@@ -490,3 +490,128 @@ exports.togglePaymentStatus = onCall(async (request) => {
   });
   return { paymentStatus: newStatus };
 });
+
+// ── cloudinaryDestroy ─────────────────────────────────────────────────────────
+// SUPPRIME POUR DE BON un média chez Cloudinary. Calquée sur
+// getCloudinarySignature : les deux mêmes secrets, le même refus sans
+// authentification, et l'API secret ne quitte jamais le serveur.
+//
+// POURQUOI ELLE EXISTE. Jusqu'ici l'app ne pouvait effacer une copie distante
+// que dans les DIX MINUTES suivant l'envoi, par le `delete_token` d'un upload
+// non signé. Au-delà, « supprimer une vidéo » ne supprimait que la ligne dans
+// le dossier : le fichier restait chez l'hébergeur, pour toujours, et le compte
+// grossissait sans que personne ne puisse rien y faire depuis l'application.
+// Une révocation de photos de progression — un droit, pas une option — laissait
+// les originaux en place et l'écran devait le dire.
+//
+// ⚠ ELLE NE TOURNE PAS ENCORE. Le projet est en plan Spark : aucune fonction
+//   n'est déployée (les trois autres répondent 404, mesuré le 23/09/2026).
+//   Le client l'appelle quand même, et met en file d'attente locale tout ce
+//   qu'elle n'a pas pu détruire — file qu'il REJOUE au démarrage et qu'il
+//   AFFICHE. Le jour où le projet passe en Blaze, `firebase deploy --only
+//   functions` suffit : la file se vide d'elle-même à la première ouverture.
+//   Rien à changer dans l'app.
+//
+// CE QU'ELLE VÉRIFIE AVANT DE DÉTRUIRE, et c'est le cœur : un identifiant
+// Cloudinary est PUBLIC (il est dans l'URL de la vidéo). Sans contrôle
+// d'appartenance, n'importe quel compte connecté pourrait effacer les médias de
+// n'importe qui. On exige donc que le média appartienne à l'appelant, ou à un
+// athlète dont l'appelant est LE coach désigné PAR LE DOSSIER — lu dans la
+// base, jamais d'après ce que le client prétend.
+exports.cloudinaryDestroy = onCall(
+  { secrets: [CLOUDINARY_API_SECRET, CLOUDINARY_API_KEY] },
+  async (request) => {
+    if (!request.auth || !request.auth.token || !request.auth.token.email) {
+      throw new HttpsError("unauthenticated", "Connecte-toi pour effectuer cette action.");
+    }
+    const callerEmail = request.auth.token.email.toLowerCase();
+    const publicId = String(request.data && request.data.publicId || "").trim();
+    const resourceType = String(request.data && request.data.resourceType || "").trim();
+    const proprietaire = String(request.data && request.data.proprietaire || "").toLowerCase().trim();
+
+    // ── L'IDENTIFIANT ────────────────────────────────────────────────────────
+    // Tout ce que l'app envoie chez Cloudinary part sous `repcore/<qui>/…`. Un
+    // identifiant qui ne commence pas par là n'est pas à nous, et un `..` n'a
+    // rien à faire dans un chemin.
+    if (!publicId.startsWith("repcore/") || publicId.length > 300
+        || publicId.indexOf("..") >= 0 || /[\r\n]/.test(publicId)) {
+      throw new HttpsError("invalid-argument", "Identifiant de média invalide.");
+    }
+    if (resourceType !== "image" && resourceType !== "video") {
+      throw new HttpsError("invalid-argument", "Type de média invalide.");
+    }
+    // Le segment qui suit « repcore/ » EST le propriétaire : l'app y met
+    // `user.id` quand il existe, son adresse sinon.
+    const jeton = publicId.split("/")[1] || "";
+    if (!jeton) throw new HttpsError("invalid-argument", "Identifiant de média sans propriétaire.");
+
+    // ── L'APPARTENANCE, LUE DANS LA BASE ─────────────────────────────────────
+    const callerSnap = await db.ref("users/" + emailKey(callerEmail)).get();
+    const caller = callerSnap.val();
+    if (!caller) throw new HttpsError("permission-denied", "Dossier introuvable.");
+    const aLui = jeton === caller.id || jeton === callerEmail || jeton === emailKey(callerEmail);
+
+    if (!aLui) {
+      // PAS DE PARCOURS DE TOUS LES DOSSIERS : l'appelant dit de QUI est le
+      // média, et on vérifie les deux bouts — que le dossier annoncé porte bien
+      // cet identifiant, et que l'appelant en est le coach désigné. Deux
+      // lectures directes, et rien qui dépende du cache du client.
+      if (!proprietaire) {
+        throw new HttpsError("permission-denied", "Ce média n'est pas le tien.");
+      }
+      const cibleSnap = await db.ref("users/" + emailKey(proprietaire)).get();
+      const cible = cibleSnap.val();
+      if (!cible) throw new HttpsError("not-found", "Dossier du propriétaire introuvable.");
+      if (jeton !== cible.id && jeton !== proprietaire && jeton !== emailKey(proprietaire)) {
+        throw new HttpsError("permission-denied", "Ce média n'appartient pas au dossier annoncé.");
+      }
+      if (caller.role !== "coach" || !cible.coachId || cible.coachId !== caller.id) {
+        throw new HttpsError("permission-denied", "Cet athlète n'est pas dans ta liste.");
+      }
+    }
+
+    // ── LA DESTRUCTION ───────────────────────────────────────────────────────
+    // `invalidate` purge aussi les copies du réseau de diffusion : sans lui, une
+    // photo révoquée reste servie par les caches pendant des heures. Il entre
+    // dans la signature, comme tout paramètre envoyé.
+    const cloudName = String(request.data && request.data.cloudName || "dntu57ml")
+      .trim().replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 60) || "dntu57ml";
+    const timestamp = Math.floor(Date.now() / 1000);
+    const params = { invalidate: "true", public_id: publicId, timestamp };
+    const paramStr = Object.keys(params).sort().map((k) => `${k}=${params[k]}`).join("&");
+    const signature = crypto.createHash("sha1")
+      .update(paramStr + CLOUDINARY_API_SECRET.value())
+      .digest("hex");
+    const body = new URLSearchParams({
+      public_id: publicId,
+      invalidate: "true",
+      timestamp: String(timestamp),
+      api_key: CLOUDINARY_API_KEY.value(),
+      signature,
+    });
+    let res;
+    try {
+      res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/destroy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+      });
+    } catch (err) {
+      throw new HttpsError("unavailable", "Cloudinary est injoignable : le média reste à purger.");
+    }
+    let d = null;
+    try { d = await res.json(); } catch (err) { d = null; }
+    // « not found » EST UN SUCCÈS : le fichier n'est plus là, c'est tout ce
+    // qu'on voulait. Le redire en échec ferait rejouer la file indéfiniment.
+    const r = d && d.result;
+    if (r === "ok" || r === "not found") return { result: r, publicId };
+    if (res.status === 401 || res.status === 403) {
+      // La clé ne couvre pas ce compte Cloudinary — cas d'un coach qui a
+      // configuré le sien. On le DIT, au lieu de faire semblant.
+      throw new HttpsError("permission-denied",
+        "Ce média est hébergé sur un autre compte Cloudinary que celui du service.");
+    }
+    throw new HttpsError("internal",
+      "Cloudinary a refusé la suppression" + (r ? ` (${r})` : ` (${res.status})`) + ".");
+  }
+);

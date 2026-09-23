@@ -227,6 +227,12 @@
           <td>États-Unis, CCT + Data Privacy Framework</td>
         </tr>
         <tr>
+          <td><strong>Google Ireland Limited</strong>, Cloud Functions<br><code>europe-west1-repcore-sync.cloudfunctions.net</code></td>
+          <td>Supprimer pour de bon, chez l'hébergeur de médias, une vidéo ou une photo que vous retirez de l'application. Cette opération exige une clé secrète qui ne peut pas vivre dans l'application : elle est demandée à ce service, qui vérifie que le fichier vous appartient — ou que vous en êtes le coach désigné — avant de le détruire.</td>
+          <td>Uniquement l'identifiant du fichier à détruire et votre jeton d'authentification. Aucune donnée de santé, aucun contenu, aucune mesure. Rien n'est transmis tant que vous ne supprimez rien.</td>
+          <td>Irlande (Union européenne), avec possibles transferts vers Google LLC (États-Unis), CCT + Data Privacy Framework</td>
+        </tr>
+        <tr>
           <td><strong>Open Food Facts</strong> (association à but non lucratif, France)<br><code>search.openfoodfacts.org</code><br><code>world.openfoodfacts.org</code></td>
           <td>Recherche de produits alimentaires de marque, à votre demande explicite, par nom ou par code-barres</td>
           <td>Uniquement le terme que vous tapez, ou le code-barres lu ou saisi, lorsque vous appuyez sur le bouton correspondant. Aucune donnée de compte, aucun identifiant, aucune information de santé n'est transmise. Aucun appel n'est fait pendant la frappe. <strong>La lecture du code-barres se fait entièrement sur votre appareil</strong> : l'image de la caméra est analysée en mémoire puis immédiatement abandonnée — aucune photo n'est enregistrée, ni transmise, ni mise en cache, et seul le code chiffré qui en est extrait est envoyé. La caméra s'arrête dès que vous quittez l'écran ou que l'application passe en arrière-plan. Les données d'Open Food Facts sont publiques et diffusées sous licence ODbL ; RepCore n'en conserve aucune copie, hormis les valeurs du produit que vous choisissez d'inscrire à votre journal. RepCore ne contribue rien à Open Food Facts : il lit, il n'écrit pas.</td>
@@ -235,7 +241,7 @@
         <tr>
           <td><strong>Cloudinary Inc.</strong><br><code>api.cloudinary.com</code></td>
           <td>Hébergement des vidéos d'exécution, des mémos audio du coach, et des photos de progression <strong>que vous choisissez de partager</strong></td>
-          <td>Les fichiers vidéo et audio que vous transmettez. Les photos de progression restent sur votre appareil et ne sont transmises qu'après une confirmation explicite, photo par photo — elles constituent une donnée de santé au sens de l'article 9 du RGPD. Une photo déjà transmise ne peut pas être supprimée à distance depuis l'application : le retrait de votre accord détruit les copies présentes sur votre appareil et vous remet la liste des fichiers à faire supprimer par votre coach, responsable du compte d'hébergement.</td>
+          <td>Les fichiers vidéo et audio que vous transmettez. Les photos de progression restent sur votre appareil et ne sont transmises qu'après une confirmation explicite, photo par photo — elles constituent une donnée de santé au sens de l'article 9 du RGPD. Lorsque vous retirez une photo ou une vidéo, l'application DEMANDE la destruction de la copie distante (voir la ligne Cloud Functions ci-dessus). Tant que cette destruction n'a pas pu être effectuée — service momentanément indisponible, ou fichier hébergé sur un autre compte que celui du service —, le retrait de votre accord détruit les copies présentes sur votre appareil et l'application CONSERVE ET VOUS AFFICHE la liste des fichiers restant à supprimer, que votre coach, responsable du compte d'hébergement, peut faire supprimer. Cette liste n'est jamais effacée en silence : elle est rejouée à chaque ouverture jusqu'à ce que les fichiers aient réellement disparu.</td>
           <td>États-Unis, clauses contractuelles types</td>
         </tr>
         <tr>

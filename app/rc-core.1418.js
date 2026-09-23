@@ -8,7 +8,7 @@
 // Tout compte dont consent.policyVersion differe de cette valeur revoit l'ecran
 // de consentement au demarrage — y compris les comptes crees avant l'existence
 // du champ, qui n'en portent aucun.
-const POLICY_VERSION='2026-08';
+const POLICY_VERSION='2026-09';
 
 // ── Identité créateur & configuration PayPal ─────────────────────────────────
 // Ces constantes sont en dur et NE doivent jamais être exposées ni modifiables
@@ -5270,6 +5270,11 @@ window.onload=()=>{
   // Reprise des envois restés en échec lors de la session précédente. Différée :
   // l'accueil doit s'afficher d'abord, la file est une tâche d'arrière-plan.
   setTimeout(()=>{CLOUD.viderFile().catch(()=>{});},3000);
+  // ET LA FILE DES MEDIAS A DETRUIRE CHEZ L'HEBERGEUR, plus tard encore :
+  // elle depend d'un jeton, et rien ne presse. Une suppression que l'app n'a
+  // pas pu faire au moment du geste ne doit pas rester en plan indefiniment —
+  // ni couter une requete a chaque ouverture quand le service est absent.
+  setTimeout(()=>{ try{ cldFileRejouer().catch(()=>{}); }catch(e){} },9000);
   // UN SEUL INSTANT DE DEPART. Le voile et l'eclair partaient a l'analyse du
   // HTML, le logo en JS a la toute fin du demarrage — l'eclair frappait donc
   // AVANT que le logo n'apparaisse, et l'ecart grandissait avec la lenteur de
@@ -45106,6 +45111,15 @@ async function phpSupprimerPose(u,seanceDate,pose){
   if(x.publicId){
     let efface=false;
     if(x.deleteToken){ try{ efface=await phpAnnulerUpload(x.deleteToken); }catch(e){ efface=false; } }
+    // PUIS LA FONCTION SERVEUR, qui n'a pas de fenetre de dix minutes. Ce qui
+    // lui echappe entre dans DEUX registres, et les deux servent : `aPurger`
+    // dans le dossier, que l'ecran des photos annonce, et la file locale, qui
+    // est rejouee a chaque demarrage.
+    if(!efface){
+      const _d=await _cldDetruire(x.publicId,'image',
+        {proprietaire:u.email,quoi:'photo de progression ('+pose+', '+s.date+')'});
+      efface=_d.ok;
+    }
     if(!efface) restant={publicId:x.publicId,date:s.date,pose};
   }
   delete s.poses[pose];
@@ -45158,6 +45172,13 @@ async function phpRevoquer(u){
     const x=(phpEtat(u).seances.find(s=>s.date===p.date)||{poses:{}}).poses[p.pose];
     if(x&&x.deleteToken){
       try{ efface=await phpAnnulerUpload(x.deleteToken); }catch(e){ efface=false; }
+    }
+    // PUIS LA FONCTION SERVEUR. Une revocation est un DROIT : tout ce qui peut
+    // etre detruit doit l'etre, et ce qui reste doit rester ecrit quelque part.
+    if(!efface){
+      const _d=await _cldDetruire(p.publicId,'image',
+        {proprietaire:u.email,quoi:'photo de progression ('+p.pose+', '+p.date+')'});
+      efface=_d.ok;
     }
     if(!efface) restants.push({publicId:p.publicId,date:p.date,pose:p.pose});
   }
@@ -77012,6 +77033,135 @@ async function _demanderSuppressionVideo(email,id){
   await deleteVideo(email,id);
   return true;
 }
+// ══════════════ LA SUPPRESSION DISTANTE, ET SA FILE D'ATTENTE ═════════════
+//
+// CE QUI NE MARCHAIT PAS. « Supprimer une vidéo » retirait la ligne du dossier
+// et laissait le fichier chez Cloudinary — pour toujours. Le commentaire de
+// deleteVideo le disait en passant (« le fichier peut être purgé depuis le
+// dashboard »), le toast annonçait « Vidéo supprimée ». Côté photos de
+// progression, la révocation ne pouvait effacer une copie transmise que dans
+// les DIX MINUTES du `delete_token` ; au-delà elle rendait la liste des
+// identifiants restants, honnêtement, et rien ne pouvait plus les effacer.
+//
+// CE QUI CHANGE. Une seule porte, `_cldDetruire`, qui appelle la fonction
+// serveur `cloudinaryDestroy` (voir functions/index.js) — la seule à détenir
+// l'API secret. TOUT CE QU'ELLE NE DÉTRUIT PAS ENTRE DANS UNE FILE LOCALE,
+// rejouée au démarrage suivant, et que l'on peut lire : « où est passée ma
+// vidéo ? » a une réponse, et « elle est supprimée » n'est plus dit quand c'est
+// faux.
+//
+// ⚠ LA FONCTION N'EST PAS ENCORE DÉPLOYÉE. Le projet est en plan Spark :
+//   mesuré le 23/09/2026, les trois fonctions existantes répondent 404. La file
+//   est donc, aujourd'hui, le mécanisme RÉEL — et scripts/purge_cloudinary_orphelins.py
+//   est l'outil qui purge pour de bon, sous le contrôle de Kevin. Le jour où le
+//   projet passe en Blaze, `firebase deploy --only functions` suffit : la file
+//   se vide d'elle-même à la première ouverture, sans rien changer à l'app.
+//
+// ⚠ ON N'INSISTE PAS DANS LE VIDE. Une fonction absente répond 404 à chaque
+//   appel : vingt suppressions feraient vingt requêtes inutiles et autant
+//   d'attentes. Le premier 404 de la session coupe les appels — on met en file
+//   directement, sans bruit. Le démarrage suivant réessaiera.
+const CLD_FILE_CLE='rc_cloudinary_a_purger';
+const CLD_FILE_MAX=400;
+let _cldIndispo=false;          // 404 vu dans cette session : la fonction n'est pas là
+let _cldRejeuFait=false;
+
+function cldFileLire(){
+  try{ const l=JSON.parse(localStorage.getItem(CLD_FILE_CLE)||'[]');
+    return Array.isArray(l)?l.filter(x=>x&&x.publicId):[]; }catch(e){ return []; }
+}
+function cldFileEcrire(l){
+  try{ localStorage.setItem(CLD_FILE_CLE,JSON.stringify((l||[]).slice(0,CLD_FILE_MAX)));
+    return true; }catch(e){ return false; }
+}
+// DÉDOUBLONNÉE PAR publicId, et elle garde la PREMIÈRE date : c'est depuis
+// quand le fichier attend, et c'est ce qui compte pour qui la lit.
+function cldFileAjouter(publicId,type,extra){
+  if(!publicId) return false;
+  const l=cldFileLire();
+  const deja=l.find(x=>x.publicId===publicId);
+  if(deja){
+    if(extra&&extra.raison) deja.raison=extra.raison;
+    deja.essais=(deja.essais||1)+1;
+    return cldFileEcrire(l);
+  }
+  l.push(Object.assign({publicId,type:type||'image',depuis:Date.now(),essais:1},extra||{}));
+  return cldFileEcrire(l);
+}
+function cldFileRetirer(publicId){
+  return cldFileEcrire(cldFileLire().filter(x=>x.publicId!==publicId));
+}
+// CE QUE L'ÉCRAN PEUT ANNONCER : combien, et depuis quand le plus ancien.
+function cldFileEtat(){
+  const l=cldFileLire();
+  if(!l.length) return {nb:0};
+  const plusVieux=l.reduce((a,b)=>(a.depuis||0)<(b.depuis||0)?a:b);
+  return {nb:l.length,depuis:plusVieux.depuis,jours:Math.floor((Date.now()-(plusVieux.depuis||Date.now()))/864e5)};
+}
+
+// LA PORTE UNIQUE. Rend {ok:true} quand le fichier n'est PLUS chez l'hébergeur —
+// « introuvable » compris, c'est le résultat qu'on voulait. Rend {ok:false} et
+// INSCRIT EN FILE dans tous les autres cas, y compris hors ligne.
+async function _cldDetruire(publicId,type,opts){
+  const o=opts||{};
+  if(!publicId) return {ok:true,rien:true};
+  const entree={type:type||'image'};
+  if(o.proprietaire) entree.proprietaire=o.proprietaire;
+  if(o.cloudName) entree.cloudName=o.cloudName;
+  if(o.quoi) entree.quoi=o.quoi;
+  if(_cldIndispo){
+    cldFileAjouter(publicId,type,Object.assign({raison:'service de suppression indisponible'},entree));
+    return {ok:false,raison:'indisponible'};
+  }
+  try{
+    const r=await CLOUD._callFn('cloudinaryDestroy',{
+      publicId,resourceType:(type==='video'?'video':'image'),
+      proprietaire:o.proprietaire||'',cloudName:o.cloudName||''});
+    if(r&&(r.result==='ok'||r.result==='not found')){
+      cldFileRetirer(publicId);
+      return {ok:true,resultat:r.result};
+    }
+    cldFileAjouter(publicId,type,Object.assign({raison:'réponse inattendue'},entree));
+    return {ok:false,raison:'réponse inattendue'};
+  }catch(e){
+    const m=String(e&&e.message||e);
+    // LE SERVICE EST-IL LA ? Deux formes, et la seconde m'a surpris : une
+    // fonction non deployee repond 404 SANS en-tete CORS, donc le navigateur ne
+    // rend pas le 404 — il leve une erreur reseau. Mesure au banc le
+    // 23/09/2026 : « Impossible de joindre le serveur ». Un appareil vraiment
+    // hors ligne donne le meme message, et c'est tres bien : dans les deux cas,
+    // insister vingt fois dans la meme session ne sert a rien, et la file, elle,
+    // garde tout jusqu'au prochain demarrage.
+    if(/\(404\)/.test(m)||/introuvable sur le serveur/i.test(m)
+       ||/Impossible de joindre le serveur/i.test(m)) _cldIndispo=true;
+    cldFileAjouter(publicId,type,Object.assign({raison:m.slice(0,120)},entree));
+    return {ok:false,raison:m};
+  }
+}
+
+// LE REJEU, AU DÉMARRAGE. Une fois par session, jamais avant que l'app soit
+// debout, et jamais sans jeton : sans authentification la fonction refuse, et
+// l'entrée serait comptée comme un essai pour rien.
+//
+// ⚠ IL NE BLOQUE RIEN et n'affiche rien. C'est un travail de fond : ce qui
+//   reste en file reste lisible, et l'écran de confidentialité l'annonce.
+async function cldFileRejouer(){
+  if(_cldRejeuFait) return 0;
+  _cldRejeuFait=true;
+  if(!navigator.onLine||!CLOUD.canWrite()) return 0;
+  const l=cldFileLire();
+  if(!l.length) return 0;
+  let partis=0;
+  for(const e of l.slice(0,40)){          // par paquets : le reste attendra la prochaine fois
+    if(_cldIndispo) break;
+    const r=await _cldDetruire(e.publicId,e.type,
+      {proprietaire:e.proprietaire,cloudName:e.cloudName,quoi:e.quoi});
+    if(r.ok) partis++;
+  }
+  if(partis) console.log('[RepCore] file Cloudinary : '+partis+' média(s) détruit(s) pour de bon, '
+    +cldFileLire().length+' en attente');
+  return partis;
+}
 async function deleteVideo(email,videoId){
   const users=DB.get('users')||{};
   const u=users[email];
@@ -77030,10 +77180,23 @@ async function deleteVideo(email,videoId){
   users[email]=u;
   const ok=DB.set('users',users);
   if(currentUser?.email===email){currentUser.videos=u.videos;currentUser.updatedAt=u.updatedAt;}
-  // Plan Spark : pas de suppression distante Cloudinary (nécessiterait l'API secret côté serveur).
-  // La vidéo est retirée de l'app ; le fichier peut être purgé depuis le dashboard Cloudinary.
   toastSync(ok,CLOUD.pushOne(email,u),'Vidéo supprimée','la suppression est');
   loadVideos();
+  // LA COPIE CHEZ L'HEBERGEUR, ET LA VERITE DESSUS. Jusqu'ici le toast
+  // annoncait « Vidéo supprimée » alors que le fichier restait chez Cloudinary
+  // POUR TOUJOURS — un upload non signe ne permet pas de l'effacer, et le
+  // commentaire d'ici renvoyait l'utilisateur au tableau de bord Cloudinary,
+  // qu'il n'a pas. On tente maintenant la destruction reelle par la fonction
+  // serveur ; ce qui ne part pas entre dans la file a purger, et on le DIT.
+  //
+  // APRES le toast et le rendu, jamais avant : un aller-retour reseau ne doit
+  // pas retenir l'ecran pour un geste deja effectue localement.
+  if(vid.cloudinaryPublicId){
+    const _d=await _cldDetruire(vid.cloudinaryPublicId,'video',
+      {proprietaire:email,cloudName:vid.cloudinaryName,quoi:'vidéo '+(vid.name||'')});
+    if(!_d.ok) toast('Retirée de l’app. La copie chez l’hébergeur n’a pas pu être effacée : '
+      +'elle est inscrite à purger.','var(--orange)');
+  }
 }
 function addVideoLink(){
   const inp=document.getElementById('vid-url-input');

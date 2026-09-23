@@ -19583,19 +19583,24 @@ async function testExercices(){
             'drive.google.com',      // l. 257 — programme ou vidéo dont le coach
                                      // a collé le lien, que l'app réécrit en URL
                                      // Google avant de l'ouvrir.
+            'cloudfunctions.net',    // l. 230 — Cloud Functions. ⚠ CETTE LIGNE A
+                                     // CHANGÉ DE CAMP LE 23/09/2026 : le domaine
+                                     // était toléré ici PARCE QUE RIEN NE LE
+                                     // CONTACTAIT — _callFn n'avait aucun
+                                     // appelant. Depuis, _cldDetruire l'appelle
+                                     // pour faire détruire une vidéo ou une
+                                     // photo retirée chez l'hébergeur. C'est un
+                                     // sous-traitant réel, il est déclaré, et
+                                     // POLICY_VERSION est passée à 2026-09.
             // Ce qui suit n'est PAS déclaré, et ne doit pas l'être : rien
-            // n'est contacté. cloudfunctions.net n'apparaît que dans _callFn,
-            // vestige sans aucun appelant — le déclarer sous-traitant serait
-            // aussi faux que d'omettre un sous-traitant réel. w3.org est
-            // l'espace de noms XML des SVG (jamais téléchargé) ; repcore131 est
-            // un lien que l'utilisateur clique.
+            // n'est contacté. w3.org est l'espace de noms XML des SVG (jamais
+            // téléchargé) ; repcore131 est un lien que l'utilisateur clique.
             //
             // ⚠ anses.fr A QUITTÉ CETTE LISTE, et c'est le sens de ce lot : il
             // n'existe que dans un COMMENTAIRE — la source des références
             // nutritionnelles, citée en clair. Depuis que le scanner retire les
             // commentaires, il n'y a plus rien à excuser. Une exception qui ne
             // couvre plus rien est une invitation à en ajouter une de trop.
-            'cloudfunctions.net',
             'w3.org','repcore131.github.io'];
           // ══ LE SCANNER LISAIT LES COMMENTAIRES ═══════════════════════
           //
@@ -33619,6 +33624,238 @@ async function testExercices(){
         const re=new RegExp(f.slice(i-2,i+8));
         return re.test('HTTP 401 Unauthorized')&&re.test('403')&&!re.test('40134')
           ?true:_echec('le motif ne reconnait pas un 401 reel');})());
+
+      // ══════════════ BUILD 1418 — LA SUPPRESSION DISTANTE ════════════════
+      //
+      // « Supprimer une vidéo » ne supprimait que la ligne du dossier : le
+      // fichier restait chez Cloudinary POUR TOUJOURS, et le toast annonçait
+      // « Vidéo supprimée ». Une photo de progression transmise ne pouvait
+      // plus être effacée passé les dix minutes du `delete_token`.
+      //
+      // Désormais une seule porte, `_cldDetruire`, qui demande la destruction
+      // à la fonction serveur — la seule à détenir l'API secret. ET UNE FILE :
+      // tout ce qui n'est pas détruit y entre, est rejoué au démarrage, et
+      // reste LISIBLE. C'est la règle du chantier : rien ne disparaît en
+      // silence, et rien n'est annoncé comme supprimé quand c'est faux.
+      //
+      // ⚠ LA FONCTION N'EST PAS DÉPLOYÉE (plan Spark, mesuré le 23/09/2026 :
+      //   404 sur les trois fonctions existantes). Ces assertions éprouvent
+      //   donc les DEUX chemins — celui du succès et celui de l'échec — en
+      //   remplaçant CLOUD._callFn. C'est le chemin d'échec qui tourne en vrai
+      //   aujourd'hui, et c'est lui qui devait être écrit avec soin.
+      (()=>{
+        // LES DEUX FILES LOCALES SONT RENDUES TELLES QUELLES : phpRevoquer
+        // vide celle des photos en attente, et une suite qui laisse derriere
+        // elle l'etat d'un vrai appareil est une suite qui mentira plus tard.
+        const _sFile=localStorage.getItem(CLD_FILE_CLE);
+        const _sPhp=localStorage.getItem(PHP_FILE_CLE);
+        const _sCall=CLOUD._callFn, _sToast=window.toast;
+        const _rendre=(k,v)=>{ if(v===null) localStorage.removeItem(k); else localStorage.setItem(k,v); };
+        const _remettre=()=>{ CLOUD._callFn=_sCall; window.toast=_sToast;
+          _rendre(CLD_FILE_CLE,_sFile); _rendre(PHP_FILE_CLE,_sPhp); };
+        try{
+          window.toast=()=>{};
+
+          ok('1418 — LA FILE À PURGER DÉDOUBLONNE ET GARDE LA PREMIÈRE DATE',(()=>{
+            cldFileEcrire([]);
+            cldFileAjouter('repcore/A1/v1','video',{raison:'hors ligne'});
+            const t1=cldFileLire()[0].depuis;
+            cldFileAjouter('repcore/A1/v1','video',{raison:'404'});
+            const l=cldFileLire();
+            if(l.length!==1) return _echec(l.length+' entrées pour un seul média');
+            if(l[0].depuis!==t1) return _echec('la date d’entrée a été réécrite : ce n’est plus « depuis quand »');
+            if(l[0].essais!==2) return _echec('les essais ne sont pas comptés : '+l[0].essais);
+            if(l[0].raison!=='404') return _echec('la dernière raison n’est pas gardée');
+            cldFileAjouter('repcore/A1/v2','video');
+            if(cldFileLire().length!==2) return _echec('un second média n’a pas été inscrit');
+            cldFileRetirer('repcore/A1/v1');
+            const r=cldFileLire();
+            if(r.length!==1||r[0].publicId!=='repcore/A1/v2') return _echec('le retrait a visé la mauvaise entrée');
+            // ET L'ÉTAT QUE L'ÉCRAN PEUT ANNONCER : combien, et depuis quand.
+            const e=cldFileEtat();
+            if(e.nb!==1||typeof e.jours!=='number') return _echec('l’état de la file : '+JSON.stringify(e));
+            // UNE FILE VIDE NE DIT PAS « depuis le 1er janvier 1970 ».
+            cldFileEcrire([]);
+            return cldFileEtat().nb===0&&cldFileEtat().depuis===undefined
+              ?true:_echec('une file vide annonce une date');})());
+
+          okA('1418 — CE QUI EST DÉTRUIT QUITTE LA FILE, CE QUI RÉSISTE Y ENTRE',async()=>{
+            cldFileEcrire([]);
+            let vus=[];
+            // ── LE SUCCÈS ──────────────────────────────────────────────────
+            CLOUD._callFn=async(nom,d)=>{ vus.push({nom,d}); return {result:'ok',publicId:d.publicId}; };
+            _cldIndispo=false;
+            let r=await _cldDetruire('repcore/A1/squat','video',{proprietaire:'a@t.fr',cloudName:'dntu57ml'});
+            if(!r.ok) return _echec('une destruction réussie est comptée comme un échec');
+            if(cldFileLire().length) return _echec('un média détruit reste dans la file');
+            if(vus[0].nom!=='cloudinaryDestroy') return _echec('la fonction appelée : '+vus[0].nom);
+            // LES ARGUMENTS : le type de ressource décide de l'URL chez
+            // Cloudinary, et le propriétaire est ce qui permet au serveur de
+            // vérifier qu'un coach a bien le droit.
+            if(vus[0].d.resourceType!=='video') return _echec('resourceType : '+vus[0].d.resourceType);
+            if(vus[0].d.proprietaire!=='a@t.fr') return _echec('le propriétaire n’est pas transmis');
+            // ── « INTROUVABLE » EST UN SUCCÈS ──────────────────────────────
+            // Le fichier n'est plus là : c'est ce qu'on voulait. Le compter en
+            // échec ferait rejouer la file indéfiniment sur du vide.
+            CLOUD._callFn=async()=>({result:'not found'});
+            r=await _cldDetruire('repcore/A1/deja_parti','image',{proprietaire:'a@t.fr'});
+            if(!r.ok) return _echec('« introuvable » est compté comme un échec');
+            if(cldFileLire().length) return _echec('un média introuvable est mis en file');
+            // ── L'ÉCHEC ───────────────────────────────────────────────────
+            CLOUD._callFn=async()=>{ throw new Error('Erreur serveur (500).'); };
+            r=await _cldDetruire('repcore/A1/resiste','video',{proprietaire:'a@t.fr'});
+            if(r.ok) return _echec('un échec est annoncé comme un succès');
+            const f=cldFileLire();
+            if(f.length!==1||f[0].publicId!=='repcore/A1/resiste')
+              return _echec('l’échec n’est pas inscrit dans la file : '+JSON.stringify(f));
+            if(f[0].type!=='video'||f[0].proprietaire!=='a@t.fr')
+              return _echec('la file perd de quoi réessayer : '+JSON.stringify(f[0]));
+            if(!/500/.test(String(f[0].raison||''))) return _echec('la raison n’est pas gardée');
+            // ── UN 404 COUPE LES APPELS POUR LA SESSION ────────────────────
+            // La fonction n'est pas déployée : vingt suppressions feraient
+            // vingt allers-retours inutiles. On met en file, sans bruit.
+            cldFileEcrire([]); _cldIndispo=false;
+            let appels=0;
+            CLOUD._callFn=async()=>{ appels++; throw new Error('Erreur serveur (404).'); };
+            for(const id of ['repcore/A1/x1','repcore/A1/x2','repcore/A1/x3'])
+              await _cldDetruire(id,'video',{proprietaire:'a@t.fr'});
+            if(appels!==1) return _echec(appels+' appels au lieu d’un seul après un 404');
+            if(cldFileLire().length!==3) return _echec('les trois médias ne sont pas tous en file');
+            // ⚠ ET LA MEME CHOSE POUR UNE ERREUR RESEAU, qui est la forme REELLE
+            //   du service absent : un 404 sans en-tete CORS ne revient pas en 404
+            //   au navigateur, il leve. Mesure au banc le 23/09/2026.
+            cldFileEcrire([]); _cldIndispo=false; appels=0;
+            CLOUD._callFn=async()=>{ appels++;
+              throw new Error('Impossible de joindre le serveur : vérifie ta connexion.'); };
+            for(const id of ['repcore/A1/y1','repcore/A1/y2'])
+              await _cldDetruire(id,'image',{proprietaire:'a@t.fr'});
+            if(appels!==1) return _echec(appels+' appels au lieu d’un seul après une panne réseau');
+            if(cldFileLire().length!==2) return _echec('les deux médias ne sont pas tous en file');
+            _cldIndispo=false;
+            return true;});
+
+          okA('1418 — LE REJEU AU DÉMARRAGE VIDE CE QU’IL PEUT ET GARDE LE RESTE',async()=>{
+            // ⚠ IL EXIGE UN JETON, et il a raison : sans authentification la
+            //   fonction serveur refuse, et l'entrée serait comptée comme un
+            //   essai pour rien. La suite n'est pas connectée — on le simule,
+            //   au lieu de retirer la garde.
+            const _sCan=CLOUD.canWrite; CLOUD.canWrite=()=>true;
+            try{
+            cldFileEcrire([]); _cldIndispo=false; _cldRejeuFait=false;
+            cldFileAjouter('repcore/A1/part','video',{proprietaire:'a@t.fr'});
+            cldFileAjouter('repcore/A1/reste','image',{proprietaire:'a@t.fr'});
+            CLOUD._callFn=async(n,d)=>{
+              if(d.publicId.endsWith('/part')) return {result:'ok'};
+              throw new Error('Erreur serveur (503).'); };
+            const n=await cldFileRejouer();
+            if(n!==1) return _echec(n+' média(s) détruit(s) au rejeu au lieu d’un');
+            const l=cldFileLire();
+            if(l.length!==1||l[0].publicId!=='repcore/A1/reste')
+              return _echec('la file après rejeu : '+JSON.stringify(l.map(x=>x.publicId)));
+            // ⚠ UNE FOIS PAR SESSION : un second appel ne doit rien refaire,
+            //   sinon chaque changement d'écran relancerait la file.
+            let encore=0;
+            CLOUD._callFn=async()=>{ encore++; return {result:'ok'}; };
+            await cldFileRejouer();
+            if(encore) return _echec('le rejeu est reparti une seconde fois');
+            _cldRejeuFait=false;
+            return true;
+            } finally { CLOUD.canWrite=_sCan; }});
+
+          okA('1418 — SUPPRIMER UNE VIDÉO DEMANDE SA DESTRUCTION, ET LE DIT QUAND ELLE RÉSISTE',async()=>{
+            const sU=currentUser, sDB=DB.get('users'), sPush=CLOUD.pushOne,
+                  sTS=window.toastSync, sLoad=window.loadVideos;
+            const dits=[];
+            try{
+              cldFileEcrire([]); _cldIndispo=false;
+              CLOUD.pushOne=()=>Promise.resolve(true);
+              window.toastSync=()=>Promise.resolve(true);
+              window.loadVideos=()=>{};
+              window.toast=(m)=>{ dits.push(String(m)); };
+              const AT={id:'A2',email:'a2@t.fr',role:'athlete',videos:[
+                {id:'vc',name:'Squat',url:'https://res.cloudinary.com/x/video/upload/v1/repcore/A2/squat.mp4',
+                 cloudinaryPublicId:'repcore/A2/squat',cloudinaryName:'dntu57ml',date:Date.now()},
+                {id:'vy',name:'YouTube',url:'https://youtu.be/abc',date:Date.now()}]};
+              DB.set('users',{[AT.email]:AT}); currentUser=AT;
+              // ── LA COPIE DISTANTE RÉSISTE : on le dit, on ne prétend pas. ──
+              CLOUD._callFn=async()=>{ throw new Error('Erreur serveur (503).'); };
+              await deleteVideo('a2@t.fr','vc');
+              const u=(DB.get('users')||{})['a2@t.fr'];
+              if((u.videos||[]).some(v=>v.id==='vc')) return _echec('la vidéo est restée dans le dossier');
+              const f=cldFileLire();
+              if(!f.some(x=>x.publicId==='repcore/A2/squat'))
+                return _echec('le média n’est pas inscrit à purger : '+JSON.stringify(f.map(x=>x.publicId)));
+              if(!dits.some(m=>/n’a pas pu être effacée|inscrite à purger/.test(m)))
+                return _echec('rien n’a été dit sur la copie qui reste : '+JSON.stringify(dits));
+              // ── UN LIEN YOUTUBE N'A PAS DE COPIE CHEZ NOUS ────────────────
+              // Rien à détruire, et surtout rien à annoncer : un message
+              // inquiétant sur un lien collé serait faux.
+              dits.length=0; cldFileEcrire([]);
+              let appels=0;
+              CLOUD._callFn=async()=>{ appels++; return {result:'ok'}; };
+              await deleteVideo('a2@t.fr','vy');
+              if(appels) return _echec('un lien collé a déclenché une suppression chez l’hébergeur');
+              if(cldFileLire().length) return _echec('un lien collé a rempli la file');
+              return true;
+            } finally {
+              currentUser=sU; if(sDB) DB.set('users',sDB);
+              CLOUD.pushOne=sPush; window.toastSync=sTS; window.loadVideos=sLoad;
+            }});
+
+          okA('1418 — RÉVOQUER SES PHOTOS DÉTRUIT VRAIMENT CE QUI PEUT L’ÊTRE',async()=>{
+            // AVANT : seul le `delete_token` de dix minutes pouvait effacer une
+            // copie transmise. Une révocation faite le lendemain rendait la
+            // liste des identifiants et rien de plus. Maintenant la fonction
+            // serveur est tentée, et `aPurger` ne garde QUE ce qui a résisté.
+            const sU=currentUser;
+            try{
+              cldFileEcrire([]); _cldIndispo=false;
+              const u={id:'A3',email:'a3@t.fr',role:'athlete',photosProgression:{
+                consentement:{donne:true,date:Date.now(),partageCoach:true},
+                seances:[{date:'2026-09-02',poses:{
+                  face:{cle:'k_face',publicId:'repcore/A3/progression/face',w:800,h:1200,octets:90000},
+                  dos:{cle:'k_dos',publicId:'repcore/A3/progression/dos',w:800,h:1200,octets:90000}}}]}};
+              currentUser=u;
+              // « face » part, « dos » résiste.
+              CLOUD._callFn=async(n,d)=>{
+                if(String(d.publicId).endsWith('/face')) return {result:'ok'};
+                throw new Error('Erreur serveur (503).'); };
+              const r=await phpRevoquer(u);
+              if(!r.ok) return _echec('la révocation a échoué');
+              const reste=(r.aPurger||[]).map(x=>x.publicId);
+              if(reste.length!==1||!reste[0].endsWith('/dos'))
+                return _echec('à purger après révocation : '+JSON.stringify(reste));
+              if(!cldFileLire().some(x=>x.publicId.endsWith('/dos')))
+                return _echec('la photo qui résiste n’est pas dans la file rejouée');
+              if(cldFileLire().some(x=>x.publicId.endsWith('/face')))
+                return _echec('une photo détruite est restée dans la file');
+              // LE CONSENTEMENT EST RETIRÉ, ET LES SÉANCES VIDÉES : c'est le
+              // cœur du droit exercé, et il ne dépend pas de l'hébergeur.
+              if(u.photosProgression.consentement.donne!==false)
+                return _echec('le consentement n’a pas été retiré');
+              return (u.photosProgression.seances||[]).length===0
+                ?true:_echec('des séances de photos ont survécu à la révocation');
+            } finally { currentUser=sU; }});
+
+          ok('1418 — LA FILE EST REJOUÉE AU DÉMARRAGE, ET SEULEMENT LÀ',(()=>{
+            // Le rejeu doit être BRANCHÉ : un module parfait que personne
+            // n'appelle ne purge rien. Et il doit être DIFFÉRÉ — l'accueil
+            // passe d'abord, comme pour la file d'envois.
+            const src=_prodSrc();
+            // ⚠ LA DEFINITION CONTIENT AUSSI « cldFileRejouer() » : on cherche
+            //   l'APPEL, reconnaissable a son .catch.
+            const i=src.indexOf('cldFileRejouer().catch(');
+            if(i<0) return _echec('cldFileRejouer n’est appelé nulle part');
+            const avant=src.slice(Math.max(0,i-400),i);
+            if(avant.indexOf('setTimeout')<0)
+              return _echec('le rejeu n’est pas différé : il retiendrait le démarrage');
+            // ET LES TROIS GESTES DE SUPPRESSION PASSENT PAR LA MÊME PORTE.
+            for(const f of ['deleteVideo','phpSupprimerPose','phpRevoquer'])
+              if(String(window[f]).indexOf('_cldDetruire')<0)
+                return _echec(f+' ne demande pas la destruction de la copie distante');
+            return true;})());
+        } finally { _remettre(); }
+      })();
 
       // BUILD 1411 — Kevin : « côté coach uniquement, sur ordi, mets les noms
       // des compléments sur la même ligne que “VITAMINE…”, entre la photo et le

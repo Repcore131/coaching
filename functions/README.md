@@ -5,6 +5,19 @@ Ce dossier contient 4 Cloud Functions :
 - **verifyPaypalSubscription** (1 fonction) — v��rifie l'abonnement PayPal côté serveur avant
   d'activer le statut `AUTONOMIE_PREMIUM`
 
+- **cloudinaryDestroy** (1 fonction, ajoutée le 23/09/2026) — supprime POUR DE BON une vidéo ou
+  une photo chez Cloudinary, après avoir vérifié dans la base que le fichier appartient à
+  l'appelant ou à un athlète dont il est le coach désigné. L'API secret ne quitte pas le serveur.
+
+⚠ **AUCUNE DE CES FONCTIONS N'EST DÉPLOYÉE AUJOURD'HUI.** Mesuré le 23/09/2026 : les trois
+adresses testées répondent 404 — le projet est en plan Spark, et le déploiement automatique
+(`.github/workflows/firebase.yml`) ne publie que l'hébergement. L'application en tient compte :
+tout média qu'elle n'a pas pu faire détruire entre dans une file locale (`rc_cloudinary_a_purger`),
+rejouée à chaque démarrage et affichée. Le jour où le projet passe en Blaze,
+`firebase deploy --only functions` suffit : les files se vident d'elles-mêmes, sans rien changer
+à l'app. En attendant, `scripts/purge_cloudinary_orphelins.py` produit la liste des fichiers
+orphelins à valider à la main.
+
 Avant de publier le nouveau `index.html`, ces fonctions doivent être déployées.
 
 ## Prérequis

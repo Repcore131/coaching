@@ -76,6 +76,13 @@ jobs:
           echo "Version du service worker :"
           head -1 _site/app/sw.js
 
+      # LE CODE SE PARSE-T-IL ? C'est le plus bete et le plus grave : une
+      # parenthese oubliee n'empeche pas la page de s'ouvrir, elle empeche TOUT
+      # le JavaScript qui suit de tourner. L'app s'affiche, et plus rien ne
+      # repond. Depuis que le code est servi a part, ce controle le lit aussi.
+      - name: Verifier que le code se parse
+        run: node scripts/verif/syntaxe.mjs
+
       # LES ACTIFS VERSIONNES. Depuis le build 1417, index.html ne porte plus le
       # code : il le DEMANDE, sous un nom qui contient le numero de build, et
       # l'hebergement sert ces deux fichiers immuables pour un an. Un nom qui ne
@@ -91,6 +98,16 @@ jobs:
       # inverse, ou un cache neuf inutilisable ne fait pas jeter l'ancien.
       - name: Verifier la purge des actifs par le worker
         run: node scripts/verif/worker-actifs.mjs
+
+      # LA SUPPRESSION DISTANTE. cloudinaryDestroy detient l'API secret : un
+      # identifiant Cloudinary est public, et sans controle d'appartenance
+      # n'importe quel compte connecte effacerait les medias de n'importe qui.
+      # Le banc fait TOURNER la fonction avec une fausse base et un faux reseau :
+      # il verifie les dix refus, les deux autorisations, et que la signature
+      # couvre exactement les parametres envoyes — une signature incomplete rend
+      # 401 et fait echouer TOUTES les suppressions en silence.
+      - name: Verifier la suppression distante des medias
+        run: node scripts/verif/suppression-distante.mjs
 
       # LES ILLUSTRATIONS. Un deploiement remplace TOUT le site : une image
       # annoncee par l'index mais absente du depot disparait de la production
