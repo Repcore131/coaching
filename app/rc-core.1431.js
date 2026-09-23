@@ -23071,10 +23071,30 @@ const VOL_CONCENTRATION_PART=0.70;
 // à personne en particulier. En tirer une table « MRV à 45 ans » serait
 // remplacer un repère trop général par un repère faussement précis.
 //
-// LOMBAIRES, ABDUCTEURS et ADDUCTEURS n'y figurent pas volontairement : ils
-// reçoivent du volume réel, mais aucun repère de terrain ne fait consensus
-// pour eux. Ils sont comptés et affichés sans zone ni couleur, plutôt que
-// jugés contre un chiffre inventé.
+// LOMBAIRES, ABDUCTEURS ET ADDUCTEURS ONT REJOINT LA TABLE LE 23/09/2026, et
+// il faut dire pourquoi, parce qu'ils en étaient exclus VOLONTAIREMENT.
+//
+// La règle d'alors : aucun repère de terrain ne fait consensus pour ces
+// trois-là, donc on les compte et on les affiche sans zone ni couleur, plutôt
+// que de les juger contre un chiffre inventé. Elle était défendable. Elle
+// avait un coût, et c'est Kevin qui l'a vu, sa silhouette sous les yeux :
+// « les lombaires, j'ai aucune couleur, alors que pourtant j'ai quand même un
+// exo lombaire dans mes séances » ; « les adducteurs, j'ai un exo, je comprends
+// pas pourquoi ils sont pas mis ». Un muscle qu'on entraîne, qu'on compte, et
+// qui reste gris sans un mot ne se lit pas comme « on ne sait pas juger » — il
+// se lit comme un oubli, ou comme un zéro.
+//
+// ⚠ CE SONT DONC DES ARBITRAGES, ET ILS LE DISENT — exactement au même titre
+//   que le partage du trapèze plus bas, et comme TOUTE cette table, que le
+//   bandeau « repères indicatifs » annonce partout où elle s'affiche. Ils
+//   tiennent sur un seul constat, le même pour les trois : CES MUSCLES SONT
+//   MASSIVEMENT CHARGÉS EN INDIRECT. Les érecteurs travaillent à chaque squat,
+//   soulevé, rowing et port lourd ; les adducteurs et les abducteurs à chaque
+//   squat, fente et hip thrust. D'où un MEV à 0 — le travail direct n'est
+//   jamais ce qui les maintient — et un MRV bas, parce que ce qui les use vient
+//   d'ailleurs et s'additionne sans qu'on le compte ici. Le lombaire a le MRV
+//   le plus bas des trois : c'est le site de surmenage classique, et sa fatigue
+//   se paie sur tout le reste.
 // ══════════════ LE TRAPEZE S'EST DEDOUBLE ══════════════════════════════
 //
 // Le 08/09/2026, TRAPEZES est devenu TRAP_SUP et TRAP_MED. Des dossiers
@@ -23134,7 +23154,11 @@ const REPERES_VOLUME=Object.freeze({
   ISCHIOS   :{mev:4,  mavMin:10, mavMax:16, mrv:20},
   FESSIERS  :{mev:0,  mavMin:8,  mavMax:16, mrv:16},
   MOLLETS   :{mev:6,  mavMin:12, mavMax:16, mrv:20},
-  ABDOS     :{mev:0,  mavMin:8,  mavMax:16, mrv:25}
+  ABDOS     :{mev:0,  mavMin:8,  mavMax:16, mrv:25},
+  // Les trois arbitrages du 23/09/2026 — voir l'en-tête.
+  LOMBAIRES :{mev:0,  mavMin:4,  mavMax:10, mrv:14},
+  ABDUCTEURS:{mev:0,  mavMin:6,  mavMax:12, mrv:16},
+  ADDUCTEURS:{mev:0,  mavMin:6,  mavMax:12, mrv:16}
 });
 // Zones d'un repère, dans l'ordre croissant. Le libellé est celui montré à
 // l'athlète : il décrit une position, il ne prescrit rien.
@@ -39944,16 +39968,29 @@ const CORPS_PLANCHE=Object.freeze({
 //   rouge partout ; or le rouge, dans cette legende, dit « au-dessus du MRV ».
 //   Un muscle sans repere serait reste rouge et se serait lu comme surcharge.
 //   En gris clair — le bonhomme blanc de ce matin — il se lit « non teinte ».
+// ⚠ TRAP_MED EST EN QUEUE DE LISTE, ET IL DOIT Y RESTER. La valeur d'un pixel
+//   vaut son RANG dans cette liste, fois CORPS_ZONES_PAS : insérer un muscle au
+//   milieu décalerait tous les suivants et rendrait les quatre cartes déjà
+//   livrées illisibles d'un seul coup, sans un mot à l'écran. On ajoute donc à
+//   la fin, jamais au milieu.
 const CORPS_ZONES_ORDRE=Object.freeze(['TRAP_SUP','DELT_ANT','DELT_LAT','DELT_POST',
   'PECTORAUX','BICEPS','TRICEPS','AVANT_BRAS','ABDOS','DORSAUX','LOMBAIRES','FESSIERS',
-  'ABDUCTEURS','ADDUCTEURS','QUADRICEPS','ISCHIOS','MOLLETS']);
+  'ABDUCTEURS','ADDUCTEURS','QUADRICEPS','ISCHIOS','MOLLETS','TRAP_MED']);
 const CORPS_ZONES_PAS=12;
 // Les muscles que chaque vue montre — les treize de ce matin, par vue.
 const CORPS_MUSCLES_VUE=Object.freeze({
   face:Object.freeze(['TRAP_SUP','DELT_ANT','DELT_LAT','PECTORAUX','BICEPS','TRICEPS',
     'AVANT_BRAS','ABDOS','DORSAUX','ABDUCTEURS','QUADRICEPS','ADDUCTEURS','MOLLETS']),
-  dos:Object.freeze(['TRAP_SUP','DELT_LAT','DELT_POST','DORSAUX','TRICEPS','BICEPS',
-    'AVANT_BRAS','LOMBAIRES','FESSIERS','ABDUCTEURS','ISCHIOS','ADDUCTEURS','MOLLETS'])
+  // ⚠ LE TRAPEZE MOYEN N'EXISTE QUE DE DOS, et il n'existait nulle part avant
+  //   le 23/09/2026. Kevin : « les trapèzes médians inférieurs, je ne les vois
+  //   pas ; essaye déjà de séquencer les deux, les médians et le supérieur ».
+  //   Le volume les sépare depuis le 08/09 — le shrug élève l'omoplate, le
+  //   rowing la rétracte —, mais la silhouette n'avait qu'un seul territoire :
+  //   un athlète qui ne fait que des rowings voyait son trapèze éteint, parce
+  //   que la zone dessinée était celle du SUPÉRIEUR, qu'il ne travaille pas.
+  dos:Object.freeze(['TRAP_SUP','TRAP_MED','DELT_LAT','DELT_POST','DORSAUX','TRICEPS',
+    'BICEPS','AVANT_BRAS','LOMBAIRES','FESSIERS','ABDUCTEURS','ISCHIOS','ADDUCTEURS',
+    'MOLLETS'])
 });
 // La part de largeur que la planche occupe sur la scene, les deux colonnes
 // d'etiquettes se partageant le reste. Une seule constante : les traits de

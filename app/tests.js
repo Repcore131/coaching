@@ -1902,10 +1902,35 @@ async function testExercices(){
     ok('Surcharge partielle : le MRV change',_re.mrv===26,String(_re.mrv));
     ok('Surcharge partielle : les autres bornes gardent le défaut',
        _re.mev===6&&_re.mavMin===10&&_re.mavMax===14,JSON.stringify(_re));
-    ok('Muscle sans repère → null',reperesEffectifs(currentUser,'LOMBAIRES')===null);
-    ok('ABDUCTEURS et ADDUCTEURS aussi',
-       reperesEffectifs(currentUser,'ABDUCTEURS')===null&&reperesEffectifs(currentUser,'ADDUCTEURS')===null);
-    ok('Les 14 muscles à repère sont couverts',Object.keys(REPERES_VOLUME).length===14);
+    // ⚠ CES TROIS ASSERTIONS ONT CHANGÉ D'OBJET LE 23/09/2026. Elles
+    //   gardaient l'ABSENCE de repère pour les lombaires, les abducteurs et
+    //   les adducteurs — la table les excluait faute de consensus de terrain.
+    //   Kevin, sa silhouette sous les yeux : « les lombaires, j'ai aucune
+    //   couleur, alors que pourtant j'ai un exo lombaire dans mes séances ».
+    //   Les trois ont rejoint la table, en ARBITRAGE assumé (voir son
+    //   en-tête). CE QUI SURVIT DE LA RÈGLE, et c'est l'essentiel : un
+    //   muscle INCONNU de la table rend toujours null, et rien ne l'invente.
+    ok('Les trois muscles sans repère en ont un, et il est complet',(()=>{
+      for(const m of ['LOMBAIRES','ABDUCTEURS','ADDUCTEURS']){
+        const r=reperesEffectifs(currentUser,m);
+        if(!r) return _echec(m+' n’a toujours pas de repère');
+        // Les bornes se suivent : un MEV au-dessus du MAV n'aurait aucun sens.
+        if(!(r.mev<=r.mavMin&&r.mavMin<=r.mavMax&&r.mavMax<=r.mrv))
+          return _echec(m+' : bornes incohérentes '+JSON.stringify(r));
+        // ⚠ MEV À 0 : ces trois-là sont chargés en indirect par tout le bas
+        //   du corps et par chaque port lourd. Le travail direct n'est pas
+        //   ce qui les maintient, et c'est ce que l'arbitrage dit.
+        if(r.mev!==0) return _echec(m+' : un MEV de '+r.mev+' pour un muscle chargé en indirect');
+      }
+      // LE LOMBAIRE A LE MRV LE PLUS BAS DES TROIS : site de surmenage
+      // classique, et sa fatigue se paie sur tout le reste.
+      const L=reperesEffectifs(currentUser,'LOMBAIRES');
+      return L.mrv<reperesEffectifs(currentUser,'ABDUCTEURS').mrv
+        ?true:_echec('le lombaire n’a plus le MRV le plus bas : '+L.mrv);})());
+    ok('Un muscle inconnu de la table rend toujours null',
+       reperesEffectifs(currentUser,'SOURCILS')===null);
+    ok('Les 18 muscles à repère sont couverts',Object.keys(REPERES_VOLUME).length===18,
+       Object.keys(REPERES_VOLUME).join(','));
     ok('Tous les repères portent sur un muscle connu',
        Object.keys(REPERES_VOLUME).every(m=>MUSCLES[m]));
     ok('Repères cohérents : mev <= mavMin <= mavMax <= mrv',
@@ -6460,8 +6485,14 @@ async function testExercices(){
           return sec.length?_echec('secondaires absents : '+sec.join(', ')):true;})());
 
         // ── REPERES_VOLUME : l'âge est nommé, aucun barème n'est créé ────
-        ok('REPERES_VOLUME est INCHANGÉ, aucun barème par âge',(()=>{
-          if(Object.keys(REPERES_VOLUME).length!==14)
+        // ⚠ LE TITRE DIT « INCHANGÉ » ET LA TABLE A CHANGÉ LE 23/09/2026 :
+        //   trois muscles de plus (lombaires, abducteurs, adducteurs). CE QUE
+        //   CETTE ASSERTION GARDE N'A PAS BOUGÉ D'UN POUCE — c'est le barème
+        //   par âge, et lui seul : aucune entrée ne gagne de clé liée à l'âge,
+        //   et les bornes des pectoraux sont celles d'origine. Le compte est
+        //   là pour qu'un ajout se remarque, pas pour les interdire.
+        ok('REPERES_VOLUME ne prend aucun barème par âge',(()=>{
+          if(Object.keys(REPERES_VOLUME).length!==18)
             return _echec(Object.keys(REPERES_VOLUME).length+' muscles');
           const r=REPERES_VOLUME.PECTORAUX;
           if(r.mev!==8||r.mavMin!==12||r.mavMax!==20||r.mrv!==22)
@@ -15228,21 +15259,31 @@ async function testExercices(){
               return _echec((f.name||'?')+' écrit');
           }
           return true;})());
-        ok('Un muscle SANS repère est absent de la sortie',(()=>{
-          // Règle 3. LOMBAIRES, ABDUCTEURS et ADDUCTEURS n'ont pas de repère :
-          // trois muscles sur dix-sept, et le lombaire est justement celui
-          // dont la charge cumulée fait le plus de dégâts.
+        // ⚠ CETTE ASSERTION A CHANGÉ DE SENS LE 23/09/2026. Elle vérifiait que
+        //   les lombaires, les abducteurs et les adducteurs RESTENT DEHORS,
+        //   faute de repère. Ils en ont un depuis, et la grille les montre :
+        //   c'est même le premier bénéfice de l'arbitrage, parce que la charge
+        //   lombaire cumulée est justement celle qui fait le plus de dégâts et
+        //   qu'elle n'apparaissait nulle part.
+        //   LA RÈGLE ELLE-MÊME N'A PAS BOUGÉ : pas de repère, pas de ligne.
+        //   Elle se vérifie maintenant sur un muscle que la table ne connaît
+        //   pas — ce qui est le seul cas qui reste, et le vrai cas général.
+        ok('La grille montre un muscle des qu’il a un repère, et pas avant',(()=>{
           _viderCacheVolume();
           const g=grilleCharge(_dossierG());
           const vus=new Set(g.map(c=>c.muscle));
           for(const m of ['LOMBAIRES','ABDUCTEURS','ADDUCTEURS'])
-            if(vus.has(m)) return _echec(m+' est affiché sans repère');
+            if(!vus.has(m)) return _echec(m+' a un repère et reste absent de la grille');
           if(!vus.has('PECTORAUX')) return _echec('un muscle AVEC repère est absent');
-          // Un coach qui fournit ses propres bornes le fait réapparaître.
+          // ET RIEN QUI N'AIT DE REPÈRE : chaque ligne porte un muscle connu.
+          for(const m of vus)
+            if(!reperesEffectifs(_dossierG(),m)) return _echec(m+' est affiché sans repère');
+          // Un coach qui fournit ses propres bornes reste prioritaire.
           _viderCacheVolume();
           const u2=_dossierG({reperesVolume:{LOMBAIRES:{mev:4,mavMin:8,mavMax:14,mrv:18}}});
-          return new Set(grilleCharge(u2).map(c=>c.muscle)).has('LOMBAIRES')
-            ?true:_echec('un repère fourni par le coach ne suffit pas');})());
+          const l=grilleCharge(u2).filter(c=>c.muscle==='LOMBAIRES')[0];
+          return (l&&reperesEffectifs(u2,'LOMBAIRES').mrv===18)
+            ?true:_echec('le repère du coach ne passe pas devant l’arbitrage');})());
         ok('Une semaine sans donnée rend le PRÉVISIONNEL du gabarit',(()=>{
           // Une case vide ne dit rien ; une case prévisionnelle dit ce qui est
           // prévu. Les semaines 2 et 3 du bloc n'ont aucune séance loggée.
@@ -18424,8 +18465,15 @@ async function testExercices(){
             // LE REFUS DIT QUOI FAIRE À LA PLACE, il ne se contente pas de bloquer.
             if(!/retire|deux blocs/i.test(r.raison)) return _echec('le refus ne propose rien : « '+r.raison+' »');
             if(u.blocPriorite.hauts.length!==3) return _echec('le quatrième a quand même été ajouté');
-            // Et un muscle sans repère n'est jamais priorisable.
-            const s=blocAjouterHaut(neuf(),'LOMBAIRES');
+            // ⚠ LE MUSCLE TÉMOIN A CHANGÉ LE 23/09/2026. C'était LOMBAIRES,
+            //   qui n'avait pas de repère ; il en a un depuis, et il est donc
+            //   priorisable comme les autres — ce qui est cohérent : on peut
+            //   vouloir un bloc lombaire. LA RÈGLE GARDÉE est la même, et
+            //   c'est elle qui compte : sans repère, pas de priorisation,
+            //   parce qu'on ne saurait pas dire vers quel volume monter.
+            if(!blocAjouterHaut(neuf(),'LOMBAIRES').ok)
+              return _echec('un muscle qui a maintenant un repère reste refusé');
+            const s=blocAjouterHaut(neuf(),'SOURCILS');
             return s.ok?_echec('un muscle sans repère est priorisé'):true;})());
 
           ok('Le plafond des 10 % est OPPOSABLE, et il dit quoi retirer',(()=>{
@@ -18784,21 +18832,27 @@ async function testExercices(){
               return appliquerRetourMuscle(u,'PECTORAUX',S(1)).bouge==='mrv'
                 ?true:_echec('deux baisses de suite ne descendent pas le MRV');});})());
 
-          ok('Un muscle sans repère est ignoré, à l\'écriture comme au déplacement',(()=>{
-            // LOMBAIRES, ABDUCTEURS, ADDUCTEURS : la table les exclut
-            // volontairement. Ils n'ont ni MEV ni MRV à déplacer, et récolter
-            // un retour qu'on ne pourra pas appliquer, c'est poser une
-            // question pour rien.
+          // ⚠ CETTE ASSERTION A CHANGÉ D'OBJET LE 23/09/2026. Les trois muscles
+          //   qu'elle citait — lombaires, abducteurs, adducteurs — ont rejoint la
+          //   table, et la boucle de retour les traite donc comme les autres :
+          //   leur repère se déplace sur les retours de séance. C'est cohérent,
+          //   et c'est même ce qui rattrape l'arbitrage, puisqu'un arbitrage
+          //   moyen se corrige sur l'athlète qui le porte.
+          //   LA RÈGLE GARDÉE : un muscle que la table ne connaît pas ne récolte
+          //   rien et ne bouge rien. Poser une question dont on ne fera rien
+          //   reste la faute qu'on évite.
+          ok('Un muscle inconnu de la table ne récolte rien et ne bouge rien',(()=>{
             return sansSave(()=>{
-              for(const m of ['LOMBAIRES','ABDUCTEURS','ADDUCTEURS']){
-                if(reperesTable(m)) return _echec(m+' a un repère de table');
-                const u={email:'x@t.fr',sessions:[],reperesAuto:{},retourMuscle:{}};
-                u.retourMuscle[m]=[{semaineISO:S(1),congestion:'forte',courbatures:'aucune',perfDelta:'stable'}];
-                if(appliquerRetourMuscle(u,m,S(1)).bouge) return _echec(m+' a bougé');
-                const e=enregistrerRetourMuscle(u,m,{congestion:'forte'});
-                if(e.ok) return _echec('un retour est accepté sur '+m);
-              }
-              return true;});})());
+              // Les trois arbitrés, eux, sont bien traités comme les autres.
+              for(const m of ['LOMBAIRES','ABDUCTEURS','ADDUCTEURS'])
+                if(!reperesTable(m)) return _echec(m+' n’a pas de repère de table');
+              const m='SOURCILS';
+              if(reperesTable(m)) return _echec('la table connaît '+m);
+              const u={email:'x@t.fr',sessions:[],reperesAuto:{},retourMuscle:{}};
+              u.retourMuscle[m]=[{semaineISO:S(1),congestion:'forte',courbatures:'aucune',perfDelta:'stable'}];
+              if(appliquerRetourMuscle(u,m,S(1)).bouge) return _echec(m+' a bougé');
+              const e=enregistrerRetourMuscle(u,m,{congestion:'forte'});
+              return e.ok?_echec('un retour est accepté sur '+m):true;});})());
 
           ok('Deux semaines muettes gèlent le repère, sans revenir à la table',(()=>{
             // Revenir en silence changerait les seuils de quelqu'un qui n'a
@@ -25109,11 +25163,16 @@ async function testExercices(){
         &&_htmlConcentration({},'PECTORAUX')==='');
 
       // ── Indépendance vis-à-vis des repères ──
-      ok('Critère 4 : un muscle SANS repère reçoit la ligne',(()=>{
+      // ⚠ L'INTITULÉ DISAIT « SANS REPÈRE » ET LES LOMBAIRES EN ONT UN DEPUIS
+      //   LE 23/09/2026. Ce que la ligne garantit n'a pas bougé d'un mot : elle
+      //   parle de RÉPARTITION, pas de dosage, et elle sort pour n'importe quel
+      //   muscle — avec repère ou sans. L'assertion suivante le prouve d'ailleurs
+      //   autrement, et mieux : la fonction ne lit NI REPERES_VOLUME, NI
+      //   reperesEffectifs, NI zoneVolume.
+      ok('Critère 4 : la ligne sort quel que soit le muscle, repère ou pas',(()=>{
         const c=_cAth([14,2],'LOMBAIRES');
         const r=_cRes(c);
-        return reperesEffectifs(c,'LOMBAIRES')===null
-          &&/14 des 16 séries sur une seule séance/.test(_htmlConcentration(r,'LOMBAIRES'));})());
+        return /14 des 16 séries sur une seule séance/.test(_htmlConcentration(r,'LOMBAIRES'));})());
       ok('La ligne ne lit ni REPERES_VOLUME ni zoneVolume',
         _htmlConcentration.toString().indexOf('REPERES_VOLUME')<0
         &&_htmlConcentration.toString().indexOf('reperesEffectifs')<0
@@ -26258,14 +26317,17 @@ async function testExercices(){
       ok('Critère 2 : urgencyScore vaut 6, comme le sous-MEV',
         _vhScore(_vhAth('vh3',24,26))===6,String(_vhScore(_vhAth('vh3',24,26))));
 
-      // ── Critère : un muscle sans repère ne lève jamais rien ──
-      // reperesEffectifs rend null pour LOMBAIRES, ABDUCTEURS et ADDUCTEURS :
-      // ni sous-MEV, ni volume haut, quel que soit le nombre de séries.
-      ok('Critère 3 : un muscle sans repère ne lève pas le signal',(()=>{
+      // ── Critère : le signal suit le repère, et rien d'autre ──
+      // ⚠ CHANGÉ LE 23/09/2026. Les lombaires, les abducteurs et les
+      //   adducteurs n'avaient pas de repère : aucun signal ne pouvait les
+      //   concerner. Ils en ont un depuis, et QUARANTE SÉRIES DE LOMBAIRES
+      //   LÈVENT MAINTENANT LE VOLUME HAUT — ce qui est exactement ce qu'on
+      //   veut d'un muscle dont la charge cumulée fait le plus de dégâts.
+      ok('Critère 3 : un muscle arbitré lève le signal comme les autres',(()=>{
         return ['LOMBAIRES','ABDUCTEURS','ADDUCTEURS'].every((m,i)=>{
           const c=_vhAth('vhs'+i,40,40,{exMuscles:{[_vhK]:{p:[m],s:[]}},reperesVolume:{}});
           const sg=signauxEntrainement(c);
-          return reperesEffectifs(c,m)===null&&sg.volumeHaut===false&&sg.sousMEV===false;});})());
+          return !!reperesEffectifs(c,m)&&sg.volumeHaut===true;});})());
 
       // ── Critère : la santé passe devant ──
       // Un signal de niveau 6 n'est même pas calculé quand un 7, 8 ou 9 est
@@ -35493,76 +35555,143 @@ async function testExercices(){
             return true;
           } finally { _corpsVue=sV; try{ rcInfoFermer(true); }catch(e){} }})());
 
-        okA('1428 — LES CARTES DE ZONES : LE PEC MONTE, LE BICEPS PASSE DEVANT, LA CUISSE VA DU HAUT EN BAS',(async()=>{
-          // Kevin, la silhouette sous les yeux : « le détourage au niveau des
-          // pecs est incomplet, tu peux monter en haut et sélectionner
-          // correctement les pecs ; les biceps, l’entourage est mauvais aussi,
-          // il englobe le triceps ; les cuisses, il faut que ça soit en
-          // entier ». Les quatre cartes sont recoupées par
-          // scripts/corps_zones_recoupe.py, qui est idempotent : le rejouer sur
-          // les cartes livrées ne les change pas.
-          //
-          // ⚠ ON SONDE LA CARTE, PAS LE SCRIPT. Ce sont ces pixels-là que
-          //   l’application lit sous le doigt et peint en couleur ; un jour où
-          //   quelqu’un régénérera les cartes autrement, c’est le résultat qui
-          //   doit tenir, pas la recette.
-          const url=(CORPS_PLANCHE['h-face']||{}).zones;
-          if(!url) return _echec('la silhouette masculine n’a plus de carte de zones');
-          const img=await new Promise(res=>{
-            const i=new Image();
-            i.onload=()=>res(i); i.onerror=()=>res(null);
-            i.src=url;
-          });
-          if(!img) return _echec('la carte '+url+' ne se charge pas');
-          const cv=document.createElement('canvas');
-          cv.width=img.naturalWidth; cv.height=img.naturalHeight;
-          cv.getContext('2d').drawImage(img,0,0);
-          let d=null;
-          try{ d=cv.getContext('2d').getImageData(0,0,cv.width,cv.height).data; }
-          catch(e){ return _echec('la carte n’est pas lisible : '+((e&&e.message)||e)); }
-          const zone=(x,y)=>{
-            const v=d[(y*cv.width+x)*4];
-            return v?(CORPS_ZONES_ORDRE[Math.round(v/CORPS_ZONES_PAS)-1]||null):null;
+        // ⚠ CETTE ASSERTION A GRANDI LE 23/09/2026 AU SOIR. Elle sondait douze
+        //   pixels d'une seule planche — le pec, le biceps, la cuisse. Kevin a
+        //   regardé les quatre, et il en manquait bien plus que trois : le
+        //   trapèze moyen n'avait AUCUN territoire (son volume existait, sa
+        //   place sur le dessin non), les dorsaux et les lombaires se
+        //   partageaient le bas du dos par une ligne HORIZONTALE, et le short
+        //   était trop sombre pour qu'une couleur s'y voie.
+        okA('1430 — LES QUATRE CARTES DE ZONES, MUSCLE PAR MUSCLE',(async()=>{
+          // Les cartes sont produites par scripts/corps_zones.py, idempotent.
+          // ⚠ ON SONDE LA CARTE, PAS LE SCRIPT : ce sont ces pixels-là que
+          //   l'application lit sous le doigt et peint en couleur. Le jour où
+          //   quelqu'un les régénérera autrement, c'est le RÉSULTAT qui doit
+          //   tenir, pas la recette.
+          // ⚠ ET ON SONDE UNE FENÊTRE DE 7×7, PAS UN PIXEL. La carte laisse à
+          //   zéro les traits du dessin, pour qu'ils restent lisibles sous la
+          //   teinte : un pixel isolé tombe une fois sur trois dans un trait,
+          //   et l'assertion aurait clignoté sans rien dire de vrai.
+          const lire=async(url)=>{
+            const img=await new Promise(res=>{ const i=new Image();
+              i.onload=()=>res(i); i.onerror=()=>res(null); i.src=url; });
+            if(!img) return null;
+            const cv=document.createElement('canvas');
+            cv.width=img.naturalWidth; cv.height=img.naturalHeight;
+            cv.getContext('2d').drawImage(img,0,0);
+            try{ return {w:cv.width,h:cv.height,
+              d:cv.getContext('2d').getImageData(0,0,cv.width,cv.height).data}; }
+            catch(e){ return null; }
           };
+          const nomZone=v=>v?(CORPS_ZONES_ORDRE[Math.round(v/CORPS_ZONES_PAS)-1]||null):null;
+          const fenetre=(c,x,y)=>{
+            // Le muscle majoritaire de la fenêtre, et rien d'autre dedans.
+            const n={};
+            for(let j=y-3;j<=y+3;j++) for(let i=x-3;i<=x+3;i++){
+              const k=nomZone(c.d[(j*c.w+i)*4]);
+              if(k) n[k]=(n[k]||0)+1;
+            }
+            const cles=Object.keys(n).sort((a,b)=>n[b]-n[a]);
+            return cles.length?cles[0]:null;
+          };
+          const cartes={};
+          for(const g of ['h','f']) for(const v of ['face','dos']){
+            const pl=CORPS_PLANCHE[g+'-'+v];
+            const c=pl&&await lire(pl.zones);
+            if(!c) return _echec('la carte '+((pl||{}).zones||g+'-'+v)+' ne se lit pas');
+            cartes[g+'-'+v]=c;
+          }
+          // ── 1. CHAQUE MUSCLE QUE LA VUE ANNONCE A UN TERRITOIRE ─────────
+          //    C'est le défaut du trapèze moyen, et il ne doit plus pouvoir
+          //    revenir : un muscle listé dans CORPS_MUSCLES_VUE sans pixels sur
+          //    la planche reçoit du volume et ne s'affiche nulle part.
+          //    ET AUCUN INTRUS : un muscle peint que la vue ne déclare pas ne
+          //    serait jamais teinté, donc jamais vu — du travail perdu.
+          for(const g of ['h','f']) for(const v of ['face','dos']){
+            const c=cartes[g+'-'+v], n={};
+            for(let i=0;i<c.d.length;i+=4){
+              const k=nomZone(c.d[i]);
+              if(k) n[k]=(n[k]||0)+1;
+            }
+            for(const m of CORPS_MUSCLES_VUE[v])
+              if(!((n[m]||0)>=500))
+                return _echec(g+'-'+v+' : '+m+' n’a que '+(n[m]||0)+' pixels');
+            for(const m of Object.keys(n))
+              if(CORPS_MUSCLES_VUE[v].indexOf(m)<0)
+                return _echec(g+'-'+v+' : '+m+' est peint mais la vue ne le montre pas');
+          }
+          // ── 2. LES SONDES, LA OU KEVIN A REGARDE ────────────────────────
           const sondes=[
-            // LE HAUT DU THORAX, DES DEUX CÔTÉS : le trapèze y descendait en
-            // coin, et le pec ne commençait qu’à mi-hauteur.
-            [130,200,'PECTORAUX','le haut du thorax, à gauche'],
-            [230,200,'PECTORAUX','le haut du thorax, à droite'],
-            [120,210,'PECTORAUX','le thorax près de l’aisselle gauche'],
-            [240,210,'PECTORAUX','le thorax près de l’aisselle droite'],
-            // LE BRAS DE FACE : le biceps tient la masse, le triceps la bande
-            // extérieure. C’était l’inverse.
-            [78,300,'BICEPS','l’intérieur du bras gauche'],
-            [52,300,'TRICEPS','le bord extérieur du bras gauche'],
-            [300,300,'BICEPS','l’intérieur du bras droit'],
-            // LE HAUT DE LA CUISSE, sous l’ourlet du short : l’abducteur
-            // prenait toute la largeur et le quadriceps ne commençait qu’à
-            // mi-cuisse.
-            [102,510,'QUADRICEPS','le haut de la cuisse gauche'],
-            [255,510,'QUADRICEPS','le haut de la cuisse droite'],
-            [120,540,'QUADRICEPS','la cuisse gauche'],
-            [240,540,'QUADRICEPS','la cuisse droite']];
-          for(const [x,y,attendu,ou] of sondes){
-            const z=zone(x,y);
-            if(z!==attendu) return _echec(ou+' ('+x+','+y+') : '+(z||'rien')+' au lieu de '+attendu);
+            // LE PEC MONTE JUSQUE SOUS LA CLAVICULE, des deux côtés. Le
+            // trapèze descendait en coin sur le haut du thorax.
+            ['h-face',130,196,'PECTORAUX','le haut du thorax, à gauche'],
+            ['h-face',240,206,'PECTORAUX','le haut du thorax, à droite'],
+            ['f-face',130,200,'PECTORAUX','le haut du thorax de la femme'],
+            // DE FACE, LE BICEPS EST LA MASSE et le triceps une bande.
+            ['h-face',65,271,'BICEPS','l’avant du bras'],
+            ['h-face',45,273,'TRICEPS','le bord extérieur du bras'],
+            ['f-face',60,300,'BICEPS','l’avant du bras de la femme'],
+            ['f-face',51,285,'TRICEPS','le bord extérieur de son bras'],
+            // DE DOS, L'INVERSE.
+            ['h-dos',60,300,'TRICEPS','l’arrière du bras'],
+            ['f-dos',60,300,'TRICEPS','l’arrière du bras de la femme'],
+            // LA CUISSE ENTIERE, ses deux bandes de chaque côté.
+            ['h-face',120,545,'QUADRICEPS','la cuisse'],
+            ['h-face',79,533,'ABDUCTEURS','le bord extérieur de la cuisse'],
+            ['h-face',165,548,'ADDUCTEURS','l’intérieur de la cuisse'],
+            ['f-face',100,500,'QUADRICEPS','la cuisse de la femme'],
+            ['h-dos',120,560,'ISCHIOS','l’arrière de la cuisse'],
+            ['f-dos',100,530,'ISCHIOS','l’arrière de la cuisse de la femme'],
+            // LE TRAPEZE, COUPE A L'EPINE DE L'OMOPLATE.
+            ['h-dos',180,190,'TRAP_SUP','la pente cou-épaule'],
+            ['h-dos',145,229,'TRAP_MED','entre les omoplates'],
+            ['f-dos',155,180,'TRAP_SUP','la pente cou-épaule de la femme'],
+            ['f-dos',117,217,'TRAP_MED','entre ses omoplates'],
+            // ET LE BAS DU DOS : la colonne au milieu, les dorsaux de chaque
+            // côté — À LA MÊME HAUTEUR. C'est ce qui prouve que la séparation
+            // est verticale et non plus horizontale.
+            ['h-dos',180,390,'LOMBAIRES','la colonne lombaire'],
+            ['h-dos',133,365,'DORSAUX','le flanc gauche, au niveau des lombaires'],
+            ['h-dos',217,361,'DORSAUX','le flanc droit, au niveau des lombaires'],
+            ['f-dos',139,323,'LOMBAIRES','la colonne lombaire de la femme'],
+            ['f-dos',117,351,'DORSAUX','son flanc, au niveau des lombaires'],
+            ['h-dos',157,451,'FESSIERS','le fessier']];
+          for(const [pl,x,y,attendu,ou] of sondes){
+            const z=fenetre(cartes[pl],x,y);
+            if(z!==attendu)
+              return _echec(pl+' — '+ou+' ('+x+','+y+') : '+(z||'rien')+' au lieu de '+attendu);
           }
-          // ET LES TROIS MUSCLES QUI CÈDENT DU TERRAIN EN GARDENT : un partage
-          // qui en efface un le rendrait introuvable sous le doigt.
-          const compte={};
-          for(let i=0;i<d.length;i+=4){
-            const v=d[i];
-            if(!v) continue;
-            const k=CORPS_ZONES_ORDRE[Math.round(v/CORPS_ZONES_PAS)-1];
-            if(k) compte[k]=(compte[k]||0)+1;
+          return true;}));
+
+        okA('1430 — LE SHORT LAISSE VOIR LA COULEUR DES FESSIERS',(async()=>{
+          // Kevin : « fessiers, essaie de mettre peut-être plus blanc ton
+          // caleçon, pour qu'on puisse voir par-dessus la couleur ». La teinte
+          // est peinte en `multiply` : elle MULTIPLIE la luminance du dessin.
+          // À 24 sur 255, le short rendait un vert à (5,29,14) — noir. Aucun
+          // réglage de couleur ne rattrape une multiplication par presque zéro ;
+          // c'est la luminance du dessin qui a été relevée, sous la seule zone
+          // des fessiers et avec un bord fondu (scripts/corps_short.py).
+          const pl=CORPS_PLANCHE['h-dos'];
+          const charger=url=>new Promise(res=>{ const i=new Image();
+            i.onload=()=>res(i); i.onerror=()=>res(null); i.src=url; });
+          const [dessin,zones]=await Promise.all([charger(pl.src),charger(pl.zones)]);
+          if(!dessin||!zones) return _echec('la silhouette de dos ne se charge pas');
+          const lire=img=>{ const cv=document.createElement('canvas');
+            cv.width=img.naturalWidth; cv.height=img.naturalHeight;
+            cv.getContext('2d').drawImage(img,0,0);
+            return cv.getContext('2d').getImageData(0,0,cv.width,cv.height).data; };
+          let a=null,b=null;
+          try{ a=lire(dessin); b=lire(zones); }catch(e){ return _echec('image illisible : '+((e&&e.message)||e)); }
+          const val=(CORPS_ZONES_ORDRE.indexOf('FESSIERS')+1)*CORPS_ZONES_PAS;
+          let n=0,somme=0;
+          for(let i=0;i<b.length;i+=4){
+            if(b[i]!==val) continue;
+            n++; somme+=(a[i]+a[i+1]+a[i+2])/3;
           }
-          for(const m of ['TRAP_SUP','DELT_ANT','TRICEPS','ABDUCTEURS','ADDUCTEURS']){
-            if(!((compte[m]||0)>400)) return _echec(m+' n’a plus que '+(compte[m]||0)+' pixels sur la vue avant');
-          }
-          // DE FACE, LE BICEPS PASSE DEVANT LE TRICEPS. C’est la demande, et
-          // c’est ce qu’un bras vu de face montre.
-          return (compte.BICEPS>compte.TRICEPS)?true
-            :_echec('le triceps tient encore '+compte.TRICEPS+' pixels contre '+compte.BICEPS+' au biceps');}));
+          if(!n) return _echec('aucun pixel de fessier sur la carte de dos');
+          const moy=somme/n;
+          return moy>=55?true
+            :_echec('le short est à '+Math.round(moy)+' de luminance : la couleur ne s’y verra pas');}));
       })();
 
       // BUILD 1411 — Kevin : « côté coach uniquement, sur ordi, mets les noms
@@ -42114,9 +42243,16 @@ async function testExercices(){
       // vaut le rang de son muscle dans CORPS_ZONES_ORDRE, fois CORPS_ZONES_PAS.
       if(CORPS_ZONES_ORDRE.length*CORPS_ZONES_PAS>255) return _echec('les rangs débordent un octet');
       if(new Set(CORPS_ZONES_ORDRE).size!==CORPS_ZONES_ORDRE.length) return _echec('un muscle a deux rangs');
+      // ⚠ TREIZE DE FACE, QUATORZE DE DOS DEPUIS LE 23/09/2026 : le trapèze
+      //   moyen a rejoint la vue arrière, où il se voit — il n'existait sur
+      //   aucune planche alors que le volume le sépare du supérieur depuis le
+      //   08/09. De face, on ne le voit pas, et il n'y est pas.
+      const ATTENDU={face:13,dos:14};
       for(const vue of ['face','dos']){
         const l=CORPS_MUSCLES_VUE[vue]||[];
-        if(l.length!==13) return _echec(vue+' : '+l.length+' muscles au lieu des 13 de ce matin');
+        if(l.length!==ATTENDU[vue]) return _echec(vue+' : '+l.length+' muscles au lieu de '+ATTENDU[vue]);
+        if(vue==='dos'&&l.indexOf('TRAP_MED')<0) return _echec('le trapèze moyen n’est pas sur la vue de dos');
+        if(vue==='face'&&l.indexOf('TRAP_MED')>=0) return _echec('le trapèze moyen ne se voit pas de face');
         for(const m of l){
           if(CORPS_ZONES_ORDRE.indexOf(m)<0) return _echec(vue+' : '+m+' n’a pas de rang dans la carte');
           if(!MUSCLES[m]) return _echec(m+' n’est pas un muscle connu');
@@ -42146,11 +42282,18 @@ async function testExercices(){
         if(c(v)!==GC_COULEURS[z]) return _echec(v+' séries : '+c(v)+' au lieu de '+z+' ('+GC_COULEURS[z]+')');
       // QUATRE COULEURS DIFFERENTES : plus un corps d'une seule teinte.
       if(new Set(cas.map(([v])=>c(v))).size!==4) return _echec('les quatre zones ne donnent pas quatre couleurs');
-      // UN MUSCLE SANS REPERE N'EST PAS TEINTE : on n'invente pas son MRV.
-      for(const m of ['ABDUCTEURS','ADDUCTEURS'])
-        if(!reperesEffectifs(u,m)&&corpsTeintes(u,'face',{[m]:12})[m]) return _echec(m+' est teinté sans repère');
-      if(!reperesEffectifs(u,'LOMBAIRES')&&corpsTeintes(u,'dos',{LOMBAIRES:6}).LOMBAIRES)
-        return _echec('les lombaires sont teintées sans repère');
+      // ⚠ LES TROIS MUSCLES ARBITRÉS SE TEIGNENT MAINTENANT (23/09/2026). Ce
+      //   test gardait l'inverse : sans repère, pas de teinte, et les
+      //   abducteurs, les adducteurs et les lombaires restaient gris. Kevin
+      //   entraîne les trois et ne comprenait pas leur silence.
+      for(const [m,vue] of [['ABDUCTEURS','face'],['ADDUCTEURS','face'],['LOMBAIRES','dos']])
+        if(!corpsTeintes(u,vue,{[m]:12})[m]) return _echec(m+' n’est toujours pas teinté');
+      // LA RÈGLE, ELLE, TIENT TOUJOURS, et c'est le garde-fou qui compte : le
+      // calcul ÉCARTE un muscle dont reperesEffectifs ne sait rien dire. Elle
+      // ne se démontre plus sur un muscle réel — ils ont tous un repère —,
+      // alors on la lit dans le code, là où elle vit.
+      if(!/if\(!rep\)\s*continue/.test(String(corpsZones)))
+        return _echec('corpsZones n’écarte plus les muscles sans repère');
       // LA VUE FILTRE : un muscle que la planche ne montre pas n'est pas peint.
       if(corpsTeintes(u,'face',{FESSIERS:15}).FESSIERS) return _echec('les fessiers sont teints en vue de face');
       if(!corpsTeintes(u,'dos',{FESSIERS:15}).FESSIERS) return _echec('les fessiers ne sont pas teints en vue de dos');
