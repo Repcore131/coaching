@@ -39422,16 +39422,22 @@ function corpsEtaler(ys,gap,min,max){
   return out;
 }
 /**
- * PURE. L'ecart d'une mensuration entre LES DEUX DERNIERS BILANS QUI LA
+ * PURE. L'ecart d'une mensuration entre LE PREMIER ET LE DERNIER BILAN QUI LA
  * PORTENT. Rend null quand il n'y en a pas deux.
  *
- * ⚠ « LES DEUX DERNIERS QUI LA PORTENT », ET NON « LES DEUX DERNIERS ». Un
- *   athlete qui saute son tour de mollet une fois sur deux aurait vu son
- *   mollet muet un bilan sur deux, alors que la mesure d'avant existe et que
- *   la comparaison est parfaitement valable. C'est aussi pour ca que chaque
- *   etiquette porte SES dates : d'un muscle a l'autre, la periode peut
- *   differer, et une periode commune affichee en pied de cadre aurait menti
- *   sur celles-la.
+ * ⚠ LE PREMIER ET LE DERNIER, ET NON LES DEUX DERNIERS. Demande de Kevin le
+ *   23/09/2026 : « les +/- du premier bilan compare au dernier bilan ». Les
+ *   deux derniers disaient la quinzaine ecoulee ; ce que l'athlete et son
+ *   coach regardent sur une silhouette, c'est le CHEMIN PARCOURU depuis le
+ *   debut. Les mini-courbes, elles, montrent toujours le detail intermediaire
+ *   — rien n'est perdu, c'est la meme donnee lue sur une autre portee.
+ *
+ * ⚠ « QUI LA PORTENT », ET NON « LE PREMIER ET LE DERNIER BILAN ». Un athlete
+ *   qui saute son tour de mollet aurait vu son mollet muet, alors que la
+ *   mesure existe un bilan plus loin et que la comparaison est parfaitement
+ *   valable. C'est aussi pour ca que chaque etiquette porte SES dates : d'une
+ *   mensuration a l'autre, la periode peut differer, et une periode commune
+ *   affichee en pied de cadre aurait menti sur celles-la.
  *
  * ⚠ LES VALEURS REPORTEES SONT ECARTEES, ET C'EST LE PIEGE PRINCIPAL.
  *   bilansOrdonnes passe par _comblerMensurations : quand l'athlete confirme
@@ -39449,10 +39455,18 @@ function corpsEtaler(ys,gap,min,max){
  * @returns {{cle:string,debut:{date:number,valeur:number},
  *            fin:{date:number,valeur:number},delta:number,stable:boolean}|null}
  */
-function corpsEcart(u,cle){
-  if(!cle) return null;
+/**
+ * PURE. Les releves REELS d'une mensuration, du plus ancien au plus recent.
+ * Les valeurs reportees sont ecartees — voir la regle ci-dessus.
+ *
+ * Sortie de corpsEcart pour que l'etiquette puisse dire « une seule mesure »
+ * sans refaire le meme balayage d'une facon qui finirait par diverger.
+ * @returns {Array<{date:number,valeur:number}>}
+ */
+function corpsRelevesReels(u,cle){
+  if(!cle) return [];
   let bl=[];
-  try{ bl=bilansOrdonnes(u)||[]; }catch(e){ return null; }
+  try{ bl=bilansOrdonnes(u)||[]; }catch(e){ return []; }
   const avec=[];
   for(const b of bl){
     let rep=false; try{ rep=bmReportee(b,cle); }catch(e){ rep=false; }
@@ -39460,8 +39474,12 @@ function corpsEcart(u,cle){
     let v=null; try{ v=getBM(b,cle); }catch(e){ v=null; }
     if(v>0) avec.push({date:Number(b&&b.date)||0,valeur:v});
   }
+  return avec;
+}
+function corpsEcart(u,cle){
+  const avec=corpsRelevesReels(u,cle);
   if(avec.length<2) return null;
-  const a=avec[avec.length-2], z=avec[avec.length-1];
+  const a=avec[0], z=avec[avec.length-1];
   const d=Math.round((z.valeur-a.valeur)*10)/10;
   return {cle,debut:a,fin:z,delta:d,stable:Math.abs(d)<SYN_BRUIT_MESURE};
 }
@@ -39482,17 +39500,26 @@ function _corpsJourLong(ts){
  * PURE. Ce que porte l'etiquette d'une mensuration, ou null si elle n'a
  * aucun ecart a montrer.
  *
- * ⚠ PAS D'ETIQUETTE SANS ECART. Kevin, 21/09/2026 : « les mensurations
- *   uniquement avec les +/- cm ». Un tour mesure une seule fois — ou jamais,
- *   ou seulement reporte d'un bilan a l'autre — ne dit rien d'une evolution :
- *   il ne sort pas. Quand AUCUN tour n'a d'ecart, c'est le pied de cadre qui
- *   dit pourquoi.
+ * ⚠ UNE ETIQUETTE PAR MENSURATION MESUREE, ZEROS COMPRIS. Kevin, 23/09/2026 :
+ *   « il faut l'ensemble des mensurations, si ya des 0 met les quand meme ».
+ *   La version d'avant ne sortait que les tours qui avaient bouge : un corps
+ *   ou trois mesures sur dix n'ont pas change montrait trois etiquettes, et on
+ *   ne pouvait pas distinguer « pas bouge » de « pas mesure ». Les deux se
+ *   disent maintenant, et ils ne se disent pas pareil.
+ *
+ * ⚠ CE QU'ON NE FAIT PAS : inventer un zero. Un tour mesure UNE SEULE FOIS n'a
+ *   pas d'ecart — ecrire « 0 cm » dessus affirmerait qu'il n'a pas bouge,
+ *   alors que personne n'en sait rien. Il porte « 1 mesure », et son infobulle
+ *   donne la valeur et la date. Un tour JAMAIS mesure n'a pas d'etiquette du
+ *   tout : il n'y a rien a montrer, et une etiquette vide sur un corps n'est
+ *   que du bruit.
  *
  * ⚠ « stable » SOUS LA TOLERANCE, ET NON « +0,3 cm ». C'est _synEcart qui
  *   tranche, avec le meme seuil que le reste de l'application : un metre de
  *   couturiere se trompe d'un demi-centimetre, et un ecart plus petit que
  *   l'erreur de mesure n'est pas un ecart. L'afficher en chiffres le ferait
- *   lire comme un resultat.
+ *   lire comme un resultat. UN ZERO EXACT, LUI, S'ECRIT « 0 cm » : les deux
+ *   releves donnent le meme nombre, ce n'est pas une incertitude de mesure.
  *
  * ⚠ AUCUNE COULEUR DE JUGEMENT (regle R32) : un tour de taille qui descend
  *   est un but, un tour de bras qui descend une perte, et rien dans le
@@ -39502,12 +39529,27 @@ function _corpsJourLong(ts){
  *            ecart:object}|null}
  */
 function corpsMesureEtiquette(u,cle){
+  let rel=[];
+  try{ rel=corpsRelevesReels(u,cle); }catch(err){ rel=[]; }
+  if(!rel.length) return null;
+  const nom=CORPS_NOMS[cle]||cle;
+  const long=_libMesure(((MEAS.find(m=>m.k===cle)||{}).l)||nom,true);
+  // UNE SEULE MESURE : on le DIT, on n'ecrit pas un zero qu'on ne sait pas.
+  if(rel.length<2){
+    const seul=rel[0];
+    return {cle,lib:nom,valeur:'1 mesure',periode:_corpsJour(seul.date),ecart:null,
+      titre:long+' · mesuré une seule fois, le '+_corpsJourLong(seul.date)
+        +' · '+String(seul.valeur).replace('.',',')+' cm'
+        +' · un écart demande deux relevés'};
+  }
   let e=null;
   try{ e=corpsEcart(u,cle); }catch(err){ e=null; }
   if(!e) return null;
-  const nom=CORPS_NOMS[cle]||cle;
-  const long=_libMesure(((MEAS.find(m=>m.k===cle)||{}).l)||nom,true);
   const t=_synEcart(e.delta,'cm',SYN_BRUIT_MESURE);
+  // UN ZERO EXACT S'ECRIT, il ne devient pas « stable » : « stable » veut dire
+  // « plus petit que l'erreur du metre », « 0 cm » veut dire « le meme
+  // nombre ». Ce n'est pas la meme information.
+  if(e.delta===0) t.delta='0'+String.fromCharCode(160)+'cm';
   const periode=_corpsJour(e.debut.date)+' → '+_corpsJour(e.fin.date);
   // L'infobulle et la phrase lue commencent par la MENSURATION, en toutes
   // lettres : l'etiquette n'en montre que le nom court.
@@ -40147,7 +40189,13 @@ function _htmlCorpsGraphes(u){
  * ⚠ AUCUNE COULEUR DE JUGEMENT SUR UN CENTIMETRE. C'est la regle R32 : aucun
  *   objectif declare ne dit dans quel sens un tour de cuisse « doit » aller.
  *   L'ecart s'ecrit donc toujours dans la meme encre.
- * @returns {{etiquettes:string,traits:string,avecEcart:number}}
+ *
+ * ⚠ DEUX COMPTEURS, ET ILS NE DISENT PAS LA MEME CHOSE depuis le 23/09/2026 :
+ *   `etiquettes` compte ce qui est POSE sur le corps — toute mensuration
+ *   mesuree, zeros compris — et `avecEcart` ce qui porte un ECART calcule.
+ *   Un seul compteur melangerait « dix tours affiches » et « trois tours qui
+ *   ont bouge », et le pied de cadre se tromperait de phrase.
+ * @returns {{etiquettes:string,traits:string,avecEcart:number,nEtiquettes:number}}
  */
 function _htmlCorpsEtiquettes(u,genre,vue){
   const g0=(100-CORPS_PART_CORPS)/2;
@@ -40159,14 +40207,15 @@ function _htmlCorpsEtiquettes(u,genre,vue){
     if(!a) continue;
     (par[m.s]||par.l).push({inf,x:g0+a.x*CORPS_PART_CORPS/100,y:a.y});
   }
-  let ets='', segments='', points='', avecEcart=0;
+  let ets='', segments='', points='', avecEcart=0, nEtiquettes=0;
   for(const cote of ['l','r']){
     const col=par[cote].slice().sort((p,q)=>p.y-q.y);
     const ys=corpsEtaler(col.map(p=>p.y),CORPS_ETIQ_GAP,CORPS_ETIQ_HAUT,CORPS_ETIQ_BAS);
     col.forEach((p,i)=>{
       const cy=ys[i];
       const inf=p.inf;
-      avecEcart++;
+      nEtiquettes++;
+      if(inf.ecart) avecEcart++;
       // TROIS LIGNES : la mensuration, son ecart, ses deux dates. La source
       // et la date sont SUR l'etiquette, la tolerance dans l'infobulle et au
       // pied du cadre — la doctrine, verifiable.
@@ -40201,18 +40250,29 @@ function _htmlCorpsEtiquettes(u,genre,vue){
   }
   const traits='<svg class="cc-corps-traits" viewBox="0 0 100 100"'
     +' preserveAspectRatio="none" aria-hidden="true">'+segments+'</svg>'+points;
-  return {etiquettes:ets,traits,avecEcart};
+  return {etiquettes:ets,traits,avecEcart,nEtiquettes};
 }
 /**
- * Le cadre « Évolution élève numéro N ». Rend '' quand il n'a rien le droit
- * de montrer.
+ * Le cadre du schema corporel. Rend '' quand il n'a rien le droit de montrer.
+ *
+ * ⚠ LE MEME CADRE DES DEUX COTES depuis le 23/09/2026 (Kevin : « rend
+ *   disponible cette image ... corrige donc la version sur le profil de
+ *   l'athlete dans le compte du coach au passage »). Deux rendus separes
+ *   auraient fini par montrer deux corps differents pour le meme dossier — et
+ *   c'est exactement ce que l'application evite partout ailleurs.
+ *
+ *   `o.titre`   remplace « Évolution élève numéro N » : chez l'athlete, c'est
+ *               SON corps, et un numero de fiche n'a aucun sens pour lui.
+ *   `o.graphes` a faux retire la colonne de courbes : l'onglet Mensurations de
+ *               l'athlete trace deja les siennes, juste en dessous.
  *
  * ⚠ GROSSESSE OU ALLAITEMENT DECLARES : LE BLOC N'EXISTE PAS. Meme regle que
  *   les photos de progression, et pour la meme raison — on ne suit pas la
  *   transformation d'un corps qui change pour un motif qui ne nous regarde
  *   pas. C'est phpDisponible qui tranche, la meme fonction, pas une copie.
  */
-function _htmlCorpsCadre(c){
+function _htmlCorpsCadre(c,o){
+  o=o||{};
   const u=_dossier(c);
   if(!u) return '';
   // ⚠ UNE INVITATION PAS ENCORE CONSOMMEE N'A PAS DE CORPS. `_fromCode` est un
@@ -40249,16 +40309,19 @@ function _htmlCorpsCadre(c){
   // seraient deux reperes contradictoires. Sans rang connu, le titre se tait
   // sur le numero plutot que d'afficher « numéro 0 ».
   const rang=(function(){ try{ return rangArrivee(c); }catch(e){ return 0; } })();
-  const titre='Évolution élève'+(rang?(' numéro '+rang):'');
+  const titre=o.titre||('Évolution élève'+(rang?(' numéro '+rang):''));
   const tete='<div class="cc-corps-h">'
     +'<span class="cc-corps-t">'+escapeHtml(titre)+'</span>'
     +'<span class="cc-corps-vue" role="group" aria-label="Vue du corps">'
     +onglet('face','Vue avant')+onglet('dos','Vue arrière')+'</span></div>';
-  // LES ETIQUETTES NE SORTENT QU'AVEC DEUX BILANS : sous ce seuil il n'y a
-  // aucun ecart a montrer.
-  const eti=(bilans.length>=2)
+  // ⚠ LES ETIQUETTES SORTENT DES LE PREMIER BILAN depuis le 23/09/2026. Elles
+  //   etaient conditionnees a deux bilans, parce qu'elles ne disaient que des
+  //   ecarts ; elles disent maintenant TOUTES les mensurations mesurees, et un
+  //   premier bilan en porte deja dix. Chacune annonce alors « 1 mesure » —
+  //   ce qui est vrai, utile, et bien meilleur qu'un corps nu.
+  const eti=bilans.length
     ?_htmlCorpsEtiquettes(u,genre,vue)
-    :{etiquettes:'',traits:'',avecEcart:0};
+    :{etiquettes:'',traits:'',avecEcart:0,nEtiquettes:0};
   // LA TEINTE SORT DES LE PREMIER BILAN ; sans aucun bilan le cadre reste
   // eteint, comme ce matin.
   //
@@ -40320,11 +40383,13 @@ function _htmlCorpsCadre(c){
     }
   }
   const note=(bilans.length<2)
-    ?'<div class="cc-corps-n">Un seul bilan — les écarts apparaîtront au suivant.</div>'
+    ?'<div class="cc-corps-n">Un seul bilan — chaque tour porte sa mesure, et '
+      +'les écarts apparaîtront au suivant.</div>'
     :(eti.avecEcart
-      ?'<div class="cc-corps-n">Écart entre les deux derniers bilans qui portent '
-        +'la mesure, reports exclus · ± '
-        +String(SYN_BRUIT_MESURE).replace('.',',')+' cm de tolérance.</div>'
+      ?'<div class="cc-corps-n">Écart entre le premier et le dernier bilan qui '
+        +'portent la mesure, reports exclus · ± '
+        +String(SYN_BRUIT_MESURE).replace('.',',')+' cm de tolérance · '
+        +'« 1 mesure » = relevé une seule fois.</div>'
       :(ailleurs
         ?'<div class="cc-corps-n">Rien à lire de ce côté : les écarts relevés sont '
           +(vue==='dos'?'en vue avant':'en vue arrière')+'.</div>'
@@ -40392,11 +40457,33 @@ function _htmlCorpsCadre(c){
   const graphes=_htmlCorpsGraphes(u);
   // LE PETIT CADRE DE L'EXPLICATION VA SOUS LES GRAPHIQUES, dans la colonne
   // de droite ; sans graphique, il reste sous la legende.
+  const avecG=(o.graphes!==false)&&!!graphes;
   return '<div class="cc-corps">'+tete
     +'<div class="cc-corps-grille">'
-    +'<div class="cc-corps-col">'+scene+note+legende+(graphes?'':explication)+'</div>'
-    +(graphes?('<div class="cc-corps-col">'+graphes+explication+'</div>'):'')
+    +'<div class="cc-corps-col">'+scene+note+legende+(avecG?'':explication)+'</div>'
+    +(avecG?('<div class="cc-corps-col">'+graphes+explication+'</div>'):'')
     +'</div></div>';
+}
+/**
+ * LE SCHEMA CORPOREL SUR L'ECRAN DE L'ATHLETE, onglet Mensurations.
+ *
+ * Meme fonction de rendu que la fiche du coach — silhouette de son sexe,
+ * etiquettes de toutes ses mensurations, ecart du premier au dernier bilan.
+ * Ce qui change tient en deux options : le titre, et la colonne de courbes
+ * qu'on retire parce que l'onglet trace deja les siennes juste dessous.
+ *
+ * ⚠ LES CALQUES DE ZONES SE PEIGNENT APRES L'INJECTION, ici comme chez le
+ *   coach : ils lisent une image en niveaux de gris, ce qu'une chaine HTML ne
+ *   sait pas faire. Sans cet appel, la silhouette sort grise.
+ */
+function renderCorpsAthlete(z){
+  if(!z) return false;
+  let h='';
+  try{ h=_htmlCorpsCadre(currentUser,{titre:'Ton évolution',graphes:false})||''; }
+  catch(e){ h=''; }
+  z.innerHTML=h;
+  try{ _corpsPeindreCalques(z); }catch(e){}
+  return !!h;
 }
 function renderCorpsCoach(c){
   const z=document.getElementById('ccd-corps');
@@ -59009,6 +59096,15 @@ function showProgressTab(tab,btn,sansMemo){
          Les valeurs en gris ont été reportées du bilan précédent, sans être
          re-mesurées : rien n’avait bougé.</div>`:'')
     +miniCharts;
+    // ⚠ LE SCHEMA CORPOREL PASSE DEVANT LE TABLEAU. C'est la demande de Kevin
+    //   du 23/09/2026 : l'athlete ouvre cet onglet pour voir OU son corps a
+    //   bouge, et une silhouette repond a cette question en une seconde la ou
+    //   un tableau de douze lignes demande d'etre lu. Les chiffres restent
+    //   dessous, dans le meme ordre qu'avant.
+    //   Le conteneur est POSE AVANT le rendu : renderCorpsAthlete y ecrit puis
+    //   peint les calques de zones, ce qu'une chaine HTML ne sait pas faire.
+    c.insertAdjacentHTML('afterbegin','<div id="prog-corps"></div>');
+    try{ renderCorpsAthlete(document.getElementById('prog-corps')); }catch(e){}
     c.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
     setTimeout(()=>{
       groupsToRender.forEach(g=>{

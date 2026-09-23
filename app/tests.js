@@ -34777,6 +34777,111 @@ async function testExercices(){
             if(ec&&!etaitActif) ec.classList.remove('active'); }});
       })();
 
+      // ══════════════ BUILD 1424 — LE SCHÉMA CORPOREL CHEZ L’ATHLÈTE ═══════
+      //
+      // Kevin, 23/09/2026 : « sur la page mensuration de l'athlète sur son
+      // compte rend disponible cette image pour les hommes et celle avec la
+      // femme pour les femmes, avec les +/- du premier bilan comparé au
+      // dernier bilan ; il faut l'ensemble des mensurations, si ya des 0 met
+      // les quand même ; corrige donc la version sur le profil de l'athlète
+      // dans le compte du coach au passage ».
+      //
+      // ⚠ UN SEUL CADRE POUR LES DEUX ÉCRANS. Deux rendus séparés auraient fini
+      //   par montrer deux corps différents pour le même dossier — c'est
+      //   exactement ce que ce fichier évite partout ailleurs. Ce qui diffère
+      //   tient en deux options : le titre, et la colonne de courbes.
+      (()=>{
+        const J=864e5, t=Date.now();
+        const _u=(g,bl)=>({id:'C24',email:'c24@t.fr',role:'athlete',gender:g,_evol_gender:g,
+          consent:{cgu:true,health:true,policyVersion:POLICY_VERSION},bilans:bl,sessions:[]});
+        const _bl=()=>[
+          {date:t-240*J,type:'depart','bil-weight':'80','bil-bicep-r':'38','bil-chest':'102',
+           'bil-waist':'84','bil-calf-r':'38','bil-thigh-r':'58'},
+          {date:t-120*J,'bil-weight':'79','bil-bicep-r':'38.6'},
+          {date:t-5*J,'bil-weight':'78','bil-bicep-r':'39.5','bil-chest':'101',
+           'bil-waist':'82.5','bil-calf-r':'38','bil-neck':'41'}];
+
+        ok('1424 — L’ATHLÈTE VOIT SON CORPS, ET C’EST LE MÊME CADRE QUE CHEZ LE COACH',(()=>{
+          const sU=currentUser;
+          try{
+            currentUser=_u('H',_bl());
+            const d=document.createElement('div');
+            const n=renderCorpsAthlete(d);
+            if(!n) return _echec('rien n’est rendu pour un athlète qui a des bilans');
+            const t1=(d.querySelector('.cc-corps-t')||{}).textContent||'';
+            if(t1!=='Ton évolution') return _echec('le titre chez l’athlète : « '+t1+' »');
+            // ⚠ SON SEXE, ET PAS UN AUTRE. Kevin : « cette image pour les
+            //   hommes et celle avec la femme pour les femmes ».
+            const img=d.querySelector('.cc-corps-scene img');
+            if(!img||img.getAttribute('src').indexOf('h-face')<0)
+              return _echec('un homme ne reçoit pas la silhouette masculine');
+            currentUser=_u('F',_bl());
+            const d2=document.createElement('div');
+            renderCorpsAthlete(d2);
+            const img2=d2.querySelector('.cc-corps-scene img');
+            if(!img2||img2.getAttribute('src').indexOf('f-face')<0)
+              return _echec('une athlète ne reçoit pas la silhouette féminine');
+            // LES COURBES DU COACH NE SONT PAS DUPLIQUÉES : l'onglet trace
+            // déjà les siennes, juste en dessous.
+            if(d.querySelector('.cc-corps-g')) return _echec('la colonne de courbes est dupliquée');
+            // ET LE COACH GARDE SON TITRE NUMÉROTÉ.
+            const dc=document.createElement('div');
+            dc.innerHTML=_htmlCorpsCadre(_u('H',_bl()));
+            const t2=(dc.querySelector('.cc-corps-t')||{}).textContent||'';
+            if(!/Évolution élève/.test(t2)) return _echec('le titre du coach a changé : « '+t2+' »');
+            return true;
+          } finally { currentUser=sU; }})());
+
+        ok('1424 — TOUTES LES MENSURATIONS MESURÉES SONT SUR LE CORPS, ZÉROS COMPRIS',(()=>{
+          const u=_u('H',_bl());
+          const d=document.createElement('div');
+          d.innerHTML=_htmlCorpsCadre(u);
+          const lu={};
+          for(const e of d.querySelectorAll('.cc-corps-et'))
+            lu[(e.querySelector('.cc-corps-em')||{}).textContent]
+              =(e.querySelector('.cc-corps-ev')||{}).textContent;
+          // ── CE QUI A BOUGÉ, DU PREMIER AU DERNIER BILAN ────────────────
+          const NB=String.fromCharCode(160);
+          if(lu['Biceps D']!=='+1,5'+NB+'cm')
+            return _echec('le biceps affiche « '+lu['Biceps D']+' » (38 → 39,5 depuis le premier bilan)');
+          if(lu['Taille']!=='−1,5'+NB+'cm') return _echec('la taille : « '+lu['Taille']+' »');
+          // ── CE QUI N'A PAS BOUGÉ : « 0 cm », ET NON RIEN ───────────────
+          if(lu['Mollet D']!=='0'+NB+'cm')
+            return _echec('un tour inchangé affiche « '+lu['Mollet D']+' » au lieu de « 0 cm »');
+          // ── CE QUI N'A ÉTÉ MESURÉ QU'UNE FOIS ─────────────────────────
+          if(lu['Cou']!=='1 mesure') return _echec('le cou, mesuré une fois : « '+lu['Cou']+' »');
+          // ── ET CE QUI N'A JAMAIS ÉTÉ MESURÉ N'EST PAS LÀ ──────────────
+          // Une étiquette vide sur un corps n'est que du bruit.
+          if(lu['Buste']!==undefined) return _echec('un tour jamais mesuré porte une étiquette');
+          // LA CUISSE DROITE A ÉTÉ MESURÉE AU PREMIER BILAN SEULEMENT.
+          if(lu['Cuisse D']!=='1 mesure') return _echec('la cuisse droite : « '+lu['Cuisse D']+' »');
+          // LE PIED DE CADRE DIT LA BONNE PÉRIODE ET LA CONVENTION.
+          const note=(d.querySelector('.cc-corps-n')||{}).textContent||'';
+          if(note.indexOf('premier et le dernier')<0)
+            return _echec('le pied de cadre parle encore des deux derniers : '+note);
+          if(note.indexOf('1 mesure')<0) return _echec('le pied n’explique pas « 1 mesure »');
+          return true;})());
+
+        ok('1424 — UN PREMIER BILAN SUFFIT À ALLUMER LES ÉTIQUETTES',(()=>{
+          // Elles étaient conditionnées à deux bilans, parce qu'elles ne
+          // disaient que des écarts. Un premier bilan en porte déjà dix, et
+          // chacune annonce « 1 mesure » — ce qui est vrai et utile.
+          const un=_u('H',[{date:t-3*J,type:'depart','bil-weight':'80',
+            'bil-bicep-r':'38','bil-waist':'84','bil-thigh-r':'58'}]);
+          const d=document.createElement('div');
+          d.innerHTML=_htmlCorpsCadre(un);
+          const n=d.querySelectorAll('.cc-corps-et').length;
+          if(n<3) return _echec(n+' étiquette(s) sur un premier bilan qui en porte trois');
+          const note=(d.querySelector('.cc-corps-n')||{}).textContent||'';
+          if(note.indexOf('Un seul bilan')<0) return _echec('le cadre ne dit pas qu’il n’y a qu’un bilan');
+          // ET AUCUN BILAN : le corps reste éteint, et le cadre le dit.
+          const d0=document.createElement('div');
+          d0.innerHTML=_htmlCorpsCadre(_u('H',[]));
+          if(d0.querySelectorAll('.cc-corps-et').length) return _echec('des étiquettes sans aucun bilan');
+          return /Pas encore de bilan/.test(d0.textContent)
+            ?true:_echec('le cadre vide ne dit rien');})());
+      })();
+
       // BUILD 1411 — Kevin : « côté coach uniquement, sur ordi, mets les noms
       // des compléments sur la même ligne que “VITAMINE…”, entre la photo et le
       // type, pour réduire la hauteur des rectangles ».
@@ -40986,6 +41091,14 @@ async function testExercices(){
       const e=corpsEcart(u,'bicep-r');
       if(!e) return _echec('aucun écart alors que deux relevés existent');
       if(e.delta!==0.8) return _echec('écart de '+e.delta+' au lieu de 0,8');
+      // ⚠ DU PREMIER AU DERNIER RELEVÉ, et non des deux derniers (Kevin,
+      //   23/09/2026). Sur quatre bilans, l'écart part du plus ancien : c'est
+      //   le chemin parcouru, pas la quinzaine écoulée. Le détail
+      //   intermédiaire reste dans les mini-courbes, juste en dessous.
+      const q={id:'E1b',role:'athlete',bilans:[B(240,36.0),B(120,38.2),B(60,39.0),B(2,39.5)]};
+      const eq=corpsEcart(q,'bicep-r');
+      if(eq.delta!==3.5) return _echec('l’écart part du mauvais bilan : '+eq.delta+' au lieu de 3,5');
+      if(eq.debut.date!==t-240*J) return _echec('la période ne commence pas au premier relevé');
       // ET LA PERIODE EST CELLE DES DEUX RELEVES REELS, pas celle du dernier
       // bilan : c'est ce que l'étiquette affiche, et ce doit être vrai.
       if(e.fin.date!==t-60*J) return _echec('la période finit sur le bilan reporté');
@@ -41453,28 +41566,57 @@ async function testExercices(){
       }
       return true;})());
 
-    ok('UNE MENSURATION SANS DEUX RELEVÉS RÉELS NE SORT PAS',(()=>{
-      // Trois situations, un seul comportement : pas d'ecart, pas d'etiquette.
-      // C'est le pied de cadre qui dit pourquoi — et il dit la RAISON, qui
-      // couvre les trois.
+    // ⚠ CETTE ASSERTION A CHANGÉ D'OBJET LE 23/09/2026, ET IL FAUT LE DIRE.
+    //   Elle gardait « pas d'écart, pas d'étiquette » — la règle de Kevin du
+    //   21/09 (« les mensurations uniquement avec les +/- cm »). Il l'a
+    //   remplacée le 23/09 : « il faut l'ensemble des mensurations, si ya des
+    //   0 met les quand même ». Un corps où trois tours sur dix n'avaient pas
+    //   bougé montrait trois étiquettes, et on ne pouvait pas distinguer
+    //   « n'a pas bougé » de « pas mesuré ».
+    //   CE QUI NE CHANGE PAS, et c'est le fond de l'ancienne règle : ON
+    //   N'INVENTE PAS UN ZÉRO. Un tour mesuré une seule fois n'a pas d'écart,
+    //   et écrire « 0 cm » dessus affirmerait qu'il n'a pas bougé.
+    ok('CHAQUE MENSURATION MESURÉE SORT, ET DIT EXACTEMENT CE QU’ELLE SAIT',(()=>{
       const J=864e5, t=Date.now();
-      // UN SEUL RELEVE : le biceps mesure une fois.
+      // 1. UN SEUL RELEVÉ : l'étiquette sort, et elle dit « 1 mesure ».
       const unSeul={id:'R1',role:'athlete',gender:'H',
         bilans:[{date:t-92*J,'bil-weight':'80'},{date:t-6*J,'bil-weight':'79','bil-bicep-r':'39.0'}]};
-      if(corpsMesureEtiquette(unSeul,'bicep-r')!==null) return _echec('un seul relevé produit une étiquette');
-      // AUCUN RELEVE REEL : la cuisse, reportee d'un bilan a l'autre.
+      const e1=corpsMesureEtiquette(unSeul,'bicep-r');
+      if(!e1) return _echec('un tour mesuré une fois n’a pas d’étiquette');
+      if(e1.valeur!=='1 mesure') return _echec('une mesure unique affiche « '+e1.valeur+' »');
+      if(e1.ecart!==null) return _echec('un écart est inventé sur un seul relevé');
+      if(e1.titre.indexOf('39')<0) return _echec('l’infobulle ne donne pas la valeur mesurée');
+      // 2. AUCUN RELEVÉ RÉEL — la cuisse, reportée d'un bilan à l'autre : le
+      //    premier relevé EXISTE, donc l'étiquette sort en « 1 mesure ». Le
+      //    report, lui, reste écarté : c'est la règle qui n'a pas bougé.
       const reporte={id:'R2',role:'athlete',gender:'H',
         bilans:[{date:t-92*J,'bil-thigh-r':'61'},
                 {date:t-6*J,'bil-thigh-r':'61',reprises:['bil-thigh-r']}]};
-      if(corpsMesureEtiquette(reporte,'thigh-r')!==null) return _echec('un report produit une étiquette');
-      // JAMAIS MESURE.
+      const e2=corpsMesureEtiquette(reporte,'thigh-r');
+      if(!e2||e2.valeur!=='1 mesure')
+        return _echec('un report compte comme un second relevé : '+(e2&&e2.valeur));
+      // 3. JAMAIS MESURÉ : toujours rien. Une étiquette vide sur un corps
+      //    n'est que du bruit.
       if(corpsMesureEtiquette(unSeul,'neck')!==null) return _echec('un tour jamais mesuré produit une étiquette');
-      // ET LE CADRE LE DIT, SANS PROMETTRE DE TOLERANCE.
+      // 4. UN ÉCART NUL S'ÉCRIT « 0 cm », il ne devient pas « stable » : les
+      //    deux relevés donnent le même nombre, ce n'est pas une incertitude.
+      const zero={id:'R3',role:'athlete',gender:'H',
+        bilans:[{date:t-92*J,'bil-calf-r':'38'},{date:t-6*J,'bil-calf-r':'38'}]};
+      const NB=String.fromCharCode(160);
+      const e3=corpsMesureEtiquette(zero,'calf-r');
+      if(!e3||e3.valeur!=='0'+NB+'cm') return _echec('un écart nul affiche « '+(e3&&e3.valeur)+' »');
+      // Et sous la tolérance, « stable » tient : 0,3 cm, c'est l'erreur du mètre.
+      const bruit={id:'R4',role:'athlete',gender:'H',
+        bilans:[{date:t-92*J,'bil-calf-r':'38'},{date:t-6*J,'bil-calf-r':'38.3'}]};
+      if(corpsMesureEtiquette(bruit,'calf-r').valeur!=='stable')
+        return _echec('0,3 cm ne s’écrit plus « stable »');
+      // 5. ET LE CADRE MONTRE TOUT ÇA, DÈS LE PREMIER BILAN.
       const boite=document.createElement('div');
       boite.innerHTML=_htmlCorpsCadre(Object.assign({email:'r1@t.fr'},unSeul));
-      if(boite.querySelectorAll('.cc-corps-et').length) return _echec('des étiquettes sortent sans écart');
-      if(boite.textContent.indexOf('il faut deux relevés')<0) return _echec('le cadre ne dit pas pourquoi il se tait');
-      return true;})());
+      if(!boite.querySelectorAll('.cc-corps-et').length)
+        return _echec('aucune étiquette alors qu’un tour est mesuré');
+      return boite.textContent.indexOf('1 mesure')>=0
+        ?true:_echec('le cadre ne montre pas « 1 mesure »');})());
 
     ok('UNE MENSURATION QUI DESCEND S’ÉCRIT COMME UNE QUI MONTE',(()=>{
       // ⚠ REGLE R32, ET C'EST LE CAS QUI COMPTE POUR KEVIN : son athlete est
