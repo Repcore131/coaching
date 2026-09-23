@@ -980,12 +980,23 @@ const PAYPAL_PLAN_ID_ANNUEL='';
 //     « RepCore Ultime annuel »  249,00 EUR, cycle YEAR
 const PAYPAL_PLAN_ID_ULTIME='';
 const PAYPAL_PLAN_ID_ULTIME_ANNUEL='';
+// ⚠ LE PREMIER MOIS A MOITIE PRIX APRES UN PACK (lot 10). C'est un plan
+//   PAYPAL A PART, et non une remise appliquee a la main : un abonnement
+//   mensuel dont le PREMIER cycle est a 12,45 EUR et les suivants a 24,90.
+//     PayPal → Billing Plans → « RepCore Ultime, premier mois apres pack »
+//     Cycle 1 : 12,45 EUR, TRIAL, 1 mois, 1 fois.
+//     Cycle 2 : 24,90 EUR, REGULAR, mensuel, illimite.
+//   TANT QUE CETTE CASE EST VIDE, L'OFFRE N'EST PAS ANNONCEE DU TOUT : la
+//   sortie de pack propose alors Ultime au prix normal. On ne promet pas un
+//   prix qu'on ne sait pas encaisser.
+const PAYPAL_PLAN_ID_ULTIME_DEMI='';
 // PURE. Le plan PayPal d'une offre, ou '' quand il n'a pas encore ete cree.
 // UN SEUL ENDROIT SAIT QUEL PLAN VA AVEC QUELLE OFFRE : sans ca, l'ecran des
 // tarifs et le bouton de paiement finiraient par ne plus parler du meme.
 function planIdOffre(cle,annuel){
   if(cle==='essentielle') return annuel?PAYPAL_PLAN_ID_ANNUEL:PAYPAL_PLAN_ID;
   if(cle==='ultime') return annuel?PAYPAL_PLAN_ID_ULTIME_ANNUEL:PAYPAL_PLAN_ID_ULTIME;
+  if(cle==='ultime_demi') return PAYPAL_PLAN_ID_ULTIME_DEMI;
   return '';
 }
 // Les deux paliers, dans l'ordre d'affichage. `dispo` est ce qui décide de
@@ -1017,6 +1028,15 @@ const OFFRES=Object.freeze({
   // ── Ce que l'application vend, quand personne ne suit la personne ───
   essentielle:        Object.freeze({lib:'Essentielle', prix:9.95,  prixAn:99,  palier:'essentielle', mois:0, type:'abonnement'}),
   ultime:             Object.freeze({lib:'Ultime',      prix:24.90, prixAn:249, palier:'ultime',      mois:0, type:'abonnement'}),
+  // ── La sortie de pack : le premier mois a moitie prix, UNE SEULE FOIS ──
+  // ⚠ LE PRIX SE CALCULE, IL NE S'ECRIT PAS : la moitie d'Ultime suit Ultime
+  //   le jour ou Ultime bouge. Un 12,45 ecrit en dur aurait vecu plus
+  //   longtemps que le prix dont il est la moitie.
+  //   Le prix se LIT sur Ultime au moment ou on le demande : un nombre
+  //   recopie ici serait la moitie d'un prix d'hier.
+  ultime_demi:        Object.freeze({lib:'Ultime, premier mois',
+                        get prix(){ return Math.round(OFFRES.ultime.prix*50)/100; },
+                        palier:'ultime', mois:1, type:'abonnement'}),
   // ── Et l'essai, qui ne se paie pas ──────────────────────────────────
   essai:              Object.freeze({lib:'Essai',       prix:0,     palier:'ultime', mois:1, type:'essai'}),
 });
@@ -6935,6 +6955,26 @@ function loadAccessGate(){
   if(u.status==='COACHING_SUIVI'&&u.accessExpiry&&Date.now()>=u.accessExpiry){
     const d=new Date(u.accessExpiry).toLocaleDateString('fr-FR');
     const nom=(u.coachName||'').trim();
+    // ══ LA SORTIE DE PACK (lot 10) ════════════════════════════════════
+    // ⚠ CET ECRAN DISAIT « Accès expiré » ET PROPOSAIT UNE SEULE ISSUE :
+    //   recontacter le coach. Quelqu'un qui ne le recontacte pas etait perdu,
+    //   avec ses seances, son programme et son historique derriere la porte.
+    //   Il porte maintenant les deux sorties, et dit d'abord que rien n'est
+    //   efface — c'est la peur de tout perdre qui fait ne pas revenir.
+    const _pack=(()=>{ try{ return htmlSortiePack(u); }catch(e){ return ''; } })();
+    const _ren=document.getElementById('ag-renouveler');
+    if(_pack){
+      title.textContent='Ton suivi est terminé';
+      sub.textContent='Rien n’est effacé. Tes séances, ton programme et ton historique t’attendent.';
+      block.innerHTML=_pack;
+      // « Renouveler mon accès » mene au meme endroit que « Garder l'app » :
+      // deux boutons identiques a deux centimetres l'un de l'autre font
+      // hesiter, et l'hesitation coute la vente. Le code coach reste, lui :
+      // c'est une troisieme chose, pas la meme.
+      if(_ren) _ren.style.display='none';
+      return;
+    }
+    if(_ren) _ren.style.display='';
     title.textContent='Accès expiré';
     sub.textContent='Ton accès coaching avec suivi a expiré le '+d+'.';
     // Sur cet écran, joindre son coach est la seule action qui débloque
@@ -58116,11 +58156,110 @@ function _htmlPointDuJour(etat){
     +'<div class="pdj-q">'+escapeHtml(etat.titre)+'</div>'
     +controle+lien+'</div>';
 }
+// ══════ LA SORTIE DE PACK (lot 10) ══════════════════════════════════════
+//
+// Ce que ce lot repare : la fin d'un suivi menait a « Accès expiré », et la
+// seule issue proposee etait de recontacter le coach. On perdait la personne
+// entierement — alors qu'elle a ses seances, son programme et son historique
+// dans l'application, et qu'elle vient de passer trois mois a les remplir.
+//
+// DEUX BOUTONS, JAMAIS UN SEUL : reprendre le suivi, ou garder l'application.
+// Le second n'est pas un lot de consolation : c'est celui qui rapporte quand
+// le premier ne se fait pas.
+//
+// PURE. Ou en est le pack : 'non' (rien a dire), 'bientot' (dans les quinze
+// jours), 'finie'. La fin vient du serveur quand il parle, du dossier sinon.
+function finDePack(u,maintenant){
+  const x=u||currentUser;
+  const t=Number(maintenant)||Date.now();
+  const rien={etat:'non',jours:null,fin:0};
+  if(!x||x.role==='coach') return rien;
+  let fin=0,suivi=false;
+  try{
+    const d=droitsDe(x);
+    if(d.etat==='serveur'&&d.palier==='suivi'){ suivi=true; fin=Number(d.echeance)||0; }
+  }catch(e){}
+  if(String(x.status||'')==='COACHING_SUIVI'){ suivi=true; fin=fin||Number(x.accessExpiry)||0; }
+  if(!suivi||!fin) return rien;
+  const j=Math.ceil((fin-t)/864e5);
+  if(j>RELANCE_JOURS) return {etat:'non',jours:j,fin:fin};
+  if(j>0) return {etat:'bientot',jours:j,fin:fin};
+  return {etat:'finie',jours:j,fin:fin};
+}
+// PURE. Le premier mois d'Ultime a moitie prix, apres un pack, UNE SEULE FOIS.
+//
+// ⚠ ELLE REND false TANT QUE LE PLAN PAYPAL N'EXISTE PAS. Annoncer 12,45 € et
+//   facturer 24,90 serait pire que ne rien annoncer du tout : la sortie de
+//   pack propose alors Ultime au prix normal, ce qu'elle sait encaisser.
+function demiPremierMoisDispo(u,maintenant){
+  const x=u||currentUser;
+  if(!x) return false;
+  try{ if(!planIdOffre('ultime_demi')) return false; }catch(e){ return false; }
+  if(x.demiPackUtilise===true) return false;
+  try{ const d=droitsDe(x); if(d.etat==='serveur'&&d.demiPackUtilise===true) return false; }catch(e){}
+  return finDePack(x,maintenant).etat!=='non';
+}
+// PURE. La phrase, selon le moment et selon ce qu'on sait encaisser.
+function phraseSortiePack(u,maintenant){
+  const f=finDePack(u,maintenant);
+  if(f.etat==='non') return '';
+  const d=f.fin?new Date(f.fin).toLocaleDateString('fr-FR'):'';
+  const demi=demiPremierMoisDispo(u,maintenant);
+  const prix=demi
+    ?(prixOffre('ultime_demi')+' le premier mois, puis '+prixOffre('ultime')+' par mois')
+    :(prixOffre('ultime')+' par mois');
+  const tete=(f.etat==='bientot')
+    ?('Ton suivi se termine'+(d?(' le '+d):' bientôt')+'.')
+    :('Ton suivi est terminé'+(d?(' depuis le '+d):'')+'.');
+  return tete+' Tu peux le reprendre, ou garder l’app, ton programme et ton '
+    +'historique pour '+prix+'.';
+}
+// LE BLOC, AVEC SES DEUX PORTES. La premiere mene au coach quand on sait ou le
+// joindre — c'est le sien, pas une page generale.
+function htmlSortiePack(u,maintenant){
+  const x=u||currentUser;
+  const f=finDePack(x,maintenant);
+  if(f.etat==='non') return '';
+  const nom=String((x&&x.coachName)||'').trim();
+  let href='';
+  try{
+    href=_coachContactHref((x&&x.coachId),'Bonjour'+(nom?' '+nom:'')
+      +', je voudrais reprendre mon suivi RepCore.');
+  }catch(e){ href=''; }
+  const reprendre=href
+    ?'<a class="vrr-b" href="'+_safeContactUrl(href)+'" target="_blank" rel="noopener">'
+      +'Reprendre mon suivi</a>'
+    :'<a class="vrr-b" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'
+      +'Reprendre mon suivi</a>';
+  return '<div class="vrr">'
+    +'<div class="vrr-t">'+escapeHtml(phraseSortiePack(x,maintenant))+'</div>'
+    // RIEN N'EST EFFACE, et c'est ce qui decide : la peur de tout perdre est
+    // la premiere raison de ne pas revenir.
+    +'<div class="vrr-p">Rien n’est effacé : tes séances, ton programme et ton '
+    +'historique restent à toi.</div>'
+    +'<div class="vrr-deux">'+reprendre
+    +'<button type="button" class="vrr-b vrr-b2" onclick="garderLApp()">Garder l’app</button>'
+    +'</div></div>';
+}
+// LA SECONDE PORTE. Elle memorise l'offre choisie comme la carte de l'ecran
+// d'arrivee, et ouvre l'ecran d'abonnement.
+function garderLApp(){
+  try{ return accueilChoisir(demiPremierMoisDispo()?'ultime_demi':'ultime',false); }
+  catch(e){ try{ go('s-subscribe'); }catch(_e){} }
+  return true;
+}
 // La mention d'essai. Elle emprunte son texte a texteEssaiRestant, qui est
 // PURE et qui est la seule a savoir compter — ce rendu-ci ne fait que peindre.
 function _rendreEssai(){
   const z=document.getElementById('clh-essai');
   if(!z) return;
+  // ⚠ LA SORTIE DE PACK PASSE DEVANT L'ESSAI (lot 10), et les deux ne peuvent
+  //   pas arriver ensemble : on ne fait pas d'essai pendant un suivi. La
+  //   priorite est ecrite quand meme, parce qu'un dossier peut porter les deux
+  //   champs apres un code coach pose sur un compte qui avait essaye.
+  let pack='';
+  try{ pack=htmlSortiePack(currentUser); }catch(e){ pack=''; }
+  if(pack){ z.innerHTML=pack; return; }
   let t='';
   try{ t=texteEssaiRestant(currentUser); }catch(e){ t=''; }
   // LE LIBELLE DU LIEN SUIT LE MOMENT (lot 6) : « voir l'abonnement » ne dit
