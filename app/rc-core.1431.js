@@ -21247,8 +21247,14 @@ const CCD_REPLI_CLE='rc_ccd_replis';
 // fourre-tout, plus les trois blocs de reference qu'on ne consulte pas chaque
 // jour. Le reste s'ouvre — l'entrainement et la nutrition sont ce qu'on vient
 // voir.
-const CCD_REPLI_DEFAUT=['ccd-journal','ccd-bilans','ccd-poids','ccd-pp',
-  'ccd-photos-progression','ccd-dossier','ccd-reds','ccd-securite',
+// ⚠ QUATRE SECTIONS ONT QUITTE CETTE LISTE le 23/09/2026 : 'ccd-bilans',
+//   'ccd-poids', 'ccd-pp' et 'ccd-photos-progression'. Kevin : « ces quatre
+//   sections contiennent le plus d'information et elles s'ouvrent fermees :
+//   c'est la raison numero un pour laquelle le coach croit que l'app ne sait
+//   rien faire ». Elles s'ouvrent deployees, et c'est desormais l'ETAGE du
+//   detail qui se replie d'un bloc — 'ccd-detail', ci-dessous.
+const CCD_REPLI_DEFAUT=['ccd-journal','ccd-detail',
+  'ccd-dossier','ccd-reds','ccd-securite',
   'ccd-suspension','ccd-sessions-recap','ccd-rite',
   // ⚠ 'ccd-prises' A QUITTE CETTE LISTE le 08/09/2026 avec la section
   // « Proteines par prise ». Une clef qui ne designe plus rien ne casse rien,
@@ -21365,8 +21371,15 @@ const CCD_VUES=['entrainement','nutrition','lifestyle','donnees'];
 // UN ONGLET FERMÉ NE DOIT JAMAIS CACHER UN SIGNAL : la puce s'allume quand l'une
 // d'elles a quelque chose à dire. Sans ça, ranger la fiche l'aurait rendue moins
 // sûre qu'un long rouleau.
-const CCD_ALERTES={entrainement:['ccd-douleur'],
-  donnees:['ccd-reds','ccd-securite','ccd-suspension']};
+// ⚠ 'ccd-douleur' A CHANGE D'ONGLET le 23/09/2026 : la douleur est descendue
+//   dans l'etage « Ce qui appelle un oeil » de l'onglet Donnees, avec les
+//   autres signaux. La pastille la suit — sinon elle se serait allumee sur un
+//   onglet qui ne la contient plus, et se serait tue sur celui qui la porte.
+const CCD_ALERTES={entrainement:[],
+  donnees:['ccd-douleur','ccd-reds','ccd-securite','ccd-suspension']};
+// LES SIX ETAGES DE L'ONGLET DONNEES, dans l'ordre ou ils se lisent. La barre
+// d'ancres en rend un bouton chacun, et seul le dernier s'ouvre replie.
+const CCD_ETAGES=['verdict','corps','courbes','longueurs','signaux','detail'];
 let _ccdVue='entrainement';
 // C'EST LE DOCUMENT QUI DEFILE, PAS .scroll-area. Celle-ci ne deborde jamais :
 // .screen est en min-height sans height, et .scroll-area en flex:1 — le
@@ -21408,9 +21421,18 @@ function _ccdCalerAncres(){
     const tb=e&&e.querySelector(':scope>.topbar');
     const nav=document.getElementById('ccd-ancres');
     if(!tb||!nav) return;
+    // LA BARRE DES ETAGES SE CALE SOUS CELLE DES ONGLETS, par la meme mesure.
+    // Et les deux hauteurs partent dans --ccd-haut : c'est ce que vaut le
+    // bandeau colle, donc de combien un etage vise doit s'arreter plus bas
+    // (scroll-margin-top). Sans elle, le titre de l'etage passait dessous.
+    const etg=document.getElementById('ccd-etages');
     const poser=()=>{
       const h=Math.round(tb.getBoundingClientRect().height);
       if(h>0) nav.style.top=h+'px';
+      const hn=Math.round(nav.getBoundingClientRect().height);
+      if(etg&&h>0&&hn>0) etg.style.top=(h+hn)+'px';
+      const he=(etg&&etg.classList.contains('actif'))?Math.round(etg.getBoundingClientRect().height):0;
+      try{ document.documentElement.style.setProperty('--ccd-haut',(h+hn+he+8)+'px'); }catch(e){}
     };
     poser();
     if(!window._ccdTopObs&&typeof ResizeObserver==='function'){
@@ -21490,10 +21512,15 @@ function ccdVue(nom){
       // identiques, et rien qui dise lequel est ouvert.
       b.setAttribute('aria-current',b.dataset.vue===v?'page':'false');
     });
+    // LA BARRE DES SIX ETAGES NE PARAIT QUE SUR L'ONGLET QU'ELLE SERT. Posee
+    // partout, elle aurait mene a des etages absents des trois autres onglets.
+    const nav=document.getElementById('ccd-etages');
+    if(nav) nav.classList.toggle('actif',v==='donnees');
     // On remonte : garder la position d'un onglet en montrerait un autre par
     // son milieu, sur une hauteur qui n'a aucune raison de correspondre.
     if(_change) _ccdRemonter();
   }catch(e){}
+  _ccdMajEtages();
   _ccdMajAlertes();
   _ccdMajColonnes();
   return v;
@@ -21543,6 +21570,79 @@ function _ccdMajAlertes(){
     }
   }catch(e){}
 }
+// ══ LES SIX ETAGES DE L'ONGLET DONNEES ═══════════════════════════════════
+//
+// Kevin, 23/09/2026 : « il ne manque presque rien, il manque un ordre ». Les
+// sections de l'onglet Donnees sont rangees en six etages — ou il en est, son
+// corps, ses courbes, ses longueurs, ce qui appelle un oeil, le detail — et la
+// barre d'ancres mene a chacun.
+//
+// ⚠ UN ETAGE VIDE N'A PAS DE BOUTON, ET PAS DE TITRE. Un dossier neuf n'a ni
+//   photo, ni bilan, ni signal : la moitie des etages n'ont alors rien a dire.
+//   Un titre seul au-dessus du vide se lit comme une panne. On mesure donc ce
+//   qui est REELLEMENT rendu, exactement comme _ccdMajColonnes le fait pour
+//   les colonnes, et l'etage disparait avec son bouton.
+/**
+ * PURE au sens de l'ecran : elle ne lit que ce qui est rendu.
+ * @param {Element} sec l'etage
+ * @returns {boolean} vrai s'il n'a rien a montrer
+ */
+function _ccdEtageVide(sec){
+  try{
+    for(const e of sec.children){
+      if(e.classList.contains('ccd-et-h')) continue;          // le titre ne compte pas
+      if(getComputedStyle(e).display==='none') continue;
+      if((e.textContent||'').trim()) return false;
+      if(e.querySelector('img,canvas,svg,input,button')) return false;
+    }
+    return true;
+  }catch(e){ return false; }
+}
+// Range les etages vides et leurs boutons. Appelee au changement d'onglet et
+// apres chaque rendu de fiche.
+function _ccdMajEtages(){
+  try{
+    const nav=document.getElementById('ccd-etages');
+    let n=0;
+    for(const cle of CCD_ETAGES){
+      const sec=document.getElementById('ccd-et-'+cle);
+      const b=nav&&nav.querySelector('.ccd-et-b[data-et="'+cle+'"]');
+      const vide=!sec||_ccdEtageVide(sec);
+      if(sec) sec.hidden=vide;
+      if(b) b.hidden=vide;
+      if(!vide) n++;
+    }
+    // UN SEUL ETAGE NE FAIT PAS UNE BARRE : elle ne menerait qu'a l'endroit ou
+    // l'on est deja.
+    if(nav) nav.classList.toggle('vide',n<2);
+  }catch(e){}
+}
+/**
+ * Mene a un etage. Ouvre d'abord l'onglet Donnees — sans quoi le defilement
+ * viserait un bloc masque, et rien ne se passerait, comme pour ccdAller.
+ * @param {string} cle
+ * @returns {boolean}
+ */
+function ccdEtage(cle){
+  const sec=document.getElementById('ccd-et-'+cle);
+  if(!sec) return false;
+  if(_ccdVue!=='donnees') ccdVue('donnees');
+  if(sec.hidden) return false;
+  _ccdEtageActif(cle);
+  try{ sec.scrollIntoView({block:'start'}); }catch(e){ _defiler(sec); }
+  return true;
+}
+// Le bouton de l'etage ou l'on est. Une barre qui ne suit pas le pouce ment
+// des le premier defilement.
+function _ccdEtageActif(cle){
+  try{
+    document.querySelectorAll('#ccd-etages .ccd-et-b').forEach(b=>{
+      const a=b.dataset.et===cle;
+      b.classList.toggle('active',a);
+      b.setAttribute('aria-current',a?'true':'false');
+    });
+  }catch(e){}
+}
 // Garde son role : mener a une section precise. Elle OUVRE d'abord l'onglet
 // qui la contient — sinon elle faisait defiler vers un bloc masque, et il ne
 // se passait rien.
@@ -21588,6 +21688,17 @@ function _ccdArmerAncres(){
           const y=window.scrollY||document.documentElement.scrollTop||0;
           if(y>120) nav.setAttribute('data-serre','');
           else if(y<60) nav.removeAttribute('data-serre');
+          // L'ETAGE SOUS LE BANDEAU : celui dont le haut est passe, le plus
+          // bas des trois premiers pixels visibles. Le meme ecouteur que la
+          // barre serree, une seule frame pour les deux.
+          if(_ccdVue!=='donnees') return;
+          let vu='';
+          for(const cle of CCD_ETAGES){
+            const s=document.getElementById('ccd-et-'+cle);
+            if(!s||s.hidden) continue;
+            if(s.getBoundingClientRect().top<=140) vu=cle;
+          }
+          if(vu) _ccdEtageActif(vu);
         });
       },{passive:true});
     }
@@ -21716,7 +21827,10 @@ function openClientDetail(cid,_refresh,_force){
     ccdVue((_refresh&&_memeAthlete)?_ccdVue:'entrainement');
     // ccdVue le fait deja pour l'onglet visible ; ce second appel couvre
     // les trois autres, dont le contenu vient d'etre rendu.
-    _ccdMajColonnes(); },0);
+    _ccdMajColonnes();
+    // ET LES ETAGES, une fois le contenu pose : c'est lui qui dit lesquels
+    // ont quelque chose a montrer.
+    _ccdMajEtages(); _ccdCalerAncres(); },0);
   setTimeout(_majLiensClasser,0);
   // N3.10 — LE BROUILLON DE SEANCES APPARTIENT A UN ATHLETE. Ouvrir la fiche
   // d'un autre abandonne celui qui restait en memoire : il n'etait remis a

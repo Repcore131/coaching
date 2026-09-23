@@ -30667,7 +30667,12 @@ async function testExercices(){
             return _echec(vues.length+' conteneurs pour '+CCD_VUES.length+' onglets');
           // Chaque puce vise un onglet reel : une puce orpheline ne ferait rien
           // et ne le dirait pas.
-          const puces=[...document.querySelectorAll('#ccd-ancres .pf-chip')];
+          // ⚠ LE SELECTEUR DISAIT ENCORE .pf-chip, et ne trouvait plus rien :
+          //   la barre est faite de .ccd-tuile depuis les quatre tuiles a
+          //   pictogramme. Un test qui interroge un noeud absent ne teste pas
+          //   ce qu'il croit — il tombait, dans les echecs connus, depuis ce
+          //   jour-la. Corrige le 23/09/2026 avec les six etages.
+          const puces=[...document.querySelectorAll('#ccd-ancres .ccd-tuile')];
           if(puces.length!==CCD_VUES.length)
             return _echec(puces.length+' puces pour '+CCD_VUES.length+' onglets');
           for(const b of puces)
@@ -30678,7 +30683,7 @@ async function testExercices(){
             const actives=[...document.querySelectorAll('#s-coach-client .ccd-vue.actif')];
             if(actives.length!==1||actives[0].dataset.vue!==v)
               return _echec(v+' : '+actives.length+' onglet(s) monte(s)');
-            const p=[...document.querySelectorAll('#ccd-ancres .pf-chip.active')];
+            const p=[...document.querySelectorAll('#ccd-ancres .ccd-tuile.active')];
             if(p.length!==1||p[0].dataset.vue!==v)
               return _echec(v+' : la puce ne suit pas');
           }
@@ -30697,8 +30702,13 @@ async function testExercices(){
             // rappelle renderCoachNutriSection a la fin. Elle vivait a un onglet
             // des cibles qu'elle fixe.
             'ccd-phase':'nutrition',
-            'ccd-volume':'entrainement','ccd-plateaux':'entrainement',
-            'ccd-forme':'entrainement','ccd-douleur':'entrainement',
+            // LES CINQ SIGNAUX ET LE CORPS SONT PASSES EN DONNEES le
+            // 23/09/2026 : ils decrivent l'athlete, pas sa seance. Ils
+            // vivaient au milieu du programme, entre « Modifier le programme »
+            // et « Fiche a imprimer ».
+            'ccd-volume':'donnees','ccd-plateaux':'donnees',
+            'ccd-forme':'donnees','ccd-douleur':'donnees',
+            'ccd-asymetrie':'donnees','ccd-corps':'donnees',
             'ccd-sessions-recap':'entrainement','ccc-pdf-content':'entrainement',
             'ccd-nutrition':'nutrition','ccd-supplements':'nutrition',
             'ccd-caffeine':'nutrition',
@@ -30741,7 +30751,9 @@ async function testExercices(){
           // Douleur, RED-S, suspension : ranger la fiche ne doit pas la rendre
           // moins sure qu'un long rouleau.
           const z=document.getElementById('ccd-douleur');
-          const puce=document.querySelector('#ccd-ancres .pf-chip[data-vue="entrainement"]');
+          // LA DOULEUR EST DESCENDUE EN DONNEES le 23/09/2026, avec les autres
+          // signaux : c'est la tuile de cet onglet-la qui doit s'allumer.
+          const puce=document.querySelector('#ccd-ancres .ccd-tuile[data-vue="donnees"]');
           if(!z||!puce) return _echec('fixture introuvable');
           const sect=z.closest('.cc-sect'), avant=z.innerHTML, dsp=sect?sect.style.display:'';
           try{
@@ -30757,6 +30769,104 @@ async function testExercices(){
                 return _echec('une section masquee allume quand meme la pastille'); }
             return true;
           } finally { z.innerHTML=avant; if(sect) sect.style.display=dsp; _ccdMajAlertes(); }})());
+        // ══ LES SIX ETAGES DE L'ONGLET DONNEES (23/09/2026) ═══════════════
+        // Kevin : « il ne manque presque rien, il manque un ordre ». Soixante
+        // sections a plat deviennent six etages, et le coach doit voir les
+        // quatre chiffres et le debut du corps sans defiler.
+        ok('L\'ONGLET DONNEES EST RANGE EN SIX ETAGES, DANS CET ORDRE',(()=>{
+          const vue=document.querySelector('#s-coach-client .ccd-vue[data-vue="donnees"]');
+          if(!vue) return _echec('l\'onglet Donnees a disparu');
+          const etages=[...vue.querySelectorAll(':scope>.cc-etage')].map(s=>s.dataset.et);
+          if(etages.join(',')!==CCD_ETAGES.join(','))
+            return _echec('etages rendus : '+etages.join(',')+' au lieu de '+CCD_ETAGES.join(','));
+          // CHAQUE ETAGE PORTE UN TITRE ET CE QU'ON Y LIT.
+          for(const cle of CCD_ETAGES){
+            const s=document.getElementById('ccd-et-'+cle);
+            if(!s) return _echec('etage absent : '+cle);
+            const t=s.querySelector(':scope>.ccd-et-h>.ccd-et-t');
+            if(!t||!(t.textContent||'').trim()) return _echec(cle+' n\'a pas de titre');
+          }
+          // ET CHAQUE CONTENU EST A SON ETAGE.
+          const chez={'ccd-verdict':'verdict','ccd-corps':'corps','ccd-poids':'courbes',
+            'ccd-courbes':'courbes','ccd-morpho':'longueurs','ccd-asymetrie':'signaux',
+            'ccd-forme':'signaux','ccd-volume':'signaux','ccd-plateaux':'signaux',
+            'ccd-douleur':'signaux','ccd-bilans':'detail','ccd-journal':'detail',
+            'ccd-dossier':'detail','ccd-photos-progression':'detail','ccd-bil-cal':'detail'};
+          for(const id in chez){
+            const z=document.getElementById(id);
+            if(!z) return _echec(id+' a disparu de la fiche');
+            const e=z.closest('.cc-etage');
+            if(!e||e.dataset.et!==chez[id])
+              return _echec(id+' est a l\'etage « '+(e?e.dataset.et:'aucun')+' » au lieu de « '+chez[id]+' »');
+          }
+          return true;})());
+
+        ok('UN BOUTON PAR ETAGE, ET LA BARRE NE SERT QUE L\'ONGLET DONNEES',(()=>{
+          const nav=document.getElementById('ccd-etages');
+          if(!nav) return _echec('la barre des etages a disparu');
+          // MEME MECANISME QUE LES QUATRE TUILES, pas un second : mêmes classes,
+          // donc meme position collante et meme calage sous la topbar.
+          if(!nav.classList.contains('ccd-tuiles')) return _echec('la barre ne reprend pas les tuiles');
+          const bs=[...nav.querySelectorAll('.ccd-et-b')].map(b=>b.dataset.et);
+          if(bs.join(',')!==CCD_ETAGES.join(','))
+            return _echec('boutons : '+bs.join(',')+' au lieu de '+CCD_ETAGES.join(','));
+          const sv=_ccdVue;
+          try{
+            ccdVue('nutrition');
+            if(nav.classList.contains('actif')) return _echec('la barre des etages sort hors de l\'onglet Donnees');
+            ccdVue('donnees');
+            if(!nav.classList.contains('actif')) return _echec('la barre des etages ne sort pas sur son onglet');
+            // ccdEtage OUVRE L'ONGLET AVANT DE VISER, comme ccdAller.
+            ccdVue('lifestyle');
+            const z=document.getElementById('ccd-et-corps');
+            const cache=z.hidden;
+            z.hidden=false;
+            const ok1=ccdEtage('corps');
+            if(!ok1||_ccdVue!=='donnees') return _echec('ccdEtage n\'ouvre pas l\'onglet Donnees');
+            const a=[...nav.querySelectorAll('.ccd-et-b.active')].map(b=>b.dataset.et);
+            if(a.join(',')!=='corps') return _echec('le bouton de l\'etage vise ne s\'allume pas : '+a.join(','));
+            z.hidden=cache;
+            if(ccdEtage('nimportequoi')) return _echec('un etage inconnu passe');
+            return true;
+          } finally { try{ ccdVue(sv); }catch(e){} }})());
+
+        ok('SEUL L\'ETAGE DU DETAIL S\'OUVRE REPLIE',(()=>{
+          // Les quatre sections les plus riches s'ouvraient fermees : « c'est
+          // la raison numero un pour laquelle le coach croit que l'app ne sait
+          // rien faire ». Elles s'ouvrent maintenant deployees.
+          for(const id of ['ccd-bilans','ccd-poids','ccd-pp','ccd-photos-progression'])
+            if(CCD_REPLI_DEFAUT.indexOf(id)>=0)
+              return _echec(id+' s\'ouvre encore replie');
+          if(CCD_REPLI_DEFAUT.indexOf('ccd-detail')<0)
+            return _echec('l\'etage du detail ne s\'ouvre pas replie');
+          // ET AUCUNE SECTION DES CINQ PREMIERS ETAGES N'EST REPLIEE PAR DEFAUT.
+          for(const cle of CCD_ETAGES){
+            if(cle==='detail') continue;
+            const s=document.getElementById('ccd-et-'+cle);
+            if(!s) continue;
+            for(const c of s.querySelectorAll('.cc-sect-c[id]'))
+              if(CCD_REPLI_DEFAUT.indexOf(c.id)>=0)
+                return _echec(c.id+' est a l\'etage « '+cle+' » et s\'ouvre replie');
+          }
+          return true;})());
+
+        ok('UN ETAGE SANS RIEN A MONTRER N\'A NI TITRE NI BOUTON',(()=>{
+          // Un dossier neuf n'a ni photo, ni bilan, ni signal : un titre seul
+          // au-dessus du vide se lit comme une panne.
+          const s=document.getElementById('ccd-et-longueurs');
+          const b=document.querySelector('#ccd-etages .ccd-et-b[data-et="longueurs"]');
+          const z=document.getElementById('ccd-morpho');
+          if(!s||!b||!z) return _echec('fixture introuvable');
+          const avant=z.innerHTML, sv=_ccdVue;
+          try{
+            ccdVue('donnees');
+            z.innerHTML=''; _ccdMajEtages();
+            if(!s.hidden||!b.hidden) return _echec('un etage vide reste a l\'ecran');
+            z.textContent='Fémur 44,1 cm';
+            _ccdMajEtages();
+            if(s.hidden||b.hidden) return _echec('un etage rempli ne revient pas');
+            return true;
+          } finally { z.innerHTML=avant; _ccdMajEtages(); try{ ccdVue(sv); }catch(e){} }})());
 
         ok('LES SECTIONS SE REPLIENT, ET L\'ETAT EST RETENU',(()=>{
           // Vingt-sept sections deployees font un rouleau qu'on ne lit pas ;
@@ -30788,10 +30898,15 @@ async function testExercices(){
             try{ ccdAppliquerReplis(); }catch(e){}
           }})());
 
-        ok('L\'ONGLET DONNEES S\'OUVRE REPLIE, l\'entrainement non',(()=>{
-          // Donnees est le fourre-tout : onze sections deployees d'un coup n'y
-          // servent personne. Entrainement et nutrition sont ce qu'on vient
-          // voir — les replier ferait un clic de plus a chaque ouverture.
+        ok('SEUL LE DETAIL S\'OUVRE REPLIE, le reste des Donnees non',(()=>{
+          // ⚠ CETTE ASSERTION DISAIT L'INVERSE, et elle avait raison tant que
+          //   l'onglet Donnees etait un fourre-tout : onze sections deployees
+          //   d'un coup n'y servaient personne. Kevin, 23/09/2026 : « ces
+          //   quatre sections contiennent le plus d'information et elles
+          //   s'ouvrent fermees : c'est la raison numero un pour laquelle le
+          //   coach croit que l'app ne sait rien faire ». L'onglet est range
+          //   en six etages ; les cinq premiers sont toujours deployes, et
+          //   c'est le sixieme, le detail, qui se replie d'un bloc.
           const sv=localStorage.getItem(CCD_REPLI_CLE);
           try{
             localStorage.removeItem(CCD_REPLI_CLE);   // premiere ouverture
@@ -30799,9 +30914,10 @@ async function testExercices(){
             const replie=id=>{ const c=document.getElementById(id);
               const s=c&&c.closest('.cc-sect');
               return s?s.classList.contains('replie'):null; };
-            for(const id of ['ccd-journal','ccd-bilans','ccd-poids','ccd-dossier'])
+            for(const id of ['ccd-journal','ccd-detail','ccd-dossier'])
               if(replie(id)===false) return _echec(id+' s\'ouvre deploye');
-            for(const id of ['ccd-nutrition','ccd-phase','ccd-volume'])
+            for(const id of ['ccd-bilans','ccd-poids','ccd-pp','ccd-photos-progression',
+                             'ccd-nutrition','ccd-phase','ccd-volume'])
               if(replie(id)===true) return _echec(id+' s\'ouvre replie');
             return true;
           } finally {
