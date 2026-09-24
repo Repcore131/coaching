@@ -67128,21 +67128,10 @@ function _renderStrictDiet(){
   if(planActif(currentUser)&&!_ciqualDB) _loadCiqual().then(()=>_renderStrictDiet());
   const nut=currentUser.nutrition||{};
   const _transiStrict=_htmlDieteTransition(nut);
-  const days_data=nut.days||{};
-  const today=new Date();
-  const todayKey=localISODate(today);
   // LE JOUR CHOISI, et non plus le jour même : une journée oubliée la veille
   // était perdue, et la série de jours consécutifs cassait pour une case non
   // cochée.
   const _sjour=_strictJourValide(_strictJour);
-  const _sAuj=_sjour===todayKey;
-  const resp=days_data[_sjour]?.respected;
-  const respYes=resp===true;
-  const respNo=resp===false;
-  const wk=new Date(today);wk.setDate(today.getDate()-((today.getDay()+6)%7));
-  const weekKeys=Array.from({length:7},(_,i)=>{const d=new Date(wk);d.setDate(wk.getDate()+i);return localISODate(d);});
-  const weekScore=weekKeys.filter(k=>days_data[k]?.respected===true).length;
-  const answered=weekKeys.filter(k=>days_data[k]?.respected===true||days_data[k]?.respected===false).length;
   // La boucle vit desormais dans serieDieteJours, pure et testable : voir la
   // regle et le plafond de traversee la-bas.
   const _serie=serieDieteJours(currentUser);
@@ -67161,41 +67150,9 @@ function _renderStrictDiet(){
   const coachCircle=coachPhoto
     ?`<img src="${escapeHtml(coachPhoto)}" style="width:54px;height:54px;border-radius:var(--r-full);object-fit:cover;flex-shrink:0;border:2px solid rgba(255,255,255,.35);box-shadow:0 0 0 4px rgba(0,0,0,.18)">`
     :`<div style="width:54px;height:54px;border-radius:var(--r-full);background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text)">${icon('dumbbell',22)}</div>`;
-  // LE SUIVI DU JOUR EST PASSÉ AU PLAN, à la place qu'occupait la liste de
-  // courses. Ses deux compteurs le suivent : ils NOTENT la réponse oui/non,
-  // et les laisser derrière la liste les aurait rendus orphelins.
-  const suiviDuJour=`    <!-- Suivi du jour -->
-    <div style="background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0b0b0b);border:1px solid var(--border);border-radius:var(--r-4);box-shadow:var(--e4);padding:18px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45);animation:fadeInUp var(--t-3) var(--c-out)">
-      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.028) 11px,rgba(255,255,255,.028) 12px);pointer-events:none"></div>
-      <div style="position:relative">
-        <div style="display:inline-flex;align-items:center;gap:7px;font-family:var(--pile-titre);font-size:var(--fs-lg);color:var(--text);text-transform:uppercase;letter-spacing:2.5px;margin-bottom:14px;text-shadow:var(--halo-1),0 0 18px rgba(255,255,255,.18)"><span style="display:inline-flex;color:#ff3b30;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('check',13)}</span>J'AI RESPECTÉ MON PLAN${_sAuj?" AUJOURD'HUI":''}</div>
-        ${_bandeauJour('strict-jour',_sjour,'setStrictJour')}
-        <div style="display:flex;gap:10px">
-          <button onclick="setNutriRespected('${_sjour}',true)" style="flex:1;padding:16px 0;border-radius:var(--r-3);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respYes?'linear-gradient(160deg,#1a9c4d,#0f5c2e)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respYes?'var(--text)':'#8fd9ab'};border:2px solid ${respYes?'#22c55e':'rgba(34,197,94,.35)'};box-shadow:${respYes?'0 0 20px rgba(34,197,94,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respYes?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">✓ Oui</button>
-          <button onclick="setNutriRespected('${_sjour}',false)" style="flex:1;padding:16px 0;border-radius:var(--r-3);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respNo?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respNo?'var(--text)':'#e79b9b'};border:2px solid ${respNo?'var(--red)':'rgba(224,32,32,.35)'};box-shadow:${respNo?'0 0 20px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respNo?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">✗ Non</button>
-        </div>
-      </div>
-    </div>
-    <!-- Scores -->
-    <div style="display:flex;gap:10px;margin-bottom:8px">
-      <div style="flex:1;min-width:0;background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0a0a0a);border:1px solid var(--border);border-radius:var(--r-4);box-shadow:var(--e4);padding:16px 10px;text-align:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp var(--t-3) var(--c-out)">
-        <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.028) 11px,rgba(255,255,255,.028) 12px);pointer-events:none"></div>
-        <div style="position:absolute;left:50%;top:-46px;transform:translateX(-50%);width:150px;height:110px;background:radial-gradient(circle,${streak>0?'rgba(34,197,94,.2)':'rgba(224,32,32,.13)'},transparent 68%);pointer-events:none"></div>
-        <div style="position:relative">
-          <div style="font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:1;color:${streak>0?'#22c55e':'#ff3b30'};--halo-c:${streak>0?'rgba(34,197,94,.85)':'rgba(224,32,32,.8)'};text-shadow:var(--halo-2),0 0 26px ${streak>0?'rgba(34,197,94,.4)':'rgba(224,32,32,.35)'}">${streak}</div>
-          <div style="font-size:var(--fs-xs);color:${streak>0?'rgba(34,197,94,.75)':'rgba(255,90,90,.7)'};letter-spacing:2px;margin-top:5px;text-transform:uppercase;font-weight:800">Jours consécutifs</div>
-          ${_trous}
-        </div>
-      </div>
-      <div style="flex:1;min-width:0;background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0a0a0a);border:1px solid var(--border);border-radius:var(--r-4);box-shadow:var(--e4);padding:16px 10px;text-align:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp var(--t-3) var(--c-out)">
-        <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.028) 11px,rgba(255,255,255,.028) 12px);pointer-events:none"></div>
-        <div style="position:absolute;left:50%;top:-46px;transform:translateX(-50%);width:150px;height:110px;background:radial-gradient(circle,rgba(245,197,24,.16),transparent 68%);pointer-events:none"></div>
-        <div style="position:relative">
-          <div style="font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:1;color:#f5c518;--halo-c:rgba(245,197,24,.8);text-shadow:var(--halo-2),0 0 26px rgba(245,197,24,.35)">${weekScore}<span style="font-size:var(--fs-xl);color:rgba(255,255,255,.35);text-shadow:none">/${answered||7}</span></div>
-          <div style="font-size:var(--fs-xs);color:rgba(245,197,24,.7);letter-spacing:2px;margin-top:5px;text-transform:uppercase;font-weight:800">Cette semaine</div>
-        </div>
-      </div>
-    </div>`;
+  // LE SUIVI DU JOUR, EN UNE CARTE (maquette de Kevin, 24/09/2026), juste
+  // sous le cadre qui explique la diete : voir _htmlSuiviAlimentaire.
+  const suiviDuJour=_htmlSuiviAlimentaire(currentUser,_sjour,streak,_trous);
   el.innerHTML=`${_transiStrict}
     <!-- Définition diète stricte -->
     <div class="banner-hero" style="margin-bottom:18px;animation:fadeInUp var(--t-3) var(--c-out)">
@@ -67208,6 +67165,10 @@ function _renderStrictDiet(){
         </div>
       </div>
     </div>
+    <!-- LE SUIVI ALIMENTAIRE, JUSTE SOUS LE CADRE EXPLICATIF (Kevin,
+         24/09/2026). Avec ou sans plan : il est rendu ici, une seule fois, et
+         _htmlPlanAthlete ne le recoit plus. -->
+    ${suiviDuJour}
     <!-- Plan alimentaire pas encore composé. Le bloc DISPARAÎT dès qu'un plan
          existe : « Plan alimentaire à venir » juste au-dessus d'un plan complet
          se lisait comme une contradiction. Le plan en photo a été retiré : le
@@ -67218,20 +67179,8 @@ function _renderStrictDiet(){
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:5px">${icon('clipboard',12)} Plan alimentaire</div>
       <div style="background:var(--surface-1);border:1px dashed var(--border);border-radius:var(--r-3);padding:32px 16px;text-align:center;color:var(--text-dim);font-size:var(--fs-sm)"><div style="margin-bottom:8px;opacity:.3">${icon('clipboard',32)}</div>Plan alimentaire à venir</div>
     </div>`:''}
-    <!-- SANS PLAN, LE SUIVI DU JOUR EST RENDU ICI. Il ne l'était qu'à travers
-         _htmlPlanAthlete, qui sort tot quand planActif est faux : tant
-         que le coach n'avait pas composé le plan dans l'application, l'athlète
-         ne pouvait ni répondre à la question quotidienne, ni voir sa série.
-         Les anciens athlètes y perdaient même l'usage qui leur vaut l'accès.
-
-         LES DEUX CONDITIONS SONT EXCLUSIVES — ce bloc ne sort que si
-         !planActif, et _htmlPlanAthlete ne rend rien dans ce cas : jamais de
-         double rendu. Et il prend sa place juste sous « Plan alimentaire à
-         venir », parce que c'est la seule chose qu'on puisse encore faire
-         sur cet écran. -->
-    ${!planActif(currentUser)?suiviDuJour:''}
     <!-- Le plan composé par le coach : repas imposés et sources interchangeables -->
-    ${_htmlPlanAthlete(currentUser,suiviDuJour)}
+    ${_htmlPlanAthlete(currentUser)}
     <!-- LA FICHE A IMPRIMER. Le plan se lisait sur un telephone et nulle part
          ailleurs ; Kevin livre ses programmes sur deux planches que ses
          athletes collent sur le frigo. Le bouton ouvre EXACTEMENT ces planches,
@@ -67246,6 +67195,133 @@ function _renderStrictDiet(){
 `;
 }
 
+// ══ SUIVI ALIMENTAIRE — LA MAQUETTE DE KEVIN (24/09/2026) ═════════════════
+// La question du jour et ses deux compteurs, reunis dans UNE carte, juste
+// sous le cadre qui explique la diete stricte : « remplace par celle-ci et
+// place-la juste en dessous du cadre explicatif ». Elle vivait au milieu du
+// plan, a la place de la liste de courses, ou sous « Plan alimentaire a
+// venir » quand le plan n'existait pas encore.
+// Dans l'ordre : l'en-tete et le jour vise ; Oui / Non ; la serie ; les
+// sept derniers jours en anneau ; les sept pastilles, qui menent chacune a
+// leur jour ; « Voir mon suivi », quatre semaines d'un coup d'oeil.
+// ⚠ « CETTE SEMAINE » = LES SEPT DERNIERS JOURS, ceux des pastilles juste
+//   dessous. Compter la semaine calendaire sous sept pastilles glissantes,
+//   c'etait afficher deux chiffres qui ne se recoupent pas.
+const _SA_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+const SA_ICO={
+  couverts:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 2.5a1 1 0 0 1 1 1V9a1 1 0 0 0 1 1V3.5a1 1 0 1 1 2 0V10a1 1 0 0 0 1-1V3.5a1 1 0 1 1 2 0V9a3 3 0 0 1-2.2 2.9V20.5a1.5 1.5 0 0 1-3 0v-8.6A3 3 0 0 1 5 9V3.5a1 1 0 0 1 1-1zM17.5 2.5c1.9 0 3 2.6 3 6.2 0 2.4-.9 3.8-2 4.3v7.5a1.5 1.5 0 0 1-3 0V3.8c0-.7.6-1.3 2-1.3z"/></svg>',
+  oui:_SA_SVG+'<path d="M4.5 12.5l5 5L19.5 7"/></svg>',
+  non:_SA_SVG+'<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>',
+  moins:_SA_SVG+'<path d="M7 12h10"/></svg>',
+  points:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="7" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="17" cy="12" r="1.6"/></svg>',
+  flamme:'<svg viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="sa-fl" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff2d2d"/><stop offset="1" stop-color="#ff7a3d"/></linearGradient></defs><path fill="url(#sa-fl)" d="M12.6 1.8c.7 3.4-2.1 5.2-3.7 7.4C7.5 11.2 6.7 13 6.7 15a5.3 5.3 0 0 0 10.6 0c0-2.6-1.1-4.6-2.6-6.3.1 1.8-.7 3.1-1.8 3.7.6-3.7-.4-7.6-.3-10.6z"/></svg>',
+  calendrier:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4M7.5 13h.01M12 13h.01M16.5 13h.01M7.5 16.5h.01M12 16.5h.01"/></svg>',
+  bas:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
+  droite:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>',
+  histo:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="4" y="11" width="3.4" height="9" rx="1.2"/><rect x="10.3" y="6" width="3.4" height="14" rx="1.2"/><rect x="16.6" y="9" width="3.4" height="11" rx="1.2"/></svg>'
+};
+// PURE. L'etat d'un jour pour sa pastille : 'oui', 'non', 'vide' (jour passe
+// sans reponse) ou 'attente' (aujourd'hui, pas encore repondu).
+function saEtatJour(u,iso,auj){
+  const r=(((u&&u.nutrition)||{}).days||{})[iso];
+  const v=r&&r.respected;
+  if(v===true) return 'oui';
+  if(v===false) return 'non';
+  return iso===auj?'attente':'vide';
+}
+// PURE. Les n derniers jours, du plus ancien a aujourd'hui.
+function saJours(n,maintenant){
+  const d=maintenant?new Date(maintenant):new Date(); d.setHours(12,0,0,0);
+  const out=[];
+  for(let i=n-1;i>=0;i--){ const j=new Date(d); j.setDate(d.getDate()-i); out.push({iso:localISODate(j),d:j}); }
+  return out;
+}
+function _saPastille(etat){
+  return '<span class="sa-p" data-e="'+etat+'">'
+    +(etat==='oui'?SA_ICO.oui:etat==='non'?SA_ICO.non:etat==='attente'?SA_ICO.points:SA_ICO.moins)+'</span>';
+}
+function _saJourCourt(d){
+  const s=d.toLocaleDateString('fr-FR',{weekday:'short'}).replace('.','');
+  return s.charAt(0).toUpperCase()+s.slice(1);
+}
+function _htmlSuiviAlimentaire(u,sjour,serie,trous){
+  const auj=localISODate(new Date());
+  const sAuj=(sjour===auj);
+  const r=((((u&&u.nutrition)||{}).days||{})[sjour]||{}).respected;
+  const jours=saJours(7);
+  const tenus=jours.filter(j=>saEtatJour(u,j.iso,auj)==='oui').length;
+  const C=2*Math.PI*42;
+  // LE JOUR VISE : un menu natif, transparent, pose sur la date affichee —
+  // la meme borne de retention que l'ancien selecteur (_strictJourValide).
+  const min=localISODate(new Date(Date.now()-STEPS_RETENTION_JOURS*24*3600*1000));
+  let opts='';
+  for(let t=new Date(auj+'T12:00:00');localISODate(t)>=min;t.setDate(t.getDate()-1)){
+    const iso=localISODate(t);
+    opts+='<option value="'+iso+'"'+(iso===sjour?' selected':'')+'>'
+      +(iso===auj?'Aujourd’hui — ':'')+t.toLocaleDateString('fr-FR')+'</option>';
+  }
+  const dateLib=new Date(sjour+'T12:00:00').toLocaleDateString('fr-FR');
+  const bouton=(val,titre,sous,ico)=>{
+    const actif=(r===val);
+    return '<button type="button" class="sa-rep" data-v="'+(val?'oui':'non')+'"'+(actif?' data-actif=""':'')
+      +' aria-pressed="'+actif+'" onclick="setNutriRespected(\''+sjour+'\','+val+')">'
+      +'<span class="sa-rep-i">'+ico+'</span><span class="sa-rep-t"><b>'+titre+'</b><span>'+sous+'</span></span></button>';
+  };
+  return '<section class="sa-carte" aria-label="Suivi alimentaire">'
+    +'<div class="sa-tete">'
+      +'<span class="sa-ico">'+SA_ICO.couverts+'</span>'
+      +'<div class="sa-titres"><h3>Suivi <span>alimentaire</span></h3>'
+        +'<span class="sa-q">J’ai respecté mon plan '+(sAuj?'aujourd’hui':'ce jour-là')+' ?</span></div>'
+      +'<label class="sa-date">'+SA_ICO.calendrier+'<span>'+escapeHtml(dateLib)+'</span>'+SA_ICO.bas
+        +'<select onchange="setStrictJour(this.value===\''+auj+'\'?\'\':this.value)" aria-label="Choisir le jour">'+opts+'</select></label>'
+    +'</div>'
+    +'<div class="sa-milieu">'
+      +'<div class="sa-reps">'
+        +bouton(true,'Oui','Plan respecté',SA_ICO.oui)
+        +bouton(false,'Non','Plan non respecté',SA_ICO.non)
+      +'</div>'
+      +'<div class="sa-chiffres">'
+        +'<div class="sa-serie"><span class="sa-flamme">'+SA_ICO.flamme+'</span>'
+          +'<div><strong>'+serie+'</strong><span>Jours<br>consécutifs</span>'+(trous||'')+'</div></div>'
+        +'<div class="sa-anneau"><svg viewBox="0 0 100 100" aria-hidden="true">'
+          +'<circle cx="50" cy="50" r="42" class="sa-an-f"/>'
+          +'<circle cx="50" cy="50" r="42" class="sa-an-p" stroke-dasharray="'+(C*tenus/7).toFixed(1)+' '+C.toFixed(1)+'"/></svg>'
+          +'<div class="sa-an-c"><strong>'+tenus+'<small>/7</small></strong><span>Cette semaine</span></div></div>'
+      +'</div>'
+    +'</div>'
+    +'<div class="sa-pied">'
+      +'<div class="sa-jours">'+jours.map(j=>{
+        const e=saEtatJour(u,j.iso,auj);
+        const lib=j.d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+        return '<button type="button" class="sa-j'+(j.iso===sjour?' sa-j-vise':'')+'"'
+          +' onclick="setStrictJour(\''+(j.iso===auj?'':j.iso)+'\')"'
+          +' aria-label="'+escapeHtml(lib+' : '+(e==='oui'?'plan respecté':e==='non'?'plan non respecté':'pas de réponse'))+'">'
+          +_saPastille(e)+'<span>'+escapeHtml(_saJourCourt(j.d))+'</span></button>';
+      }).join('')+'</div>'
+      +'<button type="button" class="sa-voir" onclick="saVoirSuivi()">'+SA_ICO.histo
+        +'<span>Voir mon suivi</span>'+SA_ICO.droite+'</button>'
+    +'</div>'
+    +'</section>';
+}
+// « VOIR MON SUIVI » : quatre semaines, jour par jour, et leur taux. Les
+// memes pastilles que la carte, et chacune mene a son jour.
+function saVoirSuivi(){
+  const u=currentUser, auj=localISODate(new Date());
+  const jours=saJours(28);
+  const rep=jours.filter(j=>{ const e=saEtatJour(u,j.iso,auj); return e==='oui'||e==='non'; });
+  const oui=jours.filter(j=>saEtatJour(u,j.iso,auj)==='oui').length;
+  const grille=jours.map(j=>{
+    const e=saEtatJour(u,j.iso,auj);
+    return '<button type="button" class="sa-j" onclick="sanFermer();setStrictJour(\''+(j.iso===auj?'':j.iso)+'\')"'
+      +' aria-label="'+escapeHtml(j.d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}))+'">'
+      +_saPastille(e)+'<span>'+j.d.getDate()+'</span></button>';
+  }).join('');
+  _sanFeuille('Mon suivi alimentaire',
+    '<div class="sa-bilan"><strong>'+oui+'<small>/'+(rep.length||0)+'</small></strong>'
+      +'<span>jours où tu as respecté ton plan, sur les jours renseignés des 4 dernières semaines</span></div>'
+    +'<div class="sa-grille">'+grille+'</div>'
+    +'<div class="san-aide" style="margin-top:10px">Touche un jour pour y répondre ou corriger ta réponse.</div>');
+}
 function setNutriRespected(key,val){
   if(!currentUser.nutrition) currentUser.nutrition={};
   if(!currentUser.nutrition.days) currentUser.nutrition.days={};
