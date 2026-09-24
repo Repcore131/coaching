@@ -124,11 +124,31 @@ const CLIENT_ID = process.env.PAYPAL_CLIENT_ID
   || (src.match(/const PAYPAL_CLIENT_ID='([^']+)'/) || [])[1] || '';
 const SECRET = process.env.PAYPAL_CLIENT_SECRET || '';
 
-async function jeton() {
+// LE SECRET, DEMANDE A L'ECRAN. Rien n'est garde : ni fichier, ni variable
+// d'environnement, ni historique de shell.
+function demanderSecret() {
+  return new Promise(res => {
+    process.stdout.write('\n  Colle le secret de l\'application PayPal, puis Entree\n  (il n\'est ni enregistre ni affiche ailleurs) : ');
+    let t = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', d => {
+      t += d;
+      const i = t.indexOf('\n');
+      if (i >= 0) {
+        process.stdin.pause();
+        console.log('');
+        res(t.slice(0, i).trim());
+      }
+    });
+    process.stdin.resume();
+  });
+}
+
+async function jeton(secret) {
   const r = await fetch(API + '/v1/oauth2/token', {
     method: 'POST',
     headers: {
-      Authorization: 'Basic ' + Buffer.from(CLIENT_ID + ':' + SECRET).toString('base64'),
+      Authorization: 'Basic ' + Buffer.from(CLIENT_ID + ':' + secret).toString('base64'),
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body: 'grant_type=client_credentials',
@@ -230,8 +250,8 @@ async function principal() {
 
   if (BLANC) {
     console.log('  Essai a blanc : rien n\'a ete cree.');
-    console.log('  Pour de vrai :  PAYPAL_CLIENT_SECRET=...  node scripts/paypal_plans.mjs'
-      + (SANDBOX ? ' --sandbox' : '') + '\n');
+    console.log('  Pour de vrai :  node scripts/paypal_plans.mjs --ecrire'
+      + (SANDBOX ? ' --sandbox' : '') + '   (il demandera le secret)\n');
     return;
   }
   if (!CLIENT_ID) throw new Error('Aucun identifiant client : donne PAYPAL_CLIENT_ID.');
@@ -244,15 +264,19 @@ async function principal() {
     console.log('    developer.paypal.com → Apps & Credentials → onglet Sandbox.');
     console.log('    Donne-les tous les deux : PAYPAL_CLIENT_ID=... PAYPAL_CLIENT_SECRET=...\n');
   }
-  if (!SECRET) {
-    console.log('  Il manque le secret. Rien n\'a ete cree.\n');
-    console.log('  PAYPAL_CLIENT_SECRET=ton_secret node scripts/paypal_plans.mjs'
-      + (SANDBOX ? ' --sandbox' : '') + '\n');
+  // ⚠ LE SECRET SE DEMANDE ICI, ET NON SUR LA LIGNE DE COMMANDE. Un secret
+  //   tape en argument ou en variable d'environnement reste dans l'historique
+  //   du shell, et dans la liste des processus le temps de l'appel. Colle-le
+  //   quand il le demande : il ne va nulle part ailleurs que dans la memoire
+  //   de ce processus, et le processus meurt a la fin de la commande.
+  const secret = SECRET || await demanderSecret();
+  if (!secret) {
+    console.log('\n  Aucun secret : rien n\'a ete cree.\n');
     process.exitCode = 2;
     return;
   }
 
-  const tok = await jeton();
+  const tok = await jeton(secret);
   console.log('  Identifiants acceptes par PayPal.');
   const pr = await produit(tok);
   console.log('  Produit « ' + PRODUIT_NOM +' » : ' + pr.id + (pr.neuf ? ' (cree)' : ' (deja la)'));
