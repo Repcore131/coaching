@@ -1441,6 +1441,25 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
   </div>
 </div>
+<!-- ══════ ACCÈS : OUVRIR ET FERMER À LA MAIN ══════
+     Le geste au bout du rapport payeur du 1er du mois : PayPal prélève, mais
+     rien ne redescend jusqu'ici, et aucun serveur ne viendra le faire. Réservé
+     au créateur, parce que database.rules.json n'accorde l'écriture de droits/
+     qu'à son adresse. Rempli par _rendreConsoleAcces. -->
+<div id="s-coach-acces" class="screen ecran-coach">
+  <div class="topbar">
+    <button class="back-btn" onclick="retourDe('s-coach-acces','s-coach-home')">←</button>
+    <span class="topbar-title">Accès</span><span></span>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
+      <h1 style="font-size:var(--fs-xl);line-height:1.3;font-weight:900;margin-bottom:4px">Ouvrir, fermer un accès</h1>
+      <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:16px">Fermer n’efface rien : la personne retrouve ses séances, son programme et son historique dès que tu rouvres.</p>
+      <div id="acces-corps"></div>
+    </div>
+  </div>
+</div>
 <div id="s-coach-file" class="screen ecran-coach">
   <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-coach-file','s-coach-home')">←</button>
@@ -1994,6 +2013,19 @@ const COACH_PHOTO='icons/coach.jpg';
              loadMonetisationTab : cette carte s adresse a TOUS les coachs,
              contrairement au bloc du tunnel juste au-dessus. -->
         <div id="coach-abo"></div>
+
+        <!-- Accès : le geste au bout du rapport payeur. Créateur seulement,
+             affiché par loadMonetisationTab — lui seul peut écrire droits/. -->
+        <div id="ch-lien-acces" style="display:none;margin-bottom:18px">
+          <div onclick="ouvrirAccesConsole()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:16px 18px;cursor:pointer;display:flex;align-items:center;gap:14px">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Accès</div>
+              <div style="font-weight:800;font-size:var(--fs-md)">Ouvrir, fermer un accès</div>
+              <div class="sub" style="font-size:var(--fs-xs);margin-top:2px">Par adresse, sans ouvrir de dossier</div>
+            </div>
+            <div style="color:var(--sub);font-size:var(--fs-xl)">›</div>
+          </div>
+        </div>
 
         <!-- ══ L'ACCES DE MES ATHLETES ═══════════════════════════════════
              Demande de Kevin, 08/09/2026 : « il faut que je voie les athletes,

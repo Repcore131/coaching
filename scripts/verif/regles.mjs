@@ -291,33 +291,75 @@ if(fautes.length){
 }
 console.log('regles : aucun appel JavaScript inconnu du langage');
 
-// ══ LE NOEUD droits/ : LU PAR DEUX, ECRIT PAR PERSONNE (lot 0) ═══════════
-// C'est la serrure du modele economique. Si ".write" cessait d'etre false, le
-// titulaire du dossier retrouverait le droit de se poser lui-meme un palier —
-// exactement ce que ce lot ferme.
+// ══ LE NOEUD droits/ : LU PAR DEUX, ECRIT PAR UN SEUL COMPTE ═════════════
+//
+// ⚠ CE TEST A CHANGE DE CONTRAT LE 24/09/2026, ET VOICI POURQUOI. Il exigeait
+//   « ".write": false » : le noeud devait etre rempli par une Cloud Function,
+//   donc par personne depuis un navigateur. Kevin ne prend pas le plan Blaze,
+//   il n y aura donc pas de fonction — et un noeud que PERSONNE n ecrit jamais
+//   ne sert a rien. L ecriture est maintenant accordee a UNE adresse, celle du
+//   createur, et c est exactement ce que ce test verifie desormais : la regle
+//   NOMME une adresse, et le code qui ecrit verifie la meme de son cote.
+//
+//   CE QUI RESTE FERME, et qui est tout l interet du noeud : le titulaire du
+//   dossier n y touche pas. Un dossier se trafique depuis une console de
+//   navigateur ; droits/ non.
 {
   const i=regles.indexOf('"droits"');
-  const bloc=i<0?'':regles.slice(i,i+900);
+  const bloc=i<0?'':regles.slice(i,i+2000);
   if(!bloc){
     console.error('\ndroits/ ABSENT de database.rules.json : le palier serveur ne peut pas etre lu.');
     process.exit(1);
   }
-  if(!/"\.write"\s*:\s*false/.test(bloc)){
-    console.error('\ndroits/ n\'est plus ferme en ecriture : n\'importe qui pourrait se poser un palier.');
+  const w=bloc.match(/"\.write"\s*:\s*("(?:[^"\\]|\\.)*"|true|false)/);
+  if(!w){
+    console.error('\ndroits/ n\'a plus de regle d\'ecriture du tout.');
+    process.exit(1);
+  }
+  if(w[1]==='true'||/^"\s*auth\s*!=\s*null\s*"$/.test(w[1])){
+    console.error('\ndroits/ est ouvert a tout compte connecte : n\'importe qui pourrait se poser un palier.');
+    process.exit(1);
+  }
+  // L'ADRESSE DOIT Y ETRE ECRITE EN CLAIR. Une condition qui passerait par le
+  // dossier (« role === coach », par exemple) rendrait la serrure aussi
+  // trafiquable que le dossier lui-meme.
+  if(w[1]!=='false'&&w[1].indexOf(mCreateur[1])<0){
+    console.error('\ndroits/ s\'ecrit sans nommer d\'adresse : '+w[1].slice(0,90));
     process.exit(1);
   }
   if(!/"\.read"\s*:/.test(bloc)){
     console.error('\ndroits/ n\'est pas lisible : l\'application ne pourra jamais lire le palier.');
     process.exit(1);
   }
-  // ET LE CLIENT N'ECRIT JAMAIS DEDANS. Une ecriture cliente serait refusee
-  // par la regle, mais elle dirait qu'on a cru pouvoir le faire.
-  const ecrit=source.match(/method\s*:\s*'(PUT|PATCH)'[^\n]{0,160}droits\//);
-  if(ecrit){
-    console.error('\nLe client tente d\'ecrire dans droits/ : '+ecrit[0].slice(0,110));
+  // LES CHAMPS SONT ENUMERES. Sans « $autre : false », une faute de frappe
+  // ecrirait « palie » a cote de « palier » sans que rien ne bronche.
+  if(!/"\$autre"\s*:\s*\{\s*"\.validate"\s*:\s*false/.test(bloc)){
+    console.error('\ndroits/ accepte des champs non prevus : une faute de frappe y passerait.');
     process.exit(1);
   }
-  console.log('droits : lisible par le titulaire et son coach, ferme en ecriture');
+  // ── ET LE CODE QUI ECRIT VERIFIE L'ADRESSE, LUI AUSSI ─────────────────
+  // Defense en profondeur : la regle refuserait l'ecriture d'un autre compte,
+  // mais le refus arriverait APRES le geste, sous forme d'un echec reseau
+  // illisible. La garde locale dit non tout de suite, et dit pourquoi.
+  const iw=source.indexOf('async poserDroits(');
+  if(iw<0){
+    console.error('\nposerDroits a disparu : plus rien dans l\'application ne peut ouvrir ni fermer un acces.');
+    process.exit(1);
+  }
+  if(source.slice(iw,iw+1800).indexOf('CREATOR_EMAIL')<0){
+    console.error('\nposerDroits ecrit dans droits/ sans verifier l\'adresse du createur.');
+    process.exit(1);
+  }
+  // ET IL N'Y A QUE DEUX CHEMINS VERS CE NOEUD : la lecture et cette ecriture.
+  // Un troisieme est peut-etre legitime — mais il doit passer par la meme
+  // garde, donc par poserDroits, et ce compte le dira.
+  const chemins=(source.match(/'droits\/'/g)||[]).length;
+  if(chemins!==2){
+    console.error('\n'+chemins+' endroits construisent une adresse droits/ au lieu de 2 '
+      +'(la lecture et poserDroits). Toute ecriture doit passer par poserDroits.');
+    process.exit(1);
+  }
+  console.log('droits : lisible par le titulaire, son coach et le createur ; ecrit par le createur seul');
 }
 
 console.log('\nRien de bloquant.');
