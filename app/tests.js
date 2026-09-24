@@ -4434,24 +4434,35 @@ async function testExercices(){
             ?true:_echec('le dépassement n\'a pas lieu : '+bloc.kcal);})());
 
         // ── Le plancher, et le cas limite du cahier des charges ──────────
-        ok('Critère : 48 kg, lipides à 1,5, gros déficit → le plancher tient',(()=>{
+        ok('Critère : 48 kg, lipides à 1,5, gros déficit → le plancher se DIT, il ne corrige plus',(()=>{
+          // ⚠ CONTRAT CHANGÉ LE 24/09/2026. Kevin : « supprime les blocage et
+          //   limite ». Le plancher remontait les glucides en silence ; il est
+          //   toujours calculé et toujours nommé, mais il ne touche plus aux
+          //   chiffres. Ce que l'assertion tient maintenant : la journée sort
+          //   INTACTE, et la violation est signalée.
           const u=_ath({id:'p1',kg:48});
           const pl=plancherEffectif(u).kcal;
           if(!(pl>0)) return _echec('plancher nul');
           const r=_repartition(Math.round(pl*0.6),48,2.4,1.5);
-          const j=_relevePlancher(_bloc(r.p,r.l,r.g),u);
-          return j.kcal>=pl?true:_echec(j.kcal+' sous le plancher '+pl);})());
-        ok('Des lipides ÉLEVÉS ne peuvent pas éloigner du plancher',(()=>{
-          // Démonstration plutôt qu\'affirmation : _relevePlancher ne relève que
-          // si kcal < plancher, et kcal vaut au moins 4p+9l. Monter les lipides
-          // ne fait qu\'augmenter ce minimum. Aucun plafonnement n\'est requis.
+          const b=_bloc(r.p,r.l,r.g);
+          const j=_relevePlancher(b,u);
+          if(j.kcal!==b.kcal) return _echec('la journée a été corrigée : '+b.kcal+' → '+j.kcal);
+          if(!(j.kcal<pl)) return _echec('le cas d\'essai ne descend pas sous le plancher');
+          // ET ELLE EST SIGNALÉE : le coach et l'athlète la lisent tous les deux.
+          const viol=controlerMacros({on:j,off:j},u);
+          return viol.length?true:_echec('une journée sous le plancher ne déclenche aucun signalement');})());
+        ok('Quel que soit le g/kg de lipides, la journée sort intacte',(()=>{
+          // ⚠ MÊME CONTRAT CHANGÉ (24/09/2026). L'assertion vérifiait qu'aucun
+          //   réglage de lipides ne passait sous le plancher ; elle vérifie
+          //   maintenant qu'AUCUN ne se fait corriger en silence.
           const u=_ath({id:'p2',kg:48});
           const pl=plancherEffectif(u).kcal;
-          const rates=LIP_ECHELLE.filter(v=>{
+          const corriges=LIP_ECHELLE.filter(v=>{
             const r=_repartition(Math.round(pl*0.5),48,2.4,v);
-            return _relevePlancher(_bloc(r.p,r.l,r.g),u).kcal<pl;
+            const b=_bloc(r.p,r.l,r.g);
+            return _relevePlancher(b,u).kcal!==b.kcal;
           });
-          return rates.length?_echec('plancher violé à '+rates.join(', ')):true;})());
+          return corriges.length?_echec('journées corrigées à '+corriges.join(', ')):true;})());
 
         // ── besoinsProposes ─────────────────────────────────────────────
         ok('besoinsProposes transmet le g/kg de lipides et l\'annonce',(()=>{
@@ -22965,21 +22976,40 @@ async function testExercices(){
             for(const k in v){ const e=document.getElementById('ccd-'+col+'-'+k); if(e) e.value=v[k]; }
           }
         };
-        ok('Sous le plancher, le premier enregistrement est REFUSÉ',(()=>{
+        ok('Sous le plancher, l\'enregistrement PASSE, et la violation reste affichée',(()=>{
+          // ⚠ CONTRAT INVERSÉ LE 24/09/2026 (« supprime les blocage et limite »).
+          //   Il fallait deux clics et une case cochée ; un seul clic écrit. Ce
+          //   qui est tenu maintenant : les chiffres SONT écrits, et le bloc
+          //   rouge « Sous le plancher » les nomme tant qu'ils y sont.
           poser();
           remplir(1200,150,100,70);
           const r=saveClientNutriMacros();
           const m=((DB.get('users')||{})['plc@t.fr'].nutrition||{}).macros;
-          return r===false&&!m;})());
+          if(r!==true) return _echec('l\'enregistrement a été refusé');
+          if(!m||Number(m.on.kcal)!==1200) return _echec('les chiffres ne sont pas écrits : '+JSON.stringify(m&&m.on));
+          const h=_htmlViolationsCoach((DB.get('users')||{})['plc@t.fr']);
+          if(!/Sous le plancher/.test(h)) return _echec('la violation n\'est plus affichée');
+          if(!/1200 kcal/.test(h)) return _echec('la violation ne chiffre plus : '+h.slice(0,120));
+          return true;})());
         ok('Les violations sont affichées, chiffrées, sous le tableau',(()=>{
           const h=(document.getElementById('ccd-nutrition')||{}).innerHTML||'';
-          return /Sous le plancher/.test(h)&&/1200 kcal/.test(h)&&/1760 kcal/.test(h)
-            &&/je confirme cette prescription en connaissance de cause/i.test(h);})());
-        ok('Sans la case cochée, « enregistrer malgré » refuse encore',(()=>{
+          if(!/Sous le plancher/.test(h)) return _echec('le bloc a disparu');
+          if(!/1200 kcal/.test(h)||!/1760 kcal/.test(h)) return _echec('les chiffres ne sont plus là');
+          // ⚠ LA CASE A COCHÉ A DISPARU AVEC LE REFUS (24/09/2026) : elle ne
+          //   servait qu'à lever un blocage qui n'existe plus. Ce qui la
+          //   remplace dit ce qui se passe vraiment.
+          if(/je confirme cette prescription/i.test(h)) return _echec('la case de dérogation est revenue');
+          if(!/enregistrés tels quels/.test(h)) return _echec('rien ne dit que les chiffres sont écrits');
+          return true;})());
+        ok('Sans la case cochée, l\'enregistrement passe quand même',(()=>{
+          // ⚠ CONTRAT INVERSÉ LE 24/09/2026 : la case n'existe plus, et le
+          //   paramètre `malgrePlancher` n'a plus d'effet. Un clic suffit.
           _plConfirme=null;
-          remplir(1200,150,100,70);
+          remplir(1210,150,100,70);
           const r=saveClientNutriMacros(true);
-          return r===false&&!((DB.get('users')||{})['plc@t.fr'].nutrition||{}).macros;})());
+          const m=((DB.get('users')||{})['plc@t.fr'].nutrition||{}).macros;
+          return (r===true&&m&&Number(m.on.kcal)===1210)
+            ?true:_echec('r='+r+' macros='+JSON.stringify(m&&m.on));})());
         ok('Critère : le coach peut confirmer, et la confirmation est TRACÉE',(()=>{
           // L'empreinte se calcule sur ce qui est A L'ECRAN : on remplit
           // d'abord, on confirme ensuite. L'inverse confirmerait des champs
@@ -33491,7 +33521,10 @@ async function testExercices(){
         if(deltaKcalPartage({nutrition:{tableur:{deltaAthlete:20}}})!==20) return _echec('l’ancien deltaAthlete n’est plus repris');
         if(deltaKcalPartage({nutrition:{tableur:{delta:0},perso:{delta:80}}})!==0)
           return _echec('la case partagée ne prime pas sur l’ancienne');
-        if(deltaKcalPartage({nutrition:{tableur:{delta:9000}}})!==DELTA_KCAL_MAX) return _echec('la borne haute ne joue pas');
+        // ⚠ PLUS DE BORNE (24/09/2026) : une cible à 2 400 doit pouvoir
+        //   descendre à 1 800 par ce bouton, et elle ne le pouvait pas.
+        if(deltaKcalPartage({nutrition:{tableur:{delta:9000}}})!==9000) return _echec('le ±20 est encore borné');
+        if(DELTA_KCAL_MAX!==Infinity) return _echec('la borne est revenue : '+DELTA_KCAL_MAX);
         if(deltaKcalPartage({})!==0) return _echec('un dossier sans nutrition ne rend pas 0');
         if(libelleDeltaKcal({nutrition:{tableur:{delta:40}}})!=='+40') return _echec('le libellé : '+libelleDeltaKcal({nutrition:{tableur:{delta:40}}}));
         if(libelleDeltaKcal({nutrition:{tableur:{delta:0}}})!=='') return _echec('un delta nul affiche quelque chose');
@@ -33573,12 +33606,15 @@ async function testExercices(){
           if(on.g!==250) return _echec('les glucides n’absorbent pas : '+on.g+' pour 250');
           if(off.g!==200) return _echec('le jour OFF ne suit pas : '+off.g+' pour 200');
           if(u.nutrition.macros.origine!=='manuel') return _echec('l’origine manuelle a été réécrite');
-          // LA BORNE : a ±500, on ne bouge plus, et on le dit.
-          u.nutrition.tableur.delta=DELTA_KCAL_MAX;
+          // ⚠ PLUS DE BORNE (24/09/2026) : a ±2 000 comme a ±20, le geste
+          //   suivant passe encore. C'est ce que Kevin demande — « supprime les
+          //   blocage et limite » — et c'est verifiable ici.
+          u.nutrition.tableur.delta=2000;
           const avant=u.nutrition.macros.on.kcal;
           const b=appliquerDeltaKcal(u,1,'tableur');
-          if(b.bouge!==false) return _echec('la borne ne retient pas le geste');
-          return u.nutrition.macros.on.kcal===avant?true:_echec('le total a bougé malgré la borne');
+          if(b.bouge!==true) return _echec('le geste est retenu alors qu\'il n\'y a plus de borne');
+          return u.nutrition.macros.on.kcal===avant+20
+            ?true:_echec('le total n\'a pas suivi : '+u.nutrition.macros.on.kcal+' pour '+(avant+20));
         } finally { window.saveUser=_sv; }})());
 
       ok('1412 — LA SYNCHRO DE FOND DU COACH REDESCEND LA FICHE QU’IL REGARDE',(()=>{
@@ -62955,16 +62991,57 @@ async function testExercices(){
             for(const k in v){ const e=document.getElementById('ccd-'+col+'-'+k); if(e) e.value=v[k]; }
           }
         };
-        ok('Critère : un échec d\'enregistrement remet la confirmation à null',(()=>{
+        ok('UNE JOURNÉE VIDE NE PART JAMAIS AU DOSSIER',(()=>{
+          // ⚠ LE DÉFAUT « ELLE NE REÇOIT RIEN », trouvé au banc à deux appareils
+          //   le 24/09/2026. Avec le cyclage, la saisie manuelle écrit DEUX
+          //   journées ; la colonne JOUR OFF laissée vide partait telle quelle.
+          //   L'athlète recevait le dossier et sa carte restait muette les jours
+          //   où elle tombait sur la journée vide.
+          poser2('vide@t.fr');
+          remplir2(2400,150,100,260);
+          // On vide la colonne OFF à la main, comme un coach qui ne remplit que
+          // la première.
+          for(const id of ['ccd-off-kcal','ccd-off-p','ccd-off-l','ccd-off-g','ccd-off-f']){
+            const e=document.getElementById(id); if(e) e.value='';
+          }
+          if(saveClientNutriMacros()!==true) return _echec('l\'enregistrement est refusé');
+          const m=(((DB.get('users')||{})['vide@t.fr']||{}).nutrition||{}).macros||{};
+          if(!m.on||Number(m.on.kcal)!==2400) return _echec('le jour ON n\'est pas écrit : '+JSON.stringify(m.on));
+          if(!m.off||!(Number(m.off.kcal)>0))
+            return _echec('une journée vide est partie au dossier : '+JSON.stringify(m.off));
+          return Number(m.off.kcal)===Number(m.on.kcal)
+            ?true:_echec('la journée vide ne reprend pas l\'autre : '+m.off.kcal+' pour '+m.on.kcal);})());
+
+        ok('UNE JOURNÉE VIDE DÉJÀ AU DOSSIER NE FAIT PLUS TAIRE LA CARTE',(()=>{
+          // Les dossiers abîmés avant le correctif se réparent à l'affichage :
+          // la carte retombe sur l'autre journée plutôt que de se taire.
+          const u={id:'v2',email:'v2@t.fr',role:'athlete',gender:'F',
+            nutrition:{dietType:'flexible',
+              macros:{on:{kcal:2000,p:150,l:60,g:245,f:28},off:{},origine:'coach'}}};
+          const on=ciblesEnVigueur(u,'2026-09-21');
+          const off=ciblesEnVigueur(u,'2026-09-20');
+          if(!on||!off) return _echec('la carte se tait : '+JSON.stringify({on,off}));
+          if(Number(on.kcal)!==2000||Number(off.kcal)!==2000)
+            return _echec('les deux journées ne valent pas 2 000 : '+JSON.stringify({on,off}));
+          // ET UN DOSSIER SANS AUCUNE JOURNÉE SE TAIT TOUJOURS : il n'y a rien
+          // à montrer, et inventer un chiffre serait pire.
+          const vide={id:'v3',email:'v3@t.fr',role:'athlete',
+            nutrition:{macros:{on:{},off:{},origine:'coach'}}};
+          return ciblesEnVigueur(vide,'2026-09-21')===null
+            ?true:_echec('un dossier sans chiffre rend quelque chose');})());
+
+        ok('Critère : deux enregistrements de suite passent, chacun avec ses chiffres',(()=>{
+          // ⚠ CONTRAT INVERSÉ (24/09/2026). L'assertion vérifiait qu'un second
+          //   jeu de chiffres, non confirmé, était refusé. Il n'y a plus de
+          //   confirmation : les deux passent, et c'est le DERNIER qui reste.
           poser2('ech@t.fr');
           remplir2(1200,150,100,70);
-          _plSetConfirme(true,'ech@t.fr');
-          // On casse l'empreinte APRÈS avoir confirmé : l'enregistrement doit
-          // échouer ET oublier la confirmation.
+          if(saveClientNutriMacros()!==true) return _echec('le premier enregistrement est refusé');
           remplir2(1100,150,100,70);
-          const r=saveClientNutriMacros(true);
-          if(r!==false) return _echec('l\'enregistrement est passé');
-          return _plConfirme===null?true:_echec('la confirmation a survécu à l\'échec');})());
+          if(saveClientNutriMacros()!==true) return _echec('le second enregistrement est refusé');
+          const m=(((DB.get('users')||{})['ech@t.fr']||{}).nutrition||{}).macros;
+          return (m&&Number(m.on.kcal)===1100)
+            ?true:_echec('le dossier ne porte pas les derniers chiffres : '+JSON.stringify(m&&m.on));})());
         ok('Confirmé pour A, la fiche de B ne l\'hérite pas',(()=>{
           poser2('anna@t.fr');
           remplir2(1200,150,100,70);
@@ -62980,20 +63057,23 @@ async function testExercices(){
           renderCoachNutriSection(bruno);
           return _plConfirme===null
             ?true:_echec('la confirmation d\'Anna a suivi jusqu\'à Bruno');})());
-        ok('La case rendue pour B n\'est pas cochée par la confirmation de A',(()=>{
+        ok('Le bloc de B ne montre pas les chiffres de A',(()=>{
+          // Même garantie qu'avant, par un autre chemin : chacun lit son dossier.
           poser2('anna2@t.fr');
           remplir2(1200,150,100,70);
           saveClientNutriMacros();
-          _plSetConfirme(true,'anna2@t.fr');
           const u=DB.get('users')||{};
-          const b2=Object.assign({},u['anna2@t.fr'],{id:'p_bru2@t.fr',email:'bru2@t.fr'});
+          const anna=u['anna2@t.fr'];
+          // Bruno a les mêmes bilans mais des cibles SAINES.
+          const b2=Object.assign({},anna,{id:'p_bru2@t.fr',email:'bru2@t.fr',
+            nutrition:Object.assign({},anna.nutrition,
+              {macros:{on:{kcal:2400,p:150,l:100,g:260,f:29},
+                       off:{kcal:2400,p:150,l:100,g:260,f:29},origine:'coach'}})});
           u['bru2@t.fr']=b2; DB.set('users',u); currentClientId=b2.id;
-          window._plDerniereViol={email:'bru2@t.fr',liste:[{champ:'kcal',valeur:1200,
-            plancher:1760,message:'1200 kcal sous le plancher de 1760 kcal'}]};
+          window._plDerniereViol=null;
           const h=_htmlViolationsCoach(b2);
-          if(!/ccd-pl-confirm/.test(h)) return _echec('aucune case rendue');
-          return !/id="ccd-pl-confirm" checked/.test(h)
-            ?true:_echec('la case de Bruno est cochée par la confirmation d\'Anna');})());
+          if(/1200 kcal/.test(h)) return _echec('le bloc de Bruno porte les chiffres d\'Anna');
+          return h===''?true:_echec('un bloc sort pour un dossier au-dessus du plancher : '+h.slice(0,120));})());
         ok('Critère : sans email, l\'enregistrement sous plancher est refusé',(()=>{
           const c={id:'p_sansmail',email:'',role:'athlete',coachId:'coD2',fname:'S',
             gender:'H',_evol_gender:'H',_evol_height:178,exAlias:{},exMuscles:{},
@@ -63007,9 +63087,15 @@ async function testExercices(){
           window._plDerniereViol=null; _plConfirme=null;
           renderCoachNutriSection(c);
           remplir2(1200,150,100,70);
+          // ⚠ CONTRAT INVERSÉ (24/09/2026) : sans email, l'écriture passe aussi.
+          //   Le dossier est local, il n'y a rien à pousser, et refuser la
+          //   prescription pour cette raison-là n'avait plus de sens une fois
+          //   la dérogation supprimée.
           const r=saveClientNutriMacros(true);
-          return r===false&&_plConfirme===null
-            ?true:_echec('la dérogation est passée sans email');})());
+          if(r!==true) return _echec('l\'enregistrement local est refusé');
+          const m=((DB.get('users')||{})['_sansmail']||{}).nutrition;
+          return (m&&m.macros&&Number(m.macros.on.kcal)===1200)
+            ?true:_echec('les chiffres ne sont pas écrits : '+JSON.stringify(m&&m.macros&&m.macros.on));})());
         ok('Critère : confirmeSousPlancher porte l\'email de l\'athlète',(()=>{
           poser2('trace@t.fr');
           remplir2(1200,150,100,70);
@@ -63032,17 +63118,23 @@ async function testExercices(){
           const r=saveClientNutriMacros(true);
           const m=((DB.get('users')||{})['tca@t.fr'].nutrition||{}).macros;
           return r===false&&!m?true:_echec('la dérogation est passée malgré le TCA');})());
-        ok('La case rendue reflète l\'état pour CET athlète',(()=>{
+        ok('Le bloc du plancher reflète les chiffres de CET athlète',(()=>{
+          // ⚠ LA CASE A COCHER A DISPARU (24/09/2026), et ce qu'elle protegeait
+          //   est tenu autrement : le bloc lit le DOSSIER de l'athlete affiche.
+          //   Il ne peut donc pas montrer les chiffres d'un autre.
           poser2('case@t.fr');
           remplir2(1200,150,100,70);
-          saveClientNutriMacros();            // provoque l'affichage des violations
+          saveClientNutriMacros();
           const h1=(document.getElementById('ccd-nutrition')||{}).innerHTML||'';
-          if(!/ccd-pl-confirm/.test(h1)) return _echec('aucune case rendue');
-          if(/id="ccd-pl-confirm" checked/.test(h1)) return _echec('cochée sans confirmation');
-          _plSetConfirme(true,'case@t.fr');
-          renderCoachNutriSection(getOwnedClient(currentClientId));
+          if(!/Sous le plancher/.test(h1)) return _echec('le bloc ne sort pas');
+          if(!/1200 kcal/.test(h1)) return _echec('le bloc ne porte pas ses chiffres');
+          if(/ccd-pl-confirm/.test(h1)) return _echec('la case de dérogation est revenue');
+          // Des chiffres remontés au-dessus du plancher : le bloc disparaît.
+          remplir2(2400,150,100,260);
+          saveClientNutriMacros();
           const h2=(document.getElementById('ccd-nutrition')||{}).innerHTML||'';
-          return /checked/.test(h2)?true:_echec('la case ne reflète pas la confirmation');})());
+          return !/Sous le plancher/.test(h2)
+            ?true:_echec('le bloc reste alors que les chiffres sont remontés');})());
       } finally {
         currentUser=_sU; currentClientId=_sCid;
         if(_sUsers) DB.set('users',_sUsers);

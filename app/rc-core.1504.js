@@ -64665,7 +64665,12 @@ const ATH_DELTA_PAS=20;
 //   19/09/2026 : `origine:'athlete'` leve le verrou du coach. Un ±20 de
 //   l'athlete deplace donc le total SANS reprendre la main sur la
 //   prescription — exactement comme les menus g/kg depuis le 20/09.
-const DELTA_KCAL_MAX=500;
+// ⚠ PLUS DE BORNE (24/09/2026). Elle valait 500 kcal : une cible a 2 400 ne
+//   pouvait pas descendre a 1 800 par ce bouton, et l'athlete comme le coach
+//   cliquaient dans le vide une fois la borne atteinte. Le total reste borne a
+//   zero dans cibleTableur — des calories negatives n'existent pas — et c'est
+//   la seule borne qui reste.
+const DELTA_KCAL_MAX=Infinity;
 // PURE. Le ±20 en vigueur, quel que soit celui qui l'a pose.
 function deltaKcalPartage(u){
   const nut=(u&&u.nutrition)||{};
@@ -64828,6 +64833,14 @@ function ciblesEnVigueur(u,jourISO){
   const j=jourISO||localISODate(new Date());
   let m=null;
   try{ m=_getEffectiveMacros(nut,nutIsOnDay(j,u),j,u); }catch(e){ return null; }
+  // ⚠ UNE JOURNEE VIDE NE FAIT PLUS TAIRE LA CARTE (24/09/2026). Un dossier
+  //   enregistre avec une seule des deux colonnes laissait l'athlete devant
+  //   « ton coach n'a pas encore pose tes cibles » alors qu'il venait de les
+  //   poser. L'ecriture ne peut plus produire ce cas ; les dossiers deja
+  //   abimes, eux, se reparent ici : on retombe sur l'autre journee.
+  if(!m||!(Number(m.kcal)>0)){
+    try{ m=_getEffectiveMacros(nut,!nutIsOnDay(j,u),j,u); }catch(e){ m=null; }
+  }
   if(!m) return null;
   const kcal=Math.round(Number(m.kcal)||0);
   const p=Math.round(Number(m.p)||0), l=Math.round(Number(m.l)||0),
@@ -64941,7 +64954,10 @@ function athDelta(sens){
     return;
   }
   if(!r.bouge){
-    toast('Limite atteinte : '+DELTA_KCAL_MAX+' kcal d’écart au maximum','var(--orange)');
+    // Branche morte depuis que la borne est tombee (24/09/2026) : elle ne
+    // pouvait se declencher qu'a DELTA_KCAL_MAX. On la garde, sans citer une
+    // limite qui n'existe plus.
+    toast('Rien n’a bouge.','var(--orange)');
     return;
   }
   saveUser();
@@ -65085,13 +65101,30 @@ function _htmlCiblesAthlete(u){
     //   main sur la prescription : il decale le total PARTAGE, et le coach le
     //   voit sur sa grille comme elle voit le sien.
     const _dl=libelleDeltaKcal(u);
+    // ⚠ QUEL JOUR EST AFFICHE, ET COMBIEN VAUT L'AUTRE (24/09/2026). La carte
+    //   montre la journee D'AUJOURD'HUI (ciblesEnVigueur passe par
+    //   _getEffectiveMacros et nutIsOnDay) sous un libelle qui disait « kcal
+    //   par jour » : un jour de repos, elle affichait 1 661 quand la grille du
+    //   coach affichait 1 797, et les deux ecrans semblaient se contredire.
+    const _cycA=(function(){ try{ return dieteCyclee(u); }catch(e){ return false; } })();
+    const _onA=(function(){ try{ return nutIsOnDay(localISODate(new Date()),u); }
+      catch(e){ return true; } })();
+    const _autreJour=(function(){
+      const m=((u&&u.nutrition)||{}).macros||{};
+      const a=_onA?m.off:m.on;
+      const k=Math.round(Number((a||{}).kcal)||0);
+      return k>0?k:0;
+    })();
+    const _libJour=_cycA
+      ?('kcal aujourd’hui · '+(_onA?'jour d’entraînement':'jour de repos'))
+      :'kcal par jour';
     return '<div class="rc-obj-carte">'
       +'<div class="rc-obj-titre">Mes cibles</div>'
       +'<div class="rc-obj-kcal">'
         +'<button type="button" class="rc-obj-pas" onclick="athDelta(-1)" aria-label="Vingt calories de moins">−20</button>'
         +'<div class="rc-obj-centre">'
           +'<div class="rc-obj-nb">'+Number(v.kcal).toLocaleString('fr-FR')+'</div>'
-          +'<div class="rc-obj-u">kcal par jour'+(_dl?' · '+_dl:'')+'</div></div>'
+          +'<div class="rc-obj-u">'+_libJour+(_dl?' · '+_dl:'')+'</div></div>'
         +'<button type="button" class="rc-obj-pas" onclick="athDelta(1)" aria-label="Vingt calories de plus">+20</button>'
       +'</div>'
       +'<div class="rc-obj-macros">'
@@ -65099,9 +65132,14 @@ function _htmlCiblesAthlete(u){
         +l('Lipides',v.l,_gr?_sel('lip',Number(_gr.lipGkg)||0.9,0.6,1.4):'')
         +l('Glucides',v.g,'<span class="rc-obj-reste">le reste</span>')
       +'</div>'
-      +'<div class="rc-obj-note">Le total vient de ton coach. Le ±20 et les '
+      +'<div class="rc-obj-note">'
+      +((_cycA&&_autreJour)
+        ?('Les '+(_onA?'jours de repos':'jours d’entraînement')+' : '
+          +_autreJour.toLocaleString('fr-FR')+' kcal. ')
+        :'')
+      +'Le total vient de ton coach. Le ±20 et les '
       +'grammes par kilo se règlent des deux côtés : ce que tu changes ici, il '
-      +'le voit sur sa grille — et ce qu’il change, tu le vois ici.</div>'
+      +'le voit sur sa grille, et ce qu’il change, tu le vois ici.</div>'
       +'</div>';
   }
   const c=ciblesAthlete(u);
@@ -65131,7 +65169,10 @@ function _htmlCiblesAthlete(u){
     +'<div class="rc-obj-kcal">'
       +'<button type="button" class="rc-obj-pas" onclick="athDelta(-1)" aria-label="Vingt calories de moins">−20</button>'
       +'<div class="rc-obj-centre">'
-        +'<div class="rc-obj-nb">'+Number(c.kcal).toLocaleString('fr-FR')+'</div>'
+        // LE MEME TOTAL QUE LA GRILLE DU COACH : la somme des grammes
+        // AFFICHES, et non le total avant leur arrondi. Les deux ecrans
+        // s'ecartaient d'une kilocalorie, ce qui suffit a faire douter.
+        +'<div class="rc-obj-nb">'+Number(_bloc(c.p,c.l,c.g).kcal).toLocaleString('fr-FR')+'</div>'
         +'<div class="rc-obj-u">kcal par jour'
         +(c.delta?' · '+(c.delta>0?'+':'')+c.delta:'')+'</div></div>'
       +'<button type="button" class="rc-obj-pas" onclick="athDelta(1)" aria-label="Vingt calories de plus">+20</button>'
@@ -73741,14 +73782,22 @@ function _bloc(p,l,g){
   const kcal=Math.round(4*p+9*l+4*g);
   return {kcal,p,l,g,f:Math.round(FIBRES_PAR_1000*kcal/1000)};
 }
-// Relevement au plancher. Le chemin AUTOMATIQUE n'a aucune dérogation : il ne
-// peut pas produire un jour sous le plancher, même quand le calcul de dépense
-// le demanderait. On remonte les GLUCIDES, protéines et lipides intacts.
+// ⚠ ELLE NE RELEVE PLUS RIEN (24/09/2026). Kevin : « supprime les blocage et
+//   limite ». Elle remontait les glucides d'une journee jusqu'au plancher, en
+//   silence, y compris sur le chemin automatique.
+//
+//   CE QUI A CHANGE, ET CE QUI N'A PAS CHANGE. Le plancher est toujours calcule
+//   (plancherEffectif), toujours affiche (la ligne du tableau des besoins, la
+//   liste des violations du coach) et toujours trace quand le coach passe
+//   outre. Ce qui disparait, c'est la CORRECTION SILENCIEUSE : le chiffre
+//   affiche est desormais celui que le calcul donne, et si quelqu'un veut le
+//   voir descendre, il descend.
+//
+//   LA FONCTION RESTE, VIDE, PLUTOT QUE D'ETRE RETIREE DE SES SIX APPELS : le
+//   jour ou le plancher doit revenir, il revient ici, en une ligne, et non a
+//   six endroits qu'il faudrait retrouver.
 function _relevePlancher(j,user){
-  const pl=plancherKcal(user);
-  if(pl==null||!(j.kcal<pl)) return j;
-  const gMin=Math.ceil((pl-4*j.p-9*j.l)/4);
-  return _bloc(j.p,j.l,Math.max(j.g,gMin));
+  return j;
 }
 
 // opts : { protGparKg, lipGparKg, cycle }  — cycle à false donne le MÊME total
@@ -74055,7 +74104,12 @@ function cibleTableur(user,opts){
   //   a inclure un reglage manuel sans le dire.
   const deltaKcal=(typeof o.delta==='number'&&isFinite(o.delta))?Math.round(o.delta):deltaKcalPartage(u);
   const ajuste=Math.max(0,brut+deltaKcal);
-  const kcal=Math.max(ajuste,pl);
+  // ⚠ LE TOTAL N'EST PLUS REMONTE AU PLANCHER (24/09/2026). Cette ligne valait
+  //   `Math.max(ajuste,pl)`, et c'est elle qui rendait le bouton −20 INERTE
+  //   chez l'athlete : une fois sous le plancher, vingt calories de moins ne
+  //   changeaient plus rien a l'ecran. Le plancher reste calcule et dit
+  //   (`plancher`, `sousPlancher`), il ne corrige plus.
+  const kcal=ajuste;
   const rep=_repartition(kcal,poids,protGkg,lipGkg);
   const bloc=_bloc(rep.p,rep.l,rep.g);
 
@@ -74067,7 +74121,10 @@ function cibleTableur(user,opts){
     sportSource:sport.source, creneaux:sport.creneaux, dureeMin:sport.dureeMin,
     sportLignes:sport.lignes||[],
     avecSport,
-    coef, phase, brut, delta:deltaKcal, ajuste, plancher:pl, sousPlancher:kcal>ajuste,
+    // `sousPlancher` DIT que les chiffres passent dessous — avant, il disait
+    // qu'ils avaient ete remontes. Meme nom, sens inverse, et c'est celui-la
+    // que l'ecran doit annoncer.
+    coef, phase, brut, delta:deltaKcal, ajuste, plancher:pl, sousPlancher:(pl>0&&ajuste<pl),
     kcal, p:bloc.p, l:bloc.l, g:bloc.g, f:bloc.f,
     protGkg, lipGkg, manque:[]
   };
@@ -75395,7 +75452,8 @@ function tbkDelta(sens){
     return false;
   }
   if(!r.bouge){
-    try{ toast('Limite atteinte : '+DELTA_KCAL_MAX+' kcal d’écart au maximum','var(--orange)'); }catch(e){}
+    // Branche morte depuis que la borne est tombee (24/09/2026).
+    try{ toast('Rien n’a bouge.','var(--orange)'); }catch(e){}
     return false;
   }
   c.updatedAt=Date.now(); users[c.email]=c;
@@ -75983,9 +76041,15 @@ function _htmlTableauxTableur(c){
     +li('Besoin selon l’objectif',_tbNb(t.brut)+' kcal',
         '× '+String(t.coef).replace('.',',')
         +(_cycT?' · avant cyclage : voir « Journées » juste en dessous':''),true,'target')
+    // ⚠ CETTE LIGNE ANNONCAIT L'INVERSE DE CE QU'ELLE FAISAIT. Elle citait
+    //   `brut` — le total AVANT le ±20 — et le donnait pour « sous le plancher »
+    //   alors qu'il etait au-dessus : « Releve au plancher : 1 749 kcal, le
+    //   calcul descendait a 1 931 kcal ». Elle dit maintenant ce qui est vrai :
+    //   les chiffres passent sous le plancher, et voici lequel.
     +(t.sousPlancher
-      ? li('Relevé au plancher',_tbNb(t.kcal)+' kcal',
-          'le calcul descendait à '+_tbNb(t.brut)+' kcal, sous le plancher de sécurité',true,'alert-triangle')
+      ? li('Sous le plancher de sécurité',_tbNb(t.kcal)+' kcal',
+          'le plancher calculé pour cet athlète est de '+_tbNb(t.plancher)
+          +' kcal : ces chiffres passent en dessous',true,'alert-triangle')
       : '')
     +'</tbody>'
     // CE QUE DIT LA MAQUETTE, DIT AU COACH : ce sont des estimations. Une
@@ -76205,6 +76269,19 @@ function _htmlTableauxTableur(c){
         (_man?('en kilocalories, écrites par toi · le calcul donnerait '+_tbNb(totK))
             :(_tbNb(t.p)+' g de protéines · '+_tbNb(t.g)+' g de glucides · '
               +_tbNb(t.l)+' g de lipides'))
+        // ⚠ LES DEUX JOURNEES SOUS LE TOTAL (24/09/2026). Avec cyclage, ce
+        //   total est la base AVANT cyclage : il ne correspond a AUCUN jour de
+        //   son assiette. Sa carte, elle, affiche la journee du jour. Sans ces
+        //   deux chiffres ici, les deux ecrans se contredisent a l'oeil.
+        +((function(){
+          if(!_cycT) return '';
+          try{
+            const j=_tbJournees(c,t,true);
+            if(!j||!j.on||!j.off) return '';
+            return ' · jour d’entraînement '+_tbNb(j.on.kcal)
+              +' kcal, jour de repos '+_tbNb(j.off.kcal)+' kcal';
+          }catch(e){ return ''; }
+        })())
         +(_dl20?(' · ajustement '+_dl20+' kcal, partagé avec elle'):''),
         true,_in('ccd-off-kcal',_mOff.kcal),'kcal',totK,'zap')
     +'</tbody></table>','tbk-mac-c');
@@ -77608,6 +77685,15 @@ function saveClientNutriMacros(malgrePlancher,transmettre){
       :(_auto?Object.assign({},_auto.off)
             :{kcal:g('ccd-off-kcal'),p:g('ccd-off-p'),g:g('ccd-off-g'),l:g('ccd-off-l'),f:g('ccd-off-f')}),
   };
+  // ⚠ UNE JOURNEE VIDE N'EST JAMAIS ENREGISTREE (24/09/2026). Avec le cyclage,
+  //   la saisie manuelle ecrit DEUX journees ; une colonne laissee vide partait
+  //   telle quelle, et la carte de l'athlete restait muette les jours ou elle
+  //   tombait dessus — elle avait pourtant recu le dossier. Trouve au banc a
+  //   deux appareils, et c'est la plainte « elle ne recoit rien ».
+  //   Remplir l'une des deux suffit donc : l'autre la recopie.
+  const _jourVide=b=>!b||!(Number(b.kcal)>0);
+  if(_jourVide(saisie.off)&&!_jourVide(saisie.on)) saisie.off=Object.assign({},saisie.on);
+  if(_jourVide(saisie.on)&&!_jourVide(saisie.off)) saisie.on=Object.assign({},saisie.off);
   // CONTRÔLE AVANT ÉCRITURE. Rien n'est écrit tant que le coach n'a pas vu.
   const viol=controlerMacros(saisie,c);
   const pl=plancherEffectif(c);
@@ -77625,25 +77711,15 @@ function saveClientNutriMacros(malgrePlancher,transmettre){
         'var(--red)');
       return false;
     }
-    // Premier clic : on montre les chiffres et on attend un geste explicite.
-    // Sans email, aucune derogation possible : rien a quoi l'attacher.
-    if(malgrePlancher&&!c.email){
-      _plConfirme=null;
-      window._plDerniereViol={email:c.email,liste:viol};
-      renderCoachNutriSection(c);
-      toast('Cet élève n\'a pas de dossier synchronisé : aucune dérogation possible','var(--orange)');
-      return false;
-    }
-    if(!malgrePlancher||!_plConfirmeValide(c.email,saisie)){
-      // La case est DECOCHEE : si elle etait cochee pour un autre athlete ou
-      // pour d'autres chiffres, la laisser cochee mentirait sur ce qui a
-      // reellement ete confirme.
-      _plConfirme=null;
-      window._plDerniereViol={email:c.email,liste:viol};
-      renderCoachNutriSection(c);
-      toast(malgrePlancher?'Coche la confirmation pour enregistrer':'Ces valeurs sont sous le plancher : relis-les','var(--orange)');
-      return false;
-    }
+    // ⚠ UN SEUL CLIC (24/09/2026). Il en fallait deux : le premier montrait les
+    //   violations et refusait d'ecrire, le second — case cochee — enregistrait.
+    //   Kevin : « supprime les blocage et limite ». Les chiffres s'ecrivent du
+    //   premier coup ; les violations restent AFFICHEES sous la grille, et la
+    //   derogation reste TRACEE dans le dossier, avec qui, quand et quoi.
+    //
+    //   ⚠ SANS EMAIL, LA TRACE N'A RIEN A QUOI S'ATTACHER. L'ecriture passe
+    //     quand meme — c'est un dossier local — mais la trace le dit.
+    window._plDerniereViol={email:c.email,liste:viol};
     // Confirmation explicite : on trace QUI, QUAND, et QUOI exactement.
     // L'email de l'athlete CONCERNE, pas seulement l'identifiant du coach :
     // deux homonymes se distinguent par lui, jamais par leur nom.
@@ -87560,9 +87636,22 @@ function _plConfirmeValide(email,saisie){
   return _plConfirme.empreinte===_plEmpreinte(saisie);
 }
 function _htmlViolationsCoach(c){
-  const viol=(window._plDerniereViol&&window._plDerniereViol.email===(c&&c.email))
-    ?window._plDerniereViol.liste:null;
-  if(!viol||!viol.length) return '';
+  // ⚠ IL LIT LE DOSSIER, PLUS UN ETAT TRANSITOIRE (24/09/2026). `_plDerniereViol`
+  //   n'etait pose que par un REFUS d'enregistrement ; l'enregistrement ne
+  //   refuse plus, et ce bloc ne serait plus jamais sorti. Il lit maintenant les
+  //   chiffres ECRITS, comme le bloc de l'athlete le fait depuis toujours : ce
+  //   qui est sous le plancher se voit tant que ca l'est.
+  const nut=(c&&c.nutrition)||{};
+  let viol=[];
+  if(nut.macros){ try{ viol=controlerMacros(nut.macros,c)||[]; }catch(e){ viol=[]; } }
+  // ⚠ ET LA TENTATIVE REFUSEE, QUAND IL Y EN A UNE. Un antecedent alimentaire
+  //   declare fait toujours REFUSER l'ecriture : le dossier garde alors ses
+  //   anciens chiffres, donc aucune violation a lire, donc le coach n'aurait
+  //   eu aucune explication de son refus. On retombe sur ce qu'il vient
+  //   d'essayer d'ecrire.
+  if(!viol.length&&window._plDerniereViol&&window._plDerniereViol.email===(c&&c.email))
+    viol=window._plDerniereViol.liste||[];
+  if(!viol.length) return '';
   const pl=plancherEffectif(c);
   const dur=pl.tca;
   return `<div style="background:#1a0505;border:1px solid var(--red);border-radius:var(--r-3);padding:12px;margin:10px 0">
@@ -87570,12 +87659,10 @@ function _htmlViolationsCoach(c){
     ${viol.map(v=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">· ${escapeHtml(v.message)}</div>`).join('')}
     ${dur
       ?`<div style="font-size:var(--fs-xs);color:var(--red-text);line-height:1.6;margin-top:9px;font-weight:700">Un antécédent alimentaire est déclaré au bilan de départ. Cette prescription ne peut pas être enregistrée, et il n'y a pas de dérogation. Reprends les valeurs au-dessus du plancher.</div>`
-      :`<label style="display:flex;align-items:flex-start;gap:9px;margin-top:11px;cursor:pointer;text-transform:none;letter-spacing:normal;font-size:inherit;font-weight:400;color:inherit">
-          <input type="checkbox" id="ccd-pl-confirm" ${_plConfirmeValide(c&&c.email,_plSaisieCourante())?'checked':''} onchange="_plSetConfirme(this.checked,'${escapeHtml((c&&c.email)||'')}')"
-            style="width:18px;height:18px;margin-top:1px;flex-shrink:0;accent-color:var(--red)">
-          <span style="font-size:var(--fs-sm);color:var(--text);line-height:1.5">Je confirme cette prescription en connaissance de cause.</span>
-        </label>
-        <button class="btn btn-red btn-sm" style="width:100%;margin-top:9px;letter-spacing:1px" onclick="saveClientNutriMacros(true)">Enregistrer malgré le plancher</button>`}
+      // ⚠ PLUS DE CASE NI DE SECOND BOUTON (24/09/2026). Ils ne servaient qu'a
+      //   lever un refus qui n'existe plus. Ce qui reste est ce qui informe :
+      //   les chiffres, et ce que l'athlete voit de son cote.
+      :`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:9px">Ces chiffres sont enregistrés tels quels. De son côté, elle lit « tes objectifs sont sous le minimum calculé pour toi ».</div>`}
     ${blocDisclaimerSante()}
   </div>`;
 }
