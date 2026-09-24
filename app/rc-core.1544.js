@@ -44849,7 +44849,9 @@ function renderCourbesCoach(c){
 // v3 : modèle de pose « full » et suivi remis à zéro (les points de la v2,
 // lus au modèle « lite », tombaient à côté). Les points posés à la main en v2
 // sont repris tels quels.
-const ANAT_VERSION=3;
+// v4 : sommet du crâne cherché en remontant le cou (la v3 prenait la lampe
+// du plafond pour une tête). Les points posés à la main sont repris.
+const ANAT_VERSION=4;
 /** Fractions de la taille, Drillis & Contini (1966), centres articulaires. */
 const ANAT_DC=Object.freeze({bras:0.186,avantbras:0.146,cuisse:0.245,jambe:0.246,
   tronc:0.288,hanche:0.530,membreSup:0.332,main:0.108});
@@ -45750,6 +45752,11 @@ const ANAT_SVG={
   relancer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>',
   points:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="9" r="2.2"/><circle cx="9" cy="18" r="2.2"/><path d="M8 7l8 1.6M16.8 10.8l-6.4 5.6"/></svg>',
   x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  disquette:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l5 5v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v5h8V3M7 21v-7h10v7"/></svg>',
+  cadrer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V4h4M17 4h4v4M21 16v4h-4M7 20H3v-4"/><circle cx="12" cy="9" r="2"/><path d="M9 17l1-4h4l1 4"/></svg>',
+  entiere:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 16l5-5 4 4 3-3 4 4"/></svg>',
+  gauche:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>',
+  droite:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
   reglage:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>',
   recadrer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v16h16M2 6h16v16"/></svg>',
   squat:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4" r="2"/><path d="M4 8h16M12 8l-3 6 5 2-1 6M9 14l-4 1"/></svg>',
@@ -45819,7 +45826,7 @@ function anatNomPoint(vue,cle){
 // l'athlète ; les réglages sont un FILTRE d'affichage et un CADRE, rangés dans
 // `morphoAnat.opts.photo`. La détection, relancée, lit la photo réglée — c'est
 // ce qui sauve une photo à contre-jour.
-const ANAT_REGLAGE_DEFAUT=Object.freeze({lum:100,con:100,cadre:null});
+const ANAT_REGLAGE_DEFAUT=Object.freeze({lum:100,con:100,cadre:null,net:true});
 function anatReglage(anat,vue){
   const p=anat&&anat.opts&&anat.opts.photo&&anat.opts.photo[vue];
   const r=Object.assign({},ANAT_REGLAGE_DEFAUT,p||{});
@@ -45902,6 +45909,194 @@ function anatChoisirPoint(k){
   _anatEdit.sel=k;
   _anatEdit.aide=k;
   const c=getOwnedClient(currentClientId); if(c) renderAnatCoach(c);
+}
+
+// ── LA LISTE, LES LEVIERS, LA SAUVEGARDE ──────────────────────────────────
+let _anatLevIdx=0;
+let _anatToutes=false;
+function anatLevier(d,i){
+  _anatLevIdx=(i!=null)?Number(i)||0:_anatLevIdx+(Number(d)||0);
+  const c=getOwnedClient(currentClientId); if(c) renderAnatCoach(c);
+}
+function anatToutesFiches(){
+  _anatToutes=!_anatToutes;
+  const z=document.getElementById('ccd-anat');
+  const col=z&&z.querySelector('.an-col-g');
+  if(!col){ const c=getOwnedClient(currentClientId); if(c) renderAnatCoach(c); return; }
+  col.classList.toggle('toutes',_anatToutes);
+  const b=col.querySelector('.an-deroule');
+  if(b){
+    b.setAttribute('aria-expanded',_anatToutes?'true':'false');
+    const n=col.querySelectorAll('.an-f-plus-l').length;
+    b.querySelector('span').textContent=_anatToutes?'Replier la liste':'Voir les '+n+' autres zones';
+  }
+}
+function _anatDateHeure(t){
+  try{ return new Date(t).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; }
+}
+function _anatResumeSauvegarde(x){
+  const n=v=>(x&&x[v]&&x[v].man)?Object.keys(x[v].man).length:0;
+  const p=[];
+  const nf=n('face'),nd=n('dos');
+  p.push(nf||nd?(nf+nd)+' point'+(nf+nd>1?'s':'')+' à la main':'points automatiques');
+  const ph=x&&x.opts&&x.opts.photo;
+  if(ph&&Object.values(ph).some(r=>r&&(r.cadre||(r.lum&&r.lum!==100)||(r.con&&r.con!==100)))) p.push('photo réglée');
+  if(x&&x.opts&&x.opts.miroir) p.push('miroir');
+  return p.join(' · ');
+}
+/**
+ * « Un petit menu sauvegarde pour sauvegarder la position et tout ce qu'on
+ * aura fait comme modification sur l'image » (Kevin). Ce qui est en cours
+ * d'édition est d'abord appliqué, puis l'état entier — points posés à la
+ * main, options, réglages de la photo — est rangé sous sa date. Huit
+ * versions au plus : au-delà, la plus ancienne part.
+ */
+function anatSauvegarder(){
+  if(_anatEdit) anatEnregistrerPoints(true);
+  const c=getOwnedClient(currentClientId);
+  if(!c) return;
+  const users=DB.get('users')||{};
+  const d=users[c.email];
+  if(!d||!d.morphoAnat) return;
+  const a=d.morphoAnat;
+  const copie=o=>o?JSON.parse(JSON.stringify(o)):null;
+  const v={id:String(Date.now()),date:Date.now(),
+    face:{man:copie(a.face&&a.face.man)},dos:{man:copie(a.dos&&a.dos.man)},opts:copie(a.opts)||{}};
+  a.sauvegardes=(Array.isArray(a.sauvegardes)?a.sauvegardes:[]).concat([v]).slice(-8);
+  d.updatedAt=Date.now();
+  users[c.email]=d;
+  const ok=DB.set('users',users);
+  renderAnatCoach(getOwnedClient(currentClientId)||c);
+  toastSync(ok,CLOUD.pushOne(c.email,d),'Analyse sauvegardée ✓','la sauvegarde est');
+}
+function anatRestaurer(id){
+  const c=getOwnedClient(currentClientId);
+  if(!c) return;
+  const users=DB.get('users')||{};
+  const d=users[c.email];
+  const a=d&&d.morphoAnat;
+  const v=a&&(a.sauvegardes||[]).find(x=>String(x.id)===String(id));
+  if(!v) return;
+  _anatEdit=null; _anatRecadre=false;
+  const copie=o=>o?JSON.parse(JSON.stringify(o)):null;
+  if(a.face) a.face.man=copie(v.face&&v.face.man);
+  if(a.dos) a.dos.man=copie(v.dos&&v.dos.man);
+  a.opts=copie(v.opts)||{};
+  a.date=Date.now();
+  d.updatedAt=Date.now();
+  users[c.email]=d;
+  const ok=DB.set('users',users);
+  renderAnatCoach(getOwnedClient(currentClientId)||c);
+  toastSync(ok,CLOUD.pushOne(c.email,d),'Version du '+_anatDateHeure(v.date)+' restaurée ✓','la restauration est');
+}
+function anatSupprimerSauvegarde(id){
+  const c=getOwnedClient(currentClientId);
+  if(!c) return;
+  const users=DB.get('users')||{};
+  const d=users[c.email];
+  const a=d&&d.morphoAnat;
+  if(!a||!Array.isArray(a.sauvegardes)) return;
+  a.sauvegardes=a.sauvegardes.filter(x=>String(x.id)!==String(id));
+  d.updatedAt=Date.now();
+  users[c.email]=d;
+  DB.set('users',users);
+  try{ CLOUD.pushOne(c.email,d); }catch(e){}
+  renderAnatCoach(getOwnedClient(currentClientId)||c);
+}
+
+// ── LA NETTETÉ AUTOMATIQUE ────────────────────────────────────────────────
+// Kevin : « booste la qualité de la photo, repixelise-la en automatique, pour
+// qu'elle soit plus facile à lire, notamment quand on zoome ». Une photo de
+// bilan pèse 1280 px au plus, compressée, souvent sombre (contre-jour, salle
+// de bain). Ce qu'on peut faire honnêtement, sur l'appareil, sans l'envoyer
+// nulle part :
+//   1. l'agrandir à ~2 000 px de haut en interpolation haute qualité, pour que
+//      le zoom et la loupe ne tombent pas sur des pixels grossiers ;
+//   2. étirer les niveaux (0,5 % des pixels les plus sombres et les plus
+//      clairs écartés), et relever les tons moyens d'une photo sombre ;
+//   3. accentuer les contours (masque flou) — c'est ce qui rend lisibles une
+//      rotule, un bord de deltoïde, une malléole.
+// ⚠ AUCUN DÉTAIL N'EST INVENTÉ. Pas d'IA, pas de « super-résolution » qui
+//   dessinerait des muscles : on rend lisible ce que la photo contient, rien
+//   de plus. Et c'est un affichage : la photo de l'athlète n'est pas touchée.
+const _anatNetCache=new Map();
+function anatAmeliorer(src){
+  if(!src) return Promise.resolve(null);
+  if(_anatNetCache.has(src)) return _anatNetCache.get(src);
+  const p=(async()=>{
+    const im=await new Promise(res=>{
+      const i=new Image(); i.crossOrigin='anonymous';
+      i.onload=()=>res(i); i.onerror=()=>res(null); i.src=src;
+    });
+    if(!im||!im.naturalWidth) return null;
+    const k=Math.max(1,Math.min(2,2000/im.naturalHeight));
+    const w=Math.round(im.naturalWidth*k),h=Math.round(im.naturalHeight*k);
+    const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+    const x=cv.getContext('2d',{willReadFrequently:true});
+    if(!x) return null;
+    x.imageSmoothingEnabled=true; x.imageSmoothingQuality='high';
+    x.drawImage(im,0,0,w,h);
+    let id;
+    try{ id=x.getImageData(0,0,w,h); }catch(e){ return null; } // photo sans CORS
+    const d=id.data, n=w*h;
+    // 1. Les niveaux : histogramme de la luminance.
+    const hist=new Uint32Array(256);
+    for(let i=0;i<d.length;i+=4) hist[(d[i]*77+d[i+1]*150+d[i+2]*29)>>8]++;
+    const seuil=n*0.005;
+    let lo=0,hi=255,acc=0;
+    for(let v=0;v<256;v++){ acc+=hist[v]; if(acc>seuil){ lo=v; break; } }
+    acc=0;
+    for(let v=255;v>=0;v--){ acc+=hist[v]; if(acc>seuil){ hi=v; break; } }
+    if(hi-lo<40){ lo=Math.max(0,lo-20); hi=Math.min(255,hi+20); }
+    let somme=0;
+    for(let v=0;v<256;v++) somme+=hist[v]*Math.max(0,Math.min(1,(v-lo)/(hi-lo)));
+    const moy=somme/n;
+    // Gamma : on ne relève que les photos sombres, jamais on ne les assombrit.
+    const g=moy>0.02&&moy<0.42?Math.max(0.55,Math.log(0.45)/Math.log(moy)):1;
+    const lut=new Uint8ClampedArray(256);
+    for(let v=0;v<256;v++) lut[v]=Math.round(255*Math.pow(Math.max(0,Math.min(1,(v-lo)/(hi-lo))),g));
+    for(let i=0;i<d.length;i+=4){ d[i]=lut[d[i]]; d[i+1]=lut[d[i+1]]; d[i+2]=lut[d[i+2]]; }
+    // 2. L'accentuation : original + 0,7 × (original − flou), flou en boîte
+    //    séparable de rayon 2 (après agrandissement, ~1 px de la photo).
+    const r=2, flou=new Uint8ClampedArray(d.length), tmp=new Uint8ClampedArray(d.length);
+    const passe=(srcA,dst,horiz)=>{
+      const L=horiz?w:h, M=horiz?h:w;
+      for(let m=0;m<M;m++){
+        for(let ch=0;ch<3;ch++){
+          let s=0;
+          const at=(i)=>{ const ii=Math.max(0,Math.min(L-1,i)); return horiz?((m*w+ii)*4+ch):((ii*w+m)*4+ch); };
+          for(let i=-r;i<=r;i++) s+=srcA[at(i)];
+          for(let i=0;i<L;i++){
+            dst[at(i)]=s/(2*r+1);
+            s+=srcA[at(i+r+1)]-srcA[at(i-r)];
+          }
+        }
+      }
+    };
+    passe(d,tmp,true); passe(tmp,flou,false);
+    const A=0.7;
+    for(let i=0;i<d.length;i+=4){
+      d[i]=d[i]+A*(d[i]-flou[i]); d[i+1]=d[i+1]+A*(d[i+1]-flou[i+1]); d[i+2]=d[i+2]+A*(d[i+2]-flou[i+2]);
+    }
+    x.putImageData(id,0,0);
+    const blob=await new Promise(res=>cv.toBlob(b=>res(b),'image/jpeg',0.92));
+    return blob?URL.createObjectURL(blob):null;
+  })().catch(()=>null);
+  _anatNetCache.set(src,p);
+  return p;
+}
+/** Pose la version nette sur toutes les images d'une vue, dès qu'elle est prête. */
+function _anatNettete(z,c){
+  const a=c&&c.morphoAnat;
+  if(!a||!z) return;
+  const pb=anatPremierBilan(c);
+  for(const vue of ['face','dos']){
+    if(anatReglage(a,vue).net===false) continue;
+    const src=vue==='dos'?pb.dos:pb.face;
+    const imgs=z.querySelectorAll('img[data-v="'+vue+'"]');
+    if(!src||!imgs.length) continue;
+    anatAmeliorer(src).then(u=>{ if(u) imgs.forEach(i=>{ if(i.isConnected) i.src=u; }); });
+  }
 }
 
 /** L'analyse est-elle à faire (ou à refaire) pour ce bilan ? */
@@ -46043,7 +46238,7 @@ function anatOption(nom,val){
   const c=getOwnedClient(currentClientId); if(c) renderAnatCoach(c);
 }
 /** « Analyser avec ces points » : on enregistre, et tout se recalcule. */
-function anatEnregistrerPoints(){
+function anatEnregistrerPoints(silencieux){
   const e=_anatEdit;
   if(!e) return;
   const users=DB.get('users')||{};
@@ -46067,6 +46262,7 @@ function anatEnregistrerPoints(){
   const ok=DB.set('users',users);
   _anatEdit=null;
   try{ const cc=getOwnedClient(currentClientId); if(cc) renderAnatCoach(cc); }catch(x){}
+  if(silencieux){ try{ CLOUD.pushOne(e.email,c); }catch(x){} return; }
   toastSync(ok,CLOUD.pushOne(e.email,c),'Analyse refaite avec tes points ✓','l’analyse est');
 }
 function _anatBouge(a,b){
@@ -46250,6 +46446,7 @@ function anatOuvrir(cle,depuisAnneau){
   if(!z) return;
   const f=z.querySelector('.an-f[data-k="'+cle+'"]');
   if(!f) return;
+  if(f.classList.contains('an-f-plus-l')&&!_anatToutes) anatToutesFiches();
   const ouvrir=depuisAnneau?true:!f.classList.contains('ouvert');
   f.classList.toggle('ouvert',ouvrir);
   const b=f.querySelector('.an-f-plus');
@@ -46352,6 +46549,7 @@ function renderAnatCoach(c){
   z.innerHTML=h;
   if(!h) return true;
   try{ _anatBrancherEdition(z); }catch(e){}
+  try{ _anatNettete(z,c); }catch(e){}
   try{
     const pb=anatPremierBilan(c);
     if(anatARefaire(c,pb)&&!_anatEnCours.has(c.email)&&!_anatEchecs.has(c.email))
@@ -46490,33 +46688,59 @@ function _htmlAnat(c){
       +'<div class="an-consigne" aria-live="polite">'+(aideSel?'<b>* '+escapeHtml(anatNomPoint(vueAct,aideSel))+'</b><span>'+escapeHtml(anatAide(aideSel).aide)+'</span>'
         :'<span>Touche un repère ou son « * » : sa consigne de placement s’affiche ici.</span>')+'</div></div>':'';
   const reg=anatReglage(a,vueAct);
-  const photoHtml='<details class="an-ph"'+((_anatRecadre||reg.cadre||reg.lum!==100||reg.con!==100)?' open':'')+'><summary>'+ANAT_SVG.reglage+'<span>Réglages de la photo</span>'
-      +((reg.cadre||reg.lum!==100||reg.con!==100)?'<i>modifiée</i>':'')+'</summary><div class="an-ph-c">'
+  const modif=!!(reg.cadre||reg.lum!==100||reg.con!==100);
+  // LES RÉGLAGES DE LA PHOTO, SOUS L'IMAGE ET TOUJOURS VISIBLES. Kevin :
+  // « luminosité, contraste sur la même ligne ; recadrer, cadrer, photo
+  // entière, réinitialiser sur la même ligne ».
+  const photoHtml='<div class="an-ph"><div class="an-ph-t">'+ANAT_SVG.reglage+'<span>Réglages de la photo</span>'
+      +(modif?'<i>modifiée</i>':'')
+      +'<label class="an-net" title="Accentuation et niveaux automatiques de l’affichage"><input type="checkbox"'+(reg.net!==false?' checked':'')+' onchange="anatReglerPhoto(\''+vueAct+'\',{net:this.checked},true)"><span>Netteté auto</span></label></div>'
+      +'<div class="an-ph-l">'
       +'<label class="an-ph-r"><span>Luminosité</span><input type="range" min="40" max="250" step="5" value="'+reg.lum+'" data-r="lum" oninput="anatCurseur(this,\'lum\')" onchange="anatCurseur(this,\'lum\',true)"><output>'+reg.lum+' %</output></label>'
       +'<label class="an-ph-r"><span>Contraste</span><input type="range" min="40" max="250" step="5" value="'+reg.con+'" data-r="con" oninput="anatCurseur(this,\'con\')" onchange="anatCurseur(this,\'con\',true)"><output>'+reg.con+' %</output></label>'
-      +'<div class="an-ph-b">'+(_anatRecadre
-        ?'<button type="button" class="an-b2 an-b2-r" onclick="anatModeRecadrage(false)">Annuler le recadrage</button><span class="an-ph-aide">Trace un rectangle sur la photo.</span>'
-        :'<button type="button" class="an-b2" onclick="anatModeRecadrage(true)">'+ANAT_SVG.recadrer+'<span>Recadrer</span></button>'
-          +'<button type="button" class="an-b2" onclick="anatCadrerPersonne()">Cadrer sur la personne</button>'
-          +(reg.cadre?'<button type="button" class="an-b2" onclick="anatPhotoEntiere()">Photo entière</button>':'')
-          +((reg.cadre||reg.lum!==100||reg.con!==100)?'<button type="button" class="an-b2" onclick="anatReinitialiserPhoto()">Réinitialiser</button>':''))
-      +'</div><p class="an-ph-n">La photo de l’athlète n’est jamais modifiée : ce sont des réglages d’affichage. « Refaire la détection » relit la photo réglée — utile à contre-jour.</p></div></details>';
+      +'</div><div class="an-ph-b">'+(_anatRecadre
+        ?'<button type="button" class="an-b3 actif" onclick="anatModeRecadrage(false)">'+ANAT_SVG.x+'<span>Annuler le recadrage</span></button><span class="an-ph-aide">Trace sur la photo le rectangle à garder.</span>'
+        :'<button type="button" class="an-b3" onclick="anatModeRecadrage(true)">'+ANAT_SVG.recadrer+'<span>Recadrer</span></button>'
+          +'<button type="button" class="an-b3" onclick="anatCadrerPersonne()">'+ANAT_SVG.cadrer+'<span>Cadrer</span></button>'
+          +'<button type="button" class="an-b3" onclick="anatPhotoEntiere()"'+(reg.cadre?'':' disabled')+'>'+ANAT_SVG.entiere+'<span>Photo entière</span></button>'
+          +'<button type="button" class="an-b3" onclick="anatReinitialiserPhoto()"'+(modif?'':' disabled')+'>'+ANAT_SVG.relancer+'<span>Réinitialiser</span></button>')
+      +'</div></div>';
+  // LA SAUVEGARDE : l'état courant (points, options, réglages) enregistré
+  // sous une date, et les versions précédentes qu'on peut restaurer.
+  const sauv=Array.isArray(a.sauvegardes)?a.sauvegardes:[];
+  const sauvHtml='<details class="an-sv"><summary>'+ANAT_SVG.disquette+'<span>Sauvegarde</span>'+(sauv.length?'<i>'+sauv.length+'</i>':'')+ANAT_SVG.chev+'</summary>'
+    +'<div class="an-sv-m"><button type="button" class="an-sv-b an-sv-p" onclick="anatSauvegarder()">'+ANAT_SVG.disquette+'<span>Enregistrer cette version<small>points, options et réglages de la photo</small></span></button>'
+    +(sauv.length?'<p class="an-sv-t">Versions enregistrées</p>'+sauv.slice().reverse().map(x=>'<div class="an-sv-v"><span>'+escapeHtml(_anatDateHeure(x.date))+'<small>'+escapeHtml(_anatResumeSauvegarde(x))+'</small></span>'
+        +'<button type="button" class="an-sv-r" onclick="anatRestaurer(\''+escapeHtml(String(x.id))+'\')">Restaurer</button>'
+        +'<button type="button" class="an-sv-x" aria-label="Supprimer cette version" onclick="anatSupprimerSauvegarde(\''+escapeHtml(String(x.id))+'\')">'+ANAT_SVG.x+'</button></div>').join('')
+      :'<p class="an-sv-t">Aucune version enregistrée pour l’instant.</p>')
+    +'</div></details>';
   const outils=edit
     ?'<div class="an-outils an-outils-edit"><p class="an-aide">Glisse chaque point sur son repère (loupe au-dessus du doigt ; double-clic ou appui pour le saisir ; au clavier : Tab puis flèches). Les points <b class="an-aide-est">orangés</b> sont estimés — à vérifier en priorité.</p>'+liste
       +'<div class="an-outils-b"><button type="button" class="btn btn-red btn-casse an-analyser" onclick="anatEnregistrerPoints()">'+ANAT_SVG.relancer+'<span>Analyser avec ces points</span></button>'
       +'<button type="button" class="an-b2" onclick="anatPointsAutomatiques()">Points automatiques</button>'
       +'<button type="button" class="an-b2" onclick="anatAnnulerEdition()">Annuler</button>'
-      +'<button type="button" class="an-b2" onclick="anatRelancer()">'+ANAT_SVG.relancer+'<span>Refaire la détection</span></button></div></div>'
-    :'<div class="an-outils"><button type="button" class="an-b2 an-b2-r" onclick="anatEditer()">'+ANAT_SVG.points+'<span>Ajuster les points</span></button>'
+      +'<button type="button" class="an-b2" onclick="anatRelancer()">'+ANAT_SVG.relancer+'<span>Refaire la détection</span></button>'+sauvHtml+'</div></div>'
+    :'<div class="an-outils"><button type="button" class="an-b2 an-b2-r" onclick="anatEditer()">'+ANAT_SVG.points+'<span>Ajuster les points</span></button>'+sauvHtml
       +'<span class="an-ech">'+(echelle&&echelle.cmPx?'Échelle : '+_anatN(echelle.taille,0)+' cm du sommet du crâne aux talons · ±'+ANAT_TOL.echelle+' %'
         :'Taille absente du dossier : longueurs en % de la hauteur')+(V.man?' · points ajustés à la main':(V.auto&&V.auto.gabarit?' · personne non détectée : points à placer':' · points automatiques'))+'</span></div>';
-  // La synthèse des leviers.
-  const lev=res.leviers.length?'<div class="an-lev"><h5>Leviers mécaniques</h5><div class="an-lev-l">'+res.leviers.map(l=>{
+  // LES LEVIERS, UN PAR UN, AUX FLÈCHES. Kevin : « juste des petites flèches
+  // pour passer de squat à soulevé à développé couché ».
+  const nLev=res.leviers.length;
+  const iLev=nLev?((_anatLevIdx%nLev)+nLev)%nLev:0;
+  const lev=nLev?(()=>{
+      const l=res.leviers[iLev];
       const val=l.cle==='squat'?l.val+'°':l.cle==='souleve'?_anatN(l.val,2):(l.val!=null?l.val+' cm':_anatSN(l.ecart,0)+' %');
       const ref=l.cle==='squat'?l.ref+'°':l.cle==='souleve'?_anatN(l.ref,2):(l.ref!=null?l.ref+' cm':'');
       const sous=l.cle==='squat'?'buste à la parallèle':l.cle==='souleve'?'bras / tronc':'trajet de barre';
-      return '<div class="an-lev-c"><span class="an-lev-i">'+(ANAT_SVG[l.cle]||'')+'</span><div><b>'+escapeHtml(l.lib)+'</b><strong>'+escapeHtml(val)+'</strong><em>'+escapeHtml(sous)+(ref?' · moyenne '+escapeHtml(ref):'')+'</em><p>'+escapeHtml(l.txt)+'</p></div></div>';
-    }).join('')+'</div><p class="an-lev-n">Modèles plans (cuisse parallèle et tibia à 30° au squat ; prise à 1,5 fois la carrure au développé), appliqués aux longueurs de l’athlète puis aux proportions moyennes de Drillis & Contini. C’est l’écart qui renseigne.</p></div>':'';
+      return '<div class="an-lev"><div class="an-lev-h"><h5>Leviers mécaniques</h5>'
+        +'<div class="an-lev-nav"><button type="button" aria-label="Levier précédent" onclick="anatLevier(-1)"'+(nLev<2?' disabled':'')+'>'+ANAT_SVG.gauche+'</button>'
+        +'<span>'+(iLev+1)+' / '+nLev+'</span>'
+        +'<button type="button" aria-label="Levier suivant" onclick="anatLevier(1)"'+(nLev<2?' disabled':'')+'>'+ANAT_SVG.droite+'</button></div></div>'
+        +'<div class="an-lev-c"><span class="an-lev-i">'+(ANAT_SVG[l.cle]||'')+'</span><div><b>'+escapeHtml(l.lib)+'</b><strong>'+escapeHtml(val)+'</strong><em>'+escapeHtml(sous)+(ref?' · moyenne '+escapeHtml(ref):'')+'</em><p>'+escapeHtml(l.txt)+'</p></div></div>'
+        +'<div class="an-lev-dots">'+res.leviers.map((x,i)=>'<button type="button" aria-label="'+escapeHtml(x.lib)+'"'+(i===iLev?' class="actif" aria-current="true"':'')+' onclick="anatLevier(0,'+i+')"></button>').join('')+'</div>'
+        +'<p class="an-lev-n">Modèles plans (cuisse parallèle et tibia à 30° au squat ; prise à 1,5 fois la carrure au développé), appliqués aux longueurs de l’athlète puis aux proportions moyennes de Drillis & Contini. C’est l’écart qui renseigne.</p></div>';
+    })():'';
 
   const carte=(f)=>{
     const t=textes[f.cle]||{};
@@ -46533,7 +46757,7 @@ function _htmlAnat(c){
       +(t.verifier?'<h6>Comment vérifier</h6><p>'+escapeHtml(t.verifier)+'</p>':'')
       +'<p class="an-f-src">Source : '+escapeHtml(f.source||'')+(f.tolerance?' · marge '+escapeHtml(f.tolerance):'')+' · bilan du '+_anatDateFr(a.bilan)+'</p>'
       +'</div>';
-    return '<div class="an-f" data-k="'+f.cle+'" data-etat="'+f.etat+'">'
+    return '<div class="an-f" data-k="'+f.cle+'" data-etat="'+f.etat+'" data-n="'+(f.niveau==null?'':Math.abs(f.niveau))+'">'
       +'<button type="button" class="an-f-vig" '+(cad?'onclick="anatZoom(\''+f.cle+'\')" aria-label="Agrandir : '+escapeHtml(f.lib)+'"':'disabled')+'>'
       +(cad?_anatImg(s2,cad,f.vue==='dos'?'dos':'face',anatFiltre(anatReglage(a,f.vue==='dos'?'dos':'face')))+'<span class="an-f-loupe">'+ANAT_SVG.loupe+'</span>':'')+'</button>'
       +'<div class="an-f-c"><div class="an-f-h"><b>'+escapeHtml(f.lib)+'</b>'+(f.valeur?'<em>'+escapeHtml(f.valeur)+'</em>':'')+(f.estime?'<i class="an-f-est" title="Points estimés, à vérifier">estimé</i>':'')+'</div>'
@@ -46541,23 +46765,33 @@ function _htmlAnat(c){
       +'<button type="button" class="an-f-plus" aria-expanded="false" aria-controls="an-long-'+f.cle+'" onclick="anatOuvrir(\''+f.cle+'\')"><span class="an-f-plus-o">Recommandations détaillées</span><span class="an-f-plus-f">Replier</span>'+ANAT_SVG.chev+'</button>'
       +'</div>'+detail+'</div>';
   };
-  const gauche=fiches.filter(f=>['clavicules','epaules','buste','bras','bassin'].includes(f.cle));
-  const droite=fiches.filter(f=>['jambes','genoux','pieds','dos'].includes(f.cle));
-  const resHtml='<div class="an-res"><h5>Résultats de l’analyse</h5>'
-    +fiches.map(f=>'<button type="button" class="an-r" data-k="'+f.cle+'" onclick="anatOuvrir(\''+f.cle+'\',true)">'
-      +'<span class="an-r-l">'+escapeHtml(f.lib)+'</span>'+_anatPoints(f)+'<span class="an-r-v">'+escapeHtml(anatVerdict(f))+'</span></button>').join('')
+  // TOUTES LES FICHES À GAUCHE : quatre visibles, le reste se déroule.
+  const VISIBLES=4;
+  const reste=Math.max(0,fiches.length-VISIBLES);
+  const colG='<div class="an-col an-col-g'+(_anatToutes?' toutes':'')+'"><h5>Détails morphologiques <span>'+fiches.length+' zones</span></h5>'
+    +fiches.map((f,i)=>i<VISIBLES?carte(f):carte(f).replace('<div class="an-f"','<div class="an-f an-f-plus-l"')).join('')
+    +(reste?'<button type="button" class="an-deroule" aria-expanded="'+(_anatToutes?'true':'false')+'" onclick="anatToutesFiches()">'
+      +'<span>'+(_anatToutes?'Replier la liste':'Voir les '+reste+' autres zones')+'</span>'+ANAT_SVG.chev+'</button>':'')+'</div>';
+  // LES RÉSULTATS, STYLISÉS : un bandeau, le compte de ce qui est à
+  // surveiller, et chaque ligne teintée de son niveau.
+  const nSurv=fiches.filter(f=>f.niveau!=null&&Math.abs(f.niveau)>=2).length;
+  const nMarge=fiches.filter(f=>f.niveau===0).length;
+  const nIll=fiches.filter(f=>f.niveau==null).length;
+  const resHtml='<div class="an-res"><div class="an-res-h"><h5>Résultats de l’analyse</h5>'
+    +'<div class="an-res-k"><span data-t="s"><b>'+nSurv+'</b>à surveiller</span><span data-t="m"><b>'+nMarge+'</b>dans la marge</span>'+(nIll?'<span data-t="i"><b>'+nIll+'</b>non lisible'+(nIll>1?'s':'')+'</span>':'')+'</div></div>'
+    +'<div class="an-res-l">'+fiches.map(f=>'<button type="button" class="an-r" data-k="'+f.cle+'" data-n="'+(f.niveau==null?'':Math.abs(f.niveau))+'" onclick="anatOuvrir(\''+f.cle+'\',true)">'
+      +'<span class="an-r-l">'+escapeHtml(f.lib)+'</span>'+_anatPoints(f)+'<span class="an-r-v">'+escapeHtml(anatVerdict(f))+'</span></button>').join('')+'</div>'
     +'<p class="an-res-leg"><span><i data-i="0"></i>dans la marge</span><span><i data-i="1"></i>léger</span><span><i data-i="2"></i>net</span><span><i data-i="3"></i>marqué</span><span>gris : non lisible</span></p></div>';
   const pourquoi='<div class="an-pq"><span class="an-pq-i">'+ANAT_SVG.info+'</span><div class="an-pq-c"><h5>Méthode</h5>'
     +'<span>Les repères sont posés sur les vraies photos du premier bilan — automatiquement, puis ajustables à la main. La photo est mise à l’échelle par la taille du dossier (du sommet du crâne aux talons), les longueurs sont mesurées d’un centre articulaire à l’autre et comparées aux proportions moyennes publiées par Drillis & Contini ; les largeurs d’os, aux moyennes ANSUR II. Un écart à la moyenne est un levier à connaître, pas un défaut. '
     +escapeHtml(MORPHO_DISCLAIMER)+'</span></div>'
     +'<button type="button" class="an-b2" onclick="anatRelancer()"'+(enCours?' disabled':'')+'>'+ANAT_SVG.relancer+'<span>'+(enCours?'Détection…':'Refaire la détection')+'</span></button></div>';
   return '<div class="an" data-vue="'+vueAct+'">'+tete
-    +'<div class="an-grille"><div class="an-col an-col-g"><h5>Détails morphologiques</h5>'+gauche.map(carte).join('')+'</div>'
-    +'<div class="an-centre">'+scene+optsHtml+outils+photoHtml+lev+'</div>'
-    +resHtml+'<div class="an-col an-col-d">'+droite.map(carte).join('')+'</div></div>'
+    +'<div class="an-grille">'+colG
+    +'<div class="an-centre">'+scene+outils+photoHtml+optsHtml+'</div>'
+    +'<div class="an-col an-col-d">'+resHtml+lev+'</div></div>'
     +pourquoi+'</div>';
 }
-
 /** Le zoom d'une vignette : la photo d'origine, nette, avec ses repères. */
 function anatZoom(cle){
   const c=getOwnedClient(currentClientId);
@@ -46598,6 +46832,7 @@ function anatZoom(cle){
   });
   document.addEventListener('keydown',esc);
   document.body.appendChild(o);
+  if(anatReglage(a,vue).net!==false) anatAmeliorer(src).then(u=>{ const i=o.querySelector('img'); if(u&&i) i.src=u; });
   setTimeout(()=>{ try{ o.querySelector('.an-zoom-x').focus(); }catch(e){} },30);
 }
 function renderCorpsCoach(c){
