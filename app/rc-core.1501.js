@@ -970,7 +970,7 @@ const PAYPAL_PLAN_ID='P-95N51603RD882780YNJKS2QA';
 // Pour l'activer : developer.paypal.com → Billing Plans → créer un plan
 // « RepCore Annuel », 99,00 EUR, cycle ANNUAL, puis coller l'ID ci-dessous.
 // Rien d'autre à modifier : l'écran s'adapte tout seul.
-const PAYPAL_PLAN_ID_ANNUEL='';
+const PAYPAL_PLAN_ID_ANNUEL='P-92T09491KF550281RNK2LZWY';
 // ⚠ LES DEUX PLANS D'ULTIME N'EXISTENT PAS ENCORE (lot 5). Ils se creent dans
 //   le tableau de bord PayPal — Billing Plans — puis leur identifiant se colle
 //   ici. Tant qu'une case est vide, l'offre correspondante n'est pas proposee
@@ -978,8 +978,8 @@ const PAYPAL_PLAN_ID_ANNUEL='';
 //   de payer.
 //     « RepCore Ultime mensuel »  24,90 EUR, cycle MONTH
 //     « RepCore Ultime annuel »  249,00 EUR, cycle YEAR
-const PAYPAL_PLAN_ID_ULTIME='';
-const PAYPAL_PLAN_ID_ULTIME_ANNUEL='';
+const PAYPAL_PLAN_ID_ULTIME='P-2W777608239063532NK2LZXA';
+const PAYPAL_PLAN_ID_ULTIME_ANNUEL='P-16Y44630WF304553UNK2LZXI';
 // ⚠ LE PREMIER MOIS A MOITIE PRIX APRES UN PACK (lot 10). C'est un plan
 //   PAYPAL A PART, et non une remise appliquee a la main : un abonnement
 //   mensuel dont le PREMIER cycle est a 12,45 EUR et les suivants a 24,90.
@@ -989,7 +989,7 @@ const PAYPAL_PLAN_ID_ULTIME_ANNUEL='';
 //   TANT QUE CETTE CASE EST VIDE, L'OFFRE N'EST PAS ANNONCEE DU TOUT : la
 //   sortie de pack propose alors Ultime au prix normal. On ne promet pas un
 //   prix qu'on ne sait pas encaisser.
-const PAYPAL_PLAN_ID_ULTIME_DEMI='';
+const PAYPAL_PLAN_ID_ULTIME_DEMI='P-57P40267XP026613FNK2LZXQ';
 // PURE. Le plan PayPal d'une offre, ou '' quand il n'a pas encore ete cree.
 // UN SEUL ENDROIT SAIT QUEL PLAN VA AVEC QUELLE OFFRE : sans ca, l'ecran des
 // tarifs et le bouton de paiement finiraient par ne plus parler du meme.

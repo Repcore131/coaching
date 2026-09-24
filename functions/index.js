@@ -455,8 +455,16 @@ exports.verifyPaypalSubscription = onCall({ secrets: [PAYPAL_CLIENT_SECRET] }, a
 // declarer un plan cree ce matin sans attendre un deploiement de fonctions.
 // La table du fichier sert de repli quand la base ne dit rien.
 const PLANS_CONNUS = {
-  // planId PayPal            palier         mois
-  "P-95N51603RD882780YNJKS2QA": { palier: "essentielle", mois: 1 },
+  // planId PayPal                 palier          mois   ce que c'est
+  "P-95N51603RD882780YNJKS2QA": { palier: "essentielle", mois: 1 },  // Essentielle, mensuel
+  // Crees le 24/09/2026 par scripts/paypal_plans.mjs, sur le compte reel.
+  "P-92T09491KF550281RNK2LZWY": { palier: "essentielle", mois: 12 }, // Essentielle, annuel
+  "P-2W777608239063532NK2LZXA": { palier: "ultime", mois: 1 },       // Ultime, mensuel
+  "P-16Y44630WF304553UNK2LZXI": { palier: "ultime", mois: 12 },      // Ultime, annuel
+  // ⚠ CELUI-CI PORTE `demi` : c'est le premier mois a moitie prix apres un
+  //   pack, et ce drapeau est ce qui le marque comme consomme dans droits/.
+  //   Sans lui, il se reprendrait a chaque sortie de pack.
+  "P-57P40267XP026613FNK2LZXQ": { palier: "ultime", mois: 1, demi: true },
 };
 let _plansBase = null;
 async function chargerPlans() {
