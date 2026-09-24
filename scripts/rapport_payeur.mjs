@@ -73,6 +73,10 @@ function demanderSecret() {
   });
 }
 
+// Les permissions du jeton en cours, posees a l'obtention et relues par le
+// diagnostic du 403. Une globale plutot qu'un parametre de plus : `encaissements`
+// en a deja quatre, et celle-ci ne sert qu'a expliquer un echec.
+let PERMISSIONS_DU_JETON = '';
 async function jeton(secret) {
   const r = await fetch(API + '/v1/oauth2/token', {
     method: 'POST',
@@ -87,7 +91,22 @@ async function jeton(secret) {
     throw new Error('PayPal refuse les identifiants (' + r.status + ') : '
       + (j.error_description || j.error || 'reponse inattendue'));
   }
-  return j.access_token;
+  // ⚠ ON GARDE LES PERMISSIONS QUE PAYPAL A ACCORDEES. Elles arrivent dans la
+  //   meme reponse, en clair, sous forme d'une liste d'adresses. C'est la seule
+  //   facon de distinguer les deux 403 possibles sur la recherche de
+  //   transactions : « la case n'est pas encore prise en compte » et « la case
+  //   est prise en compte, et PayPal refuse quand meme ». Les deux se corrigent
+  //   a des endroits opposes, et sans cette liste on tourne en rond.
+  //
+  //   CE N'EST PAS UN SECRET : c'est la liste de ce que ce jeton a le droit de
+  //   lire, pas de quoi lire quoi que ce soit.
+  return { jeton: j.access_token, permissions: String(j.scope || '') };
+}
+// PURE. La permission qui ouvre la recherche de transactions, telle que PayPal
+// la nomme dans la liste ci-dessus.
+const PERM_RECHERCHE = 'https://uri.paypal.com/services/reporting/search/read';
+function permissionRechercheAccordee(permissions) {
+  return String(permissions || '').split(/\s+/).indexOf(PERM_RECHERCHE) >= 0;
 }
 
 // ── LES ENCAISSEMENTS D'UNE PERIODE ─────────────────────────────────────
@@ -110,9 +129,29 @@ async function encaissements(tok, debut, fin) {
         + '&page_size=100&page=' + page;
       const r = await fetch(u, { headers: { Authorization: 'Bearer ' + tok } });
       if (r.status === 403) {
-        throw new Error('PayPal refuse la recherche de transactions (403). Active '
-          + '« Transaction Search » sur l\'application : developer.paypal.com > Apps & '
-          + 'Credentials > ton application > Features.');
+        // CE QUE PAYPAL DIT LUI-MEME, avant ce qu'on en deduit. `debug_id` est
+        // la reference a donner au support s'il faut en arriver la.
+        const e = await r.json().catch(() => ({}));
+        const sien = [e.name, e.message, e.debug_id ? ('debug_id ' + e.debug_id) : '']
+          .filter(Boolean).join(' / ');
+        if (permissionRechercheAccordee(PERMISSIONS_DU_JETON)) {
+          throw new Error('PayPal refuse la recherche de transactions (403) ALORS QUE LA '
+            + 'PERMISSION EST ACCORDEE.\n  Ce jeton porte bien '
+            + 'reporting/search/read : le probleme n\'est plus la case a cocher, c\'est le '
+            + 'compte lui-meme qui n\'est pas provisionne pour cette API. Il faut le '
+            + 'demander au support marchand PayPal.'
+            + (sien ? ('\n  PayPal dit : ' + sien) : ''));
+        }
+        throw new Error('PayPal refuse la recherche de transactions (403).\n  Ce jeton ne '
+          + 'porte PAS la permission reporting/search/read. Si tu viens de cocher '
+          + '« Transaction search » dans developer.paypal.com > Apps & Credentials > '
+          + 'ton application > Features, laisse passer quelques minutes : la case est '
+          + 'enregistree tout de suite, la permission descend avec un peu de retard.'
+          + '\n  Permissions de ce jeton : ' + (PERMISSIONS_DU_JETON
+            ? PERMISSIONS_DU_JETON.split(/\s+/).map(p => p.replace(
+                'https://uri.paypal.com/services/', '')).join(', ')
+            : '(aucune)')
+          + (sien ? ('\n  PayPal dit : ' + sien) : ''));
       }
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error('PayPal a repondu ' + r.status + ' : ' + (j.message || ''));
@@ -257,7 +296,8 @@ async function principal() {
     if (!CLIENT_ID) throw new Error('Aucun identifiant client : donne PAYPAL_CLIENT_ID.');
     const secret = process.env.PAYPAL_CLIENT_SECRET || await demanderSecret();
     if (!secret) throw new Error('Aucun secret : rien n\'a ete lu.');
-    const tok = await jeton(secret);
+    const { jeton: tok, permissions } = await jeton(secret);
+    PERMISSIONS_DU_JETON = permissions;
     brutMois = await encaissements(tok, debut, fin);
     brutAvant = await encaissements(tok, debutAvant, finAvant);
   }
