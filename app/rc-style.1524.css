@@ -2511,97 +2511,104 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 /* Sous 360 px, les deux tuiles s'empilent : un telephone dessine dans 150 px
    ne se lit plus. */
 @media (max-width:360px){ .sv-meth-g{grid-template-columns:1fr} .sv-duo{grid-template-columns:1fr} }
-/* ══ SUIVI ALIMENTAIRE — LA MAQUETTE DE KEVIN (24/09/2026) ═══════════════
-   Sur un bloc large (maquette) : Oui / Non a gauche, la serie et l'anneau a
-   droite, sur une ligne ; les pastilles et « Voir mon suivi » dessous. Sur un
-   telephone, chaque rangee passe sous la precedente. */
-.sa-carte{container-type:inline-size;container-name:sa;position:relative;margin:0 0 18px;padding:16px 14px 14px;
-  border-radius:18px;border:1.5px solid #e02020;background:linear-gradient(180deg,#140707,#0a0a0b 40%,#0a0a0b);
-  box-shadow:0 0 22px rgba(224,32,32,.28),inset 0 0 30px rgba(224,32,32,.06)}
-.sa-tete{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap}
-.sa-ico{width:52px;height:52px;flex-shrink:0;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;
-  color:#ff3b3b;background:linear-gradient(160deg,#5a0b0b,#2a0505);border:1px solid rgba(224,32,32,.45);
-  box-shadow:0 0 14px rgba(224,32,32,.3)}
-.sa-ico svg{width:28px;height:28px;filter:drop-shadow(0 0 6px rgba(255,59,59,.7))}
-.sa-titres{flex:1 1 220px;min-width:0}
-.sa-titres h3{margin:0;font-family:var(--pile-titre);font-weight:400;font-size:clamp(26px,7.6vw,44px);line-height:.95;
-  letter-spacing:.5px;color:#fff;text-transform:uppercase;white-space:nowrap}
-.sa-titres h3 span{color:#ff2d2d}
-.sa-q{display:block;margin-top:4px;font-size:clamp(9.5px,2.6vw,13px);letter-spacing:1.2px;text-transform:uppercase;
-  color:var(--text-dim);font-weight:700}
-/* Quand le titre prend la ligne, la date passe dessous, a droite. */
-.sa-date{margin-left:auto;position:relative;display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 12px;border-radius:12px;
-  border:1px solid #33333a;background:#0f0f12;color:#fff;cursor:pointer;white-space:nowrap;
-  text-transform:none;letter-spacing:0;font-size:var(--fs-sm);font-weight:700}
-.sa-date svg{width:17px;height:17px;flex-shrink:0;pointer-events:none}
-.sa-date select{position:absolute;inset:0;width:100%;min-height:44px;top:50%;transform:translateY(-50%);opacity:0;
-  cursor:pointer;border:0;margin:0;font-size:16px}
-.sa-date:focus-within{border-color:#e02020}
-.sa-milieu{display:flex;flex-direction:column;gap:12px;margin-top:14px}
-.sa-reps{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.sa-rep{display:flex;align-items:center;justify-content:center;gap:clamp(6px,2vw,12px);min-height:74px;padding:8px 6px;min-width:0;border-radius:14px;
-  cursor:pointer;font-family:inherit;text-align:left;color:#fff;background:linear-gradient(180deg,#151517,#0d0d0f);
-  border:2px solid rgba(34,197,94,.35);transition:background var(--t-2),border-color var(--t-2),box-shadow var(--t-2)}
-.sa-rep[data-v="non"]{border-color:rgba(224,32,32,.4);background:linear-gradient(180deg,#1a0909,#0d0d0f)}
-.sa-rep-i{display:inline-flex;width:clamp(24px,7vw,34px);height:clamp(24px,7vw,34px);flex-shrink:0;color:#22e27a;filter:drop-shadow(0 0 6px rgba(34,226,122,.6))}
-.sa-rep[data-v="non"] .sa-rep-i{color:#ff3b3b;filter:drop-shadow(0 0 6px rgba(255,59,59,.6))}
+/* ══ SUIVI ALIMENTAIRE — LA MAQUETTE DE KEVIN, A L'ECHELLE (24/09/2026) ══
+   Kevin : « ca ressemble pas du tout, applique vraiment niveau taille a
+   l'identique », puis « applique sur tel, oui ». La carte EST la maquette,
+   reduite a la largeur de l'ecran : chaque element est pose a ses
+   coordonnees d'origine (carte de 1720 x 623 px), en unites --u =
+   1/1720e de la largeur de la carte. Seul plancher : 8 px pour le texte,
+   en dessous duquel il ne se lit plus sur un telephone. */
+.sa-carte{container-type:inline-size;container-name:sa;margin:0 0 18px}
+.sa-in{--u:calc(100cqw / 1720);position:relative;width:100%;height:calc(623 * var(--u));box-sizing:border-box;
+  border-radius:calc(44 * var(--u));border:max(1.5px,calc(4 * var(--u))) solid #ff1a1a;
+  background:radial-gradient(120% 60% at 50% -10%,rgba(224,32,32,.16),transparent 60%),#0b0b0c;
+  box-shadow:0 0 calc(40 * var(--u)) rgba(255,26,26,.45),inset 0 0 calc(60 * var(--u)) rgba(224,32,32,.08)}
+.sa-in>*{position:absolute;box-sizing:border-box}
+.sa-ico{left:calc(46 * var(--u));top:calc(39 * var(--u));width:calc(154 * var(--u));height:calc(142 * var(--u));
+  border-radius:calc(28 * var(--u));display:flex;align-items:center;justify-content:center;color:#ff3434;
+  background:linear-gradient(160deg,#6a0c0c,#300505);border:max(1px,calc(3 * var(--u))) solid rgba(224,32,32,.5);
+  box-shadow:0 0 calc(24 * var(--u)) rgba(224,32,32,.35)}
+.sa-ico svg{width:calc(74 * var(--u));height:calc(74 * var(--u));filter:drop-shadow(0 0 calc(10 * var(--u)) rgba(255,52,52,.8))}
+.sa-titre{left:calc(250 * var(--u));top:calc(40 * var(--u));margin:0;font-family:var(--pile-titre);font-weight:400;
+  font-size:calc(86 * var(--u));line-height:1;letter-spacing:calc(1 * var(--u));color:#fff;white-space:nowrap;text-transform:uppercase}
+.sa-titre span{color:#ff2020}
+.sa-q{left:calc(252 * var(--u));top:calc(126 * var(--u));font-size:max(8px,calc(31 * var(--u)));letter-spacing:calc(3 * var(--u));
+  font-weight:600;color:#a9a9ad;text-transform:uppercase;white-space:nowrap;line-height:1}
+.sa-date{margin:0;left:calc(1215 * var(--u));top:calc(39 * var(--u));width:calc(465 * var(--u));height:calc(110 * var(--u));
+  display:flex;align-items:center;gap:calc(26 * var(--u));padding:0 calc(34 * var(--u));border-radius:calc(24 * var(--u));
+  border:max(1px,calc(3 * var(--u))) solid #3a3a40;background:#0e0e10;color:#fff;cursor:pointer;
+  font-size:max(8px,calc(38 * var(--u)));font-weight:600;letter-spacing:0;text-transform:none;white-space:nowrap}
+.sa-date svg{width:calc(46 * var(--u));height:calc(46 * var(--u));flex-shrink:0;pointer-events:none}
+.sa-date span{flex:1;pointer-events:none}
+.sa-date svg:last-of-type{width:calc(34 * var(--u));height:calc(34 * var(--u))}
+.sa-date select{position:absolute;inset:0;width:100%;height:100%;min-height:44px;opacity:0;cursor:pointer;border:0;margin:0;font-size:16px}
+.sa-rep{top:calc(223 * var(--u));height:calc(178 * var(--u));display:flex;align-items:center;justify-content:center;
+  gap:calc(40 * var(--u));padding:0;border-radius:calc(26 * var(--u));cursor:pointer;font-family:inherit;color:#fff;
+  border:max(1.5px,calc(5 * var(--u))) solid #2f9e5b;background:linear-gradient(180deg,#101312,#0a0c0b)}
+.sa-rep[data-v="oui"]{left:calc(50 * var(--u));width:calc(462 * var(--u))}
+.sa-rep[data-v="non"]{left:calc(538 * var(--u));width:calc(437 * var(--u));border-color:#8f1414;
+  background:linear-gradient(180deg,#170909,#0c0808)}
+.sa-rep-i{display:inline-flex;width:calc(72 * var(--u));height:calc(72 * var(--u));flex-shrink:0;color:#39f08f;
+  filter:drop-shadow(0 0 calc(12 * var(--u)) rgba(57,240,143,.7))}
+.sa-rep[data-v="non"] .sa-rep-i{width:calc(56 * var(--u));height:calc(56 * var(--u));color:#ff3b3b;
+  filter:drop-shadow(0 0 calc(12 * var(--u)) rgba(255,59,59,.7))}
 .sa-rep-i svg{width:100%;height:100%}
-.sa-rep-t{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
-.sa-rep-t b{font-size:clamp(17px,4.8vw,24px);font-weight:800;line-height:1}
-.sa-rep-t span{font-size:clamp(10px,2.8vw,13px);color:#d4d4d8;text-align:center;line-height:1.2}
-.sa-rep[data-v="oui"][data-actif]{border-color:#22e27a;background:linear-gradient(160deg,#16a34a,#0b5a2b);
-  box-shadow:0 0 22px rgba(34,226,122,.45),inset 0 1px 0 rgba(255,255,255,.2)}
-.sa-rep[data-v="oui"][data-actif] .sa-rep-i{color:#eafff2}
-.sa-rep[data-v="non"][data-actif]{border-color:#ff3b3b;background:linear-gradient(160deg,#c10000,#5e0000);
-  box-shadow:0 0 22px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)}
+.sa-rep-t{display:flex;flex-direction:column;align-items:center;gap:calc(6 * var(--u))}
+.sa-rep-t b{font-size:calc(46 * var(--u));font-weight:800;line-height:1}
+.sa-rep-t span{font-size:max(8px,calc(28 * var(--u)));color:#e4e4e7;white-space:nowrap;line-height:1.1}
+.sa-rep[data-v="oui"][data-actif]{border-color:#2bf28c;background:linear-gradient(150deg,#1fcf73,#0c6a3a 55%,#0a4d2b);
+  box-shadow:0 0 calc(30 * var(--u)) rgba(43,242,140,.55),inset 0 calc(2 * var(--u)) 0 rgba(255,255,255,.2)}
+.sa-rep[data-v="oui"][data-actif] .sa-rep-i{color:#5dffa9}
+.sa-rep[data-v="non"][data-actif]{border-color:#ff3b3b;background:linear-gradient(150deg,#c20c0c,#5e0000);
+  box-shadow:0 0 calc(30 * var(--u)) rgba(255,59,59,.55),inset 0 calc(2 * var(--u)) 0 rgba(255,255,255,.2)}
 .sa-rep[data-v="non"][data-actif] .sa-rep-i{color:#fff}
-.sa-chiffres{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px}
-.sa-serie{display:flex;align-items:center;gap:10px;min-width:0}
-.sa-flamme{width:clamp(40px,11vw,56px);height:clamp(40px,11vw,56px);flex-shrink:0;filter:drop-shadow(0 0 10px rgba(255,45,45,.6))}
+.sa-vl{width:max(1px,calc(2 * var(--u)));background:#2a2a2e}
+.sa-vl1{left:calc(1018 * var(--u));top:calc(208 * var(--u));height:calc(193 * var(--u))}
+.sa-vl2{left:calc(1364 * var(--u));top:calc(208 * var(--u));height:calc(193 * var(--u))}
+.sa-vl3{left:calc(1061 * var(--u));top:calc(481 * var(--u));height:calc(94 * var(--u))}
+.sa-hl{left:calc(46 * var(--u));right:calc(40 * var(--u));top:calc(444 * var(--u));height:max(1px,calc(2 * var(--u)));background:#2a2a2e}
+.sa-flamme{left:calc(1058 * var(--u));top:calc(222 * var(--u));width:calc(72 * var(--u));height:calc(96 * var(--u));
+  filter:drop-shadow(0 0 calc(16 * var(--u)) rgba(255,45,45,.7))}
 .sa-flamme svg{width:100%;height:100%}
-.sa-serie strong{display:block;font-family:var(--pile-titre);font-weight:400;font-size:clamp(40px,12vw,64px);line-height:.9;color:#fff}
-.sa-serie strong+span{display:block;font-family:var(--pile-titre);font-size:clamp(14px,4vw,20px);letter-spacing:1px;
-  color:#b4b4bb;text-transform:uppercase;line-height:1.05;margin-top:4px}
-.sa-anneau{position:relative;width:clamp(104px,30vw,138px);height:clamp(104px,30vw,138px)}
+.sa-serie-n{left:calc(1160 * var(--u));top:calc(222 * var(--u));font-family:var(--pile-titre);font-size:calc(118 * var(--u));
+  line-height:1;color:#fff}
+.sa-serie-l{left:calc(1161 * var(--u));top:calc(318 * var(--u));font-family:var(--pile-titre);font-size:max(8px,calc(36 * var(--u)));
+  letter-spacing:calc(2 * var(--u));line-height:1;color:#a9a9ad;text-transform:uppercase}
+.sa-anneau{left:calc(1402 * var(--u));top:calc(174 * var(--u));width:calc(252 * var(--u));height:calc(252 * var(--u))}
 .sa-anneau svg{width:100%;height:100%;transform:rotate(-90deg)}
-.sa-an-f{fill:none;stroke:#26262b;stroke-width:8}
-.sa-an-p{fill:none;stroke:#f5c518;stroke-width:8;stroke-linecap:round;filter:drop-shadow(0 0 4px rgba(245,197,24,.6))}
-.sa-an-c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
-.sa-an-c strong{font-family:var(--pile-titre);font-weight:400;font-size:clamp(30px,9vw,44px);color:#fff;line-height:1}
-.sa-an-c small{font-size:.75em;color:#8a8a92}
-.sa-an-c span{font-family:var(--pile-titre);font-size:clamp(10px,2.9vw,14px);letter-spacing:1px;color:#b4b4bb;text-transform:uppercase}
-.sa-pied{display:flex;flex-direction:column;gap:12px;margin-top:14px;padding-top:12px;border-top:1px solid #26262b}
-.sa-jours{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
-.sa-j{display:flex;flex-direction:column;align-items:center;gap:6px;min-height:44px;padding:2px 0;background:none;border:0;
-  color:#b4b4bb;font-family:inherit;font-size:clamp(10.5px,2.9vw,14px);cursor:pointer;border-radius:10px}
+.sa-an-f{fill:none;stroke:#26262b;stroke-width:9}
+.sa-an-p{fill:none;stroke:#ffc21a;stroke-width:9;stroke-linecap:round;filter:drop-shadow(0 0 3px rgba(255,194,26,.6))}
+.sa-an-c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:calc(8 * var(--u))}
+.sa-an-c strong{font-family:var(--pile-titre);font-weight:400;font-size:calc(80 * var(--u));color:#fff;line-height:1}
+.sa-an-c small{font-size:1em;color:#8a8a92}
+.sa-an-c span{font-family:var(--pile-titre);font-size:max(8px,calc(28 * var(--u)));letter-spacing:calc(1.5 * var(--u));
+  color:#cfcfd3;text-transform:uppercase;white-space:nowrap}
+.sa-j{top:calc(470 * var(--u));width:calc(142 * var(--u));height:calc(120 * var(--u));display:flex;flex-direction:column;
+  align-items:center;justify-content:space-between;padding:calc(6 * var(--u)) 0 0;background:none;border:0;border-radius:calc(16 * var(--u));
+  color:#b4b4bb;font-family:inherit;font-size:max(8px,calc(29 * var(--u)));cursor:pointer;line-height:1}
 .sa-j-vise{background:rgba(255,255,255,.05)}
-.sa-p{width:clamp(28px,7.6vw,36px);height:clamp(28px,7.6vw,36px);border-radius:50%;display:inline-flex;align-items:center;
-  justify-content:center;border:2.5px solid #6b6b74;color:#9a9aa2}
-.sa-p svg{width:58%;height:58%}
-.sa-p[data-e="oui"]{border-color:#22e27a;color:#22e27a;background:rgba(34,226,122,.12);box-shadow:0 0 8px rgba(34,226,122,.35)}
-.sa-p[data-e="non"]{border-color:#ff3b3b;color:#ff3b3b;background:rgba(255,59,59,.12);box-shadow:0 0 8px rgba(255,59,59,.35)}
-.sa-p[data-e="vide"]{border-color:#f5c518;color:#f5c518;background:rgba(245,197,24,.12)}
-.sa-voir{display:flex;align-items:center;gap:14px;min-height:56px;padding:0 16px;border-radius:14px;border:1px solid #33333a;
-  background:#0f0f12;color:#fff;font-family:inherit;font-size:clamp(14px,4vw,18px);font-weight:600;cursor:pointer;text-align:left}
-.sa-voir svg{width:24px;height:24px;flex-shrink:0}
+.sa-p{width:calc(56 * var(--u));height:calc(56 * var(--u));border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+  border:max(1.5px,calc(5 * var(--u))) solid #6b6b74;color:#9a9aa2;box-sizing:border-box}
+.sa-p svg{width:60%;height:60%}
+.sa-p[data-e="oui"]{border-color:#2bf28c;color:#2bf28c;background:rgba(43,242,140,.12);box-shadow:0 0 calc(14 * var(--u)) rgba(43,242,140,.45)}
+.sa-p[data-e="non"]{border-color:#ff3b3b;color:#ff3b3b;background:rgba(255,59,59,.12);box-shadow:0 0 calc(14 * var(--u)) rgba(255,59,59,.45)}
+.sa-p[data-e="vide"]{border-color:#ffc21a;color:#ffc21a;background:rgba(255,194,26,.15);box-shadow:0 0 calc(14 * var(--u)) rgba(255,194,26,.4)}
+.sa-voir{left:calc(1118 * var(--u));top:calc(473 * var(--u));width:calc(562 * var(--u));height:calc(112 * var(--u));
+  display:flex;align-items:center;gap:calc(40 * var(--u));padding:0 calc(40 * var(--u));border-radius:calc(24 * var(--u));
+  border:max(1px,calc(3 * var(--u))) solid #3a3a40;background:#0e0e10;color:#fff;font-family:inherit;
+  font-size:max(8px,calc(36 * var(--u)));font-weight:500;cursor:pointer;text-align:left;white-space:nowrap}
+.sa-voir svg{width:calc(52 * var(--u));height:calc(52 * var(--u));flex-shrink:0}
 .sa-voir span{flex:1}
-.sa-voir svg:last-child{width:18px;height:18px}
-/* La maquette, sur un bloc large : tout sur deux lignes. */
-@container sa (min-width:700px){
-  .sa-milieu{flex-direction:row;align-items:center}
-  .sa-reps{flex:1.25}
-  .sa-chiffres{flex:1;grid-template-columns:auto auto;justify-content:space-around;
-    border-left:1px solid #26262b;padding-left:14px}
-  .sa-pied{flex-direction:row;align-items:center}
-  .sa-jours{flex:1.25}
-  .sa-voir{flex:1}
-}
+.sa-voir svg:last-child{width:calc(34 * var(--u));height:calc(34 * var(--u))}
+.sa-lu{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 /* « Voir mon suivi » : les quatre semaines. */
 .sa-bilan{display:flex;align-items:center;gap:12px;margin-bottom:12px}
 .sa-bilan strong{font-family:var(--pile-titre);font-weight:400;font-size:44px;color:#fff;line-height:1}
 .sa-bilan small{font-size:.6em;color:#8a8a92}
 .sa-bilan span{font-size:var(--fs-xs);color:var(--text-dim);line-height:1.4}
 .sa-grille{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.sa-grille .sa-j{position:static;width:auto;height:auto;min-height:44px;gap:6px;justify-content:flex-start;font-size:12px}
+.sa-grille .sa-p{width:32px;height:32px;border-width:2.5px}
 /* ══ MES APPAREILS — LA MAQUETTE DE KEVIN (24/09/2026) ══════════════════ */
 /* La page porte son propre titre : le petit titre de la feuille, qui le
    redisait juste au-dessus, s'efface (il reste le nom du dialogue). */
