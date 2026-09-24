@@ -13,7 +13,8 @@
 #  Depot > Settings > Secrets and variables > Actions > New repository secret
 #      PAYPAL_CLIENT_SECRET   le secret de l'application PayPal (compte reel)
 #  C'est le MEME que celui du rapport payeur : si tu l'as deja pose, il n'y a
-#  rien a faire.
+#  rien a faire. Pose par Kevin le 24/09/2026 — le rapport payeur du 1er du
+#  mois en depend aussi, et il ne pouvait donc pas partir avant.
 #
 #  PAYPAL_CLIENT_ID n'est pas un secret : le script le lit dans rc-core, ou il
 #  vit en clair — chaque page servie le contient.
