@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1537';
+window.RC_BUILD='1538';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -266,7 +266,7 @@ if('serviceWorker' in navigator){
       const a=document.createElement('button');
       a.type='button';
       a.style.cssText='flex:0 0 auto;border:none;border-radius:8px;cursor:pointer;'
-        +'background:#E02020;color:#0a0000;font-family:Montserrat,sans-serif;'
+        +'background:#D21A1A;color:#fff;font-family:Montserrat,sans-serif;'
         +'font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;'
         +'padding:10px 14px;min-height:40px';
       a.textContent='Mettre à jour';
@@ -337,6 +337,18 @@ if('serviceWorker' in navigator){
   //   `controllerchange` et le message du worker — et ils repondaient
   //   autrefois chacun pour soi. La regle est la meme dans les deux cas : on
   //   ne recharge jamais sous les doigts de quelqu'un qui saisit.
+  // ⚠ UNE PREMIERE INSTALLATION N'EST PAS UNE MISE A JOUR. Mesure du
+  //   24/09/2026 (Lighthouse, profil vierge) : a la toute premiere ouverture,
+  //   le worker s'installe, prend la page (clients.claim) et poste « maj » —
+  //   et le visiteur arrive le plus souvent sur l'ecran d'installation, hors
+  //   de RC_MAJ_SURS. Resultat : « Une nouvelle version de RepCore est
+  //   disponible » affiche a quelqu'un qui vient de charger la derniere, pile
+  //   sur le chemin du bouton « Essayer gratuitement » de la page de vente.
+  //   Deux gardes : le worker annonce SA version, et une page qui la tourne
+  //   deja n'a rien a faire ; un `controllerchange` sur une page qui n'avait
+  //   aucun controleur au chargement est une premiere prise, pas un
+  //   changement de version.
+  const _rcControleurInitial=!!(navigator.serviceWorker&&navigator.serviceWorker.controller);
   const _rcRechargerSiPossible=()=>{
     const active=document.querySelector('.screen.active')?.id;
     if(!active||RC_MAJ_SURS.includes(active)){ location.reload(); return true; }
@@ -352,12 +364,16 @@ if('serviceWorker' in navigator){
   //   TOUS les onglets a son activation.
   try{
     navigator.serviceWorker.addEventListener('message',(ev)=>{
-      if(ev&&ev.data&&ev.data.rc==='maj') _rcRechargerSiPossible();
+      if(!(ev&&ev.data&&ev.data.rc==='maj')) return;
+      const v=parseInt(String(ev.data.version||'').replace(/\D/g,''),10)||0;
+      if(v&&v===(parseInt(String(window.RC_BUILD||'0'),10)||0)) return;
+      _rcRechargerSiPossible();
     });
   }catch(e){}
   navigator.serviceWorker.register('./sw.js').then(reg=>{
     reg.update();
     navigator.serviceWorker.addEventListener('controllerchange',()=>{
+      if(!_rcControleurInitial) return;
       _rcRechargerSiPossible();
     });
   });
@@ -403,7 +419,10 @@ if('serviceWorker' in navigator){
 /* Repli COMPLET, pour un navigateur sans woff2 ou un fichier manquant. */
 :root{--pile-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans',sans-serif;--pile-titre:'Bebas Neue','Arial Narrow','Haettenschweiler','Franklin Gothic Condensed',Impact,sans-serif}
 </style>
-<link rel="stylesheet" href="./rc-style.1537.css">
+<link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
+<link rel="stylesheet" href="./rc-style.1538.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -454,7 +473,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="ch-sidebar" style="display:none;flex-direction:column;background:#040404;border-right:1px solid #1a0000">
   <div style="padding:20px 16px;border-bottom:1px solid #1a0000">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-      <img src="./icons/logo.png" style="display:block;width:52px;height:52px;flex-shrink:0">
+      <img src="./icons/logo.webp" style="display:block;width:52px;height:52px;flex-shrink:0">
       <div>
         <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800">COACH</div>
         <div style="font-size:var(--fs-md);font-weight:900" id="ch-name-sidebar"></div>
@@ -576,7 +595,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="position:relative;display:flex;justify-content:center;align-items:center">
       <div id="splash-halo" style="position:absolute;width:340px;height:340px;border-radius:50%;pointer-events:none;background:radial-gradient(circle,rgba(224,32,32,.55),transparent 70%);opacity:0"></div>
       <div id="splash-logo-anim" style="position:relative;opacity:0">
-        <img src="./icons/logo.png" style="display:block;width:240px;height:240px">
+        <img src="./icons/logo.webp" style="display:block;width:240px;height:240px">
       </div>
     </div>
     <!-- LE TRAIT ET LE MOT tiennent dans le budget existant : le dernier finit
@@ -620,7 +639,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div style="flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1;padding:24px 28px 0;overflow-y:auto">
 
     <div style="animation:wFadeUp 0.45s var(--c-out) 0s both;min-height:0;flex-shrink:0">
-      <img src="./icons/logo.png" alt="RepCore" style="display:block;width:132px;height:132px;height:min(132px,20dvh);width:auto;aspect-ratio:1;filter:drop-shadow(5px 8px 16px rgba(0,0,0,.95)) drop-shadow(2px 4px 6px rgba(0,0,0,.7))">
+      <img src="./icons/logo.webp" alt="RepCore" style="display:block;width:132px;height:132px;height:min(132px,20dvh);width:auto;aspect-ratio:1;filter:drop-shadow(5px 8px 16px rgba(0,0,0,.95)) drop-shadow(2px 4px 6px rgba(0,0,0,.7))">
     </div>
 
     <div style="margin-top:28px;margin-top:min(28px,3.4dvh);text-align:center;animation:wFadeUp var(--t-4) var(--c-out) 0.18s both;opacity:0">
@@ -708,7 +727,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
     <!-- C et D partagent ce bouton : seuls son texte et son geste changent. -->
     <button class="hv-rouge" id="rc-inst-principal" onclick="rcInstallAgir()"
-      style="display:none;width:100%;padding:20px;background:#E02020;color:var(--text);border:none;font-family:var(--pile-titre);font-size:var(--fs-md);font-weight:400;letter-spacing:4px;cursor:pointer;text-transform:uppercase;transition:background var(--t-1);box-shadow:var(--e-inset),var(--glow-red)"
+      style="display:none;width:100%;padding:20px;background:#D21A1A;color:#fff;border:none;font-family:var(--pile-titre);font-size:var(--fs-md);font-weight:400;letter-spacing:4px;cursor:pointer;text-transform:uppercase;transition:background var(--t-1);box-shadow:var(--e-inset),var(--glow-red)"
      >INSTALLER REPCORE</button>
 
     <!-- SUR ORDINATEUR, l'installation locale reste possible quand le
@@ -780,7 +799,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <!-- PREMIER ECRAN : l'accroche, puis les trois portes. -->
   <div class="wel-un">
     <div class="wel-logo">
-      <img src="./icons/logo.png" alt="RepCore" width="200" height="200">
+      <img src="./icons/logo.webp" alt="RepCore" width="200" height="200">
     </div>
     <div class="wel-accroche">
       <div class="wel-titre">Entraîne-toi<br>comme un<br><span class="wel-titre-r">pro.</span></div>
@@ -867,7 +886,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- R21 — retour force : tunnel d'entree, on revient a l'accueil du tunnel et non a un ecran de session. -->
     <button class="back-btn" onclick="go('s-welcome')">←</button>
     <div style="height:32px;display:flex;align-items:center;gap:6px">
-      <img src="./icons/logo.png" style="display:block;height:52px;width:52px;margin:-8px 0">
+      <img src="./icons/logo.webp" style="display:block;height:52px;width:52px;margin:-8px 0">
     </div>
     <span></span>
   </div>
@@ -963,7 +982,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- R21 — retour force : tunnel d'entree, on revient a l'accueil du tunnel et non a un ecran de session. -->
     <button class="back-btn" onclick="go('s-welcome')">←</button>
     <div style="height:32px;display:flex;align-items:center;gap:6px">
-      <img src="./icons/logo.png" style="display:block;height:52px;width:52px;margin:-8px 0">
+      <img src="./icons/logo.webp" style="display:block;height:52px;width:52px;margin:-8px 0">
     </div>
     <span></span>
   </div>
@@ -1059,7 +1078,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar" style="border-bottom:1px solid var(--border)">
     <!-- R21 — retour force : tunnel de connexion ; laisse tel quel, voir le rapport du lot (« Ajouter un compte » y mene aussi depuis l'accueil). -->
     <button class="back-btn" onclick="go('s-welcome')">←</button>
-    <div style="height:32px;display:flex;align-items:center;gap:6px"><img src="./icons/logo.png" style="display:block;height:52px;width:52px;margin:-8px 0"></div>
+    <div style="height:32px;display:flex;align-items:center;gap:6px"><img src="./icons/logo.webp" style="display:block;height:52px;width:52px;margin:-8px 0"></div>
     <span></span>
   </div>
   <div class="pad scroll-area gap" style="justify-content:center;flex:1">
@@ -1506,7 +1525,7 @@ const COACH_PHOTO='icons/coach.jpg';
          d'encoche s'ajoute à l'existant, il ne le redéfinit pas. -->
     <div id="ch-mobile-header" style="background:#090909;border-bottom:1px solid var(--red);padding:12px 20px;padding-top:calc(12px + env(safe-area-inset-top,0px));display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
       <div style="display:flex;align-items:center;gap:10px">
-        <img src="./icons/logo.png" style="display:block;width:52px;height:52px;flex-shrink:0">
+        <img src="./icons/logo.webp" style="display:block;width:52px;height:52px;flex-shrink:0">
         <div>
           <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:4px;font-weight:700;text-transform:uppercase;margin-bottom:2px">COACH</div>
           <div style="font-size:var(--fs-md);font-family:var(--pile-titre);letter-spacing:1px;line-height:1" id="ch-name"></div>
@@ -5632,5 +5651,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1537.js"></script>
+<script src="./rc-core.1538.js"></script>
 </body></html>
