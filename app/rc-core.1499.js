@@ -12222,6 +12222,14 @@ const MORPHO_MESURES=Object.freeze([
   // 145 cm et 55 cm à 200 cm. Les bornes couvrent largement au-delà.
   {cle:'deb-genou',lib:'Hauteur de genou',court:'Genou',type:'longueur',min:25,max:75,
    consigne:'Debout, pieds nus : du sol au creux du genou, là où la jambe plie.'},
+  // Du sol au milieu de la rotule : le meme ordre de grandeur que la hauteur
+  // de genou ci-dessus, deux a trois centimetres plus haut. Memes bornes.
+  //
+  // ⚠ ELLE NE REMPLACE PAS `deb-genou`, ELLE S'AJOUTE. Voir le bloc du lot 7 :
+  //   deux protocoles differents ne peuvent pas partager une colonne.
+  {cle:'deb-rotule',lib:'Hauteur de rotule',court:'Rotule',type:'longueur',min:25,max:75,
+   consigne:'Du sol au milieu de la rotule, pieds nus, dos au mur, jambes tendues.',
+   schema:true},
   // Olécrane → styloïde : environ 14,5 % de la taille, soit 21 à 29 cm chez
   // l'adulte.
   {cle:'deb-avantbras',lib:'Avant-bras',court:'Av.-bras',type:'longueur',min:15,max:45,
@@ -13728,7 +13736,8 @@ async function lireMorphoPhoto(email){
       :'La photo n’a pas pu être lue.','var(--orange)');
     return false;
   }
-  _morphoPhotoVue={email,date:dateBilan,prise:r.prise,rapports:r.rapports||[]};
+  _morphoPhotoVue={email,date:dateBilan,prise:r.prise,rapports:r.rapports||[],
+    pixels:r.pixels||null};
   if(!r.rapports||!r.rapports.length){
     _ampRendre();
     toast('Photo lue, mais rien n’en sort : '+(r.prise.raisons[0]||'prise de vue'),'var(--orange)');
@@ -13737,7 +13746,11 @@ async function lireMorphoPhoto(email){
   const out={};
   r.rapports.forEach(x=>{ out[x.cle]={v:x.valeur,date:dateBilan||Date.now()}; });
   const avant=(c.morphoPhoto&&typeof c.morphoPhoto==='object')?c.morphoPhoto:{};
-  c.morphoPhoto=Object.assign({},avant,{rapports:out});
+  // LES PIXELS DE L'ECHELLE SONT GARDES AVEC LES RAPPORTS (lot 7) : ils ne
+  // valent que pour CETTE photo, et sans eux il faudrait la relire a chaque
+  // ouverture de l'ecran pour reafficher un centimetre.
+  c.morphoPhoto=Object.assign({},avant,{rapports:out},
+    r.pixels?{pixels:r.pixels,pixelsDate:dateBilan||Date.now()}:{});
   c.updatedAt=Date.now();
   users[email]=c;
   const ok=DB.set('users',users);
@@ -13748,6 +13761,150 @@ async function lireMorphoPhoto(email){
 /** La dernière lecture, pour l'afficher sans la relire. @type {any} */
 let _morphoPhotoVue=null;
 
+// ══ LOT 7 : LA MESURE DU GENOU, ET L'ECHELLE DE LA PHOTO ═══════════════════
+//
+// Kevin, 23/09/2026 : « Une seule mesure nouvelle, au PREMIER bilan uniquement.
+// Intitule exact : "Du sol au milieu de la rotule, pieds nus, dos au mur,
+// jambes tendues." »
+//
+// POURQUOI CELLE-LA : c'est le seul repere que le ruban et la photo trouvent au
+// MEME endroit. Le modele de pose rend le centre du genou, qui se projette au
+// milieu de la rotule vu de face ; le sol est donne par le talon.
+//
+// ⚠ ET C'EST UNE MESURE NEUVE, PAS L'ANCIENNE REECRITE. `deb-genou` existe
+//   depuis le lot M1 avec un tout autre protocole : « du sol au creux du
+//   genou ». Le creux est DERRIERE la jambe, invisible de face, et deux a trois
+//   centimetres plus bas que le centre articulaire. Changer la consigne sous la
+//   meme cle aurait melange, dans la meme colonne, des mesures prises a deux
+//   endroits differents — et personne n'aurait pu savoir laquelle est laquelle.
+//   L'ancienne garde sa cle, ses valeurs et sa consigne ; la nouvelle porte la
+//   sienne, et c'est elle qui met la photo a l'echelle.
+const MORPHO_ROTULE='deb-rotule';
+// LE SCHEMA DE LA MESURE, en SVG : le mur, le sol, la jambe tendue, et la
+// fleche qui monte du sol au milieu de la rotule. Kevin : « avec un schema si
+// tu peux ». Un protocole ecrit se lit de six facons ; un dessin en montre une.
+const MORPHO_ROTULE_SCHEMA=
+  '<svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true"'
+  +' style="display:block;margin:2px 0 6px">'
+  // le mur, a gauche, et le sol
+  +'<path d="M14 4 V92" stroke="rgba(255,255,255,.22)" stroke-width="2" fill="none"/>'
+  +'<path d="M6 92 H114" stroke="rgba(255,255,255,.35)" stroke-width="2" fill="none"/>'
+  // la jambe : cuisse, genou, tibia, pied nu au sol
+  +'<path d="M46 10 V44" stroke="#8a8a8a" stroke-width="7" stroke-linecap="round" fill="none"/>'
+  +'<path d="M46 52 V86" stroke="#8a8a8a" stroke-width="6" stroke-linecap="round" fill="none"/>'
+  +'<path d="M43 88 H62" stroke="#8a8a8a" stroke-width="5" stroke-linecap="round" fill="none"/>'
+  // la rotule, au milieu du genou
+  +'<circle cx="46" cy="48" r="7" fill="#0c0c0c" stroke="var(--red)" stroke-width="2"/>'
+  +'<circle cx="46" cy="48" r="1.8" fill="var(--red)"/>'
+  // la fleche du sol au milieu de la rotule
+  +'<path d="M86 48 V90 M82 86 l4 5 4-5 M82 52 l4-5 4 5" stroke="var(--red)"'
+  +' stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+  +'<path d="M50 48 H86" stroke="rgba(224,32,32,.45)" stroke-width="1"'
+  +' stroke-dasharray="3 3" fill="none"/>'
+  +'</svg>';
+// ── L'ECHELLE, ET SON GARDE-FOU ────────────────────────────────────────────
+//
+// ⚠ LES 93 % NE DOIVENT JAMAIS ENTRER DANS UNE VALEUR AFFICHEE. C'est un
+//   GARDE-FOU, pas une mesure : la hauteur des yeux vaut « environ » 93 % de la
+//   taille debout, et cet « environ » couvre plusieurs centimetres d'un
+//   individu a l'autre. Multiplier une taille par 0,93 pour en tirer un
+//   centimetre serait inventer une mesure que personne n'a prise. Il ne sert
+//   qu'a une chose : comparer DEUX echelles et refuser la photo quand elles se
+//   contredisent. Toute autre utilisation est une faute, et ce commentaire est
+//   la pour qu'elle ne se fasse pas par distraction.
+const MORPHO_YEUX_PART=0.93;
+// Au-dela, les deux echelles ne decrivent pas la meme photo : corps de profil,
+// genou flechi, talon hors cadre, objectif trop pres. On ne publie rien.
+const MORPHO_ECHELLE_ECART_MAX=0.04;
+// La marge d'un centimetre issu de la photo ne descend jamais sous celle du
+// ruban qui a servi a l'echelle : elle en herite.
+const MORPHO_PHOTO_MARGE_MIN=0.5;
+/**
+ * PURE. L'echelle de la photo, ou la raison de n'en pas avoir.
+ *
+ * cm par pixel = mesure du genou (cm) / distance talon-genou (px).
+ *
+ * @param {any} u le dossier de l'athlete
+ * @param {any} px la sortie de mlMorphoPixels
+ * @returns {{cmPx:number,genouCm:number,genouPx:number,ecart:number|null,
+ *            taille:number|null}|{motif:string}}
+ */
+function morphoEchellePhoto(u,px){
+  if(!px||!(Number(px.genou)>0)) return {motif:'pixels'};
+  const m=mesureMorpho(u,MORPHO_ROTULE);
+  if(m.cm==null) return {motif:'mesure'};
+  const cmPx=m.cm/px.genou;
+  const taille=_tailleCm(u);
+  // LE CONTROLE : la seconde echelle, tiree de la taille debout deja saisie.
+  let ecart=null;
+  if(taille&&Number(px.yeux)>0){
+    const cmPx2=(taille*MORPHO_YEUX_PART)/px.yeux;
+    ecart=Math.abs(cmPx2-cmPx)/((cmPx2+cmPx)/2);
+    if(ecart>MORPHO_ECHELLE_ECART_MAX)
+      return {motif:'divergence',ecart:Math.round(ecart*1000)/1000,
+        taille:taille,genouCm:m.cm,genouPx:px.genou};
+  }
+  return {cmPx:cmPx,genouCm:m.cm,genouPx:px.genou,
+    ecart:(ecart==null)?null:Math.round(ecart*1000)/1000,taille:taille};
+}
+// Les quatre segments que la photo sait mesurer une fois a l'echelle.
+const MORPHO_PHOTO_SEGMENTS=Object.freeze([
+  {cle:'cuisse',lib:'Cuisse (hanche au genou)'},
+  {cle:'jambe',lib:'Jambe (genou à la cheville)'},
+  {cle:'bras',lib:'Bras (épaule au coude)'},
+  {cle:'avantbras',lib:'Avant-bras (coude au poignet)'}
+]);
+/**
+ * PURE. Les longueurs en centimetres, ou rien.
+ *
+ * ⚠ LA MARGE N'EST PAS DECORATIVE : c'est l'ecart entre les deux echelles,
+ *   porte sur la longueur, et jamais moins que le demi-centimetre du ruban qui
+ *   a donne l'echelle. Sans second controle (pas de taille debout), la marge
+ *   prend l'ecart maximal tolere : on ne fait pas passer une echelle non
+ *   verifiee pour une echelle verifiee.
+ * @returns {{cm:number,marge:number,lib:string,cle:string}[]}
+ */
+function morphoLongueursPhoto(u,px){
+  const e=morphoEchellePhoto(u,px);
+  if(e.motif) return [];
+  const part=(e.ecart==null)?MORPHO_ECHELLE_ECART_MAX:Math.max(e.ecart,0.005);
+  const out=[];
+  for(const s of MORPHO_PHOTO_SEGMENTS){
+    const n=Number(px[s.cle])||0;
+    if(!(n>0)) continue;
+    const cm=n*e.cmPx;
+    out.push({cle:s.cle,lib:s.lib,cm:Math.round(cm*10)/10,
+      marge:Math.round(Math.max(cm*part,MORPHO_PHOTO_MARGE_MIN)*10)/10});
+  }
+  return out;
+}
+// CE QUE L'ECRAN DIT DE L'ECHELLE : la valeur et sa source, ou le refus et sa
+// raison. Jamais un centimetre quand les deux echelles se contredisent.
+function _htmlMorphoEchelle(u,px){
+  const E=escapeHtml;
+  const e=morphoEchellePhoto(u,px);
+  const cadre=(txt,couleur)=>'<p style="font-size:var(--fs-sm);line-height:1.6;'
+    +'margin-bottom:10px;color:'+couleur+'">'+txt+'</p>';
+  if(e.motif==='pixels')
+    return cadre('Pas d’échelle : la photo ne montre pas le talon et le genou '
+      +'des deux côtés, ou le corps est tourné.','var(--text-dim)');
+  if(e.motif==='mesure')
+    return cadre('Pas d’échelle : il manque la hauteur du sol au milieu de la '
+      +'rotule, à prendre une fois au premier bilan.','var(--text-dim)');
+  if(e.motif==='divergence')
+    return cadre('Photo non exploitable : les deux repères ne donnent pas la '
+      +'même échelle ('+E(_synNombre(e.ecart*100))+' % d’écart, au-delà des '
+      +_synNombre(MORPHO_ECHELLE_ECART_MAX*100)+' % admis). Aucun centimètre '
+      +'n’est publié. À refaire de face, bien en pied, talons visibles.','var(--orange)');
+  const l=morphoLongueursPhoto(u,px);
+  return cadre('Échelle : '+E(_synNombre(e.genouCm))+' cm du sol au milieu de la '
+      +'rotule, sur '+E(_synNombre(e.genouPx))+' pixels'
+      +((e.ecart!=null)?(', vérifiée à '+E(_synNombre(e.ecart*100))+' % près par la taille debout'):'')
+      +'.','var(--text-dim)')
+    +(l.length?('<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7;'
+      +'margin-bottom:10px">'+l.map(x=>'<div>'+E(x.lib)+' : '+E(_synNombre(x.cm))
+      +' cm, à ± '+E(_synNombre(x.marge))+' cm près</div>').join('')+'</div>'):'');
+}
 /** Le bloc « photo » de l'écran des amplitudes. Côté coach, comme le reste. */
 function _htmlMorphoPhoto(){
   if(!_amp) return '';
@@ -13765,10 +13922,12 @@ function _htmlMorphoPhoto(){
     +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#bbb;margin-bottom:6px">'
     +'La photo de face</div>'
     +'<p style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin-bottom:10px">'
-    +'Elle ne rend AUCUN centimètre — sans le sommet du crâne, il n’y a pas d’échelle, et un '
-    +'coefficient inventé serait pire qu’une case vide. Elle rend deux rapports sans échelle, '
-    +'cuisse sur jambe et humérus sur avant-bras, d’un repère osseux à l’autre. Le mètre reste '
-    +'prioritaire : la photo le confirme, ou le contredit.</p>'
+    +'Elle rend deux rapports d’un repère osseux à l’autre, cuisse sur jambe et '
+    +'humérus sur avant-bras. Elle rend aussi des centimètres, mais seulement '
+    +'quand une mesure au ruban lui donne son échelle : du sol au milieu de la '
+    +'rotule, prise une fois au premier bilan. Le mètre reste prioritaire : la '
+    +'photo le confirme, ou le contredit.</p>'
+    +_htmlMorphoEchelle(c,(c.morphoPhoto&&c.morphoPhoto.pixels)||(vue&&vue.pixels)||null)
     +(pr?'<p style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:10px;color:'
       +(pr.verdict==='bon'?'var(--green)':pr.verdict==='a_ameliorer'?'var(--orange)':'var(--red)')+'">'
       +'Prise de vue : '+(pr.verdict==='bon'?'bonne'
@@ -55357,9 +55516,12 @@ function bBodySchema(prefix){
 // Deux longueurs, facultatives, sous le schéma. Elles ne changent plus une
 // fois adulte : on ne les redemande pas à chaque bilan de suivi.
 function bLongueurs(){
-  const champ=(id,lbl,aide)=>`<div style="margin-bottom:12px">
+  // LE SCHEMA VA SOUS LA CONSIGNE, pas a la place : le dessin montre OU, la
+  // phrase dit COMMENT (pieds nus, dos au mur, jambes tendues).
+  const champ=(id,lbl,aide,schema)=>`<div style="margin-bottom:12px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--sub);margin-bottom:3px">${lbl}</div>
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5;margin-bottom:5px">${aide}</div>
+    ${schema||''}
     <div style="display:flex;align-items:center;background:#0c0c0c;border:1px solid var(--border);border-radius:var(--r-2);padding:1px 10px;max-width:170px">
       <input type="number" inputmode="decimal" step="any" id="${id}" value="${bilData[id]||''}" placeholder="—"
         oninput="bilData['${id}']=this.value"
@@ -55373,7 +55535,7 @@ function bLongueurs(){
   return `<div style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
     <div style="font-size:var(--fs-xs);font-weight:700;color:var(--text-strong);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Longueurs (facultatif)</div>
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">Des mesures qui ne bougent plus une fois adulte. Elles servent à ton coach pour te proposer des variantes d'un mouvement, jamais pour en écarter un. Toutes sont facultatives : une case vide vaut mieux qu'une mesure approximative.</div>
-    ${MORPHO_MESURES.map(m=>champ(m.cle,m.lib,m.consigne)).join('')}
+    ${MORPHO_MESURES.map(m=>champ(m.cle,m.lib,m.consigne,m.schema?MORPHO_ROTULE_SCHEMA:'')).join('')}
   </div>`;
 }
 function bBodyFocus(id,on){

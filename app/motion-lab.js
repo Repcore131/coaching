@@ -12414,6 +12414,51 @@ function mlMorphoRapports(p,w,h){
 }
 
 /**
+ * PURE. Les distances dont l'echelle a besoin, EN PIXELS, jamais en
+ * centimetres : talon-genou, talon-oeil, et les quatre segments des membres.
+ *
+ * ⚠ CETTE FONCTION NE SAIT RIEN DU PROTOCOLE. Elle mesure des points sur une
+ *   image. C'est rc-core qui sait que le talon-genou vaut la mesure prise au
+ *   mur, que la hauteur d'oeil est un garde-fou et non une mesure, et qu'un
+ *   ecart de plus de 4 % interdit de publier le moindre centimetre.
+ *
+ * ⚠ LE TALON, PAS LA CHEVILLE, POUR LE SOL. Le point 29/30 est le talon : il
+ *   touche le sol, la cheville non. Deux centimetres d'ecart sur une jambe de
+ *   quarante, c'est 5 % sur l'echelle entiere.
+ *
+ * ⚠ LES DEUX COTES DOIVENT DIRE LA MEME CHOSE, comme pour les rapports : au
+ *   dela de ML_MORPHO_COTES d'ecart, le corps est tourne et la projection ment
+ *   des deux cotes a la fois. On ne rend rien plutot qu'une moyenne fausse.
+ * @param {any[]} p @param {number} w @param {number} h
+ * @returns {{genou:number,yeux:number,cuisse:number,jambe:number,
+ *            bras:number,avantbras:number,cotes:number}|null}
+ */
+function mlMorphoPixels(p,w,h){
+  const vu=i=>!!p[i]&&(p[i].visibility||0)>=ML_MORPHO_VIS;
+  /** Moyenne des deux cotes, ou null si l'un manque ou s'ils divergent. */
+  const paire=(aG,bG,aD,bD)=>{
+    if(!vu(aG)||!vu(bG)||!vu(aD)||!vu(bD)) return null;
+    const g=_mlmDist(p[aG],p[bG],w,h), d=_mlmDist(p[aD],p[bD],w,h);
+    if(!(g>0)||!(d>0)) return null;
+    const ec=Math.abs(g-d)/((g+d)/2);
+    if(ec>ML_MORPHO_COTES) return null;
+    return {v:(g+d)/2,ec:ec};
+  };
+  // Talon → genou : la distance que la mesure du mur met a l'echelle.
+  const genou=paire(29,25,30,26);
+  if(!genou) return null;
+  // Talon → oeil : le garde-fou. 2 et 5 sont les yeux (gauche, droit).
+  const yeux=paire(29,2,30,5);
+  const cuisse=paire(23,25,24,26);
+  const jambe=paire(25,27,26,28);
+  const bras=paire(11,13,12,14);
+  const avantbras=paire(13,15,14,16);
+  const r=x=>x?Math.round(x.v*10)/10:0;
+  return {genou:r(genou),yeux:r(yeux),cuisse:r(cuisse),jambe:r(jambe),
+    bras:r(bras),avantbras:r(avantbras),
+    cotes:Math.round(genou.ec*1000)/1000};
+}
+/**
  * Lit une photo et rend ce qu'elle dit — après le contrôle de prise de vue,
  * jamais avant.
  * @param {string} src  l'image, telle que le bilan la porte
@@ -12451,6 +12496,9 @@ async function mlMorphoPhoto(src){
   //   aucun rapport : mesurer dessus donnerait un chiffre, et un chiffre faux
   //   est plus difficile à défaire qu'une case vide.
   if(prise.verdict==='a_refaire') return {ok:true,prise,rapports:[],px:{w,h}};
-  return {ok:true,prise,rapports:mlMorphoRapports(pts,w,h),px:{w,h}};
+  // LES PIXELS VOYAGENT AVEC LES RAPPORTS (lot 7) : sans eux, rc-core ne peut
+  // pas mettre la photo a l'echelle, et il est le seul a savoir avec quoi.
+  return {ok:true,prise,rapports:mlMorphoRapports(pts,w,h),
+    pixels:mlMorphoPixels(pts,w,h),px:{w,h}};
 }
 

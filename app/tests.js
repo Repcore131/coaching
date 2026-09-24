@@ -43857,6 +43857,99 @@ async function testExercices(){
       if(CCD_REPLI_DEFAUT.indexOf('ccd-detail')<0) return _echec('le détail ne s’ouvre plus replié');
       return true;})());
 
+
+    // ══ LOT 7 : LA MESURE DU GENOU, ET L'ÉCHELLE (23/09/2026) ════════════
+    // « Une seule mesure nouvelle, au PREMIER bilan uniquement. Intitulé
+    //   exact : "Du sol au milieu de la rotule, pieds nus, dos au mur, jambes
+    //   tendues." »
+    ok('LA HAUTEUR DE ROTULE EST UNE MESURE NEUVE, ET ELLE DIT SON PROTOCOLE',(()=>{
+      const m=MORPHO_MESURES.find(x=>x.cle==='deb-rotule');
+      if(!m) return _echec('la mesure du genou n’existe pas');
+      // L'INTITULÉ EXACT, MOT POUR MOT.
+      if(m.consigne!=='Du sol au milieu de la rotule, pieds nus, dos au mur, jambes tendues.')
+        return _echec('la consigne : « '+m.consigne+' »');
+      // ⚠ ET SURTOUT PAS L'ANCIENNE FORMULE : le creux est derrière la jambe,
+      //   invisible de face, deux à trois centimètres plus bas que le centre
+      //   articulaire.
+      if(/creux/.test(m.consigne)) return _echec('la nouvelle mesure reprend le creux du genou');
+      if(m.type!=='longueur'||!(m.min>0)||!(m.max>m.min)) return _echec('la mesure n’a pas ses bornes');
+      // L'ANCIENNE N'EST NI SUPPRIMÉE NI RÉÉCRITE : ses valeurs ont été prises
+      // avec son protocole, et deux protocoles ne partagent pas une colonne.
+      const g=MORPHO_MESURES.find(x=>x.cle==='deb-genou');
+      if(!g) return _echec('l’ancienne hauteur de genou a disparu');
+      if(g.consigne.indexOf('creux du genou')<0) return _echec('l’ancienne consigne a été réécrite : '+g.consigne);
+      if(g.cle===m.cle) return _echec('les deux mesures partagent une clé');
+      // AU PREMIER BILAN UNIQUEMENT : bLongueurs n'est appelée que pour le
+      // questionnaire de départ.
+      const src=String(bBodySchema||'');
+      if(src.indexOf("prefix==='deb'?bLongueurs()")<0)
+        return _echec('les longueurs ne sont plus réservées au premier bilan');
+      // ET LE SCHÉMA EST SOUS LA CONSIGNE.
+      if(!m.schema) return _echec('la mesure n’a pas de schéma');
+      if(String(bLongueurs()).indexOf(MORPHO_ROTULE_SCHEMA)<0)
+        return _echec('le schéma ne sort pas dans le formulaire');
+      const d=document.createElement('div'); d.innerHTML=MORPHO_ROTULE_SCHEMA;
+      if(!d.querySelector('svg')) return _echec('le schéma n’est pas un dessin');
+      return true;})());
+
+    ok('L’ÉCHELLE VIENT DU RUBAN, ET LA TAILLE DEBOUT LA CONTRÔLE',(()=>{
+      if(typeof morphoEchellePhoto!=='function') return _echec('l’échelle n’existe pas');
+      const J=864e5, t=Date.now();
+      // 47 cm du sol au milieu de la rotule, 117,5 pixels : 0,4 cm par pixel.
+      // La taille debout donne la seconde échelle : 0,93 x 178 = 165,54 cm
+      // pour 413,85 pixels, soit 0,4 aussi.
+      const u={id:'K7',email:'k7@t.fr',role:'athlete',gender:'H',_evol_height:'178',
+        bilans:[{type:'depart',date:t-60*J,'deb-rotule':'47'}]};
+      const px={genou:117.5,yeux:413.85,cuisse:100,jambe:105,bras:70,avantbras:62,cotes:0.01};
+      const e=morphoEchellePhoto(u,px);
+      if(e.motif) return _echec('pas d’échelle : '+e.motif);
+      if(Math.abs(e.cmPx-0.4)>0.002) return _echec('échelle : '+e.cmPx);
+      if(e.genouCm!==47) return _echec('l’échelle ne dit pas d’où elle vient');
+      if(!(e.ecart<0.01)) return _echec('les deux échelles divergent alors qu’elles sont d’accord : '+e.ecart);
+      // LES CENTIMÈTRES, AVEC LEUR MARGE, jamais nus.
+      const l=morphoLongueursPhoto(u,px);
+      if(l.length!==4) return _echec(l.length+' longueurs au lieu de quatre');
+      const cu=l.find(x=>x.cle==='cuisse');
+      if(!cu||Math.abs(cu.cm-40)>0.2) return _echec('cuisse : '+(cu&&cu.cm));
+      if(!(cu.marge>=MORPHO_PHOTO_MARGE_MIN)) return _echec('une longueur sans marge : '+cu.marge);
+      // ⚠ PLUS DE 4 % D'ÉCART ENTRE LES DEUX ÉCHELLES : on le DIT, et on ne
+      //   publie aucun centimètre.
+      const faux=morphoEchellePhoto(u,Object.assign({},px,{yeux:380}));
+      if(faux.motif!=='divergence') return _echec('une photo qui diverge de 8 % passe : '+JSON.stringify(faux));
+      if(morphoLongueursPhoto(u,Object.assign({},px,{yeux:380})).length)
+        return _echec('des centimètres sortent d’une photo non exploitable');
+      const h=_htmlMorphoEchelle(u,Object.assign({},px,{yeux:380}));
+      if(h.indexOf('non exploitable')<0) return _echec('l’écran ne dit pas que la photo ne sert pas : '+h);
+      if(/\d+(,\d+)? cm/.test(h.replace(/\d+(,\d+)? %/g,''))) return _echec('un centimètre sort quand même : '+h);
+      // SANS MESURE AU RUBAN, PAS D'ÉCHELLE — et on dit laquelle manque.
+      const sans=morphoEchellePhoto({id:'K8',email:'k8@t.fr',role:'athlete',bilans:[]},px);
+      if(sans.motif!=='mesure') return _echec('une échelle sort sans mesure : '+JSON.stringify(sans));
+      if(_htmlMorphoEchelle({id:'K8',email:'k8@t.fr',role:'athlete',bilans:[]},px).indexOf('milieu de la rotule')<0)
+        return _echec('l’écran ne dit pas quelle mesure manque');
+      // SANS PIXELS, RIEN NON PLUS.
+      if(morphoEchellePhoto(u,null).motif!=='pixels') return _echec('une échelle sort sans pixels');
+      return true;})());
+
+    ok('LES 93 % SONT UN GARDE-FOU, ET NE SORTENT JAMAIS À L’ÉCRAN',(()=>{
+      if(MORPHO_YEUX_PART!==0.93) return _echec('le garde-fou a changé de valeur : '+MORPHO_YEUX_PART);
+      if(MORPHO_ECHELLE_ECART_MAX!==0.04) return _echec('la tolérance a changé : '+MORPHO_ECHELLE_ECART_MAX);
+      // ⚠ IL NE SERT QU'À COMPARER DEUX ÉCHELLES. Une valeur affichée qui en
+      //   sortirait serait une mesure que personne n'a prise.
+      if(String(morphoEchellePhoto).indexOf('MORPHO_YEUX_PART')<0)
+        return _echec('le contrôle ne se fait plus avec la hauteur des yeux');
+      for(const f of ['morphoLongueursPhoto','_htmlMorphoEchelle'])
+        if(String(window[f]).indexOf('MORPHO_YEUX_PART')>=0)
+          return _echec(f+' se sert du garde-fou pour produire une valeur');
+      const J=864e5, t=Date.now();
+      const u={id:'K9',email:'k9@t.fr',role:'athlete',gender:'H',_evol_height:'178',
+        bilans:[{type:'depart',date:t-60*J,'deb-rotule':'47'}]};
+      const px={genou:117.5,yeux:413.85,cuisse:100,jambe:105,bras:70,avantbras:62,cotes:0.01};
+      const h=_htmlMorphoEchelle(u,px);
+      if(/93/.test(h)) return _echec('le garde-fou s’affiche : '+h);
+      if(h.indexOf('milieu de la rotule')<0) return _echec('l’écran ne dit pas d’où vient l’échelle');
+      if(/[—–]/.test(h.replace(/<[^>]*>/g,''))) return _echec('un tiret cadratin dans le bloc de l’échelle');
+      return true;})());
+
     ok('LES CARTES DE ZONES COUVRENT LES MUSCLES DE CHAQUE VUE',(()=>{
       // Chaque silhouette porte sa carte : une image ou chaque pixel du corps
       // vaut le rang de son muscle dans CORPS_ZONES_ORDRE, fois CORPS_ZONES_PAS.
@@ -60383,12 +60476,15 @@ async function testExercices(){
       const _m1=(taille,extra)=>({email:'m1@t.fr',fname:'Léa',role:'athlete',coachId:'co',
         bilans:[Object.assign({type:'depart',date:Date.now()-864e5,'deb-height':String(taille)},extra||{})]});
 
-      ok('M1 — huit mesures déclarées, chacune avec sa consigne et ses bornes',(()=>{
-        if(MORPHO_MESURES.length!==8) return _echec(MORPHO_MESURES.length+' mesures');
+      ok('M1 — neuf mesures déclarées, chacune avec sa consigne et ses bornes',(()=>{
+        // ⚠ NEUF DEPUIS LE LOT 7 : la hauteur de rotule s'ajoute, elle ne
+        //   remplace pas la hauteur de genou. Deux protocoles differents ne
+        //   peuvent pas partager une colonne, et l'ancienne garde ses valeurs.
+        if(MORPHO_MESURES.length!==9) return _echec(MORPHO_MESURES.length+' mesures');
         const sans=MORPHO_MESURES.filter(m=>!m.consigne||m.consigne.length<15);
         if(sans.length) return _echec('sans consigne : '+sans.map(m=>m.cle).join(', '));
         const neuves=MORPHO_MESURES.filter(m=>m.origine!=='M0');
-        if(neuves.length!==6) return _echec(neuves.length+' nouvelles');
+        if(neuves.length!==7) return _echec(neuves.length+' nouvelles');
         const bornes=neuves.filter(m=>!(m.min>0&&m.max>m.min));
         return bornes.length?_echec('bornes absentes : '+bornes.map(m=>m.cle).join(', ')):true;})());
 
