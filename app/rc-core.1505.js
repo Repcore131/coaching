@@ -22319,7 +22319,7 @@ const CCD_VUES=['entrainement','nutrition','lifestyle','donnees'];
 //   dans l'etage « Ce qui appelle un oeil » de l'onglet Donnees, avec les
 //   autres signaux. La pastille la suit — sinon elle se serait allumee sur un
 //   onglet qui ne la contient plus, et se serait tue sur celui qui la porte.
-const CCD_ALERTES={entrainement:[],
+const CCD_ALERTES={entrainement:['ccd-douleur'],
   donnees:['ccd-douleur','ccd-reds','ccd-securite','ccd-suspension']};
 // LES SIX ETAGES DE L'ONGLET DONNEES, dans l'ordre ou ils se lisent. La barre
 // d'ancres en rend un bouton chacun, et seul le dernier s'ouvre replie.
@@ -22445,6 +22445,7 @@ function ccdVue(nom){
   // qu'il lit. On ne remonte que sur un vrai changement d'onglet.
   const _change=(v!==_ccdVue);
   _ccdVue=v;
+  _ccdPlacerBlocs(v);
   try{
     document.querySelectorAll('#s-coach-client .ccd-vue').forEach(z=>{
       z.classList.toggle('actif',z.dataset.vue===v);
@@ -22473,6 +22474,35 @@ function ccdVue(nom){
   _ccdMajAlertes();
   _ccdMajColonnes();
   return v;
+}
+// LES BLOCS QUI VIVENT DANS DEUX ONGLETS. Kevin, 24/09/2026 : l'onglet
+// Entrainement redevient celui d'hier matin, et Donnees garde ses etages.
+// Un seul exemplaire de chaque bloc : il est DEPLACE vers l'onglet ouvert.
+// Sur Entrainement, il se pose apres son <template data-ent-ancre> ; partout
+// ailleurs, il retourne a sa place dans Donnees, que marque un <template
+// data-don-ancre> pose au premier passage — le bloc y est encore a ce moment.
+// Un bloc range dans une .cc-sect-c voyage AVEC sa section : le titre
+// « Volume », « Plateaux » ou « Douleur » part avec lui.
+const CCD_BLOCS_ENTRAINEMENT=['ccd-corps','ccd-asymetrie','ccd-forme',
+  'ccd-volume','ccd-plateaux','ccd-douleur'];
+function _ccdPlacerBlocs(v){
+  try{
+    for(const id of CCD_BLOCS_ENTRAINEMENT){
+      const el=document.getElementById(id);
+      if(!el) continue;
+      const bloc=el.classList.contains('cc-sect-c')?el.closest('.cc-sect'):el;
+      const ici=document.querySelector('#s-coach-client template[data-ent-ancre="'+id+'"]');
+      if(!bloc||!ici) continue;
+      let la=document.querySelector('#s-coach-client template[data-don-ancre="'+id+'"]');
+      if(!la){
+        la=document.createElement('template');
+        la.setAttribute('data-don-ancre',id);
+        bloc.before(la);
+      }
+      const cible=(v==='entrainement')?ici:la;
+      if(bloc.previousElementSibling!==cible) cible.after(bloc);
+    }
+  }catch(e){}
 }
 // Compte ce qui est REELLEMENT affiche dans chaque onglet, et pose `data-solo`
 // sur ceux qui n'ont qu'un bloc. Au-dela de 1025 px, l'onglet actif se met en

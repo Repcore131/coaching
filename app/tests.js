@@ -30827,11 +30827,43 @@ async function testExercices(){
                 return _echec('une section masquee allume quand meme la pastille'); }
             return true;
           } finally { z.innerHTML=avant; if(sect) sect.style.display=dsp; _ccdMajAlertes(); }})());
+        // ══ L'ONGLET ENTRAINEMENT COMME HIER MATIN (24/09/2026) ══════════════
+        // Kevin : « remets cette page comme elle etait hier matin, on s'en fiche
+        // des doublons dans Donnees ». Six blocs vivent dans les deux onglets, en
+        // un seul exemplaire que ccdVue DEPLACE : les tests des etages les lisent
+        // donc onglet Donnees ouvert, puis rendent l'onglet d'avant.
+        window._ccdSurDonnees=f=>{ const v=_ccdVue; ccdVue('donnees');
+          try{ return f(); } finally { ccdVue(v); } };
+        ok('ENTRAINEMENT RETROUVE LE CORPS, LA FORME ET LES SIGNAUX, DONNEES LES GARDE',(()=>{
+          const v=_ccdVue;
+          const ou=id=>{ const e=document.getElementById(id); const z=e&&e.closest('.ccd-vue');
+            return z?z.dataset.vue:'absent'; };
+          try{
+            for(const tour of ['entrainement','donnees','nutrition','entrainement']){
+              ccdVue(tour);
+              const attendu=tour==='entrainement'?'entrainement':'donnees';
+              for(const id of CCD_BLOCS_ENTRAINEMENT.concat('ccd-bloc')){
+                if(ou(id)!==attendu) return _echec(id+' est dans '+ou(id)+' onglet '+tour+' ouvert');
+                if(document.querySelectorAll('#'+id).length!==1) return _echec(id+' existe en double');
+              }
+            }
+            // A SA PLACE D'HIER : le corps juste sous « Modifier le programme »,
+            // la douleur juste avant le recapitulatif des seances.
+            ccdVue('entrainement');
+            const c=document.getElementById('ccd-corps');
+            const b=c.previousElementSibling&&c.previousElementSibling.previousElementSibling;
+            if(!b||!/Modifier le programme/.test(b.textContent)) return _echec('le corps n\'est plus sous « Modifier le programme »');
+            const dl=document.getElementById('ccd-douleur').closest('.cc-sect');
+            const suiv=dl.nextElementSibling;
+            if(!suiv||!suiv.querySelector('#ccd-sessions-recap')) return _echec('la douleur n\'est plus juste avant le recapitulatif');
+            if(CCD_ALERTES.entrainement.indexOf('ccd-douleur')<0) return _echec('la douleur n\'allume plus l\'onglet Entrainement');
+            return true;
+          } finally { ccdVue(v); }})());
         // ══ LES SIX ETAGES DE L'ONGLET DONNEES (23/09/2026) ═══════════════
         // Kevin : « il ne manque presque rien, il manque un ordre ». Soixante
         // sections a plat deviennent six etages, et le coach doit voir les
         // quatre chiffres et le debut du corps sans defiler.
-        ok('L\'ONGLET DONNEES EST RANGE EN SIX ETAGES, DANS CET ORDRE',(()=>{
+        ok('L\'ONGLET DONNEES EST RANGE EN SIX ETAGES, DANS CET ORDRE',_ccdSurDonnees(()=>{
           const vue=document.querySelector('#s-coach-client .ccd-vue[data-vue="donnees"]');
           if(!vue) return _echec('l\'onglet Donnees a disparu');
           const etages=[...vue.querySelectorAll(':scope>.cc-etage')].map(s=>s.dataset.et);
@@ -30862,7 +30894,7 @@ async function testExercices(){
             if(!e||e.dataset.et!==chez[id])
               return _echec(id+' est a l\'etage « '+(e?e.dataset.et:'aucun')+' » au lieu de « '+chez[id]+' »');
           }
-          return true;})());
+          return true;}));
 
         ok('UN BOUTON PAR ETAGE, ET LA BARRE NE SERT QUE L\'ONGLET DONNEES',(()=>{
           const nav=document.getElementById('ccd-etages');
@@ -43747,7 +43779,10 @@ async function testExercices(){
         return true;
       } finally { window.expliquerUrgence=sE; }})());
 
-    ok('LES CINQ BLOCS DE SIGNAUX SONT RANGÉS, PAS SUPPRIMÉS',(()=>{
+    // Lu onglet Donnees ouvert : voir « L'ONGLET ENTRAINEMENT COMME HIER MATIN ».
+    window._ccdSurDonnees=window._ccdSurDonnees||(f=>{ const v=_ccdVue; ccdVue('donnees');
+      try{ return f(); } finally { ccdVue(v); } });
+    ok('LES CINQ BLOCS DE SIGNAUX SONT RANGÉS, PAS SUPPRIMÉS',_ccdSurDonnees(()=>{
       // Kevin : « Rien n'est supprimé, tout est rangé. » Chaque bloc vit
       // maintenant dans l'étage du détail, et la ligne y mène.
       const et=id=>{ const e=document.getElementById(id);
@@ -43776,7 +43811,7 @@ async function testExercices(){
         ccdVoirDetail('ccd-volume');
         if(s.classList.contains('replie')) return _echec('le repli reste fermé sur le bloc visé');
         return true;
-      } finally { s.classList.toggle('replie',avant); }})());
+      } finally { s.classList.toggle('replie',avant); }}));
 
 
     // ══ LOT 10 : LE DÉTAIL, REPLIÉ (23/09/2026) ══════════════════════════
