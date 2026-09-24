@@ -12431,7 +12431,7 @@ function mlMorphoRapports(p,w,h){
  *   des deux cotes a la fois. On ne rend rien plutot qu'une moyenne fausse.
  * @param {any[]} p @param {number} w @param {number} h
  * @returns {{genou:number,yeux:number,cuisse:number,jambe:number,
- *            bras:number,avantbras:number,cotes:number}|null}
+ *            bras:number,avantbras:number,tronc:number,cotes:number}|null}
  */
 function mlMorphoPixels(p,w,h){
   const vu=i=>!!p[i]&&(p[i].visibility||0)>=ML_MORPHO_VIS;
@@ -12453,9 +12453,19 @@ function mlMorphoPixels(p,w,h){
   const jambe=paire(25,27,26,28);
   const bras=paire(11,13,12,14);
   const avantbras=paire(13,15,14,16);
+  // LE TRONC EST MEDIAN : du milieu des epaules au milieu des hanches. Il n'a
+  // pas de cote, donc pas de garde par les deux cotes ; on exige en revanche
+  // les quatre points, sans quoi le milieu serait pris sur un seul epaule.
+  const tronc=(function(){
+    if(!vu(11)||!vu(12)||!vu(23)||!vu(24)) return null;
+    const ep={x:(p[11].x+p[12].x)/2,y:(p[11].y+p[12].y)/2};
+    const ha={x:(p[23].x+p[24].x)/2,y:(p[23].y+p[24].y)/2};
+    const d=_mlmDist(ep,ha,w,h);
+    return (d>0)?{v:d,ec:0}:null;
+  })();
   const r=x=>x?Math.round(x.v*10)/10:0;
   return {genou:r(genou),yeux:r(yeux),cuisse:r(cuisse),jambe:r(jambe),
-    bras:r(bras),avantbras:r(avantbras),
+    bras:r(bras),avantbras:r(avantbras),tronc:r(tronc),
     cotes:Math.round(genou.ec*1000)/1000};
 }
 /**

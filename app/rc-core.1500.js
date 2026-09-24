@@ -5426,6 +5426,11 @@ const CHAMPS_SANTE=Object.freeze([
   'drapeauRouge','drapeauGeneral','historiqueDrapeaux','journalDouleur',
   'contraintesSante','suspension','sante','santeSignal','santeSource',
   'tracesSante','constantes','analyses','encartOsseuxVu',
+  // L'analyse morphologique initiale (lot 8) : des longueurs de segments en
+  // centimetres, lues une fois sur une photo de bilan et figees. Aucune image
+  // dedans — la photo n'est designee que par la date de son bilan — mais ce
+  // sont des mesures d'un corps : elles sont de sante, comme les mensurations.
+  'morphoInitiale',
   // Alimentation, cafeine, complements — nutrition porte les trois
   'nutrition','paliers','phase','phaseRefusee',
   // Troubles alimentaires et vigilance energetique
@@ -13905,6 +13910,267 @@ function _htmlMorphoEchelle(u,px){
       +'margin-bottom:10px">'+l.map(x=>'<div>'+E(x.lib)+' : '+E(_synNombre(x.cm))
       +' cm, à ± '+E(_synNombre(x.marge))+' cm près</div>').join('')+'</div>'):'');
 }
+// ══ LOT 8 : L'ANALYSE MORPHO, AUTOMATIQUE ET FIGEE ═════════════════════════
+//
+// Kevin, 23/09/2026 : « Declenchement automatique a l'enregistrement du PREMIER
+// bilan, quand les trois photos et la mesure du genou sont la. Aucun clic de
+// l'athlete. Aux bilans suivants : rien. La morphologie d'un adulte ne bouge
+// pas. »
+//
+// ⚠ CE QUI SORT : femur, tibia, humerus, avant-bras, tronc, en centimetres avec
+//   leur marge, et les rapports.
+// ⚠ CE QUI NE SORT PAS, ET CE N'EST PAS UN OUBLI : largeur d'epaules, largeur
+//   de bassin, longueur de clavicule. Le modele de pose rend le CENTRE
+//   ARTICULAIRE de l'epaule et de la hanche, pas l'acromion ni la crete
+//   iliaque : une largeur prise entre deux centres articulaires est plus
+//   courte de plusieurs centimetres, et la difference n'est pas constante d'un
+//   corps a l'autre. La clavicule, elle, n'est detectee par rien. UNE ECHELLE
+//   NE CORRIGE PAS UN POINT MAL PLACE : mise a l'echelle, une largeur fausse
+//   devient une largeur fausse en centimetres. Si quelqu'un est tente d'en
+//   ajouter une ici, la reponse est non, et elle est ecrite.
+const MORPHO_INIT_SEGMENTS=Object.freeze([
+  {cle:'femur',px:'cuisse',lib:'Fémur (hanche au genou)'},
+  {cle:'tibia',px:'jambe',lib:'Tibia (genou à la cheville)'},
+  {cle:'humerus',px:'bras',lib:'Humérus (épaule au coude)'},
+  {cle:'avantbras',px:'avantbras',lib:'Avant-bras (coude au poignet)'},
+  {cle:'tronc',px:'tronc',lib:'Tronc (épaules aux hanches)'}
+]);
+// Les largeurs interdites, nommees pour que la regle soit verifiable par un
+// test et pas seulement lisible dans un commentaire.
+const MORPHO_INIT_INTERDITS=Object.freeze(['epaules','bassin','clavicule']);
+// Moins de vingt ans : il grandit encore. On PROPOSE de refaire, une fois par
+// an, et seulement dans ce cas.
+const MORPHO_INIT_AGE_CROISSANCE=20;
+const MORPHO_INIT_AN=365*864e5;
+/**
+ * PURE. L'etat de l'analyse initiale d'un dossier.
+ * 'gelee'   : elle a reussi, elle ne se refait plus jamais toute seule.
+ * 'attente' : aucune photo n'est encore passee. On retentera au bilan suivant.
+ * 'absente' : rien n'a encore ete tente.
+ */
+function morphoInitialeEtat(u){
+  const m=u&&u.morphoInitiale;
+  if(!m||typeof m!=='object') return 'absente';
+  return (m.etat==='gelee')?'gelee':'attente';
+}
+// PURE. Vrai quand il faut (re)tenter : jamais si c'est gele.
+function morphoInitialeARefaire(u){ return morphoInitialeEtat(u)!=='gelee'; }
+/**
+ * PURE. La photo de face sur laquelle lire, et le bilan d'ou elle vient.
+ *
+ * ⚠ LE PREMIER BILAN D'ABORD, MEME AU DIXIEME. C'est la morphologie INITIALE
+ *   qu'on gele, et le premier bilan est celui ou la mesure du genou a ete
+ *   prise. Si sa photo ne passe pas le controle, on prend la plus recente qui
+ *   existe : un os ne change pas de longueur entre deux bilans, et « seulement
+ *   le premier bilan » ne doit pas vouloir dire « une seule chance ».
+ * @returns {{src:string,date:number,depart:boolean}|null}
+ */
+function morphoPhotoInitiale(u,rang){
+  let bl=[]; try{ bl=(Array.isArray(u&&u.bilans)?u.bilans:[]).filter(b=>b&&b.date); }catch(e){ return null; }
+  if(!bl.length) return null;
+  const dep=bl.filter(b=>b.type==='depart').sort((a,b)=>a.date-b.date);
+  const reste=bl.filter(b=>b.type!=='depart').sort((a,b)=>b.date-a.date);
+  const ordre=dep.concat(reste);
+  const n=Math.max(0,Number(rang)||0);
+  let vus=0;
+  for(const b of ordre){
+    let src=null;
+    try{ src=photoBilanSrc(b,'face'); }catch(e){ src=null; }
+    if(!src) continue;
+    if(vus++<n) continue;
+    return {src:src,date:Number(b.date)||0,depart:b.type==='depart'};
+  }
+  return null;
+}
+/**
+ * PURE. Ce que l'analyse gele, a partir de ce que la photo a rendu.
+ * Aucun octet d'image : la photo n'est designee que par la date de son bilan.
+ * @returns {{etat:string,date:number,cmParPx:number,controleEcart:number|null,
+ *            longueurs:Object,rapports:Object,photoRef:Object}
+ *           |{etat:'attente',date:number,raison:string,essais:number}}
+ */
+function morphoInitialeDe(u,r,photo,essais){
+  const n=Math.max(1,Number(essais)||1);
+  const attente=(raison)=>({etat:'attente',date:Date.now(),raison:String(raison||''),essais:n});
+  if(!r||!r.ok) return attente((r&&r.code==='personne')?'aucune silhouette reconnue'
+    :(r&&r.code==='moteur')?'le moteur de pose ne s’est pas chargé':'la photo n’a pas pu être lue');
+  const pr=r.prise||{};
+  if(pr.verdict==='a_refaire')
+    return attente('prise de vue à refaire'+((pr.raisons&&pr.raisons.length)?' : '+pr.raisons[0]:''));
+  const px=r.pixels;
+  if(!px) return attente('le talon et le genou ne sont pas visibles des deux côtés');
+  const e=morphoEchellePhoto(u,px);
+  if(e.motif==='mesure') return attente('il manque la hauteur du sol au milieu de la rotule');
+  if(e.motif==='pixels') return attente('le talon et le genou ne sont pas visibles des deux côtés');
+  if(e.motif==='divergence')
+    return attente('les deux repères ne donnent pas la même échelle ('
+      +_synNombre(e.ecart*100)+' % d’écart)');
+  const longueurs={};
+  const part=(e.ecart==null)?MORPHO_ECHELLE_ECART_MAX:Math.max(e.ecart,0.005);
+  for(const s of MORPHO_INIT_SEGMENTS){
+    const v=Number(px[s.px])||0;
+    if(!(v>0)) continue;
+    const cm=v*e.cmPx;
+    longueurs[s.cle]={cm:Math.round(cm*10)/10,
+      marge:Math.round(Math.max(cm*part,MORPHO_PHOTO_MARGE_MIN)*10)/10};
+  }
+  if(!Object.keys(longueurs).length) return attente('aucun segment lisible sur la photo');
+  const rapports={};
+  for(const x of (r.rapports||[])) if(x&&x.cle) rapports[x.cle]=x.valeur;
+  return {etat:'gelee',date:Date.now(),
+    cmParPx:Math.round(e.cmPx*10000)/10000,
+    controleEcart:(e.ecart==null)?null:e.ecart,
+    longueurs:longueurs,rapports:rapports,
+    photoRef:{bilan:(photo&&photo.date)||0,vue:'face',depart:!!(photo&&photo.depart)},
+    essais:n};
+}
+/**
+ * L'analyse elle-meme : elle lit une photo, et n'ecrit rien.
+ * @returns {Promise<any>} l'objet morphoInitiale a poser, ou null si rien a faire
+ */
+async function morphoAnalyserInitiale(u,rang){
+  if(!u) return null;
+  const photo=morphoPhotoInitiale(u,rang);
+  if(!photo) return {etat:'attente',date:Date.now(),
+    raison:'aucune photo de face au dossier',essais:(((u.morphoInitiale||{}).essais)||0)+1};
+  try{ await chargerMotionLab(); }catch(e){
+    return {etat:'attente',date:Date.now(),raison:'le moteur de pose ne s’est pas chargé',
+      essais:(((u.morphoInitiale||{}).essais)||0)+1};
+  }
+  const lire=(typeof window!=='undefined')?window.mlMorphoPhoto:null;
+  if(typeof lire!=='function') return {etat:'attente',date:Date.now(),
+    raison:'lecture de photo indisponible',essais:(((u.morphoInitiale||{}).essais)||0)+1};
+  let r=null;
+  try{ r=await lire(photo.src); }catch(e){ r=null; }
+  return morphoInitialeDe(u,r,photo,(((u.morphoInitiale||{}).essais)||0)+1);
+}
+/**
+ * LE DECLENCHEMENT AUTOMATIQUE, a l'enregistrement d'un bilan.
+ *
+ * ⚠ IL NE BLOQUE RIEN. Le bilan est deja ecrit quand cette fonction part ; le
+ *   chargement du moteur de pose prend plusieurs secondes et peut echouer.
+ *   Si la page se ferme avant la fin, rien n'est ecrit et l'etat reste
+ *   « attente » : on retentera au bilan suivant, ce qui est exactement la
+ *   regle demandee.
+ * ⚠ ET JAMAIS SUR UNE ANALYSE GELEE. « Aux bilans suivants : rien. »
+ */
+function morphoInitialePeutEtre(u){
+  if(!u||!morphoInitialeARefaire(u)) return false;
+  // La mesure du genou d'abord : sans elle il n'y a pas d'echelle, et charger
+  // le moteur de pose pour s'en apercevoir serait plusieurs megaoctets pour
+  // rien. Le lot 6 la reclame par ailleurs.
+  if(mesureMorpho(u,MORPHO_ROTULE).cm==null) return false;
+  if(!morphoPhotoInitiale(u,0)) return false;
+  setTimeout(async()=>{
+    try{
+      const m=await morphoAnalyserInitiale(u,0);
+      if(!m) return;
+      const users=DB.get('users')||{};
+      const cle=u.email;
+      const dossier=(cle&&users[cle])||u;
+      dossier.morphoInitiale=m;
+      dossier.updatedAt=Date.now();
+      if(cle){ users[cle]=dossier; DB.set('users',users); CLOUD.pushOne(cle,dossier); }
+      if(currentUser&&currentUser.email===cle) currentUser.morphoInitiale=m;
+    }catch(e){}
+  },0);
+  return true;
+}
+/**
+ * LE GESTE DU COACH, et lui seul : « pour le cas ou la photo etait valide mais
+ * mauvaise ». Jamais automatique, meme sur une analyse gelee.
+ */
+async function refaireMorphoInitiale(email){
+  const users=DB.get('users')||{};
+  const c=users[email];
+  if(!c||!currentUser||c.coachId!==currentUser.id){
+    toast('Élève introuvable ou non autorisé','var(--orange)'); return false;
+  }
+  if(mesureMorpho(c,MORPHO_ROTULE).cm==null){
+    toast('Il manque la hauteur du sol au milieu de la rotule.','var(--orange)'); return false;
+  }
+  toast('Analyse de la photo…');
+  // ⚠ ON PREND LA PHOTO SUIVANTE, pas la meme : « la photo etait valide mais
+  //   mauvaise » veut dire qu'elle a passe le controle et qu'elle ne vaut rien.
+  //   La relire donnerait le meme resultat.
+  const rang=(c.morphoInitiale&&c.morphoInitiale.photoRef)?1:0;
+  let m=null;
+  try{ m=await morphoAnalyserInitiale(c,rang); }catch(e){ m=null; }
+  if(!m||m.etat!=='gelee'){
+    toast('Rien de lu : '+((m&&m.raison)||'la photo n’a pas pu être lue'),'var(--orange)');
+    return false;
+  }
+  c.morphoInitiale=m;
+  c.updatedAt=Date.now();
+  users[email]=c;
+  const ok=DB.set('users',users);
+  try{ _ampRendre(); }catch(e){}
+  toastSync(ok,CLOUD.pushOne(email,c),'Analyse refaite ✓','l’analyse est');
+  return true;
+}
+// ── CE QUE L'ECRAN EN DIT ──────────────────────────────────────────────────
+//
+// ⚠ UN REPERE MANQUANT SE DIT AVEC SON COMPTE. « Un trou muet passe pour un
+//   bug, un trou qui s'explique passe pour du serieux. » Et on n'importe
+//   JAMAIS un repere trouve ailleurs pour debloquer un axe : on agrandit la
+//   base, on ne pose pas un chiffre.
+function morphoCalibrageCompte(athletes,cle){
+  const l=Array.isArray(athletes)?athletes:[];
+  let n=0;
+  for(const u of l){
+    let r=null;
+    try{ r=_morphoRapportPhoto(u,cle); }catch(e){ r=null; }
+    if(r) n++;
+  }
+  return n;
+}
+function _htmlMorphoInitiale(u,athletes){
+  const E=escapeHtml;
+  const etat=morphoInitialeEtat(u);
+  const m=u&&u.morphoInitiale;
+  const bouton='<button type="button" class="btn btn-outline" style="width:100%;margin:8px 0 0" '
+    +'onclick="refaireMorphoInitiale(\''+escapeHtml((u&&u.email)||'')+'\')">Refaire l’analyse</button>';
+  if(etat==='absente')
+    return '<p style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin:0">'
+      +'Analyse pas encore faite : elle part toute seule au premier bilan qui porte '
+      +'une photo de face et la hauteur du sol au milieu de la rotule.</p>';
+  if(etat==='attente')
+    return '<p style="font-size:var(--fs-sm);color:var(--orange);line-height:1.6;margin:0">'
+      +'Analyse en attente : '+E(m.raison||'la photo n’est pas exploitable')+'. '
+      +'Elle sera retentée au prochain bilan, et à chaque bilan tant qu’aucune photo '
+      +'ne passe.</p>'+bouton;
+  const l=MORPHO_INIT_SEGMENTS.filter(s=>m.longueurs&&m.longueurs[s.cle]);
+  const jour=(t)=>{ try{ return new Date(Number(t)||0).toLocaleDateString('fr-FR'); }catch(e){ return ''; } };
+  let age=null; try{ age=ageActuel(u); }catch(e){ age=null; }
+  const croissance=(age!=null&&age<MORPHO_INIT_AGE_CROISSANCE
+    &&(Date.now()-(Number(m.date)||0))>MORPHO_INIT_AN);
+  return '<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">'
+    +l.map(s=>'<div>'+E(s.lib)+' : '+E(_synNombre(m.longueurs[s.cle].cm))+' cm, à ± '
+      +E(_synNombre(m.longueurs[s.cle].marge))+' cm près</div>').join('')
+    +'</div>'
+    +'<p style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin:6px 0 0">'
+    +'Lu une fois sur la photo de face du '+E(jour((m.photoRef&&m.photoRef.bilan)||m.date))
+    +', mis à l’échelle par la hauteur du sol au milieu de la rotule'
+    +((m.controleEcart!=null)?(', contrôlé à '+E(_synNombre(m.controleEcart*100))+' % près par la taille debout'):'')
+    +'. Figé le '+E(jour(m.date))+' : la morphologie d’un adulte ne bouge plus.</p>'
+    // LES RAPPORTS, ET CE QUI LEUR MANQUE POUR ETRE SITUES.
+    +MORPHO_PHOTO_RAPPORTS.map(d=>{
+      const v=m.rapports&&m.rapports[d.cle];
+      if(v==null) return '';
+      const n=morphoCalibrageCompte(athletes,d.axe);
+      return '<p style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin:6px 0 0">'
+        +E(d.lib)+' : '+E(String(Math.round(v*100)/100).replace('.',','))
+        +((n<MORPHO_CALIB_MIN)
+          ?(' · repère en cours de calibrage, '+n+' athlète'+(n>1?'s':'')+' sur '+MORPHO_CALIB_MIN)
+          :'')+'</p>';
+    }).join('')
+    +(croissance
+      ?('<p style="font-size:var(--fs-sm);color:var(--orange);line-height:1.6;margin:8px 0 0">'
+        +'Moins de '+MORPHO_INIT_AGE_CROISSANCE+' ans et l’analyse a plus d’un an : '
+        +'il grandit encore, tu peux la refaire.</p>')
+      :'')
+    +bouton;
+}
 /** Le bloc « photo » de l'écran des amplitudes. Côté coach, comme le reste. */
 function _htmlMorphoPhoto(){
   if(!_amp) return '';
@@ -13939,6 +14205,14 @@ function _htmlMorphoPhoto(){
       +'Rien de lu pour l’instant.</p>')
     +'<button type="button" class="btn btn-outline" style="width:100%;margin:0" '
     +'onclick="lireMorphoPhoto(\''+escapeHtml(_amp.email)+'\')">Lire la photo de face du dernier bilan</button>'
+    +'</div>'
+    // L'ANALYSE INITIALE, FIGEE (lot 8) : ce que la photo a donne une fois, et
+    // qu'on ne recalcule plus. Le bouton « Refaire l'analyse » est cote coach,
+    // et nulle part ailleurs.
+    +'<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">'
+    +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#bbb;margin-bottom:6px">'
+    +'Ses longueurs, figées</div>'
+    +_htmlMorphoInitiale(c,(function(){ try{ return getClients(); }catch(e){ return []; } })())
     +'</div>';
 }
 
@@ -43013,6 +43287,9 @@ const CCD_MANQUES=Object.freeze([
   {cle:'hips',lib:'son tour de hanches',champ:'hips',femme:true,
    debloque:'calculer sa masse grasse et suivre gras contre muscle',
    effort:'Trente secondes, à chaque bilan.'},
+  {cle:'deb-rotule',lib:'la hauteur de son genou',champ:'rotule',
+   debloque:'mettre ses longueurs à l’échelle sur sa photo',
+   effort:'Une fois, au mur, et c’est valable pour toujours.'},
   {cle:'chest',lib:'son tour de poitrine',champ:'chest',
    debloque:'suivre ses pectoraux sur la silhouette',
    effort:'Trente secondes, à chaque bilan.'},
@@ -43030,6 +43307,9 @@ const CCD_MANQUES=Object.freeze([
 function _ccdManqueCette(u,m){
   if(m.cle==='taille')
     return !(parseFloat((u&&(u._evol_height||u['init-height']||u.height))||0)>0);
+  // La hauteur de genou n'est pas un tour : elle vit dans les longueurs du
+  // premier bilan, pas dans les mensurations, et se lit par mesureMorpho.
+  if(m.cle===MORPHO_ROTULE) return mesureMorpho(u,MORPHO_ROTULE).cm==null;
   let rel=[]; try{ rel=corpsRelevesReels(u,m.cle)||[]; }catch(e){ rel=[]; }
   return !rel.length;
 }
@@ -57927,6 +58207,11 @@ function saveBilanFinal(){
   // LE BILAN ETEINT LES DEMANDES DE MESURE QU'IL SATISFAIT (lot 6). Il est
   // enregistre juste apres, par le meme chemin : rien a pousser de plus.
   try{ consommerDemandesMesure(bi,currentUser); }catch(e){}
+  // ET IL DECLENCHE L'ANALYSE MORPHO SI ELLE N'EST PAS DEJA GELEE (lot 8).
+  // Elle part APRES l'ecriture, ne bloque rien, et ne se refait jamais une fois
+  // gelee. Un athlete qui avait deja son premier bilan est analyse ici aussi,
+  // sur ses photos de depart : c'est le cas retroactif de la mission.
+  try{ morphoInitialePeutEtre(currentUser); }catch(e){}
   if(bi.type==='depart'){
     delete currentUser._firstBilanPending;
     // Le questionnaire de départ installait la Fondation SANS regarder si un

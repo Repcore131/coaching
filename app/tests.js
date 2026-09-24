@@ -43626,8 +43626,11 @@ async function testExercices(){
       if((ccdMesureManquante(fem)||{}).cle!=='hips') return _echec('le tour de hanches n’est pas réclamé à une femme');
       // 4. QUAND TOUT EST LÀ, ON NE RÉCLAME RIEN.
       const plein={id:'M6D',email:'m6d@t.fr',role:'athlete',gender:'H',_evol_height:'178',
-        bilans:[{date:t-2*J,'bil-weight':'80','bil-waist':'88','bil-neck':'40','bil-chest':'100',
-          'bil-bicep-r':'38','bil-thigh-r':'60','bil-calf-r':'39'}]};
+        bilans:[{type:'depart',date:t-2*J,'bil-weight':'80','bil-waist':'88','bil-neck':'40',
+          'bil-chest':'100','bil-bicep-r':'38','bil-thigh-r':'60','bil-calf-r':'39',
+          // La hauteur de genou entre dans les mesures reclamees au lot 8 :
+          // sans elle, la photo n'a pas d'echelle. Un dossier complet la porte.
+          'deb-rotule':'47'}]};
       if(ccdMesureManquante(plein)) return _echec('une mesure est réclamée alors qu’il ne manque rien : '+JSON.stringify(ccdMesureManquante(plein)));
       // 5. ET L'ÉCRAN N'EN AFFICHE QU'UNE : une ligne, pas une liste.
       const d=document.createElement('div'); d.innerHTML=_htmlCcdManque(h);
@@ -43948,6 +43951,117 @@ async function testExercices(){
       if(/93/.test(h)) return _echec('le garde-fou s’affiche : '+h);
       if(h.indexOf('milieu de la rotule')<0) return _echec('l’écran ne dit pas d’où vient l’échelle');
       if(/[—–]/.test(h.replace(/<[^>]*>/g,''))) return _echec('un tiret cadratin dans le bloc de l’échelle');
+      return true;})());
+
+
+    // ══ LOT 8 : L'ANALYSE MORPHO, AUTOMATIQUE ET FIGÉE (23/09/2026) ══════
+    // « Déclenchement automatique à l'enregistrement du premier bilan. Aux
+    //   bilans suivants : rien. La morphologie d'un adulte ne bouge pas. »
+    ok('L’ANALYSE SE GÈLE, ET NE SE REFAIT PLUS JAMAIS TOUTE SEULE',(()=>{
+      if(typeof morphoInitialeDe!=='function') return _echec('l’analyse initiale n’existe pas');
+      const J=864e5, t=Date.now();
+      const u={id:'A8',email:'a8@t.fr',role:'athlete',gender:'H',_evol_height:'178',
+        bilans:[{type:'depart',date:t-60*J,'deb-rotule':'47'}]};
+      const px={genou:117.5,yeux:413.85,cuisse:100,jambe:105,bras:70,avantbras:62,tronc:130,cotes:0.01};
+      const r={ok:true,prise:{verdict:'bon',raisons:[]},pixels:px,
+        rapports:[{cle:'A2photo',valeur:0.952},{cle:'A4photo',valeur:1.13}]};
+      const m=morphoInitialeDe(u,r,{date:t-60*J,depart:true},1);
+      if(m.etat!=='gelee') return _echec('l’analyse ne gèle pas : '+JSON.stringify(m));
+      // CE QUI SORT : cinq segments, en centimètres, avec leur marge.
+      for(const s of ['femur','tibia','humerus','avantbras','tronc'])
+        if(!m.longueurs[s]||!(m.longueurs[s].cm>0)||!(m.longueurs[s].marge>0))
+          return _echec(s+' : '+JSON.stringify(m.longueurs[s]));
+      if(Math.abs(m.longueurs.femur.cm-40)>0.2) return _echec('fémur : '+m.longueurs.femur.cm);
+      // ⚠ CE QUI NE SORT PAS : largeur d'épaules, largeur de bassin, longueur
+      //   de clavicule. Le point rendu est le centre articulaire, et une
+      //   échelle ne corrige pas un point mal placé.
+      for(const x of MORPHO_INIT_INTERDITS)
+        if(m.longueurs[x]) return _echec(x+' sort de l’analyse');
+      if(MORPHO_INIT_SEGMENTS.some(s=>MORPHO_INIT_INTERDITS.indexOf(s.cle)>=0))
+        return _echec('une largeur interdite est dans la table des segments');
+      // AUCUN OCTET D'IMAGE : la photo n'est désignée que par la date du bilan.
+      const j=JSON.stringify(m);
+      if(/data:image|base64|https?:\/\//.test(j)) return _echec('l’analyse porte une image : '+j.slice(0,80));
+      if(!m.photoRef||m.photoRef.bilan!==t-60*J) return _echec('la photo n’est pas datée : '+JSON.stringify(m.photoRef));
+      // ET UNE FOIS GELÉE, PLUS RIEN NE SE RELANCE TOUT SEUL.
+      const gele=Object.assign({},u,{morphoInitiale:m});
+      if(morphoInitialeEtat(gele)!=='gelee') return _echec('l’état n’est pas gelé');
+      if(morphoInitialeARefaire(gele)) return _echec('une analyse gelée se refait');
+      if(morphoInitialePeutEtre(gele)!==false) return _echec('le déclenchement repart sur une analyse gelée');
+      return true;})());
+
+    ok('UNE PHOTO QUI NE PASSE PAS LAISSE L’ANALYSE EN ATTENTE, JAMAIS EN ÉCHEC',(()=>{
+      // « Seulement le premier bilan » ne doit pas vouloir dire « une seule
+      // chance » : on retente au bilan suivant, puis au suivant.
+      const J=864e5, t=Date.now();
+      const u={id:'B8',email:'b8@t.fr',role:'athlete',gender:'H',_evol_height:'178',
+        bilans:[{type:'depart',date:t-60*J,'deb-rotule':'47'}]};
+      const px={genou:117.5,yeux:413.85,cuisse:100,jambe:105,bras:70,avantbras:62,tronc:130,cotes:0.01};
+      const cas=[
+        [{ok:false,code:'personne'},'aucune silhouette'],
+        [{ok:true,prise:{verdict:'a_refaire',raisons:['corps tourné']},pixels:px,rapports:[]},'à refaire'],
+        [{ok:true,prise:{verdict:'bon',raisons:[]},pixels:null,rapports:[]},'talon'],
+        [{ok:true,prise:{verdict:'bon',raisons:[]},pixels:Object.assign({},px,{yeux:380}),rapports:[]},'échelle']
+      ];
+      for(const [r,mot] of cas){
+        const m=morphoInitialeDe(u,r,{date:t-60*J,depart:true},1);
+        if(m.etat!=='attente') return _echec('état « '+m.etat+' » pour « '+mot+' »');
+        if(/échou|echec/i.test(m.etat)) return _echec('l’analyse se déclare en échec');
+        if(!m.raison) return _echec('l’attente ne dit pas pourquoi');
+        if(m.longueurs||m.cmParPx) return _echec('des chiffres sortent d’une photo refusée');
+      }
+      // ET L'ÉTAT « ATTENTE » SE RETENTE.
+      const attente=Object.assign({},u,{morphoInitiale:{etat:'attente',date:t,raison:'x',essais:2}});
+      if(!morphoInitialeARefaire(attente)) return _echec('une analyse en attente ne se retente pas');
+      if(morphoInitialeEtat(attente)!=='attente') return _echec('l’état n’est pas « attente »');
+      // SANS LA MESURE DU GENOU, ON NE CHARGE MÊME PAS LE MOTEUR DE POSE.
+      const sans={id:'C8',email:'c8@t.fr',role:'athlete',bilans:[{type:'depart',date:t-60*J}]};
+      if(morphoInitialePeutEtre(sans)!==false) return _echec('le moteur part sans échelle possible');
+      // ET LA MESURE MANQUANTE EST RÉCLAMÉE PAR LA RÈGLE DU LOT 6.
+      const dem=CCD_MANQUES.find(x=>x.cle==='deb-rotule');
+      if(!dem) return _echec('la hauteur de genou n’est jamais réclamée');
+      if(dem.debloque.indexOf('échelle')<0) return _echec('elle ne dit pas ce qu’elle débloque : '+dem.debloque);
+      const u2={id:'D8',email:'d8@t.fr',role:'athlete',gender:'H',_evol_height:'178',
+        bilans:[{type:'depart',date:t-2*J,'deb-waist':'88','deb-neck':'40','deb-chest':'100',
+          'deb-bicep-r':'38','deb-thigh-r':'60','deb-calf-r':'39'}]};
+      const q=ccdMesureManquante(u2);
+      if(!q||q.cle!=='deb-rotule') return _echec('la hauteur de genou n’est pas réclamée : '+(q&&q.cle));
+      const u3=Object.assign({},u2,{bilans:[Object.assign({},u2.bilans[0],{'deb-rotule':'47'})]});
+      if((ccdMesureManquante(u3)||{}).cle==='deb-rotule') return _echec('elle est réclamée alors qu’elle est saisie');
+      return true;})());
+
+    ok('LES RAPPORTS SANS REPÈRE LE DISENT, AVEC LEUR COMPTE',(()=>{
+      // « Un trou muet passe pour un bug, un trou qui s'explique passe pour du
+      //   sérieux. » Et on n'importe jamais un repère trouvé ailleurs.
+      const J=864e5, t=Date.now();
+      const u={id:'E8',email:'e8@t.fr',role:'athlete',gender:'H',_evol_height:'178',
+        bilans:[{type:'depart',date:t-60*J,'deb-rotule':'47'}],
+        morphoInitiale:{etat:'gelee',date:t-59*J,cmParPx:0.4,controleEcart:0.006,
+          longueurs:{femur:{cm:40,marge:0.5},tibia:{cm:42,marge:0.5}},
+          rapports:{A2photo:0.952},photoRef:{bilan:t-60*J,vue:'face',depart:true}}};
+      // Trois athlètes portent un rapport photo, il en faut huit.
+      const pop=[1,2,3].map(i=>({id:'P'+i,email:'p'+i+'@t.fr',
+        morphoPhoto:{rapports:{A2photo:{v:0.9+i/100,date:t}}}}));
+      if(morphoCalibrageCompte(pop,'A2')!==3) return _echec('le compte : '+morphoCalibrageCompte(pop,'A2'));
+      const h=_htmlMorphoInitiale(u,pop);
+      if(h.indexOf('repère en cours de calibrage, 3 athlètes sur '+MORPHO_CALIB_MIN)<0)
+        return _echec('le trou ne s’explique pas : '+h);
+      // LES LONGUEURS PORTENT LEUR MARGE ET LEUR SOURCE.
+      if(h.indexOf('40 cm, à ± 0,5 cm près')<0) return _echec('une longueur sans marge : '+h);
+      if(h.indexOf('milieu de la rotule')<0) return _echec('la source de l’échelle n’est pas dite');
+      if(h.indexOf('Figé le')<0) return _echec('l’écran ne dit pas que c’est figé');
+      // LE BOUTON « REFAIRE L'ANALYSE » EST LÀ, CÔTÉ COACH.
+      if(h.indexOf('refaireMorphoInitiale')<0) return _echec('le coach ne peut pas refaire l’analyse');
+      // ⚠ ET IL N'EST NULLE PART CHEZ L'ATHLÈTE : aucun écran d'athlète ne
+      //   l'appelle, et le rendu de l'athlète ne porte pas le bloc.
+      if(String(renderCorpsAthlete).indexOf('MorphoInitiale')>=0)
+        return _echec('l’écran de l’athlète porte l’analyse morpho');
+      // AUCUN TIRET CADRATIN.
+      const d=document.createElement('div'); d.innerHTML=h;
+      if(/[—–]/.test(d.textContent||'')) return _echec('un tiret cadratin : '+(d.textContent||'').slice(0,60));
+      // ET LE CHAMP EST CLASSÉ EN SANTÉ : ce sont des mesures d'un corps.
+      if(CHAMPS_SANTE.indexOf('morphoInitiale')<0) return _echec('morphoInitiale n’est pas classé en santé');
+      if(CHAMPS_NON_SANTE.indexOf('morphoInitiale')>=0) return _echec('morphoInitiale est classé deux fois');
       return true;})());
 
     ok('LES CARTES DE ZONES COUVRENT LES MUSCLES DE CHAQUE VUE',(()=>{
