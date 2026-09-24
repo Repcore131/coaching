@@ -1948,6 +1948,39 @@ function _palierSuivant(cle){
 // propose de payer que ce qui est réellement payable. Aucun état
 // « bientôt disponible » : les boutons apparaîtront d'eux-mêmes le jour
 // où les deux constantes seront remplies.
+// PURE. CE QUI ATTEND D'ETRE SUPPRIME CHEZ L'HEBERGEUR, tous dossiers
+// confondus. Le coach a ceux de ses athletes sous la main : c'est assez pour
+// savoir s'il y a un geste a faire, et l'export de la base, lui, voit tout le
+// monde — y compris les abonnes sans coach.
+function cldAPurgerTotal(users){
+  const m=users||DB.get('users')||{};
+  let fichiers=0,dossiers=0,plusVieux=0;
+  for(const k of Object.keys(m)){
+    const l=(m[k]&&m[k].cloudinaryAPurger);
+    if(!Array.isArray(l)||!l.length) continue;
+    dossiers++; fichiers+=l.length;
+    for(const e of l){
+      const t=Number(e&&e.le)||0;
+      if(t&&(!plusVieux||t<plusVieux)) plusVieux=t;
+    }
+  }
+  return {fichiers:fichiers,dossiers:dossiers,plusVieux:plusVieux};
+}
+// LE SEUIL. En dessous, on se tait : un rappel qui s'affiche pour trois
+// fichiers finit par ne plus se lire du tout.
+const CLD_RAPPEL_MINI=20;
+function _htmlRappelPurge(users){
+  const t=(()=>{ try{ return cldAPurgerTotal(users); }catch(e){ return {fichiers:0}; } })();
+  if(t.fichiers<CLD_RAPPEL_MINI) return '';
+  const jours=t.plusVieux?Math.floor((Date.now()-t.plusVieux)/864e5):0;
+  return '<div style="margin-top:10px;background:var(--surface-2);border:1px solid var(--border);'
+    +'border-radius:var(--r-2);padding:9px 11px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">'
+    +'<strong style="color:var(--text)">'+t.fichiers+' fichiers</strong> attendent d’être supprimés '
+    +'chez l’hébergeur'+(jours>2?(', le plus ancien depuis '+jours+' jours'):'')+'.<br>'
+    +'Exporte la base (console Firebase, Realtime Database, Exporter le JSON) et lance&nbsp;:<br>'
+    +'<code style="font-size:var(--fs-2xs);color:var(--text)">python scripts/purge_cloudinary_orphelins.py '
+    +'export.json --supprimer</code></div>';
+}
 function _renderAbonnementCoach(users){
   const z=document.getElementById('coach-abo');
   if(!z) return false;
@@ -1991,6 +2024,7 @@ function _renderAbonnementCoach(users){
     <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:14px">${cartes}</div>
     <button class="btn btn-outline btn-sm" style="margin-top:14px;width:100%"
       onclick="exporterMesDonnees()">Exporter toutes mes données</button>
+    ${_htmlRappelPurge(users)}
   </div>`;
   return true;
 }
@@ -5543,7 +5577,10 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // personne, et l'identifiant du coach. revisions : les ajustements payes,
   // date et montant. Ni l'une ni les autres ne disent quoi que ce soit du
   // corps : ce sont des faits commerciaux, comme programmesAchetes (lot 9).
-  'videos','correctionsOrphelines','programmePerso','revisions',
+  // cloudinaryAPurger : des identifiants de fichiers a supprimer chez
+  // l'hebergeur, rien d'autre. Aucun contenu, aucune mesure, aucun nom : de
+  // la comptabilite de menage, classee avec les videos qu'elle designe.
+  'videos','correctionsOrphelines','cloudinaryAPurger','programmePerso','revisions',
   'athletePhoto','objective','badges','habitudes','sonRepos',
   // R20 — le dernier onglet d'Évolution ouvert : un NOM d'onglet ('perf',
   // 'mensus'…), une preference d'affichage. Aucune mesure n'y transite.
@@ -82191,10 +82228,82 @@ function cldFileAjouter(publicId,type,extra){
     return cldFileEcrire(l);
   }
   l.push(Object.assign({publicId,type:type||'image',depuis:Date.now(),essais:1},extra||{}));
+  // ET DANS LE DOSSIER, pour que Kevin la voie. Sans saveUser ici : cette
+  // fonction est appelee en boucle pendant une purge, et l'appelant
+  // enregistre une fois a la fin.
+  try{ cldDossierAjouter(publicId,type,(extra||{}).cloudName); }catch(e){}
   return cldFileEcrire(l);
 }
 function cldFileRetirer(publicId){
+  cldDossierRetirer(publicId);
   return cldFileEcrire(cldFileLire().filter(x=>x.publicId!==publicId));
+}
+// ══ LA MEME FILE, DANS LE DOSSIER ════════════════════════════════════════
+//
+// Elle y sert UNE seule chose : que Kevin puisse la lire. L'export de la base
+// la contient, et scripts/cloudinary_purge.mjs supprime ce qu'elle nomme.
+//
+// ⚠ LEGERE PAR CONSTRUCTION. Le dossier part EN ENTIER a chaque
+//   synchronisation : une entree pese une centaine d'octets, on en garde cent
+//   cinquante au plus, et on ne garde que ce qui sert a supprimer — un
+//   identifiant, un type, une date. Ni nom de fichier, ni raison, ni compte
+//   d'essais : ca, c'est l'affaire du local.
+const CLD_DOSSIER_MAX=150;
+function cldDossierLire(u){
+  const x=u||currentUser;
+  const l=(x&&x.cloudinaryAPurger);
+  return Array.isArray(l)?l.filter(e=>e&&e.publicId):[];
+}
+function cldDossierAjouter(publicId,type,cloudName){
+  const u=currentUser;
+  if(!u||!publicId) return false;
+  const l=cldDossierLire(u);
+  if(l.some(e=>e.publicId===publicId)) return false;
+  l.push({publicId:String(publicId),type:(type==='video'?'video':'image'),
+    le:Date.now(),cloud:String(cloudName||'')});
+  u.cloudinaryAPurger=l.slice(-CLD_DOSSIER_MAX);
+  return true;
+}
+function cldDossierRetirer(publicId){
+  const u=currentUser;
+  if(!u||!Array.isArray(u.cloudinaryAPurger)) return false;
+  const avant=u.cloudinaryAPurger.length;
+  u.cloudinaryAPurger=u.cloudinaryAPurger.filter(e=>e&&e.publicId!==publicId);
+  if(u.cloudinaryAPurger.length===avant) return false;
+  if(!u.cloudinaryAPurger.length) delete u.cloudinaryAPurger;
+  return true;
+}
+// ══ ET ELLE SE VIDE TOUTE SEULE QUAND LE FICHIER A VRAIMENT DISPARU ══════
+//
+// Le script supprime chez Cloudinary ; il ne peut pas ecrire dans les dossiers
+// des athletes. Sans quoi la liste grossirait pour toujours, et Kevin
+// redemanderait chaque mois la suppression de ce qui est deja supprime.
+//
+// ON DEMANDE DONC AU FICHIER. Une requete de tete sur l'URL : 404, il n'est
+// plus la, l'entree part. CINQ PAR DEMARRAGE AU PLUS — c'est un menage de
+// fond, pas une urgence, et personne n'attend apres lui.
+async function cldDossierMenage(maxi){
+  const u=currentUser;
+  if(!u||!CLOUD.ok()) return 0;
+  const l=cldDossierLire(u);
+  if(!l.length) return 0;
+  let n=0;
+  for(const e of l.slice(0,Math.max(1,Number(maxi)||5))){
+    const cloud=String(e.cloud||'').trim();
+    if(!cloud) continue;
+    const url='https://res.cloudinary.com/'+encodeURIComponent(cloud)+'/'
+      +(e.type==='video'?'video':'image')+'/upload/'+String(e.publicId);
+    try{
+      const ctrl=new AbortController(); setTimeout(()=>ctrl.abort(),6000);
+      const r=await fetch(url,{method:'HEAD',signal:ctrl.signal});
+      // 404 : le fichier est parti, l'entree n'a plus de raison d'etre.
+      // 200 : il est encore la, on la garde. Toute autre reponse — reseau,
+      // 401, 403 — ne prouve rien, et on ne jette rien sur un doute.
+      if(r.status===404){ cldDossierRetirer(e.publicId); cldFileRetirer(e.publicId); n++; }
+    }catch(err){}
+  }
+  if(n){ try{ saveUser(); }catch(err){} }
+  return n;
 }
 // CE QUE L'ÉCRAN PEUT ANNONCER : combien, et depuis quand le plus ancien.
 function cldFileEtat(){
@@ -83803,6 +83912,10 @@ async function retentionAuDemarrage(){
       try{ if(document.getElementById('s-videos')
         &&document.getElementById('s-videos').classList.contains('active')) _renderVideosListe(); }catch(e){}
     }
+    // LE MENAGE DE LA FILE : cinq fichiers verifies, pas plus. Ceux qui ont
+    // vraiment disparu de chez l'hebergeur quittent le dossier, et Kevin ne
+    // redemande pas chaque mois la suppression de ce qui est deja supprime.
+    try{ bilan.menage=await cldDossierMenage(5); }catch(e){ bilan.menage=0; }
     // LES MÉTRIQUES : réservées au créateur, et silencieuses pour tout autre.
     bilan.metrics=await purgerMetricsPerimes();
     return bilan;
