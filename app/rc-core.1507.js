@@ -22534,6 +22534,7 @@ function ccdVue(nom){
 // « Volume », « Plateaux » ou « Douleur » part avec lui.
 const CCD_BLOCS_ENTRAINEMENT=['ccd-corps','ccd-asymetrie','ccd-forme',
   'ccd-volume','ccd-plateaux','ccd-douleur'];
+let _ccdCorpsEnt=null;
 function _ccdPlacerBlocs(v){
   try{
     for(const id of CCD_BLOCS_ENTRAINEMENT){
@@ -22552,6 +22553,14 @@ function _ccdPlacerBlocs(v){
       if(bloc.previousElementSibling!==cible) cible.after(bloc);
     }
   }catch(e){}
+  // LA SILHOUETTE NE SE DESSINE PAS PAREIL DANS LES DEUX ONGLETS : avec ses
+  // courbes sur Entrainement, sans elles sur Donnees. On la repeint quand on
+  // passe de l'un a l'autre, pas a chaque rafraichissement de fond.
+  const ent=(v==='entrainement');
+  if(_ccdCorpsEnt!==ent){
+    _ccdCorpsEnt=ent;
+    try{ const c=getOwnedClient(currentClientId); if(c) renderCorpsCoach(c); }catch(e){}
+  }
 }
 // Compte ce qui est REELLEMENT affiche dans chaque onglet, et pose `data-solo`
 // sur ceux qui n'ont qu'un bloc. Au-dela de 1025 px, l'onglet actif se met en
@@ -44106,8 +44115,19 @@ function renderCorpsCoach(c){
   // LA PAIRE DE BILANS BORNE AUSSI LA SILHOUETTE (lot 5) : les etiquettes
   // disent alors l'ecart entre les deux bilans choisis, et la teinte le sens
   // de cet ecart-la.
-  try{ h=_htmlCorpsCadre(ccdBorner(_dossier(c)),
-    {graphes:false,evoPremier:ccdPaireActive()})||''; }catch(e){ h=''; }
+  // ⚠ SUR L'ONGLET ENTRAINEMENT, LE CADRE D'HIER MATIN, COURBES COMPRISES.
+  //   Kevin, 24/09/2026 : « y avait les graphiques hier matin a droite, et le
+  //   rectangle "Chaque muscle…" ». La colonne de droite porte les courbes ET
+  //   l'explication de la teinte : sans courbes, l'explication tombait sous
+  //   la silhouette. Le meme #ccd-corps suit l'onglet ouvert (voir
+  //   _ccdPlacerBlocs), qui le repeint quand il change d'onglet.
+  try{
+    h=(_ccdVue==='entrainement')
+      ?_htmlCorpsCadre(c)
+      :_htmlCorpsCadre(ccdBorner(_dossier(c)),
+        {graphes:false,evoPremier:ccdPaireActive()});
+    h=h||'';
+  }catch(e){ h=''; }
   z.innerHTML=h;
   // Les calques de zones se peignent une fois dans la page : ils lisent une
   // image, ce qu'une chaine HTML ne sait pas faire.
