@@ -10451,6 +10451,32 @@ async function testExercices(){
                 return _echec('le plateau est passé sous le calibrage');
               return true;})());
 
+            ok('L\'ALERTE DE CALIBRAGE DIT CE QU\'ELLE MESURE, SANS MOT TECHNIQUE',(()=>{
+              // Kevin, 24/09/2026 : « enleve le rir », puis « verifie que le
+              // calibrage marche encore avec ca ». Le renommage pouvait casser
+              // deux choses : la LIGNE elle-meme, et la PHRASE qui l'explique.
+              // Le reste de la chaine ne connait que le type 'calibrage' et la
+              // clef 'calibrageDu', qui n'ont pas bouge.
+              const l=String(_lignesEntrainement).replace(/^\s*\/\/.*$/gm,'');
+              const m=l.match(/cle:'calibrageDu'[\s\S]{0,200}?lib:'([^']*)'/);
+              if(!m) return _echec('la ligne de calibrage n\'a plus de libellé');
+              if(/RIR/.test(m[1])) return _echec('le libellé porte encore l\'acronyme : '+m[1]);
+              if(!/perception/i.test(m[1]))
+                return _echec('le libellé ne dit plus de quoi il parle : '+m[1]);
+              // LA PHRASE, DANS SES DEUX FORMES : jamais mesurée, et périmée.
+              const c={id:'cal9',sessions:[],bilans:[]};
+              for(const d of [{details:{calibrageDu:{n:0,seances:12,jours:null,maj:null}}},
+                              {details:{calibrageDu:{n:3,seances:40,jours:120,
+                                maj:Date.now()-120*864e5}}}]){
+                const t=_texteSignal('calibrage',c,d);
+                if(!t) return _echec('la phrase est vide pour '+JSON.stringify(d.details));
+                if(/\bRIR\b|e1RM/.test(t))
+                  return _echec('la phrase porte encore un mot technique : '+t);
+                if(!/perception/i.test(t))
+                  return _echec('la phrase ne dit plus ce qui est mesuré : '+t);
+              }
+              return true;})());
+
             ok('Le signal se lève après 8 séances, et se rendort une fois mesuré',(()=>{
               const seances=n=>Array.from({length:n},(_,i)=>({date:Date.now()-i*864e5,data:{}}));
               // Avant neuf séances : rien. L'athlète a autre chose à apprendre
