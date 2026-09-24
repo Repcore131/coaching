@@ -21,6 +21,9 @@
 #    d'ENVIRONNEMENT ne descendent que dans un travail qui declare cet
 #    environnement. Un secret pose dans le mauvais n'arrive jamais ici. La
 #    premiere etape dit lequel des six noms attendus lui parvient vraiment.
+#    Les trois MAIL_* y figurent aussi, bien qu'ils ne servent pas ici : c'est
+#    le rapport payeur du 1er du mois qui en depend, et une seule table vaut
+#    mieux que deux travaux a declencher pour savoir ou on en est.
 #
 #  PAYPAL_CLIENT_ID n'est pas un secret : le script le lit dans rc-core, ou il
 #  vit en clair — chaque page servie le contient.

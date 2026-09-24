@@ -65,6 +65,51 @@ jobs:
         with:
           node-version: '22'
 
+      # ── LES QUATRE SECRETS D'ABORD ───────────────────────────────────
+      # Le 1er du mois a 6 h, un travail qui echoue sur « PayPal refuse les
+      # identifiants » ou sur « 535 authentification refusee » envoie un
+      # courriel d'echec que personne ne relie a un secret jamais pose. Cette
+      # etape le dit en une ligne, avant le premier appel.
+      #
+      # ⚠ ON NE DEMANDE JAMAIS LA TABLE ENTIERE DES SECRETS : GitHub marque le
+      #   fichier « may be malicious » et bloque le travail (constate le
+      #   24/09/2026 sur plans-paypal.yml). Ce sont des COMPARAISONS par nom :
+      #   elles rendent true ou false, aucune valeur ne prend corps.
+      - name: Les quatre secrets sont-ils poses
+        env:
+          VU_PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET != '' }}
+          VU_MAIL_UTILISATEUR: ${{ secrets.MAIL_UTILISATEUR != '' }}
+          VU_MAIL_MOT_DE_PASSE: ${{ secrets.MAIL_MOT_DE_PASSE != '' }}
+          VU_MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE != '' }}
+        run: |
+          {
+            echo '## Les secrets qui arrivent jusqu ici'
+            echo
+            echo '| nom | etat |'
+            echo '| --- | --- |'
+          } >> $GITHUB_STEP_SUMMARY
+          MANQUE=0
+          for n in PAYPAL_CLIENT_SECRET MAIL_UTILISATEUR MAIL_MOT_DE_PASSE MAIL_DESTINATAIRE; do
+            eval "v=\$VU_$n"
+            if [ "$v" = "true" ]; then e='pose'; else e='**absent**'; MANQUE=1; fi
+            echo "| $n | $e |" >> $GITHUB_STEP_SUMMARY
+            echo "$n : $e"
+          done
+          if [ "$MANQUE" = "1" ]; then
+            {
+              echo
+              echo 'Il en manque au moins un. Settings > Secrets and variables > **Actions**'
+              echo '> **Repository secrets** de CE depot : les onglets Dependabot et'
+              echo 'Codespaces ont leurs propres listes, et un autre depot est un autre monde.'
+              echo
+              echo 'MAIL_MOT_DE_PASSE est un **mot de passe d application** Google, pas celui'
+              echo 'du compte : myaccount.google.com > Securite > Validation en deux etapes >'
+              echo 'Mots de passe des applications.'
+            } >> $GITHUB_STEP_SUMMARY
+            echo "::error::Il manque au moins un secret : le rapport ne peut pas partir (voir le resume)."
+            exit 1
+          fi
+
       - name: Construire le rapport
         env:
           PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
