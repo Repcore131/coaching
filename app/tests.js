@@ -65844,11 +65844,43 @@ async function testExercices(){
             data:{'SQUAT':{sets:[_st(100,5,'2'),_st(100,5,'')]}}}]);
           const h=_htmlRirMoyen(c);
           if(!h) return _echec('aucun bloc');
-          return /1 série sans RIR, exclue du calcul/.test(h)
+          // ⚠ LE TEXTE A CHANGE LE 24/09/2026 (« enleve le rir ») : le bloc dit
+          //   la meme chose sans l'acronyme. Le contrat tenu ici n'a pas bouge :
+          //   une serie non notee est EXCLUE, et l'ecran le dit.
+          return /1 série sans intensité notée, exclue du calcul/.test(h)
             ?true:_echec(h.replace(/<[^>]*>/g,' ').slice(0,140));})());
         ok('Sans RIR du tout, aucun bloc de RIR moyen',
           _htmlRirMoyen(_ath([{id:'c2',date:Date.now(),
             data:{'SQUAT':{sets:[_st(100,5,'')]}}}]))==='');
+        ok('AUCUN « RIR » DANS LES BLOCS DE LECTURE DE LA FICHE COACH',(()=>{
+          // Kevin, 24/09/2026 : « enleve le rir ». Sa regle d'ecriture dit
+          // aucun mot technique visible, et ce bloc en portait quatre.
+          // ⚠ CE QUI RESTE AUTORISE, ET QUI N'EST PAS TESTE ICI : le tableau de
+          //   la seance (l'athlete y NOTE son chiffre) et le menu « RIR cible »
+          //   du coach (il y POSE sa consigne). Un champ doit nommer ce qu'il
+          //   prend. Ce qui est interdit, c'est le mot dans un bloc qui se
+          //   contente de RAPPORTER.
+          _viderCacheVolume();
+          const c=_ath([{id:'nr1',date:Date.now()-2*864e5,
+            data:{'SQUAT':{sets:[_st(100,5,'2'),_st(100,5,'')]}}},
+            {id:'nr2',date:Date.now()-864e5,
+            data:{'LEG EXTENSION':{sets:[_st(60,10,'4')]}}}]);
+          c.sessions_config=[{active:true,exercises:[
+            {name:'SQUAT',series:4,reps:'5',rirCible:'2'},
+            {name:'LEG EXTENSION',series:3,reps:'10',rirCible:'2'}]}];
+          const blocs={'intensité moyenne':_htmlRirMoyen(c),
+                       'écart à la consigne':_htmlEcartRir(c)};
+          for(const nom in blocs){
+            if(!blocs[nom]) return _echec('le bloc « '+nom+' » ne rend rien : '
+              +'l\'assertion ne prouverait rien');
+            if(/\bRIR\b/.test(blocs[nom]))
+              return _echec('« RIR » est revenu dans le bloc « '+nom+' » : '
+                +blocs[nom].replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').slice(0,150));
+          }
+          // ET LE CHIFFRE GARDE SON SENS : retirer l'acronyme sans dire de quoi
+          // on parle aurait laisse « 2,25 » tout seul a l'ecran.
+          return /répétitions en réserve/.test(blocs['intensité moyenne'])
+            ?true:_echec('le chiffre ne dit plus ce qu\'il compte');})());
         ok('La fiche coach montre l\'écart prescrit / réalisé',(()=>{
           _viderCacheVolume();
           const c=_ath([{id:'c3',date:_sem(0),volume:1,duration:60,
