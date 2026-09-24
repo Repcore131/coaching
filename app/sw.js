@@ -124,6 +124,10 @@ CORPS.push('./img/complements.webp');
 // LES DIX LOGOS DE « MODIFIER MA SOURCE » (17 ko), decoupes dans la maquette.
 ['apple','google','garmin','samsung','huawei','fitbit','xiaomi','amazfit','polar','coros']
   .forEach(n => CORPS.push('./img/sources/' + n + '.webp'));
+// LES SEIZE LOGOS DE « MES APPAREILS » (40 ko), decoupes dans la maquette.
+['apple','garmin','samsung','google','huawei','fitbit','xiaomi','amazfit','polar','coros',
+  'suunto','whoop','oura','withings','casio','autre']
+  .forEach(n => CORPS.push('./img/appareils/' + n + '.webp'));
 // ⚠ LES DEUX ACTIFS VERSIONNES (build 1417). Le code et la feuille de styles
 // ne sont plus dans index.html : ils sont servis sous un nom qui porte le
 // numero de build, avec un cache d'un an et `immutable`. Ils DOIVENT entrer

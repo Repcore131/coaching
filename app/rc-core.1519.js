@@ -91014,10 +91014,6 @@ const TRACKERS=Object.freeze([
   {id:'casio',marque:'Casio',app:'Casio Watches',modeles:['G-Shock Move'],sommeil:{chemin:null},pas:{chemin:null}},
   {id:'autre',marque:'Autre',app:null,modeles:[],sommeil:{chemin:null},pas:{chemin:null}}
 ]);
-// L'ordre d'affichage : les ecosystemes les plus repandus d'abord, le reste
-// par ordre alphabetique. La recherche, elle, les atteint tous.
-const TRACK_TETE=Object.freeze(['apple','garmin','samsung','google','huawei','fitbit',
-  'xiaomi','amazfit','polar','coros','suunto','whoop','oura','withings']);
 // PURE. Recherche tolerante : accents, casse et espaces ignores, et une
 // correspondance partielle suffit. « fenix 8 » trouve Garmin, « gt 5 » Huawei.
 function trackNorm(t){
@@ -91059,43 +91055,104 @@ function trackChercher(q){
   return out.sort((a,b)=>b.score-a.score||a.t.marque.localeCompare(b.t.marque)).map(x=>x.t);
 }
 function trackParId(id){ return TRACKERS.find(t=>t.id===id)||null; }
-// ══ TROUVER MES DONNEES ════════════════════════════════════════════════
-// Trois etapes, jamais plus : QUOI, puis AVEC QUELLE MONTRE, puis le chemin.
-// Afficher d'emblee vingt-huit marques et deux notices par marque, c'est un
-// mur ; poser deux questions courtes reduit la notice a six lignes.
-let _trkQuoi='sommeil',_trkQ='';
+// ══ MES APPAREILS — D'APRES LA MAQUETTE DE KEVIN (24/09/2026) ════════════
+// « Trouver mes données » posait deux questions (quoi, puis quelle montre)
+// devant une grille d'initiales. La maquette montre d'emblee les seize
+// ecosystemes, chacun avec son logo (decoupe dans la maquette,
+// img/appareils/), un badge, le chemin dans son application et une phrase.
+// Le domaine vient de la carte qui ouvre la page : les chemins disent
+// « > Sommeil » ou « > Pas ». Toucher une carte ouvre sa fiche (_trkFiche) ;
+// « Autre appareil » ouvre l'import par capture. Les marques qui ne sont pas
+// parmi les seize restent atteignables par « Ma montre n'est pas dans la
+// liste », qui garde la recherche.
+let _trkQuoi='sommeil',_trkTri='pop';
+const TRK_APPAREILS=Object.freeze([
+  // id, nom, badge, pictogramme du chemin, application, onglet(s)
+  {id:'apple',nom:'Apple Santé',badge:'Populaire',ico:'reglage',app:'Santé',
+   d:q=>'Ouvre l’app Santé et va dans '+q+' pour voir tes données.'},
+  {id:'garmin',nom:'Garmin Connect',badge:'Populaire',ico:'barres',app:'Garmin Connect',
+   d:q=>'Ouvre Garmin Connect, onglet '+q+' ou Statistiques.'},
+  {id:'samsung',nom:'Samsung Health',badge:'Populaire',ico:'coeur',app:'Samsung Health',
+   d:q=>'Ouvre l’app, onglet '+q+' pour voir tes données.'},
+  {id:'google',nom:'Google Health Connect',badge:'Application',ico:'barres',app:'Health Connect',
+   d:q=>'Ouvre Health Connect pour accéder à tes données.'},
+  {id:'huawei',nom:'Huawei Santé',badge:'Montre',ico:'reglage',app:'Santé Huawei',
+   d:q=>'Ouvre l’app Huawei Santé et va dans '+q+'.'},
+  {id:'fitbit',nom:'Fitbit',badge:'Montre',ico:'barres',app:'Fitbit',
+   d:q=>'Ouvre l’app Fitbit, onglet '+q+' ou Tableau de bord.'},
+  {id:'xiaomi',nom:'Xiaomi / Redmi',badge:'Montre',ico:'reglage',app:'Zepp Life',
+   d:q=>'Ouvre l’app Zepp Life (Mi Fitness) et va dans '+q+'.'},
+  {id:'amazfit',nom:'Amazfit (Zepp)',badge:'Montre',ico:'barres',app:'Zepp',
+   d:q=>'Ouvre l’app Zepp, onglet '+q+'.'},
+  {id:'polar',nom:'Polar Flow',badge:'Montre',ico:'barres',app:'Polar Flow',
+   d:q=>'Ouvre l’app Polar Flow, section '+q+'.'},
+  {id:'coros',nom:'COROS',badge:'Montre',ico:'barres',app:'COROS',
+   d:q=>'Ouvre l’app COROS, onglet '+q+'.'},
+  {id:'suunto',nom:'Suunto',badge:'Montre',ico:'barres',app:'Suunto App',
+   d:q=>'Ouvre l’app Suunto, section '+q+'.'},
+  // WHOOP et Oura nomment leurs onglets en anglais ; WHOOP ne compte pas les pas.
+  {id:'whoop',nom:'WHOOP',badge:'Bracelet',ico:'barres',app:'WHOOP',onglet:{sommeil:'Sleep',pas:null},
+   d:q=>q?'Ouvre l’app WHOOP, onglet '+q+' pour voir tes données.':'WHOOP ne compte pas les pas.'},
+  {id:'oura',nom:'Oura',badge:'Bague',ico:'barres',app:'Oura',onglet:{sommeil:'Sleep',pas:'Activité'},
+   d:q=>'Ouvre l’app Oura, onglet '+q+'.'},
+  {id:'withings',nom:'Withings',badge:'Montre',ico:'barres',app:'Withings',
+   d:q=>'Ouvre l’app Withings, onglet '+q+'.'},
+  {id:'casio',nom:'Casio',badge:'Montre',ico:'reglage',app:'Casio Watches',
+   d:q=>'Ouvre l’app Casio Watches et va dans '+q+'.'}
+]);
+const _TRK_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+const _TRK_ICO={
+  reglage:_TRK_SVG+'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+  barres:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="4" y="12" width="3.5" height="8" rx="1"/><rect x="10.2" y="7" width="3.5" height="13" rx="1"/><rect x="16.5" y="3.5" width="3.5" height="16.5" rx="1"/></svg>',
+  coeur:_TRK_SVG+'<path d="M20.8 5.6a5.4 5.4 0 0 0-7.7 0L12 6.7l-1.1-1.1a5.4 5.4 0 0 0-7.7 7.7L12 22l8.8-8.7a5.4 5.4 0 0 0 0-7.7z"/></svg>',
+  envoi:_TRK_SVG+'<path d="M12 15.5V4M7.5 8.5L12 4l4.5 4.5M4.5 14.5v4a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-4"/></svg>'
+};
+function _trkCarte(a){
+  const nuit=(_trkQuoi!=='pas');
+  const q=a.onglet?(nuit?a.onglet.sommeil:a.onglet.pas):(nuit?'Sommeil':'Pas');
+  return '<button type="button" class="trk-a" onclick="_trkFiche(\''+a.id+'\')">'
+    +'<img class="trk-a-logo" src="img/appareils/'+a.id+'.webp" alt="" aria-hidden="true" loading="lazy" decoding="async">'
+    +'<span class="trk-a-c"><span class="trk-a-h"><span class="trk-a-nom">'+escapeHtml(a.nom)+'</span>'
+      +'<span class="trk-a-b" data-b="'+escapeHtml(a.badge)+'">'+escapeHtml(a.badge)+'</span></span>'
+      +'<span class="trk-a-ch">'+_TRK_ICO[a.ico]+'<span>'+escapeHtml(q?(a.app+' > '+q):a.app)+'</span></span>'
+      +'<span class="trk-a-d">'+escapeHtml(a.d(q))+'</span></span>'
+    +'<span class="sv-chev">'+SAN_ICO.droite+'</span></button>';
+}
+// « Autre appareil » ouvre l'import par capture. ⚠ Le champ, PUIS son bouton :
+// importerCaptureStats retrouve le bouton par nextElementSibling et y ecrit
+// par textContent — il ne porte donc que du texte, pose sur la carte.
+function _trkCarteAutre(){
+  return '<div class="trk-a trk-a-autre">'
+    +'<img class="trk-a-logo" src="img/appareils/autre.webp" alt="" aria-hidden="true" loading="lazy" decoding="async">'
+    +'<span class="trk-a-c"><span class="trk-a-h"><span class="trk-a-nom">Autre appareil</span>'
+      +'<span class="trk-a-b" data-b="Autre">Autre</span></span>'
+      +'<span class="trk-a-ch">'+_TRK_ICO.envoi+'<span>Importer une capture d’écran</span></span>'
+      +'<span class="trk-a-d">Envoie une capture de ton application de santé.</span></span>'
+    +'<input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="sanFermer();importerCaptureStats(this)">'
+    +'<button type="button" class="sv-tuile-go" onclick="this.previousElementSibling.click()">Importer une capture d’écran</button>'
+    +'</div>';
+}
 function sanAide(quoi){
   _trkQuoi=(quoi==='pas')?'pas':'sommeil';
-  _trkQ='';
   try{ rcm(_trkQuoi==='pas'?'steps_help_opened':'sleep_help_opened'); }catch(e){}
   try{ rcm('tracker_help_opened'); }catch(e){}
   _trkEtape1();
 }
 function _trkEtape1(){
-  _sanFeuille('Trouver mes données',
-    '<div class="san-aide" style="margin-bottom:12px">Que cherches-tu ?</div>'
-    +'<div class="trk-duo">'
-      +'<button type="button" class="trk-gros'+(_trkQuoi==='sommeil'?' actif':'')+'" '
-        +'onclick="_trkQuoiSet(\'sommeil\')">Sommeil</button>'
-      +'<button type="button" class="trk-gros'+(_trkQuoi==='pas'?' actif':'')+'" '
-        +'onclick="_trkQuoiSet(\'pas\')">Pas</button>'
-    +'</div>'
-    +'<div class="san-lab">Avec quel appareil ?</div>'
-    +'<input id="trk-q" inputmode="search" placeholder="Rechercher ma montre…" '
-      +'value="'+escapeHtml(_trkQ)+'" oninput="_trkRecherche(this.value)">'
-    +'<div id="trk-res">'+_trkGrille()+'</div>'
-    +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:14px 0 0" '
-      +'onclick="_trkPerdu()">Je ne trouve pas ma montre</button>');
-  const i=document.getElementById('trk-q'); if(i&&_trkQ) i.focus();
+  const liste=TRK_APPAREILS.slice();
+  if(_trkTri==='az') liste.sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
+  _sanFeuille('Mes appareils',
+    '<div class="trk-tete"><div><h3 class="trk-t">Mes appareils</h3>'
+      +'<span class="trk-s">Choisis ton écosystème pour voir où trouver les données.</span></div>'
+      +'<label class="san-per-sel trk-tri"><span class="san-per-lib">'+(_trkTri==='az'?'De A à Z':'Popularité')+'</span>'+SAN_ICO.bas
+        +'<select onchange="_trkTri=this.value;_trkEtape1()" aria-label="Trier les appareils">'
+          +'<option value="pop"'+(_trkTri==='pop'?' selected':'')+'>Popularité</option>'
+          +'<option value="az"'+(_trkTri==='az'?' selected':'')+'>De A à Z</option></select></label></div>'
+    +'<div class="trk-liste">'+liste.map(_trkCarte).join('')+_trkCarteAutre()+'</div>'
+    +'<button type="button" class="trk-lien trk-perdu" onclick="_trkPerdu()">Ma montre n’est pas dans la liste</button>');
 }
-function _trkQuoiSet(q){ _trkQuoi=q; _trkEtape1(); }
-function _trkGrille(){
-  const tete=TRACK_TETE.map(trackParId).filter(Boolean);
-  const reste=TRACKERS.filter(t=>TRACK_TETE.indexOf(t.id)<0&&t.id!=='autre')
-    .sort((a,b)=>a.marque.localeCompare(b.marque));
-  return '<div class="trk-grille">'
-    +tete.concat(reste).map(_trkTuile).join('')+'</div>';
-}
+// La tuile a initiale, pour les resultats de la recherche de « Ma montre
+// n'est pas dans la liste ».
 function _trkTuile(t){
   // AUCUN LOGO DE MARQUE : le projet n'en detient pas les droits et un logo
   // approximatif vaut moins qu'une initiale nette. Fallback generique partout.
@@ -91103,21 +91160,6 @@ function _trkTuile(t){
   return '<button type="button" class="trk-tuile" onclick="_trkFiche(\''+t.id+'\')">'
     +'<span class="trk-ini" aria-hidden="true">'+escapeHtml(ini)+'</span>'
     +'<span class="trk-nom">'+escapeHtml(t.marque)+'</span></button>';
-}
-function _trkRecherche(q){
-  _trkQ=q;
-  const z=document.getElementById('trk-res');
-  if(!z) return;
-  const n=String(q||'').trim();
-  if(!n){ z.innerHTML=_trkGrille(); return; }
-  const r=trackChercher(n);
-  if(!r.length){
-    z.innerHTML='<div class="san-vide">Aucun appareil trouvé pour « '+escapeHtml(n)+' ».</div>';
-    return;
-  }
-  z.innerHTML=(r.length>1
-      ?'<div class="san-aide" style="margin:10px 0 6px">Nous avons trouvé plusieurs appareils.</div>':'')
-    +'<div class="trk-grille">'+r.map(_trkTuile).join('')+'</div>';
 }
 // ── LA FICHE ───────────────────────────────────────────────────────────
 function _trkFiche(id){
@@ -91240,8 +91282,10 @@ function _trkEnvoyerSignal(){
 // toujours les sept jours les plus recents.
 //
 // CE QUI N'EST PAS FAIT, ET NE DOIT PAS ETRE SIMULE : aucune synchronisation
-// automatique. Rien dans ce module ne parle a Garmin, Apple ou Samsung, et
-// aucun libelle ne le laisse croire. La saisie est manuelle ; l'architecture,
+// automatique. Rien dans ce module ne parle a Garmin, Apple ou Samsung.
+// ⚠ UNE EXCEPTION VOULUE : « Modifier ma source » dit « Synchronisation
+// automatique », a la demande expresse de Kevin (24/09/2026) — voir
+// _sanSrcDesc. La saisie est manuelle ; l'architecture,
 // elle, porte deja source et sourceDevice pour le jour ou une API existera.
 const SAN_OBJ_SOMMEIL=480;              // 8 h, en minutes
 const SAN_SOURCES=Object.freeze({
@@ -92015,27 +92059,28 @@ function sanSupprimer(quoi,iso){
 // pastilles sous les montres : un athlete qui avait declare Oura ne doit pas
 // voir son choix disparaitre de la liste.
 //
-// ⚠ AUCUNE PROMESSE DE SYNCHRONISATION. La maquette portait « Synchronisation
-//   automatique » et « Synchronise automatiquement tes données » : c'est
-//   faux, rien ne se synchronise (voir sanPoserSource). Les deux titres disent
-//   donc COMMENT la donnee arrive — par une capture d'ecran de l'application —
-//   et les descriptions disent d'ou elle vient, pas qu'elle arrive seule.
+// ⚠ « SYNCHRONISATION AUTOMATIQUE » : LE LIBELLE DE LA MAQUETTE, GARDE A LA
+//   DEMANDE EXPRESSE DE KEVIN (24/09/2026, « laisse la synchronisation
+//   automatique »), apres qu'il a ete prevenu qu'AUCUNE synchronisation
+//   n'existe encore : choisir une source ne fait que la declarer (voir
+//   sanPoserSource). Le jour ou une API branchera une source, ce libelle
+//   deviendra vrai ; d'ici la, c'est une decision de produit, pas un oubli.
 const SAN_SRC_APPS=['apple','google'];
 const SAN_SRC_MONTRES=['garmin','samsung','huawei','fitbit','xiaomi','amazfit','polar','coros'];
 function _sanSrcDesc(k,quoi){
   const nuit=(quoi==='sommeil');
-  const Q=nuit?'Ton sommeil':'Ton nombre de pas', q=nuit?'de sommeil':'de pas';
+  const q=nuit?'ton sommeil':'tes pas', qd=nuit?'de sommeil':'de pas';
   switch(k){
-    case 'apple': return 'Tes données '+q+' viennent de ton iPhone.';
-    case 'google': return 'Tes données viennent de l’écosystème Android.';
+    case 'apple': return 'Synchronise automatiquement tes données '+qd+' depuis ton iPhone.';
+    case 'google': return 'Connecte tes données depuis l’écosystème Android.';
     case 'garmin': return nuit?'Suivi du sommeil, récupération, HRV et plus encore.':'Pas, distance, récupération et plus encore.';
-    case 'samsung': return 'Tes données viennent de ton Samsung.';
-    case 'huawei': return Q+' vient de ta montre Huawei.';
-    case 'fitbit': return Q+' vient de ta montre Fitbit.';
-    case 'xiaomi': return 'Tes données viennent de ta montre Xiaomi.';
-    case 'amazfit': return 'Tes données viennent de ta montre Zepp (Amazfit).';
-    case 'polar': return Q+' vient de ta montre Polar.';
-    case 'coros': return Q+' vient de ta montre COROS.';
+    case 'samsung': return 'Synchronise automatiquement tes données.';
+    case 'huawei': return 'Synchronise '+q+' depuis ta montre Huawei.';
+    case 'fitbit': return 'Synchronise '+q+' depuis ta montre Fitbit.';
+    case 'xiaomi': return 'Synchronise tes données depuis ta montre Xiaomi.';
+    case 'amazfit': return 'Synchronise tes données depuis ta montre Zepp (Amazfit).';
+    case 'polar': return 'Synchronise '+q+' depuis ta montre Polar.';
+    case 'coros': return 'Synchronise '+q+' depuis ta montre COROS.';
   }
   return '';
 }
@@ -92049,7 +92094,7 @@ function _sanSrcLigne(quoi,k,act){
 }
 function _sanSrcFamille(titre,ico,corps){
   return '<section class="sv-src-s"><div class="sv-src-h"><span class="sv-src-hi">'+ico+'</span>'
-    +'<h3>'+titre+'</h3><span class="sv-src-badge">Par capture d’écran</span></div>'+corps+'</section>';
+    +'<h3>'+titre+'</h3><span class="sv-src-badge">Synchronisation automatique</span></div>'+corps+'</section>';
 }
 function sanChangerSource(quoi){
   const u=currentUser;
@@ -92063,8 +92108,7 @@ function sanChangerSource(quoi){
   // donnee, et l'historique deja enregistre garde SA source d'origine.
   _sanFeuille('Modifier ma source',
     '<div class="sv-src" style="--sv-c:'+(quoi==='sommeil'?'#60a5fa':'#ff3b3b')+'">'
-    +'<div class="san-aide" style="margin-bottom:12px">D\'où viennent tes données. '
-    +'Ça n\'active aucune synchronisation : tu les reportes à la main, ou par une capture d\'écran.</div>'
+    +'<div class="san-aide" style="margin-bottom:12px">D\'où viennent tes données.</div>'
     +_sanSrcFamille('Applications de santé',coeur,
       '<div class="sv-src-l1">'+SAN_SRC_APPS.map(k=>_sanSrcLigne(quoi,k,act)).join('')+'</div>')
     +_sanSrcFamille('Montres connectées',montre,
