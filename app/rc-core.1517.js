@@ -91981,18 +91981,70 @@ function sanSupprimer(quoi,iso){
   sanFermer(); sanRendre();
   toast('Supprimé','var(--green)');
 }
+// ══ MODIFIER MA SOURCE — D'APRES LA MAQUETTE DE KEVIN (24/09/2026) ════════
+// Deux familles, chacune sous son titre : les applications de sante, en
+// lignes, et les montres, en grille de deux, chacune avec son logo (decoupe
+// dans la maquette, img/sources/). La source choisie porte le point vert.
+// Les sources que la maquette ne montre pas restent choisissables, en
+// pastilles sous les montres : un athlete qui avait declare Oura ne doit pas
+// voir son choix disparaitre de la liste.
+//
+// ⚠ AUCUNE PROMESSE DE SYNCHRONISATION. La maquette portait « Synchronisation
+//   automatique » et « Synchronise automatiquement tes données » : c'est
+//   faux, rien ne se synchronise (voir sanPoserSource). Les deux titres disent
+//   donc COMMENT la donnee arrive — par une capture d'ecran de l'application —
+//   et les descriptions disent d'ou elle vient, pas qu'elle arrive seule.
+const SAN_SRC_APPS=['apple','google'];
+const SAN_SRC_MONTRES=['garmin','samsung','huawei','fitbit','xiaomi','amazfit','polar','coros'];
+function _sanSrcDesc(k,quoi){
+  const nuit=(quoi==='sommeil');
+  const Q=nuit?'Ton sommeil':'Ton nombre de pas', q=nuit?'de sommeil':'de pas';
+  switch(k){
+    case 'apple': return 'Tes données '+q+' viennent de ton iPhone.';
+    case 'google': return 'Tes données viennent de l’écosystème Android.';
+    case 'garmin': return nuit?'Suivi du sommeil, récupération, HRV et plus encore.':'Pas, distance, récupération et plus encore.';
+    case 'samsung': return 'Tes données viennent de ton Samsung.';
+    case 'huawei': return Q+' vient de ta montre Huawei.';
+    case 'fitbit': return Q+' vient de ta montre Fitbit.';
+    case 'xiaomi': return 'Tes données viennent de ta montre Xiaomi.';
+    case 'amazfit': return 'Tes données viennent de ta montre Zepp (Amazfit).';
+    case 'polar': return Q+' vient de ta montre Polar.';
+    case 'coros': return Q+' vient de ta montre COROS.';
+  }
+  return '';
+}
+function _sanSrcLigne(quoi,k,act){
+  return '<button type="button" class="san-src-o sv-src-o'+(k===act?' actif':'')+'" aria-pressed="'+(k===act)+'"'
+    +' onclick="sanPoserSource(\''+quoi+'\',\''+k+'\')">'
+    +'<span class="sv-src-logo"><img src="img/sources/'+k+'.webp" alt="" aria-hidden="true" loading="lazy" decoding="async"></span>'
+    +'<span class="sv-src-c"><span class="sv-src-t">'+escapeHtml(SAN_SOURCES[k])+'</span>'
+      +'<span class="sv-src-d">'+escapeHtml(_sanSrcDesc(k,quoi))+'</span></span>'
+    +'<span class="sv-chev">'+SAN_ICO.droite+'</span></button>';
+}
+function _sanSrcFamille(titre,ico,corps){
+  return '<section class="sv-src-s"><div class="sv-src-h"><span class="sv-src-hi">'+ico+'</span>'
+    +'<h3>'+titre+'</h3><span class="sv-src-badge">Par capture d’écran</span></div>'+corps+'</section>';
+}
 function sanChangerSource(quoi){
   const u=currentUser;
   const act=sanSource(u,quoi).cle;
-  const opts=Object.keys(SAN_SOURCES).map(k=>
-    '<button type="button" class="san-src-o'+(k===act?' actif':'')+'" '
-    +'onclick="sanPoserSource(\''+quoi+'\',\''+k+'\')">'+escapeHtml(SAN_SOURCES[k])+'</button>').join('');
+  const coeur=_SV_SVG+'<path d="M20.8 5.6a5.4 5.4 0 0 0-7.7 0L12 6.7l-1.1-1.1a5.4 5.4 0 0 0-7.7 7.7L12 22l8.8-8.7a5.4 5.4 0 0 0 0-7.7z"/></svg>';
+  const montre=_SV_SVG+'<rect x="6" y="6" width="12" height="12" rx="3"/><path d="M9 6l.7-3.5h4.6L15 6M9 18l.7 3.5h4.6L15 18"/></svg>';
+  const autres=Object.keys(SAN_SOURCES).filter(k=>SAN_SRC_APPS.indexOf(k)<0&&SAN_SRC_MONTRES.indexOf(k)<0)
+    .map(k=>'<button type="button" class="san-src-o sv-src-p'+(k===act?' actif':'')+'" aria-pressed="'+(k===act)+'"'
+      +' onclick="sanPoserSource(\''+quoi+'\',\''+k+'\')">'+escapeHtml(SAN_SOURCES[k])+'</button>').join('');
   // CE QUE CE CHOIX NE FAIT PAS : il ne synchronise rien. Il dit d'ou vient la
   // donnee, et l'historique deja enregistre garde SA source d'origine.
   _sanFeuille('Modifier ma source',
-    '<div class="san-aide" style="margin-bottom:10px">D\'où viennent tes données. '
-    +'Ça n\'active aucune synchronisation : la saisie reste manuelle.</div>'
-    +'<div class="san-src-l">'+opts+'</div>');
+    '<div class="sv-src" style="--sv-c:'+(quoi==='sommeil'?'#60a5fa':'#ff3b3b')+'">'
+    +'<div class="san-aide" style="margin-bottom:12px">D\'où viennent tes données. '
+    +'Ça n\'active aucune synchronisation : tu les reportes à la main, ou par une capture d\'écran.</div>'
+    +_sanSrcFamille('Applications de santé',coeur,
+      '<div class="sv-src-l1">'+SAN_SRC_APPS.map(k=>_sanSrcLigne(quoi,k,act)).join('')+'</div>')
+    +_sanSrcFamille('Montres connectées',montre,
+      '<div class="sv-src-l2">'+SAN_SRC_MONTRES.map(k=>_sanSrcLigne(quoi,k,act)).join('')+'</div>')
+    +'<div class="sv-src-autres"><span>Autres sources</span><div>'+autres+'</div></div>'
+    +'</div>');
 }
 function sanPoserSource(quoi,cle){
   if(!SAN_SOURCES[cle]) return;
