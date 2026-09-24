@@ -98,13 +98,18 @@ jobs:
         run: |
           mkdir -p docs/offre
           R=docs/offre/etat-plans-paypal.md
-          NOMS=""
+          # Un fichier plutot qu'une variable a rallonge : une chaine shell qui
+          # porte des retours a la ligne DANS un bloc YAML en ferme le bloc des
+          # que le guillemet retombe en colonne zero. Invalid workflow file,
+          # constate le 24/09/2026.
+          T=$(mktemp)
           for n in PAYPAL_CLIENT_SECRET PAYPAL_SECRET PAYPAL_CLIENT_ID \
                    MAIL_UTILISATEUR MAIL_MOT_DE_PASSE MAIL_DESTINATAIRE; do
             eval "v=\$VU_$n"
-            NOMS="$NOMS$n : $([ "$v" = "true" ] && echo 'pose' || echo 'absent')
-"
+            if [ "$v" = "true" ]; then e=pose; else e=absent; fi
+            echo "$n : $e" >> $T
           done
+          NOMS=$(cat $T)
           {
             echo "# L'etat des plans PayPal"
             echo
