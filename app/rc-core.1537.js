@@ -43555,13 +43555,23 @@ function _ccdDelta(v,unite){
  * Une carte du verdict. `source` porte la date et la marge : aucune valeur
  * affichee dans cette application ne sort sans elles.
  */
-function _ccdCarte(libelle,valeur,delta,phrase,source){
-  return '<article class="ccd-v">'
+function _ccdCarte(libelle,valeur,delta,phrase,source,o){
+  o=o||{};
+  // LE SENS DE L'ECART : une fleche, et une couleur quand elle veut dire
+  // quelque chose (la masse maigre qui baisse, la masse grasse qui monte).
+  const fl=(o.d!=null&&isFinite(o.d)&&Math.abs(o.d)>=0.05)?(o.d>0?CCD_ICO.haut:CCD_ICO.bas):'';
+  return '<article class="ccd-v"'+(o.k?' data-k="'+o.k+'"':'')+'>'
+    +(o.ico?'<span class="ccdx-ico">'+o.ico+'</span>':'')
+    +'<div class="ccdx-c">'
     +'<span class="ccd-v-l">'+escapeHtml(libelle)+'</span>'
     +'<span class="ccd-v-n">'+escapeHtml(valeur)+'</span>'
-    +(delta?'<span class="ccd-v-d">'+escapeHtml(delta)+'</span>':'')
+    +(delta?'<span class="ccd-v-d"'+(o.ton?' data-ton="'+o.ton+'"':'')+'>'+escapeHtml(delta)+fl+'</span>':'')
+    +(o.dep?'<span class="ccdx-dep">'+escapeHtml(o.dep)+'</span>':'')
     +(phrase?'<span class="ccd-v-p">'+escapeHtml(phrase)+'</span>':'')
     +(source?'<span class="ccd-v-s">'+escapeHtml(source)+'</span>':'')
+    +'</div>'
+    +(o.spark||'')
+    +(o.clic?'<button type="button" class="ccdx-chev" onclick="'+o.clic+'" aria-label="'+escapeHtml(o.clicLib||'Voir')+'">'+CCD_ICO.droite+'</button>':'')
     +'</article>';
 }
 /**
@@ -43571,6 +43581,8 @@ function _ccdCarte(libelle,valeur,delta,phrase,source){
 function _htmlCcdVerdict(u,depuisLePremier){
   const v=ccdVerdict(u,depuisLePremier);
   if(!v.poids&&(!v.gras||v.gras.manque)&&!v.dort.n) return '';
+  const sr=_ccdSeries(u);
+  const dep=t=>t?('par rapport au bilan du '+_ccdJour(t)):'';
   const cartes=[];
   // 1. LE POIDS.
   if(v.poids){
@@ -43578,24 +43590,31 @@ function _htmlCcdVerdict(u,depuisLePremier){
     const lu=_ccdLu(p.valeur,'kg',p.delta,p.premier);
     cartes.push(_ccdCarte('Poids',lu.grand,lu.petit,
       (p.kgSem!=null&&isFinite(p.kgSem))?(_ccdDelta(p.kgSem,'kg')+' par semaine'):'',
-      'pesé au bilan du '+_ccdJour(p.date)+' · à 0,3 kg près'));
+      'pesé au bilan du '+_ccdJour(p.date)+' · à 0,3 kg près',
+      {k:'poids',ico:CCD_ICO.poids,spark:_ccdSpark(sr.poids),d:_ccdLecture==='absolu'?p.delta:null,dep:_ccdLecture==='absolu'?dep(p.depuis):''}));
   }
-  // 2 et 3. LA MASSE GRASSE ET LA MASSE MAIGRE, ou ce qui manque pour elles.
+  // 2 et 3. LA MASSE MAIGRE ET LA MASSE GRASSE, ou ce qui manque pour elles.
+  // ⚠ ORDRE DE LA MAQUETTE (24/09/2026) : la maigre avant la grasse.
   if(v.gras&&v.gras.manque){
     const m=v.gras.manque;
-    cartes.push('<article class="ccd-v ccd-v-manque"><span class="ccd-v-l">Masse grasse</span>'
+    cartes.push('<article class="ccd-v ccd-v-manque" data-k="gras"><span class="ccdx-ico">'+CCD_ICO.gras+'</span><div class="ccdx-c">'
+      +'<span class="ccd-v-l">Masse grasse</span>'
       +'<span class="ccd-v-p">Pas encore calculable : il manque '+escapeHtml(m[0]||'une mesure')+'.</span>'
-      +'<span class="ccd-v-s">avec elle, tu sauras s\'il perd du gras ou du muscle</span></article>');
+      +'<span class="ccd-v-s">avec elle, tu sauras s\'il perd du gras ou du muscle</span></div></article>');
   } else if(v.gras){
-    const lg=_ccdLu(v.gras.kg,'kg',v.gras.delta,v.gras.premier);
-    cartes.push(_ccdCarte('Masse grasse',lg.grand,lg.petit,
-      _synNombre(v.gras.pct)+' % de son poids',
-      'estimée au ruban le '+_ccdJour(v.gras.date)+' · à '+v.gras.marge+' points près'));
     const m=v.maigre;
     const dit={preservee:'préservée',baisse:'en baisse',hausse:'en hausse'}[m&&m.sens]||'';
     const lm=_ccdLu(m.kg,'kg',m.delta,m.premier);
     cartes.push(_ccdCarte('Masse maigre',lm.grand,lm.petit,dit,
-      'le poids moins la masse grasse · à '+_synNombre(CCD_MAIGRE_BRUIT)+' kg près'));
+      'le poids moins la masse grasse, au bilan du '+_ccdJour(m.date)+' · à '+_synNombre(CCD_MAIGRE_BRUIT)+' kg près',
+      {k:'maigre',ico:CCD_ICO.maigre,spark:_ccdSpark(sr.maigre),d:_ccdLecture==='absolu'?m.delta:null,
+       ton:m.sens==='baisse'?'mal':'bien',dep:_ccdLecture==='absolu'?dep(m.depuis):''}));
+    const lg=_ccdLu(v.gras.kg,'kg',v.gras.delta,v.gras.premier);
+    cartes.push(_ccdCarte('Masse grasse',lg.grand,lg.petit,
+      _synNombre(v.gras.pct)+' % de son poids',
+      'estimée au ruban le '+_ccdJour(v.gras.date)+' · à '+v.gras.marge+' points près',
+      {k:'gras',ico:CCD_ICO.gras,spark:_ccdSpark(sr.gras),d:_ccdLecture==='absolu'?v.gras.delta:null,
+       ton:(v.gras.delta!=null&&v.gras.delta>0)?'attention':'bien',dep:_ccdLecture==='absolu'?dep(v.gras.depuis):''}));
   }
   // 4. CE QUI DORT.
   const d=v.dort;
@@ -43603,7 +43622,8 @@ function _htmlCcdVerdict(u,depuisLePremier){
     d.n?(d.n+' mesure'+(d.n>1?'s':'')):'Rien',
     d.n?(d.noms.slice(0,2).join(', ')+(d.n>2?(' et '+(d.n-2)+' autre'+(d.n>3?'s':'')):'')):'',
     d.n?('pareilles depuis '+d.bilans+' bilans'):'tout a bougé depuis '+d.bilans+' bilans',
-    'au ruban, à 0,5 cm près'));
+    'au ruban, à 0,5 cm près',
+    {k:'dort',ico:CCD_ICO.dort,clic:'ccdVoirDetail(\'ccd-mens\')',clicLib:'Voir les douze tours'}));
   return '<div class="ccd-v4">'+cartes.join('')+'</div>'
     // LA PHRASE QUI BORNE LES DEUX ESTIMATIONS. Elle est SOUS les cartes, pas
     // dans une infobulle : ce qu'elle dit change la façon de lire les deux
@@ -43842,7 +43862,7 @@ function _htmlCcdOutils(u){
       ?('<div class="ccd-out-l"><label>Comparer<select onchange="ccdPaireDepuisEcran()" id="ccd-pa">'
         +opts(a)+'</select></label><label>à<select onchange="ccdPaireDepuisEcran()" id="ccd-pb">'
         +opts(b)+'</select></label>'
-        +(ccdPaireActive()?'<button type="button" class="ccd-out-r" onclick="ccdPaire(0,0)">Revenir aux deux derniers</button>':'')
+        +(ccdPaireActive()?'<button type="button" class="ccd-out-r" onclick="_ccdFenetre=null;ccdPaire(0,0)">Revenir aux deux derniers</button>':'')
         +'</div><p class="ccd-out-p">Les cartes et la silhouette se recalculent entre ces deux bilans. '
         +'Les courbes, elles, suivent la période choisie dans « Ses courbes ».</p>')
       :'<p class="ccd-out-p">Il faut deux bilans pour en comparer deux.</p>')
@@ -43863,6 +43883,7 @@ function ccdOutils(b){
   return !ouvert;
 }
 function ccdPaireDepuisEcran(){
+  _ccdFenetre=null;
   const a=document.getElementById('ccd-pa'), b=document.getElementById('ccd-pb');
   if(!a||!b) return null;
   const r=ccdPaire(Number(a.value)||0,Number(b.value)||0);
@@ -44336,6 +44357,183 @@ function renderMensCoach(c){
   try{ z.querySelectorAll('[data-scroll-fade]').forEach(e=>setupScrollFade(e)); }catch(e){}
   return !!h;
 }
+// ══ L'ETAGE « OU IL EN EST », D'APRES LA MAQUETTE DE KEVIN (24/09/2026) ═══
+// « Remplace par celle-ci et rajoute les fonctionnalites. » Autour des quatre
+// cartes, qui gardent leurs chiffres, leurs sources et leurs marges :
+//   • un en-tete : la lecture (valeur, ecart, %), trois periodes d'un appui
+//     (7 jours, 28 jours, 3 mois) et les deux bilans compares ;
+//   • sur chaque carte, une icone, une mini-courbe et le sens de l'ecart ;
+//   • « Comparer les periodes » : les trois ecarts cote a cote ;
+//   • « Donnees incompletes » : toutes les mesures qui manquent, et la demande.
+// ⚠ UNE PERIODE, C'EST UNE PAIRE DE BILANS. Les chiffres viennent des bilans,
+//   pas d'un calendrier : « 28 jours » compare le dernier bilan au dernier
+//   bilan pose au moins 28 jours avant lui (ou au premier), et la carte dit
+//   de quel bilan l'ecart part. Rien n'est interpole entre deux bilans.
+// ⚠ « MASSE MAIGRE », PAS « MUSCULAIRE » : la formule donne le poids moins la
+//   masse grasse (os, eau, organes compris), pas le muscle seul.
+const CCD_FENETRES=Object.freeze([{k:'7j',j:7,lib:'7 jours'},{k:'28j',j:28,lib:'28 jours'},{k:'3m',j:91,lib:'3 mois'}]);
+let _ccdFenetre=null;
+// PURE. La paire de bilans d'une fenetre : le dernier, et le dernier pose au
+// moins `jours` jours avant lui — ou le premier. null sous deux bilans.
+function ccdFenetreBilans(u,jours){
+  let bl=[]; try{ bl=bilansOrdonnes(u)||[]; }catch(e){ bl=[]; }
+  if(bl.length<2) return null;
+  const B=bl[bl.length-1], lim=Number(B.date)-jours*864e5;
+  let A=bl[0];
+  for(let i=bl.length-2;i>=0;i--) if(Number(bl[i].date)<=lim){ A=bl[i]; break; }
+  return {a:Number(A.date),b:Number(B.date)};
+}
+// PURE. Le dossier ramene a deux dates — ccdBorner, pour une paire donnee.
+function _ccdBornerA(u,a,b){
+  const iA=_jourISO(a), iB=_jourISO(b);
+  return Object.assign({},u,{
+    bilans:((u&&u.bilans)||[]).filter(x=>x&&Number(x.date)>=a&&Number(x.date)<=b),
+    weightLog:((u&&u.weightLog)||[]).filter(e=>e&&e.date>=iA&&e.date<=iB)});
+}
+function ccdPeriodeVerdict(k){
+  const f=CCD_FENETRES.find(x=>x.k===k);
+  const c=getOwnedClient(currentClientId);
+  if(!f||!c) return null;
+  const p=ccdFenetreBilans(_dossier(c),f.j);
+  _ccdFenetre=p?k:null;
+  if(p) ccdPaire(p.a,p.b); else ccdPaire(0,0);
+  return p;
+}
+function _ccdSvg(p,plein){ return '<svg viewBox="0 0 24 24" '+(plein?'fill="currentColor"':'fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"')+' aria-hidden="true">'+p+'</svg>'; }
+const CCD_ICO={
+  athlete:_ccdSvg('<circle cx="12" cy="7.5" r="4"/><path d="M4 21c0-4.4 3.6-7.5 8-7.5s8 3.1 8 7.5z"/>',true),
+  poids:_ccdSvg('<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 9.5a4 4 0 0 1 8 0M12 9.5l1.8-2"/>'),
+  maigre:_ccdSvg('<path d="M6 19c-1.5-2-1.5-5 .5-7l3-3c.8-.8 2-.5 2.3.5l.5 1.6 3-1.1c1.4-.5 2.9.4 3 1.9.3 3.2-1.2 7.1-5.3 7.1z"/><path d="M9 7.5l-1-3.5 3 .5"/>'),
+  gras:_ccdSvg('<path d="M12.3 2.5c.6 3-1.9 4.6-3.3 6.6-1.3 1.8-2 3.4-2 5.3a5 5 0 0 0 10 0c0-2.3-1-4.1-2.3-5.6.1 1.6-.6 2.8-1.6 3.3.5-3.3-.4-6.8-.8-9.6z"/>'),
+  dort:_ccdSvg('<path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z"/><path d="M15 4h3.5L15 8h3.5"/>'),
+  bas:_ccdSvg('<path d="M6 9l6 6 6-6"/>'),
+  haut:_ccdSvg('<path d="M6 15l6-6 6 6"/>'),
+  droite:_ccdSvg('<path d="M9 5l7 7-7 7"/>'),
+  calendrier:_ccdSvg('<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4M7.5 13h.01M12 13h.01M16.5 13h.01M7.5 16.5h.01M12 16.5h.01"/>'),
+  info:_ccdSvg('<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.8h.01"/>'),
+  barres:_ccdSvg('<rect x="3.5" y="12" width="4" height="8.5" rx="1.2"/><rect x="10" y="7" width="4" height="13.5" rx="1.2"/><rect x="16.5" y="3.5" width="4" height="17" rx="1.2"/>',true),
+  alerte:_ccdSvg('<circle cx="12" cy="12" r="10"/><path d="M12 7v6.5M12 16.8h.01" stroke="#1a0d00" stroke-width="2.4" stroke-linecap="round"/>',true)
+};
+// La mini-courbe : les derniers releves, sans echelle — elle dit une forme,
+// le chiffre est a cote. Rien sous deux points.
+function _ccdSpark(vals){
+  const v=(vals||[]).filter(x=>x!=null&&isFinite(x)).slice(-8);
+  if(v.length<2) return '';
+  const mn=Math.min(...v), mx=Math.max(...v), et=(mx-mn)||1;
+  const pts=v.map((x,i)=>[(i/(v.length-1))*96+2,26-((x-mn)/et)*22]);
+  const l=pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+  const der=pts[pts.length-1];
+  return '<svg class="ccdx-spark" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true">'
+    +'<polygon points="2,30 '+l+' 98,30" class="ccdx-spark-a"/>'
+    +'<polyline points="'+l+'" class="ccdx-spark-l"/>'
+    +'<circle cx="'+der[0].toFixed(1)+'" cy="'+der[1].toFixed(1)+'" r="2.4" class="ccdx-spark-p"/></svg>';
+}
+function _ccdSeries(u){
+  let bl=[]; try{ bl=bilansOrdonnes(u)||[]; }catch(e){ bl=[]; }
+  let comp=[]; try{ comp=ccdCompositionSerie(u)||[]; }catch(e){ comp=[]; }
+  return {poids:bl.map(b=>getBW(b)).filter(x=>x>0),
+    gras:comp.map(x=>x.gras),maigre:comp.map(x=>x.maigre)};
+}
+// L'en-tete de l'etage : lecture, periodes, et les deux bilans compares.
+function _htmlCcdTete(u){
+  let bl=[]; try{ bl=bilansOrdonnes(u)||[]; }catch(e){ bl=[]; }
+  const a=ccdPaireActive()?_ccdPaireA:(bl.length>1?Number(bl[bl.length-2].date):0);
+  const b=ccdPaireActive()?_ccdPaireB:(bl.length?Number(bl[bl.length-1].date):0);
+  const jj=t=>t?new Date(t).toLocaleDateString('fr-FR'):'';
+  const plage=a&&b?(jj(a)+' – '+jj(b)):(b?jj(b):'Aucun bilan');
+  return '<div class="ccdx-tete">'
+    +'<span class="ccdx-tete-i">'+CCD_ICO.athlete+'</span>'
+    +'<div class="ccdx-tete-c"><h4>Athlète</h4><span>Vue d’ensemble de ses données principales</span></div>'
+    +'<span class="cc-corps-vue ccd-lec ccdx-lec" role="group" aria-label="Ce que les cartes affichent">'
+      +CCD_LECTURES.map(x=>'<button type="button" class="cc-corps-o'+((x.cle===_ccdLecture)?' actif':'')
+        +'" aria-pressed="'+((x.cle===_ccdLecture)?'true':'false')+'" title="'+escapeHtml(x.aide)
+        +'" onclick="ccdLecture(\''+x.cle+'\')">'+escapeHtml(x.lib)+'</button>').join('')+'</span>'
+    +'<span class="ccdx-per" role="group" aria-label="Période comparée">'
+      +CCD_FENETRES.map(f=>'<button type="button" class="ccdx-per-b'+(_ccdFenetre===f.k?' actif':'')+'"'
+        +' aria-pressed="'+(_ccdFenetre===f.k)+'"'+(bl.length<2?' disabled':'')
+        +' onclick="ccdPeriodeVerdict(\''+f.k+'\')">'+f.lib+'</button>').join('')+'</span>'
+    +'<button type="button" class="ccdx-plage ccd-out-b" aria-expanded="false" aria-controls="ccd-out-c"'
+      +' onclick="ccdOutils(this)" title="Choisir les deux bilans comparés, et les mesures épinglées">'
+      +CCD_ICO.calendrier+'<span>'+escapeHtml(plage)+'</span>'+CCD_ICO.bas+'</button>'
+    +'</div>';
+}
+// « COMPARER LES PERIODES » : ouvre la feuille des trois ecarts.
+function _htmlCcdComparer(u){
+  let bl=[]; try{ bl=bilansOrdonnes(u)||[]; }catch(e){ bl=[]; }
+  if(bl.length<2) return '';
+  return '<div class="ccdx-bande">'
+    +'<span class="ccdx-bande-i">'+CCD_ICO.info+'</span>'
+    +'<div class="ccdx-bande-c"><h5>Comparer les périodes</h5>'
+      +'<span>Analyse les évolutions de l’athlète en comparant différentes périodes (7 jours, 28 jours, 3 mois) pour identifier les tendances et ajuster l’entraînement.</span></div>'
+    +'<button type="button" class="btn btn-red ccdx-bande-b" onclick="ccdComparerPeriodes()">'+CCD_ICO.barres+'<span>Les comparer</span></button>'
+    +'<button type="button" class="ccdx-bande-b2" onclick="ccdChoisirPeriode()">'+CCD_ICO.calendrier+'<span>Choisir une période</span></button>'
+    +'</div>';
+}
+function ccdChoisirPeriode(){
+  const t=document.querySelector('#ccd-verdict .ccdx-plage');
+  const c=document.getElementById('ccd-out-c');
+  if(t&&c&&c.hidden) ccdOutils(t);
+  try{ (document.getElementById('ccd-pa')||t).focus(); t.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){}
+}
+// PURE. Les trois ecarts cote a cote.
+function ccdComparaison(u){
+  return CCD_FENETRES.map(f=>{
+    const p=ccdFenetreBilans(u,f.j);
+    if(!p) return {f,p:null};
+    let v=null; try{ v=ccdVerdict(_ccdBornerA(u,p.a,p.b),true); }catch(e){ v=null; }
+    return {f,p,poids:v&&v.poids?v.poids.delta:null,
+      maigre:v&&v.maigre?v.maigre.delta:null,gras:v&&v.gras&&!v.gras.manque?v.gras.delta:null};
+  });
+}
+function ccdComparerPeriodes(){
+  const c=getOwnedClient(currentClientId);
+  if(!c) return;
+  const l=ccdComparaison(_dossier(c));
+  const cel=v=>v==null?'—':escapeHtml(_ccdDelta(v,'kg'));
+  _sanFeuille('Comparer les périodes',
+    '<table class="ccdx-tab"><thead><tr><th>Période</th><th>Poids</th><th>Masse maigre</th><th>Masse grasse</th></tr></thead><tbody>'
+    +l.map(x=>'<tr><th>'+x.f.lib+(x.p?'<small>depuis le '+escapeHtml(_ccdJour(x.p.a))+'</small>':'')+'</th>'
+      +(x.p?('<td>'+cel(x.poids)+'</td><td>'+cel(x.maigre)+'</td><td>'+cel(x.gras)+'</td>')
+        :'<td colspan="3">Il faut deux bilans.</td>')+'</tr>').join('')
+    +'</tbody></table>'
+    +'<div class="san-aide" style="margin-top:10px">Chaque période compare le dernier bilan au dernier bilan posé au moins aussi loin avant lui. '
+    +'Masse grasse estimée au ruban, à '+CCD_BF_MARGE+' points près ; masse maigre à '+_synNombre(CCD_MAIGRE_BRUIT)+' kg près.</div>');
+}
+// « DONNEES INCOMPLETES » : combien de mesures manquent, et la feuille qui
+// les nomme toutes, chacune avec ce qu'elle debloque et sa demande.
+function _ccdManquesTous(u){
+  let femme=false; try{ femme=isFemale((u&&(u._evol_gender||u.gender))||''); }catch(e){}
+  return CCD_MANQUES.filter(m=>(!m.femme||femme)&&_ccdManqueCette(u,m));
+}
+function _htmlCcdIncomplet(c){
+  const u=_dossier(c);
+  if(!u) return '';
+  const l=_ccdManquesTous(u);
+  if(!l.length) return '';
+  return '<div class="ccdx-incomplet">'
+    +'<span class="ccdx-inc-i">'+CCD_ICO.alerte+'</span>'
+    +'<div class="ccdx-inc-c"><h5>Données incomplètes</h5>'
+      +'<span>'+l.length+' mesure'+(l.length>1?'s manquent':' manque')+' à son dossier. '
+      +escapeHtml(ccdPhraseManque(ccdMesureManquante(u)).split('. ')[0])+' d’abord : c’est elle qui débloque le plus.</span></div>'
+    +'<button type="button" class="ccdx-inc-lien" onclick="ccdVoirManques()">Voir les données manquantes'+CCD_ICO.droite+'</button>'
+    +'</div>';
+}
+function ccdVoirManques(){
+  const c=getOwnedClient(currentClientId);
+  if(!c) return;
+  const u=_dossier(c);
+  const l=_ccdManquesTous(u);
+  _sanFeuille('Données manquantes',
+    (_htmlCcdManque(c)||'')
+    +'<div class="ccdx-manq-l">'+l.map(m=>{
+      const d=demandeMesurePour(m.cle,u);
+      return '<div class="ccdx-manq"><div><b>'+escapeHtml(m.lib.charAt(0).toUpperCase()+m.lib.slice(1))+'</b>'
+        +'<span>Pour '+escapeHtml(m.debloque)+'. '+escapeHtml(m.effort)+'</span></div>'
+        +(d?'<em>Demandé le '+escapeHtml(_ccdJour(d.date))+'</em>'
+          :'<button type="button" class="ccd-manque-b" onclick="demanderMesure(\''+m.cle+'\');ccdVoirManques()">Le lui demander</button>')
+        +'</div>';
+    }).join('')+'</div>');
+}
 function renderVerdictCoach(c){
   const z=document.getElementById('ccd-verdict');
   if(!z) return false;
@@ -44347,7 +44545,10 @@ function renderVerdictCoach(c){
   let h='';
   try{ h=u?_htmlCcdVerdict(b,ccdPaireActive()):''; }catch(e){ h=''; }
   if(h){
-    try{ h=_htmlCcdOutils(u)+h+_htmlCcdEpingles(b)+_htmlCcdManque(c); }catch(e){}
+    // LA MAQUETTE DU 24/09/2026 : l'en-tete, les cartes, la comparaison des
+    // periodes, et les donnees qui manquent (la demande vit dans leur feuille).
+    try{ h='<div class="ccdx">'+_htmlCcdTete(u)+_htmlCcdOutils(u)+h+_htmlCcdEpingles(b)
+      +_htmlCcdComparer(u)+_htmlCcdIncomplet(c)+'</div>'; }catch(e){}
   }
   z.innerHTML=h;
   // LA BARRE VIT DANS LA LIGNE DE TITRE, et elle disparait avec les cartes :

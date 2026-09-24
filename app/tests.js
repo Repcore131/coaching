@@ -31145,7 +31145,8 @@ async function testExercices(){
           const cartes=[...d.querySelectorAll('.ccd-v')];
           if(cartes.length!==4) return _echec(cartes.length+' cartes au lieu de quatre');
           const libs=cartes.map(c=>(c.querySelector('.ccd-v-l')||{}).textContent||'');
-          if(libs.join('|')!=='Poids|Masse grasse|Masse maigre|Ce qui dort')
+          // ORDRE DE LA MAQUETTE DE KEVIN (24/09/2026) : la maigre avant la grasse.
+          if(libs.join('|')!=='Poids|Masse maigre|Masse grasse|Ce qui dort')
             return _echec('cartes : '+libs.join('|'));
           for(const c of cartes){
             const s=(c.querySelector('.ccd-v-s')||{}).textContent||'';
