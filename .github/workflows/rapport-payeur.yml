@@ -11,18 +11,21 @@
 #    base, ni un dossier, ni une mesure. Une adresse, un nom, un montant, une
 #    date : ce qu'une facture porte deja.
 #
-#  ── LES QUATRE SECRETS A POSER UNE FOIS ────────────────────────────────
+#  ── LE SECRET A POSER UNE FOIS, ET LE MOT DE PASSE D'ENVOI ─────────────────
 #  Depot GitHub > Settings > Secrets and variables > Actions > New repository
 #  secret. Ils sont chiffres, invisibles ensuite, et jamais dans le code.
 #
+#  ⚠ DEUX, ET NON QUATRE : MAIL_UTILISATEUR et MAIL_DESTINATAIRE ne sont pas
+#    des secrets, ce sont des adresses, et elles ont une valeur par defaut.
+#
 #    PAYPAL_CLIENT_SECRET   le secret de l'application PayPal (compte reel)
-#    MAIL_UTILISATEUR       guellec.coachingpro@gmail.com
+#    (MAIL_UTILISATEUR)     facultatif : guellec.coachingpro@gmail.com par defaut
 #    MAIL_MOT_DE_PASSE      un MOT DE PASSE D'APPLICATION Google, pas celui du
 #                           compte : myaccount.google.com > Securite >
 #                           Validation en deux etapes > Mots de passe des
 #                           applications. Il ne permet que d'envoyer un
 #                           courriel, et se revoque d'un clic.
-#    MAIL_DESTINATAIRE      l'adresse qui recoit (la meme, en general)
+#    (MAIL_DESTINATAIRE)    facultatif : la meme adresse par defaut
 #
 #  PAYPAL_CLIENT_ID n'est pas un secret : il est lu dans rc-core, ou il vit
 #  deja en clair — chaque page servie le contient.
@@ -65,7 +68,7 @@ jobs:
         with:
           node-version: '22'
 
-      # ── LES QUATRE SECRETS D'ABORD ───────────────────────────────────
+      # ── LES DEUX SECRETS D'ABORD ────────────────────────────────────
       # Le 1er du mois a 6 h, un travail qui echoue sur « PayPal refuse les
       # identifiants » ou sur « 535 authentification refusee » envoie un
       # courriel d'echec que personne ne relie a un secret jamais pose. Cette
@@ -75,12 +78,18 @@ jobs:
       #   fichier « may be malicious » et bloque le travail (constate le
       #   24/09/2026 sur plans-paypal.yml). Ce sont des COMPARAISONS par nom :
       #   elles rendent true ou false, aucune valeur ne prend corps.
-      - name: Les quatre secrets sont-ils poses
+      #
+      # ⚠ IL N'Y A QUE DEUX VRAIS SECRETS (24/09/2026). MAIL_UTILISATEUR et
+      #   MAIL_DESTINATAIRE valaient tous les deux l'adresse du createur — une
+      #   adresse qui vit deja en clair dans rc-core (CREATOR_EMAIL) et dans
+      #   database.rules.json, donc dans chaque page servie. En faire des
+      #   secrets ajoutait deux formulaires a remplir sans rien proteger du
+      #   tout. Elles ont maintenant une valeur par defaut, et un secret du
+      #   meme nom la remplace si l'envoi doit partir ailleurs.
+      - name: Les deux secrets sont-ils poses
         env:
           VU_PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET != '' }}
-          VU_MAIL_UTILISATEUR: ${{ secrets.MAIL_UTILISATEUR != '' }}
           VU_MAIL_MOT_DE_PASSE: ${{ secrets.MAIL_MOT_DE_PASSE != '' }}
-          VU_MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE != '' }}
         run: |
           {
             echo '## Les secrets qui arrivent jusqu ici'
@@ -89,7 +98,7 @@ jobs:
             echo '| --- | --- |'
           } >> $GITHUB_STEP_SUMMARY
           MANQUE=0
-          for n in PAYPAL_CLIENT_SECRET MAIL_UTILISATEUR MAIL_MOT_DE_PASSE MAIL_DESTINATAIRE; do
+          for n in PAYPAL_CLIENT_SECRET MAIL_MOT_DE_PASSE; do
             eval "v=\$VU_$n"
             if [ "$v" = "true" ]; then e='pose'; else e='**absent**'; MANQUE=1; fi
             echo "| $n | $e |" >> $GITHUB_STEP_SUMMARY
@@ -119,9 +128,11 @@ jobs:
       # portent le meme titre ne se relit pas.
       - name: L'envoyer
         env:
-          MAIL_UTILISATEUR: ${{ secrets.MAIL_UTILISATEUR }}
+          # L'adresse est publique (CREATOR_EMAIL, servi dans chaque page) :
+          # un secret du meme nom la remplace, sinon c'est celle-ci.
+          MAIL_UTILISATEUR: ${{ secrets.MAIL_UTILISATEUR || 'guellec.coachingpro@gmail.com' }}
           MAIL_MOT_DE_PASSE: ${{ secrets.MAIL_MOT_DE_PASSE }}
-          MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE }}
+          MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE || 'guellec.coachingpro@gmail.com' }}
         run: |
           node scripts/envoyer_mail.mjs rapport-payeur.md \
             "Rapport payeur RepCore, $(date -u +'%Y-%m')"
