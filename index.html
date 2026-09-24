@@ -231,7 +231,7 @@ header{padding:56px 0 72px;overflow:hidden;
 .hero .sub{color:#bdbdbd;font-size:clamp(16px,2.2vw,19px);max-width:52ch;margin-bottom:30px}
 .hero .visuel{position:relative;display:flex;justify-content:center}
 .hero .b1{top:47%;left:-10%}
-.hero .b2{bottom:16%;right:-6%}
+.hero .b2{bottom:16%;right:-2%}
 /* ---------- preuves ---------- */
 .preuves{padding:0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:#0c0c0c}
 .preuves .wrap{display:grid;grid-template-columns:repeat(4,1fr)}
@@ -259,7 +259,7 @@ ul.coches{list-style:none;margin-top:16px}
 ul.coches li{position:relative;padding-left:28px;margin-bottom:10px;font-size:14.5px;color:#d4d4d4}
 ul.coches li::before{content:'';position:absolute;left:0;top:4px;width:17px;height:17px;border-radius:50%;
   background:rgba(224,32,32,.15) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e96363' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5L20 7'/%3E%3C/svg%3E") center/11px no-repeat}
-.fonction .b3{top:3%;right:-10%}
+.fonction .b3{top:3%;right:-3%}
 .fonction .b4{bottom:22%;left:-6%}
 /* ---------- clip video ---------- */
 .clip{position:relative;width:min(340px,82vw);aspect-ratio:398/552;border-radius:22px;overflow:hidden;
@@ -652,12 +652,20 @@ footer a{color:var(--dim);margin:0 8px}
           <div><q>Une approche humaine et à l'écoute, pour un accompagnement qui fait la différence.</q><small>Kevin Guellec · Guellec Coaching Pro</small></div>
         </div>
         <p class="lead">Coach diplômé d'État, créateur de RepCore. Un programme construit pour toi, des bilans lus et commentés, la correction vidéo de tes mouvements. L'application est incluse dans chaque formule.</p>
+        <div class="compare" aria-label="Comparaison de prix" style="margin-top:22px">
+          <div class="ligne"><span>Coach en salle, 2 séances par semaine</span><b>400 à 640&nbsp;€/mois</b></div>
+          <div class="ligne"><span>Programme personnalisé + 3 mois d'app</span><b>99&nbsp;€</b></div>
+          <div class="ligne moi"><span>Coaching suivi, sur 6 mois</span><b>100&nbsp;€/mois</b></div>
+        </div>
         <p style="margin-top:22px"><a class="cta" href="https://beacons.ai/kevin.gllc" rel="noopener" target="_blank">Voir les formules de coaching</a></p>
       </div>
-      <div class="compare" aria-label="Comparaison de prix">
-        <div class="ligne"><span>Coach en salle, 2 séances par semaine</span><b>400 à 640&nbsp;€/mois</b></div>
-        <div class="ligne"><span>Programme personnalisé + 3 mois d'app</span><b>99&nbsp;€</b></div>
-        <div class="ligne moi"><span>Coaching suivi, sur 6 mois</span><b>100&nbsp;€/mois</b></div>
+      <div class="visuel" style="display:flex;justify-content:center">
+        <div class="clip" style="aspect-ratio:540/674">
+          <video autoplay muted loop playsinline preload="metadata" poster="app/img/vente/seance-kevin.webp"
+            aria-label="Kevin à l'entraînement, à la presse">
+            <source src="app/img/vente/seance-kevin.mp4" type="video/mp4">
+          </video>
+        </div>
       </div>
     </div>
   </div>
