@@ -67504,15 +67504,29 @@ vendredi 78 6h 44m
         // La sparkline, elle, est bien partie.
         return typeof _sparklineCoach==='undefined'
           ?true:_echec('deux graphiques cohabitent encore');})());
-      ok('Le resume « Sommeil et pas » est EN TETE de l\'onglet',(()=>{
-        // Son propre commentaire l'annoncait depuis le debut ; le balisage ne
-        // suivait pas, et il tombait apres les habitudes.
+      // ⚠ LE RESUME « SOMMEIL ET PAS » EST PARTI (maquette de Kevin, 24/09/2026) :
+      //   le tableau de bord du sommeil le remplace, avec la section « Sommeil ».
+      ok('Le tableau de bord du sommeil ouvre l’onglet Lifestyle',(()=>{
         const v=document.querySelector('.ccd-vue[data-vue="lifestyle"]');
         if(!v) return _echec('onglet introuvable');
-        const ids=[...v.querySelectorAll('.cc-sect-c')].map(x=>x.id);
-        const i=ids.indexOf('ccd-sante');
-        if(i<0) return _echec('le resume a disparu');
-        return i===0?true:_echec('il arrive en position '+(i+1)+' : '+ids.join(', '));})());
+        if(document.getElementById('ccd-sante')) return _echec('le resume « Sommeil et pas » survit');
+        const z=document.getElementById('ccd-sommeil');
+        if(!z||z.closest('.ccd-vue')!==v) return _echec('le tableau de bord a quitte l’onglet');
+        return v.firstElementChild===z
+          ?true:_echec('il n’est pas en tete');})());
+      ok('Le tableau de bord du sommeil dit ce qu’il lit',(()=>{
+        const j=Date.now(), iso=d=>localISODate(new Date(d));
+        const c={sleepGoal:480,sleepLog:[{date:iso(j-864e5),duration:5},{date:iso(j-2*864e5),duration:8.5},
+          {date:iso(j-3*864e5),duration:7}]};
+        const s=csSemaine(c,0);
+        if(s.lus!==3) return _echec(s.lus+' nuits lues au lieu de 3');
+        if(s.atteints!==1) return _echec(s.atteints+' nuits atteintes au lieu de 1');
+        if(s.courtes.length!==1) return _echec(s.courtes.length+' nuits courtes au lieu de 1');
+        const h=_htmlSommeilCoach(c);
+        for(const m of ['Moyenne (7 jours)','Objectif','Nuits atteintes','Tendance','Durée de sommeil',
+                        'Détails de la semaine','Points d’attention','Insights','1 nuit &lt; 6h'])
+          if(h.indexOf(m)<0) return _echec('absent : '+m);
+        return true;})());
       ok('Les sections de domaine ne sont plus masquees par defaut',(()=>{
         // Elles l'etaient, et c'etait le defaut : un athlete muet produisait un
         // onglet vide, indiscernable d'un athlete qui va bien.

@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1531';
+window.RC_BUILD='1532';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -403,7 +403,7 @@ if('serviceWorker' in navigator){
 /* Repli COMPLET, pour un navigateur sans woff2 ou un fichier manquant. */
 :root{--pile-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans',sans-serif;--pile-titre:'Bebas Neue','Arial Narrow','Haettenschweiler','Franklin Gothic Condensed',Impact,sans-serif}
 </style>
-<link rel="stylesheet" href="./rc-style.1531.css">
+<link rel="stylesheet" href="./rc-style.1532.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -2545,18 +2545,11 @@ const COACH_PHOTO='icons/coach.jpg';
            ET « Sommeil et pas » EST ENFIN EN TETE, comme son propre
            commentaire l'annonçait depuis le debut sans que le balisage le
            suive : c'est le resume qu'on lit avant d'ouvrir le detail. -->
-      <section class="cc-sect" style="--cc-accent:var(--border)">
-        <div class="cc-sect-t"><span>Sommeil et pas</span></div>
-        <div class="cc-sect-c" id="ccd-sante"></div>
-      </section>
-      <!-- ⚠ CES DEUX SECTIONS NE SONT PLUS MASQUEES PAR DEFAUT. Elles
-           l'etaient, et c'etait le defaut : un athlete muet depuis dix jours
-           produisait un onglet vide, donc indiscernable d'un athlete qui va
-           bien. Le silence est desormais l'une des choses qu'elles disent. -->
-      <section class="cc-sect" style="--cc-accent:var(--border)">
-        <div class="cc-sect-t"><span>Sommeil</span></div>
-        <div class="cc-sect-c" id="ccd-sommeil"></div>
-      </section>
+      <!-- LE SOMMEIL, EN UN TABLEAU DE BORD (maquette de Kevin, 24/09/2026). Il
+           remplace le resume « Sommeil et pas » et la section « Sommeil » : son
+           propre en-tete, ses quatre cartes, son graphe et ses trois colonnes.
+           Rempli par renderSommeilCoach. -->
+      <div id="ccd-sommeil"></div>
       <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Pas</span></div>
         <div class="cc-sect-c" id="ccd-pas"></div>
@@ -5635,5 +5628,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1531.js"></script>
+<script src="./rc-core.1532.js"></script>
 </body></html>
