@@ -261,6 +261,18 @@ ul.coches li::before{content:'';position:absolute;left:0;top:4px;width:17px;heig
   background:rgba(224,32,32,.15) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e96363' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5L20 7'/%3E%3C/svg%3E") center/11px no-repeat}
 .fonction .b3{top:3%;right:-10%}
 .fonction .b4{bottom:22%;left:-6%}
+/* ---------- clip video ---------- */
+.clip{position:relative;width:min(340px,82vw);aspect-ratio:398/552;border-radius:22px;overflow:hidden;
+  border:1px solid #2a2a2a;box-shadow:0 40px 80px -20px rgba(0,0,0,.9),0 0 90px -10px rgba(224,32,32,.3);background:#0b0b0b}
+.clip video,.clip img{width:100%;height:100%;object-fit:cover;display:block}
+.clip .rec{position:absolute;top:12px;left:12px;font-size:10.5px;font-weight:800;letter-spacing:1.5px;color:#fff;
+  background:rgba(224,32,32,.9);padding:4px 9px;border-radius:999px}
+/* ---------- portrait ---------- */
+.portrait{display:flex;align-items:center;gap:18px;margin:22px 0 6px}
+.portrait img{width:112px;height:112px;border-radius:50%;border:3px solid var(--red);
+  box-shadow:0 0 30px rgba(224,32,32,.35);flex-shrink:0}
+.portrait q{font-style:italic;color:#cfcfcf;font-size:15px;quotes:'« ' ' »';display:block}
+.portrait small{display:block;margin-top:6px;font-size:12px;color:var(--red-light);font-style:normal;font-weight:800;letter-spacing:1.5px;text-transform:uppercase}
 /* ---------- tuiles ---------- */
 .tuiles{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:36px}
 .tuile{background:linear-gradient(160deg,#141414,#0d0d0d);border:1px solid var(--border);border-radius:16px;padding:28px}
@@ -365,6 +377,8 @@ footer a{color:var(--dim);margin:0 8px}
   .prix .offre:first-child{order:2}
   .duo .tel:last-child{margin-left:-28px;margin-top:44px}
   .barre{display:flex}
+  .portrait{gap:14px}.portrait img{width:76px;height:76px}.portrait q{font-size:14px}
+  .ancre .ligne{flex-direction:column;gap:2px}
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.cta,.barre{transition:none}}
 </style>
@@ -490,7 +504,28 @@ footer a{color:var(--dim);margin:0 8px}
         <div class="bulle b3"><b>+20 kg d'e1RM</b>à la presse, en 8 semaines</div>
       </div>
     </div>
-    <p class="demo">Captures réelles de l'application, avec un profil de démonstration.</p>
+    <div class="fonction inverse">
+      <div class="texte">
+        <span class="badge">Avec ton coach</span>
+        <h3>Ta technique corrigée,<br>image par image.</h3>
+        <p>Tu filmes ta série, tu l'envoies depuis ta séance. Ton coach la reprend image par image et te répond avec des tracés : angles, trajectoire de la charge, amplitude mesurée.</p>
+        <ul class="coches">
+          <li>Angles articulaires et trajectoires dessinés sur ta vidéo</li>
+          <li>Mesures d'amplitude, pas des impressions</li>
+          <li>La correction revient dans l'app, à côté de l'exercice</li>
+        </ul>
+      </div>
+      <div class="visuel">
+        <div class="clip">
+          <video autoplay muted loop playsinline preload="metadata" poster="app/img/vente/correction.webp"
+            aria-label="Vidéo d'une presse à cuisses annotée : angles du genou et de la hanche, trajectoire de la machine">
+            <source src="app/img/vente/correction.mp4" type="video/mp4">
+          </video>
+          <span class="rec">Analyse</span>
+        </div>
+      </div>
+    </div>
+    <p class="demo">Captures réelles de l'application : profil de démonstration, et analyse filmée par Kevin.</p>
 
     <div class="tuiles">
       <div class="tuile">
@@ -612,6 +647,10 @@ footer a{color:var(--dim);margin:0 8px}
       <div>
         <p class="eyebrow">Tu veux aller plus loin&nbsp;?</p>
         <h2>Être coaché par <em>Kevin</em></h2>
+        <div class="portrait">
+          <img src="app/img/vente/kevin.webp" width="400" height="400" loading="lazy" alt="Kevin Guellec, coach">
+          <div><q>Une approche humaine et à l'écoute, pour un accompagnement qui fait la différence.</q><small>Kevin Guellec · Guellec Coaching Pro</small></div>
+        </div>
         <p class="lead">Coach diplômé d'État, créateur de RepCore. Un programme construit pour toi, des bilans lus et commentés, la correction vidéo de tes mouvements. L'application est incluse dans chaque formule.</p>
         <p style="margin-top:22px"><a class="cta" href="https://beacons.ai/kevin.gllc" rel="noopener" target="_blank">Voir les formules de coaching</a></p>
       </div>
@@ -722,6 +761,13 @@ footer a{color:var(--dim);margin:0 8px}
       });
     }
     bs.forEach(function(b){ b.addEventListener('click',function(){ poser(b.getAttribute('data-periode')); }); });
+  }catch(e){}
+})();
+/* Mouvement reduit demande : la boucle video s'arrete sur son affiche. */
+(function(){
+  try{
+    if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)
+      document.querySelectorAll('video[autoplay]').forEach(function(v){ v.removeAttribute('autoplay'); v.pause(); });
   }catch(e){}
 })();
 /* Barre d'appel fixe sur mobile : elle n'apparait qu'une fois le premier
