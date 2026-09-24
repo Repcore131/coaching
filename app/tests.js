@@ -12932,13 +12932,49 @@ async function testExercices(){
               return _echec('la carte « '+x.titre+' » a disparu');
             return true;
           } finally { currentUser=sauve; z.innerHTML=''; }})());
-        ok('souscrireCoach REFUSE un palier sans plan, et ne navigue pas',(()=>{
+        ok('souscrireCoach REFUSE un palier sans plan, ET OUVRE CEUX QUI EN ONT UN',(()=>{
+          // ⚠ CE TEST A CHANGE DE CONTRAT LE 24/09/2026. Il exigeait que
+          //   souscrireCoach('coach') REFUSE, parce que les deux plans PayPal du
+          //   coach n'existaient pas : la formule etait invendable, et le refus
+          //   etait la seule chose honnete a faire. Les plans existent
+          //   maintenant (P-9JD3… et P-1WS2…), et refuser SERAIT le defaut.
+          //
+          //   CE QUI RESTE VRAI, et qui est l'invariant : un palier SANS plan ne
+          //   mene jamais a un ecran de paiement vide.
           const avant=document.querySelector('.screen.active');
-          const r=souscrireCoach('coach');
-          if(r!==false) return _echec('la souscription a été acceptée');
-          if(souscrireCoach('palier-invente')!==false) return _echec('un palier inventé est accepté');
-          return document.querySelector('.screen.active')===avant
-            ?true:_echec('l\'écran a changé');})());
+          const svPal=(()=>{ try{ return sessionStorage.getItem('rc_palier_coach'); }catch(e){ return null; } })();
+          const sv=currentUser;
+          try{
+            currentUser={id:'c1',email:'c@t',role:'coach'};
+            // « libre » est gratuit : il n'a pas de plan, et il ne doit rien ouvrir.
+            if(souscrireCoach('libre')!==false) return _echec('le palier gratuit ouvre un paiement');
+            if(souscrireCoach('palier-invente')!==false) return _echec('un palier inventé est accepté');
+            if(document.querySelector('.screen.active')!==avant)
+              return _echec('un refus a quand même navigué');
+            // ET LES DEUX QUI ONT UN PLAN S'OUVRENT.
+            for(const cle of ['coach','pro']){
+              if(souscrireCoach(cle)!==true)
+                return _echec('« '+cle+' » refuse alors que son plan existe');
+              if((document.querySelector('.screen.active')||{}).id!=='s-subscribe')
+                return _echec('« '+cle+' » n\'ouvre pas l\'écran de paiement');
+              // ⚠ ET C'EST LE PLAN DU COACH QUI SERA FACTURE, pas celui de
+              //   l'athlete. C'est exactement la faute que le lot 11 a fermee :
+              //   un repli sur PAYPAL_PLAN_ID facturait 9,95 € a qui croyait
+              //   prendre autre chose.
+              const p=COACH_PALIERS.find(x=>x.cle===cle);
+              if(_planIdChoisi()!==p.planId())
+                return _echec('« '+cle+' » facturerait '+(_planIdChoisi()||'(rien)'));
+            }
+            return true;
+          } finally {
+            currentUser=sv;
+            try{ if(svPal==null) sessionStorage.removeItem('rc_palier_coach');
+                 else sessionStorage.setItem('rc_palier_coach',svPal); }catch(e){}
+            if(avant){
+              document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+              avant.classList.add('active');
+            }
+          }})());
         ok('L\'export est offert au coach QUEL QUE SOIT son palier',(()=>{
           // Article 15 : le droit d'accès ne se conditionne pas à un paiement.
           const z=document.getElementById('coach-abo');
@@ -34677,6 +34713,8 @@ async function testExercices(){
           if(formuleDuPlan(PAYPAL_PLAN_ID_ULTIME_ANNUEL)!=='ultime') return _echec('le plan Ultime annuel n’est pas reconnu');
           if(formuleDuPlan(PAYPAL_PLAN_ID_ULTIME_DEMI)!=='ultime') return _echec('le premier mois n’ouvre pas Ultime');
           if(formuleDuPlan(PAYPAL_PLAN_ID)!=='essentielle') return _echec('le mensuel d’Essentielle n’est pas reconnu');
+          if(formuleDuPlan(PAYPAL_PLAN_ID_COACH)!=='coach') return _echec('le plan Coach n’est pas reconnu');
+          if(formuleDuPlan(PAYPAL_PLAN_ID_PRO)!=='pro') return _echec('le plan Pro n’est pas reconnu');
           if(formuleDuPlan('P-INCONNU')!=='') return _echec('un plan inconnu se voit attribuer une formule');
           // ET ELLE S’ECRIT AU MOMENT DU PAIEMENT.
           const src=_prodSrc();

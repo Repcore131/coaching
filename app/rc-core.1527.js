@@ -1347,8 +1347,8 @@ const COACH_PLANS=Object.freeze(['libre','coach','pro']);
 // de lancement : c'est le palier permanent de qui suit une seule personne.
 // Son quota est une limitation technique, JAMAIS annoncée comme un avantage —
 // une gratuité promise publiquement devient contractuelle et ne se reprend pas.
-const PAYPAL_PLAN_ID_COACH='';   // à créer sur developer.paypal.com — 19 EUR/mois
-const PAYPAL_PLAN_ID_PRO='';     // idem — 39 EUR/mois
+const PAYPAL_PLAN_ID_COACH='P-9JD300001T4718058NK2RF5Q';   // à créer sur developer.paypal.com — 19 EUR/mois
+const PAYPAL_PLAN_ID_PRO='P-1WS20264K4576284KNK2RF5Y';     // idem — 39 EUR/mois
 const COACH_PALIERS=Object.freeze([
   Object.freeze({cle:'libre', titre:'Libre', prix:0, quota:1,
    periode:'', detail:'Un athlète suivi, sans carte bancaire et sans durée.',
@@ -98792,6 +98792,14 @@ function formuleDuPlan(planId){
   if(id===PAYPAL_PLAN_ID_ULTIME||id===PAYPAL_PLAN_ID_ULTIME_ANNUEL
      ||id===PAYPAL_PLAN_ID_ULTIME_DEMI) return 'ultime';
   if(id===PAYPAL_PLAN_ID||id===PAYPAL_PLAN_ID_ANNUEL) return 'essentielle';
+  // ET LES DEUX FORMULES DU COACH (24/09/2026). Elles n'ouvrent aucun palier
+  // d'acces — un coach a le sien par son role — mais le dossier doit dire ce
+  // qui a ete facture. Sans ces deux lignes, subOffreChoisie prenait le relais
+  // et ecrivait « essentielle » dans le dossier d'un coach qui vient de payer
+  // 39 euros : un champ faux, que personne ne lit aujourd'hui et que
+  // quelqu'un lira un jour.
+  if(id===PAYPAL_PLAN_ID_COACH) return 'coach';
+  if(id===PAYPAL_PLAN_ID_PRO) return 'pro';
   return '';
 }
 // SANS COMPTE, s-client-code EST UN PIÈGE : doLinkCoach y lit currentUser.fname
