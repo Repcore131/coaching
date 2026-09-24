@@ -179,6 +179,15 @@ const SECRET = process.env.PAYPAL_CLIENT_SECRET || '';
 // LE SECRET, DEMANDE A L'ECRAN. Rien n'est garde : ni fichier, ni variable
 // d'environnement, ni historique de shell.
 function demanderSecret() {
+  // ⚠ PERSONNE POUR TAPER : on le dit, au lieu d'attendre dans le vide.
+  //   Sans terminal — un travail GitHub, un script appele par un autre — la
+  //   demande partirait dans le neant et le processus rendrait « aucun secret »
+  //   sans que rien n'explique pourquoi.
+  if (!process.stdin.isTTY) {
+    throw new Error('aucun terminal pour saisir le secret : donne-le par '
+      + "PAYPAL_CLIENT_SECRET (variable d'environnement, ou secret du depot "
+      + 'pour un travail GitHub).');
+  }
   return new Promise(res => {
     process.stdout.write('\n  Colle le secret de l\'application PayPal, puis Entree\n  (il n\'est ni enregistre ni affiche ailleurs) : ');
     let t = '';
