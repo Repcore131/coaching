@@ -75,26 +75,36 @@ jobs:
       # erreur de saisie et personne ne comprend que c'est un secret qui
       # manque, pas PayPal qui refuse.
       #
-      # ⚠ ET IL DIT QUELS SECRETS IL VOIT, PAR LEUR NOM. Un secret pose au
-      #   mauvais endroit — onglet Dependabot, onglet Codespaces, secret
-      #   d'environnement — n'arrive jamais ici, et « il n'existe pas » est
-      #   alors un message qui ment a celui qui vient de le poser. La liste des
-      #   NOMS tranche en une seconde.
+      # ⚠ ET IL DIT LESQUELS IL VOIT. Un secret pose au mauvais endroit —
+      #   onglet Dependabot, onglet Codespaces, secret d'environnement — n'arrive
+      #   jamais ici, et « il n'existe pas » est alors un message qui ment a
+      #   celui qui vient de le poser.
       #
-      #   ⚠⚠ LES NOMS, ET RIEN QUE LES NOMS. `toJSON(secrets)` porte AUSSI les
-      #      valeurs. Le journal les masque, mais le fichier qu'on commite,
-      #      LUI, ne masque rien et ce depot est public : on passe donc par
-      #      Object.keys, et la valeur ne sort jamais de la variable.
+      #   ⚠⚠ ON NE DEMANDE JAMAIS `toJSON(secrets)`. Essaye le 24/09/2026 :
+      #      GitHub a marque ce fichier « may be malicious » et bloque le
+      #      travail jusqu'a approbation — et il a RAISON, c'est le motif exact
+      #      d'une exfiltration de secrets. Ce qu'on ecrit ici ne sont pas des
+      #      valeurs mais des COMPARAISONS : `!= ''` rend true ou false, et
+      #      aucune valeur ne prend jamais corps nulle part.
       - name: Le secret est-il pose
         env:
           PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
-          TOUS_LES_SECRETS: ${{ toJSON(secrets) }}
+          VU_PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET != '' }}
+          VU_PAYPAL_SECRET: ${{ secrets.PAYPAL_SECRET != '' }}
+          VU_PAYPAL_CLIENT_ID: ${{ secrets.PAYPAL_CLIENT_ID != '' }}
+          VU_MAIL_UTILISATEUR: ${{ secrets.MAIL_UTILISATEUR != '' }}
+          VU_MAIL_MOT_DE_PASSE: ${{ secrets.MAIL_MOT_DE_PASSE != '' }}
+          VU_MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE != '' }}
         run: |
           mkdir -p docs/offre
           R=docs/offre/etat-plans-paypal.md
-          NOMS=$(node -e 'const o=JSON.parse(process.env.TOUS_LES_SECRETS||"{}");
-            const k=Object.keys(o).filter(x=>x!=="github_token");
-            console.log(k.length?k.sort().join(", "):"(aucun)")')
+          NOMS=""
+          for n in PAYPAL_CLIENT_SECRET PAYPAL_SECRET PAYPAL_CLIENT_ID \
+                   MAIL_UTILISATEUR MAIL_MOT_DE_PASSE MAIL_DESTINATAIRE; do
+            eval "v=\$VU_$n"
+            NOMS="$NOMS$n : $([ "$v" = "true" ] && echo 'pose' || echo 'absent')
+"
+          done
           {
             echo "# L'etat des plans PayPal"
             echo
@@ -103,7 +113,8 @@ jobs:
             echo
             echo '## Les secrets que ce travail voit'
             echo
-            echo 'Leurs NOMS seulement : une valeur ecrite ici partirait dans un depot public.'
+            echo 'Une ligne par nom attendu : pose, ou absent. Aucune valeur ne figure'
+            echo 'ici, ni ailleurs dans ce fichier : ce depot est public.'
             echo
             echo '```'
             echo "$NOMS"
@@ -123,7 +134,8 @@ jobs:
               echo
               echo "Les noms ci-dessus sont ceux qui arrivent vraiment jusqu'ici."
             } >> $R
-            echo "::error::Le secret PAYPAL_CLIENT_SECRET n'arrive pas jusqu'a ce travail. Secrets vus : $NOMS"
+            PLAT=$(echo "$NOMS" | tr '\n' ' ')
+            echo "::error::PAYPAL_CLIENT_SECRET n'arrive pas jusqu'a ce travail. Etat : $PLAT"
             exit 1
           fi
           echo "Secret present."
