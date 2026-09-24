@@ -5568,6 +5568,10 @@ const CHAMPS_SANTE=Object.freeze([
   // dedans — la photo n'est designee que par la date de son bilan — mais ce
   // sont des mesures d'un corps : elles sont de sante, comme les mensurations.
   'morphoInitiale',
+  // L'analyse morpho-anatomique (24/09/2026) : les 33 points des photos de
+  // face et de dos du premier bilan, et le masque de la personne. Aucune image
+  // — mais c'est le contour d'un corps, lu sur une photo corporelle : santé.
+  'morphoAnat',
   // Alimentation, cafeine, complements — nutrition porte les trois
   'nutrition','paliers','phase','phaseRefusee',
   // Troubles alimentaires et vigilance energetique
@@ -23367,6 +23371,7 @@ function openClientDetail(cid,_refresh,_force){
   // repond a la seule question qu'on se pose en ouvrant une fiche.
   try{ renderVerdictCoach(c); }catch(e){}
   try{ renderCorpsCoach(c); }catch(e){}
+  try{ renderAnatCoach(c); }catch(e){}
   try{ renderCourbesCoach(c); }catch(e){}
   try{ renderSignauxCoach(c); }catch(e){}
   try{ renderMensCoach(c); }catch(e){}
@@ -43721,6 +43726,7 @@ function _ccdRefaireEtages(){
     if(!c) return false;
     try{ renderVerdictCoach(c); }catch(e){}
     try{ renderCorpsCoach(c); }catch(e){}
+    try{ renderAnatCoach(c); }catch(e){}
     return true;
   }catch(e){ return false; }
 }
@@ -44808,6 +44814,1125 @@ function renderCourbesCoach(c){
   try{ h=_htmlCcdCourbes(c)||''; }catch(e){ h=''; }
   z.innerHTML=h;
   return !!h;
+}
+// ══ ANALYSE MORPHO-ANATOMIQUE — LA MAQUETTE DE KEVIN (24/09/2026) ═══════════
+//
+// Sous les silhouettes de l'onglet Données. « Au milieu, réellement la photo
+// de la personne qui a fait son bilan, en PNG, en supprimant le fond en
+// automatisme. […] Sur le côté, un petit screen de chaque partie de la photo
+// bilan. […] Une petite phrase, et en cliquant dessus ça me développe vraiment
+// un texte plus poussé. »
+//
+// ⚠ LA PHOTO EST CELLE DU PREMIER BILAN, face ET dos. Pas de dessin, pas
+//   d'image fabriquée : le centre est la photo détourée, les vignettes sont
+//   des recadrages de cette même photo. S'il manque le bilan ou une des deux
+//   photos, toute la section est grisée et propose de contacter l'athlète.
+// ⚠ LE DÉTOURAGE SE FAIT UNE FOIS, CHEZ LE COACH. mlAnatPhoto (motion-lab.js)
+//   rend les 33 points et un masque de 200 px de large, codé par plages ; on
+//   range ça dans `morphoAnat`, jamais un octet d'image. À l'affichage, le
+//   masque découpe la photo que l'hébergeur sert déjà.
+// ⚠ LA DOCTRINE MORPHO TIENT ICI COMME AILLEURS :
+//   - aucune largeur d'épaules, de bassin ni de clavicule lue sur la photo
+//     (MORPHO_INIT_INTERDITS) : les points de MediaPipe sont des centres
+//     articulaires, pas l'acromion ni la crête iliaque. Les clavicules se
+//     lisent au mètre (A5), ou ne se lisent pas ;
+//   - un rapport de longueurs n'a de position que calibré sur huit athlètes
+//     du coach (A2, A4, A5) — sinon il sort avec sa valeur et son compte ;
+//   - les inclinaisons, elles, ont un repère qui n'est pas une population :
+//     l'horizontale. Elles sortent avec leur marge ;
+//   - jamais « à éviter » : « à aménager », avec le réglage ;
+//   - aucun diagnostic. Un genou qui rentre sur une photo debout est une
+//     tendance à vérifier sous charge, pas un défaut.
+
+const ANAT_VERSION=1;
+/** Visibilité minimale d'un point pour qu'il serve à une mesure. */
+const ANAT_VIS=0.55;
+/** Marges de lecture, en degrés, d'un point de pose sur une photo de bilan. */
+const ANAT_TOL={epaules:1.5,bassin:2,genoux:3,pieds:8,tronc:3,triangles:25};
+/** Au-delà de ces seuils : léger, net, marqué. */
+const ANAT_SEUILS={epaules:[1.5,3,5],bassin:[2,3.5,5],genoux:[3,5,8],pieds:[8,14,20],
+  tronc:[3,6,9],triangles:[25,45,65]};
+
+/**
+ * PURE. Le premier bilan qui porte les photos, et ce qui manque.
+ * ⚠ LE PREMIER, PAS LE PLUS RÉCENT : c'est le corps de départ qu'on lit. Un
+ *   bilan « départ » passe avant tous les autres ; sinon le plus ancien.
+ * @returns {{bilan:any|null,date:number,face:string|null,dos:string|null,manque:string[]}}
+ */
+function anatPremierBilan(u){
+  let bl=[];
+  try{ bl=(Array.isArray(u&&u.bilans)?u.bilans:[]).filter(b=>b&&b.date); }catch(e){ bl=[]; }
+  if(!bl.length) return {bilan:null,date:0,face:null,dos:null,manque:['le premier bilan']};
+  const dep=bl.filter(b=>b.type==='depart').sort((a,b)=>a.date-b.date);
+  const reste=bl.filter(b=>b.type!=='depart').sort((a,b)=>a.date-b.date);
+  const ordre=dep.concat(reste);
+  const src=(b,v)=>{ try{ return photoBilanSrc(b,v)||null; }catch(e){ return null; } };
+  // Le premier bilan qui porte au moins la photo de face ; à défaut, le premier.
+  const b=ordre.find(x=>src(x,'face'))||ordre[0];
+  const face=src(b,'face'), dos=src(b,'back');
+  const manque=[];
+  if(!face) manque.push('la photo de face');
+  if(!dos) manque.push('la photo de dos');
+  return {bilan:b,date:Number(b.date)||0,face,dos,manque};
+}
+
+// ── LES POINTS ─────────────────────────────────────────────────────────────
+/** Un point de la vue, en pixels, s'il est assez visible. */
+function _anatP(v,i){
+  const q=v&&Array.isArray(v.pts)?v.pts[i]:null;
+  if(!q||!((q[2]||0)>=ANAT_VIS)) return null;
+  return {x:q[0]*v.w,y:q[1]*v.h};
+}
+/**
+ * La paire gauche/droite DE L'ATHLÈTE, lue sur la position dans l'image et non
+ * sur l'étiquette du moteur : de dos, MediaPipe confond souvent les côtés. De
+ * face, sa gauche est à droite de l'image ; de dos, à gauche.
+ */
+function _anatPaire(v,iA,iB,dos){
+  const a=_anatP(v,iA), b=_anatP(v,iB);
+  if(!a||!b) return null;
+  const [petitX,grandX]=(a.x<=b.x)?[a,b]:[b,a];
+  return dos?{g:petitX,d:grandX}:{g:grandX,d:petitX};
+}
+const _anatMil=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+const _anatDist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+const _anatDeg=r=>r*180/Math.PI;
+function _anatN(x,d){
+  const k=Math.pow(10,d==null?1:d);
+  return String(Math.round(Math.abs(Number(x))*k)/k).replace('.',',');
+}
+/** Niveau d'un écart signé : 0 à 3, avec son signe. */
+function _anatNiveau(v,seuils){
+  const a=Math.abs(v);
+  let n=0;
+  if(a>seuils[0]) n=1;
+  if(a>seuils[1]) n=2;
+  if(a>seuils[2]) n=3;
+  return n*(v<0?-1:1);
+}
+/** Le repère du corps : milieux, longueur du tronc, largeur aux épaules. */
+function _anatRepere(v,dos){
+  const ep=_anatPaire(v,11,12,dos), ha=_anatPaire(v,23,24,dos);
+  if(!ep||!ha) return null;
+  const mEp=_anatMil(ep.g,ep.d), mHa=_anatMil(ha.g,ha.d);
+  const T=_anatDist(mEp,mHa);
+  if(!(T>10)) return null;
+  return {ep,ha,mEp,mHa,T,S:_anatDist(ep.g,ep.d),H:_anatDist(ha.g,ha.d)};
+}
+
+// ── LE MASQUE ──────────────────────────────────────────────────────────────
+/** @returns {Uint8Array|null} */
+function anatMasqueBits(m){
+  if(!m||!m.rle||!(m.w>0)||!(m.h>0)) return null;
+  const bits=new Uint8Array(m.w*m.h);
+  let i=0,v=0;
+  for(const s of String(m.rle).split('.')){
+    const n=parseInt(s,36)||0;
+    if(v) bits.fill(1,i,Math.min(bits.length,i+n));
+    i+=n; v=1-v;
+  }
+  return bits;
+}
+/** Les plages de personne d'une ligne du masque : [[début,fin[,…]. */
+function _anatPlages(bits,m,y){
+  const out=[];
+  const yy=Math.max(0,Math.min(m.h-1,Math.round(y)));
+  let deb=-1;
+  for(let x=0;x<m.w;x++){
+    const b=bits[yy*m.w+x];
+    if(b&&deb<0) deb=x;
+    if(!b&&deb>=0){ out.push([deb,x]); deb=-1; }
+  }
+  if(deb>=0) out.push([deb,m.w]);
+  // Les miettes (un ou deux pixels) ne sont pas une partie du corps.
+  return out.filter(p=>p[1]-p[0]>1);
+}
+/** Le cadre de la personne dans le masque, normalisé 0..1. */
+function anatCadre(m){
+  const bits=anatMasqueBits(m);
+  if(!bits) return null;
+  let x0=m.w,y0=m.h,x1=-1,y1=-1;
+  for(let y=0;y<m.h;y++) for(let x=0;x<m.w;x++){
+    if(!bits[y*m.w+x]) continue;
+    if(x<x0) x0=x; if(x>x1) x1=x; if(y<y0) y0=y; if(y>y1) y1=y;
+  }
+  if(x1<0) return null;
+  return {x0:x0/m.w,y0:y0/m.h,x1:(x1+1)/m.w,y1:(y1+1)/m.h};
+}
+
+// ── LES MESURES ────────────────────────────────────────────────────────────
+/** Inclinaison d'une paire : positif quand le côté GAUCHE de l'athlète est plus bas. */
+function _anatInclinaison(p){
+  if(!p) return null;
+  return _anatDeg(Math.atan2(p.g.y-p.d.y,Math.abs(p.g.x-p.d.x)||1));
+}
+/**
+ * Genou dans le plan de la photo de face : l'écart, en degrés, à la ligne
+ * hanche-cheville. Positif quand le genou passe EN DEDANS (vers le milieu du
+ * corps), négatif quand il passe en dehors.
+ */
+function _anatGenou(h,g,c,milieuX){
+  if(!h||!g||!c||!(c.y-h.y>10)) return null;
+  const ux=h.x-g.x, uy=h.y-g.y, vx=c.x-g.x, vy=c.y-g.y;
+  const nu=Math.hypot(ux,uy), nv=Math.hypot(vx,vy);
+  if(!(nu>0)||!(nv>0)) return null;
+  const ang=_anatDeg(Math.acos(Math.max(-1,Math.min(1,(ux*vx+uy*vy)/(nu*nv)))));
+  const ecart=180-ang;
+  const xl=h.x+(c.x-h.x)*((g.y-h.y)/(c.y-h.y));
+  const dedans=Math.abs(g.x-milieuX)<Math.abs(xl-milieuX);
+  return dedans?ecart:-ecart;
+}
+/** Ouverture apparente d'un pied (talon → pointe), vers l'extérieur positive. */
+function _anatPied(talon,pointe,milieuX){
+  if(!talon||!pointe) return null;
+  const dx=(pointe.x-talon.x)*((talon.x>=milieuX)?1:-1);
+  const dy=Math.max(1,pointe.y-talon.y);
+  return _anatDeg(Math.atan2(dx,dy));
+}
+/**
+ * Les deux « triangles » entre le bras et la taille, dans le masque : leur
+ * largeur moyenne à gauche et à droite de l'athlète, en pixels d'image.
+ */
+function _anatTriangles(v,R,dos){
+  const m=v&&v.masque, bits=anatMasqueBits(m);
+  if(!bits||!R) return null;
+  const k=m.h/v.h;
+  const gs=[],ds=[];
+  for(let f=0.45;f<=0.80;f+=0.05){
+    const y=(R.mEp.y+(R.mHa.y-R.mEp.y)*f)*k;
+    const pl=_anatPlages(bits,m,y);
+    if(pl.length<3) continue;
+    const cx=R.mEp.x*m.w/v.w+(R.mHa.x-R.mEp.x)*m.w/v.w*f;
+    const t=pl.findIndex(p=>p[0]<=cx&&p[1]>=cx);
+    if(t<=0||t>=pl.length-1) continue;
+    const gaucheImg=(pl[t][0]-pl[t-1][1])*v.w/m.w;
+    const droiteImg=(pl[t+1][0]-pl[t][1])*v.w/m.w;
+    // De face, la gauche de l'athlète est à droite de l'image.
+    if(dos){ gs.push(gaucheImg); ds.push(droiteImg); } else { gs.push(droiteImg); ds.push(gaucheImg); }
+  }
+  if(gs.length<3) return null;
+  const moy=a=>a.reduce((s,x)=>s+x,0)/a.length;
+  return {g:moy(gs),d:moy(ds),lignes:gs.length};
+}
+/**
+ * La silhouette de face : largeur aux deltoïdes et à la taille, dans le masque.
+ * ⚠ CE N'EST PAS UNE LARGEUR D'OS. C'est ce que l'œil voit — le « V » —,
+ *   deltoïdes et dorsaux compris, et c'est ce que l'entraînement fait bouger.
+ */
+function _anatSilhouette(v,R){
+  const m=v&&v.masque, bits=anatMasqueBits(m);
+  if(!bits||!R) return null;
+  const kx=m.w/v.w, ky=m.h/v.h;
+  const cx=R.mEp.x*kx;
+  // Aux deltoïdes : juste sous la ligne des épaules, la plage la plus large
+  // qui contient le milieu du corps.
+  let epaules=0;
+  for(let f=0.04;f<=0.16;f+=0.02){
+    const pl=_anatPlages(bits,m,(R.mEp.y+R.T*f)*ky);
+    const p=pl.find(q=>q[0]<=cx&&q[1]>=cx);
+    if(p) epaules=Math.max(epaules,p[1]-p[0]);
+  }
+  // À la taille : la plage du tronc la plus étroite, seulement quand les bras
+  // en sont détachés (trois plages au moins) — sinon on mesurerait les bras.
+  let taille=Infinity,n=0;
+  for(let f=0.55;f<=0.92;f+=0.03){
+    const y=(R.mEp.y+(R.mHa.y-R.mEp.y)*f)*ky;
+    const pl=_anatPlages(bits,m,y);
+    if(pl.length<3) continue;
+    const c2=(R.mEp.x+(R.mHa.x-R.mEp.x)*f)*kx;
+    const p=pl.find(q=>q[0]<=c2&&q[1]>=c2);
+    if(!p) continue;
+    taille=Math.min(taille,p[1]-p[0]); n++;
+  }
+  if(!(epaules>0)||!isFinite(taille)||n<2) return null;
+  return {epaules:epaules/kx,taille:taille/kx,rapport:epaules/taille};
+}
+
+/**
+ * PURE. Tout ce que les deux photos disent, région par région.
+ * @param {any} anat  u.morphoAnat
+ * @param {any} u     le dossier (mesures au mètre, axes calibrés)
+ * @param {any} [axes] la sortie de morphoAxes, si on l'a
+ * @returns {any[]} une fiche par région, dans l'ordre de la maquette
+ */
+function anatMesures(anat,u,axes){
+  const F=anat&&anat.face, D=anat&&anat.dos;
+  const RF=F?_anatRepere(F,false):null, RD=D?_anatRepere(D,true):null;
+  const parAxe={};
+  (Array.isArray(axes)?axes:[]).forEach(a=>{ if(a&&a.cle) parAxe[a.cle]=a; });
+  const out=[];
+  const fiche=(o)=>{ out.push(Object.assign({niveau:null,valeur:'',tolerance:'',etat:'ok'},o)); };
+
+  // ── CLAVICULES : au mètre, jamais sur la photo ───────────────────────────
+  {
+    const ax=parAxe.A5;
+    const ep=_anatSafe(()=>mesureMorpho(u,'deb-epaules').cm), bs=_anatSafe(()=>mesureMorpho(u,'deb-bassin').cm);
+    const r=(ep&&bs)?ep/bs:null;
+    const pos=ax&&ax.position;
+    fiche({cle:'clavicules',lib:'Clavicules',vue:'face',
+      zone:RF?_anatZone(RF.mEp.x,RF.mEp.y-0.10*RF.T,RF.S*1.8,0.5*RF.T):null,
+      ancre:RF?{x:RF.mEp.x,y:RF.mEp.y-0.05*RF.T}:null,
+      etat:r?(pos?'ok':'sans-repere'):'a-mesurer',
+      niveau:r&&pos?(pos==='haut'?2:pos==='bas'?-2:0):null,
+      bornes:['plus étroites','plus larges'],
+      valeur:r?_anatN(r,2)+' (épaules / bassin)':'au mètre',
+      tolerance:r?'mètre ruban, ±1 cm par mesure':'',
+      mesure:{ep,bs,r,pos,n:_anatSafe(()=>_morphoAthletesDuCoach().filter(x=>mesureMorpho(x,'deb-epaules').cm&&mesureMorpho(x,'deb-bassin').cm).length)},
+      source:'mètre ruban'});
+  }
+  // ── ÉPAULES : inclinaison, de face et de dos ─────────────────────────────
+  {
+    const af=RF?_anatInclinaison(RF.ep):null, ad=RD?_anatInclinaison(RD.ep):null;
+    const a=(af!=null&&ad!=null)?(af+ad)/2:(af!=null?af:ad);
+    fiche({cle:'epaules',lib:'Épaules',vue:'face',
+      zone:RF?_anatZone(RF.mEp.x,RF.mEp.y+0.06*RF.T,RF.S*2.2,0.62*RF.T):null,
+      ancre:RF?RF.ep.d:null,
+      etat:a==null?'illisible':'ok',
+      niveau:a==null?null:_anatNiveau(a,ANAT_SEUILS.epaules),
+      bornes:['droite plus basse','gauche plus basse'],
+      valeur:a==null?'':_anatN(a)+'°',tolerance:'±'+_anatN(ANAT_TOL.epaules)+'°',
+      mesure:{a,af,ad},source:(af!=null&&ad!=null)?'photos de face et de dos':'photo de '+(af!=null?'face':'dos')});
+  }
+  // ── BUSTE : la silhouette, et l'axe du tronc ─────────────────────────────
+  {
+    const sil=F?_anatSilhouette(F,RF):null;
+    // Décalage latéral du milieu des épaules sur le milieu des hanches, en %
+    // du tronc. Positif : les épaules partent vers la GAUCHE de l'athlète.
+    const dec=(R,dos)=>R?((R.mEp.x-R.mHa.x)*((dos?-1:1))/R.T*100):null;
+    const tf=dec(RF,false), td=dec(RD,true);
+    const t=(tf!=null&&td!=null)?(tf+td)/2:(tf!=null?tf:td);
+    fiche({cle:'buste',lib:'Buste',vue:'face',
+      zone:RF?_anatZone((RF.mEp.x+RF.mHa.x)/2,(RF.mEp.y+RF.mHa.y)/2,RF.S*2,1.3*RF.T):null,
+      ancre:RF?{x:RF.mEp.x+(RF.mHa.x-RF.mEp.x)*0.35,y:RF.mEp.y+(RF.mHa.y-RF.mEp.y)*0.35}:null,
+      etat:(sil||t!=null)?'ok':'illisible',
+      niveau:t==null?null:_anatNiveau(t,ANAT_SEUILS.tronc),
+      bornes:['penché à droite','penché à gauche'],
+      valeur:sil?_anatN(sil.rapport,2)+' (V)':(t!=null?_anatN(t)+' %':''),
+      tolerance:'axe ±'+ANAT_TOL.tronc+' % du tronc',
+      mesure:{sil,t},source:'silhouette détourée, photo de face'});
+  }
+  // ── BRAS : humérus sur avant-bras ────────────────────────────────────────
+  {
+    const r=F?_anatRapport(F,[11,13,15],[12,14,16]):null;
+    const ax=parAxe.A4, pos=ax&&ax.position;
+    const bras=F?_anatPaire(F,13,14,false):null;
+    const e=bras?bras.g:null;
+    const bb=F?_anatBoite(F,[11,13,15],0.18*(RF?RF.T:100)):null;
+    fiche({cle:'bras',lib:'Bras',vue:'face',
+      zone:bb,ancre:e,
+      etat:r?(pos?'ok':'sans-repere'):'illisible',
+      niveau:r&&pos?(pos==='haut'?2:pos==='bas'?-2:0):null,
+      bornes:['avant-bras long','humérus long'],
+      valeur:r?_anatN(r.v,2)+' (humérus / av.-bras)':'',
+      tolerance:r?'±'+_anatN(Math.max(r.ec*100,3),0)+' % entre les deux côtés':'',
+      mesure:{r,pos,n:_anatSafe(()=>morphoCalibrageCompte(_morphoAthletesDuCoach(),'A4'))},
+      source:'photo de face, points du coude et du poignet'});
+  }
+  // ── BASSIN : inclinaison ─────────────────────────────────────────────────
+  {
+    const af=RF?_anatInclinaison(RF.ha):null, ad=RD?_anatInclinaison(RD.ha):null;
+    const a=(af!=null&&ad!=null)?(af+ad)/2:(af!=null?af:ad);
+    fiche({cle:'bassin',lib:'Bassin',vue:'face',
+      zone:RF?_anatZone(RF.mHa.x,RF.mHa.y+0.02*RF.T,Math.max(RF.H*3.2,RF.S*1.6),0.62*RF.T):null,
+      ancre:RF?RF.ha.d:null,
+      etat:a==null?'illisible':'ok',
+      niveau:a==null?null:_anatNiveau(a,ANAT_SEUILS.bassin),
+      bornes:['droite plus basse','gauche plus basse'],
+      valeur:a==null?'':_anatN(a)+'°',tolerance:'±'+_anatN(ANAT_TOL.bassin)+'°',
+      mesure:{a,af,ad,ecartVues:(af!=null&&ad!=null)?Math.abs(af-ad):null},
+      source:(af!=null&&ad!=null)?'photos de face et de dos':'photo de '+(af!=null?'face':'dos')});
+  }
+  // ── JAMBES : cuisse sur jambe ────────────────────────────────────────────
+  {
+    const r=F?_anatRapport(F,[23,25,27],[24,26,28]):null;
+    const ax=parAxe.A2, pos=ax&&ax.position;
+    const a1=parAxe.A1;
+    const ha=RF?RF.ha:null;
+    const talons=F?_anatPaire(F,29,30,false):null;
+    const jambe=(ha&&talons)?((talons.g.y+talons.d.y)/2-(ha.g.y+ha.d.y)/2):null;
+    const tj=(RF&&jambe&&jambe>0)?RF.T/jambe:null;
+    fiche({cle:'jambes',lib:'Jambes',vue:'face',
+      zone:F?_anatBoite(F,[23,24,25,26,27,28,29,30],0.12*(RF?RF.T:100)):null,
+      ancre:(RF&&F)?_anatSafe(()=>{ const g=_anatPaire(F,25,26,false); return g?_anatMil(RF.ha.d,g.d):null; }):null,
+      etat:r?(pos?'ok':'sans-repere'):'illisible',
+      niveau:r&&pos?(pos==='haut'?2:pos==='bas'?-2:0):null,
+      bornes:['jambe longue','cuisse longue'],
+      valeur:r?_anatN(r.v,2)+' (cuisse / jambe)':'',
+      tolerance:r?'±'+_anatN(Math.max(r.ec*100,3),0)+' % entre les deux côtés':'',
+      mesure:{r,pos,tj,a1:a1&&a1.position||null,n:_anatSafe(()=>morphoCalibrageCompte(_morphoAthletesDuCoach(),'A2'))},
+      source:'photo de face, hanche, genou, cheville'});
+  }
+  // ── GENOUX : alignement frontal ──────────────────────────────────────────
+  {
+    let g=null,d=null,mid=null;
+    if(F&&RF){
+      mid=RF.mHa.x;
+      const hg=RF.ha.g, hd=RF.ha.d;
+      const ge=_anatPaire(F,25,26,false), ch=_anatPaire(F,27,28,false);
+      if(ge&&ch){ g=_anatGenou(hg,ge.g,ch.g,mid); d=_anatGenou(hd,ge.d,ch.d,mid); }
+    }
+    const pire=(g==null&&d==null)?null:((d==null||(g!=null&&Math.abs(g)>=Math.abs(d)))?{c:'gauche',v:g}:{c:'droit',v:d});
+    const ge=F?_anatPaire(F,25,26,false):null;
+    fiche({cle:'genoux',lib:'Genoux',vue:'face',
+      zone:ge&&RF?_anatZone((ge.g.x+ge.d.x)/2,(ge.g.y+ge.d.y)/2,Math.max(_anatDist(ge.g,ge.d)*2.1,0.9*RF.T),0.62*RF.T):null,
+      ancre:ge?ge.d:null,
+      etat:pire?'ok':'illisible',
+      niveau:pire?_anatNiveau(pire.v,ANAT_SEUILS.genoux):null,
+      bornes:['vers l’extérieur','vers l’intérieur'],
+      valeur:pire?'G '+_anatSigne(g)+' · D '+_anatSigne(d):'',
+      tolerance:'±'+ANAT_TOL.genoux+'°',
+      mesure:{g,d,pire},source:'photo de face, ligne hanche-genou-cheville'});
+  }
+  // ── PIEDS : ouverture, et surtout sa symétrie ────────────────────────────
+  {
+    let g=null,d=null;
+    if(F&&RF){
+      const ta=_anatPaire(F,29,30,false), po=_anatPaire(F,31,32,false);
+      const mid=RF.mHa.x;
+      if(ta&&po){ g=_anatPied(ta.g,po.g,mid); d=_anatPied(ta.d,po.d,mid); }
+    }
+    const asy=(g!=null&&d!=null)?g-d:null;
+    fiche({cle:'pieds',lib:'Pieds',vue:'face',
+      zone:F?_anatBoite(F,[27,28,29,30,31,32],0.2*(RF?RF.T:100),0.45*(RF?RF.T:100)):null,
+      ancre:F?_anatSafe(()=>{ const p=_anatPaire(F,31,32,false); return p?p.d:null; }):null,
+      etat:asy==null?'illisible':'ok',
+      niveau:asy==null?null:_anatNiveau(asy,ANAT_SEUILS.pieds),
+      bornes:['droit plus ouvert','gauche plus ouvert'],
+      valeur:asy==null?'':'G '+_anatN(g,0)+'° · D '+_anatN(d,0)+'°',
+      tolerance:'±'+ANAT_TOL.pieds+'° (perspective)',
+      mesure:{g,d,asy},source:'photo de face, talon et pointe'});
+  }
+  // ── DOS : les triangles bras-tronc, sur la photo de dos ──────────────────
+  {
+    const tr=D?_anatTriangles(D,RD,true):null;
+    const moy=tr?(tr.g+tr.d)/2:0;
+    const asy=(tr&&moy>0)?(tr.g-tr.d)/Math.max(tr.g,tr.d)*100:null;
+    const ad=RD?_anatInclinaison(RD.ep):null;
+    fiche({cle:'dos',lib:'Dos',vue:'dos',
+      zone:RD?_anatZone((RD.mEp.x+RD.mHa.x)/2,(RD.mEp.y+RD.mHa.y)/2-0.05*RD.T,RD.S*2.2,1.3*RD.T):null,
+      ancre:RD?{x:RD.mEp.x+(RD.mHa.x-RD.mEp.x)*0.3,y:RD.mEp.y+(RD.mHa.y-RD.mEp.y)*0.3}:null,
+      etat:D?(asy!=null?'ok':(ad!=null?'partiel':'illisible')):'illisible',
+      niveau:asy!=null?_anatNiveau(asy,ANAT_SEUILS.triangles):null,
+      bornes:['triangle droit plus grand','triangle gauche plus grand'],
+      valeur:asy!=null?_anatN(asy,0)+' % d’écart':(ad!=null?_anatN(ad)+'° aux épaules':''),
+      tolerance:'±'+ANAT_TOL.triangles+' % (position des bras)',
+      mesure:{tr,asy,ad,lu:!!RD},source:'photo de dos détourée'});
+  }
+  return out;
+}
+function _anatSafe(f){ try{ const v=f(); return v==null?null:v; }catch(e){ return null; } }
+function _anatSigne(v){ return v==null?'—':((v>0?'+':v<0?'−':'')+_anatN(v)+'°'); }
+/** Un cadre centré, en pixels d'image. */
+function _anatZone(cx,cy,w,h){ return {x0:cx-w/2,y0:cy-h/2,x1:cx+w/2,y1:cy+h/2}; }
+/** Le cadre qui contient des points, élargi de `pad` (et de `padBas` sous le plus bas). */
+function _anatBoite(v,ids,pad,padBas){
+  const ps=ids.map(i=>_anatP(v,i)).filter(Boolean);
+  if(ps.length<2) return null;
+  const xs=ps.map(p=>p.x), ys=ps.map(p=>p.y);
+  return {x0:Math.min(...xs)-pad,y0:Math.min(...ys)-pad,x1:Math.max(...xs)+pad,
+    y1:Math.max(...ys)+(padBas==null?pad:padBas)};
+}
+/**
+ * Un rapport haut/bas sur les deux côtés : humérus/avant-bras, cuisse/jambe.
+ * Même garde que mlMorphoRapports : deux côtés qui divergent de plus de 10 %
+ * disent un corps tourné, pas une asymétrie — on ne rend rien.
+ */
+function _anatRapport(v,[a1,b1,c1],[a2,b2,c2]){
+  const cote=(a,b,c)=>{
+    const A=_anatP(v,a),B=_anatP(v,b),C=_anatP(v,c);
+    if(!A||!B||!C) return null;
+    const d1=_anatDist(A,B), d2=_anatDist(B,C);
+    return (d1>0&&d2>0)?d1/d2:null;
+  };
+  const g=cote(a1,b1,c1), d=cote(a2,b2,c2);
+  if(g!=null&&d!=null){
+    const ec=Math.abs(g-d)/((g+d)/2);
+    if(ec>0.10) return null;
+    return {v:(g+d)/2,ec};
+  }
+  const s=(g!=null)?g:d;
+  return s!=null?{v:s,ec:0.05}:null;
+}
+
+// ── CE QU'ON EN FAIT ───────────────────────────────────────────────────────
+// Chaque fiche : une phrase courte (deux lignes au plus), puis le texte long —
+// ce que la photo montre, comment le lire, quoi privilégier, quoi aménager et
+// avec quel réglage, et comment vérifier. Jamais un exercice « à éviter ».
+function anatTexte(f,u){
+  const m=f.mesure||{};
+  const T={court:'',lecture:'',privilegier:[],amenager:[],verifier:''};
+  if(f.etat==='illisible'&&f.cle==='dos'&&!(f.mesure&&f.mesure.lu)){
+    T.court='La photo de dos n’a pas pu être lue : aucune silhouette reconnue avec assez de certitude.';
+    T.lecture='Le moteur de pose ne trouve pas la personne sur la photo de dos (trop sombre, fond chargé, ou personne coupée). Rien n’est estimé à sa place.';
+    T.verifier='Demander une photo de dos en pied, sur fond clair et uni, bras relâchés légèrement écartés du corps.';
+    return T;
+  }
+  if(f.etat==='illisible'){
+    T.court=f.cle==='dos'
+      ?'Bras collés au tronc sur la photo de dos : la symétrie ne se lit pas. Demander la photo bras légèrement écartés.'
+      :'Pas assez de points visibles sur la photo pour lire cette zone avec une marge honnête.';
+    T.lecture='Le moteur de pose n’a pas vu cette partie avec assez de certitude (membre masqué, hors cadre ou photo trop sombre). On ne remplit pas un trou avec une estimation : il faut une photo où la zone est dégagée, de face, pieds à largeur de hanches, bras relâchés légèrement écartés du corps.';
+    T.verifier='Au prochain bilan, la même analyse se refait sur la nouvelle photo si celle-ci reste illisible.';
+    return T;
+  }
+  switch(f.cle){
+  case 'clavicules':{
+    if(f.etat==='a-mesurer'){
+      T.court='Largeurs d’épaules et de bassin à prendre au mètre : la photo ne voit pas l’acromion ni la crête iliaque.';
+      T.lecture='Les points de la photo sont des centres articulaires : l’épaule rendue est la tête de l’humérus, pas la pointe de l’os, et la hanche est la tête du fémur, pas le bord du bassin. Une largeur de clavicules lue là-dessus serait fausse de plusieurs centimètres, dans un sens qu’on ne connaît pas. La charpente se lit donc au mètre ruban, avec deux mesures simples : '
+        +'« '+((MORPHO_MESURES.find(x=>x.cle==='deb-epaules')||{}).consigne||'')+' » et « '
+        +((MORPHO_MESURES.find(x=>x.cle==='deb-bassin')||{}).consigne||'')+' »';
+      T.privilegier=['En attendant : le deltoïde latéral et la largeur de dos restent la base de toute silhouette en V, quelle que soit la charpente.'];
+      T.verifier='Demander les deux largeurs au prochain bilan : elles ne changent plus chez l’adulte, une fois suffit.';
+      return T;
+    }
+    const r=m.r;
+    if(m.pos==='haut'){
+      T.court='Clavicules larges par rapport au bassin : le V est de construction — à entretenir, pas à fabriquer.';
+      T.lecture='Épaules / bassin = '+_anatN(r,2)+', au-dessus du repère calibré sur tes athlètes. Une charpente large donne un bras de levier plus long aux développés prise large et une silhouette en V « offerte ». Le risque est de s’appuyer dessus et de laisser le bas du corps en retrait.';
+      T.privilegier=['Quadriceps, ischios et fessiers au même niveau d’exigence que le haut : l’équilibre haut / bas est ce qui se remarque le plus sur une charpente large','Rowing et tirages horizontaux pour l’épaisseur du dos, qui accompagne la largeur','Deltoïde postérieur (oiseau, face pull) pour tenir l’épaule en arrière'];
+      T.amenager=[{quoi:'Développé couché prise large',reglage:'prise calée sur la largeur d’épaules : avant-bras verticaux en bas du mouvement, pas plus large'},{quoi:'Dips',reglage:'buste un peu penché, amplitude arrêtée quand l’épaule passe sous le coude'}];
+    }else if(m.pos==='bas'){
+      T.court='Clavicules courtes par rapport au bassin : la largeur visuelle viendra des deltoïdes latéraux et du dos.';
+      T.lecture='Épaules / bassin = '+_anatN(r,2)+', sous le repère calibré sur tes athlètes. L’os ne changera pas ; la silhouette, si. Ce qui élargit le haut à l’œil, ce sont le deltoïde latéral et les grands dorsaux ; ce qui le fait paraître plus étroit, c’est une taille large.';
+      T.privilegier=['Deltoïde latéral en priorité : élévations latérales (haltères, poulie basse derrière le corps, machine), 12 à 20 séries par semaine en phase de priorité','Largeur de dos : tractions et tirage vertical prise large, pull-over à la poulie','Taille : gainage anti-rotation (Pallof press), vacuum, et une masse grasse maîtrisée'];
+      T.amenager=[{quoi:'Travail lourd des abducteurs et du moyen fessier',reglage:'à doser selon l’objectif esthétique : il élargit la hanche visuelle'},{quoi:'Développé couché',reglage:'prise plutôt moyenne : une prise très large n’apporte rien de plus à une charpente étroite'}];
+    }else if(m.pos==='neutre'){
+      T.court='Charpente épaules / bassin au centre du groupe : aucune compensation particulière.';
+      T.lecture='Épaules / bassin = '+_anatN(r,2)+', dans la marge du repère calibré sur tes athlètes. Rien à rattraper : la silhouette dépendra de ce qui sera développé.';
+      T.privilegier=['Deltoïde latéral et dorsaux pour la largeur, fessiers et quadriceps pour l’équilibre'];
+    }else{
+      T.court='Épaules / bassin = '+_anatN(r,2)+' au mètre : il faut '+MORPHO_CALIB_MIN+' athlètes mesurés pour le situer ('+(m.n||0)+' aujourd’hui).';
+      T.lecture='Un rapport sans repère ne dit rien : on ne sait pas encore si '+_anatN(r,2)+' est large ou étroit pour ton public. Le repère se calcule sur tes propres athlètes, au huitième mesuré — c’est plus lent qu’un chiffre recopié d’une étude, mais c’est juste. En attendant, voici ce que chaque cas changera.';
+      T.privilegier=['S’il ressort haut (charpente large) : garder le bas du corps au niveau, et entretenir le V par le dos','S’il ressort bas (charpente étroite) : priorité au deltoïde latéral (12 à 20 séries par semaine) et à la largeur de dos'];
+    }
+    T.verifier='Largeurs prises au mètre, ±1 cm par mesure. Chez l’adulte elles ne bougent plus : on ne les reprend que si une saisie paraît fausse.';
+    return T;
+  }
+  case 'epaules':{
+    const a=m.a, n=Math.abs(f.niveau||0);
+    const bas=a>0?'gauche':'droite';
+    if(!n){
+      T.court='Épaules de niveau ('+_anatN(a)+'°, sous la marge de ±'+_anatN(ANAT_TOL.epaules)+'°) : rien à compenser.';
+      T.lecture='La ligne des deux épaules est horizontale à la précision de la photo. La ceinture scapulaire se présente équilibrée.';
+      T.privilegier=['Garder l’équilibre tirage / poussée : au moins autant de séries de tirage que de développé','Stabilité des omoplates : Y-raise sur banc incliné, pompes scapulaires, face pull'];
+    }else{
+      T.court='Épaule '+bas+' plus basse de '+_anatN(a)+'° : décalage '+(n===1?'léger':n===2?'net':'marqué')+' à surveiller au développé et aux tirages.';
+      T.lecture='Sur une photo debout, une épaule plus basse vient le plus souvent d’une habitude (côté dominant, sac porté d’un côté), d’un trapèze supérieur plus tonique d’un côté ou d’un tronc qui s’incline — la photo ne dit pas lequel. Ce n’est pas une anomalie : c’est un point de départ pour regarder l’exécution.'
+        +((m.af!=null&&m.ad!=null)?' Face : '+_anatSigneTexte(m.af)+' ; dos : '+_anatSigneTexte(m.ad)+'. '+(Math.sign(m.af)===Math.sign(m.ad)&&Math.abs(m.af-m.ad)<2?'Les deux photos disent la même chose : c’est la posture habituelle, pas la pose du moment.':'Les deux photos ne disent pas tout à fait la même chose : une part vient de la pose du moment.'):'');
+      T.privilegier=['Unilatéral en priorité : développé haltère un bras, rowing un bras, tirage poulie un bras — commencer par le côté '+bas+' et aligner l’autre sur ses répétitions','Porter lourd d’un seul côté (suitcase carry) en gardant les épaules de niveau : c’est l’exercice qui apprend le mieux à ne pas pencher','Planche latérale des deux côtés, 3 × 30 à 45 s','Trapèze inférieur et dentelé : Y-raise sur banc incliné, pompes scapulaires'];
+      T.amenager=[{quoi:'Développé et rowing à la barre',reglage:'vérifier en vidéo de face que la barre reste horizontale ; si elle penche, passer une partie du volume aux haltères'},{quoi:'Shrugs',reglage:'aux haltères plutôt qu’à la barre, en contrôlant que les deux épaules montent à la même hauteur'}];
+    }
+    T.verifier='Marge de lecture ±'+_anatN(ANAT_TOL.epaules)+'° : un point d’épaule est un centre articulaire, lu à quelques pixels près. Comparer au prochain bilan photo.';
+    return T;
+  }
+  case 'buste':{
+    const s=m.sil, t=m.t, nt=Math.abs(f.niveau||0);
+    const V=s?_anatN(s.rapport,2):null;
+    T.court=(V?'Épaules '+V+' × plus larges que la taille en silhouette de face : le repère du V à faire monter.':'')
+      +(nt?(V?' ':'')+'Tronc décalé vers la '+(t>0?'gauche':'droite')+' ('+_anatN(t)+' % du tronc).':(V?'':'Tronc dans l’axe du bassin.'));
+    T.lecture=(V?'Ce rapport ne mesure pas les os : il mesure la silhouette, deltoïdes et dorsaux compris, à la taille la plus fine entre les bras. C’est ce que l’œil voit, et c’est ce que l’entraînement fait bouger — il monte quand la carrure prend et quand la taille descend. Il n’a pas de « bonne » valeur : il se suit de bilan en bilan. ':'La silhouette ne se lit pas (bras collés au tronc à hauteur de taille) : seul l’axe du tronc est mesuré. ')
+      +(t!=null?(nt?'Le milieu des épaules est décalé de '+_anatN(t)+' % de la longueur du tronc par rapport au milieu du bassin : le buste se porte d’un côté. Posture du moment ou habitude, la photo ne tranche pas.':'Le milieu des épaules tombe à l’aplomb du milieu du bassin (écart '+_anatN(t)+' %, sous la marge de '+ANAT_TOL.tronc+' %).'):'');
+    T.privilegier=['Deltoïde latéral : élévations latérales aux haltères, à la poulie basse derrière le corps, à la machine','Largeur de dos : tractions et tirage vertical prise large, pull-over à la poulie','Deltoïde postérieur : oiseau, face pull — il élargit aussi la silhouette vue de dos','Taille : gainage anti-rotation (Pallof press), vacuum ; la taille visuelle se joue surtout sur la masse grasse'];
+    if(nt) T.privilegier.push('Pour l’axe : carry unilatéral et planche latérale, côté opposé au décalage en premier');
+    T.amenager=[{quoi:'Obliques lestés en rotation',reglage:'pas nécessaires pour la silhouette : garder le gainage, sans surcharger les rotations lestées si la taille est une priorité'}];
+    T.verifier='Silhouette lue sur le détourage de la photo de face (±4 % selon la position des bras). À comparer sur la même pose au bilan suivant.';
+    return T;
+  }
+  case 'bras':{
+    const r=m.r;
+    const theorieHaut='Humérus long : amplitude plus longue au développé et aux dips (plus de travail par répétition, pectoral étiré plus loin) et une fin de mouvement qui repose sur les triceps.';
+    const theorieBas='Avant-bras long : bon levier en tirage (rowing, tractions), les curls paraissent plus durs et le poignet travaille plus au développé.';
+    if(m.pos==='haut'){
+      T.court='Humérus long par rapport à l’avant-bras : trajet plus long aux développés, les triceps finissent le travail.';
+      T.lecture='Humérus / avant-bras = '+_anatN(r.v,2)+' sur la photo, au-dessus du repère calibré sur tes athlètes. '+theorieHaut;
+      T.privilegier=['Triceps en position étirée : extension au-dessus de la tête (poulie, haltère), barre au front sur banc incliné','Développé couché prise moyenne à large pour raccourcir le trajet','Biceps en position étirée : curl incliné, curl à la poulie dos à la poulie'];
+      T.amenager=[{quoi:'Développé couché',reglage:'prise un peu plus large et omoplates serrées pour réduire l’amplitude utile ; arrêter à 1 à 2 cm de la poitrine si l’épaule proteste'},{quoi:'Dips',reglage:'amplitude arrêtée quand l’épaule passe sous le coude'}];
+    }else if(m.pos==='bas'){
+      T.court='Avant-bras long par rapport à l’humérus : levier favorable en tirage, les curls paraissent plus durs.';
+      T.lecture='Humérus / avant-bras = '+_anatN(r.v,2)+' sur la photo, sous le repère calibré sur tes athlètes. '+theorieBas;
+      T.privilegier=['Tirages (rowing, tractions) : le levier est favorable, c’est un point fort à exploiter','Curl marteau et curl pupitre pour charger le brachial et le brachio-radial','Avant-bras : curl poignet et farmer walk, qui tiennent la prise'];
+      T.amenager=[{quoi:'Curls lourds à la barre droite',reglage:'barre EZ ou haltères si les poignets tirent'},{quoi:'Développé couché',reglage:'prise plutôt moyenne, poignets empilés au-dessus des coudes'}];
+    }else if(m.pos==='neutre'){
+      T.court='Répartition humérus / avant-bras au centre du groupe : aucun levier à compenser.';
+      T.lecture='Humérus / avant-bras = '+_anatN(r.v,2)+', dans la marge du repère calibré sur tes athlètes.';
+      T.privilegier=['Programmer les bras sur les deux positions : étirée (curl incliné, extension au-dessus de la tête) et raccourcie (curl pupitre, pushdown)'];
+    }else{
+      T.court='Humérus / avant-bras = '+_anatN(r.v,2)+' (photo) : il faut '+MORPHO_CALIB_MIN+' athlètes mesurés pour le situer ('+(m.n||0)+' aujourd’hui).';
+      T.lecture='La photo donne un rapport, pas une position : sans repère calibré sur tes athlètes, dire « long » ou « court » serait inventer. Ce que chaque cas changera : '+theorieHaut+' '+theorieBas;
+      T.privilegier=['En attendant : bras travaillés en position étirée et raccourcie, développés à prise moyenne'];
+    }
+    T.verifier='Lu sur les centres de l’épaule, du coude et du poignet, les deux bras tendus. Le mètre prime toujours : une mesure d’avant-bras au ruban confirme ou suspend cette lecture.';
+    return T;
+  }
+  case 'bassin':{
+    const a=m.a, n=Math.abs(f.niveau||0);
+    const haut=a>0?'droite':'gauche';
+    if(!n){
+      T.court='Bassin de niveau ('+_anatN(a)+'°, sous la marge de ±'+_anatN(ANAT_TOL.bassin)+'°) : appui réparti sur les deux jambes.';
+      T.lecture='La ligne des deux hanches est horizontale à la précision de la photo.';
+      T.privilegier=['Garder de l’unilatéral dans chaque bloc (fente, split squat, soulevé roumain une jambe) : c’est ce qui entretient la symétrie'];
+    }else{
+      T.court='Hanche '+haut+' plus haute de '+_anatN(a)+'° : appui probablement plus chargé d’un côté sur la photo.';
+      T.lecture='Une hanche plus haute sur une photo debout vient d’abord de l’appui — le poids porté sur une jambe, un genou un peu fléchi de l’autre côté. La photo ne permet pas de dire s’il y a autre chose ; refaire la photo pieds à largeur de hanches, poids réparti, est le premier geste.'
+        +(m.ecartVues!=null?(m.ecartVues<2?' Face et dos disent la même chose.':' Face et dos ne disent pas la même chose ('+_anatN(m.ecartVues)+'° d’écart) : c’est probablement la pose.'):'');
+      T.privilegier=['Unilatéral des membres inférieurs : split squat bulgare, fente arrière, soulevé roumain à une jambe — commencer par le côté faible','Moyen fessier : abduction de hanche (machine ou poulie), marche latérale avec élastique','Carry unilatéral et planche latérale contre l’inclinaison du tronc'];
+      T.amenager=[{quoi:'Squat et soulevé de terre',reglage:'pieds symétriques (repères au sol), contrôler en vidéo de dos que le bassin ne glisse pas d’un côté en remontant'},{quoi:'Presse à cuisses',reglage:'pieds à la même hauteur sur la plateforme, amplitude arrêtée avant que le bassin ne décolle'}];
+    }
+    T.verifier='Marge ±'+_anatN(ANAT_TOL.bassin)+'° : le point de hanche est la tête du fémur, estimée sous les tissus. Si l’écart revient au même endroit d’un bilan à l’autre sur une photo bien prise, en parler avec l’athlète — et, s’il a une gêne, l’orienter vers un professionnel de santé.';
+    return T;
+  }
+  case 'jambes':{
+    const r=m.r;
+    const tj=m.tj?' Tronc / jambe = '+_anatN(m.tj,2)+'.':'';
+    const theorieHaut='Cuisse longue : pour garder la barre au-dessus du milieu du pied, la hanche recule et le buste s’incline — fessiers et lombaires prennent une plus grande part du squat.';
+    const theorieBas='Jambe longue : squat naturellement droit, genoux qui avancent loin — les quadriceps travaillent beaucoup, la cheville doit suivre.';
+    if(m.pos==='haut'){
+      T.court='Cuisse longue par rapport à la jambe : au squat, le buste penchera davantage — c’est de la mécanique, pas un défaut.';
+      T.lecture='Cuisse / jambe = '+_anatN(r.v,2)+' sur la photo, au-dessus du repère calibré sur tes athlètes.'+tj+' '+theorieHaut;
+      T.privilegier=['Squat talons surélevés (cale de 2 à 3 cm) ou hack squat pour recentrer le travail sur les quadriceps','Presse à cuisses et fente longue : les quadriceps y travaillent sans contrainte de buste','Soulevé roumain et hip thrust : le levier long y devient un avantage'];
+      T.amenager=[{quoi:'Squat barre haute pieds serrés',reglage:'élargir l’appui et ouvrir les pointes (20 à 30°), ou ajouter une cale sous les talons'},{quoi:'Soulevé de terre conventionnel',reglage:'essayer le sumo ou la barre hexagonale si le dos s’arrondit au départ'}];
+    }else if(m.pos==='bas'){
+      T.court='Jambe longue par rapport à la cuisse : squat naturellement droit, genoux qui avancent loin.';
+      T.lecture='Cuisse / jambe = '+_anatN(r.v,2)+' sur la photo, sous le repère calibré sur tes athlètes.'+tj+' '+theorieBas;
+      T.privilegier=['Squat barre haute et front squat : le levier est favorable','Leg curl et soulevé roumain pour équilibrer : ischios et fessiers travaillent moins au squat','Mobilité de cheville (genou au mur) : le genou a besoin d’avancer'];
+      T.amenager=[{quoi:'Squat profond',reglage:'chaussures à talon ou cale si la cheville bloque avant la profondeur voulue'}];
+    }else if(m.pos==='neutre'){
+      T.court='Répartition cuisse / jambe au centre du groupe : pas de levier à compenser au squat.';
+      T.lecture='Cuisse / jambe = '+_anatN(r.v,2)+', dans la marge du repère calibré sur tes athlètes.'+tj;
+      T.privilegier=['Squat, presse et fente dans leur réglage standard ; équilibre quadriceps / ischios à surveiller dans le carnet'];
+    }else{
+      T.court='Cuisse / jambe = '+_anatN(r.v,2)+' (photo) : il faut '+MORPHO_CALIB_MIN+' athlètes mesurés pour le situer ('+(m.n||0)+' aujourd’hui).';
+      T.lecture='Sans repère calibré sur tes athlètes, le rapport ne dit pas encore « long » ou « court ».'+tj+' Ce que chaque cas changera : '+theorieHaut+' '+theorieBas;
+      T.privilegier=['En attendant : filmer un squat de profil dans Motion Lab — l’inclinaison du buste dit, en pratique, ce que le rapport dira en théorie'];
+    }
+    T.verifier='Lu sur les centres de la hanche, du genou et de la cheville, jambes tendues. La hanche est la tête du fémur : c’est pourquoi ce rapport n’est jamais comparé aux chiffres des études, qui portent sur les os.';
+    return T;
+  }
+  case 'genoux':{
+    const p=m.pire, n=Math.abs(f.niveau||0);
+    if(!n){
+      T.court='Genoux dans l’axe hanche-cheville (écart sous ±'+ANAT_TOL.genoux+'°) : rien à compenser à l’arrêt.';
+      T.lecture='Debout, chaque genou tombe sur la ligne qui relie la hanche à la cheville. Gauche : '+_anatSigneTexte(m.g,true)+', droit : '+_anatSigneTexte(m.d,true)+'.';
+      T.privilegier=['Garder de l’unilatéral (fente, split squat) : le contrôle du genou s’entretient en l’entraînant','Équilibre quadriceps / ischios / fessiers'];
+    }else if(p.v>0){
+      T.court='Genou '+p.c+' qui rentre vers l’intérieur ('+_anatN(p.v)+'°) : contrôle de hanche à renforcer avant de charger le squat.';
+      T.lecture='Debout, le genou se place en dedans de la ligne hanche-cheville (gauche '+_anatSigneTexte(m.g,true)+', droit '+_anatSigneTexte(m.d,true)+'). Sur une photo statique c’est une tendance, pas un défaut : la vraie question est ce qu’il fait en squat, en fente et en réception. Les causes fréquentes sont un moyen fessier et des rotateurs externes de hanche peu sollicités, un pied qui s’affaisse, ou une cheville raide qui pousse le genou vers l’intérieur pour trouver de l’amplitude.';
+      T.privilegier=['Moyen et grand fessier : abduction de hanche (machine, poulie, élastique), hip thrust, pont fessier une jambe','Fente et split squat lents (3 s à la descente), genou dans l’axe du deuxième orteil','Squat gobelet avec élastique au-dessus des genoux, consigne « écarte le sol »','Pied en trépied (talon, base du gros orteil, base du petit orteil) et mobilité de cheville genou au mur'];
+      T.amenager=[{quoi:'Squat lourd',reglage:'pieds largeur de hanches ou un peu plus, pointes ouvertes de 15 à 30°, et charge qui ne monte pas tant que le genou rentre en fin de série'},{quoi:'Presse à cuisses',reglage:'pieds un peu plus hauts et plus écartés sur la plateforme, genoux alignés sur les pointes'},{quoi:'Sauts et réceptions',reglage:'volume progressif, réception contrôlée genoux au-dessus des pieds'}];
+    }else{
+      T.court='Genou '+p.c+' qui s’écarte vers l’extérieur ('+_anatN(p.v)+'°) : jambes en parenthèses à l’arrêt.';
+      T.lecture='Debout, le genou passe en dehors de la ligne hanche-cheville (gauche '+_anatSigneTexte(m.g,true)+', droit '+_anatSigneTexte(m.d,true)+'). C’est une forme fréquente, souvent de construction, que l’entraînement ne redresse pas ; ce qui compte, c’est de placer les appuis pour que le genou suive le pied sous charge.';
+      T.privilegier=['Adducteurs : machine à adducteurs, Copenhagen plank, squat sumo contrôlé','Vaste interne : extension de jambes jusqu’au verrouillage, squat talons surélevés','Hip thrust pieds parallèles pour des fessiers travaillés en rotation neutre'];
+      T.amenager=[{quoi:'Squat',reglage:'appui un peu plus serré, pointes ouvertes de 10 à 20°, genoux dans l’axe des pieds sans chercher à les pousser dehors'},{quoi:'Fente',reglage:'pas un peu plus écarté latéralement, pour la stabilité'}];
+    }
+    T.verifier='Filmer une série de squat de face dans Motion Lab : si le genou bouge sous charge, c’est là qu’on travaille ; s’il reste aligné, la photo montrait une position de repos. Marge ±'+ANAT_TOL.genoux+'°.';
+    return T;
+  }
+  case 'pieds':{
+    const n=Math.abs(f.niveau||0);
+    if(!n){
+      T.court='Appuis symétriques : les deux pieds s’ouvrent de la même façon ('+_anatN(m.asy,0)+'° d’écart).';
+      T.lecture='Gauche '+_anatN(m.g,0)+'°, droit '+_anatN(m.d,0)+'° d’ouverture apparente. Sur une photo de face, la perspective exagère l’ouverture des pieds : on lit la différence entre les deux, pas les degrés eux-mêmes.';
+      T.privilegier=['Travail du pied : short foot, montées sur pointes lentes, et du pied nu à l’échauffement'];
+    }else{
+      const ouvert=m.asy>0?'gauche':'droit';
+      T.court='Pied '+ouvert+' plus ouvert que l’autre ('+_anatN(m.asy,0)+'° d’écart) : l’appui n’est pas symétrique.';
+      T.lecture='Gauche '+_anatN(m.g,0)+'°, droit '+_anatN(m.d,0)+'° d’ouverture apparente — la perspective exagère les degrés, on lit la différence. Un pied nettement plus ouvert traduit souvent une rotation de hanche de ce côté (rotation interne limitée, rotateurs externes raides), ou simplement la façon dont la photo a été prise.';
+      T.privilegier=['Mobilité de hanche en rotation interne (90/90, rotation assise) du côté '+ouvert,'Travail du pied : short foot, montées sur pointes lentes','Unilatéral jambes (split squat, step-up) en plaçant les deux pieds de façon identique'];
+      T.amenager=[{quoi:'Squat et soulevé de terre',reglage:'marquer au sol la position des pieds pour qu’elle soit la même à gauche et à droite ; ne pas forcer une ouverture que la hanche refuse — on la travaille à côté'}];
+    }
+    T.verifier='La voûte plantaire ne se lit pas sur une photo de face : regarder la vignette, et le talon sur la photo de dos. Marge ±'+ANAT_TOL.pieds+'°.';
+    return T;
+  }
+  case 'dos':{
+    const tr=m.tr, n=Math.abs(f.niveau||0);
+    if(!tr){
+      T.court='Épaules à '+_anatN(m.ad)+'° de l’horizontale vue de dos ; bras trop près du tronc pour lire la symétrie de la taille.';
+      T.lecture='Les « triangles » entre les bras et la taille ne se voient pas : les bras touchent le tronc à hauteur de taille. La hauteur des omoplates et leur décollement restent à regarder sur la vignette.';
+      T.verifier='Demander au prochain bilan la photo de dos bras relâchés, légèrement écartés du corps.';
+      return T;
+    }
+    if(!n){
+      T.court='Dos symétrique : triangles bras-tronc équivalents ('+_anatN(m.asy,0)+' % d’écart)'+(m.ad!=null?', épaules à '+_anatN(m.ad)+'°':'')+'.';
+      T.lecture='Vu de dos, l’espace entre chaque bras et la taille est le même à gauche et à droite : le tronc est centré. Sur la vignette, regarder la hauteur des deux omoplates et leur décollement — la photo ne les repère pas automatiquement.';
+      T.privilegier=['Rowing et tirages unilatéraux dans chaque bloc pour garder l’équilibre','Stabilité des omoplates : face pull, Y-raise, pompes scapulaires'];
+    }else{
+      const grand=m.asy>0?'gauche':'droite';
+      T.court='Espace bras-tronc plus grand à '+grand+' ('+_anatN(m.asy,0)+' %) : le tronc se décale vers la '+(grand==='gauche'?'droite':'gauche')+' sur la photo de dos.';
+      T.lecture='Debout, bras relâchés, les deux triangles entre le bras et la taille devraient se ressembler. Un triangle nettement plus grand d’un côté traduit un tronc qui se décale ou s’incline — posture du moment, appui sur une jambe, ou habitude. La photo ne dit pas pourquoi : elle dit où regarder. Sur la vignette, comparer aussi la hauteur des omoplates.';
+      T.privilegier=['Carry unilatéral (valise) et planche latérale, en commençant par le côté du plus petit triangle','Unilatéral dos : rowing un bras, tirage poulie un bras — commencer par le côté faible','Anti-rotation : Pallof press, bird dog'];
+      T.amenager=[{quoi:'Soulevé de terre et squat',reglage:'contrôler en vidéo de dos que la barre reste horizontale et que le bassin ne glisse pas'},{quoi:'Tractions',reglage:'amplitude complète des deux côtés, sans tirer « de travers » en fin de série'}];
+    }
+    T.verifier='Marge ±'+ANAT_TOL.triangles+' % : la largeur des triangles dépend beaucoup de la position des bras. Si l’écart revient d’un bilan à l’autre sur une photo bien prise, en parler avec l’athlète ; en cas de gêne, l’orienter vers un professionnel de santé.';
+    return T;
+  }
+  }
+  return T;
+}
+function _anatSigneTexte(v,genou){
+  if(v==null) return 'non lu';
+  if(Math.abs(v)<0.05) return '0°';
+  if(genou) return _anatN(v)+'° '+(v>0?'en dedans':'en dehors');
+  return _anatN(v)+'° '+(v>0?'côté gauche bas':'côté droit bas');
+}
+/** Le mot court de la colonne « Résultats ». */
+function anatVerdict(f){
+  if(f.etat==='illisible') return 'Non lisible';
+  if(f.etat==='a-mesurer') return 'À mesurer au mètre';
+  if(f.etat==='sans-repere') return 'Repère à calibrer';
+  const n=f.niveau;
+  if(n==null) return f.etat==='partiel'?'Partiel':'—';
+  if(n===0) return {clavicules:'Au centre',epaules:'Alignées',buste:'Tronc centré',bras:'Au centre',
+    bassin:'Aligné',jambes:'Au centre',genoux:'Dans l’axe',pieds:'Symétriques',dos:'Symétrique'}[f.cle]||'Au centre';
+  const i=n>0?1:0;
+  const intens=['','léger','net','marqué'][Math.abs(n)];
+  if(f.cle==='clavicules'||f.cle==='bras'||f.cle==='jambes') return f.bornes[i].charAt(0).toUpperCase()+f.bornes[i].slice(1);
+  const court={epaules:['Droite basse','Gauche basse'],bassin:['Droite basse','Gauche basse'],
+    buste:['Vers la droite','Vers la gauche'],genoux:['S’écartent','Rentrent'],
+    pieds:['Droit + ouvert','Gauche + ouvert'],dos:['Triangle D. +','Triangle G. +']}[f.cle];
+  return (court?court[i]:f.bornes[i])+' · '+intens;
+}
+
+// ── LE DÉTOURAGE À L'AFFICHAGE ─────────────────────────────────────────────
+// Une photo, un masque → un PNG sans fond, fabriqué une fois par session.
+// ⚠ SI LA PHOTO « SALIT » LA TOILE (un hébergeur sans en-tête CORS), on ne peut
+//   pas en faire un PNG : on garde la photo telle quelle et on la découpe en
+//   CSS (mask-image), avec le même masque. Même rendu, sans fichier.
+const _anatPngCache=new Map();
+function anatDetourer(src,masque){
+  const cle=src+'|'+(masque&&masque.rle?masque.rle.length:0);
+  if(_anatPngCache.has(cle)) return _anatPngCache.get(cle);
+  const p=(async()=>{
+    const bits=anatMasqueBits(masque);
+    if(!bits) return {url:src,masque:null,detoure:false};
+    // Le masque en petite image : blanc opaque sur la personne.
+    const mc=document.createElement('canvas');
+    mc.width=masque.w; mc.height=masque.h;
+    const mx=mc.getContext('2d');
+    const id=mx.createImageData(masque.w,masque.h);
+    for(let i=0;i<bits.length;i++){ const o=i*4; id.data[o]=id.data[o+1]=id.data[o+2]=255; id.data[o+3]=bits[i]?255:0; }
+    mx.putImageData(id,0,0);
+    const masqueUrl=mc.toDataURL('image/png');
+    const im=await new Promise(res=>{
+      const i=new Image(); i.crossOrigin='anonymous';
+      i.onload=()=>res(i); i.onerror=()=>res(null); i.src=src;
+    });
+    if(!im||!im.naturalWidth) return {url:src,masque:masqueUrl,detoure:false};
+    const w=im.naturalWidth,h=im.naturalHeight;
+    try{
+      const c=document.createElement('canvas');
+      c.width=w; c.height=h;
+      const x=c.getContext('2d');
+      // Le contour : agrandi en lissage, adouci d'un flou d'un demi-pixel de
+      // masque — sans quoi on verrait les marches de 200 px de large.
+      x.imageSmoothingEnabled=true; x.imageSmoothingQuality='high';
+      try{ x.filter='blur('+Math.max(1,Math.round(w/masque.w*0.5))+'px)'; }catch(e){}
+      x.drawImage(mc,0,0,w,h);
+      try{ x.filter='none'; }catch(e){}
+      // ⚠ LE FLOU DÉBORDE : il pose un halo de fond autour de la personne. On
+      //   redresse l'alpha autour de sa moitié — le contour reste doux, mais
+      //   il retombe sur la frontière du masque, pas un demi-pixel dehors.
+      try{
+        const d=x.getImageData(0,0,w,h), a=d.data;
+        for(let i=3;i<a.length;i+=4){ const v=(a[i]-150)*2.6+128; a[i]=v<0?0:v>255?255:v; }
+        x.putImageData(d,0,0);
+      }catch(e){}
+      x.globalCompositeOperation='source-in';
+      x.drawImage(im,0,0,w,h);
+      const blob=await new Promise(res=>c.toBlob(b=>res(b),'image/png'));
+      if(!blob) throw new Error('toile');
+      return {url:URL.createObjectURL(blob),masque:null,detoure:true};
+    }catch(e){
+      return {url:src,masque:masqueUrl,detoure:true};
+    }
+  })();
+  _anatPngCache.set(cle,p);
+  return p;
+}
+
+// ── L'ÉCRAN ────────────────────────────────────────────────────────────────
+const _anatEnCours=new Set();
+const _anatEchecs=new Map();
+let _anatVueActive='face';
+const ANAT_SVG={
+  tete:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4.5" r="2.2"/><path d="M8 21l1.2-7.5M16 21l-1.2-7.5M7 9.5c1.5-1.4 3.2-2 5-2s3.5.6 5 2M9.2 13.5h5.6M12 7.5v6"/></svg>',
+  loupe:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5M8 10.5h5M10.5 8v5"/></svg>',
+  chev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
+  info:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.5"/></svg>',
+  msg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8.5 8.5 0 0 1-12.6 7.4L3 21l1.6-5.2A8.5 8.5 0 1 1 21 12z"/></svg>',
+  relancer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>',
+  x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>'
+};
+
+/** L'analyse est-elle à faire (ou à refaire) pour ce bilan ? */
+function anatARefaire(c,pb){
+  const a=c&&c.morphoAnat;
+  if(!pb||!pb.face||!pb.dos) return false;
+  if(!a||typeof a!=='object') return true;
+  if(a.v!==ANAT_VERSION) return true;
+  return Number(a.bilan)!==pb.date;
+}
+
+/**
+ * Lit les deux photos et range le résultat dans le dossier. CÔTÉ COACH.
+ * @param {string} email @param {boolean} [force]
+ */
+async function anatAnalyser(email,force){
+  if(_anatEnCours.has(email)) return false;
+  const users=DB.get('users')||{};
+  const c=users[email];
+  if(!c||!currentUser||c.coachId!==currentUser.id) return false;
+  const pb=anatPremierBilan(c);
+  if(!pb.face||!pb.dos) return false;
+  if(!force&&!anatARefaire(c,pb)) return false;
+  _anatEnCours.add(email);
+  _anatEchecs.delete(email);
+  try{ renderAnatCoach(c); }catch(e){}
+  let res=null;
+  try{
+    await chargerMotionLab();
+    const lire=(typeof window!=='undefined')?/** @type {any} */(window).mlAnatPhoto:null;
+    if(typeof lire!=='function') throw new Error('lecture de photo indisponible');
+    const face=await lire(pb.face);
+    const dos=await lire(pb.dos);
+    if(!face||!face.ok) throw new Error(face&&face.code==='personne'?'aucune silhouette reconnue sur la photo de face'
+      :face&&face.code==='moteur'?'le moteur de pose ne s’est pas chargé':'la photo de face n’a pas pu être lue');
+    const garder=r=>(r&&r.ok)?{w:r.w,h:r.h,pts:r.pts,masque:r.masque||null}:null;
+    res={v:ANAT_VERSION,date:Date.now(),bilan:pb.date,depart:pb.bilan&&pb.bilan.type==='depart',
+      face:garder(face),dos:garder(dos)};
+  }catch(e){
+    _anatEchecs.set(email,String((e&&e.message)||e||'échec'));
+  }
+  _anatEnCours.delete(email);
+  const frais=(DB.get('users')||{});
+  const d=frais[email];
+  if(res&&d){
+    d.morphoAnat=res;
+    d.updatedAt=Date.now();
+    frais[email]=d;
+    DB.set('users',frais);
+    try{ CLOUD.pushOne(email,d); }catch(e){}
+  }
+  try{ const cc=getOwnedClient(currentClientId); if(cc&&cc.email===email) renderAnatCoach(cc); }catch(e){}
+  return !!res;
+}
+
+/** Relancer, à la main : le seul geste du coach sur l'analyse. */
+function anatRelancer(){
+  const c=getOwnedClient(currentClientId);
+  if(!c) return;
+  toast('Analyse de la photo…');
+  anatAnalyser(c.email,true).then(ok=>{
+    if(ok) toast('Analyse refaite ✓');
+    else toast('Rien de lu : '+(_anatEchecs.get(c.email)||'la photo n’a pas pu être lue'),'var(--orange)');
+  });
+}
+function anatVue(v){
+  _anatVueActive=(v==='dos')?'dos':'face';
+  try{ const c=getOwnedClient(currentClientId); if(c) renderAnatCoach(c); }catch(e){}
+}
+/** Déplie / replie une fiche, et l'amène sous les yeux depuis l'anneau. */
+function anatOuvrir(cle,depuisAnneau){
+  const z=document.getElementById('ccd-anat');
+  if(!z) return;
+  const f=z.querySelector('.an-f[data-k="'+cle+'"]');
+  if(!f) return;
+  const ouvrir=depuisAnneau?true:!f.classList.contains('ouvert');
+  f.classList.toggle('ouvert',ouvrir);
+  const b=f.querySelector('.an-f-plus');
+  if(b) b.setAttribute('aria-expanded',ouvrir?'true':'false');
+  z.querySelectorAll('.an-lbl,.an-r').forEach(e=>e.classList.toggle('actif',e.getAttribute('data-k')===cle&&ouvrir));
+  if(depuisAnneau){
+    try{ f.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){}
+    f.classList.add('an-eclair'); setTimeout(()=>f.classList.remove('an-eclair'),1200);
+  }
+}
+
+/** Le recadrage d'une zone : une image positionnée dans une fenêtre. */
+function _anatCadrage(zone,v,aspect){
+  if(!zone||!v) return null;
+  let {x0,y0,x1,y1}=zone;
+  let w=x1-x0,h=y1-y0;
+  // On élargit le côté court pour tenir le format de la vignette, sans rogner.
+  if(w/h<aspect){ const nw=h*aspect; x0-=(nw-w)/2; w=nw; }
+  else { const nh=w/aspect; y0-=(nh-h)/2; h=nh; }
+  return {l:-x0/w*100,t:-y0/h*100,w:v.w/w*100,h:v.h/h*100};
+}
+function _anatImg(vue,cad,extra){
+  if(!cad) return '';
+  return '<img class="an-img" data-anat-img="'+vue+'" alt="" draggable="false" style="left:'+cad.l.toFixed(2)+'%;top:'+cad.t.toFixed(2)
+    +'%;width:'+cad.w.toFixed(2)+'%;height:'+cad.h.toFixed(2)+'%'+(extra||'')+'">';
+}
+/** Les sept points du niveau : le centre vert, puis de plus en plus loin. */
+function _anatPoints(f){
+  const n=f.niveau;
+  let h='<span class="an-pts'+(n==null?' an-pts-vide':'')+'" role="img" aria-label="'
+    +escapeHtml(n==null?'sans position':(n===0?'au centre':f.bornes[n>0?1:0]+', niveau '+Math.abs(n)+' sur 3'))+'">';
+  for(let i=-3;i<=3;i++){
+    const on=(n!=null)&&(n===0?i===0:(n>0?(i>0&&i<=n):(i<0&&i>=n)));
+    h+='<i data-i="'+Math.abs(i)+'"'+(on?' data-on="1"':'')+'></i>';
+  }
+  return h+'</span>';
+}
+function _anatDateFr(t){
+  try{ return new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}); }catch(e){ return ''; }
+}
+function _anatContact(c,manque){
+  const pre=String(c.fname||'').trim()||'l’athlète';
+  const txt='Salut '+(String(c.fname||'').trim())+' ! Pour ton analyse morpho-anatomique, il me manque '
+    +(manque&&manque.length?manque.join(' et '):'tes photos de bilan')
+    +'. Tu peux compléter ton bilan dans l’application (photos de face et de dos, pieds à largeur de hanches, bras relâchés légèrement écartés du corps) ? Merci !';
+  const tel=String(c.phone||'').trim();
+  let url='';
+  try{ if(tel&&_numWa(tel)) url=waLink(tel,txt); }catch(e){ url=''; }
+  if(!url&&c.email) url='mailto:'+c.email+'?subject='+encodeURIComponent('Ton bilan')+'&body='+encodeURIComponent(txt);
+  return {url,pre};
+}
+
+function renderAnatCoach(c){
+  const z=document.getElementById('ccd-anat');
+  if(!z) return false;
+  let h='';
+  try{ h=_htmlAnat(c); }catch(e){ h=''; }
+  z.innerHTML=h;
+  if(!h) return true;
+  // Le détourage se pose APRÈS le rendu : il lit une image.
+  try{ _anatPeindre(z,c); }catch(e){}
+  // L'analyse se lance d'elle-même quand elle manque — une fois par dossier.
+  try{
+    const pb=anatPremierBilan(c);
+    if(anatARefaire(c,pb)&&!_anatEnCours.has(c.email)&&!_anatEchecs.has(c.email))
+      setTimeout(()=>{ anatAnalyser(c.email).catch(()=>{}); },50);
+  }catch(e){}
+  return true;
+}
+function _anatPeindre(z,c){
+  const a=c.morphoAnat;
+  const pb=anatPremierBilan(c);
+  for(const vue of ['face','dos']){
+    const src=vue==='face'?pb.face:pb.dos;
+    const v=a&&a[vue];
+    const imgs=z.querySelectorAll('img[data-anat-img="'+vue+'"]');
+    if(!imgs.length||!src) continue;
+    if(!v||!v.masque){ imgs.forEach(i=>{ i.src=src; }); continue; }
+    anatDetourer(src,v.masque).then(r=>{
+      imgs.forEach(i=>{
+        i.src=r.url;
+        if(r.masque){
+          i.style.webkitMaskImage=i.style.maskImage='url('+r.masque+')';
+          i.style.webkitMaskSize=i.style.maskSize='100% 100%';
+        }
+      });
+      z.querySelectorAll('.an-scene[data-vue="'+vue+'"]').forEach(s=>s.classList.add('pret'));
+    }).catch(()=>{ imgs.forEach(i=>{ i.src=src; }); });
+  }
+}
+
+function _htmlAnat(c){
+  if(!c) return '';
+  // Mêmes gardes que la silhouette : une invitation n'a pas de corps, et une
+  // grossesse déclarée met les photos du corps de côté.
+  if(c._fromCode) return '';
+  try{ if(!phpDisponible(c)) return ''; }catch(e){}
+  const pb=anatPremierBilan(c);
+  const a=c.morphoAnat&&c.morphoAnat.v===ANAT_VERSION&&Number(c.morphoAnat.bilan)===pb.date?c.morphoAnat:null;
+  const enCours=_anatEnCours.has(c.email);
+  const echec=_anatEchecs.get(c.email)||null;
+  const manque=pb.manque;
+  const grise=manque.length>0;
+  const tete='<div class="an-tete"><span class="an-tete-i">'+ANAT_SVG.tete+'</span><div class="an-tete-c"><h4>Analyse <span>morpho-anatomique</span></h4>'
+    +'<span>'+(pb.date?'Photos du premier bilan · '+_anatDateFr(pb.date)+(a&&a.face&&a.face.masque?' · fond retiré automatiquement':''):'Photos du premier bilan, détourées automatiquement')+'</span></div>'
+    +(grise?'':'<div class="an-vues" role="tablist">'
+      +['face','dos'].map(v=>'<button type="button" role="tab" class="an-vue-b'+(_anatVueActive===v?' actif':'')+'" aria-selected="'+(_anatVueActive===v)+'" onclick="anatVue(\''+v+'\')">'+(v==='face'?'Face':'Dos')+'</button>').join('')
+      +'</div>')+'</div>';
+
+  // ── GRISÉ : il manque le bilan ou une photo ──────────────────────────────
+  if(grise){
+    const k=_anatContact(c,manque);
+    const fant='<div class="an-fant">'+Array.from({length:5}).map(()=>'<div class="an-fant-c"><i></i><div><b></b><span></span><span></span></div></div>').join('')+'</div>';
+    return '<div class="an an-grise">'+tete
+      +'<div class="an-grise-corps" aria-hidden="true"><div class="an-grille">'+fant+'<div class="an-scene an-scene-vide"></div>'+fant+'</div></div>'
+      +'<div class="an-voile"><div class="an-voile-c"><b>Analyse indisponible</b><span>Il manque '+escapeHtml(manque.join(' et '))
+      +'. L’analyse se lit sur les photos de face et de dos du premier bilan.</span>'
+      +(k.url?'<a class="btn an-contact" href="'+escapeHtml(k.url)+'" target="_blank" rel="noopener">'+ANAT_SVG.msg+'<span>Contacter '+escapeHtml(k.pre)+' pour mettre à jour ses données</span></a>'
+        :'<span class="an-voile-s">Aucun numéro ni adresse pour contacter '+escapeHtml(k.pre)+'.</span>')
+      +'</div></div></div>';
+  }
+
+  // ── EN COURS, OU PAS ENCORE LU ───────────────────────────────────────────
+  if(!a){
+    const k=_anatContact(c,['une photo où tu es bien visible en entier']);
+    return '<div class="an">'+tete+'<div class="an-attente">'
+      +'<div class="an-scene an-scene-brute"><img class="an-brute" src="'+escapeHtml(pb.face)+'" alt="Photo de face du premier bilan"></div>'
+      +'<div class="an-attente-c">'+(echec
+        ?'<b>La photo n’a pas pu être lue</b><span>'+escapeHtml(echec)+'. Relancer l’analyse, ou demander une photo où '+escapeHtml(k.pre)+' est entier dans le cadre, de face, sur fond dégagé.</span>'
+          +'<div class="an-attente-b"><button type="button" class="btn an-relance" onclick="anatRelancer()">'+ANAT_SVG.relancer+'<span>Relancer l’analyse</span></button>'
+          +(k.url?'<a class="an-lien" href="'+escapeHtml(k.url)+'" target="_blank" rel="noopener">'+ANAT_SVG.msg+'<span>Contacter '+escapeHtml(k.pre)+'</span></a>':'')+'</div>'
+        :'<span class="an-roue" aria-hidden="true"></span><b>Détourage et lecture des points…</b><span>Les photos de face et de dos du premier bilan passent dans le moteur de pose, sur cet appareil. Quelques secondes la première fois.</span>'
+          +(enCours?'':'<div class="an-attente-b"><button type="button" class="btn an-relance" onclick="anatRelancer()">'+ANAT_SVG.relancer+'<span>Analyser les photos</span></button></div>'))
+      +'</div></div></div>';
+  }
+
+  // ── L'ANALYSE ────────────────────────────────────────────────────────────
+  let axes=null;
+  try{ axes=morphoAxes(c,{calibrage:morphoCalibrageCoach()}); }catch(e){ axes=null; }
+  const fiches=anatMesures(a,c,axes);
+  const textes={};
+  fiches.forEach(f=>{ try{ textes[f.cle]=anatTexte(f,c); }catch(e){ textes[f.cle]={court:'',lecture:'',privilegier:[],amenager:[],verifier:''}; } });
+  const vueAct=(_anatVueActive==='dos'&&a.dos)?'dos':'face';
+  const V=a[vueAct];
+
+  // La scène : la photo détourée, cadrée sur la personne, et l'anneau.
+  const cadre=(V&&V.masque)?anatCadre(V.masque):null;
+  const px=cadre?{x0:cadre.x0*V.w,y0:cadre.y0*V.h,x1:cadre.x1*V.w,y1:cadre.y1*V.h}:{x0:0,y0:0,x1:V.w,y1:V.h};
+  const pad=(px.y1-px.y0)*0.03;
+  px.x0-=pad; px.y0-=pad; px.x1+=pad; px.y1+=pad;
+  // Scène de 100 × 130 unités ; la photo occupe la hauteur, centrée.
+  const SH=124, ph=SH, pw=ph*(px.x1-px.x0)/(px.y1-px.y0), ox=50-pw/2, oy=3;
+  const verScene=(p)=>({x:ox+(p.x-px.x0)/(px.x1-px.x0)*pw,y:oy+(p.y-px.y0)/(px.y1-px.y0)*ph});
+  const cadScene=_anatCadrage({x0:px.x0,y0:px.y0,x1:px.x1,y1:px.y1},V,(px.x1-px.x0)/(px.y1-px.y0));
+  // Les repères du squelette, en rouge : épaules, hanches, genoux, chevilles.
+  const liens=[[11,12],[23,24],[11,23],[12,24],[11,13],[13,15],[12,14],[14,16],[23,25],[25,27],[24,26],[26,28],[27,29],[28,30],[29,31],[30,32]];
+  let svg='';
+  for(const [i,j] of liens){
+    const p=_anatP(V,i),q=_anatP(V,j);
+    if(!p||!q) continue;
+    const A=verScene(p),B=verScene(q);
+    svg+='<line x1="'+A.x.toFixed(2)+'" y1="'+A.y.toFixed(2)+'" x2="'+B.x.toFixed(2)+'" y2="'+B.y.toFixed(2)+'"/>';
+  }
+  for(const i of [11,12,13,14,15,16,23,24,25,26,27,28]){
+    const p=_anatP(V,i);
+    if(!p) continue;
+    const A=verScene(p);
+    svg+='<circle cx="'+A.x.toFixed(2)+'" cy="'+A.y.toFixed(2)+'" r="1"/>';
+  }
+  // L'anneau : une étiquette par région de cette vue, à gauche ou à droite.
+  const surVue=fiches.filter(f=>f.ancre&&(f.vue===vueAct||(vueAct==='dos'&&(f.cle==='epaules'||f.cle==='bassin'))));
+  const ancreDos=(f)=>{
+    if(vueAct!=='dos') return f.ancre;
+    if(f.cle==='dos') return f.ancre;
+    const R=_anatRepere(a.dos,true);
+    if(!R) return null;
+    return f.cle==='epaules'?R.ep.g:R.ha.g;
+  };
+  const etiq=[];
+  surVue.forEach(f=>{
+    const an=ancreDos(f);
+    if(!an) return;
+    const s=verScene(an);
+    const cote=({clavicules:'g',epaules:'g',bras:'g',bassin:'g',genoux:'g',buste:'d',dos:'d',jambes:'d',pieds:'d'})[f.cle]||'d';
+    etiq.push({f,s,cote});
+  });
+  for(const cote of ['g','d']){
+    const l=etiq.filter(e=>e.cote===cote).sort((x,y)=>x.s.y-y.s.y);
+    let min=6;
+    l.forEach(e=>{ e.y=Math.max(e.s.y,min); min=e.y+11; });
+    // Si on déborde en bas, on remonte tout le paquet.
+    const deb=l.length?l[l.length-1].y-124:0;
+    if(deb>0) l.forEach(e=>{ e.y-=deb; });
+  }
+  let anneau='';
+  etiq.forEach(e=>{
+    const xl=e.cote==='g'?13:87;
+    svg+='<polyline class="an-fil" points="'+(e.cote==='g'?xl+5:xl-5).toFixed(2)+','+e.y.toFixed(2)+' '+e.s.x.toFixed(2)+','+e.s.y.toFixed(2)+'"/>'
+      +'<circle class="an-fil-p" cx="'+e.s.x.toFixed(2)+'" cy="'+e.s.y.toFixed(2)+'" r="1.3"/>';
+    anneau+='<button type="button" class="an-lbl an-lbl-'+e.cote+'" data-k="'+e.f.cle+'" style="top:'+(e.y/130*100).toFixed(2)+'%" onclick="anatOuvrir(\''+e.f.cle+'\',true)">'+escapeHtml(e.f.lib)+'</button>';
+  });
+  const scene='<div class="an-scene" data-vue="'+vueAct+'"><div class="an-scene-photo">'+_anatImg(vueAct,cadScene)+'</div>'
+    +'<svg class="an-os" viewBox="0 0 100 130" preserveAspectRatio="none" aria-hidden="true">'+svg+'</svg>'+anneau
+    +'<span class="an-scene-leg">'+(vueAct==='face'?'Face':'Dos')+' · premier bilan</span></div>';
+
+  // Les fiches : la vignette, la phrase courte, le texte long.
+  const carte=(f)=>{
+    const t=textes[f.cle]||{};
+    const v=a[f.vue==='dos'?'dos':'face'];
+    const cad=_anatCadrage(f.zone,v,4/3);
+    const li=(l)=>l&&l.length?'<ul>'+l.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')+'</ul>':'';
+    const detail='<div class="an-f-long" id="an-long-'+f.cle+'">'
+      +(t.lecture?'<p class="an-f-lec">'+escapeHtml(t.lecture)+'</p>':'')
+      +(t.privilegier&&t.privilegier.length?'<h6>À privilégier</h6>'+li(t.privilegier):'')
+      +(t.amenager&&t.amenager.length?'<h6>À aménager</h6><ul>'+t.amenager.map(x=>'<li><b>'+escapeHtml(x.quoi)+'</b> — '+escapeHtml(x.reglage)+'</li>').join('')+'</ul>':'')
+      +(t.verifier?'<h6>Comment vérifier</h6><p>'+escapeHtml(t.verifier)+'</p>':'')
+      +'<p class="an-f-src">Source : '+escapeHtml(f.source||'')+(f.tolerance?' · marge '+escapeHtml(f.tolerance):'')+' · bilan du '+_anatDateFr(a.bilan)+'</p>'
+      +'</div>';
+    return '<div class="an-f" data-k="'+f.cle+'" data-etat="'+f.etat+'">'
+      +'<button type="button" class="an-f-vig" '+(cad?'onclick="anatZoom(\''+f.cle+'\')" aria-label="Agrandir : '+escapeHtml(f.lib)+'"':'disabled')+'>'
+      +(cad?_anatImg(f.vue==='dos'?'dos':'face',cad):'')+(cad?'<span class="an-f-loupe">'+ANAT_SVG.loupe+'</span>':'')+'</button>'
+      +'<div class="an-f-c"><div class="an-f-h"><b>'+escapeHtml(f.lib)+'</b>'+(f.valeur?'<em>'+escapeHtml(f.valeur)+'</em>':'')+'</div>'
+      +'<p class="an-f-court">'+escapeHtml(t.court||'')+'</p>'
+      +'<button type="button" class="an-f-plus" aria-expanded="false" aria-controls="an-long-'+f.cle+'" onclick="anatOuvrir(\''+f.cle+'\')"><span class="an-f-plus-o">Recommandations détaillées</span><span class="an-f-plus-f">Replier</span>'+ANAT_SVG.chev+'</button>'
+      +'</div>'+detail+'</div>';
+  };
+  const gauche=fiches.filter(f=>['clavicules','epaules','buste','bras','bassin'].includes(f.cle));
+  const droite=fiches.filter(f=>['jambes','genoux','pieds','dos'].includes(f.cle));
+  const res='<div class="an-res"><h5>Résultats de l’analyse</h5>'
+    +fiches.map(f=>'<button type="button" class="an-r" data-k="'+f.cle+'" data-n="'+(f.niveau==null?'':Math.abs(f.niveau))+'" onclick="anatOuvrir(\''+f.cle+'\',true)">'
+      +'<span class="an-r-l">'+escapeHtml(f.lib)+'</span>'+_anatPoints(f)+'<span class="an-r-v">'+escapeHtml(anatVerdict(f))+'</span></button>').join('')
+    +'<p class="an-res-leg"><span><i data-i="0"></i>dans la marge</span><span><i data-i="1"></i>léger</span><span><i data-i="2"></i>net</span><span><i data-i="3"></i>marqué</span><span>gris : sans position</span></p></div>';
+  const pourquoi='<div class="an-pq"><span class="an-pq-i">'+ANAT_SVG.info+'</span><div class="an-pq-c"><h5>Pourquoi cette analyse ?</h5>'
+    +'<span>Elle repère, sur les vraies photos du premier bilan, ce qui peut orienter le choix et le réglage des exercices : un appui qui penche, un genou qui rentre, un levier long. Chaque valeur porte sa marge ; ce qui ne se lit pas honnêtement sur une photo — largeurs d’os, insertions musculaires, voûte plantaire — n’est pas inventé. '
+    +escapeHtml(MORPHO_DISCLAIMER)+'</span></div>'
+    +'<button type="button" class="an-relance-p" onclick="anatRelancer()"'+(enCours?' disabled':'')+'>'+ANAT_SVG.relancer+'<span>'+(enCours?'Analyse…':'Relancer l’analyse')+'</span></button></div>';
+  return '<div class="an" data-vue="'+vueAct+'">'+tete
+    +'<div class="an-grille"><div class="an-col an-col-g"><h5>Détails morphologiques</h5>'+gauche.map(carte).join('')+'</div>'
+    +'<div class="an-centre">'+scene+'</div>'
+    +res+'<div class="an-col an-col-d">'+droite.map(carte).join('')+'</div></div>'
+    +pourquoi+'</div>';
+}
+
+/** Le zoom d'une vignette : la même photo, en grand. */
+function anatZoom(cle){
+  const c=getOwnedClient(currentClientId);
+  if(!c||!c.morphoAnat) return;
+  const a=c.morphoAnat;
+  let axes=null;
+  try{ axes=morphoAxes(c,{calibrage:morphoCalibrageCoach()}); }catch(e){ axes=null; }
+  const f=anatMesures(a,c,axes).find(x=>x.cle===cle);
+  if(!f||!f.zone) return;
+  const vue=f.vue==='dos'?'dos':'face';
+  const v=a[vue];
+  const zw=f.zone.x1-f.zone.x0, zh=f.zone.y1-f.zone.y0;
+  const asp=Math.max(0.6,Math.min(1.8,zw/zh));
+  const cad=_anatCadrage(f.zone,v,asp);
+  const t=anatTexte(f,c);
+  document.getElementById('an-zoom')?.remove();
+  const o=document.createElement('div');
+  o.id='an-zoom'; o.className='an-zoom';
+  o.setAttribute('role','dialog'); o.setAttribute('aria-modal','true'); o.setAttribute('aria-label','Zoom : '+f.lib);
+  o.innerHTML='<div class="an-zoom-b"><div class="an-zoom-h"><b>'+escapeHtml(f.lib)+'</b>'+(f.valeur?'<em>'+escapeHtml(f.valeur)+'</em>':'')
+    +'<button type="button" class="an-zoom-o" aria-pressed="false">Avec le fond</button>'
+    +'<button type="button" class="an-zoom-x" aria-label="Fermer">'+ANAT_SVG.x+'</button></div>'
+    +'<div class="an-zoom-img" style="aspect-ratio:'+asp.toFixed(3)+';width:min(100%,calc(66vh * '+asp.toFixed(3)+'))">'+_anatImg(vue,cad)+'</div>'
+    +'<p>'+escapeHtml(t.court||'')+'</p></div>';
+  const fermer=()=>{ o.remove(); document.removeEventListener('keydown',esc); };
+  const esc=(e)=>{ if(e.key==='Escape') fermer(); };
+  o.addEventListener('click',e=>{ if(e.target===o) fermer(); });
+  o.querySelector('.an-zoom-x').addEventListener('click',fermer);
+  document.addEventListener('keydown',esc);
+  document.body.appendChild(o);
+  const pb=anatPremierBilan(c);
+  const src=vue==='dos'?pb.dos:pb.face;
+  const img=o.querySelector('img');
+  let detoure=null;
+  if(img&&src){
+    if(v.masque) anatDetourer(src,v.masque).then(r=>{
+      detoure=r; img.src=r.url;
+      if(r.masque){ img.style.webkitMaskImage=img.style.maskImage='url('+r.masque+')'; img.style.webkitMaskSize=img.style.maskSize='100% 100%'; }
+    }).catch(()=>{ img.src=src; });
+    else img.src=src;
+  }
+  // Voir la photo d'origine, fond compris : ce que l'athlète a envoyé.
+  const bo=o.querySelector('.an-zoom-o');
+  bo.addEventListener('click',()=>{
+    const avec=bo.getAttribute('aria-pressed')!=='true';
+    bo.setAttribute('aria-pressed',avec?'true':'false');
+    bo.textContent=avec?'Sans le fond':'Avec le fond';
+    if(!img) return;
+    if(avec){ img.src=src; img.style.webkitMaskImage=img.style.maskImage='none'; }
+    else if(detoure){ img.src=detoure.url; if(detoure.masque){ img.style.webkitMaskImage=img.style.maskImage='url('+detoure.masque+')'; } }
+  });
+  setTimeout(()=>{ try{ o.querySelector('.an-zoom-x').focus(); }catch(e){} },30);
 }
 function renderCorpsCoach(c){
   const z=document.getElementById('ccd-corps');

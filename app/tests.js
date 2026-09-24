@@ -44608,6 +44608,63 @@ async function testExercices(){
       return true;})());
 
 
+    // ══ ANALYSE MORPHO-ANATOMIQUE (24/09/2026) ══════════════════════════
+    // La photo du premier bilan, face et dos ; des inclinaisons avec leur
+    // marge, jamais une largeur d'os lue sur la photo.
+    const _anatPose=(modif)=>{
+      const pts=Array.from({length:33},()=>[0.5,0.5,0]);
+      const pose={11:[0.60,0.25],12:[0.40,0.25],13:[0.63,0.40],14:[0.37,0.40],15:[0.64,0.53],16:[0.36,0.53],
+        23:[0.56,0.52],24:[0.44,0.52],25:[0.56,0.72],26:[0.44,0.72],27:[0.56,0.92],28:[0.44,0.92],
+        29:[0.56,0.94],30:[0.44,0.94],31:[0.58,0.96],32:[0.42,0.96]};
+      Object.assign(pose,modif||{});
+      for(const k in pose) pts[k]=[pose[k][0],pose[k][1],0.95];
+      return {w:1000,h:1500,pts,masque:null};
+    };
+    ok('ANALYSE MORPHO-ANATOMIQUE : UN CORPS DE NIVEAU SORT DANS LA MARGE',(()=>{
+      if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
+      const f=anatMesures({v:ANAT_VERSION,bilan:1,face:_anatPose(),dos:null},{bilans:[]},[]);
+      const par={}; f.forEach(x=>{ par[x.cle]=x; });
+      for(const k of ['epaules','bassin','genoux','pieds'])
+        if(!par[k]||par[k].niveau!==0) return _echec(k+' devrait être au centre : '+(par[k]&&par[k].niveau));
+      if(par.dos.etat!=='illisible') return _echec('sans photo de dos, le dos doit être illisible');
+      return true;})());
+    ok('ANALYSE MORPHO-ANATOMIQUE : L’ÉPAULE BASSE EST CELLE DE L’ATHLÈTE, PAS CELLE DE L’IMAGE',(()=>{
+      // De face, la gauche de l'athlète est à DROITE de l'image (x plus grand).
+      const face=_anatPose({11:[0.60,0.28]});
+      const f=anatMesures({v:ANAT_VERSION,bilan:1,face,dos:null},{bilans:[]},[]).find(x=>x.cle==='epaules');
+      if(!(f.niveau>0)) return _echec('l’épaule gauche basse n’est pas lue à gauche : '+f.niveau);
+      if(anatTexte(f,{}).court.indexOf('gauche')<0) return _echec('la phrase ne nomme pas la gauche');
+      // De dos, c'est l'inverse : la même image dit l'épaule DROITE.
+      const g=anatMesures({v:ANAT_VERSION,bilan:1,face:_anatPose(),dos:face},{bilans:[]},[]).find(x=>x.cle==='epaules');
+      if(!(g.mesure.ad<0)) return _echec('de dos, la même image devrait dire la droite : '+g.mesure.ad);
+      return true;})());
+    ok('ANALYSE MORPHO-ANATOMIQUE : UN GENOU QUI RENTRE EST LU EN DEDANS',(()=>{
+      const face=_anatPose({25:[0.52,0.72]});
+      const f=anatMesures({v:ANAT_VERSION,bilan:1,face,dos:null},{bilans:[]},[]).find(x=>x.cle==='genoux');
+      if(!(f.mesure.g>ANAT_TOL.genoux)) return _echec('genou gauche en dedans non lu : '+f.mesure.g);
+      if(!(f.niveau>0)) return _echec('niveau attendu positif : '+f.niveau);
+      return true;})());
+    ok('ANALYSE MORPHO-ANATOMIQUE : LES CLAVICULES NE SE LISENT QU’AU MÈTRE, ET AUCUN EXERCICE N’EST À ÉVITER',(()=>{
+      const f=anatMesures({v:ANAT_VERSION,bilan:1,face:_anatPose({11:[0.62,0.28],25:[0.52,0.72],31:[0.66,0.96]}),dos:null},{bilans:[]},[]);
+      const cl=f.find(x=>x.cle==='clavicules');
+      if(cl.etat!=='a-mesurer') return _echec('sans mètre, les clavicules devraient être « à mesurer » : '+cl.etat);
+      for(const x of f){
+        const t=anatTexte(x,{});
+        const tout=[t.court,t.lecture,t.verifier].concat(t.privilegier||[]).concat((t.amenager||[]).map(a=>a.quoi+' '+a.reglage)).join(' ');
+        if(/[àa] [ée]viter|proscri|interdit/i.test(tout)) return _echec(x.cle+' : « à éviter » dans le texte');
+        if(!t.court) return _echec(x.cle+' : pas de phrase courte');
+      }
+      return true;})());
+    ok('ANALYSE MORPHO-ANATOMIQUE : LE MASQUE SE RELIT TEL QU’IL A ÉTÉ CODÉ',(()=>{
+      // 4 × 3 : fond, 2 personne, fond ; codé par plages en base 36.
+      const m={w:4,h:3,rle:'1.2.2.2.2.2.1'};
+      const b=anatMasqueBits(m);
+      if(!b||Array.from(b).join('')!=='011001100110') return _echec('masque mal relu : '+(b&&Array.from(b).join('')));
+      const c=anatCadre(m);
+      if(!c||c.x0!==0.25||c.x1!==0.75) return _echec('cadre faux : '+JSON.stringify(c));
+      if(CHAMPS_SANTE.indexOf('morphoAnat')<0) return _echec('morphoAnat n’est pas classé santé');
+      return true;})());
+
     // ══ LOT 8 : L'ANALYSE MORPHO, AUTOMATIQUE ET FIGÉE (23/09/2026) ══════
     // « Déclenchement automatique à l'enregistrement du premier bilan. Aux
     //   bilans suivants : rien. La morphologie d'un adulte ne bouge pas. »

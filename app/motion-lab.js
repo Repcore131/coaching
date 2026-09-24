@@ -12512,3 +12512,117 @@ async function mlMorphoPhoto(src){
     pixels:mlMorphoPixels(pts,w,h),px:{w,h}};
 }
 
+// ══ L'ANALYSE MORPHO-ANATOMIQUE — LES POINTS ET LE DÉTOURAGE ════════════════
+//
+// Kevin, 24/09/2026 : « au milieu, réellement la photo de la personne qui a
+// fait son bilan, en PNG, en supprimant le fond en automatisme ». Le même
+// moteur de pose que ci-dessus, avec sa segmentation allumée le temps d'une
+// image : il rend les 33 points ET un masque de la personne.
+//
+// ⚠ AUCUN OCTET D'IMAGE NE SORT D'ICI. Le masque est ramené à ML_ANAT_MASQUE_L
+//   pixels de large et codé par plages (0/1) : quelques kilo-octets, rangés
+//   dans le dossier. Le détourage se refait à l'affichage, sur la photo que
+//   l'hébergeur sert déjà — la photo n'est jamais recopiée.
+// ⚠ LES POINTS SORTENT BRUTS, NORMALISÉS. Aucun verdict ici : c'est rc-core
+//   qui sait ce qu'une épaule basse de deux degrés vaut, avec quelle marge.
+
+/** Largeur du masque rangé. 200 px sur une photo de 1280 : un pixel de masque
+ *  couvre six pixels d'image, et le contour est lissé à l'affichage. */
+const ML_ANAT_MASQUE_L=200;
+
+/**
+ * Code un masque binaire par plages alternées, en commençant par le fond.
+ * @param {Uint8Array} bits @returns {string}
+ */
+function _mlAnatRle(bits){
+  const out=[];
+  let v=0,n=0;
+  for(let i=0;i<bits.length;i++){
+    if(bits[i]===v) n++;
+    else { out.push(n.toString(36)); v=bits[i]; n=1; }
+  }
+  out.push(n.toString(36));
+  return out.join('.');
+}
+
+/**
+ * Lit une photo de bilan : les 33 points et le masque de la personne.
+ * @param {string} src
+ * @returns {Promise<{ok:boolean, code?:string, w?:number, h?:number,
+ *   pts?:number[][], masque?:{w:number,h:number,rle:string}|null}>}
+ */
+async function mlAnatPhoto(src){
+  if(!src||typeof src!=='string') return {ok:false,code:'image'};
+  let moteur=null;
+  try{ moteur=await _mlChargerPose(); }catch(e){ return {ok:false,code:'moteur'}; }
+  if(!moteur) return {ok:false,code:'moteur'};
+  /** @type {HTMLImageElement|null} */
+  const im=await new Promise(res=>{
+    const i=new Image();
+    i.crossOrigin='anonymous';
+    i.onload=()=>res(i); i.onerror=()=>res(null);
+    i.src=src;
+  });
+  if(!im||!im.naturalWidth) return {ok:false,code:'image'};
+  const w=im.naturalWidth, h=im.naturalHeight;
+  const t=document.createElement('canvas');
+  t.width=w; t.height=h;
+  const cx=t.getContext('2d');
+  if(!cx) return {ok:false,code:'image'};
+  cx.drawImage(im,0,0,w,h);
+  // LA SEGMENTATION LE TEMPS D'UNE IMAGE. Le laboratoire tourne sans elle :
+  // elle coûte à chaque image d'une vidéo, et on la rend éteinte.
+  try{ moteur.setOptions({enableSegmentation:true,smoothSegmentation:false}); }catch(e){}
+  /** @type {any} */
+  let res=null;
+  let masque=null;
+  try{
+    res=await new Promise((ok)=>{
+      const garde=setTimeout(()=>ok(null),20000);
+      moteur.onResults((/** @type {any} */ r)=>{
+        clearTimeout(garde);
+        // ⚠ LE MASQUE SE LIT DANS LE RAPPEL, pas après : c'est une texture du
+        //   moteur, réécrite à l'image suivante.
+        try{ masque=r&&r.segmentationMask?_mlAnatMasque(r.segmentationMask,w,h):null; }catch(e){ masque=null; }
+        ok(r);
+      });
+      moteur.send({image:t}).catch(()=>{ clearTimeout(garde); ok(null); });
+    });
+  } finally {
+    try{ moteur.setOptions({enableSegmentation:false}); }catch(e){}
+  }
+  const p=res&&res.poseLandmarks;
+  if(!p||p.length<33) return {ok:false,code:'personne'};
+  const r4=(/** @type {number} */ x)=>Math.round((Number(x)||0)*10000)/10000;
+  const pts=p.map((/** @type {any} */ q)=>[r4(q.x),r4(q.y),Math.round((Number(q.visibility)||0)*100)/100]);
+  return {ok:true,w,h,pts,masque};
+}
+
+/**
+ * Ramène le masque du moteur à ML_ANAT_MASQUE_L de large, en 0/1.
+ * @param {any} m  image ou toile du moteur
+ * @param {number} w @param {number} h
+ * @returns {{w:number,h:number,rle:string}|null}
+ */
+function _mlAnatMasque(m,w,h){
+  const mw=ML_ANAT_MASQUE_L, mh=Math.max(1,Math.round(ML_ANAT_MASQUE_L*h/w));
+  const c=document.createElement('canvas');
+  c.width=mw; c.height=mh;
+  const x=c.getContext('2d',{willReadFrequently:true});
+  if(!x) return null;
+  x.drawImage(m,0,0,mw,mh);
+  const d=x.getImageData(0,0,mw,mh).data;
+  // Selon le navigateur, la confiance arrive dans l'alpha ou dans le rouge :
+  // un alpha plein partout veut dire qu'elle est dans le rouge.
+  let alphaPlein=true;
+  for(let i=3;i<d.length;i+=4){ if(d[i]<250){ alphaPlein=false; break; } }
+  const bits=new Uint8Array(mw*mh);
+  let n=0;
+  for(let i=0,j=0;i<d.length;i+=4,j++){
+    const v=alphaPlein?d[i]:d[i+3];
+    if(v>=128){ bits[j]=1; n++; }
+  }
+  // Moins de 2 % de l'image : ce n'est pas une personne entière.
+  if(n<mw*mh*0.02) return null;
+  return {w:mw,h:mh,rle:_mlAnatRle(bits)};
+}
