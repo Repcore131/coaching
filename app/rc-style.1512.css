@@ -4482,7 +4482,11 @@ span.cc-corps-lp{cursor:default;text-decoration:none}
   .cc-corps-trio-x{grid-column:1/-1}
 }
 @container corps (min-width:900px){
-  .cc-corps-trio{grid-template-columns:repeat(2,minmax(0,1fr)) 210px;gap:8px}
+  /* 140 px, et un retrait a gauche : Kevin, 24/09/2026, « encore moins de
+     largeur, les persos un poil plus gros et mieux centres ». Le retrait
+     ramene le couple de silhouettes vers le milieu du cadre sans le
+     retrecir : ce que le rectangle rend, les corps le prennent. */
+  .cc-corps-trio{grid-template-columns:repeat(2,minmax(0,1fr)) 140px;gap:4px;padding-left:60px}
   .cc-corps-trio-x{grid-column:auto}
 }
 /* PLUS GRANDES, ET LE CADRE PLUS ETROIT (Kevin, 24/09/2026 : « agrandis les
@@ -4491,7 +4495,7 @@ span.cc-corps-lp{cursor:default;text-decoration:none}
    tient a 210 px, centre sur la hauteur de la silhouette — il reste ainsi
    dans la hauteur de la colonne d'etiquettes, du cou au mollet. */
 .cc-corps-duo .cc-corps-scene{max-width:none}
-.cc-corps-trio-x .cc-corps-x{margin-top:0}
+.cc-corps-trio-x .cc-corps-x{margin-top:0;padding:8px 10px}
 .cc-corps-pied{max-width:760px;margin:4px auto 0;text-align:center}
 .cc-corps-g{background:rgba(255,255,255,.028);border:1px solid rgba(255,255,255,.09);
   border-radius:var(--r-2);padding:9px 10px 8px}
