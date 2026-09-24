@@ -1,0 +1,93 @@
+# ══════════════════════════════════════════════════════════════════════════
+#  LE RAPPORT PAYEUR, LE 1er DE CHAQUE MOIS
+# ══════════════════════════════════════════════════════════════════════════
+#
+#  POURQUOI ICI ET PAS DANS L'APPLICATION. Un rapport qui n'arrive que si on
+#  ouvre l'application n'arrive pas : c'est justement quand on ne l'ouvre pas
+#  qu'on a besoin d'etre prevenu. GitHub, lui, tourne tout seul, gratuitement,
+#  telephone eteint.
+#
+#  ⚠ CE QUE CE TRAVAIL LIT : les encaissements PayPal, et RIEN D'AUTRE. Ni la
+#    base, ni un dossier, ni une mesure. Une adresse, un nom, un montant, une
+#    date : ce qu'une facture porte deja.
+#
+#  ── LES QUATRE SECRETS A POSER UNE FOIS ────────────────────────────────
+#  Depot GitHub > Settings > Secrets and variables > Actions > New repository
+#  secret. Ils sont chiffres, invisibles ensuite, et jamais dans le code.
+#
+#    PAYPAL_CLIENT_SECRET   le secret de l'application PayPal (compte reel)
+#    MAIL_UTILISATEUR       guellec.coachingpro@gmail.com
+#    MAIL_MOT_DE_PASSE      un MOT DE PASSE D'APPLICATION Google, pas celui du
+#                           compte : myaccount.google.com > Securite >
+#                           Validation en deux etapes > Mots de passe des
+#                           applications. Il ne permet que d'envoyer un
+#                           courriel, et se revoque d'un clic.
+#    MAIL_DESTINATAIRE      l'adresse qui recoit (la meme, en general)
+#
+#  PAYPAL_CLIENT_ID n'est pas un secret : il est lu dans rc-core, ou il vit
+#  deja en clair — chaque page servie le contient.
+#
+#  ⚠ UNE PERMISSION A COCHER, COTE PAYPAL : l'application doit avoir
+#    « Transaction Search » activee (developer.paypal.com > Apps & Credentials
+#    > ton application > Features). Sinon PayPal repond 403, le travail
+#    echoue, et GitHub previent par courriel.
+#
+#  ⚠ GITHUB ENDORT LES TRAVAUX PROGRAMMES apres soixante jours SANS AUCUNE
+#    activite sur le depot. Ce depot recoit des builds regulierement : le cas
+#    ne devrait pas se presenter, mais si un rapport manque a l'appel, c'est
+#    la premiere chose a regarder (l'onglet Actions le dit et propose de le
+#    reactiver d'un bouton).
+# ══════════════════════════════════════════════════════════════════════════
+name: Rapport payeur
+
+on:
+  schedule:
+    # Le 1er de chaque mois a 06:00 UTC, soit 8 h a Paris l'ete, 7 h l'hiver.
+    - cron: '0 6 1 * *'
+  # ET A LA DEMANDE : onglet Actions > Rapport payeur > Run workflow. C'est
+  # par la qu'on l'essaie, sans attendre le mois prochain.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rapport-payeur
+  cancel-in-progress: false
+
+jobs:
+  rapport:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Construire le rapport
+        env:
+          PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
+        run: node scripts/rapport_payeur.mjs
+
+      # LE MOIS DANS L'OBJET : une boite de reception ou douze courriels
+      # portent le meme titre ne se relit pas.
+      - name: L'envoyer
+        env:
+          MAIL_UTILISATEUR: ${{ secrets.MAIL_UTILISATEUR }}
+          MAIL_MOT_DE_PASSE: ${{ secrets.MAIL_MOT_DE_PASSE }}
+          MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE }}
+        run: |
+          node scripts/envoyer_mail.mjs rapport-payeur.md \
+            "Rapport payeur RepCore, $(date -u +'%Y-%m')"
+
+      # ET IL RESTE TELECHARGEABLE PENDANT TROIS MOIS, meme si le courriel
+      # s'est perdu : onglet Actions > le travail > Artifacts.
+      - name: Le garder sous la main
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapport-payeur
+          path: rapport-payeur.md
+          retention-days: 90
+          if-no-files-found: ignore

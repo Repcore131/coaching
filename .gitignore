@@ -8,6 +8,14 @@ node_modules/
 # n importe qui, et l historique git est permanent. Les audits experts et la
 # cartographie technique decrivent les entrailles de l app — ils restent sur le
 # disque, ils ne partent pas en ligne.
+# ⚠ LE RAPPORT PAYEUR NE DOIT JAMAIS ENTRER DANS LE DEPOT. Il porte des
+# noms, des adresses et des montants, et ce depot est publie TEL QUEL sur
+# repcore131.github.io : un fichier a la racine devient lisible par tout le
+# monde, et l'historique git est permanent. Il vit dans le travail de
+# GitHub Actions, qui l'envoie par courriel et le garde en piece jointe
+# telechargeable quatre-vingt-dix jours.
+rapport-payeur.md
+
 AUDIT_INVENTAIRE.md
 AUDIT_REPCORE.md
 AUDIT_REPCORE.pdf
