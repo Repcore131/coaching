@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1504';
+window.RC_BUILD='1510';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -403,7 +403,7 @@ if('serviceWorker' in navigator){
 /* Repli COMPLET, pour un navigateur sans woff2 ou un fichier manquant. */
 :root{--pile-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans',sans-serif;--pile-titre:'Bebas Neue','Arial Narrow','Haettenschweiler','Franklin Gothic Condensed',Impact,sans-serif}
 </style>
-<link rel="stylesheet" href="./rc-style.1504.css">
+<link rel="stylesheet" href="./rc-style.1510.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -2345,12 +2345,24 @@ const COACH_PHOTO='icons/coach.jpg';
            meme fait dans le meme ecran, c'est une de trop. -->
       <button class="btn btn-red" style="width:100%;margin:0 0 14px;min-height:52px;font-size:var(--fs-md);letter-spacing:1.5px"
         onclick="openCoachSessions()">Modifier le programme</button>
+      <!-- ══ CE QUE L'ONGLET AVAIT HIER MATIN ═══════════════════════════
+           Kevin, 24/09/2026 : « remets cette page comme elle etait hier
+           matin, on s'en fiche des doublons dans Donnees ». Le lot 1 des six
+           etages avait demenage ici le corps, l'asymetrie, la forme, le
+           volume, les plateaux et la douleur vers l'onglet Donnees.
+           ILS SONT DANS LES DEUX ONGLETS, MAIS EN UN SEUL EXEMPLAIRE : chaque
+           <template data-ent-ancre> marque leur place d'hier, et
+           _ccdPlacerBlocs (appelee par ccdVue) les y pose quand Entrainement
+           est ouvert, puis les rend a leur etage de Donnees sinon. Deux copies
+           auraient voulu deux identifiants, donc deux rendus a tenir. -->
+      <template data-ent-ancre="ccd-corps"></template>
       <!-- Modèle appliqué : renseigné par openClientDetail -->
       <div id="ccd-assigned-prog" style="display:none;font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px;padding:8px 12px;background:var(--surface-1);border-left:2px solid var(--red);border-radius:0 var(--r-2) var(--r-2) 0;line-height:1.5"></div>
       <!-- LES TECHNIQUES D'INTENSIFICATION : une phrase quand la semaine est
            chargee, les depassements de regle quand il y en a. Sous le
            programme, parce que c'est du programme qu'elles parlent. -->
       <div id="ccd-methodes"></div>
+      <template data-ent-ancre="ccd-asymetrie"></template>
       <!-- Charge de la semaine et exercices en hausse. Masqué tant que
            l'historique ne permet pas de les établir : c'est le contrat des
            deux fonctions qui les calculent. -->
@@ -2358,6 +2370,10 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="cc-sect-t"><span>Tendances</span></div>
         <div class="cc-sect-c" id="ccd-tendances"></div>
       </section>
+      <template data-ent-ancre="ccd-forme"></template>
+      <template data-ent-ancre="ccd-volume"></template>
+      <template data-ent-ancre="ccd-plateaux"></template>
+      <template data-ent-ancre="ccd-douleur"></template>
       <section class="cc-sect" style="--cc-accent:var(--border)">
         <div class="cc-sect-t"><span>Récapitulatif des séances</span></div>
         <div class="cc-sect-c" id="ccd-sessions-recap"></div>
@@ -5583,5 +5599,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1504.js"></script>
+<script src="./rc-core.1510.js"></script>
 </body></html>

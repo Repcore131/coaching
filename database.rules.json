@@ -71,6 +71,12 @@
         // booleen horodate, jamais un texte libre ou un objet arbitraire.
         "abonnement": {
           "palier": { ".validate": "newData.isString() && newData.val().length < 40" },
+          // ⚠ LA FORMULE PAYEE (24/09/2026), et elle DOIT etre declaree ici.
+          //   `abonnement` est une liste blanche fermee par "$autre": false :
+          //   un champ non declare fait rejeter le PUT ENTIER du dossier, en
+           //   silence. Sans cette ligne, le premier abonne a Ultime aurait
+          //   cesse de se synchroniser sans que rien ne le dise.
+          "formule": { ".validate": "newData.isString() && newData.val().length < 40" },
           "prochaineEcheance": { ".validate": "newData.isNumber()" },
           "resiliationDemandee": {
             "ts": { ".validate": "newData.isNumber()" },
@@ -978,8 +984,18 @@
     //   et voit un catalogue VIDE. Le code le gere (chargerBanque garde ce
     //   qu'il a), mais la porte ouverte dans l'interface ne donne rien tant que
     //   `firebase deploy --only database` n'a pas tourne.
+    //
+    // ⚠ LA TROISIEME BRANCHE EST LA PARCE QU'IL N'Y AURA PAS DE SERVEUR
+    //   (24/09/2026). droits/ ne se remplit qu'avec une Cloud Function, et
+    //   Kevin ne prend pas le plan Blaze : sans elle, un abonne qui vient de
+    //   payer Ultime trouverait un catalogue vide, c'est-a-dire exactement ce
+    //   qu'il a paye. On lit donc aussi ce que le DOSSIER dit avoir paye.
+    //   CE QUE CA COUTE : le titulaire ecrit son dossier, donc qui sait ouvrir
+    //   une console peut se declarer « ultime » et lire les fiches. C'est deja
+    //   vrai de tout le reste sans fonctions, et la seule barriere qui ne se
+    //   trafique pas reste droits/, ecrit a la main depuis la console Firebase.
     "exercices": {
-      ".read": "auth != null && (\n  root.child('users').child(auth.token.email.replace('.', ',')).child('role').val() === 'coach' ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('palier').val() === 'ultime'\n)",
+      ".read": "auth != null && (\n  root.child('users').child(auth.token.email.replace('.', ',')).child('role').val() === 'coach' ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('palier').val() === 'ultime' ||\n  (root.child('users').child(auth.token.email.replace('.', ',')).child('status').val() === 'AUTONOMIE_PREMIUM' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('paymentStatus').val() === 'active' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('abonnement').child('formule').val() === 'ultime')\n)",
       ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'"
     }
   }

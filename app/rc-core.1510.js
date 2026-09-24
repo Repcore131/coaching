@@ -80,6 +80,26 @@ const RC_WHATSAPP='33778439205';
 // pris pour autre chose.
 // L'ORDRE PAYPAL, LUI, EST REEL : l'argent est bien encaisse, et
 // l'identifiant de transaction est conserve dans le dossier.
+// ══ Y A-T-IL UN SERVEUR ? NON, ET CE N'EST PAS UN OUBLI ═════════════════
+//
+// Decision de Kevin, 24/09/2026 : « je ne payerai pas le plan Blaze ». Les
+// Cloud Functions de functions/index.js sont ecrites et ne tourneront pas.
+//
+// CE QUE CE BOOLEEN TIENT : les deux appels que le client leur adressait, a
+// l'inscription (ouvrirEssai) et a l'achat d'un programme
+// (verifierAchatProgramme). Ils echouaient tous les deux, sans consequence
+// mais pour de vrai : une requete pour rien, et une erreur reseau dans la
+// console de chaque athlete. On ne les envoie plus.
+//
+// ⚠ LA SUPPRESSION DISTANTE DES VIDEOS N'EST PAS GARDEE PAR CE BOOLEEN, et
+//   c'est volontaire : _cldDetruire se rend compte tout seul de l'absence de
+//   la fonction, des le premier appel, et met tout en file. Elle repartirait
+//   donc d'elle-meme si la fonction apparaissait, sans que personne ait a
+//   penser a ce fichier.
+//
+// LE JOUR OU CES FONCTIONS TOURNENT : ce booleen passe a true, et rien
+// d'autre ne bouge.
+const FONCTIONS_SERVEUR=false;
 const RC_BOUTIQUE_GRATUITE=false;
 const RC_PROGRAMMES=Object.freeze([
   Object.freeze({
@@ -970,7 +990,7 @@ const PAYPAL_PLAN_ID='P-95N51603RD882780YNJKS2QA';
 // Pour l'activer : developer.paypal.com → Billing Plans → créer un plan
 // « RepCore Annuel », 99,00 EUR, cycle ANNUAL, puis coller l'ID ci-dessous.
 // Rien d'autre à modifier : l'écran s'adapte tout seul.
-const PAYPAL_PLAN_ID_ANNUEL='';
+const PAYPAL_PLAN_ID_ANNUEL='P-92T09491KF550281RNK2LZWY';
 // ⚠ LES DEUX PLANS D'ULTIME N'EXISTENT PAS ENCORE (lot 5). Ils se creent dans
 //   le tableau de bord PayPal — Billing Plans — puis leur identifiant se colle
 //   ici. Tant qu'une case est vide, l'offre correspondante n'est pas proposee
@@ -978,8 +998,8 @@ const PAYPAL_PLAN_ID_ANNUEL='';
 //   de payer.
 //     « RepCore Ultime mensuel »  24,90 EUR, cycle MONTH
 //     « RepCore Ultime annuel »  249,00 EUR, cycle YEAR
-const PAYPAL_PLAN_ID_ULTIME='';
-const PAYPAL_PLAN_ID_ULTIME_ANNUEL='';
+const PAYPAL_PLAN_ID_ULTIME='P-2W777608239063532NK2LZXA';
+const PAYPAL_PLAN_ID_ULTIME_ANNUEL='P-16Y44630WF304553UNK2LZXI';
 // ⚠ LE PREMIER MOIS A MOITIE PRIX APRES UN PACK (lot 10). C'est un plan
 //   PAYPAL A PART, et non une remise appliquee a la main : un abonnement
 //   mensuel dont le PREMIER cycle est a 12,45 EUR et les suivants a 24,90.
@@ -989,7 +1009,7 @@ const PAYPAL_PLAN_ID_ULTIME_ANNUEL='';
 //   TANT QUE CETTE CASE EST VIDE, L'OFFRE N'EST PAS ANNONCEE DU TOUT : la
 //   sortie de pack propose alors Ultime au prix normal. On ne promet pas un
 //   prix qu'on ne sait pas encaisser.
-const PAYPAL_PLAN_ID_ULTIME_DEMI='';
+const PAYPAL_PLAN_ID_ULTIME_DEMI='P-57P40267XP026613FNK2LZXQ';
 // PURE. Le plan PayPal d'une offre, ou '' quand il n'a pas encore ete cree.
 // UN SEUL ENDROIT SAIT QUEL PLAN VA AVEC QUELLE OFFRE : sans ca, l'ecran des
 // tarifs et le bouton de paiement finiraient par ne plus parler du meme.
@@ -1567,11 +1587,14 @@ function essaiOuvrir(u){
   if(u.essai&&typeof u.essai==='object') return false;   // deja ouvert, ou deja fini
   const t=Date.now();
   u.essai={ouvertLe:t,finit:t+ESSAI_JOURS*86400000};
-  // LE SERVEUR EST PREVENU, SANS QU'ON L'ATTENDE. S'il repond, son echeance
-  // prend la main a la premiere lecture de droits/. S'il ne repond pas — plan
-  // Spark, hors ligne, fonction absente — l'essai s'ouvre quand meme : un
-  // compte neuf ne doit pas rester dehors parce qu'un serveur n'a rien dit.
-  try{ if(CLOUD&&CLOUD._callFn) CLOUD._callFn('ouvrirEssai',{jours:ESSAI_JOURS}).catch(()=>{}); }catch(e){}
+  // LE SERVEUR SERAIT PREVENU, S'IL Y EN AVAIT UN. Il n'y en a pas : voir
+  // FONCTIONS_SERVEUR. L'essai s'ouvre donc dans le dossier, et il y reste.
+  // Le jour ou la fonction tourne, son echeance prendra la main a la premiere
+  // lecture de droits/, sans qu'une ligne d'interface change.
+  try{
+    if(FONCTIONS_SERVEUR&&CLOUD&&CLOUD._callFn)
+      CLOUD._callFn('ouvrirEssai',{jours:ESSAI_JOURS}).catch(()=>{});
+  }catch(e){}
   return true;
 }
 // PURE. La fin de l'essai, en millisecondes, ou 0 quand il n'y en a pas.
@@ -6796,12 +6819,28 @@ function droitsDe(u){
     source:d.source||null,maj:Number(d.maj)||0,lu:o.lu,
     essaiOuvertLe:Number(d.essaiOuvertLe)||0,essaiFinit:Number(d.essaiFinit)||0};
 }
-// ⚠ LE REPLI EST LE PALIER LE PLUS BAS QUI NE CASSE RIEN, JAMAIS LE PLUS HAUT.
-//   Un droit qu'on ne sait pas lire n'est pas un droit acquis. La seule chose
-//   qu'on n'ose pas faire, c'est couper quelqu'un en pleine seance parce qu'un
-//   serveur n'a pas repondu : tant qu'aucune lecture n'a abouti sur cet
-//   appareil, l'ancien modele continue de decider (etat 'inconnu'), et il
-//   cesse de le faire des la premiere reponse du serveur.
+// ⚠ UN NOEUD VIDE NE FERME RIEN, ET C'EST LA CORRECTION DU 24/09/2026.
+//
+//   Le lot 0 faisait de droits/ la source unique : vide valait « aucun droit »,
+//   parce qu'une Cloud Function allait le remplir a chaque paiement. Kevin a
+//   tranche : pas de plan Blaze, donc pas de fonctions, donc PERSONNE n'ecrira
+//   jamais ce noeud. Garder cette lecture-la aurait coupe l'acces a TOUS les
+//   abonnes et a TOUS les athletes suivis le jour ou les regles seraient
+//   publiees — la lecture aurait abouti, rendu null, et ferme la porte.
+//
+//   CE QUI DECIDE DONC :
+//     droits/ PORTE QUELQUE CHOSE  → il decide, et il prime sur le dossier.
+//     droits/ VIDE OU ILLISIBLE    → le dossier decide, comme avant le lot 0.
+//
+//   CE QU'ON GARDE EN ECHANGE : le noeud s'ecrit depuis la CONSOLE FIREBASE,
+//   qui passe par l'Admin SDK et ignore les regles. Un acces pose la ne se
+//   trafique pas depuis un navigateur, contrairement au dossier. Pour ouvrir
+//   Ultime trois mois a quelqu'un qui a paye hors de l'application :
+//     droits/<adresse avec des virgules>/palier   = "ultime"
+//     droits/<adresse avec des virgules>/echeance = <millisecondes>
+//     droits/<adresse avec des virgules>/source   = "main"
+//   Pour le refermer, remettre palier a "aucun" : la, le noeud PORTE quelque
+//   chose, et il prime.
 //
 // PURE (elle ne lit que le dossier et le cache local).
 function palierDe(u){
@@ -6812,19 +6851,30 @@ function palierDe(u){
     if(d.echeance>0&&Date.now()>=d.echeance) return 'aucun';
     return d.palier;
   }
-  if(d.etat==='absent') return 'aucun';
   return _palierHerite(u);
 }
-// L'ANCIEN MODELE, ET IL EST EN SURSIS. Il ne sert que tant que droits/ n'a
-// jamais repondu sur cet appareil — le temps que les regles soient deployees
-// et que la migration ait tourne. Il disparaitra quand plus personne ne
-// dependra de lui.
+// LE MODELE DU DOSSIER, ET IL N'EST PLUS EN SURSIS. Il servait « le temps que
+// les regles soient deployees et que la migration ait tourne » : sans plan
+// Blaze, cette migration ne tournera pas, et c'est lui qui decide pour tout le
+// monde sauf pour les acces poses a la main dans droits/.
+//
+// ⚠ IL NE PROTEGE DE RIEN, ET ON NE FAIT PAS SEMBLANT. database.rules.json
+//   accorde au titulaire l'ecriture sans restriction de champ sur son propre
+//   dossier : qui sait ouvrir une console de navigateur peut s'ecrire
+//   status:'AUTONOMIE_PREMIUM'. C'est le meme arbitrage qu'avant le lot 0,
+//   assume, et la seule barriere reelle reste droits/, ecrit a la main.
 function _palierHerite(u){
   const s=String((u&&u.status)||'FREE');
   const ech=Number(u&&u.accessExpiry)||0;
   if(ech>0&&Date.now()>=ech) return 'aucun';
   if(s==='COACHING_SUIVI') return 'suivi';
-  if(s==='AUTONOMIE_PREMIUM'&&u.paymentStatus==='active') return 'essentielle';
+  if(s==='AUTONOMIE_PREMIUM'&&u.paymentStatus==='active'){
+    // LA FORMULE PAYEE, quand le dossier la porte. Les dossiers ouverts avant
+    // le 24/09/2026 n'en ont pas : ils valent Essentielle, qui est ce qu'ils
+    // ont effectivement paye — Ultime n'etait pas en vente.
+    const f=String(((u.abonnement||{}).formule)||'');
+    return (f==='ultime')?'ultime':'essentielle';
+  }
   // UN PROGRAMME ACHETE OUVRE ULTIME LE TEMPS DE SON PROGRAMME (lot 8). Meme
   // sursis que le reste de ce repli : le serveur decidera des qu'il parlera.
   if(programmeOuvreUltime(u)) return 'ultime';
@@ -6980,11 +7030,10 @@ function checkAccess(u){
     if(p!=='aucun') return true;
     return essaiActif(u);
   }
-  if(d.etat==='absent') return essaiActif(u);
-  // ETAT 'inconnu' : droits/ n'a jamais repondu sur cet appareil — regles pas
-  // encore deployees, hors ligne, ou premiere ouverture. L'ancien modele
-  // decide, exactement comme avant ce lot. ON NE COUPE PERSONNE SUR UN
-  // SILENCE DU SERVEUR.
+  // ⚠ 'absent' ET 'inconnu' SE REJOIGNENT (24/09/2026). Un noeud vide ne veut
+  //   pas dire « aucun droit » : il veut dire que personne n'y a rien ecrit,
+  //   et sans fonctions personne n'y ecrira. Le dossier decide, exactement
+  //   comme avant le lot 0, et ON NE COUPE PERSONNE SUR UN SILENCE.
   if(s==='FREE') return essaiActif(u);
   if(s==='COACHING_SUIVI'){
     if(!u.accessExpiry) return true;
@@ -22319,7 +22368,7 @@ const CCD_VUES=['entrainement','nutrition','lifestyle','donnees'];
 //   dans l'etage « Ce qui appelle un oeil » de l'onglet Donnees, avec les
 //   autres signaux. La pastille la suit — sinon elle se serait allumee sur un
 //   onglet qui ne la contient plus, et se serait tue sur celui qui la porte.
-const CCD_ALERTES={entrainement:[],
+const CCD_ALERTES={entrainement:['ccd-douleur'],
   donnees:['ccd-douleur','ccd-reds','ccd-securite','ccd-suspension']};
 // LES SIX ETAGES DE L'ONGLET DONNEES, dans l'ordre ou ils se lisent. La barre
 // d'ancres en rend un bouton chacun, et seul le dernier s'ouvre replie.
@@ -22445,6 +22494,7 @@ function ccdVue(nom){
   // qu'il lit. On ne remonte que sur un vrai changement d'onglet.
   const _change=(v!==_ccdVue);
   _ccdVue=v;
+  _ccdPlacerBlocs(v);
   try{
     document.querySelectorAll('#s-coach-client .ccd-vue').forEach(z=>{
       z.classList.toggle('actif',z.dataset.vue===v);
@@ -22473,6 +22523,44 @@ function ccdVue(nom){
   _ccdMajAlertes();
   _ccdMajColonnes();
   return v;
+}
+// LES BLOCS QUI VIVENT DANS DEUX ONGLETS. Kevin, 24/09/2026 : l'onglet
+// Entrainement redevient celui d'hier matin, et Donnees garde ses etages.
+// Un seul exemplaire de chaque bloc : il est DEPLACE vers l'onglet ouvert.
+// Sur Entrainement, il se pose apres son <template data-ent-ancre> ; partout
+// ailleurs, il retourne a sa place dans Donnees, que marque un <template
+// data-don-ancre> pose au premier passage — le bloc y est encore a ce moment.
+// Un bloc range dans une .cc-sect-c voyage AVEC sa section : le titre
+// « Volume », « Plateaux » ou « Douleur » part avec lui.
+const CCD_BLOCS_ENTRAINEMENT=['ccd-corps','ccd-asymetrie','ccd-forme',
+  'ccd-volume','ccd-plateaux','ccd-douleur'];
+let _ccdCorpsEnt=null;
+function _ccdPlacerBlocs(v){
+  try{
+    for(const id of CCD_BLOCS_ENTRAINEMENT){
+      const el=document.getElementById(id);
+      if(!el) continue;
+      const bloc=el.classList.contains('cc-sect-c')?el.closest('.cc-sect'):el;
+      const ici=document.querySelector('#s-coach-client template[data-ent-ancre="'+id+'"]');
+      if(!bloc||!ici) continue;
+      let la=document.querySelector('#s-coach-client template[data-don-ancre="'+id+'"]');
+      if(!la){
+        la=document.createElement('template');
+        la.setAttribute('data-don-ancre',id);
+        bloc.before(la);
+      }
+      const cible=(v==='entrainement')?ici:la;
+      if(bloc.previousElementSibling!==cible) cible.after(bloc);
+    }
+  }catch(e){}
+  // LA SILHOUETTE NE SE DESSINE PAS PAREIL DANS LES DEUX ONGLETS : avec ses
+  // courbes sur Entrainement, sans elles sur Donnees. On la repeint quand on
+  // passe de l'un a l'autre, pas a chaque rafraichissement de fond.
+  const ent=(v==='entrainement');
+  if(_ccdCorpsEnt!==ent){
+    _ccdCorpsEnt=ent;
+    try{ const c=getOwnedClient(currentClientId); if(c) renderCorpsCoach(c); }catch(e){}
+  }
 }
 // Compte ce qui est REELLEMENT affiche dans chaque onglet, et pose `data-solo`
 // sur ceux qui n'ont qu'un bloc. Au-dela de 1025 px, l'onglet actif se met en
@@ -33993,7 +34081,7 @@ function _enregistrerAchat(id,ordre){
   // LE SERVEUR, SANS QU'ON L'ATTENDE : s'il repond, son echeance prend la main
   // a la premiere lecture de droits/.
   try{
-    if(CLOUD&&CLOUD._callFn&&ordre)
+    if(FONCTIONS_SERVEUR&&CLOUD&&CLOUD._callFn&&ordre)
       CLOUD._callFn('verifierAchatProgramme',{orderId:String(ordre),programmeId:p.id})
         .then(()=>{ try{ rafraichirDroits(currentUser,true); }catch(e){} }).catch(()=>{});
   }catch(e){}
@@ -42572,8 +42660,35 @@ function _htmlCorpsCadre(c,o){
   //   dossiers pour la meme raison, et de la meme facon.
   if(c&&c._fromCode) return '';
   try{ if(!phpDisponible(u)) return ''; }catch(e){}
+  // ⚠ LES DEUX VUES COTE A COTE — ONGLET DONNEES SEULEMENT. Kevin,
+  //   24/09/2026 : « dans l'onglet Donnees et uniquement celui-la, mets la
+  //   vue avant et la vue arriere a cote l'une de l'autre, le rectangle
+  //   "Chaque muscle…" a droite des deux silhouettes, et le reste de la
+  //   legende pile en dessous, au centre des trois parties ».
+  //   Chaque vue est rendue par CETTE fonction, en pieces (o._parties) : deux
+  //   calculs de teinte ou d'etiquettes a cote de celui-ci finiraient par
+  //   montrer deux corps differents pour le meme dossier.
+  if(o.deuxVues){
+    const base=Object.assign({},o,{deuxVues:false,_parties:true});
+    const f=_htmlCorpsCadre(c,Object.assign({},base,{vue:'face'}));
+    const d=_htmlCorpsCadre(c,Object.assign({},base,{vue:'dos'}));
+    // Sans bilan, la fonction rend son cadre eteint, en entier : on le garde.
+    if(!f||typeof f==='string') return f||'';
+    if(!d||typeof d==='string') return f.cadre;
+    // LA PHRASE DU PIED EST CELLE DE LA VUE QUI PORTE UN ECART : celle de
+    // l'autre dirait « rien a lire de ce cote », vrai pour elle seule.
+    const note=(d.avecEcart&&!f.avecEcart)?d.note:f.note;
+    return '<div class="cc-corps cc-corps-duo">'+f.tete
+      +'<div class="cc-corps-trio">'
+      +'<div class="cc-corps-col">'+f.scene+'</div>'
+      +'<div class="cc-corps-col">'+d.scene+'</div>'
+      +(f.explication?('<div class="cc-corps-col cc-corps-trio-x">'+f.explication+'</div>'):'')
+      +'</div>'
+      +'<div class="cc-corps-pied">'+note+(f.legende||d.legende)+'</div>'
+      +'</div>';
+  }
   const genre=woGenreAvatar(u);
-  const vue=(_corpsVue==='dos')?'dos':'face';
+  const vue=o.vue?((o.vue==='dos')?'dos':'face'):((_corpsVue==='dos')?'dos':'face');
   const pl=CORPS_PLANCHE[genre+'-'+vue]||CORPS_PLANCHE['h-face'];
   let bilans=[]; try{ bilans=bilansOrdonnes(u)||[]; }catch(e){ bilans=[]; }
   // LA LECTURE : celle du coach (_corpsMode), ou celle qu'impose l'appelant —
@@ -42623,8 +42738,10 @@ function _htmlCorpsCadre(c,o){
       :('<span class="cc-corps-vue cc-corps-lec" role="group" aria-label="Ce que dit la teinte">'
         +bMode('evolution','Évolution','Ce que ses tours ont fait depuis leur dernier relevé')
         +bMode('volume','Volume','Les séries que le programme donne à chaque muscle')+'</span>'))
-    +'<span class="cc-corps-vue" role="group" aria-label="Vue du corps">'
-    +onglet('face','Vue avant')+onglet('dos','Vue arrière')+'</span></div>';
+    +(o._parties?''
+      :('<span class="cc-corps-vue" role="group" aria-label="Vue du corps">'
+        +onglet('face','Vue avant')+onglet('dos','Vue arrière')+'</span>'))
+    +'</div>';
   // ⚠ LES ETIQUETTES SORTENT DES LE PREMIER BILAN depuis le 23/09/2026. Elles
   //   etaient conditionnees a deux bilans, parce qu'elles ne disaient que des
   //   ecarts ; elles disent maintenant TOUTES les mensurations mesurees, et un
@@ -42797,6 +42914,7 @@ function _htmlCorpsCadre(c,o){
   // LE PETIT CADRE DE L'EXPLICATION VA SOUS LES GRAPHIQUES, dans la colonne
   // de droite ; sans graphique, il reste sous la legende.
   const avecG=(o.graphes!==false)&&!!graphes;
+  if(o._parties) return {tete,scene,note,legende,explication,avecEcart:eti.avecEcart};
   return '<div class="cc-corps">'+tete
     +'<div class="cc-corps-grille">'
     +'<div class="cc-corps-col">'+scene+note+legende+(avecG?'':explication)+'</div>'
@@ -44027,8 +44145,19 @@ function renderCorpsCoach(c){
   // LA PAIRE DE BILANS BORNE AUSSI LA SILHOUETTE (lot 5) : les etiquettes
   // disent alors l'ecart entre les deux bilans choisis, et la teinte le sens
   // de cet ecart-la.
-  try{ h=_htmlCorpsCadre(ccdBorner(_dossier(c)),
-    {graphes:false,evoPremier:ccdPaireActive()})||''; }catch(e){ h=''; }
+  // ⚠ SUR L'ONGLET ENTRAINEMENT, LE CADRE D'HIER MATIN, COURBES COMPRISES.
+  //   Kevin, 24/09/2026 : « y avait les graphiques hier matin a droite, et le
+  //   rectangle "Chaque muscle…" ». La colonne de droite porte les courbes ET
+  //   l'explication de la teinte : sans courbes, l'explication tombait sous
+  //   la silhouette. Le meme #ccd-corps suit l'onglet ouvert (voir
+  //   _ccdPlacerBlocs), qui le repeint quand il change d'onglet.
+  try{
+    h=(_ccdVue==='entrainement')
+      ?_htmlCorpsCadre(c)
+      :_htmlCorpsCadre(ccdBorner(_dossier(c)),
+        {graphes:false,deuxVues:true,evoPremier:ccdPaireActive()});
+    h=h||'';
+  }catch(e){ h=''; }
   z.innerHTML=h;
   // Les calques de zones se peignent une fois dans la page : ils lisent une
   // image, ce qu'une chaine HTML ne sait pas faire.
@@ -97818,6 +97947,20 @@ function _planIdChoisi(){
   const p=_paliersDispo().find(x=>x.cle===_subPalier)||_paliersDispo()[0];
   return p?p.planId():'';
 }
+// PURE. LA FORMULE QU'UN PLAN PAYPAL FACTURE, lue sur l'identifiant lui-meme.
+//
+// ⚠ ON NE SE FIE PAS A CE QU'ON A CHOISI A L'ECRAN, mais a ce qui a ete
+//   FACTURE : entre le choix et le paiement, on a pu changer d'avis, revenir
+//   en arriere, ou arriver par un autre chemin. L'identifiant du plan, lui,
+//   est celui que PayPal a debite.
+function formuleDuPlan(planId){
+  const id=String(planId||'');
+  if(!id) return '';
+  if(id===PAYPAL_PLAN_ID_ULTIME||id===PAYPAL_PLAN_ID_ULTIME_ANNUEL
+     ||id===PAYPAL_PLAN_ID_ULTIME_DEMI) return 'ultime';
+  if(id===PAYPAL_PLAN_ID||id===PAYPAL_PLAN_ID_ANNUEL) return 'essentielle';
+  return '';
+}
 // SANS COMPTE, s-client-code EST UN PIÈGE : doLinkCoach y lit currentUser.fname
 // dès sa première branche réelle, ce qui lève une TypeError sur un visiteur.
 // s-athlete-entry fait le chemin complet — le code PUIS la création du compte —
@@ -98039,7 +98182,12 @@ function renderPaypalButton(planId,coachId){
         // l échéance, la résiliation et le renoncement à la rétractation. Le
         // remplacer les effacerait.
         currentUser.abonnement=Object.assign({},currentUser.abonnement,
-          {palier:_subPalier||'mensuel'});
+          {palier:_subPalier||'mensuel',
+           // ⚠ LA FORMULE, ET PAS SEULEMENT LA PERIODE (24/09/2026). `palier`
+           //   dit « mensuel » ou « annuel » ; sans `formule`, rien dans le
+           //   dossier ne distinguait Essentielle d'Ultime, et un abonne a
+           //   24,90 € recevait Essentielle. Elle se lit sur le plan FACTURE.
+           formule:formuleDuPlan(_planIdChoisi())||subOffreChoisie()});
         rcm('subscription_activated');
         if(pending){
           currentUser.coachId=pending.coachId||currentUser.coachId||null;
