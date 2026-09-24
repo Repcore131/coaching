@@ -4311,6 +4311,43 @@ const CLOUD={
       return {ok:true,droits:(d&&typeof d==='object')?d:null};
     }catch(e){ return {ok:false,raison:'reseau'}; }
   },
+  // ══ ECRIRE UN DROIT, DEPUIS L’APPLICATION (24/09/2026) ══════════════════
+  //
+  // ⚠ C’EST LA SEULE ECRITURE DE CE NOEUD DANS TOUT LE FICHIER, et la regle ne
+  //   l’accorde qu’a l’adresse du createur. LA GARDE EST REPETEE ICI : sans
+  //   elle, un autre compte enverrait la requete, Firebase la refuserait, et le
+  //   seul retour serait « HTTP 401 » — un echec illisible la ou il faut une
+  //   phrase claire. C’est la meme defense en profondeur que toggleSubStatus.
+  //
+  // PATCH ET NON PUT : le noeud porte aussi l’essai (essaiOuvertLe,
+  // essaiFinit). Un PUT les effacerait en suspendant un acces, et la personne
+  // se verrait offrir un second essai de trente jours.
+  //
+  // `champs === null` SUPPRIME LE NOEUD. C’est « rouvrir » : on n’ecrit pas une
+  // date par-dessus, on rend la main au dossier, qui sait deja jusqu’a quand va
+  // le pack ou l’abonnement.
+  async poserDroits(email,champs){
+    const mail=String(email||'').trim().toLowerCase();
+    if(!mail||mail.indexOf('@')<0) return {ok:false,raison:'adresse incomplete'};
+    if(!currentUser||currentUser.email!==CREATOR_EMAIL)
+      return {ok:false,raison:'reserve au createur'};
+    if(champs!==null&&(!champs||typeof champs!=='object'))
+      return {ok:false,raison:'rien a ecrire'};
+    const base=this._fbUrl.replace('users.json','droits/'+mail.replace(/[.]/g,',')+'.json');
+    const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),8000);
+    try{
+      const token=await this._getToken();
+      if(!token) return {ok:false,raison:'non authentifie'};
+      const corps=(champs===null)?'':JSON.stringify(champs);
+      const r=await fetch(base+'?auth='+token,(champs===null)
+        ?{method:'DELETE',signal:ctrl.signal}
+        :{method:'PATCH',headers:{'Content-Type':'application/json'},
+          body:corps,signal:ctrl.signal});
+      try{ _quotaCompter('out',corps.length+base.length); }catch(e){}
+      if(!r.ok) return {ok:false,raison:'HTTP '+r.status};
+      return {ok:true};
+    }catch(e){ return {ok:false,raison:'reseau'}; }
+  },
   async pullUser(email){
     const key=email.replace(/\./g,',');
     const base=this._fbUrl.replace('users.json','users/'+key+'.json');
@@ -5473,7 +5510,7 @@ const CHAMPS_SANTE=Object.freeze([
   'weightLog','profileWeight','weight','bilans','photosBilan','photosProgression',
   'comparaisons','bilanGoals','_evol_height','_evol_gender',
   // Sommeil, pas, energie, habitudes quotidiennes
-  'sleepLog','stepsLog','stepsDayType','stepsGoals','energieLog','habitudesLog',
+  'sleepLog','stepsLog','stepsDayType','stepsGoals','sleepGoal','energieLog','habitudesLog',
   // Cycle menstruel et ce qui l'entoure
   'cycle','currentCycle','cycleSuivi','cycleArretPropose','cycleChoixVus',
   'cycleIgnoresSuite','grossesse','statutHormonal','traitementHormonal',
@@ -6852,8 +6889,11 @@ function droitsDe(u){
   if(o.vide||!o.d) return {etat:'absent',palier:'aucun',echeance:0,source:null,maj:0,lu:o.lu};
   const d=o.d||{};
   const p=PALIERS_ORDRE.indexOf(String(d.palier))>0?String(d.palier):'aucun';
+  // `avant` EST CE QUI ETAIT OUVERT AVANT UNE SUSPENSION. Sans lui, rouvrir
+  // demanderait de se souvenir du palier de quelqu’un.
   return {etat:'serveur',palier:p,echeance:Number(d.echeance)||0,
     source:d.source||null,maj:Number(d.maj)||0,lu:o.lu,
+    avant:(PALIERS_ORDRE.indexOf(String(d.avant))>0?String(d.avant):''),
     essaiOuvertLe:Number(d.essaiOuvertLe)||0,essaiFinit:Number(d.essaiFinit)||0};
 }
 // ⚠ UN NOEUD VIDE NE FERME RIEN, ET C'EST LA CORRECTION DU 24/09/2026.
@@ -6947,6 +6987,309 @@ async function rafraichirDroits(u,force){
   try{ r=await CLOUD.pullDroits(mail); }catch(e){ r=null; }
   if(!r||!r.ok) return false;
   _droitsPoser(mail,r.droits,!r.droits);
+  return true;
+}
+// ══════════════════════════════════════════════════════════════════════════
+//  OUVRIR ET FERMER UN ACCÈS, À LA MAIN (24/09/2026)
+// ══════════════════════════════════════════════════════════════════════════
+//
+//  POURQUOI CET ÉCRAN EXISTE. PayPal prélève tout seul, mais rien ne redescend
+//  jusqu’à l’application : une résiliation, un impayé, une carte qui expire ne
+//  changent RIEN ici, et ne le changeront jamais — il n’y a pas de serveur pour
+//  écouter PayPal. Le rapport du 1er du mois dit qui a payé et qui n’a pas payé ;
+//  cet écran est le geste qui va avec. Sans lui, le rapport n’est qu’une liste
+//  qu’on lit en soupirant.
+//
+//  ⚠ FERMER N’EFFACE RIEN, et l’écran d’accueil de la personne le dit dans ces
+//    termes : ses séances, son programme et son historique l’attendent. C’est
+//    aussi ce qui fait revenir quelqu’un qui a simplement oublié de payer.
+//
+//  ⚠ ROUVRIR N’ÉCRIT PAS UNE DATE, IL REND LA MAIN AU DOSSIER. Poser « ouvert
+//    un mois » sur un athlète suivi trois mois l’aurait coupé au bout d’un mois
+//    sans que personne ne comprenne pourquoi. Le dossier sait déjà jusqu’à quand
+//    va son pack ou son abonnement : on efface la fermeture, il redécide.
+//
+//  ⚠ ET CE QUI N’EST PAS ICI : arrêter le prélèvement. Ça se passe chez PayPal,
+//    l’application n’a aucun moyen de l’ordonner. L’écran le dit et donne
+//    l’adresse, plutôt que de laisser croire que fermer l’accès arrête le
+//    paiement.
+const ACCES_DUREES=Object.freeze([{mois:1,libelle:'1 mois'},{mois:3,libelle:'3 mois'},
+  {mois:12,libelle:'12 mois'},{mois:0,libelle:'sans fin'}]);
+// PURE. La même date, n mois plus tard. Date.setMonth seul déborde : le 31
+// janvier plus un mois donnerait le 3 mars. On passe par le 1er, puis on
+// redescend au dernier jour du mois visé quand il est plus court.
+function moisApres(t,n){
+  const d=new Date(Number(t)||Date.now());
+  const jour=d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth()+(Number(n)||0));
+  const dernier=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+  d.setDate(Math.min(jour,dernier));
+  return d.getTime();
+}
+// PURE. Le nom d’un palier, lu sur OFFRES quand il y est : renommer Ultime un
+// jour ne laissera pas cet écran seul à dire l’ancien nom.
+function nomDuPalier(p){
+  const c=String(p||'');
+  if(c==='suivi') return 'Suivi par un coach';
+  if(c==='aucun'||!c) return 'Fermé';
+  const o=OFFRES[c];
+  return (o&&o.lib)?o.lib:c;
+}
+// PURE. CE QU’ON VA ÉCRIRE, à partir de ce qui est déjà là. Elle ne touche à
+// rien, et c’est elle qu’on teste : l’envoi n’est qu’un envoi.
+//   'ouvrir'     pose le palier demandé pour `mois` mois (0 = sans fin)
+//   'prolonger'  garde le palier, repousse l’échéance de `mois` mois
+//   'suspendre'  palier 'aucun', et GARDE dans `avant` ce qui était ouvert
+//   'rendre'     null, c’est-à-dire : efface le nœud, le dossier redécide
+// `d` est ce que droitsDe rend — y compris {etat:'absent'} quand le nœud est
+// vide, ce qui est le cas de presque tout le monde.
+function accesCalcul(action,d,opt){
+  const o=opt||{};
+  const now=Number(o.maintenant)||Date.now();
+  if(action==='rendre') return null;
+  const actuel=(d&&d.etat==='serveur')?d:null;
+  const pal=actuel?String(actuel.palier||'aucun'):'aucun';
+  const mois=(o.mois==null)?1:Number(o.mois);
+  if(action==='suspendre'){
+    // CE QUI ÉTAIT OUVERT EST GARDÉ, même quand le nœud était vide : dans ce
+    // cas c’est l’appelant qui le sait (un athlète suivi vaut 'suivi').
+    const avant=(pal!=='aucun')?pal
+      :((PALIERS_ORDRE.indexOf(String(actuel&&actuel.avant))>0)?String(actuel.avant)
+        :((PALIERS_ORDRE.indexOf(String(o.avant))>0)?String(o.avant):'essentielle'));
+    return {palier:'aucun',echeance:0,source:'suspension',avant:avant,maj:now};
+  }
+  // L’ÉCHÉANCE REPART DE LA PLUS TARDIVE DES DEUX. Prolonger d’un mois le 3,
+  // alors que l’accès court jusqu’au 28, doit donner le 28 du mois suivant et
+  // non le 3 : un mois réglé ne se perd pas parce qu’on a cliqué tôt.
+  const socle=(actuel&&actuel.echeance>now)?actuel.echeance:now;
+  let palier=String(o.palier||'');
+  if(action==='prolonger'){
+    palier=(pal!=='aucun')?pal
+      :((PALIERS_ORDRE.indexOf(String(actuel&&actuel.avant))>0)?String(actuel.avant)
+        :String(o.palier||''));
+  }
+  if(PALIERS_ORDRE.indexOf(palier)<1) palier='essentielle';
+  return {palier:palier,echeance:(mois>0?moisApres(socle,mois):0),source:'main',maj:now};
+}
+// PURE. L’état d’un accès, en une phrase, une couleur, et un « à vérifier » qui
+// ne se devine pas : une échéance dépassée, ou un accès fermé à la main.
+function accesEtatPhrase(d,maintenant){
+  const t=Number(maintenant)||Date.now();
+  if(!d||d.etat==='inconnu')
+    return {cle:'inconnu',phrase:'Pas encore lu',couleur:'var(--sub)',verifier:false};
+  if(d.etat==='absent')
+    return {cle:'absent',phrase:'Rien de posé ici : son dossier décide',
+      couleur:'var(--sub)',verifier:false};
+  const pal=String(d.palier||'aucun');
+  if(pal==='aucun')
+    return {cle:'ferme',phrase:(d.source==='suspension'?'Accès fermé':'Fermé'),
+      couleur:'var(--red-light)',verifier:true,
+      avant:(d.avant?nomDuPalier(d.avant):'')};
+  const nom=nomDuPalier(pal);
+  if(!d.echeance)
+    return {cle:'sansfin',phrase:nom+', sans fin',couleur:'var(--green)',verifier:false};
+  const jours=Math.ceil((d.echeance-t)/864e5);
+  const date=new Date(d.echeance).toLocaleDateString('fr-FR');
+  if(jours<0)
+    return {cle:'depasse',phrase:nom+', terminé le '+date,
+      couleur:'var(--red-light)',verifier:true,jours:jours};
+  if(jours<=7)
+    return {cle:'bientot',phrase:nom+', jusqu’au '+date+' ('+jours+' jour'+(jours>1?'s':'')+')',
+      couleur:'var(--orange)',verifier:false,jours:jours};
+  return {cle:'ok',phrase:nom+', jusqu’au '+date,couleur:'var(--green)',
+    verifier:false,jours:jours};
+}
+// PURE. Un accès fermé À LA MAIN, et de quelle façon : c’est ce qui décide de la
+// phrase que la personne lit. '' quand rien n’est fermé de cette manière.
+function accesFermeParMain(u){
+  const d=droitsDe(u);
+  if(!d||d.etat!=='serveur') return '';
+  if(String(d.palier||'aucun')==='aucun')
+    return (d.source==='suspension')?'suspension':'ferme';
+  if(d.echeance>0&&Date.now()>=d.echeance) return 'echu';
+  return '';
+}
+// PURE. Le message à envoyer, prêt à coller. Il dit ce qui est fermé ET ce qui
+// reste possible tout de suite, comme l’écran que la personne voit.
+function messageAcces(etat){
+  const e=etat||{};
+  const quoi=(e.cle==='ferme')
+    ?'Ton accès à RepCore est en pause en attendant le règlement de ce mois.'
+    :((e.cle==='depasse')
+      ?'Ton accès à RepCore est arrivé au bout de la période réglée.'
+      :'Ton accès à RepCore se termine bientôt.');
+  return 'Salut ! '+quoi
+    +' Rien n’est effacé : tes séances, ton programme et ton historique t’attendent.'
+    +' Ouvre l’app et reprends ton abonnement, tout revient au même endroit : '
+    +lienAbonnement()+' Dis-moi si tu as le moindre souci, je m’en occupe.';
+}
+// ── LE GESTE ──────────────────────────────────────────────────────────────
+// ⚠ ON LIT AVANT D’ÉCRIRE, TOUJOURS. Prolonger sans connaître l’échéance en
+//   cours la raccourcirait ; suspendre sans connaître le palier perdrait de
+//   quoi rouvrir. Une lecture qui échoue annule le geste et le dit : mieux vaut
+//   ne rien faire que fermer un accès en croyant le prolonger.
+async function accesAgir(action,email,opt){
+  if(!currentUser||currentUser.email!==CREATOR_EMAIL){
+    toast('Réservé au créateur.','var(--orange)'); return false; }
+  const mail=String(email||'').trim().toLowerCase();
+  if(!mail||mail.indexOf('@')<0){ toast('Il manque l’adresse.','var(--orange)'); return false; }
+  const lu=await CLOUD.pullDroits(mail);
+  if(!lu||!lu.ok){
+    toast('Pas pu lire cet accès : rien n’a changé.','var(--orange)'); return false; }
+  _droitsPoser(mail,lu.droits,!lu.droits);
+  const avantEtat=accesEtatPhrase(droitsDe({email:mail}));
+  const champs=accesCalcul(action,droitsDe({email:mail}),opt);
+  const dit=(action==='suspendre')
+    ?('Fermer l’accès de '+mail+' ? Rien n’est effacé, et tu le rouvres quand tu veux.')
+    :((action==='rendre')
+      ?('Rouvrir l’accès de '+mail+' ? Son dossier reprend la main : abonnement ou suivi, selon ce qu’il a.')
+      :((action==='prolonger')
+        ?('Prolonger l’accès de '+mail+' d’un mois ?')
+        :('Ouvrir '+nomDuPalier(champs.palier)+' à '+mail
+          +(champs.echeance?(' jusqu’au '+new Date(champs.echeance).toLocaleDateString('fr-FR')):' sans fin')+' ?')));
+  if(!await rcConfirm(dit,null,'Confirmer')) return false;
+  const r=await CLOUD.poserDroits(mail,champs);
+  if(!r||!r.ok){
+    toast('Pas envoyé ('+((r&&r.raison)||'réseau')+') : rien n’a changé.','var(--orange)');
+    return false; }
+  // LE CACHE SUIT L’ÉCRITURE. Sans ça, l’écran affichait encore l’état d’avant
+  // et on cliquait deux fois, en croyant que le premier clic avait raté.
+  if(champs===null) _droitsPoser(mail,null,true);
+  else _droitsPoser(mail,Object.assign({},lu.droits||{},champs),false);
+  const apres=accesEtatPhrase(droitsDe({email:mail}));
+  toast(mail+' : '+apres.phrase.toLowerCase(),'var(--green)');
+  try{ if(_accesVu&&_accesVu.email===mail) _rendreConsoleAcces(); }catch(e){}
+  try{ _rendreAccesAthletes(); }catch(e){}
+  return true;
+}
+// Les quatre entrées, une par geste : elles lisent la durée choisie à l’écran
+// au moment du clic, et non au moment du rendu.
+function _accesDureeChoisie(){
+  const s=document.getElementById('acces-duree');
+  const v=s?Number(s.value):1;
+  return (ACCES_DUREES.some(x=>x.mois===v))?v:1;
+}
+function accesOuvrir(palier,email){
+  return accesAgir('ouvrir',email||(_accesVu&&_accesVu.email),
+    {palier:palier,mois:_accesDureeChoisie()});
+}
+function accesProlonger(email,opt){
+  return accesAgir('prolonger',email||(_accesVu&&_accesVu.email),
+    Object.assign({mois:1},opt||{}));
+}
+function accesSuspendre(email,opt){
+  return accesAgir('suspendre',email||(_accesVu&&_accesVu.email),opt||{});
+}
+function accesRouvrir(email){
+  return accesAgir('rendre',email||(_accesVu&&_accesVu.email),{});
+}
+// ── L’ÉCRAN ───────────────────────────────────────────────────────────────
+// L’adresse qu’on regarde, et l’état de sa lecture. Une seule à la fois : on
+// vient du rapport, une ligne après l’autre.
+let _accesVu=null;
+function ouvrirAccesConsole(){
+  if(!currentUser||currentUser.email!==CREATOR_EMAIL){
+    toast('Réservé au créateur.','var(--orange)'); return false; }
+  go('s-coach-acces');
+  _rendreConsoleAcces();
+  return true;
+}
+async function accesVoir(email){
+  const champ=document.getElementById('acces-mail');
+  const mail=String((email!=null?email:(champ?champ.value:''))||'').trim().toLowerCase();
+  if(!mail||mail.indexOf('@')<0){
+    toast('Colle l’adresse de la personne.','var(--orange)'); return false; }
+  _accesVu={email:mail,lecture:'en cours'};
+  _rendreConsoleAcces();
+  const r=await CLOUD.pullDroits(mail);
+  if(!r||!r.ok){
+    _accesVu={email:mail,lecture:'echec',raison:(r&&r.raison)||'réseau'};
+    _rendreConsoleAcces(); return false; }
+  _droitsPoser(mail,r.droits,!r.droits);
+  _accesVu={email:mail,lecture:'ok'};
+  _rendreConsoleAcces();
+  return true;
+}
+function _rendreConsoleAcces(){
+  const z=document.getElementById('acces-corps');
+  if(!z) return false;
+  if(!currentUser||currentUser.email!==CREATOR_EMAIL){
+    z.innerHTML=emptyState('lock','Cet écran est réservé au créateur.'); return false; }
+  const mail=(_accesVu&&_accesVu.email)||'';
+  const S='style="font-size:var(--fs-xs);color:var(--sub);line-height:1.7"';
+  let etat=null,d=null;
+  if(mail&&_accesVu.lecture==='ok'){ d=droitsDe({email:mail}); etat=accesEtatPhrase(d); }
+  const carte=(h)=>'<div style="background:var(--surface-1);border:1px solid var(--border);'
+    +'border-radius:var(--r-4);padding:16px;margin-bottom:14px">'+h+'</div>';
+  const titre=(x)=>'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;'
+    +'font-weight:800;text-transform:uppercase;margin-bottom:12px">'+x+'</div>';
+  const bouton=(lib,act,couleur)=>'<button class="btn '+couleur+' btn-sm" style="margin:0;flex:1;'
+    +'min-width:132px;font-size:var(--fs-2xs);letter-spacing:1px;padding:9px 10px;min-height:38px" '
+    +'onclick="'+act+'">'+lib+'</button>';
+  let h=carte(titre('Une adresse')
+    +'<input id="acces-mail" type="email" inputmode="email" autocapitalize="off" autocomplete="off" '
+    +'spellcheck="false" placeholder="adresse@exemple.fr" value="'+escapeHtml(mail)+'" '
+    +'style="width:100%;margin-bottom:10px" onkeydown="if(event.key===\'Enter\'){event.preventDefault();accesVoir()}">'
+    +'<button class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="accesVoir()">Voir son accès</button>'
+    +'<div '+S+' style="margin-top:10px">Le rapport du 1er du mois donne l’adresse de chaque '
+    +'personne qui paie. Colle-la ici : tu n’as pas besoin d’ouvrir son dossier pour '
+    +'ouvrir ou fermer son accès.</div>');
+  if(mail&&_accesVu.lecture==='en cours')
+    h+=carte('<div '+S+'>Lecture de l’accès de '+escapeHtml(mail)+'…</div>');
+  if(mail&&_accesVu.lecture==='echec')
+    h+=carte('<div style="font-size:var(--fs-sm);color:var(--orange);line-height:1.6">'
+      +'Pas pu lire l’accès de '+escapeHtml(mail)+' ('+escapeHtml(String(_accesVu.raison||''))+').'
+      +'</div><div '+S+' style="margin-top:8px">Rien n’a été changé. Réessaie : '
+      +'les boutons n’apparaissent que sur un état lu pour de bon.</div>');
+  if(etat){
+    const msg=messageAcces(etat);
+    const lien='mailto:'+encodeURIComponent(mail)+'?subject='
+      +encodeURIComponent('Ton accès à RepCore')+'&body='+encodeURIComponent(msg);
+    const durees=ACCES_DUREES.map(x=>'<option value="'+x.mois+'">'+x.libelle+'</option>').join('');
+    h+=carte(titre('Son accès aujourd’hui')
+      +'<div style="font-weight:800;font-size:var(--fs-sm);color:'+etat.couleur+'">'
+      +escapeHtml(etat.phrase)+(etat.verifier?' <span class="badge badge-red" '
+        +'style="vertical-align:middle">à vérifier</span>':'')+'</div>'
+      +(etat.avant?('<div '+S+' style="margin-top:4px">Avant la fermeture : '
+        +escapeHtml(etat.avant)+'</div>'):'')
+      +'<div '+S+' style="margin-top:4px">'+escapeHtml(mail)+'</div>'
+      // CE QUI EST FERMÉ, CE QUI RESTE POSSIBLE : la même règle pour lui que
+      // pour la personne en face.
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">'
+      // L'ORDRE EST CELUI DE L'INTENTION. Sur un accès fermé, rouvrir est LE
+      // geste, et il est rouge. Sur un accès ouvert, le même bouton ne veut
+      // plus dire « rouvrir » mais « retirer ce que j'ai posé » : même effet,
+      // autre intention, donc autre mot et dernière place.
+      +((etat.cle==='ferme')?bouton('Rouvrir','accesRouvrir()','btn-red'):'')
+      +((['ok','bientot','depasse'].indexOf(etat.cle)>=0)
+        ?bouton('Prolonger d’un mois','accesProlonger()','btn-outline')
+        :'')
+      +((etat.cle!=='ferme')?bouton('Fermer son accès','accesSuspendre()','btn-outline'):'')
+      +'<a href="'+escapeHtml(lien)+'" class="btn btn-outline btn-sm" style="margin:0;flex:1;'
+      +'min-width:132px;font-size:var(--fs-2xs);letter-spacing:1px;padding:9px 10px;min-height:38px;'
+      +'display:flex;align-items:center;justify-content:center;text-decoration:none">Lui écrire</a>'
+      +((d&&d.etat==='serveur'&&etat.cle!=='ferme')
+        ?bouton('Retirer ce que j’ai posé','accesRouvrir()','btn-outline')
+        :'')
+      +'</div>');
+    h+=carte(titre('Ouvrir un accès réglé ailleurs')
+      +'<div '+S+' style="margin-bottom:10px">Un programme payé de la main à la main, un mois '
+      +'offert, un dépannage : ça se posait dans la console Firebase, ça se pose ici.</div>'
+      +'<select id="acces-duree" style="width:100%;margin-bottom:10px">'+durees+'</select>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      +bouton('Ouvrir '+escapeHtml(nomDuPalier('essentielle')),'accesOuvrir(\'essentielle\')','btn-outline')
+      +bouton('Ouvrir '+escapeHtml(nomDuPalier('ultime')),'accesOuvrir(\'ultime\')','btn-red')
+      +'</div>');
+  }
+  h+=carte(titre('Ce qui ne se fait pas d’ici')
+    +'<div '+S+'>Arrêter le prélèvement se passe chez PayPal, l’application ne peut pas '
+    +'l’ordonner : <a href="https://www.paypal.com/myaccount/autopay/" target="_blank" '
+    +'rel="noopener" style="color:var(--red-text)">paypal.com, Paiements automatiques</a>. '
+    +'Ici, tu ouvres et tu fermes l’accès.<br>'
+    +'Fermer l’accès de quelqu’un n’arrête pas son prélèvement, et arrêter son prélèvement '
+    +'ne ferme pas son accès : les deux gestes vont ensemble.</div>');
+  z.innerHTML=h;
   return true;
 }
 // ══ L'ARRIVEE : LES DEUX FORMULES, LES CHIFFRES, LES PORTES (lot 2) ══════
@@ -7088,7 +7431,27 @@ function loadAccessGate(){
   if(!u){return;}
   if(ic) ic.innerHTML=icon('lock',56);
   const L='<div style="font-size:var(--fs-sm);color:#888;line-height:1.8">';
-  if(u.status==='COACHING_SUIVI'&&u.accessExpiry&&Date.now()>=u.accessExpiry){
+  // ══ FERMÉ À LA MAIN (24/09/2026) ═══════════════════════════════════════
+  // ⚠ CETTE BRANCHE PASSE AVANT TOUTES LES AUTRES, et c'est voulu. Un accès
+  //   fermé depuis l'écran « Accès » l'est pour une raison précise, et les
+  //   phrases d'à côté parleraient d'autre chose : « Abonnement inactif » alors
+  //   que le prélèvement tourne peut-être encore chez PayPal, « Accès requis »
+  //   à quelqu'un qui en avait un hier.
+  const _ferme=(()=>{ try{ return accesFermeParMain(u); }catch(e){ return ''; } })();
+  const _renM=document.getElementById('ag-renouveler');
+  if(_ferme){
+    // LES DEUX CHOSES, TOUJOURS : ce qui est fermé, et ce qui reste possible
+    // tout de suite. Ce qui reste possible est juste dessous, les deux boutons
+    // de l'écran — qu'on remet en place au cas où une autre branche les ait
+    // cachés pendant la même session.
+    title.textContent=(_ferme==='echu')?'Ta période est arrivée au bout':'Ton accès est en pause';
+    sub.textContent='Rien n’est effacé. Tes séances, ton programme et ton historique t’attendent.';
+    block.innerHTML=L+((_ferme==='echu')
+      ?'La période réglée est terminée.<br><br>Tu la reprends quand tu veux, et tout revient au même endroit.'
+      :'En attente du règlement de ce mois.<br><br>Ton accès se rouvre dès qu’il est passé, et tout revient au même endroit.')
+      +'</div>';
+    if(_renM) _renM.style.display='';
+  } else if(u.status==='COACHING_SUIVI'&&u.accessExpiry&&Date.now()>=u.accessExpiry){
     const d=new Date(u.accessExpiry).toLocaleDateString('fr-FR');
     const nom=(u.coachName||'').trim();
     // ══ LA SORTIE DE PACK (lot 10) ════════════════════════════════════
@@ -34035,7 +34398,7 @@ function _rendreBoutonAchat(){
   z.innerHTML='<div id="ach-pp"></div>'
     +'<div id="ach-carte-lib" class="bq-note" style="margin:10px 0 6px;display:none">'
     +'Payer par carte bancaire, sans compte PayPal</div><div id="ach-carte"></div>';
-  sdk.Buttons({
+  sdk.Buttons(Object.assign({},_paiementPayPalOptions(sdk),{
     style:{layout:'vertical',color:'black',shape:'rect',label:'pay'},
     createOrder:(data,actions)=>{
       const c=document.getElementById('ach-cgv');
@@ -34058,7 +34421,7 @@ function _rendreBoutonAchat(){
       _enregistrerAchat(_achatProgId,(d&&d.id)||(data&&data.orderID)||'');
     }),
     onError:()=>{ toast('Le paiement n\'a pas abouti.','var(--orange)'); }
-  }).render('#ach-pp');
+  })).render('#ach-pp');
   // LE BOUTON CARTE, EXPLICITE. `isEligible` decide : si le compte marchand
   // ou le pays ne l'accepte pas, on n'affiche RIEN plutot qu'un cadre vide.
   try{
@@ -34093,6 +34456,27 @@ function _rendreBoutonAchat(){
 function _paiementCarteOptions(sdk){
   return {fundingSource:(sdk&&sdk.FUNDING&&sdk.FUNDING.CARD)||'card',
     style:{layout:'vertical',color:'black',shape:'rect',height:45}};
+}
+// ⚠ ET LA PILE DU HAUT EST EPINGLEE SUR PAYPAL (24/09/2026). Sans ce reglage,
+//   elle rendait TOUT ce que le compte accepte — donc PayPal ET la carte,
+//   puisque enable-funding=card la reclame. L'ecran montrait alors trois
+//   boutons : « Payer avec PayPal », « Carte bancaire », puis notre libelle et
+//   une SECONDE « Carte bancaire ». Constate en production le 24/09/2026, sur
+//   l'abonnement comme sur l'achat d'un programme.
+//
+//   Deux boutons identiques a deux centimetres l'un de l'autre, au moment
+//   precis de payer, c'est une hesitation de plus la ou il n'en faut aucune —
+//   et la moitie des gens cherche lequel est le bon.
+//
+//   ON GARDE LE NOTRE plutot que celui de la pile : c'est le seul dont on
+//   choisisse le libelle (« Payer par carte bancaire, sans compte PayPal »),
+//   et le seul qu'on puisse cacher quand isEligible dit non.
+//
+//   ⚠ SI UN JOUR ON VEUT LE PAIEMENT EN QUATRE FOIS ou un moyen local, il
+//     faudra l'ajouter ICI, en bouton nomme : cette epingle empeche PayPal de
+//     l'ajouter tout seul dans la pile.
+function _paiementPayPalOptions(sdk){
+  return {fundingSource:(sdk&&sdk.FUNDING&&sdk.FUNDING.PAYPAL)||'paypal'};
 }
 // L'ACHAT EST ECRIT, PUIS LE PROGRAMME S'APPLIQUE. Dans cet ordre : si
 // l'application echoue ou si l'athlete refuse d'ecraser ses seances, il a
@@ -90630,10 +91014,6 @@ const TRACKERS=Object.freeze([
   {id:'casio',marque:'Casio',app:'Casio Watches',modeles:['G-Shock Move'],sommeil:{chemin:null},pas:{chemin:null}},
   {id:'autre',marque:'Autre',app:null,modeles:[],sommeil:{chemin:null},pas:{chemin:null}}
 ]);
-// L'ordre d'affichage : les ecosystemes les plus repandus d'abord, le reste
-// par ordre alphabetique. La recherche, elle, les atteint tous.
-const TRACK_TETE=Object.freeze(['apple','garmin','samsung','google','huawei','fitbit',
-  'xiaomi','amazfit','polar','coros','suunto','whoop','oura','withings']);
 // PURE. Recherche tolerante : accents, casse et espaces ignores, et une
 // correspondance partielle suffit. « fenix 8 » trouve Garmin, « gt 5 » Huawei.
 function trackNorm(t){
@@ -90675,43 +91055,104 @@ function trackChercher(q){
   return out.sort((a,b)=>b.score-a.score||a.t.marque.localeCompare(b.t.marque)).map(x=>x.t);
 }
 function trackParId(id){ return TRACKERS.find(t=>t.id===id)||null; }
-// ══ TROUVER MES DONNEES ════════════════════════════════════════════════
-// Trois etapes, jamais plus : QUOI, puis AVEC QUELLE MONTRE, puis le chemin.
-// Afficher d'emblee vingt-huit marques et deux notices par marque, c'est un
-// mur ; poser deux questions courtes reduit la notice a six lignes.
-let _trkQuoi='sommeil',_trkQ='';
+// ══ MES APPAREILS — D'APRES LA MAQUETTE DE KEVIN (24/09/2026) ════════════
+// « Trouver mes données » posait deux questions (quoi, puis quelle montre)
+// devant une grille d'initiales. La maquette montre d'emblee les seize
+// ecosystemes, chacun avec son logo (decoupe dans la maquette,
+// img/appareils/), un badge, le chemin dans son application et une phrase.
+// Le domaine vient de la carte qui ouvre la page : les chemins disent
+// « > Sommeil » ou « > Pas ». Toucher une carte ouvre sa fiche (_trkFiche) ;
+// « Autre appareil » ouvre l'import par capture. Les marques qui ne sont pas
+// parmi les seize restent atteignables par « Ma montre n'est pas dans la
+// liste », qui garde la recherche.
+let _trkQuoi='sommeil',_trkTri='pop';
+const TRK_APPAREILS=Object.freeze([
+  // id, nom, badge, pictogramme du chemin, application, onglet(s)
+  {id:'apple',nom:'Apple Santé',badge:'Populaire',ico:'reglage',app:'Santé',
+   d:q=>'Ouvre l’app Santé et va dans '+q+' pour voir tes données.'},
+  {id:'garmin',nom:'Garmin Connect',badge:'Populaire',ico:'barres',app:'Garmin Connect',
+   d:q=>'Ouvre Garmin Connect, onglet '+q+' ou Statistiques.'},
+  {id:'samsung',nom:'Samsung Health',badge:'Populaire',ico:'coeur',app:'Samsung Health',
+   d:q=>'Ouvre l’app, onglet '+q+' pour voir tes données.'},
+  {id:'google',nom:'Google Health Connect',badge:'Application',ico:'barres',app:'Health Connect',
+   d:q=>'Ouvre Health Connect pour accéder à tes données.'},
+  {id:'huawei',nom:'Huawei Santé',badge:'Montre',ico:'reglage',app:'Santé Huawei',
+   d:q=>'Ouvre l’app Huawei Santé et va dans '+q+'.'},
+  {id:'fitbit',nom:'Fitbit',badge:'Montre',ico:'barres',app:'Fitbit',
+   d:q=>'Ouvre l’app Fitbit, onglet '+q+' ou Tableau de bord.'},
+  {id:'xiaomi',nom:'Xiaomi / Redmi',badge:'Montre',ico:'reglage',app:'Zepp Life',
+   d:q=>'Ouvre l’app Zepp Life (Mi Fitness) et va dans '+q+'.'},
+  {id:'amazfit',nom:'Amazfit (Zepp)',badge:'Montre',ico:'barres',app:'Zepp',
+   d:q=>'Ouvre l’app Zepp, onglet '+q+'.'},
+  {id:'polar',nom:'Polar Flow',badge:'Montre',ico:'barres',app:'Polar Flow',
+   d:q=>'Ouvre l’app Polar Flow, section '+q+'.'},
+  {id:'coros',nom:'COROS',badge:'Montre',ico:'barres',app:'COROS',
+   d:q=>'Ouvre l’app COROS, onglet '+q+'.'},
+  {id:'suunto',nom:'Suunto',badge:'Montre',ico:'barres',app:'Suunto App',
+   d:q=>'Ouvre l’app Suunto, section '+q+'.'},
+  // WHOOP et Oura nomment leurs onglets en anglais ; WHOOP ne compte pas les pas.
+  {id:'whoop',nom:'WHOOP',badge:'Bracelet',ico:'barres',app:'WHOOP',onglet:{sommeil:'Sleep',pas:null},
+   d:q=>q?'Ouvre l’app WHOOP, onglet '+q+' pour voir tes données.':'WHOOP ne compte pas les pas.'},
+  {id:'oura',nom:'Oura',badge:'Bague',ico:'barres',app:'Oura',onglet:{sommeil:'Sleep',pas:'Activité'},
+   d:q=>'Ouvre l’app Oura, onglet '+q+'.'},
+  {id:'withings',nom:'Withings',badge:'Montre',ico:'barres',app:'Withings',
+   d:q=>'Ouvre l’app Withings, onglet '+q+'.'},
+  {id:'casio',nom:'Casio',badge:'Montre',ico:'reglage',app:'Casio Watches',
+   d:q=>'Ouvre l’app Casio Watches et va dans '+q+'.'}
+]);
+const _TRK_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+const _TRK_ICO={
+  reglage:_TRK_SVG+'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+  barres:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="4" y="12" width="3.5" height="8" rx="1"/><rect x="10.2" y="7" width="3.5" height="13" rx="1"/><rect x="16.5" y="3.5" width="3.5" height="16.5" rx="1"/></svg>',
+  coeur:_TRK_SVG+'<path d="M20.8 5.6a5.4 5.4 0 0 0-7.7 0L12 6.7l-1.1-1.1a5.4 5.4 0 0 0-7.7 7.7L12 22l8.8-8.7a5.4 5.4 0 0 0 0-7.7z"/></svg>',
+  envoi:_TRK_SVG+'<path d="M12 15.5V4M7.5 8.5L12 4l4.5 4.5M4.5 14.5v4a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-4"/></svg>'
+};
+function _trkCarte(a){
+  const nuit=(_trkQuoi!=='pas');
+  const q=a.onglet?(nuit?a.onglet.sommeil:a.onglet.pas):(nuit?'Sommeil':'Pas');
+  return '<button type="button" class="trk-a" onclick="_trkFiche(\''+a.id+'\')">'
+    +'<img class="trk-a-logo" src="img/appareils/'+a.id+'.webp" alt="" aria-hidden="true" loading="lazy" decoding="async">'
+    +'<span class="trk-a-c"><span class="trk-a-h"><span class="trk-a-nom">'+escapeHtml(a.nom)+'</span>'
+      +'<span class="trk-a-b" data-b="'+escapeHtml(a.badge)+'">'+escapeHtml(a.badge)+'</span></span>'
+      +'<span class="trk-a-ch">'+_TRK_ICO[a.ico]+'<span>'+escapeHtml(q?(a.app+' > '+q):a.app)+'</span></span>'
+      +'<span class="trk-a-d">'+escapeHtml(a.d(q))+'</span></span>'
+    +'<span class="sv-chev">'+SAN_ICO.droite+'</span></button>';
+}
+// « Autre appareil » ouvre l'import par capture. ⚠ Le champ, PUIS son bouton :
+// importerCaptureStats retrouve le bouton par nextElementSibling et y ecrit
+// par textContent — il ne porte donc que du texte, pose sur la carte.
+function _trkCarteAutre(){
+  return '<div class="trk-a trk-a-autre">'
+    +'<img class="trk-a-logo" src="img/appareils/autre.webp" alt="" aria-hidden="true" loading="lazy" decoding="async">'
+    +'<span class="trk-a-c"><span class="trk-a-h"><span class="trk-a-nom">Autre appareil</span>'
+      +'<span class="trk-a-b" data-b="Autre">Autre</span></span>'
+      +'<span class="trk-a-ch">'+_TRK_ICO.envoi+'<span>Importer une capture d’écran</span></span>'
+      +'<span class="trk-a-d">Envoie une capture de ton application de santé.</span></span>'
+    +'<input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="sanFermer();importerCaptureStats(this)">'
+    +'<button type="button" class="sv-tuile-go" onclick="this.previousElementSibling.click()">Importer une capture d’écran</button>'
+    +'</div>';
+}
 function sanAide(quoi){
   _trkQuoi=(quoi==='pas')?'pas':'sommeil';
-  _trkQ='';
   try{ rcm(_trkQuoi==='pas'?'steps_help_opened':'sleep_help_opened'); }catch(e){}
   try{ rcm('tracker_help_opened'); }catch(e){}
   _trkEtape1();
 }
 function _trkEtape1(){
-  _sanFeuille('Trouver mes données',
-    '<div class="san-aide" style="margin-bottom:12px">Que cherches-tu ?</div>'
-    +'<div class="trk-duo">'
-      +'<button type="button" class="trk-gros'+(_trkQuoi==='sommeil'?' actif':'')+'" '
-        +'onclick="_trkQuoiSet(\'sommeil\')">Sommeil</button>'
-      +'<button type="button" class="trk-gros'+(_trkQuoi==='pas'?' actif':'')+'" '
-        +'onclick="_trkQuoiSet(\'pas\')">Pas</button>'
-    +'</div>'
-    +'<div class="san-lab">Avec quel appareil ?</div>'
-    +'<input id="trk-q" inputmode="search" placeholder="Rechercher ma montre…" '
-      +'value="'+escapeHtml(_trkQ)+'" oninput="_trkRecherche(this.value)">'
-    +'<div id="trk-res">'+_trkGrille()+'</div>'
-    +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:14px 0 0" '
-      +'onclick="_trkPerdu()">Je ne trouve pas ma montre</button>');
-  const i=document.getElementById('trk-q'); if(i&&_trkQ) i.focus();
+  const liste=TRK_APPAREILS.slice();
+  if(_trkTri==='az') liste.sort((a,b)=>a.nom.localeCompare(b.nom,'fr'));
+  _sanFeuille('Mes appareils',
+    '<div class="trk-tete"><div><h3 class="trk-t">Mes appareils</h3>'
+      +'<span class="trk-s">Choisis ton écosystème pour voir où trouver les données.</span></div>'
+      +'<label class="san-per-sel trk-tri"><span class="san-per-lib">'+(_trkTri==='az'?'De A à Z':'Popularité')+'</span>'+SAN_ICO.bas
+        +'<select onchange="_trkTri=this.value;_trkEtape1()" aria-label="Trier les appareils">'
+          +'<option value="pop"'+(_trkTri==='pop'?' selected':'')+'>Popularité</option>'
+          +'<option value="az"'+(_trkTri==='az'?' selected':'')+'>De A à Z</option></select></label></div>'
+    +'<div class="trk-liste">'+liste.map(_trkCarte).join('')+_trkCarteAutre()+'</div>'
+    +'<button type="button" class="trk-lien trk-perdu" onclick="_trkPerdu()">Ma montre n’est pas dans la liste</button>');
 }
-function _trkQuoiSet(q){ _trkQuoi=q; _trkEtape1(); }
-function _trkGrille(){
-  const tete=TRACK_TETE.map(trackParId).filter(Boolean);
-  const reste=TRACKERS.filter(t=>TRACK_TETE.indexOf(t.id)<0&&t.id!=='autre')
-    .sort((a,b)=>a.marque.localeCompare(b.marque));
-  return '<div class="trk-grille">'
-    +tete.concat(reste).map(_trkTuile).join('')+'</div>';
-}
+// La tuile a initiale, pour les resultats de la recherche de « Ma montre
+// n'est pas dans la liste ».
 function _trkTuile(t){
   // AUCUN LOGO DE MARQUE : le projet n'en detient pas les droits et un logo
   // approximatif vaut moins qu'une initiale nette. Fallback generique partout.
@@ -90719,21 +91160,6 @@ function _trkTuile(t){
   return '<button type="button" class="trk-tuile" onclick="_trkFiche(\''+t.id+'\')">'
     +'<span class="trk-ini" aria-hidden="true">'+escapeHtml(ini)+'</span>'
     +'<span class="trk-nom">'+escapeHtml(t.marque)+'</span></button>';
-}
-function _trkRecherche(q){
-  _trkQ=q;
-  const z=document.getElementById('trk-res');
-  if(!z) return;
-  const n=String(q||'').trim();
-  if(!n){ z.innerHTML=_trkGrille(); return; }
-  const r=trackChercher(n);
-  if(!r.length){
-    z.innerHTML='<div class="san-vide">Aucun appareil trouvé pour « '+escapeHtml(n)+' ».</div>';
-    return;
-  }
-  z.innerHTML=(r.length>1
-      ?'<div class="san-aide" style="margin:10px 0 6px">Nous avons trouvé plusieurs appareils.</div>':'')
-    +'<div class="trk-grille">'+r.map(_trkTuile).join('')+'</div>';
 }
 // ── LA FICHE ───────────────────────────────────────────────────────────
 function _trkFiche(id){
@@ -90856,8 +91282,10 @@ function _trkEnvoyerSignal(){
 // toujours les sept jours les plus recents.
 //
 // CE QUI N'EST PAS FAIT, ET NE DOIT PAS ETRE SIMULE : aucune synchronisation
-// automatique. Rien dans ce module ne parle a Garmin, Apple ou Samsung, et
-// aucun libelle ne le laisse croire. La saisie est manuelle ; l'architecture,
+// automatique. Rien dans ce module ne parle a Garmin, Apple ou Samsung.
+// ⚠ UNE EXCEPTION VOULUE : « Modifier ma source » dit « Synchronisation
+// automatique », a la demande expresse de Kevin (24/09/2026) — voir
+// _sanSrcDesc. La saisie est manuelle ; l'architecture,
 // elle, porte deja source et sourceDevice pour le jour ou une API existera.
 const SAN_OBJ_SOMMEIL=480;              // 8 h, en minutes
 const SAN_SOURCES=Object.freeze({
@@ -91094,93 +91522,189 @@ function sanLirePas(txt){
   const n=Number(t);
   return isFinite(n)&&n>=0?Math.round(n):null;
 }
-// ── LE GRAPHIQUE ───────────────────────────────────────────────────────
-// Sept barres, une ligne d'objectif, et une echelle qui ne ment pas : le bas
-// n'est jamais arbitraire, il descend au minimum observe arrondi vers le bas,
-// et jamais au-dessus de ce qui rendrait un ecart de vingt minutes spectaculaire.
-// PURE, ET PARTAGEE PAR LES DEUX PISTES DE « MA SEMAINE ». Elle vivait dans
-// _sanGraph ; deux graphes la voulaient, et la recopier aurait fait diverger
-// l'echelle d'une piste de celle de la carte qui la redit.
-// Le plancher : zero pour les pas — un jour a 2 000 pas DOIT paraitre bas —
-// et six heures pour le sommeil, sinon sept nuits entre 6 h et 8 h donnent
-// sept barres identiques.
-function _sanEchelle(quoi,vals,objectif){
-  const max=Math.max(objectif,...(vals.length?vals:[objectif]));
-  const bas=quoi==='sommeil'?Math.min(360,Math.max(0,(vals.length?Math.min(...vals):360)-30)):0;
-  const haut=max*1.08;
-  return {
-    bas,haut,
-    // 3 % de plancher : une barre a zero n'est pas cliquable, et c'est
-    // justement le jour qu'on veut pouvoir ouvrir pour le remplir.
-    pc:v=>Math.max(3,Math.round((v-bas)/(haut-bas)*100)),
-    pcObj:Math.max(0,Math.min(100,Math.round((objectif-bas)/(haut-bas)*100)))
-  };
+// ══ LES CARTES PAS ET SOMMEIL, D'APRES LES MAQUETTES DE KEVIN ═════════════
+//
+// Kevin, 24/09/2026, deux maquettes a l'appui : « remplace par celle-ci,
+// exactement pareil en mise en page ». La carte unique — graphe gris, deux
+// chiffres, des lignes de faits — devient sept blocs, dans cet ordre :
+//   1. le graphe, titre et objectif quotidien dans son en-tete ;
+//   2. la moyenne et la progression, cote a cote ;
+//   3. (sommeil) la dette de la semaine ;
+//   4. « On reprend ! » quand des jours manquent ;
+//   5. le bouton de saisie ;
+//   6. « ou », puis les deux methodes : a la main, ou par une capture.
+// La periode se choisit dans l'en-tete de la section (sanRendre remplit
+// #ls-per-pas et #ls-per-sommeil) : un menu au lieu de deux fleches.
+//
+// ⚠ CE QUI N'EST PLUS A L'ECRAN, PARCE QUE LA MAQUETTE NE LE PORTE PAS : la
+//   serie en cours et la regularite des couchers. regulariteCoucher et
+//   serieePas restent — le coach les lit sur sa fiche.
+// ⚠ CE QUI RESTE, EN UNE LIGNE DISCRETE SOUS LES METHODES : la source des
+//   donnees et « Où trouver… ». Les retirer aurait supprime deux reglages
+//   sans le dire ; ils ne prennent qu'une ligne de texte.
+//
+// LA COULEUR D'UNE BARRE DIT OU EN EST LE JOUR PAR RAPPORT A L'OBJECTIF,
+// comme sur la maquette : vert, orange, rouge. Les seuils sont ceux qu'elle
+// montre — pour les pas, 6 843 sur 12 000 (57 %) est vert, 4 872 (41 %)
+// orange, 1 320 (11 %) rouge ; pour le sommeil, 7h20 sur 8h00 (92 %) vert,
+// 4h30 (56 %) orange, 3h48 (48 %) rouge.
+const SAN_SEUILS={pas:{ok:.5,moy:.25},sommeil:{ok:.875,moy:.55}};
+const SAN_NIV_COUL={ok:'#34e89e',moy:'#f5a524',bas:'#ff4040'};
+// PURE. 'ok', 'moy' ou 'bas' pour une valeur rapportee a l'objectif.
+function sanNiveau(quoi,v,obj){
+  if(v==null||!(obj>0)) return null;
+  const s=SAN_SEUILS[quoi==='sommeil'?'sommeil':'pas'], r=v/obj;
+  return r>=s.ok?'ok':(r>=s.moy?'moy':'bas');
 }
-// UNE COULEUR, UN SENS, SUR TOUTE LA PAGE. Le rouge est le domaine de
-// l'activite, le bleu celui du sommeil. Une nuit reussie affichee en rouge
-// disait « pas » a l'oeil qui venait de lire la piste du dessus.
-function _sanTeinte(quoi){ return quoi==='sommeil'?'#60a5fa':'#e02020'; }
-function _sanGraph(quoi,serie,objectif,fmt){
-  const vals=serie.map(x=>x.v).filter(v=>v!=null);
-  const e=_sanEchelle(quoi,vals,objectif);
-  const pc=e.pc, pcObj=e.pcObj;
-  const barres=serie.map((x,i)=>{
-    const ok=x.v!=null&&x.v>=objectif;
-    const col=x.v==null?'#242428':(ok?_sanTeinte(quoi):'#5a5a62');
-    const h=x.v==null?3:pc(x.v);
+// PURE. L'axe vertical : un pas rond (3 000 pas, 2 h), un sommet au-dessus de
+// l'objectif ET de la plus haute barre, jamais plus de six graduations.
+function sanAxe(quoi,vals,obj){
+  const nuit=(quoi==='sommeil');
+  let pas=nuit?120:3000;
+  const max=Math.max(obj||0,...vals.filter(v=>v!=null),0)*1.12;
+  let haut=Math.max(pas,Math.ceil(max/pas)*pas);
+  while(haut/pas>6){ pas*=2; haut=Math.ceil(max/pas)*pas; }
+  const grad=[];
+  for(let v=0;v<=haut;v+=pas) grad.push(v);
+  return {haut,grad,lib:v=>nuit?(Math.round(v/60)+'h'):(v?(Math.round(v/100)/10+'K').replace('.',','):'0')};
+}
+// Les milliers avec une espace ordinaire : la fine insecable de
+// toLocaleString manque a la police de titre, qui collait « 10452 ».
+function _svEsp(t){ return String(t).replace(/[\u202f\u00a0]/g,' '); }
+function _sanJourCourt(d){
+  const s=d.toLocaleDateString('fr-FR',{weekday:'short'}).replace('.','');
+  return s.charAt(0).toUpperCase()+s.slice(1);
+}
+function _sanGraphe(quoi,serie,obj,fmt){
+  const ax=sanAxe(quoi,serie.map(x=>x.v),obj);
+  const f0=fmt; fmt=v=>_svEsp(f0(v));
+  const pc=v=>Math.max(0,Math.min(100,v/ax.haut*100));
+  const lignes=ax.grad.map(v=>'<div class="sv-gl" style="bottom:'+pc(v)+'%"><span>'
+    +escapeHtml(ax.lib(v))+'</span></div>').join('');
+  const barres=serie.map(x=>{
+    const niv=sanNiveau(quoi,x.v,obj);
     const lib=x.d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
-    return '<button type="button" class="san-bar" style="--h:'+h+'%"'
+    return '<button type="button" class="san-bar sv-bar" data-niv="'+(niv||'vide')+'"'
       +' onclick="sanOuvrirJour(\''+quoi+'\',\''+x.iso+'\')"'
       +' aria-label="'+escapeHtml(lib+' : '+(x.v==null?'aucune donnée':fmt(x.v)))+'">'
-      +'<span class="san-bar-f" style="background:'+col+'"></span>'
-      +'<span class="san-bar-j">'+escapeHtml(['L','M','M','J','V','S','D'][(x.d.getDay()+6)%7])+'</span>'
+      +'<span class="sv-bar-z">'
+        +(x.v==null?'<span class="sv-bar-v">—</span>'
+          :'<span class="sv-bar-v">'+escapeHtml(fmt(x.v))+'</span>')
+        +'<span class="sv-bar-f" style="height:'+(x.v==null?1.5:Math.max(1.5,pc(x.v)))+'%"></span>'
+      +'</span>'
+      +'<span class="sv-bar-j">'+escapeHtml(_sanJourCourt(x.d))+'</span>'
       +'</button>';
   }).join('');
-  return '<div class="san-graph">'
-    +'<div class="san-obj-l" style="bottom:calc('+pcObj+'% + 18px)"><span>'+escapeHtml(fmt(objectif))+'</span></div>'
-    +barres+'</div>';
+  return '<div class="sv-graphe">'
+    +'<div class="sv-axe">'+lignes
+      +'<div class="sv-obj" style="bottom:'+pc(obj)+'%"><span>'+escapeHtml(fmt(obj))+'</span></div>'
+    +'</div>'
+    +'<div class="san-graph sv-barres">'+barres+'</div>'
+    +'</div>';
 }
-// ⚠ _htmlSemaineSante ET _htmlPisteSante ONT ETE RETIREES LE 15/09/2026,
-// le lendemain de leur arrivee. Elles mettaient les pas et les nuits en regard
-// sur un axe de jours commun ; Kevin les voulait separes : « 1 graphique = un
-// suivi ». Le raisonnement qui les avait amenees — la nuit ou l'on dort mal
-// est celle ou l'on marche peu — reste vrai, mais il ne vaut pas de lire deux
-// suivis sur une figure qu'on n'a pas demandee. Chaque carte a repris son
-// graphe et sa navigation.
-// _sanEchelle et _sanTeinte, elles, RESTENT : la premiere est le calcul de
-// plancher que _sanGraph utilisait deja, sortie pour etre partageable ; la
-// seconde donne au sommeil sa couleur, et une nuit reussie n'a plus a
-// s'afficher en rouge.
-// ══ RATTRAPER ══════════════════════════════════════════════════════════
-//
-// La seconde moitie du probleme des trous. Les voir ne suffit pas : pour
-// rattraper trois jours, il fallait ouvrir la feuille de saisie, changer la
-// date, saisir, refermer, recommencer. Ce bouton ouvre directement le PREMIER
-// JOUR VIDE du domaine — le plus ancien, celui qui va sortir de la fenetre en
-// premier et qu'on perdrait pour de bon.
-//
-// PURE. Le plus ancien jour de la semaine sans donnee POUR CE DOMAINE : un
-// jour ou les pas sont notes mais pas la nuit est un trou pour le sommeil, et
-// pas pour les pas.
-function premierJourVide(u,quoi,jours){
-  const n=(jours>0?jours:7);
-  const d=new Date(); d.setHours(12,0,0,0);
-  for(let i=n;i>=1;i--){
-    const j=new Date(d); j.setDate(d.getDate()-i);
-    const iso=localISODate(j);
-    const v=quoi==='sommeil'?sanSommeilMin(u,iso):sanPas(u,iso);
-    if(v==null) return iso;
-  }
-  return null;
+// ── Les pictogrammes. Traces, pas des images : ils prennent la couleur du
+//    domaine et restent nets a toutes les tailles.
+const _SV_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+const SAN_ICO={
+  chaussure:_SV_SVG+'<path d="M2.5 16.5h17.2a1.8 1.8 0 0 0 1.8-1.8c0-1.4-1-2.1-2.5-2.6l-4.1-1.5a3 3 0 0 1-1.3-.9L11.2 6.8a1.3 1.3 0 0 0-2-.2L7.6 8.3H2.5z"/><path d="M2.5 16.5v2h19v-2"/><path d="M9.6 10.2l1.2-1M11.4 11.6l1.2-1"/></svg>',
+  lune:_SV_SVG+'<path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z"/></svg>',
+  crayon:_SV_SVG+'<path d="M16.9 3.6a2.1 2.1 0 0 1 3 3L8.4 18.1l-4 1 1-4z"/><path d="M14.8 5.7l3 3"/></svg>',
+  calendrier:_SV_SVG+'<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4M7.5 13h.01M12 13h.01M16.5 13h.01M7.5 16.5h.01M12 16.5h.01"/></svg>',
+  bas:_SV_SVG+'<path d="M6 9l6 6 6-6"/></svg>',
+  droite:_SV_SVG+'<path d="M9 5l7 7-7 7"/></svg>',
+  eclair:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.2 2.2L4.6 13.4h6.1l-1.2 8.4 8.8-11.4h-6.2z"/></svg>',
+  clavier:_SV_SVG+'<rect x="2.5" y="5.5" width="19" height="13" rx="2.2"/><path d="M6.5 9.5h.01M10 9.5h.01M13.5 9.5h.01M17.5 9.5h.01M6.5 12.5h.01M10 12.5h.01M13.5 12.5h.01M17.5 12.5h.01M8 15.5h8"/></svg>',
+  photo:_SV_SVG+'<path d="M22 18.5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-10a2 2 0 0 1 2-2h3.2l1.8-2.7h6l1.8 2.7H20a2 2 0 0 1 2 2z"/><circle cx="12" cy="13.2" r="3.8"/></svg>',
+  histo:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="10" width="3.6" height="9" rx="1"/><rect x="8.8" y="5" width="3.6" height="14" rx="1"/><rect x="14.6" y="12" width="3.6" height="7" rx="1"/><rect x="2" y="20.5" width="4" height="1.5" rx=".6"/><rect x="8" y="20.5" width="4" height="1.5" rx=".6"/><rect x="14" y="20.5" width="4" height="1.5" rx=".6"/></svg>',
+  lit:_SV_SVG+'<path d="M3 18.5V6.5M3 14h18v4.5M21 14v-2.2a2.8 2.8 0 0 0-2.8-2.8H11v5"/><circle cx="7" cy="10.8" r="1.8"/></svg>',
+  dormeur:_SV_SVG+'<path d="M3 19v-7M3 16h18v3M21 16v-2a2.5 2.5 0 0 0-2.5-2.5H12.5V16"/><circle cx="8" cy="12" r="1.9"/><path d="M14 4.5h3l-3 3.5h3M18.5 2.5h2l-2 2.3h2"/></svg>',
+  cadenas:_SV_SVG+'<rect x="4.5" y="10.5" width="15" height="10.5" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg>',
+  info:_SV_SVG+'<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.8h.01"/></svg>'
+};
+function _svEnTete(quoi,r,bloc,fmt){
+  const nuit=(quoi==='sommeil');
+  const verrou=sanVerrouille(currentUser);
+  const p0=r.jours[0].d,p6=r.jours[6].d;
+  const sous=_sanOffset===0?'Sur les 7 derniers jours'
+    :('Du '+p0.getDate()+' '+p0.toLocaleDateString('fr-FR',{month:'short'})+' au '
+      +p6.getDate()+' '+p6.toLocaleDateString('fr-FR',{month:'short'}));
+  const obj=nuit?escapeHtml(sanHM(bloc.objectif)).toUpperCase()
+    :escapeHtml(_svEsp(sanNb(bloc.objectif)))+'<small>pas</small>';
+  return '<div class="sv-g-tete">'
+    +'<span class="sv-g-ico">'+(nuit?SAN_ICO.lune:SAN_ICO.chaussure)+'</span>'
+    +'<div class="sv-g-t"><h3>'+(nuit?'Durée de sommeil':'Nombre de pas')+'</h3>'
+      +'<span>'+escapeHtml(sous)+'</span></div>'
+    +'<div class="sv-g-obj"><span>Objectif quotidien</span><strong>'+obj+'</strong></div>'
+    +'<button type="button" class="sv-g-edit" onclick="sanObjectif(\''+quoi+'\')"'
+      +(verrou?' data-verrou="" title="Ton coach a fixé cet objectif"':'')
+      +' aria-label="'+(verrou?'Objectif fixé par ton coach':'Modifier mon objectif')+'">'
+      +(verrou?SAN_ICO.cadenas:SAN_ICO.crayon)+'</button>'
+    +'</div>';
 }
-function sanRattraper(quoi){
-  const iso=premierJourVide(currentUser,quoi,7);
-  // Plus de trou : le bouton ne devrait pas etre la, mais s'il l'est (rendu
-  // avant une saisie, clique apres), on ouvre le jour courant plutot que de
-  // ne rien faire — un bouton muet se lit comme une panne.
-  sanSaisir(quoi,iso||localISODate(new Date()));
+function _svMoyenne(quoi,bloc,fmt){
+  const nuit=(quoi==='sommeil');
+  const f0=fmt; fmt=v=>_svEsp(f0(v));
+  const e=bloc.ecart;
+  const ecart=(e==null)?''
+    :'<div class="sv-m-e" data-sens="'+(e>=0?'haut':'bas')+'"><i aria-hidden="true">'+(e>=0?'▲':'▼')+'</i>'
+      +(e>=0?'+ ':'- ')+escapeHtml(_svEsp(nuit?sanHM(Math.abs(e)):sanNb(Math.abs(e))))+'</div>'
+      +'<div class="sv-m-n">par rapport à l’objectif'+(nuit?' ('+escapeHtml(sanHM(bloc.objectif))+')':'')+'</div>';
+  return '<div class="sv-moy">'
+    +'<span class="sv-moy-ico">'+(nuit?SAN_ICO.lune:SAN_ICO.chaussure)+'</span>'
+    +'<div class="sv-moy-c"><span class="sv-lbl">Moyenne</span>'
+      +'<strong class="sv-moy-v">'+(bloc.moy==null?'—':escapeHtml(fmt(bloc.moy)))+'</strong>'
+      +'<span class="sv-moy-u">'+(nuit?'par nuit':'pas / jour')+'</span>'
+      +ecart+'</div></div>';
 }
-// Le raccourci, rendu seulement s'il y a quelque chose a rattraper.
+function _svProgression(quoi,r,bloc){
+  const nuit=(quoi==='sommeil');
+  const n=bloc.renseignes;
+  // L'ANNEAU DIT, COMME SUR LA MAQUETTE : la part de l'objectif pour les pas,
+  // la part des nuits renseignees pour le sommeil.
+  const part=nuit?n/7:(bloc.moy==null?0:Math.min(1,bloc.moy/bloc.objectif));
+  const C=2*Math.PI*42;
+  const centre=nuit?(n+'/7'):(Math.round(part*100)+'%');
+  const points=r.jours.map(j=>{
+    const v=nuit?sanSommeilMin(currentUser,j.iso):sanPas(currentUser,j.iso);
+    return '<i'+(v!=null?' data-plein=""':'')+'></i>';
+  }).join('');
+  const semaine=_sanOffset===0?'cette semaine':'sur la période';
+  return '<div class="sv-prog">'
+    +'<svg class="sv-anneau" viewBox="0 0 100 100" aria-hidden="true">'
+      +(nuit?'<defs><linearGradient id="sv-g-nuit" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c9cff"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs>':'')
+      +'<circle cx="50" cy="50" r="42" class="sv-anneau-f"/>'
+      +'<circle cx="50" cy="50" r="42" class="sv-anneau-p" stroke-dasharray="'+(C*part).toFixed(1)+' '+C.toFixed(1)+'"/>'
+    +'</svg>'
+    +'<span class="sv-anneau-v">'+escapeHtml(centre)+'</span>'
+    +'<div class="sv-prog-c">'
+      +'<span class="sv-prog-t">Progression'+(nuit?'<i aria-hidden="true">'+SAN_ICO.droite+'</i>':'')+'</span>'
+      +(nuit?'<span class="sv-prog-s">nuits renseignées</span>'
+        :'<span class="sv-prog-n"><b>'+n+' / 7</b> jours</span><span class="sv-prog-s">renseignés '+semaine+'</span>')
+      +'<span class="sv-points" role="img" aria-label="'+n+' '+(nuit?'nuits':'jours')+' renseignés sur 7">'+points+'</span>'
+    +'</div></div>';
+}
+function _svDette(u){
+  const d=detteSommeil(u);
+  if(!d) return '';
+  return '<div class="sv-dette">'
+    +'<span class="sv-dette-ico">'+SAN_ICO.lit+'</span>'
+    +'<div class="sv-dette-c"><span class="sv-dette-t">Dette de sommeil'
+      +'<button type="button" class="sv-info" onclick="sanDetteAide()" aria-label="Comment la dette est calculée">'+SAN_ICO.info+'</button></span>'
+      +'<span class="sv-dette-s">sur '+d.nuits+' nuit'+(d.nuits>1?'s':'')+' renseignée'+(d.nuits>1?'s':'')
+        +' · objectif '+escapeHtml(sanHM(d.objectif))+'</span></div>'
+    +'<strong class="sv-dette-v" style="color:'+_teinteDette(d.dette,d.objectif)+'">'
+      +(d.dette?escapeHtml(sanHM(d.dette)):'aucune')+'</strong>'
+    +'</div>';
+}
+function sanDetteAide(){
+  _sanFeuille('Dette de sommeil',
+    '<div class="san-vide">Ce qui manque à ton objectif, nuit après nuit, sur les 7 derniers jours. '
+    +'Une nuit plus longue que l’objectif en rembourse une partie. Seules les nuits renseignées comptent : '
+    +'une nuit oubliée n’ajoute rien, et ne rembourse rien.</div>');
+}
+// Le raccourci de rattrapage, rendu seulement s'il y a quelque chose a
+// rattraper. Il ouvre directement le PREMIER JOUR VIDE du domaine — le plus
+// ancien, celui qui va sortir de la fenetre en premier.
 function _htmlRattraper(u,quoi){
   const n=[];
   const d=new Date(); d.setHours(12,0,0,0);
@@ -91193,26 +91717,14 @@ function _htmlRattraper(u,quoi){
   const q=quoi==='sommeil'?'nuit':'jour';
   const prem=premierJourVide(u,quoi,7);
   const lbl=prem?new Date(prem+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric'}):'';
-  return '<button type="button" class="san-rattrap" onclick="sanRattraper(\''+quoi+'\')">'
-    +'<span class="san-rattrap-t">Rattraper</span>'
-    +'<span class="san-rattrap-n">'+n.length+' '+q+(n.length>1?'s':'')+' sans données cette semaine'
-    +(lbl?' · on commence par '+escapeHtml(lbl):'')+'</span></button>';
+  return '<button type="button" class="san-rattrap sv-rep" onclick="sanRattraper(\''+quoi+'\')">'
+    +_svImg(quoi==='sommeil'?'rep-som':'rep-pas','sv-rep-deco')
+    +'<span class="sv-rep-ico">'+SAN_ICO.eclair+'</span>'
+    +'<span class="sv-rep-c"><span class="san-rattrap-t">On reprend !</span>'
+    +'<span class="san-rattrap-n">'+n.length+' '+q+(n.length>1?'s':'')+' sans données cette semaine.'
+    +(lbl?'<br>On commence par '+escapeHtml(lbl)+'.':'')+'</span></span>'
+    +'<span class="sv-chev">'+SAN_ICO.droite+'</span></button>';
 }
-function _sanFait(lbl,val,coul,note){
-  return '<div class="san-fait">'
-    +'<span class="san-fait-l">'+escapeHtml(lbl)+'</span>'
-    +'<span class="san-fait-v"'+(coul?' style="color:'+coul+'"':'')+'>'+escapeHtml(val)+'</span>'
-    +(note?'<span class="san-fait-n">'+escapeHtml(note)+'</span>':'')
-    +'</div>';
-}
-// ══ RATTRAPER ══════════════════════════════════════════════════════════
-//
-// La seconde moitie du probleme des trous. Les voir ne suffit pas : pour
-// rattraper trois jours, il fallait ouvrir la feuille de saisie, changer la
-// date, saisir, refermer, recommencer. Ce bouton ouvre directement le PREMIER
-// JOUR VIDE du domaine — le plus ancien, celui qui va sortir de la fenetre en
-// premier et qu'on perdrait pour de bon.
-//
 // PURE. Le plus ancien jour de la semaine sans donnee POUR CE DOMAINE : un
 // jour ou les pas sont notes mais pas la nuit est un trou pour le sommeil, et
 // pas pour les pas.
@@ -91234,96 +91746,131 @@ function sanRattraper(quoi){
   // ne rien faire — un bouton muet se lit comme une panne.
   sanSaisir(quoi,iso||localISODate(new Date()));
 }
-function _htmlFaitsSante(u,quoi){
-  let h='';
-  if(quoi==='sommeil'){
-    const r=regulariteCoucher(u);
-    // ⚠ MUET PLUTOT QU'APPROXIMATIF. Sous deux couchers, regulariteCoucher
-    // rend null : afficher « ± 0 min » sur une nuit unique dirait
-    // « parfaitement regulier », le contraire de ce qu'on sait.
-    if(r) h+=_sanFait('Régularité des couchers','± '+r.ecart+' min',_teinteRegularite(r.ecart),
-      'coucher moyen '+_libHeure(r.moyenne)+' · sur '+r.n+' nuit'+(r.n>1?'s':''));
-    const d=detteSommeil(u);
-    if(d) h+=_sanFait('Dette de la semaine',d.dette?sanHM(d.dette):'aucune',
-      _teinteDette(d.dette,d.objectif),
-      'sur '+d.nuits+' nuit'+(d.nuits>1?'s':'')+' renseignée'+(d.nuits>1?'s':'')
-        +' · objectif '+sanHM(d.objectif));
-  } else {
-    const s=serieePas(u);
-    if(s){
-      // POURQUOI ELLE S'ARRETE, sinon l'athlete conclut qu'il n'a pas marche
-      // alors qu'il a seulement oublie de noter — et les deux ne se
-      // rattrapent pas de la meme facon.
-      const pourquoi=s.n===0?null
-        :s.raison==='vide'?'arrêtée par un jour non renseigné'
-        :s.raison==='sous'?'arrêtée par un jour sous l\'objectif':null;
-      h+=_sanFait('Série en cours',s.n?(s.n+' jour'+(s.n>1?'s':'')):'aucune',
-        s.n?'#e02020':'var(--text-dim)',pourquoi);
-    }
-  }
-  return h?'<div class="san-faits">'+h+'</div>':'';
+// LES TELEPHONES DES DEUX METHODES, ET LE DECOR DE « ON REPREND ! », SONT
+// DECOUPES DANS LES MAQUETTES DE KEVIN (img/lifestyle/, 5 a 14 ko chacun) :
+// « exactement pareil » ne se redessine pas, il se reprend.
+function _svImg(nom,classe){
+  return '<img class="'+classe+'" src="img/lifestyle/'+nom+'.webp" alt="" aria-hidden="true" loading="lazy" decoding="async">';
+}
+function _svMethodes(u,quoi){
+  const nuit=(quoi==='sommeil');
+  const src=sanSource(u,quoi);
+  return '<div class="san-import sv-meth">'
+    +'<div class="sv-meth-tete"><span class="sv-meth-ico">'+(nuit?SAN_ICO.dormeur:SAN_ICO.histo)+'</span>'
+      +'<div><h3>'+(nuit?'Ajouter mon sommeil':'Ajouter mes pas')+'</h3>'
+      +'<span>Choisis la méthode qui te convient</span></div></div>'
+    +'<div class="sv-meth-g">'
+      +'<button type="button" class="sv-tuile sv-tuile-m" onclick="sanSaisir(\''+quoi+'\')">'
+        +'<span class="sv-tuile-h"><span class="sv-tuile-ico">'+SAN_ICO.clavier+'</span>'
+          +'<span class="sv-tuile-t">Saisie manuelle</span><span class="sv-chev">'+SAN_ICO.droite+'</span></span>'
+        +'<span class="sv-tuile-d">'+(nuit?'Renseigne la durée de ton sommeil du jour en quelques secondes.'
+          :'Renseigne ton nombre de pas du jour en quelques secondes.')+'</span>'
+        +_svImg(nuit?'tel-m-som':'tel-m-pas','sv-tel')
+      +'</button>'
+      // ⚠ LE CHAMP, PUIS SON BOUTON, DANS CET ORDRE. importerCaptureStats
+      //   retrouve le bouton par nextElementSibling et y ecrit « Lecture en
+      //   cours… » par textContent : il ne porte donc QUE du texte, et il
+      //   couvre la tuile, invisible, pour que toute la tuile se touche.
+      +'<div class="sv-tuile sv-tuile-c">'
+        +'<span class="sv-tuile-h"><span class="sv-tuile-ico">'+SAN_ICO.photo+'</span>'
+          +'<span class="sv-tuile-t">Depuis une capture d’écran</span><span class="sv-chev">'+SAN_ICO.droite+'</span></span>'
+        +'<span class="sv-tuile-d">Importe une photo de ton application de santé (Apple Santé, Samsung Health, etc.).</span>'
+        +_svImg(nuit?'tel-c-som':'tel-c-pas','sv-tel')
+        +'<input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="importerCaptureStats(this)">'
+        +'<button type="button" class="sv-tuile-go" onclick="this.previousElementSibling.click()">Envoyer une capture</button>'
+      +'</div>'
+    +'</div>'
+    +'<div class="sv-cadenas">'+SAN_ICO.cadenas+'<span>La capture est lue sur ton téléphone. Elle n\'est ni envoyée ni conservée.</span></div>'
+    +'<div class="sv-pied">'
+      +'<button type="button" class="san-src" onclick="sanChangerSource(\''+quoi+'\')">Source : <strong>'+escapeHtml(src.lib)+'</strong></button>'
+      +'<span aria-hidden="true">·</span>'
+      +'<button type="button" class="san-src" onclick="sanAide(\''+quoi+'\')">Où trouver '+(nuit?'mon sommeil':'mes pas')+' ?</button>'
+    +'</div>'
+    +'</div>';
 }
 function _htmlCarteSante(u,quoi){
+  const nuit=(quoi==='sommeil');
   const r=sanResume(u,_sanOffset);
-  const bloc=quoi==='sommeil'?r.sommeil:r.pas;
-  const fmt=quoi==='sommeil'?sanHM:sanNb;
-  const serie=r.jours.map(j=>({iso:j.iso,d:j.d,
-    v:quoi==='sommeil'?sanSommeilMin(u,j.iso):sanPas(u,j.iso)}));
-  const titre=quoi==='sommeil'?'Sommeil':'Pas';
-  const src=sanSource(u,quoi);
-  const p0=r.jours[0].d,p6=r.jours[6].d;
-  const libPer=_sanOffset===0?'7 derniers jours'
-    :(p0.getDate()+' '+p0.toLocaleDateString('fr-FR',{month:'short'})+' au '
-      +p6.getDate()+' '+p6.toLocaleDateString('fr-FR',{month:'short'}));
-  const ecart=bloc.ecart==null?''
-    :'<div class="san-ecart '+(bloc.ecart>=0?'pos':'neg')+'">'
-      +(quoi==='sommeil'?sanHMSigne(bloc.ecart)+' / nuit'
-        :(bloc.ecart>0?'+':'−')+sanNb(Math.abs(bloc.ecart))+' / jour')+'</div>';
-  return '<section class="san-carte'+(quoi==='sommeil'?' san-nuit':'')+'">'
-    +'<div class="san-tete">'
-      +'<span class="san-ico">'+(quoi==='sommeil'?_sanIcoLune():_sanIcoPas())+'</span>'
-      +'<h2 class="san-t">'+titre+'</h2></div>'
-    // ⚠ UN GRAPHIQUE PAR SUIVI, ET CHACUN CHEZ LUI. Le 14/09/2026 les deux
-    // semaines avaient ete reunies sur un axe de jours commun, au-dessus des
-    // cartes. Kevin, le 15 : « je veux pour les pas et sommeil un graphique
-    // different, pas sur le meme. 1 graphique = un suivi ». On revient donc a
-    // la disposition d'avant, carte par carte, navigation comprise — ce qui a
-    // ete AJOUTE depuis reste : les faits du domaine, le rattrapage, l'aide et
-    // la source.
-    +'<div class="san-nav">'
-      +'<button type="button" class="san-nav-b" onclick="sanPeriode(-1)" aria-label="Période précédente">‹</button>'
-      +'<span class="san-per">'+escapeHtml(libPer)+'</span>'
-      +'<button type="button" class="san-nav-b" onclick="sanPeriode(1)" aria-label="Période suivante"'
-        +(_sanOffset>=0?' disabled':'')+'>›</button>'
-    +'</div>'
-    +(_sanOffset!==0?'<button type="button" class="san-auj" onclick="sanPeriode(0,true)">Aujourd\'hui</button>':'')
-    +_sanGraph(quoi,serie,bloc.objectif,fmt)
-    +'<div class="san-chiffres">'
-      +'<div><div class="san-lbl">Moyenne</div><div class="san-val">'
-        +(bloc.moy==null?'—':escapeHtml(fmt(bloc.moy)))+'</div></div>'
-      +'<div><div class="san-lbl">Objectif</div><div class="san-val">'+escapeHtml(fmt(bloc.objectif))+'</div></div>'
-    +'</div>'
-    +ecart
-    +'<div class="san-resume">'+bloc.renseignes+'/7 jour'+(bloc.renseignes>1?'s':'')+' renseigné'
-      +(bloc.renseignes>1?'s':'')+' · '+bloc.atteints+'/7 dans l\'objectif</div>'
-    +_htmlFaitsSante(u,quoi)
+  const bloc=nuit?r.sommeil:r.pas;
+  const fmt=nuit?sanHM:sanNb;
+  const serie=r.jours.map(j=>({iso:j.iso,d:j.d,v:nuit?sanSommeilMin(u,j.iso):sanPas(u,j.iso)}));
+  // Les couleurs du domaine, posees une fois sur la carte : #e02020 pour les
+  // pas, #60a5fa pour le sommeil. Tout le reste en derive.
+  return '<section class="san-carte sv-carte" data-quoi="'+(nuit?'sommeil':'pas')+'"'
+    +' style="--sv-c:'+(nuit?'#60a5fa':'#e02020')+'">'
+    +'<div class="sv-bloc sv-g">'+_svEnTete(quoi,r,bloc,fmt)+_sanGraphe(quoi,serie,bloc.objectif,fmt)+'</div>'
+    +'<div class="sv-duo">'+_svMoyenne(quoi,bloc,fmt)+_svProgression(quoi,r,bloc)+'</div>'
+    +(nuit?_svDette(u):'')
     +_htmlRattraper(u,quoi)
     +'<div class="san-actions">'
-      +'<button type="button" class="btn btn-red btn-sm san-a1" onclick="sanSaisir(\''+quoi+'\')">'
-        +'Ajouter / modifier mes données</button>'
-      +'<button type="button" class="btn btn-outline btn-sm san-a2" onclick="sanAide(\''+quoi+'\')">'
-        +'Où trouver '+(quoi==='sommeil'?'mon sommeil':'mes pas')+' ?</button>'
+      +'<button type="button" class="btn btn-red san-a1 sv-saisir" onclick="sanSaisir(\''+quoi+'\')">'
+        +SAN_ICO.crayon+'<span>Ajouter / modifier mes données</span>'+SAN_ICO.droite+'</button>'
     +'</div>'
-    // R22 — L'IMPORT PAR CAPTURE, JUSTE SOUS LA SAISIE, comme alternative. Il
-    // etait en tete de Lifestyle ; la saisie manuelle redevient le chemin
-    // principal, et chaque carte porte le sien.
-    +_htmlCadreImportCapture(quoi,{alternative:true})
-    +'<button type="button" class="san-src" onclick="sanChangerSource(\''+quoi+'\')">'
-      +'Source : <strong>'+escapeHtml(src.lib)+'</strong></button>'
+    +'<div class="sv-ou" aria-hidden="true"><span>ou</span></div>'
+    +_svMethodes(u,quoi)
     +'</section>';
 }
-function _sanIcoLune(){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 019.5 4 8.5 8.5 0 1020 14.5z"/></svg>'; }
-function _sanIcoPas(){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18c-1.5 0-2.5-1-2.5-2.5S6 12 6 10c0-2.5 1-4 2.5-4S11 7.5 11 10c0 2 1 3 1 5.5S9 18 7 18z"/><path d="M17 21c-1.2 0-2-.8-2-2s1-2.5 1-4c0-2 .8-3 2-3s2 1.2 2 3c0 1.5-.8 2.5-.8 4S18.2 21 17 21z"/></svg>'; }
+// LE MENU DE PERIODE, dans l'en-tete de chaque section. Douze semaines en
+// arriere, comme les fleches permettaient ; on ne consulte pas l'avenir.
+function _htmlSanPeriode(quoi){
+  // ⚠ UN MENU NATIF PREND LA LARGEUR DE SA PLUS LONGUE OPTION. Kevin,
+  //   24/09/2026 : « le bouton "7 derniers jours" est trop grand, il chevauche
+  //   le sommeil ». Le libelle affiche est donc un <span> a la taille de la
+  //   periode choisie, et le <select> est pose dessus, transparent : il garde
+  //   le clavier, le lecteur d'ecran et la roue native du telephone.
+  const lib=k=>k===0?'7 derniers jours':(k===-1?'Semaine précédente':('Il y a '+(-k)+' semaines'));
+  const court=k=>k===0?'7 derniers jours':(k===-1?'Sem. précédente':('Il y a '+(-k)+' sem.'));
+  let o='';
+  for(let k=0;k>=-11;k--)
+    o+='<option value="'+k+'"'+(k===_sanOffset?' selected':'')+'>'+lib(k)+'</option>';
+  return '<label class="san-per-sel">'+SAN_ICO.calendrier
+    +'<span class="san-per-lib">'+escapeHtml(court(_sanOffset))+'</span>'+SAN_ICO.bas
+    +'<select onchange="sanPeriodeChoisir(this.value)" aria-label="Période affichée">'+o+'</select></label>';
+}
+function sanPeriodeChoisir(v){
+  const n=Math.round(Number(v));
+  _sanOffset=(isFinite(n)&&n<=0)?n:0;
+  sanRendre();
+}
+// L'OBJECTIF QUOTIDIEN, AU CRAYON DE L'EN-TETE. Verrouille par le coach, il se
+// lit sans se changer — et le dit, plutot qu'un bouton qui ne fait rien.
+function sanObjectif(quoi){
+  const u=currentUser;
+  if(sanVerrouille(u)){ toast('Ton coach a fixé cet objectif.'); return; }
+  const corps=quoi==='sommeil'
+    ?'<label class="san-lab">Objectif de sommeil</label>'
+      +'<input id="san-obj" inputmode="text" placeholder="8h00" value="'+escapeHtml(sanHM(sanObjSommeil(u)))+'">'
+      +'<div class="san-aide">« 8h », « 7h30 » ou « 450 » minutes.</div>'
+    :'<label class="san-lab">Jour d’entraînement</label>'
+      +'<input id="san-obj" inputmode="numeric" placeholder="10000" value="'+sanObjPas(u)+'">'
+      +'<label class="san-lab">Jour de repos</label>'
+      +'<input id="san-obj-off" inputmode="numeric" placeholder="7000" value="'
+        +escapeHtml(String(((u.stepsGoals||STEPS_GOALS_DEFAUT||{}).off)||''))+'">';
+  _sanFeuille(quoi==='sommeil'?'Mon objectif de sommeil':'Mon objectif de pas',
+    corps+'<button type="button" class="btn btn-red" style="width:100%;margin:14px 0 0" '
+      +'onclick="sanObjectifEnregistrer(\''+quoi+'\')">Enregistrer</button>');
+}
+function sanObjectifEnregistrer(quoi){
+  const u=currentUser;
+  if(sanVerrouille(u)) return;
+  // UN OBJECTIF DE PAS OU DE SOMMEIL EST UNE DONNEE DE SANTE (CHAMPS_SANTE) :
+  // meme porte que la saisie du jour.
+  if(!demanderConsentementSante(quoi==='sommeil'?'sommeil':'pas',()=>sanObjectifEnregistrer(quoi))) return;
+  const v=(document.getElementById('san-obj')||{}).value||'';
+  if(quoi==='sommeil'){
+    const m=sanLireDuree(v);
+    if(m==null||m<240||m>720){ toast('Un objectif entre 4h et 12h'); return; }
+    u.sleepGoal=m;
+  } else {
+    const on=sanLirePas(v);
+    const off=sanLirePas((document.getElementById('san-obj-off')||{}).value||'');
+    if(on==null||on<500||on>60000){ toast('Un objectif entre 500 et 60 000 pas'); return; }
+    u.stepsGoals=Object.assign({},u.stepsGoals||{},{on:on},(off!=null&&off>=500&&off<=60000)?{off:off}:{});
+  }
+  toastEcriture(saveUser(),'Objectif enregistré ✓','l’objectif est');
+  sanFermer();
+  sanRendre();
+}
 function sanPeriode(sens,auj){
   if(auj) _sanOffset=0;
   else{
@@ -91342,6 +91889,11 @@ function sanRendre(){
   // loadLifestyle, s'il joue, rend donc loadSteps/loadSleep AVEC leur import.
   try{ if(zs) zs.innerHTML=_htmlCarteSante(u,'sommeil'); }catch(e){ if(zs) zs.innerHTML=''; }
   try{ if(zp) zp.innerHTML=_htmlCarteSante(u,'pas'); }catch(e){ if(zp) zp.innerHTML=''; }
+  // LE MENU DE PERIODE VIT DANS L'EN-TETE DE SECTION, a droite du titre,
+  // comme sur la maquette : un par section, et les deux suivent _sanOffset.
+  for(const q of ['pas','sommeil']){
+    try{ const zm=document.getElementById('ls-per-'+q); if(zm) zm.innerHTML=_htmlSanPeriode(q); }catch(e){}
+  }
   try{ const zh=document.getElementById('lifestyle-habitudes');
        if(zh) zh.innerHTML=htmlHabitudes(u,{taux:true}); }catch(e){
        const zh=document.getElementById('lifestyle-habitudes'); if(zh) zh.innerHTML=''; }
@@ -91499,18 +92051,70 @@ function sanSupprimer(quoi,iso){
   sanFermer(); sanRendre();
   toast('Supprimé','var(--green)');
 }
+// ══ MODIFIER MA SOURCE — D'APRES LA MAQUETTE DE KEVIN (24/09/2026) ════════
+// Deux familles, chacune sous son titre : les applications de sante, en
+// lignes, et les montres, en grille de deux, chacune avec son logo (decoupe
+// dans la maquette, img/sources/). La source choisie porte le point vert.
+// Les sources que la maquette ne montre pas restent choisissables, en
+// pastilles sous les montres : un athlete qui avait declare Oura ne doit pas
+// voir son choix disparaitre de la liste.
+//
+// ⚠ « SYNCHRONISATION AUTOMATIQUE » : LE LIBELLE DE LA MAQUETTE, GARDE A LA
+//   DEMANDE EXPRESSE DE KEVIN (24/09/2026, « laisse la synchronisation
+//   automatique »), apres qu'il a ete prevenu qu'AUCUNE synchronisation
+//   n'existe encore : choisir une source ne fait que la declarer (voir
+//   sanPoserSource). Le jour ou une API branchera une source, ce libelle
+//   deviendra vrai ; d'ici la, c'est une decision de produit, pas un oubli.
+const SAN_SRC_APPS=['apple','google'];
+const SAN_SRC_MONTRES=['garmin','samsung','huawei','fitbit','xiaomi','amazfit','polar','coros'];
+function _sanSrcDesc(k,quoi){
+  const nuit=(quoi==='sommeil');
+  const q=nuit?'ton sommeil':'tes pas', qd=nuit?'de sommeil':'de pas';
+  switch(k){
+    case 'apple': return 'Synchronise automatiquement tes données '+qd+' depuis ton iPhone.';
+    case 'google': return 'Connecte tes données depuis l’écosystème Android.';
+    case 'garmin': return nuit?'Suivi du sommeil, récupération, HRV et plus encore.':'Pas, distance, récupération et plus encore.';
+    case 'samsung': return 'Synchronise automatiquement tes données.';
+    case 'huawei': return 'Synchronise '+q+' depuis ta montre Huawei.';
+    case 'fitbit': return 'Synchronise '+q+' depuis ta montre Fitbit.';
+    case 'xiaomi': return 'Synchronise tes données depuis ta montre Xiaomi.';
+    case 'amazfit': return 'Synchronise tes données depuis ta montre Zepp (Amazfit).';
+    case 'polar': return 'Synchronise '+q+' depuis ta montre Polar.';
+    case 'coros': return 'Synchronise '+q+' depuis ta montre COROS.';
+  }
+  return '';
+}
+function _sanSrcLigne(quoi,k,act){
+  return '<button type="button" class="san-src-o sv-src-o'+(k===act?' actif':'')+'" aria-pressed="'+(k===act)+'"'
+    +' onclick="sanPoserSource(\''+quoi+'\',\''+k+'\')">'
+    +'<span class="sv-src-logo"><img src="img/sources/'+k+'.webp" alt="" aria-hidden="true" loading="lazy" decoding="async"></span>'
+    +'<span class="sv-src-c"><span class="sv-src-t">'+escapeHtml(SAN_SOURCES[k])+'</span>'
+      +'<span class="sv-src-d">'+escapeHtml(_sanSrcDesc(k,quoi))+'</span></span>'
+    +'<span class="sv-chev">'+SAN_ICO.droite+'</span></button>';
+}
+function _sanSrcFamille(titre,ico,corps){
+  return '<section class="sv-src-s"><div class="sv-src-h"><span class="sv-src-hi">'+ico+'</span>'
+    +'<h3>'+titre+'</h3><span class="sv-src-badge">Synchronisation automatique</span></div>'+corps+'</section>';
+}
 function sanChangerSource(quoi){
   const u=currentUser;
   const act=sanSource(u,quoi).cle;
-  const opts=Object.keys(SAN_SOURCES).map(k=>
-    '<button type="button" class="san-src-o'+(k===act?' actif':'')+'" '
-    +'onclick="sanPoserSource(\''+quoi+'\',\''+k+'\')">'+escapeHtml(SAN_SOURCES[k])+'</button>').join('');
+  const coeur=_SV_SVG+'<path d="M20.8 5.6a5.4 5.4 0 0 0-7.7 0L12 6.7l-1.1-1.1a5.4 5.4 0 0 0-7.7 7.7L12 22l8.8-8.7a5.4 5.4 0 0 0 0-7.7z"/></svg>';
+  const montre=_SV_SVG+'<rect x="6" y="6" width="12" height="12" rx="3"/><path d="M9 6l.7-3.5h4.6L15 6M9 18l.7 3.5h4.6L15 18"/></svg>';
+  const autres=Object.keys(SAN_SOURCES).filter(k=>SAN_SRC_APPS.indexOf(k)<0&&SAN_SRC_MONTRES.indexOf(k)<0)
+    .map(k=>'<button type="button" class="san-src-o sv-src-p'+(k===act?' actif':'')+'" aria-pressed="'+(k===act)+'"'
+      +' onclick="sanPoserSource(\''+quoi+'\',\''+k+'\')">'+escapeHtml(SAN_SOURCES[k])+'</button>').join('');
   // CE QUE CE CHOIX NE FAIT PAS : il ne synchronise rien. Il dit d'ou vient la
   // donnee, et l'historique deja enregistre garde SA source d'origine.
   _sanFeuille('Modifier ma source',
-    '<div class="san-aide" style="margin-bottom:10px">D\'où viennent tes données. '
-    +'Ça n\'active aucune synchronisation : la saisie reste manuelle.</div>'
-    +'<div class="san-src-l">'+opts+'</div>');
+    '<div class="sv-src" style="--sv-c:'+(quoi==='sommeil'?'#60a5fa':'#ff3b3b')+'">'
+    +'<div class="san-aide" style="margin-bottom:12px">D\'où viennent tes données.</div>'
+    +_sanSrcFamille('Applications de santé',coeur,
+      '<div class="sv-src-l1">'+SAN_SRC_APPS.map(k=>_sanSrcLigne(quoi,k,act)).join('')+'</div>')
+    +_sanSrcFamille('Montres connectées',montre,
+      '<div class="sv-src-l2">'+SAN_SRC_MONTRES.map(k=>_sanSrcLigne(quoi,k,act)).join('')+'</div>')
+    +'<div class="sv-src-autres"><span>Autres sources</span><div>'+autres+'</div></div>'
+    +'</div>');
 }
 function sanPoserSource(quoi,cle){
   if(!SAN_SOURCES[cle]) return;
@@ -96495,6 +97099,32 @@ function relancerAccesAthlete(id){
   window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank','noopener');
   return true;
 }
+// ── LE CRÉATEUR AGIT DEPUIS LA LISTE, LES AUTRES COACHS NON ──────────────
+// La règle n'accorde l'écriture de droits/ qu'à une adresse. Un bouton qui
+// échouerait chez les autres coachs serait pire que pas de bouton : il leur
+// ferait croire qu'ils ont fermé un accès qui reste ouvert.
+function _htmlAccesPose(c){
+  if(!currentUser||currentUser.email!==CREATOR_EMAIL) return '';
+  const d=(()=>{ try{ return droitsDe(c); }catch(e){ return null; } })();
+  if(!d||d.etat!=='serveur') return '';
+  const e=accesEtatPhrase(d);
+  return '<div style="font-size:var(--fs-2xs);color:'+e.couleur+';font-weight:700;margin-top:2px">'
+    +'Posé à la main : '+escapeHtml(e.phrase)+(e.verifier?' · à vérifier':'')+'</div>';
+}
+function _htmlAccesBoutons(c){
+  if(!currentUser||currentUser.email!==CREATOR_EMAIL) return '';
+  const mail=String((c&&c.email)||'');
+  if(!mail||mail.indexOf('@')<0) return '';
+  const d=(()=>{ try{ return droitsDe(c); }catch(e){ return null; } })();
+  const ferme=!!(d&&d.etat==='serveur'&&String(d.palier||'aucun')==='aucun');
+  const st='margin:0;letter-spacing:1px;font-size:var(--fs-2xs);padding:7px 11px;min-height:34px';
+  const arg='&#39;'+escapeHtml(mail)+'&#39;';
+  // `avant:'suivi'` : ce qui était ouvert quand rien n'est posé. Sans lui,
+  // rouvrir un athlète suivi lui aurait rendu « Essentielle ».
+  return ferme
+    ?'<button class="btn btn-red btn-sm" style="'+st+'" onclick="accesRouvrir('+arg+')">Rouvrir</button>'
+    :'<button class="btn btn-outline btn-sm" style="'+st+'" onclick="accesSuspendre('+arg+',{avant:&#39;suivi&#39;})">Fermer</button>';
+}
 function _rendreAccesAthletes(){
   const z=document.getElementById('mon-acces-athletes');
   if(!z) return false;
@@ -96527,11 +97157,12 @@ function _rendreAccesAthletes(){
         +'<div style="font-weight:800;font-size:var(--fs-sm)">'+escapeHtml(nom)+'</div>'
         +'<div style="font-size:var(--fs-2xs);color:'+e.couleur+';font-weight:800;margin-top:2px">'
         +escapeHtml(e.libelle)+(d?'<span class="sub" style="font-weight:600"> · '+escapeHtml(d)+'</span>':'')
-        +'</div></div>'
+        +'</div>'+_htmlAccesPose(c)+'</div>'
         +(e.relancable
           ?'<button class="btn btn-red btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs);padding:7px 13px;min-height:34px" '
             +'onclick="relancerAccesAthlete(\''+escapeHtml(String(c.id||''))+'\')">Relancer</button>'
           :'')
+        +_htmlAccesBoutons(c)
         +'</div>';
     }).join('');
   return true;
@@ -96611,6 +97242,11 @@ function loadMonetisationTab(){
     return '<div class="client-row"><div class="avatar" style="width:36px;height:36px;font-size:var(--fs-md)">'+ini(s.fname,s.lname)+'</div><div style="flex:1"><div style="font-weight:700">'+_snm+'</div>'+coachInfo+'<div class="sub" style="font-size:var(--fs-xs);font-family:monospace">'+(s.paypalSubscriptionId||'no sub id')+'</div></div><div>'+st+'<button onclick="toggleSubStatus(\''+s.email+'\')" style="margin-top:4px;font-size:var(--fs-xs);background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:3px 8px;cursor:pointer;font-family:Montserrat,sans-serif">'+(s.paymentStatus==='active'?'Suspendre':'Activer')+'</button></div></div>';
   }).join('');
   // Section admin offboarding — visible créateur seulement
+  // LE LIEN VERS L'ÉCRAN « Accès ». Créateur seulement : lui seul peut écrire
+  // droits/, et un lien qui mène à un écran qui refuse ne vaut pas mieux que
+  // pas de lien du tout.
+  const _lienAcces=document.getElementById('ch-lien-acces');
+  if(_lienAcces) _lienAcces.style.display=isCreator?'block':'none';
   const adminSection=document.getElementById('coach-admin-offboard');
   const adminSel=document.getElementById('admin-offboard-select');
   if(adminSection&&adminSel){
@@ -98345,7 +98981,7 @@ function renderPaypalButton(planId,coachId){
       console.error('PayPal error',err);
     }
   };
-  paypal.Buttons(_optsAbo).render('#pp-abo');
+  paypal.Buttons(Object.assign({},_optsAbo,_paiementPayPalOptions(paypal))).render('#pp-abo');
   // LE BOUTON CARTE, EXPLICITE ET SOUS L'AUTRE. `isEligible` decide : si le
   // compte marchand ou le pays ne l'accepte pas, on n'affiche RIEN plutot
   // qu'un cadre vide — et le chemin PayPal, lui, reste entier.

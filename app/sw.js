@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1513';
+const CACHE = 'repcore-v1520';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -117,6 +117,17 @@ CORPS.push('./img/diete-respectee.webp');
 // Le plan de complements se consulte au moment de la prise — le matin, en
 // salle, souvent sans reseau — et sans elle chaque carte perdrait sa vignette.
 CORPS.push('./img/complements.webp');
+// LES SIX IMAGES DES CARTES PAS ET SOMMEIL DE LIFESTYLE (70 ko), decoupees dans
+// les maquettes de Kevin : deux decors et quatre telephones.
+['rep-pas','rep-som','tel-m-pas','tel-c-pas','tel-m-som','tel-c-som']
+  .forEach(n => CORPS.push('./img/lifestyle/' + n + '.webp'));
+// LES DIX LOGOS DE « MODIFIER MA SOURCE » (17 ko), decoupes dans la maquette.
+['apple','google','garmin','samsung','huawei','fitbit','xiaomi','amazfit','polar','coros']
+  .forEach(n => CORPS.push('./img/sources/' + n + '.webp'));
+// LES SEIZE LOGOS DE « MES APPAREILS » (40 ko), decoupes dans la maquette.
+['apple','garmin','samsung','google','huawei','fitbit','xiaomi','amazfit','polar','coros',
+  'suunto','whoop','oura','withings','casio','autre']
+  .forEach(n => CORPS.push('./img/appareils/' + n + '.webp'));
 // ⚠ LES DEUX ACTIFS VERSIONNES (build 1417). Le code et la feuille de styles
 // ne sont plus dans index.html : ils sont servis sous un nom qui porte le
 // numero de build, avec un cache d'un an et `immutable`. Ils DOIVENT entrer
@@ -124,7 +135,7 @@ CORPS.push('./img/complements.webp');
 // ni code ni style — c'est-a-dire rien du tout.
 // Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
 // chaque build et reecrit cette ligne comme celle d'index.html.
-const ASSETS = ['./index.html', './rc-core.1513.js', './rc-style.1513.css',
+const ASSETS = ['./index.html', './rc-core.1520.js', './rc-style.1520.css',
   './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se

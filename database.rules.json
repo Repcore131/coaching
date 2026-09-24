@@ -219,10 +219,32 @@
   // LA LECTURE PAR LE COACH est necessaire : sa fiche athlete dit ce que son
   // eleve peut faire, et elle doit le dire juste. Elle passe par le meme
   // test que users/ : le dossier de l athlete designe ce coach.
+  // ⚠ ET ECRIT PAR UN SEUL COMPTE DEPUIS LE 24/09/2026. Ce noeud etait ferme
+  //   a tout le monde le temps qu une Cloud Function le remplisse. Sans plan
+  //   Blaze il n y aura pas de fonction, donc personne n aurait jamais rien
+  //   ecrit ici : ni ouvrir un acces paye hors de l application, ni suspendre
+  //   celui de quelqu un qui ne paie plus. L ecriture est donc accordee A
+  //   L ADRESSE DU CREATEUR, et a elle seule.
+  //
+  //   CE QUI NE CHANGE PAS, et c est l essentiel : LE TITULAIRE DU DOSSIER N Y
+  //   TOUCHE PAS. C est ce qui fait de droits/ la seule barriere reelle — un
+  //   dossier se trafique depuis une console de navigateur, ce noeud non.
+  //
+  //   LES CHAMPS SONT ENUMERES ET LE RESTE EST REFUSE. Un palier mal
+  //   orthographie vaut « aucun » a la lecture : il fermerait un acces en
+  //   croyant l ouvrir, et c est la faute la plus chere possible ici.
   "droits": {
     "$emailKey": {
-      ".read": "auth != null && (\n  auth.token.email.replace('.', ',') === $emailKey ||\n  root.child('users').child($emailKey).child('coachEmailKey').val() === auth.token.email.replace('.', ',')\n)",
-      ".write": false
+      ".read": "auth != null && (\n  auth.token.email.replace('.', ',') === $emailKey ||\n  root.child('users').child($emailKey).child('coachEmailKey').val() === auth.token.email.replace('.', ',') ||\n  auth.token.email === 'guellec.coachingpro@gmail.com'\n)",
+      ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      "palier": { ".validate": "newData.isString() && (newData.val() === 'aucun' || newData.val() === 'essentielle' || newData.val() === 'ultime' || newData.val() === 'suivi')" },
+      "avant": { ".validate": "newData.isString() && (newData.val() === 'aucun' || newData.val() === 'essentielle' || newData.val() === 'ultime' || newData.val() === 'suivi')" },
+      "echeance": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 4102444800000" },
+      "maj": { ".validate": "newData.isNumber() && newData.val() > 0" },
+      "source": { ".validate": "newData.isString() && newData.val().length < 30" },
+      "essaiOuvertLe": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+      "essaiFinit": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+      "$autre": { ".validate": false }
     }
   },
 

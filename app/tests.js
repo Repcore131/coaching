@@ -34750,6 +34750,193 @@ async function testExercices(){
         // ET IL DIT DEPUIS QUAND ÇA ATTEND.
         return /10 jours/.test(txt)?true:_echec('l’ancienneté ne se lit pas : '+txt.slice(0,120));})());
 
+      // ══ OUVRIR ET FERMER UN ACCÈS À LA MAIN (24/09/2026) ══════════════
+      ok('ACCÈS — UN MOIS DE PLUS TOMBE SUR UNE DATE QUI EXISTE',(()=>{
+        // ⚠ Date.setMonth SEUL DÉBORDE : le 31 janvier plus un mois donnerait
+        //   le 3 mars, et un accès réglé jusqu’au 28 février serait ouvert
+        //   trois jours de trop, chaque année, sur tous les mois courts.
+        const j31=new Date(2027,0,31,12,0,0).getTime();
+        const r=new Date(moisApres(j31,1));
+        if(r.getMonth()!==1) return _echec('janvier + 1 mois tombe en '+(r.getMonth()+1));
+        if(r.getDate()!==28) return _echec('le 31 janvier + 1 mois donne le '+r.getDate());
+        // ET LE JOUR SE GARDE QUAND IL EXISTE.
+        const r2=new Date(moisApres(new Date(2027,0,15,12,0,0).getTime(),3));
+        if(r2.getMonth()!==3||r2.getDate()!==15) return _echec('15 janvier + 3 mois : '+r2.toDateString());
+        // DOUZE MOIS FONT UN AN, PAS TREIZE.
+        const r3=new Date(moisApres(new Date(2027,5,10,12,0,0).getTime(),12));
+        if(r3.getFullYear()!==2028||r3.getMonth()!==5) return _echec('+12 mois : '+r3.toDateString());
+        return moisApres(j31,0)===j31?true:_echec('zéro mois déplace la date');})());
+
+      ok('ACCÈS — PROLONGER PART DE L’ÉCHÉANCE, PAS DU JOUR DU CLIC',(()=>{
+        // ⚠ LE DÉFAUT QU’ON ÉVITE : prolonger le 3 alors que l’accès court
+        //   jusqu’au 28 aurait donné « le 3 du mois suivant », soit vingt-cinq
+        //   jours réglés partis en fumée parce qu’on a cliqué tôt.
+        const now=new Date(2027,2,3,12,0,0).getTime();
+        const fin=new Date(2027,2,28,12,0,0).getTime();
+        const d={etat:'serveur',palier:'ultime',echeance:fin,source:'main',avant:''};
+        const c=accesCalcul('prolonger',d,{maintenant:now,mois:1});
+        if(c.palier!=='ultime') return _echec('le palier change : '+c.palier);
+        const r=new Date(c.echeance);
+        if(r.getMonth()!==3||r.getDate()!==28) return _echec('prolongé jusqu’au '+r.toDateString());
+        // UNE ÉCHÉANCE DÉPASSÉE, ELLE, REPART D’AUJOURD’HUI : on ne rattrape
+        // pas les mois où la personne n’avait plus rien.
+        const vieux={etat:'serveur',palier:'essentielle',echeance:new Date(2027,0,5).getTime()};
+        const c2=accesCalcul('prolonger',vieux,{maintenant:now,mois:1});
+        const r2=new Date(c2.echeance);
+        if(r2.getMonth()!==3||r2.getDate()!==3) return _echec('après expiration : '+r2.toDateString());
+        // ET « sans fin » S’ÉCRIT 0, PAS UNE DATE LOINTAINE : c’est ce que lit
+        // palierDe, qui ne compare rien quand l’échéance vaut zéro.
+        const c3=accesCalcul('ouvrir',{etat:'absent'},{maintenant:now,mois:0,palier:'ultime'});
+        return c3.echeance===0?true:_echec('sans fin vaut '+c3.echeance);})());
+
+      ok('ACCÈS — FERMER GARDE DE QUOI ROUVRIR, ROUVRIR REND LA MAIN AU DOSSIER',(()=>{
+        const now=Date.now();
+        const ouvert={etat:'serveur',palier:'ultime',echeance:now+30*864e5,source:'main',avant:''};
+        const f=accesCalcul('suspendre',ouvert,{maintenant:now});
+        if(f.palier!=='aucun') return _echec('fermer laisse le palier '+f.palier);
+        if(f.echeance!==0) return _echec('fermer laisse une échéance');
+        if(f.source!=='suspension') return _echec('la source ne dit pas d’où vient la fermeture');
+        if(f.avant!=='ultime') return _echec('ce qui était ouvert est perdu : '+f.avant);
+        // NŒUD VIDE : c’est l’appelant qui sait ce qui était ouvert (la liste
+        // des athlètes passe 'suivi'). Sans ça, rouvrir un athlète suivi lui
+        // aurait rendu « Essentielle ».
+        const f2=accesCalcul('suspendre',{etat:'absent'},{maintenant:now,avant:'suivi'});
+        if(f2.avant!=='suivi') return _echec('l’appelant n’est pas écouté : '+f2.avant);
+        // ROUVRIR N’ÉCRIT PAS UNE DATE. Poser « un mois » sur quelqu’un suivi
+        // trois mois l’aurait coupé au bout d’un mois : on efface, le dossier
+        // redécide, et il sait déjà jusqu’à quand va son pack.
+        if(accesCalcul('rendre',ouvert,{maintenant:now})!==null)
+          return _echec('rouvrir écrit quelque chose au lieu d’effacer');
+        // PROLONGER UN ACCÈS FERMÉ LE ROUVRE AU PALIER D’AVANT.
+        const c=accesCalcul('prolonger',{etat:'serveur',palier:'aucun',echeance:0,
+          source:'suspension',avant:'ultime'},{maintenant:now,mois:1});
+        return c.palier==='ultime'?true:_echec('prolonger après fermeture donne '+c.palier);})());
+
+      ok('ACCÈS — « À VÉRIFIER » NE S’ALLUME QUE QUAND IL Y A QUELQUE CHOSE À FAIRE',(()=>{
+        const now=new Date(2027,4,10,12,0,0).getTime();
+        const cas=(d)=>accesEtatPhrase(d,now);
+        if(cas({etat:'absent'}).verifier) return _echec('un nœud vide demande une vérification');
+        if(cas({etat:'inconnu'}).verifier) return _echec('une lecture manquée demande une vérification');
+        if(cas({etat:'serveur',palier:'ultime',echeance:now+40*864e5}).verifier)
+          return _echec('un accès actif demande une vérification');
+        const dep=cas({etat:'serveur',palier:'ultime',echeance:now-864e5});
+        if(!dep.verifier) return _echec('une échéance dépassée passe inaperçue');
+        const fer=cas({etat:'serveur',palier:'aucun',echeance:0,source:'suspension',avant:'ultime'});
+        if(!fer.verifier) return _echec('un accès fermé passe inaperçu');
+        if(fer.avant.indexOf('Ultime')<0) return _echec('ce qui était ouvert ne se lit pas : '+fer.avant);
+        // LES SEPT DERNIERS JOURS PRÉVIENNENT SANS ALARMER.
+        const b=cas({etat:'serveur',palier:'essentielle',echeance:now+3*864e5});
+        if(b.cle!=='bientot') return _echec('trois jours restants donnent '+b.cle);
+        // ET AUCUN TIRET CADRATIN NULLE PART : c’est du texte d’interface.
+        for(const p of [dep.phrase,fer.phrase,b.phrase,cas({etat:'absent'}).phrase])
+          if(/[—–]/.test(p)) return _echec('tiret cadratin dans « '+p+' »');
+        return true;})());
+
+      ok('ACCÈS — LA PORTE FERMÉE DIT CE QUI EST FERMÉ ET CE QUI RESTE POSSIBLE',(()=>{
+        const sv=currentUser, svD=localStorage.getItem(DROITS_CLE);
+        const t0=document.getElementById('ag-title').textContent;
+        const s0=document.getElementById('ag-sub').textContent;
+        const b0=document.getElementById('ag-status-block').innerHTML;
+        try{
+          currentUser={id:'A1',email:'ferme@t.fr',role:'athlete',
+            status:'AUTONOMIE_PREMIUM',paymentStatus:'active'};
+          _droitsPoser('ferme@t.fr',{palier:'aucun',echeance:0,source:'suspension',
+            avant:'ultime',maj:Date.now()},false);
+          if(accesFermeParMain(currentUser)!=='suspension')
+            return _echec('la fermeture à la main n’est pas reconnue');
+          // ET ELLE FERME POUR DE BON, quoi que dise le dossier : ici le
+          // dossier dit « abonné actif ».
+          if(checkAccess(currentUser)) return _echec('la porte reste ouverte');
+          loadAccessGate();
+          const titre=document.getElementById('ag-title').textContent;
+          const sous=document.getElementById('ag-sub').textContent;
+          const bloc=document.getElementById('ag-status-block').textContent.replace(/\s+/g,' ');
+          // ⚠ DEUX CHOSES, TOUJOURS : ce qui est fermé, et ce qui reste
+          //   possible tout de suite. Un mur sec fait partir la personne.
+          if(!/pause/i.test(titre)) return _echec('le titre ne dit pas la pause : '+titre);
+          if(sous.indexOf('effacé')<0) return _echec('rien ne dit que rien n’est effacé : '+sous);
+          if(sous.indexOf('attendent')<0) return _echec('le sous-titre ne dit pas ce qui reste : '+sous);
+          if(bloc.indexOf('rouvre')<0) return _echec('le bloc ne dit pas comment ça se rouvre : '+bloc);
+          if(/[—–]/.test(titre+' '+sous+' '+bloc)) return _echec('tiret cadratin dans la porte fermée');
+          // LE BOUTON QUI REPREND L’ACCÈS EST VISIBLE : une autre branche de cet
+          // écran le cache, et rien ne le remontrait.
+          const ren=document.getElementById('ag-renouveler');
+          if(ren&&ren.style.display==='none') return _echec('le bouton de reprise reste caché');
+          // ET UNE PÉRIODE SIMPLEMENT ARRIVÉE AU BOUT NE PARLE PAS DE RÈGLEMENT.
+          _droitsPoser('ferme@t.fr',{palier:'ultime',echeance:Date.now()-864e5,
+            source:'main',maj:Date.now()},false);
+          if(accesFermeParMain(currentUser)!=='echu') return _echec('l’échéance dépassée n’est pas vue');
+          loadAccessGate();
+          const t2=document.getElementById('ag-title').textContent;
+          return /bout/i.test(t2)?true:_echec('le titre de fin de période : '+t2);
+        } finally {
+          currentUser=sv;
+          if(svD==null) localStorage.removeItem(DROITS_CLE); else localStorage.setItem(DROITS_CLE,svD);
+          document.getElementById('ag-title').textContent=t0;
+          document.getElementById('ag-sub').textContent=s0;
+          document.getElementById('ag-status-block').innerHTML=b0;
+        }})());
+
+      ok('ACCÈS — L’ÉCRAN EST AU CRÉATEUR, ET LES BOUTONS AUSSI',(()=>{
+        const sv=currentUser, svD=localStorage.getItem(DROITS_CLE), svVu=_accesVu;
+        const z=document.getElementById('acces-corps');
+        if(!z) return _echec('l’écran Accès n’existe pas dans index.html');
+        const svZ=z.innerHTML;
+        // LA GARDE SE VOIT AU BON MOMENT : accesAgir est asynchrone, mais son
+        // refus est synchrone — il tombe avant le premier await, donc avant que
+        // la moindre lecture ne part.
+        let toastVu='',lu=0;
+        const svToast=window.toast, svPull=CLOUD.pullDroits;
+        try{
+          window.toast=(m)=>{ toastVu=String(m||''); };
+          CLOUD.pullDroits=()=>{ lu++; return Promise.resolve({ok:false}); };
+          currentUser={id:'C2',email:'autre.coach@t.fr',role:'coach'};
+          accesAgir('suspendre','victime@t.fr',{});
+          if(lu!==0) return _echec('un autre coach a quand même fait lire le nœud');
+          if(toastVu.indexOf('créateur')<0) return _echec('le refus ne dit pas pourquoi : '+toastVu);
+          if(_htmlAccesBoutons({email:'a@t.fr'})!=='')
+            return _echec('un autre coach voit des boutons qui échoueraient chez lui');
+          if(_htmlAccesPose({email:'a@t.fr'})!=='')
+            return _echec('un autre coach voit l’état posé à la main');
+          // ET L’ÉCRAN LUI-MÊME NE MONTRE RIEN.
+          _rendreConsoleAcces();
+          if(z.textContent.indexOf('créateur')<0) return _echec('l’écran s’ouvre à tout coach');
+          // ── LE CRÉATEUR, LUI, VOIT L’ÉTAT ET LES GESTES ──────────────────
+          currentUser={id:'K1',email:CREATOR_EMAIL,role:'coach'};
+          _droitsPoser('paye@t.fr',{palier:'aucun',echeance:0,source:'suspension',
+            avant:'essentielle',maj:Date.now()},false);
+          _accesVu={email:'paye@t.fr',lecture:'ok'};
+          _rendreConsoleAcces();
+          const txt=z.textContent.replace(/\s+/g,' ');
+          if(txt.indexOf('paye@t.fr')<0) return _echec('l’adresse regardée ne s’affiche pas');
+          if(txt.indexOf('à vérifier')<0) return _echec('le badge « à vérifier » manque');
+          if(z.innerHTML.indexOf('accesRouvrir()')<0) return _echec('pas de bouton pour rouvrir');
+          // ON NE PROPOSE PAS DE FERMER CE QUI EST DÉJÀ FERMÉ.
+          if(z.innerHTML.indexOf('accesSuspendre()')>=0) return _echec('on propose de refermer');
+          // NI DE PROLONGER UN ACCÈS FERMÉ : le bouton dirait une date qui
+          // n’existe pas encore.
+          if(z.innerHTML.indexOf('accesProlonger()')>=0) return _echec('on propose de prolonger du vide');
+          if(z.innerHTML.indexOf('mailto:')<0) return _echec('aucun moyen de lui écrire');
+          // CE QUI NE SE FAIT PAS D’ICI EST DIT : fermer un accès n’arrête pas
+          // un prélèvement, et l’inverse non plus.
+          if(txt.indexOf('PayPal')<0) return _echec('l’écran ne dit pas où s’arrête le prélèvement');
+          if(/[—–]/.test(txt)) return _echec('tiret cadratin dans l’écran Accès');
+          // UN ACCÈS OUVERT, LUI, SE PROLONGE ET SE FERME.
+          _droitsPoser('paye@t.fr',{palier:'ultime',echeance:Date.now()+20*864e5,
+            source:'main',maj:Date.now()},false);
+          _rendreConsoleAcces();
+          if(z.innerHTML.indexOf('accesProlonger()')<0) return _echec('pas de bouton pour prolonger');
+          if(z.innerHTML.indexOf('accesSuspendre()')<0) return _echec('pas de bouton pour fermer');
+          // ET LES DURÉES SONT LÀ, avec « sans fin » qui vaut zéro mois.
+          const sel=document.getElementById('acces-duree');
+          if(!sel) return _echec('aucune durée à choisir');
+          return (sel.innerHTML.indexOf('sans fin')>=0)?true:_echec('« sans fin » n’est pas proposé');
+        } finally {
+          window.toast=svToast; CLOUD.pullDroits=svPull;
+          currentUser=sv; _accesVu=svVu; z.innerHTML=svZ;
+          if(svD==null) localStorage.removeItem(DROITS_CLE); else localStorage.setItem(DROITS_CLE,svD);
+        }})());
+
       // ══ LOT 5 — LA CARTE BANCAIRE, QU'ON FERMAIT NOUS-MEMES ════════════
       ok('LOT 5 — LE SDK PAYPAL OUVRE LA CARTE, DANS LES DEUX ÉCRANS',(()=>{
         const src=_prodSrc();
@@ -34783,10 +34970,43 @@ async function testExercices(){
         // LES DEUX BOUTONS PARTAGENT LES MEMES OPTIONS : un plan facture d'un
         // cote et pas de l'autre, c'est le defaut qu'on ne verrait qu'en
         // production.
-        if(src.indexOf('paypal.Buttons(_optsAbo).render')<0)
-          return _echec('le bouton PayPal de l’abonnement ne lit plus les options communes');
+        // ⚠ CE TEST A CHANGE DE CONTRAT LE 24/09/2026. Il exigeait
+        //   « paypal.Buttons(_optsAbo) » tel quel. Rendue sans source de
+        //   financement, la pile affiche TOUT ce que le compte accepte : donc
+        //   PayPal ET la carte, puisque enable-funding=card la reclame. Resultat
+        //   constate en production : « Payer avec PayPal », « Carte bancaire »,
+        //   puis notre libelle et une SECONDE « Carte bancaire ». Les options
+        //   communes restent obligatoires ; l'epingle sur PayPal s'y ajoute.
+        if(!/paypal\.Buttons\(Object\.assign\(\{\},_optsAbo,_paiementPayPalOptions\(paypal\)\)\)\.render/.test(src))
+          return _echec('le bouton PayPal de l’abonnement ne lit plus les options communes, ou n’est plus épinglé sur PayPal');
         return /Object\.assign\(\{\},_optsAbo,_paiementCarteOptions\(paypal\)\)/.test(src)
           ?true:_echec('le bouton carte de l’abonnement ne reprend pas les options communes');})());
+
+      ok('PAIEMENT — « CARTE BANCAIRE » NE S’AFFICHE QU’UNE SEULE FOIS',(()=>{
+        // ⚠ LE DEFAUT, VU EN PRODUCTION LE 24/09/2026, sur l'abonnement ET
+        //   sur l'achat d'un programme : trois boutons au lieu de deux, dont
+        //   deux « Carte bancaire » identiques a deux centimetres l'un de
+        //   l'autre. Au moment precis de payer, c'est une hesitation de plus la
+        //   ou il n'en faut aucune.
+        //
+        //   LA PILE DU HAUT EST DONC EPINGLEE SUR PAYPAL, des deux cotes, et la
+        //   carte n'a plus qu'un seul bouton : le notre, celui dont on choisit
+        //   le libelle et qu'on sait cacher quand isEligible dit non.
+        const src=_prodSrc();
+        if(src.indexOf('function _paiementPayPalOptions(sdk)')<0)
+          return _echec('rien n’épingle la pile sur PayPal');
+        if(!/fundingSource:\(sdk&&sdk\.FUNDING&&sdk\.FUNDING\.PAYPAL\)/.test(src))
+          return _echec('l’épingle ne nomme pas la source PayPal');
+        // UNE DEFINITION, DEUX EMPLOIS : l'abonnement et l'achat. Un seul des
+        // deux corrige laisserait le doublon sur l'autre ecran, et c'est
+        // exactement ce qui s'est passe.
+        const n=(src.match(/_paiementPayPalOptions/g)||[]).length;
+        if(n!==3) return _echec('l’épingle apparaît '+n+' fois au lieu de 3 (une définition, deux emplois)');
+        if(src.indexOf('sdk.Buttons(Object.assign({},_paiementPayPalOptions(sdk)')<0)
+          return _echec('l’achat d’un programme rend encore la pile entière');
+        // ET LE BOUTON CARTE RESTE, LUI, AVEC SON LIBELLE A NOUS.
+        const c=(src.match(/_paiementCarteOptions/g)||[]).length;
+        return c===3?true:_echec('le bouton carte apparaît '+c+' fois au lieu de 3');})());
 
       // ══ LOT 1 — UNE SEULE TABLE D'OFFRES, UNE SEULE DE CAPACITES ═══════
       ok('LOT 1 — LES OFFRES, LEURS PRIX ET CE QU’ELLES OUVRENT',(()=>{
@@ -38790,6 +39010,9 @@ async function testExercices(){
         // qu'un ecran coach neuf doit se declarer : la classe seule ne suffit
         // pas, et l'assertion l'a dit avant que quiconque ne l'ouvre.
         's-coach-tunnel',
+        // L'ECRAN « Acces », 24/09/2026 : ouvrir et fermer un acces a la
+        // main, au bout du rapport payeur du 1er du mois.
+        's-coach-acces',
         's-coach-activite','s-rapport','s-programme-print','s-vitrine',
         's-ex-classify','s-proto-edit','s-protocoles','s-metrics',
         // B1.1 — L'OUBLI. Le coach qui verifie une seance avant de la publier
@@ -54333,6 +54556,8 @@ async function testExercices(){
     // ══ 17/09/2026 — R22 : TROIS FONCTIONS MIEUX EXPOSÉES ═════════════════
 
     ok('R22 — l’import par capture est l’alternative JUSTE SOUS la saisie, dans chaque carte',(()=>{
+      // Maquettes de Kevin, 24/09/2026 : la saisie, puis « ou », puis les deux
+      // methodes — a la main, ou par une capture.
       const u={stepsGoals:{on:10000,off:7000},sleepGoal:480,stepsLog:[],sleepLog:[]};
       const sU=currentUser;
       try{
@@ -54342,20 +54567,21 @@ async function testExercices(){
           const actions=d.querySelector('.san-actions');
           const imp=d.querySelector('.san-import');
           if(!actions||!imp) return _echec(quoi+' : saisie ou import absent');
-          // SOUS la saisie, et juste sous : le bloc suivant les actions.
-          if(actions.nextElementSibling!==imp) return _echec(quoi+' : l’import ne suit pas directement la saisie');
-          if(!/^ou importe une capture d'écran de ton application de santé$/.test(imp.firstElementChild.textContent.trim()))
-            return _echec(quoi+' : « '+imp.firstElementChild.textContent.trim()+' »');
+          const ou=actions.nextElementSibling;
+          if(!ou||!ou.classList.contains('sv-ou')||ou.nextElementSibling!==imp)
+            return _echec(quoi+' : l’import ne suit pas la saisie, derrière son « ou »');
           const inp=imp.querySelector('input[type="file"]');
           if(!inp||inp.getAttribute('onchange')!=='importerCaptureStats(this)') return _echec(quoi+' : le champ n’appelle plus importerCaptureStats');
-          // Le gestionnaire retrouve son bouton par nextElementSibling.
-          if(!inp.nextElementSibling||inp.nextElementSibling.tagName!=='BUTTON') return _echec(quoi+' : le bouton ne suit plus le champ');
+          // Le gestionnaire retrouve son bouton par nextElementSibling, et y
+          // ecrit par textContent : le bouton ne porte que du texte.
+          const b=inp.nextElementSibling;
+          if(!b||b.tagName!=='BUTTON') return _echec(quoi+' : le bouton ne suit plus le champ');
+          if(b.children.length) return _echec(quoi+' : le bouton de la capture porte du balisage');
           if(!/ni envoyée ni conservée/.test(imp.textContent)) return _echec(quoi+' : la phrase de confidentialité a disparu');
-          // La saisie manuelle reste le bouton principal ; l'import est secondaire.
-          if(!d.querySelector('.san-a1.btn-red')||inp.nextElementSibling.classList.contains('btn-red')) return _echec(quoi+' : l’import a pris la place du chemin principal');
+          if(!/Saisie manuelle/.test(imp.textContent)) return _echec(quoi+' : la saisie manuelle n’est plus proposée');
+          if(!d.querySelector('.san-a1.btn-red')||b.classList.contains('btn-red')) return _echec(quoi+' : l’import a pris la place du chemin principal');
         }
       } finally { currentUser=sU; }
-      // Plus de cadre d'import en tête de Lifestyle.
       if(document.getElementById('lifestyle-import')) return _echec('le cadre de tête de Lifestyle est toujours là');
       return true;})());
 
@@ -67112,7 +67338,7 @@ vendredi 78 6h 44m
         const u={stepsLog:[{date:iso(j-1*864e5),count:9000}],sleepLog:[]};
         const h=_htmlRattraper(u,'pas');
         if(!/6 jours sans données/.test(h)) return _echec('le compte manque : '+h.replace(/<[^>]*>/g,' ').slice(0,120));
-        return /on commence par/.test(h)
+        return /on commence par/i.test(h)
           ?true:_echec('le premier jour n\'est pas nommé');})());
       ok('La lecture croisee MONTRE ses appuis, et ne montre pas de score',(()=>{
         // C'est tout le grief : l'athlete lisait la phrase sans jamais savoir
@@ -67475,22 +67701,19 @@ vendredi 78 6h 44m
             ?true:_echec('une date illisible rend une valeur');})());
 
         // ── Les faits de domaine, rendus ────────────────────────────────
-        ok('Chaque fait dit SUR COMBIEN DE NUITS il porte',(()=>{
+        ok('La dette dit SUR COMBIEN DE NUITS elle porte',(()=>{
           // Une dette calculee sur deux nuits presentee comme hebdomadaire
           // serait un chiffre faux affiche avec aplomb.
           const u={sleepGoal:480,sleepLog:[
             {date:iso(j-864e5),duration:6,bed:'23:00'},
             {date:iso(j-2*864e5),duration:6,bed:'23:40'}]};
-          const h=_htmlFaitsSante(u,'sommeil');
-          if(!/Régularité des couchers/.test(h)) return _echec('la regularite manque');
-          if(!/Dette de la semaine/.test(h)) return _echec('la dette manque');
+          const h=_svDette(u);
+          if(!/Dette de sommeil/.test(h)) return _echec('la dette manque');
           return /sur 2 nuits renseignées/.test(h)
             ?true:_echec('le nombre de nuits n\'est pas dit : '+h.replace(/<[^>]*>/g,' ').slice(0,160));})());
-        ok('Sous deux couchers, la regularite se TAIT plutot que d\'afficher zero',(()=>{
-          const u={sleepGoal:480,sleepLog:[{date:iso(j-864e5),duration:7,bed:'23:00'}]};
-          const h=_htmlFaitsSante(u,'sommeil');
-          return !/Régularité/.test(h)
-            ?true:_echec('« ± 0 min » est affiche sur une nuit unique');})());
+        ok('Sans nuit renseignée, la carte de dette ne sort pas',(()=>{
+          return _svDette({sleepGoal:480,sleepLog:[]})===''
+            ?true:_echec('une dette est affichée sans une seule nuit');})());
       } finally { currentUser=_sU; }
     })();
 
@@ -67506,10 +67729,6 @@ vendredi 78 6h 44m
       const _sU=currentUser;
       try{
         const j=Date.now(), iso=d=>localISODate(new Date(d));
-        // DEUX NUITS HORODATEES AU MINIMUM : sous deux couchers,
-        // regulariteCoucher rend null a dessein — « ± 0 min » sur une nuit
-        // unique dirait « parfaitement regulier », le contraire de ce qu'on
-        // sait. Et un jour vide, pour que « Rattraper » ait lieu d'etre.
         const u={stepsGoals:{on:10000,off:7000},sleepGoal:480,
           stepsLog:[{date:iso(j-864e5),count:12000}],
           sleepLog:[{date:iso(j-864e5),duration:9,bed:'23:00'},
@@ -67520,38 +67739,39 @@ vendredi 78 6h 44m
         // UN GRAPHE PAR CARTE, ET UN SEUL.
         if(p.querySelectorAll('.san-graph').length!==1) return _echec('la carte Pas n\'a pas son graphe');
         if(s.querySelectorAll('.san-graph').length!==1) return _echec('la carte Sommeil n\'a pas son graphe');
-        // ET SA PROPRE NAVIGATION : c'est la disposition d'avant, rendue.
-        if(!p.querySelector('.san-nav')||!s.querySelector('.san-nav'))
-          return _echec('une carte a perdu ses fleches de periode');
-        // AUCUN AXE PARTAGE NE SUBSISTE.
+        // LE MENU DE PERIODE, DANS L'EN-TETE DE CHAQUE SECTION (maquettes du
+        // 24/09/2026) : sanRendre le pose, et il mene a douze semaines.
+        for(const q of ['pas','sommeil']){
+          if(!document.getElementById('ls-per-'+q)) return _echec('l’en-tête '+q+' n’a plus de place pour sa période');
+          const x=document.createElement('div'); x.innerHTML=_htmlSanPeriode(q);
+          const sel=x.querySelector('select');
+          if(!sel||sel.options.length!==12||sel.getAttribute('onchange')!=='sanPeriodeChoisir(this.value)')
+            return _echec('le menu de période de '+q+' est incomplet');
+        }
         if(typeof _htmlSemaineSante!=='undefined'||typeof _htmlPisteSante!=='undefined')
           return _echec('la figure a axe commun est de retour');
         if(document.getElementById('lifestyle-semaine'))
           return _echec('le porteur de la figure commune survit dans le balisage');
-        // UNE COULEUR, UN SENS : la nuit reussie reste bleue, le jour rouge.
-        const bleu=s.innerHTML.indexOf('#60a5fa')>=0, rouge=p.innerHTML.indexOf('#e02020')>=0;
-        if(!bleu) return _echec('la nuit atteinte n\'est pas bleue');
-        if(!rouge) return _echec('le jour atteint n\'est pas rouge');
-        // ET CE QUI A ETE AJOUTE RESTE : faits du domaine, rattrapage, aide,
-        // source. C'est la demande exacte : l'ancienne mise en page, plus ca.
+        // LA COULEUR DU DOMAINE : bleu pour le sommeil, rouge pour les pas.
+        if(s.innerHTML.indexOf('#60a5fa')<0) return _echec('le sommeil a perdu son bleu');
+        if(p.innerHTML.indexOf('#e02020')<0) return _echec('les pas ont perdu leur rouge');
+        // CE QUI RESTE : la dette, le rattrapage, l'aide, la source.
         const manque=[];
-        if(!/Régularité des couchers/.test(s.innerHTML)) manque.push('la régularité');
-        if(!/Dette de la semaine/.test(s.innerHTML)) manque.push('la dette');
-        if(!/Série en cours/.test(p.innerHTML)) manque.push('la série');
+        if(!/Dette de sommeil/.test(s.innerHTML)) manque.push('la dette');
         if(!/Où trouver/.test(p.innerHTML)) manque.push('« où trouver »');
         if(!/san-src/.test(p.innerHTML)) manque.push('la source');
         if(!/san-rattrap/.test(p.innerHTML)) manque.push('« rattraper »');
         return manque.length?_echec('perdu au passage : '+manque.join(', ')):true;
       } finally { currentUser=_sU; }})());
-    ok('Les fleches de periode tiennent la cible de 44 px',(()=>{
-      // Ce sont les seules commandes de navigation de l'ecran : les rater au
-      // doigt, c'est ne pas pouvoir consulter la semaine passee du tout.
+    ok('Le menu de période et le crayon de l’objectif tiennent la cible de 44 px',(()=>{
       const css=_stylesProd().map(x=>x.textContent).join('\n');
-      const m=css.match(/\.san-nav-b\{([^}]*)\}/);
-      if(!m) return _echec('regle .san-nav-b introuvable');
-      const w=(m[1].match(/min-width:(\d+)px/)||[])[1];
-      const h=(m[1].match(/min-height:(\d+)px/)||[])[1];
-      return (Number(w)>=44&&Number(h)>=44)?true:_echec('cible '+w+'×'+h+' px');})());
+      const m=css.match(/\.san-per-sel select\{([^}]*)\}/);
+      if(!m) return _echec('regle .san-per-sel select introuvable');
+      if(Number((m[1].match(/min-height:(\d+)px/)||[])[1])<44) return _echec('le menu fait moins de 44 px');
+      const e=css.match(/\.sv-g-edit\{([^}]*)\}/);
+      if(!e) return _echec('regle .sv-g-edit introuvable');
+      const w=(e[1].match(/width:(\d+)px/)||[])[1], h=(e[1].match(/height:(\d+)px/)||[])[1];
+      return (Number(w)>=44&&Number(h)>=44)?true:_echec('crayon '+w+'×'+h+' px');})());
 
 
     // ── Le cadre d'import est LA, et une seule fois — 6 cas ──

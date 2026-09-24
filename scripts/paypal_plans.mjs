@@ -38,7 +38,11 @@
 //
 //       PAYPAL_CLIENT_SECRET=...  node scripts/paypal_plans.mjs
 //
-//  5. Avec --ecrire, il colle lui-meme les quatre identifiants dans rc-core a
+//  5. Avec --verifier, il ne cree RIEN : il va chercher chaque plan chez
+//     PayPal et dit lequel est inactif, introuvable, ou ne facture pas le
+//     prix que l'application annonce. C'est la commande a lancer quand on
+//     se demande « est-ce que les paiements marchent ? ».
+//  6. Avec --ecrire, il colle lui-meme les identifiants dans rc-core a
 //     la place des chaines vides. Sans, il les affiche et tu les colles.
 //
 //  IL NE CREE JAMAIS DEUX FOIS LE MEME PLAN : avant d'en creer un, il liste
@@ -52,6 +56,7 @@ const ARGS = new Set(process.argv.slice(2));
 const BLANC = ARGS.has('--blanc') || ARGS.has('--dry-run');
 const SANDBOX = ARGS.has('--sandbox');
 const ECRIRE = ARGS.has('--ecrire');
+const VERIFIER = ARGS.has('--verifier');
 const API = SANDBOX ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com';
 
 // ── LE FICHIER DE L'APPLICATION, ET SES PRIX ────────────────────────────
@@ -75,6 +80,25 @@ function lireOffres() {
   return new Function(bloc + ' return OFFRES;')();
 }
 const OFFRES = lireOffres();
+// LES PALIERS COACH VIVENT DANS UNE AUTRE TABLE, et leurs prix aussi. Meme
+// methode : on evalue la table telle quelle, apres avoir pose les constantes
+// d'identifiants qu'elle referme dans ses accesseurs `planId`.
+function lireCoachPaliers() {
+  const i = src.indexOf('const COACH_PALIERS=Object.freeze([');
+  if (i < 0) throw new Error('COACH_PALIERS introuvable dans ' + fichierCore);
+  const fin = src.indexOf('\n]);', i);
+  if (fin < 0) throw new Error('fin de COACH_PALIERS introuvable');
+  const bloc = src.slice(i, fin + 4).replace('const COACH_PALIERS=', 'var COACH_PALIERS=');
+  // eslint-disable-next-line no-new-func
+  return new Function('var PAYPAL_PLAN_ID_COACH="",PAYPAL_PLAN_ID_PRO="";'
+    + bloc + ' return COACH_PALIERS;')();
+}
+const COACH_PALIERS = lireCoachPaliers();
+const coachPalier = cle => {
+  const p = COACH_PALIERS.find(x => x.cle === cle);
+  if (!p) throw new Error('palier coach « ' + cle + ' » introuvable');
+  return p;
+};
 const eur = n => (Math.round(Number(n) * 100) / 100).toFixed(2);
 
 // ── CE QU'ON CREE, ET CE QUE CHAQUE PLAN OUVRE ──────────────────────────
@@ -117,7 +141,35 @@ const PLANS = [
     ],
     config: { palier: 'ultime', mois: 1, demi: true },
   },
+  // ══ ET LES DEUX PLANS DU COACH (24/09/2026) ═══════════════════════════
+  //
+  // ⚠ ILS MANQUAIENT, ET AUCUN COACH NE POUVAIT DONC PAYER. PAYPAL_PLAN_ID_COACH
+  //   et PAYPAL_PLAN_ID_PRO etaient vides dans rc-core : souscrireCoach
+  //   refusait proprement (« Cette formule n'est pas encore ouverte au
+  //   paiement »), ce qui est honnete, mais ferme la seule source de revenus
+  //   que le coach apporte.
+  //
+  //   CE QU'ILS N'OUVRENT PAS : un palier d'acces. Un coach a le sien par son
+  //   role, pas par un droit achete — ce plan achete un QUOTA D'ATHLETES, que
+  //   coachPlanDe et getCoachQuota lisent dans le dossier. D'ou `config: null`.
+  {
+    constante: 'PAYPAL_PLAN_ID_COACH',
+    nom: 'RepCore Coach, mensuel',
+    description: 'Formule Coach : jusqu\'a quinze athletes actifs, facturee chaque mois.',
+    cycles: [{ type: 'REGULAR', unite: 'MONTH', prix: eur(coachPalier('coach').prix) }],
+    config: null,
+  },
+  {
+    constante: 'PAYPAL_PLAN_ID_PRO',
+    nom: 'RepCore Pro, mensuel',
+    description: 'Formule Pro : athletes sans limite de nombre, facturee chaque mois.',
+    cycles: [{ type: 'REGULAR', unite: 'MONTH', prix: eur(coachPalier('pro').prix) }],
+    config: null,
+  },
 ];
+// LES PLANS DEJA EN PLACE, que ce script n'a pas crees mais que l'application
+// facture : le mensuel Essentielle date d'avant. `--verifier` les regarde tous.
+const DEJA = [{ constante: 'PAYPAL_PLAN_ID', quoi: 'Essentielle, mensuel' }];
 
 // ── L'APPEL A PAYPAL ────────────────────────────────────────────────────
 const CLIENT_ID = process.env.PAYPAL_CLIENT_ID
@@ -233,7 +285,7 @@ async function planExistant(tok, produitId, nom) {
 
 // ── CE QU'ON MONTRE ─────────────────────────────────────────────────────
 function tableau() {
-  console.log('\n  Les quatre plans, avec les prix LUS dans ' + fichierCore + ' :\n');
+  console.log('\n  Les ' + PLANS.length + ' plans, avec les prix LUS dans ' + fichierCore + ' :\n');
   for (const p of PLANS) {
     const c = p.cycles.map(x =>
       x.type === 'TRIAL'
@@ -244,8 +296,70 @@ function tableau() {
   console.log('');
 }
 
+// ══ `--verifier` : CE QUE PAYPAL FACTURE VRAIMENT ════════════════════════
+//
+// Un plan peut exister et etre INACTIF, ou porter un prix qui n'est plus celui
+// que l'ecran annonce. Les deux se voient le jour d'un paiement, et pas avant :
+// le premier refuse le client, le second le debite du mauvais montant. Ce mode
+// va chercher chaque plan chez PayPal et compare, ligne a ligne.
+//
+// IL N'ECRIT RIEN, ni chez PayPal, ni dans le fichier.
+function prixAnnonce(p) {
+  const reg = p.cycles.find(c => c.type === 'REGULAR') || p.cycles[0];
+  return { prix: reg.prix, unite: reg.unite };
+}
+function prixFacture(plan) {
+  const cy = (plan.billing_cycles || []).find(c => c.tenure_type === 'REGULAR')
+    || (plan.billing_cycles || [])[0] || {};
+  const m = (cy.pricing_scheme || {}).fixed_price || {};
+  return { prix: m.value || '?', devise: m.currency_code || '?',
+    unite: ((cy.frequency || {}).interval_unit) || '?' };
+}
+async function verifier(tok) {
+  const attendus = PLANS.map(p => ({ constante: p.constante, nom: p.nom, ...prixAnnonce(p) }));
+  for (const d of DEJA) attendus.push({ constante: d.constante, nom: d.quoi, prix: null, unite: null });
+  let souci = 0;
+  console.log('\n── L\'ETAT REEL DE CHAQUE PLAN ────────────────────────────\n');
+  for (const a of attendus) {
+    const id = (src.match(new RegExp('const ' + a.constante + "='([^']*)'")) || [])[1] || '';
+    if (!id) {
+      souci++;
+      console.log('  ' + a.constante.padEnd(30) + 'VIDE dans ' + fichierCore
+        + ' — personne ne peut payer « ' + a.nom + ' »');
+      continue;
+    }
+    let plan = null;
+    try { plan = await pp(tok, 'GET', '/v1/billing/plans/' + id); }
+    catch (e) {
+      souci++;
+      console.log('  ' + a.constante.padEnd(30) + id + '  INTROUVABLE (' + e.message.slice(0, 60) + ')');
+      continue;
+    }
+    const f = prixFacture(plan);
+    const etat = String(plan.status || '?');
+    const ligne = etat.padEnd(9) + f.prix + ' ' + f.devise + ' / '
+      + (f.unite === 'YEAR' ? 'an' : (f.unite === 'MONTH' ? 'mois' : f.unite));
+    const ecarts = [];
+    if (etat !== 'ACTIVE') ecarts.push('plan ' + etat);
+    if (f.devise !== 'EUR') ecarts.push('facture en ' + f.devise);
+    if (a.prix && f.prix !== a.prix) ecarts.push('l\'app annonce ' + a.prix + ' EUR');
+    if (a.unite && f.unite !== a.unite) ecarts.push('l\'app annonce un cycle ' + a.unite);
+    if (ecarts.length) souci++;
+    console.log('  ' + a.constante.padEnd(30) + ligne
+      + (ecarts.length ? ('   ⚠ ' + ecarts.join(' ; ')) : '   ok'));
+  }
+  console.log('');
+  if (souci) {
+    console.log('  ' + souci + ' plan(s) a regarder de pres : tant qu\'ils sont dans cet etat,');
+    console.log('  ce chemin de paiement ne rapporte rien ou ne facture pas le bon prix.\n');
+    process.exitCode = 1;
+  } else {
+    console.log('  Tous les plans sont actifs, en euros, au prix que l\'application annonce.\n');
+  }
+}
+
 async function principal() {
-  console.log('\n══ LES QUATRE PLANS PAYPAL ' + (SANDBOX ? '(BAC A SABLE)' : '(COMPTE REEL)') + ' ══');
+  console.log('\n══ LES PLANS PAYPAL ' + (SANDBOX ? '(BAC A SABLE)' : '(COMPTE REEL)') + ' ══');
   tableau();
 
   if (BLANC) {
@@ -278,6 +392,7 @@ async function principal() {
 
   const tok = await jeton(secret);
   console.log('  Identifiants acceptes par PayPal.');
+  if (VERIFIER) { await verifier(tok); return; }
   const pr = await produit(tok);
   console.log('  Produit « ' + PRODUIT_NOM +' » : ' + pr.id + (pr.neuf ? ' (cree)' : ' (deja la)'));
 
@@ -298,13 +413,20 @@ async function principal() {
   console.log('\n── A COLLER DANS ' + fichierCore + ' ───────────────────────────');
   for (const f of faits) console.log("const " + f.constante + "='" + f.id + "';");
 
-  console.log('\n── A DECLARER DANS config/plans (console Firebase) ─────────');
-  const conf = {};
-  for (const f of faits) conf[f.id] = f.config;
-  console.log(JSON.stringify(conf, null, 2));
-  console.log('\n  Sans cette declaration, la Cloud Function ouvre Essentielle un mois');
-  console.log('  pour tout plan qu\'elle ne reconnait pas : le repli est le palier le');
-  console.log('  plus bas, jamais le plus haut.\n');
+  // ⚠ PLUS RIEN A DECLARER DANS config/plans (24/09/2026). Cette section
+  //   servait une Cloud Function qui lisait le plan facture pour ouvrir le
+  //   palier correspondant. Kevin ne prend pas le plan Blaze : la fonction
+  //   n'existera pas. C'est `formuleDuPlan`, dans rc-core, qui lit desormais
+  //   l'identifiant du plan facture — d'ou l'importance de la ligne du dessus.
+  const aConfigurer = faits.filter(f => f.config);
+  if (aConfigurer.length) {
+    console.log('\n── POUR MEMOIRE, ce que chaque plan ouvre ──────────────────');
+    for (const f of aConfigurer)
+      console.log('   ' + f.id + '  ' + JSON.stringify(f.config));
+    console.log('\n  ⚠ A RECOPIER DANS formuleDuPlan (rc-core) si un plan neuf');
+    console.log('    n\'y figure pas : un plan inconnu ne dit pas quelle formule');
+    console.log('    a ete payee, et le dossier retombe sur Essentielle.\n');
+  }
 
   if (ECRIRE) {
     let s = readFileSync(CHEMIN, 'utf8');
