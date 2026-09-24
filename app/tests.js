@@ -44608,61 +44608,73 @@ async function testExercices(){
       return true;})());
 
 
-    // ══ ANALYSE MORPHO-ANATOMIQUE (24/09/2026) ══════════════════════════
-    // La photo du premier bilan, face et dos ; des inclinaisons avec leur
-    // marge, jamais une largeur d'os lue sur la photo.
-    const _anatPose=(modif)=>{
-      const pts=Array.from({length:33},()=>[0.5,0.5,0]);
-      const pose={11:[0.60,0.25],12:[0.40,0.25],13:[0.63,0.40],14:[0.37,0.40],15:[0.64,0.53],16:[0.36,0.53],
-        23:[0.56,0.52],24:[0.44,0.52],25:[0.56,0.72],26:[0.44,0.72],27:[0.56,0.92],28:[0.44,0.92],
-        29:[0.56,0.94],30:[0.44,0.94],31:[0.58,0.96],32:[0.42,0.96]};
-      Object.assign(pose,modif||{});
-      for(const k in pose) pts[k]=[pose[k][0],pose[k][1],0.95];
-      return {w:1000,h:1500,pts,masque:null};
+    // ══ ANALYSE MORPHO-ANATOMIQUE (24/09/2026, v2) ══════════════════════
+    // La photo entière, des repères déplaçables, une échelle par la taille,
+    // des repères publiés. Jamais une photo déformée, jamais « à éviter ».
+    const _anatDossier=(o)=>Object.assign({id:'AN1',email:'an1@t.fr',role:'athlete',gender:'H',_evol_height:'180',bilans:[]},o||{});
+    const _anatGab=(modif,opts)=>{
+      const pts=anatGabarit(1000,1500,'face');
+      for(const k in (modif||{})) pts[k]=modif[k];
+      return {v:ANAT_VERSION,bilan:1,face:{w:1000,h:1500,auto:{pts},man:null},dos:null,opts:opts||{}};
     };
-    ok('ANALYSE MORPHO-ANATOMIQUE : UN CORPS DE NIVEAU SORT DANS LA MARGE',(()=>{
+    ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
-      const f=anatMesures({v:ANAT_VERSION,bilan:1,face:_anatPose(),dos:null},{bilans:[]},[]);
-      const par={}; f.forEach(x=>{ par[x.cle]=x; });
-      for(const k of ['epaules','bassin','genoux','pieds'])
-        if(!par[k]||par[k].niveau!==0) return _echec(k+' devrait être au centre : '+(par[k]&&par[k].niveau));
-      if(par.dos.etat!=='illisible') return _echec('sans photo de dos, le dos doit être illisible');
+      const r=anatMesures(_anatGab(),_anatDossier());
+      if(!r.echelle||!r.echelle.cmPx) return _echec('pas d’échelle');
+      const t=r.echelle.cmPx*r.echelle.stature;
+      if(Math.abs(t-180)>0.01) return _echec('sommet du crâne → talons = '+t+' cm, pas 180');
+      const g=r.fiches.find(f=>f.cle==='genoux');
+      if(g.niveau!==0) return _echec('le gabarit droit a des genoux décalés : '+g.niveau);
+      // Sans taille : des fractions, jamais un centimètre inventé.
+      const s=anatMesures(_anatGab(),_anatDossier({_evol_height:''}));
+      if(s.echelle.cmPx) return _echec('une échelle sans taille');
+      if(/cm/.test(s.fiches.find(f=>f.cle==='jambes').chiffres[0].val)) return _echec('des centimètres sans taille');
       return true;})());
-    ok('ANALYSE MORPHO-ANATOMIQUE : L’ÉPAULE BASSE EST CELLE DE L’ATHLÈTE, PAS CELLE DE L’IMAGE',(()=>{
-      // De face, la gauche de l'athlète est à DROITE de l'image (x plus grand).
-      const face=_anatPose({11:[0.60,0.28]});
-      const f=anatMesures({v:ANAT_VERSION,bilan:1,face,dos:null},{bilans:[]},[]).find(x=>x.cle==='epaules');
-      if(!(f.niveau>0)) return _echec('l’épaule gauche basse n’est pas lue à gauche : '+f.niveau);
-      if(anatTexte(f,{}).court.indexOf('gauche')<0) return _echec('la phrase ne nomme pas la gauche');
-      // De dos, c'est l'inverse : la même image dit l'épaule DROITE.
-      const g=anatMesures({v:ANAT_VERSION,bilan:1,face:_anatPose(),dos:face},{bilans:[]},[]).find(x=>x.cle==='epaules');
-      if(!(g.mesure.ad<0)) return _echec('de dos, la même image devrait dire la droite : '+g.mesure.ad);
+    ok('ANALYSE MORPHO : LE MIROIR INVERSE LES CÔTÉS DE L’ATHLÈTE, PAS L’IMAGE',(()=>{
+      // L'acromion à DROITE de l'écran descend. De face sans miroir, c'est sa gauche.
+      const pts=anatGabarit(1000,1500,'face');
+      const bas={acromion_r:[pts.acromion_r[0],pts.acromion_r[1]+0.02,1]};
+      const sans=anatMesures(_anatGab(bas),_anatDossier()).fiches.find(f=>f.cle==='epaules');
+      const avec=anatMesures(_anatGab(bas,{miroir:true}),_anatDossier()).fiches.find(f=>f.cle==='epaules');
+      if(!(sans.niveau>0)) return _echec('sans miroir, la gauche devrait être basse : '+sans.niveau);
+      if(!(avec.niveau<0)) return _echec('au miroir, la droite devrait être basse : '+avec.niveau);
       return true;})());
-    ok('ANALYSE MORPHO-ANATOMIQUE : UN GENOU QUI RENTRE EST LU EN DEDANS',(()=>{
-      const face=_anatPose({25:[0.52,0.72]});
-      const f=anatMesures({v:ANAT_VERSION,bilan:1,face,dos:null},{bilans:[]},[]).find(x=>x.cle==='genoux');
-      if(!(f.mesure.g>ANAT_TOL.genoux)) return _echec('genou gauche en dedans non lu : '+f.mesure.g);
-      if(!(f.niveau>0)) return _echec('niveau attendu positif : '+f.niveau);
+    ok('ANALYSE MORPHO : LE BRAS QUI TIENT LE TÉLÉPHONE NE DONNE AUCUNE LONGUEUR',(()=>{
+      const r=anatMesures(_anatGab(null,{telephone:'r'}),_anatDossier()).fiches.find(f=>f.cle==='bras');
+      // De face sans miroir, le côté droit de l'écran est le bras GAUCHE.
+      if(r.mesure.telAth!=='g') return _echec('le bras au téléphone n’est pas le gauche : '+r.mesure.telAth);
+      if((r.mesure.cotesOk||[]).indexOf('g')>=0) return _echec('le bras au téléphone est mesuré');
+      // Et le moteur le reconnaît : un poignet au-dessus du coude.
+      const raw={w:1000,h:1500,masque:null,pts:Array.from({length:33},()=>[0.5,0.2,0.9])};
+      const S={11:[0.6,0.3],12:[0.4,0.3],13:[0.63,0.42],14:[0.37,0.42],15:[0.64,0.54],16:[0.45,0.30],
+        23:[0.56,0.55],24:[0.44,0.55],25:[0.56,0.75],26:[0.44,0.75],27:[0.56,0.93],28:[0.44,0.93],0:[0.5,0.18]};
+      for(const k in S) raw.pts[k]=[S[k][0],S[k][1],0.95];
+      const au=anatPointsAuto(raw,'face');
+      if(!au||au.telephone!=='l') return _echec('téléphone non détecté : '+(au&&au.telephone));
+      if(!au.miroir) return _echec('un selfie au téléphone devrait être présumé au miroir');
+      if(!(au.pts.acromion_l&&au.pts.acromion_l[2]===0.5)) return _echec('l’acromion devrait être marqué estimé');
       return true;})());
-    ok('ANALYSE MORPHO-ANATOMIQUE : LES CLAVICULES NE SE LISENT QU’AU MÈTRE, ET AUCUN EXERCICE N’EST À ÉVITER',(()=>{
-      const f=anatMesures({v:ANAT_VERSION,bilan:1,face:_anatPose({11:[0.62,0.28],25:[0.52,0.72],31:[0.66,0.96]}),dos:null},{bilans:[]},[]);
-      const cl=f.find(x=>x.cle==='clavicules');
-      if(cl.etat!=='a-mesurer') return _echec('sans mètre, les clavicules devraient être « à mesurer » : '+cl.etat);
-      for(const x of f){
-        const t=anatTexte(x,{});
-        const tout=[t.court,t.lecture,t.verifier].concat(t.privilegier||[]).concat((t.amenager||[]).map(a=>a.quoi+' '+a.reglage)).join(' ');
-        if(/[àa] [ée]viter|proscri|interdit/i.test(tout)) return _echec(x.cle+' : « à éviter » dans le texte');
-        if(!t.court) return _echec(x.cle+' : pas de phrase courte');
+    ok('ANALYSE MORPHO : REPÈRES SOURCÉS, AUCUN EXERCICE À ÉVITER, DOSSIER CLASSÉ SANTÉ',(()=>{
+      const pts=anatGabarit(1000,1500,'face');
+      const a=_anatGab({genou_l:[pts.genou_l[0]+0.03,pts.genou_l[1],1],acromion_r:[pts.acromion_r[0],pts.acromion_r[1]+0.02,1]});
+      const r=anatMesures(a,_anatDossier());
+      if(!r.leviers.some(l=>l.cle==='squat')) return _echec('pas de modèle de squat');
+      for(const f of r.fiches){
+        const t=anatTexte(f,r);
+        const tout=[t.court,t.lecture,t.verifier].concat(t.privilegier||[]).concat((t.amenager||[]).map(x=>x.quoi+' '+x.reglage)).join(' ');
+        if(/[àa] [ée]viter|proscri|interdit/i.test(tout)) return _echec(f.cle+' : « à éviter » dans le texte');
+        if(!t.court) return _echec(f.cle+' : pas de phrase courte');
       }
-      return true;})());
-    ok('ANALYSE MORPHO-ANATOMIQUE : LE MASQUE SE RELIT TEL QU’IL A ÉTÉ CODÉ',(()=>{
-      // 4 × 3 : fond, 2 personne, fond ; codé par plages en base 36.
-      const m={w:4,h:3,rle:'1.2.2.2.2.2.1'};
-      const b=anatMasqueBits(m);
-      if(!b||Array.from(b).join('')!=='011001100110') return _echec('masque mal relu : '+(b&&Array.from(b).join('')));
-      const c=anatCadre(m);
-      if(!c||c.x0!==0.25||c.x1!==0.75) return _echec('cadre faux : '+JSON.stringify(c));
+      if(!/ANSUR/.test(r.fiches.find(f=>f.cle==='clavicules').source)) return _echec('la carrure sans sa source');
+      if(!/Drillis/.test(r.fiches.find(f=>f.cle==='jambes').source)) return _echec('les longueurs sans leur source');
       if(CHAMPS_SANTE.indexOf('morphoAnat')<0) return _echec('morphoAnat n’est pas classé santé');
+      return true;})());
+    ok('ANALYSE MORPHO : LES POINTS POSÉS À LA MAIN PASSENT DEVANT L’AUTOMATIQUE',(()=>{
+      const a=_anatGab();
+      a.face.man={vertex:[0.5,0.02]};
+      const p=anatPoints(a,'face');
+      if(p.vertex[1]!==0.02||p.vertex[2]!==2) return _echec('le point du coach n’est pas retenu');
+      if(!p.genou_l) return _echec('les autres points ont disparu');
       return true;})());
 
     // ══ LOT 8 : L'ANALYSE MORPHO, AUTOMATIQUE ET FIGÉE (23/09/2026) ══════
