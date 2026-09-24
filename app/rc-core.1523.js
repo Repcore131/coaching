@@ -64441,7 +64441,9 @@ function setNutriDietType(type){
     if(!a.ok){
       toast(a.raison==='sans_coach'
         ?'La diète stricte est composée par un coach : il t\'en faut un.'
-        :'Ton coach ne t\'a pas encore ouvert la diète stricte.','var(--orange)');
+        :(a.raison==='referme'
+          ?'Ton coach a refermé ta diète stricte, le temps de retravailler ton plan.'
+          :'Ton coach ne t\'a pas encore ouvert la diète stricte.'),'var(--orange)');
       const s=document.getElementById('nut-diet-select');
       if(s) s.value=typeDiete(currentUser.nutrition||{});
       return;
@@ -66963,6 +66965,12 @@ const STRICT_VERROU=Object.freeze({
     action:'La diète flexible, elle, te suit en autonomie : tu fixes tes '
       +'macros et tu manges ce que tu veux dans ces limites.'
   }),
+  referme:Object.freeze({
+    titre:'Ton coach l\'a refermée pour le moment',
+    texte:'Il retravaille ton plan alimentaire. Rien n\'est perdu : tu le '
+      +'retrouveras dès qu\'il te l\'aura rouvert, tel qu\'il l\'aura préparé.',
+    action:'En attendant, tu peux suivre ta nutrition en diète flexible.'
+  }),
   non_valide:Object.freeze({
     titre:'Ton coach ne l\'a pas encore ouverte',
     texte:'Ton coach prépare ton plan alimentaire. Tu y auras accès dès '
@@ -68080,7 +68088,13 @@ function accesDieteStricte(user){
   if(!user.coachId) return {ok:false,raison:'sans_coach'};
   const v=((user.nutrition)||{}).strictAcces;
   if(v===true) return {ok:true,raison:null};
-  if(v===false) return {ok:false,raison:'non_valide'};
+  // ⚠ DEUX FERMETURES QUI NE SE RACONTENT PAS PAREIL (24/09/2026). « Jamais
+  //   ouverte » et « refermée après usage » mènent à la même porte close, mais
+  //   pas au même texte : dire « pas encore ouverte » à une athlète dont le
+  //   programme est déjà composé dans son dossier lui fait douter de ce qu'elle
+  //   a vécu. La nuance ne s'invente pas : elle vient de _strictUsageExistant,
+  //   qui ne répond oui que sur une trace réelle.
+  if(v===false) return {ok:false,raison:_strictUsageExistant(user)?'referme':'non_valide'};
   return _strictUsageExistant(user)
     ?{ok:true,raison:'usage_existant'}
     :{ok:false,raison:'non_valide'};
