@@ -5510,7 +5510,7 @@ const CHAMPS_SANTE=Object.freeze([
   'weightLog','profileWeight','weight','bilans','photosBilan','photosProgression',
   'comparaisons','bilanGoals','_evol_height','_evol_gender',
   // Sommeil, pas, energie, habitudes quotidiennes
-  'sleepLog','stepsLog','stepsDayType','stepsGoals','energieLog','habitudesLog',
+  'sleepLog','stepsLog','stepsDayType','stepsGoals','sleepGoal','energieLog','habitudesLog',
   // Cycle menstruel et ce qui l'entoure
   'cycle','currentCycle','cycleSuivi','cycleArretPropose','cycleChoixVus',
   'cycleIgnoresSuite','grossesse','statutHormonal','traitementHormonal',
@@ -91457,93 +91457,189 @@ function sanLirePas(txt){
   const n=Number(t);
   return isFinite(n)&&n>=0?Math.round(n):null;
 }
-// ── LE GRAPHIQUE ───────────────────────────────────────────────────────
-// Sept barres, une ligne d'objectif, et une echelle qui ne ment pas : le bas
-// n'est jamais arbitraire, il descend au minimum observe arrondi vers le bas,
-// et jamais au-dessus de ce qui rendrait un ecart de vingt minutes spectaculaire.
-// PURE, ET PARTAGEE PAR LES DEUX PISTES DE « MA SEMAINE ». Elle vivait dans
-// _sanGraph ; deux graphes la voulaient, et la recopier aurait fait diverger
-// l'echelle d'une piste de celle de la carte qui la redit.
-// Le plancher : zero pour les pas — un jour a 2 000 pas DOIT paraitre bas —
-// et six heures pour le sommeil, sinon sept nuits entre 6 h et 8 h donnent
-// sept barres identiques.
-function _sanEchelle(quoi,vals,objectif){
-  const max=Math.max(objectif,...(vals.length?vals:[objectif]));
-  const bas=quoi==='sommeil'?Math.min(360,Math.max(0,(vals.length?Math.min(...vals):360)-30)):0;
-  const haut=max*1.08;
-  return {
-    bas,haut,
-    // 3 % de plancher : une barre a zero n'est pas cliquable, et c'est
-    // justement le jour qu'on veut pouvoir ouvrir pour le remplir.
-    pc:v=>Math.max(3,Math.round((v-bas)/(haut-bas)*100)),
-    pcObj:Math.max(0,Math.min(100,Math.round((objectif-bas)/(haut-bas)*100)))
-  };
+// ══ LES CARTES PAS ET SOMMEIL, D'APRES LES MAQUETTES DE KEVIN ═════════════
+//
+// Kevin, 24/09/2026, deux maquettes a l'appui : « remplace par celle-ci,
+// exactement pareil en mise en page ». La carte unique — graphe gris, deux
+// chiffres, des lignes de faits — devient sept blocs, dans cet ordre :
+//   1. le graphe, titre et objectif quotidien dans son en-tete ;
+//   2. la moyenne et la progression, cote a cote ;
+//   3. (sommeil) la dette de la semaine ;
+//   4. « On reprend ! » quand des jours manquent ;
+//   5. le bouton de saisie ;
+//   6. « ou », puis les deux methodes : a la main, ou par une capture.
+// La periode se choisit dans l'en-tete de la section (sanRendre remplit
+// #ls-per-pas et #ls-per-sommeil) : un menu au lieu de deux fleches.
+//
+// ⚠ CE QUI N'EST PLUS A L'ECRAN, PARCE QUE LA MAQUETTE NE LE PORTE PAS : la
+//   serie en cours et la regularite des couchers. regulariteCoucher et
+//   serieePas restent — le coach les lit sur sa fiche.
+// ⚠ CE QUI RESTE, EN UNE LIGNE DISCRETE SOUS LES METHODES : la source des
+//   donnees et « Où trouver… ». Les retirer aurait supprime deux reglages
+//   sans le dire ; ils ne prennent qu'une ligne de texte.
+//
+// LA COULEUR D'UNE BARRE DIT OU EN EST LE JOUR PAR RAPPORT A L'OBJECTIF,
+// comme sur la maquette : vert, orange, rouge. Les seuils sont ceux qu'elle
+// montre — pour les pas, 6 843 sur 12 000 (57 %) est vert, 4 872 (41 %)
+// orange, 1 320 (11 %) rouge ; pour le sommeil, 7h20 sur 8h00 (92 %) vert,
+// 4h30 (56 %) orange, 3h48 (48 %) rouge.
+const SAN_SEUILS={pas:{ok:.5,moy:.25},sommeil:{ok:.875,moy:.55}};
+const SAN_NIV_COUL={ok:'#34e89e',moy:'#f5a524',bas:'#ff4040'};
+// PURE. 'ok', 'moy' ou 'bas' pour une valeur rapportee a l'objectif.
+function sanNiveau(quoi,v,obj){
+  if(v==null||!(obj>0)) return null;
+  const s=SAN_SEUILS[quoi==='sommeil'?'sommeil':'pas'], r=v/obj;
+  return r>=s.ok?'ok':(r>=s.moy?'moy':'bas');
 }
-// UNE COULEUR, UN SENS, SUR TOUTE LA PAGE. Le rouge est le domaine de
-// l'activite, le bleu celui du sommeil. Une nuit reussie affichee en rouge
-// disait « pas » a l'oeil qui venait de lire la piste du dessus.
-function _sanTeinte(quoi){ return quoi==='sommeil'?'#60a5fa':'#e02020'; }
-function _sanGraph(quoi,serie,objectif,fmt){
-  const vals=serie.map(x=>x.v).filter(v=>v!=null);
-  const e=_sanEchelle(quoi,vals,objectif);
-  const pc=e.pc, pcObj=e.pcObj;
-  const barres=serie.map((x,i)=>{
-    const ok=x.v!=null&&x.v>=objectif;
-    const col=x.v==null?'#242428':(ok?_sanTeinte(quoi):'#5a5a62');
-    const h=x.v==null?3:pc(x.v);
+// PURE. L'axe vertical : un pas rond (3 000 pas, 2 h), un sommet au-dessus de
+// l'objectif ET de la plus haute barre, jamais plus de six graduations.
+function sanAxe(quoi,vals,obj){
+  const nuit=(quoi==='sommeil');
+  let pas=nuit?120:3000;
+  const max=Math.max(obj||0,...vals.filter(v=>v!=null),0)*1.12;
+  let haut=Math.max(pas,Math.ceil(max/pas)*pas);
+  while(haut/pas>6){ pas*=2; haut=Math.ceil(max/pas)*pas; }
+  const grad=[];
+  for(let v=0;v<=haut;v+=pas) grad.push(v);
+  return {haut,grad,lib:v=>nuit?(Math.round(v/60)+'h'):(v?(Math.round(v/100)/10+'K').replace('.',','):'0')};
+}
+// Les milliers avec une espace ordinaire : la fine insecable de
+// toLocaleString manque a la police de titre, qui collait « 10452 ».
+function _svEsp(t){ return String(t).replace(/[\u202f\u00a0]/g,' '); }
+function _sanJourCourt(d){
+  const s=d.toLocaleDateString('fr-FR',{weekday:'short'}).replace('.','');
+  return s.charAt(0).toUpperCase()+s.slice(1);
+}
+function _sanGraphe(quoi,serie,obj,fmt){
+  const ax=sanAxe(quoi,serie.map(x=>x.v),obj);
+  const f0=fmt; fmt=v=>_svEsp(f0(v));
+  const pc=v=>Math.max(0,Math.min(100,v/ax.haut*100));
+  const lignes=ax.grad.map(v=>'<div class="sv-gl" style="bottom:'+pc(v)+'%"><span>'
+    +escapeHtml(ax.lib(v))+'</span></div>').join('');
+  const barres=serie.map(x=>{
+    const niv=sanNiveau(quoi,x.v,obj);
     const lib=x.d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
-    return '<button type="button" class="san-bar" style="--h:'+h+'%"'
+    return '<button type="button" class="san-bar sv-bar" data-niv="'+(niv||'vide')+'"'
       +' onclick="sanOuvrirJour(\''+quoi+'\',\''+x.iso+'\')"'
       +' aria-label="'+escapeHtml(lib+' : '+(x.v==null?'aucune donnée':fmt(x.v)))+'">'
-      +'<span class="san-bar-f" style="background:'+col+'"></span>'
-      +'<span class="san-bar-j">'+escapeHtml(['L','M','M','J','V','S','D'][(x.d.getDay()+6)%7])+'</span>'
+      +'<span class="sv-bar-z">'
+        +(x.v==null?'<span class="sv-bar-v">—</span>'
+          :'<span class="sv-bar-v">'+escapeHtml(fmt(x.v))+'</span>')
+        +'<span class="sv-bar-f" style="height:'+(x.v==null?1.5:Math.max(1.5,pc(x.v)))+'%"></span>'
+      +'</span>'
+      +'<span class="sv-bar-j">'+escapeHtml(_sanJourCourt(x.d))+'</span>'
       +'</button>';
   }).join('');
-  return '<div class="san-graph">'
-    +'<div class="san-obj-l" style="bottom:calc('+pcObj+'% + 18px)"><span>'+escapeHtml(fmt(objectif))+'</span></div>'
-    +barres+'</div>';
+  return '<div class="sv-graphe">'
+    +'<div class="sv-axe">'+lignes
+      +'<div class="sv-obj" style="bottom:'+pc(obj)+'%"><span>'+escapeHtml(fmt(obj))+'</span></div>'
+    +'</div>'
+    +'<div class="san-graph sv-barres">'+barres+'</div>'
+    +'</div>';
 }
-// ⚠ _htmlSemaineSante ET _htmlPisteSante ONT ETE RETIREES LE 15/09/2026,
-// le lendemain de leur arrivee. Elles mettaient les pas et les nuits en regard
-// sur un axe de jours commun ; Kevin les voulait separes : « 1 graphique = un
-// suivi ». Le raisonnement qui les avait amenees — la nuit ou l'on dort mal
-// est celle ou l'on marche peu — reste vrai, mais il ne vaut pas de lire deux
-// suivis sur une figure qu'on n'a pas demandee. Chaque carte a repris son
-// graphe et sa navigation.
-// _sanEchelle et _sanTeinte, elles, RESTENT : la premiere est le calcul de
-// plancher que _sanGraph utilisait deja, sortie pour etre partageable ; la
-// seconde donne au sommeil sa couleur, et une nuit reussie n'a plus a
-// s'afficher en rouge.
-// ══ RATTRAPER ══════════════════════════════════════════════════════════
-//
-// La seconde moitie du probleme des trous. Les voir ne suffit pas : pour
-// rattraper trois jours, il fallait ouvrir la feuille de saisie, changer la
-// date, saisir, refermer, recommencer. Ce bouton ouvre directement le PREMIER
-// JOUR VIDE du domaine — le plus ancien, celui qui va sortir de la fenetre en
-// premier et qu'on perdrait pour de bon.
-//
-// PURE. Le plus ancien jour de la semaine sans donnee POUR CE DOMAINE : un
-// jour ou les pas sont notes mais pas la nuit est un trou pour le sommeil, et
-// pas pour les pas.
-function premierJourVide(u,quoi,jours){
-  const n=(jours>0?jours:7);
-  const d=new Date(); d.setHours(12,0,0,0);
-  for(let i=n;i>=1;i--){
-    const j=new Date(d); j.setDate(d.getDate()-i);
-    const iso=localISODate(j);
-    const v=quoi==='sommeil'?sanSommeilMin(u,iso):sanPas(u,iso);
-    if(v==null) return iso;
-  }
-  return null;
+// ── Les pictogrammes. Traces, pas des images : ils prennent la couleur du
+//    domaine et restent nets a toutes les tailles.
+const _SV_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+const SAN_ICO={
+  chaussure:_SV_SVG+'<path d="M2.5 16.5h17.2a1.8 1.8 0 0 0 1.8-1.8c0-1.4-1-2.1-2.5-2.6l-4.1-1.5a3 3 0 0 1-1.3-.9L11.2 6.8a1.3 1.3 0 0 0-2-.2L7.6 8.3H2.5z"/><path d="M2.5 16.5v2h19v-2"/><path d="M9.6 10.2l1.2-1M11.4 11.6l1.2-1"/></svg>',
+  lune:_SV_SVG+'<path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z"/></svg>',
+  crayon:_SV_SVG+'<path d="M16.9 3.6a2.1 2.1 0 0 1 3 3L8.4 18.1l-4 1 1-4z"/><path d="M14.8 5.7l3 3"/></svg>',
+  calendrier:_SV_SVG+'<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4M7.5 13h.01M12 13h.01M16.5 13h.01M7.5 16.5h.01M12 16.5h.01"/></svg>',
+  bas:_SV_SVG+'<path d="M6 9l6 6 6-6"/></svg>',
+  droite:_SV_SVG+'<path d="M9 5l7 7-7 7"/></svg>',
+  eclair:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.2 2.2L4.6 13.4h6.1l-1.2 8.4 8.8-11.4h-6.2z"/></svg>',
+  clavier:_SV_SVG+'<rect x="2.5" y="5.5" width="19" height="13" rx="2.2"/><path d="M6.5 9.5h.01M10 9.5h.01M13.5 9.5h.01M17.5 9.5h.01M6.5 12.5h.01M10 12.5h.01M13.5 12.5h.01M17.5 12.5h.01M8 15.5h8"/></svg>',
+  photo:_SV_SVG+'<path d="M22 18.5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-10a2 2 0 0 1 2-2h3.2l1.8-2.7h6l1.8 2.7H20a2 2 0 0 1 2 2z"/><circle cx="12" cy="13.2" r="3.8"/></svg>',
+  histo:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="10" width="3.6" height="9" rx="1"/><rect x="8.8" y="5" width="3.6" height="14" rx="1"/><rect x="14.6" y="12" width="3.6" height="7" rx="1"/><rect x="2" y="20.5" width="4" height="1.5" rx=".6"/><rect x="8" y="20.5" width="4" height="1.5" rx=".6"/><rect x="14" y="20.5" width="4" height="1.5" rx=".6"/></svg>',
+  lit:_SV_SVG+'<path d="M3 18.5V6.5M3 14h18v4.5M21 14v-2.2a2.8 2.8 0 0 0-2.8-2.8H11v5"/><circle cx="7" cy="10.8" r="1.8"/></svg>',
+  dormeur:_SV_SVG+'<path d="M3 19v-7M3 16h18v3M21 16v-2a2.5 2.5 0 0 0-2.5-2.5H12.5V16"/><circle cx="8" cy="12" r="1.9"/><path d="M14 4.5h3l-3 3.5h3M18.5 2.5h2l-2 2.3h2"/></svg>',
+  cadenas:_SV_SVG+'<rect x="4.5" y="10.5" width="15" height="10.5" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg>',
+  info:_SV_SVG+'<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.8h.01"/></svg>'
+};
+function _svEnTete(quoi,r,bloc,fmt){
+  const nuit=(quoi==='sommeil');
+  const verrou=sanVerrouille(currentUser);
+  const p0=r.jours[0].d,p6=r.jours[6].d;
+  const sous=_sanOffset===0?'Sur les 7 derniers jours'
+    :('Du '+p0.getDate()+' '+p0.toLocaleDateString('fr-FR',{month:'short'})+' au '
+      +p6.getDate()+' '+p6.toLocaleDateString('fr-FR',{month:'short'}));
+  const obj=nuit?escapeHtml(sanHM(bloc.objectif)).toUpperCase()
+    :escapeHtml(_svEsp(sanNb(bloc.objectif)))+'<small>pas</small>';
+  return '<div class="sv-g-tete">'
+    +'<span class="sv-g-ico">'+(nuit?SAN_ICO.lune:SAN_ICO.chaussure)+'</span>'
+    +'<div class="sv-g-t"><h3>'+(nuit?'Durée de sommeil':'Nombre de pas')+'</h3>'
+      +'<span>'+escapeHtml(sous)+'</span></div>'
+    +'<div class="sv-g-obj"><span>Objectif quotidien</span><strong>'+obj+'</strong></div>'
+    +'<button type="button" class="sv-g-edit" onclick="sanObjectif(\''+quoi+'\')"'
+      +(verrou?' data-verrou="" title="Ton coach a fixé cet objectif"':'')
+      +' aria-label="'+(verrou?'Objectif fixé par ton coach':'Modifier mon objectif')+'">'
+      +(verrou?SAN_ICO.cadenas:SAN_ICO.crayon)+'</button>'
+    +'</div>';
 }
-function sanRattraper(quoi){
-  const iso=premierJourVide(currentUser,quoi,7);
-  // Plus de trou : le bouton ne devrait pas etre la, mais s'il l'est (rendu
-  // avant une saisie, clique apres), on ouvre le jour courant plutot que de
-  // ne rien faire — un bouton muet se lit comme une panne.
-  sanSaisir(quoi,iso||localISODate(new Date()));
+function _svMoyenne(quoi,bloc,fmt){
+  const nuit=(quoi==='sommeil');
+  const f0=fmt; fmt=v=>_svEsp(f0(v));
+  const e=bloc.ecart;
+  const ecart=(e==null)?''
+    :'<div class="sv-m-e" data-sens="'+(e>=0?'haut':'bas')+'"><i aria-hidden="true">'+(e>=0?'▲':'▼')+'</i>'
+      +(e>=0?'+ ':'- ')+escapeHtml(_svEsp(nuit?sanHM(Math.abs(e)):sanNb(Math.abs(e))))+'</div>'
+      +'<div class="sv-m-n">par rapport à l’objectif'+(nuit?' ('+escapeHtml(sanHM(bloc.objectif))+')':'')+'</div>';
+  return '<div class="sv-moy">'
+    +'<span class="sv-moy-ico">'+(nuit?SAN_ICO.lune:SAN_ICO.chaussure)+'</span>'
+    +'<div class="sv-moy-c"><span class="sv-lbl">Moyenne</span>'
+      +'<strong class="sv-moy-v">'+(bloc.moy==null?'—':escapeHtml(fmt(bloc.moy)))+'</strong>'
+      +'<span class="sv-moy-u">'+(nuit?'par nuit':'pas / jour')+'</span>'
+      +ecart+'</div></div>';
 }
-// Le raccourci, rendu seulement s'il y a quelque chose a rattraper.
+function _svProgression(quoi,r,bloc){
+  const nuit=(quoi==='sommeil');
+  const n=bloc.renseignes;
+  // L'ANNEAU DIT, COMME SUR LA MAQUETTE : la part de l'objectif pour les pas,
+  // la part des nuits renseignees pour le sommeil.
+  const part=nuit?n/7:(bloc.moy==null?0:Math.min(1,bloc.moy/bloc.objectif));
+  const C=2*Math.PI*42;
+  const centre=nuit?(n+'/7'):(Math.round(part*100)+'%');
+  const points=r.jours.map(j=>{
+    const v=nuit?sanSommeilMin(currentUser,j.iso):sanPas(currentUser,j.iso);
+    return '<i'+(v!=null?' data-plein=""':'')+'></i>';
+  }).join('');
+  const semaine=_sanOffset===0?'cette semaine':'sur la période';
+  return '<div class="sv-prog">'
+    +'<svg class="sv-anneau" viewBox="0 0 100 100" aria-hidden="true">'
+      +(nuit?'<defs><linearGradient id="sv-g-nuit" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c9cff"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs>':'')
+      +'<circle cx="50" cy="50" r="42" class="sv-anneau-f"/>'
+      +'<circle cx="50" cy="50" r="42" class="sv-anneau-p" stroke-dasharray="'+(C*part).toFixed(1)+' '+C.toFixed(1)+'"/>'
+    +'</svg>'
+    +'<span class="sv-anneau-v">'+escapeHtml(centre)+'</span>'
+    +'<div class="sv-prog-c">'
+      +'<span class="sv-prog-t">Progression'+(nuit?'<i aria-hidden="true">'+SAN_ICO.droite+'</i>':'')+'</span>'
+      +(nuit?'<span class="sv-prog-s">nuits renseignées</span>'
+        :'<span class="sv-prog-n"><b>'+n+' / 7</b> jours</span><span class="sv-prog-s">renseignés '+semaine+'</span>')
+      +'<span class="sv-points" role="img" aria-label="'+n+' '+(nuit?'nuits':'jours')+' renseignés sur 7">'+points+'</span>'
+    +'</div></div>';
+}
+function _svDette(u){
+  const d=detteSommeil(u);
+  if(!d) return '';
+  return '<div class="sv-dette">'
+    +'<span class="sv-dette-ico">'+SAN_ICO.lit+'</span>'
+    +'<div class="sv-dette-c"><span class="sv-dette-t">Dette de sommeil'
+      +'<button type="button" class="sv-info" onclick="sanDetteAide()" aria-label="Comment la dette est calculée">'+SAN_ICO.info+'</button></span>'
+      +'<span class="sv-dette-s">sur '+d.nuits+' nuit'+(d.nuits>1?'s':'')+' renseignée'+(d.nuits>1?'s':'')
+        +' · objectif '+escapeHtml(sanHM(d.objectif))+'</span></div>'
+    +'<strong class="sv-dette-v" style="color:'+_teinteDette(d.dette,d.objectif)+'">'
+      +(d.dette?escapeHtml(sanHM(d.dette)):'aucune')+'</strong>'
+    +'</div>';
+}
+function sanDetteAide(){
+  _sanFeuille('Dette de sommeil',
+    '<div class="san-vide">Ce qui manque à ton objectif, nuit après nuit, sur les 7 derniers jours. '
+    +'Une nuit plus longue que l’objectif en rembourse une partie. Seules les nuits renseignées comptent : '
+    +'une nuit oubliée n’ajoute rien, et ne rembourse rien.</div>');
+}
+// Le raccourci de rattrapage, rendu seulement s'il y a quelque chose a
+// rattraper. Il ouvre directement le PREMIER JOUR VIDE du domaine — le plus
+// ancien, celui qui va sortir de la fenetre en premier.
 function _htmlRattraper(u,quoi){
   const n=[];
   const d=new Date(); d.setHours(12,0,0,0);
@@ -91556,26 +91652,14 @@ function _htmlRattraper(u,quoi){
   const q=quoi==='sommeil'?'nuit':'jour';
   const prem=premierJourVide(u,quoi,7);
   const lbl=prem?new Date(prem+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric'}):'';
-  return '<button type="button" class="san-rattrap" onclick="sanRattraper(\''+quoi+'\')">'
-    +'<span class="san-rattrap-t">Rattraper</span>'
-    +'<span class="san-rattrap-n">'+n.length+' '+q+(n.length>1?'s':'')+' sans données cette semaine'
-    +(lbl?' · on commence par '+escapeHtml(lbl):'')+'</span></button>';
+  return '<button type="button" class="san-rattrap sv-rep" onclick="sanRattraper(\''+quoi+'\')">'
+    +_svImg(quoi==='sommeil'?'rep-som':'rep-pas','sv-rep-deco')
+    +'<span class="sv-rep-ico">'+SAN_ICO.eclair+'</span>'
+    +'<span class="sv-rep-c"><span class="san-rattrap-t">On reprend !</span>'
+    +'<span class="san-rattrap-n">'+n.length+' '+q+(n.length>1?'s':'')+' sans données cette semaine.'
+    +(lbl?'<br>On commence par '+escapeHtml(lbl)+'.':'')+'</span></span>'
+    +'<span class="sv-chev">'+SAN_ICO.droite+'</span></button>';
 }
-function _sanFait(lbl,val,coul,note){
-  return '<div class="san-fait">'
-    +'<span class="san-fait-l">'+escapeHtml(lbl)+'</span>'
-    +'<span class="san-fait-v"'+(coul?' style="color:'+coul+'"':'')+'>'+escapeHtml(val)+'</span>'
-    +(note?'<span class="san-fait-n">'+escapeHtml(note)+'</span>':'')
-    +'</div>';
-}
-// ══ RATTRAPER ══════════════════════════════════════════════════════════
-//
-// La seconde moitie du probleme des trous. Les voir ne suffit pas : pour
-// rattraper trois jours, il fallait ouvrir la feuille de saisie, changer la
-// date, saisir, refermer, recommencer. Ce bouton ouvre directement le PREMIER
-// JOUR VIDE du domaine — le plus ancien, celui qui va sortir de la fenetre en
-// premier et qu'on perdrait pour de bon.
-//
 // PURE. Le plus ancien jour de la semaine sans donnee POUR CE DOMAINE : un
 // jour ou les pas sont notes mais pas la nuit est un trou pour le sommeil, et
 // pas pour les pas.
@@ -91597,96 +91681,126 @@ function sanRattraper(quoi){
   // ne rien faire — un bouton muet se lit comme une panne.
   sanSaisir(quoi,iso||localISODate(new Date()));
 }
-function _htmlFaitsSante(u,quoi){
-  let h='';
-  if(quoi==='sommeil'){
-    const r=regulariteCoucher(u);
-    // ⚠ MUET PLUTOT QU'APPROXIMATIF. Sous deux couchers, regulariteCoucher
-    // rend null : afficher « ± 0 min » sur une nuit unique dirait
-    // « parfaitement regulier », le contraire de ce qu'on sait.
-    if(r) h+=_sanFait('Régularité des couchers','± '+r.ecart+' min',_teinteRegularite(r.ecart),
-      'coucher moyen '+_libHeure(r.moyenne)+' · sur '+r.n+' nuit'+(r.n>1?'s':''));
-    const d=detteSommeil(u);
-    if(d) h+=_sanFait('Dette de la semaine',d.dette?sanHM(d.dette):'aucune',
-      _teinteDette(d.dette,d.objectif),
-      'sur '+d.nuits+' nuit'+(d.nuits>1?'s':'')+' renseignée'+(d.nuits>1?'s':'')
-        +' · objectif '+sanHM(d.objectif));
-  } else {
-    const s=serieePas(u);
-    if(s){
-      // POURQUOI ELLE S'ARRETE, sinon l'athlete conclut qu'il n'a pas marche
-      // alors qu'il a seulement oublie de noter — et les deux ne se
-      // rattrapent pas de la meme facon.
-      const pourquoi=s.n===0?null
-        :s.raison==='vide'?'arrêtée par un jour non renseigné'
-        :s.raison==='sous'?'arrêtée par un jour sous l\'objectif':null;
-      h+=_sanFait('Série en cours',s.n?(s.n+' jour'+(s.n>1?'s':'')):'aucune',
-        s.n?'#e02020':'var(--text-dim)',pourquoi);
-    }
-  }
-  return h?'<div class="san-faits">'+h+'</div>':'';
+// LES TELEPHONES DES DEUX METHODES, ET LE DECOR DE « ON REPREND ! », SONT
+// DECOUPES DANS LES MAQUETTES DE KEVIN (img/lifestyle/, 5 a 14 ko chacun) :
+// « exactement pareil » ne se redessine pas, il se reprend.
+function _svImg(nom,classe){
+  return '<img class="'+classe+'" src="img/lifestyle/'+nom+'.webp" alt="" aria-hidden="true" loading="lazy" decoding="async">';
+}
+function _svMethodes(u,quoi){
+  const nuit=(quoi==='sommeil');
+  const src=sanSource(u,quoi);
+  return '<div class="san-import sv-meth">'
+    +'<div class="sv-meth-tete"><span class="sv-meth-ico">'+(nuit?SAN_ICO.dormeur:SAN_ICO.histo)+'</span>'
+      +'<div><h3>'+(nuit?'Ajouter mon sommeil':'Ajouter mes pas')+'</h3>'
+      +'<span>Choisis la méthode qui te convient</span></div></div>'
+    +'<div class="sv-meth-g">'
+      +'<button type="button" class="sv-tuile sv-tuile-m" onclick="sanSaisir(\''+quoi+'\')">'
+        +'<span class="sv-tuile-h"><span class="sv-tuile-ico">'+SAN_ICO.clavier+'</span>'
+          +'<span class="sv-tuile-t">Saisie manuelle</span><span class="sv-chev">'+SAN_ICO.droite+'</span></span>'
+        +'<span class="sv-tuile-d">'+(nuit?'Renseigne la durée de ton sommeil du jour en quelques secondes.'
+          :'Renseigne ton nombre de pas du jour en quelques secondes.')+'</span>'
+        +_svImg(nuit?'tel-m-som':'tel-m-pas','sv-tel')
+      +'</button>'
+      // ⚠ LE CHAMP, PUIS SON BOUTON, DANS CET ORDRE. importerCaptureStats
+      //   retrouve le bouton par nextElementSibling et y ecrit « Lecture en
+      //   cours… » par textContent : il ne porte donc QUE du texte, et il
+      //   couvre la tuile, invisible, pour que toute la tuile se touche.
+      +'<div class="sv-tuile sv-tuile-c">'
+        +'<span class="sv-tuile-h"><span class="sv-tuile-ico">'+SAN_ICO.photo+'</span>'
+          +'<span class="sv-tuile-t">Depuis une capture d’écran</span><span class="sv-chev">'+SAN_ICO.droite+'</span></span>'
+        +'<span class="sv-tuile-d">Importe une photo de ton application de santé (Apple Santé, Samsung Health, etc.).</span>'
+        +_svImg(nuit?'tel-c-som':'tel-c-pas','sv-tel')
+        +'<input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="importerCaptureStats(this)">'
+        +'<button type="button" class="sv-tuile-go" onclick="this.previousElementSibling.click()">Envoyer une capture</button>'
+      +'</div>'
+    +'</div>'
+    +'<div class="sv-cadenas">'+SAN_ICO.cadenas+'<span>La capture est lue sur ton téléphone. Elle n\'est ni envoyée ni conservée.</span></div>'
+    +'<div class="sv-pied">'
+      +'<button type="button" class="san-src" onclick="sanChangerSource(\''+quoi+'\')">Source : <strong>'+escapeHtml(src.lib)+'</strong></button>'
+      +'<span aria-hidden="true">·</span>'
+      +'<button type="button" class="san-src" onclick="sanAide(\''+quoi+'\')">Où trouver '+(nuit?'mon sommeil':'mes pas')+' ?</button>'
+    +'</div>'
+    +'</div>';
 }
 function _htmlCarteSante(u,quoi){
+  const nuit=(quoi==='sommeil');
   const r=sanResume(u,_sanOffset);
-  const bloc=quoi==='sommeil'?r.sommeil:r.pas;
-  const fmt=quoi==='sommeil'?sanHM:sanNb;
-  const serie=r.jours.map(j=>({iso:j.iso,d:j.d,
-    v:quoi==='sommeil'?sanSommeilMin(u,j.iso):sanPas(u,j.iso)}));
-  const titre=quoi==='sommeil'?'Sommeil':'Pas';
-  const src=sanSource(u,quoi);
-  const p0=r.jours[0].d,p6=r.jours[6].d;
-  const libPer=_sanOffset===0?'7 derniers jours'
-    :(p0.getDate()+' '+p0.toLocaleDateString('fr-FR',{month:'short'})+' au '
-      +p6.getDate()+' '+p6.toLocaleDateString('fr-FR',{month:'short'}));
-  const ecart=bloc.ecart==null?''
-    :'<div class="san-ecart '+(bloc.ecart>=0?'pos':'neg')+'">'
-      +(quoi==='sommeil'?sanHMSigne(bloc.ecart)+' / nuit'
-        :(bloc.ecart>0?'+':'−')+sanNb(Math.abs(bloc.ecart))+' / jour')+'</div>';
-  return '<section class="san-carte'+(quoi==='sommeil'?' san-nuit':'')+'">'
-    +'<div class="san-tete">'
-      +'<span class="san-ico">'+(quoi==='sommeil'?_sanIcoLune():_sanIcoPas())+'</span>'
-      +'<h2 class="san-t">'+titre+'</h2></div>'
-    // ⚠ UN GRAPHIQUE PAR SUIVI, ET CHACUN CHEZ LUI. Le 14/09/2026 les deux
-    // semaines avaient ete reunies sur un axe de jours commun, au-dessus des
-    // cartes. Kevin, le 15 : « je veux pour les pas et sommeil un graphique
-    // different, pas sur le meme. 1 graphique = un suivi ». On revient donc a
-    // la disposition d'avant, carte par carte, navigation comprise — ce qui a
-    // ete AJOUTE depuis reste : les faits du domaine, le rattrapage, l'aide et
-    // la source.
-    +'<div class="san-nav">'
-      +'<button type="button" class="san-nav-b" onclick="sanPeriode(-1)" aria-label="Période précédente">‹</button>'
-      +'<span class="san-per">'+escapeHtml(libPer)+'</span>'
-      +'<button type="button" class="san-nav-b" onclick="sanPeriode(1)" aria-label="Période suivante"'
-        +(_sanOffset>=0?' disabled':'')+'>›</button>'
-    +'</div>'
-    +(_sanOffset!==0?'<button type="button" class="san-auj" onclick="sanPeriode(0,true)">Aujourd\'hui</button>':'')
-    +_sanGraph(quoi,serie,bloc.objectif,fmt)
-    +'<div class="san-chiffres">'
-      +'<div><div class="san-lbl">Moyenne</div><div class="san-val">'
-        +(bloc.moy==null?'—':escapeHtml(fmt(bloc.moy)))+'</div></div>'
-      +'<div><div class="san-lbl">Objectif</div><div class="san-val">'+escapeHtml(fmt(bloc.objectif))+'</div></div>'
-    +'</div>'
-    +ecart
-    +'<div class="san-resume">'+bloc.renseignes+'/7 jour'+(bloc.renseignes>1?'s':'')+' renseigné'
-      +(bloc.renseignes>1?'s':'')+' · '+bloc.atteints+'/7 dans l\'objectif</div>'
-    +_htmlFaitsSante(u,quoi)
+  const bloc=nuit?r.sommeil:r.pas;
+  const fmt=nuit?sanHM:sanNb;
+  const serie=r.jours.map(j=>({iso:j.iso,d:j.d,v:nuit?sanSommeilMin(u,j.iso):sanPas(u,j.iso)}));
+  // Les couleurs du domaine, posees une fois sur la carte : #e02020 pour les
+  // pas, #60a5fa pour le sommeil. Tout le reste en derive.
+  return '<section class="san-carte sv-carte" data-quoi="'+(nuit?'sommeil':'pas')+'"'
+    +' style="--sv-c:'+(nuit?'#60a5fa':'#e02020')+'">'
+    +'<div class="sv-bloc sv-g">'+_svEnTete(quoi,r,bloc,fmt)+_sanGraphe(quoi,serie,bloc.objectif,fmt)+'</div>'
+    +'<div class="sv-duo">'+_svMoyenne(quoi,bloc,fmt)+_svProgression(quoi,r,bloc)+'</div>'
+    +(nuit?_svDette(u):'')
     +_htmlRattraper(u,quoi)
     +'<div class="san-actions">'
-      +'<button type="button" class="btn btn-red btn-sm san-a1" onclick="sanSaisir(\''+quoi+'\')">'
-        +'Ajouter / modifier mes données</button>'
-      +'<button type="button" class="btn btn-outline btn-sm san-a2" onclick="sanAide(\''+quoi+'\')">'
-        +'Où trouver '+(quoi==='sommeil'?'mon sommeil':'mes pas')+' ?</button>'
+      +'<button type="button" class="btn btn-red san-a1 sv-saisir" onclick="sanSaisir(\''+quoi+'\')">'
+        +SAN_ICO.crayon+'<span>Ajouter / modifier mes données</span>'+SAN_ICO.droite+'</button>'
     +'</div>'
-    // R22 — L'IMPORT PAR CAPTURE, JUSTE SOUS LA SAISIE, comme alternative. Il
-    // etait en tete de Lifestyle ; la saisie manuelle redevient le chemin
-    // principal, et chaque carte porte le sien.
-    +_htmlCadreImportCapture(quoi,{alternative:true})
-    +'<button type="button" class="san-src" onclick="sanChangerSource(\''+quoi+'\')">'
-      +'Source : <strong>'+escapeHtml(src.lib)+'</strong></button>'
+    +'<div class="sv-ou" aria-hidden="true"><span>ou</span></div>'
+    +_svMethodes(u,quoi)
     +'</section>';
 }
-function _sanIcoLune(){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 019.5 4 8.5 8.5 0 1020 14.5z"/></svg>'; }
-function _sanIcoPas(){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18c-1.5 0-2.5-1-2.5-2.5S6 12 6 10c0-2.5 1-4 2.5-4S11 7.5 11 10c0 2 1 3 1 5.5S9 18 7 18z"/><path d="M17 21c-1.2 0-2-.8-2-2s1-2.5 1-4c0-2 .8-3 2-3s2 1.2 2 3c0 1.5-.8 2.5-.8 4S18.2 21 17 21z"/></svg>'; }
+// LE MENU DE PERIODE, dans l'en-tete de chaque section. Douze semaines en
+// arriere, comme les fleches permettaient ; on ne consulte pas l'avenir.
+function _htmlSanPeriode(quoi){
+  let o='';
+  for(let k=0;k>=-11;k--){
+    const lib=k===0?'7 derniers jours':(k===-1?'Semaine précédente':('Il y a '+(-k)+' semaines'));
+    o+='<option value="'+k+'"'+(k===_sanOffset?' selected':'')+'>'+lib+'</option>';
+  }
+  return '<label class="san-per-sel">'+SAN_ICO.calendrier
+    +'<select onchange="sanPeriodeChoisir(this.value)" aria-label="Période affichée">'+o+'</select>'
+    +SAN_ICO.bas+'</label>';
+}
+function sanPeriodeChoisir(v){
+  const n=Math.round(Number(v));
+  _sanOffset=(isFinite(n)&&n<=0)?n:0;
+  sanRendre();
+}
+// L'OBJECTIF QUOTIDIEN, AU CRAYON DE L'EN-TETE. Verrouille par le coach, il se
+// lit sans se changer — et le dit, plutot qu'un bouton qui ne fait rien.
+function sanObjectif(quoi){
+  const u=currentUser;
+  if(sanVerrouille(u)){ toast('Ton coach a fixé cet objectif.'); return; }
+  const corps=quoi==='sommeil'
+    ?'<label class="san-lab">Objectif de sommeil</label>'
+      +'<input id="san-obj" inputmode="text" placeholder="8h00" value="'+escapeHtml(sanHM(sanObjSommeil(u)))+'">'
+      +'<div class="san-aide">« 8h », « 7h30 » ou « 450 » minutes.</div>'
+    :'<label class="san-lab">Jour d’entraînement</label>'
+      +'<input id="san-obj" inputmode="numeric" placeholder="10000" value="'+sanObjPas(u)+'">'
+      +'<label class="san-lab">Jour de repos</label>'
+      +'<input id="san-obj-off" inputmode="numeric" placeholder="7000" value="'
+        +escapeHtml(String(((u.stepsGoals||STEPS_GOALS_DEFAUT||{}).off)||''))+'">';
+  _sanFeuille(quoi==='sommeil'?'Mon objectif de sommeil':'Mon objectif de pas',
+    corps+'<button type="button" class="btn btn-red" style="width:100%;margin:14px 0 0" '
+      +'onclick="sanObjectifEnregistrer(\''+quoi+'\')">Enregistrer</button>');
+}
+function sanObjectifEnregistrer(quoi){
+  const u=currentUser;
+  if(sanVerrouille(u)) return;
+  // UN OBJECTIF DE PAS OU DE SOMMEIL EST UNE DONNEE DE SANTE (CHAMPS_SANTE) :
+  // meme porte que la saisie du jour.
+  if(!demanderConsentementSante(quoi==='sommeil'?'sommeil':'pas',()=>sanObjectifEnregistrer(quoi))) return;
+  const v=(document.getElementById('san-obj')||{}).value||'';
+  if(quoi==='sommeil'){
+    const m=sanLireDuree(v);
+    if(m==null||m<240||m>720){ toast('Un objectif entre 4h et 12h'); return; }
+    u.sleepGoal=m;
+  } else {
+    const on=sanLirePas(v);
+    const off=sanLirePas((document.getElementById('san-obj-off')||{}).value||'');
+    if(on==null||on<500||on>60000){ toast('Un objectif entre 500 et 60 000 pas'); return; }
+    u.stepsGoals=Object.assign({},u.stepsGoals||{},{on:on},(off!=null&&off>=500&&off<=60000)?{off:off}:{});
+  }
+  toastEcriture(saveUser(),'Objectif enregistré ✓','l’objectif est');
+  sanFermer();
+  sanRendre();
+}
 function sanPeriode(sens,auj){
   if(auj) _sanOffset=0;
   else{
@@ -91705,6 +91819,11 @@ function sanRendre(){
   // loadLifestyle, s'il joue, rend donc loadSteps/loadSleep AVEC leur import.
   try{ if(zs) zs.innerHTML=_htmlCarteSante(u,'sommeil'); }catch(e){ if(zs) zs.innerHTML=''; }
   try{ if(zp) zp.innerHTML=_htmlCarteSante(u,'pas'); }catch(e){ if(zp) zp.innerHTML=''; }
+  // LE MENU DE PERIODE VIT DANS L'EN-TETE DE SECTION, a droite du titre,
+  // comme sur la maquette : un par section, et les deux suivent _sanOffset.
+  for(const q of ['pas','sommeil']){
+    try{ const zm=document.getElementById('ls-per-'+q); if(zm) zm.innerHTML=_htmlSanPeriode(q); }catch(e){}
+  }
   try{ const zh=document.getElementById('lifestyle-habitudes');
        if(zh) zh.innerHTML=htmlHabitudes(u,{taux:true}); }catch(e){
        const zh=document.getElementById('lifestyle-habitudes'); if(zh) zh.innerHTML=''; }

@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1515';
+window.RC_BUILD='1516';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -403,7 +403,7 @@ if('serviceWorker' in navigator){
 /* Repli COMPLET, pour un navigateur sans woff2 ou un fichier manquant. */
 :root{--pile-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans',sans-serif;--pile-titre:'Bebas Neue','Arial Narrow','Haettenschweiler','Franklin Gothic Condensed',Impact,sans-serif}
 </style>
-<link rel="stylesheet" href="./rc-style.1515.css">
+<link rel="stylesheet" href="./rc-style.1516.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -5249,18 +5249,22 @@ const COACH_PHOTO='icons/coach.jpg';
            de nouveau affichees en entier, l une sous l autre. -->
       <section id="ls-pas" class="ls-sec">
       <div class="ls-sec-tete">
-        <div style="width:3px;height:22px;background:var(--red);border-radius:var(--r-1);box-shadow:0 0 10px rgba(224,32,32,.9)"></div>
-        <span style="display:inline-flex;color:#ff3b30;filter:drop-shadow(0 0 6px rgba(224,32,32,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M2 17h18a2 2 0 0 0 2-2c0-1.6-1.2-2.3-2.8-2.9l-4.4-1.7a3 3 0 0 1-1.3-1L11.6 6.4a1.4 1.4 0 0 0-2.2-.2L7.6 8.1 2 8.1z"/><path d="M2 17v2h20v-2"/></svg></span>
-        <span style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:3px;color:var(--red-text);text-transform:uppercase;--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)">MES PAS</span>
+        <!-- LES EN-TETES DE LA MAQUETTE (Kevin, 24/09/2026) : un trait, le
+             titre en deux couleurs, une ligne espacee dessous, et le menu de
+             periode a droite — sanRendre le pose dans #ls-per-pas. -->
+        <div class="ls-trait" style="background:var(--red);box-shadow:0 0 12px rgba(224,32,32,.9)"></div>
+        <div class="ls-titres"><span class="ls-titre">MES <span style="color:#ff2d2d">PAS</span></span><span class="ls-sous">Suivi quotidien</span></div>
+        <div class="ls-per" id="ls-per-pas"></div>
       </div>
       <div id="lifestyle-steps-content"></div>
       </section>
       <div class="divider ls-sep"></div>
       <section id="ls-sommeil" class="ls-sec">
       <div class="ls-sec-tete">
-        <div style="width:3px;height:22px;background:#60a5fa;border-radius:var(--r-1);box-shadow:0 0 10px rgba(96,165,250,.9)"></div>
-        <span style="display:inline-flex;color:#60a5fa;filter:drop-shadow(0 0 6px rgba(96,165,250,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>
-        <span style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:3px;color:var(--text);text-transform:uppercase;text-shadow:var(--halo-2)">MON SOMMEIL</span>
+        <div class="ls-trait" style="background:#3b82f6;box-shadow:0 0 12px rgba(59,130,246,.9)"></div>
+        <span class="ls-lune" style="color:#4f8ff7;filter:drop-shadow(0 0 8px rgba(79,143,247,.8))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>
+        <div class="ls-titres"><span class="ls-titre">MON <span style="color:#4f8ff7">SOMMEIL</span></span><span class="ls-sous">Récupération &amp; repos</span></div>
+        <div class="ls-per" id="ls-per-sommeil"></div>
       </div>
       <div id="lifestyle-sleep-content"></div>
       </section>
@@ -5631,5 +5635,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1515.js"></script>
+<script src="./rc-core.1516.js"></script>
 </body></html>

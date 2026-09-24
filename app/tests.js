@@ -54424,6 +54424,8 @@ async function testExercices(){
     // ══ 17/09/2026 — R22 : TROIS FONCTIONS MIEUX EXPOSÉES ═════════════════
 
     ok('R22 — l’import par capture est l’alternative JUSTE SOUS la saisie, dans chaque carte',(()=>{
+      // Maquettes de Kevin, 24/09/2026 : la saisie, puis « ou », puis les deux
+      // methodes — a la main, ou par une capture.
       const u={stepsGoals:{on:10000,off:7000},sleepGoal:480,stepsLog:[],sleepLog:[]};
       const sU=currentUser;
       try{
@@ -54433,20 +54435,21 @@ async function testExercices(){
           const actions=d.querySelector('.san-actions');
           const imp=d.querySelector('.san-import');
           if(!actions||!imp) return _echec(quoi+' : saisie ou import absent');
-          // SOUS la saisie, et juste sous : le bloc suivant les actions.
-          if(actions.nextElementSibling!==imp) return _echec(quoi+' : l’import ne suit pas directement la saisie');
-          if(!/^ou importe une capture d'écran de ton application de santé$/.test(imp.firstElementChild.textContent.trim()))
-            return _echec(quoi+' : « '+imp.firstElementChild.textContent.trim()+' »');
+          const ou=actions.nextElementSibling;
+          if(!ou||!ou.classList.contains('sv-ou')||ou.nextElementSibling!==imp)
+            return _echec(quoi+' : l’import ne suit pas la saisie, derrière son « ou »');
           const inp=imp.querySelector('input[type="file"]');
           if(!inp||inp.getAttribute('onchange')!=='importerCaptureStats(this)') return _echec(quoi+' : le champ n’appelle plus importerCaptureStats');
-          // Le gestionnaire retrouve son bouton par nextElementSibling.
-          if(!inp.nextElementSibling||inp.nextElementSibling.tagName!=='BUTTON') return _echec(quoi+' : le bouton ne suit plus le champ');
+          // Le gestionnaire retrouve son bouton par nextElementSibling, et y
+          // ecrit par textContent : le bouton ne porte que du texte.
+          const b=inp.nextElementSibling;
+          if(!b||b.tagName!=='BUTTON') return _echec(quoi+' : le bouton ne suit plus le champ');
+          if(b.children.length) return _echec(quoi+' : le bouton de la capture porte du balisage');
           if(!/ni envoyée ni conservée/.test(imp.textContent)) return _echec(quoi+' : la phrase de confidentialité a disparu');
-          // La saisie manuelle reste le bouton principal ; l'import est secondaire.
-          if(!d.querySelector('.san-a1.btn-red')||inp.nextElementSibling.classList.contains('btn-red')) return _echec(quoi+' : l’import a pris la place du chemin principal');
+          if(!/Saisie manuelle/.test(imp.textContent)) return _echec(quoi+' : la saisie manuelle n’est plus proposée');
+          if(!d.querySelector('.san-a1.btn-red')||b.classList.contains('btn-red')) return _echec(quoi+' : l’import a pris la place du chemin principal');
         }
       } finally { currentUser=sU; }
-      // Plus de cadre d'import en tête de Lifestyle.
       if(document.getElementById('lifestyle-import')) return _echec('le cadre de tête de Lifestyle est toujours là');
       return true;})());
 
@@ -67203,7 +67206,7 @@ vendredi 78 6h 44m
         const u={stepsLog:[{date:iso(j-1*864e5),count:9000}],sleepLog:[]};
         const h=_htmlRattraper(u,'pas');
         if(!/6 jours sans données/.test(h)) return _echec('le compte manque : '+h.replace(/<[^>]*>/g,' ').slice(0,120));
-        return /on commence par/.test(h)
+        return /on commence par/i.test(h)
           ?true:_echec('le premier jour n\'est pas nommé');})());
       ok('La lecture croisee MONTRE ses appuis, et ne montre pas de score',(()=>{
         // C'est tout le grief : l'athlete lisait la phrase sans jamais savoir
@@ -67566,22 +67569,19 @@ vendredi 78 6h 44m
             ?true:_echec('une date illisible rend une valeur');})());
 
         // ── Les faits de domaine, rendus ────────────────────────────────
-        ok('Chaque fait dit SUR COMBIEN DE NUITS il porte',(()=>{
+        ok('La dette dit SUR COMBIEN DE NUITS elle porte',(()=>{
           // Une dette calculee sur deux nuits presentee comme hebdomadaire
           // serait un chiffre faux affiche avec aplomb.
           const u={sleepGoal:480,sleepLog:[
             {date:iso(j-864e5),duration:6,bed:'23:00'},
             {date:iso(j-2*864e5),duration:6,bed:'23:40'}]};
-          const h=_htmlFaitsSante(u,'sommeil');
-          if(!/Régularité des couchers/.test(h)) return _echec('la regularite manque');
-          if(!/Dette de la semaine/.test(h)) return _echec('la dette manque');
+          const h=_svDette(u);
+          if(!/Dette de sommeil/.test(h)) return _echec('la dette manque');
           return /sur 2 nuits renseignées/.test(h)
             ?true:_echec('le nombre de nuits n\'est pas dit : '+h.replace(/<[^>]*>/g,' ').slice(0,160));})());
-        ok('Sous deux couchers, la regularite se TAIT plutot que d\'afficher zero',(()=>{
-          const u={sleepGoal:480,sleepLog:[{date:iso(j-864e5),duration:7,bed:'23:00'}]};
-          const h=_htmlFaitsSante(u,'sommeil');
-          return !/Régularité/.test(h)
-            ?true:_echec('« ± 0 min » est affiche sur une nuit unique');})());
+        ok('Sans nuit renseignée, la carte de dette ne sort pas',(()=>{
+          return _svDette({sleepGoal:480,sleepLog:[]})===''
+            ?true:_echec('une dette est affichée sans une seule nuit');})());
       } finally { currentUser=_sU; }
     })();
 
@@ -67597,10 +67597,6 @@ vendredi 78 6h 44m
       const _sU=currentUser;
       try{
         const j=Date.now(), iso=d=>localISODate(new Date(d));
-        // DEUX NUITS HORODATEES AU MINIMUM : sous deux couchers,
-        // regulariteCoucher rend null a dessein — « ± 0 min » sur une nuit
-        // unique dirait « parfaitement regulier », le contraire de ce qu'on
-        // sait. Et un jour vide, pour que « Rattraper » ait lieu d'etre.
         const u={stepsGoals:{on:10000,off:7000},sleepGoal:480,
           stepsLog:[{date:iso(j-864e5),count:12000}],
           sleepLog:[{date:iso(j-864e5),duration:9,bed:'23:00'},
@@ -67611,38 +67607,39 @@ vendredi 78 6h 44m
         // UN GRAPHE PAR CARTE, ET UN SEUL.
         if(p.querySelectorAll('.san-graph').length!==1) return _echec('la carte Pas n\'a pas son graphe');
         if(s.querySelectorAll('.san-graph').length!==1) return _echec('la carte Sommeil n\'a pas son graphe');
-        // ET SA PROPRE NAVIGATION : c'est la disposition d'avant, rendue.
-        if(!p.querySelector('.san-nav')||!s.querySelector('.san-nav'))
-          return _echec('une carte a perdu ses fleches de periode');
-        // AUCUN AXE PARTAGE NE SUBSISTE.
+        // LE MENU DE PERIODE, DANS L'EN-TETE DE CHAQUE SECTION (maquettes du
+        // 24/09/2026) : sanRendre le pose, et il mene a douze semaines.
+        for(const q of ['pas','sommeil']){
+          if(!document.getElementById('ls-per-'+q)) return _echec('l’en-tête '+q+' n’a plus de place pour sa période');
+          const x=document.createElement('div'); x.innerHTML=_htmlSanPeriode(q);
+          const sel=x.querySelector('select');
+          if(!sel||sel.options.length!==12||sel.getAttribute('onchange')!=='sanPeriodeChoisir(this.value)')
+            return _echec('le menu de période de '+q+' est incomplet');
+        }
         if(typeof _htmlSemaineSante!=='undefined'||typeof _htmlPisteSante!=='undefined')
           return _echec('la figure a axe commun est de retour');
         if(document.getElementById('lifestyle-semaine'))
           return _echec('le porteur de la figure commune survit dans le balisage');
-        // UNE COULEUR, UN SENS : la nuit reussie reste bleue, le jour rouge.
-        const bleu=s.innerHTML.indexOf('#60a5fa')>=0, rouge=p.innerHTML.indexOf('#e02020')>=0;
-        if(!bleu) return _echec('la nuit atteinte n\'est pas bleue');
-        if(!rouge) return _echec('le jour atteint n\'est pas rouge');
-        // ET CE QUI A ETE AJOUTE RESTE : faits du domaine, rattrapage, aide,
-        // source. C'est la demande exacte : l'ancienne mise en page, plus ca.
+        // LA COULEUR DU DOMAINE : bleu pour le sommeil, rouge pour les pas.
+        if(s.innerHTML.indexOf('#60a5fa')<0) return _echec('le sommeil a perdu son bleu');
+        if(p.innerHTML.indexOf('#e02020')<0) return _echec('les pas ont perdu leur rouge');
+        // CE QUI RESTE : la dette, le rattrapage, l'aide, la source.
         const manque=[];
-        if(!/Régularité des couchers/.test(s.innerHTML)) manque.push('la régularité');
-        if(!/Dette de la semaine/.test(s.innerHTML)) manque.push('la dette');
-        if(!/Série en cours/.test(p.innerHTML)) manque.push('la série');
+        if(!/Dette de sommeil/.test(s.innerHTML)) manque.push('la dette');
         if(!/Où trouver/.test(p.innerHTML)) manque.push('« où trouver »');
         if(!/san-src/.test(p.innerHTML)) manque.push('la source');
         if(!/san-rattrap/.test(p.innerHTML)) manque.push('« rattraper »');
         return manque.length?_echec('perdu au passage : '+manque.join(', ')):true;
       } finally { currentUser=_sU; }})());
-    ok('Les fleches de periode tiennent la cible de 44 px',(()=>{
-      // Ce sont les seules commandes de navigation de l'ecran : les rater au
-      // doigt, c'est ne pas pouvoir consulter la semaine passee du tout.
+    ok('Le menu de période et le crayon de l’objectif tiennent la cible de 44 px',(()=>{
       const css=_stylesProd().map(x=>x.textContent).join('\n');
-      const m=css.match(/\.san-nav-b\{([^}]*)\}/);
-      if(!m) return _echec('regle .san-nav-b introuvable');
-      const w=(m[1].match(/min-width:(\d+)px/)||[])[1];
-      const h=(m[1].match(/min-height:(\d+)px/)||[])[1];
-      return (Number(w)>=44&&Number(h)>=44)?true:_echec('cible '+w+'×'+h+' px');})());
+      const m=css.match(/\.san-per-sel\{([^}]*)\}/);
+      if(!m) return _echec('regle .san-per-sel introuvable');
+      if(Number((m[1].match(/min-height:(\d+)px/)||[])[1])<44) return _echec('le menu fait moins de 44 px');
+      const e=css.match(/\.sv-g-edit\{([^}]*)\}/);
+      if(!e) return _echec('regle .sv-g-edit introuvable');
+      const w=(e[1].match(/width:(\d+)px/)||[])[1], h=(e[1].match(/height:(\d+)px/)||[])[1];
+      return (Number(w)>=44&&Number(h)>=44)?true:_echec('crayon '+w+'×'+h+' px');})());
 
 
     // ── Le cadre d'import est LA, et une seule fois — 6 cas ──
