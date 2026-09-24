@@ -2515,13 +2515,17 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    Sur une fiche large : quatre cartes sur une ligne, le graphe, puis trois
    colonnes. Plus etroit, les cartes passent deux par deux et les trois
    colonnes s'empilent. */
-.cso{container-type:inline-size;container-name:cso;display:flex;flex-direction:column;gap:14px;margin-bottom:20px}
+.cso{container-type:inline-size;container-name:cso;display:flex;flex-direction:column;gap:14px;margin-bottom:28px}
 .cso-carte{position:relative;border-radius:14px;border:1px solid #26262b;background:linear-gradient(180deg,#141417,#0c0c0e);padding:16px}
 .cso h3,.cso h4{margin:0;font-weight:400}
 .cso-tete{display:flex;align-items:center;gap:16px;padding:12px 16px}
 .cso-t-ico{width:64px;height:64px;flex-shrink:0;border-radius:12px;display:flex;align-items:center;justify-content:center;
   color:#ff3b3b;background:linear-gradient(160deg,#5a0b0b,#260404);border:1px solid rgba(224,32,32,.45)}
 .cso-t-ico svg{width:34px;height:34px}
+/* LA LUNE EN BLEU (Kevin, 24/09/2026) : le sommeil garde sa couleur, celle de
+   l'ecran de l'athlete. Les pas restent rouges. */
+.cso[data-quoi="sommeil"] .cso-t-ico{color:#60a5fa;background:linear-gradient(160deg,#10275a,#07122b);
+  border-color:rgba(96,165,250,.5);box-shadow:0 0 16px rgba(59,130,246,.25)}
 .cso-t-c{flex:1;min-width:0}
 .cso-t-c h3{font-family:var(--pile-titre);font-size:clamp(30px,4vw,42px);letter-spacing:1px;color:#fff;text-transform:uppercase;line-height:1}
 .cso-t-c span{font-size:var(--fs-sm);color:#b4b4bb}
@@ -2543,7 +2547,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .cso-k-ico svg{width:30px;height:30px}
 .cso-k-l{font-size:var(--fs-xs);color:#d4d4d8;letter-spacing:.8px;text-transform:uppercase;font-weight:600}
 .cso-k-v{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
-.cso-k-v strong{font-family:var(--pile-titre);font-weight:400;font-size:clamp(34px,4.6vw,52px);color:#fff;line-height:1;letter-spacing:.5px}
+.cso-k-v strong{white-space:nowrap;font-family:var(--pile-titre);font-weight:400;font-size:clamp(34px,4.6vw,52px);color:#fff;line-height:1;letter-spacing:.5px}
 .cso-k-v em{font-style:normal;font-family:var(--pile-titre);font-size:clamp(18px,2.2vw,24px);color:#ff4040}
 .cso-k-v em[data-sens="haut"]{color:#34e89e}
 .cso-k-s{font-size:var(--fs-xs);color:#b4b4bb;line-height:1.4}

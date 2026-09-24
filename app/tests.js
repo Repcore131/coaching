@@ -67485,25 +67485,21 @@ vendredi 78 6h 44m
       // total de la periode. Garder les deux, c'etait remplacer une duplication
       // par une autre — et celle que je venais d'ecrire etait la plus pauvre.
       // Ce qui reste a tenir, c'est qu'UN SUJET N'AIT QU'UNE SECTION.
-      ok('Un sujet, une section : la courbe vit avec sa moyenne',(()=>{
-        // DEUX SEMAINES DE DONNEES, sinon le delta vaut null et la ligne ne se
-        // rend pas : c'est le contrat de bilanDomaineCoach, pas un defaut.
+      ok('Un sujet, une section : le tableau de bord des pas porte sa courbe et sa tendance',(()=>{
+        // Maquette de Kevin, 24/09/2026 : les pas prennent le tableau de bord du
+        // sommeil. La courbe (7 jours, 28 jours, 3 mois) et la comparaison d'une
+        // semaine sur l'autre (la carte « Tendance ») vivent DANS la section.
         const p14=[],n14=[];
         for(let i=1;i<=14;i++){ p14.push({date:iso(j-i*864e5),count:9000});
           n14.push({date:iso(j-i*864e5),duration:7,bed:'23:00'}); }
         const u=ath(p14,n14);
         const h=_htmlPasCoach(u);
-        // La courbe de periode est DANS la section « Pas », plus dans un
-        // conteneur a part pose sous les habitudes.
-        if(h.indexOf('ccdLifePeriode')<0) return _echec('la courbe n\'a pas rejoint la section');
-        if(h.indexOf('7 j vs 7 j')<0) return _echec('la comparaison hebdo a disparu');
-        // ET LE CONTENEUR SEPARE N'EXISTE PLUS : un identifiant qui ne designe
-        // plus rien survit indefiniment, et le prochain lecteur le croit vivant.
+        for(const m of ['Nombre de pas','28 jours','3 mois','Tendance','Moyenne 14 jours','Objectif'])
+          if(h.indexOf(m)<0) return _echec('absent : '+m);
         if(document.getElementById('ccd-life-graphes'))
           return _echec('#ccd-life-graphes survit dans le balisage');
-        // La sparkline, elle, est bien partie.
-        return typeof _sparklineCoach==='undefined'
-          ?true:_echec('deux graphiques cohabitent encore');})());
+        return (typeof _sparklineCoach==='undefined'&&typeof _htmlCcdLifeUn==='undefined')
+          ?true:_echec('un ancien graphique cohabite encore');})());
       // ⚠ LE RESUME « SOMMEIL ET PAS » EST PARTI (maquette de Kevin, 24/09/2026) :
       //   le tableau de bord du sommeil le remplace, avec la section « Sommeil ».
       ok('Le tableau de bord du sommeil ouvre l’onglet Lifestyle',(()=>{

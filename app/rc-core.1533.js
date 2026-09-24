@@ -23330,7 +23330,6 @@ function openClientDetail(cid,_refresh,_force){
       :'';
   }catch(e){}
   try{ renderHabitudesCoach(c); }catch(e){}
-  try{ renderLifestyleGraphesCoach(c); }catch(e){}
   try{ _ccdBilCalReset(); renderCalendrierBilansCoach(c); }catch(e){}
   try{ renderRedsCoach(c); }catch(e){}
   try{ renderPostPartumCoach(c); }catch(e){}
@@ -59530,143 +59529,6 @@ function renderHabitudesCoach(c){
   let h=''; try{ h=c?htmlHabitudesCoach(c):''; }catch(e){ h=''; }
   z.innerHTML=h;
 }
-// ── LIFESTYLE COACH : LA FORME, PAS SEULEMENT LA MOYENNE ────────────────
-// Les deux sections « Sommeil » et « Pas » de cet onglet rendent une phrase :
-// « moyenne 14 jours ». C'est vrai et c'est insuffisant. Trois nuits a cinq
-// heures suivies de quatre a huit donnent la meme moyenne qu'une semaine
-// reguliere, et ce n'est pas la meme personne en face. Le coach a besoin de
-// voir la SUITE des jours avant de toucher a une charge.
-//
-// On reprend donc les barres de l'ecran Lifestyle de l'athlete, cote a cote
-// sous les habitudes, avec le choix de la periode. AUCUNE SAISIE ici : le
-// coach lit. Corriger la nuit de quelqu'un d'autre n'a pas de sens, et la
-// saisie est ce qui rend loadSteps/loadSleep inutilisables telles quelles —
-// elles lisent currentUser, qui est le coach sur cet ecran, pas l'athlete.
-const _CCD_LIFE_PERIODES=[7,14,30,90];
-const _ccdLifePer={pas:7,sommeil:7};
-// LES TROUS RESTENT DES TROUS. On parcourt les N derniers jours de calendrier
-// plutot que les seules entrees du journal : une semaine a trois relevés doit
-// se voir comme une semaine a trois relevés, pas comme une semaine pleine.
-function _ccdLifeSerie(log,jours,lire){
-  const par={};
-  (Array.isArray(log)?log:[]).forEach(e=>{ if(e&&e.date) par[e.date]=e; });
-  const auj=new Date(),out=[];
-  for(let i=jours-1;i>=0;i--){
-    const d=new Date(auj.getFullYear(),auj.getMonth(),auj.getDate()-i);
-    const iso=localISODate(d),e=par[iso];
-    let v=null;
-    if(e){ try{ v=lire(e); }catch(_){ v=null; } }
-    out.push({date:iso,jour:d,val:(typeof v==='number'&&isFinite(v))?v:null});
-  }
-  return out;
-}
-function _ccdLifeJJMM(d){
-  return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0');
-}
-// La carte : titre, periode, chiffre de tete, barres. Une seule fonction pour
-// les deux colonnes — ce qui les distingue tient dans la couleur d'une barre
-// et dans l'unite, pas dans la structure.
-function _htmlCcdLifeCarte(o){
-  const s=o.serie,avec=s.filter(x=>x.val!=null);
-  const max=Math.max(...s.map(x=>x.val||0),o.plancher||1);
-  // Au-dela de 30 jours les barres tombent sous deux pixels : l'ecart entre
-  // elles mange le graphe au lieu de le lire.
-  const ecart=s.length>30?1:2;
-  const barres=s.map(x=>{
-    const pct=x.val?Math.max(4,Math.round(x.val/max*100)):3;
-    const col=x.val?o.couleur(x.val,x):'var(--border)';
-    return '<div title="'+_ccdLifeJJMM(x.jour)+(x.val!=null?' — '+o.format(x.val):' — non renseigné')+'"'
-      +' style="flex:1;min-width:2px;display:flex;align-items:flex-end;height:100%">'
-      +'<div style="width:100%;height:'+pct+'%;background:'+col+';border-radius:2px 2px 0 0"></div></div>';
-  }).join('');
-  const opts=_CCD_LIFE_PERIODES.map(n=>'<option value="'+n+'"'+(n===o.periode?' selected':'')+'>'+n+' jours</option>').join('');
-  return '<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">'
-    +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px">'
-      +'<span style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase">'+escapeHtml(o.titre)+'</span>'
-      +'<select aria-label="Période affichée" onchange="ccdLifePeriode(\''+o.cle+'\',this.value)"'
-        +' style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-size:var(--fs-2xs);padding:4px 6px">'
-        +opts+'</select>'
-    +'</div>'
-    +(avec.length
-      ? '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:10px">'
-          +'<span style="font-size:var(--fs-lg);font-weight:900;color:var(--text-strong)">'+escapeHtml(o.tete)+'</span>'
-          +'<span style="font-size:var(--fs-2xs);color:var(--text-dim)">'+escapeHtml(o.sousTete)+'</span>'
-        +'</div>'
-        +'<div style="display:flex;align-items:flex-end;gap:'+ecart+'px;height:74px">'+barres+'</div>'
-        +'<div style="display:flex;justify-content:space-between;font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px">'
-          +'<span>'+_ccdLifeJJMM(s[0].jour)+'</span><span>'+_ccdLifeJJMM(s[s.length-1].jour)+'</span></div>'
-        +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">'+avec.length+' jour'+(avec.length>1?'s':'')+' renseigné'+(avec.length>1?'s':'')+' sur '+s.length+'</div>'
-      : '<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;padding:6px 0">Rien de saisi sur cette période.</div>')
-    +'</div>';
-}
-// ⚠ SCINDEE PAR DOMAINE LE 14/09/2026. Les deux cartes vivaient cote a cote
-// dans #ccd-life-graphes, SOUS les sections « Sommeil » et « Pas » qui disaient
-// deja une moyenne du meme domaine : l'onglet portait donc trois lectures
-// voisines du sommeil et trois des pas, a trois endroits. Chaque courbe rejoint
-// la section de son domaine ; #ccd-life-graphes disparait.
-function _htmlCcdLifeUn(c,quoi){
-  if(!c) return '';
-  const nb=n=>Number(n).toLocaleString('fr-FR');
-  if(quoi==='pas'){
-  const jp=_ccdLifePer.pas;
-  const sp=_ccdLifeSerie(c.stepsLog,jp,e=>Number(e.count));
-  const avecP=sp.filter(x=>x.val!=null);
-  const totalP=avecP.reduce((s,x)=>s+x.val,0);
-  const moyP=avecP.length?Math.round(totalP/avecP.length):0;
-  const buts=(c&&c.stepsGoals)||STEPS_GOALS_DEFAUT;
-  const types=(c&&c.stepsDayType)||{};
-  const carteP=_htmlCcdLifeCarte({
-    cle:'pas',titre:'Pas',periode:jp,serie:sp,plancher:1000,
-    tete:avecP.length?nb(totalP)+' pas':'—',
-    sousTete:avecP.length?('soit '+nb(moyP)+' / jour'):'',
-    format:v=>nb(v)+' pas',
-    couleur:(v,x)=>{
-      // Le vert n'est pas une opinion : c'est l'objectif du jour, ON ou OFF,
-      // tel que l'athlete l'a regle. Sans objectif lisible, on reste neutre
-      // plutot que d'inventer un seuil.
-      const but=_stepsObjectifJour(buts,types[x.date]??null,x.date);
-      if(!(but>0)) return 'var(--sub)';
-      if(v>=but) return '#22c55e';
-      if(v>=but*0.6) return '#f97316';
-      return '#E02020';
-    }
-  });
-  return carteP;
-  }
-  const js=_ccdLifePer.sommeil;
-  const ss=_ccdLifeSerie(c.sleepLog,js,e=>Number(e.duration));
-  const avecS=ss.filter(x=>x.val!=null);
-  const moyS=avecS.length?Math.round(avecS.reduce((s,x)=>s+x.val,0)/avecS.length*10)/10:0;
-  const hhmm=v=>{
-    const h=Math.floor(v),m=Math.round((v-h)*60);
-    return h+' h'+(m?' '+String(m).padStart(2,'0'):'');
-  };
-  const carteS=_htmlCcdLifeCarte({
-    cle:'sommeil',titre:'Sommeil',periode:js,serie:ss,plancher:8,
-    tete:avecS.length?hhmm(moyS):'—',
-    sousTete:avecS.length?'de moyenne par nuit':'',
-    format:v=>hhmm(v),
-    couleur:v=>sleepColor(v)
-  });
-  return carteS;
-}
-// Le changement de periode redessine les DEUX SECTIONS DE DOMAINE, puisque
-// c'est la qu'habitent desormais les courbes. Le nom ne bouge pas :
-// ccdLifePeriode l'appelle, et le renommer n'aurait rien clarifie.
-function renderLifestyleGraphesCoach(c){
-  try{ renderPasCoach(c); }catch(e){}
-  try{ renderSommeilCoach(c); }catch(e){}
-}
-// Le selecteur de periode. Il relit le dossier au lieu de garder celui du
-// premier rendu : une saisie de l'athlete arrivee entre-temps apparait alors
-// sans qu'on ait a rouvrir la fiche.
-function ccdLifePeriode(cle,v){
-  const n=parseInt(v,10);
-  if(_CCD_LIFE_PERIODES.indexOf(n)<0) return;
-  if(cle!=='pas'&&cle!=='sommeil') return;
-  _ccdLifePer[cle]=n;
-  renderLifestyleGraphesCoach(getOwnedClient(currentClientId));
-}
 // N3.2 — LE DOSSIER ENREGISTRE EST CELUI DE L'ATHLETE. getOwnedClient sans
 // second argument rend un objet DETACHE : DB.get reparse le JSON a chaque
 // appel. La mutation partait bien au serveur par pushOne, mais saveUser ne
@@ -88589,19 +88451,9 @@ function bilanDomaineCoach(u,quoi,jours){
     delta:(m0!=null&&m1!=null)?(m0-m1):null,
     dernier:der,depuis};
 }
-// ⚠ _sparklineCoach A ETE RETIREE LE MEME JOUR QU'ELLE EST NEE. Elle dessinait
-// 28 jours de forme, sans echelle ; la carte de _htmlCcdLifeUn, qui vit
-// maintenant dans la meme section, offre 7/14/30/90 jours, des barres colorees
-// par l'objectif DU JOUR et le total de la periode. Garder les deux, c'etait
-// remplacer une duplication par une autre — et celle que je venais d'ecrire
-// etait la plus pauvre des deux.
-function _ligneCoach(lib,val,note){
-  return '<div style="display:flex;justify-content:space-between;gap:12px;font-size:var(--fs-sm);'
-    +'color:var(--text-strong);line-height:1.9"><span style="color:var(--sub)">'+escapeHtml(lib)+'</span>'
-    +'<span style="font-weight:800">'+val
-    +(note?'<span style="color:var(--text-dim);font-weight:600"> · '+escapeHtml(note)+'</span>':'')
-    +'</span></div>';
-}
+// ⚠ LA SPARKLINE, PUIS LA CARTE DE PERIODE ET LES LIGNES « 7 j vs 7 j », SONT
+// PARTIES : le tableau de bord de chaque domaine (_htmlDomaineCoach) porte
+// maintenant la courbe sur 7 jours, 28 jours ou 3 mois, et la tendance.
 // LE SILENCE EST DIT, ET IL EST VISIBLE. C'est le point : un athlete muet
 // depuis dix jours ne doit pas ressembler a un athlete qui va bien.
 const COACH_SILENCE_JOURS=7;
@@ -88614,34 +88466,6 @@ function _htmlSilenceCoach(b,quoi){
   const lbl=new Date(b.dernier+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
   return '<div style="font-size:var(--fs-sm);color:var(--warning);line-height:1.6;font-weight:700;margin-bottom:6px">'
     +'Aucune donnée depuis le '+escapeHtml(lbl)+' ('+b.depuis+' jours).</div>';
-}
-// LA FORME, PAS SEULEMENT LA MOYENNE.
-//
-// LE TAUX DE RENSEIGNEMENT EST LA CHOSE LA PLUS IMPORTANTE DU BLOC : sans lui,
-// une moyenne calculee sur quatre jours se lit comme une moyenne sur vingt-huit.
-// Il vient donc en premier, avant les chiffres qu'il qualifie.
-function _htmlFormeCoach(bil,quoi,c){
-  const fmt=quoi==='sommeil'?sanHM:sanNb;
-  let h=_ligneCoach('Renseigné',bil.renseignes+'/'+bil.fenetre+' jours');
-  if(bil.delta!=null){
-    // SIGNE ET COULEUR : « +820 pas » ne veut rien dire sans dire par rapport
-    // a quoi, et les deux semaines se comparent chacune sur SES jours lus.
-    const signe=bil.delta>0?'+':bil.delta<0?'−':'';
-    const coul=bil.delta===0?'var(--text-dim)':(bil.delta>0?'#22c55e':'var(--warning)');
-    h+=_ligneCoach('7 j vs 7 j précédents',
-      '<span style="color:'+coul+'">'+signe+fmt(Math.abs(bil.delta))+'</span>',
-      'sur ce qui est renseigné');
-  }
-  if(quoi==='sommeil'){
-    // LA MEME FONCTION QUE L'ATHLETE, sur le meme dossier. Deux calculs de
-    // regularite donneraient deux chiffres, et le coach commenterait celui que
-    // son athlete ne voit pas.
-    const r=regulariteCoucher(c);
-    if(r) h+=_ligneCoach('Régularité des couchers',
-      '<span style="color:'+_teinteRegularite(r.ecart)+'">± '+r.ecart+' min</span>',
-      'coucher moyen '+_libHeure(r.moyenne)+' · '+r.n+' nuit'+(r.n>1?'s':''));
-  }
-  return h;
 }
 // LES OBJECTIFS DE PAS, POSABLES PAR LE COACH (4.3).
 //
@@ -88691,64 +88515,52 @@ function coachPoserObjectifsPas(){
   if(c.email) users[c.email]=c;
   const ok=DB.set('users',users);
   const envoi=CLOUD.pushOne(c.email,c);
+  try{ sanFermer(); }catch(e){}
   try{ renderPasCoach(c); }catch(e){}
   toastSync(ok,envoi,'Objectifs posés','l\'objectif est');
   return true;
 }
-// PURE. '' sans aucun jour de pas sur la fenêtre. moyennePas14j est employée
-// TELLE QUELLE : elle porte déjà sa fenêtre et son contrat de null.
-function _htmlPasCoach(c){
-  let m=null; try{ m=moyennePas14j(c); }catch(e){ m=null; }
-  const bil=bilanDomaineCoach(c,'pas',COACH_FENETRE_JOURS);
-  // Meme regle que le sommeil : le silence se dit, il ne se cache pas.
-  const silence=_htmlSilenceCoach(bil,'pas');
-  if(m==null&&!silence) return '';
-  // LE MÊME DÉFAUT QUE L’ATHLÈTE, et il est DIT. Masquer la ligne laissait
-  // croire qu’aucun objectif n’était fixé ; afficher le chiffre sans préciser
-  // d’où il vient remplacerait un silence trompeur par une affirmation
-  // trompeuse. Le coach doit pouvoir distinguer un objectif CHOISI d’un repli.
-  const _propres=!!(c&&c.stepsGoals);
-  const g=(c&&c.stepsGoals)||STEPS_GOALS_DEFAUT;
-  const on=Number(g&&g.on)>0?Number(g.on):null;
-  const off=Number(g&&g.off)>0?Number(g.off):null;
-  const nb=v=>Number(v).toLocaleString('fr-FR');
-  const _liste=[on!=null?nb(on)+' les jours ON':'',off!=null?nb(off)+' les jours OFF':'']
-    .filter(Boolean).join(' · ');
-  // Un dossier qui porte des objectifs à ZÉRO n’a rien à dire, et la ligne
-  // disparaît comme avant : c’est un choix explicite, pas une absence.
-  const obj=_liste?(_liste+(_propres?'':' (objectifs par défaut)')):'';
-  return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:8px">Pas</div>
-    ${silence}
-    ${m!=null?`<div style="display:flex;justify-content:space-between;gap:12px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.9"><span style="color:var(--sub)">Moyenne 14 jours</span><span style="font-weight:800">${nb(m)} pas</span></div>`:''}
-    ${obj?`<div style="display:flex;justify-content:space-between;gap:12px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.9"><span style="color:var(--sub)">Objectif</span><span style="font-weight:800">${escapeHtml(obj)}</span></div>`:''}
-    ${_htmlCcdLifeUn(c,'pas')}
-    ${_htmlFormeCoach(bil,'pas',c)}
-    ${_htmlObjectifsCoach(c)}
-  </div>`;
-}
-// ══ LE SOMMEIL CHEZ LE COACH — LA MAQUETTE DE KEVIN (24/09/2026) ═════════
+// ══ SOMMEIL ET PAS CHEZ LE COACH — LA MAQUETTE DE KEVIN (24/09/2026) ═════
 // « Remplace par celle-ci, exactement pareil, et rajoute les fonctionnalites
-// manquantes. » Le resume « Sommeil et pas » et la section « Sommeil »
-// deviennent un seul tableau de bord :
+// manquantes », pour le sommeil, puis « pareil » pour les pas. Chaque
+// domaine devient un tableau de bord, le meme pour les deux :
 //   l'en-tete et la periode (sept jours glissants, ou une semaine passee) ;
 //   quatre cartes — la moyenne et son ecart, l'objectif (que le coach pose
-//   maintenant lui-meme), les nuits atteintes en anneau, la tendance ;
-//   la duree de sommeil en barres, sur 7 jours, 28 jours ou 3 mois ;
+//   lui-meme), les jours atteints en anneau, la tendance ;
+//   les barres, sur 7 jours, 28 jours ou 3 mois ;
 //   le detail de la semaine, les points d'attention, et ce que le coach
 //   doit en retenir.
-// ⚠ RIEN N'EST DEVINE. Tout sort des nuits saisies (sanSommeilMin), de
-//   l'objectif du dossier (sanObjSommeil) et des fonctions deja partagees
-//   avec l'athlete (sanNiveau, regulariteCoucher, bilanDomaineCoach). Une
-//   nuit non renseignee n'est comptee nulle part : elle est DITE.
+// ⚠ RIEN N'EST DEVINE. Tout sort des saisies (sanSommeilMin, sanPas), des
+//   objectifs du dossier et des fonctions deja partagees avec l'athlete
+//   (sanNiveau, sanAxe, regulariteCoucher, bilanDomaineCoach). Un jour non
+//   renseigne n'est compte nulle part : il est DIT.
+// ⚠ POUR LES PAS, UN JOUR SE JUGE SUR SON OBJECTIF DU JOUR, ON ou OFF, tel
+//   que _stepsObjectifJour le lit — la regle que la carte du coach suivait
+//   deja : 7 000 pas un jour de repos n'est pas un echec a 12 000.
 // ⚠ AUCUN DIAGNOSTIC : « moins de 6 h », jamais « insomnie ».
 const CS_SEUIL_COURT=360;          // 6 h, en minutes : le seuil des nuits courtes
-const CS_STABLE=10;                // ± 10 min d'une semaine a l'autre = stable
-let _csOffset=0, _csVue='7j', _csVise=null;
+const CS_DOM={
+  sommeil:{titre:'Sommeil',sous:'Suivi et analyse des données de sommeil',ico:'lune',
+    graphe:'Durée de sommeil',nom:'nuit',noms:'nuits',f:true,stable:10,
+    val:(c,iso)=>sanSommeilMin(c,iso),obj:c=>sanObjSommeil(c),objJour:c=>sanObjSommeil(c),
+    fmt:v=>sanHM(v),fmtEcart:v=>sanHM(v),
+    note:'Durées saisies par l’athlète. Les nuits non renseignées ne sont pas comptées.'},
+  pas:{titre:'Pas',sous:'Suivi et analyse du nombre de pas',ico:'chaussure',
+    graphe:'Nombre de pas',nom:'jour',noms:'jours',f:false,stable:500,
+    val:(c,iso)=>sanPas(c,iso),obj:c=>sanObjPas(c),
+    objJour:(c,iso)=>{ const b=_stepsObjectifJour((c&&c.stepsGoals)||STEPS_GOALS_DEFAUT,
+      ((c&&c.stepsDayType)||{})[iso]??null,iso); return b>0?b:sanObjPas(c); },
+    fmt:v=>_svEsp(sanNb(v)),fmtEcart:v=>_svEsp(sanNb(v))+' pas',
+    note:'Nombres saisis par l’athlète. Les jours non renseignés ne sont pas comptés.'}
+};
+const _csEtat={sommeil:{off:0,vue:'7j',vise:null},pas:{off:0,vue:'7j',vise:null}};
+function _csQ(q){ return q==='pas'?'pas':'sommeil'; }
 function _csSvg(p,plein){ return '<svg viewBox="0 0 24 24" '+(plein?'fill="currentColor"':'fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"')+' aria-hidden="true">'+p+'</svg>'; }
 const CS_ICO={
   lune:_csSvg('<path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z"/>'),
+  chaussure:_csSvg('<path d="M2.5 16.5h17.2a1.8 1.8 0 0 0 1.8-1.8c0-1.4-1-2.1-2.5-2.6l-4.1-1.5a3 3 0 0 1-1.3-.9L11.2 6.8a1.3 1.3 0 0 0-2-.2L7.6 8.3H2.5z"/><path d="M2.5 16.5v2h19v-2"/>'),
   lit:_csSvg('<path d="M3 19V6.5M3 15h18v4M21 15v-2.4A2.6 2.6 0 0 0 18.4 10H11v5"/><circle cx="7" cy="11.2" r="1.9"/>'),
+  marche:_csSvg('<circle cx="13" cy="4.5" r="2"/><path d="M11 21l2-6-2.5-2.5L12 8l3 3 3 1M10.5 8.5L7 10l-1 4M13 15l3 6"/>'),
   cible:_csSvg('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12l7-7M16.5 3.8L19 5l1.2 2.5"/>'),
   crayon:_csSvg('<path d="M16.9 3.6a2.1 2.1 0 0 1 3 3L8.4 18.1l-4 1 1-4z"/><path d="M14.8 5.7l3 3"/>'),
   barres:_csSvg('<rect x="3.5" y="12" width="4" height="8.5" rx="1.2"/><rect x="10" y="7" width="4" height="13.5" rx="1.2"/><rect x="16.5" y="3.5" width="4" height="17" rx="1.2"/>',true),
@@ -88761,120 +88573,134 @@ const CS_ICO={
   moins:_csSvg('<path d="M7 12h10"/>'),
   ampoule:_csSvg('<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>',true),
   hausse:_csSvg('<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>'),
+  etoile:_csSvg('<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>'),
   engrenage:_csSvg('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>')
 };
 // PURE. La semaine lue (sept jours glissants, decales de `offset` semaines),
-// et tout ce que le tableau de bord en dit.
-function csSemaine(c,offset){
-  const obj=sanObjSommeil(c);
-  const jours=sanJours(offset||0).map(j=>({iso:j.iso,d:j.d,v:sanSommeilMin(c,j.iso)}));
+// et tout ce que le tableau de bord en dit. Chaque jour porte SON objectif.
+function csSemaine(c,offset,quoi){
+  const D=CS_DOM[_csQ(quoi)], q=_csQ(quoi);
+  const obj=D.obj(c);
+  const jours=sanJours(offset||0).map(j=>({iso:j.iso,d:j.d,v:D.val(c,j.iso),o:D.objJour(c,j.iso)}));
   const lus=jours.filter(j=>j.v!=null);
   const moy=lus.length?Math.round(lus.reduce((t,j)=>t+j.v,0)/lus.length):null;
-  const prec=sanJours((offset||0)-1).map(j=>sanSommeilMin(c,j.iso)).filter(v=>v!=null);
+  const prec=sanJours((offset||0)-1).map(j=>D.val(c,j.iso)).filter(v=>v!=null);
   const moyPrec=prec.length?Math.round(prec.reduce((t,v)=>t+v,0)/prec.length):null;
   return {obj,jours,lus:lus.length,moy,moyPrec,
-    atteints:lus.filter(j=>j.v>=obj).length,
-    courtes:lus.filter(j=>j.v<CS_SEUIL_COURT),
+    atteints:lus.filter(j=>j.v>=j.o).length,
+    // Nuits de moins de 6 h ; jours de pas sous le quart de leur objectif.
+    courtes:q==='sommeil'?lus.filter(j=>j.v<CS_SEUIL_COURT):lus.filter(j=>sanNiveau('pas',j.v,j.o)==='bas'),
+    meilleur:lus.length?lus.reduce((m,j)=>j.v>m.v?j:m):null,
     vides:jours.filter(j=>j.v==null)};
 }
 // PURE. « Stable », « En hausse », « En baisse » — ou rien a comparer.
-function csTendance(s){
-  if(s.moy==null||s.moyPrec==null) return {lib:'—',phrase:'Pas assez de nuits pour comparer deux semaines.',sens:0};
+function csTendance(s,quoi){
+  const D=CS_DOM[_csQ(quoi)];
+  if(s.moy==null||s.moyPrec==null) return {lib:'—',phrase:'Pas assez de données pour comparer deux semaines.',sens:0};
   const d=s.moy-s.moyPrec;
-  if(Math.abs(d)<=CS_STABLE) return {lib:'Stable',phrase:'Même moyenne que la semaine précédente, à '+CS_STABLE+' min près.',sens:0,d};
+  if(Math.abs(d)<=D.stable) return {lib:'Stable',sens:0,d,
+    phrase:'Même moyenne que la semaine précédente, à '+D.fmtEcart(D.stable)+' près.'};
   return {lib:d>0?'En hausse':'En baisse',sens:d>0?1:-1,d,
-    phrase:(d>0?'+':'−')+sanHM(Math.abs(d))+' par rapport à la semaine précédente.'};
+    phrase:(d>0?'+':'−')+D.fmtEcart(Math.abs(d))+' par rapport à la semaine précédente.'};
 }
 function _csJour(d,long){
   const s=d.toLocaleDateString('fr-FR',{weekday:long?'long':'short'}).replace('.','');
   return s.charAt(0).toUpperCase()+s.slice(1);
 }
 function _csDate(d){ return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0'); }
-// Les barres. 7 jours : une par nuit, jour et date dessous. 28 jours : une par
-// nuit, la date une fois sur quatre. 3 mois : la moyenne de chaque semaine.
-function _csSerie(c,vue,offset){
-  const obj=sanObjSommeil(c);
-  if(vue==='3m'){
+function _csPl(n,D,adj){ return n+' '+(n>1?D.noms:D.nom)+(adj?' '+adj+(D.f?'e':'')+(n>1?'s':''):''); }
+// Les barres. 7 jours : une par jour, jour et date dessous. 28 jours : une par
+// jour, la date une fois sur quatre. 3 mois : la moyenne de chaque semaine.
+function _csSerie(c,quoi){
+  const D=CS_DOM[_csQ(quoi)], E=_csEtat[_csQ(quoi)];
+  if(E.vue==='3m'){
     const out=[];
     for(let k=12;k>=0;k--){
-      const js=sanJours((offset||0)-k);
-      const v=js.map(j=>sanSommeilMin(c,j.iso)).filter(x=>x!=null);
-      out.push({iso:js[6].iso,d:js[6].d,v:v.length?Math.round(v.reduce((t,x)=>t+x,0)/v.length):null,
+      const js=sanJours(E.off-k);
+      const v=js.map(j=>D.val(c,j.iso)).filter(x=>x!=null);
+      out.push({iso:js[6].iso,d:js[6].d,o:D.obj(c),v:v.length?Math.round(v.reduce((t,x)=>t+x,0)/v.length):null,
         lib:'S'+(13-k),sous:_csDate(js[0].d),semaine:true});
     }
-    return {obj,barres:out};
+    return out;
   }
-  const n=vue==='28j'?28:7;
-  const fin=sanJours(offset||0)[6].d;
+  const n=E.vue==='28j'?28:7;
+  const fin=sanJours(E.off)[6].d;
   const out=[];
   for(let i=n-1;i>=0;i--){
     const d=new Date(fin); d.setDate(fin.getDate()-i);
     const iso=localISODate(d);
-    out.push({iso,d,v:sanSommeilMin(c,iso),
+    out.push({iso,d,v:D.val(c,iso),o:D.objJour(c,iso),
       lib:n===7?_csJour(d):(i%4===0?_csDate(d):''),sous:n===7?_csDate(d):''});
   }
-  return {obj,barres:out};
+  return out;
 }
-function _htmlCsGraphe(c){
-  const {obj,barres}=_csSerie(c,_csVue,_csOffset);
-  const vals=barres.map(b=>b.v).filter(v=>v!=null);
-  const ax=sanAxe('sommeil',vals,obj);
+function _htmlCsGraphe(c,quoi){
+  const q=_csQ(quoi), D=CS_DOM[q], E=_csEtat[q];
+  const obj=D.obj(c);
+  const barres=_csSerie(c,q);
+  const ax=sanAxe(q,barres.map(b=>b.v),obj);
   const pc=v=>Math.max(0,Math.min(100,v/ax.haut*100));
   const dense=barres.length>7;
   const grilles=ax.grad.map(v=>'<div class="cso-gl" style="bottom:'+pc(v)+'%"><span>'+escapeHtml(ax.lib(v))+'</span></div>').join('');
   const b=barres.map(x=>{
-    const niv=sanNiveau('sommeil',x.v,obj);
-    const vise=_csVise&&_csVise.indexOf(x.iso)>=0;
+    const niv=sanNiveau(q,x.v,x.o);
+    const vise=E.vise&&E.vise.indexOf(x.iso)>=0;
     return '<div class="cso-b'+(vise?' cso-b-vise':'')+'" data-niv="'+(niv||'vide')+'" title="'
       +escapeHtml((x.semaine?'Semaine du '+x.sous:x.d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}))
-        +' : '+(x.v==null?'aucune nuit saisie':sanHM(x.v)+(x.semaine?' en moyenne':'')))+'">'
-      +'<div class="cso-b-z">'+(dense?'':'<span class="cso-b-v">'+(x.v==null?'—':escapeHtml(sanHM(x.v)))+'</span>')
+        +' : '+(x.v==null?'rien de saisi':D.fmt(x.v)+(x.semaine?' en moyenne':'')))+'">'
+      +'<div class="cso-b-z">'+(dense?'':'<span class="cso-b-v">'+(x.v==null?'—':escapeHtml(D.fmt(x.v)))+'</span>')
         +'<i style="height:'+(x.v==null?1.5:Math.max(1.5,pc(x.v)))+'%"></i></div>'
       +'<span class="cso-b-j">'+escapeHtml(x.lib)+'</span>'
       +(x.sous&&!dense?'<span class="cso-b-d">'+escapeHtml(x.sous)+'</span>':'')
       +'</div>';
   }).join('');
-  const onglet=(k,l)=>'<button type="button" class="cso-onglet'+(_csVue===k?' actif':'')+'" aria-pressed="'+(_csVue===k)+'" onclick="csVue(\''+k+'\')">'+l+'</button>';
-  const sous=_csVue==='7j'?'Évolution sur les 7 derniers jours':_csVue==='28j'?'Évolution sur les 28 derniers jours':'Moyenne de chaque semaine, sur 3 mois';
+  const onglet=(k,l)=>'<button type="button" class="cso-onglet'+(E.vue===k?' actif':'')+'" aria-pressed="'+(E.vue===k)+'" onclick="csVue(\''+k+'\',\''+q+'\')">'+l+'</button>';
+  const sous=E.vue==='7j'?'Évolution sur les 7 derniers jours':E.vue==='28j'?'Évolution sur les 28 derniers jours':'Moyenne de chaque semaine, sur 3 mois';
   return '<section class="cso-carte cso-graphe">'
     +'<div class="cso-g-tete"><span class="cso-g-ico">'+CS_ICO.barres+'</span>'
-      +'<div><h4>Durée de sommeil</h4><span>'+sous+'</span></div>'
+      +'<div><h4>'+D.graphe+'</h4><span>'+sous+'</span></div>'
       +'<div class="cso-onglets" role="group" aria-label="Période du graphique">'+onglet('7j','7 jours')+onglet('28j','28 jours')+onglet('3m','3 mois')+'</div></div>'
     +'<div class="cso-plot'+(dense?' cso-dense':'')+'"><div class="cso-axe">'+grilles
-      +'<div class="cso-obj" style="bottom:'+pc(obj)+'%"><span>Objectif '+escapeHtml(sanHM(obj))+'</span></div></div>'
+      +'<div class="cso-obj" style="bottom:'+pc(obj)+'%"><span>Objectif '+escapeHtml(D.fmt(obj))+'</span></div></div>'
       +'<div class="cso-barres">'+b+'</div></div>'
     +'</section>';
 }
-function _htmlSommeilCoach(c){
+function _htmlDomaineCoach(c,quoi){
   if(!c) return '';
-  const s=csSemaine(c,_csOffset);
-  const t=csTendance(s);
-  const bil=bilanDomaineCoach(c,'sommeil',COACH_FENETRE_JOURS);
-  const reg=regulariteCoucher(c);
+  const q=_csQ(quoi), D=CS_DOM[q], E=_csEtat[q];
+  const s=csSemaine(c,E.off,q);
+  const t=csTendance(s,q);
+  const bil=bilanDomaineCoach(c,q,COACH_FENETRE_JOURS);
+  const reg=q==='sommeil'?regulariteCoucher(c):null;
   const ecart=s.moy==null?null:s.moy-s.obj;
-  // LA PERIODE, comme chez l'athlete : les sept derniers jours, ou une semaine passee.
   let opts='';
-  for(let k=0;k>=-11;k--) opts+='<option value="'+k+'"'+(k===_csOffset?' selected':'')+'>'
+  for(let k=0;k>=-11;k--) opts+='<option value="'+k+'"'+(k===E.off?' selected':'')+'>'
     +(k===0?'7 derniers jours':k===-1?'Semaine précédente':'Il y a '+(-k)+' semaines')+'</option>';
-  const libPer=_csOffset===0?'7 derniers jours':_csOffset===-1?'Semaine précédente':'Il y a '+(-_csOffset)+' semaines';
-  // L'ANNEAU : la moyenne rapportee a l'objectif, couleur de la meme regle que les barres.
+  const libPer=E.off===0?'7 derniers jours':E.off===-1?'Semaine précédente':'Il y a '+(-E.off)+' semaines';
   const part=s.moy==null?0:Math.min(1,s.moy/s.obj);
   const C=2*Math.PI*42;
-  const nivA=sanNiveau('sommeil',s.moy,s.obj)||'vide';
-  const points=s.jours.map(j=>'<i data-e="'+(j.v==null?'vide':(j.v>=s.obj?'ok':'bas'))+'" title="'
-    +escapeHtml(_csJour(j.d,true)+' : '+(j.v==null?'aucune nuit saisie':sanHM(j.v)))+'"></i>').join('');
+  const nivA=sanNiveau(q,s.moy,s.obj)||'vide';
+  const points=s.jours.map(j=>'<i data-e="'+(j.v==null?'vide':(j.v>=j.o?'ok':'bas'))+'" title="'
+    +escapeHtml(_csJour(j.d,true)+' : '+(j.v==null?'rien de saisi':D.fmt(j.v)))+'"></i>').join('');
+  // L'OBJECTIF : une valeur pour le sommeil, ON et OFF pour les pas.
+  let objV=escapeHtml(D.fmt(s.obj)), objS='';
+  if(q==='pas'){
+    const g=(c&&c.stepsGoals)||STEPS_GOALS_DEFAUT;
+    const off=Number(g&&g.off)>0?Number(g.off):null;
+    objS=(off!=null?'les jours ON · '+escapeHtml(D.fmt(off))+' les jours OFF':'les jours ON')+(c&&c.stepsGoals?'':' (par défaut)');
+  }
   // LES POINTS D'ATTENTION : ce qui demande un oeil, et seulement ca.
   const att=[];
-  const silence=_htmlSilenceCoach(bil,'sommeil');
-  if(silence) att.push({ico:'alerte',ton:'rouge',t:'Aucune nuit récente',d:silence.replace(/<[^>]*>/g,''),vise:[]});
+  const silence=_htmlSilenceCoach(bil,q);
+  if(silence) att.push({ico:'alerte',ton:'rouge',t:'Aucune saisie récente',d:silence.replace(/<[^>]*>/g,''),vise:[]});
   if(s.courtes.length) att.push({ico:'flecheBas',ton:'rouge',
-    t:s.courtes.length+' nuit'+(s.courtes.length>1?'s':'')+' < 6h',
-    d:'Moins de 6 h : '+s.courtes.map(j=>_csJour(j.d)+' '+_csDate(j.d)).join(', ')+'.',vise:s.courtes.map(j=>j.iso)});
-  if(s.vides.length) att.push({ico:'moins',ton:'orange',
-    t:s.vides.length+' nuit'+(s.vides.length>1?'s':'')+' non renseignée'+(s.vides.length>1?'s':''),
+    t:q==='sommeil'?s.courtes.length+' nuit'+(s.courtes.length>1?'s':'')+' < 6h':_csPl(s.courtes.length,D,'très bas'),
+    d:(q==='sommeil'?'Moins de 6 h : ':'Sous le quart de l’objectif du jour : ')
+      +s.courtes.map(j=>_csJour(j.d)+' '+_csDate(j.d)).join(', ')+'.',vise:s.courtes.map(j=>j.iso)});
+  if(s.vides.length) att.push({ico:'moins',ton:'orange',t:_csPl(s.vides.length,D,'non renseigné'),
     d:'Donnée manquante : '+s.vides.map(j=>_csJour(j.d,true)).join(', ')+'.',vise:s.vides.map(j=>j.iso)});
-  const attH=att.length?att.map((a,i)=>'<button type="button" class="cso-att" data-ton="'+a.ton+'"'
-      +(a.vise.length?' onclick="csViser('+escapeHtml(JSON.stringify(a.vise))+')"':'')+'>'
+  const attH=att.length?att.map(a=>'<button type="button" class="cso-att" data-ton="'+a.ton+'"'
+      +(a.vise.length?' onclick="csViser('+escapeHtml(JSON.stringify(a.vise))+',\''+q+'\')"':'')+'>'
       +'<span class="cso-att-i">'+CS_ICO[a.ico]+'</span><span class="cso-att-c"><b>'+escapeHtml(a.t)+'</b><span>'+escapeHtml(a.d)+'</span></span>'
       +(a.vise.length?'<span class="cso-chev">'+CS_ICO.droite+'</span>':'')+'</button>').join('')
     :'<div class="cso-rien">Rien à signaler sur cette période.</div>';
@@ -88883,76 +88709,96 @@ function _htmlSommeilCoach(c){
   if(s.lus){
     const bon=s.atteints>=Math.ceil(s.lus*.7);
     ins.push({ico:bon?'hausse':'flecheBas',ton:bon?'vert':'orange',t:bon?'Bonne régularité':'Objectif peu atteint',
-      d:s.atteints+' nuit'+(s.atteints>1?'s':'')+' sur '+s.lus+' renseignée'+(s.lus>1?'s':'')+' atteignent l’objectif de '+sanHM(s.obj)+'.'});
+      d:_csPl(s.atteints,D)+' sur '+_csPl(s.lus,D,'renseigné')+' atteignent '
+        +(q==='sommeil'?'l’objectif de '+sanHM(s.obj):'l’objectif du jour')+'.'});
   }
   if(reg) ins.push({ico:'lune',ton:'bleu',t:'Heure du coucher',
     d:'± '+reg.ecart+' min autour de '+_libHeure(reg.moyenne)+', sur '+reg.n+' nuit'+(reg.n>1?'s':'')+'.'});
+  if(q==='pas'&&s.meilleur) ins.push({ico:'etoile',ton:'bleu',t:'Meilleur jour',
+    d:_csJour(s.meilleur.d,true)+' '+_csDate(s.meilleur.d)+' : '+D.fmt(s.meilleur.v)+' pas.'});
   if(s.courtes.length) ins.push({ico:'engrenage',ton:'gris',t:'Focus',
-    d:'Surveiller la récupération après '+(s.courtes.length>1?'les nuits':'la nuit')+' de moins de 6 h ('
-      +s.courtes.map(j=>_csJour(j.d)).join(', ')+').'});
+    d:q==='sommeil'
+      ?'Surveiller la récupération après '+(s.courtes.length>1?'les nuits':'la nuit')+' de moins de 6 h ('+s.courtes.map(j=>_csJour(j.d)).join(', ')+').'
+      :'Surveiller l’activité '+(s.courtes.length>1?'des jours':'du jour')+' très bas ('+s.courtes.map(j=>_csJour(j.d)).join(', ')+').'});
   const insH=ins.length?ins.map(a=>'<div class="cso-ins" data-ton="'+a.ton+'"><span class="cso-att-i">'+CS_ICO[a.ico]+'</span>'
       +'<span class="cso-att-c"><b>'+escapeHtml(a.t)+'</b><span>'+escapeHtml(a.d)+'</span></span></div>').join('')
-    :'<div class="cso-rien">Pas encore de nuit à analyser.</div>';
+    :'<div class="cso-rien">Pas encore de donnée à analyser.</div>';
   const ligne=(l,v)=>'<div class="cso-l"><span>'+l+'</span><b>'+v+'</b></div>';
-  return '<div class="cso">'
+  let m14=null; if(q==='pas'){ try{ m14=moyennePas14j(c); }catch(e){ m14=null; } }
+  const Nom=D.noms.charAt(0).toUpperCase()+D.noms.slice(1);
+  return '<div class="cso" data-quoi="'+q+'">'
     +'<section class="cso-carte cso-tete">'
-      +'<span class="cso-t-ico">'+CS_ICO.lune+'</span>'
-      +'<div class="cso-t-c"><h3>Sommeil</h3><span>Suivi et analyse des données de sommeil</span></div>'
+      +'<span class="cso-t-ico">'+CS_ICO[D.ico]+'</span>'
+      +'<div class="cso-t-c"><h3>'+D.titre+'</h3><span>'+D.sous+'</span></div>'
       +'<label class="cso-per">'+CS_ICO.calendrier+'<span>'+libPer+'</span>'+CS_ICO.bas
-        +'<select onchange="csPeriode(this.value)" aria-label="Période">'+opts+'</select></label>'
+        +'<select onchange="csPeriode(this.value,\''+q+'\')" aria-label="Période">'+opts+'</select></label>'
     +'</section>'
     +'<div class="cso-kpis">'
-      +'<div class="cso-carte cso-k cso-k-moy"><span class="cso-k-ico">'+CS_ICO.lit+'</span><div>'
+      +'<div class="cso-carte cso-k cso-k-moy"><span class="cso-k-ico">'+(q==='sommeil'?CS_ICO.lit:CS_ICO.marche)+'</span><div>'
         +'<span class="cso-k-l">Moyenne (7 jours)</span>'
-        +'<div class="cso-k-v"><strong>'+(s.moy==null?'—':escapeHtml(sanHM(s.moy)))+'</strong>'
-          +(ecart==null?'':'<em data-sens="'+(ecart>=0?'haut':'bas')+'">'+(ecart>=0?'▲ +':'▼ -')+escapeHtml(sanHM(Math.abs(ecart)))+'</em>')+'</div>'
-        +'<span class="cso-k-s">'+(ecart==null?'aucune nuit saisie':'par rapport à l’objectif')+'</span></div></div>'
+        +'<div class="cso-k-v"><strong>'+(s.moy==null?'—':escapeHtml(D.fmt(s.moy)))+'</strong>'
+          +(ecart==null?'':'<em data-sens="'+(ecart>=0?'haut':'bas')+'">'+(ecart>=0?'▲ +':'▼ -')+escapeHtml(D.fmt(Math.abs(ecart)))+'</em>')+'</div>'
+        +'<span class="cso-k-s">'+(ecart==null?'rien de saisi':'par rapport à l’objectif')+'</span></div></div>'
       +'<div class="cso-carte cso-k"><span class="cso-k-ico cso-gris">'+CS_ICO.cible+'</span><div>'
-        +'<span class="cso-k-l">Objectif</span><div class="cso-k-v"><strong>'+escapeHtml(sanHM(s.obj))+'</strong></div></div>'
-        +'<button type="button" class="cso-edit" onclick="csObjectif()" aria-label="Modifier l’objectif de sommeil">'+CS_ICO.crayon+'</button></div>'
+        +'<span class="cso-k-l">Objectif</span><div class="cso-k-v"><strong>'+objV+'</strong></div>'
+        +(objS?'<span class="cso-k-s">'+objS+'</span>':'')+'</div>'
+        +'<button type="button" class="cso-edit" onclick="csObjectif(\''+q+'\')" aria-label="Modifier l’objectif">'+CS_ICO.crayon+'</button></div>'
       +'<div class="cso-carte cso-k"><div class="cso-anneau" data-niv="'+nivA+'"><svg viewBox="0 0 100 100" aria-hidden="true">'
           +'<circle cx="50" cy="50" r="42" class="cso-an-f"/><circle cx="50" cy="50" r="42" class="cso-an-p" stroke-dasharray="'+(C*part).toFixed(1)+' '+C.toFixed(1)+'"/></svg>'
           +'<span>'+Math.round(part*100)+'%</span></div><div>'
-        +'<span class="cso-k-l">Nuits atteintes</span><div class="cso-k-v"><strong>'+s.atteints+' / 7</strong></div>'
-        +'<span class="cso-points" role="img" aria-label="'+s.atteints+' nuits sur 7 atteignent l’objectif">'+points+'</span></div></div>'
-      +'<button type="button" class="cso-carte cso-k cso-k-tend" onclick="csVue(\'28j\')" aria-label="Voir 28 jours"><span class="cso-k-ico cso-gris">'+CS_ICO.barres+'</span><div>'
+        +'<span class="cso-k-l">'+Nom+' atteint'+(D.f?'e':'')+'s</span><div class="cso-k-v"><strong>'+s.atteints+' / 7</strong></div>'
+        +'<span class="cso-points" role="img" aria-label="'+s.atteints+' '+D.noms+' sur 7 atteignent l’objectif">'+points+'</span></div></div>'
+      +'<button type="button" class="cso-carte cso-k cso-k-tend" onclick="csVue(\'28j\',\''+q+'\')" aria-label="Voir 28 jours"><span class="cso-k-ico cso-gris">'+CS_ICO.barres+'</span><div>'
         +'<span class="cso-k-l">Tendance</span><div class="cso-k-v"><strong class="cso-k-t" data-sens="'+t.sens+'">'+t.lib+'</strong></div>'
         +'<span class="cso-k-s">'+escapeHtml(t.phrase)+'</span></div><span class="cso-chev">'+CS_ICO.droite+'</span></button>'
     +'</div>'
-    +_htmlCsGraphe(c)
+    +_htmlCsGraphe(c,q)
     +'<div class="cso-bas">'
       +'<section class="cso-carte cso-det"><div class="cso-s-t" data-ton="violet">'+CS_ICO.camembert+'<h4>Détails de la semaine</h4></div>'
-        +ligne('Moyenne 7 jours',s.moy==null?'—':escapeHtml(sanHM(s.moy)))
-        +ligne('Moyenne 28 jours',bil.moyenne==null?'—':escapeHtml(sanHM(bil.moyenne)))
-        +ligne('Nuits renseignées',s.lus+' / 7')
-        +ligne('Nuits atteignant l’objectif',s.atteints+' / 7')
+        +ligne('Moyenne 7 jours',s.moy==null?'—':escapeHtml(D.fmt(s.moy)))
+        +(q==='pas'?ligne('Moyenne 14 jours',m14==null?'—':escapeHtml(D.fmt(m14))):'')
+        +ligne('Moyenne 28 jours',bil.moyenne==null?'—':escapeHtml(D.fmt(bil.moyenne)))
+        +ligne(Nom+' renseigné'+(D.f?'e':'')+'s',s.lus+' / 7')
+        +ligne(Nom+' atteignant l’objectif',s.atteints+' / 7')
         +ligne('Renseigné sur '+bil.fenetre+' jours',bil.renseignes+' / '+bil.fenetre)
         +(reg?ligne('Régularité des couchers','± '+reg.ecart+' min'):'')
-        +'<div class="cso-note">Durées saisies par l’athlète. Les nuits non renseignées ne sont pas comptées.</div>'
+        +'<div class="cso-note">'+D.note+'</div>'
       +'</section>'
       +'<section class="cso-carte cso-attn"><div class="cso-s-t" data-ton="orange">'+CS_ICO.alerte+'<h4>Points d’attention</h4></div>'+attH+'</section>'
       +'<section class="cso-carte cso-insc"><div class="cso-s-t" data-ton="bleu">'+CS_ICO.ampoule+'<h4>Insights <span>coach</span></h4></div>'+insH+'</section>'
     +'</div>'
     +'</div>';
 }
+function _htmlSommeilCoach(c){ return _htmlDomaineCoach(c,'sommeil'); }
+function _htmlPasCoach(c){ return _htmlDomaineCoach(c,'pas'); }
 function renderSommeilCoach(c){
   const z=document.getElementById('ccd-sommeil');
   if(!z) return;
   let h=''; try{ h=_htmlSommeilCoach(c); }catch(e){ h=''; }
   z.innerHTML=h; z.style.display=h?'':'none';
 }
-function _csRepeindre(){ try{ const c=getOwnedClient(currentClientId); if(c) renderSommeilCoach(c); }catch(e){} }
-function csPeriode(v){ const n=Math.round(Number(v)); _csOffset=(isFinite(n)&&n<=0)?n:0; _csVise=null; _csRepeindre(); }
-function csVue(v){ _csVue=(v==='28j'||v==='3m')?v:'7j'; _csVise=null; _csRepeindre(); }
-// Un point d'attention allume les nuits dont il parle, sur le graphe 7 jours.
-function csViser(isos){ _csVue='7j'; _csVise=(_csVise&&_csVise.join()===(isos||[]).join())?null:(isos||[]); _csRepeindre();
-  try{ document.querySelector('#ccd-sommeil .cso-graphe').scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} }
-// L'OBJECTIF DE SOMMEIL, POSE PAR LE COACH. Meme patron que
-// coachPoserObjectifsPas — et meme piege : sans la carte `users`,
+function renderPasCoach(c){
+  const z=document.getElementById('ccd-pas');
+  if(!z) return;
+  let h=''; try{ h=_htmlPasCoach(c); }catch(e){ h=''; }
+  z.innerHTML=h; z.style.display=h?'':'none';
+}
+function _csRepeindre(q){ try{ const c=getOwnedClient(currentClientId); if(!c) return;
+  if(_csQ(q)==='pas') renderPasCoach(c); else renderSommeilCoach(c); }catch(e){} }
+function csPeriode(v,q){ const E=_csEtat[_csQ(q)]; const n=Math.round(Number(v)); E.off=(isFinite(n)&&n<=0)?n:0; E.vise=null; _csRepeindre(q); }
+function csVue(v,q){ const E=_csEtat[_csQ(q)]; E.vue=(v==='28j'||v==='3m')?v:'7j'; E.vise=null; _csRepeindre(q); }
+// Un point d'attention allume les jours dont il parle, sur le graphe 7 jours.
+function csViser(isos,q){ const E=_csEtat[_csQ(q)]; E.vue='7j';
+  E.vise=(E.vise&&E.vise.join()===(isos||[]).join())?null:(isos||[]); _csRepeindre(q);
+  try{ document.querySelector('#ccd-'+_csQ(q)+' .cso-graphe').scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){} }
+// L'OBJECTIF, POSE PAR LE COACH. Pour les pas, le formulaire ON / OFF qui
+// existait deja (_htmlObjectifsCoach, coachPoserObjectifsPas) ; pour le
+// sommeil, le meme patron — et le meme piege : sans la carte `users`,
 // getOwnedClient rend un objet detache, et la modification disparait.
-function csObjectif(){
+function csObjectif(q){
   const c=getOwnedClient(currentClientId);
   if(!c) return;
+  if(_csQ(q)==='pas'){ _sanFeuille('Objectifs de pas',_htmlObjectifsCoach(c)); return; }
   _sanFeuille('Objectif de sommeil',
     '<label class="san-lab">Objectif par nuit</label>'
     +'<input id="cso-obj" inputmode="text" placeholder="8h00" value="'+escapeHtml(sanHM(sanObjSommeil(c)))+'">'
@@ -88974,12 +88820,6 @@ function csObjectifEnregistrer(){
   try{ renderSommeilCoach(c); }catch(e){}
   toastSync(ok,envoi,'Objectif posé','l\'objectif est');
   return true;
-}
-function renderPasCoach(c){
-  const z=document.getElementById('ccd-pas');
-  if(!z) return;
-  let h=''; try{ h=_htmlPasCoach(c); }catch(e){ h=''; }
-  z.innerHTML=h; z.style.display=h?'':'none';
 }
 function _htmlRecuperationCoach(c){
   const r=scoreRecuperation(c);
