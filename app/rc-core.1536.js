@@ -50575,7 +50575,13 @@ const HAB_CATALOGUE=Object.freeze([
   {cle:'proteines',  lib:'Protéines à chaque repas'},
   {cle:'mobilite',   lib:'Faire ma mobilité'},
   {cle:'marche',     lib:'Marcher'},
-  {cle:'coucher',    lib:'Me coucher à heure fixe'}
+  {cle:'coucher',    lib:'Me coucher à heure fixe'},
+  // TROIS DE PLUS, pour les habitudes recommandees de la maquette de Kevin
+  // (24/09/2026). Relues comme les sept autres : aucune n'est restrictive —
+  // « Aucune substance » vise le tabac et l'alcool, pas la nourriture.
+  {cle:'alimentation',lib:'Suivre mon plan alimentaire'},
+  {cle:'stress',     lib:'Prendre un temps pour souffler'},
+  {cle:'substance',  lib:'Aucune substance (tabac, alcool)'}
 ]);
 // Un poids, une mesure, une restriction. Les motifs sont larges à dessein :
 // en cas de doute on REFUSE, et le coach reformule. Le coût d'un refus est un
@@ -59546,36 +59552,105 @@ function renderHabitudes(){
 }
 
 // ── Côté coach : la sélection, et le pourcentage ───────────────────────────
+// LA MAQUETTE DE KEVIN (24/09/2026) : « change ca par ca et rajoute les
+// fonctionnalites ». Un en-tete qui se replie et dit le compte ; l'ajout sur
+// UNE ligne (la liste, ou un libelle a soi) ; six habitudes recommandees
+// qui s'ajoutent d'un appui ; puis les habitudes posees, chacune avec son
+// taux sur 28 jours et sa semaine en cours.
+// ⚠ LES REGLES NE CHANGENT PAS : trois au plus, ni poids, ni mesure, ni
+//   restriction (habitudeAjouter tranche), et le retrait garde l'historique.
+const HAB_RECOMMANDEES=Object.freeze([
+  {cle:'sommeil',     lib:'Sommeil',          sous:'Durée et qualité',    ico:'lit',     ton:'violet'},
+  {cle:'hydratation', lib:'Hydratation',      sous:'Quantité d’eau',      ico:'verre',   ton:'bleu'},
+  {cle:'alimentation',lib:'Alimentation',     sous:'Suivi global',        ico:'pomme',   ton:'vert'},
+  {cle:'mobilite',    lib:'Mobilité',         sous:'Étirements, mobilité',ico:'course',  ton:'orange'},
+  {cle:'stress',      lib:'Gestion du stress',sous:'Bien-être mental',    ico:'lotus',   ton:'rose'},
+  {cle:'substance',   lib:'Aucune substance', sous:'Tabac, alcool, etc.', ico:'interdit',ton:'rouge'}
+]);
+let _habReplie=false;
+function _habSvg(p,plein){ return '<svg viewBox="0 0 24 24" '+(plein?'fill="currentColor"':'fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"')+' aria-hidden="true">'+p+'</svg>'; }
+const HAB_ICO={
+  chevron:_habSvg('<path d="M6 9l6 6 6-6"/>'),
+  info:_habSvg('<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.8h.01"/>'),
+  cible:_habSvg('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/><path d="M13 11l7-7M17 3.5l.5 3 3 .5"/>'),
+  ampoule:_habSvg('<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>',true),
+  loupe:_habSvg('<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>'),
+  crayon:_habSvg('<path d="M16.9 3.6a2.1 2.1 0 0 1 3 3L8.4 18.1l-4 1 1-4z"/><path d="M14.8 5.7l3 3"/>'),
+  plus:_habSvg('<path d="M12 5v14M5 12h14"/>'),
+  etoile:_habSvg('<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',true),
+  haltere:_habSvg('<path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/>'),
+  lit:_habSvg('<path d="M3 19V6.5M3 15h18v4M21 15v-2.4A2.6 2.6 0 0 0 18.4 10H11v5"/><circle cx="7" cy="11.2" r="1.9"/>'),
+  verre:_habSvg('<path d="M6 3h12l-1.6 16.2a2 2 0 0 1-2 1.8H9.6a2 2 0 0 1-2-1.8z"/><path d="M6.6 9h10.8"/>'),
+  pomme:_habSvg('<path d="M12 7c-2-2-6.5-1.5-6.5 3.5 0 4 2.7 9.5 5 9.5 1 0 1.2-.5 1.5-.5s.5.5 1.5.5c2.3 0 5-5.5 5-9.5C18.5 5.5 14 5 12 7z"/><path d="M12 7c0-2 1-3.5 3-4"/>',true),
+  course:_habSvg('<circle cx="14" cy="4.5" r="2"/><path d="M10 21l2.5-6-3-3 2.5-4 3 3 3.5 1M9.5 8L6 9.5 5 13.5M12.5 15l3.5 6"/>'),
+  lotus:_habSvg('<path d="M12 20c-4 0-8-2-9-6 3 0 5 1 6 2-1-3 0-7 3-10 3 3 4 7 3 10 1-1 3-2 6-2-1 4-5 6-9 6z"/>',true),
+  interdit:_habSvg('<circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/>'),
+  croix:_habSvg('<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>'),
+  coche:_habSvg('<path d="M5 12.5l4.5 4.5L19 7.5"/>')
+};
 function htmlHabitudesCoach(c){
   const l=habitudesDe(c);
   const g=habTauxGlobal(c);
+  const plein=l.length>=HAB_MAX;
   const dispo=HAB_CATALOGUE.filter(x=>!l.some(h=>h.cle===x.cle));
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">
-    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
-      <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Habitudes</span>
-      <span style="font-size:var(--fs-2xs);color:var(--text-faint)">${l.length}/${HAB_MAX}</span>
-    </div>
-    ${l.length
-      ? l.map(h=>`<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid rgba(255,255,255,.05)">
-          <span style="flex:1;min-width:0;font-size:var(--fs-sm);color:var(--text-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(h.libelle||h.cle)}</span>
-          <span style="font-size:var(--fs-sm);font-weight:800;color:var(--text);flex-shrink:0">${habTaux(c,h.cle)}&nbsp;%</span>
-          <button onclick="habCoachRetirer('${escapeHtml(h.cle)}')" aria-label="Retirer"
-            style="min-width:44px;min-height:44px;background:none;border:none;color:var(--sub);font-size:var(--fs-lg);cursor:pointer;flex-shrink:0">×</button>
-        </div>`).join('')
-      : '<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Aucune habitude assignée. Rien ne s\'affiche chez l\'athlète tant que tu n\'en poses pas.</div>'}
-    ${g!=null?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:9px;padding-top:9px;border-top:1px solid var(--border)">Moyenne sur ${HAB_FENETRE_JOURS} jours : ${g}&nbsp;%. Fenêtre glissante, le jour en cours n'est pas compté.</div>`:''}
-    ${l.length>=HAB_MAX
-      ? '<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-top:9px">Trois au maximum. Retires-en une pour en ajouter une autre.</div>'
-      : `<div style="margin-top:10px">
-          <select id="hab-cat" style="width:100%;margin-bottom:7px">
-            <option value="">Choisir dans la liste</option>
-            ${dispo.map(x=>`<option value="${x.cle}">${escapeHtml(x.lib)}</option>`).join('')}
-          </select>
-          <input id="hab-libre" maxlength="${HAB_LIBELLE_MAX}" placeholder="ou saisis-en une (${HAB_LIBELLE_MAX} caractères max)" style="width:100%;box-sizing:border-box">
-          <button class="btn btn-outline btn-sm" style="width:100%;margin-top:7px" onclick="habCoachAjouter()">Ajouter</button>
-        </div>`}
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:9px">Ni poids, ni mesure, ni restriction alimentaire : ce sont des données de santé, elles ne se cochent pas.</div>
-  </div>`;
+  const reco=HAB_RECOMMANDEES.map(r=>{
+    const deja=l.some(h=>h.cle===r.cle);
+    return '<button type="button" class="hbc-reco" data-ton="'+r.ton+'"'+((deja||plein)?' disabled':'')
+      +(deja?' data-deja=""':'')+' onclick="habCoachAjouter(\''+r.cle+'\')"'
+      +' title="'+escapeHtml(deja?'Déjà assignée':plein?'Trois habitudes au maximum':'Ajouter : '+((HAB_CATALOGUE.find(x=>x.cle===r.cle)||{}).lib||r.lib))+'">'
+      +'<span class="hbc-reco-i">'+HAB_ICO[r.ico]+'</span>'
+      +'<span class="hbc-reco-c"><b>'+escapeHtml(r.lib)+'</b><span>'+(deja?'Déjà assignée':escapeHtml(r.sous))+'</span></span>'
+      +(deja?'<span class="hbc-reco-ok">'+HAB_ICO.coche+'</span>':'')+'</button>';
+  }).join('');
+  const poses=l.length
+    ? l.map(h=>{
+        const sem=habSemaine(c,h.cle), n=sem.filter(x=>x===true).length;
+        const r=HAB_RECOMMANDEES.find(x=>x.cle===h.cle);
+        return '<div class="hbc-h"><span class="hbc-reco-i" data-ton="'+(r?r.ton:'gris')+'">'+HAB_ICO[r?r.ico:'cible']+'</span>'
+          +'<div class="hbc-h-c"><b>'+escapeHtml(h.libelle||h.cle)+'</b>'
+            +'<span class="hbc-h-j" role="img" aria-label="'+n+' jours cochés cette semaine">'
+              +sem.map(x=>'<i data-e="'+(x===true?'ok':(x===null?'futur':'vide'))+'"></i>').join('')+'<em>'+n+'/7</em></span></div>'
+          +'<div class="hbc-h-t"><strong>'+habTaux(c,h.cle)+'&nbsp;%</strong><span>sur '+HAB_FENETRE_JOURS+' jours</span></div>'
+          +'<button type="button" class="hbc-h-x" onclick="habCoachRetirer(\''+escapeHtml(h.cle)+'\')" aria-label="Retirer '+escapeHtml(h.libelle||h.cle)+'">'+HAB_ICO.croix+'</button>'
+          +'</div>';
+      }).join('')
+      +(g!=null?'<div class="hbc-moy">Moyenne sur '+HAB_FENETRE_JOURS+' jours : <b>'+g+'&nbsp;%</b>. Fenêtre glissante, le jour en cours n’est pas compté.</div>':'')
+    : '<div class="hbc-vide">'+HAB_ICO.haltere+'<b>Aucune habitude assignée pour le moment.</b>'
+      +'<span>Choisis une habitude dans la liste ci-dessus ou crée la tienne pour commencer à suivre les progrès de cet athlète. Rien ne s’affiche chez l’athlète tant que tu n’en poses pas.</span></div>';
+  return '<section class="hbc'+(_habReplie?' hbc-replie':'')+'">'
+    +'<div class="hbc-tete">'
+      +'<button type="button" class="hbc-pli" onclick="habCoachPlier()" aria-expanded="'+(!_habReplie)+'" aria-label="Replier les habitudes">'+HAB_ICO.chevron+'</button>'
+      +'<h3>Habitudes</h3><span class="hbc-compte">'+l.length+'/'+HAB_MAX+'</span>'
+      +'<span class="hbc-tete-s">Les habitudes permettent de suivre des comportements clés en dehors des entraînements.</span>'
+      +'<button type="button" class="hbc-info" onclick="habCoachRegles()" aria-label="Les règles des habitudes">'+HAB_ICO.info+'</button>'
+    +'</div>'
+    +'<div class="hbc-corps">'
+      +'<div class="hbc-carte">'
+        +'<div class="hbc-intro">'
+          +'<span class="hbc-intro-i">'+HAB_ICO.cible+'</span>'
+          +'<div class="hbc-intro-c"><h4>Suivi des <span>habitudes</span></h4><span>Ajoute jusqu’à '+HAB_MAX+' habitudes à suivre pour cet athlète.</span></div>'
+          +'<div class="hbc-astuce">'+HAB_ICO.ampoule+'<span>Les habitudes aident à améliorer la récupération, les performances et la constance sur le long terme.</span></div>'
+        +'</div>'
+        +'<div class="hbc-lbl">Ajouter une habitude</div>'
+        +(plein
+          ?'<div class="hbc-plein">Trois au maximum. Retires-en une pour en ajouter une autre.</div>'
+          :'<div class="hbc-ajout">'
+            +'<label class="hbc-champ hbc-liste">'+HAB_ICO.loupe
+              +'<select id="hab-cat" aria-label="Choisir une habitude"><option value="">Choisir dans la liste</option>'
+              +dispo.map(x=>'<option value="'+x.cle+'">'+escapeHtml(x.lib)+'</option>').join('')+'</select>'+HAB_ICO.chevron+'</label>'
+            +'<span class="hbc-ou">ou</span>'
+            +'<label class="hbc-champ">'+HAB_ICO.crayon
+              +'<input id="hab-libre" maxlength="'+HAB_LIBELLE_MAX+'" placeholder="Saisis-en une ('+HAB_LIBELLE_MAX+' caractères max)" aria-label="Habitude à saisir" onkeydown="if(event.key===\'Enter\')habCoachAjouter()"></label>'
+            +'<button type="button" class="btn btn-red hbc-ajouter" onclick="habCoachAjouter()">'+HAB_ICO.plus+'<span>Ajouter</span></button>'
+          +'</div>')
+        +'<div class="hbc-lbl hbc-lbl-reco">'+HAB_ICO.etoile+'Habitudes recommandées</div>'
+        +'<div class="hbc-recos">'+reco+'</div>'
+      +'</div>'
+      +'<div class="hbc-lbl">Habitudes ajoutées ('+l.length+'/'+HAB_MAX+')</div>'
+      +'<div class="hbc-poses">'+poses+'</div>'
+      +'<div class="hbc-note">Ni poids, ni mesure, ni restriction alimentaire : ce sont des données de santé, elles ne se cochent pas.</div>'
+    +'</div>'
+    +'</section>';
 }
 function renderHabitudesCoach(c){
   const z=document.getElementById('ccd-habitudes');
@@ -59583,18 +59658,30 @@ function renderHabitudesCoach(c){
   let h=''; try{ h=c?htmlHabitudesCoach(c):''; }catch(e){ h=''; }
   z.innerHTML=h;
 }
+function habCoachPlier(){
+  _habReplie=!_habReplie;
+  try{ renderHabitudesCoach(getOwnedClient(currentClientId)); }catch(e){}
+}
+function habCoachRegles(){
+  _sanFeuille('Les habitudes',
+    '<div class="san-vide">Trois habitudes au plus par athlète. Il les coche d’un appui sur son accueil, pour le jour même ou jusqu’à deux jours en arrière.</div>'
+    +'<div class="san-vide">Le pourcentage se lit sur '+HAB_FENETRE_JOURS+' jours glissants, sans le jour en cours. Retirer une habitude garde ses coches : la remettre plus tard retrouve tout.</div>'
+    +'<div class="san-vide">Une habitude ne peut porter ni sur un poids, ni sur une mesure, ni sur une restriction alimentaire : ce sont des données de santé.</div>');
+}
 // N3.2 — LE DOSSIER ENREGISTRE EST CELUI DE L'ATHLETE. getOwnedClient sans
 // second argument rend un objet DETACHE : DB.get reparse le JSON a chaque
 // appel. La mutation partait bien au serveur par pushOne, mais saveUser ne
 // range que currentUser — le coach. L'habitude reapparaissait donc effacee a
 // la reouverture de la fiche. On passe la carte, comme le fait deja
 // coachSetPhase.
-function habCoachAjouter(){
+// `cleForcee` : une habitude recommandee, ajoutee d'un appui sur sa carte.
+function habCoachAjouter(cleForcee){
   const users=DB.get('users')||{};
   const c=getOwnedClient(currentClientId,users);
   if(!c) return false;
-  const cat=(document.getElementById('hab-cat')||{}).value||'';
-  const libre=((document.getElementById('hab-libre')||{}).value||'').trim();
+  const force=(typeof cleForcee==='string'&&HAB_CATALOGUE.some(x=>x.cle===cleForcee))?cleForcee:'';
+  const cat=force||(document.getElementById('hab-cat')||{}).value||'';
+  const libre=force?'':((document.getElementById('hab-libre')||{}).value||'').trim();
   if(!cat&&!libre) return toast('Choisis une habitude ou saisis-en une','var(--orange)');
   // Le libellé libre porte sa propre clé, dérivée du texte : deux habitudes
   // écrites pareil sont la même habitude, et l'historique suit.
