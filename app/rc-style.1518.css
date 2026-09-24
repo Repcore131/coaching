@@ -2335,12 +2335,16 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .ls-sous{font-size:var(--fs-2xs);letter-spacing:clamp(1.5px,.6vw,4px);text-transform:uppercase;color:var(--sub);
   margin-top:5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ls-per{flex-shrink:0}
-.san-per-sel{position:relative;display:inline-flex;align-items:center;gap:6px;min-height:44px;
-  padding:0 8px;border:1px solid #33333a;border-radius:10px;background:#0f0f12;color:#fff;cursor:pointer}
-.san-per-sel svg{width:17px;height:17px;flex-shrink:0;pointer-events:none}
-.san-per-sel select{appearance:none;-webkit-appearance:none;background:transparent;border:0;
-  color:#fff;font-family:inherit;font-size:clamp(11px,3vw,13px);font-weight:700;cursor:pointer;padding:0;
-  min-height:44px;outline:none}
+.san-per-sel{position:relative;display:inline-flex;align-items:center;gap:5px;height:32px;
+  padding:0 8px;border:1px solid #33333a;border-radius:9px;background:#0f0f12;color:#fff;cursor:pointer;white-space:nowrap}
+.san-per-sel svg{width:13px;height:13px;flex-shrink:0;pointer-events:none}
+.san-per-sel,.san-per-lib{text-transform:none;letter-spacing:0}
+.san-per-lib{font-size:11px;font-weight:700;pointer-events:none}
+/* Le menu natif, transparent, couvre le bouton — et deborde en hauteur
+   jusqu'a 44 px : la zone du doigt, pas celle du dessin. */
+.san-per-sel select{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);width:100%;
+  min-height:44px;opacity:0;cursor:pointer;appearance:none;-webkit-appearance:none;border:0;margin:0;
+  font-size:16px}
 .san-per-sel select option{background:#111;color:#fff}
 .san-per-sel:focus-within{border-color:var(--sv-c,#e02020)}
 #ls-pas .san-per-sel{border-color:rgba(224,32,32,.5)}
@@ -2351,10 +2355,10 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .sv-g-ico svg{width:100%;height:100%}
 .sv-g-t{flex:1;min-width:0}
 .sv-g-t h3{margin:0;font-family:var(--pile-titre);font-size:clamp(15px,4.3vw,23px);overflow:hidden;text-overflow:ellipsis;letter-spacing:.8px;
-  color:#fff;text-transform:uppercase;font-weight:400;line-height:1.05;white-space:nowrap}
-.sv-g-t span{display:block;font-size:var(--fs-2xs);color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  color:#fff;text-transform:uppercase;font-weight:400;line-height:1.05}
+.sv-g-t span{display:block;font-size:var(--fs-2xs);color:var(--text-dim);line-height:1.3}
 .sv-g-obj{display:flex;flex-direction:column;padding-left:10px;border-left:1px solid #33333a}
-.sv-g-obj span{white-space:nowrap;font-size:9.5px;letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:700}
+.sv-g-obj span{white-space:nowrap;font-size:clamp(8px,2.3vw,9.5px);letter-spacing:.3px;text-transform:uppercase;color:var(--sub);font-weight:700}
 .sv-g-obj strong{font-family:var(--pile-titre);font-size:clamp(24px,7vw,32px);font-weight:400;line-height:1;
   color:var(--sv-c);letter-spacing:.5px;white-space:nowrap}
 .sv-g-obj small{font-size:var(--fs-xs);color:var(--text-dim);margin-left:5px;

@@ -67633,8 +67633,8 @@ vendredi 78 6h 44m
       } finally { currentUser=_sU; }})());
     ok('Le menu de période et le crayon de l’objectif tiennent la cible de 44 px',(()=>{
       const css=_stylesProd().map(x=>x.textContent).join('\n');
-      const m=css.match(/\.san-per-sel\{([^}]*)\}/);
-      if(!m) return _echec('regle .san-per-sel introuvable');
+      const m=css.match(/\.san-per-sel select\{([^}]*)\}/);
+      if(!m) return _echec('regle .san-per-sel select introuvable');
       if(Number((m[1].match(/min-height:(\d+)px/)||[])[1])<44) return _echec('le menu fait moins de 44 px');
       const e=css.match(/\.sv-g-edit\{([^}]*)\}/);
       if(!e) return _echec('regle .sv-g-edit introuvable');

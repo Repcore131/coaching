@@ -91748,14 +91748,19 @@ function _htmlCarteSante(u,quoi){
 // LE MENU DE PERIODE, dans l'en-tete de chaque section. Douze semaines en
 // arriere, comme les fleches permettaient ; on ne consulte pas l'avenir.
 function _htmlSanPeriode(quoi){
+  // ⚠ UN MENU NATIF PREND LA LARGEUR DE SA PLUS LONGUE OPTION. Kevin,
+  //   24/09/2026 : « le bouton "7 derniers jours" est trop grand, il chevauche
+  //   le sommeil ». Le libelle affiche est donc un <span> a la taille de la
+  //   periode choisie, et le <select> est pose dessus, transparent : il garde
+  //   le clavier, le lecteur d'ecran et la roue native du telephone.
+  const lib=k=>k===0?'7 derniers jours':(k===-1?'Semaine précédente':('Il y a '+(-k)+' semaines'));
+  const court=k=>k===0?'7 derniers jours':(k===-1?'Sem. précédente':('Il y a '+(-k)+' sem.'));
   let o='';
-  for(let k=0;k>=-11;k--){
-    const lib=k===0?'7 derniers jours':(k===-1?'Semaine précédente':('Il y a '+(-k)+' semaines'));
-    o+='<option value="'+k+'"'+(k===_sanOffset?' selected':'')+'>'+lib+'</option>';
-  }
+  for(let k=0;k>=-11;k--)
+    o+='<option value="'+k+'"'+(k===_sanOffset?' selected':'')+'>'+lib(k)+'</option>';
   return '<label class="san-per-sel">'+SAN_ICO.calendrier
-    +'<select onchange="sanPeriodeChoisir(this.value)" aria-label="Période affichée">'+o+'</select>'
-    +SAN_ICO.bas+'</label>';
+    +'<span class="san-per-lib">'+escapeHtml(court(_sanOffset))+'</span>'+SAN_ICO.bas
+    +'<select onchange="sanPeriodeChoisir(this.value)" aria-label="Période affichée">'+o+'</select></label>';
 }
 function sanPeriodeChoisir(v){
   const n=Math.round(Number(v));
