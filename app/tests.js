@@ -44184,6 +44184,55 @@ async function testExercices(){
         return true;
       } finally { _corpsVue=sv; _corpsMode=sm; }})());
 
+
+    // ══ LA MÊME DEMANDE, À TOUS CEUX À QUI ELLE MANQUE (24/09/2026) ══════
+    // Kevin : « réclamer la hauteur de genou à tes athlètes actuels ». Une
+    // mesure neuve manque à tout le monde le jour où elle arrive.
+    ok('UNE MESURE SE DEMANDE À TOUTE LA LISTE EN UN GESTE, ET À EUX SEULS',(()=>{
+      if(typeof demanderMesureATous!=='function') return _echec('la demande groupée n’existe pas');
+      const J=864e5, t=Date.now();
+      const sD=DB.get, sS=DB.set, sP=CLOUD.pushOne, sT=window.toastSync, sTo=window.toast,
+        sU=currentUser, sC=currentClientId;
+      let ecrit=null; const pousses=[];
+      try{
+        const ath=(id,extra)=>Object.assign({id:id,email:id+'@t.fr',role:'athlete',gender:'H',
+          coachId:'C6B',bilans:[Object.assign({type:'depart',date:t-30*J,'bil-weight':'80'},extra||{})]},{});
+        const users={};
+        // A : il manque la hauteur de genou. B aussi. C l'a. D est chez un
+        // autre coach. E n'a qu'un code d'invitation.
+        for(const [id,extra] of [['A',null],['B',null],['C',{'deb-rotule':'47'}]])
+          users[id+'@t.fr']=ath(id,extra);
+        users['D@t.fr']=Object.assign(ath('D'),{coachId:'AUTRE'});
+        users['E@t.fr']=Object.assign(ath('E'),{_fromCode:true});
+        currentUser={id:'C6B',email:'c6b@t.fr',role:'coach'};
+        currentClientId='A';
+        DB.get=k=>(k==='users')?users:sD.call(DB,k);
+        DB.set=(k,v)=>{ ecrit=v; return true; };
+        CLOUD.pushOne=(e)=>{ pousses.push(e); return Promise.resolve(true); };
+        window.toastSync=()=>{}; window.toast=()=>{};
+        // LES AUTRES : B seulement. C l'a déjà, D n'est pas à moi, E n'a pas
+        // de dossier, et A est l'athlète ouvert (il a son propre bouton).
+        const autres=ccdManqueAutres('deb-rotule').map(x=>x.id).sort();
+        if(autres.join()!=='B') return _echec('les autres : '+autres.join(','));
+        const n=demanderMesureATous('deb-rotule');
+        if(n!==1) return _echec(n+' demandes au lieu d’une');
+        if(!ecrit) return _echec('rien n’est écrit');
+        if(!(ecrit['B@t.fr'].demandesMesure||[]).length) return _echec('B n’a pas sa demande');
+        if((ecrit['C@t.fr'].demandesMesure||[]).length) return _echec('C, qui a la mesure, reçoit une demande');
+        if((ecrit['D@t.fr'].demandesMesure||[]).length) return _echec('un athlète d’un autre coach reçoit une demande');
+        if((ecrit['E@t.fr'].demandesMesure||[]).length) return _echec('une invitation non consommée reçoit une demande');
+        if(pousses.join()!=='B@t.fr') return _echec('poussées : '+pousses.join(','));
+        const d=ecrit['B@t.fr'].demandesMesure[0];
+        if(d.cle!=='deb-rotule'||!d.date||d.parQui!=='C6B')
+          return _echec('la demande groupée ne porte pas sa clé, sa date et son auteur : '+JSON.stringify(d));
+        // ⚠ ET ON NE REDEMANDE PAS A QUI A DEJA LA DEMANDE EN ATTENTE.
+        users['B@t.fr']=ecrit['B@t.fr'];
+        if(ccdManqueAutres('deb-rotule').length) return _echec('B est redemandé alors qu’il attend déjà');
+        if(demanderMesureATous('deb-rotule')!==0) return _echec('une seconde salve part quand même');
+        return true;
+      } finally { DB.get=sD; DB.set=sS; CLOUD.pushOne=sP; window.toastSync=sT; window.toast=sTo;
+        currentUser=sU; currentClientId=sC; }})());
+
     ok('LES CARTES DE ZONES COUVRENT LES MUSCLES DE CHAQUE VUE',(()=>{
       // Chaque silhouette porte sa carte : une image ou chaque pixel du corps
       // vaut le rang de son muscle dans CORPS_ZONES_ORDRE, fois CORPS_ZONES_PAS.
