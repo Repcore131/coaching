@@ -45066,12 +45066,21 @@ function anatPointsAuto(raw,vue){
   // & Contini : sommet → épaule = 0,18 H, tronc = 0,29 H, soit 0,63 tronc).
   // ⚠ UN TÉLÉPHONE DEVANT LE VISAGE EST DANS LE MASQUE : le haut de la
   //   personne reste le haut de la personne, le téléphone étant plus bas.
+  // ⚠ EN REMONTANT DEPUIS LES ÉPAULES, SANS SAUTER DE TROU. Chercher « le
+  //   pixel le plus haut au-dessus des épaules » prenait la lampe du plafond
+  //   pour une tête (Kevin, 24/09/2026) : un objet clair derrière la personne
+  //   entre dans le masque. On suit la colonne du cou vers le haut et on
+  //   s'arrête au premier vide de plus de deux lignes.
   let vertex=null;
   if(bits){
-    const x0=Math.max(0,Math.round((mEp.x-0.18*T)*kx)), x1=Math.min(m.w-1,Math.round((mEp.x+0.18*T)*kx));
-    for(let y=0;y<m.h&&!vertex;y++){
-      for(let x=x0;x<=x1;x++) if(bits[y*m.w+x]){ vertex={x:mEp.x,y:y/ky}; break; }
+    const x0=Math.max(0,Math.round((mEp.x-0.12*T)*kx)), x1=Math.min(m.w-1,Math.round((mEp.x+0.12*T)*kx));
+    let y=Math.min(m.h-1,Math.round((mEp.y-0.05*T)*ky)), haut=null, vide=0;
+    for(;y>=0;y--){
+      let plein=false;
+      for(let x=x0;x<=x1;x++) if(bits[y*m.w+x]){ plein=true; break; }
+      if(plein){ haut=y; vide=0; } else if(++vide>2) break;
     }
+    if(haut!=null) vertex={x:mEp.x,y:haut/ky};
     if(vertex&&!(vertex.y>mEp.y-0.95*T&&vertex.y<mEp.y-0.4*T)) vertex=null;
   }
   pose('vertex',vertex||{x:mEp.x,y:mEp.y-0.63*T},vertex?1:0.5);
@@ -45741,6 +45750,8 @@ const ANAT_SVG={
   relancer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>',
   points:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="9" r="2.2"/><circle cx="9" cy="18" r="2.2"/><path d="M8 7l8 1.6M16.8 10.8l-6.4 5.6"/></svg>',
   x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  reglage:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>',
+  recadrer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v16h16M2 6h16v16"/></svg>',
   squat:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4" r="2"/><path d="M4 8h16M12 8l-3 6 5 2-1 6M9 14l-4 1"/></svg>',
   souleve:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="4.5" r="2"/><path d="M9 7l4 5v8M13 12l-6 1M3 20h18M5 17v6M19 17v6"/></svg>',
   developpe:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6h20M5 3v6M19 3v6M8 6v7M16 6v7M4 17h16M6 17l2-4h8l2 4"/></svg>'
@@ -45763,6 +45774,134 @@ function _anatTraits(vue){
     else out.push([a,b,c]);
   }
   return out;
+}
+
+/**
+ * LES CONSIGNES DE PLACEMENT, une par repère — l'étoile « * » de l'écran
+ * d'édition. Kevin : « donne le nom des points et une consigne sur comment
+ * ils doivent être placés ». Écrites pour une photo, pas pour la palpation :
+ * ce qu'on VOIT, et où ça tombe quand on ne le voit pas.
+ */
+const ANAT_AIDE=Object.freeze({
+  vertex:{court:'Crâne',aide:'Le point le plus haut du crâne, cheveux aplatis : c’est lui qui fixe l’échelle avec les talons. Si le téléphone cache le visage, estime le haut de la tête dans l’axe du cou — jamais la lampe ou le mur derrière.'},
+  acromion:{court:'Acromion',aide:'La pointe osseuse du dessus de l’épaule, là où la clavicule se termine : sur le haut du moignon de l’épaule, 2 à 3 cm en dedans du bord du deltoïde. C’est l’os, pas le muscle.'},
+  epaule:{court:'Épaule',aide:'Le centre de l’articulation de l’épaule : au milieu du moignon, environ 3 cm sous l’acromion, dans le prolongement de l’axe du bras.'},
+  deltoide:{court:'Deltoïde',aide:'Le bord extérieur du deltoïde, à l’endroit où l’épaule est la plus large sur la photo. Sert au rapport deltoïdes / taille (le V).'},
+  coude:{court:'Coude',aide:'Le centre du coude : de face, au milieu du pli du coude ; de dos, sur la pointe du coude (olécrane).'},
+  poignet:{court:'Poignet',aide:'Le milieu du poignet, à la hauteur des deux petits os saillants (styloïdes), juste avant la main.'},
+  taille:{court:'Taille',aide:'Le bord de la taille à son endroit le plus étroit, entre les dernières côtes et le haut du bassin. Sert au rapport deltoïdes / taille.'},
+  crete:{court:'Crête',aide:'Le sommet de l’os du bassin sur le côté : là où l’on pose les mains « sur les hanches », en général à la hauteur du nombril ou juste en dessous, au-dessus de l’élastique du sous-vêtement.'},
+  hanche:{court:'Hanche',aide:'Le centre de l’articulation de la hanche : de face, dans le pli de l’aine, à hauteur de la bosse osseuse sur le côté de la cuisse (grand trochanter). Environ 8 à 10 cm sous la crête.'},
+  genou:{court:'Genou',aide:'Le centre du genou : de face, au milieu de la rotule ; de dos, au milieu du creux poplité (le pli derrière le genou).'},
+  cheville:{court:'Cheville',aide:'Le centre de la cheville, à mi-chemin entre les deux bosses osseuses (malléoles interne et externe).'},
+  talon:{court:'Talon',aide:'Le bas du talon, là où il touche le sol. Avec le sommet du crâne, c’est ce point qui met la photo à l’échelle de la taille.'},
+  pointe:{court:'Orteil',aide:'Le bout du gros orteil. Sert à lire l’ouverture du pied (talon → orteil).'},
+  c7:{court:'C7',aide:'La vertèbre la plus saillante à la base du cou (C7) : la bosse qui dépasse le plus quand on penche la tête en avant.'},
+  omoplate:{court:'Omoplate',aide:'La pointe basse de l’omoplate (angle inférieur), en général à la hauteur de la 7e côte. Si elle ne se voit pas, suis le bord interne de l’omoplate jusqu’en bas.'},
+  sacrum:{court:'Sacrum',aide:'Le milieu entre les deux fossettes du bas du dos (fossettes de Vénus), au-dessus du pli fessier.'}
+});
+function anatAide(cle){
+  const k=String(cle||'').replace(/_[lr]$/,'');
+  return ANAT_AIDE[k]||{court:k,aide:''};
+}
+/** Où poser le nom d'un point, en hauteur (fraction du cadre) : les repères
+ *  voisins — taille et crête, talon et orteil — ne se couvrent plus. */
+const ANAT_NOM_DY=Object.freeze({acromion:-0.014,deltoide:0.02,taille:-0.012,crete:0.024,talon:0.022,pointe:0.04,cheville:-0.008,epaule:0.042});
+/** Le nom complet d'un repère, avec le côté de l'écran. */
+function anatNomPoint(vue,cle){
+  const r=anatRepere(vue,cle);
+  return (r?r.lib:cle)+(String(cle).endsWith('_l')?' · écran gauche':String(cle).endsWith('_r')?' · écran droit':'');
+}
+
+// ── LES RÉGLAGES DE LA PHOTO ───────────────────────────────────────────────
+// Kevin : « donne la possibilité de mettre du contraste, recadrer la photo et
+// jouer sur la luminosité ». Rien n'est réécrit : la photo reste celle de
+// l'athlète ; les réglages sont un FILTRE d'affichage et un CADRE, rangés dans
+// `morphoAnat.opts.photo`. La détection, relancée, lit la photo réglée — c'est
+// ce qui sauve une photo à contre-jour.
+const ANAT_REGLAGE_DEFAUT=Object.freeze({lum:100,con:100,cadre:null});
+function anatReglage(anat,vue){
+  const p=anat&&anat.opts&&anat.opts.photo&&anat.opts.photo[vue];
+  const r=Object.assign({},ANAT_REGLAGE_DEFAUT,p||{});
+  r.lum=Math.max(40,Math.min(250,Number(r.lum)||100));
+  r.con=Math.max(40,Math.min(250,Number(r.con)||100));
+  const c=r.cadre;
+  r.cadre=(c&&c.x1-c.x0>0.05&&c.y1-c.y0>0.05)?{x0:Math.max(0,c.x0),y0:Math.max(0,c.y0),x1:Math.min(1,c.x1),y1:Math.min(1,c.y1)}:null;
+  return r;
+}
+function anatFiltre(r){
+  return (r&&(r.lum!==100||r.con!==100))?'brightness('+r.lum+'%) contrast('+r.con+'%)':'';
+}
+let _anatRecadre=false;
+let _anatSauveMinuteur=null;
+/** Écrit un réglage de photo dans le dossier, sans toast à chaque cran. */
+function anatReglerPhoto(vue,patch,rendre){
+  const c=getOwnedClient(currentClientId);
+  if(!c||!c.morphoAnat) return;
+  const users=DB.get('users')||{};
+  const d=users[c.email];
+  if(!d||!d.morphoAnat) return;
+  const a=d.morphoAnat;
+  a.opts=a.opts||{};
+  a.opts.photo=a.opts.photo||{};
+  a.opts.photo[vue]=Object.assign({},anatReglage(a,vue),patch);
+  d.updatedAt=Date.now();
+  users[c.email]=d;
+  DB.set('users',users);
+  clearTimeout(_anatSauveMinuteur);
+  _anatSauveMinuteur=setTimeout(()=>{ try{ CLOUD.pushOne(c.email,d); }catch(e){} },800);
+  if(rendre){ const cc=getOwnedClient(currentClientId); if(cc) renderAnatCoach(cc); }
+}
+/** Le curseur bouge : on applique tout de suite, on écrit au relâché. */
+function anatCurseur(el,nom,fin){
+  const z=document.getElementById('ccd-anat');
+  const vue=z&&z.querySelector('.an-scene')?.getAttribute('data-vue');
+  if(!vue) return;
+  const v=Number(el.value)||100;
+  const lum=nom==='lum'?v:Number(z.querySelector('input[data-r="lum"]')?.value||100);
+  const con=nom==='con'?v:Number(z.querySelector('input[data-r="con"]')?.value||100);
+  const f=anatFiltre({lum,con});
+  z.querySelectorAll('img[data-v="'+vue+'"]').forEach(i=>{ i.style.filter=f; });
+  const l=z.querySelector('.an-loupe'); if(l) l.style.filter=f;
+  const s=el.parentElement&&el.parentElement.querySelector('output'); if(s) s.textContent=v+' %';
+  if(fin) anatReglerPhoto(vue,{[nom]:v},false);
+}
+function anatCadrerPersonne(){
+  const c=getOwnedClient(currentClientId);
+  if(!c||!c.morphoAnat) return;
+  const vue=(_anatEdit&&_anatEdit.vue)||(_anatVueActive==='dos'&&c.morphoAnat.dos?'dos':'face');
+  const pts=(_anatEdit&&_anatEdit.pts)||anatPoints(c.morphoAnat,vue)||{};
+  const xs=[],ys=[];
+  for(const k in pts){ xs.push(pts[k][0]); ys.push(pts[k][1]); }
+  if(xs.length<4) return;
+  const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+  const mx=(x1-x0)*0.18+0.02, my=(y1-y0)*0.05+0.01;
+  anatReglerPhoto(vue,{cadre:{x0:x0-mx,y0:y0-my,x1:x1+mx,y1:y1+my}},true);
+}
+function anatPhotoEntiere(){
+  const c=getOwnedClient(currentClientId);
+  if(!c||!c.morphoAnat) return;
+  const vue=(_anatEdit&&_anatEdit.vue)||(_anatVueActive==='dos'&&c.morphoAnat.dos?'dos':'face');
+  _anatRecadre=false;
+  anatReglerPhoto(vue,{cadre:null},true);
+}
+function anatReinitialiserPhoto(){
+  const c=getOwnedClient(currentClientId);
+  if(!c||!c.morphoAnat) return;
+  const vue=(_anatEdit&&_anatEdit.vue)||(_anatVueActive==='dos'&&c.morphoAnat.dos?'dos':'face');
+  _anatRecadre=false;
+  anatReglerPhoto(vue,{lum:100,con:100,cadre:null},true);
+}
+function anatModeRecadrage(on){
+  _anatRecadre=!!on;
+  const c=getOwnedClient(currentClientId); if(c) renderAnatCoach(c);
+}
+/** Choisir un point depuis la liste des repères (et montrer sa consigne). */
+function anatChoisirPoint(k){
+  if(!_anatEdit) return;
+  _anatEdit.sel=k;
+  _anatEdit.aide=k;
+  const c=getOwnedClient(currentClientId); if(c) renderAnatCoach(c);
 }
 
 /** L'analyse est-elle à faire (ou à refaire) pour ce bilan ? */
@@ -45824,7 +45963,10 @@ async function anatAnalyser(email,force){
     const ancien=(c.morphoAnat&&c.morphoAnat.v>=2&&Number(c.morphoAnat.bilan)===pb.date)?c.morphoAnat:null;
     const vue=async(nom,src)=>{
       let r=null;
-      try{ r=await lire(src); }catch(e){ r=null; }
+      // LA DÉTECTION LIT LA PHOTO RÉGLÉE : luminosité, contraste et cadre du
+      // coach — c'est ce qui rattrape une photo à contre-jour.
+      const rg=anatReglage(c.morphoAnat,nom);
+      try{ r=await lire(src,{filtre:anatFiltre(rg),cadre:rg.cadre}); }catch(e){ r=null; }
       let auto=(r&&r.ok)?anatPointsAuto(r,nom):null;
       let w=r&&r.w, h=r&&r.h;
       if(!w||!h){ const d=await _anatDimensions(src); if(!d) return null; w=d.w; h=d.h; }
@@ -45836,7 +45978,7 @@ async function anatAnalyser(email,force){
     const dos=await vue('dos',pb.dos);
     if(!face) throw new Error('la photo de face n’a pas pu être lue');
     res={v:ANAT_VERSION,date:Date.now(),bilan:pb.date,depart:!!(pb.bilan&&pb.bilan.type==='depart'),
-      face,dos,opts:(ancien&&ancien.opts)||{}};
+      face,dos,opts:(ancien&&ancien.opts)||((c.morphoAnat&&c.morphoAnat.opts&&c.morphoAnat.opts.photo)?{photo:c.morphoAnat.opts.photo}:{})};
   }catch(e){
     _anatEchecs.set(email,String((e&&e.message)||e||'échec'));
   }
@@ -45951,7 +46093,36 @@ function _anatBrancherEdition(z){
   const img=scene&&scene.querySelector('img.an-photo');
   if(!svg||!img) return;
   const W=Number(scene.getAttribute('data-w')),H=Number(scene.getAttribute('data-h'));
+  const E=Number(scene.getAttribute('data-e'))||H;
   const e=_anatEdit;
+  // LE RECADRAGE : on trace un rectangle sur la photo, il devient le cadre.
+  if(_anatRecadre){
+    const r=svg.querySelector('.an-cadre-r');
+    const vers=(ev)=>{
+      const pt=svg.createSVGPoint(); pt.x=ev.clientX; pt.y=ev.clientY;
+      const m=svg.getScreenCTM(); if(!m) return null;
+      const q=pt.matrixTransform(m.inverse());
+      return {x:Math.max(0,Math.min(W,q.x)),y:Math.max(0,Math.min(H,q.y))};
+    };
+    let d0=null;
+    svg.style.touchAction='none';
+    svg.addEventListener('pointerdown',ev=>{ d0=vers(ev); if(!d0) return; ev.preventDefault(); try{ svg.setPointerCapture(ev.pointerId); }catch(x){} });
+    svg.addEventListener('pointermove',ev=>{
+      if(!d0||!r) return;
+      const q=vers(ev); if(!q) return;
+      r.setAttribute('x',Math.min(d0.x,q.x).toFixed(1)); r.setAttribute('y',Math.min(d0.y,q.y).toFixed(1));
+      r.setAttribute('width',Math.abs(q.x-d0.x).toFixed(1)); r.setAttribute('height',Math.abs(q.y-d0.y).toFixed(1));
+    });
+    svg.addEventListener('pointerup',ev=>{
+      if(!d0) return;
+      const q=vers(ev); const a0=d0; d0=null;
+      if(!q||Math.abs(q.x-a0.x)<W*0.08||Math.abs(q.y-a0.y)<H*0.08) return;
+      const vue=scene.getAttribute('data-vue');
+      _anatRecadre=false;
+      anatReglerPhoto(vue,{cadre:{x0:Math.min(a0.x,q.x)/W,y0:Math.min(a0.y,q.y)/H,x1:Math.max(a0.x,q.x)/W,y1:Math.max(a0.y,q.y)/H}},true);
+    });
+    return;
+  }
   if(!e){
     let dernier={k:null,t:0};
     const saisir=(k)=>{ if(k) anatEditer(k); };
@@ -45986,10 +46157,19 @@ function _anatBrancherEdition(z){
     return (r?r.lib:k)+(k.endsWith('_l')?' (écran gauche)':k.endsWith('_r')?' (écran droit)':'');
   };
   const choisir=(k)=>{
-    e.sel=k;
+    e.sel=k; e.aide=k;
     svg.querySelectorAll('.an-pt').forEach(c=>c.classList.toggle('actif',c.getAttribute('data-k')===k));
-    const nom=scene.querySelector('.an-nom');
+    svg.querySelectorAll('.an-pt-t').forEach(t=>t.classList.toggle('actif',t.getAttribute('data-t')===k));
+    const nom=scene.parentElement&&scene.parentElement.querySelector('.an-nom');
     if(nom) nom.textContent=nomDe(k)+' — glisse-le, ou touche l’endroit où il doit aller';
+    // La consigne suit le point choisi, et la liste aussi.
+    const z2=scene.closest('.an');
+    const cs=z2&&z2.querySelector('.an-consigne');
+    if(cs){ cs.innerHTML='<b>* '+escapeHtml(anatNomPoint(e.vue,k))+'</b><span>'+escapeHtml(anatAide(k).aide)+'</span>'; }
+    if(z2) z2.querySelectorAll('.an-rep-c').forEach(x=>{
+      const b=x.querySelector('.an-rep-n'); const on=!!b&&(b.getAttribute('onclick')||'').indexOf("'"+k+"'")>=0;
+      x.classList.toggle('actif',on);
+    });
   };
   const deplacer=(k,x,y)=>{
     e.pts[k]=[Math.round(x/W*10000)/10000,Math.round(y/H*10000)/10000,2];
@@ -45997,6 +46177,10 @@ function _anatBrancherEdition(z){
     svg.querySelectorAll('.an-pt[data-k="'+k+'"]').forEach(c=>{ c.classList.add('man'); c.classList.remove('est'); });
     svg.querySelectorAll('line[data-a="'+k+'"]').forEach(l=>{ l.setAttribute('x1',x.toFixed(1)); l.setAttribute('y1',y.toFixed(1)); });
     svg.querySelectorAll('line[data-b="'+k+'"]').forEach(l=>{ l.setAttribute('x2',x.toFixed(1)); l.setAttribute('y2',y.toFixed(1)); });
+    svg.querySelectorAll('text[data-t="'+k+'"]').forEach(t=>{
+      const g=t.getAttribute('text-anchor')==='end';
+      t.setAttribute('x',(x+(g?-1:1)*E*0.022).toFixed(1)); t.setAttribute('y',(y+Number(t.getAttribute('data-dy')||0)).toFixed(1));
+    });
     if(loupe){
       // LA LOUPE : le doigt cache le point qu'il déplace. Elle montre la photo
       // grossie trois fois autour du point, au-dessus du doigt.
@@ -46013,7 +46197,7 @@ function _anatBrancherEdition(z){
   };
   /** Le point le plus proche, dans un rayon de prise raisonnable. */
   const plusProche=(p)=>{
-    let best=null,d0=H*0.045;
+    let best=null,d0=E*0.045;
     for(const k of Object.keys(e.pts)){
       const q=e.pts[k];
       const d=Math.hypot(q[0]*W-p.x,q[1]*H-p.y);
@@ -46052,7 +46236,7 @@ function _anatBrancherEdition(z){
     const t=/** @type {Element} */(ev.target);
     const k=t&&t.getAttribute&&t.getAttribute('data-k');
     if(!k||!e.pts[k]) return;
-    const pas=(ev.shiftKey?10:2)*H/1000;
+    const pas=(ev.shiftKey?10:2)*E/1000;
     const d={ArrowLeft:[-pas,0],ArrowRight:[pas,0],ArrowUp:[0,-pas],ArrowDown:[0,pas]}[ev.key];
     if(!d) return;
     ev.preventDefault();
@@ -46091,13 +46275,14 @@ function _anatCadrage(zone,v,aspect){
   const z=_anatAjuster(zone,aspect);
   return {l:-z.x0/z.w*100,t:-z.y0/z.h*100,w:v.w/z.w*100,h:v.h/z.h*100,z};
 }
-function _anatImg(src,cad){
+function _anatImg(src,cad,vue,filtre){
   if(!cad||!src) return '';
-  return '<img class="an-img" src="'+escapeHtml(src)+'" alt="" loading="lazy" decoding="async" draggable="false" style="left:'+cad.l.toFixed(3)+'%;top:'+cad.t.toFixed(3)
-    +'%;width:'+cad.w.toFixed(3)+'%;height:'+cad.h.toFixed(3)+'%">';
+  return '<img class="an-img" src="'+escapeHtml(src)+'" alt="" loading="lazy" decoding="async" draggable="false"'+(vue?' data-v="'+vue+'"':'')+' style="left:'+cad.l.toFixed(3)+'%;top:'+cad.t.toFixed(3)
+    +'%;width:'+cad.w.toFixed(3)+'%;height:'+cad.h.toFixed(3)+'%'+(filtre?';filter:'+filtre:'')+'">';
 }
 /** Les traits et les points d'une vue, dans le repère de pixels de la photo. */
-function _anatDessin(vue,pts,W,H,edit){
+function _anatDessin(vue,pts,W,H,edit,E){
+  E=E||H;
   const P=k=>pts[k]?{x:pts[k][0]*W,y:pts[k][1]*H,e:pts[k][2]}:null;
   let s='';
   // La ligne du sol et le fil à plomb : ce qui met la photo à l'échelle.
@@ -46112,16 +46297,24 @@ function _anatDessin(vue,pts,W,H,edit){
     if(!A||!B) continue;
     s+='<line class="an-t '+c+'" data-a="'+a+'" data-b="'+b+'" x1="'+A.x.toFixed(1)+'" y1="'+A.y.toFixed(1)+'" x2="'+B.x.toFixed(1)+'" y2="'+B.y.toFixed(1)+'"/>';
   }
-  const r=H*(edit?0.0105:0.0068);
+  const r=E*(edit?0.0105:0.0068);
+  const cx=(()=>{ const a=P('hanche_l'),b=P('hanche_r'); return a&&b?(a.x+b.x)/2:W/2; })();
   for(const k of anatCles(vue)){
     const p=P(k);
     if(!p) continue;
     const rep=anatRepere(vue,k);
     const cls='an-pt'+(p.e>=2?' man':(p.e<1?' est':''))+(rep&&rep.est?' an-pt-os':'');
-    s+='<circle class="an-hit" data-k="'+k+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="'+(H*(edit?0.032:0.02)).toFixed(1)+'">'
+    s+='<circle class="an-hit" data-k="'+k+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="'+(E*(edit?0.03:0.02)).toFixed(1)+'">'
       +(edit?'':'<title>'+escapeHtml((rep?rep.lib:k)+' — double-clic pour le déplacer')+'</title>')+'</circle>';
     s+='<circle class="'+cls+'" data-k="'+k+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="'+r.toFixed(1)+'"'
       +(edit?' tabindex="0" role="button" aria-label="'+escapeHtml((rep?rep.lib:k)+(k.endsWith('_l')?', côté gauche de l’écran':k.endsWith('_r')?', côté droit de l’écran':''))+'. Flèches pour déplacer."':'')+'/>';
+    // LE NOM DU POINT, en édition : côté extérieur, pour ne pas couvrir le corps.
+    if(edit){
+      const g=p.x<cx-E*0.01, mil=Math.abs(p.x-cx)<=E*0.01;
+      const dx=(g?-1:1)*E*0.022;
+      const dy=E*(ANAT_NOM_DY[k.replace(/_[lr]$/,'')]||0.007);
+      s+='<text class="an-pt-t" data-t="'+k+'" data-dy="'+dy.toFixed(1)+'" x="'+(p.x+dx).toFixed(1)+'" y="'+(p.y+dy).toFixed(1)+'" font-size="'+(E*0.021).toFixed(1)+'" text-anchor="'+(g&&!mil?'end':'start')+'">'+escapeHtml(anatAide(k).court)+'</text>';
+    }
   }
   return s;
 }
@@ -46219,11 +46412,19 @@ function _htmlAnat(c){
   const src=vueAct==='dos'?pb.dos:pb.face;
   const pts=edit?edit.pts:anatPoints(a,vueAct);
   const opts=edit?edit.opts:res.opts;
-  const W=V.w,H=V.h,G=Math.round(W*0.42),TW=W+2*G;
+  const W=V.w,H=V.h;
+  // LE CADRE : toute la photo, ou la partie que le coach a recadrée. Tout —
+  // photo, traits, étiquettes — se dessine dans le repère de pixels de la
+  // photo ; le cadre ne change que la fenêtre.
+  const reglage=anatReglage(a,vueAct);
+  const filtre=anatFiltre(reglage);
+  const C=reglage.cadre?{x0:reglage.cadre.x0*W,y0:reglage.cadre.y0*H,x1:reglage.cadre.x1*W,y1:reglage.cadre.y1*H}:{x0:0,y0:0,x1:W,y1:H};
+  const CW=C.x1-C.x0,CH=C.y1-C.y0,G=Math.round(CW*0.42),TW=CW+2*G,VX=C.x0-G;
+  const pctX=x=>((x-VX)/TW*100);
 
   // L'anneau : une étiquette par région lisible sur cette vue.
   let anneau='',fils='';
-  if(!edit){
+  if(!edit&&!_anatRecadre){
     const M=res;
     const cotes=anatCotes(vueAct,vueAct==='face'&&opts.miroir);
     const Pp=k=>pts[k]?{x:pts[k][0]*W,y:pts[k][1]*H}:null;
@@ -46233,35 +46434,42 @@ function _htmlAnat(c){
         genoux:()=>P2('genou','g'),pieds:()=>P2('pointe','d')},
       dos:{epaules:()=>P2('acromion','g'),dos:()=>Pp('c7')&&Pp('sacrum')?_anatMil(Pp('c7'),Pp('sacrum')):null,bassin:()=>P2('crete','g'),
         bras:()=>P2('coude','d'),genoux:()=>P2('genou','d')}}[vueAct];
-    const ecranG=k=>{ const p=ancre[k]&&ancre[k](); return p?p.x<W/2:true; };
     const et=[];
     M.fiches.forEach(f=>{
       const fn=ancre[f.cle]; if(!fn) return;
       const p=fn(); if(!p) return;
-      et.push({f,p,cote:ecranG(f.cle)?'g':'d'});
+      // Hors du cadre : pas d'étiquette.
+      if(p.x<C.x0||p.x>C.x1||p.y<C.y0||p.y>C.y1) return;
+      et.push({f,p,cote:p.x<(C.x0+C.x1)/2?'g':'d'});
     });
     for(const cote of ['g','d']){
       const l=et.filter(e=>e.cote===cote).sort((x,y)=>x.p.y-y.p.y);
-      let min=H*0.05;
-      l.forEach(e=>{ e.y=Math.max(e.p.y,min); min=e.y+H*0.1; });
-      const deb=l.length?l[l.length-1].y-H*0.96:0;
+      let min=C.y0+CH*0.05;
+      l.forEach(e=>{ e.y=Math.max(e.p.y,min); min=e.y+CH*0.1; });
+      const deb=l.length?l[l.length-1].y-(C.y0+CH*0.96):0;
       if(deb>0) l.forEach(e=>{ e.y-=deb; });
     }
     et.forEach(e=>{
-      const xl=e.cote==='g'?-G*0.14:W+G*0.14;
+      const xl=e.cote==='g'?C.x0-G*0.14:C.x1+G*0.14;
       fils+='<polyline class="an-fil" points="'+xl.toFixed(1)+','+e.y.toFixed(1)+' '+e.p.x.toFixed(1)+','+e.p.y.toFixed(1)+'"/>'
-        +'<circle class="an-fil-p" cx="'+e.p.x.toFixed(1)+'" cy="'+e.p.y.toFixed(1)+'" r="'+(H*0.009).toFixed(1)+'"/>';
-      anneau+='<button type="button" class="an-lbl an-lbl-'+e.cote+'" data-k="'+e.f.cle+'" data-n="'+(e.f.niveau==null?'':Math.abs(e.f.niveau))+'" style="top:'+(e.y/H*100).toFixed(2)+'%;'
-        +(e.cote==='g'?'right:'+((W+G*1.14)/TW*100).toFixed(2)+'%':'left:'+((G+W+G*0.14)/TW*100).toFixed(2)+'%')+'" onclick="anatOuvrir(\''+e.f.cle+'\',true)">'+escapeHtml(e.f.lib)+'</button>';
+        +'<circle class="an-fil-p" cx="'+e.p.x.toFixed(1)+'" cy="'+e.p.y.toFixed(1)+'" r="'+(CH*0.009).toFixed(1)+'"/>';
+      anneau+='<button type="button" class="an-lbl an-lbl-'+e.cote+'" data-k="'+e.f.cle+'" data-n="'+(e.f.niveau==null?'':Math.abs(e.f.niveau))+'" style="top:'+((e.y-C.y0)/CH*100).toFixed(2)+'%;'
+        +(e.cote==='g'?'right:'+(100-pctX(xl)).toFixed(2)+'%':'left:'+pctX(xl).toFixed(2)+'%')+'" onclick="anatOuvrir(\''+e.f.cle+'\',true)">'+escapeHtml(e.f.lib)+'</button>';
     });
   }
   const echelle=res.echelle;
-  const scene='<div class="an-scene'+(edit?' an-edit':'')+'" data-vue="'+vueAct+'"'+(edit?' data-edit="1"':'')+' data-w="'+W+'" data-h="'+H+'" style="aspect-ratio:'+TW+'/'+H+';max-width:calc(78vh * '+(TW/H).toFixed(4)+')">'
-    +'<img class="an-photo" src="'+escapeHtml(src)+'" alt="Photo de '+(vueAct==='face'?'face':'dos')+' du premier bilan" decoding="async" draggable="false" style="left:'+(G/TW*100).toFixed(3)+'%;width:'+(W/TW*100).toFixed(3)+'%">'
-    +'<svg class="an-os" viewBox="'+(-G)+' 0 '+TW+' '+H+'" preserveAspectRatio="xMidYMid meet"'+(edit?' aria-label="Repères déplaçables"':' aria-hidden="true"')+'>'+fils+_anatDessin(vueAct,pts,W,H,!!edit)+'</svg>'
+  // La photo : positionnée pour que le cadre remplisse la fenêtre, et rognée
+  // au cadre (les marges des étiquettes restent sombres).
+  const clip=reglage.cadre?';clip-path:inset('+(C.y0/H*100).toFixed(3)+'% '+((W-C.x1)/W*100).toFixed(3)+'% '+((H-C.y1)/H*100).toFixed(3)+'% '+(C.x0/W*100).toFixed(3)+'%)':'';
+  const scene='<div class="an-scene'+(edit?' an-edit':'')+(_anatRecadre?' an-recadre':'')+'" data-vue="'+vueAct+'"'+(edit?' data-edit="1"':'')+' data-w="'+W+'" data-h="'+H+'" data-e="'+CH.toFixed(1)+'" style="aspect-ratio:'+TW.toFixed(1)+'/'+CH.toFixed(1)+';max-width:calc(78vh * '+(TW/CH).toFixed(4)+')">'
+    +'<img class="an-photo" data-v="'+vueAct+'" src="'+escapeHtml(src)+'" alt="Photo de '+(vueAct==='face'?'face':'dos')+' du premier bilan" decoding="async" draggable="false" style="left:'+pctX(0).toFixed(3)+'%;top:'+(-C.y0/CH*100).toFixed(3)+'%;width:'+(W/TW*100).toFixed(3)+'%;height:'+(H/CH*100).toFixed(3)+'%'+clip+(filtre?';filter:'+filtre:'')+'">'
+    +'<svg class="an-os" viewBox="'+VX.toFixed(1)+' '+C.y0.toFixed(1)+' '+TW.toFixed(1)+' '+CH.toFixed(1)+'" preserveAspectRatio="xMidYMid meet"'+(edit?' aria-label="Repères déplaçables"':' aria-hidden="true"')+'>'+fils+_anatDessin(vueAct,pts,W,H,!!edit,CH)
+      +(_anatRecadre?'<rect class="an-cadre-r" x="0" y="0" width="0" height="0"/>':'')+'</svg>'
     +anneau
-    +(edit?'<div class="an-loupe" aria-hidden="true"></div><div class="an-nom" aria-live="polite">Touche un point et fais-le glisser, ou sélectionne-le puis touche l’endroit où il doit aller</div>':'')
-    +'</div>';
+    +(edit?'<div class="an-loupe" aria-hidden="true"'+(filtre?' style="filter:'+filtre+'"':'')+'></div>':'')
+    +'</div>'
+    +(edit?'<div class="an-nom" aria-live="polite">Touche un point et fais-le glisser, ou sélectionne-le puis touche l’endroit où il doit aller</div>':'')
+    +(_anatRecadre?'<div class="an-nom">Trace sur la photo le rectangle à garder</div>':'');
   // Sous la scène : l'échelle, les options, et le geste d'édition.
   const ath=(s)=>{ const cc=anatCotes('face',!!opts.miroir); return s===cc.g?'gauche':'droit'; };
   const optsHtml=vueAct==='face'?'<div class="an-opts">'
@@ -46271,11 +46479,34 @@ function _htmlAnat(c){
       :'<span class="an-puce">'+(opts.miroir?'Photo au miroir':'Photo sans miroir')+'</span>'
         +(opts.telephone?'<span class="an-puce an-puce-o">Téléphone tenu : bras '+ath(opts.telephone)+' — écarté des mesures</span>':''))
       +'</div>':'';
+  const aideSel=edit&&(edit.aide||edit.sel)?(edit.aide||edit.sel):null;
+  const liste=edit?'<div class="an-rep"><h6>Repères <span>— touche un nom pour le sélectionner, « * » pour sa consigne ; ◂ ▸ : côté gauche ou droit de l’écran</span></h6><div class="an-rep-l">'
+      +anatCles(vueAct).filter(k=>pts[k]).map(k=>{
+        const e2=pts[k][2];
+        return '<span class="an-rep-c'+(edit.sel===k?' actif':'')+'" data-e="'+(e2>=2?'man':e2<1?'est':'auto')+'">'
+          +'<button type="button" class="an-rep-n" title="'+escapeHtml(anatNomPoint(vueAct,k))+'" onclick="anatChoisirPoint(\''+k+'\')">'+escapeHtml(anatAide(k).court)+(k.endsWith('_l')?' ◂':k.endsWith('_r')?' ▸':'')+'</button>'
+          +'<button type="button" class="an-rep-a" aria-label="Consigne : '+escapeHtml(anatNomPoint(vueAct,k))+'" onclick="anatChoisirPoint(\''+k+'\')">*</button></span>';
+      }).join('')+'</div>'
+      +'<div class="an-consigne" aria-live="polite">'+(aideSel?'<b>* '+escapeHtml(anatNomPoint(vueAct,aideSel))+'</b><span>'+escapeHtml(anatAide(aideSel).aide)+'</span>'
+        :'<span>Touche un repère ou son « * » : sa consigne de placement s’affiche ici.</span>')+'</div></div>':'';
+  const reg=anatReglage(a,vueAct);
+  const photoHtml='<details class="an-ph"'+((_anatRecadre||reg.cadre||reg.lum!==100||reg.con!==100)?' open':'')+'><summary>'+ANAT_SVG.reglage+'<span>Réglages de la photo</span>'
+      +((reg.cadre||reg.lum!==100||reg.con!==100)?'<i>modifiée</i>':'')+'</summary><div class="an-ph-c">'
+      +'<label class="an-ph-r"><span>Luminosité</span><input type="range" min="40" max="250" step="5" value="'+reg.lum+'" data-r="lum" oninput="anatCurseur(this,\'lum\')" onchange="anatCurseur(this,\'lum\',true)"><output>'+reg.lum+' %</output></label>'
+      +'<label class="an-ph-r"><span>Contraste</span><input type="range" min="40" max="250" step="5" value="'+reg.con+'" data-r="con" oninput="anatCurseur(this,\'con\')" onchange="anatCurseur(this,\'con\',true)"><output>'+reg.con+' %</output></label>'
+      +'<div class="an-ph-b">'+(_anatRecadre
+        ?'<button type="button" class="an-b2 an-b2-r" onclick="anatModeRecadrage(false)">Annuler le recadrage</button><span class="an-ph-aide">Trace un rectangle sur la photo.</span>'
+        :'<button type="button" class="an-b2" onclick="anatModeRecadrage(true)">'+ANAT_SVG.recadrer+'<span>Recadrer</span></button>'
+          +'<button type="button" class="an-b2" onclick="anatCadrerPersonne()">Cadrer sur la personne</button>'
+          +(reg.cadre?'<button type="button" class="an-b2" onclick="anatPhotoEntiere()">Photo entière</button>':'')
+          +((reg.cadre||reg.lum!==100||reg.con!==100)?'<button type="button" class="an-b2" onclick="anatReinitialiserPhoto()">Réinitialiser</button>':''))
+      +'</div><p class="an-ph-n">La photo de l’athlète n’est jamais modifiée : ce sont des réglages d’affichage. « Refaire la détection » relit la photo réglée — utile à contre-jour.</p></div></details>';
   const outils=edit
-    ?'<div class="an-outils an-outils-edit"><p class="an-aide">Glisse chaque point sur son repère (loupe au-dessus du doigt ; au clavier : Tab puis flèches). Les points <b class="an-aide-est">orangés</b> sont estimés : acromions, crêtes iliaques'+(vueAct==='dos'?', C7, sacrum, omoplates':'')+' — à vérifier en priorité.</p>'
+    ?'<div class="an-outils an-outils-edit"><p class="an-aide">Glisse chaque point sur son repère (loupe au-dessus du doigt ; double-clic ou appui pour le saisir ; au clavier : Tab puis flèches). Les points <b class="an-aide-est">orangés</b> sont estimés — à vérifier en priorité.</p>'+liste
       +'<div class="an-outils-b"><button type="button" class="btn btn-red btn-casse an-analyser" onclick="anatEnregistrerPoints()">'+ANAT_SVG.relancer+'<span>Analyser avec ces points</span></button>'
       +'<button type="button" class="an-b2" onclick="anatPointsAutomatiques()">Points automatiques</button>'
-      +'<button type="button" class="an-b2" onclick="anatAnnulerEdition()">Annuler</button></div></div>'
+      +'<button type="button" class="an-b2" onclick="anatAnnulerEdition()">Annuler</button>'
+      +'<button type="button" class="an-b2" onclick="anatRelancer()">'+ANAT_SVG.relancer+'<span>Refaire la détection</span></button></div></div>'
     :'<div class="an-outils"><button type="button" class="an-b2 an-b2-r" onclick="anatEditer()">'+ANAT_SVG.points+'<span>Ajuster les points</span></button>'
       +'<span class="an-ech">'+(echelle&&echelle.cmPx?'Échelle : '+_anatN(echelle.taille,0)+' cm du sommet du crâne aux talons · ±'+ANAT_TOL.echelle+' %'
         :'Taille absente du dossier : longueurs en % de la hauteur')+(V.man?' · points ajustés à la main':(V.auto&&V.auto.gabarit?' · personne non détectée : points à placer':' · points automatiques'))+'</span></div>';
@@ -46304,7 +46535,7 @@ function _htmlAnat(c){
       +'</div>';
     return '<div class="an-f" data-k="'+f.cle+'" data-etat="'+f.etat+'">'
       +'<button type="button" class="an-f-vig" '+(cad?'onclick="anatZoom(\''+f.cle+'\')" aria-label="Agrandir : '+escapeHtml(f.lib)+'"':'disabled')+'>'
-      +(cad?_anatImg(s2,cad)+'<span class="an-f-loupe">'+ANAT_SVG.loupe+'</span>':'')+'</button>'
+      +(cad?_anatImg(s2,cad,f.vue==='dos'?'dos':'face',anatFiltre(anatReglage(a,f.vue==='dos'?'dos':'face')))+'<span class="an-f-loupe">'+ANAT_SVG.loupe+'</span>':'')+'</button>'
       +'<div class="an-f-c"><div class="an-f-h"><b>'+escapeHtml(f.lib)+'</b>'+(f.valeur?'<em>'+escapeHtml(f.valeur)+'</em>':'')+(f.estime?'<i class="an-f-est" title="Points estimés, à vérifier">estimé</i>':'')+'</div>'
       +'<p class="an-f-court">'+escapeHtml(t.court||'')+'</p>'
       +'<button type="button" class="an-f-plus" aria-expanded="false" aria-controls="an-long-'+f.cle+'" onclick="anatOuvrir(\''+f.cle+'\')"><span class="an-f-plus-o">Recommandations détaillées</span><span class="an-f-plus-f">Replier</span>'+ANAT_SVG.chev+'</button>'
@@ -46322,7 +46553,7 @@ function _htmlAnat(c){
     +'<button type="button" class="an-b2" onclick="anatRelancer()"'+(enCours?' disabled':'')+'>'+ANAT_SVG.relancer+'<span>'+(enCours?'Détection…':'Refaire la détection')+'</span></button></div>';
   return '<div class="an" data-vue="'+vueAct+'">'+tete
     +'<div class="an-grille"><div class="an-col an-col-g"><h5>Détails morphologiques</h5>'+gauche.map(carte).join('')+'</div>'
-    +'<div class="an-centre">'+scene+optsHtml+outils+lev+'</div>'
+    +'<div class="an-centre">'+scene+optsHtml+outils+photoHtml+lev+'</div>'
     +resHtml+'<div class="an-col an-col-d">'+droite.map(carte).join('')+'</div></div>'
     +pourquoi+'</div>';
 }
@@ -46351,7 +46582,7 @@ function anatZoom(cle){
   o.innerHTML='<div class="an-zoom-b"><div class="an-zoom-h"><b>'+escapeHtml(f.lib)+'</b>'+(f.valeur?'<em>'+escapeHtml(f.valeur)+'</em>':'')
     +'<button type="button" class="an-zoom-o" aria-pressed="true">Masquer les repères</button>'
     +'<button type="button" class="an-zoom-x" aria-label="Fermer">'+ANAT_SVG.x+'</button></div>'
-    +'<div class="an-zoom-img" style="aspect-ratio:'+asp.toFixed(3)+';width:min(100%,calc(66vh * '+asp.toFixed(3)+'))">'+_anatImg(src,cad)
+    +'<div class="an-zoom-img" style="aspect-ratio:'+asp.toFixed(3)+';width:min(100%,calc(66vh * '+asp.toFixed(3)+'))">'+_anatImg(src,cad,vue,anatFiltre(anatReglage(a,vue)))
     +'<svg class="an-os" viewBox="'+z.x0.toFixed(1)+' '+z.y0.toFixed(1)+' '+z.w.toFixed(1)+' '+z.h.toFixed(1)+'" preserveAspectRatio="none" aria-hidden="true">'+_anatDessin(vue,pts,v.w,v.h,false)+'</svg></div>'
     +'<p>'+escapeHtml(t.court||'')+'</p></div>';
   const fermer=()=>{ o.remove(); document.removeEventListener('keydown',esc); };

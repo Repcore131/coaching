@@ -12547,11 +12547,16 @@ function _mlAnatRle(bits){
 
 /**
  * Lit une photo de bilan : les 33 points et le masque de la personne.
+ * `o.filtre` (luminosité, contraste) et `o.cadre` (normalisé) sont les
+ * réglages du coach : le moteur lit la photo RÉGLÉE — ce qui rattrape une
+ * photo à contre-jour — mais les points et le masque sont rendus dans le
+ * repère de la photo ENTIÈRE, comme si rien n'avait été recadré.
  * @param {string} src
+ * @param {{filtre?:string, cadre?:{x0:number,y0:number,x1:number,y1:number}|null}} [o]
  * @returns {Promise<{ok:boolean, code?:string, w?:number, h?:number,
  *   pts?:number[][], masque?:{w:number,h:number,rle:string}|null}>}
  */
-async function mlAnatPhoto(src){
+async function mlAnatPhoto(src,o){
   if(!src||typeof src!=='string') return {ok:false,code:'image'};
   let moteur=null;
   try{ moteur=await _mlChargerPose(); }catch(e){ return {ok:false,code:'moteur'}; }
@@ -12565,11 +12570,16 @@ async function mlAnatPhoto(src){
   });
   if(!im||!im.naturalWidth) return {ok:false,code:'image'};
   const w=im.naturalWidth, h=im.naturalHeight;
+  const cad=(o&&o.cadre)||null;
+  const sx=cad?Math.max(0,Math.round(cad.x0*w)):0, sy=cad?Math.max(0,Math.round(cad.y0*h)):0;
+  const sw=cad?Math.max(8,Math.min(w-sx,Math.round((cad.x1-cad.x0)*w))):w;
+  const sh=cad?Math.max(8,Math.min(h-sy,Math.round((cad.y1-cad.y0)*h))):h;
   const t=document.createElement('canvas');
-  t.width=w; t.height=h;
+  t.width=sw; t.height=sh;
   const cx=t.getContext('2d');
   if(!cx) return {ok:false,code:'image'};
-  cx.drawImage(im,0,0,w,h);
+  if(o&&o.filtre){ try{ cx.filter=o.filtre; }catch(e){} }
+  cx.drawImage(im,sx,sy,sw,sh,0,0,sw,sh);
   // LA SEGMENTATION LE TEMPS D'UNE IMAGE. Le laboratoire tourne sans elle :
   // elle coûte à chaque image d'une vidéo, et on la rend éteinte.
   // ⚠ LE MODÈLE « FULL », PAS LE « LITE ». Le laboratoire lit des vidéos, à
@@ -12594,7 +12604,7 @@ async function mlAnatPhoto(src){
       clearTimeout(garde);
       // ⚠ LE MASQUE SE LIT DANS LE RAPPEL, pas après : c'est une texture du
       //   moteur, réécrite à l'image suivante.
-      try{ masque=r&&r.segmentationMask?_mlAnatMasque(r.segmentationMask,w,h):masque; }catch(e){}
+      try{ masque=r&&r.segmentationMask?_mlAnatMasque(r.segmentationMask,w,h,{x:sx,y:sy,w:sw,h:sh}):masque; }catch(e){}
       ok(r&&r.poseLandmarks?{poseLandmarks:r.poseLandmarks.map((/** @type {any} */ q)=>({x:q.x,y:q.y,visibility:q.visibility}))}:null);
     });
     moteur.send({image:t}).catch(()=>{ clearTimeout(garde); ok(null); });
@@ -12611,24 +12621,30 @@ async function mlAnatPhoto(src){
   const p=res&&res.poseLandmarks;
   if(!p||p.length<33) return {ok:false,code:'personne'};
   const r4=(/** @type {number} */ x)=>Math.round((Number(x)||0)*10000)/10000;
-  const pts=p.map((/** @type {any} */ q)=>[r4(q.x),r4(q.y),Math.round((Number(q.visibility)||0)*100)/100]);
+  // Du repère du cadre au repère de la photo entière.
+  const pts=p.map((/** @type {any} */ q)=>[r4((q.x*sw+sx)/w),r4((q.y*sh+sy)/h),Math.round((Number(q.visibility)||0)*100)/100]);
   return {ok:true,w,h,pts,masque};
 }
 
 /**
- * Ramène le masque du moteur à ML_ANAT_MASQUE_L de large, en 0/1.
+ * Ramène le masque du moteur à ML_ANAT_MASQUE_L de large, en 0/1, dans le
+ * repère de la photo entière : le masque d'un cadre est posé à sa place.
  * @param {any} m  image ou toile du moteur
  * @param {number} w @param {number} h
+ * @param {{x:number,y:number,w:number,h:number}} [z]  le cadre lu, en pixels
  * @returns {{w:number,h:number,rle:string}|null}
  */
-function _mlAnatMasque(m,w,h){
+function _mlAnatMasque(m,w,h,z){
   const mw=ML_ANAT_MASQUE_L, mh=Math.max(1,Math.round(ML_ANAT_MASQUE_L*h/w));
+  const zz=z||{x:0,y:0,w,h};
+  const ox=Math.round(zz.x*mw/w), oy=Math.round(zz.y*mh/h);
+  const rw=Math.max(1,Math.min(mw-ox,Math.round(zz.w*mw/w))), rh=Math.max(1,Math.min(mh-oy,Math.round(zz.h*mh/h)));
   const c=document.createElement('canvas');
-  c.width=mw; c.height=mh;
+  c.width=rw; c.height=rh;
   const x=c.getContext('2d',{willReadFrequently:true});
   if(!x) return null;
-  x.drawImage(m,0,0,mw,mh);
-  const d=x.getImageData(0,0,mw,mh).data;
+  x.drawImage(m,0,0,rw,rh);
+  const d=x.getImageData(0,0,rw,rh).data;
   // Selon le navigateur, la confiance arrive dans l'alpha ou dans le rouge :
   // un alpha plein partout veut dire qu'elle est dans le rouge.
   let alphaPlein=true;
@@ -12637,9 +12653,9 @@ function _mlAnatMasque(m,w,h){
   let n=0;
   for(let i=0,j=0;i<d.length;i+=4,j++){
     const v=alphaPlein?d[i]:d[i+3];
-    if(v>=128){ bits[j]=1; n++; }
+    if(v>=128){ bits[(oy+Math.floor(j/rw))*mw+ox+(j%rw)]=1; n++; }
   }
-  // Moins de 2 % de l'image : ce n'est pas une personne entière.
-  if(n<mw*mh*0.02) return null;
+  // Moins de 2 % du cadre lu : ce n'est pas une personne entière.
+  if(n<rw*rh*0.02) return null;
   return {w:mw,h:mh,rle:_mlAnatRle(bits)};
 }
