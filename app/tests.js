@@ -50951,7 +50951,7 @@ async function testExercices(){
       // seraient absurdes. Il vérifie que les fichiers sont là, servis d'ici.
       const fichiers=['pose.js','pose_solution_simd_wasm_bin.js','pose_solution_simd_wasm_bin.wasm',
         'pose_solution_packed_assets.data','pose_solution_packed_assets_loader.js',
-        'pose_landmark_lite.tflite','pose_web.binarypb'];
+        'pose_landmark_lite.tflite','pose_landmark_full.tflite','pose_web.binarypb'];
       for(const f of fichiers){
         let r=null;
         try{ r=await fetch('./vendor/mediapipe/'+f,{method:'HEAD',cache:'no-store'}); }catch(e){}

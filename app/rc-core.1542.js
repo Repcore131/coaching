@@ -44846,7 +44846,10 @@ function renderCourbesCoach(c){
 // ⚠ LA DOCTRINE MORPHO TIENT : aucun diagnostic, aucun exercice « à éviter »
 //   (on dit « à aménager », avec le réglage), toute valeur avec sa marge.
 
-const ANAT_VERSION=2;
+// v3 : modèle de pose « full » et suivi remis à zéro (les points de la v2,
+// lus au modèle « lite », tombaient à côté). Les points posés à la main en v2
+// sont repris tels quels.
+const ANAT_VERSION=3;
 /** Fractions de la taille, Drillis & Contini (1966), centres articulaires. */
 const ANAT_DC=Object.freeze({bras:0.186,avantbras:0.146,cuisse:0.245,jambe:0.246,
   tronc:0.288,hanche:0.530,membreSup:0.332,main:0.108});
@@ -45028,7 +45031,23 @@ function anatPointsAuto(raw,vue){
   // ACROMION : au-dessus et en dehors du centre de l'épaule. Le moteur ne le
   // voit pas ; on le pose à 12 % du tronc en dehors, 7 % au-dessus — l'ordre
   // de grandeur anatomique — et on le marque estimé.
-  for(const s of ['l','r']) pose('acromion_'+s,{x:dehors(ep[s],s,0.12*T).x,y:ep[s].y-0.07*T},0.5);
+  // ⚠ RECALÉ SUR LA SILHOUETTE. La pointe de l'acromion est à ~2,5 cm en
+  //   dehors du centre de la tête humérale et ~3 cm au-dessus (≈ 5 % et 6 %
+  //   du tronc) ; le deltoïde déborde encore de 2 à 4 cm. Quand le masque se
+  //   lit, on ne dépasse jamais le bord de l'épaule moins cette épaisseur.
+  for(const s of ['l','r']){
+    const y=ep[s].y-0.06*T;
+    let x=dehors(ep[s],s,0.05*T).x;
+    if(bits){
+      const pl=_anatPlages(bits,m,y*ky);
+      const c=pl.find(q=>q[0]<=mEp.x*kx&&q[1]>=mEp.x*kx);
+      if(c){
+        const lim=(s==='l'?c[0]/kx+0.05*T:c[1]/kx-0.05*T);
+        x=(s==='l')?Math.max(x,lim):Math.min(x,lim);
+      }
+    }
+    pose('acromion_'+s,{x,y},0.5);
+  }
   // CRÊTE ILIAQUE : environ 7 % de la taille au-dessus du centre de la
   // hanche (Drillis & Contini : 0,53 H à la hanche, ~0,60 H à la crête).
   // Latéralement, sur le bord du tronc s'il se lit, en retrait des tissus.
@@ -45802,7 +45821,7 @@ async function anatAnalyser(email,force){
     await chargerMotionLab();
     const lire=(typeof window!=='undefined')?/** @type {any} */(window).mlAnatPhoto:null;
     if(typeof lire!=='function') throw new Error('lecture de photo indisponible');
-    const ancien=(c.morphoAnat&&c.morphoAnat.v===ANAT_VERSION&&Number(c.morphoAnat.bilan)===pb.date)?c.morphoAnat:null;
+    const ancien=(c.morphoAnat&&c.morphoAnat.v>=2&&Number(c.morphoAnat.bilan)===pb.date)?c.morphoAnat:null;
     const vue=async(nom,src)=>{
       let r=null;
       try{ r=await lire(src); }catch(e){ r=null; }
@@ -45851,13 +45870,15 @@ function anatVue(v){
 }
 
 // ── L'ÉDITION DES POINTS ──────────────────────────────────────────────────
-function anatEditer(){
+function anatEditer(sel){
   const c=getOwnedClient(currentClientId);
   if(!c||!c.morphoAnat) return;
+  const k=(typeof sel==='string')?sel:null;
+  if(_anatEdit&&_anatEdit.email===c.email){ if(k) _anatEdit.sel=k; renderAnatCoach(c); return; }
   const vue=_anatVueActive;
   const pts=anatPoints(c.morphoAnat,vue);
   if(!pts) return;
-  _anatEdit={email:c.email,vue,pts:JSON.parse(JSON.stringify(pts)),opts:Object.assign({},anatOptions(c.morphoAnat)),reinit:false};
+  _anatEdit={email:c.email,vue,pts:JSON.parse(JSON.stringify(pts)),opts:Object.assign({},anatOptions(c.morphoAnat)),reinit:false,sel:k};
   renderAnatCoach(c);
   try{ document.querySelector('#ccd-anat .an-scene')?.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){}
 }
@@ -45891,9 +45912,11 @@ function anatEnregistrerPoints(){
   if(!v){ _anatEdit=null; return; }
   if(e.reinit&&!_anatBouge(e.pts,v.auto&&v.auto.pts)) v.man=null;
   else {
+    // ⚠ SEULS LES POINTS TOUCHÉS SONT « À LA MAIN ». Les autres restent
+    //   automatiques — et gardent leur mention « estimé » quand ils le sont.
     const man={};
-    for(const k of Object.keys(e.pts)) man[k]=[e.pts[k][0],e.pts[k][1]];
-    v.man=man;
+    for(const k of Object.keys(e.pts)) if(e.pts[k][2]===2) man[k]=[e.pts[k][0],e.pts[k][1]];
+    v.man=Object.keys(man).length?man:null;
   }
   a.opts=Object.assign({},a.opts||{},e.opts);
   a.date=Date.now();
@@ -45912,17 +45935,45 @@ function _anatBouge(a,b){
   }
   return false;
 }
-/** Branche le glisser des points, la loupe et le clavier sur la scène. */
+/**
+ * Branche les gestes sur la scène.
+ * HORS ÉDITION : un double-clic (ou double tap) sur un point le saisit et
+ *   ouvre l'édition sur lui. Kevin : « en double-cliquant dessus, pouvoir les
+ *   bouger ».
+ * EN ÉDITION : on saisit le point LE PLUS PROCHE du doigt (pas celui que le
+ *   navigateur trouve au-dessus : les zones de prise se chevauchent autour
+ *   des hanches et des épaules), on le glisse ; et un simple appui ailleurs
+ *   sur la photo y amène le point sélectionné.
+ */
 function _anatBrancherEdition(z){
-  const e=_anatEdit;
-  if(!e) return;
-  const scene=z.querySelector('.an-scene[data-edit]');
+  const scene=z.querySelector('.an-scene[data-w]');
   const svg=scene&&scene.querySelector('svg.an-os');
   const img=scene&&scene.querySelector('img.an-photo');
-  const loupe=scene&&scene.querySelector('.an-loupe');
   if(!svg||!img) return;
-  const vb=svg.viewBox.baseVal;
   const W=Number(scene.getAttribute('data-w')),H=Number(scene.getAttribute('data-h'));
+  const e=_anatEdit;
+  if(!e){
+    let dernier={k:null,t:0};
+    const saisir=(k)=>{ if(k) anatEditer(k); };
+    svg.addEventListener('dblclick',ev=>{
+      const t=/** @type {Element} */(ev.target);
+      const k=t&&t.getAttribute&&t.getAttribute('data-k');
+      if(k){ ev.preventDefault(); saisir(k); }
+    });
+    // Le double tap au doigt : tous les navigateurs mobiles ne rendent pas
+    // de « dblclick ».
+    svg.addEventListener('pointerup',ev=>{
+      if(ev.pointerType==='mouse') return;
+      const t=/** @type {Element} */(ev.target);
+      const k=t&&t.getAttribute&&t.getAttribute('data-k');
+      if(!k) return;
+      const now=Date.now();
+      if(dernier.k===k&&now-dernier.t<400){ ev.preventDefault(); dernier={k:null,t:0}; saisir(k); }
+      else dernier={k,t:now};
+    });
+    return;
+  }
+  const loupe=scene.querySelector('.an-loupe');
   let actif=null;
   const versImage=(ev)=>{
     const pt=svg.createSVGPoint(); pt.x=ev.clientX; pt.y=ev.clientY;
@@ -45930,21 +45981,28 @@ function _anatBrancherEdition(z){
     const p=pt.matrixTransform(m.inverse());
     return {x:Math.max(0,Math.min(W,p.x)),y:Math.max(0,Math.min(H,p.y))};
   };
+  const nomDe=(k)=>{
+    const r=anatRepere(e.vue,k);
+    return (r?r.lib:k)+(k.endsWith('_l')?' (écran gauche)':k.endsWith('_r')?' (écran droit)':'');
+  };
+  const choisir=(k)=>{
+    e.sel=k;
+    svg.querySelectorAll('.an-pt').forEach(c=>c.classList.toggle('actif',c.getAttribute('data-k')===k));
+    const nom=scene.querySelector('.an-nom');
+    if(nom) nom.textContent=nomDe(k)+' — glisse-le, ou touche l’endroit où il doit aller';
+  };
   const deplacer=(k,x,y)=>{
     e.pts[k]=[Math.round(x/W*10000)/10000,Math.round(y/H*10000)/10000,2];
     svg.querySelectorAll('[data-k="'+k+'"]').forEach(c=>{ c.setAttribute('cx',x.toFixed(1)); c.setAttribute('cy',y.toFixed(1)); });
-    svg.querySelectorAll('.an-pt[data-k="'+k+'"]').forEach(c=>c.classList.add('man'));
+    svg.querySelectorAll('.an-pt[data-k="'+k+'"]').forEach(c=>{ c.classList.add('man'); c.classList.remove('est'); });
     svg.querySelectorAll('line[data-a="'+k+'"]').forEach(l=>{ l.setAttribute('x1',x.toFixed(1)); l.setAttribute('y1',y.toFixed(1)); });
     svg.querySelectorAll('line[data-b="'+k+'"]').forEach(l=>{ l.setAttribute('x2',x.toFixed(1)); l.setAttribute('y2',y.toFixed(1)); });
-    const nom=scene.querySelector('.an-nom');
-    const r=anatRepere(e.vue,k);
-    if(nom){ nom.textContent=r?r.lib+(k.endsWith('_l')?' (écran gauche)':k.endsWith('_r')?' (écran droit)':''):k; }
     if(loupe){
       // LA LOUPE : le doigt cache le point qu'il déplace. Elle montre la photo
       // grossie trois fois autour du point, au-dessus du doigt.
       const ri=img.getBoundingClientRect(), rs=scene.getBoundingClientRect();
       const px=x/W*ri.width, py=y/H*ri.height, Z=3, R=loupe.offsetWidth/2||55;
-      loupe.style.backgroundImage='url("'+img.currentSrc.replace(/"/g,'%22')+'")';
+      loupe.style.backgroundImage='url("'+(img.currentSrc||img.src).replace(/"/g,'%22')+'")';
       loupe.style.backgroundSize=(ri.width*Z)+'px '+(ri.height*Z)+'px';
       loupe.style.backgroundPosition=(-(px*Z-R))+'px '+(-(py*Z-R))+'px';
       let lx=ri.left-rs.left+px-R, ly=ri.top-rs.top+py-2.4*R;
@@ -45953,16 +46011,29 @@ function _anatBrancherEdition(z){
       loupe.style.top=ly+'px';
     }
   };
+  /** Le point le plus proche, dans un rayon de prise raisonnable. */
+  const plusProche=(p)=>{
+    let best=null,d0=H*0.045;
+    for(const k of Object.keys(e.pts)){
+      const q=e.pts[k];
+      const d=Math.hypot(q[0]*W-p.x,q[1]*H-p.y);
+      if(d<d0){ d0=d; best=k; }
+    }
+    return best;
+  };
   svg.addEventListener('pointerdown',ev=>{
-    const t=/** @type {Element} */(ev.target);
-    const k=t&&t.getAttribute&&t.getAttribute('data-k');
+    const p=versImage(ev); if(!p) return;
+    let k=plusProche(p);
+    // Un appui loin de tout point amène le point sélectionné à cet endroit.
+    if(!k&&e.sel) k=e.sel;
     if(!k) return;
     ev.preventDefault();
     actif=k;
+    choisir(k);
     try{ svg.setPointerCapture(ev.pointerId); }catch(x){}
     scene.classList.add('glisse');
-    svg.querySelectorAll('.an-pt').forEach(c=>c.classList.toggle('actif',c.getAttribute('data-k')===k));
-    const p=versImage(ev); if(p) deplacer(k,p.x,p.y);
+    if(k===e.sel&&!plusProche(p)) deplacer(k,p.x,p.y);
+    else deplacer(k,e.pts[k][0]*W,e.pts[k][1]*H);
   });
   svg.addEventListener('pointermove',ev=>{
     if(!actif) return;
@@ -45972,6 +46043,11 @@ function _anatBrancherEdition(z){
   svg.addEventListener('pointerup',fin);
   svg.addEventListener('pointercancel',fin);
   // AU CLAVIER : Tab pour choisir un point, flèches pour le déplacer.
+  svg.addEventListener('focusin',ev=>{
+    const t=/** @type {Element} */(ev.target);
+    const k=t&&t.getAttribute&&t.getAttribute('data-k');
+    if(k) choisir(k);
+  });
   svg.addEventListener('keydown',ev=>{
     const t=/** @type {Element} */(ev.target);
     const k=t&&t.getAttribute&&t.getAttribute('data-k');
@@ -45982,9 +46058,8 @@ function _anatBrancherEdition(z){
     ev.preventDefault();
     deplacer(k,Math.max(0,Math.min(W,e.pts[k][0]*W+d[0])),Math.max(0,Math.min(H,e.pts[k][1]*H+d[1])));
   });
-  void vb;
+  if(e.sel&&e.pts[e.sel]) choisir(e.sel);
 }
-
 /** Déplie / replie une fiche, et l'amène sous les yeux depuis l'anneau. */
 function anatOuvrir(cle,depuisAnneau){
   const z=document.getElementById('ccd-anat');
@@ -46043,7 +46118,8 @@ function _anatDessin(vue,pts,W,H,edit){
     if(!p) continue;
     const rep=anatRepere(vue,k);
     const cls='an-pt'+(p.e>=2?' man':(p.e<1?' est':''))+(rep&&rep.est?' an-pt-os':'');
-    if(edit) s+='<circle class="an-hit" data-k="'+k+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="'+(H*0.032).toFixed(1)+'"/>';
+    s+='<circle class="an-hit" data-k="'+k+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="'+(H*(edit?0.032:0.02)).toFixed(1)+'">'
+      +(edit?'':'<title>'+escapeHtml((rep?rep.lib:k)+' — double-clic pour le déplacer')+'</title>')+'</circle>';
     s+='<circle class="'+cls+'" data-k="'+k+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="'+r.toFixed(1)+'"'
       +(edit?' tabindex="0" role="button" aria-label="'+escapeHtml((rep?rep.lib:k)+(k.endsWith('_l')?', côté gauche de l’écran':k.endsWith('_r')?', côté droit de l’écran':''))+'. Flèches pour déplacer."':'')+'/>';
   }
@@ -46184,7 +46260,7 @@ function _htmlAnat(c){
     +'<img class="an-photo" src="'+escapeHtml(src)+'" alt="Photo de '+(vueAct==='face'?'face':'dos')+' du premier bilan" decoding="async" draggable="false" style="left:'+(G/TW*100).toFixed(3)+'%;width:'+(W/TW*100).toFixed(3)+'%">'
     +'<svg class="an-os" viewBox="'+(-G)+' 0 '+TW+' '+H+'" preserveAspectRatio="xMidYMid meet"'+(edit?' aria-label="Repères déplaçables"':' aria-hidden="true"')+'>'+fils+_anatDessin(vueAct,pts,W,H,!!edit)+'</svg>'
     +anneau
-    +(edit?'<div class="an-loupe" aria-hidden="true"></div><div class="an-nom" aria-live="polite">Touche un point et fais-le glisser</div>':'')
+    +(edit?'<div class="an-loupe" aria-hidden="true"></div><div class="an-nom" aria-live="polite">Touche un point et fais-le glisser, ou sélectionne-le puis touche l’endroit où il doit aller</div>':'')
     +'</div>';
   // Sous la scène : l'échelle, les options, et le geste d'édition.
   const ath=(s)=>{ const cc=anatCotes('face',!!opts.miroir); return s===cc.g?'gauche':'droit'; };

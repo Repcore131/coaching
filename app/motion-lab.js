@@ -12572,24 +12572,41 @@ async function mlAnatPhoto(src){
   cx.drawImage(im,0,0,w,h);
   // LA SEGMENTATION LE TEMPS D'UNE IMAGE. Le laboratoire tourne sans elle :
   // elle coûte à chaque image d'une vidéo, et on la rend éteinte.
-  try{ moteur.setOptions({enableSegmentation:true,smoothSegmentation:false}); }catch(e){}
+  // ⚠ LE MODÈLE « FULL », PAS LE « LITE ». Le laboratoire lit des vidéos, à
+  //   cadence, et le « lite » y suffit ; une photo de bilan se lit une fois,
+  //   et Kevin l'a vu : « les points sont mal placés ». Le « full » (même
+  //   paquet, 6 Mo de plus, chargé seulement ici) place nettement mieux
+  //   épaules, hanches et chevilles.
+  // ⚠ ET LE SUIVI REMIS À ZÉRO. Sans reset(), le moteur cherche la personne
+  //   là où il l'a vue à l'image précédente : la photo de dos héritait de la
+  //   position de la photo de face.
+  // ⚠ DEUX PASSES. La première trouve la personne ; la seconde relit les
+  //   points dans le cadre resserré qu'elle en déduit. Sur une photo fixe,
+  //   c'est la seconde qui est juste.
+  try{ moteur.setOptions({modelComplexity:1,enableSegmentation:true,smoothSegmentation:false}); }catch(e){}
   /** @type {any} */
   let res=null;
+  /** @type {{w:number,h:number,rle:string}|null} */
   let masque=null;
-  try{
-    res=await new Promise((ok)=>{
-      const garde=setTimeout(()=>ok(null),20000);
-      moteur.onResults((/** @type {any} */ r)=>{
-        clearTimeout(garde);
-        // ⚠ LE MASQUE SE LIT DANS LE RAPPEL, pas après : c'est une texture du
-        //   moteur, réécrite à l'image suivante.
-        try{ masque=r&&r.segmentationMask?_mlAnatMasque(r.segmentationMask,w,h):null; }catch(e){ masque=null; }
-        ok(r);
-      });
-      moteur.send({image:t}).catch(()=>{ clearTimeout(garde); ok(null); });
+  const passe=()=>new Promise((ok)=>{
+    const garde=setTimeout(()=>ok(null),30000);
+    moteur.onResults((/** @type {any} */ r)=>{
+      clearTimeout(garde);
+      // ⚠ LE MASQUE SE LIT DANS LE RAPPEL, pas après : c'est une texture du
+      //   moteur, réécrite à l'image suivante.
+      try{ masque=r&&r.segmentationMask?_mlAnatMasque(r.segmentationMask,w,h):masque; }catch(e){}
+      ok(r&&r.poseLandmarks?{poseLandmarks:r.poseLandmarks.map((/** @type {any} */ q)=>({x:q.x,y:q.y,visibility:q.visibility}))}:null);
     });
+    moteur.send({image:t}).catch(()=>{ clearTimeout(garde); ok(null); });
+  });
+  try{
+    try{ moteur.reset(); }catch(e){}
+    const r1=await passe();
+    const r2=r1?await passe():null;
+    res=r2||r1;
   } finally {
-    try{ moteur.setOptions({enableSegmentation:false}); }catch(e){}
+    try{ moteur.setOptions({modelComplexity:0,enableSegmentation:false}); }catch(e){}
+    try{ moteur.reset(); }catch(e){}
   }
   const p=res&&res.poseLandmarks;
   if(!p||p.length<33) return {ok:false,code:'personne'};

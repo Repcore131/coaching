@@ -9836,6 +9836,8 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .an-photo{position:absolute;top:0;height:100%;max-width:none;object-fit:fill;pointer-events:none}
 .an-os{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
 .an-scene:not(.an-edit) .an-os{pointer-events:none}
+.an-scene:not(.an-edit) .an-os .an-hit{pointer-events:auto;fill:transparent;cursor:pointer}
+.an-scene:not(.an-edit) .an-os .an-hit:hover+.an-pt{stroke-width:3}
 .an-os .an-t{stroke:#ff3b3b;stroke-width:2;vector-effect:non-scaling-stroke;stroke-linecap:round;opacity:.9}
 .an-os .an-t-fin{stroke-width:1.4;opacity:.7}
 .an-os .an-t-os{stroke:#ffd166;stroke-width:1.6;stroke-dasharray:5 4}
