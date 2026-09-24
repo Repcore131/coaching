@@ -67006,50 +67006,15 @@ async function testExercices(){
           return JSON.stringify(u.nutrition.days)===avant
             ?true:_echec('le dossier a été modifié');})());
 
-        ok('La phrase des trous ne paraît QUE quand un jour a été traversé',(()=>{
-          const _s=currentUser;
-          const el=document.getElementById('nut-diet-content');
-          if(!el) return _echec('nut-diet-content absent');
-          const garde=el.innerHTML;
-          try{
-            const T=Date.now();
-            const mk=m=>Object.assign(_srU(m),{fname:'A',coachId:'c1',
-              status:'COACHING_SUIVI',accessExpiry:T+90*864e5,createdAt:T-200*864e5,
-              sessions:[],bilans:[]});
-            const rendre=m=>{ currentUser=mk(m);
-              if(!(accesDieteStricte(currentUser)||{}).ok)
-                return '(accès fermé — le test ne prouve rien)';
-              _renderStrictDiet();
-              return (el.textContent||'').replace(/\s+/g,' '); };
-            // Sans trou : rien sous le compteur.
-            const plein=rendre('OOOOO');
-            if(plein.indexOf('(accès fermé')===0) return _echec(plein);
-            if(/non renseigné/.test(plein)) return _echec('une phrase sans trou : '+plein.slice(0,120));
-            // UN trou : la phrase EXACTE de la demande, au singulier.
-            const un=rendre('.OOOO');
-            if(un.indexOf('1 jour non renseigné, ta série tient.')<0)
-              return _echec('phrase absente ou fausse : '+un.slice(0,160));
-            // DEUX trous : le pluriel suit, il ne dit pas « 1 ».
-            const deux=rendre('..OOO');
-            if(deux.indexOf('2 jours non renseignés, ta série tient.')<0)
-              return _echec('pluriel : '+deux.slice(0,160));
-            // Série morte : aucune phrase — « ta série tient » sur un zéro
-            // serait un mensonge.
-            for(const m of ['...OO','NOOOO'])
-              if(/ta série tient/.test(rendre(m)))
-                return _echec('la phrase paraît sur une série morte : '+m);
-            return true;
-          } finally { el.innerHTML=garde; currentUser=_s; }})());
-
-        ok('Le rendu délègue sa boucle, il ne la refait pas',(()=>{
-          const nu=String(_renderStrictDiet).replace(/\/\/[^\n]*/g,'');
-          if(nu.indexOf('serieDieteJours')<0)
-            return _echec('_renderStrictDiet ne passe pas par la fonction pure');
-          // L'ancienne boucle ne doit pas survivre à côté : deux comptes du
-          // même chiffre finiraient par ne plus dire la même chose.
-          if(/respected===true\) streak\+\+/.test(nu))
-            return _echec('la boucle d’origine est encore là');
-          return true;})());
+        // ⚠ LA SERIE N'EST PLUS A L'ECRAN (Kevin, 24/09/2026 : « supprime le jour
+        //   consecutif »). Les deux assertions qui gardaient sa phrase et son
+        //   calcul dans le rendu decrivaient un affichage retire ; serieDieteJours,
+        //   elle, reste testee juste au-dessus.
+        ok('Le suivi alimentaire n’affiche plus la série, et Oui / Non restent seuls',(()=>{
+          const h=_htmlSuiviAlimentaire({nutrition:{days:{}}},localISODate(new Date()));
+          if(/consécutifs|ta série tient/i.test(h)) return _echec('la série est encore à l’écran');
+          return (h.split('setNutriRespected(').length-1)===2
+            ?true:_echec('Oui / Non ne sont plus deux');})());
 
         ok('Le verrou dit LEQUEL des deux cas s\'applique',(()=>{
           const sans=_htmlStrictVerrou('sans_coach'), non=_htmlStrictVerrou('non_valide');
