@@ -15,6 +15,9 @@ node_modules/
 # GitHub Actions, qui l'envoie par courriel et le garde en piece jointe
 # telechargeable quatre-vingt-dix jours.
 rapport-payeur.md
+# ⚠ MEME RAISON POUR LE RAPPORT DES ABONNEMENTS : il porte des noms, des
+# adresses, des montants et l'etat de paiement de chacun.
+rapport-abonnements.md
 
 AUDIT_INVENTAIRE.md
 AUDIT_REPCORE.md
