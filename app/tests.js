@@ -44014,6 +44014,24 @@ async function testExercices(){
       const attente=Object.assign({},u,{morphoInitiale:{etat:'attente',date:t,raison:'x',essais:2}});
       if(!morphoInitialeARefaire(attente)) return _echec('une analyse en attente ne se retente pas');
       if(morphoInitialeEtat(attente)!=='attente') return _echec('l’état n’est pas « attente »');
+      // ⚠ LES TROIS PHOTOS, PAS SEULEMENT CELLE DE FACE (Kevin, 24/09/2026 :
+      //   « garde le vert et le rouge et les 3 photos »). Un bilan a moitie
+      //   rempli ne gele pas une morphologie, meme si la photo que l'analyse
+      //   LIT est la.
+      const photo=(x)=>Object.assign({type:'depart',date:t-60*J,'deb-rotule':'47'},x||{});
+      const trois={'deb-photo-face':'data:img','deb-photo-back':'data:img','deb-photo-side':'data:img'};
+      const avecTrois=Object.assign({},u,{bilans:[photo(trois)]});
+      const p3=morphoPhotoInitiale(avecTrois,0);
+      if(!p3||p3.src!=='data:img') return _echec('un bilan complet n’est pas retenu : '+JSON.stringify(p3));
+      for(const manquante of ['deb-photo-back','deb-photo-side','deb-photo-face']){
+        const deux=Object.assign({},trois); delete deux[manquante];
+        const d2=Object.assign({},u,{bilans:[photo(deux)]});
+        if(morphoPhotoInitiale(d2,0))
+          return _echec('l’analyse part avec ' + manquante + ' en moins');
+      }
+      // ET ON LE DIT, plutot que de rester muet.
+      const rien=morphoInitialeDe(u,{ok:true,prise:{verdict:'bon',raisons:[]},pixels:null,rapports:[]},null,1);
+      if(rien.etat!=='attente') return _echec('un bilan sans photo ne laisse pas en attente');
       // SANS LA MESURE DU GENOU, ON NE CHARGE MÊME PAS LE MOTEUR DE POSE.
       const sans={id:'C8',email:'c8@t.fr',role:'athlete',bilans:[{type:'depart',date:t-60*J}]};
       if(morphoInitialePeutEtre(sans)!==false) return _echec('le moteur part sans échelle possible');

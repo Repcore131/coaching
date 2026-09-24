@@ -13963,10 +13963,20 @@ function morphoInitialeARefaire(u){ return morphoInitialeEtat(u)!=='gelee'; }
  *   prise. Si sa photo ne passe pas le controle, on prend la plus recente qui
  *   existe : un os ne change pas de longueur entre deux bilans, et « seulement
  *   le premier bilan » ne doit pas vouloir dire « une seule chance ».
+ *
+ * ⚠ ET IL FAUT LES TROIS PHOTOS, PAS SEULEMENT CELLE DE FACE. Kevin, le
+ *   24/09/2026 : « garde le vert et le rouge et les 3 photos ». J'avais
+ *   declenche sur la seule photo que l'analyse LIT ; la regle est qu'un bilan
+ *   n'est complet qu'avec face, profil et dos, et une morphologie ne se gele
+ *   pas sur un bilan a moitie rempli. Un bilan qui n'en porte que deux est
+ *   saute ; l'etat reste « attente » et le suivant est essaye.
  * @returns {{src:string,date:number,depart:boolean}|null}
  */
 function morphoPhotoInitiale(u,rang){
   let bl=[]; try{ bl=(Array.isArray(u&&u.bilans)?u.bilans:[]).filter(b=>b&&b.date); }catch(e){ return null; }
+  bl=bl.filter(b=>{
+    try{ return BILP_VUES.every(v=>photoBilanExiste(b,v)); }catch(e){ return false; }
+  });
   if(!bl.length) return null;
   const dep=bl.filter(b=>b.type==='depart').sort((a,b)=>a.date-b.date);
   const reste=bl.filter(b=>b.type!=='depart').sort((a,b)=>b.date-a.date);
@@ -14032,7 +14042,7 @@ async function morphoAnalyserInitiale(u,rang){
   if(!u) return null;
   const photo=morphoPhotoInitiale(u,rang);
   if(!photo) return {etat:'attente',date:Date.now(),
-    raison:'aucune photo de face au dossier',essais:(((u.morphoInitiale||{}).essais)||0)+1};
+    raison:'aucun bilan ne porte les trois photos',essais:(((u.morphoInitiale||{}).essais)||0)+1};
   try{ await chargerMotionLab(); }catch(e){
     return {etat:'attente',date:Date.now(),raison:'le moteur de pose ne s’est pas chargé',
       essais:(((u.morphoInitiale||{}).essais)||0)+1};
@@ -42432,6 +42442,11 @@ function _htmlCorpsGraphes(u,o){
  *     regle s'applique, et elle n'a pas bouge. Kevin, 23/09/2026, a demande la
  *     teinte en ces termes ; si un jour elle doit tomber, c'est cette phrase-la
  *     qu'il faudra relire, pas le code.
+ *
+ *     ⚠ ET C'EST ARBITRE, PAS SUBI. La relecture du lot 11 lui a pose la
+ *       question en face, le 24/09/2026 : « garde le vert et le rouge ». La
+ *       teinte reste, avec sa legende qui la borne. Personne n'a besoin de
+ *       rouvrir le sujet.
  *
  * ⚠ DEUX COMPTEURS, ET ILS NE DISENT PAS LA MEME CHOSE depuis le 23/09/2026 :
  *   `etiquettes` compte ce qui est POSE sur le corps — toute mensuration
