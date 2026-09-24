@@ -67140,19 +67140,9 @@ function _renderStrictDiet(){
   // était perdue, et la série de jours consécutifs cassait pour une case non
   // cochée.
   const _sjour=_strictJourValide(_strictJour);
-  // La boucle vit desormais dans serieDieteJours, pure et testable : voir la
-  // regle et le plafond de traversee la-bas.
-  const _serie=serieDieteJours(currentUser);
-  const streak=_serie.jours;
-  // ON NE LE DIT QUE QUAND IL S'EST PASSE QUELQUE CHOSE. Une ligne permanente
-  // sous le compteur serait lue une fois puis jamais plus ; celle-ci ne parait
-  // que le jour ou la serie a enjambe un trou, c'est-a-dire exactement quand
-  // l'athlete se demande pourquoi elle n'est pas retombee a zero.
-  const _trous=(streak>0&&_serie.traverses>0)
-    ?('<div style="font-size:11px;color:var(--text-faint);line-height:1.45;margin-top:6px">'
-      +_serie.traverses+' jour'+(_serie.traverses>1?'s':'')+' non renseigné'
-      +(_serie.traverses>1?'s':'')+', ta série tient.</div>')
-    :'';
+  // ⚠ LA SERIE « JOURS CONSECUTIFS » N'EST PLUS A L'ECRAN (Kevin, 24/09/2026 :
+  //   « supprime le jour consecutif et agrandis les boutons »). serieDieteJours
+  //   reste — pure, testee, et lue ailleurs ; seul l'affichage part.
   // Meme lecture que l en-tete de la diete flexible, et pour la meme raison.
   const coachPhoto=photoCoachDe(currentUser);
   const coachCircle=coachPhoto
@@ -67160,7 +67150,7 @@ function _renderStrictDiet(){
     :`<div style="width:54px;height:54px;border-radius:var(--r-full);background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text)">${icon('dumbbell',22)}</div>`;
   // LE SUIVI DU JOUR, EN UNE CARTE (maquette de Kevin, 24/09/2026), juste
   // sous le cadre qui explique la diete : voir _htmlSuiviAlimentaire.
-  const suiviDuJour=_htmlSuiviAlimentaire(currentUser,_sjour,streak,_trous);
+  const suiviDuJour=_htmlSuiviAlimentaire(currentUser,_sjour);
   el.innerHTML=`${_transiStrict}
     <!-- Définition diète stricte -->
     <div class="banner-hero" style="margin-bottom:18px;animation:fadeInUp var(--t-3) var(--c-out)">
@@ -67222,7 +67212,6 @@ const SA_ICO={
   non:_SA_SVG+'<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>',
   moins:_SA_SVG+'<path d="M7 12h10"/></svg>',
   points:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="7" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="17" cy="12" r="1.6"/></svg>',
-  flamme:'<svg viewBox="6.4 1.6 11.2 19" aria-hidden="true"><defs><linearGradient id="sa-fl" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff2d2d"/><stop offset="1" stop-color="#ff7a3d"/></linearGradient></defs><path fill="url(#sa-fl)" d="M12.6 1.8c.7 3.4-2.1 5.2-3.7 7.4C7.5 11.2 6.7 13 6.7 15a5.3 5.3 0 0 0 10.6 0c0-2.6-1.1-4.6-2.6-6.3.1 1.8-.7 3.1-1.8 3.7.6-3.7-.4-7.6-.3-10.6z"/></svg>',
   calendrier:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4M7.5 13h.01M12 13h.01M16.5 13h.01M7.5 16.5h.01M12 16.5h.01"/></svg>',
   bas:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
   droite:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>',
@@ -67252,11 +67241,12 @@ function _saJourCourt(d){
   const s=d.toLocaleDateString('fr-FR',{weekday:'short'}).replace('.','');
   return s.charAt(0).toUpperCase()+s.slice(1);
 }
-function _htmlSuiviAlimentaire(u,sjour,serie,trous){
+function _htmlSuiviAlimentaire(u,sjour){
   // ⚠ LA MAQUETTE, A L'ECHELLE : chaque element est pose a ses coordonnees
   //   (voir la feuille de styles, « SUIVI ALIMENTAIRE — A L'ECHELLE »). Ne
   //   pas y ajouter de ligne : la carte a la hauteur de la maquette, rien de
-  //   plus. La phrase « ta serie tient » reste lue au lecteur d'ecran.
+  //   plus. La serie « jours consecutifs » en est partie a la demande de
+  //   Kevin (24/09/2026) : Oui et Non ont pris sa place.
   const auj=localISODate(new Date());
   const sAuj=(sjour===auj);
   const r=((((u&&u.nutrition)||{}).days||{})[sjour]||{}).respected;
@@ -67290,16 +67280,11 @@ function _htmlSuiviAlimentaire(u,sjour,serie,trous){
   return '<section class="sa-carte" aria-label="Suivi alimentaire"><div class="sa-in">'
     +'<span class="sa-ico">'+SA_ICO.couverts+'</span>'
     +'<h3 class="sa-titre">Suivi <span>alimentaire</span></h3>'
-    +'<span class="sa-q">J’ai respecté mon plan '+(sAuj?'aujourd’hui':'ce jour-là')+' ?</span>'
+    +'<span class="sa-q">J’ai respecté mon plan<br>'+(sAuj?'aujourd’hui':'ce jour-là')+' ?</span>'
     +'<label class="sa-date">'+SA_ICO.calendrier+'<span>'+escapeHtml(dateLib)+'</span>'+SA_ICO.bas
       +'<select onchange="setStrictJour(this.value===\''+auj+'\'?\'\':this.value)" aria-label="Choisir le jour">'+opts+'</select></label>'
     +bouton(true,'Oui','Plan respecté',SA_ICO.oui)
     +bouton(false,'Non','Plan non respecté',SA_ICO.non)
-    +'<i class="sa-vl sa-vl1" aria-hidden="true"></i>'
-    +'<span class="sa-flamme">'+SA_ICO.flamme+'</span>'
-    +'<strong class="sa-serie-n">'+serie+'</strong>'
-    +'<span class="sa-serie-l">Jours<br>consécutifs</span>'
-    +(trous?'<span class="sa-lu">'+trous+'</span>':'')
     +'<i class="sa-vl sa-vl2" aria-hidden="true"></i>'
     +'<div class="sa-anneau"><svg viewBox="0 0 100 100" aria-hidden="true">'
       +'<circle cx="50" cy="50" r="42" class="sa-an-f"/>'
