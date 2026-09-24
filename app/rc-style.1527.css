@@ -2515,11 +2515,12 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    Kevin : « ca ressemble pas du tout, applique vraiment niveau taille a
    l'identique », puis « applique sur tel, oui ». La carte EST la maquette,
    reduite a la largeur de l'ecran : chaque element est pose a ses
-   coordonnees d'origine (carte de 1720 x 623 px), en unites --u =
+   coordonnees d'origine (carte de 1720 x 623 px, allongee a 705 le
+   24/09/2026 : plus d'air sous le titre et sous les jours, demande de Kevin), en unites --u =
    1/1720e de la largeur de la carte. Seul plancher : 8 px pour le texte,
    en dessous duquel il ne se lit plus sur un telephone. */
 .sa-carte{container-type:inline-size;container-name:sa;margin:0 0 18px}
-.sa-in{--u:calc(100cqw / 1720);position:relative;width:100%;height:calc(623 * var(--u));box-sizing:border-box;
+.sa-in{--u:calc(100cqw / 1720);position:relative;width:100%;height:calc(705 * var(--u));box-sizing:border-box;
   border-radius:calc(44 * var(--u));border:max(1.5px,calc(4 * var(--u))) solid #ff1a1a;
   background:radial-gradient(120% 60% at 50% -10%,rgba(224,32,32,.16),transparent 60%),#0b0b0c;
   box-shadow:0 0 calc(40 * var(--u)) rgba(255,26,26,.45),inset 0 0 calc(60 * var(--u)) rgba(224,32,32,.08)}
@@ -2532,7 +2533,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .sa-titre{left:calc(250 * var(--u));top:calc(40 * var(--u));margin:0;font-family:var(--pile-titre);font-weight:400;
   font-size:calc(86 * var(--u));line-height:1;letter-spacing:calc(1 * var(--u));color:#fff;white-space:nowrap;text-transform:uppercase}
 .sa-titre span{color:#ff2020}
-.sa-q{left:calc(252 * var(--u));top:calc(112 * var(--u));font-size:max(8px,calc(31 * var(--u)));letter-spacing:calc(3 * var(--u));
+.sa-q{left:calc(252 * var(--u));top:calc(158 * var(--u));font-size:max(8px,calc(31 * var(--u)));letter-spacing:calc(3 * var(--u));
   font-weight:600;color:#a9a9ad;text-transform:uppercase;white-space:nowrap;line-height:1.1}
 .sa-date{margin:0;left:calc(1215 * var(--u));top:calc(39 * var(--u));width:calc(465 * var(--u));height:calc(110 * var(--u));
   display:flex;align-items:center;gap:calc(26 * var(--u));padding:0 calc(34 * var(--u));border-radius:calc(24 * var(--u));
@@ -2542,7 +2543,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .sa-date span{flex:1;pointer-events:none}
 .sa-date svg:last-of-type{width:calc(34 * var(--u));height:calc(34 * var(--u))}
 .sa-date select{position:absolute;inset:0;width:100%;height:100%;min-height:44px;opacity:0;cursor:pointer;border:0;margin:0;font-size:16px}
-.sa-rep{top:calc(216 * var(--u));height:calc(196 * var(--u));display:flex;align-items:center;justify-content:center;
+.sa-rep{top:calc(268 * var(--u));height:calc(196 * var(--u));display:flex;align-items:center;justify-content:center;
   gap:calc(40 * var(--u));padding:0;border-radius:calc(26 * var(--u));cursor:pointer;font-family:inherit;color:#fff;
   border:max(1.5px,calc(5 * var(--u))) solid #2f9e5b;background:linear-gradient(180deg,#101312,#0a0c0b)}
 .sa-rep[data-v="oui"]{left:calc(50 * var(--u));width:calc(620 * var(--u))}
@@ -2563,10 +2564,10 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
   box-shadow:0 0 calc(30 * var(--u)) rgba(255,59,59,.55),inset 0 calc(2 * var(--u)) 0 rgba(255,255,255,.2)}
 .sa-rep[data-v="non"][data-actif] .sa-rep-i{color:#fff}
 .sa-vl{width:max(1px,calc(2 * var(--u)));background:#2a2a2e}
-.sa-vl2{left:calc(1364 * var(--u));top:calc(208 * var(--u));height:calc(193 * var(--u))}
-.sa-vl3{left:calc(1061 * var(--u));top:calc(481 * var(--u));height:calc(94 * var(--u))}
-.sa-hl{left:calc(46 * var(--u));right:calc(40 * var(--u));top:calc(444 * var(--u));height:max(1px,calc(2 * var(--u)));background:#2a2a2e}
-.sa-anneau{left:calc(1402 * var(--u));top:calc(174 * var(--u));width:calc(252 * var(--u));height:calc(252 * var(--u))}
+.sa-vl2{left:calc(1364 * var(--u));top:calc(260 * var(--u));height:calc(193 * var(--u))}
+.sa-vl3{left:calc(1061 * var(--u));top:calc(533 * var(--u));height:calc(94 * var(--u))}
+.sa-hl{left:calc(46 * var(--u));right:calc(40 * var(--u));top:calc(496 * var(--u));height:max(1px,calc(2 * var(--u)));background:#2a2a2e}
+.sa-anneau{left:calc(1402 * var(--u));top:calc(226 * var(--u));width:calc(252 * var(--u));height:calc(252 * var(--u))}
 .sa-anneau svg{width:100%;height:100%;transform:rotate(-90deg)}
 .sa-an-f{fill:none;stroke:#26262b;stroke-width:9}
 .sa-an-p{fill:none;stroke:#ffc21a;stroke-width:9;stroke-linecap:round;filter:drop-shadow(0 0 3px rgba(255,194,26,.6))}
@@ -2575,7 +2576,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .sa-an-c small{font-size:1em;color:#8a8a92}
 .sa-an-c span{font-family:var(--pile-titre);font-size:max(8px,calc(28 * var(--u)));letter-spacing:0;
   color:#cfcfd3;text-transform:uppercase;white-space:nowrap}
-.sa-j{top:calc(470 * var(--u));width:calc(142 * var(--u));height:calc(120 * var(--u));display:flex;flex-direction:column;
+.sa-j{top:calc(522 * var(--u));width:calc(142 * var(--u));height:calc(120 * var(--u));display:flex;flex-direction:column;
   align-items:center;justify-content:space-between;padding:calc(6 * var(--u)) 0 0;background:none;border:0;border-radius:calc(16 * var(--u));
   color:#b4b4bb;font-family:inherit;font-size:max(8px,calc(29 * var(--u)));cursor:pointer;line-height:1}
 .sa-j-vise{background:rgba(255,255,255,.05)}
@@ -2585,7 +2586,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .sa-p[data-e="oui"]{border-color:#2bf28c;color:#2bf28c;background:rgba(43,242,140,.12);box-shadow:0 0 calc(14 * var(--u)) rgba(43,242,140,.45)}
 .sa-p[data-e="non"]{border-color:#ff3b3b;color:#ff3b3b;background:rgba(255,59,59,.12);box-shadow:0 0 calc(14 * var(--u)) rgba(255,59,59,.45)}
 .sa-p[data-e="vide"]{border-color:#ffc21a;color:#ffc21a;background:rgba(255,194,26,.15);box-shadow:0 0 calc(14 * var(--u)) rgba(255,194,26,.4)}
-.sa-voir{left:calc(1118 * var(--u));top:calc(473 * var(--u));width:calc(562 * var(--u));height:calc(112 * var(--u));
+.sa-voir{left:calc(1118 * var(--u));top:calc(525 * var(--u));width:calc(562 * var(--u));height:calc(112 * var(--u));
   display:flex;align-items:center;gap:calc(40 * var(--u));padding:0 calc(40 * var(--u));border-radius:calc(24 * var(--u));
   border:max(1px,calc(3 * var(--u))) solid #3a3a40;background:#0e0e10;color:#fff;font-family:inherit;
   font-size:max(8px,calc(36 * var(--u)));font-weight:500;cursor:pointer;text-align:left;white-space:nowrap}
