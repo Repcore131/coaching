@@ -13,8 +13,14 @@
 #  Depot > Settings > Secrets and variables > Actions > New repository secret
 #      PAYPAL_CLIENT_SECRET   le secret de l'application PayPal (compte reel)
 #  C'est le MEME que celui du rapport payeur : si tu l'as deja pose, il n'y a
-#  rien a faire. Pose par Kevin le 24/09/2026 — le rapport payeur du 1er du
-#  mois en depend aussi, et il ne pouvait donc pas partir avant.
+#  rien a faire.
+#
+#  ⚠ TROIS ENDROITS SE RESSEMBLENT ET NE COMMUNIQUENT PAS. Sur la meme page,
+#    l'onglet « Actions » a sa liste, l'onglet « Dependabot » la sienne,
+#    l'onglet « Codespaces » la sienne ; et sous « Actions », les secrets
+#    d'ENVIRONNEMENT ne descendent que dans un travail qui declare cet
+#    environnement. Un secret pose dans le mauvais n'arrive jamais ici. La
+#    premiere etape dit lequel des six noms attendus lui parvient vraiment.
 #
 #  PAYPAL_CLIENT_ID n'est pas un secret : le script le lit dans rc-core, ou il
 #  vit en clair — chaque page servie le contient.
@@ -24,18 +30,17 @@
 #    celui qui porte le meme nom). Il ne supprime rien, ne desactive rien, et
 #    ne touche a aucun abonnement en cours.
 #
-#  ⚠ CE QU'IL NE FAIT PAS : ecrire les identifiants dans rc-core. Ils sont
-#    AFFICHES dans le journal, et recopies a la main dans le code, avec un
-#    numero de build. Une machine qui modifie le code source de l'application
-#    au milieu d'un travail programme, c'est une modification que personne
-#    n'a relue.
+#  ⚠ CE QU'IL NE FAIT PAS : ecrire les identifiants dans rc-core. Ils
+#    apparaissent dans le RESUME du travail, et sont recopies a la main dans le
+#    code, avec un numero de build. Une machine qui modifie le code source de
+#    l'application au milieu d'un travail programme, c'est une modification que
+#    personne n'a relue.
 #
-#  ⚠ IL LAISSE UNE TRACE LISIBLE SANS COMPTE GITHUB : le releve est ecrit dans
-#    docs/offre/etat-plans-paypal.md et commite. Les journaux d'Actions
-#    demandent une connexion ; un fichier du depot, non. C'est la qu'on lit les
-#    identifiants des plans crees, et c'est ce qui permet de relire dans six
-#    mois ce que PayPal facturait ce jour-la. Le commit porte [skip ci] : il ne
-#    redeclenche aucun deploiement.
+#  ⚠ ET RIEN N'EST COMMITE. Un premier jet ecrivait son releve dans
+#    docs/offre/ — dossier volontairement hors du depot — puis le committait :
+#    l'etape passait au vert sans que rien ne soit jamais enregistre. Tout
+#    passe maintenant par le resume du travail, qui se lit dans l'onglet
+#    Actions sans rien publier ni rien ecrire dans le depot.
 # ══════════════════════════════════════════════════════════════════════════
 name: Plans PayPal
 
@@ -50,7 +55,7 @@ on:
       - '.github/workflows/plans-paypal.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: plans-paypal
@@ -60,32 +65,23 @@ jobs:
   plans:
     runs-on: ubuntu-latest
     steps:
-      # fetch-depth 0 : l'etape finale fait un pull --rebase, impossible sur
-      # un clone superficiel.
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
 
       # ── LE SECRET D'ABORD : sans lui, tout le reste ment ─────────────
-      # Sans cette etape, les trois suivantes tombent en six secondes sur une
-      # erreur de saisie et personne ne comprend que c'est un secret qui
-      # manque, pas PayPal qui refuse.
+      # Sans cette etape, les appels suivants tombent sur une erreur de saisie
+      # et personne ne comprend que c'est un secret qui manque, pas PayPal qui
+      # refuse.
       #
-      # ⚠ ET IL DIT LESQUELS IL VOIT. Un secret pose au mauvais endroit —
-      #   onglet Dependabot, onglet Codespaces, secret d'environnement — n'arrive
-      #   jamais ici, et « il n'existe pas » est alors un message qui ment a
-      #   celui qui vient de le poser.
-      #
-      #   ⚠⚠ ON NE DEMANDE JAMAIS `toJSON(secrets)`. Essaye le 24/09/2026 :
-      #      GitHub a marque ce fichier « may be malicious » et bloque le
-      #      travail jusqu'a approbation — et il a RAISON, c'est le motif exact
-      #      d'une exfiltration de secrets. Ce qu'on ecrit ici ne sont pas des
-      #      valeurs mais des COMPARAISONS : `!= ''` rend true ou false, et
-      #      aucune valeur ne prend jamais corps nulle part.
+      # ⚠ ON NE DEMANDE JAMAIS LA TABLE ENTIERE DES SECRETS. Essaye le
+      #   24/09/2026 : GitHub a marque le fichier « may be malicious » et
+      #   bloque le travail jusqu'a approbation — et il a raison, c'est le
+      #   motif exact d'une exfiltration. Ce qui suit n'est pas une valeur mais
+      #   une COMPARAISON par nom : elle rend true ou false, et aucune valeur
+      #   ne prend jamais corps nulle part.
       - name: Le secret est-il pose
         env:
           PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
@@ -96,57 +92,39 @@ jobs:
           VU_MAIL_MOT_DE_PASSE: ${{ secrets.MAIL_MOT_DE_PASSE != '' }}
           VU_MAIL_DESTINATAIRE: ${{ secrets.MAIL_DESTINATAIRE != '' }}
         run: |
-          mkdir -p docs/offre
-          R=docs/offre/etat-plans-paypal.md
-          # Un fichier plutot qu'une variable a rallonge : une chaine shell qui
-          # porte des retours a la ligne DANS un bloc YAML en ferme le bloc des
-          # que le guillemet retombe en colonne zero. Invalid workflow file,
-          # constate le 24/09/2026.
-          T=$(mktemp)
+          {
+            echo '## Les secrets qui arrivent jusqu ici'
+            echo
+            echo 'Une ligne par nom attendu. Aucune valeur ne figure ici.'
+            echo
+            echo '| nom | etat |'
+            echo '| --- | --- |'
+          } >> $GITHUB_STEP_SUMMARY
           for n in PAYPAL_CLIENT_SECRET PAYPAL_SECRET PAYPAL_CLIENT_ID \
                    MAIL_UTILISATEUR MAIL_MOT_DE_PASSE MAIL_DESTINATAIRE; do
             eval "v=\$VU_$n"
-            if [ "$v" = "true" ]; then e=pose; else e=absent; fi
-            echo "$n : $e" >> $T
+            if [ "$v" = "true" ]; then e='pose'; else e='**absent**'; fi
+            echo "| $n | $e |" >> $GITHUB_STEP_SUMMARY
+            echo "$n : $e"
           done
-          NOMS=$(cat $T)
-          {
-            echo "# L'etat des plans PayPal"
-            echo
-            echo "Releve du $(date -u +'%d/%m/%Y a %H:%M UTC'), ecrit par le travail"
-            echo "« Plans PayPal » (.github/workflows/plans-paypal.yml)."
-            echo
-            echo '## Les secrets que ce travail voit'
-            echo
-            echo 'Une ligne par nom attendu : pose, ou absent. Aucune valeur ne figure'
-            echo 'ici, ni ailleurs dans ce fichier : ce depot est public.'
-            echo
-            echo '```'
-            echo "$NOMS"
-            echo '```'
-          } > $R
-          echo "Secrets vus : $NOMS"
           if [ -z "$PAYPAL_CLIENT_SECRET" ]; then
             {
               echo
-              echo '## PAYPAL_CLIENT_SECRET manque'
+              echo '### PAYPAL_CLIENT_SECRET n arrive pas jusqu ici'
               echo
-              echo "Ce travail ne voit pas de secret de ce nom. S'il vient d'etre pose,"
-              echo "c'est qu'il l'a ete ailleurs que dans **Settings > Secrets and variables"
-              echo "> Actions > Repository secrets** : l'onglet Dependabot et l'onglet"
-              echo "Codespaces ont leurs propres listes, et un secret d'environnement ne"
-              echo "descend que dans un travail qui declare cet environnement."
-              echo
-              echo "Les noms ci-dessus sont ceux qui arrivent vraiment jusqu'ici."
-            } >> $R
-            PLAT=$(echo "$NOMS" | tr '\n' ' ')
-            echo "::error::PAYPAL_CLIENT_SECRET n'arrive pas jusqu'a ce travail. Etat : $PLAT"
+              echo 'Il a ete pose ailleurs que dans **Settings > Secrets and variables >'
+              echo 'Actions > Repository secrets** de ce depot : les onglets Dependabot et'
+              echo 'Codespaces ont leurs propres listes, un secret d environnement ne'
+              echo 'descend que dans un travail qui declare cet environnement, et un autre'
+              echo 'depot est un autre monde.'
+            } >> $GITHUB_STEP_SUMMARY
+            echo "::error::PAYPAL_CLIENT_SECRET n'arrive pas jusqu'a ce travail (voir le resume)."
             exit 1
           fi
           echo "Secret present."
 
       # ── 1, 2, 3 : L'ETAT, LA CREATION, L'ETAT ────────────────────────
-      # Tout dans une seule etape, parce que tout part dans le MEME releve.
+      # Tout dans une seule etape, parce que tout part dans le MEME resume.
       # Le premier appel echoue par construction quand un plan manque : c'est
       # ce qu'on vient chercher, d'ou le `|| true`. Le dernier, lui, decide de
       # la couleur du travail.
@@ -154,47 +132,12 @@ jobs:
         env:
           PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
         run: |
-          R=docs/offre/etat-plans-paypal.md
-          {
-            echo
-            echo '## Avant'
-            echo
-            echo '```'
-          } >> $R
-          node scripts/paypal_plans.mjs --verifier 2>&1 | tee -a $R || true
-          {
-            echo '```'
-            echo
-            echo '## Ce qui a ete cree'
-            echo
-            echo '```'
-          } >> $R
-          node scripts/paypal_plans.mjs 2>&1 | tee -a $R
-          {
-            echo '```'
-            echo
-            echo '## Apres'
-            echo
-            echo '```'
-          } >> $R
-          node scripts/paypal_plans.mjs --verifier 2>&1 | tee -a $R && OK=1 || OK=0
-          echo '```' >> $R
+          S=$GITHUB_STEP_SUMMARY
+          { echo; echo '## Avant'; echo; echo '```'; } >> $S
+          node scripts/paypal_plans.mjs --verifier 2>&1 | tee -a $S || true
+          { echo '```'; echo; echo '## Ce qui a ete cree'; echo; echo '```'; } >> $S
+          node scripts/paypal_plans.mjs 2>&1 | tee -a $S
+          { echo '```'; echo; echo '## Apres'; echo; echo '```'; } >> $S
+          node scripts/paypal_plans.mjs --verifier 2>&1 | tee -a $S && OK=1 || OK=0
+          echo '```' >> $S
           [ "$OK" = 1 ]
-
-      # ── ET LE RELEVE RESTE DANS LE DEPOT ─────────────────────────────
-      # `always` : un releve qui ne survit qu'aux jours ou tout va bien ne sert
-      # a rien, c'est les autres jours qu'on le lit.
-      - name: Garder le releve
-        if: always()
-        run: |
-          git config user.name 'github-actions'
-          git config user.email 'github-actions@users.noreply.github.com'
-          git add docs/offre/etat-plans-paypal.md || true
-          git diff --cached --quiet && { echo 'rien de neuf'; exit 0; }
-          git commit -m 'Releve des plans PayPal [skip ci]'
-          for i in 1 2 3; do
-            git pull --rebase --quiet && git push --quiet && exit 0
-            echo "push refuse, nouvel essai ($i)"
-            sleep 5
-          done
-          exit 1
