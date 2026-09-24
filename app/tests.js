@@ -44064,6 +44064,108 @@ async function testExercices(){
       if(CHAMPS_NON_SANTE.indexOf('morphoInitiale')>=0) return _echec('morphoInitiale est classé deux fois');
       return true;})());
 
+
+    // ══ LOT 11 : LA RELECTURE, TENUE PAR DES ASSERTIONS ══════════════════
+    // « Relis chaque phrase visible. Traque le tiret cadratin (INTERDIT), le
+    //   vocabulaire technique qui a fui dans l'interface. »
+    // Ce que la relecture a trouvé est corrigé ; ces assertions empêchent le
+    // retour, parce qu'une relecture ne se refait pas à chaque build.
+    ok('AUCUN TIRET CADRATIN DANS CE QUE LE COACH LIT SUR L’ONGLET DONNÉES',(()=>{
+      const CAD='—', DEMI='–';
+      // 1. LES TEXTES QUE CET ONGLET FABRIQUE, pris à la source.
+      const J=864e5, t=Date.now();
+      const u={id:'R11',email:'r11@t.fr',role:'athlete',gender:'H',_evol_height:'178',
+        weightLog:(function(){ const l=[]; const iso=d=>{const x=new Date(d);
+          return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');};
+          for(let k=26;k>=0;k-=2) l.push({date:iso(t-k*J),kg:86-(26-k)*0.05}); return l; })(),
+        bilans:[
+          {type:'depart',date:t-90*J,'deb-weight':'90','deb-waist':'96','deb-neck':'41',
+           'deb-bicep-r':'38','deb-bicep-l':'37.5','deb-chest':'104','deb-rotule':'47'},
+          {date:t-30*J,'bil-weight':'88','bil-waist':'93','bil-neck':'41','bil-bicep-r':'39','bil-chest':'103'},
+          {date:t-2*J,'bil-weight':'86','bil-waist':'90','bil-neck':'41','bil-bicep-r':'39.5','bil-chest':'102'}]};
+      const morceaux=[];
+      const ajout=(nom,h)=>{ const d=document.createElement('div');
+        d.innerHTML=String(h||''); morceaux.push([nom,(d.textContent||'')]); };
+      ajout('verdict',_htmlCcdVerdict(u));
+      ajout('épingles',_htmlCcdEpingles(u));
+      ajout('manque',_htmlCcdManque(u));
+      ajout('outils',_htmlCcdOutils(u));
+      ajout('courbes',_htmlCcdCourbes(u));
+      ajout('projection',_htmlCcdProjection(u));
+      ajout('mensurations',_htmlCcdMensurations(u));
+      ajout('signaux',_htmlCcdSignaux(u));
+      ajout('échelle',_htmlMorphoEchelle(u,{genou:117.5,yeux:413.85,cuisse:100,jambe:105,
+        bras:70,avantbras:62,tronc:130,cotes:0.01}));
+      ajout('longueurs figées',_htmlMorphoInitiale(u,[]));
+      const sv=_corpsVue, sm=_corpsMode;
+      try{
+        _corpsVue='face'; _corpsMode='evolution';
+        ajout('silhouette',_htmlCorpsCadre(u,{graphes:false}));
+        _corpsMode='volume';
+        ajout('silhouette (volume)',_htmlCorpsCadre(u,{graphes:false}));
+      } finally { _corpsVue=sv; _corpsMode=sm; }
+      for(const [nom,txt] of morceaux){
+        for(const sep of [CAD,DEMI]){
+          const i=txt.indexOf(sep);
+          if(i>=0) return _echec(nom+' : « '+txt.slice(Math.max(0,i-40),i+40).replace(/\s+/g,' ')+' »');
+        }
+      }
+      // 2. ET LE POINT DECIMAL N'EST PAS UNE VIRGULE : « 60.6 kg » sur un
+      //    écran français est une faute, au même titre.
+      for(const [nom,txt] of morceaux)
+        if(/\d+\.\d+\s?(kg|cm|%)/.test(txt))
+          return _echec(nom+' : un point décimal dans « '+(/\d+\.\d+\s?(kg|cm|%)/.exec(txt)||[])[0]+' »');
+      return true;})());
+
+    ok('CHAQUE CHIFFRE DE L’ONGLET PORTE SA SOURCE, SA DATE ET SA MARGE',(()=>{
+      // « Toute valeur affichée porte sa source, sa date et sa marge. Sans
+      //   exception. » La relecture a trouvé le poids du jour sans sa marge.
+      const J=864e5, t=Date.now();
+      const iso=d=>{const x=new Date(d);return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');};
+      const u={id:'S11',email:'s11@t.fr',role:'athlete',gender:'H',_evol_height:'178',
+        weightLog:[{date:iso(t-4*J),kg:86.4},{date:iso(t-2*J),kg:86.2},{date:iso(t),kg:86}],
+        bilans:[{type:'depart',date:t-60*J,'deb-weight':'90','deb-waist':'96','deb-neck':'41'},
+          {date:t-2*J,'bil-weight':'86','bil-waist':'90','bil-neck':'41'}]};
+      const d=document.createElement('div');
+      d.innerHTML=blocPoidsCoach(u);
+      const txt=(d.textContent||'');
+      if(!/dernière pesée le/.test(txt)) return _echec('le poids du jour n’est pas daté');
+      if(!/près/.test(txt)) return _echec('le poids du jour n’a pas sa marge : '+txt.slice(0,120));
+      if(!new RegExp(String(SYN_BRUIT_POIDS).replace('.',',')+' kg près').test(txt))
+        return _echec('la marge affichée n’est pas celle de la balance : '+txt.slice(0,120));
+      // LES QUATRE CARTES, ELLES, LES PORTAIENT DÉJÀ.
+      const c=document.createElement('div'); c.innerHTML=_htmlCcdVerdict(u);
+      for(const a of c.querySelectorAll('.ccd-v')){
+        const s=((a.querySelector('.ccd-v-s')||{}).textContent||'');
+        if(!/près|points près/.test(s)) return _echec('une carte sans marge : '+s);
+      }
+      return true;})());
+
+    ok('LA TEINTE D’ÉVOLUTION EST BORNÉE PAR ÉCRIT, ET L’ÉTIQUETTE GARDE SON ENCRE',(()=>{
+      // R32 : aucune couleur ne juge un centimètre. La teinte du lot 3 dit un
+      // SENS, et la règle porte désormais le renvoi qui l'explique.
+      const src=String(_htmlCorpsEtiquettes);
+      const J=864e5, t=Date.now();
+      const u={id:'T11',email:'t11@t.fr',role:'athlete',gender:'H',bilans:[
+        {date:t-60*J,'bil-chest':'100'},{date:t-2*J,'bil-chest':'102'}]};
+      const sv=_corpsVue, sm=_corpsMode;
+      try{
+        _corpsVue='face'; _corpsMode='evolution';
+        const d=document.createElement('div'); d.innerHTML=_htmlCorpsCadre(u,{graphes:false});
+        // 1. LA LÉGENDE BORNE LA COULEUR AVANT DE DIRE AUTRE CHOSE.
+        const x=(d.querySelector('.cc-corps-x')||{}).textContent||'';
+        if(x.indexOf('jamais un jugement sur son corps')<0)
+          return _echec('la teinte ne dit pas qu’elle ne juge pas : '+x.slice(0,80));
+        // 2. L'ÉTIQUETTE N'EST PAS COLORÉE PAR LE SENS DE L'ÉCART : une seule
+        //    encre, celle du texte.
+        const e=d.querySelector('.cc-corps-ev');
+        if(!e) return _echec('aucune étiquette d’écart sur la silhouette');
+        const st=(e.getAttribute('style')||'')+' '+(e.className||'');
+        if(/green|red|22c55e|e05050/i.test(st))
+          return _echec('l’étiquette porte une couleur de jugement : '+st);
+        return true;
+      } finally { _corpsVue=sv; _corpsMode=sm; }})());
+
     ok('LES CARTES DE ZONES COUVRENT LES MUSCLES DE CHAQUE VUE',(()=>{
       // Chaque silhouette porte sa carte : une image ou chaque pixel du corps
       // vaut le rang de son muscle dans CORPS_ZONES_ORDRE, fois CORPS_ZONES_PAS.

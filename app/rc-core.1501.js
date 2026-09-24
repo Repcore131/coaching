@@ -12324,7 +12324,7 @@ function coherencesMorpho(user){
 // effacé — il est marqué périmé, et reproposé.
 const MORPHO_PEREMPTION_J=90;
 const MORPHO_TESTS=Object.freeze([
-  {cle:'cheville',lib:'Cheville — genou au mur',champ:'cm',unite:'cm',min:0,max:25,
+  {cle:'cheville',lib:'Cheville, genou au mur',champ:'cm',unite:'cm',min:0,max:25,
    protocole:'Pied nu, orteils face à un mur. Avance le genou jusqu’à toucher le mur sans '
      +'décoller le talon, puis recule le pied jusqu’à la distance la plus grande où le genou '
      +'touche encore. Mesure de l’orteil au mur.'},
@@ -12840,7 +12840,7 @@ function morphoAxes(user,opts){
         +'sous 10 cm au mur, la contrainte devient visible en séance.';
       if(v==null||!t||!t.date){
         a.manque='absente';
-        a.aMesurer='le test du genou au mur — trente secondes, pied nu, talon au sol';
+        a.aMesurer='le test du genou au mur : trente secondes, pied nu, talon au sol';
         a.texte='Amplitude de cheville non relevée.';
         return a;
       }
@@ -13053,7 +13053,7 @@ const MORPHO_PROFILS=Object.freeze([
 
   {cle:'P9',lib:'Cheville verrouillée',nature:'fonctionnel',segment:'bas',
    axes:['A7'],signature:[{axe:'A7',positions:['bas']}],
-   signatureTexte:'Moins de ~10 cm au test du genou au mur. En vidéo : talons qui décollent au fond, buste qui plonge d’un coup, ou genoux qui rentrent — les trois compensations classiques d’une amplitude qu’on n’a pas.',
+   signatureTexte:'Moins de ~10 cm au test du genou au mur. En vidéo : talons qui décollent au fond, buste qui plonge d’un coup, ou genoux qui rentrent : les trois compensations classiques d’une amplitude qu’on n’a pas.',
    mecanique:'Un squat complet demande de l’ordre de 35–40° de flexion dorsale. Sans elle, le corps emprunte l’amplitude ailleurs. La cause n’est pas toujours la souplesse : elle peut être articulaire. Le test dit qu’il manque de l’amplitude, pas pourquoi.',
    privilegier:'Presse à cuisses, hack squat, extension de jambes : le quadriceps se charge sans exiger la cheville. Squat talons surélevés : la méta-analyse montre un gain d’amplitude de cheville et de genou à partir d’environ 2,5 cm d’élévation, avec un effet dose.',
    amenager:[{quoi:'Squat pieds serrés profond',reglage:'cale de 2,5 cm, ou stance élargi avec pointes ouvertes',schema:'squat'},
@@ -42423,6 +42423,16 @@ function _htmlCorpsGraphes(u,o){
  *   objectif declare ne dit dans quel sens un tour de cuisse « doit » aller.
  *   L'ecart s'ecrit donc toujours dans la meme encre.
  *
+ *   ⚠ ET LA TEINTE « EVOLUTION » DU LOT 3 N'EST PAS UNE EXCEPTION A CETTE
+ *     REGLE, MEME SI ELLE EN A L'AIR. Elle peint le muscle en vert quand son
+ *     tour a PRIS et en rouge quand il a PERDU : c'est un SENS, pas un
+ *     jugement, et la legende l'ecrit avant de dire quoi que ce soit d'autre
+ *     (« la couleur dit le sens de la mesure, jamais un jugement sur son
+ *     corps »). L'etiquette, elle, garde son encre unique : c'est ici que la
+ *     regle s'applique, et elle n'a pas bouge. Kevin, 23/09/2026, a demande la
+ *     teinte en ces termes ; si un jour elle doit tomber, c'est cette phrase-la
+ *     qu'il faudra relire, pas le code.
+ *
  * ⚠ DEUX COMPTEURS, ET ILS NE DISENT PAS LA MEME CHOSE depuis le 23/09/2026 :
  *   `etiquettes` compte ce qui est POSE sur le corps — toute mensuration
  *   mesuree, zeros compris — et `avecEcart` ce qui porte un ECART calcule.
@@ -43615,12 +43625,17 @@ function _htmlCcdMensurations(c){
             +((bl[ci]&&(function(){ try{ return bmReportee(bl[ci],m.k); }catch(e){ return false; } })())
               ?'var(--text-faint)':'var(--text)')+';'))};
   });
+  // ⚠ LE MARQUEUR DE CASE VIDE EST UN POINT, PAS UN TIRET CADRATIN.
+  //   renderDataTable met un tiret cadratin par defaut, et le tiret cadratin
+  //   est interdit dans tout ce que Kevin lit. Le pied de tableau dit ce que
+  //   le point veut dire, sans quoi il passerait pour une valeur.
   const t=renderDataTable(colonnes,lignes,
-    {stickyCol0:true,firstColMinWidth:'118px',pad:'4px 6px',mb:'8px'});
+    {stickyCol0:true,firstColMinWidth:'118px',pad:'4px 6px',mb:'8px',emptyVal:'·'});
   const dit={absolu:'la valeur relevée à chaque bilan',
     ecart:'l’écart avec le bilan d’avant',
     pourcent:'le pourcentage depuis le premier bilan'}[_ccdLecture]||'';
-  return t+'<p class="ccd-out-p">Chaque colonne porte la date de son bilan, et '
+  return t+'<p class="ccd-out-p">Un point, c’est une mesure absente de ce bilan. '
+    +'Chaque colonne porte la date de son bilan, et '
     +'chaque case '+escapeHtml(dit)+' (la bascule en tête de fiche). La dernière '
     +'colonne dit l’écart entre le côté droit et le côté gauche au dernier bilan, '
     +'quand la mesure existe des deux côtés. Tout est au ruban, à ± '
@@ -89356,11 +89371,11 @@ function blocPoidsCoach(user,depuis){
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Poids</span>
-      <span style="font-size:var(--fs-2xs);color:var(--text-faint)">dernière pesée le ${_fmtJourCourt(der.date)}</span>
+      <span style="font-size:var(--fs-2xs);color:var(--text-faint)">dernière pesée le ${_fmtJourCourt(der.date)} · à ${_synNombre(SYN_BRUIT_POIDS)} kg près</span>
     </div>
     <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
-      <span style="font-size:var(--fs-xl);font-weight:400;color:var(--text);font-family:var(--pile-titre);letter-spacing:1px">${der.kg} kg</span>
-      ${moy!=null?`<span style="font-size:var(--fs-xs);color:var(--sub)">moyenne 7 j ${moy.toFixed(1)} kg</span>`:''}
+      <span style="font-size:var(--fs-xl);font-weight:400;color:var(--text);font-family:var(--pile-titre);letter-spacing:1px">${_synNombre(der.kg)} kg</span>
+      ${moy!=null?`<span style="font-size:var(--fs-xs);color:var(--sub)">moyenne 7 j ${_synNombre(moy)} kg</span>`:''}
     </div>
     ${v?`<div style="font-size:var(--fs-sm);font-weight:700;color:${c};margin-top:6px">
         ${v.kgSem>0?'+':''}${v.kgSem.toFixed(2)} kg/sem · ${v.kgSem>0?'+':''}${v.pctSem.toFixed(2)} %/sem
