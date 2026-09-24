@@ -34728,6 +34728,193 @@ async function testExercices(){
         // ET IL DIT DEPUIS QUAND ÇA ATTEND.
         return /10 jours/.test(txt)?true:_echec('l’ancienneté ne se lit pas : '+txt.slice(0,120));})());
 
+      // ══ OUVRIR ET FERMER UN ACCÈS À LA MAIN (24/09/2026) ══════════════
+      ok('ACCÈS — UN MOIS DE PLUS TOMBE SUR UNE DATE QUI EXISTE',(()=>{
+        // ⚠ Date.setMonth SEUL DÉBORDE : le 31 janvier plus un mois donnerait
+        //   le 3 mars, et un accès réglé jusqu’au 28 février serait ouvert
+        //   trois jours de trop, chaque année, sur tous les mois courts.
+        const j31=new Date(2027,0,31,12,0,0).getTime();
+        const r=new Date(moisApres(j31,1));
+        if(r.getMonth()!==1) return _echec('janvier + 1 mois tombe en '+(r.getMonth()+1));
+        if(r.getDate()!==28) return _echec('le 31 janvier + 1 mois donne le '+r.getDate());
+        // ET LE JOUR SE GARDE QUAND IL EXISTE.
+        const r2=new Date(moisApres(new Date(2027,0,15,12,0,0).getTime(),3));
+        if(r2.getMonth()!==3||r2.getDate()!==15) return _echec('15 janvier + 3 mois : '+r2.toDateString());
+        // DOUZE MOIS FONT UN AN, PAS TREIZE.
+        const r3=new Date(moisApres(new Date(2027,5,10,12,0,0).getTime(),12));
+        if(r3.getFullYear()!==2028||r3.getMonth()!==5) return _echec('+12 mois : '+r3.toDateString());
+        return moisApres(j31,0)===j31?true:_echec('zéro mois déplace la date');})());
+
+      ok('ACCÈS — PROLONGER PART DE L’ÉCHÉANCE, PAS DU JOUR DU CLIC',(()=>{
+        // ⚠ LE DÉFAUT QU’ON ÉVITE : prolonger le 3 alors que l’accès court
+        //   jusqu’au 28 aurait donné « le 3 du mois suivant », soit vingt-cinq
+        //   jours réglés partis en fumée parce qu’on a cliqué tôt.
+        const now=new Date(2027,2,3,12,0,0).getTime();
+        const fin=new Date(2027,2,28,12,0,0).getTime();
+        const d={etat:'serveur',palier:'ultime',echeance:fin,source:'main',avant:''};
+        const c=accesCalcul('prolonger',d,{maintenant:now,mois:1});
+        if(c.palier!=='ultime') return _echec('le palier change : '+c.palier);
+        const r=new Date(c.echeance);
+        if(r.getMonth()!==3||r.getDate()!==28) return _echec('prolongé jusqu’au '+r.toDateString());
+        // UNE ÉCHÉANCE DÉPASSÉE, ELLE, REPART D’AUJOURD’HUI : on ne rattrape
+        // pas les mois où la personne n’avait plus rien.
+        const vieux={etat:'serveur',palier:'essentielle',echeance:new Date(2027,0,5).getTime()};
+        const c2=accesCalcul('prolonger',vieux,{maintenant:now,mois:1});
+        const r2=new Date(c2.echeance);
+        if(r2.getMonth()!==3||r2.getDate()!==3) return _echec('après expiration : '+r2.toDateString());
+        // ET « sans fin » S’ÉCRIT 0, PAS UNE DATE LOINTAINE : c’est ce que lit
+        // palierDe, qui ne compare rien quand l’échéance vaut zéro.
+        const c3=accesCalcul('ouvrir',{etat:'absent'},{maintenant:now,mois:0,palier:'ultime'});
+        return c3.echeance===0?true:_echec('sans fin vaut '+c3.echeance);})());
+
+      ok('ACCÈS — FERMER GARDE DE QUOI ROUVRIR, ROUVRIR REND LA MAIN AU DOSSIER',(()=>{
+        const now=Date.now();
+        const ouvert={etat:'serveur',palier:'ultime',echeance:now+30*864e5,source:'main',avant:''};
+        const f=accesCalcul('suspendre',ouvert,{maintenant:now});
+        if(f.palier!=='aucun') return _echec('fermer laisse le palier '+f.palier);
+        if(f.echeance!==0) return _echec('fermer laisse une échéance');
+        if(f.source!=='suspension') return _echec('la source ne dit pas d’où vient la fermeture');
+        if(f.avant!=='ultime') return _echec('ce qui était ouvert est perdu : '+f.avant);
+        // NŒUD VIDE : c’est l’appelant qui sait ce qui était ouvert (la liste
+        // des athlètes passe 'suivi'). Sans ça, rouvrir un athlète suivi lui
+        // aurait rendu « Essentielle ».
+        const f2=accesCalcul('suspendre',{etat:'absent'},{maintenant:now,avant:'suivi'});
+        if(f2.avant!=='suivi') return _echec('l’appelant n’est pas écouté : '+f2.avant);
+        // ROUVRIR N’ÉCRIT PAS UNE DATE. Poser « un mois » sur quelqu’un suivi
+        // trois mois l’aurait coupé au bout d’un mois : on efface, le dossier
+        // redécide, et il sait déjà jusqu’à quand va son pack.
+        if(accesCalcul('rendre',ouvert,{maintenant:now})!==null)
+          return _echec('rouvrir écrit quelque chose au lieu d’effacer');
+        // PROLONGER UN ACCÈS FERMÉ LE ROUVRE AU PALIER D’AVANT.
+        const c=accesCalcul('prolonger',{etat:'serveur',palier:'aucun',echeance:0,
+          source:'suspension',avant:'ultime'},{maintenant:now,mois:1});
+        return c.palier==='ultime'?true:_echec('prolonger après fermeture donne '+c.palier);})());
+
+      ok('ACCÈS — « À VÉRIFIER » NE S’ALLUME QUE QUAND IL Y A QUELQUE CHOSE À FAIRE',(()=>{
+        const now=new Date(2027,4,10,12,0,0).getTime();
+        const cas=(d)=>accesEtatPhrase(d,now);
+        if(cas({etat:'absent'}).verifier) return _echec('un nœud vide demande une vérification');
+        if(cas({etat:'inconnu'}).verifier) return _echec('une lecture manquée demande une vérification');
+        if(cas({etat:'serveur',palier:'ultime',echeance:now+40*864e5}).verifier)
+          return _echec('un accès actif demande une vérification');
+        const dep=cas({etat:'serveur',palier:'ultime',echeance:now-864e5});
+        if(!dep.verifier) return _echec('une échéance dépassée passe inaperçue');
+        const fer=cas({etat:'serveur',palier:'aucun',echeance:0,source:'suspension',avant:'ultime'});
+        if(!fer.verifier) return _echec('un accès fermé passe inaperçu');
+        if(fer.avant.indexOf('Ultime')<0) return _echec('ce qui était ouvert ne se lit pas : '+fer.avant);
+        // LES SEPT DERNIERS JOURS PRÉVIENNENT SANS ALARMER.
+        const b=cas({etat:'serveur',palier:'essentielle',echeance:now+3*864e5});
+        if(b.cle!=='bientot') return _echec('trois jours restants donnent '+b.cle);
+        // ET AUCUN TIRET CADRATIN NULLE PART : c’est du texte d’interface.
+        for(const p of [dep.phrase,fer.phrase,b.phrase,cas({etat:'absent'}).phrase])
+          if(/[—–]/.test(p)) return _echec('tiret cadratin dans « '+p+' »');
+        return true;})());
+
+      ok('ACCÈS — LA PORTE FERMÉE DIT CE QUI EST FERMÉ ET CE QUI RESTE POSSIBLE',(()=>{
+        const sv=currentUser, svD=localStorage.getItem(DROITS_CLE);
+        const t0=document.getElementById('ag-title').textContent;
+        const s0=document.getElementById('ag-sub').textContent;
+        const b0=document.getElementById('ag-status-block').innerHTML;
+        try{
+          currentUser={id:'A1',email:'ferme@t.fr',role:'athlete',
+            status:'AUTONOMIE_PREMIUM',paymentStatus:'active'};
+          _droitsPoser('ferme@t.fr',{palier:'aucun',echeance:0,source:'suspension',
+            avant:'ultime',maj:Date.now()},false);
+          if(accesFermeParMain(currentUser)!=='suspension')
+            return _echec('la fermeture à la main n’est pas reconnue');
+          // ET ELLE FERME POUR DE BON, quoi que dise le dossier : ici le
+          // dossier dit « abonné actif ».
+          if(checkAccess(currentUser)) return _echec('la porte reste ouverte');
+          loadAccessGate();
+          const titre=document.getElementById('ag-title').textContent;
+          const sous=document.getElementById('ag-sub').textContent;
+          const bloc=document.getElementById('ag-status-block').textContent.replace(/\s+/g,' ');
+          // ⚠ DEUX CHOSES, TOUJOURS : ce qui est fermé, et ce qui reste
+          //   possible tout de suite. Un mur sec fait partir la personne.
+          if(!/pause/i.test(titre)) return _echec('le titre ne dit pas la pause : '+titre);
+          if(sous.indexOf('effacé')<0) return _echec('rien ne dit que rien n’est effacé : '+sous);
+          if(sous.indexOf('attendent')<0) return _echec('le sous-titre ne dit pas ce qui reste : '+sous);
+          if(bloc.indexOf('rouvre')<0) return _echec('le bloc ne dit pas comment ça se rouvre : '+bloc);
+          if(/[—–]/.test(titre+' '+sous+' '+bloc)) return _echec('tiret cadratin dans la porte fermée');
+          // LE BOUTON QUI REPREND L’ACCÈS EST VISIBLE : une autre branche de cet
+          // écran le cache, et rien ne le remontrait.
+          const ren=document.getElementById('ag-renouveler');
+          if(ren&&ren.style.display==='none') return _echec('le bouton de reprise reste caché');
+          // ET UNE PÉRIODE SIMPLEMENT ARRIVÉE AU BOUT NE PARLE PAS DE RÈGLEMENT.
+          _droitsPoser('ferme@t.fr',{palier:'ultime',echeance:Date.now()-864e5,
+            source:'main',maj:Date.now()},false);
+          if(accesFermeParMain(currentUser)!=='echu') return _echec('l’échéance dépassée n’est pas vue');
+          loadAccessGate();
+          const t2=document.getElementById('ag-title').textContent;
+          return /bout/i.test(t2)?true:_echec('le titre de fin de période : '+t2);
+        } finally {
+          currentUser=sv;
+          if(svD==null) localStorage.removeItem(DROITS_CLE); else localStorage.setItem(DROITS_CLE,svD);
+          document.getElementById('ag-title').textContent=t0;
+          document.getElementById('ag-sub').textContent=s0;
+          document.getElementById('ag-status-block').innerHTML=b0;
+        }})());
+
+      ok('ACCÈS — L’ÉCRAN EST AU CRÉATEUR, ET LES BOUTONS AUSSI',(()=>{
+        const sv=currentUser, svD=localStorage.getItem(DROITS_CLE), svVu=_accesVu;
+        const z=document.getElementById('acces-corps');
+        if(!z) return _echec('l’écran Accès n’existe pas dans index.html');
+        const svZ=z.innerHTML;
+        // LA GARDE SE VOIT AU BON MOMENT : accesAgir est asynchrone, mais son
+        // refus est synchrone — il tombe avant le premier await, donc avant que
+        // la moindre lecture ne part.
+        let toastVu='',lu=0;
+        const svToast=window.toast, svPull=CLOUD.pullDroits;
+        try{
+          window.toast=(m)=>{ toastVu=String(m||''); };
+          CLOUD.pullDroits=()=>{ lu++; return Promise.resolve({ok:false}); };
+          currentUser={id:'C2',email:'autre.coach@t.fr',role:'coach'};
+          accesAgir('suspendre','victime@t.fr',{});
+          if(lu!==0) return _echec('un autre coach a quand même fait lire le nœud');
+          if(toastVu.indexOf('créateur')<0) return _echec('le refus ne dit pas pourquoi : '+toastVu);
+          if(_htmlAccesBoutons({email:'a@t.fr'})!=='')
+            return _echec('un autre coach voit des boutons qui échoueraient chez lui');
+          if(_htmlAccesPose({email:'a@t.fr'})!=='')
+            return _echec('un autre coach voit l’état posé à la main');
+          // ET L’ÉCRAN LUI-MÊME NE MONTRE RIEN.
+          _rendreConsoleAcces();
+          if(z.textContent.indexOf('créateur')<0) return _echec('l’écran s’ouvre à tout coach');
+          // ── LE CRÉATEUR, LUI, VOIT L’ÉTAT ET LES GESTES ──────────────────
+          currentUser={id:'K1',email:CREATOR_EMAIL,role:'coach'};
+          _droitsPoser('paye@t.fr',{palier:'aucun',echeance:0,source:'suspension',
+            avant:'essentielle',maj:Date.now()},false);
+          _accesVu={email:'paye@t.fr',lecture:'ok'};
+          _rendreConsoleAcces();
+          const txt=z.textContent.replace(/\s+/g,' ');
+          if(txt.indexOf('paye@t.fr')<0) return _echec('l’adresse regardée ne s’affiche pas');
+          if(txt.indexOf('à vérifier')<0) return _echec('le badge « à vérifier » manque');
+          if(z.innerHTML.indexOf('accesRouvrir()')<0) return _echec('pas de bouton pour rouvrir');
+          // ON NE PROPOSE PAS DE FERMER CE QUI EST DÉJÀ FERMÉ.
+          if(z.innerHTML.indexOf('accesSuspendre()')>=0) return _echec('on propose de refermer');
+          // NI DE PROLONGER UN ACCÈS FERMÉ : le bouton dirait une date qui
+          // n’existe pas encore.
+          if(z.innerHTML.indexOf('accesProlonger()')>=0) return _echec('on propose de prolonger du vide');
+          if(z.innerHTML.indexOf('mailto:')<0) return _echec('aucun moyen de lui écrire');
+          // CE QUI NE SE FAIT PAS D’ICI EST DIT : fermer un accès n’arrête pas
+          // un prélèvement, et l’inverse non plus.
+          if(txt.indexOf('PayPal')<0) return _echec('l’écran ne dit pas où s’arrête le prélèvement');
+          if(/[—–]/.test(txt)) return _echec('tiret cadratin dans l’écran Accès');
+          // UN ACCÈS OUVERT, LUI, SE PROLONGE ET SE FERME.
+          _droitsPoser('paye@t.fr',{palier:'ultime',echeance:Date.now()+20*864e5,
+            source:'main',maj:Date.now()},false);
+          _rendreConsoleAcces();
+          if(z.innerHTML.indexOf('accesProlonger()')<0) return _echec('pas de bouton pour prolonger');
+          if(z.innerHTML.indexOf('accesSuspendre()')<0) return _echec('pas de bouton pour fermer');
+          // ET LES DURÉES SONT LÀ, avec « sans fin » qui vaut zéro mois.
+          const sel=document.getElementById('acces-duree');
+          if(!sel) return _echec('aucune durée à choisir');
+          return (sel.innerHTML.indexOf('sans fin')>=0)?true:_echec('« sans fin » n’est pas proposé');
+        } finally {
+          window.toast=svToast; CLOUD.pullDroits=svPull;
+          currentUser=sv; _accesVu=svVu; z.innerHTML=svZ;
+          if(svD==null) localStorage.removeItem(DROITS_CLE); else localStorage.setItem(DROITS_CLE,svD);
+        }})());
+
       // ══ LOT 5 — LA CARTE BANCAIRE, QU'ON FERMAIT NOUS-MEMES ════════════
       ok('LOT 5 — LE SDK PAYPAL OUVRE LA CARTE, DANS LES DEUX ÉCRANS',(()=>{
         const src=_prodSrc();
@@ -38768,6 +38955,9 @@ async function testExercices(){
         // qu'un ecran coach neuf doit se declarer : la classe seule ne suffit
         // pas, et l'assertion l'a dit avant que quiconque ne l'ouvre.
         's-coach-tunnel',
+        // L'ECRAN « Acces », 24/09/2026 : ouvrir et fermer un acces a la
+        // main, au bout du rapport payeur du 1er du mois.
+        's-coach-acces',
         's-coach-activite','s-rapport','s-programme-print','s-vitrine',
         's-ex-classify','s-proto-edit','s-protocoles','s-metrics',
         // B1.1 — L'OUBLI. Le coach qui verifie une seance avant de la publier

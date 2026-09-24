@@ -4311,6 +4311,43 @@ const CLOUD={
       return {ok:true,droits:(d&&typeof d==='object')?d:null};
     }catch(e){ return {ok:false,raison:'reseau'}; }
   },
+  // ══ ECRIRE UN DROIT, DEPUIS L’APPLICATION (24/09/2026) ══════════════════
+  //
+  // ⚠ C’EST LA SEULE ECRITURE DE CE NOEUD DANS TOUT LE FICHIER, et la regle ne
+  //   l’accorde qu’a l’adresse du createur. LA GARDE EST REPETEE ICI : sans
+  //   elle, un autre compte enverrait la requete, Firebase la refuserait, et le
+  //   seul retour serait « HTTP 401 » — un echec illisible la ou il faut une
+  //   phrase claire. C’est la meme defense en profondeur que toggleSubStatus.
+  //
+  // PATCH ET NON PUT : le noeud porte aussi l’essai (essaiOuvertLe,
+  // essaiFinit). Un PUT les effacerait en suspendant un acces, et la personne
+  // se verrait offrir un second essai de trente jours.
+  //
+  // `champs === null` SUPPRIME LE NOEUD. C’est « rouvrir » : on n’ecrit pas une
+  // date par-dessus, on rend la main au dossier, qui sait deja jusqu’a quand va
+  // le pack ou l’abonnement.
+  async poserDroits(email,champs){
+    const mail=String(email||'').trim().toLowerCase();
+    if(!mail||mail.indexOf('@')<0) return {ok:false,raison:'adresse incomplete'};
+    if(!currentUser||currentUser.email!==CREATOR_EMAIL)
+      return {ok:false,raison:'reserve au createur'};
+    if(champs!==null&&(!champs||typeof champs!=='object'))
+      return {ok:false,raison:'rien a ecrire'};
+    const base=this._fbUrl.replace('users.json','droits/'+mail.replace(/[.]/g,',')+'.json');
+    const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),8000);
+    try{
+      const token=await this._getToken();
+      if(!token) return {ok:false,raison:'non authentifie'};
+      const corps=(champs===null)?'':JSON.stringify(champs);
+      const r=await fetch(base+'?auth='+token,(champs===null)
+        ?{method:'DELETE',signal:ctrl.signal}
+        :{method:'PATCH',headers:{'Content-Type':'application/json'},
+          body:corps,signal:ctrl.signal});
+      try{ _quotaCompter('out',corps.length+base.length); }catch(e){}
+      if(!r.ok) return {ok:false,raison:'HTTP '+r.status};
+      return {ok:true};
+    }catch(e){ return {ok:false,raison:'reseau'}; }
+  },
   async pullUser(email){
     const key=email.replace(/\./g,',');
     const base=this._fbUrl.replace('users.json','users/'+key+'.json');
@@ -6852,8 +6889,11 @@ function droitsDe(u){
   if(o.vide||!o.d) return {etat:'absent',palier:'aucun',echeance:0,source:null,maj:0,lu:o.lu};
   const d=o.d||{};
   const p=PALIERS_ORDRE.indexOf(String(d.palier))>0?String(d.palier):'aucun';
+  // `avant` EST CE QUI ETAIT OUVERT AVANT UNE SUSPENSION. Sans lui, rouvrir
+  // demanderait de se souvenir du palier de quelqu’un.
   return {etat:'serveur',palier:p,echeance:Number(d.echeance)||0,
     source:d.source||null,maj:Number(d.maj)||0,lu:o.lu,
+    avant:(PALIERS_ORDRE.indexOf(String(d.avant))>0?String(d.avant):''),
     essaiOuvertLe:Number(d.essaiOuvertLe)||0,essaiFinit:Number(d.essaiFinit)||0};
 }
 // ⚠ UN NOEUD VIDE NE FERME RIEN, ET C'EST LA CORRECTION DU 24/09/2026.
@@ -6947,6 +6987,309 @@ async function rafraichirDroits(u,force){
   try{ r=await CLOUD.pullDroits(mail); }catch(e){ r=null; }
   if(!r||!r.ok) return false;
   _droitsPoser(mail,r.droits,!r.droits);
+  return true;
+}
+// ══════════════════════════════════════════════════════════════════════════
+//  OUVRIR ET FERMER UN ACCÈS, À LA MAIN (24/09/2026)
+// ══════════════════════════════════════════════════════════════════════════
+//
+//  POURQUOI CET ÉCRAN EXISTE. PayPal prélève tout seul, mais rien ne redescend
+//  jusqu’à l’application : une résiliation, un impayé, une carte qui expire ne
+//  changent RIEN ici, et ne le changeront jamais — il n’y a pas de serveur pour
+//  écouter PayPal. Le rapport du 1er du mois dit qui a payé et qui n’a pas payé ;
+//  cet écran est le geste qui va avec. Sans lui, le rapport n’est qu’une liste
+//  qu’on lit en soupirant.
+//
+//  ⚠ FERMER N’EFFACE RIEN, et l’écran d’accueil de la personne le dit dans ces
+//    termes : ses séances, son programme et son historique l’attendent. C’est
+//    aussi ce qui fait revenir quelqu’un qui a simplement oublié de payer.
+//
+//  ⚠ ROUVRIR N’ÉCRIT PAS UNE DATE, IL REND LA MAIN AU DOSSIER. Poser « ouvert
+//    un mois » sur un athlète suivi trois mois l’aurait coupé au bout d’un mois
+//    sans que personne ne comprenne pourquoi. Le dossier sait déjà jusqu’à quand
+//    va son pack ou son abonnement : on efface la fermeture, il redécide.
+//
+//  ⚠ ET CE QUI N’EST PAS ICI : arrêter le prélèvement. Ça se passe chez PayPal,
+//    l’application n’a aucun moyen de l’ordonner. L’écran le dit et donne
+//    l’adresse, plutôt que de laisser croire que fermer l’accès arrête le
+//    paiement.
+const ACCES_DUREES=Object.freeze([{mois:1,libelle:'1 mois'},{mois:3,libelle:'3 mois'},
+  {mois:12,libelle:'12 mois'},{mois:0,libelle:'sans fin'}]);
+// PURE. La même date, n mois plus tard. Date.setMonth seul déborde : le 31
+// janvier plus un mois donnerait le 3 mars. On passe par le 1er, puis on
+// redescend au dernier jour du mois visé quand il est plus court.
+function moisApres(t,n){
+  const d=new Date(Number(t)||Date.now());
+  const jour=d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth()+(Number(n)||0));
+  const dernier=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+  d.setDate(Math.min(jour,dernier));
+  return d.getTime();
+}
+// PURE. Le nom d’un palier, lu sur OFFRES quand il y est : renommer Ultime un
+// jour ne laissera pas cet écran seul à dire l’ancien nom.
+function nomDuPalier(p){
+  const c=String(p||'');
+  if(c==='suivi') return 'Suivi par un coach';
+  if(c==='aucun'||!c) return 'Fermé';
+  const o=OFFRES[c];
+  return (o&&o.lib)?o.lib:c;
+}
+// PURE. CE QU’ON VA ÉCRIRE, à partir de ce qui est déjà là. Elle ne touche à
+// rien, et c’est elle qu’on teste : l’envoi n’est qu’un envoi.
+//   'ouvrir'     pose le palier demandé pour `mois` mois (0 = sans fin)
+//   'prolonger'  garde le palier, repousse l’échéance de `mois` mois
+//   'suspendre'  palier 'aucun', et GARDE dans `avant` ce qui était ouvert
+//   'rendre'     null, c’est-à-dire : efface le nœud, le dossier redécide
+// `d` est ce que droitsDe rend — y compris {etat:'absent'} quand le nœud est
+// vide, ce qui est le cas de presque tout le monde.
+function accesCalcul(action,d,opt){
+  const o=opt||{};
+  const now=Number(o.maintenant)||Date.now();
+  if(action==='rendre') return null;
+  const actuel=(d&&d.etat==='serveur')?d:null;
+  const pal=actuel?String(actuel.palier||'aucun'):'aucun';
+  const mois=(o.mois==null)?1:Number(o.mois);
+  if(action==='suspendre'){
+    // CE QUI ÉTAIT OUVERT EST GARDÉ, même quand le nœud était vide : dans ce
+    // cas c’est l’appelant qui le sait (un athlète suivi vaut 'suivi').
+    const avant=(pal!=='aucun')?pal
+      :((PALIERS_ORDRE.indexOf(String(actuel&&actuel.avant))>0)?String(actuel.avant)
+        :((PALIERS_ORDRE.indexOf(String(o.avant))>0)?String(o.avant):'essentielle'));
+    return {palier:'aucun',echeance:0,source:'suspension',avant:avant,maj:now};
+  }
+  // L’ÉCHÉANCE REPART DE LA PLUS TARDIVE DES DEUX. Prolonger d’un mois le 3,
+  // alors que l’accès court jusqu’au 28, doit donner le 28 du mois suivant et
+  // non le 3 : un mois réglé ne se perd pas parce qu’on a cliqué tôt.
+  const socle=(actuel&&actuel.echeance>now)?actuel.echeance:now;
+  let palier=String(o.palier||'');
+  if(action==='prolonger'){
+    palier=(pal!=='aucun')?pal
+      :((PALIERS_ORDRE.indexOf(String(actuel&&actuel.avant))>0)?String(actuel.avant)
+        :String(o.palier||''));
+  }
+  if(PALIERS_ORDRE.indexOf(palier)<1) palier='essentielle';
+  return {palier:palier,echeance:(mois>0?moisApres(socle,mois):0),source:'main',maj:now};
+}
+// PURE. L’état d’un accès, en une phrase, une couleur, et un « à vérifier » qui
+// ne se devine pas : une échéance dépassée, ou un accès fermé à la main.
+function accesEtatPhrase(d,maintenant){
+  const t=Number(maintenant)||Date.now();
+  if(!d||d.etat==='inconnu')
+    return {cle:'inconnu',phrase:'Pas encore lu',couleur:'var(--sub)',verifier:false};
+  if(d.etat==='absent')
+    return {cle:'absent',phrase:'Rien de posé ici : son dossier décide',
+      couleur:'var(--sub)',verifier:false};
+  const pal=String(d.palier||'aucun');
+  if(pal==='aucun')
+    return {cle:'ferme',phrase:(d.source==='suspension'?'Accès fermé':'Fermé'),
+      couleur:'var(--red-light)',verifier:true,
+      avant:(d.avant?nomDuPalier(d.avant):'')};
+  const nom=nomDuPalier(pal);
+  if(!d.echeance)
+    return {cle:'sansfin',phrase:nom+', sans fin',couleur:'var(--green)',verifier:false};
+  const jours=Math.ceil((d.echeance-t)/864e5);
+  const date=new Date(d.echeance).toLocaleDateString('fr-FR');
+  if(jours<0)
+    return {cle:'depasse',phrase:nom+', terminé le '+date,
+      couleur:'var(--red-light)',verifier:true,jours:jours};
+  if(jours<=7)
+    return {cle:'bientot',phrase:nom+', jusqu’au '+date+' ('+jours+' jour'+(jours>1?'s':'')+')',
+      couleur:'var(--orange)',verifier:false,jours:jours};
+  return {cle:'ok',phrase:nom+', jusqu’au '+date,couleur:'var(--green)',
+    verifier:false,jours:jours};
+}
+// PURE. Un accès fermé À LA MAIN, et de quelle façon : c’est ce qui décide de la
+// phrase que la personne lit. '' quand rien n’est fermé de cette manière.
+function accesFermeParMain(u){
+  const d=droitsDe(u);
+  if(!d||d.etat!=='serveur') return '';
+  if(String(d.palier||'aucun')==='aucun')
+    return (d.source==='suspension')?'suspension':'ferme';
+  if(d.echeance>0&&Date.now()>=d.echeance) return 'echu';
+  return '';
+}
+// PURE. Le message à envoyer, prêt à coller. Il dit ce qui est fermé ET ce qui
+// reste possible tout de suite, comme l’écran que la personne voit.
+function messageAcces(etat){
+  const e=etat||{};
+  const quoi=(e.cle==='ferme')
+    ?'Ton accès à RepCore est en pause en attendant le règlement de ce mois.'
+    :((e.cle==='depasse')
+      ?'Ton accès à RepCore est arrivé au bout de la période réglée.'
+      :'Ton accès à RepCore se termine bientôt.');
+  return 'Salut ! '+quoi
+    +' Rien n’est effacé : tes séances, ton programme et ton historique t’attendent.'
+    +' Ouvre l’app et reprends ton abonnement, tout revient au même endroit : '
+    +lienAbonnement()+' Dis-moi si tu as le moindre souci, je m’en occupe.';
+}
+// ── LE GESTE ──────────────────────────────────────────────────────────────
+// ⚠ ON LIT AVANT D’ÉCRIRE, TOUJOURS. Prolonger sans connaître l’échéance en
+//   cours la raccourcirait ; suspendre sans connaître le palier perdrait de
+//   quoi rouvrir. Une lecture qui échoue annule le geste et le dit : mieux vaut
+//   ne rien faire que fermer un accès en croyant le prolonger.
+async function accesAgir(action,email,opt){
+  if(!currentUser||currentUser.email!==CREATOR_EMAIL){
+    toast('Réservé au créateur.','var(--orange)'); return false; }
+  const mail=String(email||'').trim().toLowerCase();
+  if(!mail||mail.indexOf('@')<0){ toast('Il manque l’adresse.','var(--orange)'); return false; }
+  const lu=await CLOUD.pullDroits(mail);
+  if(!lu||!lu.ok){
+    toast('Pas pu lire cet accès : rien n’a changé.','var(--orange)'); return false; }
+  _droitsPoser(mail,lu.droits,!lu.droits);
+  const avantEtat=accesEtatPhrase(droitsDe({email:mail}));
+  const champs=accesCalcul(action,droitsDe({email:mail}),opt);
+  const dit=(action==='suspendre')
+    ?('Fermer l’accès de '+mail+' ? Rien n’est effacé, et tu le rouvres quand tu veux.')
+    :((action==='rendre')
+      ?('Rouvrir l’accès de '+mail+' ? Son dossier reprend la main : abonnement ou suivi, selon ce qu’il a.')
+      :((action==='prolonger')
+        ?('Prolonger l’accès de '+mail+' d’un mois ?')
+        :('Ouvrir '+nomDuPalier(champs.palier)+' à '+mail
+          +(champs.echeance?(' jusqu’au '+new Date(champs.echeance).toLocaleDateString('fr-FR')):' sans fin')+' ?')));
+  if(!await rcConfirm(dit,null,'Confirmer')) return false;
+  const r=await CLOUD.poserDroits(mail,champs);
+  if(!r||!r.ok){
+    toast('Pas envoyé ('+((r&&r.raison)||'réseau')+') : rien n’a changé.','var(--orange)');
+    return false; }
+  // LE CACHE SUIT L’ÉCRITURE. Sans ça, l’écran affichait encore l’état d’avant
+  // et on cliquait deux fois, en croyant que le premier clic avait raté.
+  if(champs===null) _droitsPoser(mail,null,true);
+  else _droitsPoser(mail,Object.assign({},lu.droits||{},champs),false);
+  const apres=accesEtatPhrase(droitsDe({email:mail}));
+  toast(mail+' : '+apres.phrase.toLowerCase(),'var(--green)');
+  try{ if(_accesVu&&_accesVu.email===mail) _rendreConsoleAcces(); }catch(e){}
+  try{ _rendreAccesAthletes(); }catch(e){}
+  return true;
+}
+// Les quatre entrées, une par geste : elles lisent la durée choisie à l’écran
+// au moment du clic, et non au moment du rendu.
+function _accesDureeChoisie(){
+  const s=document.getElementById('acces-duree');
+  const v=s?Number(s.value):1;
+  return (ACCES_DUREES.some(x=>x.mois===v))?v:1;
+}
+function accesOuvrir(palier,email){
+  return accesAgir('ouvrir',email||(_accesVu&&_accesVu.email),
+    {palier:palier,mois:_accesDureeChoisie()});
+}
+function accesProlonger(email,opt){
+  return accesAgir('prolonger',email||(_accesVu&&_accesVu.email),
+    Object.assign({mois:1},opt||{}));
+}
+function accesSuspendre(email,opt){
+  return accesAgir('suspendre',email||(_accesVu&&_accesVu.email),opt||{});
+}
+function accesRouvrir(email){
+  return accesAgir('rendre',email||(_accesVu&&_accesVu.email),{});
+}
+// ── L’ÉCRAN ───────────────────────────────────────────────────────────────
+// L’adresse qu’on regarde, et l’état de sa lecture. Une seule à la fois : on
+// vient du rapport, une ligne après l’autre.
+let _accesVu=null;
+function ouvrirAccesConsole(){
+  if(!currentUser||currentUser.email!==CREATOR_EMAIL){
+    toast('Réservé au créateur.','var(--orange)'); return false; }
+  go('s-coach-acces');
+  _rendreConsoleAcces();
+  return true;
+}
+async function accesVoir(email){
+  const champ=document.getElementById('acces-mail');
+  const mail=String((email!=null?email:(champ?champ.value:''))||'').trim().toLowerCase();
+  if(!mail||mail.indexOf('@')<0){
+    toast('Colle l’adresse de la personne.','var(--orange)'); return false; }
+  _accesVu={email:mail,lecture:'en cours'};
+  _rendreConsoleAcces();
+  const r=await CLOUD.pullDroits(mail);
+  if(!r||!r.ok){
+    _accesVu={email:mail,lecture:'echec',raison:(r&&r.raison)||'réseau'};
+    _rendreConsoleAcces(); return false; }
+  _droitsPoser(mail,r.droits,!r.droits);
+  _accesVu={email:mail,lecture:'ok'};
+  _rendreConsoleAcces();
+  return true;
+}
+function _rendreConsoleAcces(){
+  const z=document.getElementById('acces-corps');
+  if(!z) return false;
+  if(!currentUser||currentUser.email!==CREATOR_EMAIL){
+    z.innerHTML=emptyState('lock','Cet écran est réservé au créateur.'); return false; }
+  const mail=(_accesVu&&_accesVu.email)||'';
+  const S='style="font-size:var(--fs-xs);color:var(--sub);line-height:1.7"';
+  let etat=null,d=null;
+  if(mail&&_accesVu.lecture==='ok'){ d=droitsDe({email:mail}); etat=accesEtatPhrase(d); }
+  const carte=(h)=>'<div style="background:var(--surface-1);border:1px solid var(--border);'
+    +'border-radius:var(--r-4);padding:16px;margin-bottom:14px">'+h+'</div>';
+  const titre=(x)=>'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;'
+    +'font-weight:800;text-transform:uppercase;margin-bottom:12px">'+x+'</div>';
+  const bouton=(lib,act,couleur)=>'<button class="btn '+couleur+' btn-sm" style="margin:0;flex:1;'
+    +'min-width:132px;font-size:var(--fs-2xs);letter-spacing:1px;padding:9px 10px;min-height:38px" '
+    +'onclick="'+act+'">'+lib+'</button>';
+  let h=carte(titre('Une adresse')
+    +'<input id="acces-mail" type="email" inputmode="email" autocapitalize="off" autocomplete="off" '
+    +'spellcheck="false" placeholder="adresse@exemple.fr" value="'+escapeHtml(mail)+'" '
+    +'style="width:100%;margin-bottom:10px" onkeydown="if(event.key===\'Enter\'){event.preventDefault();accesVoir()}">'
+    +'<button class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="accesVoir()">Voir son accès</button>'
+    +'<div '+S+' style="margin-top:10px">Le rapport du 1er du mois donne l’adresse de chaque '
+    +'personne qui paie. Colle-la ici : tu n’as pas besoin d’ouvrir son dossier pour '
+    +'ouvrir ou fermer son accès.</div>');
+  if(mail&&_accesVu.lecture==='en cours')
+    h+=carte('<div '+S+'>Lecture de l’accès de '+escapeHtml(mail)+'…</div>');
+  if(mail&&_accesVu.lecture==='echec')
+    h+=carte('<div style="font-size:var(--fs-sm);color:var(--orange);line-height:1.6">'
+      +'Pas pu lire l’accès de '+escapeHtml(mail)+' ('+escapeHtml(String(_accesVu.raison||''))+').'
+      +'</div><div '+S+' style="margin-top:8px">Rien n’a été changé. Réessaie : '
+      +'les boutons n’apparaissent que sur un état lu pour de bon.</div>');
+  if(etat){
+    const msg=messageAcces(etat);
+    const lien='mailto:'+encodeURIComponent(mail)+'?subject='
+      +encodeURIComponent('Ton accès à RepCore')+'&body='+encodeURIComponent(msg);
+    const durees=ACCES_DUREES.map(x=>'<option value="'+x.mois+'">'+x.libelle+'</option>').join('');
+    h+=carte(titre('Son accès aujourd’hui')
+      +'<div style="font-weight:800;font-size:var(--fs-sm);color:'+etat.couleur+'">'
+      +escapeHtml(etat.phrase)+(etat.verifier?' <span class="badge badge-red" '
+        +'style="vertical-align:middle">à vérifier</span>':'')+'</div>'
+      +(etat.avant?('<div '+S+' style="margin-top:4px">Avant la fermeture : '
+        +escapeHtml(etat.avant)+'</div>'):'')
+      +'<div '+S+' style="margin-top:4px">'+escapeHtml(mail)+'</div>'
+      // CE QUI EST FERMÉ, CE QUI RESTE POSSIBLE : la même règle pour lui que
+      // pour la personne en face.
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">'
+      // L'ORDRE EST CELUI DE L'INTENTION. Sur un accès fermé, rouvrir est LE
+      // geste, et il est rouge. Sur un accès ouvert, le même bouton ne veut
+      // plus dire « rouvrir » mais « retirer ce que j'ai posé » : même effet,
+      // autre intention, donc autre mot et dernière place.
+      +((etat.cle==='ferme')?bouton('Rouvrir','accesRouvrir()','btn-red'):'')
+      +((['ok','bientot','depasse'].indexOf(etat.cle)>=0)
+        ?bouton('Prolonger d’un mois','accesProlonger()','btn-outline')
+        :'')
+      +((etat.cle!=='ferme')?bouton('Fermer son accès','accesSuspendre()','btn-outline'):'')
+      +'<a href="'+escapeHtml(lien)+'" class="btn btn-outline btn-sm" style="margin:0;flex:1;'
+      +'min-width:132px;font-size:var(--fs-2xs);letter-spacing:1px;padding:9px 10px;min-height:38px;'
+      +'display:flex;align-items:center;justify-content:center;text-decoration:none">Lui écrire</a>'
+      +((d&&d.etat==='serveur'&&etat.cle!=='ferme')
+        ?bouton('Retirer ce que j’ai posé','accesRouvrir()','btn-outline')
+        :'')
+      +'</div>');
+    h+=carte(titre('Ouvrir un accès réglé ailleurs')
+      +'<div '+S+' style="margin-bottom:10px">Un programme payé de la main à la main, un mois '
+      +'offert, un dépannage : ça se posait dans la console Firebase, ça se pose ici.</div>'
+      +'<select id="acces-duree" style="width:100%;margin-bottom:10px">'+durees+'</select>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      +bouton('Ouvrir '+escapeHtml(nomDuPalier('essentielle')),'accesOuvrir(\'essentielle\')','btn-outline')
+      +bouton('Ouvrir '+escapeHtml(nomDuPalier('ultime')),'accesOuvrir(\'ultime\')','btn-red')
+      +'</div>');
+  }
+  h+=carte(titre('Ce qui ne se fait pas d’ici')
+    +'<div '+S+'>Arrêter le prélèvement se passe chez PayPal, l’application ne peut pas '
+    +'l’ordonner : <a href="https://www.paypal.com/myaccount/autopay/" target="_blank" '
+    +'rel="noopener" style="color:var(--red-text)">paypal.com, Paiements automatiques</a>. '
+    +'Ici, tu ouvres et tu fermes l’accès.<br>'
+    +'Fermer l’accès de quelqu’un n’arrête pas son prélèvement, et arrêter son prélèvement '
+    +'ne ferme pas son accès : les deux gestes vont ensemble.</div>');
+  z.innerHTML=h;
   return true;
 }
 // ══ L'ARRIVEE : LES DEUX FORMULES, LES CHIFFRES, LES PORTES (lot 2) ══════
@@ -7088,7 +7431,27 @@ function loadAccessGate(){
   if(!u){return;}
   if(ic) ic.innerHTML=icon('lock',56);
   const L='<div style="font-size:var(--fs-sm);color:#888;line-height:1.8">';
-  if(u.status==='COACHING_SUIVI'&&u.accessExpiry&&Date.now()>=u.accessExpiry){
+  // ══ FERMÉ À LA MAIN (24/09/2026) ═══════════════════════════════════════
+  // ⚠ CETTE BRANCHE PASSE AVANT TOUTES LES AUTRES, et c'est voulu. Un accès
+  //   fermé depuis l'écran « Accès » l'est pour une raison précise, et les
+  //   phrases d'à côté parleraient d'autre chose : « Abonnement inactif » alors
+  //   que le prélèvement tourne peut-être encore chez PayPal, « Accès requis »
+  //   à quelqu'un qui en avait un hier.
+  const _ferme=(()=>{ try{ return accesFermeParMain(u); }catch(e){ return ''; } })();
+  const _renM=document.getElementById('ag-renouveler');
+  if(_ferme){
+    // LES DEUX CHOSES, TOUJOURS : ce qui est fermé, et ce qui reste possible
+    // tout de suite. Ce qui reste possible est juste dessous, les deux boutons
+    // de l'écran — qu'on remet en place au cas où une autre branche les ait
+    // cachés pendant la même session.
+    title.textContent=(_ferme==='echu')?'Ta période est arrivée au bout':'Ton accès est en pause';
+    sub.textContent='Rien n’est effacé. Tes séances, ton programme et ton historique t’attendent.';
+    block.innerHTML=L+((_ferme==='echu')
+      ?'La période réglée est terminée.<br><br>Tu la reprends quand tu veux, et tout revient au même endroit.'
+      :'En attente du règlement de ce mois.<br><br>Ton accès se rouvre dès qu’il est passé, et tout revient au même endroit.')
+      +'</div>';
+    if(_renM) _renM.style.display='';
+  } else if(u.status==='COACHING_SUIVI'&&u.accessExpiry&&Date.now()>=u.accessExpiry){
     const d=new Date(u.accessExpiry).toLocaleDateString('fr-FR');
     const nom=(u.coachName||'').trim();
     // ══ LA SORTIE DE PACK (lot 10) ════════════════════════════════════
@@ -96487,6 +96850,32 @@ function relancerAccesAthlete(id){
   window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank','noopener');
   return true;
 }
+// ── LE CRÉATEUR AGIT DEPUIS LA LISTE, LES AUTRES COACHS NON ──────────────
+// La règle n'accorde l'écriture de droits/ qu'à une adresse. Un bouton qui
+// échouerait chez les autres coachs serait pire que pas de bouton : il leur
+// ferait croire qu'ils ont fermé un accès qui reste ouvert.
+function _htmlAccesPose(c){
+  if(!currentUser||currentUser.email!==CREATOR_EMAIL) return '';
+  const d=(()=>{ try{ return droitsDe(c); }catch(e){ return null; } })();
+  if(!d||d.etat!=='serveur') return '';
+  const e=accesEtatPhrase(d);
+  return '<div style="font-size:var(--fs-2xs);color:'+e.couleur+';font-weight:700;margin-top:2px">'
+    +'Posé à la main : '+escapeHtml(e.phrase)+(e.verifier?' · à vérifier':'')+'</div>';
+}
+function _htmlAccesBoutons(c){
+  if(!currentUser||currentUser.email!==CREATOR_EMAIL) return '';
+  const mail=String((c&&c.email)||'');
+  if(!mail||mail.indexOf('@')<0) return '';
+  const d=(()=>{ try{ return droitsDe(c); }catch(e){ return null; } })();
+  const ferme=!!(d&&d.etat==='serveur'&&String(d.palier||'aucun')==='aucun');
+  const st='margin:0;letter-spacing:1px;font-size:var(--fs-2xs);padding:7px 11px;min-height:34px';
+  const arg='&#39;'+escapeHtml(mail)+'&#39;';
+  // `avant:'suivi'` : ce qui était ouvert quand rien n'est posé. Sans lui,
+  // rouvrir un athlète suivi lui aurait rendu « Essentielle ».
+  return ferme
+    ?'<button class="btn btn-red btn-sm" style="'+st+'" onclick="accesRouvrir('+arg+')">Rouvrir</button>'
+    :'<button class="btn btn-outline btn-sm" style="'+st+'" onclick="accesSuspendre('+arg+',{avant:&#39;suivi&#39;})">Fermer</button>';
+}
 function _rendreAccesAthletes(){
   const z=document.getElementById('mon-acces-athletes');
   if(!z) return false;
@@ -96519,11 +96908,12 @@ function _rendreAccesAthletes(){
         +'<div style="font-weight:800;font-size:var(--fs-sm)">'+escapeHtml(nom)+'</div>'
         +'<div style="font-size:var(--fs-2xs);color:'+e.couleur+';font-weight:800;margin-top:2px">'
         +escapeHtml(e.libelle)+(d?'<span class="sub" style="font-weight:600"> · '+escapeHtml(d)+'</span>':'')
-        +'</div></div>'
+        +'</div>'+_htmlAccesPose(c)+'</div>'
         +(e.relancable
           ?'<button class="btn btn-red btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs);padding:7px 13px;min-height:34px" '
             +'onclick="relancerAccesAthlete(\''+escapeHtml(String(c.id||''))+'\')">Relancer</button>'
           :'')
+        +_htmlAccesBoutons(c)
         +'</div>';
     }).join('');
   return true;
@@ -96603,6 +96993,11 @@ function loadMonetisationTab(){
     return '<div class="client-row"><div class="avatar" style="width:36px;height:36px;font-size:var(--fs-md)">'+ini(s.fname,s.lname)+'</div><div style="flex:1"><div style="font-weight:700">'+_snm+'</div>'+coachInfo+'<div class="sub" style="font-size:var(--fs-xs);font-family:monospace">'+(s.paypalSubscriptionId||'no sub id')+'</div></div><div>'+st+'<button onclick="toggleSubStatus(\''+s.email+'\')" style="margin-top:4px;font-size:var(--fs-xs);background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:3px 8px;cursor:pointer;font-family:Montserrat,sans-serif">'+(s.paymentStatus==='active'?'Suspendre':'Activer')+'</button></div></div>';
   }).join('');
   // Section admin offboarding — visible créateur seulement
+  // LE LIEN VERS L'ÉCRAN « Accès ». Créateur seulement : lui seul peut écrire
+  // droits/, et un lien qui mène à un écran qui refuse ne vaut pas mieux que
+  // pas de lien du tout.
+  const _lienAcces=document.getElementById('ch-lien-acces');
+  if(_lienAcces) _lienAcces.style.display=isCreator?'block':'none';
   const adminSection=document.getElementById('coach-admin-offboard');
   const adminSel=document.getElementById('admin-offboard-select');
   if(adminSection&&adminSel){
