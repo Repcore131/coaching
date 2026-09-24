@@ -80,6 +80,26 @@ const RC_WHATSAPP='33778439205';
 // pris pour autre chose.
 // L'ORDRE PAYPAL, LUI, EST REEL : l'argent est bien encaisse, et
 // l'identifiant de transaction est conserve dans le dossier.
+// ══ Y A-T-IL UN SERVEUR ? NON, ET CE N'EST PAS UN OUBLI ═════════════════
+//
+// Decision de Kevin, 24/09/2026 : « je ne payerai pas le plan Blaze ». Les
+// Cloud Functions de functions/index.js sont ecrites et ne tourneront pas.
+//
+// CE QUE CE BOOLEEN TIENT : les deux appels que le client leur adressait, a
+// l'inscription (ouvrirEssai) et a l'achat d'un programme
+// (verifierAchatProgramme). Ils echouaient tous les deux, sans consequence
+// mais pour de vrai : une requete pour rien, et une erreur reseau dans la
+// console de chaque athlete. On ne les envoie plus.
+//
+// ⚠ LA SUPPRESSION DISTANTE DES VIDEOS N'EST PAS GARDEE PAR CE BOOLEEN, et
+//   c'est volontaire : _cldDetruire se rend compte tout seul de l'absence de
+//   la fonction, des le premier appel, et met tout en file. Elle repartirait
+//   donc d'elle-meme si la fonction apparaissait, sans que personne ait a
+//   penser a ce fichier.
+//
+// LE JOUR OU CES FONCTIONS TOURNENT : ce booleen passe a true, et rien
+// d'autre ne bouge.
+const FONCTIONS_SERVEUR=false;
 const RC_BOUTIQUE_GRATUITE=false;
 const RC_PROGRAMMES=Object.freeze([
   Object.freeze({
@@ -1567,11 +1587,14 @@ function essaiOuvrir(u){
   if(u.essai&&typeof u.essai==='object') return false;   // deja ouvert, ou deja fini
   const t=Date.now();
   u.essai={ouvertLe:t,finit:t+ESSAI_JOURS*86400000};
-  // LE SERVEUR EST PREVENU, SANS QU'ON L'ATTENDE. S'il repond, son echeance
-  // prend la main a la premiere lecture de droits/. S'il ne repond pas — plan
-  // Spark, hors ligne, fonction absente — l'essai s'ouvre quand meme : un
-  // compte neuf ne doit pas rester dehors parce qu'un serveur n'a rien dit.
-  try{ if(CLOUD&&CLOUD._callFn) CLOUD._callFn('ouvrirEssai',{jours:ESSAI_JOURS}).catch(()=>{}); }catch(e){}
+  // LE SERVEUR SERAIT PREVENU, S'IL Y EN AVAIT UN. Il n'y en a pas : voir
+  // FONCTIONS_SERVEUR. L'essai s'ouvre donc dans le dossier, et il y reste.
+  // Le jour ou la fonction tourne, son echeance prendra la main a la premiere
+  // lecture de droits/, sans qu'une ligne d'interface change.
+  try{
+    if(FONCTIONS_SERVEUR&&CLOUD&&CLOUD._callFn)
+      CLOUD._callFn('ouvrirEssai',{jours:ESSAI_JOURS}).catch(()=>{});
+  }catch(e){}
   return true;
 }
 // PURE. La fin de l'essai, en millisecondes, ou 0 quand il n'y en a pas.
@@ -6796,12 +6819,28 @@ function droitsDe(u){
     source:d.source||null,maj:Number(d.maj)||0,lu:o.lu,
     essaiOuvertLe:Number(d.essaiOuvertLe)||0,essaiFinit:Number(d.essaiFinit)||0};
 }
-// ⚠ LE REPLI EST LE PALIER LE PLUS BAS QUI NE CASSE RIEN, JAMAIS LE PLUS HAUT.
-//   Un droit qu'on ne sait pas lire n'est pas un droit acquis. La seule chose
-//   qu'on n'ose pas faire, c'est couper quelqu'un en pleine seance parce qu'un
-//   serveur n'a pas repondu : tant qu'aucune lecture n'a abouti sur cet
-//   appareil, l'ancien modele continue de decider (etat 'inconnu'), et il
-//   cesse de le faire des la premiere reponse du serveur.
+// ⚠ UN NOEUD VIDE NE FERME RIEN, ET C'EST LA CORRECTION DU 24/09/2026.
+//
+//   Le lot 0 faisait de droits/ la source unique : vide valait « aucun droit »,
+//   parce qu'une Cloud Function allait le remplir a chaque paiement. Kevin a
+//   tranche : pas de plan Blaze, donc pas de fonctions, donc PERSONNE n'ecrira
+//   jamais ce noeud. Garder cette lecture-la aurait coupe l'acces a TOUS les
+//   abonnes et a TOUS les athletes suivis le jour ou les regles seraient
+//   publiees — la lecture aurait abouti, rendu null, et ferme la porte.
+//
+//   CE QUI DECIDE DONC :
+//     droits/ PORTE QUELQUE CHOSE  → il decide, et il prime sur le dossier.
+//     droits/ VIDE OU ILLISIBLE    → le dossier decide, comme avant le lot 0.
+//
+//   CE QU'ON GARDE EN ECHANGE : le noeud s'ecrit depuis la CONSOLE FIREBASE,
+//   qui passe par l'Admin SDK et ignore les regles. Un acces pose la ne se
+//   trafique pas depuis un navigateur, contrairement au dossier. Pour ouvrir
+//   Ultime trois mois a quelqu'un qui a paye hors de l'application :
+//     droits/<adresse avec des virgules>/palier   = "ultime"
+//     droits/<adresse avec des virgules>/echeance = <millisecondes>
+//     droits/<adresse avec des virgules>/source   = "main"
+//   Pour le refermer, remettre palier a "aucun" : la, le noeud PORTE quelque
+//   chose, et il prime.
 //
 // PURE (elle ne lit que le dossier et le cache local).
 function palierDe(u){
@@ -6812,19 +6851,30 @@ function palierDe(u){
     if(d.echeance>0&&Date.now()>=d.echeance) return 'aucun';
     return d.palier;
   }
-  if(d.etat==='absent') return 'aucun';
   return _palierHerite(u);
 }
-// L'ANCIEN MODELE, ET IL EST EN SURSIS. Il ne sert que tant que droits/ n'a
-// jamais repondu sur cet appareil — le temps que les regles soient deployees
-// et que la migration ait tourne. Il disparaitra quand plus personne ne
-// dependra de lui.
+// LE MODELE DU DOSSIER, ET IL N'EST PLUS EN SURSIS. Il servait « le temps que
+// les regles soient deployees et que la migration ait tourne » : sans plan
+// Blaze, cette migration ne tournera pas, et c'est lui qui decide pour tout le
+// monde sauf pour les acces poses a la main dans droits/.
+//
+// ⚠ IL NE PROTEGE DE RIEN, ET ON NE FAIT PAS SEMBLANT. database.rules.json
+//   accorde au titulaire l'ecriture sans restriction de champ sur son propre
+//   dossier : qui sait ouvrir une console de navigateur peut s'ecrire
+//   status:'AUTONOMIE_PREMIUM'. C'est le meme arbitrage qu'avant le lot 0,
+//   assume, et la seule barriere reelle reste droits/, ecrit a la main.
 function _palierHerite(u){
   const s=String((u&&u.status)||'FREE');
   const ech=Number(u&&u.accessExpiry)||0;
   if(ech>0&&Date.now()>=ech) return 'aucun';
   if(s==='COACHING_SUIVI') return 'suivi';
-  if(s==='AUTONOMIE_PREMIUM'&&u.paymentStatus==='active') return 'essentielle';
+  if(s==='AUTONOMIE_PREMIUM'&&u.paymentStatus==='active'){
+    // LA FORMULE PAYEE, quand le dossier la porte. Les dossiers ouverts avant
+    // le 24/09/2026 n'en ont pas : ils valent Essentielle, qui est ce qu'ils
+    // ont effectivement paye — Ultime n'etait pas en vente.
+    const f=String(((u.abonnement||{}).formule)||'');
+    return (f==='ultime')?'ultime':'essentielle';
+  }
   // UN PROGRAMME ACHETE OUVRE ULTIME LE TEMPS DE SON PROGRAMME (lot 8). Meme
   // sursis que le reste de ce repli : le serveur decidera des qu'il parlera.
   if(programmeOuvreUltime(u)) return 'ultime';
@@ -6980,11 +7030,10 @@ function checkAccess(u){
     if(p!=='aucun') return true;
     return essaiActif(u);
   }
-  if(d.etat==='absent') return essaiActif(u);
-  // ETAT 'inconnu' : droits/ n'a jamais repondu sur cet appareil — regles pas
-  // encore deployees, hors ligne, ou premiere ouverture. L'ancien modele
-  // decide, exactement comme avant ce lot. ON NE COUPE PERSONNE SUR UN
-  // SILENCE DU SERVEUR.
+  // ⚠ 'absent' ET 'inconnu' SE REJOIGNENT (24/09/2026). Un noeud vide ne veut
+  //   pas dire « aucun droit » : il veut dire que personne n'y a rien ecrit,
+  //   et sans fonctions personne n'y ecrira. Le dossier decide, exactement
+  //   comme avant le lot 0, et ON NE COUPE PERSONNE SUR UN SILENCE.
   if(s==='FREE') return essaiActif(u);
   if(s==='COACHING_SUIVI'){
     if(!u.accessExpiry) return true;
@@ -34023,7 +34072,7 @@ function _enregistrerAchat(id,ordre){
   // LE SERVEUR, SANS QU'ON L'ATTENDE : s'il repond, son echeance prend la main
   // a la premiere lecture de droits/.
   try{
-    if(CLOUD&&CLOUD._callFn&&ordre)
+    if(FONCTIONS_SERVEUR&&CLOUD&&CLOUD._callFn&&ordre)
       CLOUD._callFn('verifierAchatProgramme',{orderId:String(ordre),programmeId:p.id})
         .then(()=>{ try{ rafraichirDroits(currentUser,true); }catch(e){} }).catch(()=>{});
   }catch(e){}
@@ -97761,6 +97810,20 @@ function _planIdChoisi(){
   const p=_paliersDispo().find(x=>x.cle===_subPalier)||_paliersDispo()[0];
   return p?p.planId():'';
 }
+// PURE. LA FORMULE QU'UN PLAN PAYPAL FACTURE, lue sur l'identifiant lui-meme.
+//
+// ⚠ ON NE SE FIE PAS A CE QU'ON A CHOISI A L'ECRAN, mais a ce qui a ete
+//   FACTURE : entre le choix et le paiement, on a pu changer d'avis, revenir
+//   en arriere, ou arriver par un autre chemin. L'identifiant du plan, lui,
+//   est celui que PayPal a debite.
+function formuleDuPlan(planId){
+  const id=String(planId||'');
+  if(!id) return '';
+  if(id===PAYPAL_PLAN_ID_ULTIME||id===PAYPAL_PLAN_ID_ULTIME_ANNUEL
+     ||id===PAYPAL_PLAN_ID_ULTIME_DEMI) return 'ultime';
+  if(id===PAYPAL_PLAN_ID||id===PAYPAL_PLAN_ID_ANNUEL) return 'essentielle';
+  return '';
+}
 // SANS COMPTE, s-client-code EST UN PIÈGE : doLinkCoach y lit currentUser.fname
 // dès sa première branche réelle, ce qui lève une TypeError sur un visiteur.
 // s-athlete-entry fait le chemin complet — le code PUIS la création du compte —
@@ -97982,7 +98045,12 @@ function renderPaypalButton(planId,coachId){
         // l échéance, la résiliation et le renoncement à la rétractation. Le
         // remplacer les effacerait.
         currentUser.abonnement=Object.assign({},currentUser.abonnement,
-          {palier:_subPalier||'mensuel'});
+          {palier:_subPalier||'mensuel',
+           // ⚠ LA FORMULE, ET PAS SEULEMENT LA PERIODE (24/09/2026). `palier`
+           //   dit « mensuel » ou « annuel » ; sans `formule`, rien dans le
+           //   dossier ne distinguait Essentielle d'Ultime, et un abonne a
+           //   24,90 € recevait Essentielle. Elle se lit sur le plan FACTURE.
+           formule:formuleDuPlan(_planIdChoisi())||subOffreChoisie()});
         rcm('subscription_activated');
         if(pending){
           currentUser.coachId=pending.coachId||currentUser.coachId||null;

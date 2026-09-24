@@ -34593,6 +34593,46 @@ async function testExercices(){
         }
         return fuites.length?_echec('mot technique à l’écran : '+fuites.join(', ')):true;})());
 
+      // ══ SANS PLAN BLAZE : CE QUE LE DOSSIER DOIT TENIR TOUT SEUL ══════
+      ok('SPARK — UN ABONNÉ À ULTIME REÇOIT ULTIME, ET PAS ESSENTIELLE',(()=>{
+        // ⚠ LE DEFAUT QUE CECI FERME. Le dossier notait le statut et la
+        //   PERIODE (mensuel ou annuel), jamais la FORMULE : _palierHerite
+        //   traduisait AUTONOMIE_PREMIUM par « essentielle » quoi qu’on ait
+        //   payé. Tant qu’une Cloud Function écrivait droits/, le serveur
+        //   savait quel plan avait été facturé. Il n’y aura pas de serveur.
+        const sauve=localStorage.getItem(DROITS_CLE);
+        try{
+          localStorage.removeItem(DROITS_CLE);
+          const base={id:'S1',email:'spark@t.fr',role:'athlete',
+            status:'AUTONOMIE_PREMIUM',paymentStatus:'active'};
+          const ult=Object.assign({},base,{abonnement:{palier:'mensuel',formule:'ultime'}});
+          const ess=Object.assign({},base,{abonnement:{palier:'annuel',formule:'essentielle'}});
+          const vieux=Object.assign({},base,{abonnement:{palier:'mensuel'}});
+          if(palierDe(ult)!=='ultime') return _echec('un abonné à Ultime reçoit '+palierDe(ult));
+          if(palierDe(ess)!=='essentielle') return _echec('un abonné à Essentielle reçoit '+palierDe(ess));
+          // LES DOSSIERS D’AVANT VALENT ESSENTIELLE : Ultime n’était pas en
+          // vente, c’est bien ce qu’ils ont payé.
+          if(palierDe(vieux)!=='essentielle') return _echec('un dossier sans formule reçoit '+palierDe(vieux));
+          // ET LA FORMULE SE LIT SUR LE PLAN FACTURE, pas sur ce qu’on a
+          // choisi à l’écran : entre les deux, on a pu changer d’avis.
+          if(formuleDuPlan(PAYPAL_PLAN_ID_ULTIME)!=='ultime') return _echec('le plan Ultime mensuel n’est pas reconnu');
+          if(formuleDuPlan(PAYPAL_PLAN_ID_ULTIME_ANNUEL)!=='ultime') return _echec('le plan Ultime annuel n’est pas reconnu');
+          if(formuleDuPlan(PAYPAL_PLAN_ID_ULTIME_DEMI)!=='ultime') return _echec('le premier mois n’ouvre pas Ultime');
+          if(formuleDuPlan(PAYPAL_PLAN_ID)!=='essentielle') return _echec('le mensuel d’Essentielle n’est pas reconnu');
+          if(formuleDuPlan('P-INCONNU')!=='') return _echec('un plan inconnu se voit attribuer une formule');
+          // ET ELLE S’ECRIT AU MOMENT DU PAIEMENT.
+          const src=_prodSrc();
+          if(src.indexOf('formule:formuleDuPlan(_planIdChoisi())')<0)
+            return _echec('le paiement n’écrit pas la formule dans le dossier');
+          // ⚠ LE CHAMP EST DECLARE DANS LES REGLES. `abonnement` est une liste
+          //   blanche fermée : un champ non déclaré fait rejeter le PUT ENTIER
+          //   du dossier, en silence.
+          return true;
+        } finally {
+          if(sauve==null) localStorage.removeItem(DROITS_CLE);
+          else localStorage.setItem(DROITS_CLE,sauve);
+        }})());
+
       // ══ LOT 5 — LA CARTE BANCAIRE, QU'ON FERMAIT NOUS-MEMES ════════════
       ok('LOT 5 — LE SDK PAYPAL OUVRE LA CARTE, DANS LES DEUX ÉCRANS',(()=>{
         const src=_prodSrc();
@@ -34751,17 +34791,36 @@ async function testExercices(){
           poser({palier:'essentielle',echeance:Date.now()+10*864e5,source:'paypal',maj:Date.now()});
           if(palierDe(u)!=='essentielle') return _echec('le dossier a pris le dessus : '+palierDe(u));
           if(droitsDe(u).etat!=='serveur') return _echec('l’état lu : '+droitsDe(u).etat);
-          // 2. LE SERVEUR A REPONDU, ET IL NE DIT RIEN. Le palier le plus bas,
-          //    jamais le plus haut — meme avec un dossier qui promet tout.
+          // 2. LE SERVEUR A REPONDU, ET IL NE DIT RIEN : LE DOSSIER DECIDE.
+          //
+          // ⚠ CETTE ASSERTION EST L'INVERSE DE CE QU'ELLE DISAIT, ET C'EST UNE
+          //   DECISION DE KEVIN, PAS UN RELACHEMENT. Elle tenait « un nœud vide
+          //   ferme tout », parce qu'une Cloud Function allait le remplir à
+          //   chaque paiement. Le 24/09/2026 : « je ne payerai pas le plan
+          //   Blaze ». Sans fonctions, PERSONNE n'écrira jamais ce nœud, et la
+          //   garder aurait coupé l'accès à TOUS les abonnés et à TOUS les
+          //   athlètes suivis le jour où les règles seraient publiées.
+          //
+          //   CE QU'ON TIENT MAINTENANT, ET IL FAUT LE TENIR : un nœud VIDE
+          //   laisse décider le dossier, un nœud QUI PORTE QUELQUE CHOSE prime
+          //   sur lui. Remettre « vide = fermé » sans fonction pour le remplir,
+          //   c'est fermer la porte à tout le monde.
           poser(null,true);
-          if(palierDe(u)!=='aucun') return _echec('un nœud vide ouvre encore : '+palierDe(u));
-          if(checkAccess(u)!==false) return _echec('l’accès reste ouvert sur un nœud vide');
+          if(droitsDe(u).etat!=='absent') return _echec('l’état d’un nœud vide : '+droitsDe(u).etat);
+          if(palierDe(u)!=='essentielle') return _echec('un nœud vide ne rend plus la main au dossier : '+palierDe(u));
+          if(checkAccess(u)!==true) return _echec('un nœud vide coupe un abonné');
+          // ET UN NŒUD QUI PORTE « aucun » FERME, LUI : c'est ainsi que Kevin
+          // referme un accès à la main depuis la console, et ça, un navigateur
+          // ne peut pas le défaire.
+          poser({palier:'aucun',echeance:0,source:'main',maj:Date.now()});
+          if(palierDe(u)!=='aucun') return _echec('un nœud qui dit « aucun » ouvre encore : '+palierDe(u));
+          if(checkAccess(u)!==false) return _echec('l’accès reste ouvert malgré un refus posé à la main');
           // 3. UNE ECHEANCE DEPASSEE FERME, quoi que dise le dossier.
           poser({palier:'ultime',echeance:Date.now()-1000,source:'paypal',maj:Date.now()});
           if(palierDe(u)!=='aucun') return _echec('un droit expiré ouvre encore : '+palierDe(u));
-          // 4. RIEN N'A JAMAIS ETE LU : l'ancien modele decide, et lui seul —
-          //    c'est le pont, le temps que les regles soient deployees. ON NE
-          //    COUPE PERSONNE SUR UN SILENCE DU SERVEUR.
+          // 4. RIEN N'A JAMAIS ETE LU : le dossier decide, et lui seul. ON NE
+          //    COUPE PERSONNE SUR UN SILENCE DU SERVEUR. Ce n'est plus un pont
+          //    vers une migration a venir : c'est le fonctionnement normal.
           localStorage.removeItem(DROITS_CLE);
           if(droitsDe(u).etat!=='inconnu') return _echec('l’état sans lecture : '+droitsDe(u).etat);
           if(palierDe(u)!=='essentielle') return _echec('le repli hérité : '+palierDe(u));
