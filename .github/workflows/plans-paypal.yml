@@ -1,0 +1,85 @@
+# ══════════════════════════════════════════════════════════════════════════
+#  LES PLANS PAYPAL : CE QU'ILS FACTURENT, ET CE QUI MANQUE
+# ══════════════════════════════════════════════════════════════════════════
+#
+#  POURQUOI ICI, ET PAS SUR LE POSTE DE KEVIN. Ces commandes ont besoin du
+#  secret de l'application PayPal. Le taper dans une session assistee, c'est le
+#  faire transiter par une conversation ; le poser en variable d'environnement,
+#  c'est le laisser dans un historique de shell. Ici, il vit dans les secrets du
+#  depot : GitHub l'injecte dans le processus, le masque dans les journaux, et
+#  personne ne le lit jamais — pas meme celui qui declenche le travail.
+#
+#  ── LE SECRET, UNE FOIS ────────────────────────────────────────────────
+#  Depot > Settings > Secrets and variables > Actions > New repository secret
+#      PAYPAL_CLIENT_SECRET   le secret de l'application PayPal (compte reel)
+#  C'est le MEME que celui du rapport payeur : si tu l'as deja pose, il n'y a
+#  rien a faire.
+#
+#  PAYPAL_CLIENT_ID n'est pas un secret : le script le lit dans rc-core, ou il
+#  vit en clair — chaque page servie le contient.
+#
+#  ⚠ CE TRAVAIL ECRIT CHEZ PAYPAL. Il cree les plans manquants (et seulement
+#    eux : avant d'en creer un, le script liste les existants et reutilise
+#    celui qui porte le meme nom). Il ne supprime rien, ne desactive rien, et
+#    ne touche a aucun abonnement en cours.
+#
+#  ⚠ CE QU'IL NE FAIT PAS : ecrire les identifiants dans rc-core. Ils sont
+#    AFFICHES dans le journal, et recopies a la main dans le code, avec un
+#    numero de build. Une machine qui modifie le code source de l'application
+#    au milieu d'un travail programme, c'est une modification que personne
+#    n'a relue.
+# ══════════════════════════════════════════════════════════════════════════
+name: Plans PayPal
+
+on:
+  # A LA DEMANDE : onglet Actions > Plans PayPal > Run workflow.
+  workflow_dispatch:
+  # ET A CHAQUE FOIS QUE LE SCRIPT OU CE FICHIER CHANGE : c'est le moment ou
+  # une formule neuve apparait, donc le moment ou un plan manque.
+  push:
+    paths:
+      - 'scripts/paypal_plans.mjs'
+      - '.github/workflows/plans-paypal.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plans-paypal
+  cancel-in-progress: false
+
+jobs:
+  plans:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # ── 1. L'ETAT AVANT ──────────────────────────────────────────────
+      # Il ECHOUE quand un plan manque ou n'est pas au bon prix, et c'est
+      # justement ce qu'on vient chercher : `continue-on-error` laisse la
+      # creation s'executer derriere.
+      - name: Ce que PayPal facture aujourd hui
+        id: avant
+        continue-on-error: true
+        env:
+          PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
+        run: node scripts/paypal_plans.mjs --verifier
+
+      # ── 2. CREER CE QUI MANQUE ───────────────────────────────────────
+      # Idempotent : un plan qui existe deja est repris, pas recree.
+      - name: Creer les plans manquants
+        env:
+          PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
+        run: node scripts/paypal_plans.mjs
+
+      # ── 3. ET LE DIRE A NOUVEAU ──────────────────────────────────────
+      # Celui-ci, lui, DOIT passer : si un plan reste inactif ou mal tarife
+      # apres creation, le travail est rouge et le courriel de GitHub le dit.
+      - name: Ce que PayPal facture apres
+        env:
+          PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
+        run: node scripts/paypal_plans.mjs --verifier
