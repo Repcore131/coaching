@@ -2514,53 +2514,55 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 /* ══ « OÙ IL EN EST » — LA MAQUETTE DE KEVIN (24/09/2026) ═════════════════
    L'etage porte son propre en-tete (lecture, periodes, bilans compares) :
    la ligne de titre de l'etage s'efface, son titre reste pour la barre des
-   etages et les lecteurs d'ecran. */
+   etages et les lecteurs d'ecran.
+   Tailles reduites le meme jour (Kevin : « reduis la typo dans les
+   rectangles, c'est trop gros »). */
 #ccd-et-verdict>.ccd-et-h{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .ccdx{container-type:inline-size;container-name:ccdx;border-radius:16px;border:1px solid #26262b;
   background:linear-gradient(180deg,#131316,#0b0b0d);padding:14px;margin-bottom:10px;display:flex;flex-direction:column;gap:12px}
 .ccdx h4,.ccdx h5{margin:0;font-weight:400}
 .ccdx-tete{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.ccdx-tete-i{width:46px;height:46px;flex-shrink:0;border-radius:10px;display:flex;align-items:center;justify-content:center;
+.ccdx-tete-i{width:38px;height:38px;flex-shrink:0;border-radius:10px;display:flex;align-items:center;justify-content:center;
   color:#ff3b3b;background:linear-gradient(160deg,#5a0b0b,#260404)}
-.ccdx-tete-i svg{width:24px;height:24px}
+.ccdx-tete-i svg{width:20px;height:20px}
 .ccdx-tete-c{flex:1;min-width:180px}
-.ccdx-tete-c h4{font-family:var(--pile-titre);font-size:clamp(20px,2.2vw,26px);letter-spacing:1px;color:#fff;text-transform:uppercase;line-height:1}
-.ccdx-tete-c span{font-size:var(--fs-xs);color:#b4b4bb}
+.ccdx-tete-c h4{font-family:var(--pile-titre);font-size:clamp(17px,1.7vw,20px);letter-spacing:1px;color:#fff;text-transform:uppercase;line-height:1}
+.ccdx-tete-c span{font-size:var(--fs-2xs);color:#b4b4bb}
 .ccdx-lec{flex-shrink:0}
 .ccdx-per{display:inline-flex;border:1px solid #33333a;border-radius:10px;padding:3px;background:#0e0e10}
-.ccdx-per-b{min-height:38px;padding:0 14px;border-radius:8px;border:1px solid transparent;background:none;color:#b4b4bb;
+.ccdx-per-b{min-height:36px;padding:0 12px;border-radius:8px;border:1px solid transparent;background:none;color:#b4b4bb;
   font-family:inherit;font-size:var(--fs-2xs);font-weight:700;letter-spacing:.8px;text-transform:uppercase;cursor:pointer}
 .ccdx-per-b.actif{color:#fff;border-color:#e02020;background:rgba(224,32,32,.2)}
 .ccdx-per-b[disabled]{opacity:.4;cursor:default}
 .ccdx-plage.ccd-out-b{display:inline-flex;align-items:center;gap:10px;min-height:44px;padding:0 14px;border-radius:10px;
-  border:1px solid #33333a;background:#0e0e10;color:#fff;font-size:var(--fs-xs);font-weight:600;letter-spacing:0;text-transform:none}
+  border:1px solid #33333a;background:#0e0e10;color:#fff;font-size:var(--fs-2xs);font-weight:600;letter-spacing:0;text-transform:none}
 .ccdx-plage svg{width:17px;height:17px;flex-shrink:0}
 .ccdx .ccd-out-c{margin-top:0}
 /* Les cartes */
 .ccdx .ccd-v4{grid-template-columns:minmax(0,1fr);gap:10px;margin:0}
 @container ccdx (min-width:560px){ .ccdx .ccd-v4{grid-template-columns:repeat(2,minmax(0,1fr))} }
 @container ccdx (min-width:1000px){ .ccdx .ccd-v4{grid-template-columns:repeat(4,minmax(0,1fr))} }
-.ccdx .ccd-v{position:relative;flex-direction:row;align-items:flex-start;gap:12px;padding:14px;border-radius:14px;
+.ccdx .ccd-v{position:relative;flex-direction:row;align-items:flex-start;gap:10px;padding:12px;border-radius:14px;
   border:1px solid #26262b;background:#0f0f12}
 .ccdx .ccd-v-manque{grid-column:auto}
-.ccdx-ico{width:44px;height:44px;flex-shrink:0;border-radius:10px;display:flex;align-items:center;justify-content:center}
-.ccdx-ico svg{width:24px;height:24px}
+.ccdx-ico{width:34px;height:34px;flex-shrink:0;border-radius:10px;display:flex;align-items:center;justify-content:center}
+.ccdx-ico svg{width:18px;height:18px}
 .ccd-v[data-k="poids"] .ccdx-ico{color:#ff4d4d;background:rgba(224,32,32,.16)}
 .ccd-v[data-k="maigre"] .ccdx-ico{color:#60a5fa;background:rgba(96,165,250,.14)}
 .ccd-v[data-k="gras"] .ccdx-ico{color:#fb923c;background:rgba(251,146,60,.14)}
 .ccd-v[data-k="dort"] .ccdx-ico{color:#a78bfa;background:rgba(167,139,250,.14)}
 .ccdx-c{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
-.ccdx .ccd-v-l{font-size:var(--fs-2xs);letter-spacing:.8px;color:#d4d4d8}
-.ccdx .ccd-v-n{font-family:var(--pile-titre);font-size:clamp(24px,2.4vw,30px);color:#fff;white-space:nowrap}
-.ccdx .ccd-v-d{display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-sm);font-weight:700;color:#e4e4e7}
+.ccdx .ccd-v-l{font-size:9.5px;letter-spacing:.8px;color:#d4d4d8}
+.ccdx .ccd-v-n{font-family:var(--pile-titre);font-size:clamp(18px,1.7vw,22px);color:#fff;white-space:nowrap}
+.ccdx .ccd-v-d{display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:700;color:#e4e4e7}
 .ccdx .ccd-v-d[data-ton="bien"]{color:#34e89e}
 .ccdx .ccd-v-d[data-ton="mal"]{color:#ff4d4d}
 .ccdx .ccd-v-d[data-ton="attention"]{color:#f5a524}
-.ccdx .ccd-v-d svg{width:14px;height:14px}
-.ccdx-dep{font-size:var(--fs-2xs);color:#b4b4bb}
-.ccdx .ccd-v-p{font-size:var(--fs-2xs);color:#b4b4bb}
-.ccdx .ccd-v-s{font-size:9.5px;color:#7c7c84}
-.ccdx-spark{position:absolute;right:14px;top:20px;width:34%;max-width:110px;height:34px;pointer-events:none}
+.ccdx .ccd-v-d svg{width:12px;height:12px}
+.ccdx-dep{font-size:9.5px;color:#b4b4bb}
+.ccdx .ccd-v-p{font-size:9.5px;color:#b4b4bb}
+.ccdx .ccd-v-s{font-size:8.5px;color:#7c7c84}
+.ccdx-spark{position:absolute;right:12px;top:18px;width:30%;max-width:90px;height:26px;pointer-events:none}
 .ccdx-spark-a{fill:rgba(52,232,158,.10)}
 .ccdx-spark-l{fill:none;stroke:#34e89e;stroke-width:1.6;vector-effect:non-scaling-stroke}
 .ccdx-spark-p{fill:#34e89e}
@@ -2570,26 +2572,26 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .ccdx-chev svg{width:18px;height:18px}
 .ccdx .ccd-v-note{margin:0;font-size:var(--fs-2xs);color:#8a8a92}
 /* Comparer les periodes */
-.ccdx-bande{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 16px;border-radius:14px;border:1px solid #26262b;background:#0f0f12}
-.ccdx-bande-i{width:40px;height:40px;flex-shrink:0;color:#60a5fa}
+.ccdx-bande{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:11px 14px;border-radius:14px;border:1px solid #26262b;background:#0f0f12}
+.ccdx-bande-i{width:30px;height:30px;flex-shrink:0;color:#60a5fa}
 .ccdx-bande-i svg{width:100%;height:100%}
 .ccdx-bande-c{flex:1 1 320px;min-width:0}
-.ccdx-bande-c h5,.ccdx-inc-c h5{font-family:var(--pile-titre);font-size:clamp(17px,1.8vw,21px);letter-spacing:1px;color:#fff;text-transform:uppercase}
-.ccdx-bande-c span,.ccdx-inc-c span{font-size:var(--fs-xs);color:#b4b4bb;line-height:1.45}
-.ccdx-bande-b.btn{display:inline-flex;align-items:center;gap:10px;width:auto;min-height:44px;margin:0;padding:0 18px;
-  font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.6px}
-.ccdx-bande-b svg,.ccdx-bande-b2 svg{width:18px;height:18px}
-.ccdx-bande-b2{display:inline-flex;align-items:center;gap:10px;min-height:44px;padding:0 18px;border-radius:10px;border:1px solid #3a3a40;
-  background:#0e0e10;color:#fff;font-family:inherit;font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;letter-spacing:.6px;cursor:pointer}
+.ccdx-bande-c h5,.ccdx-inc-c h5{font-family:var(--pile-titre);font-size:clamp(15px,1.4vw,17px);letter-spacing:1px;color:#fff;text-transform:uppercase}
+.ccdx-bande-c span,.ccdx-inc-c span{font-size:var(--fs-2xs);color:#b4b4bb;line-height:1.45}
+.ccdx-bande-b.btn{display:inline-flex;align-items:center;gap:10px;width:auto;min-height:40px;margin:0;padding:0 14px;
+  font-size:var(--fs-2xs);text-transform:uppercase;letter-spacing:.6px}
+.ccdx-bande-b svg,.ccdx-bande-b2 svg{width:15px;height:15px}
+.ccdx-bande-b2{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 14px;border-radius:10px;border:1px solid #3a3a40;
+  background:#0e0e10;color:#fff;font-family:inherit;font-size:var(--fs-2xs);font-weight:700;text-transform:uppercase;letter-spacing:.6px;cursor:pointer}
 /* Donnees incompletes */
-.ccdx-incomplet{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 16px;border-radius:14px;
+.ccdx-incomplet{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:11px 14px;border-radius:14px;
   border:1.5px solid #f59e0b;background:linear-gradient(90deg,rgba(245,158,11,.12),rgba(245,158,11,.03))}
-.ccdx-inc-i{width:38px;height:38px;flex-shrink:0;color:#f59e0b}
+.ccdx-inc-i{width:30px;height:30px;flex-shrink:0;color:#f59e0b}
 .ccdx-inc-i svg{width:100%;height:100%}
 .ccdx-inc-c{flex:1 1 320px;min-width:0}
 .ccdx-inc-c h5{color:#f5a524}
 .ccdx-inc-lien{display:inline-flex;align-items:center;gap:6px;min-height:44px;border:0;background:none;color:#f5a524;cursor:pointer;
-  font-family:inherit;font-size:var(--fs-xs);font-weight:600;text-decoration:underline;text-underline-offset:3px}
+  font-family:inherit;font-size:var(--fs-2xs);font-weight:600;text-decoration:underline;text-underline-offset:3px}
 .ccdx-inc-lien svg{width:16px;height:16px}
 /* Les feuilles */
 .ccdx-tab{width:100%;border-collapse:collapse;font-size:var(--fs-xs)}
