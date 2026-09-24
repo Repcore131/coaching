@@ -146,6 +146,14 @@ def references(base):
             if isinstance(e, dict) and e.get('publicId'):
                 apurger.setdefault(e['publicId'], []).append('%s · déclaré à purger (%s, %s)'
                                                              % (qui, e.get('pose'), e.get('date')))
+        # LA FILE DES VIDEOS, ECRITE DANS LE DOSSIER DEPUIS LE 24/09/2026.
+        # Elle vivait dans le navigateur de chaque athlete : personne d'autre
+        # ne la voyait, et elle partait avec un cache vide. Elle remonte
+        # maintenant a la base, donc elle est dans cet export.
+        for e in (u.get('cloudinaryAPurger') or []):
+            if isinstance(e, dict) and e.get('publicId'):
+                apurger.setdefault(e['publicId'], []).append(
+                    '%s · vidéo expirée, à purger' % qui)
         # TOUTE AUTRE URL CLOUDINARY DU DOSSIER : memos audio, photos de bilan
         # partagees, et ce que j'aurais oublie. Un balayage du dossier entier
         # coute moins cher qu'une liste de chemins qui derive.
@@ -164,9 +172,53 @@ def ko(n):
     return '%s Ko' % format(int(round(n / 1024.0)), ',d').replace(',', ' ')
 
 
+def detruire(publics, heberges):
+    """Supprime pour de vrai, par paquets de cent, et rend ce qui est parti.
+
+    ⚠ ELLE NE PREND QUE CE QU'ON LUI DONNE. L'appelant ne lui passe que les
+      fichiers qu'un dossier a DEMANDE a purger : jamais un orphelin muet,
+      qui se relit a la main.
+    """
+    partis, rates = [], []
+    par_type = {}
+    for pid in publics:
+        t = (heberges.get(pid) or {}).get('type') or 'image'
+        par_type.setdefault(t, []).append(pid)
+    for t, ids in par_type.items():
+        for i in range(0, len(ids), 100):
+            lot = ids[i:i + 100]
+            url = 'https://api.cloudinary.com/v1_1/%s/resources/%s/upload' % (CLOUD, t)
+            corps = '&'.join('public_ids[]=' + urllib.parse.quote(x, safe='') for x in lot)
+            req = urllib.request.Request(url, data=corps.encode(), method='DELETE')
+            jeton = base64.b64encode(('%s:%s' % (CLE, SECRET)).encode()).decode()
+            req.add_header('Authorization', 'Basic ' + jeton)
+            req.add_header('Content-Type', 'application/x-www-form-urlencoded')
+            try:
+                with urllib.request.urlopen(req, timeout=120) as r:
+                    d = json.loads(r.read().decode('utf-8'))
+                for pid, etat in (d.get('deleted') or {}).items():
+                    # « deleted » : parti. « not_found » : deja parti, ce qui
+                    # revient au meme pour qui voulait la place.
+                    (partis if etat in ('deleted', 'not_found') else rates).append(pid)
+            except urllib.error.HTTPError as e:
+                rates.extend(lot)
+                print('  Cloudinary a repondu %s sur un lot de %d' % (e.code, len(lot)))
+            time.sleep(0.3)
+    return partis, rates
+
+
+def demander_secret(quoi):
+    """Le secret se colle a l'ecran : ni historique de shell, ni fichier."""
+    sys.stdout.write('  Colle %s, puis Entree : ' % quoi)
+    sys.stdout.flush()
+    return (sys.stdin.readline() or '').strip()
+
+
 def main():
+    global CLE, SECRET
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     sans_cld = '--sans-cloudinary' in sys.argv
+    supprimer = '--supprimer' in sys.argv
     sortie = None
     if '--rapport' in sys.argv:
         i = sys.argv.index('--rapport')
@@ -179,6 +231,16 @@ def main():
                          ' [--rapport fichier.txt] [--sans-cloudinary]')
     with io.open(args[0], encoding='utf-8') as f:
         base = json.load(f)
+
+    # LES IDENTIFIANTS SE DEMANDENT A L'ECRAN QUAND ILS MANQUENT : ils ne
+    # passent ni par la ligne de commande, ni par un fichier.
+    if not sans_cld and (not CLE or not SECRET):
+        print('\n  Cloudinary : Settings > Access Keys (console.cloudinary.com)')
+        if not CLE:
+            CLE = demander_secret('la cle d\'API (API Key)')
+        if not SECRET:
+            SECRET = demander_secret('le secret d\'API (API Secret)')
+        print('')
 
     vivants, apurger = references(base)
     heberges = {} if sans_cld else lister_heberges()
@@ -223,9 +285,29 @@ def main():
         for k in sorted(fantomes):
             W('  %-70s %s' % (k, '; '.join(fantomes[k])[:90]))
         W('')
-        W('RIEN N\'A ETE SUPPRIME. Pour effacer une ligne de ce rapport, la relire,')
-        W('puis la donner a l\'application (elle passe par cloudinaryDestroy) ou la')
-        W('supprimer depuis la console Cloudinary. Ce script ne detruit jamais.')
+        if supprimer and demandes:
+            W('── SUPPRESSION DEMANDEE (--supprimer) ──────────────────────────────')
+            print('\n  %d fichier(s) declares a purger, %s a liberer.'
+                  % (len(demandes), ko(sum(h['octets'] for h in demandes.values()))))
+            print('  Les orphelins muets NE SONT PAS touches : ils se relisent a la main.')
+            sys.stdout.write('  Taper OUI pour supprimer : ')
+            sys.stdout.flush()
+            if (sys.stdin.readline() or '').strip() == 'OUI':
+                partis, rates = detruire(list(demandes), heberges)
+                libere = sum(demandes[k]['octets'] for k in partis if k in demandes)
+                W('  %d supprime(s), %s libere(s).' % (len(partis), ko(libere)))
+                if rates:
+                    W('  %d non supprime(s) : ils restent dans le rapport suivant.' % len(rates))
+                print('\n  %d fichier(s) supprime(s), %s libere(s).' % (len(partis), ko(libere)))
+                print('  Les entrees des dossiers se videront d\'elles-memes : l\'application')
+                print('  verifie cinq fichiers a chaque demarrage et retire ceux qui ont disparu.\n')
+            else:
+                W('  Suppression annulee : rien n\'a ete touche.')
+                print('\n  Annule. Rien n\'a ete touche.\n')
+        else:
+            W('RIEN N\'A ETE SUPPRIME. Pour effacer les fichiers declares a purger :')
+            W('  python scripts/purge_cloudinary_orphelins.py <export.json> --supprimer')
+            W('Les orphelins muets ne partent jamais par ce chemin : ils se relisent.')
 
     texte = '\n'.join(L) + '\n'
     if sortie:

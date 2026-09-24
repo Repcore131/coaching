@@ -34633,6 +34633,65 @@ async function testExercices(){
           else localStorage.setItem(DROITS_CLE,sauve);
         }})());
 
+      // ══ LA PURGE ASSISTEE : LA FILE QUITTE LE NAVIGATEUR ══════════════
+      ok('PURGE — CE QUI EST À SUPPRIMER EST DANS LE DOSSIER, PAS DANS UN NAVIGATEUR',(()=>{
+        // ⚠ LE DEFAUT : la file vivait dans localStorage. Kevin ne la voyait
+        //   jamais, elle partait avec un cache vidé, et les fichiers restaient
+        //   chez l’hébergeur pour toujours. Elle est maintenant dans le
+        //   dossier, donc dans l’export de la base, donc le script la lit.
+        const sv=currentUser;
+        const svFile=localStorage.getItem(CLD_FILE_CLE);
+        try{
+          currentUser={id:'P1',email:'purge@t.fr',role:'athlete'};
+          localStorage.removeItem(CLD_FILE_CLE);
+          cldFileAjouter('repcore/a/v1','video',{cloudName:'dntu57ml',raison:'essai'});
+          const l=cldDossierLire(currentUser);
+          if(l.length!==1) return _echec(l.length+' entrée(s) dans le dossier au lieu d’une');
+          if(l[0].publicId!=='repcore/a/v1') return _echec('l’identifiant n’est pas repris');
+          if(l[0].type!=='video') return _echec('le type n’est pas repris : '+l[0].type);
+          if(l[0].cloud!=='dntu57ml') return _echec('le compte hébergeur n’est pas repris');
+          // ⚠ LEGERE : le dossier part EN ENTIER a chaque synchronisation. On
+          //   ne garde QUE de quoi supprimer, jamais le nom ni la raison.
+          const poids=JSON.stringify(l[0]).length;
+          if(poids>140) return _echec('une entrée pèse '+poids+' octets');
+          for(const k of Object.keys(l[0]))
+            if(['publicId','type','le','cloud'].indexOf(k)<0)
+              return _echec('champ inattendu dans le dossier : '+k);
+          // PAS DE DOUBLON : la même vidéo deux fois reste une entrée.
+          cldFileAjouter('repcore/a/v1','video',{cloudName:'dntu57ml'});
+          if(cldDossierLire(currentUser).length!==1) return _echec('un doublon est entré');
+          // ET RETIRER RETIRE DES DEUX CÔTÉS.
+          cldFileRetirer('repcore/a/v1');
+          if(cldDossierLire(currentUser).length!==0) return _echec('l’entrée survit dans le dossier');
+          if(cldFileLire().length!==0) return _echec('l’entrée survit dans la file locale');
+          if('cloudinaryAPurger' in currentUser) return _echec('le champ vide reste dans le dossier');
+          return true;
+        } finally {
+          currentUser=sv;
+          if(svFile==null) localStorage.removeItem(CLD_FILE_CLE);
+          else localStorage.setItem(CLD_FILE_CLE,svFile);
+        }})());
+
+      ok('PURGE — LE COACH VOIT CE QUI ATTEND, ET SEULEMENT QUAND ÇA VAUT LE GESTE',(()=>{
+        const faux=(n)=>{ const m={}; for(let i=0;i<n;i++)
+            m['a'+i+'@t,fr']={email:'a'+i+'@t.fr',cloudinaryAPurger:[
+              {publicId:'repcore/x/'+i,type:'video',le:Date.now()-10*864e5,cloud:'c'}]};
+          return m; };
+        const t1=cldAPurgerTotal(faux(3));
+        if(t1.fichiers!==3||t1.dossiers!==3) return _echec('compte : '+JSON.stringify(t1));
+        // EN DESSOUS DU SEUIL, ON SE TAIT : un rappel qui s’affiche pour trois
+        // fichiers finit par ne plus se lire.
+        if(_htmlRappelPurge(faux(3))!=='') return _echec('le rappel parle pour trois fichiers');
+        const h=_htmlRappelPurge(faux(CLD_RAPPEL_MINI+5));
+        if(!h) return _echec('le rappel se tait alors qu’il y a de quoi faire');
+        const d=document.createElement('div'); d.innerHTML=h;
+        const txt=d.textContent.replace(/\s+/g,' ');
+        if(txt.indexOf(String(CLD_RAPPEL_MINI+5)+' fichiers')<0) return _echec('le compte ne se lit pas : '+txt.slice(0,80));
+        if(txt.indexOf('purge_cloudinary_orphelins.py')<0) return _echec('le rappel ne dit pas quoi lancer');
+        if(txt.indexOf('--supprimer')<0) return _echec('le rappel ne dit pas comment supprimer');
+        // ET IL DIT DEPUIS QUAND ÇA ATTEND.
+        return /10 jours/.test(txt)?true:_echec('l’ancienneté ne se lit pas : '+txt.slice(0,120));})());
+
       // ══ LOT 5 — LA CARTE BANCAIRE, QU'ON FERMAIT NOUS-MEMES ════════════
       ok('LOT 5 — LE SDK PAYPAL OUVRE LA CARTE, DANS LES DEUX ÉCRANS',(()=>{
         const src=_prodSrc();
