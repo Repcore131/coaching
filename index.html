@@ -424,6 +424,11 @@ ul.coches li::before{content:'';position:absolute;left:0;top:4px;width:17px;heig
 .f1{top:6%;left:0}.f2{top:30%;right:-2%;animation-delay:-2s}.f3{bottom:26%;left:-4%;animation-delay:-4s}
 .f4{bottom:6%;right:4%;animation-delay:-1s}.f5{top:-2%;right:18%;animation-delay:-3s;font-size:28px}.f6{top:52%;left:4%;animation-delay:-5s;font-size:28px}
 @keyframes flotte{from{transform:translateY(0) rotate(-6deg)}to{transform:translateY(-14px) rotate(8deg)}}
+/* ---------- ecran qui defile (vraie capture, plus haute que le telephone) ---------- */
+.tel.defile .ecran{position:absolute;inset:9px;border-radius:36px;overflow:hidden;background:#0b0b0b}
+.tel.defile .ecran img{width:100%;height:auto;border-radius:0;object-fit:initial;animation:defile 22s ease-in-out infinite alternate}
+.tel.defile:hover .ecran img{animation-play-state:paused}
+@keyframes defile{0%,10%{transform:translateY(0)}90%,100%{transform:translateY(-57.5%)}}
 /* ---------- vie ---------- */
 .vie{margin-top:40px;padding-top:40px;border-top:1px dashed #1c1c1c}
 .vie-t{font-size:clamp(26px,3.6vw,38px);margin-top:12px}
@@ -548,7 +553,7 @@ footer a{color:var(--dim);margin:0 8px}
   .ancre .ligne{flex-direction:column;gap:2px}
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.cta,.barre{transition:none}
-  .nutri-scene *,.eparpille span{animation:none!important}.p1{opacity:1}.nm-arc{stroke-dashoffset:52}.tape{width:11ch}}
+  .nutri-scene *,.eparpille span,.tel.defile .ecran img{animation:none!important}.p1{opacity:1}.nm-arc{stroke-dashoffset:52}.tape{width:11ch}}
 </style>
 </head>
 <body>
@@ -621,7 +626,7 @@ footer a{color:var(--dim);margin:0 8px}
       <h2>Tout est réuni.<br><em>Dans une seule application.</em></h2>
     </div>
     <nav class="piliers" aria-label="Ce que réunit RepCore">
-      <a href="#p-seance"><i>🏋️</i>Carnet de séance</a><a href="#p-nutrition"><i>🥗</i>Nutrition</a>
+      <a href="#p-seance"><i>🏋️</i>Carnet de séance</a><a href="#p-nutrition"><i>🥗</i>Nutrition</a><a href="#p-tableur"><i>🧮</i>Tableur nutrition</a>
       <a href="#p-exercices"><i>🎥</i>Exercices expliqués</a><a href="#p-coach"><i>🎯</i>Coach et correction</a>
       <a href="#p-vie"><i>😴</i>Sommeil et pas</a><a href="#p-evolution"><i>📈</i>Évolution</a>
     </nav>
@@ -692,7 +697,26 @@ footer a{color:var(--dim);margin:0 8px}
       </div>
     </div>
 
-    <div class="fonction" id="p-exercices">
+    <div class="fonction" id="p-tableur">
+      <div class="texte">
+        <span class="badge">Tableur nutrition</span>
+        <h3>Tes besoins calculés,<br>pas devinés.</h3>
+        <p>Poids, taille, âge, activité, sport, objectif : le tableur calcule tes besoins étape par étape, puis les répartit en protéines, glucides, lipides et fibres. Ton coach ajuste, tu vois tes cibles bouger en direct.</p>
+        <ul class="coches">
+          <li>Besoins de base, activité hors sport et dépense sportive, détaillés</li>
+          <li>Jours d'entraînement et jours de repos : les glucides suivent ta semaine</li>
+          <li>Protéines et lipides au kilo de poids de corps, fibres et sel compris</li>
+          <li>Un réglage à ±20 kcal, et les deux écrans restent synchronisés</li>
+        </ul>
+      </div>
+      <div class="visuel">
+        <div class="tel defile"><div class="ecran"><img src="app/img/vente/tableur-nutrition.webp" srcset="app/img/vente/tableur-nutrition-300.webp 300w, app/img/vente/tableur-nutrition.webp 600w" sizes="(max-width:640px) 78vw, 300px" width="600" height="3057" loading="lazy"
+          alt="Tableur nutrition RepCore : facteurs, besoins caloriques, jours ON et OFF, macronutriments et total calorique"></div></div>
+        <div class="bulle b4"><b>1 945 kcal / 1 705 kcal</b>jour d'entraînement, jour de repos</div>
+      </div>
+    </div>
+
+    <div class="fonction inverse" id="p-exercices">
       <div class="texte">
         <span class="badge">Ultime</span>
         <h3>500 exercices filmés<br>et vraiment expliqués.</h3>
@@ -710,7 +734,7 @@ footer a{color:var(--dim);margin:0 8px}
       </div>
     </div>
 
-    <div class="fonction inverse" id="p-coach">
+    <div class="fonction" id="p-coach">
       <div class="texte">
         <span class="badge">Avec ton coach</span>
         <h3>Ta technique corrigée,<br>image par image.</h3>
@@ -734,7 +758,7 @@ footer a{color:var(--dim);margin:0 8px}
     </div>
     <p class="demo">Captures réelles de l'application (profil de démonstration). Vidéos tournées par Kevin.</p>
 
-    <div class="fonction" id="p-evolution">
+    <div class="fonction inverse" id="p-evolution">
       <div class="texte">
         <span class="badge">Ultime</span>
         <h3>Tu évolues avec l'application,<br>semaine après semaine.</h3>
