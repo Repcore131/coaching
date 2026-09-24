@@ -67151,6 +67151,15 @@ function _renderStrictDiet(){
   // LE SUIVI DU JOUR, EN UNE CARTE (maquette de Kevin, 24/09/2026), juste
   // sous le cadre qui explique la diete : voir _htmlSuiviAlimentaire.
   const suiviDuJour=_htmlSuiviAlimentaire(currentUser,_sjour);
+  // LA FICHE A IMPRIMER, EN ROUGE, JUSTE APRES « 1 PORTION DE FRUITS » (Kevin,
+  // 24/09/2026). Le plan de l'athlete ouvre les deux planches que Kevin colle
+  // sur le frigo, remplies avec ce plan-ci.
+  // ⚠ ELLE EST POSEE PAR L'ECRAN, dans l'emplacement que _htmlPlanAthlete
+  //   reserve apres la table des fruits (son second argument) : ce rendu-la
+  //   ne porte lui-meme AUCUN bouton, et une assertion le garde. Sans plan,
+  //   _htmlPlanAthlete ne rend rien — pas de fiche, rien a imprimer.
+  const ficheAlim=`<button class="btn btn-red btn-doigt" style="width:100%;margin:0 0 16px"
+      onclick="ouvrirFicheAlim()">Fiche alimentaire à imprimer</button>`;
   el.innerHTML=`${_transiStrict}
     <!-- Définition diète stricte -->
     <div class="banner-hero" style="margin-bottom:18px;animation:fadeInUp var(--t-3) var(--c-out)">
@@ -67178,18 +67187,7 @@ function _renderStrictDiet(){
       <div style="background:var(--surface-1);border:1px dashed var(--border);border-radius:var(--r-3);padding:32px 16px;text-align:center;color:var(--text-dim);font-size:var(--fs-sm)"><div style="margin-bottom:8px;opacity:.3">${icon('clipboard',32)}</div>Plan alimentaire à venir</div>
     </div>`:''}
     <!-- Le plan composé par le coach : repas imposés et sources interchangeables -->
-    ${_htmlPlanAthlete(currentUser)}
-    <!-- LA FICHE A IMPRIMER. Le plan se lisait sur un telephone et nulle part
-         ailleurs ; Kevin livre ses programmes sur deux planches que ses
-         athletes collent sur le frigo. Le bouton ouvre EXACTEMENT ces planches,
-         remplies avec ce plan-ci.
-         ⚠ IL EST POSE PAR L'ECRAN, ET NON PAR _htmlPlanAthlete : ce rendu-la ne
-           porte AUCUN bouton, et une assertion le garde — le plan de l'athlete
-           ne se modifie pas de son cote. Celui-ci ne modifie rien, mais la
-           regle se tient mieux quand elle n'a pas d'exception a expliquer.
-         Et pas de plan, pas de fiche : il n'y aurait rien a imprimer. -->
-    ${planActif(currentUser)?`<button class="btn btn-outline btn-doigt" style="width:100%;margin-bottom:16px"
-      onclick="ouvrirFicheAlim()">Fiche alimentaire à imprimer</button>`:''}
+    ${_htmlPlanAthlete(currentUser,ficheAlim)}
 `;
 }
 
@@ -69677,9 +69675,9 @@ function lcStock(cle,el){
     if(qte) qte.style.color=stock?'var(--text-faint)':'var(--text)';
   }catch(e){}
 }
-// `intercale` : ce que le plan doit afficher A LA PLACE de sa liste de
-// courses, laquelle est renvoyee a la fin. Le plan ne sait pas ce que c est
-// et n'a pas a le savoir — il fournit un emplacement, l'appelant le remplit.
+// `intercale` : ce que l'ecran pose JUSTE APRES la table des fruits —
+// aujourd'hui, le bouton de la fiche a imprimer. Le plan ne sait pas ce que
+// c'est et n'a pas a le savoir : il fournit un emplacement, l'appelant le remplit.
 // ══ OBJECTIFS ALIMENTAIRES : LES QUATRE CADRANS ══════════════════════════
 // Maquette de Kevin, 24/08/2026. Elle remplace les quatre tuiles plates de la
 // diete stricte, trait pour trait : cadre et lueur par macro, pastille
