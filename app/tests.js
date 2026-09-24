@@ -23028,19 +23028,39 @@ async function testExercices(){
           const r=saveClientNutriMacros();
           const m=((DB.get('users')||{})['plc@t.fr'].nutrition||{}).macros;
           return r===true&&!!m&&m.confirmeSousPlancher===undefined;})());
-        ok('Critère : antécédent déclaré → la confirmation est REFUSÉE',(()=>{
+        ok('Critère : antécédent déclaré → l\'écriture passe, et le plancher est majoré',(()=>{
+          // ⚠ CONTRAT INVERSÉ LE 24/09/2026. Kevin, deux fois et en majuscules :
+          //   « ENLEVE LE AUSSI ». C'était le dernier endroit où un
+          //   professionnel ne pouvait pas passer outre. Ce qui reste : le
+          //   plancher MAJORÉ de 15 % dans ce cas, donc un avertissement plus
+          //   précoce, et tout ce qui informe.
           poser({tcaRisque:true,bilans:[{type:'depart',date:Date.now()-100*864e5,'deb-tca':'oui'},
             {type:'suivi',date:Date.now()-2*864e5,'deb-weight':'80','deb-height':'178',
              'deb-age':'32','deb-gender':'Homme'}]});
           remplir(1200,150,100,70);
-          _plSetConfirme(true,'plc@t.fr');
           const r=saveClientNutriMacros(true);
-          const m=((DB.get('users')||{})['plc@t.fr'].nutrition||{}).macros;
-          return r===false&&!m;})());
-        ok('Et le message d\'échec est explicite, sans case à cocher',(()=>{
+          const c=(DB.get('users')||{})['plc@t.fr'];
+          const m=(c.nutrition||{}).macros;
+          if(r!==true) return _echec('l\'écriture est encore refusée');
+          if(!m||Number(m.on.kcal)!==1200) return _echec('les chiffres ne sont pas écrits');
+          // LA MAJORATION TIENT : le plancher d'un dossier à antécédent est
+          // plus haut que le même dossier sans antécédent.
+          const pl=plancherEffectif(c);
+          if(!pl.tca) return _echec('l\'antécédent n\'est plus reconnu');
+          if(!(pl.majoration>1)) return _echec('le plancher n\'est plus majoré : '+pl.majoration);
+          return true;})());
+        ok('Et l\'écran nomme l\'antécédent, sans case à cocher',(()=>{
+          // ⚠ CONTRAT INVERSÉ (24/09/2026) : il n'y a plus de refus, donc plus
+          //   de « pas de dérogation » à afficher. Ce qui doit rester à l'écran,
+          //   c'est le MOTIF, et le fait que la décision est tracée.
           const h=(document.getElementById('ccd-nutrition')||{}).innerHTML||'';
-          return /pas de dérogation/.test(h)&&!/ccd-pl-confirm/.test(h)
-            &&!/Enregistrer malgré/.test(h);})());
+          if(!/antécédent alimentaire est déclaré/.test(h))
+            return _echec('l\'écran ne nomme plus l\'antécédent');
+          if(/pas de dérogation|ne peut pas être enregistrée/.test(h))
+            return _echec('l\'écran promet encore un refus');
+          if(/ccd-pl-confirm/.test(h)||/Enregistrer malgré/.test(h))
+            return _echec('la case de dérogation est revenue');
+          return true;})());
       })();
 
       // ── Côté athlète : carte permanente ──
@@ -31726,13 +31746,15 @@ async function testExercices(){
         const s=String(saveClientNutriManuel);
         if(s.indexOf('controlerMacros')<0)
           return _echec('la bascule ecrit les cibles sans controle');
-        // LA BASCULE RESTE IMMEDIATE QUAND RIEN NE VIOLE : c'est la consigne.
-        if(!/if\(!viol\.length\)/.test(s))
-          return _echec('l’ecriture n’est plus conditionnee a l’absence de violation');
-        // ET LE REFUS DUR EST LE MEME : antecedent alimentaire ou signaux de
-        // deficit, aucune derogation n'est offerte ici.
+        // ⚠ LA BASCULE ECRIT TOUJOURS DEPUIS LE 24/09/2026, violation ou non :
+        //   depuis que le plancher ne corrige plus, un calcul peut legitimement
+        //   descendre dessous, et refuser aurait laisse le coach sans cibles
+        //   sans qu'il comprenne pourquoi.
+        if(/if\(!viol\.length\)\{[\s\S]{0,80}c\.nutrition\.macros=/.test(s))
+          return _echec('l’ecriture est encore conditionnee a l’absence de violation');
+        // LE MOTIF RESTE NOMME quand il y en a un.
         if(!/pl\.tca\|\|pl\.deficit/.test(s))
-          return _echec('le refus dur n’est pas repris');
+          return _echec('le motif de l’avertissement n’est plus nomme');
         // La trace est posee comme sur l'autre chemin, pour que la section des
         // violations ait de quoi s'afficher.
         return /_plDerniereViol/.test(s)
@@ -63261,16 +63283,26 @@ async function testExercices(){
             ?true:_echec(JSON.stringify(cf));})());
         ok('Après un enregistrement réussi, la confirmation retombe',(()=>{
           return _plConfirme===null?true:_echec('la confirmation persiste après succès');})());
-        ok('Le blocage TCA reste DUR : aucune dérogation, même confirmée',(()=>{
+        ok('Antécédent déclaré : l\'écriture passe, et l\'écran le DIT',(()=>{
+          // ⚠ MÊME CONTRAT INVERSÉ (24/09/2026). Ce qui est tenu ici : le
+          //   coach ne peut pas ne pas voir ce qu'il fait.
           poser2('tca@t.fr',{tcaRisque:true,bilans:[
             {type:'depart',date:Date.now()-100*864e5,'deb-tca':'oui'},
             {type:'suivi',date:Date.now()-2*864e5,'deb-weight':'80','deb-height':'178',
              'deb-age':'32','deb-gender':'Homme'}]});
           remplir2(1200,150,100,70);
-          _plSetConfirme(true,'tca@t.fr');
           const r=saveClientNutriMacros(true);
-          const m=((DB.get('users')||{})['tca@t.fr'].nutrition||{}).macros;
-          return r===false&&!m?true:_echec('la dérogation est passée malgré le TCA');})());
+          const c=(DB.get('users')||{})['tca@t.fr'];
+          if(r!==true) return _echec('l\'écriture est encore refusée');
+          if(!((c.nutrition||{}).macros||{}).on) return _echec('rien n\'est écrit');
+          const h=_htmlViolationsCoach(c);
+          if(!/Sous le plancher/.test(h)) return _echec('le bloc rouge ne sort pas');
+          if(!/antécédent alimentaire est déclaré/.test(h))
+            return _echec('l\'écran ne nomme plus l\'antécédent : '+h.slice(0,160));
+          if(/ne peut pas être enregistrée/.test(h))
+            return _echec('l\'écran promet encore un refus');
+          if(!/tracée dans son dossier/.test(h)) return _echec('rien ne dit que la décision est tracée');
+          return true;})());
         ok('Le bloc du plancher reflète les chiffres de CET athlète',(()=>{
           // ⚠ LA CASE A COCHER A DISPARU (24/09/2026), et ce qu'elle protegeait
           //   est tenu autrement : le bloc lit le DOSSIER de l'athlete affiche.

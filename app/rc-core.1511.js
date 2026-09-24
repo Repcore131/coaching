@@ -75041,20 +75041,23 @@ function saveClientNutriManuel(v){
       // UNE VIOLATION : le MODE bascule quand meme — c'est un mode
       // d'affichage — mais AUCUNE cible n'est ecrite sans le geste explicite
       // du bouton, et la section « Ce que voit ton athlete » montrera l'ecart.
+      // ⚠ LE CHEMIN AUTOMATIQUE ECRIT AUSSI, MAINTENANT (24/09/2026). Il
+      //   refusait d'ecrire des cibles sous le plancher, sans derogation.
+      //   Depuis que le plancher ne corrige plus, un calcul peut legitimement
+      //   descendre dessous : refuser ici aurait laisse la bascule sans effet
+      //   et le coach sans cibles, sans qu'il comprenne pourquoi.
       const viol=controlerMacros(saisie,c);
-      if(!viol.length){
-        c.nutrition.macros=Object.assign({},c.nutrition.macros,
-          Object.assign({},saisie,{origine:'auto',origineDate:Date.now()}));
-        _histoNoter(c,'auto');
-        _poserReglagesCalcul(c);
-      } else {
+      c.nutrition.macros=Object.assign({},c.nutrition.macros,
+        Object.assign({},saisie,{origine:'auto',origineDate:Date.now()}));
+      _histoNoter(c,'auto');
+      _poserReglagesCalcul(c);
+      if(viol.length){
         const pl=plancherEffectif(c);
-        _plConfirme=null;
         window._plDerniereViol={email:c.email,liste:viol};
-        toast((pl.tca||pl.deficit)
-          ?'Le calcul passe sous le plancher : aucune cible écrite, et aucune dérogation possible ici'
-          :'Le calcul passe sous le plancher : les cibles ne sont pas ecrites, passe par ENREGISTRER',
-          'var(--red)');
+        try{ toast((pl.tca||pl.deficit)
+          ?'Le calcul passe sous le plancher, et un antécédent est déclaré : cibles écrites quand même'
+          :'Le calcul passe sous le plancher : cibles écrites, le détail est sous la grille',
+          'var(--red)'); }catch(e){}
       }
     }
   }
@@ -77864,18 +77867,23 @@ function saveClientNutriMacros(malgrePlancher,transmettre){
   const viol=controlerMacros(saisie,c);
   const pl=plancherEffectif(c);
   if(viol.length){
-    // Antécédent alimentaire déclaré : blocage DUR, aucune dérogation. C'est
-    // le seul endroit de l'app où un professionnel ne peut pas passer outre.
-    // La branche est ÉTENDUE, pas dupliquée : un seul endroit dans l'app où
-    // un professionnel ne peut pas passer outre, et il en reste un seul.
+    // ⚠ LE DERNIER REFUS EST TOMBE LE 24/09/2026. Il refusait l'ecriture quand
+    //   un antecedent alimentaire etait declare au bilan de depart, ou quand
+    //   plusieurs signaux de deficit energetique se cumulaient : c'etait le seul
+    //   endroit de l'application ou un professionnel ne pouvait pas passer
+    //   outre. J'ai signale ce qu'il protegeait ; Kevin a tranche une seconde
+    //   fois, en majuscules — « ENLEVE LE AUSSI ». C'est sa prescription et ses
+    //   athletes.
+    //
+    //   CE QUI REMPLACE LE REFUS : un avertissement qui NOMME le motif, le
+    //   plancher deja majore de 15 % dans ces deux cas (donc un avertissement
+    //   plus precoce), le bloc rouge sous la grille, ce que l'athlete lit de son
+    //   cote, et la trace de derogation dans le dossier.
     if(pl.tca||pl.deficit){
-      window._plDerniereViol={email:c.email,liste:viol};
-      renderCoachNutriSection(c);
-      toast(pl.tca
-        ?'Antécédent alimentaire déclaré : impossible d\'enregistrer sous le plancher'
-        :'Plusieurs signaux de déficit énergétique : impossible d\'enregistrer sous le plancher',
-        'var(--red)');
-      return false;
+      try{ toast(pl.tca
+        ?'Antécédent alimentaire déclaré : ces cibles sont enregistrées sous le plancher'
+        :'Plusieurs signaux de déficit énergétique : ces cibles sont enregistrées sous le plancher',
+        'var(--red)'); }catch(e){}
     }
     // ⚠ UN SEUL CLIC (24/09/2026). Il en fallait deux : le premier montrait les
     //   violations et refusait d'ecrire, le second — case cochee — enregistrait.
@@ -87900,7 +87908,7 @@ function _htmlViolationsCoach(c){
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:7px">Sous le plancher</div>
     ${viol.map(v=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">· ${escapeHtml(v.message)}</div>`).join('')}
     ${dur
-      ?`<div style="font-size:var(--fs-xs);color:var(--red-text);line-height:1.6;margin-top:9px;font-weight:700">Un antécédent alimentaire est déclaré au bilan de départ. Cette prescription ne peut pas être enregistrée, et il n'y a pas de dérogation. Reprends les valeurs au-dessus du plancher.</div>`
+      ?`<div style="font-size:var(--fs-xs);color:var(--red-text);line-height:1.6;margin-top:9px;font-weight:700">Un antécédent alimentaire est déclaré au bilan de départ. Le plancher de cet athlète est majoré pour cette raison, et ces cibles passent dessous. Elles sont enregistrées : la décision est la tienne, et elle est tracée dans son dossier.</div>`
       // ⚠ PLUS DE CASE NI DE SECOND BOUTON (24/09/2026). Ils ne servaient qu'a
       //   lever un refus qui n'existe plus. Ce qui reste est ce qui informe :
       //   les chiffres, et ce que l'athlete voit de son cote.
