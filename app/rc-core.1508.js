@@ -42660,8 +42660,35 @@ function _htmlCorpsCadre(c,o){
   //   dossiers pour la meme raison, et de la meme facon.
   if(c&&c._fromCode) return '';
   try{ if(!phpDisponible(u)) return ''; }catch(e){}
+  // ⚠ LES DEUX VUES COTE A COTE — ONGLET DONNEES SEULEMENT. Kevin,
+  //   24/09/2026 : « dans l'onglet Donnees et uniquement celui-la, mets la
+  //   vue avant et la vue arriere a cote l'une de l'autre, le rectangle
+  //   "Chaque muscle…" a droite des deux silhouettes, et le reste de la
+  //   legende pile en dessous, au centre des trois parties ».
+  //   Chaque vue est rendue par CETTE fonction, en pieces (o._parties) : deux
+  //   calculs de teinte ou d'etiquettes a cote de celui-ci finiraient par
+  //   montrer deux corps differents pour le meme dossier.
+  if(o.deuxVues){
+    const base=Object.assign({},o,{deuxVues:false,_parties:true});
+    const f=_htmlCorpsCadre(c,Object.assign({},base,{vue:'face'}));
+    const d=_htmlCorpsCadre(c,Object.assign({},base,{vue:'dos'}));
+    // Sans bilan, la fonction rend son cadre eteint, en entier : on le garde.
+    if(!f||typeof f==='string') return f||'';
+    if(!d||typeof d==='string') return f.cadre;
+    // LA PHRASE DU PIED EST CELLE DE LA VUE QUI PORTE UN ECART : celle de
+    // l'autre dirait « rien a lire de ce cote », vrai pour elle seule.
+    const note=(d.avecEcart&&!f.avecEcart)?d.note:f.note;
+    return '<div class="cc-corps cc-corps-duo">'+f.tete
+      +'<div class="cc-corps-trio">'
+      +'<div class="cc-corps-col">'+f.scene+'</div>'
+      +'<div class="cc-corps-col">'+d.scene+'</div>'
+      +(f.explication?('<div class="cc-corps-col cc-corps-trio-x">'+f.explication+'</div>'):'')
+      +'</div>'
+      +'<div class="cc-corps-pied">'+note+(f.legende||d.legende)+'</div>'
+      +'</div>';
+  }
   const genre=woGenreAvatar(u);
-  const vue=(_corpsVue==='dos')?'dos':'face';
+  const vue=o.vue?((o.vue==='dos')?'dos':'face'):((_corpsVue==='dos')?'dos':'face');
   const pl=CORPS_PLANCHE[genre+'-'+vue]||CORPS_PLANCHE['h-face'];
   let bilans=[]; try{ bilans=bilansOrdonnes(u)||[]; }catch(e){ bilans=[]; }
   // LA LECTURE : celle du coach (_corpsMode), ou celle qu'impose l'appelant —
@@ -42711,8 +42738,10 @@ function _htmlCorpsCadre(c,o){
       :('<span class="cc-corps-vue cc-corps-lec" role="group" aria-label="Ce que dit la teinte">'
         +bMode('evolution','Évolution','Ce que ses tours ont fait depuis leur dernier relevé')
         +bMode('volume','Volume','Les séries que le programme donne à chaque muscle')+'</span>'))
-    +'<span class="cc-corps-vue" role="group" aria-label="Vue du corps">'
-    +onglet('face','Vue avant')+onglet('dos','Vue arrière')+'</span></div>';
+    +(o._parties?''
+      :('<span class="cc-corps-vue" role="group" aria-label="Vue du corps">'
+        +onglet('face','Vue avant')+onglet('dos','Vue arrière')+'</span>'))
+    +'</div>';
   // ⚠ LES ETIQUETTES SORTENT DES LE PREMIER BILAN depuis le 23/09/2026. Elles
   //   etaient conditionnees a deux bilans, parce qu'elles ne disaient que des
   //   ecarts ; elles disent maintenant TOUTES les mensurations mesurees, et un
@@ -42885,6 +42914,7 @@ function _htmlCorpsCadre(c,o){
   // LE PETIT CADRE DE L'EXPLICATION VA SOUS LES GRAPHIQUES, dans la colonne
   // de droite ; sans graphique, il reste sous la legende.
   const avecG=(o.graphes!==false)&&!!graphes;
+  if(o._parties) return {tete,scene,note,legende,explication,avecEcart:eti.avecEcart};
   return '<div class="cc-corps">'+tete
     +'<div class="cc-corps-grille">'
     +'<div class="cc-corps-col">'+scene+note+legende+(avecG?'':explication)+'</div>'
@@ -44125,7 +44155,7 @@ function renderCorpsCoach(c){
     h=(_ccdVue==='entrainement')
       ?_htmlCorpsCadre(c)
       :_htmlCorpsCadre(ccdBorner(_dossier(c)),
-        {graphes:false,evoPremier:ccdPaireActive()});
+        {graphes:false,deuxVues:true,evoPremier:ccdPaireActive()});
     h=h||'';
   }catch(e){ h=''; }
   z.innerHTML=h;

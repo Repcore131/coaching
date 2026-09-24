@@ -4471,6 +4471,22 @@ span.cc-corps-lp{cursor:default;text-decoration:none}
     align-items:start;gap:16px}
 }
 .cc-corps-col{min-width:0}
+/* LES DEUX VUES COTE A COTE, ONGLET DONNEES (Kevin, 24/09/2026). Trois
+   parties sur un bloc large : vue avant, vue arriere, puis le petit cadre qui
+   explique la teinte ; la phrase de methode et la legende passent dessous,
+   centrees sur les trois. Plus etroit, les deux silhouettes restent cote a
+   cote et le cadre passe dessous ; sur un telephone, tout s'empile. */
+.cc-corps-trio{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:center}
+@container corps (min-width:520px){
+  .cc-corps-trio{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cc-corps-trio-x{grid-column:1/-1}
+}
+@container corps (min-width:900px){
+  .cc-corps-trio{grid-template-columns:repeat(2,minmax(0,1fr)) minmax(220px,.8fr)}
+  .cc-corps-trio-x{grid-column:auto}
+}
+.cc-corps-trio-x .cc-corps-x{margin-top:0}
+.cc-corps-pied{max-width:760px;margin:4px auto 0;text-align:center}
 .cc-corps-g{background:rgba(255,255,255,.028);border:1px solid rgba(255,255,255,.09);
   border-radius:var(--r-2);padding:9px 10px 8px}
 .cc-corps-g+.cc-corps-g{margin-top:10px}
