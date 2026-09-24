@@ -44014,6 +44014,24 @@ async function testExercices(){
       const attente=Object.assign({},u,{morphoInitiale:{etat:'attente',date:t,raison:'x',essais:2}});
       if(!morphoInitialeARefaire(attente)) return _echec('une analyse en attente ne se retente pas');
       if(morphoInitialeEtat(attente)!=='attente') return _echec('l’état n’est pas « attente »');
+      // ⚠ LES TROIS PHOTOS, PAS SEULEMENT CELLE DE FACE (Kevin, 24/09/2026 :
+      //   « garde le vert et le rouge et les 3 photos »). Un bilan a moitie
+      //   rempli ne gele pas une morphologie, meme si la photo que l'analyse
+      //   LIT est la.
+      const photo=(x)=>Object.assign({type:'depart',date:t-60*J,'deb-rotule':'47'},x||{});
+      const trois={'deb-photo-face':'data:img','deb-photo-back':'data:img','deb-photo-side':'data:img'};
+      const avecTrois=Object.assign({},u,{bilans:[photo(trois)]});
+      const p3=morphoPhotoInitiale(avecTrois,0);
+      if(!p3||p3.src!=='data:img') return _echec('un bilan complet n’est pas retenu : '+JSON.stringify(p3));
+      for(const manquante of ['deb-photo-back','deb-photo-side','deb-photo-face']){
+        const deux=Object.assign({},trois); delete deux[manquante];
+        const d2=Object.assign({},u,{bilans:[photo(deux)]});
+        if(morphoPhotoInitiale(d2,0))
+          return _echec('l’analyse part avec ' + manquante + ' en moins');
+      }
+      // ET ON LE DIT, plutot que de rester muet.
+      const rien=morphoInitialeDe(u,{ok:true,prise:{verdict:'bon',raisons:[]},pixels:null,rapports:[]},null,1);
+      if(rien.etat!=='attente') return _echec('un bilan sans photo ne laisse pas en attente');
       // SANS LA MESURE DU GENOU, ON NE CHARGE MÊME PAS LE MOTEUR DE POSE.
       const sans={id:'C8',email:'c8@t.fr',role:'athlete',bilans:[{type:'depart',date:t-60*J}]};
       if(morphoInitialePeutEtre(sans)!==false) return _echec('le moteur part sans échelle possible');
@@ -44165,6 +44183,55 @@ async function testExercices(){
           return _echec('l’étiquette porte une couleur de jugement : '+st);
         return true;
       } finally { _corpsVue=sv; _corpsMode=sm; }})());
+
+
+    // ══ LA MÊME DEMANDE, À TOUS CEUX À QUI ELLE MANQUE (24/09/2026) ══════
+    // Kevin : « réclamer la hauteur de genou à tes athlètes actuels ». Une
+    // mesure neuve manque à tout le monde le jour où elle arrive.
+    ok('UNE MESURE SE DEMANDE À TOUTE LA LISTE EN UN GESTE, ET À EUX SEULS',(()=>{
+      if(typeof demanderMesureATous!=='function') return _echec('la demande groupée n’existe pas');
+      const J=864e5, t=Date.now();
+      const sD=DB.get, sS=DB.set, sP=CLOUD.pushOne, sT=window.toastSync, sTo=window.toast,
+        sU=currentUser, sC=currentClientId;
+      let ecrit=null; const pousses=[];
+      try{
+        const ath=(id,extra)=>Object.assign({id:id,email:id+'@t.fr',role:'athlete',gender:'H',
+          coachId:'C6B',bilans:[Object.assign({type:'depart',date:t-30*J,'bil-weight':'80'},extra||{})]},{});
+        const users={};
+        // A : il manque la hauteur de genou. B aussi. C l'a. D est chez un
+        // autre coach. E n'a qu'un code d'invitation.
+        for(const [id,extra] of [['A',null],['B',null],['C',{'deb-rotule':'47'}]])
+          users[id+'@t.fr']=ath(id,extra);
+        users['D@t.fr']=Object.assign(ath('D'),{coachId:'AUTRE'});
+        users['E@t.fr']=Object.assign(ath('E'),{_fromCode:true});
+        currentUser={id:'C6B',email:'c6b@t.fr',role:'coach'};
+        currentClientId='A';
+        DB.get=k=>(k==='users')?users:sD.call(DB,k);
+        DB.set=(k,v)=>{ ecrit=v; return true; };
+        CLOUD.pushOne=(e)=>{ pousses.push(e); return Promise.resolve(true); };
+        window.toastSync=()=>{}; window.toast=()=>{};
+        // LES AUTRES : B seulement. C l'a déjà, D n'est pas à moi, E n'a pas
+        // de dossier, et A est l'athlète ouvert (il a son propre bouton).
+        const autres=ccdManqueAutres('deb-rotule').map(x=>x.id).sort();
+        if(autres.join()!=='B') return _echec('les autres : '+autres.join(','));
+        const n=demanderMesureATous('deb-rotule');
+        if(n!==1) return _echec(n+' demandes au lieu d’une');
+        if(!ecrit) return _echec('rien n’est écrit');
+        if(!(ecrit['B@t.fr'].demandesMesure||[]).length) return _echec('B n’a pas sa demande');
+        if((ecrit['C@t.fr'].demandesMesure||[]).length) return _echec('C, qui a la mesure, reçoit une demande');
+        if((ecrit['D@t.fr'].demandesMesure||[]).length) return _echec('un athlète d’un autre coach reçoit une demande');
+        if((ecrit['E@t.fr'].demandesMesure||[]).length) return _echec('une invitation non consommée reçoit une demande');
+        if(pousses.join()!=='B@t.fr') return _echec('poussées : '+pousses.join(','));
+        const d=ecrit['B@t.fr'].demandesMesure[0];
+        if(d.cle!=='deb-rotule'||!d.date||d.parQui!=='C6B')
+          return _echec('la demande groupée ne porte pas sa clé, sa date et son auteur : '+JSON.stringify(d));
+        // ⚠ ET ON NE REDEMANDE PAS A QUI A DEJA LA DEMANDE EN ATTENTE.
+        users['B@t.fr']=ecrit['B@t.fr'];
+        if(ccdManqueAutres('deb-rotule').length) return _echec('B est redemandé alors qu’il attend déjà');
+        if(demanderMesureATous('deb-rotule')!==0) return _echec('une seconde salve part quand même');
+        return true;
+      } finally { DB.get=sD; DB.set=sS; CLOUD.pushOne=sP; window.toastSync=sT; window.toast=sTo;
+        currentUser=sU; currentClientId=sC; }})());
 
     ok('LES CARTES DE ZONES COUVRENT LES MUSCLES DE CHAQUE VUE',(()=>{
       // Chaque silhouette porte sa carte : une image ou chaque pixel du corps

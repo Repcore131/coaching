@@ -4361,6 +4361,9 @@ html{scroll-behavior:smooth}
   -webkit-tap-highlight-color:transparent}
 .ccd-manque-b:focus-visible{outline:2px solid var(--red);outline-offset:1px}
 .ccd-manque-d{display:inline-flex;align-items:center;gap:8px;color:var(--text-faint)}
+/* LE SECOND BOUTON, celui qui vise toute la liste : meme forme, moins d'encre.
+   Le geste principal reste celui qui vise l'athlete ouvert. */
+.ccd-manque-tous{background:transparent;border-color:var(--border);color:var(--sub)}
 /* Chez l'athlete, la meme ligne sans bouton : il n'a rien a demander, il a
    quelque chose a mesurer. */
 .ccd-manque-a{margin:0 0 12px}

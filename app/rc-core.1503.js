@@ -13963,10 +13963,20 @@ function morphoInitialeARefaire(u){ return morphoInitialeEtat(u)!=='gelee'; }
  *   prise. Si sa photo ne passe pas le controle, on prend la plus recente qui
  *   existe : un os ne change pas de longueur entre deux bilans, et « seulement
  *   le premier bilan » ne doit pas vouloir dire « une seule chance ».
+ *
+ * ⚠ ET IL FAUT LES TROIS PHOTOS, PAS SEULEMENT CELLE DE FACE. Kevin, le
+ *   24/09/2026 : « garde le vert et le rouge et les 3 photos ». J'avais
+ *   declenche sur la seule photo que l'analyse LIT ; la regle est qu'un bilan
+ *   n'est complet qu'avec face, profil et dos, et une morphologie ne se gele
+ *   pas sur un bilan a moitie rempli. Un bilan qui n'en porte que deux est
+ *   saute ; l'etat reste « attente » et le suivant est essaye.
  * @returns {{src:string,date:number,depart:boolean}|null}
  */
 function morphoPhotoInitiale(u,rang){
   let bl=[]; try{ bl=(Array.isArray(u&&u.bilans)?u.bilans:[]).filter(b=>b&&b.date); }catch(e){ return null; }
+  bl=bl.filter(b=>{
+    try{ return BILP_VUES.every(v=>photoBilanExiste(b,v)); }catch(e){ return false; }
+  });
   if(!bl.length) return null;
   const dep=bl.filter(b=>b.type==='depart').sort((a,b)=>a.date-b.date);
   const reste=bl.filter(b=>b.type!=='depart').sort((a,b)=>b.date-a.date);
@@ -14032,7 +14042,7 @@ async function morphoAnalyserInitiale(u,rang){
   if(!u) return null;
   const photo=morphoPhotoInitiale(u,rang);
   if(!photo) return {etat:'attente',date:Date.now(),
-    raison:'aucune photo de face au dossier',essais:(((u.morphoInitiale||{}).essais)||0)+1};
+    raison:'aucun bilan ne porte les trois photos',essais:(((u.morphoInitiale||{}).essais)||0)+1};
   try{ await chargerMotionLab(); }catch(e){
     return {etat:'attente',date:Date.now(),raison:'le moteur de pose ne s’est pas chargé',
       essais:(((u.morphoInitiale||{}).essais)||0)+1};
@@ -42433,6 +42443,11 @@ function _htmlCorpsGraphes(u,o){
  *     teinte en ces termes ; si un jour elle doit tomber, c'est cette phrase-la
  *     qu'il faudra relire, pas le code.
  *
+ *     ⚠ ET C'EST ARBITRE, PAS SUBI. La relecture du lot 11 lui a pose la
+ *       question en face, le 24/09/2026 : « garde le vert et le rouge ». La
+ *       teinte reste, avec sa legende qui la borne. Personne n'a besoin de
+ *       rouvrir le sujet.
+ *
  * ⚠ DEUX COMPTEURS, ET ILS NE DISENT PAS LA MEME CHOSE depuis le 23/09/2026 :
  *   `etiquettes` compte ce qui est POSE sur le corps — toute mensuration
  *   mesuree, zeros compris — et `avecEcart` ce qui porte un ECART calcule.
@@ -43419,6 +43434,73 @@ function consommerDemandesMesure(bi,user){
   });
   return avant-u.demandesMesure.length;
 }
+/**
+ * PURE (au dossier pres). Les AUTRES athletes a qui la meme mesure manque, et
+ * qui n'ont pas deja la demande en attente.
+ *
+ * ⚠ POURQUOI CE BOUTON EXISTE. Kevin, 24/09/2026 : « reclamer la hauteur de
+ *   genou a tes athletes actuels ». Une mesure NEUVE manque a TOUT LE MONDE le
+ *   jour ou elle arrive : demander athlete par athlete, c'est autant de fois le
+ *   meme geste, et un coach de vingt eleves ne le fera pas. La regle reste
+ *   celle du lot 6 — une seule mesure a la fois, celle qui debloque le plus —
+ *   mais elle vaut pour toute la liste d'un coup.
+ *
+ * ⚠ UN ELEVE QUI N'A PAS ENCORE DE DOSSIER EST ECARTE : `_fromCode` n'est
+ *   qu'un code d'invitation, il n'y a personne au bout pour lire la demande.
+ * @returns {any[]}
+ */
+function ccdManqueAutres(cle){
+  const m=CCD_MANQUES.find(x=>x.cle===cle);
+  if(!m) return [];
+  let l=[]; try{ l=getClients()||[]; }catch(e){ return []; }
+  const moi=String(currentClientId||'');
+  return l.filter(c=>{
+    if(!c||c._fromCode||!c.email) return false;
+    if(String(c.id||'')===moi) return false;
+    const u=_dossier(c);
+    let femme=false;
+    try{ femme=isFemale((u._evol_gender||u.gender)||''); }catch(e){ femme=false; }
+    if(m.femme&&!femme) return false;
+    if(!_ccdManqueCette(u,m)) return false;
+    return !demandeMesurePour(cle,u);
+  });
+}
+/**
+ * La meme demande, a tous ceux a qui elle manque. UN SEUL GESTE DU COACH.
+ *
+ * ⚠ UNE SEULE ECRITURE LOCALE, UNE POUSSEE PAR DOSSIER. DB.set reecrit la
+ *   table entiere : la rappeler vingt fois ecrirait vingt fois le meme gros
+ *   objet. La poussee, elle, est par dossier — c'est le chemin des demandes de
+ *   video, et il ne change pas.
+ * ⚠ ET TOUJOURS AUCUNE NOTIFICATION : la demande attend dans l'app, a l'endroit
+ *   ou la mesure se saisit.
+ */
+function demanderMesureATous(cle){
+  const m=CCD_MANQUES.find(x=>x.cle===cle);
+  if(!m) return 0;
+  const users=DB.get('users')||{};
+  const liste=ccdManqueAutres(cle);
+  let n=0;
+  const envois=[];
+  for(const c of liste){
+    const d=users[c.email];
+    if(!d||!_estMonAthlete(d,currentUser)) continue;
+    if(demandeMesurePour(cle,d)) continue;
+    if(!Array.isArray(d.demandesMesure)) d.demandesMesure=[];
+    d.demandesMesure.push({cle:cle,date:Date.now(),parQui:(currentUser||{}).id});
+    d.updatedAt=Date.now();
+    users[c.email]=d;
+    envois.push([c.email,d]);
+    n++;
+  }
+  if(!n){ toast('Personne d’autre n’a besoin de cette mesure.','var(--orange)'); return 0; }
+  const ok=DB.set('users',users);
+  let envoi=Promise.resolve(true);
+  try{ envoi=Promise.all(envois.map(([e,d])=>CLOUD.pushOne(e,d))); }catch(e){}
+  try{ renderVerdictCoach(getOwnedClient(currentClientId)); }catch(e){}
+  toastSync(ok,envoi,'Mesure demandée à '+n+' athlète'+(n>1?'s':''),'les demandes sont');
+  return n;
+}
 // LA LIGNE DU COACH : la mesure, ce qu'elle debloque, et le geste.
 function _htmlCcdManque(c){
   const u=_dossier(c);
@@ -43426,12 +43508,24 @@ function _htmlCcdManque(c){
   let m=null; try{ m=ccdMesureManquante(u); }catch(e){ m=null; }
   if(!m) return '';
   const d=demandeMesurePour(m.cle,u);
+  // LES AUTRES A QUI ELLE MANQUE : le compte est DANS le bouton, pour que le
+  // clic soit informe. Une mesure neuve manque a tout le monde le jour ou elle
+  // arrive, et personne ne fera vingt fois le meme geste.
+  const autres=(function(){ try{ return ccdManqueAutres(m.cle); }catch(e){ return []; } })();
+  // ⚠ « AUX 1 AUTRE » NE SE DIT PAS. A un seul, on le nomme : c'est plus
+  //   court a lire, et ca dit exactement qui va recevoir la demande.
+  const libTous=(autres.length===1)
+    ?('La demander aussi à '+(String((autres[0]||{}).fname||'').trim()||'ton autre athlète'))
+    :('La demander aux '+autres.length+' autres');
   return '<p class="ccd-manque"><span class="ccd-manque-t">'
     +escapeHtml(ccdPhraseManque(m))+'</span>'
     +(d
       ?('<span class="ccd-manque-d">Demandé le '+escapeHtml(_ccdJour(d.date))+'.'
         +'<button type="button" class="ccd-out-r" onclick="annulerDemandeMesure(\''+m.cle+'\')">Retirer la demande</button></span>')
       :('<button type="button" class="ccd-manque-b" onclick="demanderMesure(\''+m.cle+'\')">Le lui demander</button>'))
+    +(autres.length?('<button type="button" class="ccd-manque-b ccd-manque-tous"'
+      +' onclick="demanderMesureATous(\''+m.cle+'\')">'
+      +escapeHtml(libTous)+'</button>'):'')
     +'</p>';
 }
 // ET LA LIGNE DE L'ATHLETE, sur son ecran de mensurations : il n'y a aucune
