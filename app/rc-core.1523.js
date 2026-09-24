@@ -18039,8 +18039,8 @@ function _texteSignal(type,c,sg){
     // « calibrage à refaire » ne dit pas au coach pourquoi il devrait s'en
     // occuper. Le RIR alimente l'e1RM, le plateau et ses propres consignes.
     return x.n===0
-      ? 'perception du RIR jamais mesurée après '+x.seances+' séances : ses RIR déclarés alimentent l\'e1RM et la détection de plateau sans avoir jamais été vérifiés.'
-      : 'dernier calibrage du RIR il y a '+Math.floor(x.jours/30)+' mois. La perception change avec l\'entraînement : le repère mérite d\'être repris.';
+      ? 'perception de l\'effort jamais mesurée après '+x.seances+' séances : ce qui est noté série par série sert à estimer ses maximums et à repérer les plateaux, sans avoir jamais été vérifié.'
+      : 'dernier calibrage de la perception de l\'effort il y a '+Math.floor(x.jours/30)+' mois. Elle change avec l\'entraînement : le repère mérite d\'être repris.';
   }
   if(type==='entrainement'){
     if(d.restrictionLongue) return 'sèche depuis '+d.restrictionLongue.semaines
@@ -18615,7 +18615,7 @@ function _lignesEntrainement(clients){
     // pour une douleur, un decrochage ou un plateau n'apparait pas ici : on ne
     // parle pas d'entretien a un coach qui a un probleme de sante a traiter.
     // Gris et non orange : rien ne va mal, il manque juste une mesure.
-    {type:'calibrage',  cle:'calibrageDu',   icon:icon('target',16),color:'var(--sub)',   lib:'Calibrage RIR à faire'},
+    {type:'calibrage',  cle:'calibrageDu',   icon:icon('target',16),color:'var(--sub)',   lib:'Calibrage de la perception à faire'},
     // ECHEANCE DE BLOC : une decision a prendre, pas une alerte. Dernier rang,
     // gris, et hors d'urgencyScore comme le calibrage — un bloc qui se termine
     // ne remonte personne dans la liste.
@@ -62084,8 +62084,8 @@ function _htmlRirMoyen(c){
     }
   }
   return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
-    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">RIR moyen · ${l.length} dernière${l.length>1?'s':''} séance${l.length>1?'s':''}</div>
-    <div style="font-size:var(--fs-xs);color:var(--text-strong)">${String(moy).replace('.',',')}${derive}${manquantes?`<span style="color:var(--text-faint)"> · ${manquantes} série${manquantes>1?'s':''} sans RIR, exclue${manquantes>1?'s':''} du calcul</span>`:''}</div>
+    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Intensité moyenne · ${l.length} dernière${l.length>1?'s':''} séance${l.length>1?'s':''}</div>
+    <div style="font-size:var(--fs-xs);color:var(--text-strong)">${String(moy).replace('.',',')}<span style="color:var(--sub)"> répétition${moy>=2?'s':''} en réserve</span>${derive}${manquantes?`<span style="color:var(--text-faint)"> · ${manquantes} série${manquantes>1?'s':''} sans intensité notée, exclue${manquantes>1?'s':''} du calcul</span>`:''}</div>
   </div>`;
 }
 // ══════ B3.1 — L'INTENSITE PRESCRITE CONTRE L'INTENSITE FAITE ══════════
@@ -62202,7 +62202,7 @@ function _htmlEcartRir(c){
     <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Intensité demandée · faite</div>
     ${(horsCible.length?horsCible:l).slice(0,RIR_ECART_MAX).map(ligne).join('')}
     ${horsCible.length?'':`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:5px">Tout est conforme à la consigne.</div>`}
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px;line-height:1.5">Un RIR plus haut que prescrit veut dire plus facile : il reste plus de répétitions en réserve. Sur les ${RIR_DERNIERES} dernières séances.</div>
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px;line-height:1.5">Un chiffre plus haut que la consigne veut dire plus facile : il reste plus de répétitions en réserve. Sur les ${RIR_DERNIERES} dernières séances.</div>
   </div>`;
 }
 // Cinq lignes au plus : au-dela, la carte devient une liste qu'on ne lit plus.
@@ -62252,7 +62252,7 @@ function _htmlFinProgEx(c){
       <span style="font-size:var(--fs-2xs);color:var(--orange);white-space:nowrap">${dit(x)}</span>
     </div>`).join('')}
     ${l.length>RIR_ECART_MAX?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:5px">et ${l.length-RIR_ECART_MAX} de plus</div>`:''}
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px;line-height:1.5">Sans nouvelle programmation, ces exercices repasseront en charge libre et l’athlète notera son RIR comme avant.</div>
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px;line-height:1.5">Sans nouvelle programmation, ces exercices repasseront en charge libre et l’athlète notera de nouveau ses répétitions en réserve, comme avant.</div>
   </div>`;
 }
 // Fiche coach : ce qui est prescrit contre ce qui est fait.
