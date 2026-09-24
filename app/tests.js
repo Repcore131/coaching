@@ -40220,6 +40220,105 @@ async function testExercices(){
           if(f==='{}'||!f) return _echec('aucune cible en flexible');
           return f===s?true:_echec('les deux dietes divergent :\n  flexible '+f+'\n  stricte  '+s);})());
 
+        // ── LE TABLEAU DU COACH ET L'ECRAN DE SON ATHLETE, MEME CHIFFRE ──
+        // Kevin, 24/09/2026 : « verifie et test le tableau de calcul
+        // alimentaire du coach, qu'il s'applique a chaque fois au programme
+        // diete stricte pour la conception de programme et a chaque fois a
+        // l'athlete [...] la synchro doit etre parfaite et instantanee [...] ce
+        // genre de soucis ne doit plus exister ».
+        //
+        // MESURE FAITE SUR DEUX APPAREILS (banc tableur-duo.mjs, 24/09/2026) :
+        // 64 gestes du coach, quatre combinaisons de diete et de journee, zero
+        // divergence, 0,5 s de mediane entre le geste et le chiffre affiche chez
+        // l'athlete. Ces assertions retiennent ce que le banc a prouve, la ou
+        // personne n'a besoin de lancer un banc pour le savoir.
+        ok('APRES CHAQUE REGLAGE, AUCUNE « CIBLES PAS A JOUR »',(()=>{
+          // `ecartCiblesTableur` est la sonde de la banniere orange du
+          // composeur : elle compare le CALCUL de la fiche a ce qui est
+          // ENREGISTRE dans le dossier. Non nulle, elle dit que le coach vise un
+          // chiffre et que son athlete en a recu un autre. AUCUNE assertion ne
+          // la gardait avant ce jour, et c'est pourtant le symptome exact dont
+          // Kevin se plaignait : « elle n'a pas les meme chiffre que le coach ».
+          poser({});
+          for(const g of [['naf','1.6'],['coef','0.75'],['protGkg','2'],
+                          ['lipGkg','1.1'],['coef','0.7'],['naf','1.375']]){
+            majTableauTableur(g[0],g[1]);
+            const e=ecartCiblesTableur(getOwnedClient('A9'));
+            if(e) return _echec('« Cibles pas a jour » apres '+g[0]+'='+g[1]
+              +' : le calcul dit '+e.calc+', le dossier porte '+e.enregistre);
+          }
+          return true;})());
+
+        ok('CE QUE LE COACH ECRIT EST CE QUE L\'ATHLETE LIT, JOUR PAR JOUR',(()=>{
+          // `planCiblesJour` est la porte de DEUX ecrans : le composeur de plan
+          // du coach et le programme que l'athlete consulte en diete stricte.
+          // Elle doit rendre le chiffre de la grille du coach POUR LA JOURNEE
+          // CONCERNEE : un jour de repos lit la colonne repos, et confondre les
+          // deux ferait manger a l'athlete la ration d'un autre jour.
+          poser({});
+          majTableauTableur('coef','0.8');
+          const c=getOwnedClient('A9');
+          const m=((c.nutrition||{}).macros)||{};
+          if(!(Number((m.on||{}).kcal)>0)||!(Number((m.off||{}).kcal)>0))
+            return _echec('les deux journees ne sont pas ecrites : '+JSON.stringify(m));
+          for(const paire of [[true,'on'],[false,'off']]){
+            const j=planCiblesJour(c,paire[0],null), col=m[paire[1]];
+            if(Math.abs(Number(j.kcal)-Number(col.kcal))>2)
+              return _echec('le plan vise '+j.kcal+' la ou la grille dit '+col.kcal
+                +' (jour '+paire[1]+')');
+            if(Math.abs(Number(j.p)-Number(col.p))>2)
+              return _echec('les proteines divergent le jour '+paire[1]+' : '
+                +j.p+' contre '+col.p);
+            if(Math.abs(Number(j.c)-Number(col.g))>2)
+              return _echec('les glucides divergent le jour '+paire[1]+' : '
+                +j.c+' contre '+col.g);
+          }
+          return true;})());
+
+        ok('SA CARTE « MES CIBLES » LIT LA BONNE COLONNE',(()=>{
+          // `ciblesEnVigueur` est la porte de l'ecran flexible. Elle choisit la
+          // journee par `nutIsOnDay` : l'assertion fait le MEME choix plutot que
+          // de figer une colonne, sinon elle dirait le contraire d'elle-meme un
+          // jour sur deux selon le jour de la semaine ou la suite tourne.
+          poser({});
+          majTableauTableur('coef','0.8');
+          const c=getOwnedClient('A9');
+          const m=((c.nutrition||{}).macros)||{};
+          const v=ciblesEnVigueur(c,null);
+          if(!v) return _echec('sa carte ne rend plus rien');
+          const col=m[nutIsOnDay(localISODate(new Date()),c)?'on':'off'];
+          if(Math.abs(Number(v.kcal)-Number(col.kcal))>2)
+            return _echec('sa carte affiche '+v.kcal+' la ou la grille dit '+col.kcal);
+          // ET LES TROIS MACROS AVEC : un total juste sur des grammes faux
+          // laisserait l'athlete composer ses repas de travers.
+          if(Math.abs(Number(v.p)-Number(col.p))>2
+            ||Math.abs(Number(v.g)-Number(col.g))>2
+            ||Math.abs(Number(v.l)-Number(col.l))>2)
+            return _echec('les grammes divergent : '+JSON.stringify(v)
+              +' contre '+JSON.stringify(col));
+          return true;})());
+
+        ok('EN SAISIE MANUELLE, C\'EST LE CHIFFRE TAPE QUI ARRIVE',(()=>{
+          // Le chemin manuel ne passe pas par le calcul : `planCiblesJour` doit
+          // rendre EXACTEMENT ce que le coach a tape, sans le recalculer au
+          // passage. Le banc l'a verifie a l'ecran (2 150 kcal tapes le jour
+          // d'entrainement, 1 800 le jour de repos, les deux lus sur son
+          // telephone) ; ici on le verifie sans navigateur.
+          poser({manuel:true,macros:{on:{kcal:2150,p:160,g:270,l:70,f:30},
+                                     off:{kcal:1800,p:160,g:185,l:65,f:25}}});
+          const c=getOwnedClient('A9');
+          const on=planCiblesJour(c,true,null), off=planCiblesJour(c,false,null);
+          if(Number(on.kcal)!==2150)
+            return _echec('le jour d\'entrainement vise '+on.kcal+' au lieu de 2150');
+          if(Number(off.kcal)!==1800)
+            return _echec('le jour de repos vise '+off.kcal+' au lieu de 1800');
+          if(Number(on.p)!==160||Number(on.c)!==270||Number(on.l)!==70)
+            return _echec('les grammes tapes ont ete recalcules : '+JSON.stringify(on));
+          // ET LA BANNIERE ORANGE NE SORT PAS : en manuel, l'ecart au calcul est
+          // voulu par le coach, ce n'est pas un retard de synchro.
+          return ecartCiblesTableur(c)===null
+            ?true:_echec('« Cibles pas a jour » sort sur une saisie manuelle');})());
+
         ok('ACTIVER LE CYCLAGE RECALCULE LES DEUX JOURNEES',(()=>{
           // ⚠ LA RECOPIE NE REGLAIT QU'UN SENS. En ARRETANT le cyclage, ON etait
           //   recopie sur OFF ; en l'ACTIVANT, rien ne recalculait — le tableau
