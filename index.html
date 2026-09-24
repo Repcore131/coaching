@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>RepCore : la bonne charge, à chaque série | App de musculation</title>
-<meta name="description" content="L'app de musculation qui te propose la bonne charge à chaque série. 500 exercices filmés, nutrition Ciqual hors ligne, suivi du cycle, espace coach. 1 mois d'essai offert, sans carte bancaire.">
+<meta name="description" content="L'application de musculation qui réunit tout : séance avec la bonne charge à chaque série, nutrition (scan, recherche, photo d'étiquette), sommeil, pas, et ton coach. 500 exercices filmés et expliqués. 1 mois d'essai offert.">
 <link rel="canonical" href="https://repcore131.github.io/coaching/">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://repcore131.github.io/coaching/">
@@ -310,7 +310,7 @@ header{padding:56px 0 72px;overflow:hidden;
 .hero .visuel{position:relative;display:flex;justify-content:center}
 .hero .b1{top:47%;left:-10%}
 .hero .b2{bottom:16%;right:-2%}
-.auteur{display:inline-flex;align-items:center;gap:12px;margin-top:26px;text-decoration:none;color:#bdbdbd;font-size:13.5px}
+.auteur{display:inline-flex;align-items:center;gap:12px;margin-top:30px;text-decoration:none;color:#bdbdbd;font-size:13.5px}
 .auteur img{width:48px;height:48px;border-radius:50%;border:2px solid var(--red)}
 .auteur b{color:#fff}
 /* ---------- preuves ---------- */
@@ -318,7 +318,7 @@ header{padding:56px 0 72px;overflow:hidden;
 .preuves .wrap{display:grid;grid-template-columns:repeat(4,1fr)}
 .preuve{padding:26px 16px;text-align:center;border-left:1px solid var(--border)}
 .preuve:first-child{border-left:0}
-.preuve b{display:block;font-family:'Bebas Neue',var(--pile-titre);font-size:34px;letter-spacing:1px;color:#fff;line-height:1}
+.preuve b{display:block;font-family:'Bebas Neue',var(--pile-titre);font-size:32px;letter-spacing:1px;color:#fff;line-height:1}
 .preuve span{font-size:12px;color:var(--dim);letter-spacing:.5px}
 /* ---------- douleurs ---------- */
 .douleurs{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:36px}
@@ -354,6 +354,80 @@ ul.coches li::before{content:'';position:absolute;left:0;top:4px;width:17px;heig
   box-shadow:0 0 30px rgba(224,32,32,.35);flex-shrink:0}
 .portrait q{font-style:italic;color:#cfcfcf;font-size:15px;quotes:'« ' ' »';display:block}
 .portrait small{display:block;margin-top:6px;font-size:12px;color:var(--red-light);font-style:normal;font-weight:800;letter-spacing:1.5px;text-transform:uppercase}
+/* ---------- eparpillement ---------- */
+.eparpille{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin:34px auto 0;max-width:760px}
+.eparpille span{background:#121212;border:1px dashed #333;border-radius:999px;padding:9px 15px;font-size:13.5px;color:#aaa;
+  transform:rotate(var(--r,0deg));animation:derive 5s ease-in-out infinite alternate}
+.eparpille span:nth-child(odd){--r:-2deg;animation-delay:-1.5s}.eparpille span:nth-child(3n){--r:2.5deg;animation-delay:-3s}
+@keyframes derive{to{transform:rotate(calc(var(--r,0deg) * -1)) translateY(-4px)}}
+.fleche{font-size:28px;color:var(--red);margin:18px 0 12px}
+.reuni{display:inline-flex;align-items:center;gap:16px;text-align:left;background:linear-gradient(120deg,#1a0b0b,#111);
+  border:1px solid rgba(224,32,32,.55);border-radius:16px;padding:18px 22px;max-width:620px;box-shadow:0 20px 50px -20px rgba(224,32,32,.45)}
+.reuni img{width:44px;height:44px;border-radius:10px}
+.reuni b{display:block;color:#fff;font-size:17px}.reuni span{font-size:14px;color:#bdbdbd}
+/* ---------- piliers ---------- */
+.piliers{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:26px}
+.piliers a{display:inline-flex;align-items:center;gap:8px;text-decoration:none;color:#ddd;font-size:13.5px;font-weight:700;
+  background:#111;border:1px solid #262626;border-radius:999px;padding:9px 16px}
+.piliers a:hover{border-color:var(--red);color:#fff}
+.piliers i{font-style:normal}
+/* ---------- nutrition (maquette animee) ---------- */
+.nutri-scene{position:relative;padding:10px 40px}
+.nutri-tel{background:linear-gradient(145deg,#2a2a2a,#0e0e0e)}
+.nm{position:absolute;inset:9px;border-radius:36px;background:#0b0b0b;overflow:hidden;padding:44px 16px 16px;
+  font-size:11px;color:#ddd;display:flex;flex-direction:column;gap:10px;text-align:left}
+.nm-top{display:flex;justify-content:space-between;align-items:center;font-family:'Bebas Neue',var(--pile-titre);font-size:18px;letter-spacing:1.5px;color:#fff}
+.nm-mode{display:flex;background:#161616;border:1px solid #262626;border-radius:999px;padding:2px;font-family:Montserrat,var(--pile-sans);letter-spacing:0}
+.nm-mode b{font-size:9.5px;padding:4px 8px;border-radius:999px;color:#999;animation:mode 10.5s infinite}
+.nm-mode b.on{animation-name:mode-on}
+@keyframes mode-on{0%,62%{background:var(--red);color:#fff}66%,96%{background:none;color:#999}100%{background:var(--red);color:#fff}}
+@keyframes mode{0%,62%{background:none;color:#999}66%,96%{background:var(--red);color:#fff}100%{background:none;color:#999}}
+.nm-kcal{display:flex;align-items:center;gap:14px;background:#121212;border:1px solid #1f1f1f;border-radius:14px;padding:10px 12px}
+.nm-kcal svg{width:62px;height:62px;transform:rotate(-90deg)}
+.nm-fond{fill:none;stroke:#222;stroke-width:12}
+.nm-arc{fill:none;stroke:var(--red);stroke-width:12;stroke-linecap:round;stroke-dasharray:314;stroke-dashoffset:314;animation:arc 3.5s ease-out infinite}
+@keyframes arc{0%{stroke-dashoffset:314}45%,100%{stroke-dashoffset:52}}
+.nm-kcal b{display:block;font-family:'Bebas Neue',var(--pile-titre);font-size:26px;color:#fff;letter-spacing:1px;line-height:1}
+.nm-kcal span{color:#999}
+.nm-macros{display:flex;flex-direction:column;gap:6px}
+.nm-macros div{display:grid;grid-template-columns:58px 1fr 70px;align-items:center;gap:8px}
+.nm-macros span{color:#aaa}.nm-macros b{text-align:right;color:#fff;font-weight:700;font-size:10px}
+.nm-macros i{height:6px;background:#1c1c1c;border-radius:9px;overflow:hidden}
+.nm-macros em{display:block;height:100%;width:calc(var(--v)*100%);background:var(--c);border-radius:9px;transform-origin:left;animation:barre 3.5s ease-out infinite}
+@keyframes barre{0%{transform:scaleX(0)}45%,100%{transform:scaleX(1)}}
+.nm-ajout{background:#121212;border:1px solid rgba(224,32,32,.4);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.nm-onglets{display:flex;gap:6px}
+.nm-onglets b{flex:1;text-align:center;font-size:10px;padding:6px 0;border-radius:8px;background:#1a1a1a;color:#888;animation:onglet 10.5s infinite}
+.nm-onglets .o2{animation-delay:-7s}.nm-onglets .o3{animation-delay:-3.5s}
+@keyframes onglet{0%,31%{background:var(--red);color:#fff}34%,100%{background:#1a1a1a;color:#888}}
+.nm-panneaux{position:relative;height:118px}
+.pn{position:absolute;inset:0;opacity:0;animation:panneau 10.5s infinite;display:flex;flex-direction:column;gap:8px}
+.p2{animation-delay:-7s}.p3{animation-delay:-3.5s}
+@keyframes panneau{0%{opacity:0;transform:translateY(6px)}3%,30%{opacity:1;transform:none}33%,100%{opacity:0}}
+.code{position:relative;height:56px;border-radius:8px;background:#fff;overflow:hidden;
+  background-image:repeating-linear-gradient(90deg,#111 0 2px,#fff 2px 4px,#111 4px 5px,#fff 5px 8px,#111 8px 11px,#fff 11px 12px);background-size:auto 70%;background-repeat:repeat-x;background-position:center}
+.laser{position:absolute;left:0;right:0;height:2px;background:#ff2d2d;box-shadow:0 0 10px 2px rgba(255,45,45,.8);animation:laser 1.2s ease-in-out infinite alternate}
+@keyframes laser{from{top:8%}to{top:88%}}
+.res{background:#181818;border-radius:8px;padding:7px 9px}.res b{display:block;color:#fff;font-size:11.5px}.res span{color:#9a9a9a;font-size:10px}
+.champ{background:#181818;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#fff}
+.tape{display:inline-block;overflow:hidden;white-space:nowrap;border-right:2px solid var(--red);width:0;animation:tape 3.5s steps(11) infinite}
+@keyframes tape{0%{width:0}40%,100%{width:11ch}}
+.liste{display:flex;flex-direction:column;gap:4px}.liste span{background:#181818;border-radius:6px;padding:5px 8px;color:#bbb;font-size:10px}
+.liste b{color:#fff}
+.etiq{position:relative;background:#f4f1ea;color:#222;border-radius:8px;padding:6px 10px;display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;font-size:10px;overflow:hidden}
+.etiq span{display:flex;justify-content:space-between;border-bottom:1px solid #d8d2c4}
+.balaye{position:absolute;left:0;right:0;top:0;height:30%;background:linear-gradient(transparent,rgba(224,32,32,.35),transparent);animation:balaye 1.4s linear infinite}
+@keyframes balaye{from{transform:translateY(-100%)}to{transform:translateY(340%)}}
+.nm-repas{display:flex;justify-content:space-between;background:#121212;border:1px solid #1f1f1f;border-radius:10px;padding:8px 10px}
+.nm-repas b{color:#fff}
+.flotte{position:absolute;font-size:34px;filter:drop-shadow(0 8px 14px rgba(0,0,0,.6));animation:flotte 6s ease-in-out infinite alternate;z-index:3}
+.f1{top:6%;left:0}.f2{top:30%;right:-2%;animation-delay:-2s}.f3{bottom:26%;left:-4%;animation-delay:-4s}
+.f4{bottom:6%;right:4%;animation-delay:-1s}.f5{top:-2%;right:18%;animation-delay:-3s;font-size:28px}.f6{top:52%;left:4%;animation-delay:-5s;font-size:28px}
+@keyframes flotte{from{transform:translateY(0) rotate(-6deg)}to{transform:translateY(-14px) rotate(8deg)}}
+/* ---------- vie ---------- */
+.vie{margin-top:40px;padding-top:40px;border-top:1px dashed #1c1c1c}
+.vie-t{font-size:clamp(26px,3.6vw,38px);margin-top:12px}
+.tuile .ico{font-size:22px}
 /* ---------- tuiles ---------- */
 .tuiles{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:36px}
 .tuile{background:linear-gradient(160deg,#141414,#0d0d0d);border:1px solid var(--border);border-radius:16px;padding:28px}
@@ -463,6 +537,8 @@ footer a{color:var(--dim);margin:0 8px}
   .nav .lien.garde{display:inline}
   .tuiles,.paliers{grid-template-columns:1fr}
   .bulle{font-size:11.5px;max-width:170px;padding:8px 11px}
+  .nutri-scene{padding:10px 18px}.flotte{font-size:26px}
+  .piliers a{font-size:12.5px;padding:8px 12px}
   .bulle b{font-size:13.5px}
   .hero .b1{left:0;top:auto;bottom:4%}.hero .b2,.fonction .bulle{display:none}
   .prix .offre:first-child{order:2}
@@ -471,7 +547,8 @@ footer a{color:var(--dim);margin:0 8px}
   .portrait{gap:14px}.portrait img{width:76px;height:76px}.portrait q{font-size:14px}
   .ancre .ligne{flex-direction:column;gap:2px}
 }
-@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.cta,.barre{transition:none}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.cta,.barre{transition:none}
+  .nutri-scene *,.eparpille span{animation:none!important}.p1{opacity:1}.nm-arc{stroke-dashoffset:52}.tape{width:11ch}}
 </style>
 </head>
 <body>
@@ -492,14 +569,13 @@ footer a{color:var(--dim);margin:0 8px}
       <div>
         <p class="eyebrow">Application de musculation · créée par un coach</p>
         <h1>La bonne charge,<em>à chaque série.</em></h1>
-        <p class="sub">RepCore se souvient de ce que tu as soulevé la dernière fois et te propose la suite.
-          Tu t'entraînes, tu progresses, et ton coach voit tout. Plus de carnet, plus de tableur,
-          plus de « c'était combien déjà&nbsp;? ».</p>
+        <p class="sub">Ta séance, ta nutrition, ton sommeil et ton coach, enfin dans une seule application.
+          RepCore se souvient de ce que tu as soulevé la dernière fois et te propose la suite.
+          Tu t'entraînes, tu manges juste, et tu te vois évoluer chaque semaine.</p>
         <div class="ctas">
           <a class="cta" href="app/#install">Essayer gratuitement 1&nbsp;mois</a>
           <a class="cta ghost" href="app/">J'ai un code coach</a>
         </div>
-        <div class="rassure"><span>Sans carte bancaire</span><span>Sans engagement</span><span>Marche hors ligne en salle</span></div>
         <a class="auteur" href="#coaching"><img src="app/img/vente/kevin-96.webp" width="48" height="48" alt="">
           <span>Créée par <b>Kevin Guellec</b>, coach diplômé d'État</span></a>
       </div>
@@ -515,25 +591,26 @@ footer a{color:var(--dim);margin:0 8px}
 
 <div class="preuves" role="list">
   <div class="wrap">
-    <div class="preuve" role="listitem"><b>500</b><span>exercices filmés</span></div>
-    <div class="preuve" role="listitem"><b>3&nbsp;484</b><span>aliments ANSES-Ciqual</span></div>
-    <div class="preuve" role="listitem"><b>100&nbsp;%</b><span>utilisable sans réseau</span></div>
-    <div class="preuve" role="listitem"><b>1&nbsp;mois</b><span>d'essai complet offert</span></div>
+    <div class="preuve" role="listitem"><b>4 en 1</b><span>entraînement · nutrition · vie · coach</span></div>
+    <div class="preuve" role="listitem"><b>500</b><span>exercices filmés et expliqués</span></div>
+    <div class="preuve" role="listitem"><b>3 façons</b><span>d'ajouter un aliment : scan, recherche, photo</span></div>
+    <div class="preuve" role="listitem"><b>Chaque semaine</b><span>tes chiffres, ta progression</span></div>
   </div>
 </div>
 
 <section id="probleme">
   <div class="wrap center">
     <p class="eyebrow">Tu te reconnais&nbsp;?</p>
-    <h2>Tu t'entraînes dur.<br><em>Mais tu progresses à l'aveugle.</em></h2>
-    <div class="douleurs">
-      <div class="douleur"><q>« J'avais mis combien la semaine dernière&nbsp;? »</q>
-        <p>Tu recharges au feeling, trop léger ou trop lourd. <strong>RepCore te propose la charge</strong>, calculée sur ta séance précédente du même jour.</p></div>
-      <div class="douleur"><q>« Mon programme, c'est une photo dans ma galerie. »</q>
-        <p>Tu zoomes entre deux séries. <strong>Photographie ta fiche une fois</strong> : les exercices se remplissent seuls.</p></div>
-      <div class="douleur"><q>« Certains jours, rien ne passe. »</q>
-        <p>Ce n'est pas toujours la motivation. <strong>Active le suivi du cycle</strong> : les charges s'ajustent à la phase que tu déclares.</p></div>
+    <h2>Une appli pour la diète. Une pour la muscu.<br><em>Une pour ton coach. Tu t'y perds.</em></h2>
+    <p class="lead">Ton programme est dans un PDF, tes repas dans une autre appli, tes charges dans tes notes,
+      ton sommeil sur ta montre, et ton coach sur WhatsApp. Rien ne se parle, et tu ne vois jamais l'ensemble.</p>
+    <div class="eparpille" aria-hidden="true">
+      <span>📋 Programme en PDF</span><span>🍽️ Appli de calories</span><span>📝 Notes de charges</span>
+      <span>😴 Appli sommeil</span><span>👣 Podomètre</span><span>💬 WhatsApp du coach</span>
     </div>
+    <div class="fleche" aria-hidden="true">↓</div>
+    <div class="reuni"><img src="app/img/vente/logo-72.webp" width="44" height="44" alt="">
+      <div><b>RepCore réunit tout.</b><span>Séance, nutrition, sommeil, pas, bilans et coach, au même endroit, et qui se parlent enfin.</span></div></div>
   </div>
 </section>
 
@@ -541,12 +618,17 @@ footer a{color:var(--dim);margin:0 8px}
   <div class="wrap">
     <div class="center">
       <p class="eyebrow">Comment ça marche</p>
-      <h2>Tout ton entraînement.<br><em>Une seule app.</em></h2>
+      <h2>Tout est réuni.<br><em>Dans une seule application.</em></h2>
     </div>
+    <nav class="piliers" aria-label="Ce que réunit RepCore">
+      <a href="#p-seance"><i>🏋️</i>Carnet de séance</a><a href="#p-nutrition"><i>🥗</i>Nutrition</a>
+      <a href="#p-exercices"><i>🎥</i>Exercices expliqués</a><a href="#p-coach"><i>🎯</i>Coach et correction</a>
+      <a href="#p-vie"><i>😴</i>Sommeil et pas</a><a href="#p-evolution"><i>📈</i>Évolution</a>
+    </nav>
 
-    <div class="fonction">
+    <div class="fonction" id="p-seance">
       <div class="texte">
-        <span class="badge gris">Séance</span>
+        <span class="badge gris">Carnet de séance</span>
         <h3>Ouvre ta séance.<br>Tout est prêt.</h3>
         <p>Tes exercices, tes séries, tes temps de repos et la vidéo de chaque mouvement. Tu n'as plus qu'à pousser.</p>
         <ul class="coches">
@@ -563,49 +645,61 @@ footer a{color:var(--dim);margin:0 8px}
       </div>
     </div>
 
-    <div class="fonction inverse">
+    <div class="fonction inverse" id="p-nutrition">
       <div class="texte">
-        <span class="badge">Ultime</span>
-        <h3>Vois où ton programme<br>travaille vraiment.</h3>
-        <p>La carte du corps colore chaque muscle selon le volume que ton programme lui donne. Tu vois d'un coup d'œil ce qui est sous-travaillé et ce qui est en trop.</p>
+        <span class="badge">Nutrition</span>
+        <h3>Ta nutrition, au même endroit<br>que ta séance.</h3>
+        <p>Diète flexible ou plan strict, c'est toi (ou ton coach) qui choisis. Tu ajoutes tes aliments en deux secondes, tes macros se remplissent, et ta journée se lit d'un coup d'œil.</p>
         <ul class="coches">
-          <li>Volume par muscle, vue avant et vue arrière</li>
-          <li>Mensurations et tour de taille reliés à ta silhouette</li>
-          <li>Poids, masse grasse et photos, semaine après semaine</li>
+          <li><strong>Scanne le code-barres</strong> d'un produit, ses valeurs arrivent seules</li>
+          <li><strong>Cherche</strong> dans les bases d'aliments, même sans réseau</li>
+          <li><strong>Prends l'étiquette en photo</strong> : l'application lit les valeurs nutritionnelles</li>
+          <li>Diète <strong>flexible</strong> (tes macros) ou <strong>stricte</strong> (ton plan repas), plus tes compléments</li>
         </ul>
       </div>
       <div class="visuel">
-        <div class="tel"><img src="app/img/vente/evolution-corps.webp" srcset="app/img/vente/evolution-corps-300.webp 300w, app/img/vente/evolution-corps.webp 600w" sizes="(max-width:640px) 78vw, 300px" width="600" height="1299" loading="lazy"
-          alt="Écran Évolution : silhouette colorée selon le volume par muscle, tour de taille moins quatre centimètres"></div>
-        <div class="bulle b4"><b>−4 cm de taille</b>sur 8 semaines, affiché sur la silhouette</div>
+        <div class="nutri-scene" aria-label="Illustration : journal nutrition RepCore, ajout d'aliments par scan, recherche et photo d'étiquette">
+          <span class="flotte f1" aria-hidden="true">🥑</span><span class="flotte f2" aria-hidden="true">🍗</span>
+          <span class="flotte f3" aria-hidden="true">🍚</span><span class="flotte f4" aria-hidden="true">🥚</span>
+          <span class="flotte f5" aria-hidden="true">🍓</span><span class="flotte f6" aria-hidden="true">🥛</span>
+          <div class="tel nutri-tel">
+            <div class="nm">
+              <div class="nm-top"><span>Aujourd'hui</span><span class="nm-mode"><b class="on">Flexible</b><b>Stricte</b></span></div>
+              <div class="nm-kcal"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="50" class="nm-fond"/><circle cx="60" cy="60" r="50" class="nm-arc"/></svg>
+                <div><b class="nm-n">1 840</b><span>/ 2 200 kcal</span></div></div>
+              <div class="nm-macros">
+                <div><span>Protéines</span><i><em style="--v:.86;--c:#e02020"></em></i><b>138 / 160 g</b></div>
+                <div><span>Glucides</span><i><em style="--v:.74;--c:#f59e0b"></em></i><b>196 / 265 g</b></div>
+                <div><span>Lipides</span><i><em style="--v:.81;--c:#3b82f6"></em></i><b>57 / 70 g</b></div>
+              </div>
+              <div class="nm-ajout">
+                <div class="nm-onglets"><b class="o1">Scan</b><b class="o2">Recherche</b><b class="o3">Photo</b></div>
+                <div class="nm-panneaux">
+                  <div class="pn p1"><div class="code"><i></i><span class="laser"></span></div>
+                    <div class="res"><b>Skyr nature</b><span>150 g · 90 kcal · 15 g de protéines</span></div></div>
+                  <div class="pn p2"><div class="champ"><span class="tape">poulet rôti</span></div>
+                    <div class="liste"><span>Poulet rôti, blanc · <b>150 kcal</b></span><span>Riz basmati cuit · <b>130 kcal</b></span><span>Avocat · <b>160 kcal</b></span></div></div>
+                  <div class="pn p3"><div class="etiq"><span>Énergie <b>389 kcal</b></span><span>Protéines <b>13 g</b></span><span>Glucides <b>60 g</b></span><span>Lipides <b>7 g</b></span><i class="balaye"></i></div>
+                    <div class="res"><b>Flocons d'avoine</b><span>valeurs lues sur l'étiquette</span></div></div>
+                </div>
+              </div>
+              <div class="nm-repas"><span>🍳 Petit-déjeuner</span><b>520 kcal</b></div>
+              <div class="nm-repas"><span>🥗 Déjeuner</span><b>740 kcal</b></div>
+              <div class="nm-repas"><span>🍎 Collation</span><b>210 kcal</b></div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="fonction">
+    <div class="fonction" id="p-exercices">
       <div class="texte">
         <span class="badge">Ultime</span>
-        <h3>Ta progression,<br>chiffrée.</h3>
-        <p>Chaque exercice a sa courbe. Tu sais si tu avances, si tu stagnes, et depuis quand. Plus de doute, plus d'impression : des chiffres.</p>
-        <ul class="coches">
-          <li>Maximum estimé (e1RM) par exercice</li>
-          <li>Records et régularité : séances faites sur séances prévues</li>
-          <li>Rapport de période complet, à montrer à ton coach</li>
-        </ul>
-      </div>
-      <div class="visuel">
-        <div class="tel"><img src="app/img/vente/progression.webp" srcset="app/img/vente/progression-300.webp 300w, app/img/vente/progression.webp 600w" sizes="(max-width:640px) 78vw, 300px" width="600" height="1299" loading="lazy"
-          alt="Écran Perfs : vingt-quatre séances, soixante-quinze pour cent réalisées, courbes de progression par exercice"></div>
-        <div class="bulle b3"><b>+20 kg d'e1RM</b>à la presse, en 8 semaines</div>
-      </div>
-    </div>
-    <div class="fonction inverse">
-      <div class="texte">
-        <span class="badge">Ultime</span>
-        <h3>500 exercices filmés.<br>Le geste juste, montré.</h3>
-        <p>Chaque mouvement de ton programme a sa vidéo, tournée en salle. Placement, amplitude, tempo : tu vois le geste avant de le faire, au moment où tu en as besoin.</p>
+        <h3>500 exercices filmés<br>et vraiment expliqués.</h3>
+        <p>Chaque mouvement a sa vidéo, tournée en salle, et sa vraie explication : placement, trajet de la charge, amplitude, tempo, respiration. Tu comprends le geste avant de le faire.</p>
         <ul class="coches">
           <li>La vidéo s'ouvre depuis ta séance, sur l'exercice en cours</li>
-          <li>Les erreurs à éviter, pour chaque mouvement</li>
+          <li>L'explication pas à pas, et les erreurs à éviter</li>
           <li>Méthodes d'intensification et échauffements tout faits</li>
         </ul>
       </div>
@@ -616,7 +710,7 @@ footer a{color:var(--dim);margin:0 8px}
       </div>
     </div>
 
-    <div class="fonction">
+    <div class="fonction inverse" id="p-coach">
       <div class="texte">
         <span class="badge">Avec ton coach</span>
         <h3>Ta technique corrigée,<br>image par image.</h3>
@@ -624,7 +718,8 @@ footer a{color:var(--dim);margin:0 8px}
         <ul class="coches">
           <li>Angles articulaires et trajectoires dessinés sur ta vidéo</li>
           <li>Mesures d'amplitude, pas des impressions</li>
-          <li>La correction revient dans l'app, à côté de l'exercice</li>
+          <li>La correction revient dans l'application, à côté de l'exercice</li>
+          <li>Et tes échanges avec ton coach, sans passer par une autre messagerie</li>
         </ul>
       </div>
       <div class="visuel">
@@ -639,21 +734,36 @@ footer a{color:var(--dim);margin:0 8px}
     </div>
     <p class="demo">Captures réelles de l'application (profil de démonstration). Vidéos tournées par Kevin.</p>
 
-    <div class="tuiles">
-      <div class="tuile">
-        <div class="ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e96363" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
-        <h3>Ta fiche papier devient une séance</h3>
-        <p>Une photo, et ton programme est dans l'app. Tu relis et tu corriges avant de valider : rien ne s'écrit sans toi. La photo reste sous tes yeux pendant la séance.</p>
+    <div class="fonction" id="p-evolution">
+      <div class="texte">
+        <span class="badge">Ultime</span>
+        <h3>Tu évolues avec l'application,<br>semaine après semaine.</h3>
+        <p>Chaque semaine, tes chiffres te disent où tu en es : ta courbe par exercice, ton poids, tes mensurations, et le volume que ton programme donne à chaque muscle. Tu ne progresses plus à l'impression.</p>
+        <ul class="coches">
+          <li>Maximum estimé (e1RM) et records, exercice par exercice</li>
+          <li>Carte du corps : volume par muscle, vue avant et vue arrière</li>
+          <li>Poids, tour de taille, masse grasse et photos, reliés à ta silhouette</li>
+          <li>Bilans réguliers et rapport de période, à revoir avec ton coach</li>
+        </ul>
       </div>
-      <div class="tuile">
-        <div class="ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e96363" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18"/></svg></div>
-        <h3>Ton programme suit ton cycle</h3>
-        <p>Tu déclares où tu en es, les charges et le volume suivent. Ce que tu ressens aujourd'hui passe avant le calendrier. Désactivé tant que tu ne l'actives pas.</p>
+      <div class="visuel duo">
+        <div class="tel"><img src="app/img/vente/progression.webp" srcset="app/img/vente/progression-300.webp 300w, app/img/vente/progression.webp 600w" sizes="(max-width:640px) 42vw, 250px" width="600" height="1299" loading="lazy"
+          alt="Écran Perfs : courbes de progression par exercice"></div>
+        <div class="tel"><img src="app/img/vente/evolution-corps.webp" srcset="app/img/vente/evolution-corps-300.webp 300w, app/img/vente/evolution-corps.webp 600w" sizes="(max-width:640px) 42vw, 250px" width="600" height="1299" loading="lazy"
+          alt="Écran Évolution : silhouette colorée selon le volume par muscle"></div>
       </div>
-      <div class="tuile">
-        <div class="ico" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e96363" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></svg></div>
-        <h3>Nutrition, même hors ligne</h3>
-        <p>La base ANSES-Ciqual (3&nbsp;484 aliments) est dans ton téléphone. Journal, totaux du jour, et avec Ultime ta diète calculée et ton plan de compléments.</p>
+    </div>
+
+    <div class="vie" id="p-vie">
+      <div class="center"><span class="badge gris">Ta vie, pas seulement ta séance</span>
+        <h3 class="vie-t">Ce qui se passe hors de la salle<br>compte aussi.</h3></div>
+      <div class="tuiles">
+        <div class="tuile"><div class="ico" aria-hidden="true">😴</div><h3>Ton sommeil</h3>
+          <p>Tes nuits notées au même endroit que tes séances. Ton coach voit si la fatigue vient de là.</p></div>
+        <div class="tuile"><div class="ico" aria-hidden="true">👣</div><h3>Tes pas</h3>
+          <p>Un objectif pour les jours d'entraînement, un autre pour le repos, et ta semaine en un coup d'œil.</p></div>
+        <div class="tuile"><div class="ico" aria-hidden="true">🌙</div><h3>Ton cycle, si tu veux</h3>
+          <p>Tu déclares ta phase, les charges et le volume suivent. Désactivé tant que tu ne l'actives pas.</p></div>
       </div>
     </div>
     <div class="center" style="margin-top:44px">
@@ -849,13 +959,13 @@ footer a{color:var(--dim);margin:0 8px}
 
 <section class="final">
   <div class="wrap center">
-    <h2>Ta prochaine séance<br><em>mérite mieux qu'un carnet.</em></h2>
+    <h2>Une seule application.<br><em>Tout ton progrès dedans.</em></h2>
     <p class="lead">Un mois complet, offert. Installe l'application en un geste, ou entre le code de ton coach.</p>
     <div class="ctas">
       <a class="cta" href="app/#install">Essayer gratuitement 1&nbsp;mois</a>
       <a class="cta ghost" href="app/">Ouvrir dans le navigateur</a>
     </div>
-    <div class="rassure"><span>Sans carte bancaire</span><span>Sans engagement</span><span>Android et iPhone</span></div>
+    <div class="rassure"><span>Android et iPhone</span><span>Marche hors ligne en salle</span></div>
   </div>
 </section>
 
@@ -869,7 +979,7 @@ footer a{color:var(--dim);margin:0 8px}
 </footer>
 
 <div class="barre" id="barre" aria-hidden="true">
-  <span>1 mois offert<br>sans carte bancaire</span>
+  <span>1 mois<br>offert</span>
   <a class="cta" href="app/#install" tabindex="-1">Commencer</a>
 </div>
 
