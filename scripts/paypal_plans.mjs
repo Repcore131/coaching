@@ -341,6 +341,15 @@ function prixAnnonce(p) {
   const reg = p.cycles.find(c => c.type === 'REGULAR') || p.cycles[0];
   return { prix: reg.prix, unite: reg.unite };
 }
+// PURE. Deux montants sont-ils le meme ? EN CENTIMES ENTIERS, jamais en
+// chaines : PayPal rend « 114.0 » la ou la table dit « 114.00 », et « 24.9 »
+// la ou elle dit « 24.90 ». Compare comme du texte, chaque plan juste etait
+// signale comme faux — sept alertes sur sept plans corrects, le 24/09/2026.
+// Un rapport qui crie au loup a chaque ligne ne se lit plus.
+function memeMontant(a, b) {
+  const x = Math.round(Number(a) * 100), y = Math.round(Number(b) * 100);
+  return Number.isFinite(x) && Number.isFinite(y) && x === y;
+}
 function prixFacture(plan) {
   const cy = (plan.billing_cycles || []).find(c => c.tenure_type === 'REGULAR')
     || (plan.billing_cycles || [])[0] || {};
@@ -376,7 +385,7 @@ async function verifier(tok) {
     const ecarts = [];
     if (etat !== 'ACTIVE') ecarts.push('plan ' + etat);
     if (f.devise !== 'EUR') ecarts.push('facture en ' + f.devise);
-    if (a.prix && f.prix !== a.prix) ecarts.push('l\'app annonce ' + a.prix + ' EUR');
+    if (a.prix && !memeMontant(f.prix, a.prix)) ecarts.push('l\'app annonce ' + a.prix + ' EUR');
     if (a.unite && f.unite !== a.unite) ecarts.push('l\'app annonce un cycle ' + a.unite);
     if (ecarts.length) souci++;
     console.log('  ' + a.constante.padEnd(30) + ligne
