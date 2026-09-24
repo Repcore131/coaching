@@ -51,6 +51,7 @@
 // ══════════════════════════════════════════════════════════════════════════
 
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const ARGS = new Set(process.argv.slice(2));
 const BLANC = ARGS.has('--blanc') || ARGS.has('--dry-run');
@@ -60,7 +61,12 @@ const VERIFIER = ARGS.has('--verifier');
 const API = SANDBOX ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com';
 
 // ── LE FICHIER DE L'APPLICATION, ET SES PRIX ────────────────────────────
-const DOSSIER = 'C:/RepCore-web/app';
+// ⚠ LE CHEMIN SE DEDUIT DU SCRIPT, il ne s'ecrit pas. Il valait
+//   « C:/RepCore-web/app » en dur : sur un poste Windows, personne ne le voit ;
+//   dans un travail GitHub, readdirSync jette au premier appel et les trois
+//   etapes tombent en six secondes, avec une erreur qui parle d'un dossier
+//   introuvable et pas de PayPal. Constate le 24/09/2026, execution n°1.
+const DOSSIER = fileURLToPath(new URL('../app/', import.meta.url));
 const fichierCore = readdirSync(DOSSIER)
   .filter(f => /^rc-core\.\d+\.js$/.test(f))
   .sort((a, b) => Number(a.match(/\d+/)[0]) - Number(b.match(/\d+/)[0]))

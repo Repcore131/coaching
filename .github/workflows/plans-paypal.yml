@@ -28,6 +28,13 @@
 #    numero de build. Une machine qui modifie le code source de l'application
 #    au milieu d'un travail programme, c'est une modification que personne
 #    n'a relue.
+#
+#  ⚠ IL LAISSE UNE TRACE LISIBLE SANS COMPTE GITHUB : le releve est ecrit dans
+#    docs/offre/etat-plans-paypal.md et commite. Les journaux d'Actions
+#    demandent une connexion ; un fichier du depot, non. C'est la qu'on lit les
+#    identifiants des plans crees, et c'est ce qui permet de relire dans six
+#    mois ce que PayPal facturait ce jour-la. Le commit porte [skip ci] : il ne
+#    redeclenche aucun deploiement.
 # ══════════════════════════════════════════════════════════════════════════
 name: Plans PayPal
 
@@ -42,7 +49,7 @@ on:
       - '.github/workflows/plans-paypal.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: plans-paypal
@@ -52,34 +59,88 @@ jobs:
   plans:
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth 0 : l'etape finale fait un pull --rebase, impossible sur
+      # un clone superficiel.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      # ── 1. L'ETAT AVANT ──────────────────────────────────────────────
-      # Il ECHOUE quand un plan manque ou n'est pas au bon prix, et c'est
-      # justement ce qu'on vient chercher : `continue-on-error` laisse la
-      # creation s'executer derriere.
-      - name: Ce que PayPal facture aujourd hui
-        id: avant
-        continue-on-error: true
+      # ── LE SECRET D'ABORD : sans lui, tout le reste ment ─────────────
+      # Sans cette etape, les trois suivantes tombent en six secondes sur une
+      # erreur de saisie et personne ne comprend que c'est un secret qui
+      # manque, pas PayPal qui refuse.
+      - name: Le secret est-il pose
         env:
           PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
-        run: node scripts/paypal_plans.mjs --verifier
+        run: |
+          if [ -z "$PAYPAL_CLIENT_SECRET" ]; then
+            echo "::error::Le secret PAYPAL_CLIENT_SECRET n'existe pas dans ce depot."
+            echo "Settings > Secrets and variables > Actions > New repository secret"
+            echo "  nom   : PAYPAL_CLIENT_SECRET"
+            echo "  valeur: le secret de l'application PayPal (compte reel)"
+            exit 1
+          fi
+          echo "Secret present."
 
-      # ── 2. CREER CE QUI MANQUE ───────────────────────────────────────
-      # Idempotent : un plan qui existe deja est repris, pas recree.
-      - name: Creer les plans manquants
+      # ── 1, 2, 3 : L'ETAT, LA CREATION, L'ETAT ────────────────────────
+      # Tout dans une seule etape, parce que tout part dans le MEME releve.
+      # Le premier appel echoue par construction quand un plan manque : c'est
+      # ce qu'on vient chercher, d'ou le `|| true`. Le dernier, lui, decide de
+      # la couleur du travail.
+      - name: Regarder, creer, regarder a nouveau
         env:
           PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
-        run: node scripts/paypal_plans.mjs
+        run: |
+          mkdir -p docs/offre
+          R=docs/offre/etat-plans-paypal.md
+          {
+            echo "# L'etat des plans PayPal"
+            echo
+            echo "Releve du $(date -u +'%d/%m/%Y a %H:%M UTC'), ecrit par le travail"
+            echo "« Plans PayPal » (.github/workflows/plans-paypal.yml)."
+            echo
+            echo '## Avant'
+            echo
+            echo '```'
+          } > $R
+          node scripts/paypal_plans.mjs --verifier 2>&1 | tee -a $R || true
+          {
+            echo '```'
+            echo
+            echo '## Ce qui a ete cree'
+            echo
+            echo '```'
+          } >> $R
+          node scripts/paypal_plans.mjs 2>&1 | tee -a $R
+          {
+            echo '```'
+            echo
+            echo '## Apres'
+            echo
+            echo '```'
+          } >> $R
+          node scripts/paypal_plans.mjs --verifier 2>&1 | tee -a $R && OK=1 || OK=0
+          echo '```' >> $R
+          [ "$OK" = 1 ]
 
-      # ── 3. ET LE DIRE A NOUVEAU ──────────────────────────────────────
-      # Celui-ci, lui, DOIT passer : si un plan reste inactif ou mal tarife
-      # apres creation, le travail est rouge et le courriel de GitHub le dit.
-      - name: Ce que PayPal facture apres
-        env:
-          PAYPAL_CLIENT_SECRET: ${{ secrets.PAYPAL_CLIENT_SECRET }}
-        run: node scripts/paypal_plans.mjs --verifier
+      # ── ET LE RELEVE RESTE DANS LE DEPOT ─────────────────────────────
+      # `always` : un releve qui ne survit qu'aux jours ou tout va bien ne sert
+      # a rien, c'est les autres jours qu'on le lit.
+      - name: Garder le releve
+        if: always()
+        run: |
+          git config user.name 'github-actions'
+          git config user.email 'github-actions@users.noreply.github.com'
+          git add docs/offre/etat-plans-paypal.md || true
+          git diff --cached --quiet && { echo 'rien de neuf'; exit 0; }
+          git commit -m 'Releve des plans PayPal [skip ci]'
+          for i in 1 2 3; do
+            git pull --rebase --quiet && git push --quiet && exit 0
+            echo "push refuse, nouvel essai ($i)"
+            sleep 5
+          done
+          exit 1
