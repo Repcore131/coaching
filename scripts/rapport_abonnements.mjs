@@ -40,10 +40,10 @@
 //    sort de la fonction qui extrait, ni n'atteint le disque.
 // ══════════════════════════════════════════════════════════════════════════
 
-import { writeFileSync, readFileSync } from 'node:fs';
+import { writeFileSync, readFileSync, readdirSync, existsSync } from 'node:fs';
 import { execFile } from 'node:child_process';
-import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 
 const ARGS = process.argv.slice(2);
 const ESSAI = ARGS.includes('--essai');
@@ -88,13 +88,43 @@ function extraire(users, droits) {
   return out;
 }
 
+// ⚠ « firebase » N'EST PAS TOUJOURS DANS LE PATH QUE NODE HERITE. Constate le
+//   24/09/2026 : la commande marche dans un terminal, et le meme appel depuis
+//   Node rend « 'firebase' n'est pas reconnu en tant que commande interne ».
+//   Le PATH d'une session PowerShell ouverte avant l'installation de npm n'a
+//   jamais ete rafraichi, et Node herite celui-la.
+//
+//   ON CHERCHE DONC LE FICHIER, dans cet ordre : ce que FIREBASE_BIN designe,
+//   l'emplacement standard de npm sous Windows, puis le nom nu — qui marchera
+//   sur un poste ou le PATH est juste.
+function chercherFirebase() {
+  const essais = [];
+  if (process.env.FIREBASE_BIN) essais.push(process.env.FIREBASE_BIN);
+  if (process.env.APPDATA) essais.push(path.join(process.env.APPDATA, 'npm', 'firebase.cmd'));
+  essais.push('/usr/local/bin/firebase', '/usr/bin/firebase');
+  for (const e of essais) { try { if (existsSync(e)) return e; } catch (x) {} }
+  return 'firebase';
+}
+const FIREBASE = chercherFirebase();
+
 function lireFirebase(chemin) {
   return new Promise((res, rej) => {
-    execFile('firebase', ['database:get', chemin, '--project', PROJET],
-      { shell: true, maxBuffer: 512 * 1024 * 1024 },
+    // UN .cmd NE S'EXECUTE PAS DIRECTEMENT : on passe par cmd.exe, et SANS
+    // `shell: true` — Node 24 deprecie les arguments non echappes dans un shell,
+    // et l'avertissement au milieu d'un rapport fait croire a une erreur.
+    const cmd = /\.cmd$/i.test(FIREBASE);
+    const prog = cmd ? (process.env.ComSpec || 'cmd.exe') : FIREBASE;
+    const args = ['database:get', chemin, '--project', PROJET];
+    execFile(prog, cmd ? ['/c', FIREBASE, ...args] : args,
+      { maxBuffer: 512 * 1024 * 1024 },
       (e, out, err) => {
-        if (e) return rej(new Error('firebase database:get ' + chemin + ' : '
-          + String(err || e.message).split('\n')[0]));
+        if (e) return rej(new Error('firebase database:get ' + chemin + ' a echoue : '
+          + String(err || e.message).split('\n')[0]
+          + '\n  Commande essayee : ' + FIREBASE
+          + '\n  Si elle marche dans ton terminal mais pas ici, donne son chemin :'
+          + '\n      $env:FIREBASE_BIN = "$env:APPDATA\\npm\\firebase.cmd"'
+          + '\n  Ou passe un export JSON de la base en argument :'
+          + '\n      node scripts/rapport_abonnements.mjs export.json'));
         try { res(JSON.parse(out || 'null')); }
         catch (x) { rej(new Error('reponse illisible pour ' + chemin)); }
       });
