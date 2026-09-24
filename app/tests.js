@@ -67025,6 +67025,33 @@ async function testExercices(){
           if(!/pas encore ouverte/.test(non)) return _echec('cas non validé muet');
           if(!/code coach/.test(sans)) return _echec('aucune sortie pour l\'athlète sans coach');
           return !/code coach/.test(non)?true:_echec('on propose un code à qui a déjà un coach');})());
+        ok('Le verrou distingue « jamais ouverte » de « refermée »',(()=>{
+          // TROUVE SUR DEUX APPAREILS le 24/09/2026 : le coach ouvre, elle
+          // bascule, il compose son programme, il referme. Elle lisait alors
+          // « Ton coach ne l'a pas encore ouverte », avec son plan dans son
+          // dossier. La porte reste close dans les deux cas : c'est le TEXTE qui
+          // doit dire lequel des deux s'est produit.
+          const jamais=_pa({coachId:'u_c',nutrition:{dietType:'strict',strictAcces:false}});
+          const apres=_pa({coachId:'u_c',nutrition:{dietType:'strict',strictAcces:false,
+            plan:{squelette:[{id:'a',repas:'midi',ciqual:4,q:100,u:'g'}]}}});
+          if(accesDieteStricte(jamais).raison!=='non_valide')
+            return _echec('une athlète sans trace d\'usage n\'est plus « jamais ouverte » : '
+              +accesDieteStricte(jamais).raison);
+          if(accesDieteStricte(apres).raison!=='referme')
+            return _echec('une fermeture après usage se raconte encore comme une attente : '
+              +accesDieteStricte(apres).raison);
+          // LA PORTE NE BOUGE PAS. Si la nuance rouvrait l'accès, l'interrupteur
+          // du coach ne servirait plus à rien.
+          if(accesDieteStricte(apres).ok!==false)
+            return _echec('la fermeture ne tient plus');
+          const h=_htmlStrictVerrou('referme');
+          if(!/refermée/.test(h)) return _echec('l\'écran ne dit pas qu\'elle a été refermée');
+          if(/pas encore ouverte/.test(h)) return _echec('l\'écran promet encore une ouverture');
+          // ⚠ PAS D'APOSTROPHE DANS CETTE REGEX : `escapeHtml` a deja transforme
+          //   « Rien n'est perdu » en « Rien n&#39;est perdu ». Chercher
+          //   l'apostrophe droite echoue sur un texte qui est bel et bien la.
+          if(!/tu le retrouveras/.test(h)) return _echec('rien ne la rassure sur son plan');
+          return true;})());
         ok('Choisir « stricte » est refusé quand l\'accès est fermé',(()=>{
           const _s=currentUser, _sSave=window.saveUser, _sToast=window.toast;
           let msg='';
