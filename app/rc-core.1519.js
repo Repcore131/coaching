@@ -34398,7 +34398,7 @@ function _rendreBoutonAchat(){
   z.innerHTML='<div id="ach-pp"></div>'
     +'<div id="ach-carte-lib" class="bq-note" style="margin:10px 0 6px;display:none">'
     +'Payer par carte bancaire, sans compte PayPal</div><div id="ach-carte"></div>';
-  sdk.Buttons({
+  sdk.Buttons(Object.assign({},_paiementPayPalOptions(sdk),{
     style:{layout:'vertical',color:'black',shape:'rect',label:'pay'},
     createOrder:(data,actions)=>{
       const c=document.getElementById('ach-cgv');
@@ -34421,7 +34421,7 @@ function _rendreBoutonAchat(){
       _enregistrerAchat(_achatProgId,(d&&d.id)||(data&&data.orderID)||'');
     }),
     onError:()=>{ toast('Le paiement n\'a pas abouti.','var(--orange)'); }
-  }).render('#ach-pp');
+  })).render('#ach-pp');
   // LE BOUTON CARTE, EXPLICITE. `isEligible` decide : si le compte marchand
   // ou le pays ne l'accepte pas, on n'affiche RIEN plutot qu'un cadre vide.
   try{
@@ -34456,6 +34456,27 @@ function _rendreBoutonAchat(){
 function _paiementCarteOptions(sdk){
   return {fundingSource:(sdk&&sdk.FUNDING&&sdk.FUNDING.CARD)||'card',
     style:{layout:'vertical',color:'black',shape:'rect',height:45}};
+}
+// ⚠ ET LA PILE DU HAUT EST EPINGLEE SUR PAYPAL (24/09/2026). Sans ce reglage,
+//   elle rendait TOUT ce que le compte accepte — donc PayPal ET la carte,
+//   puisque enable-funding=card la reclame. L'ecran montrait alors trois
+//   boutons : « Payer avec PayPal », « Carte bancaire », puis notre libelle et
+//   une SECONDE « Carte bancaire ». Constate en production le 24/09/2026, sur
+//   l'abonnement comme sur l'achat d'un programme.
+//
+//   Deux boutons identiques a deux centimetres l'un de l'autre, au moment
+//   precis de payer, c'est une hesitation de plus la ou il n'en faut aucune —
+//   et la moitie des gens cherche lequel est le bon.
+//
+//   ON GARDE LE NOTRE plutot que celui de la pile : c'est le seul dont on
+//   choisisse le libelle (« Payer par carte bancaire, sans compte PayPal »),
+//   et le seul qu'on puisse cacher quand isEligible dit non.
+//
+//   ⚠ SI UN JOUR ON VEUT LE PAIEMENT EN QUATRE FOIS ou un moyen local, il
+//     faudra l'ajouter ICI, en bouton nomme : cette epingle empeche PayPal de
+//     l'ajouter tout seul dans la pile.
+function _paiementPayPalOptions(sdk){
+  return {fundingSource:(sdk&&sdk.FUNDING&&sdk.FUNDING.PAYPAL)||'paypal'};
 }
 // L'ACHAT EST ECRIT, PUIS LE PROGRAMME S'APPLIQUE. Dans cet ordre : si
 // l'application echoue ou si l'athlete refuse d'ecraser ses seances, il a
@@ -98916,7 +98937,7 @@ function renderPaypalButton(planId,coachId){
       console.error('PayPal error',err);
     }
   };
-  paypal.Buttons(_optsAbo).render('#pp-abo');
+  paypal.Buttons(Object.assign({},_optsAbo,_paiementPayPalOptions(paypal))).render('#pp-abo');
   // LE BOUTON CARTE, EXPLICITE ET SOUS L'AUTRE. `isEligible` decide : si le
   // compte marchand ou le pays ne l'accepte pas, on n'affiche RIEN plutot
   // qu'un cadre vide — et le chemin PayPal, lui, reste entier.

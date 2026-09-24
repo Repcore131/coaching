@@ -34970,10 +34970,43 @@ async function testExercices(){
         // LES DEUX BOUTONS PARTAGENT LES MEMES OPTIONS : un plan facture d'un
         // cote et pas de l'autre, c'est le defaut qu'on ne verrait qu'en
         // production.
-        if(src.indexOf('paypal.Buttons(_optsAbo).render')<0)
-          return _echec('le bouton PayPal de l’abonnement ne lit plus les options communes');
+        // ⚠ CE TEST A CHANGE DE CONTRAT LE 24/09/2026. Il exigeait
+        //   « paypal.Buttons(_optsAbo) » tel quel. Rendue sans source de
+        //   financement, la pile affiche TOUT ce que le compte accepte : donc
+        //   PayPal ET la carte, puisque enable-funding=card la reclame. Resultat
+        //   constate en production : « Payer avec PayPal », « Carte bancaire »,
+        //   puis notre libelle et une SECONDE « Carte bancaire ». Les options
+        //   communes restent obligatoires ; l'epingle sur PayPal s'y ajoute.
+        if(!/paypal\.Buttons\(Object\.assign\(\{\},_optsAbo,_paiementPayPalOptions\(paypal\)\)\)\.render/.test(src))
+          return _echec('le bouton PayPal de l’abonnement ne lit plus les options communes, ou n’est plus épinglé sur PayPal');
         return /Object\.assign\(\{\},_optsAbo,_paiementCarteOptions\(paypal\)\)/.test(src)
           ?true:_echec('le bouton carte de l’abonnement ne reprend pas les options communes');})());
+
+      ok('PAIEMENT — « CARTE BANCAIRE » NE S’AFFICHE QU’UNE SEULE FOIS',(()=>{
+        // ⚠ LE DEFAUT, VU EN PRODUCTION LE 24/09/2026, sur l'abonnement ET
+        //   sur l'achat d'un programme : trois boutons au lieu de deux, dont
+        //   deux « Carte bancaire » identiques a deux centimetres l'un de
+        //   l'autre. Au moment precis de payer, c'est une hesitation de plus la
+        //   ou il n'en faut aucune.
+        //
+        //   LA PILE DU HAUT EST DONC EPINGLEE SUR PAYPAL, des deux cotes, et la
+        //   carte n'a plus qu'un seul bouton : le notre, celui dont on choisit
+        //   le libelle et qu'on sait cacher quand isEligible dit non.
+        const src=_prodSrc();
+        if(src.indexOf('function _paiementPayPalOptions(sdk)')<0)
+          return _echec('rien n’épingle la pile sur PayPal');
+        if(!/fundingSource:\(sdk&&sdk\.FUNDING&&sdk\.FUNDING\.PAYPAL\)/.test(src))
+          return _echec('l’épingle ne nomme pas la source PayPal');
+        // UNE DEFINITION, DEUX EMPLOIS : l'abonnement et l'achat. Un seul des
+        // deux corrige laisserait le doublon sur l'autre ecran, et c'est
+        // exactement ce qui s'est passe.
+        const n=(src.match(/_paiementPayPalOptions/g)||[]).length;
+        if(n!==3) return _echec('l’épingle apparaît '+n+' fois au lieu de 3 (une définition, deux emplois)');
+        if(src.indexOf('sdk.Buttons(Object.assign({},_paiementPayPalOptions(sdk)')<0)
+          return _echec('l’achat d’un programme rend encore la pile entière');
+        // ET LE BOUTON CARTE RESTE, LUI, AVEC SON LIBELLE A NOUS.
+        const c=(src.match(/_paiementCarteOptions/g)||[]).length;
+        return c===3?true:_echec('le bouton carte apparaît '+c+' fois au lieu de 3');})());
 
       // ══ LOT 1 — UNE SEULE TABLE D'OFFRES, UNE SEULE DE CAPACITES ═══════
       ok('LOT 1 — LES OFFRES, LEURS PRIX ET CE QU’ELLES OUVRENT',(()=>{
