@@ -44,6 +44,7 @@ import { writeFileSync, readFileSync, readdirSync, existsSync } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import os from 'node:os';
 
 const ARGS = process.argv.slice(2);
 const ESSAI = ARGS.includes('--essai');
@@ -97,18 +98,46 @@ function extraire(users, droits) {
 //   ON CHERCHE DONC LE FICHIER, dans cet ordre : ce que FIREBASE_BIN designe,
 //   l'emplacement standard de npm sous Windows, puis le nom nu — qui marchera
 //   sur un poste ou le PATH est juste.
+//
+//   ⚠ ET APPDATA NE SUFFIT PAS NON PLUS. Deuxieme essai, meme poste : le
+//     dossier %APPDATA%\npm existe pour un processus et pas pour l'autre —
+//     l'application qui heberge ce terminal virtualise une partie de AppData.
+//     On ratisse donc : ce que FIREBASE_BIN designe, chaque dossier du PATH
+//     avec les extensions que Windows execute, puis les emplacements habituels
+//     de npm calcules depuis le dossier personnel.
 function chercherFirebase() {
   const essais = [];
   if (process.env.FIREBASE_BIN) essais.push(process.env.FIREBASE_BIN);
+  const sep = process.platform === 'win32' ? ';' : ':';
+  const exts = process.platform === 'win32' ? ['.cmd', '.exe', '.bat', ''] : [''];
+  for (const d of String(process.env.PATH || '').split(sep)) {
+    if (!d) continue;
+    for (const x of exts) essais.push(path.join(d.replace(/^"|"$/g, ''), 'firebase' + x));
+  }
+  for (const m of [os.homedir(), process.env.USERPROFILE, process.env.HOME].filter(Boolean)) {
+    essais.push(path.join(m, 'AppData', 'Roaming', 'npm', 'firebase.cmd'));
+    essais.push(path.join(m, 'AppData', 'Roaming', 'npm', 'firebase'));
+  }
   if (process.env.APPDATA) essais.push(path.join(process.env.APPDATA, 'npm', 'firebase.cmd'));
   essais.push('/usr/local/bin/firebase', '/usr/bin/firebase');
+  ESSAYES = essais;
   for (const e of essais) { try { if (existsSync(e)) return e; } catch (x) {} }
-  return 'firebase';
+  return '';
 }
+let ESSAYES = [];
 const FIREBASE = chercherFirebase();
 
 function lireFirebase(chemin) {
   return new Promise((res, rej) => {
+    if (!FIREBASE) {
+      const ou = ESSAYES.filter(x => /firebase\.cmd$|firebase$/.test(x)).slice(0, 4);
+      return rej(new Error('la commande `firebase` est introuvable depuis ce processus.'
+        + '\n  Cherchee dans le PATH et dans ' + ou.length + ' emplacements habituels, dont :'
+        + '\n    ' + ou.join('\n    ')
+        + '\n  Deux sorties, au choix :'
+        + '\n    $env:FIREBASE_BIN = (Get-Command firebase).Source'
+        + '\n    node scripts/rapport_abonnements.mjs export.json'));
+    }
     // UN .cmd NE S'EXECUTE PAS DIRECTEMENT : on passe par cmd.exe, et SANS
     // `shell: true` — Node 24 deprecie les arguments non echappes dans un shell,
     // et l'avertissement au milieu d'un rapport fait croire a une erreur.
