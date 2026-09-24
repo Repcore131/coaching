@@ -38,11 +38,15 @@
 //
 //       PAYPAL_CLIENT_SECRET=...  node scripts/paypal_plans.mjs
 //
-//  5. Avec --verifier, il ne cree RIEN : il va chercher chaque plan chez
+//  5. Avec --tarifs, il remet les plans EXISTANTS au prix que la table de
+//     l'application annonce, puis verifie. A lancer apres tout changement
+//     de tarif : sans lui, l'ecran dit un prix et PayPal en preleve un
+//     autre. Il ne touche pas aux abonnements deja en cours.
+//  6. Avec --verifier, il ne cree RIEN : il va chercher chaque plan chez
 //     PayPal et dit lequel est inactif, introuvable, ou ne facture pas le
 //     prix que l'application annonce. C'est la commande a lancer quand on
 //     se demande « est-ce que les paiements marchent ? ».
-//  6. Avec --ecrire, il colle lui-meme les identifiants dans rc-core a
+//  7. Avec --ecrire, il colle lui-meme les identifiants dans rc-core a
 //     la place des chaines vides. Sans, il les affiche et tu les colles.
 //
 //  IL NE CREE JAMAIS DEUX FOIS LE MEME PLAN : avant d'en creer un, il liste
@@ -58,6 +62,7 @@ const BLANC = ARGS.has('--blanc') || ARGS.has('--dry-run');
 const SANDBOX = ARGS.has('--sandbox');
 const ECRIRE = ARGS.has('--ecrire');
 const VERIFIER = ARGS.has('--verifier');
+const TARIFS = ARGS.has('--tarifs');
 const API = SANDBOX ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com';
 
 // ── LE FICHIER DE L'APPLICATION, ET SES PRIX ────────────────────────────
@@ -174,8 +179,21 @@ const PLANS = [
   },
 ];
 // LES PLANS DEJA EN PLACE, que ce script n'a pas crees mais que l'application
-// facture : le mensuel Essentielle date d'avant. `--verifier` les regarde tous.
-const DEJA = [{ constante: 'PAYPAL_PLAN_ID', quoi: 'Essentielle, mensuel' }];
+// facture : le mensuel Essentielle date d'avant.
+//
+// ⚠ IL PORTE SES CYCLES, LUI AUSSI (24/09/2026). Sans eux, `--verifier` le
+//   regardait sans rien comparer et `--tarifs` le sautait : le plan d'entree,
+//   celui que presque tout le monde prendra, serait reste a 9,95 pendant que
+//   l'ecran annonce 9,50.
+//
+// ⚠ ET IL RESTE HORS DE `PLANS` : la boucle de creation y reconnait un plan
+//   par son NOM, et celui-ci n'a pas le meme. L'y mettre creerait un DOUBLON
+//   chez PayPal au prochain passage.
+const DEJA = [{
+  constante: 'PAYPAL_PLAN_ID',
+  quoi: 'Essentielle, mensuel',
+  cycles: [{ type: 'REGULAR', unite: 'MONTH', prix: eur(OFFRES.essentielle.prix) }],
+}];
 
 // ── L'APPEL A PAYPAL ────────────────────────────────────────────────────
 const CLIENT_ID = process.env.PAYPAL_CLIENT_ID
@@ -332,7 +350,8 @@ function prixFacture(plan) {
 }
 async function verifier(tok) {
   const attendus = PLANS.map(p => ({ constante: p.constante, nom: p.nom, ...prixAnnonce(p) }));
-  for (const d of DEJA) attendus.push({ constante: d.constante, nom: d.quoi, prix: null, unite: null });
+  for (const d of DEJA) attendus.push({ constante: d.constante, nom: d.quoi,
+    ...prixAnnonce(d) });
   let souci = 0;
   console.log('\n── L\'ETAT REEL DE CHAQUE PLAN ────────────────────────────\n');
   for (const a of attendus) {
@@ -373,6 +392,51 @@ async function verifier(tok) {
   }
 }
 
+// ══ `--tarifs` : REMETTRE LES PLANS AU PRIX DE L'APPLICATION ════════════
+//
+// ⚠ UN PLAN PAYPAL NE SUIT PAS LA TABLE DES PRIX. Le 24/09/2026, l'abonnement
+//   est passe a 9,50 par mois et 114 l'an ; les plans, eux, facturaient encore
+//   9,95 et 99. L'application annoncait un prix, PayPal en prelevait un autre —
+//   la faute la plus chere possible, et la plus silencieuse.
+//
+// ⚠ CE QUE CETTE COMMANDE NE FAIT PAS : changer ce que paient les abonnes
+//   DEJA en cours. PayPal applique le nouveau tarif aux souscriptions a venir ;
+//   les existantes gardent le leur jusqu'a ce qu'on leur propose le changement,
+//   ce qui est un autre geste, avec un preavis. Au 24/09/2026 il n'y a aucun
+//   abonne, donc la question ne se pose pas — mais elle se posera.
+async function majTarifs(tok) {
+  let bouge = 0, deja = 0;
+  console.log('\n── LES PRIX, REMIS A CEUX DE L\'APPLICATION ───────────────\n');
+  for (const p of PLANS.concat(DEJA)) {
+    const id = (src.match(new RegExp('const ' + p.constante + "='([^']*)'")) || [])[1] || '';
+    if (!id) { console.log('  ' + p.constante.padEnd(30) + 'vide, rien a mettre a jour'); continue; }
+    let plan = null;
+    try { plan = await pp(tok, 'GET', '/v1/billing/plans/' + id); }
+    catch (e) { console.log('  ' + p.constante.padEnd(30) + 'INTROUVABLE'); continue; }
+    // UN CYCLE ATTENDU, UN CYCLE CHEZ PAYPAL, DANS LE MEME ORDRE. On compare en
+    // CENTIMES ENTIERS : 24,90 × 12 ne vaut pas 298,80 en virgule flottante.
+    const chez = (plan.billing_cycles || []);
+    const schemas = [];
+    const dits = [];
+    p.cycles.forEach((c, i) => {
+      const seq = i + 1;
+      const actuel = ((chez[i] || {}).pricing_scheme || {}).fixed_price || {};
+      const a = Math.round(Number(actuel.value || 0) * 100);
+      const veut = Math.round(Number(c.prix) * 100);
+      if (a === veut && String(actuel.currency_code || '') === 'EUR') return;
+      dits.push((actuel.value || '?') + ' → ' + c.prix);
+      schemas.push({ billing_cycle_sequence: seq,
+        pricing_scheme: { fixed_price: { value: c.prix, currency_code: 'EUR' } } });
+    });
+    if (!schemas.length) { deja++; console.log('  ' + p.constante.padEnd(30) + 'deja au bon prix'); continue; }
+    await pp(tok, 'POST', '/v1/billing/plans/' + id + '/update-pricing-schemes',
+      { pricing_schemes: schemas });
+    bouge++;
+    console.log('  ' + p.constante.padEnd(30) + dits.join(', ') + '  (mis a jour)');
+  }
+  console.log('\n  ' + bouge + ' plan(s) remis au tarif, ' + deja + ' deja juste(s).\n');
+}
+
 async function principal() {
   console.log('\n══ LES PLANS PAYPAL ' + (SANDBOX ? '(BAC A SABLE)' : '(COMPTE REEL)') + ' ══');
   tableau();
@@ -408,6 +472,7 @@ async function principal() {
   const tok = await jeton(secret);
   console.log('  Identifiants acceptes par PayPal.');
   if (VERIFIER) { await verifier(tok); return; }
+  if (TARIFS) { await majTarifs(tok); await verifier(tok); return; }
   const pr = await produit(tok);
   console.log('  Produit « ' + PRODUIT_NOM +' » : ' + pr.id + (pr.neuf ? ' (cree)' : ' (deja la)'));
 
