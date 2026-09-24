@@ -371,55 +371,13 @@ ul.coches li::before{content:'';position:absolute;left:0;top:4px;width:17px;heig
   background:#111;border:1px solid #262626;border-radius:999px;padding:9px 16px}
 .piliers a:hover{border-color:var(--red);color:#fff}
 .piliers i{font-style:normal}
-/* ---------- nutrition (maquette animee) ---------- */
-.nutri-scene{position:relative;padding:10px 40px}
-.nutri-tel{background:linear-gradient(145deg,#2a2a2a,#0e0e0e)}
-.nm{position:absolute;inset:9px;border-radius:36px;background:#0b0b0b;overflow:hidden;padding:44px 16px 16px;
-  font-size:11px;color:#ddd;display:flex;flex-direction:column;gap:10px;text-align:left}
-.nm-top{display:flex;justify-content:space-between;align-items:center;font-family:'Bebas Neue',var(--pile-titre);font-size:18px;letter-spacing:1.5px;color:#fff}
-.nm-mode{display:flex;background:#161616;border:1px solid #262626;border-radius:999px;padding:2px;font-family:Montserrat,var(--pile-sans);letter-spacing:0}
-.nm-mode b{font-size:9.5px;padding:4px 8px;border-radius:999px;color:#999;animation:mode 10.5s infinite}
-.nm-mode b.on{animation-name:mode-on}
-@keyframes mode-on{0%,62%{background:var(--red);color:#fff}66%,96%{background:none;color:#999}100%{background:var(--red);color:#fff}}
-@keyframes mode{0%,62%{background:none;color:#999}66%,96%{background:var(--red);color:#fff}100%{background:none;color:#999}}
-.nm-kcal{display:flex;align-items:center;gap:14px;background:#121212;border:1px solid #1f1f1f;border-radius:14px;padding:10px 12px}
-.nm-kcal svg{width:62px;height:62px;transform:rotate(-90deg)}
-.nm-fond{fill:none;stroke:#222;stroke-width:12}
-.nm-arc{fill:none;stroke:var(--red);stroke-width:12;stroke-linecap:round;stroke-dasharray:314;stroke-dashoffset:314;animation:arc 3.5s ease-out infinite}
-@keyframes arc{0%{stroke-dashoffset:314}45%,100%{stroke-dashoffset:52}}
-.nm-kcal b{display:block;font-family:'Bebas Neue',var(--pile-titre);font-size:26px;color:#fff;letter-spacing:1px;line-height:1}
-.nm-kcal span{color:#999}
-.nm-macros{display:flex;flex-direction:column;gap:6px}
-.nm-macros div{display:grid;grid-template-columns:58px 1fr 70px;align-items:center;gap:8px}
-.nm-macros span{color:#aaa}.nm-macros b{text-align:right;color:#fff;font-weight:700;font-size:10px}
-.nm-macros i{height:6px;background:#1c1c1c;border-radius:9px;overflow:hidden}
-.nm-macros em{display:block;height:100%;width:calc(var(--v)*100%);background:var(--c);border-radius:9px;transform-origin:left;animation:barre 3.5s ease-out infinite}
-@keyframes barre{0%{transform:scaleX(0)}45%,100%{transform:scaleX(1)}}
-.nm-ajout{background:#121212;border:1px solid rgba(224,32,32,.4);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px}
-.nm-onglets{display:flex;gap:6px}
-.nm-onglets b{flex:1;text-align:center;font-size:10px;padding:6px 0;border-radius:8px;background:#1a1a1a;color:#888;animation:onglet 10.5s infinite}
-.nm-onglets .o2{animation-delay:-7s}.nm-onglets .o3{animation-delay:-3.5s}
-@keyframes onglet{0%,31%{background:var(--red);color:#fff}34%,100%{background:#1a1a1a;color:#888}}
-.nm-panneaux{position:relative;height:118px}
-.pn{position:absolute;inset:0;opacity:0;animation:panneau 10.5s infinite;display:flex;flex-direction:column;gap:8px}
-.p2{animation-delay:-7s}.p3{animation-delay:-3.5s}
-@keyframes panneau{0%{opacity:0;transform:translateY(6px)}3%,30%{opacity:1;transform:none}33%,100%{opacity:0}}
-.code{position:relative;height:56px;border-radius:8px;background:#fff;overflow:hidden;
-  background-image:repeating-linear-gradient(90deg,#111 0 2px,#fff 2px 4px,#111 4px 5px,#fff 5px 8px,#111 8px 11px,#fff 11px 12px);background-size:auto 70%;background-repeat:repeat-x;background-position:center}
-.laser{position:absolute;left:0;right:0;height:2px;background:#ff2d2d;box-shadow:0 0 10px 2px rgba(255,45,45,.8);animation:laser 1.2s ease-in-out infinite alternate}
-@keyframes laser{from{top:8%}to{top:88%}}
-.res{background:#181818;border-radius:8px;padding:7px 9px}.res b{display:block;color:#fff;font-size:11.5px}.res span{color:#9a9a9a;font-size:10px}
-.champ{background:#181818;border:1px solid #2a2a2a;border-radius:8px;padding:8px 10px;color:#fff}
-.tape{display:inline-block;overflow:hidden;white-space:nowrap;border-right:2px solid var(--red);width:0;animation:tape 3.5s steps(11) infinite}
-@keyframes tape{0%{width:0}40%,100%{width:11ch}}
-.liste{display:flex;flex-direction:column;gap:4px}.liste span{background:#181818;border-radius:6px;padding:5px 8px;color:#bbb;font-size:10px}
-.liste b{color:#fff}
-.etiq{position:relative;background:#f4f1ea;color:#222;border-radius:8px;padding:6px 10px;display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;font-size:10px;overflow:hidden}
-.etiq span{display:flex;justify-content:space-between;border-bottom:1px solid #d8d2c4}
-.balaye{position:absolute;left:0;right:0;top:0;height:30%;background:linear-gradient(transparent,rgba(224,32,32,.35),transparent);animation:balaye 1.4s linear infinite}
-@keyframes balaye{from{transform:translateY(-100%)}to{transform:translateY(340%)}}
-.nm-repas{display:flex;justify-content:space-between;background:#121212;border:1px solid #1f1f1f;border-radius:10px;padding:8px 10px}
-.nm-repas b{color:#fff}
+/* ---------- nutrition : deux vrais ecrans ---------- */
+.nutri-scene{position:relative;padding:10px 30px}
+.nutri-duo{position:relative;display:flex;justify-content:center}
+.nutri-duo .tel{width:min(270px,46vw)}
+.nutri-duo .tel:last-child{width:min(250px,42vw);margin-left:-44px;margin-top:70px}
+.tel.defile-long .ecran img{animation:defile-long 30s ease-in-out infinite alternate}
+@keyframes defile-long{0%,8%{transform:translateY(0)}92%,100%{transform:translateY(-71.8%)}}
 .flotte{position:absolute;font-size:34px;filter:drop-shadow(0 8px 14px rgba(0,0,0,.6));animation:flotte 6s ease-in-out infinite alternate;z-index:3}
 .f1{top:6%;left:0}.f2{top:30%;right:-2%;animation-delay:-2s}.f3{bottom:26%;left:-4%;animation-delay:-4s}
 .f4{bottom:6%;right:4%;animation-delay:-1s}.f5{top:-2%;right:18%;animation-delay:-3s;font-size:28px}.f6{top:52%;left:4%;animation-delay:-5s;font-size:28px}
@@ -542,7 +500,8 @@ footer a{color:var(--dim);margin:0 8px}
   .nav .lien.garde{display:inline}
   .tuiles,.paliers{grid-template-columns:1fr}
   .bulle{font-size:11.5px;max-width:170px;padding:8px 11px}
-  .nutri-scene{padding:10px 18px}.flotte{font-size:26px}
+  .nutri-scene{padding:10px 6px}.flotte{font-size:24px}
+  .nutri-duo .tel:last-child{margin-left:-30px;margin-top:50px}
   .piliers a{font-size:12.5px;padding:8px 12px}
   .bulle b{font-size:13.5px}
   .hero .b1{left:0;top:auto;bottom:4%}.hero .b2,.fonction .bulle{display:none}
@@ -553,7 +512,7 @@ footer a{color:var(--dim);margin:0 8px}
   .ancre .ligne{flex-direction:column;gap:2px}
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.cta,.barre{transition:none}
-  .nutri-scene *,.eparpille span,.tel.defile .ecran img{animation:none!important}.p1{opacity:1}.nm-arc{stroke-dashoffset:52}.tape{width:11ch}}
+  .nutri-scene *,.eparpille span,.tel.defile .ecran img{animation:none!important}}
 </style>
 </head>
 <body>
@@ -663,35 +622,15 @@ footer a{color:var(--dim);margin:0 8px}
         </ul>
       </div>
       <div class="visuel">
-        <div class="nutri-scene" aria-label="Illustration : journal nutrition RepCore, ajout d'aliments par scan, recherche et photo d'étiquette">
+        <div class="nutri-scene" aria-label="Captures réelles de l'écran Nutrition de RepCore">
           <span class="flotte f1" aria-hidden="true">🥑</span><span class="flotte f2" aria-hidden="true">🍗</span>
           <span class="flotte f3" aria-hidden="true">🍚</span><span class="flotte f4" aria-hidden="true">🥚</span>
           <span class="flotte f5" aria-hidden="true">🍓</span><span class="flotte f6" aria-hidden="true">🥛</span>
-          <div class="tel nutri-tel">
-            <div class="nm">
-              <div class="nm-top"><span>Aujourd'hui</span><span class="nm-mode"><b class="on">Flexible</b><b>Stricte</b></span></div>
-              <div class="nm-kcal"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="50" class="nm-fond"/><circle cx="60" cy="60" r="50" class="nm-arc"/></svg>
-                <div><b class="nm-n">1 840</b><span>/ 2 200 kcal</span></div></div>
-              <div class="nm-macros">
-                <div><span>Protéines</span><i><em style="--v:.86;--c:#e02020"></em></i><b>138 / 160 g</b></div>
-                <div><span>Glucides</span><i><em style="--v:.74;--c:#f59e0b"></em></i><b>196 / 265 g</b></div>
-                <div><span>Lipides</span><i><em style="--v:.81;--c:#3b82f6"></em></i><b>57 / 70 g</b></div>
-              </div>
-              <div class="nm-ajout">
-                <div class="nm-onglets"><b class="o1">Scan</b><b class="o2">Recherche</b><b class="o3">Photo</b></div>
-                <div class="nm-panneaux">
-                  <div class="pn p1"><div class="code"><i></i><span class="laser"></span></div>
-                    <div class="res"><b>Skyr nature</b><span>150 g · 90 kcal · 15 g de protéines</span></div></div>
-                  <div class="pn p2"><div class="champ"><span class="tape">poulet rôti</span></div>
-                    <div class="liste"><span>Poulet rôti, blanc · <b>150 kcal</b></span><span>Riz basmati cuit · <b>130 kcal</b></span><span>Avocat · <b>160 kcal</b></span></div></div>
-                  <div class="pn p3"><div class="etiq"><span>Énergie <b>389 kcal</b></span><span>Protéines <b>13 g</b></span><span>Glucides <b>60 g</b></span><span>Lipides <b>7 g</b></span><i class="balaye"></i></div>
-                    <div class="res"><b>Flocons d'avoine</b><span>valeurs lues sur l'étiquette</span></div></div>
-                </div>
-              </div>
-              <div class="nm-repas"><span>🍳 Petit-déjeuner</span><b>520 kcal</b></div>
-              <div class="nm-repas"><span>🥗 Déjeuner</span><b>740 kcal</b></div>
-              <div class="nm-repas"><span>🍎 Collation</span><b>210 kcal</b></div>
-            </div>
+          <div class="nutri-duo">
+            <div class="tel defile defile-long"><div class="ecran"><img src="app/img/vente/nutrition-journal.webp" srcset="app/img/vente/nutrition-journal-300.webp 300w, app/img/vente/nutrition-journal.webp 600w" sizes="(max-width:640px) 46vw, 270px" width="600" height="4608" loading="lazy"
+              alt="Écran Nutrition RepCore : diète flexible, cibles du jour, anneaux protéines glucides lipides, calories, et journal repas par repas"></div></div>
+            <div class="tel"><img src="app/img/vente/nutrition-recherche.webp" srcset="app/img/vente/nutrition-recherche-300.webp 300w, app/img/vente/nutrition-recherche.webp 600w" sizes="(max-width:640px) 46vw, 250px" width="600" height="1299" loading="lazy"
+              alt="Recherche d'un aliment : poulet, avec les boutons Scanner, Meal prep et Recette"></div>
           </div>
         </div>
       </div>
