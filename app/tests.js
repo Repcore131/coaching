@@ -12625,8 +12625,11 @@ async function testExercices(){
           const t=[/19[ \u00a0]€/,/39[ \u00a0]€/].filter(re=>re.test(prod)).map(String);
           if(t.length) return _echec('un prix coach est écrit en dur : '+t.join(', '));
           // Et le paywall autonome reste intact : ce lot ne l'a pas touché.
-          return /9,95/.test(String(loadAccessGate))
-            ?true:_echec('la mention autonome a disparu de loadAccessGate');})());
+          // ⚠ CE TEST CHERCHAIT « 9,95 » DANS LE TEXTE DE LA FONCTION, et il le
+          //   trouvait dans un COMMENTAIRE : il serait reste vert avec un prix
+          //   affiche faux. Il verifie maintenant que la porte lit la table.
+          return /prixAutonomie\(\)/.test(String(loadAccessGate))
+            ?true:_echec('la porte fermée n’annonce plus le prix de la table');})());
           // ══════ L'ÉCRAN D'ACCÈS EXPIRÉ ══════
           ok('Accès expiré : le coach est joignable en un geste',(()=>{
             // Sur cet écran, joindre son coach est UNE des deux actions qui
@@ -12740,10 +12743,16 @@ async function testExercices(){
                 return _echec('la relance d\'action a disparu');
               const requis=poser({status:'FREE'});
               if(requis.indexOf('Accès requis')<0) return _echec('titre : '+requis.split('|')[0]);
-              // ESPACE INSÉCABLE avant le € : « 9,95 » / « €/mois » coupé en fin de
-              // ligne est fautif en typographie française.
-              if(requis.indexOf('9,95\u00a0€/mois')<0)
-                return _echec('la mention de prix a perdu son espace insécable');
+              // ⚠ LE PRIX N'EST PLUS RECOPIE ICI (24/09/2026). Un chiffre ecrit
+              //   dans une assertion vieillit avec le tarif, et le test devient
+              //   un mensonge vert. On compare l'ecran a LA TABLE.
+              if(requis.indexOf(prixAutonomie())<0)
+                return _echec('la mention de prix ne reprend pas la table ('
+                  +prixAutonomie()+') : '+requis.slice(0,140));
+              // ESPACE INSÉCABLE avant le € : la coupure « 9,50 » / « €/mois » en
+              // fin de ligne est fautive en typographie française.
+              if(prixAutonomie().indexOf('\u00a0€')<0)
+                return _echec('le prix a perdu son espace insécable : '+prixAutonomie());
               // Aucun des trois états ne laisse passer un mot désaccentué.
               const tout=inactif+'|'+requis;
               const nus=(tout.match(/\b(Acces|acces|expire|Expire|abonnes)\b/g)||[]);
@@ -12885,8 +12894,12 @@ async function testExercices(){
           const t=(z.innerText||z.textContent||'').replace(/\s+/g,' ');
           if(!/[Gg]ratuit pour votre premier client/.test(t))
             return _echec('la gratuité du premier client n\'est plus dite');
-          if(t.indexOf('9,95')<0&&t.indexOf('9,95')<0)
-            return _echec('le tarif des athlètes n\'est pas annoncé au coach');
+          // ⚠ MEME RAISON : le prix vient de la table. `t` a ete normalise par
+          //   replace(/\s+/g,' '), qui a transforme l'espace insecable en espace
+          //   ordinaire — on normalise le prix de la meme facon avant de comparer.
+          const _prixAth=prixOffre('essentielle').replace(/\u00a0/g,' ');
+          if(t.indexOf(_prixAth)<0)
+            return _echec('le tarif des athlètes ('+_prixAth+') n\'est pas annoncé au coach');
           if(!/ne paient rien/.test(t))
             return _echec('la gratuité par code n\'est plus dite');
           // On ne promet PAS un compte coach gratuit tout court : c'est vrai
@@ -33906,10 +33919,18 @@ async function testExercices(){
           const tot=i=>cartes[i].querySelector('.wel-c-tot').textContent;
           // L'ANNUEL EST AFFICHE PAR DEFAUT, et le chiffre le plus gros est le
           // prix AU MOIS. Le total annuel est en petit dessous.
-          if(nb(0)!=='8,25'+nbsp+'€') return _echec('Essentielle annuel au mois : '+nb(0));
-          if(nb(1)!=='20,75'+nbsp+'€') return _echec('Ultime annuel au mois : '+nb(1));
-          if(tot(0).indexOf('99'+nbsp+'€')<0) return _echec('le total annuel d’Essentielle : '+tot(0));
-          if(tot(1).indexOf('249'+nbsp+'€')<0) return _echec('le total annuel d’Ultime : '+tot(1));
+          // ⚠ LES CHIFFRES NE SONT PLUS RECOPIES (24/09/2026). Ils valaient 8,25
+          //   et 20,75 — le prix mensuel d'une annee remisee. L'annee vaut
+          //   maintenant douze mensualites pleines, et ces quatre lignes
+          //   auraient dû être réécrites à chaque ajustement de tarif. Elles
+          //   lisent la table, qui est la seule source.
+          if(nb(0)!==prixMoisAnnuel('essentielle')) return _echec('Essentielle annuel au mois : '+nb(0));
+          if(nb(1)!==prixMoisAnnuel('ultime')) return _echec('Ultime annuel au mois : '+nb(1));
+          if(tot(0).indexOf(prixOffre('essentielle',true))<0) return _echec('le total annuel d’Essentielle : '+tot(0));
+          if(tot(1).indexOf(prixOffre('ultime',true))<0) return _echec('le total annuel d’Ultime : '+tot(1));
+          // ET IL EST DIT QUE L'ANNEE SE REGLE EN UNE FOIS : c'est la seule
+          // difference avec le mensuel depuis qu'il n'y a plus de remise.
+          if(tot(0).indexOf('une fois')<0) return _echec('l’année ne dit pas qu’elle se règle en une fois : '+tot(0));
           // ULTIME PORTE « LE PLUS CHOISI », et elle seule.
           if(document.querySelectorAll('#wel-cartes .wel-c-pref').length!==1)
             return _echec('le bandeau « le plus choisi » n’est pas unique');
@@ -33917,9 +33938,25 @@ async function testExercices(){
           // LE MENSUEL DIT LES VRAIS PRIX, et le badge des deux mois disparait.
           accueilPeriode(false);
           const m=[...document.querySelectorAll('#wel-cartes .wel-c-nb')].map(x=>x.textContent);
-          if(m[0]!=='9,95'+nbsp+'€'||m[1]!=='24,90'+nbsp+'€') return _echec('les prix mensuels : '+m.join(' / '));
+          if(m[0]!==prixOffre('essentielle')||m[1]!==prixOffre('ultime'))
+            return _echec('les prix mensuels : '+m.join(' / '));
+          // ⚠ LE BANDEAU NE PROMET UNE REMISE QUE S'IL Y EN A UNE. Il disait
+          //   « 2 mois offerts » en dur : le jour où l'année est passée à douze
+          //   mensualités pleines, il a continué à l'annoncer au-dessus de deux
+          //   prix qui le démentaient. Il porte la remise calculée, ou rien.
           const badge=document.getElementById('wel-badge');
-          if(badge&&badge.style.display!=='none') return _echec('« 2 mois offerts » reste affiché en mensuel');
+          if(badge&&badge.style.display!=='none') return _echec('le bandeau reste affiché en mensuel');
+          accueilPeriode(true);
+          const _rem=_economie('essentielle').pourcent;
+          const b2=document.getElementById('wel-badge');
+          if(b2){
+            const vu=b2.style.display!=='none';
+            if(!!_rem!==vu) return _echec(_rem
+              ?('la remise '+_rem+' n’est pas annoncée')
+              :('le bandeau annonce « '+b2.textContent+' » sans remise'));
+            if(_rem&&b2.textContent.indexOf(_rem)<0)
+              return _echec('le bandeau n’annonce pas la remise calculée : '+b2.textContent);
+          }
           return true;
         } finally { accueilPeriode(sauve); }})());
 
@@ -35078,7 +35115,11 @@ async function testExercices(){
           programme_perso:[99,'ultime',3], revision_prog:[40,'ultime',1],
           boutique_prog:[14.9,'ultime',3], coaching_essentiel:[150,'suivi',1],
           coaching_transfo:[350,'suivi',3], coaching_evolution:[600,'suivi',6],
-          essentielle:[9.95,'essentielle',0], ultime:[24.90,'ultime',0], essai:[0,'ultime',1],
+          // ⚠ 9,50 ET NON 9,95 DEPUIS LE 24/09/2026 : l'abonnement s'engage sur
+          //   douze mois, et l'annee payee d'un coup vaut douze mensualites.
+          //   C'est LE test qui empeche un tarif de bouger en silence : les
+          //   chiffres y sont ecrits a la main, et c'est voulu.
+          essentielle:[9.50,'essentielle',0], ultime:[24.90,'ultime',0], essai:[0,'ultime',1],
           // LOT 10 : le premier mois apres un pack. Son prix se LIT sur
           // Ultime, il n'est pas recopie : la moitie de 24,90 fait 12,45, et
           // elle suivra le jour ou Ultime bougera.
@@ -35092,16 +35133,31 @@ async function testExercices(){
           if(o.mois!==a[2]) return _echec(k+' dure '+o.mois+' mois au lieu de '+a[2]);
         }
         // LES DEUX TARIFS ANNUELS, et les deux seuls.
-        if(OFFRES.essentielle.prixAn!==99||OFFRES.ultime.prixAn!==249)
+        if(OFFRES.essentielle.prixAn!==114||OFFRES.ultime.prixAn!==298.80)
           return _echec('les tarifs annuels ont changé');
+        // ⚠ ET L'ANNEE VAUT EXACTEMENT DOUZE MENSUALITES. C'est le coeur du
+        //   choix du 24/09/2026 : payer d'avance ne coute ni plus ni moins.
+        //   En centimes entiers — 24,90 × 12 vaut 298,80000000000005 en
+        //   virgule flottante, et la comparaison directe echouerait.
+        for(const k of ['essentielle','ultime']){
+          const o=OFFRES[k];
+          if(Math.round(o.prixAn*100)!==Math.round(o.prix*100)*12)
+            return _echec(k+' : l’année ('+o.prixAn+') ne fait pas douze fois '+o.prix);
+        }
+        // DONC AUCUNE REMISE A ANNONCER, et rien ne doit en annoncer une.
+        if(_economie('essentielle').texte||_economie('ultime').texte)
+          return _echec('une économie est annoncée alors que l’année vaut douze mois');
         // LA MISE EN FORME : deux decimales des qu'il y a des centimes, un
         // espace insecable avant le symbole.
         const nbsp=String.fromCharCode(160);
         if(prixOffre('ultime')!=='24,90'+nbsp+'€') return _echec('Ultime s’écrit « '+prixOffre('ultime')+' »');
-        if(prixOffre('essentielle')!=='9,95'+nbsp+'€') return _echec('Essentielle s’écrit « '+prixOffre('essentielle')+' »');
+        if(prixOffre('essentielle')!=='9,50'+nbsp+'€') return _echec('Essentielle s’écrit « '+prixOffre('essentielle')+' »');
         if(prixOffre('programme_perso')!=='99'+nbsp+'€') return _echec('99 € s’écrit « '+prixOffre('programme_perso')+' »');
-        if(prixMoisAnnuel('ultime')!=='20,75'+nbsp+'€') return _echec('Ultime annuel au mois : '+prixMoisAnnuel('ultime'));
-        if(prixMoisAnnuel('essentielle')!=='8,25'+nbsp+'€') return _echec('Essentielle annuel au mois : '+prixMoisAnnuel('essentielle'));
+        // LE MOIS D'UNE ANNEE PAYEE D'AVANCE EST LE MEME QUE LE MENSUEL,
+        // maintenant qu'il n'y a plus de remise. Les deux lignes le verifient
+        // plutot que de recopier un chiffre qui redeviendrait faux.
+        if(prixMoisAnnuel('ultime')!==prixOffre('ultime')) return _echec('Ultime annuel au mois : '+prixMoisAnnuel('ultime'));
+        if(prixMoisAnnuel('essentielle')!==prixOffre('essentielle')) return _echec('Essentielle annuel au mois : '+prixMoisAnnuel('essentielle'));
         // ET « COACHING PREMIUM » N'EXISTE NULLE PART : il est supprime de
         // l'offre, il ne doit pas survivre dans un identifiant oublie.
         const src=_prodSrc();

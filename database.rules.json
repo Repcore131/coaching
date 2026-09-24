@@ -78,6 +78,12 @@
           //   cesse de se synchroniser sans que rien ne le dise.
           "formule": { ".validate": "newData.isString() && newData.val().length < 40" },
           "prochaineEcheance": { ".validate": "newData.isNumber()" },
+          // ⚠ LE TERME DE L'ENGAGEMENT (24/09/2026), ET IL DOIT ETRE DECLARE ICI.
+          //   `abonnement` est une liste blanche fermee par "$autre": false : un
+          //   champ non declare fait rejeter le PUT ENTIER du dossier, en silence.
+          //   Sans cette ligne, le premier abonne aurait cesse de se synchroniser
+          //   a la seconde ou il paie — c'est le defaut qu'a evite `formule`.
+          "engagementJusqu": { ".validate": "newData.isNumber() && newData.val() > 0" },
           "resiliationDemandee": {
             "ts": { ".validate": "newData.isNumber()" },
             "motif": { ".validate": "newData.isString() && newData.val().length < 300" },

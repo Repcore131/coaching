@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1534';
+window.RC_BUILD='1535';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -403,7 +403,7 @@ if('serviceWorker' in navigator){
 /* Repli COMPLET, pour un navigateur sans woff2 ou un fichier manquant. */
 :root{--pile-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans',sans-serif;--pile-titre:'Bebas Neue','Arial Narrow','Haettenschweiler','Franklin Gothic Condensed',Impact,sans-serif}
 </style>
-<link rel="stylesheet" href="./rc-style.1534.css">
+<link rel="stylesheet" href="./rc-style.1535.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -820,7 +820,11 @@ const COACH_PHOTO='icons/coach.jpg';
     <div class="wel-bascule" role="group" aria-label="Choisir la période">
       <button type="button" id="wel-b-an" class="actif" onclick="accueilPeriode(true)">Annuel</button>
       <button type="button" id="wel-b-mois" onclick="accueilPeriode(false)">Mensuel</button>
-      <span class="wel-badge" id="wel-badge">2 mois offerts</span>
+      <!-- ⚠ VIDE ET MASQUE : accueilPeriode y ecrit la remise CALCULEE, et le
+           laisse cache quand il n'y en a pas. Il disait « 2 mois offerts »
+           en dur, ce qui est devenu faux le 24/09/2026 quand l'annee est
+           passee a douze mensualites pleines. -->
+      <span class="wel-badge" id="wel-badge" style="display:none"></span>
     </div>
 
     <!-- LES DEUX FORMULES. Remplies par accueilRendreTarifs : les prix vivent
@@ -946,7 +950,7 @@ const COACH_PHOTO='icons/coach.jpg';
              c'est vrai pour UN athlète, puis les paliers Coach et Pro s'appliquent.
              L'ancienne formule promettait « des codes d'accès gratuits » que seul le
            créateur peut émettre : la promesse ne pouvait pas être tenue. -->
-      <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.82);line-height:1.6"><strong style="color:var(--text)">Gratuit pour votre premier client</strong>, sans limite de durée et sans carte bancaire. Au-delà, ta formule suit le nombre d'athlètes que tu accompagnes. Tu génères tes propres codes à donner à tes athlètes : chaque code les rattache à ton suivi et leur ouvre l'accès pour la durée que tu choisis, <strong style="color:var(--text)">jusqu'à 12 mois</strong>. <strong style="color:var(--text)">Tes athlètes ne paient rien</strong> tant qu'ils utilisent un de tes codes. Sans code, l'accès en autonomie leur coûte <span data-prix-autonomie></span>, sans engagement.</div>
+      <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.82);line-height:1.6"><strong style="color:var(--text)">Gratuit pour votre premier client</strong>, sans limite de durée et sans carte bancaire. Au-delà, ta formule suit le nombre d'athlètes que tu accompagnes. Tu génères tes propres codes à donner à tes athlètes : chaque code les rattache à ton suivi et leur ouvre l'accès pour la durée que tu choisis, <strong style="color:var(--text)">jusqu'à 12 mois</strong>. <strong style="color:var(--text)">Tes athlètes ne paient rien</strong> tant qu'ils utilisent un de tes codes. Sans code, l'accès en autonomie leur coûte <span data-prix-autonomie></span>, sur douze mois d'engagement.</div>
     </div>
   </div>
 </div>
@@ -1036,7 +1040,7 @@ const COACH_PHOTO='icons/coach.jpg';
                pose par _poserPromesseAthlete — ecrit une fois, comme
                PROMESSE_COACH. -->
           <div class="sub" style="font-size:var(--fs-xs);margin-top:3px;color:var(--green)" data-promesse-athlete></div>
-          <div class="sub" style="font-size:var(--fs-xs);margin-top:3px">Ensuite : <span data-prix-autonomie></span>, sans engagement</div>
+          <div class="sub" style="font-size:var(--fs-xs);margin-top:3px">Ensuite : <span data-prix-autonomie></span>, engagement 12 mois</div>
         </div>
         <div style="margin-left:auto;color:var(--sub);font-size:var(--fs-xl)">›</div>
       </div>
@@ -1045,7 +1049,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- Info box athlète -->
     <div style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.24);border-radius:var(--r-3);padding:14px 16px;margin-top:4px">
       <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:var(--red-text);font-weight:700;margin-bottom:6px">ℹ️ ESPACE ATHLÈTE</div>
-      <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.82);line-height:1.6">Avec un code fourni par ton coach, l'accès est compris dans son suivi. Sans code, <span data-promesse-athlete></span> L'accès en autonomie coûte ensuite <span data-prix-autonomie></span>, sans engagement.</div>
+      <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.82);line-height:1.6">Avec un code fourni par ton coach, l'accès est compris dans son suivi. Sans code, <span data-promesse-athlete></span> L'accès en autonomie coûte ensuite <span data-prix-autonomie></span>, sur douze mois d'engagement.</div>
     </div>
 
   </div>
@@ -5579,9 +5583,11 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="display:flex;align-items:center;gap:9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="font-size:var(--fs-sm);color:#aaa">Tu choisis ce que ton coach voit</span></div>
         <div style="display:flex;align-items:center;gap:9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="font-size:var(--fs-sm);color:#aaa">3 484 aliments ANSES-Ciqual 2025, hors ligne</span></div>
         <div style="display:flex;align-items:center;gap:9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="font-size:var(--fs-sm);color:#aaa">Séances complètes en salle sans réseau</span></div>
-        <div style="display:flex;align-items:center;gap:9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><!-- « annulation facile » n'était adossé à rien : aucun code de résiliation
-     n'existe dans l'app, elle se fait depuis PayPal. Formulation tenable. -->
-<span style="font-size:var(--fs-sm);color:#aaa">Sans engagement, tu arrêtes quand tu veux</span></div>
+        <div style="display:flex;align-items:center;gap:9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><!-- ⚠ CETTE LIGNE PROMETTAIT « Sans engagement, tu arrêtes quand tu veux »
+     (24/09/2026). L'abonnement s'engage désormais sur douze mois, réglés en
+     une fois ou mois par mois : la promesse inverse, maintenue au-dessus du
+     bouton de paiement, aurait été un argument de vente faux. -->
+<span style="font-size:var(--fs-sm);color:#aaa">Engagement 12 mois, en une fois ou mensuel</span></div>
       </div>
       <div style="width:36px;height:2px;background:var(--red);margin-bottom:16px"></div>
       <!-- Sélecteur de palier — rempli par _renderSubPaliers(). Rendu en JS et
@@ -5617,7 +5623,7 @@ const COACH_PHOTO='icons/coach.jpg';
           </svg>
           <div style="text-align:left">
             <div style="font-size:var(--fs-xs);font-weight:700;color:#ccc;font-family:Montserrat,sans-serif;display:flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="#6b9fd4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12" style="flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Paiement sécurisé via <span style="color:#009CDE">PayPal</span></div>
-            <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px">Sans engagement · Résiliation à tout moment</div>
+            <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px">Engagement 12 mois · Résiliation en ligne, effet au terme</div>
           </div>
         </div>
       </div>
@@ -5627,5 +5633,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1534.js"></script>
+<script src="./rc-core.1535.js"></script>
 </body></html>

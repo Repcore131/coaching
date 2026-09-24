@@ -1046,8 +1046,16 @@ const OFFRES=Object.freeze({
   coaching_transfo:   Object.freeze({lib:'Coaching Transformation',  prix:350,  palier:'suivi',  mois:3, type:'coaching'}),
   coaching_evolution: Object.freeze({lib:'Coaching Évolution',       prix:600,  palier:'suivi',  mois:6, type:'coaching'}),
   // ── Ce que l'application vend, quand personne ne suit la personne ───
-  essentielle:        Object.freeze({lib:'Essentielle', prix:9.95,  prixAn:99,  palier:'essentielle', mois:0, type:'abonnement'}),
-  ultime:             Object.freeze({lib:'Ultime',      prix:24.90, prixAn:249, palier:'ultime',      mois:0, type:'abonnement'}),
+  // ⚠ ENGAGEMENT DOUZE MOIS, DEUX FAÇONS DE LE RÉGLER (24/09/2026, demande de
+  //   Kevin). `prixAn` N'EST PLUS UN TARIF REMISÉ : c'est le même total, payé en
+  //   une fois au lieu de douze. 9,50 × 12 = 114, 24,90 × 12 = 298,80.
+  //
+  //   Ce qui suit de ce choix, et qui n'est pas ici : les écrans ne promettent
+  //   plus « sans engagement », et la remise (− x %) disparaît d'elle-même
+  //   puisqu'elle se calcule — elle reviendra le jour où `prixAn` redescendra
+  //   sous douze mensualités, sans qu'une ligne bouge.
+  essentielle:        Object.freeze({lib:'Essentielle', prix:9.50,  prixAn:114,   palier:'essentielle', mois:0, type:'abonnement'}),
+  ultime:             Object.freeze({lib:'Ultime',      prix:24.90, prixAn:298.80, palier:'ultime',      mois:0, type:'abonnement'}),
   // ── La sortie de pack : le premier mois a moitie prix, UNE SEULE FOIS ──
   // ⚠ LE PRIX SE CALCULE, IL NE S'ECRIT PAS : la moitie d'Ultime suit Ultime
   //   le jour ou Ultime bouge. Un 12,45 ecrit en dur aurait vecu plus
@@ -1248,14 +1256,32 @@ function rcVerrouUltime(){
   try{ return accueilChoisir('ultime',true); }catch(e){ try{ go('s-subscribe'); }catch(_e){} }
   return true;
 }
+// PURE. CE QUE L'ANNÉE FAIT ÉCONOMISER, quand elle fait économiser quelque
+// chose. Rend deux chaînes vides sinon — l'écran retombe alors sur le détail
+// (« soit 9,50 / mois »), qui lui reste vrai.
+//
+// ⚠ ON NE TESTE PAS « prixAn < prix × 12 » A UN CENTIME PRES : 24,90 × 12 vaut
+//   298,80000000000005 en virgule flottante. On compare des centimes entiers.
+function _economie(cle){
+  const o=offre(cle)||{};
+  const mois=Math.round((Number(o.prix)||0)*100), an=Math.round((Number(o.prixAn)||0)*100);
+  if(!an||!mois||an>=mois*12) return {texte:'',pourcent:''};
+  return {texte:'Économise '+_euros(Math.round(mois*12-an)/100),
+    pourcent:'−'+Math.round((1-an/(mois*12))*100)+' %'};
+}
 // Les deux paliers d'abonnement, dans l'ordre d'affichage.
 // ⚠ LES PRIX VIENNENT D'OFFRES, PAS D'ICI (lot 1) : deux ecrans qui annoncent
 //   deux prix pour le meme abonnement, c'est ce que ce lot ferme.
 const SUB_PALIERS=[
   {cle:'annuel', titre:'Annuel', prix:prixOffre('essentielle',true), periode:'par an',
    detail:'soit '+prixMoisAnnuel('essentielle')+' / mois',
-   econ:'Économise '+_euros(Math.round((OFFRES.essentielle.prix*12-OFFRES.essentielle.prixAn)*100)/100),
-   remise:'−'+Math.round((1-OFFRES.essentielle.prixAn/(OFFRES.essentielle.prix*12))*100)+' %',
+   // ⚠ RIEN QUAND IL N'Y A RIEN À ÉCONOMISER. Depuis que l'année vaut douze
+   //   mensualités, « Économise 0,00 € » et « −0 % » s'affichaient tous les
+   //   deux : deux mentions qui disent que ça ne sert à rien de payer
+   //   d'avance, juste au-dessus du bouton qui le propose. Le calcul reste,
+   //   la mention revient toute seule si le prix annuel redescend.
+   econ:_economie('essentielle').texte,
+   remise:_economie('essentielle').pourcent,
    planId:()=>PAYPAL_PLAN_ID_ANNUEL},
   {cle:'mensuel', titre:'Mensuel', prix:prixOffre('essentielle'), periode:'par mois',
    detail:_euros(Math.round(OFFRES.essentielle.prix*12*100)/100)+' sur un an', econ:'', remise:'',
@@ -1301,8 +1327,7 @@ function subPaliersDe(cle){
   const l=[];
   if(an) l.push({cle:'annuel',titre:'Annuel',prix:prixOffre(cle,true),periode:'par an',
     detail:'soit '+prixMoisAnnuel(cle)+' / mois',
-    econ:'Économise '+_euros(Math.round((mois*12-an)*100)/100),
-    remise:'−'+Math.round((1-an/(mois*12))*100)+' %',
+    econ:_economie(cle).texte, remise:_economie(cle).pourcent,
     planId:()=>planIdOffre(cle,true)});
   if(mois) l.push({cle:'mensuel',titre:'Mensuel',prix:prixOffre(cle),periode:'par mois',
     detail:_euros(Math.round(mois*12*100)/100)+' sur un an',econ:'',remise:'',
@@ -2096,6 +2121,12 @@ function finAccesAbonnement(user){
   const u=user||{};
   if(typeof u.accessExpiry==='number'&&u.accessExpiry>0) return u.accessExpiry;
   const a=abonnementDe(u);
+  // ⚠ LE TERME DE L'ENGAGEMENT D'ABORD (24/09/2026). C'est la date jusqu'a
+  //   laquelle l'acces court quand quelqu'un resilie, et la seule que le
+  //   dossier connaisse avec certitude : elle est posee a l'achat et ne bouge
+  //   plus. Sans elle, l'ecran de resiliation disait « la fin de la periode
+  //   reglee » — vrai, et inutilisable.
+  if(typeof a.engagementJusqu==='number'&&a.engagementJusqu>0) return a.engagementJusqu;
   if(typeof a.prochaineEcheance==='number') return a.prochaineEcheance;
   return null;
 }
@@ -2220,9 +2251,13 @@ function _renderAbonnement(){
     <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:8px">Mon abonnement</div>
     ${l('Formule',(pal&&pal.titre)||'Mensuel')}
     ${l('Prix',((pal&&pal.prix)||prixOffre('essentielle'))+' '+((pal&&pal.periode)||'par mois'))}
-    ${fin?l(r?'Accès jusqu\'au':'Prochaine échéance',finTxt):''}
+    ${/* ⚠ CE LIBELLE DISAIT « Prochaine échéance » et affichait le TERME DE
+          L'ENGAGEMENT (corrigé le 24/09/2026) : quelqu'un qui paie au mois y
+          lisait qu'il ne serait pas prélevé avant un an. La date n'a pas
+          changé, le mot si. */''}
+    ${fin?l(r?'Accès jusqu\'au':'Engagement jusqu\'au',finTxt):''}
     ${r?`<div style="margin-top:12px;background:var(--surface-2);border-radius:var(--r-3);padding:12px 13px">
-        <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-bottom:8px">Résiliation demandée le ${escapeHtml(new Date(r.ts).toLocaleDateString('fr-FR'))}. Ton accès reste ouvert jusqu'au ${escapeHtml(finTxt)}.</div>
+        <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-bottom:8px">Résiliation demandée le ${escapeHtml(new Date(r.ts).toLocaleDateString('fr-FR'))}. Ton accès reste ouvert jusqu'au ${escapeHtml(finTxt)}, et rien ne se reconduit ensuite.</div>
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.7">${escapeHtml(RESIL_MOYENS)}</div>
         <ol style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.8;margin:8px 0 0 18px">${RESIL_PAYPAL.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')}</ol>
       </div>`
@@ -2256,10 +2291,18 @@ function _confirmerResiliation(){
   toast('Résiliation enregistrée ✓','var(--green)');
   return true;
 }
-const RESIL_MOYENS='Ta demande est enregistrée. RepCore ne peut pas annuler '
-  +'l\'abonnement à ta place chez PayPal : le paiement est géré directement '
-  +'entre toi et eux. Fais les trois étapes ci-dessous. Si un prélèvement '
-  +'partait malgré tout après cette demande, il te serait remboursé (CGV §7).';
+// ⚠ CE TEXTE PROMETTAIT LE REMBOURSEMENT DE TOUT PRELEVEMENT POSTERIEUR A LA
+//   DEMANDE. Depuis l'engagement de douze mois (24/09/2026), les echeances
+//   restantes sont dues : la promesse inverse, affichee au moment ou quelqu'un
+//   resilie, aurait coute soit de l'argent, soit la confiance. Ce qui reste
+//   vrai, et qui est dit : l'acces court jusqu'au terme, rien ne se reconduit
+//   ensuite, et un prelevement APRES le terme se rembourse.
+const RESIL_MOYENS='Ta demande est enregistrée. Ton abonnement va jusqu\'au terme '
+  +'des douze mois : les prélèvements continuent jusque-là, et rien ne se '
+  +'reconduit ensuite. Au terme, coupe le paiement automatique chez PayPal : '
+  +'RepCore ne peut pas annuler l\'abonnement à ta place, le paiement est géré '
+  +'directement entre toi et eux. Un prélèvement postérieur au terme te serait '
+  +'remboursé (CGV §5).';
 // Palier retenu. L'annuel est pré-sélectionné quand il existe ; sinon le
 // premier disponible, pour qu'aucun état ne laisse la sélection vide.
 let _subPalier=null;
@@ -7306,8 +7349,18 @@ function accueilPeriode(annuel){
   const a=document.getElementById('wel-b-an'), m=document.getElementById('wel-b-mois');
   if(a) a.classList.toggle('actif',_accueilAnnuel);
   if(m) m.classList.toggle('actif',!_accueilAnnuel);
+  // ⚠ LE BANDEAU DISAIT « 2 mois offerts », EN DUR, DANS index.html. Depuis
+  //   que l'année vaut douze mensualités (24/09/2026), la promesse était
+  //   fausse — et affichée juste au-dessus des deux prix qui la démentent.
+  //   Il porte maintenant la remise CALCULÉE, et ne s'affiche pas quand il
+  //   n'y en a pas. Le jour où le prix annuel redescendra, il reviendra tout
+  //   seul, avec le bon pourcentage.
   const b=document.getElementById('wel-badge');
-  if(b) b.style.display=_accueilAnnuel?'':'none';
+  if(b){
+    const e=_economie('essentielle');
+    if(_accueilAnnuel&&e.pourcent){ b.textContent=e.pourcent+' sur l’année'; b.style.display=''; }
+    else b.style.display='none';
+  }
   accueilRendreTarifs();
   return _accueilAnnuel;
 }
@@ -7504,8 +7557,9 @@ function loadAccessGate(){
   } else {
     title.textContent='Accès requis';
     sub.textContent='Tu dois activer un accès pour utiliser RepCore.';
-    // Espace insécable avant le € : la coupure « 9,95 » / « €/mois » en fin de
-    // ligne est fautive en typographie française.
+    // Espace insécable avant le € : la coupure « 9,50 » / « €/mois » en fin de
+    // ligne est fautive en typographie française. Le prix vient de la table,
+    // jamais d'ici : prixAutonomie le lit sur SUB_PALIERS, qui le lit sur OFFRES.
     block.innerHTML=L+"Tu n'as pas encore d'accès actif.<br>"
       +"Entre un code fourni par ton coach, ou souscris à l'abonnement autonomie à "+escapeHtml(prixAutonomie())+".</div>";
   }
@@ -97301,7 +97355,15 @@ function loadMonetisationTab(){
   const active=subs.filter(x=>x.paymentStatus==='active');
   const cancelled=subs.filter(x=>x.paymentStatus==='cancelled');
   document.getElementById('pp-total-subs').textContent=active.length;
-  document.getElementById('pp-mrr').textContent=(active.length*9.95).toFixed(2)+'€';
+  // ⚠ LE SEUL PRIX ENCORE ECRIT EN DUR DANS TOUT LE FICHIER, trouve le
+  //   24/09/2026 : « active.length * 9.95 ». Il annoncait un revenu mensuel
+  //   calcule sur un tarif qui venait de changer, et sur le seul tarif
+  //   d'Essentielle — un abonne a Ultime comptait pour 9,95 €. Chacun compte
+  //   maintenant pour ce que SA formule vaut, lue dans la table.
+  document.getElementById('pp-mrr').textContent=_euros(Math.round(active.reduce((s,x)=>{
+    const f=String(((x.abonnement||{}).formule)||'essentielle');
+    return s+(Number((offre(f)||{}).prix)||0);
+  },0)*100)/100);
   document.getElementById('pp-cancelled').textContent=cancelled.length;
   const el=document.getElementById('pp-subs-list');
   if(!subs.length){
@@ -99029,7 +99091,18 @@ function renderPaypalButton(planId,coachId){
            //   dit « mensuel » ou « annuel » ; sans `formule`, rien dans le
            //   dossier ne distinguait Essentielle d'Ultime, et un abonne a
            //   24,90 € recevait Essentielle. Elle se lit sur le plan FACTURE.
-           formule:formuleDuPlan(_planIdChoisi())||subOffreChoisie()});
+           formule:formuleDuPlan(_planIdChoisi())||subOffreChoisie(),
+           // ⚠ LE TERME DE L'ENGAGEMENT, POSE UNE FOIS (24/09/2026). Douze mois
+           //   a compter d'aujourd'hui : c'est la seule date de ce dossier qui
+           //   ne vieillira jamais, parce qu'elle ne depend d'aucun evenement
+           //   futur. `prochaineEcheance` avait ete ecartee pour cette raison
+           //   exacte — personne ne peut la rafraichir a chaque prelevement,
+           //   elle serait fausse des le deuxieme mois.
+           //
+           //   ⚠ POUR L'ATHLETE SEULEMENT : les formules coach se facturent au
+           //     mois, sans duree, et un terme ecrit dans leur dossier
+           //     promettrait un engagement que personne n'a pris.
+           engagementJusqu:(_estCoach?undefined:moisApres(Date.now(),12))});
         rcm('subscription_activated');
         if(pending){
           currentUser.coachId=pending.coachId||currentUser.coachId||null;
