@@ -45258,6 +45258,38 @@ async function testExercices(){
       if(!/omoplate gauche plus écartée de la colonne/.test(t.court)||!/Position du moment/.test(t.court)) return _echec('texte : '+t.court);
       if(!t.privilegier.some(x=>/face pull/.test(x)&&/Y-raise/.test(x)&&/rowing un bras/.test(x))) return _echec('recommandations : '+t.privilegier[0]);
       return true;})());
+    // Des pieds lus honnêtement (A15, 25/09/2026).
+    // Le pied gauche de l'athlète (écran droit, photo de face) ouvert de 30° apparents.
+    const _anatPieds=(opts)=>{
+      const a=_anatGab(null,opts), P=a.face.auto.pts, k=anatCotes('face',false).g;
+      const t=P['talon_'+k], q=P['pointe_'+k];
+      const dy=(q[1]-t[1])*1500, L=Math.hypot((q[0]-t[0])*1000,dy);
+      P['pointe_'+k]=[t[0]+L*Math.sin(30*Math.PI/180)/1000*(k==='r'?1:-1),t[1]+L*Math.cos(30*Math.PI/180)/1500,q[2]];
+      const res=anatMesures(a,_anatDossier());
+      return {res,f:res.fiches.find(x=>x.cle==='pieds')};
+    };
+    ok('ANALYSE MORPHO : PIEDS, LES DEGRÉS INDIVIDUELS QUITTENT LE TITRE, L’ÉCART RESTE CALCULÉ',(()=>{
+      const {res,f}=_anatPieds();
+      if(f.mesure.asy==null) return _echec('écart non calculé');
+      if(Math.abs(f.mesure.asy-(f.mesure.g-f.mesure.d))>1e-9) return _echec('écart faux');
+      if(!/^écart G\/D : [+−-]?\d+°$/.test(f.valeur)) return _echec('titre : « '+f.valeur+' »');
+      if(f.valeur.indexOf(_anatN(f.mesure.g,0)+'°')>=0&&Math.round(f.mesure.g)!==Math.round(f.mesure.asy)) return _echec('un degré individuel dans le titre : '+f.valeur);
+      const lg=f.chiffres.find(c=>c.lib==='Pied gauche');
+      if(!lg||!/apparente \(perspective\)/.test(lg.def)||!/estimation/.test(lg.def)) return _echec('ligne du pied gauche : '+JSON.stringify(lg));
+      // 30° apparents × 0,4 = 12° : « ouvert ».
+      if(lg.val!=='ouvert') return _echec('mot du pied gauche : '+lg.val);
+      if(anatMotPied(-2)!=='fermé'||anatMotPied(4)!=='droit'||anatMotPied(25)!=='très ouvert') return _echec('seuils des mots');
+      if(!/estimation RepCore/.test(f.source)) return _echec('source : '+f.source);
+      if(!/posés comme d’habitude/.test(anatTexte(f,res).verifier)) return _echec('pas de consigne de prise de vue');
+      return true;})());
+    ok('ANALYSE MORPHO : PIEDS, « PHOTO PRISE VERS LE SOL » : L’OUVERTURE SE LIT EN DEGRÉS',(()=>{
+      const {f}=_anatPieds({sol:true});
+      const lg=f.chiffres.find(c=>c.lib==='Pied gauche');
+      if(lg.val!=='+30°') return _echec('ouverture lue : '+lg.val);
+      if(!/écart G\/D/.test(f.valeur)||/30°/.test(f.valeur)) return _echec('titre : '+f.valeur);
+      if(!/vers le sol/.test(f.source)) return _echec('source : '+f.source);
+      if(anatOptions({opts:{sol:true}}).sol!==true||anatOptions({}).sol!==false) return _echec('option sol');
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());

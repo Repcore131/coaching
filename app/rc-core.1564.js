@@ -45035,6 +45035,21 @@ function anatSerieV(u,courant){
   }
   return Object.values(par).sort((x,y)=>x.bilan-y.bilan);
 }
+/**
+ * LES PIEDS LUS HONNÊTEMENT (A15). De face, à hauteur de hanche et à 3 m, le
+ * pied se couche dans l'image : son axe avant-arrière est vu en raccourci
+ * (≈ sin 18°), si bien que l'ouverture APPARENTE exagère la vraie d'un
+ * facteur 2 à 3. Sans photo prise vers le sol, on n'en tire qu'un mot, sur
+ * l'angle apparent × 0,4 — une ESTIMATION RepCore, pas une mesure. L'écart
+ * G/D, lui, se lit sur les deux angles apparents : la perspective est la même
+ * des deux côtés.
+ */
+const ANAT_PIEDS=Object.freeze({CORR:0.4,SEUILS:[0,7,18],MOTS:['fermé','droit','ouvert','très ouvert'],
+  CONSIGNE:'Photo de face pieds nus, posés comme d’habitude — sans les tourner exprès, ni vers l’avant ni vers l’extérieur.'});
+function anatMotPied(corr){
+  const S=ANAT_PIEDS.SEUILS;
+  return ANAT_PIEDS.MOTS[corr<S[0]?0:(corr<=S[1]?1:(corr<=S[2]?2:3))];
+}
 /** Le repère d'un sexe (homme par défaut, comme les largeurs). */
 function anatRef(femme){ return ANAT_REF[femme?'F':'H']; }
 /**
@@ -45828,7 +45843,10 @@ function anatOptions(anat){
     cheveux:!!o.cheveux,
     // Chantier A10 : paumes vers l'avant, sans quoi l'angle de port ne se lit
     // pas. null : le coach n'a rien dit, le bilan décide (anatMesures).
-    paumes:(o.paumes!=null)?!!o.paumes:null};
+    paumes:(o.paumes!=null)?!!o.paumes:null,
+    // Chantier A15 : photo prise vers le sol, pieds vus du dessus — leur
+    // ouverture se lit alors telle quelle, sans perspective.
+    sol:!!o.sol};
 }
 /** Le bilan lu a-t-il été pris sur demande « paumes vers l'avant » ? */
 function anatPaumesBilan(u){
@@ -46205,11 +46223,15 @@ function anatMesures(anat,u,o){
       zone:F?_anatZoneAutour([F.P2('cheville','g'),F.P2('cheville','d'),F.P2('pointe','g'),F.P2('pointe','d'),F.P2('talon','g'),F.P2('talon','d')],0.5):null,
       etat:asy==null?'illisible':'ok',niveau:asy==null?null:_anatNiveau(asy,ANAT_SEUILS.pieds),
       bornes:['droit plus ouvert','gauche plus ouvert'],
-      valeur:asy==null?'':'G '+_anatN(g,0)+'° · D '+_anatN(d,0)+'°',tolerance:'±'+ANAT_TOL.pieds+'° (perspective)',
-      chiffres:[{lib:'Ouverture apparente, gauche',def:'talon → pointe / verticale de la photo',val:g!=null?_anatN(g,0)+'°':'—',ref:'',ecart:''},
-        {lib:'Ouverture apparente, droite',def:'talon → pointe / verticale de la photo',val:d!=null?_anatN(d,0)+'°':'—',ref:'',ecart:''},
-        {lib:'Différence',def:'gauche − droite',val:asy!=null?_anatSN(asy,0)+'°':'—',ref:'0°',ecart:''}],
-      mesure:{g,d,asy},source:'photo de face, talon et pointe'});
+      // A15 : le titre ne porte que l'écart ; les ouvertures passent au tableau.
+      valeur:asy==null?'':'écart G/D : '+_anatSN(asy,0)+'°',tolerance:'±'+ANAT_TOL.pieds+'° (perspective)',
+      chiffres:[['Pied gauche',g],['Pied droit',d]].map(([lib,v])=>opts.sol
+          ?{lib,def:'ouverture talon → pointe, photo prise vers le sol : lue sans correction',val:v!=null?_anatSN(v,0)+'°':'—',ref:'',ecart:''}
+          :{lib,def:v!=null?'ouverture apparente (perspective) '+_anatSN(v,0)+'° ; estimée ≈ '+_anatSN(v*ANAT_PIEDS.CORR,0)+'° (× '+_anatN(ANAT_PIEDS.CORR,1)+', estimation RepCore)':'ouverture apparente (perspective)',
+            val:v!=null?anatMotPied(v*ANAT_PIEDS.CORR):'—',ref:'',ecart:''})
+        .concat([{lib:'Écart G/D',def:opts.sol?'gauche − droite':'gauche − droite, sur les angles apparents : même perspective des deux côtés',val:asy!=null?_anatSN(asy,0)+'°':'—',ref:'0°',ecart:''}]),
+      mesure:{g,d,asy,sol:!!opts.sol,motG:g!=null?anatMotPied(g*ANAT_PIEDS.CORR):null,motD:d!=null?anatMotPied(d*ANAT_PIEDS.CORR):null},
+      source:'photo de face, talon et pointe'+(opts.sol?' ; photo prise vers le sol, ouverture lue telle quelle':' ; ouverture qualitative estimée (angle apparent × '+_anatN(ANAT_PIEDS.CORR,1)+', estimation RepCore)')});
   }
   // ── DOS : omoplates, rachis, triangles ───────────────────────────────────
   {
@@ -46848,16 +46870,17 @@ function anatTexte(f,res){
   case 'pieds':{
     if(!an){
       T.court='Appuis symétriques : les deux pieds s’ouvrent de la même façon ('+_anatN(m.asy,0)+'° d’écart).';
-      T.lecture='Gauche '+_anatN(m.g,0)+'°, droit '+_anatN(m.d,0)+'° d’ouverture apparente. La perspective d’une photo de face exagère l’ouverture : on lit la différence entre les deux, pas les degrés eux-mêmes.';
+      T.lecture=(m.sol?'Photo prise vers le sol : gauche '+_anatSN(m.g,0)+'°, droit '+_anatSN(m.d,0)+'° d’ouverture.'
+        :'Pied gauche '+m.motG+', pied droit '+m.motD+' (estimation). La perspective d’une photo de face exagère l’ouverture : on lit la différence entre les deux, pas les degrés eux-mêmes.');
       T.privilegier=['Travail du pied : short foot, montées sur pointes lentes, et du pied nu à l’échauffement'];
     }else{
       const ouvert=m.asy>0?'gauche':'droit';
       T.court='Pied '+ouvert+' plus ouvert que l’autre ('+_anatN(m.asy,0)+'° d’écart) : l’appui n’est pas symétrique.';
-      T.lecture='Gauche '+_anatN(m.g,0)+'°, droit '+_anatN(m.d,0)+'° d’ouverture apparente — on lit la différence. Un pied nettement plus ouvert traduit souvent une rotation de hanche de ce côté (rotation interne limitée, rotateurs externes raides), ou simplement la façon dont la photo a été prise.';
+      T.lecture=(m.sol?'Gauche '+_anatSN(m.g,0)+'°, droit '+_anatSN(m.d,0)+'° d’ouverture, photo prise vers le sol.':'Pied gauche '+m.motG+', pied droit '+m.motD+' (estimation sur l’angle apparent) — on lit la différence.')+' Un pied nettement plus ouvert traduit souvent une rotation de hanche de ce côté (rotation interne limitée, rotateurs externes raides), ou simplement la façon dont la photo a été prise.';
       T.privilegier=['Mobilité de hanche en rotation interne (90/90, rotation assise) du côté '+ouvert,'Travail du pied : short foot, montées sur pointes lentes','Unilatéral jambes (split squat, step-up) en plaçant les deux pieds de façon identique'];
       T.amenager=[{quoi:'Squat et soulevé de terre',reglage:'marquer au sol la position des pieds pour qu’elle soit la même à gauche et à droite ; ne pas forcer une ouverture que la hanche refuse — on la travaille à côté'}];
     }
-    T.verifier='La voûte plantaire ne se lit pas sur une photo de face : regarder la vignette, et le talon sur la photo de dos. Marge ±'+ANAT_TOL.pieds+'°.';
+    T.verifier=ANAT_PIEDS.CONSIGNE+' La voûte plantaire ne se lit pas sur une photo de face : regarder la vignette, et le talon sur la photo de dos. Marge ±'+ANAT_TOL.pieds+'°.';
     return T;
   }
   case 'dos':{
@@ -47525,6 +47548,20 @@ function anatRelancer(){
     else toast('Rien de lu : '+(_anatEchecs.get(c.email)||'la photo n’a pas pu être lue'),'var(--orange)');
   });
 }
+/** Une option de lecture posée hors édition (A15 : la photo prise vers le sol). */
+function anatReglerOption(nom,val){
+  const c=getOwnedClient(currentClientId);
+  if(!c||_anatEdit) return;
+  const users=DB.get('users')||{};
+  const d=users[c.email];
+  if(!d||!d.morphoAnat) return;
+  d.morphoAnat.opts=Object.assign({},d.morphoAnat.opts||{},{[nom]:!!val});
+  d.updatedAt=Date.now();
+  users[c.email]=d;
+  const ok=DB.set('users',users);
+  try{ renderAnatCoach(getOwnedClient(currentClientId)||d); }catch(e){}
+  toastSync(ok,CLOUD.pushOne(c.email,d),'Lecture mise à jour ✓','le réglage est');
+}
 /** La demande « paumes vers l'avant » pour les prochaines photos de bilan (A10). */
 function anatDemanderPaumes(on){
   const c=getOwnedClient(currentClientId);
@@ -47890,7 +47927,7 @@ function _anatContact(c,manque){
   const pre=String(c.fname||'').trim()||'l’athlète';
   const txt='Salut '+(String(c.fname||'').trim())+' ! Pour ton analyse morpho-anatomique, il me manque '
     +(manque&&manque.length?manque.join(' et '):'tes photos de bilan')
-    +'. Tu peux compléter ton bilan dans l’application (photos de face et de dos en pied, pieds à largeur de hanches, bras relâchés légèrement écartés du corps'
+    +'. Tu peux compléter ton bilan dans l’application (photos de face et de dos en pied, pieds nus à largeur de hanches et posés comme d’habitude, bras relâchés légèrement écartés du corps'
     +(c.photoPaumes?', paumes tournées vers l’avant sur la photo de face':'')
     +', idéalement prises par quelqu’un d’autre ou avec un minuteur) ? Merci !';
   const tel=String(c.phone||'').trim();
@@ -48173,6 +48210,7 @@ function _htmlAnat(c){
     +optsHtml
     // A10 : la demande de photos du prochain bilan. Elle ne descend chez
     // l'athlète que comme une consigne de prise de vue.
+    +'<label class="an-opt an-demande"><input type="checkbox"'+(res.opts.sol?' checked':'')+' onchange="anatReglerOption(\'sol\',this.checked)"><span>Photo prise vers le sol (pieds vus du dessus) : ouverture des pieds lue telle quelle</span></label>'
     +'<label class="an-opt an-demande"><input type="checkbox"'+(c.photoPaumes?' checked':'')+' onchange="anatDemanderPaumes(this.checked)"><span>Demander les prochaines photos de face paumes vers l’avant</span></label>'
     +'</div></details>';
 
@@ -59960,7 +59998,9 @@ function bPhotoCards(prefix){
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#ccc;margin-bottom:9px">${p.l}</div>
       <label style="display:inline-block;background:${done?'#001a00':'#1a0000'};border:1px solid ${done?'#22c55e':'var(--red)'};color:${done?'#22c55e':'var(--red)'};padding:6px 12px;border-radius:var(--r-1);font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:.5px">${done?' Ajoutée':'AJOUTER'} <input type="file" accept="image/*" style="display:none" onchange="loadBilPhoto(this,'${key}')"></label>
     </div>`;
-  }).join('')+`</div>`+(paumes?`<div class="bil-paumes" style="margin-top:10px;font-size:var(--fs-xs);line-height:1.5;color:var(--sub);text-align:center">Photo de face : <strong style="color:var(--text)">paumes tournées vers l’avant</strong>, bras tendus le long du corps, légèrement écartés.</div>`:'');
+  }).join('')+`</div>`
+    +`<div class="bil-pieds" style="margin-top:10px;font-size:var(--fs-xs);line-height:1.5;color:var(--sub);text-align:center">${escapeHtml(ANAT_PIEDS.CONSIGNE)}</div>`
+    +(paumes?`<div class="bil-paumes" style="margin-top:10px;font-size:var(--fs-xs);line-height:1.5;color:var(--sub);text-align:center">Photo de face : <strong style="color:var(--text)">paumes tournées vers l’avant</strong>, bras tendus le long du corps, légèrement écartés.</div>`:'');
 }
 function bSlider(gid){
   const parsed=parseInt(String(bilData[gid]||'').match(/\d+/)?.[0]||0);
