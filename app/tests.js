@@ -44989,6 +44989,66 @@ async function testExercices(){
       if(r2.fiable) return _echec('2 % pris pour une rotation : '+JSON.stringify(r2));
       if(anatMesures(_anatTourne(0.02),_anatDossier()).fiches.some(f=>f.tourne)) return _echec('2 % neutralise des fiches');
       return true;})());
+    // La troisième vue, le profil (A9, 25/09/2026).
+    // Gabarit de profil, regard vers la droite ; `modif` déplace des points de dx cm.
+    const _anatProfil=(modif)=>{
+      const a=_anatGab();
+      const pts=anatGabarit(1000,1500,'profil');
+      const cmPx=180/(0.86*1500);            // taille du dossier / stature en px
+      for(const k in (modif||{})) pts[k]=[pts[k][0]+modif[k]/cmPx/1000,pts[k][1],pts[k][2]];
+      a.profil={w:1000,h:1500,auto:{pts,sens:1},man:null};
+      return a;
+    };
+    ok('ANALYSE MORPHO : LE PROFIL A SES REPÈRES, CHACUN AVEC SA CONSIGNE « * »',(()=>{
+      if(!ANAT_REPERES.profil) return _echec('ANAT_REPERES.profil n’existe pas');
+      const cles=anatCles('profil');
+      for(const k of ['tragus','c7','acromion','trochanter','genou','malleole','vertex','talon']){
+        if(cles.indexOf(k)<0) return _echec('repère absent : '+k);
+        const a=anatAide(k,null,'profil');
+        if(!a||!a.aide||a.aide.length<30) return _echec('pas de consigne pour '+k);
+      }
+      if(anatAide('genou',null,'profil').aide===anatAide('genou').aide) return _echec('le genou de profil garde la consigne de face');
+      const pb=anatPremierBilan(_anatDossier({bilans:[{type:'depart',date:5,photos:{face:'f',back:'b',side:'s'}}]}));
+      if(pb.profil!=='s') return _echec('la photo de profil n’est pas lue : '+pb.profil);
+      if(pb.manque.length) return _echec('le profil ne doit pas être exigé');
+      return true;})());
+    ok('ANALYSE MORPHO : GABARIT DE PROFIL ALIGNÉ : TOUT À MOINS DE 1 CM DU FIL À PLOMB',(()=>{
+      const res=anatMesures(_anatProfil(),_anatDossier());
+      const po=res.fiches.find(f=>f.cle==='posture'), te=res.fiches.find(f=>f.cle==='tete');
+      if(!po||!te) return _echec('fiches Posture ou Tête et cou absentes');
+      for(const k of ['tragus','acromion','trochanter','genou']){
+        const x=po.mesure.dist[k];
+        if(!x||!(Math.abs(x.cm)<1)) return _echec(k+' : '+(x?x.cm.toFixed(2):'—')+' cm du fil');
+      }
+      if(Math.abs(te.mesure.cva-ANAT_PROFIL.cva)>0.5) return _echec('angle cranio-vertébral du gabarit : '+te.mesure.cva);
+      if(Math.abs(po.mesure.genouAng-180)>0.5||Math.abs(po.mesure.tronc)>0.5) return _echec('genou '+po.mesure.genouAng+' · tronc '+po.mesure.tronc);
+      if(po.niveau!==0||te.niveau!==0) return _echec('niveaux : '+po.niveau+' / '+te.niveau);
+      // Sans photo de profil : aucune fiche de plus.
+      if(anatMesures(_anatGab(),_anatDossier()).fiches.some(f=>f.vue==='profil')) return _echec('des fiches de profil sans photo de profil');
+      return true;})());
+    ok('ANALYSE MORPHO : TÊTE AVANCÉE DE 6 CM : ANGLE CRANIO-VERTÉBRAL RÉDUIT, « TÊTE ET COU » ≥ 1',(()=>{
+      const g=anatMesures(_anatProfil(),_anatDossier()).fiches.find(f=>f.cle==='tete');
+      const res=anatMesures(_anatProfil({tragus:6}),_anatDossier());
+      const te=res.fiches.find(f=>f.cle==='tete'), po=res.fiches.find(f=>f.cle==='posture');
+      if(!(te.mesure.cva<g.mesure.cva-10)) return _echec('angle : '+te.mesure.cva+' contre '+g.mesure.cva);
+      if(!(te.niveau>=1)) return _echec('niveau : '+te.niveau);
+      if(Math.abs(po.mesure.dist.tragus.cm-6)>0.2) return _echec('tragus au fil : '+po.mesure.dist.tragus.cm);
+      const t=anatTexte(te,res);
+      if(!/Posture du moment, à confirmer au bilan suivant/.test(t.court)) return _echec('pas de « posture du moment » : '+t.court);
+      if(!t.privilegier.some(x=>/face pull/i.test(x))||!t.privilegier.some(x=>/thoracique/i.test(x))) return _echec('recommandations : '+t.privilegier.join(' | '));
+      if(!t.amenager.some(x=>/militaire/i.test(x.quoi))) return _echec('le développé militaire n’est pas aménagé');
+      if(!/Ferreira et al\., Clinics 2010/.test(te.source)||!/Kendall/.test(po.source)) return _echec('sources : '+te.source+' | '+po.source);
+      const tout=JSON.stringify([t,anatTexte(po,res),te.chiffres,po.chiffres]);
+      if(/éviter|pathologi|diagnosti|lésion|douleur/i.test(tout)) return _echec('un mot de santé ou « à éviter »');
+      return true;})());
+    ok('ANALYSE MORPHO : GENOU 3 CM EN ARRIÈRE DE L’AXE : AU-DELÀ DE 185°, POSTURE LUE',(()=>{
+      const res=anatMesures(_anatProfil({genou:-3}),_anatDossier());
+      const po=res.fiches.find(f=>f.cle==='posture');
+      if(!(po.mesure.genouAng>185)) return _echec('angle du genou : '+po.mesure.genouAng);
+      if(!(po.niveau<0)) return _echec('niveau : '+po.niveau);
+      const t=anatTexte(po,res);
+      if(!t.amenager.some(x=>/Squat/.test(x.quoi)&&/déverrouillés/.test(x.reglage))) return _echec('pas d’aménagement du squat pour le genou');
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());

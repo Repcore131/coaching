@@ -45175,9 +45175,24 @@ function anatMargeAngle(tol,pts,poidsMilieu){
   const e=Math.sqrt(v.reduce((s,p,i)=>s+Math.pow(anatErrPoint(p.e)*((poidsMilieu&&i===1)?2:1),2),0));
   return Math.hypot(tol,_anatDeg(Math.atan(e/100)));
 }
-const ANAT_TOL={epaules:1.5,bassin:2,genoux:3,pieds:8,tronc:3,omoplates:1.2,rachis:2,triangles:25,echelle:3};
+const ANAT_TOL={epaules:1.5,bassin:2,genoux:3,pieds:8,tronc:3,omoplates:1.2,rachis:2,triangles:25,echelle:3,cva:3,profil:2};
 const ANAT_SEUILS={epaules:[1.5,3,5],bassin:[2,3.5,5],genoux:[3,5,8],pieds:[8,14,20],
-  tronc:[3,6,9],omoplates:[1.2,2.5,4],rachis:[2,4,6],triangles:[25,45,65]};
+  tronc:[3,6,9],omoplates:[1.2,2.5,4],rachis:[2,4,6],triangles:[25,45,65],
+  // Le profil (A9) : degrés sous le repère cranio-vertébral, degrés de tronc,
+  // cm du grand trochanter au fil à plomb, degrés au-delà de 180° au genou.
+  cva:[4,8,12],inclTronc:[3,6,9],plombCm:[3,6,9],recurvatum:[5,8,12]};
+/** L'erreur de placement d'un point de profil, en cm (main, moteur, estimé). */
+const ANAT_ERR_CM=Object.freeze({main:1,auto:2,estime:3});
+/**
+ * Les repères du profil (A9). ⚠ Le 50° de l'angle cranio-vertébral est un
+ * REPÈRE DE TRAVAIL (l'ordre de grandeur d'un adulte debout) : à calibrer sur
+ * les athlètes du coach, comme les axes de « morpho-reperes-a-calibrer ».
+ */
+const ANAT_PROFIL=Object.freeze({cva:50,recurvatum:5,
+  SOURCE_REF:'ligne de référence de Kendall (Muscles: Testing and Function)',
+  SOURCE_METH:'protocole SAPO (Ferreira et al., Clinics 2010)',
+  CVA_SOURCE:'repère de travail 50°, à calibrer',
+  CONSIGNE:'Photo de profil en pied : debout relâché, bras le long du corps, regard à l’horizontale, pieds joints dans l’axe de l’objectif, téléphone à hauteur de hanche et à 3 m environ.'});
 
 /**
  * Les repères de chaque vue. `_l` et `_r` sont les côtés DE L'IMAGE (gauche et
@@ -45214,7 +45229,19 @@ const ANAT_REPERES=Object.freeze({
     {k:'hanche',lib:'Centre de la hanche',paire:1},
     {k:'genou',lib:'Creux du genou',paire:1},
     {k:'cheville',lib:'Cheville',paire:1},
-    {k:'talon',lib:'Talon (sol)',paire:1}]
+    {k:'talon',lib:'Talon (sol)',paire:1}],
+  // LE PROFIL (A9) : les repères du protocole SAPO (Ferreira et al., Clinics
+  // 2010) sur la ligne de référence de Kendall, plus le crâne et le talon
+  // pour l'échelle. Un seul côté se voit : pas de paires.
+  profil:[
+    {k:'vertex',lib:'Sommet du crâne'},
+    {k:'tragus',lib:'Tragus (devant l’oreille)'},
+    {k:'c7',lib:'Vertèbre C7 (base du cou)',est:1},
+    {k:'acromion',lib:'Acromion (pointe de l’épaule)',est:1},
+    {k:'trochanter',lib:'Grand trochanter (hanche)'},
+    {k:'genou',lib:'Genou (condyle latéral)'},
+    {k:'malleole',lib:'Malléole latérale (cheville)'},
+    {k:'talon',lib:'Talon (sol)'}]
 });
 /** Toutes les clés d'une vue, paires dédoublées. */
 function anatCles(vue){
@@ -45234,6 +45261,14 @@ function anatRepere(vue,cle){
  * l'écran. Dans un miroir, l'image est inversée : sa gauche est à gauche. De
  * dos : à gauche, toujours.
  */
+/** La vue affichée : celle demandée si le dossier la porte, sinon la face. */
+function _anatVueDe(a,v){
+  return (v==='dos'&&a&&a.dos)?'dos':((v==='profil'&&a&&a.profil)?'profil':'face');
+}
+/** La photo d'une vue, dans le bilan lu. */
+function _anatSrcVue(pb,vue){
+  return vue==='dos'?pb.dos:(vue==='profil'?pb.profil:pb.face);
+}
 function anatCotes(vue,miroir){
   const g=(vue==='dos'||miroir)?'l':'r';
   return {g,d:g==='l'?'r':'l'};
@@ -45262,11 +45297,13 @@ function anatPremierBilan(u){
   const choix=Number(u&&u.morphoAnat&&u.morphoAnat.choix)||0;
   const choisi=choix?bl.find(x=>Number(x.date)===choix&&src(x,'face')):null;
   const b=choisi||parDefaut;
-  const face=src(b,'face'), dos=src(b,'back');
+  const face=src(b,'face'), dos=src(b,'back'), profil=src(b,'side');
   const manque=[];
   if(!face) manque.push('la photo de face');
   if(!dos) manque.push('la photo de dos');
-  return {bilan:b,date:Number(b.date)||0,face,dos,manque,
+  // La photo de profil (A9) n'est pas exigée : sans elle, pas de fiches
+  // Posture ni Tête et cou, et rien d'autre ne change.
+  return {bilan:b,date:Number(b.date)||0,face,dos,profil,manque,
     auto:!choisi||Number(choisi.date)===Number(parDefaut.date),defaut:Number(parDefaut.date)||0};
 }
 /**
@@ -45280,7 +45317,7 @@ function anatBilansPhotos(u){
   const src=(b,v)=>{ try{ return photoBilanSrc(b,v)||null; }catch(e){ return null; } };
   const def=anatPremierBilan(Object.assign({},u,{morphoAnat:null})).date;
   return bl.filter(b=>src(b,'face')).sort((a,b)=>a.date-b.date)
-    .map(b=>({date:Number(b.date),depart:b.type==='depart',dos:!!src(b,'back'),defaut:Number(b.date)===def}));
+    .map(b=>({date:Number(b.date),depart:b.type==='depart',dos:!!src(b,'back'),profil:!!src(b,'side'),defaut:Number(b.date)===def}));
 }
 
 // ── LE MASQUE : il ne sert qu'à PLACER des points ─────────────────────────
@@ -45342,6 +45379,7 @@ function _anatNiveau(v,seuils){
  */
 function anatPointsAuto(raw,vue){
   if(!raw||!Array.isArray(raw.pts)||raw.pts.length<33) return null;
+  if(vue==='profil') return _anatPointsAutoProfil(raw);
   const W=raw.w,H=raw.h;
   const P=i=>{ const q=raw.pts[i]; return q?{x:q[0]*W,y:q[1]*H,v:q[2]||0}:null; };
   const e=v=>v>=0.6?1:0.2;
@@ -45525,6 +45563,73 @@ function anatPointsAuto(raw,vue){
   return {pts:out,telephone,miroir:vue==='face'&&!!telephone,triangles};
 }
 
+/**
+ * PURE. Les repères de la photo de PROFIL (A9). Le moteur voit les deux côtés
+ * superposés : on garde celui qu'il voit le mieux (épaule, hanche, genou,
+ * cheville, oreille). `sens` vaut +1 quand l'athlète regarde vers la droite de
+ * l'image (le nez devant l'oreille). Le tragus est l'oreille du moteur ; le
+ * grand trochanter, sa hanche ; l'acromion et C7 sont ESTIMÉS à partir de
+ * l'épaule : le moteur ne les voit pas.
+ */
+function _anatPointsAutoProfil(raw){
+  const W=raw.w,H=raw.h;
+  const P=i=>{ const q=raw.pts[i]; return q?{x:q[0]*W,y:q[1]*H,v:q[2]||0}:null; };
+  const e=v=>v>=0.6?1:0.2;
+  const out={};
+  const pose=(k,p,conf)=>{ if(p&&isFinite(p.x)&&isFinite(p.y)){
+    out[k]=[Math.round(p.x/W*10000)/10000,Math.round(p.y/H*10000)/10000,conf];
+    if(p.v!=null&&isFinite(p.v)) out[k].push(Math.round(p.v*100)/100); } };
+  const vis=o=>[7,11,23,25,27].reduce((t,i)=>{ const q=P(i+o); return t+(q?q.v:0); },0);
+  const o=vis(1)>vis(0)?1:0;   // 0 : côté gauche du moteur, 1 : côté droit
+  const oreille=P(7+o), ep=P(11+o), ha=P(23+o), ge=P(25+o), ch=P(27+o), ta=P(29+o), nez=P(0), pied=P(31+o);
+  if(!ep||!ha) return null;
+  const T=_anatDist(ep,ha);
+  if(!(T>10)) return null;
+  const sens=(nez&&oreille&&Math.abs(nez.x-oreille.x)>2)?Math.sign(nez.x-oreille.x)
+    :((pied&&ta)?Math.sign(pied.x-ta.x)||1:1);
+  pose('tragus',oreille,oreille?e(oreille.v):0.5);
+  pose('acromion',{x:ep.x,y:ep.y-0.04*T},0.5);
+  // C7 : en arrière et au-dessus de l'épaule (≈ 6 cm derrière, 5 cm au-dessus
+  // chez l'adulte, pour un tronc de 50 cm).
+  pose('c7',{x:ep.x-sens*0.12*T,y:ep.y-0.10*T},0.5);
+  pose('trochanter',ha,e(ha.v));
+  if(ge) pose('genou',ge,e(ge.v));
+  if(ch) pose('malleole',ch,e(ch.v));
+  const bits=anatMasqueBits(raw.masque), m=raw.masque;
+  const kx=m?m.w/W:1, ky=m?m.h/H:1;
+  // Le sommet du crâne : le haut du masque au-dessus de l'oreille, sans sauter de trou.
+  let vertex=null;
+  const tete=oreille||{x:ep.x,y:ep.y-0.35*T};
+  if(bits){
+    const x0=Math.max(0,Math.round((tete.x-0.12*T)*kx)), x1=Math.min(m.w-1,Math.round((tete.x+0.12*T)*kx));
+    let y=Math.min(m.h-1,Math.round(tete.y*ky)), haut=null, vide=0;
+    for(;y>=0;y--){
+      let plein=false;
+      for(let x=x0;x<=x1;x++) if(bits[y*m.w+x]){ plein=true; break; }
+      if(plein){ haut=y; vide=0; } else if(++vide>2) break;
+    }
+    if(haut!=null) vertex={x:tete.x,y:haut/ky};
+    if(vertex&&!(vertex.y>tete.y-0.55*T&&vertex.y<tete.y-0.12*T)) vertex=null;
+  }
+  pose('vertex',vertex||{x:tete.x,y:tete.y-0.26*T},vertex?1:0.5);
+  // Le talon au sol, comme de face : la dernière ligne pleine du masque.
+  if(ta){
+    let sol=null;
+    if(bits){
+      const x0=Math.max(0,Math.round((ta.x-0.04*W)*kx)), x1=Math.min(m.w-1,Math.round((ta.x+0.04*W)*kx));
+      let y=Math.max(0,Math.round(ta.y*ky)), bas=null, vide=0;
+      for(;y<m.h;y++){
+        let plein=false;
+        for(let x=x0;x<=x1;x++) if(bits[y*m.w+x]){ plein=true; break; }
+        if(plein){ bas=y; vide=0; } else if(++vide>2) break;
+      }
+      if(bas!=null){ const yb=(bas+1)/ky; if(yb>=ta.y&&yb-ta.y<=0.1*T) sol=yb; }
+    }
+    if(sol!=null) pose('talon',{x:ta.x,y:sol,v:ta.v},e(ta.v));
+    else pose('talon',{x:ta.x,y:ta.y+0.02*T},0.5);
+  }
+  return {pts:out,sens,telephone:null,miroir:false,triangles:null};
+}
 /** Les points effectifs d'une vue : ceux du coach s'il en a posé, sinon l'automatique. */
 function anatPoints(anat,vue){
   const v=anat&&anat[vue];
@@ -45580,7 +45685,7 @@ function anatMesures(anat,u,o){
   const biaisTxt=(cle)=>(B&&B[cle])?'corrigé du biais moteur, calibré sur '+B[cle].n+' athlètes':'biais moteur non calibré (±'+ANAT_BIAIS_DEFAUT_PCT+' %)';
   const BI=ANAT_BIAIS_DEFAUT_PCT;
   const vues={};
-  for(const vue of ['face','dos']){
+  for(const vue of ['face','dos','profil']){
     const v=anat&&anat[vue];
     const pts=anatPoints(anat,vue);
     if(!v||!pts) continue;
@@ -45594,7 +45699,7 @@ function anatMesures(anat,u,o){
     const P=k=>{ const q=pts[k]; return q?{x:q[0]*W,y:q[1]*H,e:q[2],v:q[3]}:null; };
     // Côté ATHLÈTE → point : P2('coude','g') lit le coude gauche de l'athlète.
     const P2=(k,s)=>P(k+'_'+cotes[s]);
-    const tl=P('talon_l'),tr=P('talon_r'),vx=P('vertex');
+    const tl=P('talon_l')||P('talon'),tr=P('talon_r'),vx=P('vertex');
     const sol=(tl&&tr)?Math.max(tl.y,tr.y):(tl||tr?(tl||tr).y:null);
     const stature=(vx&&sol!=null)?sol-vx.y:null;
     const cmPx=(taille&&stature&&stature>H*0.3)?taille/stature:null;
@@ -45892,6 +45997,77 @@ function anatMesures(anat,u,o){
         {lib:'Triangles bras-tronc (G / D)',def:'espace entre le bras et la taille, de dos',val:(trG!=null&&trD!=null&&D.cmPx)?cm(trG*D.cmPx)+' / '+cm(trD*D.cmPx):(asy!=null?_anatSN(asy,0)+' %':'—'),ref:'égaux',ecart:asy!=null?pct(asy):''}],
       mesure:{om,omCm,rach,asy,lu:!!D,pire:{nOm,nRa,nTr}},source:'photo de dos'});
   }
+  // ── PROFIL : posture et tête (A9) ────────────────────────────────────────
+  // Un fil à plomb passe par la malléole latérale : chaque repère en est à une
+  // distance horizontale, en cm (positive = en avant). La ligne de référence
+  // est celle de Kendall (tragus, acromion, grand trochanter, genou, malléole
+  // alignés) ; la méthode, celle du SAPO (Ferreira et al., Clinics 2010).
+  // ⚠ UNE PHOTO DEBOUT SAISIT UNE POSTURE DU MOMENT, jamais une structure :
+  //   fatigue, regard, respiration la déplacent. Rien ici n'est un diagnostic.
+  if(anat&&anat.profil){
+    const Pr=vues.profil||null;
+    const K=k=>Pr?Pr.P(k):null;
+    const tg=K('tragus'),c7=K('c7'),ac=K('acromion'),tc=K('trochanter'),ge=K('genou'),ml=K('malleole');
+    const sens=(tg&&c7&&Math.abs(tg.x-c7.x)>1)?Math.sign(tg.x-c7.x):((anat.profil.auto&&anat.profil.auto.sens)||1);
+    const cmPr=Pr&&Pr.cmPx;
+    const errCm=q=>!q?ANAT_ERR_CM.estime:(q.e>=2?ANAT_ERR_CM.main:(q.e>=0.9?ANAT_ERR_CM.auto:ANAT_ERR_CM.estime));
+    const horiz=(q,r0)=>(q&&r0&&cmPr)?(q.x-r0.x)*sens*cmPr:null;
+    const plomb=q=>{ const cm=horiz(q,ml); return cm==null?null:{cm,marge:Math.hypot(errCm(q),errCm(ml))+Math.abs(cm)*ECH/100}; };
+    // « +2,3 ± 2,8 cm » : court, pour tenir dans la colonne à 390 px.
+    const cmTx=(cm,mg)=>(Math.abs(cm)<0.05?'0':_anatSN(cm,1))+' ± '+_anatN(mg,1)+' cm';
+    const dTx=d0=>d0==null?'—':cmTx(d0.cm,d0.marge);
+    const dist={tragus:plomb(tg),acromion:plomb(ac),trochanter:plomb(tc),genou:plomb(ge)};
+    const lignePlomb=(k,lib)=>({lib:lib+' / fil à plomb',def:'distance horizontale à la verticale de la malléole, + en avant ; 0 sur la ligne de Kendall',val:dTx(dist[k]),ref:'0 cm',ecart:''});
+    // Le tronc : acromion → grand trochanter / verticale, + penché en avant.
+    const tronc=(ac&&tc)?_anatDeg(Math.atan2((ac.x-tc.x)*sens,Math.max(1,tc.y-ac.y))):null;
+    // Le genou : l'angle hanche-genou-cheville, 180° tendu ; au-delà, le genou
+    // passe EN ARRIÈRE de la ligne hanche → malléole.
+    let genouAng=null;
+    if(tc&&ge&&ml){
+      const a1={x:tc.x-ge.x,y:tc.y-ge.y}, a2={x:ml.x-ge.x,y:ml.y-ge.y};
+      const n1=Math.hypot(a1.x,a1.y), n2=Math.hypot(a2.x,a2.y);
+      if(n1>1&&n2>1){
+        let ang=_anatDeg(Math.acos(Math.max(-1,Math.min(1,(a1.x*a2.x+a1.y*a2.y)/(n1*n2)))));
+        const xl=tc.x+(ml.x-tc.x)*(ge.y-tc.y)/((ml.y-tc.y)||1);
+        if((ge.x-xl)*sens<0) ang=360-ang;
+        genouAng=ang;
+      }
+    }
+    const genouExt=genouAng!=null?genouAng-180:null;
+    const nTronc=tronc!=null?_anatNiveau(tronc,ANAT_SEUILS.inclTronc):null;
+    const nGenou=genouExt!=null?(genouExt>ANAT_PROFIL.recurvatum?-Math.abs(_anatNiveau(genouExt,ANAT_SEUILS.recurvatum)):0):null;
+    const nBassin=dist.trochanter?_anatNiveau(dist.trochanter.cm,ANAT_SEUILS.plombCm):null;
+    const ns=[nTronc,nGenou,nBassin].filter(x=>x!=null);
+    const pireP=ns.length?ns.reduce((a,b)=>Math.abs(b)>Math.abs(a)?b:a,0):null;
+    const margeTr=anatMargeAngle(ANAT_TOL.profil,[ac,tc]);
+    const srcProfil='photo de profil ; '+ANAT_PROFIL.SOURCE_REF+' ; '+ANAT_PROFIL.SOURCE_METH;
+    fiche({cle:'posture',lib:'Posture',vue:'profil',ancre:tc,
+      zone:Pr?_anatZoneAutour([ac,tc,ge,ml],0.12):null,
+      etat:pireP==null?'illisible':'ok',niveau:pireP,
+      bornes:['en arrière','en avant'],
+      valeur:[tronc!=null?'tronc '+_anatSigne(tronc):'',genouAng!=null?'genou '+_anatN(genouAng,0)+'°':''].filter(Boolean).join(' · '),
+      tolerance:'distances ±'+_anatN(Math.hypot(ANAT_ERR_CM.auto,ANAT_ERR_CM.auto),1)+' cm environ (placement de deux points, échelle ±'+ECH+' %) ; tronc ±'+_anatN(margeTr)+'°',
+      chiffres:[lignePlomb('tragus','Tragus'),lignePlomb('acromion','Acromion'),lignePlomb('trochanter','Grand trochanter'),lignePlomb('genou','Genou'),
+        {lib:'Inclinaison du tronc',def:'acromion → grand trochanter / verticale ; + penché en avant',val:tronc!=null?_anatSigneTexte(tronc):'—',ref:'0°',ecart:''},
+        {lib:'Angle hanche-genou-cheville',def:'grand trochanter → genou → malléole ; 180° = jambe tendue dans l’axe, lu au-delà de '+(180+ANAT_PROFIL.recurvatum)+'°',val:genouAng!=null?_anatN(genouAng,0)+'°':'—',ref:'180°',ecart:genouExt!=null?_anatSN(genouExt,0)+'°':''}],
+      mesure:{sens,dist,tronc,genouAng,genouExt,nTronc,nGenou,nBassin,cmPx:cmPr,marge:margeTr},source:srcProfil});
+    // La tête : l'angle cranio-vertébral (C7 → tragus / horizontale). Plus il
+    // est petit, plus la tête est portée en avant.
+    const cva=(tg&&c7)?_anatDeg(Math.atan2(c7.y-tg.y,Math.max(1e-6,(tg.x-c7.x)*sens))):null;
+    const ecCva=cva!=null?ANAT_PROFIL.cva-cva:null;
+    const margeCva=anatMargeAngle(ANAT_TOL.cva,[tg,c7]);
+    const dTA=horiz(tg,ac);
+    fiche({cle:'tete',lib:'Tête et cou',court:'Tête',vue:'profil',ancre:tg,
+      zone:Pr?_anatZoneAutour([tg,c7,ac],0.45):null,
+      etat:cva==null?'illisible':'ok',niveau:cva==null?null:_anatNiveau(ecCva,ANAT_SEUILS.cva),
+      bornes:['tête en arrière','tête en avant'],
+      valeur:cva==null?'':'angle '+_anatN(cva,0)+'°',
+      tolerance:'±'+_anatN(margeCva)+'° (pose ±'+ANAT_TOL.cva+'°, placement du tragus et de C7 compris)',
+      chiffres:[{lib:'Angle cranio-vertébral',def:'droite C7 → tragus / horizontale ; repère de travail '+ANAT_PROFIL.cva+'°, à calibrer',val:cva!=null?_anatN(cva,1)+'°':'—',ref:'≈ '+ANAT_PROFIL.cva+'°',ecart:ecCva!=null?_anatSN(-ecCva,1)+'°':''},
+        lignePlomb('tragus','Tragus'),
+        {lib:'Tragus / acromion',def:'distance horizontale de l’oreille à la pointe de l’épaule, + en avant ; 0 sur la ligne de Kendall',val:dTA!=null?cmTx(dTA,Math.hypot(errCm(tg),errCm(ac))+Math.abs(dTA)*ECH/100):'—',ref:'0 cm',ecart:''}],
+      mesure:{cva,ecart:ecCva,dTA,dT:dist.tragus,marge:margeCva},source:'photo de profil ; angle cranio-vertébral, '+ANAT_PROFIL.CVA_SOURCE+' ; '+ANAT_PROFIL.SOURCE_METH});
+  }
   // ⚠ DEUX REPÈRES QUI SE CONTREDISENT : les longueurs passent en gris. Leur
   //   niveau n'est plus publié, ni leur percentile ; les chiffres restent
   //   lisibles, pour que le coach voie ce qui cloche. L'axe du buste, les
@@ -45949,18 +46125,20 @@ function anatMesures(anat,u,o){
       jambes:F?['hanche','genou','cheville'].map(k=>K(F,k,sJ)):[],
       genoux:F?['hanche','genou','cheville'].map(k=>K(F,k,sG)):[],
       pieds:[...deux(F,'talon'),...deux(F,'pointe')],
-      dos:D?[...deux(D,'omoplate'),'c7','sacrum']:[]
+      dos:D?[...deux(D,'omoplate'),'c7','sacrum']:[],
+      posture:vues.profil?['acromion','trochanter','genou','malleole']:[],
+      tete:vues.profil?['tragus','c7']:[]
     };
     const rot=rotation;
     const tourne=!!(rot&&rot.fiable&&rot.deg>ANAT_ROTATION_SEUIL);
     for(const f of fiches){
-      const V=f.cle==='dos'?D:F;
+      const V=vues[f.vue]||null;
       const deg=[];
-      if(['clavicules','buste','bras','jambes'].indexOf(f.cle)>=0&&!(verif&&verif.statut==='confirmee'))
+      if(['clavicules','buste','bras','jambes','posture'].indexOf(f.cle)>=0&&!(verif&&verif.statut==='confirmee'))
         deg.push(verif?ANAT_ECHELLE_MOTS[verif.statut]:'échelle non vérifiée');
       if(tourne) deg.push('corps tourné d’environ '+_anatN(rot.deg,0)+'°');
       const c=anatConfiance(V?V.pts:null,cles[f.cle]||[],deg);
-      f.conf=c.conf; f.confCles=c.faibles; f.confVue=f.cle==='dos'?'dos':'face';
+      f.conf=c.conf; f.confCles=c.faibles; f.confVue=f.vue;
       f.confPourquoi='Confiance '+c.conf+' : '+ANAT_CONF_MOTS[c.brut]
         +(c.faibles.length?' ('+c.faibles.map(k=>anatNomPoint(f.confVue,k)).join(', ')+')':'')
         +(deg.length?' ; un cran de moins : '+deg.join(', '):'')+'.';
@@ -46064,6 +46242,12 @@ function anatTexte(f,res){
       T.verifier='Demander une photo de face prise par quelqu’un d’autre ou avec un minuteur, bras relâchés le long du corps.';
       return T;
     }
+    if(f.vue==='profil'){
+      T.court='Repères de profil insuffisants : à placer à la main sur la photo de profil.';
+      T.lecture='Le tragus, C7, l’acromion, le grand trochanter, le genou et la malléole doivent être visibles, ou posés à la main (« Ajuster les points », vue Profil). Sans eux, ni le fil à plomb ni l’angle de la tête ne se lisent.';
+      T.verifier=ANAT_PROFIL.CONSIGNE;
+      return T;
+    }
     T.court='Repères insuffisants pour lire cette zone avec une marge honnête : à placer à la main.';
     T.lecture='Les points nécessaires ne sont pas visibles, ou le membre est plié (un membre plié paraît plus court qu’il n’est). « Ajuster les points » permet de les poser à la main, puis de relancer l’analyse.';
     T.verifier='Photo de face en pied, pieds à largeur de hanches, bras relâchés légèrement écartés du corps.';
@@ -46078,6 +46262,42 @@ function anatTexte(f,res){
   }
   const n=f.niveau||0, an=Math.abs(n);
   switch(f.cle){
+  case 'tete':{
+    const ta=m.dTA;
+    const moment=' Posture du moment, à confirmer au bilan suivant.';
+    if(!an) T.court='Tête dans l’axe : angle cranio-vertébral de '+_anatN(m.cva,0)+'° (repère de travail '+ANAT_PROFIL.cva+'°).'+moment;
+    else if(n>0) T.court='Tête portée en avant sur cette photo : angle cranio-vertébral de '+_anatN(m.cva,0)+'° pour un repère de '+ANAT_PROFIL.cva+'°'
+      +(ta!=null&&ta>0.5?', tragus '+_anatN(ta,1)+' cm devant l’acromion':'')+'.'+moment;
+    else T.court='Tête portée en arrière sur cette photo : angle cranio-vertébral de '+_anatN(m.cva,0)+'° pour un repère de '+ANAT_PROFIL.cva+'°.'+moment;
+    T.lecture='L’angle cranio-vertébral se lit entre la droite C7 → tragus et l’horizontale : plus il est petit, plus la tête est portée devant les épaules. Sur une photo debout, il dépend du regard, de la fatigue et de l’habitude du moment ; il décrit une posture, il ne dit rien de la santé du cou. Le repère de '+ANAT_PROFIL.cva+'° est un ordre de grandeur de l’adulte debout, à affiner sur les athlètes suivis.';
+    if(n>0){
+      T.privilegier=['Mobilité thoracique : extensions sur rouleau, rotations en quadrupédie (« open book »), 2 à 3 séries en échauffement',
+        'Rétraction scapulaire : face pull à la poulie, Y-raise sur banc incliné, 12 à 20 répétitions contrôlées',
+        'Placement de la tête dans les tirages et les rowings : menton légèrement rentré, nuque longue, regard au sol devant soi'];
+      T.amenager=[{quoi:'Développé militaire',reglage:'la tête recule pour laisser passer la barre puis revient « dans la fenêtre » au-dessus ; en haltères ou à la landmine si la trajectoire contourne le visage'},
+        {quoi:'Squat',reglage:'regard à l’horizontale ou légèrement vers le bas, pas vers le plafond : la nuque reste dans l’axe du dos'}];
+    }
+    T.verifier='Au bilan suivant, même prise de vue. '+ANAT_PROFIL.CONSIGNE+' Replacer au besoin le tragus (le petit cartilage devant le conduit de l’oreille) et C7 (« Ajuster les points », vue Profil).';
+    return T;
+  }
+  case 'posture':{
+    const d=m.dist||{}, moment=' Posture du moment, à confirmer au bilan suivant.';
+    const parts=[];
+    if(m.nTronc) parts.push('tronc penché '+(m.tronc>0?'en avant':'en arrière')+' de '+_anatN(Math.abs(m.tronc),0)+'°');
+    if(m.nBassin) parts.push('bassin (grand trochanter) '+_anatN(Math.abs(d.trochanter.cm),1)+' cm '+(d.trochanter.cm>0?'en avant':'en arrière')+' du fil');
+    if(m.nGenou) parts.push('genou tendu au-delà de l’axe ('+_anatN(m.genouAng,0)+'°)');
+    T.court=(parts.length?'Sur cette photo de profil : '+parts.join(', ')+'.':'Alignement de profil dans la marge : les repères tombent près du fil à plomb.')+moment;
+    T.lecture='Le fil à plomb passe par la malléole latérale. Kendall décrit une ligne de référence qui passe près du tragus, de l’acromion, du grand trochanter et de l’axe du genou : chaque repère en est ici à une distance horizontale, avec sa marge. Un genou à plus de 180° + '+ANAT_PROFIL.recurvatum+'° se tend au-delà de l’axe de la jambe (ce qu’on appelle un recurvatum de posture). Une photo debout saisit une posture du moment — respiration, fatigue, chaussures —, jamais une structure : elle dit où regarder, pas pourquoi.';
+    if(an){
+      T.privilegier=['Gainage : planche, dead bug, Pallof press — côtes basses, bassin sous les côtes'];
+      if(m.nTronc>0||(d.acromion&&d.acromion.cm>3)) T.privilegier.push('Mobilité thoracique : extensions sur rouleau, rotations en quadrupédie','Rétraction scapulaire : face pull, Y-raise sur banc incliné');
+      T.privilegier.push('Chaîne postérieure : soulevé de terre roumain, hip thrust, extensions de hanche au banc à 45°, amplitude contrôlée');
+      T.amenager=[{quoi:'Squat',reglage:'buste gainé avant la descente, côtes basses ; talons surélevés d’une cale de 1 à 2,5 cm si le buste part loin devant'+(m.nGenou?' ; en haut de chaque répétition, genoux « déverrouillés », légèrement fléchis':'')},
+        {quoi:'Développé militaire',reglage:'fessiers serrés et côtes basses pour ne pas cambrer en poussant ; assis dos soutenu si le buste part en arrière'}];
+    }
+    T.verifier='Au bilan suivant, même prise de vue. '+ANAT_PROFIL.CONSIGNE+' Replacer au besoin le grand trochanter (la bosse osseuse sur le côté de la hanche) et la malléole (« Ajuster les points », vue Profil).';
+    return T;
+  }
   case 'clavicules':{
     const bi=m.bi, bc=m.bc, r=m.r;
     const c=v=>v&&v.cm!=null?_anatN(v.cm,1)+' cm':(v&&v.fr?_anatN(v.fr*100,1)+' % de la taille':'—');
@@ -46269,12 +46489,13 @@ function anatVerdict(f){
   const n=f.niveau;
   if(n==null) return '—';
   if(n===0) return {clavicules:'Carrure moyenne',epaules:'Alignées',buste:'Tronc moyen',bras:'Équilibrés',
-    bassin:'Aligné',jambes:'Équilibrées',genoux:'Dans l’axe',pieds:'Symétriques',dos:'Symétrique'}[f.cle]||'Dans la marge';
+    bassin:'Aligné',jambes:'Équilibrées',genoux:'Dans l’axe',pieds:'Symétriques',dos:'Symétrique',posture:'Alignée',tete:'Dans l’axe'}[f.cle]||'Dans la marge';
   const i=n>0?1:0;
   const intens=['','léger','net','marqué'][Math.abs(n)];
   const court={clavicules:['Étroite','Large'],epaules:['Droite basse','Gauche basse'],bassin:['Droite basse','Gauche basse'],
     buste:['Tronc court','Tronc long'],bras:['Avant-bras long','Humérus long'],jambes:['Tibia long','Fémur long'],
-    genoux:['S’écartent','Rentrent'],pieds:['Droit + ouvert','Gauche + ouvert'],dos:['Côté droit','Côté gauche']}[f.cle];
+    genoux:['S’écartent','Rentrent'],pieds:['Droit + ouvert','Gauche + ouvert'],dos:['Côté droit','Côté gauche'],
+    posture:['En arrière','En avant'],tete:['Tête en arrière','Tête en avant']}[f.cle];
   return (court?court[i]:f.bornes[i])+' · '+intens;
 }
 // ── L'ÉCRAN ────────────────────────────────────────────────────────────────
@@ -46312,7 +46533,8 @@ const ANAT_TRAITS={
   dos:[['acromion_l','acromion_r','an-t-os'],['epaule_l','epaule_r',''],['hanche_l','hanche_r',''],['crete_l','crete_r','an-t-os'],
     ['omoplate_l','omoplate_r','an-t-os'],['c7','sacrum','an-t-axe'],['taille_l','taille_r','an-t-sil'],
     ['epaule_*','coude_*',''],['coude_*','poignet_*',''],['epaule_*','hanche_*','an-t-fin'],['hanche_*','genou_*',''],
-    ['genou_*','cheville_*',''],['cheville_*','talon_*','an-t-fin']]
+    ['genou_*','cheville_*',''],['cheville_*','talon_*','an-t-fin']],
+  profil:[['c7','tragus','an-t-axe'],['acromion','trochanter',''],['trochanter','genou',''],['genou','malleole',''],['malleole','talon','an-t-fin']]
 };
 function _anatTraits(vue){
   const out=[];
@@ -46345,10 +46567,21 @@ const ANAT_AIDE=Object.freeze({
   pointe:{court:'Orteil',aide:'Le bout du gros orteil. Sert à lire l’ouverture du pied (talon → orteil).'},
   c7:{court:'C7',aide:'La vertèbre la plus saillante à la base du cou (C7) : la bosse qui dépasse le plus quand on penche la tête en avant.'},
   omoplate:{court:'Omoplate',aide:'La pointe basse de l’omoplate (angle inférieur), en général à la hauteur de la 7e côte. Si elle ne se voit pas, suis le bord interne de l’omoplate jusqu’en bas.'},
-  sacrum:{court:'Sacrum',aide:'Le milieu entre les deux fossettes du bas du dos (fossettes de Vénus), au-dessus du pli fessier.'}
+  sacrum:{court:'Sacrum',aide:'Le milieu entre les deux fossettes du bas du dos (fossettes de Vénus), au-dessus du pli fessier.'},
+  tragus:{court:'Tragus',aide:'Le petit cartilage devant le conduit de l’oreille. Si les cheveux le cachent, au milieu de l’oreille, à la hauteur de l’ouverture du conduit.'},
+  trochanter:{court:'Trochanter',aide:'La bosse osseuse sur le côté de la hanche (grand trochanter), environ une main sous la crête du bassin, au milieu de l’épaisseur de la cuisse vue de côté.'},
+  malleole:{court:'Malléole',aide:'La bosse osseuse à l’extérieur de la cheville (malléole latérale) : c’est par elle que passe le fil à plomb.'}
 });
-function anatAide(cle,opts){
+/** Les consignes qui changent de profil (A9) : même repère, autre prise de vue. */
+const ANAT_AIDE_PROFIL=Object.freeze({
+  acromion:{court:'Acromion',aide:'De profil, la pointe osseuse du dessus de l’épaule, au milieu de l’épaisseur de l’épaule vue de côté — pas le bord avant du deltoïde.'},
+  c7:{court:'C7',aide:'De profil, la bosse la plus saillante à la base de la nuque (C7), sur le contour du cou vu de côté, au-dessus de la ligne des épaules.'},
+  genou:{court:'Genou',aide:'De profil, le milieu du genou vu de côté (condyle latéral du fémur), à mi-épaisseur entre la rotule et le creux du genou.'},
+  talon:{court:'Talon',aide:'Le bas du talon, là où il touche le sol. Avec le sommet du crâne, il met la photo de profil à l’échelle de la taille.'}
+});
+function anatAide(cle,opts,vue){
   const k=String(cle||'').replace(/_[lr]$/,'');
+  if(vue==='profil'&&ANAT_AIDE_PROFIL[k]) return ANAT_AIDE_PROFIL[k];
   if(k==='vertex'&&opts&&opts.cheveux)
     return {court:'Crâne',aide:'L’os, sous les cheveux : estime où le crâne s’arrête sous la masse des cheveux (environ un doigt à deux doigts sous leur sommet pour une coiffure volumineuse), dans l’axe du cou. La marge d’échelle passe à ±'+ANAT_ECHELLE_CHEVEUX_PCT+' %.'};
   return ANAT_AIDE[k]||{court:k,aide:''};
@@ -46418,7 +46651,7 @@ function anatCurseur(el,nom,fin){
 function anatCadrerPersonne(){
   const c=getOwnedClient(currentClientId);
   if(!c||!c.morphoAnat) return;
-  const vue=(_anatEdit&&_anatEdit.vue)||(_anatVueActive==='dos'&&c.morphoAnat.dos?'dos':'face');
+  const vue=(_anatEdit&&_anatEdit.vue)||_anatVueDe(c.morphoAnat,_anatVueActive);
   const pts=(_anatEdit&&_anatEdit.pts)||anatPoints(c.morphoAnat,vue)||{};
   const xs=[],ys=[];
   for(const k in pts){ xs.push(pts[k][0]); ys.push(pts[k][1]); }
@@ -46430,14 +46663,14 @@ function anatCadrerPersonne(){
 function anatPhotoEntiere(){
   const c=getOwnedClient(currentClientId);
   if(!c||!c.morphoAnat) return;
-  const vue=(_anatEdit&&_anatEdit.vue)||(_anatVueActive==='dos'&&c.morphoAnat.dos?'dos':'face');
+  const vue=(_anatEdit&&_anatEdit.vue)||_anatVueDe(c.morphoAnat,_anatVueActive);
   _anatRecadre=false;
   anatReglerPhoto(vue,{cadre:null},true);
 }
 function anatReinitialiserPhoto(){
   const c=getOwnedClient(currentClientId);
   if(!c||!c.morphoAnat) return;
-  const vue=(_anatEdit&&_anatEdit.vue)||(_anatVueActive==='dos'&&c.morphoAnat.dos?'dos':'face');
+  const vue=(_anatEdit&&_anatEdit.vue)||_anatVueDe(c.morphoAnat,_anatVueActive);
   _anatRecadre=false;
   anatReglerPhoto(vue,{lum:100,con:100,cadre:null},true);
 }
@@ -46505,7 +46738,7 @@ function anatSauvegarder(){
   const a=d.morphoAnat;
   const copie=o=>o?JSON.parse(JSON.stringify(o)):null;
   const v={id:String(Date.now()),date:Date.now(),
-    face:{man:copie(a.face&&a.face.man)},dos:{man:copie(a.dos&&a.dos.man)},opts:copie(a.opts)||{}};
+    face:{man:copie(a.face&&a.face.man)},dos:{man:copie(a.dos&&a.dos.man)},profil:{man:copie(a.profil&&a.profil.man)},opts:copie(a.opts)||{}};
   a.sauvegardes=(Array.isArray(a.sauvegardes)?a.sauvegardes:[]).concat([v]).slice(-8);
   d.updatedAt=Date.now();
   users[c.email]=d;
@@ -46535,11 +46768,11 @@ function anatChoisirBilan(val){
   const copie=o=>o?JSON.parse(JSON.stringify(o)):null;
   const quitte=Number(a.bilan)||0;
   if(quitte&&(a.face||a.dos)){
-    const aMain=(a.face&&a.face.man)||(a.dos&&a.dos.man)||(a.opts&&Object.keys(a.opts).length)
+    const aMain=(a.face&&a.face.man)||(a.dos&&a.dos.man)||(a.profil&&a.profil.man)||(a.opts&&Object.keys(a.opts).length)
       ||(Array.isArray(a.sauvegardes)&&a.sauvegardes.length);
     if(aMain){
       a.archives=Object.assign({},a.archives||{});
-      a.archives[String(quitte)]={v:a.v,face:{man:copie(a.face&&a.face.man)},dos:{man:copie(a.dos&&a.dos.man)},
+      a.archives[String(quitte)]={v:a.v,face:{man:copie(a.face&&a.face.man)},dos:{man:copie(a.dos&&a.dos.man)},profil:{man:copie(a.profil&&a.profil.man)},
         opts:copie(a.opts)||{},sauvegardes:copie(a.sauvegardes)||[]};
     }
   }
@@ -46565,6 +46798,7 @@ function anatRestaurer(id){
   const copie=o=>o?JSON.parse(JSON.stringify(o)):null;
   if(a.face) a.face.man=copie(v.face&&v.face.man);
   if(a.dos) a.dos.man=copie(v.dos&&v.dos.man);
+  if(a.profil) a.profil.man=copie(v.profil&&v.profil.man);
   a.opts=copie(v.opts)||{};
   a.date=Date.now();
   d.updatedAt=Date.now();
@@ -46674,9 +46908,9 @@ function _anatNettete(z,c){
   const a=c&&c.morphoAnat;
   if(!a||!z) return;
   const pb=anatPremierBilan(c);
-  for(const vue of ['face','dos']){
-    if(anatReglage(a,vue).net===false) continue;
-    const src=vue==='dos'?pb.dos:pb.face;
+  for(const vue of ['face','dos','profil']){
+    if(!a[vue]||anatReglage(a,vue).net===false) continue;
+    const src=_anatSrcVue(pb,vue);
     const imgs=z.querySelectorAll('img[data-v="'+vue+'"]');
     if(!src||!imgs.length) continue;
     anatAmeliorer(src).then(u=>{ if(u) imgs.forEach(i=>{ if(i.isConnected) i.src=u; }); });
@@ -46689,7 +46923,10 @@ function anatARefaire(c,pb){
   if(!pb||!pb.face||!pb.dos) return false;
   if(!a||typeof a!=='object') return true;
   if(a.v!==ANAT_VERSION) return true;
-  return Number(a.bilan)!==pb.date;
+  if(Number(a.bilan)!==pb.date) return true;
+  // Une photo de profil jamais lue (analyse antérieure à A9, ou photo ajoutée
+  // depuis) : on relit, une fois — les points posés à la main restent.
+  return !!(pb.profil&&!a.profil&&a.profilLu!==pb.profil);
 }
 /** Les dimensions d'une photo, quand le moteur n'a rien rendu. */
 function _anatDimensions(src){
@@ -46722,6 +46959,18 @@ function anatGabarit(w,h,vue,femme){
   const fCh=Math.max(0.02,ANAT_ROTULE.part-jV), fGenou=fCh+jV;
   const fHa=fGenou+R.cuisse, fEp=fHa+R.tronc;
   const fCo=bout(fEp,0.10,0.12,R.bras), fPo=bout(fCo,0.12,0.13,R.avantbras);
+  // DE PROFIL (A9), regard vers la droite : tragus, acromion, grand trochanter,
+  // genou et malléole sur la même verticale (la ligne de Kendall) ; C7 en
+  // arrière du tragus, à 50° (le repère cranio-vertébral).
+  if(vue==='profil'){
+    const pt=(k,dx,f)=>pose(k,cx+dx*Hh,y(f));
+    const fTr=0.935, dC7=0.04;
+    pt('vertex',-0.01,1); pt('tragus',0,fTr);
+    pt('c7',-dC7,fTr-dC7*Math.tan(ANAT_PROFIL.cva*Math.PI/180));
+    pt('acromion',0,fEp+0.012); pt('trochanter',0,fHa); pt('genou',0,fGenou); pt('malleole',0,fCh);
+    pt('talon',-0.025,0);
+    return out;
+  }
   pose('vertex',cx,y(1));
   const LG=ANAT_LARGEURS[femme?'F':'H'];
   lat('acromion',LG.biacromial/2,fEp+0.012); lat('epaule',0.10,fEp); lat('deltoide',0.14,fEp-0.02);
@@ -46775,9 +47024,10 @@ async function anatAnalyser(email,force){
     };
     const face=await vue('face',pb.face);
     const dos=await vue('dos',pb.dos);
+    const profil=pb.profil?await vue('profil',pb.profil):null;
     if(!face) throw new Error('la photo de face n’a pas pu être lue');
     res={v:ANAT_VERSION,date:Date.now(),bilan:pb.date,depart:!!(pb.bilan&&pb.bilan.type==='depart'),
-      face,dos,opts:(ancien&&ancien.opts)||((cour&&Number(cour.bilan)===pb.date&&cour.opts&&cour.opts.photo)?{photo:cour.opts.photo}:{})};
+      face,dos,profil,profilLu:pb.profil||null,opts:(ancien&&ancien.opts)||((cour&&Number(cour.bilan)===pb.date&&cour.opts&&cour.opts.photo)?{photo:cour.opts.photo}:{})};
     // ⚠ LES VERSIONS SAUVEGARDÉES NE PARTENT PLUS À LA DÉTECTION. Avant, « Refaire
     //   la détection » réécrivait morphoAnat sans elles : huit versions perdues
     //   d'un geste. Elles suivent le bilan, comme les points.
@@ -46816,7 +47066,7 @@ function anatRelancer(){
 }
 function anatVue(v){
   if(_anatEdit) return;
-  _anatVueActive=(v==='dos')?'dos':'face';
+  _anatVueActive=(v==='dos'||v==='profil')?v:'face';
   try{ const c=getOwnedClient(currentClientId); if(c) renderAnatCoach(c); }catch(e){}
 }
 
@@ -46832,7 +47082,7 @@ function anatEditer(sel){
     const f=_anatSafe(()=>anatMesures(c.morphoAnat,c,{biais:anatBiaisCoach()}).fiches.find(x=>x.cle===_anatDerniereFiche));
     if(f&&f.confCles&&f.confCles.length){ k=f.confCles[0]; _anatVueActive=f.confVue; }
   }
-  const vue=_anatVueActive;
+  const vue=_anatVueDe(c.morphoAnat,_anatVueActive);
   const pts=anatPoints(c.morphoAnat,vue);
   if(!pts) return;
   _anatEdit={email:c.email,vue,pts:JSON.parse(JSON.stringify(pts)),opts:Object.assign({},anatOptions(c.morphoAnat)),reinit:false,sel:k};
@@ -46981,7 +47231,7 @@ function _anatBrancherEdition(z){
     // La consigne suit le point choisi, et la liste aussi.
     const z2=scene.closest('.an');
     const cs=z2&&z2.querySelector('.an-consigne');
-    if(cs){ cs.innerHTML='<b>* '+escapeHtml(anatNomPoint(e.vue,k))+'</b><span>'+escapeHtml(anatAide(k,e.opts).aide)+'</span>'; }
+    if(cs){ cs.innerHTML='<b>* '+escapeHtml(anatNomPoint(e.vue,k))+'</b><span>'+escapeHtml(anatAide(k,e.opts,e.vue).aide)+'</span>'; }
     if(z2) z2.querySelectorAll('.an-rep-c').forEach(x=>{
       const b=x.querySelector('.an-rep-n'); const on=!!b&&(b.getAttribute('onclick')||'').indexOf("'"+k+"'")>=0;
       x.classList.toggle('actif',on);
@@ -47111,6 +47361,14 @@ function _anatDessin(vue,pts,W,H,edit,E){
     s+='<line class="an-t-plomb" x1="'+vx.x.toFixed(1)+'" y1="'+vx.y.toFixed(1)+'" x2="'+vx.x.toFixed(1)+'" y2="'+sol.toFixed(1)+'"/>'
       +'<line class="an-t-sol" x1="'+(vx.x-W*0.3).toFixed(1)+'" y1="'+sol.toFixed(1)+'" x2="'+(vx.x+W*0.3).toFixed(1)+'" y2="'+sol.toFixed(1)+'"/>';
   }
+  // DE PROFIL, le fil à plomb passe par la MALLÉOLE (A9) : c'est de lui que
+  // se mesurent les distances de la fiche Posture.
+  const ma=vue==='profil'?P('malleole'):null, ta=vue==='profil'?P('talon'):null;
+  if(ma&&vx){
+    const sol=ta?ta.y:ma.y;
+    s+='<line class="an-t-plomb an-t-plomb-p" x1="'+ma.x.toFixed(1)+'" y1="'+(vx.y-H*0.02).toFixed(1)+'" x2="'+ma.x.toFixed(1)+'" y2="'+sol.toFixed(1)+'"/>'
+      +'<line class="an-t-sol" x1="'+(ma.x-W*0.3).toFixed(1)+'" y1="'+sol.toFixed(1)+'" x2="'+(ma.x+W*0.3).toFixed(1)+'" y2="'+sol.toFixed(1)+'"/>';
+  }
   for(const [a,b,c] of _anatTraits(vue)){
     const A=P(a),B=P(b);
     if(!A||!B) continue;
@@ -47118,6 +47376,7 @@ function _anatDessin(vue,pts,W,H,edit,E){
   }
   const r=E*(edit?0.0105:0.0068);
   const cx=(()=>{ const a=P('hanche_l'),b=P('hanche_r'); return a&&b?(a.x+b.x)/2:W/2; })();
+  const sensP=(vue==='profil'&&P('tragus')&&P('c7'))?(Math.sign(P('tragus').x-P('c7').x)||1):0;
   for(const k of anatCles(vue)){
     const p=P(k);
     if(!p) continue;
@@ -47129,10 +47388,11 @@ function _anatDessin(vue,pts,W,H,edit,E){
       +(edit?' tabindex="0" role="button" aria-label="'+escapeHtml((rep?rep.lib:k)+(k.endsWith('_l')?', côté gauche de l’écran':k.endsWith('_r')?', côté droit de l’écran':''))+'. Flèches pour déplacer."':'')+'/>';
     // LE NOM DU POINT, en édition : côté extérieur, pour ne pas couvrir le corps.
     if(edit){
-      const g=p.x<cx-E*0.01, mil=Math.abs(p.x-cx)<=E*0.01;
+      // De profil (A9) : les noms devant le corps, celui de C7 derrière la nuque.
+      const g=sensP?(k==='c7'?sensP>0:sensP<0):p.x<cx-E*0.01, mil=!sensP&&Math.abs(p.x-cx)<=E*0.01;
       const dx=(g?-1:1)*E*0.022;
       const dy=E*(ANAT_NOM_DY[k.replace(/_[lr]$/,'')]||0.007);
-      s+='<text class="an-pt-t" data-t="'+k+'" data-dy="'+dy.toFixed(1)+'" x="'+(p.x+dx).toFixed(1)+'" y="'+(p.y+dy).toFixed(1)+'" font-size="'+(E*0.021).toFixed(1)+'" text-anchor="'+(g&&!mil?'end':'start')+'">'+escapeHtml(anatAide(k).court)+'</text>';
+      s+='<text class="an-pt-t" data-t="'+k+'" data-dy="'+dy.toFixed(1)+'" x="'+(p.x+dx).toFixed(1)+'" y="'+(p.y+dy).toFixed(1)+'" font-size="'+(E*0.021).toFixed(1)+'" text-anchor="'+(g&&!mil?'end':'start')+'">'+escapeHtml(anatAide(k,null,vue).court)+'</text>';
     }
   }
   return s;
@@ -47216,7 +47476,9 @@ function _htmlAnat(c){
   const tete='<div class="an-tete"><span class="an-tete-i">'+ANAT_SVG.tete+'</span><div class="an-tete-c"><h4>Analyse <span>morpho-anatomique</span></h4>'
     +_htmlAnatChoixBilan(c,pb,!!edit)+'</div>'
     +((grise||!a)?'':'<div class="an-vues" role="tablist">'
-      +['face','dos'].map(v=>'<button type="button" role="tab" class="an-vue-b'+(_anatVueActive===v?' actif':'')+'" aria-selected="'+(_anatVueActive===v)+'"'+(edit?' disabled':'')+' onclick="anatVue(\''+v+'\')">'+(v==='face'?'Face':'Dos')+'</button>').join('')
+      +['face','dos','profil'].map(v=>{ const sans=v==='profil'&&!a.profil, on=_anatVueDe(a,_anatVueActive)===v;
+        return '<button type="button" role="tab" class="an-vue-b'+(on?' actif':'')+'" aria-selected="'+on+'"'+((edit||sans)?' disabled':'')
+          +(sans?' title="Pas de photo de profil sur ce bilan"':'')+' onclick="anatVue(\''+v+'\')">'+({face:'Face',dos:'Dos',profil:'Profil'})[v]+'</button>'; }).join('')
       +'</div>')+'</div>';
 
   if(grise){
@@ -47247,9 +47509,9 @@ function _htmlAnat(c){
   const fiches=res.fiches;
   const textes={};
   fiches.forEach(f=>{ try{ textes[f.cle]=anatTexte(f,res); }catch(e){ textes[f.cle]={court:'',lecture:'',privilegier:[],amenager:[],verifier:''}; } });
-  const vueAct=(edit?edit.vue:(_anatVueActive==='dos'&&a.dos?'dos':'face'));
+  const vueAct=(edit?edit.vue:_anatVueDe(a,_anatVueActive));
   const V=a[vueAct];
-  const src=vueAct==='dos'?pb.dos:pb.face;
+  const src=_anatSrcVue(pb,vueAct);
   const pts=edit?edit.pts:anatPoints(a,vueAct);
   const opts=edit?edit.opts:res.opts;
   const W=V.w,H=V.h;
@@ -47273,7 +47535,8 @@ function _htmlAnat(c){
         bras:()=>P2('coude','g'),bassin:()=>P2('crete','g'),jambes:()=>{ const a1=P2('hanche','d'),b1=P2('genou','d'); return a1&&b1?_anatMil(a1,b1):null; },
         genoux:()=>P2('genou','g'),pieds:()=>P2('pointe','d')},
       dos:{epaules:()=>P2('acromion','g'),dos:()=>Pp('c7')&&Pp('sacrum')?_anatMil(Pp('c7'),Pp('sacrum')):null,bassin:()=>P2('crete','g'),
-        bras:()=>P2('coude','d'),genoux:()=>P2('genou','d')}}[vueAct];
+        bras:()=>P2('coude','d'),genoux:()=>P2('genou','d')},
+      profil:{tete:()=>Pp('tragus'),posture:()=>Pp('trochanter')}}[vueAct];
     const et=[];
     M.fiches.forEach(f=>{
       const fn=ancre[f.cle]; if(!fn) return;
@@ -47297,7 +47560,7 @@ function _htmlAnat(c){
         // L'étiquette ne sort jamais de la scène : sa largeur est bornée à
         // la marge qui lui reste, bord compris.
         +(e.cote==='g'?'right:'+(100-pctX(xl)).toFixed(2)+'%;max-width:'+(pctX(xl)-1).toFixed(2)+'%'
-          :'left:'+pctX(xl).toFixed(2)+'%;max-width:'+(99-pctX(xl)).toFixed(2)+'%')+'" onclick="anatOuvrir(\''+e.f.cle+'\',true)">'+escapeHtml(e.f.lib)+'</button>';
+          :'left:'+pctX(xl).toFixed(2)+'%;max-width:'+(99-pctX(xl)).toFixed(2)+'%')+'" onclick="anatOuvrir(\''+e.f.cle+'\',true)"'+(e.f.court?' aria-label="'+escapeHtml(e.f.lib)+'"':'')+'>'+escapeHtml(e.f.court||e.f.lib)+'</button>';
     });
   }
   const echelle=res.echelle;
@@ -47306,7 +47569,7 @@ function _htmlAnat(c){
   // au cadre (les marges des étiquettes restent sombres).
   const clip=reglage.cadre?';clip-path:inset('+(C.y0/H*100).toFixed(3)+'% '+((W-C.x1)/W*100).toFixed(3)+'% '+((H-C.y1)/H*100).toFixed(3)+'% '+(C.x0/W*100).toFixed(3)+'%)':'';
   const scene='<div class="an-scene'+(edit?' an-edit':'')+(_anatRecadre?' an-recadre':'')+'" data-vue="'+vueAct+'"'+(edit?' data-edit="1"':'')+' data-w="'+W+'" data-h="'+H+'" data-e="'+CH.toFixed(1)+'" style="aspect-ratio:'+TW.toFixed(1)+'/'+CH.toFixed(1)+';max-width:calc(78vh * '+(TW/CH).toFixed(4)+')">'
-    +'<img class="an-photo" data-v="'+vueAct+'" src="'+escapeHtml(src)+'" alt="Photo de '+(vueAct==='face'?'face':'dos')+' du premier bilan" decoding="async" draggable="false" style="left:'+pctX(0).toFixed(3)+'%;top:'+(-C.y0/CH*100).toFixed(3)+'%;width:'+(W/TW*100).toFixed(3)+'%;height:'+(H/CH*100).toFixed(3)+'%'+clip+(filtre?';filter:'+filtre:'')+'">'
+    +'<img class="an-photo" data-v="'+vueAct+'" src="'+escapeHtml(src)+'" alt="Photo de '+({face:'face',dos:'dos',profil:'profil'})[vueAct]+' du bilan" decoding="async" draggable="false" style="left:'+pctX(0).toFixed(3)+'%;top:'+(-C.y0/CH*100).toFixed(3)+'%;width:'+(W/TW*100).toFixed(3)+'%;height:'+(H/CH*100).toFixed(3)+'%'+clip+(filtre?';filter:'+filtre:'')+'">'
     +'<svg class="an-os" viewBox="'+VX.toFixed(1)+' '+C.y0.toFixed(1)+' '+TW.toFixed(1)+' '+CH.toFixed(1)+'" preserveAspectRatio="xMidYMid meet"'+(edit?' aria-label="Repères déplaçables"':' aria-hidden="true"')+'>'+fils+_anatDessin(vueAct,pts,W,H,!!edit,CH)
       +(_anatRecadre?'<rect class="an-cadre-r" x="0" y="0" width="0" height="0"/>':'')+'</svg>'
     +anneau
@@ -47330,10 +47593,10 @@ function _htmlAnat(c){
       +anatCles(vueAct).filter(k=>pts[k]).map(k=>{
         const e2=pts[k][2];
         return '<span class="an-rep-c'+(edit.sel===k?' actif':'')+'" data-e="'+(e2>=2?'man':e2<1?'est':'auto')+'">'
-          +'<button type="button" class="an-rep-n" title="'+escapeHtml(anatNomPoint(vueAct,k))+'" onclick="anatChoisirPoint(\''+k+'\')">'+escapeHtml(anatAide(k).court)+(k.endsWith('_l')?' ◂':k.endsWith('_r')?' ▸':'')+'</button>'
+          +'<button type="button" class="an-rep-n" title="'+escapeHtml(anatNomPoint(vueAct,k))+'" onclick="anatChoisirPoint(\''+k+'\')">'+escapeHtml(anatAide(k,null,vueAct).court)+(k.endsWith('_l')?' ◂':k.endsWith('_r')?' ▸':'')+'</button>'
           +'<button type="button" class="an-rep-a" aria-label="Consigne : '+escapeHtml(anatNomPoint(vueAct,k))+'" onclick="anatChoisirPoint(\''+k+'\')">*</button></span>';
       }).join('')+'</div>'
-      +'<div class="an-consigne" aria-live="polite">'+(aideSel?'<b>* '+escapeHtml(anatNomPoint(vueAct,aideSel))+'</b><span>'+escapeHtml(anatAide(aideSel,edit&&edit.opts).aide)+'</span>'
+      +'<div class="an-consigne" aria-live="polite">'+(aideSel?'<b>* '+escapeHtml(anatNomPoint(vueAct,aideSel))+'</b><span>'+escapeHtml(anatAide(aideSel,edit&&edit.opts,vueAct).aide)+'</span>'
         :'<span>Touche un repère ou son « * » : sa consigne de placement s’affiche ici.</span>')+'</div></div>':'';
   const reg=anatReglage(a,vueAct);
   const modif=!!(reg.cadre||reg.lum!==100||reg.con!==100);
@@ -47429,8 +47692,8 @@ function _htmlAnat(c){
 
   const carte=(f)=>{
     const t=textes[f.cle]||{};
-    const vv=a[f.vue==='dos'?'dos':'face'];
-    const s2=f.vue==='dos'?pb.dos:pb.face;
+    const vv=a[f.vue];
+    const s2=_anatSrcVue(pb,f.vue);
     const cad=_anatCadrage(f.zone,vv,4/3);
     const li=(l)=>l&&l.length?'<ul>'+l.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')+'</ul>':'';
     const tab=f.chiffres&&f.chiffres.length?'<table class="an-tab"><thead><tr><th>Mesure</th><th>Athlète</th><th>Repère</th><th>Écart</th></tr></thead><tbody>'
@@ -47444,7 +47707,7 @@ function _htmlAnat(c){
       +'</div>';
     return '<div class="an-f" data-k="'+f.cle+'" data-etat="'+f.etat+'" data-n="'+(f.niveau==null?'':Math.abs(f.niveau))+'">'
       +'<button type="button" class="an-f-vig" '+(cad?'onclick="anatZoom(\''+f.cle+'\')" aria-label="Agrandir : '+escapeHtml(f.lib)+'"':'disabled')+'>'
-      +(cad?_anatImg(s2,cad,f.vue==='dos'?'dos':'face',anatFiltre(anatReglage(a,f.vue==='dos'?'dos':'face')))+'<span class="an-f-loupe">'+ANAT_SVG.loupe+'</span>':'')+'</button>'
+      +(cad?_anatImg(s2,cad,f.vue,anatFiltre(anatReglage(a,f.vue)))+'<span class="an-f-loupe">'+ANAT_SVG.loupe+'</span>':'')+'</button>'
       +'<div class="an-f-c"><div class="an-f-h"><b>'+escapeHtml(f.lib)+'</b>'
         +(f.conf?'<i class="an-conf" data-c="'+f.conf+'" title="'+escapeHtml(f.confPourquoi||'')+'" aria-label="'+escapeHtml(f.confPourquoi||'')+'">'+f.conf+'</i>':'')+(f.valeur?'<em>'+escapeHtml(f.valeur)+'</em>':'')+(f.estime?'<i class="an-f-est" title="Points estimés, à vérifier">estimé</i>':'')+'</div>'
       +'<p class="an-f-court">'+escapeHtml(t.court||'')+'</p>'
@@ -47583,10 +47846,10 @@ function anatZoom(cle){
   const a=c.morphoAnat;
   const f=anatMesures(a,c,{biais:anatBiaisCoach()}).fiches.find(x=>x.cle===cle);
   if(!f||!f.zone) return;
-  const vue=f.vue==='dos'?'dos':'face';
+  const vue=f.vue;
   const v=a[vue];
   const pb=anatPremierBilan(c);
-  const src=vue==='dos'?pb.dos:pb.face;
+  const src=_anatSrcVue(pb,vue);
   const zw=f.zone.x1-f.zone.x0, zh=f.zone.y1-f.zone.y0;
   const asp=Math.max(0.6,Math.min(1.8,zw/zh));
   const cad=_anatCadrage(f.zone,v,asp);
