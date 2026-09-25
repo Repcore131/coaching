@@ -6249,6 +6249,11 @@ window.onload=()=>{
       if(r&&r.faites) { saveUser(); CLOUD.pushOne(currentUser.email,currentUser).catch(()=>{});
         console.log('[RepCore] photos de bilan sorties du document : '+r.faites
           +' ('+Math.round(r.octets/1024)+' Ko), '+r.restantes+' restante(s)'); }
+    }).catch(()=>{})
+    // Puis celles dont l'envoi avait échoué : le blob est ici, le coach attend.
+    .then(()=>photosBilanRenvoyer(currentUser,{max:6})).then(r=>{
+      if(r&&r.faites){ saveUser(); CLOUD.pushOne(currentUser.email,currentUser).catch(()=>{});
+        console.log('[RepCore] photos de bilan renvoyées : '+r.faites+', '+r.restantes+' restante(s)'); }
     }).catch(()=>{});
   }catch(e){} },18000);
   // UN SEUL INSTANT DE DEPART. Le voile et l'eclair partaient a l'analyse du
@@ -45511,24 +45516,35 @@ function anatCotes(vue,miroir){
 function anatPremierBilan(u){
   let bl=[];
   try{ bl=(Array.isArray(u&&u.bilans)?u.bilans:[]).filter(b=>b&&b.date); }catch(e){ bl=[]; }
-  if(!bl.length) return {bilan:null,date:0,face:null,dos:null,manque:['le premier bilan'],auto:true,defaut:0};
+  if(!bl.length) return {bilan:null,date:0,face:null,dos:null,manque:['le premier bilan'],locales:[],auto:true,defaut:0};
   const dep=bl.filter(b=>b.type==='depart').sort((a,b)=>a.date-b.date);
   const reste=bl.filter(b=>b.type!=='depart').sort((a,b)=>a.date-b.date);
   const ordre=dep.concat(reste);
   const src=(b,v)=>{ try{ return photoBilanSrc(b,v)||null; }catch(e){ return null; } };
-  const parDefaut=ordre.find(x=>src(x,'face'))||ordre[0];
+  // ⚠ UNE RÉFÉRENCE SANS URL (E2, 25/09/2026) : la photo existe, mais son blob
+  //   n'est que sur le téléphone de l'athlète — l'envoi a échoué. Ce n'est pas
+  //   « il manque la photo » : l'athlète l'a prise, et lui redemander de la
+  //   prendre serait faux. On le dit tel quel, au coach et dans le message.
+  const locale=(b,v)=>{ try{ const r=photoBilanRef(b,v); return !!(r&&r.cle&&!r.url)&&!src(b,v); }catch(e){ return false; } };
+  // Par défaut, le premier bilan qui porte face ET dos ; à défaut, le premier
+  // à photo de face ; à défaut, le premier dont les photos attendent l'envoi.
+  const parDefaut=ordre.find(x=>src(x,'face')&&src(x,'back'))||ordre.find(x=>src(x,'face'))
+    ||ordre.find(x=>locale(x,'face')||locale(x,'back'))||ordre[0];
   const choix=Number(u&&u.morphoAnat&&u.morphoAnat.choix)||0;
   const choisi=choix?bl.find(x=>Number(x.date)===choix&&src(x,'face')):null;
   const b=choisi||parDefaut;
   const face=src(b,'face'), dos=src(b,'back'), profil=src(b,'side');
-  const manque=[];
-  if(!face) manque.push('la photo de face');
-  if(!dos) manque.push('la photo de dos');
+  const manque=[], locales=[];
+  if(!face){ if(locale(b,'face')){ locales.push('face'); manque.push(ANAT_MANQUE_LOCALE.face); } else manque.push('la photo de face'); }
+  if(!dos){ if(locale(b,'back')){ locales.push('dos'); manque.push(ANAT_MANQUE_LOCALE.dos); } else manque.push('la photo de dos'); }
   // La photo de profil (A9) n'est pas exigée : sans elle, pas de fiches
   // Posture ni Tête et cou, et rien d'autre ne change.
-  return {bilan:b,date:Number(b.date)||0,face,dos,profil,manque,
+  return {bilan:b,date:Number(b.date)||0,face,dos,profil,manque,locales,
     auto:!choisi||Number(choisi.date)===Number(parDefaut.date),defaut:Number(parDefaut.date)||0};
 }
+const ANAT_MANQUE_LOCALE=Object.freeze({
+  face:'la photo de face (restée sur le téléphone, pas encore synchronisée)',
+  dos:'la photo de dos (restée sur le téléphone, pas encore synchronisée)'});
 /**
  * PURE. Les bilans qu'on peut analyser — ceux qui portent une photo de face —,
  * du plus ancien au plus récent, et lequel est le choix par défaut.
@@ -48680,13 +48696,27 @@ function _anatPoints(f){
 function _anatDateFr(t){
   try{ return new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}); }catch(e){ return ''; }
 }
-function _anatContact(c,manque){
+function _anatContact(c,manque,locales){
   const pre=String(c.fname||'').trim()||'l’athlète';
-  const txt='Salut '+(String(c.fname||'').trim())+' ! Pour ton analyse morpho-anatomique, il me manque '
+  const L=Array.isArray(locales)?locales:[];
+  const vraies=(manque||[]).filter(m=>m!==ANAT_MANQUE_LOCALE.face&&m!==ANAT_MANQUE_LOCALE.dos);
+  let txt='Salut '+(String(c.fname||'').trim())+' ! ';
+  // LA PHOTO PRISE MAIS PAS ARRIVÉE : on ne la redemande pas, on dit où elle est.
+  if(L.length){
+    const q=L.length>1?'Tes photos de '+L.join(' et de ')+' sont':'Ta photo de '+L[0]+' est';
+    txt+=q+' bien dans ton bilan, mais '+(L.length>1?'elles sont restées':'elle est restée')
+      +' sur ton téléphone : '+(L.length>1?'elles ne sont':'elle n’est')+' pas encore synchronisée'+(L.length>1?'s':'')
+      +' et je ne '+(L.length>1?'les':'la')+' vois pas de mon côté. Ouvre l’application avec du réseau (Wi-Fi ou 4G) : '
+      +(L.length>1?'elles partiront':'elle partira')+' toute'+(L.length>1?'s':'')+' seule'+(L.length>1?'s':'')
+      +'. Si rien n’arrive, remets-'+(L.length>1?'les':'la')+' dans ton bilan.'
+      +(vraies.length?' Il me manque aussi '+vraies.join(' et ')+'.':'')+' Merci !';
+  }else{
+    txt+='Pour ton analyse morpho-anatomique, il me manque '
     +(manque&&manque.length?manque.join(' et '):'tes photos de bilan')
     +'. Tu peux compléter ton bilan dans l’application (photos de face et de dos en pied, pieds nus à largeur de hanches et posés comme d’habitude, bras relâchés légèrement écartés du corps'
     +(c.photoPaumes?', paumes tournées vers l’avant sur la photo de face':'')
     +', idéalement prises par quelqu’un d’autre ou avec un minuteur) ? Merci !';
+  }
   const tel=String(c.phone||'').trim();
   let url='';
   try{ if(tel&&_numWa(tel)) url=waLink(tel,txt); }catch(e){ url=''; }
@@ -48725,7 +48755,7 @@ function renderAnatCoach(c){
  */
 function _htmlAnatChoixBilan(c,pb,fige){
   let liste=[];
-  try{ liste=anatBilansPhotos(c); }catch(e){ liste=[]; }
+  try{ liste=anatBilansPhotos(c).filter(x=>x.dos||x.date===pb.date); }catch(e){ liste=[]; }
   const nomDe=x=>(x.depart?'Départ':'Bilan')+' · '+_anatDateFr(x.date);
   if(liste.length<2||!pb.date)
     return '<span>'+(pb.date?(pb.auto?'Photos du premier bilan · ':'Photos du bilan du ')+_anatDateFr(pb.date)
@@ -48757,12 +48787,14 @@ function _htmlAnat(c){
       +'</div>')+'</div>';
 
   if(grise){
-    const k=_anatContact(c,manque);
+    const k=_anatContact(c,manque,pb.locales);
     const fant='<div class="an-fant">'+Array.from({length:5}).map(()=>'<div class="an-fant-c"><i></i><div><b></b><span></span><span></span></div></div>').join('')+'</div>';
     return '<div class="an an-grise">'+tete
       +'<div class="an-grise-corps" aria-hidden="true"><div class="an-grille">'+fant+'<div class="an-scene-vide"></div>'+fant+'</div></div>'
       +'<div class="an-voile"><div class="an-voile-c"><b>Analyse indisponible</b><span>Il manque '+escapeHtml(manque.join(' et '))
-      +'. L’analyse se lit sur les photos de face et de dos du premier bilan.</span>'
+      +(pb.locales&&pb.locales.length?(pb.locales.length>1?'. Elles ont été prises, mais leur envoi n’a pas abouti : elles partiront':'. Elle a été prise, mais son envoi n’a pas abouti : elle partira')
+        +' quand l’athlète rouvrira l’application avec du réseau.'
+        :'. L’analyse se lit sur les photos de face et de dos '+(pb.date&&!pb.auto?'du bilan du '+_anatDateFr(pb.date):'du premier bilan')+'.')+'</span>'
       +(k.url?'<a class="btn an-contact" href="'+escapeHtml(k.url)+'" target="_blank" rel="noopener">'+ANAT_SVG.msg+'<span>Contacter '+escapeHtml(k.pre)+' pour mettre à jour ses données</span></a>'
         :'<span class="an-voile-s">Aucun numéro ni adresse pour contacter '+escapeHtml(k.pre)+'.</span>')
       +'</div></div></div>';
@@ -54687,6 +54719,45 @@ async function photoBilanEnregistrer(cible,bilan,vue,file){
   }
   bilan[champ]=ref;
   return {ok:true,transmise:true,ref:ref};
+}
+
+/** PURE. Les photos de bilan dont le blob est ici et l'URL nulle part. */
+function photosBilanARenvoyer(user){
+  const u=_dossier(user);
+  const out=[];
+  for(const b of (Array.isArray(u&&u.bilans)?u.bilans:[])){
+    if(!b||!b.date) continue;
+    for(const vue of BILP_VUES) for(const pre of BILP_PREFIXES){
+      const r=b[pre+vue];
+      if(r&&typeof r==='object'&&r.cle&&!r.url) out.push({bilan:b,champ:pre+vue,ref:r});
+    }
+  }
+  return out;
+}
+/**
+ * LE RENVOI QUE `photoBilanEnregistrer` PROMETTAIT (E2, 25/09/2026). Une photo
+ * dont l'envoi a échoué gardait `aEnvoyer` pour toujours : rien ne la
+ * reprenait, et le coach restait sans photo. Même règle que la migration :
+ * SON dossier seulement (le blob est sur cet appareil), et la référence ne
+ * change que si l'envoi a réussi.
+ */
+async function photosBilanRenvoyer(user,options){
+  const o=options||{};
+  const liste=photosBilanARenvoyer(user);
+  let faites=0,echecs=0;
+  for(const x of liste.slice(0,o.max||6)){
+    let blob=null;
+    try{ blob=await phpLireBlob(x.ref.cle); }catch(e){ blob=null; }
+    if(!blob){ echecs++; continue; }
+    try{
+      const d=await phpUploadImage(blob,x.ref.cle,'bilan');
+      if(!d||!d.secure_url){ echecs++; continue; }
+      x.ref.url=d.secure_url; x.ref.publicId=d.public_id;
+      delete x.ref.aEnvoyer;
+      faites++;
+    }catch(e){ echecs++; }
+  }
+  return {faites,echecs,restantes:photosBilanARenvoyer(user).length};
 }
 
 // ── LA MIGRATION DES ANCIENNES ────────────────────────────────────────────

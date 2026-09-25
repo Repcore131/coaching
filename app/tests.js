@@ -45545,6 +45545,72 @@ async function testExercices(){
       if(!/face : contrôle passé/.test(c)||!/dos : envoyée avec réserve \(bras\)/.test(c)) return _echec('coach : '+c);
       if(!/avant le contrôle/.test(_anatCtlEnvoi({type:'depart'}))) return _echec('bilan ancien');
       return true;})());
+    // E2 (25/09/2026) : le bon bilan, le bon message.
+    ok('E2 — UNE PHOTO RESTÉE SUR LE TÉLÉPHONE N’EST PAS « MANQUANTE » : LE MESSAGE LE DIT',(()=>{
+      const loc={date:2000,type:'depart','deb-photo-face':{cle:'bilan/2000/deb-photo-face',aEnvoyer:true},'deb-photo-back':{cle:'bilan/2000/deb-photo-back',url:'https://x/b.jpg'}};
+      const pb=anatPremierBilan(_anatDossier({bilans:[loc]}));
+      if(pb.date!==2000) return _echec('bilan lu : '+pb.date);
+      if(pb.face) return _echec('une clé locale prise pour une URL');
+      if(pb.manque.join('|')!=='la photo de face (restée sur le téléphone, pas encore synchronisée)') return _echec('manque : '+pb.manque.join('|'));
+      if(pb.locales.join()!=='face') return _echec('locales : '+pb.locales.join());
+      const k=_anatContact(_anatDossier({fname:'Léa',phone:'0612345678'}),pb.manque,pb.locales);
+      const txt=decodeURIComponent(String(k.url).split('text=')[1]||String(k.url).split('body=')[1]||'');
+      if(!/restée sur ton téléphone/.test(txt)||!/pas encore synchronisée/.test(txt)) return _echec('message : '+txt);
+      if(/il me manque la photo de face/i.test(txt)) return _echec('le message redemande la photo');
+      // Une photo vraiment absente garde le message d'origine.
+      const abs=anatPremierBilan(_anatDossier({bilans:[{date:2000,type:'depart','deb-photo-back':{cle:'k',url:'https://x/b.jpg'}}]}));
+      if(abs.manque.join()!=='la photo de face'||abs.locales.length) return _echec('photo absente : '+abs.manque.join());
+      const k2=_anatContact(_anatDossier({fname:'Léa',phone:'0612345678'}),abs.manque,abs.locales);
+      if(!/il me manque la photo de face/.test(decodeURIComponent(k2.url))) return _echec('message d’origine perdu');
+      // Et la fiche grisée le dit au coach.
+      const h=_htmlAnat(_anatDossier({bilans:[loc]}));
+      if(h.indexOf('restée sur le téléphone')<0||h.indexOf('son envoi n’a pas abouti')<0) return _echec('fiche grisée muette');
+      // Ce qui partira au prochain démarrage de l'athlète.
+      const r=photosBilanARenvoyer({bilans:[loc]});
+      if(r.length!==1||r[0].champ!=='deb-photo-face') return _echec('à renvoyer : '+r.map(x=>x.champ).join());
+      return true;})());
+    ok('E2 — LE MENU NE PROPOSE QUE LES BILANS À FACE ET DOS, ET LE DÉFAUT EN PORTE LES DEUX',(()=>{
+      const bl=[_anatBil(2000,'depart',false),_anatBil(3000,'coaching'),_anatBil(4000,'coaching',false),_anatBil(5000,'coaching')];
+      const pb=anatPremierBilan(_anatDossier({bilans:bl}));
+      if(pb.date!==3000) return _echec('un départ sans dos passe avant un bilan complet : '+pb.date);
+      const h=_htmlAnatChoixBilan(_anatDossier({bilans:bl}),pb,false);
+      const v=(h.match(/<option value="[^"]+"/g)||[]).map(x=>x.slice(15,-1)).join(',');
+      if(v!=='5000,auto') return _echec('menu : '+v);
+      return true;})());
+    okA('E2 — CHANGER DE BILAN RELANCE LA DÉTECTION, ET LES POINTS DE L’ANCIEN LUI RESTENT',(async()=>{
+      const man={pts:{epaule_g:{x:111,y:222}}};
+      const mag={users:{'e2@t.fr':_anatDossier({email:'e2@t.fr',id:'E2',coachId:'C2',
+        bilans:[_anatBil(2000,'depart'),_anatBil(3000,'coaching')],
+        morphoAnat:{v:ANAT_VERSION,bilan:2000,face:{w:1000,h:1500,auto:{pts:{}},man:man},dos:{w:1000,h:1500,auto:{pts:{}},man:null},opts:{}}})}};
+      const sv={get:DB.get,set:DB.set,u:currentUser,cid:currentClientId,own:getOwnedClient,rd:renderAnatCoach,ts:toastSync,
+        push:CLOUD.pushOne,ch:chargerMotionLab,dim:_anatDimensions,ml:window.mlAnatPhoto};
+      try{
+        DB.get=k=>mag[k]?JSON.parse(JSON.stringify(mag[k])):null; DB.set=(k,v)=>{ mag[k]=JSON.parse(JSON.stringify(v)); return true; };
+        currentUser={id:'C2',email:'c2@t.fr',role:'coach'}; currentClientId='E2';
+        getOwnedClient=()=>mag.users['e2@t.fr']; renderAnatCoach=()=>true; toastSync=()=>{}; CLOUD.pushOne=()=>Promise.resolve(true);
+        chargerMotionLab=async()=>true; _anatDimensions=async()=>({w:1000,h:1500}); window.mlAnatPhoto=async()=>({ok:false});
+        anatChoisirBilan('3000');
+        let d=mag.users['e2@t.fr'];
+        if(Number(d.morphoAnat.choix)!==3000) return _echec('choix non suivi');
+        const ar=d.morphoAnat.archives&&d.morphoAnat.archives['2000'];
+        if(!ar||!ar.face||JSON.stringify(ar.face.man)!==JSON.stringify(man)) return _echec('les points du départ ne sont pas mis de côté');
+        const pb=anatPremierBilan(d);
+        if(pb.date!==3000||!anatARefaire(d,pb)) return _echec('le nouveau bilan ne demande pas de détection');
+        if(!await anatAnalyser('e2@t.fr')) return _echec('détection du nouveau bilan : '+(_anatEchecs.get('e2@t.fr')||'rien'));
+        d=mag.users['e2@t.fr'];
+        if(Number(d.morphoAnat.bilan)!==3000) return _echec('bilan analysé : '+d.morphoAnat.bilan);
+        if(d.morphoAnat.face.man) return _echec('les points du départ ont suivi sur le nouveau bilan');
+        if(!d.morphoAnat.archives||!d.morphoAnat.archives['2000']) return _echec('l’archive du départ a disparu');
+        // Retour au départ : ses points reviennent.
+        anatChoisirBilan('auto');
+        if(!await anatAnalyser('e2@t.fr')) return _echec('détection du retour');
+        d=mag.users['e2@t.fr'];
+        if(Number(d.morphoAnat.bilan)!==2000||JSON.stringify(d.morphoAnat.face.man)!==JSON.stringify(man)) return _echec('les points du départ ne reviennent pas');
+        return true;
+      }finally{
+        DB.get=sv.get; DB.set=sv.set; currentUser=sv.u; currentClientId=sv.cid; getOwnedClient=sv.own; renderAnatCoach=sv.rd; toastSync=sv.ts;
+        CLOUD.pushOne=sv.push; chargerMotionLab=sv.ch; _anatDimensions=sv.dim; window.mlAnatPhoto=sv.ml; _anatEchecs.delete('e2@t.fr');
+      }}));
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());
