@@ -10380,6 +10380,19 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .an-j-moi2{fill:#ff3b3b;stroke:#fff;stroke-width:1.5;filter:drop-shadow(0 0 3px rgba(255,59,59,.8))}
 .an-jauge text{font-size:6.5px;fill:#8a8a92;font-family:inherit}
 .an-lev-leg{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:9.5px;color:#8a8a92}
+/* A17 : le soulevé, conventionnel et sumo côte à côte. */
+.an-sdt{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.an-sdt-s{display:flex;flex-direction:column;gap:4px;min-width:0;padding:8px;border-radius:9px;background:#17171b;border:1px solid #232328}
+.an-sdt-s>b{font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:#d4d4d8}
+.an-sdt-j{display:flex;align-items:center;gap:8px}
+.an-jauge-t{width:64px;height:64px;flex:0 0 64px}
+.an-sdt-v{display:flex;flex-direction:column;gap:2px;min-width:0}
+.an-sdt-v strong{font-size:20px;color:#fff}
+.an-sdt-v em{font-style:normal;font-size:10px;color:#8a8a92;line-height:1.35}
+.an-sdt-c{margin:0;font-size:10px;color:#a1a1aa;line-height:1.4}
+.an-sdt-d{margin:4px 0 0;font-size:11.5px;color:#fff;line-height:1.45}
+.an-lev .an-lev-c>.an-sdt{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+@media (max-width:420px){ .an-lev .an-lev-c>.an-sdt{grid-template-columns:minmax(0,1fr)} }
 /* A16 : les quatre réglages du squat, compacts, sous le texte. */
 .an-sq{display:grid;grid-template-columns:1fr 1fr auto auto;gap:6px 10px;align-items:center;padding-top:6px;border-top:1px solid #232328}
 .an-sq-c{display:flex;flex-direction:column;gap:2px;min-width:0;font-size:10px;color:#a1a1aa}

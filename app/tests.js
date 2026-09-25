@@ -45323,6 +45323,35 @@ async function testExercices(){
       if(!/Fry, Smith & Schilling, JSCR 2003/.test(L.source)||!/Schoenfeld, JSCR 2010/.test(L.source)||!/genou au mur/.test(L.source)) return _echec('source : '+L.source);
       if(L.ref==null||L.val==null) return _echec('valeurs');
       return true;})());
+    // Le soulevé de terre, deux styles (A17, 25/09/2026).
+    ok('ANALYSE MORPHO : SOULEVÉ : PROPORTIONS MOYENNES, TRONC CONVENTIONNEL ENTRE 30° ET 50°',(()=>{
+      if(typeof anatSouleveModele!=='function') return _echec('anatSouleveModele n’existe pas');
+      for(const sx of ['H','F']){
+        const R=ANAT_REF[sx], MR=ANAT_MESURES_REF[sx];
+        const p={F:R.cuisse,T:R.jambe,Tr:R.tronc,A:R.bras+R.avantbras+ANAT_MAIN/2,pied:MR.pied,taille:sx==='H'?178:165};
+        const c=anatSouleveModele(Object.assign({style:'conventionnel'},p));
+        if(!c||!(c.tronc>30&&c.tronc<50)) return _echec(sx+' : tronc '+(c&&c.tronc));
+        if(!(c.hanche*p.taille>35&&c.hanche*p.taille<80)) return _echec(sx+' : hanche à '+(c.hanche*p.taille)+' cm');
+        if(!(c.brasHanche>0)) return _echec(sx+' : la hanche n’est pas derrière la barre');
+        const su=anatSouleveModele(Object.assign({style:'sumo'},p));
+        if(!su||!(su.tronc>c.tronc)) return _echec(sx+' : sumo '+(su&&su.tronc)+' contre '+c.tronc);
+        if(!(su.tibia<=10.01)) return _echec(sx+' : tibia sumo '+su.tibia);
+        if(!(su.brasHanche<c.brasHanche)) return _echec(sx+' : le sumo n’approche pas la hanche de la barre');
+      }
+      return true;})());
+    ok('ANALYSE MORPHO : SOULEVÉ : BRAS PLUS LONGS → TRONC PLUS DROIT ; LA CARTE COMPARE LES DEUX STYLES',(()=>{
+      const R=ANAT_REF.H, p={F:R.cuisse,T:R.jambe,Tr:R.tronc,pied:0.154,taille:178,style:'conventionnel'};
+      const court=anatSouleveModele(Object.assign({A:0.35},p)), long=anatSouleveModele(Object.assign({A:0.40},p));
+      if(!(long.tronc>court.tronc)) return _echec('bras longs '+long.tronc+' contre '+court.tronc);
+      const L=anatMesures(_anatGab(),_anatDossier()).leviers.find(x=>x.cle==='souleve');
+      if(!L||!L.styles||!L.styles.sumo||!L.styles.conventionnel) return _echec('le levier ne porte pas les deux styles');
+      if(Math.abs(L.val-L.ref)>0.5) return _echec('le gabarit n’est pas dans la moyenne : '+L.val+' / '+L.ref);
+      if(!/Escamilla et al\., MSSE 2000/.test(L.source)||!/Swinton et al\., JSCR 2011/.test(L.source)) return _echec('source : '+L.source);
+      if(!/En sumo, le tronc se redresse de \d+°/.test(L.decision)) return _echec('décision : '+L.decision);
+      if(/éviter/i.test(L.decision+L.txt)) return _echec('« à éviter »');
+      const h=_htmlSouleve(L);
+      if((h.match(/an-jauge-t/g)||[]).length!==2) return _echec('pas deux jauges');
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());

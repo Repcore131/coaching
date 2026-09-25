@@ -46532,6 +46532,49 @@ function anatSquatCalc(prop,cfg){
   return anatSquatModele({F:prop.F,T:prop.T,Tr:prop.Tr-(ANAT_SQUAT.BARRE[cfg.barre]||ANAT_SQUAT.BARRE.haute),
     alpha:cfg.alpha+(cfg.cale?ANAT_SQUAT.CALE:0),beta:cfg.beta||0,pied:prop.pied});
 }
+/**
+ * LE SOULEVÉ DE TERRE, DEUX STYLES (chantier A17). Une chaîne plane
+ * cheville → genou → hanche → épaule, au décollage :
+ *   - la barre (22,5 cm du sol, rayon d'un disque de 45 cm) à l'aplomb du
+ *     milieu du pied, 0,3 × pied devant la cheville ; la main la tient : le
+ *     bras A va de l'épaule au poignet, plus une demi-main ;
+ *   - l'épaule 0 à 3 cm devant la barre (1,5 cm retenus) ;
+ *   - conventionnel : pieds largeur de hanches, le tibia touche la barre —
+ *     genou devant la barre d'un rayon de tibia (≈ 4,5 cm) ;
+ *   - sumo : fémur projeté F·cos 40° (hanches ouvertes), tibia plus vertical
+ *     (≤ 10°), prise à l'intérieur des genoux, A inchangé.
+ * Épaule et genou connus, la hanche est à l'intersection des deux cercles
+ * (fémur autour du genou, tronc autour de l'épaule), côté arrière. La hauteur
+ * de cheville (0,039 × taille) est celle de Drillis & Contini.
+ * Sources : Escamilla et al., MSSE 2000 ; Swinton et al., JSCR 2011.
+ */
+const ANAT_SOULEVE=Object.freeze({BARRE_CM:22.5,EPAULE_CM:1.5,RAYON_TIBIA_CM:4.5,CHEVILLE:0.039,
+  SUMO_FEMUR:40,SUMO_TIBIA:10,TAILLE_DEFAUT:175,
+  SOURCE:'Escamilla et al., MSSE 2000 ; Swinton et al., JSCR 2011'});
+/** PURE. {F, T, Tr, A, pied, taille, style} → tronc (° / horizontale), hauteur de hanche, bras de levier. */
+function anatSouleveModele(p){
+  const H=p.taille||ANAT_SOULEVE.TAILLE_DEFAUT, cm=x=>x/H, rad=Math.PI/180;
+  const sumo=p.style==='sumo';
+  const xa=-ANAT_SQUAT.MILIEU_PIED*(p.pied||0), ya=ANAT_SOULEVE.CHEVILLE;
+  const yb=cm(ANAT_SOULEVE.BARRE_CM), r=cm(ANAT_SOULEVE.RAYON_TIBIA_CM), dS=cm(ANAT_SOULEVE.EPAULE_CM);
+  // Le genou : devant la barre d'un rayon de tibia ; en sumo, tibia à 10° au plus.
+  let kx=r;
+  if(sumo){ const aConv=Math.asin(Math.max(-1,Math.min(1,(r-xa)/p.T))); kx=xa+p.T*Math.sin(Math.min(aConv,ANAT_SOULEVE.SUMO_TIBIA*rad)); }
+  if(Math.abs(kx-xa)>=p.T) return null;
+  const ky=ya+Math.sqrt(p.T*p.T-(kx-xa)*(kx-xa));
+  const Fp=sumo?p.F*Math.cos(ANAT_SOULEVE.SUMO_FEMUR*rad):p.F;
+  if(!(p.A>dS)) return null;
+  const sx=dS, sy=yb+Math.sqrt(p.A*p.A-dS*dS);
+  // La hanche : intersection du cercle du fémur (genou) et du cercle du tronc (épaule).
+  const dx=sx-kx, dy=sy-ky, dd=Math.hypot(dx,dy);
+  if(!(dd<=Fp+p.Tr&&dd>=Math.abs(Fp-p.Tr))) return null;
+  const a=(Fp*Fp-p.Tr*p.Tr+dd*dd)/(2*dd), h=Math.sqrt(Math.max(0,Fp*Fp-a*a));
+  const mx=kx+a*dx/dd, my=ky+a*dy/dd;
+  const c1={x:mx-h*dy/dd,y:my+h*dx/dd}, c2={x:mx+h*dy/dd,y:my-h*dx/dd};
+  const hip=c1.x<c2.x?c1:c2;
+  return {tronc:_anatDeg(Math.atan2(sy-hip.y,sx-hip.x)),hanche:hip.y,brasHanche:-hip.x,
+    tibia:_anatDeg(Math.asin((kx-xa)/p.T)),genou:{x:kx,y:ky},epaule:{x:sx,y:sy},hip};
+}
 /** Le texte d'une configuration, avec ses bras de levier en cm quand la taille est connue. */
 function anatSquatTexte(moi,ref,cfg,taille){
   const cm=v=>taille?_anatN(Math.abs(v)*taille,0)+' cm':_anatN(Math.abs(v)*100,1)+' % de la taille';
@@ -46592,12 +46635,29 @@ function anatLeviers(fiches,F,taille,femme,u){
   const srcEnv=env?'bras tirés de l’envergure mesurée au bilan ('+_anatN(env,0)+' cm'+(epM?', largeur d’épaules au mètre':'')+' ; repère '+ANAT_MESURES_REF.SOURCE+')':null;
   const hu=par.bras.mesure.hu, ab=par.bras.mesure.ab;
   const brasMoi=kEnv?(R.bras+R.avantbras)*kEnv:((hu&&ab&&hu.fr&&ab.fr)?hu.fr+ab.fr:null);
-  if(brasMoi&&tr&&tr.fr){
-    const moi=(brasMoi+ANAT_MAIN/2)/tr.fr, ref=(R.bras+R.avantbras+ANAT_MAIN/2)/R.tronc;
-    out.push({cle:'souleve',lib:'Soulevé de terre',val:Math.round(moi*100)/100,ref:Math.round(ref*100)/100,
-      source:srcEnv?srcEnv+' ; tronc lu sur la photo':photo,
-      txt:'Bras / tronc : '+_anatN(moi,2)+' (moyenne : '+_anatN(ref,2)+'). '+(moi>ref*1.04?'Bras longs : départ plus haut, buste plus droit — un levier favorable.':moi<ref*0.96?'Bras courts : il faut descendre les hanches, le dos travaille plus au départ.':'Levier dans la moyenne.')
-        +(env?' Bras tirés de l’envergure mesurée ('+_anatN(env,0)+' cm).':'')});
+  // LE SOULEVÉ (A17) : le modèle géométrique, en conventionnel et en sumo,
+  // comparé au même modèle sur les proportions moyennes de de Leva.
+  if(brasMoi&&tr&&tr.fr&&cu&&cu.fr&&ja&&ja.fr){
+    const H=taille||ANAT_SOULEVE.TAILLE_DEFAUT;
+    const A={F:cu.fr,T:ja.fr,Tr:tr.fr,A:brasMoi+ANAT_MAIN/2,pied:pied?pied/taille:MR.pied,taille:H};
+    const Rp={F:R.cuisse,T:R.jambe,Tr:R.tronc,A:R.bras+R.avantbras+ANAT_MAIN/2,pied:MR.pied,taille:H};
+    const st={};
+    for(const style of ['conventionnel','sumo'])
+      st[style]={moi:anatSouleveModele(Object.assign({style},A)),ref:anatSouleveModele(Object.assign({style},Rp))};
+    const c=st.conventionnel, su=st.sumo;
+    if(c.moi&&c.ref&&su.moi&&su.ref){
+      const cmv=v=>_anatN(v*H,0)+' cm';
+      const gain=su.moi.tronc-c.moi.tronc, dLev=(c.moi.brasHanche-su.moi.brasHanche)*H;
+      const net=gain>=8||dLev>=5;
+      out.push({cle:'souleve',lib:'Soulevé de terre',val:Math.round(c.moi.tronc*10)/10,ref:Math.round(c.ref.tronc*10)/10,styles:st,taille:H,
+        source:(srcEnv?srcEnv+' ; tronc et jambes lus sur la photo':photo)+' ; modèle '+ANAT_SOULEVE.SOURCE+' ; hauteur de cheville Drillis & Contini'+(taille?'':' ; taille supposée '+H+' cm'),
+        decision:'En sumo, le tronc se redresse de '+_anatN(gain,0)+'° ('+_anatN(su.moi.tronc,0)+'° contre '+_anatN(c.moi.tronc,0)+'° en conventionnel) et la hanche se rapproche de la barre de '+_anatN(Math.max(0,dLev),0)+' cm. '
+          +(net?'Le sumo raccourcit nettement le levier du dos : une variante à proposer, surtout si le bas du dos limite la charge.'
+            :'Les deux styles se valent mécaniquement ici : choisir selon la mobilité de hanche et le ressenti.'),
+        txt:'Conventionnel : tronc à '+_anatN(c.moi.tronc,0)+'° de l’horizontale (proportions moyennes : '+_anatN(c.ref.tronc,0)+'°), hanche à '+cmv(c.moi.hanche)+' du sol, bras de levier hanche → barre '+cmv(c.moi.brasHanche)+'. '
+          +(c.moi.tronc>c.ref.tronc+3?'Tronc plus droit que la moyenne : un levier favorable au décollage.':c.moi.tronc<c.ref.tronc-3?'Tronc plus couché que la moyenne : le dos porte davantage au décollage.':'Levier dans la moyenne.')
+          +(env?' Bras tirés de l’envergure mesurée ('+_anatN(env,0)+' cm).':'')});
+    }
   }
   const bi=par.clavicules.mesure.bi;
   const biD=(env&&epM)?{fr:epM/taille}:bi;
@@ -47224,6 +47284,32 @@ let _anatLevIdx=0;
 /** Les menus déroulants de la colonne centrale : ouverts ou fermés. */
 let _anatDeplie={lev:true,inf:false};
 let _anatToutes=false;
+/** Une jauge de tronc, de l'horizontale (0°) à la verticale (90°) : athlète et moyenne. */
+function _anatJaugeTronc(moi,ref,lib){
+  const O={x:8,y:74},R=64;
+  const pt=(a,r)=>{ const t=a*Math.PI/180; return {x:O.x+(r||R)*Math.cos(t),y:O.y-(r||R)*Math.sin(t)}; };
+  const arc=(a0,a1,r)=>{ const p0=pt(a0,r),p1=pt(a1,r); return 'M'+p0.x.toFixed(1)+' '+p0.y.toFixed(1)+' A'+r+' '+r+' 0 0 0 '+p1.x.toFixed(1)+' '+p1.y.toFixed(1); };
+  const aig=(a,cl,r)=>{ const p=pt(Math.max(0,Math.min(90,a)),r||R-6); return '<line class="'+cl+'" x1="'+O.x+'" y1="'+O.y+'" x2="'+p.x.toFixed(1)+'" y2="'+p.y.toFixed(1)+'"/>'; };
+  let g='<svg class="an-jauge an-jauge-t" viewBox="0 0 80 80" role="img" aria-label="'+escapeHtml(lib)+' : tronc à '+Math.round(moi)+'° de l’horizontale, moyenne '+Math.round(ref)+'°">'
+    +'<path class="an-j-fond" d="'+arc(0,90,R)+'"/>'
+    +'<path class="an-j-zone" d="'+arc(Math.min(moi,ref),Math.max(moi,ref),R)+'"/>';
+  for(const t of [0,30,60,90]){ const a=pt(t,R+1),b=pt(t,R-5); g+='<line class="an-j-gr" x1="'+a.x.toFixed(1)+'" y1="'+a.y.toFixed(1)+'" x2="'+b.x.toFixed(1)+'" y2="'+b.y.toFixed(1)+'"/>'; }
+  return g+'<line class="an-j-sol" x1="'+O.x+'" y1="'+O.y+'" x2="78" y2="'+O.y+'"/>'+aig(ref,'an-j-moy')+aig(moi,'an-j-moi')
+    +'<circle class="an-j-piv" cx="'+O.x+'" cy="'+O.y+'" r="3.5"/></svg>';
+}
+/** La carte du soulevé (A17) : conventionnel et sumo côte à côte, et la phrase de décision. */
+function _htmlSouleve(l){
+  const H=l.taille, cmv=v=>_anatN(v*H,0)+' cm';
+  const bloc=(style,lib)=>{
+    const x=l.styles[style];
+    return '<div class="an-sdt-s"><b>'+lib+'</b><div class="an-sdt-j">'+_anatJaugeTronc(x.moi.tronc,x.ref.tronc,lib)
+      +'<div class="an-sdt-v"><strong>'+_anatN(x.moi.tronc,0)+'°</strong><em>tronc / horizontale<br>moyenne '+_anatN(x.ref.tronc,0)+'°</em></div></div>'
+      +'<p class="an-sdt-c">hanche à '+cmv(x.moi.hanche)+' du sol · levier hanche → barre '+cmv(x.moi.brasHanche)+'</p></div>';
+  };
+  return '<div class="an-sdt">'+bloc('conventionnel','Conventionnel')+bloc('sumo','Sumo')+'</div>'
+    +'<span class="an-lev-leg"><span><i class="l-moi"></i>athlète</span><span><i class="l-moy"></i>moyenne</span></span>'
+    +'<p class="an-sdt-d">'+escapeHtml(l.decision)+'</p><p>'+escapeHtml(l.txt)+'</p>';
+}
 // ── LE SQUAT RÉGLÉ (A16) : un état d'écran, pas une donnée ────────────────
 let _anatSquatReg=null, _anatSquatL=null;
 function _anatSquatCfg(l){
@@ -48259,11 +48345,11 @@ function _htmlAnat(c){
   const iLev=nLev?((_anatLevIdx%nLev)+nLev)%nLev:0;
   const lev=nLev?(()=>{
       const l=res.leviers[iLev];
-      const val=l.cle==='squat'?l.val+'°':l.cle==='souleve'?_anatN(l.val,2):(l.val!=null?l.val+' cm':_anatSN(l.ecart,0)+' %');
-      const ref=l.cle==='squat'?l.ref+'°':l.cle==='souleve'?_anatN(l.ref,2):(l.ref!=null?l.ref+' cm':'');
-      const sous=l.cle==='squat'?'buste à la parallèle':l.cle==='souleve'?'bras / tronc':'trajet de barre';
+      const val=l.cle==='squat'?l.val+'°':l.cle==='souleve'?_anatN(l.val,0)+'°':(l.val!=null?l.val+' cm':_anatSN(l.ecart,0)+' %');
+      const ref=l.cle==='squat'?l.ref+'°':l.cle==='souleve'?_anatN(l.ref,0)+'°':(l.ref!=null?l.ref+' cm':'');
+      const sous=l.cle==='squat'?'buste à la parallèle':l.cle==='souleve'?'tronc / horizontale':'trajet de barre';
       const modele={squat:'Cuisse parallèle au sol, tibia incliné de '+_anatN(l.modele?l.modele.base.alpha:30,0)+'°, barre au-dessus du milieu du pied, 0,3 × pied devant la cheville ; barre haute 4 % de la taille sous les épaules, basse 8 %.',
-        souleve:'Bras (épaule → poignet + demi-main) rapporté au tronc.',
+        souleve:'Au décollage : barre à 22,5 cm du sol au-dessus du milieu du pied, épaule 1,5 cm devant, tibia contre la barre ; en sumo, hanches ouvertes à 40° et tibia à 10° au plus.',
         developpe:'Trajet de barre, prise à 1,5 fois la carrure.'}[l.cle]||'';
       return '<details class="an-dr an-lev"'+(_anatDeplie.lev!==false?' open':'')+' ontoggle="_anatDeplie.lev=this.open">'
         +'<summary><span class="an-dr-i">'+(ANAT_SVG[l.cle]||'')+'</span><span class="an-dr-t">Leviers mécaniques</span>'
@@ -48275,7 +48361,8 @@ function _htmlAnat(c){
           +'<div class="an-lev-nav"><button type="button" aria-label="Levier précédent" onclick="anatLevier(-1)"'+(nLev<2?' disabled':'')+'>'+ANAT_SVG.gauche+'</button>'
           +'<span>'+(iLev+1)+' / '+nLev+'</span>'
           +'<button type="button" aria-label="Levier suivant" onclick="anatLevier(1)"'+(nLev<2?' disabled':'')+'>'+ANAT_SVG.droite+'</button></div></div>'
-          +(l.cle==='squat'&&l.modele?'<div id="an-sq-res">'+_htmlSquatRes(l)+'</div>'+_htmlSquatCtl(l)
+          +(l.cle==='souleve'&&l.styles?_htmlSouleve(l)
+          :l.cle==='squat'&&l.modele?'<div id="an-sq-res">'+_htmlSquatRes(l)+'</div>'+_htmlSquatCtl(l)
           :'<div class="an-lev-v">'+_anatJauge(l)+'<div class="an-lev-vt"><strong>'+escapeHtml(val)+'</strong><em>'+escapeHtml(sous)+(ref?'<br>moyenne '+escapeHtml(ref):'')+'</em>'
             +'<span class="an-lev-leg"><span><i class="l-moi"></i>athlète</span><span><i class="l-moy"></i>moyenne</span></span></div></div>'
           +'<p>'+escapeHtml(l.txt)+'</p>')+'</div>'
