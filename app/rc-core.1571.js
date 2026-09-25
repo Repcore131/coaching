@@ -47564,6 +47564,56 @@ function anatDevRegler(k,v){
   const z=document.getElementById('an-dev-res'); if(z) z.innerHTML=_htmlDeveloppeRes(l);
   const o=document.getElementById('an-dev-th'); if(o) o.textContent=_anatN(cfg.theta,0)+'°';
 }
+/**
+ * LES TROIS PRIORITÉS (chantier A22). Score d'une fiche = |niveau| × poids de
+ * confiance (A 1, B 0,8, C 0,3) × pertinence pour l'objectif (1 pour les
+ * fiches de l'objectif, 0,75 pour les autres). N'entrent que les fiches au
+ * moins « nettes » et qui portent une action concrète (aménagement, sinon
+ * première recommandation).
+ */
+const ANAT_PRIO=Object.freeze({CONF:Object.freeze({A:1,B:0.8,C:0.3}),AUTRE:0.75,SEUIL:2,
+  OBJ:Object.freeze({hypertrophie:['buste','bras','clavicules'],force:['jambes','bras','buste','genoux'],posture:['epaules','bassin','dos','posture','tete']}),
+  LIB:Object.freeze({hypertrophie:'Hypertrophie',force:'Force',posture:'Posture'})});
+/** PURE. L'objectif de l'athlète, d'après ce qu'il en a écrit au bilan. */
+function anatObjectif(u){
+  const t=(_anatSafe(()=>_objectifTexte(u))||'').toLowerCase();
+  if(/force|powerlift|record|1 ?rm|compét|strongman/.test(t)) return 'force';
+  if(/postur|dos droit|mal de dos|redresser|alignement|maintien/.test(t)) return 'posture';
+  return 'hypertrophie';
+}
+/** PURE. Les trois priorités d'une analyse, pour un objectif. [] quand rien n'est au-dessus de « léger ». */
+function anatPriorites(res,objectif){
+  const obj=ANAT_PRIO.OBJ[objectif]?objectif:'hypertrophie', rel=ANAT_PRIO.OBJ[obj];
+  const out=[];
+  for(const f of ((res&&res.fiches)||[])){
+    if(!f||f.etat!=='ok'||f.niveau==null||f.grise||Math.abs(f.niveau)<ANAT_PRIO.SEUIL) continue;
+    const t=_anatSafe(()=>anatTexte(f,res));
+    const am=t&&t.amenager&&t.amenager[0], pr=t&&t.privilegier&&t.privilegier[0];
+    const action=am?(am.quoi+' : '+am.reglage):(pr?String(pr):'');
+    if(!action) continue;
+    const conf=ANAT_PRIO.CONF[f.conf]!=null?ANAT_PRIO.CONF[f.conf]:ANAT_PRIO.CONF.C;
+    const score=Math.abs(f.niveau)*conf*(rel.indexOf(f.cle)>=0?1:ANAT_PRIO.AUTRE);
+    out.push({cle:f.cle,lib:f.lib,verdict:anatVerdict(f),niveau:f.niveau,conf:f.conf||null,score,action,
+      exercices:(am&&am.exercices)||(pr&&pr.exercices)||[]});
+  }
+  return out.sort((a,b)=>b.score-a.score||Math.abs(b.niveau)-Math.abs(a.niveau)).slice(0,3);
+}
+let _anatPrioObj=null;
+function anatPrioObjectif(o){
+  _anatPrioObj=ANAT_PRIO.OBJ[o]?o:null;
+  const c=getOwnedClient(currentClientId); if(c) renderAnatCoach(c);
+}
+/** Le bandeau sous l'en-tête : trois cartes numérotées, ou le message neutre — jamais un vide. */
+function _htmlAnatPriorites(res,c){
+  const auto=anatObjectif(c), obj=_anatPrioObj||auto;
+  const l=anatPriorites(res,obj);
+  const seg='<span class="an-prio-o" role="group" aria-label="Objectif">'+Object.keys(ANAT_PRIO.OBJ).map(k=>'<button type="button" class="'+(k===obj?'actif':'')+'" aria-pressed="'+(k===obj)+'" onclick="anatPrioObjectif(\''+k+'\')">'+ANAT_PRIO.LIB[k]+(k===auto?' <small>(bilan)</small>':'')+'</button>').join('')+'</span>';
+  const corps=l.length?'<div class="an-prio-l">'+l.map((x,i)=>'<button type="button" class="an-prio-c" data-k="'+x.cle+'" data-n="'+Math.abs(x.niveau)+'" onclick="anatOuvrir(\''+x.cle+'\',true)">'
+      +'<span class="an-prio-n">'+(i+1)+'</span><span class="an-prio-t"><b>'+escapeHtml(x.lib)+'</b><em>'+escapeHtml(x.verdict)+(x.conf?' · confiance '+x.conf:'')+'</em>'
+      +'<span class="an-prio-a">'+escapeHtml(x.action)+'</span></span></button>').join('')+'</div>'
+    :'<p class="an-prio-vide">Rien à corriger : leviers dans la moyenne. Aucune zone n’est au-dessus de « léger » sur ce bilan.</p>';
+  return '<div class="an-prio"><div class="an-prio-h"><h5>3 priorités</h5>'+seg+'</div>'+corps+'</div>';
+}
 /** Le nom d'une fiche du catalogue, ou son slug mis en forme. */
 function _anatNomExo(slug){
   let f=null; try{ f=catalogueCoach().find(x=>x.slug===slug); }catch(e){ f=null; }
@@ -48834,6 +48884,7 @@ function _htmlAnat(c){
     +escapeHtml(MORPHO_DISCLAIMER)+'</span></div>'
     +'<button type="button" class="an-b2" onclick="anatRelancer()"'+(enCours?' disabled':'')+'>'+ANAT_SVG.relancer+'<span>'+(enCours?'Détection…':'Refaire la détection')+'</span></button></div>';
   return '<div class="an" data-vue="'+vueAct+'">'+tete
+    +(_anatSafe(()=>_htmlAnatPriorites(res,c))||'')
     +'<div class="an-grille">'+colG
     +'<div class="an-centre">'+scene+outils+'</div>'
     +'<div class="an-col an-col-d">'+resHtml+'</div>'

@@ -10380,6 +10380,26 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .an-j-moi2{fill:#ff3b3b;stroke:#fff;stroke-width:1.5;filter:drop-shadow(0 0 3px rgba(255,59,59,.8))}
 .an-jauge text{font-size:6.5px;fill:#8a8a92;font-family:inherit}
 .an-lev-leg{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:9.5px;color:#8a8a92}
+/* A22 : le bandeau des trois priorités, sous l'en-tête. */
+.an-prio{margin:0 0 12px;padding:10px 12px;border-radius:12px;background:#131316;border:1px solid #232328}
+.an-prio-h{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;margin-bottom:8px}
+.an-prio-h h5{margin:0;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:#fff}
+.an-prio-o{display:inline-flex;border:1px solid #2a2a30;border-radius:8px;overflow:hidden}
+.an-prio-o button{background:#17171b;color:#a1a1aa;border:0;padding:4px 9px;font:inherit;font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.an-prio-o button.actif{background:rgba(224,32,32,.18);color:#fff}
+.an-prio-o small{font-weight:500;color:#8a8a92}
+.an-prio-l{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.an-prio-c{display:flex;gap:9px;align-items:flex-start;text-align:left;padding:9px 10px;border-radius:10px;background:#17171b;border:1px solid #2a2a30;color:inherit;font:inherit;cursor:pointer;min-width:0}
+.an-prio-c:hover{border-color:rgba(224,32,32,.55)}
+.an-prio-c[data-n="3"]{border-left:3px solid #ff3b3b}
+.an-prio-c[data-n="2"]{border-left:3px solid #fb923c}
+.an-prio-n{flex:0 0 22px;height:22px;border-radius:50%;background:#e02020;color:#fff;font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center}
+.an-prio-t{display:flex;flex-direction:column;gap:2px;min-width:0}
+.an-prio-t b{font-size:12px;color:#fff}
+.an-prio-t em{font-style:normal;font-size:10.5px;color:#fb923c}
+.an-prio-a{font-size:10.5px;color:#d4d4d8;line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.an-prio-vide{margin:0;font-size:11.5px;color:#d4d4d8}
+@media (max-width:760px){ .an-prio-l{grid-template-columns:minmax(0,1fr)} }
 /* A21 : du texte à l'action — puces d'exercices, ajout au programme, consigne. */
 .an-exos{display:flex;flex-wrap:wrap;gap:5px;margin:5px 0 2px;align-items:center}
 .an-exo{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:3px 9px 3px 3px;border-radius:999px;border:1px solid #2a2a30;background:#17171b;color:#e4e4e7;font:inherit;font-size:10.5px;font-weight:600;cursor:pointer}

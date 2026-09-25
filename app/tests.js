@@ -45456,6 +45456,28 @@ async function testExercices(){
       if(anatPoserConsigne(sc,am.exercices,am.consigne)!==1) return _echec('exercices touchés');
       if(sc[0].exercises[0].reglageCoach!==am.consigne||sc[0].exercises[1].reglageCoach) return _echec('mauvais exercice');
       return true;})());
+    // Les trois priorités (A22, 25/09/2026).
+    ok('ANALYSE MORPHO : 3 PRIORITÉS : GENOUX MARQUÉS + BUSTE NET → GENOUX EN PREMIER ; TOUT DANS LA MARGE → MESSAGE NEUTRE',(()=>{
+      if(typeof anatPriorites!=='function') return _echec('anatPriorites n’existe pas');
+      const res=anatMesures(_anatGab(),_anatDossier());
+      const vide=anatPriorites(res,'hypertrophie');
+      if(vide.length) return _echec('gabarit : des priorités '+vide.map(x=>x.cle).join(','));
+      const h0=_htmlAnatPriorites(res,_anatDossier());
+      if(!/Rien à corriger : leviers dans la moyenne/.test(h0)) return _echec('pas de message neutre');
+      // Genoux marqués (confiance A) et buste net (A), objectif hypertrophie.
+      for(const f of res.fiches){ f.conf='A'; if(f.cle==='genoux'){ f.niveau=3; f.etat='ok'; f.mesure.pire={c:'gauche',v:9}; f.mesure.g=9; } if(f.cle==='buste'){ f.niveau=2; } }
+      const l=anatPriorites(res,'hypertrophie');
+      if(!l.length||l[0].cle!=='genoux') return _echec('ordre : '+l.map(x=>x.cle+':'+x.score).join(','));
+      if(!l.some(x=>x.cle==='buste')) return _echec('le buste manque');
+      if(l.length>3) return _echec('plus de trois');
+      if(!l.every(x=>x.action&&x.action.length>10)) return _echec('une priorité sans action');
+      // La confiance pèse : un buste marqué mais en C passe derrière des genoux marqués en A.
+      res.fiches.find(f=>f.cle==='buste').niveau=3; res.fiches.find(f=>f.cle==='buste').conf='C';
+      if(anatPriorites(res,'hypertrophie')[0].cle!=='genoux') return _echec('la confiance ne pèse pas');
+      const h=_htmlAnatPriorites(res,_anatDossier());
+      if((h.match(/an-prio-c/g)||[]).length<2||!/anatOuvrir\('genoux',true\)/.test(h)) return _echec('cartes');
+      if(anatObjectif(_anatDossier({bilans:[{type:'depart',date:1,'deb-goals':'Battre mon record au squat'}]}))!=='force') return _echec('objectif force');
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());
