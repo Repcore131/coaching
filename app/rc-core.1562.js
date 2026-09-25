@@ -44961,6 +44961,79 @@ const ANAT_MESURES_REF=Object.freeze({
   H:Object.freeze({envergure:1.033,envergure_et:0.027,pied:0.154,pied_et:0.005,thorax:25.4,thorax_et:2.6}),
   F:Object.freeze({envergure:1.019,envergure_et:0.029,pied:0.151,pied_et:0.005,thorax:24.7,thorax_et:2.7}),
   SOURCE:'ANSUR II (Gordon et al., 2014), calcul RepCore'});
+/**
+ * LE V DANS LE TEMPS (chantier A13). Repère de population : largeur
+ * bideltoïde / largeur de taille, ANSUR II (Gordon et al., 2014), calcul
+ * RepCore. ⚠ La taille d'ANSUR est prise AU NOMBRIL, pas au plus étroit comme
+ * sur la photo : le percentile est indicatif. Jamais « idéal » : un repère.
+ */
+const ANAT_V_REF=Object.freeze({
+  H:Object.freeze({moy:1.573,et:0.110,p5:1.40,p95:1.76}),
+  F:Object.freeze({moy:1.512,et:0.110,p5:1.33,p95:1.70}),
+  SOURCE:'ANSUR II (Gordon et al., 2014), largeur bideltoïde / largeur de taille, calcul RepCore',
+  AVERT:'taille ANSUR prise au nombril, pas au plus étroit : percentile indicatif',
+  BRUIT:0.03});   // bruit de placement des quatre points, en unité de V
+/** Les six points qu'on garde d'une photo de bilan pour le V et le X — rien d'autre. */
+const ANAT_SIL_CLES=Object.freeze(['deltoide_l','deltoide_r','taille_l','taille_r','hanches_l','hanches_r']);
+/**
+ * PURE. V (deltoïdes / taille) et X (hanches / taille) d'une photo de face
+ * lue par le moteur : les bords de la silhouette, sur le masque. Les hanches
+ * sont la plus large plage du masque entre le centre des hanches et 12 % du
+ * tronc plus bas. `conf` : la marque la plus faible (1 lu, 0,5 estimé).
+ */
+function anatSilhouetteDe(raw){
+  const a=_anatSafe(()=>anatPointsAuto(raw,'face'));
+  if(!a||!a.pts) return null;
+  const P=a.pts, W=raw.w, H=raw.h;
+  const pts={};
+  for(const k of ['deltoide_l','deltoide_r','taille_l','taille_r']) if(P[k]) pts[k]=P[k].slice(0,3);
+  const bits=anatMasqueBits(raw.masque), m=raw.masque;
+  if(bits&&P.hanche_l&&P.hanche_r&&P.epaule_l&&P.epaule_r){
+    const kx=m.w/W, ky=m.h/H;
+    const yH=(P.hanche_l[1]+P.hanche_r[1])/2*H, cx=(P.hanche_l[0]+P.hanche_r[0])/2*W;
+    const T=Math.abs(yH-(P.epaule_l[1]+P.epaule_r[1])/2*H);
+    let best=null;
+    for(let f=0;f<=0.12;f+=0.02){
+      const y=yH+f*T, pl=_anatPlages(bits,m,y*ky);
+      const q=pl.find(r=>r[0]<=cx*kx&&r[1]>=cx*kx);
+      if(q&&(!best||q[1]-q[0]>best.w)) best={w:q[1]-q[0],l:q[0]/kx,r:q[1]/kx,y};
+    }
+    if(best){ pts.hanches_l=[best.l/W,best.y/H,1]; pts.hanches_r=[best.r/W,best.y/H,1]; }
+  }
+  for(const k in pts) pts[k]=[Math.round(pts[k][0]*10000)/10000,Math.round(pts[k][1]*10000)/10000,pts[k][2]];
+  const r=anatVDePoints(pts,W,H);
+  return r?Object.assign({pts,w:W,h:H},r):null;
+}
+/** PURE. V et X à partir des points (normalisés) d'une photo de W × H. */
+function anatVDePoints(pts,W,H){
+  const d=(a,b)=>(pts[a]&&pts[b])?Math.hypot((pts[a][0]-pts[b][0])*W,(pts[a][1]-pts[b][1])*H):null;
+  const dl=d('deltoide_l','deltoide_r'), tl=d('taille_l','taille_r'), hl=d('hanches_l','hanches_r');
+  if(!dl||!tl) return null;
+  const marques=['deltoide_l','deltoide_r','taille_l','taille_r'].map(k=>pts[k][2]);
+  return {V:Math.round(dl/tl*1000)/1000,X:hl?Math.round(hl/tl*1000)/1000:null,conf:Math.min(...marques)};
+}
+/**
+ * PURE. La série du V, bilan par bilan : les silhouettes lues en arrière-plan,
+ * et, pour le bilan analysé, le V de l'analyse (points du coach compris).
+ * ⚠ SEULS LES BILANS QUI PORTENT UNE PHOTO DE FACE : une ligne restée pour un
+ *   bilan dont la photo a disparu n'est plus tracée.
+ * @returns {{bilan:number,V:number,X:number|null,conf:number,lu:'analyse'|'auto'}[]}
+ */
+function anatSerieV(u,courant){
+  const a=u&&u.morphoAnat;
+  let bl=[]; try{ bl=(Array.isArray(u&&u.bilans)?u.bilans:[]).filter(b=>b&&b.date); }catch(e){ bl=[]; }
+  const avecFace=new Set(bl.filter(b=>{ try{ return !!photoBilanSrc(b,'face'); }catch(e){ return false; } }).map(b=>Number(b.date)));
+  const par={};
+  for(const x of (a&&Array.isArray(a.silhouettes)?a.silhouettes:[]))
+    // ⚠ UNE SILHOUETTE ESTIMÉE N'EST PAS TRACÉE : sans bords lus sur le masque,
+    //   deltoïdes et taille sont posés aux proportions moyennes — un V inventé.
+    if(x&&x.V>0&&x.conf>=0.9&&avecFace.has(Number(x.bilan))) par[Number(x.bilan)]={bilan:Number(x.bilan),V:x.V,X:x.X!=null?x.X:null,conf:x.conf,lu:'auto'};
+  if(courant&&courant.V>0&&avecFace.has(Number(courant.bilan))){
+    const ancien=par[Number(courant.bilan)];
+    par[Number(courant.bilan)]={bilan:Number(courant.bilan),V:courant.V,X:courant.X!=null?courant.X:(ancien?ancien.X:null),conf:courant.conf,lu:'analyse'};
+  }
+  return Object.values(par).sort((x,y)=>x.bilan-y.bilan);
+}
 /** Le repère d'un sexe (homme par défaut, comme les largeurs). */
 function anatRef(femme){ return ANAT_REF[femme?'F':'H']; }
 /**
@@ -45910,6 +45983,15 @@ function anatMesures(anat,u,o){
       return {px,cm:F.cmPx?px*F.cmPx:null,fr:F.stature?px/F.stature:null,e:Math.min(a.e,b.e,c.e,d.e)}; })():null;
     const dg=F&&F.P2('deltoide','g'),dd=F&&F.P2('deltoide','d'),tg=F&&F.P2('taille','g'),td=F&&F.P2('taille','d');
     const V=(dg&&dd&&tg&&td)?_anatDist(dg,dd)/_anatDist(tg,td):null;
+    // LE V DANS LE TEMPS (A13) : sa place dans la population, et sa courbe.
+    const RV=ANAT_V_REF[femme?'F':'H'];
+    const errV=V?Math.hypot(anatErrSeg([dg],[dd]),anatErrSeg([tg],[td])):null;
+    const stV=V?anatClasser((V/RV.moy-1)*100,RV.et/RV.moy*100,errV,'aux V les plus marqués','aux V les moins marqués'):null;
+    const serieV=_anatSafe(()=>anatSerieV(u,V?{bilan:Number(anat&&anat.bilan),V:Math.round(V*1000)/1000,conf:Math.min(dg.e,dd.e,tg.e,td.e)}:null))||[];
+    const vPrem=serieV.length>1?serieV[0]:null, vDer=serieV.length>1?serieV[serieV.length-1]:null;
+    const courant=serieV.find(x=>x.lu==='analyse');
+    const nEst=((anat&&Array.isArray(anat.silhouettes))?anat.silhouettes:[]).filter(x=>x&&x.V>0&&x.conf<0.9&&Number(x.bilan)!==Number(anat.bilan)&&!serieV.some(y=>y.bilan===Number(x.bilan))).length;
+    const Xc=courant&&courant.X!=null?courant.X:null;
     const shift=(X)=>{ if(!X) return null; const a=X.P2('epaule','g'),b=X.P2('epaule','d'),c=X.P2('hanche','g'),d=X.P2('hanche','d');
       if(!a||!b||!c||!d) return null; const me=_anatMil(a,b),mh=_anatMil(c,d); const t=_anatDist(me,mh);
       // Positif : les épaules partent vers la GAUCHE de l'athlète.
@@ -45929,10 +46011,17 @@ function anatMesures(anat,u,o){
       valeur:(tr&&tr.cm!=null?'tronc '+cm(tr.cm):'')+(V?(tr&&tr.cm!=null?' · ':'')+'V '+_anatN(V,2):''),
       tolerance:tolTxt(errT,plT,BI),
       chiffres:[ligne('Tronc (épaules → hanches)',tr,REF.tronc,DEF.tronc),
-        {lib:'Rapport deltoïdes / taille (V)',def:'deltoïde → deltoïde ÷ largeur de taille',val:V?_anatN(V,2):'—',ref:'à suivre',ecart:''},
-        {lib:'Axe du tronc (décalage)',def:'mi-épaules / mi-hanches, en % du tronc',val:s!=null?_anatSN(s,1)+' % du tronc':'—',ref:'0 %',ecart:''}]
-        .concat(stT?[posLigne(stT,'longueur du tronc')]:[]),
-      mesure:{tr,ec,V,s,ref:REF.tronc,femme,stat:stT,nTr:stT?stT.niveau:0},source:'centres des épaules et des hanches, bords de la silhouette ; '+echelleTxt+' ; repère '+ANAT_REF.SOURCE+' ('+(femme?'femmes':'hommes')+')'});
+        {lib:'Rapport deltoïdes / taille (V)',def:'deltoïde → deltoïde ÷ largeur de taille au plus étroit ; repère de population ANSUR II',val:V?_anatN(V,2):'—',ref:_anatN(RV.moy,2)+' ± '+_anatN(RV.et,2),ecart:''},
+        {lib:'Axe du tronc (décalage)',def:'mi-épaules / mi-hanches, en % du tronc',val:s!=null?_anatSN(s,1)+' %':'—',ref:'0 %',ecart:''}]
+        .concat(stT?[posLigne(stT,'longueur du tronc')]:[])
+        .concat(stV?[{lib:'Position du V dans la population',def:(femme?'femmes':'hommes')+' (P5 '+_anatN(RV.p5,2)+', P95 '+_anatN(RV.p95,2)+') ; '+ANAT_V_REF.AVERT,val:stV.txt,ref:'50ᵉ percentile',ecart:''}]:[])
+        .concat(Xc!=null?[{lib:'Rapport hanches / taille (X)',def:'bord à bord des hanches ÷ largeur de taille, sur la silhouette ; sans repère de population',val:_anatN(Xc,2),ref:'à suivre',ecart:''}]:[])
+        .concat(vPrem?[{lib:'V, du premier au dernier bilan',def:_anatDateFr(vPrem.bilan)+' → '+_anatDateFr(vDer.bilan)+', '+serieV.length+' bilans lus sur la silhouette'+(nEst?' ('+nEst+' à bords estimés, écarté'+(nEst>1?'s':'')+')':'')+' ; bruit de placement ±'+_anatN(ANAT_V_REF.BRUIT,2),val:_anatN(vPrem.V,2)+' → '+_anatN(vDer.V,2),ref:'',ecart:_anatSN(vDer.V-vPrem.V,2)}]:[]),
+      courbeV:serieV.length>1?serieV:null,
+      mesure:{tr,ec,V,s,ref:REF.tronc,femme,stat:stT,nTr:stT?stT.niveau:0,statV:stV,refV:RV,serieV,X:Xc,
+        varV:vPrem?Math.round((vDer.V-vPrem.V)*1000)/1000:null},
+      source:'centres des épaules et des hanches, bords de la silhouette ; '+echelleTxt+' ; repère '+ANAT_REF.SOURCE+' ('+(femme?'femmes':'hommes')+')'
+        +(V?' ; V : repère de population '+ANAT_V_REF.SOURCE+', '+ANAT_V_REF.AVERT:'')});
   }
   // ── BRAS : humérus, avant-bras, et le bras qui tient le téléphone ────────
   {
@@ -46630,6 +46719,8 @@ function anatTexte(f,res){
       +'Un tronc long est un bras de levier long au squat et au soulevé : la barre est plus loin des hanches, les érecteurs du rachis travaillent plus. '
       +(sq?'Au squat, le modèle donne '+sq.val+'° d’inclinaison du buste à la parallèle, pour '+sq.ref+'° avec des proportions moyennes. ':'')
       +(V?'Le rapport deltoïdes / taille de '+_anatN(V,2)+' mesure la silhouette, pas l’os : il monte quand la carrure prend ou que la taille descend — c’est le chiffre à suivre de bilan en bilan. ':'')
+      +(m.statV?'Repère de population : '+m.statV.txt+' ('+ANAT_V_REF.AVERT+'). ':'')
+      +(m.varV!=null?'Depuis le premier bilan : '+_anatSN(m.varV,2)+' sur '+m.serieV.length+' bilans'+(Math.abs(m.varV)<=ANAT_V_REF.BRUIT?', dans le bruit de placement des points.':'.')+' ':'')
       +(s!=null?(ns?'Le milieu des épaules est décalé de '+_anatN(s,1)+' % du tronc par rapport au milieu du bassin : le buste se porte d’un côté (posture du moment ou habitude).':'Le buste est à l’aplomb du bassin (écart '+_anatN(s,1)+' %).'):'');
     T.privilegier=['Deltoïde latéral : élévations latérales aux haltères, à la poulie basse derrière le corps, à la machine','Largeur de dos : tractions et tirage vertical prise large, pull-over à la poulie','Taille : gainage anti-rotation (Pallof press), vacuum ; la taille visuelle se joue surtout sur la masse grasse'];
     if((m.nTr||0)>0) T.privilegier.push('Tronc long : renforcer les érecteurs et le gainage (soulevé roumain, good morning léger, planches) — c’est le maillon qui cède le premier sous charge');
@@ -46773,6 +46864,55 @@ function anatVerdict(f){
 }
 // ── L'ÉCRAN ────────────────────────────────────────────────────────────────
 const _anatEnCours=new Set();
+const _anatSilEnCours=new Set();
+/** Les bilans à photo de face dont la silhouette n'est pas encore lue. */
+function anatSilhouettesAFaire(c){
+  const a=c&&c.morphoAnat;
+  if(!a||a.v!==ANAT_VERSION) return [];
+  const faits=new Set((Array.isArray(a.silhouettes)?a.silhouettes:[]).map(x=>Number(x.bilan)));
+  let bl=[]; try{ bl=(Array.isArray(c.bilans)?c.bilans:[]).filter(b=>b&&b.date); }catch(e){ bl=[]; }
+  // Le bilan analysé aussi : son V vient de l'analyse, mais ses hanches (le X) de là.
+  return bl.filter(b=>!faits.has(Number(b.date))
+    &&(()=>{ try{ return !!photoBilanSrc(b,'face'); }catch(e){ return false; } })());
+}
+/**
+ * Lit, en arrière-plan et un bilan à la fois, deltoïdes, taille et hanches sur
+ * chaque photo de face. CÔTÉ COACH. Il ne reste que six points, V, X, la
+ * confiance et la date du bilan — ni les 33 points du moteur, ni le masque.
+ * Un bilan illisible est noté (V null) pour ne pas être relu à chaque écran.
+ */
+async function anatSuivreSilhouettes(email){
+  if(_anatSilEnCours.has(email)||_anatEnCours.has(email)) return false;
+  const c0=(DB.get('users')||{})[email];
+  if(!c0||!currentUser||c0.coachId!==currentUser.id) return false;
+  const aFaire=anatSilhouettesAFaire(c0);
+  if(!aFaire.length) return false;
+  _anatSilEnCours.add(email);
+  const lus=[];
+  try{
+    await chargerMotionLab();
+    const lire=(typeof window!=='undefined')?/** @type {any} */(window).mlAnatPhoto:null;
+    if(typeof lire!=='function') throw new Error('lecture indisponible');
+    for(const b of aFaire){
+      let r=null; try{ r=await lire(photoBilanSrc(b,'face'),{}); }catch(e){ r=null; }
+      const sil=(r&&r.ok)?anatSilhouetteDe(r):null;
+      lus.push(sil?{bilan:Number(b.date),V:sil.V,X:sil.X,conf:sil.conf,pts:sil.pts,w:sil.w,h:sil.h}:{bilan:Number(b.date),V:null});
+    }
+  }catch(e){}
+  _anatSilEnCours.delete(email);
+  if(!lus.length) return false;
+  const users=DB.get('users')||{};
+  const d=users[email];
+  if(!d||!d.morphoAnat) return false;
+  const deja=new Set(lus.map(x=>x.bilan));
+  d.morphoAnat.silhouettes=(Array.isArray(d.morphoAnat.silhouettes)?d.morphoAnat.silhouettes:[]).filter(x=>!deja.has(Number(x.bilan))).concat(lus);
+  d.updatedAt=Date.now();
+  users[email]=d;
+  DB.set('users',users);
+  try{ CLOUD.pushOne(email,d); }catch(e){}
+  try{ const cc=getOwnedClient(currentClientId); if(cc&&cc.email===email) renderAnatCoach(cc); }catch(e){}
+  return true;
+}
 const _anatEchecs=new Map();
 let _anatVueActive='face';
 /** L'édition des points en cours : {email, vue, pts, opts, auto:boolean} ou null. */
@@ -47316,6 +47456,8 @@ async function anatAnalyser(email,force){
     if(ancien&&Array.isArray(ancien.sauvegardes)&&ancien.sauvegardes.length) res.sauvegardes=ancien.sauvegardes;
     // Le choix du bilan et ce qui a été mis de côté pour les autres bilans.
     if(cour&&cour.choix) res.choix=cour.choix;
+    // Les silhouettes des autres bilans (A13) ne dépendent pas du bilan lu.
+    if(cour&&Array.isArray(cour.silhouettes)&&cour.silhouettes.length) res.silhouettes=cour.silhouettes;
     if(cour&&cour.archives){
       const ar=Object.assign({},cour.archives); delete ar[String(pb.date)];
       if(Object.keys(ar).length) res.archives=ar;
@@ -47736,6 +47878,8 @@ function renderAnatCoach(c){
     const pb=anatPremierBilan(c);
     if(anatARefaire(c,pb)&&!_anatEnCours.has(c.email)&&!_anatEchecs.has(c.email))
       setTimeout(()=>{ anatAnalyser(c.email).catch(()=>{}); },50);
+    else if(anatSilhouettesAFaire(c).length&&!_anatSilEnCours.has(c.email))
+      setTimeout(()=>{ anatSuivreSilhouettes(c.email).catch(()=>{}); },400);
   }catch(e){}
   return true;
 }
@@ -48002,8 +48146,13 @@ function _htmlAnat(c){
     const cad=_anatCadrage(f.zone,vv,4/3);
     const li=(l)=>l&&l.length?'<ul>'+l.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')+'</ul>':'';
     const tab=f.chiffres&&f.chiffres.length?'<table class="an-tab"><thead><tr><th>Mesure</th><th>Athlète</th><th>Repère</th><th>Écart</th></tr></thead><tbody>'
-      +f.chiffres.map(r=>'<tr><th>'+escapeHtml(r.lib)+(r.def?'<small class="an-def">'+escapeHtml(r.def)+'</small>':'')+'</th><td'+((r.val||'').length>16?' class="an-td-txt"':'')+'>'+escapeHtml(r.val||'—')+'</td><td>'+escapeHtml(r.ref||'')+'</td><td>'+escapeHtml(r.ecart||'')+'</td></tr>').join('')+'</tbody></table>':'';
-    const detail='<div class="an-f-long" id="an-long-'+f.cle+'">'+tab
+      +f.chiffres.map(r=>'<tr><th>'+escapeHtml(r.lib)+(r.def?'<small class="an-def">'+escapeHtml(r.def)+'</small>':'')+'</th><td'+(((r.val||'').length>16||/→/.test(r.val||''))?' class="an-td-txt"':'')+'>'+escapeHtml(r.val||'—')+'</td><td>'+escapeHtml(r.ref||'')+'</td><td>'+escapeHtml(r.ecart||'')+'</td></tr>').join('')+'</tbody></table>':'';
+    // LA COURBE DU V (A13), avec la carte des courbes de l'onglet Données.
+    const courbe=f.courbeV?_anatSafe(()=>_htmlCorpsGraphe('Rapport deltoïdes / taille (V)','',
+      [{lib:'V',couleur:'#E02020',points:f.courbeV.map(x=>({x:x.bilan,v:x.V})),bande:ANAT_V_REF.BRUIT}],
+      {h:72,dates:true,valeur:_anatN(f.courbeV[f.courbeV.length-1].V,2),
+       pied:'Un point par bilan à photo de face · la bande grise est le bruit de placement : ± '+_anatN(ANAT_V_REF.BRUIT,2)}))||'':'';
+    const detail='<div class="an-f-long" id="an-long-'+f.cle+'">'+tab+(courbe?'<div class="an-f-courbe">'+courbe+'</div>':'')
       +(t.lecture?'<h6>Lecture</h6><p class="an-f-lec">'+escapeHtml(t.lecture)+'</p>':'')
       +(t.privilegier&&t.privilegier.length?'<h6>À privilégier</h6>'+li(t.privilegier):'')
       +(t.amenager&&t.amenager.length?'<h6>À aménager</h6><ul>'+t.amenager.map(x=>'<li><b>'+escapeHtml(x.quoi)+'</b> — '+escapeHtml(x.reglage)+'</li>').join('')+'</ul>':'')

@@ -9967,7 +9967,7 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .an-tab thead th:first-child{text-align:left}
 .an-tab td:last-child{color:#ff8a8a}
 /* Une valeur en phrase (« parmi les 5 % … ») passe à la ligne, les chiffres non. */
-.an-tab td.an-td-txt{white-space:normal;min-width:7em;line-height:1.3}
+.an-tab td.an-td-txt{white-space:normal;min-width:4.5em;line-height:1.3}
 .an-f[data-etat="illisible"] .an-f-h em{color:#8a8a92}
 
 /* Les resultats */

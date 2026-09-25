@@ -45179,6 +45179,48 @@ async function testExercices(){
       if(!(f.mesure.ape.stat.pct>74&&f.mesure.ape.stat.pct<84)) return _echec('percentile de 190 pour 180 cm : '+f.mesure.ape.stat.pct);
       if(!/ANSUR II \(Gordon et al\., 2014\), calcul RepCore/.test(f.source)) return _echec('source : '+f.source);
       return true;})());
+    // Le V mesuré dans le temps (A13, 25/09/2026).
+    // Trois bilans à photo de face (1, 2000, 3000 ; le premier est celui qu'on
+    // analyse, au gabarit), un quatrième sans photo de face qui porte pourtant
+    // une silhouette : il ne doit pas être tracé.
+    const _anatV=()=>{
+      const a=_anatGab();
+      a.silhouettes=[{bilan:2000,V:1.9,X:1.3,conf:1},{bilan:3000,V:2.0,X:1.28,conf:1},{bilan:4000,V:2.5,X:1.2,conf:1},{bilan:1,V:9,X:1.35,conf:1}];
+      const bil=[{type:'depart',date:1,photos:{face:'f1'}},{type:'coaching',date:2000,photos:{face:'f2'}},
+        {type:'coaching',date:3000,photos:{face:'f3'}},{type:'coaching',date:4000,photos:{back:'b4'}}];
+      const u=_anatDossier({bilans:bil,morphoAnat:a});
+      return {a,u,res:anatMesures(a,u)};
+    };
+    ok('ANALYSE MORPHO : LE V SUR TROIS BILANS : COURBE À TROIS POINTS, VARIATION JUSTE',(()=>{
+      if(typeof anatSerieV!=='function'||typeof anatVDePoints!=='function') return _echec('anatSerieV ou anatVDePoints n’existe pas');
+      const {res}=_anatV(), f=res.fiches.find(x=>x.cle==='buste');
+      const V0=f.mesure.V;
+      if(!(V0>1)) return _echec('V du gabarit : '+V0);
+      const sv=f.mesure.serieV;
+      if(!sv||sv.length!==3) return _echec('points : '+(sv?sv.map(x=>x.bilan).join(','):'aucun'));
+      if(sv[0].lu!=='analyse'||Math.abs(sv[0].V-V0)>0.001) return _echec('le bilan analysé ne prend pas le V de l’analyse : '+sv[0].V);
+      if(sv[0].X!==1.35) return _echec('le X du bilan analysé vient de sa silhouette : '+sv[0].X);
+      if(Math.abs(f.mesure.varV-(2.0-V0))>0.002) return _echec('variation : '+f.mesure.varV+' au lieu de '+(2.0-V0).toFixed(3));
+      if(!f.courbeV||f.courbeV.length!==3) return _echec('pas de courbe à trois points');
+      const l=f.chiffres.find(c=>c.lib==='V, du premier au dernier bilan');
+      if(!l||l.ecart!==_anatSN(2.0-V0,2)) return _echec('ligne de variation : '+JSON.stringify(l));
+      // La courbe, avec la carte de l'onglet Données.
+      const h=_htmlCorpsGraphe('V','',[{lib:'V',couleur:'#E02020',points:f.courbeV.map(x=>({x:x.bilan,v:x.V})),bande:ANAT_V_REF.BRUIT}],{h:72,dates:true,valeur:''});
+      if(h.indexOf('cc-corps-gc')<0) return _echec('la courbe ne se dessine pas');
+      return true;})());
+    ok('ANALYSE MORPHO : LE V A SON PERCENTILE DE POPULATION, INDICATIF, SANS « IDÉAL »',(()=>{
+      const {res}=_anatV(), f=res.fiches.find(x=>x.cle==='buste');
+      const p=f.chiffres.find(c=>c.lib==='Position du V dans la population');
+      if(!p||!/percentile|parmi les 5 %/.test(p.val)) return _echec('percentile : '+(p&&p.val));
+      if(!/au nombril/.test(p.def)||!/indicatif/.test(p.def)) return _echec('l’avertissement de la taille ANSUR manque : '+p.def);
+      if(!/1,57 ± 0,11/.test(f.chiffres.find(c=>/\(V\)/.test(c.lib)).ref)) return _echec('repère homme');
+      const t=anatTexte(f,res);
+      if(/idéal|esthéti|parfait|beau/i.test(JSON.stringify([t,f.chiffres,f.source]))) return _echec('un mot normatif');
+      if(!/Repère de population/.test(t.lecture)) return _echec('la lecture ne parle pas de repère de population');
+      // Un V calculé sur des points connus.
+      const v=anatVDePoints({deltoide_l:[0.3,0.3,1],deltoide_r:[0.7,0.3,1],taille_l:[0.375,0.5,1],taille_r:[0.625,0.5,0.5],hanches_l:[0.35,0.6,1],hanches_r:[0.65,0.6,1]},1000,1000);
+      if(v.V!==1.6||v.X!==1.2||v.conf!==0.5) return _echec('anatVDePoints : '+JSON.stringify(v));
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());
