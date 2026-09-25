@@ -44700,6 +44700,39 @@ async function testExercices(){
       const html=_htmlAnat;   // la définition est écrite sous le libellé du tableau
       if(String(html).indexOf('an-def')<0) return _echec('la définition n’est pas affichée');
       return true;})());
+    // Les largeurs : ANSUR II recalculé, avec la dispersion (A2, 25/09/2026).
+    // La carrure se juge sur la biacromiale ; ici, bassin à la moyenne, le rapport
+    // épaules / bassin suit donc la largeur des acromions.
+    const _anatCarrure=(rapport,femme)=>{
+      const L=ANAT_LARGEURS[femme?'F':'H'];
+      const pts=anatGabarit(1000,1500,'face',femme);
+      const Hh=0.86*1500, k=Hh/1000;   // une fraction de la taille, en fraction de la largeur de la photo
+      const demi=rapport*L.bicretal/2;
+      const a={acromion_l:[0.5-demi*k,pts.acromion_l[1],1],acromion_r:[0.5+demi*k,pts.acromion_r[1],1],
+        crete_l:[0.5-L.bicretal/2*k,pts.crete_l[1],1],crete_r:[0.5+L.bicretal/2*k,pts.crete_r[1],1]};
+      const g=_anatGab(a); g.face.auto.pts=Object.assign({},pts,a);
+      return anatMesures(g,_anatDossier({gender:femme?'F':'H'})).fiches.find(f=>f.cle==='clavicules');
+    };
+    ok('ANALYSE MORPHO : LA CARRURE SE COMPARE À ANSUR II RECALCULÉ, DISPERSION COMPRISE',(()=>{
+      const H=ANAT_LARGEURS.H, F=ANAT_LARGEURS.F;
+      if(!H||H.rapport!==1.513||H.rapport_et!==0.090||F.rapport!==1.344||!(H.biacromial_et>0)) return _echec('ANAT_LARGEURS n’a pas les valeurs ANSUR II recalculées');
+      const f=_anatCarrure(1.51,false);
+      const l=f.chiffres.find(c=>c.lib==='Épaules / bassin');
+      if(l.ref!=='1,51 ± 0,09') return _echec('repère du rapport : « '+l.ref+' »');
+      if(!/± /.test(f.chiffres[0].ref)) return _echec('la largeur biacromiale sans sa dispersion : '+f.chiffres[0].ref);
+      if(!/ANSUR II \(Gordon et al\., 2014\)/.test(f.source)||!/4 082/.test(f.source)) return _echec('source : '+f.source);
+      return true;})());
+    ok('ANALYSE MORPHO : UN HOMME À 1,51 SORT « CARRURE MOYENNE », À 1,30 « ÉTROITE »',(()=>{
+      const moy=_anatCarrure(1.51,false);
+      if(moy.niveau!==0||anatVerdict(moy)!=='Carrure moyenne') return _echec('1,51 : '+moy.niveau+' · '+anatVerdict(moy));
+      const et=_anatCarrure(1.30,false);
+      if(!(et.niveau<0)||!/Étroite/.test(anatVerdict(et))) return _echec('1,30 : '+et.niveau+' · '+anatVerdict(et));
+      return true;})());
+    ok('ANALYSE MORPHO : UNE FEMME À 1,34 SORT DANS LA MARGE',(()=>{
+      const f=_anatCarrure(1.34,true);
+      if(f.niveau!==0) return _echec('niveau '+f.niveau+' · '+anatVerdict(f));
+      if(!/femmes/.test(f.source)) return _echec('le repère n’est pas celui des femmes : '+f.source);
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());

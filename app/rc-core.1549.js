@@ -44874,8 +44874,8 @@ const ANAT_VERSION=4;
  *     tronc MIDS→MIDH        H 515,5 (0,2961)  F 497,9 (0,2870)
  *     pied                   H 258,1 (0,1482)  F 228,3 (0,1316)
  *   - `hanche` n'est PAS de de Leva : c'est la hauteur de trochanter d'ANSUR II
- *     (2012), recalculée pour l'audit (H 0,513, F 0,519). Elle reste sur ANSUR
- *     II comme les largeurs (ANAT_LARGEURS) ; le chantier A2 les reprendra.
+ *     (2012), recalculée pour l'audit (H 0,513, F 0,519), comme les largeurs
+ *     (ANAT_LARGEURS, chantier A2).
  *   - `DEF` dit, pour chaque ligne du tableau, d'où à où l'on mesure : c'est ce
  *     qui rend la comparaison lisible par le coach.
  */
@@ -44895,8 +44895,27 @@ function anatRef(femme){ return ANAT_REF[femme?'F':'H']; }
  * encore — et elle n'entre que dans le modèle, jamais dans un verdict.
  */
 const ANAT_MAIN=0.108;
-/** Largeurs osseuses adultes, ANSUR II (2012), en fraction de la taille. */
-const ANAT_LARGEURS=Object.freeze({H:{biacromial:0.231,bicretal:0.162},F:{biacromial:0.224,bicretal:0.172}});
+/**
+ * LES LARGEURS OSSEUSES ADULTES, en fraction de la taille, AVEC LEUR DISPERSION.
+ *
+ * Source : ANSUR II (Gordon et al., 2014, NATICK/TR-15/007), fichiers publics —
+ * calcul RepCore du 25/09/2026, n = 4 082 hommes / 1 986 femmes. `_et` est
+ * l'écart-type ; `rapport` est la moyenne du rapport biacromial / bicrêtal
+ * calculée personne par personne — PAS le rapport des deux moyennes.
+ *
+ * ⚠ POURQUOI CE N'EST PLUS 0,231 / 0,162 (audit morpho, chantier A2). Le rapport
+ *   des anciennes moyennes donnait 1,43 pour les hommes ; les données en donnent
+ *   1,51 ± 0,09. Chaque homme ressortait donc « carrure étroite » d'environ un
+ *   cran : une erreur de référence, pas une observation.
+ * ⚠ POPULATION MILITAIRE, plus athlétique que la moyenne des adultes : la
+ *   référence décrit des adultes actifs, pas une norme. Un écart dit où se
+ *   situe l'athlète par rapport à eux, jamais ce qu'il « devrait » être.
+ */
+const ANAT_LARGEURS=Object.freeze({
+  H:Object.freeze({biacromial:0.2368,biacromial_et:0.0098,bicretal:0.1569,bicretal_et:0.0086,rapport:1.513,rapport_et:0.090}),
+  F:Object.freeze({biacromial:0.2244,biacromial_et:0.0096,bicretal:0.1679,bicretal_et:0.0127,rapport:1.344,rapport_et:0.110}),
+  SOURCE:'ANSUR II (Gordon et al., 2014), calcul RepCore du 25/09/2026, n = 4 082 H / 1 986 F'
+});
 /** Écart à un repère : dans la marge, léger, net, marqué (en %). */
 const ANAT_SEUILS_PCT=[5,9,14];
 const ANAT_TOL={epaules:1.5,bassin:2,genoux:3,pieds:8,tronc:3,omoplates:1.2,rachis:2,triangles:25,echelle:3};
@@ -45286,8 +45305,9 @@ function anatMesures(anat,u){
   const cm=(x)=>x==null?'—':_anatN(x,1)+' cm';
   const pct=(x)=>x==null?'—':_anatSN(x,0)+' %';
   // `def` : d'où à où la ligne mesure, écrit sous le libellé du tableau.
-  const ligne=(lib,seg,ref,def)=>({lib,def:def||'',val:seg?(seg.cm!=null?cm(seg.cm):_anatN(seg.fr*100,1)+' % de la taille'):'—',
-    ref:ref!=null&&taille?cm(ref*taille):(ref!=null?_anatN(ref*100,1)+' %':''),
+  // `et` : l'écart-type du repère, quand la source le donne — écrit « ± ».
+  const ligne=(lib,seg,ref,def,et)=>({lib,def:def||'',val:seg?(seg.cm!=null?cm(seg.cm):_anatN(seg.fr*100,1)+' % de la taille'):'—',
+    ref:ref!=null&&taille?cm(ref*taille)+(et?' ± '+_anatN(et*taille,1):''):(ref!=null?_anatN(ref*100,1)+' %'+(et?' ± '+_anatN(et*100,1):''):''),
     ecart:seg&&ref!=null?pct(ecartPct(seg.fr,ref)):''});
   // Un membre plié se raccourcit en projection : il ne donne pas de longueur.
   const tendu=(V,a,b,c,s)=>{
@@ -45314,7 +45334,7 @@ function anatMesures(anat,u){
     if(bi){ bi.cm=F.cmPx?bi.px*F.cmPx:null; bi.fr=F.stature?bi.px/F.stature:null; }
     if(bc){ bc.cm=F.cmPx?bc.px*F.cmPx:null; bc.fr=F.stature?bc.px/F.stature:null; }
     const ec=bi?ecartPct(bi.fr,larg.biacromial):null;
-    const r=(bi&&bc)?bi.px/bc.px:null, rRef=larg.biacromial/larg.bicretal;
+    const r=(bi&&bc)?bi.px/bc.px:null, rRef=larg.rapport, rEt=larg.rapport_et;
     const estime=!!((bi&&bi.e<1)||(bc&&bc.e<1));
     fiche({cle:'clavicules',lib:'Clavicules',vue:'face',ancre:A&&B?_anatMil(A,B):null,
       zone:(A&&B&&F)?_anatZoneAutour([A,B,F.P2('epaule','g'),F.P2('epaule','d')],0.35):null,
@@ -45323,9 +45343,9 @@ function anatMesures(anat,u){
       bornes:['carrure étroite','carrure large'],
       valeur:bi?(bi.cm!=null?cm(bi.cm):'')+(r?' · ép./bassin '+_anatN(r,2):''):'',
       tolerance:'±2 cm par acromion'+(estime?' — points estimés, à vérifier':''),
-      chiffres:[ligne('Largeur biacromiale',bi,larg.biacromial,'acromion → acromion'),ligne('Largeur bicrêtale (bassin)',bc,larg.bicretal,'crête iliaque → crête iliaque'),
-        {lib:'Épaules / bassin',def:'biacromiale ÷ bicrêtale',val:r?_anatN(r,2):'—',ref:_anatN(rRef,2),ecart:r?pct((r/rRef-1)*100):''}],
-      mesure:{bi,bc,r,rRef,ec,femme},source:'acromions et crêtes iliaques, photo de face ; repère ANSUR II ('+(femme?'femmes':'hommes')+')'});
+      chiffres:[ligne('Largeur biacromiale',bi,larg.biacromial,'acromion → acromion',larg.biacromial_et),ligne('Largeur bicrêtale (bassin)',bc,larg.bicretal,'crête iliaque → crête iliaque',larg.bicretal_et),
+        {lib:'Épaules / bassin',def:'biacromiale ÷ bicrêtale',val:r?_anatN(r,2):'—',ref:_anatN(rRef,2)+' ± '+_anatN(rEt,2),ecart:r?pct((r/rRef-1)*100):''}],
+      mesure:{bi,bc,r,rRef,rEt,ec,femme},source:'acromions et crêtes iliaques, photo de face ; repère '+ANAT_LARGEURS.SOURCE+', '+(femme?'femmes':'hommes')});
   }
   // ── ÉPAULES : inclinaison ────────────────────────────────────────────────
   const incl=(V,k)=>{
@@ -45617,7 +45637,7 @@ function anatTexte(f,res){
     }else{
       T.court='Clavicules courtes : carrure osseuse '+_anatSN(m.ec,0)+' % sous la moyenne '+ref+'. La largeur viendra du deltoïde latéral et du dos.';
     }
-    T.lecture='Largeur biacromiale '+c(bi)+', bassin (crêtes iliaques) '+c(bc)+(r?', soit un rapport épaules / bassin de '+_anatN(r,2)+' pour '+_anatN(m.rRef,2)+' en moyenne':'')+'. '
+    T.lecture='Largeur biacromiale '+c(bi)+', bassin (crêtes iliaques) '+c(bc)+(r?', soit un rapport épaules / bassin de '+_anatN(r,2)+' pour '+_anatN(m.rRef,2)+(m.rEt?' ± '+_anatN(m.rEt,2):'')+' en moyenne chez des adultes actifs ('+(m.femme?'femmes':'hommes')+', ANSUR II)':'')+'. '
       +'La clavicule fixe l’écartement des épaules : c’est elle qui donne le bras de levier au développé prise large et la base de la silhouette en V. Elle ne change pas avec l’entraînement ; ce qui change, c’est ce qui s’y attache (deltoïdes, trapèzes, grands dorsaux). '
       +(n>0?'Une charpente large offre le V : le piège est de s’appuyer dessus et de laisser le bas du corps en retrait.'
         :n<0?'Une charpente étroite ne limite pas le physique : elle déplace la priorité vers les faisceaux qui élargissent à l’œil — deltoïde latéral et dorsaux — et vers une taille fine.'
@@ -46227,7 +46247,8 @@ function _anatDimensions(src){
 }
 /**
  * Des points de départ quand le moteur ne voit personne : un gabarit aux
- * proportions de de Leva (1996) — celles d'ANAT_REF, du sexe demandé —,
+ * proportions de de Leva (1996) — celles d'ANAT_REF, du sexe demandé — et aux
+ * largeurs d'ANSUR II (ANAT_LARGEURS),
  * centré, que le coach n'a plus qu'à caler. Les segments sont posés À LEUR
  * LONGUEUR EXACTE (l'écart latéral est retiré de la hauteur), si bien qu'un
  * gabarit mesuré sort « dans la marge » sur les bras, les jambes et le buste.
@@ -46245,9 +46266,10 @@ function anatGabarit(w,h,vue,femme){
   const fHa=fGenou+R.cuisse, fEp=fHa+R.tronc;
   const fCo=bout(fEp,0.10,0.12,R.bras), fPo=bout(fCo,0.12,0.13,R.avantbras);
   pose('vertex',cx,y(1));
-  lat('acromion',0.115,fEp+0.012); lat('epaule',0.10,fEp); lat('deltoide',0.14,fEp-0.02);
+  const LG=ANAT_LARGEURS[femme?'F':'H'];
+  lat('acromion',LG.biacromial/2,fEp+0.012); lat('epaule',0.10,fEp); lat('deltoide',0.14,fEp-0.02);
   lat('coude',0.12,fCo); lat('poignet',0.13,fPo); lat('taille',0.075,fHa+0.09);
-  lat('crete',0.08,fHa+0.07); lat('hanche',0.055,fHa); lat('genou',0.055,fGenou);
+  lat('crete',LG.bicretal/2,fHa+0.07); lat('hanche',0.055,fHa); lat('genou',0.055,fGenou);
   lat('cheville',0.05,fCh); lat('talon',0.05,0.0);
   if(vue==='face') lat('pointe',0.07,-0.01);
   if(vue==='dos'){ pose('c7',cx,y(fEp+0.04)); pose('sacrum',cx,y(fHa+0.04)); lat('omoplate',0.06,fEp-0.10); }
