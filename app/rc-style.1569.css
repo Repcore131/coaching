@@ -10380,6 +10380,11 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .an-j-moi2{fill:#ff3b3b;stroke:#fff;stroke-width:1.5;filter:drop-shadow(0 0 3px rgba(255,59,59,.8))}
 .an-jauge text{font-size:6.5px;fill:#8a8a92;font-family:inherit}
 .an-lev-leg{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:9.5px;color:#8a8a92}
+/* A20 : prévu / mesuré en vidéo, et le lien vers la vidéo. */
+.an-vid{margin:4px 0 0;padding:6px 8px;border-radius:8px;background:#17171b;border:1px solid #2a2a30;font-size:11px;color:#d4d4d8;line-height:1.45}
+.an-vid b{color:#fff}
+.an-vid.an-vid-loin{border-color:rgba(245,158,11,.5)}
+.an-vid-b{display:inline-block;margin:4px 0 0;padding:4px 9px;border-radius:7px;border:1px solid rgba(224,32,32,.6);background:rgba(224,32,32,.12);color:#fff;font:inherit;font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap}
 /* A19 : à charge égale, une barre divergente par articulation. */
 .an-cpl{display:flex;flex-direction:column;gap:8px}
 .an-cpl-e{display:grid;grid-template-columns:70px 1fr 44px;gap:0 8px;font-size:9.5px;color:#8a8a92}

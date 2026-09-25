@@ -46527,6 +46527,17 @@ function anatAlphaCheville(u){
   const a=Math.max(ANAT_SQUAT.ALPHA_MIN,Math.min(ANAT_SQUAT.ALPHA_MAX,ANAT_SQUAT.ALPHA+1.2*(cm-10)));
   return {alpha:Math.round(a*10)/10,cm};
 }
+/**
+ * PURE. La dernière mesure vidéo d'un mouvement (A20), exportée par le Motion
+ * Lab : {date, videoId, exercice, angleTroncBas, angleTibiaBas, profondeur}.
+ */
+function anatDerniereMesureVideo(u,ex){
+  const l=(u&&Array.isArray(u.mesuresVideo))?u.mesuresVideo:[];
+  return l.filter(x=>x&&x.exercice===ex&&isFinite(Number(x.angleTroncBas))).sort((a,b)=>(b.date||0)-(a.date||0))[0]||null;
+}
+/** Au-delà, l'écart prévu / mesuré ne vient pas des segments. */
+const ANAT_VIDEO_ECART=8;
+const ANAT_VIDEO_PHRASE='L’écart ne vient pas des segments : regarder la cheville et le placement.';
 /** PURE. Un réglage appliqué à des proportions : {F,T,Tr (hanche → épaules),pied} × {alpha,beta,barre,cale}. */
 function anatSquatCalc(prop,cfg){
   return anatSquatModele({F:prop.F,T:prop.T,Tr:prop.Tr-(ANAT_SQUAT.BARRE[cfg.barre]||ANAT_SQUAT.BARRE.haute),
@@ -46727,14 +46738,19 @@ function anatLeviers(fiches,F,taille,femme,u){
   // les hanches, sans cale. La moyenne reçoit exactement le même réglage.
   if(cu&&ja&&tr&&cu.fr&&ja.fr&&tr.fr){
     const aC=_anatSafe(()=>anatAlphaCheville(u));
-    const base={alpha:aC?aC.alpha:ANAT_SQUAT.ALPHA,beta:0,barre:'haute',cale:false};
+    // A20 : le tibia MESURÉ en vidéo prime sur celui du test et sur les 30°.
+    const vS=_anatSafe(()=>anatDerniereMesureVideo(u,'squat'));
+    const aV=(vS&&isFinite(Number(vS.angleTibiaBas)))?Math.max(ANAT_SQUAT.ALPHA_MIN,Math.min(ANAT_SQUAT.ALPHA_MAX,Number(vS.angleTibiaBas))):null;
+    const base={alpha:aV!=null?aV:(aC?aC.alpha:ANAT_SQUAT.ALPHA),beta:0,barre:'haute',cale:false};
     const A={F:cu.fr,T:ja.fr,Tr:tr.fr,pied:pied?pied/taille:MR.pied}, Rp={F:R.cuisse,T:R.jambe,Tr:R.tronc,pied:MR.pied};
     const moi=anatSquatCalc(A,base), ref=anatSquatCalc(Rp,base), cale=anatSquatCalc(A,Object.assign({},base,{cale:true}));
     out.push({cle:'squat',lib:'Squat',val:Math.round(moi.angle),ref:Math.round(ref.angle),cale:Math.round(cale.angle),
-      modele:{A,Rp,base,taille:taille||null,alphaSrc:aC?'test':'defaut',alphaCm:aC?aC.cm:null},
+      modele:{A,Rp,base,taille:taille||null,alphaSrc:aV!=null?'video':(aC?'test':'defaut'),alphaCm:aC?aC.cm:null},
+      video:vS?{date:vS.date,videoId:vS.videoId,mesure:Number(vS.angleTroncBas),tibia:aV,prevu:moi.angle,ecart:Number(vS.angleTroncBas)-moi.angle}:null,
       bras:{hanche:moi.brasHanche,genou:moi.brasGenou,rapport:moi.rapport,dominante:moi.dominante},
       source:photo+(pied?' ; milieu du pied d’après la longueur de pied mesurée au bilan ('+_anatN(pied,1)+' cm ; repère '+ANAT_MESURES_REF.SOURCE+')':' ; milieu du pied pour un pied moyen (ANSUR II)')
-        +(aC?' ; tibia tiré du test du genou au mur ('+_anatN(aC.cm,0)+' cm → '+_anatN(aC.alpha,0)+'°, approximation 30° + 1,2° par cm au-delà de 10 cm)':' ; tibia à 30°')
+        +(aV!=null?' ; tibia mesuré en vidéo ('+_anatN(aV,0)+'°, Motion Lab, '+_anatDateFr(vS.date)+')'
+          :(aC?' ; tibia tiré du test du genou au mur ('+_anatN(aC.cm,0)+' cm → '+_anatN(aC.alpha,0)+'°, approximation 30° + 1,2° par cm au-delà de 10 cm)':' ; tibia à 30°'))
         +' ; modèle '+ANAT_SQUAT.SOURCE,
       txt:anatSquatTexte(moi,ref,base,taille)+' Avec une cale sous les talons\u00a0: '+Math.round(cale.angle)+'°.'
         +(pied?' Barre au-dessus du milieu d’un pied de '+_anatN(pied,1)+' cm, mesuré au bilan.':'')});
@@ -46761,7 +46777,10 @@ function anatLeviers(fiches,F,taille,femme,u){
       const cmv=v=>_anatN(v*H,0)+' cm';
       const gain=su.moi.tronc-c.moi.tronc, dLev=(c.moi.brasHanche-su.moi.brasHanche)*H;
       const net=gain>=8||dLev>=5;
+      const vD=_anatSafe(()=>anatDerniereMesureVideo(u,'souleve'));
+      const mesD=vD?90-Number(vD.angleTroncBas):null;
       out.push({cle:'souleve',lib:'Soulevé de terre',val:Math.round(c.moi.tronc*10)/10,ref:Math.round(c.ref.tronc*10)/10,styles:st,taille:H,
+        video:vD?{date:vD.date,videoId:vD.videoId,mesure:mesD,prevu:c.moi.tronc,ecart:mesD-c.moi.tronc}:null,
         source:(srcEnv?srcEnv+' ; tronc et jambes lus sur la photo':photo)+' ; modèle '+ANAT_SOULEVE.SOURCE+' ; hauteur de cheville Drillis & Contini'+(taille?'':' ; taille supposée '+H+' cm'),
         decision:'En sumo, le tronc se redresse de '+_anatN(gain,0)+'° ('+_anatN(su.moi.tronc,0)+'° contre '+_anatN(c.moi.tronc,0)+'° en conventionnel) et la hanche se rapproche de la barre de '+_anatN(Math.max(0,dLev),0)+' cm. '
           +(net?'Le sumo raccourcit nettement le levier du dos : une variante à proposer, surtout si le bas du dos limite la charge.'
@@ -47502,7 +47521,7 @@ function _htmlSouleve(l){
   };
   return '<div class="an-sdt">'+bloc('conventionnel','Conventionnel')+bloc('sumo','Sumo')+'</div>'
     +'<span class="an-lev-leg"><span><i class="l-moi"></i>athlète</span><span><i class="l-moy"></i>moyenne</span></span>'
-    +'<p class="an-sdt-d">'+escapeHtml(l.decision)+'</p><p>'+escapeHtml(l.txt)+'</p>';
+    +'<p class="an-sdt-d">'+escapeHtml(l.decision)+'</p><p>'+escapeHtml(l.txt)+'</p>'+_htmlAnatVideo(l);
 }
 // ── LE SQUAT RÉGLÉ (A16) : un état d'écran, pas une donnée ────────────────
 let _anatSquatReg=null, _anatSquatL=null;
@@ -47520,7 +47539,17 @@ function _htmlSquatRes(l){
   return '<div class="an-lev-v">'+j+'<div class="an-lev-vt"><strong>'+l.val+'°</strong><em>buste à la parallèle<br>moyenne '+l.ref+'°'
       +(change?'<br>réglage : <b class="an-sq-r">'+regle+'°</b> (moyenne '+Math.round(ref.angle)+'°)':'')+'</em>'
     +'<span class="an-lev-leg"><span><i class="l-moi"></i>athlète</span><span><i class="l-moy"></i>moyenne</span><span><i class="l-cale"></i>'+(change?'réglage':'avec cale')+'</span></span></div></div>'
-    +'<p>'+escapeHtml(change?anatSquatTexte(moi,ref,cfg,M.taille):l.txt)+'</p>';
+    +'<p>'+escapeHtml(change?anatSquatTexte(moi,ref,cfg,M.taille):l.txt)+'</p>'
+    +_htmlAnatVideo(l);
+}
+/** Prévu / mesuré (A20), et le lien vers la dernière vidéo analysée. */
+function _htmlAnatVideo(l){
+  const v=l&&l.video; if(!v) return '';
+  const c=getOwnedClient(currentClientId);
+  const loin=Math.abs(v.ecart)>ANAT_VIDEO_ECART;
+  return '<p class="an-vid'+(loin?' an-vid-loin':'')+'">Prévu <b>'+_anatN(v.prevu,0)+'°</b> · mesuré en vidéo <b>'+_anatN(v.mesure,0)+'°</b> ('+_anatDateFr(v.date)+') — écart '+_anatSN(v.ecart,0)+'°.'
+    +(loin?' '+escapeHtml(ANAT_VIDEO_PHRASE):'')
+    +(c&&v.videoId?' <button type="button" class="an-vid-b" onclick="ouvrirMotionLab(\''+escapeHtml(c.email)+'\',\''+escapeHtml(String(v.videoId))+'\')">Voir la vidéo analysée</button>':'')+'</p>';
 }
 /** Les quatre contrôles : cheville, écart, barre haute / basse, cale. */
 function _htmlSquatCtl(l){

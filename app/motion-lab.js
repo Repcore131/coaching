@@ -10111,6 +10111,8 @@ async function mlAnalyserArticulations(){
   _ml.segments=_ml.segments.map(s=>s.id===segId?{...s,pose}:s);
   _ml.cachePose=null;
   _ml.angCote='';
+  // A20 : un squat ou un soulevé lu de profil renseigne le modèle des leviers.
+  _mlExporterMesure(pose);
   // LE CALQUE OUVERT D'OFFICE est celui qui a le plus bougé : c'est celui qu'on
   // est venu regarder. Aucun calque après une minute d'analyse donnerait un
   // écran qui a l'air vide, et il faudrait deviner lequel ouvrir.
@@ -10126,6 +10128,70 @@ async function mlAnalyserArticulations(){
   _mlDessinerCalque();
   toast('Articulations lues sur '+ech.length+' images.');
   return true;
+}
+// ── DU MODÈLE À LA MESURE (chantier A20) ────────────────────────────────────
+/**
+ * PURE. Le mouvement d'une vidéo, d'après son nom : 'squat', 'souleve' ou null.
+ * Les variantes que les modèles de l'analyse morpho ne décrivent pas (gobelet,
+ * bulgare, roumain…) ne sont pas exportées.
+ * @param {string} nom
+ * @returns {'squat'|'souleve'|null}
+ */
+function mlExerciceVideo(nom){
+  const n=String(nom||'');
+  if(/soulev|deadlift/i.test(n)&&!/roumain|rdl|jambes tendues/i.test(n)) return 'souleve';
+  if(/squat/i.test(n)&&!/goblet|gobelet|bulgare|split|saut|jump|hack|presse|sissy/i.test(n)) return 'squat';
+  return null;
+}
+/**
+ * PURE. Au plus bas du mouvement — l'image où le genou est le plus fléchi — :
+ * l'inclinaison du tronc (hanche → épaule) et du tibia (cheville → genou) par
+ * rapport à la verticale, dans le repère redressé, et l'angle du genou
+ * (« profondeur »). null si le genou n'a jamais été lu.
+ * @param {any} pose
+ */
+function mlMesureBas(pose){
+  const sp=mlAnglesSerie(pose), g=sp.ang.genou||[];
+  let k=-1, m=Infinity;
+  for(let i=0;i<g.length;i++) if(g[i]!=null&&g[i]<m){ m=g[i]; k=i; }
+  if(k<0) return null;
+  const vw=pose.vw, vh=pose.vh;
+  const X=sp.X[k].map((/** @type {number} */ v)=>v*vw), Y=sp.Y[k].map((/** @type {number} */ v)=>v*vh);
+  const r=sp.theta?mlRedresser(X,Y,sp.theta,vw/2,vh/2):{X,Y};
+  /** @param {string} n */
+  const P=n=>{ const i=mlRangPose(n,sp.cote); return (i<0||!(sp.V[k][i]>=ML_POSE_VIS_MIN)||!isFinite(r.X[i]))?null:{x:r.X[i],y:r.Y[i]}; };
+  const ge=P('genou'), ch=P('cheville'), ha=P('hanche');
+  const tronc=sp.ang.tronc?sp.ang.tronc[k]:null;
+  const tibia=(ge&&ch)?mlInclinaison(ch.x,ch.y,ge.x,ge.y):null;
+  const r1=(/** @type {number|null} */ v)=>v==null?null:Math.round(v*10)/10;
+  return {tMs:Math.round(sp.t[k]),angleTroncBas:r1(tronc),angleTibiaBas:r1(tibia),profondeur:r1(m),
+    sousParallele:(ha&&ge)?ha.y>ge.y:null};
+}
+/**
+ * À la fin d'une lecture des articulations, si la vidéo est un squat ou un
+ * soulevé : la mesure au plus bas entre dans le dossier (`mesuresVideo`), une
+ * par vidéo et par mouvement, vingt au plus. CÔTÉ COACH.
+ * @param {any} pose
+ */
+function _mlExporterMesure(pose){
+  try{
+    if(!_ml) return false;
+    const src=_mlVideoSource(), ex=mlExerciceVideo(src&&src.name);
+    if(!ex) return false;
+    const m=mlMesureBas(pose);
+    if(!m||m.angleTroncBas==null) return false;
+    const users=DB.get('users')||{}, d=users[_ml.email];
+    if(!d||!currentUser||d.coachId!==currentUser.id) return false;
+    const e={date:Date.now(),videoId:_ml.videoId,exercice:ex,angleTroncBas:m.angleTroncBas,angleTibiaBas:m.angleTibiaBas,
+      profondeur:m.profondeur,sousParallele:m.sousParallele};
+    d.mesuresVideo=(Array.isArray(d.mesuresVideo)?d.mesuresVideo:[])
+      .filter((/** @type {any} */ x)=>!(x&&x.videoId===e.videoId&&x.exercice===ex)).concat([e]).slice(-20);
+    d.updatedAt=Date.now();
+    users[_ml.email]=d;
+    DB.set('users',users);
+    try{ CLOUD.pushOne(_ml.email,d); }catch(x){}
+    return true;
+  }catch(x){ return false; }
 }
 /** Arrête la lecture des articulations en cours. */
 function mlArreterPose(){

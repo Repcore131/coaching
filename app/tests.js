@@ -45410,6 +45410,28 @@ async function testExercices(){
       if(!/le levier \(hanche \+\d+ %\) y contribue/.test(html)) return _echec('la lecture levier ne sort pas : '+html.slice(0,300));
       if(/éviter/i.test(html)) return _echec('« à éviter »');
       return true;})());
+    // Du modèle à la mesure (A20, 25/09/2026).
+    ok('ANALYSE MORPHO : MESURE VIDÉO INJECTÉE : LE MODÈLE DU SQUAT SE RECALE ; SANS VIDÉO, RIEN NE CHANGE',(()=>{
+      if(typeof anatDerniereMesureVideo!=='function') return _echec('anatDerniereMesureVideo n’existe pas');
+      const a=_anatGab();
+      const S0=anatMesures(a,_anatDossier()).leviers.find(x=>x.cle==='squat');
+      if(S0.video||S0.modele.base.alpha!==30||S0.modele.alphaSrc!=='defaut') return _echec('sans vidéo : '+JSON.stringify(S0.modele.base)+' '+S0.modele.alphaSrc);
+      const u=_anatDossier({mesuresVideo:[
+        {date:1000,videoId:'v1',exercice:'squat',angleTroncBas:20,angleTibiaBas:25},
+        {date:5000,videoId:'v2',exercice:'squat',angleTroncBas:55,angleTibiaBas:40},
+        {date:6000,videoId:'v3',exercice:'souleve',angleTroncBas:50,angleTibiaBas:12}]});
+      const L=anatMesures(a,u).leviers;
+      const S=L.find(x=>x.cle==='squat'), D=L.find(x=>x.cle==='souleve');
+      if(S.modele.base.alpha!==40||S.modele.alphaSrc!=='video') return _echec('le tibia mesuré n’entre pas : '+S.modele.base.alpha);
+      if(!(S.val<S0.val)) return _echec('un tibia plus incliné doit redresser le buste : '+S.val+' / '+S0.val);
+      if(!S.video||S.video.videoId!=='v2'||S.video.mesure!==55) return _echec('dernière mesure : '+JSON.stringify(S.video));
+      if(Math.abs(S.video.prevu-anatSquatCalc(S.modele.A,S.modele.base).angle)>1e-9) return _echec('prévu');
+      if(!/tibia mesuré en vidéo \(40°, Motion Lab/.test(S.source)) return _echec('source : '+S.source);
+      if(Math.abs(S.video.ecart)>8&&!/ne vient pas des segments/.test(_htmlAnatVideo(S))) return _echec('la phrase d’écart manque');
+      if(!/Prévu <b>\d+°<\/b> · mesuré en vidéo <b>55°<\/b>/.test(_htmlAnatVideo(S))) return _echec('prévu / mesuré à l’écran');
+      // Le soulevé : 50° de la verticale mesurés = 40° de l'horizontale.
+      if(!D.video||D.video.mesure!==40) return _echec('soulevé : '+JSON.stringify(D.video));
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());
@@ -51258,6 +51280,28 @@ async function testExercices(){
           [1500,'trait',1,'100,200 300,400'],[2000,'lecture']],
       cartes:[{id:'k1',aMs:900,dureeMs:3000,texte:'Coudes hauts'}]},o||{});
 
+    okA('A20 — MOTION LAB : AU PLUS BAS D’UN SQUAT DE PROFIL, TRONC ET TIBIA LUS ; LE NOM DIT LE MOUVEMENT',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      if(typeof mlMesureBas!=='function'||typeof mlExerciceVideo!=='function') return _echec('fonctions absentes');
+      if(mlExerciceVideo('Squat barre haute')!=='squat'||mlExerciceVideo('Soulevé de terre')!=='souleve') return _echec('noms reconnus');
+      if(mlExerciceVideo('Squat goblet')!==null||mlExerciceVideo('Soulevé de terre roumain')!==null||mlExerciceVideo('Curl')!==null) return _echec('variantes écartées');
+      // Profil gauche : debout, puis au plus bas — tibia à 30°, cuisse horizontale, tronc à 40°.
+      const rad=Math.PI/180, ch={x:500,y:1000}, ge={x:ch.x+400*Math.sin(30*rad),y:ch.y-400*Math.cos(30*rad)};
+      const ha={x:ge.x-420,y:ge.y}, ep={x:ha.x+500*Math.sin(40*rad),y:ha.y-500*Math.cos(40*rad)};
+      const img=(E,C,P,H,G,K,T)=>{ const X=[],Y=[],V=[];
+        for(const q of [E,E,C,C,P,P,H,H,G,G,K,K,T,T]){ X.push(q.x); Y.push(q.y); V.push(1); } return {X,Y,V}; };
+      const debout=img({x:500,y:300},{x:500,y:450},{x:500,y:600},{x:500,y:560},{x:500,y:780},ch,{x:650,y:1000});
+      const bas=img(ep,{x:620,y:420},{x:640,y:560},ha,ge,ch,{x:650,y:1000});
+      const ech=[Object.assign({tMs:0},debout),Object.assign({tMs:500},bas)];
+      const pose=mlCompacterPose({id:'s',label:'',debutMs:0,finMs:600},ech,{vw:1000,vh:1200,cote:'G',theta:0});
+      const m=mlMesureBas(pose);
+      if(!m) return _echec('rien de lu');
+      if(Math.abs(m.angleTibiaBas-30)>0.5) return _echec('tibia : '+m.angleTibiaBas);
+      if(Math.abs(m.angleTroncBas-40)>0.5) return _echec('tronc : '+m.angleTroncBas);
+      if(Math.abs(m.profondeur-60)>0.5) return _echec('genou : '+m.profondeur);
+      if(m.sousParallele!==false) return _echec('cuisse parallèle, hanche à hauteur du genou : '+m.sousParallele);
+      return true;
+    });
     okA('R30 — le rejeu redonne l’état enregistré, geste par geste',async()=>{
       try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
       const m=_r30Motion();
