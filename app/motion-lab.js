@@ -12646,6 +12646,16 @@ async function mlAnatPhoto(src,o){
   if(!cx) return {ok:false,code:'image'};
   if(o&&o.filtre){ try{ cx.filter=o.filtre; }catch(e){} }
   cx.drawImage(im,sx,sy,sw,sh,0,0,sw,sh);
+  // E1 : la luminosité moyenne (0–255) de ce qui est lu, sur une vignette de
+  // 32 px — de quoi dire « trop sombre » avant l'envoi d'une photo de bilan.
+  let lum=null;
+  try{
+    const v=document.createElement('canvas'); v.width=32; v.height=32;
+    const vx=v.getContext('2d');
+    if(vx){ vx.drawImage(t,0,0,32,32); const px=vx.getImageData(0,0,32,32).data; let sL=0;
+      for(let i=0;i<px.length;i+=4) sL+=0.2126*px[i]+0.7152*px[i+1]+0.0722*px[i+2];
+      lum=Math.round(sL/(px.length/4)); }
+  }catch(e){ lum=null; }
   // LA SEGMENTATION LE TEMPS D'UNE IMAGE. Le laboratoire tourne sans elle :
   // elle coûte à chaque image d'une vidéo, et on la rend éteinte.
   // ⚠ LE MODÈLE « FULL », PAS LE « LITE ». Le laboratoire lit des vidéos, à
@@ -12671,7 +12681,7 @@ async function mlAnatPhoto(src,o){
       // ⚠ LE MASQUE SE LIT DANS LE RAPPEL, pas après : c'est une texture du
       //   moteur, réécrite à l'image suivante.
       try{ masque=r&&r.segmentationMask?_mlAnatMasque(r.segmentationMask,w,h,{x:sx,y:sy,w:sw,h:sh}):masque; }catch(e){}
-      ok(r&&r.poseLandmarks?{poseLandmarks:r.poseLandmarks.map((/** @type {any} */ q)=>({x:q.x,y:q.y,visibility:q.visibility}))}:null);
+      ok(r&&r.poseLandmarks?{poseLandmarks:r.poseLandmarks.map((/** @type {any} */ q)=>({x:q.x,y:q.y,z:q.z,visibility:q.visibility}))}:null);
     });
     moteur.send({image:t}).catch(()=>{ clearTimeout(garde); ok(null); });
   });
@@ -12689,7 +12699,10 @@ async function mlAnatPhoto(src,o){
   const r4=(/** @type {number} */ x)=>Math.round((Number(x)||0)*10000)/10000;
   // Du repère du cadre au repère de la photo entière.
   const pts=p.map((/** @type {any} */ q)=>[r4((q.x*sw+sx)/w),r4((q.y*sh+sy)/h),Math.round((Number(q.visibility)||0)*100)/100]);
-  return {ok:true,w,h,pts,masque};
+  // La profondeur du moteur (même échelle que x, dans le repère du cadre),
+  // ramenée à la largeur de la photo entière : elle sert au contrôle de rotation (E1).
+  const z=p.map((/** @type {any} */ q)=>isFinite(Number(q.z))?r4(Number(q.z)*sw/w):null);
+  return {ok:true,w,h,pts,masque,z,lum};
 }
 
 /**

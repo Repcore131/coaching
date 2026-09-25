@@ -45509,6 +45509,42 @@ async function testExercices(){
       if(anatPersistance([{v:1},{v:1},{v:1}],2).persistant) return _echec('sous la marge');
       if(!anatPersistance([{v:-3},{v:3},{v:3},{v:3}],2).persistant) return _echec('trois derniers du même côté');
       return true;})());
+    // E1 — des photos de bilan exploitables dès l'envoi (25/09/2026).
+    const _photoRaw=(modif)=>{
+      const pts=Array.from({length:33},()=>[0.5,0.1,1]);
+      const P={0:[0.5,0.12],11:[0.42,0.25],12:[0.58,0.25],13:[0.38,0.38],14:[0.62,0.38],15:[0.36,0.5],16:[0.64,0.5],
+        23:[0.45,0.52],24:[0.55,0.52],25:[0.45,0.72],26:[0.55,0.72],27:[0.45,0.9],28:[0.55,0.9],29:[0.45,0.93],30:[0.55,0.93],31:[0.44,0.95],32:[0.56,0.95]};
+      for(const i in P) pts[i]=[P[i][0],P[i][1],1];
+      for(let i=1;i<=10;i++) pts[i]=[0.5+(i%2?-0.02:0.02),0.11,1];
+      const raw={ok:true,w:1000,h:1500,pts,z:Array(33).fill(0),lum:120};
+      return modif?modif(raw)||raw:raw;
+    };
+    ok('E1 — PHOTO CONFORME : VERT ; SANS PIEDS : ROUGE ; SOMBRE OU TOURNÉE : ORANGE',(()=>{
+      if(typeof photoControle!=='function') return _echec('photoControle n’existe pas');
+      const v=photoControle(_photoRaw(),'face');
+      if(v.etat!=='vert') return _echec('conforme : '+JSON.stringify(v));
+      const sansPieds=photoControle(_photoRaw(r=>{ for(const i of [29,30,31,32]) r.pts[i]=[r.pts[i][0],1.04,0.2]; }),'face');
+      if(sansPieds.etat!=='rouge'||sansPieds.codes[0]!=='pieds') return _echec('sans pieds : '+JSON.stringify(sansPieds));
+      if(!/pieds sortent du cadre/.test(sansPieds.raisons[0])) return _echec('raison : '+sansPieds.raisons[0]);
+      if(photoControle(_photoRaw(r=>{ r.lum=45; }),'face').etat!=='orange') return _echec('sombre');
+      if(photoControle(_photoRaw(r=>{ r.z[11]=-0.03; r.z[12]=0.03; r.z[23]=-0.03; r.z[24]=0.03; }),'face').codes.indexOf('rotation')<0) return _echec('rotation non vue');
+      if(photoControle(_photoRaw(r=>{ r.pts[15]=[0.45,0.5,1]; r.pts[16]=[0.55,0.5,1]; }),'face').codes.indexOf('bras')<0) return _echec('bras collés');
+      if(photoControle({ok:false,code:'personne'},'face').etat!=='rouge') return _echec('personne');
+      if(photoControle(_photoRaw(),'side').codes.indexOf('profil')<0) return _echec('un corps de face pris pour un profil');
+      return true;})());
+    ok('E1 — AUCUN TEXTE MORPHOLOGIQUE CÔTÉ ATHLÈTE ; LE COACH VOIT LE CONTRÔLE',(()=>{
+      const textes=Object.values(PHOTO_CTL.MSG).concat(...Object.values(PHOTO_CONSIGNES));
+      const g=['face','back','side'].map(v=>_htmlPhotoGuide(v).replace(/<[^>]+>/g,' ')).join(' ');
+      const v=['vert|','orange|bras,sombre','rouge|pieds'].map(c=>_htmlPhotoVerdict(c).replace(/<[^>]+>/g,' ')).join(' ');
+      for(const x of textes.concat([g,v])) if(ANAT_LEXIQUE_MORPHO.test(x)) return _echec('mot morphologique : « '+x.match(ANAT_LEXIQUE_MORPHO)[0]+' » dans « '+x.slice(0,80)+' »');
+      if(!/Pas de miroir/.test(g)) return _echec('rappel « pas de miroir »');
+      if(PHOTO_CONSIGNES.face.length!==6||PHOTO_CONSIGNES.back.length!==6||PHOTO_CONSIGNES.side.length!==6) return _echec('six consignes par vue');
+      // Rien d'autre que le verdict n'entre dans le bilan : une chaîne courte, sans nombre.
+      if(/\d/.test('orange|bras,sombre')) return _echec('un nombre');
+      const c=_anatCtlEnvoi({type:'depart','deb-photo-face-ctl':'vert|','deb-photo-back-ctl':'orange|bras'});
+      if(!/face : contrôle passé/.test(c)||!/dos : envoyée avec réserve \(bras\)/.test(c)) return _echec('coach : '+c);
+      if(!/avant le contrôle/.test(_anatCtlEnvoi({type:'depart'}))) return _echec('bilan ancien');
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());

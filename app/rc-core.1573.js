@@ -46967,7 +46967,7 @@ const ANAT_EXOS_LIENS=Object.freeze([
   [/squat/i,['squat']]
 ]);
 /** Les mots qui disent le POURQUOI morphologique : ils ne descendent jamais chez l'athlète (G7). */
-const ANAT_LEXIQUE_MORPHO=/morpho|levier|fémur|femur|tibia|humérus|humerus|clavicule|carrure|charpente|proportion|segment|asymétr|silhouette|percentile|population|recurvatum|anatom|ossature|os\b|squelett|longueur de|court|long\b|longs|étroit|axe du|posture|projection/i;
+const ANAT_LEXIQUE_MORPHO=/morpho|levier|fémur|femur|tibia|humérus|humerus|clavicule|carrure|charpente|proportion|segment|asymétr|silhouette|percentile|population|recurvatum|anatom|ossature|\bos\b|squelett|longueur de|court|long\b|longs|étroit|axe du|posture|projection/i;
 /** PURE. Les exercices du catalogue cités dans un texte (quatre au plus). */
 function anatLierExos(texte){
   const t=String(texte||''), out=[];
@@ -47746,6 +47746,19 @@ function _htmlAnatPriorites(res,c){
       +'<span class="an-prio-a">'+escapeHtml(x.action)+'</span></span></button>').join('')+'</div>'
     :'<p class="an-prio-vide">Rien à corriger : leviers dans la moyenne. Aucune zone n’est au-dessus de « léger » sur ce bilan.</p>';
   return '<div class="an-prio"><div class="an-prio-h"><h5>3 priorités</h5>'+seg+'</div>'+corps+'</div>';
+}
+/** E1 : ce que le contrôle à l'envoi a dit des photos de ce bilan, pour le coach. */
+function _anatCtlEnvoi(b){
+  if(!b) return '';
+  const pre=(b.type==='depart'?'deb':'bil')+'-photo-';
+  const lib={face:'face',back:'dos',side:'profil'}, mot={vert:'contrôle passé',orange:'envoyée avec réserve',rouge:'à reprendre'};
+  const l=['face','back','side'].map(v=>{
+    const c=b[pre+v+'-ctl']; if(!c) return null;
+    const [e,cs]=String(c).split('|');
+    const codes=(cs||'').split(',').filter(Boolean);
+    return lib[v]+' : '+(mot[e]||e)+(codes.length?' ('+codes.map(x=>({personne:'personne',pieds:'pieds',tete:'tête',points:'visibilité',bras:'bras',rotation:'rotation',rotationDos:'rotation',profil:'profil',sombre:'lumière',clair:'lumière'})[x]||x).join(', ')+')':'');
+  }).filter(Boolean);
+  return l.length?' Contrôle des photos à l’envoi : '+l.join(' · ')+'.':' Photos envoyées avant le contrôle à l’envoi.';
 }
 /** Le nom d'une fiche du catalogue, ou son slug mis en forme. */
 function _anatNomExo(slug){
@@ -48956,6 +48969,7 @@ function _htmlAnat(c){
             :!res.rotation.fiable?' : dans le bruit du placement des points (±'+_anatN(ANAT_ROTATION_BRUIT*100,0)+' % sur ce rapport), le corps est lu de face.':'.')
         :(res.rotation?' Rotation du corps : non estimée sans photo de dos.':''))
       +(res.rotation&&res.rotation.asyBras!=null?' Écart des deux bras sur la photo de face : '+_anatN(res.rotation.asyBras*100,1)+' %.':'')
+      +(_anatSafe(()=>_anatCtlEnvoi(pb.bilan))||'')
       +' '+(V.man?'Des points ont été ajustés à la main.':(V.auto&&V.auto.gabarit?'Personne non détectée : les points sont à placer.':'Points placés automatiquement.'))+'</p>'
     +optsHtml
     // A10 : la demande de photos du prochain bilan. Elle ne descend chez
@@ -60740,6 +60754,97 @@ function posesGenre(prefix){
   return femme?BPOSE_F:BPOSE;
 }
 // 3 cartes photo avec personnage neon : la pose a reproduire est montree au-dessus du bouton
+// ══ E1 — DES PHOTOS DE BILAN EXPLOITABLES DÈS L'ENVOI ══════════════════════
+//
+// ⚠ G7 : l'athlète ne voit QUE des consignes de prise de vue — cadre, lumière,
+//   placement. Aucune mesure, aucune lecture du corps ; la photo passe par le
+//   moteur de pose SUR L'APPAREIL, et rien d'autre n'est gardé que le verdict
+//   (vert / orange) et les codes des consignes, pour le coach.
+const PHOTO_CTL=Object.freeze({VIS:0.6,LUM_ORANGE:55,LUM_ROUGE:30,LUM_TROP:235,ROT_ORANGE:8,ROT_ROUGE:25,PROFIL_MIN:35,
+  CLES:Object.freeze([11,12,13,14,15,16,23,24,25,26,27,28]),
+  MSG:Object.freeze({
+    personne:'Personne n’est reconnu sur la photo : cadre-toi en entier, de la tête aux pieds.',
+    pieds:'Les pieds sortent du cadre : recule d’un pas ou baisse le téléphone à hauteur de hanche.',
+    tete:'Le haut de la tête est coupé : recule ou éloigne un peu le téléphone.',
+    points:'Une partie du corps est mal visible : lumière de face, tenue près du corps, rien devant toi.',
+    bras:'Écarte un peu les bras du corps, mains relâchées.',
+    rotation:'Tourne-toi bien face au téléphone : épaules et bassin parallèles à l’objectif.',
+    rotationDos:'Dos bien face au téléphone : épaules et bassin parallèles à l’objectif.',
+    profil:'Mets-toi bien de profil : l’épaule vers le téléphone.',
+    sombre:'Photo trop sombre : place-toi face à la lumière, pas dos à une fenêtre.',
+    clair:'Photo trop claire : évite le soleil direct ou le flash.',
+    ok:'Photo exploitable : tout est dans le cadre.'})});
+/** Les six consignes illustrées de chaque vue (E1). */
+const PHOTO_CONSIGNES=Object.freeze({
+  face:['De la tête aux pieds dans le cadre, un peu de sol sous les pieds','Téléphone à hauteur de hanche, à 2 ou 3 m','Face à la lumière, fond clair et uni','Bras relâchés, légèrement écartés du corps','Bien face au téléphone, pieds à largeur de hanches','Tenue près du corps, pieds nus'],
+  back:['De la tête aux pieds dans le cadre, un peu de sol sous les pieds','Téléphone à hauteur de hanche, à 2 ou 3 m','Lumière de face, fond clair et uni','Bras relâchés, légèrement écartés du corps','Dos bien face au téléphone, pieds à largeur de hanches','Cheveux attachés, tenue près du corps, pieds nus'],
+  side:['De la tête aux pieds dans le cadre, un peu de sol sous les pieds','Téléphone à hauteur de hanche, à 2 ou 3 m','Lumière de face, fond clair et uni','Bras relâchés, mains contre les cuisses','Bien de profil, épaule vers le téléphone, regard droit devant','Pieds joints, tenue près du corps, pieds nus']});
+const PHOTO_ICONES=['M4 4h16v16H4zM12 7v10','M7 21h10M12 17v4M9 3h6v14H9z','M12 3v2M5 12H3m18 0h-2M6 6l1.5 1.5M18 6l-1.5 1.5M8 12a4 4 0 0 0 8 0','M12 5v7m-5 8 3-8h4l3 8M5 10l4 1m10-1-4 1','M12 3a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm-4 18 2-9h4l2 9','M8 4h8l2 5-3 1v10H9V10L6 9z'];
+/**
+ * PURE. Le contrôle d'une photo de bilan, sur ce que le moteur de pose y a lu.
+ * @param {{ok:boolean,w:number,h:number,pts:number[][],z?:(number|null)[],lum?:number|null}} raw
+ * @param {'face'|'back'|'side'} vue
+ * @returns {{etat:'vert'|'orange'|'rouge',codes:string[],raisons:string[]}}
+ */
+function photoControle(raw,vue){
+  const C=PHOTO_CTL, codes=[], rouge=new Set();
+  const dire=(c,grave)=>{ if(codes.indexOf(c)<0) codes.push(c); if(grave) rouge.add(c); };
+  if(!raw||!raw.ok||!Array.isArray(raw.pts)||raw.pts.length<33){ dire('personne',true); return _photoVerdict(codes,rouge); }
+  const P=i=>{ const q=raw.pts[i]; return q?{x:q[0],y:q[1],v:q[2]||0}:null; };
+  const W=raw.w||1, H=raw.h||1;
+  // La personne entière : le crâne et les pieds dans le cadre.
+  const nez=P(0), eg=P(11), ed=P(12);
+  const epY=(eg&&ed)?(eg.y+ed.y)/2:null;
+  const hautTete=(nez&&epY!=null)?nez.y-0.6*Math.max(0,epY-nez.y):null;
+  if(hautTete==null||hautTete<0.005||nez.y<0.02) dire('tete',true);
+  const pieds=[29,30,31,32].map(P).filter(q=>q&&q.v>=0.5&&q.y<=0.985&&q.y>=0);
+  if(pieds.length<2) dire('pieds',true);
+  // Les douze points clés.
+  const cles=vue==='side'
+    ?(()=>{ const g=[11,13,15,23,25,27], d=[12,14,16,24,26,28], s=l=>l.reduce((t,i)=>t+(P(i)?P(i).v:0),0); return s(g)>=s(d)?g:d; })()
+    :C.CLES;
+  const manquent=cles.filter(i=>!(P(i)&&P(i).v>=C.VIS)).length;
+  if(manquent>=(vue==='side'?2:4)) dire('points',true); else if(manquent) dire('points',false);
+  if(vue!=='side'){
+    // Les bras écartés : le poignet ne colle pas à la hanche.
+    const sw=(eg&&ed)?Math.abs(eg.x-ed.x)*W:null;
+    const colle=[[15,23],[16,24]].filter(([p,h])=>{ const a=P(p),b=P(h); return a&&b&&sw&&Math.abs(a.x-b.x)*W<0.12*sw; }).length;
+    if(colle===2) dire('bras',false);
+  }
+  // La rotation, par la profondeur des épaules et des hanches.
+  const z=Array.isArray(raw.z)?raw.z:null;
+  if(z&&eg&&ed&&z[11]!=null&&z[12]!=null){
+    const ang=(a,b)=>{ const A=P(a),B=P(b); if(!A||!B||z[a]==null||z[b]==null) return null;
+      return Math.atan2(Math.abs(z[a]-z[b]),Math.abs(A.x-B.x)*W/W)*180/Math.PI; };
+    const l=[ang(11,12),ang(23,24)].filter(x=>x!=null);
+    const rot=l.length?l.reduce((t,x)=>t+x,0)/l.length:null;
+    if(rot!=null){
+      if(vue==='side'){ if(rot<C.PROFIL_MIN) dire('profil',false); }
+      // ⚠ JAMAIS ROUGE : la profondeur du moteur est bruitée — une photo de face
+      //   sortait « à reprendre ». Au-delà de 8°, une réserve, pas un refus.
+      else if(rot>C.ROT_ORANGE) dire(vue==='back'?'rotationDos':'rotation',false);
+    }
+  }
+  // La lumière.
+  if(raw.lum!=null){
+    if(raw.lum<C.LUM_ROUGE) dire('sombre',true); else if(raw.lum<C.LUM_ORANGE) dire('sombre',false);
+    else if(raw.lum>C.LUM_TROP) dire('clair',false);
+  }
+  return _photoVerdict(codes,rouge);
+}
+function _photoVerdict(codes,rouge){
+  const etat=rouge.size?'rouge':(codes.length?'orange':'vert');
+  const ordre=codes.slice().sort((a,b)=>(rouge.has(b)?1:0)-(rouge.has(a)?1:0));
+  return {etat,codes:ordre,raisons:etat==='vert'?[PHOTO_CTL.MSG.ok]:ordre.map(c=>PHOTO_CTL.MSG[c])};
+}
+/** Le guide de prise de vue d'une vue : six consignes illustrées, et le rappel « pas de miroir ». */
+function _htmlPhotoGuide(vue,titre){
+  const l=PHOTO_CONSIGNES[vue]||PHOTO_CONSIGNES.face;
+  return '<details class="bil-guide"><summary>'+escapeHtml(titre||'Réussir cette photo')+'</summary><ul>'
+    +l.map((t,i)=>'<li><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="'+PHOTO_ICONES[i]+'"/></svg><span>'+escapeHtml(t)+'</span></li>').join('')
+    // Regroupés (titre donné), les guides partagent un seul rappel « pas de miroir ».
+    +'</ul>'+(titre?'':'<p class="bil-guide-m"><b>Pas de miroir</b> : fais-toi prendre par quelqu’un, ou pose le téléphone et démarre le minuteur.</p>')+'</details>';
+}
 function bPhotoCards(prefix){
   const B=posesGenre(prefix);
   // A10 : le coach demande la photo de face paumes vers l'avant. Une consigne
@@ -60754,8 +60859,14 @@ function bPhotoCards(prefix){
       <img src="${p.img}" alt="${p.l}" style="height:118px;max-width:100%;object-fit:contain;filter:drop-shadow(0 0 7px rgba(255,255,255,.4));margin-bottom:8px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#ccc;margin-bottom:9px">${p.l}</div>
       <label style="display:inline-block;background:${done?'#001a00':'#1a0000'};border:1px solid ${done?'#22c55e':'var(--red)'};color:${done?'#22c55e':'var(--red)'};padding:6px 12px;border-radius:var(--r-1);font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:.5px">${done?' Ajoutée':'AJOUTER'} <input type="file" accept="image/*" style="display:none" onchange="loadBilPhoto(this,'${key}')"></label>
+      <button type="button" class="bil-minut" onclick="bilMinuteur('${key}','${p.k}')">Minuteur 10 s</button>
     </div>`;
   }).join('')+`</div>`
+    // E1 : le verdict de chaque photo, puis les guides, sur toute la largeur.
+    +`<div class="bil-ctls">`+P.map(p=>{ const key=prefix+'-photo-'+p.k;
+      return `<div class="bil-ctl" id="bil-ctl-${key}" data-vue="${p.l}">${_htmlPhotoVerdict(bilData[key+'-ctl'])}</div>`; }).join('')+`</div>`
+    +`<div class="bil-guides"><div class="bil-guides-t">Réussir tes photos</div>`+P.map(p=>_htmlPhotoGuide(p.k,p.l)).join('')
+    +`<p class="bil-guide-m"><b>Pas de miroir</b> : fais-toi prendre par quelqu’un, ou pose le téléphone et démarre le minuteur.</p></div>`
     +`<div class="bil-pieds" style="margin-top:10px;font-size:var(--fs-xs);line-height:1.5;color:var(--sub);text-align:center">${escapeHtml(ANAT_PIEDS.CONSIGNE)}</div>`
     +(paumes?`<div class="bil-paumes" style="margin-top:10px;font-size:var(--fs-xs);line-height:1.5;color:var(--sub);text-align:center">Photo de face : <strong style="color:var(--text)">paumes tournées vers l’avant</strong>, bras tendus le long du corps, légèrement écartés.</div>`:'');
 }
@@ -61110,6 +61221,62 @@ function bBodyFocus(id,on){
   if(bx){bx.style.borderColor=on?'#E02020':(filled?'rgba(224,32,32,.4)':'var(--border)');bx.style.boxShadow=on?'0 0 18px rgba(224,32,32,.45)':'none';}
 }
 function bLbl(txt){return`<div style="font-size:var(--fs-xs);font-weight:700;color:var(--text-strong);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;margin-top:14px">${txt}</div>`;}
+/** Le moteur de pose, sur l'appareil, puis le contrôle. null si le moteur n'est pas disponible. */
+async function _bilControlerPhoto(src,vue){
+  try{
+    await chargerMotionLab();
+    const lire=(typeof window!=='undefined')?/** @type {any} */(window).mlAnatPhoto:null;
+    if(typeof lire!=='function') return null;
+    const r=await lire(src,{});
+    if(r&&r.code==='moteur') return null;
+    return photoControle(r,vue);
+  }catch(e){ return null; }
+}
+/** Le verdict affiché sous la carte : la couleur et, en clair, ce qu'il faut refaire. */
+function _htmlPhotoVerdict(ctl){
+  if(!ctl) return '';
+  const [etat,cs]=String(ctl).split('|'), codes=(cs||'').split(',').filter(Boolean);
+  const lib={vert:'Photo exploitable',orange:'Envoyable, mais à améliorer',rouge:'À reprendre'}[etat]||'';
+  const raisons=etat==='vert'?[]:codes.map(c=>PHOTO_CTL.MSG[c]).filter(Boolean);
+  return '<div class="bil-ctl-v" data-e="'+escapeHtml(etat)+'"><b>'+escapeHtml(lib)+'</b>'+raisons.map(r=>'<span>'+escapeHtml(r)+'</span>').join('')
+    +(etat==='orange'?'<small>Elle est gardée : tu peux l’envoyer telle quelle, ou la reprendre.</small>':'')+'</div>';
+}
+/**
+ * LE MINUTEUR 10 S (E1). La caméra de l'appareil, la silhouette à caler en
+ * calque, dix secondes pour se placer, et l'image capturée passe par le même
+ * chemin qu'une photo choisie — contrôle compris.
+ */
+async function bilMinuteur(key,vue){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ toast('Caméra indisponible ici : utilise « Ajouter ».','var(--orange)'); return; }
+  let flux=null;
+  try{ flux=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920}}, audio:false}); }
+  catch(e){ toast('Accès à la caméra refusé.','var(--orange)'); return; }
+  const B=posesGenre(key.split('-photo-')[0]||'bil');
+  const sil={face:B.face,back:B.back,side:B.side}[vue]||B.face;
+  const o=document.createElement('div'); o.className='bil-cam'; o.setAttribute('role','dialog'); o.setAttribute('aria-label','Photo avec minuteur');
+  o.innerHTML='<div class="bil-cam-b"><div class="bil-cam-v"><video playsinline muted autoplay></video><img class="bil-cam-sil" src="'+escapeHtml(sil)+'" alt=""><span class="bil-cam-n"></span></div>'
+    +'<p>Pose le téléphone à hauteur de hanche, cale-toi dans la silhouette. Pas de miroir.</p>'
+    +'<div class="bil-cam-a"><button type="button" class="btn btn-red" data-a="go">Démarrer le minuteur 10 s</button><button type="button" class="btn" data-a="x">Annuler</button></div></div>';
+  document.body.appendChild(o);
+  const v=o.querySelector('video'); v.srcObject=flux;
+  const fin=()=>{ try{ flux.getTracks().forEach(t=>t.stop()); }catch(e){} o.remove(); };
+  o.querySelector('[data-a="x"]').onclick=fin;
+  o.querySelector('[data-a="go"]').onclick=async e=>{
+    e.target.disabled=true;
+    const n=o.querySelector('.bil-cam-n');
+    for(let s=10;s>0;s--){ n.textContent=String(s); await new Promise(r=>setTimeout(r,1000)); if(!o.isConnected) return; }
+    n.textContent='';
+    const c=document.createElement('canvas'); c.width=v.videoWidth||1080; c.height=v.videoHeight||1920;
+    c.getContext('2d').drawImage(v,0,0,c.width,c.height);
+    fin();
+    c.toBlob(b=>{
+      if(!b) return;
+      const f=new File([b],'minuteur.jpg',{type:'image/jpeg'});
+      const input=document.querySelector('input[type=file][onchange*="\''+key+'\'"]');
+      if(input){ const dt=new DataTransfer(); dt.items.add(f); input.files=dt.files; loadBilPhoto(input,key); }
+    },'image/jpeg',0.92);
+  };
+}
 function loadBilPhoto(input,key){
   const f=input.files[0];if(!f)return;
   _bilPhotoLoading++;
@@ -61135,10 +61302,28 @@ function loadBilPhoto(input,key){
   // La garder en douce ferait apparaître plus tard une photo que personne
   // n’a vue être acceptée.
   const _gen=_bilGen;
-  compressImage(f,1200,0.75,data=>{
+  compressImage(f,1200,0.75,async data=>{
+    // E1 : LE CONTRÔLE AVANT DE GARDER. Rouge : la photo n'est pas gardée, on
+    // dit pourquoi et on reprend ; orange : gardée, avec la raison ; vert :
+    // gardée. Sans moteur disponible (hors ligne), la photo est gardée telle
+    // quelle — le contrôle aide, il ne bloque jamais faute de pouvoir tourner.
+    const vue=String(key).split('-photo-')[1]||'face';
+    let ctl=null;
+    if(['face','back','side'].indexOf(vue)>=0){
+      if(lbl){ lbl.innerHTML='⏳ Vérification…'; }
+      ctl=await _bilControlerPhoto(data,vue);
+    }
     _rendre();
     if(_gen!==_bilGen) return;
+    const z=document.getElementById('bil-ctl-'+key);
+    if(ctl&&ctl.etat==='rouge'){
+      if(z) z.innerHTML=_htmlPhotoVerdict(ctl.etat+'|'+ctl.codes.join(','));
+      if(lbl){ lbl.style.color=lblCoul; lbl.innerHTML=lblHtml; }
+      return;
+    }
     bilData[key]=data;
+    if(ctl) bilData[key+'-ctl']=ctl.etat+'|'+ctl.codes.join(','); else delete bilData[key+'-ctl'];
+    if(z) z.innerHTML=_htmlPhotoVerdict(bilData[key+'-ctl']);
     _setPhotoLS('rc_pendingphoto_'+key,data);
     _bilSaveDraft();
     if(lbl){lbl.style.background='#001a00';lbl.style.borderColor='#22c55e';lbl.style.color='#22c55e';lbl.innerHTML=' Ajoutée';}
