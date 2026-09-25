@@ -44854,7 +44854,9 @@ function renderCourbesCoach(c){
 // v5 (chantier A7) : chaque point du moteur garde sa VISIBILITÉ en quatrième
 // valeur ; c'est elle qui départage une confiance B d'une C. Les points posés à
 // la main sont repris.
-const ANAT_VERSION=5;
+// v6 (chantier A11) : la photo de dos pose le milieu du mollet et le tendon
+// d'Achille ; les analyses se relisent, les points posés à la main restent.
+const ANAT_VERSION=6;
 /**
  * LES LONGUEURS DE RÉFÉRENCE, en fraction de la taille, PAR SEXE.
  *
@@ -44903,6 +44905,7 @@ const ANAT_COUDE=Object.freeze({H:Object.freeze({moy:11,et:4}),F:Object.freeze({
   // raccourcit l'avant-bras en projection sans fermer l'angle de l'image.
   TENDU:155,RACCOURCI:0.85,
   CONSIGNE:'Photo de face bras tendus le long du corps, légèrement écartés, paumes tournées vers l’avant.'});
+const ANAT_ARRIERE_PIED_CONSIGNE='Photo de dos pieds nus, pieds à largeur de hanches, poids réparti sur les deux jambes, mollets et talons visibles ; replacer au besoin le milieu du mollet, le tendon d’Achille au niveau des malléoles et le bas du talon (« Ajuster les points », vue Dos).';
 /** Le repère d'un sexe (homme par défaut, comme les largeurs). */
 function anatRef(femme){ return ANAT_REF[femme?'F':'H']; }
 /**
@@ -45188,12 +45191,14 @@ function anatMargeAngle(tol,pts,poidsMilieu){
   const e=Math.sqrt(v.reduce((s,p,i)=>s+Math.pow(anatErrPoint(p.e)*((poidsMilieu&&i===1)?2:1),2),0));
   return Math.hypot(tol,_anatDeg(Math.atan(e/100)));
 }
-const ANAT_TOL={epaules:1.5,bassin:2,genoux:3,pieds:8,tronc:3,omoplates:1.2,rachis:2,triangles:25,echelle:3,cva:3,profil:2,coudes:2};
+const ANAT_TOL={epaules:1.5,bassin:2,genoux:3,pieds:8,tronc:3,omoplates:1.2,rachis:2,triangles:25,echelle:3,cva:3,profil:2,coudes:2,arrierePied:3};
 const ANAT_SEUILS={epaules:[1.5,3,5],bassin:[2,3.5,5],genoux:[3,5,8],pieds:[8,14,20],
   tronc:[3,6,9],omoplates:[1.2,2.5,4],rachis:[2,4,6],triangles:[25,45,65],
   // Le profil (A9) : degrés sous le repère cranio-vertébral, degrés de tronc,
   // cm du grand trochanter au fil à plomb, degrés au-delà de 180° au genou.
-  cva:[4,8,12],inclTronc:[3,6,9],plombCm:[3,6,9],recurvatum:[5,8,12]};
+  cva:[4,8,12],inclTronc:[3,6,9],plombCm:[3,6,9],recurvatum:[5,8,12],
+  // L'arrière-pied (A11) : 0–4° dans la marge, 4–8° léger, 8–12° net, au-delà marqué.
+  arrierePied:[4,8,12]};
 /** L'erreur de placement d'un point de profil, en cm (main, moteur, estimé). */
 const ANAT_ERR_CM=Object.freeze({main:1,auto:2,estime:3});
 /**
@@ -45241,7 +45246,9 @@ const ANAT_REPERES=Object.freeze({
     {k:'sacrum',lib:'Sacrum (fossettes)',est:1},
     {k:'hanche',lib:'Centre de la hanche',paire:1},
     {k:'genou',lib:'Creux du genou',paire:1},
+    {k:'mollet',lib:'Milieu du mollet',paire:1},
     {k:'cheville',lib:'Cheville',paire:1},
+    {k:'achille',lib:'Tendon d’Achille (niveau des malléoles)',paire:1},
     {k:'talon',lib:'Talon (sol)',paire:1}],
   // LE PROFIL (A9) : les repères du protocole SAPO (Ferreira et al., Clinics
   // 2010) sur la ligne de référence de Kendall, plus le crâne et le talon
@@ -45539,6 +45546,25 @@ function anatPointsAuto(raw,vue){
     pose('sacrum',{x:mHa.x,y:mHa.y-0.10*T},0.5);
     for(const s of ['l','r'])
       pose('omoplate_'+s,{x:mEp.x+(ep[s].x-mEp.x)*0.55,y:ep[s].y+0.36*T},0.5);
+    // L'ARRIÈRE-PIED (A11) : le milieu de la jambe à mi-mollet et à la hauteur
+    // des malléoles, lu sur le masque (le centre de la plage qui contient la
+    // jambe) ; sans masque, entre genou et cheville, et marqué estimé.
+    for(const s of ['l','r']){
+      const g=out['genou_'+s], c=out['cheville_'+s];
+      if(!g||!c) continue;
+      const G={x:g[0]*W,y:g[1]*H}, C={x:c[0]*W,y:c[1]*H};
+      const milieu=(y,x0)=>{
+        if(!bits) return null;
+        const pl=_anatPlages(bits,m,y*ky);
+        const q=pl.find(r=>r[0]<=x0*kx&&r[1]>=x0*kx);
+        return q&&(q[1]-q[0])/kx<0.2*T?{x:(q[0]+q[1])/2/kx,y}:null;
+      };
+      const yM=G.y+(C.y-G.y)*0.45, xM=G.x+(C.x-G.x)*0.45;
+      const mo=milieu(yM,xM);
+      pose('mollet_'+s,mo||{x:xM,y:yM},mo?1:0.5);
+      const ac=milieu(C.y,C.x);
+      pose('achille_'+s,ac||{x:C.x,y:C.y},ac?1:0.5);
+    }
   }
   // LE BRAS QUI TIENT LE TÉLÉPHONE. Kevin : « si la personne tient son
   // appareil photo devant lui, prends-le en considération ». Un poignet plus
@@ -46060,6 +46086,41 @@ function anatMesures(anat,u,o){
         {lib:'Triangles bras-tronc (G / D)',def:'espace entre le bras et la taille, de dos',val:(trG!=null&&trD!=null&&D.cmPx)?cm(trG*D.cmPx)+' / '+cm(trD*D.cmPx):(asy!=null?_anatSN(asy,0)+' %':'—'),ref:'égaux',ecart:asy!=null?pct(asy):''}],
       mesure:{om,omCm,rach,asy,lu:!!D,pire:{nOm,nRa,nTr}},source:'photo de dos'});
   }
+  // ── ARRIÈRE-PIED (A11) ──────────────────────────────────────────────────
+  // L'angle entre (mollet → Achille) et (Achille → talon), de dos. Positif :
+  // le talon « rentre en dedans » — l'arrière-pied s'affaisse vers l'intérieur
+  // (pronation), et le bas du talon part EN DEHORS de l'axe du mollet.
+  // Lecture visuelle inspirée du FPI-6 (Redmond et al., 2006) : pas un score.
+  {
+    const angAp=s=>{
+      if(!D) return null;
+      const a=D.P2('mollet',s),b=D.P2('achille',s),t=D.P2('talon',s);
+      if(!a||!b||!t) return null;
+      const u={x:b.x-a.x,y:b.y-a.y}, v={x:t.x-b.x,y:t.y-b.y};
+      const nu=Math.hypot(u.x,u.y), nv=Math.hypot(v.x,v.y);
+      if(!(nu>1&&nv>1)) return null;
+      const dev=_anatDeg(Math.acos(Math.max(-1,Math.min(1,(u.x*v.x+u.y*v.y)/(nu*nv)))));
+      const lat=D.cotes[s]==='l'?-1:1;     // de dos, la gauche de l'athlète est à gauche de l'écran
+      const dehors=((v.x/nv)-(u.x/nu))*lat;
+      return {ang:(dehors>=0?1:-1)*dev,pts:[a,b,t]};
+    };
+    const g=angAp('g'), dd=angAp('d');
+    const lus=[g,dd].filter(Boolean);
+    const pire=lus.length?lus.reduce((x,y)=>Math.abs(y.ang)>Math.abs(x.ang)?y:x):null;
+    const marge=pire?anatMargeAngle(ANAT_TOL.arrierePied,pire.pts,true):ANAT_TOL.arrierePied;
+    const sv=x=>x?_anatSN(x.ang,0)+'°':'—';
+    fiche({cle:'arriere_pied',lib:'Arrière-pied',court:'Talons',vue:'dos',ancre:D&&D.P2('achille','d'),
+      zone:D?_anatZoneAutour([D.P2('mollet','g'),D.P2('talon','g'),D.P2('mollet','d'),D.P2('talon','d')],0.15):null,
+      etat:pire?'ok':'illisible',niveau:pire?_anatNiveau(pire.ang,ANAT_SEUILS.arrierePied):null,
+      bornes:['talon en dehors','talon en dedans'],
+      valeur:lus.length?'G '+sv(g)+' · D '+sv(dd):'',
+      tolerance:'±'+_anatN(marge)+'° (pose ±'+ANAT_TOL.arrierePied+'°, placement mollet-tendon-talon compris)',
+      estime:!!(pire&&pire.pts.some(p=>p.e<1)),
+      chiffres:[{lib:'Arrière-pied gauche',def:'mollet → tendon d’Achille / tendon → talon, de dos ; + talon en dedans',val:sv(g),ref:'0° ± 4°',ecart:''},
+        {lib:'Arrière-pied droit',def:'même lecture, pied droit de l’athlète',val:sv(dd),ref:'0° ± 4°',ecart:''}],
+      mesure:{g:g&&g.ang,d:dd&&dd.ang,pire:pire&&pire.ang,cote:pire?(pire===g?'gauche':'droit'):null,marge},
+      source:'photo de dos ; lecture visuelle inspirée du FPI-6 (Redmond et al., 2006), seuils 4, 8 et 12°'});
+  }
   // ── PROFIL : posture et tête (A9) ────────────────────────────────────────
   // Un fil à plomb passe par la malléole latérale : chaque repère en est à une
   // distance horizontale, en cm (positive = en avant). La ligne de référence
@@ -46153,7 +46214,7 @@ function anatMesures(anat,u,o){
   if(rotation&&rotation.fiable&&rotation.deg>ANAT_ROTATION_SEUIL){
     const nl='non lisible — corps tourné d’environ '+_anatN(rotation.deg,0)+'°';
     const par={}; fiches.forEach(f=>{ par[f.cle]=f; });
-    for(const cle of ['epaules','bassin','pieds']){
+    for(const cle of ['epaules','bassin','pieds','arriere_pied']){
       const f=par[cle]; if(!f) continue;
       f.etat='illisible'; f.niveau=null; f.valeur=''; f.tourne=rotation.deg;
       f.chiffres=f.chiffres.map(c=>Object.assign({},c,{val:nl,ecart:''}));
@@ -46191,6 +46252,7 @@ function anatMesures(anat,u,o){
       dos:D?[...deux(D,'omoplate'),'c7','sacrum']:[],
       posture:vues.profil?['acromion','trochanter','genou','malleole']:[],
       coudes:[...deux(F,'epaule'),...deux(F,'coude'),...deux(F,'poignet')],
+      arriere_pied:D?[...deux(D,'mollet'),...deux(D,'achille'),...deux(D,'talon')]:[],
       tete:vues.profil?['tragus','c7']:[]
     };
     const rot=rotation;
@@ -46293,6 +46355,12 @@ function anatTexte(f,res){
     T.verifier=ANAT_ROTATION_CONSIGNE;
     return T;
   }
+  if(f.etat==='illisible'&&f.cle==='arriere_pied'&&!f.tourne){
+    T.court='Arrière-pied non lisible : mollets, tendons d’Achille et talons doivent se voir sur la photo de dos.';
+    T.lecture='L’angle se lit entre la ligne du mollet et celle du talon ; il lui faut trois points par pied, visibles ou posés à la main (« Ajuster les points », vue Dos).';
+    T.verifier=ANAT_ARRIERE_PIED_CONSIGNE;
+    return T;
+  }
   if(f.etat==='illisible'&&f.cle==='coudes'){
     if(m.raison==='paumes'){
       T.court='Non lisible : paumes tournées vers les cuisses — l’angle de port du coude ne se lit que paumes vers l’avant.';
@@ -46338,6 +46406,22 @@ function anatTexte(f,res){
   }
   const n=f.niveau||0, an=Math.abs(n);
   switch(f.cle){
+  case 'arriere_pied':{
+    const cote=m.cote?' ('+m.cote+')':'';
+    T.court=!an?'Arrière-pied dans l’axe : G '+_anatSN(m.g,0)+'° · D '+_anatSN(m.d,0)+'° (0 à 4° : dans la marge).'
+      :(n>0?'Talon qui rentre en dedans'+cote+' : '+_anatSN(m.pire,0)+'°, '+intens(n)+'. Posture d’appui du moment, à confirmer au bilan suivant.'
+        :'Talon qui part en dehors'+cote+' : '+_anatSN(m.pire,0)+'°, '+intens(n)+'. Posture d’appui du moment, à confirmer au bilan suivant.');
+    T.lecture='Vu de dos, quand l’arrière-pied s’affaisse vers l’intérieur, la ligne du mollet et celle du talon se cassent au niveau du tendon d’Achille : le bas du talon part en dehors de l’axe de la jambe. C’est une lecture visuelle inspirée du FPI-6 (Redmond et al., 2006), pas le score lui-même : debout, pieds nus, elle dépend de l’appui du moment et des chaussures portées juste avant.';
+    if(an){
+      T.privilegier=['Pied « trépied » : talon, base du gros orteil et base du petit orteil posés, l’arche se soulève sans crisper les orteils — à tenir debout, puis au squat',
+        'Short foot : raccourcir le pied en rapprochant la base du gros orteil du talon, 5 à 10 s, 8 à 10 répétitions',
+        'Montées sur pointes lentes : 3 s en montée, 3 s en descente, genou tendu puis genou fléchi',
+        'Pour le squat, une chaussure à semelle ferme et stable'];
+      T.amenager=[{quoi:'Squat',reglage:'pieds un peu plus ouverts (15 à 30°), genoux dans l’axe des pieds ; une cale sous les talons si la cheville bloque la descente'}];
+    }
+    T.verifier=ANAT_ARRIERE_PIED_CONSIGNE;
+    return T;
+  }
   case 'coudes':{
     const R=m.ref||ANAT_COUDE.H, sx=m.femme?'des femmes':'des hommes';
     const quoi=_anatSN(m.moy,0)+'° (repère '+sx+' : '+R.moy+'° ± '+R.et+'°)';
@@ -46580,13 +46664,13 @@ function anatVerdict(f){
   const n=f.niveau;
   if(n==null) return '—';
   if(n===0) return {clavicules:'Carrure moyenne',epaules:'Alignées',buste:'Tronc moyen',bras:'Équilibrés',
-    bassin:'Aligné',jambes:'Équilibrées',genoux:'Dans l’axe',pieds:'Symétriques',dos:'Symétrique',posture:'Alignée',tete:'Dans l’axe',coudes:'Port moyen'}[f.cle]||'Dans la marge';
+    bassin:'Aligné',jambes:'Équilibrées',genoux:'Dans l’axe',pieds:'Symétriques',dos:'Symétrique',posture:'Alignée',tete:'Dans l’axe',coudes:'Port moyen',arriere_pied:'Dans l’axe'}[f.cle]||'Dans la marge';
   const i=n>0?1:0;
   const intens=['','léger','net','marqué'][Math.abs(n)];
   const court={clavicules:['Étroite','Large'],epaules:['Droite basse','Gauche basse'],bassin:['Droite basse','Gauche basse'],
     buste:['Tronc court','Tronc long'],bras:['Avant-bras long','Humérus long'],jambes:['Tibia long','Fémur long'],
     genoux:['S’écartent','Rentrent'],pieds:['Droit + ouvert','Gauche + ouvert'],dos:['Côté droit','Côté gauche'],
-    posture:['En arrière','En avant'],tete:['Tête en arrière','Tête en avant'],coudes:['Coudes fermés','Coudes ouverts']}[f.cle];
+    posture:['En arrière','En avant'],tete:['Tête en arrière','Tête en avant'],coudes:['Coudes fermés','Coudes ouverts'],arriere_pied:['Talon en dehors','Talon en dedans']}[f.cle];
   return (court?court[i]:f.bornes[i])+' · '+intens;
 }
 // ── L'ÉCRAN ────────────────────────────────────────────────────────────────
@@ -46624,7 +46708,8 @@ const ANAT_TRAITS={
   dos:[['acromion_l','acromion_r','an-t-os'],['epaule_l','epaule_r',''],['hanche_l','hanche_r',''],['crete_l','crete_r','an-t-os'],
     ['omoplate_l','omoplate_r','an-t-os'],['c7','sacrum','an-t-axe'],['taille_l','taille_r','an-t-sil'],
     ['epaule_*','coude_*',''],['coude_*','poignet_*',''],['epaule_*','hanche_*','an-t-fin'],['hanche_*','genou_*',''],
-    ['genou_*','cheville_*',''],['cheville_*','talon_*','an-t-fin']],
+    ['genou_*','cheville_*',''],['cheville_*','talon_*','an-t-fin'],
+    ['mollet_*','achille_*','an-t-axe'],['achille_*','talon_*','an-t-axe']],
   profil:[['c7','tragus','an-t-axe'],['acromion','trochanter',''],['trochanter','genou',''],['genou','malleole',''],['malleole','talon','an-t-fin']]
 };
 function _anatTraits(vue){
@@ -46661,6 +46746,8 @@ const ANAT_AIDE=Object.freeze({
   sacrum:{court:'Sacrum',aide:'Le milieu entre les deux fossettes du bas du dos (fossettes de Vénus), au-dessus du pli fessier.'},
   tragus:{court:'Tragus',aide:'Le petit cartilage devant le conduit de l’oreille. Si les cheveux le cachent, au milieu de l’oreille, à la hauteur de l’ouverture du conduit.'},
   trochanter:{court:'Trochanter',aide:'La bosse osseuse sur le côté de la hanche (grand trochanter), environ une main sous la crête du bassin, au milieu de l’épaisseur de la cuisse vue de côté.'},
+  mollet:{court:'Mollet',aide:'De dos, le milieu du mollet à mi-hauteur entre le creux du genou et la cheville : au centre de la largeur de la jambe, pas sur le bord du muscle.'},
+  achille:{court:'Achille',aide:'De dos, le milieu du tendon d’Achille à la hauteur des malléoles (les bosses de la cheville) : là où la jambe est la plus fine au-dessus du talon.'},
   malleole:{court:'Malléole',aide:'La bosse osseuse à l’extérieur de la cheville (malléole latérale) : c’est par elle que passe le fil à plomb.'}
 });
 /** Les consignes qui changent de profil (A9) : même repère, autre prise de vue. */
@@ -46679,7 +46766,7 @@ function anatAide(cle,opts,vue){
 }
 /** Où poser le nom d'un point, en hauteur (fraction du cadre) : les repères
  *  voisins — taille et crête, talon et orteil — ne se couvrent plus. */
-const ANAT_NOM_DY=Object.freeze({acromion:-0.014,deltoide:0.02,taille:-0.012,crete:0.024,talon:0.022,pointe:0.04,cheville:-0.008,epaule:0.042});
+const ANAT_NOM_DY=Object.freeze({acromion:-0.014,deltoide:0.02,taille:-0.012,crete:0.024,talon:0.03,pointe:0.04,cheville:-0.012,epaule:0.042,achille:0.012});
 /** Le nom complet d'un repère, avec le côté de l'écran. */
 function anatNomPoint(vue,cle){
   const r=anatRepere(vue,cle);
@@ -47073,7 +47160,9 @@ function anatGabarit(w,h,vue,femme){
   lat('crete',LG.bicretal/2,fHa+0.07); lat('hanche',0.055,fHa); lat('genou',0.055,fGenou);
   lat('cheville',0.05,fCh); lat('talon',0.05,0.0);
   if(vue==='face') lat('pointe',0.07,-0.01);
-  if(vue==='dos'){ pose('c7',cx,y(fEp+0.04)); pose('sacrum',cx,y(fHa+0.04)); lat('omoplate',0.06,fEp-0.10); }
+  if(vue==='dos'){ pose('c7',cx,y(fEp+0.04)); pose('sacrum',cx,y(fHa+0.04)); lat('omoplate',0.06,fEp-0.10);
+    // A11 : mollet, tendon et talon sur la même verticale.
+    lat('mollet',0.05,(fGenou+fCh)/2); lat('achille',0.05,fCh); }
   return out;
 }
 
@@ -47645,7 +47734,7 @@ function _htmlAnat(c){
     const ancre={face:{clavicules:()=>P2('acromion','g'),epaules:()=>P2('acromion','d'),buste:()=>{ const a1=P2('epaule','g'),b1=P2('hanche','d'); return a1&&b1?_anatMil(a1,b1):null; },
         bras:()=>P2('coude','g'),bassin:()=>P2('crete','g'),jambes:()=>{ const a1=P2('hanche','d'),b1=P2('genou','d'); return a1&&b1?_anatMil(a1,b1):null; },
         genoux:()=>P2('genou','g'),pieds:()=>P2('pointe','d'),coudes:()=>P2('coude','d')},
-      dos:{epaules:()=>P2('acromion','g'),dos:()=>Pp('c7')&&Pp('sacrum')?_anatMil(Pp('c7'),Pp('sacrum')):null,bassin:()=>P2('crete','g'),
+      dos:{arriere_pied:()=>P2('achille','d'),epaules:()=>P2('acromion','g'),dos:()=>Pp('c7')&&Pp('sacrum')?_anatMil(Pp('c7'),Pp('sacrum')):null,bassin:()=>P2('crete','g'),
         bras:()=>P2('coude','d'),genoux:()=>P2('genou','d')},
       profil:{tete:()=>Pp('tragus'),posture:()=>Pp('trochanter')}}[vueAct];
     const et=[];

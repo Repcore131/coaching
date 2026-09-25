@@ -45096,6 +45096,43 @@ async function testExercices(){
       const fp=anatMesures(a,_anatDossier()).fiches.find(x=>x.cle==='coudes');
       if(fp.etat!=='illisible'||fp.mesure.raison!=='plie') return _echec('bras fléchi lu : '+fp.etat);
       return true;})());
+    // L'arrière-pied, de dos (A11, 25/09/2026).
+    // Gabarit de face et de dos ; le talon de chaque pied tourné autour du tendon
+    // de `deg` degrés vers l'extérieur (+) ou l'intérieur (−) de l'athlète.
+    const _anatArriere=(degG,degD)=>{
+      const a=_anatGab(); a.dos={w:1000,h:1500,auto:{pts:anatGabarit(1000,1500,'dos')},man:null};
+      const P=a.dos.auto.pts, c=anatCotes('dos',false);
+      for(const [s,deg] of [['g',degG],['d',degD]]){
+        if(!deg) continue;
+        const k=c[s], ac=P['achille_'+k], ta=P['talon_'+k], lat=k==='l'?-1:1;
+        const dx=(ta[0]-ac[0])*1000, dy=(ta[1]-ac[1])*1500, t=-deg*lat*Math.PI/180;
+        P['talon_'+k]=[ac[0]+(dx*Math.cos(t)-dy*Math.sin(t))/1000,ac[1]+(dx*Math.sin(t)+dy*Math.cos(t))/1500,ta[2]];
+      }
+      return anatMesures(a,_anatDossier());
+    };
+    ok('ANALYSE MORPHO : ARRIÈRE-PIED, POINTS ALIGNÉS : 0°, DANS LA MARGE',(()=>{
+      if(anatCles('dos').indexOf('mollet_l')<0||anatCles('dos').indexOf('achille_r')<0) return _echec('mollet et tendon absents des repères de dos');
+      if(!anatAide('achille').aide||!anatAide('mollet').aide) return _echec('pas de consigne « * »');
+      const res=_anatArriere(0,0), f=res.fiches.find(x=>x.cle==='arriere_pied');
+      if(!f||f.etat!=='ok') return _echec('fiche Arrière-pied absente ou non lue');
+      if(Math.abs(f.mesure.g)>0.05||Math.abs(f.mesure.d)>0.05) return _echec('G '+f.mesure.g+' · D '+f.mesure.d);
+      if(f.niveau!==0) return _echec('niveau '+f.niveau);
+      if(!/FPI-6 \(Redmond et al\., 2006\)/.test(f.source)) return _echec('source : '+f.source);
+      return true;})());
+    ok('ANALYSE MORPHO : ARRIÈRE-PIED, TALON DÉCALÉ : SIGNE ET NIVEAU DES DEUX CÔTÉS',(()=>{
+      const cas=[[10,0,'g',2],[0,10,'d',2],[-6,0,'g',-1],[0,-14,'d',-3],[3,0,'g',0]];
+      for(const [g,d,cote,n] of cas){
+        const f=_anatArriere(g,d).fiches.find(x=>x.cle==='arriere_pied');
+        const v=cote==='g'?f.mesure.g:f.mesure.d, attendu=cote==='g'?g:d;
+        if(Math.abs(v-attendu)>0.3) return _echec('talon '+attendu+'° ('+cote+') lu '+v);
+        if(f.niveau!==n) return _echec('talon '+attendu+'° ('+cote+') : niveau '+f.niveau+' au lieu de '+n);
+      }
+      const res=_anatArriere(10,0), f=res.fiches.find(x=>x.cle==='arriere_pied'), t=anatTexte(f,res);
+      if(!/en dedans \(gauche\)/.test(t.court)) return _echec('texte : '+t.court);
+      if(!t.privilegier.some(x=>/trépied/.test(x))||!t.privilegier.some(x=>/Short foot/.test(x))||!t.privilegier.some(x=>/pointes lentes/.test(x))||!t.privilegier.some(x=>/chaussure/.test(x))) return _echec('recommandations : '+t.privilegier.join(' | '));
+      if(!t.amenager.some(x=>/Squat/.test(x.quoi)&&/plus ouverts/.test(x.reglage)&&/cale/.test(x.reglage))) return _echec('pas d’aménagement du squat');
+      if(/éviter|pathologi|diagnosti|lésion|douleur|trouble/i.test(JSON.stringify(t))) return _echec('un mot de santé ou « à éviter »');
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());
