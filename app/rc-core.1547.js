@@ -44924,25 +44924,47 @@ function anatCotes(vue,miroir){
 }
 
 /**
- * PURE. Le premier bilan qui porte les photos, et ce qui manque.
- * ⚠ LE PREMIER, PAS LE PLUS RÉCENT : c'est le corps de départ qu'on lit. Un
- *   bilan « départ » passe avant tous les autres ; sinon le plus ancien.
- * @returns {{bilan:any|null,date:number,face:string|null,dos:string|null,manque:string[]}}
+ * PURE. Le bilan dont on lit les photos, et ce qui manque.
+ * ⚠ PAR DÉFAUT LE PREMIER, PAS LE PLUS RÉCENT : c'est le corps de départ qu'on
+ *   lit. Un bilan « départ » passe avant tous les autres ; sinon le plus ancien.
+ * ⚠ SAUF CHOIX DU COACH (25/09/2026, Kevin : « le départ en automatique et
+ *   après possibilité de le changer »). Le choix vit dans `morphoAnat.choix`
+ *   (la date du bilan) ; un choix qui ne désigne plus un bilan à photo de face
+ *   — bilan supprimé, photo retirée — est ignoré, et l'on retombe sur le
+ *   départ plutôt que sur un écran vide.
+ * @returns {{bilan:any|null,date:number,face:string|null,dos:string|null,manque:string[],auto:boolean,defaut:number}}
  */
 function anatPremierBilan(u){
   let bl=[];
   try{ bl=(Array.isArray(u&&u.bilans)?u.bilans:[]).filter(b=>b&&b.date); }catch(e){ bl=[]; }
-  if(!bl.length) return {bilan:null,date:0,face:null,dos:null,manque:['le premier bilan']};
+  if(!bl.length) return {bilan:null,date:0,face:null,dos:null,manque:['le premier bilan'],auto:true,defaut:0};
   const dep=bl.filter(b=>b.type==='depart').sort((a,b)=>a.date-b.date);
   const reste=bl.filter(b=>b.type!=='depart').sort((a,b)=>a.date-b.date);
   const ordre=dep.concat(reste);
   const src=(b,v)=>{ try{ return photoBilanSrc(b,v)||null; }catch(e){ return null; } };
-  const b=ordre.find(x=>src(x,'face'))||ordre[0];
+  const parDefaut=ordre.find(x=>src(x,'face'))||ordre[0];
+  const choix=Number(u&&u.morphoAnat&&u.morphoAnat.choix)||0;
+  const choisi=choix?bl.find(x=>Number(x.date)===choix&&src(x,'face')):null;
+  const b=choisi||parDefaut;
   const face=src(b,'face'), dos=src(b,'back');
   const manque=[];
   if(!face) manque.push('la photo de face');
   if(!dos) manque.push('la photo de dos');
-  return {bilan:b,date:Number(b.date)||0,face,dos,manque};
+  return {bilan:b,date:Number(b.date)||0,face,dos,manque,
+    auto:!choisi||Number(choisi.date)===Number(parDefaut.date),defaut:Number(parDefaut.date)||0};
+}
+/**
+ * PURE. Les bilans qu'on peut analyser — ceux qui portent une photo de face —,
+ * du plus ancien au plus récent, et lequel est le choix par défaut.
+ * @returns {{date:number,depart:boolean,dos:boolean,defaut:boolean}[]}
+ */
+function anatBilansPhotos(u){
+  let bl=[];
+  try{ bl=(Array.isArray(u&&u.bilans)?u.bilans:[]).filter(b=>b&&b.date); }catch(e){ bl=[]; }
+  const src=(b,v)=>{ try{ return photoBilanSrc(b,v)||null; }catch(e){ return null; } };
+  const def=anatPremierBilan(Object.assign({},u,{morphoAnat:null})).date;
+  return bl.filter(b=>src(b,'face')).sort((a,b)=>a.date-b.date)
+    .map(b=>({date:Number(b.date),depart:b.type==='depart',dos:!!src(b,'back'),defaut:Number(b.date)===def}));
 }
 
 // ── LE MASQUE : il ne sert qu'à PLACER des points ─────────────────────────
@@ -45971,6 +45993,46 @@ function anatSauvegarder(){
   renderAnatCoach(getOwnedClient(currentClientId)||c);
   toastSync(ok,CLOUD.pushOne(c.email,d),'Analyse sauvegardée ✓','la sauvegarde est');
 }
+/**
+ * Changer le bilan analysé. « auto » (ou le bilan par défaut) revient au
+ * départ. Ce qui a été posé à la main sur le bilan quitté — points, options,
+ * réglages de la photo, versions sauvegardées — est MIS DE CÔTÉ sous sa date,
+ * et reviendra si l'on y revient : changer de bilan pour comparer ne doit
+ * jamais coûter le travail fait sur l'autre.
+ */
+function anatChoisirBilan(val){
+  if(_anatEdit) return;
+  const c=getOwnedClient(currentClientId);
+  if(!c) return;
+  const users=DB.get('users')||{};
+  const d=users[c.email];
+  if(!d) return;
+  const def=anatPremierBilan(Object.assign({},d,{morphoAnat:null})).date;
+  const n=(val==='auto')?0:(Number(val)||0);
+  const choix=(n&&n!==def)?n:0;
+  const a=(d.morphoAnat&&typeof d.morphoAnat==='object')?d.morphoAnat:{};
+  if((Number(a.choix)||0)===choix) return;
+  const copie=o=>o?JSON.parse(JSON.stringify(o)):null;
+  const quitte=Number(a.bilan)||0;
+  if(quitte&&(a.face||a.dos)){
+    const aMain=(a.face&&a.face.man)||(a.dos&&a.dos.man)||(a.opts&&Object.keys(a.opts).length)
+      ||(Array.isArray(a.sauvegardes)&&a.sauvegardes.length);
+    if(aMain){
+      a.archives=Object.assign({},a.archives||{});
+      a.archives[String(quitte)]={v:a.v,face:{man:copie(a.face&&a.face.man)},dos:{man:copie(a.dos&&a.dos.man)},
+        opts:copie(a.opts)||{},sauvegardes:copie(a.sauvegardes)||[]};
+    }
+  }
+  if(choix) a.choix=choix; else delete a.choix;
+  d.morphoAnat=a;
+  d.updatedAt=Date.now();
+  users[c.email]=d;
+  const ok=DB.set('users',users);
+  _anatLevIdx=0;
+  renderAnatCoach(getOwnedClient(currentClientId)||d);
+  const txt=choix?'Bilan du '+_anatDateFr(choix)+' ✓':'Bilan de départ ✓';
+  toastSync(ok,CLOUD.pushOne(c.email,d),txt,'le changement de bilan est');
+}
 function anatRestaurer(id){
   const c=getOwnedClient(currentClientId);
   if(!c) return;
@@ -46157,7 +46219,12 @@ async function anatAnalyser(email,force){
     await chargerMotionLab();
     const lire=(typeof window!=='undefined')?/** @type {any} */(window).mlAnatPhoto:null;
     if(typeof lire!=='function') throw new Error('lecture de photo indisponible');
-    const ancien=(c.morphoAnat&&c.morphoAnat.v>=2&&Number(c.morphoAnat.bilan)===pb.date)?c.morphoAnat:null;
+    // CE QUI A ÉTÉ POSÉ À LA MAIN APPARTIENT À UN BILAN. Sur le bilan déjà
+    // lu : l'analyse en cours ; sur un bilan qu'on retrouve : ce que
+    // anatChoisirBilan avait mis de côté en le quittant.
+    const cour=c.morphoAnat&&typeof c.morphoAnat==='object'?c.morphoAnat:null;
+    const ancien=(cour&&cour.v>=2&&Number(cour.bilan)===pb.date)?cour
+      :((cour&&cour.archives&&cour.archives[String(pb.date)])||null);
     const vue=async(nom,src)=>{
       let r=null;
       // LA DÉTECTION LIT LA PHOTO RÉGLÉE : luminosité, contraste et cadre du
@@ -46175,7 +46242,17 @@ async function anatAnalyser(email,force){
     const dos=await vue('dos',pb.dos);
     if(!face) throw new Error('la photo de face n’a pas pu être lue');
     res={v:ANAT_VERSION,date:Date.now(),bilan:pb.date,depart:!!(pb.bilan&&pb.bilan.type==='depart'),
-      face,dos,opts:(ancien&&ancien.opts)||((c.morphoAnat&&c.morphoAnat.opts&&c.morphoAnat.opts.photo)?{photo:c.morphoAnat.opts.photo}:{})};
+      face,dos,opts:(ancien&&ancien.opts)||((cour&&Number(cour.bilan)===pb.date&&cour.opts&&cour.opts.photo)?{photo:cour.opts.photo}:{})};
+    // ⚠ LES VERSIONS SAUVEGARDÉES NE PARTENT PLUS À LA DÉTECTION. Avant, « Refaire
+    //   la détection » réécrivait morphoAnat sans elles : huit versions perdues
+    //   d'un geste. Elles suivent le bilan, comme les points.
+    if(ancien&&Array.isArray(ancien.sauvegardes)&&ancien.sauvegardes.length) res.sauvegardes=ancien.sauvegardes;
+    // Le choix du bilan et ce qui a été mis de côté pour les autres bilans.
+    if(cour&&cour.choix) res.choix=cour.choix;
+    if(cour&&cour.archives){
+      const ar=Object.assign({},cour.archives); delete ar[String(pb.date)];
+      if(Object.keys(ar).length) res.archives=ar;
+    }
   }catch(e){
     _anatEchecs.set(email,String((e&&e.message)||e||'échec'));
   }
@@ -46561,6 +46638,24 @@ function renderAnatCoach(c){
   return true;
 }
 
+/**
+ * La ligne sous le titre : le bilan lu. Un seul bilan à photos : le texte,
+ * comme avant. Plusieurs : un menu, le départ en tête et marqué
+ * « automatique ». Figé pendant l'ajustement des points — changer de photo
+ * sous des points en cours de pose les rendrait faux.
+ */
+function _htmlAnatChoixBilan(c,pb,fige){
+  let liste=[];
+  try{ liste=anatBilansPhotos(c); }catch(e){ liste=[]; }
+  const nomDe=x=>(x.depart?'Départ':'Bilan')+' · '+_anatDateFr(x.date);
+  if(liste.length<2||!pb.date)
+    return '<span>'+(pb.date?(pb.auto?'Photos du premier bilan · ':'Photos du bilan du ')+_anatDateFr(pb.date)
+      :'Photos de face et de dos du premier bilan')+'</span>';
+  const opts=liste.slice().reverse().map(x=>'<option value="'+(x.defaut?'auto':x.date)+'"'+(x.date===pb.date?' selected':'')+'>'
+    +escapeHtml(nomDe(x)+(x.defaut?' (auto)':'')+(x.dos?'':' · sans dos'))+'</option>').join('');
+  return '<label class="an-bilan"><span>Photos du</span><select'+(fige?' disabled':'')
+    +' aria-label="Bilan dont on analyse les photos" onchange="anatChoisirBilan(this.value)">'+opts+'</select></label>';
+}
 function _htmlAnat(c){
   if(!c) return '';
   // Mêmes gardes que la silhouette : une invitation n'a pas de corps, et une
@@ -46575,7 +46670,7 @@ function _htmlAnat(c){
   const grise=manque.length>0;
   const edit=_anatEdit&&_anatEdit.email===c.email?_anatEdit:null;
   const tete='<div class="an-tete"><span class="an-tete-i">'+ANAT_SVG.tete+'</span><div class="an-tete-c"><h4>Analyse <span>morpho-anatomique</span></h4>'
-    +'<span>'+(pb.date?'Photos du premier bilan · '+_anatDateFr(pb.date):'Photos de face et de dos du premier bilan')+'</span></div>'
+    +_htmlAnatChoixBilan(c,pb,!!edit)+'</div>'
     +((grise||!a)?'':'<div class="an-vues" role="tablist">'
       +['face','dos'].map(v=>'<button type="button" role="tab" class="an-vue-b'+(_anatVueActive===v?' actif':'')+'" aria-selected="'+(_anatVueActive===v)+'"'+(edit?' disabled':'')+' onclick="anatVue(\''+v+'\')">'+(v==='face'?'Face':'Dos')+'</button>').join('')
       +'</div>')+'</div>';

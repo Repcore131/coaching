@@ -9811,6 +9811,14 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .an-tete-c h4{font-family:var(--pile-titre);font-size:clamp(20px,2.2vw,26px);letter-spacing:1px;color:#fff;text-transform:uppercase;line-height:1.05}
 .an-tete-c h4 span{color:#ff2d2d}
 .an-tete-c>span{font-size:var(--fs-2xs);color:#b4b4bb}
+/* Le bilan lu, et le menu pour en changer (25/09/2026). */
+.an-bilan{display:flex;align-items:center;gap:8px;margin-top:4px;font-size:var(--fs-2xs);color:#b4b4bb;text-transform:none;letter-spacing:normal;font-weight:500;max-width:100%}
+.an-bilan>span{white-space:nowrap;flex-shrink:0}
+.an-bilan select{appearance:none;-webkit-appearance:none;background:#161618 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ff5a5a' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;
+  border:1px solid rgba(224,32,32,.45);border-radius:8px;color:#fff;font:inherit;font-weight:700;padding:6px 30px 6px 10px;min-height:32px;cursor:pointer;min-width:0;flex:0 1 auto;max-width:100%;text-overflow:ellipsis}
+.an-bilan select:hover:not(:disabled){border-color:#ff2d2d}
+.an-bilan select:disabled{opacity:.5;cursor:not-allowed}
+.an-bilan select option{background:#161618;color:#fff}
 .an-vues{display:inline-flex;border:1px solid #33333a;border-radius:10px;padding:3px;background:#0e0e10}
 .an-vue-b{min-height:38px;min-width:64px;padding:0 14px;border-radius:8px;border:1px solid transparent;background:none;color:#b4b4bb;
   font-family:inherit;font-size:var(--fs-2xs);font-weight:700;letter-spacing:.8px;text-transform:uppercase;cursor:pointer}

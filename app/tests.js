@@ -44617,6 +44617,39 @@ async function testExercices(){
       for(const k in (modif||{})) pts[k]=modif[k];
       return {v:ANAT_VERSION,bilan:1,face:{w:1000,h:1500,auto:{pts},man:null},dos:null,opts:opts||{}};
     };
+    // Le bilan lu : le départ par défaut, un autre au choix du coach (25/09/2026).
+    const _anatBil=(date,type,dos)=>({date,type,photos:Object.assign({face:'f'+date},dos===false?{}:{back:'b'+date})});
+    ok('ANALYSE MORPHO : LE BILAN DE DÉPART EST LU PAR DÉFAUT, PAS LE PLUS RÉCENT',(()=>{
+      if(typeof anatPremierBilan!=='function') return _echec('anatPremierBilan n’existe pas');
+      const u=_anatDossier({bilans:[_anatBil(3000,'coaching'),_anatBil(2000,'depart'),_anatBil(1000,'coaching')]});
+      const pb=anatPremierBilan(u);
+      if(pb.date!==2000) return _echec('bilan lu : '+pb.date+' au lieu du départ (2000)');
+      if(!pb.auto) return _echec('le départ n’est pas marqué automatique');
+      return true;})());
+    ok('ANALYSE MORPHO : LE COACH PEUT CHOISIR UN AUTRE BILAN, ET UN CHOIX CADUC RETOMBE SUR LE DÉPART',(()=>{
+      const bl=[_anatBil(2000,'depart'),_anatBil(3000,'coaching'),_anatBil(4000,'coaching',false)];
+      const c=anatPremierBilan(_anatDossier({bilans:bl,morphoAnat:{choix:3000}}));
+      if(c.date!==3000||c.auto) return _echec('le choix n’est pas suivi : '+c.date);
+      if(c.face!=='f3000'||c.dos!=='b3000') return _echec('les photos ne sont pas celles du bilan choisi');
+      const sansDos=anatPremierBilan(_anatDossier({bilans:bl,morphoAnat:{choix:4000}}));
+      if(sansDos.date!==4000||sansDos.manque.indexOf('la photo de dos')<0) return _echec('un bilan sans dos doit le dire');
+      const caduc=anatPremierBilan(_anatDossier({bilans:bl,morphoAnat:{choix:9999}}));
+      if(caduc.date!==2000||!caduc.auto) return _echec('un choix qui ne désigne plus rien doit rendre le départ : '+caduc.date);
+      return true;})());
+    ok('ANALYSE MORPHO : LE MENU LISTE LES BILANS À PHOTO DE FACE, ET MARQUE LE DÉPART',(()=>{
+      if(typeof anatBilansPhotos!=='function') return _echec('anatBilansPhotos n’existe pas');
+      const sansPhoto={date:5000,type:'coaching'};
+      const l=anatBilansPhotos(_anatDossier({bilans:[_anatBil(3000,'coaching'),sansPhoto,_anatBil(2000,'depart')],morphoAnat:{choix:3000}}));
+      if(l.map(x=>x.date).join(',')!=='2000,3000') return _echec('liste : '+l.map(x=>x.date).join(','));
+      if(!l[0].defaut||l[1].defaut) return _echec('le défaut n’est pas le départ, même quand un autre est choisi');
+      if(!l[0].depart) return _echec('le départ n’est pas reconnu');
+      const h=_htmlAnatChoixBilan(_anatDossier({bilans:[_anatBil(3000,'coaching'),_anatBil(2000,'depart')]}),anatPremierBilan(_anatDossier({bilans:[_anatBil(3000,'coaching'),_anatBil(2000,'depart')]})),false);
+      if(h.indexOf('<select')<0) return _echec('deux bilans à photos, et pas de menu');
+      if(h.indexOf('value="auto"')<0||h.indexOf('(auto)')<0) return _echec('le départ n’est pas proposé comme automatique');
+      const seul=_htmlAnatChoixBilan(_anatDossier({bilans:[_anatBil(2000,'depart')]}),anatPremierBilan(_anatDossier({bilans:[_anatBil(2000,'depart')]})),false);
+      if(seul.indexOf('<select')>=0) return _echec('un menu pour un seul bilan');
+      if(seul.indexOf('Photos du premier bilan')<0) return _echec('le texte d’origine a disparu : '+seul);
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());
