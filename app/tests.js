@@ -45377,6 +45377,39 @@ async function testExercices(){
       if(!/Prise conseillée : <b>\d+\u00a0cm entre index<\/b> \(bagues à 81\u00a0cm : [\d,]+\u00a0cm à l’(intérieur|extérieur)\)/.test(h)) return _echec('phrase : '+h.slice(0,220));
       if((h.match(/× la carrure/g)||[]).length!==3) return _echec('tableau des trois prises');
       return true;})());
+    // À charge égale : les couples relatifs (A19, 25/09/2026).
+    const _anatFichesMoy=(k)=>{ const R=ANAT_REF.H, x=Object.assign({cu:1,ja:1,tr:1,hu:1,ab:1},k||{});
+      return [{cle:'jambes',mesure:{cu:{fr:R.cuisse*x.cu},ja:{fr:R.jambe*x.ja}}},{cle:'buste',mesure:{tr:{fr:R.tronc*x.tr}}},
+        {cle:'bras',mesure:{hu:{fr:R.bras*x.hu},ab:{fr:R.avantbras*x.ab}}}]; };
+    ok('ANALYSE MORPHO : À CHARGE ÉGALE : PROPORTIONS MOYENNES, TOUT À 0 %',(()=>{
+      if(typeof anatCouples!=='function') return _echec('anatCouples n’existe pas');
+      const c=anatCouples(_anatFichesMoy(),{femme:false,taille:178});
+      const cles=c.map(x=>x.cle).join(',');
+      if(cles!=='squat,souleve,developpe,tractions,curl') return _echec('exercices : '+cles);
+      for(const r of c) for(const a of r.arts) if(Math.abs(a.pct)>0.01) return _echec(r.cle+' '+a.art+' : '+a.pct);
+      const sq=c.find(x=>x.cle==='squat');
+      if(sq.arts.map(a=>a.art).join()!=='hanche,genou') return _echec('squat : hanche et genou');
+      if(c.find(x=>x.cle==='developpe').arts.map(a=>a.art).join()!=='épaule,coude') return _echec('développé : épaule et coude');
+      return true;})());
+    ok('ANALYSE MORPHO : À CHARGE ÉGALE : FÉMUR +10 % → COUPLE DE HANCHE AU SQUAT > 0 ; LE CARNET EST RELU',(()=>{
+      const c=anatCouples(_anatFichesMoy({cu:1.1}),{femme:false,taille:178});
+      const h=c.find(x=>x.cle==='squat').arts.find(a=>a.art==='hanche');
+      if(!(h.pct>0)) return _echec('hanche au squat : '+h.pct);
+      if(!(c.find(x=>x.cle==='souleve').arts[0].pct!==0)) return _echec('le soulevé ne bouge pas avec le fémur');
+      // Le carnet : un squat nettement sous les autres mouvements.
+      const J=864e5, t=Date.now()-2*J, set=(w,r)=>({done:true,weight:String(w),reps:String(r),rir:'2'});
+      const u={sessions:[{date:t,data:{'SQUAT BARRE':{sets:[set(60,5)]},'DÉVELOPPÉ COUCHÉ BARRE':{sets:[set(90,5)]},'CURL BARRE':{sets:[set(45,8)]}}}]};
+      const f=anatForceCarnet(u);
+      if(!f.squat||!f.developpe||!f.curl) return _echec('mouvements lus : '+Object.keys(f).join(','));
+      if(!f.squat.faible||f.developpe.faible) return _echec('squat faible ? '+JSON.stringify(f.squat));
+      // La lecture levier s'affiche à côté du squat.
+      const L=anatMesures(_anatGab(),_anatDossier()).leviers.find(x=>x.cle==='couples');
+      if(!L||!L.rows||!L.rows.length) return _echec('pas d’onglet « À charge égale »');
+      const html=_htmlCouples(Object.assign({},L,{rows:c}),u);
+      if(!/Carnet : 1RM estimé \d+ kg \(SQUAT BARRE\)/.test(html)) return _echec('pas de lecture carnet');
+      if(!/le levier \(hanche \+\d+ %\) y contribue/.test(html)) return _echec('la lecture levier ne sort pas : '+html.slice(0,300));
+      if(/éviter/i.test(html)) return _echec('« à éviter »');
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());

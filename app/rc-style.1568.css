@@ -10380,6 +10380,21 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .an-j-moi2{fill:#ff3b3b;stroke:#fff;stroke-width:1.5;filter:drop-shadow(0 0 3px rgba(255,59,59,.8))}
 .an-jauge text{font-size:6.5px;fill:#8a8a92;font-family:inherit}
 .an-lev-leg{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:9.5px;color:#8a8a92}
+/* A19 : à charge égale, une barre divergente par articulation. */
+.an-cpl{display:flex;flex-direction:column;gap:8px}
+.an-cpl-e{display:grid;grid-template-columns:70px 1fr 44px;gap:0 8px;font-size:9.5px;color:#8a8a92}
+.an-cpl-es{grid-column:2;display:flex;justify-content:space-between}
+.an-cpl-r{display:flex;flex-direction:column;gap:3px;padding:6px 0;border-top:1px solid #232328}
+.an-cpl-r>b{font-size:11px;color:#fff}
+.an-cpl-a{display:grid;grid-template-columns:70px 1fr 44px;grid-template-areas:"l b v" ". m m";align-items:center;gap:1px 8px}
+.an-cpl-l{grid-area:l;font-size:10.5px;color:#d4d4d8;text-transform:capitalize}
+.an-cpl-b{grid-area:b;position:relative;height:8px;border-radius:4px;background:#1f1f24;overflow:hidden}
+.an-cpl-0{position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:#8a8a92}
+.an-cpl-f{position:absolute;top:0;bottom:0;background:#e02020;border-radius:4px}
+.an-cpl-f.an-cpl-n{background:#34e89e}
+.an-cpl-v{grid-area:v;font-size:11px;font-weight:700;color:#fff;text-align:right;white-space:nowrap}
+.an-cpl-m{grid-area:m;font-size:9.5px;color:#8a8a92;line-height:1.35}
+.an-cpl-note{margin:2px 0 0;font-size:10.5px;color:#f59e0b;line-height:1.4}
 /* A18 : le développé, prise conseillée et trois prises. */
 .an-dev-p{margin:0 0 4px;font-size:12px;color:#fff;line-height:1.45}
 .an-lev .an-dev-p b{color:#34e89e;text-transform:none;letter-spacing:0;font-size:inherit}

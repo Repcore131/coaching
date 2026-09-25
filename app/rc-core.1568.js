@@ -46608,6 +46608,85 @@ function anatDeveloppeModele(p){
   return {S,theta,prise,index,bague:(ANAT_DEV.BAGUES_CM-index)/2,trajet:trajet(prise),
     prises:ANAT_DEV.PRISES.map(k=>({k,G:k*p.bi,index:k*p.bi-2*ANAT_DEV.INDEX_CM,trajet:trajet(k*p.bi)}))};
 }
+/**
+ * À CHARGE ÉGALE (chantier A19). Le couple qu'une même charge impose à chaque
+ * articulation, rapporté à celui de proportions moyennes (de Leva, 1996, même
+ * sexe), À TAILLE ÉGALE. Squat et soulevé : les bras de levier horizontaux des
+ * modèles A16 et A17. Développé, tractions, curl : à posture égale, le couple
+ * est proportionnel au segment qui porte la charge — humérus (épaule, prise
+ * écartée à θ), avant-bras (coude), bras entier jusqu'au milieu de la paume
+ * (épaule aux tractions), avant-bras et demi-main (coude au curl).
+ */
+const ANAT_COUPLES=Object.freeze({BORNE:20,PROCHE:3,ECART_FORCE:0.85,
+  EXOS:Object.freeze([
+    Object.freeze({cle:'squat',lib:'Squat',motif:/squat/i,exclu:/goblet|bulgare|split|saut|jump|hack|presse|sissy/i,force:1.0}),
+    Object.freeze({cle:'souleve',lib:'Soulevé de terre',motif:/soulev|deadlift/i,exclu:/roumain|jambes tendues|rdl|sumo/i,force:1.2}),
+    Object.freeze({cle:'developpe',lib:'Développé couché',motif:/d[ée]velopp[ée].*couch|bench/i,exclu:/halt|inclin|d[ée]clin/i,force:0.75}),
+    Object.freeze({cle:'tractions',lib:'Tractions',motif:/traction|pull.?up|chin.?up/i,exclu:/australien|assist/i,force:null}),
+    Object.freeze({cle:'curl',lib:'Curl',motif:/curl/i,exclu:/leg|ischio|jambe|poignet|nordic|halt|marteau|hammer|concentr|poulie|c[aâ]ble|unilat/i,force:0.35})]),
+  // ⚠ Des charges comparables : barre seulement (une charge d'haltère est par main).
+  FORCE_SOURCE:'rapports de force habituels entre mouvements à la barre (squat 1, soulevé 1,2, développé 0,75, curl 0,35 : repère RepCore, indicatif)'});
+/**
+ * PURE. Les couples relatifs, exercice par exercice.
+ * @param fiches les fiches d'anatMesures (jambes, buste, bras)
+ * @param reg {femme, pied (fraction de taille), kEnv (bras tirés de l'envergure), squat (réglage A16), theta}
+ * @returns {{cle,lib,arts:{art,pct,def}[]}[]}
+ */
+function anatCouples(fiches,reg){
+  const o=reg||{}, par={}; (fiches||[]).forEach(f=>{ par[f.cle]=f; });
+  const R=anatRef(o.femme), MR=ANAT_MESURES_REF[o.femme?'F':'H'];
+  const m=k=>par[k]&&par[k].mesure||{};
+  const fr=v=>v&&v.fr>0?v.fr:null;
+  const F=fr(m('jambes').cu), T=fr(m('jambes').ja), Tr=fr(m('buste').tr);
+  const H=o.kEnv?R.bras*o.kEnv:fr(m('bras').hu), A=o.kEnv?R.avantbras*o.kEnv:fr(m('bras').ab);
+  const pied=o.pied||MR.pied, pct=(a,b)=>(a!=null&&b>0)?(a/b-1)*100:null;
+  const out=[];
+  const ligne=(cle,arts)=>{ const x=ANAT_COUPLES.EXOS.find(e=>e.cle===cle); const a=arts.filter(z=>z.pct!=null&&isFinite(z.pct)); if(a.length) out.push({cle,lib:x.lib,arts:a}); };
+  if(F&&T&&Tr){
+    const cfg=Object.assign({alpha:ANAT_SQUAT.ALPHA,beta:0,barre:'haute',cale:false},o.squat||{});
+    const moi=anatSquatCalc({F,T,Tr,pied},cfg), ref=anatSquatCalc({F:R.cuisse,T:R.jambe,Tr:R.tronc,pied:MR.pied},cfg);
+    ligne('squat',[{art:'hanche',pct:pct(moi.brasHanche,ref.brasHanche),def:'bras de levier hanche → barre (modèle du squat)'},
+      {art:'genou',pct:pct(moi.brasGenou,ref.brasGenou),def:'bras de levier genou → barre (modèle du squat)'}]);
+  }
+  if(F&&T&&Tr&&H&&A){
+    const tl=o.taille||ANAT_SOULEVE.TAILLE_DEFAUT;
+    const sm=anatSouleveModele({F,T,Tr,A:H+A+ANAT_MAIN/2,pied,taille:tl,style:'conventionnel'});
+    const sr=anatSouleveModele({F:R.cuisse,T:R.jambe,Tr:R.tronc,A:R.bras+R.avantbras+ANAT_MAIN/2,pied:MR.pied,taille:tl,style:'conventionnel'});
+    if(sm&&sr) ligne('souleve',[{art:'hanche',pct:pct(sm.brasHanche,sr.brasHanche),def:'bras de levier hanche → barre au décollage (modèle du soulevé)'}]);
+  }
+  if(H&&A){
+    ligne('developpe',[{art:'épaule',pct:pct(H,R.bras),def:'humérus, écarté à θ en bas : bras de levier de l’épaule'},
+      {art:'coude',pct:pct(A,R.avantbras),def:'avant-bras : bras de levier du coude'}]);
+    ligne('tractions',[{art:'épaule',pct:pct(H+A+ANAT_MAIN/2,R.bras+R.avantbras+ANAT_MAIN/2),def:'bras entier, du centre de l’épaule au milieu de la paume'}]);
+    ligne('curl',[{art:'coude',pct:pct(A+ANAT_MAIN/2,R.avantbras+ANAT_MAIN/2),def:'avant-bras et demi-main : bras de levier du coude'}]);
+  }
+  return out;
+}
+/**
+ * Le carnet (A19) : le meilleur 1RM estimé de chaque mouvement, ramené à un
+ * rapport de force habituel. Un mouvement NETTEMENT plus faible que la moyenne
+ * des autres (moins de 85 %) reçoit sa lecture levier.
+ */
+function anatForceCarnet(u){
+  const l=(u&&Array.isArray(u.sessions))?u.sessions:[];
+  const noms=new Set(); for(const s of l) if(s&&s.data) Object.keys(s.data).forEach(k=>noms.add(k));
+  const idx={};
+  for(const x of ANAT_COUPLES.EXOS){
+    if(!x.force) continue;
+    let best=null;
+    for(const n of noms){ if(!x.motif.test(n)||(x.exclu&&x.exclu.test(n))) continue;
+      const v=_anatSafe(()=>maxE1rmObserve(u,n)); if(v&&(!best||v>best.e1)) best={nom:n,e1:v}; }
+    if(best) idx[x.cle]=Object.assign(best,{i:best.e1/x.force});
+  }
+  const cles=Object.keys(idx);
+  for(const k of cles){
+    const autres=cles.filter(j=>j!==k).map(j=>idx[j].i);
+    if(!autres.length) continue;
+    const moy=autres.reduce((a,b)=>a+b,0)/autres.length;
+    idx[k].rel=idx[k].i/moy; idx[k].faible=idx[k].rel<ANAT_COUPLES.ECART_FORCE;
+  }
+  return idx;
+}
 /** Le texte d'une configuration, avec ses bras de levier en cm quand la taille est connue. */
 function anatSquatTexte(moi,ref,cfg,taille){
   const cm=v=>taille?_anatN(Math.abs(v)*taille,0)+' cm':_anatN(Math.abs(v)*100,1)+' % de la taille';
@@ -46692,6 +46771,7 @@ function anatLeviers(fiches,F,taille,femme,u){
           +(env?' Bras tirés de l’envergure mesurée ('+_anatN(env,0)+' cm).':'')});
     }
   }
+  const _cplReg={femme,taille,pied:pied?pied/taille:MR.pied,kEnv};
   const bi=par.clavicules.mesure.bi;
   // LE DÉVELOPPÉ (A18) : la prise conseillée et les trajets, en cm. La carrure
   // vient du mètre s'il y est, sinon de la photo ; le bras et l'avant-bras de
@@ -46721,6 +46801,15 @@ function anatLeviers(fiches,F,taille,femme,u){
           +'Trajet de barre à cette prise : '+c0(moi.trajet)+' (proportions moyennes, même taille : '+c0(ref.trajet)+').'
           +(thx?' La barre touche le sternum : '+_anatN(thx,1)+' cm de thorax mesurés.':'')});
     }
+  }
+  // À CHARGE ÉGALE (A19) : le dernier onglet des leviers.
+  const cpl=_anatSafe(()=>anatCouples(fiches,_cplReg));
+  if(cpl&&cpl.length){
+    const tous=[].concat(...cpl.map(x=>x.arts));
+    const pire=tous.reduce((a,b)=>Math.abs(b.pct)>Math.abs(a.pct)?b:a,tous[0]);
+    out.push({cle:'couples',lib:'À charge égale',rows:cpl,pire:pire.pct,
+      source:photo+(kEnv?' ; bras tirés de l’envergure':'')+' ; proportions moyennes de Leva (1996) ; modèles du squat, du soulevé et du développé',
+      txt:'À taille égale, chaque barre compare le couple qu’une même charge impose à l’articulation avec celui de proportions moyennes. Au-delà de ±'+ANAT_COUPLES.BORNE+' %, la barre est bornée.'});
   }
   return out;
 }
@@ -47159,6 +47248,7 @@ const ANAT_SVG={
   recadrer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v16h16M2 6h16v16"/></svg>',
   squat:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4" r="2"/><path d="M4 8h16M12 8l-3 6 5 2-1 6M9 14l-4 1"/></svg>',
   souleve:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="4.5" r="2"/><path d="M9 7l4 5v8M13 12l-6 1M3 20h18M5 17v6M19 17v6"/></svg>',
+  couples:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M7 20h10M5 7h14M5 7l-3 6h6zM19 7l-3 6h6z"/></svg>',
   developpe:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6h20M5 3v6M19 3v6M8 6v7M16 6v7M4 17h16M6 17l2-4h8l2 4"/></svg>'
 };
 /** Les segments dessinés : [a, b, classe]. Les paires se dédoublent par côté. */
@@ -47332,6 +47422,25 @@ let _anatLevIdx=0;
 /** Les menus déroulants de la colonne centrale : ouverts ou fermés. */
 let _anatDeplie={lev:true,inf:false};
 let _anatToutes=false;
+/** L'onglet « À charge égale » (A19) : une barre divergente par articulation, et la lecture du carnet. */
+function _htmlCouples(l,c){
+  const force=_anatSafe(()=>anatForceCarnet(c))||{};
+  const B=ANAT_COUPLES.BORNE, P=ANAT_COUPLES.PROCHE;
+  const mot=v=>v>P?'levier plus long : à charge égale, cette articulation travaille plus':(v<-P?'levier plus court : à charge égale, elle travaille moins':'dans la moyenne');
+  const barre=v=>{ const x=Math.max(-B,Math.min(B,v)), w=Math.abs(x)/B*50;
+    return '<span class="an-cpl-b" role="img" aria-label="'+_anatSN(v,0)+' %"><i class="an-cpl-0"></i><i class="an-cpl-f'+(x<0?' an-cpl-n':'')+'" style="'+(x<0?'right:50%':'left:50%')+';width:'+w.toFixed(1)+'%"></i></span>'; };
+  const rows=l.rows.map(r=>{
+    const f=force[r.cle], haut=r.arts.reduce((a,b)=>Math.abs(b.pct)>Math.abs(a.pct)?b:a,r.arts[0]);
+    const note=f&&f.faible?'<p class="an-cpl-note">Carnet : 1RM estimé '+_anatN(f.e1,0)+' kg ('+escapeHtml(f.nom)+'), à '+_anatN(f.rel*100,0)+' % de tes autres mouvements'
+      +(haut.pct>P?' — le levier ('+haut.art+' '+_anatSN(haut.pct,0)+' %) y contribue : à charge égale, le mouvement demande plus.':' — le levier n’explique pas l’écart ('+haut.art+' '+_anatSN(haut.pct,0)+' %).')+'</p>':'';
+    return '<div class="an-cpl-r"><b>'+escapeHtml(r.lib)+'</b>'
+      +r.arts.map(a=>'<div class="an-cpl-a" title="'+escapeHtml(a.def)+'"><span class="an-cpl-l">'+escapeHtml(a.art)+'</span>'+barre(a.pct)+'<span class="an-cpl-v">'+_anatSN(a.pct,0)+' %</span><span class="an-cpl-m">'+escapeHtml(mot(a.pct))+'</span></div>').join('')
+      +note+'</div>';
+  }).join('');
+  return '<div class="an-cpl"><div class="an-cpl-e" aria-hidden="true"><span class="an-cpl-es"><span>−'+B+' %</span><span>moyenne</span><span>+'+B+' %</span></span></div>'+rows+'</div>'
+    +'<p>'+escapeHtml(l.txt)+'</p>'
+    +(Object.keys(force).length>1?'<p class="an-lev-n">Carnet : meilleurs 1RM estimés des '+PROG_EX_OBS_JOURS+' derniers jours, ramenés aux '+escapeHtml(ANAT_COUPLES.FORCE_SOURCE)+'.</p>':'');
+}
 // ── LE DÉVELOPPÉ RÉGLÉ (A18) : θ et l'arche, un état d'écran ─────────────
 let _anatDevReg=null, _anatDevL=null;
 function _anatDevCfg(){
@@ -48430,12 +48539,13 @@ function _htmlAnat(c){
   const iLev=nLev?((_anatLevIdx%nLev)+nLev)%nLev:0;
   const lev=nLev?(()=>{
       const l=res.leviers[iLev];
-      const val=l.cle==='squat'?l.val+'°':l.cle==='souleve'?_anatN(l.val,0)+'°':(l.val!=null?l.val+' cm':_anatSN(l.ecart,0)+' %');
+      const val=l.cle==='couples'?'jusqu’à '+_anatSN(l.pire,0)+' %':l.cle==='squat'?l.val+'°':l.cle==='souleve'?_anatN(l.val,0)+'°':(l.val!=null?l.val+' cm':_anatSN(l.ecart,0)+' %');
       const ref=l.cle==='squat'?l.ref+'°':l.cle==='souleve'?_anatN(l.ref,0)+'°':(l.ref!=null?l.ref+' cm':'');
       const sous=l.cle==='squat'?'buste à la parallèle':l.cle==='souleve'?'tronc / horizontale':'trajet de barre';
       const modele={squat:'Cuisse parallèle au sol, tibia incliné de '+_anatN((l.modele&&l.modele.base)?l.modele.base.alpha:30,0)+'°, barre au-dessus du milieu du pied, 0,3 × pied devant la cheville ; barre haute 4 % de la taille sous les épaules, basse 8 %.',
         souleve:'Au décollage : barre à 22,5 cm du sol au-dessus du milieu du pied, épaule 1,5 cm devant, tibia contre la barre ; en sumo, hanches ouvertes à 40° et tibia à 10° au plus.',
-        developpe:'Allongé, vu de face : humérus écarté du tronc de θ en bas, avant-bras vertical ; trajet = verrouillage − poitrine.'}[l.cle]||'';
+        developpe:'Allongé, vu de face : humérus écarté du tronc de θ en bas, avant-bras vertical ; trajet = verrouillage − poitrine.',
+        couples:'Pour chaque mouvement, le bras de levier de l’articulation principale, rapporté au même calcul sur des proportions moyennes, à taille égale.'}[l.cle]||'';
       return '<details class="an-dr an-lev"'+(_anatDeplie.lev!==false?' open':'')+' ontoggle="_anatDeplie.lev=this.open">'
         +'<summary><span class="an-dr-i">'+(ANAT_SVG[l.cle]||'')+'</span><span class="an-dr-t">Leviers mécaniques</span>'
         +'<span class="an-dr-r">'+escapeHtml(l.lib)+' · <b>'+escapeHtml(val)+'</b></span>'+ANAT_SVG.chev+'</summary>'
@@ -48446,7 +48556,8 @@ function _htmlAnat(c){
           +'<div class="an-lev-nav"><button type="button" aria-label="Levier précédent" onclick="anatLevier(-1)"'+(nLev<2?' disabled':'')+'>'+ANAT_SVG.gauche+'</button>'
           +'<span>'+(iLev+1)+' / '+nLev+'</span>'
           +'<button type="button" aria-label="Levier suivant" onclick="anatLevier(1)"'+(nLev<2?' disabled':'')+'>'+ANAT_SVG.droite+'</button></div></div>'
-          +(l.cle==='developpe'&&l.prise?'<div id="an-dev-res">'+_htmlDeveloppeRes(l)+'</div>'+_htmlDeveloppeCtl(l)
+          +(l.cle==='couples'?_htmlCouples(l,c)
+          :l.cle==='developpe'&&l.prise?'<div id="an-dev-res">'+_htmlDeveloppeRes(l)+'</div>'+_htmlDeveloppeCtl(l)
           :l.cle==='souleve'&&l.styles?_htmlSouleve(l)
           :l.cle==='squat'&&l.modele?'<div id="an-sq-res">'+_htmlSquatRes(l)+'</div>'+_htmlSquatCtl(l)
           :'<div class="an-lev-v">'+_anatJauge(l)+'<div class="an-lev-vt"><strong>'+escapeHtml(val)+'</strong><em>'+escapeHtml(sous)+(ref?'<br>moyenne '+escapeHtml(ref):'')+'</em>'
