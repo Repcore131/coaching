@@ -45221,6 +45221,43 @@ async function testExercices(){
       const v=anatVDePoints({deltoide_l:[0.3,0.3,1],deltoide_r:[0.7,0.3,1],taille_l:[0.375,0.5,1],taille_r:[0.625,0.5,0.5],hanches_l:[0.35,0.6,1],hanches_r:[0.65,0.6,1]},1000,1000);
       if(v.V!==1.6||v.X!==1.2||v.conf!==0.5) return _echec('anatVDePoints : '+JSON.stringify(v));
       return true;})());
+    // Un dos qui suit les points (A14, 25/09/2026).
+    const _anatDos=(modif)=>{
+      const a=_anatGab(); a.dos={w:1000,h:1500,auto:{pts:anatGabarit(1000,1500,'dos'),triangles:{l:40,r:40}},man:null};
+      for(const k in (modif||{})){ const q=a.dos.auto.pts[k]; a.dos.auto.pts[k]=[q[0]+modif[k][0],q[1]+(modif[k][1]||0),q[2]]; }
+      const res=anatMesures(a,_anatDossier());
+      return {res,f:res.fiches.find(x=>x.cle==='dos')};
+    };
+    ok('ANALYSE MORPHO : DOS, DÉPLACER TAILLE_L CHANGE LE TRIANGLE ET LE NIVEAU',(()=>{
+      const g=_anatDos();
+      if(g.f.mesure.triSrc!=='points') return _echec('les triangles ne viennent pas des points : '+g.f.mesure.triSrc);
+      if(Math.abs(g.f.mesure.asy)>0.5||g.f.mesure.pire.nTr!==0) return _echec('gabarit : '+g.f.mesure.asy);
+      // De dos, taille_l est la taille GAUCHE de l'athlète : on la rentre vers la colonne.
+      const m=_anatDos({taille_l:[0.05,0]});
+      if(!(m.f.mesure.aires.g>g.f.mesure.aires.g)) return _echec('l’aire gauche ne grandit pas');
+      if(Math.abs(m.f.mesure.aires.d-g.f.mesure.aires.d)>1e-6) return _echec('l’aire droite a bougé');
+      if(!(m.f.mesure.asy>25)||!(m.f.mesure.pire.nTr>=1)||!(m.f.niveau>=1)) return _echec('asymétrie '+m.f.mesure.asy+' · niveau '+m.f.niveau);
+      const l=m.f.chiffres.find(c=>/^Triangles/.test(c.lib));
+      if(!/cm²/.test(l.val)||!/points placés/.test(l.def)) return _echec('ligne : '+l.val+' · '+l.def);
+      // Sans points de taille : le repli sur la lecture du masque.
+      const a=_anatGab(); a.dos={w:1000,h:1500,auto:{pts:anatGabarit(1000,1500,'dos'),triangles:{l:40,r:20}},man:null};
+      delete a.dos.auto.pts.taille_l;
+      const f2=anatMesures(a,_anatDossier()).fiches.find(x=>x.cle==='dos');
+      if(f2.mesure.triSrc!=='masque'||Math.abs(f2.mesure.asy-50)>0.01) return _echec('repli : '+f2.mesure.triSrc+' '+f2.mesure.asy);
+      return true;})());
+    ok('ANALYSE MORPHO : OMOPLATES SYMÉTRIQUES : ÉCART AU BORD INTERNE < 0,5 CM ; DÉCALÉE : LUE',(()=>{
+      if(anatCles('dos').indexOf('omoplate_int_l')<0||!anatAide('omoplate_int').aide) return _echec('repère ou consigne absents');
+      const g=_anatDos();
+      if(g.f.mesure.oiDiff==null||!(Math.abs(g.f.mesure.oiDiff)<0.5)) return _echec('écart : '+g.f.mesure.oiDiff);
+      // 1,5 cm de plus vers l'extérieur à gauche (image gauche, x décroît).
+      const cmPx=180/(0.86*1500);
+      const m=_anatDos({omoplate_int_l:[-1.5/cmPx/1000,0]});
+      if(Math.abs(m.f.mesure.oiDiff-1.5)>0.05) return _echec('1,5 cm lus '+m.f.mesure.oiDiff);
+      if(m.f.mesure.pire.nOi!==1) return _echec('niveau du bord interne : '+m.f.mesure.pire.nOi);
+      const t=anatTexte(m.f,m.res);
+      if(!/omoplate gauche plus écartée de la colonne/.test(t.court)||!/Position du moment/.test(t.court)) return _echec('texte : '+t.court);
+      if(!t.privilegier.some(x=>/face pull/.test(x)&&/Y-raise/.test(x)&&/rowing un bras/.test(x))) return _echec('recommandations : '+t.privilegier[0]);
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());

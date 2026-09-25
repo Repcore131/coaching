@@ -44902,7 +44902,8 @@ function renderCourbesCoach(c){
 // la main sont repris.
 // v6 (chantier A11) : la photo de dos pose le milieu du mollet et le tendon
 // d'Achille ; les analyses se relisent, les points posés à la main restent.
-const ANAT_VERSION=6;
+// v7 (chantier A14) : le bord interne des omoplates, posé sur la photo de dos.
+const ANAT_VERSION=7;
 /**
  * LES LONGUEURS DE RÉFÉRENCE, en fraction de la taille, PAR SEXE.
  *
@@ -45319,14 +45320,16 @@ function anatMargeAngle(tol,pts,poidsMilieu){
   const e=Math.sqrt(v.reduce((s,p,i)=>s+Math.pow(anatErrPoint(p.e)*((poidsMilieu&&i===1)?2:1),2),0));
   return Math.hypot(tol,_anatDeg(Math.atan(e/100)));
 }
-const ANAT_TOL={epaules:1.5,bassin:2,genoux:3,pieds:8,tronc:3,omoplates:1.2,rachis:2,triangles:25,echelle:3,cva:3,profil:2,coudes:2,arrierePied:3};
+const ANAT_TOL={epaules:1.5,bassin:2,genoux:3,pieds:8,tronc:3,omoplates:1.2,rachis:2,triangles:25,echelle:3,cva:3,profil:2,coudes:2,arrierePied:3,omoInt:1};
 const ANAT_SEUILS={epaules:[1.5,3,5],bassin:[2,3.5,5],genoux:[3,5,8],pieds:[8,14,20],
   tronc:[3,6,9],omoplates:[1.2,2.5,4],rachis:[2,4,6],triangles:[25,45,65],
   // Le profil (A9) : degrés sous le repère cranio-vertébral, degrés de tronc,
   // cm du grand trochanter au fil à plomb, degrés au-delà de 180° au genou.
   cva:[4,8,12],inclTronc:[3,6,9],plombCm:[3,6,9],recurvatum:[5,8,12],
   // L'arrière-pied (A11) : 0–4° dans la marge, 4–8° léger, 8–12° net, au-delà marqué.
-  arrierePied:[4,8,12]};
+  arrierePied:[4,8,12],
+  // Le bord interne des omoplates (A14) : cm d'écart G/D à l'axe C7-sacrum.
+  omoInt:[1,2,3]};
 /** L'erreur de placement d'un point de profil, en cm (main, moteur, estimé). */
 const ANAT_ERR_CM=Object.freeze({main:1,auto:2,estime:3});
 /**
@@ -45367,6 +45370,7 @@ const ANAT_REPERES=Object.freeze({
     {k:'acromion',lib:'Acromion',paire:1,est:1},
     {k:'epaule',lib:'Centre de l’épaule',paire:1},
     {k:'omoplate',lib:'Pointe basse de l’omoplate',paire:1,est:1},
+    {k:'omoplate_int',lib:'Bord interne de l’omoplate (mi-hauteur)',paire:1,est:1},
     {k:'coude',lib:'Coude',paire:1},
     {k:'poignet',lib:'Poignet',paire:1},
     {k:'taille',lib:'Bord de la taille',paire:1},
@@ -45674,6 +45678,9 @@ function anatPointsAuto(raw,vue){
     pose('sacrum',{x:mHa.x,y:mHa.y-0.10*T},0.5);
     for(const s of ['l','r'])
       pose('omoplate_'+s,{x:mEp.x+(ep[s].x-mEp.x)*0.55,y:ep[s].y+0.36*T},0.5);
+    // A14 : le bord interne, à mi-hauteur de l'omoplate, au tiers de l'axe à l'épaule.
+    for(const s of ['l','r'])
+      pose('omoplate_int_'+s,{x:mEp.x+(ep[s].x-mEp.x)*0.3,y:ep[s].y+0.18*T},0.5);
     // L'ARRIÈRE-PIED (A11) : le milieu de la jambe à mi-mollet et à la hauteur
     // des malléoles, lu sur le masque (le centre de la plage qui contient la
     // jambe) ; sans masque, entre genou et cheville, et marqué estimé.
@@ -46212,23 +46219,46 @@ function anatMesures(anat,u,o){
     const c7=D&&D.P('c7'),sa=D&&D.P('sacrum');
     // Positif : le haut du dos part vers la GAUCHE de l'athlète.
     const rach=(c7&&sa)?_anatDeg(Math.atan2((c7.x-sa.x)*(D.cotes.g==='l'?-1:1),Math.max(1,sa.y-c7.y))):null;
-    const tri=D&&anat.dos&&anat.dos.auto&&anat.dos.auto.triangles;
-    const trG=tri?tri[D.cotes.g]:null,trD=tri?tri[D.cotes.d]:null;
+    // LES TRIANGLES BRAS-TRONC (A14) : l'aire du polygone épaule → coude →
+    // poignet → taille, côté athlète, sur les POINTS EFFECTIFS — ceux que le
+    // coach a replacés compris. L'ancienne lecture du masque (largeurs moyennes
+    // de l'espace bras-tronc) ne sert plus que de repli, quand un point manque.
+    const aire=sd=>{
+      if(!D) return null;
+      const q=['epaule','coude','poignet','taille'].map(k=>D.P2(k,sd));
+      if(q.some(x=>!x)) return null;
+      let a2=0; for(let i=0;i<q.length;i++){ const A=q[i],B=q[(i+1)%q.length]; a2+=A.x*B.y-B.x*A.y; }
+      return Math.abs(a2)/2;
+    };
+    const aG=aire('g'), aD=aire('d');
+    const parPts=aG!=null&&aD!=null;
+    const tri=!parPts&&D&&anat.dos&&anat.dos.auto&&anat.dos.auto.triangles;
+    const trG=parPts?aG:(tri?tri[D.cotes.g]:null),trD=parPts?aD:(tri?tri[D.cotes.d]:null);
+    const triSrc=parPts?'points':(tri?'masque':null);
     const asy=(trG!=null&&trD!=null&&Math.max(trG,trD)>0)?(trG-trD)/Math.max(trG,trD)*100:null;
+    // LE BORD INTERNE DES OMOPLATES (A14) : sa distance horizontale à la ligne
+    // C7 → sacrum, à la même hauteur, en cm ; gauche contre droite.
+    const dAxe=q=>{ if(!q||!c7||!sa||!D.cmPx) return null; const t=(q.y-c7.y)/((sa.y-c7.y)||1); return Math.abs(q.x-(c7.x+(sa.x-c7.x)*t))*D.cmPx; };
+    const oiG=D&&D.P2('omoplate_int','g'), oiD=D&&D.P2('omoplate_int','d');
+    const dOiG=dAxe(oiG), dOiD=dAxe(oiD);
+    const oiDiff=(dOiG!=null&&dOiD!=null)?dOiG-dOiD:null;
     const nOm=om!=null?_anatNiveau(om,ANAT_SEUILS.omoplates):0, nRa=rach!=null?_anatNiveau(rach,ANAT_SEUILS.rachis):0,
-      nTr=asy!=null?_anatNiveau(asy,ANAT_SEUILS.triangles):0;
-    const pire=[nOm,nRa,nTr].reduce((a,b)=>Math.abs(b)>Math.abs(a)?b:a,0);
+      nTr=asy!=null?_anatNiveau(asy,ANAT_SEUILS.triangles):0, nOi=oiDiff!=null?_anatNiveau(oiDiff,ANAT_SEUILS.omoInt):0;
+    const pire=[nOm,nRa,nTr,nOi].reduce((a,b)=>Math.abs(b)>Math.abs(a)?b:a,0);
     fiche({cle:'dos',lib:'Dos',vue:'dos',ancre:c7&&sa?_anatMil(c7,sa):null,
       zone:D?_anatZoneAutour([D.P2('acromion','g'),D.P2('acromion','d'),D.P('sacrum'),D.P2('omoplate','g')],0.12):null,
       etat:D?((om!=null||rach!=null)?'ok':'illisible'):'illisible',
-      niveau:(om!=null||rach!=null||asy!=null)?pire:null,
+      niveau:(om!=null||rach!=null||asy!=null||oiDiff!=null)?pire:null,
       bornes:['côté droit','côté gauche'],
       valeur:[om!=null?'omoplates '+_anatN(om)+'°':'',rach!=null?'axe '+_anatN(rach)+'°':''].filter(Boolean).join(' · '),
-      tolerance:'omoplates ±'+ANAT_TOL.omoplates+'°, axe ±'+ANAT_TOL.rachis+'°',estime:!!(og&&og.e<1),
+      tolerance:'omoplates ±'+_anatN(ANAT_TOL.omoplates,1)+'°, axe ±'+_anatN(ANAT_TOL.rachis,0)+'°, bord interne ±'+_anatN(ANAT_TOL.omoInt,0)+' cm',estime:!!((og&&og.e<1)||(oiG&&oiG.e<1)),
       chiffres:[{lib:'Omoplates (différence de hauteur)',def:'pointes des omoplates / horizontale',val:om!=null?_anatSigneTexte(om)+(omCm!=null?' · '+_anatN(omCm,1)+' cm':''):'—',ref:'0°',ecart:''},
         {lib:'Axe C7 → sacrum',def:'base du cou → fossettes du sacrum / verticale',val:rach!=null?_anatN(rach)+'° vers la '+(rach>0?'gauche':'droite'):'—',ref:'0°',ecart:''},
-        {lib:'Triangles bras-tronc (G / D)',def:'espace entre le bras et la taille, de dos',val:(trG!=null&&trD!=null&&D.cmPx)?cm(trG*D.cmPx)+' / '+cm(trD*D.cmPx):(asy!=null?_anatSN(asy,0)+' %':'—'),ref:'égaux',ecart:asy!=null?pct(asy):''}],
-      mesure:{om,omCm,rach,asy,lu:!!D,pire:{nOm,nRa,nTr}},source:'photo de dos'});
+        {lib:'Triangles bras-tronc (G / D)',def:parPts?'aire épaule → coude → poignet → taille, de dos, sur les points placés':'espace entre le bras et la taille, de dos, lu sur la silhouette',
+          val:(trG!=null&&trD!=null&&D.cmPx)?(parPts?_anatN(trG*D.cmPx*D.cmPx,0)+' / '+_anatN(trD*D.cmPx*D.cmPx,0)+' cm²':cm(trG*D.cmPx)+' / '+cm(trD*D.cmPx)):(asy!=null?_anatSN(asy,0)+' %':'—'),ref:'égaux',ecart:asy!=null?pct(asy):''},
+        {lib:'Bord interne des omoplates (G / D)',def:'distance horizontale à la ligne C7 → sacrum, à mi-hauteur de l’omoplate ; marge ±'+ANAT_TOL.omoInt+' cm',
+          val:(dOiG!=null&&dOiD!=null)?_anatN(dOiG,1)+' / '+_anatN(dOiD,1)+' cm':'—',ref:'égales',ecart:oiDiff!=null?_anatSN(oiDiff,1)+' cm':''}],
+      mesure:{om,omCm,rach,asy,triSrc,aires:parPts?{g:aG,d:aD}:null,oiG:dOiG,oiD:dOiD,oiDiff,lu:!!D,pire:{nOm,nRa,nTr,nOi}},source:'photo de dos'+(parPts?' ; triangles sur les points placés':'')});
   }
   // ── ARRIÈRE-PIED (A11) ──────────────────────────────────────────────────
   // L'angle entre (mollet → Achille) et (Achille → talon), de dos. Positif :
@@ -46369,11 +46399,11 @@ function anatMesures(anat,u,o){
       f.chiffres=f.chiffres.map(c=>c.lib==='Écart gauche / droite'?Object.assign({},c,{val:nl,ecart:''}):c);
     }
     const fd=par.dos;
-    if(fd&&fd.mesure.asy!=null){
-      fd.tourne=rotation.deg; fd.mesure.asy=null; fd.mesure.pire.nTr=0;
+    if(fd&&(fd.mesure.asy!=null||fd.mesure.oiDiff!=null)){
+      fd.tourne=rotation.deg; fd.mesure.asy=null; fd.mesure.oiDiff=null; fd.mesure.pire.nTr=0; fd.mesure.pire.nOi=0;
       const {nOm,nRa}=fd.mesure.pire;
       fd.niveau=(fd.mesure.om!=null||fd.mesure.rach!=null)?(Math.abs(nRa)>Math.abs(nOm)?nRa:nOm):null;
-      fd.chiffres=fd.chiffres.map(c=>/^Triangles/.test(c.lib)?Object.assign({},c,{val:nl,ecart:''}):c);
+      fd.chiffres=fd.chiffres.map(c=>/^(Triangles|Bord interne)/.test(c.lib)?Object.assign({},c,{val:nl,ecart:''}):c);
     }
   }
   // LA CONFIANCE, fiche par fiche, sur les points qu'elle utilise.
@@ -46393,7 +46423,7 @@ function anatMesures(anat,u,o){
       jambes:F?['hanche','genou','cheville'].map(k=>K(F,k,sJ)):[],
       genoux:F?['hanche','genou','cheville'].map(k=>K(F,k,sG)):[],
       pieds:[...deux(F,'talon'),...deux(F,'pointe')],
-      dos:D?[...deux(D,'omoplate'),'c7','sacrum']:[],
+      dos:D?[...deux(D,'omoplate'),...deux(D,'omoplate_int'),'c7','sacrum']:[],
       posture:vues.profil?['acromion','trochanter','genou','malleole']:[],
       coudes:[...deux(F,'epaule'),...deux(F,'coude'),...deux(F,'poignet')],
       arriere_pied:D?[...deux(D,'mollet'),...deux(D,'achille'),...deux(D,'talon')]:[],
@@ -46836,10 +46866,16 @@ function anatTexte(f,res){
     if(m.om!=null) parts.push(Math.abs(p.nOm)?'omoplate '+(m.om>0?'gauche':'droite')+' plus basse ('+_anatN(m.om)+'°'+(m.omCm!=null?', '+_anatN(m.omCm,1)+' cm':'')+')':'omoplates à la même hauteur');
     if(m.rach!=null) parts.push(Math.abs(p.nRa)?'axe du dos incliné de '+_anatN(m.rach)+'° vers la '+(m.rach>0?'gauche':'droite'):'axe C7-sacrum vertical');
     if(m.asy!=null&&Math.abs(p.nTr)) parts.push('espace bras-tronc plus grand à '+(m.asy>0?'gauche':'droite'));
-    T.court=(parts[0]?parts[0].charAt(0).toUpperCase()+parts[0].slice(1):'Dos lu')+(parts.length>1?' ; '+parts.slice(1).join(' ; '):'')+'.';
+    if(m.oiDiff!=null&&Math.abs(p.nOi||0)) parts.push('omoplate '+(m.oiDiff>0?'gauche':'droite')+' plus écartée de la colonne ('+_anatN(Math.abs(m.oiDiff),1)+' cm)');
+    T.court=(parts[0]?parts[0].charAt(0).toUpperCase()+parts[0].slice(1):'Dos lu')+(parts.length>1?' ; '+parts.slice(1).join(' ; '):'')+'.'
+      +(an?' Position du moment, à confirmer au bilan suivant.':'');
     T.lecture='Vu de dos, on regarde trois choses : la hauteur des deux pointes d’omoplate (repère de la position de la ceinture scapulaire), la ligne de la base du cou (C7) aux fossettes du sacrum (l’axe du dos) et les deux « triangles » entre les bras et la taille. Un écart sur une photo debout traduit une posture — du moment ou habituelle —, jamais une structure : la photo dit où regarder, pas pourquoi.'
       +(Math.abs(p.nOm)?' Une omoplate plus basse va souvent avec un trapèze inférieur et un dentelé moins actifs de ce côté, ou une épaule plus basse sur la photo de face.':'');
-    T.privilegier=['Unilatéral dos : rowing un bras, tirage poulie un bras — commencer par le côté faible','Contrôle des omoplates : Y-raise, face pull, pompes scapulaires, shrug en rétraction','Carry unilatéral (valise), planche latérale, bird dog, Pallof press'];
+    T.lecture+=' Le bord interne des omoplates se mesure à sa distance à la ligne C7 → sacrum : une omoplate plus écartée de la colonne que l’autre, sur une photo debout, est une position du moment — une épaule qui s’enroule, un bras un peu tendu vers l’avant —, à relire au bilan suivant.';
+    T.privilegier=['Rétraction et abaissement des omoplates : face pull, Y-raise sur banc incliné, rowing un bras en finissant omoplate serrée et basse',
+      'Unilatéral dos : rowing un bras, tirage poulie un bras — commencer par le côté faible',
+      'Contrôle des omoplates : pompes scapulaires, shrug en rétraction',
+      'Carry unilatéral (valise), planche latérale, bird dog, Pallof press'];
     T.amenager=[{quoi:'Soulevé de terre et squat',reglage:'contrôler en vidéo de dos que la barre reste horizontale et que le bassin ne glisse pas'},{quoi:'Tractions',reglage:'amplitude complète des deux côtés, sans tirer « de travers » en fin de série'}];
     T.verifier=(f.estime?'Les pointes d’omoplate, C7 et le sacrum sont ESTIMÉS : les replacer sur la photo avant de retenir les chiffres. ':'')+'Si un écart revient d’un bilan à l’autre sur une photo bien prise, en parler avec l’athlète ; en cas de gêne, l’orienter vers un professionnel de santé.';
     return T;
@@ -46944,7 +46980,7 @@ const ANAT_TRAITS={
     ['epaule_*','coude_*',''],['coude_*','poignet_*',''],['epaule_*','hanche_*','an-t-fin'],['hanche_*','genou_*',''],
     ['genou_*','cheville_*',''],['cheville_*','talon_*','an-t-fin'],['talon_*','pointe_*','an-t-fin']],
   dos:[['acromion_l','acromion_r','an-t-os'],['epaule_l','epaule_r',''],['hanche_l','hanche_r',''],['crete_l','crete_r','an-t-os'],
-    ['omoplate_l','omoplate_r','an-t-os'],['c7','sacrum','an-t-axe'],['taille_l','taille_r','an-t-sil'],
+    ['omoplate_l','omoplate_r','an-t-os'],['omoplate_int_l','omoplate_int_r','an-t-os'],['c7','sacrum','an-t-axe'],['taille_l','taille_r','an-t-sil'],
     ['epaule_*','coude_*',''],['coude_*','poignet_*',''],['epaule_*','hanche_*','an-t-fin'],['hanche_*','genou_*',''],
     ['genou_*','cheville_*',''],['cheville_*','talon_*','an-t-fin'],
     ['mollet_*','achille_*','an-t-axe'],['achille_*','talon_*','an-t-axe']],
@@ -46984,6 +47020,7 @@ const ANAT_AIDE=Object.freeze({
   sacrum:{court:'Sacrum',aide:'Le milieu entre les deux fossettes du bas du dos (fossettes de Vénus), au-dessus du pli fessier.'},
   tragus:{court:'Tragus',aide:'Le petit cartilage devant le conduit de l’oreille. Si les cheveux le cachent, au milieu de l’oreille, à la hauteur de l’ouverture du conduit.'},
   trochanter:{court:'Trochanter',aide:'La bosse osseuse sur le côté de la hanche (grand trochanter), environ une main sous la crête du bassin, au milieu de l’épaisseur de la cuisse vue de côté.'},
+  omoplate_int:{court:'Omo. int.',aide:'Le bord interne de l’omoplate (celui qui longe la colonne), à mi-hauteur entre l’épine de l’omoplate et sa pointe basse. Bras relâchés, il se voit comme un relief vertical de chaque côté du dos.'},
   mollet:{court:'Mollet',aide:'De dos, le milieu du mollet à mi-hauteur entre le creux du genou et la cheville : au centre de la largeur de la jambe, pas sur le bord du muscle.'},
   achille:{court:'Achille',aide:'De dos, le milieu du tendon d’Achille à la hauteur des malléoles (les bosses de la cheville) : là où la jambe est la plus fine au-dessus du talon.'},
   malleole:{court:'Malléole',aide:'La bosse osseuse à l’extérieur de la cheville (malléole latérale) : c’est par elle que passe le fil à plomb.'}
@@ -47398,7 +47435,7 @@ function anatGabarit(w,h,vue,femme){
   lat('crete',LG.bicretal/2,fHa+0.07); lat('hanche',0.055,fHa); lat('genou',0.055,fGenou);
   lat('cheville',0.05,fCh); lat('talon',0.05,0.0);
   if(vue==='face') lat('pointe',0.07,-0.01);
-  if(vue==='dos'){ pose('c7',cx,y(fEp+0.04)); pose('sacrum',cx,y(fHa+0.04)); lat('omoplate',0.06,fEp-0.10);
+  if(vue==='dos'){ pose('c7',cx,y(fEp+0.04)); pose('sacrum',cx,y(fHa+0.04)); lat('omoplate',0.06,fEp-0.10); lat('omoplate_int',0.035,fEp-0.05);
     // A11 : mollet, tendon et talon sur la même verticale.
     lat('mollet',0.05,(fGenou+fCh)/2); lat('achille',0.05,fCh); }
   return out;
