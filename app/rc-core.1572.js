@@ -45052,6 +45052,60 @@ function anatMotPied(corr){
   const S=ANAT_PIEDS.SEUILS;
   return ANAT_PIEDS.MOTS[corr<S[0]?0:(corr<=S[1]?1:(corr<=S[2]?2:3))];
 }
+/**
+ * L'HISTORIQUE POSTURAL (chantier A23). Pour chaque bilan à photos de face et
+ * de dos : inclinaison des épaules et du bassin, décalage du tronc, V — lus en
+ * arrière-plan, sans rien garder d'autre que ces quatre nombres.
+ * ⚠ MÊME RÈGLE QUE P14 (MORPHO_PROFILS, « asymétrie latérale soutenue ») : un
+ *   écart ne compte que s'il revient, DU MÊME CÔTÉ, au-delà de la marge, trois
+ *   bilans de suite. Jusque-là, la fiche reste au plus « léger ».
+ */
+const ANAT_SUIVI=Object.freeze({N:3,
+  CLES:Object.freeze([
+    Object.freeze({cle:'epaules',m:'epaules',lib:'Inclinaison des épaules',unite:'°'}),
+    Object.freeze({cle:'bassin',m:'bassin',lib:'Inclinaison du bassin',unite:'°'}),
+    Object.freeze({cle:'buste',m:'tronc',lib:'Décalage du tronc',unite:' %'})])});
+/** PURE. Les quatre nombres d'une analyse. */
+function anatMesuresPosture(res){
+  const F=k=>((res&&res.fiches)||[]).find(f=>f.cle===k);
+  const ep=F('epaules'), ba=F('bassin'), bu=F('buste');
+  const r1=v=>(v==null||!isFinite(v))?null:Math.round(v*100)/100;
+  const confs=[ep,ba,bu].map(f=>f&&f.conf).filter(Boolean), rang={A:2,B:1,C:0};
+  // Une fiche illisible ou neutralisée (corps tourné, A8) n'entre pas dans l'historique.
+  const lu=f=>f&&f.etat==='ok'&&!f.tourne;
+  return {mesures:{epaules:r1(lu(ep)?ep.mesure.a:null),bassin:r1(lu(ba)?ba.mesure.a:null),tronc:r1(lu(bu)?bu.mesure.s:null),V:r1(bu&&bu.mesure.V)},
+    conf:confs.length?confs.reduce((a,b)=>rang[b]<rang[a]?b:a):null};
+}
+/**
+ * PURE. La série d'une mesure, bilan par bilan : l'historique lu en arrière-
+ * plan, et pour le bilan analysé la valeur de l'analyse. Seuls les bilans qui
+ * portent encore des photos de face ET de dos.
+ */
+function anatSeriePosture(u,m,courant,anatLu){
+  const a=anatLu||(u&&u.morphoAnat);
+  let bl=[]; try{ bl=(Array.isArray(u&&u.bilans)?u.bilans:[]).filter(b=>b&&b.date); }catch(e){ bl=[]; }
+  const ok=new Set(bl.filter(b=>{ try{ return !!photoBilanSrc(b,'face')&&!!photoBilanSrc(b,'back'); }catch(e){ return false; } }).map(b=>Number(b.date)));
+  const par={};
+  for(const x of (a&&Array.isArray(a.suivi)?a.suivi:[]))
+    if(x&&x.mesures&&x.mesures[m]!=null&&ok.has(Number(x.bilan))) par[Number(x.bilan)]={bilan:Number(x.bilan),v:x.mesures[m]};
+  if(courant&&courant.v!=null&&ok.has(Number(courant.bilan))) par[Number(courant.bilan)]={bilan:Number(courant.bilan),v:courant.v};
+  return Object.values(par).sort((x,y)=>x.bilan-y.bilan);
+}
+/**
+ * PURE. Persistant si les trois derniers bilans dépassent la marge DU MÊME
+ * CÔTÉ. Rend {persistant, n (bilans consécutifs du même côté au-delà de la
+ * marge, en remontant du dernier), cote (+1 / −1)}.
+ */
+function anatPersistance(serie,marge){
+  const l=(serie||[]).slice();
+  let n=0, cote=0;
+  for(let i=l.length-1;i>=0;i--){
+    const v=l[i].v; if(v==null||!(Math.abs(v)>marge)) break;
+    const sg=Math.sign(v); if(cote&&sg!==cote) break;
+    cote=sg; n++;
+  }
+  return {persistant:n>=ANAT_SUIVI.N,n,cote};
+}
 /** Le repère d'un sexe (homme par défaut, comme les largeurs). */
 function anatRef(femme){ return ANAT_REF[femme?'F':'H']; }
 /**
@@ -46430,6 +46484,29 @@ function anatMesures(anat,u,o){
       fd.chiffres=fd.chiffres.map(c=>/^(Triangles|Bord interne)/.test(c.lib)?Object.assign({},c,{val:nl,ecart:''}):c);
     }
   }
+  // L'HISTORIQUE POSTURAL (A23) : sans persistance sur trois bilans, un
+  // écart d'inclinaison ou d'axe reste au plus « léger ».
+  if(!brut&&anat&&anat.bilan){
+    const cour=anatMesuresPosture({fiches});
+    for(const d of ANAT_SUIVI.CLES){
+      const f=fiches.find(x=>x.cle===d.cle);
+      if(!f||f.etat!=='ok'||f.tourne) continue;
+      const v=cour.mesures[d.m];
+      if(v==null) continue;
+      const serie=_anatSafe(()=>anatSeriePosture(u,d.m,{bilan:Number(anat.bilan),v},anat))||[];
+      const marge=d.cle==='buste'?ANAT_SEUILS.tronc[0]:(f.mesure.marge||ANAT_TOL[d.cle]||2);
+      // La persistance se lit JUSQU'AU bilan analysé : c'est son niveau qu'elle autorise.
+      const pe=anatPersistance(serie.filter(x=>x.bilan<=Number(anat.bilan)),marge);
+      f.suivi={cle:d.m,lib:d.lib,unite:d.unite,serie,marge,persistance:pe};
+      // Le buste : seul son AXE est postural ; une longueur classée ne se plafonne pas.
+      const axe=d.cle!=='buste'||!f.stat;
+      if(axe&&!pe.persistant&&f.niveau!=null&&Math.abs(f.niveau)>1){ f.niveau=Math.sign(f.niveau); f.plafonne=true; }
+      if(serie.length>1) f.chiffres=f.chiffres.concat([{lib:'Suivi sur '+serie.length+' bilans',
+        def:d.lib.toLowerCase()+', même lecture à chaque bilan ; marge ±'+_anatN(marge,1)+d.unite.trim(),
+        val:pe.persistant?'persistant depuis '+pe.n+' bilans':(pe.n?pe.n+' bilan'+(pe.n>1?'s':'')+' de suite du même côté':'non persistant'),
+        ref:ANAT_SUIVI.N+' de suite',ecart:''}]);
+    }
+  }
   // LA CONFIANCE, fiche par fiche, sur les points qu'elle utilise.
   {
     const K=(V,k,sd)=>V?k+'_'+V.cotes[sd]:null;
@@ -46488,7 +46565,8 @@ function anatMesures(anat,u,o){
   const fb=fiches.find(f=>f.cle==='bras');
   const photoCm={bras:fb&&fb.mesure.mb?fb.mesure.mb.cm:null,avantbras:fb&&fb.mesure.abPhoto?fb.mesure.abPhoto.cm:null,
     rotule:(verif&&verif.genouCm1!=null&&!(B&&B.rotule))?verif.genouCm1:null};
-  return {photoCm,biais:B,fiches,leviers:anatLeviers(fiches,F,taille,femme,u),echelle:F?{cmPx:F.cmPx,taille,stature:F.stature,verif,pct:ECH,piedsCoupes,cheveux:!!opts.cheveux}:null,rotation,opts};
+  return {photoCm,biais:B,fiches,leviers:anatLeviers(fiches,F,taille,femme,u),echelle:F?{cmPx:F.cmPx,taille,stature:F.stature,verif,pct:ECH,piedsCoupes,cheveux:!!opts.cheveux}:null,rotation,opts,
+    posture:anatMesuresPosture({fiches})};
 }
 
 /**
@@ -46920,6 +46998,12 @@ function anatTexte(f,res){
   const T=_anatTexteBrut(f,res);
   T.privilegier=(T.privilegier||[]).map(x=>typeof x==='string'?_anatReco(x):x);
   T.amenager=(T.amenager||[]).map(x=>Object.assign({},x,{exercices:anatLierExos(x.quoi+' '+x.reglage),consigne:anatConsigneAthlete(x.reglage)}));
+  // A23 : la persistance, dite avec la prudence de P14.
+  const su=f&&f.suivi;
+  if(su&&su.persistance.persistant)
+    T.lecture=(T.lecture?T.lecture+' ':'')+'Persistant depuis '+su.persistance.n+' bilans, du même côté et au-delà de la marge : ce n’est plus une photo isolée. Réévaluer au prochain bilan après un bloc de travail unilatéral ; si l’écart ne bouge pas, en parler avec l’athlète, et l’orienter vers un professionnel de santé si une gêne existe.';
+  else if(f&&f.plafonne)
+    T.lecture=(T.lecture?T.lecture+' ':'')+'Écart au-delà de « léger » sur cette photo, mais pas encore trois bilans de suite du même côté : il reste « léger » tant qu’il ne revient pas (même règle que pour une asymétrie latérale soutenue).';
   return T;
 }
 function _anatTexteBrut(f,res){
@@ -47264,6 +47348,55 @@ function anatVerdict(f){
 // ── L'ÉCRAN ────────────────────────────────────────────────────────────────
 const _anatEnCours=new Set();
 const _anatSilEnCours=new Set();
+const _anatSuiviEnCours=new Set();
+/** Les bilans à photos de face et de dos dont la posture n'est pas encore lue. */
+function anatPostureAFaire(c){
+  const a=c&&c.morphoAnat;
+  if(!a||a.v!==ANAT_VERSION) return [];
+  const faits=new Set((Array.isArray(a.suivi)?a.suivi:[]).map(x=>Number(x.bilan)));
+  let bl=[]; try{ bl=(Array.isArray(c.bilans)?c.bilans:[]).filter(b=>b&&b.date); }catch(e){ bl=[]; }
+  return bl.filter(b=>!faits.has(Number(b.date))&&Number(b.date)!==Number(a.bilan)
+    &&(()=>{ try{ return !!photoBilanSrc(b,'face')&&!!photoBilanSrc(b,'back'); }catch(e){ return false; } })());
+}
+/**
+ * Lit, un bilan à la fois, les photos de face et de dos, et range les quatre
+ * nombres posturaux (A23). CÔTÉ COACH. Aucune image, aucun point gardés.
+ */
+async function anatSuivrePosture(email){
+  if(_anatSuiviEnCours.has(email)||_anatEnCours.has(email)||_anatSilEnCours.has(email)) return false;
+  const c0=(DB.get('users')||{})[email];
+  if(!c0||!currentUser||c0.coachId!==currentUser.id) return false;
+  const aFaire=anatPostureAFaire(c0);
+  if(!aFaire.length) return false;
+  _anatSuiviEnCours.add(email);
+  const lus=[];
+  try{
+    await chargerMotionLab();
+    const lire=(typeof window!=='undefined')?/** @type {any} */(window).mlAnatPhoto:null;
+    if(typeof lire!=='function') throw new Error('lecture indisponible');
+    for(const b of aFaire){
+      const vue=async(nom,src)=>{ let r=null; try{ r=await lire(src,{}); }catch(e){ r=null; }
+        const auto=(r&&r.ok)?anatPointsAuto(r,nom):null; return auto?{w:r.w,h:r.h,auto,man:null}:null; };
+      const fa=await vue('face',photoBilanSrc(b,'face')), da=await vue('dos',photoBilanSrc(b,'back'));
+      if(!fa){ lus.push({bilan:Number(b.date),mesures:null}); continue; }
+      const tmp={v:ANAT_VERSION,bilan:Number(b.date),face:fa,dos:da,opts:{}};
+      const r=_anatSafe(()=>anatMesures(tmp,c0,{brut:true}));
+      const m=r?anatMesuresPosture(r):null;
+      lus.push(m?{bilan:Number(b.date),mesures:m.mesures,conf:m.conf}:{bilan:Number(b.date),mesures:null});
+    }
+  }catch(e){}
+  _anatSuiviEnCours.delete(email);
+  if(!lus.length) return false;
+  const users=DB.get('users')||{}, d=users[email];
+  if(!d||!d.morphoAnat) return false;
+  const deja=new Set(lus.map(x=>x.bilan));
+  d.morphoAnat.suivi=(Array.isArray(d.morphoAnat.suivi)?d.morphoAnat.suivi:[]).filter(x=>!deja.has(Number(x.bilan))).concat(lus);
+  d.updatedAt=Date.now(); users[email]=d;
+  DB.set('users',users);
+  try{ CLOUD.pushOne(email,d); }catch(e){}
+  try{ const cc=getOwnedClient(currentClientId); if(cc&&cc.email===email) renderAnatCoach(cc); }catch(e){}
+  return true;
+}
 /** Les bilans à photo de face dont la silhouette n'est pas encore lue. */
 function anatSilhouettesAFaire(c){
   const a=c&&c.morphoAnat;
@@ -48128,6 +48261,7 @@ async function anatAnalyser(email,force){
     if(cour&&cour.choix) res.choix=cour.choix;
     // Les silhouettes des autres bilans (A13) ne dépendent pas du bilan lu.
     if(cour&&Array.isArray(cour.silhouettes)&&cour.silhouettes.length) res.silhouettes=cour.silhouettes;
+    if(cour&&Array.isArray(cour.suivi)&&cour.suivi.length) res.suivi=cour.suivi;
     if(cour&&cour.archives){
       const ar=Object.assign({},cour.archives); delete ar[String(pb.date)];
       if(Object.keys(ar).length) res.archives=ar;
@@ -48564,6 +48698,8 @@ function renderAnatCoach(c){
       setTimeout(()=>{ anatAnalyser(c.email).catch(()=>{}); },50);
     else if(anatSilhouettesAFaire(c).length&&!_anatSilEnCours.has(c.email))
       setTimeout(()=>{ anatSuivreSilhouettes(c.email).catch(()=>{}); },400);
+    else if(anatPostureAFaire(c).length&&!_anatSuiviEnCours.has(c.email))
+      setTimeout(()=>{ anatSuivrePosture(c.email).catch(()=>{}); },600);
   }catch(e){}
   return true;
 }
@@ -48841,7 +48977,11 @@ function _htmlAnat(c){
       [{lib:'V',couleur:'#E02020',points:f.courbeV.map(x=>({x:x.bilan,v:x.V})),bande:ANAT_V_REF.BRUIT}],
       {h:72,dates:true,valeur:_anatN(f.courbeV[f.courbeV.length-1].V,2),
        pied:'Un point par bilan à photo de face · la bande grise est le bruit de placement : ± '+_anatN(ANAT_V_REF.BRUIT,2)}))||'':'';
-    const detail='<div class="an-f-long" id="an-long-'+f.cle+'">'+tab+(courbe?'<div class="an-f-courbe">'+courbe+'</div>':'')
+    const cP=(f.suivi&&f.suivi.serie.length>1)?_anatSafe(()=>_htmlCorpsGraphe(f.suivi.lib,f.suivi.unite.trim(),
+      [{lib:f.suivi.lib,couleur:'#E02020',points:f.suivi.serie.map(x=>({x:x.bilan,v:x.v})),bande:f.suivi.marge}],
+      {h:60,dates:true,valeur:_anatSN(f.suivi.serie[f.suivi.serie.length-1].v,1)+f.suivi.unite,
+       pied:'Un point par bilan à photos de face et de dos · la bande grise est la marge : ± '+_anatN(f.suivi.marge,1)+f.suivi.unite}))||'':'';
+    const detail='<div class="an-f-long" id="an-long-'+f.cle+'">'+tab+(courbe?'<div class="an-f-courbe">'+courbe+'</div>':'')+(cP?'<div class="an-f-courbe">'+cP+'</div>':'')
       +(t.lecture?'<h6>Lecture</h6><p class="an-f-lec">'+escapeHtml(t.lecture)+'</p>':'')
       +(t.privilegier&&t.privilegier.length?'<h6>À privilégier</h6>'+li(t.privilegier):'')
       +(t.amenager&&t.amenager.length?'<h6>À aménager</h6><ul>'+t.amenager.map((x,i)=>'<li><b>'+escapeHtml(x.quoi)+'</b> — '+escapeHtml(x.reglage)

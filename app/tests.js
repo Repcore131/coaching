@@ -45478,6 +45478,37 @@ async function testExercices(){
       if((h.match(/an-prio-c/g)||[]).length<2||!/anatOuvrir\('genoux',true\)/.test(h)) return _echec('cartes');
       if(anatObjectif(_anatDossier({bilans:[{type:'depart',date:1,'deb-goals':'Battre mon record au squat'}]}))!=='force') return _echec('objectif force');
       return true;})());
+    // L'historique postural (A23, 25/09/2026).
+    // Le bilan analysé est le 3000 ; les bilans 1000 et 2000 ont été lus en arrière-plan.
+    const _anatPosture=(e1,e2)=>{
+      const pts=anatGabarit(1000,1500,'face');
+      const dy=Math.tan(4.5*Math.PI/180)*(pts.acromion_r[0]-pts.acromion_l[0])*1000/1500;
+      const a=_anatGab({acromion_r:[pts.acromion_r[0],pts.acromion_r[1]+dy,1]}); a.bilan=3000;
+      a.suivi=[{bilan:1000,mesures:{epaules:e1}},{bilan:2000,mesures:{epaules:e2}}];
+      const B=t=>({type:t===1000?'depart':'coaching',date:t,photos:{face:'f'+t,back:'b'+t}});
+      const res=anatMesures(a,_anatDossier({bilans:[B(1000),B(2000),B(3000)]}));
+      return res.fiches.find(f=>f.cle==='epaules');
+    };
+    ok('ANALYSE MORPHO : HISTORIQUE POSTURAL : 3 BILANS DU MÊME CÔTÉ → PERSISTANT, LA FICHE PEUT ÊTRE « NETTE »',(()=>{
+      if(typeof anatPersistance!=='function') return _echec('anatPersistance n’existe pas');
+      const f=_anatPosture(5,4.8);
+      if(!f.suivi||f.suivi.serie.length!==3) return _echec('série : '+JSON.stringify(f.suivi&&f.suivi.serie));
+      if(!f.suivi.persistance.persistant||f.suivi.persistance.n!==3) return _echec('persistance : '+JSON.stringify(f.suivi.persistance));
+      if(f.niveau!==2||f.plafonne) return _echec('niveau : '+f.niveau);
+      const l=f.chiffres.find(c=>/^Suivi sur 3 bilans/.test(c.lib));
+      if(!l||!/persistant depuis 3 bilans/.test(l.val)) return _echec('ligne de suivi : '+JSON.stringify(l));
+      const t=anatTexte(f,{fiches:[f]});
+      if(!/Persistant depuis 3 bilans/.test(t.lecture)||!/professionnel de santé si une gêne existe/.test(t.lecture)) return _echec('lecture : '+t.lecture);
+      return true;})());
+    ok('ANALYSE MORPHO : HISTORIQUE POSTURAL : CÔTÉS ALTERNÉS → PAS DE PERSISTANCE, LA FICHE RESTE « LÉGÈRE »',(()=>{
+      const f=_anatPosture(5,-5);
+      if(f.suivi.persistance.persistant) return _echec('persistance sur des côtés alternés');
+      if(f.niveau!==1||!f.plafonne) return _echec('niveau : '+f.niveau+' plafonné '+f.plafonne);
+      if(!/pas encore trois bilans de suite/.test(anatTexte(f,{fiches:[f]}).lecture)) return _echec('la lecture ne dit pas le plafond');
+      // La série pure : bruit sous la marge, pas de persistance ; même côté trois fois, oui.
+      if(anatPersistance([{v:1},{v:1},{v:1}],2).persistant) return _echec('sous la marge');
+      if(!anatPersistance([{v:-3},{v:3},{v:3},{v:3}],2).persistant) return _echec('trois derniers du même côté');
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());
