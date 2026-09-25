@@ -45290,6 +45290,39 @@ async function testExercices(){
       if(!/vers le sol/.test(f.source)) return _echec('source : '+f.source);
       if(anatOptions({opts:{sol:true}}).sol!==true||anatOptions({}).sol!==false) return _echec('option sol');
       return true;})());
+    // Le squat réglable (A16, 25/09/2026).
+    ok('ANALYSE MORPHO : SQUAT RÉGLABLE, MÊMES ENTRÉES QUE L’ANCIEN MODÈLE : MÊME ANGLE À 0,5° PRÈS',(()=>{
+      if(typeof anatSquatModele!=='function') return _echec('anatSquatModele n’existe pas');
+      // L'ancien modèle : span = cuisse − jambe·sin 30° + 0,03 ; angle = asin(span / tronc).
+      const ancien=(f,t,j,a,m)=>Math.asin(Math.max(-1,Math.min(1,(f-j*Math.sin(a*Math.PI/180)+m)/t)))*180/Math.PI;
+      for(const [f,t,j] of [[0.2425,0.2961,0.2493],[0.26,0.28,0.24],[0.22,0.31,0.26]]){
+        const n=anatSquatModele({F:f,T:j,Tr:t,alpha:30,beta:0,pied:0.03/ANAT_SQUAT.MILIEU_PIED});
+        if(Math.abs(n.angle-ancien(f,t,j,30,0.03))>0.5) return _echec('écart : '+n.angle+' / '+ancien(f,t,j,30,0.03));
+      }
+      return true;})());
+    ok('ANALYSE MORPHO : SQUAT : CALE → PLUS DROIT, BARRE BASSE → PLUS PENCHÉ, ÉCART LARGE → PLUS DROIT',(()=>{
+      const A={F:0.2425,T:0.2493,Tr:0.2961,pied:0.154};
+      const b={alpha:30,beta:0,barre:'haute',cale:false};
+      const a0=anatSquatCalc(A,b).angle;
+      const aC=anatSquatCalc(A,Object.assign({},b,{cale:true})).angle;
+      const aB=anatSquatCalc(A,Object.assign({},b,{barre:'basse'})).angle;
+      const aE=anatSquatCalc(A,Object.assign({},b,{beta:30})).angle;
+      if(!(aC<a0)) return _echec('cale : '+aC+' contre '+a0);
+      if(!(aB>a0)) return _echec('barre basse : '+aB+' contre '+a0);
+      if(!(aE<a0)) return _echec('écart large : '+aE+' contre '+a0);
+      const m=anatSquatCalc(A,b);
+      if(!(m.brasHanche>0)||!isFinite(m.rapport)||['hanche','genou','équilibre'].indexOf(m.dominante)<0) return _echec('bras de levier : '+JSON.stringify(m));
+      if(anatSquatModele({F:0.3,T:0.2,Tr:0.3,alpha:30,beta:0,pied:0.15}).dominante!=='hanche') return _echec('dominante hanche non reconnue');
+      // Le tibia tiré du test du genou au mur : 14 cm → 34,8° ; 0 cm → 18°, borné à 20°.
+      if(anatAlphaCheville({morphoTests:{cheville:{cm:'14'}}}).alpha!==34.8) return _echec('genou au mur 14 cm');
+      if(anatAlphaCheville({morphoTests:{cheville:{cm:0}}}).alpha!==20) return _echec('borne basse');
+      if(anatAlphaCheville({})!==null) return _echec('sans test, pas de tibia');
+      // Le levier de l'analyse porte le modèle, la source et le réglage par défaut.
+      const L=anatMesures(_anatGab(),_anatDossier({morphoTests:{cheville:{cm:14,date:Date.now()}}})).leviers.find(x=>x.cle==='squat');
+      if(!L||!L.modele||L.modele.base.alpha!==34.8||L.modele.alphaSrc!=='test') return _echec('levier : '+JSON.stringify(L&&L.modele));
+      if(!/Fry, Smith & Schilling, JSCR 2003/.test(L.source)||!/Schoenfeld, JSCR 2010/.test(L.source)||!/genou au mur/.test(L.source)) return _echec('source : '+L.source);
+      if(L.ref==null||L.val==null) return _echec('valeurs');
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());

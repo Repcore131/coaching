@@ -46490,6 +46490,58 @@ function anatMesures(anat,u,o){
 }
 
 /**
+ * LE SQUAT RÉGLABLE (chantier A16). Un modèle plan, cuisse parallèle au sol :
+ *   - cheville à l'origine, genou en avant de T·sin α (α : inclinaison du tibia) ;
+ *   - hanche en arrière du genou de F·cos β (β : abduction de hanche — l'écart
+ *     et l'ouverture des pieds projettent le fémur hors du plan sagittal) ;
+ *   - barre à l'aplomb du milieu du pied, 0,3 × pied devant la cheville ;
+ *   - tronc hanche → barre : Tr − 4 % de la taille barre haute, − 8 % barre basse ;
+ *   - cale sous les talons : + 7° de tibia.
+ * Sorties : l'inclinaison du buste (depuis la verticale), les bras de levier
+ * horizontaux hanche → barre et genou → barre, et leur rapport. Tout est en
+ * fraction de la taille. Sources : Fry, Smith & Schilling, JSCR 2003 (le
+ * genou qui avance redresse le buste et reporte le travail vers le genou) ;
+ * Schoenfeld, JSCR 2010 (barre haute et basse, largeur de pieds).
+ */
+const ANAT_SQUAT=Object.freeze({ALPHA:30,ALPHA_MIN:20,ALPHA_MAX:45,CALE:7,BARRE:Object.freeze({haute:0.04,basse:0.08}),
+  MILIEU_PIED:0.3,DOMINANTE:1.2,
+  SOURCE:'Fry, Smith & Schilling, JSCR 2003 ; Schoenfeld, JSCR 2010'});
+/** PURE. Le modèle : {F, T, Tr, alpha, beta, pied} → angle et bras de levier. */
+function anatSquatModele(p){
+  const rad=Math.PI/180;
+  const genou=p.T*Math.sin((p.alpha||0)*rad);
+  const fp=p.F*Math.cos((p.beta||0)*rad);
+  const barre=ANAT_SQUAT.MILIEU_PIED*(p.pied||0);
+  const hanche=genou-fp;              // position de la hanche (négative : derrière la cheville)
+  const bh=barre-hanche, bg=genou-barre;
+  const angle=_anatDeg(Math.asin(Math.max(-1,Math.min(1,bh/p.Tr))));
+  const rapport=Math.abs(bg)>1e-6?bh/Math.abs(bg):Infinity;
+  return {angle,brasHanche:bh,brasGenou:bg,rapport,
+    dominante:rapport>ANAT_SQUAT.DOMINANTE?'hanche':(rapport<1/ANAT_SQUAT.DOMINANTE?'genou':'équilibre')};
+}
+/** PURE. Le tibia tiré du test du genou au mur : ≈ 30° + 1,2° par cm au-delà de 10 cm, borné 20–45°. APPROXIMATION. */
+function anatAlphaCheville(u){
+  const t=u&&u.morphoTests&&u.morphoTests.cheville;
+  const cm=t?parseFloat(String(t.cm).replace(',','.')):NaN;
+  if(!isFinite(cm)) return null;
+  const a=Math.max(ANAT_SQUAT.ALPHA_MIN,Math.min(ANAT_SQUAT.ALPHA_MAX,ANAT_SQUAT.ALPHA+1.2*(cm-10)));
+  return {alpha:Math.round(a*10)/10,cm};
+}
+/** PURE. Un réglage appliqué à des proportions : {F,T,Tr (hanche → épaules),pied} × {alpha,beta,barre,cale}. */
+function anatSquatCalc(prop,cfg){
+  return anatSquatModele({F:prop.F,T:prop.T,Tr:prop.Tr-(ANAT_SQUAT.BARRE[cfg.barre]||ANAT_SQUAT.BARRE.haute),
+    alpha:cfg.alpha+(cfg.cale?ANAT_SQUAT.CALE:0),beta:cfg.beta||0,pied:prop.pied});
+}
+/** Le texte d'une configuration, avec ses bras de levier en cm quand la taille est connue. */
+function anatSquatTexte(moi,ref,cfg,taille){
+  const cm=v=>taille?_anatN(Math.abs(v)*taille,0)+' cm':_anatN(Math.abs(v)*100,1)+' % de la taille';
+  const dom={hanche:'dominante hanche',genou:'dominante genou',équilibre:'hanche et genou équilibrés'}[moi.dominante];
+  return 'Barre '+cfg.barre+', tibia à '+_anatN(cfg.alpha+(cfg.cale?ANAT_SQUAT.CALE:0),0)+'°'+(cfg.cale?' (cale comprise)':'')+(cfg.beta?', abduction de hanche '+_anatN(cfg.beta,0)+'°':'')
+    +' : buste à '+Math.round(moi.angle)+'° de la verticale (proportions moyennes, même réglage : '+Math.round(ref.angle)+'°). '
+    +'Bras de levier : hanche → barre '+cm(moi.brasHanche)+', genou → barre '+cm(moi.brasGenou)+(moi.brasGenou<0?' (genou derrière la barre)':'')
+    +' ; rapport '+(isFinite(moi.rapport)?_anatN(moi.rapport,2):'—')+', '+dom+'.';
+}
+/**
  * PURE. CE QUE LES LONGUEURS FONT AUX TROIS GRANDS MOUVEMENTS.
  * Des modèles plans simples, écrits en clair pour qu'on puisse les discuter :
  * - squat, cuisse parallèle au sol, barre au-dessus du milieu du pied, tibia
@@ -46515,16 +46567,21 @@ function anatLeviers(fiches,F,taille,femme,u){
   // Le milieu du pied devant la cheville, en fraction de la taille : 0,03 pour
   // un pied moyen ; un pied mesuré le déplace à proportion (repère ANSUR II).
   const mPied=pied?0.03*(pied/taille)/MR.pied:0.03;
-  const squat=(f,t,j,a,m)=>{
-    const span=f-j*Math.sin(a*Math.PI/180)+m;
-    return _anatDeg(Math.asin(Math.max(-1,Math.min(1,span/t))));
-  };
+  // LE SQUAT (A16) : le modèle réglable. Réglage par défaut : barre haute,
+  // tibia tiré du test du genou au mur s'il existe (sinon 30°), pieds sous
+  // les hanches, sans cale. La moyenne reçoit exactement le même réglage.
   if(cu&&ja&&tr&&cu.fr&&ja.fr&&tr.fr){
-    const moi=squat(cu.fr,tr.fr,ja.fr,30,mPied), ref=squat(R.cuisse,R.tronc,R.jambe,30,0.03);
-    const cale=squat(cu.fr,tr.fr,ja.fr,37,mPied);
-    out.push({cle:'squat',lib:'Squat',val:Math.round(moi),ref:Math.round(ref),cale:Math.round(cale),
-      source:photo+(pied?' ; milieu du pied d’après la longueur de pied mesurée au bilan ('+_anatN(pied,1)+' cm ; repère '+ANAT_MESURES_REF.SOURCE+')':' ; milieu du pied à la position moyenne'),
-      txt:'Inclinaison du buste estimée à la parallèle : '+Math.round(moi)+'° (proportions moyennes : '+Math.round(ref)+'°). Avec une cale de 2,5 cm sous les talons : '+Math.round(cale)+'°.'
+    const aC=_anatSafe(()=>anatAlphaCheville(u));
+    const base={alpha:aC?aC.alpha:ANAT_SQUAT.ALPHA,beta:0,barre:'haute',cale:false};
+    const A={F:cu.fr,T:ja.fr,Tr:tr.fr,pied:pied?pied/taille:MR.pied}, Rp={F:R.cuisse,T:R.jambe,Tr:R.tronc,pied:MR.pied};
+    const moi=anatSquatCalc(A,base), ref=anatSquatCalc(Rp,base), cale=anatSquatCalc(A,Object.assign({},base,{cale:true}));
+    out.push({cle:'squat',lib:'Squat',val:Math.round(moi.angle),ref:Math.round(ref.angle),cale:Math.round(cale.angle),
+      modele:{A,Rp,base,taille:taille||null,alphaSrc:aC?'test':'defaut',alphaCm:aC?aC.cm:null},
+      bras:{hanche:moi.brasHanche,genou:moi.brasGenou,rapport:moi.rapport,dominante:moi.dominante},
+      source:photo+(pied?' ; milieu du pied d’après la longueur de pied mesurée au bilan ('+_anatN(pied,1)+' cm ; repère '+ANAT_MESURES_REF.SOURCE+')':' ; milieu du pied pour un pied moyen (ANSUR II)')
+        +(aC?' ; tibia tiré du test du genou au mur ('+_anatN(aC.cm,0)+' cm → '+_anatN(aC.alpha,0)+'°, approximation 30° + 1,2° par cm au-delà de 10 cm)':' ; tibia à 30°')
+        +' ; modèle '+ANAT_SQUAT.SOURCE,
+      txt:anatSquatTexte(moi,ref,base,taille)+' Avec une cale sous les talons\u00a0: '+Math.round(cale.angle)+'°.'
         +(pied?' Barre au-dessus du milieu d’un pied de '+_anatN(pied,1)+' cm, mesuré au bilan.':'')});
   }
   // LE BRAS PAR L'ENVERGURE : (envergure − carrure) / 2, rapporté à la même
@@ -47167,6 +47224,49 @@ let _anatLevIdx=0;
 /** Les menus déroulants de la colonne centrale : ouverts ou fermés. */
 let _anatDeplie={lev:true,inf:false};
 let _anatToutes=false;
+// ── LE SQUAT RÉGLÉ (A16) : un état d'écran, pas une donnée ────────────────
+let _anatSquatReg=null, _anatSquatL=null;
+function _anatSquatCfg(l){
+  const b=(l&&l.modele&&l.modele.base)||{alpha:ANAT_SQUAT.ALPHA,beta:0,barre:'haute',cale:false};
+  return Object.assign({},b,(_anatSquatReg&&_anatSquatReg.email===((getOwnedClient(currentClientId)||{}).email))?_anatSquatReg.cfg:{});
+}
+/** Le haut de la carte : la jauge (athlète, moyenne, réglage) et le texte recalculé. */
+function _htmlSquatRes(l){
+  _anatSquatL=l;
+  const M=l.modele, cfg=_anatSquatCfg(l);
+  const moi=anatSquatCalc(M.A,cfg), ref=anatSquatCalc(M.Rp,cfg);
+  const regle=Math.round(moi.angle), change=JSON.stringify(cfg)!==JSON.stringify(M.base);
+  const j=_anatJauge(Object.assign({},l,{regle:change?regle:null,cale:change?null:l.cale}));
+  return '<div class="an-lev-v">'+j+'<div class="an-lev-vt"><strong>'+l.val+'°</strong><em>buste à la parallèle<br>moyenne '+l.ref+'°'
+      +(change?'<br>réglage : <b class="an-sq-r">'+regle+'°</b> (moyenne '+Math.round(ref.angle)+'°)':'')+'</em>'
+    +'<span class="an-lev-leg"><span><i class="l-moi"></i>athlète</span><span><i class="l-moy"></i>moyenne</span><span><i class="l-cale"></i>'+(change?'réglage':'avec cale')+'</span></span></div></div>'
+    +'<p>'+escapeHtml(change?anatSquatTexte(moi,ref,cfg,M.taille):l.txt)+'</p>';
+}
+/** Les quatre contrôles : cheville, écart, barre haute / basse, cale. */
+function _htmlSquatCtl(l){
+  const cfg=_anatSquatCfg(l), M=l.modele;
+  return '<div class="an-sq" role="group" aria-label="Régler le squat">'
+    +'<label class="an-sq-c"><span>Cheville <output id="an-sq-a">'+_anatN(cfg.alpha,0)+'°</output></span><input type="range" min="'+ANAT_SQUAT.ALPHA_MIN+'" max="'+ANAT_SQUAT.ALPHA_MAX+'" step="1" value="'+Math.round(cfg.alpha)+'" oninput="anatSquatRegler(\'alpha\',this.value)" aria-label="Inclinaison du tibia'+(M.alphaSrc==='test'?' (départ : test du genou au mur)':'')+'"></label>'
+    +'<label class="an-sq-c"><span>Écart <output id="an-sq-b">'+_anatN(cfg.beta,0)+'°</output></span><input type="range" min="0" max="45" step="1" value="'+Math.round(cfg.beta)+'" oninput="anatSquatRegler(\'beta\',this.value)" aria-label="Abduction de hanche : écart et ouverture des pieds"></label>'
+    +'<div class="an-sq-t" role="group" aria-label="Position de la barre">'+['haute','basse'].map(b=>'<button type="button" class="'+(cfg.barre===b?'actif':'')+'" aria-pressed="'+(cfg.barre===b)+'" onclick="anatSquatRegler(\'barre\',\''+b+'\')">Barre '+b+'</button>').join('')+'</div>'
+    +'<label class="an-sq-k"><input type="checkbox"'+(cfg.cale?' checked':'')+' onchange="anatSquatRegler(\'cale\',this.checked)"><span>Cale</span></label>'
+    +'</div>';
+}
+/** Un contrôle bouge : le résultat se recalcule sur place, les contrôles restent sous le doigt. */
+function anatSquatRegler(k,v){
+  const l=_anatSquatL; if(!l||!l.modele) return;
+  const c=getOwnedClient(currentClientId);
+  const cfg=_anatSquatCfg(l);
+  cfg[k]=(k==='alpha'||k==='beta')?Number(v):(k==='cale'?!!v:v);
+  _anatSquatReg={email:c&&c.email,cfg};
+  const z=document.getElementById('an-sq-res');
+  if(z) z.innerHTML=_htmlSquatRes(l);
+  const oa=document.getElementById('an-sq-a'), ob=document.getElementById('an-sq-b');
+  if(oa) oa.textContent=_anatN(cfg.alpha,0)+'°';
+  if(ob) ob.textContent=_anatN(cfg.beta,0)+'°';
+  const ck=document.querySelector('.an-sq-k input'); if(ck) ck.checked=!!cfg.cale;
+  if(k==='barre') document.querySelectorAll('.an-sq-t button').forEach(b=>{ const on=b.textContent==='Barre '+v; b.classList.toggle('actif',on); b.setAttribute('aria-pressed',on); });
+}
 function anatLevier(d,i){
   _anatLevIdx=(i!=null)?Number(i)||0:_anatLevIdx+(Number(d)||0);
   const c=getOwnedClient(currentClientId); if(c) renderAnatCoach(c);
@@ -48162,7 +48262,7 @@ function _htmlAnat(c){
       const val=l.cle==='squat'?l.val+'°':l.cle==='souleve'?_anatN(l.val,2):(l.val!=null?l.val+' cm':_anatSN(l.ecart,0)+' %');
       const ref=l.cle==='squat'?l.ref+'°':l.cle==='souleve'?_anatN(l.ref,2):(l.ref!=null?l.ref+' cm':'');
       const sous=l.cle==='squat'?'buste à la parallèle':l.cle==='souleve'?'bras / tronc':'trajet de barre';
-      const modele={squat:'Cuisse parallèle au sol, tibia incliné de 30°, barre au-dessus du milieu du pied.',
+      const modele={squat:'Cuisse parallèle au sol, tibia incliné de '+_anatN(l.modele?l.modele.base.alpha:30,0)+'°, barre au-dessus du milieu du pied, 0,3 × pied devant la cheville ; barre haute 4 % de la taille sous les épaules, basse 8 %.',
         souleve:'Bras (épaule → poignet + demi-main) rapporté au tronc.',
         developpe:'Trajet de barre, prise à 1,5 fois la carrure.'}[l.cle]||'';
       return '<details class="an-dr an-lev"'+(_anatDeplie.lev!==false?' open':'')+' ontoggle="_anatDeplie.lev=this.open">'
@@ -48175,10 +48275,10 @@ function _htmlAnat(c){
           +'<div class="an-lev-nav"><button type="button" aria-label="Levier précédent" onclick="anatLevier(-1)"'+(nLev<2?' disabled':'')+'>'+ANAT_SVG.gauche+'</button>'
           +'<span>'+(iLev+1)+' / '+nLev+'</span>'
           +'<button type="button" aria-label="Levier suivant" onclick="anatLevier(1)"'+(nLev<2?' disabled':'')+'>'+ANAT_SVG.droite+'</button></div></div>'
-          +'<div class="an-lev-v">'+_anatJauge(l)+'<div class="an-lev-vt"><strong>'+escapeHtml(val)+'</strong><em>'+escapeHtml(sous)+(ref?'<br>moyenne '+escapeHtml(ref):'')+'</em>'
-            +(l.cle==='squat'?'<span class="an-lev-leg"><span><i class="l-moi"></i>athlète</span><span><i class="l-moy"></i>moyenne</span><span><i class="l-cale"></i>avec cale</span></span>'
-              :'<span class="an-lev-leg"><span><i class="l-moi"></i>athlète</span><span><i class="l-moy"></i>moyenne</span></span>')+'</div></div>'
-          +'<p>'+escapeHtml(l.txt)+'</p></div>'
+          +(l.cle==='squat'&&l.modele?'<div id="an-sq-res">'+_htmlSquatRes(l)+'</div>'+_htmlSquatCtl(l)
+          :'<div class="an-lev-v">'+_anatJauge(l)+'<div class="an-lev-vt"><strong>'+escapeHtml(val)+'</strong><em>'+escapeHtml(sous)+(ref?'<br>moyenne '+escapeHtml(ref):'')+'</em>'
+            +'<span class="an-lev-leg"><span><i class="l-moi"></i>athlète</span><span><i class="l-moy"></i>moyenne</span></span></div></div>'
+          +'<p>'+escapeHtml(l.txt)+'</p>')+'</div>'
         +'</div></details>';
     })():'';
   // ET DESSOUS, CE QUI « ÉVALUE » LA PHOTO : l'échelle, l'origine des points,
@@ -48298,7 +48398,7 @@ function _anatJauge(l){
       +'<path class="an-j-zone" d="'+arc(Math.min(l.val,l.ref),Math.max(l.val,l.ref),R)+'"/>';
     for(const t of [0,15,30,45,60]){ const a=pt(t,R+1),b=pt(t,R-5); g+='<line class="an-j-gr" x1="'+a.x.toFixed(1)+'" y1="'+a.y.toFixed(1)+'" x2="'+b.x.toFixed(1)+'" y2="'+b.y.toFixed(1)+'"/>'; }
     g+='<line class="an-j-sol" x1="'+O.x+'" y1="'+O.y+'" x2="88" y2="'+O.y+'"/>'
-      +aig(l.ref,'an-j-moy')+(l.cale!=null?aig(l.cale,'an-j-cale',R-14):'')+aig(l.val,'an-j-moi')
+      +aig(l.ref,'an-j-moy')+(l.regle!=null?aig(l.regle,'an-j-cale',R-14):(l.cale!=null?aig(l.cale,'an-j-cale',R-14):''))+aig(l.val,'an-j-moi')
       +'<circle class="an-j-piv" cx="'+O.x+'" cy="'+O.y+'" r="3.5"/></svg>';
     return g;
   }

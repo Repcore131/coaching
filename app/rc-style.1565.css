@@ -10380,6 +10380,24 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .an-j-moi2{fill:#ff3b3b;stroke:#fff;stroke-width:1.5;filter:drop-shadow(0 0 3px rgba(255,59,59,.8))}
 .an-jauge text{font-size:6.5px;fill:#8a8a92;font-family:inherit}
 .an-lev-leg{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:9.5px;color:#8a8a92}
+/* A16 : les quatre réglages du squat, compacts, sous le texte. */
+.an-sq{display:grid;grid-template-columns:1fr 1fr auto auto;gap:6px 10px;align-items:center;padding-top:6px;border-top:1px solid #232328}
+.an-sq-c{display:flex;flex-direction:column;gap:2px;min-width:0;font-size:10px;color:#a1a1aa}
+.an-sq-c span{display:flex;justify-content:space-between;gap:6px}
+.an-sq-c output{color:#fff;font-weight:700}
+.an-sq-c input[type=range]{width:100%;accent-color:#e02020;margin:0}
+.an-sq-t{display:inline-flex;border:1px solid #2a2a30;border-radius:8px;overflow:hidden}
+.an-sq-t button{background:#17171b;color:#a1a1aa;border:0;padding:5px 8px;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap}
+.an-sq-t button.actif{background:rgba(224,32,32,.18);color:#fff}
+.an-sq-k{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:#d4d4d8;white-space:nowrap}
+.an-sq-k input{accent-color:#e02020;margin:0}
+.an-sq-r{color:#34e89e}
+@media (max-width:600px){ .an-sq{grid-template-columns:1fr 1fr} }
+/* La carte des leviers met ses enfants en flex, et « label » est en capitales dans l'app : on reprend la main. */
+.an-lev .an-lev-c>.an-sq{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto auto;align-items:end;gap:6px 12px}
+.an-lev .an-sq label{text-transform:none;letter-spacing:0;font-weight:500;margin:0;font-size:10px;color:#a1a1aa}
+.an-lev .an-sq-c{width:auto}
+@media (max-width:600px){ .an-lev .an-lev-c>.an-sq{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} .an-lev .an-sq-t{justify-self:start} .an-lev .an-sq-k{justify-self:end} }
 .an-lev-leg i{display:inline-block;width:12px;height:0;border-top:2px solid;vertical-align:middle;margin-right:4px}
 .an-res-cale .an-res .an-r,.an-res-cale .an-r{min-height:26px}
 .an-res-cale .an-res-leg{margin-top:4px !important}
