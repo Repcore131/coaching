@@ -46575,6 +46575,39 @@ function anatSouleveModele(p){
   return {tronc:_anatDeg(Math.atan2(sy-hip.y,sx-hip.x)),hanche:hip.y,brasHanche:-hip.x,
     tibia:_anatDeg(Math.asin((kx-xa)/p.T)),genou:{x:kx,y:ky},epaule:{x:sx,y:sy},hip};
 }
+/**
+ * LE DÉVELOPPÉ COUCHÉ : PRISE ET TRAJETS (chantier A18). Vu de face, allongé :
+ *   - S, entre les centres des épaules = biacromiale − 2 × 3,5 cm ;
+ *   - en bas, l'humérus s'écarte du tronc d'un angle θ (45–75°, 60° par
+ *     défaut) et l'avant-bras est VERTICAL par construction : la main est à
+ *     l'aplomb du coude, et la prise (centre de paume à centre de paume) vaut
+ *     S + 2 · H · sin θ ;
+ *   - le trajet de barre = hauteur de verrouillage − hauteur de poitrine :
+ *     épaule à mi-profondeur du thorax au-dessus du banc (modèle RepCore),
+ *     bras tendus de l'épaule au milieu de la paume, poitrine à la profondeur
+ *     du thorax (mesurée, sinon 0,145 × taille chez l'homme, 0,152 chez la
+ *     femme) ; l'arche remonte la poitrine de 3 cm.
+ *   - « entre index » : 3 cm de chaque côté en dedans du milieu de la paume ;
+ *     les bagues de la barre sont à 81 cm.
+ * Source : Gomo & van den Tillaar, J Sports Sci 2016.
+ */
+const ANAT_DEV=Object.freeze({EPAULE_CM:3.5,THETA:60,THETA_MIN:45,THETA_MAX:75,INDEX_CM:3,BAGUES_CM:81,ARCHE_CM:3,
+  THORAX:Object.freeze({H:0.145,F:0.152}),PRISES:Object.freeze([1.2,1.5,1.8]),
+  SOURCE:'Gomo & van den Tillaar, J Sports Sci 2016'});
+/**
+ * PURE. Tout en cm : {bi, H, A, main, thorax, theta, arche} → prise conseillée,
+ * trajet à cette prise, et le tableau des trois prises (1,2 ×, 1,5 ×, 1,8 × la carrure).
+ */
+function anatDeveloppeModele(p){
+  const rad=Math.PI/180, S=p.bi-2*ANAT_DEV.EPAULE_CM, L=p.H+p.A+(p.main||0)/2;
+  const theta=Math.max(ANAT_DEV.THETA_MIN,Math.min(ANAT_DEV.THETA_MAX,p.theta||ANAT_DEV.THETA));
+  const poitrine=p.thorax+(p.arche?ANAT_DEV.ARCHE_CM:0), epaule=p.thorax/2;
+  const trajet=G=>{ const off=Math.max(0,(G-S)/2); if(off>=L) return null; return epaule+Math.sqrt(L*L-off*off)-poitrine; };
+  const prise=S+2*p.H*Math.sin(theta*rad);
+  const index=prise-2*ANAT_DEV.INDEX_CM;
+  return {S,theta,prise,index,bague:(ANAT_DEV.BAGUES_CM-index)/2,trajet:trajet(prise),
+    prises:ANAT_DEV.PRISES.map(k=>({k,G:k*p.bi,index:k*p.bi-2*ANAT_DEV.INDEX_CM,trajet:trajet(k*p.bi)}))};
+}
 /** Le texte d'une configuration, avec ses bras de levier en cm quand la taille est connue. */
 function anatSquatTexte(moi,ref,cfg,taille){
   const cm=v=>taille?_anatN(Math.abs(v)*taille,0)+' cm':_anatN(Math.abs(v)*100,1)+' % de la taille';
@@ -46660,19 +46693,34 @@ function anatLeviers(fiches,F,taille,femme,u){
     }
   }
   const bi=par.clavicules.mesure.bi;
-  const biD=(env&&epM)?{fr:epM/taille}:bi;
-  if(brasMoi&&biD&&biD.fr){
-    const rom=(A,b)=>{ const g=1.5*b; const off=(g-b*0.82)/2; return Math.sqrt(Math.max(0,A*A-off*off)); };
-    // LE POINT BAS (A12) : mesuré, la barre touche le sternum, à mi-profondeur
-    // du thorax au-dessus de l'épaule (modèle RepCore) ; sans mesure, elle
-    // descend au niveau de l'épaule, comme avant.
-    const bas=v=>thx?0.5*v/taille:0;
-    const moi=rom(brasMoi,biD.fr)-bas(thx), ref=rom(R.bras+R.avantbras,carrure)-bas(MR.thorax);
-    out.push({cle:'developpe',lib:'Développé couché',val:taille?Math.round(moi*taille):null,ref:taille?Math.round(ref*taille):null,
-      ecart:(moi/ref-1)*100,
-      source:(srcEnv||photo)+(thx?' ; point bas au sternum, profondeur du thorax mesurée au bilan ('+_anatN(thx,1)+' cm ; repère '+_anatN(MR.thorax,1)+' ± '+_anatN(MR.thorax_et,1)+' cm, '+ANAT_MESURES_REF.SOURCE+')':' ; point bas au niveau de l’épaule'),
-      txt:'Trajet de barre estimé, prise à 1,5 fois la carrure : '+(taille?Math.round(moi*taille)+' cm (proportions moyennes, même taille : '+Math.round(ref*taille)+' cm)':_anatSN((moi/ref-1)*100,0)+' % par rapport à des proportions moyennes')+'.'
-        +(thx?' La barre touche le sternum : '+_anatN(thx,1)+' cm de thorax mesurés.':'')});
+  // LE DÉVELOPPÉ (A18) : la prise conseillée et les trajets, en cm. La carrure
+  // vient du mètre s'il y est, sinon de la photo ; le bras et l'avant-bras de
+  // l'envergure si elle est mesurée, sinon de la photo.
+  // ⚠ UNE CARRURE IMPOSSIBLE NE FAIT PAS UNE PRISE. Hors des bornes du mètre
+  //   (25–65 cm), la photo s'est trompée : on prend la carrure moyenne, et on le dit.
+  const biPhoto=(bi&&bi.fr)?bi.fr*(taille||ANAT_SOULEVE.TAILLE_DEFAUT):null;
+  const biOk=biPhoto!=null&&biPhoto>=25&&biPhoto<=65;
+  const biCm=epM||(biOk?biPhoto:carrure*(taille||ANAT_SOULEVE.TAILLE_DEFAUT));
+  const Hfr=kEnv?R.bras*kEnv:(hu&&hu.fr?hu.fr:null), Afr=kEnv?R.avantbras*kEnv:(ab&&ab.fr?ab.fr:null);
+  if(biCm&&Hfr&&Afr){
+    const Ht=taille||ANAT_SOULEVE.TAILLE_DEFAUT;
+    const thxDef=ANAT_DEV.THORAX[femme?'F':'H']*Ht;
+    const entree=(o)=>Object.assign({theta:ANAT_DEV.THETA,arche:false},o);
+    const A=entree({bi:biCm,H:Hfr*Ht,A:Afr*Ht,main:ANAT_MAIN*Ht,thorax:thx||thxDef});
+    const Rm=entree({bi:carrure*Ht,H:R.bras*Ht,A:R.avantbras*Ht,main:ANAT_MAIN*Ht,thorax:thxDef});
+    const moi=anatDeveloppeModele(A), ref=anatDeveloppeModele(Rm);
+    if(moi.trajet!=null&&ref.trajet!=null){
+      const c0=v=>_anatN(v,0)+'\u00a0cm';
+      out.push({cle:'developpe',lib:'Développé couché',val:Math.round(moi.trajet),ref:Math.round(ref.trajet),
+        ecart:(moi.trajet/ref.trajet-1)*100,modele:{A,Rm,taille:Ht},prise:moi,
+        source:(srcEnv||photo)+(epM?' ; largeur d’épaules au mètre':(biOk?'':' ; carrure moyenne (ANSUR II) : la photo ne donne pas une largeur d’épaules plausible'))
+          +(thx?' ; point bas au sternum, profondeur du thorax mesurée au bilan ('+_anatN(thx,1)+' cm ; repère '+_anatN(MR.thorax,1)+' ± '+_anatN(MR.thorax_et,1)+' cm, '+ANAT_MESURES_REF.SOURCE+')'
+            :' ; profondeur du thorax estimée à '+_anatN(ANAT_DEV.THORAX[femme?'F':'H'],3).replace('.',',')+' × la taille')
+          +' ; modèle '+ANAT_DEV.SOURCE+(taille?'':' ; taille supposée '+Ht+' cm'),
+        txt:'Prise conseillée (humérus à '+ANAT_DEV.THETA+'° du tronc en bas, avant-bras vertical) : '+c0(moi.prise)+' de milieu de paume à milieu de paume, '+c0(moi.index)+' entre index. '
+          +'Trajet de barre à cette prise : '+c0(moi.trajet)+' (proportions moyennes, même taille : '+c0(ref.trajet)+').'
+          +(thx?' La barre touche le sternum : '+_anatN(thx,1)+' cm de thorax mesurés.':'')});
+    }
   }
   return out;
 }
@@ -47284,6 +47332,43 @@ let _anatLevIdx=0;
 /** Les menus déroulants de la colonne centrale : ouverts ou fermés. */
 let _anatDeplie={lev:true,inf:false};
 let _anatToutes=false;
+// ── LE DÉVELOPPÉ RÉGLÉ (A18) : θ et l'arche, un état d'écran ─────────────
+let _anatDevReg=null, _anatDevL=null;
+function _anatDevCfg(){
+  const c=getOwnedClient(currentClientId);
+  return Object.assign({theta:ANAT_DEV.THETA,arche:false},(_anatDevReg&&_anatDevReg.email===(c&&c.email))?_anatDevReg.cfg:{});
+}
+function _htmlDeveloppeRes(l){
+  _anatDevL=l;
+  const cfg=_anatDevCfg(), M=l.modele;
+  const moi=anatDeveloppeModele(Object.assign({},M.A,cfg)), ref=anatDeveloppeModele(Object.assign({},M.Rm,cfg));
+  const c0=v=>v==null?'—':_anatN(v,0)+'\u00a0cm', c1=v=>_anatN(v,1)+'\u00a0cm';
+  const bag=moi.bague>=0?c1(moi.bague)+' à l’intérieur':c1(-moi.bague)+' à l’extérieur';
+  const jl=Object.assign({},l,{val:Math.round(moi.trajet),ref:Math.round(ref.trajet)});
+  return '<p class="an-dev-p">Prise conseillée : <b>'+c0(moi.index)+' entre index</b> (bagues à '+ANAT_DEV.BAGUES_CM+'\u00a0cm : '+bag+')</p>'
+    +'<div class="an-lev-v">'+_anatJauge(jl)+'<div class="an-lev-vt"><strong>'+c0(moi.trajet)+'</strong><em>trajet à cette prise<br>moyenne '+c0(ref.trajet)+'</em>'
+      +'<span class="an-lev-leg"><span><i class="l-moi"></i>athlète</span><span><i class="l-moy"></i>moyenne</span></span></div></div>'
+    +'<table class="an-tab an-dev-t"><thead><tr><th>Prise</th><th>Largeur</th><th>Entre index</th><th>Trajet</th></tr></thead><tbody>'
+      +moi.prises.map((x,i)=>'<tr><th>'+_anatN(x.k,1)+' × la carrure</th><td>'+c0(x.G)+'</td><td>'+c0(x.index)+'</td><td>'+c0(x.trajet)
+        +(ref.prises[i].trajet!=null?' <small class="an-def">moy. '+c0(ref.prises[i].trajet)+'</small>':'')+'</td></tr>').join('')
+    +'</tbody></table>'
+    +'<p>Humérus à '+_anatN(moi.theta,0)+'° du tronc en bas, avant-bras vertical : '+c0(moi.prise)+' de milieu de paume à milieu de paume'+(cfg.arche?', arche de '+ANAT_DEV.ARCHE_CM+'\u00a0cm':'')+'.</p>';
+}
+function _htmlDeveloppeCtl(l){
+  const cfg=_anatDevCfg();
+  return '<div class="an-sq an-dev-c" role="group" aria-label="Régler le développé">'
+    +'<label class="an-sq-c"><span>Humérus en bas <output id="an-dev-th">'+_anatN(cfg.theta,0)+'°</output></span><input type="range" min="'+ANAT_DEV.THETA_MIN+'" max="'+ANAT_DEV.THETA_MAX+'" step="1" value="'+cfg.theta+'" oninput="anatDevRegler(\'theta\',this.value)" aria-label="Écart de l’humérus au tronc en bas du mouvement"></label>'
+    +'<label class="an-sq-k"><input type="checkbox"'+(cfg.arche?' checked':'')+' onchange="anatDevRegler(\'arche\',this.checked)"><span>Arche (−'+ANAT_DEV.ARCHE_CM+' cm)</span></label>'
+    +'</div>';
+}
+function anatDevRegler(k,v){
+  const l=_anatDevL; if(!l||!l.modele) return;
+  const c=getOwnedClient(currentClientId), cfg=_anatDevCfg();
+  cfg[k]=k==='theta'?Number(v):!!v;
+  _anatDevReg={email:c&&c.email,cfg};
+  const z=document.getElementById('an-dev-res'); if(z) z.innerHTML=_htmlDeveloppeRes(l);
+  const o=document.getElementById('an-dev-th'); if(o) o.textContent=_anatN(cfg.theta,0)+'°';
+}
 /** Une jauge de tronc, de l'horizontale (0°) à la verticale (90°) : athlète et moyenne. */
 function _anatJaugeTronc(moi,ref,lib){
   const O={x:8,y:74},R=64;
@@ -48348,9 +48433,9 @@ function _htmlAnat(c){
       const val=l.cle==='squat'?l.val+'°':l.cle==='souleve'?_anatN(l.val,0)+'°':(l.val!=null?l.val+' cm':_anatSN(l.ecart,0)+' %');
       const ref=l.cle==='squat'?l.ref+'°':l.cle==='souleve'?_anatN(l.ref,0)+'°':(l.ref!=null?l.ref+' cm':'');
       const sous=l.cle==='squat'?'buste à la parallèle':l.cle==='souleve'?'tronc / horizontale':'trajet de barre';
-      const modele={squat:'Cuisse parallèle au sol, tibia incliné de '+_anatN(l.modele?l.modele.base.alpha:30,0)+'°, barre au-dessus du milieu du pied, 0,3 × pied devant la cheville ; barre haute 4 % de la taille sous les épaules, basse 8 %.',
+      const modele={squat:'Cuisse parallèle au sol, tibia incliné de '+_anatN((l.modele&&l.modele.base)?l.modele.base.alpha:30,0)+'°, barre au-dessus du milieu du pied, 0,3 × pied devant la cheville ; barre haute 4 % de la taille sous les épaules, basse 8 %.',
         souleve:'Au décollage : barre à 22,5 cm du sol au-dessus du milieu du pied, épaule 1,5 cm devant, tibia contre la barre ; en sumo, hanches ouvertes à 40° et tibia à 10° au plus.',
-        developpe:'Trajet de barre, prise à 1,5 fois la carrure.'}[l.cle]||'';
+        developpe:'Allongé, vu de face : humérus écarté du tronc de θ en bas, avant-bras vertical ; trajet = verrouillage − poitrine.'}[l.cle]||'';
       return '<details class="an-dr an-lev"'+(_anatDeplie.lev!==false?' open':'')+' ontoggle="_anatDeplie.lev=this.open">'
         +'<summary><span class="an-dr-i">'+(ANAT_SVG[l.cle]||'')+'</span><span class="an-dr-t">Leviers mécaniques</span>'
         +'<span class="an-dr-r">'+escapeHtml(l.lib)+' · <b>'+escapeHtml(val)+'</b></span>'+ANAT_SVG.chev+'</summary>'
@@ -48361,7 +48446,8 @@ function _htmlAnat(c){
           +'<div class="an-lev-nav"><button type="button" aria-label="Levier précédent" onclick="anatLevier(-1)"'+(nLev<2?' disabled':'')+'>'+ANAT_SVG.gauche+'</button>'
           +'<span>'+(iLev+1)+' / '+nLev+'</span>'
           +'<button type="button" aria-label="Levier suivant" onclick="anatLevier(1)"'+(nLev<2?' disabled':'')+'>'+ANAT_SVG.droite+'</button></div></div>'
-          +(l.cle==='souleve'&&l.styles?_htmlSouleve(l)
+          +(l.cle==='developpe'&&l.prise?'<div id="an-dev-res">'+_htmlDeveloppeRes(l)+'</div>'+_htmlDeveloppeCtl(l)
+          :l.cle==='souleve'&&l.styles?_htmlSouleve(l)
           :l.cle==='squat'&&l.modele?'<div id="an-sq-res">'+_htmlSquatRes(l)+'</div>'+_htmlSquatCtl(l)
           :'<div class="an-lev-v">'+_anatJauge(l)+'<div class="an-lev-vt"><strong>'+escapeHtml(val)+'</strong><em>'+escapeHtml(sous)+(ref?'<br>moyenne '+escapeHtml(ref):'')+'</em>'
             +'<span class="an-lev-leg"><span><i class="l-moi"></i>athlète</span><span><i class="l-moy"></i>moyenne</span></span></div></div>'

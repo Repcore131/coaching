@@ -10380,6 +10380,12 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .an-j-moi2{fill:#ff3b3b;stroke:#fff;stroke-width:1.5;filter:drop-shadow(0 0 3px rgba(255,59,59,.8))}
 .an-jauge text{font-size:6.5px;fill:#8a8a92;font-family:inherit}
 .an-lev-leg{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:9.5px;color:#8a8a92}
+/* A18 : le développé, prise conseillée et trois prises. */
+.an-dev-p{margin:0 0 4px;font-size:12px;color:#fff;line-height:1.45}
+.an-lev .an-dev-p b{color:#34e89e;text-transform:none;letter-spacing:0;font-size:inherit}
+.an-lev .an-dev-t{margin:6px 0 2px}
+.an-lev .an-dev-t td small.an-def{display:block;font-weight:400}
+.an-lev .an-lev-c>.an-sq.an-dev-c{grid-template-columns:minmax(0,1fr) auto}
 /* A17 : le soulevé, conventionnel et sumo côte à côte. */
 .an-sdt{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .an-sdt-s{display:flex;flex-direction:column;gap:4px;min-width:0;padding:8px;border-radius:9px;background:#17171b;border:1px solid #232328}

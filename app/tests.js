@@ -45352,6 +45352,31 @@ async function testExercices(){
       const h=_htmlSouleve(L);
       if((h.match(/an-jauge-t/g)||[]).length!==2) return _echec('pas deux jauges');
       return true;})());
+    // Le développé : prise recommandée et trajets (A18, 25/09/2026).
+    ok('ANALYSE MORPHO : DÉVELOPPÉ : CARRURE PLUS LARGE → PRISE PLUS LARGE ; THORAX PLUS PROFOND → TRAJET PLUS COURT',(()=>{
+      if(typeof anatDeveloppeModele!=='function') return _echec('anatDeveloppeModele n’existe pas');
+      const base={bi:40,H:30,A:27,main:19,thorax:25,theta:60,arche:false};
+      const m=anatDeveloppeModele(base);
+      // S = 40 − 7 = 33 ; prise = 33 + 2 × 30 × sin 60° = 84,96.
+      if(Math.abs(m.prise-(33+60*Math.sin(Math.PI/3)))>0.01) return _echec('prise : '+m.prise);
+      if(Math.abs(m.index-(m.prise-6))>1e-9) return _echec('entre index : '+m.index);
+      const large=anatDeveloppeModele(Object.assign({},base,{bi:44}));
+      if(!(large.prise>m.prise)) return _echec('carrure large : '+large.prise+' contre '+m.prise);
+      const prof=anatDeveloppeModele(Object.assign({},base,{thorax:30}));
+      if(!(prof.trajet<m.trajet)) return _echec('thorax profond : '+prof.trajet+' contre '+m.trajet);
+      if(!(anatDeveloppeModele(Object.assign({},base,{arche:true})).trajet<m.trajet-2.9)) return _echec('arche');
+      if(m.prises.length!==3||m.prises.map(x=>x.k).join()!=='1.2,1.5,1.8') return _echec('trois prises');
+      if(!(m.prises[2].trajet<m.prises[0].trajet)) return _echec('une prise plus large doit raccourcir le trajet');
+      return true;})());
+    ok('ANALYSE MORPHO : DÉVELOPPÉ : LA CARTE DIT LA PRISE EN CM ENTRE INDEX ET PAR RAPPORT AUX BAGUES',(()=>{
+      const L=anatMesures(_anatGab(),_anatDossier()).leviers.find(x=>x.cle==='developpe');
+      if(!L||!L.prise) return _echec('pas de levier développé');
+      if(!/Gomo & van den Tillaar, J Sports Sci 2016/.test(L.source)) return _echec('source : '+L.source);
+      if(Math.abs(L.val-L.ref)>1) return _echec('gabarit hors moyenne : '+L.val+' / '+L.ref);
+      const h=_htmlDeveloppeRes(L);
+      if(!/Prise conseillée : <b>\d+\u00a0cm entre index<\/b> \(bagues à 81\u00a0cm : [\d,]+\u00a0cm à l’(intérieur|extérieur)\)/.test(h)) return _echec('phrase : '+h.slice(0,220));
+      if((h.match(/× la carrure/g)||[]).length!==3) return _echec('tableau des trois prises');
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());
