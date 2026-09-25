@@ -5572,6 +5572,9 @@ const CHAMPS_SANTE=Object.freeze([
   // face et de dos du premier bilan, et le masque de la personne. Aucune image
   // — mais c'est le contour d'un corps, lu sur une photo corporelle : santé.
   'morphoAnat',
+  // Les trois mesures au mètre du chantier A12 : elles vivent dans les bilans
+  // (déjà de santé), et le seraient aussi recopiées ailleurs.
+  'deb-envergure','deb-pied','deb-thorax',
   // Alimentation, cafeine, complements — nutrition porte les trois
   'nutrition','paliers','phase','phaseRefusee',
   // Troubles alimentaires et vigilance energetique
@@ -12757,7 +12760,19 @@ const MORPHO_MESURES=Object.freeze([
    consigne:'Juste sous l’os saillant, mètre ruban à plat, sans serrer.'},
   // Tour de cheville au plus fin : 19 à 27 cm chez l'adulte.
   {cle:'deb-cheville',lib:'Tour de cheville',court:'Cheville',type:'tour',min:14,max:38,
-   consigne:'Au plus fin, juste au-dessus de l’os de la cheville, sans serrer.'}
+   consigne:'Au plus fin, juste au-dessus de l’os de la cheville, sans serrer.'},
+  // ── Chantier A12 (25/09/2026) : trois mesures que les leviers utilisent.
+  // Envergure : environ 1,02 à 1,03 fois la taille (ANSUR II), soit 150 à
+  // 210 cm. ⚠ PAS UNE « LONGUEUR » AU SENS DE LA GARDE : elle dépasse la
+  // taille chez la moitié des gens, on ne la compare donc pas à elle.
+  {cle:'deb-envergure',lib:'Envergure',court:'Envergure',type:'envergure',min:120,max:230,
+   consigne:'Bras en croix à l’horizontale, dos et bras contre le mur : du bout d’un majeur à l’autre.',schema:'envergure'},
+  // Pied : environ 15 % de la taille, soit 22 à 30 cm.
+  {cle:'deb-pied',lib:'Longueur de pied',court:'Pied',type:'longueur',min:18,max:34,
+   consigne:'Debout, pieds nus, talon contre le mur : du mur au bout de l’orteil le plus long.',schema:'pied'},
+  // Profondeur thoracique : 20 à 32 cm chez l'adulte.
+  {cle:'deb-thorax',lib:'Profondeur du thorax',court:'Thorax',type:'longueur',min:15,max:40,
+   consigne:'Debout, souffle relâché : du sternum (à hauteur des mamelons) au dos, entre deux livres tenus bien parallèles ou au pied à coulisse.',schema:'thorax'}
 ]);
 
 /**
@@ -12780,6 +12795,8 @@ function mesureMorpho(user,cle){
   // millimètres pris pour des centimètres. On ne calcule pas, on le dit.
   const t=_tailleCm(user);
   if(d.type==='longueur'&&t!=null&&v>t) return {cm:null,motif:'aberrante'};
+  // L'envergure, elle, reste proche de la taille : au-delà de ±20 %, c'est une saisie fausse.
+  if(d.type==='envergure'&&t!=null&&Math.abs(v/t-1)>0.2) return {cm:null,motif:'aberrante'};
   return {cm:v,motif:null};
 }
 
@@ -14314,6 +14331,35 @@ const MORPHO_ROTULE_SCHEMA=
   +'<path d="M50 48 H86" stroke="rgba(224,32,32,.45)" stroke-width="1"'
   +' stroke-dasharray="3 3" fill="none"/>'
   +'</svg>';
+// LES SCHEMAS DES TROIS MESURES DU CHANTIER A12, dans le meme style : le mur,
+// le sol, et la fleche de la mesure.
+const _MORPHO_SVG=(corps)=>'<svg viewBox="0 0 120 96" width="120" height="96" aria-hidden="true" style="display:block;margin:2px 0 6px">'+corps+'</svg>';
+const _MORPHO_FLECHE='stroke="var(--red)" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"';
+const MORPHO_SCHEMAS=Object.freeze({
+  rotule:MORPHO_ROTULE_SCHEMA,
+  // Bras en croix contre le mur : du bout d'un majeur à l'autre.
+  envergure:_MORPHO_SVG(
+    '<path d="M6 92 H114" stroke="rgba(255,255,255,.35)" stroke-width="2" fill="none"/>'
+    +'<circle cx="60" cy="22" r="7" fill="none" stroke="#8a8a8a" stroke-width="3"/>'
+    +'<path d="M60 30 V64 M60 64 L52 90 M60 64 L68 90" stroke="#8a8a8a" stroke-width="5" stroke-linecap="round" fill="none"/>'
+    +'<path d="M14 38 H106" stroke="#8a8a8a" stroke-width="4" stroke-linecap="round" fill="none"/>'
+    +'<path d="M12 50 H108 M16 46 l-4 4 4 4 M104 46 l4 4 -4 4" '+_MORPHO_FLECHE+'/>'
+    +'<path d="M12 38 V52 M108 38 V52" stroke="rgba(224,32,32,.45)" stroke-width="1" stroke-dasharray="3 3" fill="none"/>'),
+  // Le pied de profil, talon au mur : du mur au bout de l'orteil.
+  pied:_MORPHO_SVG(
+    '<path d="M18 10 V86" stroke="rgba(255,255,255,.22)" stroke-width="2" fill="none"/>'
+    +'<path d="M6 86 H114" stroke="rgba(255,255,255,.35)" stroke-width="2" fill="none"/>'
+    +'<path d="M30 14 V58 C30 70 22 76 20 82 C20 85 22 86 26 86 H96 C102 86 104 82 98 78 C86 72 62 66 42 58" stroke="#8a8a8a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
+    +'<path d="M20 70 H102 M24 66 l-4 4 4 4 M98 66 l4 4 -4 4" '+_MORPHO_FLECHE+'/>'),
+  // Le buste de profil entre deux livres : du sternum au dos.
+  thorax:_MORPHO_SVG(
+    '<path d="M6 92 H114" stroke="rgba(255,255,255,.35)" stroke-width="2" fill="none"/>'
+    +'<circle cx="60" cy="14" r="7" fill="none" stroke="#8a8a8a" stroke-width="3"/>'
+    +'<path d="M46 26 C40 40 40 58 46 74 H72 C78 58 80 42 74 26 Z" stroke="#8a8a8a" stroke-width="3" fill="none" stroke-linejoin="round"/>'
+    +'<rect x="30" y="30" width="7" height="30" rx="1" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="2"/>'
+    +'<rect x="83" y="30" width="7" height="30" rx="1" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="2"/>'
+    +'<path d="M38 45 H82 M42 41 l-4 4 4 4 M78 41 l4 4 -4 4" '+_MORPHO_FLECHE+'/>')
+});
 // ── L'ECHELLE, ET SON GARDE-FOU ────────────────────────────────────────────
 //
 // ⚠ LES 93 % NE DOIVENT JAMAIS ENTRER DANS UNE VALEUR AFFICHEE. C'est un
@@ -44906,6 +44952,15 @@ const ANAT_COUDE=Object.freeze({H:Object.freeze({moy:11,et:4}),F:Object.freeze({
   TENDU:155,RACCOURCI:0.85,
   CONSIGNE:'Photo de face bras tendus le long du corps, légèrement écartés, paumes tournées vers l’avant.'});
 const ANAT_ARRIERE_PIED_CONSIGNE='Photo de dos pieds nus, pieds à largeur de hanches, poids réparti sur les deux jambes, mollets et talons visibles ; replacer au besoin le milieu du mollet, le tendon d’Achille au niveau des malléoles et le bas du talon (« Ajuster les points », vue Dos).';
+/**
+ * Les repères des trois mesures du chantier A12 : ANSUR II (Gordon et al.,
+ * 2014), CALCUL REPCORE sur les fichiers publics — moyenne ± écart-type.
+ * Envergure et pied en fraction de la taille ; thorax en cm.
+ */
+const ANAT_MESURES_REF=Object.freeze({
+  H:Object.freeze({envergure:1.033,envergure_et:0.027,pied:0.154,pied_et:0.005,thorax:25.4,thorax_et:2.6}),
+  F:Object.freeze({envergure:1.019,envergure_et:0.029,pied:0.151,pied_et:0.005,thorax:24.7,thorax_et:2.7}),
+  SOURCE:'ANSUR II (Gordon et al., 2014), calcul RepCore'});
 /** Le repère d'un sexe (homme par défaut, comme les largeurs). */
 function anatRef(femme){ return ANAT_REF[femme?'F':'H']; }
 /**
@@ -46270,10 +46325,27 @@ function anatMesures(anat,u,o){
         +(deg.length?' ; un cran de moins : '+deg.join(', '):'')+'.';
     }
   }
+  // L'APE INDEX (A12) : envergure mesurée − taille, avec son percentile
+  // (ANSUR II, calcul RepCore). Une mesure au mètre : elle ne dépend pas de la photo.
+  {
+    const fbA=fiches.find(f=>f.cle==='bras');
+    const env=(taille&&!brut)?_anatSafe(()=>mesureMorpho(u,'deb-envergure')):null;
+    if(fbA&&env&&env.cm!=null){
+      const MR=ANAT_MESURES_REF[femme?'F':'H'];
+      const ape=env.cm-taille, refApe=(MR.envergure-1)*taille, etCm=MR.envergure_et*taille;
+      const errPct=Math.hypot(1,1)/taille*100;   // mètre : ±1 cm sur l'envergure et sur la taille
+      const st=anatClasser((env.cm/taille-MR.envergure)*100,MR.envergure_et*100,errPct,'aux envergures les plus longues','aux envergures les plus courtes');
+      fbA.chiffres=fbA.chiffres.concat([
+        {lib:'Envergure − taille (ape index)',def:'envergure au mètre, bras en croix, moins la taille du dossier',val:_anatSN(ape,1)+' cm',ref:_anatSN(refApe,1)+' ± '+_anatN(etCm,1)+' cm',ecart:''},
+        {lib:'Position de l’envergure',def:'envergure / taille, '+sexeTxt+' ('+ANAT_MESURES_REF.SOURCE+') ; dispersion ±'+_anatN(MR.envergure_et*100,1)+' %, mesure ±'+_anatN(errPct,1)+' %',val:st.txt,ref:'50ᵉ percentile',ecart:''}]);
+      fbA.mesure.ape={cm:ape,ref:refApe,et:etCm,envergure:env.cm,stat:st};
+      fbA.source=(fbA.source||'')+' ; envergure au mètre (bilan), repère '+ANAT_MESURES_REF.SOURCE;
+    }
+  }
   const fb=fiches.find(f=>f.cle==='bras');
   const photoCm={bras:fb&&fb.mesure.mb?fb.mesure.mb.cm:null,avantbras:fb&&fb.mesure.abPhoto?fb.mesure.abPhoto.cm:null,
     rotule:(verif&&verif.genouCm1!=null&&!(B&&B.rotule))?verif.genouCm1:null};
-  return {photoCm,biais:B,fiches,leviers:anatLeviers(fiches,F,taille,femme),echelle:F?{cmPx:F.cmPx,taille,stature:F.stature,verif,pct:ECH,piedsCoupes,cheveux:!!opts.cheveux}:null,rotation,opts};
+  return {photoCm,biais:B,fiches,leviers:anatLeviers(fiches,F,taille,femme,u),echelle:F?{cmPx:F.cmPx,taille,stature:F.stature,verif,pct:ECH,piedsCoupes,cheveux:!!opts.cheveux}:null,rotation,opts};
 }
 
 /**
@@ -46288,35 +46360,61 @@ function anatMesures(anat,u,o){
  * de de Leva (1996), DU MÊME SEXE — les fractions d'ANAT_REF, celles des fiches :
  * c'est l'ÉCART qui renseigne, pas la valeur absolue.
  */
-function anatLeviers(fiches,F,taille,femme){
+function anatLeviers(fiches,F,taille,femme,u){
   const par={}; fiches.forEach(f=>{ par[f.cle]=f; });
   const R=anatRef(femme), carrure=ANAT_LARGEURS[femme?'F':'H'].biacromial;
+  const MR=ANAT_MESURES_REF[femme?'F':'H'];
   const cu=par.jambes.mesure.cu, ja=par.jambes.mesure.ja, tr=par.buste.mesure.tr;
   const out=[];
-  const squat=(f,t,j,a)=>{
-    const m=0.03; // milieu du pied devant la cheville, en fraction de la taille
+  // LES MESURES AU MÈTRE (A12), quand le bilan les porte et qu'elles tiennent
+  // debout. Absentes, chaque levier reste celui de la photo, au chiffre près.
+  const metre=cle=>{ const m=(u&&taille)?_anatSafe(()=>mesureMorpho(u,cle)):null; return m&&m.cm!=null?m.cm:null; };
+  const env=metre('deb-envergure'), pied=metre('deb-pied'), thx=metre('deb-thorax'), epM=metre('deb-epaules');
+  const photo='longueurs lues sur la photo';
+  // Le milieu du pied devant la cheville, en fraction de la taille : 0,03 pour
+  // un pied moyen ; un pied mesuré le déplace à proportion (repère ANSUR II).
+  const mPied=pied?0.03*(pied/taille)/MR.pied:0.03;
+  const squat=(f,t,j,a,m)=>{
     const span=f-j*Math.sin(a*Math.PI/180)+m;
     return _anatDeg(Math.asin(Math.max(-1,Math.min(1,span/t))));
   };
   if(cu&&ja&&tr&&cu.fr&&ja.fr&&tr.fr){
-    const moi=squat(cu.fr,tr.fr,ja.fr,30), ref=squat(R.cuisse,R.tronc,R.jambe,30);
-    const cale=squat(cu.fr,tr.fr,ja.fr,37);
+    const moi=squat(cu.fr,tr.fr,ja.fr,30,mPied), ref=squat(R.cuisse,R.tronc,R.jambe,30,0.03);
+    const cale=squat(cu.fr,tr.fr,ja.fr,37,mPied);
     out.push({cle:'squat',lib:'Squat',val:Math.round(moi),ref:Math.round(ref),cale:Math.round(cale),
-      txt:'Inclinaison du buste estimée à la parallèle : '+Math.round(moi)+'° (proportions moyennes : '+Math.round(ref)+'°). Avec une cale de 2,5 cm sous les talons : '+Math.round(cale)+'°.'});
+      source:photo+(pied?' ; milieu du pied d’après la longueur de pied mesurée au bilan ('+_anatN(pied,1)+' cm ; repère '+ANAT_MESURES_REF.SOURCE+')':' ; milieu du pied à la position moyenne'),
+      txt:'Inclinaison du buste estimée à la parallèle : '+Math.round(moi)+'° (proportions moyennes : '+Math.round(ref)+'°). Avec une cale de 2,5 cm sous les talons : '+Math.round(cale)+'°.'
+        +(pied?' Barre au-dessus du milieu d’un pied de '+_anatN(pied,1)+' cm, mesuré au bilan.':'')});
   }
+  // LE BRAS PAR L'ENVERGURE : (envergure − carrure) / 2, rapporté à la même
+  // quantité pour des proportions moyennes (ANSUR II), puis appliqué au bras
+  // moyen de de Leva. Une envergure moyenne rend le bras moyen, exactement.
+  const biFr=epM?epM/taille:carrure;
+  const kEnv=env?((env/taille-biFr)/(MR.envergure-carrure)):null;
+  const srcEnv=env?'bras tirés de l’envergure mesurée au bilan ('+_anatN(env,0)+' cm'+(epM?', largeur d’épaules au mètre':'')+' ; repère '+ANAT_MESURES_REF.SOURCE+')':null;
   const hu=par.bras.mesure.hu, ab=par.bras.mesure.ab;
-  if(hu&&ab&&tr&&hu.fr&&ab.fr&&tr.fr){
-    const moi=(hu.fr+ab.fr+ANAT_MAIN/2)/tr.fr, ref=(R.bras+R.avantbras+ANAT_MAIN/2)/R.tronc;
+  const brasMoi=kEnv?(R.bras+R.avantbras)*kEnv:((hu&&ab&&hu.fr&&ab.fr)?hu.fr+ab.fr:null);
+  if(brasMoi&&tr&&tr.fr){
+    const moi=(brasMoi+ANAT_MAIN/2)/tr.fr, ref=(R.bras+R.avantbras+ANAT_MAIN/2)/R.tronc;
     out.push({cle:'souleve',lib:'Soulevé de terre',val:Math.round(moi*100)/100,ref:Math.round(ref*100)/100,
-      txt:'Bras / tronc : '+_anatN(moi,2)+' (moyenne : '+_anatN(ref,2)+'). '+(moi>ref*1.04?'Bras longs : départ plus haut, buste plus droit — un levier favorable.':moi<ref*0.96?'Bras courts : il faut descendre les hanches, le dos travaille plus au départ.':'Levier dans la moyenne.')});
+      source:srcEnv?srcEnv+' ; tronc lu sur la photo':photo,
+      txt:'Bras / tronc : '+_anatN(moi,2)+' (moyenne : '+_anatN(ref,2)+'). '+(moi>ref*1.04?'Bras longs : départ plus haut, buste plus droit — un levier favorable.':moi<ref*0.96?'Bras courts : il faut descendre les hanches, le dos travaille plus au départ.':'Levier dans la moyenne.')
+        +(env?' Bras tirés de l’envergure mesurée ('+_anatN(env,0)+' cm).':'')});
   }
   const bi=par.clavicules.mesure.bi;
-  if(hu&&ab&&bi&&hu.fr&&ab.fr&&bi.fr){
+  const biD=(env&&epM)?{fr:epM/taille}:bi;
+  if(brasMoi&&biD&&biD.fr){
     const rom=(A,b)=>{ const g=1.5*b; const off=(g-b*0.82)/2; return Math.sqrt(Math.max(0,A*A-off*off)); };
-    const moi=rom(hu.fr+ab.fr,bi.fr), ref=rom(R.bras+R.avantbras,carrure);
+    // LE POINT BAS (A12) : mesuré, la barre touche le sternum, à mi-profondeur
+    // du thorax au-dessus de l'épaule (modèle RepCore) ; sans mesure, elle
+    // descend au niveau de l'épaule, comme avant.
+    const bas=v=>thx?0.5*v/taille:0;
+    const moi=rom(brasMoi,biD.fr)-bas(thx), ref=rom(R.bras+R.avantbras,carrure)-bas(MR.thorax);
     out.push({cle:'developpe',lib:'Développé couché',val:taille?Math.round(moi*taille):null,ref:taille?Math.round(ref*taille):null,
       ecart:(moi/ref-1)*100,
-      txt:'Trajet de barre estimé, prise à 1,5 fois la carrure : '+(taille?Math.round(moi*taille)+' cm (proportions moyennes, même taille : '+Math.round(ref*taille)+' cm)':_anatSN((moi/ref-1)*100,0)+' % par rapport à des proportions moyennes')+'.'});
+      source:(srcEnv||photo)+(thx?' ; point bas au sternum, profondeur du thorax mesurée au bilan ('+_anatN(thx,1)+' cm ; repère '+_anatN(MR.thorax,1)+' ± '+_anatN(MR.thorax_et,1)+' cm, '+ANAT_MESURES_REF.SOURCE+')':' ; point bas au niveau de l’épaule'),
+      txt:'Trajet de barre estimé, prise à 1,5 fois la carrure : '+(taille?Math.round(moi*taille)+' cm (proportions moyennes, même taille : '+Math.round(ref*taille)+' cm)':_anatSN((moi/ref-1)*100,0)+' % par rapport à des proportions moyennes')+'.'
+        +(thx?' La barre touche le sternum : '+_anatN(thx,1)+' cm de thorax mesurés.':'')});
   }
   return out;
 }
@@ -47853,7 +47951,8 @@ function _htmlAnat(c){
         +'<summary><span class="an-dr-i">'+(ANAT_SVG[l.cle]||'')+'</span><span class="an-dr-t">Leviers mécaniques</span>'
         +'<span class="an-dr-r">'+escapeHtml(l.lib)+' · <b>'+escapeHtml(val)+'</b></span>'+ANAT_SVG.chev+'</summary>'
         +'<div class="an-lev-g">'
-        +'<div class="an-lev-mod"><b>Modèle plan</b><p>'+escapeHtml(modele)+'</p><p class="an-lev-n">Appliqué aux longueurs de l’athlète, puis aux proportions moyennes publiées par de Leva (1996), du même sexe : c’est l’écart qui renseigne.</p></div>'
+        +'<div class="an-lev-mod"><b>Modèle plan</b><p>'+escapeHtml(modele)+'</p><p class="an-lev-n">Appliqué aux longueurs de l’athlète, puis aux proportions moyennes publiées par de Leva (1996), du même sexe : c’est l’écart qui renseigne.</p>'
+          +(l.source?'<p class="an-lev-n">Source : '+escapeHtml(l.source)+'.</p>':'')+'</div>'
         +'<div class="an-lev-c"><div class="an-lev-top"><b>'+escapeHtml(l.lib)+'</b>'
           +'<div class="an-lev-nav"><button type="button" aria-label="Levier précédent" onclick="anatLevier(-1)"'+(nLev<2?' disabled':'')+'>'+ANAT_SVG.gauche+'</button>'
           +'<span>'+(iLev+1)+' / '+nLev+'</span>'
@@ -60016,7 +60115,7 @@ function bLongueurs(){
   return `<div style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
     <div style="font-size:var(--fs-xs);font-weight:700;color:var(--text-strong);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Longueurs (facultatif)</div>
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">Des mesures qui ne bougent plus une fois adulte. Elles servent à ton coach pour te proposer des variantes d'un mouvement, jamais pour en écarter un. Toutes sont facultatives : une case vide vaut mieux qu'une mesure approximative.</div>
-    ${MORPHO_MESURES.map(m=>champ(m.cle,m.lib,m.consigne,m.schema?MORPHO_ROTULE_SCHEMA:'')).join('')}
+    ${MORPHO_MESURES.map(m=>champ(m.cle,m.lib,m.consigne,m.schema?(MORPHO_SCHEMAS[m.schema===true?'rotule':m.schema]||''):'')).join('')}
   </div>`;
 }
 function bBodyFocus(id,on){
@@ -60114,6 +60213,9 @@ const BILAN_QUESTIONS={
     {k:'deb-bassin',lbl:'Largeur de bassin (cm)',emoji:'📏'},
     {k:'deb-poignet',lbl:'Tour de poignet (cm)',emoji:'📏'},
     {k:'deb-cheville',lbl:'Tour de cheville (cm)',emoji:'📏'},
+    {k:'deb-envergure',lbl:'Envergure (cm)',emoji:'📏'},
+    {k:'deb-pied',lbl:'Longueur de pied (cm)',emoji:'📏'},
+    {k:'deb-thorax',lbl:'Profondeur du thorax (cm)',emoji:'📏'},
     {k:'deb-traitement',lbl:'Traitement médicamenteux régulier',emoji:'💊',alerte:true},
     {k:'deb-traitement-detail',lbl:'Traitement — précisions',emoji:'💊'},
     {k:'deb-allergies',lbl:'Allergies / régime particulier',emoji:'🥜',alerte:true},

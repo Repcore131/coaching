@@ -45133,6 +45133,52 @@ async function testExercices(){
       if(!t.amenager.some(x=>/Squat/.test(x.quoi)&&/plus ouverts/.test(x.reglage)&&/cale/.test(x.reglage))) return _echec('pas d’aménagement du squat');
       if(/éviter|pathologi|diagnosti|lésion|douleur|trouble/i.test(JSON.stringify(t))) return _echec('un mot de santé ou « à éviter »');
       return true;})());
+    // Trois mesures au mètre, utilisées tout de suite (A12, 25/09/2026).
+    ok('ANALYSE MORPHO : ENVERGURE, PIED, THORAX : DÉCLARÉS, BORNÉS, DE SANTÉ, AVEC SCHÉMA',(()=>{
+      for(const [k,mi,ma] of [['deb-envergure',120,230],['deb-pied',18,34],['deb-thorax',15,40]]){
+        const m=MORPHO_MESURES.find(x=>x.cle===k);
+        if(!m) return _echec(k+' absente');
+        if(m.min!==mi||m.max!==ma) return _echec(k+' : bornes '+m.min+'–'+m.max);
+        if(!m.schema||!MORPHO_SCHEMAS[m.schema]||MORPHO_SCHEMAS[m.schema].indexOf('<svg')<0) return _echec(k+' : pas de schéma');
+        if(CHAMPS_SANTE.indexOf(k)<0) return _echec(k+' n’est pas classée santé');
+      }
+      // Une envergure dépasse la taille : ce n'est pas une saisie fausse.
+      const u=_anatDossier({bilans:[{type:'depart',date:1,'deb-envergure':'190'}]});
+      if(mesureMorpho(u,'deb-envergure').cm!==190) return _echec('190 cm d’envergure refusés pour 180 cm');
+      return true;})());
+    ok('ANALYSE MORPHO : MESURES ABSENTES, LEVIERS INCHANGÉS ; PRÉSENTES, LE MODÈLE LES UTILISE ET LE DIT',(()=>{
+      const a=_anatGab();
+      const sans=anatMesures(a,_anatDossier()).leviers;
+      const brut=anatLeviers(anatMesures(a,_anatDossier()).fiches,null,180,false);
+      const cle=l=>l.map(x=>x.cle+':'+x.val+':'+x.ref).join('|');
+      if(cle(sans)!==cle(brut)) return _echec('sans mesure, les leviers changent : '+cle(sans)+' / '+cle(brut));
+      if(sans.some(l=>/envergure|longueur de pied|thorax mesurée/.test(l.source||''))) return _echec('une source cite une mesure absente');
+      const L=(o)=>{ const r=anatMesures(a,_anatDossier({bilans:[Object.assign({type:'depart',date:1},o)]})).leviers; const x={}; r.forEach(l=>{ x[l.cle]=l; }); return x; };
+      const S={}; sans.forEach(l=>{ S[l.cle]=l; });
+      // Envergure moyenne (1,033 × 180) : le bras moyen, le même levier ; longue : bras plus longs.
+      const moy=L({'deb-envergure':String(1.033*180)});
+      if(Math.abs(moy.souleve.val-S.souleve.ref)>0.011) return _echec('envergure moyenne : '+moy.souleve.val+' contre '+S.souleve.ref);
+      const lg=L({'deb-envergure':'198'});
+      if(!(lg.souleve.val>S.souleve.val)||!/envergure mesurée au bilan \(198 cm/.test(lg.souleve.source)) return _echec('envergure 198 : '+lg.souleve.val+' · '+lg.souleve.source);
+      // Pied long : le milieu du pied avance, le buste s'incline davantage.
+      const pl=L({'deb-pied':'31'});
+      if(!(pl.squat.val>S.squat.val)||!/longueur de pied mesurée au bilan \(31 cm/.test(pl.squat.source)) return _echec('pied 31 : '+pl.squat.val+' contre '+S.squat.val+' · '+pl.squat.source);
+      // Thorax : la barre touche le sternum, le trajet raccourcit.
+      const th=L({'deb-thorax':'30'});
+      if(!(th.developpe.val<S.developpe.val)||!/profondeur du thorax mesurée au bilan \(30 cm/.test(th.developpe.source)) return _echec('thorax 30 : '+th.developpe.val+' contre '+S.developpe.val+' · '+th.developpe.source);
+      return true;})());
+    ok('ANALYSE MORPHO : FICHE BRAS : APE INDEX ET SON PERCENTILE',(()=>{
+      const a=_anatGab();
+      const f0=anatMesures(a,_anatDossier()).fiches.find(f=>f.cle==='bras');
+      if(f0.chiffres.some(c=>/ape index/.test(c.lib))) return _echec('un ape index sans envergure');
+      const f=anatMesures(a,_anatDossier({bilans:[{type:'depart',date:1,'deb-envergure':'190'}]})).fiches.find(f=>f.cle==='bras');
+      const l=f.chiffres.find(c=>/ape index/.test(c.lib)), p=f.chiffres.find(c=>c.lib==='Position de l’envergure');
+      if(!l||(l.val!=='+10 cm'&&l.val!=='+10,0 cm')) return _echec('ape index : '+(l&&l.val));
+      if(!p||!/percentile|parmi les 5 %/.test(p.val)) return _echec('percentile : '+(p&&p.val));
+      // 190 / 180 = 1,056 pour 1,033 ± 0,027 (mesure ±0,8 %) : z ≈ 0,8, vers le 79e percentile.
+      if(!(f.mesure.ape.stat.pct>74&&f.mesure.ape.stat.pct<84)) return _echec('percentile de 190 pour 180 cm : '+f.mesure.ape.stat.pct);
+      if(!/ANSUR II \(Gordon et al\., 2014\), calcul RepCore/.test(f.source)) return _echec('source : '+f.source);
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());
@@ -62001,15 +62047,16 @@ async function testExercices(){
       const _m1=(taille,extra)=>({email:'m1@t.fr',fname:'Léa',role:'athlete',coachId:'co',
         bilans:[Object.assign({type:'depart',date:Date.now()-864e5,'deb-height':String(taille)},extra||{})]});
 
-      ok('M1 — neuf mesures déclarées, chacune avec sa consigne et ses bornes',(()=>{
+      ok('M1 — douze mesures déclarées, chacune avec sa consigne et ses bornes',(()=>{
         // ⚠ NEUF DEPUIS LE LOT 7 : la hauteur de rotule s'ajoute, elle ne
         //   remplace pas la hauteur de genou. Deux protocoles differents ne
         //   peuvent pas partager une colonne, et l'ancienne garde ses valeurs.
-        if(MORPHO_MESURES.length!==9) return _echec(MORPHO_MESURES.length+' mesures');
+        //   DOUZE DEPUIS LE CHANTIER A12 : envergure, pied, thorax.
+        if(MORPHO_MESURES.length!==12) return _echec(MORPHO_MESURES.length+' mesures');
         const sans=MORPHO_MESURES.filter(m=>!m.consigne||m.consigne.length<15);
         if(sans.length) return _echec('sans consigne : '+sans.map(m=>m.cle).join(', '));
         const neuves=MORPHO_MESURES.filter(m=>m.origine!=='M0');
-        if(neuves.length!==7) return _echec(neuves.length+' nouvelles');
+        if(neuves.length!==10) return _echec(neuves.length+' nouvelles');
         const bornes=neuves.filter(m=>!(m.min>0&&m.max>m.min));
         return bornes.length?_echec('bornes absentes : '+bornes.map(m=>m.cle).join(', ')):true;})());
 
