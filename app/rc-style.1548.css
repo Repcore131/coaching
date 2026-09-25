@@ -9953,6 +9953,8 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .an-tab th,.an-tab td{padding:6px 4px;border-bottom:1px solid #232328;text-align:right;color:#fff;font-weight:600;white-space:nowrap}
 .an-tab thead th{color:#8a8a92;font-weight:700;font-size:9.5px;text-transform:uppercase;letter-spacing:.6px}
 .an-tab tbody th{text-align:left;color:#c8c8cf;font-weight:500;white-space:normal}
+/* La definition de la mesure, sous son libelle (de Leva, 25/09/2026). */
+.an-tab tbody th .an-def{display:block;margin-top:2px;font-size:9.5px;font-weight:400;color:#8a8a92;line-height:1.3;letter-spacing:0;text-transform:none}
 .an-tab thead th:first-child{text-align:left}
 .an-tab td:last-child{color:#ff8a8a}
 .an-f[data-etat="illisible"] .an-f-h em{color:#8a8a92}
@@ -10420,3 +10422,15 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 @container an (max-width:520px){ .an-lbl{padding:0 3px;letter-spacing:-.1px} }
 .an-ph-r input[type=range]{min-height:24px;height:24px}
 .an-ph-r{min-height:28px}
+
+/* ── PAS DE TEXTE COUPÉ (25/09/2026, chantier A1) ──────────────────────────
+   Mesuré sur le banc à 1920, 1280 et 390 px : le verdict « Avant-bras long ·
+   marqué » finissait en « mar… » dans une colonne de résultats étroite,
+   l'étiquette « Clavicules » en « Clavicul… » sur la photo à 390 px, et
+   « 168 cm · ±3 % » en « ±3… » à côté d'un titre sur deux lignes. Un chiffre
+   ou un verdict tronqué se lit faux : on laisse passer à la ligne. */
+.an-res .an-r-v{white-space:normal;overflow:visible;text-overflow:clip}
+@container ancold (max-width:360px){ .an-res .an-r-v{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.15} }
+@container an (max-width:520px){ .an-lbl{max-width:26%;font-size:8.5px;padding:0 3px;letter-spacing:-.2px} }
+.an-dr-t{min-width:0}
+.an-dr-r{flex-shrink:0;overflow:visible;text-overflow:clip}

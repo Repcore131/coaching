@@ -44650,6 +44650,56 @@ async function testExercices(){
       if(seul.indexOf('<select')>=0) return _echec('un menu pour un seul bilan');
       if(seul.indexOf('Photos du premier bilan')<0) return _echec('le texte d’origine a disparu : '+seul);
       return true;})());
+    // Les références de longueur : de Leva (1996), centres articulaires, par sexe (A1, 25/09/2026).
+    ok('ANALYSE MORPHO : LE GABARIT REPRODUIT LES FRACTIONS DE DE LEVA, POUR CHAQUE SEXE',(()=>{
+      if(typeof ANAT_REF!=='object'||!ANAT_REF.H||!ANAT_REF.F) return _echec('ANAT_REF n’existe pas');
+      if(typeof ANAT_DC!=='undefined') return _echec('ANAT_DC est encore là');
+      for(const sx of ['H','F']){
+        const R=ANAT_REF[sx], pts=anatGabarit(1000,1500,'face',sx==='F');
+        const P=k=>({x:pts[k][0]*1000,y:pts[k][1]*1500});
+        const Hh=P('talon_l').y-P('vertex').y;
+        const d=(a,b)=>Math.hypot(P(a).x-P(b).x,P(a).y-P(b).y)/Hh;
+        const mil=(a,b)=>({x:(P(a).x+P(b).x)/2,y:(P(a).y+P(b).y)/2});
+        const tr=Math.hypot(mil('epaule_l','epaule_r').x-mil('hanche_l','hanche_r').x,mil('epaule_l','epaule_r').y-mil('hanche_l','hanche_r').y)/Hh;
+        const l={bras:d('epaule_l','coude_l'),avantbras:d('coude_l','poignet_l'),cuisse:d('hanche_l','genou_l'),jambe:d('genou_l','cheville_l'),tronc:tr};
+        for(const k in l) if(Math.abs(l[k]/R[k]-1)>0.005) return _echec(sx+' '+k+' : '+l[k].toFixed(4)+' pour '+R[k]);
+      }
+      if(Math.abs(ANAT_REF.H.bras-0.1618)>1e-9||Math.abs(ANAT_REF.F.cuisse-0.2124)>1e-9) return _echec('les fractions de la table 4 ont bougé');
+      return true;})());
+    ok('ANALYSE MORPHO : UN GABARIT DE DE LEVA SORT DANS LA MARGE SUR LES BRAS, LES JAMBES ET LE BUSTE',(()=>{
+      for(const g of ['H','F']){
+        const a=_anatGab(); a.face.auto.pts=anatGabarit(1000,1500,'face',g==='F');
+        const r=anatMesures(a,_anatDossier({gender:g}));
+        for(const k of ['bras','jambes','buste']){
+          const f=r.fiches.find(x=>x.cle===k);
+          if(f.niveau!==0) return _echec(g+' '+k+' : niveau '+f.niveau+' ('+anatVerdict(f)+')');
+        }
+      }
+      return true;})());
+    ok('ANALYSE MORPHO : UN HUMÉRUS ALLONGÉ DE 10 % SORT « HUMÉRUS LONG »',(()=>{
+      const pts=anatGabarit(1000,1500,'face');
+      const dy=0.10*ANAT_REF.H.bras*0.86;   // 10 % de l'humérus, en fraction de la hauteur de la photo
+      const bas={};
+      for(const s of ['l','r']) for(const k of ['coude','poignet']) bas[k+'_'+s]=[pts[k+'_'+s][0],pts[k+'_'+s][1]+dy,1];
+      const f=anatMesures(_anatGab(bas),_anatDossier()).fiches.find(x=>x.cle==='bras');
+      if(!(f.niveau>0)) return _echec('niveau '+f.niveau+' : l’humérus long n’est pas vu');
+      if(!/Humérus long/.test(anatVerdict(f))) return _echec('verdict : '+anatVerdict(f));
+      if(Math.abs(f.mesure.ecR-10)>1) return _echec('écart au rapport de référence : '+f.mesure.ecR);
+      return true;})());
+    ok('ANALYSE MORPHO : UNE FEMME ET UN HOMME DE MÊME PHOTO N’ONT PAS LE MÊME REPÈRE',(()=>{
+      const a=_anatGab();
+      const h=anatMesures(a,_anatDossier({gender:'H'})), f=anatMesures(a,_anatDossier({gender:'F'}));
+      const cuisse=r=>r.fiches.find(x=>x.cle==='jambes').chiffres[0];
+      if(cuisse(h).ref===cuisse(f).ref) return _echec('même repère de cuisse : '+cuisse(h).ref);
+      if(h.fiches.find(x=>x.cle==='jambes').mesure.rRef===f.fiches.find(x=>x.cle==='jambes').mesure.rRef) return _echec('même rapport cuisse / jambe');
+      if(!/femmes/.test(f.fiches.find(x=>x.cle==='bras').source)||!/hommes/.test(h.fiches.find(x=>x.cle==='bras').source)) return _echec('la source ne dit pas le sexe du repère');
+      // Chaque longueur dit d'où à où elle mesure.
+      const hu=h.fiches.find(x=>x.cle==='bras').chiffres[0];
+      if(hu.def!=='centre épaule → centre coude') return _echec('définition de l’humérus : '+hu.def);
+      for(const fi of h.fiches) for(const c of fi.chiffres) if(!c.def) return _echec(fi.cle+' / '+c.lib+' : pas de définition');
+      const html=_htmlAnat;   // la définition est écrite sous le libellé du tableau
+      if(String(html).indexOf('an-def')<0) return _echec('la définition n’est pas affichée');
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());
@@ -44699,7 +44749,7 @@ async function testExercices(){
         if(!t.court) return _echec(f.cle+' : pas de phrase courte');
       }
       if(!/ANSUR/.test(r.fiches.find(f=>f.cle==='clavicules').source)) return _echec('la carrure sans sa source');
-      if(!/Drillis/.test(r.fiches.find(f=>f.cle==='jambes').source)) return _echec('les longueurs sans leur source');
+      if(!/de Leva/.test(r.fiches.find(f=>f.cle==='jambes').source)) return _echec('les longueurs sans leur source');
       if(CHAMPS_SANTE.indexOf('morphoAnat')<0) return _echec('morphoAnat n’est pas classé santé');
       return true;})());
     ok('ANALYSE MORPHO : LES POINTS POSÉS À LA MAIN PASSENT DEVANT L’AUTOMATIQUE',(()=>{
