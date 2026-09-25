@@ -9937,6 +9937,11 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .an-f-h b{font-size:var(--fs-xs);color:#fff;font-weight:800;text-transform:uppercase;letter-spacing:.6px}
 .an-f-h em{font-style:normal;font-size:var(--fs-2xs);color:#ff6b6b;font-weight:700}
 .an-f-est{font-style:normal;font-size:9.5px;font-weight:700;color:#f59e0b;border:1px solid rgba(245,158,11,.5);border-radius:5px;padding:0 5px;text-transform:uppercase;letter-spacing:.5px}
+/* A7 : la confiance de la fiche, A vert, B gris clair, C orange. */
+.an-conf{font-style:normal;font-size:9.5px;font-weight:800;line-height:15px;width:16px;height:16px;flex:0 0 16px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;cursor:help;border:1px solid;align-self:center}
+.an-conf[data-c="A"]{color:#34e89e;border-color:rgba(52,232,158,.6);background:rgba(52,232,158,.12)}
+.an-conf[data-c="B"]{color:#d4d4d8;border-color:#52525b;background:#202026}
+.an-conf[data-c="C"]{color:#f59e0b;border-color:rgba(245,158,11,.6);background:rgba(245,158,11,.12)}
 .an-f-court{font-size:var(--fs-2xs);color:#d4d4d8;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .an-f.ouvert .an-f-court{-webkit-line-clamp:unset;display:block}
 .an-f-plus{align-self:flex-start;display:inline-flex;align-items:center;gap:4px;min-height:32px;padding:0;border:0;background:none;color:#ff4d4d;
@@ -9961,6 +9966,8 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .an-tab tbody th .an-def{display:block;margin-top:2px;font-size:9.5px;font-weight:400;color:#8a8a92;line-height:1.3;letter-spacing:0;text-transform:none}
 .an-tab thead th:first-child{text-align:left}
 .an-tab td:last-child{color:#ff8a8a}
+/* Une valeur en phrase (« parmi les 5 % … ») passe à la ligne, les chiffres non. */
+.an-tab td.an-td-txt{white-space:normal;min-width:7em;line-height:1.3}
 .an-f[data-etat="illisible"] .an-f-h em{color:#8a8a92}
 
 /* Les resultats */
@@ -9978,6 +9985,11 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .an-pts i[data-on][data-i="2"],.an-res-leg i[data-i="2"]{background:#fb923c}
 .an-pts i[data-on][data-i="3"],.an-res-leg i[data-i="3"]{background:#ff3b3b;box-shadow:0 0 5px rgba(255,59,59,.55)}
 .an-pts i[data-i="0"]{outline:1px solid #3a3a40;outline-offset:1px}
+/* A7 : une mesure de confiance C garde ses points du niveau en contour seul. */
+.an-pts.an-pts-c i[data-on]{background:transparent!important;box-shadow:none!important;border:1.5px solid #fb923c}
+.an-pts.an-pts-c i[data-on][data-i="0"]{border-color:#34e89e}
+.an-pts.an-pts-c i[data-on][data-i="1"]{border-color:#facc15}
+.an-pts.an-pts-c i[data-on][data-i="3"]{border-color:#ff3b3b}
 .an-pts-vide i{background:#1e1e22}
 .an-res-leg{margin-top:6px !important;font-size:10px;color:#7c7c84;display:flex;align-items:center;gap:4px 10px;flex-wrap:wrap}
 .an-res-leg span{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
@@ -10159,6 +10171,8 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .an-res-k [data-t="s"]{border-color:rgba(255,59,59,.6);background:rgba(224,32,32,.14)}
 .an-res-k [data-t="s"] b{color:#ff5a5a}
 .an-res-k [data-t="m"] b{color:#34e89e}
+.an-res-k [data-t="c"]{border-color:rgba(245,158,11,.55);cursor:help}
+.an-res-k [data-t="c"] b{color:#f59e0b}
 .an-res-l{display:flex;flex-direction:column;gap:3px}
 .an-res .an-r{position:relative;min-height:40px;border-radius:9px;background:rgba(255,255,255,.02);border:1px solid transparent;padding:2px 8px 2px 12px}
 .an-res .an-r::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:2px;background:#2a2a30}

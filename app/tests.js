@@ -44914,6 +44914,41 @@ async function testExercices(){
       if(l.val!=='25 cm'&&l.val!=='25,0 cm') return _echec('ligne avant-bras : '+l.val);
       if(!/photo en contrôle/.test(l.def)) return _echec('la photo n’est pas présentée en contrôle : '+l.def);
       return true;})());
+    // La confiance de chaque fiche, A / B / C (A7, 25/09/2026).
+    // Clavicules à 1,20 : acromions et crêtes estimés (0,5), puis posés à la main.
+    const _anatConfClav=(rapport,marque,vis)=>{
+      const L=ANAT_LARGEURS.H, pts=anatGabarit(1000,1500,'face');
+      const k=0.86*1500/1000, demi=rapport*L.bicretal/2;
+      const q=(x,y)=>{ const r=[x,y,marque]; if(vis!=null) r.push(vis); return r; };
+      const a={acromion_l:q(0.5-demi*k,pts.acromion_l[1]),acromion_r:q(0.5+demi*k,pts.acromion_r[1]),
+        crete_l:q(0.5-L.bicretal/2*k,pts.crete_l[1]),crete_r:q(0.5+L.bicretal/2*k,pts.crete_r[1])};
+      const g=_anatGab(); g.face.auto.pts=Object.assign({},pts,a);
+      if(marque===2){ g.face.auto.pts=pts; g.face.man={}; for(const c in a) g.face.man[c]=a[c].slice(0,2); }
+      return anatMesures(g,_anatDossier());
+    };
+    ok('ANALYSE MORPHO : ACROMIONS ESTIMÉS, CLAVICULES EN C ; DÉPLACÉS À LA MAIN, EN A',(()=>{
+      if(typeof anatConfiance!=='function'||typeof anatCompteurs!=='function') return _echec('anatConfiance ou anatCompteurs n’existe pas');
+      const est=_anatConfClav(1.20,0.5).fiches.find(f=>f.cle==='clavicules');
+      if(est.conf!=='C') return _echec('estimés : '+est.conf);
+      if(est.confCles.indexOf('acromion_l')<0) return _echec('les points faibles ne sont pas nommés : '+est.confCles.join(','));
+      if(!/estimé/.test(est.confPourquoi)||!/acromion/i.test(est.confPourquoi)) return _echec('pourquoi : '+est.confPourquoi);
+      const man=_anatConfClav(1.20,2).fiches.find(f=>f.cle==='clavicules');
+      if(man.conf!=='A') return _echec('à la main : '+man.conf+' · '+man.confPourquoi);
+      // Moteur bien visible : B ; moteur peu visible : C.
+      if(_anatConfClav(1.20,1,0.92).fiches.find(f=>f.cle==='clavicules').conf!=='B') return _echec('moteur visible à 0,92 : pas B');
+      if(_anatConfClav(1.20,1,0.7).fiches.find(f=>f.cle==='clavicules').conf!=='C') return _echec('moteur visible à 0,7 : pas C');
+      // Une échelle non confirmée retire un cran à une longueur.
+      if(anatConfiance({a:[0,0,2]},['a'],['échelle à vérifier']).conf!=='B') return _echec('A dégradé : pas B');
+      if(anatConfiance({a:[0,0,1,0.9]},['a'],['x','y']).conf!=='C') return _echec('la note descend sous C');
+      return true;})());
+    ok('ANALYSE MORPHO : « À SURVEILLER » NE COMPTE QUE A ET B, LE RESTE EST « À CONFIRMER »',(()=>{
+      const est=_anatConfClav(1.20,0.5), man=_anatConfClav(1.20,2);
+      const fe=est.fiches.find(f=>f.cle==='clavicules'), fm=man.fiches.find(f=>f.cle==='clavicules');
+      if(!(Math.abs(fe.niveau)>=2)||!(Math.abs(fm.niveau)>=2)) return _echec('1,20 ne sort pas net : '+fe.niveau+' / '+fm.niveau);
+      const ce=anatCompteurs([fe]), cm=anatCompteurs([fm]);
+      if(ce.surveiller!==0||ce.confirmer!==1) return _echec('estimés : '+JSON.stringify(ce));
+      if(cm.surveiller!==1||cm.confirmer!==0) return _echec('à la main : '+JSON.stringify(cm));
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());

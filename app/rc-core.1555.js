@@ -44851,7 +44851,10 @@ function renderCourbesCoach(c){
 // sont repris tels quels.
 // v4 : sommet du crâne cherché en remontant le cou (la v3 prenait la lampe
 // du plafond pour une tête). Les points posés à la main sont repris.
-const ANAT_VERSION=4;
+// v5 (chantier A7) : chaque point du moteur garde sa VISIBILITÉ en quatrième
+// valeur ; c'est elle qui départage une confiance B d'une C. Les points posés à
+// la main sont repris.
+const ANAT_VERSION=5;
 /**
  * LES LONGUEURS DE RÉFÉRENCE, en fraction de la taille, PAR SEXE.
  *
@@ -45053,6 +45056,42 @@ function anatBiaisCoach(){
   const cle=l.map(u=>(u&&u.email)+':'+((u&&u.updatedAt)||0)).join('|');
   if(cle!==_anatBiaisCache.cle) _anatBiaisCache={cle,val:_anatSafe(()=>anatBiaisMoteur(l))};
   return _anatBiaisCache.val;
+}
+/**
+ * MONTRER LA CONFIANCE, PAS SEULEMENT LA VALEUR (audit morpho, chantier A7).
+ * Chaque point porte une note : A posé à la main, B lu par le moteur et bien
+ * visible (≥ 0,8), C sinon — estimé, gabarit, peu visible. Une fiche vaut son
+ * point le plus faible. Elle perd un cran quand l'échelle n'est pas confirmée
+ * (A4) — pour les LONGUEURS seulement : une inclinaison ou un angle ne dépend
+ * pas de l'échelle — ou quand le corps est tourné (anatRotation, chantier A8,
+ * si elle existe et annonce plus de 8°).
+ */
+const ANAT_CONF_VIS_MIN=0.8;
+const ANAT_CONF_MOTS=Object.freeze({A:'points posés à la main',B:'points lus par le moteur, bien visibles',C:'au moins un point estimé ou peu visible'});
+function anatConfPoint(q){
+  if(!q) return 'C';
+  if(q[2]>=2) return 'A';
+  if(q[2]>=0.9&&q[3]!=null&&q[3]>=ANAT_CONF_VIS_MIN) return 'B';
+  return 'C';
+}
+/** PURE. La confiance d'une liste de points (clés), et ceux qui la tirent vers C. */
+function anatConfiance(pts,cles,degrade){
+  const rang={A:2,B:1,C:0}, lettre=['C','B','A'];
+  let r=2; const faibles=[];
+  for(const k of cles||[]){ const c=anatConfPoint(pts&&pts[k]); if(rang[c]<r) r=rang[c]; if(c==='C') faibles.push(k); }
+  if(!(cles&&cles.length)) r=0;
+  const brut=lettre[r];
+  const n=Math.max(0,r-(degrade||[]).length);
+  return {conf:lettre[n],brut,faibles,degrade:degrade||[]};
+}
+/** PURE. Les compteurs des résultats : « à surveiller » ne compte que A et B. */
+function anatCompteurs(fiches){
+  const l=fiches||[];
+  const fort=f=>f.niveau!=null&&Math.abs(f.niveau)>=2;
+  return {surveiller:l.filter(f=>fort(f)&&f.conf!=='C').length,
+    confirmer:l.filter(f=>fort(f)&&f.conf==='C').length,
+    marge:l.filter(f=>f.niveau===0).length,
+    illisibles:l.filter(f=>f.niveau==null).length};
 }
 /** Le mot de l'échelle, le même partout. */
 const ANAT_ECHELLE_MOTS=Object.freeze({confirmee:'échelle confirmée',verifier:'échelle à vérifier',divergence:'échelles divergentes'});
@@ -45272,7 +45311,10 @@ function anatPointsAuto(raw,vue){
   const P=i=>{ const q=raw.pts[i]; return q?{x:q[0]*W,y:q[1]*H,v:q[2]||0}:null; };
   const e=v=>v>=0.6?1:0.2;
   const out={};
-  const pose=(k,p,conf)=>{ if(p&&isFinite(p.x)&&isFinite(p.y)) out[k]=[Math.round(p.x/W*10000)/10000,Math.round(p.y/H*10000)/10000,conf]; };
+  const pose=(k,p,conf)=>{ if(p&&isFinite(p.x)&&isFinite(p.y)){
+    out[k]=[Math.round(p.x/W*10000)/10000,Math.round(p.y/H*10000)/10000,conf];
+    // La visibilité du moteur, quand le point vient de lui (A7).
+    if(p.v!=null&&isFinite(p.v)) out[k].push(Math.round(p.v*100)/100); } };
   // Les paires, rangées par côté de l'IMAGE : l'étiquette gauche/droite du
   // moteur n'est pas fiable de dos, ni dans un miroir.
   const paire=(a,b)=>{ const A=P(a),B=P(b); if(!A||!B) return null; return A.x<=B.x?{l:A,r:B}:{l:B,r:A}; };
@@ -45378,7 +45420,7 @@ function anatPointsAuto(raw,vue){
         }
         if(bas!=null){ const yb=(bas+1)/ky; if(yb>=ty&&yb-ty<=0.03*Hpx) sol=yb; }
       }
-      if(sol!=null) pose('talon_'+s,{x:tx,y:sol},t[2]);
+      if(sol!=null) pose('talon_'+s,{x:tx,y:sol,v:t[3]},t[2]);
       else pose('talon_'+s,{x:tx,y:ty+0.006*Hpx},0.5);
     }
   }
@@ -45457,7 +45499,7 @@ function anatPoints(anat,vue){
   const out={};
   for(const k of anatCles(vue)){
     if(man&&man[k]) out[k]=[man[k][0],man[k][1],2];
-    else if(auto[k]) out[k]=auto[k].slice(0,3);
+    else if(auto[k]) out[k]=auto[k].slice(0,4);
   }
   return out;
 }
@@ -45514,7 +45556,7 @@ function anatMesures(anat,u,o){
     if(v.auto&&v.auto.gabarit&&!v.man) continue;
     const W=v.w,H=v.h;
     const cotes=anatCotes(vue,vue==='face'&&opts.miroir);
-    const P=k=>{ const q=pts[k]; return q?{x:q[0]*W,y:q[1]*H,e:q[2]}:null; };
+    const P=k=>{ const q=pts[k]; return q?{x:q[0]*W,y:q[1]*H,e:q[2],v:q[3]}:null; };
     // Côté ATHLÈTE → point : P2('coude','g') lit le coude gauche de l'athlète.
     const P2=(k,s)=>P(k+'_'+cotes[s]);
     const tl=P('talon_l'),tr=P('talon_r'),vx=P('vertex');
@@ -45827,6 +45869,40 @@ function anatMesures(anat,u,o){
       f.chiffres=f.chiffres.filter(c=>c.lib!=='Position dans la population');
       if(f.cle==='buste'){ const sx=f.mesure.s; f.niveau=(sx!=null)?_anatNiveau(sx,ANAT_SEUILS.tronc):null; f.mesure.nTr=0; }
       else f.niveau=null;
+    }
+  }
+  // LA CONFIANCE, fiche par fiche, sur les points qu'elle utilise.
+  {
+    const K=(V,k,sd)=>V?k+'_'+V.cotes[sd]:null;
+    const deux=(V,k)=>V?[K(V,k,'g'),K(V,k,'d')]:[];
+    const par={}; fiches.forEach(f=>{ par[f.cle]=f; });
+    const sB=(par.bras&&par.bras.mesure.cotesOk&&par.bras.mesure.cotesOk[0])||'g';
+    const sJ=['g','d'].filter(jambeOk)[0]||'g';
+    const sG=(par.genoux&&par.genoux.mesure.pire&&par.genoux.mesure.pire.c==='droit')?'d':'g';
+    const cles={
+      clavicules:[...deux(F,'acromion'),...deux(F,'crete')],
+      epaules:deux(F,'acromion'),
+      buste:[...deux(F,'epaule'),...deux(F,'hanche')],
+      bras:F?['epaule','coude','poignet'].map(k=>K(F,k,sB)):[],
+      bassin:deux(F,'crete'),
+      jambes:F?['hanche','genou','cheville'].map(k=>K(F,k,sJ)):[],
+      genoux:F?['hanche','genou','cheville'].map(k=>K(F,k,sG)):[],
+      pieds:[...deux(F,'talon'),...deux(F,'pointe')],
+      dos:D?[...deux(D,'omoplate'),'c7','sacrum']:[]
+    };
+    const rot=(typeof anatRotation==='function')?_anatSafe(()=>anatRotation(anat)):null;
+    const tourne=!!(rot&&rot.deg>8);
+    for(const f of fiches){
+      const V=f.cle==='dos'?D:F;
+      const deg=[];
+      if(['clavicules','buste','bras','jambes'].indexOf(f.cle)>=0&&!(verif&&verif.statut==='confirmee'))
+        deg.push(verif?ANAT_ECHELLE_MOTS[verif.statut]:'échelle non vérifiée');
+      if(tourne) deg.push('corps tourné d’environ '+_anatN(rot.deg,0)+'°');
+      const c=anatConfiance(V?V.pts:null,cles[f.cle]||[],deg);
+      f.conf=c.conf; f.confCles=c.faibles; f.confVue=f.cle==='dos'?'dos':'face';
+      f.confPourquoi='Confiance '+c.conf+' : '+ANAT_CONF_MOTS[c.brut]
+        +(c.faibles.length?' ('+c.faibles.map(k=>anatNomPoint(f.confVue,k)).join(', ')+')':'')
+        +(deg.length?' ; un cran de moins : '+deg.join(', '):'')+'.';
     }
   }
   const fb=fiches.find(f=>f.cle==='bras');
@@ -46681,8 +46757,14 @@ function anatVue(v){
 function anatEditer(sel){
   const c=getOwnedClient(currentClientId);
   if(!c||!c.morphoAnat) return;
-  const k=(typeof sel==='string')?sel:null;
+  let k=(typeof sel==='string')?sel:null;
   if(_anatEdit&&_anatEdit.email===c.email){ if(k) _anatEdit.sel=k; renderAnatCoach(c); return; }
+  // A7 : sans point demandé, le premier point de confiance C de la dernière
+  // fiche ouverte — c'est lui qu'il faut vérifier d'abord.
+  if(!k&&_anatDerniereFiche){
+    const f=_anatSafe(()=>anatMesures(c.morphoAnat,c,{biais:anatBiaisCoach()}).fiches.find(x=>x.cle===_anatDerniereFiche));
+    if(f&&f.confCles&&f.confCles.length){ k=f.confCles[0]; _anatVueActive=f.confVue; }
+  }
   const vue=_anatVueActive;
   const pts=anatPoints(c.morphoAnat,vue);
   if(!pts) return;
@@ -46912,6 +46994,7 @@ function _anatBrancherEdition(z){
   if(e.sel&&e.pts[e.sel]) choisir(e.sel);
 }
 /** Déplie / replie une fiche, et l'amène sous les yeux depuis l'anneau. */
+let _anatDerniereFiche=null;
 function anatOuvrir(cle,depuisAnneau){
   const z=document.getElementById('ccd-anat');
   if(!z) return;
@@ -46919,6 +47002,7 @@ function anatOuvrir(cle,depuisAnneau){
   if(!f) return;
   if(f.classList.contains('an-f-plus-l')&&!_anatToutes) anatToutesFiches();
   const ouvrir=depuisAnneau?true:!f.classList.contains('ouvert');
+  _anatDerniereFiche=ouvrir?cle:null;
   f.classList.toggle('ouvert',ouvrir);
   const b=f.querySelector('.an-f-plus');
   if(b) b.setAttribute('aria-expanded',ouvrir?'true':'false');
@@ -46988,7 +47072,8 @@ function _anatDessin(vue,pts,W,H,edit,E){
 }
 function _anatPoints(f){
   const n=f.niveau;
-  let h='<span class="an-pts'+(n==null?' an-pts-vide':'')+'" role="img" aria-label="'
+  // Une mesure de confiance C : les points du niveau en contour seul (A7).
+  let h='<span class="an-pts'+(n==null?' an-pts-vide':'')+(f.conf==='C'?' an-pts-c':'')+'" role="img" aria-label="'
     +escapeHtml(n==null?'sans position':(n===0?'dans la marge':f.bornes[n>0?1:0]+', niveau '+Math.abs(n)+' sur 3'))+'">';
   for(let i=-3;i<=3;i++){
     const on=(n!=null)&&(n===0?i===0:(n>0?(i>0&&i<=n):(i<0&&i>=n)));
@@ -47277,7 +47362,7 @@ function _htmlAnat(c){
     const cad=_anatCadrage(f.zone,vv,4/3);
     const li=(l)=>l&&l.length?'<ul>'+l.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')+'</ul>':'';
     const tab=f.chiffres&&f.chiffres.length?'<table class="an-tab"><thead><tr><th>Mesure</th><th>Athlète</th><th>Repère</th><th>Écart</th></tr></thead><tbody>'
-      +f.chiffres.map(r=>'<tr><th>'+escapeHtml(r.lib)+(r.def?'<small class="an-def">'+escapeHtml(r.def)+'</small>':'')+'</th><td>'+escapeHtml(r.val||'—')+'</td><td>'+escapeHtml(r.ref||'')+'</td><td>'+escapeHtml(r.ecart||'')+'</td></tr>').join('')+'</tbody></table>':'';
+      +f.chiffres.map(r=>'<tr><th>'+escapeHtml(r.lib)+(r.def?'<small class="an-def">'+escapeHtml(r.def)+'</small>':'')+'</th><td'+((r.val||'').length>16?' class="an-td-txt"':'')+'>'+escapeHtml(r.val||'—')+'</td><td>'+escapeHtml(r.ref||'')+'</td><td>'+escapeHtml(r.ecart||'')+'</td></tr>').join('')+'</tbody></table>':'';
     const detail='<div class="an-f-long" id="an-long-'+f.cle+'">'+tab
       +(t.lecture?'<h6>Lecture</h6><p class="an-f-lec">'+escapeHtml(t.lecture)+'</p>':'')
       +(t.privilegier&&t.privilegier.length?'<h6>À privilégier</h6>'+li(t.privilegier):'')
@@ -47288,7 +47373,8 @@ function _htmlAnat(c){
     return '<div class="an-f" data-k="'+f.cle+'" data-etat="'+f.etat+'" data-n="'+(f.niveau==null?'':Math.abs(f.niveau))+'">'
       +'<button type="button" class="an-f-vig" '+(cad?'onclick="anatZoom(\''+f.cle+'\')" aria-label="Agrandir : '+escapeHtml(f.lib)+'"':'disabled')+'>'
       +(cad?_anatImg(s2,cad,f.vue==='dos'?'dos':'face',anatFiltre(anatReglage(a,f.vue==='dos'?'dos':'face')))+'<span class="an-f-loupe">'+ANAT_SVG.loupe+'</span>':'')+'</button>'
-      +'<div class="an-f-c"><div class="an-f-h"><b>'+escapeHtml(f.lib)+'</b>'+(f.valeur?'<em>'+escapeHtml(f.valeur)+'</em>':'')+(f.estime?'<i class="an-f-est" title="Points estimés, à vérifier">estimé</i>':'')+'</div>'
+      +'<div class="an-f-c"><div class="an-f-h"><b>'+escapeHtml(f.lib)+'</b>'
+        +(f.conf?'<i class="an-conf" data-c="'+f.conf+'" title="'+escapeHtml(f.confPourquoi||'')+'" aria-label="'+escapeHtml(f.confPourquoi||'')+'">'+f.conf+'</i>':'')+(f.valeur?'<em>'+escapeHtml(f.valeur)+'</em>':'')+(f.estime?'<i class="an-f-est" title="Points estimés, à vérifier">estimé</i>':'')+'</div>'
       +'<p class="an-f-court">'+escapeHtml(t.court||'')+'</p>'
       +'<button type="button" class="an-f-plus" aria-expanded="false" aria-controls="an-long-'+f.cle+'" onclick="anatOuvrir(\''+f.cle+'\')"><span class="an-f-plus-o">Recommandations détaillées</span><span class="an-f-plus-f">Replier</span>'+ANAT_SVG.chev+'</button>'
       +'</div>'+detail+'</div>';
@@ -47306,11 +47392,10 @@ function _htmlAnat(c){
     +photoHtml+'</div>';
   // LES RÉSULTATS, STYLISÉS : un bandeau, le compte de ce qui est à
   // surveiller, et chaque ligne teintée de son niveau.
-  const nSurv=fiches.filter(f=>f.niveau!=null&&Math.abs(f.niveau)>=2).length;
-  const nMarge=fiches.filter(f=>f.niveau===0).length;
-  const nIll=fiches.filter(f=>f.niveau==null).length;
+  const cpt=anatCompteurs(fiches);
+  const nSurv=cpt.surveiller, nMarge=cpt.marge, nIll=cpt.illisibles, nConf=cpt.confirmer;
   const resHtml='<div class="an-res"><div class="an-res-h"><h5>Résultats de l’analyse</h5>'
-    +'<div class="an-res-k"><span data-t="s"><b>'+nSurv+'</b>à surveiller</span><span data-t="m"><b>'+nMarge+'</b>dans la marge</span>'+(nIll?'<span data-t="i"><b>'+nIll+'</b>non lisible'+(nIll>1?'s':'')+'</span>':'')+'</div></div>'
+    +'<div class="an-res-k"><span data-t="s"><b>'+nSurv+'</b>à surveiller</span><span data-t="m"><b>'+nMarge+'</b>dans la marge</span>'+(nConf?'<span data-t="c" title="Niveau net ou marqué sur des points estimés : à confirmer en les replaçant"><b>'+nConf+'</b>à confirmer</span>':'')+(nIll?'<span data-t="i"><b>'+nIll+'</b>non lisible'+(nIll>1?'s':'')+'</span>':'')+'</div></div>'
     +'<div class="an-res-l">'+fiches.map(f=>'<button type="button" class="an-r" data-k="'+f.cle+'" data-n="'+(f.niveau==null?'':Math.abs(f.niveau))+'" onclick="anatOuvrir(\''+f.cle+'\',true)">'
       +'<span class="an-r-l">'+escapeHtml(f.lib)+'</span>'+_anatPoints(f)+'<span class="an-r-v">'+escapeHtml(anatVerdict(f))+(f.stat?'<small class="an-r-p">'+escapeHtml(f.stat.court||f.stat.txt)+'</small>':'')+'</span></button>').join('')+'</div>'
     +'<p class="an-res-leg"><span><i data-i="0"></i>dans la marge</span><span><i data-i="1"></i>léger</span><span><i data-i="2"></i>net</span><span><i data-i="3"></i>marqué</span><span>gris : non lisible</span></p></div>';
