@@ -45049,6 +45049,53 @@ async function testExercices(){
       const t=anatTexte(po,res);
       if(!t.amenager.some(x=>/Squat/.test(x.quoi)&&/déverrouillés/.test(x.reglage))) return _echec('pas d’aménagement du squat pour le genou');
       return true;})());
+    // L'angle de port du coude (A10, 25/09/2026).
+    ok('ANALYSE MORPHO : GABARIT BRAS TENDUS, PAUMES VERS L’AVANT : ANGLE DE PORT CALCULÉ',(()=>{
+      if(typeof ANAT_COUDE!=='object') return _echec('ANAT_COUDE n’existe pas');
+      for(const [sx,femme] of [['H',false],['F',true]]){
+        const a=_anatGab(null,{paumes:true}); a.face.auto.pts=anatGabarit(1000,1500,'face',femme);
+        const res=anatMesures(a,_anatDossier({gender:sx==='F'?'F':'H'}));
+        const f=res.fiches.find(x=>x.cle==='coudes');
+        if(!f) return _echec('pas de fiche Coudes');
+        if(f.etat!=='ok'||f.mesure.moy==null) return _echec(sx+' : non lu ('+f.mesure.raison+')');
+        if(Math.abs(f.mesure.moy-ANAT_COUDE[sx].moy)>0.6) return _echec(sx+' : '+f.mesure.moy.toFixed(2)+'° au lieu de '+ANAT_COUDE[sx].moy+'°');
+        if(Math.abs(f.mesure.g-f.mesure.d)>0.1) return _echec(sx+' : gauche '+f.mesure.g+' / droit '+f.mesure.d);
+        if(f.niveau!==0||!f.stat) return _echec(sx+' : niveau '+f.niveau);
+        if(!/ordre de grandeur des séries publiées/.test(f.source)) return _echec('source : '+f.source);
+        const t=anatTexte(f,res);
+        if(!/dans la moyenne/.test(t.court)) return _echec(sx+' : '+t.court);
+      }
+      // Avant-bras écarté de 12° de plus : coudes plus ouverts, et les recommandations.
+      const a=_anatGab(null,{paumes:true});
+      const P=a.face.auto.pts, c=anatCotes('face',false);
+      for(const s of ['g','d']){
+        const k=c[s], co=P['coude_'+k], po=P['poignet_'+k], lat=k==='l'?-1:1;
+        const dx=(po[0]-co[0])*1000, dy=(po[1]-co[1])*1500, t=12*Math.PI/180*lat*(-1);
+        P['poignet_'+k]=[co[0]+(dx*Math.cos(t)-dy*Math.sin(t))/1000,co[1]+(dx*Math.sin(t)+dy*Math.cos(t))/1500,po[2]];
+      }
+      const res=anatMesures(a,_anatDossier()), f=res.fiches.find(x=>x.cle==='coudes');
+      if(!(f.mesure.moy>ANAT_COUDE.H.moy+10)) return _echec('écarté de 12° : '+f.mesure.moy);
+      if(!(f.niveau>=1)) return _echec('niveau : '+f.niveau);
+      const t=anatTexte(f,res);
+      if(!t.privilegier.some(x=>/barre EZ/.test(x))||!t.privilegier.some(x=>/corde/.test(x))||!t.privilegier.some(x=>/avant-bras reste vertical/.test(x))) return _echec('recommandations : '+t.privilegier.join(' | '));
+      if(/éviter|pathologi|diagnosti|lésion|douleur|articulaire/i.test(JSON.stringify(t))) return _echec('un mot de santé ou « à éviter »');
+      return true;})());
+    ok('ANALYSE MORPHO : OPTION « PAUMES VERS L’AVANT » DÉCOCHÉE : COUDES NON LISIBLES',(()=>{
+      const res=anatMesures(_anatGab(),_anatDossier());
+      const f=res.fiches.find(x=>x.cle==='coudes');
+      if(f.etat!=='illisible'||f.niveau!=null||f.mesure.raison!=='paumes') return _echec('lu sans paumes : '+f.etat+' '+f.mesure.raison);
+      if(!f.chiffres.every(c=>c.lib==='Position dans la population'||/non lisible : paumes tournées vers les cuisses/.test(c.val))) return _echec(f.chiffres.map(c=>c.val).join(' | '));
+      if(!/paumes tournées vers les cuisses/.test(anatTexte(f,res).court)) return _echec('texte : '+anatTexte(f,res).court);
+      // La demande du bilan coche l'option par défaut ; le coach a le dernier mot.
+      const u=_anatDossier({bilans:[{type:'depart',date:1,'deb-photo-paumes':'oui'}]});
+      if(anatMesures(_anatGab(),u).fiches.find(x=>x.cle==='coudes').etat!=='ok') return _echec('la demande du bilan n’est pas suivie');
+      if(anatMesures(_anatGab(null,{paumes:false}),u).fiches.find(x=>x.cle==='coudes').etat!=='illisible') return _echec('le coach ne peut pas décocher');
+      // Coude fléchi vers l'objectif : l'avant-bras raccourci à 70 % ne se lit pas.
+      const a=_anatGab(null,{paumes:true}), P=a.face.auto.pts;
+      for(const k of ['l','r']){ const co=P['coude_'+k],po=P['poignet_'+k]; P['poignet_'+k]=[co[0]+(po[0]-co[0])*0.7,co[1]+(po[1]-co[1])*0.7,po[2]]; }
+      const fp=anatMesures(a,_anatDossier()).fiches.find(x=>x.cle==='coudes');
+      if(fp.etat!=='illisible'||fp.mesure.raison!=='plie') return _echec('bras fléchi lu : '+fp.etat);
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());

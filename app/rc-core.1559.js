@@ -44890,6 +44890,19 @@ const ANAT_REF=Object.freeze({
     cuisse:'centre hanche → centre genou',jambe:'centre genou → cheville (malléole)',
     tronc:'mi-épaules → mi-hanches',hanche:'centre hanche → sol ; repère : trochanter (ANSUR II)'})
 });
+/**
+ * L'ANGLE DE PORT DU COUDE (A10), bras tendu, paume vers l'avant : de combien
+ * l'avant-bras s'écarte en dehors de l'axe du bras. ⚠ ORDRE DE GRANDEUR des
+ * séries publiées chez l'adulte, cité comme tel — pas une table de référence.
+ */
+const ANAT_COUDE=Object.freeze({H:Object.freeze({moy:11,et:4}),F:Object.freeze({moy:15,et:5}),
+  SOURCE:'ordre de grandeur des séries publiées chez l’adulte (angle de port du coude), cité comme tel',
+  // Un bras est « tendu » à 155° au moins dans le plan de l'image (le même
+  // seuil que les longueurs) ET quand l'avant-bras garde au moins 85 % de sa
+  // longueur attendue par rapport au bras : un coude fléchi vers l'objectif
+  // raccourcit l'avant-bras en projection sans fermer l'angle de l'image.
+  TENDU:155,RACCOURCI:0.85,
+  CONSIGNE:'Photo de face bras tendus le long du corps, légèrement écartés, paumes tournées vers l’avant.'});
 /** Le repère d'un sexe (homme par défaut, comme les largeurs). */
 function anatRef(femme){ return ANAT_REF[femme?'F':'H']; }
 /**
@@ -45175,7 +45188,7 @@ function anatMargeAngle(tol,pts,poidsMilieu){
   const e=Math.sqrt(v.reduce((s,p,i)=>s+Math.pow(anatErrPoint(p.e)*((poidsMilieu&&i===1)?2:1),2),0));
   return Math.hypot(tol,_anatDeg(Math.atan(e/100)));
 }
-const ANAT_TOL={epaules:1.5,bassin:2,genoux:3,pieds:8,tronc:3,omoplates:1.2,rachis:2,triangles:25,echelle:3,cva:3,profil:2};
+const ANAT_TOL={epaules:1.5,bassin:2,genoux:3,pieds:8,tronc:3,omoplates:1.2,rachis:2,triangles:25,echelle:3,cva:3,profil:2,coudes:2};
 const ANAT_SEUILS={epaules:[1.5,3,5],bassin:[2,3.5,5],genoux:[3,5,8],pieds:[8,14,20],
   tronc:[3,6,9],omoplates:[1.2,2.5,4],rachis:[2,4,6],triangles:[25,45,65],
   // Le profil (A9) : degrés sous le repère cranio-vertébral, degrés de tronc,
@@ -45651,7 +45664,15 @@ function anatOptions(anat){
     telephone:(o.telephone!==undefined)?o.telephone:(a.telephone||null),
     // Chantier A5 : des cheveux volumineux cachent le haut du crâne. Le point se
     // pose sur l'os, sous les cheveux, et la marge d'échelle passe à ±4 %.
-    cheveux:!!o.cheveux};
+    cheveux:!!o.cheveux,
+    // Chantier A10 : paumes vers l'avant, sans quoi l'angle de port ne se lit
+    // pas. null : le coach n'a rien dit, le bilan décide (anatMesures).
+    paumes:(o.paumes!=null)?!!o.paumes:null};
+}
+/** Le bilan lu a-t-il été pris sur demande « paumes vers l'avant » ? */
+function anatPaumesBilan(u){
+  const b=_anatSafe(()=>anatPremierBilan(u).bilan);
+  return !!(b&&(b['bil-photo-paumes']||b['deb-photo-paumes']));
 }
 /** La marge d'échelle quand des cheveux volumineux cachent le sommet du crâne. */
 const ANAT_ECHELLE_CHEVEUX_PCT=4;
@@ -45667,6 +45688,7 @@ function anatMesures(anat,u,o){
   const brut=!!(o&&o.brut);
   const B=(!brut&&o&&o.biais)?o.biais:null;
   const opts=anatOptions(anat);
+  if(opts.paumes==null) opts.paumes=anatPaumesBilan(u);
   const taille=_anatSafe(()=>_tailleCm(u));
   const femme=_anatSafe(()=>isFemale((u&&(u._evol_gender||u.gender))||''));
   const larg=ANAT_LARGEURS[femme?'F':'H'];
@@ -45877,6 +45899,47 @@ function anatMesures(anat,u,o){
       mesure:{hu,ab,abPhoto,abSrc,mb,r,rRef,ecR,asy,cotesOk,telAth,refBras:REF.bras,refAvantbras:REF.avantbras,femme,stat:stB},
       source:'photo de face'+(telAth?', sans le bras '+(telAth==='g'?'gauche':'droit')+' qui tient le téléphone':'')+' ; '+echelleTxt+' ; repère '+ANAT_REF.SOURCE+' ('+(femme?'femmes':'hommes')+')'
         +' ; '+(abSrc==='metre'?'avant-bras au mètre, la photo en contrôle':biaisTxt('avantbras'))});
+  }
+  // ── COUDES : l'angle de port (A10) ───────────────────────────────────────
+  // 180° − angle(épaule, coude, poignet), dans le plan de l'image, compté
+  // positif quand l'avant-bras part EN DEHORS de l'axe du bras.
+  {
+    const RC=ANAT_COUDE[femme?'F':'H'];
+    const rRef=REF.avantbras/REF.bras;
+    const port=s=>{
+      if(!F) return null;
+      const e=F.P2('epaule',s),c=F.P2('coude',s),w=F.P2('poignet',s);
+      if(!e||!c||!w) return null;
+      const u={x:c.x-e.x,y:c.y-e.y}, v={x:w.x-c.x,y:w.y-c.y};
+      const nu=Math.hypot(u.x,u.y), nv=Math.hypot(v.x,v.y);
+      if(!(nu>1&&nv>1)) return null;
+      const dev=_anatDeg(Math.acos(Math.max(-1,Math.min(1,(u.x*v.x+u.y*v.y)/(nu*nv)))));
+      // En dehors : du côté du bord de l'image où se trouve ce bras.
+      const lat=F.cotes[s]==='l'?-1:1;
+      const dehors=((v.x/nv)-(u.x/nu))*lat;       // l'avant-bras s'écarte-t-il vers le bord ?
+      return {ang:(dehors>=0?1:-1)*dev,interieur:180-dev,ratio:nv/nu/rRef,pts:[e,c,w]};
+    };
+    const cotes=['g','d'].map(s=>({s,m:port(s)}));
+    const lisible=x=>x.m&&x.s!==telAth&&x.m.interieur>=ANAT_COUDE.TENDU&&x.m.ratio>=ANAT_COUDE.RACCOURCI;
+    const ok=opts.paumes?cotes.filter(lisible):[];
+    const raison=!F?'vue':(!opts.paumes?'paumes':(ok.length?null:'plie'));
+    const moy=ok.length?ok.reduce((t,x)=>t+x.m.ang,0)/ok.length:null;
+    const marge=ok.length?anatMargeAngle(ANAT_TOL.coudes,ok[0].m.pts,true):ANAT_TOL.coudes;
+    const stC=moy!=null?anatClasser(moy-RC.moy,RC.et,marge,'aux coudes les plus ouverts','aux coudes les plus fermés'):null;
+    const g=cotes[0].m, dd=cotes[1].m;
+    const nl=raison==='paumes'?'non lisible : paumes tournées vers les cuisses':'non lisible';
+    const val=x=>opts.paumes&&lisible(x)?_anatSN(x.m.ang,1)+'°':nl;
+    fiche({cle:'coudes',lib:'Coudes',vue:'face',ancre:F&&F.P2('coude','d'),stat:stC,
+      zone:F?_anatZoneAutour([F.P2('epaule','g'),F.P2('coude','g'),F.P2('poignet','g'),F.P2('epaule','d'),F.P2('coude','d'),F.P2('poignet','d')],0.08):null,
+      etat:moy==null?'illisible':'ok',niveau:stC?stC.niveau:null,
+      bornes:['plus fermés','plus ouverts'],
+      valeur:moy==null?'':_anatSN(moy,0)+'°',
+      tolerance:'±'+_anatN(marge,1)+'° (pose ±'+ANAT_TOL.coudes+'°, placement épaule-coude-poignet compris)',
+      chiffres:[{lib:'Angle de port, gauche',def:'180° − angle épaule → coude → poignet, dans le plan de la photo ; + en dehors',val:val(cotes[0]),ref:RC.moy+'° ± '+RC.et+'°',ecart:''},
+        {lib:'Angle de port, droit',def:'même mesure, bras droit de l’athlète',val:val(cotes[1]),ref:RC.moy+'° ± '+RC.et+'°',ecart:''}]
+        .concat(stC?[{lib:'Position dans la population',def:'angle de port, '+sexeTxt+' ; dispersion ±'+RC.et+'°, mesure ±'+_anatN(marge,1)+'°',val:stC.txt,ref:'50ᵉ percentile',ecart:''}]:[]),
+      mesure:{moy,g:g&&g.ang,d:dd&&dd.ang,raison,paumes:!!opts.paumes,ref:RC,marge,femme,stat:stC},
+      source:'photo de face, bras tendus paumes vers l’avant ; repère '+ANAT_COUDE.SOURCE+' ('+(femme?'femmes':'hommes')+' '+RC.moy+'° ± '+RC.et+'°)'});
   }
   // ── BASSIN : inclinaison et largeur ──────────────────────────────────────
   {
@@ -46127,6 +46190,7 @@ function anatMesures(anat,u,o){
       pieds:[...deux(F,'talon'),...deux(F,'pointe')],
       dos:D?[...deux(D,'omoplate'),'c7','sacrum']:[],
       posture:vues.profil?['acromion','trochanter','genou','malleole']:[],
+      coudes:[...deux(F,'epaule'),...deux(F,'coude'),...deux(F,'poignet')],
       tete:vues.profil?['tragus','c7']:[]
     };
     const rot=rotation;
@@ -46229,6 +46293,18 @@ function anatTexte(f,res){
     T.verifier=ANAT_ROTATION_CONSIGNE;
     return T;
   }
+  if(f.etat==='illisible'&&f.cle==='coudes'){
+    if(m.raison==='paumes'){
+      T.court='Non lisible : paumes tournées vers les cuisses — l’angle de port du coude ne se lit que paumes vers l’avant.';
+      T.lecture='Paumes vers les cuisses, l’avant-bras tourne sur lui-même et son axe se replace sous le bras : l’angle de port disparaît de la photo. On ne le devine pas.';
+      T.verifier='Si la photo montre les paumes vers l’avant : cocher « paumes vers l’avant » dans « Ajuster les points ». Sinon, demander les prochaines photos paumes vers l’avant (« Échelle et prise de vue »). '+ANAT_COUDE.CONSIGNE;
+    }else{
+      T.court='Non lisible : bras fléchis sur la photo (ou le seul bras tendu tient le téléphone) — l’angle de port ne se lit que bras tendus.';
+      T.lecture='Un coude fléchi, même un peu, ferme l’angle dans le plan de la photo et raccourcit l’avant-bras : la mesure serait celle de la flexion.';
+      T.verifier=ANAT_COUDE.CONSIGNE+' Vérifier aussi le centre du coude et du poignet (« Ajuster les points »).';
+    }
+    return T;
+  }
   if(f.etat==='illisible'){
     if(f.cle==='dos'&&!m.lu){
       T.court='Photo de dos non lue : aucune silhouette reconnue avec assez de certitude.';
@@ -46262,6 +46338,21 @@ function anatTexte(f,res){
   }
   const n=f.niveau||0, an=Math.abs(n);
   switch(f.cle){
+  case 'coudes':{
+    const R=m.ref||ANAT_COUDE.H, sx=m.femme?'des femmes':'des hommes';
+    const quoi=_anatSN(m.moy,0)+'° (repère '+sx+' : '+R.moy+'° ± '+R.et+'°)';
+    T.court=!an?'Port du coude dans la moyenne : '+quoi+'.'
+      :(n>0?'Coudes plus ouverts que la moyenne : '+quoi+'.':'Coudes plus fermés que la moyenne : '+quoi+'.');
+    T.lecture='L’angle de port se lit bras tendus, paumes vers l’avant : l’avant-bras s’écarte un peu en dehors de l’axe du bras, d’ordinaire un peu plus chez les femmes. Il décide de la trajectoire où l’avant-bras est à l’aise dans les curls, les extensions et les développés. Mesuré dans le plan de la photo : une légère rotation du bras le déplace de quelques degrés, d’où la marge.';
+    if(an){
+      T.privilegier=['Curls à la barre EZ ou aux haltères en supination libre : le poignet trouve lui-même son angle',
+        'Extensions à la poulie : pushdown à la corde, les mains s’écartent en bas',
+        'Au développé, la prise où l’avant-bras reste vertical en bas du mouvement, vu de face'];
+      if(n>0) T.amenager=[{quoi:'Curl à la barre droite',reglage:'barre EZ ou haltères, ou prise un peu plus large, pour que l’avant-bras suive son angle'}];
+    }
+    T.verifier=ANAT_COUDE.CONSIGNE+' Replacer au besoin le centre du coude et du poignet (« Ajuster les points »).';
+    return T;
+  }
   case 'tete':{
     const ta=m.dTA;
     const moment=' Posture du moment, à confirmer au bilan suivant.';
@@ -46489,13 +46580,13 @@ function anatVerdict(f){
   const n=f.niveau;
   if(n==null) return '—';
   if(n===0) return {clavicules:'Carrure moyenne',epaules:'Alignées',buste:'Tronc moyen',bras:'Équilibrés',
-    bassin:'Aligné',jambes:'Équilibrées',genoux:'Dans l’axe',pieds:'Symétriques',dos:'Symétrique',posture:'Alignée',tete:'Dans l’axe'}[f.cle]||'Dans la marge';
+    bassin:'Aligné',jambes:'Équilibrées',genoux:'Dans l’axe',pieds:'Symétriques',dos:'Symétrique',posture:'Alignée',tete:'Dans l’axe',coudes:'Port moyen'}[f.cle]||'Dans la marge';
   const i=n>0?1:0;
   const intens=['','léger','net','marqué'][Math.abs(n)];
   const court={clavicules:['Étroite','Large'],epaules:['Droite basse','Gauche basse'],bassin:['Droite basse','Gauche basse'],
     buste:['Tronc court','Tronc long'],bras:['Avant-bras long','Humérus long'],jambes:['Tibia long','Fémur long'],
     genoux:['S’écartent','Rentrent'],pieds:['Droit + ouvert','Gauche + ouvert'],dos:['Côté droit','Côté gauche'],
-    posture:['En arrière','En avant'],tete:['Tête en arrière','Tête en avant']}[f.cle];
+    posture:['En arrière','En avant'],tete:['Tête en arrière','Tête en avant'],coudes:['Coudes fermés','Coudes ouverts']}[f.cle];
   return (court?court[i]:f.bornes[i])+' · '+intens;
 }
 // ── L'ÉCRAN ────────────────────────────────────────────────────────────────
@@ -46958,7 +47049,11 @@ function anatGabarit(w,h,vue,femme){
   const jV=Math.sqrt(R.jambe*R.jambe-0.005*0.005);
   const fCh=Math.max(0.02,ANAT_ROTULE.part-jV), fGenou=fCh+jV;
   const fHa=fGenou+R.cuisse, fEp=fHa+R.tronc;
-  const fCo=bout(fEp,0.10,0.12,R.bras), fPo=bout(fCo,0.12,0.13,R.avantbras);
+  const fCo=bout(fEp,0.10,0.12,R.bras);
+  // L'avant-bras s'écarte en dehors du bras de l'angle de port moyen (A10) :
+  // un gabarit sort « port moyen », à sa longueur exacte.
+  const aPort=Math.asin(0.02/R.bras)+ANAT_COUDE[femme?'F':'H'].moy*Math.PI/180;
+  const dxPo=0.12+R.avantbras*Math.sin(aPort), fPo=fCo-R.avantbras*Math.cos(aPort);
   // DE PROFIL (A9), regard vers la droite : tragus, acromion, grand trochanter,
   // genou et malléole sur la même verticale (la ligne de Kendall) ; C7 en
   // arrière du tragus, à 50° (le repère cranio-vertébral).
@@ -46974,7 +47069,7 @@ function anatGabarit(w,h,vue,femme){
   pose('vertex',cx,y(1));
   const LG=ANAT_LARGEURS[femme?'F':'H'];
   lat('acromion',LG.biacromial/2,fEp+0.012); lat('epaule',0.10,fEp); lat('deltoide',0.14,fEp-0.02);
-  lat('coude',0.12,fCo); lat('poignet',0.13,fPo); lat('taille',0.075,fHa+0.09);
+  lat('coude',0.12,fCo); lat('poignet',dxPo,fPo); lat('taille',0.075,fHa+0.09);
   lat('crete',LG.bicretal/2,fHa+0.07); lat('hanche',0.055,fHa); lat('genou',0.055,fGenou);
   lat('cheville',0.05,fCh); lat('talon',0.05,0.0);
   if(vue==='face') lat('pointe',0.07,-0.01);
@@ -47063,6 +47158,20 @@ function anatRelancer(){
     if(ok) toast('Détection refaite ✓');
     else toast('Rien de lu : '+(_anatEchecs.get(c.email)||'la photo n’a pas pu être lue'),'var(--orange)');
   });
+}
+/** La demande « paumes vers l'avant » pour les prochaines photos de bilan (A10). */
+function anatDemanderPaumes(on){
+  const c=getOwnedClient(currentClientId);
+  if(!c) return;
+  const users=DB.get('users')||{};
+  const d=users[c.email];
+  if(!d) return;
+  if(on) d.photoPaumes=true; else delete d.photoPaumes;
+  d.updatedAt=Date.now();
+  users[c.email]=d;
+  const ok=DB.set('users',users);
+  try{ renderAnatCoach(getOwnedClient(currentClientId)||d); }catch(e){}
+  toastSync(ok,CLOUD.pushOne(c.email,d),on?'Prochaines photos : paumes vers l’avant ✓':'Demande retirée ✓','la demande est');
 }
 function anatVue(v){
   if(_anatEdit) return;
@@ -47415,7 +47524,9 @@ function _anatContact(c,manque){
   const pre=String(c.fname||'').trim()||'l’athlète';
   const txt='Salut '+(String(c.fname||'').trim())+' ! Pour ton analyse morpho-anatomique, il me manque '
     +(manque&&manque.length?manque.join(' et '):'tes photos de bilan')
-    +'. Tu peux compléter ton bilan dans l’application (photos de face et de dos en pied, pieds à largeur de hanches, bras relâchés légèrement écartés du corps, idéalement prises par quelqu’un d’autre ou avec un minuteur) ? Merci !';
+    +'. Tu peux compléter ton bilan dans l’application (photos de face et de dos en pied, pieds à largeur de hanches, bras relâchés légèrement écartés du corps'
+    +(c.photoPaumes?', paumes tournées vers l’avant sur la photo de face':'')
+    +', idéalement prises par quelqu’un d’autre ou avec un minuteur) ? Merci !';
   const tel=String(c.phone||'').trim();
   let url='';
   try{ if(tel&&_numWa(tel)) url=waLink(tel,txt); }catch(e){ url=''; }
@@ -47533,7 +47644,7 @@ function _htmlAnat(c){
     const P2=(k,s)=>Pp(k+'_'+cotes[s]);
     const ancre={face:{clavicules:()=>P2('acromion','g'),epaules:()=>P2('acromion','d'),buste:()=>{ const a1=P2('epaule','g'),b1=P2('hanche','d'); return a1&&b1?_anatMil(a1,b1):null; },
         bras:()=>P2('coude','g'),bassin:()=>P2('crete','g'),jambes:()=>{ const a1=P2('hanche','d'),b1=P2('genou','d'); return a1&&b1?_anatMil(a1,b1):null; },
-        genoux:()=>P2('genou','g'),pieds:()=>P2('pointe','d')},
+        genoux:()=>P2('genou','g'),pieds:()=>P2('pointe','d'),coudes:()=>P2('coude','d')},
       dos:{epaules:()=>P2('acromion','g'),dos:()=>Pp('c7')&&Pp('sacrum')?_anatMil(Pp('c7'),Pp('sacrum')):null,bassin:()=>P2('crete','g'),
         bras:()=>P2('coude','d'),genoux:()=>P2('genou','d')},
       profil:{tete:()=>Pp('tragus'),posture:()=>Pp('trochanter')}}[vueAct];
@@ -47582,10 +47693,12 @@ function _htmlAnat(c){
   const optsHtml=vueAct==='face'?'<div class="an-opts">'
       +(edit?'<label class="an-opt"><input type="checkbox"'+(opts.miroir?' checked':'')+' onchange="anatOption(\'miroir\',this.checked)"><span>Photo prise dans un miroir</span></label>'
         +'<label class="an-opt"><input type="checkbox"'+(opts.cheveux?' checked':'')+' onchange="anatOption(\'cheveux\',this.checked)"><span>Cheveux volumineux (sommet du crâne sur l’os)</span></label>'
+        +'<label class="an-opt"><input type="checkbox"'+((opts.paumes!=null?opts.paumes:res.opts.paumes)?' checked':'')+' onchange="anatOption(\'paumes\',this.checked)"><span>Paumes tournées vers l’avant (angle de port des coudes)</span></label>'
         +'<div class="an-opt-seg" role="group" aria-label="Bras qui tient le téléphone"><span>Téléphone tenu :</span>'
         +[['','aucun'],[anatCotes('face',!!opts.miroir).g,'bras gauche'],[anatCotes('face',!!opts.miroir).d,'bras droit']].map(([v,l])=>'<button type="button" class="'+((opts.telephone||'')===v?'actif':'')+'" onclick="anatOption(\'telephone\','+(v?'\''+v+'\'':'null')+')">'+l+'</button>').join('')+'</div>'
       :'<span class="an-puce">'+(opts.miroir?'Photo au miroir':'Photo sans miroir')+'</span>'
         +(opts.cheveux?'<span class="an-puce">Cheveux volumineux : crâne posé sur l’os, échelle ±'+ANAT_ECHELLE_CHEVEUX_PCT+' %</span>':'')
+        +(opts.paumes?'<span class="an-puce">Paumes vers l’avant</span>':'')
         +(opts.telephone?'<span class="an-puce an-puce-o">Téléphone tenu : bras '+ath(opts.telephone)+' — écarté des mesures</span>':''))
       +'</div>':'';
   const aideSel=edit&&(edit.aide||edit.sel)?(edit.aide||edit.sel):null;
@@ -47688,7 +47801,11 @@ function _htmlAnat(c){
         :(res.rotation?' Rotation du corps : non estimée sans photo de dos.':''))
       +(res.rotation&&res.rotation.asyBras!=null?' Écart des deux bras sur la photo de face : '+_anatN(res.rotation.asyBras*100,1)+' %.':'')
       +' '+(V.man?'Des points ont été ajustés à la main.':(V.auto&&V.auto.gabarit?'Personne non détectée : les points sont à placer.':'Points placés automatiquement.'))+'</p>'
-    +optsHtml+'</div></details>';
+    +optsHtml
+    // A10 : la demande de photos du prochain bilan. Elle ne descend chez
+    // l'athlète que comme une consigne de prise de vue.
+    +'<label class="an-opt an-demande"><input type="checkbox"'+(c.photoPaumes?' checked':'')+' onchange="anatDemanderPaumes(this.checked)"><span>Demander les prochaines photos de face paumes vers l’avant</span></label>'
+    +'</div></details>';
 
   const carte=(f)=>{
     const t=textes[f.cle]||{};
@@ -59456,6 +59573,10 @@ function posesGenre(prefix){
 // 3 cartes photo avec personnage neon : la pose a reproduire est montree au-dessus du bouton
 function bPhotoCards(prefix){
   const B=posesGenre(prefix);
+  // A10 : le coach demande la photo de face paumes vers l'avant. Une consigne
+  // de prise de vue, rien d'autre ; le bilan garde la trace de la demande.
+  const paumes=!!(currentUser&&currentUser.photoPaumes);
+  if(paumes&&typeof bilData==='object'&&bilData) bilData[prefix+'-photo-paumes']='oui';
   const P=[{k:'face',l:'DE FACE',img:B.face},{k:'back',l:'DE DOS',img:B.back},{k:'side',l:'DE PROFIL',img:B.side}];
   return `<div style="display:flex;gap:8px">`+P.map(p=>{
     const key=prefix+'-photo-'+p.k;
@@ -59465,7 +59586,7 @@ function bPhotoCards(prefix){
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#ccc;margin-bottom:9px">${p.l}</div>
       <label style="display:inline-block;background:${done?'#001a00':'#1a0000'};border:1px solid ${done?'#22c55e':'var(--red)'};color:${done?'#22c55e':'var(--red)'};padding:6px 12px;border-radius:var(--r-1);font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:.5px">${done?' Ajoutée':'AJOUTER'} <input type="file" accept="image/*" style="display:none" onchange="loadBilPhoto(this,'${key}')"></label>
     </div>`;
-  }).join('')+`</div>`;
+  }).join('')+`</div>`+(paumes?`<div class="bil-paumes" style="margin-top:10px;font-size:var(--fs-xs);line-height:1.5;color:var(--sub);text-align:center">Photo de face : <strong style="color:var(--text)">paumes tournées vers l’avant</strong>, bras tendus le long du corps, légèrement écartés.</div>`:'');
 }
 function bSlider(gid){
   const parsed=parseInt(String(bilData[gid]||'').match(/\d+/)?.[0]||0);
