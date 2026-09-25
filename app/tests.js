@@ -45432,6 +45432,30 @@ async function testExercices(){
       // Le soulevé : 50° de la verticale mesurés = 40° de l'horizontale.
       if(!D.video||D.video.mesure!==40) return _echec('soulevé : '+JSON.stringify(D.video));
       return true;})());
+    // Du texte à l'action (A21, 25/09/2026).
+    ok('ANALYSE MORPHO : LES RECOMMANDATIONS SONT DES OBJETS, RELIÉS AU CATALOGUE ; LA CONSIGNE SE POSE SUR LE PROGRAMME',(()=>{
+      if(typeof anatLierExos!=='function'||typeof anatPoserConsigne!=='function') return _echec('fonctions absentes');
+      const res=anatMesures(_anatArriere?_anatGab():_anatGab(),_anatDossier());
+      // Une fiche au hasard avec des recommandations : le squat de l'arrière-pied (A11) a trépied, short foot, squat.
+      const a=_anatGab(); a.dos={w:1000,h:1500,auto:{pts:anatGabarit(1000,1500,'dos')},man:null};
+      const P=a.dos.auto.pts, k=anatCotes('dos',false).g, ac=P['achille_'+k], ta=P['talon_'+k];
+      const dx=(ta[0]-ac[0])*1000, dy=(ta[1]-ac[1])*1500, t=-12*(k==='l'?-1:1)*Math.PI/180;
+      P['talon_'+k]=[ac[0]+(dx*Math.cos(t)-dy*Math.sin(t))/1000,ac[1]+(dx*Math.sin(t)+dy*Math.cos(t))/1500,ta[2]];
+      const r2=anatMesures(a,_anatDossier()), f=r2.fiches.find(x=>x.cle==='arriere_pied'), T=anatTexte(f,r2);
+      const p0=T.privilegier[0];
+      if(typeof p0!=='object'||typeof p0.texte!=='string'||!Array.isArray(p0.exercices)) return _echec('privilégier : '+JSON.stringify(p0));
+      if(String(p0)!==p0.texte) return _echec('un objet qui ne se lit pas comme son texte');
+      const am=T.amenager[0];
+      if(!am||am.exercices.indexOf('squat')<0) return _echec('aménagement du squat non relié : '+JSON.stringify(am&&am.exercices));
+      if(!am.consigne||ANAT_LEXIQUE_MORPHO.test(am.consigne)) return _echec('consigne : '+am.consigne);
+      // Un aménagement porteur d'une raison morphologique : la raison reste, la consigne part sans elle.
+      const c=anatConsigneAthlete('prise moyenne (avant-bras verticaux en bas) : une prise très large n’apporte rien à une charpente étroite');
+      if(c!=='Prise moyenne (avant-bras verticaux en bas)') return _echec('consigne filtrée : '+c);
+      // La consigne se pose sur l'exercice du programme, par slug ou par nom.
+      const sc=[{name:'Jambes',exercises:[{name:'SQUAT',series:4,reps:'8'},{name:'LEG EXTENSION',series:3,reps:'12'}]}];
+      if(anatPoserConsigne(sc,am.exercices,am.consigne)!==1) return _echec('exercices touchés');
+      if(sc[0].exercises[0].reglageCoach!==am.consigne||sc[0].exercises[1].reglageCoach) return _echec('mauvais exercice');
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());
@@ -51300,6 +51324,22 @@ async function testExercices(){
       if(Math.abs(m.angleTroncBas-40)>0.5) return _echec('tronc : '+m.angleTroncBas);
       if(Math.abs(m.profondeur-60)>0.5) return _echec('genou : '+m.profondeur);
       if(m.sousParallele!==false) return _echec('cuisse parallèle, hanche à hauteur du genou : '+m.sousParallele);
+      return true;
+    });
+    okA('A21 — UNE PUCE POINTE VERS UN EXERCICE EXISTANT ; LA CONSIGNE PARAÎT CÔTÉ ATHLÈTE, SANS MOT MORPHOLOGIQUE',async()=>{
+      let idx=null;
+      try{ idx=await (await fetch('exercices/index.json')).json(); }catch(e){ return _echec('index des exercices : '+e.message); }
+      const existe=new Set(Object.keys((idx&&idx.fiches)||{}));
+      const manquants=[];
+      for(const [,sl] of ANAT_EXOS_LIENS) for(const x of sl) if(!existe.has(x)) manquants.push(x);
+      if(manquants.length) return _echec('slugs inconnus du catalogue : '+manquants.join(', '));
+      if(anatLierExos('Rétraction : face pull, Y-raise sur banc incliné').join()!=='face-pull,elevation-y') return _echec('lien face pull');
+      // Côté athlète : la consigne sur l'exercice, et elle seule.
+      const ex={name:'SQUAT',series:4,reps:'8',repos:'2 min',description:'',reglageCoach:'Pieds un peu plus ouverts (15 à 30°), genoux dans l’axe des pieds'};
+      const h=_renderExCard(ex,0)+_htmlConsigneExo(ex);
+      if(h.indexOf('Réglage du coach')<0||h.indexOf('genoux dans l’axe des pieds')<0) return _echec('la consigne ne paraît pas');
+      const texte=h.replace(/<[^>]+>/g,' ');
+      if(ANAT_LEXIQUE_MORPHO.test(texte)) return _echec('un mot morphologique côté athlète : '+texte.match(ANAT_LEXIQUE_MORPHO)[0]);
       return true;
     });
     okA('R30 — le rejeu redonne l’état enregistré, geste par geste',async()=>{

@@ -37363,6 +37363,7 @@ function _renderExCard(ex,idx){
       <div class="ex-detail" style="margin-top:3px">${ex.series} séries · ${escapeHtml(ex.reps)} reps${ex.repos?' · '+escapeHtml(ex.repos):''}${_rirPrescrit(ex)?' · RIR '+escapeHtml(_rirPrescrit(ex)):''}</div>
       ${badge?`<div style="margin-top:5px">${badge}</div>`:''}
       ${ex.description?`<div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:6px;line-height:1.5;border-left:2px solid var(--border);padding-left:8px">${escapeHtml(ex.description)}</div>`:''}
+      ${ex.reglageCoach?`<div class="ex-reglage" style="font-size:var(--fs-xs);color:var(--text);margin-top:6px;line-height:1.5;border-left:2px solid var(--red);padding-left:8px"><b>Réglage du coach :</b> ${escapeHtml(ex.reglageCoach)}</div>`:''}
       ${htmlVideosExo(ex)}
     </div>
   </div></div>`;
@@ -38927,7 +38928,7 @@ function renderWoEx(){
 function _htmlConsigneExo(ex){
   if(!ex) return '';
   const img=(()=>{ try{ return illustrationExo(ex); }catch(e){ return null; } })();
-  if(!(ex.description||ex.materiel||ex.tempo||img)) return '';
+  if(!(ex.description||ex.materiel||ex.tempo||ex.reglageCoach||img)) return '';
   return `<div style="background:var(--surface-2);border-radius:var(--r-3);padding:11px 14px;margin-bottom:12px">
         <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--red-text);margin-bottom:5px">CONSIGNE</div>
         ${blocTempo(ex)}
@@ -38936,6 +38937,7 @@ function _htmlConsigneExo(ex){
              condition d'affichage du bloc — sans ça, un exercice qui ne
              porterait QUE son matériel n'aurait rien affiché du tout. -->
         ${ex.materiel?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:6px"><span style="font-weight:800;letter-spacing:.5px">Matériel :</span> ${escapeHtml(ex.materiel)}</div>`:''}
+        ${ex.reglageCoach?`<div class="ex-reglage" style="font-size:var(--fs-xs);color:var(--text);line-height:1.6;margin-bottom:6px"><span style="font-weight:800;letter-spacing:.5px;color:var(--red-text)">Réglage du coach :</span> ${escapeHtml(ex.reglageCoach)}</div>`:''}
         <div style="display:flex;gap:11px;align-items:flex-start">
           ${_htmlVignetteExo(ex)}
           <div style="flex:1;min-width:0;font-size:var(--fs-sm);color:#bbb;line-height:1.6">${escapeHtml(ex.description||'')}</div>
@@ -46855,7 +46857,72 @@ function _anatZoneAutour(ps,marge){
 // LES CHIFFRES de l'athlète — ce que la photo montre, ce que ça change
 // mécaniquement, quoi privilégier, quoi aménager et avec quel réglage, et
 // comment le vérifier. Jamais un exercice « à éviter ».
+/**
+ * DU TEXTE À L'ACTION (chantier A21). Les noms cités dans les recommandations,
+ * reliés aux fiches du catalogue d'exercices — les slugs de app/exercices,
+ * ceux que l'éditeur de programme utilise. L'ordre compte : le motif le plus
+ * précis d'abord (« soulevé roumain » avant « soulevé »).
+ */
+const ANAT_EXOS_LIENS=Object.freeze([
+  [/élévations? latérales?/i,['elevation-laterale-haltere','elevation-laterale-poulie']],
+  [/face pull/i,['face-pull']],[/y-raise/i,['elevation-y']],
+  [/tirage vertical/i,['tirage-vertical-a-la-poulie']],[/(^|[\s(,;:])tractions?\b/i,['tractions']],
+  [/pull-over/i,['pull-over']],[/oiseau/i,['oiseaux-buste-penche']],
+  [/pallof/i,['pallof-press']],[/planche latérale/i,['gainage-lateral']],[/planche|gainage/i,['gainage-planche']],
+  [/vacuum/i,['le-vacuum']],[/soulevé roumain|roumain/i,['souleve-de-terre-roumain']],
+  [/good morning/i,['good-morning']],[/hip thrust/i,['hip-thrust']],[/pont fessier/i,['glute-bridge']],
+  [/rowing un bras|rowing.*unilat/i,['rowing-haltere-unilateral']],[/tirage poulie un bras/i,['tirage-horizontal-unilateral']],
+  [/rowing|tirages? horizonta/i,['tirage-horizontal-large']],
+  [/carry|valise|farmer|fermier/i,['marche-du-fermier']],
+  [/split squat|bulgare/i,['squat-bulgar-haltere']],[/fente/i,['fentes-haltere']],[/step-up/i,['monter-sur-banc-haltere']],
+  [/montées? sur pointes/i,['mollets-debout-unilateral']],[/front squat/i,['squat-barre-devant']],
+  [/squat gobelet|gobelet/i,['squat-avec-halteres']],[/abduction de hanche/i,['abducteur-a-la-machine']],
+  [/leg curl/i,['leg-curl-allonge']],[/curl incliné/i,['curl-sur-banc-incline']],[/curl pupitre/i,['curl-larry-scott']],
+  [/curl marteau/i,['curl-marteau']],[/barre ez/i,['curl-barre']],[/supination libre/i,['curl-rotation']],
+  [/pushdown à la corde|à la corde/i,['triceps-a-la-poulie-haute-corde']],[/pushdown/i,['triceps-a-la-poulie-haute-barre']],
+  [/extension au-dessus de la tête/i,['extension-triceps-au-dessu-de-la-tete']],[/barre au front/i,['barre-au-front-banc-incline']],
+  [/développé militaire/i,['developpe-militaire-barre']],[/landmine/i,['developpe-epaule-au-landmine']],
+  [/développé couché|développé haltère|au développé/i,['developpe-couche-barre']],[/dips/i,['dips']],
+  [/barre hexagonale/i,['souleve-de-terre-trap-barre']],[/sumo/i,['souleve-de-terre-sumo']],
+  [/soulevé de terre/i,['souleve-de-terre']],[/extensions? lombaires?|banc à 45/i,['extension-de-buste-sur-banc']],
+  [/pompes scapulaires/i,['pompes']],[/shrug/i,['shrug-haltere']],[/tibia|flexion dorsale/i,['tibia-dorsi-flexion']],
+  [/squat/i,['squat']]
+]);
+/** Les mots qui disent le POURQUOI morphologique : ils ne descendent jamais chez l'athlète (G7). */
+const ANAT_LEXIQUE_MORPHO=/morpho|levier|fémur|femur|tibia|humérus|humerus|clavicule|carrure|charpente|proportion|segment|asymétr|silhouette|percentile|population|recurvatum|anatom|ossature|os\b|squelett|longueur de|court|long\b|longs|étroit|axe du|posture|projection/i;
+/** PURE. Les exercices du catalogue cités dans un texte (quatre au plus). */
+function anatLierExos(texte){
+  const t=String(texte||''), out=[];
+  for(const [re,sl] of ANAT_EXOS_LIENS){ if(re.test(t)) for(const x of sl) if(out.indexOf(x)<0) out.push(x); if(out.length>=4) break; }
+  return out.slice(0,4);
+}
+/**
+ * PURE. La consigne d'exécution qu'on peut envoyer à l'athlète : le réglage,
+ * clause par clause, sans aucune qui porte un mot du lexique morphologique.
+ * Vide si rien ne reste.
+ */
+function anatConsigneAthlete(reglage){
+  const cl=String(reglage||'').split(/\s*[;:]\s*|\s+—\s+/).map(x=>x.trim()).filter(Boolean);
+  const garde=[];
+  for(const c of cl){ if(ANAT_LEXIQUE_MORPHO.test(c)) continue; if((garde.join(' ; ')+c).length>150) break; garde.push(c); }
+  const t=garde.join(' ; ');
+  return t?t.charAt(0).toUpperCase()+t.slice(1):'';
+}
+/** Une recommandation : son texte, ses exercices ; lue comme une chaîne là où l'on n'attend qu'un texte. */
+function _anatReco(texte){
+  return {texte,exercices:anatLierExos(texte),toString(){ return this.texte; }};
+}
+/**
+ * Le texte d'une fiche, et ce qu'on peut en FAIRE (A21) : à privilégier →
+ * {texte, exercices} ; à aménager → {quoi, reglage, exercices, consigne}.
+ */
 function anatTexte(f,res){
+  const T=_anatTexteBrut(f,res);
+  T.privilegier=(T.privilegier||[]).map(x=>typeof x==='string'?_anatReco(x):x);
+  T.amenager=(T.amenager||[]).map(x=>Object.assign({},x,{exercices:anatLierExos(x.quoi+' '+x.reglage),consigne:anatConsigneAthlete(x.reglage)}));
+  return T;
+}
+function _anatTexteBrut(f,res){
   const m=f.mesure||{};
   const T={court:'',lecture:'',privilegier:[],amenager:[],verifier:''};
   const lev=(res&&res.leviers)||[];
@@ -47496,6 +47563,90 @@ function anatDevRegler(k,v){
   _anatDevReg={email:c&&c.email,cfg};
   const z=document.getElementById('an-dev-res'); if(z) z.innerHTML=_htmlDeveloppeRes(l);
   const o=document.getElementById('an-dev-th'); if(o) o.textContent=_anatN(cfg.theta,0)+'°';
+}
+/** Le nom d'une fiche du catalogue, ou son slug mis en forme. */
+function _anatNomExo(slug){
+  let f=null; try{ f=catalogueCoach().find(x=>x.slug===slug); }catch(e){ f=null; }
+  if(f&&f.nom) return f.nom;
+  const t=String(slug||'').replace(/-/g,' ');
+  return t.charAt(0).toUpperCase()+t.slice(1);
+}
+/** Les puces d'exercices d'une recommandation, et le menu « Ajouter au programme ». */
+function _htmlAnatExos(slugs){
+  const l=Array.isArray(slugs)?slugs:[];
+  if(!l.length) return '';
+  const c=getOwnedClient(currentClientId);
+  const sc=(c&&Array.isArray(c.sessions_config))?c.sessions_config:[];
+  const puces=l.map(sl=>{
+    // Les slugs d'ANAT_EXOS_LIENS existent tous dans app/exercices (un test le vérifie) :
+    // l'image n'attend pas le chargement de l'index.
+    const img=_anatSafe(()=>_illustrationParSlug(sl))||(EXO_IMG_DOSSIER+sl+'.webp');
+    return '<button type="button" class="an-exo" data-exo="'+escapeHtml(sl)+'" onclick="anatOuvrirExo(\''+escapeHtml(sl)+'\')" title="Ouvrir la fiche">'
+      +(img?'<img src="'+escapeHtml(img)+'" alt="" loading="lazy" width="28" height="20">':'')+'<span>'+escapeHtml(_anatNomExo(sl))+'</span></button>';
+  }).join('');
+  const menu=sc.length?'<select class="an-exo-aj" aria-label="Ajouter au programme" onchange="if(this.value){anatAjouterExo(this.value);this.value=\'\';}">'
+    +'<option value="">+ Ajouter au programme…</option>'
+    +l.map(sl=>'<optgroup label="'+escapeHtml(_anatNomExo(sl))+'">'+sc.map((x,i)=>'<option value="'+escapeHtml(sl)+'|'+i+'">'+escapeHtml((x&&x.name)||('Séance '+(i+1)))+'</option>').join('')+'</optgroup>').join('')
+    +'</select>':'';
+  return '<div class="an-exos">'+puces+menu+'</div>';
+}
+/** La fiche d'un exercice du catalogue ; à défaut, son illustration. */
+function anatOuvrirExo(slug){
+  try{ if(ouvrirFicheBanque(slug)) return true; }catch(e){}
+  try{ ouvrirIllustration(slug); return true; }catch(e){ return false; }
+}
+/** « Ajouter au programme » : l'exercice entre à la fin de la séance choisie. CÔTÉ COACH. */
+function anatAjouterExo(val){
+  const [slug,iS]=String(val||'').split('|'); const i=Number(iS);
+  const c=getOwnedClient(currentClientId);
+  if(!c||!slug||!isFinite(i)) return false;
+  const users=DB.get('users')||{}, d=users[c.email];
+  const sc=d&&Array.isArray(d.sessions_config)?d.sessions_config[i]:null;
+  if(!sc){ toast('Séance introuvable.','var(--orange)'); return false; }
+  let f=null; try{ f=catalogueCoach().find(x=>x.slug===slug); }catch(e){ f=null; }
+  const base={name:_anatNomExo(slug),series:3,reps:'10-12',repos:'1 min 30',description:'',exSlug:slug};
+  const ex=f?exRemplaceParFiche(base,f):base;
+  try{ _pushSessionsHistory(d); }catch(e){}
+  sc.exercises=(Array.isArray(sc.exercises)?sc.exercises:[]).concat([ex]);
+  d.updatedAt=Date.now(); users[c.email]=d;
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(c.email,d),ex.name+' ajouté à « '+(sc.name||('Séance '+(i+1)))+' » ✓','le programme est');
+  return true;
+}
+/**
+ * PURE. Pose la consigne sur les exercices du programme qui correspondent
+ * (même slug, ou même nom que l'une des fiches citées). Rend le nombre touché.
+ * ⚠ G7 : SEULE LA CONSIGNE D'EXÉCUTION descend — `reglageCoach` —, jamais la
+ *   raison morphologique qui l'a fait écrire.
+ */
+function anatPoserConsigne(sessions,slugs,consigne){
+  let n=0;
+  const cles=(slugs||[]).map(x=>String(x));
+  for(const sc of (sessions||[])) for(const ex of ((sc&&sc.exercises)||[])){
+    if(!ex) continue;
+    const sl=String(ex.exSlug||'')||_anatSafe(()=>exSlug(ex.name))||'';
+    if(cles.indexOf(sl)<0&&cles.indexOf(_anatSafe(()=>exSlug(ex.name))||'')<0) continue;
+    ex.reglageCoach=consigne; n++;
+  }
+  return n;
+}
+/** « Envoyer la consigne » d'un aménagement : elle s'attache aux exercices du programme. CÔTÉ COACH. */
+function anatEnvoyerConsigne(cle,i){
+  const c=getOwnedClient(currentClientId);
+  if(!c||!c.morphoAnat) return false;
+  const res=anatMesures(c.morphoAnat,c,{biais:anatBiaisCoach()});
+  const f=res.fiches.find(x=>x.cle===cle); if(!f) return false;
+  const am=(anatTexte(f,res).amenager||[])[i];
+  if(!am||!am.consigne){ toast('Pas de consigne à envoyer pour cet aménagement.','var(--orange)'); return false; }
+  const users=DB.get('users')||{}, d=users[c.email];
+  if(!d||!Array.isArray(d.sessions_config)||!d.sessions_config.length){ toast('Son programme est vide : ajoute d’abord l’exercice.','var(--orange)'); return false; }
+  try{ _pushSessionsHistory(d); }catch(e){}
+  const n=anatPoserConsigne(d.sessions_config,am.exercices,am.consigne);
+  if(!n){ toast('Aucun exercice de son programme ne correspond à « '+am.quoi+' ».','var(--orange)'); return false; }
+  d.updatedAt=Date.now(); users[c.email]=d;
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(c.email,d),'Consigne envoyée sur '+n+' exercice'+(n>1?'s':'')+' ✓','la consigne est');
+  return true;
 }
 /** Une jauge de tronc, de l'horizontale (0°) à la verticale (90°) : athlète et moyenne. */
 function _anatJaugeTronc(moi,ref,lib){
@@ -48632,7 +48783,7 @@ function _htmlAnat(c){
     const vv=a[f.vue];
     const s2=_anatSrcVue(pb,f.vue);
     const cad=_anatCadrage(f.zone,vv,4/3);
-    const li=(l)=>l&&l.length?'<ul>'+l.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')+'</ul>':'';
+    const li=(l)=>l&&l.length?'<ul>'+l.map(x=>'<li>'+escapeHtml(String(x))+_htmlAnatExos(x&&x.exercices)+'</li>').join('')+'</ul>':'';
     const tab=f.chiffres&&f.chiffres.length?'<table class="an-tab"><thead><tr><th>Mesure</th><th>Athlète</th><th>Repère</th><th>Écart</th></tr></thead><tbody>'
       +f.chiffres.map(r=>'<tr><th>'+escapeHtml(r.lib)+(r.def?'<small class="an-def">'+escapeHtml(r.def)+'</small>':'')+'</th><td'+(((r.val||'').length>16||/→/.test(r.val||''))?' class="an-td-txt"':'')+'>'+escapeHtml(r.val||'—')+'</td><td>'+escapeHtml(r.ref||'')+'</td><td>'+escapeHtml(r.ecart||'')+'</td></tr>').join('')+'</tbody></table>':'';
     // LA COURBE DU V (A13), avec la carte des courbes de l'onglet Données.
@@ -48643,7 +48794,9 @@ function _htmlAnat(c){
     const detail='<div class="an-f-long" id="an-long-'+f.cle+'">'+tab+(courbe?'<div class="an-f-courbe">'+courbe+'</div>':'')
       +(t.lecture?'<h6>Lecture</h6><p class="an-f-lec">'+escapeHtml(t.lecture)+'</p>':'')
       +(t.privilegier&&t.privilegier.length?'<h6>À privilégier</h6>'+li(t.privilegier):'')
-      +(t.amenager&&t.amenager.length?'<h6>À aménager</h6><ul>'+t.amenager.map(x=>'<li><b>'+escapeHtml(x.quoi)+'</b> — '+escapeHtml(x.reglage)+'</li>').join('')+'</ul>':'')
+      +(t.amenager&&t.amenager.length?'<h6>À aménager</h6><ul>'+t.amenager.map((x,i)=>'<li><b>'+escapeHtml(x.quoi)+'</b> — '+escapeHtml(x.reglage)
+        +_htmlAnatExos(x.exercices)
+        +(x.consigne?'<div class="an-cons"><span>Consigne pour l’athlète : « '+escapeHtml(x.consigne)+' »</span><button type="button" class="an-cons-b" onclick="anatEnvoyerConsigne(\''+f.cle+'\','+i+')">Envoyer la consigne</button></div>':'')+'</li>').join('')+'</ul>':'')
       +(t.verifier?'<h6>Comment vérifier</h6><p>'+escapeHtml(t.verifier)+'</p>':'')
       +'<p class="an-f-src">Source : '+escapeHtml(f.source||'')+(f.tolerance?' · marge '+escapeHtml(f.tolerance):'')+' · bilan du '+_anatDateFr(a.bilan)+'</p>'
       +'</div>';

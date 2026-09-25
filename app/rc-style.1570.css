@@ -10380,6 +10380,17 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .an-j-moi2{fill:#ff3b3b;stroke:#fff;stroke-width:1.5;filter:drop-shadow(0 0 3px rgba(255,59,59,.8))}
 .an-jauge text{font-size:6.5px;fill:#8a8a92;font-family:inherit}
 .an-lev-leg{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:9.5px;color:#8a8a92}
+/* A21 : du texte à l'action — puces d'exercices, ajout au programme, consigne. */
+.an-exos{display:flex;flex-wrap:wrap;gap:5px;margin:5px 0 2px;align-items:center}
+.an-exo{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:3px 9px 3px 3px;border-radius:999px;border:1px solid #2a2a30;background:#17171b;color:#e4e4e7;font:inherit;font-size:10.5px;font-weight:600;cursor:pointer}
+.an-exo img{width:28px;height:20px;object-fit:cover;border-radius:999px;background:#fff;flex:0 0 28px}
+.an-exo span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.an-exo:hover{border-color:rgba(224,32,32,.6)}
+.an-exo-aj{max-width:100%;padding:4px 8px;border-radius:8px;border:1px dashed #3a3a40;background:#111114;color:#a1a1aa;font:inherit;font-size:10.5px;cursor:pointer}
+.an-f .an-exos select.an-exo-aj{width:auto;flex:0 0 auto;min-width:0;height:auto;margin:0;padding:4px 26px 4px 9px;font-size:10.5px;line-height:1.3;border-radius:999px;background-position:right 8px center}
+.an-cons{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:5px 0 2px;padding:6px 8px;border-radius:8px;background:rgba(52,232,158,.06);border:1px solid rgba(52,232,158,.25)}
+.an-cons span{font-size:10.5px;color:#d4d4d8;line-height:1.4;flex:1 1 200px}
+.an-cons-b{padding:4px 9px;border-radius:7px;border:1px solid rgba(52,232,158,.55);background:rgba(52,232,158,.12);color:#fff;font:inherit;font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap}
 /* A20 : prévu / mesuré en vidéo, et le lien vers la vidéo. */
 .an-vid{margin:4px 0 0;padding:6px 8px;border-radius:8px;background:#17171b;border:1px solid #2a2a30;font-size:11px;color:#d4d4d8;line-height:1.45}
 .an-vid b{color:#fff}
