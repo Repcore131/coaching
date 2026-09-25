@@ -45084,6 +45084,41 @@ function anatConfiance(pts,cles,degrade){
   const n=Math.max(0,r-(degrade||[]).length);
   return {conf:lettre[n],brut,faibles,degrade:degrade||[]};
 }
+/**
+ * PAS D'ASYMÉTRIE SUR UN CORPS TOURNÉ (audit morpho, chantier A8).
+ * Un corps tourné d'un angle θ face à l'objectif rétrécit ses largeurs en
+ * projection, les épaules plus que le bassin : le rapport épaules / hanches
+ * de la photo de face, divisé par le même rapport de dos, le montre. On en
+ * tire θ ≈ acos(rapport) — rapport pris sous 1 (la vue la plus étroite est
+ * celle qui a tourné). L'écart de longueur des deux bras (épaule → poignet)
+ * est rendu à côté, en second indice.
+ * ⚠ acos est très raide près de 1 : 1 % de rapport vaut déjà 8°. Le placement
+ *   de huit points fait bouger ce rapport de quelques % sur un corps bien de
+ *   face : sous ANAT_ROTATION_BRUIT, la rotation n'est pas « fiable » et ne
+ *   neutralise rien.
+ */
+const ANAT_ROTATION_SEUIL=8;
+const ANAT_ROTATION_BRUIT=0.03;
+const ANAT_ROTATION_CONSIGNE='Reprendre la photo corps bien de face à l’objectif : pieds, bassin et épaules parallèles au téléphone, bras relâchés, regard droit.';
+function anatRotation(anat){
+  const lire=vue=>{
+    const v=anat&&anat[vue]; if(!v) return null;
+    if(v.auto&&v.auto.gabarit&&!v.man) return null;
+    const p=anatPoints(anat,vue); if(!p) return null;
+    const W=v.w||1,H=v.h||1;
+    const lx=(a,b)=>(p[a]&&p[b])?Math.abs(p[a][0]-p[b][0])*W:null;
+    const ep=lx('epaule_l','epaule_r'), ha=lx('hanche_l','hanche_r');
+    const bras=s=>{ const a=p['epaule_'+s],b=p['poignet_'+s]; return a&&b?Math.hypot((a[0]-b[0])*W,(a[1]-b[1])*H):null; };
+    return {r:(ep&&ha)?ep/ha:null,bg:bras('l'),bd:bras('r')};
+  };
+  const F=lire('face'), D=lire('dos');
+  if(!F||F.r==null) return null;
+  const asyBras=(F.bg&&F.bd)?Math.abs(F.bg-F.bd)/((F.bg+F.bd)/2):null;
+  if(!D||D.r==null) return {deg:null,fiable:false,rapport:null,vue:null,asyBras};
+  const brut=F.r/D.r, rr=Math.min(brut,1/brut);
+  const deg=Math.round(Math.acos(Math.min(1,rr))*180/Math.PI*10)/10;
+  return {deg,fiable:(1-rr)>ANAT_ROTATION_BRUIT,rapport:Math.round(brut*1000)/1000,vue:brut<1?'face':'dos',asyBras};
+}
 /** PURE. Les compteurs des résultats : « à surveiller » ne compte que A et B. */
 function anatCompteurs(fiches){
   const l=fiches||[];
@@ -45871,6 +45906,32 @@ function anatMesures(anat,u,o){
       else f.niveau=null;
     }
   }
+  // UN CORPS TOURNÉ (A8) : ses écarts gauche / droite sont ceux de la
+  //   projection, pas du corps. Les inclinaisons d'épaules et de bassin, les
+  //   pieds, les écarts de longueur des bras et des jambes et les triangles
+  //   du dos passent en « non lisible », avec la consigne de reprise.
+  const rotation=_anatSafe(()=>anatRotation(anat));
+  if(rotation&&rotation.fiable&&rotation.deg>ANAT_ROTATION_SEUIL){
+    const nl='non lisible — corps tourné d’environ '+_anatN(rotation.deg,0)+'°';
+    const par={}; fiches.forEach(f=>{ par[f.cle]=f; });
+    for(const cle of ['epaules','bassin','pieds']){
+      const f=par[cle]; if(!f) continue;
+      f.etat='illisible'; f.niveau=null; f.valeur=''; f.tourne=rotation.deg;
+      f.chiffres=f.chiffres.map(c=>Object.assign({},c,{val:nl,ecart:''}));
+    }
+    for(const cle of ['bras','jambes']){
+      const f=par[cle]; if(!f) continue;
+      f.tourne=rotation.deg; f.mesure.asy=null;
+      f.chiffres=f.chiffres.map(c=>c.lib==='Écart gauche / droite'?Object.assign({},c,{val:nl,ecart:''}):c);
+    }
+    const fd=par.dos;
+    if(fd&&fd.mesure.asy!=null){
+      fd.tourne=rotation.deg; fd.mesure.asy=null; fd.mesure.pire.nTr=0;
+      const {nOm,nRa}=fd.mesure.pire;
+      fd.niveau=(fd.mesure.om!=null||fd.mesure.rach!=null)?(Math.abs(nRa)>Math.abs(nOm)?nRa:nOm):null;
+      fd.chiffres=fd.chiffres.map(c=>/^Triangles/.test(c.lib)?Object.assign({},c,{val:nl,ecart:''}):c);
+    }
+  }
   // LA CONFIANCE, fiche par fiche, sur les points qu'elle utilise.
   {
     const K=(V,k,sd)=>V?k+'_'+V.cotes[sd]:null;
@@ -45890,8 +45951,8 @@ function anatMesures(anat,u,o){
       pieds:[...deux(F,'talon'),...deux(F,'pointe')],
       dos:D?[...deux(D,'omoplate'),'c7','sacrum']:[]
     };
-    const rot=(typeof anatRotation==='function')?_anatSafe(()=>anatRotation(anat)):null;
-    const tourne=!!(rot&&rot.deg>8);
+    const rot=rotation;
+    const tourne=!!(rot&&rot.fiable&&rot.deg>ANAT_ROTATION_SEUIL);
     for(const f of fiches){
       const V=f.cle==='dos'?D:F;
       const deg=[];
@@ -45908,7 +45969,7 @@ function anatMesures(anat,u,o){
   const fb=fiches.find(f=>f.cle==='bras');
   const photoCm={bras:fb&&fb.mesure.mb?fb.mesure.mb.cm:null,avantbras:fb&&fb.mesure.abPhoto?fb.mesure.abPhoto.cm:null,
     rotule:(verif&&verif.genouCm1!=null&&!(B&&B.rotule))?verif.genouCm1:null};
-  return {photoCm,biais:B,fiches,leviers:anatLeviers(fiches,F,taille,femme),echelle:F?{cmPx:F.cmPx,taille,stature:F.stature,verif,pct:ECH,piedsCoupes,cheveux:!!opts.cheveux}:null,opts};
+  return {photoCm,biais:B,fiches,leviers:anatLeviers(fiches,F,taille,femme),echelle:F?{cmPx:F.cmPx,taille,stature:F.stature,verif,pct:ECH,piedsCoupes,cheveux:!!opts.cheveux}:null,rotation,opts};
 }
 
 /**
@@ -45984,6 +46045,12 @@ function anatTexte(f,res){
   const lev=(res&&res.leviers)||[];
   const L=k=>lev.find(x=>x.cle===k)||null;
   const intens=n=>['dans la marge','léger','net','marqué'][Math.abs(n||0)];
+  if(f.etat==='illisible'&&f.tourne){
+    T.court='Non lisible : corps tourné d’environ '+_anatN(f.tourne,0)+'° sur la photo — un écart gauche / droite y serait celui de la projection.';
+    T.lecture='Quand le corps n’est pas de face, un côté s’éloigne de l’objectif : il paraît plus court, plus bas ou plus fermé que l’autre, sans l’être. La rotation se lit sur le rapport épaules / hanches, de face et de dos.';
+    T.verifier=ANAT_ROTATION_CONSIGNE;
+    return T;
+  }
   if(f.etat==='illisible'){
     if(f.cle==='dos'&&!m.lu){
       T.court='Photo de dos non lue : aucune silhouette reconnue avec assez de certitude.';
@@ -47336,7 +47403,7 @@ function _htmlAnat(c){
   // le miroir et le téléphone — replié par défaut.
   const infos='<details class="an-dr an-inf"'+(_anatDeplie.inf?' open':'')+' ontoggle="_anatDeplie.inf=this.open">'
     +'<summary><span class="an-dr-i">'+ANAT_SVG.info+'</span><span class="an-dr-t">Échelle et prise de vue</span>'
-    +'<span class="an-dr-r">'+(echelle&&echelle.cmPx?_anatN(echelle.taille,0)+' cm · ±'+echelle.pct+' %':'sans taille')+(ver?' · '+ANAT_ECHELLE_MOTS[ver.statut]:'')+'</span>'+ANAT_SVG.chev+'</summary>'
+    +'<span class="an-dr-r">'+(echelle&&echelle.cmPx?_anatN(echelle.taille,0)+' cm · ±'+echelle.pct+' %':'sans taille')+(ver?' · '+ANAT_ECHELLE_MOTS[ver.statut]:'')+(res.rotation&&res.rotation.fiable&&res.rotation.deg>ANAT_ROTATION_SEUIL?' · corps tourné ≈ '+_anatN(res.rotation.deg,0)+'°':'')+'</span>'+ANAT_SVG.chev+'</summary>'
     +'<div class="an-inf-c"><p>'+(echelle&&echelle.cmPx?'Échelle 1, par la taille : '+_anatN(echelle.taille,0)+' cm du sommet du crâne aux talons (taille du dossier), ±'+echelle.pct+' % — perspective et posture.'
         :'Taille absente du dossier : les longueurs sont données en % de la hauteur sur la photo.')
       +' Biais du moteur : '+(res.biais?Object.keys(res.biais).map(k=>(ANAT_BIAIS_SEGMENTS.find(x=>x.cle===k)||{}).lib+' '+_anatSN((res.biais[k].k-1)*100,1)+' % (calibré sur '+res.biais[k].n+' athlètes)').join(', ')+'.'
@@ -47352,6 +47419,11 @@ function _htmlAnat(c){
           :ver.statut==='verifier'?' (entre '+_anatN(ANAT_ECHELLE_CONFIRMEE*100,0)+' et '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' %) : marge d’échelle portée à ±'+ANAT_ECHELLE_A_VERIFIER_PCT+' %.'
           :' (au-delà de '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' %) : longueurs en gris.')
         +(ver.source==='estimation'?' Pour une échelle au mètre : la hauteur du sol au milieu de la rotule, au prochain bilan.':''):'')
+      +(res.rotation&&res.rotation.deg!=null?' Rotation du corps estimée : environ '+_anatN(res.rotation.deg,0)+'° (rapport épaules / hanches de face ÷ de dos : '+_anatN(res.rotation.rapport,2)+')'
+          +(res.rotation.fiable&&res.rotation.deg>ANAT_ROTATION_SEUIL?' — au-delà de '+ANAT_ROTATION_SEUIL+'°, les écarts gauche / droite ne sont pas lus. '+ANAT_ROTATION_CONSIGNE
+            :!res.rotation.fiable?' : dans le bruit du placement des points (±'+_anatN(ANAT_ROTATION_BRUIT*100,0)+' % sur ce rapport), le corps est lu de face.':'.')
+        :(res.rotation?' Rotation du corps : non estimée sans photo de dos.':''))
+      +(res.rotation&&res.rotation.asyBras!=null?' Écart des deux bras sur la photo de face : '+_anatN(res.rotation.asyBras*100,1)+' %.':'')
       +' '+(V.man?'Des points ont été ajustés à la main.':(V.auto&&V.auto.gabarit?'Personne non détectée : les points sont à placer.':'Points placés automatiquement.'))+'</p>'
     +optsHtml+'</div></details>';
 

@@ -44949,6 +44949,46 @@ async function testExercices(){
       if(ce.surveiller!==0||ce.confirmer!==1) return _echec('estimés : '+JSON.stringify(ce));
       if(cm.surveiller!==1||cm.confirmer!==0) return _echec('à la main : '+JSON.stringify(cm));
       return true;})());
+    // Un corps tourné ne donne pas d'asymétrie (A8, 25/09/2026).
+    // Gabarit de face et de dos ; les épaules de face rapprochées du centre de k.
+    const _anatTourne=(k)=>{
+      const a=_anatGab(); a.dos={w:1000,h:1500,auto:{pts:anatGabarit(1000,1500,'dos')},man:null};
+      const pts=a.face.auto.pts, cx=(pts.epaule_l[0]+pts.epaule_r[0])/2;
+      for(const c of ['epaule_l','epaule_r','acromion_l','acromion_r']) pts[c]=[cx+(pts[c][0]-cx)*(1-k),pts[c][1],pts[c][2]];
+      // Une épaule plus basse, pour qu'il y ait une asymétrie à neutraliser.
+      pts.acromion_l=[pts.acromion_l[0],pts.acromion_l[1]+0.012,pts.acromion_l[2]];
+      return a;
+    };
+    ok('ANALYSE MORPHO : LE GABARIT DE FACE ET DE DOS N’EST PAS TOURNÉ (0°)',(()=>{
+      if(typeof anatRotation!=='function') return _echec('anatRotation n’existe pas');
+      const r=anatRotation(_anatTourne(0));
+      if(!r||r.deg==null) return _echec('rotation non estimée : '+JSON.stringify(r));
+      if(r.deg>0.5||r.fiable) return _echec('gabarit : '+r.deg+'° fiable='+r.fiable);
+      const res=anatMesures(_anatTourne(0),_anatDossier());
+      if(res.fiches.some(f=>f.tourne)) return _echec('une fiche neutralisée sans rotation');
+      if(res.fiches.find(f=>f.cle==='epaules').niveau==null) return _echec('l’épaule basse n’est plus lue');
+      return true;})());
+    ok('ANALYSE MORPHO : ÉPAULES DE FACE RÉTRÉCIES DE 12 % : ROTATION VUE, ASYMÉTRIES NEUTRALISÉES',(()=>{
+      const a=_anatTourne(0.12), r=anatRotation(a);
+      if(!r.fiable||Math.abs(r.deg-Math.acos(0.88)*180/Math.PI)>1.5||r.vue!=='face') return _echec('rotation : '+JSON.stringify(r));
+      const res=anatMesures(a,_anatDossier()), F=k=>res.fiches.find(f=>f.cle===k);
+      if(res.rotation!==r&&JSON.stringify(res.rotation)!==JSON.stringify(r)) return _echec('la rotation n’est pas rendue');
+      for(const k of ['epaules','bassin','pieds']){
+        const f=F(k);
+        if(f.niveau!=null||f.etat!=='illisible') return _echec(k+' encore lu : '+f.niveau);
+        if(!f.chiffres.every(c=>/non lisible — corps tourné d’environ 2[89]°/.test(c.val))) return _echec(k+' : '+f.chiffres.map(c=>c.val).join(' | '));
+        const t=anatTexte(f,res);
+        if(!/tourné/.test(t.court)||!/de face à l’objectif/.test(t.verifier)) return _echec(k+' : pas de consigne de reprise');
+      }
+      for(const k of ['bras','jambes']){
+        const l=F(k).chiffres.find(c=>c.lib==='Écart gauche / droite');
+        if(!/corps tourné/.test(l.val)||F(k).mesure.asy!=null) return _echec(k+' : écart G/D encore lu ('+l.val+')');
+      }
+      // Sous le bruit du placement (2 %) : rien n'est neutralisé.
+      const r2=anatRotation(_anatTourne(0.02));
+      if(r2.fiable) return _echec('2 % pris pour une rotation : '+JSON.stringify(r2));
+      if(anatMesures(_anatTourne(0.02),_anatDossier()).fiches.some(f=>f.tourne)) return _echec('2 % neutralise des fiches');
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());
