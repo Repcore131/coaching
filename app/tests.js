@@ -44733,6 +44733,54 @@ async function testExercices(){
       if(f.niveau!==0) return _echec('niveau '+f.niveau+' · '+anatVerdict(f));
       if(!/femmes/.test(f.source)) return _echec('le repère n’est pas celui des femmes : '+f.source);
       return true;})());
+    // Le classement : z à taille égale, erreur de la photo comprise, et un percentile (A3, 25/09/2026).
+    // Points lus par le moteur (marque 1, placement ±2 %) : l'humérus allongé de p %.
+    const _anatHumerus=(p)=>{
+      const pts=anatGabarit(1000,1500,'face');
+      const dy=p/100*ANAT_REF.H.bras*0.86;
+      const m={};
+      for(const s of ['l','r']){
+        m['epaule_'+s]=[pts['epaule_'+s][0],pts['epaule_'+s][1],1];
+        for(const k of ['coude','poignet']) m[k+'_'+s]=[pts[k+'_'+s][0],pts[k+'_'+s][1]+dy,1];
+      }
+      return anatMesures(_anatGab(m),_anatDossier()).fiches.find(f=>f.cle==='bras');
+    };
+    ok('ANALYSE MORPHO : UN HUMÉRUS À +5 % SORT DANS LA MARGE, À +12 % « NET »',(()=>{
+      if(typeof anatClasser!=='function'||!ANAT_DISP||ANAT_DISP.H.rapportBras!==4.2) return _echec('le classement en z n’existe pas');
+      const a=_anatHumerus(5), b=_anatHumerus(12);
+      if(a.niveau!==0) return _echec('+5 % : niveau '+a.niveau+' (z '+(a.stat&&a.stat.z)+')');
+      if(b.niveau!==2||!/net/.test(anatVerdict(b))) return _echec('+12 % : niveau '+b.niveau+' · '+anatVerdict(b));
+      // Échelle 3 %, placement 2 % par point : σ = √(4,2² + 3² + 2,83² + 2,83²)
+      if(Math.abs(b.stat.sd-Math.sqrt(4.2*4.2+9+8+8))>0.01) return _echec('écart-type total : '+b.stat.sd);
+      return true;})());
+    ok('ANALYSE MORPHO : LE PERCENTILE EST MONOTONE, ET AUCUN Z BRUT N’EST AFFICHÉ',(()=>{
+      let avant=-1;
+      for(let p=-15;p<=15;p+=1){
+        const f=_anatHumerus(p);
+        if(!f.stat) return _echec(p+' % : pas de classement');
+        if(!(f.stat.pct>avant)) return _echec('percentile non croissant à '+p+' % : '+f.stat.pct+' après '+avant);
+        avant=f.stat.pct;
+        const ligne=f.chiffres.find(c=>c.lib==='Position dans la population');
+        if(!ligne||!/percentile|parmi les 5 %/.test(ligne.val)) return _echec(p+' % : ligne de position « '+(ligne&&ligne.val)+' »');
+        if(/\bz\b|σ/.test(ligne.val+' '+ligne.def)) return _echec('un z brut s’affiche : '+ligne.val);
+      }
+      if(anatPercentileTxt(72,'haut','bas')!=='72ᵉ percentile') return _echec(anatPercentileTxt(72,'haut','bas'));
+      if(anatPercentileTxt(97,'les plus longs','x')!=='parmi les 5 % les plus longs') return _echec(anatPercentileTxt(97,'les plus longs','x'));
+      if(Math.abs(anatPhi(0)-0.5)>1e-6||Math.abs(anatPhi(1.96)-0.975)>1e-3) return _echec('Φ faux');
+      if(String(_htmlAnat).indexOf('an-r-p')<0) return _echec('le percentile n’est pas dans les résultats');
+      return true;})());
+    ok('ANALYSE MORPHO : LES INCLINAISONS GARDENT LEURS DEGRÉS, LA MARGE INCLUT LE PLACEMENT',(()=>{
+      const r=anatMesures(_anatGab(),_anatDossier());
+      const ep=r.fiches.find(f=>f.cle==='epaules'), ba=r.fiches.find(f=>f.cle==='bassin'), ge=r.fiches.find(f=>f.cle==='genoux');
+      for(const [f,tol] of [[ep,ANAT_TOL.epaules],[ba,ANAT_TOL.bassin],[ge,ANAT_TOL.genoux]]){
+        if(!(f.mesure.marge>tol)) return _echec(f.cle+' : marge '+f.mesure.marge+' pas au-dessus de la pose ±'+tol);
+        if(!/placement/.test(f.tolerance)) return _echec(f.cle+' : « '+f.tolerance+' »');
+      }
+      // Les seuils restent en degrés : 2° d'épaule à plat reste « léger » (1,5 / 3 / 5).
+      const pts=anatGabarit(1000,1500,'face');
+      const incl=anatMesures(_anatGab({acromion_r:[pts.acromion_r[0],pts.acromion_r[1]+Math.tan(2*Math.PI/180)*(pts.acromion_r[0]-pts.acromion_l[0])*1000/1500,1]}),_anatDossier()).fiches.find(f=>f.cle==='epaules');
+      if(Math.abs(incl.niveau)!==1) return _echec('2° : niveau '+incl.niveau);
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());

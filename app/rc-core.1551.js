@@ -44916,8 +44916,81 @@ const ANAT_LARGEURS=Object.freeze({
   F:Object.freeze({biacromial:0.2244,biacromial_et:0.0096,bicretal:0.1679,bicretal_et:0.0127,rapport:1.344,rapport_et:0.110}),
   SOURCE:'ANSUR II (Gordon et al., 2014), calcul RepCore du 25/09/2026, n = 4 082 H / 1 986 F'
 });
-/** Écart à un repère : dans la marge, léger, net, marqué (en %). */
-const ANAT_SEUILS_PCT=[5,9,14];
+/**
+ * UN CLASSEMENT STATISTIQUEMENT HONNÊTE (audit morpho, chantier A3).
+ *
+ * ⚠ POURQUOI PLUS DE SEUILS EN POUR CENT. Les anciens seuils (5 / 9 / 14 %)
+ *   traitaient tous les segments pareil. Or le seuil « léger » de 5 % vaut à peu
+ *   près UN écart-type de population : un adulte sur trois en sortait, par le
+ *   seul jeu de la variation normale — environ 32 % de faux signaux.
+ *
+ * On compare donc l'écart à ce qui est NORMAL POUR CE SEGMENT, erreur de la
+ * photo comprise :   z = (mesure / attendu − 1) / √(disp² + err²)
+ *   - disp : dispersion résiduelle À TAILLE ÉGALE, en % du segment (ANAT_DISP) ;
+ *   - err  : l'erreur de la mesure photo (anatErrMesure) ;
+ *   - |z| < 1 dans la marge, 1–1,5 léger, 1,5–2 net, > 2 marqué ;
+ *   - percentile = Φ(z). On affiche un percentile, JAMAIS un z brut.
+ */
+const ANAT_DISP=Object.freeze({
+  H:Object.freeze({bras:3.2,avantbras:4.0,cuisse:4.7,jambe:3.5,tronc:5.0,biacromial:3.9,bicretal:5.5,rapportBras:4.2,rapportJambes:5.3}),
+  F:Object.freeze({bras:3.4,avantbras:4.6,cuisse:4.1,jambe:3.7,tronc:4.7,biacromial:4.1,bicretal:7.5,rapportBras:4.7,rapportJambes:5.1}),
+  SOURCE:'ANSUR II, dispersion résiduelle à taille égale, calcul RepCore du 25/09/2026'
+});
+/**
+ * L'erreur de la mesure photo, en %. L'échelle (taille déclarée, perspective,
+ * posture) : 3 %. Le placement de chaque point : 1 % posé à la main, 2 % lu par
+ * le moteur, 4 % estimé (acromion, crête, point peu visible, gabarit).
+ * ⚠ LE 3 % RESTE DANS LES RAPPORTS. Le facteur d'échelle s'y annule, mais pas
+ *   la perspective ni la posture, qui touchent deux segments différemment.
+ * ⚠ ON NE DIVISE PAS PAR LE NOMBRE DE CÔTÉS mesurés : deux bras d'une même
+ *   photo, lus par le même moteur, se trompent dans le même sens.
+ */
+const ANAT_ERR=Object.freeze({echelle:3,main:1,auto:2,estime:4});
+const ANAT_SEUILS_Z=[1,1.5,2];
+/** L'erreur de placement d'un point, d'après sa marque (2 main, 1 moteur, sinon estimé). */
+function anatErrPoint(e){ return e>=2?ANAT_ERR.main:(e>=0.9?ANAT_ERR.auto:ANAT_ERR.estime); }
+/**
+ * PURE. L'erreur de placement d'une longueur, en %, entre deux extrémités qui
+ * sont chacune la moyenne d'un ou plusieurs points : une moyenne de n points
+ * se trompe de √(Σe²)/n.
+ */
+function anatErrSeg(A,B){
+  const bout=l=>{ const v=(l||[]).filter(Boolean); if(!v.length) return ANAT_ERR.estime;
+    return Math.sqrt(v.reduce((s,p)=>s+Math.pow(anatErrPoint(p.e),2),0))/v.length; };
+  return Math.hypot(bout(A),bout(B));
+}
+/** PURE. La fonction de répartition de la loi normale (Abramowitz & Stegun 26.2.17). */
+function anatPhi(z){
+  const t=1/(1+0.2316419*Math.abs(z));
+  const q=0.3989422804014327*Math.exp(-z*z/2)*t*(0.319381530+t*(-0.356563782+t*(1.781477937+t*(-1.821255978+t*1.330274429))));
+  return z>=0?1-q:q;
+}
+/** PURE. « 72ᵉ percentile », ou « parmi les 5 % … » aux deux bouts. */
+function anatPercentileTxt(pct,haut,bas){
+  if(pct>=95) return 'parmi les 5 % '+haut;
+  if(pct<=5) return 'parmi les 5 % '+bas;
+  const n=Math.round(pct);
+  return n+(n===1?'ᵉʳ':'ᵉ')+' percentile';
+}
+/**
+ * PURE. Le classement d'un écart (en %) : z, percentile, niveau, et de quoi
+ * écrire la marge. `null` sans écart.
+ */
+function anatClasser(ec,disp,err,haut,bas){
+  if(ec==null||!isFinite(ec)) return null;
+  const sd=Math.hypot(disp,err), z=ec/sd, pct=anatPhi(z)*100;
+  // `court` : pour la colonne des résultats, dont les rangées sont calées sur la
+  // hauteur de la photo ; le sens est déjà dans le verdict juste au-dessus.
+  const court=pct>=95?'≥ 95ᵉ percentile':(pct<=5?'≤ 5ᵉ percentile':anatPercentileTxt(pct,haut,bas));
+  return {z,pct,sd,disp,err,niveau:_anatNiveau(z,ANAT_SEUILS_Z),txt:anatPercentileTxt(pct,haut,bas),court};
+}
+/** PURE. La marge d'un angle entre points : la tolérance de pose, et le placement. */
+function anatMargeAngle(tol,pts,poidsMilieu){
+  const v=(pts||[]).filter(Boolean);
+  if(!v.length) return tol;
+  const e=Math.sqrt(v.reduce((s,p,i)=>s+Math.pow(anatErrPoint(p.e)*((poidsMilieu&&i===1)?2:1),2),0));
+  return Math.hypot(tol,_anatDeg(Math.atan(e/100)));
+}
 const ANAT_TOL={epaules:1.5,bassin:2,genoux:3,pieds:8,tronc:3,omoplates:1.2,rachis:2,triangles:25,echelle:3};
 const ANAT_SEUILS={epaules:[1.5,3,5],bassin:[2,3.5,5],genoux:[3,5,8],pieds:[8,14,20],
   tronc:[3,6,9],omoplates:[1.2,2.5,4],rachis:[2,4,6],triangles:[25,45,65]};
@@ -45264,7 +45337,13 @@ function anatMesures(anat,u){
   const taille=_anatSafe(()=>_tailleCm(u));
   const femme=_anatSafe(()=>isFemale((u&&(u._evol_gender||u.gender))||''));
   const larg=ANAT_LARGEURS[femme?'F':'H'];
-  const REF=anatRef(femme), DEF=ANAT_REF.DEF;
+  const REF=anatRef(femme), DEF=ANAT_REF.DEF, DISP=ANAT_DISP[femme?'F':'H'];
+  const sexeTxt=femme?'femmes':'hommes';
+  // La ligne « Position dans la population » : un percentile, jamais un z.
+  const posLigne=(st,quoi)=>({lib:'Position dans la population',
+    def:quoi+', à taille égale, '+sexeTxt+' (ANSUR II) ; dispersion ±'+_anatN(st.disp,1)+' %, mesure ±'+_anatN(st.err,1)+' %',
+    val:st.txt,ref:'50ᵉ percentile',ecart:''});
+  const tolTxt=(err,pl)=>'±'+_anatN(err,1)+' % de mesure (échelle ±'+ANAT_ERR.echelle+' %, placement ±'+_anatN(pl,1)+' %)';
   const vues={};
   for(const vue of ['face','dos']){
     const v=anat&&anat[vue];
@@ -45336,16 +45415,19 @@ function anatMesures(anat,u){
     const ec=bi?ecartPct(bi.fr,larg.biacromial):null;
     const r=(bi&&bc)?bi.px/bc.px:null, rRef=larg.rapport, rEt=larg.rapport_et;
     const estime=!!((bi&&bi.e<1)||(bc&&bc.e<1));
+    const pl=anatErrSeg([A],[B]), err=Math.hypot(ANAT_ERR.echelle,pl);
+    const st=anatClasser(ec,DISP.biacromial,err,'aux épaules les plus larges','aux épaules les plus étroites');
     fiche({cle:'clavicules',lib:'Clavicules',vue:'face',ancre:A&&B?_anatMil(A,B):null,
       zone:(A&&B&&F)?_anatZoneAutour([A,B,F.P2('epaule','g'),F.P2('epaule','d')],0.35):null,
-      etat:ec!=null?'ok':'illisible',estime,
-      niveau:ec!=null?_anatNiveau(ec,ANAT_SEUILS_PCT):null,
+      etat:ec!=null?'ok':'illisible',estime,stat:st,
+      niveau:st?st.niveau:null,
       bornes:['carrure étroite','carrure large'],
       valeur:bi?(bi.cm!=null?cm(bi.cm):'')+(r?' · ép./bassin '+_anatN(r,2):''):'',
-      tolerance:'±2 cm par acromion'+(estime?' — points estimés, à vérifier':''),
+      tolerance:tolTxt(err,pl)+(estime?' — points estimés, à vérifier':''),
       chiffres:[ligne('Largeur biacromiale',bi,larg.biacromial,'acromion → acromion',larg.biacromial_et),ligne('Largeur bicrêtale (bassin)',bc,larg.bicretal,'crête iliaque → crête iliaque',larg.bicretal_et),
-        {lib:'Épaules / bassin',def:'biacromiale ÷ bicrêtale',val:r?_anatN(r,2):'—',ref:_anatN(rRef,2)+' ± '+_anatN(rEt,2),ecart:r?pct((r/rRef-1)*100):''}],
-      mesure:{bi,bc,r,rRef,rEt,ec,femme},source:'acromions et crêtes iliaques, photo de face ; repère '+ANAT_LARGEURS.SOURCE+', '+(femme?'femmes':'hommes')});
+        {lib:'Épaules / bassin',def:'biacromiale ÷ bicrêtale',val:r?_anatN(r,2):'—',ref:_anatN(rRef,2)+' ± '+_anatN(rEt,2),ecart:r?pct((r/rRef-1)*100):''}]
+        .concat(st?[posLigne(st,'largeur biacromiale')]:[]),
+      mesure:{bi,bc,r,rRef,rEt,ec,femme,stat:st},source:'acromions et crêtes iliaques, photo de face ; repère '+ANAT_LARGEURS.SOURCE+', '+(femme?'femmes':'hommes')});
   }
   // ── ÉPAULES : inclinaison ────────────────────────────────────────────────
   const incl=(V,k)=>{
@@ -45360,15 +45442,16 @@ function anatMesures(anat,u){
     const a=(af!=null&&ad!=null)?(af+ad)/2:(af!=null?af:ad);
     const hcm=(V,k)=>{ if(!V||!V.cmPx) return null; const g=V.P2(k,'g'),d=V.P2(k,'d'); return g&&d?(g.y-d.y)*V.cmPx:null; };
     const dh=hcm(F,'acromion');
+    const marge=anatMargeAngle(ANAT_TOL.epaules,F?[F.P2('acromion','g'),F.P2('acromion','d')]:[]);
     fiche({cle:'epaules',lib:'Épaules',vue:'face',ancre:F&&F.P2('acromion','d'),
       zone:F?_anatZoneAutour([F.P2('acromion','g'),F.P2('acromion','d'),F.P2('coude','g'),F.P2('coude','d')],0.15):null,
       etat:a==null?'illisible':'ok',niveau:a==null?null:_anatNiveau(a,ANAT_SEUILS.epaules),
       bornes:['droite plus basse','gauche plus basse'],
-      valeur:a==null?'':_anatN(a)+'°'+(dh!=null?' · '+_anatN(dh,1)+' cm':''),tolerance:'±'+_anatN(ANAT_TOL.epaules)+'°',
+      valeur:a==null?'':_anatN(a)+'°'+(dh!=null?' · '+_anatN(dh,1)+' cm':''),tolerance:'±'+_anatN(marge)+'° (pose ±'+_anatN(ANAT_TOL.epaules)+'°, placement des acromions compris)',
       chiffres:[{lib:'Inclinaison de face',def:'ligne des acromions / horizontale',val:af!=null?_anatSigneTexte(af):'—',ref:'0°',ecart:''},
         {lib:'Inclinaison de dos',def:'ligne des acromions / horizontale',val:ad!=null?_anatSigneTexte(ad):'—',ref:'0°',ecart:''},
         {lib:'Différence de hauteur',def:'acromion gauche − acromion droit',val:dh!=null?_anatN(dh,1)+' cm':'—',ref:'0 cm',ecart:''}],
-      mesure:{a,af,ad,dh},source:'acromions, photos de face et de dos'});
+      mesure:{a,af,ad,dh,marge},source:'acromions, photos de face et de dos'});
   }
   // ── BUSTE : tronc, V, axe ────────────────────────────────────────────────
   {
@@ -45384,18 +45467,22 @@ function anatMesures(anat,u){
     const sf=shift(F),sd=shift(D);
     const s=(sf!=null&&sd!=null)?(sf+sd)/2:(sf!=null?sf:sd);
     const ec=tr?ecartPct(tr.fr,REF.tronc):null;
-    fiche({cle:'buste',lib:'Buste',vue:'face',
+    const plT=F?anatErrSeg([F.P2('epaule','g'),F.P2('epaule','d')],[F.P2('hanche','g'),F.P2('hanche','d')]):ANAT_ERR.estime;
+    const errT=Math.hypot(ANAT_ERR.echelle,plT);
+    const stT=anatClasser(ec,DISP.tronc,errT,'au tronc le plus long','au tronc le plus court');
+    fiche({cle:'buste',stat:stT,lib:'Buste',vue:'face',
       ancre:(F&&F.P2('epaule','g')&&F.P2('hanche','g'))?_anatMil(_anatMil(F.P2('epaule','g'),F.P2('epaule','d')),_anatMil(F.P2('hanche','g'),F.P2('hanche','d'))):null,
       zone:F?_anatZoneAutour([F.P2('deltoide','g'),F.P2('deltoide','d'),F.P2('hanche','g'),F.P2('hanche','d')],0.08):null,
       etat:(ec!=null||V!=null||s!=null)?'ok':'illisible',
-      niveau:ec!=null?_anatNiveau(ec,ANAT_SEUILS_PCT):(s!=null?_anatNiveau(s,ANAT_SEUILS.tronc):null),
+      niveau:stT?stT.niveau:(s!=null?_anatNiveau(s,ANAT_SEUILS.tronc):null),
       bornes:['tronc court','tronc long'],
       valeur:(tr&&tr.cm!=null?'tronc '+cm(tr.cm):'')+(V?(tr&&tr.cm!=null?' · ':'')+'V '+_anatN(V,2):''),
-      tolerance:'±'+ANAT_TOL.echelle+' % (échelle)',
+      tolerance:tolTxt(errT,plT),
       chiffres:[ligne('Tronc (épaules → hanches)',tr,REF.tronc,DEF.tronc),
         {lib:'Rapport deltoïdes / taille (V)',def:'deltoïde → deltoïde ÷ largeur de taille',val:V?_anatN(V,2):'—',ref:'à suivre',ecart:''},
-        {lib:'Axe du tronc (décalage)',def:'mi-épaules / mi-hanches, en % du tronc',val:s!=null?_anatSN(s,1)+' % du tronc':'—',ref:'0 %',ecart:''}],
-      mesure:{tr,ec,V,s,ref:REF.tronc,femme},source:'centres des épaules et des hanches, bords de la silhouette ; '+echelleTxt+' ; repère '+ANAT_REF.SOURCE+' ('+(femme?'femmes':'hommes')+')'});
+        {lib:'Axe du tronc (décalage)',def:'mi-épaules / mi-hanches, en % du tronc',val:s!=null?_anatSN(s,1)+' % du tronc':'—',ref:'0 %',ecart:''}]
+        .concat(stT?[posLigne(stT,'longueur du tronc')]:[]),
+      mesure:{tr,ec,V,s,ref:REF.tronc,femme,stat:stT,nTr:stT?stT.niveau:0},source:'centres des épaules et des hanches, bords de la silhouette ; '+echelleTxt+' ; repère '+ANAT_REF.SOURCE+' ('+(femme?'femmes':'hommes')+')'});
   }
   // ── BRAS : humérus, avant-bras, et le bras qui tient le téléphone ────────
   {
@@ -45407,16 +45494,21 @@ function anatMesures(anat,u){
     const asy=(cotesOk.length===2)?(()=>{ const g=seg(F,'epaule','poignet','g'),d=seg(F,'epaule','poignet','d');
       return (g&&d)?(g.px-d.px)/((g.px+d.px)/2)*100:null; })():null;
     const coude=F&&F.P2('coude',cotesOk[0]||'g');
-    fiche({cle:'bras',lib:'Bras',vue:'face',ancre:coude,
+    const s0=cotesOk[0]||'g';
+    const plB=F?Math.hypot(anatErrSeg([F.P2('epaule',s0)],[F.P2('coude',s0)]),anatErrSeg([F.P2('coude',s0)],[F.P2('poignet',s0)])):ANAT_ERR.estime;
+    const errB=Math.hypot(ANAT_ERR.echelle,plB);
+    const stB=r?anatClasser(ecR,DISP.rapportBras,errB,'à l’humérus le plus long (rapporté à l’avant-bras)','à l’avant-bras le plus long (rapporté à l’humérus)'):null;
+    fiche({cle:'bras',lib:'Bras',vue:'face',ancre:coude,stat:stB,
       zone:F?_anatZoneAutour(['epaule','coude','poignet'].map(k=>F.P2(k,cotesOk[0]||'g')),0.25):null,
-      etat:r?'ok':'illisible',niveau:ecR!=null?_anatNiveau(ecR,ANAT_SEUILS_PCT):null,
+      etat:r?'ok':'illisible',niveau:stB?stB.niveau:null,
       bornes:['avant-bras long','humérus long'],
       valeur:r?'hum./av.-bras '+_anatN(r,2):'',
-      tolerance:'±4 % (placement des coudes et poignets)',
+      tolerance:tolTxt(errB,plB),
       chiffres:[ligne('Humérus (épaule → coude)',hu,REF.bras,DEF.bras),ligne('Avant-bras (coude → poignet)',ab,REF.avantbras,DEF.avantbras),
         {lib:'Humérus / avant-bras',def:'les deux longueurs ci-dessus',val:r?_anatN(r,2):'—',ref:_anatN(rRef,2),ecart:ecR!=null?pct(ecR):''},
-        {lib:'Écart gauche / droite',def:'centre épaule → centre poignet, un bras sur l’autre',val:asy!=null?_anatSN(asy,1)+' %':'—',ref:'0 %',ecart:''}],
-      mesure:{hu,ab,r,rRef,ecR,asy,cotesOk,telAth,refBras:REF.bras,refAvantbras:REF.avantbras,femme},
+        {lib:'Écart gauche / droite',def:'centre épaule → centre poignet, un bras sur l’autre',val:asy!=null?_anatSN(asy,1)+' %':'—',ref:'0 %',ecart:''}]
+        .concat(stB?[posLigne(stB,'rapport humérus / avant-bras')]:[]),
+      mesure:{hu,ab,r,rRef,ecR,asy,cotesOk,telAth,refBras:REF.bras,refAvantbras:REF.avantbras,femme,stat:stB},
       source:'photo de face'+(telAth?', sans le bras '+(telAth==='g'?'gauche':'droit')+' qui tient le téléphone':'')+' ; '+echelleTxt+' ; repère '+ANAT_REF.SOURCE+' ('+(femme?'femmes':'hommes')+')'});
   }
   // ── BASSIN : inclinaison et largeur ──────────────────────────────────────
@@ -45424,14 +45516,15 @@ function anatMesures(anat,u){
     const af=incl(F,'crete')!=null?incl(F,'crete'):incl(F,'hanche');
     const ad=incl(D,'crete')!=null?incl(D,'crete'):incl(D,'hanche');
     const a=(af!=null&&ad!=null)?(af+ad)/2:(af!=null?af:ad);
+    const marge=anatMargeAngle(ANAT_TOL.bassin,F?[F.P2('crete','g'),F.P2('crete','d')]:[]);
     fiche({cle:'bassin',lib:'Bassin',vue:'face',ancre:F&&F.P2('crete','d'),
       zone:F?_anatZoneAutour([F.P2('crete','g'),F.P2('crete','d'),F.P2('hanche','g'),F.P2('hanche','d')],0.35):null,
       etat:a==null?'illisible':'ok',niveau:a==null?null:_anatNiveau(a,ANAT_SEUILS.bassin),
       bornes:['droite plus basse','gauche plus basse'],
-      valeur:a==null?'':_anatN(a)+'°',tolerance:'±'+_anatN(ANAT_TOL.bassin)+'°',
+      valeur:a==null?'':_anatN(a)+'°',tolerance:'±'+_anatN(marge)+'° (pose ±'+_anatN(ANAT_TOL.bassin)+'°, placement des crêtes compris)',
       chiffres:[{lib:'Inclinaison de face',def:'ligne des crêtes iliaques / horizontale',val:af!=null?_anatSigneTexte(af):'—',ref:'0°',ecart:''},
         {lib:'Inclinaison de dos',def:'ligne des crêtes iliaques / horizontale',val:ad!=null?_anatSigneTexte(ad):'—',ref:'0°',ecart:''}],
-      mesure:{a,af,ad,ecartVues:(af!=null&&ad!=null)?Math.abs(af-ad):null},source:'crêtes iliaques, photos de face et de dos'});
+      mesure:{a,af,ad,marge,ecartVues:(af!=null&&ad!=null)?Math.abs(af-ad):null},source:'crêtes iliaques, photos de face et de dos'});
   }
   // ── JAMBES : fémur, tibia, et ce que ça fait au squat ────────────────────
   const tronc=fiches.find(f=>f.cle==='buste').mesure.tr;
@@ -45446,17 +45539,22 @@ function anatMesures(anat,u){
     const asy=(ok.length===2)?(()=>{ const g=seg(F,'hanche','cheville','g'),d=seg(F,'hanche','cheville','d');
       return (g&&d)?(g.px-d.px)/((g.px+d.px)/2)*100:null; })():null;
     const tj=(tronc&&hh)?tronc.px/hh.px:null, tjRef=REF.tronc/REF.hanche;
+    const s1=ok[0]||'g';
+    const plJ=F?Math.hypot(anatErrSeg([F.P2('hanche',s1)],[F.P2('genou',s1)]),anatErrSeg([F.P2('genou',s1)],[F.P2('cheville',s1)])):ANAT_ERR.estime;
+    const errJ=Math.hypot(ANAT_ERR.echelle,plJ);
+    const stJ=r?anatClasser(ecR,DISP.rapportJambes,errJ,'au fémur le plus long (rapporté au tibia)','au tibia le plus long (rapporté au fémur)'):null;
     fiche({cle:'jambes',lib:'Jambes',vue:'face',ancre:F&&F.P2('genou','d')&&F.P2('hanche','d')?_anatMil(F.P2('hanche','d'),F.P2('genou','d')):null,
       zone:F?_anatZoneAutour([F.P2('hanche','g'),F.P2('hanche','d'),F.P2('cheville','g'),F.P2('cheville','d')],0.12):null,
-      etat:r?'ok':'illisible',niveau:ecR!=null?_anatNiveau(ecR,ANAT_SEUILS_PCT):null,
+      etat:r?'ok':'illisible',niveau:stJ?stJ.niveau:null,stat:stJ,
       bornes:['tibia long','fémur long'],
-      valeur:r?'cuisse/jambe '+_anatN(r,2):'',tolerance:'±4 % (placement des genoux)',
+      valeur:r?'cuisse/jambe '+_anatN(r,2):'',tolerance:tolTxt(errJ,plJ),
       chiffres:[ligne('Cuisse (hanche → genou)',cu,REF.cuisse,DEF.cuisse),ligne('Jambe (genou → cheville)',ja,REF.jambe,DEF.jambe),
         {lib:'Cuisse / jambe',def:'les deux longueurs ci-dessus',val:r?_anatN(r,2):'—',ref:_anatN(rRef,2),ecart:ecR!=null?pct(ecR):''},
         ligne('Hauteur de hanche',hh,REF.hanche,DEF.hanche),
         {lib:'Tronc / hauteur de hanche',def:'mi-épaules → mi-hanches ÷ hauteur de hanche',val:tj?_anatN(tj,2):'—',ref:_anatN(tjRef,2),ecart:tj?pct((tj/tjRef-1)*100):''},
-        {lib:'Écart gauche / droite',def:'centre hanche → cheville, une jambe sur l’autre',val:asy!=null?_anatSN(asy,1)+' %':'—',ref:'0 %',ecart:''}],
-      mesure:{cu,ja,hh,r,rRef,ecR,tj,tjRef,asy,femme},source:'photo de face ; '+echelleTxt+' ; repère '+ANAT_REF.SOURCE+' ('+(femme?'femmes':'hommes')+'), hauteur de hanche ANSUR II'});
+        {lib:'Écart gauche / droite',def:'centre hanche → cheville, une jambe sur l’autre',val:asy!=null?_anatSN(asy,1)+' %':'—',ref:'0 %',ecart:''}]
+        .concat(stJ?[posLigne(stJ,'rapport cuisse / jambe')]:[]),
+      mesure:{cu,ja,hh,r,rRef,ecR,tj,tjRef,asy,femme,stat:stJ},source:'photo de face ; '+echelleTxt+' ; repère '+ANAT_REF.SOURCE+' ('+(femme?'femmes':'hommes')+'), hauteur de hanche ANSUR II'});
   }
   // ── GENOUX : alignement frontal ──────────────────────────────────────────
   {
@@ -45473,14 +45571,16 @@ function anatMesures(anat,u){
     };
     const g=gen('g'),d=gen('d');
     const pire=(g==null&&d==null)?null:((d==null||(g!=null&&Math.abs(g)>=Math.abs(d)))?{c:'gauche',v:g}:{c:'droit',v:d});
+    const sP=pire&&pire.c==='droit'?'d':'g';
+    const marge=anatMargeAngle(ANAT_TOL.genoux,F?[F.P2('hanche',sP),F.P2('genou',sP),F.P2('cheville',sP)]:[],true);
     fiche({cle:'genoux',lib:'Genoux',vue:'face',ancre:F&&F.P2('genou','d'),
       zone:F?_anatZoneAutour([F.P2('genou','g'),F.P2('genou','d')],0.9):null,
       etat:pire?'ok':'illisible',niveau:pire?_anatNiveau(pire.v,ANAT_SEUILS.genoux):null,
       bornes:['vers l’extérieur','vers l’intérieur'],
-      valeur:pire?'G '+_anatSigne(g)+' · D '+_anatSigne(d):'',tolerance:'±'+ANAT_TOL.genoux+'°',
+      valeur:pire?'G '+_anatSigne(g)+' · D '+_anatSigne(d):'',tolerance:'±'+_anatN(marge)+'° (pose ±'+ANAT_TOL.genoux+'°, placement hanche-genou-cheville compris)',
       chiffres:[{lib:'Genou gauche / ligne hanche-cheville',def:'angle hanche → genou → cheville, de face',val:_anatSigneTexte(g,true),ref:'0°',ecart:''},
         {lib:'Genou droit / ligne hanche-cheville',def:'angle hanche → genou → cheville, de face',val:_anatSigneTexte(d,true),ref:'0°',ecart:''}],
-      mesure:{g,d,pire},source:'photo de face, hanche-genou-cheville'});
+      mesure:{g,d,pire,marge},source:'photo de face, hanche-genou-cheville'});
   }
   // ── PIEDS ────────────────────────────────────────────────────────────────
   {
@@ -45658,7 +45758,7 @@ function anatTexte(f,res){
   case 'epaules':{
     const a=m.a, bas=a>0?'gauche':'droite';
     if(!an){
-      T.court='Épaules de niveau ('+_anatN(a)+'°, sous la marge de ±'+_anatN(ANAT_TOL.epaules)+'°) : rien à compenser.';
+      T.court='Épaules de niveau ('+_anatN(a)+'°, sous la marge de ±'+_anatN(m.marge||ANAT_TOL.epaules)+'°) : rien à compenser.';
       T.lecture='La ligne des deux acromions est horizontale à la précision de la photo, de face'+(m.ad!=null?' comme de dos':'')+'. La ceinture scapulaire se présente équilibrée.';
       T.privilegier=['Garder l’équilibre tirage / poussée : au moins autant de séries de tirage que de développé','Stabilité des omoplates : Y-raise sur banc incliné, pompes scapulaires, face pull'];
     }else{
@@ -45668,14 +45768,14 @@ function anatTexte(f,res){
       T.privilegier=['Unilatéral en priorité : développé haltère un bras, rowing un bras, tirage poulie un bras — commencer par le côté '+bas+' et aligner l’autre sur ses répétitions','Porter lourd d’un seul côté (suitcase carry) en gardant les épaules de niveau','Planche latérale des deux côtés, 3 × 30 à 45 s','Trapèze inférieur et dentelé : Y-raise sur banc incliné, pompes scapulaires'];
       T.amenager=[{quoi:'Développé et rowing à la barre',reglage:'vérifier en vidéo de face que la barre reste horizontale ; si elle penche, passer une partie du volume aux haltères'},{quoi:'Shrugs',reglage:'aux haltères plutôt qu’à la barre, en contrôlant que les deux épaules montent à la même hauteur'}];
     }
-    T.verifier='Marge ±'+_anatN(ANAT_TOL.epaules)+'°. Si la personne tient son téléphone, l’épaule de ce bras monte : relire la photo de dos, prise bras relâchés.';
+    T.verifier='Marge ±'+_anatN(m.marge||ANAT_TOL.epaules)+'°, placement des acromions compris. Si la personne tient son téléphone, l’épaule de ce bras monte : relire la photo de dos, prise bras relâchés.';
     return T;
   }
   case 'buste':{
     const tr=m.tr, V=m.V, s=m.s;
     const ns=s!=null?_anatNiveau(s,ANAT_SEUILS.tronc):0;
     const sq=L('squat');
-    T.court=(m.ec!=null&&Math.abs(_anatNiveau(m.ec,ANAT_SEUILS_PCT))>0
+    T.court=(m.ec!=null&&m.nTr
         ?'Tronc '+(m.ec>0?'long':'court')+' ('+_anatSN(m.ec,0)+' % sur la moyenne) : '+(m.ec>0?'squat plus droit, soulevé plus exigeant pour le dos.':'buste qui penche plus au squat, soulevé favorable.')
         :'Tronc de longueur moyenne'+(tr&&tr.cm!=null?' ('+_anatN(tr.cm,1)+' cm)':'')+'.')
       +(V?' V (deltoïdes / taille) : '+_anatN(V,2)+'.':'')
@@ -45687,10 +45787,10 @@ function anatTexte(f,res){
       +(V?'Le rapport deltoïdes / taille de '+_anatN(V,2)+' mesure la silhouette, pas l’os : il monte quand la carrure prend ou que la taille descend — c’est le chiffre à suivre de bilan en bilan. ':'')
       +(s!=null?(ns?'Le milieu des épaules est décalé de '+_anatN(s,1)+' % du tronc par rapport au milieu du bassin : le buste se porte d’un côté (posture du moment ou habitude).':'Le buste est à l’aplomb du bassin (écart '+_anatN(s,1)+' %).'):'');
     T.privilegier=['Deltoïde latéral : élévations latérales aux haltères, à la poulie basse derrière le corps, à la machine','Largeur de dos : tractions et tirage vertical prise large, pull-over à la poulie','Taille : gainage anti-rotation (Pallof press), vacuum ; la taille visuelle se joue surtout sur la masse grasse'];
-    if(m.ec!=null&&m.ec>5) T.privilegier.push('Tronc long : renforcer les érecteurs et le gainage (soulevé roumain, good morning léger, planches) — c’est le maillon qui cède le premier sous charge');
+    if((m.nTr||0)>0) T.privilegier.push('Tronc long : renforcer les érecteurs et le gainage (soulevé roumain, good morning léger, planches) — c’est le maillon qui cède le premier sous charge');
     if(ns) T.privilegier.push('Pour l’axe : carry unilatéral et planche latérale, côté opposé au décalage en premier');
     T.amenager=[{quoi:'Obliques lestés en rotation',reglage:'pas nécessaires pour la silhouette : garder le gainage, sans surcharger les rotations lestées si la taille est une priorité'}];
-    if(m.ec!=null&&m.ec>5) T.amenager.push({quoi:'Soulevé de terre conventionnel',reglage:'le sumo ou la barre hexagonale rapprochent la barre des hanches et raccourcissent le levier du dos'});
+    if((m.nTr||0)>0) T.amenager.push({quoi:'Soulevé de terre conventionnel',reglage:'le sumo ou la barre hexagonale rapprochent la barre des hanches et raccourcissent le levier du dos'});
     T.verifier='Échelle ±'+ANAT_TOL.echelle+' %. Le V se relit sur la même pose au bilan suivant, bras légèrement écartés du corps.';
     return T;
   }
@@ -45722,7 +45822,7 @@ function anatTexte(f,res){
   case 'bassin':{
     const a=m.a, haut=a>0?'droite':'gauche';
     if(!an){
-      T.court='Bassin de niveau ('+_anatN(a)+'°, sous la marge de ±'+_anatN(ANAT_TOL.bassin)+'°) : appui réparti sur les deux jambes.';
+      T.court='Bassin de niveau ('+_anatN(a)+'°, sous la marge de ±'+_anatN(m.marge||ANAT_TOL.bassin)+'°) : appui réparti sur les deux jambes.';
       T.lecture='La ligne des crêtes iliaques est horizontale à la précision de la photo.';
       T.privilegier=['Garder de l’unilatéral dans chaque bloc (fente, split squat, soulevé roumain une jambe) : c’est ce qui entretient la symétrie'];
     }else{
@@ -45732,7 +45832,7 @@ function anatTexte(f,res){
       T.privilegier=['Unilatéral des membres inférieurs : split squat bulgare, fente arrière, soulevé roumain à une jambe — commencer par le côté faible','Moyen fessier : abduction de hanche (machine ou poulie), marche latérale avec élastique','Carry unilatéral et planche latérale contre l’inclinaison du tronc'];
       T.amenager=[{quoi:'Squat et soulevé de terre',reglage:'pieds symétriques (repères au sol), contrôler en vidéo de dos que le bassin ne glisse pas d’un côté en remontant'},{quoi:'Presse à cuisses',reglage:'pieds à la même hauteur sur la plateforme, amplitude arrêtée avant que le bassin ne décolle'}];
     }
-    T.verifier='Marge ±'+_anatN(ANAT_TOL.bassin)+'°. Les crêtes iliaques sont estimées : les palper, ou les replacer sur la photo. Si l’écart revient au même endroit d’un bilan à l’autre sur une photo bien prise, en parler avec l’athlète — et, s’il a une gêne, l’orienter vers un professionnel de santé.';
+    T.verifier='Marge ±'+_anatN(m.marge||ANAT_TOL.bassin)+'°, placement des crêtes compris. Les crêtes iliaques sont estimées : les palper, ou les replacer sur la photo. Si l’écart revient au même endroit d’un bilan à l’autre sur une photo bien prise, en parler avec l’athlète — et, s’il a une gêne, l’orienter vers un professionnel de santé.';
     return T;
   }
   case 'jambes':{
@@ -45762,7 +45862,7 @@ function anatTexte(f,res){
   case 'genoux':{
     const p=m.pire;
     if(!an){
-      T.court='Genoux dans l’axe hanche-cheville (écart sous ±'+ANAT_TOL.genoux+'°) : rien à compenser à l’arrêt.';
+      T.court='Genoux dans l’axe hanche-cheville (écart sous ±'+_anatN(m.marge||ANAT_TOL.genoux)+'°) : rien à compenser à l’arrêt.';
       T.lecture='Debout, chaque genou tombe sur la ligne qui relie la hanche à la cheville. Gauche : '+_anatSigneTexte(m.g,true)+', droit : '+_anatSigneTexte(m.d,true)+'.';
       T.privilegier=['Garder de l’unilatéral (fente, split squat) : le contrôle du genou s’entretient en l’entraînant','Équilibre quadriceps / ischios / fessiers'];
     }else if(p.v>0){
@@ -45776,7 +45876,7 @@ function anatTexte(f,res){
       T.privilegier=['Adducteurs : machine à adducteurs, Copenhagen plank, squat sumo contrôlé','Vaste interne : extension de jambes jusqu’au verrouillage, squat talons surélevés','Hip thrust pieds parallèles pour des fessiers travaillés en rotation neutre'];
       T.amenager=[{quoi:'Squat',reglage:'appui un peu plus serré, pointes ouvertes de 10 à 20°, genoux dans l’axe des pieds sans chercher à les pousser dehors'},{quoi:'Fente',reglage:'pas un peu plus écarté latéralement, pour la stabilité'}];
     }
-    T.verifier='Filmer une série de squat de face dans Motion Lab : si le genou bouge sous charge, c’est là qu’on travaille ; s’il reste aligné, la photo montrait une position de repos. Marge ±'+ANAT_TOL.genoux+'°.';
+    T.verifier='Filmer une série de squat de face dans Motion Lab : si le genou bouge sous charge, c’est là qu’on travaille ; s’il reste aligné, la photo montrait une position de repos. Marge ±'+_anatN(m.marge||ANAT_TOL.genoux)+'°, placement compris.';
     return T;
   }
   case 'pieds':{
@@ -46978,7 +47078,7 @@ function _htmlAnat(c){
   const resHtml='<div class="an-res"><div class="an-res-h"><h5>Résultats de l’analyse</h5>'
     +'<div class="an-res-k"><span data-t="s"><b>'+nSurv+'</b>à surveiller</span><span data-t="m"><b>'+nMarge+'</b>dans la marge</span>'+(nIll?'<span data-t="i"><b>'+nIll+'</b>non lisible'+(nIll>1?'s':'')+'</span>':'')+'</div></div>'
     +'<div class="an-res-l">'+fiches.map(f=>'<button type="button" class="an-r" data-k="'+f.cle+'" data-n="'+(f.niveau==null?'':Math.abs(f.niveau))+'" onclick="anatOuvrir(\''+f.cle+'\',true)">'
-      +'<span class="an-r-l">'+escapeHtml(f.lib)+'</span>'+_anatPoints(f)+'<span class="an-r-v">'+escapeHtml(anatVerdict(f))+'</span></button>').join('')+'</div>'
+      +'<span class="an-r-l">'+escapeHtml(f.lib)+'</span>'+_anatPoints(f)+'<span class="an-r-v">'+escapeHtml(anatVerdict(f))+(f.stat?'<small class="an-r-p">'+escapeHtml(f.stat.court||f.stat.txt)+'</small>':'')+'</span></button>').join('')+'</div>'
     +'<p class="an-res-leg"><span><i data-i="0"></i>dans la marge</span><span><i data-i="1"></i>léger</span><span><i data-i="2"></i>net</span><span><i data-i="3"></i>marqué</span><span>gris : non lisible</span></p></div>';
   const pourquoi='<div class="an-pq"><span class="an-pq-i">'+ANAT_SVG.info+'</span><div class="an-pq-c"><h5>Méthode</h5>'
     +'<span>Les repères sont posés sur les vraies photos du bilan — automatiquement, puis ajustables à la main. La photo est mise à l’échelle par la taille du dossier (du sommet du crâne aux talons), les longueurs sont mesurées d’un centre articulaire à l’autre et comparées aux longueurs publiées par de Leva (1996), mesurées elles aussi d’un centre articulaire à l’autre, pour le même sexe ; la hauteur de hanche et les largeurs d’os, aux moyennes ANSUR II (2012). Sous chaque mesure, sa définition. Un écart à la moyenne est un levier à connaître, pas un défaut. '
