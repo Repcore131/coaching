@@ -39095,7 +39095,7 @@ function _blocExo(idx,estSS){
            renderWoEx le rend visible si l'index des illustrations apporte une
            image apres coup. -->
       <details id="wo-comment-${idx}" class="wo-comment"${_consOuverte?' open':''}${_videoTech?' data-video="1"':''}${(_consigneHtml||_videoTech)?'':' hidden'}>
-        <summary class="wo-comment-s"><span class="wo-comment-t">Comment l'exécuter${ex.materiel?` <span class="wo-comment-m">· ${escapeHtml(ex.materiel)}</span>`:''}</span><span class="wo-comment-fl" aria-hidden="true">▾</span></summary>
+        <summary class="wo-comment-s"><svg class="wo-comment-yt" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.6v8.8L18.8 10z" fill="#fff"/></svg><span class="wo-comment-t"><span class="wo-comment-l">Comment l'exécuter</span>${ex.materiel?` <span class="wo-comment-m">· ${escapeHtml(ex.materiel)}</span>`:''}</span><span class="wo-comment-fl" aria-hidden="true">▾</span></summary>
         <!-- R15 — LA CONSIGNE VIT DANS SA PROPRE ZONE : renderWoEx la repeint
              seule quand l'index des illustrations arrive apres le rendu. -->
         <div id="wo-consigne-${idx}">${_consigneHtml}</div>

@@ -8498,6 +8498,10 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .wo-comment-s::-webkit-details-marker{display:none}
 .wo-comment-t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .wo-comment-m{color:var(--sub);font-weight:700;letter-spacing:.5px;text-transform:none}
+/* Kevin, 25/09/2026 : « Comment l'exécuter » en rouge, un petit logo YouTube
+   devant — la vidéo technique est derrière ce menu. */
+.wo-comment-l{color:#ff3b3b}
+.wo-comment-yt{flex:none;width:22px;height:16px;display:block;filter:drop-shadow(0 0 4px rgba(255,0,0,.35))}
 .wo-comment-fl{flex:none;color:var(--sub);transition:transform var(--t-2)}
 .wo-comment[open] .wo-comment-fl{transform:rotate(180deg)}
 .wo-comment[open] .wo-comment-s{margin-bottom:8px}
