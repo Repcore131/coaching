@@ -44781,6 +44781,42 @@ async function testExercices(){
       const incl=anatMesures(_anatGab({acromion_r:[pts.acromion_r[0],pts.acromion_r[1]+Math.tan(2*Math.PI/180)*(pts.acromion_r[0]-pts.acromion_l[0])*1000/1500,1]}),_anatDossier()).fiches.find(f=>f.cle==='epaules');
       if(Math.abs(incl.niveau)!==1) return _echec('2° : niveau '+incl.niveau);
       return true;})());
+    // L'échelle vérifiée : la taille, contrôlée par le genou (A4, 25/09/2026).
+    ok('ANALYSE MORPHO : LE GABARIT CONFIRME SON ÉCHELLE PAR LE GENOU (ÉCART < 1 %)',(()=>{
+      if(typeof anatVerifEchelle!=='function') return _echec('anatVerifEchelle n’existe pas');
+      for(const g of ['H','F']){
+        const a=_anatGab(); a.face.auto.pts=anatGabarit(1000,1500,'face',g==='F');
+        const v=anatMesures(a,_anatDossier({gender:g})).echelle.verif;
+        if(!v) return _echec(g+' : pas de vérification');
+        if(!(v.ecart<0.01)) return _echec(g+' : écart '+(v.ecart*100).toFixed(2)+' %');
+        if(v.statut!=='confirmee'||v.source!=='estimation') return _echec(g+' : '+v.statut+' / '+v.source);
+      }
+      // Au mètre : la hauteur de rotule du bilan, réutilisée par l'échelle du lot 7.
+      const m=anatMesures(_anatGab(),_anatDossier({bilans:[{type:'depart',date:1,'deb-rotule':'50'}]})).echelle.verif;
+      if(!m||m.source!=='metre'||m.statut!=='confirmee') return _echec('au mètre : '+(m&&m.source)+' / '+(m&&m.statut)+' / '+(m&&m.ecart));
+      return true;})());
+    ok('ANALYSE MORPHO : GENOUX DÉPLACÉS DE 5 % : BANDEAU, LONGUEURS EN GRIS',(()=>{
+      const pts=anatGabarit(1000,1500,'face');
+      const dy=0.05*ANAT_ROTULE.part*0.86;   // 5 % de la hauteur du genou, en fraction de la photo
+      const r=anatMesures(_anatGab({genou_l:[pts.genou_l[0],pts.genou_l[1]-dy,1],genou_r:[pts.genou_r[0],pts.genou_r[1]-dy,1]}),_anatDossier());
+      const v=r.echelle.verif;
+      if(!v||v.statut!=='divergence') return _echec('statut : '+(v&&v.statut)+' ('+(v&&(v.ecart*100).toFixed(1))+' %)');
+      for(const k of ['clavicules','bras','jambes']){
+        const f=r.fiches.find(x=>x.cle===k);
+        if(f.niveau!==null||!f.grise) return _echec(k+' : niveau '+f.niveau+', pas grisé');
+        if(f.stat) return _echec(k+' : un percentile sur une échelle contredite');
+        if(!/gris/.test(anatTexte(f,r).court)) return _echec(k+' : le texte ne dit pas que la fiche est en gris');
+      }
+      // Ce qui ne dépend pas de l'échelle reste lu.
+      if(r.fiches.find(x=>x.cle==='epaules').niveau==null) return _echec('les épaules ont été grisées aussi');
+      const h=String(_htmlAnat);
+      if(h.indexOf('an-alerte')<0||h.indexOf('ne donnent pas la même échelle')<0) return _echec('pas de bandeau au-dessus des fiches');
+      // Entre 2 et 4 % : on garde, marge portée à ±5 %.
+      const dy2=0.03*ANAT_ROTULE.part*0.86;
+      const r2=anatMesures(_anatGab({genou_l:[pts.genou_l[0],pts.genou_l[1]-dy2,1],genou_r:[pts.genou_r[0],pts.genou_r[1]-dy2,1]}),_anatDossier());
+      if(r2.echelle.verif.statut!=='verifier'||r2.echelle.pct!==5) return _echec('3 % : '+r2.echelle.verif.statut+' / ±'+r2.echelle.pct);
+      if(!/échelle ±5 %/.test(r2.fiches.find(x=>x.cle==='buste').tolerance)) return _echec('la marge ±5 % n’est pas écrite');
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());

@@ -44946,6 +44946,56 @@ const ANAT_DISP=Object.freeze({
  *   photo, lus par le même moteur, se trompent dans le même sens.
  */
 const ANAT_ERR=Object.freeze({echelle:3,main:1,auto:2,estime:4});
+/**
+ * UNE ÉCHELLE VÉRIFIÉE (audit morpho, chantier A4). Tous les centimètres de
+ * l'analyse viennent d'UNE échelle : la taille du dossier posée du sommet du
+ * crâne aux talons. Un sommet mal placé, un talon hors cadre, et tout est faux
+ * du même facteur sans que rien ne le dise. On la contrôle donc par un second
+ * repère, indépendant : la hauteur du genou.
+ *   - au mètre, si le bilan porte la hauteur de rotule (deb-rotule) : c'est
+ *     morphoEchellePhoto, l'échelle du lot 7, qu'on réutilise telle quelle ;
+ *   - sinon estimée : 0,278 × taille (ANSUR II, hommes et femmes), ±3,2 %.
+ * ⚠ MÊME SEUIL QUE LE LOT 7 : au-delà de MORPHO_ECHELLE_ECART_MAX (4 %), les
+ *   deux repères ne décrivent pas la même photo. Entre 2 et 4 %, on garde, mais
+ *   la marge d'échelle passe de ±3 à ±5 %.
+ */
+const ANAT_ROTULE=Object.freeze({part:0.278,disp:3.2,source:'0,278 × taille, ANSUR II, ±3,2 %'});
+const ANAT_ECHELLE_CONFIRMEE=0.02;
+const ANAT_ECHELLE_A_VERIFIER_PCT=5;
+/**
+ * PURE. Les deux échelles d'une vue de face, et leur accord.
+ * @returns {null|{e1:number|null,e2:number|null,ratio:number,ecart:number,
+ *   statut:'confirmee'|'verifier'|'divergence',source:'metre'|'estimation',
+ *   mesureCm:number|null,hGenouPx:number,genouCm1:number|null,genouCm2:number|null}}
+ */
+function anatVerifEchelle(u,F){
+  if(!F||F.sol==null||!(F.stature>0)) return null;
+  const g=F.P2('genou','g'),d=F.P2('genou','d');
+  if(!g||!d) return null;
+  const hG=F.sol-(g.y+d.y)/2;
+  if(!(hG>0)) return null;
+  const e1=F.cmPx||null;
+  // Le mètre d'abord : l'échelle du lot 7, sur la même hauteur de genou.
+  const m=_anatSafe(()=>morphoEchellePhoto(u,{genou:hG}));
+  if(m&&m.cmPx&&e1){
+    const ratio=m.cmPx/e1;
+    return _anatStatutEchelle({e1,e2:m.cmPx,ratio,source:'metre',mesureCm:m.genouCm,hGenouPx:hG});
+  }
+  // Sinon l'estimation : l'écart ne dépend alors pas de la taille (0,278 × la
+  // hauteur du corps sur la photo, comparé à la hauteur du genou).
+  const ratio=ANAT_ROTULE.part*F.stature/hG;
+  return _anatStatutEchelle({e1,e2:e1?e1*ratio:null,ratio,source:'estimation',mesureCm:null,hGenouPx:hG});
+}
+function _anatStatutEchelle(o){
+  const ecart=Math.abs(o.ratio-1);
+  o.ecart=ecart;
+  o.statut=ecart<=ANAT_ECHELLE_CONFIRMEE?'confirmee':(ecart<=MORPHO_ECHELLE_ECART_MAX?'verifier':'divergence');
+  o.genouCm1=o.e1?o.hGenouPx*o.e1:null;
+  o.genouCm2=o.e2?o.hGenouPx*o.e2:null;
+  return o;
+}
+/** Le mot de l'échelle, le même partout. */
+const ANAT_ECHELLE_MOTS=Object.freeze({confirmee:'échelle confirmée',verifier:'échelle à vérifier',divergence:'échelles divergentes'});
 const ANAT_SEUILS_Z=[1,1.5,2];
 /** L'erreur de placement d'un point, d'après sa marque (2 main, 1 moteur, sinon estimé). */
 function anatErrPoint(e){ return e>=2?ANAT_ERR.main:(e>=0.9?ANAT_ERR.auto:ANAT_ERR.estime); }
@@ -45343,7 +45393,10 @@ function anatMesures(anat,u){
   const posLigne=(st,quoi)=>({lib:'Position dans la population',
     def:quoi+', à taille égale, '+sexeTxt+' (ANSUR II) ; dispersion ±'+_anatN(st.disp,1)+' %, mesure ±'+_anatN(st.err,1)+' %',
     val:st.txt,ref:'50ᵉ percentile',ecart:''});
-  const tolTxt=(err,pl)=>'±'+_anatN(err,1)+' % de mesure (échelle ±'+ANAT_ERR.echelle+' %, placement ±'+_anatN(pl,1)+' %)';
+  // La marge d'échelle : ±3 %, portée à ±5 % quand les deux repères
+  // s'accordent mal (voir anatVerifEchelle). Posée plus bas, lue à l'appel.
+  let ECH=ANAT_ERR.echelle;
+  const tolTxt=(err,pl)=>'±'+_anatN(err,1)+' % de mesure (échelle ±'+ECH+' %, placement ±'+_anatN(pl,1)+' %)';
   const vues={};
   for(const vue of ['face','dos']){
     const v=anat&&anat[vue];
@@ -45366,6 +45419,8 @@ function anatMesures(anat,u){
     vues[vue]={W,H,P,P2,cotes,sol,stature,cmPx,pts};
   }
   const F=vues.face, D=vues.dos;
+  const verif=_anatSafe(()=>anatVerifEchelle(u,F));
+  if(verif&&verif.statut==='verifier') ECH=ANAT_ECHELLE_A_VERIFIER_PCT;
   const fiches=[];
   const fiche=(o)=>{ fiches.push(Object.assign({niveau:null,valeur:'',tolerance:'',etat:'ok',chiffres:[],estime:false},o)); };
   // Un segment en cm (ou en fraction de la taille, sans taille), et son écart
@@ -45401,7 +45456,7 @@ function anatMesures(anat,u){
   const telAth=(F&&opts.telephone)?(F.cotes.g===opts.telephone?'g':'d'):null;
   const brasOk=s=>F&&s!==telAth&&tendu(F,'epaule','coude','poignet',s);
   const jambeOk=s=>F&&tendu(F,'hanche','genou','cheville',s);
-  const echelleTxt=F&&F.cmPx?'échelle par la taille ('+_anatN(taille,0)+' cm), ±'+ANAT_TOL.echelle+' %'
+  const echelleTxt=F&&F.cmPx?'échelle par la taille ('+_anatN(taille,0)+' cm), ±'+ECH+' %'+(verif?', '+ANAT_ECHELLE_MOTS[verif.statut]+' par le genou':'')
     :'sans taille connue : en fraction de la hauteur sur la photo';
 
   // ── CLAVICULES : la carrure osseuse ──────────────────────────────────────
@@ -45415,7 +45470,7 @@ function anatMesures(anat,u){
     const ec=bi?ecartPct(bi.fr,larg.biacromial):null;
     const r=(bi&&bc)?bi.px/bc.px:null, rRef=larg.rapport, rEt=larg.rapport_et;
     const estime=!!((bi&&bi.e<1)||(bc&&bc.e<1));
-    const pl=anatErrSeg([A],[B]), err=Math.hypot(ANAT_ERR.echelle,pl);
+    const pl=anatErrSeg([A],[B]), err=Math.hypot(ECH,pl);
     const st=anatClasser(ec,DISP.biacromial,err,'aux épaules les plus larges','aux épaules les plus étroites');
     fiche({cle:'clavicules',lib:'Clavicules',vue:'face',ancre:A&&B?_anatMil(A,B):null,
       zone:(A&&B&&F)?_anatZoneAutour([A,B,F.P2('epaule','g'),F.P2('epaule','d')],0.35):null,
@@ -45468,7 +45523,7 @@ function anatMesures(anat,u){
     const s=(sf!=null&&sd!=null)?(sf+sd)/2:(sf!=null?sf:sd);
     const ec=tr?ecartPct(tr.fr,REF.tronc):null;
     const plT=F?anatErrSeg([F.P2('epaule','g'),F.P2('epaule','d')],[F.P2('hanche','g'),F.P2('hanche','d')]):ANAT_ERR.estime;
-    const errT=Math.hypot(ANAT_ERR.echelle,plT);
+    const errT=Math.hypot(ECH,plT);
     const stT=anatClasser(ec,DISP.tronc,errT,'au tronc le plus long','au tronc le plus court');
     fiche({cle:'buste',stat:stT,lib:'Buste',vue:'face',
       ancre:(F&&F.P2('epaule','g')&&F.P2('hanche','g'))?_anatMil(_anatMil(F.P2('epaule','g'),F.P2('epaule','d')),_anatMil(F.P2('hanche','g'),F.P2('hanche','d'))):null,
@@ -45496,7 +45551,7 @@ function anatMesures(anat,u){
     const coude=F&&F.P2('coude',cotesOk[0]||'g');
     const s0=cotesOk[0]||'g';
     const plB=F?Math.hypot(anatErrSeg([F.P2('epaule',s0)],[F.P2('coude',s0)]),anatErrSeg([F.P2('coude',s0)],[F.P2('poignet',s0)])):ANAT_ERR.estime;
-    const errB=Math.hypot(ANAT_ERR.echelle,plB);
+    const errB=Math.hypot(ECH,plB);
     const stB=r?anatClasser(ecR,DISP.rapportBras,errB,'à l’humérus le plus long (rapporté à l’avant-bras)','à l’avant-bras le plus long (rapporté à l’humérus)'):null;
     fiche({cle:'bras',lib:'Bras',vue:'face',ancre:coude,stat:stB,
       zone:F?_anatZoneAutour(['epaule','coude','poignet'].map(k=>F.P2(k,cotesOk[0]||'g')),0.25):null,
@@ -45541,7 +45596,7 @@ function anatMesures(anat,u){
     const tj=(tronc&&hh)?tronc.px/hh.px:null, tjRef=REF.tronc/REF.hanche;
     const s1=ok[0]||'g';
     const plJ=F?Math.hypot(anatErrSeg([F.P2('hanche',s1)],[F.P2('genou',s1)]),anatErrSeg([F.P2('genou',s1)],[F.P2('cheville',s1)])):ANAT_ERR.estime;
-    const errJ=Math.hypot(ANAT_ERR.echelle,plJ);
+    const errJ=Math.hypot(ECH,plJ);
     const stJ=r?anatClasser(ecR,DISP.rapportJambes,errJ,'au fémur le plus long (rapporté au tibia)','au tibia le plus long (rapporté au fémur)'):null;
     fiche({cle:'jambes',lib:'Jambes',vue:'face',ancre:F&&F.P2('genou','d')&&F.P2('hanche','d')?_anatMil(F.P2('hanche','d'),F.P2('genou','d')):null,
       zone:F?_anatZoneAutour([F.P2('hanche','g'),F.P2('hanche','d'),F.P2('cheville','g'),F.P2('cheville','d')],0.12):null,
@@ -45630,7 +45685,21 @@ function anatMesures(anat,u){
         {lib:'Triangles bras-tronc (G / D)',def:'espace entre le bras et la taille, de dos',val:(trG!=null&&trD!=null&&D.cmPx)?cm(trG*D.cmPx)+' / '+cm(trD*D.cmPx):(asy!=null?_anatSN(asy,0)+' %':'—'),ref:'égaux',ecart:asy!=null?pct(asy):''}],
       mesure:{om,omCm,rach,asy,lu:!!D,pire:{nOm,nRa,nTr}},source:'photo de dos'});
   }
-  return {fiches,leviers:anatLeviers(fiches,F,taille,femme),echelle:F?{cmPx:F.cmPx,taille,stature:F.stature}:null,opts};
+  // ⚠ DEUX REPÈRES QUI SE CONTREDISENT : les longueurs passent en gris. Leur
+  //   niveau n'est plus publié, ni leur percentile ; les chiffres restent
+  //   lisibles, pour que le coach voie ce qui cloche. L'axe du buste, les
+  //   inclinaisons, les genoux, les pieds et le dos ne dépendent pas de
+  //   l'échelle : ils restent.
+  if(verif&&verif.statut==='divergence'){
+    for(const f of fiches){
+      if(['clavicules','bras','jambes','buste'].indexOf(f.cle)<0) continue;
+      f.grise=true; f.stat=null;
+      f.chiffres=f.chiffres.filter(c=>c.lib!=='Position dans la population');
+      if(f.cle==='buste'){ const sx=f.mesure.s; f.niveau=(sx!=null)?_anatNiveau(sx,ANAT_SEUILS.tronc):null; f.mesure.nTr=0; }
+      else f.niveau=null;
+    }
+  }
+  return {fiches,leviers:anatLeviers(fiches,F,taille,femme),echelle:F?{cmPx:F.cmPx,taille,stature:F.stature,verif,pct:ECH}:null,opts};
 }
 
 /**
@@ -45724,6 +45793,13 @@ function anatTexte(f,res){
     T.verifier='Photo de face en pied, pieds à largeur de hanches, bras relâchés légèrement écartés du corps.';
     return T;
   }
+  if(f.grise){
+    T.court='Longueurs en gris : les deux repères d’échelle ne donnent pas la même mesure — sommet du crâne, talons et genoux à vérifier.';
+    T.lecture='L’échelle par la taille (sommet du crâne → talons) et celle par le genou diffèrent de plus de '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' % : un point mal placé fausse toutes les longueurs du même facteur, sans que rien ne le montre. Tant que les deux ne s’accordent pas, aucune longueur n’est classée.'
+      +(f.cle==='buste'&&f.mesure&&f.mesure.s!=null?' L’axe du buste, lui, ne dépend pas de l’échelle : décalage de '+_anatN(f.mesure.s,1)+' % du tronc.':'');
+    T.verifier='Replacer le sommet du crâne, les talons et les genoux (« Ajuster les points »), puis relancer l’analyse ; ou saisir au prochain bilan la hauteur du sol au milieu de la rotule, qui donne une échelle au mètre.';
+    return T;
+  }
   const n=f.niveau||0, an=Math.abs(n);
   switch(f.cle){
   case 'clavicules':{
@@ -45791,7 +45867,7 @@ function anatTexte(f,res){
     if(ns) T.privilegier.push('Pour l’axe : carry unilatéral et planche latérale, côté opposé au décalage en premier');
     T.amenager=[{quoi:'Obliques lestés en rotation',reglage:'pas nécessaires pour la silhouette : garder le gainage, sans surcharger les rotations lestées si la taille est une priorité'}];
     if((m.nTr||0)>0) T.amenager.push({quoi:'Soulevé de terre conventionnel',reglage:'le sumo ou la barre hexagonale rapprochent la barre des hanches et raccourcissent le levier du dos'});
-    T.verifier='Échelle ±'+ANAT_TOL.echelle+' %. Le V se relit sur la même pose au bilan suivant, bras légèrement écartés du corps.';
+    T.verifier='Échelle ±'+((res&&res.echelle&&res.echelle.pct)||ANAT_TOL.echelle)+' %. Le V se relit sur la même pose au bilan suivant, bras légèrement écartés du corps.';
     return T;
   }
   case 'bras':{
@@ -46362,7 +46438,10 @@ function anatGabarit(w,h,vue,femme){
   const bout=(f0,dx0,dx1,L)=>f0-Math.sqrt(Math.max(0,L*L-(dx1-dx0)*(dx1-dx0)));
   const pose=(k,x,yy)=>{ out[k]=[Math.round(x/w*100000)/100000,Math.round(yy/h*100000)/100000,0.5]; };
   const lat=(k,dx,f)=>{ pose(k+'_l',cx-dx*Hh,y(f)); pose(k+'_r',cx+dx*Hh,y(f)); };
-  const fCh=0.04, fGenou=fCh+Math.sqrt(R.jambe*R.jambe-0.005*0.005);
+  // La cheville est posée pour que le genou tombe à 0,278 de la taille, la
+  // hauteur de rotule d'ANSUR II : un gabarit doit CONFIRMER son échelle.
+  const jV=Math.sqrt(R.jambe*R.jambe-0.005*0.005);
+  const fCh=Math.max(0.02,ANAT_ROTULE.part-jV), fGenou=fCh+jV;
   const fHa=fGenou+R.cuisse, fEp=fHa+R.tronc;
   const fCo=bout(fEp,0.10,0.12,R.bras), fPo=bout(fCo,0.12,0.13,R.avantbras);
   pose('vertex',cx,y(1));
@@ -46935,6 +47014,7 @@ function _htmlAnat(c){
     });
   }
   const echelle=res.echelle;
+  const ver=echelle&&echelle.verif;   // les deux échelles et leur accord (A4)
   // La photo : positionnée pour que le cadre remplisse la fenêtre, et rognée
   // au cadre (les marges des étiquettes restent sombres).
   const clip=reglage.cadre?';clip-path:inset('+(C.y0/H*100).toFixed(3)+'% '+((W-C.x1)/W*100).toFixed(3)+'% '+((H-C.y1)/H*100).toFixed(3)+'% '+(C.x0/W*100).toFixed(3)+'%)':'';
@@ -47034,9 +47114,18 @@ function _htmlAnat(c){
   // le miroir et le téléphone — replié par défaut.
   const infos='<details class="an-dr an-inf"'+(_anatDeplie.inf?' open':'')+' ontoggle="_anatDeplie.inf=this.open">'
     +'<summary><span class="an-dr-i">'+ANAT_SVG.info+'</span><span class="an-dr-t">Échelle et prise de vue</span>'
-    +'<span class="an-dr-r">'+(echelle&&echelle.cmPx?_anatN(echelle.taille,0)+' cm · ±'+ANAT_TOL.echelle+' %':'sans taille')+'</span>'+ANAT_SVG.chev+'</summary>'
-    +'<div class="an-inf-c"><p>'+(echelle&&echelle.cmPx?'Échelle : '+_anatN(echelle.taille,0)+' cm du sommet du crâne aux talons (taille du dossier), ±'+ANAT_TOL.echelle+' % — perspective et posture.'
+    +'<span class="an-dr-r">'+(echelle&&echelle.cmPx?_anatN(echelle.taille,0)+' cm · ±'+echelle.pct+' %':'sans taille')+(ver?' · '+ANAT_ECHELLE_MOTS[ver.statut]:'')+'</span>'+ANAT_SVG.chev+'</summary>'
+    +'<div class="an-inf-c"><p>'+(echelle&&echelle.cmPx?'Échelle 1, par la taille : '+_anatN(echelle.taille,0)+' cm du sommet du crâne aux talons (taille du dossier), ±'+echelle.pct+' % — perspective et posture.'
         :'Taille absente du dossier : les longueurs sont données en % de la hauteur sur la photo.')
+      +(ver?' Échelle 2, par le genou : '+(ver.source==='metre'
+          ?_anatN(ver.mesureCm,1)+' cm du sol au milieu de la rotule, mesurés au mètre au bilan'
+          :'hauteur de rotule estimée ('+ANAT_ROTULE.source+')')
+        +(ver.genouCm1!=null&&ver.genouCm2!=null?' — le genou est à '+_anatN(ver.genouCm1,1)+' cm du sol par la taille, '+_anatN(ver.genouCm2,1)+' cm par '+(ver.source==='metre'?'le mètre':'l’estimation'):'')
+        +'. Écart entre les deux : '+_anatN(ver.ecart*100,1)+' % — '+ANAT_ECHELLE_MOTS[ver.statut]
+        +(ver.statut==='confirmee'?' (au plus '+_anatN(ANAT_ECHELLE_CONFIRMEE*100,0)+' %).'
+          :ver.statut==='verifier'?' (entre '+_anatN(ANAT_ECHELLE_CONFIRMEE*100,0)+' et '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' %) : marge d’échelle portée à ±'+ANAT_ECHELLE_A_VERIFIER_PCT+' %.'
+          :' (au-delà de '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' %) : longueurs en gris.')
+        +(ver.source==='estimation'?' Pour une échelle au mètre : la hauteur du sol au milieu de la rotule, au prochain bilan.':''):'')
       +' '+(V.man?'Des points ont été ajustés à la main.':(V.auto&&V.auto.gabarit?'Personne non détectée : les points sont à placer.':'Points placés automatiquement.'))+'</p>'
     +optsHtml+'</div></details>';
 
@@ -47066,7 +47155,9 @@ function _htmlAnat(c){
   // TOUTES LES ZONES À GAUCHE, DANS UNE LISTE QUI DÉFILE, À LA HAUTEUR DE LA
   // PHOTO. Kevin : « pas un bouton, plutôt un menu déroulant du haut vers le
   // bas ; que tout cet espace prenne la même place que la photo ».
-  const colG='<div class="an-col an-col-g"><h5>Détails morphologiques <span>'+fiches.length+' zones</span></h5>'
+  const alerteEch=(ver&&ver.statut==='divergence')
+    ?'<div class="an-alerte" role="alert">'+ANAT_SVG.info+'<span><b>Les deux repères ne donnent pas la même échelle</b> ('+_anatN(ver.ecart*100,1)+' % d’écart, au-delà des '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' % admis) : vérifie le sommet du crâne, les talons et les genoux. Les longueurs sont en gris tant que les deux échelles ne s’accordent pas.</span></div>':'';
+  const colG='<div class="an-col an-col-g"><h5>Détails morphologiques <span>'+fiches.length+' zones</span></h5>'+alerteEch
     +'<div class="an-liste" tabindex="0" aria-label="Zones analysées, faire défiler">'+fiches.map(carte).join('')+'</div>'
     +'<div class="an-liste-fin" aria-hidden="true">'+ANAT_SVG.chev+'<span>Fais défiler pour voir toutes les zones</span></div>'
     +photoHtml+'</div>';

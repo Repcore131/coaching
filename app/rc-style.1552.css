@@ -10441,3 +10441,15 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 
 /* Le percentile sous le verdict, dans les résultats (chantier A3, 25/09/2026). */
 .an-res .an-r-v .an-r-p{display:block;margin-top:2px;font-size:9.5px;font-weight:500;color:#8a8a92;letter-spacing:0;white-space:normal}
+
+/* Le bandeau des échelles divergentes, au-dessus des fiches (chantier A4, 25/09/2026). */
+.an-alerte{display:flex;align-items:flex-start;gap:10px;margin:0 0 10px;padding:10px 12px;border-radius:10px;
+  background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.55);color:#fcd9a0;font-size:11.5px;line-height:1.45}
+.an-alerte svg{width:18px;height:18px;flex-shrink:0;color:#f59e0b;margin-top:1px}
+.an-alerte b{color:#fde6c1}
+/* Sur petit écran, le résumé de l'échelle (« 168 cm · ±3 % · échelle confirmée »)
+   passe sous le titre au lieu de le rogner. */
+@container an (max-width:520px){
+  .an-inf>summary{flex-wrap:wrap;row-gap:2px;padding-top:8px;padding-bottom:8px}
+  .an-inf .an-dr-r{order:3;flex-basis:100%;margin-left:40px;white-space:normal}
+}
