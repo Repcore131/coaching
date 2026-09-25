@@ -44750,8 +44750,9 @@ async function testExercices(){
       const a=_anatHumerus(5), b=_anatHumerus(12);
       if(a.niveau!==0) return _echec('+5 % : niveau '+a.niveau+' (z '+(a.stat&&a.stat.z)+')');
       if(b.niveau!==2||!/net/.test(anatVerdict(b))) return _echec('+12 % : niveau '+b.niveau+' · '+anatVerdict(b));
-      // Échelle 3 %, placement 2 % par point : σ = √(4,2² + 3² + 2,83² + 2,83²)
-      if(Math.abs(b.stat.sd-Math.sqrt(4.2*4.2+9+8+8))>0.01) return _echec('écart-type total : '+b.stat.sd);
+      // Échelle 3 %, placement 2 % par point, biais moteur non calibré 3 % (A6) :
+      // σ = √(4,2² + 3² + 2,83² + 2,83² + 3²)
+      if(Math.abs(b.stat.sd-Math.sqrt(4.2*4.2+9+8+8+9))>0.01) return _echec('écart-type total : '+b.stat.sd);
       return true;})());
     ok('ANALYSE MORPHO : LE PERCENTILE EST MONOTONE, ET AUCUN Z BRUT N’EST AFFICHÉ',(()=>{
       let avant=-1;
@@ -44866,6 +44867,52 @@ async function testExercices(){
       const coupe=anatMesures(_anatGab({pointe_l:[pts.pointe_l[0],0.995,1]}),_anatDossier());
       if(!coupe.echelle.piedsCoupes) return _echec('un orteil au bord du cadre n’est pas vu');
       if(String(_htmlAnat).indexOf('Pieds coupés : l’échelle est estimée')<0) return _echec('pas de bandeau « pieds coupés »');
+      return true;})());
+    // Le biais du moteur, appris sur les athlètes du coach (A6, 25/09/2026).
+    // n athlètes au gabarit, de 170 à 190 cm ; leur mètre vaut la photo ÷ 1,06
+    // (le moteur lit 6 % trop long), à ±0,5 % près. Ces mètres de rotule rendent
+    // leur échelle « divergente » (A4) : les fiches grisent, mais les longueurs
+    // photo que la calibration apprend restent calculées.
+    const _anatPopulation=(n,biais)=>Array.from({length:n},(_,i)=>{
+      const u=_anatDossier({email:'cal'+i+'@t.fr',_evol_height:String(170+i*20/Math.max(1,n-1))});
+      u.morphoAnat=_anatGab();
+      const ph=anatMesures(u.morphoAnat,u,{brut:true}).photoCm;
+      const bruit=1+((i%3)-1)*0.005;
+      u.bilans=[{type:'depart',date:1,'deb-avantbras':(ph.avantbras/biais*bruit).toFixed(2),
+        'deb-bras':(ph.bras/biais*bruit).toFixed(2),'deb-rotule':(ph.rotule/biais*bruit).toFixed(2)}];
+      return u;
+    });
+    ok('ANALYSE MORPHO : 8 ATHLÈTES À +6 % : LE BIAIS MOTEUR EST RETROUVÉ À ±1 %',(()=>{
+      if(typeof anatBiaisMoteur!=='function') return _echec('anatBiaisMoteur n’existe pas');
+      const b=anatBiaisMoteur(_anatPopulation(8,1.06));
+      if(!b) return _echec('pas de biais appris sur 8 athlètes');
+      for(const k of ['bras','avantbras','rotule']){
+        if(!b[k]) return _echec(k+' : non calibré');
+        if(Math.abs(b[k].k-1.06)>0.01) return _echec(k+' : '+b[k].k.toFixed(4)+' au lieu de 1,06');
+        if(b[k].n!==8) return _echec(k+' : n = '+b[k].n);
+      }
+      return true;})());
+    ok('ANALYSE MORPHO : 7 ATHLÈTES : PAS DE CORRECTION',(()=>{
+      if(anatBiaisMoteur(_anatPopulation(7,1.06))!==null) return _echec('un biais appris sur 7 athlètes');
+      if(anatBiaisMoteur([])!==null) return _echec('un biais appris sur personne');
+      return true;})());
+    ok('ANALYSE MORPHO : LA CORRECTION S’APPLIQUE ET SE DIT ; LE MÈTRE PRIME',(()=>{
+      const b=anatBiaisMoteur(_anatPopulation(8,1.06));
+      const u=_anatDossier(), a=_anatGab();
+      const brut=anatMesures(a,u,{brut:true}).fiches.find(f=>f.cle==='bras');
+      const cor=anatMesures(a,u,{biais:b}).fiches.find(f=>f.cle==='bras');
+      if(cor.mesure.abSrc!=='corrige') return _echec('avant-bras : '+cor.mesure.abSrc);
+      if(Math.abs(cor.mesure.ab.cm-brut.mesure.abPhoto.cm/b.avantbras.k)>0.01) return _echec('avant-bras non corrigé');
+      if(!/corrigé du biais moteur, calibré sur 8 athlètes/.test(cor.source)) return _echec('source : '+cor.source);
+      // Sans calibration, la marge dit ±3 % de biais possible.
+      if(!/biais moteur ±3 %/.test(brut.tolerance)||!/non calibré/.test(anatMesures(a,u).fiches.find(f=>f.cle==='bras').source)) return _echec('le biais possible n’est pas dans la marge');
+      // L'athlète mesuré au mètre : le mètre remplace la photo, la photo reste un contrôle.
+      const m=_anatDossier({bilans:[{type:'depart',date:1,'deb-avantbras':'25'}]});
+      const fm=anatMesures(a,m,{biais:b}).fiches.find(f=>f.cle==='bras');
+      if(fm.mesure.abSrc!=='metre'||Math.abs(fm.mesure.ab.cm-25)>0.01) return _echec('le mètre ne prime pas : '+fm.mesure.abSrc+' '+fm.mesure.ab.cm);
+      const l=fm.chiffres.find(c=>c.lib==='Avant-bras (coude → poignet)');
+      if(l.val!=='25 cm'&&l.val!=='25,0 cm') return _echec('ligne avant-bras : '+l.val);
+      if(!/photo en contrôle/.test(l.def)) return _echec('la photo n’est pas présentée en contrôle : '+l.def);
       return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');

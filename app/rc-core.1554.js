@@ -44968,11 +44968,12 @@ const ANAT_ECHELLE_A_VERIFIER_PCT=5;
  *   statut:'confirmee'|'verifier'|'divergence',source:'metre'|'estimation',
  *   mesureCm:number|null,hGenouPx:number,genouCm1:number|null,genouCm2:number|null}}
  */
-function anatVerifEchelle(u,F){
+function anatVerifEchelle(u,F,kGenou){
   if(!F||F.sol==null||!(F.stature>0)) return null;
   const g=F.P2('genou','g'),d=F.P2('genou','d');
   if(!g||!d) return null;
-  const hG=F.sol-(g.y+d.y)/2;
+  // Le genou du moteur, corrigé de son biais quand il est calibré (A6).
+  const hG=(F.sol-(g.y+d.y)/2)/((kGenou>0)?kGenou:1);
   if(!(hG>0)) return null;
   const e1=F.cmPx||null;
   // Le mètre d'abord : l'échelle du lot 7, sur la même hauteur de genou.
@@ -44993,6 +44994,65 @@ function _anatStatutEchelle(o){
   o.genouCm1=o.e1?o.hGenouPx*o.e1:null;
   o.genouCm2=o.e2?o.hGenouPx*o.e2:null;
   return o;
+}
+/**
+ * UN BIAIS MOTEUR APPRIS, JAMAIS SUPPOSÉ (audit morpho, chantier A6).
+ *
+ * Les points du moteur ne sont exactement ni des repères osseux ni des centres
+ * articulaires : un poignet posé un peu trop haut, un genou un peu trop bas, et
+ * chaque segment sort plus long ou plus court qu'au mètre, toujours du même
+ * côté. On ne suppose pas ce biais : on l'APPREND sur les athlètes du coach qui
+ * ont les deux — une analyse photo ET la mesure au mètre de même définition.
+ *   - bras      : deb-bras, pointe de l'épaule → poignet  ↔ acromion → poignet ;
+ *   - avantbras : deb-avantbras, olécrane → styloïde        ↔ coude → poignet ;
+ *   - rotule    : deb-rotule, sol → milieu de la rotule     ↔ sol → genou.
+ * Rapport photo / mètre par athlète, puis médiane (une faute de frappe ne la
+ * déplace pas) et écart interquartile ramené à un écart-type robuste.
+ * ⚠ MÊME RÈGLE QUE morphoCalibrage : rien sous MORPHO_CALIB_MIN (8) athlètes.
+ *   Une médiane sur trois personnes n'est pas une calibration.
+ * ⚠ SANS CALIBRATION, la marge des longueurs intègre ±3 % de biais possible.
+ * ⚠ LE MÈTRE PRIME TOUJOURS : si l'athlète a sa propre mesure, elle remplace la
+ *   photo pour ce segment ; la photo devient un contrôle.
+ */
+const ANAT_BIAIS_SEGMENTS=Object.freeze([
+  Object.freeze({cle:'bras',metre:'deb-bras',lib:'membre supérieur (pointe de l’épaule → poignet)'}),
+  Object.freeze({cle:'avantbras',metre:'deb-avantbras',lib:'avant-bras (coude → poignet)'}),
+  Object.freeze({cle:'rotule',metre:'deb-rotule',lib:'hauteur de genou (sol → rotule)'})
+]);
+const ANAT_BIAIS_DEFAUT_PCT=3;
+/**
+ * PURE. Le biais du moteur, appris sur une population d'athlètes : pour chaque
+ * segment calibré, {k (médiane photo / mètre), iqr, sd (en fraction), n}.
+ * `null` si aucun segment n'atteint MORPHO_CALIB_MIN athlètes.
+ */
+function anatBiaisMoteur(athletes){
+  const out={};
+  for(const sg of ANAT_BIAIS_SEGMENTS){
+    const r=[];
+    for(const u of (Array.isArray(athletes)?athletes:[])){
+      const a=u&&u.morphoAnat;
+      if(!a||!a.face) continue;
+      let ph=null;
+      try{ ph=anatMesures(a,u,{brut:true}).photoCm; }catch(e){ ph=null; }
+      const m=_anatSafe(()=>mesureMorpho(u,sg.metre));
+      if(ph&&ph[sg.cle]>0&&m&&m.cm>0) r.push(ph[sg.cle]/m.cm);
+    }
+    if(r.length<MORPHO_CALIB_MIN) continue;
+    const t=r.slice().sort((x,y)=>x-y);
+    const q=f=>t[Math.min(t.length-1,Math.max(0,Math.round(f*(t.length-1))))];
+    const iqr=q(0.75)-q(0.25);
+    out[sg.cle]={k:_morphoMediane(r),iqr,sd:iqr/1.349,n:r.length};
+  }
+  return Object.keys(out).length?out:null;
+}
+// Le biais des athlètes DU COACH, recalculé seulement quand un dossier change.
+let _anatBiaisCache={cle:'',val:null};
+function anatBiaisCoach(){
+  let l=[];
+  try{ l=_morphoAthletesDuCoach()||[]; }catch(e){ l=[]; }
+  const cle=l.map(u=>(u&&u.email)+':'+((u&&u.updatedAt)||0)).join('|');
+  if(cle!==_anatBiaisCache.cle) _anatBiaisCache={cle,val:_anatSafe(()=>anatBiaisMoteur(l))};
+  return _anatBiaisCache.val;
 }
 /** Le mot de l'échelle, le même partout. */
 const ANAT_ECHELLE_MOTS=Object.freeze({confirmee:'échelle confirmée',verifier:'échelle à vérifier',divergence:'échelles divergentes'});
@@ -45419,7 +45479,11 @@ const ANAT_ECHELLE_CHEVEUX_PCT=4;
  * PURE. Tout ce que les deux photos disent, région par région, avec les
  * chiffres, leurs repères et leurs marges.
  */
-function anatMesures(anat,u){
+function anatMesures(anat,u,o){
+  // o.brut : la photo seule, sans correction ni mètre (c'est ce que la
+  // calibration apprend) ; o.biais : le biais appris (anatBiaisCoach).
+  const brut=!!(o&&o.brut);
+  const B=(!brut&&o&&o.biais)?o.biais:null;
   const opts=anatOptions(anat);
   const taille=_anatSafe(()=>_tailleCm(u));
   const femme=_anatSafe(()=>isFemale((u&&(u._evol_gender||u.gender))||''));
@@ -45433,7 +45497,11 @@ function anatMesures(anat,u){
   // La marge d'échelle : ±3 %, portée à ±5 % quand les deux repères
   // s'accordent mal (voir anatVerifEchelle). Posée plus bas, lue à l'appel.
   let ECH=ANAT_ERR.echelle;
-  const tolTxt=(err,pl)=>'±'+_anatN(err,1)+' % de mesure (échelle ±'+ECH+' %, placement ±'+_anatN(pl,1)+' %)';
+  // `bi` : la part du biais moteur (±3 % tant qu'il n'est pas calibré).
+  const tolTxt=(err,pl,bi)=>'±'+_anatN(err,1)+' % de mesure (échelle ±'+ECH+' %, placement ±'+_anatN(pl,1)+' %'
+    +(bi!=null?', biais moteur ±'+_anatN(bi,1)+' %':'')+')';
+  const biaisTxt=(cle)=>(B&&B[cle])?'corrigé du biais moteur, calibré sur '+B[cle].n+' athlètes':'biais moteur non calibré (±'+ANAT_BIAIS_DEFAUT_PCT+' %)';
+  const BI=ANAT_BIAIS_DEFAUT_PCT;
   const vues={};
   for(const vue of ['face','dos']){
     const v=anat&&anat[vue];
@@ -45456,7 +45524,7 @@ function anatMesures(anat,u){
     vues[vue]={W,H,P,P2,cotes,sol,stature,cmPx,pts};
   }
   const F=vues.face, D=vues.dos;
-  const verif=_anatSafe(()=>anatVerifEchelle(u,F));
+  const verif=_anatSafe(()=>anatVerifEchelle(u,F,B&&B.rotule?B.rotule.k:null));
   if(verif&&verif.statut==='verifier') ECH=ANAT_ECHELLE_A_VERIFIER_PCT;
   if(opts.cheveux) ECH=Math.max(ECH,ANAT_ECHELLE_CHEVEUX_PCT);
   // LES PIEDS COUPÉS (A5) : l'orteil absent, collé au bord bas de l'image, ou
@@ -45512,7 +45580,7 @@ function anatMesures(anat,u){
     const ec=bi?ecartPct(bi.fr,larg.biacromial):null;
     const r=(bi&&bc)?bi.px/bc.px:null, rRef=larg.rapport, rEt=larg.rapport_et;
     const estime=!!((bi&&bi.e<1)||(bc&&bc.e<1));
-    const pl=anatErrSeg([A],[B]), err=Math.hypot(ECH,pl);
+    const pl=anatErrSeg([A],[B]), err=Math.hypot(ECH,pl,BI);
     const st=anatClasser(ec,DISP.biacromial,err,'aux épaules les plus larges','aux épaules les plus étroites');
     fiche({cle:'clavicules',lib:'Clavicules',vue:'face',ancre:A&&B?_anatMil(A,B):null,
       zone:(A&&B&&F)?_anatZoneAutour([A,B,F.P2('epaule','g'),F.P2('epaule','d')],0.35):null,
@@ -45520,7 +45588,7 @@ function anatMesures(anat,u){
       niveau:st?st.niveau:null,
       bornes:['carrure étroite','carrure large'],
       valeur:bi?(bi.cm!=null?cm(bi.cm):'')+(r?' · ép./bassin '+_anatN(r,2):''):'',
-      tolerance:tolTxt(err,pl)+(estime?' — points estimés, à vérifier':''),
+      tolerance:tolTxt(err,pl,BI)+(estime?' — points estimés, à vérifier':''),
       chiffres:[ligne('Largeur biacromiale',bi,larg.biacromial,'acromion → acromion',larg.biacromial_et),ligne('Largeur bicrêtale (bassin)',bc,larg.bicretal,'crête iliaque → crête iliaque',larg.bicretal_et),
         {lib:'Épaules / bassin',def:'biacromiale ÷ bicrêtale',val:r?_anatN(r,2):'—',ref:_anatN(rRef,2)+' ± '+_anatN(rEt,2),ecart:r?pct((r/rRef-1)*100):''}]
         .concat(st?[posLigne(st,'largeur biacromiale')]:[]),
@@ -45565,7 +45633,7 @@ function anatMesures(anat,u){
     const s=(sf!=null&&sd!=null)?(sf+sd)/2:(sf!=null?sf:sd);
     const ec=tr?ecartPct(tr.fr,REF.tronc):null;
     const plT=F?anatErrSeg([F.P2('epaule','g'),F.P2('epaule','d')],[F.P2('hanche','g'),F.P2('hanche','d')]):ANAT_ERR.estime;
-    const errT=Math.hypot(ECH,plT);
+    const errT=Math.hypot(ECH,plT,BI);
     const stT=anatClasser(ec,DISP.tronc,errT,'au tronc le plus long','au tronc le plus court');
     fiche({cle:'buste',stat:stT,lib:'Buste',vue:'face',
       ancre:(F&&F.P2('epaule','g')&&F.P2('hanche','g'))?_anatMil(_anatMil(F.P2('epaule','g'),F.P2('epaule','d')),_anatMil(F.P2('hanche','g'),F.P2('hanche','d'))):null,
@@ -45574,7 +45642,7 @@ function anatMesures(anat,u){
       niveau:stT?stT.niveau:(s!=null?_anatNiveau(s,ANAT_SEUILS.tronc):null),
       bornes:['tronc court','tronc long'],
       valeur:(tr&&tr.cm!=null?'tronc '+cm(tr.cm):'')+(V?(tr&&tr.cm!=null?' · ':'')+'V '+_anatN(V,2):''),
-      tolerance:tolTxt(errT,plT),
+      tolerance:tolTxt(errT,plT,BI),
       chiffres:[ligne('Tronc (épaules → hanches)',tr,REF.tronc,DEF.tronc),
         {lib:'Rapport deltoïdes / taille (V)',def:'deltoïde → deltoïde ÷ largeur de taille',val:V?_anatN(V,2):'—',ref:'à suivre',ecart:''},
         {lib:'Axe du tronc (décalage)',def:'mi-épaules / mi-hanches, en % du tronc',val:s!=null?_anatSN(s,1)+' % du tronc':'—',ref:'0 %',ecart:''}]
@@ -45585,28 +45653,48 @@ function anatMesures(anat,u){
   {
     const cotesOk=['g','d'].filter(brasOk);
     const hu=moySeg(cotesOk.map(s=>seg(F,'epaule','coude',s)));
-    const ab=moySeg(cotesOk.map(s=>seg(F,'coude','poignet',s)));
-    const r=(hu&&ab)?hu.px/ab.px:null, rRef=REF.bras/REF.avantbras;
+    const abPhoto=moySeg(cotesOk.map(s=>seg(F,'coude','poignet',s)));
+    const mb=moySeg(cotesOk.map(s=>seg(F,'acromion','poignet',s)));   // pointe de l'épaule → poignet
+    // L'AVANT-BRAS RETENU : le mètre s'il existe, sinon la photo corrigée du
+    // biais appris, sinon la photo. Les autres restent en contrôle.
+    const mAb=brut?null:_anatSafe(()=>mesureMorpho(u,'deb-avantbras'));
+    const mMb=brut?null:_anatSafe(()=>mesureMorpho(u,'deb-bras'));
+    const kAb=(B&&B.avantbras)?B.avantbras.k:1, kMb=(B&&B.bras)?B.bras.k:1;
+    const abSrc=(mAb&&mAb.cm&&abPhoto&&abPhoto.cm)?'metre':((kAb!==1&&abPhoto)?'corrige':'photo');
+    const facAb=abSrc==='metre'?mAb.cm/abPhoto.cm:(abSrc==='corrige'?1/kAb:1);
+    const ab=abPhoto?Object.assign({},abPhoto,{cm:abPhoto.cm!=null?abPhoto.cm*facAb:null,fr:abPhoto.fr!=null?abPhoto.fr*facAb:null}):null;
+    const r=(hu&&ab)?hu.px/(abPhoto.px*facAb):null, rRef=REF.bras/REF.avantbras;
     const ecR=r?(r/rRef-1)*100:null;
     const asy=(cotesOk.length===2)?(()=>{ const g=seg(F,'epaule','poignet','g'),d=seg(F,'epaule','poignet','d');
       return (g&&d)?(g.px-d.px)/((g.px+d.px)/2)*100:null; })():null;
     const coude=F&&F.P2('coude',cotesOk[0]||'g');
     const s0=cotesOk[0]||'g';
     const plB=F?Math.hypot(anatErrSeg([F.P2('epaule',s0)],[F.P2('coude',s0)]),anatErrSeg([F.P2('coude',s0)],[F.P2('poignet',s0)])):ANAT_ERR.estime;
-    const errB=Math.hypot(ECH,plB);
+    // La part du biais : l'écart-type appris sur l'avant-bras s'il est calibré,
+    // aucune s'il vient du mètre, ±3 % sinon.
+    const biB=abSrc==='metre'?0:(abSrc==='corrige'?B.avantbras.sd*100:BI);
+    const errB=Math.hypot(ECH,plB,biB);
     const stB=r?anatClasser(ecR,DISP.rapportBras,errB,'à l’humérus le plus long (rapporté à l’avant-bras)','à l’avant-bras le plus long (rapporté à l’humérus)'):null;
     fiche({cle:'bras',lib:'Bras',vue:'face',ancre:coude,stat:stB,
       zone:F?_anatZoneAutour(['epaule','coude','poignet'].map(k=>F.P2(k,cotesOk[0]||'g')),0.25):null,
       etat:r?'ok':'illisible',niveau:stB?stB.niveau:null,
       bornes:['avant-bras long','humérus long'],
       valeur:r?'hum./av.-bras '+_anatN(r,2):'',
-      tolerance:tolTxt(errB,plB),
-      chiffres:[ligne('Humérus (épaule → coude)',hu,REF.bras,DEF.bras),ligne('Avant-bras (coude → poignet)',ab,REF.avantbras,DEF.avantbras),
+      tolerance:tolTxt(errB,plB,biB),
+      chiffres:[ligne('Humérus (épaule → coude)',hu,REF.bras,DEF.bras),
+        Object.assign(ligne('Avant-bras (coude → poignet)',ab,REF.avantbras,DEF.avantbras),
+          abSrc==='metre'?{def:'olécrane → styloïde, au mètre (bilan) ; photo en contrôle : '+(abPhoto.cm!=null?cm(abPhoto.cm):'—')}
+          :abSrc==='corrige'?{def:DEF.avantbras+' ; corrigé du biais moteur ('+_anatSN((kAb-1)*100,1)+' %, '+B.avantbras.n+' athlètes)'}:{}),
+        {lib:'Membre supérieur',def:'pointe de l’épaule → poignet'+((mMb&&mMb.cm)?' ; au mètre (bilan), photo en contrôle':(kMb!==1?' ; corrigé du biais moteur ('+B.bras.n+' athlètes)':' ; photo, biais moteur non calibré')),
+          val:(mMb&&mMb.cm)?cm(mMb.cm):(mb&&mb.cm!=null?cm(mb.cm/kMb):'—'),
+          ref:(mMb&&mMb.cm&&mb&&mb.cm!=null)?'photo '+cm(mb.cm/kMb):'',
+          ecart:(mMb&&mMb.cm&&mb&&mb.cm!=null)?pct((mb.cm/kMb/mMb.cm-1)*100):''},
         {lib:'Humérus / avant-bras',def:'les deux longueurs ci-dessus',val:r?_anatN(r,2):'—',ref:_anatN(rRef,2),ecart:ecR!=null?pct(ecR):''},
         {lib:'Écart gauche / droite',def:'centre épaule → centre poignet, un bras sur l’autre',val:asy!=null?_anatSN(asy,1)+' %':'—',ref:'0 %',ecart:''}]
         .concat(stB?[posLigne(stB,'rapport humérus / avant-bras')]:[]),
-      mesure:{hu,ab,r,rRef,ecR,asy,cotesOk,telAth,refBras:REF.bras,refAvantbras:REF.avantbras,femme,stat:stB},
-      source:'photo de face'+(telAth?', sans le bras '+(telAth==='g'?'gauche':'droit')+' qui tient le téléphone':'')+' ; '+echelleTxt+' ; repère '+ANAT_REF.SOURCE+' ('+(femme?'femmes':'hommes')+')'});
+      mesure:{hu,ab,abPhoto,abSrc,mb,r,rRef,ecR,asy,cotesOk,telAth,refBras:REF.bras,refAvantbras:REF.avantbras,femme,stat:stB},
+      source:'photo de face'+(telAth?', sans le bras '+(telAth==='g'?'gauche':'droit')+' qui tient le téléphone':'')+' ; '+echelleTxt+' ; repère '+ANAT_REF.SOURCE+' ('+(femme?'femmes':'hommes')+')'
+        +' ; '+(abSrc==='metre'?'avant-bras au mètre, la photo en contrôle':biaisTxt('avantbras'))});
   }
   // ── BASSIN : inclinaison et largeur ──────────────────────────────────────
   {
@@ -45638,13 +45726,13 @@ function anatMesures(anat,u){
     const tj=(tronc&&hh)?tronc.px/hh.px:null, tjRef=REF.tronc/REF.hanche;
     const s1=ok[0]||'g';
     const plJ=F?Math.hypot(anatErrSeg([F.P2('hanche',s1)],[F.P2('genou',s1)]),anatErrSeg([F.P2('genou',s1)],[F.P2('cheville',s1)])):ANAT_ERR.estime;
-    const errJ=Math.hypot(ECH,plJ);
+    const errJ=Math.hypot(ECH,plJ,BI);
     const stJ=r?anatClasser(ecR,DISP.rapportJambes,errJ,'au fémur le plus long (rapporté au tibia)','au tibia le plus long (rapporté au fémur)'):null;
     fiche({cle:'jambes',lib:'Jambes',vue:'face',ancre:F&&F.P2('genou','d')&&F.P2('hanche','d')?_anatMil(F.P2('hanche','d'),F.P2('genou','d')):null,
       zone:F?_anatZoneAutour([F.P2('hanche','g'),F.P2('hanche','d'),F.P2('cheville','g'),F.P2('cheville','d')],0.12):null,
       etat:r?'ok':'illisible',niveau:stJ?stJ.niveau:null,stat:stJ,
       bornes:['tibia long','fémur long'],
-      valeur:r?'cuisse/jambe '+_anatN(r,2):'',tolerance:tolTxt(errJ,plJ),
+      valeur:r?'cuisse/jambe '+_anatN(r,2):'',tolerance:tolTxt(errJ,plJ,BI),
       chiffres:[ligne('Cuisse (hanche → genou)',cu,REF.cuisse,DEF.cuisse),ligne('Jambe (genou → cheville)',ja,REF.jambe,DEF.jambe),
         {lib:'Cuisse / jambe',def:'les deux longueurs ci-dessus',val:r?_anatN(r,2):'—',ref:_anatN(rRef,2),ecart:ecR!=null?pct(ecR):''},
         ligne('Hauteur de hanche',hh,REF.hanche,DEF.hanche),
@@ -45741,7 +45829,10 @@ function anatMesures(anat,u){
       else f.niveau=null;
     }
   }
-  return {fiches,leviers:anatLeviers(fiches,F,taille,femme),echelle:F?{cmPx:F.cmPx,taille,stature:F.stature,verif,pct:ECH,piedsCoupes,cheveux:!!opts.cheveux}:null,opts};
+  const fb=fiches.find(f=>f.cle==='bras');
+  const photoCm={bras:fb&&fb.mesure.mb?fb.mesure.mb.cm:null,avantbras:fb&&fb.mesure.abPhoto?fb.mesure.abPhoto.cm:null,
+    rotule:(verif&&verif.genouCm1!=null&&!(B&&B.rotule))?verif.genouCm1:null};
+  return {photoCm,biais:B,fiches,leviers:anatLeviers(fiches,F,taille,femme),echelle:F?{cmPx:F.cmPx,taille,stature:F.stature,verif,pct:ECH,piedsCoupes,cheveux:!!opts.cheveux}:null,opts};
 }
 
 /**
@@ -47000,7 +47091,7 @@ function _htmlAnat(c){
   // ── L'ANALYSE ────────────────────────────────────────────────────────────
   // En édition, les chiffres restent ceux de l'analyse enregistrée : ils ne
   // bougent qu'au clic sur « Analyser avec ces points ».
-  const res=anatMesures(a,c);
+  const res=anatMesures(a,c,{biais:anatBiaisCoach()});
   const fiches=res.fiches;
   const textes={};
   fiches.forEach(f=>{ try{ textes[f.cle]=anatTexte(f,res); }catch(e){ textes[f.cle]={court:'',lecture:'',privilegier:[],amenager:[],verifier:''}; } });
@@ -47163,6 +47254,8 @@ function _htmlAnat(c){
     +'<span class="an-dr-r">'+(echelle&&echelle.cmPx?_anatN(echelle.taille,0)+' cm · ±'+echelle.pct+' %':'sans taille')+(ver?' · '+ANAT_ECHELLE_MOTS[ver.statut]:'')+'</span>'+ANAT_SVG.chev+'</summary>'
     +'<div class="an-inf-c"><p>'+(echelle&&echelle.cmPx?'Échelle 1, par la taille : '+_anatN(echelle.taille,0)+' cm du sommet du crâne aux talons (taille du dossier), ±'+echelle.pct+' % — perspective et posture.'
         :'Taille absente du dossier : les longueurs sont données en % de la hauteur sur la photo.')
+      +' Biais du moteur : '+(res.biais?Object.keys(res.biais).map(k=>(ANAT_BIAIS_SEGMENTS.find(x=>x.cle===k)||{}).lib+' '+_anatSN((res.biais[k].k-1)*100,1)+' % (calibré sur '+res.biais[k].n+' athlètes)').join(', ')+'.'
+        :'non calibré — il faut au moins '+MORPHO_CALIB_MIN+' athlètes avec photo et mesures au mètre ; d’ici là, ±'+ANAT_BIAIS_DEFAUT_PCT+' % de biais possible dans la marge des longueurs.')
       +(echelle&&echelle.cheveux?' Cheveux volumineux : le sommet du crâne est posé sur l’os, marge d’échelle ±'+ANAT_ECHELLE_CHEVEUX_PCT+' % au moins.':'')
       +(echelle&&echelle.piedsCoupes?' Pieds coupés : le talon est deviné, l’échelle est estimée.':'')
       +(ver?' Échelle 2, par le genou : '+(ver.source==='metre'
@@ -47331,7 +47424,7 @@ function anatZoom(cle){
   const c=getOwnedClient(currentClientId);
   if(!c||!c.morphoAnat) return;
   const a=c.morphoAnat;
-  const f=anatMesures(a,c).fiches.find(x=>x.cle===cle);
+  const f=anatMesures(a,c,{biais:anatBiaisCoach()}).fiches.find(x=>x.cle===cle);
   if(!f||!f.zone) return;
   const vue=f.vue==='dos'?'dos':'face';
   const v=a[vue];
@@ -47342,7 +47435,7 @@ function anatZoom(cle){
   const cad=_anatCadrage(f.zone,v,asp);
   const z=cad.z;
   const pts=anatPoints(a,vue);
-  const t=anatTexte(f,anatMesures(a,c));
+  const t=anatTexte(f,anatMesures(a,c,{biais:anatBiaisCoach()}));
   document.getElementById('an-zoom')?.remove();
   const o=document.createElement('div');
   o.id='an-zoom'; o.className='an-zoom';
