@@ -10174,3 +10174,67 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .an-lev-dots button{width:26px;height:26px;border:0;background:none;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .an-lev-dots button::after{content:"";width:8px;height:8px;border-radius:50%;background:#33333a;transition:all .2s}
 .an-lev-dots button.actif::after{width:20px;border-radius:4px;background:#e02020;box-shadow:0 0 6px rgba(224,32,32,.6)}
+/* ══ ANALYSE MORPHO — RETOUCHES DE KEVIN (25/09/2026) ═════════════════════
+   La liste des zones defile a la hauteur de la photo, les reglages dessous ;
+   les leviers et l'echelle en menus deroulants sous la photo. */
+/* Des fiches plus serrees : plus de vide sous « Recommandations detaillees » */
+.an-f{grid-template-columns:104px minmax(0,1fr);gap:4px 10px;padding:7px;align-items:start}
+.an-f-vig{width:104px}
+.an-f-c{gap:2px}
+.an-f-plus{min-height:26px;margin-top:1px}
+.an-f-plus::before{inset:-9px -4px}
+/* La liste qui defile */
+.an-liste{display:flex;flex-direction:column;gap:8px;min-height:0;scrollbar-width:thin;scrollbar-color:#c81414 #151518}
+.an-col-cale .an-liste{overflow-y:auto;overscroll-behavior:contain;padding-right:4px;
+  -webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 34px),transparent);mask-image:linear-gradient(180deg,#000 calc(100% - 34px),transparent)}
+.an-col-cale.an-liste-bas .an-liste{-webkit-mask-image:none;mask-image:none}
+.an-liste::-webkit-scrollbar{width:6px}
+.an-liste::-webkit-scrollbar-track{background:#151518;border-radius:3px}
+.an-liste::-webkit-scrollbar-thumb{background:#c81414;border-radius:3px}
+.an-liste:focus-visible{outline:2px solid #e02020;outline-offset:3px;border-radius:12px}
+.an-liste-fin{display:none;align-items:center;justify-content:center;gap:6px;font-size:10px;font-weight:700;letter-spacing:.6px;color:#ff6b6b;
+  text-transform:uppercase;margin-top:-2px}
+.an-liste-fin svg{width:14px;height:14px;animation:an-rebond 1.6s ease-in-out infinite}
+@keyframes an-rebond{0%,100%{transform:translateY(0)}50%{transform:translateY(3px)}}
+@media (prefers-reduced-motion:reduce){ .an-liste-fin svg{animation:none} }
+.an-col-cale.an-liste-defile .an-liste-fin{display:flex}
+.an-col-cale.an-liste-bas .an-liste-fin{visibility:hidden}
+.an-col-g .an-ph{margin-top:4px}
+/* Les menus deroulants sous la photo */
+.an-dr{border-radius:12px;border:1px solid #26262b;background:#0f0f12}
+.an-dr>summary{display:flex;align-items:center;gap:10px;min-height:48px;padding:0 12px;cursor:pointer;list-style:none}
+.an-dr>summary::-webkit-details-marker{display:none}
+.an-dr-i{width:30px;height:30px;flex-shrink:0;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#ff6b6b;background:rgba(224,32,32,.14)}
+.an-dr-i svg{width:18px;height:18px}
+.an-dr-t{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;color:#e4e4e7;text-transform:uppercase}
+.an-dr-r{margin-left:auto;font-size:var(--fs-2xs);color:#b4b4bb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.an-dr-r b{color:#fff}
+.an-dr>summary>svg:last-child{width:16px;height:16px;flex-shrink:0;color:#b4b4bb;transition:transform .2s}
+.an-dr[open]>summary>svg:last-child{transform:rotate(180deg)}
+.an-dr[open]{border-color:rgba(224,32,32,.45)}
+.an-dr[open]>summary{border-bottom:1px solid #232328}
+/* Leviers : modele a gauche, levier a droite, sur la meme ligne */
+.an-lev{padding:0;background:linear-gradient(180deg,#120b0b,#0d0d10)}
+.an-lev-g{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;padding:10px}
+@container an (min-width:520px){ .an-lev-g{grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr)} }
+.an-lev-mod{border-radius:10px;border:1px dashed #3a3a40;background:#101013;padding:9px 10px;display:flex;flex-direction:column;gap:4px}
+.an-lev-mod b{font-size:9.5px;font-weight:800;letter-spacing:1px;color:#ff6b6b;text-transform:uppercase}
+.an-lev-mod p{font-size:10.5px;color:#d4d4d8;line-height:1.45}
+.an-lev-mod .an-lev-n{font-size:9.5px;color:#7c7c84}
+.an-lev .an-lev-c{display:flex;flex-direction:column;gap:6px;padding:9px 10px;border-radius:10px;background:#131316;border:1px solid #232328}
+.an-lev-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.an-lev-top>b{font-size:10.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:#d4d4d8}
+.an-lev-nav button{width:34px;height:34px}
+.an-lev-nav span{min-width:32px}
+.an-lev-v{display:flex;align-items:center;gap:10px}
+.an-lev-v strong{font-family:var(--pile-titre);font-weight:400;font-size:24px;line-height:1;color:#fff;padding:4px 10px;border-radius:8px;
+  background:rgba(224,32,32,.14);border:1px solid rgba(224,32,32,.45)}
+.an-lev-v em{font-style:normal;font-size:10px;color:#8a8a92;line-height:1.35}
+.an-lev .an-lev-c p{font-size:10.5px;color:#b4b4bb;line-height:1.45;margin:0 !important}
+/* Echelle et prise de vue */
+.an-inf-c{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.an-inf-c>p{font-size:10.5px;color:#b4b4bb;line-height:1.5}
+.an-lev{display:block;padding:0;gap:0}
+.an-lev .an-lev-c>.an-lev-top{flex-direction:row;align-items:center;justify-content:space-between;gap:8px}
+.an-lev .an-lev-c>.an-lev-v{flex-direction:row;align-items:center;gap:10px}
+.an-lev .an-lev-c{text-align:left}

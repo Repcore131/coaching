@@ -45913,6 +45913,8 @@ function anatChoisirPoint(k){
 
 // ── LA LISTE, LES LEVIERS, LA SAUVEGARDE ──────────────────────────────────
 let _anatLevIdx=0;
+/** Les menus déroulants de la colonne centrale : ouverts ou fermés. */
+let _anatDeplie={lev:true,inf:false};
 let _anatToutes=false;
 function anatLevier(d,i){
   _anatLevIdx=(i!=null)?Number(i)||0:_anatLevIdx+(Number(d)||0);
@@ -46550,6 +46552,7 @@ function renderAnatCoach(c){
   if(!h) return true;
   try{ _anatBrancherEdition(z); }catch(e){}
   try{ _anatNettete(z,c); }catch(e){}
+  try{ _anatCalerListe(z); }catch(e){}
   try{
     const pb=anatPremierBilan(c);
     if(anatARefaire(c,pb)&&!_anatEnCours.has(c.email)&&!_anatEchecs.has(c.email))
@@ -46689,9 +46692,9 @@ function _htmlAnat(c){
         :'<span>Touche un repère ou son « * » : sa consigne de placement s’affiche ici.</span>')+'</div></div>':'';
   const reg=anatReglage(a,vueAct);
   const modif=!!(reg.cadre||reg.lum!==100||reg.con!==100);
-  // LES RÉGLAGES DE LA PHOTO, SOUS L'IMAGE ET TOUJOURS VISIBLES. Kevin :
-  // « luminosité, contraste sur la même ligne ; recadrer, cadrer, photo
-  // entière, réinitialiser sur la même ligne ».
+  // LES RÉGLAGES DE LA PHOTO, SOUS LA LISTE DES ZONES (colonne de gauche).
+  // Kevin, 25/09/2026 : « décale réglage de la photo pile dessous toute cette
+  // liste-là ».
   const photoHtml='<div class="an-ph"><div class="an-ph-t">'+ANAT_SVG.reglage+'<span>Réglages de la photo</span>'
       +(modif?'<i>modifiée</i>':'')
       +'<label class="an-net" title="Accentuation et niveaux automatiques de l’affichage"><input type="checkbox"'+(reg.net!==false?' checked':'')+' onchange="anatReglerPhoto(\''+vueAct+'\',{net:this.checked},true)"><span>Netteté auto</span></label></div>'
@@ -46721,11 +46724,11 @@ function _htmlAnat(c){
       +'<button type="button" class="an-b2" onclick="anatPointsAutomatiques()">Points automatiques</button>'
       +'<button type="button" class="an-b2" onclick="anatAnnulerEdition()">Annuler</button>'
       +'<button type="button" class="an-b2" onclick="anatRelancer()">'+ANAT_SVG.relancer+'<span>Refaire la détection</span></button>'+sauvHtml+'</div></div>'
-    :'<div class="an-outils"><button type="button" class="an-b2 an-b2-r" onclick="anatEditer()">'+ANAT_SVG.points+'<span>Ajuster les points</span></button>'+sauvHtml
-      +'<span class="an-ech">'+(echelle&&echelle.cmPx?'Échelle : '+_anatN(echelle.taille,0)+' cm du sommet du crâne aux talons · ±'+ANAT_TOL.echelle+' %'
-        :'Taille absente du dossier : longueurs en % de la hauteur')+(V.man?' · points ajustés à la main':(V.auto&&V.auto.gabarit?' · personne non détectée : points à placer':' · points automatiques'))+'</span></div>';
-  // LES LEVIERS, UN PAR UN, AUX FLÈCHES. Kevin : « juste des petites flèches
-  // pour passer de squat à soulevé à développé couché ».
+    :'<div class="an-outils"><button type="button" class="an-b2 an-b2-r" onclick="anatEditer()">'+ANAT_SVG.points+'<span>Ajuster les points</span></button>'+sauvHtml+'</div>';
+  // LES LEVIERS, SOUS LA PHOTO, EN MENU DÉROULANT SUR UNE LIGNE. Kevin : « je
+  // réduirais le petit degré au centre ; modèle plan dans un petit carré à
+  // gauche, le squat à droite, deux parties sur la même ligne ; les petites
+  // flèches pour passer d'un levier à l'autre ».
   const nLev=res.leviers.length;
   const iLev=nLev?((_anatLevIdx%nLev)+nLev)%nLev:0;
   const lev=nLev?(()=>{
@@ -46733,14 +46736,31 @@ function _htmlAnat(c){
       const val=l.cle==='squat'?l.val+'°':l.cle==='souleve'?_anatN(l.val,2):(l.val!=null?l.val+' cm':_anatSN(l.ecart,0)+' %');
       const ref=l.cle==='squat'?l.ref+'°':l.cle==='souleve'?_anatN(l.ref,2):(l.ref!=null?l.ref+' cm':'');
       const sous=l.cle==='squat'?'buste à la parallèle':l.cle==='souleve'?'bras / tronc':'trajet de barre';
-      return '<div class="an-lev"><div class="an-lev-h"><h5>Leviers mécaniques</h5>'
-        +'<div class="an-lev-nav"><button type="button" aria-label="Levier précédent" onclick="anatLevier(-1)"'+(nLev<2?' disabled':'')+'>'+ANAT_SVG.gauche+'</button>'
-        +'<span>'+(iLev+1)+' / '+nLev+'</span>'
-        +'<button type="button" aria-label="Levier suivant" onclick="anatLevier(1)"'+(nLev<2?' disabled':'')+'>'+ANAT_SVG.droite+'</button></div></div>'
-        +'<div class="an-lev-c"><span class="an-lev-i">'+(ANAT_SVG[l.cle]||'')+'</span><div><b>'+escapeHtml(l.lib)+'</b><strong>'+escapeHtml(val)+'</strong><em>'+escapeHtml(sous)+(ref?' · moyenne '+escapeHtml(ref):'')+'</em><p>'+escapeHtml(l.txt)+'</p></div></div>'
-        +'<div class="an-lev-dots">'+res.leviers.map((x,i)=>'<button type="button" aria-label="'+escapeHtml(x.lib)+'"'+(i===iLev?' class="actif" aria-current="true"':'')+' onclick="anatLevier(0,'+i+')"></button>').join('')+'</div>'
-        +'<p class="an-lev-n">Modèles plans (cuisse parallèle et tibia à 30° au squat ; prise à 1,5 fois la carrure au développé), appliqués aux longueurs de l’athlète puis aux proportions moyennes de Drillis & Contini. C’est l’écart qui renseigne.</p></div>';
+      const modele={squat:'Cuisse parallèle au sol, tibia incliné de 30°, barre au-dessus du milieu du pied.',
+        souleve:'Bras (épaule → poignet + demi-main) rapporté au tronc.',
+        developpe:'Trajet de barre, prise à 1,5 fois la carrure.'}[l.cle]||'';
+      return '<details class="an-dr an-lev"'+(_anatDeplie.lev!==false?' open':'')+' ontoggle="_anatDeplie.lev=this.open">'
+        +'<summary><span class="an-dr-i">'+(ANAT_SVG[l.cle]||'')+'</span><span class="an-dr-t">Leviers mécaniques</span>'
+        +'<span class="an-dr-r">'+escapeHtml(l.lib)+' · <b>'+escapeHtml(val)+'</b></span>'+ANAT_SVG.chev+'</summary>'
+        +'<div class="an-lev-g">'
+        +'<div class="an-lev-mod"><b>Modèle plan</b><p>'+escapeHtml(modele)+'</p><p class="an-lev-n">Appliqué aux longueurs de l’athlète, puis aux proportions moyennes de Drillis & Contini : c’est l’écart qui renseigne.</p></div>'
+        +'<div class="an-lev-c"><div class="an-lev-top"><b>'+escapeHtml(l.lib)+'</b>'
+          +'<div class="an-lev-nav"><button type="button" aria-label="Levier précédent" onclick="anatLevier(-1)"'+(nLev<2?' disabled':'')+'>'+ANAT_SVG.gauche+'</button>'
+          +'<span>'+(iLev+1)+' / '+nLev+'</span>'
+          +'<button type="button" aria-label="Levier suivant" onclick="anatLevier(1)"'+(nLev<2?' disabled':'')+'>'+ANAT_SVG.droite+'</button></div></div>'
+          +'<div class="an-lev-v"><strong>'+escapeHtml(val)+'</strong><em>'+escapeHtml(sous)+(ref?'<br>moyenne '+escapeHtml(ref):'')+'</em></div>'
+          +'<p>'+escapeHtml(l.txt)+'</p></div>'
+        +'</div></details>';
     })():'';
+  // ET DESSOUS, CE QUI « ÉVALUE » LA PHOTO : l'échelle, l'origine des points,
+  // le miroir et le téléphone — replié par défaut.
+  const infos='<details class="an-dr an-inf"'+(_anatDeplie.inf?' open':'')+' ontoggle="_anatDeplie.inf=this.open">'
+    +'<summary><span class="an-dr-i">'+ANAT_SVG.info+'</span><span class="an-dr-t">Échelle et prise de vue</span>'
+    +'<span class="an-dr-r">'+(echelle&&echelle.cmPx?_anatN(echelle.taille,0)+' cm · ±'+ANAT_TOL.echelle+' %':'sans taille')+'</span>'+ANAT_SVG.chev+'</summary>'
+    +'<div class="an-inf-c"><p>'+(echelle&&echelle.cmPx?'Échelle : '+_anatN(echelle.taille,0)+' cm du sommet du crâne aux talons (taille du dossier), ±'+ANAT_TOL.echelle+' % — perspective et posture.'
+        :'Taille absente du dossier : les longueurs sont données en % de la hauteur sur la photo.')
+      +' '+(V.man?'Des points ont été ajustés à la main.':(V.auto&&V.auto.gabarit?'Personne non détectée : les points sont à placer.':'Points placés automatiquement.'))+'</p>'
+    +optsHtml+'</div></details>';
 
   const carte=(f)=>{
     const t=textes[f.cle]||{};
@@ -46765,13 +46785,13 @@ function _htmlAnat(c){
       +'<button type="button" class="an-f-plus" aria-expanded="false" aria-controls="an-long-'+f.cle+'" onclick="anatOuvrir(\''+f.cle+'\')"><span class="an-f-plus-o">Recommandations détaillées</span><span class="an-f-plus-f">Replier</span>'+ANAT_SVG.chev+'</button>'
       +'</div>'+detail+'</div>';
   };
-  // TOUTES LES FICHES À GAUCHE : quatre visibles, le reste se déroule.
-  const VISIBLES=4;
-  const reste=Math.max(0,fiches.length-VISIBLES);
-  const colG='<div class="an-col an-col-g'+(_anatToutes?' toutes':'')+'"><h5>Détails morphologiques <span>'+fiches.length+' zones</span></h5>'
-    +fiches.map((f,i)=>i<VISIBLES?carte(f):carte(f).replace('<div class="an-f"','<div class="an-f an-f-plus-l"')).join('')
-    +(reste?'<button type="button" class="an-deroule" aria-expanded="'+(_anatToutes?'true':'false')+'" onclick="anatToutesFiches()">'
-      +'<span>'+(_anatToutes?'Replier la liste':'Voir les '+reste+' autres zones')+'</span>'+ANAT_SVG.chev+'</button>':'')+'</div>';
+  // TOUTES LES ZONES À GAUCHE, DANS UNE LISTE QUI DÉFILE, À LA HAUTEUR DE LA
+  // PHOTO. Kevin : « pas un bouton, plutôt un menu déroulant du haut vers le
+  // bas ; que tout cet espace prenne la même place que la photo ».
+  const colG='<div class="an-col an-col-g"><h5>Détails morphologiques <span>'+fiches.length+' zones</span></h5>'
+    +'<div class="an-liste" tabindex="0" aria-label="Zones analysées, faire défiler">'+fiches.map(carte).join('')+'</div>'
+    +'<div class="an-liste-fin" aria-hidden="true">'+ANAT_SVG.chev+'<span>Fais défiler pour voir toutes les zones</span></div>'
+    +photoHtml+'</div>';
   // LES RÉSULTATS, STYLISÉS : un bandeau, le compte de ce qui est à
   // surveiller, et chaque ligne teintée de son niveau.
   const nSurv=fiches.filter(f=>f.niveau!=null&&Math.abs(f.niveau)>=2).length;
@@ -46788,9 +46808,49 @@ function _htmlAnat(c){
     +'<button type="button" class="an-b2" onclick="anatRelancer()"'+(enCours?' disabled':'')+'>'+ANAT_SVG.relancer+'<span>'+(enCours?'Détection…':'Refaire la détection')+'</span></button></div>';
   return '<div class="an" data-vue="'+vueAct+'">'+tete
     +'<div class="an-grille">'+colG
-    +'<div class="an-centre">'+scene+outils+photoHtml+optsHtml+'</div>'
-    +'<div class="an-col an-col-d">'+resHtml+lev+'</div></div>'
+    +'<div class="an-centre">'+scene+outils+lev+infos+'</div>'
+    +'<div class="an-col an-col-d">'+resHtml+'</div></div>'
     +pourquoi+'</div>';
+}
+/**
+ * LA LISTE DES ZONES À LA HAUTEUR DE LA PHOTO. Quand les trois colonnes sont
+ * côte à côte, la liste défile dans la hauteur exacte de la scène ; sinon elle
+ * s'étale normalement. Recalculé au rendu et à chaque changement de taille.
+ */
+let _anatObsListe=null;
+function _anatCalerListe(z){
+  const liste=z&&z.querySelector('.an-liste');
+  const scene=z&&z.querySelector('.an-scene');
+  const grille=z&&z.querySelector('.an-grille');
+  if(!liste||!scene||!grille) return;
+  const caler=()=>{
+    const cols=getComputedStyle(grille).gridTemplateColumns.split(' ').filter(Boolean).length;
+    const col=liste.parentElement;
+    if(cols>=3){
+      const h=scene.getBoundingClientRect().height;
+      const titre=col.querySelector('h5');
+      liste.style.maxHeight=Math.max(260,Math.round(h-(titre?titre.getBoundingClientRect().height+8:0)))+'px';
+      col.classList.add('an-col-cale');
+    }else{
+      liste.style.maxHeight='';
+      col.classList.remove('an-col-cale');
+    }
+    const plus=liste.scrollHeight>liste.clientHeight+4;
+    col.classList.toggle('an-liste-defile',plus);
+    col.classList.toggle('an-liste-bas',plus&&liste.scrollTop+liste.clientHeight>=liste.scrollHeight-4);
+  };
+  caler();
+  liste.addEventListener('scroll',()=>{
+    const col=liste.parentElement;
+    col.classList.toggle('an-liste-bas',liste.scrollTop+liste.clientHeight>=liste.scrollHeight-4);
+  },{passive:true});
+  const img=scene.querySelector('img.an-photo');
+  if(img&&!img.complete) img.addEventListener('load',caler,{once:true});
+  try{
+    if(_anatObsListe) _anatObsListe.disconnect();
+    _anatObsListe=new ResizeObserver(()=>caler());
+    _anatObsListe.observe(scene);
+  }catch(e){}
 }
 /** Le zoom d'une vignette : la photo d'origine, nette, avec ses repères. */
 function anatZoom(cle){
