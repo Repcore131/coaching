@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1555';
+const CACHE = 'repcore-v1556';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -51,7 +51,12 @@ const CACHE = 'repcore-v1555';
 // d'intensification et la video de methode vivent dans index.html. Le dossier
 // /exercices/ est donc reporte normalement, et les 12,7 Mo ne repartent pas du
 // reseau. La constante ne redeviendra CACHE qu'au prochain reseeding d'images.
-const PURGE_EXERCICES = 'repcore-v1140';
+// LE 25/09/2026, QUATRIEME FOIS : les photos du guide actuel (6/09/2026),
+// filmees par le coach, remplacent 402 illustrations SOUS LE MEME NOM, en
+// 927 px de mediane au lieu de 248 (scripts/illustrations_guide.py). La
+// constante vaut donc CACHE pour cette version : sans purge, les appareils
+// deja equipes garderaient les anciennes images en cache.
+const PURGE_EXERCICES = CACHE;
 const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
 
 // DÉLAI DE GARDE sur index.html. Le handler était en network-first avec un
@@ -135,7 +140,7 @@ CORPS.push('./img/complements.webp');
 // ni code ni style — c'est-a-dire rien du tout.
 // Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
 // chaque build et reecrit cette ligne comme celle d'index.html.
-const ASSETS = ['./index.html', './rc-core.1555.js', './rc-style.1555.css',
+const ASSETS = ['./index.html', './rc-core.1556.js', './rc-style.1556.css',
   './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se

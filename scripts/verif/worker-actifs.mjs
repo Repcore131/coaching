@@ -126,8 +126,16 @@ const ko = [];
   if (restants.some(u => u.indexOf('.' + VIEUX + '.') >= 0)) ko.push('une version de ' + VIEUX + ' a ete reportee');
   // LE REPORT NORMAL NE DOIT PAS AVOIR SOUFFERT : les images et la base
   // alimentaire doivent bien etre passees d'un cache a l'autre.
-  for (const u of ['icons/icon-192x192.png', 'exercices/squat.webp', 'data/ciqual.json'])
+  // ⚠ SAUF LES IMAGES QUAND LA VERSION LES PURGE VOLONTAIREMENT
+  //   (PURGE_EXERCICES = CACHE) : des photos reecrites sous le meme nom ne
+  //   doivent PAS etre reportees, sinon l'appareil garderait les anciennes.
+  //   Dans ce cas, c'est l'inverse qui est verifie.
+  const PURGE_IMAGES = /const PURGE_EXERCICES\s*=\s*CACHE\s*;/.test(SW);
+  for (const u of ['icons/icon-192x192.png', 'data/ciqual.json'])
     if (!restants.some(r => r.endsWith(u))) ko.push('le report a perdu ' + u);
+  const imageReportee = restants.some(r => r.endsWith('exercices/squat.webp'));
+  if (!PURGE_IMAGES && !imageReportee) ko.push('le report a perdu exercices/squat.webp');
+  if (PURGE_IMAGES && imageReportee) ko.push('la purge des illustrations est annoncee mais exercices/squat.webp a ete reporte');
   if (restes.length !== 1) ko.push('les anciens caches n’ont pas ete supprimes : ' + restes.join(', '));
 }
 // ══ SCENE 2 : LE CACHE NEUF EST INUTILISABLE ══════════════════════════════
