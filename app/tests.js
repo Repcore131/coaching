@@ -44817,6 +44817,56 @@ async function testExercices(){
       if(r2.echelle.verif.statut!=='verifier'||r2.echelle.pct!==5) return _echec('3 % : '+r2.echelle.verif.statut+' / ±'+r2.echelle.pct);
       if(!/échelle ±5 %/.test(r2.fiches.find(x=>x.cle==='buste').tolerance)) return _echec('la marge ±5 % n’est pas écrite');
       return true;})());
+    // Les bouts de l'échelle : talons sur le sol, cheveux, pieds coupés (A5, 25/09/2026).
+    // Une personne debout, 1000 × 1500, talons du moteur à 95 % de la hauteur.
+    const _anatBrut=(masque)=>{
+      const raw={w:1000,h:1500,masque:masque||null,pts:Array.from({length:33},()=>[0.5,0.5,0.95])};
+      const S={0:[0.5,0.12],11:[0.6,0.3],12:[0.4,0.3],13:[0.63,0.42],14:[0.37,0.42],15:[0.64,0.54],16:[0.36,0.54],
+        23:[0.56,0.55],24:[0.44,0.55],25:[0.56,0.75],26:[0.44,0.75],27:[0.56,0.93],28:[0.44,0.93],
+        29:[0.56,0.95],30:[0.44,0.95],31:[0.57,0.96],32:[0.43,0.96]};
+      for(const k in S) raw.pts[k]=[S[k][0],S[k][1],0.95];
+      return raw;
+    };
+    // Le masque, codé comme celui du moteur : des plages alternées (vide d'abord), en base 36.
+    const _anatMasque=(w,h,plein)=>{
+      const b=[];for(let y=0;y<h;y++)for(let x=0;x<w;x++)b.push(plein(x,y)?1:0);
+      const runs=[];let v=0,n=0;for(const c of b){ if(c===v) n++; else { runs.push(n); v=c; n=1; } } runs.push(n);
+      return {w,h,rle:runs.map(r=>r.toString(36)).join('.')};
+    };
+    ok('ANALYSE MORPHO : LE TALON SUIT LA DERNIÈRE LIGNE PLEINE DU MASQUE',(()=>{
+      // Silhouette de la ligne 10 à la ligne 144 (sur 150) : le sol est à 1450 px.
+      const m=_anatMasque(100,150,(x,y)=>x>=35&&x<=65&&y>=10&&y<=144);
+      const au=anatPointsAuto(_anatBrut(m),'face');
+      for(const s of ['l','r']){
+        const t=au.pts['talon_'+s];
+        if(Math.abs(t[1]*1500-1450)>1.5) return _echec('talon '+s+' à '+(t[1]*1500).toFixed(1)+' px, le sol est à 1450');
+        if(t[2]<0.9) return _echec('un talon lu sur le masque n’est pas estimé : '+t[2]);
+      }
+      // Un sol trop loin (au-delà de 3 % de la taille) n'est pas le sol : ombre, tapis, reflet.
+      const loin=anatPointsAuto(_anatBrut(_anatMasque(100,150,(x,y)=>x>=35&&x<=65&&y>=10&&y<=149)),'face');
+      if(Math.abs(loin.pts.talon_l[1]*1500-1450)<1.5) return _echec('un bas de masque trop loin est pris pour le sol');
+      return true;})());
+    ok('ANALYSE MORPHO : SANS MASQUE, LE TALON DESCEND DE 0,6 % ET SE DIT ESTIMÉ',(()=>{
+      const au=anatPointsAuto(_anatBrut(null),'face');
+      const vy=au.pts.vertex[1]*1500, ty=1425;
+      const attendu=ty+0.006*(ty-vy);
+      for(const s of ['l','r']){
+        const t=au.pts['talon_'+s];
+        if(Math.abs(t[1]*1500-attendu)>0.5) return _echec('talon '+s+' à '+(t[1]*1500).toFixed(1)+' au lieu de '+attendu.toFixed(1));
+        if(t[2]!==0.5) return _echec('le talon abaissé n’est pas marqué estimé : '+t[2]);
+      }
+      return true;})());
+    ok('ANALYSE MORPHO : L’OPTION CHEVEUX CHANGE LA CONSIGNE ET LA MARGE ; LES PIEDS COUPÉS SE DISENT',(()=>{
+      const sans=anatMesures(_anatGab(),_anatDossier()), avec=anatMesures(_anatGab(null,{cheveux:true}),_anatDossier());
+      if(sans.echelle.pct!==3||avec.echelle.pct!==4) return _echec('marge : '+sans.echelle.pct+' / '+avec.echelle.pct);
+      if(!/échelle ±4 %/.test(avec.fiches.find(f=>f.cle==='buste').tolerance)) return _echec('la tolérance ne dit pas ±4 %');
+      if(!/sous les cheveux/.test(anatAide('vertex',{cheveux:true}).aide)||/sous les cheveux/.test(anatAide('vertex',{}).aide)) return _echec('la consigne du crâne ne suit pas l’option');
+      if(sans.echelle.piedsCoupes) return _echec('un gabarit entier est dit « pieds coupés »');
+      const pts=anatGabarit(1000,1500,'face');
+      const coupe=anatMesures(_anatGab({pointe_l:[pts.pointe_l[0],0.995,1]}),_anatDossier());
+      if(!coupe.echelle.piedsCoupes) return _echec('un orteil au bord du cadre n’est pas vu');
+      if(String(_htmlAnat).indexOf('Pieds coupés : l’échelle est estimée')<0) return _echec('pas de bandeau « pieds coupés »');
+      return true;})());
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());

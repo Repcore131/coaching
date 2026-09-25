@@ -45290,6 +45290,38 @@ function anatPointsAuto(raw,vue){
     if(vertex&&!(vertex.y>mEp.y-0.95*T&&vertex.y<mEp.y-0.4*T)) vertex=null;
   }
   pose('vertex',vertex||{x:mEp.x,y:mEp.y-0.63*T},vertex?1:0.5);
+  // LES TALONS, L'AUTRE BOUT DE L'ÉCHELLE (audit morpho, chantier A5). Le
+  // moteur rend un point AU-DESSUS du bas du talon : la cheville se voit, le
+  // contact avec le sol non. Mesuré de ce point, un corps paraît plus court
+  // qu'il n'est, et toutes les longueurs mises à l'échelle s'allongent d'autant.
+  //   - avec le masque : la dernière ligne pleine sous le talon (colonnes à
+  //     ±4 % de la largeur de l'image), en descendant sans sauter de trou — un
+  //     tapis, une ombre ou le reflet d'un miroir entrent aussi dans le masque ;
+  //     retenue si elle est à moins de 3 % de la taille sous le point du moteur ;
+  //   - sinon : le talon descend de 0,6 % de la taille (épaisseur talon-sol
+  //     typique), et il est marqué ESTIMÉ.
+  {
+    const vy=out.vertex?out.vertex[1]*H:null;
+    for(const s of ['l','r']){
+      const t=out['talon_'+s];
+      if(!t) continue;
+      const tx=t[0]*W, ty=t[1]*H;
+      const Hpx=(vy!=null&&ty>vy)?ty-vy:(3.4*T);
+      let sol=null;
+      if(bits){
+        const x0=Math.max(0,Math.round((tx-0.04*W)*kx)), x1=Math.min(m.w-1,Math.round((tx+0.04*W)*kx));
+        let y=Math.max(0,Math.round(ty*ky)), bas=null, vide=0;
+        for(;y<m.h;y++){
+          let plein=false;
+          for(let x=x0;x<=x1;x++) if(bits[y*m.w+x]){ plein=true; break; }
+          if(plein){ bas=y; vide=0; } else if(++vide>2) break;
+        }
+        if(bas!=null){ const yb=(bas+1)/ky; if(yb>=ty&&yb-ty<=0.03*Hpx) sol=yb; }
+      }
+      if(sol!=null) pose('talon_'+s,{x:tx,y:sol},t[2]);
+      else pose('talon_'+s,{x:tx,y:ty+0.006*Hpx},0.5);
+    }
+  }
   // Les bords de la silhouette : deltoïdes et taille.
   let taille=null,delt=null;
   if(bits){
@@ -45374,8 +45406,13 @@ function anatOptions(anat){
   const o=(anat&&anat.opts)||{};
   const a=(anat&&anat.face&&anat.face.auto)||{};
   return {miroir:(o.miroir!=null)?!!o.miroir:!!a.miroir,
-    telephone:(o.telephone!==undefined)?o.telephone:(a.telephone||null)};
+    telephone:(o.telephone!==undefined)?o.telephone:(a.telephone||null),
+    // Chantier A5 : des cheveux volumineux cachent le haut du crâne. Le point se
+    // pose sur l'os, sous les cheveux, et la marge d'échelle passe à ±4 %.
+    cheveux:!!o.cheveux};
 }
+/** La marge d'échelle quand des cheveux volumineux cachent le sommet du crâne. */
+const ANAT_ECHELLE_CHEVEUX_PCT=4;
 
 // ── LES MESURES ────────────────────────────────────────────────────────────
 /**
@@ -45421,6 +45458,11 @@ function anatMesures(anat,u){
   const F=vues.face, D=vues.dos;
   const verif=_anatSafe(()=>anatVerifEchelle(u,F));
   if(verif&&verif.statut==='verifier') ECH=ANAT_ECHELLE_A_VERIFIER_PCT;
+  if(opts.cheveux) ECH=Math.max(ECH,ANAT_ECHELLE_CHEVEUX_PCT);
+  // LES PIEDS COUPÉS (A5) : l'orteil absent, collé au bord bas de l'image, ou
+  // que le moteur voit mal. Le talon est alors deviné, et l'échelle avec lui.
+  const piedsCoupes=!!(F&&['g','d'].some(sd=>{ const q=F.P2('pointe',sd);
+    return !q||q.y>=F.H*0.985||(q.e>0&&q.e<0.5); }));
   const fiches=[];
   const fiche=(o)=>{ fiches.push(Object.assign({niveau:null,valeur:'',tolerance:'',etat:'ok',chiffres:[],estime:false},o)); };
   // Un segment en cm (ou en fraction de la taille, sans taille), et son écart
@@ -45699,7 +45741,7 @@ function anatMesures(anat,u){
       else f.niveau=null;
     }
   }
-  return {fiches,leviers:anatLeviers(fiches,F,taille,femme),echelle:F?{cmPx:F.cmPx,taille,stature:F.stature,verif,pct:ECH}:null,opts};
+  return {fiches,leviers:anatLeviers(fiches,F,taille,femme),echelle:F?{cmPx:F.cmPx,taille,stature:F.stature,verif,pct:ECH,piedsCoupes,cheveux:!!opts.cheveux}:null,opts};
 }
 
 /**
@@ -46071,8 +46113,10 @@ const ANAT_AIDE=Object.freeze({
   omoplate:{court:'Omoplate',aide:'La pointe basse de l’omoplate (angle inférieur), en général à la hauteur de la 7e côte. Si elle ne se voit pas, suis le bord interne de l’omoplate jusqu’en bas.'},
   sacrum:{court:'Sacrum',aide:'Le milieu entre les deux fossettes du bas du dos (fossettes de Vénus), au-dessus du pli fessier.'}
 });
-function anatAide(cle){
+function anatAide(cle,opts){
   const k=String(cle||'').replace(/_[lr]$/,'');
+  if(k==='vertex'&&opts&&opts.cheveux)
+    return {court:'Crâne',aide:'L’os, sous les cheveux : estime où le crâne s’arrête sous la masse des cheveux (environ un doigt à deux doigts sous leur sommet pour une coiffure volumineuse), dans l’axe du cou. La marge d’échelle passe à ±'+ANAT_ECHELLE_CHEVEUX_PCT+' %.'};
   return ANAT_AIDE[k]||{court:k,aide:''};
 }
 /** Où poser le nom d'un point, en hauteur (fraction du cadre) : les repères
@@ -46697,7 +46741,7 @@ function _anatBrancherEdition(z){
     // La consigne suit le point choisi, et la liste aussi.
     const z2=scene.closest('.an');
     const cs=z2&&z2.querySelector('.an-consigne');
-    if(cs){ cs.innerHTML='<b>* '+escapeHtml(anatNomPoint(e.vue,k))+'</b><span>'+escapeHtml(anatAide(k).aide)+'</span>'; }
+    if(cs){ cs.innerHTML='<b>* '+escapeHtml(anatNomPoint(e.vue,k))+'</b><span>'+escapeHtml(anatAide(k,e.opts).aide)+'</span>'; }
     if(z2) z2.querySelectorAll('.an-rep-c').forEach(x=>{
       const b=x.querySelector('.an-rep-n'); const on=!!b&&(b.getAttribute('onclick')||'').indexOf("'"+k+"'")>=0;
       x.classList.toggle('actif',on);
@@ -47031,9 +47075,11 @@ function _htmlAnat(c){
   const ath=(s)=>{ const cc=anatCotes('face',!!opts.miroir); return s===cc.g?'gauche':'droit'; };
   const optsHtml=vueAct==='face'?'<div class="an-opts">'
       +(edit?'<label class="an-opt"><input type="checkbox"'+(opts.miroir?' checked':'')+' onchange="anatOption(\'miroir\',this.checked)"><span>Photo prise dans un miroir</span></label>'
+        +'<label class="an-opt"><input type="checkbox"'+(opts.cheveux?' checked':'')+' onchange="anatOption(\'cheveux\',this.checked)"><span>Cheveux volumineux (sommet du crâne sur l’os)</span></label>'
         +'<div class="an-opt-seg" role="group" aria-label="Bras qui tient le téléphone"><span>Téléphone tenu :</span>'
         +[['','aucun'],[anatCotes('face',!!opts.miroir).g,'bras gauche'],[anatCotes('face',!!opts.miroir).d,'bras droit']].map(([v,l])=>'<button type="button" class="'+((opts.telephone||'')===v?'actif':'')+'" onclick="anatOption(\'telephone\','+(v?'\''+v+'\'':'null')+')">'+l+'</button>').join('')+'</div>'
       :'<span class="an-puce">'+(opts.miroir?'Photo au miroir':'Photo sans miroir')+'</span>'
+        +(opts.cheveux?'<span class="an-puce">Cheveux volumineux : crâne posé sur l’os, échelle ±'+ANAT_ECHELLE_CHEVEUX_PCT+' %</span>':'')
         +(opts.telephone?'<span class="an-puce an-puce-o">Téléphone tenu : bras '+ath(opts.telephone)+' — écarté des mesures</span>':''))
       +'</div>':'';
   const aideSel=edit&&(edit.aide||edit.sel)?(edit.aide||edit.sel):null;
@@ -47044,7 +47090,7 @@ function _htmlAnat(c){
           +'<button type="button" class="an-rep-n" title="'+escapeHtml(anatNomPoint(vueAct,k))+'" onclick="anatChoisirPoint(\''+k+'\')">'+escapeHtml(anatAide(k).court)+(k.endsWith('_l')?' ◂':k.endsWith('_r')?' ▸':'')+'</button>'
           +'<button type="button" class="an-rep-a" aria-label="Consigne : '+escapeHtml(anatNomPoint(vueAct,k))+'" onclick="anatChoisirPoint(\''+k+'\')">*</button></span>';
       }).join('')+'</div>'
-      +'<div class="an-consigne" aria-live="polite">'+(aideSel?'<b>* '+escapeHtml(anatNomPoint(vueAct,aideSel))+'</b><span>'+escapeHtml(anatAide(aideSel).aide)+'</span>'
+      +'<div class="an-consigne" aria-live="polite">'+(aideSel?'<b>* '+escapeHtml(anatNomPoint(vueAct,aideSel))+'</b><span>'+escapeHtml(anatAide(aideSel,edit&&edit.opts).aide)+'</span>'
         :'<span>Touche un repère ou son « * » : sa consigne de placement s’affiche ici.</span>')+'</div></div>':'';
   const reg=anatReglage(a,vueAct);
   const modif=!!(reg.cadre||reg.lum!==100||reg.con!==100);
@@ -47117,6 +47163,8 @@ function _htmlAnat(c){
     +'<span class="an-dr-r">'+(echelle&&echelle.cmPx?_anatN(echelle.taille,0)+' cm · ±'+echelle.pct+' %':'sans taille')+(ver?' · '+ANAT_ECHELLE_MOTS[ver.statut]:'')+'</span>'+ANAT_SVG.chev+'</summary>'
     +'<div class="an-inf-c"><p>'+(echelle&&echelle.cmPx?'Échelle 1, par la taille : '+_anatN(echelle.taille,0)+' cm du sommet du crâne aux talons (taille du dossier), ±'+echelle.pct+' % — perspective et posture.'
         :'Taille absente du dossier : les longueurs sont données en % de la hauteur sur la photo.')
+      +(echelle&&echelle.cheveux?' Cheveux volumineux : le sommet du crâne est posé sur l’os, marge d’échelle ±'+ANAT_ECHELLE_CHEVEUX_PCT+' % au moins.':'')
+      +(echelle&&echelle.piedsCoupes?' Pieds coupés : le talon est deviné, l’échelle est estimée.':'')
       +(ver?' Échelle 2, par le genou : '+(ver.source==='metre'
           ?_anatN(ver.mesureCm,1)+' cm du sol au milieu de la rotule, mesurés au mètre au bilan'
           :'hauteur de rotule estimée ('+ANAT_ROTULE.source+')')
@@ -47157,7 +47205,9 @@ function _htmlAnat(c){
   // bas ; que tout cet espace prenne la même place que la photo ».
   const alerteEch=(ver&&ver.statut==='divergence')
     ?'<div class="an-alerte" role="alert">'+ANAT_SVG.info+'<span><b>Les deux repères ne donnent pas la même échelle</b> ('+_anatN(ver.ecart*100,1)+' % d’écart, au-delà des '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' % admis) : vérifie le sommet du crâne, les talons et les genoux. Les longueurs sont en gris tant que les deux échelles ne s’accordent pas.</span></div>':'';
-  const colG='<div class="an-col an-col-g"><h5>Détails morphologiques <span>'+fiches.length+' zones</span></h5>'+alerteEch
+  const alertePieds=(echelle&&echelle.piedsCoupes)
+    ?'<div class="an-alerte" role="status">'+ANAT_SVG.info+'<span><b>Pieds coupés : l’échelle est estimée.</b> Les orteils sortent du cadre ou ne se lisent pas : le talon, bout bas de l’échelle, est deviné. Au prochain bilan, photo en pied avec un peu de sol sous les pieds.</span></div>':'';
+  const colG='<div class="an-col an-col-g"><h5>Détails morphologiques <span>'+fiches.length+' zones</span></h5>'+alerteEch+alertePieds
     +'<div class="an-liste" tabindex="0" aria-label="Zones analysées, faire défiler">'+fiches.map(carte).join('')+'</div>'
     +'<div class="an-liste-fin" aria-hidden="true">'+ANAT_SVG.chev+'<span>Fais défiler pour voir toutes les zones</span></div>'
     +photoHtml+'</div>';
