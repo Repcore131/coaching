@@ -10238,3 +10238,177 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .an-lev .an-lev-c>.an-lev-top{flex-direction:row;align-items:center;justify-content:space-between;gap:8px}
 .an-lev .an-lev-c>.an-lev-v{flex-direction:row;align-items:center;gap:10px}
 .an-lev .an-lev-c{text-align:left}
+/* ══ ANALYSE MORPHO — RETOUCHES DE KEVIN (25/09/2026, suite) ══════════════
+   Les resultats a la hauteur de la photo ; les leviers sur la longueur, sous
+   la photo et sous les resultats. */
+.an-bas{grid-area:l;display:flex;flex-direction:column;gap:10px;min-width:0}
+.an-grille{grid-template-areas:"c" "d" "l" "g"}
+@container an (min-width:700px){
+  .an-grille{grid-template-areas:"c d" "l l" "g g"}
+}
+@container an (min-width:1080px){
+  .an-grille{grid-template-areas:"g c d" "g l l"}
+}
+/* Des resultats plus compacts */
+.an-res{padding:10px 10px 8px;display:flex;flex-direction:column}
+.an-res-h{gap:6px;margin-bottom:6px}
+.an-res-h h5{font-size:18px;line-height:1}
+.an-res-k span{padding:3px 8px}
+.an-res-l{gap:3px}
+.an-res .an-r{min-height:34px;padding:0 8px 0 12px}
+.an-res .an-r::before{top:7px;bottom:7px}
+.an-res-leg{margin-top:6px !important}
+/* Cale a la hauteur de la photo : les lignes se partagent la hauteur */
+.an-res-cale{overflow:hidden}
+.an-res-cale .an-res-l{flex:1 1 auto;min-height:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#c81414 #151518}
+.an-res-cale .an-res .an-r,.an-res-cale .an-r{flex:1 1 0;min-height:28px;max-height:52px}
+/* ══ ANALYSE MORPHO — PASSE DE DESIGN (25/09/2026) ════════════════════════
+   Kevin : « de la texture, des couleurs, un effet waouh, un outil agreable
+   a utiliser ». Trois idees : un grain et une trame carbone discrets sur
+   le fond ; un cadre technique (coins, graduations) autour de la photo ;
+   une jauge par levier. Et des proportions qui donnent la place a la photo. */
+
+/* Le fond : grain + trame carbone, sous la lueur rouge */
+.an{background:
+  radial-gradient(90% 55% at 50% -10%,rgba(224,32,32,.22),transparent 60%),
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+  repeating-linear-gradient(45deg,rgba(255,255,255,.012) 0 2px,transparent 2px 6px),
+  linear-gradient(180deg,#110a0a,#0b0b0d 40%,#0a0a0c);
+  border-color:rgba(224,32,32,.55);box-shadow:0 0 0 1px rgba(0,0,0,.6),0 0 34px rgba(224,32,32,.16),inset 0 1px 0 rgba(255,255,255,.04)}
+.an-tete{padding-bottom:12px;border-bottom:1px solid rgba(224,32,32,.25);position:relative}
+.an-tete::after{content:"";position:absolute;left:0;bottom:-1px;width:140px;height:2px;background:linear-gradient(90deg,#ff2d2d,transparent);box-shadow:0 0 10px rgba(255,45,45,.7)}
+.an-tete-i{box-shadow:0 0 16px rgba(224,32,32,.35),inset 0 1px 0 rgba(255,255,255,.08)}
+.an-tete-c h4{font-size:clamp(22px,2.4vw,30px);text-shadow:0 0 18px rgba(224,32,32,.25)}
+.an-vues{box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+.an-vue-b.actif{box-shadow:0 0 12px rgba(224,32,32,.35)}
+
+/* Des proportions qui donnent la place a la photo */
+@container an (min-width:1080px){
+  .an-grille{grid-template-columns:minmax(0,1fr) minmax(0,1.65fr) minmax(0,1fr);gap:14px}
+}
+.an-lbl{max-width:19.5%;font-size:10.5px;padding:0 7px;min-height:28px;
+  background:linear-gradient(180deg,rgba(28,10,10,.95),rgba(12,12,14,.95));box-shadow:0 2px 8px rgba(0,0,0,.5)}
+@container an (max-width:520px){ .an-lbl{max-width:19.5%;font-size:9px;padding:0 4px;min-height:24px} }
+
+/* La scene : un cadre technique autour de la photo */
+.an-scene{background:
+  linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px) 0 0/100% 24px,
+  linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px) 0 0/24px 100%,
+  radial-gradient(70% 60% at 50% 45%,rgba(224,32,32,.14),transparent 70%),
+  linear-gradient(180deg,#141416,#08080a);
+  border:1px solid #2a2a30;box-shadow:inset 0 0 40px rgba(0,0,0,.6),0 10px 30px rgba(0,0,0,.45)}
+.an-scene::before,.an-scene::after{content:"";position:absolute;width:26px;height:26px;pointer-events:none;z-index:2}
+.an-scene::before{left:8px;top:8px;border-left:2px solid #ff3b3b;border-top:2px solid #ff3b3b;border-top-left-radius:6px;filter:drop-shadow(0 0 4px rgba(255,59,59,.7))}
+.an-scene::after{right:8px;bottom:8px;border-right:2px solid #ff3b3b;border-bottom:2px solid #ff3b3b;border-bottom-right-radius:6px;filter:drop-shadow(0 0 4px rgba(255,59,59,.7))}
+.an-photo{box-shadow:0 0 0 1px rgba(255,255,255,.08),0 12px 28px rgba(0,0,0,.6)}
+.an-os .an-t{stroke-width:2.2;filter:drop-shadow(0 0 2px rgba(255,59,59,.6))}
+.an-os .an-pt{stroke-width:1.6}
+
+/* Les outils sous la photo */
+.an-outils{gap:8px}
+.an-b2-r{background:linear-gradient(180deg,rgba(224,32,32,.14),rgba(224,32,32,.04))}
+.an-b2-r:hover{background:rgba(224,32,32,.22)}
+
+/* Les fiches : une bande de niveau pour toutes, un relief discret */
+.an-f{background:linear-gradient(180deg,#131316,#0e0e11);border-color:#26262b;border-left-width:3px;border-left-color:#2a2a30;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.03)}
+.an-f[data-n="0"]{border-left-color:#34e89e}
+.an-f[data-n="1"]{border-left-color:#facc15}
+.an-f[data-n="2"]{border-left-color:#fb923c}
+.an-f[data-n="3"]{border-left-color:#ff3b3b;background:linear-gradient(90deg,rgba(224,32,32,.08),#0e0e11 40%)}
+.an-f:hover{border-color:#3a3a42}
+.an-f-vig{border-color:#34343a;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.an-f-vig:hover{border-color:#e02020}
+.an-f-h b{letter-spacing:.8px}
+
+/* Les resultats */
+.an-res{background:
+  radial-gradient(100% 50% at 100% 0%,rgba(224,32,32,.22),transparent 60%),
+  repeating-linear-gradient(45deg,rgba(255,255,255,.012) 0 2px,transparent 2px 6px),
+  linear-gradient(180deg,#160a0a,#0d0d10 55%)}
+.an-res-h h5{text-shadow:0 0 14px rgba(224,32,32,.35)}
+.an-res .an-r{background:rgba(255,255,255,.025)}
+
+/* Les menus deroulants sous la photo */
+.an-dr{background:linear-gradient(180deg,#121215,#0d0d10);box-shadow:inset 0 1px 0 rgba(255,255,255,.03)}
+.an-dr>summary:hover .an-dr-t{color:#fff}
+.an-dr-i{box-shadow:0 0 10px rgba(224,32,32,.25)}
+
+/* La jauge des leviers */
+.an-lev-v{display:flex;align-items:center;gap:12px}
+.an-lev-vt{display:flex;flex-direction:column;gap:4px;min-width:0}
+.an-jauge{width:112px;height:auto;flex-shrink:0}
+.an-jauge-r{width:150px}
+.an-j-fond{fill:none;stroke:#26262b;stroke-width:7;stroke-linecap:round}
+.an-j-zone{fill:none;stroke:rgba(255,59,59,.55);stroke-width:7;stroke-linecap:round}
+.an-j-gr{stroke:#4a4a52;stroke-width:1.2}
+.an-j-sol{stroke:#3a3a40;stroke-width:1.2;stroke-dasharray:2 3}
+.an-j-moy{stroke:#fff;stroke-width:1.6;stroke-dasharray:3 3;opacity:.8}
+.an-j-cale{stroke:#34e89e;stroke-width:1.8;stroke-dasharray:1 3;stroke-linecap:round}
+.an-j-moi{stroke:#ff3b3b;stroke-width:3.2;stroke-linecap:round;filter:drop-shadow(0 0 3px rgba(255,59,59,.8))}
+.an-j-piv{fill:#ff3b3b;stroke:#fff;stroke-width:1.2}
+.an-j-rail{fill:#26262b}
+.an-j-zone2{fill:rgba(255,59,59,.55)}
+.an-j-moi2{fill:#ff3b3b;stroke:#fff;stroke-width:1.5;filter:drop-shadow(0 0 3px rgba(255,59,59,.8))}
+.an-jauge text{font-size:6.5px;fill:#8a8a92;font-family:inherit}
+.an-lev-leg{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:9.5px;color:#8a8a92}
+.an-lev-leg i{display:inline-block;width:12px;height:0;border-top:2px solid;vertical-align:middle;margin-right:4px}
+.an-res-cale .an-res .an-r,.an-res-cale .an-r{min-height:26px}
+.an-res-cale .an-res-leg{margin-top:4px !important}
+/* ══ ANALYSE MORPHO — LES COLONNES ETROITES (25/09/2026) ═════════════════
+   A cote d'une photo large, les deux colonnes font ~300 px : leurs regles
+   se decident sur LEUR largeur, pas sur celle de toute la section. */
+.an-col-g,.an-col-d{container-type:inline-size}
+.an-col-g{container-name:ancolg}
+.an-col-d{container-name:ancold}
+/* Fiches */
+@container ancolg (max-width:360px){
+  .an-f{grid-template-columns:86px minmax(0,1fr);gap:3px 9px}
+  .an-f-vig{width:86px}
+  .an-f-h{gap:2px 6px}
+  .an-f-h em{font-size:10.5px}
+  .an-f-court{font-size:10.5px}
+  .an-f-plus{font-size:10.5px;white-space:nowrap}
+  .an-f-plus-o{font-size:0}
+  .an-f-plus-o::after{content:"Recommandations";font-size:10.5px}
+  .an-f-est{font-size:8.5px}
+}
+.an-f-plus{white-space:nowrap}
+/* Reglages de la photo */
+@container ancolg (max-width:420px){
+  .an-ph{padding:10px}
+  .an-ph-t{flex-wrap:wrap;row-gap:4px}
+  .an-ph-l{grid-template-columns:minmax(0,1fr) !important;gap:4px}
+  .an-ph-r{grid-template-columns:70px minmax(0,1fr) 42px}
+  .an-ph-b{grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+  .an-b3{min-height:50px;font-size:9.5px;line-height:1.15;text-align:center}
+}
+.an-ph-r output{white-space:nowrap}
+/* Resultats */
+@container ancold (max-width:360px){
+  .an-res-h h5{font-size:17px}
+  .an-res-k{gap:4px}
+  .an-res-k span{padding:2px 7px;font-size:10px}
+  .an-res-k b{font-size:14px}
+  .an-res .an-r{grid-template-columns:62px auto minmax(0,1fr);gap:6px;padding:0 6px 0 10px}
+  .an-res .an-r-l{font-size:10.5px}
+  .an-res .an-r-v{font-size:9.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .an-res .an-pts{gap:2px}
+  .an-res .an-pts i{width:7px;height:7px}
+  .an-res-leg{font-size:9px;gap:2px 7px}
+}
+/* Leviers : le modele plus etroit, la jauge et sa legende */
+@container an (min-width:520px){ .an-lev-g{grid-template-columns:minmax(0,.62fr) minmax(0,1.38fr)} }
+.an-lev-mod{justify-content:center}
+.an-lev-v{align-items:center}
+.an-lev-leg{margin-top:2px}
+.an-lev-leg .l-moi{border-color:#ff3b3b}
+.an-lev-leg .l-moy{border-top-style:dashed;border-color:#fff}
+.an-lev-leg .l-cale{border-top-style:dotted;border-color:#34e89e}
+.an-ph-r{margin:0 !important;min-height:30px;padding:0}
+.an-ph-r>span{margin:0;text-transform:none;letter-spacing:0}
+.an-lev-vt strong{align-self:flex-start}
+@container ancolg (max-width:420px){ .an-ph-t{font-size:10px} .an-net{margin-left:auto;font-size:10px} .an-ph-l{gap:0} }
+@container an (max-width:520px){ .an-lbl{padding:0 3px;letter-spacing:-.1px} }
+.an-ph-r input[type=range]{min-height:24px;height:24px}
+.an-ph-r{min-height:28px}

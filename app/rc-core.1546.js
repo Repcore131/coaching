@@ -46620,7 +46620,7 @@ function _htmlAnat(c){
   const reglage=anatReglage(a,vueAct);
   const filtre=anatFiltre(reglage);
   const C=reglage.cadre?{x0:reglage.cadre.x0*W,y0:reglage.cadre.y0*H,x1:reglage.cadre.x1*W,y1:reglage.cadre.y1*H}:{x0:0,y0:0,x1:W,y1:H};
-  const CW=C.x1-C.x0,CH=C.y1-C.y0,G=Math.round(CW*0.42),TW=CW+2*G,VX=C.x0-G;
+  const CW=C.x1-C.x0,CH=C.y1-C.y0,G=Math.round(CW*0.34),TW=CW+2*G,VX=C.x0-G;
   const pctX=x=>((x-VX)/TW*100);
 
   // L'anneau : une étiquette par région lisible sur cette vue.
@@ -46655,7 +46655,10 @@ function _htmlAnat(c){
       fils+='<polyline class="an-fil" points="'+xl.toFixed(1)+','+e.y.toFixed(1)+' '+e.p.x.toFixed(1)+','+e.p.y.toFixed(1)+'"/>'
         +'<circle class="an-fil-p" cx="'+e.p.x.toFixed(1)+'" cy="'+e.p.y.toFixed(1)+'" r="'+(CH*0.009).toFixed(1)+'"/>';
       anneau+='<button type="button" class="an-lbl an-lbl-'+e.cote+'" data-k="'+e.f.cle+'" data-n="'+(e.f.niveau==null?'':Math.abs(e.f.niveau))+'" style="top:'+((e.y-C.y0)/CH*100).toFixed(2)+'%;'
-        +(e.cote==='g'?'right:'+(100-pctX(xl)).toFixed(2)+'%':'left:'+pctX(xl).toFixed(2)+'%')+'" onclick="anatOuvrir(\''+e.f.cle+'\',true)">'+escapeHtml(e.f.lib)+'</button>';
+        // L'étiquette ne sort jamais de la scène : sa largeur est bornée à
+        // la marge qui lui reste, bord compris.
+        +(e.cote==='g'?'right:'+(100-pctX(xl)).toFixed(2)+'%;max-width:'+(pctX(xl)-1).toFixed(2)+'%'
+          :'left:'+pctX(xl).toFixed(2)+'%;max-width:'+(99-pctX(xl)).toFixed(2)+'%')+'" onclick="anatOuvrir(\''+e.f.cle+'\',true)">'+escapeHtml(e.f.lib)+'</button>';
     });
   }
   const echelle=res.echelle;
@@ -46748,7 +46751,9 @@ function _htmlAnat(c){
           +'<div class="an-lev-nav"><button type="button" aria-label="Levier précédent" onclick="anatLevier(-1)"'+(nLev<2?' disabled':'')+'>'+ANAT_SVG.gauche+'</button>'
           +'<span>'+(iLev+1)+' / '+nLev+'</span>'
           +'<button type="button" aria-label="Levier suivant" onclick="anatLevier(1)"'+(nLev<2?' disabled':'')+'>'+ANAT_SVG.droite+'</button></div></div>'
-          +'<div class="an-lev-v"><strong>'+escapeHtml(val)+'</strong><em>'+escapeHtml(sous)+(ref?'<br>moyenne '+escapeHtml(ref):'')+'</em></div>'
+          +'<div class="an-lev-v">'+_anatJauge(l)+'<div class="an-lev-vt"><strong>'+escapeHtml(val)+'</strong><em>'+escapeHtml(sous)+(ref?'<br>moyenne '+escapeHtml(ref):'')+'</em>'
+            +(l.cle==='squat'?'<span class="an-lev-leg"><span><i class="l-moi"></i>athlète</span><span><i class="l-moy"></i>moyenne</span><span><i class="l-cale"></i>avec cale</span></span>'
+              :'<span class="an-lev-leg"><span><i class="l-moi"></i>athlète</span><span><i class="l-moy"></i>moyenne</span></span>')+'</div></div>'
           +'<p>'+escapeHtml(l.txt)+'</p></div>'
         +'</div></details>';
     })():'';
@@ -46808,8 +46813,11 @@ function _htmlAnat(c){
     +'<button type="button" class="an-b2" onclick="anatRelancer()"'+(enCours?' disabled':'')+'>'+ANAT_SVG.relancer+'<span>'+(enCours?'Détection…':'Refaire la détection')+'</span></button></div>';
   return '<div class="an" data-vue="'+vueAct+'">'+tete
     +'<div class="an-grille">'+colG
-    +'<div class="an-centre">'+scene+outils+lev+infos+'</div>'
-    +'<div class="an-col an-col-d">'+resHtml+'</div></div>'
+    +'<div class="an-centre">'+scene+outils+'</div>'
+    +'<div class="an-col an-col-d">'+resHtml+'</div>'
+    // LES LEVIERS SUR TOUTE LA LONGUEUR, sous la photo ET sous les résultats.
+    // Kevin : « qu'il prenne la place ×2, l'allonger sur la longueur ».
+    +'<div class="an-bas">'+lev+infos+'</div></div>'
     +pourquoi+'</div>';
 }
 /**
@@ -46817,6 +46825,38 @@ function _htmlAnat(c){
  * côte à côte, la liste défile dans la hauteur exacte de la scène ; sinon elle
  * s'étale normalement. Recalculé au rendu et à chaque changement de taille.
  */
+/**
+ * LA JAUGE D'UN LEVIER, en SVG : un rapporteur pour le squat (le buste de
+ * l'athlète en rouge, la moyenne en pointillé blanc, la cale en vert) ; une
+ * règle pour le soulevé et le développé (l'athlète contre la moyenne).
+ */
+function _anatJauge(l){
+  if(!l) return '';
+  if(l.cle==='squat'){
+    const O={x:14,y:74},R=62;
+    const pt=(a,r)=>{ const t=a*Math.PI/180; return {x:O.x+(r||R)*Math.sin(t),y:O.y-(r||R)*Math.cos(t)}; };
+    const arc=(a0,a1,r)=>{ const p0=pt(a0,r),p1=pt(a1,r); return 'M'+p0.x.toFixed(1)+' '+p0.y.toFixed(1)+' A'+r+' '+r+' 0 0 1 '+p1.x.toFixed(1)+' '+p1.y.toFixed(1); };
+    const aig=(a,cl,r)=>{ const p=pt(Math.max(0,Math.min(70,a)),r||R-6); return '<line class="'+cl+'" x1="'+O.x+'" y1="'+O.y+'" x2="'+p.x.toFixed(1)+'" y2="'+p.y.toFixed(1)+'"/>'; };
+    let g='<svg class="an-jauge" viewBox="0 0 92 82" role="img" aria-label="Inclinaison du buste : '+l.val+'°, moyenne '+l.ref+'°">'
+      +'<path class="an-j-fond" d="'+arc(0,70,R)+'"/>'
+      +'<path class="an-j-zone" d="'+arc(Math.min(l.val,l.ref),Math.max(l.val,l.ref),R)+'"/>';
+    for(const t of [0,15,30,45,60]){ const a=pt(t,R+1),b=pt(t,R-5); g+='<line class="an-j-gr" x1="'+a.x.toFixed(1)+'" y1="'+a.y.toFixed(1)+'" x2="'+b.x.toFixed(1)+'" y2="'+b.y.toFixed(1)+'"/>'; }
+    g+='<line class="an-j-sol" x1="'+O.x+'" y1="'+O.y+'" x2="88" y2="'+O.y+'"/>'
+      +aig(l.ref,'an-j-moy')+(l.cale!=null?aig(l.cale,'an-j-cale',R-14):'')+aig(l.val,'an-j-moi')
+      +'<circle class="an-j-piv" cx="'+O.x+'" cy="'+O.y+'" r="3.5"/></svg>';
+    return g;
+  }
+  const v=Number(l.cle==='souleve'?l.val:(l.val!=null?l.val:null));
+  const r=Number(l.cle==='souleve'?l.ref:(l.ref!=null?l.ref:null));
+  if(!isFinite(v)||!isFinite(r)||!(r>0)) return '';
+  const pos=x=>Math.max(4,Math.min(96,50+(x/r-1)/0.2*46));
+  return '<svg class="an-jauge an-jauge-r" viewBox="0 0 100 40" role="img" aria-label="'+escapeHtml(l.lib)+' : athlète contre moyenne">'
+    +'<rect class="an-j-rail" x="4" y="17" width="92" height="6" rx="3"/>'
+    +'<rect class="an-j-zone2" x="'+Math.min(pos(v),50).toFixed(1)+'" y="17" width="'+Math.abs(pos(v)-50).toFixed(1)+'" height="6" rx="3"/>'
+    +'<line class="an-j-moy" x1="50" y1="10" x2="50" y2="30"/>'
+    +'<circle class="an-j-moi2" cx="'+pos(v).toFixed(1)+'" cy="20" r="5.5"/>'
+    +'<text x="4" y="38">−20 %</text><text x="50" y="38" text-anchor="middle">moyenne</text><text x="96" y="38" text-anchor="end">+20 %</text></svg>';
+}
 let _anatObsListe=null;
 function _anatCalerListe(z){
   const liste=z&&z.querySelector('.an-liste');
@@ -46837,6 +46877,19 @@ function _anatCalerListe(z){
     }
     const plus=liste.scrollHeight>liste.clientHeight+4;
     col.classList.toggle('an-liste-defile',plus);
+    // LES RÉSULTATS À LA HAUTEUR DE LA PHOTO : leur bord bas s'aligne sur le
+    // bas de l'image dès que les deux sont côte à côte ; les lignes se
+    // répartissent la hauteur.
+    const res=z.querySelector('.an-res');
+    if(res){
+      res.style.height=''; res.classList.remove('an-res-cale');
+      const hS=scene.getBoundingClientRect().height;
+      const nL=res.querySelectorAll('.an-r').length;
+      const mini=(res.querySelector('.an-res-h')||{offsetHeight:0}).offsetHeight+(res.querySelector('.an-res-leg')||{offsetHeight:0}).offsetHeight+nL*26+(nL-1)*3+30;
+      const cote=cols>=2&&hS>=mini&&Math.abs(res.getBoundingClientRect().top-scene.getBoundingClientRect().top)<40;
+      res.style.height=cote?Math.round(scene.getBoundingClientRect().height)+'px':'';
+      res.classList.toggle('an-res-cale',cote);
+    }
     col.classList.toggle('an-liste-bas',plus&&liste.scrollTop+liste.clientHeight>=liste.scrollHeight-4);
   };
   caler();
@@ -46848,9 +46901,16 @@ function _anatCalerListe(z){
   if(img&&!img.complete) img.addEventListener('load',caler,{once:true});
   try{
     if(_anatObsListe) _anatObsListe.disconnect();
-    _anatObsListe=new ResizeObserver(()=>caler());
+    // ⚠ LA SCÈNE ET LA GRILLE. Rendue pendant que l'onglet Données est caché,
+    //   la scène n'a pas encore de taille : on recale quand elle en prend une,
+    //   et quand la grille change de largeur (fenêtre, panneau latéral).
+    _anatObsListe=new ResizeObserver(()=>requestAnimationFrame(caler));
     _anatObsListe.observe(scene);
+    _anatObsListe.observe(grille);
   }catch(e){}
+  let essais=0;
+  const reessayer=()=>{ if(!scene.isConnected) return; if(scene.getBoundingClientRect().height>0){ caler(); return; } if(++essais<40) setTimeout(reessayer,250); };
+  reessayer();
 }
 /** Le zoom d'une vignette : la photo d'origine, nette, avec ses repères. */
 function anatZoom(cle){
