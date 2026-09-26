@@ -38460,7 +38460,11 @@ function _dessinerBilanSeance(d,fond){
   const marque=_marqueCoachPrete();
   const H_TITRE=154, H_DATE=56, H_REC=d.records>0?58:0;
   const H_LISTE=34+n*LH+(d.autres?46:0);
-  const H_STATS=150;
+  // L'ÉQUIVALENT FUN, EN OPTION (case « Ajouter l'équivalent fun », décochée
+  // par défaut) : une ligne de plus sous les quatre chiffres. Absent, la mise
+  // en page est exactement celle d'avant.
+  const eq=(d.equivalent&&d.equivalent.texte)?d.equivalent:null;
+  const H_STATS=150+(eq?84:0);
   const H_MARQUE=marque?188:96;
   const HTOT=H_TITRE+H_DATE+H_REC+H_LISTE+H_STATS+H_MARQUE;
   let y=Math.max(150,Math.round((STORY_H-HTOT)/2));
@@ -38557,6 +38561,13 @@ function _dessinerBilanSeance(d,fond){
     g.fillStyle='rgba(255,255,255,.76)'; g.font='800 21px '+MONT;
     ecrireEspace(c.l,cx,y+134,4,true);
   });
+  if(eq){
+    const t='= '+eq.texte.toUpperCase()+' '+eq.emoji;
+    g.textAlign='center'; g.fillStyle='#ffffff';
+    const es=ajuste(t,'800',34,MONT,LARG,20);
+    g.font='800 '+es+'px '+MONT;
+    ecrire(t,STORY_L/2,y+192);
+  }
   g.textAlign='left';
   y+=H_STATS;
 
@@ -39153,8 +39164,29 @@ function _telechargerAvecEtat(btn){
 // aurait divergé du dessin de l'ecran de fin au premier ajustement.
 // Sans argument, le comportement est EXACTEMENT celui d'avant : la derniere
 // seance, par _bilanSeanceCourante.
+// LA CASE « Ajouter l'équivalent fun ». DÉCOCHÉE PAR DÉFAUT : le visuel est
+// déjà dense, et une ligne de plus ne doit y entrer que si l'athlète la veut.
+// Le choix est une préférence d'affichage de CET appareil (localStorage), pas
+// une donnée du dossier.
+function bilanEquivalentActif(){
+  try{ return localStorage.getItem('rc_bilan_equiv')==='1'; }catch(e){ return false; }
+}
+function bilanEquivalentBasculer(on){
+  try{ localStorage.setItem('rc_bilan_equiv',on?'1':'0'); }catch(e){}
+  // Les vignettes du sélecteur de fond redessinent la carte : on les repeint.
+  for(const k of ['wd-fonds','sd-fonds']){ try{ _visuelFondsPeindre(k); }catch(e){} }
+  return !!on;
+}
+function _htmlBilanEquivalent(){
+  return '<label class="rcf-eq-opt"><input type="checkbox"'+(bilanEquivalentActif()?' checked':'')
+    +' onchange="bilanEquivalentBasculer(this.checked)"> Ajouter l’équivalent fun</label>';
+}
 function _bilanDonneesDe(sc){
-  if(!sc) return _bilanSeanceCourante();
+  if(!sc){
+    const d=_bilanSeanceCourante();
+    if(d&&bilanEquivalentActif()){ try{ d.equivalent=equivalentTonnage(d.volume); }catch(e){ d.equivalent=null; } }
+    return d;
+  }
   const d=bilanSeanceDonnees(sc,currentUser);
   if(!d) return null;
   // LES RECORDS SONT RECOMPTES POUR CETTE SEANCE-LA. _bilanRecords est le
@@ -39166,6 +39198,8 @@ function _bilanDonneesDe(sc){
   }catch(e){ d.records=0; }
   // LA SIGNATURE DE L'ATHLETE, selon son reglage « Nom affiche sur mes visuels ».
   try{ d.signature=nomSurVisuels(currentUser); }catch(e){ d.signature=''; }
+  // L'équivalent fun, seulement si la case est cochée.
+  if(bilanEquivalentActif()){ try{ d.equivalent=equivalentTonnage(d.volume); }catch(e){ d.equivalent=null; } }
   return d;
 }
 function telechargerBilanSeance(sc){
@@ -39227,7 +39261,7 @@ function renderPartageBilan(){
     ?'<button type="button" class="rcf-share" onclick="partagerBilanSeance()">'
       +'Partager ma séance</button>':'';
   // LE FOND AVANT LES BOUTONS : on choisit, puis on télécharge.
-  z.innerHTML=_htmlVisuelFonds('wd-fonds')
+  z.innerHTML=_htmlVisuelFonds('wd-fonds')+_htmlBilanEquivalent()
     +'<button type="button" class="rcf-dl" id="wd-dl" '
     +'onclick="_telechargerAvecEtat(this)">'+icon('download',18)
     +'<span>Télécharger ma séance</span></button>'+part
@@ -52294,11 +52328,12 @@ function _rendrePartageSeanceRelue(sc){
   const part=(typeof navigator!=='undefined'&&navigator.share)
     ?'<button type="button" class="rcf-share" onclick="partagerSeanceRelue()">'
       +'Partager cette séance</button>':'';
-  z.innerHTML=_htmlVisuelFonds('sd-fonds')
+  z.innerHTML=_htmlVisuelFonds('sd-fonds')+_htmlBilanEquivalent()
     +'<button type="button" class="rcf-dl" onclick="telechargerSeanceRelue(this)">'
     +icon('download',18)+'<span>Télécharger cette séance</span></button>'+part
     +'<div class="rcf-note" id="sd-note">'+_visuelNoteFond(visuelFondEffectif())+'</div>';
-  monterSelecteurFond('sd-fonds',f=>_dessinerBilanSeance(d,f),'sd-note');
+  // Relu à chaque vignette : la case de l'équivalent fun change la carte.
+  monterSelecteurFond('sd-fonds',f=>{ const x=_bilanDonneesDe(sc)||d; return _dessinerBilanSeance(x,f); },'sd-note');
   return true;
 }
 // Les deux gestes. Ils passent par la seance RETENUE a l'ouverture de l'ecran,
@@ -52526,10 +52561,14 @@ function _htmlStatsFin(mins,sets,setsPlanned,vol,delta){
   // ⚠ L'IDENTIFIANT PORTE LE NOMBRE SEUL, jamais l'unite. arcChiffre ecrit en
   // `textContent` : une unite placee dans le meme noeud serait effacee des la
   // premiere frame, et y glisser du balisage l'aurait affiche tel quel.
-  const zone=(v,u,l,id)=>'<div class="rcf-st"><div class="rcf-st-v">'
+  // `apres` : une ligne sous le libellé — l'équivalent fun du volume.
+  const zone=(v,u,l,id,apres)=>'<div class="rcf-st"><div class="rcf-st-v">'
     +'<span'+(id?' id="'+id+'"':'')+'>'+v+'</span>'
     +(u?'<span class="rcf-st-u">'+u+'</span>':'')+'</div>'
-    +'<div class="rcf-st-l">'+l+'</div></div>';
+    +'<div class="rcf-st-l">'+l+'</div>'+(apres||'')+'</div>';
+  // « = 2 éléphants 🐘 », sous le VOLUME. Rien sous 2 kg.
+  let _eq=null; try{ _eq=equivalentTonnage(vol); }catch(e){ _eq=null; }
+  const _eqHtml=_eq?('<div class="rcf-st-eq">= '+escapeHtml(_eq.texte)+' <span aria-hidden="true">'+_eq.emoji+'</span></div>'):'';
   // La duree ne se compte PAS : « 3 h 25 » n'a pas de trajectoire depuis zero,
   // et la faire defiler en « 0 h 01, 0 h 02 » serait absurde. Les deux autres,
   // si — ce sont des quantites, et les voir monter est la recompense.
@@ -52540,7 +52579,7 @@ function _htmlStatsFin(mins,sets,setsPlanned,vol,delta){
     // ce que fmtSeries corrigeait, et on ne le perd pas. Complete, le total
     // n'apprend rien : on rend le nombre nu, qui se compte joliment.
     +zone(partielle?(nb(sets)+' / '+nb(setsPlanned)):nb(sets),'','Séries','rcf-st-series')
-    +zone(nb(vol),' kg','Volume','rcf-st-vol')
+    +zone(nb(vol),' kg','Volume','rcf-st-vol',_eqHtml)
     +'</div>'
     +(d>0?'<div class="rcf-delta"><span class="rcf-delta-v">+'+nb(d)+' kg</span>'
       +'<span class="rcf-delta-l">vs dernière séance</span></div>':'');
@@ -67807,6 +67846,46 @@ function partagerBadge(id,btn){
   if(sp&&ok){ sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent='Partager'; },2000); }
   return ok;
 }
+// ══ L'ÉQUIVALENT FUN D'UN TONNAGE ═════════════════════════════════════════
+//
+// « 12 400 kg » ne se voit pas ; « 2 éléphants » si. La table est TRIÉE, du
+// plus léger au plus lourd, et le choix tient en une règle : L'OBJET LE PLUS
+// LOURD QUI DONNE AU MOINS 1. Le nombre tombe alors entre 1 et 20 — les
+// écarts de la table ne dépassent jamais ×20, sauf entre la Statue de la
+// Liberté et la tour Eiffel (×36) : entre 4,1 et 7,3 millions de kg, on
+// garde la Statue, et le nombre dépasse 20. Arrondi au demi.
+//
+// Sous 2 kg (un demi-chat), rien : un « 0,5 chat » ne raconte rien.
+const EQUIV_TONNAGE=Object.freeze([
+  {kg:4,emoji:'🐈',un:'chat',plu:'chats'},
+  {kg:75,emoji:'🧍',un:'humain',plu:'humains'},
+  {kg:300,emoji:'🎹',un:'piano',plu:'pianos'},
+  {kg:1200,emoji:'🚗',un:'voiture',plu:'voitures'},
+  {kg:2300,emoji:'🦏',un:'rhinocéros',plu:'rhinocéros'},
+  {kg:6000,emoji:'🐘',un:'éléphant',plu:'éléphants'},
+  {kg:8000,emoji:'🦖',un:'T-Rex',plu:'T-Rex'},
+  {kg:12000,emoji:'🚌',un:'bus',plu:'bus'},
+  {kg:150000,emoji:'🐋',un:'baleine bleue',plu:'baleines bleues'},
+  {kg:204000,emoji:'🗽',un:'Statue de la Liberté',plu:'Statues de la Liberté'},
+  {kg:7300000,emoji:'🗼',un:'tour Eiffel',plu:'tours Eiffel'}
+]);
+/**
+ * PURE. L'équivalent d'un tonnage, ou null sous 2 kg.
+ * @param {number} kg
+ * @returns {?{emoji:string,libelle:string,nombre:number,texte:string}}
+ *   `libelle` est accordé au nombre (le pluriel à partir de 2, comme le veut
+ *   le français : « 1,5 éléphant ») ; `texte` est la ligne prête à poser,
+ *   « 2 éléphants ».
+ */
+function equivalentTonnage(kg){
+  const v=Number(kg);
+  if(!isFinite(v)||v<2) return null;
+  let o=EQUIV_TONNAGE[0];
+  for(const x of EQUIV_TONNAGE) if(v/x.kg>=1) o=x;
+  const n=Math.max(0.5,Math.round(v/o.kg*2)/2);
+  const libelle=n>=2?o.plu:o.un;
+  return {emoji:o.emoji,libelle,nombre:n,texte:String(n).replace('.',',')+' '+libelle};
+}
 // ══════════════════ WRAPPED : LE MOIS, L'ANNÉE, EN CINQ HISTOIRES ══════════
 //
 // Le bilan d'une période, raconté comme une story : cinq slides plein écran,
@@ -67979,7 +68058,9 @@ const _wrNb=(v,dec)=>{ const x=Number(v)||0;
 // la même liste, et ne peuvent donc pas se contredire.
 function wrappedSlides(w,per){
   const t=_wrTonnage(w.tonnage);
-  const voitures=Math.floor(w.tonnage/1200);
+  // L'ÉQUIVALENT FUN : c'est sur un cumul de mois ou d'année qu'il frappe le
+  // plus — 180 t, c'est une baleine bleue.
+  const eq=equivalentTonnage(w.tonnage);
   const r=w.meilleurRecord;
   const nb=w.badgesGagnes.length;
   return [
@@ -67987,7 +68068,7 @@ function wrappedSlides(w,per){
      lignes:[fmtDureeHeures(w.dureeTotale)+' d’entraînement',
        w.seances?('soit '+fmtDureeHeures(Math.round(w.dureeTotale/w.seances))+' par séance'):'']},
     {k:'tonnage',sur:'TU AS SOULEVÉ',grand:t.v,dec:t.dec,unite:t.u,
-     lignes:[voitures>=1?('l’équivalent de '+_wrNb(voitures)+' voiture'+(voitures>1?'s':'')):'',
+     lignes:[eq?('= '+eq.texte+' '+eq.emoji):'',
        w.muscleTop?('Muscle n°1 : '+w.muscleTop.lib+' · '+w.muscleTop.series+' séries'):'']},
     {k:'records',sur:'RECORDS BATTUS',grand:w.records,dec:0,unite:w.records>1?'RECORDS':'RECORD',
      lignes:[r?(r.nom+' : '+_recKg(r.avant)+' → '+_recKg(r.apres)+' kg'):'Le prochain t’attend.',
@@ -67995,7 +68076,7 @@ function wrappedSlides(w,per){
     {k:'habitudes',sur:'TES HABITUDES',grand:w.serieMax,dec:0,unite:w.serieMax>1?'SEMAINES D’AFFILÉE':'SEMAINE D’AFFILÉE',
      lignes:[w.jourPrefere?('Ton jour : le '+w.jourPrefere.lib):'',
        w.heureMoyenne?('Ton heure : '+w.heureMoyenne.lib):'']},
-    {k:'profil',sur:'TON PROFIL',profil:w.profil,
+    {k:'profil',sur:'TON PROFIL',profil:w.profil,equivalent:eq,
      resume:[[_wrNb(w.seances),w.seances>1?'séances':'séance'],[_wrNb(t.v,t.dec),t.u.toLowerCase()],
        [_wrNb(w.records),w.records>1?'records':'record'],[_wrNb(w.serieMax),'sem. d’affilée']]}
   ].map(s=>Object.assign(s,{lignes:(s.lignes||[]).filter(Boolean)}));
@@ -68058,8 +68139,14 @@ function _dessinerWrapped(w,per,i,signature){
       g.fillStyle='#fff'; g.font='700 150px '+BEBAS; o.ecrire(v,x,y);
       g.fillStyle='#E02020'; g.font='800 32px '+MONT; o.ecrireEspace(lib.toUpperCase(),x,y+56,4,true);
     });
+    if(s.equivalent){
+      const t='= '+s.equivalent.texte.toUpperCase()+' '+s.equivalent.emoji;
+      g.fillStyle='#fff';
+      const es=o.ajuste(t,'800',44,MONT,LARG,22);
+      g.font='800 '+es+'px '+MONT; o.ecrire(t,cx,1530);
+    }
     g.fillStyle='rgba(255,255,255,.7)'; g.font='800 30px '+MONT;
-    o.ecrireEspace(per.titre,cx,1600,6,true);
+    o.ecrireEspace(per.titre,cx,1620,6,true);
   }
   o.ombre(false);
   g.fillStyle='#E02020'; g.fillRect(cx-60,STORY_H-210,120,5);
@@ -68111,6 +68198,7 @@ function _wrHtmlSlide(s,k){
       +'<h2 class="wr-profil-nom">'+escapeHtml(p.nom)+'</h2>'
       +'<p class="wr-phrase">'+escapeHtml(p.phrase)+'</p>'
       +'<div class="wr-resume">'+s.resume.map(([v,l])=>'<div><b>'+escapeHtml(v)+'</b><span>'+escapeHtml(l)+'</span></div>').join('')+'</div>'
+      +(s.equivalent?'<p class="wr-equiv">= '+escapeHtml(s.equivalent.texte)+' '+s.equivalent.emoji+'</p>':'')
       +'<button type="button" class="btn btn-red wr-partager" onclick="event.stopPropagation();partagerWrapped(4,this)">'
         +icon('share',16)+' <span>Partager mon résumé</span></button>'
       +'</section>';

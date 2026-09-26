@@ -47968,6 +47968,68 @@ async function testExercices(){
         return _echec('boutons Partager / Télécharger');
       return d.querySelector('#musc-t-fonds')?true:_echec('pas de sélecteur de fond');})());
 
+    // ══ L'ÉQUIVALENT FUN D'UN TONNAGE (26/09/2026) ═════════════════════════
+    ok('equivalentTonnage : l’objet le plus lourd qui donne au moins 1, arrondi au demi',(()=>{
+      const T=kg=>{ const e=equivalentTonnage(kg); return e?e.texte:null; };
+      const cas=[[1,null],[0,null],[-5,null],[NaN,null],[2,'0,5 chat'],[4,'1 chat'],[150,'2 humains'],
+        [6000,'1 éléphant'],[11000,'1,5 T-Rex'],[12400,'1 bus'],[24000,'2 bus'],[180000,'1 baleine bleue'],
+        [300000,'1,5 Statue de la Liberté'],[612000,'3 Statues de la Liberté'],[7300000,'1 tour Eiffel'],
+        [14600000,'2 tours Eiffel']];
+      for(const [kg,att] of cas) if(T(kg)!==att) return _echec(kg+' kg → '+T(kg)+' au lieu de '+att);
+      // Le pluriel à partir de 2 : « 1,5 éléphant ».
+      if(T(9000)!=='1 T-Rex'||equivalentTonnage(9000).libelle!=='T-Rex') return _echec('9 000 kg');
+      if(equivalentTonnage(9000).emoji!=='🦖') return _echec('emoji');
+      if(equivalentTonnage(6000*1.5).nombre!==1) return _echec('le T-Rex passe devant l’éléphant');
+      // La table est triée, et le nombre reste entre 1 et 20 hors du trou
+      // Statue → tour Eiffel.
+      for(let i=1;i<EQUIV_TONNAGE.length;i++) if(EQUIV_TONNAGE[i].kg<=EQUIV_TONNAGE[i-1].kg) return _echec('table non triée');
+      for(let kg=4;kg<4.08e6;kg*=1.07){
+        const e=equivalentTonnage(kg);
+        if(!e||e.nombre<1||e.nombre>20) return _echec(Math.round(kg)+' kg → '+(e&&e.nombre));
+        if(Math.round(e.nombre*2)!==e.nombre*2) return _echec('pas arrondi au demi : '+e.nombre);
+      }
+      return true;})());
+    ok('Équivalent fun : sous le VOLUME de la fin de séance',(()=>{
+      const h=_htmlStatsFin(60,10,10,12400,0);
+      const d=document.createElement('div'); d.innerHTML=h;
+      const eq=d.querySelector('.rcf-st-eq');
+      if(!eq) return _echec('pas de ligne sous le volume');
+      if(eq.closest('.rcf-st').querySelector('#rcf-st-vol')===null) return _echec('la ligne n’est pas dans la zone du volume');
+      if(eq.textContent.indexOf('= 1 bus')<0) return _echec(eq.textContent);
+      return _htmlStatsFin(60,0,10,0,0).indexOf('rcf-st-eq')<0?true:_echec('une ligne pour un volume nul');})());
+    ok('Équivalent fun : en option sur le visuel du bilan, décoché par défaut',(()=>{
+      let sv=null; try{ sv=localStorage.getItem('rc_bilan_equiv'); localStorage.removeItem('rc_bilan_equiv'); }catch(e){}
+      try{
+        if(bilanEquivalentActif()) return _echec('coché par défaut');
+        const _c=document.createElement('div'); _c.innerHTML=_htmlBilanEquivalent();
+        if(_c.querySelector('input').checked) return _echec('la case est cochée par défaut');
+        if(_htmlBilanEquivalent().indexOf('Ajouter l’équivalent fun')<0) return _echec('libellé');
+        const base={titre:'PUSH',dateCourte:'26/09/2026',dureeLib:'1H00',ex:[{nom:'DC',series:3,kg:80}],
+          volume:12400,nbEx:1,series:3,reps:30,records:0,signature:'K'};
+        const P=CanvasRenderingContext2D.prototype, f=P.fillText, vus=[];
+        P.fillText=function(t){ vus.push(String(t)); return f.apply(this,arguments); };
+        try{
+          _dessinerBilanSeance(Object.assign({},base),'rouge');
+          if(vus.join('|').indexOf('= 1 BUS')>=0) return _echec('dessiné sans l’option');
+          vus.length=0;
+          _dessinerBilanSeance(Object.assign({},base,{equivalent:equivalentTonnage(12400)}),'rouge');
+          if(vus.join('|').indexOf('= 1 BUS')<0) return _echec('absent avec l’option');
+        } finally { P.fillText=f; }
+        bilanEquivalentBasculer(true);
+        return bilanEquivalentActif()?true:_echec('la case ne s’enregistre pas');
+      } finally { try{ if(sv===null) localStorage.removeItem('rc_bilan_equiv'); else localStorage.setItem('rc_bilan_equiv',sv); }catch(e){} }})());
+    ok('Équivalent fun : dans le Wrapped, sur le cumul',(()=>{
+      const w={seances:10,tonnage:180000,dureeTotale:600,meilleurRecord:null,muscleTop:null,jourPrefere:null,
+        heureMoyenne:null,serieMax:2,badgesGagnes:[],profil:{cle:'volume',nom:'Le Volume',phrase:'x'},records:0};
+      const per={cle:'m-2026-09',titre:'TON MOIS DE SEPTEMBRE'};
+      const sl=wrappedSlides(w,per);
+      if(sl[1].lignes[0]!=='= 1 baleine bleue 🐋') return _echec('slide tonnage : '+sl[1].lignes[0]);
+      if(!sl[4].equivalent||sl[4].equivalent.texte!=='1 baleine bleue') return _echec('résumé');
+      const P=CanvasRenderingContext2D.prototype, f=P.fillText, vus=[];
+      P.fillText=function(t){ vus.push(String(t)); return f.apply(this,arguments); };
+      try{ _dessinerWrapped(w,per,4,'K'); } finally { P.fillText=f; }
+      return vus.join('|').indexOf('= 1 BALEINE BLEUE')>=0?true:_echec('absent du résumé dessiné');})());
+
     ok('Les badges n’ont que trois points d’appel',(()=>{
       const s=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
       const n=(s.match(/majBadges\(/g)||[]).length;
