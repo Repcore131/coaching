@@ -45863,6 +45863,30 @@ async function testExercices(){
       if(!p.genou_l) return _echec('les autres points ont disparu');
       return true;})());
 
+    // ══ LE NOM SUR LES VISUELS (26/09/2026) ═══════════════════════════════
+    ok('VISUELS : le nom affiché suit le réglage — prénom par défaut, pseudo, ou rien',(()=>{
+      if(typeof nomSurVisuels!=='function') return _echec('nomSurVisuels n’existe pas');
+      const cas=[
+        [{fname:'Kévin'},'KÉVIN'],
+        [{fname:'Kévin',pseudo:'KevFit',visuelNom:'prenom'},'KÉVIN'],
+        [{fname:'Kévin',pseudo:'KevFit',visuelNom:'pseudo'},'KEVFIT'],
+        [{fname:'Kévin',visuelNom:'pseudo'},'KÉVIN'],
+        [{fname:'Kévin',pseudo:'KevFit',visuelNom:'rien'},''],
+        [{},''],
+        [{fname:'  Jean   Paul '},'JEAN PAUL'],
+        [{fname:'x',visuelNom:'nimporte'},'X']];
+      for(const [u,att] of cas){
+        const r=nomSurVisuels(u);
+        if(r!==att) return _echec(JSON.stringify(u)+' → « '+r+' » au lieu de « '+att+' »');
+      }
+      if(CHAMPS_NON_SANTE.indexOf('pseudo')<0||CHAMPS_NON_SANTE.indexOf('visuelNom')<0)
+        return _echec('pseudo / visuelNom ne sont pas classés');
+      return true;})());
+    ok('VISUELS : sans lienPerso(), la sortie d’un visuel ne touche pas au presse-papiers',(()=>{
+      if(typeof _storyCopierLien!=='function') return _echec('_storyCopierLien n’existe pas');
+      if(typeof lienPerso==='function') return true;
+      return _storyCopierLien()===false?true:_echec('un lien serait copié sans lienPerso');})());
+
     // ══ LOT 8 : L'ANALYSE MORPHO, AUTOMATIQUE ET FIGÉE (23/09/2026) ══════
     // « Déclenchement automatique à l'enregistrement du premier bilan. Aux
     //   bilans suivants : rien. La morphologie d'un adulte ne bouge pas. »

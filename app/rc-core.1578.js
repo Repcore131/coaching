@@ -5610,6 +5610,10 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // date de naissance — seulement un horodatage d'ouverture et un nombre de
   // seances deja faites au depart.
   'essai',
+  // Le nom sous lequel l'athlete signe ses visuels (seance, et ceux a venir) :
+  // un reglage d'affichage et un pseudo qu'il choisit. Aucune donnee de sante,
+  // mais ils DOIVENT etre classes, sinon ils ne sont proteges par rien.
+  'pseudo','visuelNom',
   // La date a laquelle les medias d'un dossier dormant ont ete detruits. Une
   // date, et rien d'autre : ni mesure, ni ressenti. Elle DOIT etre classee,
   // sinon elle n'est protegee par rien — signale par l'assertion « Chaque champ
@@ -9213,7 +9217,7 @@ function _toastCoachLarge(){
     return !!(a&&a.id==='s-coach-program'&&a.getAttribute('data-ctx')==='coach');
   }catch(e){ return false; }
 }
-function toast(msg,c='var(--green)'){
+function toast(msg,c='var(--green)',duree){
   const t=document.getElementById('toast');
   // L'erreur se reconnaît à sa COULEUR, seule chose que les cent sites d'appel
   // fournissent déjà. Aucun d'eux n'a été touché : les vingt-six qui passent
@@ -9245,7 +9249,7 @@ function toast(msg,c='var(--green)'){
       t.style.transform=_large?'translateX(-50%) translateY(-40px)'
                               :'translateX(-50%) translateY(80px)';
       _toastMinuteur=null;
-    },_large?4500:2800);
+    },(duree>0)?duree:(_large?4500:2800));
   };
   // LE RELAIS. Un toast deja affiche sort en 90 ms avant que le suivant entre :
   // sans lui, le texte etait remplace sur place et rien ne disait qu'un nouveau
@@ -37766,6 +37770,22 @@ function _marqueCoachPrete(){
   const im=_marqueCoachImg;
   return (im&&im.complete&&im.naturalWidth>0)?im:null;
 }
+// ══ LE NOM SUR LES VISUELS ════════════════════════════════════════════
+// PURE. Le nom que l'athlete a choisi de montrer sur ses visuels, en
+// majuscules, ou '' s'il ne veut rien montrer. Un seul reglage pour tous les
+// visuels, presents et a venir : « Nom affiche sur mes visuels » dans le
+// profil — prenom (defaut), pseudo, ou rien. Un pseudo demande mais absent
+// retombe sur le prenom ; sans prenom non plus, rien.
+const VISUEL_NOMS=Object.freeze(['prenom','pseudo','rien']);
+function nomSurVisuels(u){
+  if(!u) return '';
+  const r=VISUEL_NOMS.indexOf(u.visuelNom)>=0?u.visuelNom:'prenom';
+  if(r==='rien') return '';
+  const net=x=>String(x||'').replace(/\s+/g,' ').trim().slice(0,24);
+  const p=net(u.pseudo), f=net(u.fname);
+  const n=(r==='pseudo'&&p)?p:f;
+  try{ return n.toLocaleUpperCase('fr-FR'); }catch(e){ return n.toUpperCase(); }
+}
 function _dessinerBilanSeance(d){
   const cv=document.createElement('canvas');
   cv.width=STORY_L; cv.height=STORY_H;
@@ -37947,8 +37967,27 @@ function _dessinerBilanSeance(d){
   }
   ombre(true);
   g.textAlign='center';
-  g.fillStyle='rgba(255,255,255,.48)'; g.font='700 34px '+BEBAS;
-  ecrireEspace('REPCORE',cxm,y+30,5,true);
+  // LA SIGNATURE DE L'ATHLETE. Kevin, 26/09/2026 : « <PRENOM OU PSEUDO> ·
+  // REPCORE » a la place du mot-symbole seul, meme police, meme double passe
+  // d'ombre, en blanc a 85 %, espacement large. Sans nom a montrer (reglage
+  // « rien », ou ni prenom ni pseudo), le mot-symbole d'avant, inchange.
+  // La mise en page ne bouge pas : la ligne occupe exactement la place du
+  // mot-symbole, et la taille se plie si un nom long depasse la largeur.
+  // ⚠ LE DESSIN NE LIT QUE `d`, jamais le dossier (test « L'image reprend
+  //   les chiffres de l'écran ») : la signature y est posée par _bilanDonneesDe.
+  const sig=String(d.signature||'');
+  if(sig){
+    const t=sig+' · REPCORE', esp=7;
+    let ts=34;
+    const larg=()=>{ g.font='700 '+ts+'px '+BEBAS;
+      return String(t).split('').reduce((a,c)=>a+g.measureText(c).width+esp,0)-esp; };
+    while(larg()>LARG&&ts>22) ts-=1;
+    g.fillStyle='rgba(255,255,255,.85)'; g.font='700 '+ts+'px '+BEBAS;
+    ecrireEspace(t,cxm,y+30,esp,true);
+  } else {
+    g.fillStyle='rgba(255,255,255,.48)'; g.font='700 34px '+BEBAS;
+    ecrireEspace('REPCORE',cxm,y+30,5,true);
+  }
   ombre(false);
   return cv;
 }
@@ -38055,6 +38094,22 @@ function _estIOS(){
 //
 // TOUT EST SYNCHRONE, et ce n'est pas un detail : le moindre await
 // consommerait le geste utilisateur, et iOS refuserait le partage.
+// LE LIEN DE L'ATHLETE, COPIE A LA SORTIE D'UN VISUEL. Seulement si
+// lienPerso() existe (idee 16) : sans elle, rien du tout. Instagram ne lit pas
+// les liens poses sur une image ; le sticker « Lien » de la story, si. On met
+// donc le lien dans le presse-papiers au moment ou l'athlete s'apprete a
+// publier, et on lui dit quoi en faire.
+function _storyCopierLien(){
+  if(typeof lienPerso!=='function') return false;
+  try{
+    const l=lienPerso();
+    if(!l||!navigator.clipboard||!navigator.clipboard.writeText) return false;
+    navigator.clipboard.writeText(String(l))
+      .then(()=>toast('Lien copié · ajoute le sticker Lien dans ta story','var(--green)',4000))
+      .catch(()=>{});
+    return true;
+  }catch(e){ return false; }
+}
 function _storySortirTelechargement(cv,nomFichier){
   const dataUrl=cv.toDataURL('image/png');
   cv.width=0; cv.height=0;            // 8 Mo rendus tout de suite
@@ -38066,6 +38121,7 @@ function _storySortirTelechargement(cv,nomFichier){
   a.click();
   a.remove();
   toast('Image téléchargée','var(--green)');
+  _storyCopierLien();
   return true;
 }
 // Rend false quand le partage natif n'existe pas : l'appelant retombe alors
@@ -38091,6 +38147,7 @@ function _storySortirPartage(cv,nomFichier,meta){
       const riche=Object.assign({files:[f]},meta);
       try{ if(navigator.canShare(riche)) charge=riche; }catch(e){}
     }
+    _storyCopierLien();
     navigator.share(charge).catch(()=>{});
     return true;
   }
@@ -38190,6 +38247,8 @@ function _bilanDonneesDe(sc){
     const ant=listeHistoriqueSeances(currentUser).filter(x=>x.date<sc.date);
     d.records=recordsDeSeance(sc,ant).length;
   }catch(e){ d.records=0; }
+  // LA SIGNATURE DE L'ATHLETE, selon son reglage « Nom affiche sur mes visuels ».
+  try{ d.signature=nomSurVisuels(currentUser); }catch(e){ d.signature=''; }
   return d;
 }
 function telechargerBilanSeance(sc){
@@ -102368,6 +102427,31 @@ function setAthleteGender(g){
   if(bm){bm.style.background=g==='H'?'var(--red)':'none';bm.style.borderColor=g==='H'?'var(--red)':'var(--border)';}
   if(bf){bf.style.background=g==='F'?'var(--red)':'none';bf.style.borderColor=g==='F'?'var(--red)':'var(--border)';}
 }
+// « NOM AFFICHE SUR MES VISUELS ». Trois choix, un pseudo s'il le veut.
+let _atpVisuelNom='prenom';
+function setVisuelNom(v){
+  _atpVisuelNom=VISUEL_NOMS.indexOf(v)>=0?v:'prenom';
+  for(const k of VISUEL_NOMS){
+    const b=document.getElementById('atp-vn-'+k);
+    if(!b) continue;
+    const on=k===_atpVisuelNom;
+    b.style.background=on?'var(--red)':'none';
+    b.style.borderColor=on?'var(--red)':'var(--border)';
+    b.setAttribute('aria-pressed',on?'true':'false');
+  }
+  const bloc=document.getElementById('atp-pseudo-bloc');
+  if(bloc) bloc.style.display=_atpVisuelNom==='pseudo'?'block':'none';
+  _apercuVisuelNom();
+}
+function _apercuVisuelNom(){
+  const z=document.getElementById('atp-vn-apercu');
+  if(!z||!currentUser) return;
+  const essai=Object.assign({},currentUser,{visuelNom:_atpVisuelNom,
+    pseudo:(document.getElementById('atp-pseudo')?.value||''),
+    fname:(document.getElementById('atp-fname')?.value||currentUser.fname||'')});
+  const n=nomSurVisuels(essai);
+  z.textContent=n?(n+' · REPCORE'):'REPCORE';
+}
 function openAthleteProfile(){
   const u=currentUser;
   const circle=document.getElementById('atp-photo-circle');
@@ -102376,6 +102460,9 @@ function openAthleteProfile(){
   if(fnEl) fnEl.value=u.fname||'';
   const lnEl=document.getElementById('atp-lname');
   if(lnEl) lnEl.value=u.lname||'';
+  const psEl=document.getElementById('atp-pseudo');
+  if(psEl) psEl.value=u.pseudo||'';
+  setVisuelNom(u.visuelNom||'prenom');
   // LA DATE D'ABORD. Le champ d'âge n'apparaît qu'à défaut — dossiers créés
   // par doRescue, qui ne portent pas de date de naissance.
   const bdEl=document.getElementById('atp-birthdate');
@@ -102416,6 +102503,10 @@ function saveAthleteProfile(){
   const _ln=(document.getElementById('atp-lname')?.value||'').trim().slice(0,40);
   if(_fn) currentUser.fname=_fn;
   if(_ln) currentUser.lname=_ln;
+  // Le nom sur les visuels : le reglage, et le pseudo (vide = retire).
+  currentUser.visuelNom=_atpVisuelNom;
+  const _ps=(document.getElementById('atp-pseudo')?.value||'').replace(/\s+/g,' ').trim().slice(0,24);
+  if(_ps) currentUser.pseudo=_ps; else delete currentUser.pseudo;
   // L'ÂGE EST DÉDUIT, JAMAIS SAISI — quand une date est disponible. C'est ce
   // qui met fin à la correction effacée au redémarrage : le boot recalcule
   // depuis `birthdate`, il retrouvera donc exactement ce qui est écrit ici.
