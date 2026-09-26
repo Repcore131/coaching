@@ -1917,13 +1917,13 @@ function _htmlAlertePalier(coach,users){
   const chaud=(a.type!=='descente');
   const bord=chaud?'var(--orange)':'var(--green)';
   return '<div style="background:var(--surface-1);border:1px solid '+bord+';'
-    +'border-left:3px solid '+bord+';border-radius:0 var(--r-3) var(--r-3) 0;padding:11px 13px;'
+    +'border-left:3px solid '+bord+';border-radius:0 var(--r-3) var(--r-3) 0;padding:12px 14px;'
     +'margin-bottom:14px">'
     +'<div style="font-weight:800;font-size:var(--fs-sm);color:'+bord+';line-height:1.5">'
     +escapeHtml(a.titre)+'</div>'
-    +'<div class="sub" style="font-size:var(--fs-xs);margin-top:5px;line-height:1.6">'
+    +'<div class="sub" style="font-size:var(--fs-xs);margin-top:6px;line-height:1.6">'
     +escapeHtml(a.texte)+'</div>'
-    +'<button class="btn btn-outline btn-sm" style="margin-top:9px;width:100%;min-height:44px" '
+    +'<button class="btn btn-outline btn-sm" style="margin-top:10px;width:100%;min-height:44px" '
     +'onclick="ouvrirMonAbonnement()">Changer de formule</button>'
     +'</div>';
 }
@@ -1950,7 +1950,7 @@ function _htmlBandeauPaliers(coach,users){
   const depasse=fiable&&n>quota;
   return '<div style="display:flex;align-items:center;gap:10px;background:var(--surface-1);'
     +'border:1px solid '+(depasse?'var(--orange)':'var(--border)')+';border-radius:var(--r-3);'
-    +'padding:10px 13px;margin-bottom:14px">'
+    +'padding:10px 14px;margin-bottom:14px">'
     +'<div style="flex:1;min-width:0">'
     +'<div style="font-weight:800;font-size:var(--fs-sm)">'+escapeHtml(compte)+'</div>'
     +'<div class="sub" style="font-size:var(--fs-2xs);margin-top:2px">Formule '+escapeHtml(pal.titre)
@@ -2011,7 +2011,7 @@ function _htmlRappelPurge(users){
   if(t.fichiers<CLD_RAPPEL_MINI) return '';
   const jours=t.plusVieux?Math.floor((Date.now()-t.plusVieux)/864e5):0;
   return '<div style="margin-top:10px;background:var(--surface-2);border:1px solid var(--border);'
-    +'border-radius:var(--r-2);padding:9px 11px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">'
+    +'border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">'
     +'<strong style="color:var(--text)">'+t.fichiers+' fichiers</strong> attendent d’être supprimés '
     +'chez l’hébergeur'+(jours>2?(', le plus ancien depuis '+jours+' jours'):'')+'.<br>'
     +'Exporte la base (console Firebase, Realtime Database, Exporter le JSON) et lance&nbsp;:<br>'
@@ -2029,7 +2029,7 @@ function _renderAbonnementCoach(users){
   const n=countActiveAthletes(u,users);
   const depasse=fiable&&n>quota;
   const suivant=_palierSuivant(cle);
-  const l=(t,v)=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:3px 0">`
+  const l=(t,v)=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:4px 0">`
     +`<span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:var(--text)">${escapeHtml(v)}</span></div>`;
   // Le compteur ne ment pas quand il ne sait pas. `users` ne contient que ce
   // que la synchronisation a rapatrié : sur un appareil neuf, annoncer
@@ -2039,26 +2039,26 @@ function _renderAbonnementCoach(users){
   const cartes=COACH_PALIERS.map(x=>{
     const ici=x.cle===cle, id=x.planId();
     return `<div style="flex:1;min-width:140px;border:2px solid ${ici?'var(--red)':'var(--border)'};
-      background:${ici?'rgba(224,32,32,.08)':'transparent'};border-radius:var(--r-3);padding:13px 12px;text-align:center">
+      background:${ici?'rgba(224,32,32,.08)':'transparent'};border-radius:var(--r-3);padding:14px 12px;text-align:center">
       <div style="font-size:var(--fs-xs);color:${ici?'var(--red)':'var(--sub)'};font-weight:800;
-        text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">${escapeHtml(x.titre)}</div>
+        text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">${escapeHtml(x.titre)}</div>
       <div style="font-size:var(--fs-xl);font-weight:900;color:var(--text);line-height:1">${x.prix===0?'Gratuit':escapeHtml(x.prix+' €')}</div>
-      <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:3px">${escapeHtml(x.periode||'')}</div>
+      <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">${escapeHtml(x.periode||'')}</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:6px;line-height:1.5">${escapeHtml(x.detail)}</div>
       ${(id&&!ici)?`<button class="btn btn-red btn-sm" style="margin-top:10px;width:100%"
         onclick="souscrireCoach('${x.cle}')">Choisir ${escapeHtml(x.titre)}</button>`:''}
     </div>`;
   }).join('');
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:18px;margin-bottom:18px">
+  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:20px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:14px">Mon abonnement</div>
     ${l('Formule',pal.titre)}
     ${l('Athlètes',compteur)}
     ${suivant?l('Formule suivante',suivant.titre+', '+suivant.prix+' € '+suivant.periode):''}
     ${depasse?`<div style="margin-top:10px;background:var(--warning-bg);border:1px solid var(--warning-border);
-      border-radius:var(--r-2);padding:9px 11px;font-size:var(--fs-xs);color:var(--orange);line-height:1.6">
+      border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-xs);color:var(--orange);line-height:1.6">
       Tu suis ${n} athlètes pour une formule qui en prévoit ${_quotaTexte(quota)}.
       Rien n'est bloqué : tes athlètes gardent tout leur accès.</div>`:''}
-    <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:14px">${cartes}</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">${cartes}</div>
     <button class="btn btn-outline btn-sm" style="margin-top:14px;width:100%"
       onclick="exporterMesDonnees()">Exporter toutes mes données</button>
     ${_htmlRappelPurge(users)}
@@ -2380,9 +2380,9 @@ function _renderAbonnement(){
   const fin=finAccesAbonnement(u);
   const finTxt=fin?new Date(fin).toLocaleDateString('fr-FR'):'la fin de la période réglée';
   const pal=SUB_PALIERS.find(x=>x.cle===(abonnementDe(u).palier))||SUB_PALIERS[1];
-  const l=(t,v)=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:3px 0">
+  const l=(t,v)=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:4px 0">
     <span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:var(--text)">${escapeHtml(v)}</span></div>`;
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:18px;margin-bottom:18px">
+  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:20px;margin-bottom:20px">
     <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:8px">Mon abonnement</div>
     ${l('Formule',(pal&&pal.titre)||'Mensuel')}
     ${l('Prix',((pal&&pal.prix)||prixOffre('essentielle'))+' '+((pal&&pal.periode)||'par mois'))}
@@ -2391,10 +2391,10 @@ function _renderAbonnement(){
           lisait qu'il ne serait pas prélevé avant un an. La date n'a pas
           changé, le mot si. */''}
     ${fin?l(r?'Accès jusqu\'au':'Engagement jusqu\'au',finTxt):''}
-    ${r?`<div style="margin-top:12px;background:var(--surface-2);border-radius:var(--r-3);padding:12px 13px">
+    ${r?`<div style="margin-top:12px;background:var(--surface-2);border-radius:var(--r-3);padding:12px 14px">
         <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-bottom:8px">Résiliation demandée le ${escapeHtml(new Date(r.ts).toLocaleDateString('fr-FR'))}. Ton accès reste ouvert jusqu'au ${escapeHtml(finTxt)}, et rien ne se reconduit ensuite.</div>
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.7">${escapeHtml(RESIL_MOYENS)}</div>
-        <ol style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.8;margin:8px 0 0 18px">${RESIL_PAYPAL.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')}</ol>
+        <ol style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.8;margin:8px 0 0 20px">${RESIL_PAYPAL.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')}</ol>
       </div>`
       :`<button class="btn btn-outline" style="width:100%;margin-top:12px;letter-spacing:1px" onclick="_ouvrirResiliation()">Résilier mon abonnement</button>
         <div id="cr-resil" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px"></div>`}
@@ -2409,7 +2409,7 @@ function _ouvrirResiliation(){
   if(!z) return false;
   z.style.display='block';
   z.innerHTML=`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:8px">Si tu veux nous dire pourquoi : c'est facultatif, et ça ne change rien à ta résiliation.</div>
-    <select id="resil-motif" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:var(--r-3);font-family:Montserrat,sans-serif;font-size:var(--fs-md);margin-bottom:8px">
+    <select id="resil-motif" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:var(--r-3);font-family:Montserrat,sans-serif;font-size:var(--fs-md);margin-bottom:8px">
       <option value="">Sans réponse</option>
       ${RESIL_MOTIFS.map(m=>'<option value="'+escapeHtml(m)+'">'+escapeHtml(m)+'</option>').join('')}
     </select>
@@ -2730,7 +2730,7 @@ function _icoG(nom,cx,cy,taille,couleur,epaisseur){
     +' fill="none" stroke="'+couleur+'" stroke-width="'+(epaisseur||2)+'" stroke-linecap="round" stroke-linejoin="round">'
     +p+'</g>';
 }
-function icon(name,size=20){const s=ICONS[name];if(!s) return '';return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:'+size+'px;height:'+size+'px;display:inline-block;vertical-align:middle;flex-shrink:0">'+s+'</svg>';}
+function icon(name,size=20){const s=ICONS[name];if(!s) return '';return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:'+size+'px;height:'+size+'px;display:inline-block;vertical-align:middle;flex-shrink:0">'+s+'</svg>';}
 const ILLUS={
   dumbbell:`<line x1="24" y1="48" x2="72" y2="48" stroke-dasharray="4.5 3"/><line x1="24" y1="32" x2="24" y2="64"/><line x1="12" y1="38" x2="28" y2="38"/><line x1="12" y1="58" x2="28" y2="58"/><line x1="72" y1="32" x2="72" y2="64"/><line x1="68" y1="38" x2="84" y2="38"/><line x1="68" y1="58" x2="84" y2="58"/><line x1="48" y1="72" x2="48" y2="80" stroke-width="1.5"/><line x1="44" y1="76" x2="52" y2="76" stroke-width="1.5"/>`,
   pill:`<rect x="14" y="36" width="68" height="24" rx="12" stroke-dasharray="5 3"/><line x1="48" y1="36" x2="48" y2="60" stroke-dasharray="2 2.5" opacity="0.5"/><line x1="48" y1="70" x2="48" y2="78" stroke-width="1.5"/><line x1="44" y1="74" x2="52" y2="74" stroke-width="1.5"/>`,
@@ -2741,7 +2741,7 @@ const ILLUS={
   users:`<circle cx="38" cy="38" r="14" stroke-dasharray="5 3"/><path d="M10,76 Q10,58 38,58 Q66,58 66,76" stroke-dasharray="5 3"/><circle cx="62" cy="33" r="9" stroke-dasharray="3.5 2.5" opacity="0.5"/><line x1="76" y1="16" x2="76" y2="24" stroke-width="1.5"/><line x1="72" y1="20" x2="80" y2="20" stroke-width="1.5"/>`,
   folder:`<path d="M14,40 L14,76 Q14,80 18,80 L78,80 Q82,80 82,76 L82,40 Q82,36 78,36 L50,36 Q46,36 44,32 L40,27 Q38,24 34,24 L18,24 Q14,24 14,28 Z" stroke-dasharray="5 3"/><line x1="48" y1="52" x2="48" y2="64"/><line x1="42" y1="58" x2="54" y2="58"/>`,
 };
-function illusIcon(name,size=96){const s=ILLUS[name];if(!s)return icon(name,Math.round(size*.58));return '<svg viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:'+size+'px;height:'+size+'px;display:block;margin:0 auto">'+s+'</svg>';}
+function illusIcon(name,size=96){const s=ILLUS[name];if(!s)return icon(name,Math.round(size*.58));return '<svg viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:'+size+'px;height:'+size+'px;display:block;margin:0 auto">'+s+'</svg>';}
 function emptyState(iconName,message,ctaLabel,ctaFn,wrapStyle){const ico=illusIcon(iconName);const cta=(ctaLabel&&ctaFn)?`<button type="button" class="btn btn-outline btn-sm empty-cta" onclick="${ctaFn}">${ctaLabel}</button>`:'';const sa=wrapStyle?' style="'+wrapStyle+'"':'';return `<div class="empty-state"${sa}><div class="empty-illus" style="opacity:.42;margin-bottom:14px;transition:opacity var(--t-3),filter var(--t-3)">${ico}</div><div>${message}</div>${cta}</div>`;}
 // ══ R13 — AUCUN ECRAN MORT ═══════════════════════════════════════════════
 // Le bouton d'un etat vide est SECONDAIRE (.btn-outline .btn-sm) : il ne doit
@@ -2797,7 +2797,7 @@ function _bqToutEffacer(){
   const q=document.getElementById('bq-q'); if(q) q.value='';
   _bqRendre();
 }
-function setupScrollFade(el){if(!el||el._sfBound)return;el._sfBound=true;const par=el.parentElement;const badge=document.createElement('div');badge.style.cssText='position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.85);border:1px solid var(--border);color:var(--sub);font-size:var(--fs-xs);font-weight:800;font-family:Montserrat,sans-serif;letter-spacing:.5px;padding:2px 7px;border-radius:var(--r-3);pointer-events:none;transition:opacity var(--t-2);opacity:0;z-index:10;white-space:nowrap;line-height:1.5';par.appendChild(badge);const grad='linear-gradient(to right,#000 82%,transparent 100%)';const upd=()=>{const hidden=el.scrollWidth-el.scrollLeft-el.clientWidth;const hasMore=hidden>4;el.style.webkitMaskImage=hasMore?grad:'';el.style.maskImage=hasMore?grad:'';if(hasMore){let n=0;const tbl=el.querySelector('table');if(tbl){const row=tbl.querySelector('tr');if(row){const right=el.getBoundingClientRect().right;n=[...row.querySelectorAll('th,td')].filter(c=>c.getBoundingClientRect().left>=right-4).length;}}else{const right=el.getBoundingClientRect().right;n=[...el.children].filter(c=>c.getBoundingClientRect().left>=right-4).length;}badge.textContent=n>0?'+'+n:'';badge.style.opacity=n>0?'1':'0';}else{badge.style.opacity='0';}};el.addEventListener('scroll',upd,{passive:true});upd();}
+function setupScrollFade(el){if(!el||el._sfBound)return;el._sfBound=true;const par=el.parentElement;const badge=document.createElement('div');badge.style.cssText='position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.85);border:1px solid var(--border);color:var(--sub);font-size:var(--fs-xs);font-weight:800;font-family:Montserrat,sans-serif;letter-spacing:.5px;padding:2px 8px;border-radius:var(--r-3);pointer-events:none;transition:opacity var(--t-2);opacity:0;z-index:10;white-space:nowrap;line-height:1.5';par.appendChild(badge);const grad='linear-gradient(to right,#000 82%,transparent 100%)';const upd=()=>{const hidden=el.scrollWidth-el.scrollLeft-el.clientWidth;const hasMore=hidden>4;el.style.webkitMaskImage=hasMore?grad:'';el.style.maskImage=hasMore?grad:'';if(hasMore){let n=0;const tbl=el.querySelector('table');if(tbl){const row=tbl.querySelector('tr');if(row){const right=el.getBoundingClientRect().right;n=[...row.querySelectorAll('th,td')].filter(c=>c.getBoundingClientRect().left>=right-4).length;}}else{const right=el.getBoundingClientRect().right;n=[...el.children].filter(c=>c.getBoundingClientRect().left>=right-4).length;}badge.textContent=n>0?'+'+n:'';badge.style.opacity=n>0?'1':'0';}else{badge.style.opacity='0';}};el.addEventListener('scroll',upd,{passive:true});upd();}
 
 // ─── List / Table generics ───────────────────────────────────────────────────
 // renderDataList: flex rows with automatic border-bottom separator (removed on last child)
@@ -7073,7 +7073,7 @@ function htmlSelecteurComptes(opts){
     +((c.lname||'')[0]||'').toUpperCase();
   const ligne=c=>{
     const est=c.email===actif;
-    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--r-3);margin-bottom:6px;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 10px;border-radius:var(--r-3);margin-bottom:6px;
       background:${est?'#1a0505':'var(--surface-1)'};border:1px solid ${est?'var(--red)':'var(--border)'}">
       <div style="width:34px;height:34px;border-radius:var(--r-full);flex-shrink:0;overflow:hidden;background:var(--surface-2);
         display:flex;align-items:center;justify-content:center;font-size:var(--fs-sm);font-weight:800;color:#bbb">
@@ -7088,7 +7088,7 @@ function htmlSelecteurComptes(opts){
     </div>`;
   };
   return `<div id="cpt-selecteur">
-    ${l.length>1?`<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:9px">Mes comptes</div>`:''}
+    ${l.length>1?`<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:10px">Mes comptes</div>`:''}
     ${l.map(ligne).join('')}
     <button class="btn btn-outline btn-sm" style="width:100%;margin:2px 0 0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="ajouterCompte()">+ Ajouter un compte</button>
     ${l.length>1?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:8px">Les rappels de notification suivent le compte actif : le compte en veille n'en reçoit pas.</div>`:''}
@@ -7100,7 +7100,7 @@ function ouvrirComptes(){
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
     `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-      <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:18px;width:100%;max-width:520px;max-height:88vh;overflow:auto">
+      <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:520px;max-height:88vh;overflow:auto">
         <div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:4px">Changer de compte</div>
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:14px">Tes comptes restent connectés sur cet appareil. Tu passes de l'un à l'autre sans ressaisir ton mot de passe.</div>
         ${htmlSelecteurComptes()}
@@ -7605,7 +7605,7 @@ function _rendreConsoleAcces(){
   const titre=(x)=>'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;'
     +'font-weight:800;text-transform:uppercase;margin-bottom:12px">'+x+'</div>';
   const bouton=(lib,act,couleur)=>'<button class="btn '+couleur+' btn-sm" style="margin:0;flex:1;'
-    +'min-width:132px;font-size:var(--fs-2xs);letter-spacing:1px;padding:9px 10px;min-height:38px" '
+    +'min-width:132px;font-size:var(--fs-2xs);letter-spacing:1px;padding:10px 10px;min-height:38px" '
     +'onclick="'+act+'">'+lib+'</button>';
   let h=carte(titre('Une adresse')
     +'<input id="acces-mail" type="email" inputmode="email" autocapitalize="off" autocomplete="off" '
@@ -7647,7 +7647,7 @@ function _rendreConsoleAcces(){
         :'')
       +((etat.cle!=='ferme')?bouton('Fermer son accès','accesSuspendre()','btn-outline'):'')
       +'<a href="'+escapeHtml(lien)+'" class="btn btn-outline btn-sm" style="margin:0;flex:1;'
-      +'min-width:132px;font-size:var(--fs-2xs);letter-spacing:1px;padding:9px 10px;min-height:38px;'
+      +'min-width:132px;font-size:var(--fs-2xs);letter-spacing:1px;padding:10px 10px;min-height:38px;'
       +'display:flex;align-items:center;justify-content:center;text-decoration:none">Lui écrire</a>'
       +((d&&d.etat==='serveur'&&etat.cle!=='ferme')
         ?bouton('Retirer ce que j’ai posé','accesRouvrir()','btn-outline')
@@ -8759,7 +8759,8 @@ function _defiler(el,o){
 const _champVus=new WeakSet();
 function _auChamp(el,fn){
   if(!el||typeof fn!=='function'||_champVus.has(el)) return false;
-  if(arcReduit()||!('IntersectionObserver' in window)){
+  // Rendu tout de suite, sans attendre le defilement (charte du 26/09/2026).
+  if(ARC_VUE_AU_DEFILEMENT!==true||arcReduit()||!('IntersectionObserver' in window)){
     _champVus.add(el); try{fn(el);}catch(e){} return true;
   }
   const io=new IntersectionObserver(entries=>{
@@ -9728,9 +9729,14 @@ function arcRendre(btn,libelle){
 // disponibilite AVANT la pose de arc-attente — sans quoi un navigateur sans
 // IntersectionObserver afficherait une liste vide.
 const ARC_VUE_MAX=24;
+var ARC_VUE_AU_DEFILEMENT=false;   // var : lu avant sa ligne sans erreur
 function arcEntreeAuDefilement(conteneur,selecteur,depuis){
   if(!conteneur) return null;
   try{ if(conteneur._arcObs){ conteneur._arcObs.disconnect(); conteneur._arcObs=null; } }catch(e){}
+  // PLUS D'APPARITION AU DEFILEMENT (charte du 26/09/2026) : une liste est la
+  // des qu'elle est rendue. Un contenu qui attend d'etre vu pour s'afficher
+  // fait « site de demonstration », et cache ce qu'on vient chercher.
+  if(ARC_VUE_AU_DEFILEMENT!==true) return null;
   if(arcReduit()||typeof IntersectionObserver!=='function') return null;
   const d=depuis||0;
   const els=Array.prototype.slice.call(conteneur.querySelectorAll(selecteur)).slice(d,d+ARC_VUE_MAX);
@@ -9912,7 +9918,7 @@ function arcTirerPourRafraichir(zone,action){
     if(plein&&!arme){
       arme=true;
       try{ arcHaptique('legere'); }catch(e){}
-      jauge.style.background='linear-gradient(90deg,var(--arc-current),var(--arc-peak))';
+      jauge.style.background='var(--arc-peak)';
     } else if(!plein&&arme){
       arme=false;
       jauge.style.background='';
@@ -9969,7 +9975,11 @@ function toast(msg,c='var(--green)',duree){
   if(_toastMinuteur){ clearTimeout(_toastMinuteur); _toastMinuteur=null; }
   const poser=()=>{
     t.textContent=msg;
-    t.style.borderLeft='4px solid '+(erreur?'var(--arc-danger)':c);
+    // PAS DE FILET DE COULEUR SUR LE COTE (charte du 26/09/2026) : l'erreur se
+    // lit a son fond et a son cadre, le reste du temps le message est neutre.
+    t.style.borderLeft='';
+    t.style.border='1px solid '+(erreur?'var(--danger-border)':'var(--border)');
+    t.style.background=erreur?'var(--danger-bg)':'var(--surface-2)';
     // B2.12 — EN HAUT, SOUS LA BARRE DE TITRE, SUR UN GRAND ECRAN COACH.
     // C'est la que se trouvent les boutons qui declenchent l'essentiel des
     // messages — Sauvegarder, Publier — et c'est la que l'oeil revient.
@@ -11591,7 +11601,7 @@ function _annoncerDejaRattache(coachDuLien){
   const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
     +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
     +'<div onclick="event.stopPropagation()" style="background:var(--surface-2);'
-    +'border-radius:var(--r-4) var(--r-4) 0 0;padding:18px 20px 22px;width:100%;max-width:480px;'
+    +'border-radius:var(--r-4) var(--r-4) 0 0;padding:20px 20px 24px;width:100%;max-width:480px;'
     +'animation:fadeIn var(--t-3) var(--c-out)">'
     +'<h2 style="margin-bottom:8px;font-size:var(--fs-lg)">Tu es déjà suivi</h2>'
     +'<p class="sub" style="font-size:var(--fs-sm);line-height:1.65;margin-bottom:14px">'
@@ -11603,7 +11613,7 @@ function _annoncerDejaRattache(coachDuLien){
     +'</p>'
     +'<button class="btn btn-red" style="min-height:46px" onclick="closeModal();go(\'s-client-home\')">'
     +'Revenir à mon accueil</button>'
-    +'<button class="btn btn-outline" style="margin-top:9px;min-height:44px" onclick="closeModal()">Fermer</button>'
+    +'<button class="btn btn-outline" style="margin-top:10px;min-height:44px" onclick="closeModal()">Fermer</button>'
     +'</div></div>';
   document.body.insertAdjacentHTML('beforeend',html);
   return true;
@@ -13025,10 +13035,10 @@ function _htmlCouvertureMicro(user,ref){
   if(!lignes.length) return '';
   // Aucune couleur d'alerte, aucun tri par « manque », aucun total : huit
   // phrases dans l'ordre de la table, et le rappel qui les encadre.
-  return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px">
+  return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Micronutriments · ${MICRO_JOURS_FENETRE} jours</div>
     ${lignes.map(t=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;padding:4px 0;border-bottom:1px solid #161616">${escapeHtml(t)}</div>`).join('')}
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:9px">${escapeHtml(MICRO_DISCLAIMER)}</div>
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:10px">${escapeHtml(MICRO_DISCLAIMER)}</div>
   </div>`;
 }
 
@@ -14988,14 +14998,14 @@ function _htmlMorphoExercice(ex){
   let r=null;
   try{ r=morphoPourExercice(c,ex,{calibrage:_morphoCalCache()}); }catch(e){ return ''; }
   if(!r||(!r.lignes.length&&!r.reglages.length)) return '';
-  const bloc=(titre,corps)=>'<div style="margin-bottom:7px">'
+  const bloc=(titre,corps)=>'<div style="margin-bottom:8px">'
     +'<span style="color:var(--sub);font-weight:800">'+escapeHtml(titre)+' :</span> '
     +'<span style="color:var(--text-dim)">'+corps+'</span></div>';
   let h='';
   r.lignes.forEach(x=>{
     h+=bloc(x.quoi,escapeHtml(x.reglage)
       +(x.suspendu?' <span style="color:var(--orange)">(test à refaire)</span>':''));
-    if(x.avant) h+='<div style="color:var(--text-faint);margin-bottom:7px">'+escapeHtml(x.avant)+'</div>';
+    if(x.avant) h+='<div style="color:var(--text-faint);margin-bottom:8px">'+escapeHtml(x.avant)+'</div>';
   });
   r.reglages.forEach(x=>{
     h+=bloc(x.lib,'<span style="color:var(--text-strong);font-weight:700">'+escapeHtml(x.consigne)
@@ -15004,7 +15014,7 @@ function _htmlMorphoExercice(ex){
   if(r.variantes.length)
     h+=bloc('Variantes du même schéma',escapeHtml(r.variantes.join(', '))
       +' : à envisager à côté, jamais à la place.');
-  return '<div style="background:#0c0c0c;border:1px solid var(--border);border-left:2px solid var(--arc-calm);'
+  return '<div style="background:#0c0c0c;border:1px solid var(--border);border-left:1px solid var(--border);'
     +'border-radius:var(--r-2);padding:10px 12px;margin:0 0 12px;font-size:var(--fs-xs);line-height:1.6">'
     +'<div style="color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase;'
     +'margin-bottom:6px;font-size:var(--fs-2xs)">Proportions : pour toi, pas pour lui</div>'+h+'</div>';
@@ -15045,10 +15055,10 @@ function _htmlMorphoLecture(user,cal){
   if(res.profils.length){
     h+=titre('Profils composés');
     h+=res.profils.map(p=>{
-      const am=(p.amenager||[]).map(a=>'<div style="margin-top:3px"><span style="color:var(--text-strong);'
+      const am=(p.amenager||[]).map(a=>'<div style="margin-top:4px"><span style="color:var(--text-strong);'
         +'font-weight:700">'+E(a.quoi)+' :</span> <span style="color:var(--text-dim)">'
         +E(a.reglage)+'</span></div>').join('');
-      return '<div style="border-left:2px solid var(--arc-calm);padding-left:11px;margin-bottom:14px">'
+      return '<div style="border-left:1px solid var(--border);padding-left:12px;margin-bottom:14px">'
         +'<div style="font-size:var(--fs-sm);font-weight:800;color:var(--text-strong);line-height:1.5">'
         +E(p.lib)+(p.suspendu?' <span style="color:var(--orange);font-weight:700">· test à refaire</span>':'')
         +'</div>'
@@ -15085,7 +15095,7 @@ function _htmlMorphoLecture(user,cal){
   if(res.aRegarder.length){
     h+=titre('À regarder, dans cet ordre');
     h+=res.aRegarder.map((t,i)=>'<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;'
-      +'margin-bottom:3px">'+(i+1)+'. '+E(t)+'</div>').join('');
+      +'margin-bottom:4px">'+(i+1)+'. '+E(t)+'</div>').join('');
   }
   // CE QU'IL RESTERAIT À MESURER. « Je ne sais pas encore » est une sortie de
   // première classe, et celle-ci est actionnable.
@@ -15096,10 +15106,10 @@ function _htmlMorphoLecture(user,cal){
   if(res.aMesurer.length){
     h+=titre('Il manque, pour aller plus loin');
     h+='<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;'
-      +'margin-bottom:3px">'+E(res.aMesurer[0])+'</div>';
+      +'margin-bottom:4px">'+E(res.aMesurer[0])+'</div>';
     if(res.aMesurer.length>1)
       h+='<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;'
-        +'margin-top:3px">Celle-ci d’abord : '+(res.aMesurer.length-1)+' autre'
+        +'margin-top:4px">Celle-ci d’abord : '+(res.aMesurer.length-1)+' autre'
         +(res.aMesurer.length>2?'s':'')+' suivra'+(res.aMesurer.length>2?'ont':'')
         +', une à la fois.</div>';
   }
@@ -15943,13 +15953,13 @@ function _htmlQuestionsMorpho(user){
     ${faits.map(t=>`<div style="font-size:var(--fs-sm);color:${t.perime?'var(--orange)':'var(--text-strong)'};line-height:1.6">${escapeHtml(t.lib)} : ${escapeHtml(t.texte)} <span style="color:var(--text-faint)">(test, ${new Date(t.date).toLocaleDateString('fr-FR')}${t.perime?', périmé':''})</span></div>`).join('')}
   </div>`;
   return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:5px">Proportions</div>
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:6px">Proportions</div>
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">Des variantes à envisager, jamais un exercice à retirer.</div>
     ${l.length?'':`<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin-bottom:12px">Aucune proportion à signaler avec ce qui est mesuré aujourd’hui.</div>`}
-    ${l.map(r=>`<div style="border-left:2px solid var(--border);padding-left:11px;margin-bottom:12px">
+    ${l.map(r=>`<div style="border-left:2px solid var(--border);padding-left:12px;margin-bottom:12px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(r.lib)}</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(r.motif)}</div>
-      <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-top:5px;font-weight:600">${escapeHtml(r.question)}</div>
+      <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-top:6px;font-weight:600">${escapeHtml(r.question)}</div>
     </div>`).join('')}
     ${lecture}
     ${htmlTests}
@@ -15986,7 +15996,7 @@ function _htmlDeficitCoach(c){
     return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(q.lib)}</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(q.motif)}</div>
-      <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-top:5px;font-weight:600">${escapeHtml(q.question)}</div>
+      <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-top:6px;font-weight:600">${escapeHtml(q.question)}</div>
     </div>`;
   }
   if(!r) return '';
@@ -15998,7 +16008,7 @@ function _htmlDeficitCoach(c){
   // La levée est un GESTE du coach, jamais une expiration automatique. Deux
   // motifs, pas de champ libre : on ne fait pas raconter un dossier médical.
   const boutons=bloc
-    ?`<div style="display:flex;gap:8px;margin-top:11px">
+    ?`<div style="display:flex;gap:8px;margin-top:12px">
         <button onclick="leverDeficit('consulte')" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:var(--fs-2xs);letter-spacing:1px">Elle a consulté</button>
         <button onclick="leverDeficit('regles_revenues')" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:var(--fs-2xs);letter-spacing:1px">Les règles sont revenues</button>
       </div>
@@ -16055,7 +16065,7 @@ function _htmlTraitementsCoach(c){
       // et inviter a la demander. On dit ce qu'on sait, au present, sans
       // designer ce qu'on ignore.
       : '<span style="color:var(--text-dim)">Un traitement en cours</span>';
-    return '<div style="display:flex;align-items:center;gap:9px;padding:8px 0;'
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;'
       +'border-bottom:1px solid var(--border)">'
       +'<span style="flex:1;min-width:0;font-size:var(--fs-sm);color:var(--text);line-height:1.5">'
       +nom
@@ -16077,7 +16087,7 @@ function _htmlTraitementsCoach(c){
   return '<div style="background:var(--dark);border:1px solid var(--border);'
     +'border-radius:var(--r-3);padding:16px;margin-bottom:20px">'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;'
-    +'font-weight:700;text-transform:uppercase;margin-bottom:5px">Traitements</div>'
+    +'font-weight:700;text-transform:uppercase;margin-bottom:6px">Traitements</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;'
     +'margin-bottom:10px">'
     +escapeHtml('Ce que tu vois ici dépend de ce que ton athlète partage. '
@@ -16119,12 +16129,12 @@ function renderCoachMicroSection(c){
   el.style.display='block';
   if(!l.length){ el.innerHTML=def+recup+morpho+hydra; return; }
   el.innerHTML=def+`<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:5px">À demander en séance</div>
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:6px">À demander en séance</div>
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">Rien n'est détecté ici : ce sont des questions que le profil rend pertinentes.</div>
-    ${l.map(r=>`<div style="border-left:2px solid var(--border);padding-left:11px;margin-bottom:12px">
+    ${l.map(r=>`<div style="border-left:2px solid var(--border);padding-left:12px;margin-bottom:12px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(r.lib)}</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(r.motif)}</div>
-      <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-top:5px;font-weight:600">${escapeHtml(r.question)}</div>
+      <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-top:6px;font-weight:600">${escapeHtml(r.question)}</div>
     </div>`).join('')}
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;border-top:1px solid var(--border);padding-top:10px">${escapeHtml(MICRO_DISCLAIMER)}</div>
   </div>`+recup+morpho+hydra;
@@ -16261,16 +16271,16 @@ function _rendreEcheanceAcces(){
   // Le message ne porte AUCUNE donnée de santé : il ne parle que d'accès.
   const href=_coachContactHref(u.coachId,
     'Bonjour'+(nom?' '+nom:'')+", mon accès RepCore se termine le "+d+'. Peux-tu le prolonger ?');
-  z.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:var(--r-3);padding:13px 14px;margin-bottom:16px;
-      background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.02) 11px,rgba(255,255,255,.02) 12px),linear-gradient(168deg,#1b1b1b,#111 55%,#0b0b0b);
+  z.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:var(--r-3);padding:14px 14px;margin-bottom:16px;
+      background:linear-gradient(168deg,#1b1b1b,#111 55%,#0b0b0b);
       border:1px solid var(--border);border-left:3px solid ${c};
       box-shadow:var(--e3)}33">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:${c};--halo-c:${c};text-shadow:var(--halo-1)66">
       Ton accès se termine ${quand}</div>
-    <div style="font-size:var(--fs-xs);color:#c9c9c9;line-height:1.6;margin-top:5px">
+    <div style="font-size:var(--fs-xs);color:#c9c9c9;line-height:1.6;margin-top:6px">
       Il prend fin le ${escapeHtml(d)}. ${nom?escapeHtml(nom)+' peut le prolonger':'Ton coach peut le prolonger'}, préviens-le avant.</div>
     ${href?`<a href="${_safeContactUrl(href)}" target="_blank" rel="noopener" class="btn btn-red"
-      style="margin-top:11px;min-height:42px;display:flex;align-items:center;justify-content:center;font-size:var(--fs-sm);letter-spacing:1px">
+      style="margin-top:12px;min-height:42px;display:flex;align-items:center;justify-content:center;font-size:var(--fs-sm);letter-spacing:1px">
       Prévenir mon coach</a>`:''}
   </div>`;
   return j;
@@ -16501,7 +16511,7 @@ function renderPortefeuille(clients){
   el.innerHTML=cases.map(c=>_pilCompteur(c[0],c[1],c[2],c[3])).join('');
 }
 function _pilBande(cle,titre,corps,resume){
-  return `<details class="plan-src pil-bande" style="margin:0 0 7px"${_pilOuvert[cle]?' open':''} ontoggle="pilNoterBande('${cle}',this.open)">
+  return `<details class="plan-src pil-bande" style="margin:0 0 8px"${_pilOuvert[cle]?' open':''} ontoggle="pilNoterBande('${cle}',this.open)">
     <summary style="color:var(--sub)">${titre}<span class="plan-src-nb">${resume||''}</span></summary>
     <div class="plan-src-liste" style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7"><div>${corps}</div></div>
   </details>`;
@@ -16545,7 +16555,7 @@ function renderPilotage(clients){
   // TROIS VOLETS POUR UN SEUL GESTE. Le coach les ouvrait l'un apres l'autre
   // pour se faire une idee, et devait retenir ce qu'il avait lu dans le
   // precedent. Un seul volet, trois sections separees d'un filet.
-  const corpsSep='<div style="height:1px;background:#1e1e1e;margin:9px 0"></div>';
+  const corpsSep='<div style="height:1px;background:#1e1e1e;margin:10px 0"></div>';
   const _tt=t=>`<div style="font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--sub);font-weight:800;margin-bottom:4px">${t}</div>`;
   const corpsA2=_tt('Depuis ta dernière visite')+corpsA;
   const corpsC2=_tt('Charge de travail')+corpsC;
@@ -16582,9 +16592,9 @@ function _htmlPourquoiIci(c){
   try{ l=expliquerUrgence(c); }catch(e){ return ''; }
   if(!l.length) return '';
   const dateCourte=t=>new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--red);border-radius:var(--r-3);padding:11px 13px;margin-bottom:14px">
-    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:7px">Pourquoi cet athlète est ici</div>
-    ${l.map(x=>`<div style="display:flex;align-items:baseline;gap:8px;padding:3px 0">
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-left:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:14px">
+    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:8px">Pourquoi cet athlète est ici</div>
+    ${l.map(x=>`<div style="display:flex;align-items:baseline;gap:8px;padding:4px 0">
       <span style="flex-shrink:0;font-size:var(--fs-2xs);font-weight:900;color:${x.gravite>=7?'var(--red)':'var(--sub)'};min-width:16px">${x.gravite}</span>
       <span style="flex:1;min-width:0;font-size:var(--fs-xs);color:var(--text-strong);line-height:1.5">${escapeHtml(x.motif)}</span>
       <span style="flex-shrink:0;font-size:var(--fs-2xs);color:var(--text-faint)">${x.date?dateCourte(x.date):''}</span>
@@ -17304,7 +17314,7 @@ function _canalSquelette(fil){
   if(!fil||fil.dataset.rempli) return false;
   fil.innerHTML=Array(3).fill(
      '<div class="cnl-carte" style="pointer-events:none">'
-    +'<div class="skeleton fx-loop" style="height:15px;width:62%;margin-bottom:9px"></div>'
+    +'<div class="skeleton fx-loop" style="height:15px;width:62%;margin-bottom:10px"></div>'
     +'<div class="skeleton fx-loop" style="height:11px;width:88%;margin-bottom:6px"></div>'
     +'<div class="skeleton fx-loop" style="height:11px;width:35%"></div></div>').join('');
   fil._t0=Date.now();
@@ -17380,7 +17390,7 @@ async function _canalCharger(){
   let msgs;
   try{ msgs=await CLOUD.pullCanalMessages(cle); }
   catch(e){
-    fil.innerHTML=`<div style="text-align:center;padding:44px 20px">
+    fil.innerHTML=`<div style="text-align:center;padding:48px 20px">
       <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:12px;opacity:.5">📡</div>
       <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px">Canal injoignable</div>
       <div class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">Ce n'est pas que ton coach n'a rien publié : la demande n'a pas abouti.</div>
@@ -17433,7 +17443,7 @@ function _canalBoutonsReactions(m,compteurs,mienne){
     const actif=mienne===e;
     return `<button onclick="basculerReaction('${escapeHtml(m.id)}','${escapeHtml(e)}')"
       aria-pressed="${actif?'true':'false'}"
-      style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;min-height:38px;padding:0 4px;
+      style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;min-height:38px;padding:0 4px;
         background:${actif?'var(--red-bg)':'transparent'};border:1px solid ${actif?'var(--red)':'var(--border)'};
         border-radius:var(--r-4);cursor:pointer;font-size:var(--fs-md);color:${actif?'var(--text)':'var(--text-dim)'};
         font-family:Montserrat,sans-serif;font-weight:700">
@@ -17473,7 +17483,7 @@ function _canalCarteLien(lien){
   if(safeUrlRaw(lien)==='#') return '';
   return `<a href="${safeUrl(lien)}" target="_blank" rel="noopener noreferrer"
     style="display:block;margin-top:12px;border:1px solid var(--border);border-radius:var(--r-3);overflow:hidden;text-decoration:none;background:var(--surface-2)">
-    <div style="display:flex;align-items:center;gap:9px;padding:11px 13px">
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 14px">
       <span style="display:inline-flex;color:var(--info);flex-shrink:0">${icon('link',15)}</span>
       <span style="flex:1;min-width:0;font-size:var(--fs-sm);color:var(--info);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(dom||'Ouvrir le lien')}</span>
       <span class="sub" style="font-size:var(--fs-xs);flex-shrink:0">Ouvrir ↗</span>
@@ -17576,8 +17586,8 @@ function renderEpingleAccueil(){
   if(!manque){ el.innerHTML=''; el.style.display='none'; return; }
   el.style.display='block';
   el.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);'
-    +'border-radius:var(--r-3);padding:13px 14px;margin-bottom:16px">'
-    +'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5;margin-bottom:9px">'
+    +'border-radius:var(--r-3);padding:14px 14px;margin-bottom:16px">'
+    +'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5;margin-bottom:10px">'
     +'Ajoute ta photo de profil : c\'est ce qui permet à ton coach de te reconnaître '
     +'d\'un coup d\'œil sur son tableau de bord.</div>'
     +'<button class="btn btn-outline btn-sm" style="width:100%" '
@@ -17964,7 +17974,7 @@ function _majConsentementCoachReglages(){
   if(!z) return;
   const u=currentUser;
   if(!u||u.role!=='athlete'||!(u.coachId||u.coachEmailKey)){ z.innerHTML=''; return; }
-  z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:18px">'
+  z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:20px">'
     +'<label for="cr-partage-case" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0;text-transform:none;letter-spacing:normal;font-weight:400;color:var(--text)">'
     +'<input type="checkbox" id="cr-partage-case"'+(vcConsentement(u)?' checked':'')+' onchange="aaConsentementCoach(this.checked);_majConsentementCoachReglages()" style="width:18px;height:18px;accent-color:#E02020;flex-shrink:0;margin-top:2px;cursor:pointer">'
     +'<span style="flex:1;min-width:0"><span style="display:block;font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Mon coach peut partager mes progrès</span>'
@@ -18371,7 +18381,7 @@ async function ouvrirViralite(){
   if(!currentUser||currentUser.email!==CREATOR_EMAIL) return false;
   go('s-viralite');
   const z=document.getElementById('vir-contenu');
-  if(z) z.innerHTML='<div class="sub" style="padding:30px 0;text-align:center">Chargement…</div>';
+  if(z) z.innerHTML='<div class="sub" style="padding:32px 0;text-align:center">Chargement…</div>';
   try{
     const depuis=localISODate(new Date(Date.now()-95*864e5));
     const [jours,semaines]=await Promise.all([CLOUD.attribLire('jours',depuis),CLOUD.attribLire('semaines',depuis)]);
@@ -18548,7 +18558,7 @@ async function ouvrirAmbassadeurs(){
   if(!estAdminAmbassadeurs()) return false;
   go('s-ambassadeurs');
   const z=document.getElementById('amb-contenu');
-  if(z) z.innerHTML='<div class="sub" style="padding:30px 0;text-align:center">Chargement…</div>';
+  if(z) z.innerHTML='<div class="sub" style="padding:32px 0;text-align:center">Chargement…</div>';
   try{ _ambTous=(await CLOUD.ambListe())||{}; }
   catch(e){ if(z) z.innerHTML='<p class="sub">Lecture impossible : '+escapeHtml(e.message||'erreur')+'</p>'; return false; }
   _ambRendre();
@@ -18952,9 +18962,9 @@ function _rendreEntreeParrainage(){
   if(!z) return;
   if(!PARRAINAGE_ACTIF||!currentUser||currentUser.role==='coach'){ z.innerHTML=''; return; }
   const p=currentUser.parrainage||{};
-  z.innerHTML='<button type="button" class="card" onclick="ouvrirParrainage()" style="display:flex;align-items:center;gap:12px;width:100%;box-sizing:border-box;margin:0 0 18px;padding:14px 16px;text-align:left;cursor:pointer;font-family:Montserrat,sans-serif;color:var(--text)">'
+  z.innerHTML='<button type="button" class="card" onclick="ouvrirParrainage()" style="display:flex;align-items:center;gap:12px;width:100%;box-sizing:border-box;margin:0 0 20px;padding:14px 16px;text-align:left;cursor:pointer;font-family:Montserrat,sans-serif;color:var(--text)">'
     +'<span style="flex:1;min-width:0"><span style="display:block;font-size:var(--fs-sm);font-weight:800;letter-spacing:1.5px;text-transform:uppercase">Inviter des amis</span>'
-    +'<span style="display:block;font-size:var(--fs-xs);color:var(--sub);margin-top:3px">'+escapeHtml((Number(p.moisGagnes)||0)?(p.moisGagnes+' mois gagné'+(p.moisGagnes>1?'s':'')+' · ton code '+(p.code||'')):'1 mois offert par ami abonné')+'</span></span>'
+    +'<span style="display:block;font-size:var(--fs-xs);color:var(--sub);margin-top:4px">'+escapeHtml((Number(p.moisGagnes)||0)?(p.moisGagnes+' mois gagné'+(p.moisGagnes>1?'s':'')+' · ton code '+(p.code||'')):'1 mois offert par ami abonné')+'</span></span>'
     +'<span aria-hidden="true" style="flex:none;color:var(--sub);font-size:var(--fs-lg)">›</span></button>';
 }
 // ── Le rappel doux, en fin de séance ───────────────────────────────────────
@@ -19673,7 +19683,7 @@ function _canalCarteCoach(m,compteurs,vrai,reactions,neuve){
   const lignes=CANAL_EMOJIS.filter(e=>(Number(vrai[e])||0)>0).map(e=>{
     // Le prénom, précédé de l'emblème du rang de l'athlète.
     const noms=canalPrenomsRangs(reactions,m.id,e);
-    return `<div style="display:flex;gap:8px;align-items:flex-start;font-size:var(--fs-sm);padding:3px 0">
+    return `<div style="display:flex;gap:8px;align-items:flex-start;font-size:var(--fs-sm);padding:4px 0">
       <span aria-hidden="true">${e}</span><span style="font-weight:800">${noms.length}</span>
       <span class="sub" style="flex:1;min-width:0;line-height:1.5">${noms.map(x=>htmlNomRang(x.nom,x.xp)).join(', ')}</span></div>`;
   }).join('');
@@ -19685,10 +19695,10 @@ function _canalCarteCoach(m,compteurs,vrai,reactions,neuve){
     </div>
     ${m.titre?`<div class="cnl-titre">${escapeHtml(m.titre)}</div>`:''}
     ${m.texte?`<div class="cnl-texte">${escapeHtml(m.texte)}</div>`:''}
-    ${lien&&safeUrlRaw(lien)!=='#'?`<a href="${safeUrl(lien)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:9px;font-size:var(--fs-sm);color:var(--info);font-weight:700">${escapeHtml(canalDomaine(lien)||'lien')} ↗</a>`:''}
-    ${lignes?`<div style="margin-top:11px;padding-top:10px;border-top:1px solid var(--border)">${lignes}</div>`
-            :'<div class="sub" style="margin-top:11px;padding-top:10px;border-top:1px solid var(--border);font-size:var(--fs-xs)">Aucune réaction pour l\'instant.</div>'}
-    ${derive?`<button class="btn btn-outline btn-sm" style="width:100%;margin:9px 0 0;min-height:38px;color:var(--orange);border-color:var(--orange)" onclick="resyncCompteursCanal('${escapeHtml(m.id)}')">Le compteur public a dérivé : resynchroniser</button>`:''}
+    ${lien&&safeUrlRaw(lien)!=='#'?`<a href="${safeUrl(lien)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:10px;font-size:var(--fs-sm);color:var(--info);font-weight:700">${escapeHtml(canalDomaine(lien)||'lien')} ↗</a>`:''}
+    ${lignes?`<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">${lignes}</div>`
+            :'<div class="sub" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:var(--fs-xs)">Aucune réaction pour l\'instant.</div>'}
+    ${derive?`<button class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;min-height:38px;color:var(--orange);border-color:var(--orange)" onclick="resyncCompteursCanal('${escapeHtml(m.id)}')">Le compteur public a dérivé : resynchroniser</button>`:''}
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
       <button class="btn btn-outline btn-sm" style="width:auto;padding:0 14px;min-height:34px;font-size:10.5px;margin:0" onclick="openMessageCanal('${escapeHtml(m.id)}')">Modifier</button>
       <button class="btn btn-outline btn-sm" style="width:auto;padding:0 14px;min-height:34px;font-size:10.5px;margin:0;color:var(--sub)" onclick="supprimerMessageCanal('${escapeHtml(m.id)}')">Supprimer</button>
@@ -19746,7 +19756,7 @@ function openMessageCanal(msgId){
     <textarea id="cm-texte" rows="5" maxlength="${CANAL_TEXTE_MAX}" style="resize:none" placeholder="J'ai publié une nouvelle vidéo sur le soulevé de terre. Regardez-la avant jeudi.">${escapeHtml(m.texte||'')}</textarea>
     <label for="cm-lien" style="margin-top:12px">Lien (optionnel)</label>
     <input id="cm-lien" type="url" maxlength="${CANAL_LIEN_MAX}" value="${escapeHtml(m.lien||'')}" placeholder="Colle ici l'adresse de ta publication">
-    <div class="sub" style="font-size:var(--fs-xs);margin-top:5px;line-height:1.5">Réseaux sociaux, vidéo, Drive, tableur… Tes athlètes voient le nom du site et ouvrent le lien d'un tap, dans leur navigateur. Aucune image d'aperçu n'est chargée : rien n'est demandé à un autre site tant que personne n'a touché le lien.</div>
+    <div class="sub" style="font-size:var(--fs-xs);margin-top:6px;line-height:1.5">Réseaux sociaux, vidéo, Drive, tableur… Tes athlètes voient le nom du site et ouvrent le lien d'un tap, dans leur navigateur. Aucune image d'aperçu n'est chargée : rien n'est demandé à un autre site tant que personne n'a touché le lien.</div>
     <label style="display:flex;align-items:center;gap:10px;margin-top:14px;cursor:pointer">
       <input id="cm-epingle" type="checkbox" ${m.epingle?'checked':''} style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <span style="font-size:var(--fs-sm);line-height:1.5">Épingler à l'accueil<br><span class="sub" style="font-size:var(--fs-xs)">Un seul message à la fois : celui-ci remplacera l'épinglé actuel.</span></span>
@@ -19875,9 +19885,9 @@ function _crmLigne(c){
     ?`<a href="${escapeHtml(url)}" ${/^https/.test(url)?'target="_blank" rel="noopener"':''}
         style="color:var(--link);text-decoration:none;word-break:break-all">${escapeHtml(txt)}</a>`
     :`<span class="sub" style="font-size:var(--fs-2xs)">${escapeHtml(titre)}</span>`;
-  return `<div style="display:grid;grid-template-columns:1fr;gap:3px;padding:10px 0;
+  return `<div style="display:grid;grid-template-columns:1fr;gap:4px;padding:10px 0;
     border-bottom:1px solid var(--border)">
-    <div style="display:flex;align-items:center;gap:7px">
+    <div style="display:flex;align-items:center;gap:8px">
       <span style="color:${coul};font-size:14px;line-height:1">${c.gender?(femme?'♀':'♂'):'·'}</span>
       <span style="font-weight:800;font-size:var(--fs-sm)">${escapeHtml(nom)}</span>
       <span class="sub" style="font-size:var(--fs-2xs)">${escapeHtml(genre)}</span>
@@ -19901,7 +19911,7 @@ function ouvrirCrmCoach(){
     String((a.fname||'')+(a.lname||'')).localeCompare(String((b.fname||'')+(b.lname||''))));
   const adresses=_crmAdresses(l);
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div class="mdl-large" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+  <div class="mdl-large" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:4px;font-size:var(--fs-lg)">CARNET D'ADRESSES</h2>
     <div class="sub" style="font-size:var(--fs-xs);margin-bottom:12px">${l.length} athlète${l.length>1?'s':''}. Un tap ouvre ton mail, ton téléphone ou WhatsApp : RepCore n'envoie rien à ta place.</div>
     ${adresses?`<button class="btn btn-outline btn-sm" style="width:100%;margin:0 0 12px" onclick="_crmCopierAdresses()">Copier toutes les adresses</button>`:''}
@@ -19939,7 +19949,7 @@ function openWaGroupe(rowIdx){
   const lignes=tous.map(c=>{
     const tel=_telAthlete(c);
     const nom=((c.fname||'')+' '+(c.lname||'')).trim()||c.email||'Athlète';
-    return `<label style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #181818;cursor:pointer">
+    return `<label style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #181818;cursor:pointer">
       <input type="checkbox" class="wag-cb" value="${escapeHtml(c.id)}" data-tel="${escapeHtml(tel)}" data-nom="${escapeHtml(c.fname||'')}"
         ${preCoches.has(c.id)?'checked':''} style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <div style="flex:1;min-width:0">
@@ -20344,7 +20354,7 @@ function riteBilanDeLaSemaine(u,now){
 // ne porte alors que la date si l'athlète n'a rien répondu.
 function _riteLigne(lib,val,note){
   return `<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;
-    padding:7px 0;border-top:1px solid rgba(255,255,255,.06)">
+    padding:8px 0;border-top:1px solid rgba(255,255,255,.06)">
     <span style="font-size:var(--fs-xs);color:var(--sub)">${escapeHtml(lib)}</span>
     <span style="font-size:var(--fs-md);font-weight:800;color:var(--text);text-align:right">${val}${note?`<span style="font-size:var(--fs-2xs);color:var(--text-faint);font-weight:400"> ${escapeHtml(note)}</span>`:''}</span>
   </div>`;
@@ -20363,20 +20373,20 @@ function ouvrirRite(cycle){
   const tauxLib=(c.taux&&c.taux.interpretable)?(c.taux.taux+' %'):'-';
   const muscles=c.muscles.filter(m=>m.mev!=null).slice(0,14);
   const html=`<div id="modal-overlay" onclick="fermerRite()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 18px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:2px">
       <h2 style="margin:0">4 semaines</h2>
       <button onclick="fermerRite()" aria-label="Fermer" style="min-width:44px;min-height:44px;background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">×</button>
     </div>
     <p class="sub" style="font-size:var(--fs-xs);margin-bottom:14px;line-height:1.6">Un point d'étape, pas une note. Tu peux fermer cet écran à tout moment.</p>
 
-    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:11px 13px;margin-bottom:10px">
+    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:10px">
       ${_riteLigne('Séances réalisées',c.seances)}
       ${_riteLigne('Séances faites sur prévues',tauxLib,c.taux?c.taux.fenetre:'')}
       ${vit&&vit.pctSem!=null?_riteLigne('Tendance de poids',(vit.pctSem>0?'+':'')+String(Math.round(vit.pctSem*100)/100).replace('.',',')+' %/sem'):''}
     </div>
 
-    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:11px 13px;margin-bottom:10px">
+    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:10px">
       <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Records battus</div>
       ${c.records.length
         ? c.records.slice(0,6).map(r=>_riteLigne(r.nom,r.valeur+' <span style="font-size:var(--fs-2xs);color:var(--sub);font-weight:400">e1RM</span>')).join('')
@@ -20384,12 +20394,12 @@ function ouvrirRite(cycle){
       ${c.mentionPhase?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">Relevé en phase lutéale tardive : une baisse y est attendue, et n\'a pas la même signification qu\'une régression.</div>':''}
     </div>
 
-    ${muscles.length?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:11px 13px;margin-bottom:10px">
+    ${muscles.length?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:10px">
       <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Volume par muscle</div>
       ${muscles.map(m=>_riteLigne(m.muscle,m.series+' séries','MEV '+m.mev+' · MAV '+m.mav+' · MRV '+m.mrv)).join('')}
     </div>`:''}
 
-    ${bil?`<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:11px 13px;margin-bottom:10px;font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">
+    ${bil?`<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:10px;font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">
       Ton bilan de cette semaine est déjà enregistré : il n'est pas redemandé ici.</div>`:''}
 
     <label style="margin-top:0">Une question à ton coach&nbsp;?</label>
@@ -20397,15 +20407,15 @@ function ouvrirRite(cycle){
 
     <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
       <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text);margin-bottom:2px">${escapeHtml(nom)}</div>
-      <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:9px">Tes jours et ton heure d'entraînement pour les 4 prochaines semaines. Nommer cette période ne crée aucun programme : c'est une étiquette.</div>
-      <div id="rite-jours" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px">
+      <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:10px">Tes jours et ton heure d'entraînement pour les 4 prochaines semaines. Nommer cette période ne crée aucun programme : c'est une étiquette.</div>
+      <div id="rite-jours" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
         ${['L','Ma','Me','J','V','S','D'].map((j,i)=>`<button type="button" data-j="${i}" onclick="riteJour(${i},this)"
           style="flex:1;min-width:40px;min-height:44px;border-radius:var(--r-2);cursor:pointer;background:#111;border:1px solid var(--border);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800">${j}</button>`).join('')}
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:var(--fs-xs);color:var(--sub)">Heure</span>
         <input id="rite-heure" type="number" min="0" max="23" value="${(currentUser._woReminderHour??18)}"
-          style="width:70px;font-size:var(--fs-lg);padding:9px 10px;text-align:center;box-sizing:border-box">
+          style="width:70px;font-size:var(--fs-lg);padding:10px 10px;text-align:center;box-sizing:border-box">
       </div>
     </div>
 
@@ -20516,9 +20526,9 @@ function _htmlRiteReponse(r){
   const _c=Number(r.cycle);
   const _d=r.reponseDate?new Date(r.reponseDate).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}):'';
   const _sous=[Number.isFinite(_c)&&_c>0?('Bilan de fin de cycle '+_c):'',_d].filter(Boolean).join(' · ');
-  return `<div style="margin-bottom:18px;background:var(--surface-2);border-left:3px solid var(--green);border-radius:var(--r-2);padding:10px 12px">
+  return `<div style="margin-bottom:20px;background:var(--surface-2);border-left:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px">
     <div style="font-size:var(--fs-xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--green);font-weight:800;margin-bottom:4px">Réponse de ton coach</div>
-    ${_sous?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-bottom:5px">${escapeHtml(_sous)}</div>`:''}
+    ${_sous?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-bottom:6px">${escapeHtml(_sous)}</div>`:''}
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(r.reponseCoach)}</div>
   </div>`;
 }
@@ -20653,7 +20663,7 @@ function _htmlSectionsSuivi(vus,rendu,enTete){
   // ⚠ LE COMPTE RESTE PÂLE, et c'est voulu : il dit combien, pas quoi. En
   //   rouge lui aussi, on lirait « 17 » avant « avec suivi ».
   const titre=(t,n)=>'<div style="grid-column:1/-1;display:flex;align-items:baseline;gap:8px;'
-    +'margin:18px 0 6px;padding-bottom:6px;border-bottom:1px solid var(--border)">'
+    +'margin:20px 0 6px;padding-bottom:6px;border-bottom:1px solid var(--border)">'
     +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--red-text)">'
     // `sec-suivi` : la prise que _majComptesSectionsSuivi saisit pour
     // recompter les deux sections sans repeindre la liste entiere.
@@ -20989,7 +20999,7 @@ function renderFileReprise(){
   const f=fileReprise(ath,currentUser,Date.now());
   const sem=frRelancesSemaine(currentUser,Date.now());
   const tete=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;
-      background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:11px 13px;margin-bottom:12px">
+      background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:12px">
       <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.5">Relancés cette semaine</span>
       <span style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--red-text);
         --halo-c:rgba(224,32,32,.6);text-shadow:var(--halo-1)">${sem}</span>
@@ -20997,14 +21007,14 @@ function renderFileReprise(){
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
       <span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase">Mettre en veille</span>
       <select onchange="frSetDuree(this.value)" aria-label="Durée de mise en veille"
-        style="min-height:38px;padding:6px 9px;border-radius:var(--r-2);background:#101010;border:1px solid var(--border);
+        style="min-height:38px;padding:6px 10px;border-radius:var(--r-2);background:#101010;border:1px solid var(--border);
           color:var(--text-strong);font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
         ${FR_DUREES.map(j=>`<option value="${j}"${j===_frDuree?' selected':''}>${j} jours</option>`).join('')}
       </select>
     </div>`;
   if(!f.lignes.length){
     el.innerHTML=tete+_htmlCalendrierAcces()+`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);
-      padding:22px 16px;text-align:center;font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6">
+      padding:24px 16px;text-align:center;font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6">
       Personne à relancer. Les athlètes en pause déclarée et ceux qui portent un signal de santé n'entrent jamais ici : ils gardent leur ligne dans « Mes notifications ».</div>`;
     return;
   }
@@ -21014,15 +21024,15 @@ function renderFileReprise(){
       background:${fort?'rgba(224,32,32,.14)':'#111'};border:1px solid ${fort?'var(--red)':'var(--border)'};
       color:${fort?'var(--text)':'var(--sub)'}">${escapeHtml(lib)}</button>`;
   el.innerHTML=tete+_htmlCalendrierAcces()+f.lignes.map(r=>`<div style="background:linear-gradient(180deg,#151515,#0e0e0e);
-      border:1px solid var(--border);border-left:3px solid var(--red);border-radius:var(--r-3);
-      padding:11px 12px;margin-bottom:9px;box-shadow:var(--e2)">
+      border:1px solid var(--border);border-left:1px solid var(--border);border-radius:var(--r-3);
+      padding:12px 12px;margin-bottom:10px;box-shadow:var(--e2)">
       <div style="display:flex;align-items:baseline;gap:8px">
         <span style="font-size:var(--fs-md);font-weight:900;color:var(--text)">${escapeHtml(r.prenom||'Athlète')}</span>
         <span style="margin-left:auto;font-size:var(--fs-2xs);color:var(--text-faint);flex-shrink:0">${r.jours==null?'aucune séance':r.jours+' j sans séance'}</span>
       </div>
       ${r.signal?`<div style="font-size:var(--fs-xs);color:#bbb;line-height:1.55;margin-top:4px">${escapeHtml(r.signal)}</div>`:''}
       ${r.relanceDepuis!=null?`<div style="font-size:var(--fs-2xs);color:var(--green);margin-top:4px">Relancé il y a ${r.relanceDepuis} j</div>`:''}
-      <div style="display:flex;gap:6px;margin-top:9px">
+      <div style="display:flex;gap:6px;margin-top:10px">
         ${bouton('Relancer',"frRelancer('"+r.id+"')",true)}
         ${bouton('Marquer relancé',"frMarquer('"+r.id+"',true)")}
         ${bouton('Reporter',"frMarquer('"+r.id+"',false)")}
@@ -21421,7 +21431,7 @@ function ouvrirAjustement(idx){
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
     '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-    +'<div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:18px;width:100%;max-width:480px;max-height:88vh;display:flex;flex-direction:column">'
+    +'<div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:480px;max-height:88vh;display:flex;flex-direction:column">'
     +'<div id="aj-corps" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch"></div>'
     +'</div></div>');
   _ajRendre();
@@ -21445,7 +21455,7 @@ function _ajRendre(){
   const nom=((c.fname||'')+' '+(c.lname||'')).trim()||'Athlète';
   let sg=null; try{ sg=signauxEntrainement(c); }catch(e){}
   const txt=sg?_texteSignal(_ajCtx.type,c,sg):'';
-  let h='<div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:3px">'+escapeHtml(nom)+'</div>'
+  let h='<div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:4px">'+escapeHtml(nom)+'</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">'+escapeHtml(txt)+'</div>';
   // RÈGLE 1. Sous drapeau rouge, AUCUNE action de programmation. Le produit
   // suspend et renvoie ; il ne prescrit pas par-dessus. La garde est ici et
@@ -21453,7 +21463,7 @@ function _ajRendre(){
   // garantit cet ordre à l'avenir.
   let drap=null; try{ drap=drapeauRougeActif(c); }catch(e){}
   if(drap||(function(){try{return drapeauQuelconqueActif(c);}catch(e){return false;}})()){
-    z.innerHTML=h+'<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-3);padding:12px 13px">'
+    z.innerHTML=h+'<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-3);padding:12px 14px">'
       +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">Un drapeau est levé sur ce dossier. '
       +'Aucun ajustement de programme n\'est proposé tant qu\'il n\'est pas levé.</div>'
       +blocDisclaimerSante()+'</div>';
@@ -21481,11 +21491,11 @@ function _ajRendre(){
         +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'
         +cr.map(x=>'<button onclick="ajPortee(\'jour\','+x.slot+')" class="hit44" style="min-height:44px;'
           +'background:'+((_ajCtx.portee==='jour'&&_ajCtx.slotChoisi===x.slot)?'var(--red)':'var(--surface-1)')+';'
-          +'border:1px solid var(--border);border-radius:var(--r-2);padding:8px 11px;font-size:var(--fs-xs);color:var(--text-strong);cursor:pointer">'
+          +'border:1px solid var(--border);border-radius:var(--r-2);padding:8px 12px;font-size:var(--fs-xs);color:var(--text-strong);cursor:pointer">'
           +escapeHtml((x.jour||('créneau '+(x.slot+1)))+(x.active?'':' (inactif)'))+'</button>').join('')
         +'<button onclick="ajPortee(\'tous\',null)" class="hit44" style="min-height:44px;'
         +'background:'+(_ajCtx.portee==='tous'?'var(--red)':'var(--surface-1)')+';'
-        +'border:1px solid var(--border);border-radius:var(--r-2);padding:8px 11px;font-size:var(--fs-xs);color:var(--text-strong);cursor:pointer">Tous les jours</button>'
+        +'border:1px solid var(--border);border-radius:var(--r-2);padding:8px 12px;font-size:var(--fs-xs);color:var(--text-strong);cursor:pointer">Tous les jours</button>'
         +'</div>';
     }else{
       h+='<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-bottom:12px">'
@@ -21514,12 +21524,12 @@ function _ajRendre(){
         const vus=ordonnes.slice(0,30);
         h+=vus.map(x=>'<button '+(x.compatible?'onclick="ajSubstituer('+JSON.stringify(x.nom).replace(/"/g,'&quot;')+')"':'disabled')
           +' class="hit44" style="display:block;width:100%;text-align:left;min-height:44px;'
-          +'background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:9px 12px;'
+          +'background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px;'
           +'margin-bottom:6px;font-size:var(--fs-sm);cursor:'+(x.compatible?'pointer':'not-allowed')+';'
           +'color:'+(x.compatible?'var(--text-strong)':'var(--text-faint)')+';opacity:'+(x.compatible?'1':'.55')+'">'
           +escapeHtml(x.nom.toLowerCase())
           // RÈGLE 7 : écarté, GRISÉ, motivé — jamais masqué en silence.
-          +(x.compatible?'':'<div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.5;margin-top:3px">'+escapeHtml(x.motif)+'</div>')
+          +(x.compatible?'':'<div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.5;margin-top:4px">'+escapeHtml(x.motif)+'</div>')
           +'</button>').join('');
         if(ordonnes.length>vus.length)
           h+='<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;padding:2px 0 6px">'
@@ -21529,7 +21539,7 @@ function _ajRendre(){
     }
   }
   h+='<button class="btn btn-outline btn-sm" style="width:100%;margin:4px 0 0;min-height:44px;letter-spacing:.5px;font-size:var(--fs-2xs)" onclick="ajReporter()">Reporter 7 jours</button>'
-    +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:9px">'
+    +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:10px">'
     +'Chaque modification archive le programme précédent : tu peux revenir en arrière depuis la fiche.</div>';
   z.innerHTML=h;
   return true;
@@ -21702,8 +21712,8 @@ function blocDouleurCoach(c){
   const l=douleurParExercice(c,SIG_DOULEUR_JOURS);
   if(!l.length) return '';
   const dat=t=>t?new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}):'';
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">
-    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:9px">
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Douleur · 30 jours</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint)">niveau 4 et plus</span>
     </div>
@@ -21742,8 +21752,8 @@ function blocDouleurAthlete(user){
   let sg; try{ sg=signauxEntrainement(user); }catch(e){ return ''; }
   if(!sg.douleur||!sg.details.douleur) return '';
   const x=sg.details.douleur;
-  return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-3);padding:13px;margin-bottom:14px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--warning);text-transform:uppercase;margin-bottom:7px">Douleur signalée</div>
+  return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--warning);text-transform:uppercase;margin-bottom:8px">Douleur signalée</div>
     <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">
       Tu as signalé une douleur sur <b>${escapeHtml(x.nom)}</b> lors de tes ${x.seances} dernières séances.
       Ne force pas dessus. Préviens ton coach.
@@ -21787,7 +21797,7 @@ function _renderPremiersPas(clients){
   // Un seul athlète suffit à faire disparaître le bloc : il a compris.
   if(n>0){ z.innerHTML=''; return false; }
   z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);'
-    +'border-radius:var(--r-4);padding:18px;margin-bottom:18px">'
+    +'border-radius:var(--r-4);padding:20px;margin-bottom:20px">'
     +'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;'
     +'text-transform:uppercase;margin-bottom:6px">Premiers pas</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:14px">'
@@ -21795,12 +21805,13 @@ function _renderPremiersPas(clients){
     +PREMIERS_PAS.map(a=>'<div onclick="'+a.action+'" role="button" tabindex="0" '
       +'onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click()}" '
       +'style="display:flex;align-items:flex-start;gap:12px;background:var(--surface-2);'
-      +'border:1px solid var(--border);border-radius:var(--r-3);padding:13px 14px;margin-bottom:9px;'
+      +'border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:10px;'
       +'cursor:pointer;min-height:44px">'
-      +'<div style="font-size:var(--fs-xl);line-height:1.2;flex-shrink:0">'+a.icone+'</div>'
+      // LE NUMERO DE L'ETAPE, pas un emoji : l'ordre est l'information.
+      +'<div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1.2;flex-shrink:0;width:20px;color:var(--red-text)">'+(PREMIERS_PAS.indexOf(a)+1)+'</div>'
       +'<div style="flex:1;min-width:0">'
       +'<div style="font-weight:800;font-size:var(--fs-md)">'+escapeHtml(a.titre)+'</div>'
-      +'<div class="sub" style="font-size:var(--fs-xs);margin-top:3px;line-height:1.5">'+escapeHtml(a.detail)+'</div>'
+      +'<div class="sub" style="font-size:var(--fs-xs);margin-top:4px;line-height:1.5">'+escapeHtml(a.detail)+'</div>'
       +'</div><div style="color:var(--sub);font-size:var(--fs-xl);flex-shrink:0">›</div></div>').join('')
     +'</div>';
   return true;
@@ -22105,14 +22116,14 @@ function renderTodoBlock(clients){
     total:rows.filter(r=>_bande(r)===i).length,
     // On garde l'index d'origine avec la ligne : la colonne n'est qu'une vue.
     lignes:vues.map((r,idx)=>({r,idx})).filter(x=>_bande(x.r)===i)}));
-  el.innerHTML=`<div style="background:#0c0000;border:1px solid #2a0000;border-left:3px solid var(--red);border-radius:var(--r-card);margin-bottom:20px;overflow:hidden;box-shadow:var(--elev-3)">
-    <div style="padding:9px 14px;display:flex;align-items:center;justify-content:space-between;background:#0f0000;border-bottom:1px solid #1e0000">
+  el.innerHTML=`<div style="background:#0c0000;border:1px solid #2a0000;border-left:1px solid var(--border);border-radius:var(--r-card);margin-bottom:20px;overflow:hidden;box-shadow:var(--elev-3)">
+    <div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;background:#0f0000;border-bottom:1px solid #1e0000">
       <span style="font-size:13px;font-weight:800;color:var(--red-text);text-transform:uppercase;letter-spacing:2.4px">Mes notifications</span>
-      <span style="background:var(--red);color:var(--text);font-size:14px;font-weight:400;padding:1px 9px;border-radius:var(--r-3);font-family:var(--pile-titre);letter-spacing:1px">${unique}</span>
+      <span style="background:var(--red);color:var(--text);font-size:14px;font-weight:400;padding:1px 10px;border-radius:var(--r-3);font-family:var(--pile-titre);letter-spacing:1px">${unique}</span>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:10px;padding:10px">
     ${_cols.map(b=>`<div style="min-width:0;background:#0a0000;border:1px solid #1e0000;border-radius:0;overflow:hidden">
-      <div style="padding:7px 11px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:${b.couleur}">
+      <div style="padding:8px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:${b.couleur}">
         <!-- LE TEXTE EST PRESQUE NOIR SUR LE BANDEAU PLEIN, et non blanc : sur
              l'orange et sur le vert, du blanc tombe sous trois pour un de
              contraste et ne se lit plus au soleil d'une salle. Le noir tient
@@ -22153,7 +22164,7 @@ function renderTodoBlock(clients){
     },{pad:'9px 11px',gap:9,border:'#180000',hover:'#140000'})
       // UNE COLONNE VIDE LE DIT, et dit laquelle des deux raisons : il n'y a
       // rien à ce niveau, ou le plafond de huit lignes a coupé ici.
-      :`<div style="padding:10px 11px;font-size:var(--fs-xs);color:var(--text-faint)">${b.total?'+ '+b.total+' plus bas':'Rien ici'}</div>`}
+      :`<div style="padding:10px 12px;font-size:var(--fs-xs);color:var(--text-faint)">${b.total?'+ '+b.total+' plus bas':'Rien ici'}</div>`}
     </div>`).join('')}
     </div>
     ${restant?`<div style="padding:8px 14px;font-size:var(--fs-xs);color:var(--sub);border-top:1px solid #180000">+ ${restant} autre${restant>1?'s':''}</div>`:''}
@@ -22376,7 +22387,7 @@ function _selMaj(){
   if(!n){ z.innerHTML=''; z.style.display='none'; return; }
   z.style.display='';
   z.innerHTML='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;'
-    +'padding:9px 11px;background:var(--surface-1);border:1px solid var(--red);'
+    +'padding:10px 12px;background:var(--surface-1);border:1px solid var(--red);'
     +'border-radius:var(--r-3)">'
     +'<span style="font-size:var(--fs-xs);font-weight:800;color:var(--text-strong);letter-spacing:.4px">'
     +n+' athlète'+(n>1?'s':'')+' sélectionné'+(n>1?'s':'')+'</span>'
@@ -23037,8 +23048,8 @@ function _htmlCalendrierAcces(){
   const blocs=Object.keys(mois).sort().map(k=>
     '<div style="margin-bottom:10px">'
     +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;'
-    +'color:var(--sub);margin-bottom:5px">'+escapeHtml(libMois(k))+' · '+mois[k].length+'</div>'
-    +mois[k].map(x=>'<div style="display:flex;align-items:center;gap:8px;padding:5px 0;'
+    +'color:var(--sub);margin-bottom:6px">'+escapeHtml(libMois(k))+' · '+mois[k].length+'</div>'
+    +mois[k].map(x=>'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;'
       +'border-top:1px solid rgba(255,255,255,.05);font-size:var(--fs-xs)">'
       +'<span style="width:8px;height:8px;border-radius:var(--r-full);flex-shrink:0;background:'
       +(estSuivi(x.c)?'#E02020':'#f5a524')+'"></span>'
@@ -23047,9 +23058,9 @@ function _htmlCalendrierAcces(){
       +'<span style="color:var(--sub);flex-shrink:0">'+jour(x.t)+'</span></div>').join('')
     +'</div>').join('');
   return '<div style="background:var(--surface-1);border:1px solid var(--border);'
-    +'border-radius:var(--r-3);padding:13px 14px;margin-bottom:16px">'
+    +'border-radius:var(--r-3);padding:14px 14px;margin-bottom:16px">'
     +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;'
-    +'color:var(--sub);margin-bottom:9px">Accès arrivant à terme</div>'+blocs
+    +'color:var(--sub);margin-bottom:10px">Accès arrivant à terme</div>'+blocs
     +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:4px">'
     +'Rouge : avec suivi. Jaune : sans suivi.</div></div>';
 }
@@ -23073,12 +23084,12 @@ function _htmlCroissanceCoach(athletes){
   // différence entre « 3 sur le graphique » et « 30 dans mes athlètes ».
   const avecSuivi=l.filter(estSuivi).length, sansSuivi=l.length-avecSuivi;
   const dt=d=>new Date(d).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
-  return `<div class="evo-carte" style="padding:15px 14px 12px">
+  return `<div class="evo-carte" style="padding:16px 14px 12px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:2px">
       <div class="evo-titre" style="margin-bottom:0">Arrivées par mois</div>
       <div style="font-size:var(--fs-xs);font-weight:800;color:${recent>0?'var(--text)':'var(--sub)'}">${recent>0?'+':''}${recent} sur 4 semaines</div>
     </div>
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.4px;margin-bottom:9px">
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.4px;margin-bottom:10px">
       D'après la date de création de chaque dossier.</div>
     <!-- UNE SEULE LIGNE, ET LES COMPTES SONT DEDANS. La carte portait la
          répartition du portefeuille juste au-dessus de la légende des barres :
@@ -23086,15 +23097,15 @@ function _htmlCroissanceCoach(athletes){
          suivi, c'étaient les mêmes quatre mots, écrits deux fois, l'un sur
          l'autre. Les nombres rejoignent donc les pastilles qu'ils décrivent. -->
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;flex-wrap:wrap">
-      <span style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--red-text)">
+      <span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--red-text)">
         <span style="width:9px;height:9px;border-radius:var(--r-1);background:linear-gradient(180deg,#ff4a4a,#6d0000);box-shadow:0 0 7px rgba(224,32,32,.8)"></span>${avecSuivi} avec suivi</span>
-      <span style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--text)">
+      <span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--text)">
         <span style="width:9px;height:9px;border-radius:var(--r-1);background:linear-gradient(180deg,#ffffff,#8f8f8f);box-shadow:0 0 7px rgba(255,255,255,.6)"></span>${sansSuivi} sans suivi</span>
-      <span style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--text)">
+      <span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--text)">
         <span style="width:11px;height:2px;border-radius:var(--r-1);background:#ffffff;box-shadow:0 0 7px rgba(255,255,255,.8)"></span>Total (${total})</span>
     </div>
     <canvas id="ch-croissance-toile" height="150" style="width:100%;display:block"></canvas>
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:7px">
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:8px">
       ${meilleure.nouveaux>0?`Meilleure semaine : ${meilleure.nouveaux} arrivée${meilleure.nouveaux>1?'s':''} le ${dt(meilleure.debut)}.`:'Aucune arrivée sur les 12 dernières semaines.'}
     </div>
   </div>`;
@@ -23190,16 +23201,16 @@ function _actLibMois(cle){
   return ACT_MOIS_LIB[+m[2]-1]+' '+m[1].slice(2);
 }
 function _actCarte(titre,corps,note){
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px 14px;margin-bottom:12px">
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:9px">${escapeHtml(titre)}</div>
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:12px">
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:10px">${escapeHtml(titre)}</div>
     ${corps}
-    ${note?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:9px">${note}</div>`:''}
+    ${note?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:10px">${note}</div>`:''}
   </div>`;
 }
 function _actChiffre(n,lib,couleur){
   return `<div style="flex:1;min-width:0;text-align:center">
     <div style="font-family:var(--pile-titre);font-size:var(--fs-2xl);line-height:1;color:${couleur||'var(--text)'}">${n}</div>
-    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;font-weight:800;text-transform:uppercase;margin-top:5px;line-height:1.25">${escapeHtml(lib)}</div>
+    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;font-weight:800;text-transform:uppercase;margin-top:6px;line-height:1.25">${escapeHtml(lib)}</div>
   </div>`;
 }
 function renderCoachActivite(){
@@ -23216,12 +23227,12 @@ function renderCoachActivite(){
     return;
   }
   if(!fiable&&!ath.length){
-    el.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:22px 14px;text-align:center;font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6">Synchronisation en cours…<div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:6px">Tes dossiers arrivent sur cet appareil. Les chiffres seraient faux avant.</div></div>`;
+    el.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:24px 14px;text-align:center;font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6">Synchronisation en cours…<div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:6px">Tes dossiers arrivent sur cet appareil. Les chiffres seraient faux avant.</div></div>`;
     return;
   }
   // ── État « 0 athlète » ──
   if(!ath.length){
-    el.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:22px 16px;text-align:center">
+    el.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:24px 16px;text-align:center">
       <div style="font-size:var(--fs-md);font-weight:800;color:var(--text);margin-bottom:6px">Pas encore d'athlète</div>
       <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Cet écran se remplira tout seul dès qu'un athlète aura rejoint ton suivi et enregistré sa première séance.</div>
     </div>`;
@@ -23246,7 +23257,7 @@ function renderCoachActivite(){
     </div>`;
   }).join('');
   const c1=_actCarte('Athlètes actifs par mois',
-    `<div style="display:flex;gap:3px;align-items:flex-end">${barres}</div>`,
+    `<div style="display:flex;gap:4px;align-items:flex-end">${barres}</div>`,
     'Fenêtre réellement disponible : '+mois.length+' mois. <b>Actif</b> veut dire : au moins une séance enregistrée dans le mois.');
   // ── Carte 2 : entrées et sorties du trimestre ──
   const c2=_actCarte('Ce trimestre',
@@ -23292,7 +23303,7 @@ function _actParagraphe(ath,mois,es,anc,comp,partiel){
   if(es.pauses) p.push(es.pauses+' '+(es.pauses>1?'sont':'est')+' en pause déclarée.');
   if(partiel) p.push('En dessous de '+ACT_MIN_ATHLETES+' athlètes, les médianes et les tendances restent masquées : elles se liraient comme des faits alors qu\'elles n\'en sont pas.');
   p.push('Ces chiffres décrivent ce qui a été enregistré dans RepCore, rien d\'autre.');
-  return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:13px 14px;font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">${escapeHtml(p.join(' '))}
+  return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">${escapeHtml(p.join(' '))}
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">Une pause non déclarée, ou déclarée sans être partagée avec toi, n'est pas visible ici : elle apparaîtra comme une absence de séance.</div>
   </div>`;
 }
@@ -23950,14 +23961,14 @@ function _htmlJamaisDemarre(liste,maintenant){
     // ⚠ L'ESPACE AU-DESSUS, demande par Kevin : le bandeau « Jamais démarré »
     //   touchait le pied du cadre precedent, et les deux se lisaient comme un
     //   seul bloc dont on ne voyait plus la couture.
-    +'margin-top:22px;'
+    +'margin-top:24px;'
     +'overflow:hidden;box-shadow:var(--el-1)">'
-    +'<div style="padding:9px 14px;display:flex;align-items:center;justify-content:space-between;'
+    +'<div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;'
     +'gap:10px;background:var(--surface-2);border-bottom:1px solid var(--border)">'
     +'<span style="font-size:13px;font-weight:800;color:var(--text-strong);text-transform:uppercase;'
     +'letter-spacing:2.4px">Jamais démarré</span>'
     +'<span style="background:var(--surface-1);border:1px solid var(--border);color:var(--text);'
-    +'font-size:14px;font-weight:400;padding:1px 9px;border-radius:var(--r-3);'
+    +'font-size:14px;font-weight:400;padding:1px 10px;border-radius:var(--r-3);'
     +'font-family:var(--pile-titre);letter-spacing:1px">'+n+'</span>'
     +'</div>'
     +'<div class="jd-grille">'
@@ -23986,7 +23997,7 @@ function _htmlJamaisDemarre(liste,maintenant){
     +(reste?'<button type="button" onclick="jdVoirTout(this)" style="display:block;width:100%;background:none;border:none;'
       +'border-top:1px solid var(--border);color:var(--red-text);font-family:Montserrat,sans-serif;'
       +'font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;'
-      +'cursor:pointer;padding:11px 14px;min-height:42px;text-align:left">+ '+reste+' autre'
+      +'cursor:pointer;padding:12px 14px;min-height:42px;text-align:left">+ '+reste+' autre'
       +(reste>1?'s':'')+' · tout afficher</button>':'')
     +'<div class="sub" style="font-size:var(--fs-2xs);line-height:1.55;padding:2px 14px 12px">'
     +'« Relancer » ouvre le message pré-rédigé, en WhatsApp ou par mail. RepCore n’envoie rien à ta place.'
@@ -24285,7 +24296,7 @@ function tunnelRelancer(codeId){
   +'<div class="sub" style="font-size:var(--fs-xs);margin-bottom:14px">'+escapeHtml(nom)+'</div>'
   // ⚠ LA DERNIERE TENTATIVE SE DIT AVANT, PAS APRES. Fermer un acces est
   //   irreversible du point de vue de la personne : elle ne peut plus entrer.
-  +(dernier?'<div style="background:var(--surface-1);border:1px solid var(--orange);border-left:3px solid var(--orange);border-radius:var(--r-2);padding:10px 12px;margin-bottom:14px;font-size:var(--fs-xs);line-height:1.55;color:var(--text-strong)">'
+  +(dernier?'<div style="background:var(--surface-1);border:1px solid var(--orange);border-left:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px;margin-bottom:14px;font-size:var(--fs-xs);line-height:1.55;color:var(--text-strong)">'
       +'<strong>Dernière tentative.</strong> En validant, le dossier passe en fin de tunnel et le code d’accès de '
       +escapeHtml(nom)+' est désactivé. L’historique des quatre relances est conservé.</div>':'')
   +'<div class="ml-lab" style="margin-bottom:6px">Canal utilisé</div>'
@@ -24465,9 +24476,9 @@ function tunnelPlanifier(codeId,apresRelance){
   +'<div class="sub" style="font-size:var(--fs-xs);margin-bottom:14px">'+escapeHtml(nom)
   +(apresRelance?' · relance '+k.relances.length+'/'+TUNNEL_MAX+' enregistrée':'')+'</div>'
   +'<div style="display:flex;gap:8px;margin-bottom:14px">'
-  +'<label style="flex:1"><span class="ml-lab" style="display:block;margin-bottom:5px">Date</span>'
+  +'<label style="flex:1"><span class="ml-lab" style="display:block;margin-bottom:6px">Date</span>'
   +'<input type="date" id="tun-date" value="'+dISO+'" style="width:100%;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);padding:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm)"></label>'
-  +'<label style="flex:0 0 120px"><span class="ml-lab" style="display:block;margin-bottom:5px">Heure</span>'
+  +'<label style="flex:0 0 120px"><span class="ml-lab" style="display:block;margin-bottom:6px">Heure</span>'
   +'<input type="time" id="tun-heure" value="'+hISO+'" style="width:100%;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);padding:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm)"></label>'
   +'</div>'
   +'<div style="display:flex;gap:8px">'
@@ -24787,12 +24798,12 @@ function _htmlInactifs(liste,maintenant){
   return '<div style="background:var(--surface-1);border:1px solid var(--border);'
     +'border-left:3px solid var(--sub);border-radius:var(--r-card);margin-bottom:20px;'
     +'overflow:hidden;box-shadow:var(--el-1)">'
-    +'<div style="padding:9px 14px;display:flex;align-items:center;justify-content:space-between;'
+    +'<div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;'
     +'gap:10px;background:var(--surface-2);border-bottom:1px solid var(--border)">'
     +'<span style="font-size:13px;font-weight:800;color:var(--text-strong);text-transform:uppercase;'
     +'letter-spacing:2.4px">Inactifs</span>'
     +'<span style="background:var(--surface-1);border:1px solid var(--border);color:var(--text);'
-    +'font-size:14px;font-weight:400;padding:1px 9px;border-radius:var(--r-3);'
+    +'font-size:14px;font-weight:400;padding:1px 10px;border-radius:var(--r-3);'
     +'font-family:var(--pile-titre);letter-spacing:1px">'+n+'</span>'
     +'</div>'
     +'<div style="padding:0 14px">'
@@ -25021,7 +25032,7 @@ function _buildSessionCard(s){
     // se prend au clavier, il s'annonce comme un bouton, et le reste de la
     // ligne — ce que l'athlete a REELLEMENT fait — reste du texte.
     const _nomEch=escapeHtml(nm).replace(/'/g,'&#39;');
-    return `<div style="padding:7px 0;border-top:1px solid #141414">
+    return `<div style="padding:8px 0;border-top:1px solid #141414">
       <button type="button" onclick="allerVersPrescription('${_nomEch}')"
         title="Corriger cet exercice dans son programme"
         style="display:block;width:100%;text-align:left;background:none;border:none;padding:0;margin:0 0 2px;font-family:inherit;font-size:var(--fs-xs);font-weight:700;color:#ccc;cursor:pointer;text-decoration:underline;text-decoration-color:#333;text-underline-offset:3px">${escapeHtml(nm)}</button>
@@ -25031,7 +25042,7 @@ function _buildSessionCard(s){
   return `<div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:var(--r-3);margin-bottom:10px;overflow:hidden">
     <div onclick="toggleSCard(this)" style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="flex:1;min-width:0">
-        <div style="font-size:var(--fs-md);font-weight:700;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(s.name||'Séance')}</div>
+        <div style="font-size:var(--fs-md);font-weight:700;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(s.name||'Séance')}</div>
         <div style="font-size:var(--fs-xs);color:var(--sub)">${dt} · ${s.duration||0} min · ${fmtSeries(s.sets,s.setsPlanned)} série${pluSeries(s.sets,s.setsPlanned)} · ${s.volume||0} kg</div>
       </div>
       <span style="font-size:var(--fs-xs);font-weight:700;flex-shrink:0;color:${complete?'var(--green)':'#555'}">${complete?'✓':'✗'}</span>
@@ -25177,7 +25188,7 @@ function _rendreContactCoach(u,users){
   z.innerHTML='<button type="button" class="cct-lien" onclick="ouvrirContactCoach()" '
     +'title="'+escapeHtml(titre)+'">'
     +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
-    +'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    +'stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">'
     +'<path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg>'
     +'Un souci ? Contacte ton coach</button>';
   // Les canaux sont gardes pour l'ouverture de la feuille : les recalculer au
@@ -25224,11 +25235,11 @@ function renderMotCoach(){
   if(!currentUser||!currentUser.coachId){ z.innerHTML=''; return true; }
   const m=motCoach(currentUser);
   const enc='background:var(--surface-1);border:1px solid var(--border);'
-    +'border-radius:var(--r-3);padding:12px 13px;margin-bottom:16px';
+    +'border-radius:var(--r-3);padding:12px 14px;margin-bottom:16px';
   if(_motEdition){
     z.innerHTML='<div style="'+enc+'">'
       +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);'
-      +'text-transform:uppercase;margin-bottom:7px">À dire à ton coach</div>'
+      +'text-transform:uppercase;margin-bottom:8px">À dire à ton coach</div>'
       +'<textarea id="mot-texte" rows="4" maxlength="'+MOT_COACH_MAX+'" '
       +'placeholder="Ce qui n’entre dans aucune case : une douleur, une semaine compliquée, '
       +'un truc qui te bloque, une bonne nouvelle." '
@@ -25250,7 +25261,7 @@ function renderMotCoach(){
   // L'emplacement reste : des qu'un mot est ECRIT, il s'affiche ici.
   if(!m){ z.innerHTML=''; return true; }
   z.innerHTML='<div style="'+enc+'">'
-    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px">'
+    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px">'
     +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);'
     +'text-transform:uppercase">À dire à ton coach</span>'
     +(m.maj?'<span style="font-size:var(--fs-2xs);color:var(--text-faint)">'
@@ -25259,7 +25270,7 @@ function renderMotCoach(){
     // pre-wrap : les retours a la ligne de l'athlete sont a lui.
     +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;white-space:pre-wrap">'
     +escapeHtml(m.texte)+'</div>'
-    +'<button class="btn btn-outline btn-sm" style="width:100%;margin:9px 0 0" '
+    +'<button class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0" '
     +'onclick="motOuvrir()">Modifier</button></div>';
   return true;
 }
@@ -25289,8 +25300,8 @@ function renderMotCoachFiche(c){
   }
   const neuf=(()=>{ try{ return motCoachNouveau(currentUser,c); }catch(e){ return false; } })();
   z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);'
-    +'border-radius:var(--r-3);padding:12px 13px">'
-    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px">'
+    +'border-radius:var(--r-3);padding:12px 14px">'
+    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px">'
     +(neuf?'<span style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;'
       +'color:var(--red-text);text-transform:uppercase">Nouveau</span>':'<span></span>')
     +(m.maj?'<span style="font-size:var(--fs-2xs);color:var(--text-faint)">'
@@ -25465,7 +25476,7 @@ function _jrNom(id){
   return ((u.fname||'')+' '+(u.lname||'')).trim()||u.email||'Sans nom';
 }
 function _jrHtmlNote(n,nom){
-  return '<div style="border-left:2px solid var(--border);padding:0 0 0 10px;margin-bottom:9px">'
+  return '<div style="border-left:2px solid var(--border);padding:0 0 0 10px;margin-bottom:10px">'
     +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">'
     +'<span style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.5px">'
     +escapeHtml(_jrDate(n.at))+(nom?' · '+escapeHtml(nom):'')
@@ -25513,14 +25524,14 @@ function _tunnelHistorique(codeId){
   const ech=(n<TUNNEL_MAX&&k.prochaine)
     ?'<div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:8px">Prochaine relance : <b style="color:var(--text-strong)">'+dt(k.prochaine)+'</b></div>'
     :'';
-  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-top:12px">'
+  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-top:12px">'
     +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px">'
     +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Historique du tunnel commercial</span>'
     +'<span style="flex:none;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;'
     +'color:'+s.c+';border:1px solid '+s.c+';border-radius:var(--r-4);padding:2px 8px">'+escapeHtml(s.lib)+' · '+n+'/'+TUNNEL_MAX+'</span>'
     +'</div>'+frise+ech
     +(n<TUNNEL_MAX
-      ?'<div style="display:flex;gap:6px;margin-top:11px">'
+      ?'<div style="display:flex;gap:6px;margin-top:12px">'
        +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:38px;font-size:var(--fs-2xs)" onclick="tunnelRelancer(\''+escapeHtml(codeId)+'\')">Relancer</button>'
        +'<button type="button" class="btn btn-blanc btn-sm" style="flex:1;margin:0;min-height:38px;font-size:var(--fs-2xs)" onclick="tunnelPlanifier(\''+escapeHtml(codeId)+'\')">'
        +(k.prochaine?'Replanifier':'Planifier')+'</button></div>'
@@ -25557,8 +25568,8 @@ function renderJournalCoach(c){
        +'ce qu\'il faudra reprendre.</div>';
   }
   const opts=NOTE_TAGS.map(t=>'<option value="'+t+'">'+escapeHtml(NOTE_TAG_LIB[t])+'</option>').join('');
-  z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px">'
-    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:9px">'
+  z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">'
+    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">'
     // N1.16 — « Journal » tout court se confondait avec le JOURNAL
     // ALIMENTAIRE de l'athlete, une section plus haut dans un autre onglet.
     // Le carnet du coach porte ses notes ; il n'a rien a voir avec ce que
@@ -25569,12 +25580,12 @@ function renderJournalCoach(c){
     +' value="'+escapeHtml(_jrQ)+'" oninput="jrChercher()" style="width:100%;margin-bottom:10px">'
     +corps
     +(surCode
-      ?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;border-top:1px solid var(--border);padding-top:9px;margin-top:4px">'
+      ?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;border-top:1px solid var(--border);padding-top:10px;margin-top:4px">'
        +'Cet élève n\'a pas encore de dossier : le journal s\'ouvrira à son inscription.</div>'
       :'<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">'
        +'<textarea id="jr-texte" rows="2" maxlength="'+NOTE_TEXTE_MAX+'" placeholder="Ce que tu veux retrouver la prochaine fois"'
        +' style="width:100%;resize:vertical"></textarea>'
-       +'<div style="display:flex;gap:6px;margin-top:7px">'
+       +'<div style="display:flex;gap:6px;margin-top:8px">'
        +'<select id="jr-tag" style="flex:1;min-width:0"><option value="">Sans étiquette</option>'+opts+'</select>'
        // N6.13 — L'ECHEANCE. Vide par defaut : une note est d'abord une note,
        // et la plupart n'ont rien a rappeler.
@@ -26218,7 +26229,7 @@ function _htmlTiroirAthlete(c){
     const t=String(v==null?'':v).trim();
     if(!t) return '';
     return '<div style="display:flex;align-items:baseline;justify-content:space-between;'
-      +'gap:10px;margin-top:7px">'
+      +'gap:10px;margin-top:8px">'
       +'<span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;'
       +'text-transform:uppercase;font-weight:800">'+escapeHtml(lib)+'</span>'
       +'<span style="font-size:var(--fs-xs);color:var(--text-strong);text-align:right">'
@@ -26379,7 +26390,7 @@ function openClientDetail(cid,_refresh,_force){
   try{
     const _zt=document.getElementById('ccd-securite');
     if(_zt) _zt.innerHTML=aTCA(c)
-      ?`<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:11px 13px;margin-bottom:16px;font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">${escapeHtml(SCOFF_ALERTE_COACH)}</div>`
+      ?`<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:16px;font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">${escapeHtml(SCOFF_ALERTE_COACH)}</div>`
       :'';
   }catch(e){}
   try{ renderHabitudesCoach(c); }catch(e){}
@@ -26525,11 +26536,11 @@ function openClientDetail(cid,_refresh,_force){
     // presence d'un texte.
     const _ctL=contraintesActives(c), _ctD=drapeauRougeActif(c);
     _al.style.display=(ci.length||_ctL.length||_ctD)?'block':'none';
-    _al.innerHTML=(!ci.length&&!_ctL.length&&!_ctD)?'':`<div style="background:#1a0d00;border:1px solid var(--orange);border-left:4px solid var(--orange);border-radius:var(--r-2);padding:12px 14px">
+    _al.innerHTML=(!ci.length&&!_ctL.length&&!_ctD)?'':`<div style="background:#1a0d00;border:1px solid var(--orange);border-left:1px solid var(--border);border-radius:var(--r-2);padding:12px 14px">
       <div style="font-size:var(--fs-xs);color:var(--orange);font-weight:900;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:8px">À prendre en compte</div>
       ${blocDrapeauRouge(c)}
       ${ci.map(x=>`<div style="font-size:var(--fs-sm);line-height:1.55;margin-bottom:4px"><span style="color:#fcd34d;font-weight:700">${x.lbl} :</span> <span style="color:var(--text)">${escapeHtml(x.txt)}</span></div>`).join('')}
-      ${_ctL.length?`<div style="margin-top:9px;border-top:1px solid #3a2400;padding-top:8px">
+      ${_ctL.length?`<div style="margin-top:10px;border-top:1px solid #3a2400;padding-top:8px">
         <div style="font-size:var(--fs-xs);color:var(--orange);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:4px">Contraintes structurées</div>
         ${_ctL.map(x=>_ligneContrainte(x,true,c.id)).join('')}
       </div>`:''}
@@ -26578,7 +26589,7 @@ function openClientDetail(cid,_refresh,_force){
       <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700">${new Date(b.date).toLocaleDateString('fr-FR')}</span><span class="badge ${b.date>_oldSeen?'badge-orange':'badge-green'}">${b.date>_oldSeen?'Nouveau ✦':'Complété'}</span></div>
       <div style="display:flex;gap:16px;flex-wrap:wrap">${_fragmentSiValeur('<span class="sub">Poids: <strong style="color:var(--text)">',bwN,'kg</strong></span>')}${_fragmentSiValeur('<span class="sub">MG: <strong style="color:var(--text)">',bfPct,'%</strong></span>')}${_fragmentSiValeur('<span class="sub">Taille: <strong style="color:var(--text)">',bWaistN,'cm</strong></span>')}</div>
       ${_extrait.length?`<div style="margin-top:10px;border-top:1px solid #1a1a1a;padding-top:8px">
-        ${_extrait.map(x=>`<div style="font-size:var(--fs-xs);line-height:1.5;margin-bottom:3px"><span style="color:var(--sub);font-weight:700">${x.lbl} :</span> <span style="color:#ccc">${escapeHtml(x.txt.length>90?x.txt.slice(0,90)+'…':x.txt)}</span></div>`).join('')}
+        ${_extrait.map(x=>`<div style="font-size:var(--fs-xs);line-height:1.5;margin-bottom:4px"><span style="color:var(--sub);font-weight:700">${x.lbl} :</span> <span style="color:#ccc">${escapeHtml(x.txt.length>90?x.txt.slice(0,90)+'…':x.txt)}</span></div>`).join('')}
         <button class="btn btn-outline btn-sm" style="margin-top:6px" onclick="viewClientBilans();evoTab('reponses')">Voir toutes les réponses</button>
       </div>`:''}
     </div>`}).join('');
@@ -26678,9 +26689,9 @@ function _vignetteVideoHtml(url){
 // Les demandes en cours restent la, entre le texte et le champ : sans elles,
 // le coach ne pourrait plus en retirer une.
 const _DV_ICO_LECTURE='<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M10 9.2v5.6l4.8-2.8z" fill="currentColor" stroke="none"/></svg>';
-const _DV_ICO_ENVOI='<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2.5 10.8 13.2"/><path d="M21.5 2.5 14.6 21.3l-3.8-8.1-8.1-3.8z"/></svg>';
-const _DV_ICO_INFO='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v5.5"/><circle cx="12" cy="7.6" r=".9" fill="currentColor" stroke="none"/></svg>';
-const _DV_ICO_FLECHE='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+const _DV_ICO_ENVOI='<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter"><path d="M21.5 2.5 10.8 13.2"/><path d="M21.5 2.5 14.6 21.3l-3.8-8.1-8.1-3.8z"/></svg>';
+const _DV_ICO_INFO='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v5.5"/><circle cx="12" cy="7.6" r=".9" fill="currentColor" stroke="none"/></svg>';
+const _DV_ICO_FLECHE='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square" stroke-linejoin="miter"><path d="m6 9 6 6 6-6"/></svg>';
 function _htmlDemandesVideo(c){
   const prog=exercicesDuProgramme(c);
   const dem=((c&&c.demandesVideo)||[]).filter(Boolean);
@@ -27276,7 +27287,7 @@ function renderBilanEvolution(c){
     }));
     return renderDataTable(columns,rows,{stickyCol0:true,firstColMinWidth:'130px',pad:'4px 6px',mb:'24px'})
       +(bilans.some(b=>b&&MEAS.some(m=>bmReportee(b,m.key)))
-        ?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin:-18px 0 24px">
+        ?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin:-20px 0 24px">
            Les valeurs en gris ont été reportées du bilan précédent, sans être
            re-mesurées : l'athlète a confirmé qu'elles n'avaient pas bougé.</div>`:'');
   };
@@ -27415,10 +27426,10 @@ function renderBilanEvolution(c){
         return img
           ?`<div data-cap="${safeCap}" onclick="openPhotoFull(this.querySelector('img').src,this.dataset.cap)"
               style="flex-shrink:0;cursor:pointer;position:relative;border-radius:var(--r-3);overflow:hidden;background:#111;border:1px solid var(--border);width:110px" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-              <div style="position:absolute;top:6px;left:6px;background:#000b;color:var(--text);font-size:var(--fs-xs);font-weight:800;padding:2px 7px;border-radius:var(--r-2);letter-spacing:1px;z-index:1">B${i+1}</div>
+              <div style="position:absolute;top:6px;left:6px;background:#000b;color:var(--text);font-size:var(--fs-xs);font-weight:800;padding:2px 8px;border-radius:var(--r-2);letter-spacing:1px;z-index:1">B${i+1}</div>
               <img src="${img||''}"${_p.cle?` data-bil-cle="${escapeHtml(_p.cle)}"`:''} style="width:110px;height:160px;object-fit:cover;display:block;background:#111">
-              <div style="padding:5px 6px;font-size:var(--fs-xs);color:#888;font-weight:700;text-align:center">${date}</div>
-              <div style="padding:0 6px 5px;font-size:var(--fs-2xs);color:${_p.locale?'var(--orange)':'var(--text-faint)'};text-align:center;line-height:1.3">${_p.locale?'Haute déf., cet appareil':'Version transmise'}</div>
+              <div style="padding:6px 6px;font-size:var(--fs-xs);color:#888;font-weight:700;text-align:center">${date}</div>
+              <div style="padding:0 6px 6px;font-size:var(--fs-2xs);color:${_p.locale?'var(--orange)':'var(--text-faint)'};text-align:center;line-height:1.3">${_p.locale?'Haute déf., cet appareil':'Version transmise'}</div>
             </div>`
           :`<label style="flex-shrink:0;width:110px;border-radius:var(--r-3);background:var(--surface-2);border:1px dashed var(--red);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:180px;cursor:pointer">
               <input type="file" accept="image/*" style="display:none" onchange="addBilanPhoto(${b.date},'${b.type}','${v.k}',this)">
@@ -27437,7 +27448,7 @@ function renderBilanEvolution(c){
     }).join('');
 
     return `<div style="margin-top:4px;margin-bottom:28px">
-      <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);text-align:center;text-transform:uppercase;letter-spacing:3px;margin-bottom:18px;display:flex;align-items:center;justify-content:center;gap:8px">
+      <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);text-align:center;text-transform:uppercase;letter-spacing:3px;margin-bottom:20px;display:flex;align-items:center;justify-content:center;gap:8px">
         <div style="height:1px;background:rgba(224,32,32,.2);flex:1"></div>
         FRESQUE ÉVOLUTION
         <div style="height:1px;background:rgba(224,32,32,.2);flex:1"></div>
@@ -27457,7 +27468,7 @@ function renderBilanEvolution(c){
     (b.type==='depart'?BILAN_QUESTIONS.depart:BILAN_QUESTIONS.suivi)
       .some(q=>_texteReponse(b[q.k]))).length;
   const html=`<div class="pad" style="padding-bottom:40px">
-    <div style="display:flex;gap:8px;margin-bottom:18px">
+    <div style="display:flex;gap:8px;margin-bottom:20px">
       <button class="btn btn-red btn-sm" style="flex:1" data-evo-tab="mesures" onclick="evoTab('mesures')">Mesures</button>
       <button class="btn btn-outline btn-sm" style="flex:1" data-evo-tab="reponses" onclick="evoTab('reponses')">Réponses${_avecRep?' ('+_avecRep+')':''}</button>
     </div>
@@ -30477,9 +30488,9 @@ function htmlBlocProgramme(c){
   const t=(s)=>'<div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;'
     +'text-transform:uppercase;font-weight:800;margin-bottom:6px">'+s+'</div>';
   if(!p) return '<div style="background:var(--surface-1);border:1px solid var(--border);'
-    +'border-radius:var(--r-3);padding:12px 13px;margin-bottom:14px">'
+    +'border-radius:var(--r-3);padding:12px 14px;margin-bottom:14px">'
     +t('Bloc d’entraînement')
-    +'<div class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:9px">'
+    +'<div class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:10px">'
     +'Aucun bloc défini : le programme ci-dessous vaut semaine après semaine, '
     +'sans début ni fin, et sans décharge planifiée.</div>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" '
@@ -30492,14 +30503,14 @@ function htmlBlocProgramme(c){
     ? p.decharges.map(x=>'S'+(x+1)).join(', ')
     : 'aucune';
   return '<div style="background:var(--surface-1);border:1px solid var(--border);'
-    +'border-left:3px solid var(--red);border-radius:var(--r-3);padding:12px 13px;margin-bottom:14px">'
+    +'border-left:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:14px">'
     +t('Bloc d’entraînement')
     +'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">'
     +'<b>'+p.semaines+' semaine'+(p.semaines>1?'s':'')+'</b>, du '+fmt(dep)+' au '+fmt(fin)+'</div>'
     +'<div class="sub" style="font-size:var(--fs-xs);line-height:1.6">Décharges : '+escapeHtml(dech)
     +(i===null?' · <span style="color:var(--orange)">hors bloc aujourd’hui</span>'
               :' · semaine '+(i+1)+' en cours')+'</div>'
-    +'<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px">'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" '
     +'onclick="reglerBlocProgramme()">Modifier le bloc</button>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" '
@@ -30598,7 +30609,7 @@ function _boutonsCopieJour(fn,i){
     <!-- N4.17, ET CHEZ UN AUTRE ATHLETE. Seulement depuis la fiche d'un
          athlete : un MODELE n'a pas de destinataire, et coachCopyDay est le
          seul appelant qui en ait un. -->
-    ${fn==='coachCopyDay'?`<button onclick="copierSeanceVersAthlete(${i})" title="Porter cette séance chez un autre athlète" aria-label="Porter cette séance chez un autre athlète" style="background:none;border:1px dashed var(--red);color:var(--red-text);border-radius:var(--r-2);min-height:44px;padding:4px 11px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;cursor:pointer;font-family:inherit">→ Autre athlète</button>`:''}
+    ${fn==='coachCopyDay'?`<button onclick="copierSeanceVersAthlete(${i})" title="Porter cette séance chez un autre athlète" aria-label="Porter cette séance chez un autre athlète" style="background:none;border:1px dashed var(--red);color:var(--red-text);border-radius:var(--r-2);min-height:44px;padding:4px 12px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;cursor:pointer;font-family:inherit">→ Autre athlète</button>`:''}
   </div>`;
 }
 function _copierSeance(src,dst){
@@ -30834,7 +30845,7 @@ function loadAssignAthletes(){
     // qui sera reellement assigne plutot que ce qu'on aurait choisi par defaut.
     const defG=progGenreServi(_progAssigne(),detectedF?'F':'H');
     return `
-    <div style="display:flex;align-items:center;gap:12px;border-bottom:1px solid #242424;padding:11px 10px;border-left:3px solid ${ETAT_FILET[etatAthlete(a)]||'#666666'};border-radius:0 8px 8px 0;background:linear-gradient(168deg,#141414,#0d0d0d);margin-bottom:5px">
+    <div style="display:flex;align-items:center;gap:12px;border-bottom:1px solid #242424;padding:12px 10px;border-left:3px solid ${ETAT_FILET[etatAthlete(a)]||'#666666'};border-radius:0 8px 8px 0;background:linear-gradient(168deg,#141414,#0d0d0d);margin-bottom:6px">
       <div class="avatar" style="width:32px;height:32px;font-size:12px;flex-shrink:0">${escapeHtml(ini(a.fname,a.lname))}</div>
       <input type="checkbox" id="cpa-cb-${a.id}" value="${a.id}" data-gender="${defG}" style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <label for="cpa-cb-${a.id}" style="flex:1;cursor:pointer">
@@ -30979,7 +30990,7 @@ function openApplyTemplate(){
   const fg=(actif)=>actif?'var(--text)':'var(--sub)';
   const lignes=progs.map((p,i)=>`
     <div style="padding:14px 0;border-bottom:1px solid #181818">
-      <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:3px">${escapeHtml(p.name||'Sans nom')}</div>
+      <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">${escapeHtml(p.name||'Sans nom')}</div>
       <div class="sub" style="font-size:var(--fs-xs);margin-bottom:10px">${_cptCount(p.sessions_H)} séances H · ${_cptCount(p.sessions_F)} séances F</div>
       <div style="display:flex;align-items:center;gap:8px">
         <button onclick="_atSwitchGenre(${i},'H')" id="at-g-H-${i}" style="min-height:44px;min-width:52px;padding:0 12px;border-radius:var(--r-1);border:none;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;background:${bg(genreDefaut==='H')};color:${fg(genreDefaut==='H')}">H</button>
@@ -31526,7 +31537,7 @@ function _htmlBandeauBrouillon(){
   return '<div style="background:linear-gradient(135deg,#2a1a00,#160e00);border:1.5px solid var(--orange);'
     +'border-radius:var(--r-3);padding:12px 14px;margin-bottom:14px">'
     +'<div style="font-weight:900;font-size:var(--fs-xs);color:var(--orange);text-transform:uppercase;'
-    +'letter-spacing:1px;margin-bottom:5px">Non publié</div>'
+    +'letter-spacing:1px;margin-bottom:6px">Non publié</div>'
     +'<div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6">Ces modifications ne sont pas '
     +'encore chez ton athlète. Il voit toujours son programme précédent. '
     +'Touche PUBLIER, en haut de cet écran, quand tu as terminé.</div></div>';
@@ -32222,8 +32233,8 @@ function _bqLigne(f){
   return `<div onclick="bqChoisir('${escapeHtml(f.slug)}')" role="button" tabindex="0"
     onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
     class="bq-l"
-    style="display:flex;align-items:center;gap:11px;background:var(--surface-1);
-    border:1px solid var(--border);border-radius:var(--r-3);padding:9px 11px;margin-bottom:8px;
+    style="display:flex;align-items:center;gap:12px;background:var(--surface-1);
+    border:1px solid var(--border);border-radius:var(--r-3);padding:10px 12px;margin-bottom:8px;
     cursor:pointer;min-height:66px">
     ${img?`<img src="${escapeHtml(img)}"${_srcset}
       alt="" loading="lazy" decoding="async" width="64" height="48"
@@ -32252,7 +32263,7 @@ function _bqLigne(f){
 function _bqSection(titre,fiches){
   if(!fiches.length) return '';
   return `<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;
-    text-transform:uppercase;margin:12px 0 7px">${escapeHtml(titre)}</div>`
+    text-transform:uppercase;margin:12px 0 8px">${escapeHtml(titre)}</div>`
     +fiches.map(_bqLigne).join('');
 }
 function _bqRendreFiltres(){
@@ -32413,10 +32424,10 @@ function ouvrirFicheBanque(slug,ev){
   // affirmait. `max-width` a la largeur reelle la montre NETTE, centree, et
   // laisse `width:100%` faire son travail sur les ecrans plus etroits qu'elle.
   // Sans dimension connue, on ne borne rien : le comportement d'avant.
-  const l=(t,v)=>v?`<div style="display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:3px 0">`
+  const l=(t,v)=>v?`<div style="display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:4px 0">`
     +`<span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:var(--text);text-align:right">${escapeHtml(v)}</span></div>`:'';
   const liste=(titre,arr)=>(arr&&arr.length)?`<div style="margin-top:12px">`
-    +`<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:5px">${escapeHtml(titre)}</div>`
+    +`<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">${escapeHtml(titre)}</div>`
     +`<ul style="margin:0 0 0 16px;padding:0;font-size:var(--fs-sm);color:#bbb;line-height:1.6">`
     +arr.map(x=>`<li style="margin-bottom:4px">${escapeHtml(x)}</li>`).join('')+`</ul></div>`:'';
   // Variantes : les exercices du MÊME schéma moteur. C'est la seule parenté
@@ -32424,7 +32435,7 @@ function ouvrirFicheBanque(slug,ev){
   // serait un jugement de métier qu'aucune donnée ne soutient ici.
   const variantes=f.schema?catalogueCoach().filter(x=>x.schema===f.schema&&x.slug!==f.slug).slice(0,6):[];
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div class="mdl-large" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+  <div class="mdl-large" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:10px;font-size:var(--fs-lg)">${escapeHtml(f.nom)}</h2>
     ${img?`<img src="${escapeHtml(img)}" alt="${escapeHtml(f.nom)}" decoding="async"${_d?` width="${_d[0]}" height="${_d[1]}"`:''} onerror="_illusAbsente(this)" style="display:block;margin:0 auto 12px;width:100%;${_d?`max-width:${_d[0]}px;`:''}height:auto;max-height:260px;object-fit:contain;background:#fff;border-radius:var(--r-3)">`
       :`<div class="sub" style="font-size:var(--fs-xs);text-align:center;padding:16px;background:var(--surface-1);border-radius:var(--r-3);margin-bottom:12px">Aucune illustration pour cet exercice.</div>`}
@@ -32434,16 +32445,16 @@ function ouvrirFicheBanque(slug,ev){
     ${l('Niveau',f.niveau||'')}
     ${f.unilateral?l('Unilatéral','oui'):''}
     ${l('Repos conseillé',f.repos||'')}
-    ${f.execution?`<div style="margin-top:12px"><div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:5px">Exécution</div>
+    ${f.execution?`<div style="margin-top:12px"><div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Exécution</div>
       <div style="font-size:var(--fs-sm);color:#bbb;line-height:1.65">${escapeHtml(f.execution)}</div></div>`:''}
     ${liste('Erreurs fréquentes',f.erreurs)}
     ${liste('Consignes',f.consignes)}
-    ${(f.videos||[]).map(v=>`<a href="https://youtu.be/${escapeHtml(v.id)}" target="_blank" rel="noopener" style="display:block;margin-top:9px;font-size:var(--fs-sm);color:var(--link)">Vidéo technique${v.lib?' · '+escapeHtml(v.lib):''}</a>`).join('')}
+    ${(f.videos||[]).map(v=>`<a href="https://youtu.be/${escapeHtml(v.id)}" target="_blank" rel="noopener" style="display:block;margin-top:10px;font-size:var(--fs-sm);color:var(--link)">Vidéo technique${v.lib?' · '+escapeHtml(v.lib):''}</a>`).join('')}
     ${variantes.length?`<div style="margin-top:14px"><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Même schéma moteur</div>
-      ${variantes.map(v=>`<button class="pf-chip" style="margin:0 5px 5px 0" onclick="closeModal();ouvrirFicheBanque('${escapeHtml(v.slug)}')">${escapeHtml(v.nom)}</button>`).join('')}</div>`:''}
+      ${variantes.map(v=>`<button class="pf-chip" style="margin:0 6px 6px 0" onclick="closeModal();ouvrirFicheBanque('${escapeHtml(v.slug)}')">${escapeHtml(v.nom)}</button>`).join('')}</div>`:''}
     <button class="btn btn-red" style="margin-top:16px" onclick="closeModal();bqChoisir('${escapeHtml(f.slug)}')">Ajouter à la séance</button>
-    ${f.perso?`<button class="btn btn-outline" style="margin-top:9px;color:var(--red-light)" onclick="_supprimerExoPerso('${escapeHtml(f.slug)}')">Supprimer cet exercice</button>`:''}
-    <button class="btn btn-outline" style="margin-top:9px" onclick="closeModal()">Fermer</button>
+    ${f.perso?`<button class="btn btn-outline" style="margin-top:10px;color:var(--red-light)" onclick="_supprimerExoPerso('${escapeHtml(f.slug)}')">Supprimer cet exercice</button>`:''}
+    <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Fermer</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
   return true;
@@ -32461,7 +32472,7 @@ function ouvrirCreationExo(){
   if(!peutConsulterBanque()){ toast('Réservé aux coachs.','var(--orange)'); return false; }
   const opt=(v,lib,sel)=>`<option value="${escapeHtml(v)}"${sel?' selected':''}>${escapeHtml(lib)}</option>`;
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:4px;font-size:var(--fs-lg)">Créer un exercice</h2>
     <p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px;line-height:1.6">Il n'appartient qu'à toi : aucun autre coach ne le voit. L'illustration est facultative : il n'y en aura pas.</p>
     <label for="ce-nom">Nom</label>
@@ -32476,7 +32487,7 @@ function ouvrirCreationExo(){
     <textarea id="ce-exec" rows="4" placeholder="Ce que l'athlète doit faire, étape par étape."></textarea>
     <div id="ce-err" style="color:var(--red-light);font-size:var(--fs-sm);margin-top:8px;display:none"></div>
     <button class="btn btn-red" style="margin-top:14px" onclick="_validerCreationExo()">Créer</button>
-    <button class="btn btn-outline" style="margin-top:9px" onclick="closeModal()">Annuler</button>
+    <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Annuler</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
   setTimeout(()=>document.getElementById('ce-nom')?.focus(),80);
@@ -33856,7 +33867,7 @@ function _peindreRepos(){
 function _icoSon(actif,taille){
   const t=taille||15;
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
-    +'stroke-linecap="round" stroke-linejoin="round" width="'+t+'" height="'+t+'" '
+    +'stroke-linecap="square" stroke-linejoin="miter" width="'+t+'" height="'+t+'" '
     +'style="display:block;flex-shrink:0" aria-hidden="true">'
     +'<path d="M11 5 6 9H2v6h4l5 4z"/>'
     +(actif
@@ -34202,7 +34213,7 @@ function blocTempo(ex){
   const expl=n
     ? n[0]+' s pour descendre, '+n[1]+' s en bas, '+n[2]+' s pour monter, '+n[3]+' s en haut.'
     : 'Consigne de ton coach.';
-  return `<div style="margin-bottom:7px">
+  return `<div style="margin-bottom:8px">
     <span style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">Tempo ${escapeHtml(t)}</span>
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:2px">${escapeHtml(expl)}</div>
   </div>`;
@@ -34308,7 +34319,7 @@ function badgeTechnique(ex){
   if(!m&&fam==='normale') return '';
   const c=COUL_FAMILLE[fam]||['var(--border)','#bbb'];
   const txt=m?m.nom.toUpperCase():(LIB_FAMILLE_BADGE[fam]||fam.toUpperCase());
-  return `<span style="background:${c[0]};color:${c[1]};padding:2px 7px;border-radius:var(--r-2);font-size:var(--fs-xs);font-weight:700">${escapeHtml(txt)}</span>`;
+  return `<span style="background:${c[0]};color:${c[1]};padding:2px 8px;border-radius:var(--r-2);font-size:var(--fs-xs);font-weight:700">${escapeHtml(txt)}</span>`;
 }
 // ══════════════ LE CONTROLE A LA PRESCRIPTION ══════════════════════════
 //
@@ -34542,10 +34553,10 @@ function _techniqueLecture(ex,i,m,cardio){
   const s=String((ex&&ex.methodeSeries)||'').trim();
   return `<div style="margin-bottom:10px">
     <label>Technique</label>
-    <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);padding:9px 11px">
+    <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px">
       <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${escapeHtml(m.nom)}${m.sous?`<span style="font-weight:400;color:var(--sub)"> · ${escapeHtml(m.sous)}</span>`:''}</div>
-      ${s?`<div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:3px">Séries : ${escapeHtml(s)}</div>`:''}
-      <div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.6;margin-top:5px">${escapeHtml(m.desc)}
+      ${s?`<div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:4px">Séries : ${escapeHtml(s)}</div>`:''}
+      <div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.6;margin-top:6px">${escapeHtml(m.desc)}
         ${videoTechnique(m)?`<a href="${safeUrl(videoTechnique(m))}" target="_blank" rel="noopener" style="color:var(--link);white-space:nowrap">· voir la vidéo</a>`:''}</div>
     </div>
     ${_avertissementTechnique(ex,i)}
@@ -34565,13 +34576,13 @@ function _selecteurTechnique(ex,i){
     <label>Technique ${cardio?'<span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(sans objet sur du cardio)</span>':''}</label>
     <select ${cardio?'disabled':''} onchange="_progExTechnique(${i},this.value)"
       style="width:100%;box-sizing:border-box${cardio?';opacity:.45':''}">${opts}</select>
-    ${m?`<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.6;margin-top:5px">${escapeHtml(m.desc)}
+    ${m?`<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.6;margin-top:6px">${escapeHtml(m.desc)}
       ${videoTechnique(m)?`<a href="${safeUrl(videoTechnique(m))}" target="_blank" rel="noopener" style="color:var(--link);white-space:nowrap">· voir la vidéo</a>`:''}</div>`:''}
     <!-- SUR QUELLE(S) SÉRIE(S). Une méthode se pose rarement sur les quatre :
          c'est la dernière, ou les deux dernières. Le coach l'écrivait dans la
          description, ou pas du tout. Affiché SEULEMENT quand une méthode est
          posée : le champ seul ne décrirait rien. -->
-    ${m?`<div style="margin-top:7px">
+    ${m?`<div style="margin-top:8px">
       <label style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:700">Sur quelle(s) série(s)</label>
       <input value="${escapeHtml((ex&&ex.methodeSeries)||'')}" maxlength="40"
         onchange="_progExDirty=true;progEx[${i}].methodeSeries=this.value;renderProgEx()"
@@ -34617,11 +34628,11 @@ function _blocRegleMethode(ex,i){
   const ev=_evaluerMethodeEditeur(ex);
   if(ev.ok) return '';
   return '<div style="margin-top:6px;background:var(--warning-bg);border:1px solid var(--warning-border);'
-    +'border-radius:var(--r-2);padding:9px 11px;font-size:var(--fs-2xs);color:var(--text);line-height:1.6">'
+    +'border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-2xs);color:var(--text);line-height:1.6">'
     +escapeHtml(ev.phrase)
-    +'<div style="margin-top:7px"><button onclick="_forcerMethode('+i+')" '
+    +'<div style="margin-top:8px"><button onclick="_forcerMethode('+i+')" '
     +'style="background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);'
-    +'font-family:inherit;font-size:var(--fs-2xs);padding:5px 9px;cursor:pointer">Poser quand même</button></div>'
+    +'font-family:inherit;font-size:var(--fs-2xs);padding:6px 10px;cursor:pointer">Poser quand même</button></div>'
     +'</div>';
 }
 function _forcerMethode(i){
@@ -34671,7 +34682,7 @@ function _avertissementTechnique(ex,i){
   }
   if(fam==='isometrie') av.push('Le champ Reps se lit en SECONDES pour cette méthode.');
   if(!av.length) return '';
-  return av.map(t=>`<div style="margin-top:6px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);padding:7px 9px;font-size:var(--fs-2xs);color:var(--sub);line-height:1.5">${escapeHtml(t)}</div>`).join('');
+  return av.map(t=>`<div style="margin-top:6px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);padding:8px 10px;font-size:var(--fs-2xs);color:var(--sub);line-height:1.5">${escapeHtml(t)}</div>`).join('');
 }
 function _progExTechnique(i,cle){
   if(!progEx[i]) return;
@@ -34854,16 +34865,16 @@ function renderProgEx(){
     // c'est l'espace ENTRE deux exercices qu'on lie ou qu'on délie.
     const lien=i===0?'':`<div style="display:flex;align-items:center;gap:8px;margin:-6px 0 8px">
       <div style="flex:1;height:1px;background:${ex.ss?'var(--orange)':'var(--border)'}"></div>
-      <button onclick="_basculerSS(${i})" style="background:${ex.ss?'#1a0f00':'var(--surface-1)'};border:1px solid ${ex.ss?'var(--orange)':'var(--border)'};color:${ex.ss?'var(--orange)':'var(--sub)'};border-radius:var(--r-4);padding:4px 11px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap">${ex.ss?'⇄ SUPERSET · DÉLIER':'+ SUPERSET'}</button>
+      <button onclick="_basculerSS(${i})" style="background:${ex.ss?'#1a0f00':'var(--surface-1)'};border:1px solid ${ex.ss?'var(--orange)':'var(--border)'};color:${ex.ss?'var(--orange)':'var(--sub)'};border-radius:var(--r-4);padding:4px 12px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap">${ex.ss?'⇄ SUPERSET · DÉLIER':'+ SUPERSET'}</button>
       <div style="flex:1;height:1px;background:${ex.ss?'var(--orange)':'var(--border)'}"></div>
     </div>`;
     // Le badge de METHODE prime : il porte le nom exact du guide. Les badges
     // de FORME (plage, unilateral) restent pour tout le reste.
     const _bTech=badgeTechnique(ex);
     const badge=_bTech?_bTech:
-      pr.type==='degressive'?`<span style="background:#7c2d12;color:#fca5a5;padding:2px 7px;border-radius:var(--r-2);font-size:var(--fs-xs);font-weight:700">DÉGRESSIVE</span>`:
-      pr.type==='unilateral'?`<span style="background:#1e3a5f;color:#93c5fd;padding:2px 7px;border-radius:var(--r-2);font-size:var(--fs-xs);font-weight:700">UNILATÉRAL</span>`:
-      pr.type==='range'?`<span style="background:#1a3322;color:#86efac;padding:2px 7px;border-radius:var(--r-2);font-size:var(--fs-xs);font-weight:700">PLAGE</span>`:'';
+      pr.type==='degressive'?`<span style="background:#7c2d12;color:#fca5a5;padding:2px 8px;border-radius:var(--r-2);font-size:var(--fs-xs);font-weight:700">DÉGRESSIVE</span>`:
+      pr.type==='unilateral'?`<span style="background:#1e3a5f;color:#93c5fd;padding:2px 8px;border-radius:var(--r-2);font-size:var(--fs-xs);font-weight:700">UNILATÉRAL</span>`:
+      pr.type==='range'?`<span style="background:#1a3322;color:#86efac;padding:2px 8px;border-radius:var(--r-2);font-size:var(--fs-xs);font-weight:700">PLAGE</span>`:'';
     return `${lien}
     <div id="px-carte-${i}" data-px-idx="${i}" data-ex-nom="${escapeHtml(ex.name||'')}" style="background:var(--surface-1);border-radius:var(--r-4);margin-bottom:14px;overflow:hidden;border:1px solid ${enSS?'var(--orange)':'var(--border)'}">
       <!-- Numéro + Nom -->
@@ -34874,11 +34885,11 @@ function renderProgEx(){
             <button type="button" class="px-mini" onclick="_pxDeplacerParFleche(${i},-1)" ${gi===0?'disabled':''} aria-label="Monter">▲</button>
             <button type="button" class="px-mini" onclick="_pxDeplacerParFleche(${i},1)" ${gi===_grs.length-1?'disabled':''} aria-label="Descendre">▼</button>
           </span>`:''}
-          <span style="background:#fff2;border-radius:var(--r-full);min-width:22px;height:22px;padding:0 5px;display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:800;flex-shrink:0">${_repereEx(progEx,i)}</span>
+          <span style="background:#fff2;border-radius:var(--r-full);min-width:22px;height:22px;padding:0 6px;display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:800;flex-shrink:0">${_repereEx(progEx,i)}</span>
           <input value="${escapeHtml(ex.name||'')}" onchange="_progExDirty=true;progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase()" placeholder="NOM DE L'EXERCICE" class="f-inline" style="color:var(--text);font-family:Montserrat,sans-serif;outline:none;text-transform:uppercase;flex:1">
         </div>
         <span style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-          <button onclick="_dupliquerExUI(${i})" aria-label="Dupliquer cet exercice" title="Dupliquer" style="background:#fff2;border:none;color:var(--text);font-size:var(--fs-xs);font-weight:800;cursor:pointer;border-radius:var(--r-3);height:24px;padding:0 9px;display:flex;align-items:center;justify-content:center;font-family:inherit">Copie</button>
+          <button onclick="_dupliquerExUI(${i})" aria-label="Dupliquer cet exercice" title="Dupliquer" style="background:#fff2;border:none;color:var(--text);font-size:var(--fs-xs);font-weight:800;cursor:pointer;border-radius:var(--r-3);height:24px;padding:0 10px;display:flex;align-items:center;justify-content:center;font-family:inherit">Copie</button>
           <button onclick="_supprimerEx(${i})" aria-label="Supprimer cet exercice" style="background:#fff2;border:none;color:var(--text);font-size:var(--fs-md);cursor:pointer;border-radius:var(--r-full);width:24px;height:24px;display:flex;align-items:center;justify-content:center">${icon('trash',13)}</button>
         </span>
       </div>
@@ -35017,7 +35028,7 @@ function renderProgEx(){
             <label style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:700">Lien vidéo YouTube (technique)</label>
             <div style="display:flex;gap:6px;margin-top:4px">
               <input value="${escapeHtml(ex.videoUrl||'')}" onchange="_progExDirty=true;progEx[${i}].videoUrl=normaliserUrlVideo(this.value);this.value=progEx[${i}].videoUrl;renderProgEx()" placeholder="https://youtu.be/..." class="f-sm" style="flex:1">
-              ${normaliserUrlVideo(ex.videoUrl)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl))}" target="_blank" rel="noopener" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-1);padding:7px 10px;font-size:var(--fs-sm);text-decoration:none;display:flex;align-items:center">▶</a>`:''}
+              ${normaliserUrlVideo(ex.videoUrl)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl))}" target="_blank" rel="noopener" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-1);padding:8px 10px;font-size:var(--fs-sm);text-decoration:none;display:flex;align-items:center">▶</a>`:''}
             </div>
             ${ex.videoUrl&&!normaliserUrlVideo(ex.videoUrl)?`<div class="videoInutilisable" style="font-size:var(--fs-2xs);color:var(--orange);margin-top:4px;line-height:1.5">Ce texte n'est pas un lien : l'athlète ne verra aucune vidéo. Colle l'adresse YouTube, ou juste l'identifiant de la vidéo.</div>`:''}
             <!-- SECOND LIEN. La vue en séance l'affichait déjà (« VIDÉO 2 »)
@@ -35025,10 +35036,10 @@ function renderProgEx(){
                  saisir. Même normalisation et même avertissement que le
                  premier : deux champs qui se ressembleraient sans se
                  comporter pareil seraient deux champs à apprendre. -->
-            <label style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:700;margin-top:9px">2ᵉ lien vidéo (facultatif)</label>
+            <label style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:700;margin-top:10px">2ᵉ lien vidéo (facultatif)</label>
             <div style="display:flex;gap:6px;margin-top:4px">
               <input value="${escapeHtml(ex.videoUrl2||'')}" onchange="_progExDirty=true;progEx[${i}].videoUrl2=normaliserUrlVideo(this.value);this.value=progEx[${i}].videoUrl2;renderProgEx()" placeholder="https://youtu.be/..." class="f-sm" style="flex:1">
-              ${normaliserUrlVideo(ex.videoUrl2)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl2))}" target="_blank" rel="noopener" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-1);padding:7px 10px;font-size:var(--fs-sm);text-decoration:none;display:flex;align-items:center">▶</a>`:''}
+              ${normaliserUrlVideo(ex.videoUrl2)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl2))}" target="_blank" rel="noopener" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-1);padding:8px 10px;font-size:var(--fs-sm);text-decoration:none;display:flex;align-items:center">▶</a>`:''}
             </div>
             ${ex.videoUrl2&&!normaliserUrlVideo(ex.videoUrl2)?`<div class="videoInutilisable" style="font-size:var(--fs-2xs);color:var(--orange);margin-top:4px;line-height:1.5">Ce texte n'est pas un lien : l'athlète ne verra aucune vidéo. Colle l'adresse YouTube, ou juste l'identifiant de la vidéo.</div>`:''}
           </div>
@@ -35141,18 +35152,18 @@ function _htmlBoutonProgEx(ex,i){
   const fin=(()=>{ try{ return finProgExProche(ex); }catch(e){ return null; } })();
   let resume='';
   if(c){
-    resume=`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:5px">
+    resume=`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">
       Semaine ${c.semaine+1} / ${c.total} · ${c.series}×${c.reps} @${c.rpe}
       ${c.kg!=null?`· <b style="color:var(--sub)">${c.kg} kg</b> (${String(c.pct).replace('.',',')} % de ${c.maxRetenu} kg)`
                   :`· <span style="color:var(--orange)">charge non calculable au-delà de ${RPE_REPS_MAX} répétitions</span>`}
       ${fin!=null&&fin<=PROG_EX_FIN_PREVENIR+1?`<span style="color:var(--orange)"> · ${fin===1?'dernière semaine':fin+' semaines restantes'}</span>`:''}
-      ${c.maxDepasse?`<div style="color:var(--orange);margin-top:3px">1RM au dossier : ${c.max} kg · observé en séance : ${c.maxObserve} kg. La charge est calculée sur l’observé : corrige le 1RM pour figer la progression.</div>`:''}
+      ${c.maxDepasse?`<div style="color:var(--orange);margin-top:4px">1RM au dossier : ${c.max} kg · observé en séance : ${c.maxObserve} kg. La charge est calculée sur l’observé : corrige le 1RM pour figer la progression.</div>`:''}
     </div>`;
   } else if(p){
     // UNE PROGRAMMATION QUI NE S'APPLIQUE PAS SE DIT. Terminee, pas encore
     // commencee, ou semaine incomplete : dans les trois cas l'athlete ne
     // recoit rien, et le coach doit le savoir sans ouvrir la feuille.
-    resume=`<div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.5;margin-top:5px">
+    resume=`<div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.5;margin-top:6px">
       Programmation de ${p.semaines.length} semaine${p.semaines.length>1?'s':''} : aucune consigne active cette semaine.</div>`;
   }
   return `<div class="px-grp">Programmation</div>
@@ -35215,16 +35226,16 @@ function _htmlLigneProgEx(s,i,max){
   const kg=(pct!=null&&max>0)?_arrondirCharge(max*pct/100):null;
   const opt=v=>`<option value="${v}" ${s.rpe===v?'selected':''}>@${v}</option>`;
   return `<tr>
-    <td style="padding:5px 4px;font-size:var(--fs-2xs);color:var(--sub);white-space:nowrap">S${i+1}</td>
-    <td style="padding:5px 4px"><input type="number" min="1" max="20" inputmode="numeric" value="${s.series==null?'':s.series}"
+    <td style="padding:6px 4px;font-size:var(--fs-2xs);color:var(--sub);white-space:nowrap">S${i+1}</td>
+    <td style="padding:6px 4px"><input type="number" min="1" max="20" inputmode="numeric" value="${s.series==null?'':s.series}"
       onchange="_progExChamp(${i},'series',this.value)" aria-label="Séries semaine ${i+1}"
       style="width:100%;text-align:center;padding:6px 4px;margin:0"></td>
-    <td style="padding:5px 4px"><input type="number" min="1" max="${RPE_REPS_MAX}" inputmode="numeric" value="${s.reps==null?'':s.reps}"
+    <td style="padding:6px 4px"><input type="number" min="1" max="${RPE_REPS_MAX}" inputmode="numeric" value="${s.reps==null?'':s.reps}"
       onchange="_progExChamp(${i},'reps',this.value)" aria-label="Répétitions semaine ${i+1}"
       style="width:100%;text-align:center;padding:6px 4px;margin:0"></td>
-    <td style="padding:5px 4px"><select onchange="_progExChamp(${i},'rpe',this.value)" aria-label="RPE semaine ${i+1}"
+    <td style="padding:6px 4px"><select onchange="_progExChamp(${i},'rpe',this.value)" aria-label="RPE semaine ${i+1}"
       style="width:100%;padding:6px 4px;margin:0"><option value="">-</option>${RPE_ECHELLE.slice().reverse().map(opt).join('')}</select></td>
-    <td style="padding:5px 4px;text-align:right;white-space:nowrap;font-size:var(--fs-2xs)">
+    <td style="padding:6px 4px;text-align:right;white-space:nowrap;font-size:var(--fs-2xs)">
       ${kg!=null?`<b style="color:var(--text-strong)">${kg} kg</b><span style="color:var(--text-faint)"> · ${String(pct).replace('.',',')} %</span>`
         :(s.reps>RPE_REPS_MAX?`<span style="color:var(--orange)">hors table</span>`:`<span style="color:var(--text-faint)">-</span>`)}
     </td>
@@ -36136,7 +36147,7 @@ function loadClientHome(){
         ? '<div onclick="ouvrirEcheanceEcran()" role="button" tabindex="0" '
           +'onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}" '
           +'style="background:rgba(224,32,32,.07);border:1px solid var(--red);border-radius:var(--r-3);'
-          +'padding:11px 13px;cursor:pointer;font-size:var(--fs-sm);color:var(--text);font-weight:700">'
+          +'padding:12px 14px;cursor:pointer;font-size:var(--fs-sm);color:var(--text);font-weight:700">'
           +escapeHtml(_l)+'</div>'
         : '';
       _z.style.display=_l?'block':'none';
@@ -36418,8 +36429,8 @@ function loadClientHome(){
       return;
     }
     el.style.display='block';
-    el.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:var(--r-md);background:#0c0c0c;border-top:2px solid var(--red);border-left:3px solid var(--red);border-right:1px solid #1e1e1e;border-bottom:1px solid rgba(180,0,0,0.18)">
-      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 18px,rgba(255,255,255,0.013) 18px,rgba(255,255,255,0.013) 19px);pointer-events:none"></div>
+    el.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:var(--r-md);background:#0c0c0c;border-top:1px solid var(--border);border-left:1px solid var(--border);border-right:1px solid #1e1e1e;border-bottom:1px solid rgba(180,0,0,0.18)">
+      
       <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 0% 50%,rgba(210,0,0,0.2) 0%,transparent 65%);pointer-events:none"></div>
       <!-- La photo n'est plus centrée sur la hauteur : elle est calée EN HAUT,
            et le bandeau « COACH » occupe l'espace laissé libre sous elle. Le
@@ -36432,16 +36443,16 @@ function loadClientHome(){
            photo de 72 px et la pastille COACH sous elle, et la colonne de
            droite est plus courte qu'elle. C'est donc le rembourrage vertical
            qui cede : 20 px deviennent 13, en haut comme en bas. -->
-      <div style="display:flex;align-items:stretch;padding:13px 18px 13px 20px;gap:16px;position:relative">
+      <div style="display:flex;align-items:stretch;padding:14px 20px 14px 20px;gap:16px;position:relative">
         <div style="flex-shrink:0;display:flex;flex-direction:column;width:72px;gap:12px">
         ${photo
           ?`<div style="width:72px;height:72px;border-radius:var(--r-full);overflow:hidden;border:2px solid rgba(210,0,0,0.55);box-shadow:0 0 0 5px rgba(200,0,0,0.07),0 8px 28px rgba(0,0,0,0.7)"><img src="${escapeHtml(photo)}" style="width:100%;height:100%;object-fit:cover;display:block"></div>`
           :`<div style="width:72px;height:72px;border-radius:var(--r-full);background:linear-gradient(135deg,var(--surface-3),#080808);border:2px solid rgba(210,0,0,0.55);box-shadow:0 0 0 5px rgba(200,0,0,0.07),0 8px 28px rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center">${icon('dumbbell',28)}</div>`}
-          <div style="margin-top:auto;margin-left:-20px;width:92px;text-align:center;background:var(--red);color:var(--text);font-size:var(--fs-2xs);font-weight:900;letter-spacing:2.5px;padding:5px 0;border-radius:0 var(--r-2) var(--r-2) 0;box-shadow:var(--e2),var(--glow-red)">COACH</div>
+          <div style="margin-top:auto;margin-left:-20px;width:92px;text-align:center;background:var(--red);color:var(--text);font-size:var(--fs-2xs);font-weight:900;letter-spacing:2.5px;padding:6px 0;border-radius:0 var(--r-2) var(--r-2) 0;box-shadow:var(--e2),var(--glow-red)">COACH</div>
         </div>
         <div style="flex:1;min-width:0">
           ${team?`<div class="cc-team">${escapeHtml(team)}</div>`:''}
-          <div class="txt-stat" style="letter-spacing:2px;line-height:0.95;background:linear-gradient(135deg,var(--text) 30%,#888 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:${phrase?'8':'0'}px">${escapeHtml(name.trim())}</div>
+          <div class="txt-stat" style="letter-spacing:2px;line-height:0.95;color:var(--text);margin-bottom:${phrase?'8':'0'}px">${escapeHtml(name.trim())}</div>
           ${phrase?`<div style="font-size:var(--fs-xs);color:#888;font-style:italic;line-height:1.6">"${escapeHtml(phrase)}"</div>`:''}
         </div>
       </div>
@@ -37057,8 +37068,8 @@ function _rendreBoutique(){
   // pire que pas de bouton : il fait croire qu'on a ecrit.
   c.innerHTML=lien
     ?'<div style="background:var(--surface-1);border:1px solid var(--border);'
-      +'border-radius:var(--r-4);padding:18px;margin-top:6px;text-align:center">'
-      +'<div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6;margin-bottom:13px">'
+      +'border-radius:var(--r-4);padding:20px;margin-top:6px;text-align:center">'
+      +'<div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6;margin-bottom:14px">'
       +'Tu cherches un suivi sur mesure plutôt qu\'un programme tout fait ?</div>'
       +'<a class="btn btn-outline btn-sm" style="width:100%;margin:0;text-decoration:none" '
       +'href="'+escapeHtml(lien)+'" target="_blank" rel="noopener noreferrer">'
@@ -37125,7 +37136,7 @@ function _rendreEntreeVente(){
   const z=document.getElementById('bq-vendeur');
   if(!z) return false;
   z.innerHTML=estVendeur()
-    ?'<button class="btn btn-outline btn-sm" style="width:100%;margin:0 0 18px" '
+    ?'<button class="btn btn-outline btn-sm" style="width:100%;margin:0 0 20px" '
       +'onclick="ouvrirMesProgrammes()">Gérer mes programmes en vente</button>'
     :'';
   return true;
@@ -37370,16 +37381,16 @@ function _htmlActionProgramme(p){
   const createur=!!(currentUser&&currentUser.email===CREATOR_EMAIL);
   let h='';
   if(acquis){
-    h+='<button class="btn btn-red btn-sm" style="width:100%;margin-top:15px" '
+    h+='<button class="btn btn-red btn-sm" style="width:100%;margin-top:16px" '
       +'onclick="appliquerProgramme(\''+id+'\')">Enregistrer dans mes séances</button>';
     if(!RC_BOUTIQUE_GRATUITE&&p.prixCts) h+='<div class="bq-note">Programme acquis.</div>';
   } else {
-    h+='<button class="btn btn-red btn-sm" style="width:100%;margin-top:15px" '
+    h+='<button class="btn btn-red btn-sm" style="width:100%;margin-top:16px" '
       +'onclick="ouvrirAchatProgramme(\''+id+'\')">Acheter, '+prixProgramme(p)+'</button>';
     // ⚠ LE COACH L'APPLIQUE SANS PAYER, et c'est un pouvoir, pas un raccourci :
     // il vend ses propres programmes. La porte est fermee a tout autre compte.
     if(createur)
-      h+='<button class="btn btn-outline btn-sm" style="width:100%;margin-top:9px" '
+      h+='<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" '
         +'onclick="offrirProgramme(\''+id+'\')">L\'enregistrer sans payer (coach)</button>';
   }
   return h;
@@ -37604,14 +37615,14 @@ function ouvrirMerciAchat(id){
   const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
     +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
     +'<div class="mdl-large" onclick="event.stopPropagation()" style="background:var(--surface-2);'
-    +'border-radius:var(--r-4) var(--r-4) 0 0;padding:18px 20px 22px;width:100%;max-width:480px;'
+    +'border-radius:var(--r-4) var(--r-4) 0 0;padding:20px 20px 24px;width:100%;max-width:480px;'
     +'max-height:90vh;overflow-y:auto">'
     +'<h2 style="margin-bottom:6px;font-size:var(--fs-lg)">« '+escapeHtml(p.nom||'Programme')+' » est à toi.</h2>'
     +'<p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:14px">'
     +'Il est installé dans tes séances. Et pendant '+mois+' mois, tu as aussi le catalogue '
     +'d’exercices, la charge de ton bloc et ta diète calculée.</p>'
-    +'<div style="background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--red);'
-    +'border-radius:var(--r-3);padding:14px 15px;margin-bottom:14px">'
+    +'<div style="background:var(--surface-1);border:1px solid var(--border);border-left:1px solid var(--border);'
+    +'border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px">'
     +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.65">'
     +'Tu veux que j’adapte ce programme à toi&nbsp;? Le programme personnalisé, c’est '
     +escapeHtml(prixOffre('programme_perso'))+'.</div>'
@@ -37619,7 +37630,7 @@ function ouvrirMerciAchat(id){
     +'Voir les formules de coaching</a></div>'
     +'<button class="btn btn-red" style="width:100%" onclick="closeModal();loadSessionManager()">'
     +'Voir mes séances</button>'
-    +'<button class="btn btn-outline" style="width:100%;margin-top:9px" onclick="closeModal()">Plus tard</button>'
+    +'<button class="btn btn-outline" style="width:100%;margin-top:10px" onclick="closeModal()">Plus tard</button>'
     +'</div></div>';
   closeModal();
   document.body.insertAdjacentHTML('beforeend',html);
@@ -37758,7 +37769,7 @@ function ouvrirMesExercices(){
     ?_mesExos.map((x,i)=>'<button type="button" onclick="ouvrirFicheMonExercice('+i+')" '
       +'style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;'
       +'background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);'
-      +'padding:8px 10px;margin-bottom:7px;cursor:pointer;font-family:inherit">'
+      +'padding:8px 10px;margin-bottom:8px;cursor:pointer;font-family:inherit">'
       +vign(x)
       +'<span style="font-size:var(--fs-sm);font-weight:800;color:var(--text);letter-spacing:.4px">'
       +escapeHtml(x.nom)+'</span></button>').join('')
@@ -37767,7 +37778,7 @@ function ouvrirMesExercices(){
   const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
     +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
     +'<div class="mdl-large" onclick="event.stopPropagation()" style="background:var(--surface-2);'
-    +'border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 22px;width:100%;max-width:480px;'
+    +'border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;'
     +'max-height:90vh;overflow-y:auto">'
     +'<h2 style="margin-bottom:4px;font-size:var(--fs-lg)">Mes exercices</h2>'
     +'<p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px;line-height:1.6">'
@@ -37792,13 +37803,13 @@ function ouvrirFicheMonExercice(i,rejoue){
   let g=null; try{ g=_exGuide().get(resoudreAlias(exKey(nom)))||null; }catch(e){ g=null; }
   const muscles=g?[].concat(g.p||[],g.s||[]).map(m=>(MUSCLES[m]||{}).lib||m).join(', '):'';
   const l=(t,v)=>v?'<div style="display:flex;justify-content:space-between;gap:10px;'
-    +'font-size:var(--fs-sm);padding:3px 0"><span style="color:var(--sub)">'+escapeHtml(t)+'</span>'
+    +'font-size:var(--fs-sm);padding:4px 0"><span style="color:var(--sub)">'+escapeHtml(t)+'</span>'
     +'<span style="color:var(--text);text-align:right">'+escapeHtml(v)+'</span></div>':'';
   let pastilles=''; try{ pastilles=htmlVideosExo(ex)||''; }catch(e){ pastilles=''; }
   const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
     +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
     +'<div class="mdl-large" id="me-fiche" onclick="event.stopPropagation()" style="background:var(--surface-2);'
-    +'border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 22px;width:100%;max-width:480px;'
+    +'border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;'
     +'max-height:90vh;overflow-y:auto">'
     +'<h2 style="margin-bottom:10px;font-size:var(--fs-lg)">'+escapeHtml(nom)+'</h2>'
     +(img?'<img src="'+escapeHtml(img)+'" alt="'+escapeHtml(nom)+'" decoding="async"'
@@ -37812,14 +37823,14 @@ function ouvrirFicheMonExercice(i,rejoue){
     +l('Matériel',ex.materiel||'')
     +(ex.description?'<div style="margin-top:12px"><div style="font-size:var(--fs-xs);'
       +'color:var(--red-text);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;'
-      +'margin-bottom:5px">Ce que ton coach a écrit</div><div style="font-size:var(--fs-sm);'
+      +'margin-bottom:6px">Ce que ton coach a écrit</div><div style="font-size:var(--fs-sm);'
       +'color:#bbb;line-height:1.65;white-space:pre-wrap">'+escapeHtml(ex.description)+'</div></div>':'')
     +pastilles
     +(pastilles?'':'<p class="sub" style="font-size:var(--fs-xs);margin-top:12px;line-height:1.6">'
       +'Aucune vidéo pour ce mouvement. Demande-la à ton coach dans le canal : il peut la filmer '
       +'pour toi.</p>')
     +'<button class="btn btn-outline" style="margin-top:16px" onclick="closeModal();ouvrirMesExercices()">Retour à mes exercices</button>'
-    +'<button class="btn btn-outline" style="margin-top:9px" onclick="closeModal()">Fermer</button>'
+    +'<button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Fermer</button>'
     +'</div></div>';
   closeModal();
   document.body.insertAdjacentHTML('beforeend',html);
@@ -37846,7 +37857,7 @@ function _rendreOutilsSeances(){
   const b=[];
   const bouton=(lib,act,rouge)=>'<button type="button" class="btn '
     +(rouge?'btn-red':'btn-outline')+'" onclick="'+act+'" '
-    +'style="flex:1 1 46%;min-width:150px;font-size:var(--fs-xs);padding:9px 10px">'+lib+'</button>';
+    +'style="flex:1 1 46%;min-width:150px;font-size:var(--fs-xs);padding:10px 10px">'+lib+'</button>';
   try{
     // ⚠ PLUS DE CONDITION DE CAPACITE DEPUIS LE LOT 4 : l'ecran s'ouvre pour
     //   tout le monde et porte son verrou. La seule condition qui reste est
@@ -37899,7 +37910,7 @@ function ouvrirMerciRevision(){
   const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
     +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
     +'<div class="mdl-large" onclick="event.stopPropagation()" style="background:var(--surface-2);'
-    +'border-radius:var(--r-4) var(--r-4) 0 0;padding:18px 20px 22px;width:100%;max-width:480px;'
+    +'border-radius:var(--r-4) var(--r-4) 0 0;padding:20px 20px 24px;width:100%;max-width:480px;'
     +'max-height:90vh;overflow-y:auto">'
     +'<h2 style="margin-bottom:6px;font-size:var(--fs-lg)">Révision demandée.</h2>'
     +'<p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:12px">'
@@ -37948,7 +37959,7 @@ function _renderSessionManager(){
     let _l=''; try{ _l=ligneStructureBloc(currentUser); }catch(e){ _l=''; }
     _zStruct.innerHTML=_l
       ?'<div style="background:var(--surface-1);border:1px solid var(--border);'
-        +'border-left:3px solid var(--red);border-radius:var(--r-3);padding:10px 13px;'
+        +'border-left:1px solid var(--border);border-radius:var(--r-3);padding:10px 14px;'
         +'margin-bottom:14px;font-size:var(--fs-sm);color:var(--text);line-height:1.6">'
         +escapeHtml(_l)+'</div>'
       :'';
@@ -38096,14 +38107,14 @@ function alternerSeance(i){
   }
   const src=((currentUser&&currentUser.sessions_config)||[])[i]||{};
   z.innerHTML='<div style="margin-top:8px;background:var(--surface-1);'
-    +'border:1px solid var(--border);border-radius:var(--r-3);padding:11px 12px">'
+    +'border:1px solid var(--border);border-radius:var(--r-3);padding:12px 12px">'
     +'<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.55;'
     +'margin-bottom:8px">'
     +escapeHtml('Échanger « '+(String(src.name||'').trim()||'cette séance')
       +' » avec :')+'</div>'
     +cibles.map(c=>'<button type="button" class="btn btn-outline btn-sm" '
       +'style="width:100%;margin:0 0 6px;text-transform:none;letter-spacing:.4px;'
-      +'text-align:left;padding:9px 11px" onclick="_alternerVers('+i+','+c.i+')">'
+      +'text-align:left;padding:10px 12px" onclick="_alternerVers('+i+','+c.i+')">'
       +'<span style="font-weight:800">'+escapeHtml(c.jour)+'</span>'
       +'<span style="color:var(--text-faint)"> · '+escapeHtml(c.nom)+'</span>'
       +(c.actif?'':'<span style="color:var(--text-faint)"> · jour éteint</span>')
@@ -38305,7 +38316,7 @@ function _htmlSeanceDepart(s){
       +e.series+' × '+escapeHtml(String(e.reps))+' · repos '+escapeHtml(String(e.repos))+'</div>'
       +'</div>';
     },{pad:'9px 0',gap:11})
-    +'<div style="margin-top:22px">'
+    +'<div style="margin-top:24px">'
     +'<button class="btn btn-red" onclick="psLancer()" style="margin:0;min-height:52px;letter-spacing:1.5px">'
     +'Démarrer ma première séance</button></div>'
     +'<div style="height:20px"></div>';
@@ -38394,13 +38405,13 @@ function _doitProposerReprise(u,maintenant){
 // pas a apprendre ici l'etat du travail de son coach.
 function _htmlReprise(avecProgramme){
   return '<div class="clh-in clh-in-2" style="background:linear-gradient(160deg,#1a0303,#120000 55%,#0b0000);'
-    +'border:1px solid #3a0000;border-left:3px solid var(--red);border-radius:14px;'
+    +'border:1px solid #3a0000;border-left:1px solid var(--border);border-radius:14px;'
     +'padding:24px 20px;margin-bottom:16px;box-shadow:0 14px 34px rgba(0,0,0,.6),'
     +'0 0 30px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.05)">'
     +'<div class="eyebrow eyebrow-act" style="margin-bottom:12px">Ta première séance</div>'
     +'<div style="font-size:var(--fs-lg);font-family:var(--pile-titre);letter-spacing:.5px;'
     +'line-height:1.25;margin-bottom:8px">On commence maintenant.</div>'
-    +'<div class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:18px">'
+    +'<div class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:20px">'
     +'Quinze minutes suffisent pour commencer'+' '+'tu t’arrêtes quand tu veux.</div>'
     +'<button class="btn btn-red" onclick="reprendreMaintenant()" style="margin:0;min-height:52px;'
     +'letter-spacing:1.5px;font-size:var(--fs-md);box-shadow:var(--e-inset),var(--glow-red)">'
@@ -38621,7 +38632,7 @@ function _psRendre(){
   const choix=(lib,sous,onclick)=>
     '<button type="button" onclick="'+onclick+'" class="ps-choix">'
     +'<span style="font-size:var(--fs-md);font-weight:800;color:var(--text);display:block">'+lib+'</span>'
-    +(sous?'<span class="sub" style="font-size:var(--fs-xs);display:block;margin-top:3px">'+sous+'</span>':'')
+    +(sous?'<span class="sub" style="font-size:var(--fs-xs);display:block;margin-top:4px">'+sous+'</span>':'')
     +'</button>';
   if(_psEtape===0){
     z.innerHTML=titre('Ton objectif ?')+sousT('Il decide des séries et des répétitions.')
@@ -39998,12 +40009,12 @@ function _apLigne(ex,i){
          display:flex;align-items:center;justify-content:center;color:var(--border);
          box-shadow:inset 0 1px 0 rgba(255,255,255,.04)">${icon('dumbbell',26)}</div>`;
   return `<details style="position:relative;background:linear-gradient(180deg,#161616,#0f0f0f);
-    border:1px solid var(--border);border-left:3px solid var(--red);border-radius:var(--r-3);
-    margin-bottom:9px;overflow:hidden;
+    border:1px solid var(--border);border-left:1px solid var(--border);border-radius:var(--r-3);
+    margin-bottom:10px;overflow:hidden;
     box-shadow:var(--e2)">
     <div style="position:absolute;inset:0;pointer-events:none;
-      background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px)"></div>
-    <summary style="position:relative;display:flex;align-items:center;gap:12px;padding:11px 12px;
+      background:none"></div>
+    <summary style="position:relative;display:flex;align-items:center;gap:12px;padding:12px 12px;
       cursor:pointer;list-style:none;min-height:56px">
       <span style="flex-shrink:0;width:22px;font-family:var(--pile-titre);
         font-size:var(--fs-xl);line-height:1;color:var(--red-text);--halo-c:rgba(224,32,32,.75);text-shadow:var(--halo-1);
@@ -40012,13 +40023,13 @@ function _apLigne(ex,i){
       <div style="flex:1;min-width:0">
         <div style="font-weight:900;font-size:var(--fs-md);line-height:1.25;letter-spacing:.2px;
           text-transform:uppercase;color:var(--text)">${escapeHtml(ex.name||'Exercice '+(i+1))}</div>
-        ${sr?`<div style="display:inline-block;margin-top:6px;padding:3px 9px;border-radius:var(--r-2);
+        ${sr?`<div style="display:inline-block;margin-top:6px;padding:4px 10px;border-radius:var(--r-2);
           background:rgba(224,32,32,.12);border:1px solid rgba(224,32,32,.32);
           font-size:var(--fs-sm);font-weight:800;color:var(--red-text);letter-spacing:.5px">${escapeHtml(sr)}</div>`:''}
       </div>
       <span style="color:var(--sub);font-size:var(--fs-lg);flex-shrink:0;width:22px;text-align:center">▾</span>
     </summary>
-    <div style="position:relative;padding:2px 14px 13px 14px;border-top:1px solid rgba(255,255,255,.07);
+    <div style="position:relative;padding:2px 14px 14px 14px;border-top:1px solid rgba(255,255,255,.07);
       background:rgba(0,0,0,.28)">
       ${l('Séries',ex.series)}
       ${l('Répétitions',ex.reps)}
@@ -40029,7 +40040,7 @@ function _apLigne(ex,i){
       ${l('Charge cible',_chargePrescrite(ex))}
       ${l('RIR',_rirPrescrit(ex))}
       ${note?`<div style="margin-top:8px;font-size:var(--fs-sm);color:#bbb;line-height:1.6;
-        border-left:2px solid var(--border);padding-left:9px">${escapeHtml(note)}</div>`:''}
+        border-left:2px solid var(--border);padding-left:10px">${escapeHtml(note)}</div>`:''}
       <!-- LA VIDEO DU GUIDE ARRIVE JUSQU'ICI. Cet ecran n'en montrait aucune :
            un athlete qui prepare sa seance la veille n'avait nulle part ou
            verifier l'execution d'un mouvement qu'il ne connait pas. -->
@@ -40068,7 +40079,7 @@ function _renderApercu(){
       ${chiffre(r?('~'+r.minutes+' min'):'-','durée',true)}
     </div>`
     +(notes?`<div style="background:var(--surface-1);border:1px solid var(--border);
-      border-left:3px solid var(--red);border-radius:0 var(--r-3) var(--r-3) 0;padding:11px 13px;margin-bottom:14px">
+      border-left:1px solid var(--border);border-radius:0 var(--r-3) var(--r-3) 0;padding:12px 14px;margin-bottom:14px">
       <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:1.5px;font-weight:800;
       text-transform:uppercase;margin-bottom:4px">Mot de ton coach</div>
       <div style="font-size:var(--fs-sm);color:#bbb;line-height:1.65">${escapeHtml(notes)}</div></div>`:'')
@@ -40307,8 +40318,8 @@ function htmlVideosExo(ex){
   const encre=x=>x.methode?'var(--orange)':'var(--red-light)';
   return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">`
     +v.map((x,i)=>`<a href="${safeUrl(x.url)}" target="_blank" rel="noopener"
-        style="display:inline-flex;align-items:center;gap:5px;background:${fond(x)};
-        border:1px solid ${trait(x)};border-radius:var(--r-2);padding:5px 10px;
+        style="display:inline-flex;align-items:center;gap:6px;background:${fond(x)};
+        border:1px solid ${trait(x)};border-radius:var(--r-2);padding:6px 10px;
         color:${encre(x)};font-size:var(--fs-xs);font-weight:800;
         text-decoration:none;letter-spacing:1px">${escapeHtml(nommer(x,i))}</a>`).join('')
     +`</div>`;
@@ -40316,8 +40327,8 @@ function htmlVideosExo(ex){
 
 function _renderExCard(ex,idx){
   const pr=parseReps(ex.reps);
-  const badge=pr.type==='degressive'?`<span style="background:#3a0a00;color:#fca5a5;padding:2px 7px;border-radius:var(--r-1);font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;text-transform:uppercase">DÉGRESSIVE</span>`:
-    pr.type==='unilateral'?`<span style="background:#0a1a30;color:#93c5fd;padding:2px 7px;border-radius:var(--r-1);font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;text-transform:uppercase">UNILATÉRAL</span>`:'';
+  const badge=pr.type==='degressive'?`<span style="background:#3a0a00;color:#fca5a5;padding:2px 8px;border-radius:var(--r-1);font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;text-transform:uppercase">DÉGRESSIVE</span>`:
+    pr.type==='unilateral'?`<span style="background:#0a1a30;color:#93c5fd;padding:2px 8px;border-radius:var(--r-1);font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;text-transform:uppercase">UNILATÉRAL</span>`:'';
   return `<div class="exercise-card"><div style="padding:12px 14px;display:flex;align-items:flex-start;gap:10px;border-bottom:1px solid #181818">
     <div style="width:28px;height:28px;background:var(--red);border-radius:var(--r-1);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:900;flex-shrink:0;color:var(--text)">${idx+1}</div>
     <div style="flex:1">
@@ -40326,10 +40337,10 @@ function _renderExCard(ex,idx){
            le coach l'ecrirait pour lui-meme : le decrochage ne mesurait qu'un
            nombre de series, jamais un effort. Rien ne s'affiche quand il n'y a
            pas de consigne. -->
-      <div class="ex-detail" style="margin-top:3px">${ex.series} séries · ${escapeHtml(ex.reps)} reps${ex.repos?' · '+escapeHtml(ex.repos):''}${_rirPrescrit(ex)?' · RIR '+escapeHtml(_rirPrescrit(ex)):''}</div>
-      ${badge?`<div style="margin-top:5px">${badge}</div>`:''}
+      <div class="ex-detail" style="margin-top:4px">${ex.series} séries · ${escapeHtml(ex.reps)} reps${ex.repos?' · '+escapeHtml(ex.repos):''}${_rirPrescrit(ex)?' · RIR '+escapeHtml(_rirPrescrit(ex)):''}</div>
+      ${badge?`<div style="margin-top:6px">${badge}</div>`:''}
       ${ex.description?`<div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:6px;line-height:1.5;border-left:2px solid var(--border);padding-left:8px">${escapeHtml(ex.description)}</div>`:''}
-      ${ex.reglageCoach?`<div class="ex-reglage" style="font-size:var(--fs-xs);color:var(--text);margin-top:6px;line-height:1.5;border-left:2px solid var(--red);padding-left:8px"><b>Réglage du coach :</b> ${escapeHtml(ex.reglageCoach)}</div>`:''}
+      ${ex.reglageCoach?`<div class="ex-reglage" style="font-size:var(--fs-xs);color:var(--text);margin-top:6px;line-height:1.5;border-left:1px solid var(--border);padding-left:8px"><b>Réglage du coach :</b> ${escapeHtml(ex.reglageCoach)}</div>`:''}
       ${htmlVideosExo(ex)}
     </div>
   </div></div>`;
@@ -41501,15 +41512,15 @@ function _ouvrirApercuStory(url){
   const d=document.createElement('div');
   d.id='story-apercu';
   d.style.cssText='position:fixed;inset:0;z-index:var(--z-modal);background:var(--scrim);display:flex;'
-    +'flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:18px';
+    +'flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px';
   d.innerHTML='<img src="'+url+'" alt="Ta séance du jour" '
     +'style="max-width:100%;max-height:64vh;border-radius:var(--r-3);box-shadow:var(--e4)">'
     +'<div style="font-size:var(--fs-sm);color:var(--text-strong);text-align:center;line-height:1.6;max-width:320px">'
     +'Appuie <b>longuement</b> sur l’image, puis choisis <b>Ajouter aux photos</b> '
     +'(iPhone) ou <b>Télécharger l’image</b> (Android).</div>'
     +'<a href="'+url+'" download="repcore-seance.png" class="btn btn-outline btn-sm" '
-    +'style="width:auto;padding:8px 18px">Télécharger</a>'
-    +'<button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:8px 18px" '
+    +'style="width:auto;padding:8px 20px">Télécharger</a>'
+    +'<button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:8px 20px" '
     +'onclick="fermerApercuStory()">Fermer</button>';
   document.body.appendChild(d);
 }
@@ -41883,7 +41894,7 @@ function _renderWeeklyInto(el,sc){
           <div style="font-family:var(--pile-titre);font-size:var(--fs-2xl);font-weight:400;color:var(--text);letter-spacing:1px;line-height:1">${heading}</div>
           ${nbEx?`<div style="font-size:var(--fs-xs);color:rgba(255,255,255,.6);margin-top:4px">${nbEx} exercice${nbEx>1?'s':''}${mainRest?' · '+mainRest+' repos':''}</div>`:'<div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);margin-top:4px">Récupération active</div>'}
         </div>
-        ${nbEx?`<div style="border-top:1px solid rgba(255,255,255,.15);padding-top:10px;display:flex;flex-direction:column;gap:5px">
+        ${nbEx?`<div style="border-top:1px solid rgba(255,255,255,.15);padding-top:10px;display:flex;flex-direction:column;gap:6px">
           ${selS.exercises.map((ex,i)=>`
             <div style="display:flex;align-items:center;gap:8px">
               <div style="width:18px;height:18px;background:rgba(0,0,0,.3);border-radius:var(--r-1);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:900;color:rgba(255,255,255,.65);flex-shrink:0">${i+1}</div>
@@ -41896,7 +41907,7 @@ function _renderWeeklyInto(el,sc){
             style="display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:6px 12px;border-radius:var(--r-2);cursor:pointer;
               background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.22);color:var(--text);
               font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.4px">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">
               <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
             </svg>Télécharger
           </button>
@@ -41909,7 +41920,7 @@ function _renderWeeklyInto(el,sc){
             style="display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:6px 12px;border-radius:var(--r-2);cursor:pointer;
               background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.34);color:var(--text);
               font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.4px">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">
               <path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
             </svg>Partager
           </button>`:''}
@@ -41946,7 +41957,7 @@ function _renderProgExercisesInto(el){
       <div style="margin-bottom:14px">
         <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Mon programme</div>
         <div style="font-size:var(--fs-lg);font-weight:900;letter-spacing:-0.3px">${escapeHtml(prog.name)}</div>
-        ${prog.notes?`<p class="sub" style="margin-top:5px;font-size:var(--fs-sm);line-height:1.6">${escapeHtml(prog.notes)}</p>`:''}
+        ${prog.notes?`<p class="sub" style="margin-top:6px;font-size:var(--fs-sm);line-height:1.6">${escapeHtml(prog.notes)}</p>`:''}
       </div>
       ${prog.exercises.map((ex,idx)=>_renderExCard(ex,idx)).join('')}`;
     return;
@@ -42090,7 +42101,7 @@ function banniereTechnique(ex,idx){
                      catch(e){ return ''; } })();
   return `<div style="background:${c[0]}22;border:1px solid ${c[0]};border-radius:var(--r-3);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-sm);line-height:1.6;color:var(--text-strong)">
     <strong style="color:${c[1]}">${escapeHtml(m.nom)}${m.sous?' ('+escapeHtml(m.sous)+')':''}${_msTxt?' · séries : '+escapeHtml(_msTxt):''} :</strong>
-    ${_cons?`<div style="font-weight:700;color:var(--text);margin:4px 0 5px">${escapeHtml(_cons)}</div>`:''}
+    ${_cons?`<div style="font-weight:700;color:var(--text);margin:4px 0 6px">${escapeHtml(_cons)}</div>`:''}
     ${escapeHtml(m.desc)}
     ${videoTechnique(m)?`<a href="${safeUrl(videoTechnique(m))}" target="_blank" rel="noopener" style="color:var(--link);white-space:nowrap"> · vidéo</a>`:''}
     ${compteur}
@@ -42102,7 +42113,7 @@ function banniereTechnique(ex,idx){
 function _compteurRelances(idx){
   const d=woState&&woState.sessionData&&woState.sessionData[idx];
   const faites=(d&&d.relancesFaites)||0;
-  return `<div style="display:flex;align-items:center;gap:9px;margin-top:9px;flex-wrap:wrap">
+  return `<div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
     <span style="font-size:var(--fs-xs);color:var(--sub)">Relances :</span>
     <span id="rel-n-${idx}" style="font-size:var(--fs-lg);font-weight:400;font-family:var(--pile-titre);letter-spacing:1px">${faites}</span>
     <button onclick="_ajouterRelance(${idx})" class="hit44" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-size:var(--fs-lg);font-weight:800;min-width:38px;min-height:34px;cursor:pointer">+</button>
@@ -42379,15 +42390,15 @@ function renderWoEx(){
     <div>
       ${(()=>{ try{ return htmlRepriseSeance(currentUser); }catch(e){ return ''; } })()}
       ${(()=>{ try{ return _htmlSelecteurSalle(); }catch(e){ return ''; } })()}
-      ${woState.deload?`<div style="display:flex;align-items:center;gap:9px;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:10px 13px;margin-bottom:12px">
+      ${woState.deload?`<div style="display:flex;align-items:center;gap:10px;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:10px 14px;margin-bottom:12px">
         <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--info);flex-shrink:0">DÉCHARGE</span>
         <span style="font-size:var(--fs-xs);color:#bbb;line-height:1.5">Semaine allégée voulue par ton coach. Elle ne comptera pas comme un recul.</span>
       </div>`:''}
       ${woState.currentEx===0?_carteProtocole(woState.warmup,'Échauffement','var(--orange)','wo-warmup-body',true,
         (()=>{ try{ return chargeReferenceEchauffement(0); }catch(e){ return null; } })()):''}
       ${photoHtml}
-      ${estSS?`<div style="display:flex;align-items:center;gap:9px;background:#1a0f00;border:1px solid var(--orange);border-radius:var(--r-3);padding:10px 13px;margin-bottom:12px">
-        <svg viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="flex-shrink:0"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      ${estSS?`<div style="display:flex;align-items:center;gap:10px;background:#1a0f00;border:1px solid var(--orange);border-radius:var(--r-3);padding:10px 14px;margin-bottom:12px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="17" height="17" style="flex-shrink:0"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
         <div style="flex:1;min-width:0">
           <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--orange)">SUPERSET</div>
           <div style="font-size:var(--fs-xs);color:#bbb;margin-top:2px;line-height:1.5">Enchaîne les ${groupe.length===2?'deux':groupe.length} exercices sans repos, puis repose-toi avant la série suivante.</div>
@@ -42400,7 +42411,7 @@ function renderWoEx(){
                « FILMER CET EXERCICE » débordait alors sur deux lignes dès qu'un
                écran étroit la mettait en concurrence avec le rappel RIR. C'est
                une phrase, pas un intitulé de champ. -->
-          <label class="hit44" style="font-size:var(--fs-xs);cursor:pointer;color:var(--sub);text-transform:none;letter-spacing:normal;font-weight:400;margin:0;display:inline-flex;align-items:center;gap:5px"><input type="checkbox" id="film-ex" style="width:auto;margin:0">Filmer cet exercice</label>
+          <label class="hit44" style="font-size:var(--fs-xs);cursor:pointer;color:var(--sub);text-transform:none;letter-spacing:normal;font-weight:400;margin:0;display:inline-flex;align-items:center;gap:6px"><input type="checkbox" id="film-ex" style="width:auto;margin:0">Filmer cet exercice</label>
           <!-- R11, LE PANNEAU « ? » DU RIR A ETE RETIRE (Kevin, 17/09/2026 :
                « laisse le RIR, que dans le tableau, la def »).
                R23, ET LE RAPPEL DE CONSIGNE RIR 0 DE BAS D'ECRAN AUSSI,
@@ -42485,8 +42496,8 @@ function _htmlConsigneExo(ex){
   if(!ex) return '';
   const img=(()=>{ try{ return illustrationExo(ex); }catch(e){ return null; } })();
   if(!(ex.description||ex.materiel||ex.tempo||ex.reglageCoach||img)) return '';
-  return `<div style="background:var(--surface-2);border-radius:var(--r-3);padding:11px 14px;margin-bottom:12px">
-        <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--red-text);margin-bottom:5px">CONSIGNE</div>
+  return `<div style="background:var(--surface-2);border-radius:var(--r-3);padding:12px 14px;margin-bottom:12px">
+        <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--red-text);margin-bottom:6px">CONSIGNE</div>
         ${blocTempo(ex)}
         <!-- LE MATÉRIEL EN PREMIER : c'est ce qu'on va chercher avant de
              commencer, pas ce qu'on lit pendant. Il fait aussi partie de la
@@ -42494,7 +42505,7 @@ function _htmlConsigneExo(ex){
              porterait QUE son matériel n'aurait rien affiché du tout. -->
         ${ex.materiel?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:6px"><span style="font-weight:800;letter-spacing:.5px">Matériel :</span> ${escapeHtml(ex.materiel)}</div>`:''}
         ${ex.reglageCoach?`<div class="ex-reglage" style="font-size:var(--fs-xs);color:var(--text);line-height:1.6;margin-bottom:6px"><span style="font-weight:800;letter-spacing:.5px;color:var(--red-text)">Réglage du coach :</span> ${escapeHtml(ex.reglageCoach)}</div>`:''}
-        <div style="display:flex;gap:11px;align-items:flex-start">
+        <div style="display:flex;gap:12px;align-items:flex-start">
           ${_htmlVignetteExo(ex)}
           <div style="flex:1;min-width:0;font-size:var(--fs-sm);color:#bbb;line-height:1.6">${escapeHtml(ex.description||'')}</div>
         </div>
@@ -42509,7 +42520,7 @@ function _htmlConsigneExo(ex){
 function _htmlVideoTechniqueExo(ex){
   let u='';
   try{ const v=videosExo(ex).find(x=>x&&!x.methode); u=v?normaliserUrlVideo(v.url):''; }catch(e){ u=''; }
-  return u?`<a href="${safeUrl(u)}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:12px;background:#08081a;border:1px solid #2a2a5a;border-radius:var(--r-3);padding:11px 14px;margin-bottom:12px;text-decoration:none;color:#7799ff">
+  return u?`<a href="${safeUrl(u)}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:12px;background:#08081a;border:1px solid #2a2a5a;border-radius:var(--r-3);padding:12px 14px;margin-bottom:12px;text-decoration:none;color:#7799ff">
         <div style="width:32px;height:32px;background:#1a1a3a;border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;font-size:var(--fs-md);flex-shrink:0">▶</div>
         <div style="flex:1">
           <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;color:#99aaff">VIDÉO TECHNIQUE</div>
@@ -42633,7 +42644,7 @@ function _blocExo(idx,estSS){
   const _consOuverte=_consigneOuverte(ex,data,prev,{contrainte:!!_contrainteHtml,demandeVideo:_demandeVideo});
 
   const html=`
-      <div${estSS?' style="border-left:2px solid var(--orange);padding-left:11px"':''}>
+      <div${estSS?' style="border-left:1px solid var(--border);padding-left:12px"':''}>
       <div class="wo-tete">
         <div class="wo-tete-txt">
           ${estSS?`<div class="wo-ss-rep">${rep}</div>`:''}
@@ -42652,7 +42663,7 @@ function _blocExo(idx,estSS){
         </div>
         <div class="wo-cmd">
         ${_htmlBoutonRemplacer(idx,ex)}
-        <button class="hit44" id="wo-calc-btn-${idx}" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-xs);padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Calculer ma charge</button>
+        <button class="hit44" id="wo-calc-btn-${idx}" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-xs);padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Calculer ma charge</button>
         </div>
         <div class="wo-ava"></div>
       </div>
@@ -42662,7 +42673,7 @@ function _blocExo(idx,estSS){
       <!-- La consigne a ete recalculee sur ce qui a ete souleve. On le DIT :
            une charge qui change toute seule sans un mot se lit comme un bug,
            et c'est exactement ainsi que l'inverse avait ete rapporte. -->
-      ${(_cons&&_cons.maxDepasse)?`<div style="background:var(--surface-2);border-left:3px solid var(--orange);border-radius:var(--r-1);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Tu as déjà fait mieux que le 1RM noté par ton coach sur cet exercice (${_cons.max} kg au dossier, ${_cons.maxObserve} kg estimés d’après tes séries). La charge du jour est calculée sur ce que tu soulèves vraiment.</div>`:''}
+      ${(_cons&&_cons.maxDepasse)?`<div style="background:var(--surface-2);border-left:1px solid var(--border);border-radius:var(--r-1);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Tu as déjà fait mieux que le 1RM noté par ton coach sur cet exercice (${_cons.max} kg au dossier, ${_cons.maxObserve} kg estimés d’après tes séries). La charge du jour est calculée sur ce que tu soulèves vraiment.</div>`:''}
 
       ${isCardio(ex)?
         `<div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:var(--r-3);padding:14px;margin-bottom:12px;text-align:center">
@@ -42671,22 +42682,22 @@ function _blocExo(idx,estSS){
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">Durée · Cardio</div>
         </div>`
       :_abandon?
-      `<div class="wo-no-hist sub" style="font-size:var(--fs-xs);background:var(--surface-2);border-radius:var(--r-2);padding:10px 13px;margin-bottom:12px;line-height:1.6">
+      `<div class="wo-no-hist sub" style="font-size:var(--fs-xs);background:var(--surface-2);border-radius:var(--r-2);padding:10px 14px;margin-bottom:12px;line-height:1.6">
         Plus de quatre mois sans cette séance. Reprends à une charge que tu tiens facilement pour 10 répétitions, et laisse la progression repartir de là.
-        <div style="color:var(--text-dim);margin-top:5px">${SUG_NOTE_REPERE}</div>
+        <div style="color:var(--text-dim);margin-top:6px">${SUG_NOTE_REPERE}</div>
       </div>`
       :sug?`<div class="suggest-box">
-        <div style="display:flex;gap:18px;align-items:flex-end;margin:2px 0 6px">
+        <div style="display:flex;gap:20px;align-items:flex-end;margin:2px 0 6px">
           <div><div style="font-size:var(--fs-2xl);font-weight:900;line-height:1">${sug}kg</div><div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance : progresser = réduire':'Charge pour la première série'}</div></div>
         </div>
         <div class="s-note">${isCW?'Contrepoids : un RIR élevé fait diminuer la charge. ':''}${prev?'Basée sur '+escapeHtml(creneauRef)+' ('+prev.weight+'kg'+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):', RIR non noté')+')':'Première séance'}</div>
-        ${_decote<1?`<div class="s-note" style="margin-top:5px">Ta dernière séance de ${escapeHtml(ex.name)} date du ${_libDateRef(prev._refDate)}. On repart ${Math.round((1-_decote)*100)} % en dessous, le temps de te retrouver.<div style="color:var(--text-dim);margin-top:4px">${SUG_NOTE_REPERE}</div></div>`:''}
-        ${sugAjustee?`<div class="s-note" style="color:var(--cycle-accent);margin-top:5px">Ajustée de ${Math.round((1-_facteurCycle)*100)} % pour ta phase de cycle : ${_sugBrut}kg d'habitude, ${sugAjustee}kg aujourd'hui.</div>`:''}
+        ${_decote<1?`<div class="s-note" style="margin-top:6px">Ta dernière séance de ${escapeHtml(ex.name)} date du ${_libDateRef(prev._refDate)}. On repart ${Math.round((1-_decote)*100)} % en dessous, le temps de te retrouver.<div style="color:var(--text-dim);margin-top:4px">${SUG_NOTE_REPERE}</div></div>`:''}
+        ${sugAjustee?`<div class="s-note" style="color:var(--cycle-accent);margin-top:6px">Ajustée de ${Math.round((1-_facteurCycle)*100)} % pour ta phase de cycle : ${_sugBrut}kg d'habitude, ${sugAjustee}kg aujourd'hui.</div>`:''}
       </div>`:
       // Pas d'historique SUR CE CRÉNEAU. On le dit, au lieu de laisser un vide
       // inexpliqué — et surtout au lieu de proposer la charge d'un autre jour,
       // qui ne correspond ni aux mêmes répétitions ni au même effort.
-      `<div id="wo-no-hist-${idx}" class="wo-no-hist sub" style="font-size:var(--fs-xs);background:var(--surface-2);border-radius:var(--r-2);padding:10px 13px;margin-bottom:12px;line-height:1.6">Pas encore d'historique pour cet exercice ${escapeHtml(creneauPhrase)} : note ta charge, elle servira de repère la prochaine fois.</div>`}
+      `<div id="wo-no-hist-${idx}" class="wo-no-hist sub" style="font-size:var(--fs-xs);background:var(--surface-2);border-radius:var(--r-2);padding:10px 14px;margin-bottom:12px;line-height:1.6">Pas encore d'historique pour cet exercice ${escapeHtml(creneauPhrase)} : note ta charge, elle servira de repère la prochaine fois.</div>`}
 
       ${_htmlMonteeCharge(sug,ex,idx)}
       ${_contrainteHtml}
@@ -42711,7 +42722,7 @@ function _blocExo(idx,estSS){
         <strong>Dégressive :</strong> Phase 1 → <strong>${pr.p1} reps</strong> lourd · Phase 2 → <strong>${pr.p2} reps</strong> léger (sans poser la charge)
       </div>`:''}
 
-      ${_demandeVideo?`<div class="wo-demande-video" style="display:flex;align-items:center;gap:9px;background:var(--surface-2);border-radius:var(--r-2);padding:10px 13px;margin-bottom:12px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6"><span style="flex-shrink:0">🎥</span><span>Ton coach t'a demandé une vidéo de cet exercice.</span></div>`:''}
+      ${_demandeVideo?`<div class="wo-demande-video" style="display:flex;align-items:center;gap:10px;background:var(--surface-2);border-radius:var(--r-2);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6"><span style="flex-shrink:0">🎥</span><span>Ton coach t'a demandé une vidéo de cet exercice.</span></div>`:''}
       <!-- LA BANDE DE TEMPO. Peinte par renderSets, comme les actions de
            series : son libelle depend de la serie en cours et du chronometre,
            qui changent tous les deux sans repasser par _blocExo. Elle vit HORS
@@ -42737,7 +42748,7 @@ function _blocExo(idx,estSS){
            douleur et non au-dessus : une question de securite passe avant
            une explication. Peint par renderSets, comme elle. -->
       <div id="wo-surcharge-${idx}"></div>
-      ${ex.repos&&!isCardio(ex)&&!estSS?`<div style="margin-top:10px;display:flex;align-items:center;gap:8px;color:var(--sub);font-size:var(--fs-sm)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15" style="flex-shrink:0"><circle cx="12" cy="14" r="8"/><line x1="12" y1="14" x2="12" y2="9.5"/><line x1="10" y1="2.5" x2="14" y2="2.5"/><line x1="12" y1="2.5" x2="12" y2="6"/></svg> <strong>Repos :</strong> ${escapeHtml(ex.repos)}</div>`:''}
+      ${ex.repos&&!isCardio(ex)&&!estSS?`<div style="margin-top:10px;display:flex;align-items:center;gap:8px;color:var(--sub);font-size:var(--fs-sm)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="15" height="15" style="flex-shrink:0"><circle cx="12" cy="14" r="8"/><line x1="12" y1="14" x2="12" y2="9.5"/><line x1="10" y1="2.5" x2="14" y2="2.5"/><line x1="12" y1="2.5" x2="12" y2="6"/></svg> <strong>Repos :</strong> ${escapeHtml(ex.repos)}</div>`:''}
       </div>`;
 
   return {idx,ex,data,sug,html};
@@ -43064,14 +43075,14 @@ function _majActionsSeries(ex,data,idx){
   const n=((data&&data.sets)||[]).length;
   const der=n?data.sets[n-1]:null;
   const peutRetirer=n>1&&der&&der.done!==true;
-  const base='min-height:44px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-weight:800;letter-spacing:.5px;display:inline-flex;align-items:center;justify-content:center;gap:7px';
+  const base='min-height:44px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-weight:800;letter-spacing:.5px;display:inline-flex;align-items:center;justify-content:center;gap:8px';
   z.innerHTML='<div style="display:flex;gap:8px;margin-top:10px">'
     +'<button type="button" class="hit44" onclick="ajouterSerie('+idx+')" '
     +'aria-label="Ajouter une série à cet exercice" '
     +'style="flex:1;'+base+';background:var(--surface-2);border:1px dashed var(--border);'
     +'color:var(--sub);font-size:var(--fs-xs)">'
     +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" '
-    +'stroke-linecap="round" width="13" height="13" aria-hidden="true">'
+    +'stroke-linecap="square" width="13" height="13" aria-hidden="true">'
     +'<path d="M12 5v14"/><path d="M5 12h14"/></svg>une série</button>'
     // « FILMER » — LE PREMIER DES DEUX GESTES. Il vise la serie EN COURS et
     // ouvre directement la camera : aucun ecran intermediaire, aucune
@@ -43082,7 +43093,7 @@ function _majActionsSeries(ex,data,idx){
         +'style="width:52px;'+base+';background:none;border:1px solid var(--border);'
         +'color:var(--text-faint)">'
         +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
-        +'stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true">'
+        +'stroke-linecap="square" stroke-linejoin="miter" width="14" height="14" aria-hidden="true">'
         +'<path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>'
         +'</svg></button>'
       :'')
@@ -43092,7 +43103,7 @@ function _majActionsSeries(ex,data,idx){
         +'style="width:52px;'+base+';background:none;border:1px solid var(--border);'
         +'color:var(--text-faint)">'
         +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" '
-        +'stroke-linecap="round" width="13" height="13" aria-hidden="true">'
+        +'stroke-linecap="square" width="13" height="13" aria-hidden="true">'
         +'<path d="M5 12h14"/></svg></button>'
       :'')
     +'</div>';
@@ -43488,7 +43499,7 @@ function renderSets(ex,data,idx,opts){
         <td style="font-weight:700">${i+1}</td>
         <td><button data-arc="off" onclick="toggleSet(${i},${idx})"
           style="width:40px;height:40px;border-radius:var(--r-full);border:2px solid ${done?'var(--text)':'var(--border)'};background:${done?'#1a1a1a':'transparent'};color:var(--sub);font-size:var(--fs-lg);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;${done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">
-          ${done?'<svg viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="19" height="19" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}
+          ${done?'<svg viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter" width="19" height="19" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}
         </button></td>
       </tr>`;
     }).join('');
@@ -43663,7 +43674,7 @@ function renderSets(ex,data,idx,opts){
     const rirSelect=s.rpeCible
       ?`<div class="set-input" role="img" aria-label="RPE demandé par ton coach : ${s.rpeCible} sur 10"
           title="Intensité demandée par ton coach : tu ne la règles pas"
-          style="padding:4px 5px;font-size:var(--fs-xs);min-width:44px;min-height:38px;display:flex;
+          style="padding:4px 4px;font-size:var(--fs-xs);min-width:44px;min-height:38px;display:flex;
             align-items:center;justify-content:center;gap:4px;background:var(--surface-2);color:var(--text-strong);
             border:1px solid var(--border);border-radius:var(--r-1);white-space:nowrap">${icon('lock',10)}RPE ${s.rpeCible}</div>${i===_iPremierRpe?rcInfo('rpe'):''}`
       :(()=>{
@@ -43744,7 +43755,7 @@ function renderSets(ex,data,idx,opts){
             <div class="wo-intensite" style="display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px">
               ${rirSelect}
               ${painSelect}
-              <button class="hit44" data-arc="off" onclick="toggleSet(${i},${idx})" style="margin-left:auto;width:34px;height:34px;border-radius:var(--r-full);border:2px solid ${s.done?'var(--text)':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:var(--fs-md);display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button>
+              <button class="hit44" data-arc="off" onclick="toggleSet(${i},${idx})" style="margin-left:auto;width:34px;height:34px;border-radius:var(--r-full);border:2px solid ${s.done?'var(--text)':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:var(--fs-md);display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button>
             </div>
           </div>
         </td>
@@ -43758,7 +43769,7 @@ function renderSets(ex,data,idx,opts){
       ${weightCell}
       <td class="wo-intensite">${rirSelect}</td>
       <td>${painSelect}</td>
-      <td><button class="hit44" data-arc="off" onclick="toggleSet(${i},${idx})" style="width:34px;height:34px;border-radius:var(--r-full);border:2px solid ${s.done?'var(--text)':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:var(--fs-md);display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button></td>
+      <td><button class="hit44" data-arc="off" onclick="toggleSet(${i},${idx})" style="width:34px;height:34px;border-radius:var(--r-full);border:2px solid ${s.done?'var(--text)':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:var(--fs-md);display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="3" stroke-linecap="square" stroke-linejoin="miter" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button></td>
     </tr>`;
   });
   if(_lignesSeules) return lignes;
@@ -43818,7 +43829,7 @@ function _htmlEncartSurcharge(idx){
     const d=woState.sessionData&&woState.sessionData[idx];
     if(!d||!Array.isArray(d.sets)||!d.sets.some(_chargeProposee)) return '';
   }
-  return `<div class="wo-surcharge" style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px 14px;margin-top:10px">
+  return `<div class="wo-surcharge" style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-top:10px">
     <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text);line-height:1.4;margin-bottom:6px">${escapeHtml(SURCHARGE_ENCART_TITRE)}</div>
     <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(SURCHARGE_ENCART_TEXTE)}</div>
     <button onclick="accuserEncartSurcharge()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:1px">J'ai compris</button>
@@ -43889,7 +43900,7 @@ function _htmlCarteDouleur(idx){
   const choix=_dlrChoixFait(idx);
   if(choix==='continue'||choix==='declare') return '';
   if(choix==='allege'){
-    return `<div style="background:var(--surface-2);border-radius:var(--r-3);padding:11px 14px;margin-top:10px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">J'ai baissé tes séries qui restent de 20 %. À toi de voir si ça passe mieux.</div>`;
+    return `<div style="background:var(--surface-2);border-radius:var(--r-3);padding:12px 14px;margin-top:10px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">J'ai baissé tes séries qui restent de 20 %. À toi de voir si ça passe mieux.</div>`;
   }
   if(seriesDouloureusesSeance(idx)<DLR_SEANCE_MIN) return '';
   return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-3);padding:12px 14px;margin-top:10px">
@@ -44926,12 +44937,12 @@ function _carteCalibrageRir(groupe,dernier){
     const kg=_calChargeDerniereSerie(i);
     // SANS CHARGE SAISIE, IL N'Y A RIEN A ENREGISTRER. On propose quand meme :
     // l'athlete n'a simplement pas encore rempli sa serie, et il la remplira.
-    return `<div id="cal-encart" style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px 14px">
+    return `<div id="cal-encart" style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px">
       <div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:6px">Perception du RIR</div>
       <div style="font-size:var(--fs-xs);color:#bbb;line-height:1.6">Va jusqu'à ne plus pouvoir en faire une propre. On compare avec ce que tu avais annoncé.</div>
-      <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:5px">Sur ${escapeHtml(ex.name)}${kg>0?' · '+kg+' kg':''}</div>
+      <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px">Sur ${escapeHtml(ex.name)}${kg>0?' · '+kg+' kg':''}</div>
       <button id="cal-ouvrir" class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="calOuvrirTest(${i})">Tester ma perception</button>
-      <div id="cal-form" style="display:none;margin-top:11px">
+      <div id="cal-form" style="display:none;margin-top:12px">
         <!-- LA REGLE GLOBALE « label » MET EN MAJUSCULES ET ESPACE LES LETTRES,
              et sur trois colonnes de 100 px chaque intitule passait sur deux
              lignes. Meme derogation que « Filmer cet exercice », plus haut dans
@@ -44942,8 +44953,8 @@ function _carteCalibrageRir(groupe,dernier){
           <div style="flex:1;min-width:0"><label for="cal-ri" style="font-size:var(--fs-2xs);text-transform:none;letter-spacing:normal;font-weight:600">RIR annoncé</label><input type="number" inputmode="numeric" min="0" max="5" id="cal-ri" placeholder="2"></div>
           <div style="flex:1;min-width:0"><label for="cal-rr" style="font-size:var(--fs-2xs);text-transform:none;letter-spacing:normal;font-weight:600">Reps au total</label><input type="number" inputmode="numeric" min="1" id="cal-rr" placeholder="12"></div>
         </div>
-        <div id="cal-err" style="color:var(--red-light);font-size:var(--fs-xs);margin-top:7px;display:none"></div>
-        <button class="btn btn-red btn-sm" style="width:100%;margin-top:9px" onclick="calEnregistrer(${i})">Enregistrer le test</button>
+        <div id="cal-err" style="color:var(--red-light);font-size:var(--fs-xs);margin-top:8px;display:none"></div>
+        <button class="btn btn-red btn-sm" style="width:100%;margin-top:10px" onclick="calEnregistrer(${i})">Enregistrer le test</button>
       </div>
       <div id="cal-retour" style="display:none;margin-top:10px;font-size:var(--fs-xs);color:var(--text);line-height:1.6"></div>
     </div>`;
@@ -45261,8 +45272,8 @@ function renderEtatsSeance(user,sess){
   let ch=[];
   try{ ch=etatsChanges(user,sess); }catch(e){ ch=[]; }
   if(!ch.length){ z.innerHTML=''; return; }
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">
-    ${ch.map(x=>`<div style="display:flex;gap:9px;align-items:flex-start;margin-bottom:8px">
+  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+    ${ch.map(x=>`<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px">
       <span style="width:6px;height:6px;border-radius:var(--r-full);background:${x.etat==='regression'?'var(--orange)':'var(--sub)'};margin-top:6px;flex-shrink:0"></span>
       <div style="flex:1;min-width:0;font-size:var(--fs-sm);line-height:1.6;color:#ccc">
         <strong style="color:var(--text)">${escapeHtml(x.nom)}</strong> : ${_phraseEtat(x,user)}
@@ -45322,14 +45333,14 @@ function _ligneEtat(x,info){
        :'suivi trop récent : encore '+(MIN_JOURS-x.T)+' jour'+((MIN_JOURS-x.T)>1?'s':'')+' à attendre')
     : (x.joursDepuisRecord>0?'dernier record il y a '+x.joursDepuisRecord+' jour'+(x.joursDepuisRecord>1?'s':'')
        :'record sur la dernière séance');
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-left:3px solid ${c};border-radius:var(--r-3);padding:11px 12px;margin-bottom:9px">
-    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:3px">
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-left:3px solid ${c};border-radius:var(--r-3);padding:12px 12px;margin-bottom:10px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px">
       <span style="font-size:var(--fs-sm);font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}</span>
       <span style="font-size:var(--fs-xs);font-weight:800;color:${c};white-space:nowrap">${PERF_ETAT_LIB[x.etat]||x.etat}</span>
     </div>
     <div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.5">${detail}</div>
     ${x.etat!=='insuffisant'?_sparkline(x.points,c):''}
-    <div class="perf-met" style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:3px">${PERF_METRIQUE_LIB[x.metrique]||''}${info?rcInfo('e1rm'):''}${x.metriqueChangee?' · série repartie de zéro : le format de séries a changé':''}${x.aberrants?' · '+x.aberrants+' valeur'+(x.aberrants>1?'s':'')+' inhabituelle'+(x.aberrants>1?'s':'')+', vérifie ta saisie':''}</div>
+    <div class="perf-met" style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">${PERF_METRIQUE_LIB[x.metrique]||''}${info?rcInfo('e1rm'):''}${x.metriqueChangee?' · série repartie de zéro : le format de séries a changé':''}${x.aberrants?' · '+x.aberrants+' valeur'+(x.aberrants>1?'s':'')+' inhabituelle'+(x.aberrants>1?'s':'')+', vérifie ta saisie':''}</div>
   </div>`;
 }
 
@@ -46911,7 +46922,7 @@ function _htmlCorpsCadre(c,o){
   if(!bilans.length)
     return '<div class="cc-corps">'+tete+scene
       +emptyState('calendar','<strong style="font-size:var(--fs-sm)">Pas encore de bilan</strong>'
-        +'<br><span style="font-size:var(--fs-xs);display:inline-block;margin-top:5px">'
+        +'<br><span style="font-size:var(--fs-xs);display:inline-block;margin-top:6px">'
         +'La silhouette s’allumera dès qu’il aura envoyé son premier bilan.</span>','','',
         'padding:6px 0 0')
       +'</div>';
@@ -48048,7 +48059,7 @@ function ccdPeriodeVerdict(k){
   if(p) ccdPaire(p.a,p.b); else ccdPaire(0,0);
   return p;
 }
-function _ccdSvg(p,plein){ return '<svg viewBox="0 0 24 24" '+(plein?'fill="currentColor"':'fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"')+' aria-hidden="true">'+p+'</svg>'; }
+function _ccdSvg(p,plein){ return '<svg viewBox="0 0 24 24" '+(plein?'fill="currentColor"':'fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="square" stroke-linejoin="miter"')+' aria-hidden="true">'+p+'</svg>'; }
 const CCD_ICO={
   athlete:_ccdSvg('<circle cx="12" cy="7.5" r="4"/><path d="M4 21c0-4.4 3.6-7.5 8-7.5s8 3.1 8 7.5z"/>',true),
   poids:_ccdSvg('<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8 9.5a4 4 0 0 1 8 0M12 9.5l1.8-2"/>'),
@@ -51056,26 +51067,26 @@ let _anatVueActive='face';
 /** L'édition des points en cours : {email, vue, pts, opts, auto:boolean} ou null. */
 let _anatEdit=null;
 const ANAT_SVG={
-  tete:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4.5" r="2.2"/><path d="M8 21l1.2-7.5M16 21l-1.2-7.5M7 9.5c1.5-1.4 3.2-2 5-2s3.5.6 5 2M9.2 13.5h5.6M12 7.5v6"/></svg>',
-  loupe:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5M8 10.5h5M10.5 8v5"/></svg>',
-  chev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
-  info:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.5"/></svg>',
-  msg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8.5 8.5 0 0 1-12.6 7.4L3 21l1.6-5.2A8.5 8.5 0 1 1 21 12z"/></svg>',
-  relancer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>',
-  points:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="9" r="2.2"/><circle cx="9" cy="18" r="2.2"/><path d="M8 7l8 1.6M16.8 10.8l-6.4 5.6"/></svg>',
-  x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
-  export:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2"/><path d="M6 14h12v7H6z"/></svg>',
-  disquette:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l5 5v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v5h8V3M7 21v-7h10v7"/></svg>',
-  cadrer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V4h4M17 4h4v4M21 16v4h-4M7 20H3v-4"/><circle cx="12" cy="9" r="2"/><path d="M9 17l1-4h4l1 4"/></svg>',
-  entiere:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 16l5-5 4 4 3-3 4 4"/></svg>',
-  gauche:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>',
-  droite:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>',
-  reglage:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>',
-  recadrer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v16h16M2 6h16v16"/></svg>',
-  squat:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4" r="2"/><path d="M4 8h16M12 8l-3 6 5 2-1 6M9 14l-4 1"/></svg>',
-  souleve:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="4.5" r="2"/><path d="M9 7l4 5v8M13 12l-6 1M3 20h18M5 17v6M19 17v6"/></svg>',
-  couples:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M7 20h10M5 7h14M5 7l-3 6h6zM19 7l-3 6h6z"/></svg>',
-  developpe:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 6h20M5 3v6M19 3v6M8 6v7M16 6v7M4 17h16M6 17l2-4h8l2 4"/></svg>'
+  tete:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="square" stroke-linejoin="miter"><circle cx="12" cy="4.5" r="2.2"/><path d="M8 21l1.2-7.5M16 21l-1.2-7.5M7 9.5c1.5-1.4 3.2-2 5-2s3.5.6 5 2M9.2 13.5h5.6M12 7.5v6"/></svg>',
+  loupe:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5M8 10.5h5M10.5 8v5"/></svg>',
+  chev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square" stroke-linejoin="miter"><path d="M6 9l6 6 6-6"/></svg>',
+  info:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.5"/></svg>',
+  msg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter"><path d="M21 12a8.5 8.5 0 0 1-12.6 7.4L3 21l1.6-5.2A8.5 8.5 0 1 1 21 12z"/></svg>',
+  relancer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>',
+  points:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="9" r="2.2"/><circle cx="9" cy="18" r="2.2"/><path d="M8 7l8 1.6M16.8 10.8l-6.4 5.6"/></svg>',
+  x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  export:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter"><path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2"/><path d="M6 14h12v7H6z"/></svg>',
+  disquette:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter"><path d="M5 3h11l5 5v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v5h8V3M7 21v-7h10v7"/></svg>',
+  cadrer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter"><path d="M3 8V4h4M17 4h4v4M21 16v4h-4M7 20H3v-4"/><circle cx="12" cy="9" r="2"/><path d="M9 17l1-4h4l1 4"/></svg>',
+  entiere:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 16l5-5 4 4 3-3 4 4"/></svg>',
+  gauche:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square" stroke-linejoin="miter"><path d="M15 6l-6 6 6 6"/></svg>',
+  droite:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square" stroke-linejoin="miter"><path d="M9 6l6 6-6 6"/></svg>',
+  reglage:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>',
+  recadrer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter"><path d="M6 2v16h16M2 6h16v16"/></svg>',
+  squat:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" stroke-linejoin="miter"><circle cx="13" cy="4" r="2"/><path d="M4 8h16M12 8l-3 6 5 2-1 6M9 14l-4 1"/></svg>',
+  souleve:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" stroke-linejoin="miter"><circle cx="9" cy="4.5" r="2"/><path d="M9 7l4 5v8M13 12l-6 1M3 20h18M5 17v6M19 17v6"/></svg>',
+  couples:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" stroke-linejoin="miter"><path d="M12 4v16M7 20h10M5 7h14M5 7l-3 6h6zM19 7l-3 6h6z"/></svg>',
+  developpe:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" stroke-linejoin="miter"><path d="M2 6h20M5 3v6M19 3v6M8 6v7M16 6v7M4 17h16M6 17l2-4h8l2 4"/></svg>'
 };
 /** Les segments dessinés : [a, b, classe]. Les paires se dédoublent par côté. */
 const ANAT_TRAITS={
@@ -51375,24 +51386,24 @@ function _anatExportCss(){
     +'*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
     +'html,body{margin:0;background:#fff;color:#18181b;font:10pt/1.45 "RC Texte",Arial,sans-serif}'
     +'h1,h2,h3{font-family:"RC Titre","Arial Narrow",Impact,sans-serif;font-weight:400;letter-spacing:.04em;margin:0;color:#111}'
-    +'h1{font-size:24pt;line-height:1}h1 span{color:#c81e1e}h2{font-size:14pt;margin:16px 0 6px;border-bottom:1.5px solid #c81e1e;padding-bottom:2px}h3{font-size:11.5pt;margin:0 0 3px}'
+    +'h1{font-size:24pt;line-height:1}h1 span{color:#c81e1e}h2{font-size:14pt;margin:16px 0 6px;border-bottom:1.5px solid #c81e1e;padding-bottom:2px}h3{font-size:11.5pt;margin:0 0 4px}'
     +'.ex-t{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;border-bottom:3px solid #111;padding-bottom:8px;margin-bottom:10px}'
-    +'.ex-t p{margin:3px 0 0;font-size:9pt;color:#52525b}.ex-m{font-size:8pt;color:#52525b;text-align:right}'
+    +'.ex-t p{margin:4px 0 0;font-size:9pt;color:#52525b}.ex-m{font-size:8pt;color:#52525b;text-align:right}'
     +'.ex-ph{display:flex;gap:10px;justify-content:center;margin:6px 0 4px}'
-    +'.ex-f{margin:0;text-align:center;break-inside:avoid}.ex-f figcaption{font-size:8pt;color:#52525b;margin-top:3px}'
+    +'.ex-f{margin:0;text-align:center;break-inside:avoid}.ex-f figcaption{font-size:8pt;color:#52525b;margin-top:4px}'
     +'.ex-c{position:relative;height:118mm;margin:0 auto;border-radius:6px;overflow:hidden;background:#111}'
     +'.ex-a .ex-c{height:150mm}'
     +'.ex-c img,.ex-c svg{position:absolute;inset:0;width:100%;height:100%}.ex-c img{object-fit:fill}'
     +'.ex-c .an-t{stroke:#ff3b3b;stroke-width:3;stroke-linecap:round;opacity:.9}.ex-c .an-t-plomb,.ex-c .an-t-sol{stroke:#fff;stroke-width:2;stroke-dasharray:8 6;opacity:.7}'
     +'.ex-c .an-pt{fill:#ff3b3b;stroke:#fff;stroke-width:2.5}.ex-c .an-pt.est{fill:#f5a524}.ex-c .an-pt.man{fill:#22c55e}.ex-c .an-hit{display:none}'
-    +'.ex-p{display:grid;gap:7px;margin:4px 0}.ex-p>div{display:grid;grid-template-columns:26px 1fr;gap:9px;align-items:start;border:1px solid #e4e4e7;border-left:4px solid #c81e1e;border-radius:6px;padding:8px 10px;break-inside:avoid}'
+    +'.ex-p{display:grid;gap:8px;margin:4px 0}.ex-p>div{display:grid;grid-template-columns:26px 1fr;gap:10px;align-items:start;border:1px solid #e4e4e7;border-left:1px solid var(--border);border-radius:6px;padding:8px 10px;break-inside:avoid}'
     +'.ex-p b.n{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#c81e1e;color:#fff;font:400 13pt "RC Titre","Arial Narrow",Impact,sans-serif}'
     +'.ex-p p{margin:2px 0 0}.ex-p em{font-style:normal;color:#52525b;font-size:8.5pt}'
-    +'table{width:100%;border-collapse:collapse;font-size:8.5pt;margin:4px 0 8px}th,td{text-align:left;vertical-align:top;padding:3px 5px;border-bottom:1px solid #e4e4e7}'
+    +'table{width:100%;border-collapse:collapse;font-size:8.5pt;margin:4px 0 8px}th,td{text-align:left;vertical-align:top;padding:4px 6px;border-bottom:1px solid #e4e4e7}'
     +'th{font-size:7.5pt;text-transform:uppercase;letter-spacing:.05em;color:#52525b;border-bottom:1.5px solid #18181b}td.v{white-space:nowrap;font-weight:700}'
     +'.ex-z{break-inside:avoid;border:1px solid #e4e4e7;border-radius:6px;padding:8px 10px;margin:0 0 8px}'
     +'.ex-z .h{display:flex;justify-content:space-between;gap:10px;align-items:baseline}.ex-z .h span{font-size:8.5pt;font-weight:700;color:#c81e1e}'
-    +'.ex-z small,.ex-s{display:block;font-size:7.5pt;color:#71717a;margin-top:3px}.ex-z ul{margin:3px 0 0 16px;padding:0}'
+    +'.ex-z small,.ex-s{display:block;font-size:7.5pt;color:#71717a;margin-top:4px}.ex-z ul{margin:4px 0 0 16px;padding:0}'
     +'.ex-n{font-size:8pt;color:#52525b;margin-top:12px;border-top:1px solid #e4e4e7;padding-top:6px}';
 }
 /** La photo d'une vue, avec ses points et ses traits — sans un mot : ni étiquette ni infobulle. */
@@ -53300,12 +53311,12 @@ function renderAsymetrieCoach(c){
   try{ s=signalAsymetrie(c); }catch(e){ s=null; }
   if(!s){ z.innerHTML=''; return true; }
   z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);'
-    +'border-radius:var(--r-3);padding:11px 13px;margin-bottom:16px">'
+    +'border-radius:var(--r-3);padding:12px 14px;margin-bottom:16px">'
     +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);'
-    +'text-transform:uppercase;margin-bottom:5px">Asymétrie</div>'
+    +'text-transform:uppercase;margin-bottom:6px">Asymétrie</div>'
     +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">'
     +escapeHtml(s.phrase)+'</div>'
-    +'<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.55;margin-top:5px">'
+    +'<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.55;margin-top:6px">'
     +escapeHtml(s.geste)+'</div>'
     +(s.toutes.length>1
       ?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:4px">'
@@ -53322,9 +53333,9 @@ function renderMethodesCoach(c){
   try{ forces=resumeMethodesForcees(c); }catch(e){ forces=[]; }
   if(!phrase&&!forces.length){ z.innerHTML=''; return true; }
   let h='<div style="background:var(--surface-1);border:1px solid var(--border);'
-    +'border-radius:var(--r-3);padding:11px 13px;margin-bottom:16px">'
+    +'border-radius:var(--r-3);padding:12px 14px;margin-bottom:16px">'
     +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);'
-    +'text-transform:uppercase;margin-bottom:5px">Techniques d’intensification</div>';
+    +'text-transform:uppercase;margin-bottom:6px">Techniques d’intensification</div>';
   if(phrase)
     h+='<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">'
       +escapeHtml(phrase)+'</div>';
@@ -53334,7 +53345,7 @@ function renderMethodesCoach(c){
       +forces.length+' règle'+(forces.length>1?'s':'')+' d’emploi passée'
       +(forces.length>1?'s':'')+' outre cette semaine :</div>';
     for(const f of forces.slice(-4))
-      h+='<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:3px">'
+      h+='<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:4px">'
         +'· '+escapeHtml(f.exercice||'-')+' · '+escapeHtml(f.regle||'')+'</div>';
   }
   h+='</div>';
@@ -53493,13 +53504,13 @@ function coachAttribuerMuscles(){
   _coachExSansMuscle=exosProgrammeSansMuscle(c);
   const n=_coachExSansMuscle.length;
   const corps=n
-    ?_coachExSansMuscle.map((a,i)=>`<div style="display:flex;align-items:center;gap:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px;margin-bottom:7px">
+    ?_coachExSansMuscle.map((a,i)=>`<div style="display:flex;align-items:center;gap:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px;margin-bottom:8px">
         <span style="flex:1;min-width:0;font-weight:800;font-size:var(--fs-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(a.nom)}</span>
         <button class="btn btn-outline btn-sm" style="width:auto;flex:0 0 auto;margin:0" onclick="_coachClasserMuscles(${i})">Attribuer</button>
       </div>`).join('')
-    :emptyState('check','Tous les exercices du programme ont leurs muscles.',null,null,'padding:22px 0');
+    :emptyState('check','Tous les exercices du programme ont leurs muscles.',null,null,'padding:24px 0');
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-    <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 18px 20px;width:100%;max-width:480px;max-height:82vh;display:flex;flex-direction:column">
+    <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:82vh;display:flex;flex-direction:column">
       <h2 style="margin-bottom:2px;font-size:var(--fs-lg)">Attribuer les muscles</h2>
       <p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px;line-height:1.5">${n
         ?n+' exercice'+(n>1?'s':'')+' du programme sans groupe musculaire : il'+(n>1?'s ne comptent':' ne compte')+' ni dans le volume, ni dans ce qui bloque.'
@@ -53660,7 +53671,7 @@ function renderTendancesCoach(c){
   let l=[];
   try{ l=[phraseChargeHebdo(c),phraseExercicesEnProgres(c)].filter(Boolean); }catch(e){ l=[]; }
   z.innerHTML=l.length
-    ?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 13px">`
+    ?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 14px">`
       +l.map(x=>`<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(x)}</div>`).join('')
       +`</div>`
     :'';
@@ -54248,7 +54259,7 @@ function _htmlSelecteurCreneau(u){
   if(l.length===1) return '';
   return `<div data-scroll-fade style="display:flex;gap:6px;overflow-x:auto;margin-bottom:10px;padding-bottom:2px">
     ${l.map(x=>`<button onclick="_perfSetCreneau(${x.slot})" class="hit44"
-      style="flex:0 0 auto;min-height:38px;padding:8px 13px;border-radius:var(--r-2);cursor:pointer;white-space:nowrap;font-size:var(--fs-sm);font-weight:700;
+      style="flex:0 0 auto;min-height:38px;padding:8px 14px;border-radius:var(--r-2);cursor:pointer;white-space:nowrap;font-size:var(--fs-sm);font-weight:700;
       background:${cur&&cur.slot===x.slot?'#1a0505':'var(--surface-1)'};border:1px solid ${cur&&cur.slot===x.slot?'var(--red)':'var(--border)'};
       color:${cur&&cur.slot===x.slot?'var(--text)':'#bbb'}">${escapeHtml(x.nom)}</button>`).join('')}
   </div>`;
@@ -54297,9 +54308,9 @@ const BADGES=Object.freeze({
   PERSONAL_BEST:   {t:'Personal best',     d:'Ta meilleure performance historique.',               i:'trophee',  p:88, f:'record'},
   NEW_PERF:        {t:'Nouvelle performance',d:'Tu as réalisé ta meilleure performance sur cet exercice.',i:'eclair',p:80,f:'progression'},
   PROGRESSION:     {t:'En progression',    d:'Plusieurs exercices en amélioration.',               i:'courbe',   p:78, f:'progression'},
-  MONSTER:         {t:'Séance monstre',    d:'Volume exceptionnel. Tu as tout donné.',             i:'flamme',   p:75, f:'volume'},
-  HIGH_VOLUME:     {t:'Gros volume',       d:'Tu as atteint un volume musculaire exceptionnel.',   i:'haltere',  p:70, f:'volume'},
-  NO_MERCY:        {t:'No mercy',          d:'Une intensité rare. Tu n’as rien lâché.',            i:'crane',    p:68, f:'intensite'},
+  MONSTER:         {t:'Séance monstre',    d:'Nettement plus de volume que d’habitude.',             i:'flamme',   p:75, f:'volume'},
+  HIGH_VOLUME:     {t:'Gros volume',       d:'Un volume au-dessus de ta moyenne.',   i:'haltere',  p:70, f:'volume'},
+  NO_MERCY:        {t:'No mercy',          d:'Des séries menées très près de l’échec.',            i:'crane',    p:68, f:'intensite'},
   FULL_SESSION:    {t:'100% validé',       d:'Toutes les séries prévues ont été réalisées.',       i:'cible',    p:65, f:'completion'},
   NO_FAIL:         {t:'Sans échec',        d:'Toutes les séries ont été validées.',                i:'cent',     p:62, f:'completion'},
   PERFECT:         {t:'Séance parfaite',   d:'Objectifs de séance remplis.',                       i:'sommet',   p:60, f:'completion'},
@@ -54367,7 +54378,7 @@ function _badgeSansImage(el){
 function _htmlGlyphe(nom){
   const d=BADGE_GLYPHES[nom]||BADGE_GLYPHES.cible;
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" '
-    +'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+d+'</svg>';
+    +'stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">'+d+'</svg>';
 }
 // ── LE MOTEUR ──────────────────────────────────────────────────────────
 // PURE : aucun DOM, aucun currentUser. Tout ce qu'il sait lui est donne,
@@ -55588,8 +55599,8 @@ function buildSessionComparison(vol,data){
         <text x="100" y="157" text-anchor="middle" font-family="'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif" font-size="34" letter-spacing="4" fill="url(#wdSilver)" stroke="#43474e" stroke-width=".7" paint-order="stroke">RECORD</text>
       </svg></div>
       <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:2px;color:#e8ebef;margin-top:12px;line-height:1;text-shadow:var(--halo-1)">NOUVEAU RECORD</div>
-      <div style="font-size:var(--fs-md);font-weight:800;color:var(--text);margin-top:5px">${best.curMax}kg : ${escapeHtml(best.nm)}</div>
-      <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:3px">était ${best.histMax}kg${records.length>1?' · +'+(records.length-1)+' autre'+(records.length>2?'s':'')+' record'+(records.length>2?'s':'')+' battu'+(records.length>2?'s':''):''}</div>
+      <div style="font-size:var(--fs-md);font-weight:800;color:var(--text);margin-top:6px">${best.curMax}kg : ${escapeHtml(best.nm)}</div>
+      <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">était ${best.histMax}kg${records.length>1?' · +'+(records.length-1)+' autre'+(records.length>2?'s':'')+' record'+(records.length>2?'s':'')+' battu'+(records.length>2?'s':''):''}</div>
     </div>`;
   }
   // ── Volume : une seule petite ligne sobre ──
@@ -55600,7 +55611,7 @@ function buildSessionComparison(vol,data){
     const delta=Math.round(vol)-prevSame.volume;
     _bscDelta=delta;
     _bscJour=new Date(prevSame.date).toLocaleDateString('fr-FR',{weekday:'long'});
-    if(delta!==0) html+=`<div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:var(--r-2);padding:9px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px"><span style="flex-shrink:0;color:${delta>0?'var(--green)':'#666'}">${delta>0?icon('flame',18):'▾'}</span><span style="font-size:var(--fs-sm);font-weight:700;color:${delta>0?'var(--green)':'#888'}">${delta>0?'+':''}${delta}kg de volume vs dernière séance</span></div>`;
+    if(delta!==0) html+=`<div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:var(--r-2);padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px"><span style="flex-shrink:0;color:${delta>0?'var(--green)':'#666'}">${delta>0?icon('flame',18):'▾'}</span><span style="font-size:var(--fs-sm);font-weight:700;color:${delta>0?'var(--green)':'#888'}">${delta>0?'+':''}${delta}kg de volume vs dernière séance</span></div>`;
   }
   if(firstSession&&!html)
     html=`<div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:var(--r-2);padding:10px 14px;margin-bottom:14px;font-size:var(--fs-sm);font-weight:700;color:var(--sub)">Première séance enregistrée : tes prochains records apparaîtront ici</div>`;
@@ -55705,7 +55716,7 @@ function _htmlHydratation(user,jourEstOn){
   const h=hydratationMoyenne(user);
   const b=phraseBesoinEau(user,!!jourEstOn);
   if(!h&&!b) return '';
-  return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px">
+  return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Hydratation</div>
     ${h?`<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(phraseHydratation(h))}</div>`:''}
     ${b?`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:${h?'6px':'0'}">${escapeHtml(b)}</div>`:''}
@@ -55756,7 +55767,7 @@ function phraseSatisfaction(s){
 function _htmlSatisfaction(user){
   const s=satisfactionMoyenne(user);
   if(!s) return '';
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Satisfaction des séances</div>
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(phraseSatisfaction(s))}</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px;line-height:1.5">Déclaratif. N'entre pas dans l'indice de forme : une séance dure peut satisfaire, une séance facile peut décevoir.</div>
@@ -56546,7 +56557,7 @@ function renderFormeSeance(){
   const v=formeSeance(sess);
   if(v==null){ z.innerHTML=''; return; }
 
-  const cadre=(couleur,titre,detail)=>`<div style="background:var(--surface-1);border:1px solid var(--border);border-left:3px solid ${couleur};border-radius:var(--r-3);padding:11px 13px;margin-bottom:14px">
+  const cadre=(couleur,titre,detail)=>`<div style="background:var(--surface-1);border:1px solid var(--border);border-left:3px solid ${couleur};border-radius:var(--r-3);padding:12px 14px;margin-bottom:14px">
       <div style="font-size:var(--fs-sm);font-weight:800;color:${couleur};margin-bottom:${detail?'3px':'0'}">${titre}</div>
       ${detail?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6">${detail}</div>`:''}
     </div>`;
@@ -57855,10 +57866,9 @@ const FA_LIB_MOMENT=Object.freeze({
   avant:'ENTRAÎNEMENT', pendant:'ENTRAÎNEMENT', apres:'ENTRAÎNEMENT',
   collation2:'APRÈS-MIDI', soir:'SOIR', coucher:'AVANT SOMMEIL'
 });
-const FA_ICONE=Object.freeze({
-  petit_dej:'☀', collation1:'🥤', midi:'🍽', avant:'⚡', pendant:'🏋',
-  apres:'⚡', collation2:'🥤', soir:'🍽', coucher:'🌙'
-});
+// PLUS D'EMOJI EN TETE DE REPAS (charte du 26/09/2026) : le nom du repas
+// suffit, et un emoji change de dessin d'un telephone a l'autre.
+const FA_ICONE=Object.freeze({});
 const FA_MOTTO='« UNE MEILLEURE ALIMENTATION, DE MEILLEURS RÉSULTATS. »';
 
 /**
@@ -57921,7 +57931,7 @@ function ficheAlimDonnees(user,chercher){
         qte:(q==null?'-':String(Math.round(q*100)/100).replace('.',',')+' '+planUnitePluriel(q,un))};
     });
     return {cle,lib:planLibRepas(cle),moment:FA_LIB_MOMENT[cle]||'',
-      icone:FA_ICONE[cle]||'▪',lignes};
+      icone:FA_ICONE[cle]||'',lignes};
   });
   // LES DEUX CATALOGUES, AVEC LEURS TROIS COLONNES. « pour la journée » est le
   // grammage du repas multiplié par le nombre de repas qui appellent une
@@ -58002,7 +58012,7 @@ function htmlFicheAlim(user,chercher){
     const corps=r.lignes.filter((l,k)=>!(k===0&&l.type==='note')).map(ligne).join('');
     return `<section class="fa-repas">
       <div class="fa-repas-tete">
-        <span class="fa-repas-ico">${r.icone}</span>
+        ${r.icone?`<span class="fa-repas-ico">${r.icone}</span>`:''}
         <span class="fa-repas-t">${E(t1)} <em>${E(t2)}</em></span>
         ${note?`<span class="fa-repas-note">${E(note)}</span>`:''}
         <span class="fa-repas-moment">${E(r.moment)}</span>
@@ -59036,17 +59046,17 @@ async function photosBilanMigrer(user,options){
 // vaudrait accord.
 const PHP_TEXTE_SANTE='Une photo de ton corps est une donnée de santé au sens de l\'article 9 du RGPD. Elle n\'est pas traitée comme une photo ordinaire, et elle ne se donne pas par défaut.';
 function htmlPhotosConsentement(u){
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:15px 16px;margin-bottom:16px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:9px">Photos de progression</div>
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px 16px;margin-bottom:16px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Photos de progression</div>
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7;margin-bottom:10px">${escapeHtml(PHP_TEXTE_SANTE)}</div>
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.7">Ce que fait RepCore : tes photos restent <strong style="color:var(--text)">sur ton téléphone</strong>. Elles ne partent nulle part tant que tu ne les partages pas, photo par photo, avec une confirmation à chaque fois.</div>
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.7;margin-top:8px">Ce que RepCore ne peut pas faire : une photo <em>déjà partagée</em> ne peut plus être effacée à distance depuis l'application. Si tu retires ton accord, tout ce qui est sur ce téléphone est détruit, et la liste de ce qui a été transmis est affichée pour que ton coach le supprime de son côté. On préfère te le dire avant.</div>
     <div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-top:8px">Aucune analyse automatique : ni silhouette, ni masse grasse, ni comparaison à qui que ce soit. Ce sont tes photos, rangées côte à côte.</div>
-    <label class="hit44" style="display:flex;align-items:flex-start;gap:9px;margin:13px 0 0;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:400;font-size:var(--fs-xs);color:var(--sub)">
+    <label class="hit44" style="display:flex;align-items:flex-start;gap:10px;margin:14px 0 0;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:400;font-size:var(--fs-xs);color:var(--sub)">
       <input type="checkbox" id="php-partage" style="width:16px;height:16px;margin:2px 0 0;accent-color:var(--red);flex-shrink:0">
       <span>J'autorise aussi mon coach à voir les photos que je choisirai de partager. Je peux revenir dessus.</span>
     </label>
-    <button class="btn btn-red" style="width:100%;margin-top:13px" onclick="phpDonnerConsentement()">J'ai compris, j'active les photos</button>
+    <button class="btn btn-red" style="width:100%;margin-top:14px" onclick="phpDonnerConsentement()">J'ai compris, j'active les photos</button>
     <button class="btn btn-outline" style="width:100%;margin-top:8px" onclick="showProgressTab('photos',null)">Non, pas de photos</button>
   </div>`;
 }
@@ -59064,7 +59074,7 @@ async function phpDonnerConsentement(){
 function htmlPhotosSeance(u){
   const j=localISODate(new Date());
   const s=phpSeanceDuJour(u,j);
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:14px">
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Nouvelle séance photo</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint)">${s?Object.keys(s.poses||{}).length:0}/4</span>
@@ -59072,7 +59082,7 @@ function htmlPhotosSeance(u){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       ${PHP_POSES.map(p=>{
         const faite=!!(s&&s.poses&&s.poses[p.cle]);
-        return `<label class="hit44" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:64px;border-radius:var(--r-3);cursor:pointer;padding:9px 6px;text-transform:none;letter-spacing:normal;margin:0;
+        return `<label class="hit44" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:64px;border-radius:var(--r-3);cursor:pointer;padding:10px 6px;text-transform:none;letter-spacing:normal;margin:0;
           background:${faite?'rgba(34,197,94,.12)':'#111'};border:1px solid ${faite?'var(--green)':'var(--border)'};color:${faite?'var(--text)':'var(--sub)'}">
           <span style="font-size:var(--fs-lg)">${faite?'●':'○'}</span>
           <span style="font-size:var(--fs-xs);font-weight:800">${escapeHtml(p.lib)}</span>
@@ -59080,8 +59090,8 @@ function htmlPhotosSeance(u){
             onchange="phpPrendrePose('${p.cle}',this)">
         </label>`;}).join('')}
     </div>
-    <div id="php-apercu" style="margin-top:11px"></div>
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:9px">Chaque pose est facultative. Aligne-toi sur la photo précédente en transparence et sur la ligne d'horizon.</div>
+    <div id="php-apercu" style="margin-top:12px"></div>
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:10px">Chaque pose est facultative. Aligne-toi sur la photo précédente en transparence et sur la ligne d'horizon.</div>
   </div>`;
 }
 async function phpPrendrePose(pose,input){
@@ -59138,16 +59148,16 @@ function htmlPhotosComparateur(u){
   if(!_phpA||dl.indexOf(_phpA)<0) _phpA=dl.length?dl[0]:null;
   if(!_phpB||dl.indexOf(_phpB)<0) _phpB=dl.length?dl[dl.length-1]:null;
   const opt=d=>dl.map(x=>`<option value="${x}"${x===d?' selected':''}>${new Date(x).toLocaleDateString('fr-FR')}</option>`).join('');
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:14px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:9px">Comparer</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px">
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Comparer</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
       ${PHP_POSES.map(p=>`<button type="button" onclick="phpChoisirPose('${p.cle}')"
         style="flex:1;min-width:66px;min-height:44px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;
           background:${p.cle===_phpPose?'rgba(224,32,32,.14)':'#111'};border:1px solid ${p.cle===_phpPose?'var(--red)':'var(--border)'};color:${p.cle===_phpPose?'var(--text)':'var(--sub)'}">${escapeHtml(p.lib)}</button>`).join('')}
     </div>
     ${st.vide
       ? '<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Aucune photo dans cette pose.</div>'
-      : `<div style="display:flex;gap:8px;margin-bottom:9px">
+      : `<div style="display:flex;gap:8px;margin-bottom:10px">
           <select onchange="_phpA=Number(this.value);phpRendreComparateur()" style="flex:1">${opt(_phpA)}</select>
           <select onchange="_phpB=Number(this.value);phpRendreComparateur()" style="flex:1"${st.unique?' disabled':''}>${opt(_phpB)}</select>
         </div>
@@ -59185,13 +59195,13 @@ async function phpRendreComparateur(){
 function htmlPhotosFrise(u){
   const f=phpFrise(u);
   if(!f.length) return '';
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:14px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:9px">Frise</div>
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Frise</div>
     <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">
       ${f.map(s=>{
         const _j=new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
-        return `<div style="flex-shrink:0;background:#111;border:1px solid var(--border);border-radius:var(--r-2);padding:8px 9px 6px">
-          <div style="font-size:var(--fs-2xs);font-weight:800;color:var(--text);margin-bottom:5px">${_j}</div>
+        return `<div style="flex-shrink:0;background:#111;border:1px solid var(--border);border-radius:var(--r-2);padding:8px 10px 6px">
+          <div style="font-size:var(--fs-2xs);font-weight:800;color:var(--text);margin-bottom:6px">${_j}</div>
           <div style="display:flex;gap:6px">
           ${s.poses.map(_c=>{
             const _l=(PHP_POSES.find(q=>q.cle===_c)||{}).lib||_c;
@@ -59203,7 +59213,7 @@ function htmlPhotosFrise(u){
                   ${_htmlRetraitReleve(`phpSupprimerPoseUI(${s.date},&quot;${_c}&quot;)`,`la photo ${escapeHtml(_l)} du ${_j}`)}
                 </div>
               </div>
-              <div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(_l)}</div>
+              <div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(_l)}</div>
             </div>`;}).join('')}
           </div>
         </div>`;}).join('')}
@@ -59268,15 +59278,15 @@ function htmlPhotosPartage(u){
   const l=phpAPartager(u);
   if(!l.length) return '';
   const dj=t=>new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'});
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:14px">
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Partager avec mon coach</div>
-    <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.65;margin-bottom:11px">Photo par photo, et jamais toute seule. Une photo déjà transmise ne peut plus être effacée à distance depuis l’application.</div>
-    ${l.slice(0,12).map(s=>`<div style="border-top:1px solid var(--border);padding-top:9px;margin-top:9px">
+    <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.65;margin-bottom:12px">Photo par photo, et jamais toute seule. Une photo déjà transmise ne peut plus être effacée à distance depuis l’application.</div>
+    ${l.slice(0,12).map(s=>`<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:10px">
       <div style="font-size:var(--fs-2xs);font-weight:800;color:var(--text-dim);letter-spacing:1px;margin-bottom:6px">${dj(s.date)}</div>
-      ${s.poses.map(p=>`<div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">
+      ${s.poses.map(p=>`<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
         <div style="flex:1;min-width:0;font-size:var(--fs-xs);color:var(--text-strong)">${escapeHtml(p.lib)}</div>
         ${p.partagee
-          ?`<span style="flex-shrink:0;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--green);background:#001a00;border:1px solid #1e5c2e;border-radius:var(--r-1);padding:3px 8px">Partagée</span>`
+          ?`<span style="flex-shrink:0;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--green);background:#001a00;border:1px solid #1e5c2e;border-radius:var(--r-1);padding:4px 8px">Partagée</span>`
           :`<button type="button" class="hit44" onclick="phpPartagerPoseUI('${s.dateISO}','${p.cle}')"
             aria-label="Partager la pose ${escapeHtml(p.lib)} du ${dj(s.date)} avec mon coach"
             style="flex-shrink:0;min-height:34px;padding:6px 12px;border-radius:var(--r-2);cursor:pointer;background:var(--surface-2);border:1px solid var(--border);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px">Partager</button>`}
@@ -59318,11 +59328,11 @@ function htmlPhotosReglages(u){
   const e=phpEtat(u);
   const purge=(u.photosProgression&&u.photosProgression.aPurger)||[];
   const partagees=phpPartagees(u).length;
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:14px">
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Tes photos</div>
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.65">${e.seances.length} séance${e.seances.length>1?'s':''} sur cet appareil${partagees?' · '+partagees+' photo'+(partagees>1?'s':'')+' partagée'+(partagees>1?'s':''):' · rien de partagé'}.</div>
-    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.65;margin-top:7px">Partage au coach : ${e.partageCoach?'activé':'désactivé'}.</div>
-    ${purge.length?`<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-2);padding:10px 12px;margin-top:9px;font-size:var(--fs-xs);color:var(--text-strong);line-height:1.65">
+    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.65;margin-top:8px">Partage au coach : ${e.partageCoach?'activé':'désactivé'}.</div>
+    ${purge.length?`<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-2);padding:10px 12px;margin-top:10px;font-size:var(--fs-xs);color:var(--text-strong);line-height:1.65">
       ${purge.length} fichier${purge.length>1?'s':''} déjà transmis n'${purge.length>1?'ont':'a'} pas pu être supprimé${purge.length>1?'s':''} à distance. Montre cette liste à ton coach : c'est lui qui les efface chez l'hébergeur.
       <div style="font-family:monospace;font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px;word-break:break-all">${purge.map(p=>escapeHtml(p.publicId)).join('<br>')}</div>
     </div>`:''}
@@ -59363,12 +59373,12 @@ function htmlPhotosCoach(c){
   if(!e.donne||!e.partageCoach) return '';
   const l=phpPartagees(c);
   if(!l.length) return '';
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:9px">Photos partagées</div>
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Photos partagées</div>
     <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">
       ${l.slice(-12).map(p=>`<div style="flex-shrink:0;width:96px">
         <img src="${escapeHtml(p.url)}" alt="" style="width:96px;height:128px;object-fit:cover;border-radius:var(--r-2);border:1px solid var(--border);display:block">
-        <div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:3px;text-align:center">${new Date(p.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})}</div>
+        <div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:4px;text-align:center">${new Date(p.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})}</div>
       </div>`).join('')}
     </div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:8px">Lecture seule. Ce sont des données de santé : elles ne se rediffusent pas, et l'athlète peut retirer son accord à tout moment.</div>
@@ -60072,7 +60082,7 @@ function _htmlMonteeCharge(chargeTravail,ex,idx){
   const txt=memesReps
     ? paliers.map(p=>_fmtChargeMontee(p.charge)).join(' · ')+' kg × '+paliers[0].reps
     : paliers.map(p=>_fmtChargeMontee(p.charge)+' kg × '+p.reps).join(' · ');
-  return `<div class="wo-ramp sub" style="background:var(--surface-2);border-radius:var(--r-2);padding:9px 12px;margin-bottom:12px"><button type="button" onclick="basculerMonteeCharge()" style="background:none;border:none;padding:0;margin:0;color:inherit;font:inherit;cursor:pointer">Échauffement <span class="wo-ramp-caret">${masque?'▸':'▾'}</span></button><span class="wo-ramp-det"${masque?' style="display:none"':''}> : ${txt}</span></div>`;
+  return `<div class="wo-ramp sub" style="background:var(--surface-2);border-radius:var(--r-2);padding:10px 12px;margin-bottom:12px"><button type="button" onclick="basculerMonteeCharge()" style="background:none;border:none;padding:0;margin:0;color:inherit;font:inherit;cursor:pointer">Échauffement <span class="wo-ramp-caret">${masque?'▸':'▾'}</span></button><span class="wo-ramp-det"${masque?' style="display:none"':''}> : ${txt}</span></div>`;
 }
 // Préférence GLOBALE, pas par exercice : replier la rampe une fois la replie
 // partout, sinon il faudrait la replier à chaque exercice de chaque séance.
@@ -60456,7 +60466,7 @@ function _rendreGrilleCharge(){
   const muscles=[...new Set(cases.map(c=>c.muscle))];
   const par={}; for(const c of cases) par[c.index+'|'+c.muscle]=c;
   const meta={}; for(const c of cases) meta[c.index]={prevision:c.prevision,decharge:c.decharge,courante:c.courante};
-  const th='padding:4px 5px;font-size:var(--fs-2xs);font-weight:800;color:var(--sub);'
+  const th='padding:4px 6px;font-size:var(--fs-2xs);font-weight:800;color:var(--sub);'
     +'text-transform:uppercase;letter-spacing:.5px;white-space:nowrap';
   let h='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">'
     +'<table style="border-collapse:separate;border-spacing:2px;min-width:100%">'
@@ -60502,11 +60512,11 @@ function _rendreGrilleCharge(){
   }
   h+='</table></div>';
   // La legende, parce qu un damier de couleurs sans legende ne se lit pas.
-  h+='<div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:12px">'
-    +Object.keys(GC_COULEURS).map(k=>'<span style="display:inline-flex;align-items:center;gap:5px;'
+  h+='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">'
+    +Object.keys(GC_COULEURS).map(k=>'<span style="display:inline-flex;align-items:center;gap:6px;'
       +'font-size:var(--fs-2xs);color:var(--sub)"><span style="width:11px;height:11px;border-radius:var(--r-1);'
       +'background:'+GC_COULEURS[k]+'"></span>'+escapeHtml(k)+'</span>').join('')
-    +'<span style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-2xs);color:var(--sub)">'
+    +'<span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);color:var(--sub)">'
     +'<span style="width:11px;height:11px;border-radius:var(--r-1);border:1px dashed var(--sub)"></span>prévisionnel</span>'
     +'</div>';
   // LA PHRASE NE PROMET QUE CE QUE CELUI QUI LIT PEUT FAIRE : le geste de la
@@ -61410,8 +61420,8 @@ function _htmlEcheanceCoach(c){
   const u=_dossier(c);
   const e=echeance(u);
   const j=e?echeanceJour(u):null;
-  const tete='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 13px;margin-bottom:16px">'
-    +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">Échéance</div>';
+  const tete='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:16px">'
+    +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Échéance</div>';
   if(!e)
     return tete+'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-bottom:8px">'
       +'Aucune échéance active. Une seule à la fois : en ouvrir une seconde remplace la première.</div>'
@@ -61421,7 +61431,7 @@ function _htmlEcheanceCoach(c){
     +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">'
     +escapeHtml(lib)+(j?(' · '+(j.j>=0?('J-'+j.j):('J+'+(-j.j)))):'')
     +(e.federation?' · '+escapeHtml(e.federation):'')+'</div>'
-    +'<button class="btn btn-outline btn-sm" style="width:100%;margin-top:9px" '
+    +'<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" '
     +'onclick="ouvrirEcheanceEcran(getOwnedClient(currentClientId))">Ouvrir le compte à rebours</button></div>';
 }
 // L'OUVERTURE. Le remplacement est CONFIRME — deux echeances, ce sont deux
@@ -61462,7 +61472,7 @@ function _echEditer(n){
   document.body.insertAdjacentHTML('beforeend',
     '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
     +'<div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:480px;max-height:86vh;overflow-y:auto">'
-    +'<div style="font-size:var(--fs-md);font-weight:800;margin-bottom:3px">J-'+n+'</div>'
+    +'<div style="font-size:var(--fs-md);font-weight:800;margin-bottom:4px">J-'+n+'</div>'
     +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-bottom:12px">'
     +escapeHtml(ECH_PHRASE_CANEVAS)+'</div>'
     +'<div><label for="ech-glu" style="font-size:var(--fs-2xs);text-transform:none;letter-spacing:normal">Glucides (g)</label>'
@@ -61538,7 +61548,7 @@ function _renderEcheance(){
   const t=document.getElementById('ech-titre');
   if(!e){
     if(t) t.textContent='Échéance';
-    z.innerHTML='<div class="sub" style="font-size:var(--fs-sm);line-height:1.6;padding:18px 0">'
+    z.innerHTML='<div class="sub" style="font-size:var(--fs-sm);line-height:1.6;padding:20px 0">'
       +'Aucune échéance active.</div>';
     return true;
   }
@@ -61565,14 +61575,14 @@ function _renderEcheance(){
   // LA SORTIE, a J+1 — et c'est la fonction EXISTANTE.
   const sortie=echeancePropositionSortie(u);
   if(sortie){
-    h+='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px 14px;margin-bottom:14px">'
+    h+='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:14px">'
       +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">'+escapeHtml(sortie.phrase)+'</div>'
       +'<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="echeanceOuvrirSortie()">Revenir au maintien</button></div>';
   }
   if(j&&j.phase==='AFFUTAGE'){
     // L'AFFUTAGE NE FAIT RIEN DE NEUF : il resserre ce qui existe. On le DIT,
     // plutot que d'afficher des cibles qui n'existent pas.
-    h+='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px 14px;margin-bottom:14px">'
+    h+='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:14px">'
       +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;color:var(--sub);text-transform:uppercase;margin-bottom:6px">Affûtage</div>'
       +'<div style="font-size:var(--fs-sm);color:#ccc;line-height:1.6">'
       +'Rien de nouveau : tes macros suivent ta phase, ton sel reste à ta cible, '
@@ -61596,7 +61606,7 @@ function _echHtmlFiches(u,e,estCoach){
   for(let n=ECH_JOURS_PEAK;n>=0;n--){
     const f=e.fiches['j'+n]||null;
     const vide=!f||(f.cibleGlucides==null&&f.cibleSodium==null&&f.cibleEau==null);
-    h+='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:11px 13px;margin-bottom:9px">'
+    h+='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:10px">'
       +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">'
       +'<span style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">J-'+n+'</span>'
       +(f&&f.poses?'<span style="font-size:var(--fs-2xs);color:var(--red-text)">poses</span>':'')
@@ -61604,14 +61614,14 @@ function _echHtmlFiches(u,e,estCoach){
     if(vide){
       // UNE CIBLE NON POSEE N'EST PAS UN ZERO. On le dit, et on n'affiche
       // aucun chiffre — surtout pas un zero, qui serait une consigne.
-      h+='<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:3px">'
+      h+='<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">'
         +(estCoach?'À remplir.':'Ton coach n’a pas encore posé cette journée.')+'</div>';
     } else {
       const l=[];
       if(f.cibleGlucides!=null) l.push('glucides '+Math.round(f.cibleGlucides)+' g');
       if(f.cibleSodium!=null) l.push('sel '+String(Math.round(f.cibleSodium*10)/10).replace('.',',')+' g');
       if(f.cibleEau!=null) l.push('eau '+String(f.cibleEau).replace('.',',')+' L');
-      h+='<div style="font-size:var(--fs-xs);color:#ccc;margin-top:3px;line-height:1.6">'+l.join(' · ')+'</div>';
+      h+='<div style="font-size:var(--fs-xs);color:#ccc;margin-top:4px;line-height:1.6">'+l.join(' · ')+'</div>';
       if(f.seance) h+='<div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:2px">'+escapeHtml(f.seance)+'</div>';
       if(f.cibleGlucides!=null)
         h+='<div class="ech-equiv" data-jour="'+n+'" style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px;line-height:1.5"></div>';
@@ -62044,15 +62054,15 @@ function rcRendreSrpe(){
   // DEJA NOTEE, OU SANS DUREE : rien a demander. Une seance sans duree ne
   // produirait aucune charge, et la question serait posee pour rien.
   if(!s||s.srpe||!(Number(s.duration)>0)) return false;
-  z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px 14px">'
-    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:9px">'
+  z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px">'
+    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">'
     +'<span style="font-size:var(--fs-sm);color:var(--text);font-weight:700">Cette séance, c’était comment ?</span>'
     +'<button type="button" aria-label="Passer" onclick="rcPasserSrpe()" '
     +'style="background:none;border:none;color:rgba(255,255,255,.45);font-size:var(--fs-lg);line-height:1;'
     +'cursor:pointer;min-width:40px;min-height:40px;padding:8px;flex-shrink:0">✕</button></div>'
-    +'<div style="display:flex;gap:5px;flex-wrap:wrap">'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
     +SRPE_ECHELLE.map(e=>'<button type="button" class="btn btn-outline btn-sm" '
-      +'style="flex:1 1 auto;min-width:0;padding:9px 6px;font-size:var(--fs-xs)" '
+      +'style="flex:1 1 auto;min-width:0;padding:10px 6px;font-size:var(--fs-xs)" '
       +'onclick="rcNoterSeance('+JSON.stringify(e.cle).replace(/"/g,'&quot;')+')">'
       +escapeHtml(e.lib)+'</button>').join('')
     +'</div></div>';
@@ -62439,7 +62449,7 @@ function _htmlRendement(c){
   try{
     const p=propositionsRotation(u);
     if(p.actif&&p.lignes.length){
-      rot='<div style="margin-top:11px;padding-top:10px;border-top:1px solid var(--border)">'
+      rot='<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">'
         +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;color:var(--orange);text-transform:uppercase;margin-bottom:6px">Rotation proposée · fin de bloc</div>'
         +p.lignes.map(x=>'<div style="margin-bottom:8px">'
           +'<div style="font-size:var(--fs-xs);color:var(--text);font-weight:700">'+escapeHtml(x.nom)+'</div>'
@@ -62450,17 +62460,17 @@ function _htmlRendement(c){
         +'</div>';
     }
   }catch(e){ rot=''; }
-  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">'
-    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:9px">'
+  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">'
+    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">'
     +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Rendement · '+REND_SEMAINES+' semaines</span>'
     +'<span style="font-size:var(--fs-2xs);color:var(--text-faint)">progression − coût, pondéré</span></div>'
     +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:var(--fs-xs);white-space:nowrap">'
-    +'<tr><th style="text-align:left;padding:0 8px 5px 0;color:var(--sub);font-weight:700">Exercice</th>'
-    +'<th style="text-align:right;padding:0 6px 5px;color:var(--sub);font-weight:700">Prog.</th>'
-    +'<th style="text-align:right;padding:0 6px 5px;color:var(--sub);font-weight:700">Coût</th>'
-    +'<th style="text-align:right;padding:0 6px 5px;color:var(--sub);font-weight:700">Régul.</th>'
-    +'<th style="text-align:right;padding:0 0 5px 6px;color:var(--sub);font-weight:700">Rend.</th>'
-    +'<th style="text-align:right;padding:0 0 5px 6px;color:var(--sub);font-weight:700">n</th></tr>'
+    +'<tr><th style="text-align:left;padding:0 8px 6px 0;color:var(--sub);font-weight:700">Exercice</th>'
+    +'<th style="text-align:right;padding:0 6px 6px;color:var(--sub);font-weight:700">Prog.</th>'
+    +'<th style="text-align:right;padding:0 6px 6px;color:var(--sub);font-weight:700">Coût</th>'
+    +'<th style="text-align:right;padding:0 6px 6px;color:var(--sub);font-weight:700">Régul.</th>'
+    +'<th style="text-align:right;padding:0 0 6px 6px;color:var(--sub);font-weight:700">Rend.</th>'
+    +'<th style="text-align:right;padding:0 0 6px 6px;color:var(--sub);font-weight:700">n</th></tr>'
     +l.map(ligne).join('')+'</table></div></div>';
 }
 // ══════════ LES SALLES ═════════════════════════════════════════════════
@@ -62693,10 +62703,10 @@ function _htmlSelecteurSalle(){
   const l=salles(currentUser);
   if(l.length<2) return '';
   const a=salleActive(currentUser);
-  return '<div style="display:flex;align-items:center;gap:7px;margin-bottom:12px">'
+  return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">'
     +'<span style="font-size:var(--fs-2xs);color:var(--sub);flex-shrink:0">Salle</span>'
     +'<select onchange="choisirSalle(this.value)" style="flex:1;min-width:0;background:var(--surface-2);'
-    +'border:1px solid var(--border);color:var(--text);padding:7px 9px;border-radius:var(--r-2);'
+    +'border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:var(--r-2);'
     +'font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">'
     +l.map(s=>'<option value="'+escapeHtml(s.id)+'"'+((a&&a.id===s.id)?' selected':'')+'>'
       +escapeHtml(s.nom)+'</option>').join('')
@@ -62709,11 +62719,11 @@ function _htmlEcartsCoach(c){
   let t=''; try{ t=resumeEcarts(c); }catch(e){ t=''; }
   if(!t) return '';
   return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);'
-    +'padding:11px 13px;margin-bottom:16px">'
+    +'padding:12px 14px;margin-bottom:16px">'
     +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);'
-    +'text-transform:uppercase;margin-bottom:5px">Écarts au programme</div>'
+    +'text-transform:uppercase;margin-bottom:6px">Écarts au programme</div>'
     +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">'+escapeHtml(t)+'</div>'
-    +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:5px;line-height:1.5">'
+    +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px;line-height:1.5">'
     +'Remplacements décidés en séance. Le programme n’a pas été modifié.</div></div>';
 }
 // ══════════ LE BLOC DE PRIORITE ════════════════════════════════════════
@@ -63192,10 +63202,10 @@ function _htmlBlocPriorite(c){
   // PAS DE BLOC : un bouton pour en ouvrir un, et rien d'autre. Un panneau
   // vide avec trois colonnes vides serait du mobilier.
   if(!b){
-    return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">'
+    return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">'
       +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">'
       +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Bloc de priorité</span></div>'
-      +'<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-bottom:9px">'
+      +'<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-bottom:10px">'
       +'Concentrer le volume sur un à trois muscles, à budget de récupération constant. '
       +'Ce qu’on ajoute quelque part se retire ailleurs.</div>'
       +'<button class="btn btn-outline btn-sm" style="width:100%" onclick="blocOuvrir()">Ouvrir un bloc</button></div>';
@@ -63217,7 +63227,7 @@ function _htmlBlocPriorite(c){
   };
   const depasse=!!(p&&!p.ok);
   return '<div style="background:var(--surface-1);border:1px solid '+(depasse?'var(--red)':'var(--border)')
-    +';border-radius:var(--r-3);padding:13px;margin-bottom:16px">'
+    +';border-radius:var(--r-3);padding:14px;margin-bottom:16px">'
     +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">'
     +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Bloc de priorité</span>'
     +'<span style="font-size:var(--fs-2xs);color:var(--text-faint)">'
@@ -63226,7 +63236,7 @@ function _htmlBlocPriorite(c){
     +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-bottom:'
     +(depasse?'6px':'11px')+'">'+escapeHtml(blocSynthese(u,a,p))+'</div>'
     +(depasse
-      ? '<div style="font-size:var(--fs-xs);color:var(--red-light);line-height:1.6;margin-bottom:11px">'
+      ? '<div style="font-size:var(--fs-xs);color:var(--red-light);line-height:1.6;margin-bottom:12px">'
         +'Plafond dépassé de '+volAffiche(p.depasse)+' séries pondérées ('
         +String(p.hausse).replace('.',',')+' % contre +10 % permis). À retirer : '
         +escapeHtml(((p.aRetirer||[]).map(x=>x.muscle
@@ -63234,21 +63244,21 @@ function _htmlBlocPriorite(c){
             : volAffiche(x.series)+' qu’aucun muscle non prioritaire ne peut céder').join(', ')))
         +'.</div>'
       : (p&&p.raison
-        ? '<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-bottom:11px">'+escapeHtml(p.raison)+'</div>'
+        ? '<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-bottom:12px">'+escapeHtml(p.raison)+'</div>'
         : ''))
     +BLOC_ROLES.map(colonne).join('')
     // TROIS BOUTONS DISTINCTS, REFUSABLES UN PAR UN. Rien ne s'applique en
     // bloc : le coach garde la main sur chaque geste.
     +'<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">'
-    +'<button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:7px"'
-    +(depasse?' disabled style="width:100%;margin-bottom:7px;opacity:.45"':'')
+    +'<button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:8px"'
+    +(depasse?' disabled style="width:100%;margin-bottom:8px;opacity:.45"':'')
     +' onclick="blocAppliquerSeries('+JSON.stringify(String((u&&u.id)||'')).replace(/"/g,'&quot;')+')">'
     +'Enregistrer les séries</button>'
-    +'<button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:7px" onclick="blocAppliquerOrdre('
+    +'<button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:8px" onclick="blocAppliquerOrdre('
     +JSON.stringify(String((u&&u.id)||'')).replace(/"/g,'&quot;')+')">'
     +'Remonter les prioritaires en tête de séance</button>'
     +(freq
-      ? '<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-bottom:7px">'
+      ? '<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-bottom:8px">'
         +escapeHtml(((MUSCLES[freq.muscle]||{}).lib||freq.muscle))+' : '+volAffiche(freq.cible)
         +' séries sur '+freq.seances+' séance'+(freq.seances>1?'s':'')+', soit '+volAffiche(freq.parSeance)
         +' par séance. Une séance de plus les répartirait mieux.</div>'
@@ -63695,19 +63705,19 @@ function _htmlDispo(idx){
   const dejaAllege=!!(currentUser&&currentUser.allegementJour
     &&currentUser.allegementJour.date===localISODate(new Date()));
   return '<div style="background:'+(rouge?'rgba(224,32,32,.07)':'rgba(245,158,11,.07)')
-    +';border:1px solid '+c+';border-radius:var(--r-3);padding:13px 15px;margin-bottom:14px">'
+    +';border:1px solid '+c+';border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px">'
     // AUCUN CHIFFRE. « 58/100 » invite a comparer, a suivre, a optimiser la
     // note — et la note n'est pas l'objectif. On donne la consigne.
     +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">'
     +escapeHtml(d.motif)+'</div>'
     +(dejaAllege
-      ? '<div style="font-size:var(--fs-xs);color:var(--success);margin-top:9px">✓ Dernière série retirée pour aujourd’hui.</div>'
+      ? '<div style="font-size:var(--fs-xs);color:var(--success);margin-top:10px">✓ Dernière série retirée pour aujourd’hui.</div>'
       : '<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="'
         +(rouge?'dispoReporterSeance':'dispoAllegerSeance')
         +'('+(rouge?'':idx+',')+JSON.stringify({cause:d.cause,note:d.note}).replace(/"/g,'&quot;')+')">'
         +(rouge?'Alléger la semaine':'Enregistrer')+'</button>')
     +(rouge
-      ? '<button class="btn btn-outline btn-sm" style="width:100%;margin-top:7px" onclick="clientTab(\'canal\')">En parler à ton coach</button>'
+      ? '<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="clientTab(\'canal\')">En parler à ton coach</button>'
       : '')
     +'</div>';
 }
@@ -64079,14 +64089,14 @@ const RETOUR_LIB_COURBATURES=Object.freeze({aucune:'Aucune',legeres:'Légères',
 
 function _htmlChoixRetour(muscle,champ,libs){
   const lib=(MUSCLES[muscle]||{}).lib||muscle;
-  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px 14px;margin-bottom:10px" data-retour="'+escapeHtml(muscle)+'">'
-    +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">'
+  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:10px" data-retour="'+escapeHtml(muscle)+'">'
+    +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">'
     +escapeHtml(lib)+'</div>'
-    +'<div style="font-size:var(--fs-sm);color:#ccc;line-height:1.5;margin-bottom:9px">'
+    +'<div style="font-size:var(--fs-sm);color:#ccc;line-height:1.5;margin-bottom:10px">'
     +(champ==='congestion'?'Congestion pendant la séance ?':'Courbatures le lendemain ?')+'</div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
     +Object.keys(libs).map(v=>'<button type="button" class="btn btn-outline btn-sm" '
-      +'style="flex:1 1 auto;min-width:0;padding:9px 8px;font-size:var(--fs-xs)" '
+      +'style="flex:1 1 auto;min-width:0;padding:10px 8px;font-size:var(--fs-xs)" '
       +'onclick="rcRepondreRetour(this,'+JSON.stringify(muscle).replace(/"/g,'&quot;')+','
       +JSON.stringify(champ).replace(/"/g,'&quot;')+','+JSON.stringify(v).replace(/"/g,'&quot;')+')">'
       +escapeHtml(libs[v])+'</button>').join('')
@@ -64201,12 +64211,12 @@ function _htmlJournalSeance(c){
       +'<span style="font-size:var(--fs-2xs);color:var(--sub);white-space:nowrap;flex-shrink:0">'
       +(cause?escapeHtml(cause)+' · ':'')+dat(e&&e.date)+'</span></div>';
   };
-  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">'
-    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:9px">'
+  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">'
+    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">'
     +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Allègements</span>'
     +'<span style="font-size:var(--fs-2xs);color:var(--text-faint)">décidés par l’athlète</span></div>'
     +l.slice(0,6).map(ligne).join('')
-    +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:7px;line-height:1.5">'
+    +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:8px;line-height:1.5">'
     +'Proposés par l’application quand le sommeil, la douleur, l’effort ou la charge sortent de l’ordinaire. Jamais imposés.</div></div>';
 }
 // LA MAIN DU COACH, RENDUE. Le bouton n'existe QUE s'il y a quelque chose a
@@ -64222,7 +64232,7 @@ function _htmlBoutonReperes(c){
     : [];
   if(!l.length) return '';
   const noms=l.map(m=>(MUSCLES[m]||{}).lib||m).join(', ');
-  return '<div style="margin-top:9px;padding-top:9px;border-top:1px solid var(--border)">'
+  return '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">'
     +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-bottom:6px">'
     +'Repères ajustés sur ses retours : '+escapeHtml(noms)+'.</div>'
     +'<button class="btn btn-outline btn-sm" style="width:100%" '
@@ -64595,7 +64605,7 @@ function _bilEstReprise(id){ return !!(_bilReprises&&_bilReprises.has(id)); }
 // quelque chose à vérifier.
 function _htmlNoteReprises(){
   if(!_bilReprises||!_bilReprises.size) return '';
-  return `<div style="display:flex;gap:7px;align-items:flex-start;background:#12100a;border:1px dashed rgba(224,32,32,.45);border-radius:var(--r-2);padding:9px 11px;margin-bottom:10px">
+  return `<div style="display:flex;gap:8px;align-items:flex-start;background:#12100a;border:1px dashed rgba(224,32,32,.45);border-radius:var(--r-2);padding:10px 12px;margin-bottom:10px">
     <span style="flex:none;font-size:var(--fs-sm);line-height:1.3">↺</span>
     <span style="font-size:var(--fs-xs);color:var(--sub);line-height:1.55">Les cases en pointillé portent les valeurs de ton dernier bilan : corrige ce qui a changé.</span>
   </div>`;
@@ -64724,9 +64734,9 @@ function _updateBilanCountdown(){
     :[{v:pad(hours),l:'HEURES',red:true},{v:pad(mins),l:'MIN',red:false}];
   cd.innerHTML=`<div style="background:linear-gradient(160deg,#1a0000 0%,#0d0d0d 60%);border:1px solid rgba(224,32,32,.22);border-radius:var(--r-3);padding:16px 14px 14px;position:relative;overflow:hidden;box-shadow:0 0 28px rgba(224,32,32,.07),0 6px 20px rgba(0,0,0,.55)">
     <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,rgba(224,32,32,.95),rgba(224,32,32,.15),transparent)"></div>
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:var(--red-text);margin-bottom:3px">Prochain bilan</div>
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:var(--red-text);margin-bottom:4px">Prochain bilan</div>
     <div style="font-size:var(--fs-md);font-weight:700;color:var(--text);margin-bottom:14px">${dateLabel}</div>
-    <div style="display:flex;gap:6px">${blocks.map(b=>`<div style="flex:1;background:${b.red?'rgba(224,32,32,.13)':'rgba(255,255,255,.03)'};border:1px solid ${b.red?'rgba(224,32,32,.28)':'rgba(255,255,255,.07)'};border-radius:var(--r-2);padding:12px 6px;text-align:center"><div style="font-size:var(--fs-3xl);font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${b.red?'var(--red)':'var(--text)'}${b.red?';--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)':''}">${b.v}</div><div style="font-size:var(--fs-xs);font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:rgba(255,255,255,.32);margin-top:5px">${b.l}</div></div>`).join('')}</div>
+    <div style="display:flex;gap:6px">${blocks.map(b=>`<div style="flex:1;background:${b.red?'rgba(224,32,32,.13)':'rgba(255,255,255,.03)'};border:1px solid ${b.red?'rgba(224,32,32,.28)':'rgba(255,255,255,.07)'};border-radius:var(--r-2);padding:12px 6px;text-align:center"><div style="font-size:var(--fs-3xl);font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${b.red?'var(--red)':'var(--text)'}${b.red?';--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)':''}">${b.v}</div><div style="font-size:var(--fs-xs);font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:rgba(255,255,255,.32);margin-top:6px">${b.l}</div></div>`).join('')}</div>
   </div>`;
 }
 // forcerReprise : appelé depuis la carte de reprise de l'accueil, où l'athlète
@@ -65025,7 +65035,7 @@ function bT(id,ph){return`<input type="text" id="${id}" placeholder="${ph||''}" 
 function bDate(id){
   const v=escapeHtml(bilData[id]||'');
   const a=bilData[id]?_ageRevolu(bilData[id]):null;
-  return `<span style="display:inline-flex;align-items:center;gap:9px">`
+  return `<span style="display:inline-flex;align-items:center;gap:10px">`
     +`<input type="date" id="${id}" value="${v}" max="${_dateMaxNaissance()}"`
     +` oninput="bilData['${id}']=this.value;bMajAge('${id}')"`
     +` style="padding:6px 8px;font-size:var(--fs-sm);font-weight:700;margin:0;`
@@ -65225,7 +65235,7 @@ function _photoVerdict(codes,rouge){
 function _htmlPhotoGuide(vue,titre){
   const l=PHOTO_CONSIGNES[vue]||PHOTO_CONSIGNES.face;
   return '<details class="bil-guide"><summary>'+escapeHtml(titre||'Réussir cette photo')+'</summary><ul>'
-    +l.map((t,i)=>'<li><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="'+PHOTO_ICONES[i]+'"/></svg><span>'+escapeHtml(t)+'</span></li>').join('')
+    +l.map((t,i)=>'<li><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="'+PHOTO_ICONES[i]+'"/></svg><span>'+escapeHtml(t)+'</span></li>').join('')
     // Regroupés (titre donné), les guides partagent un seul rappel « pas de miroir ».
     +'</ul>'+(titre?'':'<p class="bil-guide-m"><b>Pas de miroir</b> : fais-toi prendre par quelqu’un, ou pose le téléphone et démarre le minuteur.</p>')+'</details>';
 }
@@ -65244,7 +65254,7 @@ function bPhotoCards(prefix){
     const done=!!bilData[key];
     return `<div style="flex:1;min-width:0;background:var(--surface-1);border:1px solid #222;border-radius:var(--r-3);padding:14px 6px 12px;text-align:center">
       <img src="${p.img}" alt="${p.l}" style="height:118px;max-width:100%;object-fit:contain;filter:drop-shadow(0 0 7px rgba(255,255,255,.4));margin-bottom:8px">
-      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#ccc;margin-bottom:9px">${p.l}</div>
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#ccc;margin-bottom:10px">${p.l}</div>
       <label style="display:inline-block;background:${done?'#001a00':'#1a0000'};border:1px solid ${done?'#22c55e':'var(--red)'};color:${done?'#22c55e':'var(--red)'};padding:6px 12px;border-radius:var(--r-1);font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:.5px">${done?' Ajoutée':'AJOUTER'} <input type="file" accept="image/*" style="display:none" onchange="loadBilPhoto(this,'${key}')"></label>
       <button type="button" class="bil-minut" onclick="bilMinuteur('${key}','${p.k}')">Minuteur 10 s</button>
     </div>`;
@@ -65294,7 +65304,7 @@ function bMetier(id){
     <input type="text" id="${id}" autocomplete="off" placeholder="Commence à taper : maçon, infirmier, comptable…"
       value="${escapeHtml(v)}" oninput="_bMetierSaisie('${id}',this.value)" onfocus="_bMetierSaisie('${id}',this.value)">
     <div id="${id}-sug" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:var(--z-raised);background:var(--dark);border:1px solid var(--border);border-radius:0 0 var(--r-3) var(--r-3);max-height:210px;overflow:auto"></div>
-    <div id="${id}-niv" style="font-size:var(--fs-2xs);line-height:1.6;margin-top:5px;color:${n?'var(--success)':'var(--text-faint)'}">${
+    <div id="${id}-niv" style="font-size:var(--fs-2xs);line-height:1.6;margin-top:6px;color:${n?'var(--success)':'var(--text-faint)'}">${
       n?escapeHtml(n.lib)+' → facteur '+String(n.f).replace('.',',')
        :(v?'Métier non reconnu : le calcul utilisera le nombre de séances.':'')}</div>
   </div>`;
@@ -65310,7 +65320,7 @@ function _bMetierSaisie(id,val){
     const exact=!!niveauMetier(val);
     zs.style.display=(l.length&&!exact)?'block':'none';
     zs.innerHTML=l.map(m=>`<div onclick="_bMetierChoisi('${id}',this.dataset.n)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" data-n="${escapeHtml(m.nom)}"
-      style="padding:9px 12px;font-size:var(--fs-sm);color:var(--text-strong);cursor:pointer;border-bottom:1px solid var(--border)">
+      style="padding:10px 12px;font-size:var(--fs-sm);color:var(--text-strong);cursor:pointer;border-bottom:1px solid var(--border)">
       ${escapeHtml(m.nom)}<span style="color:var(--text-faint);font-size:var(--fs-2xs)"> · ${escapeHtml(m.fam)}</span></div>`).join('');
   }
   if(zn){
@@ -65360,7 +65370,7 @@ function bSports(id){
   const noms=Object.keys(SPORTS_KCAL_H);
   const ligne=(e,i)=>{
     const kh=kcalHeureSport(e.sport,e.intensite);
-    return `<div style="display:flex;gap:5px;align-items:center;margin-bottom:6px">
+    return `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
       <select onchange="_bSportSet('${id}',${i},'sport',this.value)"
         style="flex:2;min-width:0;padding:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
         ${noms.map(n=>`<option value="${escapeHtml(n)}"${e.sport===n?' selected':''}>${escapeHtml(n)}</option>`).join('')}
@@ -65375,7 +65385,7 @@ function bSports(id){
       <button type="button" onclick="_bSportRetirer('${id}',${i})" class="hit44"
         style="flex:0 0 auto;background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:0 4px;min-width:30px">✕</button>
     </div>
-    ${kh!=null&&Number(e.heures)>0?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin:-3px 0 8px 2px">${kh} kcal/h × ${String(e.heures).replace('.',',')} h = ${Math.round(kh*Number(e.heures))} kcal par semaine</div>`:''}`;
+    ${kh!=null&&Number(e.heures)>0?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin:-4px 0 8px 2px">${kh} kcal/h × ${String(e.heures).replace('.',',')} h = ${Math.round(kh*Number(e.heures))} kcal par semaine</div>`:''}`;
   };
   const total=depenseSportsParJour(l);
   return `<div id="${id}-zone">
@@ -65432,7 +65442,7 @@ function _bSportSet(id,i,champ,val){
   }
 }
 
-function bSec(title,html){return`<div style="margin-bottom:22px"><div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:2px;font-weight:800;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid rgba(224,32,32,.28);--halo-c:rgba(224,32,32,.4);text-shadow:var(--halo-2)">${title}</div>${html}</div>`;}
+function bSec(title,html){return`<div style="margin-bottom:24px"><div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:2px;font-weight:800;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid rgba(224,32,32,.28);--halo-c:rgba(224,32,32,.4);text-shadow:var(--halo-2)">${title}</div>${html}</div>`;}
 function bMeas(id,label,unit){return`<div class="bil-row"><span class="bil-row-label">${label}</span><div style="display:flex;align-items:center;gap:6px">${bQ(id)}<span class="bil-unit">${unit}</span></div></div>`;}
 
 // ── Schéma corporel interactif (mensurations) ─────────────────────────
@@ -65561,12 +65571,12 @@ function bBodySchema(prefix){
       // que l'athlète touche la case — voir bMesureSaisie.
       const _rep=_bilEstReprise(id);
       return `<div style="position:absolute;${posX};top:${top}%;width:34%">
-        <div id="bx-${id}" style="display:flex;align-items:center;gap:3px;background:#0c0c0c;border:1px ${_rep?'dashed rgba(224,32,32,.5)':'solid var(--border)'};border-radius:var(--r-2);padding:2px 5px;transition:border-color var(--t-2),box-shadow var(--t-2)">
+        <div id="bx-${id}" style="display:flex;align-items:center;gap:4px;background:#0c0c0c;border:1px ${_rep?'dashed rgba(224,32,32,.5)':'solid var(--border)'};border-radius:var(--r-2);padding:2px 6px;transition:border-color var(--t-2),box-shadow var(--t-2)">
           <span style="flex:none;font-size:8.5px;font-weight:800;letter-spacing:.2px;text-transform:uppercase;color:var(--sub);white-space:nowrap">${court}</span>
           <input type="number" inputmode="decimal" step="any" id="${id}" value="${bilData[id]||''}" placeholder="-"
             oninput="bMesureSaisie('${id}',this.value)"
             onfocus="bBodyFocus('${id}',1)" onblur="bBodyFocus('${id}',0)"
-            style="flex:1;width:100%;min-width:0;background:none;border:none;outline:none;box-shadow:none;color:var(--text);font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-md);text-align:right;padding:3px 0;margin:0">
+            style="flex:1;width:100%;min-width:0;background:none;border:none;outline:none;box-shadow:none;color:var(--text);font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-md);text-align:right;padding:4px 0;margin:0">
           <span style="font-size:8.5px;color:var(--text-dim);font-weight:700;margin-left:1px">cm</span>
         </div>
       </div>`;
@@ -65580,8 +65590,8 @@ function bLongueurs(){
   // LE SCHEMA VA SOUS LA CONSIGNE, pas a la place : le dessin montre OU, la
   // phrase dit COMMENT (pieds nus, dos au mur, jambes tendues).
   const champ=(id,lbl,aide,schema)=>`<div style="margin-bottom:12px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--sub);margin-bottom:3px">${lbl}</div>
-    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5;margin-bottom:5px">${aide}</div>
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--sub);margin-bottom:4px">${lbl}</div>
+    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5;margin-bottom:6px">${aide}</div>
     ${schema||''}
     <div style="display:flex;align-items:center;background:#0c0c0c;border:1px solid var(--border);border-radius:var(--r-2);padding:1px 10px;max-width:170px">
       <input type="number" inputmode="decimal" step="any" id="${id}" value="${bilData[id]||''}" placeholder="-"
@@ -65593,7 +65603,7 @@ function bLongueurs(){
   // HUIT MESURES, CHACUNE AVEC SA CONSIGNE SOUS LES YEUX. Sans protocole
   // affiché, on ne sait pas ce qui a été mesuré, et deux bilans cessent d'être
   // comparables : la consigne fait partie de la mesure.
-  return `<div style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
+  return `<div style="margin-top:20px;border-top:1px solid var(--border);padding-top:14px">
     <div style="font-size:var(--fs-xs);font-weight:700;color:var(--text-strong);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Longueurs (facultatif)</div>
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">Des mesures qui ne bougent plus une fois adulte. Elles servent à ton coach pour te proposer des variantes d'un mouvement, jamais pour en écarter un. Toutes sont facultatives : une case vide vaut mieux qu'une mesure approximative.</div>
     ${MORPHO_MESURES.map(m=>champ(m.cle,m.lib,m.consigne,m.schema?(MORPHO_SCHEMAS[m.schema===true?'rotule':m.schema]||''):'')).join('')}
@@ -65931,13 +65941,13 @@ function _htmlCalendrierBilansCoach(c){
       +'<span style="font-size:var(--fs-sm);font-weight:800;color:var(--text-strong)">'+escapeHtml(_ccdBilMoisLib(cle))+'</span>'
       +fleche(suiv,1,'›')
     +'</div>'
-    +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:4px">'+noms+'</div>'
-    +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px">'+cases+'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px">'+noms+'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">'+cases+'</div>'
     +'<div style="border-top:1px solid var(--border);margin-top:12px;padding-top:10px">'
       +'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;font-weight:700;text-transform:uppercase;margin-bottom:8px">'
         +escapeHtml(dLib)+(b&&b.type==='depart'?' · bilan de départ':'')+'</div>'
       +(rep.length
-        ? rep.map(r=>'<div style="margin-bottom:9px">'
+        ? rep.map(r=>'<div style="margin-bottom:10px">'
             +'<div style="font-size:var(--fs-2xs);color:var(--sub)">'+escapeHtml(r.lbl)+'</div>'
             +'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.55;white-space:pre-wrap">'+escapeHtml(r.txt)+'</div>'
           +'</div>').join('')
@@ -66203,7 +66213,7 @@ function _htmlRetraitReleve(appel,quoi){
     +'display:inline-flex;align-items:center;justify-content:center;padding:0;'
     +'background:none;border:none;border-radius:var(--r-2);color:var(--text-faint);cursor:pointer">'
     +'<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" '
-    +'stroke-width="2.2" stroke-linecap="round" aria-hidden="true">'
+    +'stroke-width="2.2" stroke-linecap="square" aria-hidden="true">'
     +'<path d="M6 6 18 18"/><path d="M18 6 6 18"/></svg></button>';
 }
 function _htmlConstantes(user){
@@ -66240,17 +66250,17 @@ function _htmlAnalyses(user){
 }
 function _htmlRelanceAnalyses(user){
   if(!relanceAnalyses(user)) return '';
-  return `<div style="margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:11px 13px">
+  return `<div style="margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px">
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Aucune analyse consignée depuis plus de ${ANALYSES_RELANCE_JOURS} jours. Si tu en as fait une, tu peux la ranger ici.</div>
   </div>`;
 }
 function _htmlDrapeauGeneral(user){
   const d=drapeauGeneralActif(user);
   if(!d) return '';
-  return `<div style="margin-top:12px;background:#1a0000;border:1px solid var(--red);border-radius:var(--r-3);padding:13px 15px">
-    ${TEXTE_ARRET_GENERAL.map(t=>`<div style="font-size:var(--fs-md);color:var(--text);line-height:1.7;margin-bottom:9px">${escapeHtml(t)}</div>`).join('')}
+  return `<div style="margin-top:12px;background:#1a0000;border:1px solid var(--red);border-radius:var(--r-3);padding:14px 16px">
+    ${TEXTE_ARRET_GENERAL.map(t=>`<div style="font-size:var(--fs-md);color:var(--text);line-height:1.7;margin-bottom:10px">${escapeHtml(t)}</div>`).join('')}
     <div class="sub" style="font-size:var(--fs-xs);line-height:1.6">Tu as signalé : ${d.cases.map(c=>escapeHtml(libelleDrapeau(c))).join(', ')}.</div>
-    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:9px">Ton coach le voit de son côté. C'est lui qui retire ce signalement quand tu l'as vu avec un médecin.</div>
+    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:10px">Ton coach le voit de son côté. C'est lui qui retire ce signalement quand tu l'as vu avec un médecin.</div>
     ${blocDisclaimerSante()}
   </div>`;
 }
@@ -66303,8 +66313,8 @@ function loadSante(){
   if(!el||!u) return;
   el.innerHTML=`
     ${_htmlDrapeauGeneral(u)}
-    <div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px">
-      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:9px">Tension</div>
+    <div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Tension</div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <input id="ct-sys" type="number" inputmode="numeric" placeholder="120" aria-label="Systolique" style="width:72px;text-align:center">
         <span class="sub" style="font-size:var(--fs-md)">/</span>
@@ -66315,8 +66325,8 @@ function loadSante(){
       ${_htmlAlerteTension(u)}
       <div style="margin-top:10px">${_htmlConstantes(u)}</div>
     </div>
-    <div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px">
-      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:9px">Analyses</div>
+    <div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Analyses</div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
         <select id="an-marqueur" onchange="_majUnites()" style="flex:1;min-width:130px">
           ${MARQUEURS.map(m=>`<option value="${escapeHtml(m.cle)}">${escapeHtml(m.lib)}</option>`).join('')}
@@ -66329,10 +66339,10 @@ function loadSante(){
       <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:10px">${escapeHtml(ANALYSES_PHRASE)}</div>
     </div>
     ${_htmlRelanceAnalyses(u)}
-    <div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px">
+    <div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:6px">Signes à ne pas ignorer</div>
-      <div class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:9px">Coche ce que tu ressens. RepCore arrêtera ses propositions et te renverra vers un médecin.</div>
-      ${DRAPEAUX_GENERAUX.map(d=>`<label class="hit44" style="display:flex;align-items:center;gap:9px;margin:0 0 6px;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:400;font-size:var(--fs-sm);color:var(--text-strong)">
+      <div class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:10px">Coche ce que tu ressens. RepCore arrêtera ses propositions et te renverra vers un médecin.</div>
+      ${DRAPEAUX_GENERAUX.map(d=>`<label class="hit44" style="display:flex;align-items:center;gap:10px;margin:0 0 6px;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:400;font-size:var(--fs-sm);color:var(--text-strong)">
         <input type="checkbox" class="dg-case" value="${escapeHtml(d.cle)}" style="width:16px;height:16px;margin:0;accent-color:var(--red);flex-shrink:0">
         ${escapeHtml(d.lib)}
       </label>`).join('')}
@@ -66454,7 +66464,7 @@ function _htmlFormContrainte(){
     const on=s.drapeaux.indexOf(d.cle)>=0;
     // Le style global des <label> est en majuscules espacees : sur cinq
     // phrases completes, ca se lit comme des titres et plus comme des cases.
-    return `<label style="display:flex;align-items:flex-start;gap:9px;padding:9px 0;cursor:pointer;min-height:44px;text-transform:none;letter-spacing:normal;font-size:inherit;font-weight:400;color:inherit;margin:0">
+    return `<label style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;cursor:pointer;min-height:44px;text-transform:none;letter-spacing:normal;font-size:inherit;font-weight:400;color:inherit;margin:0">
       <input type="checkbox" ${on?'checked':''} onchange="_ctDrapeau('${d.cle}',this.checked)"
         style="width:18px;height:18px;margin-top:1px;flex-shrink:0;accent-color:var(--red)">
       <span style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5">${escapeHtml(d.lib)}</span>
@@ -66504,7 +66514,7 @@ function ouvrirFormContrainte(zone,cible){
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
     `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-      <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:18px;width:100%;max-width:520px;max-height:90vh;overflow:auto">
+      <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:520px;max-height:90vh;overflow:auto">
         <div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:4px">Signaler une gêne</div>
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:14px">
           Ça sert à adapter ce qu'on te propose. Rien n'est supprimé de ton programme sans que ton coach le décide.
@@ -66589,7 +66599,7 @@ function afficherEcranArret(zone){
     `<div id="modal-overlay" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:center;justify-content:center;padding:20px">
       <div style="background:var(--dark);border:2px solid var(--red);border-radius:var(--r-4);padding:20px;width:100%;max-width:460px;max-height:90vh;overflow:auto">
         <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:10px">Ce que tu décris demande un avis</div>
-        ${TEXTE_ARRET_DRAPEAU.map(t=>`<div style="font-size:var(--fs-md);color:var(--text);line-height:1.7;margin-bottom:9px">${escapeHtml(t)}</div>`).join('')}
+        ${TEXTE_ARRET_DRAPEAU.map(t=>`<div style="font-size:var(--fs-md);color:var(--text);line-height:1.7;margin-bottom:10px">${escapeHtml(t)}</div>`).join('')}
         <div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-top:10px">Zone concernée : ${escapeHtml(libZone(zone))}.</div>
         <button class="btn btn-red" onclick="closeModal()" style="margin-top:16px;letter-spacing:1px">J'ai compris</button>
       </div></div>`);
@@ -66597,7 +66607,7 @@ function afficherEcranArret(zone){
 // ── Restitution ─────────────────────────────────────────────────────────────
 function _ligneContrainte(c,pourCoach,cible){
   const cote=c.cote?' ('+(COTES_CONTRAINTE.find(x=>x.cle===c.cote)||{lib:c.cote}).lib+')':'';
-  return `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
+  return `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
     <div style="flex:1;min-width:0">
       <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${escapeHtml(libZone(c.zone))}${escapeHtml(cote)}</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5">${escapeHtml(libNiveau(c.niveau))}${c.libelle?' · '+escapeHtml(c.libelle):''}</div>
@@ -66618,7 +66628,7 @@ function blocDrapeauRouge(u){
   return `<div style="background:#1a0505;border:1px solid var(--red);border-radius:var(--r-3);padding:12px;margin-bottom:12px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:6px">Signes à faire examiner · ${escapeHtml(libZone(d.zone))}</div>
     ${lib.map(t=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">· ${escapeHtml(t)}</div>`).join('')}
-    <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:7px">Aucun exercice de remplacement n'est proposé tant que ce signalement est actif.</div>
+    <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:8px">Aucun exercice de remplacement n'est proposé tant que ce signalement est actif.</div>
   </div>`;
 }
 function blocContraintes(u,pourCoach,cible){
@@ -66842,7 +66852,7 @@ function renderCharges(){
   if(_vrr){ z.innerHTML=_vrr; return; }
   const av=avancementCharges();
   const pc=av.total?Math.round(av.pose/av.total*100):0;
-  const entete=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:14px">
+  const entete=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
     <div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6">
       Pour chaque famille de mouvement, dis à quel point elle sollicite chaque articulation.
       Un appui fait défiler <b style="color:var(--text-strong)">0</b> aucune · <b style="color:var(--text-strong)">1</b> légère ·
@@ -66853,22 +66863,22 @@ function renderCharges(){
       articulation sera averti avant de faire l'exercice. Une case laissée à <b>·</b> ne déclenche rien :
       tant que tu n'as pas jugé, l'app ne juge pas à ta place.
     </div>
-    <div style="display:flex;align-items:center;gap:9px;margin-top:11px">
+    <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
       <div style="flex:1;height:6px;background:var(--surface-2);border-radius:var(--r-1);overflow:hidden">
         <div style="height:100%;width:${pc}%;background:var(--red);border-radius:var(--r-1)"></div>
       </div>
       <span style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);white-space:nowrap">${av.pose}/${av.total}</span>
     </div>
   </div>`;
-  const entetes=`<div style="display:flex;gap:3px;padding:0 0 5px 0;min-width:max-content">
+  const entetes=`<div style="display:flex;gap:4px;padding:0 0 6px 0;min-width:max-content">
     <div style="flex:0 0 132px"></div>
     ${ZONES_ARTICULAIRES.map(zz=>`<div style="width:40px;flex-shrink:0;text-align:center;font-size:var(--fs-2xs);letter-spacing:.3px;color:var(--text-faint);text-transform:uppercase;line-height:1.2">${escapeHtml(_chAbrege(zz))}</div>`).join('')}
   </div>`;
   const lignes=Object.keys(SCHEMAS_META).map(s=>{
     const m=SCHEMAS_META[s];
     const ouvert=_chSchemaOuvert===s;
-    return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:9px 10px;margin-bottom:6px">
-      <div style="display:flex;align-items:center;gap:3px;min-width:max-content">
+    return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 10px;margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:4px;min-width:max-content">
         <div style="flex:0 0 132px;cursor:pointer" onclick="_chSchemaOuvert=${ouvert?'null':"'"+s+"'"};renderCharges()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
           <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text);line-height:1.25">${escapeHtml(m.lib)}</div>
           <div style="font-size:var(--fs-xs);color:var(--text-faint)">${m.nb} exercices${ouvert?'':' · voir'}</div>
@@ -66877,7 +66887,7 @@ function renderCharges(){
           ?`<div style="width:40px;flex-shrink:0;text-align:center;font-size:var(--fs-sm);color:var(--border)">-</div>`
           :`<div style="width:40px;flex-shrink:0;display:flex;justify-content:center">${_chCase(s,zz)}</div>`).join('')}
       </div>
-      ${ouvert?`<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.6;margin-top:7px;border-top:1px solid var(--border);padding-top:7px">
+      ${ouvert?`<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.6;margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
         ${escapeHtml((SCHEMAS_BRUT[s]||'').split('~').slice(0,12).join(' · ').toLowerCase())}${(SCHEMAS_BRUT[s]||'').split('~').length>12?'…':''}
       </div>`:''}
     </div>`;
@@ -66926,7 +66936,7 @@ function _blocAvertissementContrainte(ex,i){
   // Justification déjà donnée : on rappelle la décision au lieu de la
   // redemander à chaque ouverture de l'éditeur.
   if(ex.justificationContrainte){
-    return `<div style="margin-top:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);padding:9px 11px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
+    return `<div style="margin-top:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
       Contrainte ${escapeHtml(libZone(c.zone))} maintenue : « ${escapeHtml(ex.justificationContrainte)} »
       <button onclick="_annulerJustification(${i})" style="background:none;border:none;padding:0 0 0 6px;color:var(--link);font-size:var(--fs-xs);cursor:pointer">revoir</button>
     </div>`;
@@ -66939,15 +66949,15 @@ function _blocAvertissementContrainte(ex,i){
     <div style="font-size:var(--fs-xs);color:var(--text);line-height:1.6;margin-top:4px">
       <b>${escapeHtml(ex.name)}</b> sollicite fortement ${escapeHtml(libZone(c.zone))}.
     </div>
-    ${subs.length?`<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.6;margin-top:7px">Mouvements moins exigeants sur cette zone :</div>
-      ${subs.map(s=>`<div style="margin-top:5px">
+    ${subs.length?`<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.6;margin-top:8px">Mouvements moins exigeants sur cette zone :</div>
+      ${subs.map(s=>`<div style="margin-top:6px">
         <div style="font-size:var(--fs-2xs);color:var(--text-faint)">${escapeHtml(s.lib)} · charge ${s.charge}/3</div>
-        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:3px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
           ${_exemplesSubstitut(s,3).map(n=>`<button onclick="_remplacerParExo(${i},${JSON.stringify(n).replace(/"/g,'&quot;')})"
-            style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:6px 9px;font-size:var(--fs-2xs);color:var(--text-strong);cursor:pointer">${escapeHtml(n.toLowerCase())}</button>`).join('')}
+            style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:6px 10px;font-size:var(--fs-2xs);color:var(--text-strong);cursor:pointer">${escapeHtml(n.toLowerCase())}</button>`).join('')}
         </div></div>`).join('')}`
-      :`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:7px">Aucun mouvement de remplacement à proposer : les charges articulaires ne sont pas encore renseignées pour les autres familles.</div>`}
-    <div style="display:flex;gap:7px;margin-top:9px">
+      :`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:8px">Aucun mouvement de remplacement à proposer : les charges articulaires ne sont pas encore renseignées pour les autres familles.</div>`}
+    <div style="display:flex;gap:8px;margin-top:10px">
       <button onclick="_garderMalgreContrainte(${i})" class="btn btn-outline btn-sm" style="flex:1;letter-spacing:.5px;font-size:var(--fs-2xs)">Garder : je sais ce que je fais</button>
     </div>
     ${blocDisclaimerSante()}
@@ -66990,19 +67000,19 @@ function _blocContrainteSeance(ex,idx){
   try{ l=contraintesPourExercice(ex,currentUser); }catch(e){ return ''; }
   if(!l.length) return '';
   if(ex.justificationContrainte){
-    return `<div style="background:var(--surface-2);border-radius:var(--r-3);padding:11px 14px;margin-bottom:12px">
+    return `<div style="background:var(--surface-2);border-radius:var(--r-3);padding:12px 14px;margin-bottom:12px">
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">Ton coach a maintenu cet exercice : « ${escapeHtml(ex.justificationContrainte)} »</div>
       ${blocDisclaimerSante()}
     </div>`;
   }
   const c=l[0];
   const subs=(()=>{ try{ return substitutsDe(ex,{zone:c.zone}).slice(0,3); }catch(e){ return []; } })();
-  return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-3);padding:11px 14px;margin-bottom:12px">
+  return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:12px">
     <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">
       Tu as signalé une gêne au ${escapeHtml(libZone(c.zone))}. Cet exercice sollicite beaucoup cette zone.
       Reste sur une charge où ta technique est parfaite, et arrête si ça pince.
     </div>
-    ${subs.length?`<button onclick="_jeRemplace(${idx})" class="btn btn-outline btn-sm" style="margin-top:9px;letter-spacing:1px;font-size:var(--fs-2xs)">Je remplace</button>`:''}
+    ${subs.length?`<button onclick="_jeRemplace(${idx})" class="btn btn-outline btn-sm" style="margin-top:10px;letter-spacing:1px;font-size:var(--fs-2xs)">Je remplace</button>`:''}
     ${blocDisclaimerSante()}
   </div>`;
 }
@@ -67019,8 +67029,8 @@ function _jeRemplace(idx){
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
     `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-      <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:18px;width:100%;max-width:520px;max-height:88vh;overflow:auto">
-        <div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:3px">Remplacer pour aujourd'hui</div>
+      <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:520px;max-height:88vh;overflow:auto">
+        <div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:4px">Remplacer pour aujourd'hui</div>
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">
           Ton programme n'est pas modifié. Ton coach verra l'échange.
         </div>
@@ -67028,7 +67038,7 @@ function _jeRemplace(idx){
           <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:1px;text-transform:uppercase">${escapeHtml(s.lib)}</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
             ${_exemplesSubstitut(s,4).map(n=>`<button onclick="_appliquerSubstitut(${idx},${JSON.stringify(n).replace(/"/g,'&quot;')})"
-              class="hit44" style="min-height:40px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:8px 11px;font-size:var(--fs-xs);color:var(--text-strong);cursor:pointer">${escapeHtml(n.toLowerCase())}</button>`).join('')}
+              class="hit44" style="min-height:40px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:8px 12px;font-size:var(--fs-xs);color:var(--text-strong);cursor:pointer">${escapeHtml(n.toLowerCase())}</button>`).join('')}
           </div></div>`).join('')}
         ${blocDisclaimerSante()}
       </div></div>`);
@@ -67139,7 +67149,7 @@ function _htmlBoutonRemplacer(idx,ex){
   if(drapeauQuelconqueActif(currentUser)) return '';
   return `<button class="hit44" onclick="ouvrirRemplacement(${idx})"
     style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-xs);padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;flex-shrink:0">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>Remplacer</button>`;
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="13" height="13"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>Remplacer</button>`;
 }
 function ouvrirRemplacement(idx){
   const ex=((typeof woState!=='undefined'&&woState&&woState.exercises)||[])[idx];
@@ -67151,8 +67161,8 @@ function ouvrirRemplacement(idx){
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
     `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-      <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:18px;width:100%;max-width:520px;max-height:88vh;display:flex;flex-direction:column">
-        <div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:3px">Remplacer pour aujourd'hui</div>
+      <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:520px;max-height:88vh;display:flex;flex-direction:column">
+        <div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:4px">Remplacer pour aujourd'hui</div>
         ${_estCoach?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:10px">
           Ton programme n\'est pas modifié. Choisis dans la banque d\'exercices.
         </div>
@@ -67190,11 +67200,11 @@ function _demanderMotifEcart(idx){
   document.body.insertAdjacentHTML('beforeend',
     '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
     +'<div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:480px">'
-    +'<div style="font-size:var(--fs-md);font-weight:800;margin-bottom:3px">Pourquoi ce changement ?</div>'
+    +'<div style="font-size:var(--fs-md);font-weight:800;margin-bottom:4px">Pourquoi ce changement ?</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">'
     +'Ton coach le verra. Trois fois le même échange, c’est le programme qu’il faut corriger.</div>'
     +Object.keys(ECART_MOTIFS).map(m=>
-      '<button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:7px" '
+      '<button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:8px" '
       +'onclick="_poserMotifEcart('+JSON.stringify(m).replace(/"/g,'&quot;')+')">'
       +escapeHtml(ECART_MOTIFS[m])+'</button>').join('')
     +'</div></div>');
@@ -67267,7 +67277,7 @@ function _rendreListeRemplacement(){
   const vus=l.slice(0,REMPL_MAX_LISTE);
   // Le reste n'est pas caché en silence : on dit combien, et quoi faire.
   z.innerHTML=vus.map(n=>`<button onclick="_appliquerSubstitut(${_remplIdx},${JSON.stringify(n).replace(/"/g,'&quot;')});_demanderMotifEcart(${_remplIdx})"
-      class="hit44" style="display:block;width:100%;text-align:left;min-height:44px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:9px 12px;margin-bottom:6px;font-size:var(--fs-sm);color:var(--text-strong);cursor:pointer">`
+      class="hit44" style="display:block;width:100%;text-align:left;min-height:44px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px;margin-bottom:6px;font-size:var(--fs-sm);color:var(--text-strong);cursor:pointer">`
       +escapeHtml(n.toLowerCase())+'</button>').join('')
     +(l.length>vus.length?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;padding:4px 2px 2px">'
       +(l.length-vus.length)+' autres mouvements. Affine ta recherche pour les voir.</div>':'');
@@ -67646,11 +67656,11 @@ function blocReponseBilan(b,c){
   const dejaLue=b.reponseVue===true;
   const tca=(()=>{ try{ return aTCA(c); }catch(e){ return false; } })();
   return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
-    ${b.reponseCoach?`<div style="background:var(--surface-2);border-radius:var(--r-2);padding:9px 11px;margin-bottom:9px">
+    ${b.reponseCoach?`<div style="background:var(--surface-2);border-radius:var(--r-2);padding:10px 12px;margin-bottom:10px">
       <div style="font-size:var(--fs-xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);font-weight:800;margin-bottom:4px">Ta réponse${dejaLue?' · lue':' · non lue'}</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(b.reponseCoach)}</div>
     </div>`:''}
-    ${tca?`<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);padding:9px 11px;margin-bottom:9px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
+    ${tca?`<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);padding:10px 12px;margin-bottom:10px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
       Les chiffres de poids sont masqués dans son application. Évite de les citer par message.
     </div>`:''}
     <div id="${_qcIdBilan(id)}" style="display:flex;gap:6px;overflow-x:auto;padding:6px 0 8px;scrollbar-width:none;-ms-overflow-style:none"></div>
@@ -67692,7 +67702,7 @@ function renderReponsesBilans(bilans,client){
       const txt=_texteReponseLue(q.k,b[q.k]);
       if(!txt) return '';
       return `<div style="padding:8px 0;border-bottom:1px solid #141414">
-        <div style="font-size:var(--fs-xs);color:${q.alerte?'#fca5a5':'var(--sub)'};font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">${q.lbl}</div>
+        <div style="font-size:var(--fs-xs);color:${q.alerte?'#fca5a5':'var(--sub)'};font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">${q.lbl}</div>
         <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5">${escapeHtml(txt)}</div>
       </div>`;
     }).filter(Boolean).join('');
@@ -67703,7 +67713,7 @@ function renderReponsesBilans(bilans,client){
         <div style="text-align:right"><div style="font-size:var(--fs-xs);color:var(--text-dim)">${d}</div>${w?`<div style="font-size:var(--fs-sm);font-weight:700;color:var(--text);margin-top:2px">${w}kg</div>`:''}</div>
       </div>
       ${answers}
-      ${(!client&&b.reponseCoach)?`<div style="margin-top:10px;background:var(--surface-2);border-left:3px solid var(--green);border-radius:var(--r-2);padding:10px 12px">
+      ${(!client&&b.reponseCoach)?`<div style="margin-top:10px;background:var(--surface-2);border-left:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px">
         <div style="font-size:var(--fs-xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--green);font-weight:800;margin-bottom:4px">Réponse de ton coach</div>
         <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(b.reponseCoach)}</div>
       </div>`:''}
@@ -67775,7 +67785,7 @@ const BIL_STEPS=[
     bLbl('Où en es-tu de tes objectifs ?')+bTA('bil-new-goals-detail','Facultatif...')
   ),
   // Step 6 : Photos de progression
-  ()=>`<div style="margin-bottom:22px"><div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">Photos de progression </div>`+
+  ()=>`<div style="margin-bottom:24px"><div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">Photos de progression </div>`+
     `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-2);padding:16px;margin-bottom:14px;text-align:center">`+
     `<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:6px;color:var(--text)">Photos de progression${grossesseSuspend(currentUser)?' <span style="font-weight:600;color:var(--sub)">(facultatif)</span>':''}</div>`+
     `<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Reproduis les 3 poses ci-dessous, même endroit et même lumière qu'au début :<br><strong style="color:var(--red-text)">Face · Dos · Profil</strong></div></div>`+
@@ -67799,7 +67809,7 @@ const DEB_STEPS=[
     // R12 — marge haute negative : la ligne se loge dans les 8 px du libelle,
     // et la question ne grandit que de 14 px.
     bLbl('Quelle est ta profession ?')+
-    `<div class="rc-micro" style="margin:-6px 0 7px">Sert à estimer ce que tu dépenses en dehors de tes séances.</div>`+
+    `<div class="rc-micro" style="margin:-6px 0 8px">Sert à estimer ce que tu dépenses en dehors de tes séances.</div>`+
     bMetier('deb-job')+
     // Sous la profession, et pas ailleurs : c'est la meme question posee
     // autrement, et l'une eclaire l'autre.
@@ -67811,7 +67821,7 @@ const DEB_STEPS=[
     bLbl('As-tu des problèmes de santé ou des blessures ? (si oui, précise)')+bT('deb-health','Ex : hernie discale, entorse...')+
     // La CASE d'abord : c'est elle qui agit. Le texte est facultatif, et la
     // mention qui l'accompagne est AFFICHÉE, pas seulement commentée.
-    `<label style="display:flex;align-items:flex-start;gap:9px;margin-top:10px;cursor:pointer">
+    `<label style="display:flex;align-items:flex-start;gap:10px;margin-top:10px;cursor:pointer">
       <input type="checkbox" id="deb-traitement" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px"${bilData['deb-traitement']?' checked':''} onchange="bilData['deb-traitement']=this.checked">
       <span style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.55">Je suis un traitement médicamenteux régulier</span>
     </label>`+
@@ -67819,8 +67829,8 @@ const DEB_STEPS=[
     `<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-top:6px">${escapeHtml(TRAITEMENT_MENTION)}</div>`+
     // Étape FACULTATIVE. Le texte libre ci-dessus n'est jamais analysé : si
     // l'athlète veut que l'app en tienne compte, il le structure ici lui-même.
-    `<div style="margin-top:8px;background:var(--surface-2);border-radius:var(--r-3);padding:11px 13px">
-      <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:9px">Si une zone te gêne à l'entraînement, tu peux la préciser. C'est facultatif, et ça sert à adapter ce qu'on te propose.</div>
+    `<div style="margin-top:8px;background:var(--surface-2);border-radius:var(--r-3);padding:12px 14px">
+      <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:10px">Si une zone te gêne à l'entraînement, tu peux la préciser. C'est facultatif, et ça sert à adapter ce qu'on te propose.</div>
       <button type="button" class="btn btn-outline btn-sm" onclick="ouvrirFormContrainte('','moi')" style="letter-spacing:1px;font-size:var(--fs-2xs)">Signaler une gêne</button>
     </div>`
   ),
@@ -67840,7 +67850,7 @@ const DEB_STEPS=[
     // R12 — c'est exact : besoinsProposes compte les creneaux RepCore une fois,
     // et ne les additionne jamais a une musculation declaree ici.
     bLbl("Quels sports pratiques-tu, et combien d'heures par semaine ?")+
-    `<div class="rc-micro" style="margin:-6px 0 7px">Tes séances RepCore sont déjà comptées : n'ajoute que le reste.</div>`+
+    `<div class="rc-micro" style="margin:-6px 0 8px">Tes séances RepCore sont déjà comptées : n'ajoute que le reste.</div>`+
     bSports('deb-sports')+
     // R35 — LES DEUX QUESTIONS D'INTENSITE RESTENT, REFORMULEES. Elles ne
     // servent pas au calcul de depense (depenseSportsParJour lit l'intensite de
@@ -67899,7 +67909,7 @@ const DEB_STEPS=[
     bLbl('Si tu en prends déjà, lesquels et pourquoi ?')+bT('deb-supps-detail','Ex : whey, créatine...')
   ),
   // Step 5 : Photos de départ
-  ()=>`<div style="margin-bottom:22px"><div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">Photos de départ </div>`+
+  ()=>`<div style="margin-bottom:24px"><div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">Photos de départ </div>`+
     `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-2);padding:16px;margin-bottom:14px;text-align:center">`+
     `<div style="font-weight:700;font-size:var(--fs-md);margin-bottom:6px;color:var(--text)">Photos de départ</div>`+
     `<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Reproduis les 3 poses ci-dessous, tenue légère, lumière naturelle : <strong style="color:var(--red-text)">touche AJOUTER sous chaque pose</strong>.</div></div>`+
@@ -68339,9 +68349,9 @@ function showBilanNotifBanner(){
   const b=document.createElement('div');
   b.id='bilan-notif-banner';
   b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:var(--z-bar);animation:slideDown var(--t-3) var(--c-out)';
-  b.innerHTML=`<div style="background:linear-gradient(135deg,#1a0000,#280000);border-bottom:2px solid var(--red);padding:14px 18px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openBilanChoice();document.getElementById('bilan-notif-banner')?.remove()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+  b.innerHTML=`<div style="background:linear-gradient(135deg,#1a0000,#280000);border-bottom:2px solid var(--red);padding:14px 20px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openBilanChoice();document.getElementById('bilan-notif-banner')?.remove()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div style="flex:1;min-width:0">
-      <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red-text);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px">Bilan bimensuel · Ce samedi</div>
+      <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red-text);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Bilan bimensuel · Ce samedi</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Remplis ton bilan coaching pour suivre ton évolution !</div>
     </div>
     <button onclick="event.stopPropagation();document.getElementById('bilan-notif-banner')?.remove()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1;min-width:44px;min-height:44px">✕</button>
@@ -68497,13 +68507,13 @@ function htmlSuspension(u){
   if(!sp.actif) return '';
   const zone=(()=>{ try{ const d=drapeauRougeActif(u); return d?d.zone:''; }catch(e){ return ''; } })();
   const msg=suspensionMessageReprise(u);
-  return `<div style="background:#1a0000;border:1px solid var(--red);border-radius:var(--r-3);padding:15px 16px;margin-bottom:16px">
-    ${_suspTextes(sp.cause).map(t=>`<div style="font-size:var(--fs-md);color:var(--text);line-height:1.7;margin-bottom:9px">${escapeHtml(t)}</div>`).join('')}
+  return `<div style="background:#1a0000;border:1px solid var(--red);border-radius:var(--r-3);padding:16px 16px;margin-bottom:16px">
+    ${_suspTextes(sp.cause).map(t=>`<div style="font-size:var(--fs-md);color:var(--text);line-height:1.7;margin-bottom:10px">${escapeHtml(t)}</div>`).join('')}
     ${sp.mouvement?`<div class="sub" style="font-size:var(--fs-xs);line-height:1.6">Mouvement concerné : ${escapeHtml(sp.mouvement)}.</div>`:''}
     ${zone?`<div class="sub" style="font-size:var(--fs-xs);line-height:1.6">Zone concernée : ${escapeHtml(zone)}.</div>`:''}
-    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:9px">Ton compteur de semaines est gelé à ${sp.streakGele}. Il ne descend pas pendant la pause. Tes rappels de séance sont coupés, ton réglage est conservé.</div>
-    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:7px">Tu peux continuer à noter ce que tu fais : rien n'est bloqué, rien n'est effacé. Seul ton coach peut lever cette pause.</div>
-    ${msg?`<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-top:7px">${escapeHtml(msg)}</div>`:''}
+    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:10px">Ton compteur de semaines est gelé à ${sp.streakGele}. Il ne descend pas pendant la pause. Tes rappels de séance sont coupés, ton réglage est conservé.</div>
+    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:8px">Tu peux continuer à noter ce que tu fais : rien n'est bloqué, rien n'est effacé. Seul ton coach peut lever cette pause.</div>
+    ${msg?`<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-top:8px">${escapeHtml(msg)}</div>`:''}
     ${blocDisclaimerDouleur()}
   </div>`;
 }
@@ -68538,12 +68548,12 @@ function htmlRepriseSeance(u){
   try{ ci=_rappelContreIndication(u).trim(); }catch(e){ ci=''; }
   const zero=r.remiseAZero?suspensionMessageReprise(u):'';
   return `<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:12px">
-    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:7px">Séance de retour</div>
+    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:8px">Séance de retour</div>
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.65">Ton coach a levé la pause. Cette séance t'est proposée en volume réduit : tu peux décocher.</div>
-    ${r.mouvement?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:7px">Mouvement à l'origine de la pause : <strong style="color:var(--text)">${escapeHtml(r.mouvement)}</strong>.</div>`:''}
-    ${ci?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:5px">${escapeHtml(ci)}</div>`:''}
-    ${zero?`<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-top:7px">${escapeHtml(zero)}</div>`:''}
-    <label class="hit44" style="display:flex;align-items:center;gap:9px;margin:11px 0 0;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:400;font-size:var(--fs-xs);color:var(--sub)">
+    ${r.mouvement?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:8px">Mouvement à l'origine de la pause : <strong style="color:var(--text)">${escapeHtml(r.mouvement)}</strong>.</div>`:''}
+    ${ci?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:6px">${escapeHtml(ci)}</div>`:''}
+    ${zero?`<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-top:8px">${escapeHtml(zero)}</div>`:''}
+    <label class="hit44" style="display:flex;align-items:center;gap:10px;margin:12px 0 0;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:400;font-size:var(--fs-xs);color:var(--sub)">
       <input type="checkbox" ${repriseDeloadPropose(u)?'checked':''} onchange="toggleRepriseDeload(this.checked)" style="width:16px;height:16px;margin:0;accent-color:var(--info);flex-shrink:0">
       Volume réduit pour cette séance
     </label>
@@ -68572,8 +68582,8 @@ function htmlLeveeCoach(c){
     lignes.push('Douleur à 4 ou plus sur '+sp.mouvement+', '+SUSP_DOULEUR_SEANCES+' séances de suite.');
   return `<div style="background:#1a0000;border:1px solid var(--red);border-radius:var(--r-3);padding:14px 16px;margin-bottom:16px">
     <div style="font-size:var(--fs-2xs);color:var(--red-text);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:8px">Entraînement suspendu</div>
-    ${lignes.map(t=>`<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.65;margin-bottom:5px">${escapeHtml(t)}</div>`).join('')}
-    ${sp.actif?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:7px">Depuis ${sp.jours} jour${sp.jours>1?'s':''}. Compteur de semaines gelé à ${sp.streakGele}, rappels coupés, semaines hors du taux de complétion.</div>`:''}
+    ${lignes.map(t=>`<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.65;margin-bottom:6px">${escapeHtml(t)}</div>`).join('')}
+    ${sp.actif?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:8px">Depuis ${sp.jours} jour${sp.jours>1?'s':''}. Compteur de semaines gelé à ${sp.streakGele}, rappels coupés, semaines hors du taux de complétion.</div>`:''}
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:8px">Toi seul peux lever cette pause. RepCore ne le fera jamais à ta place.</div>
     ${dg?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="coachLeverDrapeau('general')">Lever le signalement général</button>`:''}
     ${dr?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="coachLeverDrapeau('articulaire')">Lever le drapeau rouge</button>`:''}
@@ -68630,7 +68640,7 @@ function htmlHabitudes(u,opts){
   if(!l.length) return '';
   const _taux=!!(opts&&opts.taux);
   const auj=localISODate(new Date());
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:10px">
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:10px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Aujourd'hui</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint)">un appui, c'est tout</span>
@@ -68659,7 +68669,7 @@ function htmlHabitudes(u,opts){
 function _htmlHabTaux(u){
   const g=habTauxGlobal(u);
   if(g==null) return '';
-  return `<div style="margin-top:10px;padding-top:9px;border-top:1px solid var(--border);
+  return `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);
       font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
     Moyenne sur ${HAB_FENETRE_JOURS} jours : <strong style="color:${g>=70?'var(--green)':g>=40?'var(--amber)':'var(--text)'}">${g}&nbsp;%</strong>.
     Fenêtre glissante, le jour en cours n'est pas compté.</div>`;
@@ -68672,8 +68682,8 @@ function _htmlHabTaux(u){
 function _htmlHabSemaine(u,h){
   const sem=habSemaine(u,h.cle);
   const n=sem.filter(x=>x===true).length;
-  return `<div style="margin-top:11px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05)">
-    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px">
+  return `<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05)">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px">
       <span style="font-size:var(--fs-2xs);color:var(--sub);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(h.libelle||h.cle)}</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint);flex-shrink:0">${n}/7</span>
     </div>
@@ -68711,7 +68721,7 @@ const HAB_RECOMMANDEES=Object.freeze([
   {cle:'substance',   lib:'Aucune substance', sous:'Tabac, alcool, etc.', ico:'interdit',ton:'rouge'}
 ]);
 let _habReplie=false;
-function _habSvg(p,plein){ return '<svg viewBox="0 0 24 24" '+(plein?'fill="currentColor"':'fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"')+' aria-hidden="true">'+p+'</svg>'; }
+function _habSvg(p,plein){ return '<svg viewBox="0 0 24 24" '+(plein?'fill="currentColor"':'fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="square" stroke-linejoin="miter"')+' aria-hidden="true">'+p+'</svg>'; }
 const HAB_ICO={
   chevron:_habSvg('<path d="M6 9l6 6 6-6"/>'),
   info:_habSvg('<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.8h.01"/>'),
@@ -68858,8 +68868,8 @@ function renderWoReminderCard(){
   const el=document.getElementById('clh-wo-reminder-row');if(!el)return;
   const u=currentUser;
   if(!u._woReminderEnabled){
-    el.innerHTML=`<button onclick="openWoReminderConfig()" style="width:100%;background:transparent;border:1px dashed var(--border);border-radius:var(--r-3);padding:11px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;font-family:Montserrat,sans-serif;color:var(--sub);font-size:var(--fs-xs);font-weight:700;letter-spacing:.8px;margin-bottom:10px">
-      <svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Configurer un rappel séance</span>
+    el.innerHTML=`<button onclick="openWoReminderConfig()" style="width:100%;background:transparent;border:1px dashed var(--border);border-radius:var(--r-3);padding:12px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;font-family:Montserrat,sans-serif;color:var(--sub);font-size:var(--fs-xs);font-weight:700;letter-spacing:.8px;margin-bottom:10px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:18px;height:18px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Configurer un rappel séance</span>
     </button>`;
     return;
   }
@@ -68867,13 +68877,13 @@ function renderWoReminderCard(){
   const days=(u._woReminderDays||[]).map(i=>DS[i]).join(' · ');
   const hh=String(u._woReminderHour??18).padStart(2,'0');
   const mm=String(u._woReminderMin??0).padStart(2,'0');
-  el.innerHTML=`<div style="background:#08100a;border:1px solid #1a3020;border-radius:var(--r-3);padding:11px 16px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+  el.innerHTML=`<div style="background:#08100a;border:1px solid #1a3020;border-radius:var(--r-3);padding:12px 16px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:18px;height:18px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
     <div style="flex:1;min-width:0">
       <div style="font-size:var(--fs-xs);font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.8px">Rappel séance activé</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${hh}:${mm}${_fragmentSiValeur(' · ',days)}</div>
     </div>
-    <button onclick="openWoReminderConfig()" style="background:none;border:1px solid var(--border);border-radius:var(--r-2);padding:5px 10px;color:var(--sub);font-size:var(--fs-xs);cursor:pointer;font-family:Montserrat,sans-serif">⚙️</button>
+    <button onclick="openWoReminderConfig()" style="background:none;border:1px solid var(--border);border-radius:var(--r-2);padding:6px 10px;color:var(--sub);font-size:var(--fs-xs);cursor:pointer;font-family:Montserrat,sans-serif">⚙️</button>
   </div>`;
 }
 function checkWoReminderToday(){
@@ -68910,10 +68920,10 @@ function showWoReminderBanner(){
   const b=document.createElement('div');
   b.id='wo-reminder-banner';
   b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:var(--z-bar);animation:slideDown var(--t-3) var(--c-out)';
-  b.innerHTML=`<div style="background:linear-gradient(135deg,#001a06,#002810);border-bottom:2px solid var(--green);padding:14px 18px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openSessionPicker();document.getElementById('wo-reminder-banner')?.remove()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+  b.innerHTML=`<div style="background:linear-gradient(135deg,#001a06,#002810);border-bottom:2px solid var(--green);padding:14px 20px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openSessionPicker();document.getElementById('wo-reminder-banner')?.remove()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div style="font-size:var(--fs-2xl);flex-shrink:0">💪</div>
     <div style="flex:1;min-width:0">
-      <div style="font-size:var(--fs-xs);font-weight:900;color:var(--green);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px">Séance du jour</div>
+      <div style="font-size:var(--fs-xs);font-weight:900;color:var(--green);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Séance du jour</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">C'est l'heure de t'entraîner ! Clique pour démarrer.</div>
     </div>
     <button onclick="event.stopPropagation();document.getElementById('wo-reminder-banner')?.remove()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-xl);cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1">✕</button>
@@ -68929,17 +68939,17 @@ function openWoReminderConfig(){
     (u.sessions_config||[]).reduce((a,s,i)=>{if(s.active)a.push(i);return a;},[])
   );
   const DS=['L','Ma','Me','J','V','S','D'];
-  const dayBtns=DS.map((d,i)=>`<button id="wrd-day-${i}" onclick="wrdToggleDay(${i})" style="flex:1;min-width:0;border:1px solid ${curDays.includes(i)?'var(--red)':'var(--border)'};border-radius:var(--r-2);padding:9px 2px;background:${curDays.includes(i)?'#1a0000':'transparent'};color:${curDays.includes(i)?'var(--red)':'var(--sub)'};font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer">${d}</button>`).join('');
+  const dayBtns=DS.map((d,i)=>`<button id="wrd-day-${i}" onclick="wrdToggleDay(${i})" style="flex:1;min-width:0;border:1px solid ${curDays.includes(i)?'var(--red)':'var(--border)'};border-radius:var(--r-2);padding:10px 2px;background:${curDays.includes(i)?'#1a0000':'transparent'};color:${curDays.includes(i)?'var(--red)':'var(--sub)'};font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer">${d}</button>`).join('');
   const hourOpts=Array.from({length:17},(_,i)=>i+6).map(h=>`<option value="${h}" ${h===curH?'selected':''}>${String(h).padStart(2,'0')}h</option>`).join('');
   document.getElementById('wo-reminder-config')?.remove();
   document.body.insertAdjacentHTML('beforeend',`<div id="wo-reminder-config" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center" onclick="if(event.target===this)this.remove()">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px 36px;width:100%;max-width:480px;animation:slideUp var(--t-3) var(--c-out)">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px 40px;width:100%;max-width:480px;animation:slideUp var(--t-3) var(--c-out)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <h2 style="margin:0;font-size:var(--fs-lg);display:flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Rappel séance</h2>
+      <h2 style="margin:0;font-size:var(--fs-lg);display:flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Rappel séance</h2>
       <button onclick="document.getElementById('wo-reminder-config').remove()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;line-height:1">✕</button>
     </div>
     <label style="font-size:var(--fs-xs);display:block;margin-bottom:6px">Heure du rappel</label>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
       <select id="wrd-hour" style="flex:1;font-size:var(--fs-lg);font-family:var(--pile-titre);letter-spacing:1px;padding:10px;background:var(--surface-1);border:1px solid var(--border);color:var(--text);border-radius:var(--r-2)">${hourOpts}</select>
       <div style="display:flex;flex-direction:column;gap:6px">
         <button id="wrd-min-0" onclick="wrdSetMin(0)" style="border-radius:var(--r-1);padding:6px 12px;font-size:var(--fs-xs);font-weight:800;font-family:Montserrat,sans-serif;cursor:pointer;background:${curM===0?'var(--red)':'transparent'};border:1px solid ${curM===0?'var(--red)':'var(--border)'};color:${curM===0?'var(--text)':'var(--sub)'}">:00</button>
@@ -68947,7 +68957,7 @@ function openWoReminderConfig(){
       </div>
     </div>
     <label style="font-size:var(--fs-xs);display:block;margin-bottom:6px">Jours d'entraînement</label>
-    <div style="display:flex;gap:5px;margin-bottom:22px">${dayBtns}</div>
+    <div style="display:flex;gap:6px;margin-bottom:24px">${dayBtns}</div>
     <button class="btn btn-red" onclick="saveWoReminderConfig()" style="margin-bottom:10px;letter-spacing:1.5px">Activer le rappel</button>
     ${u._woReminderEnabled?`<button class="btn btn-outline" onclick="disableWoReminder()" style="font-size:var(--fs-xs);color:var(--sub)">Désactiver les rappels</button>`:''}
   </div></div>`);
@@ -69071,7 +69081,7 @@ function _htmlInvitationNotif(etat,phrase){
     '<div style="background:var(--info-bg);border:1px solid var(--info-border);'
     +'border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px">'
     +'<div style="font-size:var(--fs-xs);color:var(--info);letter-spacing:3px;font-weight:800;'
-    +'text-transform:uppercase;margin-bottom:5px">'+titre+'</div>'+corps+actions+'</div>';
+    +'text-transform:uppercase;margin-bottom:6px">'+titre+'</div>'+corps+actions+'</div>';
   // LA PROMESSE EST NOMMEE, ET ELLE VIENT DE SES PROPRES CRENEAUX. Sans
   // planning enregistre, on ne promet pas un jour qu'on ne connait pas : la
   // phrase reste vraie, simplement moins precise.
@@ -69324,7 +69334,7 @@ function htmlReglagesPush(u,etat){
       +'<span style="flex:1;min-width:0"><span style="display:block;font-weight:700;font-size:var(--fs-sm)">'+escapeHtml(t.titre)+'</span>'
       +'<span style="display:block;font-size:var(--fs-xs);color:var(--sub);line-height:1.5">'+escapeHtml(t.txt)+'</span></span></label>';
   }).join('');
-  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:18px">'
+  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:20px">'
     +'<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Notifications</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:6px">Une au plus par jour, et jamais entre 21 h et 8 h.</div>'
     +'<div id="cr-push-etat" style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;font-weight:800;margin-bottom:10px">'+escapeHtml(ligneEtat)+'</div>'
@@ -69425,7 +69435,7 @@ function _htmlInvitationInstall(etat,aussiNotif){
   return '<div style="background:var(--info-bg);border:1px solid var(--info-border);'
     +'border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px">'
     +'<div style="font-size:var(--fs-xs);color:var(--info);letter-spacing:3px;font-weight:800;'
-    +'text-transform:uppercase;margin-bottom:5px">Dans la salle</div>'
+    +'text-transform:uppercase;margin-bottom:6px">Dans la salle</div>'
     +'<div style="font-size:var(--fs-md);color:var(--text-strong);line-height:1.5;margin-bottom:4px">'
     +'RepCore fonctionne <strong style="color:var(--text)">sans réseau</strong> : '
     +'au sous-sol ou dans un coin sans barre, ta séance s’enregistre quand même.</div>'
@@ -73057,7 +73067,7 @@ function accuserEncartOsseux(){
 function _htmlEncartOsseux(user){
   const u=user||currentUser;
   if(!menopauseeOuAgee(u)||((u||{}).encartOsseuxVu)) return '';
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px 14px;margin-bottom:14px">
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-bottom:14px">
     <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(MENO_ENCART_OSSEUX)}</div>
     <button onclick="accuserEncartOsseux()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:1px">J'ai compris</button>
   </div>`;
@@ -73798,7 +73808,7 @@ function renderVolume(){
 
   if(!c.seances){
     document.getElementById('progress-content').innerHTML=nav+tete
-      +`<div class="sub" style="font-size:var(--fs-sm);background:var(--surface-2);border-radius:var(--r-3);padding:18px;text-align:center;line-height:1.6">
+      +`<div class="sub" style="font-size:var(--fs-sm);background:var(--surface-2);border-radius:var(--r-3);padding:20px;text-align:center;line-height:1.6">
           ${_volDecalage===0?'Fais ta première séance, ton volume apparaîtra ici.':'Aucune séance cette semaine-là.'}
         </div>`+bandeau;
     return;
@@ -73822,8 +73832,8 @@ function renderVolume(){
       if(Math.abs(d)>=0.5) delta=`<span style="font-size:var(--fs-xs);font-weight:800;color:${d>0?'var(--success)':'var(--orange)'};margin-left:6px">${signe}${volAffiche(d)}</span>`;
       else delta=`<span style="font-size:var(--fs-xs);color:var(--text-faint);margin-left:6px">stable</span>`;
     }
-    return `<div style="margin-bottom:13px">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px">
+    return `<div style="margin-bottom:14px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px">
         <span style="font-size:var(--fs-sm);font-weight:800;color:${(MUSCLES[m]||{}).c||'var(--text)'}">${(MUSCLES[m]||{}).lib||m}${(()=>{ const _s=(rep&&rep.source)||'table'; if(_s==='table') return ''; return `<span style="font-weight:400;color:var(--text-faint);font-size:var(--fs-2xs)"> · ${_s==='perso'?'ajusté sur ses retours':'fixé par toi'}</span>`; })()}</span>
         <span style="font-size:var(--fs-xs);color:var(--sub);white-space:nowrap">${volAffiche(n)} série${n>=2?'s':''}${freq?' · '+freq+'×/sem':''}${delta}</span>
       </div>
@@ -73861,7 +73871,7 @@ function renderVolume(){
   const conv=_techniquesPratiquees(u).length
     ? `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6">
         ${escapeHtml(TEXTE_CONVENTION_TECHNIQUE)}
-        <div style="margin-top:5px">${_techniquesPratiquees(u).map(f=>escapeHtml(LIB_FAMILLE[f]||f)+' : '+_fmtPoidsTech(poidsTechnique(f,u))+(poidsTechniqueSurcharge(f,u)!=null?' (ajusté)':'')).join(' · ')}</div>
+        <div style="margin-top:6px">${_techniquesPratiquees(u).map(f=>escapeHtml(LIB_FAMILLE[f]||f)+' : '+_fmtPoidsTech(poidsTechnique(f,u))+(poidsTechniqueSurcharge(f,u)!=null?' (ajusté)':'')).join(' · ')}</div>
       </div>` : '';
   // Charge axiale : sous les muscles, comme demandé, et sans repère absolu.
   const axial=_htmlChargeAxiale(u,_volDecalage,null,{});
@@ -74055,7 +74065,7 @@ function _htmlChargeAxiale(user,decalageSemaines,grille,options){
     lignes.push(_fmtAxial(s.nSeriesNonNotees)+' série'+(s.nSeriesNonNotees>=2?'s':'')
       +' sur des schémas dont la charge lombaire n\'est pas notée');
   const signal=(v.variation!=null&&v.variation>=AXIAL_HAUSSE_SIGNAL)
-    ? '<div style="margin-top:5px">Ta charge lombaire augmente vite cette semaine. '
+    ? '<div style="margin-top:6px">Ta charge lombaire augmente vite cette semaine. '
       +escapeHtml(AXIAL_NOTE_REPERE)+'</div>'
     : '';
   const disclaimer=o.disclaimer
@@ -74100,12 +74110,12 @@ function _htmlTonnage(user,decalage){
         :`<div class="rc-barre-v" data-bar-h="${h}" style="height:0;min-height:4px;background:linear-gradient(180deg,var(--red),#7a0000);border-radius:var(--r-1) var(--r-1) 0 0;transition:height 420ms var(--c-out) var(--rcb-d,0ms)"></div>`)
       +`</div>`;}).join('');
   if(!hist.some(x=>!x.vide)) return '';
-  return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px">
+  return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Tonnage</span>
       <span style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${t.nSeances?`<span id="rc-tonnage-num" style="font-variant-numeric:tabular-nums">${_fmtKg(t.kg)}</span>`:'-'}<span style="font-size:var(--fs-2xs);color:var(--sub);font-weight:600">${t.nSeances?' · '+t.nSeances+' séance'+(t.nSeances>1?'s':''):' aucune séance'}</span></span>
     </div>
-    <div style="display:flex;align-items:flex-end;gap:3px;height:54px;margin-bottom:6px">${barres}</div>
+    <div style="display:flex;align-items:flex-end;gap:4px;height:54px;margin-bottom:6px">${barres}</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5">${escapeHtml(TONNAGE_AVERTISSEMENT)}</div>
   </div>`;
 }
@@ -74130,9 +74140,9 @@ function _htmlRecords(user){
     .filter(x=>x.rec&&x.rec.meilleureCharge);
   if(!lignes.length) return '';
   const dt=ms=>new Date(ms).toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
-  return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:9px">Records</div>
-    ${lignes.map(x=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:7px">
+  return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Records</div>
+    ${lignes.map(x=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);color:var(--text-strong);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}</span>
       <span style="font-size:var(--fs-xs);font-weight:800;color:var(--text);white-space:nowrap">${_fmtKg(x.rec.meilleureCharge.kg)}${x.rec.meilleureCharge.reps?` × ${x.rec.meilleureCharge.reps}`:''}<span style="font-size:var(--fs-2xs);color:var(--text-faint);font-weight:600"> · ${dt(x.rec.meilleureCharge.date)}</span></span>
     </div>`).join('')}
@@ -74287,7 +74297,7 @@ function _htmlEcartRir(c){
     const mot=dur?'plus dur que demandé':fac?'plus facile que demandé':'conforme';
     const col=dur?'var(--orange)':fac?'var(--orange)':'var(--green)';
     const nb=v=>String(v).replace('.',',');
-    return `<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:5px">
+    return `<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:6px">
       <span style="font-size:var(--fs-2xs);color:var(--text-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}</span>
       <span style="font-size:var(--fs-2xs);color:${col};white-space:nowrap">${mot} <span style="color:var(--text-faint)">· ${nb(x.realise)} pour ${nb(x.prescrit)}</span></span>
     </div>`;
@@ -74296,7 +74306,7 @@ function _htmlEcartRir(c){
   return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
     <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Intensité demandée · faite</div>
     ${(horsCible.length?horsCible:l).slice(0,RIR_ECART_MAX).map(ligne).join('')}
-    ${horsCible.length?'':`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:5px">Tout est conforme à la consigne.</div>`}
+    ${horsCible.length?'':`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px">Tout est conforme à la consigne.</div>`}
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px;line-height:1.5">Un chiffre plus haut que la consigne veut dire plus facile : il reste plus de répétitions en réserve. Sur les ${RIR_DERNIERES} dernières séances.</div>
   </div>`;
 }
@@ -74342,11 +74352,11 @@ function _htmlFinProgEx(c){
     :(x.restantes+' semaines restantes');
   return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
     <div style="font-size:var(--fs-2xs);color:var(--orange);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Programmation à renouveler</div>
-    ${l.slice(0,RIR_ECART_MAX).map(x=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:5px">
+    ${l.slice(0,RIR_ECART_MAX).map(x=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:6px">
       <span style="font-size:var(--fs-2xs);color:var(--text-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}${x.jour?`<span style="color:var(--text-faint)"> · ${escapeHtml(x.jour)}</span>`:''}</span>
       <span style="font-size:var(--fs-2xs);color:var(--orange);white-space:nowrap">${dit(x)}</span>
     </div>`).join('')}
-    ${l.length>RIR_ECART_MAX?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:5px">et ${l.length-RIR_ECART_MAX} de plus</div>`:''}
+    ${l.length>RIR_ECART_MAX?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px">et ${l.length-RIR_ECART_MAX} de plus</div>`:''}
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px;line-height:1.5">Sans nouvelle programmation, ces exercices repasseront en charge libre et l’athlète notera de nouveau ses répétitions en réserve, comme avant.</div>
   </div>`;
 }
@@ -74356,12 +74366,12 @@ function _htmlEcartPrescrit(c){
   if(!l.length) return '';
   const dits=l.slice(0,6);
   return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
-    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:5px">Prescrit / réalisé</div>
-    ${dits.map(x=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:var(--fs-xs);color:var(--text-strong);margin-bottom:3px">
+    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Prescrit / réalisé</div>
+    ${dits.map(x=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:var(--fs-xs);color:var(--text-strong);margin-bottom:4px">
       <span>${escapeHtml((MUSCLES[x.muscle]||{}).lib||x.muscle)}</span>
       <span style="white-space:nowrap;color:var(--sub)">${volAffiche(x.realise)} / ${volAffiche(x.prescrit)} · ${Math.round(x.part*100)} %</span>
     </div>`).join('')}
-    ${l.length>dits.length?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:3px">et ${l.length-dits.length} autre${l.length-dits.length>1?'s':''}</div>`:''}
+    ${l.length>dits.length?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">et ${l.length-dits.length} autre${l.length-dits.length>1?'s':''}</div>`:''}
   </div>`;
 }
 
@@ -74409,7 +74419,7 @@ function renderVolumeCoach(c){
     // _calculSemaine est memoisee : cet appel relit l’objet que `res` porte
     // deja, il n’en calcule pas un second.
     const _fq=_libFrequence(c,cle,m);
-    return `<div style="margin-bottom:9px">
+    return `<div style="margin-bottom:10px">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px">
         <span style="font-size:var(--fs-xs);font-weight:800;color:${(MUSCLES[m]||{}).c||'var(--text)'}">${(MUSCLES[m]||{}).lib||m}${(()=>{ const _s=(rep&&rep.source)||'table'; if(_s==='table') return ''; return `<span style="font-weight:400;color:var(--text-faint);font-size:var(--fs-2xs)"> · ${_s==='perso'?'ajusté sur ses retours':'fixé par toi'}</span>`; })()}</span>
         <span style="font-size:var(--fs-2xs);color:${zo?zo.c:'var(--sub)'};white-space:nowrap">${volAffiche(n)} série${n>=2?'s':''}${_fq?' · <span style="color:var(--sub)">'+escapeHtml(_fq)+'</span>':''} · ${zo?zo.lib:'pas de repère'}</span>
@@ -74430,7 +74440,7 @@ function renderVolumeCoach(c){
   const _axPrio=axialPrioritaire(c);
   const _axial=_htmlChargeAxiale(c,0,null,{disclaimer:_axPrio});
   z.innerHTML=(_axPrio?_axial:'')
-    +`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">
+    +`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Volume 7 jours</span>
       <button onclick="_volCoachDeplie=!_volCoachDeplie;renderVolumeCoach(getOwnedClient(currentClientId))" style="background:none;border:none;color:var(--sub);font-size:var(--fs-2xs);font-family:Montserrat,sans-serif;cursor:pointer;text-decoration:underline;padding:0">${_volCoachDeplie?'réduire':'voir tout'}</button>
@@ -74468,12 +74478,12 @@ function _htmlCarteDecharge(c){
     :'Décharge suggérée';
   const sem=(typeof pr.semaineIndex==='number')?('semaine '+(pr.semaineIndex+1)+' du bloc')
     :('semaine '+escapeHtml(String(pr.semaineProposee)));
-  return `<div style="margin-top:10px;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:12px 13px">
+  return `<div style="margin-top:10px;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:12px 14px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--info);text-transform:uppercase;margin-bottom:6px">`
     +escapeHtml(titre)+`</div>
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:8px">Sur la `
     +escapeHtml(sem)+`. Proposition, pas décision : rien n'est appliqué tant que tu ne cliques pas.</div>`
-    +f.motifs.map(m=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;border-left:2px solid var(--info);padding-left:9px;margin-bottom:5px">`
+    +f.motifs.map(m=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;border-left:1px solid var(--border);padding-left:10px;margin-bottom:6px">`
       +escapeHtml(String(m.libelle||''))+` · <b>`+escapeHtml(String(m.valeur))+`</b> `
       +escapeHtml(String(m.unite||''))+`</div>`).join('')
     +`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
@@ -74616,7 +74626,7 @@ function ouvrirAideRaccourcis(){
     n.style.cssText='position:fixed;inset:0;z-index:var(--z-modal);background:var(--scrim);'
       +'display:flex;align-items:center;justify-content:center;padding:20px';
     n.innerHTML='<div style="background:var(--surface-2);border:1px solid var(--border);'
-      +'border-radius:var(--r-4);padding:18px 20px;max-width:340px;width:100%">'
+      +'border-radius:var(--r-4);padding:20px 20px;max-width:340px;width:100%">'
       +'<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;'
       +'text-transform:uppercase;color:var(--sub);margin-bottom:12px">Raccourcis clavier</div>'
       +(l.length?l.map(r=>'<div style="display:flex;align-items:baseline;gap:12px;'
@@ -74624,7 +74634,7 @@ function ouvrirAideRaccourcis(){
         +'<span style="font-size:var(--fs-xs);color:var(--text-strong)">'+escapeHtml(r.dit)+'</span>'
         +'<kbd style="font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;'
         +'background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-1);'
-        +'padding:3px 8px;color:var(--text);white-space:nowrap">'
+        +'padding:4px 8px;color:var(--text);white-space:nowrap">'
         +escapeHtml(r.touche.toUpperCase())+'</kbd></div>').join('')
         :'<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55">'
          +'Aucun raccourci sur cet écran.</div>')
@@ -74720,7 +74730,7 @@ function _htmlBoutonDecharge(c){
          d ecriture dans tout le fichier : la case a cocher d un creneau, dans
          l editeur de seances. Sept clics par athlete pour defaire un geste qui
          en coutait un. -->
-    <div style="display:flex;gap:7px;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
       ${dejaTout?'':`<button class="btn btn-outline btn-sm" onclick="programmerDecharge()" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)">Programmer une semaine de décharge</button>`}
       ${enDecharge?`<button class="btn btn-outline btn-sm" onclick="programmerDecharge(false)" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)">Retirer la décharge</button>`:''}
     </div>
@@ -74825,7 +74835,7 @@ function loadDechargeAthletes(){
   const _suivis=athletes.filter(estSuivi);
   const _liste=_suivis.length?_suivis:athletes;
   const _caches=athletes.length-_liste.length;
-  el.innerHTML=(_caches?'<div style="padding:9px 10px;font-size:var(--fs-2xs);color:var(--text-faint);'
+  el.innerHTML=(_caches?'<div style="padding:10px 10px;font-size:var(--fs-2xs);color:var(--text-faint);'
       +'border-bottom:1px solid #242424;line-height:1.5">'+_caches+' athlète'+(_caches>1?'s':'')
       +' sans suivi ne sont pas listés ici.</div>':'')
     +_liste.map(a=>{
@@ -74834,7 +74844,7 @@ function loadDechargeAthletes(){
     // le récapitulatif qui dira pourquoi. Le masquer ferait croire au coach
     // qu'il n'existe pas.
     const empeche=(!a.email?'dossier non synchronisé':(!n?'aucun créneau actif':''));
-    return `<div style="display:flex;align-items:center;gap:12px;border-bottom:1px solid #242424;padding:11px 10px;border-left:3px solid ${ETAT_FILET[etatAthlete(a)]||'#666666'};border-radius:0 8px 8px 0;background:linear-gradient(168deg,#141414,#0d0d0d);margin-bottom:5px">
+    return `<div style="display:flex;align-items:center;gap:12px;border-bottom:1px solid #242424;padding:12px 10px;border-left:3px solid ${ETAT_FILET[etatAthlete(a)]||'#666666'};border-radius:0 8px 8px 0;background:linear-gradient(168deg,#141414,#0d0d0d);margin-bottom:6px">
       <div class="avatar" style="width:32px;height:32px;font-size:12px;flex-shrink:0">${escapeHtml(ini(a.fname,a.lname))}</div>
       <input type="checkbox" id="cdg-cb-${escapeHtml(a.id)}" value="${escapeHtml(a.id)}" onchange="_cdgMajBouton()" style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <label for="cdg-cb-${escapeHtml(a.id)}" style="flex:1;cursor:pointer;min-width:0">
@@ -75331,12 +75341,12 @@ function _htmlRatioPousseeTirage(cfg,user){
   if(!r) return '';
   const nb=v=>String(v).replace('.',',');
   const mot=lectureRatioPousseeTirage(r.ratio);
-  return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:9px">
+  return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
       <span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;text-transform:uppercase;font-weight:800">Poussée / tirage</span>
       <span style="font-size:var(--fs-xs);color:var(--text-strong);white-space:nowrap">${r.ratio!=null?nb(r.ratio):'-'}${mot?`<span style="color:var(--orange)"> · ${mot}</span>`:''} · ${r.poussee} / ${r.tirage} séries</span>
     </div>
-    ${r.horsSchema?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:3px">${r.horsSchema} série${r.horsSchema>1?'s':''} sur exercice au schéma non résolu, hors du compte.</div>`:''}
+    ${r.horsSchema?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">${r.horsSchema} série${r.horsSchema>1?'s':''} sur exercice au schéma non résolu, hors du compte.</div>`:''}
   </div>`;
 }
 function renderVolumePrescrit(cfg,user){
@@ -75347,7 +75357,7 @@ function renderVolumePrescrit(cfg,user){
   const lignes=Object.keys(v.muscles).filter(m=>v.muscles[m]>=0.5)
     .sort((a,b)=>v.muscles[b]-v.muscles[a]);
   if(!lignes.length){ z.innerHTML=''; return; }
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:14px">
+  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:4px">Volume prescrit</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-bottom:10px;line-height:1.5">
       ${v.avecConsigne
@@ -75360,7 +75370,7 @@ function renderVolumePrescrit(cfg,user){
     ${lignes.map(m=>{
       const rep=reperesEffectifs(u,m);
       const zo=zoneVolume(v.muscles[m],rep,u);
-      return `<div style="margin-bottom:9px">
+      return `<div style="margin-bottom:10px">
         <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px">
           <span style="font-size:var(--fs-xs);font-weight:800;color:${(MUSCLES[m]||{}).c||'var(--text)'}">${(MUSCLES[m]||{}).lib||m}${(()=>{ const _s=(rep&&rep.source)||'table'; if(_s==='table') return ''; return `<span style="font-weight:400;color:var(--text-faint);font-size:var(--fs-2xs)"> · ${_s==='perso'?'ajusté sur ses retours':'fixé par toi'}</span>`; })()}</span>
           <span style="font-size:var(--fs-2xs);color:${zo?zo.c:'var(--sub)'};white-space:nowrap">${volAffiche(v.muscles[m])} série${v.muscles[m]>=2?'s':''}${zo?' · '+zo.lib:''}</span>
@@ -75597,8 +75607,8 @@ function showProgressTab(tab,btn,sansMemo){
         <div class="evo-titre" style="letter-spacing:1.5px;margin-bottom:10px">${title}</div>
         <canvas id="pie-${idx}" style="max-width:110px;margin:0 auto;display:block"></canvas>
         <div style="margin-top:8px;display:flex;justify-content:center;gap:12px">
-          <div style="text-align:center"><div style="width:8px;height:8px;border-radius:var(--r-full);background:${mgC};margin:0 auto 3px"></div><div style="font-size:var(--fs-xs);color:var(--sub)">MG</div><div style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${mg}kg</div></div>
-          <div style="text-align:center"><div style="width:8px;height:8px;border-radius:var(--r-full);background:#22c55e;margin:0 auto 3px"></div><div style="font-size:var(--fs-xs);color:var(--sub)">MM</div><div style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${mm}kg</div></div>
+          <div style="text-align:center"><div style="width:8px;height:8px;border-radius:var(--r-full);background:${mgC};margin:0 auto 4px"></div><div style="font-size:var(--fs-xs);color:var(--sub)">MG</div><div style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${mg}kg</div></div>
+          <div style="text-align:center"><div style="width:8px;height:8px;border-radius:var(--r-full);background:#22c55e;margin:0 auto 4px"></div><div style="font-size:var(--fs-xs);color:var(--sub)">MM</div><div style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${mm}kg</div></div>
         </div>
       </div>`;
     };
@@ -75614,14 +75624,14 @@ function showProgressTab(tab,btn,sansMemo){
           <div style="flex:1;min-width:80px">
             <label style="font-size:var(--fs-xs)">Sexe</label>
             <div style="display:flex;gap:4px;margin-top:6px">
-              <button onclick="setEvolGender('H')" style="flex:1;padding:9px;border-radius:var(--r-1);border:1px solid ${!female?'var(--red)':'var(--border)'};background:${!female?'#1a0000':'#111'};color:${!female?'var(--red)':'#555'};font-size:var(--fs-md);font-weight:900;cursor:pointer;letter-spacing:1px">H</button>
-              <button onclick="setEvolGender('F')" style="flex:1;padding:9px;border-radius:var(--r-1);border:1px solid ${female?'var(--red)':'var(--border)'};background:${female?'#1a0000':'#111'};color:${female?'var(--red)':'#555'};font-size:var(--fs-md);font-weight:900;cursor:pointer;letter-spacing:1px">F</button>
+              <button onclick="setEvolGender('H')" style="flex:1;padding:10px;border-radius:var(--r-1);border:1px solid ${!female?'var(--red)':'var(--border)'};background:${!female?'#1a0000':'#111'};color:${!female?'var(--red)':'#555'};font-size:var(--fs-md);font-weight:900;cursor:pointer;letter-spacing:1px">H</button>
+              <button onclick="setEvolGender('F')" style="flex:1;padding:10px;border-radius:var(--r-1);border:1px solid ${female?'var(--red)':'var(--border)'};background:${female?'#1a0000':'#111'};color:${female?'var(--red)':'#555'};font-size:var(--fs-md);font-weight:900;cursor:pointer;letter-spacing:1px">F</button>
             </div>
           </div>
           <button class="btn btn-red btn-sm" onclick="refreshMG()" style="height:40px;padding:0 16px;align-self:flex-end;letter-spacing:1px">Enregistrer</button>
         </div>
         ${missingHeight?`<div style="margin-top:10px;padding:8px 10px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);font-size:var(--fs-xs);color:var(--warning);line-height:1.5">Renseigne ta taille ci-dessus pour calculer ta masse grasse.</div>`:''}
-        ${msgMesures?`<div class="mg-manque" style="margin-top:10px;padding:9px 11px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);font-size:var(--fs-xs);color:var(--text-strong);line-height:1.55">${escapeHtml(msgMesures)}</div>`:''}
+        ${msgMesures?`<div class="mg-manque" style="margin-top:10px;padding:10px 12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);font-size:var(--fs-xs);color:var(--text-strong);line-height:1.55">${escapeHtml(msgMesures)}</div>`:''}
         ${msgAnciens?`<div class="mg-anciens" style="margin-top:8px;font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5">${escapeHtml(msgAnciens)}</div>`:''}
       </div>
       <div style="display:flex;gap:8px;margin-bottom:14px">
@@ -75640,7 +75650,7 @@ function showProgressTab(tab,btn,sansMemo){
         <div class="evo-titre">% de masse grasse corporelle</div>
         <canvas id="mg-chart" height="150" style="width:100%;display:block"></canvas>
       </div>
-      ${bl.length>=1?`<div class="evo-carte" style="display:flex;gap:12px;padding:18px 16px;justify-content:center">
+      ${bl.length>=1?`<div class="evo-carte" style="display:flex;gap:12px;padding:20px 16px;justify-content:center">
         ${pieSec(0,'Bilan 1')}
         ${bl.length>1?pieSec(bl.length-1,'Bilan '+bl.length):''}
       </div>`:''}
@@ -75714,7 +75724,7 @@ function showProgressTab(tab,btn,sansMemo){
     </div>
     ${_blocFormePerf}
     <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirRapport(currentUser)">Rapport de la période</button>
-    <div id="perf-etats" style="margin-bottom:18px">
+    <div id="perf-etats" style="margin-bottom:20px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Progression par exercice</div>
       ${_lst.length?_lst.map((x,i)=>_ligneEtat(x,i===_iE1rm)).join(''):'<div class="sub" style="font-size:var(--fs-sm)">Aucun exercice suivi pour l\'instant.</div>'}
     </div>
@@ -75759,33 +75769,33 @@ function showProgressTab(tab,btn,sansMemo){
     // la place réellement disponible mesurée, et une seule écriture suffit.
     // MON AVANT/APRÈS : dès deux bilans à photo du même angle, en tête.
     let html=htmlBoutonAvantApres(currentUser)+`<div data-fresque class="fq-carte" style="--fq:${cellW}px;background:linear-gradient(160deg,#141414 0%,#0b0b0b 55%,#080808 100%);border:1px solid #202020;border-radius:var(--r-4);position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 14px 34px rgba(0,0,0,.55);animation:fadeInUp var(--t-3) var(--c-out)">
-      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 17px,rgba(255,255,255,.016) 17px,rgba(255,255,255,.016) 18px);pointer-events:none"></div>
-      <div style="position:absolute;left:-16px;top:34px;width:66px;height:150px;background:repeating-linear-gradient(-58deg,#E02020,#E02020 9px,transparent 9px,transparent 22px);opacity:.4;pointer-events:none;z-index:0"></div>
-      <div style="position:absolute;right:-16px;bottom:44px;width:66px;height:150px;background:repeating-linear-gradient(-58deg,#E02020,#E02020 9px,transparent 9px,transparent 22px);opacity:.4;pointer-events:none;z-index:0"></div>
+      
+      <div style="position:absolute;left:-16px;top:34px;width:66px;height:150px;background:none;opacity:.4;pointer-events:none;z-index:0"></div>
+      <div style="position:absolute;right:-16px;bottom:44px;width:66px;height:150px;background:none;opacity:.4;pointer-events:none;z-index:0"></div>
       <div style="position:relative;z-index:1">
         <!-- Titre facon affiche -->
         <div style="text-align:center;margin-bottom:6px">
-          <div style="display:flex;align-items:center;justify-content:center;gap:9px;margin-bottom:7px">
+          <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px">
             <div style="flex:1;max-width:52px;height:1px;background:linear-gradient(90deg,transparent,rgba(224,32,32,.85))"></div>
             <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:4px;color:var(--red-text);text-transform:uppercase;white-space:nowrap;--halo-c:rgba(224,32,32,.65);text-shadow:var(--halo-1)">RepCore</div>
             <div style="flex:1;max-width:52px;height:1px;background:linear-gradient(90deg,rgba(224,32,32,.85),transparent)"></div>
           </div>
           <div class="fq-titre" style="font-family:var(--pile-titre);line-height:.96;letter-spacing:2px;color:var(--text);text-shadow:var(--halo-3),0 0 44px rgba(224,32,32,.35)">MA TRANSFORMATION</div>
-          <div style="width:46px;height:2.5px;background:linear-gradient(90deg,#ff3b30,#8d0000);border-radius:var(--r-1);margin:9px auto 0;box-shadow:0 0 12px rgba(224,32,32,.85)"></div>
-          <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2.8px;color:#7a7a7a;text-transform:uppercase;margin-top:8px">${period?period+' de travail':'Suivi photo'} &nbsp;·&nbsp; ${bl.length} bilan${bl.length>1?'s':''}</div>
+          <div style="width:46px;height:2.5px;background:linear-gradient(90deg,#ff3b30,#8d0000);border-radius:var(--r-1);margin:10px auto 0;box-shadow:0 0 12px rgba(224,32,32,.85)"></div>
+          <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2.8px;color:var(--text-faint);text-transform:uppercase;margin-top:8px">${period?period+' de travail':'Suivi photo'} &nbsp;·&nbsp; ${bl.length} bilan${bl.length>1?'s':''}</div>
         </div>
-        ${dW!=null?`<div style="display:flex;justify-content:center;gap:9px;margin:11px 0 13px">
+        ${dW!=null?`<div style="display:flex;justify-content:center;gap:10px;margin:12px 0 14px">
           <div style="flex:1;max-width:112px;background:linear-gradient(180deg,#131313,#0b0b0b);border:1px solid var(--border);border-radius:var(--r-3);padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)">
             <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:#8a8a8a">${wFirst}<span style="font-size:var(--fs-xs)">kg</span></div>
-            <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:var(--text-dim);margin-top:3px;font-weight:800">DÉPART</div>
+            <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:var(--text-dim);margin-top:4px;font-weight:800">DÉPART</div>
           </div>
           <div style="flex:1;max-width:112px;background:linear-gradient(160deg,#c10000,#6d0000);border:1px solid rgba(255,90,90,.42);border-radius:var(--r-3);padding:8px 6px;text-align:center;box-shadow:0 0 20px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18)">
             <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:var(--text);text-shadow:var(--halo-2)">${wLast}<span style="font-size:var(--fs-xs)">kg</span></div>
-            <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:rgba(255,255,255,.8);margin-top:3px;font-weight:800">AUJOURD'HUI</div>
+            <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:rgba(255,255,255,.8);margin-top:4px;font-weight:800">AUJOURD'HUI</div>
           </div>
           <div style="flex:1;max-width:112px;background:linear-gradient(180deg,#131313,#0b0b0b);border:1px solid ${dCol}44;border-radius:var(--r-3);padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 0 16px ${dCol}22">
             <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:${dCol};--halo-c:${dCol};text-shadow:var(--halo-2)bb">${dW>0?'+':''}${dW}<span style="font-size:var(--fs-xs)">kg</span></div>
-            <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:${dCol}aa;margin-top:3px;font-weight:800">ÉVOLUTION</div>
+            <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:${dCol}aa;margin-top:4px;font-weight:800">ÉVOLUTION</div>
           </div>
         </div>`:'<div style="height:8px"></div>'}
         <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px" data-scroll-fade>
@@ -75794,17 +75804,17 @@ function showProgressTab(tab,btn,sansMemo){
               <td style="padding:4px 6px;min-width:56px"></td>
               ${bl.map((_,i)=>{
                 const isLast=i===bl.length-1;
-                return `<td style="padding:4px 4px 7px;text-align:center;min-width:var(--fq)">
-                  <div style="display:inline-block;padding:3px 9px;border-radius:var(--r-2);background:${isLast?'linear-gradient(160deg,#c10000,#6d0000)':'#141414'};border:1px solid ${isLast?'rgba(255,90,90,.45)':'#222'};box-shadow:${isLast?'0 0 14px rgba(224,32,32,.5)':'none'}">
+                return `<td style="padding:4px 4px 8px;text-align:center;min-width:var(--fq)">
+                  <div style="display:inline-block;padding:4px 10px;border-radius:var(--r-2);background:${isLast?'linear-gradient(160deg,#c10000,#6d0000)':'#141414'};border:1px solid ${isLast?'rgba(255,90,90,.45)':'#222'};box-shadow:${isLast?'0 0 14px rgba(224,32,32,.5)':'none'}">
                     <span style="font-family:var(--pile-titre);font-size:var(--fs-md);letter-spacing:1.5px;color:${isLast?'var(--text)':'#7a7a7a'};${isLast?'text-shadow:var(--halo-1)':''}">B${i+1}</span>
                   </div>
-                  <div style="font-size:var(--fs-xs);font-weight:800;color:${isLast?'#ff7a7a':'#3f3f3f'};margin-top:3px;letter-spacing:.5px">${getBW(bl[i])?getBW(bl[i])+'KG':''}</div>
+                  <div style="font-size:var(--fs-xs);font-weight:800;color:${isLast?'#ff7a7a':'#3f3f3f'};margin-top:4px;letter-spacing:.5px">${getBW(bl[i])?getBW(bl[i])+'KG':''}</div>
                 </td>`;
               }).join('')}
             </tr></thead>
             <tbody>
             ${poses.map(([key,lbl,poseImg])=>`<tr>
-              <td style="padding:5px 4px;vertical-align:middle;text-align:center">
+              <td style="padding:6px 4px;vertical-align:middle;text-align:center">
                 <img src="${poseImg}" alt="${lbl}" style="height:calc(var(--fq) * .5);max-width:52px;object-fit:contain;filter:drop-shadow(0 0 7px rgba(255,255,255,.55));display:block;margin:0 auto 4px">
                 <div style="font-family:var(--pile-titre);font-size:var(--fs-xs);letter-spacing:1.4px;color:var(--text);text-shadow:var(--halo-1);white-space:nowrap">${lbl}</div>
               </td>
@@ -75822,7 +75832,7 @@ function showProgressTab(tab,btn,sansMemo){
           </table>
         </div>
         <!-- Pied facon signature -->
-        <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.06)">
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.06)">
           <img src="./icons/logo.png" alt="" style="width:20px;height:20px;border-radius:var(--r-1);object-fit:cover;opacity:.9">
           <span style="font-family:var(--pile-titre);font-size:var(--fs-md);letter-spacing:3px;color:var(--text-faint)">REPCORE</span>
           <span style="font-size:var(--fs-xs);color:var(--text-dim);letter-spacing:1.5px;font-weight:700">· GUELLEC COACHING PRO</span>
@@ -76189,12 +76199,12 @@ function _htmlDossierSante(user,pourCoach){
   if(!d) return '';
   if(dossierSanteVide(d))
     return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.75">${escapeHtml(DOSSIER_VIDE)}</div>`;
-  const titre=t=>`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin:14px 0 7px">${escapeHtml(t)}</div>`;
+  const titre=t=>`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin:14px 0 8px">${escapeHtml(t)}</div>`;
   const ligne=(g,dr)=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid rgba(255,255,255,.06)">
       <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;min-width:0">${g}</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint);white-space:nowrap;flex-shrink:0">${escapeHtml(dr)}</span>
     </div>`;
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px 15px">
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px">
     ${titre('Ce qui est déclaré')}
     ${d.etats.length?d.etats.map(x=>ligne(escapeHtml(x.valeur),_dossDate(x.date))).join('')
       :'<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Rien de déclaré.</div>'}
@@ -76211,7 +76221,7 @@ function _htmlDossierSante(user,pourCoach){
         +' <span style="color:var(--text-dim)">- '+(x.action==='retire'?'retiré':'déclaré')+'</span>',
         _dossDate(x.date))).join(''):''}
     ${blocDisclaimerSante()}
-    ${!pourCoach?`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:13px;padding-top:12px;border-top:1px solid var(--border)">
+    ${!pourCoach?`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
       <button type="button" class="btn btn-outline btn-sm" style="flex:1;min-width:150px;margin:0" onclick="telechargerDossierSante()">Télécharger mon dossier</button>
       ${d.journal.length?`<button type="button" class="btn btn-outline btn-sm" style="flex:1;min-width:150px;margin:0" onclick="purgerHistoriqueSante()">Effacer l'historique des déclarations</button>`:''}
     </div>`:''}
@@ -76412,8 +76422,8 @@ function _htmlRepartitionPrises(user,macrosJour){
     :r.parts.join(' g + ')+' g';
   return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">
     <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">${escapeHtml(detail)} = ${escapeHtml(String(r.total))} g au total.</div>
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:5px">${escapeHtml(phrasePlancherPrise(r))}</div>
-    ${r.tension?`<div style="font-size:var(--fs-2xs);color:var(--text-dim);line-height:1.55;margin-top:5px">${escapeHtml(PRISE_PHRASE_TENSION)}${r.nSuggere?' Essaie '+r.nSuggere+' repas.':''}</div>`:''}
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:6px">${escapeHtml(phrasePlancherPrise(r))}</div>
+    ${r.tension?`<div style="font-size:var(--fs-2xs);color:var(--text-dim);line-height:1.55;margin-top:6px">${escapeHtml(PRISE_PHRASE_TENSION)}${r.nSuggere?' Essaie '+r.nSuggere+' repas.':''}</div>`:''}
   </div>`;
 }
 // La vue coach : la répartition, le plancher, et la tension s'il y en a une.
@@ -76488,11 +76498,11 @@ function _htmlReperesRepas(user,macrosJour,dateStr){
   let per=null;
   try{ per=repereSeance(user,dateStr); }catch(e){}
   if(!pr&&!per) return '';
-  return `<div style="margin-top:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:11px 13px">
+  return `<div style="margin-top:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px">
     ${pr?`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">${escapeHtml(phraseProtParRepas(pr))}</div>`:''}
     ${per?`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;margin-top:${pr?'6px':'0'}">${escapeHtml(per.texte)}</div>`:''}
     ${_htmlRepartitionPrises(user,macrosJour)}
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:7px">${escapeHtml(REPERE_PERI_REGISTRE)}</div>
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:8px">${escapeHtml(REPERE_PERI_REGISTRE)}</div>
   </div>`;
 }
 
@@ -76916,7 +76926,7 @@ function _htmlPostPartum(user){
   // La fenêtre est nommée en mots courants. Aucun terme médical, aucune
   // justification de ce qui se passe dans le corps : RepCore décrit ce qu'il
   // fait, pas ce qu'elle est.
-  const bloc=f?`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7;margin-top:10px;padding-top:9px;border-top:1px solid var(--border)">
+  const bloc=f?`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
       <b>${escapeHtml(PP_LIB_FENETRES[f]||'')}</b>${f==='0_6'
         ?' : je te propose seulement de la mobilité et des échauffements.'
         :(f==='6_12'?' : du renforcement progressif, sans impact.'
@@ -76924,7 +76934,7 @@ function _htmlPostPartum(user){
             :' : les impacts attendent que tu aies fait le point.'))}
     </div>`:'';
   const evalRow=(f==='12_plus'||f==='6_12')
-    ?`<label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;margin-top:10px">
+    ?`<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-top:10px">
         <input type="checkbox" ${e.evaluationPerineale?'checked':''} onchange="ppSetEvaluation(this.checked)"
           style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px">
         <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.55">J'ai fait le point avec une sage-femme ou un kinésithérapeute.</span>
@@ -76934,11 +76944,11 @@ function _htmlPostPartum(user){
     <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7;margin-bottom:10px">${escapeHtml(PP_INTRO)}</div>
     <input type="date" value="${escapeHtml(e.date||'')}" onchange="ppSetDate(this.value)"
       aria-label="Date d'accouchement"
-      style="width:100%;padding:9px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm)">
-    ${e.date?`<div style="display:flex;flex-direction:column;gap:8px;margin-top:9px">${modes}</div>`:''}
+      style="width:100%;padding:10px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm)">
+    ${e.date?`<div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">${modes}</div>`:''}
     ${bloc}${evalRow}
     ${renvoi?`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7;margin-top:10px">${escapeHtml(renvoi)}</div>`:''}
-    ${e.date?`<button onclick="ppEffacerDate()" class="btn btn-outline btn-sm" style="width:100%;margin-top:9px;font-size:var(--fs-2xs);letter-spacing:1px;color:var(--sub)">Retirer cette date</button>`:''}
+    ${e.date?`<button onclick="ppEffacerDate()" class="btn btn-outline btn-sm" style="width:100%;margin-top:10px;font-size:var(--fs-2xs);letter-spacing:1px;color:var(--sub)">Retirer cette date</button>`:''}
     ${blocDisclaimerSante()}
   </div>`;
 }
@@ -76950,8 +76960,8 @@ function _htmlPpQuestions(user){
   if(!ppProposerQuestions(u)) return '';
   const s=ppEtat(u).symptomes;
   return `<div class="card" style="margin-bottom:14px">
-    <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:9px">Comment ça se passe ?</label>
-    ${PP_SYMPTOMES.map(x=>`<div style="padding:7px 0;border-top:1px solid rgba(255,255,255,.06)">
+    <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:10px">Comment ça se passe ?</label>
+    ${PP_SYMPTOMES.map(x=>`<div style="padding:8px 0;border-top:1px solid rgba(255,255,255,.06)">
       <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-bottom:6px">${escapeHtml(x.q)}</div>
       <div style="display:flex;gap:6px">
         ${[['0','Non'],['1','Oui']].map(([v,l])=>
@@ -77043,7 +77053,7 @@ function _htmlPostPartumCoach(c){
   if(ppSymptomePositif(c)) causes.push('signalement de l\'athlète');
   if(f==='12_plus'&&!e.evaluationPerineale) causes.push('point non encore fait');
   const impact=ppImpactAutorise(c);
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">${escapeHtml(PP_TITRE)}</span>
       <span style="font-size:var(--fs-xs);font-weight:800;color:${impact===true?'var(--sub)':'var(--orange)'}">${escapeHtml(f?(PP_LIB_FENETRES[f]||''):'Informatif')}</span>
@@ -77051,7 +77061,7 @@ function _htmlPostPartumCoach(c){
     <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">Début de la fenêtre : ${escapeHtml(dat(new Date(e.date+'T00:00:00').getTime()))}.</div>
     ${causes.length?`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.7">Cause : ${escapeHtml(causes.join(', '))}.</div>`:''}
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.7">Impacts ${impact===true?'sans restriction de RepCore':'non proposés par RepCore'}.</div>
-    ${e.levee?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:8px;padding-top:7px;border-top:1px solid var(--border)">Levée le ${escapeHtml(dat(e.levee.date))}${e.levee.par?' par '+escapeHtml(e.levee.par):''}.</div>`
+    ${e.levee?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">Levée le ${escapeHtml(dat(e.levee.date))}${e.levee.par?' par '+escapeHtml(e.levee.par):''}.</div>`
       :`<button onclick="ppCoachLever()" class="btn btn-outline btn-sm" style="width:100%;margin-top:10px;font-size:var(--fs-2xs);letter-spacing:1px">Lever pour cette athlète</button>`}
     ${blocDisclaimerSante()}
   </div>`;
@@ -77265,7 +77275,7 @@ function _dieteTransitionActive(nut,porteur){
 }
 function _htmlDieteTransition(nut,porteur){
   if(!_dieteTransitionActive(nut,porteur)) return '';
-  return `<div style="margin-top:12px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-3);padding:11px 13px">
+  return `<div style="margin-top:12px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-3);padding:12px 14px">
     <div style="font-size:var(--fs-xs);color:var(--text);line-height:1.6">${escapeHtml(DIETE_TRANSITION)}</div>
   </div>`;
 }
@@ -77797,7 +77807,7 @@ function _htmlCiblesAthlete(u){
   if(!c) return '';
   if(c.manque&&c.manque.length){
     return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);'
-      +'padding:13px 14px;margin-bottom:18px;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">'
+      +'padding:14px 14px;margin-bottom:20px;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">'
       +'Tes cibles ne peuvent pas être calculées : il manque '
       +escapeHtml(c.manque.join(', '))+'. Complète ton bilan.</div>';
   }
@@ -77944,7 +77954,7 @@ function revoirSuggestionsCycle(){
 function _htmlSuggestionCycle(user){
   const s=suggestionCycleSupplements(user||currentUser);
   if(!s) return '';
-  return `<div style="margin-bottom:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 13px">
+  return `<div style="margin-bottom:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px">
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(s.libelle)}</div>
     <div style="display:flex;gap:8px;margin-top:10px">
       <button onclick="accepterSuggestionCycle()" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:var(--fs-2xs);letter-spacing:1px">Ajouter</button>
@@ -77960,7 +77970,7 @@ function _htmlMigrationCycleSupp(user){
   const list=((u.nutrition||{}).supplements)||[];
   if(((u.cycle||{}).migrationSuppVue)) return '';
   if(!list.some(x=>x&&x._cycleManaged)) return '';
-  return `<div style="margin-bottom:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 13px">
+  return `<div style="margin-bottom:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px">
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">Cette ligne avait été ajoutée automatiquement par l'app. Tu peux la garder ou la retirer.</div>
     <div style="display:flex;gap:8px;margin-top:10px">
       <button onclick="garderSuggestionCycleAuto()" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:var(--fs-2xs);letter-spacing:1px">Je la garde</button>
@@ -78048,7 +78058,7 @@ function _renderCycleNutSettings(nut){
       :phase==='luteal_late'&&!conf.sensibilitePms?'Sensibilité PMS désactivée : pas d\'ajustement'
       :phase==='menstrual'&&intens!=='difficile'?'Règles supportables : pas d\'ajustement':'Macros inchangées';
     if(pl) phaseHtml=`<div data-phase-cycle style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
-      <span style="font-size:var(--fs-xs);font-weight:800;color:${pl.color};background:${pl.color}18;border:1px solid ${pl.color}33;border-radius:var(--r-2);padding:3px 9px">${pl.txt}</span>
+      <span style="font-size:var(--fs-xs);font-weight:800;color:${pl.color};background:${pl.color}18;border:1px solid ${pl.color}33;border-radius:var(--r-2);padding:4px 10px">${pl.txt}</span>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:6px">${hasAdj?'Ajust. actif : ':''}<span style="color:${hasAdj?'var(--text)':'var(--sub)'}">${adjLabel}</span></div>
     </div>`;
     else phaseHtml=`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">Date antérieure au cycle actuel : mets à jour la date des règles.</div>`;
@@ -78059,7 +78069,7 @@ function _renderCycleNutSettings(nut){
     <div>
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:6px">Dernières règles</div>
       <input type="date" id="cycle-last-period" value="${lastP}" max="${today}"
-        style="width:100%;padding:9px 12px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);box-sizing:border-box"
+        style="width:100%;padding:10px 12px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);box-sizing:border-box"
         onchange="saveCycleNutSettings()">
     </div>
     <div>
@@ -78071,14 +78081,14 @@ function _renderCycleNutSettings(nut){
            « 30 » était matériellement impossible. onchange n'intervient qu'au
            blur, quand la valeur est complète. -->
       <input type="number" id="cycle-len" value="${len}" min="20" max="40"
-        style="width:100%;padding:9px 12px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);box-sizing:border-box"
+        style="width:100%;padding:10px 12px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);box-sizing:border-box"
         onchange="saveCycleNutSettings()">
     </div>
     <div>
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:8px">Intensité des règles</div>
       <div style="display:flex;gap:8px">
-        <button onclick="saveCycleNutSettings('intensite','supportable')" style="flex:1;padding:9px 0;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${intens==='supportable'?'var(--green)':'var(--border)'};background:${intens==='supportable'?'rgba(34,197,94,.12)':'#111'};color:${intens==='supportable'?'var(--green)':'#555'}">Supportable</button>
-        <button onclick="saveCycleNutSettings('intensite','difficile')" style="flex:1;padding:9px 0;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${intens==='difficile'?'var(--red)':'var(--border)'};background:${intens==='difficile'?'rgba(224,32,32,.12)':'#111'};color:${intens==='difficile'?'var(--red)':'#555'}">Difficile</button>
+        <button onclick="saveCycleNutSettings('intensite','supportable')" style="flex:1;padding:10px 0;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${intens==='supportable'?'var(--green)':'var(--border)'};background:${intens==='supportable'?'rgba(34,197,94,.12)':'#111'};color:${intens==='supportable'?'var(--green)':'#555'}">Supportable</button>
+        <button onclick="saveCycleNutSettings('intensite','difficile')" style="flex:1;padding:10px 0;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${intens==='difficile'?'var(--red)':'var(--border)'};background:${intens==='difficile'?'rgba(224,32,32,.12)':'#111'};color:${intens==='difficile'?'var(--red)':'#555'}">Difficile</button>
       </div>
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)">
@@ -78098,11 +78108,11 @@ function _renderCycleNutSettings(nut){
            chose dont le calcul a besoin est de savoir si un calendrier veut
            dire quelque chose. RepCore ne donne aucun conseil sur ce sujet. -->
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:8px">Contraception</div>
-      <div style="display:flex;flex-direction:column;gap:7px">
+      <div style="display:flex;flex-direction:column;gap:8px">
         ${CONTRACEPTIONS.map(c=>`<button onclick="saveCycleNutSettings('contraception','${c.cle}')"
-          style="text-align:left;padding:9px 11px;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;line-height:1.45;border:1.5px solid ${_contra===c.cle?'var(--red)':'var(--border)'};background:${_contra===c.cle?'rgba(224,32,32,.10)':'#111'};color:${_contra===c.cle?'var(--text)':'#666'}">${escapeHtml(c.lib)}</button>`).join('')}
+          style="text-align:left;padding:10px 12px;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;line-height:1.45;border:1.5px solid ${_contra===c.cle?'var(--red)':'var(--border)'};background:${_contra===c.cle?'rgba(224,32,32,.10)':'#111'};color:${_contra===c.cle?'var(--text)':'#666'}">${escapeHtml(c.lib)}</button>`).join('')}
       </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0 2px;margin-top:9px;border-top:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0 2px;margin-top:10px;border-top:1px solid var(--border)">
         <div>
           <div style="font-size:var(--fs-sm);font-weight:700;color:var(--text)">Partager avec mon coach</div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;line-height:1.5">Désactivé, cette réponse ne quitte pas ce téléphone, et un changement d'appareil la perd.</div>
@@ -78122,28 +78132,28 @@ function _renderCycleNutSettings(nut){
            n'est choisi, aucun des deux n'est allumé. -->
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:8px">Régularité</div>
       <div style="display:flex;gap:8px">
-        <button onclick="saveCycleNutSettings('regulier','oui')" style="flex:1;padding:9px 0;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${regulier===true?'var(--green)':'var(--border)'};background:${regulier===true?'rgba(34,197,94,.12)':'#111'};color:${regulier===true?'var(--green)':'#555'}">Réguliers</button>
-        <button onclick="saveCycleNutSettings('regulier','non')" style="flex:1;padding:9px 0;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${regulier===false?'var(--orange)':'var(--border)'};background:${regulier===false?'rgba(245,158,11,.12)':'#111'};color:${regulier===false?'var(--orange)':'#555'}">Irréguliers</button>
+        <button onclick="saveCycleNutSettings('regulier','oui')" style="flex:1;padding:10px 0;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${regulier===true?'var(--green)':'var(--border)'};background:${regulier===true?'rgba(34,197,94,.12)':'#111'};color:${regulier===true?'var(--green)':'#555'}">Réguliers</button>
+        <button onclick="saveCycleNutSettings('regulier','non')" style="flex:1;padding:10px 0;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${regulier===false?'var(--orange)':'var(--border)'};background:${regulier===false?'rgba(245,158,11,.12)':'#111'};color:${regulier===false?'var(--orange)':'#555'}">Irréguliers</button>
       </div>
       ${obsHtml}
     </div>
     ${_refusCycle?`<div style="border-top:1px solid var(--border);padding-top:10px">
-      <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.55;margin-bottom:7px">Tu as écarté une suggestion de complément.</div>
+      <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.55;margin-bottom:8px">Tu as écarté une suggestion de complément.</div>
       <button onclick="revoirSuggestionsCycle()" class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-2xs)">Revoir les suggestions</button>
     </div>`:''}
     <div style="border-top:1px solid var(--border);padding-top:10px">
       <button onclick="declarerReglesAujourdhui()" class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-2xs)">Mes règles ont commencé aujourd'hui</button>
-      <label style="display:flex;align-items:center;gap:9px;margin-top:10px;cursor:pointer">
+      <label style="display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer">
         <input type="checkbox" id="cycle-absence" ${absenceCeMois?'checked':''} onchange="declarerAbsenceCycle(this.checked)" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0">
         <span style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5">Je n'ai pas eu mes règles ce mois-ci</span>
       </label>
     </div>
     ${phaseHtml}
   </div>`:'';
-  return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4);padding:14px;margin-bottom:18px">
+  return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4);padding:14px;margin-bottom:20px">
     <div style="display:flex;align-items:center;justify-content:space-between">
       <div>
-        <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:3px">Adaptation cycle menstruel</div>
+        <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:4px">Adaptation cycle menstruel</div>
         <div style="font-size:var(--fs-xs);color:#888">Ajuste tes macros selon ta phase</div>
       </div>
       <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer">
@@ -78245,14 +78255,14 @@ function _htmlDepartAthlete(nut){
   const b=besoinsProposes(currentUser);
   if(!b||b.source===null) return '';
   const nom=b.source==='katch'?'Katch-McArdle':'Mifflin-St Jeor';
-  const bloc=(t,j,coul)=>`<div style="flex:1;min-width:0;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:9px 6px;text-align:center">
-      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:${coul};margin-bottom:5px">${t}</div>
+  const bloc=(t,j,coul)=>`<div style="flex:1;min-width:0;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 6px;text-align:center">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:${coul};margin-bottom:6px">${t}</div>
       <div style="font-size:var(--fs-lg);font-weight:900;color:var(--text);line-height:1">${j.kcal}<span style="font-size:var(--fs-2xs);color:var(--sub);font-weight:400"> kcal</span></div>
       <div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:4px;line-height:1.5">P ${j.p} · G ${j.g} · L ${j.l}<br>Fibres ${j.f}</div>
     </div>`;
-  return `<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:var(--r-4);padding:14px;margin-bottom:18px">
+  return `<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:var(--r-4);padding:14px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:4px">Point de départ proposé</div>
-    <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:11px">Ton coach n'a pas encore fixé tes objectifs. Voici un point de départ calculé sur ton dernier bilan : tu peux l'utiliser en attendant.</div>
+    <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">Ton coach n'a pas encore fixé tes objectifs. Voici un point de départ calculé sur ton dernier bilan : tu peux l'utiliser en attendant.</div>
     <div style="display:flex;gap:8px;margin-bottom:10px">
       ${bloc('JOUR ON',b.on,'var(--success)')}
       ${bloc('JOUR OFF',b.off,'var(--sub)')}
@@ -78261,7 +78271,7 @@ function _htmlDepartAthlete(nut){
     <!-- R10 : LES HYPOTHESES SONT REPLIEES, PAS REECRITES. Le texte du repli
          est celui d'avant, au caractere pres : seul le ⓘ du NEAT s'y ajoute,
          apres le premier emploi du mot. -->
-    <details class="nut-hyp" style="margin-top:9px">
+    <details class="nut-hyp" style="margin-top:10px">
       <summary style="font-size:var(--fs-2xs);color:var(--sub);cursor:pointer">Comment ces objectifs sont calculés</summary>
       <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:6px">${escapeHtml(nom)} · dépense estimée ${b.depense} kcal : ${_premierNeatInfo(escapeHtml(b.hypotheses.join(' · ')))}.</div>
     </details>
@@ -78660,7 +78670,7 @@ function htmlLigneCalories(tot,m){
   // niveau de lecture, la ou une ligne nue se serait lue comme une quatrieme
   // macro.
   return `<div class="nut-bloc">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <span class="nut-cap">Calories</span>
       <span class="nut-kcal"><span id="rcmac-kcal" data-num="${Math.round(tot.kcal||0)}" style="font-variant-numeric:tabular-nums">${Math.round(tot.kcal||0)}</span><small>${m.kcal?' / '+m.kcal+' kcal':' kcal'}</small></span>
     </div>
@@ -78856,14 +78866,14 @@ function _htmlSignalMicro(user,finISO){
               +' que tu manges déjà :'
             : 'Les plus riches en '+s.lib.toLowerCase()+' :'))
     : '';
-  return `<div style="margin-bottom:14px;background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--orange);border-radius:var(--r-3);padding:12px 13px">
+  return `<div style="margin-bottom:14px;background:var(--surface-1);border:1px solid var(--border);border-left:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px">
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6;font-weight:600">${escapeHtml(phraseSignalMicro(s))}</div>
     ${l.length?`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:8px">${escapeHtml(intro)}</div>
-    <div style="font-size:var(--fs-xs);color:var(--text);line-height:1.7;margin-top:3px">${
+    <div style="font-size:var(--fs-xs);color:var(--text);line-height:1.7;margin-top:4px">${
       l.map(x=>'· '+escapeHtml(x.nom)+' <span style="color:var(--text-faint)">('
         +escapeHtml(String(x.valeur))+' '+escapeHtml(x.unite)+' / 100 g)</span>').join('<br>')
     }</div>`:''}
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:9px">${escapeHtml(MICRO_DISCLAIMER)}</div>
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:10px">${escapeHtml(MICRO_DISCLAIMER)}</div>
   </div>`;
 }
 function _renderStrictMacroRings(nut,jourAff){
@@ -78905,8 +78915,8 @@ function _renderStrictMacroRings(nut,jourAff){
   // mêmes cibles : annoncer « JOUR OFF » ferait croire à un total réduit qui
   // n'existe pas. Le badge dit une différence, il se tait quand il n'y en a pas.
   const dayBadge=!dieteCyclee(currentUser)?'':isOn
-    ?`<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--success);background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-1);padding:3px 10px;letter-spacing:1px">${icon('zap',10)} JOUR ON</span>`
-    :`<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-1);padding:3px 10px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
+    ?`<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--success);background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-1);padding:4px 10px;letter-spacing:1px">${icon('zap',10)} JOUR ON</span>`
+    :`<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-1);padding:4px 10px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
   // L HABILLAGE EST CELUI DE LA CARTE DE L ACCUEIL, et rien d autre : meme
   // cadre .nut-hud, meme ciel d eclairs, meme en-tete .nut-tete. Ce que la
   // carte MONTRE ne bouge pas — son titre, son badge de phase, son jour
@@ -78917,7 +78927,7 @@ function _renderStrictMacroRings(nut,jourAff){
   // .nut-lien N EST PAS REPRISE non plus. Sur l accueil elle rend la carte
   // cliquable pour ouvrir l onglet nutrition ; ici on y est deja, et un
   // curseur de main sur une carte qui ne mene nulle part serait un mensonge.
-  return `<div class="card-nut nut-hud" style="margin-bottom:18px;${_animEntree('nut-rings')}">
+  return `<div class="card-nut nut-hud" style="margin-bottom:20px;${_animEntree('nut-rings')}">
     ${_htmlNutEclairs('D')}
     <div class="nut-tete">
       <span class="nut-boul">${icon('target',15)}</span>
@@ -78932,7 +78942,7 @@ function _renderStrictMacroRings(nut,jourAff){
          seules macros que les anneaux ne portent pas ; elles etaient dans le
          journal, elles remontent ici, ou vit deja tout ce qui se compare a une
          cible. Demande de Kevin, 24/08/2026. -->
-    <div class="fj-mini" style="margin-top:13px">
+    <div class="fj-mini" style="margin-top:14px">
       ${htmlLigneMiniNut('Sel',tot.sel,_sel.macros.sel,' g','#60a5fa')}
       ${htmlLigneMiniNut('Fibres ℹ',tot.fi,m.f,' g','#a78bfa')}
     </div>
@@ -78960,13 +78970,13 @@ function _renderStrictMacroRings(nut,jourAff){
          montrent pas du tout, le sel et les fibres. Demande de Kevin, sur sa
          maquette du 21/08/2026. -->
     <div style="margin-top:14px">
-      <div class="nut-cap" style="margin-bottom:9px">Tes cibles</div>
+      <div class="nut-cap" style="margin-bottom:10px">Tes cibles</div>
       ${htmlGrilleTuilesNut(tot,_sel.macros,{cibleSeule:true})}
       <!-- LA MEME NOTE QU AU JOURNAL. Le « ℹ » de la tuile des fibres ne veut
            rien dire sans elle, et une grille qui porte le signe sans porter la
            legende renvoie le lecteur a une phrase qui n est pas la. -->
-      <div style="font-size:var(--fs-xs);color:var(--text-dim);text-align:right;margin-top:9px">fibres : indicatif</div>
-      ${_sel.note?`<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin-top:7px">${escapeHtml(_sel.note)}</div>`:''}
+      <div style="font-size:var(--fs-xs);color:var(--text-dim);text-align:right;margin-top:10px">fibres : indicatif</div>
+      ${_sel.note?`<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin-top:8px">${escapeHtml(_sel.note)}</div>`:''}
     </div>
   </div>`;
 }
@@ -79011,7 +79021,7 @@ function _renderNutriContent(type,dateAff){
     // JUSTE APRES. On dit d'abord ou l'on est, on regle ensuite : l'ordre
     // inverse faisait regler des chiffres avant d'avoir nomme la methode.
     contentEl.innerHTML=`
-      <div class="banner-hero" style="margin-bottom:18px;${_animEntree('nut-hero')}">
+      <div class="banner-hero" style="margin-bottom:20px;${_animEntree('nut-hero')}">
         <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
           ${_flxCircle}
           <div style="flex:1;min-width:0">
@@ -79079,14 +79089,14 @@ const STRICT_VERROU=Object.freeze({
 });
 function _htmlStrictVerrou(raison){
   const v=STRICT_VERROU[raison]||STRICT_VERROU.non_valide;
-  return `<div style="position:relative;border:1px solid var(--border);border-radius:var(--r-4);padding:26px 20px;text-align:center;background:linear-gradient(180deg,var(--surface-1),var(--dark));overflow:hidden">
-    <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(-55deg,transparent,transparent 16px,rgba(255,255,255,.018) 16px,rgba(255,255,255,.018) 17px);pointer-events:none"></div>
+  return `<div style="position:relative;border:1px solid var(--border);border-radius:var(--r-4);padding:28px 20px;text-align:center;background:linear-gradient(180deg,var(--surface-1),var(--dark));overflow:hidden">
+    <div style="position:absolute;inset:0;background-image:none;pointer-events:none"></div>
     <div style="position:relative">
       <div style="color:var(--text-dim);line-height:0;margin-bottom:14px">${icon('lock',40)}</div>
       <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:2.5px;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">Diète stricte</div>
       <div style="font-size:var(--fs-md);font-weight:800;color:var(--text-strong);margin-bottom:10px">${escapeHtml(v.titre)}</div>
       <p style="margin:0 0 10px;font-size:var(--fs-sm);color:var(--sub);line-height:1.65">${escapeHtml(v.texte)}</p>
-      <p style="margin:0 0 18px;font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6">${escapeHtml(v.action)}</p>
+      <p style="margin:0 0 20px;font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6">${escapeHtml(v.action)}</p>
       <button class="btn btn-outline btn-sm btn-doigt" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-xs)" onclick="setNutriDietType('flexible')">Passer en diète flexible</button>
       ${raison==='sans_coach'?`<button class="btn btn-outline btn-sm" style="width:100%;margin:8px 0 0;letter-spacing:1px;font-size:var(--fs-xs)" onclick="go('s-client-code')">J'ai un code coach</button>`:''}
     </div>
@@ -79261,7 +79271,7 @@ function _renderStrictDiet(){
       onclick="ouvrirFicheAlim()">Fiche alimentaire à imprimer</button>`;
   el.innerHTML=`${_transiStrict}
     <!-- Définition diète stricte -->
-    <div class="banner-hero" style="margin-bottom:18px;animation:fadeInUp var(--t-3) var(--c-out)">
+    <div class="banner-hero" style="margin-bottom:20px;animation:fadeInUp var(--t-3) var(--c-out)">
       <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
         ${coachCircle}
         <div style="flex:1;min-width:0">
@@ -79282,7 +79292,7 @@ function _renderStrictDiet(){
          plus en image. -->
     ${!planActif(currentUser)?`
     <div style="margin-bottom:20px">
-      <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:5px">${icon('clipboard',12)} Plan alimentaire</div>
+      <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px">${icon('clipboard',12)} Plan alimentaire</div>
       <div style="background:var(--surface-1);border:1px dashed var(--border);border-radius:var(--r-3);padding:32px 16px;text-align:center;color:var(--text-dim);font-size:var(--fs-sm)"><div style="margin-bottom:8px;opacity:.3">${icon('clipboard',32)}</div>Plan alimentaire à venir</div>
     </div>`:''}
     <!-- Le plan composé par le coach : repas imposés et sources interchangeables -->
@@ -79302,16 +79312,16 @@ function _renderStrictDiet(){
 // ⚠ « CETTE SEMAINE » = LES SEPT DERNIERS JOURS, ceux des pastilles juste
 //   dessous. Compter la semaine calendaire sous sept pastilles glissantes,
 //   c'etait afficher deux chiffres qui ne se recoupent pas.
-const _SA_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+const _SA_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">';
 const SA_ICO={
   couverts:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 2.5a1 1 0 0 1 1 1V9a1 1 0 0 0 1 1V3.5a1 1 0 1 1 2 0V10a1 1 0 0 0 1-1V3.5a1 1 0 1 1 2 0V9a3 3 0 0 1-2.2 2.9V20.5a1.5 1.5 0 0 1-3 0v-8.6A3 3 0 0 1 5 9V3.5a1 1 0 0 1 1-1zM17.5 2.5c1.9 0 3 2.6 3 6.2 0 2.4-.9 3.8-2 4.3v7.5a1.5 1.5 0 0 1-3 0V3.8c0-.7.6-1.3 2-1.3z"/></svg>',
   oui:_SA_SVG+'<path d="M4.5 12.5l5 5L19.5 7"/></svg>',
   non:_SA_SVG+'<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg>',
   moins:_SA_SVG+'<path d="M7 12h10"/></svg>',
   points:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="7" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="17" cy="12" r="1.6"/></svg>',
-  calendrier:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4M7.5 13h.01M12 13h.01M16.5 13h.01M7.5 16.5h.01M12 16.5h.01"/></svg>',
-  bas:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
-  droite:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>',
+  calendrier:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4M7.5 13h.01M12 13h.01M16.5 13h.01M7.5 16.5h.01M12 16.5h.01"/></svg>',
+  bas:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
+  droite:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>',
   histo:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="4" y="11" width="3.4" height="9" rx="1.2"/><rect x="10.3" y="6" width="3.4" height="14" rx="1.2"/><rect x="16.6" y="9" width="3.4" height="11" rx="1.2"/></svg>'
 };
 // PURE. L'etat d'un jour pour sa pastille : 'oui', 'non', 'vide' (jour passe
@@ -80869,7 +80879,7 @@ function onPlanSearch(val){
       onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
       style="padding:12px 16px;border-bottom:1px solid var(--surface-2);cursor:pointer">
       <div style="font-size:var(--fs-md);font-weight:700;line-height:1.35">${escapeHtml(f.n)}</div>
-      ${_ev&&_ev.niveau==='intolerance'?`<div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.5;margin-top:3px">${escapeHtml(_ev.libelle+' · '+_ev.raison)}</div>`:''}
+      ${_ev&&_ev.niveau==='intolerance'?`<div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.5;margin-top:4px">${escapeHtml(_ev.libelle+' · '+_ev.raison)}</div>`:''}
       <div style="display:flex;gap:10px;align-items:center;margin-top:4px">
         ${rappel}<span style="font-size:var(--fs-2xs);color:var(--text-faint);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(f.g||'')}</span>
       </div>
@@ -81229,9 +81239,9 @@ function _cplHtmlDesync(c){
   if(!e) return '';
   const nb=v=>Math.round(v).toLocaleString('fr-FR');
   return '<div style="background:var(--warning-bg);border:1px solid var(--warning-border);'
-    +'border-radius:var(--r-2);padding:9px 11px;margin-bottom:9px">'
+    +'border-radius:var(--r-2);padding:10px 12px;margin-bottom:10px">'
     +'<div style="font-size:var(--fs-2xs);color:var(--orange);font-weight:800;'
-    +'letter-spacing:1px;text-transform:uppercase;margin-bottom:3px">Cibles pas à jour</div>'
+    +'letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Cibles pas à jour</div>'
     +'<div style="font-size:var(--fs-2xs);color:var(--text-strong);line-height:1.55">'
     // ⚠ LE SENS DE CETTE BANNIERE A CHANGE le 08/09/2026, ET C'EST IMPORTANT.
     // Avant, c'est LE PLAN qui etait en retard : il lisait la copie
@@ -81256,7 +81266,7 @@ function _cplHtmlApercu(){
   if(!(cib.kcal>0))
     return `<div style="font-size:var(--fs-xs);color:var(--orange);line-height:1.6">Aucun objectif enregistré pour cet athlète : fixe d'abord ses macros sur sa fiche, les grammages en découlent.</div>`;
   const lig=(lib,cible,couvert,restant,unite)=>`
-    <div style="display:grid;grid-template-columns:74px 1fr 1fr 1fr;gap:6px;align-items:center;padding:5px 0;border-top:1px solid var(--surface-2)">
+    <div style="display:grid;grid-template-columns:74px 1fr 1fr 1fr;gap:6px;align-items:center;padding:6px 0;border-top:1px solid var(--surface-2)">
       <div style="font-size:var(--fs-2xs);font-weight:800;color:var(--sub);letter-spacing:1px">${lib}</div>
       <div style="font-size:var(--fs-sm);font-weight:700;text-align:center">${Math.round(cible)}${unite}</div>
       <div style="font-size:var(--fs-sm);color:var(--sub);text-align:center">${Math.round(couvert)}${unite}</div>
@@ -81312,7 +81322,7 @@ function _cplHtmlImplicites(couv){
     +f.parPortion+' g de glucides');
   if(h&&h.lipides>0) bouts.push(h.lipides+' g de lipides d\'huile de cuisson');
   if(!bouts.length) return '';
-  return `<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:9px;padding-top:8px;border-top:1px solid var(--surface-2)">Compté dans le squelette sans ligne dédiée : ${escapeHtml(bouts.join(' · '))}.</div>`;
+  return `<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:10px;padding-top:8px;border-top:1px solid var(--surface-2)">Compté dans le squelette sans ligne dédiée : ${escapeHtml(bouts.join(' · '))}.</div>`;
 }
 function _cplHtmlAlertes(){
   const c=_cplAthlete();
@@ -81321,7 +81331,7 @@ function _cplHtmlAlertes(){
   try{ l=planAlertes(_cplPlan,c); }catch(e){ l=['Aperçu indisponible : '+e.message]; }
   if(!l.length) return '';
   return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-3);padding:12px;margin-bottom:14px">
-    <div style="font-size:var(--fs-xs);color:var(--orange);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:7px">À regarder</div>
+    <div style="font-size:var(--fs-xs);color:var(--orange);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:8px">À regarder</div>
     ${l.map(x=>`<div style="font-size:var(--fs-xs);color:var(--text);line-height:1.6;margin-bottom:4px">• ${escapeHtml(x)}</div>`).join('')}
   </div>`;
 }
@@ -81357,7 +81367,7 @@ function _cplHtmlSources(){
         <span style="margin-left:auto;flex-shrink:0;font-size:var(--fs-2xs);font-weight:700;color:rgba(255,255,255,.85)">${ids.length} source${ids.length>1?'s':''} · ÷ ${n}</span>
       </div>
       <div class="plan-corps">
-      <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin:7px 0 6px">Le restant se divise par ${n} repas. L'athlète permute librement dans cette liste sans dérégler ses macros.</div>
+      <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin:8px 0 6px">Le restant se divise par ${n} repas. L'athlète permute librement dans cette liste sans dérégler ses macros.</div>
       ${table}
       <details class="plan-src"${_cplSrcOuvert[macro]?' open':''} ontoggle="cplNoterSources('${macro}',this.open)">
         <summary style="color:var(--sub)">Modifier le catalogue<span class="plan-src-nb">${ids.length}</span></summary>
@@ -81366,7 +81376,7 @@ function _cplHtmlSources(){
         const r=planSourceRef(s,macro);
         const per=r?r.per100:null;
         const marque=r&&r.horsCiqual
-          ?'<span style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;padding:1px 5px;border-radius:var(--r-2);border:1px solid var(--border);color:var(--sub);margin-left:5px">HORS CIQUAL</span>':'';
+          ?'<span style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;padding:1px 6px;border-radius:var(--r-2);border:1px solid var(--border);color:var(--sub);margin-left:6px">HORS CIQUAL</span>':'';
         return `<div class="plan-l">
           <div style="flex:1;min-width:0">
             <div style="font-size:var(--fs-xs);font-weight:600;line-height:1.35">${escapeHtml(r?r.nom:'-')}${marque}</div>
@@ -81429,7 +81439,7 @@ function _cplHtmlLigne(item){
   return `<div class="plan-l" style="display:block">
     <div style="display:flex;align-items:flex-start;gap:8px">
       <div style="flex:1;min-width:0">${champNom}
-        <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:3px">${_cplMacroTxt(m)}</div>
+        <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">${_cplMacroTxt(m)}</div>
       </div>
       ${_cplInput(item.q,`cplSetChamp('${item.id}','q',this.value)`,'64px')}
       <input value="${escapeHtml(planUniteItem(item))}" oninput="cplSetChamp('${item.id}','u',this.value)" aria-label="Unité"
@@ -81455,7 +81465,7 @@ function _cplHtmlModele(c){
   const choix=PLAN_MODELES_LISTE.map(k=>{
     const actif=(pose===k);
     return `<button onclick="cplPoserModele('${k}')"
-      style="flex:1 1 46%;padding:9px 6px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;line-height:1.3;border:1.5px solid ${actif?'var(--red)':'var(--border)'};background:${actif?'rgba(224,32,32,.12)':'#111'};color:${actif?'var(--text)':'#8a8a8a'}">${escapeHtml(planModeleLib(k))}</button>`;
+      style="flex:1 1 46%;padding:10px 6px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;line-height:1.3;border:1.5px solid ${actif?'var(--red)':'var(--border)'};background:${actif?'rgba(224,32,32,.12)':'#111'};color:${actif?'var(--text)':'#8a8a8a'}">${escapeHtml(planModeleLib(k))}</button>`;
   }).join('');
   let entete;
   if(pose){
@@ -81474,7 +81484,7 @@ function _cplHtmlModele(c){
       +' Choisis le modèle à poser :';
   }
   return `<div style="background:${_cplNeuf?'var(--info-bg)':'var(--surface-1)'};border:1px solid ${_cplNeuf?'var(--info-border)':'var(--border)'};border-radius:var(--r-3);padding:12px;margin-bottom:14px">
-    <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;margin-bottom:9px">${entete}</div>
+    <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;margin-bottom:10px">${entete}</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px">${choix}</div>
   </div>`;
 }
@@ -81487,7 +81497,7 @@ function _cplHtmlMoment(c,moment){
   const choix=PLAN_MOMENTS.map(m=>{
     const actif=(moment===m.cle);
     return `<button onclick="cplSetMoment('${m.cle}')"
-      style="flex:1 1 30%;padding:9px 6px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;line-height:1.3;border:1.5px solid ${actif?'var(--red)':'var(--border)'};background:${actif?'rgba(224,32,32,.12)':'#111'};color:${actif?'var(--text)':'#8a8a8a'}">${escapeHtml(m.lib)}</button>`;
+      style="flex:1 1 30%;padding:10px 6px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;line-height:1.3;border:1.5px solid ${actif?'var(--red)':'var(--border)'};background:${actif?'rgba(224,32,32,.12)':'#111'};color:${actif?'var(--text)':'#8a8a8a'}">${escapeHtml(m.lib)}</button>`;
   }).join('');
   // D'où vient la valeur affichée. Sans cette phrase, un coach qui n'a rien
   // choisi croit avoir choisi.
@@ -81497,9 +81507,9 @@ function _cplHtmlMoment(c,moment){
   const retour=pose
     ?`<button onclick="cplSetMoment('')" style="background:none;border:none;color:var(--text-dim);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);text-decoration:underline;cursor:pointer;padding:8px 0 0">Suivre sa réponse plutôt que la mienne</button>`
     :'';
-  return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:14px">
+  return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
     <div style="font-size:var(--fs-sm);font-weight:700;color:var(--text)">Moment de la séance</div>
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin:2px 0 9px">« Avant séance », « Pendant la séance » et « Après séance » se déplacent ensemble à cet endroit de la journée. ${source}</div>
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin:2px 0 10px">« Avant séance », « Pendant la séance » et « Après séance » se déplacent ensemble à cet endroit de la journée. ${source}</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px">${choix}</div>
     ${retour}
   </div>`;
@@ -81603,7 +81613,7 @@ function renderPlanCoach(){
     <div id="cpl-alertes">${_cplHtmlAlertes()}</div>
     <div id="cpl-apercu" style="margin-bottom:16px">${_cplHtmlApercu()}</div>
 
-    <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">
+    <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
         <div style="flex:1;min-width:0">
           <div style="font-size:var(--fs-sm);font-weight:700;color:var(--text)">Version avec compléments</div>
@@ -81625,11 +81635,11 @@ function renderPlanCoach(){
       </div>
     </div>
 
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:9px">Squelette de repas</div>
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:10px">Squelette de repas</div>
     ${_cplHtmlMoment(c,moment)}
     ${clesUtilisees.map(blocRepas).join('')}
     <select onchange="if(this.value){cplAjouterMarqueur(this.value,'p');this.value='';}"
-      style="width:100%;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;margin-bottom:18px">
+      style="width:100%;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;margin-bottom:20px">
       <option value="">+ Ouvrir un nouveau repas…</option>
       ${planOrdreCles(moment).filter(k=>clesUtilisees.indexOf(k)<0).map(k=>`<option value="${k}">${escapeHtml(planLibRepas(k))}</option>`).join('')}
     </select>
@@ -81640,7 +81650,7 @@ function renderPlanCoach(){
          depense, et rien ici ne montrait le produit. Kevin : « le seul calcul
          qui compte est celui des tableaux du coach ». Un reglage qui ne peut
          plus etre juste ne se met pas a 1, il se retire. -->
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:9px">Sources interchangeables</div>
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:10px">Sources interchangeables</div>
     <div id="cpl-sources">${_cplHtmlSources()}</div>
 
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-bottom:16px">${escapeHtml(PLAN_NOTE_CUISSON)}</div>
@@ -81863,9 +81873,9 @@ function _htmlPlanAthlete(user,intercale){
   const tuile=(lib,val,unite,couleur,vedette)=>`<div style="position:relative;overflow:hidden;flex:1;min-width:0;border-radius:var(--r-3);padding:10px 4px;text-align:center;${vedette
       ?'background:linear-gradient(160deg,rgba(224,32,32,.20),rgba(224,32,32,.06) 60%,rgba(224,32,32,.02));border:1px solid rgba(224,32,32,.45);box-shadow:var(--e2),var(--glow-red)'
       :'background:rgba(255,255,255,.028);border:1px solid rgba(255,255,255,.05)'}">
-    ${vedette?`<div aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(-55deg,transparent,transparent 9px,rgba(255,255,255,.02) 9px,rgba(255,255,255,.02) 10px)"></div>`:''}
+    ${vedette?`<div aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;background:none"></div>`:''}
     <div style="position:relative;font-family:var(--pile-titre);font-size:${vedette?30:26}px;line-height:1;color:${couleur};text-shadow:0 0 ${vedette?16:10}px ${couleur}${vedette?'99':'66'}">${val==null?'-':Math.round(val)}<span style="font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);color:var(--sub);font-weight:400">${unite}</span></div>
-    <div style="position:relative;font-size:var(--fs-2xs);color:${vedette?'#ffb3b3':'var(--sub)'};letter-spacing:1.4px;font-weight:800;margin-top:5px">${lib}</div>
+    <div style="position:relative;font-size:var(--fs-2xs);color:${vedette?'#ffb3b3':'var(--sub)'};letter-spacing:1.4px;font-weight:800;margin-top:6px">${lib}</div>
   </div>`;
 
   // Code couleur commun aux deux écrans du plan — voir PLAN_COULEURS.
@@ -81984,8 +81994,8 @@ function _htmlPlanAthlete(user,intercale){
     border:1px solid rgba(255,90,90,.42);
     box-shadow:0 0 20px rgba(224,32,32,.30),inset 0 1px 0 rgba(255,255,255,.07)">
     <div style="position:absolute;inset:0;pointer-events:none;
-      background:repeating-linear-gradient(-50deg,transparent,transparent 13px,rgba(0,0,0,.16) 13px,rgba(0,0,0,.16) 14px)"></div>
-    <div style="position:relative;display:flex;align-items:center;gap:8px;padding:9px 13px;
+      background:none"></div>
+    <div style="position:relative;display:flex;align-items:center;gap:8px;padding:10px 14px;
       background:linear-gradient(90deg,rgba(224,32,32,.55),rgba(140,0,0,.22) 70%,transparent);
       border-bottom:1px solid rgba(255,90,90,.30)">
       <span style="font-size:var(--fs-lg);line-height:1;filter:drop-shadow(0 0 6px rgba(255,90,90,.95))">⚠</span>
@@ -81993,7 +82003,7 @@ function _htmlPlanAthlete(user,intercale){
         letter-spacing:3px;color:var(--text);text-transform:uppercase;
         --halo-c:rgba(255,90,90,.95);text-shadow:var(--halo-1),0 0 20px rgba(224,32,32,.55)">Attention</span>
     </div>
-    <div style="position:relative;padding:11px 13px 12px">
+    <div style="position:relative;padding:12px 14px 12px">
       <!-- LE FILET NE SEPARE QUE LES PUCES ENTRE ELLES. Pose sur TOUTES, il
            en mettait un sur la premiere aussi : juste sous le border-bottom
            du bandeau « Attention ». Deux traits rouges quasi paralleles a
@@ -82019,7 +82029,7 @@ function _htmlPlanAthlete(user,intercale){
   // Rythme de LISTE : 3px de marge au lieu de 7, separateur plus discret.
   // La cible tactile ne descend pas pour autant — le select garde 34px, et
   // la regle WCAG est tenue par sa largeur, pas par l interligne.
-  const ligneCourse=(lib,qte,cle,stock,nUsages)=>`<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-top:1px solid #1c1c1c">
+  const ligneCourse=(lib,qte,cle,stock,nUsages)=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-top:1px solid #1c1c1c">
       <select onchange="lcStock('${cle}',this)" aria-label="État : ${escapeHtml(lib)}"
         style="flex-shrink:0;width:88px;min-height:34px;padding:4px 6px;border-radius:var(--r-2);cursor:pointer;
           background:${stock?'rgba(34,197,94,.10)':'#101010'};
@@ -82029,7 +82039,7 @@ function _htmlPlanAthlete(user,intercale){
         <option value=""${stock?'':' selected'}>À prendre</option>
         <option value="stock"${stock?' selected':''}>En stock</option>
       </select>
-      <span style="flex:1;min-width:0;font-size:var(--fs-xs);color:${stock?'var(--text-faint)':'var(--text-strong)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${stock?'text-decoration:line-through':''}">${escapeHtml(lib)}${(nUsages>1)?` <span title="Regroupé : cette denrée est demandée à ${nUsages} endroits de ton plan" style="font-size:var(--fs-2xs);font-weight:800;color:var(--text-faint);border:1px solid var(--border);border-radius:var(--r-1);padding:0 3px;vertical-align:1px">×${nUsages}</span>`:''}</span>
+      <span style="flex:1;min-width:0;font-size:var(--fs-xs);color:${stock?'var(--text-faint)':'var(--text-strong)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${stock?'text-decoration:line-through':''}">${escapeHtml(lib)}${(nUsages>1)?` <span title="Regroupé : cette denrée est demandée à ${nUsages} endroits de ton plan" style="font-size:var(--fs-2xs);font-weight:800;color:var(--text-faint);border:1px solid var(--border);border-radius:var(--r-1);padding:0 4px;vertical-align:1px">×${nUsages}</span>`:''}</span>
       <span style="font-size:var(--fs-sm);font-weight:800;color:${stock?'var(--text-faint)':'var(--text)'};flex-shrink:0">${qte}</span>
     </div>`;
   // Les sources sont INTERCHANGEABLES : la liste ne peut pas deviner laquelle
@@ -82044,9 +82054,9 @@ function _htmlPlanAthlete(user,intercale){
       return `<option value="${escapeHtml(v)}"${choisi===v?' selected':''}>${escapeHtml(planNomCourt(s.nom))}</option>`;
     }).join('');
     const q=choisi?Math.round(Number(choisi.split('|')[1])*LC_REPAS):null;
-    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--border)">
+    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--border)">
       <select onchange="lcChoisir('${cle}',this.value)" aria-label="Source de ${macro==='p'?'protéines':'glucides'} au choix"
-        style="flex:1;min-width:0;min-height:38px;padding:7px 9px;background:#101010;border:1px solid var(--border);border-radius:var(--r-2);color:${choisi?'var(--text)':'var(--text-dim)'};font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
+        style="flex:1;min-width:0;min-height:38px;padding:8px 10px;background:#101010;border:1px solid var(--border);border-radius:var(--r-2);color:${choisi?'var(--text)':'var(--text-dim)'};font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
         <option value="">${macro==='p'?'Protéines':'Glucides'} au choix…</option>
         ${opts}
       </select>
@@ -82062,11 +82072,11 @@ function _htmlPlanAthlete(user,intercale){
 // poussaient tout le reste hors de vue, et on ne la consulte qu au moment de
 // faire ses courses. <details> natif, comme les historiques : aucun script,
 // le clavier l ouvre, et le lecteur d ecran l annonce.
-const courses=(lc&&lc.lignes.length)?`<details class="hist-repli lc-repli" style="position:relative;overflow:hidden;background:repeating-linear-gradient(0deg,#161616,#161616 27px,#191919 27px,#191919 54px);border:1px solid var(--border);border-left:3px solid var(--red);border-radius:var(--r-3);padding:12px 13px;margin-bottom:14px"${_lcOuvert?' open':''} ontoggle="_lcOuvert=this.open">
-    <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:-12px -13px 8px;padding:11px 13px;border-radius:var(--r-2) var(--r-2) 0 0;background:linear-gradient(180deg,var(--text),#e9e9e9);box-shadow:var(--e1);min-height:44px">
+const courses=(lc&&lc.lignes.length)?`<details class="hist-repli lc-repli" style="position:relative;overflow:hidden;background:none;border:1px solid var(--border);border-left:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:14px"${_lcOuvert?' open':''} ontoggle="_lcOuvert=this.open">
+    <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:-12px -14px 8px;padding:12px 14px;border-radius:var(--r-2) var(--r-2) 0 0;background:linear-gradient(180deg,var(--text),#e9e9e9);box-shadow:var(--e1);min-height:44px">
       <span style="font-size:var(--fs-xs);color:#0a0a0a;letter-spacing:2px;font-weight:800;text-transform:uppercase;display:inline-flex;align-items:center;gap:6px">${icon('clipboard',13)} Liste de courses</span>
-      <span style="display:inline-flex;align-items:center;gap:9px;flex-shrink:0">
-        <span style="font-size:var(--fs-2xs);color:#5a5a5a;letter-spacing:1.5px;font-weight:800;text-transform:uppercase">${lc.lignes.filter(l=>l.qte>0).length} lignes</span>
+      <span style="display:inline-flex;align-items:center;gap:10px;flex-shrink:0">
+        <span style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:1.5px;font-weight:800;text-transform:uppercase">${lc.lignes.filter(l=>l.qte>0).length} lignes</span>
         <span class="hist-chevron" style="font-size:var(--fs-md);color:var(--border);transition:transform var(--t-1)">▾</span>
       </span>
     </summary>
@@ -82080,7 +82090,7 @@ const courses=(lc&&lc.lignes.length)?`<details class="hist-repli lc-repli" style
       ${''/* les quatre lignes « au choix » suivent, hors du marquage stock */}
       ${auChoix('p',0)}${auChoix('p',1)}
       ${auChoix('c',0)}${auChoix('c',1)}
-      <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:9px">Calculée sur un jour d'entraînement, le plus chargé : mieux vaut un reste qu'une rupture en milieu de semaine. Les lignes « au choix » comptent un repas multiplié par ${LC_REPAS}.</div>
+      <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:10px">Calculée sur un jour d'entraînement, le plus chargé : mieux vaut un reste qu'une rupture en milieu de semaine. Les lignes « au choix » comptent un repas multiplié par ${LC_REPAS}.</div>
   </details>`:'';
 
   // ⚠ pal A ETE RETIRE le 08/09/2026 avec la periodisation.
@@ -82088,8 +82098,8 @@ const courses=(lc&&lc.lignes.length)?`<details class="hist-repli lc-repli" style
     ?`<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-3);padding:10px 12px;margin-bottom:12px;font-size:var(--fs-xs);color:var(--text);line-height:1.6">Tes repas imposés couvrent déjà ${rest.negatifs.map(n=>n.lib).join(' et ')} : les sources correspondantes affichent 0. Parles-en à ton coach.</div>`
     :'';
 
-  return `<div style="margin-bottom:22px">
-    <div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:2px;font-weight:800;--halo-c:rgba(224,32,32,.45);text-shadow:var(--halo-2);margin-bottom:4px;display:flex;align-items:center;gap:5px">${icon('target',12)} Programme nutritionnel</div>
+  return `<div style="margin-bottom:24px">
+    <div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:2px;font-weight:800;--halo-c:rgba(224,32,32,.45);text-shadow:var(--halo-2);margin-bottom:4px;display:flex;align-items:center;gap:6px">${icon('target',12)} Programme nutritionnel</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-bottom:12px">${escapeHtml(PLAN_NOTE_INDICATIF)}</div>
     <div class="oa-carte">
       <div class="oa-tete">
@@ -82740,7 +82750,7 @@ function _prepRendre(){
           +'<input type="number" inputmode="decimal" min="1" max="100" placeholder="%" value="'+ch(e.part_pc)+'" oninput="prepDiviseur(\'part_pc\',this.value)" style="width:100%">');
   z.innerHTML='<div style="display:flex;gap:8px;margin-bottom:16px">'+onglet('prep','Meal prep')+onglet('recette','Recette')+'</div>'
     +lignes
-    +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-bottom:18px" onclick="prepAjouterLigne()">+ Ingrédient</button>'
+    +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-bottom:20px" onclick="prepAjouterLigne()">+ Ingrédient</button>'
     +'<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px;margin-bottom:16px">'+diviseur+'</div>'
     +'<div id="prep-resultat" style="margin-bottom:16px"></div>'
     +'<button type="button" class="btn btn-red" id="prep-ajouter" onclick="prepJournaliser()" style="width:100%" disabled>Ajouter à mon journal</button>';
@@ -82957,7 +82967,7 @@ function _htmlRelegues(l){
       let h='';
       try{ h=(f&&f._perso)?_htmlPersoResult(f):_fjResultHtml(f); }catch(err){ h=''; }
       return h+'<div style="font-size:var(--fs-2xs);color:var(--orange);'
-        +'line-height:1.5;padding:0 14px 9px;margin-top:-6px">'
+        +'line-height:1.5;padding:0 14px 10px;margin-top:-6px">'
         +escapeHtml(evictionMention(e))+'</div>';
     }).join('');
 }
@@ -82973,7 +82983,7 @@ function _htmlEvictionsRappelPlan(c){
   const dits=l.filter(e=>e.niveau!=='choix');
   if(!dits.length) return '';
   return '<div style="background:var(--warning-bg);border-bottom:1px solid var(--warning-border);'
-    +'padding:9px 16px;font-size:var(--fs-2xs);color:var(--text);line-height:1.55">'
+    +'padding:10px 16px;font-size:var(--fs-2xs);color:var(--text);line-height:1.55">'
     +escapeHtml('Évictions déclarées : '+dits.map(e=>e.libelle).join(', ')+'.')
     +'</div>';
 }
@@ -82985,7 +82995,7 @@ function _htmlEquivalents(e){
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--sub);text-transform:uppercase">Équivalences</span>
       <button onclick="fermerEquivalents()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;min-width:44px;min-height:32px">×</button>
     </div>`;
-  const cadre=(corps)=>`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-top:10px">${entete}${corps}</div>`;
+  const cadre=(corps)=>`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-top:10px">${entete}${corps}</div>`;
   // RÈGLE 8 : produit OFF ou groupe vide ⇒ aucune équivalence, et on dit
   // pourquoi plutôt que de rendre une liste vide muette.
   if(!alim||!alim.g)
@@ -83030,29 +83040,29 @@ function _htmlEquivalents(e){
     return t.join(' · ');
   };
   return cadre(`
-    <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:9px">${escapeHtml(descriptif?'À '+libDom+' égales, dans le même groupe.':'Même quantité de '+libDom+', dans le même groupe. À toi de voir.')}</div>
-    ${l.map(x=>`<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-top:1px solid rgba(255,255,255,.06)">
+    <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:10px">${escapeHtml(descriptif?'À '+libDom+' égales, dans le même groupe.':'Même quantité de '+libDom+', dans le même groupe. À toi de voir.')}</div>
+    ${l.map(x=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid rgba(255,255,255,.06)">
       <div style="flex:1;min-width:0">
         <div style="font-size:var(--fs-sm);font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.alim.n)}</div>
         <div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:2px">${x.qtyEq} g${x.plafonne?' <span style="color:var(--orange)">· plafonné</span>':''} &nbsp;·&nbsp; <span style="color:var(--text-dim)">${escapeHtml(ecart(x))}</span></div>
         ${x.plafonne?`<div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.5;margin-top:2px">Quantité plafonnée à ${plafondEquivalence(alim.g)} g : l'équivalence exacte demanderait davantage, ce qui ne se mange pas.</div>`:''}
       </div>
       <button onclick="appliquerEquivalence('${escapeHtml(x.alim.id)}',${x.qtyEq})"
-        class="btn btn-outline btn-sm" style="flex-shrink:0;margin:0;min-height:36px;padding:6px 11px;font-size:var(--fs-2xs)">Remplacer</button>
+        class="btn btn-outline btn-sm" style="flex-shrink:0;margin:0;min-height:36px;padding:6px 12px;font-size:var(--fs-2xs)">Remplacer</button>
     </div>`).join('')}
-    ${_eqReleg.length?`<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;color:var(--sub);text-transform:uppercase;margin-top:13px;padding-top:9px;border-top:1px solid var(--border)">À adapter</div>
+    ${_eqReleg.length?`<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;color:var(--sub);text-transform:uppercase;margin-top:14px;padding-top:10px;border-top:1px solid var(--border)">À adapter</div>
     ${_eqReleg.map(x=>{
       const _ev=(function(){ try{ return evictionDe(currentUser,x.alim); }catch(err){ return null; } })();
-      return `<div style="display:flex;align-items:center;gap:9px;padding:8px 0">
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0">
       <div style="flex:1;min-width:0">
         <div style="font-size:var(--fs-sm);font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.alim.n)}</div>
         <div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:2px">${x.qtyEq} g &nbsp;·&nbsp; <span style="color:var(--text-dim)">${escapeHtml(ecart(x))}</span></div>
         <div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.5;margin-top:2px">${escapeHtml(evictionMention(_ev))}</div>
       </div>
       <button onclick="appliquerEquivalence('${escapeHtml(x.alim.id)}',${x.qtyEq})"
-        class="btn btn-outline btn-sm" style="flex-shrink:0;margin:0;min-height:36px;padding:6px 11px;font-size:var(--fs-2xs)">Remplacer</button>
+        class="btn btn-outline btn-sm" style="flex-shrink:0;margin:0;min-height:36px;padding:6px 12px;font-size:var(--fs-2xs)">Remplacer</button>
     </div>`;}).join('')}`:''}
-    <div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.55;margin-top:9px">${escapeHtml(EQ_RESERVE_ALLERGENE)}</div>
+    <div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.55;margin-top:10px">${escapeHtml(EQ_RESERVE_ALLERGENE)}</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:4px">Rien n'est remplacé tant que tu n'as pas appuyé. L'écart sur les autres macros est affiché tel quel, jamais arrondi à zéro.</div>`);
 }
 // RÈGLE 4 : la substitution ne se fait QUE sur ce bouton. Elle passe par
@@ -83136,7 +83146,7 @@ function _htmlDernierAjout(date){
   if(!a||a.date!==date) return '';
   return `<div style="background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-3);padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
     <div style="flex:1;min-width:0;font-size:var(--fs-sm);color:var(--success);line-height:1.5">${escapeHtml(a.quoi)}</div>
-    <button onclick="annulerDernierAjout()" style="flex-shrink:0;background:none;border:1px solid var(--success-border);color:var(--success);border-radius:var(--r-2);padding:6px 11px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;cursor:pointer">Annuler</button>
+    <button onclick="annulerDernierAjout()" style="flex-shrink:0;background:none;border:1px solid var(--success-border);color:var(--success);border-radius:var(--r-2);padding:6px 12px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;cursor:pointer">Annuler</button>
   </div>`;
 }
 function openFoodSearch(date){
@@ -83340,7 +83350,7 @@ function _htmlCoachResult(a){
   return '<div class="fj-result" role="button" tabindex="0" onclick="selectCoachFood('+_attrArg(a.id)+')"'
     +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}">'
     +'<div style="font-size:var(--fs-md);font-weight:700;line-height:1.35">'+escapeHtml(a.n||'')+'</div>'
-    +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:3px">'+kcal+(m?(' <span style="color:var(--text-faint)">· '+m+'</span>'):'')+'</div>'
+    +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">'+kcal+(m?(' <span style="color:var(--text-faint)">· '+m+'</span>'):'')+'</div>'
     +'</div>';
 }
 // Le meme ecran de quantite que partout ailleurs.
@@ -83375,14 +83385,14 @@ function _htmlPersoResult(a){
     +' style="display:flex;align-items:center;gap:10px">'
     +'<div style="flex:1;min-width:0">'
     +'<div style="font-size:var(--fs-md);font-weight:700;line-height:1.35">'+escapeHtml(a.n||'')+'</div>'
-    +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:3px">'+kcal+(m?(' <span style="color:var(--text-faint)">· '+m+'</span>'):'')+'</div>'
+    +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">'+kcal+(m?(' <span style="color:var(--text-faint)">· '+m+'</span>'):'')+'</div>'
     +'</div>'
     +'<button type="button" class="hit44" aria-label="Modifier cet aliment" style="flex-shrink:0;background:none;border:none;color:var(--sub);font-size:var(--fs-lg)"'
     +' onclick="event.stopPropagation();ouvrirAlimentPerso('+_attrArg(a.id)+')">✎</button>'
     +'</div>';
 }
 function _fjResultHtml(f,avecEpingle){
-  const _kvBadge=`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--amber);background:#1a0e00;border:1px solid #3a1e00;border-radius:var(--r-1);padding:1px 5px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`;
+  const _kvBadge=`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--amber);background:#1a0e00;border:1px solid #3a1e00;border-radius:var(--r-1);padding:1px 6px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`;
   const kcalSpan=f.k!=null?`<span style="color:var(--red-text);font-weight:700">${f.k} kcal/100g</span>`:_kvBadge;
   // L'épingle n'apparaît que sur les listes de favoris et de récents : les
   // résultats de recherche restent rendus exactement comme avant.
@@ -84262,7 +84272,7 @@ function _offBoutonHtml(q){
     <button id="off-btn" class="btn btn-outline btn-sm" style="width:100%"
       onclick="offChercherUI()">Chercher un produit de marque</button>
     ${htmlScanBouton()}
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:7px">Un seul appel, quand tu le demandes. ${escapeHtml(OFF_ATTRIBUTION)}</div>
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">Un seul appel, quand tu le demandes. ${escapeHtml(OFF_ATTRIBUTION)}</div>
     <div id="off-results"></div>
   </div>`;
 }
@@ -85501,8 +85511,8 @@ function _renderFjDaySummary(date){
   // mêmes cibles : annoncer « JOUR OFF » ferait croire à un total réduit qui
   // n'existe pas. Le badge dit une différence, il se tait quand il n'y en a pas.
   const dayBadge=!dieteCyclee(currentUser)?'':isOn
-    ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--success);background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-1);padding:2px 7px;letter-spacing:1px">${icon('zap',10)} JOUR ON</span>`
-    : `<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-1);padding:2px 7px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
+    ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--success);background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-1);padding:2px 8px;letter-spacing:1px">${icon('zap',10)} JOUR ON</span>`
+    : `<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-1);padding:2px 8px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
   // PLUS DE CADRE ROUGE AUTOUR DU JOURNAL. Demande de Kevin, 24/08/2026 : la
   // carte .nut-hud etait la troisieme de l ecran a porter le meme cadre et le
   // meme ciel d eclairs, pour un contenu qui n est ni un objectif ni un bilan
@@ -85513,12 +85523,12 @@ function _renderFjDaySummary(date){
   // n est pas monte du tout.
   const _nav=document.getElementById('fj-nav-slot');
   if(_nav) _nav.innerHTML=`
-    <div style="margin-bottom:18px;${_animEntree('fj-nav')}">
+    <div style="margin-bottom:20px;${_animEntree('fj-nav')}">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
         <button onclick="_renderFjDaySummary('${prevStr}')" style="flex-shrink:0;background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-md);line-height:1">←</button>
         <div style="flex:1;min-width:0;text-align:center">
           <div class="nut-titre" style="transform:none">${dateLbl}</div>
-          <div style="margin-top:5px">${dayBadge}</div>
+          <div style="margin-top:6px">${dayBadge}</div>
         </div>
         ${nextBtn}
       </div>
@@ -85533,13 +85543,13 @@ function _renderFjDaySummary(date){
          grande : 12 en donnaient donc 14, et les deux paraissaient colles. C est
          la marge du BOUTON qu on ouvre, pas celle du bloc : ce dernier est
          partage avec l ecran de progression et la fiche coach. -->
-    ${isToday?`<button onclick="copierHier()" style="width:100%;margin-bottom:22px;padding:10px 0;background:none;border:1px dashed var(--border);border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;cursor:pointer">Copier la journée d'hier</button>`:''}
+    ${isToday?`<button onclick="copierHier()" style="width:100%;margin-bottom:24px;padding:10px 0;background:none;border:1px dashed var(--border);border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;cursor:pointer">Copier la journée d'hier</button>`:''}
     ${_htmlHydratationNut(currentUser)}
     ${repasOrder.filter(r=>grouped[r]).map(r=>`
       <div style="margin-bottom:14px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
           <div style="flex:1;min-width:0;font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase">${repasLabels[r]}</div>
-          ${!isToday?`<button onclick="refaireRepas('${date}','${r}')" style="flex-shrink:0;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:.5px;padding:5px 9px;cursor:pointer">Refaire aujourd'hui</button>`:''}
+          ${!isToday?`<button onclick="refaireRepas('${date}','${r}')" style="flex-shrink:0;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:.5px;padding:6px 10px;cursor:pointer">Refaire aujourd'hui</button>`:''}
         </div>
         ${grouped[r].map(e=>`<div class="fj-entry${e.id===_fjIdNeuf?' fj-neuf':''}">
           <div style="flex:1;min-width:0">
@@ -85547,7 +85557,7 @@ function _renderFjDaySummary(date){
             <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${[e.qty+'g',_fragmentSiValeur('P ',e.p,'g'),_fragmentSiValeur('G ',e.c,'g'),_fragmentSiValeur('L ',e.l,'g')].filter(x=>x).join(' · ')}</div>
           </div>
           <div style="flex-shrink:0;margin-left:8px;text-align:right">
-            ${e.kcal!=null?`<div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-weight:400;font-size:17px;letter-spacing:.5px;color:var(--red-text)">${e.kcal}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400"> kcal</span></div>`:`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--amber);background:#1a0e00;border:1px solid #3a1e00;border-radius:var(--r-1);padding:1px 5px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`}
+            ${e.kcal!=null?`<div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-weight:400;font-size:17px;letter-spacing:.5px;color:var(--red-text)">${e.kcal}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400"> kcal</span></div>`:`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--amber);background:#1a0e00;border:1px solid #3a1e00;border-radius:var(--r-1);padding:1px 6px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`}
             <button class="hit44" onclick="ouvrirEquivalents('${date}',${e.id})" title="Équivalences" aria-label="Voir des équivalences"
               style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:4px">⇄</button>
             <button class="hit44" onclick="deleteFoodEntry('${date}',${e.id})" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:4px">✕</button>
@@ -85679,10 +85689,10 @@ function _htmlCapacite(user){
       return {moyen:Math.round(tot/us.length),partPhotos:tot?photos/tot:0};
     }catch(x){ return null; }
   })();
-  const l=(t,v)=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:3px 0">
+  const l=(t,v)=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:4px 0">
     <span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:var(--text)">${escapeHtml(v)}</span></div>`;
   return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:9px">Capacité</div>
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:10px">Capacité</div>
     ${l('Ce mois-ci',chiffre)}
     ${e.complet?l('Quota mensuel',_fmtOctets(QUOTA_MOIS_OCTETS)):''}
     ${l('Appels réseau comptés',String(e.appels))}
@@ -85691,8 +85701,8 @@ function _htmlCapacite(user){
     ${poids&&poids.partPhotos>0.02?l('dont photos',Math.round(poids.partPhotos*100)+' %'):''}
     ${pj?l('Franchissement projeté',pj.depasse?'quota déjà dépassé':(pj.date.toLocaleDateString('fr-FR')+' (~'+pj.joursRestants+' j)')):''}
     ${l('Dernier relevé',e.maj?new Date(e.maj).toLocaleString('fr-FR'):'aucun')}
-    ${e.degrade?`<div style="margin-top:10px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);padding:9px 11px;font-size:var(--fs-xs);color:var(--orange);line-height:1.6">Au-delà de ${Math.round(SEUIL_DEGRADATION*100)} % : synchronisation périodique ralentie à ${Math.round(SYNC_PERIODE_DEGRADEE_MS/60000)} min et préchargement de la base alimentaire suspendu. Journalisation et envoi des séances INCHANGÉS.</div>`
-      :e.alerte?`<div style="margin-top:10px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);padding:9px 11px;font-size:var(--fs-xs);color:var(--orange);line-height:1.6">Au-delà de ${Math.round(SEUIL_ALERTE*100)} % du quota estimé.</div>`:''}
+    ${e.degrade?`<div style="margin-top:10px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-xs);color:var(--orange);line-height:1.6">Au-delà de ${Math.round(SEUIL_DEGRADATION*100)} % : synchronisation périodique ralentie à ${Math.round(SYNC_PERIODE_DEGRADEE_MS/60000)} min et préchargement de la base alimentaire suspendu. Journalisation et envoi des séances INCHANGÉS.</div>`
+      :e.alerte?`<div style="margin-top:10px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-xs);color:var(--orange);line-height:1.6">Au-delà de ${Math.round(SEUIL_ALERTE*100)} % du quota estimé.</div>`:''}
     ${_htmlCapaciteGlobale()}
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:10px">${escapeHtml(QUOTA_REGISTRE)}</div>
   </div>`;
@@ -85708,7 +85718,7 @@ function _htmlCapacite(user){
  *   cas serait annoncer un service au repos alors qu'on ne mesure rien.
  */
 function _htmlCapaciteGlobale(){
-  const l=(t,v,c)=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:3px 0">
+  const l=(t,v,c)=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:4px 0">
     <span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:${c||'var(--text)'}">${escapeHtml(v)}</span></div>`;
   const q=rcqEtat();
   const g=_capaciteGlobale;
@@ -87367,8 +87377,8 @@ function migrationSopkADire(c){
 }
 function _htmlMigrationSopk(c){
   if(!migrationSopkADire(c)) return '';
-  return `<div style="background:var(--surface-1);border:1px solid var(--warning-border);border-radius:var(--r-3);padding:13px;margin-bottom:12px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">${escapeHtml(SOPK_MIGRATION_TITRE)}</div>
+  return `<div style="background:var(--surface-1);border:1px solid var(--warning-border);border-radius:var(--r-3);padding:14px;margin-bottom:12px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">${escapeHtml(SOPK_MIGRATION_TITRE)}</div>
     <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">${escapeHtml(SOPK_MIGRATION_TEXTE)}</div>
     <button onclick="accuserMigrationSopk()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:1px">J'ai compris</button>
   </div>`;
@@ -87443,7 +87453,7 @@ const BESOINS_ECHEC='Le point de départ n’a pas pu être calculé sur ce doss
   +'séances est revenue du serveur sous une forme inattendue. Les cibles déjà '
   +'enregistrées, elles, restent intactes.';
 function _htmlBesoinsEchec(){
-  return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);padding:9px 11px;font-size:var(--fs-2xs);color:var(--orange);line-height:1.55;margin-bottom:10px">${escapeHtml(BESOINS_ECHEC)}</div>`;
+  return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-2xs);color:var(--orange);line-height:1.55;margin-bottom:10px">${escapeHtml(BESOINS_ECHEC)}</div>`;
 }
 // N2.20 — LE SELECTEUR AFFICHE TOUJOURS LA VALEUR QUE LE CALCUL UTILISE.
 // L'etendue de l'echelle des proteines depend de DECLARATIONS DE L'ATHLETE —
@@ -87832,11 +87842,11 @@ function _htmlStrictAccesCoach(c){
   const a=accesDieteStricte(c);
   const ouvert=a.ok;
   const herite=(a.raison==='usage_existant');
-  return `<div style="background:var(--dark);border:1px solid ${ouvert?'var(--border)':'var(--warning-border)'};border-radius:var(--r-3);padding:13px;margin-bottom:16px">
+  return `<div style="background:var(--dark);border:1px solid ${ouvert?'var(--border)':'var(--warning-border)'};border-radius:var(--r-3);padding:14px;margin-bottom:16px">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
       <div style="flex:1;min-width:0">
         <div style="font-size:var(--fs-sm);font-weight:700;color:var(--text)">Accès à la diète stricte</div>
-        <div style="font-size:var(--fs-2xs);color:${ouvert?'var(--text-faint)':'var(--orange)'};line-height:1.55;margin-top:3px">${ouvert
+        <div style="font-size:var(--fs-2xs);color:${ouvert?'var(--text-faint)':'var(--orange)'};line-height:1.55;margin-top:4px">${ouvert
           ?'Ton athlète voit son plan, ses sources et sa liste de courses.'
           :'Ton athlète voit un écran verrouillé. Il ne verra rien tant que tu n\'auras pas ouvert.'}</div>
       </div>
@@ -87856,7 +87866,7 @@ function _htmlStrictAccesCoach(c){
 // tout ce qui se règle vraiment se règle sur l'écran dédié.
 function _htmlPlanResumeCoach(c){
   const plan=planDe(c);
-  const bouton=(lib)=>`<button onclick="ouvrirPlanCoach()" style="width:100%;margin-top:8px;padding:11px 0;background:var(--surface-2);border:1px solid var(--border);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer">${lib}</button>`;
+  const bouton=(lib)=>`<button onclick="ouvrirPlanCoach()" style="width:100%;margin-top:8px;padding:12px 0;background:var(--surface-2);border:1px solid var(--border);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer">${lib}</button>`;
   // Même précaution que sur l'écran de l'athlète : le résumé compte des
   // sources, et le décompte des alertes ne veut rien dire sans Ciqual.
   // On repasse le MÊME objet client plutôt que de le relire : getOwnedClient
@@ -87867,7 +87877,7 @@ function _htmlPlanResumeCoach(c){
   });
   if(!planActif(c)){
     return `<div style="margin-bottom:16px">
-      <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:5px">${icon('clipboard',12)} Plan alimentaire</div>
+      <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px">${icon('clipboard',12)} Plan alimentaire</div>
       <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Aucun plan composé. Tu peux poser un squelette de repas et deux catalogues de sources interchangeables : leurs grammages se calculent tout seuls pour retomber sur les macros que tu viens de fixer.</div>
       ${bouton('COMPOSER LE PLAN')}
     </div>`;
@@ -87878,7 +87888,7 @@ function _htmlPlanResumeCoach(c){
   let alertes=[];
   try{ alertes=planAlertes(plan,c); }catch(e){}
   return `<div style="margin-bottom:16px">
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:5px">${icon('clipboard',12)} Plan alimentaire</div>
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px">${icon('clipboard',12)} Plan alimentaire</div>
     <div style="font-size:var(--fs-xs);color:#ccc;line-height:1.7">
       ${nLignes} ligne${nLignes>1?'s':''} de repas · ${nMarq} source${nMarq>1?'s':''} au choix · catalogues ${nP} protéines / ${nC} glucides${plan.avecComplements?' · avec compléments':''}
     </div>
@@ -88584,8 +88594,8 @@ const TBK_ICO={
 function _tbkIco(n,taille){
   const p=TBK_ICO[n];
   if(!p) return icon(n,taille);
-  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-    +'stroke-linejoin="round" style="width:'+taille+'px;height:'+taille+'px;display:inline-block;'
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" '
+    +'stroke-linejoin="miter" style="width:'+taille+'px;height:'+taille+'px;display:inline-block;'
     +'vertical-align:middle;flex-shrink:0">'+p+'</svg>';
 }
 // Le libelle d'une ligne : l'icone dans sa case, puis le libelle et son aide.
@@ -88616,7 +88626,7 @@ function _htmlTableauxTableur(c){
   if(!t) return '';
   if(t.manque&&t.manque.length)
     return '<div style="background:var(--warning-bg);border:1px solid var(--warning-border);'
-      +'border-radius:var(--r-3);padding:11px 13px;margin-bottom:14px;'
+      +'border-radius:var(--r-3);padding:12px 14px;margin-bottom:14px;'
       +'font-size:var(--fs-xs);color:var(--text);line-height:1.6">'
       +escapeHtml('Calcul impossible : il manque '+t.manque.join(', ')
         +'. Rien n’est deviné : un chiffre inventé serait pire que pas de chiffre.')
@@ -89099,8 +89109,8 @@ function _htmlTableauxTableur(c){
     // l'instant ; l'application de l'athlete, elle, releve toutes les cinq
     // minutes et des qu'elle revient au premier plan. Promettre l'instantane
     // ferait douter du reste le jour ou elle mettrait deux minutes.
-    : '<div style="display:flex;align-items:center;gap:9px;background:var(--surface-2);'
-      +'border:1px solid var(--border);border-left:3px solid var(--green);'
+    : '<div style="display:flex;align-items:center;gap:10px;background:var(--surface-2);'
+      +'border:1px solid var(--border);border-left:1px solid var(--border);'
       +'border-radius:var(--r-3);padding:10px 12px;font-size:var(--fs-2xs);'
       +'line-height:1.55;color:var(--sub)">'
       +'<span style="color:var(--green);flex:0 0 auto;display:flex">'+icon('check',15)+'</span>'
@@ -89963,7 +89973,7 @@ function joursDieteRecents(c,n){
 // et les compteurs suivent la fenetre choisie : un pourcentage qui ne resume
 // pas le calendrier d'a cote le contredirait.
 const _DRS_SVG=(p,t,plein)=>'<svg viewBox="0 0 24 24" width="'+t+'" height="'+t+'" aria-hidden="true"'
-  +(plein?' fill="currentColor"':' fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"')
+  +(plein?' fill="currentColor"':' fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" stroke-linejoin="miter"')
   +'>'+p+'</svg>';
 // Les couverts, en tracés bruts : le bloc les pose en SVG, l'image les
 // redessine en Path2D. Une seule source, deux rendus identiques.
@@ -90667,9 +90677,9 @@ function _htmlSuppLegende(isCoach){
   // ligne : la lecture n'était donc ni tout à fait en colonnes, ni tout à
   // fait en pile, et le déséquilibre se voyait. Une ligne par niveau rend un
   // rythme régulier, et l'ordre A puis B puis C porte déjà la comparaison.
-  return `<div style="border-top:1px solid var(--border);margin-top:6px;padding-top:11px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:9px">Niveau de preuve</div>
-    <div style="display:grid;grid-template-columns:1fr;gap:7px">
+  return `<div style="border-top:1px solid var(--border);margin-top:6px;padding-top:12px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Niveau de preuve</div>
+    <div style="display:grid;grid-template-columns:1fr;gap:8px">
       ${SUPP_LEGENDE_PREUVE.map(([k,t])=>`<div style="display:flex;align-items:flex-start;gap:8px">
         ${_suppPastille(k)}<span style="font-size:var(--fs-xs);color:#ccc;line-height:1.5">${escapeHtml(t)}</span></div>`).join('')}
     </div>
@@ -90979,8 +90989,8 @@ function renderEditeurEviction(){
   h+='<div style="margin:12px 0 14px">'
     +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;'
     +'color:var(--sub);text-transform:uppercase;margin-bottom:6px">Niveau</div>'
-    +NIV.map(([id,lib,txt])=>'<label style="display:flex;align-items:flex-start;gap:9px;'
-      +'padding:10px 11px;background:var(--surface-1);border:1px solid var(--border);'
+    +NIV.map(([id,lib,txt])=>'<label style="display:flex;align-items:flex-start;gap:10px;'
+      +'padding:10px 12px;background:var(--surface-1);border:1px solid var(--border);'
       +'border-radius:var(--r-2);margin-bottom:6px;cursor:pointer;'
       +'text-transform:none;letter-spacing:normal;font-weight:400">'
       +'<input type="radio" name="eve-niv" value="'+id+'"'+(niv===id?' checked':'')
@@ -90993,10 +91003,10 @@ function renderEditeurEviction(){
   const champ=(id,lbl,attrs,aide)=>
     '<label style="display:block;margin-bottom:12px">'
     +'<span style="display:block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;'
-    +'color:var(--sub);text-transform:uppercase;margin-bottom:5px">'+escapeHtml(lbl)+'</span>'
+    +'color:var(--sub);text-transform:uppercase;margin-bottom:6px">'+escapeHtml(lbl)+'</span>'
     +'<input id="'+id+'" '+attrs+' style="width:100%;box-sizing:border-box;background:var(--surface-1);'
     +'border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);'
-    +'padding:10px 11px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm)">'
+    +'padding:10px 12px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm)">'
     +(aide?'<span style="display:block;font-size:var(--fs-2xs);color:var(--text-faint);'
       +'line-height:1.5;margin-top:4px">'+escapeHtml(aide)+'</span>':'')
     +'</label>';
@@ -91006,10 +91016,10 @@ function renderEditeurEviction(){
   // aliment precis ni un groupe Ciqual : c'est un mot qu'on cherche.
   h+='<label style="display:block;margin-bottom:12px">'
     +'<span style="display:block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;'
-    +'color:var(--sub);text-transform:uppercase;margin-bottom:5px">Ce que ça vise</span>'
+    +'color:var(--sub);text-transform:uppercase;margin-bottom:6px">Ce que ça vise</span>'
     +'<select id="eve-type" onchange="_evMajType()" style="width:100%;box-sizing:border-box;'
     +'background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);'
-    +'color:var(--text);padding:10px 11px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm)">'
+    +'color:var(--text);padding:10px 12px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm)">'
     +[['motif','Un mot, cherché dans le nom et le groupe'],
       ['groupe','Un groupe alimentaire entier'],
       ['aliment','Un aliment précis, par son identifiant']]
@@ -91019,7 +91029,7 @@ function renderEditeurEviction(){
   h+='<div id="eve-suggest" style="display:'+(typ==='motif'?'flex':'none')+';'
     +'flex-wrap:wrap;gap:6px;margin:-4px 0 12px">'
     +EV_MOTIFS_COURANTS.map(([val,lib])=>'<button type="button" class="btn btn-outline btn-sm" '
-      +'style="margin:0;font-size:var(--fs-2xs);padding:5px 9px" '
+      +'style="margin:0;font-size:var(--fs-2xs);padding:6px 10px" '
       +'onclick="_evPoserMotif('+JSON.stringify(val).replace(/"/g,'&quot;')+','
       +JSON.stringify(lib).replace(/"/g,'&quot;')+')">'+escapeHtml(lib)+'</button>').join('')
     +'</div>';
@@ -91031,7 +91041,7 @@ function renderEditeurEviction(){
   h+='<button type="button" class="btn" style="width:100%;margin:4px 0 0" '
     +'onclick="sauverEviction()">Enregistrer</button>';
   if(e)
-    h+='<button type="button" class="btn btn-outline" style="width:100%;margin:9px 0 0" '
+    h+='<button type="button" class="btn btn-outline" style="width:100%;margin:10px 0 0" '
       +'onclick="supprimerEviction()">Retirer cette éviction</button>';
   z.innerHTML=h;
   return true;
@@ -91115,7 +91125,7 @@ function renderEvictions(){
   z.innerHTML='<button type="button" class="btn" style="width:100%;margin:12px 0 14px" '
     +'onclick="ouvrirEditeurEviction(currentUser.email,null,\'s-evictions\')">'
     +'+ Ajouter une éviction</button>'
-    +(l.length?l.map(e=>'<div style="display:flex;align-items:center;gap:9px;padding:10px 11px;'
+    +(l.length?l.map(e=>'<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;'
       +'background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);'
       +'margin-bottom:6px">'
       +'<span style="flex:1;min-width:0">'
@@ -91539,10 +91549,10 @@ function renderTraitements(){
     let l=[]; try{ l=interactionsDuJour(currentUser,j); }catch(e){ l=[]; }
     zi.innerHTML=!l.length?'':l.map(x=>
       '<div style="background:var(--warning-bg);border:1px solid var(--warning-border);'
-      +'border-radius:var(--r-3);padding:11px 13px;margin-bottom:10px">'
+      +'border-radius:var(--r-3);padding:12px 14px;margin-bottom:10px">'
       +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">'
       +escapeHtml(x.phrase)+'</div>'
-      +'<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.55;margin-top:5px">'
+      +'<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.55;margin-top:6px">'
       +escapeHtml(x.traitement)+' · '+escapeHtml(x.complement)
       +(x.aDecaler?' : décaler « '+escapeHtml(x.aDecaler)+' » de '
         +(x.delaiMin>=60?(x.delaiMin/60)+' h':x.delaiMin+' min'):'')+'</div>'
@@ -91588,7 +91598,7 @@ function renderTraitements(){
       const moments=Object.keys(parMoment).sort((a,b)=>_rangMoment(a)-_rangMoment(b));
       for(const m of moments){
         const lib=(TIMINGS_LIST.filter(x=>x.id===m)[0]||{}).label||m;
-        h+='<div style="display:flex;align-items:center;gap:7px;margin:14px 0 6px">'
+        h+='<div style="display:flex;align-items:center;gap:8px;margin:14px 0 6px">'
           +_suppTimingIcon(m,15)
           +'<span style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;'
           +'color:var(--sub);text-transform:uppercase">'+escapeHtml(lib)+'</span></div>';
@@ -91596,7 +91606,7 @@ function renderTraitements(){
           const coche=prisePrise(currentUser,'trt',t.id,m,j);
           const dose=(Number(t.dosage_quantite)>0)
             ? String(t.dosage_quantite).replace('.',',')+' '+escapeHtml(t.dosage_unite||'') : '';
-          h+='<label style="display:flex;align-items:center;gap:10px;padding:9px 11px;'
+          h+='<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;'
             +'background:var(--surface-1);border:1px solid var(--border);'
             +'border-radius:var(--r-2);margin-bottom:6px;cursor:pointer;'
             +'text-transform:none;letter-spacing:normal;font-weight:400">'
@@ -91637,9 +91647,9 @@ function renderTraitements(){
   if(zh){
     const finis=traitements(currentUser).filter(t=>traitementTermine(t,j));
     zh.innerHTML=!finis.length?''
-      :'<div style="margin-top:22px;border-top:1px solid var(--border);padding-top:12px">'
+      :'<div style="margin-top:24px;border-top:1px solid var(--border);padding-top:12px">'
        +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;'
-       +'color:var(--sub);text-transform:uppercase;margin-bottom:7px">Terminés</div>'
+       +'color:var(--sub);text-transform:uppercase;margin-bottom:8px">Terminés</div>'
        // ON NE SUPPRIME PAS UN TRAITEMENT : la trace est une donnee medicale,
        // et elle explique parfois une periode entiere, des annees plus tard.
        +finis.map(t=>'<div style="font-size:var(--fs-xs);color:var(--text-faint);'
@@ -91750,10 +91760,10 @@ function renderEditeurTraitement(){
   const champ=(id,lbl,attrs,aide)=>
     '<label style="display:block;margin-bottom:12px">'
     +'<span style="display:block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;'
-    +'color:var(--sub);text-transform:uppercase;margin-bottom:5px">'+escapeHtml(lbl)+'</span>'
+    +'color:var(--sub);text-transform:uppercase;margin-bottom:6px">'+escapeHtml(lbl)+'</span>'
     +'<input id="'+id+'" '+attrs+' style="width:100%;box-sizing:border-box;background:var(--surface-1);'
     +'border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);'
-    +'padding:10px 11px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm)">'
+    +'padding:10px 12px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm)">'
     +(aide?'<span style="display:block;font-size:var(--fs-2xs);color:var(--text-faint);'
       +'line-height:1.5;margin-top:4px">'+escapeHtml(aide)+'</span>':'')
     +'</label>';
@@ -91763,12 +91773,12 @@ function renderEditeurTraitement(){
   // ce que l'app fait d'une donnee de sante doit etre lu AVANT qu'elle soit
   // saisie, pas apres.
   h+='<div style="background:var(--info-bg);border:1px solid var(--info-border);'
-    +'border-radius:var(--r-3);padding:11px 13px;margin:12px 0 16px;'
+    +'border-radius:var(--r-3);padding:12px 14px;margin:12px 0 16px;'
     +'font-size:var(--fs-2xs);color:var(--text);line-height:1.6">'
     +escapeHtml(TRT_MENTION)+'</div>';
   if(_trtEdit.parCoach)
     h+='<div style="background:var(--warning-bg);border:1px solid var(--warning-border);'
-      +'border-radius:var(--r-3);padding:11px 13px;margin-bottom:16px;'
+      +'border-radius:var(--r-3);padding:12px 14px;margin-bottom:16px;'
       +'font-size:var(--fs-2xs);color:var(--text);line-height:1.6">'
       +'Tu saisis ce traitement dans le dossier de ton athlète. Il y sera '
       +'affiché comme venant de toi, et il pourra l’arrêter lui-même. '
@@ -91777,15 +91787,15 @@ function renderEditeurTraitement(){
   h+=champ('trte-nom','Nom du traitement',
     'type="text" maxlength="'+TRT_NOM_MAX+'" value="'+v(t&&t.nom)+'" placeholder="Lévothyrox 75 µg"');
 
-  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">'
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
     +champ('trte-dq','Dose','type="number" step="any" min="0" value="'
       +v(t&&t.dosage_quantite)+'" placeholder="75"')
     +'<label style="display:block;margin-bottom:12px">'
     +'<span style="display:block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;'
-    +'color:var(--sub);text-transform:uppercase;margin-bottom:5px">Unité</span>'
+    +'color:var(--sub);text-transform:uppercase;margin-bottom:6px">Unité</span>'
     +'<select id="trte-du" style="width:100%;box-sizing:border-box;background:var(--surface-1);'
     +'border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);'
-    +'padding:10px 11px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm)">'
+    +'padding:10px 12px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm)">'
     +'<option value=""></option>'
     +TRT_UNITES.map(x=>'<option value="'+escapeHtml(x)+'"'
       +(((t&&t.dosage_unite)===x)?' selected':'')+'>'+escapeHtml(x)+'</option>').join('')
@@ -91793,10 +91803,10 @@ function renderEditeurTraitement(){
 
   h+='<label style="display:block;margin-bottom:12px">'
     +'<span style="display:block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;'
-    +'color:var(--sub);text-transform:uppercase;margin-bottom:5px">Voie</span>'
+    +'color:var(--sub);text-transform:uppercase;margin-bottom:6px">Voie</span>'
     +'<select id="trte-voie" style="width:100%;box-sizing:border-box;background:var(--surface-1);'
     +'border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);'
-    +'padding:10px 11px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm)">'
+    +'padding:10px 12px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm)">'
     +TRT_VOIES.map(([id,lib])=>'<option value="'+id+'"'
       +(((t&&t.voie)||'orale')===id?' selected':'')+'>'+escapeHtml(lib)+'</option>').join('')
     +'</select></label>';
@@ -91815,7 +91825,7 @@ function renderEditeurTraitement(){
       return '<label style="display:inline-flex;align-items:center;gap:6px;'
         +'background:'+(on?'var(--red-dim, var(--surface-2))':'var(--surface-1)')+';'
         +'border:1px solid '+(on?'var(--red)':'var(--border)')+';border-radius:var(--r-2);'
-        +'padding:7px 10px;cursor:pointer;font-size:var(--fs-xs);color:var(--text);'
+        +'padding:8px 10px;cursor:pointer;font-size:var(--fs-xs);color:var(--text);'
         +'text-transform:none;letter-spacing:normal;font-weight:400">'
         +'<input type="checkbox" class="trte-m" value="'+id+'"'+(on?' checked':'')
         +' style="width:15px;height:15px;margin:0;accent-color:var(--red)">'
@@ -91825,7 +91835,7 @@ function renderEditeurTraitement(){
 
   // ── LE RYTHME ──────────────────────────────────────────────────────────
   const rad=(val,lib)=>'<label style="display:flex;align-items:center;gap:8px;'
-    +'padding:9px 11px;background:var(--surface-1);border:1px solid var(--border);'
+    +'padding:10px 12px;background:var(--surface-1);border:1px solid var(--border);'
     +'border-radius:var(--r-2);margin-bottom:6px;cursor:pointer;font-size:var(--fs-sm);'
     +'color:var(--text);text-transform:none;letter-spacing:normal;font-weight:400">'
     +'<input type="radio" name="trte-ryt" value="'+val+'"'+(ryt===val?' checked':'')
@@ -91839,9 +91849,9 @@ function renderEditeurTraitement(){
     +rad('cycle','Par cycle : X jours de prise, Y d’arrêt')
     +rad('ponctuel','Au besoin, sans jour fixe')
     +'<div id="trte-jours" style="display:'+(ryt==='jours'?'flex':'none')+';flex-wrap:wrap;gap:6px;margin-top:8px">'
-    +[1,2,3,4,5,6,0].map(n=>'<label style="display:inline-flex;align-items:center;gap:5px;'
+    +[1,2,3,4,5,6,0].map(n=>'<label style="display:inline-flex;align-items:center;gap:6px;'
       +'background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);'
-      +'padding:6px 9px;cursor:pointer;font-size:var(--fs-xs);color:var(--text);'
+      +'padding:6px 10px;cursor:pointer;font-size:var(--fs-xs);color:var(--text);'
       +'text-transform:none;letter-spacing:normal;font-weight:400">'
       +'<input type="checkbox" class="trte-j" value="'+n+'"'
       +(jours.indexOf(n)>=0?' checked':'')
@@ -91849,7 +91859,7 @@ function renderEditeurTraitement(){
       +TRT_JOURS_LIB[n].slice(0,3)+'</label>').join('')
     +'</div>'
     +'<div id="trte-cycle" style="display:'+(ryt==='cycle'?'grid':'none')+';'
-    +'grid-template-columns:1fr 1fr;gap:9px;margin-top:8px">'
+    +'grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">'
     +champ('trte-on','Jours de prise','type="number" min="1" max="365" value="'
       +v(t&&t.rythme&&t.rythme.cycleOn,21)+'"')
     +champ('trte-off','Jours d’arrêt','type="number" min="0" max="365" value="'
@@ -91861,7 +91871,7 @@ function renderEditeurTraitement(){
       'Le compte des jours part de cette date.')
     +'</div></div>';
 
-  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">'
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
     +champ('trte-debut','Début','type="date" value="'+v(iso(t&&t.debut)||localISODate(new Date()))+'"')
     +champ('trte-fin','Fin (si connue)','type="date" value="'+v(iso(t&&t.fin))+'"')
     +'</div>';
@@ -91874,7 +91884,7 @@ function renderEditeurTraitement(){
   // ⚠ IL N'EST PROPOSE QU'A L'ATHLETE, et il vaut NON tant qu'il n'y touche
   // pas. Un interrupteur pre-coche n'est pas un consentement.
   if(!_trtEdit.parCoach)
-    h+='<label style="display:flex;align-items:flex-start;gap:10px;padding:11px 12px;'
+    h+='<label style="display:flex;align-items:flex-start;gap:10px;padding:12px 12px;'
       +'background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);'
       +'margin:6px 0 16px;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:400">'
       +'<input type="checkbox" id="trte-partage"'+((t&&t.partageCoach===true)?' checked':'')
@@ -91882,7 +91892,7 @@ function renderEditeurTraitement(){
       +'<span style="flex:1;min-width:0"><span style="display:block;font-size:var(--fs-sm);'
       +'color:var(--text);line-height:1.5">Montrer ce traitement à mon coach</span>'
       +'<span style="display:block;font-size:var(--fs-2xs);color:var(--text-faint);'
-      +'line-height:1.55;margin-top:3px">Sans ça, il voit seulement qu’un traitement '
+      +'line-height:1.55;margin-top:4px">Sans ça, il voit seulement qu’un traitement '
       +'est pris à ce moment de la journée : ni le nom, ni la dose, ni le '
       +'prescripteur. Ce que tu ne partages pas ne quitte pas ce téléphone, et '
       +'ne sera donc pas retrouvé si tu en changes.</span></span></label>';
@@ -91890,7 +91900,7 @@ function renderEditeurTraitement(){
   h+='<button type="button" class="btn" style="width:100%;margin:4px 0 0" '
     +'onclick="sauverTraitement()">Enregistrer</button>';
   if(t&&!traitementTermine(t))
-    h+='<button type="button" class="btn btn-outline" style="width:100%;margin:9px 0 0" '
+    h+='<button type="button" class="btn btn-outline" style="width:100%;margin:10px 0 0" '
       +'onclick="arreterTraitement()">Arrêter ce traitement</button>';
   // ⚠ AUCUN BOUTON « SUPPRIMER ». On n'efface pas un traitement : la trace est
   // une donnee medicale, et elle explique parfois une periode entiere des
@@ -92037,7 +92047,7 @@ function ouvrirFicheTraitement(id){
 function _suppTimingIcon(id,size,color){
   const m=SUPP_TIMING_META[id];
   if(!m) return '';
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="${color||m.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}" style="flex-shrink:0">${m.svg}</svg>`;
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="${color||m.color}" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="${size}" height="${size}" style="flex-shrink:0">${m.svg}</svg>`;
 }
 // ── L'ENCART « QUALITÉ ET SOURCING » A ÉTÉ RETIRÉ ─────────────────────────
 //
@@ -92069,7 +92079,7 @@ const TRAITEMENT_SUPP='Tu as déclaré un traitement régulier. Avant d\'ajouter
   +'de dire si l\'un peut gêner l\'autre.';
 function _htmlTraitementSupp(user){
   if(!traitementDeclare(user||currentUser)) return '';
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 13px;margin-bottom:14px">
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:14px">
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(TRAITEMENT_SUPP)}</div>
   </div>`;
 }
@@ -92096,7 +92106,7 @@ function _htmlFormesFiche(fiche,cleRetenue){
   const l=(fiche&&fiche.formes)||[];
   if(!l.length) return '';
   return `<div style="margin-top:8px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--sub);text-transform:uppercase;margin-bottom:5px">Formes</div>
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--sub);text-transform:uppercase;margin-bottom:6px">Formes</div>
     ${l.map(f=>`<div style="font-size:var(--fs-xs);color:${f.cle===cleRetenue?'var(--text)':'#bbb'};line-height:1.55;margin-bottom:4px">
       <b style="font-weight:800">${escapeHtml(f.lib)}</b> : ${escapeHtml(f.note)}</div>`).join('')}
   </div>`;
@@ -92446,7 +92456,7 @@ function _renderSuppTable(list, isCoach, editFn){
   const depli=(s,x,pose)=>{
     const bloc=(t,st)=>t?`<div style="font-size:var(--fs-xs);${st};margin-top:4px;white-space:normal">${escapeHtml(t)}</div>`:'';
     const corps=
-      (x.fiche?`<div style="font-size:var(--fs-xs);color:#ccc;line-height:1.6;margin-top:5px;white-space:normal">${escapeHtml(x.fiche.note)}</div>`:'')
+      (x.fiche?`<div style="font-size:var(--fs-xs);color:#ccc;line-height:1.6;margin-top:6px;white-space:normal">${escapeHtml(x.fiche.note)}</div>`:'')
       +(x.fiche?_htmlFormesFiche(x.fiche,s.forme):'')
       +(s.forme?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px;font-weight:700">Forme : ${escapeHtml(_libelleForme(x.fiche,s.forme))}</div>`:'')
       +bloc(phraseDureeJugement(x.fiche),'color:var(--text-dim);line-height:1.5')
@@ -92497,7 +92507,7 @@ function _renderSuppTable(list, isCoach, editFn){
   const pris=new Set(isCoach?[]:suppPrisesDuJour(currentUser,iso));
   const coche=(s,mid)=>{
     const k=_suppCle(s.id,mid);
-    return `<button type="button" class="supp-coche" data-supp-coche="${k}" aria-pressed="${pris.has(k)?'true':'false'}" aria-label="Pris : ${escapeHtml(s.name||'Complément')}" onclick="event.stopPropagation();basculerPriseSupp(${s.id},'${mid}')" onkeydown="event.stopPropagation()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5 12.5 10 17.5 19 7"/></svg></button>`;
+    return `<button type="button" class="supp-coche" data-supp-coche="${k}" aria-pressed="${pris.has(k)?'true':'false'}" aria-label="Pris : ${escapeHtml(s.name||'Complément')}" onclick="event.stopPropagation();basculerPriseSupp(${s.id},'${mid}')" onkeydown="event.stopPropagation()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><polyline points="5 12.5 10 17.5 19 7"/></svg></button>`;
   };
 
   // ── LA CARTE ───────────────────────────────────────────────────────────
@@ -92667,7 +92677,7 @@ function loadSuppEmbedded(){
     ?(String(_omega.dosage_quantity).replace('.',',')+' '+(_omega.dosage_unit||'')).trim()
     :null;
   const omegaBanner=_omQte
-    ?`<div data-bandeau-cycle style="margin-bottom:10px;background:rgba(251,146,60,.07);border:1px solid rgba(251,146,60,.22);border-radius:var(--r-2);padding:9px 12px;font-size:var(--fs-xs);color:#fb923c;font-weight:700">Phase lutéale : tu as noté ${escapeHtml(_omQte)} d'oméga-3 pour aujourd'hui.</div>`:'';
+    ?`<div data-bandeau-cycle style="margin-bottom:10px;background:rgba(251,146,60,.07);border:1px solid rgba(251,146,60,.22);border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-xs);color:#fb923c;font-weight:700">Phase lutéale : tu as noté ${escapeHtml(_omQte)} d'oméga-3 pour aujourd'hui.</div>`:'';
   el.innerHTML=_htmlBlocSupplements(list,
     _htmlMigrationCycleSupp(currentUser)+_htmlSuggestionCycle(currentUser)+omegaBanner)
     +'<div style="height:4px"></div>';
@@ -92837,7 +92847,7 @@ function _htmlEvictionsCoach(c){
   return '<div style="background:var(--dark);border:1px solid var(--border);'
     +'border-radius:var(--r-3);padding:16px;margin-bottom:20px">'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;'
-    +'font-weight:700;text-transform:uppercase;margin-bottom:5px">Ce qu’il ne mange pas</div>'
+    +'font-weight:700;text-transform:uppercase;margin-bottom:6px">Ce qu’il ne mange pas</div>'
     +(l.length
       ? l.map(e=>'<div style="padding:8px 0;border-bottom:1px solid var(--border)">'
           +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.5">'
@@ -92857,7 +92867,7 @@ function _htmlEvictionsCoach(c){
     // convenue de vive voix. Une suppression silencieuse dans un plan est pire
     // que l'erreur : elle laisse un repas incomplet que personne ne sait lire.
     +(conflits.length
-      ? '<div style="margin-top:12px;padding:11px 12px;background:var(--warning-bg);'
+      ? '<div style="margin-top:12px;padding:12px 12px;background:var(--warning-bg);'
         +'border:1px solid var(--warning-border);border-radius:var(--r-2)">'
         +'<div style="font-size:var(--fs-xs);color:var(--text);line-height:1.6;font-weight:600">'
         +escapeHtml('Son plan contient '+conflits.length+' ligne'
@@ -92867,7 +92877,7 @@ function _htmlEvictionsCoach(c){
           +'line-height:1.55;margin-top:4px">· '+escapeHtml(x.libelle+' · '
           +x.eviction.libelle+' ('+x.eviction.raison+')')+'</div>').join('')
         +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;'
-        +'margin-top:7px">RepCore ne retire rien du plan : à toi de trancher.</div></div>'
+        +'margin-top:8px">RepCore ne retire rien du plan : à toi de trancher.</div></div>'
       : '')
     +'</div>';
 }
@@ -92916,8 +92926,8 @@ function renderCoachAmplitudesSection(c){
   const l=(function(){ try{ return testsMorpho(c); }catch(e){ return []; } })();
   const faits=l.filter(t=>t.date&&t.texte);
   const email=String((c&&c.email)||'');
-  const ligne=t=>`<div style="border-left:2px solid var(--border);padding-left:11px;margin-bottom:10px">`
-    +`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:3px">${escapeHtml(t.lib)}</div>`
+  const ligne=t=>`<div style="border-left:2px solid var(--border);padding-left:12px;margin-bottom:10px">`
+    +`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(t.lib)}</div>`
     +`<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(t.texte)}</div>`
     +`<div style="font-size:var(--fs-xs);color:${t.perime?'var(--orange)':'var(--text-faint)'};line-height:1.5">`
     +`test, ${new Date(t.date).toLocaleDateString('fr-FR')}${t.perime?' · périmé, à refaire':''}</div></div>`;
@@ -92938,7 +92948,7 @@ function renderCoachAmplitudesSection(c){
     +(manque.length?`<div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">`
       +`<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Il manque, pour aller plus loin</div>`
       +`<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6">${escapeHtml(manque[0])}</div>`
-      +(manque.length>1?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:3px">Celle-ci d’abord : ${manque.length-1} autre${manque.length>2?'s':''} suivra${manque.length>2?'ont':''}, une à la fois.</div>`:'')
+      +(manque.length>1?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:4px">Celle-ci d’abord : ${manque.length-1} autre${manque.length>2?'s':''} suivra${manque.length>2?'ont':''}, une à la fois.</div>`:'')
       +`</div>`:'');
 }
 function renderCoachTraitementsSection(c){  const el=document.getElementById('ccd-traitements');
@@ -92953,7 +92963,7 @@ function renderCoachSuppSection(c){
   const list=(c.nutrition?.supplements)||[];
   el.innerHTML=`
     <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:16px">
-      <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:5px">${icon('pill',12)} Compléments alimentaires</div>
+      <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:6px">${icon('pill',12)} Compléments alimentaires</div>
       <div style="margin-bottom:12px">
         ${_renderSuppTable(list, true, 'openCoachSuppEdit')}
       </div>
@@ -92997,7 +93007,7 @@ function renderCoachSuppSection(c){
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px">Notes (optionnel)</div>
           <input id="ccd-supp-notes" class="form-input" style="padding:8px 10px;font-size:var(--fs-sm)" placeholder="Ex: à jeun, avec repas…">
         </div>
-        <button onclick="saveClientSuppEntry()" style="width:100%;padding:11px 0;background:var(--red);border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer">+ Ajouter au programme</button>
+        <button onclick="saveClientSuppEntry()" style="width:100%;padding:12px 0;background:var(--red);border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer">+ Ajouter au programme</button>
       </div>
     </div>`;
 }
@@ -93064,17 +93074,17 @@ function openCoachSuppEdit(id){
       <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
     </div>
     <div style="margin-bottom:14px">
-      <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-bottom:5px">NOM</div>
+      <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-bottom:6px">NOM</div>
       <input id="coach-supp-name" list="coach-supp-name-list" class="form-input" style="padding:10px 12px;font-size:var(--fs-md)" placeholder="Créatine…" value="${s?escapeHtml(s.name):''}">
       <datalist id="coach-supp-name-list">${SUPPLEMENTS_LIST.map(f=>`<option value="${escapeHtml(f.nom)}">`).join('')}</datalist>
     </div>
     <div style="display:grid;grid-template-columns:1fr auto;gap:10px;margin-bottom:14px;align-items:end">
       <div>
-        <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-bottom:5px">DOSAGE</div>
+        <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-bottom:6px">DOSAGE</div>
         <input id="coach-supp-qty" type="number" min="0" step="any" class="form-input" style="padding:10px 12px;font-size:var(--fs-md)" placeholder="5" value="${s&&s.dosage_quantity?s.dosage_quantity:''}">
       </div>
       <div>
-        <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-bottom:5px">UNITÉ</div>
+        <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-bottom:6px">UNITÉ</div>
         <div style="position:relative">
           <select id="coach-supp-unit" class="form-input" style="padding:10px 28px 10px 12px;font-size:var(--fs-md);appearance:none;-webkit-appearance:none">${unitOptions}</select>
           <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--sub);font-size:var(--fs-xs)">▼</span>
@@ -93086,7 +93096,7 @@ function openCoachSuppEdit(id){
       <div style="display:flex;flex-wrap:wrap;gap:6px" id="coach-supp-timings">${timingChips}</div>
     </div>
     <div style="margin-bottom:14px">
-      <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-bottom:5px">NOTES</div>
+      <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-bottom:6px">NOTES</div>
       <input id="coach-supp-notes" class="form-input" style="padding:10px 12px;font-size:var(--fs-md)" placeholder="Ex: à jeun, avec repas…" value="${s?escapeHtml(s.notes||''):''}">
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding:12px 0;border-top:1px solid var(--border)">
@@ -93098,8 +93108,8 @@ function openCoachSuppEdit(id){
       </div>
     </div>
     <input type="hidden" id="coach-supp-idx" value="${s?s.id:-1}">
-    <button onclick="saveCoachSuppEdit()" style="width:100%;padding:13px 0;background:var(--red);border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer;margin-bottom:10px;text-transform:uppercase">Enregistrer</button>
-    ${s?`<button onclick="deleteCoachSuppEdit(${s.id})" style="width:100%;padding:11px 0;background:none;border:1px solid var(--border);color:var(--text-faint);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;border-radius:var(--r-3);cursor:pointer">Supprimer ce complément</button>`:''}
+    <button onclick="saveCoachSuppEdit()" style="width:100%;padding:14px 0;background:var(--red);border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer;margin-bottom:10px;text-transform:uppercase">Enregistrer</button>
+    ${s?`<button onclick="deleteCoachSuppEdit(${s.id})" style="width:100%;padding:12px 0;background:none;border:1px solid var(--border);color:var(--text-faint);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;border-radius:var(--r-3);cursor:pointer">Supprimer ce complément</button>`:''}
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
@@ -93194,17 +93204,17 @@ function renderCoachCaffeineSection(c){
       <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:14px">Caféine</div>
       <div style="display:flex;gap:8px;margin-bottom:14px">
         <div style="flex:1;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px;text-align:center">
-          <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;margin-bottom:5px">MOY. 7J</div>
+          <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;margin-bottom:6px">MOY. 7J</div>
           <div class="txt-stat" style="color:${col7};line-height:1">${avg7||'-'}</div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">mg/j</div>
         </div>
         <div style="flex:1;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px;text-align:center">
-          <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;margin-bottom:5px">MOY. 28J</div>
+          <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;margin-bottom:6px">MOY. 28J</div>
           <div class="txt-stat" style="color:${col28};line-height:1">${avg28||'-'}</div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">mg/j</div>
         </div>
         <div style="flex:1;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px;text-align:center">
-          <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;margin-bottom:5px">PIC 28J</div>
+          <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;margin-bottom:6px">PIC 28J</div>
           <div style="font-size:${peakMg>999?'18':'24'}px;font-family:var(--pile-titre);color:${colPeak};line-height:1">${peakMg||'-'}</div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${peakMg?peakStr:'-'}</div>
         </div>
@@ -93364,7 +93374,7 @@ function caffIcone(type,taille){
   // reste un tube allumé, mais les vides du tracé restent des vides.
   const halo=coeur+0.85;
   const opHalo=s<=16?0.38:0.44;
-  return `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:inline-block;vertical-align:middle;flex-shrink:0;overflow:visible">`
+  return `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true" style="display:inline-block;vertical-align:middle;flex-shrink:0;overflow:visible">`
     +`<g filter="url(#rcNeonGlow)" stroke="#9ed4ff" stroke-width="${halo.toFixed(2)}" opacity="${opHalo}">${t}</g>`
     +`<g filter="url(#rcNeonGlow)" stroke="#e8f6ff" stroke-width="${douce.toFixed(2)}" opacity=".72">${t}</g>`
     +`<g stroke="var(--text)" stroke-width="${coeur.toFixed(2)}">${t}</g>`
@@ -93677,11 +93687,11 @@ function _htmlCafeineCoucher(entrees,user){
   const coul=alerte?'var(--warning)':'var(--sub)';
   const lim=alerte?heureLimiteCafeine(entrees,bed,CAFEINE_RESIDU_CIBLE):null;
   const sansHeure=_cafeineSansHeure(entrees);
-  return `<div style="background:${alerte?'color-mix(in srgb,var(--amber) 7%,transparent)':'var(--surface-1)'};border:1px solid ${alerte?'color-mix(in srgb,var(--amber) 28%,transparent)':'var(--border)'};border-radius:var(--r-3);padding:11px 13px;margin-bottom:8px">
+  return `<div style="background:${alerte?'color-mix(in srgb,var(--amber) 7%,transparent)':'var(--surface-1)'};border:1px solid ${alerte?'color-mix(in srgb,var(--amber) 28%,transparent)':'var(--border)'};border-radius:var(--r-3);padding:12px 14px;margin-bottom:8px">
     <div style="font-size:var(--fs-sm);color:${coul};line-height:1.6;font-weight:${alerte?'700':'400'}">Il t'en restera environ ${residu} mg à ton heure de coucher habituelle (${_libHeure(c.min)}).</div>
     ${lim!=null?`<div style="font-size:var(--fs-sm);color:var(--warning);line-height:1.6;font-weight:700;margin-top:4px">Pour être sous ${CAFEINE_RESIDU_CIBLE} mg, ta dernière prise devrait être avant ${_libHeure(lim)}.</div>`:''}
-    ${sansHeure?`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5;margin-top:5px">${sansHeure} prise${sansHeure>1?'s':''} sans heure renseignée n'${sansHeure>1?'entrent':'entre'} pas dans ce calcul.</div>`:''}
-    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5;margin-top:5px">${escapeHtml(CAFEINE_NOTE_DEMIVIE)}</div>
+    ${sansHeure?`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5;margin-top:6px">${sansHeure} prise${sansHeure>1?'s':''} sans heure renseignée n'${sansHeure>1?'entrent':'entre'} pas dans ce calcul.</div>`:''}
+    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5;margin-top:6px">${escapeHtml(CAFEINE_NOTE_DEMIVIE)}</div>
   </div>`;
 }
 
@@ -93717,7 +93727,7 @@ function _htmlCafeineNuits(user,dates){
   if(!lignes.length) return '';
   const lbl=d=>new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'});
   return `<div style="background:color-mix(in srgb,var(--amber) 6%,transparent);border:1px solid color-mix(in srgb,var(--amber) 24%,transparent);border-radius:var(--r-4);padding:16px;margin-bottom:14px">
-    <div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:var(--warning);text-transform:uppercase;margin-bottom:9px">Caféine au coucher</div>
+    <div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:var(--warning);text-transform:uppercase;margin-bottom:10px">Caféine au coucher</div>
     ${lignes.map(l=>`<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7;text-transform:capitalize">${escapeHtml(lbl(l.date))} <span style="text-transform:none;color:var(--warning);font-weight:700">environ ${l.mg} mg</span><span style="text-transform:none;color:var(--sub)"> encore présents à ${_libHeure(_hhmmEnMin(l.bed))}</span></div>`).join('')}
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5;margin-top:8px">${escapeHtml(CAFEINE_NOTE_DEMIVIE)}</div>
   </div>`;
@@ -93884,7 +93894,7 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
           <!-- 4. Le filet interieur, tres fin : il ferme le cadran. -->
           <circle cx="65" cy="65" r="37.5" fill="none" data-caff-col="${color}" style="stroke:${_colDepart};transition:stroke var(--t-3) var(--c-out)" stroke-width="0.7" opacity=".35"/>
         </svg>
-        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;padding:0 11px;box-sizing:border-box">
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;padding:0 12px;box-sizing:border-box">
           <div style="display:flex;align-items:baseline;justify-content:center;gap:1px;max-width:100%">
             <span id="caff-total-num" class="txt-hero" data-caff-col="${color}" data-num="${totalMg}" style="color:${_colDepart};font-size:${_tailleChiffres}px;line-height:1;--halo-c:${color};text-shadow:var(--halo-2)66;font-variant-numeric:tabular-nums;transition:color var(--t-3) var(--c-out),text-shadow var(--t-3) var(--c-out)">${totalMg}</span>
             <span style="color:${color};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:1px;line-height:1;text-transform:uppercase">mg</span>
@@ -93902,7 +93912,7 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
              couleur ne sert plus a etiqueter chaque ligne, elle etiquetait
              quatre etats dont trois sont hypothetiques, mais a marquer celui
              ou l athlete se trouve, de la meme teinte que l anneau. -->
-        <div style="display:flex;flex-direction:column;gap:7px">
+        <div style="display:flex;flex-direction:column;gap:8px">
           ${[[`&lt;${thr.green}mg`,'optimal'],[`&lt;${thr.yellow}mg`,'modéré'],
              [`&lt;${thr.orange}mg`,'élevé'],[`&ge;${thr.orange}mg`,'maximum']]
             .map(([v,lib],i)=>`<span class="caf-palier${i===_palier?' caf-actif':''}"${i===_palier?` style="color:${color}"`:''}>`
@@ -94022,18 +94032,18 @@ function _renderCaffeineEmbedded(){
   const minStr=localISODate(new Date(Date.now()-CAFF_RETENTION_JOURS*24*3600*1000));
   const auFond=prevStr<minStr;
   const navPrev=auFond
-    ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:var(--r-2);padding:5px 12px;font-size:var(--fs-lg);cursor:not-allowed">←</button>`
-    :`<button onclick="_caffeineEmbedDate='${prevStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:5px 12px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">←</button>`;
+    ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:var(--r-2);padding:6px 12px;font-size:var(--fs-lg);cursor:not-allowed">←</button>`
+    :`<button onclick="_caffeineEmbedDate='${prevStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">←</button>`;
   const navNext=isToday
-    ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:var(--r-2);padding:5px 12px;font-size:var(--fs-lg);cursor:not-allowed">→</button>`
-    :`<button onclick="_caffeineEmbedDate='${nextStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:5px 12px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">→</button>`;
+    ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:var(--r-2);padding:6px 12px;font-size:var(--fs-lg);cursor:not-allowed">→</button>`
+    :`<button onclick="_caffeineEmbedDate='${nextStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">→</button>`;
   const entries=getCaffeineDay(date);
   const totalMg=entries.reduce((s,e)=>s+(e.mg||0),0);
   const {weight:wKg,estimated:_wEst}=getUserWeight();
   const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser),grossesseSuspend(currentUser));
   el.innerHTML=`
     <div style="margin-bottom:12px">
-      <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--red-text);--halo-c:rgba(224,32,32,.45);text-shadow:var(--halo-1);display:flex;align-items:center;gap:5px">${icon('coffee',11)} Caféine</h3>
+      <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--red-text);--halo-c:rgba(224,32,32,.45);text-shadow:var(--halo-1);display:flex;align-items:center;gap:6px">${icon('coffee',11)} Caféine</h3>
     </div>
     ${_bandeauJour('caff-embed-date-input',date,'_caffEmbedAllerJour',{avecFleches:true,prev:auFond?null:prevStr,next:isToday?null:nextStr,retention:CAFF_RETENTION_JOURS,libelle:dateLbl})}
     ${_renderCaffeineBlock(entries,totalMg,thr,'embedded',date,_wEst,isToday,dateLbl,wKg)}
@@ -94276,7 +94286,7 @@ function renderCaffeineProducts(type){
   grid.innerHTML=products.map(p=>{
     const safe=encodeURIComponent(JSON.stringify(p));
     return `<div class="caff-product-tile" data-id="${p.id}" onclick="confirmCaffeineAdd(decodeURIComponent('${safe}'))" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-      <div style="margin-bottom:7px;line-height:0">${caffIcone(p.type,26)}</div>
+      <div style="margin-bottom:8px;line-height:0">${caffIcone(p.type,26)}</div>
       <div style="font-weight:800;font-size:var(--fs-sm);line-height:1.3;margin-bottom:4px">${p.name}</div>
       <div style="color:var(--red-text);font-weight:900;font-size:var(--fs-md)">${p.mg}mg</div>
       <div style="color:var(--sub);font-size:var(--fs-xs)">${p.volume}</div>
@@ -94459,7 +94469,7 @@ function renderCarteAFilmer(sess){
   if(!z) return;
   const noms=((sess&&sess.aFilmer)||[]).filter(Boolean);
   if(!noms.length){ z.innerHTML=''; return; }
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">
+  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">À filmer</div>
     <div style="font-size:var(--fs-sm);color:#ccc;line-height:1.6;margin-bottom:10px">Tu voulais filmer : ${noms.map(n=>escapeHtml(n)).join(', ')}</div>
     <div style="display:flex;flex-direction:column;gap:6px">
@@ -96602,7 +96612,7 @@ function htmlCorrectionsOrphelines(user){
   const u=_dossier(user);
   const l=_tabBloc(u&&u.correctionsOrphelines);
   if(!l.length) return '';
-  const ligne=o=>'<div style="padding:7px 0;border-bottom:1px solid var(--surface-2)">'
+  const ligne=o=>'<div style="padding:8px 0;border-bottom:1px solid var(--surface-2)">'
     +'<div style="font-size:var(--fs-2xs);color:var(--red-text);font-weight:800;letter-spacing:.5px">'
     +escapeHtml(String(o.exercice||'').replace(/-/g,' ').toUpperCase())+'</div>'
     +(o.audioUrl
@@ -96610,7 +96620,7 @@ function htmlCorrectionsOrphelines(user){
       :'<div style="font-size:var(--fs-sm);line-height:1.5;margin-top:2px">'+escapeHtml(o.note||'')+'</div>')
     +'</div>';
   return '<div style="background:var(--surface-1);border:1px solid var(--border);'
-    +'border-radius:var(--r-3);padding:12px 13px;margin-top:14px">'
+    +'border-radius:var(--r-3);padding:12px 14px;margin-top:14px">'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);font-weight:800;letter-spacing:1px;'
     +'text-transform:uppercase;margin-bottom:4px">Corrections de ton coach</div>'
     +'<p class="sub" style="font-size:var(--fs-2xs);line-height:1.5;margin:0 0 6px">'
@@ -96794,7 +96804,7 @@ function ouvrirModeles(cible){
   const l=_tplListe();
   window._tplCible=cible||'vc-general';
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 18px 22px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
     <h2 style="margin-bottom:2px">Modèles</h2>
     <p class="sub" style="font-size:var(--fs-xs);margin-bottom:10px">Le texte reste modifiable après insertion : rien ne part sans que tu l'aies relu.</p>
     <input id="tpl-rech" placeholder="Rechercher un titre…" oninput="_tplFiltrer()" autocomplete="off"
@@ -96822,10 +96832,10 @@ function _tplFiltrer(){
     ${parCat[c].map(t=>{
       const v=templateVariables(t.corps);
       return `<button type="button" onclick="tplInserer('${escapeHtml(t.id)}')"
-        style="width:100%;text-align:left;min-height:44px;padding:9px 11px;margin-bottom:6px;border-radius:var(--r-2);cursor:pointer;
+        style="width:100%;text-align:left;min-height:44px;padding:10px 12px;margin-bottom:6px;border-radius:var(--r-2);cursor:pointer;
           background:#111;border:1px solid var(--border);color:var(--text-strong);font-family:Montserrat,sans-serif">
         <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${escapeHtml(t.titre)}</div>
-        <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:3px">${escapeHtml(t.corps)}</div>
+        <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:4px">${escapeHtml(t.corps)}</div>
         ${v.length?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">Variables : ${v.map(x=>escapeHtml(x)).join(', ')}</div>`:''}
       </button>`;}).join('')}`).join('');
 }
@@ -96873,10 +96883,10 @@ function ouvrirGestionModeles(){
   const l=_tplListe();
   const opts=(sel)=>Object.keys(TPL_CAT_LIB).map(c=>`<option value="${c}"${c===sel?' selected':''}>${escapeHtml(TPL_CAT_LIB[c])}</option>`).join('');
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 18px 22px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
     <h2 style="margin-bottom:2px">Mes modèles</h2>
     <p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px">Variables reconnues : {prénom}, {exercice}, {séance}, {charge}. Elles sont remplies au moment où tu insères le modèle.</p>
-    ${l.map(t=>`<div style="border:1px solid var(--border);border-radius:var(--r-3);padding:9px 10px;margin-bottom:8px">
+    ${l.map(t=>`<div style="border:1px solid var(--border);border-radius:var(--r-3);padding:10px 10px;margin-bottom:8px">
       <div style="display:flex;gap:8px;align-items:center">
         <div style="flex:1;min-width:0;font-size:var(--fs-sm);font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(t.titre)}</div>
         <span style="flex-shrink:0;font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase">${escapeHtml(TPL_CAT_LIB[t.cat]||t.cat)}</span>
@@ -96884,7 +96894,7 @@ function ouvrirGestionModeles(){
           style="flex-shrink:0;min-width:44px;min-height:38px;background:none;border:1px solid #3a1a1a;border-radius:var(--r-2);color:var(--red-text);cursor:pointer">✕</button>
       </div>
       <textarea oninput="tplMajCorps('${escapeHtml(t.id)}',this.value)" rows="2"
-        style="width:100%;margin-top:7px;font-size:var(--fs-sm);box-sizing:border-box">${escapeHtml(t.corps)}</textarea>
+        style="width:100%;margin-top:8px;font-size:var(--fs-sm);box-sizing:border-box">${escapeHtml(t.corps)}</textarea>
     </div>`).join('')}
     <div style="border:1px dashed var(--border);border-radius:var(--r-3);padding:10px;margin-top:6px">
       <input id="tpl-n-titre" placeholder="Titre (ex : Genoux)" maxlength="40" style="width:100%;font-size:var(--fs-md);margin-bottom:6px;box-sizing:border-box">
@@ -97022,8 +97032,8 @@ function qcEditRow(id){
     <input id="qce-lbl-${c.id}" value="${escapeHtml(c.label)}" maxlength="40" style="width:100%;box-sizing:border-box;margin-bottom:4px;font-size:var(--fs-sm)">
     <input id="qce-txt-${c.id}" value="${escapeHtml(c.text)}" maxlength="120" style="width:100%;box-sizing:border-box;font-size:var(--fs-xs)">
   </div>
-  <button data-id="${c.id}" onclick="qcSaveEdit(this.dataset.id)" style="background:var(--red);border:none;color:var(--text);border-radius:var(--r-1);padding:7px 11px;font-size:var(--fs-xs);font-weight:800;cursor:pointer;font-family:Montserrat,sans-serif">Enregistrer</button>
-  <button onclick="openQCManager()" style="background:none;border:1px solid var(--border);border-radius:var(--r-1);padding:7px 10px;font-size:var(--fs-sm);cursor:pointer;color:var(--sub)">✕</button>`;
+  <button data-id="${c.id}" onclick="qcSaveEdit(this.dataset.id)" style="background:var(--red);border:none;color:var(--text);border-radius:var(--r-1);padding:8px 12px;font-size:var(--fs-xs);font-weight:800;cursor:pointer;font-family:Montserrat,sans-serif">Enregistrer</button>
+  <button onclick="openQCManager()" style="background:none;border:1px solid var(--border);border-radius:var(--r-1);padding:8px 10px;font-size:var(--fs-sm);cursor:pointer;color:var(--sub)">✕</button>`;
   document.getElementById('qce-lbl-'+c.id)?.focus();
 }
 function qcSaveEdit(id){
@@ -97176,7 +97186,7 @@ function secsToTs(sec){
 // attributs data-* d'avant sont TOUS conserves : rcVitesse, rcPas, rcMarque,
 // rcRepetition et _rcActiver les retrouvent sans changer de regle.
 const _VCX_SVG=(p,t,plein)=>'<svg viewBox="0 0 24 24" width="'+t+'" height="'+t+'" aria-hidden="true"'
-  +(plein?' fill="currentColor"':' fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"')
+  +(plein?' fill="currentColor"':' fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" stroke-linejoin="miter"')
   +'>'+p+'</svg>';
 const _VCX_P=Object.freeze({
   jauge:'<path d="M4.5 17a8.5 8.5 0 1 1 15 0"/><path d="m12 13 4-4"/><circle cx="12" cy="13" r="1.4" fill="currentColor"/>',
@@ -98757,15 +98767,15 @@ function _bandeauJour(inputId,jour,handler,opts){
   // LES FLECHES, quand l ecran en demande. Style repris tel quel de la version
   // cafeine : fond transparent, bordure #333, et la variante desactivee en #222.
   const _fl=(cible,txt,actif)=>actif
-    ?`<button onclick="${handler}('${cible}')" style="flex:none;background:none;border:1px solid #333;color:#aaa;border-radius:var(--r-sm);padding:6px 13px;font-size:15px;cursor:pointer;font-family:Montserrat,sans-serif">${txt}</button>`
-    :`<button disabled style="flex:none;background:none;border:1px solid #222;color:var(--text-dim);border-radius:var(--r-sm);padding:6px 13px;font-size:15px;cursor:not-allowed">${txt}</button>`;
+    ?`<button onclick="${handler}('${cible}')" style="flex:none;background:none;border:1px solid #333;color:#aaa;border-radius:var(--r-sm);padding:6px 14px;font-size:15px;cursor:pointer;font-family:Montserrat,sans-serif">${txt}</button>`
+    :`<button disabled style="flex:none;background:none;border:1px solid #222;color:var(--text-dim);border-radius:var(--r-sm);padding:6px 14px;font-size:15px;cursor:not-allowed">${txt}</button>`;
   const _gauche=avecFleches?_fl(prev,'←',!!prev&&prev>=min):'';
   const _droite=avecFleches?_fl(next,'→',!!next&&next<=auj):'';
   return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
     ${_gauche}
     <div style="flex:1;min-width:0;font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:${estAuj?'#8a8a8a':'var(--red)'};text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${lbl}</div>
     ${_droite}
-    ${estAuj?'':`<button onclick="${handler}('')" title="Revenir à aujourd'hui" style="flex:none;background:#141414;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:6px 9px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;cursor:pointer">AUJ.</button>`}
+    ${estAuj?'':`<button onclick="${handler}('')" title="Revenir à aujourd'hui" style="flex:none;background:#141414;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:6px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;cursor:pointer">AUJ.</button>`}
     <input type="date" id="${inputId}" value="${jour}" min="${min}" max="${auj}" onchange="${handler}(this.value)" aria-label="Choisir le jour" style="flex:0 0 auto;width:138px;box-sizing:border-box;background:#101010;border:1px solid var(--border);color:#ccc;border-radius:var(--r-2);padding:6px 8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);color-scheme:dark">
   </div>`;
 }
@@ -98814,7 +98824,7 @@ function _stepsObjectifJour(goals,type,date){
 // _animerJauges pose la hauteur au second requestAnimationFrame. Le gabarit est
 // PARTAGE par les pas et le sommeil : une fonction modifiee, deux ecrans.
 function _htmlBarreSemaine(pct,col,isToday,accentBas){
-  return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%"><div class="rc-barre-v" data-bar-h="${pct}" style="width:82%;height:4px;background:linear-gradient(180deg,${col},${col}55);border-radius:var(--r-1) var(--r-1) 0 0;min-height:4px;box-shadow:0 0 ${isToday?'14':'8'}px ${col}${isToday?'aa':'55'},inset 0 1px 0 rgba(255,255,255,.25);transition:height 420ms var(--c-out) var(--rcb-d,0ms);${isToday?'border-top:2px solid #fff;':''}${accentBas?'border-bottom:2px solid '+accentBas+';':''}"></div></div>`;
+  return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%"><div class="rc-barre-v" data-bar-h="${pct}" style="width:82%;height:4px;background:linear-gradient(180deg,${col},${col}55);border-radius:var(--r-1) var(--r-1) 0 0;min-height:4px;box-shadow:0 0 ${isToday?'14':'8'}px ${col}${isToday?'aa':'55'},inset 0 1px 0 rgba(255,255,255,.25);transition:height 420ms var(--c-out) var(--rcb-d,0ms);${isToday?'border-top:1px solid var(--border);':''}${accentBas?'border-bottom:2px solid '+accentBas+';':''}"></div></div>`;
 }
 // ⚠ `opts.avecImport` EST EXPLICITE, ET NON DEDUIT DU NOM DU CONTENEUR.
 // Deduire « je suis sur la page autonome » de `containerId==='steps-content'`
@@ -98876,7 +98886,7 @@ function loadSteps(containerId='steps-content',opts){
   });
   let counts='';
   weekData.forEach(d=>{
-    counts+=`<div style="flex:1;text-align:center;font-size:var(--fs-xs);font-weight:700;color:${d.count?stepColor(d.count,d.type,d.date):'var(--border)'};margin-top:3px">${d.count?Math.round(d.count/100)/10+'k':'·'}</div>`;
+    counts+=`<div style="flex:1;text-align:center;font-size:var(--fs-xs);font-weight:700;color:${d.count?stepColor(d.count,d.type,d.date):'var(--border)'};margin-top:4px">${d.count?Math.round(d.count/100)/10+'k':'·'}</div>`;
   });
 
   let histHtml='';
@@ -98893,7 +98903,7 @@ function loadSteps(containerId='steps-content',opts){
       const col=stepColor(e.count,type,e.date);
       const pctBar=goal?Math.min(100,Math.round(e.count/goal*100)):null;
       const typeBadge=type?`<span style="font-size:var(--fs-xs);font-weight:900;padding:2px 6px;border-radius:var(--r-1);background:${type==='on'?'#2a0000':'#001a2a'};color:${type==='on'?'var(--red)':'var(--sub)'};letter-spacing:.5px">${type==='on'?'Entraînement':'Repos'}</span>`:'';
-      const goalLine=goal?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">${e.count.toLocaleString('fr-FR')} / ${goal.toLocaleString('fr-FR')} pas${e.count>=goal?' <span style="color:var(--green)">✓</span>':''}</div><div style="height:3px;background:var(--surface-2);border-radius:var(--r-1);margin-top:5px;overflow:hidden"><div style="height:100%;width:${pctBar}%;background:${col};border-radius:var(--r-1)"></div></div>`:'';
+      const goalLine=goal?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">${e.count.toLocaleString('fr-FR')} / ${goal.toLocaleString('fr-FR')} pas${e.count>=goal?' <span style="color:var(--green)">✓</span>':''}</div><div style="height:3px;background:var(--surface-2);border-radius:var(--r-1);margin-top:6px;overflow:hidden"><div style="height:100%;width:${pctBar}%;background:${col};border-radius:var(--r-1)"></div></div>`:'';
       return `<div style="padding:10px 0;border-bottom:1px solid #111">
         <div style="display:flex;align-items:center;justify-content:space-between">
           <div style="display:flex;align-items:center;gap:8px">${typeBadge}<div style="font-size:var(--fs-sm);font-weight:600;color:#aaa;text-transform:capitalize">${lbl}</div></div>
@@ -98903,7 +98913,7 @@ function loadSteps(containerId='steps-content',opts){
       </div>`;
     }).join('');
     histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)">
-      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div>
+      
       <!-- R34, l'historique n'est plus replie : ses jours se lisent d'emblee. -->
       <div class="hist-bloc" style="position:relative"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Historique</div><span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:700">${Math.min(log.length,21)} jour${Math.min(log.length,21)>1?'s':''}</span></div>
       ${rows}</div>
@@ -98934,8 +98944,8 @@ function loadSteps(containerId='steps-content',opts){
     <!-- R28, L ORDRE DE L USAGE : la saisie du jour, ce qu elle change,
          la semaine, l historique, puis les reglages. -->
     <div class="card-nut" style="margin-bottom:14px;${_animEntree('steps-saisie')}">
-      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
-      <div style="position:absolute;left:50%;top:-30px;transform:translateX(-50%);width:130px;height:90px;border-radius:var(--r-full);background:radial-gradient(circle,${todayType==='off'?'rgba(96,165,250,.13)':'rgba(224,32,32,.14)'},transparent 68%);pointer-events:none"></div>
+      
+      <div style="position:absolute;left:50%;top:-30px;transform:translateX(-50%);width:130px;height:90px;border-radius:var(--r-full);background:radial-gradient(circle,${todayType==='off'?'transparent':'rgba(224,32,32,.14)'},transparent 68%);pointer-events:none"></div>
       <div style="position:relative">
         ${_bandeauJour('steps-date-input',selStr,'changeStepsDate',{avecFleches:true,
           prev:_jourVoisin(selStr,-1,STEPS_RETENTION_JOURS),
@@ -98945,13 +98955,13 @@ function loadSteps(containerId='steps-content',opts){
              seulement si le jour choisi EST aujourd'hui : le bandeau au-dessus
              permet de revenir sur un autre jour, et le libelle mentirait. -->
         <div style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">${selStr===todayStr?'Aujourd\'hui':'Ce jour-là'} :</div>
-        <div style="display:flex;gap:8px;margin-bottom:11px">
+        <div style="display:flex;gap:8px;margin-bottom:12px">
           <button onclick="stepsToggleType('on')" style="flex:1;padding:10px 4px;border-radius:var(--r-2);border:2px solid ${todayType==='on'?'var(--red)':'#1f1f1f'};background:${todayType==='on'?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='on'?'var(--text)':'#4a4a4a'};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='on'?'0 0 18px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='on'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">Entraînement</button>
           <button onclick="stepsToggleType('off')" style="flex:1;padding:10px 4px;border-radius:var(--r-2);border:2px solid ${todayType==='off'?'#60a5fa':'#1f1f1f'};background:${todayType==='off'?'linear-gradient(160deg,#1d4f80,#0b2740)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='off'?'var(--text)':'#4a4a4a'};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='off'?'0 0 18px rgba(96,165,250,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='off'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:background var(--t-2),border-color var(--t-2),color var(--t-2),box-shadow var(--t-2),text-shadow var(--t-2)">Repos</button>
         </div>
         <input type="number" id="steps-today-input" placeholder="0" min="0" max="99999"
           value="${todayEntry&&todayEntry.count!=null?todayEntry.count:''}"
-          style="width:100%;box-sizing:border-box;font-size:var(--fs-3xl);text-align:center;padding:14px 10px;background:linear-gradient(180deg,#070707,#0d0d0d);border:1px solid #242424;border-radius:var(--r-3);color:var(--text);font-family:var(--pile-titre);letter-spacing:2px;margin-bottom:11px;box-shadow:var(--e-inset);text-shadow:var(--halo-2)">
+          style="width:100%;box-sizing:border-box;font-size:var(--fs-3xl);text-align:center;padding:14px 10px;background:linear-gradient(180deg,#070707,#0d0d0d);border:1px solid #242424;border-radius:var(--r-3);color:var(--text);font-family:var(--pile-titre);letter-spacing:2px;margin-bottom:12px;box-shadow:var(--e-inset);text-shadow:var(--halo-2)">
         <!-- R28, « Enregistrer », comme partout ailleurs dans l app. -->
         <button class="btn btn-red" onclick="saveSteps()">Enregistrer</button>
         <!-- LA CAPTURE SE PLACE SOUS LA SAISIE, PAS EN BAS DE PAGE : l athlete
@@ -98967,20 +98977,20 @@ function loadSteps(containerId='steps-content',opts){
     ${todayGoalHintHtml||todayProgressHtml?`<div class="card-nut" style="margin-bottom:14px;${_animEntree('steps-jour')}"><div style="position:relative">${todayGoalHintHtml}${todayProgressHtml}</div></div>`:''}
 
     <div class="card-nut" style="margin-bottom:14px;${_animEntree('steps-sem')}">
-      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
+      
       <div style="position:relative">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:15px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
           <span style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Cette semaine</span>
           <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--text-dim)"><span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:var(--red);vertical-align:middle;box-shadow:0 0 6px rgba(224,32,32,.9)"></span> Entraînement &nbsp;<span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:#60a5fa;vertical-align:middle;box-shadow:0 0 6px rgba(96,165,250,.8)"></span> Repos</span>
         </div>
-        <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:7px;border-bottom:1px solid rgba(255,255,255,.05)">${bars}</div>
+        <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:8px;border-bottom:1px solid rgba(255,255,255,.05)">${bars}</div>
         <div style="display:flex;gap:4px">${labels}</div>
         <div style="display:flex;gap:4px">${counts}</div>
       </div>
     </div>
 
     <div style="background:linear-gradient(145deg,#c10000 0%,#7d0000 55%,#4a0000 100%);border-radius:var(--r-4);padding:20px;margin-bottom:14px;text-align:center;position:relative;overflow:hidden;box-shadow:var(--e3);${_animEntree('steps-moy')}">
-      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.13) 16px,rgba(0,0,0,.13) 17px);pointer-events:none"></div>
+      
       <div style="position:absolute;right:-22px;top:-22px;width:100px;height:100px;border-radius:var(--r-full);background:rgba(255,255,255,.055);pointer-events:none"></div>
       <div style="position:relative">
         <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:8px">Moyenne hebdomadaire</div>
@@ -99001,7 +99011,7 @@ function loadSteps(containerId='steps-content',opts){
          saisit ses pas tous les jours. R34, plus replies : la carte est
          affichee en entier. -->
     <div class="card-nut" style="margin:14px 0">
-      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
+      
       <div class="steps-reglages" style="position:relative">
         <div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Régler mes objectifs</div>
         <!-- ALIGNES PAR LE BAS. « JOUR ON ENTRAÎNEMENT » se replie sur deux
@@ -99010,17 +99020,17 @@ function loadSteps(containerId='steps-content',opts){
              et poussent leur champ en bas, ce qui tient quel que soit le
              libelle, figer une hauteur casserait a la premiere retouche de
              texte, ou sur un telephone plus etroit. -->
-        <div style="display:flex;gap:10px;margin:13px 0 12px;align-items:stretch">
+        <div style="display:flex;gap:10px;margin:14px 0 12px;align-items:stretch">
           <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end">
             <!-- R12, PLUS DE « JOUR ON ». Ici on REGLE UN OBJECTIF : le
                  libelle le dit, et il ne se confond plus avec le marquage du
                  jour, plus haut, qui employait les memes mots. -->
             <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">Objectif les jours d'entraînement</div>
-            <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:11px 6px;background:linear-gradient(180deg,#0a0000,#0f0303);border:1px solid #3a0d0d;border-radius:var(--r-2);color:var(--red-text);font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),var(--glow-red);--halo-c:rgba(224,32,32,.6);text-shadow:var(--halo-1)">
+            <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:12px 6px;background:linear-gradient(180deg,#0a0000,#0f0303);border:1px solid #3a0d0d;border-radius:var(--r-2);color:var(--red-text);font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),var(--glow-red);--halo-c:rgba(224,32,32,.6);text-shadow:var(--halo-1)">
           </div>
           <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end">
             <div style="font-size:var(--fs-xs);font-weight:800;color:#7aa7d9;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">Objectif les jours de repos</div>
-            <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:11px 6px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:var(--r-2);color:#7aa7d9;font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),0 0 12px rgba(96,165,250,.1);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
+            <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:12px 6px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:var(--r-2);color:#7aa7d9;font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),0 0 12px rgba(96,165,250,.1);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
           </div>
         </div>
         <button onclick="saveStepsGoals()" style="width:100%;padding:12px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;cursor:pointer;box-shadow:0 0 18px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Enregistrer les objectifs</button>
@@ -99698,8 +99708,8 @@ function _htmlDeficit(user,lectureSeule){
   const txt=bloc?DEF_TEXTE_BLOCAGE:messageDeficitVigilance(user);
   if(!txt) return '';
   const c=bloc?'var(--red)':'var(--orange)';
-  return `<div style="background:var(--surface-1);border:1px solid ${c}55;border-radius:var(--r-4);padding:14px;margin-bottom:18px">
-    <div style="font-size:var(--fs-xs);color:${c};text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">${bloc?'À faire vérifier':'Prudence'}</div>
+  return `<div style="background:var(--surface-1);border:1px solid ${c}55;border-radius:var(--r-4);padding:14px;margin-bottom:20px">
+    <div style="font-size:var(--fs-xs);color:${c};text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:8px">${bloc?'À faire vérifier':'Prudence'}</div>
     <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(txt)}</div>
     ${blocDisclaimerSante()}
   </div>`;
@@ -99711,8 +99721,8 @@ function _htmlDeficit(user,lectureSeule){
 function _htmlDernierAjust(nut){
   const h=((nut&&nut.ajustHisto)||[]).slice(-1)[0];
   if(!h) return '';
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">
-    <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">Dernier ajustement proposé</div>
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+    <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:8px">Dernier ajustement proposé</div>
     <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">${new Date(h.date).toLocaleDateString('fr-FR')} · ${h.sens==='baisse'?'baisse':'hausse'} de ${Math.abs(h.kcalDelta)} kcal les jours ${h.jour==='off'?'OFF':'ON'} (${_fmtPct(h.gDelta)} g de glucides) : vitesse mesurée ${_fmtPct(h.mesuree)} %/sem.<br><strong style="color:${h.decision==='applique'?'var(--success)':'var(--sub)'}">${h.decision==='applique'?'Appliqué par l\'athlète':'Refusé : il garde ses objectifs'}</strong></div>
   </div>`;
 }
@@ -99750,8 +99760,8 @@ function _htmlAjustement(user,lectureSeule){
     const _plDit=pl&&(pl.plancher!=null
       ?(pl.regle||'sous le plancher')+' ('+pl.plancher+' kcal)'
       :'sous le plancher');
-    if(pl) return _defHtml+`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:14px;margin-bottom:18px">
-      <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">Rythme</div>
+    if(pl) return _defHtml+`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:14px;margin-bottom:20px">
+      <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:8px">Rythme</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${lectureSeule
         ?`La ${escapeHtml(PHASES[(phaseCourante(user)||{}).type].apres)} avance plus lentement que visé, et aucune baisse n’est proposée : les cibles seraient ${escapeHtml(_plDit)}. Ce qui reste à regarder : sommeil, pas quotidiens, régularité, cause médicale.`
         :`Ta ${escapeHtml(PHASES[(phaseCourante(user)||{}).type].apres)} avance plus lentement que visé, mais je ne te propose pas de baisser : tu serais ${pl.plancher!=null?(pl.regle||'sous ton plancher')+' ('+pl.plancher+' kcal)':'sous ton plancher'}. On regarde ailleurs : sommeil, pas quotidiens, régularité, et s'il n'y a pas une cause médicale.`}</div>
@@ -99770,7 +99780,7 @@ function _htmlAjustement(user,lectureSeule){
   const propo=`Proposition : ${_fmtPct(a.kcalDelta)} kcal ${jourLib} (${_fmtPct(a.gDelta)} g de glucides).`;
   const regimeHtml=`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-top:6px">${escapeHtml(phraseRegimeMesure(a))}</div>`
     +(a.verifieParJournal?'':`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-top:4px">Proposé sans journal alimentaire pour le vérifier.</div>`);
-  return `<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:var(--r-4);padding:14px;margin-bottom:18px">
+  return `<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:var(--r-4);padding:14px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:8px">Ajustement proposé</div>
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7;margin-bottom:6px">${constat}</div>
     <div style="font-size:var(--fs-sm);color:var(--text);font-weight:800;line-height:1.6;margin-bottom:4px">${propo}</div>
@@ -99992,8 +100002,8 @@ const THY_TEXTE_COACH='Apports suivis et poids stable : aucun ajustement n’est
 function _htmlStagnation(user,lectureSeule){
   const r=_ajustStagnationBloque(user);
   if(!r) return '';
-  return `<div style="background:var(--surface-1);border:1px solid var(--orange)55;border-radius:var(--r-4);padding:14px;margin-bottom:18px">
-    <div style="font-size:var(--fs-xs);color:var(--orange);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">Rythme</div>
+  return `<div style="background:var(--surface-1);border:1px solid var(--orange)55;border-radius:var(--r-4);padding:14px;margin-bottom:20px">
+    <div style="font-size:var(--fs-xs);color:var(--orange);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:8px">Rythme</div>
     <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(lectureSeule?THY_TEXTE_COACH:THY_TEXTE_ATHLETE)}</div>
     ${lectureSeule?'':blocDisclaimerSante()}
   </div>`;
@@ -100029,8 +100039,8 @@ function _htmlAdherenceRefus(user,lectureSeule){
     let tca=false; try{ tca=aTCA(user); }catch(e){}
     if(tca) return '';
   }
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:14px;margin-bottom:18px">
-    <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">Rythme</div>
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:14px;margin-bottom:20px">
+    <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:8px">Rythme</div>
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(phraseAdherence(r.adh,!!lectureSeule))}</div>
     ${lectureSeule?'':blocDisclaimerSante()}
   </div>`;
@@ -100461,14 +100471,14 @@ function _htmlViolationsCoach(c){
   const pl=plancherEffectif(c);
   const dur=pl.tca;
   return `<div style="background:#1a0505;border:1px solid var(--red);border-radius:var(--r-3);padding:12px;margin:10px 0">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:7px">Sous le plancher</div>
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:8px">Sous le plancher</div>
     ${viol.map(v=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">· ${escapeHtml(v.message)}</div>`).join('')}
     ${dur
-      ?`<div style="font-size:var(--fs-xs);color:var(--red-text);line-height:1.6;margin-top:9px;font-weight:700">Un antécédent alimentaire est déclaré au bilan de départ. Le plancher de cet athlète est majoré pour cette raison, et ces cibles passent dessous. Elles sont enregistrées : la décision est la tienne, et elle est tracée dans son dossier.</div>`
+      ?`<div style="font-size:var(--fs-xs);color:var(--red-text);line-height:1.6;margin-top:10px;font-weight:700">Un antécédent alimentaire est déclaré au bilan de départ. Le plancher de cet athlète est majoré pour cette raison, et ces cibles passent dessous. Elles sont enregistrées : la décision est la tienne, et elle est tracée dans son dossier.</div>`
       // ⚠ PLUS DE CASE NI DE SECOND BOUTON (24/09/2026). Ils ne servaient qu'a
       //   lever un refus qui n'existe plus. Ce qui reste est ce qui informe :
       //   les chiffres, et ce que l'athlete voit de son cote.
-      :`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:9px">Ces chiffres sont enregistrés tels quels. De son côté, elle lit « tes objectifs sont sous le minimum calculé pour toi ».</div>`}
+      :`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:10px">Ces chiffres sont enregistrés tels quels. De son côté, elle lit « tes objectifs sont sous le minimum calculé pour toi ».</div>`}
     ${blocDisclaimerSante()}
   </div>`;
 }
@@ -100492,10 +100502,10 @@ function _htmlPlancherAthlete(user){
   // « En dessous, on ne descend pas » aurait ete faux : le coach peut
   // enregistrer une prescription sous le plancher, et c'est precisement ce
   // cas que ce bloc annonce.
-  return `<div style="background:#1a0505;border:1px solid var(--red);border-radius:var(--r-4);padding:14px;margin-bottom:18px">
+  return `<div style="background:#1a0505;border:1px solid var(--red);border-radius:var(--r-4);padding:14px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:1px">À savoir</div>
     <div class="rc-micro" style="margin-bottom:8px">Tes objectifs sont sous le minimum calculé pour toi.</div>
-    ${TEXTE_PLANCHER_ATHLETE.map(t=>`<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-bottom:7px">${escapeHtml(t)}</div>`).join('')}
+    ${TEXTE_PLANCHER_ATHLETE.map(t=>`<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-bottom:8px">${escapeHtml(t)}</div>`).join('')}
   </div>`;
 }
 // Invitation au palier, jamais une injonction. Elle ne remplace pas la carte
@@ -100507,7 +100517,7 @@ function _htmlPlancherAthlete(user){
 function _htmlPalierAthlete(user){
   if(!restrictionProlongee(user)) return '';
   const sem=semainesEcoulees(user);
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:14px;margin-bottom:18px">
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:14px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:1px">Faire un palier</div>
     <div class="rc-micro" style="margin-bottom:8px">Remonter vers ta dépense, deux à trois semaines.</div>
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">Tu es en sèche depuis ${sem} semaines, avec des apports proches de ton plancher. Remonter aux alentours de ta dépense pendant deux ou trois semaines n'annule rien de ce que tu as fait : ça remet du carburant dans les séances et ça facilite la suite. C'est une proposition, tu en parles avec ton coach.</div>
@@ -100720,17 +100730,17 @@ function _htmlSilenceCoach(b,quoi){
 function _htmlObjectifsCoach(c){
   const g=(c&&c.stepsGoals)||STEPS_GOALS_DEFAUT;
   const v=n=>Number(n)>0?Number(n):'';
-  return `<div style="border-top:1px solid var(--border);margin-top:11px;padding-top:11px">
-    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:7px">Poser l'objectif</div>
+  return `<div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px">
+    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:8px">Poser l'objectif</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <label style="flex:1;min-width:110px;font-size:var(--fs-2xs);color:var(--text-dim)">Jours ON
         <input type="number" id="ccd-pas-on" min="0" max="99999" inputmode="numeric" value="${v(g.on)}"
-          style="width:100%;box-sizing:border-box;margin-top:3px;background:#101010;border:1px solid var(--border);color:var(--text);border-radius:var(--r-2);padding:8px;min-height:44px;font-family:inherit"></label>
+          style="width:100%;box-sizing:border-box;margin-top:4px;background:#101010;border:1px solid var(--border);color:var(--text);border-radius:var(--r-2);padding:8px;min-height:44px;font-family:inherit"></label>
       <label style="flex:1;min-width:110px;font-size:var(--fs-2xs);color:var(--text-dim)">Jours OFF
         <input type="number" id="ccd-pas-off" min="0" max="99999" inputmode="numeric" value="${v(g.off)}"
-          style="width:100%;box-sizing:border-box;margin-top:3px;background:#101010;border:1px solid var(--border);color:var(--text);border-radius:var(--r-2);padding:8px;min-height:44px;font-family:inherit"></label>
+          style="width:100%;box-sizing:border-box;margin-top:4px;background:#101010;border:1px solid var(--border);color:var(--text);border-radius:var(--r-2);padding:8px;min-height:44px;font-family:inherit"></label>
     </div>
-    <button class="btn btn-outline btn-sm" onclick="coachPoserObjectifsPas()" style="width:100%;margin:9px 0 0;min-height:44px">Enregistrer les objectifs</button>
+    <button class="btn btn-outline btn-sm" onclick="coachPoserObjectifsPas()" style="width:100%;margin:10px 0 0;min-height:44px">Enregistrer les objectifs</button>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">L'athlète peut les changer depuis son écran : c'est alors sa valeur qui s'applique.</div>
   </div>`;
 }
@@ -100792,7 +100802,7 @@ const CS_DOM={
 };
 const _csEtat={sommeil:{off:0,vue:'7j',vise:null},pas:{off:0,vue:'7j',vise:null}};
 function _csQ(q){ return q==='pas'?'pas':'sommeil'; }
-function _csSvg(p,plein){ return '<svg viewBox="0 0 24 24" '+(plein?'fill="currentColor"':'fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"')+' aria-hidden="true">'+p+'</svg>'; }
+function _csSvg(p,plein){ return '<svg viewBox="0 0 24 24" '+(plein?'fill="currentColor"':'fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="square" stroke-linejoin="miter"')+' aria-hidden="true">'+p+'</svg>'; }
 const CS_ICO={
   lune:_csSvg('<path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z"/>'),
   chaussure:_csSvg('<path d="M2.5 16.5h17.2a1.8 1.8 0 0 0 1.8-1.8c0-1.4-1-2.1-2.5-2.6l-4.1-1.5a3 3 0 0 1-1.3-.9L11.2 6.8a1.3 1.3 0 0 0-2-.2L7.6 8.3H2.5z"/><path d="M2.5 16.5v2h19v-2"/>'),
@@ -101063,7 +101073,7 @@ function _htmlRecuperationCoach(c){
   if(!r.points) return '';
   const ligne=r.criteres.map(x=>x.lib.toLowerCase()+' ('+x.valeur+')').join(' · ');
   return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:16px;margin-bottom:20px">
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:5px">Récupération</div>
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:6px">Récupération</div>
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(ligne)}.</div>
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-top:8px">Ce qui va dans le même sens en ce moment, d'après ce qu'elle ou il a saisi. Aucun seuil n'est franchi : c'est une conversation à avoir.</div>
   </div>`;
@@ -101076,7 +101086,7 @@ function _htmlRecuperationAthlete(user){
   let r;
   try{ r=scoreRecuperation(user); }catch(e){ return ''; }
   if(r.points<RECUP_SEUIL_MESSAGE) return '';
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:14px;margin-bottom:18px">
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:14px;margin-bottom:20px">
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(RECUP_PHRASE_ATHLETE)}</div>
   </div>`;
 }
@@ -101438,8 +101448,8 @@ function _htmlPauseProposition(c){
   // propose — un silence se lirait comme « il n y a rien a signaler ».
   if(tca&&!PAUSE_PROPOSABLE_SOUS_TCA){
     if(!_restrictionBrute(c)||pauseActive(c)) return '';
-    return `<div style="margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px">
-      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">Restriction prolongée</div>
+    return `<div style="margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Restriction prolongée</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(PAUSE_MENTION_TCA)}</div>
       ${blocDisclaimerSante()}
     </div>`;
@@ -101450,8 +101460,8 @@ function _htmlPauseProposition(c){
     +(prop.kcalActuel?' à '+prop.kcalActuel+' kcal':'')
     +'. Pause de '+prop.jours+' jours à '+prop.kcalCible+' kcal ? '
     +'Protéines et lipides ne changent pas.';
-  return `<div style="margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">Pause diététique</div>
+  return `<div style="margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Pause diététique</div>
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(phrase)}</div>
     ${tca?`<div style="font-size:var(--fs-xs);color:var(--warning);line-height:1.6;margin-top:8px">${escapeHtml(PAUSE_MENTION_TCA)}</div>`:''}
     <div style="display:flex;gap:8px;margin-top:10px">
@@ -101474,13 +101484,13 @@ function _htmlPauseEnCours(c){
   const rest=pauseJoursRestants(c);
   const peutReprendre=!!(p.kcalAvant&&p.kcalAvant.on&&p.kcalAvant.off);
   if(!fini){
-    return `<div style="margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px">
-      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">Pause en cours</div>
+    return `<div style="margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Pause en cours</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">Pause de ${p.jours} jours, encore ${rest} jour${rest>1?'s':''}. ${escapeHtml(PAUSE_TEXTE_VITESSE.charAt(0).toUpperCase()+PAUSE_TEXTE_VITESSE.slice(1))}.</div>
     </div>`;
   }
-  return `<div style="margin-top:12px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-3);padding:13px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">Pause terminée</div>
+  return `<div style="margin-top:12px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-3);padding:14px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Pause terminée</div>
     <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7">Ta pause est terminée. On reprend la sèche, ou on s'arrête là ?</div>
     ${peutReprendre?'':`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:6px">Les objectifs d'avant la pause sont introuvables : seul le passage en maintien reste possible.</div>`}
     <div style="display:flex;gap:8px;margin-top:10px">
@@ -101500,9 +101510,9 @@ function _htmlFinPrevue(c){
   if(pauseActive(c)) return '';
   const j=Math.ceil((p.finPrevue-Date.now())/864e5);
   if(j<0||j>FIN_PREVUE_PREAVIS_JOURS) return '';
-  return `<div style="margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px">
+  return `<div style="margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">Ta ${escapeHtml(PHASES[p.type].apres)} se termine dans ${j} jour${j>1?'s':''}. On prépare la sortie ?</div>
-    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:9px" onclick="ouvrirTransitionMaintien()">Préparer la sortie</button>
+    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="ouvrirTransitionMaintien()">Préparer la sortie</button>
   </div>`;
 }
 
@@ -101974,8 +101984,8 @@ const REDS_LIB_SIGNAUX=Object.freeze({
 // ── L'écran athlète ───────────────────────────────────────────────────────
 let _leafqRep={};
 function htmlLeafq(){
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:15px 16px;margin-bottom:16px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:9px">${escapeHtml(REDS_TITRE)}</div>
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px 16px;margin-bottom:16px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">${escapeHtml(REDS_TITRE)}</div>
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.75;margin-bottom:12px">${escapeHtml(LEAFQ_INTRO)}</div>
     ${LEAFQ_ITEMS.map(it=>`<div style="padding:8px 0;border-top:1px solid rgba(255,255,255,.06)">
       <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-bottom:6px">${escapeHtml(it.q)}</div>
@@ -102062,17 +102072,17 @@ function htmlRedsCoach(c){
   if(e.level==='green'&&sig.length<REDS_MIN_SIGNAUX) return '';
   const lib={green:'Rien à signaler',orange:'À surveiller',red:'À traiter en priorité'}[e.level]||'';
   const dat=t=>{ try{ return new Date(t).toLocaleDateString('fr-FR'); }catch(x){ return ''; } };
-  return `<div style="background:var(--surface-1);border:1px solid ${e.level==='red'?'var(--red)':'var(--border)'};border-radius:var(--r-3);padding:13px;margin-bottom:16px">
+  return `<div style="background:var(--surface-1);border:1px solid ${e.level==='red'?'var(--red)':'var(--border)'};border-radius:var(--r-3);padding:14px;margin-bottom:16px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">${escapeHtml(REDS_TITRE)}</span>
       <span style="font-size:var(--fs-xs);font-weight:800;color:${e.level==='red'?'var(--red)':(e.level==='orange'?'var(--orange)':'var(--sub)')}">${escapeHtml(lib)}</span>
     </div>
-    ${sig.length?sig.map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid rgba(255,255,255,.05)">
+    ${sig.length?sig.map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,.05)">
       <span style="font-size:var(--fs-xs);color:var(--text-strong);min-width:0">${escapeHtml(REDS_LIB_SIGNAUX[x.code]||x.code)}</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint);white-space:nowrap;flex-shrink:0">${escapeHtml(dat(new Date(x.date).getTime?new Date(x.date).getTime():Date.now()))}</span>
     </div>`).join('')
     :'<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Aucun signal actif.</div>'}
-    ${e.level!=='green'?`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:9px;padding-top:8px;border-top:1px solid var(--border)">Objectif de perte de poids en pause. ${escapeHtml(REDS_RENVOI)}</div>`:''}
+    ${e.level!=='green'?`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">Objectif de perte de poids en pause. ${escapeHtml(REDS_RENVOI)}</div>`:''}
     ${e.leafq?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:6px">Questionnaire rempli le ${escapeHtml(dat(e.leafq.date))}. Le détail des réponses ne t'est pas transmis.</div>`:''}
     ${blocDisclaimerSante()}
   </div>`;
@@ -102240,7 +102250,7 @@ function renderCartePesee(){
     sous='Encore '+(PESEE_MM_MIN-fen)+' pesée'+((PESEE_MM_MIN-fen)>1?'s':'')
       +' avant une moyenne fiable';
   }
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:13px 14px;margin-bottom:16px;box-shadow:var(--el-1)">
+  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:14px 14px;margin-bottom:16px;box-shadow:var(--el-1)">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase">Pesée du jour</span>
       ${dujour?`<span style="font-size:var(--fs-2xs);color:var(--green);font-weight:700">✓ ${dujour.kg} kg</span>`:''}
@@ -102257,7 +102267,7 @@ function renderCartePesee(){
           <span class="pes-unite">kg</span>
         </span>
       </label>
-      <button class="btn btn-red btn-sm" onclick="savePesee()" style="height:44px;padding:0 18px;letter-spacing:1px;white-space:nowrap">${dujour?'Corriger':'Valider'}</button>
+      <button class="btn btn-red btn-sm" onclick="savePesee()" style="height:44px;padding:0 20px;letter-spacing:1px;white-space:nowrap">${dujour?'Corriger':'Valider'}</button>
     </div>
     <div class="pes-sous">${sous}</div>
   </div>`;
@@ -102412,7 +102422,7 @@ function _blocVitesse(user){
       <span style="font-size:var(--fs-sm);color:${c};font-weight:700">${signe}${v.pctSem.toFixed(2)} %</span>
     </div>
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:6px">${escapeHtml(phrase)}</div>
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:5px">Pente sur ${v.points} moyennes glissantes, quatorze derniers jours.</div>`;
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px">Pente sur ${v.points} moyennes glissantes, quatorze derniers jours.</div>`;
 }
 // Bloc complet de l'onglet. Le garde-fou est la PREMIÈRE chose lue : tout ce
 // qui suit est inatteignable en mode neutre.
@@ -102460,16 +102470,16 @@ function blocPoids(user){
            colonne : la fiche coach : les deux se remettent d eux-memes cote
            a cote, sans regle supplementaire. -->
       <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:2px 8px;margin-bottom:10px">
-        <span class="evo-titre" style="margin-bottom:0">Évolution du poids${act!=null?`<span style="font-family:var(--pile-titre);font-size:var(--fs-lg);color:var(--text-strong);letter-spacing:1px;margin-left:9px">${act} kg</span>`:''}</span>
+        <span class="evo-titre" style="margin-bottom:0">Évolution du poids${act!=null?`<span style="font-family:var(--pile-titre);font-size:var(--fs-lg);color:var(--text-strong);letter-spacing:1px;margin-left:10px">${act} kg</span>`:''}</span>
         <span style="font-size:var(--fs-2xs);color:var(--text-faint)">${legende}</span>
       </div>
       ${svgCourbe||'<div style="font-size:var(--fs-xs);color:var(--sub)">Au moins deux pesées sont nécessaires pour tracer une courbe.</div>'}
     </div>`;
-  const vitesse=neutre?'':`<div class="evo-carte" style="padding:13px">
+  const vitesse=neutre?'':`<div class="evo-carte" style="padding:14px">
       <div class="evo-titre">Vitesse</div>
       ${_blocVitesse(user)}
     </div>`;
-  const neutreNote=neutre?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:14px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
+  const neutreNote=neutre?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
       Tu as signalé un antécédent de trouble du comportement alimentaire dans ton
       questionnaire de départ. RepCore affiche donc tes pesées telles quelles,
       sans vitesse, sans objectif et sans alerte. Tu peux masquer complètement
@@ -102508,8 +102518,8 @@ function blocPoidsCoach(user,depuis){
   const neutre=aTCA(user);
   const serie=serieWeight(user);
   if(neutre){
-    return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">
-      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--warning);text-transform:uppercase;margin-bottom:7px">Suivi du poids en mode neutre</div>
+    return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--warning);text-transform:uppercase;margin-bottom:8px">Suivi du poids en mode neutre</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
         Un antécédent de trouble du comportement alimentaire est déclaré dans le
         questionnaire de départ. Ni vitesse, ni objectif, ni alerte de poids ne
@@ -102517,7 +102527,7 @@ function blocPoidsCoach(user,depuis){
         quotidienne. Mesure de prudence produit, pas dispositif clinique : elle
         ne détecte rien, elle se contente de ne pas aggraver.
       </div>
-      <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:7px;line-height:1.5">
+      <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:8px;line-height:1.5">
         ${serie.length?serie.length+' pesée'+(serie.length>1?'s':'')+' au dossier, dernière à '+serie[serie.length-1].kg+' kg.':'Aucune pesée au dossier.'}
       </div>
     </div>`;
@@ -102529,7 +102539,7 @@ function blocPoidsCoach(user,depuis){
   const c=alerte?'var(--orange)':'var(--text)';
   const der=serie[serie.length-1];
   const moy=mm7(serie,der.date);
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Poids</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint)">dernière pesée le ${_fmtJourCourt(der.date)} · à ${_synNombre(SYN_BRUIT_POIDS)} kg près</span>
@@ -102590,12 +102600,12 @@ function _htmlChoixPhase(){
         <span style="font-size:var(--fs-md);font-weight:800;color:${sel?'var(--text)':'var(--text-strong)'}">${p.lib}</span>
         ${sugg===t?'<span style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:1px;text-transform:uppercase">suggéré</span>':''}
       </div>
-      <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:5px">${escapeHtml(p.texte)}</div>
+      <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:6px">${escapeHtml(p.texte)}</div>
     </button>`;
   }).join('');
   return `<div id="ph-choix-zone">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">Ta phase</div>
-    <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:11px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Ta phase</div>
+    <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">
       Ce que tu cherches en ce moment. Ça ne change ni tes séances ni tes macros :
       ça change la façon dont l'app lit tes chiffres.
       ${sugg?'<br>Une suggestion est faite d\'après l\'objectif que tu as déjà indiqué : à toi de confirmer.':''}
@@ -102644,7 +102654,7 @@ function renderCartePhase(){
   if(!z) return;
   z.innerHTML=''; return;
   if(!currentUser||phaseCourante(currentUser)||currentUser.phaseRefusee){ z.innerHTML=''; return; }
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:14px">
+  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
     ${_htmlChoixPhase()}</div>`;
 }
 function ouvrirChoixPhase(){
@@ -102653,7 +102663,7 @@ function ouvrirChoixPhase(){
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
     `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-      <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:18px;width:100%;max-width:520px;max-height:88vh;overflow:auto">
+      <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:520px;max-height:88vh;overflow:auto">
         ${_htmlChoixPhase()}
       </div></div>`);
 }
@@ -102683,9 +102693,9 @@ function renderRelancePhase(){
   const z=document.getElementById('clh-relance-phase');
   if(!z) return;
   const msg=currentUser?relancePhase(currentUser):null;
-  z.innerHTML=msg?`<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:13px;margin-bottom:14px">
+  z.innerHTML=msg?`<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
     <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">${escapeHtml(msg)}</div>
-    <button class="btn btn-outline btn-sm" onclick="ouvrirChoixPhase()" style="margin-top:9px;letter-spacing:1px;font-size:var(--fs-2xs)">Mettre à jour ma phase</button>
+    <button class="btn btn-outline btn-sm" onclick="ouvrirChoixPhase()" style="margin-top:10px;letter-spacing:1px;font-size:var(--fs-2xs)">Mettre à jour ma phase</button>
   </div>`:'';
 }
 // Étiquette compacte, posée à côté des macros. AUCUN calcul n'en découle : la
@@ -102694,7 +102704,7 @@ function renderRelancePhase(){
 function badgePhase(user){
   const p=phaseCourante(user);
   if(!p) return '';
-  return `<span style="display:inline-flex;align-items:center;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:3px 9px;letter-spacing:1px;text-transform:uppercase">${PHASES[p.type].lib}</span>`;
+  return `<span style="display:inline-flex;align-items:center;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:4px 10px;letter-spacing:1px;text-transform:uppercase">${PHASES[p.type].lib}</span>`;
 }
 // ── Sélecteur de phase, côté coach ──────────────────────────────────────────
 // Le coach décide POUR son athlète : definiPar vaut 'coach'. La phase est
@@ -102739,7 +102749,7 @@ function _htmlPhaseCoach(c){
   // scene. L'athlete, lui, n'a que PHASES_ATHLETE : voir _htmlChoixPhase.
   const boutons=Object.keys(PHASES).map(t=>{
     const sel=p&&p.type===t;
-    return `<button onclick="coachSetPhase('${t}')" style="flex:1 1 auto;min-width:88px;padding:9px 6px;border-radius:var(--r-2);cursor:pointer;font-size:var(--fs-xs);font-weight:800;
+    return `<button onclick="coachSetPhase('${t}')" style="flex:1 1 auto;min-width:88px;padding:10px 6px;border-radius:var(--r-2);cursor:pointer;font-size:var(--fs-xs);font-weight:800;
       background:${sel?'#1a0505':'var(--surface-1)'};border:1px solid ${sel?'var(--red)':'var(--border)'};color:${sel?'var(--text)':'#bbb'}">${PHASES[t].lib}</button>`;
   }).join('');
   // ══ CE QUE LA PEAK WEEK AJOUTE A L'ECRAN, ET RIEN DE PLUS ══════════════
@@ -102751,11 +102761,11 @@ function _htmlPhaseCoach(c){
     const j=joursAvantScene(c);
     const d=((c||{}).phase||{}).scene||'';
     const quand=(j===null)?'' : (j>0?('J−'+j):(j===0?'C’est aujourd’hui.':('Passée depuis '+(-j)+' jour'+((-j)>1?'s':'')+'.')));
-    return `<div style="margin-top:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 11px">
-      <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+    return `<div style="margin-top:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <label for="ccd-peak-date" style="margin:0;font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase">Date de scène</label>
         <input id="ccd-peak-date" type="date" value="${escapeHtml(d)}" onchange="coachSetPeakDate(this.value)"
-          style="flex:1;min-width:140px;padding:7px 9px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700">
+          style="flex:1;min-width:140px;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700">
         ${quand?`<span style="font-size:var(--fs-md);font-weight:800;color:var(--red-text);white-space:nowrap">${escapeHtml(quand)}</span>`:''}
       </div>
       <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:8px">Le suivi du poids est neutralisé : cette semaine, la balance suit l’eau et le glycogène, pas le gras. Aucun ajustement automatique n’est proposé. RepCore ne calcule pas de protocole de peak week : la charge, l’eau et le sel restent ta décision, hors de l’application.</div>
@@ -102776,7 +102786,7 @@ function _htmlPhaseCoach(c){
   const semSeche=combiTCA?semainesEcoulees(c):0;
   const combiLongue=combiTCA&&semSeche>=PHASE_SEMAINES_RELANCE;
   const combi=!combiTCA?''
-    : `<div style="margin-top:9px;background:${combiLongue?'#1a0505':'var(--warning-bg)'};border:1px solid ${combiLongue?'var(--red)':'var(--warning-border)'};border-radius:var(--r-2);padding:9px 11px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
+    : `<div style="margin-top:10px;background:${combiLongue?'#1a0505':'var(--warning-bg)'};border:1px solid ${combiLongue?'var(--red)':'var(--warning-border)'};border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
         ${combiLongue?`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--red-text);margin-bottom:6px">Sèche longue et antécédent déclaré</div>
         Sèche depuis <b style="color:var(--text)">${semSeche} semaines</b>, et un antécédent de trouble du
         comportement alimentaire est déclaré au questionnaire de départ.`
@@ -102785,7 +102795,7 @@ function _htmlPhaseCoach(c){
         s'applique intégralement : ni vitesse, ni cible, ni alerte du côté de
         l'athlète. À suivre de près hors de l'application.
       </div>`;
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
     <!-- LE TITRE EST REVENU le 08/09/2026. Il avait ete retire parce que le
          bandeau de la section « Phase » le disait juste au-dessus : or ce bloc
          a quitte sa section pour remonter en tete de l'onglet, sous le type de
@@ -103102,7 +103112,7 @@ function _htmlCadreImportCapture(quoi,opts){
   if(opts&&opts.alternative){
     return `
     <div class="san-import" style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.07)">
-      <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-bottom:9px;text-align:center">ou importe une capture d'écran de ton application de santé</div>
+      <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-bottom:10px;text-align:center">ou importe une capture d'écran de ton application de santé</div>
       <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="importerCaptureStats(this)">
       <button type="button" class="btn btn-outline btn-sm" onclick="this.previousElementSibling.click()"
         style="width:100%;min-height:44px;margin:0;letter-spacing:1.2px">Envoyer une capture</button>
@@ -103122,8 +103132,8 @@ function _htmlCadreImportCapture(quoi,opts){
            :                    'tes pas ou tes nuits';
   return `
     <div class="card-nut" style="margin:14px 0;animation:fadeInUp var(--t-4) var(--c-out)">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:11px">
-        <span style="display:inline-flex;color:${teinte.c};filter:drop-shadow(0 0 6px ${teinte.h})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span style="display:inline-flex;color:${teinte.c};filter:drop-shadow(0 0 6px ${teinte.h})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="18" height="18"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
         <span style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:${teinte.c};text-transform:uppercase">Remplir depuis une capture</span>
       </div>
       <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-bottom:12px">
@@ -103414,7 +103424,7 @@ const TRK_APPAREILS=Object.freeze([
   {id:'casio',nom:'Casio',badge:'Montre',ico:'reglage',app:'Casio Watches',
    d:q=>'Ouvre l’app Casio Watches et va dans '+q+'.'}
 ]);
-const _TRK_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+const _TRK_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">';
 const _TRK_ICO={
   reglage:_TRK_SVG+'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
   barres:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="4" y="12" width="3.5" height="8" rx="1"/><rect x="10.2" y="7" width="3.5" height="13" rx="1"/><rect x="16.5" y="3.5" width="3.5" height="16.5" rx="1"/></svg>',
@@ -103918,7 +103928,7 @@ function _sanGraphe(quoi,serie,obj,fmt){
 }
 // ── Les pictogrammes. Traces, pas des images : ils prennent la couleur du
 //    domaine et restent nets a toutes les tailles.
-const _SV_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+const _SV_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">';
 const SAN_ICO={
   chaussure:_SV_SVG+'<path d="M2.5 16.5h17.2a1.8 1.8 0 0 0 1.8-1.8c0-1.4-1-2.1-2.5-2.6l-4.1-1.5a3 3 0 0 1-1.3-.9L11.2 6.8a1.3 1.3 0 0 0-2-.2L7.6 8.3H2.5z"/><path d="M2.5 16.5v2h19v-2"/><path d="M9.6 10.2l1.2-1M11.4 11.6l1.2-1"/></svg>',
   lune:_SV_SVG+'<path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z"/></svg>',
@@ -104509,7 +104519,7 @@ function loadSleep(containerId='sleep-content',user,opts){
   let counts='';
   weekData.forEach(d=>{
     const h=d.entry?.duration;
-    counts+=`<div style="flex:1;text-align:center;font-size:var(--fs-xs);font-weight:700;color:${h?sleepColor(h):'var(--border)'};margin-top:3px">${h!=null?h+'h':'·'}</div>`;
+    counts+=`<div style="flex:1;text-align:center;font-size:var(--fs-xs);font-weight:700;color:${h?sleepColor(h):'var(--border)'};margin-top:4px">${h!=null?h+'h':'·'}</div>`;
   });
 
   let histHtml='';
@@ -104521,7 +104531,7 @@ function loadSleep(containerId='sleep-content',user,opts){
       const badge=e.duration>=7&&e.duration<=9?'Idéal':'';
       return `<div style="font-size:var(--fs-sm);font-weight:600;color:#aaa;text-transform:capitalize">${lbl}</div><div style="display:flex;align-items:center;gap:10px">${(e.bed&&e.wake)?`<div style="font-size:var(--fs-xs);color:var(--sub)">${e.bed} → ${e.wake}</div>`:''}${badge?`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--green)">${badge}</span>`:''}<div style="font-size:var(--fs-md);font-weight:800;color:${col}">${e.duration}h</div></div>`;
     },{pad:'9px 0',justify:'space-between',gap:0,border:'#111'});
-    histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)"><div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div><div class="hist-bloc" style="position:relative"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Historique</div><span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:700">${sortedLog.length} nuit${sortedLog.length>1?'s':''}</span></div>${rows}</div></div>`;
+    histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)"><div class="hist-bloc" style="position:relative"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Historique</div><span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:700">${sortedLog.length} nuit${sortedLog.length>1?'s':''}</span></div>${rows}</div></div>`;
   }
 
   document.getElementById(containerId).innerHTML=`
@@ -104529,24 +104539,24 @@ function loadSleep(containerId='sleep-content',user,opts){
          semaine et sa moyenne, la cafeine, l historique. R34, l historique
          n est plus replie. -->
     <div class="card-nut" style="margin-bottom:14px;${_animEntree('sleep-saisie')}">
-      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
+      
       <div style="position:absolute;left:50%;top:-30px;transform:translateX(-50%);width:130px;height:90px;border-radius:var(--r-full);background:radial-gradient(circle,rgba(96,165,250,.13),transparent 68%);pointer-events:none"></div>
       <div style="position:relative">
         ${_bandeauJour('sleep-date-input',selStr,'changeSleepDate',{avecFleches:true,
           prev:_jourVoisin(selStr,-1,STEPS_RETENTION_JOURS),
           next:_jourVoisin(selStr,1,STEPS_RETENTION_JOURS),
           retention:STEPS_RETENTION_JOURS})}
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
           <div>
-            <div style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-xs);font-weight:800;color:#60a5fa;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(96,165,250,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>Coucher</div>
-            <input type="time" id="sleep-bed-input" value="${todayEntry?.bed||''}" oninput="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:11px 4px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:var(--r-2);color:#9cc4ee;width:100%;box-sizing:border-box;box-shadow:var(--e-inset);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
+            <div style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-xs);font-weight:800;color:#60a5fa;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(96,165,250,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="12" height="12"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>Coucher</div>
+            <input type="time" id="sleep-bed-input" value="${todayEntry?.bed||''}" oninput="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:12px 4px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:var(--r-2);color:#9cc4ee;width:100%;box-sizing:border-box;box-shadow:var(--e-inset);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
           </div>
           <div>
-            <div style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-xs);font-weight:800;color:#f5c518;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(245,197,24,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><circle cx="12" cy="12" r="4.5"/><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="4.2" y1="4.2" x2="6" y2="6"/><line x1="18" y1="18" x2="19.8" y2="19.8"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.2" y1="19.8" x2="6" y2="18"/><line x1="18" y1="6" x2="19.8" y2="4.2"/></svg></span>Lever</div>
-            <input type="time" id="sleep-wake-input" value="${todayEntry?.wake||''}" oninput="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:11px 4px;background:linear-gradient(180deg,#0d0900,#120e03);border:1px solid #4d3d12;border-radius:var(--r-2);color:#f0d98a;width:100%;box-sizing:border-box;box-shadow:var(--e-inset);--halo-c:rgba(245,197,24,.45);text-shadow:var(--halo-1)">
+            <div style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-xs);font-weight:800;color:#f5c518;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(245,197,24,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="12" height="12"><circle cx="12" cy="12" r="4.5"/><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="4.2" y1="4.2" x2="6" y2="6"/><line x1="18" y1="18" x2="19.8" y2="19.8"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.2" y1="19.8" x2="6" y2="18"/><line x1="18" y1="6" x2="19.8" y2="4.2"/></svg></span>Lever</div>
+            <input type="time" id="sleep-wake-input" value="${todayEntry?.wake||''}" oninput="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:12px 4px;background:linear-gradient(180deg,#0d0900,#120e03);border:1px solid #4d3d12;border-radius:var(--r-2);color:#f0d98a;width:100%;box-sizing:border-box;box-shadow:var(--e-inset);--halo-c:rgba(245,197,24,.45);text-shadow:var(--halo-1)">
           </div>
         </div>
-        <div id="sleep-preview" style="text-align:center;font-size:var(--fs-sm);color:var(--text-faint);margin-bottom:11px;min-height:26px">${todayEntry?.duration!=null?`<span style="font-family:var(--pile-titre);font-size:var(--fs-2xl);color:${sleepColor(todayEntry.duration)};--halo-c:${sleepColor(todayEntry.duration)};text-shadow:var(--halo-2)aa">${todayEntry.duration}h</span> de sommeil`:''}</div>
+        <div id="sleep-preview" style="text-align:center;font-size:var(--fs-sm);color:var(--text-faint);margin-bottom:12px;min-height:26px">${todayEntry?.duration!=null?`<span style="font-family:var(--pile-titre);font-size:var(--fs-2xl);color:${sleepColor(todayEntry.duration)};--halo-c:${sleepColor(todayEntry.duration)};text-shadow:var(--halo-2)aa">${todayEntry.duration}h</span> de sommeil`:''}</div>
         <button class="btn btn-red" onclick="saveSleep()">Enregistrer</button>
         <!-- Jumelle de la carte des pas : sous le bouton de la nuit, en
              alternative. R28 : dans la carte, comme sur Lifestyle. -->
@@ -104555,21 +104565,21 @@ function loadSleep(containerId='sleep-content',user,opts){
     </div>
 
     <div class="card-nut" style="margin-bottom:14px;${_animEntree('sleep-sem')}">
-      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
+      
       <div style="position:relative">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:15px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
           <span style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Cette semaine</span>
           <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--text-dim)"><span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:#22c55e;vertical-align:middle;box-shadow:0 0 6px rgba(34,197,94,.9)"></span> 7-9H</span>
         </div>
-        <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:7px;border-bottom:1px solid rgba(255,255,255,.05)">${bars}</div>
+        <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:8px;border-bottom:1px solid rgba(255,255,255,.05)">${bars}</div>
         <div style="display:flex;gap:4px">${labels}</div>
         <div style="display:flex;gap:4px">${counts}</div>
       </div>
     </div>
-    <div style="background:linear-gradient(145deg,#0d2a4d 0%,#08172c 55%,#040c17 100%);border-radius:var(--r-4);padding:20px;margin-bottom:14px;text-align:center;position:relative;overflow:hidden;box-shadow:var(--e3);${_animEntree('sleep-moy')}">
-      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.16) 16px,rgba(0,0,0,.16) 17px);pointer-events:none"></div>
+    <div style="background:#0b1d33;border-radius:var(--r-4);padding:20px;margin-bottom:14px;text-align:center;position:relative;overflow:hidden;box-shadow:var(--e3);${_animEntree('sleep-moy')}">
+      
       <div style="position:absolute;right:-20px;top:-20px;width:96px;height:96px;border-radius:var(--r-full);background:rgba(255,255,255,.05);pointer-events:none"></div>
-      <div style="position:absolute;left:14px;top:12px;color:rgba(255,255,255,.16)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
+      <div style="position:absolute;left:14px;top:12px;color:rgba(255,255,255,.16)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" stroke-linejoin="miter" width="22" height="22"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
       <div style="position:relative">
         <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:8px">Moyenne hebdomadaire</div>
         <div style="font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:.95;color:${weekAvg?avgColor:'rgba(255,255,255,.55)'};letter-spacing:1px;--halo-c:${weekAvg?avgColor:'rgba(255,255,255,.4)'};text-shadow:var(--halo-3),0 0 34px ${weekAvg?avgColor+'66':'transparent'}">${weekAvg?weekAvg+'h':'-'}</div>
@@ -106036,7 +106046,7 @@ function showOcrReviewModal(exercises,idx,videoLinks=[]){
     // Les variantes restantes sont offertes en un tap : le guide distingue
     // « prise serrée » de « large », et la fiche papier ne le dit pas.
     const _autres=_propose&&_vg.length>1
-      ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">`
+      ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">`
         +_vg.map(v=>`<button onclick="_ocrChoisirVideo(${i},'${v.id}')" style="background:#0e0e0e;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:4px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:700;cursor:pointer">${escapeHtml(v.lbl||'version par défaut')}</button>`).join('')
         +`</div>` : '';
     const _mention=_propose
@@ -106044,7 +106054,7 @@ function showOcrReviewModal(exercises,idx,videoLinks=[]){
     const desc=(ex.description||'').replace(/"/g,'&quot;');
     return`
     <div style="background:var(--surface-2);border-radius:var(--r-3);padding:12px;margin-bottom:10px;border:1px solid ${ex.ss?'var(--orange)':'var(--border)'}" id="ocr-ex-${i}">
-      ${i===0?'':`<label style="display:flex;align-items:center;gap:7px;margin:-4px 0 9px;cursor:pointer">
+      ${i===0?'':`<label style="display:flex;align-items:center;gap:8px;margin:-4px 0 10px;cursor:pointer">
         <input type="checkbox" id="ocr-ss-${i}" ${ex.ss?'checked':''} style="width:15px;height:15px;margin:0;accent-color:var(--orange);flex-shrink:0;cursor:pointer">
         <span style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;color:${ex.ss?'var(--orange)':'var(--sub)'};text-transform:none">⇄ EN SUPERSET AVEC LE PRÉCÉDENT</span>
       </label>`}
@@ -106054,28 +106064,28 @@ function showOcrReviewModal(exercises,idx,videoLinks=[]){
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">
         <div>
-          <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:3px;font-weight:700">SÉRIES</div>
+          <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px;font-weight:700">SÉRIES</div>
           <input type="number" value="${ex.series}" id="ocr-series-${i}" style="text-align:center;padding:8px" min="1" max="10">
         </div>
         <div>
-          <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:3px;font-weight:700">REPS</div>
+          <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px;font-weight:700">REPS</div>
           <input value="${ex.reps}" id="ocr-reps-${i}" style="text-align:center;padding:8px" placeholder="10 ou 10 PUIS 20">
         </div>
         <div>
-          <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:3px;font-weight:700">REPOS</div>
+          <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px;font-weight:700">REPOS</div>
           <input value="${ex.repos}" id="ocr-repos-${i}" style="text-align:center;padding:8px" placeholder="01 min">
         </div>
       </div>
       <div style="margin-bottom:8px">
-        <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;font-weight:700;margin-bottom:3px">DESCRIPTION / TECHNIQUE</div>
-        <textarea id="ocr-desc-${i}" rows="2" style="font-size:var(--fs-xs);padding:7px 10px;line-height:1.5;resize:vertical" placeholder="Technique d'exécution...">${desc}</textarea>
+        <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;font-weight:700;margin-bottom:4px">DESCRIPTION / TECHNIQUE</div>
+        <textarea id="ocr-desc-${i}" rows="2" style="font-size:var(--fs-xs);padding:8px 10px;line-height:1.5;resize:vertical" placeholder="Technique d'exécution...">${desc}</textarea>
       </div>
       <div style="margin-bottom:4px">
         <div style="font-size:var(--fs-xs);color:var(--green);letter-spacing:1px;font-weight:700;margin-bottom:4px"> VIDÉO 1</div>
         ${_mention}
-        <input value="${v1}" id="ocr-v1-${i}" placeholder="https://youtu.be/..." style="font-size:var(--fs-xs);padding:7px 10px;margin-bottom:6px">
+        <input value="${v1}" id="ocr-v1-${i}" placeholder="https://youtu.be/..." style="font-size:var(--fs-xs);padding:8px 10px;margin-bottom:6px">
         <div style="font-size:var(--fs-xs);color:var(--orange);letter-spacing:1px;font-weight:700;margin-bottom:4px"> VIDÉO DE LA MÉTHODE (optionnel)${_cleM&&TECHNIQUES[_cleM]?' · '+escapeHtml(TECHNIQUES[_cleM].nom):''}</div>
-        <input value="${v2}" id="ocr-v2-${i}" placeholder="https://youtu.be/..." style="font-size:var(--fs-xs);padding:7px 10px">
+        <input value="${v2}" id="ocr-v2-${i}" placeholder="https://youtu.be/..." style="font-size:var(--fs-xs);padding:8px 10px">
         ${_autres}
       </div>
       <button onclick="this.closest('#ocr-ex-${i}').remove()" style="margin-top:8px;background:none;border:none;color:var(--red-light);font-size:var(--fs-xs);cursor:pointer;font-family:Montserrat,sans-serif"> Supprimer</button>
@@ -106327,18 +106337,18 @@ function showDrivePdfModal(driveUrl,targetEmail){
       <h2 style="font-size:var(--fs-lg)"> PDF Google Drive</h2>
       <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
     </div>
-    <p style="font-size:var(--fs-sm);color:var(--sub);line-height:1.8;margin-bottom:18px">Google Drive bloque la lecture directe depuis l'app (restriction navigateur).<br>
+    <p style="font-size:var(--fs-sm);color:var(--sub);line-height:1.8;margin-bottom:20px">Google Drive bloque la lecture directe depuis l'app (restriction navigateur).<br>
     <span style="color:var(--text);font-weight:700">Étape 1 - </span> Ouvre le PDF sur Drive ↓<br>
     <span style="color:var(--text);font-weight:700">Étape 2 - </span> Télécharge-le (icône ↓ en haut à droite de Drive)<br>
     <span style="color:var(--text);font-weight:700">Étape 3 - </span> Sélectionne le fichier téléchargé ↓</p>
-    <a href="${openUrl}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px;text-align:center;background:linear-gradient(180deg,#0a2a1a,#061508);border:1px solid #1a4a2a;border-radius:var(--r-2);color:var(--green);font-size:var(--fs-xs);font-weight:800;text-decoration:none;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">
+    <a href="${openUrl}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;text-align:center;background:linear-gradient(180deg,#0a2a1a,#061508);border:1px solid #1a4a2a;border-radius:var(--r-2);color:var(--green);font-size:var(--fs-xs);font-weight:800;text-decoration:none;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">
        Ouvrir sur Google Drive
     </a>
-    <label style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px;background:var(--red);border:none;border-radius:var(--r-2);color:var(--text);font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px;text-transform:uppercase">
+    <label style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;background:var(--red);border:none;border-radius:var(--r-2);color:var(--text);font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px;text-transform:uppercase">
        Sélectionner le fichier téléchargé
       <input type="file" accept=".pdf" style="display:none" onchange="_parsePdfFromDriveFile(this)">
     </label>
-    <button onclick="closeModal()" style="display:block;width:100%;padding:11px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-sm);margin-top:10px;cursor:pointer;font-family:Montserrat,sans-serif">Annuler</button>
+    <button onclick="closeModal()" style="display:block;width:100%;padding:12px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-sm);margin-top:10px;cursor:pointer;font-family:Montserrat,sans-serif">Annuler</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
@@ -106433,7 +106443,7 @@ function openAddAthlete(){
       <option value="12">12 mois</option>
     </select></div>`}
     <div id="aa-err" style="color:var(--red-light);font-size:var(--fs-sm);margin-top:8px;display:none"></div>
-    <div style="position:sticky;bottom:0;height:36px;background:linear-gradient(transparent,var(--surface-2));pointer-events:none;margin-top:-36px"></div>
+    <div style="position:sticky;bottom:0;height:36px;background:linear-gradient(transparent,var(--surface-2));pointer-events:none;margin-top:-40px"></div>
     <button class="btn btn-red" style="margin-top:10px" onclick="createAthlete()">${estCreateur?'Créer et activer l\'accès':'Créer le compte'}</button>
     <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Annuler</button>
   </div></div>`;
@@ -106602,7 +106612,7 @@ async function createAthlete(){
         +' Pour un compte athlète EN PLUS sur la même boîte mail, utilise '
         +'<b style="color:var(--text);word-break:break-all">'+escapeHtml(_alias)+'</b>.'
         +'<button type="button" id="aa-alias-btn" class="btn btn-outline btn-sm"'
-        +' style="width:100%;margin-top:9px;letter-spacing:1px;font-size:var(--fs-xs)">'
+        +' style="width:100%;margin-top:10px;letter-spacing:1px;font-size:var(--fs-xs)">'
         +'Utiliser cette adresse</button>';
       _e.style.display='block';
       // Le gestionnaire est POSÉ EN JS, jamais écrit dans l'attribut : une
@@ -107808,7 +107818,7 @@ async function loadMetrics(){
   // data-num REECRIT TOUT LE CONTENU de l'element qu'il anime — son format
   // rend le nombre et rien d'autre. Le « % » vit donc dans un frere, sinon il
   // disparaitrait a la premiere image de l'animation.
-  let html='<div style="background:var(--surface-2);border-radius:var(--r-2);padding:12px 14px;margin-bottom:18px">'
+  let html='<div style="background:var(--surface-2);border-radius:var(--r-2);padding:12px 14px;margin-bottom:20px">'
     +'<div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:.08em;text-transform:uppercase;font-weight:700;margin-bottom:4px">Taux d\'installation</div>'
     +(_tauxInst===null
       ? '<div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.5">Pas encore mesurable : personne n\'a vu l\'écran d\'installation sur les 7 derniers jours.</div>'
@@ -107827,7 +107837,7 @@ async function loadMetrics(){
       reference=_refDepuis(_i);
       precedent=null;
       html+='<div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:.14em;'
-        +'text-transform:uppercase;font-weight:800;margin:26px 0 12px;padding-top:14px;'
+        +'text-transform:uppercase;font-weight:800;margin:28px 0 12px;padding-top:14px;'
         +'border-top:1px solid var(--border)">'+escapeHtml(e.section)+'</div>';
     }
     const n=totalEtape(e);
@@ -107842,7 +107852,7 @@ async function loadMetrics(){
       detail=' · '+parts.join(' / ');
     }
     html+='<div style="margin-bottom:12px">'
-      +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:5px">'
+      +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px">'
       +'<span style="font-size:var(--fs-sm);font-weight:700;color:'+teinte(e,'var(--text)')+'">'+escapeHtml(e.lib)+'</span>'
       +'<span style="font-size:var(--fs-sm);color:var(--sub);white-space:nowrap"><strong data-num="'+n+'" data-num-duree="520" style="color:var(--text);font-size:var(--fs-md);font-variant-numeric:tabular-nums">'+n+'</strong>'
       +(taux?' <span style="color:var(--sub)">('+taux+')</span>':'')+'</span>'
@@ -107850,13 +107860,13 @@ async function loadMetrics(){
       +'<div style="height:6px;background:var(--surface-2);border-radius:var(--r-1);overflow:hidden">'
       +'<div class="rc-barre" data-bar-w="'+largeur+'" style="height:100%;width:0;background:'+teinte(e,'var(--red)')+';transition:width 520ms var(--c-out) var(--rcf-d,0ms)"></div>'
       +'</div>'
-      +(detail?'<div class="sub" style="font-size:var(--fs-2xs);margin-top:3px">'+escapeHtml(detail.slice(3))+'</div>':'')
+      +(detail?'<div class="sub" style="font-size:var(--fs-2xs);margin-top:4px">'+escapeHtml(detail.slice(3))+'</div>':'')
       +'</div>';
     if(!e.horsTunnel) precedent=n;
   }
   // Détail jour par jour : une conversion qui s'effondre se voit ici avant de
   // se voir dans le total sur 7 jours.
-  let tbl='<div style="overflow-x:auto;margin-top:22px"><table style="border-collapse:collapse;font-size:var(--fs-xs);white-space:nowrap">'
+  let tbl='<div style="overflow-x:auto;margin-top:24px"><table style="border-collapse:collapse;font-size:var(--fs-xs);white-space:nowrap">'
     +'<tr><th style="text-align:left;padding:4px 8px 4px 0;color:var(--sub);font-weight:700">Étape</th>';
   for(const j of jours) tbl+='<th style="padding:4px 6px;color:var(--sub);font-weight:700">'+j.slice(8)+'/'+j.slice(5,7)+'</th>';
   tbl+='</tr>';
@@ -107961,7 +107971,7 @@ function coachTab(tab){
     var b=document.getElementById('ct-tab-'+id);
     if(b){
       b.style.borderBottom=(id===tab)?'2px solid #E02020':'2px solid transparent';
-      b.style.color=(id===tab)?'var(--text)':'#555';
+      b.style.color=(id===tab)?'var(--text)':'var(--text-faint)';
     }
     // LE PANNEAU LATERAL DU BUREAU. Il n'etait pas touche : ses boutons
     // gardaient le style ecrit dans le gabarit, et « ATHLETES » restait allume
@@ -108425,7 +108435,7 @@ function ajouterDiplomeRow(titre,image){
   const row=document.createElement('div');
   row.className='dip-row';
   row.style.cssText='display:flex;gap:6px;margin-bottom:6px;align-items:center';
-  const st='flex:1;min-width:0;font-size:var(--fs-sm);padding:9px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif';
+  const st='flex:1;min-width:0;font-size:var(--fs-sm);padding:10px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif';
   const t=document.createElement('input');
   t.type='text'; t.className='dip-titre'; t.placeholder='ex : Licence STAPS';
   t.maxLength=120; t.style.cssText=st; t.value=titre||'';
@@ -108502,7 +108512,7 @@ function _htmlVitrineCoach(pub){
   const img=(src,st)=>src?('<img src="'+escapeHtml(src)+'" alt="" loading="lazy" style="'+st+'">'):'';
   const TRAME="repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.020) 12px,rgba(255,255,255,.020) 13px)";
   const CARTE="background:linear-gradient(168deg,#1b1b1b,#111 52%,#0b0b0b);border:1px solid #242424;border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:var(--elev-1);position:relative;overflow:hidden";
-  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:11px;--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)";
+  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:12px;--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)";
   // La trame carbone, posee en calque : elle donne la matiere sans rien
   // telecharger, et ne mange aucun contraste au texte pose dessus.
   const grain='<div style="position:absolute;inset:0;pointer-events:none;background:'+TRAME+'"></div>';
@@ -108537,9 +108547,9 @@ function _htmlVitrineCoach(pub){
   const _rempli=(p.bio||'').trim()||(p.vision||'').trim()||p.photoVitrine
     ||p.signature||p.cartePro||((p.diplomes||[]).length)||_progs.length;
   if(!_rempli){
-    return '<div class="pad" style="padding-bottom:44px">'
+    return '<div class="pad" style="padding-bottom:48px">'
       +'<h1 style="margin-bottom:14px">'+escapeHtml(nom)+'</h1>'
-      +'<div style="'+CARTE+';border-left:3px solid var(--red)">'+grain
+      +'<div style="'+CARTE+';border-left:1px solid var(--border)">'+grain
       +'<div style="position:relative;font-size:var(--fs-md);color:var(--text-strong);line-height:1.75">'
       +(currentUser&&currentUser.role==='coach'
         ?'Ta présentation est vide. Remplis « Qui tu es » dans ton profil, puis touche <strong>Enregistrer</strong> : le bouton rouge, pas « Prévisualiser ».'
@@ -108557,7 +108567,7 @@ function _htmlVitrineCoach(pub){
     ?('<div style="position:relative;border-radius:var(--r-4);overflow:hidden;margin-bottom:20px;box-shadow:var(--e4)">'
       +img(p.photoVitrine,'width:100%;display:block')
       +'<div style="position:absolute;inset:0;background:'+TRAME+';pointer-events:none"></div>'
-      +'<div style="position:absolute;inset:auto 0 0 0;padding:64px 18px 18px;background:linear-gradient(to top,rgba(6,6,6,.97),rgba(6,6,6,.78) 42%,transparent)">'
+      +'<div style="position:absolute;inset:auto 0 0 0;padding:64px 20px 20px;background:linear-gradient(to top,rgba(6,6,6,.97),rgba(6,6,6,.78) 42%,transparent)">'
       +eyebrow+titre+'</div>'
       +'<div style="position:absolute;left:0;right:0;bottom:0;height:2px;background:linear-gradient(90deg,transparent,var(--red),transparent);box-shadow:0 0 16px rgba(224,32,32,.85)"></div>'
       +'</div>'+(phrase?('<div style="margin:-8px 4px 20px">'+phrase+'</div>'):''))
@@ -108568,7 +108578,7 @@ function _htmlVitrineCoach(pub){
     +blocProgrammes
     +carte('Ma vision',p.vision)
     +_htmlDiplomesCoach(p)
-    +(p.signature?('<div style="text-align:center;margin-top:18px;padding-top:30px;position:relative">'
+    +(p.signature?('<div style="text-align:center;margin-top:20px;padding-top:32px;position:relative">'
         +'<div style="position:absolute;top:0;left:12%;right:12%;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent)"></div>'
         +img(p.signature,'max-width:210px;width:58%;display:inline-block;background:none')
         +'</div>'):'')
@@ -108589,33 +108599,33 @@ function _htmlDiplomesCoach(p){
   if(!dips.length&&!carte) return '';
   const TRAME="repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.020) 12px,rgba(255,255,255,.020) 13px)";
   const CARTE="background:linear-gradient(168deg,#1b1b1b,#111 52%,#0b0b0b);border:1px solid #242424;border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:var(--elev-1);position:relative;overflow:hidden";
-  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:11px;--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)";
+  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:12px;--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)";
   const grain='<div style="position:absolute;inset:0;pointer-events:none;background:'+TRAME+'"></div>';
-  const img=src=>'<img src="'+escapeHtml(src)+'" alt="" loading="lazy" style="width:100%;border-radius:var(--r-3);margin-top:11px;display:block;box-shadow:var(--e2)">';
+  const img=src=>'<img src="'+escapeHtml(src)+'" alt="" loading="lazy" style="width:100%;border-radius:var(--r-3);margin-top:12px;display:block;box-shadow:var(--e2)">';
   // La pastille porte un halo : c est le seul point rouge de la liste, et
   // c est lui qui fait lire la ligne comme une validation.
-  const ligne=d=>'<div style="padding:13px 0;border-bottom:1px solid #191919">'
-    +'<div style="display:flex;gap:11px;align-items:center">'
+  const ligne=d=>'<div style="padding:14px 0;border-bottom:1px solid #191919">'
+    +'<div style="display:flex;gap:12px;align-items:center">'
     +'<span style="flex:none;width:21px;height:21px;border-radius:var(--r-full);background:linear-gradient(150deg,#ff4a3a,#b81515);color:var(--text);font-size:var(--fs-xs);font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 0 14px rgba(224,32,32,.6)">✓</span>'
     +'<span style="flex:1;min-width:0;font-size:var(--fs-sm);font-weight:700;color:var(--text);letter-spacing:.4px">'+escapeHtml(d.titre)+'</span>'
     +'</div>'+(d.image?img(d.image):'')+'</div>';
   let h='<div style="'+CARTE+'">'+grain+'<div style="position:relative">';
   if(dips.length) h+='<div style="'+TITRE+'">Diplômes et formations</div>'+dips.map(ligne).join('');
-  if(carte) h+='<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;text-transform:uppercase;font-weight:800;margin:18px 0 8px">Carte professionnelle</div>'
+  if(carte) h+='<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;text-transform:uppercase;font-weight:800;margin:20px 0 8px">Carte professionnelle</div>'
       +'<img src="'+escapeHtml(carte)+'" alt="" loading="lazy" style="width:100%;border-radius:var(--r-3);display:block;box-shadow:var(--e2)">';
   h+='</div></div>';
   // L encart pedagogique : fond plus chaud, liseré lumineux. Il parle du
   // metier, pas du coach — il ne doit pas se confondre avec la liste.
-  h+='<div style="position:relative;overflow:hidden;background:linear-gradient(160deg,#170707,#0d0404);border:1px solid rgba(224,32,32,.3);border-left:3px solid var(--red);border-radius:var(--r-4);padding:18px 20px;margin-bottom:16px;box-shadow:var(--e3),var(--glow-red)">'+grain
+  h+='<div style="position:relative;overflow:hidden;background:linear-gradient(160deg,#170707,#0d0404);border:1px solid rgba(224,32,32,.3);border-left:1px solid var(--border);border-radius:var(--r-4);padding:20px 20px;margin-bottom:16px;box-shadow:var(--e3),var(--glow-red)">'+grain
     +'<div style="position:relative">'
-    +'<div style="font-size:var(--fs-xs);letter-spacing:2.5px;text-transform:uppercase;color:var(--red-text);font-weight:800;margin-bottom:9px;--halo-c:rgba(224,32,32,.7);text-shadow:var(--halo-2)">Pourquoi un professionnel diplômé</div>'
+    +'<div style="font-size:var(--fs-xs);letter-spacing:2.5px;text-transform:uppercase;color:var(--red-text);font-weight:800;margin-bottom:10px;--halo-c:rgba(224,32,32,.7);text-shadow:var(--halo-2)">Pourquoi un professionnel diplômé</div>'
     +'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.8">'
     +'Un diplôme n\'est pas une formalité administrative : c\'est la preuve que la personne '
     +'qui règle tes charges, corrige ta technique et t\'oriente sur ton alimentation a été '
     +'formée pour le faire et qu\'elle sait où s\'arrête son domaine. '
     +'Un accompagnement improvisé, c\'est au mieux des mois perdus, au pire une blessure.'
     +'</div>'
-    +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:11px">'
+    +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:12px">'
     +'Les documents ci-dessus ont été publiés par ton coach lui-même.'
     +'</div></div></div>';
   return h;
@@ -109109,7 +109119,7 @@ function _renderAtpGrossesse(){
     if(aDire) msg.innerHTML=
       `<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7">${escapeHtml(GROSSESSE_MSG)}</div>`
       +(e==='allaitement'
-        ?`<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-top:9px">${escapeHtml(GROSSESSE_MSG_ALLAITEMENT)}</div>`:'')
+        ?`<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-top:10px">${escapeHtml(GROSSESSE_MSG_ALLAITEMENT)}</div>`:'')
       +`<button onclick="accuserMessageGrossesse()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:1px">J'ai compris</button>`;
   }
   const cons=document.getElementById('atp-gross-consent-row');
@@ -109176,7 +109186,7 @@ function _renderAtpCycle(){
     `<div class="obj-opt${_atpCycleSuivi===v?' sel':''}" onclick="setAtpCycleSuivi('${v}')"
       role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="font-weight:800">${escapeHtml(titre)}</div>
-      ${sous?`<div class="sub" style="font-size:var(--fs-xs);margin-top:3px">${escapeHtml(sous)}</div>`:''}
+      ${sous?`<div class="sub" style="font-size:var(--fs-xs);margin-top:4px">${escapeHtml(sous)}</div>`:''}
     </div>`).join('');
 }
 function setAtpCycleSuivi(v){
@@ -109477,7 +109487,7 @@ function _htmlAccesBoutons(c){
   if(!mail||mail.indexOf('@')<0) return '';
   const d=(()=>{ try{ return droitsDe(c); }catch(e){ return null; } })();
   const ferme=!!(d&&d.etat==='serveur'&&String(d.palier||'aucun')==='aucun');
-  const st='margin:0;letter-spacing:1px;font-size:var(--fs-2xs);padding:7px 11px;min-height:34px';
+  const st='margin:0;letter-spacing:1px;font-size:var(--fs-2xs);padding:8px 12px;min-height:34px';
   const arg='&#39;'+escapeHtml(mail)+'&#39;';
   // `avant:'suivi'` : ce qui était ouvert quand rien n'est posé. Sans lui,
   // rouvrir un athlète suivi lui aurait rendu « Essentielle ».
@@ -109499,7 +109509,7 @@ function _rendreAccesAthletes(){
       ||((a.e.jours==null?9e9:a.e.jours)-(b.e.jours==null?9e9:b.e.jours))
       ||String(a.c.fname||'').localeCompare(String(b.c.fname||'')));
   const aRelancer=avec.filter(x=>x.e.relancable).length;
-  z.innerHTML='<div style="display:flex;align-items:center;gap:10px;margin:26px 0 12px">'
+  z.innerHTML='<div style="display:flex;align-items:center;gap:10px;margin:28px 0 12px">'
     +'<div style="width:20px;height:2px;background:var(--red);flex-shrink:0"></div>'
     +'<div style="flex:1;min-width:0">'
     +'<div style="font-size:var(--fs-xs);letter-spacing:3px;font-weight:800;text-transform:uppercase;color:var(--red-text)">Accès de mes athlètes</div>'
@@ -109519,7 +109529,7 @@ function _rendreAccesAthletes(){
         +escapeHtml(e.libelle)+(d?'<span class="sub" style="font-weight:600"> · '+escapeHtml(d)+'</span>':'')
         +'</div>'+_htmlAccesPose(c)+'</div>'
         +(e.relancable
-          ?'<button class="btn btn-red btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs);padding:7px 13px;min-height:34px" '
+          ?'<button class="btn btn-red btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs);padding:8px 14px;min-height:34px" '
             +'onclick="relancerAccesAthlete(\''+escapeHtml(String(c.id||''))+'\')">Relancer</button>'
           :'')
         +_htmlAccesBoutons(c)
@@ -109608,7 +109618,7 @@ function loadMonetisationTab(){
     const st=s.paymentStatus==='active'?'<span class="badge badge-green">Actif</span>':'<span class="badge badge-red">'+(s.paymentStatus||'Inactif')+'</span>';
     const coachInfo=isCreator&&s.coachName?'<div class="sub" style="font-size:var(--fs-xs)">Coach : '+escapeHtml(s.coachName)+'</div>':'';
     const _snm=((s.fname||'')+' '+(s.lname||'')).trim()||'';
-    return '<div class="client-row"><div class="avatar" style="width:36px;height:36px;font-size:var(--fs-md)">'+ini(s.fname,s.lname)+'</div><div style="flex:1"><div style="font-weight:700">'+_snm+'</div>'+coachInfo+'<div class="sub" style="font-size:var(--fs-xs);font-family:monospace">'+(s.paypalSubscriptionId||'no sub id')+'</div></div><div>'+st+'<button onclick="toggleSubStatus(\''+s.email+'\')" style="margin-top:4px;font-size:var(--fs-xs);background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:3px 8px;cursor:pointer;font-family:Montserrat,sans-serif">'+(s.paymentStatus==='active'?'Suspendre':'Activer')+'</button></div></div>';
+    return '<div class="client-row"><div class="avatar" style="width:36px;height:36px;font-size:var(--fs-md)">'+ini(s.fname,s.lname)+'</div><div style="flex:1"><div style="font-weight:700">'+_snm+'</div>'+coachInfo+'<div class="sub" style="font-size:var(--fs-xs);font-family:monospace">'+(s.paypalSubscriptionId||'no sub id')+'</div></div><div>'+st+'<button onclick="toggleSubStatus(\''+s.email+'\')" style="margin-top:4px;font-size:var(--fs-xs);background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:4px 8px;cursor:pointer;font-family:Montserrat,sans-serif">'+(s.paymentStatus==='active'?'Suspendre':'Activer')+'</button></div></div>';
   }).join('');
   // Section admin offboarding — visible créateur seulement
   // LE LIEN VERS L'ÉCRAN « Accès ». Créateur seulement : lui seul peut écrire
@@ -109666,7 +109676,7 @@ function offboardCoach(coachId){
     return;
   }
   const athListHtml=athletes.slice(0,10).map(a=>
-    '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--surface-2);font-size:var(--fs-sm)">'
+    '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--surface-2);font-size:var(--fs-sm)">'
     +'<div style="width:26px;height:26px;border-radius:var(--r-full);background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:700;flex-shrink:0">'+((a.fname||'?')[0]).toUpperCase()+'</div>'
     +'<div style="flex:1">'+escapeHtml((a.fname||'')+' '+(a.lname||''))+'</div></div>'
   ).join('')+(athletes.length>10?'<div style="font-size:var(--fs-xs);color:var(--sub);padding:6px 0">… et '+(athletes.length-10)+' autre(s)</div>':'');
@@ -109675,26 +109685,26 @@ function offboardCoach(coachId){
   ).join('');
   const reassignBlock=otherCoaches.length
     ?'<label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">'
-      +'<input type="radio" name="ob-action" value="reassign" checked style="margin-top:3px;flex-shrink:0">'
+      +'<input type="radio" name="ob-action" value="reassign" checked style="margin-top:4px;flex-shrink:0">'
       +'<div style="width:100%"><div style="font-weight:700;font-size:var(--fs-sm)">Réassigner à un autre coach</div>'
-      +'<select id="ob-target" style="margin-top:8px;width:100%;padding:9px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-size:var(--fs-sm);font-family:Montserrat,sans-serif">'+coachOptsHtml+'</select>'
+      +'<select id="ob-target" style="margin-top:8px;width:100%;padding:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-size:var(--fs-sm);font-family:Montserrat,sans-serif">'+coachOptsHtml+'</select>'
       +'</div></label>'
     :'';
   const creatorBlock=(!isCreatorSelf&&creator)
     ?'<label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">'
-      +'<input type="radio" name="ob-action" value="creator" '+(otherCoaches.length?'':'checked')+' style="margin-top:3px;flex-shrink:0">'
+      +'<input type="radio" name="ob-action" value="creator" '+(otherCoaches.length?'':'checked')+' style="margin-top:4px;flex-shrink:0">'
       +'<div><div style="font-weight:700;font-size:var(--fs-sm)">Transférer au créateur</div>'
       +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">'+escapeHtml((creator.fname||'')+' '+(creator.lname||''))+' · '+CREATOR_EMAIL+'</div></div></label>'
     :'';
   const freeBlock='<label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">'
-    +'<input type="radio" name="ob-action" value="free" '+((!otherCoaches.length&&isCreatorSelf)?'checked':'')+' style="margin-top:3px;flex-shrink:0">'
+    +'<input type="radio" name="ob-action" value="free" '+((!otherCoaches.length&&isCreatorSelf)?'checked':'')+' style="margin-top:4px;flex-shrink:0">'
     +'<div><div style="font-weight:700;font-size:var(--fs-sm)">Libérer (sans coach assigné)</div>'
     +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">Les athlètes conservent leur compte mais n\'ont plus de coach</div></div></label>';
   const ov=document.createElement('div');
   ov.id='modal-overlay';ov.onclick=closeModal;
   ov.style.cssText='position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center';
   ov.innerHTML='<div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-sizing:border-box">'
-    +'<div style="width:40px;height:4px;background:var(--surface-3);border-radius:var(--r-1);margin:0 auto 18px"></div>'
+    +'<div style="width:40px;height:4px;background:var(--surface-3);border-radius:var(--r-1);margin:0 auto 20px"></div>'
     +'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Réassignation des athlètes</div>'
     +'<div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:4px">'+escapeHtml((coach.fname||'')+' '+(coach.lname||''))+'</div>'
     +'<div style="font-size:var(--fs-sm);color:var(--sub);margin-bottom:14px">'+athletes.length+' athlète'+(athletes.length>1?'s':'')+' à traiter avant désactivation</div>'
@@ -110154,7 +110164,7 @@ function _htmlInvitationsEnAttente(user){
       +'<button type="button" class="btn btn-blanc btn-sm" onclick="invCopierCode('+jeton+')">Son code</button>'
       +'</div></div>';
   }).join('');
-  return '<div style="margin-bottom:18px">'
+  return '<div style="margin-bottom:20px">'
     +'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;'
     +'text-transform:uppercase;margin-bottom:8px">En attente ('+l.length+')</div>'
     +'<div class="jd-grille" style="padding:0">'+lignes+'</div>'
@@ -110735,8 +110745,8 @@ function loadStudentCodes(){
       +'<div style="font-size:var(--fs-xs);color:#888;margin-bottom:4px">Expire: '+exp.toLocaleDateString('fr-FR')+' ('+c.months+' mois)</div>'
       +used
       +'<div style="display:flex;gap:8px;margin-top:10px">'
-      +'<button onclick="toggleStudentCode('+i+')" style="flex:1;background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:7px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">'+(c.active?'Désactiver':'Activer')+'</button>'
-      +'<button onclick="extendStudentCode('+i+')" style="flex:1;background:none;border:1px solid #1a3a1a;color:var(--green);border-radius:var(--r-2);padding:7px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">+3 mois</button>'
+      +'<button onclick="toggleStudentCode('+i+')" style="flex:1;background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">'+(c.active?'Désactiver':'Activer')+'</button>'
+      +'<button onclick="extendStudentCode('+i+')" style="flex:1;background:none;border:1px solid #1a3a1a;color:var(--green);border-radius:var(--r-2);padding:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">+3 mois</button>'
       +'</div>'
       // ══ LE GESTE PRINCIPAL DE LA LIGNE, ET IL PREND SA PROPRE LARGEUR ══
       // « Copier » etait un troisieme bouton de la rangee, du meme rang que
@@ -110744,14 +110754,14 @@ function loadStudentCodes(){
       // genere un code : on l'envoie. Et « Copier l'invitation » ne tient pas
       // dans un tiers de carte sur un telephone — il s'y couperait en trois
       // lignes. Il passe donc sur sa propre ligne, au-dessus du rouge.
-      +'<button onclick="_copierInvitationAthlete('+i+')" style="width:100%;margin-top:8px;background:none;border:1px solid #1a1a3a;color:#7ab;border-radius:var(--r-2);padding:7px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">Copier l\'invitation</button>'
+      +'<button onclick="_copierInvitationAthlete('+i+')" style="width:100%;margin-top:8px;background:none;border:1px solid #1a1a3a;color:#7ab;border-radius:var(--r-2);padding:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">Copier l\'invitation</button>'
       // ══ LE QUATRIEME GESTE : FERMER ET EFFACER ══════════════════════════
       // Demande de Kevin, 08/09/2026 : « ca m'eviterait de devoir rechercher
       // des codes ou des athletes avec qui je ne peux plus travailler ».
       // Desactiver laisse la ligne ; celui-ci la retire, et emporte la fiche
       // de l'eleve avec elle quand il y en a une. Il est SEUL SUR SA LIGNE et
       // en rouge : ce n'est pas une quatrieme option du meme rang.
-      +'<button onclick="supprimerCodeEtFiche('+i+')" style="width:100%;margin-top:8px;background:none;border:1px solid #3a0000;color:var(--red-light);border-radius:var(--r-2);padding:7px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">Rendre inactif et supprimer la fiche + le code</button>'
+      +'<button onclick="supprimerCodeEtFiche('+i+')" style="width:100%;margin-top:8px;background:none;border:1px solid #3a0000;color:var(--red-light);border-radius:var(--r-2);padding:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">Rendre inactif et supprimer la fiche + le code</button>'
       +'</div>';
   }).join('');
 }
@@ -111011,9 +111021,9 @@ function _renderSubPaliers(){
         background:var(--green);color:#04210d;font-size:var(--fs-xs);font-weight:900;
         padding:2px 8px;border-radius:var(--r-4);letter-spacing:.5px;white-space:nowrap">${escapeHtml(p.remise)}</div>`:''}
       <div style="font-size:var(--fs-xs);color:${sel?'var(--red)':'var(--sub)'};font-weight:800;
-        text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">${escapeHtml(p.titre)}</div>
+        text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">${escapeHtml(p.titre)}</div>
       <div style="font-size:var(--fs-xl);font-weight:900;color:var(--text);line-height:1">${escapeHtml(_prixPalier(p))}</div>
-      <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:3px">${escapeHtml(p.periode)}</div>
+      <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">${escapeHtml(p.periode)}</div>
       <div style="font-size:var(--fs-xs);color:${p.econ?'var(--green)':'var(--sub)'};margin-top:6px;
         font-weight:${p.econ?'800':'400'}">${escapeHtml(p.econ||p.detail)}</div>
     </div>`;
@@ -111246,7 +111256,7 @@ function renderPaypalButton(planId,coachId){
     '<label for="cgv-ok" style="display:flex;gap:10px;align-items:flex-start;'
     +'background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-3);'
     +'padding:14px 16px;margin-bottom:16px;cursor:pointer;text-align:left">'
-    +'<input type="checkbox" id="cgv-ok" style="margin-top:3px;flex-shrink:0;'
+    +'<input type="checkbox" id="cgv-ok" style="margin-top:4px;flex-shrink:0;'
     +'width:18px;height:18px;accent-color:var(--red);cursor:pointer">'
     +'<span style="font-size:var(--fs-sm);line-height:1.6;color:var(--sub)">'
     +"J'ai lu et j'accepte les <a href=\"../terms.html\" target=\"_blank\" rel=\"noopener\">"
@@ -111397,7 +111407,7 @@ function _ligneMuscles(ex,i){
   const r=resoudreMuscles(nom,ex);
   const past=(g,plein)=>{
     const m=MUSCLES[g]; if(!m) return '';
-    return `<span style="display:inline-block;padding:3px 9px;border-radius:var(--r-2);font-size:var(--fs-xs);font-weight:800;letter-spacing:.3px;white-space:nowrap;`
+    return `<span style="display:inline-block;padding:4px 10px;border-radius:var(--r-2);font-size:var(--fs-xs);font-weight:800;letter-spacing:.3px;white-space:nowrap;`
       +(plein?`background:${m.c};color:#08080a;border:1px solid ${m.c}`
              :`background:transparent;color:${m.c};border:1px solid ${m.c}`)+`">${m.lib}</span>`;
   };
@@ -111407,8 +111417,8 @@ function _ligneMuscles(ex,i){
     : `<span style="color:var(--orange);font-size:var(--fs-xs);font-weight:700">Non classé, appuie pour choisir</span>`;
   return `<div onclick="ouvrirSelecteurMuscles(${i})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
     style="margin-bottom:10px;padding:8px 10px;background:#0c0c0c;border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:5px">Muscles</div>
-    <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">${corps}</div>
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Muscles</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${corps}</div>
   </div>`;
 }
 
@@ -111431,15 +111441,15 @@ function ouvrirSelecteurMuscles(i){
 function _rendreSelecteurMuscles(titre){
   const lignes=Object.keys(MUSCLES).map(g=>{
     const m=MUSCLES[g],p=_selMusclesP.includes(g),s=_selMusclesS.includes(g);
-    const b=(actif,col,lbl,fn)=>`<button onclick="${fn}('${g}')" style="flex:1;padding:7px 4px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;`
+    const b=(actif,col,lbl,fn)=>`<button onclick="${fn}('${g}')" style="flex:1;padding:8px 4px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;`
       +(actif?`background:${col};color:#08080a;border:1px solid ${col}`:`background:transparent;color:var(--text-dim);border:1px solid var(--border)`)+`">${lbl}</button>`;
-    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #161616">
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #161616">
       <span style="flex:1;min-width:0;font-size:var(--fs-sm);font-weight:700;color:${(p||s)?'var(--text)':'var(--sub)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.lib}</span>
-      <div style="display:flex;gap:5px;flex:0 0 122px">${b(p,m.c,'PRIM.','_selMusclePrim')}${b(s,m.c,'SEC.','_selMuscleSec')}</div>
+      <div style="display:flex;gap:6px;flex:0 0 122px">${b(p,m.c,'PRIM.','_selMusclePrim')}${b(s,m.c,'SEC.','_selMuscleSec')}</div>
     </div>`;
   }).join('');
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-    <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 18px 20px;width:100%;max-width:480px;max-height:88vh;display:flex;flex-direction:column">
+    <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:88vh;display:flex;flex-direction:column">
       <h2 style="margin-bottom:2px;font-size:var(--fs-lg)">Muscles travaillés</h2>
       <p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px;line-height:1.5">${titre}</p>
       <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;margin-bottom:12px">${lignes}</div>
@@ -111514,12 +111524,12 @@ function loadExClassify(){
   }
   aClasser.sort((a,b)=>b.seances-a.seances||a.nom.localeCompare(b.nom));
   if(!aClasser.length){
-    el.innerHTML=emptyState('check','Tous tes exercices sont classés.',null,null,'padding:30px 0');
+    el.innerHTML=emptyState('check','Tous tes exercices sont classés.',null,null,'padding:32px 0');
     return;
   }
   el.innerHTML=`<p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">${aClasser.length} exercice${aClasser.length>1?'s':''} sans muscle rattaché. Classe-les, ou fusionne un doublon avec l'exercice qu'il désigne vraiment pour lui rendre son historique de charge.</p>`
     +aClasser.map(a=>`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:10px">
-      <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:3px">${escapeHtml(a.nom)}</div>
+      <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">${escapeHtml(a.nom)}</div>
       <div class="sub" style="font-size:var(--fs-xs);margin-bottom:10px">${a.seances?a.seances+' séance'+(a.seances>1?'s':''):'jamais réalisé'}</div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-outline btn-sm" style="flex:1;margin:0" onclick="_classerDepuisFile('${escapeHtml(a.k).replace(/'/g,"\'")}')">Classer</button>
@@ -111555,12 +111565,12 @@ function ouvrirFusion(k){
     .sort((a,b)=>b[1].seances-a[1].seances).slice(0,60);
   if(!cibles.length) return toast('Aucun autre exercice avec qui fusionner.','var(--orange)');
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-    <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 18px 20px;width:100%;max-width:480px;max-height:82vh;display:flex;flex-direction:column">
+    <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:82vh;display:flex;flex-direction:column">
       <h2 style="margin-bottom:2px;font-size:var(--fs-lg)">Fusionner</h2>
       <p class="sub" style="font-size:var(--fs-xs);margin-bottom:6px;line-height:1.5">« ${escapeHtml(k)} » désigne en réalité :</p>
       <p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px;line-height:1.5;color:var(--text-dim)">L'historique de charge des deux noms sera réuni. Rien n'est renommé ni effacé.</p>
       <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch">
-        ${cibles.map(([kk,e])=>`<button onclick="_confirmerFusion('${escapeHtml(k).replace(/'/g,"\'")}','${escapeHtml(kk).replace(/'/g,"\'")}')" style="width:100%;text-align:left;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:11px 13px;margin-bottom:7px;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer">
+        ${cibles.map(([kk,e])=>`<button onclick="_confirmerFusion('${escapeHtml(k).replace(/'/g,"\'")}','${escapeHtml(kk).replace(/'/g,"\'")}')" style="width:100%;text-align:left;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:12px 14px;margin-bottom:8px;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer">
           ${escapeHtml(e.nom)}<span style="display:block;color:var(--sub);font-size:var(--fs-2xs);font-weight:400;margin-top:2px">${e.seances?e.seances+' séance'+(e.seances>1?'s':''):'jamais réalisé'}</span></button>`).join('')}
       </div>
       <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Annuler</button>
@@ -111985,7 +111995,7 @@ function _carteProtocole(txt,titre,couleur,id,replie,refKg){
         // La règle globale « label » met en majuscules, espace les lettres et
         // ajoute 16px de marge haute : lisible pour un intitulé de champ,
         // illisible pour une consigne d'exercice. On la neutralise ici.
-        return `<label style="display:flex;align-items:center;gap:9px;padding:7px 0;margin:0;cursor:pointer;border-bottom:1px solid #141414;text-transform:none;letter-spacing:normal;font-weight:400">
+        return `<label style="display:flex;align-items:center;gap:10px;padding:8px 0;margin:0;cursor:pointer;border-bottom:1px solid #141414;text-transform:none;letter-spacing:normal;font-weight:400">
         <input type="checkbox" id="ck-case-${cle}-${i}" ${coche?'checked':''} onchange="_ckCocher('${cle}',${i},this.checked)" style="width:17px;height:17px;margin:0;accent-color:${couleur};flex-shrink:0;cursor:pointer">
         <span style="flex:1;min-width:0;font-size:var(--fs-sm);line-height:1.5;color:${coche?'var(--text-faint)':'#ccc'};${coche?'text-decoration:line-through':''}">${escapeHtml(e)}</span>
         ${secs?`<button type="button" id="ck-chrono-${cle}-${i}" data-libelle="${_ckMMSS(secs)}" onclick="event.preventDefault();_ckDemarrerChrono('${cle}',${i},${secs})" class="ck-chrono">${_ckMMSS(secs)}</button>`:''}
@@ -111996,7 +112006,7 @@ function _carteProtocole(txt,titre,couleur,id,replie,refKg){
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-left:3px solid ${couleur};border-radius:var(--r-3);margin-bottom:14px;overflow:hidden">
     <div onclick="const c=document.getElementById('${id}');c.style.display=c.style.display==='none'?'block':'none';this.querySelector('.chev').textContent=c.style.display==='none'?'▸':'▾'"
          role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
-         style="display:flex;align-items:center;gap:9px;padding:11px 13px;cursor:pointer">
+         style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer">
       <span style="flex:1;min-width:0">
         <span style="font-size:var(--fs-xs);letter-spacing:2px;font-weight:800;color:${couleur};text-transform:uppercase">${titre}</span>
         ${entete?`<span style="display:block;font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${escapeHtml(entete)}</span>`:''}
@@ -112004,7 +112014,7 @@ function _carteProtocole(txt,titre,couleur,id,replie,refKg){
       ${etapes.length?`<span id="ck-compte-${cle}" data-total="${etapes.length}" style="font-size:var(--fs-xs);font-weight:800;color:${faits>=etapes.length?'var(--success)':'var(--sub)'}">${faits}/${etapes.length}</span>`:''}
       <span class="chev" style="color:var(--sub);font-size:var(--fs-md)">${replie?'▸':'▾'}</span>
     </div>
-    <div id="${id}" style="padding:0 13px 11px${replie?';display:none':''}">${corps}</div>
+    <div id="${id}" style="padding:0 14px 12px${replie?';display:none':''}">${corps}</div>
   </div>`;
 }
 
@@ -112123,10 +112133,10 @@ document.addEventListener('pointerup',_peDragFin);
 document.addEventListener('pointercancel',_peDragFin);
 
 function _peLigneEtape(e,i,total){
-  return `<div id="pe-ligne-${i}" data-pe-idx="${i}" style="display:flex;align-items:flex-start;gap:7px;margin-bottom:6px">
+  return `<div id="pe-ligne-${i}" data-pe-idx="${i}" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">
     <button type="button" class="pe-poignee" aria-label="Déplacer l'étape ${i+1}"
       onpointerdown="_peDragDebut(event,${i})">⠿</button>
-    <span style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);padding-top:11px;min-width:14px;text-align:right">${i+1}</span>
+    <span style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);padding-top:12px;min-width:14px;text-align:right">${i+1}</span>
     <textarea id="pe-et-${i}" rows="1" oninput="_peEtapeTexte(${i},this.value);this.style.height='auto';this.style.height=this.scrollHeight+'px'"
       placeholder="Ex : Rameur, 3 min" style="flex:1;font-size:var(--fs-sm);padding:8px 10px;margin:0;line-height:1.5;resize:none;min-height:38px">${escapeHtml(e)}</textarea>
     <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
@@ -112175,13 +112185,13 @@ function _peRendre(){
   const b=_peBrouillon;
   const puce=(actif,lib,onclick)=>`<button type="button" class="pf-chip${actif?' active':''}" onclick="${onclick}">${lib}</button>`;
   const groupe=(titre,contenu,aide)=>`<div style="margin-bottom:16px">
-    <div style="font-size:var(--fs-2xs);letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:5px">${titre}</div>
+    <div style="font-size:var(--fs-2xs);letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:6px">${titre}</div>
     ${aide?`<div style="font-size:var(--fs-2xs);color:var(--sub);margin-bottom:6px;line-height:1.5">${aide}</div>`:''}
-    <div style="display:flex;flex-wrap:wrap;gap:5px">${contenu}</div></div>`;
+    <div style="display:flex;flex-wrap:wrap;gap:6px">${contenu}</div></div>`;
 
   z.innerHTML=`
     <div style="margin-bottom:16px">
-      <div style="font-size:var(--fs-2xs);letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:5px">Nom</div>
+      <div style="font-size:var(--fs-2xs);letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:6px">Nom</div>
       <input id="pe-nom" value="${escapeHtml(b.nom)}" oninput="_peBrouillon.nom=this.value;_peModifie=true;_peMajApercu()"
         placeholder="Ex : Échauffement épaules sensibles" style="font-size:var(--fs-md);padding:10px 12px;margin:0">
     </div>
@@ -112191,7 +112201,7 @@ function _peRendre(){
     ${groupe('Objectif',Object.keys(PROTO_OBJECTIFS).map(k=>
       puce(b.objectif===k,PROTO_OBJECTIFS[k].lib,`_peSet('objectif','${k}')`)).join(''))}
     <div style="margin-bottom:16px">
-      <div style="font-size:var(--fs-2xs);letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:5px">Durée (minutes)</div>
+      <div style="font-size:var(--fs-2xs);letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:6px">Durée (minutes)</div>
       <div style="display:flex;align-items:center;gap:8px">
         <input type="number" min="1" max="120" value="${b.dureeMin}" oninput="_peBrouillon.dureeMin=this.value;_peModifie=true;_peMajApercu()" style="text-align:center;margin:0;width:74px">
         <span style="font-size:var(--fs-xs);color:var(--sub)">à</span>
@@ -112200,12 +112210,12 @@ function _peRendre(){
       </div>
     </div>
     <div style="margin-bottom:16px">
-      <div style="font-size:var(--fs-2xs);letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:5px">Description</div>
-      <textarea rows="2" oninput="_peBrouillon.desc=this.value;_peModifie=true" placeholder="À quoi sert ce protocole, en une phrase." style="font-size:var(--fs-sm);padding:9px 11px;margin:0;line-height:1.5">${escapeHtml(b.desc)}</textarea>
+      <div style="font-size:var(--fs-2xs);letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:6px">Description</div>
+      <textarea rows="2" oninput="_peBrouillon.desc=this.value;_peModifie=true" placeholder="À quoi sert ce protocole, en une phrase." style="font-size:var(--fs-sm);padding:10px 12px;margin:0;line-height:1.5">${escapeHtml(b.desc)}</textarea>
     </div>
 
     <div style="margin-bottom:16px">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px">
         <div style="font-size:var(--fs-2xs);letter-spacing:1.5px;color:var(--text-faint);font-weight:800">Étapes</div>
         <div id="pe-duree-chrono" style="font-size:var(--fs-2xs);color:var(--sub)"></div>
       </div>
@@ -112231,8 +112241,8 @@ function _peRendre(){
       'Affiché en garde-fou, jamais utilisé pour masquer le protocole.')}
 
     <div style="margin-bottom:16px">
-      <div style="font-size:var(--fs-2xs);letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:5px">Ce que verra l'athlète</div>
-      <pre id="pe-apercu" style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:11px 13px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);color:#bbb;line-height:1.7;white-space:pre-wrap;margin:0"></pre>
+      <div style="font-size:var(--fs-2xs);letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:6px">Ce que verra l'athlète</div>
+      <pre id="pe-apercu" style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);color:#bbb;line-height:1.7;white-space:pre-wrap;margin:0"></pre>
     </div>
 
     ${estProtoPerso(b.slug)&&protocolesPerso().some(p=>p.slug===b.slug)?
@@ -112368,8 +112378,8 @@ function _pfRendre(){
   const puce=(actif,libelle,onclick)=>
     `<button class="pf-chip${actif?' active':''}" onclick="${onclick}">${libelle}</button>`;
   const ligne=(titre,contenu)=>
-    `<div style="margin-bottom:7px"><div style="font-size:var(--fs-2xs);letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:4px">${titre}</div>
-     <div style="display:flex;flex-wrap:wrap;gap:5px">${contenu}</div></div>`;
+    `<div style="margin-bottom:8px"><div style="font-size:var(--fs-2xs);letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:4px">${titre}</div>
+     <div style="display:flex;flex-wrap:wrap;gap:6px">${contenu}</div></div>`;
 
   const actifs=[f.phase,f.objectif,f.duree,f.materiel,f.type,f.q].filter(Boolean).length;
   // Résumé de ce qui filtre, lisible sans déplier.
@@ -112392,7 +112402,7 @@ function _pfRendre(){
 
   // Les puces passent à la ligne au lieu de défiler horizontalement : un filtre
   // qu'il faut faire glisser pour découvrir n'est jamais utilisé.
-  zf.innerHTML=barre+`<div style="margin-top:9px">`+
+  zf.innerHTML=barre+`<div style="margin-top:10px">`+
     ligne('Moment',
       puce(f.phase==='WARMUP','Échauffement',"_pfSet('phase','WARMUP')")+
       puce(f.phase==='COOLDOWN','Fin de séance',"_pfSet('phase','COOLDOWN')"))
@@ -112444,8 +112454,8 @@ function _pfRendreListe(){
     // réappliquer en croyant changer quelque chose.
     const pose=_pfCible&&_vientDunProtocole(document.getElementById(_pfCible)?.value)
       &&(document.getElementById(_pfCible)?.value||'').trim().split('\n')[0]===protoTexte(p).split('\n')[0];
-    return `<div style="background:var(--surface-1);border:1px solid ${pose?'var(--success)':'var(--border)'};border-radius:var(--r-3);padding:13px;margin-bottom:10px">
-      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px">
+    return `<div style="background:var(--surface-1);border:1px solid ${pose?'var(--success)':'var(--border)'};border-radius:var(--r-3);padding:14px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
         <span style="font-size:var(--fs-md);font-weight:800">${escapeHtml(p.nom)}</span>
         <span style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;padding:1px 6px;border-radius:var(--r-3);background:${o.c};color:#08080a">${o.lib.toUpperCase()}</span>
         <span style="font-size:var(--fs-2xs);color:var(--sub)">${duree} min</span>
@@ -112459,8 +112469,8 @@ function _pfRendreListe(){
         Matériel : ${p.materiel.map(m=>PROTO_MATERIEL[m]||m).join(', ')}<br>
         Convient à : ${universel?'toutes les séances':p.compatible.map(t=>_PROTO_TYPE_LIB[t]||t).join(', ')}
       </div>
-      ${p.contreInd.length?`<div style="font-size:var(--fs-2xs);color:var(--orange);margin-top:5px">À éviter si : ${p.contreInd.map(c=>_PROTO_CI_LIB[c]||c).join(', ')}</div>`:''}
-      <div style="display:flex;gap:6px;margin-top:9px">
+      ${p.contreInd.length?`<div style="font-size:var(--fs-2xs);color:var(--orange);margin-top:6px">À éviter si : ${p.contreInd.map(c=>_PROTO_CI_LIB[c]||c).join(', ')}</div>`:''}
+      <div style="display:flex;gap:6px;margin-top:10px">
         ${_pfCible?`<button class="btn btn-outline btn-sm" style="margin:0;flex:1" onclick="_pfUtiliser('${p.slug}')">Utiliser ce protocole</button>`:''}
         ${estProtoPerso(p.slug)?`<button class="btn btn-outline btn-sm" style="margin:0;${_pfCible?'flex:0 0 auto;width:auto;padding:0 14px':'flex:1'}" onclick="ouvrirEditeurProto('${p.slug}','s-protocoles')">Modifier</button>`:''}
       </div>

@@ -50,7 +50,7 @@ th{color:var(--gris);font-weight:600;font-size:12px}
   var z=document.getElementById('m');
   function esc(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
   function eur(v){ try{ return Number(v||0).toLocaleString('fr-FR',{style:'currency',currency:'EUR'}); }catch(e){ return (v||0)+' €'; } }
-  function pct(a,b){ return b>0?Math.round(a/b*100)+' %':'—'; }
+  function pct(a,b){ return b>0?Math.round(a/b*100)+' %':'-'; }
   if(!/^[a-z0-9]{24}$/.test(s)){ z.innerHTML='<div class="vide">Lien incomplet.</div>'; return; }
   fetch(DB+'/ambassadeurs_vue/'+s+'.json').then(function(r){ return r.ok?r.json():null; }).then(function(v){
     if(!v||!v.code){ z.innerHTML='<div class="vide">Ce lien de suivi n’existe pas.</div>'; return; }

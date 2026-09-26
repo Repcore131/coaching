@@ -33,7 +33,7 @@ main{max-width:520px;margin:0 auto;padding:28px 18px calc(28px + env(safe-area-i
   box-shadow:0 0 0 4px rgba(224,32,32,.25),0 12px 30px rgba(0,0,0,.5);background:#1b1b1e}
 h1{text-align:center;font-size:30px;line-height:1.1;margin:0 0 4px}
 .equipe{text-align:center;color:#ff3b3b;font-weight:800;letter-spacing:2.5px;font-size:12px;text-transform:uppercase}
-.phrase{text-align:center;color:#d4d4d8;font-style:italic;margin:10px 0 0}
+.phrase{text-align:center;color:#d4d4d8;margin:10px 0 0}
 .puces{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:14px}
 .puces span{background:#240707;border:1px solid #4a0c0c;border-radius:6px;padding:5px 11px;font-size:13px;font-weight:700}
 h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);margin:24px 0 8px}
@@ -81,7 +81,7 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
     .then(function(v){
       if(!v||!v.nom) return vide('Cette page n’existe pas, ou ce coach ne la publie plus.');
       var nom=esc(v.nom), prenom=esc(String(v.nom).split(' ')[0]);
-      document.title=v.nom+' — coaching sur RepCore';
+      document.title=v.nom+' : coaching sur RepCore';
       var h='';
       if(https(v.photo)) h+='<img class="photo" src="'+https(v.photo)+'" alt="'+nom+'" width="128" height="128">';
       h+='<h1>'+nom+'</h1>';
@@ -102,7 +102,7 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
       var ref=(q.get('ref')||'').toUpperCase();
       h+='<a class="cta" href="'+racine+'i/?coach='+encodeURIComponent(slug)+'&src='+src
         +(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)?'&ref='+ref:'')+'">Commencer avec '+prenom+'</a>';
-      h+='<div class="pied"><a href="'+racine+'">RepCore</a> — le coaching, séance après séance.</div>';
+      h+='<div class="pied"><a href="'+racine+'">RepCore</a> · le coaching, séance après séance.</div>';
       z.removeAttribute('aria-busy'); z.innerHTML=h;
     })
     .catch(function(){ vide('Page injoignable pour l’instant. Réessaie dans un moment.'); });

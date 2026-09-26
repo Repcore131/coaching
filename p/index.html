@@ -100,7 +100,7 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
       var cible=racine+'i/?'+(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)?'ref='+ref+'&':'')+'src='+src;
       h+='<a class="cta" href="'+cible+'">Rejoins '+prenom+' sur RepCore</a>';
       if(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)) h+='<div class="sous">Avec son code, tu as 2 mois pour essayer au lieu d’un.</div>';
-      h+='<div class="pied"><a href="'+racine+'">RepCore</a> — l’app d’entraînement qui te suit séance après séance.</div>';
+      h+='<div class="pied"><a href="'+racine+'">RepCore</a> · l’app d’entraînement qui te suit séance après séance.</div>';
       z.removeAttribute('aria-busy'); z.innerHTML=h;
     })
     .catch(function(){ vide('Page injoignable pour l’instant. Réessaie dans un moment.'); });

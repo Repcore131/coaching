@@ -220,7 +220,7 @@ function textePodium(defi, parts) {
     .sort((a, b) => (b.metrique - a.metrique) || ((a.termineLe || Infinity) - (b.termineLe || Infinity))).slice(0, 3);
   const unite = defi.mesure === "progressionPct" ? " %" : (defi.mesure === "serie" ? " sem." : " séances");
   const med = ["🥇", "🥈", "🥉"];
-  const lignes = vis.map((p, i) => med[i] + " " + p.nom + " — " + String(p.metrique).replace(".", ",") + unite);
+  const lignes = vis.map((p, i) => med[i] + " " + p.nom + " · " + String(p.metrique).replace(".", ",") + unite);
   const fin = parts.filter((p) => p && p.termine).length;
   let t = "🏆 Défi terminé : « " + titre + " ». ";
   t += fin ? fin + " athlète" + (fin > 1 ? "s ont" : " a") + " relevé le défi." : "Personne ne l'a bouclé cette fois.";

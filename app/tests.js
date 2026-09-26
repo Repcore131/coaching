@@ -38251,12 +38251,14 @@ async function testExercices(){
         if(trop.length) return _echec('en rouge sans décision à prendre : '+trop.join(', '));
         // ET AUCUNE SECTION N'A DISPARU : seul l'accent change.
         if(!vus['--red']) return _echec('plus aucune section d’alerte');
-        // LA TRAME ET LE FILET RESTENT : ils font partie de l'identite.
+        // L'ACCENT EST PORTE PAR LE FOND DU TITRE. Le filet de couleur a gauche
+        // est retire (charte du 26/09/2026 : pas de carte a bordure coloree).
         const css=_stylesProd().map(x=>x.textContent).join('\n');
         const i=css.indexOf('.cc-sect-t{position:relative');
         const bloc=css.slice(i,css.indexOf('}',i));
-        return /border-left:3px solid var\(--cc-accent/.test(bloc)
-          ?true:_echec('le filet de gauche ne porte plus l’accent');})());
+        if(/border-left:[2-9]px solid var\(--cc-accent/.test(bloc)) return _echec('le filet de couleur est revenu');
+        return /background:[^;]*var\(--cc-accent/.test(bloc)
+          ?true:_echec('le titre ne porte plus l’accent');})());
 
       ok('N5.9 — LA TOPBAR COLLE SUR TOUS LES ECRANS COACH',(()=>{
         const css=_stylesProd().map(s=>s.textContent).join('\n');
@@ -48965,6 +48967,42 @@ async function testExercices(){
       const v=getComputedStyle(document.documentElement);
       for(const k of ['--arc-charge','--arc-peak']){ const c=v.getPropertyValue(k).trim().toLowerCase(); if(['#7b3bff','#ff2e93'].indexOf(c)>=0) return _echec(k+' est violet'); }
       return true;})());
+    ok('Charte (2) : ni texture, ni verre, ni texte en dégradé, ni fondu au défilement, ni bouton qui s’estompe',(()=>{
+      const regles=[...document.styleSheets].flatMap(f=>{ try{ return [...f.cssRules]; }catch(e){ return []; } });
+      const tout=r=>r.cssRules?[...r.cssRules].flatMap(tout):[r];
+      const plates=regles.flatMap(tout).filter(r=>r.style&&!/data-theme="clair"/.test(r.selectorText||''));
+      for(const r of plates){
+        const st=r.style, sel=r.selectorText||'';
+        const fond=(st.getPropertyValue('background-image')||'')+' '+(st.getPropertyValue('background')||'');
+        if(/feTurbulence/.test(fond)) return _echec('grain : '+sel);
+        if(/repeating-(linear|conic|radial)-gradient/.test(fond)){
+          const al=(fond.match(/rgba\([^)]*?,\s*([\d.]+)\)/g)||[]).map(x=>Number(x.match(/([\d.]+)\)$/)[1]));
+          if(!al.length||al.every(a=>a<=0.2)) return _echec('texture : '+sel);
+        }
+        if(st.getPropertyValue('backdrop-filter')||st.getPropertyValue('-webkit-backdrop-filter')) return _echec('verre : '+sel);
+        if(/text/.test(st.getPropertyValue('background-clip')+st.getPropertyValue('-webkit-background-clip'))) return _echec('texte en dégradé : '+sel);
+        if(/:hover/.test(sel)&&st.getPropertyValue('opacity')&&/btn|button|cta/.test(sel)) return _echec('bouton qui s’estompe : '+sel);
+      }
+      if(ARC_VUE_AU_DEFILEMENT!==false) return _echec('apparition au défilement');
+      if(/stroke-linecap="round"/.test(icon('check'))) return _echec('icônes au trait arrondi');
+      if(getComputedStyle(document.documentElement).getPropertyValue('--text-dim').trim()!=='#8a8a8a') return _echec('--text-dim non défini');
+      if(/borderLeft='4px/.test(String(toast))) return _echec('filet de couleur sur le toast');
+      const src=_prodSrc().replace(/\/\/[^\n]*/g,'');
+      if(/-webkit-background-clip:text/.test(src)) return _echec('texte en dégradé dans le code');
+      return true;})());
+    ok('Charte (3) : les espacements suivent une seule échelle',(()=>{
+      const ECH=[0,1,2,4,6,8,10,12,14,16,20,24,28,32,40,48,56,64];
+      const regles=[...document.styleSheets].flatMap(f=>{ try{ return [...f.cssRules]; }catch(e){ return []; } });
+      const tout=r=>r.cssRules?[...r.cssRules].flatMap(tout):[r];
+      const hors=[];
+      for(const r of regles.flatMap(tout)){
+        if(!r.style) continue;
+        for(const k of ['padding-top','padding-right','padding-bottom','padding-left','margin-top','margin-right','margin-bottom','margin-left','row-gap','column-gap']){
+          const v=r.style.getPropertyValue(k); const m=/^(-?\d+(?:\.\d+)?)px$/.exec(v.trim());
+          if(m&&Math.abs(+m[1])<=64&&ECH.indexOf(Math.abs(+m[1]))<0) hors.push((r.selectorText||'')+' '+k+':'+v);
+        }
+      }
+      return hors.length?_echec(hors.length+' hors échelle : '+hors.slice(0,3).join(' | ')):true;})());
     ok('Aucune fausse métrique : la page de vente annonce le vrai nombre de vidéos',(()=>{
       const lire=u=>{ try{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; }catch(e){ return ''; } };
       const v=lire('../index.html');

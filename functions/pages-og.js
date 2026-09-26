@@ -46,7 +46,7 @@ function ogCoach(slug, v) {
   if (!v || !v.nom) return null;
   const photo = /^https:\/\//.test(String(v.photo || "")) ? String(v.photo) : IMAGE_DEFAUT;
   return {
-    titre: court(v.nom, 60) + " — coaching sur RepCore",
+    titre: court(v.nom, 60) + " : coaching sur RepCore",
     description: court(v.phrase || v.bio || "Programmes, suivi, séances : commence avec " + v.nom + " sur RepCore.", 180),
     image: photo,
     url: ORIGINE + "/coach/" + slug
