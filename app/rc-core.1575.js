@@ -48392,6 +48392,88 @@ function anatOption(nom,val){
   _anatEdit.opts[nom]=val;
   const c=getOwnedClient(currentClientId); if(c) renderAnatCoach(c);
 }
+/**
+ * E3 (26/09/2026) — CE QUE CHAQUE POINT FAIT BOUGER. Pour un repère (sans
+ * son côté), les lignes de chiffres qui le lisent : [fiche, libellé exact de
+ * la ligne, nom court dans la bulle]. Trois au plus : la bulle se lit d'un
+ * coup d'œil pendant le glisser, le détail reste dans la fiche.
+ * ⚠ Les libellés sont ceux d'anatMesures, À LA LETTRE : un test vérifie que
+ *   chacun existe, sans quoi une ligne renommée viderait la bulle sans bruit.
+ */
+const ANAT_DEPENDANCES=Object.freeze({
+  face:Object.freeze({
+    vertex:[['buste','Tronc (épaules → hanches)','Tronc'],['jambes','Hauteur de hanche','Hauteur de hanche']],
+    acromion:[['clavicules','Largeur biacromiale','Biacromial'],['clavicules','Épaules / bassin','Épaules / bassin'],['bras','Membre supérieur','Membre sup.']],
+    epaule:[['bras','Humérus (épaule → coude)','Humérus'],['buste','Tronc (épaules → hanches)','Tronc'],['epaules','Inclinaison de face','Inclinaison']],
+    deltoide:[['buste','Rapport deltoïdes / taille (V)','V']],
+    coude:[['bras','Humérus (épaule → coude)','Humérus'],['bras','Avant-bras (coude → poignet)','Avant-bras'],['bras','Humérus / avant-bras','Hum. / av.-bras']],
+    poignet:[['bras','Avant-bras (coude → poignet)','Avant-bras'],['bras','Membre supérieur','Membre sup.'],['bras','Écart gauche / droite','Écart G / D']],
+    taille:[['buste','Rapport deltoïdes / taille (V)','V'],['buste','Rapport hanches / taille (X)','X']],
+    crete:[['clavicules','Largeur bicrêtale (bassin)','Bicrêtal'],['clavicules','Épaules / bassin','Épaules / bassin'],['bassin','Inclinaison de face','Inclinaison']],
+    hanche:[['jambes','Cuisse (hanche → genou)','Cuisse'],['buste','Tronc (épaules → hanches)','Tronc'],['jambes','Hauteur de hanche','Hauteur de hanche']],
+    genou:[['jambes','Cuisse (hanche → genou)','Cuisse'],['jambes','Jambe (genou → cheville)','Jambe'],['jambes','Cuisse / jambe','Cuisse / jambe']],
+    cheville:[['jambes','Jambe (genou → cheville)','Jambe'],['jambes','Cuisse / jambe','Cuisse / jambe']],
+    talon:[['jambes','Hauteur de hanche','Hauteur de hanche'],['buste','Tronc (épaules → hanches)','Tronc']],
+    pointe:[['pieds','Écart G/D','Écart G / D']]}),
+  dos:Object.freeze({
+    c7:[['dos','Axe C7 → sacrum','Axe C7 → sacrum']],
+    sacrum:[['dos','Axe C7 → sacrum','Axe C7 → sacrum']],
+    omoplate:[['dos','Omoplates (différence de hauteur)','Omoplates']],
+    omoplate_int:[['dos','Bord interne des omoplates (G / D)','Bord interne']],
+    acromion:[['epaules','Inclinaison de dos','Inclinaison']],
+    epaule:[['epaules','Inclinaison de dos','Inclinaison'],['dos','Triangles bras-tronc (G / D)','Triangles']],
+    crete:[['bassin','Inclinaison de dos','Inclinaison']],
+    coude:[['dos','Triangles bras-tronc (G / D)','Triangles']],
+    poignet:[['dos','Triangles bras-tronc (G / D)','Triangles']],
+    taille:[['dos','Triangles bras-tronc (G / D)','Triangles']],
+    hanche:[['dos','Triangles bras-tronc (G / D)','Triangles']],
+    mollet:[['arriere_pied','Arrière-pied gauche','Arrière-pied G'],['arriere_pied','Arrière-pied droit','Arrière-pied D']],
+    cheville:[['arriere_pied','Arrière-pied gauche','Arrière-pied G'],['arriere_pied','Arrière-pied droit','Arrière-pied D']],
+    achille:[['arriere_pied','Arrière-pied gauche','Arrière-pied G'],['arriere_pied','Arrière-pied droit','Arrière-pied D']],
+    talon:[['arriere_pied','Arrière-pied gauche','Arrière-pied G'],['arriere_pied','Arrière-pied droit','Arrière-pied D']]}),
+  profil:Object.freeze({
+    tragus:[['tete','Angle cranio-vertébral','Cranio-vertébral'],['tete','Tragus / acromion','Tragus / acromion']],
+    c7:[['tete','Angle cranio-vertébral','Cranio-vertébral']],
+    acromion:[['tete','Tragus / acromion','Tragus / acromion'],['posture','Inclinaison du tronc','Tronc']],
+    trochanter:[['posture','Inclinaison du tronc','Tronc'],['posture','Angle hanche-genou-cheville','Hanche-genou-cheville']],
+    genou:[['posture','Angle hanche-genou-cheville','Hanche-genou-cheville']],
+    malleole:[['posture','Angle hanche-genou-cheville','Hanche-genou-cheville']]})
+});
+/**
+ * PURE. L'APERÇU D'UN POINT EN COURS DE DÉPLACEMENT : anatMesures sur une
+ * COPIE du dossier où la vue porte les points de l'édition — rien n'est écrit,
+ * l'original n'est pas touché. Rend les lignes qui lisent ce point.
+ * @returns {{lib:string,val:string,marge:string}[]}
+ */
+function anatApercu(anat,u,vue,pts,opts,k,o){
+  const deps=(ANAT_DEPENDANCES[vue]||{})[String(k||'').replace(/_[lr]$/,'')];
+  if(!deps||!anat||!anat[vue]||!pts) return [];
+  const man={};
+  for(const q of Object.keys(pts)) if(pts[q]&&pts[q][2]===2) man[q]=[pts[q][0],pts[q][1]];
+  const copie=Object.assign({},anat,{opts:Object.assign({},anat.opts||{},opts||{})});
+  copie[vue]=Object.assign({},anat[vue],{man:Object.keys(man).length?man:null});
+  let res=null;
+  try{ res=anatMesures(copie,u,o||{}); }catch(e){ return []; }
+  const out=[];
+  for(const [fc,lib,court] of deps){
+    const f=(res.fiches||[]).find(x=>x.cle===fc);
+    const l=f&&(f.chiffres||[]).find(x=>x.lib===lib);
+    if(!l) continue;
+    const m=String(f.tolerance||'').match(/±\s?[\d,]+\s?(%|°)/);
+    out.push({lib:court,val:String(l.val==null||l.val===''?'—':l.val),marge:m?m[0].replace(/\s/g,'\u00a0'):''});
+  }
+  return out;
+}
+/** Le HTML de la bulle : deux ou trois valeurs, et ce qu'elles sont. */
+function _htmlAnatBulle(lignes){
+  if(!lignes||!lignes.length) return '';
+  // Une seule marge pour toutes les lignes : dite une fois, en pied.
+  const m=[...new Set(lignes.map(l=>l.marge).filter(Boolean))];
+  const une=m.length===1&&lignes.every(l=>l.marge===m[0]);
+  return lignes.map(l=>'<div class="an-bulle-l"><span>'+escapeHtml(l.lib)+'</span><b>'+escapeHtml(l.val)+'</b>'
+    +(!une&&l.marge?'<i>'+escapeHtml(l.marge)+'</i>':'')+'</div>').join('')
+    +'<div class="an-bulle-s">'+(une?'Marge '+escapeHtml(m[0])+' · ':'')+'aperçu, non enregistré</div>';
+}
 /** « Analyser avec ces points » : on enregistre, et tout se recalcule. */
 function anatEnregistrerPoints(silencieux){
   const e=_anatEdit;
@@ -48496,6 +48578,45 @@ function _anatBrancherEdition(z){
     return;
   }
   const loupe=scene.querySelector('.an-loupe');
+  // E3 — LA BULLE. Le dossier est lu UNE fois, ici, et jamais réécrit : les
+  // chiffres de la bulle viennent d'une copie (anatApercu). Seul « Analyser
+  // avec ces points » écrit.
+  let bulle=scene.querySelector('.an-bulle');
+  if(!bulle){ bulle=document.createElement('div'); bulle.className='an-bulle'; bulle.setAttribute('role','status'); bulle.setAttribute('aria-live','polite'); scene.appendChild(bulle); }
+  let base=null;
+  try{ const d=(DB.get('users')||{})[e.email]; base=d?{anat:d.morphoAnat,u:d}:null; }catch(x){ base=null; }
+  const biais=_anatSafe(()=>anatBiaisCoach());
+  let bulleT=0, bulleK=null, bulleMin=null, tactile=false;
+  const calculerBulle=(k)=>{
+    const lignes=base?anatApercu(base.anat,base.u,e.vue,e.pts,e.opts,k,{biais}):[];
+    bulle.innerHTML=_htmlAnatBulle(lignes);
+    bulle.classList.toggle('on',!!lignes.length);
+    placerBulle(k);
+  };
+  // LA PLACE, à chaque mouvement (le calcul, lui, attend 60 ms) : à côté du
+  // point, jamais sur la loupe ni hors de la scène.
+  const placerBulle=(k)=>{
+    if(!bulle.classList.contains('on')) return;
+    const ri=img.getBoundingClientRect(), rs=scene.getBoundingClientRect();
+    const q=e.pts[k]; if(!q) return;
+    const px=ri.left-rs.left+q[0]*ri.width, py=ri.top-rs.top+q[1]*ri.height;
+    const bw=bulle.offsetWidth, bh=bulle.offsetHeight, G=22, Gd=tactile?56:G;
+    const lp=(loupe&&scene.classList.contains('glisse'))?{x:parseFloat(loupe.style.left)||0,y:parseFloat(loupe.style.top)||0,w:loupe.offsetWidth,h:loupe.offsetHeight}:null;
+    const libre=(x,y)=>x>=4&&y>=4&&x+bw<=rs.width-4&&y+bh<=rs.height-4
+      &&!(lp&&x<lp.x+lp.w+4&&x+bw>lp.x-4&&y<lp.y+lp.h+4&&y+bh>lp.y-4);
+    const essais=[[px+G,py-8],[px-G-bw,py-8],[px+G,py-bh-G],[px-G-bw,py-bh-G],[px-bw/2,py+Gd],[px-bw/2,py-bh-G]];
+    let pos=essais.find(([x,y])=>libre(x,y));
+    if(!pos){ const [x,y]=essais[0]; pos=[Math.max(4,Math.min(rs.width-bw-4,x)),Math.max(4,Math.min(rs.height-bh-4,y))]; }
+    bulle.style.left=Math.round(pos[0])+'px'; bulle.style.top=Math.round(pos[1])+'px';
+  };
+  // Au plus une mesure toutes les 60 ms ; la dernière position est toujours rendue.
+  const majBulle=(k)=>{
+    bulleK=k;
+    const t=Date.now();
+    if(t-bulleT>=60){ bulleT=t; calculerBulle(k); return; }
+    placerBulle(k);
+    if(!bulleMin) bulleMin=setTimeout(()=>{ bulleMin=null; bulleT=Date.now(); calculerBulle(bulleK); },60-(t-bulleT));
+  };
   let actif=null;
   const versImage=(ev)=>{
     const pt=svg.createSVGPoint(); pt.x=ev.clientX; pt.y=ev.clientY;
@@ -48508,6 +48629,7 @@ function _anatBrancherEdition(z){
     return (r?r.lib:k)+(k.endsWith('_l')?' (écran gauche)':k.endsWith('_r')?' (écran droit)':'');
   };
   const choisir=(k)=>{
+    if(k!==bulleK){ bulle.classList.remove('on'); }
     e.sel=k; e.aide=k;
     svg.querySelectorAll('.an-pt').forEach(c=>c.classList.toggle('actif',c.getAttribute('data-k')===k));
     svg.querySelectorAll('.an-pt-t').forEach(t=>t.classList.toggle('actif',t.getAttribute('data-t')===k));
@@ -48545,6 +48667,7 @@ function _anatBrancherEdition(z){
       loupe.style.left=Math.max(4,Math.min(rs.width-2*R-4,lx))+'px';
       loupe.style.top=ly+'px';
     }
+    majBulle(k);
   };
   /** Le point le plus proche, dans un rayon de prise raisonnable. */
   const plusProche=(p)=>{
@@ -48558,6 +48681,7 @@ function _anatBrancherEdition(z){
   };
   svg.addEventListener('pointerdown',ev=>{
     const p=versImage(ev); if(!p) return;
+    tactile=ev.pointerType!=='mouse';
     let k=plusProche(p);
     // Un appui loin de tout point amène le point sélectionné à cet endroit.
     if(!k&&e.sel) k=e.sel;

@@ -45611,6 +45611,65 @@ async function testExercices(){
         DB.get=sv.get; DB.set=sv.set; currentUser=sv.u; currentClientId=sv.cid; getOwnedClient=sv.own; renderAnatCoach=sv.rd; toastSync=sv.ts;
         CLOUD.pushOne=sv.push; chargerMotionLab=sv.ch; _anatDimensions=sv.dim; window.mlAnatPhoto=sv.ml; _anatEchecs.delete('e2@t.fr');
       }}));
+    // E3 (26/09/2026) : le retour immédiat pendant l'édition des points.
+    ok('E3 — CHAQUE LIGNE DE LA TABLE DES DÉPENDANCES EXISTE DANS ANATMESURES',(()=>{
+      if(typeof ANAT_DEPENDANCES!=='object') return _echec('ANAT_DEPENDANCES n’existe pas');
+      const src=String(anatMesures);
+      for(const vue of Object.keys(ANAT_DEPENDANCES)) for(const k of Object.keys(ANAT_DEPENDANCES[vue])){
+        if(!anatRepere(vue,k)) return _echec('repère inconnu : '+vue+'/'+k);
+        const d=ANAT_DEPENDANCES[vue][k];
+        if(!d.length||d.length>3) return _echec(vue+'/'+k+' : '+d.length+' lignes');
+        for(const [f,lib] of d){
+          if(src.indexOf("cle:'"+f+"'")<0) return _echec('fiche inconnue : '+f);
+          if(src.indexOf("'"+lib+"'")<0) return _echec('ligne introuvable : « '+lib+' »');
+        }
+      }
+      return true;})());
+    ok('E3 — DÉPLACER COUDE_L CHANGE L’HUMÉRUS ET L’AVANT-BRAS DE L’APERÇU, SANS TOUCHER LE DOSSIER',(()=>{
+      const a=_anatGab(), u=_anatDossier();
+      const avant=JSON.stringify(a);
+      const pts=anatPoints(a,'face');
+      const l0=anatApercu(a,u,'face',pts,{},'coude_l');
+      const libs=l0.map(x=>x.lib).join(',');
+      if(libs!=='Humérus,Avant-bras,Hum. / av.-bras') return _echec('lignes : '+libs);
+      const p2=JSON.parse(JSON.stringify(pts)); p2.coude_l=[p2.coude_l[0],p2.coude_l[1]+0.03,2];
+      const l1=anatApercu(a,u,'face',p2,{},'coude_l');
+      if(l1[0].val===l0[0].val) return _echec('l’humérus ne bouge pas : '+l1[0].val);
+      if(l1[1].val===l0[1].val) return _echec('l’avant-bras ne bouge pas : '+l1[1].val);
+      if(!/±/.test(l1[0].marge)) return _echec('pas de marge : '+JSON.stringify(l1[0]));
+      if(JSON.stringify(a)!==avant) return _echec('l’aperçu a modifié le dossier');
+      if(anatApercu(a,u,'face',p2,{},'inconnu').length) return _echec('un point sans dépendance a une bulle');
+      return true;})());
+    okA('E3 — PENDANT LE GLISSER, LA BULLE SUIT LE COUDE ET RIEN N’EST ÉCRIT',(async()=>{
+      const bl=[{date:1,type:'depart',photos:{face:'data:image/gif;base64,R0lGODlhAQABAAAAACw=',back:'data:image/gif;base64,R0lGODlhAQABAAAAACw='}}];
+      const c=_anatDossier({email:'e3@t.fr',coachId:'C3',bilans:bl,morphoAnat:Object.assign(_anatGab(),{dos:null})});
+      const sv={get:DB.get,set:DB.set,ed:_anatEdit};
+      let ecrit=0;
+      const z=document.createElement('div'); z.style.cssText='position:fixed;left:0;top:0;width:380px;opacity:0;pointer-events:none';
+      try{
+        DB.get=k=>k==='users'?{'e3@t.fr':c}:sv.get(k); DB.set=()=>{ ecrit++; return true; };
+        _anatEdit={email:c.email,vue:'face',pts:anatPoints(c.morphoAnat,'face'),opts:{},reinit:false,sel:'coude_l'};
+        document.body.appendChild(z);
+        z.innerHTML=_htmlAnat(c);
+        if(!z.querySelector('.an-scene[data-w]')) return _echec('pas de scène d’édition');
+        _anatBrancherEdition(z);
+        const pt=z.querySelector('svg.an-os [data-k="coude_l"]');
+        if(!pt) return _echec('pas de point coude_l');
+        const v0=anatApercu(c.morphoAnat,c,'face',_anatEdit.pts,{},'coude_l');
+        pt.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',shiftKey:true,bubbles:true}));
+        const b=z.querySelector('.an-bulle');
+        if(!b||!b.classList.contains('on')) return _echec('pas de bulle');
+        const t=b.textContent;
+        if(t.indexOf('Humérus')<0||t.indexOf('Avant-bras')<0) return _echec('bulle : '+t);
+        if(t.indexOf(v0[0].val)>=0&&t.indexOf(v0[1].val)>=0) return _echec('la bulle n’a pas suivi : '+t);
+        for(let i=0;i<4;i++) pt.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',shiftKey:true,bubbles:true}));
+        await new Promise(r=>setTimeout(r,90));
+        const v4=anatApercu(c.morphoAnat,c,'face',_anatEdit.pts,{},'coude_l');
+        if(b.textContent.indexOf(v4[0].val)<0) return _echec('la dernière position n’est pas rendue : '+b.textContent+' / '+v4[0].val);
+        if(ecrit) return _echec(ecrit+' écriture(s) dans le dossier pendant le glisser');
+        if(c.morphoAnat.face.man) return _echec('des points posés dans le dossier sans « Analyser avec ces points »');
+        return true;
+      }finally{ DB.get=sv.get; DB.set=sv.set; _anatEdit=sv.ed; z.remove(); }}));
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());
