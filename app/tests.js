@@ -69742,6 +69742,42 @@ vendredi 78 6h 44m
         return (s.indexOf('_foudresJouees.has')>=0&&String(_resetRecordsVus).indexOf('_foudresJouees')>=0)
           ?true:_echec('aucune garde « une fois par record »');})());
 
+      // ── La carte de record ──────────────────────────────────────────────
+      ok('La carte de record est un 1080×1920, sur les trois fonds',(()=>{
+        const r={nm:'Squat',histMax:100,curMax:105,gain:5,date:Date.now(),signature:'A'};
+        for(const f of ['transparent','rouge','photo']){
+          const c=_dessinerCarteRecord(r,f);
+          if(c.width!==1080||c.height!==1920) return _echec(f+' : '+c.width+'x'+c.height);
+          const c2=_dessinerCarteRecords({records:[r,r],date:Date.now()},f);
+          if(c2.width!==1080||c2.height!==1920) return _echec(f+' (récap) : '+c2.width+'x'+c2.height);
+          c.width=0; c2.width=0;
+        }
+        return true;})());
+      ok('Carte de record : +X KG · +Y %, virgule française, une décimale sous 10 %',(()=>{
+        if(_recKg(102.5)!=='102,5') return _echec('kg : '+_recKg(102.5));
+        if(_recPct({histMax:100,gain:2.5})!=='2,5') return _echec('2,5 % → '+_recPct({histMax:100,gain:2.5}));
+        if(_recPct({histMax:50,gain:10})!=='20') return _echec('20 % → '+_recPct({histMax:50,gain:10}));
+        return _recPct({histMax:0,gain:5})===''?true:_echec('pourcentage sans ancien record');})());
+      ok('L\'éclair en filigrane est le même d\'un dessin à l\'autre',(()=>{
+        const a=_recAlea(_recGraine('Squat|105')), b=_recAlea(_recGraine('Squat|105'));
+        for(let i=0;i<20;i++) if(a()!==b()) return _echec('tirage différent');
+        return true;})());
+      ok('Mes records : un bouton par record, et un récapitulatif dès deux',(()=>{
+        const l=[{nm:'A',histMax:10,curMax:12,gain:2},{nm:'B',histMax:20,curMax:25,gain:5}];
+        const d=document.createElement('div');
+        d.innerHTML=_htmlRecordsFin({records:l},Date.now(),'sd');
+        const n=d.querySelectorAll('.rcf-rk-l .rcf-rk-p').length, t=d.querySelectorAll('.rcf-rk-tous .rcf-rk-p').length;
+        if(n!==2||t!==1) return _echec(n+' bouton(s), '+t+' récapitulatif');
+        d.innerHTML=_htmlRecordsFin({records:[l[0]]},Date.now(),'sd');
+        if(d.querySelector('.rcf-rk-tous')) return _echec('récapitulatif pour un seul record');
+        // Sans clé d'écran, le bloc d'avant, sans bouton.
+        d.innerHTML=_htmlRecordsFin({records:l});
+        return d.querySelector('.rcf-rk-p')?_echec('bouton sans clé'):true;})());
+      ok('Le partage d\'un record copie le lien perso, par les sorties communes',(()=>{
+        const s=String(partagerRecord);
+        return (s.indexOf('_storySortirPartage')>=0&&s.indexOf('_storySortirTelechargement')>=0
+          &&s.indexOf("'repcore-record'")>=0)?true:_echec('sortie ou nom de fichier manquant');})());
+
       // ── La rareté du magenta ────────────────────────────────────────────
       ok('--arc-peak n\'est utilisé NULLE PART hors du record',(()=>{
         // Sa force vient de sa rareté : posé sur un bouton ordinaire, il ne

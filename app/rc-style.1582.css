@@ -1972,6 +1972,20 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .rcf-rk-v{flex-shrink:0;font-size:var(--fs-sm);font-weight:900;color:#fff;letter-spacing:.5px}
 .rcf-rk-a{color:var(--text-faint);font-weight:700;font-size:var(--fs-2xs)}
 .rcf-rk-g{color:var(--red-text);font-weight:900;font-size:var(--fs-2xs);margin-left:6px}
+/* « Partager ce record » : sous la ligne, discret. Le record reste ce qu'on
+   lit ; le bouton est l'offre, pas la nouvelle. flex-wrap porte le bouton sur
+   sa propre rangee sans toucher a l'alignement nom / valeur. */
+.rcf-rk-l{flex-wrap:wrap}
+/* Le nom se resserre avant de repousser la valeur a la ligne : base nulle. */
+.rcf-rk-l .rcf-rk-ex{flex:1 1 0}
+.rcf-rk-p{display:inline-flex;align-items:center;gap:6px;flex-basis:100%;justify-content:flex-start;
+  min-height:32px;margin-top:2px;padding:0;background:none;border:none;cursor:pointer;
+  color:var(--red-text);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;
+  letter-spacing:1.2px;text-transform:uppercase;-webkit-tap-highlight-color:transparent}
+.rcf-rk-p:active{opacity:.7}
+.rcf-rk-tous{position:relative;padding:4px 15px 0;border-top:1px solid rgba(255,255,255,.045)}
+.rcf-rk-tous .rcf-rk-p{display:flex;width:100%;justify-content:center;min-height:40px;
+  border:1px solid rgba(224,32,32,.35);border-radius:var(--r-2);margin-top:8px}
 
 /* ── LA BANDE STATISTIQUE : un seul bloc, trois zones ────────────────── */
 .rcf-stats{display:grid;grid-template-columns:repeat(3,1fr);

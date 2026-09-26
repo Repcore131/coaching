@@ -38597,6 +38597,303 @@ function _dessinerBilanSeance(d,fond){
   ombre(false);
   return cv;
 }
+// ══ LA CARTE DE RECORD ═════════════════════════════════════════════════
+//
+// Le deuxième visuel 1080×1920 après le bilan de séance, et sur SON modèle :
+// mêmes polices (Bebas pour les chiffres, Montserrat pour les libellés), même
+// ombre en double passe, même épure — pas de cadre, pas de pastille, le fond
+// vient du sélecteur partagé (_visuelPeindreFond).
+//
+// `record` : {nm, histMax, curMax, gain} — la forme que rend recordsDeSeance
+// et que lit _htmlRecordsFin —, plus `date` (ms) et `signature` posés par
+// l'appelant. ⚠ LE DESSIN NE LIT QUE SES ARGUMENTS, jamais le dossier : même
+// règle que _dessinerBilanSeance, les vignettes du sélecteur en dépendent.
+//
+// Les outils d'écriture sont ceux du bilan, extraits une fois pour les deux
+// cartes de record : la carte seule et le récapitulatif.
+function _visuelOutils(g){
+  const ombre=(on)=>{
+    g.shadowColor=on?'rgba(0,0,0,.78)':'transparent';
+    g.shadowBlur=on?12:0;
+    g.shadowOffsetX=0; g.shadowOffsetY=on?2:0;
+  };
+  const ecrire=(t,x,y)=>{ g.fillText(t,x,y); g.fillText(t,x,y);
+    const sc=g.shadowColor; g.shadowColor='transparent';
+    g.fillText(t,x,y); g.shadowColor=sc; };
+  const ecrireEspace=(t,x,y,esp,centre)=>{
+    _texteEspace(g,t,x,y,esp,centre); _texteEspace(g,t,x,y,esp,centre);
+    const sc=g.shadowColor; g.shadowColor='transparent';
+    _texteEspace(g,t,x,y,esp,centre); g.shadowColor=sc; };
+  const ajuste=(t,poids,taille,police,max,mini)=>{
+    let s=taille;
+    g.font=poids+' '+s+'px '+police;
+    while(g.measureText(t).width>max&&s>(mini||18)){ s-=1; g.font=poids+' '+s+'px '+police; }
+    return s;
+  };
+  // Le texte espacé, réduit jusqu'à tenir dans `max`.
+  const ajusteEspace=(t,poids,taille,police,esp,max,mini)=>{
+    let s=taille;
+    const larg=()=>{ g.font=poids+' '+s+'px '+police;
+      return String(t).split('').reduce((a,c)=>a+g.measureText(c).width+esp,0)-esp; };
+    while(larg()>max&&s>(mini||18)) s-=1;
+    return s;
+  };
+  return {ombre,ecrire,ecrireEspace,ajuste,ajusteEspace};
+}
+// PURE. « 102,5 » : la virgule française, sans zéro inutile.
+function _recKg(v){
+  const n=Math.round((Number(v)||0)*100)/100;
+  return String(n).replace('.',',');
+}
+// PURE. Le gain en pourcentage de l'ancien record. Une décimale sous 10 % —
+// « +2,5 % » dit quelque chose, « +3 % » arrondirait la moitié du progrès —,
+// entier au-delà.
+function _recPct(r){
+  const h=Number(r&&r.histMax)||0, g=Number(r&&r.gain)||0;
+  if(!(h>0)||!(g>0)) return '';
+  const p=g/h*100;
+  const v=p<10?Math.round(p*10)/10:Math.round(p);
+  return String(v).replace('.',',');
+}
+// PURE. « 26/09/2026 », comme la date du bilan : une image gardée six mois
+// doit porter son année.
+function _recDate(t){
+  try{ return new Date(t||Date.now()).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}); }
+  catch(e){ return ''; }
+}
+// L'ÉCLAIR EN FILIGRANE, derrière le chiffre. Le même geste que rcFoudre
+// (déplacement du point milieu), mais TIRÉ D'UNE GRAINE : les trois vignettes
+// du sélecteur et le fichier final doivent montrer le même éclair — un hasard
+// neuf à chaque dessin ferait changer l'image entre l'aperçu et l'envoi.
+function _recGraine(s){
+  let h=2166136261;
+  for(const c of String(s||'')){ h^=c.charCodeAt(0); h=Math.imul(h,16777619); }
+  return h>>>0;
+}
+function _recAlea(graine){
+  let a=graine||1;
+  return ()=>{ a=(a+0x6D2B79F5)|0; let t=Math.imul(a^(a>>>15),1|a);
+    t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; };
+}
+function _recEclairFiligrane(g,x1,y1,x2,y2,graine,fond){
+  const al=_recAlea(graine);
+  let pts=[{x:x1,y:y1},{x:x2,y:y2}];
+  let d=Math.hypot(x2-x1,y2-y1)*0.16;
+  for(let n=0;n<7;n++){
+    const nv=[pts[0]];
+    for(let i=0;i<pts.length-1;i++){
+      const a=pts[i], b=pts[i+1];
+      const dx=b.x-a.x, dy=b.y-a.y, L=Math.hypot(dx,dy)||1, e=(al()*2-1)*d;
+      nv.push({x:(a.x+b.x)/2-dy/L*e,y:(a.y+b.y)/2+dx/L*e},b);
+    }
+    pts=nv; d/=2;
+  }
+  // Sur le fond rouge, un éclair rouge disparaîtrait : il passe en blanc.
+  const coul=fond==='rouge'?'rgba(255,255,255,':'rgba(224,32,32,';
+  g.save();
+  g.lineJoin='round'; g.lineCap='round';
+  g.shadowColor=fond==='rouge'?'rgba(255,255,255,.5)':'#E02020'; g.shadowBlur=22;
+  g.strokeStyle=coul+'.42)'; g.lineWidth=7;
+  g.beginPath(); g.moveTo(pts[0].x,pts[0].y); for(const p of pts) g.lineTo(p.x,p.y); g.stroke();
+  g.shadowBlur=0;
+  g.strokeStyle=coul+'.75)'; g.lineWidth=2.4;
+  g.beginPath(); g.moveTo(pts[0].x,pts[0].y); for(const p of pts) g.lineTo(p.x,p.y); g.stroke();
+  g.restore();
+}
+// La signature du bas, reprise du bilan : « <NOM> · REPCORE », ou le
+// mot-symbole seul quand l'athlète a choisi de ne rien montrer.
+function _recSignature(g,o,sig,y,LARG){
+  const B=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const cx=STORY_L/2;
+  o.ombre(true);
+  if(sig){
+    const t=sig+' · REPCORE', esp=7;
+    const ts=o.ajusteEspace(t,'700',34,B,esp,LARG,22);
+    g.fillStyle='rgba(255,255,255,.85)'; g.font='700 '+ts+'px '+B;
+    o.ecrireEspace(t,cx,y,esp,true);
+  }else{
+    g.fillStyle='rgba(255,255,255,.48)'; g.font='700 34px '+B;
+    o.ecrireEspace('REPCORE',cx,y,5,true);
+  }
+}
+/**
+ * Le visuel d'UN record.
+ * @param {{nm:string,histMax:number,curMax:number,gain:number,date?:number,signature?:string}} record
+ * @param {'transparent'|'photo'|'rouge'} [fond]
+ */
+function _dessinerCarteRecord(record,fond){
+  const cv=document.createElement('canvas');
+  cv.width=STORY_L; cv.height=STORY_H;
+  const g=cv.getContext('2d');
+  const f=fond||'transparent';
+  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const o=_visuelOutils(g);
+  const r=record||{};
+  const nom=String(r.nm||'').toUpperCase();
+  const nouv=_recKg(r.curMax), anc=(Number(r.histMax)>0)?_recKg(r.histMax):'';
+  const pct=_recPct(r);
+  const gainTxt=(Number(r.gain)>0?('+'+_recKg(r.gain)+' KG'):'')+(pct?('  ·  +'+pct+' %'):'');
+
+  // ── LA MISE EN PAGE, CENTRÉE COMME CELLE DU BILAN ────────────────────
+  // Le creux est transparent : centrer donne une image qu'on pose au milieu
+  // d'une story sans avoir à la déplacer.
+  const H_TAG=70, H_NOM=128, H_ANC=anc?86:0, H_CHIFFRE=300, H_GAIN=gainTxt?96:0, H_DATE=60;
+  const HTOT=H_TAG+H_NOM+H_ANC+H_CHIFFRE+H_GAIN+H_DATE;
+  let y=Math.max(180,Math.round((STORY_H-HTOT)/2)-40);
+  g.textBaseline='alphabetic';
+
+  // « NOUVEAU RECORD »
+  o.ombre(true); g.textAlign='center';
+  g.fillStyle='#ffffff'; g.font='800 34px '+MONT;
+  o.ecrireEspace('NOUVEAU RECORD',cx,y+34,10,true);
+  // Le trait rouge sous l'étiquette : la seule touche de couleur hors éclair.
+  o.ombre(false);
+  g.fillStyle=f==='rouge'?'rgba(255,255,255,.85)':'#E02020';
+  g.fillRect(cx-44,y+54,88,5);
+  y+=H_TAG;
+
+  // Le nom de l'exercice
+  o.ombre(true);
+  g.fillStyle='rgba(255,255,255,.96)';
+  const ns=o.ajuste(nom,'700',104,BEBAS,LARG,44);
+  g.font='700 '+ns+'px '+BEBAS;
+  o.ecrire(nom,cx,y+ns*0.86);
+  y+=H_NOM;
+
+  // L'ancienne valeur, petite et barrée : on la lit, on sait qu'elle est dépassée.
+  if(anc){
+    const t=anc+' KG';
+    g.fillStyle='rgba(255,255,255,.6)'; g.font='700 62px '+BEBAS;
+    o.ecrire(t,cx,y+52);
+    const w=g.measureText(t).width;
+    o.ombre(false);
+    g.strokeStyle=f==='rouge'?'rgba(255,255,255,.9)':'#E02020'; g.lineWidth=5;
+    g.beginPath(); g.moveTo(cx-w/2-10,y+30); g.lineTo(cx+w/2+10,y+30); g.stroke();
+    o.ombre(true);
+    y+=H_ANC;
+  }
+
+  // LE CHIFFRE, en très gros. L'éclair passe DERRIÈRE : dessiné d'abord, il
+  // traverse la zone du chiffre de haut en bas, un peu en biais — et elle
+  // seule : sur le nom ou l'ancienne valeur, il les rayerait.
+  const base=y+H_CHIFFRE-24;
+  _recEclairFiligrane(g,cx+190,y+8,cx-150,base+30,_recGraine(nom+'|'+nouv),f);
+  // Le nombre et « KG » mesurés ensemble, puis réduits ensemble s'ils
+  // débordent : « 227,5 » à 300 px ne tient pas avec son unité.
+  let cs=300;
+  const mesure=()=>{ g.font='700 '+cs+'px '+BEBAS; const a=g.measureText(nouv).width;
+    g.font='700 '+Math.round(cs*0.3)+'px '+BEBAS; return a+14+g.measureText('KG').width; };
+  while(mesure()>LARG&&cs>120) cs-=4;
+  const total=mesure();
+  g.font='700 '+cs+'px '+BEBAS;
+  const wN=g.measureText(nouv).width;
+  const x0=cx-total/2;
+  o.ombre(true);
+  g.textAlign='left'; g.fillStyle='#ffffff';
+  o.ecrire(nouv,x0,base);
+  g.font='700 '+Math.round(cs*0.3)+'px '+BEBAS;
+  g.fillStyle='rgba(255,255,255,.9)';
+  o.ecrire('KG',x0+wN+14,base);
+  g.textAlign='center';
+  y+=H_CHIFFRE;
+
+  // « +X KG · +Y % »
+  if(gainTxt){
+    g.fillStyle='#ffffff';
+    const gs=o.ajusteEspace(gainTxt,'800',46,MONT,4,LARG,26);
+    g.font='800 '+gs+'px '+MONT;
+    o.ecrireEspace(gainTxt,cx,y+60,4,true);
+    y+=H_GAIN;
+  }
+  // La date
+  g.fillStyle='rgba(255,255,255,.82)'; g.font='700 30px '+MONT;
+  o.ecrireEspace(_recDate(r.date),cx,y+36,4,true);
+
+  // LA SIGNATURE, EN BAS DE L'IMAGE et non sous le bloc : c'est une marque,
+  // elle a sa place fixe, là où l'œil la cherche.
+  _recSignature(g,o,String(r.signature||''),STORY_H-150,LARG);
+  o.ombre(false);
+  return cv;
+}
+/**
+ * Le visuel de PLUSIEURS records : « 3 NOUVEAUX RECORDS » et une ligne par
+ * record, dans l'ordre de l'écran.
+ * @param {{records:Array<{nm:string,histMax:number,curMax:number,gain:number}>,date?:number,signature?:string}} d
+ * @param {'transparent'|'photo'|'rouge'} [fond]
+ */
+function _dessinerCarteRecords(d,fond){
+  const cv=document.createElement('canvas');
+  cv.width=STORY_L; cv.height=STORY_H;
+  const g=cv.getContext('2d');
+  const f=fond||'transparent';
+  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const o=_visuelOutils(g);
+  const l=((d&&d.records)||[]).filter(r=>r&&r.nm&&r.curMax>0);
+  const n=l.length;
+  const LH=n<=3?196:170;
+  const H_TITRE=250, H_DATE=70, H_LISTE=n*LH;
+  let y=Math.max(180,Math.round((STORY_H-(H_TITRE+H_DATE+H_LISTE))/2)-40);
+  g.textBaseline='alphabetic';
+
+  // LE TITRE, l'éclair derrière lui cette fois : c'est lui le chiffre à lire.
+  const titre=n+' NOUVEAUX RECORDS';
+  _recEclairFiligrane(g,cx+170,y-10,cx-130,y+185,_recGraine(l.map(r=>r.nm).join('|')),f);
+  o.ombre(true); g.textAlign='center'; g.fillStyle='#ffffff';
+  const [chiffre,...reste]=titre.split(' ');
+  // Le nombre en très gros, le mot en dessous : « 3 » se lit d'abord.
+  g.font='700 210px '+BEBAS;
+  o.ecrire(chiffre,cx,y+170);
+  const ts=o.ajusteEspace(reste.join(' '),'800',40,MONT,9,LARG,24);
+  g.font='800 '+ts+'px '+MONT;
+  o.ecrireEspace(reste.join(' '),cx,y+226,9,true);
+  y+=H_TITRE;
+  g.fillStyle='rgba(255,255,255,.82)'; g.font='700 30px '+MONT;
+  o.ecrireEspace(_recDate(d&&d.date),cx,y+30,4,true);
+  y+=H_DATE;
+
+  // LES LIGNES. Le nom en haut, puis l'ancienne valeur barrée, la nouvelle
+  // en gros et le gain — la carte seule en réduction.
+  l.forEach((r,i)=>{
+    const yy=y+i*LH;
+    o.ombre(false);
+    g.strokeStyle='rgba(255,255,255,.4)'; g.lineWidth=2;
+    g.beginPath(); g.moveTo(M,yy); g.lineTo(STORY_L-M,yy); g.stroke();
+    o.ombre(true);
+    g.textAlign='left'; g.fillStyle='rgba(255,255,255,.96)';
+    const nom=String(r.nm).toUpperCase();
+    const ns=o.ajuste(nom,'700',54,BEBAS,LARG,28);
+    g.font='700 '+ns+'px '+BEBAS;
+    if(g.measureText(nom).width>LARG) _texteCoupe(g,nom,M,yy+62,LARG); else o.ecrire(nom,M,yy+62);
+    // La valeur, à droite : ancienne barrée, puis la nouvelle.
+    const nouv=_recKg(r.curMax)+' KG';
+    g.textAlign='right'; g.fillStyle='#ffffff'; g.font='700 96px '+BEBAS;
+    o.ecrire(nouv,STORY_L-M,yy+160);
+    let dx=STORY_L-M-g.measureText(nouv).width-28;
+    if(Number(r.histMax)>0){
+      const a=_recKg(r.histMax);
+      g.fillStyle='rgba(255,255,255,.6)'; g.font='700 48px '+BEBAS;
+      o.ecrire(a,dx,yy+150);
+      const w=g.measureText(a).width;
+      o.ombre(false);
+      g.strokeStyle=f==='rouge'?'rgba(255,255,255,.9)':'#E02020'; g.lineWidth=4;
+      g.beginPath(); g.moveTo(dx-w-6,yy+134); g.lineTo(dx+6,yy+134); g.stroke();
+      o.ombre(true);
+    }
+    // Le gain à gauche, sous le nom.
+    const pct=_recPct(r);
+    g.textAlign='left'; g.fillStyle='rgba(255,255,255,.9)'; g.font='800 32px '+MONT;
+    o.ecrireEspace('+'+_recKg(r.gain)+' KG'+(pct?(' · +'+pct+' %'):''),M,yy+150,2);
+  });
+  _recSignature(g,o,String((d&&d.signature)||''),STORY_H-150,LARG);
+  o.ombre(false);
+  return cv;
+}
 // Ecrit un texte en l espacant, l API canvas n ayant pas de letter-spacing
 // fiable partout.
 function _texteEspace(g,t,x,y,esp,centre){
@@ -41562,7 +41859,7 @@ function finishWorkout(incomplete=false){
   //    n'invente pas trois faux badges pour meubler.
   _pose('wd-badges',(()=>{ try{ return _htmlRecompenses(_badges,_ctxFin); }catch(e){ return ''; } })());
   // 3. MES RECORDS.
-  _pose('wd-records',(()=>{ try{ return _htmlRecordsFin(_ctxFin); }catch(e){ return ''; } })());
+  _pose('wd-records',(()=>{ try{ return _htmlRecordsFin(_ctxFin,Date.now(),'wd'); }catch(e){ return ''; } })());
   // 4. LA PERFORMANCE, delta compris.
   _pose('wd-stats',(()=>{ try{
     return _htmlStatsFin(mins,sets,setsPlanned,vol,(_cmp&&_cmp.delta)||0); }catch(e){ return ''; } })());
@@ -51991,7 +52288,7 @@ function ouvrirSeanceHistorique(cle){
   // fete entiere.
   pose('sd-badges',(()=>{ try{
     return '<div class="sd-sobre">'+_htmlRecompenses(badges,ctx)+'</div>'; }catch(e){ return ''; } })());
-  pose('sd-records',(()=>{ try{ return _htmlRecordsFin(ctx); }catch(e){ return ''; } })());
+  pose('sd-records',(()=>{ try{ return _htmlRecordsFin(ctx,sc.date,'sd'); }catch(e){ return ''; } })());
   pose('sd-stats',(()=>{ try{
     return _htmlStatsFin(Number(sc.duration)||0,Number(sc.sets)||0,
       Number(sc.setsPlanned)||0,Number(sc.volume)||0,0); }catch(e){ return ''; } })());
@@ -52081,18 +52378,78 @@ function _htmlRecompenses(badges,ctx){
 // Present, mais volontairement en retrait : les recompenses au-dessus ont
 // deja dit la nouvelle. Aucun record pertinent, aucun bloc — jamais de cadre
 // vide.
-function _htmlRecordsFin(ctx){
+//
+// `date` et `cle` (FACULTATIFS) : la date de la séance, que porteront les
+// visuels, et l'écran qui affiche le bloc ('wd' fin de séance, 'sd' séance
+// relue). La clé range la liste AFFICHÉE : le bouton « Partager ce record »
+// partage exactement la ligne sous le doigt, jamais un recalcul qui aurait pu
+// changer d'ordre entre-temps. Sans clé, pas de bouton : le bloc d'avant.
+const _recordsAffiches={};
+function _htmlRecordsFin(ctx,date,cle){
   const rec=((ctx&&ctx.records)||[]).filter(r=>r&&r.nm&&r.curMax>0)
     .slice().sort((a,b)=>(b.gain||0)-(a.gain||0)).slice(0,4);
   if(!rec.length) return '';
   const nb=v=>Number(v).toLocaleString('fr-FR');
+  const k=(cle==='wd'||cle==='sd')?cle:'';
+  if(k) _recordsAffiches[k]={liste:rec,date:date||Date.now()};
+  const bouton=(i,lib)=>k?('<button type="button" class="rcf-rk-p" '
+    +'onclick="partagerRecord(\''+k+'\','+i+',this)">'+icon('share',14)
+    +'<span>'+lib+'</span></button>'):'';
   return '<div class="rcf-rk"><div class="rcf-rk-t">Mes records</div>'
-    +rec.map(r=>'<div class="rcf-rk-l">'
+    +rec.map((r,i)=>'<div class="rcf-rk-l">'
       +'<span class="rcf-rk-ex">'+escapeHtml(String(r.nm))+'</span>'
       +'<span class="rcf-rk-v"><span class="rcf-rk-a">'+nb(r.histMax)+' → </span>'
         +nb(r.curMax)+' kg<span class="rcf-rk-g">+'+nb(r.gain)+'</span></span>'
+      +bouton(i,'Partager ce record')
       +'</div>').join('')
+    // PLUSIEURS RECORDS : un visuel de plus, qui les réunit. Il ne remplace
+    // pas les cartes seules — on peut vouloir publier le plus beau des trois.
+    +(rec.length>1?('<div class="rcf-rk-tous">'+bouton(-1,'Partager mes '+rec.length+' records')+'</div>'):'')
     +'</div>';
+}
+// Les données d'un visuel de record, lues dans la liste AFFICHÉE. `i` = -1 :
+// le récapitulatif de tous les records.
+function _recordVisuelDonnees(cle,i){
+  const a=_recordsAffiches[cle];
+  if(!a||!a.liste||!a.liste.length) return null;
+  let sig='';
+  try{ sig=nomSurVisuels(currentUser); }catch(e){ sig=''; }
+  if(i<0) return a.liste.length>1?{records:a.liste,date:a.date,signature:sig}:null;
+  const r=a.liste[i];
+  return r?Object.assign({},r,{date:a.date,signature:sig}):null;
+}
+function _recordDessiner(d,i,fond){
+  return i<0?_dessinerCarteRecords(d,fond):_dessinerCarteRecord(d,fond);
+}
+// LE GESTE : le partage natif d'abord, le téléchargement s'il n'existe pas —
+// l'athlète repart toujours avec son image. Les deux sorties copient le lien
+// perso (_storyCopierLien). Tout est SYNCHRONE jusqu'au partage : le moindre
+// await consommerait le geste, et iOS refuserait la feuille.
+// Le fichier : repcore-record.png sans fond, .jpg avec (visuelNomFichier).
+function partagerRecord(cle,i,btn){
+  if(_storyEnCours) return false;
+  const d=_recordVisuelDonnees(cle,Number(i));
+  if(!d){ toast('Aucun record à partager.','var(--orange)'); return false; }
+  _storyEnCours=true;
+  const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond);
+  const nom=visuelNomFichier(i<0?'repcore-records':'repcore-record',fond);
+  let ok=false;
+  try{
+    ok=_storySortirPartage(_recordDessiner(d,i,fond),nom,undefined,fmt)
+      // Le canevas est vidé par la première sortie : on le redessine.
+      ||_storySortirTelechargement(_recordDessiner(d,i,fond),nom,fmt);
+  }catch(e){
+    toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)');
+    ok=false;
+  }finally{ _storyEnCours=false; }
+  // Le bouton dit que c'est fait, puis reprend son libellé.
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp&&ok){
+    const lib=sp.textContent;
+    sp.textContent='Visuel prêt ✓';
+    setTimeout(()=>{ sp.textContent=lib; },2000);
+  }
+  return ok;
 }
 
 // ── LA BANDE STATISTIQUE ───────────────────────────────────────────────
