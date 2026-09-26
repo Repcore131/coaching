@@ -4900,6 +4900,15 @@ const CLOUD={
     const r=await fetch(this._urlParrainage('')+'?auth='+token,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(chemins)});
     return r.ok;
   },
+  // L'attribution (administrateur) : un nœud, à partir d'un jour.
+  async attribLire(noeud,depuis){
+    const token=await this._getToken();
+    if(!token) throw new Error('Non connecté.');
+    const r=await fetch(this._fbUrl.replace('users.json','attribution/'+noeud+'.json')+'?auth='+token
+      +'&orderBy=%22%24key%22&startAt=%22'+encodeURIComponent(depuis)+'%22');
+    if(!r.ok) throw new Error('Attribution : '+r.status);
+    return await r.json();
+  },
   // ── Les ambassadeurs ──
   async ambPublicGet(code){
     const r=await fetch(this._fbUrl.replace('users.json','ambassadeurs_publics/'+encodeURIComponent(code)+'.json'));
@@ -5593,6 +5602,14 @@ function _validateAthletePkg(o){
       try{ sessionStorage.setItem('rc_amb',_va); }catch(e){}
       window._ambCode=_amb;
     }
+    // L'ORIGINE (attribution) : src, amb, ref de ce lien, jusqu'à l'inscription.
+    // Écrite ici, en clair (constantes du module pas encore initialisées). La
+    // dernière arrivée l'emporte : c'est elle qui a fait venir.
+    const _osrc=String(params.get('src')||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20);
+    if(_osrc||_amb||params.get('ref')){
+      try{ localStorage.setItem('rc_origine',JSON.stringify({src:_osrc,amb:_amb,
+        ref:String(params.get('ref')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12),le:Date.now()})); }catch(e){}
+    }
     // ?coach=<slug> — arrivé par la vitrine publique d'un coach (/coach/<slug>).
     const _vit=String(params.get('coach')||'').toLowerCase();
     if(/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(_vit)) try{ localStorage.setItem('rc_vitrine_coach',_vit); }catch(e){}
@@ -5798,6 +5815,9 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'pagePublique','vitrineSlug','vitrinePubliee','specialites',
   // L'ambassadeur par qui le compte est arrivé : un code, un nom, une date.
   'ambassadeur',
+  // L'origine du compte (attribution) : le type de lien, un code parrain ou
+  // ambassadeur, les dates d'arrivée, d'inscription et de premier paiement.
+  'origine',
   // Les types de notification push que l'athlète a coupés : {type:false}.
   // Un réglage, lu par le serveur avant chaque envoi — aucune donnée de santé.
   'pushPrefs',
@@ -7004,6 +7024,8 @@ function routeUser(){
   // Registre des comptes de l'appareil. Ici et nulle part ailleurs : ce point
   // couvre le démarrage, les quatre sorties de doLogin, et la bascule.
   try{ comptesEnregistrer(currentUser); }catch(e){}
+  // Un actif de plus cette semaine (le dénominateur du coefficient viral).
+  try{ attribActifSemaine(currentUser); }catch(e){}
   // Un paquet athlète attend une décision. Le déclencheur est ICI, en tête, et
   // non plus bas avec _pendingBilanOpen : ce paquet vise un appareil de COACH,
   // et la branche coach retourne deux lignes plus loin — le code d'en bas ne
@@ -10516,6 +10538,8 @@ async function doRegister(){
     // sorties précédentes (compte déjà présent côté cloud, invitation coach
     // refusée) ne sont pas des inscriptions abouties et ne doivent pas compter.
     rcm('register_completed');
+    // L'ORIGINE DU COMPTE (users/<clé>/origine) et l'inscription par src.
+    try{ if(attribOrigineInscription(currentUser)) saveUser(); }catch(e){}
     if(selRole==='coach'){
       // Compté seulement maintenant : les deux sorties précédentes (compte déjà
       // présent, invitation refusée) ne sont pas des inscriptions abouties.
@@ -17718,13 +17742,8 @@ function urlPagePerso(u){
 function lienPerso(src,u){
   const x=u||((typeof currentUser!=='undefined')?currentUser:null);
   const page=urlPagePerso(x)||String(RC_LIEN_COURT||'');
-  if(!page) return '';
-  const p=[];
-  const c=x&&x.parrainage&&x.parrainage.code;
-  if(typeof parrainageCodeValide==='function'&&parrainageCodeValide(c)) p.push('ref='+encodeURIComponent(c));
-  const s=String(src||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20);
-  if(s) p.push('src='+s);
-  return p.length?page+(page.indexOf('?')>=0?'&':'?')+p.join('&'):page;
+  // src, ref : posés par lienAttribue, la seule fonction qui le fait.
+  return lienAttribue(page,{src,ref:x&&x.parrainage&&x.parrainage.code});
 }
 // L'adresse du QR de la carte « Séance du jour » : le lien perso.
 function urlQrSeance(){ return lienPerso('qr')||RC_URL_VITRINE; }
@@ -17880,7 +17899,8 @@ function copierLienBio(btn){
   const l=lienPerso('bio');
   if(!l) return false;
   const lib=btn?btn.textContent:'';
-  const fait=()=>{ toast('Lien copié · colle-le dans ta bio : Modifier le profil > Liens','var(--green)',4000);
+  const fait=()=>{ try{ attribCompter('copie','bio'); }catch(e){}
+    toast('Lien copié · colle-le dans ta bio : Modifier le profil > Liens','var(--green)',4000);
     if(btn){ btn.textContent='Lien copié ✓'; setTimeout(()=>{ btn.textContent=lib; },2000); } };
   try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(l).then(fait,()=>toast(l)); return true; } }catch(e){}
   toast(l);
@@ -17946,6 +17966,173 @@ function _rendreLienVitrineCoach(){
     +(url?'<div class="pp-etat">'+escapeHtml(url.replace(/^https?:\/\//,''))+'</div>'
           +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:8px 0 0;min-height:44px" onclick="copierLienBio(this)">Copier mon lien pour ma bio Instagram</button>'
         :'<div class="pp-etat">Elle se publie à l’enregistrement de ton profil : photo (en ligne), bio, spécialités, programmes en vente.</div>');
+}
+// ══ L'ATTRIBUTION ET LA VIRALITÉ ═══════════════════════════════════════════
+//
+// D'OÙ VIENNENT LES INSCRITS. Chaque lien qui sort de l'app porte src=<type
+// de visuel ou de lien> et, selon qui le partage, ref=<code parrain> ou
+// amb=<code ambassadeur> — posés par UNE fonction, lienAttribue. Au bout du
+// lien, /i, la page d'accueil et les pages publiques comptent l'arrivée
+// (fonction attribArrivee) ; l'app garde la source jusqu'à l'inscription
+// (u.origine), et le serveur y pose la date du premier paiement.
+//
+// CE QUI EST COMPTÉ, et rien d'autre : des entiers par jour, par src et par
+// code ambassadeur, dans /attribution/jours/<AAAA-MM-JJ> — partage (feuille
+// de partage résolue), telechargement, copie (lien copié), clic, inscription,
+// payant — et les utilisateurs actifs par semaine. Aucun cookie, aucune IP,
+// aucun identifiant ; le code d'un parrain n'est jamais compté (il désigne
+// une personne). Voir privacy.html, « Mesure d'audience ».
+const ATTR_SRC_RE=/^[a-z0-9_-]{1,20}$/;
+const ATTR_ORIGINE_CLE='rc_origine';
+const ATTR_BASE='https://repcore-sync-default-rtdb.firebaseio.com/attribution';
+function attribSrc(s){
+  const x=String(s||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20);
+  return ATTR_SRC_RE.test(x)?x:'';
+}
+// PURE. LE LIEN ATTRIBUÉ — la SEULE fonction qui pose src, ref et amb. Un
+// ambassadeur exclut un parrain (un seul avantage) ; un code mal formé est
+// ignoré plutôt que de fabriquer un lien que personne ne pourrait honorer.
+function lienAttribue(base,o){
+  const b=String(base||'');
+  if(!b) return '';
+  const x=o||{}, p=[];
+  const amb=String(x.amb||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const ref=String(x.ref||'').toUpperCase();
+  if(/^[A-Z0-9]{3,16}$/.test(amb)) p.push('amb='+amb);
+  else if(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)) p.push('ref='+ref);
+  const s=attribSrc(x.src);
+  if(s) p.push('src='+s);
+  return p.length?b+(b.indexOf('?')>=0?'&':'?')+p.join('&'):b;
+}
+function _attribLocal(){
+  try{ const h=location.hostname; return h==='localhost'||h==='127.0.0.1'||h===''||h.startsWith('192.168.'); }catch(e){ return true; }
+}
+// UN DE PLUS — anonyme, atomique (.sv increment), sans réponse lue, comme rcm().
+function _attribIncr(chemin){
+  try{
+    if(_attribLocal()) return false;
+    fetch(ATTR_BASE+'/'+chemin+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({'.sv':{'increment':1}}),keepalive:true}).catch(()=>{});
+    return true;
+  }catch(e){ return false; }
+}
+// Partages résolus, téléchargements, liens copiés, inscriptions : par src.
+function attribCompter(metrique,src){
+  if(['partage','telechargement','copie','inscription','payant'].indexOf(metrique)<0) return false;
+  return _attribIncr('jours/'+localISODate(new Date())+'/src/'+(attribSrc(src)||'direct')+'/'+metrique);
+}
+// Les utilisateurs ACTIFS, une fois par semaine et par compte sur cet appareil :
+// le dénominateur du coefficient viral.
+function attribActifSemaine(u){
+  try{
+    if(!u||!u.email) return false;
+    const l=localISODate(_lundiDe(Date.now()));
+    const k='rc_attr_actif_'+l+'_'+u.email;
+    if(localStorage.getItem(k)) return false;
+    localStorage.setItem(k,'1');
+    return _attribIncr('semaines/'+l+'/actifs');
+  }catch(e){ return false; }
+}
+// L'arrivée gardée par l'app (posée au chargement, dans l'analyse de l'URL).
+function attribArriveeLue(){
+  try{ const o=JSON.parse(localStorage.getItem(ATTR_ORIGINE_CLE)||'null'); return (o&&typeof o==='object')?o:null; }catch(e){ return null; }
+}
+// PURE. L'origine d'un compte, au moment où il se crée.
+function origineDe(arrivee,maintenant){
+  const a=arrivee||{}, t=(typeof maintenant==='number')?maintenant:Date.now();
+  const amb=String(a.amb||'').toUpperCase(), ref=String(a.ref||'').toUpperCase();
+  const src=attribSrc(a.src)||(/^[A-Z0-9]{3,16}$/.test(amb)?'amb':(ref?'parrainage':'direct'));
+  const o={src,inscritLe:t};
+  if(/^[A-Z0-9]{3,16}$/.test(amb)) o.amb=amb;
+  if(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)) o.ref=ref;
+  if(Number(a.le)>0) o.arriveeLe=Number(a.le);
+  return o;
+}
+// À L'INSCRIPTION : users/<clé>/origine, une fois, et le compteur d'inscriptions
+// de son src (celui de l'ambassadeur est compté par le serveur, qui sait aussi
+// les codes saisis à la main).
+function attribOrigineInscription(u){
+  if(!u||u.origine) return null;
+  u.origine=origineDe(attribArriveeLue(),Date.now());
+  attribCompter('inscription',u.origine.src);
+  return u.origine;
+}
+// AU PREMIER PAIEMENT : la date. Le serveur la pose (attributionPaiement) et
+// compte le payant ; sans lui (plan Spark), l'app le fait à sa place.
+function attribPremierPaiement(u){
+  if(!u||!u.origine||u.origine.payeLe) return false;
+  u.origine.payeLe=Date.now();
+  if(!FONCTIONS_SERVEUR) attribCompter('payant',u.origine.src);
+  return true;
+}
+// ── L'écran « Viralité » (administrateur) ─────────────────────────────────
+// PURE. `jours` : /attribution/jours ; `semaines` : /attribution/semaines.
+// Rend l'entonnoir par src (partages → clics → inscriptions → payants), par
+// code ambassadeur, et le coefficient viral estimé : inscriptions venues d'un
+// PARTAGE (ni 'direct', ni 'amb') sur le nombre moyen d'actifs par semaine.
+function viraliteDonnees(jours,semaines,periodeJours,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const n=Math.max(1,Number(periodeJours)||30);
+  const depuis=localISODate(new Date(t-(n-1)*864e5)), jusqua=localISODate(new Date(t));
+  const src={}, amb={};
+  const ajoute=(tab,cle,m,v)=>{ const x=tab[cle]||(tab[cle]={cle,partage:0,telechargement:0,copie:0,clic:0,inscription:0,payant:0}); x[m]+=Number(v)||0; };
+  for(const j of Object.keys(jours||{})){
+    if(j<depuis||j>jusqua) continue;
+    const d=jours[j]||{};
+    for(const s of Object.keys(d.src||{})) for(const m of Object.keys(d.src[s]||{})) ajoute(src,s,m,d.src[s][m]);
+    for(const c of Object.keys(d.amb||{})) for(const m of Object.keys(d.amb[c]||{})) ajoute(amb,c,m,d.amb[c][m]);
+  }
+  const lignes=Object.values(src).map(x=>Object.assign(x,{partages:x.partage+x.telechargement+x.copie}))
+    .sort((a,b)=>(b.inscription-a.inscription)||(b.clic-a.clic)||(b.partages-a.partages));
+  const ambs=Object.values(amb).sort((a,b)=>(b.payant-a.payant)||(b.inscription-a.inscription)||(b.clic-a.clic));
+  const lundis=Object.keys(semaines||{}).filter(l=>l>=localISODate(_lundiDe(t-(n-1)*864e5))&&l<=jusqua);
+  const actifs=lundis.length?Math.round(lundis.reduce((a,l)=>a+(Number((semaines[l]||{}).actifs)||0),0)/lundis.length):0;
+  const insPartage=lignes.filter(x=>x.cle!=='direct'&&x.cle!=='amb').reduce((a,x)=>a+x.inscription,0);
+  const tot=k=>lignes.reduce((a,x)=>a+(x[k]||0),0);
+  return {periode:n,src:lignes,amb:ambs,actifs,inscriptionsPartage:insPartage,
+    k:actifs>0?Math.round(insPartage/actifs*1000)/1000:null,
+    totaux:{partages:tot('partages'),clics:tot('clic'),inscriptions:tot('inscription'),payants:tot('payant')}};
+}
+let _viral=null;   // {jours, semaines, periode}
+async function ouvrirViralite(){
+  if(!currentUser||currentUser.email!==CREATOR_EMAIL) return false;
+  go('s-viralite');
+  const z=document.getElementById('vir-contenu');
+  if(z) z.innerHTML='<div class="sub" style="padding:30px 0;text-align:center">Chargement…</div>';
+  try{
+    const depuis=localISODate(new Date(Date.now()-95*864e5));
+    const [jours,semaines]=await Promise.all([CLOUD.attribLire('jours',depuis),CLOUD.attribLire('semaines',depuis)]);
+    _viral={jours:jours||{},semaines:semaines||{},periode:(_viral&&_viral.periode)||30};
+  }catch(e){ if(z) z.innerHTML='<p class="sub">Lecture impossible : '+escapeHtml(e.message||'erreur')+'</p>'; return false; }
+  _viralRendre();
+  return true;
+}
+function viralitePeriode(n){ if(!_viral) return false; _viral.periode=Number(n)||30; _viralRendre(); return true; }
+// PURE.
+function htmlViralite(v){
+  const pct=(a,b)=>b>0?Math.round(a/b*100)+' %':'—';
+  const seg='<div class="aa-seg vir-seg" role="group">'+[7,30,90].map(n=>'<button type="button" aria-pressed="'+(v.periode===n)+'" onclick="viralitePeriode('+n+')">'+n+' jours</button>').join('')+'</div>';
+  let h=seg
+    +'<div class="vir-k card"><div class="vir-k-v">'+(v.k==null?'—':String(v.k).replace('.',','))+'</div>'
+    +'<div class="vir-k-l"><b>Coefficient viral estimé</b><span>'+v.inscriptionsPartage+' inscription'+(v.inscriptionsPartage>1?'s':'')+' venue'+(v.inscriptionsPartage>1?'s':'')
+      +' d’un partage ÷ '+v.actifs+' actifs par semaine en moyenne. Au-dessus de 1, chaque utilisateur en amène plus d’un.</span></div></div>';
+  h+='<div class="vir-t">Par source (src)</div>';
+  if(!v.src.length) h+='<p class="sub">Rien sur la période.</p>';
+  else h+='<div class="vir-tab"><table><tr><th>src</th><th title="partages résolus + téléchargements + liens copiés">Partages</th><th>Clics</th><th>Inscr.</th><th>Payants</th></tr>'
+    +v.src.map(x=>'<tr><td>'+escapeHtml(x.cle)+'</td><td title="'+x.partage+' partages · '+x.telechargement+' téléch. · '+x.copie+' copies">'+x.partages+'</td>'
+      +'<td>'+x.clic+'</td><td>'+x.inscription+'<small>'+pct(x.inscription,x.clic)+'</small></td><td>'+x.payant+'<small>'+pct(x.payant,x.inscription)+'</small></td></tr>').join('')
+    +'<tr class="vir-tot"><td>Total</td><td>'+v.totaux.partages+'</td><td>'+v.totaux.clics+'</td><td>'+v.totaux.inscriptions+'</td><td>'+v.totaux.payants+'</td></tr></table></div>';
+  h+='<div class="vir-t">Par code ambassadeur</div>';
+  h+=v.amb.length?'<div class="vir-tab"><table><tr><th>Code</th><th>Clics</th><th>Inscr.</th><th>Payants</th></tr>'
+    +v.amb.map(x=>'<tr><td>'+escapeHtml(x.cle)+'</td><td>'+x.clic+'</td><td>'+x.inscription+'<small>'+pct(x.inscription,x.clic)+'</small></td><td>'+x.payant+'<small>'+pct(x.payant,x.inscription)+'</small></td></tr>').join('')+'</table></div>'
+    :'<p class="sub">Aucun ambassadeur actif sur la période.</p>';
+  h+='<p class="sub vir-note">Des compteurs anonymes par jour : un partage est une feuille de partage résolue, un clic une arrivée par jour et par lien sur un appareil. Clics et payants demandent les Cloud Functions (attribArrivee, attributionPaiement).</p>';
+  return h;
+}
+function _viralRendre(){
+  const z=document.getElementById('vir-contenu');
+  if(!z||!_viral) return;
+  z.innerHTML=htmlViralite(viraliteDonnees(_viral.jours,_viral.semaines,_viral.periode,Date.now()));
 }
 // ══ LES AMBASSADEURS ════════════════════════════════════════════════════════
 //
@@ -18072,7 +18259,7 @@ function ambCsvDues(tous,mois,t){
   return {csv:l.join('\n')+'\n',lignes:l.length-1,total:Math.round(total*100)/100};
 }
 function _ambEuros(v){ try{ return _euros(v); }catch(e){ return String(v)+' €'; } }
-function ambLienInvitation(code){ return String(RC_URL_VITRINE||'').replace(/\/$/,'')+'/?amb='+encodeURIComponent(code); }
+function ambLienInvitation(code){ return lienAttribue(String(RC_URL_VITRINE||'').replace(/\/$/,'')+'/',{amb:code,src:'amb'}); }
 function ambLienSecret(secret){ return String(RC_URL_VITRINE||'').replace(/\/$/,'')+'/a/?s='+encodeURIComponent(secret); }
 function _ambSecret(){
   const a='abcdefghijklmnopqrstuvwxyz0123456789';
@@ -18464,7 +18651,8 @@ async function ouvrirParrainage(){
 function parrainageCopier(btn){
   const l=lienPerso('parrainage');
   if(!l) return false;
-  const fait=()=>{ if(btn){ btn.textContent='Lien copié ✓'; setTimeout(()=>{ btn.textContent='Copier le lien'; },2000); } };
+  const fait=()=>{ try{ attribCompter('copie','parrainage'); }catch(e){}
+    if(btn){ btn.textContent='Lien copié ✓'; setTimeout(()=>{ btn.textContent='Copier le lien'; },2000); } };
   try{
     if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(l).then(fait,()=>toast(l)); return true; }
   }catch(e){}
@@ -18480,7 +18668,7 @@ function parrainagePartager(btn){
   const texte=parrainageMessage(c,l);
   try{ rcm('parrainage_partage'); }catch(e){}
   if(navigator.share){
-    navigator.share({title:'RepCore',text:texte,url:l||undefined}).catch(()=>{});
+    navigator.share({title:'RepCore',text:texte,url:l||undefined}).then(()=>{ try{ attribCompter('partage','parrainage'); }catch(e){} }).catch(()=>{});
     return true;
   }
   return parrainageCopier(btn);
@@ -41100,6 +41288,7 @@ function _storyCopierLien(src){
     navigator.clipboard.writeText(String(l))
       .then(()=>{
         toast('Lien copié · dans ta story : Sticker > Lien > coller','var(--green)',4000);
+        try{ attribCompter('copie',src||'visuel'); }catch(e){}
         // LA PREMIÈRE FOIS : les trois étapes du sticker Lien, en images fixes.
         try{ montrerTutoSticker(); }catch(e){}
       })
@@ -41111,6 +41300,7 @@ function _storyCopierLien(src){
 function _storySortirTelechargement(cv,nomFichier,fmt){
   const dataUrl=(fmt&&fmt.type==='image/jpeg')?cv.toDataURL('image/jpeg',fmt.q||0.9):cv.toDataURL('image/png');
   cv.width=0; cv.height=0;            // 8 Mo rendus tout de suite
+  try{ attribCompter('telechargement',srcDuVisuel(nomFichier)); }catch(e){}
   if(_estIOS()){ _ouvrirApercuStory(dataUrl); return true; }
   const a=document.createElement('a');
   a.href=dataUrl;                     // pas d'URL d'objet : rien a liberer,
@@ -41147,7 +41337,8 @@ function _storySortirPartage(cv,nomFichier,meta,fmt){
       try{ if(navigator.canShare(riche)) charge=riche; }catch(e){}
     }
     _storyCopierLien(srcDuVisuel(nomFichier));
-    navigator.share(charge).catch(()=>{});
+    // UN PARTAGE RÉUSSI, c'est une feuille de partage RÉSOLUE (pas annulée).
+    navigator.share(charge).then(()=>{ try{ attribCompter('partage',srcDuVisuel(nomFichier)); }catch(e){} }).catch(()=>{});
     return true;
   }
   return false;
@@ -109614,7 +109805,7 @@ function lienInvitation(code,user){
   const payload={id:u.id,fname:u.fname,lname:u.lname,email:u.email,
     code:u.code,role:'coach'};
   const encoded=btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
-  return APP_BASE_URL+'?coachpkg='+encoded+'&inv='+encodeURIComponent(code);
+  return lienAttribue(APP_BASE_URL+'?coachpkg='+encoded+'&inv='+encodeURIComponent(code),{src:'invitation'});
 }
 // Le retour à la ligne d'un message WhatsApp. Nommé pour ne pas le confondre
 // avec celui du code source, et déclaré AVANT son usage : un const n'est pas
@@ -109763,6 +109954,7 @@ async function _envoyerInvitation(){
   try{
     if(navigator.share){
       await navigator.share({title:'Ton accès RepCore',text:messageRelance(r.invitation,currentUser)});
+      try{ attribCompter('partage','invitation'); }catch(e){}
       partage=true;
     }
   }catch(e){}   // annule par l utilisateur : ce n est pas une erreur
@@ -110873,6 +111065,7 @@ function renderPaypalButton(planId,coachId){
            //     promettrait un engagement que personne n'a pris.
            engagementJusqu:(_estCoach?undefined:moisApres(Date.now(),12))});
         rcm('subscription_activated');
+        try{ attribPremierPaiement(currentUser); }catch(e){}
         if(pending){
           currentUser.coachId=pending.coachId||currentUser.coachId||null;
           currentUser.coachName=pending.coachName||currentUser.coachName||'';

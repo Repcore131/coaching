@@ -11032,3 +11032,19 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .amb-due{color:#ffd23a}
 .amb-dus{display:flex;flex-direction:column;gap:6px;margin-top:10px}
 .amb-liens{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px}
+
+/* ══ VIRALITÉ (admin) ═════════════════════════════════════════════════════ */
+.vir-seg{margin-bottom:12px}
+.vir-k{display:flex;gap:14px;align-items:center;padding:14px 16px;margin-bottom:14px}
+.vir-k-v{font-family:var(--pile-titre);font-size:52px;line-height:1;color:#ffd23a;min-width:72px;text-align:center}
+.vir-k-l b{display:block;font-size:var(--fs-sm)}
+.vir-k-l span{display:block;font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:3px}
+.vir-t{font-size:var(--fs-2xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);font-weight:800;margin:16px 0 6px}
+.vir-tab{overflow-x:auto}
+.vir-tab table{width:100%;border-collapse:collapse;font-size:var(--fs-sm)}
+.vir-tab th,.vir-tab td{padding:7px 4px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap}
+.vir-tab th:first-child,.vir-tab td:first-child{text-align:left}
+.vir-tab th{font-size:var(--fs-2xs);color:var(--sub);font-weight:700}
+.vir-tab small{display:block;font-size:10px;color:var(--sub)}
+.vir-tot td{font-weight:800}
+.vir-note{font-size:var(--fs-xs);line-height:1.55;margin-top:14px}

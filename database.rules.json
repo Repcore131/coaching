@@ -1256,6 +1256,47 @@
       ".write": false
     },
 
+    // ── L ATTRIBUTION : d ou viennent les inscrits ───────────────────────
+    // Des ENTIERS par jour, par src (type de visuel ou de lien) et par code
+    // ambassadeur (public), et le nombre d utilisateurs actifs par semaine.
+    // Meme principe que /metrics : ecriture anonyme, UN de plus a la fois,
+    // noms fermes, aucune cle ne designe une personne (le code d un parrain,
+    // lui, n est jamais enregistre). Lecture : le createur (ecran Viralite).
+    "attribution": {
+      ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      "jours": {
+        "$jour": {
+          ".validate": "$jour.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+          "src": {
+            "$s": {
+              ".validate": "$s.matches(/^[a-z0-9_-]{1,20}$/)",
+              "$m": {
+                ".write": true,
+                ".validate": "$m.matches(/^(partage|telechargement|copie|clic|inscription|payant)$/) && newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && ((!data.exists() && newData.val() === 1) || newData.val() === data.val() + 1)"
+              }
+            }
+          },
+          "amb": {
+            "$c": {
+              ".validate": "$c.matches(/^[A-Z0-9]{3,16}$/)",
+              "$m": {
+                ".write": true,
+                ".validate": "$m.matches(/^(clic|inscription|payant)$/) && newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && ((!data.exists() && newData.val() === 1) || newData.val() === data.val() + 1)"
+              }
+            }
+          },
+          "$autre": { ".validate": false }
+        }
+      },
+      "semaines": {
+        "$lundi": {
+          ".validate": "$lundi.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+          "actifs": { ".write": true, ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && ((!data.exists() && newData.val() === 1) || newData.val() === data.val() + 1)" },
+          "$autre": { ".validate": false }
+        }
+      }
+    },
+
     // ── LES AMBASSADEURS ─────────────────────────────────────────────────
     // La fiche, les statistiques et les commissions : L ADMINISTRATEUR SEUL
     // (lecture et ecriture), et les Cloud Functions (hors de ces regles), qui

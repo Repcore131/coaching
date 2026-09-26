@@ -39140,6 +39140,8 @@ async function testExercices(){
         's-coach-acces',
         // LES AMBASSADEURS, 26/09/2026 : l'ecran admin des codes et commissions.
         's-ambassadeurs',
+        // L'ATTRIBUTION, 26/09/2026 : l'entonnoir de viralite (admin).
+        's-viralite',
         's-coach-activite','s-rapport','s-programme-print','s-vitrine',
         's-ex-classify','s-proto-edit','s-protocoles','s-metrics',
         // B1.1 — L'OUBLI. Le coach qui verifie une seance avant de la publier
@@ -48897,15 +48899,76 @@ async function testExercices(){
       if(t.replace(/\s/g,'').indexOf('10clics→40%4inscrits→50%2payants')<0) return _echec('entonnoir : '+t.slice(-400));
       if(!/Commission due/.test(t)||!/marquer/.test(t)||!d.querySelector('#amb-mois')) return _echec('commissions ou export');
       if(!estAdminAmbassadeurs({email:CREATOR_EMAIL})||estAdminAmbassadeurs({email:'x@t.fr'})) return _echec('admin');
-      return /\?amb=LEA$/.test(ambLienInvitation('LEA'))&&/\/a\/\?s=abc$/.test(ambLienSecret('abc'))?true:_echec('liens');})());
+      return /\?amb=LEA&src=amb$/.test(ambLienInvitation('LEA'))&&/\/a\/\?s=abc$/.test(ambLienSecret('abc'))?true:_echec('liens');})());
     ok('Ambassadeurs : ?amb= gardé par /i et la page d’accueil, clic compté, page de suivi secrète',(()=>{
       const lire=u=>{ try{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; }catch(e){ return ''; } };
       const i=lire('../i/index.html'), r=lire('../index.html'), a=lire('../a/index.html');
-      if(!/ambClic\?c=/.test(i)||!/p\.set\('amb',amb\)/.test(i)) return _echec('/i');
-      if(!/\['amb','ref','src','coach'\]/.test(r)||!/ambClic/.test(r)) return _echec('page d’accueil');
+      // Le clic est compté par attribArrivee (lot attribution, 26/09/2026).
+      if(!/attribArrivee\?src=/.test(i)||!/p\.set\('amb',amb\)/.test(i)) return _echec('/i');
+      if(!/\['amb','ref','src','coach'\]/.test(r)||!/attribArrivee/.test(r)) return _echec('page d’accueil');
       if(!/ambassadeurs_vue\//.test(a)||!/noindex/.test(a)||!/no-referrer/.test(a)) return _echec('page secrète');
       return /localStorage\.setItem\('rc_amb'/.test(_prodSrc())?true:_echec('arrivée dans l’app');})());
     ok('Ambassadeurs : le code d’arrivée est classé non-santé',CHAMPS_NON_SANTE.indexOf('ambassadeur')>=0);
+
+    // ══ L'ATTRIBUTION — 26/09/2026 ════════════════════════════════════════
+    ok('Attribution : UNE fonction pose src, ref et amb — l’ambassadeur exclut le parrain, un code faux est ignoré',(()=>{
+      const r=[lienAttribue('https://x.fr/@lea',{src:'Record',ref:'JULIE7K2'}),
+        lienAttribue('https://x.fr/?a=1',{src:'story',amb:'leafit',ref:'JULIE7K2'}),
+        lienAttribue('https://x.fr/',{src:'a b!',ref:'x',amb:'?'}),
+        lienAttribue('',{src:'x'})];
+      return (r[0]==='https://x.fr/@lea?ref=JULIE7K2&src=record'&&r[1]==='https://x.fr/?a=1&amb=LEAFIT&src=story'
+        &&r[2]==='https://x.fr/?src=ab'&&r[3]==='')?true:_echec(r.join(' | '));})());
+    ok('Attribution : les liens de l’app passent tous par lienAttribue',(()=>{
+      const s=_prodSrc();
+      if(!/function lienPerso\([\s\S]{0,1500}?lienAttribue\(page,\{src,ref:/.test(s)) return _echec('lienPerso');
+      if(!/lienAttribue\(APP_BASE_URL\+'\?coachpkg='[\s\S]{0,80}?\{src:'invitation'\}\)/.test(s)) return _echec('invitation');
+      if(!/ambLienInvitation\(code\)\{ return lienAttribue\(/.test(s)) return _echec('ambassadeur');
+      return (s.match(/function lienAttribue\(/g)||[]).length===1?true:_echec('plusieurs constructeurs');})());
+    ok('Attribution : partages résolus, téléchargements et liens copiés sont comptés, par type',(()=>{
+      const s=_prodSrc();
+      if(!/navigator\.share\(charge\)\.then\(\(\)=>\{ try\{ attribCompter\('partage',srcDuVisuel\(nomFichier\)\)/.test(s)) return _echec('partage visuel');
+      if(!/attribCompter\('telechargement',srcDuVisuel\(nomFichier\)\)/.test(s)) return _echec('téléchargement');
+      for(const x of ["attribCompter('copie',src||'visuel')","attribCompter('copie','bio')","attribCompter('copie','parrainage')",
+        "attribCompter('partage','parrainage')","attribCompter('partage','invitation')"]) if(s.indexOf(x)<0) return _echec(x);
+      return (attribCompter('rien','x')===false)?true:_echec('métrique inconnue acceptée');})());
+    ok('Attribution : l’origine d’un compte — src, codes, dates, et « direct » par défaut',(()=>{
+      const a=origineDe({src:'Story',ref:'JULIE7K2',le:5},9), b=origineDe({amb:'leafit'},9), c=origineDe(null,9), d=origineDe({ref:'JULIE7K2'},9);
+      if(a.src!=='story'||a.ref!=='JULIE7K2'||a.arriveeLe!==5||a.inscritLe!==9||a.amb) return _echec(JSON.stringify(a));
+      if(b.src!=='amb'||b.amb!=='LEAFIT') return _echec(JSON.stringify(b));
+      if(c.src!=='direct'||d.src!=='parrainage') return _echec(c.src+' '+d.src);
+      const u={email:'x@t.fr',origine:{src:'bio',inscritLe:1}};
+      if(attribOrigineInscription(u)!==null||u.origine.src!=='bio') return _echec('origine réécrite');
+      if(!attribPremierPaiement(u)||!(u.origine.payeLe>0)||attribPremierPaiement(u)) return _echec('premier paiement');
+      return CHAMPS_NON_SANTE.indexOf('origine')>=0?true:_echec('origine non classée');})());
+    ok('Attribution : l’entonnoir par src et par ambassadeur, la période, le coefficient viral',(()=>{
+      const t=new Date(2026,8,26,12).getTime();
+      const J={'2026-09-26':{src:{record:{partage:3,copie:1,clic:10,inscription:4,payant:1},direct:{inscription:6},amb:{inscription:2}},amb:{LEA:{clic:5,inscription:2,payant:1}}},
+        '2026-09-10':{src:{record:{partage:5,telechargement:2,clic:8,inscription:2}}},
+        '2026-07-01':{src:{record:{inscription:99}}}};
+      const S={'2026-09-21':{actifs:10},'2026-09-14':{actifs:30},'2026-09-07':{actifs:20}};
+      const v7=viraliteDonnees(J,S,7,t), v30=viraliteDonnees(J,S,30,t), v90=viraliteDonnees(J,S,90,t);
+      const r7=v7.src.find(x=>x.cle==='record');
+      if(!r7||r7.partages!==4||r7.clic!==10||r7.inscription!==4||r7.payant!==1) return _echec(JSON.stringify(r7));
+      if(v7.inscriptionsPartage!==4||v7.actifs!==20||v7.k!==0.2) return _echec('7 j : '+JSON.stringify([v7.inscriptionsPartage,v7.actifs,v7.k]));
+      if(v30.inscriptionsPartage!==6||v30.actifs!==20||v30.k!==0.3) return _echec('30 j : '+JSON.stringify([v30.inscriptionsPartage,v30.actifs,v30.k]));
+      if(v90.inscriptionsPartage!==105) return _echec('90 j : '+v90.inscriptionsPartage);
+      if(v7.amb.length!==1||v7.amb[0].cle!=='LEA'||v7.amb[0].payant!==1) return _echec('amb');
+      if(viraliteDonnees({},{},30,t).k!==null) return _echec('k sans actifs');
+      const d=document.createElement('div'); d.innerHTML=htmlViralite(v30);
+      const x=d.textContent;
+      if(!/Coefficient viral estimé/.test(x)||x.indexOf('0,3')<0||!/LEA/.test(x)||d.querySelectorAll('.vir-seg button').length!==3) return _echec(x.slice(0,300));
+      return true;})());
+    ok('Attribution : /i, la page d’accueil et les pages publiques comptent l’arrivée, sans cookie ni code parrain',(()=>{
+      const lire=u=>{ try{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; }catch(e){ return ''; } };
+      for(const f of ['../i/index.html','../index.html','../p/index.html','../c/index.html']){
+        const h=lire(f);
+        if(!h) continue;
+        if(!/attribArrivee\?src=/.test(h)||!/'rc_attr_'/.test(h)||!/&ref=1/.test(h)) return _echec(f);
+        if(/document\.cookie/.test(h)) return _echec(f+' : cookie');
+      }
+      const p=lire('../privacy.html');
+      if(p&&!/attribution/i.test(p)) return _echec('privacy.html ne dit rien du suivi');
+      return /localStorage\.setItem\('rc_origine'/.test(_prodSrc())?true:_echec('arrivée gardée par l’app');})());
 
     ok('Les badges n’ont que quatre points d’appel',(()=>{
       const s=_prodSrc().replace(/\/\/[^\r\n]*/g,'');

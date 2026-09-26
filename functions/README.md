@@ -417,8 +417,9 @@ réservés.
 ### Le parcours
 
 1. **Le lien** : `<domaine>/?amb=CODE` (la page d'accueil relaie `amb`, `ref`, `src` jusqu'à
-   l'app) ou `/i?amb=CODE` (`i/index.html` le garde). Le **clic** est compté par `ambClic`
-   (fonction HTTP, une fois par jour et par appareil), appelée depuis ces deux pages.
+   l'app) ou `/i?amb=CODE` (`i/index.html` le garde). Le **clic** est compté par `attribArrivee`
+   (voir « L'attribution » ; une fois par jour et par appareil). `ambClic` reste exportée pour
+   les pages encore en cache, mais plus aucune page ne l'appelle.
 2. **L'inscription** : le code arrive dans le champ « Code d'un ami ou d'un ambassadeur » (ou s'y
    tape). **Un seul avantage** : l'ambassadeur passe devant le parrain ; `parrainageDemande`
    refuse d'ailleurs un compte venu par un ambassadeur, et `ambassadeurDemande` un compte déjà
@@ -442,4 +443,50 @@ tous les codes (« ; » et virgule décimale, pour Excel en français).
 
 ```bash
 node functions/test/ambassadeurs.test.js
+```
+
+## L'attribution et la viralité (26/09/2026)
+
+D'où viennent les inscrits. Chaque lien sorti de l'app (lien perso, invitation, visuels, parrainage,
+ambassadeur) est construit par **une seule fonction**, `lienAttribue(base, {src, ref, amb})`
+(`app/rc-core.*.js`) : `src=<type de visuel ou de lien>`, puis `amb=<code>` **ou** `ref=<code>`
+(un ambassadeur exclut le parrain ; un code mal formé est ignoré).
+
+### Les nœuds
+
+| Nœud | Qui écrit | Contenu |
+|---|---|---|
+| `/attribution/jours/<AAAA-MM-JJ>/src/<src>/<m>` | tout le monde, **+1 seulement** (règles) ; `clic` et `payant` par les fonctions | `m` ∈ `partage` (feuille de partage résolue), `telechargement`, `copie`, `clic`, `inscription`, `payant` |
+| `/attribution/jours/<AAAA-MM-JJ>/amb/<CODE>/<m>` | les fonctions | `m` ∈ `clic`, `inscription`, `payant` |
+| `/attribution/semaines/<lundi>/actifs` | l'app, +1 par compte et par semaine sur un appareil | le dénominateur du coefficient viral |
+| `/users/<clé>/origine` | l'app à l'inscription ; `payeLe` par `attributionPaiement` | `{src, amb?, ref?, arriveeLe?, inscritLe, payeLe?}` |
+
+`/attribution` n'est lisible que par l'administrateur. Aucun cookie, aucune IP, aucun identifiant ;
+le code d'un parrain n'est **jamais** envoyé au serveur (les pages envoient `ref=1`).
+
+### Les fonctions
+
+- **`attribArrivee`** (HTTP, `GET ?src=&amb=&ref=1`) : appelée par `/i`, la page d'accueil, `/@pseudo`
+  et `/coach/slug`, **une fois par jour, par src et par code** sur un appareil (marque
+  `rc_attr_<jour>_<src>_<amb>` en `localStorage`, partagée par les quatre pages). Incrémente
+  `clic` par src et par code, et `ambassadeurs/<CODE>/stats/clics` si le code est actif. Répond
+  204, `Cache-Control: no-store`, sans cookie.
+- **`attributionPaiement(clé)`** : appelée avec `ambassadeurPaiement` (vérification de l'abonnement,
+  webhook `SALE.COMPLETED` / `CAPTURE.COMPLETED`). Pose `origine/payeLe` **une fois** (transaction)
+  et compte `payant` pour son src et son code ambassadeur.
+- `ambassadeurDemande` compte aussi `amb/<CODE>/inscription` (les codes tapés à la main compris).
+
+Sans les fonctions (plan Spark) : partages, téléchargements, copies, inscriptions et actifs sont
+comptés par l'app ; `payant` aussi (au premier paiement, `FONCTIONS_SERVEUR=false`) ; seuls les
+**clics** manquent.
+
+### L'écran « Viralité » (admin)
+
+Sur 7 / 30 / 90 jours : l'entonnoir par src (partages = partages + téléchargements + copies → clics
+→ inscriptions → payants), l'entonnoir par code ambassadeur, et le **coefficient viral estimé** =
+inscriptions venues d'un partage (tous les src sauf `direct` et `amb`) ÷ nombre moyen d'actifs par
+semaine sur la période.
+
+```bash
+node functions/test/attribution.test.js
 ```

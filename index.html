@@ -1004,16 +1004,23 @@ footer a{color:var(--dim);margin:0 8px}
       var base=i<0?h:h.slice(0,i), ancre=i<0?'':h.slice(i);
       a.setAttribute('href',base+(base.indexOf('?')<0?'?':'&')+q+ancre);
     });
-    var amb=(g.get('amb')||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
-    if(amb){
-      var k='rc_amb_clic_'+amb, j=new Date().toISOString().slice(0,10);
-      if(localStorage.getItem(k)!==j){
-        localStorage.setItem(k,j);
-        fetch('https://europe-west1-repcore-sync.cloudfunctions.net/ambClic?c='+encodeURIComponent(amb),{mode:'no-cors',keepalive:true}).catch(function(){});
-      }
-    }
   }catch(e){}
 })();
+</script>
+<script>
+// L'ARRIVEE (attribution) : src, amb, et le SEUL fait qu'un code parrain etait
+// la (ref=1, jamais le code : il designe une personne). Une fois par jour et
+// par lien sur cet appareil (localStorage, premiere partie) ; ni cookie, ni
+// IP, ni identifiant. La fonction attribArrivee ne repond rien : absente
+// (plan Spark), rien ne casse.
+(function(){try{var p=new URLSearchParams(location.search);
+var src=(p.get('src')||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20);
+var amb=(p.get('amb')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,16);
+var ref=p.get('ref')?1:0;
+var k='rc_attr_'+new Date().toISOString().slice(0,10)+'_'+(src||'-')+'_'+(amb||'-');
+if(localStorage.getItem(k)) return; localStorage.setItem(k,'1');
+fetch('https://europe-west1-repcore-sync.cloudfunctions.net/attribArrivee?src='+encodeURIComponent(src)+(amb?'&amb='+amb:'')+(ref?'&ref=1':''),{mode:'no-cors',keepalive:true}).catch(function(){});
+}catch(e){}})();
 </script>
 </body>
 </html>

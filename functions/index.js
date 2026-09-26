@@ -449,6 +449,7 @@ exports.verifyPaypalSubscription = onCall({ secrets: [PAYPAL_CLIENT_SECRET] }, a
     if (dernier && Number(dernier.amount && dernier.amount.value) > 0) {
       await parrainagePaiement(key, "paypal_abonnement");
       await ambassadeurPaiement(key, { montant: dernier.amount.value, le: Date.parse(dernier.time) || Date.now(), abonnement: sub.id });
+      await attributionPaiement(key);
     }
   } catch (e) { console.error("parrainage/ambassadeur", e); }
   // L'abonnement -> le compte : les ventes suivantes (webhook) n'ont que lui.
@@ -848,6 +849,7 @@ exports.paypalWebhook = onRequest(
           await ambassadeurPaiement(cle, { montant: ress.amount && (ress.amount.total || ress.amount.value),
             le: Date.parse(ress.create_time) || Date.now(), abonnement: ress.billing_agreement_id, venteId: ress.id })
             .catch((e) => console.error("ambassadeur", e));
+          await attributionPaiement(cle).catch((e) => console.error("attribution", e));
         }
       } else if (type === "BILLING.SUBSCRIPTION.CANCELLED" || type === "BILLING.SUBSCRIPTION.EXPIRED"
               || type === "BILLING.SUBSCRIPTION.SUSPENDED") {
@@ -872,6 +874,7 @@ exports.paypalWebhook = onRequest(
           await parrainagePaiement(cle, "paypal_achat").catch((e) => console.error("parrainage", e));
           await ambassadeurPaiement(cle, { montant: ress.amount && ress.amount.value, le: Date.parse(ress.create_time) || Date.now(),
             id: ress.id, venteId: ress.id }).catch((e) => console.error("ambassadeur", e));
+          await attributionPaiement(cle).catch((e) => console.error("attribution", e));
         }
       }
     } catch (e) {
@@ -1752,6 +1755,9 @@ exports.ambassadeurDemande = onValueCreated(Object.assign({ ref: "/ambassadeurs_
     [dem + "/etat"]: "accepte", [dem + "/traiteLe"]: t
   });
   await db.ref("ambassadeurs/" + code + "/stats/inscrits").transaction((n) => (Number(n) || 0) + 1);
+  // L'inscription par ambassadeur, au jour, pour l'écran « Viralité » (l'app
+  // ne compte, elle, que l'inscription par src).
+  await db.ref("attribution/jours/" + ATT.jourParis(t) + "/amb/" + code + "/inscription").transaction((n) => (Number(n) || 0) + 1);
   // L'AVANTAGE « essai+1mois » : le même mois que celui du parrainage.
   if (droits && Number(droits.essaiOuvertLe) > 0 && Number(droits.essaiFinit) > 0) {
     const fin = Number(droits.essaiFinit) + BONUS_ESSAI_JOURS * 864e5;
@@ -1830,3 +1836,50 @@ exports.ambassadeursQuotidien = onSchedule(Object.assign({ schedule: "20 6 * * *
   const tous = (await _val("ambassadeurs_publics")) || {};
   for (const code of Object.keys(tous)) { try { await _ambMajVue(code); } catch (e) { console.error("ambassadeur", code, e); } }
 });
+
+// ══ L'ATTRIBUTION ══════════════════════════════════════════════════════════
+//
+// D'où viennent les inscrits : un compteur par jour, par `src` (le type de
+// visuel ou de lien qui a circulé) et par code ambassadeur, dans
+// /attribution/jours/<AAAA-MM-JJ>/{src|amb}/<clé>/<métrique>. Métriques :
+// partage, telechargement, copie (écrits par l'app), clic (ici), inscription
+// (l'app), payant (ici, au premier encaissement). Lu par l'écran « Viralité ».
+// AUCUNE DONNÉE PERSONNELLE : ni IP, ni cookie, ni code parrain, ni
+// identifiant — des entiers. Voir privacy.html, « Mesure d'audience ».
+const ATT = require("./attribution-calcul");
+async function _incr(chemin) { await db.ref(chemin).transaction((n) => (Number(n) || 0) + 1); }
+
+// L'ARRIVÉE : appelée par /i, la page d'accueil et les pages publiques, une
+// fois par jour et par lien sur un même appareil (dédoublonné chez lui, en
+// localStorage). Elle compte aussi le clic d'un ambassadeur (comme ambClic).
+exports.attribArrivee = onRequest({ cors: true, memory: "128MiB" }, async (req, res) => {
+  const q = req.query || {};
+  try {
+    const t = Date.now();
+    for (const c of ATT.cheminsArrivee(q, t)) await _incr(c);
+    const amb = String(q.amb || "").toUpperCase();
+    if (ATT.AMB_RE.test(amb)) {
+      const [nom, actif] = await Promise.all([_val("ambassadeurs/" + amb + "/nom"), _val("ambassadeurs/" + amb + "/actif")]);
+      if (nom && actif !== false) await _incr("ambassadeurs/" + amb + "/stats/clics");
+    }
+  } catch (e) { /* un clic perdu ne vaut pas une erreur */ }
+  res.set("Cache-Control", "no-store");
+  res.status(204).send("");
+});
+
+// LE PREMIER PAIEMENT : la source d'origine du compte (users/<clé>/origine,
+// posée par l'app à l'inscription) reçoit sa date de paiement, et le compteur
+// « payant » de son src (et de son ambassadeur) prend un. Une seule fois.
+async function attributionPaiement(cle) {
+  const t = Date.now();
+  let origine = null;
+  const tx = await db.ref("users/" + cle + "/origine/payeLe").transaction((cur) => (cur ? undefined : t));
+  if (!tx.committed) return null;
+  origine = (await _val("users/" + cle + "/origine")) || {};
+  // L'ambassadeur qui compte est celui du RATTACHEMENT (lien suivi ou code
+  // saisi à l'inscription), pas seulement celui du lien d'arrivée.
+  const lien = await _val("ambassadeurs_liens/" + cle);
+  const o = Object.assign({}, origine, lien && lien.code ? { amb: lien.code } : {});
+  for (const c of ATT.cheminsEvenement("payant", o, t)) await _incr(c);
+  return origine;
+}

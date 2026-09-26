@@ -82,6 +82,21 @@ code{background:#000;border:1px solid var(--bord);border-radius:6px;padding:2px 
   <p class="petit">RepCore — <a href="../" style="color:var(--gris)">en savoir plus</a></p>
 </div>
 <script>
+// L'ARRIVEE (attribution) : src, amb, et le SEUL fait qu'un code parrain etait
+// la (ref=1, jamais le code : il designe une personne). Une fois par jour et
+// par lien sur cet appareil (localStorage, premiere partie) ; ni cookie, ni
+// IP, ni identifiant. La fonction attribArrivee ne repond rien : absente
+// (plan Spark), rien ne casse.
+(function(){try{var p=new URLSearchParams(location.search);
+var src=(p.get('src')||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20);
+var amb=(p.get('amb')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,16);
+var ref=p.get('ref')?1:0;
+var k='rc_attr_'+new Date().toISOString().slice(0,10)+'_'+(src||'-')+'_'+(amb||'-');
+if(localStorage.getItem(k)) return; localStorage.setItem(k,'1');
+fetch('https://europe-west1-repcore-sync.cloudfunctions.net/attribArrivee?src='+encodeURIComponent(src)+(amb?'&amb='+amb:'')+(ref?'&ref=1':''),{mode:'no-cors',keepalive:true}).catch(function(){});
+}catch(e){}})();
+</script>
+<script>
 (function(){
   var p=new URLSearchParams(location.search);
   // « c » et « code » sont les raccourcis qu'on peut ecrire a la main dans un
@@ -90,20 +105,9 @@ code{background:#000;border:1px solid var(--bord);border-radius:6px;padding:2px 
   var c=(p.get('c')||p.get('code')||'').trim().toUpperCase();
   if(c&&!p.get('inv')) p.set('inv',c);
   p.delete('c');p.delete('code');
-  // L'AMBASSADEUR : le code voyage jusqu'a /app/ avec le reste (?amb=), et le
-  // clic est compte UNE fois par jour et par appareil (fonction ambClic, qui
-  // ne repond rien : si elle n'est pas deployee, rien ne casse).
+  // L'AMBASSADEUR : le code voyage jusqu'a /app/ avec le reste (?amb=).
   var amb=(p.get('amb')||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
-  if(amb){
-    p.set('amb',amb);
-    try{
-      var k='rc_amb_clic_'+amb, j=new Date().toISOString().slice(0,10);
-      if(localStorage.getItem(k)!==j){
-        localStorage.setItem(k,j);
-        fetch('https://europe-west1-repcore-sync.cloudfunctions.net/ambClic?c='+encodeURIComponent(amb),{mode:'no-cors',keepalive:true}).catch(function(){});
-      }
-    }catch(e){}
-  }
+  if(amb) p.set('amb',amb);
   var q=p.toString();
   // Chemin RELATIF : la meme page sert sur repcore-sync.web.app/i/ et sur
   // repcore131.github.io/coaching/i/, ou « /app/ » ne designerait rien.

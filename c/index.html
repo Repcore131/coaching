@@ -108,5 +108,20 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
     .catch(function(){ vide('Page injoignable pour l’instant. Réessaie dans un moment.'); });
 })();
 </script>
+<script>
+// L'ARRIVEE (attribution) : src, amb, et le SEUL fait qu'un code parrain etait
+// la (ref=1, jamais le code : il designe une personne). Une fois par jour et
+// par lien sur cet appareil (localStorage, premiere partie) ; ni cookie, ni
+// IP, ni identifiant. La fonction attribArrivee ne repond rien : absente
+// (plan Spark), rien ne casse.
+(function(){try{var p=new URLSearchParams(location.search);
+var src=(p.get('src')||'vitrine').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20);
+var amb=(p.get('amb')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,16);
+var ref=p.get('ref')?1:0;
+var k='rc_attr_'+new Date().toISOString().slice(0,10)+'_'+(src||'-')+'_'+(amb||'-');
+if(localStorage.getItem(k)) return; localStorage.setItem(k,'1');
+fetch('https://europe-west1-repcore-sync.cloudfunctions.net/attribArrivee?src='+encodeURIComponent(src)+(amb?'&amb='+amb:'')+(ref?'&ref=1':''),{mode:'no-cors',keepalive:true}).catch(function(){});
+}catch(e){}})();
+</script>
 </body>
 </html>
