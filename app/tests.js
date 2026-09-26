@@ -48366,6 +48366,171 @@ async function testExercices(){
       const src=String(_seriePlanifierNotif);
       return /pushTypeActif\(u,'serie'\)/.test(src)?true:_echec('rappel local série');})());
 
+    // ── LES VOLTS ET LES RANGS ───────────────────────────────────────────
+    const _VJ=864e5, _VT0=new Date(2025,0,6,18).getTime();   // un lundi, 18 h
+    const _VS=(j,o)=>Object.assign({date:_VT0+j*_VJ,duration:60,sets:15,setsPlanned:15,
+      data:{'Squat':{sets:[{weight:'100',reps:'8',done:true}]}}},o||{});
+    const _VU=o=>Object.assign({role:'athlete',email:'v@t.fr',createdAt:_VT0-_VJ,
+      sessions_config:[{active:true},{active:true},{active:true}],sessions:[],bilans:[]},o||{});
+    const _VFIN=_VT0+400*_VJ;
+    ok('Volts : le barème XP_ACTIONS est celui de la demande',(()=>{
+      const a=XP_ACTIONS;
+      const ok1=a.seance===100&&a.complete===30&&a.record===50&&a.bilan===80&&a.nutrition===15
+        &&a.sommeil===5&&a.semaine===150&&a.badge===40&&a.badgePalier4===200;
+      return ok1&&XP_PLAFOND_JOUR>=380?true:_echec(JSON.stringify(a)+' plafond '+XP_PLAFOND_JOUR);})());
+    ok('Volts : dix rangs, dans l’ordre, seuils croissants à partir de 0',(()=>{
+      const n=RANGS.map(r=>r.nom).join();
+      if(n!=='ÉTINCELLE,IMPULSION,VOLTAGE,MACHINE,ÉLITE,SURTENSION,MONSTRE,FOUDRE,TITAN,LÉGENDE') return _echec(n);
+      if(RANGS[0].seuil!==0) return _echec('premier seuil '+RANGS[0].seuil);
+      for(let i=1;i<RANGS.length;i++) if(!(RANGS[i].seuil>RANGS[i-1].seuil)) return _echec('seuil '+i);
+      return RANGS.every((r,i)=>r.n===i+1)?true:_echec('numéros');})());
+    ok('Volts : rangDe bascule exactement au seuil, et la jauge dit ce qui reste',(()=>{
+      for(let i=1;i<RANGS.length;i++){
+        if(rangDe(RANGS[i].seuil-1).rang.n!==i) return _echec('seuil-1 de '+RANGS[i].nom);
+        if(rangDe(RANGS[i].seuil).rang.n!==i+1) return _echec('seuil de '+RANGS[i].nom);
+      }
+      const m=RANGS[1].seuil+Math.round((RANGS[2].seuil-RANGS[1].seuil)/2);
+      const r=rangDe(m);
+      if(Math.abs(r.part-0.5)>0.01||r.reste!==RANGS[2].seuil-m||r.suivant.nom!=='VOLTAGE') return _echec(JSON.stringify(r));
+      const x=rangDe(RANGS[9].seuil*3);
+      if(x.suivant!==null||x.part!==1||x.rang.nom!=='LÉGENDE') return _echec('rang maximal');
+      return rangDe(-5).rang.n===1&&rangDe('abc').rang.n===1?true:_echec('valeurs absurdes');})());
+    ok('Volts : une séance complète = 130, incomplète = 100, et le record se compte par record',(()=>{
+      const a=xpCalcul(_VU({sessions:[_VS(0)]}),_VFIN).cat;
+      if(a.seance!==100||a.complete!==30||a.record!==0) return _echec('complète '+JSON.stringify(a));
+      const b=xpCalcul(_VU({sessions:[_VS(0,{sets:10})]}),_VFIN).cat;
+      if(b.complete!==0) return _echec('incomplète comptée complète');
+      const c=xpCalcul(_VU({sessions:[_VS(0,{complete:false})]}),_VFIN).cat;
+      if(c.complete!==0) return _echec('complete:false compté');
+      // Deux exercices battus à la seconde séance : deux records.
+      const d2={'Squat':{sets:[{weight:'110',reps:'5',done:true}]},'Rowing barre':{sets:[{weight:'70',reps:'8',done:true}]}};
+      const d1={'Squat':{sets:[{weight:'100',reps:'5',done:true}]},'Rowing barre':{sets:[{weight:'60',reps:'8',done:true}]}};
+      const r=xpCalcul(_VU({sessions:[_VS(0,{data:d1}),_VS(2,{data:d2})]}),_VFIN).cat;
+      return r.record===100?true:_echec('records '+r.record);})());
+    ok('Volts : le plafond du jour arrête dix séances saisies d’un coup',(()=>{
+      const ses=Array.from({length:10},(_,i)=>_VS(0,{date:_VT0+i*60000}));
+      const c=xpCalcul(_VU({sessions:ses}),_VFIN);
+      const jour=c.cat.seance+c.cat.complete+c.cat.record;
+      if(jour!==XP_PLAFOND_JOUR) return _echec('jour '+jour);
+      if(c.ecrete!==10*130-XP_PLAFOND_JOUR) return _echec('écrêté '+c.ecrete);
+      // Deux jours distincts : deux plafonds, pas un.
+      const d=xpCalcul(_VU({sessions:ses.concat(ses.map(s=>Object.assign({},s,{date:s.date+_VJ})))}),_VFIN);
+      return d.cat.seance+d.cat.complete===2*XP_PLAFOND_JOUR?true:_echec('deux jours '+JSON.stringify(d.cat));})());
+    ok('Volts : bilan 80, journal rempli 15 (3 aliments), nuit 5 — une fois par nuit',(()=>{
+      const u=_VU({bilans:[{date:_VT0,type:'suivi'}],
+        nutrition:{log:{'2025-01-07':{entries:[{},{},{}]},'2025-01-08':{entries:[{},{}]},'pas-une-date':{entries:[{},{},{}]}}},
+        sleepLog:[{date:'2025-01-07',duration:7.5},{date:'2025-01-07',duration:7},{date:'2025-01-08',duration:0},{date:'2025-01-09',duration:6}]});
+      const c=xpCalcul(u,_VFIN).cat;
+      return (c.bilan===80&&c.nutrition===15&&c.sommeil===10)?true:_echec(JSON.stringify(c));})());
+    ok('Volts : la semaine validée vaut 150, hors plafond',(()=>{
+      const u=_VU({sessions:[_VS(0),_VS(2),_VS(4)]});
+      const c=xpCalcul(u,_VFIN).cat;
+      if(c.semaine!==150) return _echec('semaine '+c.semaine);
+      const v=xpCalcul(_VU({sessions:[_VS(0),_VS(2)]}),_VFIN).cat;
+      return v.semaine===0?true:_echec('semaine non validée comptée');})());
+    ok('Volts : un badge vaut 40, un palier IV 200',(()=>{
+      const ses=n=>Array.from({length:n},(_,i)=>_VS(i));
+      const a=xpCalcul(_VU({sessions:ses(249)}),_VT0+900*_VJ).cat.badge;
+      const b=xpCalcul(_VU({sessions:ses(250)}),_VT0+900*_VJ).cat.badge;
+      if(b-a!==200) return _echec('ASSIDU IV : +'+(b-a));
+      const c=xpCalcul(_VU({sessions:ses(9)}),_VT0+900*_VJ).cat.badge;
+      const d=xpCalcul(_VU({sessions:ses(10)}),_VT0+900*_VJ).cat.badge;
+      return d-c===40?true:_echec('ASSIDU I : +'+(d-c));})());
+    ok('Volts : recalculable — rien ne dépend de l’instant du calcul ni d’un compteur',(()=>{
+      const u=_VU({sessions:[_VS(0),_VS(2),_VS(4)],bilans:[{date:_VT0+_VJ}]});
+      const a=xpCalcul(u,_VFIN).total, b=xpCalcul(JSON.parse(JSON.stringify(u)),_VFIN+99*_VJ).total;
+      if(a!==b) return _echec(a+' ≠ '+b);
+      // La copie u.xp n'est pas relue par le calcul.
+      if(xpCalcul(Object.assign({},u,{xp:999999}),_VFIN).total!==a) return _echec('u.xp relu');
+      // Les nuits purgées gardent leurs volts.
+      return xpCalcul(Object.assign({},u,{xpArchive:{sommeil:25}}),_VFIN).total===a+25?true:_echec('archive');})());
+    ok('Volts : le gain d’une séance, détaillé (séance, complète, semaine, badge)',(()=>{
+      const u=_VU({sessions:[_VS(0),_VS(2),_VS(4)]});
+      const g=xpGainsSeance(u,u.sessions[2],_VFIN);
+      const l=g.lignes.map(x=>x.lib+':'+x.v).join('|');
+      if(g.total!==g.lignes.reduce((a,x)=>a+x.v,0)) return _echec('somme '+g.total+' '+l);
+      if(!/Séance terminée:100/.test(l)||!/Séance complète:30/.test(l)||!/Semaine validée:150/.test(l)) return _echec(l);
+      return g.apres-g.avant===g.total?true:_echec('avant/après');})());
+    ok('Volts : la courbe tient le calendrier d’un athlète à 3 séances par semaine',(()=>{
+      // LE MÊME ATHLÈTE QUE LA CALIBRATION (voir RANGS) : 5 exercices par
+      // séance, 85 % de séances complètes, un bilan toutes les deux semaines,
+      // un record par exercice à 45 % au début, qui fond vers 6 %.
+      let x=7; const rnd=()=>{ x=(x*1103515245+12345)%2147483648; return x/2147483648; };
+      const EX=['Squat','Développé couché','Soulevé de terre','Rowing barre','Développé militaire','Tractions','Fentes','Dips','Curl barre','Presse'];
+      const best={}, ses=[], bil=[];
+      for(let w=0;w<140;w++){
+        for(const dj of [0,2,4]){
+          const data={}, p=Math.max(0.06,0.45*Math.exp(-w/18));
+          for(const e of (dj===2?EX.slice(5):EX.slice(0,5))){
+            const b0=best[e]||40, rec=best[e]&&rnd()<p, wg=rec?b0+2.5:b0-(best[e]?2.5:0);
+            best[e]=Math.max(wg,best[e]||0);
+            data[e]={sets:[1,2,3].map(()=>({weight:String(wg),reps:'8',done:true}))};
+          }
+          const c=rnd()<0.85;
+          ses.push({date:_VT0+(w*7+dj)*_VJ,duration:60,data,sets:c?15:12,setsPlanned:15});
+        }
+        if(w%2===1) bil.push({date:_VT0+(w*7+5)*_VJ,type:'suivi'});
+      }
+      const rangA=w=>{ const t=_VT0+w*7*_VJ-1;
+        return rangDe(xpCalcul(_VU({sessions:ses.filter(s=>s.date<=t),bilans:bil.filter(b=>b.date<=t)}),t).total).rang.n; };
+      // [rang, semaines visées] : ~2 sem., ~1 mois, ~2 mois, ~4, ~6, ~9 mois, ~1 an, ~18 mois, ~30 mois.
+      const cible=[[2,2],[3,4.3],[4,8.7],[5,17],[6,26],[7,39],[8,52],[9,78],[10,130]];
+      const f=[];
+      for(const [n,w] of cible){
+        if(rangA(Math.ceil(w*1.25))<n) f.push(RANGS[n-1].nom+' pas atteint à '+Math.ceil(w*1.25)+' sem.');
+        if(rangA(Math.floor(w*0.75))>=n) f.push(RANGS[n-1].nom+' déjà atteint à '+Math.floor(w*0.75)+' sem.');
+      }
+      return f.length?_echec(f.join(' ; ')):true;})());
+    ok('Volts : l’accueil dit « ⚡ total / seuil V vers RANG », avec l’emblème',(()=>{
+      const d=document.createElement('div');
+      d.innerHTML=htmlRangAccueil(1240);
+      const t=d.textContent;
+      if(!/⚡ 1\s240 \/ 1\s800 V vers IMPULSION/.test(t)) return _echec(t);
+      if(!/ÉTINCELLE/.test(t)) return _echec('nom du rang');
+      const img=d.querySelector('img.rg-emb');
+      if(!img||!/img\/rangs\/rang_1\.webp$/.test(img.getAttribute('src'))) return _echec('emblème');
+      d.innerHTML=htmlRangAccueil(RANGS[9].seuil+5);
+      return /rang maximal/.test(d.textContent)?true:_echec('rang maximal');})());
+    ok('Volts : la fin de séance affiche « +N ⚡ » et une ligne par gain',(()=>{
+      const d=document.createElement('div');
+      d.innerHTML=htmlVoltsFin({total:180,lignes:[{lib:'Séance terminée',v:100},{lib:'Record battu',v:50},{lib:'Séance complète',v:30}],ecrete:false},2000);
+      if(d.querySelectorAll('.vt-l').length!==3) return _echec('lignes');
+      if(!d.querySelector('#vt-compteur')) return _echec('compteur');
+      if(htmlVoltsFin({total:0,lignes:[]},0)!=='') return _echec('bloc sans gain');
+      d.innerHTML=htmlVoltsFin({total:20,lignes:[{lib:'Séance terminée',v:20}],ecrete:true},2000);
+      return /Plafond du jour/.test(d.textContent)?true:_echec('plafond non dit');})());
+    ok('Volts : la carte de rang 1080×1920, « NOUVEAU RANG · TITAN » et la signature',(()=>{
+      const P=CanvasRenderingContext2D.prototype, f=P.fillText, vus=[];
+      P.fillText=function(t){ vus.push(String(t)); return f.apply(this,arguments); };
+      let c;
+      try{ c=_dessinerCarteRang({n:9,nom:'TITAN',xp:54000,signature:'LÉA'},'transparent',null); }
+      finally{ P.fillText=f; }
+      if(c.width!==1080||c.height!==1920) return _echec(c.width+'x'+c.height);
+      const tout=vus.join('');
+      if(tout.indexOf('NOUVEAU RANG · TITAN')<0) return _echec('en-tête');
+      return tout.indexOf('LÉA · REPCORE')>=0?true:_echec('signature');})());
+    ok('Volts : le premier calcul ne fête rien, un passage de rang passe dans la file',(()=>{
+      const svU=currentUser, svS=saveUser, svF=_bdgFile, svR=_bdgRecap;
+      try{
+        saveUser=()=>{}; _bdgFile=[]; _bdgRecap=[];
+        currentUser=_VU({sessions:[_VS(0),_VS(2),_VS(4)]});
+        const m=majXp();
+        if(!m||m.fete||_bdgFile.length) return _echec('fête au premier calcul');
+        if(currentUser.xp!==m.total||currentUser.xpRang!==m.rang) return _echec('copie');
+        currentUser.xpRang=1; currentUser.sessions=currentUser.sessions.concat(Array.from({length:30},(_,i)=>_VS(7+i)));
+        const m2=majXp();
+        if(!(m2.fete>1)) return _echec('pas de passage : '+JSON.stringify(m2));
+        return (_bdgFile.length===1&&_bdgFile[0].rang===m2.fete)?true:_echec(JSON.stringify(_bdgFile));
+      } finally { clearTimeout(_bdgMinuterie); _bdgMinuterie=null; currentUser=svU; saveUser=svS; _bdgFile=svF; _bdgRecap=svR; }})());
+    ok('Volts : dans le Canal, l’emblème du rang précède le prénom',(()=>{
+      const d=document.createElement('div');
+      d.innerHTML=htmlNomRang('Léa',RANGS[6].seuil);
+      const i=d.querySelector('img.rg-mini');
+      return (i&&/rang_7\.webp$/.test(i.getAttribute('src'))&&i.alt==='MONSTRE'&&/Léa/.test(d.textContent))
+        ?true:_echec(d.innerHTML);})());
+    ok('Volts : xp, xpRang et xpArchive sont classés non-santé',
+      ['xp','xpRang','xpArchive'].every(k=>CHAMPS_NON_SANTE.indexOf(k)>=0));
+
     ok('Les badges n’ont que quatre points d’appel',(()=>{
       const s=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
       const n=(s.match(/majBadges\(/g)||[]).length;

@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1591';
+const CACHE = 'repcore-v1592';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -115,6 +115,13 @@ const MEDAILLONS = ['new_record', 'multiple_records', 'new_load', 'personal_best
 // deux marqueurs — ne pas l'éditer à la main. Les 512 px n'y sont pas : ils ne
 // servent qu'à la fiche et au partage, et 2 Mo de plus à chaque installation
 // ne se justifient pas pour un geste rare.
+// LES DIX EMBLÈMES DE RANG (les « volts »), aux deux tailles : l'écran de
+// passage de rang peut tomber en fin de séance, hors ligne. Liste écrite par
+// scripts/rangs.py entre ses deux marqueurs — ne pas l'éditer à la main.
+// rangs.py:debut
+const EMBLEMES_RANGS = Array.from({ length: 10 }, (_, i) => i + 1)
+  .flatMap(n => ['./img/rangs/rang_' + n + '.webp', './img/rangs/rang_' + n + '-512.webp']);
+// rangs.py:fin
 // badges.py:debut
 const MEDAILLONS_COLLECTION = [
   'tonnage_1', 'tonnage_2', 'tonnage_3', 'tonnage_4', 'verrouille'
@@ -154,7 +161,7 @@ CORPS.push('./img/complements.webp');
 // ni code ni style — c'est-a-dire rien du tout.
 // Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
 // chaque build et reecrit cette ligne comme celle d'index.html.
-const ASSETS = ['./index.html', './rc-core.1591.js', './rc-style.1591.css',
+const ASSETS = ['./index.html', './rc-core.1592.js', './rc-style.1592.css',
   './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
@@ -163,7 +170,7 @@ const ASSETS = ['./index.html', './rc-core.1591.js', './rc-style.1591.css',
   './vendor/mp4/mp4box.all.min.js', './vendor/mp4/mp4-muxer.js',
   './fonts/montserrat-var-latin.woff2',
   './fonts/bebasneue-400-latin.woff2', './img/arn.png']
-  .concat(AVATARS).concat(MEDAILLONS).concat(MEDAILLONS_COLLECTION).concat(CORPS);
+  .concat(AVATARS).concat(MEDAILLONS).concat(MEDAILLONS_COLLECTION).concat(EMBLEMES_RANGS).concat(CORPS);
 
 // Une séance en cours interdit la bascule. Prendre le contrôle en pleine
 // séance, c'est purger le cache sous les pieds de quelqu'un qui est peut-être

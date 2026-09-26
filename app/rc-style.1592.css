@@ -10835,3 +10835,34 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .vf-b:focus-visible{outline:2px solid var(--red,#e02020);outline-offset:2px}
 .vf-c{display:block;width:100%;height:auto;aspect-ratio:9/16;border-radius:9px;background:#0e0e10}
 .vf-b span{font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;text-align:center;line-height:1.25;overflow-wrap:anywhere}
+
+/* ══ LES VOLTS ET LES RANGS ═══════════════════════════════════════════════ */
+/* L'accueil : sous le prénom, l'emblème et le nom du rang, puis la jauge. */
+.rg-accueil{margin-top:5px;min-width:0;max-width:210px}
+.rg-ligne{display:flex;align-items:center;gap:5px;min-width:0}
+.rg-emb{width:22px;height:22px;object-fit:contain;flex-shrink:0;filter:drop-shadow(0 0 4px rgba(224,32,32,.55))}
+.rg-nom{font-family:var(--pile-titre);font-size:var(--fs-sm);letter-spacing:1.5px;color:#ff3b3b;line-height:1}
+.rg-jauge{height:4px;border-radius:2px;background:rgba(255,255,255,.1);overflow:hidden;margin-top:5px}
+.rg-jauge span{display:block;height:100%;border-radius:2px;background:linear-gradient(90deg,#8e0403,#E02020 60%,#ff5a4a);
+  box-shadow:0 0 8px rgba(224,32,32,.7)}
+.rg-txt{font-size:var(--fs-2xs);color:var(--sub);margin-top:4px;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-variant-numeric:tabular-nums}
+/* Le Canal : l'emblème miniature devant le prénom. */
+.rg-nomrang{display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
+.rg-mini{width:16px;height:16px;object-fit:contain;flex-shrink:0}
+.cnl-defi{display:inline-block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;
+  color:#fff;background:var(--red,#E02020);border-radius:var(--r-2,4px);padding:3px 8px;margin-bottom:7px}
+/* La fin de séance : « +180 ⚡ » et le détail. */
+.vt-carte{background:linear-gradient(160deg,#1a0303,#120000 60%,#0b0000);border:1px solid #3a0000;border-radius:14px;padding:14px 16px}
+.vt-tete{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.vt-emb{width:44px;height:44px;object-fit:contain;flex-shrink:0;filter:drop-shadow(0 0 8px rgba(224,32,32,.6))}
+.vt-gain{font-family:var(--pile-titre);font-size:34px;line-height:1;color:#fff;font-variant-numeric:tabular-nums;
+  text-shadow:0 0 14px rgba(224,32,32,.8);flex:1;min-width:0}
+.vt-eclair{color:#ffd23a;text-shadow:0 0 12px rgba(255,190,40,.8)}
+.vt-rang{font-family:var(--pile-titre);font-size:var(--fs-md);letter-spacing:1.5px;color:#ff3b3b}
+.vt-l{display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:3px 0;color:var(--text-dim)}
+.vt-l b{color:var(--text);font-variant-numeric:tabular-nums}
+.vt-plafond{font-size:var(--fs-xs);color:var(--orange);margin-top:6px}
+.vt-jauge{margin-top:10px}
+/* Le passage de rang : l'emblème, un peu moins large que le médaillon d'un badge. */
+.rg-ecran-med{width:72%}

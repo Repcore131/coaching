@@ -5672,6 +5672,10 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // fichier et un message d'erreur. Du diagnostic, pas de la sante — mais il
   // DOIT etre classe, sinon il n'est protege par rien.
   'videoDiag',
+  // Les volts : une copie du total recalculé (xpCalcul), le plus haut rang
+  // déjà fêté, et les volts des nuits purgées du journal. Des scores, pas des
+  // mesures — mais ils DOIVENT être classés.
+  'xp','xpRang','xpArchive',
   // Les types de notification push que l'athlète a coupés : {type:false}.
   // Un réglage, lu par le serveur avant chaque envoi — aucune donnée de santé.
   'pushPrefs',
@@ -16999,6 +17003,7 @@ function _canalCarte(m,compteurs,mienne){
       ${m.epingle?'<span style="font-size:var(--fs-xs);color:var(--red-text);font-weight:800;letter-spacing:1.5px;text-transform:uppercase">📌 Épinglé</span>':''}
       <span class="sub" style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase">${escapeHtml(ago(Number(m.at)||Date.now()))}</span>
     </div>
+    ${m.defi===true?'<div class="cnl-defi">⚡ Défi</div>':''}
     ${m.titre?`<div class="cnl-titre">${escapeHtml(m.titre)}</div>`:''}
     ${m.texte?`<div class="cnl-texte">${escapeHtml(m.texte)}</div>`:''}
     ${lien?_canalCarteLien(lien):''}
@@ -17214,10 +17219,11 @@ function canalPrenoms(reactions,msgId,emoji){
 function _canalCarteCoach(m,compteurs,vrai,reactions,neuve){
   const derive=CANAL_EMOJIS.some(e=>(Number(compteurs[e])||0)!==(Number(vrai[e])||0));
   const lignes=CANAL_EMOJIS.filter(e=>(Number(vrai[e])||0)>0).map(e=>{
-    const noms=canalPrenoms(reactions,m.id,e);
+    // Le prénom, précédé de l'emblème du rang de l'athlète.
+    const noms=canalPrenomsRangs(reactions,m.id,e);
     return `<div style="display:flex;gap:8px;align-items:flex-start;font-size:var(--fs-sm);padding:3px 0">
       <span aria-hidden="true">${e}</span><span style="font-weight:800">${noms.length}</span>
-      <span class="sub" style="flex:1;min-width:0;line-height:1.5">${escapeHtml(noms.join(', '))}</span></div>`;
+      <span class="sub" style="flex:1;min-width:0;line-height:1.5">${noms.map(x=>htmlNomRang(x.nom,x.xp)).join(', ')}</span></div>`;
   }).join('');
   const lien=String(m.lien||'').trim();
   return `<div class="cnl-carte${neuve?' cnl-neuve':''}"${m.epingle?' data-epingle':''}>
@@ -17225,6 +17231,7 @@ function _canalCarteCoach(m,compteurs,vrai,reactions,neuve){
       ${m.epingle?'<span style="font-size:var(--fs-xs);color:var(--red-text);font-weight:800;letter-spacing:1.5px;text-transform:uppercase">📌 Épinglé</span>':''}
       <span class="sub" style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase">${escapeHtml(ago(Number(m.at)||Date.now()))}</span>
     </div>
+    ${m.defi===true?'<div class="cnl-defi">⚡ Défi</div>':''}
     ${m.titre?`<div class="cnl-titre">${escapeHtml(m.titre)}</div>`:''}
     ${m.texte?`<div class="cnl-texte">${escapeHtml(m.texte)}</div>`:''}
     ${lien&&safeUrlRaw(lien)!=='#'?`<a href="${safeUrl(lien)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:9px;font-size:var(--fs-sm);color:var(--info);font-weight:700">${escapeHtml(canalDomaine(lien)||'lien')} ↗</a>`:''}
@@ -17290,6 +17297,10 @@ function openMessageCanal(msgId){
       <input id="cm-epingle" type="checkbox" ${m.epingle?'checked':''} style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <span style="font-size:var(--fs-sm);line-height:1.5">Épingler à l'accueil<br><span class="sub" style="font-size:var(--fs-xs)">Un seul message à la fois : celui-ci remplacera l'épinglé actuel.</span></span>
     </label>
+    <label style="display:flex;align-items:center;gap:10px;margin-top:12px;cursor:pointer">
+      <input id="cm-defi" type="checkbox" ${m.defi===true?'checked':''} style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
+      <span style="font-size:var(--fs-sm);line-height:1.5">C'est un défi<br><span class="sub" style="font-size:var(--fs-xs)">Marqué « ⚡ Défi » dans le Canal. À sa publication, tes athlètes qui ont activé les notifications en reçoivent une.</span></span>
+    </label>
     <div style="display:flex;gap:8px;margin-top:16px">
       <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="closeModal()">Annuler</button>
       <button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="enregistrerMessageCanal()">${msgId?'Enregistrer':'Publier'}</button>
@@ -17302,6 +17313,7 @@ async function enregistrerMessageCanal(){
   const texte=(document.getElementById('cm-texte')?.value||'').trim().slice(0,CANAL_TEXTE_MAX);
   const lienBrut=(document.getElementById('cm-lien')?.value||'').trim().slice(0,CANAL_LIEN_MAX);
   const epingle=!!document.getElementById('cm-epingle')?.checked;
+  const defi=!!document.getElementById('cm-defi')?.checked;
   if(!titre&&!texte){ toast('Écris au moins un titre ou un message','var(--orange)'); return; }
   // Un lien saisi mais invalide est REFUSÉ, pas silencieusement vidé : le coach
   // croirait l'avoir publié, et l'athlète ne verrait jamais rien.
@@ -17315,6 +17327,7 @@ async function enregistrerMessageCanal(){
   const id=window._canalEdite||('m'+Date.now()+'-'+Math.random().toString(36).slice(2,7));
   const ancien=(window._canalMsgsCoach||{})[id]||{};
   const msg={at:Number(ancien.at)||Date.now(),titre,texte,lien:lienBrut,epingle};
+  if(defi) msg.defi=true;
   // LE BOUTON PORTE L'ATTENTE, et la feuille ne part QU'AU SUCCES. closeModal()
   // etait appele AVANT patcherMessagesCanal, ecrireMessageCanal et
   // pushProfilCoach — trois allers-retours reseau enchaines : le coach venait
@@ -18007,6 +18020,7 @@ function validerRite(){
   // LA FAMILLE CYCLES (idée 04) SE DÉBLOQUE ICI : le rite vient d'entrer dans
   // `rites`, qui est ce que compte le badge.
   try{ majBadges(); }catch(e){}
+  try{ majXp(); }catch(e){}
   // Puis le cycle se montre, et se partage.
   try{ _riteAfficherFin(riteCarteDonnees(currentUser,cycle,Date.now())); }catch(e){}
 }
@@ -33715,6 +33729,9 @@ function loadClientHome(){
   const u=currentUser;
   // clh-avatar replaced by logo badge
   document.getElementById('clh-name').textContent=((u.fname||'')+' '+(u.lname||'')).trim()||'Profil incomplet';
+  // Le rang et la jauge des volts, sous le prénom. majXp y tourne : c'est
+  // aussi le rattrapage d'un dossier ancien à la mise à jour.
+  try{ _rendreRang(u); }catch(e){}
   // Avatar athlète
   const avatar=document.getElementById('clh-athlete-avatar');
   if(avatar) avatar.innerHTML=u.athletePhoto?`<img src="${escapeHtml(u.athletePhoto)}" style="width:100%;height:100%;object-fit:cover">`:ini(u.fname,u.lname);
@@ -42036,6 +42053,10 @@ function finishWorkout(incomplete=false){
   // seconde plus tard — _celebrerBadge attend que la fête de fin de séance
   // ait joué la sienne.
   try{ majBadges(); }catch(e){}
+  // LES VOLTS, APRÈS LES BADGES : ceux que la séance vient de débloquer
+  // comptent dans le gain, et un passage de rang passe dans la file APRÈS eux.
+  try{ majXp(); }catch(e){}
+  try{ rendreVoltsFin(currentUser,sess); }catch(e){}
   // LA BOUCLE DE RETOUR PAR MUSCLE. Vide la plupart du temps — une fois par
   // semaine et par muscle, sur la derniere seance qui le touche.
   try{ rcRendreSrpe(); }catch(e){}
@@ -65617,6 +65638,7 @@ function saveBilanFinal(){
   // critère des cinq qui ne passe pas par la fin d'une séance : sans cette
   // ligne, « Premier bilan » ne tomberait qu'à la séance suivante.
   try{ majBadges(); }catch(e){}
+  try{ majXp(); }catch(e){}
   if(currentUser._notifEnabled) scheduleSwNotif();
   // Un bilan représente une saisie longue : mensurations, photos et réponses
   // de santé. Annoncer « enregistré ! » alors que le quota a débordé pousse
@@ -67904,6 +67926,7 @@ function _bdgSuivant(){
   if(_bdgFile.length){
     const x=_bdgFile.shift();
     if(x&&typeof x==='object'&&x.serie) _serieEcran(x.serie,_bdgFile.length);
+    else if(x&&typeof x==='object'&&x.rang) _rangEcran(x.rang,_bdgFile.length);
     else _bdgEcran(x,_bdgFile.length);
     return;
   }
@@ -69897,6 +69920,376 @@ function partagerSerie(btn){
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
   if(sp&&ok){ sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent='Partager'; },2000); }
   return ok;
+}
+// ══ LES VOLTS (XP) ET LES DIX RANGS ═══════════════════════════════════════
+//
+// ⚠ u.xp EST UN RÉSULTAT, PAS UN COMPTEUR. xpCalcul le recalcule en entier
+// depuis ce que le dossier contient déjà — séances, records, bilans, journal,
+// sommeil, semaines validées, badges — et ne l'incrémente jamais. Aucune
+// migration : un athlète ancien a ses volts dès la mise à jour, et changer un
+// barème ou un seuil ci-dessous recalcule tout le monde, sans rien réécrire.
+// u.xp n'est qu'une copie, pour que le coach lise le rang sans refaire le
+// calcul (Canal) — l'athlète, lui, recalcule toujours.
+//
+// Le seul morceau qui ne se recalcule pas : le sommeil de plus de 180 jours,
+// que saveSleep retire du journal. Ses volts sont mis de côté à la purge
+// (u.xpArchive.sommeil) au lieu de disparaître.
+const XP_ACTIONS=Object.freeze({
+  seance:100,          // séance terminée
+  complete:30,         // … et complète (toutes les séries prévues faites)
+  record:50,           // par record de charge battu
+  bilan:80,
+  nutrition:15,        // journée de journal « remplie » (XP_NUTRITION_MIN aliments)
+  sommeil:5,           // nuit saisie
+  semaine:150,         // semaine validée (le quota de séances atteint)
+  badge:40,            // badge débloqué…
+  badgePalier4:200     // … sauf un palier IV
+});
+const XP_NUTRITION_MIN=3;
+// LE PLAFOND ANTI-TRICHE, par jour (jour local). Il porte sur tout ce qui se
+// répète à volonté — séances, records, bilans, journal, sommeil. Une grosse
+// vraie journée y tient (séance complète à trois records + bilan + journal +
+// nuit = 380) ; dix séances saisies en une soirée, non. Les jalons — semaine
+// validée, badge — n'y sont pas soumis : ils ne se répètent pas.
+const XP_PLAFOND_JOUR=400;
+// LES RANGS ET LEURS SEUILS, en volts cumulés. C'est LA table à retoucher.
+// Calibrée sur un athlète à 3 séances par semaine de 5 exercices (complètes à
+// 85 %, un bilan toutes les deux semaines, un record par exercice avec une
+// chance de 45 % au début qui fond vers 6 %, badges compris, SANS journal ni
+// sommeil — ceux-là accélèrent : +20 V par jour au plus) : IMPULSION ~2 semaines,
+// VOLTAGE ~1 mois, MACHINE ~2 mois, ÉLITE ~4 mois, SURTENSION ~6 mois,
+// MONSTRE ~9 mois, FOUDRE ~1 an, TITAN ~1 an et demi, LÉGENDE ~2 ans et demi.
+// Le test « Volts : la courbe tient le calendrier » rejoue cet athlète.
+const RANGS=Object.freeze([
+  {n:1, nom:'ÉTINCELLE', seuil:0},
+  {n:2, nom:'IMPULSION', seuil:1800},
+  {n:3, nom:'VOLTAGE',   seuil:3800},
+  {n:4, nom:'MACHINE',   seuil:7500},
+  {n:5, nom:'ÉLITE',     seuil:14000},
+  {n:6, nom:'SURTENSION',seuil:20000},
+  {n:7, nom:'MONSTRE',   seuil:29000},
+  {n:8, nom:'FOUDRE',    seuil:37000},
+  {n:9, nom:'TITAN',     seuil:53000},
+  {n:10,nom:'LÉGENDE',   seuil:85000}
+]);
+function rangEmbleme(n,grand){
+  const k=Math.max(1,Math.min(RANGS.length,Number(n)||1));
+  return './img/rangs/rang_'+k+(grand?'-512':'')+'.webp';
+}
+// PURE. Le rang d'un total : {rang, suivant, part (0-1 vers le suivant), reste}.
+function rangDe(xp){
+  const v=Math.max(0,Number(xp)||0);
+  let i=0;
+  for(let k=0;k<RANGS.length;k++) if(v>=RANGS[k].seuil) i=k;
+  const rang=RANGS[i], suivant=RANGS[i+1]||null;
+  const part=suivant?Math.max(0,Math.min(1,(v-rang.seuil)/(suivant.seuil-rang.seuil))):1;
+  return {rang,suivant,part,reste:suivant?Math.max(0,suivant.seuil-v):0,xp:v};
+}
+// PURE. Une séance complète : même règle que les semaines « à 100 % » des
+// badges — ni marquée incomplète, ni moins de séries que prévu.
+function _xpComplete(s){
+  if(!s||s.complete===false) return false;
+  return !(Number(s.setsPlanned)>0&&Number(s.sets)<Number(s.setsPlanned));
+}
+function _xpJour(t){ try{ return localISODate(new Date(t)); }catch(e){ return ''; } }
+// PURE. LE CALCUL. Rend {total, cat:{seance, complete, record, bilan,
+// nutrition, sommeil, semaine, badge, archive}, ecrete} — `ecrete`, ce que le
+// plafond a retenu. Les catégories du jour passent dans l'ordre ci-dessous
+// jusqu'au plafond : la séance d'abord, la nuit en dernier.
+function xpCalcul(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const cat={seance:0,complete:0,record:0,bilan:0,nutrition:0,sommeil:0,semaine:0,badge:0,archive:0};
+  const vide={total:0,cat,ecrete:0};
+  if(!u) return vide;
+  let f; try{ f=_badgesFaits(u,t); }catch(e){ return vide; }
+  const jours={};                         // jour → [[categorie, volts], …]
+  const pose=(j,c,v)=>{ if(!j||!(v>0)) return; (jours[j]||(jours[j]=[])).push([c,v]); };
+  // Les records, par séance : _badgesFaits en pousse la date une fois par record.
+  const recs={};
+  for(const d of f.records) recs[d]=(recs[d]||0)+1;
+  const ses=((u.sessions)||[]).filter(s=>s&&s.date>0&&s.date<=t);
+  for(const s of ses){
+    const j=_xpJour(s.date);
+    pose(j,'seance',XP_ACTIONS.seance);
+    if(_xpComplete(s)) pose(j,'complete',XP_ACTIONS.complete);
+    if(recs[s.date]){ pose(j,'record',XP_ACTIONS.record*recs[s.date]); recs[s.date]=0; }
+  }
+  for(const d of f.bilans) if(d<=t) pose(_xpJour(d),'bilan',XP_ACTIONS.bilan);
+  const log=((u.nutrition||{}).log)||{};
+  for(const j of Object.keys(log)){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(j)) continue;
+    if(((log[j]&&log[j].entries)||[]).length>=XP_NUTRITION_MIN) pose(j,'nutrition',XP_ACTIONS.nutrition);
+  }
+  const nuits=new Set();
+  for(const e of (Array.isArray(u.sleepLog)?u.sleepLog:[])){
+    if(e&&/^\d{4}-\d{2}-\d{2}$/.test(String(e.date))&&Number(e.duration)>0&&!nuits.has(e.date)){
+      nuits.add(e.date); pose(e.date,'sommeil',XP_ACTIONS.sommeil);
+    }
+  }
+  const ordre=['seance','complete','record','bilan','nutrition','sommeil'];
+  let ecrete=0;
+  for(const j of Object.keys(jours)){
+    let reste=XP_PLAFOND_JOUR;
+    const l=jours[j].sort((a,b)=>ordre.indexOf(a[0])-ordre.indexOf(b[0]));
+    for(const [c,v] of l){
+      const pris=Math.min(v,reste);
+      cat[c]+=pris; reste-=pris; ecrete+=v-pris;
+    }
+  }
+  // Les jalons, hors plafond.
+  cat.semaine=f.semaines.filter(d=>d<=t).length*XP_ACTIONS.semaine;
+  for(const b of BADGES_ACQUIS){
+    if(_bdgInactif(b)) continue;
+    let at=0; try{ at=Number(b.test(f))||0; }catch(e){ at=0; }
+    if(at>0&&at<=t) cat.badge+=(b.palier===4?XP_ACTIONS.badgePalier4:XP_ACTIONS.badge);
+  }
+  const ar=u.xpArchive&&typeof u.xpArchive==='object'?Number(u.xpArchive.sommeil)||0:0;
+  cat.archive=Math.max(0,Math.round(ar));
+  const total=Object.keys(cat).reduce((a,k)=>a+cat[k],0);
+  return {total,cat,ecrete};
+}
+// PURE. Ce qu'une séance a rapporté : le calcul avec elle, moins le calcul
+// sans elle. Les badges et la semaine qu'elle débloque comptent donc — et le
+// plafond aussi, tel qu'il s'applique vraiment. Rend {total, lignes:[{lib,v}]}.
+function xpGainsSeance(u,sess,maintenant){
+  if(!u||!sess) return {total:0,lignes:[]};
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const apres=xpCalcul(u,t);
+  const sans=Object.assign({},u,{sessions:(u.sessions||[]).filter(s=>s!==sess&&!(s&&s.date===sess.date))});
+  const avant=xpCalcul(sans,t);
+  const d=k=>(apres.cat[k]||0)-(avant.cat[k]||0);
+  const lignes=[];
+  const nRec=Math.round(d('record')/XP_ACTIONS.record);
+  if(d('seance')>0) lignes.push({lib:'Séance terminée',v:d('seance')});
+  if(d('complete')>0) lignes.push({lib:'Séance complète',v:d('complete')});
+  if(d('record')>0) lignes.push({lib:nRec>1?nRec+' records':'Record battu',v:d('record')});
+  if(d('semaine')>0) lignes.push({lib:'Semaine validée',v:d('semaine')});
+  if(d('badge')>0) lignes.push({lib:'Badge débloqué',v:d('badge')});
+  const autres=(apres.total-avant.total)-lignes.reduce((a,l)=>a+l.v,0);
+  if(autres>0) lignes.push({lib:'Autres gains du jour',v:autres});
+  return {total:Math.max(0,apres.total-avant.total),lignes,ecrete:apres.ecrete>avant.ecrete,
+    avant:avant.total,apres:apres.total};
+}
+// Le total d'un dossier QUELCONQUE (le coach lit ses athlètes) : la copie
+// u.xp quand elle existe, sinon le calcul.
+function xpDe(u){
+  if(!u) return 0;
+  if(typeof u.xp==='number'&&isFinite(u.xp)) return u.xp;
+  try{ return xpCalcul(u).total; }catch(e){ return 0; }
+}
+function xpFormat(v){ try{ return Math.round(Number(v)||0).toLocaleString('fr-FR'); }catch(e){ return String(Math.round(Number(v)||0)); } }
+// LA MISE À JOUR : la copie u.xp, et le PASSAGE DE RANG. u.xpRang retient le
+// plus haut rang déjà fêté ; au premier calcul (mise à jour de l'app), il est
+// posé SANS fête — un athlète ancien ne voit pas défiler six écrans pour des
+// mois passés. Même garde que les badges : sous suspension ou drapeau, le
+// passage attend (u.xpRang ne bouge pas, il sera fêté ensuite).
+function majXp(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||u.role==='coach') return null;
+  let r; try{ r=xpCalcul(u); }catch(e){ return null; }
+  const rg=rangDe(r.total);
+  let change=false;
+  if(u.xp!==r.total){ u.xp=r.total; change=true; }
+  const vu=Number(u.xpRang)||0;
+  let fete=0;
+  if(!vu){ u.xpRang=rg.rang.n; change=true; }
+  else if(rg.rang.n>vu){
+    let bloque=false;
+    try{ if(suspensionEtat(u).actif) bloque=true; }catch(e){}
+    try{ if(drapeauQuelconqueActif(u)) bloque=true; }catch(e){}
+    if(!bloque){ u.xpRang=rg.rang.n; fete=rg.rang.n; change=true; }
+  }
+  if(change) try{ saveUser(); }catch(e){}
+  if(fete) try{ _celebrerRang(fete); }catch(e){}
+  return {total:r.total,rang:rg.rang.n,fete};
+}
+// ── L'ACCUEIL : l'emblème et le nom du rang sous le prénom, et la jauge ──
+// PURE.
+function htmlRangAccueil(xp){
+  const r=rangDe(xp);
+  const txt=r.suivant
+    ?'⚡ '+xpFormat(r.xp)+' / '+xpFormat(r.suivant.seuil)+' V vers '+r.suivant.nom
+    :'⚡ '+xpFormat(r.xp)+' V · rang maximal';
+  return '<div class="rg-ligne"><img class="rg-emb" src="'+rangEmbleme(r.rang.n)+'" alt="" width="22" height="22" decoding="async">'
+    +'<span class="rg-nom">'+escapeHtml(r.rang.nom)+'</span></div>'
+    +'<div class="rg-jauge" role="progressbar" aria-label="Volts vers le rang suivant" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'
+      +Math.round(r.part*100)+'"><span style="width:'+Math.round(r.part*100)+'%"></span></div>'
+    +'<div class="rg-txt">'+escapeHtml(txt)+'</div>';
+}
+function _rendreRang(u){
+  const z=document.getElementById('clh-rang');
+  if(!z) return false;
+  if(!u||u.role==='coach'){ z.innerHTML=''; z.hidden=true; return false; }
+  let m=null; try{ m=majXp(); }catch(e){ m=null; }
+  z.hidden=false;
+  z.innerHTML=htmlRangAccueil(m?m.total:xpDe(u));
+  return true;
+}
+// ── LA FIN DE SÉANCE : « +180 ⚡ », compté par arcCompteur, et le détail ──
+// PURE.
+function htmlVoltsFin(g,xpTotal){
+  if(!g||!(g.total>0)) return '';
+  const r=rangDe(xpTotal);
+  const lignes=g.lignes.map(l=>'<div class="vt-l"><span>'+escapeHtml(l.lib)+'</span><b>+'+xpFormat(l.v)+'</b></div>').join('');
+  return '<div class="vt-carte">'
+    +'<div class="vt-tete"><img class="vt-emb" src="'+rangEmbleme(r.rang.n)+'" alt="" width="44" height="44" decoding="async">'
+    +'<div class="vt-gain"><span id="vt-compteur" data-valeur="0">+0</span> <span class="vt-eclair" aria-hidden="true">⚡</span></div>'
+    +'<div class="vt-rang">'+escapeHtml(r.rang.nom)+'</div></div>'
+    +'<div class="vt-lignes">'+lignes+'</div>'
+    +(g.ecrete?'<div class="vt-plafond">Plafond du jour atteint : '+xpFormat(XP_PLAFOND_JOUR)+' V au plus par jour.</div>':'')
+    +'<div class="rg-jauge vt-jauge"><span style="width:'+Math.round(r.part*100)+'%"></span></div>'
+    +'<div class="rg-txt">'+escapeHtml(r.suivant?xpFormat(r.xp)+' / '+xpFormat(r.suivant.seuil)+' V vers '+r.suivant.nom:xpFormat(r.xp)+' V · rang maximal')+'</div>'
+    +'</div>';
+}
+function rendreVoltsFin(u,sess){
+  const z=document.getElementById('wd-volts');
+  if(!z) return null;
+  let g=null; try{ g=xpGainsSeance(u,sess); }catch(e){ g=null; }
+  z.innerHTML=htmlVoltsFin(g,g?g.apres:xpDe(u));
+  if(!g||!(g.total>0)) return g;
+  const el=document.getElementById('vt-compteur');
+  const fmt=v=>'+'+xpFormat(v);
+  // Il monte quand le bloc entre en scène (.rcf-d3, ~950 ms), comme la bande
+  // statistique : un chiffre qui a fini de compter avant d'apparaître ne dit rien.
+  if(arcReduit()){ if(el){ el.textContent=fmt(g.total); el.dataset.valeur=String(g.total); } }
+  else setTimeout(()=>{ try{ arcCompteur(el,g.total,{format:fmt,duree:900}); }catch(e){ if(el) el.textContent=fmt(g.total); } },1000);
+  return g;
+}
+// ── LE PASSAGE DE RANG : écran plein, foudre, emblème dans le flash ───────
+// Dans la même file que les badges et les paliers de série (après eux :
+// majXp tourne après majBadges).
+function _celebrerRang(n){
+  const v=Number(n)||0; if(!v) return;
+  _bdgFile.push({rang:v});
+  _bdgPlanifier();
+}
+let _rangCourant=null;
+function rangCarteDonnees(u,n){
+  let sig=''; try{ sig=nomSurVisuels(u); }catch(e){ sig=''; }
+  const r=RANGS[Math.max(0,Math.min(RANGS.length-1,(Number(n)||1)-1))];
+  return {n:r.n,nom:r.nom,xp:xpDe(u),signature:sig};
+}
+function _rangEcran(n,reste){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  const d=rangCarteDonnees(u,n);
+  _rangCourant=d;
+  const suiv=RANGS[d.n]||null;
+  const z=_bdgCouche(
+    '<div class="bdg-ecran-scene"><div class="bdg-ecran-med rg-ecran-med">'
+      +'<img id="rg-ecran-img" src="'+rangEmbleme(d.n,true)+'" alt="" width="512" height="512" decoding="async"></div></div>'
+    +'<div class="bdg-ecran-txt">'
+    +'<div class="bdg-ecran-sur">NOUVEAU RANG</div>'
+    +'<h2 class="bdg-ecran-nom">'+escapeHtml(d.nom)+'</h2>'
+    +'<div class="bdg-ecran-meta">⚡ '+escapeHtml(xpFormat(d.xp))+' V</div>'
+    +'<p class="bdg-ecran-cond">'+escapeHtml(suiv?'Prochain rang : '+suiv.nom+', à '+xpFormat(suiv.seuil)+' V.':'Le rang le plus haut. Il n’y a rien au-dessus.')+'</p>'
+    +_htmlVisuelFonds('rg-fonds')
+    +'<button type="button" class="btn btn-red bdg-ecran-part" onclick="partagerRang(this)">'+icon('share',16)+' <span>Partager</span></button>'
+    +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" onclick="bdgPlusTard()">'
+      +(reste||_bdgRecap.length?'Suivant':'Plus tard')+'</button>'
+    +'</div>',
+    'Nouveau rang : '+d.nom);
+  const img=z.querySelector('#rg-ecran-img');
+  const monter=()=>{ try{ monterSelecteurFond('rg-fonds',f=>_dessinerCarteRang(_rangCourant||d,f,img),null); }catch(e){} };
+  if(img&&img.complete&&img.naturalWidth) monter(); else if(img) img.addEventListener('load',monter,{once:true});
+  const med=z.querySelector('.bdg-ecran-med');
+  if(arcReduit()){ try{ rcFoudre(med,{son:false}); }catch(e){} }
+  else{
+    _animer(z,[{opacity:0},{opacity:1}],{duration:120,easing:'linear'});
+    // L'EMBLÈME NAÎT DANS LE FLASH : la foudre frappe à t=0, il sort du blanc
+    // à 40 ms, plus grand, puis se pose.
+    try{ rcFoudre(med,{eclairs:d.n>=8?3:2,conteneur:z}); }catch(e){}
+    _animer(med,[{transform:'scale(.2)',opacity:0,filter:'brightness(4)'},
+      {transform:'scale(1.15)',opacity:1,filter:'brightness(2)',offset:.55},
+      {transform:'scale(1)',opacity:1,filter:'brightness(1)'}],
+      {duration:900,delay:40,easing:ARC.snap,fill:'backwards'});
+    const txt=z.querySelector('.bdg-ecran-txt');
+    _animer(txt,[{opacity:0,transform:'translateY(14px)'},{opacity:1,transform:'none'}],
+      {duration:360,delay:620,easing:ARC.discharge,fill:'backwards'});
+  }
+  try{ arcHaptique('succes'); }catch(e){}
+  try{ const p=z.querySelector('.bdg-ecran-part'); if(p) p.focus({preventScroll:true}); }catch(e){}
+}
+/**
+ * LA CARTE 1080×1920 : « NOUVEAU RANG · TITAN », l'emblème géant, les volts,
+ * la signature « <NOM> · REPCORE ». `img` : l'emblème 512 déjà chargé (sans
+ * lui, la carte se dessine sans emblème plutôt que de lever).
+ */
+function _dessinerCarteRang(d,fond,img){
+  const cv=document.createElement('canvas');
+  cv.width=STORY_L; cv.height=STORY_H;
+  const g=cv.getContext('2d');
+  const f=fond||'transparent';
+  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const o=_visuelOutils(g);
+  const rouge=f==='rouge';
+  g.textAlign='center'; g.textBaseline='alphabetic';
+  // L'en-tête.
+  o.ombre(true);
+  const sur='NOUVEAU RANG · '+String(d.nom||'');
+  const ss=o.ajusteEspace(sur,'800',46,MONT,9,LARG,26);
+  g.fillStyle=rouge?'#fff':'#E02020'; g.font='800 '+ss+'px '+MONT;
+  o.ecrireEspace(sur,cx,300,9,true);
+  o.ombre(false);
+  // L'EMBLÈME GÉANT, avec un halo derrière.
+  const T=860, y0=400;
+  g.save();
+  const h=g.createRadialGradient(cx,y0+T/2,40,cx,y0+T/2,T*0.62);
+  h.addColorStop(0,rouge?'rgba(255,255,255,.28)':'rgba(224,32,32,.42)');
+  h.addColorStop(1,'rgba(0,0,0,0)');
+  g.fillStyle=h; g.fillRect(0,y0-120,STORY_L,T+240);
+  g.restore();
+  if(img&&img.naturalWidth){
+    try{ g.drawImage(img,cx-T/2,y0,T,T); }catch(e){}
+  }
+  // Le nom du rang, en grand, sous l'emblème.
+  o.ombre(true);
+  g.fillStyle='#fff';
+  const ns=o.ajuste(String(d.nom||''),'700',210,BEBAS,LARG,90);
+  g.font='700 '+ns+'px '+BEBAS; o.ecrire(String(d.nom||''),cx,y0+T+ns*0.9);
+  g.fillStyle='rgba(255,255,255,.88)'; g.font='800 40px '+MONT;
+  o.ecrireEspace('⚡ '+xpFormat(d.xp)+' V',cx,y0+T+ns*0.9+80,4,true);
+  _recSignature(g,o,String(d.signature||''),STORY_H-110,LARG);
+  o.ombre(false);
+  return cv;
+}
+function partagerRang(btn){
+  const d=_rangCourant; if(!d||_storyEnCours) return false;
+  const img=document.getElementById('rg-ecran-img');
+  const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond);
+  const nom=visuelNomFichier('repcore-rang',fond);
+  _storyEnCours=true;
+  let ok=false;
+  try{
+    ok=_storySortirPartage(_dessinerCarteRang(d,fond,img),nom,undefined,fmt)
+      ||_storySortirTelechargement(_dessinerCarteRang(d,fond,img),nom,fmt);
+  }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
+  finally{ _storyEnCours=false; }
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp&&ok){ sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent='Partager'; },2000); }
+  return ok;
+}
+// ── LE CANAL ET LES DÉFIS : l'emblème miniature devant chaque prénom ──────
+// Seul le coach voit des prénoms dans le Canal (qui a réagi à quoi) — un
+// athlète n'apprend jamais l'existence d'un autre. Le rang vient du dossier de
+// l'athlète que le coach a déjà (u.xp, sinon le calcul).
+// PURE.
+function htmlNomRang(nom,xp){
+  const r=rangDe(xp);
+  return '<span class="rg-nomrang"><img class="rg-mini" src="'+rangEmbleme(r.rang.n)+'" alt="'+escapeHtml(r.rang.nom)+'" title="'+escapeHtml(r.rang.nom)+'" width="16" height="16" decoding="async">'
+    +escapeHtml(nom)+'</span>';
+}
+function canalPrenomsRangs(reactions,msgId,emoji){
+  const users=DB.get('users')||{};
+  const l=[];
+  Object.keys(reactions||{}).forEach(k=>{
+    if((reactions[k]||{})[msgId]!==emoji) return;
+    const c=users[k.replace(/,/g,'.')];
+    l.push({nom:(c&&(c.fname||c.email))||k.replace(/,/g,'.'),xp:xpDe(c)});
+  });
+  return l.sort((a,b)=>String(a.nom).localeCompare(String(b.nom)));
 }
 // ══ LE RAPPEL « SÉRIE EN DANGER » ═════════════════════════════════════════
 // Jeudi 18 h et samedi 10 h, si la semaine n'est pas validée. Le push serveur
@@ -101746,6 +102139,14 @@ function _recordSleep(dateStr,{bed,wake,duration}={}){
     currentUser.sleepLog.push(entry);
   }
   const cutoff=localISODate(new Date(Date.now()-180*24*3600*1000));
+  // LES VOLTS DES NUITS PURGÉES sont mis de côté : xpCalcul relit le journal,
+  // et une nuit qui en sort ne doit pas faire BAISSER les volts.
+  const _purgees=new Set(currentUser.sleepLog.filter(e=>e&&e.date<cutoff&&Number(e.duration)>0).map(e=>e.date));
+  if(_purgees.size){
+    const a=(currentUser.xpArchive&&typeof currentUser.xpArchive==='object')?currentUser.xpArchive:{};
+    a.sommeil=(Number(a.sommeil)||0)+_purgees.size*XP_ACTIONS.sommeil;
+    currentUser.xpArchive=a;
+  }
   currentUser.sleepLog=currentUser.sleepLog.filter(e=>e.date>=cutoff);
   return true;
 }

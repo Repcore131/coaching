@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1591';
+window.RC_BUILD='1592';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -422,7 +422,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1591.css">
+<link rel="stylesheet" href="./rc-style.1592.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -3173,6 +3173,8 @@ const COACH_PHOTO='icons/coach.jpg';
       <div>
         <div class="eyebrow eyebrow-act" style="margin-bottom:2px">MON PROFIL</div>
         <div style="font-size:var(--fs-md);font-family:var(--pile-titre);letter-spacing:1px;line-height:1" id="clh-name"></div>
+        <!-- LE RANG (les volts) : l'emblème, le nom, la jauge. Posé par _rendreRang. -->
+        <div id="clh-rang" class="rg-accueil" hidden></div>
       </div>
     </div>
     <!-- L'INDICATEUR DE SEMAINES. La flambée est DERRIÈRE le cadre : son corps
@@ -4304,6 +4306,9 @@ const COACH_PHOTO='icons/coach.jpg';
 
       <!-- 3. MES RECORDS : present mais tamise. Rien quand il n'y a rien. -->
       <div id="wd-records" class="rcf-e rcf-d3" style="margin-bottom:14px"></div>
+
+      <!-- 3 bis. LES VOLTS : « +180 ⚡ » compté, et le détail. rendreVoltsFin. -->
+      <div id="wd-volts" class="rcf-e rcf-d3" style="margin-bottom:14px"></div>
 
       <!-- 4. LA PERFORMANCE : une bande, trois zones, et le delta dessous. -->
       <div id="wd-stats" class="rcf-e rcf-d3" style="margin-bottom:18px"></div>
@@ -5682,5 +5687,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1591.js"></script>
+<script src="./rc-core.1592.js"></script>
 </body></html>

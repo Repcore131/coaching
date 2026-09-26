@@ -221,5 +221,5 @@ Banc autonome (firebase-admin, firebase-functions et web-push simulés, base en 
 plafond, heures calmes puis envoi de 8 h 05, type coupé, réponse corrigée, nettoyage 410, série
 en danger, défi du Canal.
 
-Pour lancer un défi depuis le Canal, le message porte `defi: true` (règle ajoutée dans
-`database.rules.json`) ; un message ordinaire ne notifie personne.
+Un défi se lance depuis le Canal : case « C'est un défi » dans la feuille du message, qui écrit
+`defi: true` (règle ajoutée dans `database.rules.json`) ; un message ordinaire ne notifie personne.
