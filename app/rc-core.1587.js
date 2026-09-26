@@ -79403,11 +79403,17 @@ function depenseSportsParJour(liste){
 // appelle le NEAT. Il est donc plus bas que les multiplicateurs classiques,
 // qui englobent l'entraînement : ici le sport est ajouté à part, en kcal, et
 // le compter deux fois gonflerait la dépense de plusieurs centaines de kcal.
+// ⚠ LES FACTEURS SONT CEUX DE L'ECHELLE DU TABLEUR (NAF_ECHELLE, via
+//   NAF_DEPUIS_METIER), ET PLUS L'ANCIENNE 1,15 / 1,25 / 1,40 / 1,55 (QA du
+//   27/09/2026). Le calcul des besoins etait passe a l'echelle du tableur, mais
+//   ce tableau-ci gardait l'ancienne : le bilan annoncait « facteur 1,15 » a
+//   l'athlete pendant que ses cibles etaient calculees a 1,20, et le plafond du
+//   surplus se bornait sur une depense plus basse que celle affichee.
 const METIER_NIVEAUX=Object.freeze({
-  sedentaire:Object.freeze({lib:'Assis la majeure partie de la journée', f:1.15}),
-  leger:     Object.freeze({lib:'Debout, peu de marche',                 f:1.25}),
-  modere:    Object.freeze({lib:'Marche soutenue, charges légères',      f:1.40}),
-  lourd:     Object.freeze({lib:'Effort physique continu, port de charges',f:1.55})
+  sedentaire:Object.freeze({lib:'Assis la majeure partie de la journée', f:1.2}),
+  leger:     Object.freeze({lib:'Debout, peu de marche',                 f:1.4}),
+  modere:    Object.freeze({lib:'Marche soutenue, charges légères',      f:1.5}),
+  lourd:     Object.freeze({lib:'Effort physique continu, port de charges',f:1.6})
 });
 const METIERS_FAMILLES=Object.freeze([
   Object.freeze({fam:'Bureau, gestion, informatique',n:'sedentaire',l:Object.freeze([
@@ -79569,8 +79575,8 @@ function masseMaigreDuBilan(user){
 // appelant en production ; elle n'etait plus tenue que par cinq assertions
 // qui ne verifiaient qu'elle-meme. Elles sont parties avec.
 //
-// CE QUI RESTE EST VIVANT : moyennePas14j et ACT_PAS alimentent facteurNEAT,
-// ACT_MIN et ACT_MAX le bornent.
+// moyennePas14j reste vivante (nafRetenu la lit). ACT_PAS, ACT_MIN et ACT_MAX ne
+// servent plus a facteurNEAT depuis qu'il suit nafRetenu (QA du 27/09/2026).
 //
 // Comme REPERES_VOLUME, ce bareme est un repere de PRATIQUE DE TERRAIN et non
 // une mesure. Le compteur de pas d'un telephone pose sur un bureau ne vaut
@@ -79608,25 +79614,19 @@ function moyennePas14j(user){
 const NEAT_BASE=1.20;
 // Facteur d'activité HORS SPORT : le nombre de créneaux est du sport, il se
 // compte en kcal, pas en multiplicateur.
+// ⚠ UNE SEULE SOURCE : nafRetenu (QA du 27/09/2026). Cette fonction tenait sa
+//   propre echelle — l'ancienne, 1,15 pour un metier assis — et ignorait le
+//   reglage du coach. _depensePourPlafond passait par elle : le plafond du
+//   surplus se calculait sur une depense qui n'etait pas celle affichee, et
+//   corriger le niveau d'activite de l'athlete ne changeait pas ce plafond.
+//   Elle rend desormais exactement le niveau que retient le calcul des besoins.
 function facteurNEAT(user){
   const metier=_dernierChamp(user,'deb-job');
-  const prof=facteurProfession(metier);
   const pas=moyennePas14j(user);
-  // MEME PRIORITE QUE nafRetenu, et pour la meme raison : deux fonctions qui
-  // classent le meme athlete doivent le classer pareil, sinon l'estimation
-  // affichee ici contredit la cible affichee la.
-  const dec=nafDepuisReponse(_dernierChamp(user,'deb-naf'));
-  if(dec) return {f:dec.f,source:'declare',pas,
-    niveau:dec.cle,lib:dec.lib,metier:metier||null};
-  if(prof) return {f:prof.f,source:'profession',pas,
-    niveau:prof.niveau,lib:prof.lib,metier};
-  // Sans profession reconnue, les PAS SEULS ajustent la base. Aucun relevé :
-  // on reste à la base et on le dit, plutôt que d'inventer un niveau.
-  if(pas==null) return {f:NEAT_BASE,source:'defaut',pas:null,metier:metier||null};
-  let d=0;
-  for(const x of ACT_PAS) if(pas<=x.max){ d=x.d; break; }
-  const f=Math.min(ACT_MAX,Math.max(ACT_MIN,NEAT_BASE+d));
-  return {f:Math.round(f*1000)/1000,source:'pas',pas,metier:metier||null};
+  const r=nafRetenu(user);
+  const n=(r&&r.n)||nafNiveau('sedentaire');
+  const source=r&&r.source==='metier'?'profession':((r&&r.source)||'defaut');
+  return {f:n.f,source,pas:pas==null?null:pas,niveau:n.cle,lib:n.lib,metier:metier||null};
 }
 
 // Durée d'une séance, lue dans un champ de TEXTE LIBRE déjà collecté et
