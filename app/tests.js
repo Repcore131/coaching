@@ -39138,6 +39138,8 @@ async function testExercices(){
         // L'ECRAN « Acces », 24/09/2026 : ouvrir et fermer un acces a la
         // main, au bout du rapport payeur du 1er du mois.
         's-coach-acces',
+        // LES AMBASSADEURS, 26/09/2026 : l'ecran admin des codes et commissions.
+        's-ambassadeurs',
         's-coach-activite','s-rapport','s-programme-print','s-vitrine',
         's-ex-classify','s-proto-edit','s-protocoles','s-metrics',
         // B1.1 — L'OUBLI. Le coach qui verifie une seance avant de la publier
@@ -48862,6 +48864,48 @@ async function testExercices(){
       if(htmlBoutonVictoire({id:'x',sessions:[]})!=='') return _echec('bouton sans victoire');
       if(!/Partager une victoire/.test(htmlBoutonVictoire(_VCA()))) return _echec('bouton absent');
       return (document.getElementById('cr-partage-coach')&&document.getElementById('ccd-victoire'))?true:_echec('emplacements');})());
+
+    // ── LES AMBASSADEURS ─────────────────────────────────────────────────
+    // ⚠ MÊME FICHE QUE functions/test/ambassadeurs.test.js : les deux calculs
+    // de « due » doivent rendre les mêmes chiffres.
+    const _AMBF={nom:'Léa',instagram:'leafit',commissionPct:20,stats:{clics:10,inscrits:4,payants:2},commissions:{'2026-10':{
+      a:{montant:20,commission:4,dueLe:100,pct:20,payeLe:1},b:{montant:20,commission:4,dueLe:900},
+      c:{montant:20,commission:4,dueLe:100,statut:'payee'},d:{montant:20,commission:4,dueLe:100,statut:'rembourse'}}}};
+    ok('Ambassadeurs : due à 30 jours, payée, remboursée — les mêmes chiffres que le serveur',(()=>{
+      const r=ambResume('LEA',_AMBF,500);
+      if(r.due!==4||r.attente!==4||r.payee!==4||r.rembourse!==4||r.ca!==60||r.clics!==10) return _echec(JSON.stringify(r));
+      return (ambEtatCommission({dueLe:10},9)==='attente'&&ambEtatCommission({dueLe:10},10)==='due'&&AMB_DELAI_DUE_MS===30*864e5)?true:_echec('états');})());
+    ok('Ambassadeurs : le CSV mensuel ne porte que les commissions dues',(()=>{
+      const r=ambCsvDues({LEA:_AMBF,ZED:{nom:'Zed',commissions:{'2026-09':{x:{commission:9,dueLe:1}}}}},'2026-10',500);
+      const l=r.csv.trim().split('\n');
+      if(l.length!==2||!/^code;ambassadeur;/.test(l[0])||!/^LEA;"Léa";"leafit";2026-10;a;/.test(l[1])) return _echec(r.csv);
+      return (r.lignes===1&&r.total===4)?true:_echec(JSON.stringify(r));})());
+    ok('Ambassadeurs : un seul avantage — l’ambassadeur passe devant le parrain',(()=>{
+      const a=codesInscription('julie7k2','LEAFIT','TOMMY2K9').map(x=>x.type+':'+x.code).join();
+      if(a.indexOf('amb:LEAFIT')<0||a.indexOf('ref:JULIE7K2')<0||a.indexOf('amb:LEAFIT')>a.indexOf('ref:')) return _echec(a);
+      const b=codesInscription('','','TOMMY2K9').map(x=>x.type).join();
+      return b==='ref'?true:_echec(b);})());
+    ok('Ambassadeurs : la fiche — code, taux par défaut (20 %, 25 % au-delà de 50, 12 mois), secret de 24 caractères',(()=>{
+      if(!ambFiche({code:'x',nom:'A'}).erreur||!ambFiche({code:'LEAFIT',nom:''}).erreur||!ambFiche({code:'LEAFIT',nom:'A'},{LEAFIT:{}}).erreur) return _echec('validation');
+      const r=ambFiche({code:' leafit ',nom:'Léa',instagram:'@leafit'},{},7);
+      const f=r.fiche;
+      return (r.code==='LEAFIT'&&f.commissionPct===20&&f.palierPct===25&&f.palierSeuil===50&&f.dureeMois===12&&f.actif===true
+        &&f.avantage==='essai+1mois'&&f.instagram==='leafit'&&/^[a-z0-9]{24}$/.test(f.secret)&&f.creeLe===7)?true:_echec(JSON.stringify(r));})());
+    ok('Ambassadeurs : le tableau admin — entonnoir, CA, due / payée, marquer payé, export',(()=>{
+      const d=document.createElement('div'); d.innerHTML=htmlAmbassadeurs({LEA:_AMBF},500);
+      const t=d.textContent.replace(/\s+/g,' ');
+      if(t.replace(/\s/g,'').indexOf('10clics→40%4inscrits→50%2payants')<0) return _echec('entonnoir : '+t.slice(-400));
+      if(!/Commission due/.test(t)||!/marquer/.test(t)||!d.querySelector('#amb-mois')) return _echec('commissions ou export');
+      if(!estAdminAmbassadeurs({email:CREATOR_EMAIL})||estAdminAmbassadeurs({email:'x@t.fr'})) return _echec('admin');
+      return /\?amb=LEA$/.test(ambLienInvitation('LEA'))&&/\/a\/\?s=abc$/.test(ambLienSecret('abc'))?true:_echec('liens');})());
+    ok('Ambassadeurs : ?amb= gardé par /i et la page d’accueil, clic compté, page de suivi secrète',(()=>{
+      const lire=u=>{ try{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; }catch(e){ return ''; } };
+      const i=lire('../i/index.html'), r=lire('../index.html'), a=lire('../a/index.html');
+      if(!/ambClic\?c=/.test(i)||!/p\.set\('amb',amb\)/.test(i)) return _echec('/i');
+      if(!/\['amb','ref','src','coach'\]/.test(r)||!/ambClic/.test(r)) return _echec('page d’accueil');
+      if(!/ambassadeurs_vue\//.test(a)||!/noindex/.test(a)||!/no-referrer/.test(a)) return _echec('page secrète');
+      return /localStorage\.setItem\('rc_amb'/.test(_prodSrc())?true:_echec('arrivée dans l’app');})());
+    ok('Ambassadeurs : le code d’arrivée est classé non-santé',CHAMPS_NON_SANTE.indexOf('ambassadeur')>=0);
 
     ok('Les badges n’ont que quatre points d’appel',(()=>{
       const s=_prodSrc().replace(/\/\/[^\r\n]*/g,'');

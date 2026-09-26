@@ -11005,3 +11005,30 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .vc-ecran .vc-dl{width:100%;margin:0 0 8px;min-height:48px}
 .vc-ecran .vc-part{width:100%;margin:0 0 8px;min-height:44px}
 .vc-bouton{margin-top:10px}
+
+/* ══ LES AMBASSADEURS (admin) ═════════════════════════════════════════════ */
+.amb-form summary{cursor:pointer;font-weight:800;min-height:40px;display:flex;align-items:center}
+.amb-grille{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.amb-grille label{display:flex;flex-direction:column;gap:4px;margin:0;font-size:var(--fs-2xs)}
+.amb-grille input{min-height:40px}
+.amb-note{font-size:var(--fs-xs);margin:8px 0 0;line-height:1.5}
+.amb-t{font-weight:800;margin-bottom:8px}
+.amb-ligne{display:flex;gap:8px;align-items:center}
+.amb-ligne select{flex:1;min-height:40px}
+.amb-carte{margin:12px 0;padding:14px 16px}
+.amb-eteint{opacity:.6}
+.amb-tete{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.amb-code{font-size:var(--fs-2xs);color:var(--sub);margin-top:3px;letter-spacing:.5px}
+.amb-actif{display:flex;align-items:center;gap:6px;margin:0;font-size:var(--fs-xs);text-transform:none;letter-spacing:normal}
+.amb-entonnoir{display:flex;align-items:center;justify-content:space-between;gap:4px;margin:12px 0;background:var(--surface-2);border-radius:var(--r-3);padding:10px}
+.amb-entonnoir div{text-align:center;flex:1}
+.amb-entonnoir b{display:block;font-family:var(--pile-titre);font-size:26px;line-height:1}
+.amb-entonnoir span{font-size:var(--fs-2xs);color:var(--sub)}
+.amb-entonnoir i{font-style:normal;font-size:var(--fs-2xs);color:var(--sub);white-space:nowrap}
+.amb-chiffres{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.amb-chiffres div{display:flex;flex-direction:column;background:var(--surface-2);border-radius:var(--r-2);padding:8px 10px}
+.amb-chiffres span{font-size:var(--fs-2xs);color:var(--sub)}
+.amb-chiffres b{font-variant-numeric:tabular-nums}
+.amb-due{color:#ffd23a}
+.amb-dus{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.amb-liens{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px}

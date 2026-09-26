@@ -54,6 +54,8 @@ function deciderRattachement(d, ctx) {
   if (emailNormalise(c.parrainEmail) === emailNormalise(c.filleulEmail)) return { ok: false, raison: "meme_personne" };
   if (d.appareil && c.appareilsParrain && c.appareilsParrain[d.appareil]) return { ok: false, raison: "meme_appareil" };
   if (c.dejaFilleul) return { ok: false, raison: "deja_parraine" };
+  // UN SEUL AVANTAGE : venu par un ambassadeur, on ne devient pas filleul.
+  if (c.dejaAmbassadeur) return { ok: false, raison: "ambassadeur" };
   if (c.emailDejaVu) return { ok: false, raison: "adresse_deja_parrainee" };
   if (c.dejaPaye) return { ok: false, raison: "deja_client" };
   if (Number(c.creeLe) > 0 && Number(c.maintenant) - Number(c.creeLe) > DELAI_RATTACHEMENT_MS)

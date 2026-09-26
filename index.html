@@ -989,5 +989,31 @@ footer a{color:var(--dim);margin:0 8px}
   }catch(e){}
 })();
 </script>
+<script>
+// LES CODES D'INVITATION VOYAGENT JUSQU'A L'APP. <domaine>/?amb=CODE (un
+// ambassadeur), ?ref= (un parrain), ?src= : sans ce relais, la page de vente
+// les perdait au premier clic sur « Essayer ». Le clic d'un lien ambassadeur
+// est compte ici comme dans /i (une fois par jour et par appareil).
+(function(){
+  try{
+    var p=new URLSearchParams(location.search), g=new URLSearchParams();
+    ['amb','ref','src','coach'].forEach(function(k){ var v=p.get(k); if(v) g.set(k,v.slice(0,40)); });
+    var q=g.toString(); if(!q) return;
+    document.querySelectorAll('a[href^="app/"]').forEach(function(a){
+      var h=a.getAttribute('href'), i=h.indexOf('#');
+      var base=i<0?h:h.slice(0,i), ancre=i<0?'':h.slice(i);
+      a.setAttribute('href',base+(base.indexOf('?')<0?'?':'&')+q+ancre);
+    });
+    var amb=(g.get('amb')||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+    if(amb){
+      var k='rc_amb_clic_'+amb, j=new Date().toISOString().slice(0,10);
+      if(localStorage.getItem(k)!==j){
+        localStorage.setItem(k,j);
+        fetch('https://europe-west1-repcore-sync.cloudfunctions.net/ambClic?c='+encodeURIComponent(amb),{mode:'no-cors',keepalive:true}).catch(function(){});
+      }
+    }
+  }catch(e){}
+})();
+</script>
 </body>
 </html>

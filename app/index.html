@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1596';
+window.RC_BUILD='1597';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -422,7 +422,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1596.css">
+<link rel="stylesheet" href="./rc-style.1597.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -1255,7 +1255,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- LE CODE D'UN AMI (parrainage). Athletes seulement (selectRole), pre-rempli
          depuis ?ref= — et saisissable a la main : sur iPhone, l'app installee
          ne voit pas le stockage de Safari ou le lien avait ete ouvert. -->
-    <div id="r-parrain-z" style="display:none"><label for="r-parrain">Code d'un ami (optionnel)</label>
+    <div id="r-parrain-z" style="display:none"><label for="r-parrain">Code d'un ami ou d'un ambassadeur (optionnel)</label>
       <input type="text" id="r-parrain" maxlength="12" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="JULIE7K2">
       <div class="sub" id="r-parrain-info" style="font-size:var(--fs-xs);margin-top:5px"></div></div>
     <!-- Arrive par la vitrine publique d'un coach (?coach=<slug>) : _infoVitrineInscription. -->
@@ -2044,6 +2044,16 @@ const COACH_PHOTO='icons/coach.jpg';
               <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Mesure</div>
               <div style="font-weight:800;font-size:var(--fs-md)">Tunnel d'acquisition</div>
               <div class="sub" style="font-size:var(--fs-xs);margin-top:2px">7 derniers jours : compteurs anonymes</div>
+            </div>
+            <div style="color:var(--sub);font-size:var(--fs-xl)">›</div>
+          </div>
+          <!-- LES AMBASSADEURS : createur seulement (le bloc entier l'est), et ce
+               sont les regles de /ambassadeurs qui le garantissent. -->
+          <div onclick="ouvrirAmbassadeurs()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:16px 18px;cursor:pointer;display:flex;align-items:center;gap:12px;margin-top:10px">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Admin</div>
+              <div style="font-weight:800;font-size:var(--fs-md)">Ambassadeurs</div>
+              <div class="sub" style="font-size:var(--fs-xs);margin-top:2px">Codes, clics → inscrits → payants, commissions</div>
             </div>
             <div style="color:var(--sub);font-size:var(--fs-xl)">›</div>
           </div>
@@ -5324,6 +5334,18 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- ══════ INVITER DES AMIS (parrainage) ══════
      Le code, le partage, les compteurs et les paliers. htmlParrainage. -->
+<!-- ══════ AMBASSADEURS (admin) ══════ htmlAmbassadeurs. -->
+<div id="s-ambassadeurs" class="screen ecran-coach">
+  <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+    <button class="back-btn" onclick="retourDe('s-ambassadeurs','s-coach-home')">←</button>
+    <span class="topbar-title">Ambassadeurs</span>
+    <span></span>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad"><div id="amb-contenu"></div></div>
+  </div>
+</div>
+
 <div id="s-parrainage" class="screen">
   <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
     <button class="back-btn" onclick="retourDe('s-parrainage','s-athlete-profile')">←</button>
@@ -5735,5 +5757,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1596.js"></script>
+<script src="./rc-core.1597.js"></script>
 </body></html>

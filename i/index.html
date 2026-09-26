@@ -90,6 +90,20 @@ code{background:#000;border:1px solid var(--bord);border-radius:6px;padding:2px 
   var c=(p.get('c')||p.get('code')||'').trim().toUpperCase();
   if(c&&!p.get('inv')) p.set('inv',c);
   p.delete('c');p.delete('code');
+  // L'AMBASSADEUR : le code voyage jusqu'a /app/ avec le reste (?amb=), et le
+  // clic est compte UNE fois par jour et par appareil (fonction ambClic, qui
+  // ne repond rien : si elle n'est pas deployee, rien ne casse).
+  var amb=(p.get('amb')||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(amb){
+    p.set('amb',amb);
+    try{
+      var k='rc_amb_clic_'+amb, j=new Date().toISOString().slice(0,10);
+      if(localStorage.getItem(k)!==j){
+        localStorage.setItem(k,j);
+        fetch('https://europe-west1-repcore-sync.cloudfunctions.net/ambClic?c='+encodeURIComponent(amb),{mode:'no-cors',keepalive:true}).catch(function(){});
+      }
+    }catch(e){}
+  }
   var q=p.toString();
   // Chemin RELATIF : la meme page sert sur repcore-sync.web.app/i/ et sur
   // repcore131.github.io/coaching/i/, ou « /app/ » ne designerait rien.

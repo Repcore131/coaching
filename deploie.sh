@@ -63,7 +63,7 @@ echo "== build app=$B  sw=$S =="
 # ligne — la planche de badges d'origine, les notes, les scripts de verif.
 echo "== assemblage =="
 rm -rf _site && mkdir -p _site                                      || exit 1
-cp -a app blog i p c _site/                                             || exit 1
+cp -a app blog i p c a _site/                                             || exit 1
 cp -a index.html legal.html privacy.html terms.html 404.html _site/ || exit 1
 cp -a logo.png og-image.png robots.txt sitemap.xml _site/           || exit 1
 

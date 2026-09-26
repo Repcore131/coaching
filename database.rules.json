@@ -1255,6 +1255,67 @@
       ".read": true,
       ".write": false
     },
+
+    // ── LES AMBASSADEURS ─────────────────────────────────────────────────
+    // La fiche, les statistiques et les commissions : L ADMINISTRATEUR SEUL
+    // (lecture et ecriture), et les Cloud Functions (hors de ces regles), qui
+    // comptent clics, inscriptions, paiements et commissions. L admin n y
+    // touche, en pratique, que pour creer une fiche et marquer « payee ».
+    "ambassadeurs": {
+      ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      "$code": {
+        ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+        ".validate": "$code.matches(/^[A-Z0-9]{3,16}$/)",
+        "nom":           { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 80" },
+        "instagram":     { ".validate": "newData.isString() && newData.val().length <= 60" },
+        "avantage":      { ".validate": "newData.isString() && newData.val() === 'essai+1mois'" },
+        "commissionPct": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+        "palierPct":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+        "palierSeuil":   { ".validate": "newData.isNumber() && newData.val() >= 1" },
+        "dureeMois":     { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 120" },
+        "actif":         { ".validate": "newData.isBoolean()" },
+        "secret":        { ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9]{24}$/)" },
+        "creeLe":        { ".validate": "newData.isNumber()" },
+        "stats": {},
+        "filleuls": {},
+        "commissions": {},
+        "$autre":        { ".validate": false }
+      }
+    },
+    // Lu a l inscription (le code existe-t-il, est-il actif ?) : ni taux, ni
+    // chiffres, ni secret.
+    "ambassadeurs_publics": {
+      "$code": {
+        ".read": true,
+        ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+        "nom":      { ".validate": "newData.isString() && newData.val().length <= 80" },
+        "avantage": { ".validate": "newData.isString() && newData.val() === 'essai+1mois'" },
+        "actif":    { ".validate": "newData.isBoolean()" },
+        "$autre":   { ".validate": false }
+      }
+    },
+    // LA PAGE DE L AMBASSADEUR : lisible par qui connait le secret (24
+    // caracteres), jamais listable — aucun .read au-dessus de $secret.
+    "ambassadeurs_vue": {
+      "$secret": {
+        ".read": true,
+        ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'"
+      }
+    },
+    // UNE demande par compte, a vie, vers un code actif ; jugee par
+    // ambassadeurDemande. Liens, paiements et ventes : les fonctions seules.
+    "ambassadeurs_demandes": {
+      "$k": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') === $k",
+        ".write": "auth != null && auth.token.email.replace('.', ',') === $k && !data.exists() && root.child('ambassadeurs_publics').child(newData.child('code').val()).child('actif').val() === true",
+        ".validate": "newData.hasChildren(['code', 'le', 'appareil'])",
+        "code":     { ".validate": "newData.isString() && newData.val().matches(/^[A-Z0-9]{3,16}$/)" },
+        "le":       { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+        "appareil": { ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9]{12,32}$/)" },
+        "$autre":   { ".validate": false }
+      }
+    },
+
     "exercices": {
       ".read": "auth != null && (\n  root.child('users').child(auth.token.email.replace('.', ',')).child('role').val() === 'coach' ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('palier').val() === 'ultime' ||\n  (root.child('users').child(auth.token.email.replace('.', ',')).child('status').val() === 'AUTONOMIE_PREMIUM' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('paymentStatus').val() === 'active' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('abonnement').child('formule').val() === 'ultime')\n)",
       ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'"

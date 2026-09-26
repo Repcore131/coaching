@@ -446,8 +446,13 @@ exports.verifyPaypalSubscription = onCall({ secrets: [PAYPAL_CLIENT_SECRET] }, a
   // abonnement ACTIVE à essai gratuit côté PayPal n'a rien payé).
   try {
     const dernier = sub.billing_info && sub.billing_info.last_payment;
-    if (dernier && Number(dernier.amount && dernier.amount.value) > 0) await parrainagePaiement(key, "paypal_abonnement");
-  } catch (e) { console.error("parrainage", e); }
+    if (dernier && Number(dernier.amount && dernier.amount.value) > 0) {
+      await parrainagePaiement(key, "paypal_abonnement");
+      await ambassadeurPaiement(key, { montant: dernier.amount.value, le: Date.parse(dernier.time) || Date.now(), abonnement: sub.id });
+    }
+  } catch (e) { console.error("parrainage/ambassadeur", e); }
+  // L'abonnement -> le compte : les ventes suivantes (webhook) n'ont que lui.
+  try { await db.ref("paypal_abonnes/" + String(sub.id || subscriptionId).replace(/[^A-Za-z0-9_-]/g, "")).set(key); } catch (e) { /* non bloquant */ }
   return { ok: true };
 });
 
@@ -809,8 +814,20 @@ exports.paypalWebhook = onRequest(
       (ress.payer && ress.payer.payer_info && ress.payer.payer_info.email) ||
       (corps.summary_email || "")
     ).toLowerCase().trim();
-    if (!mail || mail.indexOf("@") < 0) { res.status(200).send("sans adresse, rien a faire"); return; }
-    const cle = emailKey(mail);
+    // UN REMBOURSEMENT annule la commission d'ambassadeur du paiement concerne
+    // (elle n'etait « due » qu'apres 30 jours precisement pour ce cas).
+    if (type === "PAYMENT.SALE.REFUNDED" || type === "PAYMENT.CAPTURE.REFUNDED") {
+      try { await ambassadeurRemboursement(ress); } catch (e) { console.error("ambassadeur", e); }
+      res.status(200).send("ok"); return;
+    }
+    // ⚠ UNE VENTE D'ABONNEMENT (PAYMENT.SALE.COMPLETED) NE PORTE PAS L'ADRESSE
+    //   DU PAYEUR, seulement l'identifiant de l'abonnement : on la retrouve par
+    //   l'index que verifyPaypalSubscription pose a l'activation.
+    let cleAbo = null;
+    if ((!mail || mail.indexOf("@") < 0) && ress.billing_agreement_id)
+      cleAbo = await _val("paypal_abonnes/" + String(ress.billing_agreement_id).replace(/[^A-Za-z0-9_-]/g, ""));
+    if ((!mail || mail.indexOf("@") < 0) && !cleAbo) { res.status(200).send("sans adresse, rien a faire"); return; }
+    const cle = cleAbo || emailKey(mail);
     const table = await chargerPlans();
     const actuel = await lireDroits(cle);
 
@@ -826,7 +843,12 @@ exports.paypalWebhook = onRequest(
         });
         // Un encaissement, pas une simple activation : c'est lui qui compte
         // pour le parrainage (premier paiement seulement, voir parrainagePaiement).
-        if (type === "PAYMENT.SALE.COMPLETED") await parrainagePaiement(cle, "paypal_vente").catch((e) => console.error("parrainage", e));
+        if (type === "PAYMENT.SALE.COMPLETED") {
+          await parrainagePaiement(cle, "paypal_vente").catch((e) => console.error("parrainage", e));
+          await ambassadeurPaiement(cle, { montant: ress.amount && (ress.amount.total || ress.amount.value),
+            le: Date.parse(ress.create_time) || Date.now(), abonnement: ress.billing_agreement_id, venteId: ress.id })
+            .catch((e) => console.error("ambassadeur", e));
+        }
       } else if (type === "BILLING.SUBSCRIPTION.CANCELLED" || type === "BILLING.SUBSCRIPTION.EXPIRED"
               || type === "BILLING.SUBSCRIPTION.SUSPENDED") {
         // ⚠ ON NE COUPE PAS LE JOUR MEME. Un abonnement annule reste ouvert
@@ -846,7 +868,11 @@ exports.paypalWebhook = onRequest(
           echeance: prolonger(actuel && actuel.echeance, MONTH_MS),
           source: "paypal_achat",
         });
-        if (type === "PAYMENT.CAPTURE.COMPLETED") await parrainagePaiement(cle, "paypal_achat").catch((e) => console.error("parrainage", e));
+        if (type === "PAYMENT.CAPTURE.COMPLETED") {
+          await parrainagePaiement(cle, "paypal_achat").catch((e) => console.error("parrainage", e));
+          await ambassadeurPaiement(cle, { montant: ress.amount && ress.amount.value, le: Date.parse(ress.create_time) || Date.now(),
+            id: ress.id, venteId: ress.id }).catch((e) => console.error("ambassadeur", e));
+        }
       }
     } catch (e) {
       res.status(500).send("ecriture impossible"); return;
@@ -1530,17 +1556,18 @@ exports.parrainageDemande = onValueCreated(Object.assign({ ref: "/parrainage/dem
   const code = String(d.code || "").toUpperCase();
   const parrain = P.CODE_RE.test(code) ? await _val("parrainage/codes/" + code) : null;
   const filleulEmail = P.cleVersEmail(uid);
-  const [appareil, lien, emailVu, droits, creeLe, prenom] = await Promise.all([
+  const [appareil, lien, emailVu, droits, creeLe, prenom, amb] = await Promise.all([
     d.appareil ? _val("parrainage/appareils/" + String(d.appareil).replace(/[^a-z0-9]/g, "")) : null,
     _val("parrainage/liens/" + uid),
     _val("parrainage/emails/" + P.cleNormalisee(filleulEmail)),
     lireDroits(uid),
     _val("users/" + uid + "/createdAt"),
-    _val("users/" + uid + "/fname")]);
+    _val("users/" + uid + "/fname"),
+    _val("ambassadeurs_liens/" + uid)]);
   const dec = P.deciderRattachement(Object.assign({}, d, { code }), {
     filleul: uid, filleulEmail, parrain, parrainEmail: parrain ? P.cleVersEmail(parrain) : "",
     appareilsParrain: (appareil && appareil === parrain) ? { [d.appareil]: true } : {},
-    dejaFilleul: !!lien, emailDejaVu: !!emailVu, creeLe, maintenant: t,
+    dejaFilleul: !!lien, dejaAmbassadeur: !!amb, emailDejaVu: !!emailVu, creeLe, maintenant: t,
     dejaPaye: !!(droits && /^paypal/.test(String(droits.source || "")))
   });
   const dem = "parrainage/demandes/" + uid;
@@ -1652,4 +1679,154 @@ exports.pagePublique = onRequest({ cors: false, memory: "256MiB" }, async (req, 
   } catch (e) { o = null; }
   res.set("Cache-Control", "public, max-age=300, s-maxage=600");
   res.status(200).send(OG.injecterOg(html, o));
+});
+
+// ══ LES AMBASSADEURS ═══════════════════════════════════════════════════════
+//
+// LES NŒUDS (database.rules.json) :
+//   /ambassadeurs/<CODE>          la fiche — {nom, instagram, avantage, commissionPct, palierPct,
+//                                 palierSeuil, dureeMois, actif, secret, creeLe} (l'administrateur),
+//                                 et, ICI : stats {clics, inscrits, payants, ca}, filleuls/<id>,
+//                                 commissions/<AAAA-MM>/<paiement> {montant, pct, commission, payeLe,
+//                                 dueLe, statut?} — l'administrateur n'y pose que statut:'payee'
+//   /ambassadeurs_publics/<CODE>  {nom, avantage, actif} — lu à l'inscription
+//   /ambassadeurs_vue/<secret>    le résumé, lu par l'ambassadeur via son lien secret
+//   /ambassadeurs_demandes/<clé>  l'inscrit, UNE fois ; /ambassadeurs_liens, _paiements, _ventes : ici
+// AUCUN PAIEMENT AUTOMATIQUE : les commissions dues s'exportent en CSV (écran admin).
+const A = require("./ambassadeurs-calcul");
+
+// LE CLIC, appelé par /i (et la page d'accueil) au passage d'un lien ?amb=.
+// Aucune réponse à lire : 204, et rien si le code n'existe pas ou est éteint.
+exports.ambClic = onRequest({ cors: true, memory: "128MiB" }, async (req, res) => {
+  const code = String((req.query && req.query.c) || "").toUpperCase();
+  try {
+    if (A.CODE_AMB_RE.test(code)) {
+      const [nom, actif] = await Promise.all([_val("ambassadeurs/" + code + "/nom"), _val("ambassadeurs/" + code + "/actif")]);
+      if (nom && actif !== false) await db.ref("ambassadeurs/" + code + "/stats/clics").transaction((n) => (Number(n) || 0) + 1);
+    }
+  } catch (e) { /* un clic perdu ne vaut pas une erreur */ }
+  res.set("Cache-Control", "no-store");
+  res.status(204).send("");
+});
+
+async function _ambConfig(code) {
+  const ch = ["nom", "actif", "commissionPct", "palierPct", "palierSeuil", "dureeMois", "secret"];
+  const v = await Promise.all(ch.map((k) => _val("ambassadeurs/" + code + "/" + k)));
+  const o = {}; ch.forEach((k, i) => { if (v[i] !== null && v[i] !== undefined) o[k] = v[i]; });
+  return o.nom ? o : null;
+}
+// LE RÉSUMÉ PUBLIC (lien secret), recalculé après chaque événement et chaque matin.
+async function _ambMajVue(code) {
+  const a = await _val("ambassadeurs/" + code);
+  if (!a || !/^[a-z0-9]{24}$/.test(String(a.secret || ""))) return null;
+  const t = Date.now();
+  const cfg = A.config(a);
+  const v = Object.assign(A.resume(code, a, t), { commissionPct: cfg.commissionPct, palierPct: cfg.palierPct,
+    palierSeuil: cfg.palierSeuil, dureeMois: cfg.dureeMois, actif: cfg.actif, maj: t });
+  await db.ref("ambassadeurs_vue/" + a.secret).set(v);
+  return v;
+}
+
+// L'INSCRIPTION : une demande par compte, jugée ici. Un seul avantage : venu
+// par un ambassadeur, on n'est pas filleul d'un parrain (et inversement).
+exports.ambassadeurDemande = onValueCreated(Object.assign({ ref: "/ambassadeurs_demandes/{uid}" }, _optsDecl), async (ev) => {
+  const uid = ev.params.uid;
+  const d = ev.data.val() || {};
+  const t = Date.now();
+  const code = String(d.code || "").toUpperCase();
+  const dem = "ambassadeurs_demandes/" + uid;
+  const cfg = A.CODE_AMB_RE.test(code) ? await _ambConfig(code) : null;
+  const [lien, parrain, droits, creeLe] = await Promise.all([
+    _val("ambassadeurs_liens/" + uid), _val("parrainage/liens/" + uid), lireDroits(uid), _val("users/" + uid + "/createdAt")]);
+  let raison = null;
+  if (!cfg || cfg.actif === false) raison = "code_inconnu";
+  else if (lien) raison = "deja_rattache";
+  else if (parrain) raison = "deja_parraine";
+  else if (droits && /^paypal/.test(String(droits.source || ""))) raison = "deja_client";
+  else if (Number(creeLe) > 0 && t - Number(creeLe) > P.DELAI_RATTACHEMENT_MS) raison = "compte_ancien";
+  if (raison) { await db.ref(dem).update({ etat: "refuse", raison, traiteLe: t }); return; }
+  const id = P.idFilleul(uid);
+  await db.ref().update({
+    ["ambassadeurs_liens/" + uid]: { code, id, le: t },
+    ["ambassadeurs/" + code + "/filleuls/" + id]: { inscritLe: t },
+    [dem + "/etat"]: "accepte", [dem + "/traiteLe"]: t
+  });
+  await db.ref("ambassadeurs/" + code + "/stats/inscrits").transaction((n) => (Number(n) || 0) + 1);
+  // L'AVANTAGE « essai+1mois » : le même mois que celui du parrainage.
+  if (droits && Number(droits.essaiOuvertLe) > 0 && Number(droits.essaiFinit) > 0) {
+    const fin = Number(droits.essaiFinit) + BONUS_ESSAI_JOURS * 864e5;
+    const champs = { essaiFinit: fin };
+    if (droits.source === "essai") champs.echeance = Math.max(Number(droits.echeance) || 0, fin);
+    await ecrireDroits(uid, champs);
+  } else if (!droits || !droits.palier || droits.palier === "aucun") {
+    await db.ref("droits/" + uid + "/bonusEssaiJours").set(BONUS_ESSAI_JOURS);
+  }
+  await _ambMajVue(code);
+});
+
+/**
+ * UN PAIEMENT D'UN INSCRIT D'AMBASSADEUR : la commission, pendant `dureeMois`
+ * à partir de son PREMIER paiement, inscrite dans
+ * /ambassadeurs/<CODE>/commissions/<mois>/<paiement>. Idempotent : un même
+ * encaissement vu deux fois (appel du client, webhook) ne compte qu'une fois.
+ * @param {string} cle
+ * @param {{montant:number|string, le?:number, abonnement?:string, id?:string, venteId?:string}} p
+ */
+async function ambassadeurPaiement(cle, p) {
+  const lien = await _val("ambassadeurs_liens/" + cle);
+  if (!lien || !lien.code || !lien.id) return null;
+  const montant = Number(p && p.montant);
+  if (!(montant > 0)) return null;
+  const code = lien.code;
+  const pid = A.idPaiement(Object.assign({}, p, { montant }));
+  const vente = p.venteId ? String(p.venteId).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 60) : "";
+  const tx = await db.ref("ambassadeurs_paiements/" + pid).transaction((cur) => (cur ? undefined : { code, le: Date.now() }));
+  if (!tx.committed) {
+    // Déjà compté : on garde seulement l'identifiant de vente, pour un
+    // éventuel remboursement.
+    if (vente) { const x = await _val("ambassadeurs_paiements/" + pid); if (x && x.mois) await db.ref("ambassadeurs_ventes/" + vente).set({ code, mois: x.mois, pid }); }
+    return null;
+  }
+  const cfg = (await _ambConfig(code)) || {};
+  const fRef = "ambassadeurs/" + code + "/filleuls/" + lien.id;
+  const filleul = (await _val(fRef)) || {};
+  let payants = Number(await _val("ambassadeurs/" + code + "/stats/payants")) || 0;
+  if (!filleul.premierPaiement) {
+    const r = await db.ref("ambassadeurs/" + code + "/stats/payants").transaction((n) => (Number(n) || 0) + 1);
+    payants = Number(r && r.snapshot && r.snapshot.val ? r.snapshot.val() : payants + 1) || payants + 1;
+  }
+  const le = Number(p.le) || Date.now();
+  await db.ref("ambassadeurs/" + code + "/stats/ca").transaction((n) => Math.round(((Number(n) || 0) + montant) * 100) / 100);
+  const c = A.commissionPour(cfg, filleul, payants, { montant, le });
+  const maj = {};
+  if (!filleul.premierPaiement) maj[fRef + "/premierPaiement"] = le;
+  if (c) {
+    maj["ambassadeurs/" + code + "/commissions/" + c.mois + "/" + pid] = { filleul: lien.id, montant: c.montant, pct: c.pct,
+      commission: c.commission, payeLe: c.payeLe, dueLe: c.dueLe };
+    maj["ambassadeurs_paiements/" + pid + "/mois"] = c.mois;
+    if (vente) maj["ambassadeurs_ventes/" + vente] = { code, mois: c.mois, pid };
+  }
+  if (Object.keys(maj).length) await db.ref().update(maj);
+  await _ambMajVue(code);
+  return c;
+}
+// Un remboursement : la commission du paiement passe « remboursée ».
+async function ambassadeurRemboursement(ress) {
+  let id = String(ress.sale_id || "");
+  if (!id && Array.isArray(ress.links)) {
+    const up = ress.links.find((l) => l && l.rel === "up");
+    if (up && up.href) id = String(up.href).split("/").pop();
+  }
+  id = id.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 60);
+  if (!id) return null;
+  const v = await _val("ambassadeurs_ventes/" + id);
+  if (!v || !v.code || !v.mois || !v.pid) return null;
+  await db.ref("ambassadeurs/" + v.code + "/commissions/" + v.mois + "/" + v.pid + "/statut").set("rembourse");
+  await _ambMajVue(v.code);
+  return v;
+}
+// CHAQUE MATIN : les commissions passent « dues » à 30 jours — les résumés suivent.
+exports.ambassadeursQuotidien = onSchedule(Object.assign({ schedule: "20 6 * * *" }, _optsPlanifie), async () => {
+  const tous = (await _val("ambassadeurs_publics")) || {};
+  for (const code of Object.keys(tous)) { try { await _ambMajVue(code); } catch (e) { console.error("ambassadeur", code, e); } }
 });

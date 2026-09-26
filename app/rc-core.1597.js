@@ -4900,6 +4900,26 @@ const CLOUD={
     const r=await fetch(this._urlParrainage('')+'?auth='+token,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(chemins)});
     return r.ok;
   },
+  // ── Les ambassadeurs ──
+  async ambPublicGet(code){
+    const r=await fetch(this._fbUrl.replace('users.json','ambassadeurs_publics/'+encodeURIComponent(code)+'.json'));
+    return r.ok?await r.json():null;
+  },
+  async ambDemande(moi,d){
+    const token=await this._getToken();
+    if(!token) return false;
+    const r=await fetch(this._fbUrl.replace('users.json','ambassadeurs_demandes/'+moi+'.json')+'?auth='+token,
+      {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
+    return r.ok;
+  },
+  // Réservé à l'administrateur (règles) : les fiches, statistiques et commissions.
+  async ambListe(){
+    const token=await this._getToken();
+    if(!token) throw new Error('Non connecté.');
+    const r=await fetch(this._fbUrl.replace('users.json','ambassadeurs.json')+'?auth='+token);
+    if(!r.ok) throw new Error('Ambassadeurs : '+r.status);
+    return await r.json();
+  },
   async pullDefisResultats(moi){
     const token=await this._getToken();
     if(!token) throw new Error('Session expirée.');
@@ -5498,7 +5518,7 @@ function _validateAthletePkg(o){
     aNettoyer=!!(params.get('coachpkg')||params.get('athletepkg')||params.get('s')
       ||params.get('bilan')==='1'||params.get('wo')==='1'||params.get('diete')==='1'
       ||!!params.get('wrapped')||params.get('canal')==='1'||!!params.get('ref')||params.get('parrainage')==='1'
-      ||!!params.get('coach')||!!params.get('src'));
+      ||!!params.get('coach')||!!params.get('src')||!!params.get('amb'));
     // Coach invite → athlete device
     const cpkg=params.get('coachpkg');
     if(cpkg){
@@ -5563,6 +5583,15 @@ function _validateAthletePkg(o){
       try{ localStorage.setItem('rc_ref',_v); }catch(e){}
       try{ sessionStorage.setItem('rc_ref',_v); }catch(e){}
       window._refCode=_ref;
+    }
+    // ?amb=<CODE> — un lien d'ambassadeur. Même garde que ?ref= (écrit ici,
+    // en clair : les constantes du module ne sont pas encore initialisées).
+    const _amb=String(params.get('amb')||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+    if(/^[A-Z0-9]{3,16}$/.test(_amb)){
+      const _va=JSON.stringify({code:_amb,le:Date.now()});
+      try{ localStorage.setItem('rc_amb',_va); }catch(e){}
+      try{ sessionStorage.setItem('rc_amb',_va); }catch(e){}
+      window._ambCode=_amb;
     }
     // ?coach=<slug> — arrivé par la vitrine publique d'un coach (/coach/<slug>).
     const _vit=String(params.get('coach')||'').toLowerCase();
@@ -5767,6 +5796,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // athlète ; le slug et les spécialités de la vitrine d'un coach. Des
   // réglages d'affichage — la page elle-même n'accepte aucune donnée de santé.
   'pagePublique','vitrineSlug','vitrinePubliee','specialites',
+  // L'ambassadeur par qui le compte est arrivé : un code, un nom, une date.
+  'ambassadeur',
   // Les types de notification push que l'athlète a coupés : {type:false}.
   // Un réglage, lu par le serveur avant chaque envoi — aucune donnée de santé.
   'pushPrefs',
@@ -10500,8 +10531,10 @@ async function doRegister(){
       // affilié) sans jamais voir s-client-code.
       // LE PARRAINAGE, AVANT le code coach : un filleul peut arriver avec les
       // deux. La demande s'enregistre ; le mois en plus ne sert qu'à l'essai.
+      // L'AMBASSADEUR D'ABORD (un seul avantage : ambassadeur > parrain).
       let _bonusParrain=0;
-      try{ _bonusParrain=await parrainageApresInscription(currentUser); }catch(e){ _bonusParrain=0; }
+      try{ _bonusParrain=(await ambassadeurApresInscription(currentUser,(document.getElementById('r-parrain')||{}).value)).jours; }catch(e){ _bonusParrain=0; }
+      if(!_bonusParrain){ try{ _bonusParrain=await parrainageApresInscription(currentUser); }catch(e){ _bonusParrain=0; } }
       if(await _appliquerCodeApresInscription()) return;
       // ⚠ PAS DE CODE : C'EST ICI QUE L'ESSAI S'OUVRE, et nulle part ailleurs.
       // Cette branche est exactement « un athlete sans code coach » — celui
@@ -17914,6 +17947,283 @@ function _rendreLienVitrineCoach(){
           +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:8px 0 0;min-height:44px" onclick="copierLienBio(this)">Copier mon lien pour ma bio Instagram</button>'
         :'<div class="pp-etat">Elle se publie à l’enregistrement de ton profil : photo (en ligne), bio, spécialités, programmes en vente.</div>');
 }
+// ══ LES AMBASSADEURS ════════════════════════════════════════════════════════
+//
+// Un code (/ambassadeurs/<CODE>) donné à un créateur de contenu : ceux qui
+// arrivent par lui ont 1 mois de plus pour essayer (avantage 'essai+1mois',
+// le même que le parrainage), et il touche une commission sur ce qu'ils
+// paient — commissionPct (20 %), palierPct (25 %) au-delà de palierSeuil (50)
+// payants — pendant dureeMois (12) à partir de leur premier paiement. Une
+// commission n'est DUE que 30 jours après le paiement (remboursements).
+// AUCUN PAIEMENT AUTOMATIQUE : l'admin exporte les dues en CSV, paie, et
+// marque « payées ».
+//
+// ⚠ UN SEUL AVANTAGE : ambassadeur > parrain. Arrivé avec les deux, on garde
+//   l'ambassadeur ; la fonction parrainageDemande refuse d'ailleurs un compte
+//   déjà rattaché à un ambassadeur.
+//
+// Le suivi — clics (/i), inscriptions, paiements, commissions — est tenu par
+// les Cloud Functions (functions/index.js, section « Les ambassadeurs »). Les
+// règles de « due » sont les MÊMES qu'ici (functions/ambassadeurs-calcul.js) :
+// les deux bancs rejouent la même fiche.
+const AMB_CODE_RE=/^[A-Z0-9]{3,16}$/;
+const AMB_DELAI_DUE_MS=30*864e5;
+const AMB_DEFAUTS=Object.freeze({commissionPct:20,palierPct:25,palierSeuil:50,dureeMois:12});
+const AMB_CLE='rc_amb';
+function ambCodeNormalise(c){ return String(c||'').toUpperCase().replace(/[^A-Z0-9]/g,''); }
+function ambEnAttente(maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(typeof window!=='undefined'&&window._ambCode) return window._ambCode;
+  for(const st of ['sessionStorage','localStorage']){
+    try{
+      const o=JSON.parse(window[st].getItem(AMB_CLE)||'null');
+      if(o&&AMB_CODE_RE.test(o.code||'')&&t-Number(o.le)<60*864e5) return o.code;
+    }catch(e){}
+  }
+  return '';
+}
+function ambOublier(){
+  try{ localStorage.removeItem(AMB_CLE); }catch(e){}
+  try{ sessionStorage.removeItem(AMB_CLE); }catch(e){}
+  window._ambCode='';
+}
+// PURE. Les codes à essayer, dans l'ordre de priorité : un ambassadeur (saisi
+// ou arrivé par le lien) avant un parrain.
+function codesInscription(saisi,amb,ref){
+  const s=ambCodeNormalise(saisi);
+  const out=[];
+  const pousse=(c,type)=>{ if(c&&!out.some(x=>x.code===c&&x.type===type)) out.push({code:c,type}); };
+  if(AMB_CODE_RE.test(s)) pousse(s,'amb');
+  if(AMB_CODE_RE.test(amb||'')) pousse(amb,'amb');
+  if(typeof parrainageCodeValide==='function'){
+    if(parrainageCodeValide(s)) pousse(s,'ref');
+    if(parrainageCodeValide(ref||'')) pousse(ref,'ref');
+  }
+  return out;
+}
+// À l'inscription : l'ambassadeur d'abord. Rend {jours, type} — jours = le
+// mois en plus (0 si rien).
+async function ambassadeurApresInscription(u,saisi){
+  if(!u||u.role==='coach') return {jours:0,type:null};
+  const moi=(u.email||'').replace(/\./g,',');
+  const liste=codesInscription(saisi,ambEnAttente(),(typeof parrainageRefEnAttente==='function')?parrainageRefEnAttente():'');
+  for(const c of liste.filter(x=>x.type==='amb')){
+    let pub=null;
+    try{ pub=await CLOUD.ambPublicGet(c.code); }catch(e){ pub=null; }
+    if(!pub||pub.actif!==true) continue;
+    const ok=await CLOUD.ambDemande(moi,{code:c.code,le:Date.now(),appareil:rcAppareilId()}).catch(()=>false);
+    if(!ok) continue;
+    u.ambassadeur={code:c.code,nom:String(pub.nom||'').slice(0,80),le:Date.now()};
+    ambOublier();
+    try{ if(typeof parrainageOublierRef==='function') parrainageOublierRef(); }catch(e){}
+    try{ rcm('ambassadeur_inscrit'); }catch(e){}
+    toast('Code '+c.code+' appliqué : 1 mois de plus pour essayer ⚡','var(--green)');
+    return {jours:parrainageBonusJours(),type:'amb'};
+  }
+  return {jours:0,type:null};
+}
+// ── Les règles de « due », les mêmes que le serveur ────────────────────────
+function ambEtatCommission(x,t){
+  if(!x) return 'attente';
+  if(x.statut==='rembourse') return 'rembourse';
+  if(x.statut==='payee') return 'payee';
+  return Number(t)>=Number(x.dueLe)?'due':'attente';
+}
+// PURE. Le résumé d'un ambassadeur (le même que sa page secrète).
+function ambResume(code,a,t){
+  const s=(a&&a.stats)||{};
+  const out={code,nom:String((a&&a.nom)||'').slice(0,80),clics:Number(s.clics)||0,inscrits:Number(s.inscrits)||0,
+    payants:Number(s.payants)||0,ca:0,due:0,payee:0,attente:0,rembourse:0,mois:{}};
+  const com=(a&&a.commissions)||{};
+  for(const m of Object.keys(com).sort()){
+    const lm={ca:0,due:0,payee:0,attente:0};
+    for(const id of Object.keys(com[m]||{})){
+      const x=com[m][id]; if(!x) continue;
+      const e=ambEtatCommission(x,t);
+      if(e==='rembourse'){ out.rembourse+=Number(x.commission)||0; continue; }
+      lm.ca+=Number(x.montant)||0; out.ca+=Number(x.montant)||0;
+      lm[e]+=Number(x.commission)||0; out[e]+=Number(x.commission)||0;
+    }
+    for(const k of Object.keys(lm)) lm[k]=Math.round(lm[k]*100)/100;
+    out.mois[m]=lm;
+  }
+  // LE CHIFFRE D'AFFAIRES : tout l'encaissé (stats.ca), comme le serveur.
+  if(Number(s.ca)>0) out.ca=Number(s.ca);
+  for(const k of ['ca','due','payee','attente','rembourse']) out[k]=Math.round(out[k]*100)/100;
+  return out;
+}
+// PURE. Le CSV des commissions DUES d'un mois, tous ambassadeurs confondus.
+// « ; » et virgule décimale : Excel en français.
+function ambCsvDues(tous,mois,t){
+  const l=[['code','ambassadeur','instagram','mois','paiement','date_paiement','montant_encaisse','taux_pct','commission','due_le'].join(';')];
+  const d=ms=>{ const x=new Date(Number(ms)); return isNaN(x.getTime())?'':x.toISOString().slice(0,10); };
+  const e=v=>String(v).replace('.',',');
+  const q=s=>'"'+String(s||'').replace(/"/g,'""')+'"';
+  let total=0;
+  for(const code of Object.keys(tous||{}).sort()){
+    const a=tous[code]||{}, com=((a.commissions||{})[mois])||{};
+    for(const id of Object.keys(com).sort()){
+      const x=com[id];
+      if(ambEtatCommission(x,t)!=='due') continue;
+      total+=Number(x.commission)||0;
+      l.push([code,q(a.nom),q(a.instagram),mois,id,d(x.payeLe),e(x.montant),x.pct,e(x.commission),d(x.dueLe)].join(';'));
+    }
+  }
+  return {csv:l.join('\n')+'\n',lignes:l.length-1,total:Math.round(total*100)/100};
+}
+function _ambEuros(v){ try{ return _euros(v); }catch(e){ return String(v)+' €'; } }
+function ambLienInvitation(code){ return String(RC_URL_VITRINE||'').replace(/\/$/,'')+'/?amb='+encodeURIComponent(code); }
+function ambLienSecret(secret){ return String(RC_URL_VITRINE||'').replace(/\/$/,'')+'/a/?s='+encodeURIComponent(secret); }
+function _ambSecret(){
+  const a='abcdefghijklmnopqrstuvwxyz0123456789';
+  let s='';
+  try{ const r=new Uint8Array(24); crypto.getRandomValues(r); for(const x of r) s+=a[x%36]; }
+  catch(e){ for(let i=0;i<24;i++) s+=a[Math.floor(Math.random()*36)]; }
+  return s;
+}
+// ── L'écran admin ──────────────────────────────────────────────────────────
+let _ambTous=null;
+function estAdminAmbassadeurs(u){ const x=u||currentUser; return !!(x&&x.email===CREATOR_EMAIL); }
+async function ouvrirAmbassadeurs(){
+  if(!estAdminAmbassadeurs()) return false;
+  go('s-ambassadeurs');
+  const z=document.getElementById('amb-contenu');
+  if(z) z.innerHTML='<div class="sub" style="padding:30px 0;text-align:center">Chargement…</div>';
+  try{ _ambTous=(await CLOUD.ambListe())||{}; }
+  catch(e){ if(z) z.innerHTML='<p class="sub">Lecture impossible : '+escapeHtml(e.message||'erreur')+'</p>'; return false; }
+  _ambRendre();
+  return true;
+}
+// PURE. L'écran : le formulaire, puis une carte par code.
+function htmlAmbassadeurs(tous,t){
+  const codes=Object.keys(tous||{}).sort();
+  const moisDispo=new Set();
+  codes.forEach(c=>Object.keys((tous[c]&&tous[c].commissions)||{}).forEach(m=>moisDispo.add(m)));
+  const pct=(a,b)=>b>0?Math.round(a/b*100)+' %':'—';
+  let h='<details class="card amb-form"'+(codes.length?'':' open')+'><summary>Nouvel ambassadeur</summary>'
+    +'<div class="amb-grille">'
+    +'<label>Code<input id="amb-code" maxlength="16" autocapitalize="characters" placeholder="LEAFIT"></label>'
+    +'<label>Nom<input id="amb-nom" maxlength="80" placeholder="Léa Martin"></label>'
+    +'<label>Instagram<input id="amb-insta" maxlength="60" placeholder="leafit"></label>'
+    +'<label>Commission %<input id="amb-pct" type="number" min="0" max="100" value="'+AMB_DEFAUTS.commissionPct+'"></label>'
+    +'<label>Palier %<input id="amb-palier" type="number" min="0" max="100" value="'+AMB_DEFAUTS.palierPct+'"></label>'
+    +'<label>Au-delà de (payants)<input id="amb-seuil" type="number" min="1" value="'+AMB_DEFAUTS.palierSeuil+'"></label>'
+    +'<label>Durée (mois)<input id="amb-duree" type="number" min="1" max="120" value="'+AMB_DEFAUTS.dureeMois+'"></label>'
+    +'</div><p class="sub amb-note">Avantage de ses inscrits : 1 mois de plus pour essayer.</p>'
+    +'<button type="button" class="btn btn-red" style="width:100%;margin:8px 0 0" onclick="creerAmbassadeur(this)">Créer l’ambassadeur</button></details>';
+  if(moisDispo.size){
+    const ms=[...moisDispo].sort().reverse();
+    h+='<div class="card amb-export"><div class="amb-t">Export mensuel</div>'
+      +'<div class="amb-ligne"><select id="amb-mois">'+ms.map(m=>'<option>'+m+'</option>').join('')+'</select>'
+      +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="margin:0" onclick="exporterCommissionsDues()">CSV des commissions dues</button></div>'
+      +'<p class="sub amb-note">Aucun paiement n’est automatique : exporte, paie, puis marque le mois « payé » sur chaque carte.</p></div>';
+  }
+  if(!codes.length) return h+'<p class="sub" style="text-align:center;padding:20px 0">Aucun ambassadeur pour l’instant.</p>';
+  for(const code of codes){
+    const a=tous[code]||{}, r=ambResume(code,a,t);
+    const mdus=Object.keys(r.mois).filter(m=>r.mois[m].due>0).sort();
+    h+='<div class="card amb-carte'+(a.actif===false?' amb-eteint':'')+'">'
+      +'<div class="amb-tete"><div><b>'+escapeHtml(a.nom||code)+'</b>'+(a.instagram?' <span class="sub">@'+escapeHtml(a.instagram)+'</span>':'')
+      +'<div class="amb-code">'+escapeHtml(code)+' · '+(Number(a.commissionPct)||0)+' % → '+(Number(a.palierPct)||0)+' % au-delà de '+(Number(a.palierSeuil)||AMB_DEFAUTS.palierSeuil)+' · '+(Number(a.dureeMois)||12)+' mois</div></div>'
+      +'<label class="amb-actif"><input type="checkbox"'+(a.actif!==false?' checked':'')+' onchange="basculerAmbassadeur(\''+code+'\',this.checked)"> actif</label></div>'
+      +'<div class="amb-entonnoir">'
+        +'<div><b>'+r.clics+'</b><span>clics</span></div><i>→ '+pct(r.inscrits,r.clics)+'</i>'
+        +'<div><b>'+r.inscrits+'</b><span>inscrits</span></div><i>→ '+pct(r.payants,r.inscrits)+'</i>'
+        +'<div><b>'+r.payants+'</b><span>payants</span></div></div>'
+      +'<div class="amb-chiffres">'
+        +'<div><span>Chiffre d’affaires</span><b>'+_ambEuros(r.ca)+'</b></div>'
+        +'<div><span>Commission due</span><b class="amb-due">'+_ambEuros(r.due)+'</b></div>'
+        +'<div><span>Payée</span><b>'+_ambEuros(r.payee)+'</b></div>'
+        +'<div><span>En attente (30 j)</span><b>'+_ambEuros(r.attente)+'</b></div></div>'
+      +(mdus.length?'<div class="amb-dus">'+mdus.map(m=>'<button type="button" class="btn btn-outline btn-sm btn-casse" style="margin:0" onclick="marquerCommissionsPayees(\''+code+'\',\''+m+'\',this)">'
+        +m+' : marquer '+_ambEuros(r.mois[m].due)+' payé</button>').join('')+'</div>':'')
+      +'<div class="amb-liens">'
+        +'<button type="button" class="dfi-lien" onclick="ambCopier(\''+escapeHtml(ambLienInvitation(code))+'\',this)">Copier son lien d’invitation</button>'
+        +(a.secret?'<button type="button" class="dfi-lien" onclick="ambCopier(\''+escapeHtml(ambLienSecret(a.secret))+'\',this)">Copier sa page de suivi (lien secret)</button>':'')
+      +'</div></div>';
+  }
+  return h;
+}
+function _ambRendre(){
+  const z=document.getElementById('amb-contenu');
+  if(z) z.innerHTML=htmlAmbassadeurs(_ambTous||{},Date.now());
+}
+// PURE. La fiche à écrire, ou {erreur}.
+function ambFiche(f,existants,maintenant){
+  const code=ambCodeNormalise(f.code);
+  if(!AMB_CODE_RE.test(code)) return {erreur:'Code : 3 à 16 lettres ou chiffres.'};
+  if(existants&&existants[code]) return {erreur:'Ce code existe déjà.'};
+  const nom=String(f.nom||'').replace(/\s+/g,' ').trim().slice(0,80);
+  if(!nom) return {erreur:'Donne un nom.'};
+  const n=(v,d,min,max)=>{ const k=Number(v); return isFinite(k)&&k>=min&&k<=max?k:d; };
+  return {code,fiche:{nom,instagram:String(f.instagram||'').replace(/^@/,'').trim().slice(0,60),avantage:'essai+1mois',
+    commissionPct:n(f.commissionPct,AMB_DEFAUTS.commissionPct,0,100),palierPct:n(f.palierPct,AMB_DEFAUTS.palierPct,0,100),
+    palierSeuil:n(f.palierSeuil,AMB_DEFAUTS.palierSeuil,1,100000),dureeMois:n(f.dureeMois,AMB_DEFAUTS.dureeMois,1,120),
+    actif:true,secret:f.secret||_ambSecret(),creeLe:(typeof maintenant==='number')?maintenant:Date.now()}};
+}
+async function creerAmbassadeur(btn){
+  if(!estAdminAmbassadeurs()) return false;
+  const g=id=>(document.getElementById(id)||{}).value;
+  const r=ambFiche({code:g('amb-code'),nom:g('amb-nom'),instagram:g('amb-insta'),commissionPct:g('amb-pct'),
+    palierPct:g('amb-palier'),palierSeuil:g('amb-seuil'),dureeMois:g('amb-duree')},_ambTous||{});
+  if(r.erreur){ toast(r.erreur,'var(--orange)'); return false; }
+  if(btn) btn.disabled=true;
+  const f=r.fiche;
+  const ok=await CLOUD.racinePatch({['ambassadeurs/'+r.code]:f,
+    ['ambassadeurs_publics/'+r.code]:{nom:f.nom,avantage:f.avantage,actif:true},
+    ['ambassadeurs_vue/'+f.secret]:Object.assign(ambResume(r.code,f,Date.now()),{commissionPct:f.commissionPct,palierPct:f.palierPct,
+      palierSeuil:f.palierSeuil,dureeMois:f.dureeMois,actif:true,maj:Date.now()})}).catch(()=>false);
+  if(btn) btn.disabled=false;
+  if(!ok){ toast('Création refusée (droits, ou code déjà pris).','var(--orange)'); return false; }
+  toast('Ambassadeur '+r.code+' créé ⚡');
+  return ouvrirAmbassadeurs();
+}
+async function basculerAmbassadeur(code,on){
+  if(!estAdminAmbassadeurs()) return false;
+  const ok=await CLOUD.racinePatch({['ambassadeurs/'+code+'/actif']:!!on,['ambassadeurs_publics/'+code+'/actif']:!!on}).catch(()=>false);
+  if(!ok){ toast('Non enregistré','var(--orange)'); return false; }
+  if(_ambTous&&_ambTous[code]) _ambTous[code].actif=!!on;
+  _ambRendre();
+  return true;
+}
+// Marque « payées » les commissions DUES d'un mois (et la page secrète suit).
+async function marquerCommissionsPayees(code,mois,btn){
+  if(!estAdminAmbassadeurs()||!_ambTous||!_ambTous[code]) return false;
+  const a=_ambTous[code], com=((a.commissions||{})[mois])||{}, t=Date.now();
+  const patch={};
+  Object.keys(com).forEach(id=>{ if(ambEtatCommission(com[id],t)==='due'){
+    patch['ambassadeurs/'+code+'/commissions/'+mois+'/'+id+'/statut']='payee';
+    patch['ambassadeurs/'+code+'/commissions/'+mois+'/'+id+'/payeeLe']=t; } });
+  if(!Object.keys(patch).length) return false;
+  if(!confirm('Marquer comme payées les commissions dues de '+mois+' pour '+(a.nom||code)+' ?')) return false;
+  if(btn) btn.disabled=true;
+  Object.keys(com).forEach(id=>{ if(ambEtatCommission(com[id],t)==='due'){ com[id].statut='payee'; com[id].payeeLe=t; } });
+  if(a.secret) patch['ambassadeurs_vue/'+a.secret]=Object.assign(ambResume(code,a,t),{commissionPct:a.commissionPct,palierPct:a.palierPct,
+    palierSeuil:a.palierSeuil||AMB_DEFAUTS.palierSeuil,dureeMois:a.dureeMois,actif:a.actif!==false,maj:t});
+  const ok=await CLOUD.racinePatch(patch).catch(()=>false);
+  if(!ok){ toast('Non enregistré','var(--orange)'); return ouvrirAmbassadeurs(); }
+  toast('Commissions de '+mois+' marquées payées.');
+  _ambRendre();
+  return true;
+}
+function exporterCommissionsDues(){
+  const mois=(document.getElementById('amb-mois')||{}).value;
+  if(!mois||!_ambTous) return false;
+  const r=ambCsvDues(_ambTous,mois,Date.now());
+  if(!r.lignes){ toast('Aucune commission due pour '+mois+'.','var(--orange)'); return false; }
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['﻿'+r.csv],{type:'text/csv;charset=utf-8'}));
+  a.download='repcore-commissions-'+mois+'.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>{ try{ URL.revokeObjectURL(a.href); }catch(e){} },4000);
+  toast(r.lignes+' commission'+(r.lignes>1?'s':'')+' due'+(r.lignes>1?'s':'')+' · '+_ambEuros(r.total));
+  return true;
+}
+function ambCopier(l,btn){
+  try{ navigator.clipboard.writeText(l).then(()=>{ if(btn){ const x=btn.textContent; btn.textContent='Copié ✓'; setTimeout(()=>{ btn.textContent=x; },1800); } },()=>toast(l)); }
+  catch(e){ toast(l); }
+  return true;
+}
 // ══ LE PARRAINAGE ══════════════════════════════════════════════════════════
 //
 // LA RÉCOMPENSE : le filleul a 1 mois d'essai en plus (OFFRES.essai_parrainage) ;
@@ -18015,10 +18325,12 @@ function parrainageChampInscription(role){
   if(!z) return;
   z.style.display=role==='athlete'?'':'none';
   const i=document.getElementById('r-parrain');
-  const c=parrainageRefEnAttente();
+  // L'ambassadeur passe devant le parrain : un seul avantage.
+  const a=ambEnAttente(), c=a||parrainageRefEnAttente();
   if(i&&c&&!i.value) i.value=c;
   const info=document.getElementById('r-parrain-info');
-  if(info) info.textContent=c?'Invité par un ami : 2 mois pour essayer au lieu d’un.':'Le code d’un ami t’offre 1 mois de plus pour essayer.';
+  if(info) info.textContent=a?'Invité par '+a+' : 2 mois pour essayer au lieu d’un.'
+    :c?'Invité par un ami : 2 mois pour essayer au lieu d’un.':'Le code d’un ami ou d’un ambassadeur t’offre 1 mois de plus pour essayer.';
   // ARRIVÉ PAR LA VITRINE D'UN COACH (/coach/<slug> → ?coach=) : on le dit, et
   // on dit la suite — c'est le coach qui donne le code d'accès qui relie.
   try{ _infoVitrineInscription(role); }catch(e){}

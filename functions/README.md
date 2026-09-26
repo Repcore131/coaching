@@ -392,3 +392,54 @@ Pas avant : une réécriture vers une fonction absente fait échouer le déploie
 ```bash
 node functions/test/pages.test.js
 ```
+
+## Les ambassadeurs (26/09/2026)
+
+Un code donné à un créateur de contenu. Ceux qui arrivent par lui ont **1 mois de plus pour
+essayer** (`avantage: 'essai+1mois'`, le même mois que le parrainage) ; il touche une commission
+sur ce qu'ils paient : `commissionPct` (20 %), `palierPct` (25 %) au-delà de `palierSeuil` (50)
+payants, pendant `dureeMois` (12) mois **à partir du premier paiement** de chacun. Une commission
+n'est **due que 30 jours après le paiement** (remboursements). **Aucun paiement automatique.**
+
+### Les nœuds
+
+| Nœud | Qui écrit | Contenu |
+|---|---|---|
+| `/ambassadeurs/<CODE>` | l'administrateur (fiche, `statut:'payee'`) ; les fonctions (le reste) | `{nom, instagram, avantage, commissionPct, palierPct, palierSeuil, dureeMois, actif, secret, creeLe, stats{clics, inscrits, payants, ca}, filleuls/<id>, commissions/<AAAA-MM>/<paiement>{montant, pct, commission, payeLe, dueLe, statut?}}` — lu par l'administrateur seul |
+| `/ambassadeurs_publics/<CODE>` | l'administrateur | `{nom, avantage, actif}` — lu à l'inscription |
+| `/ambassadeurs_vue/<secret>` | les fonctions (et l'administrateur) | le résumé, lu par l'ambassadeur via `a/?s=<secret>` ; jamais listable |
+| `/ambassadeurs_demandes/<clé>` | l'inscrit, une fois | `{code, le, appareil}` ; puis `{etat, raison}` |
+| `/ambassadeurs_liens`, `_paiements`, `_ventes`, `/paypal_abonnes` | les fonctions seules | inscrit → code ; paiements déjà comptés ; vente → commission (remboursements) ; abonnement → compte |
+
+L'administrateur, c'est `guellec.coachingpro@gmail.com` — le même contrôle que les autres nœuds
+réservés.
+
+### Le parcours
+
+1. **Le lien** : `<domaine>/?amb=CODE` (la page d'accueil relaie `amb`, `ref`, `src` jusqu'à
+   l'app) ou `/i?amb=CODE` (`i/index.html` le garde). Le **clic** est compté par `ambClic`
+   (fonction HTTP, une fois par jour et par appareil), appelée depuis ces deux pages.
+2. **L'inscription** : le code arrive dans le champ « Code d'un ami ou d'un ambassadeur » (ou s'y
+   tape). **Un seul avantage** : l'ambassadeur passe devant le parrain ; `parrainageDemande`
+   refuse d'ailleurs un compte venu par un ambassadeur, et `ambassadeurDemande` un compte déjà
+   filleul. Refusés aussi : code inconnu ou éteint, compte de plus de 7 jours, déjà client.
+3. **Chaque paiement** : `ambassadeurPaiement`, appelé par `verifyPaypalSubscription` (dernier
+   paiement non nul) et par le webhook (`PAYMENT.SALE.COMPLETED`, `PAYMENT.CAPTURE.COMPLETED`).
+   Un même encaissement vu par les deux n'est compté qu'une fois (abonnement + jour + montant).
+   `PAYMENT.SALE.REFUNDED` / `PAYMENT.CAPTURE.REFUNDED` passent la commission « remboursée ».
+   ⚠ Une vente d'abonnement ne porte pas l'adresse du payeur : le webhook la retrouve désormais par
+   `/paypal_abonnes/<abonnement>`, posé à l'activation (les renouvellements en profitent aussi).
+4. **Chaque matin** (`ambassadeursQuotidien`, 6 h 20) : les résumés suivent le passage à « due ».
+
+### Le tableau de bord (admin → « Ambassadeurs »)
+
+Par code : clics → inscrits → payants (avec les taux), chiffre d'affaires, commission due / payée /
+en attente ; créer un ambassadeur, l'éteindre, copier son lien d'invitation et son lien secret ;
+**« marquer payé »** les commissions dues d'un mois ; **export CSV** mensuel des commissions dues de
+tous les codes (« ; » et virgule décimale, pour Excel en français).
+
+À déclarer dans PayPal (webhooks) en plus : `PAYMENT.SALE.REFUNDED`, `PAYMENT.CAPTURE.REFUNDED`.
+
+```bash
+node functions/test/ambassadeurs.test.js
+```
