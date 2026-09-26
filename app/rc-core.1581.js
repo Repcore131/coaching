@@ -8466,8 +8466,11 @@ function _auChamp(el,fn){
 // « avertir » reprend exactement le motif déjà employé par la fin de repos
 // (180-90-180) : deux signaux d'avertissement qui se ressembleraient sans être
 // identiques seraient pires que deux signaux franchement distincts.
+// « foudre » : le craquement puis le grondement de rcFoudre — deux coups secs,
+// un temps, et une longue qui roule. Distinct de « succes » à dessein : un
+// record n'est pas une série de plus.
 const ARC_VIBRE=Object.freeze({legere:12,moyenne:26,lourde:55,
-  succes:[55,60,55],avertir:[180,90,180]});
+  succes:[55,60,55],avertir:[180,90,180],foudre:[25,40,25,60,90]});
 function arcHaptique(nom){
   try{
     if(!navigator.vibrate) return false;
@@ -8747,11 +8750,17 @@ function arcCompteur(el,vers,o){
   const fmt=(o&&o.format)||(x=>String(Math.round(x)));
   // PREMIER RENDU, ou valeur inchangee : on pose, on n'anime pas. Animer depuis
   // rien ferait partir le compteur de zero a chaque ouverture d'ecran.
-  if(!isFinite(de)||de===vers){ el.textContent=fmt(vers); return; }
+  if(!isFinite(de)||(de===vers&&!(o&&o.gresille))){ _arcEcrire(el,fmt(vers)); return; }
   try{ el.style.fontVariantNumeric='tabular-nums'; }catch(e){}
   arcChiffre(el,de,vers,o);
 }
 const _arcChiffres=new WeakMap();
+// Un champ de saisie n'affiche pas son textContent : la charge d'une série est
+// un <input>, et rcFoudre la fait compter. On écrit donc sa value.
+function _arcEcrire(el,txt){
+  if(el.tagName==='INPUT'||el.tagName==='TEXTAREA') el.value=txt;
+  else el.textContent=txt;
+}
 function arcChiffre(el,de,vers,o){
   o=o||{};
   if(typeof el==='string') el=document.getElementById(el);
@@ -8768,8 +8777,12 @@ function arcChiffre(el,de,vers,o){
   // compteur resterait fige sur sa valeur de DEPART — un zero, qui se lit comme
   // une donnee perdue. Mieux vaut le chiffre juste, sans la montee.
   let _cachee=false; try{ _cachee=!!(typeof document!=='undefined'&&document.hidden); }catch(e){}
-  if(arcReduit()||!(d>0)||de===vers||_cachee){
-    el.textContent=fmt(vers);
+  // `gresille` : 2 ou 3 valeurs au hasard avant de se fixer (rcFoudre). Il
+  // anime MEME quand de===vers — un record d'e1RM à charge égale grésille sur
+  // place au lieu de ne rien dire.
+  const gr=!!o.gresille;
+  if(arcReduit()||!(d>0)||(de===vers&&!gr)||_cachee){
+    _arcEcrire(el,fmt(vers));
     return null;
   }
   // LA VALEUR DE DÉPART EST ÉCRITE TOUT DE SUITE, avant la moindre frame.
@@ -8777,19 +8790,426 @@ function arcChiffre(el,de,vers,o){
   // ligne, un compteur mis à jour pendant que l'athlète a rangé son téléphone
   // restait VIDE — pas figé sur l'ancienne valeur, vide — jusqu'au retour à
   // l'écran. Un chiffre absent se lit comme une donnée perdue.
-  el.textContent=fmt(de);
+  _arcEcrire(el,fmt(de));
   const t0=(typeof performance!=='undefined'&&performance.now)?performance.now():Date.now();
+  // LE GRÉSILLEMENT OCCUPE LE DERNIER TIERS : la montée d'abord, lisible, puis
+  // le chiffre « saute » entre des valeurs voisines et tombe sur la bonne. Les
+  // valeurs sont tirées une fois, à l'avance : une nouvelle par frame serait un
+  // flou illisible, pas un grésillement.
+  const nGr=gr?(2+(Math.random()<0.5?1:0)):0;
+  const bruit=[];
+  const amp=Math.max(Math.abs(vers-de)*0.6,Math.abs(vers)*0.05,2);
+  for(let k=0;k<nGr;k++) bruit.push(vers+(Math.random()*2-1)*amp);
   const pas=(maintenant)=>{
     const p=Math.min(1,(maintenant-t0)/d);
-    // Sortie longue, sans rebond : un chiffre qui dépasse sa valeur puis y
-    // revient se lit comme une erreur de calcul, pas comme une animation.
-    const e=1-Math.pow(1-p,3);
-    el.textContent=fmt(de+(vers-de)*e);
+    let txt;
+    if(nGr&&p>=0.62&&p<1){
+      // [0,62 ; 1[ découpé en nGr+1 plages : nGr valeurs au hasard, puis la vraie.
+      const k=Math.floor((p-0.62)/(0.38/(nGr+1)));
+      txt=fmt(k<nGr?bruit[k]:vers);
+    }else{
+      // Sortie longue, sans rebond : un chiffre qui dépasse sa valeur puis y
+      // revient se lit comme une erreur de calcul, pas comme une animation.
+      const e=1-Math.pow(1-(nGr?Math.min(1,p/0.62):p),3);
+      txt=fmt(de+(vers-de)*e);
+    }
+    _arcEcrire(el,txt);
     if(p<1) _arcChiffres.set(el,requestAnimationFrame(pas));
     else _arcChiffres.delete(el);
   };
   _arcChiffres.set(el,requestAnimationFrame(pas));
   return el;
+}
+
+// ══ LA FOUDRE — rcFoudre(cible, options) ═══════════════════════════════════
+//
+// L'événement rare. Un record en séance aujourd'hui ; demain un badge (idée
+// 05), un rang (idée 13), un palier de série. RÉUTILISABLE À DESSEIN : un seul
+// dessin de la foudre, sinon chaque écran finirait par avoir la sienne.
+//
+// LA CHRONOLOGIE, en millisecondes depuis l'appel :
+//     0 ─ flash blanc à 85 % (70 ms)         160 ─ second flash, plus faible
+//     0 ─ premier éclair  ·  45 / 95 ─ les suivants (2 ou 3 au total)
+//    30 ─ impact : étincelles (600 ms max), tremblement (280 ms), grondement
+//  ~550 ─ le dernier éclair s'est éteint     ~650 ─ la dernière étincelle aussi
+// PLAFOND DUR : FOUDRE_MAX = 1 100 ms. Au-delà, le calque est retiré quoi qu'il
+// arrive — l'athlète reprend sa série, la foudre ne le retient jamais.
+//
+// UNE TOILE PLEIN ÉCRAN, CRÉÉE À L'APPEL ET RETIRÉE À LA FIN. pointer-events
+// :none : elle recouvre tout mais n'intercepte rien, l'athlète peut taper sa
+// série suivante pendant qu'elle brûle encore. Posée dans <body> et PAS dans
+// #arc-calque : la feuille masque ce calque sous « réduire les animations », or
+// la variante douce a encore besoin de son flash.
+//
+// SANS BIBLIOTHÈQUE. Les éclairs sont tirés par DÉPLACEMENT DU POINT MILIEU :
+// on coupe le segment en deux, on écarte le milieu perpendiculairement d'une
+// quantité qui diminue de moitié à chaque niveau. 6 à 8 niveaux = 64 à 256
+// segments, assez pour lire une foudre, trop peu pour peser sur une frame.
+//
+// options :
+//   son        false pour couper le son même si l'app l'autorise
+//   haptique   false pour ne pas vibrer
+//   eclairs    2 ou 3 (tiré au hasard sinon)
+//   conteneur  l'élément qui tremble (défaut : l'écran actif)
+//   couleur    la teinte du halo et du trait (défaut #E02020)
+// Rend une Promise résolue à la fin (jamais rejetée), avec le point d'impact —
+// l'appelant peut enchaîner, mais n'a JAMAIS à attendre pour laisser la main.
+//
+// NE LÈVE JAMAIS : comme toute l'animation, la foudre cède en silence.
+const FOUDRE_MAX=1100;
+const FOUDRE_ROUGE='#E02020';
+function rcFoudre(cible,o){
+  o=o||{};
+  try{
+    const el=(typeof cible==='string')?document.getElementById(cible):cible;
+    const W=window.innerWidth||document.documentElement.clientWidth||360;
+    const H=window.innerHeight||document.documentElement.clientHeight||640;
+    // Le point d'impact : le centre de la cible, ou un point {x,y}, ou le
+    // centre de l'écran quand la cible est masquée — mieux vaut frapper au
+    // milieu que ne pas frapper du tout.
+    let ix=W/2, iy=H/2;
+    if(el&&el.getBoundingClientRect){
+      const r=el.getBoundingClientRect();
+      if(r.width||r.height){ ix=r.left+r.width/2; iy=r.top+r.height/2; }
+    }else if(cible&&typeof cible.x==='number'&&typeof cible.y==='number'){
+      ix=cible.x; iy=cible.y;
+    }
+    const impact={x:ix,y:iy};
+    // LES SENS D'ABORD, qui ne dépendent d'aucune frame. Vibration et son
+    // survivent à « réduire les animations » : même règle que arcHaptique.
+    if(o.haptique!==false) arcHaptique('foudre');
+    if(o.son!==false&&_foudreSonPermis()) _foudreSon();
+    if(arcReduit()) return _foudreDouce(impact);
+    return _foudrePleine(impact,W,H,o);
+  }catch(e){ return Promise.resolve(null); }
+}
+// LE SON SUIT LE RÉGLAGE DE L'APP. Aucun son par défaut (salle bruyante,
+// écouteurs) : c'est l'interrupteur du son de repos qui fait foi, le seul
+// réglage de son que connaisse l'athlète. Éteint = mode silencieux = rien.
+function _foudreSonPermis(){
+  try{ return !!(typeof currentUser!=='undefined'&&currentUser&&currentUser.sonRepos); }
+  catch(e){ return false; }
+}
+// Le calque de la foudre : une toile fixe, plein écran, qui n'intercepte rien.
+function _foudreToile(W,H){
+  const c=document.createElement('canvas');
+  c.className='rc-foudre';
+  c.setAttribute('aria-hidden','true');
+  // Densité plafonnée à 2 : à 3, la toile d'un grand téléphone passe les
+  // 10 millions de pixels, et le shadowBlur se paie au pixel.
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  c.width=Math.round(W*dpr); c.height=Math.round(H*dpr);
+  c.style.cssText='position:fixed;left:0;top:0;width:'+W+'px;height:'+H+'px;'
+    +'pointer-events:none;z-index:1900';
+  document.body.appendChild(c);
+  const ctx=c.getContext('2d');
+  if(ctx) ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {c,ctx};
+}
+// VARIANTE « RÉDUIRE LES ANIMATIONS » : un seul flash doux, sans éclair, sans
+// étincelle, sans tremblement. Une opacité qui monte et redescend, rien qui
+// bouge. Le compteur, lui, est posé par l'appelant (arcChiffre pose la valeur
+// finale sous arcReduit()).
+function _foudreDouce(impact){
+  return new Promise(res=>{
+    let n=null;
+    try{
+      n=document.createElement('div');
+      n.className='rc-foudre';
+      n.setAttribute('aria-hidden','true');
+      n.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:1900;'
+        +'background:#fff;opacity:0;transition:opacity 90ms linear';
+      document.body.appendChild(n);
+      requestAnimationFrame(()=>{ if(n) n.style.opacity='0.22'; });
+      setTimeout(()=>{ if(n){ n.style.transition='opacity 260ms linear'; n.style.opacity='0'; } },110);
+    }catch(e){}
+    setTimeout(()=>{ try{ n&&n.remove(); }catch(e){} res(impact); },420);
+  });
+}
+function _foudrePleine(impact,W,H,o){
+  return new Promise(res=>{
+    const {c,ctx}=_foudreToile(W,H);
+    let fini=false;
+    const finir=()=>{ if(fini) return; fini=true; try{ c.remove(); }catch(e){} res(impact); };
+    // LE FILET DE SÉCURITÉ. requestAnimationFrame ne tourne pas sur une page
+    // cachée : sans ce minuteur, une foudre lancée juste avant de ranger le
+    // téléphone laisserait sa toile collée à l'écran au retour.
+    setTimeout(finir,FOUDRE_MAX);
+    if(!ctx){ finir(); return; }
+    const coul=o.couleur||FOUDRE_ROUGE;
+    const nb=(o.eclairs===2||o.eclairs===3)?o.eclairs:(Math.random()<0.5?2:3);
+    const eclairs=[];
+    for(let k=0;k<nb;k++) eclairs.push(_foudreEclair(impact,W,[0,45,95][k]));
+    // L'impact tombe avec le premier éclair : le tremblement et les étincelles
+    // sont la CONSÉQUENCE de la frappe, jamais posés à côté.
+    const T_IMPACT=30;
+    const etincelles=_foudreEtincelles(impact,T_IMPACT);
+    setTimeout(()=>{ _foudreTrembler(o.conteneur); },T_IMPACT);
+    const t0=performance.now();
+    const image=(now)=>{
+      if(fini) return;
+      const t=now-t0;
+      ctx.clearRect(0,0,W,H);
+      // 1. LE FLASH, sous tout le reste : blanc sur blanc, un éclair ne se
+      //    verrait pas. Double, comme une vraie foudre : le coup, puis le
+      //    réamorçage du canal, plus faible.
+      let f=0;
+      if(t<70) f=0.85*(t<50?1:1-(t-50)/20);
+      else if(t>=160&&t<230) f=0.38*(1-(t-160)/70);
+      if(f>0){ ctx.fillStyle='rgba(255,255,255,'+f.toFixed(3)+')'; ctx.fillRect(0,0,W,H); }
+      // 2. LES ÉCLAIRS
+      let vivant=false;
+      for(const e of eclairs){
+        const a=_foudreAlpha(e,t);
+        if(a<0) continue;
+        vivant=true;
+        if(a>0) _foudreDessiner(ctx,e,a,coul);
+      }
+      // 3. LES ÉTINCELLES, par-dessus : elles jaillissent du point d'impact.
+      if(_foudreEtincellesPeindre(ctx,etincelles,t)) vivant=true;
+      if(vivant||t<240) requestAnimationFrame(image);
+      else finir();
+    };
+    requestAnimationFrame(image);
+  });
+}
+// UN ÉCLAIR : un tronc du haut de l'écran jusqu'à l'impact, et ses branches.
+// Le départ est tiré dans une bande autour de l'aplomb de la cible — un
+// éclair parti du coin opposé traverserait tout l'écran en diagonale et se
+// lirait comme un trait, pas comme une chute.
+function _foudreEclair(impact,W,delai){
+  const x0=Math.max(-20,Math.min(W+20,impact.x+(Math.random()*2-1)*W*0.35));
+  const y0=-12;
+  const niveaux=6+Math.floor(Math.random()*3);            // 6, 7 ou 8
+  const long=Math.hypot(impact.x-x0,impact.y-y0);
+  const tronc=_foudreMilieu(x0,y0,impact.x,impact.y,long*0.18,niveaux);
+  const branches=[];
+  // LES BRANCHES partent du tronc, jamais de son dernier quart : une branche
+  // qui naîtrait sous l'impact frapperait « à côté » de la cible.
+  const nbB=2+Math.floor(Math.random()*3);
+  for(let b=0;b<nbB;b++){
+    const i=Math.floor(tronc.length*(0.12+Math.random()*0.6));
+    const p=tronc[i], q=tronc[Math.min(tronc.length-1,i+1)];
+    const ang=Math.atan2(q.y-p.y,q.x-p.x)+(Math.random()<0.5?-1:1)*(0.35+Math.random()*0.6);
+    const l=long*(0.12+Math.random()*0.22);
+    const pts=_foudreMilieu(p.x,p.y,p.x+Math.cos(ang)*l,p.y+Math.sin(ang)*l,l*0.22,Math.max(3,niveaux-3));
+    branches.push(pts);
+  }
+  // 2 ou 3 RÉAPPARITIONS dans les 250 premières ms — le scintillement du
+  // canal qui se recharge —, puis un fondu de 200 ms. Les plages « allumé »
+  // sont tirées une fois : c'est le même éclair qui revient, pas un autre.
+  const n=2+(Math.random()<0.5?1:0);
+  const plages=[[0,55]];
+  for(let k=1;k<=n;k++){
+    const deb=Math.round(55+k*(195/(n+1))+(Math.random()*16-8));
+    plages.push([deb,Math.min(250,deb+30+Math.random()*18)]);
+  }
+  return {delai,tronc,branches,plages,epais:0.85+Math.random()*0.4};
+}
+// DÉPLACEMENT DU POINT MILIEU. Itératif et non récursif : la liste des
+// points double à chaque niveau, sans pile d'appels.
+function _foudreMilieu(x1,y1,x2,y2,dep,niveaux){
+  let pts=[{x:x1,y:y1},{x:x2,y:y2}];
+  let d=dep;
+  for(let n=0;n<niveaux;n++){
+    const nv=[pts[0]];
+    for(let i=0;i<pts.length-1;i++){
+      const a=pts[i], b=pts[i+1];
+      const dx=b.x-a.x, dy=b.y-a.y, L=Math.hypot(dx,dy)||1;
+      // Écart PERPENDICULAIRE au segment : un écart pris en x seul aplatirait
+      // les éclairs obliques.
+      const e=(Math.random()*2-1)*d;
+      nv.push({x:(a.x+b.x)/2-dy/L*e,y:(a.y+b.y)/2+dx/L*e},b);
+    }
+    pts=nv; d/=2;
+  }
+  return pts;
+}
+// L'opacité d'un éclair à l'instant t. -1 : pas encore né ou déjà mort.
+// Entre deux réapparitions il ne s'éteint pas tout à fait : le canal ionisé
+// reste une trace, c'est ce qui fait lire UN éclair qui scintille et non trois.
+function _foudreAlpha(e,t){
+  const r=t-e.delai;
+  if(r<0) return 0;
+  if(r<250){
+    for(const p of e.plages) if(r>=p[0]&&r<p[1]) return 1;
+    return 0.14;
+  }
+  if(r<450) return 1-(r-250)/200;
+  return -1;
+}
+function _foudreChemin(ctx,pts){
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x,pts[0].y);
+  for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x,pts[i].y);
+}
+// TROIS PASSES, du plus large au plus fin : le halo rouge flou, le trait
+// rouge, le cœur blanc. C'est l'empilement qui fait l'incandescence — un trait
+// seul, même épais, reste un dessin.
+function _foudreDessiner(ctx,e,a,coul){
+  const w=e.epais;
+  const passe=(pts,k)=>{
+    ctx.save();
+    ctx.lineJoin='round'; ctx.lineCap='round';
+    ctx.shadowColor=coul; ctx.shadowBlur=30;
+    ctx.strokeStyle=coul; ctx.lineWidth=9*w*k;
+    ctx.globalAlpha=a*k*0.45; _foudreChemin(ctx,pts); ctx.stroke();
+    ctx.shadowBlur=0;
+    ctx.globalAlpha=a*k;
+    ctx.lineWidth=3.6*w*k; _foudreChemin(ctx,pts); ctx.stroke();
+    ctx.strokeStyle='#fff'; ctx.lineWidth=1.3*w*k; _foudreChemin(ctx,pts); ctx.stroke();
+    ctx.restore();
+  };
+  passe(e.tronc,1);
+  for(const b of e.branches) passe(b,0.55);
+}
+// 30 À 40 ÉTINCELLES, blanches et rouges, projetées vers le haut et les côtés
+// puis rattrapées par la gravité. Chacune vit entre 350 et 600 ms.
+function _foudreEtincelles(impact,tImpact){
+  const n=30+Math.floor(Math.random()*11);
+  const out=[];
+  for(let i=0;i<n;i++){
+    // Un éventail vers le haut (−π … 0), un peu élargi : quelques-unes
+    // partent presque à l'horizontale, aucune ne part droit vers le sol.
+    const ang=-Math.PI*(0.05+Math.random()*0.9);
+    const v=180+Math.random()*420;
+    out.push({x:impact.x,y:impact.y,vx:Math.cos(ang)*v,vy:Math.sin(ang)*v,
+      t0:tImpact+Math.random()*40,vie:350+Math.random()*250,
+      coul:Math.random()<0.55?'#FFFFFF':'#FF3B3B',taille:1+Math.random()*1.6});
+  }
+  return out;
+}
+// Position calculée analytiquement à partir de t, pas intégrée frame à frame :
+// une frame sautée ne ralentit pas les étincelles, elles sont où elles doivent.
+function _foudreEtincellesPeindre(ctx,ps,t){
+  const G=1500;                                   // px/s²
+  let vivant=false;
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  ctx.lineCap='round';
+  for(const p of ps){
+    const r=(t-p.t0)/1000;
+    if(r<0){ vivant=true; continue; }
+    if(r*1000>p.vie) continue;
+    vivant=true;
+    const x=p.x+p.vx*r, y=p.y+p.vy*r+0.5*G*r*r;
+    const vx=p.vx, vy=p.vy+G*r;
+    const vit=Math.hypot(vx,vy)||1;
+    // UNE TRAÎNÉE ET NON UN POINT : 18 ms de trajectoire, dans l'axe de la
+    // vitesse. Un point rond de 2 px ne se lit pas comme une étincelle.
+    const l=Math.min(14,vit*0.018);
+    ctx.globalAlpha=1-(r*1000)/p.vie;
+    ctx.strokeStyle=p.coul; ctx.lineWidth=p.taille;
+    ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x-vx/vit*l,y-vy/vit*l); ctx.stroke();
+  }
+  ctx.restore();
+  return vivant;
+}
+// LE TREMBLEMENT : ±6 px au hasard, amorti, 280 ms, sur le conteneur
+// principal. translate SEUL — composé au transform existant par composite:'add'
+// quand le navigateur le sait, pour ne pas décaler un écran déjà transformé.
+function _foudreTrembler(cont){
+  try{
+    const z=(typeof cont==='string'?document.querySelector(cont):cont)
+      ||document.querySelector('.screen.active')||document.body;
+    if(!z||!z.animate) return null;
+    const kf=[], N=9;
+    for(let k=0;k<=N;k++){
+      const amort=1-k/N;
+      const dx=k===N?0:(Math.random()*2-1)*6*amort;
+      const dy=k===N?0:(Math.random()*2-1)*6*amort;
+      kf.push({transform:'translate('+dx.toFixed(1)+'px,'+dy.toFixed(1)+'px)'});
+    }
+    return _animer(z,kf,{duration:280,easing:'linear',composite:'add'});
+  }catch(e){ return null; }
+}
+// LE SON, SANS FICHIER. Un crépitement — bruit blanc passe-haut, enveloppe de
+// quelques dizaines de ms, haché pour craquer au lieu de souffler — puis un
+// grondement : un oscillateur à 50 Hz qui roule 400 ms.
+// Il reprend le contexte audio du repos (_ctxSon), amorcé au geste : sur iOS
+// un contexte créé hors geste naîtrait suspendu. Il n'en ouvre un que s'il
+// n'y en a aucun, comme _bipRepos.
+function _foudreSon(){
+  try{
+    const C=window.AudioContext||window.webkitAudioContext;
+    if(!C) return;
+    if(_ctxSon&&_ctxSon.state==='closed') _ctxSon=null;
+    if(!_ctxSon) _ctxSon=new C();
+    const ctx=_ctxSon;
+    try{ ctx.resume(); }catch(e){}
+    const t=ctx.currentTime;
+    // Crépitement
+    const dur=0.16, sr=ctx.sampleRate;
+    const buf=ctx.createBuffer(1,Math.floor(sr*dur),sr);
+    const d=buf.getChannelData(0);
+    let porte=1;
+    for(let i=0;i<d.length;i++){
+      // Hachage : la « porte » se ferme et se rouvre au hasard, toutes les
+      // ~2 ms. Sans elle, c'est un souffle ; avec, ça craque.
+      if(i%Math.floor(sr*0.002)===0) porte=Math.random()<0.65?1:0.15;
+      d[i]=(Math.random()*2-1)*porte;
+    }
+    const src=ctx.createBufferSource(); src.buffer=buf;
+    const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=2500;
+    const g1=ctx.createGain();
+    g1.gain.setValueAtTime(0.0001,t);
+    g1.gain.exponentialRampToValueAtTime(0.5,t+0.004);
+    g1.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    src.connect(hp); hp.connect(g1); g1.connect(ctx.destination);
+    src.start(t); src.stop(t+dur);
+    // Grondement
+    const o=ctx.createOscillator(); o.type='sine'; o.frequency.value=50;
+    const g2=ctx.createGain();
+    const t2=t+0.06;
+    g2.gain.setValueAtTime(0.0001,t2);
+    g2.gain.exponentialRampToValueAtTime(0.45,t2+0.03);
+    g2.gain.exponentialRampToValueAtTime(0.0001,t2+0.4);
+    o.connect(g2); g2.connect(ctx.destination);
+    o.start(t2); o.stop(t2+0.41);
+  }catch(e){}
+}
+// EXPOSÉE sur window, explicitement : les badges (idée 05), les rangs (idée
+// 13) et les paliers de série l'appelleront depuis d'autres modules, et un nom
+// global implicite est la première chose qu'un découpage du fichier casserait.
+try{ window.rcFoudre=rcFoudre; }catch(e){}
+
+// ── LA FOUDRE DU RECORD, EN SÉANCE ─────────────────────────────────────────
+// La charge est frappée, puis elle COMPTE de l'ancien record à la nouvelle
+// valeur en grésillant, et un halo rouge pulse deux fois. Le tout tient en
+// moins de 1,2 s et ne bloque rien : le champ est déjà désactivé (série
+// validée), et la ligne suivante reste utilisable pendant tout ce temps.
+//
+// `ancienne` : la meilleure charge d'AVANT, ou null. Sans elle — premier
+// record de l'exercice, ou record d'e1RM à charge égale —, le chiffre grésille
+// sur place au lieu de partir de zéro, ce qui se lirait comme une donnée perdue.
+function rcFoudreRecord(champ,ancienne,nouvelle){
+  try{
+    if(!champ) return;
+    const vers=parseFloat(nouvelle);
+    if(!(vers>0)) return;
+    const brut=String(champ.value!=null&&champ.value!==''?champ.value:nouvelle);
+    // La valeur finale est rendue TELLE QUE SAISIE : « 102.5 » reste « 102.5 »,
+    // jamais « 102.50 » ni « 103 ». Les valeurs de passage tombent au
+    // demi-kilo : des charges plausibles, pas des 101.37 qui se liraient
+    // comme une erreur. Comparaison à epsilon : de+(vers-de)*1 n'est pas
+    // toujours égal à vers en virgule flottante.
+    const fmt=v=>Math.abs(v-vers)<1e-9?brut:String(Math.max(0,Math.round(v*2)/2));
+    const de=(ancienne>0&&ancienne<vers)?ancienne:vers;
+    // Le compteur part AVEC l'impact, pas après : la foudre frappe la charge et
+    // c'est la charge qui réagit. L'ancienne valeur s'affiche dès t=0, puis
+    // 600 ms de montée et de grésillement.
+    rcFoudre(champ);
+    champ.dataset.valeur=String(de);
+    arcCompteur(champ,vers,{duree:600,gresille:true,format:fmt});
+    // Le dataset n'est pas une donnée ici : on le retire, pour qu'aucun
+    // compteur ne le relise plus tard comme une valeur précédente.
+    try{ delete champ.dataset.valeur; }catch(e){}
+    // Le halo rouge qui pulse DEUX FOIS : 280 ms chacun, le second part quand
+    // le premier s'éteint. Fin à 380 + 280 = 660 ms.
+    const halo={couleur:'rgba(224,32,32,.75)',duree:280};
+    setTimeout(()=>{ try{ if(champ.isConnected) arcGlow(champ,halo); }catch(e){} },80);
+    setTimeout(()=>{ try{ if(champ.isConnected) arcGlow(champ,halo); }catch(e){} },380);
+  }catch(e){}
 }
 
 // ── ANIMATION 7 : L'ARC QUI CHANGE D'ONGLET ────────────────────────────────
@@ -40801,7 +41221,12 @@ function _arcSerieValidee(idx,i){
     // raconter la meme chose, et relire le Set a chaque appel les exposerait a
     // diverger si le marquage changeait entre-temps.
     const rec=_recordsVus.has(idx+':'+i);
-    arcHaptique(rec?'succes':'lourde');
+    // LA FOUDRE, UNE FOIS PAR RECORD. Décocher puis recocher la même série ne
+    // la rejoue pas : c'est une correction de saisie, pas un second record.
+    // Elle porte sa propre vibration — « succes » par-dessus la brouillerait.
+    const foudre=rec&&!_foudresJouees.has(idx+':'+i);
+    if(foudre){ _foudresJouees.add(idx+':'+i); _foudreSurCharge(idx,i); }
+    else arcHaptique(rec?'succes':'lourde');
     const tb=document.getElementById('sets-body-'+idx);
     if(!tb) return;
     const ligne=tb.children[i];
@@ -40853,6 +41278,26 @@ function _arcSerieValidee(idx,i){
     }
     const compteur=ligne.firstElementChild;
     if(compteur) arcDecharge(compteur,{flash:false,halo:false,impact:rec?1.22:undefined});
+  }catch(e){}
+}
+// La charge de la série qui vient de battre le record, frappée par la foudre.
+// L'« ancienne » valeur est le meilleur de l'historique ET des records déjà
+// battus plus tôt dans cette séance : le troisième record de la soirée compte
+// depuis le deuxième, pas depuis celui de la semaine dernière.
+function _foudreSurCharge(idx,i){
+  try{
+    const ex=(woState.exercises||[])[idx];
+    const d=woState.sessionData[idx];
+    if(!ex||!d||!d.sets[i]) return;
+    const champ=document.querySelector('#sets-body-'+idx+' input[data-serie="'+i+'"][data-champ="weight"]');
+    if(!champ) return;
+    let anc=0;
+    const r=recordsExercice(currentUser,ex.name);
+    if(r&&r.meilleureCharge) anc=r.meilleureCharge.kg||0;
+    d.sets.forEach((s,j)=>{
+      if(j!==i&&s&&s.done&&_recordsVus.has(idx+':'+j)) anc=Math.max(anc,parseFloat(s.weight)||0);
+    });
+    rcFoudreRecord(champ,anc||null,d.sets[i].weight);
   }catch(e){}
 }
 function woNav(dir){
@@ -68586,7 +69031,9 @@ function ecartPrescritRealise(user){
 // vit dans un Set de module et JAMAIS sur la série : woState.sessionData est
 // enregistré tel quel en fin de séance, et un champ posé là serait persisté.
 let _recordsVus=new Set();
-function _resetRecordsVus(){ _recordsVus=new Set(); }
+// Les records déjà foudroyés dans cette séance (clés idx:i, comme _recordsVus).
+let _foudresJouees=new Set();
+function _resetRecordsVus(){ _recordsVus=new Set(); _foudresJouees=new Set(); }
 // OUBLIE LES RECORDS D'UN SEUL EXERCICE, par sa POSITION. Appelée quand un
 // mouvement est remplacé en cours de séance : ses séries sont reconstruites à
 // vide, mais les clés `idx:i` survivraient et _badgeRecord — rendu sans
@@ -68598,6 +69045,8 @@ function _oublierRecordsExo(idx){
   const pre=idx+':';
   for(const k of Array.from(_recordsVus))
     if(String(k).indexOf(pre)===0) _recordsVus.delete(k);
+  for(const k of Array.from(_foudresJouees))
+    if(String(k).indexOf(pre)===0) _foudresJouees.delete(k);
 }
 // UNE SEANCE REPRISE RETROUVE SES BADGES. Ils ne sont pas dans l'instantane
 // — le drapeau vit dans un Set de module et JAMAIS sur la serie, puisque

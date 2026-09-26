@@ -69681,6 +69681,67 @@ vendredi 78 6h 44m
         return arcHaptique.toString().indexOf('arcReduit')<0
           ?true:_echec('arcHaptique consulte la préférence');})());
 
+      // ── La foudre (rcFoudre) ────────────────────────────────────────────
+      ok('rcFoudre est exposée, rend une Promise et ne lève jamais',(()=>{
+        if(typeof window.rcFoudre!=='function') return _echec('window.rcFoudre absente');
+        let p1,p2;
+        try{
+          p1=rcFoudre(null,{son:false,haptique:false});
+          p2=rcFoudre('id-qui-n-existe-pas',{son:false,haptique:false});
+        }catch(e){ return _echec('exception : '+e.message); }
+        return (p1&&typeof p1.then==='function'&&p2&&typeof p2.then==='function')
+          ?true:_echec('pas de Promise');})());
+      ok('La foudre ne retient jamais l\'athlète : plafond sous 1,2 s',(()=>{
+        return (FOUDRE_MAX>0&&FOUDRE_MAX<1200)?true:_echec('FOUDRE_MAX = '+FOUDRE_MAX);})());
+      ok('La toile de la foudre n\'intercepte aucun appui',(()=>{
+        const {c}=_foudreToile(10,10);
+        try{ return c.style.pointerEvents==='none'?true:_echec('pointer-events = '+c.style.pointerEvents); }
+        finally{ try{ c.remove(); }catch(e){} }})());
+      ok('Le motif de vibration de la foudre est 25-40-25-60-90',(()=>{
+        return JSON.stringify(ARC_VIBRE.foudre)==='[25,40,25,60,90]'
+          ?true:_echec(JSON.stringify(ARC_VIBRE.foudre));})());
+      ok('Déplacement du point milieu : 2^n segments, extrémités tenues',(()=>{
+        for(const n of [6,7,8]){
+          const pts=_foudreMilieu(10,-12,200,400,60,n);
+          if(pts.length!==Math.pow(2,n)+1) return _echec(n+' niveaux → '+pts.length+' points');
+          const a=pts[0], b=pts[pts.length-1];
+          if(a.x!==10||a.y!==-12||b.x!==200||b.y!==400) return _echec('une extrémité a bougé');
+        }
+        return true;})());
+      ok('Un éclair part du haut, frappe l\'impact, scintille 2-3 fois en 250 ms',(()=>{
+        for(let k=0;k<20;k++){
+          const e=_foudreEclair({x:180,y:500},390,0);
+          const a=e.tronc[0], b=e.tronc[e.tronc.length-1];
+          if(!(a.y<0)) return _echec('départ sous le haut de l\'écran');
+          if(b.x!==180||b.y!==500) return _echec('l\'impact est manqué');
+          if(e.plages.length<3||e.plages.length>4) return _echec(e.plages.length-1+' réapparitions');
+          if(e.plages.some(p=>p[1]>250)) return _echec('scintillement au-delà de 250 ms');
+          if(e.branches.length<2) return _echec('éclair sans ramification');
+          if(_foudreAlpha(e,460)!==-1) return _echec('éclair encore vivant à 460 ms');
+        }
+        return true;})());
+      ok('La foudre est muette quand le son de l\'app est coupé',(()=>{
+        const sv=currentUser;
+        try{
+          currentUser={sonRepos:false};
+          if(_foudreSonPermis()) return _echec('son permis, réglage éteint');
+          currentUser={sonRepos:true};
+          if(!_foudreSonPermis()) return _echec('son refusé, réglage allumé');
+          currentUser=null;
+          return _foudreSonPermis()?_echec('son permis sans utilisateur'):true;
+        }finally{ currentUser=sv; }})());
+      ok('Le compteur grésille puis tombe sur la valeur saisie, telle quelle',(()=>{
+        const i=document.createElement('input');
+        try{
+          i.value='102.5';
+          arcChiffre(i,100,102.5,{duree:0,gresille:true,format:v=>Math.abs(v-102.5)<1e-9?'102.5':String(v)});
+          return i.value==='102.5'?true:_echec('valeur finale : '+i.value);
+        }finally{ try{ i.remove(); }catch(e){} }})());
+      ok('La foudre du record ne se rejoue pas à la re-validation',(()=>{
+        const s=String(_arcSerieValidee);
+        return (s.indexOf('_foudresJouees.has')>=0&&String(_resetRecordsVus).indexOf('_foudresJouees')>=0)
+          ?true:_echec('aucune garde « une fois par record »');})());
+
       // ── La rareté du magenta ────────────────────────────────────────────
       ok('--arc-peak n\'est utilisé NULLE PART hors du record',(()=>{
         // Sa force vient de sa rareté : posé sur un bouton ordinaire, il ne
