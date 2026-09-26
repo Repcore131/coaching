@@ -9363,6 +9363,14 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .aa-perso .aa-case{justify-content:flex-start}
 .aa-case input{width:18px;height:18px;accent-color:#E02020;margin:0}
 .aa-local{font-size:var(--fs-2xs);color:var(--sub);text-align:center;margin:12px 0 4px}
+
+/* L'écran de fin de rite : le cycle est noté, il se partage. */
+.rite-fin{background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:18px 18px 22px;
+  width:100%;max-width:480px;max-height:90vh;overflow-y:auto;text-align:center}
+.rite-fin-sur{font-size:var(--fs-2xs);font-weight:800;letter-spacing:2.4px;text-transform:uppercase;color:var(--red-text)}
+.rite-fin h2{font-family:var(--pile-titre);font-size:clamp(34px,10vw,46px);letter-spacing:1px;margin:4px 0 6px}
+.rite-fin p{font-size:var(--fs-sm);color:var(--text-dim);line-height:1.5;margin:0 0 14px}
+.rite-fin .btn{width:100%;display:flex;align-items:center;justify-content:center;gap:8px}
 /* La carte de l'accueil. */
 .wr-carte{width:100%;display:flex;align-items:center;gap:12px;margin:0 0 12px;padding:14px 14px;
   background:linear-gradient(135deg,#1a0404,#0b0b0c 70%);border:1px solid rgba(224,32,32,.45);

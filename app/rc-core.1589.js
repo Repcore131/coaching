@@ -17784,8 +17784,12 @@ function _riteRecords(u,debut,fin){
     if(!s||!s.date) continue;
     const cible=(s.date>=debut&&s.date<=fin)?ap:((s.date<debut)?av:null);
     if(!cible) continue;
-    for(const ex of ((s.exercises)||[])){
-      const nom=ex&&ex.name; if(!nom) continue;
+    // ⚠ LES DEUX FORMES DE SÉANCE. Cette boucle ne lisait que `exercises`,
+    //   alors que finishWorkout enregistre les séries dans `data` : sur un
+    //   vrai dossier, le rite n'a jamais trouvé un seul record. _wrExos lit
+    //   les deux (et passe par les alias).
+    for(const ex of _wrExos(s)){
+      const nom=ex&&ex.nom; if(!nom) continue;
       for(const set of ((ex.sets)||[])){
         if(!set||set.done===false) continue;
         const w=parseFloat(set.weight)||0, r=parseFloat(set.repsDone!=null?set.repsDone:set.reps)||0;
@@ -17853,6 +17857,8 @@ function _riteLigne(lib,val,note){
   </div>`;
 }
 function ouvrirRite(cycle){
+  // L'écran de fin d'un rite précédent, s'il est encore là, cède la place.
+  try{ const _o=document.getElementById('modal-overlay'); if(_o&&_o.querySelector('.rite-fin')) closeModal(); }catch(e){}
   const u=currentUser;
   const c=riteContenu(u,Date.now());
   const bil=riteBilanDeLaSemaine(u,Date.now());
@@ -17961,9 +17967,16 @@ function fermerRite(){
 }
 function validerRite(){
   const q=((document.getElementById('rite-question')||{}).value||'').trim();
-  _riteEnregistrer(q,true);
+  const cycle=window._riteCycle;
+  const ok=_riteEnregistrer(q,true);
   closeModal();
   toast('Nouveau cycle noté.');
+  if(!ok) return;
+  // LA FAMILLE CYCLES (idée 04) SE DÉBLOQUE ICI : le rite vient d'entrer dans
+  // `rites`, qui est ce que compte le badge.
+  try{ majBadges(); }catch(e){}
+  // Puis le cycle se montre, et se partage.
+  try{ _riteAfficherFin(riteCarteDonnees(currentUser,cycle,Date.now())); }catch(e){}
 }
 function _riteEnregistrer(question,avecReglages){
   try{
@@ -69168,6 +69181,170 @@ function _aaSortir(partager,btn,confirme){
 }
 function aaPartager(btn){ return _aaSortir(true,btn,false); }
 function aaEnregistrer(btn){ return _aaSortir(false,btn,false); }
+// ══ LA CARTE DE CYCLE : « CYCLE N TERMINÉ » ═══════════════════════════════
+//
+// Le rite de 28 jours se referme sur un visuel, et c'est le seul moment où il
+// a quelque chose à montrer : quatre semaines tenues. Même famille que les
+// autres cartes 1080×1920 — fond au choix (idée 02), ombre en double passe,
+// Bebas et Montserrat, signature — et même sortie que le bilan.
+//
+// PURE. Les données de la carte, lues au moment de la validation.
+function riteCarteDonnees(u,cycle,now){
+  const t=(typeof now==='number')?now:Date.now();
+  const n=Number(cycle)||0;
+  const c=riteContenu(u,t);
+  const ses=((u&&u.sessions)||[]).filter(s=>s&&s.date>=c.depuis&&s.date<=c.jusqua);
+  // Prévues : le quota du programme sur quatre semaines ; sans programme,
+  // on ne l'invente pas.
+  let prevues=0; try{ prevues=_creneauxPrevus(u)*(RITE_JOURS/7); }catch(e){ prevues=0; }
+  const faites=c.seances;
+  const taux=prevues>0?Math.min(100,Math.round(faites/prevues*100)):null;
+  const tonnage=ses.reduce((a,s)=>a+(Number(s.volume)||0),0);
+  let eq=null; try{ eq=equivalentTonnage(tonnage); }catch(e){ eq=null; }
+  let groupes=null; try{ groupes=muscDonnees(ses,{user:u,semaines:RITE_JOURS/7}).groupes; }catch(e){ groupes=null; }
+  // Le nom du cycle qui se termine : celui que le coach lui a donné au rite
+  // précédent, sinon son numéro. Le suivant : riteNomPeriode, comme l'écran.
+  const r=((u&&u.rites)||[]).find(x=>x&&Number(x.cycle)===n-1&&x.nom);
+  let sig=''; try{ sig=nomSurVisuels(u); }catch(e){ sig=''; }
+  return {cycle:n,nom:r?String(r.nom):('Cycle '+n),prochain:riteNomPeriode(u,n),
+    jours:RITE_JOURS,faites,prevues,taux,records:(c.records||[]).length,
+    tonnage,equivalent:eq,groupes,genre:(()=>{ try{ return woGenreAvatar(u); }catch(e){ return 'h'; } })(),
+    signature:sig};
+}
+/**
+ * Le visuel 1080×1920. `resMuscles` : les silhouettes chargées
+ * (chargerSilhouettes) — sans elles, la carte se passe de la heatmap et
+ * remonte le reste.
+ */
+function _dessinerCarteCycle(d,fond,resMuscles){
+  const cv=document.createElement('canvas');
+  cv.width=STORY_L; cv.height=STORY_H;
+  const g=cv.getContext('2d');
+  const f=fond||'transparent';
+  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const o=_visuelOutils(g);
+  const rouge=f==='rouge';
+  const accent=rouge?'#ffffff':'#E02020';
+  g.textAlign='center'; g.textBaseline='alphabetic';
+  // CYCLE N TERMINÉ
+  o.ombre(true); g.fillStyle='#fff';
+  const titre='CYCLE '+d.cycle+' TERMINÉ';
+  const ts=o.ajuste(titre,'700',150,BEBAS,LARG,70);
+  g.font='700 '+ts+'px '+BEBAS; o.ecrire(titre,cx,230);
+  // Le nom, s'il dit autre chose que le numéro, et les 28 jours.
+  let y=300;
+  if(d.nom&&d.nom!=='Cycle '+d.cycle){
+    g.fillStyle='rgba(255,255,255,.92)';
+    const ns=o.ajuste(d.nom,'700',44,MONT,LARG,22);
+    g.font='700 '+ns+'px '+MONT; o.ecrire(d.nom,cx,y); y+=58;
+  }
+  g.fillStyle=accent; g.font='800 32px '+MONT;
+  o.ecrireEspace(d.jours+' JOURS',cx,y,8,true);
+  o.ombre(false);
+  // L'ANNEAU : le taux de complétion. Sans programme, le nombre de séances
+  // seul, au centre, sans arc.
+  const ry=y+250, R=175;
+  g.save();
+  g.lineCap='round'; g.lineWidth=34;
+  g.strokeStyle='rgba(255,255,255,.14)';
+  g.beginPath(); g.arc(cx,ry,R,0,Math.PI*2); g.stroke();
+  if(d.taux!=null&&d.taux>0){
+    g.strokeStyle=accent;
+    g.shadowColor=rouge?'rgba(255,255,255,.6)':'rgba(224,32,32,.8)'; g.shadowBlur=24;
+    g.beginPath(); g.arc(cx,ry,R,-Math.PI/2,-Math.PI/2+Math.PI*2*Math.min(1,d.taux/100)); g.stroke();
+  }
+  g.restore();
+  o.ombre(true); g.fillStyle='#fff';
+  const centre=d.taux!=null?(d.taux+' %'):String(d.faites);
+  g.font='700 130px '+BEBAS; o.ecrire(centre,cx,ry+40);
+  g.fillStyle='rgba(255,255,255,.85)'; g.font='800 24px '+MONT;
+  o.ecrireEspace(d.taux!=null?'COMPLÉTION':'SÉANCES',cx,ry+86,5,true);
+  // Les trois chiffres.
+  y=ry+R+120;
+  const t=_wrTonnage(d.tonnage);
+  const chiffres=[
+    {v:d.prevues>0?(d.faites+'/'+Math.round(d.prevues)):String(d.faites),l:'SÉANCES'},
+    {v:String(d.records),l:d.records>1?'RECORDS':'RECORD'},
+    {v:_wrNb(t.v,t.dec)+(t.u==='KG'?' KG':' T'),l:'TONNAGE'}];
+  const cw=LARG/3;
+  chiffres.forEach((c,i)=>{
+    const x=M+cw*i+cw/2;
+    g.fillStyle='#fff';
+    const vs=o.ajuste(c.v,'700',96,BEBAS,cw-16,44);
+    g.font='700 '+vs+'px '+BEBAS; o.ecrire(c.v,x,y);
+    g.fillStyle=accent; g.font='800 22px '+MONT; o.ecrireEspace(c.l,x,y+40,4,true);
+  });
+  y+=90;
+  if(d.equivalent){
+    const e='= '+d.equivalent.texte.toUpperCase()+' '+d.equivalent.emoji;
+    g.fillStyle='#fff';
+    const es=o.ajuste(e,'800',34,MONT,LARG,20);
+    g.font='800 '+es+'px '+MONT; o.ecrire(e,cx,y); y+=30;
+  }
+  o.ombre(false);
+  // LA HEATMAP MUSCULAIRE (idée 07), si les silhouettes sont là.
+  const basTexte=STORY_H-250;
+  if(resMuscles&&d.groupes){
+    const H=Math.max(200,basTexte-40-(y+20));
+    const vs=['face','dos'].map(v=>_muscPeindreVue(resMuscles[v],d.groupes,_recGraine('cycle'+d.cycle+v)));
+    const ws=vs.map(v=>v.w*H/v.h), gap=24, tot=ws[0]+ws[1]+gap;
+    let x=cx-tot/2;
+    vs.forEach((v,i)=>{ _muscPoser(g,v,x,y+20,ws[i],H,1); x+=ws[i]+gap; });
+  }
+  // « Prochain chapitre : … »
+  o.ombre(true);
+  g.fillStyle=accent; g.font='800 26px '+MONT;
+  o.ecrireEspace('PROCHAIN CHAPITRE',cx,basTexte,6,true);
+  g.fillStyle='#fff';
+  const ps=o.ajuste(String(d.prochain||''),'700',64,BEBAS,LARG,30);
+  g.font='700 '+ps+'px '+BEBAS; o.ecrire(String(d.prochain||''),cx,basTexte+66);
+  _recSignature(g,o,String(d.signature||''),STORY_H-90,LARG);
+  o.ombre(false);
+  return cv;
+}
+// L'écran qui suit « Enregistrer et repartir » : le cycle est noté, et on
+// propose de le partager. Il REMPLACE la feuille du rite (même modal-overlay :
+// Échap et le voile la ferment).
+let _riteCarte=null;
+function _riteAfficherFin(d){
+  _riteCarte=d;
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',
+  '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+  +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Cycle terminé" class="rite-fin">'
+  +'<div class="rite-fin-sur">'+d.jours+' jours</div>'
+  +'<h2>Cycle '+d.cycle+' terminé</h2>'
+  +'<p>Nouveau cycle noté. Prochain chapitre : <b>'+escapeHtml(d.prochain)+'</b>.</p>'
+  +_htmlVisuelFonds('rite-fonds')
+  +'<button type="button" class="btn btn-red" onclick="partagerCycle(this)">'+icon('share',16)+' <span>Partager mon cycle</span></button>'
+  +'<button type="button" class="btn btn-outline" style="margin-top:8px" onclick="closeModal()">Fermer</button>'
+  +'</div></div>');
+  const monter=res=>{ try{ monterSelecteurFond('rite-fonds',f=>_dessinerCarteCycle(_riteCarte||d,f,res||null),null); }catch(e){} };
+  monter(null);
+  // Les silhouettes arrivent : les vignettes se repeignent avec la heatmap.
+  try{ chargerSilhouettes(d.genre).then(r=>{ if(document.getElementById('rite-fonds')) monter(r); }).catch(()=>{}); }catch(e){}
+}
+// MÊME SORTIE QUE LE BILAN : partage natif, sinon téléchargement ; les deux
+// copient le lien perso (_storyCopierLien).
+function partagerCycle(btn){
+  const d=_riteCarte; if(!d||_storyEnCours) return false;
+  const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond);
+  const nom=visuelNomFichier('repcore-cycle',fond);
+  const res=_muscPret(d.genre);
+  _storyEnCours=true;
+  let ok=false;
+  try{
+    ok=_storySortirPartage(_dessinerCarteCycle(d,fond,res),nom,undefined,fmt)
+      ||_storySortirTelechargement(_dessinerCarteCycle(d,fond,res),nom,fmt);
+  }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
+  finally{ _storyEnCours=false; }
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp&&ok){ sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent='Partager mon cycle'; },2000); }
+  return ok;
+}
 // ══════════ LE PLANNING DE RAPPEL, ECRIT EN UN SEUL ENDROIT ════════════
 //
 // Extrait de saveWoReminderConfig le 15/09/2026, quand l'ecran d'accueil des

@@ -30204,7 +30204,7 @@ async function testExercices(){
         if(!riteAfficherSiBesoin()) return false;
         window._riteJours=[1,3];
         const ch=document.getElementById('rite-heure'); if(ch) ch.value='19';
-        validerRite();
+        validerRite(); closeModal();   // l'écran « Cycle terminé » (26/09/2026) s'ouvre après
         return !!u.rites&&u.rites.length===1
           &&Object.keys(u.rites[0]).sort().join(',')==='cycle,date,reponseCoach';})());
 
@@ -30216,7 +30216,7 @@ async function testExercices(){
         if(!riteAfficherSiBesoin()) return false;
         window._riteJours=[4,0,2];
         const ch=document.getElementById('rite-heure'); if(ch) ch.value='7';
-        validerRite();
+        validerRite(); closeModal();   // l'écran « Cycle terminé » (26/09/2026) s'ouvre après
         return JSON.stringify(u._woReminderDays)==='[0,2,4]'&&u._woReminderHour===7
           &&u.periodisation===undefined&&!('phase' in u.rites[0]);})());
 
@@ -30236,7 +30236,7 @@ async function testExercices(){
       ok('Validé : LÀ, le rite est tenu pour ce cycle',(()=>{
         _riteReportes.clear();
         const u=ath();
-        currentUser=u; riteAfficherSiBesoin(); validerRite();
+        currentUser=u; riteAfficherSiBesoin(); validerRite(); closeModal();   // l'écran « Cycle terminé » (26/09/2026) s'ouvre après
         return riteAAfficher(u,N).raison==='deja_tenu'&&!riteAfficherSiBesoin();})());
 
       currentUser=sauveU;
@@ -48143,16 +48143,85 @@ async function testExercices(){
       if(String(bPhotoCards).indexOf('htmlBoutonAvantApres')<0) return _echec('bilan');
       return String(renderBilanEvolution).indexOf("htmlBoutonAvantApres(c,'coach')")>=0?true:_echec('fiche coach');})());
 
-    ok('Les badges n’ont que trois points d’appel',(()=>{
+    // ══ LA CARTE DE CYCLE (26/09/2026) ════════════════════════════════════
+    const _CY=()=>{
+      const J=864e5, t=Date.now();
+      return {id:'cy1',email:'cy@t.fr',fname:'Léa',role:'athlete',createdAt:t-60*J,
+        sessions_config:[{active:true},{active:true},{active:true}],
+        rites:[{cycle:1,date:t-29*J,nom:'Force',reponseCoach:null}],
+        sessions:Array.from({length:10},(_,i)=>({date:t-(i*2+1)*J,duration:60,volume:4200,sets:12,
+          data:{SQUAT:{sets:[{weight:100+(9-i)*2,reps:'5',repsDone:5,rir:'1',done:true}]}},
+          exercises:[{name:'SQUAT',sets:[{weight:100+(9-i)*2,reps:'5',repsDone:5,rir:'1',done:true}]}]}))};
+    };
+    ok('Carte de cycle : les données (faites/prévues, taux, records, tonnage, chapitres)',(()=>{
+      const u=_CY();
+      const d=riteCarteDonnees(u,2,Date.now());
+      if(d.cycle!==2||d.jours!==28) return _echec('cycle/jours '+d.cycle+'/'+d.jours);
+      if(d.faites!==10||d.prevues!==12) return _echec(d.faites+'/'+d.prevues);
+      if(d.taux!==83) return _echec('taux '+d.taux);
+      if(d.tonnage!==42000) return _echec('tonnage '+d.tonnage);
+      if(!d.equivalent||d.equivalent.texte!=='3,5 bus') return _echec('équivalent '+JSON.stringify(d.equivalent));
+      if(!(d.records>=1)) return _echec('records '+d.records);
+      if(d.nom!=='Force') return _echec('nom '+d.nom);
+      if(d.prochain!=='Force') return _echec('prochain '+d.prochain);
+      // Sans programme, pas de taux inventé.
+      const s=riteCarteDonnees(Object.assign(_CY(),{sessions_config:[]}),2,Date.now());
+      return (s.taux===null&&s.prevues===0)?true:_echec('taux sans programme : '+s.taux);})());
+    ok('Carte de cycle : 1080×1920, titre, anneau, prochain chapitre, signature',(()=>{
+      const d=riteCarteDonnees(_CY(),2,Date.now());
+      const P=CanvasRenderingContext2D.prototype, f=P.fillText, a=P.arc, vus=[];
+      let arcs=0;
+      P.fillText=function(t){ vus.push(String(t)); return f.apply(this,arguments); };
+      P.arc=function(){ arcs++; return a.apply(this,arguments); };
+      let c;
+      try{ c=_dessinerCarteCycle(d,'rouge',null); } finally { P.fillText=f; P.arc=a; }
+      if(c.width!==1080||c.height!==1920) return _echec(c.width+'x'+c.height);
+      const bar=vus.join('|'), tout=vus.join('');
+      if(bar.indexOf('CYCLE 2 TERMINÉ')<0) return _echec('titre');
+      if(tout.indexOf('28 JOURS')<0) return _echec('28 jours');
+      if(bar.indexOf('83 %')<0) return _echec('taux au centre de l’anneau');
+      if(arcs<2) return _echec('pas d’anneau');
+      if(bar.indexOf('10/12')<0) return _echec('séances faites/prévues');
+      if(bar.indexOf('= 3,5 BUS 🚌')<0) return _echec('équivalent');
+      if(tout.indexOf('PROCHAIN CHAPITRE')<0) return _echec('prochain chapitre');
+      return tout.indexOf('LÉA · REPCORE')>=0?true:_echec('signature');})());
+    ok('Rite : les records se lisent aussi dans `data`, la forme de finishWorkout',(()=>{
+      const J=864e5, t=Date.now();
+      const u={sessions:[{date:t-40*J,data:{DC:{sets:[{weight:80,reps:5,repsDone:5,rir:'1',done:true}]}}},
+        {date:t-3*J,data:{DC:{sets:[{weight:90,reps:5,repsDone:5,rir:'1',done:true}]}}}]};
+      const r=_riteRecords(u,t-28*J,t);
+      return (r.length===1&&r[0].nom==='DC')?true:_echec(JSON.stringify(r));})());
+    ok('Fin du rite : « Partager mon cycle », CYCLES débloqué, même sortie que le bilan',(()=>{
+      const sv=currentUser, svC=_celebrerBadges;
+      try{
+        _celebrerBadges=()=>{};
+        _riteReportes.clear();
+        const u=_CY(); u.rites=[]; u.createdAt=Date.now()-30*864e5;
+        currentUser=u;
+        if(!riteAfficherSiBesoin()) return _echec('le rite ne s’ouvre pas');
+        validerRite();
+        const z=document.querySelector('#modal-overlay .rite-fin');
+        if(!z) return _echec('pas d’écran de fin');
+        if(!z.querySelector('[onclick^="partagerCycle("]')||z.textContent.indexOf('Partager mon cycle')<0) return _echec('pas de bouton');
+        if(!z.querySelector('#rite-fonds')) return _echec('pas de sélecteur de fond');
+        if(!(u.badges&&u.badges.cycles_1&&u.badges.cycles_1.at>0)) return _echec('CYCLES I non débloqué');
+        const src=String(partagerCycle);
+        return (src.indexOf('_storySortirPartage')>=0&&src.indexOf('_storySortirTelechargement')>=0)
+          ?true:_echec('sortie différente du bilan');
+      } finally { try{ closeModal(); }catch(e){} _celebrerBadges=svC; currentUser=sv; }})());
+
+    ok('Les badges n’ont que quatre points d’appel',(()=>{
       const s=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
       const n=(s.match(/majBadges\(/g)||[]).length;
-      // Quatre occurrences : la definition, l'appel de fin de seance, l'appel
-      // de fin de bilan, et le RATTRAPAGE (_rattraperBadges), une fois par
-      // session depuis l'accueil — c'est lui qui rend a un dossier ancien ses
-      // badges a la mise a jour. Une cinquieme signalerait un rendu qui
-      // attribue des badges a chaque passage, et une banniere qui surgit sans
-      // que rien ne vienne de se passer.
-      if(n!==4) return _echec(n+' occurrences de majBadges( au lieu de quatre');
+      // Cinq occurrences : la definition, l'appel de fin de seance, l'appel
+      // de fin de bilan, la fin d'un rite de cycle (famille CYCLES), et le
+      // RATTRAPAGE (_rattraperBadges), une fois par session depuis l'accueil —
+      // c'est lui qui rend a un dossier ancien ses badges a la mise a jour. Une
+      // sixieme signalerait un rendu qui attribue des badges a chaque passage,
+      // et une celebration qui surgit sans que rien ne vienne de se passer.
+      if(n!==5) return _echec(n+' occurrences de majBadges( au lieu de cinq');
+      if(!/_riteEnregistrer\(q,true\);[\s\S]{0,300}?majBadges\(\)/.test(s))
+        return _echec('l’appel apres le rite a disparu');
       if(!/_rattraperBadges\(\)\{\s*if\(_badgesRattrapes\) return \[\];/.test(s))
         return _echec('le rattrapage n’est plus limite a une fois par session');
       if(!/function loadClientHome\(\)\{[\s\S]{0,4000}?_rattraperBadges\(\)/.test(s))
