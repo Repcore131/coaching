@@ -10259,6 +10259,21 @@ function goRegisterAthlete(){
   go('s-register');
   setTimeout(()=>selectRole('athlete',true),50);
 }
+/**
+ * « J'ai un code coach » (26/09/2026). s-client-code RATTACHE un compte
+ * connecte a un coach : sans session, doLinkCoach lisait currentUser.fname et
+ * echouait. Sans compte, la bonne porte est l'Espace athlete, carte du code
+ * ouverte — doAthleteCode y garde le code et enchaine sur l'inscription.
+ */
+function ouvrirCodeCoach(){
+  if(typeof currentUser!=='undefined'&&currentUser){ go('s-client-code'); return 's-client-code'; }
+  go('s-athlete-entry');
+  setTimeout(()=>{ try{
+    const z=document.getElementById('ae-code-zone');
+    if(z&&z.style.display==='none') aeToggleCode();
+  }catch(e){} },60);
+  return 's-athlete-entry';
+}
 function aeToggleCode(){
   const zone=document.getElementById('ae-code-zone');
   const arrow=document.getElementById('ae-arrow');
@@ -64308,6 +64323,21 @@ function saveBilanFinal(){
   // seuil : on ecrit la trace quoi qu il arrive, absence du coach comprise.
   // Elle remonte par la synchronisation, et l appareil du coach la relevera.
   try{ _dispoTracerSante('bilan'); }catch(e){}
+  // ⚠ L'ACCORD DE SANTE AVANT TOUT LE RESTE (26/09/2026). La porte etait posee
+  //   plus bas, juste avant l'ecriture du bilan — mais APRES l'effacement du
+  //   brouillon et apres les ecritures dans le dossier (questionnaire marque
+  //   complet, niveau, poids...), et sans rien pour reprendre ensuite. Le
+  //   premier bilan d'un client neuf, qui n'a pas encore donne son accord,
+  //   etait donc PERDU : accord donne, retour a l'accueil, brouillon efface,
+  //   aucun bilan, jamais « Bilan enregistré — Ton coach est prévenu. ».
+  //   Ici, rien n'a encore bouge : on demande, et on REPREND le meme
+  //   enregistrement une fois l'accord donne. Refuser ne coute rien : le
+  //   brouillon est ecrit juste avant, il se reprendra plus tard.
+  if(!aConsentiSante(currentUser)){
+    try{ _bilEcrireDraft(); }catch(e){}
+    demanderConsentementSante('mensuration',_bilanReprendreApresAccord);
+    return;
+  }
   const n=(currentUser.bilans||[]).filter(b=>b.type===bilType).length+1;
   const bi=Object.assign({type:bilType,date:Date.now(),num:n},bilData);
   // Le bilan est validé : le brouillon n'a plus de raison d'être, et le laisser
@@ -64453,10 +64483,8 @@ function saveBilanFinal(){
   // questionnaire : quelqu'un a le droit de PARCOURIR le formulaire pour voir
   // ce qu'on lui demande avant de decider. C'est au moment ou ca s'ecrit que
   // la question se pose.
-  if(!aConsentiSante(currentUser)){
-    demanderConsentementSante('mensuration',null);
-    return;
-  }
+  // (La porte de l'article 9 est en tete de fonction : rien de ce qui precede
+  //  ne s'ecrit sans l'accord.)
   if(!currentUser.bilans) currentUser.bilans=[];
   currentUser.bilans.push(bi);
   // LE BILAN ETEINT LES DEMANDES DE MESURE QU'IL SATISFAIT (lot 6). Il est
@@ -65981,7 +66009,7 @@ function rendreEssaiBilan(u){
       +'Avec un coach, l’application est comprise, et tes vidéos sont corrigées.</p>'
       +'<a class="eb-lien" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'
       +'Voir les formules de coaching</a>'
-      +'<button type="button" class="eb-lien" onclick="go(\'s-client-code\')">J’ai un code coach</button>'
+      +'<button type="button" class="eb-lien" onclick="ouvrirCodeCoach()">J’ai un code coach</button>'
     +'</div>';
   return true;
 }
@@ -66788,6 +66816,16 @@ function _htmlRestitutionBilan(user){
     +'<p class="rb-coach">'+escapeHtml(r?r.coach:_phraseCoachBilan(user))+'</p>'
     +'<button type="button" class="btn btn-red" onclick="loadProgress()">Voir ma progression</button>'
     +'<button type="button" class="btn btn-outline" style="margin-top:10px" onclick="go(\'s-client-home\');loadClientHome()">Retour à l\'accueil</button>';
+}
+// LA REPRISE APRES L'ACCORD DE SANTE. Le bilan attendait en memoire (bilData,
+// bilType) pendant la question : on l'enregistre, et l'ecran de restitution
+// suit exactement comme depuis bilNext — seulement si le bilan s'est ecrit.
+function _bilanReprendreApresAccord(){
+  if(!currentUser) return false;
+  const avant=(currentUser.bilans||[]).length;
+  try{ saveBilanFinal(); }catch(e){ return false; }
+  if((currentUser.bilans||[]).length>avant){ try{ ouvrirRestitutionBilan(); }catch(e){} return true; }
+  return false;
 }
 // Ouvert par bilNext, APRES saveBilanFinal — qui n'est pas modifiee : elle
 // ramene a l'accueil, et cet ecran prend la place tout de suite derriere.

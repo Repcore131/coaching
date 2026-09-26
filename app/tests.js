@@ -6838,7 +6838,7 @@ async function testExercices(){
           try{
             window.saveUser=()=>true; window.go=()=>{}; window.loadClientHome=()=>{};
             window.toastEcriture=()=>{};
-            currentUser=_ath({id:'h3'});
+            currentUser=Object.assign(_ath({id:'h3'}),{consent:{health:true,policyVersion:POLICY_VERSION}});
             bilType='depart';
             bilData={'deb-traitement':true,'deb-traitement-detail':'  un texte  '};
             saveBilanFinal();
@@ -6865,7 +6865,7 @@ async function testExercices(){
           try{
             window.saveUser=()=>true; window.go=()=>{}; window.loadClientHome=()=>{};
             window.toastEcriture=()=>{};
-            currentUser=_ath({id:'h4',trait:true});
+            currentUser=Object.assign(_ath({id:'h4',trait:true}),{consent:{health:true,policyVersion:POLICY_VERSION}});
             bilType='coaching';
             bilData={};
             saveBilanFinal();
@@ -6888,7 +6888,7 @@ async function testExercices(){
           try{
             window.saveUser=()=>true; window.go=()=>{}; window.loadClientHome=()=>{};
             window.toastEcriture=()=>{};
-            currentUser=_ath({id:'h5',trait:true,detail:'garde-moi'});
+            currentUser=Object.assign(_ath({id:'h5',trait:true,detail:'garde-moi'}),{consent:{health:true,policyVersion:POLICY_VERSION}});
             bilType='coaching';
             bilData={'bil-traitement-change':'Je ne prends plus de traitement'};
             saveBilanFinal();
@@ -33897,7 +33897,12 @@ async function testExercices(){
         if(t[2]!=='Je m\'entraîne seul') return _echec('la troisième porte : '+t[2]);
         // CHACUNE MENE QUELQUE PART, et la bonne : le code vers l'écran de
         // code, le coach vers la page de coaching, l'autonomie vers les prix.
-        if((portes[0].getAttribute('onclick')||'').indexOf('s-client-code')<0)
+        // Sans session, le code mène à l'Espace athlète (inscription) ; avec,
+        // à l'écran de rattachement. ouvrirCodeCoach choisit (26/09/2026).
+        const _codeCoachAiguille=()=>{ const f=String(ouvrirCodeCoach);
+          return f.indexOf("go('s-client-code')")>=0&&f.indexOf("go('s-athlete-entry')")>=0; };
+        if(((portes[0].getAttribute('onclick')||'').indexOf('s-client-code')<0)
+          &&!((portes[0].getAttribute('onclick')||'').indexOf('ouvrirCodeCoach()')>=0&&_codeCoachAiguille()))
           return _echec('« J’ai un code coach » ne mène pas à l’écran de code');
         if((portes[1].getAttribute('href')||'').indexOf('beacons.ai/kevin.gllc')<0)
           return _echec('« Je cherche un coach » ne mène pas à la page de coaching');
@@ -48136,7 +48141,7 @@ async function testExercices(){
         if(b.length<4) return _echec(b.length+' portes seulement');
         if(!b.some(x=>/beacons\.ai\/kevin\.gllc/.test(x.getAttribute('href')||'')))
           return _echec('aucune porte ne mène au coaching');
-        if(!b.some(x=>/s-client-code/.test(x.getAttribute('onclick')||'')))
+        if(!b.some(x=>/s-client-code|ouvrirCodeCoach\(\)/.test(x.getAttribute('onclick')||'')))
           return _echec('aucune porte ne mène au code coach');
         // NI TIRET CADRATIN, NI VOCABULAIRE TECHNIQUE.
         if(txt.indexOf(String.fromCharCode(8212))>=0||txt.indexOf(String.fromCharCode(8211))>=0)
@@ -51465,6 +51470,61 @@ async function testExercices(){
       const carte=_buildSessionCard({date:Date.now(),data:{'Développé haltères':dev}});
       if(!/32kg×12[\s\S]*34kg×11[\s\S]*36kg×10(?!-)/.test(carte)) return _echec('carte coach : '+(carte.match(/\d+kg×[\d-]+/g)||[]).join(' '));
       return true;})());
+
+    // ══ 26/09/2026 — LE PREMIER BILAN D'UN CLIENT NEUF N'EST PLUS PERDU ═══════
+    ok('BILAN — SANS ACCORD DE SANTÉ : RIEN N’EST ÉCRIT, LE BROUILLON RESTE, ET L’ACCORD REPREND L’ENREGISTREMENT',(()=>{
+      const sU=currentUser, sT=bilType, sD=bilData;
+      const sv={go:window.go,save:window.saveUser,lch:window.loadClientHome,res:window.ouvrirRestitutionBilan,push:CLOUD.pushOne,
+        mig:window.photosBilanMigrer,badges:window.majBadges,toast:window.toast};
+      let ecran=null, restit=0, brouillon=null;
+      try{ brouillon=localStorage.getItem(BIL_DRAFT_KEY); }catch(e){}
+      try{
+        window.go=(id)=>{ ecran=id; }; window.saveUser=()=>true; window.loadClientHome=()=>{};
+        window.ouvrirRestitutionBilan=()=>{ restit++; return true; };
+        CLOUD.pushOne=()=>Promise.resolve(true); window.photosBilanMigrer=async()=>({faites:0});
+        window.majBadges=()=>{}; window.toast=()=>{};
+        currentUser={id:'nb1',email:'nb1@t',role:'athlete',fname:'Neuf',coachId:'c1',sessions:[],bilans:[],exAlias:{},exMuscles:{}};
+        bilType='depart';
+        bilData={'deb-weight':'72','deb-height':'175','deb-goals':['Prise de muscle']};
+        try{ localStorage.removeItem(BIL_DRAFT_KEY); }catch(e){}
+        saveBilanFinal();
+        if(ecran!=='s-consent-sante') return _echec('l’accord n’est pas demandé : '+ecran);
+        if(currentUser.bilans.length) return _echec('un bilan écrit sans accord');
+        if(currentUser.questionnaireComplete||currentUser.weight||currentUser.bilanGoals) return _echec('le dossier a bougé sans accord');
+        let d=null; try{ d=JSON.parse(localStorage.getItem(BIL_DRAFT_KEY)||'null'); }catch(e){}
+        if(!d||!d.bilData||d.bilData['deb-weight']!=='72') return _echec('le brouillon a été effacé avant l’accord');
+        // L'accord est donné : le même bilan s'enregistre, et la restitution suit.
+        const c=document.getElementById('cs-health'); if(!c) return _echec('case d’accord absente');
+        c.checked=true;
+        accepterConsentementSante();
+        if(currentUser.bilans.length!==1) return _echec('le bilan n’est pas enregistré après l’accord ('+currentUser.bilans.length+')');
+        if(currentUser.bilans[0]['deb-weight']!=='72') return _echec('le bilan enregistré n’est pas celui saisi');
+        if(!restit) return _echec('pas d’écran « Bilan enregistré »');
+        let d2=null; try{ d2=localStorage.getItem(BIL_DRAFT_KEY); }catch(e){}
+        if(d2) return _echec('le brouillon survit à l’enregistrement');
+        // Et la phrase de l'écran : le coach est prévenu.
+        if(!/Ton coach est prévenu/.test(_phraseCoachBilan(currentUser))) return _echec('phrase : '+_phraseCoachBilan(currentUser));
+        return true;
+      }finally{
+        currentUser=sU; bilType=sT; bilData=sD;
+        window.go=sv.go; window.saveUser=sv.save; window.loadClientHome=sv.lch; window.ouvrirRestitutionBilan=sv.res;
+        CLOUD.pushOne=sv.push; window.photosBilanMigrer=sv.mig; window.majBadges=sv.badges; window.toast=sv.toast;
+        try{ if(brouillon==null) localStorage.removeItem(BIL_DRAFT_KEY); else localStorage.setItem(BIL_DRAFT_KEY,brouillon); }catch(e){}
+        try{ const c=document.getElementById('cs-health'); if(c) c.checked=false; }catch(e){}
+      }})());
+    ok('CODE COACH — SANS SESSION, L’ESPACE ATHLÈTE CARTE OUVERTE ; CONNECTÉ, L’ÉCRAN DE RATTACHEMENT',(()=>{
+      const sU=currentUser, sGo=window.go; let ecran=null;
+      try{
+        window.go=(id)=>{ ecran=id; };
+        currentUser=null;
+        if(ouvrirCodeCoach()!=='s-athlete-entry'||ecran!=='s-athlete-entry') return _echec('sans session : '+ecran);
+        currentUser={id:'cc1',email:'cc1@t',role:'athlete'};
+        if(ouvrirCodeCoach()!=='s-client-code'||ecran!=='s-client-code') return _echec('connecté : '+ecran);
+        // Les deux boutons de l'accueil passent par là.
+        const w=document.querySelector('#s-welcome .wel-p-code');
+        if(!w||(w.getAttribute('onclick')||'').indexOf('ouvrirCodeCoach()')<0) return _echec('bouton de l’accueil : '+(w&&w.getAttribute('onclick')));
+        return true;
+      }finally{ currentUser=sU; window.go=sGo; }})());
 
     // ══ 26/09/2026 — LE FOND DES VISUELS : sans fond, ma photo, rouge ════════
     const _vfBilan=()=>bilanSeanceDonnees({date:Date.now(),name:'Push',duration:40,sets:3,setsPlanned:3,volume:900,
@@ -64687,7 +64747,7 @@ async function testExercices(){
           try{
             window.saveUser=()=>true;
             currentUser={id:'bq',email:'bq@t',role:'athlete',exAlias:{},exMuscles:{},
-              sessions:[],bilans:[]};
+              sessions:[],bilans:[],consent:{health:true,policyVersion:POLICY_VERSION}};
             if(nutDepart) currentUser.nutrition=nutDepart;
             bilType='depart';
             bilData=reponse==null?{}:{'deb-nutrition-type':reponse};
