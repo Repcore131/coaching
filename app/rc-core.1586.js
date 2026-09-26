@@ -9521,6 +9521,10 @@ function _boutonSous(zoneId,cle,libelle,action){
 function _lienVersInscription(em){
   _boutonSous('l-err','l-vers-inscription','Créer mon compte avec cette adresse',()=>{
     go('s-register');
+    // LE ROLE DEJA CHOISI EST GARDE, et s'il n'y en a pas, le choix se montre :
+    // un bloc masque par une visite precedente laissait un formulaire qui
+    // refusait de partir sans qu'on voie pourquoi (QA du 27/09/2026).
+    try{ if(selRole) selectRole(selRole,true); else rcRoleRouvrir(); }catch(e){}
     const i=document.getElementById('r-email');
     if(i) i.value=em||'';
   });
@@ -10368,12 +10372,25 @@ function copyCoachInviteLink(){
   };
   const encoded=btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
   const url=APP_BASE_URL+'?coachpkg='+encoded;
-  if(navigator.clipboard){
-    navigator.clipboard.writeText(url).then(()=>toast('✓ Lien copié ! Envoie-le à ton athlète par WhatsApp ou SMS.'));
-  }else{
-    const ta=document.createElement('textarea');ta.value=url;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();
-    toast('✓ Lien copié !');
-  }
+  // LA COPIE PEUT ETRE REFUSEE (QA du 27/09/2026) : permission, navigateur
+  // integre d'une application, page sans le focus. writeText rejetait alors
+  // sans rien dire — aucun toast, et le coach croyait le lien copie. _rcCopier
+  // essaie le presse-papiers puis l'ancienne copie ; en dernier recours, le
+  // lien s'affiche pour etre copie a la main.
+  _rcCopierOuMontrer(url,'✓ Lien copié ! Envoie-le à ton athlète par WhatsApp ou SMS.','Copie ce lien et envoie-le à ton athlète :');
+}
+/**
+ * Copier, et DIRE ce qui s'est passe : le toast de reussite seulement si la
+ * copie a reussi ; sinon le texte s'affiche dans une boite ou il se
+ * selectionne a la main. Rend une promesse de booleen (copie faite ou non).
+ */
+function _rcCopierOuMontrer(texte,okMsg,titreManuel){
+  return _rcCopier(String(texte||'')).then(ok=>{
+    if(ok){ try{ toast(okMsg,'var(--green)'); }catch(e){} return true; }
+    try{ toast('Copie refusée par le navigateur : copie-le à la main.','var(--orange)'); }catch(e){}
+    try{ window.prompt(titreManuel||'Copie ce texte :',String(texte||'')); }catch(e){}
+    return false;
+  });
 }
 
 async function doAthleteCode(){
@@ -34457,7 +34474,8 @@ function ouvrirAchatProgramme(id){
   if(!p){ toast('Programme introuvable.','var(--orange)'); return; }
   if(!currentUser){
     toast('Crée ton compte avant d\'acheter.','var(--orange)');
-    go('s-register'); return;
+    // Un programme s'achete en athlete : le role est pose (QA du 27/09/2026).
+    go('s-register'); try{ selectRole('athlete',true); }catch(e){} return;
   }
   _achatProgId=id;
   const z=document.getElementById('ach-corps');
@@ -103080,8 +103098,8 @@ function relancerAccesAthlete(id){
   if(!tel){
     // Pas de numero : on ne fait pas semblant. Le message est copie, le coach
     // l'envoie par le canal qu'il veut.
-    try{ navigator.clipboard.writeText(msg); toast('Pas de numéro : message copié.','var(--orange)'); }
-    catch(e){ toast('Pas de numéro enregistré pour '+(c.fname||'cet athlète')+'.','var(--orange)'); }
+    // La copie est ATTENDUE : « message copié » ne s'annonce que s'il l'est.
+    _rcCopierOuMontrer(msg,'Pas de numéro : message copié.','Pas de numéro pour '+(c.fname||'cet athlète')+'. Copie ce message :');
     return false;
   }
   window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank','noopener');
@@ -104321,12 +104339,7 @@ async function generateStudentCode(){
 }
 function copyStudentCode(){
   if(!lastGeneratedCode) return;
-  if(navigator.clipboard){
-    navigator.clipboard.writeText(lastGeneratedCode).then(()=>toast('Code copié. Envoie-le à l\'élève par WhatsApp/SMS'));
-  } else {
-    const t=document.createElement('textarea');t.value=lastGeneratedCode;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();
-    toast('Code copié');
-  }
+  _rcCopierOuMontrer(lastGeneratedCode,'Code copié. Envoie-le à l\'élève par WhatsApp/SMS','Copie ce code et envoie-le à l\'élève :');
 }
 function loadStudentCodes(){
   const isCreator=currentUser.email===CREATOR_EMAIL;

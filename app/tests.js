@@ -19027,12 +19027,38 @@ async function testExercices(){
           // formulaire qui refuse de partir sans qu'on sache pourquoi.
           const s=_prodSrc().replace(/^\s*\/\/.*$/gm,'');
           const routes=(s.match(/go\('s-register'\)/g)||[]).length;
-          const poses=(s.match(/selectRole\('(?:coach|athlete)',true\)/g)||[]).length;
+          // Garder le rôle déjà choisi (« Créer mon compte avec cette adresse ») vaut pose.
+          const poses=(s.match(/selectRole\('(?:coach|athlete)',true\)|selectRole\(selRole,true\)/g)||[]).length;
           if(!routes) return _echec('plus aucune route vers l’inscription');
           if(poses<routes)
             return _echec(poses+' présélection(s) pour '+routes+' routes : une au moins ne pose pas le rôle');
           return true;})());
 
+        okA('QA — UNE COPIE REFUSÉE NE S’ANNONCE PAS RÉUSSIE : LE TEXTE S’AFFICHE À COPIER',(async()=>{
+          const sv={cb:navigator.clipboard,ex:document.execCommand,pr:window.prompt,to:window.toast,u:currentUser};
+          const toasts=[], invites=[];
+          try{
+            Object.defineProperty(navigator,'clipboard',{value:{writeText:()=>Promise.reject(new DOMException('Document is not focused','NotAllowedError'))},configurable:true});
+            document.execCommand=()=>false;
+            window.prompt=(t,v)=>{ invites.push(v); return null; };
+            window.toast=(m,c)=>{ toasts.push(String(m)); };
+            currentUser={id:'qc1',email:'qc1@t.fr',role:'coach',fname:'Q',lname:'C',code:'RC-QA'};
+            copyCoachInviteLink();
+            await new Promise(r=>setTimeout(r,60));
+            if(toasts.some(t=>/Lien copié/.test(t))) return _echec('« Lien copié » annoncé alors que rien n’a été copié');
+            if(!toasts.some(t=>/Copie refusée/.test(t))) return _echec('rien ne dit que la copie a échoué : '+toasts.join(' | '));
+            if(!invites.length||invites[0].indexOf('coachpkg=')<0) return _echec('le lien n’est pas montré à copier à la main');
+            // Et quand la copie passe, la réussite se dit, sans boîte.
+            toasts.length=0; invites.length=0;
+            Object.defineProperty(navigator,'clipboard',{value:{writeText:()=>Promise.resolve()},configurable:true});
+            copyCoachInviteLink();
+            await new Promise(r=>setTimeout(r,60));
+            if(!toasts.some(t=>/Lien copié/.test(t))||invites.length) return _echec('copie réussie mal annoncée : '+toasts.join(' | '));
+            return true;
+          }finally{
+            try{ Object.defineProperty(navigator,'clipboard',{value:sv.cb,configurable:true}); }catch(e){}
+            document.execCommand=sv.ex; window.prompt=sv.pr; window.toast=sv.to; currentUser=sv.u;
+          }}));
         ok('Critère : coller le lien complet mène à l\'inscription, coach lié',(()=>{
           const _sv=currentUser, _su=localStorage.getItem('rc_users');
           const _pc=localStorage.getItem('pendingCode'), _ss=window.saveUser;
