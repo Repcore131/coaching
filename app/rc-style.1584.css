@@ -8853,27 +8853,41 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .pdj-carte[data-fait]{border-left-color:var(--green)}
 @media(prefers-reduced-motion:reduce){.pdj-past{transition:none}}
 
-.bdg-fete{position:fixed;left:16px;right:16px;bottom:88px;margin:0 auto;
-  width:fit-content;max-width:min(92vw,360px);z-index:var(--z-toast);
-  transform:translateY(16px);opacity:0;pointer-events:none;
-  display:flex;align-items:center;gap:12px;
-  background:var(--surface-2);border:1px solid var(--border);
-  border-left:4px solid var(--red);border-radius:var(--r-3);
-  padding:11px 15px 11px 12px;box-shadow:0 10px 30px rgba(0,0,0,.45);
-  transition:opacity var(--t-3) var(--c-out),transform var(--t-3) var(--c-out)}
-/* ⚠ CENTRE PAR left/right/margin:auto, ET NON par left:50% + translateX.
-   Un bloc fixe cale a left:50% n'a plus que LA MOITIE de la fenetre comme
-   largeur disponible : sur un telephone de 390 px, la banniere se repliait a
-   195 px, le titre passait sur deux lignes et la phrase sur quatre. Le
-   max-width ne servait a rien, il n'etait jamais atteint. Mesure faite au
-   navigateur le 15/09/2026. La translation ne porte donc plus que le Y. */
-.bdg-fete[data-vu]{opacity:1;transform:translateY(0)}
-.bdg-fete img{width:54px;height:54px;flex-shrink:0;display:block}
-.bdg-fete b{display:block;font-size:var(--fs-xs);letter-spacing:1.2px;
-  font-weight:800;text-transform:uppercase;color:var(--red);margin-bottom:3px}
-.bdg-fete span{display:block;font-size:var(--fs-sm);color:var(--text-strong);
-  line-height:1.45}
-@media(prefers-reduced-motion:reduce){.bdg-fete{transition:none}}
+/* ══ L'ÉCRAN DE CÉLÉBRATION D'UN BADGE (#bdg-ecran) ══════════════════
+   Il remplace le bandeau .bdg-fete : fond noir, plein écran, au-dessus de
+   tout SAUF du calque des animations (--z-layer, où vit le halo) et de la
+   toile de rcFoudre (1900) — la foudre et le halo doivent passer DEVANT. */
+.bdg-ecran{position:fixed;inset:0;z-index:1790;background:#000;
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+  padding:max(20px,env(safe-area-inset-top)) 20px max(20px,env(safe-area-inset-bottom));
+  overflow-y:auto;text-align:center;color:#fff}
+/* Centré par des marges automatiques et non par justify-content:center : sur
+   un petit écran où le contenu déborde, ce dernier rogne le HAUT (le
+   médaillon) sans qu'on puisse y défiler. */
+.bdg-ecran>:first-child{margin-top:auto}
+.bdg-ecran>:last-child{margin-bottom:auto}
+.bdg-ecran-scene{position:relative;width:min(70vw,300px);aspect-ratio:1;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;margin-bottom:8px}
+.bdg-ecran-long .bdg-ecran-scene{width:min(74vw,320px)}
+.bdg-ecran-med{width:84%;transform-style:preserve-3d;will-change:transform}
+.bdg-ecran-med img{width:100%;height:auto;aspect-ratio:1;object-fit:contain;display:block}
+.bdg-ecran-arcs{position:absolute;inset:-6%;width:112%;height:112%;pointer-events:none}
+.bdg-ecran-txt{width:100%;max-width:420px}
+.bdg-ecran-sur{font-size:var(--fs-xs);font-weight:800;letter-spacing:3px;color:var(--red-text);margin-bottom:6px}
+.bdg-ecran-nom{font-family:var(--pile-titre);font-size:clamp(34px,10vw,52px);line-height:1;
+  letter-spacing:1px;margin:0 0 6px;color:#fff}
+.bdg-ecran-meta{font-size:var(--fs-sm);font-weight:800;letter-spacing:1.4px;color:var(--text-strong);
+  font-variant-numeric:tabular-nums}
+.bdg-ecran-rar{font-size:var(--fs-sm);font-weight:700;color:#fff;margin-top:6px}
+.bdg-ecran-cond{font-size:var(--fs-sm);color:var(--text-dim);line-height:1.5;margin:10px 0 12px}
+.bdg-ecran .vf{margin:0 0 12px}
+.bdg-ecran .btn{width:100%;display:flex;align-items:center;justify-content:center;gap:8px}
+.bdg-ecran-tard{margin-top:8px}
+.bdg-ecran-grille{display:grid;grid-template-columns:repeat(auto-fit,minmax(78px,1fr));gap:12px 8px;margin:16px 0 4px}
+.bdg-ecran-grille img{width:64px;height:auto;aspect-ratio:1;object-fit:contain;display:block;margin:0 auto 4px}
+.bdg-ecran-grille span{font-size:var(--fs-2xs);font-weight:800;letter-spacing:.6px;color:var(--text-strong)}
+.bdg-fiche-rar{font-size:var(--fs-xs);font-weight:700;color:var(--text-strong);margin:-4px 0 12px}
+.bdg-fiche .vf{margin:0 0 12px}
 
 /* La vitrine du profil. LES CINQ SONT TOUJOURS LÀ, obtenus ou non : une
    grille qui ne montrerait que les acquis ne dirait pas ce qui reste, et

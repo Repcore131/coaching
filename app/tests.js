@@ -47416,53 +47416,114 @@ async function testExercices(){
         return un.length===1?true:_echec('le premier passage a rendu '+un.join(','));
       } finally { currentUser=sv; }})());
 
-    // « A l'obtention, afficher une celebration breve et sobre : une animation
-    // courte, le badge, une phrase. PAS DE MODALE BLOQUANTE. » — la banniere
-    // ne prend pas le focus, ne couvre aucun bouton, et il n'y a rien a fermer.
-    ok('La célébration ne bloque rien',(()=>{
-      const z=document.getElementById('bdg-fete');
-      if(!z) return _echec('le noeud de celebration n’existe pas');
-      // Hors de tout .screen : elle doit survivre au changement d'ecran, comme
-      // le toast — majBadges est appelee AVANT go('s-workout-done').
-      if(z.closest('.screen')) return _echec('la banniere vit dans un ecran');
-      const css=_stylesProd().map(x=>x.textContent).join('\n');
-      const m=css.match(/\.bdg-fete\{([^}]*)\}/);
-      if(!m) return _echec('la regle .bdg-fete n’existe pas');
-      if(!/pointer-events:none/.test(m[1]))
-        return _echec('la banniere intercepte les clics : '+m[1].slice(0,80));
-      if(!/position:fixed/.test(m[1])) return _echec('la banniere n’est pas posee');
-      // AUCUN DES GESTES D'UNE MODALE : pas de voile, pas de prise de focus,
-      // pas de changement d'ecran, pas de blocage du defilement.
-      const src=String(_celebrerBadge);
-      for(const g of ['focus(','showModal','go(','overflow','confirm(','alert('])
-        if(src.indexOf(g)>=0) return _echec('_celebrerBadge appelle '+g);
-      // ELLE S'EN VA SEULE. Un setTimeout qui retire data-vu, et rien qui
-      // attende un geste.
-      if(!/setTimeout/.test(src)||!/removeAttribute\('data-vu'\)/.test(src))
-        return _echec('la banniere ne se retire pas d’elle-meme');
+    // L'ÉCRAN DE CÉLÉBRATION (26/09/2026) remplace le bandeau #bdg-fete. Il
+    // prend l'écran — c'est voulu — mais se ferme par « Plus tard » et par
+    // Échap, et il vit hors de tout .screen pour survivre à go().
+    ok('L’écran de célébration : plein écran, texte, Partager, Plus tard, Échap',(()=>{
+      const sv=currentUser;
+      try{
+        if(document.getElementById('bdg-fete')) return _echec('le bandeau #bdg-fete est encore là');
+        currentUser={role:'athlete',badges:{'tonnage_2':{at:new Date(2026,8,1,10).getTime()}}};
+        _bdgFile=[]; _bdgRecap=[];
+        _bdgEcran('tonnage_2',0);
+        const z=document.getElementById('bdg-ecran');
+        if(!z) return _echec('l’écran ne s’ouvre pas');
+        if(z.closest('.screen')) return _echec('l’écran vit dans un .screen');
+        if(z.getAttribute('role')!=='dialog') return _echec('pas de role=dialog');
+        const css=getComputedStyle(z);
+        if(css.position!=='fixed') return _echec('pas en position fixe');
+        const t=z.textContent;
+        for(const x of ['BADGE DÉBLOQUÉ','TONNAGE II','PALIER II','01/09/2026'])
+          if(t.indexOf(x)<0) return _echec('« '+x+' » manque');
+        if(!/-512\.webp/.test(z.innerHTML)) return _echec('pas le visuel 512 px');
+        if(!z.querySelector('[onclick^="partagerBadge("]')) return _echec('pas de Partager');
+        if(!z.querySelector('#bdg-ecran-fonds')) return _echec('pas de sélecteur de fond');
+        if(!z.querySelector('[onclick="bdgPlusTard()"]')) return _echec('pas de Plus tard');
+        z.querySelector('.bdg-ecran-part').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+        if(document.getElementById('bdg-ecran')) return _echec('Échap ne ferme pas');
+        // Un secret : le titre change.
+        currentUser.badges.aube={at:Date.now()};
+        _bdgEcran('aube',0);
+        const z2=document.getElementById('bdg-ecran');
+        if(!z2||z2.textContent.indexOf('BADGE SECRET DÉCOUVERT')<0) return _echec('titre du secret');
+        if(!z2.classList.contains('bdg-ecran-long')) return _echec('un secret n’a pas la version longue');
+        bdgPlusTard();
+        return document.getElementById('bdg-ecran')?_echec('Plus tard ne ferme pas'):true;
+      } finally { try{ _bdgFermerEcran(true); }catch(e){} currentUser=sv; }})());
+    ok('Palier IV et secrets : la version longue, avec les arcs',(()=>{
+      if(!_bdgLong(badgeAcquisDef('tonnage_4'))||!_bdgLong(badgeAcquisDef('noel'))) return _echec('IV ou secret en version courte');
+      if(_bdgLong(badgeAcquisDef('tonnage_3'))||_bdgLong(badgeAcquisDef('premier-bilan'))) return _echec('version longue pour un badge ordinaire');
+      const src=String(_bdgJouer);
+      if(!/_bdgArcs\(z,2000\)/.test(src)) return _echec('les arcs ne durent pas 2 s');
+      for(const f of ['rcFoudre','arcGlow','arcHaptique','rotateY']) if(src.indexOf(f)<0) return _echec(f+' absent de la mise en scène');
       return true;})());
+    ok('Plusieurs badges : trois écrans au plus, puis un récapitulatif',(()=>{
+      const p5=_bdgPlan(['a','b','c','d','e']);
+      if(p5.ecrans.join()!=='a,b,c'||p5.recap.join()!=='d,e') return _echec('5 badges → '+JSON.stringify(p5));
+      const p2=_bdgPlan(['a','b']);
+      if(p2.ecrans.length!==2||p2.recap.length) return _echec('2 badges → '+JSON.stringify(p2));
+      const r=_bdgPlan(['a','b','c','d'],true);
+      return (!r.ecrans.length&&r.recap.length===4)?true:_echec('le rattrapage joue des écrans');})());
+    ok('La rareté : un pourcentage lisible, et rien sans donnée',(()=>{
+      const st={total:200,pct:{aube:4.2,assidu_1:37.5,noel:0.4}};
+      if(badgeRareteTexte('aube',st)!=='Possédé par 4,2 % des athlètes') return _echec(badgeRareteTexte('aube',st));
+      if(badgeRareteTexte('assidu_1',st)!=='Possédé par 38 % des athlètes') return _echec(badgeRareteTexte('assidu_1',st));
+      if(badgeRareteTexte('noel',st)!=='Moins de 1 % des athlètes le possèdent') return _echec('noel');
+      if(badgeRareteTexte('phenix',st)!=='Moins de 1 % des athlètes le possèdent') return _echec('absent des stats');
+      if(badgeRareteTexte('aube',{total:0,pct:{aube:4}})!=='') return _echec('total nul');
+      const sv=_statsBadges; _statsBadges=null;
+      try{
+        let ls=null; try{ ls=localStorage.getItem(BADGE_STATS_CLE); localStorage.removeItem(BADGE_STATS_CLE); }catch(e){}
+        const v=badgeRareteTexte('aube');
+        try{ if(ls) localStorage.setItem(BADGE_STATS_CLE,ls); }catch(e){}
+        return v===''?true:_echec('sans donnée, une ligne : '+v);
+      } finally { _statsBadges=sv; }})());
+    ok('La carte d’un secret révèle son indice, jamais sa condition',(()=>{
+      const P=CanvasRenderingContext2D.prototype, f=P.fillText, vus=[];
+      P.fillText=function(t){ vus.push(String(t)); return f.apply(this,arguments); };
+      try{
+        const b=badgeAcquisDef('aube');
+        const c=_dessinerCarteBadge(b,Date.now(),null,'rouge','KEVIN','Possédé par 3 % des athlètes');
+        if(c.width!==1080||c.height!==1920) return _echec('format '+c.width+'x'+c.height);
+        const tout=vus.join('|');
+        if(tout.indexOf(b.indice)<0) return _echec('indice absent');
+        if(tout.indexOf(b.condition)>=0) return _echec('la condition est révélée');
+        if(tout.indexOf('Possédé par 3 %')<0) return _echec('rareté absente');
+        vus.length=0;
+        _dessinerCarteBadge(badgeAcquisDef('tonnage_3'),Date.now(),null,'transparent','KEVIN','');
+        if(vus.join('|').indexOf('TONNAGE')<0) return _echec('le nom manque');
+        return true;
+      } finally { P.fillText=f; }})());
+    ok('/stats/badges : lecture publique, aucune écriture cliente',(()=>{
+      const r=window._RC_RULES;
+      if(!r) return true;                      // règles non servies : regles.mjs le dit
+      const m=r.match(/"stats"\s*:\s*\{([^}]*)\}/);
+      if(!m) return _echec('le nœud stats manque aux règles');
+      if(!/"\.read"\s*:\s*true/.test(m[1])) return _echec('stats n’est pas en lecture publique');
+      return /"\.write"\s*:\s*false/.test(m[1])?true:_echec('stats est inscriptible');})());
+
 
     // UNE SEULE BANNIERE, meme quand plusieurs badges tombent ensemble — cas
     // reel : la premiere seance d'un programme a une seance par semaine vaut
     // aussi la semaine validee. Trois bannieres a la file seraient la
     // collection sans fin qu'on refuse, en accelere.
-    ok('Plusieurs badges d’un coup ne font qu’une seule bannière',(()=>{
-      const sv=currentUser, svC=_celebrerBadge;
+    ok('Plusieurs badges d’un coup : une seule célébration, qui les enchaîne',(()=>{
+      const sv=currentUser, svC=_celebrerBadges;
       const vues=[];
       try{
-        _celebrerBadge=(id)=>{ vues.push(id); };
+        _celebrerBadges=(ids,recap)=>{ vues.push([ids,recap]); };
         currentUser={id:'b3',email:'b3@t.fr',role:'athlete',
-          sessions:[{date:Date.now()-3600e3,exercises:[]}],
+          sessions:[{date:new Date(2026,2,10,12).getTime(),duration:60,exercises:[]}],
           bilans:[{date:Date.now()}],sessions_config:[{active:true}]};
         const n=majBadges();
         if(n.length<2) return _echec('le cas a plusieurs badges ne se produit pas : '+n.join(','));
-        if(vues.length!==1) return _echec(vues.length+' bannieres pour '+n.length+' badges');
-        if(vues[0]!==n[0]) return _echec('la banniere ne montre pas le premier : '+vues[0]);
-        // LES AUTRES SONT INSCRITS QUAND MEME, et attendent dans le profil.
+        if(vues.length!==1) return _echec(vues.length+' célébrations pour '+n.length+' badges');
+        if(vues[0][0].join()!==n.join()) return _echec('la célébration ne reçoit pas tous les badges');
+        if(vues[0][1]) return _echec('une fin de séance joue le seul récapitulatif');
         for(const id of n) if(!currentUser.badges[id])
           return _echec(id+' n’est pas inscrit au dossier');
         return true;
-      } finally { currentUser=sv; _celebrerBadge=svC; }})());
+      } finally { currentUser=sv; _celebrerBadges=svC; }})());
 
     // LA VITRINE DU PROFIL : les cinq, toujours les cinq. Montrer seulement les
     // acquis repondrait a « qu'ai-je gagne » et jamais a « que reste-t-il »,
@@ -47646,19 +47707,20 @@ async function testExercices(){
     // LA RÉTRO-ATTRIBUTION : un dossier ancien reçoit tout, daté du jour où
     // chaque badge a été mérité, et UNE seule célébration récapitulative.
     ok('Rétro-attribution : les vraies dates, et une seule bannière récapitulative',(()=>{
-      const sv=currentUser, svC=_celebrerBadge, svR=_badgesRattrapes;
+      const sv=currentUser, svC=_celebrerBadges, svR=_badgesRattrapes;
       const vues=[];
       try{
         const {J,sc,base}=_B;
         const l=Array.from({length:12},(_,i)=>sc(base+i*J,{DEV:[100+i,5]}));
         currentUser={id:'r1',email:'r1@t.fr',role:'athlete',sessions:l,
           bilans:[{date:base+2*J}],sessions_config:[{active:true}]};
-        _celebrerBadge=(id,n)=>{ vues.push([id,n]); };
+        _celebrerBadges=(ids,recap)=>{ vues.push([ids.length,recap]); };
         _badgesRattrapes=false;
         const n=_rattraperBadges();
         if(n.length<5) return _echec('seulement '+n.length+' badges rendus : '+n.join(','));
         if(vues.length!==1) return _echec(vues.length+' célébrations au lieu d’une');
-        if(vues[0][1]!==n.length) return _echec('le récapitulatif annonce '+vues[0][1]+' pour '+n.length);
+        if(vues[0][0]!==n.length) return _echec('le récapitulatif annonce '+vues[0][0]+' pour '+n.length);
+        if(vues[0][1]!==true) return _echec('le rattrapage joue des écrans au lieu du seul récapitulatif');
         const b=currentUser.badges;
         if(b['premiere-seance'].at!==l[0].date) return _echec('première séance datée du jour de la mise à jour');
         if(b['assidu_1'].at!==l[9].date) return _echec('ASSIDU I pas daté de la 10e séance');
@@ -47666,13 +47728,16 @@ async function testExercices(){
         if(b['premier-bilan'].at!==base+2*J) return _echec('premier bilan mal daté');
         // Une seule fois par session.
         if(_rattraperBadges().length) return _echec('le rattrapage se rejoue');
-        // Le récapitulatif dit le nombre.
-        _celebrerBadge=svC;
         return true;
-      } finally { currentUser=sv; _celebrerBadge=svC; _badgesRattrapes=svR; }})());
-    ok('La bannière récapitulative dit « Tu as débloqué N badges »',(()=>{
-      const src=String(_celebrerBadge);
-      return /Tu as débloqué '\+n\+' badges/.test(src)?true:_echec('libellé du récapitulatif absent');})());
+      } finally { currentUser=sv; _celebrerBadges=svC; _badgesRattrapes=svR; }})());
+    ok('Le récapitulatif dit « Tu as débloqué N badges »',(()=>{
+      try{
+        _bdgEcranRecap(['assidu_1','noel','tonnage_1']);
+        const z=document.getElementById('bdg-ecran');
+        if(!z) return _echec('le récapitulatif ne s’ouvre pas');
+        if(z.textContent.indexOf('Tu as débloqué 3 badges')<0) return _echec('libellé absent');
+        return z.querySelectorAll('.bdg-ecran-grille img').length===3?true:_echec('médaillons absents');
+      } finally { _bdgFermerEcran(true); }})());
     // ── PERSONAL_BEST : corrigé, pas supprimé ─────────────────────────────
     ok('PERSONAL BEST : meilleure e1RM battue sans record de charge',(()=>{
       const J=864e5, t=Date.now();
@@ -47691,14 +47756,14 @@ async function testExercices(){
 
     ok('Les badges n’ont que trois points d’appel',(()=>{
       const s=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
-      const n=(s.match(/majBadges\(\)/g)||[]).length;
+      const n=(s.match(/majBadges\(/g)||[]).length;
       // Quatre occurrences : la definition, l'appel de fin de seance, l'appel
       // de fin de bilan, et le RATTRAPAGE (_rattraperBadges), une fois par
       // session depuis l'accueil — c'est lui qui rend a un dossier ancien ses
       // badges a la mise a jour. Une cinquieme signalerait un rendu qui
       // attribue des badges a chaque passage, et une banniere qui surgit sans
       // que rien ne vienne de se passer.
-      if(n!==4) return _echec(n+' occurrences de majBadges() au lieu de quatre');
+      if(n!==4) return _echec(n+' occurrences de majBadges( au lieu de quatre');
       if(!/_rattraperBadges\(\)\{\s*if\(_badgesRattrapes\) return \[\];/.test(s))
         return _echec('le rattrapage n’est plus limite a une fois par session');
       if(!/function loadClientHome\(\)\{[\s\S]{0,4000}?_rattraperBadges\(\)/.test(s))

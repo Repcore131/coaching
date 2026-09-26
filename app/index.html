@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1583';
+window.RC_BUILD='1584';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -422,7 +422,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1583.css">
+<link rel="stylesheet" href="./rc-style.1584.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -5332,13 +5332,8 @@ const COACH_PHOTO='icons/coach.jpg';
      min-width etait la seule contrainte de largeur. Il enveloppe desormais. -->
 <div id="toast" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(28px);background:#222;color:var(--text);padding:12px 20px;border-radius:var(--r-3);font-size:var(--fs-md);font-weight:600;z-index:var(--z-toast);transition:opacity var(--t-2) var(--c-out),transform var(--t-2) var(--c-out);opacity:0;min-width:200px;max-width:min(92vw,420px);line-height:1.4;text-align:center;pointer-events:none"></div>
 
-<!-- LA CÉLÉBRATION DES BADGES. Sœur du toast, et posée au même endroit pour
-     la même raison : elle doit survivre aux changements d'écran, donc elle ne
-     vit dans aucun. Vide tant que rien n'est gagné. Remplie par
-     _celebrerBadge, qui la retire seule au bout de cinq secondes.
-     aria-live=polite : annoncée après ce que la personne est en train de
-     faire, jamais à sa place. -->
-<div id="bdg-fete" class="bdg-fete" role="status" aria-live="polite"></div>
+<!-- LA CÉLÉBRATION DES BADGES est un écran plein, créé à la demande par
+     _celebrerBadges (#bdg-ecran) : rien à poser ici. -->
 
 <!-- ══════ BARRE D'ONGLETS ATHLÈTE ══════
      Sœur des écrans, et non enfant de #s-client-home : c'est ce qui lui permet
@@ -5671,5 +5666,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1583.js"></script>
+<script src="./rc-core.1584.js"></script>
 </body></html>

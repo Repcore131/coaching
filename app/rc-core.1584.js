@@ -67263,7 +67263,7 @@ function badgesObtenus(u){
 // LA DATE INSCRITE EST CELLE OÙ LE BADGE A ÉTÉ MÉRITÉ, lue dans l'historique
 // — pas celle du passage. C'est ce qui rend à un athlète ancien, à la mise à
 // jour, ses cinquante séances avec la date de la cinquantième.
-function majBadges(){
+function majBadges(o){
   const u=(typeof currentUser!=='undefined')?currentUser:null;
   if(!u||u.role==='coach') return [];
   try{ if(suspensionEtat(u).actif) return []; }catch(e){}
@@ -67277,11 +67277,11 @@ function majBadges(){
   for(const x of nouveaux) u.badges[x.id]={at:(x.at>0?x.at:t)};
   try{ saveUser(); }catch(e){}
   const neufs=nouveaux.map(x=>x.id);
-  // UNE SEULE CÉLÉBRATION, quel que soit le nombre. À la mise à jour, un
-  // athlète ancien en reçoit parfois vingt d'un coup : vingt bannières à la
-  // file seraient du bruit. Au-delà d'un, la bannière devient un récapitulatif
-  // — « Tu as débloqué 7 badges » — et le détail attend dans le profil.
-  try{ _celebrerBadge(neufs[0],neufs.length); }catch(e){}
+  // LA CÉLÉBRATION : un écran par badge, trois au plus, puis un
+  // récapitulatif. Au RATTRAPAGE (mise à jour), le récapitulatif seul : un
+  // athlète ancien en reçoit parfois vingt d'un coup, et vingt écrans à la
+  // file seraient du bruit — le détail attend dans le profil.
+  try{ _celebrerBadges(neufs,!!(o&&o.rattrapage)); }catch(e){}
   return neufs;
 }
 // LE RATTRAPAGE À LA MISE À JOUR. Une fois par ouverture de l'accueil
@@ -67293,42 +67293,279 @@ let _badgesRattrapes=false;
 function _rattraperBadges(){
   if(_badgesRattrapes) return [];
   _badgesRattrapes=true;
-  try{ return majBadges(); }catch(e){ return []; }
+  try{ chargerStatsBadges(); }catch(e){}
+  try{ return majBadges({rattrapage:true}); }catch(e){ return []; }
 }
-let _bdgMinuteur=null;
-// LA CÉLÉBRATION. Une bannière posée, une image, une phrase, cinq secondes.
-// Elle ne prend pas le focus et ne bloque aucun geste : pointer-events est à
-// none sur le bloc entier (feuille de style), il n'y a donc rien à fermer.
+// ══ LA RARETÉ ══════════════════════════════════════════════════════════
 //
-// `nombre` > 1 : le RÉCAPITULATIF — le premier visuel, « Tu as débloqué N
-// badges », et l'invitation à les voir dans le profil.
+// Comptée chaque nuit par la fonction planifiée statsBadges (functions/) et
+// lue dans /stats/badges — lecture publique, sans jeton : ce ne sont que des
+// pourcentages. Gardée en mémoire et sur l'appareil (un jour) : l'écran de
+// célébration doit pouvoir l'afficher sans attendre le réseau, en salle.
 //
-// LE DÉLAI D'UNE SECONDE n'est pas cosmétique : majBadges est appelée avant
-// go('s-workout-done'), et _feterFinSeance joue sa propre séquence à
-// l'arrivée. Deux mouvements en même temps sur le même écran ne se lisent
-// ni l'un ni l'autre.
-function _celebrerBadge(id,nombre){
-  const b=badgeAcquisDef(id); if(!b) return;
-  const z=document.getElementById('bdg-fete'); if(!z) return;
-  if(_bdgMinuteur){ clearTimeout(_bdgMinuteur); _bdgMinuteur=null; }
-  const n=Math.max(1,Number(nombre)||1);
-  const titre=n>1?('Tu as débloqué '+n+' badges'):b.lib;
-  const phrase=n>1?'Retrouve-les dans ton profil, avec la date de chacun.':b.phrase;
-  const poser=()=>{
-    z.innerHTML='<img src="'+escapeHtml(badgeVisuel(b.id))+'" alt="" width="54" height="54"'
-      +' onerror="this.onerror=null;this.src=\''+escapeHtml(badgeAcquisFichier(b.id))+'\'">'
-      +'<div><b>'+escapeHtml(titre)+'</b><span>'+escapeHtml(phrase)+'</span></div>';
-    z.setAttribute('data-vu','');
-    try{ arcHaptique('legere'); }catch(e){}
-    _bdgMinuteur=setTimeout(()=>{
-      z.removeAttribute('data-vu');
-      _bdgMinuteur=null;
-      // Le contenu part APRÈS la sortie, sans quoi la bannière se viderait
-      // en pleine transition et disparaîtrait d'un coup.
-      setTimeout(()=>{ if(!z.hasAttribute('data-vu')) z.innerHTML=''; },420);
-    },5000);
+// SANS DONNÉE, RIEN : pas de « 0 % », pas de tiret. La ligne n'existe pas.
+const BADGE_STATS_URL='https://repcore-sync-default-rtdb.firebaseio.com/stats/badges.json';
+const BADGE_STATS_CLE='rc_stats_badges';
+let _statsBadges=null, _statsBadgesEnCours=null;
+function _statsBadgesLocales(){
+  if(_statsBadges) return _statsBadges;
+  try{
+    const x=JSON.parse(localStorage.getItem(BADGE_STATS_CLE)||'null');
+    if(x&&x.d&&x.d.pct&&Number(x.d.total)>0) _statsBadges=x.d;
+  }catch(e){}
+  return _statsBadges;
+}
+// Rafraîchit au plus une fois par jour. Ne lève jamais, ne bloque rien.
+function chargerStatsBadges(){
+  if(_statsBadgesEnCours) return _statsBadgesEnCours;
+  try{
+    const x=JSON.parse(localStorage.getItem(BADGE_STATS_CLE)||'null');
+    if(x&&x.t&&Date.now()-x.t<864e5&&x.d){ _statsBadges=x.d; return Promise.resolve(_statsBadges); }
+  }catch(e){}
+  if(typeof fetch!=='function') return Promise.resolve(_statsBadgesLocales());
+  _statsBadgesEnCours=fetch(BADGE_STATS_URL,{cache:'no-store'})
+    .then(r=>r.ok?r.json():null)
+    .then(d=>{
+      if(d&&d.pct&&typeof d.pct==='object'&&Number(d.total)>0){
+        _statsBadges=d;
+        try{ localStorage.setItem(BADGE_STATS_CLE,JSON.stringify({t:Date.now(),d})); }catch(e){}
+      }
+      return _statsBadgesLocales();
+    })
+    .catch(()=>_statsBadgesLocales())
+    .finally(()=>{ _statsBadgesEnCours=null; });
+  return _statsBadgesEnCours;
+}
+// PURE. La ligne de rareté, ou '' sans donnée. `stats` facultatif (tests).
+function badgeRareteTexte(id,stats){
+  const s=stats||_statsBadgesLocales();
+  if(!s||!s.pct||!(Number(s.total)>0)) return '';
+  const p=Number(s.pct[id]);
+  // Des stats existent mais ce badge n'y figure pas : personne ne l'avait
+  // la nuit dernière. C'est une information, et c'est la plus rare.
+  const v=Number.isFinite(p)?p:0;
+  if(v<1) return 'Moins de 1 % des athlètes le possèdent';
+  const txt=(v<10?String(Math.round(v*10)/10):String(Math.round(v))).replace('.',',');
+  return 'Possédé par '+txt+' % des athlètes';
+}
+// PURE. « PALIER III », ou '' pour un badge sans palier.
+function badgePalierTexte(b){
+  return (b&&b.palier)?('PALIER '+BADGE_ROMAINS[b.palier-1]):'';
+}
+// L'événement : palier IV et secrets ont droit à la version longue.
+function _bdgLong(b){ return !!b&&(b.palier===4||b.famille==='secret'); }
+
+// ══ L'ÉCRAN DE CÉLÉBRATION ═════════════════════════════════════════════
+//
+// Il remplace le bandeau #bdg-fete : un badge est un événement rare, il a
+// droit à l'écran entier. Fond noir, la foudre frappe le centre, le médaillon
+// apparaît DANS le flash en tournant sur lui-même, un halo rouge, une
+// vibration. Palier IV et secrets : la rotation dure plus longtemps, et des
+// arcs électriques tournent autour du médaillon pendant deux secondes.
+//
+// PLUSIEURS BADGES : un écran par badge, trois au plus, puis un récapitulatif
+// des autres. « Plus tard » passe au suivant ; chaque badge reste partageable
+// depuis sa fiche dans « Mes badges ».
+//
+// LE RATTRAPAGE (mise à jour) ne joue que le récapitulatif : vingt badges
+// d'un historique ancien ne sont pas vingt événements d'aujourd'hui.
+//
+// ⚠ CE N'EST PLUS UN BANDEAU SANS CONSÉQUENCE : l'écran prend la main, et
+// c'est voulu. Il se ferme par « Plus tard », par Échap, et il n'arrive
+// jamais PENDANT une série : majBadges n'est appelée qu'en fin de séance, en
+// fin de bilan et à l'ouverture de l'accueil.
+const BDG_ECRAN_MAX=3;
+let _bdgFile=[], _bdgRecap=[], _bdgArcsRaf=null;
+// Point d'entrée. `ids` dans l'ordre de BADGES_ACQUIS ; `recapSeul` pour le
+// rattrapage.
+function _celebrerBadges(ids,recapSeul){
+  const l=(ids||[]).filter(id=>badgeAcquisDef(id));
+  if(!l.length) return;
+  try{ chargerStatsBadges(); }catch(e){}
+  const p=_bdgPlan(l,recapSeul);
+  _bdgFile=p.ecrans; _bdgRecap=p.recap;
+  // Le délai laisse l'écran de fin de séance se poser : deux mouvements en
+  // même temps ne se lisent ni l'un ni l'autre.
+  setTimeout(_bdgSuivant,arcReduit()?0:900);
+}
+// PURE. L'enchaînement : les écrans (trois au plus), puis le récapitulatif
+// de ce qui reste. Au rattrapage, le récapitulatif seul.
+function _bdgPlan(ids,recapSeul){
+  const l=(ids||[]).slice();
+  if(recapSeul) return {ecrans:[],recap:l};
+  return {ecrans:l.slice(0,BDG_ECRAN_MAX),recap:l.slice(BDG_ECRAN_MAX)};
+}
+// L'ancien nom, gardé pour ses appelants : un badge seul.
+function _celebrerBadge(id){ _celebrerBadges([id]); }
+function _bdgSuivant(){
+  _bdgFermerEcran(true);
+  if(_bdgFile.length){ _bdgEcran(_bdgFile.shift(),_bdgFile.length); return; }
+  if(_bdgRecap.length){ const r=_bdgRecap; _bdgRecap=[]; _bdgEcranRecap(r); }
+}
+function _bdgCouche(html,etiquette){
+  const z=document.createElement('div');
+  z.id='bdg-ecran'; z.className='bdg-ecran';
+  z.setAttribute('role','dialog'); z.setAttribute('aria-modal','true');
+  z.setAttribute('aria-label',etiquette);
+  z.innerHTML=html;
+  document.body.appendChild(z);
+  // ÉCHAP SUR L'ÉCRAN LUI-MÊME, et non sur document : le focus y est posé à
+  // l'ouverture, et un écouteur global aurait avalé l'Échap des autres
+  // écrans (l'éditeur de vidéo, les feuilles) tant qu'il restait branché.
+  z.tabIndex=-1;
+  z.addEventListener('keydown',e=>{ if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); _bdgSuivant(); } });
+  return z;
+}
+function _bdgFermerEcran(tout_de_suite){
+  if(_bdgArcsRaf){ cancelAnimationFrame(_bdgArcsRaf); _bdgArcsRaf=null; }
+  const z=document.getElementById('bdg-ecran');
+  if(!z) return;
+  z.removeAttribute('id');
+  try{ _visuelFondsMontes.delete('bdg-ecran-fonds'); }catch(e){}
+  if(tout_de_suite||arcReduit()){ z.remove(); return; }
+  const a=_animer(z,[{opacity:1},{opacity:0}],{duration:160,easing:'linear',fill:'forwards'});
+  if(a) a.addEventListener('finish',()=>z.remove()); else z.remove();
+}
+// « Plus tard » : le badge suivant, ou le récapitulatif, ou rien.
+function bdgPlusTard(){ _bdgSuivant(); return true; }
+function _bdgEcran(id,reste){
+  const b=badgeAcquisDef(id); if(!b) return _bdgSuivant();
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  const m=(u&&u.badges)||{};
+  const at=(m[id]&&m[id].at)||Date.now();
+  const secret=b.famille==='secret';
+  const long=_bdgLong(b);
+  const rar=badgeRareteTexte(id);
+  const pal=badgePalierTexte(b);
+  const z=_bdgCouche(
+    '<div class="bdg-ecran-scene"><canvas class="bdg-ecran-arcs" aria-hidden="true"></canvas>'
+    +'<div class="bdg-ecran-med">'+_htmlBadgeImg(id,{grand:true,id:'bdg-ecran-img'})+'</div></div>'
+    +'<div class="bdg-ecran-txt">'
+    +'<div class="bdg-ecran-sur">'+(secret?'BADGE SECRET DÉCOUVERT':'BADGE DÉBLOQUÉ')+'</div>'
+    +'<h2 class="bdg-ecran-nom">'+escapeHtml(b.nom)+'</h2>'
+    +'<div class="bdg-ecran-meta">'+escapeHtml([pal,_bdgDate(at)].filter(Boolean).join(' · '))+'</div>'
+    +'<div class="bdg-ecran-rar"'+(rar?'':' hidden')+'>'+escapeHtml(rar)+'</div>'
+    +'<p class="bdg-ecran-cond">'+escapeHtml(b.condition)+'</p>'
+    +_htmlVisuelFonds('bdg-ecran-fonds')
+    +'<button type="button" class="btn btn-red bdg-ecran-part" onclick="partagerBadge(\''+id+'\',this)">'
+      +icon('share',16)+' <span>Partager</span></button>'
+    +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" onclick="bdgPlusTard()">'
+      +(reste||_bdgRecap.length?'Suivant':'Plus tard')+'</button>'
+    +'</div>',
+    secret?'Badge secret découvert : '+b.nom:'Badge débloqué : '+b.nom);
+  if(long) z.classList.add('bdg-ecran-long');
+  // La rareté arrive parfois APRÈS l'ouverture (premier chargement) : on la
+  // pose alors, sans rien animer.
+  if(!rar) chargerStatsBadges().then(()=>{
+    const t=badgeRareteTexte(id), el=z.querySelector('.bdg-ecran-rar');
+    if(t&&el&&z.isConnected){ el.textContent=t; el.hidden=false; }
+  }).catch(()=>{});
+  // Le sélecteur de fond : ses vignettes dessinent la vraie carte, qui a
+  // besoin du médaillon chargé.
+  const img=z.querySelector('#bdg-ecran-img');
+  const monter=()=>{ try{ monterSelecteurFond('bdg-ecran-fonds',f=>_bdgCarteDe(id,f,img),null); }catch(e){} };
+  if(img&&img.complete&&img.naturalWidth) monter(); else if(img) img.addEventListener('load',monter,{once:true});
+  _bdgJouer(z,b,long);
+  try{ const p=z.querySelector('.bdg-ecran-part'); if(p) p.focus({preventScroll:true}); }catch(e){}
+}
+// LA MISE EN SCÈNE. Durées : normale ~1,1 s, longue ~2,4 s (arcs compris).
+function _bdgJouer(z,b,long){
+  const med=z.querySelector('.bdg-ecran-med');
+  const txt=z.querySelector('.bdg-ecran-txt');
+  if(arcReduit()){
+    // Rien ne tourne, rien ne frappe : le flash doux de rcFoudre et la
+    // vibration, puis tout est là.
+    try{ rcFoudre(med,{son:false}); }catch(e){}
+    return;
+  }
+  _animer(z,[{opacity:0},{opacity:1}],{duration:120,easing:'linear'});
+  // La foudre frappe le centre ; le médaillon naît dans le flash (t≈40 ms).
+  try{ rcFoudre(med,{eclairs:long?3:2,conteneur:z}); }catch(e){}
+  const tours=long?2:1, duree=long?1600:900;
+  _animer(med,[
+    {transform:'perspective(900px) rotateY('+(-360*tours-180)+'deg) scale(.25)',opacity:0,offset:0},
+    {transform:'perspective(900px) rotateY(-120deg) scale(.9)',opacity:1,offset:.55},
+    {transform:'perspective(900px) rotateY(12deg) scale(1.08)',opacity:1,offset:.85},
+    {transform:'perspective(900px) rotateY(0deg) scale(1)',opacity:1,offset:1}
+  ],{duration:duree,delay:40,easing:ARC.snap,fill:'backwards'});
+  setTimeout(()=>{
+    if(!z.isConnected) return;
+    try{ arcGlow(med,{couleur:'rgba(224,32,32,.8)',duree:ARC.afterglow}); }catch(e){}
+    try{ arcHaptique(long?'succes':'lourde'); }catch(e){}
+  },40+duree*0.85);
+  _animer(txt,[{opacity:0,transform:'translateY(14px)'},{opacity:1,transform:'none'}],
+    {duration:ARC.release,delay:long?1300:700,easing:ARC.discharge,fill:'backwards'});
+  if(long) _bdgArcs(z,2000);
+}
+// LES ARCS QUI TOURNENT : trois arcs brisés sur un cercle autour du
+// médaillon, retirés au hasard à chaque image (ils grésillent), qui tournent
+// pendant `duree` ms puis s'éteignent en 300 ms. Mêmes trois passes que
+// rcFoudre : halo rouge, trait rouge, cœur blanc.
+function _bdgArcs(z,duree){
+  const c=z.querySelector('.bdg-ecran-arcs'); if(!c||!c.getContext) return;
+  const r=c.getBoundingClientRect();
+  const dpr=Math.min(2,window.devicePixelRatio||1);
+  c.width=Math.round(r.width*dpr); c.height=Math.round(r.height*dpr);
+  const g=c.getContext('2d'); if(!g) return;
+  g.setTransform(dpr,0,0,dpr,0,0);
+  const W=r.width, H=r.height, cx=W/2, cy=H/2, R=Math.min(W,H)*0.44;
+  const t0=performance.now();
+  const image=now=>{
+    if(!z.isConnected){ _bdgArcsRaf=null; return; }
+    const t=now-t0;
+    g.clearRect(0,0,W,H);
+    if(t>duree+300){ _bdgArcsRaf=null; return; }
+    const a=t<duree?1:1-(t-duree)/300;
+    for(let k=0;k<3;k++){
+      const debut=t/1000*2.4+k*Math.PI*2/3, long=0.9;
+      const pts=[];
+      for(let i=0;i<=14;i++){
+        const th=debut+long*i/14, rr=R+(Math.random()*2-1)*R*0.07;
+        pts.push([cx+Math.cos(th)*rr,cy+Math.sin(th)*rr]);
+      }
+      const trace=(w,st,al)=>{ g.globalAlpha=a*al; g.strokeStyle=st; g.lineWidth=w;
+        g.beginPath(); g.moveTo(pts[0][0],pts[0][1]); for(const p of pts) g.lineTo(p[0],p[1]); g.stroke(); };
+      g.save(); g.lineJoin='round'; g.lineCap='round';
+      g.shadowColor='#E02020'; g.shadowBlur=24; trace(7,'#E02020',.5);
+      g.shadowBlur=0; trace(3,'#E02020',1); trace(1.2,'#fff',1);
+      g.restore();
+    }
+    _bdgArcsRaf=requestAnimationFrame(image);
   };
-  setTimeout(poser,arcReduit()?0:1000);
+  _bdgArcsRaf=requestAnimationFrame(image);
+}
+// LE RÉCAPITULATIF : « Tu as débloqué N badges », leurs médaillons, et un
+// seul bouton. Chacun reste partageable depuis sa fiche.
+function _bdgEcranRecap(ids){
+  const n=ids.length;
+  const vus=ids.slice(0,12);
+  const z=_bdgCouche(
+    '<div class="bdg-ecran-txt bdg-ecran-recap">'
+    +'<div class="bdg-ecran-sur">'+(n>1?'NOUVEAUX BADGES':'NOUVEAU BADGE')+'</div>'
+    +'<h2 class="bdg-ecran-nom">Tu as débloqué '+n+' badge'+(n>1?'s':'')+'</h2>'
+    +'<div class="bdg-ecran-grille">'+vus.map(id=>'<div>'+_htmlBadgeImg(id)
+      +'<span>'+escapeHtml(badgeAcquisDef(id).nom)+'</span></div>').join('')+'</div>'
+    +(n>vus.length?'<div class="bdg-ecran-meta">et '+(n-vus.length)+' autre'+(n-vus.length>1?'s':'')+'</div>':'')
+    +'<p class="bdg-ecran-cond">Retrouve-les dans ton profil, avec la date de chacun — et partage-les depuis leur fiche.</p>'
+    +'<button type="button" class="btn btn-red bdg-ecran-tard" onclick="bdgPlusTard()">Voir plus tard</button>'
+    +'</div>',
+    'Tu as débloqué '+n+' badges');
+  if(!arcReduit()){
+    _animer(z,[{opacity:0},{opacity:1}],{duration:160,easing:'linear'});
+    try{ rcFoudre(z.querySelector('.bdg-ecran-grille'),{eclairs:2}); }catch(e){}
+  }
+  try{ arcHaptique('succes'); }catch(e){}
+  try{ const p=z.querySelector('.bdg-ecran-tard'); if(p) p.focus({preventScroll:true}); }catch(e){}
+}
+// Le visuel de partage d'un badge, pour un fond : ce que dessinent les
+// vignettes du sélecteur et ce que partage le bouton. Lit le DOSSIER pour la
+// date et la signature, la mémoire pour la rareté.
+function _bdgCarteDe(id,fond,img){
+  const b=badgeAcquisDef(id); if(!b) return null;
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  const m=(u&&u.badges)||{};
+  let sig=''; try{ sig=nomSurVisuels(u); }catch(e){ sig=''; }
+  return _dessinerCarteBadge(b,(m[id]&&m[id].at)||Date.now(),img,fond,sig,badgeRareteTexte(id));
 }
 // PURE. L'état d'une famille : le palier atteint (0 à 4), la valeur, et ce
 // qui reste pour le suivant.
@@ -67429,19 +67666,29 @@ function ouvrirFicheBadge(id){
   +(g?'<div class="bdg-fiche-date">Obtenu le '+escapeHtml(_bdgDate(m[id].at))+'</div>':'')
   +'<p>'+escapeHtml(secret?('Indice : '+b.indice):b.condition)+'</p>'
   +(etat?'<p class="bdg-fiche-etat">'+escapeHtml(etat)+'</p>':'')
+  +(g&&badgeRareteTexte(id)?'<div class="bdg-fiche-rar">'+escapeHtml(badgeRareteTexte(id))+'</div>':'')
+  +(g?_htmlVisuelFonds('bdg-fiche-fonds'):'')
   +(g?('<button type="button" class="btn btn-red" onclick="partagerBadge(\''+id+'\',this)">'
       +icon('share',16)+' <span>Partager</span></button>'):'')
   +'<button type="button" class="btn btn-outline btn-sm" onclick="closeModal()" style="margin-top:8px">Fermer</button>'
   +'</div></div>');
-  // Le visuel est préchargé ici, à l'ouverture : le dessin du partage est
-  // synchrone et ne peut pas attendre une image.
-  try{ _prechaufferMarqueCoach(); }catch(e){}
+  // Le sélecteur de fond dessine la vraie carte : il attend le médaillon.
+  if(g){
+    const img=document.getElementById('bdg-fiche-img');
+    const monter=()=>{ try{ monterSelecteurFond('bdg-fiche-fonds',f=>_bdgCarteDe(id,f,img),null); }catch(e){} };
+    if(img&&img.complete&&img.naturalWidth) monter(); else if(img) img.addEventListener('load',monter,{once:true});
+  }
+  try{ chargerStatsBadges(); }catch(e){}
   return true;
 }
 // LE VISUEL DE PARTAGE, 1080×1920, sur le modèle de la carte de record :
-// mêmes outils d'écriture, même fond au choix, même signature. `img` est
-// l'image DÉJÀ CHARGÉE de la fiche.
-function _dessinerCarteBadge(b,at,img,fond,signature){
+// mêmes outils d'écriture, même fond au choix, même signature. Le médaillon
+// en géant, le nom, le palier, la rareté, la date. `img` est l'image DÉJÀ
+// CHARGÉE (fiche ou écran de célébration) : le dessin est synchrone.
+//
+// ⚠ UN SECRET RÉVÈLE SON INDICE, JAMAIS SA CONDITION. La story est vue par
+// des gens qui ne l'ont pas : leur donner la recette tuerait le secret.
+function _dessinerCarteBadge(b,at,img,fond,signature,rarete){
   const cv=document.createElement('canvas');
   cv.width=STORY_L; cv.height=STORY_H;
   const g=cv.getContext('2d');
@@ -67451,34 +67698,57 @@ function _dessinerCarteBadge(b,at,img,fond,signature){
   const MONT="Montserrat,'Segoe UI',sans-serif";
   const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
   const o=_visuelOutils(g);
-  let y=360;
+  const secret=b&&b.famille==='secret';
+  let y=250;
   g.textBaseline='alphabetic'; g.textAlign='center';
   o.ombre(true); g.fillStyle='#ffffff'; g.font='800 34px '+MONT;
-  o.ecrireEspace(b.famille==='secret'?'BADGE SECRET DÉBLOQUÉ':'BADGE DÉBLOQUÉ',cx,y,10,true);
+  const sur=secret?'BADGE SECRET DÉCOUVERT':'BADGE DÉBLOQUÉ';
+  const ss=o.ajusteEspace(sur,'800',34,MONT,10,LARG,22);
+  g.font='800 '+ss+'px '+MONT;
+  o.ecrireEspace(sur,cx,y,10,true);
   o.ombre(false);
   g.fillStyle=f==='rouge'?'rgba(255,255,255,.85)':'#E02020';
   g.fillRect(cx-44,y+20,88,5);
-  y+=70;
-  // Le médaillon, 620 px, sans ombre de texte : il porte déjà sa lueur.
+  y+=60;
+  // LE MÉDAILLON GÉANT, 780 px, sans ombre de texte : il porte sa lueur.
+  const T=780;
   if(img&&img.complete&&img.naturalWidth){
-    const T=620, r=Math.min(T/img.naturalWidth,T/img.naturalHeight);
+    const r=Math.min(T/img.naturalWidth,T/img.naturalHeight);
     const w=img.naturalWidth*r, h=img.naturalHeight*r;
     try{ g.drawImage(img,cx-w/2,y+(T-h)/2,w,h); }catch(e){}
   }
-  y+=660;
+  y+=T+20;
   o.ombre(true); g.fillStyle='#ffffff';
-  const ns=o.ajuste(b.nom,'700',140,BEBAS,LARG,60);
+  // Le nom SANS son chiffre romain : le palier a sa propre ligne.
+  const nom=(b.palier?b.nom.replace(/ [IV]+$/,''):b.nom);
+  const ns=o.ajuste(nom,'700',140,BEBAS,LARG,60);
   g.font='700 '+ns+'px '+BEBAS;
-  o.ecrire(b.nom,cx,y+ns*0.8);
-  y+=ns+30;
-  g.fillStyle='rgba(255,255,255,.9)';
-  const cs=o.ajuste(b.condition,'700',36,MONT,LARG,22);
-  g.font='700 '+cs+'px '+MONT;
-  o.ecrire(b.condition,cx,y+cs);
-  y+=cs+50;
+  o.ecrire(nom,cx,y+ns*0.8);
+  y+=ns+10;
+  const pal=badgePalierTexte(b);
+  if(pal){
+    g.fillStyle='#ffffff'; g.font='800 40px '+MONT;
+    o.ecrireEspace(pal,cx,y+40,8,true);
+    y+=76;
+  }
+  const ligne=secret?('Indice : '+(b.indice||'')):'';
+  if(ligne){
+    g.fillStyle='rgba(255,255,255,.9)';
+    const cs=o.ajuste(ligne,'700',34,MONT,LARG,20);
+    g.font='700 '+cs+'px '+MONT;
+    o.ecrire(ligne,cx,y+cs);
+    y+=cs+34;
+  }
+  if(rarete){
+    g.fillStyle='rgba(255,255,255,.92)';
+    const rs=o.ajuste(rarete,'700',32,MONT,LARG,20);
+    g.font='700 '+rs+'px '+MONT;
+    o.ecrire(rarete,cx,y+rs);
+    y+=rs+30;
+  }
   g.fillStyle='rgba(255,255,255,.82)'; g.font='700 30px '+MONT;
   o.ecrireEspace(_bdgDate(at),cx,y+30,4,true);
-  _recSignature(g,o,String(signature||''),STORY_H-150,LARG);
+  _recSignature(g,o,String(signature||''),STORY_H-120,LARG);
   o.ombre(false);
   return cv;
 }
@@ -67490,16 +67760,16 @@ function partagerBadge(id,btn){
   const m=(u&&u.badges)||{};
   if(!(m[id]&&m[id].at>0)){ toast('Ce badge n’est pas encore obtenu.','var(--orange)'); return false; }
   if(_storyEnCours) return false;
-  const img=document.getElementById('bdg-fiche-img');
+  // L'image déjà chargée : celle de l'écran de célébration, sinon de la fiche.
+  const img=document.getElementById('bdg-ecran-img')||document.getElementById('bdg-fiche-img');
   if(!img||!img.complete||!img.naturalWidth){ toast('Le visuel se charge, réessaie dans un instant.','var(--orange)'); return false; }
-  let sig=''; try{ sig=nomSurVisuels(u); }catch(e){ sig=''; }
   const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond);
   const nom=visuelNomFichier('repcore-badge',fond);
   _storyEnCours=true;
   let ok=false;
   try{
-    ok=_storySortirPartage(_dessinerCarteBadge(b,m[id].at,img,fond,sig),nom,undefined,fmt)
-      ||_storySortirTelechargement(_dessinerCarteBadge(b,m[id].at,img,fond,sig),nom,fmt);
+    ok=_storySortirPartage(_bdgCarteDe(id,fond,img),nom,undefined,fmt)
+      ||_storySortirTelechargement(_bdgCarteDe(id,fond,img),nom,fmt);
   }catch(e){
     toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false;
   }finally{ _storyEnCours=false; }

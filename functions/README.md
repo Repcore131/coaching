@@ -112,3 +112,14 @@ Si la région ou le nom du projet diffère de `europe-west1-repcore-sync`, mets 
 index dédié. Si besoin, ajoute manuellement dans la console Firebase (Realtime Database →
 Règles) une entrée `".indexOn": ["id"]` sur le nœud `users` — non inclus automatiquement ici
 pour ne pas risquer d'écraser les règles de sécurité déjà en place.
+
+## statsBadges — la rareté des badges (26/09/2026)
+
+Fonction **planifiée** (Cloud Scheduler, chaque nuit à 3 h 17 heure de Paris). Elle compte, pour
+chaque badge, le pourcentage de dossiers athlètes qui le possèdent, et écrit
+`/stats/badges = { maj, total, pct: { <idBadge>: 4.2 } }`. Aucune donnée personnelle : un
+pourcentage par badge. Lecture publique, écriture serveur seulement (`database.rules.json`).
+
+Comme les autres, elle demande le **plan Blaze** (Cloud Scheduler inclus : 3 tâches gratuites par
+mois de facturation). Tant qu'elle ne tourne pas, `/stats/badges` reste vide et l'écran de
+célébration n'affiche pas la ligne de rareté — rien d'autre ne change.

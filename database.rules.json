@@ -1022,6 +1022,16 @@
     //   une console peut se declarer « ultime » et lire les fiches. C'est deja
     //   vrai de tout le reste sans fonctions, et la seule barriere qui ne se
     //   trafique pas reste droits/, ecrit a la main depuis la console Firebase.
+    // ── LA RARETE DES BADGES ────────────────────────────────────────────
+    // Ecrite chaque nuit par la fonction planifiee statsBadges (Admin SDK, qui
+    // ne passe pas par les regles) : { maj, total, pct: { idBadge: 4.2 } }.
+    // LECTURE PUBLIQUE : ce ne sont que des pourcentages, aucun dossier n'y
+    // figure, et l'ecran de celebration doit pouvoir les lire meme avant la
+    // fin de la connexion. ECRITURE : personne, cote client.
+    "stats": {
+      ".read": true,
+      ".write": false
+    },
     "exercices": {
       ".read": "auth != null && (\n  root.child('users').child(auth.token.email.replace('.', ',')).child('role').val() === 'coach' ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('palier').val() === 'ultime' ||\n  (root.child('users').child(auth.token.email.replace('.', ',')).child('status').val() === 'AUTONOMIE_PREMIUM' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('paymentStatus').val() === 'active' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('abonnement').child('formule').val() === 'ultime')\n)",
       ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'"

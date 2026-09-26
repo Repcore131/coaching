@@ -1000,3 +1000,87 @@ exports.migrerDroits = onCall(async (request) => {
   }
   return { simulation, compte };
 });
+
+// ══ LA RARETE DES BADGES, COMPTEE CHAQUE NUIT ═════════════════════════════
+//
+// L'ecran de celebration dit « possede par 4 % des athletes ». Ce chiffre ne
+// peut PAS se calculer sur un telephone : il demanderait de lire le dossier de
+// tout le monde. Il est donc compte ici, une fois par nuit, et ecrit dans
+// /stats/badges — lecture publique, ecriture serveur seulement (voir
+// database.rules.json). L'Admin SDK ne passe pas par les regles.
+//
+// CE QUI EST ECRIT, et rien de plus :
+//   { maj: <ms>, total: <nombre d'athletes>, pct: { <idBadge>: 4.2, ... } }
+// Aucun identifiant de personne, aucune liste : un pourcentage par badge.
+//
+// LE DENOMINATEUR : les dossiers ATHLETES (role different de « coach »). Un
+// coach ne gagne aucun badge ; le compter ferait baisser tous les chiffres.
+//
+// ⚠ ON NE LIT PAS /users EN ENTIER. Un dossier porte ses seances, ses bilans,
+// ses references de photos : tout lire chaque nuit ferait descendre la base
+// entiere. On lit la LISTE des cles (?shallow=true, REST, jeton de service),
+// puis, par paquets, deux petits noeuds par dossier : role et badges.
+//
+// ⚠ PLAN BLAZE. Les fonctions planifiees reposent sur Cloud Scheduler :
+// comme les autres fonctions de ce fichier, celle-ci ne tourne pas sur Spark.
+// Tant qu'elle ne tourne pas, /stats/badges reste vide et l'application
+// n'affiche simplement pas la ligne de rarete.
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+
+async function _clesUtilisateurs() {
+  try {
+    const jeton = await admin.credential.applicationDefault().getAccessToken();
+    const racine = db.ref().toString().replace(/\/$/, "");
+    const r = await fetch(racine + "/users.json?shallow=true&access_token=" +
+      encodeURIComponent(jeton.access_token));
+    if (r.ok) {
+      const d = await r.json();
+      if (d && typeof d === "object") return Object.keys(d);
+    }
+  } catch (e) { /* repli ci-dessous */ }
+  // REPLI : la lecture complete. Plus lourde, mais juste.
+  const s = await db.ref("users").get();
+  return Object.keys(s.val() || {});
+}
+
+// PURE : les pourcentages, a un chiffre apres
+// la virgule, depuis une liste de dossiers {role, badges}.
+function calculerRareteBadges(dossiers) {
+  let total = 0;
+  const n = {};
+  for (const d of dossiers) {
+    if (!d || d.role === "coach") continue;
+    total++;
+    const b = (d.badges && typeof d.badges === "object") ? d.badges : {};
+    for (const id of Object.keys(b)) {
+      if (b[id] && Number(b[id].at) > 0) n[id] = (n[id] || 0) + 1;
+    }
+  }
+  const pct = {};
+  for (const id of Object.keys(n)) pct[id] = Math.round(n[id] / total * 1000) / 10;
+  return { total, pct };
+}
+
+exports.statsBadges = onSchedule(
+  { schedule: "every day 03:17", timeZone: "Europe/Paris", timeoutSeconds: 540, memory: "512MiB" },
+  async () => {
+    const cles = await _clesUtilisateurs();
+    const dossiers = [];
+    const PAQUET = 50;
+    for (let i = 0; i < cles.length; i += PAQUET) {
+      const lot = cles.slice(i, i + PAQUET);
+      const lus = await Promise.all(lot.map(async (k) => {
+        const [role, badges] = await Promise.all([
+          db.ref("users/" + k + "/role").get(),
+          db.ref("users/" + k + "/badges").get(),
+        ]);
+        return { role: role.val(), badges: badges.val() };
+      }));
+      dossiers.push(...lus);
+    }
+    const r = calculerRareteBadges(dossiers);
+    // Aucun athlete : on n'ecrit rien plutot qu'un tableau de zeros, que
+    // l'application afficherait comme « 0 % ».
+    if (!r.total) return;
+    await db.ref("stats/badges").set({ maj: Date.now(), total: r.total, pct: r.pct });
+  });
