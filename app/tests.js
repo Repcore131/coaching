@@ -19326,7 +19326,9 @@ async function testExercices(){
             return _echec('le cas « compte déjà pris » n\'est plus distingué');
           if(dr.indexOf("_signInErr==='network'")<0)
             return _echec('le cas hors ligne n\'est plus distingué');
-          if(!/Se connecter/.test(dr)||!/Mot de passe oublié/.test(dr))
+          // « Mot de passe oublié » est devenu un bouton sous le message
+          // (_boutonReprise) : le message y renvoie, le bouton envoie le lien.
+          if(!/Se connecter/.test(dr)||!/_boutonReprise\(em\)/.test(dr)||!/M.{1,2}envoyer un lien/.test(String(_boutonReprise)))
             return _echec('le message ne dit pas quoi faire');
           if(!/Pas de connexion/.test(dr))
             return _echec('le message hors ligne a disparu');
@@ -19550,11 +19552,14 @@ async function testExercices(){
           const dr=String(doRegister);
           if(dr.indexOf('_masquerSecondCompte()')<0)
             return _echec('la proposition n\'est pas remise à zéro à chaque tentative');
-          const n=dr.split('_proposerSecondCompte(em)').length-1;
-          if(n!==1) return _echec(n+' branche(s) offrent la sortie au lieu d\'une seule');
+          // DEUX branches, chacune sur une adresse PRISE : le refus Firebase
+          // « mot de passe faux », et le dossier trouvé avec un autre rôle.
+          const n=(dr.match(/_proposerSecondCompte\(em[,)]/g)||[]).length;
+          if(n!==2) return _echec(n+' branche(s) offrent la sortie au lieu de deux');
+          if(dr.indexOf('dossierExistant.role!==selRole')<0) return _echec('la branche des rôles divergents a disparu');
           // UN HORS LIGNE OU UNE ADRESSE MAL FORMÉE n'ont pas de second compte à
           // proposer : seul « mot de passe faux sur adresse prise » l'offre.
-          const i=dr.indexOf('CLOUD._signInErr===\'wrong_password\') _proposerSecondCompte(em)');
+          const i=dr.indexOf('CLOUD._signInErr===\'wrong_password\'){ _proposerSecondCompte(em);');
           if(i<0) return _echec('la branche Firebase l\'offre sur n\'importe quel refus');
           // ET LE COACH QUI S'AJOUTE COMME ATHLÈTE l'a aussi, depuis son propre
           // formulaire : c'est là qu'il se heurte à sa propre adresse.
@@ -58647,6 +58652,21 @@ async function testExercices(){
     // ── _majPastilleBilan ──
     ok('La pastille de l\'onglet Bilan existe dans le HTML',
        !!document.querySelector('#client-tabbar .tab-btn[data-tab="bilan"] .tab-dot'));
+    ok('QA — LA RÉPONSE LUE DANS L’ONGLET NOTES ÉTEINT LA PASTILLE, MÊME SUR UN BILAN SANS TEXTE',(()=>{
+      const sauve=currentUser;
+      try{
+        // Un bilan de mesures SEULES, avec une réponse du coach non lue.
+        currentUser=_rbU([_rbB(3,{reponseCoach:'Belle régularité',reponseDate:Date.now(),reponseVue:false})]);
+        currentUser.bilans.forEach(b=>{ for(const k of Object.keys(b)) if(/^bil-(?!weight)/.test(k)) delete b[k]; });
+        const h=renderReponsesBilans(currentUser.bilans);
+        if(!/Belle régularité/.test(h)) return _echec('la réponse d’un bilan sans texte ne s’affiche pas');
+        // Côté coach, la carte porte le champ pour répondre.
+        const hc=renderReponsesBilans(currentUser.bilans,{id:'c',email:'c@t',fname:'A',bilans:currentUser.bilans});
+        if(!/rb-texte_/.test(hc)) return _echec('le coach n’a aucun champ pour répondre à ce bilan');
+        const _save=window.saveUser; window.saveUser=()=>true;
+        try{ showProgressTab('notes',null,true); }finally{ window.saveUser=_save; }
+        return currentUser.bilans.every(b=>b.reponseVue!==false)?true:_echec('la réponse affichée reste non lue');
+      }finally{ currentUser=sauve; try{ _majPastilleBilan(); }catch(e){} }})());
     ok('Pastille allumée puis éteinte',(()=>{
       const sauve=currentUser;
       const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="bilan"]');
@@ -58654,7 +58674,7 @@ async function testExercices(){
       if(!dot){ currentUser=sauve; return false; }
       currentUser=_rbU([_rbB(3,{reponseCoach:'x',reponseDate:Date.now(),reponseVue:false})]);
       _majPastilleBilan();
-      const on=dot.classList.contains('on')&&/1 réponse/.test(btn.getAttribute('aria-label')||'');
+      const on=dot.classList.contains('on')&&/Bilan : 1 élément/.test(btn.getAttribute('aria-label')||'');
       currentUser=_rbU([_rbB(3,{reponseCoach:'x',reponseDate:Date.now(),reponseVue:true})]);
       _majPastilleBilan();
       const off=!dot.classList.contains('on')&&!btn.getAttribute('aria-label');

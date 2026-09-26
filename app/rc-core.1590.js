@@ -64129,13 +64129,23 @@ function renderReponsesBilans(bilans,client){
         <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5">${escapeHtml(txt)}</div>
       </div>`;
     }).filter(Boolean).join('');
-    if(!answers) return '';
+    // ⚠ UNE CARTE SANS TEXTE PEUT PORTER UNE REPONSE (QA du 27/09/2026). Un
+    //   bilan de mesures seules n'a aucune reponse ecrite : la carte etait
+    //   sautee, et la reponse du coach qu'elle portait ne s'affichait NULLE
+    //   PART chez l'athlete — openReponseBilan le menait sur une ancre absente.
+    //   Cote coach, la meme carte portait le seul champ pour lui repondre.
+    //   Elle reste donc des qu'il y a une reponse a lire, ou a ecrire — un
+    //   bilan de SUIVI ; un questionnaire de depart vide n'appelle rien.
+    const _aLire=!client&&!!b.reponseCoach;
+    const _aEcrire=!!client&&!depart;
+    if(!answers&&!_aLire&&!_aEcrire) return '';
+    const _corps=answers||`<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.5;padding:4px 0">Aucune réponse écrite dans ce bilan : mesures et photos seulement.</div>`;
     return `<div id="bil-${escapeHtml(_idBilan(b))}" style="background:var(--dark);border:1px solid ${depart?'rgba(224,32,32,.35)':'var(--border)'};border-radius:var(--r-3);padding:16px;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red-text);text-transform:uppercase;letter-spacing:1.5px">${depart?'Questionnaire de départ':'Bilan '+_rang.get(b)}</div>
         <div style="text-align:right"><div style="font-size:var(--fs-xs);color:var(--text-dim)">${d}</div>${w?`<div style="font-size:var(--fs-sm);font-weight:700;color:var(--text);margin-top:2px">⚖️ ${w}kg</div>`:''}</div>
       </div>
-      ${answers}
+      ${_corps}
       ${(!client&&b.reponseCoach)?`<div style="margin-top:10px;background:var(--surface-2);border-left:3px solid var(--green);border-radius:var(--r-2);padding:10px 12px">
         <div style="font-size:var(--fs-xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--green);font-weight:800;margin-bottom:4px">Réponse de ton coach</div>
         <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(b.reponseCoach)}</div>
@@ -69343,6 +69353,15 @@ function showProgressTab(tab,btn,sansMemo){
     // BILAN_QUESTIONS et renderReponsesBilans. Elles vivaient ici, en local,
     // et l'athlète était donc le seul à pouvoir lire ses propres réponses.
     c.innerHTML=renderReponsesBilans(bl);
+    // ⚠ LUE A L'AFFICHAGE (QA du 27/09/2026), comme renderRiteReponse. Seul
+    //   openReponseBilan — la notification, la ligne de l'accueil — marquait la
+    //   reponse lue : l'athlete qui allait la lire ici par l'onglet la lisait
+    //   bel et bien, et la pastille restait allumee pour toujours.
+    try{
+      let _lu=false;
+      for(const b of bl) if(b&&b.reponseCoach&&b.reponseVue===false){ b.reponseVue=true; _lu=true; }
+      if(_lu){ saveUser(); _majPastilleBilan(); }
+    }catch(e){}
   }
   // arcTracerCourbes n'etait declenchee que par go() : la premiere arrivee sur
   // Evolution tracait bien la courbe, mais un aller-retour vers Mensurations
