@@ -10624,3 +10624,52 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .vf-b:focus-visible{outline:2px solid var(--red,#e02020);outline-offset:2px}
 .vf-c{display:block;width:100%;height:auto;aspect-ratio:9/16;border-radius:9px;background:#0e0e10}
 .vf-b span{font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;text-align:center;line-height:1.25;overflow-wrap:anywhere}
+/* ══ Poids : la carte « Vitesse » et la courbe (refonte du 26/09/2026) ══ */
+.pv-carte{display:flex;gap:16px;align-items:center;padding:16px 18px;border-color:rgba(224,32,32,.55)!important;
+  background:linear-gradient(135deg,rgba(224,32,32,.10),rgba(224,32,32,.02) 55%),var(--surface-1)}
+.pv-ico{flex:none;display:flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:50%;color:#ff3b3b;
+  background:radial-gradient(circle at 50% 45%,rgba(224,32,32,.28),rgba(224,32,32,.06) 70%);border:1px solid rgba(224,32,32,.35);
+  box-shadow:0 0 18px rgba(224,32,32,.25)}
+.pv-c{flex:1;min-width:0}
+.pv-t{color:var(--red-text)!important;margin-bottom:6px!important}
+.pc-carte{padding:16px}
+.pc-tete{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.pc-ico{display:flex;color:#ff3b3b}
+.pc-titre{font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;color:var(--text);text-transform:uppercase;flex:1;min-width:150px}
+.pc-per{display:inline-flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#0e0e10}
+.pc-per button{min-width:40px;min-height:34px;padding:0 9px;border:0;border-left:1px solid var(--border);background:none;color:var(--sub);
+  font-family:var(--pile-titre);font-size:var(--fs-md);letter-spacing:1px;cursor:pointer}
+.pc-per button:first-child{border-left:0}
+.pc-per button.actif{background:linear-gradient(180deg,#e02020,#a51212);color:#fff}
+.pc{position:relative}
+.pc-cadre{position:relative;height:210px;margin:8px 0 0 30px}
+.pc-g{position:absolute;left:0;right:0;border-top:1px solid rgba(255,255,255,.07)}
+.pc-g span{position:absolute;left:-30px;top:-8px;width:26px;text-align:right;font-size:var(--fs-xs);color:var(--text-faint);line-height:1}
+.pc-zone{position:absolute;inset:0}
+.pc-zone svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.pc-pt{position:absolute;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;background:#140a0a;border:2px solid #ff3b3b;box-sizing:border-box}
+.pc-pt.pc-der{width:16px;height:16px;margin:-8px 0 0 -8px;background:#fff;border:4px solid #ff3b3b;box-shadow:0 0 0 3px rgba(224,32,32,.25),0 0 14px rgba(224,32,32,.6)}
+.pc-bulle{position:absolute;right:-6px;transform:translateY(calc(-100% - 16px));display:flex;flex-direction:column;align-items:center;gap:1px;
+  padding:6px 11px;border-radius:9px;background:#0d0d0f;border:1px solid rgba(34,197,94,.55);box-shadow:0 6px 16px rgba(0,0,0,.5);white-space:nowrap;pointer-events:none}
+.pc-bulle.pc-bulle-bas{transform:translateY(16px)}
+.pc-bulle b{font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:.5px;color:#fff;font-weight:400}
+.pc-bulle span{font-size:var(--fs-xs);font-weight:800}
+.pc-x{position:relative;height:18px;margin:6px 0 0 30px}
+.pc-x span{position:absolute;transform:translateX(-50%);font-size:var(--fs-xs);color:var(--sub);white-space:nowrap}
+.pc-x span.pc-x0{transform:none}.pc-x span.pc-x1{transform:translateX(-100%)}
+.pc-leg{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:12px;font-size:var(--fs-xs);color:var(--sub)}
+.pc-leg span{display:inline-flex;align-items:center;gap:7px}
+.pc-leg i{display:inline-block;flex:none}
+.pc-l-pt{width:11px;height:11px;border-radius:50%;border:2px solid #ff3b3b;box-sizing:border-box}
+.pc-l-tend,.pc-l-poin{width:22px;height:0;border-top:2px dashed #ff3b3b}
+.pc-l-plage{width:22px;height:11px;border-radius:3px;background:linear-gradient(180deg,rgba(224,32,32,.55),rgba(224,32,32,.15))}
+.pc-note{display:flex;gap:12px;align-items:center;margin-top:12px;padding:11px 13px;border-radius:12px;border:1px solid var(--border);
+  background:rgba(255,255,255,.02);font-size:var(--fs-xs);color:var(--sub);line-height:1.55}
+.pc-note-i{flex:none;display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:10px;color:#ff3b3b;
+  background:rgba(224,32,32,.10);border:1px solid rgba(224,32,32,.35)}
+.pc-vide{font-size:var(--fs-xs);color:var(--sub);line-height:1.6}
+@media (max-width:420px){
+  .pv-ico{width:52px;height:52px}
+  .pc-titre{font-size:var(--fs-lg)}
+  .pc-per button{min-width:34px;padding:0 6px;font-size:var(--fs-sm)}
+}

@@ -21748,9 +21748,12 @@ async function testExercices(){
     // et un dernier point souligné : compter les <path> nus ne distinguerait
     // plus rien. On compte chaque forme par SA signature — même exigence,
     // lue au bon endroit.
-    const _trTraits=h=>(h.match(/stroke-width="1\.8"/g)||[]).length;
+    // REFONTE DU 26/09/2026 (maquette de Kevin) : la tendance est un trait
+    // marqué data-trait="moyenne", la plage de variation une aire par segment,
+    // et chaque pesée un point HTML posé sur le SVG.
+    const _trTraits=h=>(h.match(/data-trait="moyenne"/g)||[]).length;
     const _trAires=h=>(h.match(/fill="url\(#pesAire\d+\)"/g)||[]).length;
-    const _trPoints=h=>(h.match(/stroke="var\(--text-faint\)" stroke-width="2\.2"/g)||[]).length;
+    const _trPoints=h=>(h.match(/class="pc-pt/g)||[]).length;
     ok('Deux segments donnent deux traits',(()=>{
       const s=[]; for(let i=0;i<=10;i++) s.push({date:_pj(i),kg:80});
       for(let i=0;i<=10;i++) s.push({date:_pj(50+i),kg:78});
@@ -21763,8 +21766,8 @@ async function testExercices(){
        _trPoints(_courbePesee(_ps(20,()=>80)))===21);
     ok('La dernière pesée est soulignée, une seule fois',(()=>{
       const h=_courbePesee(_ps(20,()=>80));
-      return (h.match(/stroke-width="7"/g)||[]).length===1
-          &&(h.match(/stroke-width="4\.5"/g)||[]).length===1;})());
+      return (h.match(/pc-der/g)||[]).length===1
+          &&(h.match(/class="pc-bulle/g)||[]).length===1;})());
     ok('Aucun <circle> ne subsiste : ils rendaient des ovales',
        !/<circle/.test(_courbePesee(_ps(20,()=>80))));
     ok('Une série parfaitement plate ne divise pas par zéro',
@@ -21788,20 +21791,38 @@ async function testExercices(){
       if(_courbePesee.dernierTrait!=='pesees')
         return _echec('le tracé ne se déclare pas comme un relevé');
       return /pesées reliées/.test(h)?true:_echec('rien ne dit ce qu’est ce trait');})());
-    ok('Une série dense garde sa moyenne mobile, sans pointillé',(()=>{
+    ok('Une série dense : le relevé en trait plein, la tendance en pointillé',(()=>{
       const h=_courbePesee(_ps(20,i=>80-i/14));
       if(_trTraits(h)!==1) return _echec('la moyenne a disparu');
-      if(/stroke-dasharray/.test(h)) return _echec('le relevé s’est ajouté à la moyenne');
+      // Le pointillé « pesées reliées » est réservé au cas SANS tendance.
+      if(/stroke-dasharray="3 2\.5"/.test(h)) return _echec('le relevé est en pointillé alors qu’une tendance existe');
+      if(!/data-trait="releve"/.test(h)) return _echec('le relevé a disparu');
       return _courbePesee.dernierTrait==='moyenne'?true
         :_echec('la courbe se déclare relevé alors qu’elle trace une moyenne');})());
-    ok('La légende du bloc Poids suit le trait réellement dessiné',(()=>{
-      const s=String(blocPoids);
-      if(s.indexOf('_courbePesee.dernierTrait')<0)
-        return _echec('la légende ne consulte pas le tracé');
-      // La courbe est construite AVANT la légende : dans l'autre sens elle
-      // annoncerait un trait qui n'existe pas encore.
-      return s.indexOf('const svgCourbe=')<s.indexOf('const legende=')
-        ?true:_echec('la légende est construite avant la courbe');})());
+    ok('La légende suit le trait réellement dessiné',(()=>{
+      // Elle est écrite PAR le tracé, sous lui : elle ne peut pas annoncer un
+      // trait qui n'existe pas.
+      const dense=_courbePesee(_ps(20,i=>80-i/14));
+      if(!/Tendance \(moy\. 7 jours\)/.test(dense)||/Pesées reliées/.test(dense)) return _echec('légende dense');
+      if(!/Plage de variation/.test(dense)) return _echec('la plage dessinée n’est pas nommée');
+      const rare=_courbePesee([{date:_pj(0),kg:103.8},{date:_pj(38),kg:100.9}]);
+      if(/Tendance/.test(rare)||/Plage de variation/.test(rare)) return _echec('une tendance annoncée sans tendance');
+      return /Pesées reliées/.test(rare)?true:_echec('légende du relevé seul');})());
+    ok('La bulle dit le dernier poids et l’écart sur la période, dans la couleur demandée',(()=>{
+      const h=_courbePesee([{date:_pj(0),kg:103.8},{date:_pj(38),kg:100.9}],{couleur:e=>e<0?'rgb(1, 2, 3)':'x'});
+      if(!/100,9 kg/.test(h)) return _echec('poids de la bulle');
+      if(!/rgb\(1, 2, 3\)">−2,9 kg/.test(h)) return _echec('écart de la bulle : '+(h.match(/pc-bulle[\s\S]{0,160}/)||[''])[0]);
+      return true;})());
+    ok('Les périodes 7J à 1A cadrent la courbe, 12 semaines par défaut',(()=>{
+      const s=[]; for(let i=0;i<=200;i+=2) s.push({date:_pj(i),kg:80-i/50});
+      const n=j=>_trPoints(_courbePesee(s,{jours:j}));
+      if(!(n(7)<n(28)&&n(28)<n(84)&&n(84)<n(182))) return _echec('fenêtres : '+[7,28,84,182].map(n).join(','));
+      if(_trPoints(_courbePesee(s))!==n(84)) return _echec('défaut ≠ 12 semaines');
+      const z=document.createElement('div'); z.innerHTML=_carteCourbePoids(s,{id:'pc-test'});
+      const b=[...z.querySelectorAll('.pc-per button')].map(x=>x.textContent);
+      if(b.join(',')!=='7J,4S,12S,6M,1A') return _echec('boutons : '+b.join(','));
+      if((z.querySelector('.pc-per .actif')||{}).textContent!=='12S') return _echec('12S n’est pas actif');
+      return true;})());
 
     // ── UNE MENSURATION INCHANGÉE RESTE UNE MENSURATION ──────────────────
     // Même signalement : « les mensurations restées identiques et inchangées

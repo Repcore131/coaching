@@ -95777,93 +95777,186 @@ async function savePesee(){
   const v=parseFloat(String(inp.value).replace(',','.'));
   if(await _enregistrerPesee(v,localISODate(new Date()))) renderCartePesee();
 }
-// ── Onglet Poids : points bruts + moyenne mobile ────────────────────────────
-// Tracé en SVG et non au canevas parce qu'il faut deux choses que
-// multiLineChart ne sait pas faire : un axe des abscisses en DATES (les pesées
-// ne sont pas régulières) et une vraie rupture du trait après une longue
-// interruption — filtrer les valeurs nulles relierait les deux bouts et
-// inventerait une tendance à travers le trou.
-const PESEE_COURBE_JOURS=90;
-function _courbePesee(serie){
+// ── Onglet Poids : la courbe (refonte du 26/09/2026, maquette de Kevin) ────
+// UN SEUL DESSIN pour l'athlete (Evolution > Poids) et pour le coach (fiche,
+// « Poids ») : _carteCourbePoids pose la carte — titre, periodes, courbe,
+// legende — et _courbePesee trace le corps. Ce qui est dessine :
+//   - LE RELEVE : les pesees, reliees par un trait plein, en anneaux ;
+//   - LA TENDANCE : la moyenne sur sept jours (mm7), en pointille, une par
+//     segment — elle s'interrompt a chaque longue coupure ;
+//   - LA PLAGE DE VARIATION : du plus bas au plus haut des pesees des sept
+//     derniers jours, la ou la tendance existe ;
+//   - la derniere pesee, soulignee, avec sa bulle : le poids, et l'ecart
+//     depuis le debut de la periode affichee.
+// SANS TENDANCE (moins de quatre pesees dans une semaine), les pesees sont
+// reliees EN POINTILLE, et l'encadre du bas le dit : c'est le cas de
+// l'athlete qui ne se pese qu'aux bilans.
+//
+// ⚠ LES POINTS ET LES LIBELLES SONT DU HTML POSE PAR-DESSUS LE SVG. Le SVG est
+//   etire (preserveAspectRatio="none") pour remplir la largeur : un cercle y
+//   devenait un ovale, et un texte y serait deforme. Les traits, eux, gardent
+//   leur epaisseur (vector-effect="non-scaling-stroke").
+const PESEE_COURBE_JOURS=84;                    // la periode par defaut : 12 semaines
+const PESEE_PERIODES=Object.freeze([
+  Object.freeze({k:'7J',j:7,lib:'7 jours'}),Object.freeze({k:'4S',j:28,lib:'4 semaines'}),
+  Object.freeze({k:'12S',j:84,lib:'12 semaines'}),Object.freeze({k:'6M',j:182,lib:'6 mois'}),
+  Object.freeze({k:'1A',j:365,lib:'1 an'})]);
+let _pesPeriode='12S';
+// Les cartes a l'ecran : id → {serie, opts}. Un clic sur une periode refait la sienne.
+const _pesCartes=new Map();
+/** PURE. Des graduations rondes (1, 2 ou 5 kg) qui encadrent [mn, mx]. */
+function _pesGraduations(mn,mx){
+  const et=Math.max(0.5,mx-mn);
+  const pas=[0.5,1,2,5,10,20].find(p=>et/p<=5)||20;
+  const bas=Math.floor(mn/pas)*pas, haut=Math.ceil(mx/pas)*pas;
+  const out=[]; for(let v=bas;v<=haut+1e-9;v+=pas) out.push(Math.round(v*10)/10);
+  if(out.length<2) out.push(Math.round((bas+pas)*10)/10);
+  return out;
+}
+/**
+ * Le corps de la courbe. `opts` (FACULTATIF) :
+ *   jours     — la fenetre, comptee depuis la derniere pesee (84 par defaut) ;
+ *   couleur   — (ecartKg)=>couleur CSS de l'ecart dans la bulle ;
+ * Declare le trait dessine dans _courbePesee.dernierTrait : 'moyenne' ou 'pesees'.
+ */
+function _courbePesee(serie,opts){
+  const o=opts||{};
+  _courbePesee.dernierTrait='';
   if(!serie||serie.length<2) return '';
   const fin=serie[serie.length-1].date;
-  const debut=_jourPlus(fin,-(PESEE_COURBE_JOURS-1));
+  const debut=_jourPlus(fin,-((o.jours||PESEE_COURBE_JOURS)-1));
   const pts=serie.filter(e=>e.date>=debut);
   if(pts.length<2) return '';
   const segs=segmentsWeight(pts);
   const jours=_joursEntre(pts[0].date,fin)||1;
+  // LA TENDANCE ET LA PLAGE, segment par segment.
+  const plage=(seg,d)=>{ const f=seg.filter(e=>e.date<=d&&e.date>=_jourPlus(d,-(PESEE_FENETRE_MM-1))).map(e=>e.kg);
+    return f.length?[Math.min(...f),Math.max(...f)]:null; };
+  const courbes=segs.map(seg=>{
+    const t=[];
+    for(const e of seg){ const v=mm7(seg,e.date); if(v!=null) t.push({d:e.date,v,p:plage(seg,e.date)}); }
+    return t.length>=2?t:null;
+  }).filter(Boolean);
+  const brut=!courbes.length;
+  // L'ECHELLE couvre les pesees ET la plage : rien ne sort du cadre.
   const vals=pts.map(e=>e.kg);
+  courbes.forEach(t=>t.forEach(x=>{ if(x.p) vals.push(x.p[0],x.p[1]); }));
   let mn=Math.min(...vals), mx=Math.max(...vals);
-  if(mx-mn<1){ const c=(mx+mn)/2; mn=c-0.5; mx=c+0.5; }   // série plate : bande d'1 kg
-  const L=100,H=64,mg=4;
-  const X=d=>(_joursEntre(pts[0].date,d)/jours)*L;
-  const Y=v=>H-mg-((v-mn)/(mx-mn))*(H-2*mg);
-  // LES POINTS ETAIENT DES ELLIPSES. Le viewBox fait 100x64 et le svg est
-  // etire en preserveAspectRatio="none" jusqu'a ~350x120 : l'abscisse est
-  // grossie 3,5 fois, l'ordonnee 1,9 fois. Un <circle r="1.1" devenait donc
-  // un ovale couche de 7,7 sur 4,1 pixels. Un segment nul de longueur 0.01
-  // termine en bout ROND et trace en non-scaling-stroke echappe a la
-  // deformation : sa taille est en pixels d'ecran, pas en unites du viewBox.
-  const _pt=(x,y,c,w)=>`<path d="M${x.toFixed(2)} ${y.toFixed(2)} l0.01 0" stroke="${c}" stroke-width="${w}" stroke-linecap="round" vector-effect="non-scaling-stroke" fill="none"/>`;
-  const bruts=pts.map(e=>_pt(X(e.date),Y(e.kg),'var(--text-faint)',2.2)).join('');
-  // LA DERNIERE PESEE porte le regard : c'est celle qu'on vient de poser.
-  // Le disque sombre pose dessous la decolle du trait quand elle tombe
-  // exactement sur la moyenne.
-  const _d=pts[pts.length-1];
-  const dernier=_pt(X(_d.date),Y(_d.kg),'#0b0b0b',7)+_pt(X(_d.date),Y(_d.kg),'var(--red)',4.5);
-  // Une moyenne mobile par SEGMENT : le trait s'interrompt à chaque coupure.
-  // L'IDENTIFIANT EST UNIQUE PAR TRACE. blocPoids et blocPoidsCoach appellent
-  // tous deux cette fonction, et les ecrans restent dans le document une fois
-  // rendus : un id fixe en aurait mis deux. url(#...) prend le premier venu.
+  if(mx-mn<1){ const c=(mx+mn)/2; mn=c-0.5; mx=c+0.5; }   // série plate : bande d'1 kg
+  const grad=_pesGraduations(mn-(mx-mn)*0.08,mx+(mx-mn)*0.08);
+  const g0=grad[0], g1=grad[grad.length-1];
+  const X=d=>(_joursEntre(pts[0].date,d)/jours)*100;
+  const Y=v=>100-((v-g0)/(g1-g0))*100;
+  const f2=n=>n.toFixed(2);
+  // L'IDENTIFIANT EST UNIQUE PAR TRACE : plusieurs courbes restent dans le
+  // document une fois rendues, et url(#...) prend la premiere venue.
   const gid='pesAire'+(_courbePesee._n=(_courbePesee._n||0)+1);
-  // L'AIRE SUIT LE SEGMENT, pas la courbe entiere : une coupure dans les
-  // pesees doit se voir comme un trou, pas se laisser combler par un aplat.
-  const aires=[],traits=[];
-  segs.forEach(seg=>{
-    const d=[],xy=[];
-    for(let i=0;i<seg.length;i++){
-      const v=mm7(seg,seg[i].date);
-      if(v!=null){ const x=X(seg[i].date),y=Y(v);
-        xy.push([x,y]);
-        d.push((d.length?'L':'M')+x.toFixed(2)+' '+y.toFixed(2)); }
+  const aires=[], tendances=[];
+  courbes.forEach(t=>{
+    const avecP=t.filter(x=>x.p);
+    if(avecP.length>=2){
+      const haut=avecP.map((x,i)=>(i?'L':'M')+f2(X(x.d))+' '+f2(Y(x.p[1]))).join(' ');
+      const bas=avecP.slice().reverse().map(x=>'L'+f2(X(x.d))+' '+f2(Y(x.p[0]))).join(' ');
+      aires.push(`<path d="${haut} ${bas} Z" fill="url(#${gid})" stroke="none"/>`);
     }
-    if(d.length<2) return;
-    aires.push(`<path d="M${xy[0][0].toFixed(2)} ${H} ${d.join(' ').slice(1)} L${xy[xy.length-1][0].toFixed(2)} ${H} Z" fill="url(#${gid})" stroke="none"/>`);
-    traits.push(`<path d="${d.join(' ')}" fill="none" stroke="var(--red)" stroke-width="1.8"
-      stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`);
+    tendances.push(`<path data-trait="moyenne" d="${t.map((x,i)=>(i?'L':'M')+f2(X(x.d))+' '+f2(Y(x.v))).join(' ')}" fill="none"
+      stroke="var(--red)" stroke-width="1.6" stroke-dasharray="5 4" stroke-linecap="round" vector-effect="non-scaling-stroke" opacity=".9"/>`);
   });
-  // AUCUNE MOYENNE TRACABLE : on relie les pesees elles-memes, en pointille.
-  // C'est le cas de l'athlete qui ne se pese qu'aux bilans — deux points a
-  // cinq semaines d'ecart, et jusqu'ici un graphique vide.
-  const brut=!traits.length;
-  if(brut){
-    const d=pts.map((e,i)=>(i?'L':'M')+X(e.date).toFixed(2)+' '+Y(e.kg).toFixed(2)).join(' ');
-    traits.push(`<path d="${d}" fill="none" stroke="var(--red)" stroke-width="1.6"
-      stroke-dasharray="3 2.5" stroke-linejoin="round" stroke-linecap="round"
-      vector-effect="non-scaling-stroke" opacity=".85"/>`);
-  }
-  // Le degrade est declare en style inline : var() n'est substitue que dans
-  // une declaration CSS, et stop-color en attribut ne le resoudrait pas
-  // partout de la meme facon.
+  // LE RELEVE : trait plein avec une tendance, pointille sans (et l'encadre le dit).
+  // Il s'interrompt lui aussi a chaque longue coupure.
+  const releves=(brut?[pts]:segs).map(seg=>seg.length<2?'':`<path data-trait="releve" d="${seg.map((e,i)=>(i?'L':'M')+f2(X(e.date))+' '+f2(Y(e.kg))).join(' ')}" fill="none"
+      stroke="var(--red)" stroke-width="${brut?1.6:2.4}"${brut?' stroke-dasharray="3 2.5" opacity=".85"':''}
+      stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`).join('');
   const defs=`<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" style="stop-color:var(--red);stop-opacity:.30"/>
-      <stop offset="1" style="stop-color:var(--red);stop-opacity:0"/>
+      <stop offset="0" style="stop-color:var(--red);stop-opacity:.34"/>
+      <stop offset="1" style="stop-color:var(--red);stop-opacity:.06"/>
     </linearGradient></defs>`;
+  // Les points : chaque pesee, et la derniere, soulignee une seule fois.
+  const der=pts[pts.length-1];
+  const points=pts.map((e,i)=>`<span class="pc-pt${i===pts.length-1?' pc-der':''}" style="left:${f2(X(e.date))}%;top:${f2(Y(e.kg))}%"></span>`).join('');
+  // La bulle : le poids, et l'ecart depuis le debut de la periode affichee.
+  const ecart=Math.round((der.kg-pts[0].kg)*10)/10;
+  const coulE=(typeof o.couleur==='function')?o.couleur(ecart):'var(--sub)';
+  const yD=Y(der.kg);
+  const bulle=`<div class="pc-bulle${yD<30?' pc-bulle-bas':''}" style="top:${f2(yD)}%">
+      <b>${_synNombre(der.kg)} kg</b><span style="color:${coulE}">${ecart>0?'+':(ecart<0?'−':'')}${_synNombre(Math.abs(ecart))} kg</span></div>`;
+  // Les graduations et les dates : du HTML, jamais du texte etire.
+  const lignes=grad.map(v=>`<div class="pc-g" style="top:${f2(Y(v))}%"><span>${String(v).replace('.',',')}</span></div>`).join('');
+  const nX=Math.min(5,Math.max(2,jours>=6?5:2));
+  const dates=[];
+  for(let i=0;i<nX;i++){ const d=_jourPlus(pts[0].date,Math.round(jours*i/(nX-1)));
+    if(!dates.some(x=>x===d)) dates.push(d); }
+  const xs=dates.map((d,i)=>`<span style="left:${f2(X(d))}%" class="${i===0?'pc-x0':(i===dates.length-1?'pc-x1':'')}">${_fmtJourCourt(d)}</span>`).join('');
   _courbePesee.dernierTrait=brut?'pesees':'moyenne';
-  return `<svg class="arc-courbe" viewBox="0 0 ${L} ${H}" preserveAspectRatio="none" style="width:100%;height:120px;overflow:visible" aria-hidden="true">
-      ${defs}${aires.join('')}${bruts}${traits.join('')}${dernier}
-    </svg>
-    <div style="display:flex;justify-content:space-between;font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">
-      <span>${_fmtJourCourt(pts[0].date)}</span><span>${_synNombre(mn)} à ${_synNombre(mx)} kg</span><span>${_fmtJourCourt(fin)}</span>
-    </div>
-    ${brut?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:6px">
-       Trait en pointillé : les pesées reliées entre elles. La moyenne sur sept
-       jours demande quatre pesées dans la même semaine — elle prendra le relais
-       dès que tu te pèseras plus souvent.</div>`:''}`;
+  const legende=`<div class="pc-leg">
+      <span><i class="pc-l-pt"></i>Poids relevé</span>
+      ${brut?'<span><i class="pc-l-poin"></i>Pesées reliées</span>'
+        :'<span><i class="pc-l-tend"></i>Tendance (moy. 7 jours)</span>'+(aires.length?'<span><i class="pc-l-plage"></i>Plage de variation</span>':'')}
+    </div>`;
+  return `<div class="pc">
+      <div class="pc-cadre">${lignes}
+        <div class="pc-zone">
+          <svg class="arc-courbe" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            ${defs}${aires.join('')}${releves}${tendances.join('')}
+          </svg>
+          ${points}${bulle}
+        </div>
+      </div>
+      <div class="pc-x">${xs}</div>
+      ${legende}
+      ${brut?`<div class="pc-note"><span class="pc-note-i" aria-hidden="true">${_pesIcone('barres')}</span><div>
+         Trait en pointillé : les pesées reliées entre elles.<br>La moyenne sur sept
+         jours demande quatre pesées dans la même semaine — elle prendra le relais
+         dès que tu te pèseras plus souvent.</div></div>`:''}
+    </div>`;
 }
 function _fmtJourCourt(iso){
   const [a,m,j]=String(iso).split('-');
   return j+'/'+m;
+}
+/** Les deux pictogrammes de la maquette : l'eclair de la vitesse, les barres du graphique. */
+function _pesIcone(k){
+  if(k==='eclair') return '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true"><path d="M13.2 2 4.5 13.4h6.2L9.6 22l9.9-12.6h-6.4L13.2 2z"/></svg>';
+  return '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><rect x="3" y="13" width="4.2" height="8" rx="1"/><rect x="9.9" y="8" width="4.2" height="13" rx="1"/><rect x="16.8" y="3" width="4.2" height="18" rx="1"/></svg>';
+}
+/**
+ * La carte complete : titre, periodes, courbe. `opts` :
+ *   id       — l'identifiant de la carte (un par ecran) ;
+ *   couleur  — (ecartKg)=>couleur de l'ecart ;
+ *   periodes — false pour masquer le choix (la fiche coach suit alors SA periode) ;
+ *   jours    — impose la fenetre (sinon, la periode choisie).
+ */
+function _carteCourbePoids(serie,opts){
+  const o=Object.assign({id:'pc-carte'},opts||{});
+  _pesCartes.set(o.id,{serie,opts:o});
+  const per=PESEE_PERIODES.find(p=>p.k===_pesPeriode)||PESEE_PERIODES[2];
+  const jours=o.jours||per.j;
+  const corps=_courbePesee(serie,Object.assign({},o,{jours}));
+  const choix=o.periodes===false?'':`<div class="pc-per" role="group" aria-label="Période du graphique">${PESEE_PERIODES.map(p=>
+      `<button type="button" class="${p.k===per.k?'actif':''}" aria-pressed="${p.k===per.k}" title="${p.lib}" onclick="pesPeriode('${o.id}','${p.k}')">${p.k}</button>`).join('')}</div>`;
+  const vide=(serie&&serie.length>=2)
+    ?'<div class="pc-vide">Moins de deux pesées sur '+escapeHtml(o.jours?'cette période':per.lib)+' : choisis une période plus longue.</div>'
+    :'<div class="pc-vide">Au moins deux pesées sont nécessaires pour tracer une courbe.</div>';
+  return `<div class="evo-carte pc-carte" id="${o.id}">
+      <div class="pc-tete">
+        <span class="pc-ico" aria-hidden="true">${_pesIcone('barres')}</span>
+        <span class="pc-titre">Évolution du poids</span>
+        ${choix}
+      </div>
+      ${corps||vide}
+    </div>`;
+}
+/** Un clic sur une periode : la carte se refait, les autres ne bougent pas. */
+function pesPeriode(id,k){
+  if(!PESEE_PERIODES.some(p=>p.k===k)) return false;
+  _pesPeriode=k;
+  const c=_pesCartes.get(id), z=document.getElementById(id);
+  if(!c||!z){ _pesCartes.delete(id); return false; }
+  const t=document.createElement('div'); t.innerHTML=_carteCourbePoids(c.serie,c.opts);
+  const neuf=t.firstElementChild; if(!neuf) return false;
+  z.replaceWith(neuf);
+  try{ if(typeof arcTracerCourbes==='function') arcTracerCourbes(neuf); }catch(e){}
+  return true;
 }
 // Encadré vitesse. En mode neutre il n'est jamais construit — pas caché : pas
 // construit du tout, pour qu'aucun chemin d'affichage ne puisse le ressortir.
@@ -95921,33 +96014,18 @@ function blocPoids(user){
       <div class="metric-box"><div class="metric-val">${act??'—'}kg</div><div class="metric-label">Actuel</div></div>
       <div class="metric-box"><div class="metric-val" style="color:${colEvol}">${diff!=null?(diff>0?'+':'')+diff+'kg':'—'}</div><div class="metric-label">Évolution</div></div>
     </div>`;
-  // LA COURBE D'ABORD : c'est elle qui sait si le trait est une moyenne ou
-  // les pesées reliées, et la légende ne peut le dire qu'après.
-  const svgCourbe=_courbePesee(serie);
-  const legende=!svgCourbe?'points = pesées'
-    :(_courbePesee.dernierTrait==='pesees'?'points = pesées · trait = relevé'
-                                          :'points = pesées · trait = moyenne 7 j');
-  const courbe=`<div class="evo-carte" style="padding:16px">
-      <!-- LE TITRE ET SA VALEUR TIENNENT SUR UNE LIGNE, la legende passe
-           dessous. Mesure au navigateur, ecran de 375 px : la ligne offre
-           300 px, le titre « Évolution du poids 103.8 kg » en reclame 227 et
-           la legende « points = pesées · trait = moyenne 7 j » 178 — 413 a
-           deux, pour 300 disponibles. Les deux ne pouvaient donc PAS
-           cohabiter, et c est le titre qui payait : reduit a 164 px, il
-           cassait apres « poids » et laissait « KG » seul a la ligne.
-           flex-wrap renvoie la legende a la ligne suivante ; le titre
-           retrouve les 300 px et ses 227 y tiennent. Au-dela de 413 px de
-           colonne — la fiche coach — les deux se remettent d eux-memes cote
-           a cote, sans regle supplementaire. -->
-      <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:2px 8px;margin-bottom:10px">
-        <span class="evo-titre" style="margin-bottom:0">Évolution du poids${act!=null?`<span style="font-family:var(--pile-titre);font-size:var(--fs-lg);color:var(--text-strong);letter-spacing:1px;margin-left:9px">${act} kg</span>`:''}</span>
-        <span style="font-size:var(--fs-2xs);color:var(--text-faint)">${legende}</span>
+  // LA COURBE, ET SA LEGENDE AVEC ELLE (refonte du 26/09/2026) : c'est
+  // _courbePesee qui sait si le trait est une moyenne ou les pesees reliees,
+  // et c'est donc elle qui l'ecrit, sous le trace.
+  // Mode neutre : l'ecart de la bulle reste neutre, sans couleur de verdict.
+  const courbe=_carteCourbePoids(serie,{id:'pc-athlete',
+    couleur:e=>neutre?'var(--sub)':couleurEvolution(user,e)});
+  const vitesse=neutre?'':`<div class="evo-carte pv-carte">
+      <span class="pv-ico" aria-hidden="true">${_pesIcone('eclair')}</span>
+      <div class="pv-c">
+        <div class="evo-titre pv-t">Vitesse</div>
+        ${_blocVitesse(user)}
       </div>
-      ${svgCourbe||'<div style="font-size:var(--fs-xs);color:var(--sub)">Au moins deux pesées sont nécessaires pour tracer une courbe.</div>'}
-    </div>`;
-  const vitesse=neutre?'':`<div class="evo-carte" style="padding:13px">
-      <div class="evo-titre">Vitesse</div>
-      ${_blocVitesse(user)}
     </div>`;
   const neutreNote=neutre?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:14px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
       Tu as signalé un antécédent de trouble du comportement alimentaire dans ton
@@ -96023,9 +96101,12 @@ function blocPoidsCoach(user,depuis){
       </div>
       ${alerte?`<div style="font-size:var(--fs-xs);color:var(--orange);line-height:1.6;margin-top:4px">Au-delà du seuil${cible.phase?' de la phase '+cible.lib:''} — à vérifier avec l'athlète.</div>`:''}`
      :`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:6px">Pas assez de pesées pour une vitesse (il en faut au moins quatre par semaine sur trois semaines).</div>`}
-    ${_courbePesee(_pDep?serie.filter(e=>{
+    ${_carteCourbePoids(_pDep?serie.filter(e=>{
       try{ return new Date(e.date+'T12:00:00').getTime()>=_pDep; }catch(x){ return true; }
-    }):serie)}
+    }):serie,{id:'pc-coach',couleur:e=>couleurEvolution(user,e),
+      // LA PERIODE DU COACH PRIME : posee en haut de « Ses courbes », elle cadre
+      // deja la serie — pas de second choix de periode dans la carte.
+      periodes:!_pDep,jours:_pDep?100000:0})}
     ${_pDep?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:4px">La courbe suit la période choisie en haut de « Ses courbes ». La vitesse, elle, garde sa fenêtre de mesure.</div>':''}
   </div>`;
 }
