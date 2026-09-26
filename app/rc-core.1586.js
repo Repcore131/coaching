@@ -41876,6 +41876,8 @@ function finishWorkout(incomplete=false){
   // 4. LA PERFORMANCE, delta compris.
   _pose('wd-stats',(()=>{ try{
     return _htmlStatsFin(mins,sets,setsPlanned,vol,(_cmp&&_cmp.delta)||0); }catch(e){ return ''; } })());
+  // 4 bis. LA CARTE MUSCULAIRE de la séance, sous le bilan.
+  try{ rendreMusclesFinSeance(currentUser,sess); }catch(e){}
   // 6. L'ASCENSION.
   _pose('wd-objectif',(()=>{ try{ return _htmlProchainObjectif(_ctxFin); }catch(e){ return ''; } })());
   // L'ascension du grimpeur se mesure : elle ne peut pas partir avant que le
@@ -58528,6 +58530,50 @@ let _cacheVolume={};
 function _viderCacheVolume(){ _cacheVolume={}; }
 
 // Le cœur : une passe sur les séances de la semaine.
+// PURE. Les séries dures d'UNE séance, par muscle : séries éligibles
+// (serieEligible), pondérées par le RIR (poidsIntensite), un muscle
+// secondaire comptant une demi-série. Le cardio ne compte nulle part ; un
+// exercice inconnu n'est pas réparti au hasard, il est signalé.
+function _volumeSeance(sess,user){
+  const out={muscles:{},eligibles:0,sansRir:0,nonRattachees:0,exNonRattaches:[]};
+  const data=(sess&&sess.data&&typeof sess.data==='object')?sess.data:{};
+  for(const nom of Object.keys(data)){
+    const d=data[nom];
+    if(!d||!Array.isArray(d.sets)||!d.sets.length) continue;
+    // L'objet exercice n'est pas conservé dans l'historique : on le
+    // reconstitue à partir du nom et des reps de la première série, seuls
+    // éléments dont isCardio a besoin.
+    // Les reps en TEXTE : isCardio les lit comme une chaîne, et un nombre venu
+    // d'un import le faisait lever.
+    const r0=d.sets[0].reps;
+    const ex={name:nom,reps:(r0==null?r0:String(r0)),methode:d.methode,technique:d.technique};
+    const cardio=isCardio(ex);
+    const cls=cardio?VOL_CARDIO:resoudreMusclesLecture(nom,ex,user);
+    let elig=0,sansRir=0;
+    for(const s of d.sets){
+      if(!serieEligible(s,ex)) continue;
+      elig++;
+      if(s.rir===''||s.rir==null) sansRir++;
+    }
+    if(!elig) continue;
+    out.eligibles+=elig;
+    out.sansRir+=sansRir;
+    if(cls===VOL_CARDIO) continue;         // compté nulle part, signalé nulle part
+    if(!cls){                               // exercice inconnu : on ne répartit pas au hasard
+      out.nonRattachees+=elig;
+      if(out.exNonRattaches.indexOf(nom)<0) out.exNonRattaches.push(nom);
+      continue;
+    }
+    for(const s of d.sets){
+      if(!serieEligible(s,ex)) continue;
+      const pi=poidsIntensite(s);
+      if(!pi) continue;
+      for(const m of (cls.p||[])) out.muscles[m]=(out.muscles[m]||0)+pi*POIDS_ROLE.PRIMAIRE;
+      for(const m of (cls.s||[])) out.muscles[m]=(out.muscles[m]||0)+pi*POIDS_ROLE.SECONDAIRE;
+    }
+  }
+  return out;
+}
 function _calculSemaine(user,cle){
   const k=(user&&user.email||'?')+'|'+cle;
   if(_cacheVolume[k]) return _cacheVolume[k];
@@ -58548,41 +58594,17 @@ function _calculSemaine(user,cle){
     res.seances++;
     const jour=_cleJour(t);
     const j=parJour[jour]||(parJour[jour]={});
-    const parSeance={};
-    for(const nom of Object.keys(sess.data)){
-      const d=sess.data[nom];
-      if(!d||!Array.isArray(d.sets)||!d.sets.length) continue;
-      // L'objet exercice n'est pas conservé dans l'historique : on le
-      // reconstitue à partir du nom et des reps de la première série, seuls
-      // éléments dont isCardio a besoin.
-      const ex={name:nom,reps:d.sets[0].reps,methode:d.methode,technique:d.technique};
-      const cardio=isCardio(ex);
-      const cls=cardio?VOL_CARDIO:resoudreMusclesLecture(nom,ex,user);
-      let elig=0,sansRir=0;
-      for(const s of d.sets){
-        if(!serieEligible(s,ex)) continue;
-        elig++;
-        if(s.rir===''||s.rir==null) sansRir++;
-      }
-      if(!elig) continue;
-      res.eligibles+=elig;
-      res.sansRir+=sansRir;
-      if(cls===VOL_CARDIO) continue;         // compté nulle part, signalé nulle part
-      if(!cls){                               // exercice inconnu : on ne répartit pas au hasard
-        res.nonRattachees+=elig;
-        if(!vus.has(nom)){ vus.add(nom); res.exNonRattaches.push(nom); }
-        continue;
-      }
-      for(const s of d.sets){
-        if(!serieEligible(s,ex)) continue;
-        const pi=poidsIntensite(s);
-        if(!pi) continue;
-        for(const m of (cls.p||[])){ const v=pi*POIDS_ROLE.PRIMAIRE;
-          res.muscles[m]=(res.muscles[m]||0)+v; j[m]=(j[m]||0)+v; parSeance[m]=(parSeance[m]||0)+v; }
-        for(const m of (cls.s||[])){ const v=pi*POIDS_ROLE.SECONDAIRE;
-          res.muscles[m]=(res.muscles[m]||0)+v; j[m]=(j[m]||0)+v; parSeance[m]=(parSeance[m]||0)+v; }
-      }
-    }
+    // LE DÉCOMPTE D'UNE SÉANCE vit dans _volumeSeance, partagé avec la carte
+    // musculaire (volumeParMuscle). Les pondérations sont des multiples de
+    // 0,25 : sommer par séance puis par semaine donne le même total, exact.
+    const r=_volumeSeance(sess,user);
+    res.eligibles+=r.eligibles;
+    res.sansRir+=r.sansRir;
+    res.nonRattachees+=r.nonRattachees;
+    for(const nom of r.exNonRattaches) if(!vus.has(nom)){ vus.add(nom); res.exNonRattaches.push(nom); }
+    const parSeance=r.muscles;
+    for(const m in parSeance){ const v=parSeance[m];
+      res.muscles[m]=(res.muscles[m]||0)+v; j[m]=(j[m]||0)+v; }
     for(const m in parSeance) if(parSeance[m]>VOL_SEUIL_ABERRANT) res.aberrants[m]=true;
     // Plus gros total obtenu sur UNE séance. parSeance est déjà construit
     // au-dessus pour le seuil d'aberration : on ne le recalcule pas.
@@ -68216,6 +68238,449 @@ function _wrPlanifierNotif(){
     }).catch(()=>{});
   }catch(e){}
 }
+// ══════════════════ LA CARTE MUSCULAIRE ════════════════════════════════════
+//
+// La silhouette, face et dos côte à côte, où chaque groupe musculaire prend
+// une couleur entre #2a2a2a (au repos) et #E02020 (à sa cible) — et, à la
+// cible, une lueur électrique et de fines veines lumineuses.
+//
+// ⚠ LES ZONES VIENNENT DES CARTES z-*.png, PAS DE TRACÉS SVG. La demande
+//   parlait de « chemins simples par groupe ». Mais les territoires musculaires
+//   de ces silhouettes ont déjà été détourés pixel par pixel, puis recoupés à
+//   la demande de Kevin (pecs jusqu'à la clavicule, biceps en entier, cuisse
+//   entière, trapèze coupé à l'épine de l'omoplate — voir CORPS_ZONES_ORDRE et
+//   scripts/corps_zones.py). Des chemins simples auraient refait, en moins
+//   juste, un découpage déjà validé, et deux découpages du même corps finissent
+//   toujours par se contredire. On lit donc LES MÊMES cartes que la fiche
+//   coach, et tout se peint dans un canvas — ce qui rend le même dessin à
+//   l'écran et dans le visuel 1080×1920.
+//
+// LE VOLUME EST CELUI DE L'ONGLET VOLUME : séries dures, un muscle secondaire
+// compte une demi-série, pondération par le RIR — _volumeSeance, extrait de
+// _calculSemaine, et partagé avec lui. Aucun second calcul.
+
+// Les onze groupes affichés, et les muscles de la carte qu'ils couvrent.
+// Les adducteurs colorent avec la cuisse, les abducteurs avec les fessiers ;
+// l'avant-bras reste neutre (aucun groupe ne le dit).
+const MUSC_GROUPES=Object.freeze([
+  {cle:'pectoraux',lib:'Pectoraux',m:['PECTORAUX'],cat:'Pecs'},
+  {cle:'epaules',lib:'Épaules',m:['DELT_ANT','DELT_LAT','DELT_POST'],cat:'Épaules'},
+  {cle:'biceps',lib:'Biceps',m:['BICEPS'],cat:'Bras'},
+  {cle:'triceps',lib:'Triceps',m:['TRICEPS'],cat:'Bras'},
+  {cle:'abdos',lib:'Abdos',m:['ABDOS'],cat:'Abdos'},
+  {cle:'quadriceps',lib:'Quadriceps',m:['QUADRICEPS','ADDUCTEURS'],cat:'Jambes'},
+  {cle:'ischios',lib:'Ischios',m:['ISCHIOS'],cat:'Jambes'},
+  {cle:'fessiers',lib:'Fessiers',m:['FESSIERS','ABDUCTEURS'],cat:'Jambes'},
+  {cle:'mollets',lib:'Mollets',m:['MOLLETS'],cat:'Jambes'},
+  {cle:'dos',lib:'Dos',m:['DORSAUX','LOMBAIRES'],cat:'Dos'},
+  {cle:'trapezes',lib:'Trapèzes',m:['TRAP_SUP','TRAP_MED'],cat:'Dos'}
+]);
+const MUSC_FROID=[0x2a,0x2a,0x2a], MUSC_CHAUD=[0xE0,0x20,0x20];
+
+/**
+ * PURE. Le volume d'une période, par groupe musculaire, normalisé 0..1.
+ *
+ * LA NORMALISATION : pour chaque muscle, ses séries dures rapportées à sa
+ * CIBLE — la borne haute du MAV (reperesEffectifs : table, retours de
+ * l'athlète, surcharge du coach), multipliée par `semaines` ; le groupe prend
+ * le score de son muscle le plus avancé. 1 = la cible est atteinte ou
+ * dépassée : c'est là que le muscle s'allume. Une séance seule vaut 1/quota semaine : c'est sa part de la
+ * semaine prévue.
+ *
+ * @param {Array} seances  des séances enregistrées (format de finishWorkout)
+ * @param {{user?:object, semaines?:number}} [o]
+ * @returns {{groupes:Object<string,number>, series:Object<string,number>,
+ *   muscles:Object<string,number>, total:number, semaines:number}}
+ */
+function volumeParMuscle(seances,o){
+  o=o||{};
+  const user=o.user||null;
+  const sem=(Number(o.semaines)>0)?Number(o.semaines):1;
+  const muscles={};
+  let total=0;
+  for(const s of (seances||[])){
+    if(!s||!s.data) continue;
+    const r=_volumeSeance(s,user);
+    total+=r.eligibles;
+    for(const m in r.muscles) muscles[m]=(muscles[m]||0)+r.muscles[m];
+  }
+  // LE SCORE D'UN GROUPE EST CELUI DE SON MUSCLE LE PLUS AVANCÉ. Sommer les
+  // cibles pénalisait les groupes composés : un dos dont les dorsaux sont à
+  // leur cible restait tiède parce que les lombaires ne l'étaient pas.
+  const groupes={}, series={};
+  for(const g of MUSC_GROUPES){
+    let n=0, best=0;
+    for(const m of g.m){
+      const x=muscles[m]||0;
+      n+=x;
+      let rep=null; try{ rep=reperesEffectifs(user,m); }catch(e){ rep=null; }
+      // Sans repère (cas qui n'existe pas aujourd'hui : les dix-huit muscles
+      // en ont un), une cible prudente de 12 séries plutôt qu'une division
+      // par zéro.
+      const cible=((rep&&rep.mavMax>0)?rep.mavMax:12)*sem;
+      best=Math.max(best,Math.min(1,x/cible));
+    }
+    series[g.cle]=n;
+    groupes[g.cle]=Math.max(0,best);
+  }
+  return {groupes,series,muscles,total,semaines:sem};
+}
+// PURE. La couleur d'un score : #2a2a2a → #E02020.
+function muscCouleur(s){
+  const t=Math.max(0,Math.min(1,Number(s)||0));
+  const c=MUSC_FROID.map((a,i)=>Math.round(a+(MUSC_CHAUD[i]-a)*t));
+  return '#'+c.map(v=>v.toString(16).padStart(2,'0')).join('').toUpperCase();
+}
+// PURE. Le titre : les régions sous tension (score ≥ 0,66), de la plus
+// chargée à la moins chargée. « Dos et jambes sous tension ».
+function muscTitre(groupes){
+  const cats=[];
+  const l=MUSC_GROUPES.map(g=>({cat:g.cat,s:Number(groupes&&groupes[g.cle])||0}))
+    .filter(x=>x.s>=0.66).sort((a,b)=>b.s-a.s);
+  for(const x of l) if(cats.indexOf(x.cat)<0) cats.push(x.cat);
+  if(!cats.length) return 'Des muscles au repos';
+  if(cats.length>=4) return 'Tout le corps sous tension';
+  const noms=cats.map((c,i)=>i?c.toLowerCase():c);
+  return (noms.length===1?noms[0]:(noms.slice(0,-1).join(', ')+' et '+noms[noms.length-1]))+' sous tension';
+}
+// PURE. Les données d'une carte : titre, trois chiffres, période.
+function muscDonnees(seances,o){
+  const v=volumeParMuscle(seances,o);
+  const tonnage=(seances||[]).reduce((a,s)=>a+(Number(s&&s.volume)||0),0);
+  const t=_wrTonnage(tonnage);
+  const auMax=MUSC_GROUPES.filter(g=>v.groupes[g.cle]>=1).length;
+  return {groupes:v.groupes,series:v.series,titre:muscTitre(v.groupes),periode:(o&&o.periode)||'',
+    chiffres:[
+      {v:_wrNb(Math.round(v.total)),l:'séries dures'},
+      {v:_wrNb(t.v,t.dec),l:t.u==='KG'?'kg soulevés':'tonnes'},
+      {v:String(auMax),l:auMax>1?'groupes au max':'groupe au max'}]};
+}
+
+// ── LES RESSOURCES : silhouettes, cartes de zones, fond détouré ────────
+// Lues une fois par sexe. Le FOND des dessins est noir et opaque : il est
+// retiré par remplissage depuis les bords (pixels sombres joignables de
+// l'extérieur), pour que la silhouette se pose sur les trois fonds du visuel.
+// Le short et les cheveux, sombres mais enclos, restent.
+const _muscRes={};
+function chargerSilhouettes(genre){
+  const g=genre==='f'?'f':'h';
+  if(_muscRes[g]) return _muscRes[g];
+  const lire=src=>new Promise((ok,ko)=>{
+    const i=new Image();
+    i.onload=()=>{ try{
+      const c=document.createElement('canvas'); c.width=i.naturalWidth; c.height=i.naturalHeight;
+      const x=c.getContext('2d',{willReadFrequently:true}); x.drawImage(i,0,0);
+      ok(x.getImageData(0,0,c.width,c.height)); }catch(e){ ko(e); } };
+    i.onerror=()=>ko(new Error('image illisible : '+src));
+    i.src=src;
+  });
+  const vue=v=>{
+    const pl=CORPS_PLANCHE[g+'-'+v];
+    return Promise.all([lire(pl.src),_corpsCarte(pl.zones)]).then(([img,carte])=>({img,carte,fond:_muscFond(img)}));
+  };
+  _muscRes[g]=Promise.all([vue('face'),vue('dos')]).then(([face,dos])=>{
+    const r={face,dos}; _muscRes[g].pret=r; return r; })
+    .catch(e=>{ delete _muscRes[g]; throw e; });
+  return _muscRes[g];
+}
+function _muscPret(genre){ const p=_muscRes[genre==='f'?'f':'h']; return (p&&p.pret)||null; }
+// Le masque du fond : 1 = fond.
+//
+// ⚠ UN REMPLISSAGE SIMPLE FUIT. Le fond vaut 0 à 5, mais le short et les
+//   cheveux ont des pixels à 1 qui touchent l'extérieur : un remplissage
+//   « sombre et joignable » trouait le short. On fait donc une FERMETURE : les
+//   traits du dessin (L > 24) sont épaissis de 3 px, ce qui referme les
+//   passages de moins de 6 px ; on remplit depuis les bords ce qui reste ; et
+//   la bande de 3 px rendue au dessin est redonnée au fond là où elle est
+//   sombre — la silhouette garde son contour exact.
+function _muscFond(img){
+  const w=img.width, h=img.height, d=img.data, n=w*h, R=3;
+  const trait=new Uint8Array(n);
+  for(let p=0,i=0;p<n;p++,i+=4) trait[p]=(0.3*d[i]+0.59*d[i+1]+0.11*d[i+2])>24?1:0;
+  // Dilatation séparable (carré 7×7) : lignes, puis colonnes.
+  const t1=new Uint8Array(n), epais=new Uint8Array(n);
+  for(let y=0;y<h;y++){ let run=0;
+    for(let x=0;x<w;x++){ let v=0; for(let k=-R;k<=R&&!v;k++){ const xx=x+k; if(xx>=0&&xx<w&&trait[y*w+xx]) v=1; } t1[y*w+x]=v; } }
+  for(let x=0;x<w;x++) for(let y=0;y<h;y++){ let v=0;
+    for(let k=-R;k<=R&&!v;k++){ const yy=y+k; if(yy>=0&&yy<h&&t1[yy*w+x]) v=1; } epais[y*w+x]=v; }
+  // Remplissage depuis les bords, hors des traits épaissis.
+  const fond=new Uint8Array(n), pile=[];
+  for(let x=0;x<w;x++) pile.push(x,(h-1)*w+x);
+  for(let y=0;y<h;y++) pile.push(y*w,y*w+w-1);
+  while(pile.length){
+    const i=pile.pop();
+    if(fond[i]||epais[i]) continue;
+    fond[i]=1;
+    const x=i%w;
+    if(x>0) pile.push(i-1); if(x<w-1) pile.push(i+1);
+    if(i>=w) pile.push(i-w); if(i<n-w) pile.push(i+w);
+  }
+  // La bande rendue : un pixel sombre à moins de R+1 px du fond redevient fond.
+  const bord=fond.slice();
+  for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+    const p=y*w+x; if(fond[p]||trait[p]) continue;
+    let pres=0;
+    for(let dy=-R-1;dy<=R+1&&!pres;dy++) for(let dx=-R-1;dx<=R+1&&!pres;dx++){
+      const xx=x+dx, yy=y+dy; if(xx>=0&&yy>=0&&xx<w&&yy<h&&fond[yy*w+xx]) pres=1; }
+    if(pres){
+      const i=p*4; if((0.3*d[i]+0.59*d[i+1]+0.11*d[i+2])<10) bord[p]=1;
+    }
+  }
+  return bord;
+}
+// Le groupe de chaque rang de la carte de zones (null : neutre).
+const _muscGroupeDeRang=(()=>{
+  const t=[null];
+  for(const m of CORPS_ZONES_ORDRE){ const g=MUSC_GROUPES.find(x=>x.m.indexOf(m)>=0); t.push(g?g.cle:null); }
+  return t;
+})();
+/**
+ * Peint UNE vue : trois toiles à la taille du dessin.
+ *   base   — le dessin en niveaux de gris, chaque muscle teinté par son score ;
+ *   lueur  — le masque plein des groupes AU MAXIMUM (à flouter) ;
+ *   veines — des éclairs fins, tracés dans ces mêmes muscles et découpés
+ *            par leur masque.
+ * @returns {{base:HTMLCanvasElement,lueur:HTMLCanvasElement,veines:HTMLCanvasElement,w:number,h:number}}
+ */
+function _muscPeindreVue(r,groupes,graine){
+  const {img,carte,fond}=r, w=img.width, h=img.height;
+  const mk=()=>{ const c=document.createElement('canvas'); c.width=w; c.height=h; return c; };
+  const base=mk(), lueur=mk(), veines=mk();
+  const bx=base.getContext('2d'), lx=lueur.getContext('2d');
+  const out=bx.createImageData(w,h), lm=lx.createImageData(w,h);
+  const s=img.data, z=carte.data, o=out.data, l=lm.data;
+  const coul={}, max={};
+  for(const g of MUSC_GROUPES){
+    const sc=Number(groupes&&groupes[g.cle])||0;
+    coul[g.cle]=MUSC_FROID.map((a,i)=>a+(MUSC_CHAUD[i]-a)*Math.max(0,Math.min(1,sc)));
+    max[g.cle]=sc>=1;
+  }
+  const boites={};
+  for(let i=0,p=0;i<s.length;i+=4,p++){
+    if(fond[p]) continue;                                   // alpha 0
+    const L=0.3*s[i]+0.59*s[i+1]+0.11*s[i+2];
+    const k=(z.length===s.length)?Math.round(z[i]/CORPS_ZONES_PAS):0;
+    const gc=_muscGroupeDeRang[k]||null;
+    if(gc){
+      // L'ombrage du dessin est gardé : la couleur est modulée par sa
+      // luminosité, comme un « multiply » éclairci.
+      const f=Math.min(1.25,0.3+L/255*1.5), c=coul[gc];
+      o[i]=Math.min(255,c[0]*f); o[i+1]=Math.min(255,c[1]*f); o[i+2]=Math.min(255,c[2]*f);
+      if(max[gc]){
+        l[i]=255; l[i+1]=40; l[i+2]=40; l[i+3]=255;
+        const x=p%w, y=(p/w)|0, b=boites[gc]||(boites[gc]=[x,y,x,y,0]);
+        if(x<b[0]) b[0]=x; if(y<b[1]) b[1]=y; if(x>b[2]) b[2]=x; if(y>b[3]) b[3]=y; b[4]++;
+      }
+    } else {
+      const v=L*0.62; o[i]=v; o[i+1]=v; o[i+2]=v;
+    }
+    o[i+3]=255;
+  }
+  bx.putImageData(out,0,0);
+  lx.putImageData(lm,0,0);
+  // LES VEINES : trois éclairs par groupe au max, dans sa boîte, tirés d'une
+  // graine (le même dessin à chaque rendu), puis découpés par le masque.
+  const vx=veines.getContext('2d');
+  const al=_recAlea(graine||1);
+  vx.lineCap='round'; vx.lineJoin='round';
+  for(const gc in boites){
+    const b=boites[gc]; if(b[4]<40) continue;
+    const bw=b[2]-b[0], bh=b[3]-b[1];
+    for(let n=0;n<3;n++){
+      let pts=[{x:b[0]+bw*(0.2+al()*0.6),y:b[1]+bh*0.05},{x:b[0]+bw*(0.2+al()*0.6),y:b[3]-bh*0.05}];
+      if(bw>bh){ pts=[{x:b[0]+bw*0.05,y:b[1]+bh*(0.2+al()*0.6)},{x:b[2]-bw*0.05,y:b[1]+bh*(0.2+al()*0.6)}]; }
+      let d=Math.hypot(pts[1].x-pts[0].x,pts[1].y-pts[0].y)*0.14;
+      for(let k=0;k<5;k++){
+        const nv=[pts[0]];
+        for(let i=0;i<pts.length-1;i++){
+          const a=pts[i], c=pts[i+1], dx=c.x-a.x, dy=c.y-a.y, L=Math.hypot(dx,dy)||1, e=(al()*2-1)*d;
+          nv.push({x:(a.x+c.x)/2-dy/L*e,y:(a.y+c.y)/2+dx/L*e},c);
+        }
+        pts=nv; d/=2;
+      }
+      vx.beginPath(); vx.moveTo(pts[0].x,pts[0].y); for(const p of pts) vx.lineTo(p.x,p.y);
+      vx.strokeStyle='rgba(255,70,70,.9)'; vx.lineWidth=2.6; vx.stroke();
+      vx.strokeStyle='rgba(255,235,235,.95)'; vx.lineWidth=0.9; vx.stroke();
+    }
+  }
+  vx.globalCompositeOperation='destination-in';
+  vx.drawImage(lueur,0,0);
+  vx.globalCompositeOperation='source-over';
+  return {base,lueur,veines,w,h};
+}
+// Pose une vue peinte dans un contexte, avec la lueur floue et les veines.
+// Le flou passe par l'OMBRE décalée (le filtre de canvas manque à Safari).
+function _muscPoser(g,v,x,y,wd,ht,intensite){
+  g.drawImage(v.base,x,y,wd,ht);
+  const k=(intensite==null)?1:intensite;
+  if(k>0){
+    g.save();
+    g.globalCompositeOperation='lighter';
+    g.globalAlpha=0.55*k;
+    g.shadowColor='rgba(255,40,40,1)'; g.shadowBlur=Math.max(6,wd*0.045);
+    g.shadowOffsetX=10000;
+    g.drawImage(v.lueur,x-10000,y,wd,ht);
+    g.shadowOffsetX=0; g.shadowBlur=0;
+    g.globalAlpha=0.9*k;
+    g.drawImage(v.veines,x,y,wd,ht);
+    g.restore();
+  }
+}
+
+// ── L'ÉCRAN : le cadre et son rendu ───────────────────────────────────
+// `id` : la place ('wd' fin de séance, 'ev' Évolution). Les données de chaque
+// place sont gardées : le partage et le sélecteur de fond les relisent.
+const _muscPlaces={};
+function htmlCarteMuscles(id,d,o){
+  o=o||{};
+  _muscPlaces[id]=Object.assign({d},o);
+  return '<section class="musc" id="musc-'+id+'">'
+    +'<div class="musc-sur">Carte musculaire'+(d.periode?' · '+escapeHtml(d.periode):'')+'</div>'
+    +(o.bascule||'')
+    +'<h3 class="musc-titre">'+escapeHtml(d.titre)+'</h3>'
+    +'<div class="musc-duo">'
+      +['face','dos'].map(v=>'<div class="musc-vue" data-vue="'+v+'">'
+        +'<canvas class="musc-base" aria-hidden="true"></canvas>'
+        +'<canvas class="musc-lueur" aria-hidden="true"></canvas>'
+        +'<canvas class="musc-veines" aria-hidden="true"></canvas></div>').join('')
+    +'</div>'
+    +'<div class="musc-chiffres">'+d.chiffres.map(c=>'<div><b>'+escapeHtml(c.v)+'</b><span>'+escapeHtml(c.l)+'</span></div>').join('')+'</div>'
+    +'<div class="musc-legende"><span>Repos</span><i aria-hidden="true"></i><span>Cible atteinte</span></div>'
+    +_htmlVisuelFonds('musc-'+id+'-fonds')
+    +'<div class="musc-actions">'
+      +'<button type="button" class="btn btn-red btn-casse" onclick="partagerCarteMuscles(\''+id+'\',this)">'+icon('share',16)+' <span>Partager</span></button>'
+      +'<button type="button" class="btn btn-outline" onclick="telechargerCarteMuscles(\''+id+'\',this)">'+icon('download',16)+' <span>Télécharger</span></button>'
+    +'</div></section>';
+}
+// Peint les trois toiles de chaque vue, une fois les images lues.
+function monterCarteMuscles(id){
+  const p=_muscPlaces[id]; if(!p) return Promise.resolve(false);
+  const genre=p.genre||'h';
+  return chargerSilhouettes(genre).then(res=>{
+    const z=document.getElementById('musc-'+id); if(!z) return false;
+    for(const v of ['face','dos']){
+      const pv=_muscPeindreVue(res[v],p.d.groupes,_recGraine(id+v));
+      const box=z.querySelector('.musc-vue[data-vue="'+v+'"]');
+      if(!box) continue;
+      box.style.aspectRatio=pv.w+'/'+pv.h;
+      const poser=(sel,src)=>{ const c=box.querySelector(sel); c.width=pv.w; c.height=pv.h; c.getContext('2d').drawImage(src,0,0); };
+      poser('.musc-base',pv.base); poser('.musc-lueur',pv.lueur); poser('.musc-veines',pv.veines);
+    }
+    try{ monterSelecteurFond('musc-'+id+'-fonds',f=>_muscCarteDe(id,f),null); }catch(e){}
+    return true;
+  }).catch(()=>false);
+}
+function _muscCarteDe(id,fond){
+  const p=_muscPlaces[id]; if(!p) return null;
+  const res=_muscPret(p.genre); if(!res) return null;
+  let sig=''; try{ sig=nomSurVisuels(currentUser); }catch(e){ sig=''; }
+  return _dessinerCarteMuscles(p.d,fond,res,sig);
+}
+/**
+ * LE VISUEL 1080×1920. Même famille que le bilan et les records : fond au
+ * choix (idée 02), ombre en double passe, Bebas et Montserrat. La
+ * silhouette face + dos, le titre, trois chiffres, la signature. `res` est
+ * chargé (chargerSilhouettes) : le dessin est synchrone.
+ */
+function _dessinerCarteMuscles(d,fond,res,signature){
+  const cv=document.createElement('canvas');
+  cv.width=STORY_L; cv.height=STORY_H;
+  const g=cv.getContext('2d');
+  const f=fond||'transparent';
+  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const o=_visuelOutils(g);
+  g.textAlign='center'; g.textBaseline='alphabetic';
+  o.ombre(true); g.fillStyle='#fff'; g.font='800 32px '+MONT;
+  const sur='CARTE MUSCULAIRE'+(d.periode?' · '+String(d.periode).toUpperCase():'');
+  const ss=o.ajusteEspace(sur,'800',32,MONT,8,LARG,20);
+  g.font='800 '+ss+'px '+MONT;
+  o.ecrireEspace(sur,cx,190,8,true);
+  const titre=String(d.titre||'').toUpperCase();
+  const ts=o.ajuste(titre,'700',112,BEBAS,LARG,56);
+  g.font='700 '+ts+'px '+BEBAS;
+  o.ecrire(titre,cx,190+30+ts*0.85);
+  o.ombre(false);
+  // Les deux vues, même hauteur, côte à côte.
+  if(res){
+    const H=1080, y=390;
+    const vs=['face','dos'].map((v,i)=>_muscPeindreVue(res[v],d.groupes,_recGraine('carte'+v)));
+    const ws=vs.map(v=>v.w*H/v.h);
+    const gap=30, tot=ws[0]+ws[1]+gap;
+    let x=cx-tot/2;
+    vs.forEach((v,i)=>{ _muscPoser(g,v,x,y,ws[i],H,1); x+=ws[i]+gap; });
+  }
+  // Les trois chiffres.
+  const cw=LARG/3;
+  (d.chiffres||[]).slice(0,3).forEach((c,i)=>{
+    const x=M+cw*i+cw/2;
+    o.ombre(true); g.fillStyle='#fff';
+    const vs=o.ajuste(c.v,'700',110,BEBAS,cw-20,50);
+    g.font='700 '+vs+'px '+BEBAS; o.ecrire(c.v,x,1590);
+    g.fillStyle=f==='rouge'?'rgba(255,255,255,.9)':'#E02020';
+    const ls=o.ajusteEspace(c.l.toUpperCase(),'800',24,MONT,3,cw-16,14);
+    g.font='800 '+ls+'px '+MONT; o.ecrireEspace(c.l.toUpperCase(),x,1632,3,true);
+  });
+  _recSignature(g,o,String(signature||''),STORY_H-110,LARG);
+  o.ombre(false);
+  return cv;
+}
+function _muscSortir(id,btn,partager){
+  if(_storyEnCours) return false;
+  const res=_muscPret((_muscPlaces[id]||{}).genre);
+  if(!res){ toast('La silhouette se charge, réessaie dans un instant.','var(--orange)'); return false; }
+  const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond);
+  const nom=visuelNomFichier('repcore-muscles',fond);
+  _storyEnCours=true;
+  let ok=false;
+  try{
+    ok=(partager&&_storySortirPartage(_muscCarteDe(id,fond),nom,undefined,fmt))
+      ||_storySortirTelechargement(_muscCarteDe(id,fond),nom,fmt);
+  }catch(e){ toast('Visuel impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
+  finally{ _storyEnCours=false; }
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp&&ok){ const l=sp.textContent; sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  return ok;
+}
+function partagerCarteMuscles(id,btn){ return _muscSortir(id,btn,true); }
+function telechargerCarteMuscles(id,btn){ return _muscSortir(id,btn,false); }
+
+// ── LES DEUX PLACES ───────────────────────────────────────────────────
+// Fin de séance : la séance qui vient de se terminer, rapportée à sa part de
+// la semaine prévue (1/quota).
+function rendreMusclesFinSeance(u,sess){
+  const z=document.getElementById('wd-muscles'); if(!z) return false;
+  if(!sess||!sess.data){ z.innerHTML=''; return false; }
+  let q=1; try{ q=seancesPrevuesParSemaine(u); }catch(e){ q=1; }
+  const d=muscDonnees([sess],{user:u,semaines:1/q,periode:'cette séance'});
+  if(!d.series||!Object.values(d.series).some(v=>v>0)){ z.innerHTML=''; return false; }
+  z.innerHTML=htmlCarteMuscles('wd',d,{genre:woGenreAvatar(u)});
+  monterCarteMuscles('wd');
+  return true;
+}
+// Évolution : la semaine affichée par l'onglet Volume, ou les quatre
+// semaines qui finissent avec elle (« mois »).
+let _muscEvoPeriode='semaine';
+function muscEvoPeriode(p){ _muscEvoPeriode=(p==='mois')?'mois':'semaine'; rendreMusclesEvolution(); }
+function rendreMusclesEvolution(){
+  const z=document.getElementById('prog-muscles'); if(!z) return false;
+  const u=currentUser;
+  const lundi=_lundiDeSemaine(_volCleDecalee(typeof _volDecalage==='number'?_volDecalage:0));
+  if(!lundi||!u){ z.innerHTML=''; return false; }
+  const fin=lundi.getTime()+7*864e5;
+  const mois=_muscEvoPeriode==='mois';
+  const debut=mois?fin-28*864e5:lundi.getTime();
+  const ses=(u.sessions||[]).filter(s=>s&&s.date>=debut&&s.date<fin);
+  const bascule='<div class="musc-bascule" role="group" aria-label="Période">'
+    +['semaine','mois'].map(k=>'<button type="button" aria-pressed="'+(_muscEvoPeriode===k)+'" onclick="muscEvoPeriode(\''+k+'\')">'
+      +(k==='semaine'?'Semaine':'4 semaines')+'</button>').join('')+'</div>';
+  const d=muscDonnees(ses,{user:u,semaines:mois?4:1,periode:mois?'4 semaines':'la semaine'});
+  z.innerHTML=htmlCarteMuscles('ev',d,{genre:woGenreAvatar(u),bascule});
+  monterCarteMuscles('ev');
+  return true;
+}
 // ══════════ LE PLANNING DE RAPPEL, ECRIT EN UN SEUL ENDROIT ════════════
 //
 // Extrait de saveWoReminderConfig le 15/09/2026, quand l'ecran d'accueil des
@@ -69268,7 +69733,7 @@ function renderVolume(){
   // Charge axiale : sous les muscles, comme demandé, et sans repère absolu.
   const axial=_htmlChargeAxiale(u,_volDecalage,null,{});
   document.getElementById('progress-content').innerHTML=
-    nav+tete+alertes+corps+zero+axial+_htmlTonnage(u,_volDecalage)+_htmlRecords(u)
+    nav+tete+'<div id="prog-muscles"></div>'+alertes+corps+zero+axial+_htmlTonnage(u,_volDecalage)+_htmlRecords(u)
     +_htmlHydratation(u,nutIsOnDay(localISODate(new Date())))+conv+bandeau;
   // LE REMPLISSAGE SEUL BOUGE : le fond zone, le trait de MRV et le contour des
   // valeurs aberrantes sont des REPERES, pas des mesures, et restent poses a
@@ -69290,6 +69755,8 @@ function renderVolume(){
       requestAnimationFrame(()=>arcTracerCourbes(_pc));
     }
   }catch(e){}
+  // LA CARTE MUSCULAIRE de la semaine affichée (ou des quatre dernières).
+  try{ rendreMusclesEvolution(); }catch(e){}
 }
 // Familles reellement pratiquees sur la fenetre affichee : on ne parle de
 // convention que si elle s'applique a quelque chose.

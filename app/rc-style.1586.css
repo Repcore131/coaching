@@ -9322,6 +9322,40 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .wr-carte-t span{display:block;font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px}
 .wr-carte-v{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--red-text)}
 
+/* ══ LA CARTE MUSCULAIRE ═════════════════════════════════════════════════
+   Face et dos côte à côte. Trois toiles par vue : la base teintée, la lueur
+   des groupes au maximum (floutée, qui pulse), et les veines (qui
+   grésillent). Sous « réduire les animations », tout reste allumé et immobile. */
+.musc{background:linear-gradient(180deg,#101012,#08080a);border:1px solid #1c1c1f;
+  border-radius:var(--r-3);padding:14px 14px 16px;text-align:center}
+.musc-sur{font-size:var(--fs-2xs);font-weight:800;letter-spacing:2.2px;text-transform:uppercase;color:var(--red-text)}
+.musc-titre{font-family:var(--pile-titre);font-size:clamp(26px,8vw,36px);letter-spacing:.6px;
+  line-height:1.05;margin:6px 0 10px;color:#fff}
+.musc-bascule{display:inline-flex;gap:4px;margin-top:8px;background:var(--surface-2);
+  border-radius:var(--r-full);padding:3px}
+.musc-bascule button{border:none;background:none;color:var(--sub);font-size:var(--fs-2xs);font-weight:800;
+  letter-spacing:.8px;text-transform:uppercase;padding:7px 12px;border-radius:var(--r-full);cursor:pointer;min-height:32px}
+.musc-bascule button[aria-pressed="true"]{background:#E02020;color:#fff}
+.musc-duo{display:flex;justify-content:center;align-items:flex-end;gap:10px;margin:4px 0 12px}
+.musc-vue{position:relative;height:min(62vw,300px);aspect-ratio:360/898}
+.musc-vue canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.musc-lueur{filter:blur(5px);mix-blend-mode:screen;opacity:.55;animation:muscPouls 1.8s ease-in-out infinite}
+.musc-veines{mix-blend-mode:screen;animation:muscGresil 2.6s steps(1,end) infinite}
+@keyframes muscPouls{0%,100%{opacity:.35}50%{opacity:.75}}
+@keyframes muscGresil{0%,100%{opacity:.9}12%{opacity:.35}14%{opacity:1}46%{opacity:.6}48%{opacity:1}}
+@media(prefers-reduced-motion:reduce){.musc-lueur,.musc-veines{animation:none}}
+.musc-chiffres{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.musc-chiffres b{display:block;font-family:var(--pile-titre);font-size:30px;line-height:1;color:#fff}
+.musc-chiffres span{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--red-text)}
+.musc-legende{display:flex;align-items:center;justify-content:center;gap:8px;font-size:var(--fs-2xs);
+  color:var(--sub);margin-bottom:12px}
+.musc-legende i{display:block;width:90px;height:6px;border-radius:var(--r-full);background:linear-gradient(90deg,#2a2a2a,#E02020)}
+.musc .vf{margin:0 0 10px}
+.musc-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.musc-actions .btn{display:flex;align-items:center;justify-content:center;gap:6px;margin:0}
+/* R31 : un seul bouton en capitales par écran — le Partager de la carte est
+   en casse de phrase (btn-casse), c'est un geste secondaire de la fin de séance. */
+
 
 /* ── Accessibilité : respect de « Réduire les animations » du système ──────────
    Doit rester en TOUTE FIN de feuille pour l'emporter sur les règles ci-dessus. */

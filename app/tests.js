@@ -47882,6 +47882,92 @@ async function testExercices(){
         return String(_wrAller).indexOf('rcFoudre')>=0?true:_echec('pas de foudre au profil');
       } finally { _wrFermer(); window.go=svGo; currentUser=sv; }})());
 
+    // ══ LA CARTE MUSCULAIRE (26/09/2026) ══════════════════════════════════
+    const _MU=(()=>{
+      // Les muscles des exercices sont FIXÉS par le dossier (exMuscles) : le
+      // test ne dépend ni du guide ni des règles de reconnaissance.
+      const u={email:'mu@t.fr',exMuscles:{}};
+      u.exMuscles[exKey('TEST PECS')]={p:['PECTORAUX'],s:['TRICEPS'],src:'manuel'};
+      u.exMuscles[exKey('TEST SQUAT')]={p:['QUADRICEPS'],s:['FESSIERS'],src:'manuel'};
+      const serie=(n,rir)=>Array.from({length:n},()=>({weight:60,reps:'8',repsDone:8,rir:rir==null?'1':String(rir),done:true}));
+      const sc=(exos)=>({date:Date.now(),volume:3000,data:Object.fromEntries(Object.entries(exos).map(([k,n])=>[k,{sets:serie(n)}]))});
+      return {u,sc,serie};
+    })();
+    ok('volumeParMuscle : vide, normalisé 0..1, plafonné, secondaires à moitié',(()=>{
+      const {u,sc}=_MU;
+      const v0=volumeParMuscle([],{user:u});
+      if(Object.keys(v0.groupes).length!==11) return _echec(Object.keys(v0.groupes).length+' groupes au lieu de onze');
+      if(Object.values(v0.groupes).some(x=>x!==0)) return _echec('un groupe vide n’est pas à 0');
+      // 10 séries de pecs sur une semaine : 10 / MAV max (20) = 0,5.
+      const v=volumeParMuscle([sc({'TEST PECS':10})],{user:u,semaines:1});
+      if(v.series.pectoraux!==10) return _echec('séries pecs '+v.series.pectoraux);
+      if(Math.abs(v.groupes.pectoraux-0.5)>1e-9) return _echec('score pecs '+v.groupes.pectoraux);
+      // Le triceps, secondaire, reçoit une demi-série : 5 / 14.
+      if(Math.abs(v.groupes.triceps-5/14)>1e-9) return _echec('score triceps '+v.groupes.triceps);
+      // Plafonné à 1.
+      const g=volumeParMuscle([sc({'TEST PECS':40})],{user:u,semaines:1});
+      if(g.groupes.pectoraux!==1) return _echec('pas plafonné : '+g.groupes.pectoraux);
+      // Une séance vaut 1/quota semaine : 7 séries à 1/3 → 7/(20/3) ≥ 1.
+      const s1=volumeParMuscle([sc({'TEST PECS':7})],{user:u,semaines:1/3});
+      if(s1.groupes.pectoraux!==1) return _echec('séance seule : '+s1.groupes.pectoraux);
+      // La cible suit le repère de l'athlète (surcharge du coach).
+      const uc=Object.assign({},u,{reperesVolume:{PECTORAUX:{mavMax:10}}});
+      const c=volumeParMuscle([sc({'TEST PECS':5})],{user:uc,semaines:1});
+      return Math.abs(c.groupes.pectoraux-0.5)<1e-9?true:_echec('repère du coach ignoré : '+c.groupes.pectoraux);})());
+    ok('volumeParMuscle lit le même décompte que l’onglet Volume',(()=>{
+      const {u,serie}=_MU;
+      const lundi=_lundiDe(Date.now()).getTime()+12*36e5;
+      const ses=[{date:lundi,data:{'TEST PECS':{sets:serie(4).concat(serie(2,4))},'TEST SQUAT':{sets:serie(3)}}},
+        {date:lundi+864e5,data:{'TEST SQUAT':{sets:serie(5)}}}];
+      const uu=Object.assign({},u,{email:'mu2@t.fr',sessions:ses});
+      const sem=_calculSemaine(uu,semaineISO(new Date(lundi))).muscles;
+      const v=volumeParMuscle(ses,{user:uu}).muscles;
+      for(const m of new Set(Object.keys(sem).concat(Object.keys(v))))
+        if((sem[m]||0)!==(v[m]||0)) return _echec(m+' : semaine '+sem[m]+' ≠ carte '+v[m]);
+      // RIR 4 compte une demi-série : 4 + 2×0,5 = 5 pour les pecs.
+      return v.PECTORAUX===5?true:_echec('pecs '+v.PECTORAUX);})());
+    ok('Carte musculaire : couleur #2a2a2a → #E02020, titre automatique',(()=>{
+      if(muscCouleur(0)!=='#2A2A2A'||muscCouleur(1)!=='#E02020') return _echec(muscCouleur(0)+' / '+muscCouleur(1));
+      if(muscCouleur(2)!=='#E02020'||muscCouleur(-1)!=='#2A2A2A') return _echec('bornes');
+      const z={}; for(const g of MUSC_GROUPES) z[g.cle]=0;
+      if(muscTitre(z)!=='Des muscles au repos') return _echec(muscTitre(z));
+      if(muscTitre(Object.assign({},z,{dos:1,quadriceps:0.8}))!=='Dos et jambes sous tension')
+        return _echec(muscTitre(Object.assign({},z,{dos:1,quadriceps:0.8})));
+      if(muscTitre(Object.assign({},z,{ischios:0.7}))!=='Jambes sous tension') return _echec('une région');
+      if(muscTitre(Object.assign({},z,{dos:1,quadriceps:1,pectoraux:1,biceps:1}))!=='Tout le corps sous tension') return _echec('quatre régions');
+      return muscTitre(Object.assign({},z,{dos:0.65}))==='Des muscles au repos'?true:_echec('seuil 0,66');})());
+    ok('Carte musculaire : le visuel 1080×1920, titre, trois chiffres, signature',(()=>{
+      const {u,sc}=_MU;
+      const d=muscDonnees([sc({'TEST PECS':10,'TEST SQUAT':12})],{user:u,semaines:1,periode:'la semaine'});
+      if(d.chiffres.length!==3) return _echec(d.chiffres.length+' chiffres');
+      const P=CanvasRenderingContext2D.prototype, f=P.fillText, vus=[];
+      P.fillText=function(t){ vus.push(String(t)); return f.apply(this,arguments); };
+      let c;
+      try{ c=_dessinerCarteMuscles(d,'rouge',null,'KEVIN'); } finally { P.fillText=f; }
+      if(c.width!==1080||c.height!==1920) return _echec(c.width+'x'+c.height);
+      const tout=vus.join('');
+      if(tout.indexOf(d.titre.toUpperCase())<0) return _echec('titre absent');
+      if(tout.indexOf('REPCORE')<0) return _echec('signature absente');
+      return d.chiffres.every(x=>tout.indexOf(x.v)>=0)?true:_echec('un chiffre manque');})());
+    ok('Carte musculaire : les zones viennent des cartes validées, pas d’un second découpage',(()=>{
+      const src=String(_muscPeindreVue)+String(chargerSilhouettes);
+      if(src.indexOf('_corpsCarte')<0||src.indexOf('CORPS_ZONES_PAS')<0) return _echec('les cartes z-*.png ne sont pas lues');
+      // Chaque muscle des groupes existe dans la carte.
+      for(const g of MUSC_GROUPES) for(const m of g.m)
+        if(CORPS_ZONES_ORDRE.indexOf(m)<0) return _echec(m+' absent de CORPS_ZONES_ORDRE');
+      return true;})());
+    ok('Carte musculaire : fin de séance et onglet Volume (semaine / 4 semaines)',(()=>{
+      if(!document.getElementById('wd-muscles')) return _echec('pas de #wd-muscles sur l’écran de fin');
+      if(String(finishWorkout).indexOf('rendreMusclesFinSeance')<0) return _echec('fin de séance non branchée');
+      if(String(renderVolume).indexOf('rendreMusclesEvolution')<0||String(renderVolume).indexOf('prog-muscles')<0)
+        return _echec('onglet Volume non branché');
+      const h=htmlCarteMuscles('t',{titre:'X',periode:'p',chiffres:[{v:'1',l:'a'},{v:'2',l:'b'},{v:'3',l:'c'}],groupes:{}},{});
+      const d=document.createElement('div'); d.innerHTML=h;
+      if(d.querySelectorAll('.musc-vue').length!==2) return _echec('pas face + dos');
+      if(!d.querySelector('[onclick^="partagerCarteMuscles("]')||!d.querySelector('[onclick^="telechargerCarteMuscles("]'))
+        return _echec('boutons Partager / Télécharger');
+      return d.querySelector('#musc-t-fonds')?true:_echec('pas de sélecteur de fond');})());
+
     ok('Les badges n’ont que trois points d’appel',(()=>{
       const s=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
       const n=(s.match(/majBadges\(/g)||[]).length;
