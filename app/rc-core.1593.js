@@ -4845,6 +4845,22 @@ const CLOUD={
   },
 
   pullCanalMessages(key){ return this._canalGet(key,'messages'); },
+  // Les défis seuls, par l'index 'type' (règles : .indexOn) — l'accueil ne
+  // tire pas tout le fil pour un rappel.
+  async pullDefisCanal(key){
+    const token=await this._getToken();
+    if(!token) throw new Error('Session expirée.');
+    const r=await fetch(this._urlCanal(key,'messages')+'?auth='+token+'&orderBy=%22type%22&equalTo=%22defi%22');
+    if(!r.ok) throw new Error('Défis : '+r.status);
+    return await r.json();
+  },
+  async pullDefisResultats(moi){
+    const token=await this._getToken();
+    if(!token) throw new Error('Session expirée.');
+    const r=await fetch(this._fbUrl.replace('users.json','defis_resultats/'+moi+'.json')+'?auth='+token);
+    if(!r.ok) throw new Error('Résultats : '+r.status);
+    return await r.json();
+  },
   pullCanalCompteurs(key){ return this._canalGet(key,'compteurs'); },
   // Réservé au coach : les règles refusent ce chemin à un athlète.
   pullCanalReactions(key){ return this._canalGet(key,'reactions'); },
@@ -5435,7 +5451,7 @@ function _validateAthletePkg(o){
     const params=new URLSearchParams(window.location.search);
     aNettoyer=!!(params.get('coachpkg')||params.get('athletepkg')||params.get('s')
       ||params.get('bilan')==='1'||params.get('wo')==='1'||params.get('diete')==='1'
-      ||!!params.get('wrapped'));
+      ||!!params.get('wrapped')||params.get('canal')==='1');
     // Coach invite → athlete device
     const cpkg=params.get('coachpkg');
     if(cpkg){
@@ -5487,6 +5503,8 @@ function _validateAthletePkg(o){
     // ?wrapped=<clé> — la notification du Wrapped (sw.js, 'wrapped-reminder').
     const _wrDeep=params.get('wrapped');
     if(_wrDeep&&/^(m-\d{4}-\d{2}|a-\d{4}|1)$/.test(_wrDeep)) window._pendingWrappedOpen=_wrDeep;
+    // ?canal=1 — les push des défis (nouveau défi, plus que 48 h).
+    if(params.get('canal')==='1') window._pendingCanalOpen=true;
   }catch(e){}
   finally{
     if(aNettoyer){
@@ -5676,6 +5694,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // déjà fêté, et les volts des nuits purgées du journal. Des scores, pas des
   // mesures — mais ils DOIVENT être classés.
   'xp','xpRang','xpArchive',
+  // Les défis bouclés (titre, dates, champion) : recopiés de /defis_resultats.
+  'defisReleves',
   // Les types de notification push que l'athlète a coupés : {type:false}.
   // Un réglage, lu par le serveur avant chaque envoi — aucune donnée de santé.
   'pushPrefs',
@@ -6921,6 +6941,8 @@ function routeUser(){
     setTimeout(()=>{ try{ go('s-nutrition'); loadNutrition(); }catch(e){} },1000);}
   if(window._pendingWrappedOpen){ const _k=window._pendingWrappedOpen; window._pendingWrappedOpen=false;
     setTimeout(()=>{ try{ ouvrirWrapped(_k==='1'?null:_k); }catch(e){} },1000);}
+  if(window._pendingCanalOpen){ window._pendingCanalOpen=false;
+    setTimeout(()=>{ try{ loadCanal(); }catch(e){} },1000);}
 }
 // ARBITRAGE ASSUMÉ (24/07/2026, plan Spark) — status, paymentStatus et
 // paypalSubscriptionId ne sont protégés par AUCUNE règle serveur :
@@ -16960,14 +16982,18 @@ async function _canalCharger(){
   // Sans elle, le compteur touché ne changeait jamais à l'écran.
   const liste=canalTrier(msgs);
   window._canalListe=liste;
+  // LES DÉFIS : le résumé public et ma feuille, pour chaque défi visible.
+  try{ window._canalDefis=await _canalChargerDefis(cle,liste); }catch(e){ window._canalDefis={}; }
   // Les horodatages, pour que la pastille sache COMBIEN la prochaine fois.
   try{ _canalMemoriser(cle,liste); }catch(e){}
   await _canalPlancher(fil);
   // Un rappel sur un fil deja peint — bouton « Reessayer », retour dans
   // l'onglet — ne doit pas vider l'ecran pour y remettre des silhouettes.
   fil.dataset.rempli='1';
+  // Les défis en cours épinglés en tête ; les messages système en cartes
+  // compactes (_canalHtmlFilAthlete).
   fil.innerHTML=liste.length
-    ? liste.map(m=>_canalCarte(m,window._canalCompteurs[m.id]||{},window._canalMiennes[m.id]||'')).join('')
+    ? _canalHtmlFilAthlete(liste)
     : _canalVide('Rien pour le moment.','Ton coach publiera ici ses annonces et ses liens.');
   // Marqué lu au plus récent AFFICHÉ, et non à Date.now() : si un message
   // arrive pendant le chargement, l'horodater à maintenant l'enterrerait sans
@@ -16985,9 +17011,9 @@ function _canalVide(titre,sous){
     <div class="sub" style="font-size:var(--fs-sm);line-height:1.6">${escapeHtml(sous)}</div></div>`;
 }
 // La carte d'un message. `mienne` est l'emoji déjà posé par cet athlète, ou ''.
-function _canalCarte(m,compteurs,mienne){
-  const lien=String(m.lien||'').trim();
-  const boutons=CANAL_EMOJIS.map(e=>{
+// Les quatre boutons de réaction, communs aux messages et aux défis.
+function _canalBoutonsReactions(m,compteurs,mienne){
+  return CANAL_EMOJIS.map(e=>{
     const n=Number(compteurs[e])||0;
     const actif=mienne===e;
     return `<button onclick="basculerReaction('${escapeHtml(m.id)}','${escapeHtml(e)}')"
@@ -16998,12 +17024,15 @@ function _canalCarte(m,compteurs,mienne){
         font-family:Montserrat,sans-serif;font-weight:700">
       <span aria-hidden="true">${e}</span><span style="font-size:var(--fs-xs)">${n}</span></button>`;
   }).join('');
+}
+function _canalCarte(m,compteurs,mienne){
+  const lien=String(m.lien||'').trim();
+  const boutons=_canalBoutonsReactions(m,compteurs,mienne);
   return `<div class="cnl-carte"${m.epingle?' data-epingle':''}>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       ${m.epingle?'<span style="font-size:var(--fs-xs);color:var(--red-text);font-weight:800;letter-spacing:1.5px;text-transform:uppercase">📌 Épinglé</span>':''}
       <span class="sub" style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase">${escapeHtml(ago(Number(m.at)||Date.now()))}</span>
     </div>
-    ${m.defi===true?'<div class="cnl-defi">⚡ Défi</div>':''}
     ${m.titre?`<div class="cnl-titre">${escapeHtml(m.titre)}</div>`:''}
     ${m.texte?`<div class="cnl-texte">${escapeHtml(m.texte)}</div>`:''}
     ${lien?_canalCarteLien(lien):''}
@@ -17092,8 +17121,7 @@ async function basculerReaction(msgId,emoji){
 function _canalRepeindre(){
   const fil=document.getElementById('canal-fil');
   if(!fil||!window._canalListe) return;
-  fil.innerHTML=window._canalListe.map(m=>
-    _canalCarte(m,(window._canalCompteurs||{})[m.id]||{},(window._canalMiennes||{})[m.id]||'')).join('');
+  fil.innerHTML=_canalHtmlFilAthlete(window._canalListe);
 }
 
 // ── La bannière d'accueil, alimentée par le message épinglé ─────────────────
@@ -17141,6 +17169,599 @@ function renderEpingleAccueil(){
     +'onclick="go(\'s-athlete-profile\')">Ajouter ma photo</button></div>';
 }
 
+// ══ LES DÉFIS DU CANAL ═════════════════════════════════════════════════════
+//
+// Un défi est un message du Canal de type 'defi' : /canaux/<coach>/messages/<id>
+// = {at, type:'defi', titre, texte, mesure, objectif, collectif, debut, fin,
+// recompense?}. Le coach l'écrit ; tout le reste est ailleurs, et pas à lui :
+//   …/defis/<id>/participants/<moi>/inscription   l'athlète s'inscrit (règles)
+//   …/defis/<id>/participants/<moi>/{valeur, termine, place}   Cloud Functions
+//   …/defis/<id>/public   l'équipe, le classement, les avatars — SANS aucune
+//                         clé, et ne nommant que ceux qui ont choisi le
+//                         classement (opt-in). C'est tout ce que le groupe voit.
+//   /defis_resultats/<moi>/<id>   un défi bouclé, CHAMPION compris (clôture)
+//
+// ⚠ LA JAUGE PERSO EST CALCULÉE ICI (defiValeur), avec la même règle que le
+// serveur (functions/defis-calcul.js) : elle bouge dès la fin de séance, sans
+// attendre la fonction. Les deux bancs rejouent les mêmes fixtures.
+//
+// LE CLASSEMENT NE PORTE JAMAIS SUR LES CHARGES : la régularité (séances, ou
+// semaines validées), ou la progression en %. Un défi de tonnage se classe
+// aux séances.
+const DEFI_MESURES=Object.freeze({
+  seances:{lib:'séances',court:'séances'},
+  tonnage:{lib:'kg soulevés',court:'kg'},
+  serie:{lib:'semaines validées',court:'semaines'},
+  progressionPct:{lib:'% de progression',court:'%'}
+});
+// Les trois modèles prêts. La durée : 'mois' = jusqu'à la fin du mois en
+// cours ; un nombre = autant de jours.
+const DEFI_MODELES=Object.freeze([
+  {titre:'12 séances ce mois',mesure:'seances',objectif:12,collectif:false,duree:'mois'},
+  {titre:'100 000 kg en équipe',mesure:'tonnage',objectif:100000,collectif:true,duree:'mois'},
+  {titre:'Personne ne lâche : 4 semaines validées',mesure:'serie',objectif:4,collectif:true,duree:28}
+]);
+const DEFI_INSCRITS_CLE='rc_defis_inscrits';
+function _dfListe(x){
+  if(Array.isArray(x)) return x.filter(Boolean);
+  if(x&&typeof x==='object') return Object.keys(x).map(k=>x[k]).filter(Boolean);
+  return [];
+}
+// Même lecture des exercices que le serveur : le nom, en capitales. Pas les
+// alias — le serveur ne les connaît pas, et les deux doivent compter pareil.
+function _dfExos(s){
+  if(s&&s.data&&typeof s.data==='object'&&Object.keys(s.data).length)
+    return Object.keys(s.data).map(nm=>({nom:String(nm).trim().toUpperCase(),sets:_dfListe((s.data[nm]||{}).sets)}));
+  return _dfListe(s&&s.exercises).filter(e=>e&&(e.name||e.nm))
+    .map(e=>({nom:String(e.name||e.nm).trim().toUpperCase(),sets:_dfListe(e.sets)}));
+}
+function defiTonnageSeance(s){
+  if(Number(s&&s.volume)>0) return Math.round(Number(s.volume));
+  let v=0;
+  for(const e of _dfExos(s)) for(const st of e.sets){
+    if(!st||st.done===false) continue;
+    v+=(parseFloat(st.weight)||0)*(parseFloat(st.repsDone!=null?st.repsDone:st.reps)||0);
+  }
+  return Math.round(v);
+}
+// PURE. La valeur d'un athlète pour un défi, entre debut et fin.
+function defiValeur(u,d){
+  if(!d) return 0;
+  const ses=_dfListe(u&&u.sessions).filter(s=>Number(s.date)>0);
+  const dans=t=>t>=Number(d.debut)&&t<=Number(d.fin);
+  const dedans=ses.filter(s=>dans(Number(s.date)));
+  switch(d.mesure){
+    case 'seances': return dedans.length;
+    case 'tonnage': return dedans.reduce((a,s)=>a+defiTonnageSeance(s),0);
+    case 'serie':{
+      const q=Math.max(1,_dfListe(u&&u.sessions_config).filter(s=>s&&s.active).length), n={};
+      for(const s of dedans){ const l=localISODate(_lundiDe(Number(s.date))); n[l]=(n[l]||0)+1; }
+      return Object.keys(n).filter(l=>n[l]>=q).length;
+    }
+    case 'progressionPct':{
+      const avant={}, pendant={};
+      for(const s of ses){
+        const t=Number(s.date);
+        const c=t<Number(d.debut)?avant:(dans(t)?pendant:null);
+        if(!c) continue;
+        for(const e of _dfExos(s)) for(const st of e.sets){
+          if(!st||st.done===false) continue;
+          const w=parseFloat(st.weight)||0;
+          if(w>(c[e.nom]||0)) c[e.nom]=w;
+        }
+      }
+      const p=Object.keys(pendant).filter(k=>avant[k]>0).map(k=>(pendant[k]/avant[k]-1)*100);
+      return p.length?Math.round(p.reduce((a,b)=>a+b,0)/p.length*10)/10:0;
+    }
+    default: return 0;
+  }
+}
+function _dfSomme(d){ return d&&(d.mesure==='seances'||d.mesure==='tonnage'); }
+// PURE. La part perso : en équipe additive, sur SA part de l'objectif.
+function defiPartPerso(d,v,n){
+  const o=Number(d&&d.objectif)||0; if(!o) return 0;
+  const cible=(d.collectif&&_dfSomme(d))?o/Math.max(1,Number(n)||1):o;
+  return Math.max(0,Math.min(1,(Number(v)||0)/cible));
+}
+function defiNombre(v){ try{ return Number(v).toLocaleString('fr-FR'); }catch(e){ return String(v); } }
+// PURE. « 12 séances », « 100 000 kg », « 4 semaines validées », « +5 % ».
+function defiTexteObjectif(d){
+  const o=Number(d&&d.objectif)||0, n=defiNombre(o);
+  switch(d&&d.mesure){
+    case 'seances': return n+' séance'+(o>1?'s':'');
+    case 'tonnage': return n+' kg';
+    case 'serie': return n+' semaine'+(o>1?'s':'')+' validée'+(o>1?'s':'');
+    case 'progressionPct': return '+'+n+' %';
+    default: return n;
+  }
+}
+function _dfFinDuMois(t){ const d=new Date(t); return new Date(d.getFullYear(),d.getMonth()+1,0,23,59,59).getTime(); }
+// PURE. Le titre, tiré des trois champs — les trois modèles retombent
+// exactement sur leur propre titre.
+function defiTitreAuto(mesure,objectif,collectif,fin,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const d={mesure,objectif:Number(objectif)||0};
+  const eq=collectif?' en équipe':'';
+  switch(mesure){
+    case 'seances': return defiTexteObjectif(d)+eq+(Math.abs(Number(fin)-_dfFinDuMois(t))<864e5?' ce mois':'');
+    case 'tonnage': return defiTexteObjectif(d)+eq;
+    case 'serie': return (collectif?'Personne ne lâche : ':'')+defiTexteObjectif(d);
+    case 'progressionPct': return defiTexteObjectif(d)+(collectif?' en équipe':' sur tes charges');
+    default: return 'Défi';
+  }
+}
+// PURE. « D'OCTOBRE », « DE MARS » : l'élision devant une voyelle.
+function defiMoisTexte(fin){
+  let m=''; try{ m=new Date(Number(fin)).toLocaleDateString('fr-FR',{month:'long'}); }catch(e){ m=''; }
+  m=String(m||'').toLocaleUpperCase('fr-FR');
+  return (/^[AEIOUYÂÉÈ]/.test(m)?'D’':'DE ')+m;
+}
+function defiActif(d,t){ const x=(typeof t==='number')?t:Date.now(); return !!d&&x>=Number(d.debut)&&x<=Number(d.fin); }
+function defiJoursRestants(d,t){ const x=(typeof t==='number')?t:Date.now(); return Math.max(0,Math.ceil((Number(d.fin)-x)/864e5)); }
+function _dfDate(t){ try{ return new Date(Number(t)).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }catch(e){ return ''; } }
+function _dfValeurTexte(d,v){
+  const x=Number(v)||0;
+  if(d.mesure==='progressionPct') return (x>0?'+':'')+String(x).replace('.',',')+' %';
+  return defiNombre(x)+' '+DEFI_MESURES[d.mesure].court;
+}
+function _dfInscrits(){ try{ const o=JSON.parse(localStorage.getItem(DEFI_INSCRITS_CLE)||'{}'); return (o&&typeof o==='object')?o:{}; }catch(e){ return {}; } }
+function _dfMemoInscrit(id,oui){
+  try{ const o=_dfInscrits(); if(oui) o[id]=Date.now(); else delete o[id]; localStorage.setItem(DEFI_INSCRITS_CLE,JSON.stringify(o)); }catch(e){}
+}
+// ── Le coach : « Lancer un défi » ──────────────────────────────────────────
+let _dfModele=-1;
+function openDefiCanal(id){
+  if(currentUser?.role!=='coach') return false;
+  document.getElementById('modal-overlay')?.remove();
+  const m=(id&&(window._canalMsgsCoach||{})[id])||null;
+  window._defiEdite=id||'';
+  _dfModele=-1;
+  const fin=m?Number(m.fin):_dfFinDuMois(Date.now());
+  const val=x=>escapeHtml(String(x==null?'':x));
+  const opt=Object.keys(DEFI_MESURES).map(k=>'<option value="'+k+'"'+((m?m.mesure:'seances')===k?' selected':'')+'>'+DEFI_MESURES[k].lib+'</option>').join('');
+  const coll=m?!!m.collectif:false;
+  document.body.insertAdjacentHTML('beforeend',
+  '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+  +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="df-h" class="dfm-feuille">'
+  +'<h2 id="df-h" style="margin-bottom:4px">'+(id?'Modifier le défi':'Lancer un défi')+'</h2>'
+  +'<p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px;line-height:1.55">Épinglé en haut du Canal de tes athlètes. Ceux qui ont activé les notifications sont prévenus.</p>'
+  +(id?'':'<div class="dfm-modeles" role="group" aria-label="Modèles">'+DEFI_MODELES.map((x,i)=>
+    '<button type="button" class="dfm-modele" data-i="'+i+'" onclick="defiAppliquerModele('+i+')">'+escapeHtml(x.titre)+'</button>').join('')+'</div>')
+  +'<label for="df-objectif">1 · Le défi</label>'
+  +'<div class="dfm-ligne"><input id="df-objectif" type="number" inputmode="decimal" min="1" step="any" value="'+val(m?m.objectif:12)+'" oninput="_dfApercu()" aria-label="Objectif">'
+  +'<select id="df-mesure" onchange="_dfApercu()" aria-label="Mesure">'+opt+'</select></div>'
+  +'<div class="dfm-seg" role="radiogroup" aria-label="Individuel ou en équipe">'
+  +'<button type="button" role="radio" data-coll="0" aria-checked="'+(!coll)+'" onclick="_dfColl(false)">Chacun le sien</button>'
+  +'<button type="button" role="radio" data-coll="1" aria-checked="'+coll+'" onclick="_dfColl(true)">En équipe</button></div>'
+  +'<label for="df-fin" style="margin-top:14px">2 · Jusqu’au</label>'
+  +'<input id="df-fin" type="date" value="'+val(localISODate(new Date(fin)))+'" min="'+val(localISODate(new Date()))+'" oninput="_dfApercu()">'
+  +'<label for="df-recompense" style="margin-top:14px">3 · Récompense (optionnel)</label>'
+  +'<input id="df-recompense" type="text" maxlength="120" value="'+val(m&&m.recompense)+'" placeholder="Une séance offerte, un t-shirt, la gloire…">'
+  +'<div id="df-apercu" class="dfm-apercu" aria-live="polite"></div>'
+  +'<div style="display:flex;gap:8px;margin-top:16px">'
+  +'<button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="closeModal()">Annuler</button>'
+  +'<button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="enregistrerDefiCanal()">'+(id?'Enregistrer':'Lancer le défi')+'</button>'
+  +'</div></div></div>');
+  _dfApercu();
+  return true;
+}
+function _dfColl(oui){
+  document.querySelectorAll('.dfm-seg [data-coll]').forEach(b=>b.setAttribute('aria-checked',String((b.dataset.coll==='1')===!!oui)));
+  _dfApercu();
+}
+function _dfLireFormulaire(){
+  const g=id=>document.getElementById(id);
+  const mesure=(g('df-mesure')||{}).value||'seances';
+  const objectif=Number(String((g('df-objectif')||{}).value||'').replace(',','.'))||0;
+  const coll=!!document.querySelector('.dfm-seg [data-coll="1"][aria-checked="true"]');
+  const f=String((g('df-fin')||{}).value||'');
+  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(f);
+  const fin=m?new Date(+m[1],+m[2]-1,+m[3],23,59,59).getTime():0;
+  const recompense=String((g('df-recompense')||{}).value||'').trim().slice(0,120);
+  return {mesure,objectif,collectif:coll,fin,recompense};
+}
+function defiAppliquerModele(i){
+  const x=DEFI_MODELES[i]; if(!x) return false;
+  _dfModele=i;
+  const g=id=>document.getElementById(id);
+  if(g('df-objectif')) g('df-objectif').value=x.objectif;
+  if(g('df-mesure')) g('df-mesure').value=x.mesure;
+  const fin=x.duree==='mois'?_dfFinDuMois(Date.now()):Date.now()+x.duree*864e5;
+  if(g('df-fin')) g('df-fin').value=localISODate(new Date(fin));
+  document.querySelectorAll('.dfm-modele').forEach(b=>b.setAttribute('aria-pressed',String(Number(b.dataset.i)===i)));
+  _dfColl(x.collectif);
+  return true;
+}
+function _dfApercu(){
+  const z=document.getElementById('df-apercu'); if(!z) return;
+  const f=_dfLireFormulaire();
+  const titre=defiTitreAuto(f.mesure,f.objectif,f.collectif,f.fin);
+  z.innerHTML='<b>'+escapeHtml(titre)+'</b><span>'+escapeHtml((f.collectif?'Tous ensemble : les résultats s’additionnent.':'Chacun son objectif.')
+    +(f.fin?' Jusqu’au '+_dfDate(f.fin)+'.':''))+'</span>';
+}
+// PURE. Le message, tiré du formulaire. Rend {msg} ou {erreur}.
+function defiMessage(f,ancien,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(!DEFI_MESURES[f.mesure]) return {erreur:'Choisis ce que le défi mesure.'};
+  if(!(f.objectif>0)) return {erreur:'Donne un objectif chiffré.'};
+  if(!(f.fin>t+3600e3)) return {erreur:'La date de fin doit être dans le futur.'};
+  const a=ancien||{};
+  const debut=Number(a.debut)||t;
+  const titre=defiTitreAuto(f.mesure,f.objectif,f.collectif,f.fin,t).slice(0,CANAL_TITRE_MAX);
+  const texte=(f.collectif?'En équipe : ':'Objectif : ')+defiTexteObjectif(f)+' d’ici le '+_dfDate(f.fin)+'.'
+    +(f.collectif&&_dfSomme(f)?' Chaque séance de chacun compte pour tout le monde.':'')
+    +(f.mesure==='progressionPct'?' Ta meilleure charge de chaque exercice, comparée à celle d’avant le défi.':'');
+  const msg={at:Number(a.at)||t,type:'defi',titre,texte:texte.slice(0,CANAL_TEXTE_MAX),mesure:f.mesure,
+    objectif:Number(f.objectif),collectif:!!f.collectif,debut,fin:f.fin};
+  if(f.recompense) msg.recompense=f.recompense;
+  if(a.epingle) msg.epingle=true;
+  return {msg};
+}
+async function enregistrerDefiCanal(){
+  const id=window._defiEdite||('d'+Date.now()+'-'+Math.random().toString(36).slice(2,7));
+  const r=defiMessage(_dfLireFormulaire(),(window._canalMsgsCoach||{})[window._defiEdite]||null);
+  if(r.erreur){ toast(r.erreur,'var(--orange)'); return false; }
+  const cle=canalCle(currentUser);
+  if(!cle||!CLOUD.ok()){ toast('Publication impossible hors connexion','var(--orange)'); return false; }
+  const b=document.querySelector('#modal-overlay .btn-red');
+  if(b){ b.disabled=true; b.dataset.lib=b.textContent; b.textContent='Envoi…'; }
+  try{
+    await CLOUD.ecrireMessageCanal(cle,id,r.msg);
+    currentUser.canalDernier=Math.max(Number(currentUser.canalDernier)||0,r.msg.at);
+    saveUser();
+    await CLOUD.pushProfilCoach(currentUser);
+  }catch(e){
+    if(b){ b.disabled=false; if(b.dataset.lib!=null) b.textContent=b.dataset.lib; }
+    toast('Non publié : '+e.message,'var(--orange)');
+    return false;
+  }
+  closeModal();
+  toast(window._defiEdite?'Défi modifié':'Défi lancé ⚡');
+  window._defiEdite='';
+  _canalChargerCoach(id);
+  return true;
+}
+// ── Les cartes ─────────────────────────────────────────────────────────────
+function _dfJauge(lib,part,droite){
+  const p=Math.round(Math.max(0,Math.min(1,Number(part)||0))*100);
+  return '<div class="dfi-j"><div class="dfi-j-l"><span>'+escapeHtml(lib)+'</span><b>'+escapeHtml(droite)+'</b></div>'
+    +'<div class="dfi-barre" role="progressbar" aria-label="'+escapeHtml(lib)+'" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+p+'"><span style="width:'+p+'%"></span></div></div>';
+}
+function _dfEnTete(m,t){
+  const fini=t>Number(m.fin);
+  const j=defiJoursRestants(m,t);
+  const quand=fini?'Terminé':(t<Number(m.debut)?'Commence le '+_dfDate(m.debut)
+    :'Jusqu’au '+_dfDate(m.fin)+' · '+(j<=1?'dernier jour':'J-'+j));
+  return '<div class="dfi-tete"><span class="cnl-defi">⚡ Défi</span><span class="dfi-quand">'+escapeHtml(quand)+'</span></div>'
+    +'<div class="cnl-titre">'+escapeHtml(m.titre||'Défi')+'</div>'
+    +'<div class="dfi-obj">'+escapeHtml((m.collectif?'En équipe · ':'Chacun le sien · ')+defiTexteObjectif(m))+'</div>'
+    +(m.recompense?'<div class="dfi-rec">🎁 '+escapeHtml(m.recompense)+'</div>':'');
+}
+// PURE. La carte athlète : jauges, avatars, classement, et l'action.
+// etat : {pub, moi, resultat} ; u : l'athlète (jauge perso calculée ici).
+function htmlCarteDefi(m,etat,u,compteurs,mienne,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const e=etat||{}, pub=e.pub||{}, moi=e.moi||null;
+  const inscrit=!!(moi&&moi.inscription);
+  const n=Math.max(1,Number(pub.n)||0);
+  const v=defiValeur(u,m);
+  const actif=t<=Number(m.fin);
+  const res=e.resultat||null;
+  const fini=!!(res||(moi&&moi.termine)||(inscrit&&!m.collectif&&v>=Number(m.objectif)));
+  let h='<div class="cnl-carte dfi-carte" data-epingle data-defi="'+escapeHtml(m.id)+'">'+_dfEnTete(m,t);
+  if(inscrit||res){
+    const cible=(m.collectif&&_dfSomme(m))?' (ta part : '+defiNombre(Math.ceil(Number(m.objectif)/n))+')':' / '+defiTexteObjectif(m);
+    h+=_dfJauge('Toi',defiPartPerso(m,v,n),_dfValeurTexte(m,v)+cible);
+  }
+  const eq=pub.equipe||{};
+  if(Number(pub.n)>0)
+    h+=_dfJauge('Équipe · '+pub.n+' participant'+(pub.n>1?'s':''),eq.part,
+      Math.round((Number(eq.part)||0)*100)+' %'+(m.collectif&&eq.valeur!=null?' · '+_dfValeurTexte(m,eq.valeur):''));
+  const vis=Array.isArray(pub.visibles)?pub.visibles:[];
+  if(vis.length||Number(pub.n)>0){
+    const autres=Math.max(0,(Number(pub.n)||0)-vis.length);
+    h+='<div class="dfi-avatars" aria-label="'+escapeHtml((Number(pub.n)||0)+' participants')+'">'
+      +vis.slice(0,8).map(x=>'<span class="dfi-av" title="'+escapeHtml(x.nom)+'">'+escapeHtml(x.ini||'?')+'</span>').join('')
+      +(autres?'<span class="dfi-av dfi-av-plus">+'+autres+'</span>':'')+'</div>';
+  }
+  const cl=Array.isArray(pub.classement)?pub.classement:[];
+  if(cl.length){
+    const unite=m.mesure==='progressionPct'?' %':(m.mesure==='serie'?' sem.':' séances');
+    h+='<div class="dfi-classement"><div class="dfi-cl-t">Classement · '+escapeHtml(m.mesure==='progressionPct'?'progression':'régularité')+'</div>'
+      +cl.slice(0,5).map((x,i)=>'<div class="dfi-cl-l"><span>'+(i+1)+'. '+escapeHtml(x.nom)+(x.termine?' ✓':'')+'</span><b>'
+        +escapeHtml(String(x.valeur).replace('.',','))+unite+'</b></div>').join('')
+      +(moi&&moi.place?'<div class="dfi-cl-moi">Ta place : '+moi.place+(moi.place===1?'er':'e')
+        +(moi.inscription&&moi.inscription.classement?'':' (hors classement public)')+'</div>':'')+'</div>';
+  }
+  if(fini){
+    h+='<div class="dfi-fait">'+(res&&res.champion?'🏆 Champion du défi':'✓ Défi relevé')+'</div>'
+      +'<button type="button" class="btn btn-outline btn-sm dfi-part" onclick="partagerDefi(\''+escapeHtml(m.id)+'\',this)">'+icon('share',16)+' <span>Partager</span></button>';
+  }else if(actif&&!inscrit){
+    h+='<button type="button" class="btn btn-red dfi-go" onclick="defiRelever(\''+escapeHtml(m.id)+'\')">Je relève le défi</button>';
+  }else if(actif&&inscrit){
+    h+='<div class="dfi-inscrit">Tu relèves ce défi ✓ <button type="button" class="dfi-lien" onclick="defiRelever(\''+escapeHtml(m.id)+'\')">Mes réglages</button></div>';
+  }
+  h+='<div style="display:flex;gap:6px;margin-top:12px">'+_canalBoutonsReactions(m,compteurs||{},mienne||'')+'</div>';
+  return h+'</div>';
+}
+function htmlCarteSysteme(m,coach){
+  return '<div class="cnl-carte cnl-systeme"><div class="cnl-sys-t">'+escapeHtml(String(m.texte||''))+'</div>'
+    +'<div class="cnl-sys-b"><span class="sub">'+escapeHtml(ago(Number(m.at)||Date.now()))+'</span>'
+    +(coach?'<button class="dfi-lien" onclick="supprimerMessageCanal(\''+escapeHtml(m.id)+'\')">Supprimer</button>':'')+'</div></div>';
+}
+// La carte du coach : il voit tout le monde, avec l'emblème de rang.
+function htmlCarteDefiCoach(m,d,neuve){
+  const t=Date.now(), pub=(d&&d.public)||{}, parts=(d&&d.participants)||{};
+  const users=DB.get('users')||{};
+  const l=Object.keys(parts).filter(k=>parts[k]&&parts[k].inscription).map(k=>{
+    const c=users[k.replace(/,/g,'.')];
+    return {nom:(c&&c.fname)||k.replace(/,/g,'.'),xp:xpDe(c),v:Number(parts[k].valeur)||0,f:!!parts[k].termine};
+  }).sort((a,b)=>b.v-a.v);
+  let h='<div class="cnl-carte dfi-carte'+(neuve?' cnl-neuve':'')+'">'+_dfEnTete(m,t);
+  h+=_dfJauge('Équipe',Number((pub.equipe||{}).part)||0,Math.round((Number((pub.equipe||{}).part)||0)*100)+' %');
+  h+=l.length?'<div class="dfi-classement">'+l.map(x=>'<div class="dfi-cl-l"><span>'+htmlNomRang(x.nom,x.xp)+(x.f?' ✓':'')+'</span><b>'
+      +escapeHtml(_dfValeurTexte(m,x.v))+'</b></div>').join('')+'</div>'
+    :'<div class="sub" style="font-size:var(--fs-xs);margin-top:10px">Personne n’a encore relevé le défi.</div>';
+  h+='<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">'
+    +'<button class="btn btn-outline btn-sm" style="width:auto;padding:0 14px;min-height:34px;font-size:10.5px;margin:0" onclick="openDefiCanal(\''+escapeHtml(m.id)+'\')">Modifier</button>'
+    +'<button class="btn btn-outline btn-sm" style="width:auto;padding:0 14px;min-height:34px;font-size:10.5px;margin:0;color:var(--sub)" onclick="supprimerMessageCanal(\''+escapeHtml(m.id)+'\')">Supprimer</button></div>';
+  return h+'</div>';
+}
+// PURE. L'ordre du fil athlète : les défis en cours ÉPINGLÉS en tête (le plus
+// proche de sa fin d'abord), puis tout le reste dans l'ordre du Canal. Un défi
+// terminé redescend dans le fil, à sa date.
+function canalOrdreAvecDefis(liste,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const l=Array.isArray(liste)?liste:[];
+  const haut=l.filter(m=>m&&m.type==='defi'&&t<=Number(m.fin)).sort((a,b)=>Number(a.fin)-Number(b.fin));
+  return haut.concat(l.filter(m=>haut.indexOf(m)<0));
+}
+// Ce que le fil athlète a besoin de savoir de chaque défi visible : le résumé
+// public et sa propre feuille. En parallèle ; un échec rend un défi sans
+// jauge d'équipe, jamais un fil vide.
+async function _canalChargerDefis(cle,liste){
+  const moi=(currentUser.email||'').replace(/\./g,',');
+  const t=Date.now();
+  const d=liste.filter(m=>m.type==='defi'&&t<=Number(m.fin)+14*864e5);
+  const out={};
+  await Promise.all(d.map(async m=>{
+    const [pub,mien]=await Promise.all([
+      CLOUD._canalGet(cle,'defis/'+m.id+'/public').catch(()=>null),
+      CLOUD._canalGet(cle,'defis/'+m.id+'/participants/'+moi).catch(()=>null)]);
+    out[m.id]={pub:pub||{},moi:mien||null,resultat:((currentUser.defisReleves||{})[m.id])||null};
+    _dfMemoInscrit(m.id,!!(mien&&mien.inscription));
+  }));
+  return out;
+}
+function _canalHtmlFilAthlete(liste){
+  const t=Date.now();
+  return canalOrdreAvecDefis(liste,t).map(m=>{
+    if(m.type==='systeme') return htmlCarteSysteme(m,false);
+    if(m.type==='defi') return htmlCarteDefi(m,(window._canalDefis||{})[m.id],currentUser,
+      (window._canalCompteurs||{})[m.id]||{},(window._canalMiennes||{})[m.id]||'',t);
+    return _canalCarte(m,(window._canalCompteurs||{})[m.id]||{},(window._canalMiennes||{})[m.id]||'');
+  }).join('');
+}
+// ── « Je relève le défi » : l'inscription, et le classement en opt-in ──────
+function defiRelever(id){
+  const m=((window._canalListe||[]).find(x=>x.id===id))||null;
+  if(!m) return false;
+  const e=(window._canalDefis||{})[id]||{};
+  const ins=(e.moi&&e.moi.inscription)||null;
+  document.getElementById('modal-overlay')?.remove();
+  document.body.insertAdjacentHTML('beforeend',
+  '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+  +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="dfr-h" class="dfm-feuille">'
+  +'<h2 id="dfr-h" style="margin-bottom:4px">'+escapeHtml(m.titre||'Le défi')+'</h2>'
+  +'<p class="sub" style="font-size:var(--fs-sm);margin-bottom:14px;line-height:1.55">'+escapeHtml(m.texte||'')+'</p>'
+  +'<label class="dfr-case"><input type="checkbox" id="dfr-classement"'+(ins&&ins.classement?' checked':'')+' onchange="document.getElementById(\'dfr-pseudo-z\').hidden=!this.checked">'
+  +'<span><b>Apparaître au classement</b><span class="sub">Il ne porte que sur ta régularité ou ta progression en %, jamais sur tes charges. Sans lui, tu comptes pour l’équipe sans être nommé.</span></span></label>'
+  +'<div id="dfr-pseudo-z"'+(ins&&ins.classement?'':' hidden')+'><label for="dfr-pseudo" style="margin-top:12px">Nom affiché (optionnel)</label>'
+  +'<input id="dfr-pseudo" type="text" maxlength="24" value="'+escapeHtml((ins&&ins.pseudo)||'')+'" placeholder="'+escapeHtml(currentUser.fname||'Ton pseudo')+'"></div>'
+  +'<div style="display:flex;gap:8px;margin-top:16px">'
+  +(ins?'<button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="defiInscrire(\''+escapeHtml(id)+'\',false)">Me retirer</button>'
+       :'<button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="closeModal()">Plus tard</button>')
+  +'<button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="defiInscrire(\''+escapeHtml(id)+'\',true)">'+(ins?'Enregistrer':'C’est parti')+'</button>'
+  +'</div></div></div>');
+  return true;
+}
+// PURE. L'inscription écrite : {le, classement, pseudo?}.
+function defiInscription(classement,pseudo,maintenant){
+  const o={le:(typeof maintenant==='number')?maintenant:Date.now(),classement:!!classement};
+  const p=String(pseudo||'').replace(/\s+/g,' ').trim().slice(0,24);
+  if(classement&&p) o.pseudo=p;
+  return o;
+}
+async function defiInscrire(id,oui){
+  const cle=canalCle(currentUser), moi=(currentUser.email||'').replace(/\./g,',');
+  if(!cle||!CLOUD.ok()){ toast('Impossible hors connexion','var(--orange)'); return false; }
+  const ins=oui?defiInscription(!!document.getElementById('dfr-classement')?.checked,
+    document.getElementById('dfr-pseudo')?.value,Date.now()):null;
+  try{
+    if(ins) await CLOUD._canalPut(cle,'defis/'+id+'/participants/'+moi+'/inscription',ins);
+    else await CLOUD._canalPut(cle,'defis/'+id+'/participants/'+moi+'/inscription',null,'DELETE');
+  }catch(e){ toast('Non enregistré : '+e.message,'var(--orange)'); return false; }
+  _dfMemoInscrit(id,!!ins);
+  const e=(window._canalDefis||(window._canalDefis={}))[id]||(window._canalDefis[id]={pub:{}});
+  e.moi=Object.assign({},e.moi||{},{inscription:ins});
+  closeModal();
+  if(ins){ try{ arcHaptique('succes'); }catch(x){} toast('Défi relevé ⚡ Tes séances depuis le début comptent déjà.'); }
+  else toast('Tu t’es retiré du défi.');
+  _canalRepeindre();
+  // Le résumé public se met à jour côté serveur (defiInscription) : on le relit.
+  setTimeout(()=>{ try{ if(document.getElementById('canal-fil')) _canalCharger(); }catch(x){} },2500);
+  return true;
+}
+// ── L'accueil : le rappel tant qu'un défi est actif ────────────────────────
+let _dfAccueilCache=null;
+// PURE. La carte de l'accueil, pour le défi le plus proche de sa fin.
+function htmlDefiAccueil(defis,u,inscrits,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const a=(defis||[]).filter(d=>d&&d.type==='defi'&&defiActif(d,t)).sort((x,y)=>Number(x.fin)-Number(y.fin));
+  if(!a.length) return '';
+  const d=a[0], ins=!!(inscrits||{})[d.id];
+  const j=defiJoursRestants(d,t);
+  const reste=j<=1?'dernier jour':'encore '+j+' jours';
+  let corps;
+  if(ins){
+    const v=defiValeur(u,d);
+    corps='<div class="dfa-l"><b>'+escapeHtml(_dfValeurTexte(d,v))+'</b> / '+escapeHtml(defiTexteObjectif(d))+' · '+escapeHtml(reste)+'</div>'
+      +'<div class="dfi-barre"><span style="width:'+Math.round(defiPartPerso(d,v,1)*100)+'%"></span></div>';
+  }else corps='<div class="dfa-l">Ton coach a lancé un défi · '+escapeHtml(reste)+'</div><div class="dfa-go">Je relève le défi →</div>';
+  return '<div class="dfa-carte" role="button" tabindex="0" onclick="loadCanal()" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();loadCanal()}">'
+    +'<div class="dfa-t"><span class="cnl-defi">⚡ Défi</span> '+escapeHtml(d.titre||'')+'</div>'+corps
+    +(a.length>1?'<div class="sub" style="font-size:var(--fs-2xs);margin-top:4px">+ '+(a.length-1)+' autre'+(a.length>2?'s':'')+' défi'+(a.length>2?'s':'')+'</div>':'')+'</div>';
+}
+async function renderDefiAccueil(){
+  const z=document.getElementById('clh-defi');
+  if(!z) return false;
+  if(!canalAccessible(currentUser)||!CLOUD.ok()){ z.innerHTML=''; return false; }
+  const cle=canalCle(currentUser);
+  if(!cle){ z.innerHTML=''; return false; }
+  try{
+    if(!_dfAccueilCache||_dfAccueilCache.cle!==cle||Date.now()-_dfAccueilCache.t>10*60e3){
+      const r=await CLOUD.pullDefisCanal(cle);
+      _dfAccueilCache={cle,t:Date.now(),l:Object.keys(r||{}).map(id=>Object.assign({id},r[id]))};
+    }
+    z.innerHTML=htmlDefiAccueil(_dfAccueilCache.l,currentUser,_dfInscrits(),Date.now());
+  }catch(e){ z.innerHTML=''; }
+  try{ await majDefisResultats(); }catch(e){}
+  return true;
+}
+// ── Les résultats : CHAMPION et DÉFI RELEVÉ ────────────────────────────────
+// La clôture (Cloud Functions) écrit /defis_resultats/<moi>/<id>. On les
+// recopie dans le dossier (u.defisReleves) — c'est là que _badgesFaits lit,
+// et c'est ce qui date les badges. Une fois par jour au plus.
+async function majDefisResultats(){
+  const u=currentUser;
+  if(!u||u.role!=='athlete'||!CLOUD.ok()) return 0;
+  const j=localISODate(new Date());
+  try{ if(localStorage.getItem('rc_defis_res_jour')===j+'|'+u.email) return 0; }catch(e){}
+  const r=await CLOUD.pullDefisResultats((u.email||'').replace(/\./g,','));
+  try{ localStorage.setItem('rc_defis_res_jour',j+'|'+u.email); }catch(e){}
+  const avant=Object.keys(u.defisReleves||{});
+  const n=defisFusionnerResultats(u,r);
+  if(n){
+    try{ saveUser(); }catch(e){}
+    // CHAQUE DÉFI RELEVÉ a son écran (dans la file des badges) : « J'AI
+    // RELEVÉ LE DÉFI D'OCTOBRE », et sa carte à partager.
+    try{ Object.keys(u.defisReleves).filter(id=>avant.indexOf(id)<0).forEach(id=>_bdgFile.push({defi:id})); _bdgPlanifier(); }catch(e){}
+    // LE SIXIÈME POINT D'APPEL DES BADGES : CHAMPION et DÉFI RELEVÉ arrivent
+    // du serveur, jamais d'une séance ni d'un bilan.
+    try{ majBadges(); }catch(e){}
+    try{ majXp(); }catch(e){}
+  }
+  return n;
+}
+// PURE (écrit dans u). Rend le nombre de défis nouveaux.
+function defisFusionnerResultats(u,r){
+  if(!u||!r||typeof r!=='object') return 0;
+  const m=(u.defisReleves&&typeof u.defisReleves==='object')?u.defisReleves:{};
+  let n=0;
+  for(const id of Object.keys(r)){
+    const x=r[id]; if(!x||m[id]) continue;
+    m[id]={titre:String(x.titre||'').slice(0,80),mesure:String(x.mesure||''),fin:Number(x.fin)||0,
+      termineLe:Number(x.termineLe)||Number(x.fin)||0,champion:x.champion===true};
+    n++;
+  }
+  if(n) u.defisReleves=m;
+  return n;
+}
+// ── La carte 1080×1920 ─────────────────────────────────────────────────────
+function defiCarteDonnees(u,m,res){
+  let sig=''; try{ sig=nomSurVisuels(u); }catch(e){ sig=''; }
+  const fin=Number((m&&m.fin)||(res&&res.fin))||Date.now();
+  const d=Object.assign({},m||{},{fin});
+  // La valeur montrée n'est jamais une charge : la régularité ou le %.
+  const mesure=d.mesure==='progressionPct'?'progressionPct':(d.mesure==='serie'?'serie':'seances');
+  const v=defiValeur(u,Object.assign({},d,{mesure}));
+  return {titre:String((m&&m.titre)||(res&&res.titre)||'Le défi'),mois:defiMoisTexte(fin),
+    champion:!!(res&&res.champion),valeur:v?_dfValeurTexte({mesure},v):'',signature:sig};
+}
+function _dessinerCarteDefi(d,fond){
+  const cv=document.createElement('canvas');
+  cv.width=STORY_L; cv.height=STORY_H;
+  const g=cv.getContext('2d');
+  const f=fond||'transparent';
+  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const o=_visuelOutils(g);
+  const rouge=f==='rouge';
+  g.textAlign='center'; g.textBaseline='alphabetic';
+  // L'éclair, derrière.
+  g.save();
+  const h=g.createRadialGradient(cx,690,40,cx,690,540);
+  h.addColorStop(0,rouge?'rgba(255,255,255,.3)':'rgba(224,32,32,.45)'); h.addColorStop(1,'rgba(0,0,0,0)');
+  g.fillStyle=h; g.fillRect(0,200,STORY_L,1100);
+  g.fillStyle=rouge?'rgba(255,255,255,.92)':'#E02020';
+  g.shadowColor=rouge?'rgba(255,255,255,.6)':'rgba(224,32,32,.9)'; g.shadowBlur=60;
+  g.beginPath();
+  [[610,300],[410,720],[540,720],[455,1080],[715,580],[575,580],[680,300]].forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));
+  g.closePath(); g.fill();
+  g.restore();
+  o.ombre(true);
+  g.fillStyle='#fff';
+  if(d.champion){
+    g.fillStyle=rouge?'#fff':'#E02020'; g.font='800 40px '+MONT;
+    o.ecrireEspace('DÉFI '+String(d.mois||''),cx,300,9,true);
+    g.fillStyle='#fff';
+    const cs=o.ajuste('CHAMPION','700',300,BEBAS,LARG,120);
+    g.font='700 '+cs+'px '+BEBAS; o.ecrire('CHAMPION',cx,1380);
+  }else{
+    const l1='J’AI RELEVÉ', l2='LE DÉFI '+String(d.mois||'');
+    const s1=o.ajuste(l1,'700',190,BEBAS,LARG,90), s2=o.ajuste(l2,'700',150,BEBAS,LARG,70);
+    g.font='700 '+s1+'px '+BEBAS; o.ecrire(l1,cx,1330);
+    g.fillStyle=rouge?'#fff':'#ff3b3b';
+    g.font='700 '+s2+'px '+BEBAS; o.ecrire(l2,cx,1330+s2+10);
+  }
+  g.fillStyle='rgba(255,255,255,.9)';
+  const ts=o.ajuste('« '+d.titre+' »','700',46,MONT,LARG,26);
+  g.font='700 '+ts+'px '+MONT; o.ecrire('« '+d.titre+' »',cx,d.champion?1480:1560);
+  if(d.valeur){ g.font='800 40px '+MONT; o.ecrireEspace('⚡ '+d.valeur,cx,d.champion?1560:1640,4,true); }
+  _recSignature(g,o,String(d.signature||''),STORY_H-110,LARG);
+  o.ombre(false);
+  return cv;
+}
+// L'écran d'un défi relevé : la foudre, la carte au choix du fond, partager.
+let _defiCourant=null;
+function _defiEcran(id,reste){
+  const res=(currentUser&&currentUser.defisReleves||{})[id];
+  if(!res) return _bdgSuivant();
+  const d=defiCarteDonnees(currentUser,((window._canalListe||[]).find(x=>x.id===id))||null,res);
+  _defiCourant={id,d};
+  const z=_bdgCouche('<div class="bdg-ecran-txt">'
+    +'<div class="bdg-ecran-sur">'+(d.champion?'CHAMPION DU DÉFI':'DÉFI RELEVÉ')+'</div>'
+    +'<h2 class="bdg-ecran-nom" id="dfe-titre">'+escapeHtml(d.titre)+'</h2>'
+    +'<div class="bdg-ecran-meta">'+escapeHtml(_bdgDate(Number(res.termineLe)||Number(res.fin)))+(d.valeur?' · ⚡ '+escapeHtml(d.valeur):'')+'</div>'
+    +_htmlVisuelFonds('dfe-fonds')
+    +'<button type="button" class="btn btn-red bdg-ecran-part" onclick="partagerDefi(\''+escapeHtml(id)+'\',this)">'+icon('share',16)+' <span>Partager</span></button>'
+    +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" onclick="bdgPlusTard()">'+(reste||_bdgRecap.length?'Suivant':'Plus tard')+'</button>'
+    +'</div>',d.champion?'Champion du défi':'Défi relevé');
+  try{ monterSelecteurFond('dfe-fonds',f=>_dessinerCarteDefi(d,f),null); }catch(e){}
+  try{ rcFoudre(z.querySelector('#dfe-titre'),arcReduit()?{son:false}:{eclairs:d.champion?3:2,conteneur:z}); }catch(e){}
+  try{ arcHaptique('succes'); }catch(e){}
+  try{ const p=z.querySelector('.bdg-ecran-part'); if(p) p.focus({preventScroll:true}); }catch(e){}
+}
+function partagerDefi(id,btn){
+  if(_storyEnCours) return false;
+  const m=((window._canalListe||[]).find(x=>x.id===id))||null;
+  const res=(currentUser.defisReleves||{})[id]||null;
+  const d=defiCarteDonnees(currentUser,m,res);
+  const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond);
+  const nom=visuelNomFichier(d.champion?'repcore-champion':'repcore-defi',fond);
+  _storyEnCours=true;
+  let ok=false;
+  try{
+    ok=_storySortirPartage(_dessinerCarteDefi(d,fond),nom,undefined,fmt)
+      ||_storySortirTelechargement(_dessinerCarteDefi(d,fond),nom,fmt);
+  }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
+  finally{ _storyEnCours=false; }
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp&&ok){ sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent='Partager'; },2000); }
+  return ok;
+}
 // ══ CANAL — CÔTÉ COACH ══════════════════════════════════════════════════════
 function loadCanalCoach(){
   if(currentUser?.role!=='coach') return;
@@ -17161,12 +17782,14 @@ async function _canalChargerCoach(idNeuf){
   // Même règle que côté athlète, et elle compte DAVANTAGE ici : un coach qui
   // voit son canal vide à cause d'un réseau capricieux le republierait en
   // double, chez tout le monde.
-  let msgs,compteurs,reactions;
+  let msgs,compteurs,reactions,defis;
   try{
     msgs=await CLOUD.pullCanalMessages(cle);
-    [compteurs,reactions]=await Promise.all([
+    [compteurs,reactions,defis]=await Promise.all([
       CLOUD.pullCanalCompteurs(cle).catch(()=>null),
-      CLOUD.pullCanalReactions(cle).catch(()=>null)
+      CLOUD.pullCanalReactions(cle).catch(()=>null),
+      // Le coach lit /defis en entier : participants, résumé public.
+      CLOUD._canalGet(cle,'defis').catch(()=>null)
     ]);
   }catch(e){
     fil.innerHTML=`<div style="text-align:center;padding:40px 20px">
@@ -17178,11 +17801,20 @@ async function _canalChargerCoach(idNeuf){
   }
   window._canalMsgsCoach=msgs||{};
   const liste=canalTrier(msgs);
+  // LES MESSAGES SYSTÈME (paliers, podium) rallument la pastille côté serveur,
+  // dans coach_public.canalDernier. Le profil que ce coach renvoie ensuite ne
+  // doit pas la faire reculer : on la remonte au plus récent du fil.
+  try{
+    const der=liste.reduce((x,m)=>Math.max(x,Number(m.at)||0),0);
+    if(der>(Number(currentUser.canalDernier)||0)){ currentUser.canalDernier=der; saveUser(); }
+  }catch(e){}
   const vrai=canalDecompteVrai(reactions);
   await _canalPlancher(fil);
   fil.dataset.rempli='1';
   fil.innerHTML=liste.length
-    ? liste.map(m=>_canalCarteCoach(m,(compteurs||{})[m.id]||{},vrai[m.id]||{},reactions||{},m.id===idNeuf)).join('')
+    ? canalOrdreAvecDefis(liste).map(m=>m.type==='systeme'?htmlCarteSysteme(m,true)
+        :m.type==='defi'?htmlCarteDefiCoach(m,(defis||{})[m.id],m.id===idNeuf)
+        :_canalCarteCoach(m,(compteurs||{})[m.id]||{},vrai[m.id]||{},reactions||{},m.id===idNeuf)).join('')
     : _canalVide('Ton canal est vide.','Le premier message apparaîtra chez tous tes athlètes.');
 }
 // PURE. /reactions est rangé par athlète puis par message ; le décompte, lui,
@@ -17231,7 +17863,6 @@ function _canalCarteCoach(m,compteurs,vrai,reactions,neuve){
       ${m.epingle?'<span style="font-size:var(--fs-xs);color:var(--red-text);font-weight:800;letter-spacing:1.5px;text-transform:uppercase">📌 Épinglé</span>':''}
       <span class="sub" style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase">${escapeHtml(ago(Number(m.at)||Date.now()))}</span>
     </div>
-    ${m.defi===true?'<div class="cnl-defi">⚡ Défi</div>':''}
     ${m.titre?`<div class="cnl-titre">${escapeHtml(m.titre)}</div>`:''}
     ${m.texte?`<div class="cnl-texte">${escapeHtml(m.texte)}</div>`:''}
     ${lien&&safeUrlRaw(lien)!=='#'?`<a href="${safeUrl(lien)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:9px;font-size:var(--fs-sm);color:var(--info);font-weight:700">${escapeHtml(canalDomaine(lien)||'lien')} ↗</a>`:''}
@@ -17280,6 +17911,9 @@ async function resyncCompteursCanal(msgId){
 function openMessageCanal(msgId){
   document.getElementById('modal-overlay')?.remove();
   const m=(msgId&&(window._canalMsgsCoach||{})[msgId])||{};
+  // Un défi se modifie dans SA feuille : celle-ci réécrirait le message sans
+  // sa mesure ni ses dates.
+  if(m.type==='defi') return openDefiCanal(msgId);
   window._canalEdite=msgId||'';
   document.body.insertAdjacentHTML('beforeend',
   `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
@@ -17297,10 +17931,6 @@ function openMessageCanal(msgId){
       <input id="cm-epingle" type="checkbox" ${m.epingle?'checked':''} style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <span style="font-size:var(--fs-sm);line-height:1.5">Épingler à l'accueil<br><span class="sub" style="font-size:var(--fs-xs)">Un seul message à la fois : celui-ci remplacera l'épinglé actuel.</span></span>
     </label>
-    <label style="display:flex;align-items:center;gap:10px;margin-top:12px;cursor:pointer">
-      <input id="cm-defi" type="checkbox" ${m.defi===true?'checked':''} style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
-      <span style="font-size:var(--fs-sm);line-height:1.5">C'est un défi<br><span class="sub" style="font-size:var(--fs-xs)">Marqué « ⚡ Défi » dans le Canal. À sa publication, tes athlètes qui ont activé les notifications en reçoivent une.</span></span>
-    </label>
     <div style="display:flex;gap:8px;margin-top:16px">
       <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="closeModal()">Annuler</button>
       <button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="enregistrerMessageCanal()">${msgId?'Enregistrer':'Publier'}</button>
@@ -17313,7 +17943,6 @@ async function enregistrerMessageCanal(){
   const texte=(document.getElementById('cm-texte')?.value||'').trim().slice(0,CANAL_TEXTE_MAX);
   const lienBrut=(document.getElementById('cm-lien')?.value||'').trim().slice(0,CANAL_LIEN_MAX);
   const epingle=!!document.getElementById('cm-epingle')?.checked;
-  const defi=!!document.getElementById('cm-defi')?.checked;
   if(!titre&&!texte){ toast('Écris au moins un titre ou un message','var(--orange)'); return; }
   // Un lien saisi mais invalide est REFUSÉ, pas silencieusement vidé : le coach
   // croirait l'avoir publié, et l'athlète ne verrait jamais rien.
@@ -17327,7 +17956,6 @@ async function enregistrerMessageCanal(){
   const id=window._canalEdite||('m'+Date.now()+'-'+Math.random().toString(36).slice(2,7));
   const ancien=(window._canalMsgsCoach||{})[id]||{};
   const msg={at:Number(ancien.at)||Date.now(),titre,texte,lien:lienBrut,epingle};
-  if(defi) msg.defi=true;
   // LE BOUTON PORTE L'ATTENTE, et la feuille ne part QU'AU SUCCES. closeModal()
   // etait appele AVANT patcherMessagesCanal, ecrireMessageCanal et
   // pushProfilCoach — trois allers-retours reseau enchaines : le coach venait
@@ -33732,6 +34360,8 @@ function loadClientHome(){
   // Le rang et la jauge des volts, sous le prénom. majXp y tourne : c'est
   // aussi le rattrapage d'un dossier ancien à la mise à jour.
   try{ _rendreRang(u); }catch(e){}
+  // Le rappel du défi en cours (et, une fois par jour, ses résultats).
+  try{ renderDefiAccueil(); }catch(e){}
   // Avatar athlète
   const avatar=document.getElementById('clh-athlete-avatar');
   if(avatar) avatar.innerHTML=u.athletePhoto?`<img src="${escapeHtml(u.athletePhoto)}" style="width:100%;height:100%;object-fit:cover">`:ini(u.fname,u.lname);
@@ -67526,11 +68156,15 @@ const BADGES_ACQUIS=Object.freeze([
   // lit pas depuis un dossier : on compare la date d'inscription à celle du
   // 500e, FONDATEUR_LIMITE. Tant qu'elle n'est pas posée, le badge dort.
   {id:'fondateur',nom:'FONDATEUR',famille:'unique',palier:null,icone:'fondateur',condition:'Fais partie des 500 premiers inscrits.',test:f=>f.fondateur,inactif:()=>!(FONDATEUR_LIMITE>0)},
-  // Les trois suivants attendent le parrainage et les défis, qui n'existent
-  // pas encore : ils sont montrés, jamais attribués.
+  // Les deux suivants attendent le parrainage, qui n'existe pas encore : ils
+  // sont montrés, jamais attribués.
   {id:'recruteur',nom:'RECRUTEUR',famille:'unique',palier:null,icone:'recruteur',condition:'Parraine 3 personnes.',test:()=>0,inactif:()=>true},
   {id:'mentor',nom:'MENTOR',famille:'unique',palier:null,icone:'mentor',condition:'Parraine 10 personnes.',test:()=>0,inactif:()=>true},
-  {id:'champion',nom:'CHAMPION',famille:'unique',palier:null,icone:'champion',condition:'Gagne un défi.',test:()=>0,inactif:()=>true},
+  // LES DÉFIS DU CANAL : CHAMPION est daté par la clôture du défi
+  // (defis_resultats → u.defisReleves) — le premier du classement d'un défi
+  // bouclé. « DÉFI RELEVÉ » N'EST PAS ICI : c'est un badge daté PAR DÉFI, hors
+  // de la collection des cinquante (voir htmlDefisReleves).
+  {id:'champion',nom:'CHAMPION',famille:'unique',palier:null,icone:'champion',condition:'Gagne un défi.',test:f=>f.champion},
   // ── LES SECRETS : heure et date LOCALES de l'appareil ───────────────
   {id:'aube',nom:'AUBE',famille:'secret',palier:null,icone:'aube',condition:'Lance une séance avant 6 h du matin.',indice:'Le fer est plus froid avant le lever du jour.',test:f=>f.aube},
   {id:'nuit',nom:'NUIT',famille:'secret',palier:null,icone:'nuit',condition:'Termine une séance après 23 h.',indice:'Certains s’entraînent quand la ville dort.',test:f=>f.nuit},
@@ -67738,6 +68372,10 @@ function _badgesFaits(u,maintenant){
     .sort().map(j=>{ const [a,m,dd]=j.split('-').map(Number); return new Date(a,m-1,dd,20).getTime(); });
   const cree=Number(u&&u.createdAt)||0;
   if(FONDATEUR_LIMITE>0&&cree>0&&cree<=FONDATEUR_LIMITE) f.fondateur=cree;
+  // Le premier défi gagné (CHAMPION).
+  const dr=(u&&u.defisReleves&&typeof u.defisReleves==='object')?Object.keys(u.defisReleves).map(k=>u.defisReleves[k]).filter(Boolean):[];
+  const dc=dr.filter(x=>x.champion).map(x=>Number(x.fin)||Number(x.termineLe)||0).filter(x=>x>0).sort((a,b)=>a-b);
+  f.champion=dc[0]||0;
   return f;
 }
 // Les exercices d'une séance, qu'elle soit écrite en `data` (nom → séries,
@@ -67927,6 +68565,7 @@ function _bdgSuivant(){
     const x=_bdgFile.shift();
     if(x&&typeof x==='object'&&x.serie) _serieEcran(x.serie,_bdgFile.length);
     else if(x&&typeof x==='object'&&x.rang) _rangEcran(x.rang,_bdgFile.length);
+    else if(x&&typeof x==='object'&&x.defi) _defiEcran(x.defi,_bdgFile.length);
     else _bdgEcran(x,_bdgFile.length);
     return;
   }
@@ -68160,7 +68799,21 @@ function htmlMesBadges(u,maintenant){
     +cases(BADGES_ACQUIS.filter(b=>b.famille==='unique'),false)+'</div>';
   h+='<div class="bdg-sous">Secrets</div><div class="bdg-grille">'
     +cases(BADGES_ACQUIS.filter(b=>b.famille==='secret'),true)+'</div>';
+  h+=htmlDefisReleves(u);
   return h;
+}
+// PURE. LES BADGES « DÉFI RELEVÉ » : un par défi bouclé, daté, hors de la
+// collection des cinquante (qui est fermée). Du plus récent au plus ancien.
+function htmlDefisReleves(u){
+  const m=(u&&u.defisReleves&&typeof u.defisReleves==='object')?u.defisReleves:{};
+  const l=Object.keys(m).map(id=>Object.assign({id},m[id])).filter(x=>x&&x.titre!=null)
+    .sort((a,b)=>(Number(b.fin)||0)-(Number(a.fin)||0));
+  if(!l.length) return '';
+  return '<div class="bdg-sous">Défis relevés <span class="bdg-compte">'+l.length+'</span></div><div class="dfr-liste">'
+    +l.map(x=>'<button type="button" class="dfr-badge" onclick="partagerDefi(\''+escapeHtml(x.id)+'\',null)">'
+      +'<span class="dfr-ico" aria-hidden="true">'+(x.champion?'🏆':'⚡')+'</span>'
+      +'<span class="dfr-c"><b>'+escapeHtml(x.champion?'CHAMPION · ':'DÉFI RELEVÉ · ')+escapeHtml(defiMoisTexte(x.fin).replace(/^D’|^DE /,''))+'</b>'
+      +'<span>'+escapeHtml(x.titre)+' · '+escapeHtml(_bdgDate(Number(x.termineLe)||Number(x.fin)))+'</span></span></button>').join('')+'</div>';
 }
 function _rendreMesBadges(){
 

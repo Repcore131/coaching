@@ -1325,10 +1325,166 @@ exports.pushFilleulInscrit = onValueCreated(Object.assign({ ref: "/parrainage/{p
 // destinataires sont ses athlètes, lus dans l'annuaire du coach.
 exports.pushDefiCanal = onValueCreated(Object.assign({ ref: "/canaux/{coach}/messages/{msg}" }, _optsDecl), async (ev) => {
   const m = ev.data.val() || {};
-  if (m.defi !== true) return;
+  if (m.type !== "defi") return;
+  const obj = require("./defis-calcul").texteObjectif(m);
+  const fin = Number(m.fin) ? new Date(Number(m.fin)).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "numeric", month: "long" }) : "";
   const a = await db.ref("annuaire_coach/" + ev.params.coach).get();
   for (const uid of Object.keys(a.val() || {}))
-    await envoyerPush(uid, { type: "defi", url: "./", tag: "defi-" + ev.params.msg,
+    await envoyerPush(uid, { type: "defi", url: "./?canal=1", tag: "defi-" + ev.params.msg,
       title: "Nouveau défi : " + String(m.titre || "ton coach te lance un défi").slice(0, 60),
-      body: String(m.texte || "").slice(0, 120) });
+      body: (m.collectif ? "En équipe : " : "Objectif : ") + obj + (fin ? " d’ici le " + fin : "") + ". Tu le relèves ?" });
+});
+
+// ══ LES DÉFIS DU CANAL ═════════════════════════════════════════════════════
+//
+// Un défi est un message du Canal de type 'defi' :
+//   /canaux/<coach>/messages/<id> = {at, type:'defi', titre, texte?, mesure,
+//     objectif, collectif, debut, fin, recompense?}            (écrit par le coach)
+// À côté, hors du message, ce que le coach n'écrit pas :
+//   /canaux/<coach>/defis/<id>/participants/<athlète>/inscription  (l'athlète : {le, classement, pseudo?})
+//   /canaux/<coach>/defis/<id>/participants/<athlète>/{valeur, metrique, termine, termineLe, place, maj}
+//                                                                  (ICI SEULEMENT)
+//   /canaux/<coach>/defis/<id>/public   le résumé que lisent les athlètes (ICI SEULEMENT)
+//   /canaux/<coach>/defis/<id>/etat     paliers annoncés, dernier message système, clôture (ICI SEULEMENT)
+//   /defis_resultats/<athlète>/<id>     un défi bouclé : de quoi dater les badges (ICI SEULEMENT)
+// Le calcul lui-même vit dans defis-calcul.js, pur.
+const D = require("./defis-calcul");
+
+async function _defisDuCoach(coach) {
+  const s = await db.ref("canaux/" + coach + "/messages").orderByChild("type").equalTo("defi").get();
+  const out = [];
+  s.forEach((c) => { const v = c.val(); if (v && v.type === "defi") out.push(Object.assign({}, v, { id: c.key })); });
+  return out;
+}
+function _defiRef(coach, id, sous) { return db.ref("canaux/" + coach + "/defis/" + id + (sous ? "/" + sous : "")); }
+// La valeur d'un athlète, relue dans SON dossier (séances et créneaux seulement).
+async function _majParticipant(coach, defi, cle, t) {
+  const [ses, cfg] = await Promise.all([_lire(cle, "sessions"), _lire(cle, "sessions_config")]);
+  const u = { sessions: ses, sessions_config: cfg };
+  const valeur = D.valeurDefi(u, defi);
+  const metrique = D.metriqueClassement(defi, u).valeur;
+  await _defiRef(coach, defi.id, "participants/" + cle).update({ valeur, metrique, maj: t });
+}
+async function _participants(coach, defi) {
+  const s = await _defiRef(coach, defi.id, "participants").get();
+  const brut = s.val() || {};
+  const cles = Object.keys(brut).filter((k) => brut[k] && brut[k].inscription);
+  const prenoms = await Promise.all(cles.map((k) => _lire(k, "fname")));
+  return cles.map((k, i) => {
+    const p = brut[k], ins = p.inscription || {};
+    return { cle: k, nom: String(ins.pseudo || prenoms[i] || "").trim() || "Athlète", classement: ins.classement === true,
+      valeur: Number(p.valeur) || 0, metrique: Number(p.metrique) || 0, termine: !!p.termine, termineLe: Number(p.termineLe) || 0 };
+  });
+}
+// UN MESSAGE SYSTÈME dans le Canal, et la pastille des athlètes rallumée.
+async function _publierSysteme(coach, defi, texte, t) {
+  const id = "s" + t + "-" + String(defi.id).slice(-6).replace(/[^a-z0-9]/gi, "");
+  await db.ref("canaux/" + coach + "/messages/" + id).set({ at: t, type: "systeme", texte: String(texte).slice(0, 1000), defiId: defi.id });
+  await db.ref("coach_public/" + coach + "/canalDernier").set(t);
+  return id;
+}
+// Tout ce qui découle des valeurs : qui a fini, les places, le résumé public,
+// et l'annonce du jour s'il y en a une.
+async function _recalculerDefi(coach, defi, t, o) {
+  const parts = await _participants(coach, defi);
+  const equipe = D.partEquipe(defi, parts.map((p) => p.valeur));
+  for (const p of parts) {
+    const fini = D.aTermine(defi, p.valeur, equipe);
+    if (fini && !p.termineLe) p.termineLe = t;
+    p.termine = fini;
+  }
+  const pl = D.places(parts);
+  await Promise.all(parts.map((p) => _defiRef(coach, defi.id, "participants/" + p.cle)
+    .update({ termine: p.termine, termineLe: p.termine ? p.termineLe : null, place: pl[p.cle] || null })));
+  await _defiRef(coach, defi.id, "public").set(Object.assign(D.resumePublic(defi, parts), { maj: t }));
+  if (!(o && o.sansAnnonce)) {
+    const etat = (await _defiRef(coach, defi.id, "etat").get()).val() || {};
+    const a = D.annonceSuivante(defi, etat, parts, equipe, _paris(t).jour);
+    if (a) {
+      await _publierSysteme(coach, defi, a.texte, t);
+      await _defiRef(coach, defi.id, "etat").set(a.etat);
+    }
+  }
+  return { parts, equipe };
+}
+async function _estClos(coach, id) { return (await _defiRef(coach, id, "etat/clos").get()).val() === true; }
+
+// ── À CHAQUE SÉANCE TERMINÉE ─────────────────────────────────────────────
+// Le dossier part en entier (PUT) : ce déclencheur ne se réveille que si
+// `sessions` a changé. La valeur est RECALCULÉE depuis les séances, jamais
+// incrémentée : une séance supprimée ou resynchronisée deux fois ne fausse rien.
+exports.defiApresSeance = onValueWritten(Object.assign({ ref: "/users/{uid}/sessions" }, _optsDecl), async (ev) => {
+  const uid = ev.params.uid;
+  const coach = await _lire(uid, "coachEmailKey");
+  if (!coach) return;
+  const t = Date.now();
+  for (const defi of await _defisDuCoach(coach)) {
+    if (t < Number(defi.debut) || await _estClos(coach, defi.id)) continue;
+    const ins = (await _defiRef(coach, defi.id, "participants/" + uid + "/inscription").get()).val();
+    if (!ins) continue;
+    await _majParticipant(coach, defi, uid, t);
+    await _recalculerDefi(coach, defi, t);
+  }
+});
+// ── À L'INSCRIPTION (et à la désinscription) ─────────────────────────────
+// Les séances déjà faites depuis le début du défi comptent tout de suite.
+exports.defiInscription = onValueWritten(Object.assign({ ref: "/canaux/{coach}/defis/{id}/participants/{uid}/inscription" }, _optsDecl), async (ev) => {
+  const { coach, id, uid } = ev.params;
+  const m = (await db.ref("canaux/" + coach + "/messages/" + id).get()).val();
+  if (!m || m.type !== "defi" || await _estClos(coach, id)) return;
+  const defi = Object.assign({}, m, { id });
+  const t = Date.now();
+  if (ev.data.after.val()) await _majParticipant(coach, defi, uid, t);
+  await _recalculerDefi(coach, defi, t, { sansAnnonce: !ev.data.after.val() });
+});
+
+// ── LA TÂCHE DU MATIN : rappel des 48 h, annonces en attente, clôture ─────
+async function _cloturer(coach, defi, t) {
+  const parts = await _participants(coach, defi);
+  for (const p of parts) await _majParticipant(coach, defi, p.cle, t);
+  const r = await _recalculerDefi(coach, defi, t, { sansAnnonce: true });
+  const g = D.gagnant(r.parts);
+  await _publierSysteme(coach, defi, D.textePodium(defi, r.parts), t);
+  for (const p of r.parts.filter((x) => x.termine)) {
+    await db.ref("defis_resultats/" + p.cle + "/" + defi.id).set({
+      titre: String(defi.titre || "").slice(0, 80), mesure: defi.mesure, collectif: !!defi.collectif,
+      fin: Number(defi.fin), termineLe: p.termineLe || t, champion: !!(g && g.cle === p.cle), coach });
+  }
+  const etat = (await _defiRef(coach, defi.id, "etat").get()).val() || {};
+  await _defiRef(coach, defi.id, "etat").set(Object.assign({}, etat, { clos: true, closLe: t, dernierSysteme: _paris(t).jour,
+    champion: g ? g.cle : null }));
+}
+async function _coachsAvecCanal() {
+  try {
+    const jeton = await admin.credential.applicationDefault().getAccessToken();
+    const racine = db.ref().toString().replace(/\/$/, "");
+    const r = await fetch(racine + "/canaux.json?shallow=true&access_token=" + encodeURIComponent(jeton.access_token));
+    if (r.ok) { const d = await r.json(); return d ? Object.keys(d) : []; }
+  } catch (e) { /* repli */ }
+  return Object.keys((await db.ref("canaux").get()).val() || {});
+}
+exports.defisQuotidien = onSchedule(Object.assign({ schedule: "0 9 * * *" }, _optsPlanifie), async () => {
+  const t = Date.now(), jour = _paris(t).jour;
+  for (const coach of await _coachsAvecCanal()) {
+    for (const defi of await _defisDuCoach(coach)) {
+      const etat = (await _defiRef(coach, defi.id, "etat").get()).val() || {};
+      if (etat.clos || t < Number(defi.debut)) continue;
+      if (t > Number(defi.fin)) {
+        // Un message système est déjà parti aujourd'hui pour ce défi : la
+        // clôture attend demain — un par jour, podium compris.
+        if (etat.dernierSysteme !== jour) await _cloturer(coach, defi, t);
+        continue;
+      }
+      if (Number(defi.fin) - t <= 48 * 3600e3 && !etat.rappel48) {
+        const parts = await _participants(coach, defi);
+        for (const p of parts.filter((x) => !x.termine))
+          await envoyerPush(p.cle, { type: "defi", url: "./?canal=1", tag: "defi-48h-" + defi.id,
+            title: "Plus que 48 h : " + String(defi.titre || "ton défi").slice(0, 60),
+            body: "Objectif : " + D.texteObjectif(defi) + ". Tu en es à " + String(p.valeur).replace(".", ",") + "." }, { attendre: false });
+        await _defiRef(coach, defi.id, "etat/rappel48").set(true);
+      }
+      // Les annonces restées en attente (plafond d'un message par jour).
+      await _recalculerDefi(coach, defi, t);
+    }
+  }
 });

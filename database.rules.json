@@ -544,8 +544,52 @@
             "texte":   { ".validate": "newData.isString() && newData.val().length <= 1000" },
             "lien":    { ".validate": "newData.isString() && newData.val().length <= 500" },
             "epingle": { ".validate": "newData.isBoolean()" },
-            "defi":    { ".validate": "newData.isBoolean()" },
+            // LES DEFIS. Un defi est un message de type 'defi' ; le coach seul
+            // l ecrit (.write ci-dessus). Les messages 'systeme' (paliers,
+            // podium) ne viennent QUE des Cloud Functions, qui ne passent pas
+            // par ces regles : le coach ne peut donc pas en fabriquer.
+            "type":       { ".validate": "newData.isString() && newData.val() === 'defi'" },
+            "mesure":     { ".validate": "newData.isString() && newData.val().matches(/^(seances|tonnage|serie|progressionPct)$/)" },
+            "objectif":   { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 10000000" },
+            "collectif":  { ".validate": "newData.isBoolean()" },
+            "debut":      { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "fin":        { ".validate": "newData.isNumber() && newData.val() > newData.parent().child('debut').val()" },
+            "recompense": { ".validate": "newData.isString() && newData.val().length <= 120" },
             "$autre":  { ".validate": false }
+          },
+          ".indexOn": ["type"]
+        },
+
+        // CE QUE LE COACH N ECRIT PAS : l inscription (l athlete), la
+        // progression, le resume public et l etat (les Cloud Functions seules,
+        // qui ne passent pas par ces regles).
+        //
+        // ⚠ LES PARTICIPANTS SONT RANGES PAR CLE D ATHLETE, et une cle est un
+        // e-mail. Aucun athlete ne lit donc /participants : seulement SA
+        // feuille. Ce que le groupe voit — l equipe, le classement, les
+        // avatars — vient de /public, ecrit par le serveur SANS aucune cle, et
+        // n y nomme que ceux qui ont choisi le classement (opt-in).
+        "defis": {
+          ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
+          "$msgId": {
+            "public": {
+              ".read": "auth != null && root.child('users').child(auth.token.email.replace('.', ',')).child('coachEmailKey').val() === $coachKey"
+            },
+            "participants": {
+              "$athleteKey": {
+                ".read": "auth != null && auth.token.email.replace('.', ',') === $athleteKey",
+                // S inscrire (ou se desinscrire) : soi-meme, rattache a CE
+                // coach, a un defi qui existe et n est pas termine.
+                "inscription": {
+                  ".write": "auth != null && auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey && root.child('canaux').child($coachKey).child('messages').child($msgId).child('type').val() === 'defi' && now <= root.child('canaux').child($coachKey).child('messages').child($msgId).child('fin').val()",
+                  ".validate": "newData.hasChildren(['le'])",
+                  "le":         { ".validate": "newData.isNumber() && newData.val() > 0" },
+                  "classement": { ".validate": "newData.isBoolean()" },
+                  "pseudo":     { ".validate": "newData.isString() && newData.val().length <= 24" },
+                  "$autre":     { ".validate": false }
+                }
+              }
+            }
           }
         },
 
@@ -1050,6 +1094,14 @@
     },
     // Le journal du plafond (1 push par jour) et les messages mis de cote
     // pendant les heures calmes : SERVEUR SEULEMENT.
+    // Les defis boucles (et le CHAMPION) : ecrits par la cloture du defi
+    // (Cloud Functions), lus par l athlete pour dater ses badges.
+    "defis_resultats": {
+      "$emailKey": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') === $emailKey",
+        ".write": false
+      }
+    },
     "push_log":     { ".read": false, ".write": false },
     "push_attente": { ".read": false, ".write": false },
 

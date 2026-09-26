@@ -186,7 +186,7 @@ entier par `PUT`, qui effacerait un enfant écrit à part.
 | `pushApresHeuresCalmes` | tous les jours, 8 h 05 | vide `/push_attente` |
 | `pushReponseCoachBilan`, `pushReponseCoachRite` | `reponseCoach` écrit sur un bilan / un rite | `coach` — à la première réponse seulement, pas à chaque correction |
 | `pushFilleulInscrit` | création de `/parrainage/<parrain>/filleuls/<filleul>` | `filleul` — **dormant** : le parrainage n'existe pas encore dans l'app |
-| `pushDefiCanal` | message du Canal avec `defi: true` | `defi` — à tous les athlètes de l'annuaire du coach |
+| `pushDefiCanal` | message du Canal de `type: 'defi'` | `defi` — à tous les athlètes de l'annuaire du coach |
 
 Les tags reprennent ceux des notifications locales (`serie-<lundi>-jeu`, `wrapped-<clé>`) : si les
 deux arrivent sur un même appareil, la seconde **remplace** la première au lieu de s'y ajouter.
@@ -221,5 +221,56 @@ Banc autonome (firebase-admin, firebase-functions et web-push simulés, base en 
 plafond, heures calmes puis envoi de 8 h 05, type coupé, réponse corrigée, nettoyage 410, série
 en danger, défi du Canal.
 
-Un défi se lance depuis le Canal : case « C'est un défi » dans la feuille du message, qui écrit
-`defi: true` (règle ajoutée dans `database.rules.json`) ; un message ordinaire ne notifie personne.
+Un défi se lance depuis le Canal (« ⚡ Lancer un défi ») : c'est un message de `type: 'defi'` ;
+un message ordinaire ne notifie personne. Voir la section suivante.
+
+## Les défis du Canal (26/09/2026)
+
+Le coach lance un défi depuis son Canal (« ⚡ Lancer un défi » : trois champs et trois modèles).
+Ses athlètes le voient épinglé en haut de leur Canal, s'y inscrivent (« Je relève le défi »), et
+un rappel reste sur leur accueil tant qu'il court.
+
+### Les nœuds
+
+| Nœud | Qui écrit | Contenu |
+|---|---|---|
+| `/canaux/<coach>/messages/<id>` | le coach | `{at, type:'defi', titre, texte, mesure, objectif, collectif, debut, fin, recompense?}` — `mesure` : `seances`, `tonnage`, `serie` (semaines validées) ou `progressionPct` |
+| `…/defis/<id>/participants/<athlète>/inscription` | l'athlète | `{le, classement, pseudo?}` — le classement est un **opt-in** |
+| `…/defis/<id>/participants/<athlète>/{valeur, metrique, termine, termineLe, place, maj}` | **les fonctions seules** | la progression |
+| `…/defis/<id>/public` | **les fonctions seules** | l'équipe (part, somme), le classement et les avatars (initiales) — **sans aucune clé**, et ne nommant que ceux qui ont choisi le classement |
+| `…/defis/<id>/etat` | **les fonctions seules** | paliers annoncés, dernier message système, rappel 48 h, clôture |
+| `/canaux/<coach>/messages/s…` (`type:'systeme'`) | **les fonctions seules** | paliers, athlète qui boucle le défi, podium |
+| `/defis_resultats/<athlète>/<id>` | **les fonctions seules** | `{titre, mesure, fin, termineLe, champion}` — lu par l'athlète pour ses badges |
+
+Un athlète ne lit que **sa** feuille de participant et le résumé public : les participants sont
+rangés par clé, et une clé est un e-mail. RepCore ne fait toujours connaître un athlète aux autres
+que s'il le choisit (classement), sous son prénom ou son pseudo.
+
+⚠ La demande parlait de `/canal/<coachId>/<msgId>` : le Canal existe déjà sous `/canaux/<coach>`
+(messages, compteurs, réactions), le défi y est donc un message comme un autre.
+
+### Les fonctions
+
+| Fonction | Quand | Ce qu'elle fait |
+|---|---|---|
+| `defiApresSeance` | `/users/{uid}/sessions` change (région `us-central1`) | recalcule la valeur de l'athlète pour ses défis actifs, puis l'équipe, les places, le résumé public, et l'annonce du jour |
+| `defiInscription` | une inscription est posée ou retirée | idem — les séances faites depuis le début du défi comptent tout de suite |
+| `defisQuotidien` | tous les jours, 9 h (Paris) | rappel push « Plus que 48 h » (une fois, à qui n'a pas fini), annonces en attente, **clôture** : podium dans le Canal, `/defis_resultats` (CHAMPION au gagnant) |
+| `pushDefiCanal` | un défi est publié | push « Nouveau défi » aux athlètes du coach |
+
+**Messages système : un par jour et par défi au plus** (podium compris — une clôture attend le
+lendemain si un message est déjà parti). Priorité : 100 % d'équipe, puis les athlètes qui ont
+bouclé le défi (tous en un message ; ceux hors classement restent « un athlète »), puis le plus
+haut palier d'équipe atteint (25/50/75 %).
+
+**Le classement ne porte jamais sur les charges** : la progression en % pour un défi de
+progression, la régularité (séances, ou semaines validées) pour tous les autres — un défi de
+tonnage se classe aux séances. Le gagnant : la meilleure métrique parmi ceux qui ont bouclé le
+défi, à égalité le premier à l'avoir bouclé.
+
+Le calcul est dans `defis-calcul.js` (pur, sans Firebase). Le client a la même règle
+(`defiValeur`) pour la jauge perso ; les deux bancs rejouent les mêmes fixtures.
+
+```bash
+node functions/test/defis.test.js
+```

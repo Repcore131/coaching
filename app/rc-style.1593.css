@@ -10866,3 +10866,70 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .vt-jauge{margin-top:10px}
 /* Le passage de rang : l'emblème, un peu moins large que le médaillon d'un badge. */
 .rg-ecran-med{width:72%}
+
+/* ══ LES DÉFIS DU CANAL ═══════════════════════════════════════════════════ */
+.dfi-carte{border-color:#5a0a0a;background:linear-gradient(160deg,#1a0303,var(--surface-1,#141416) 70%);
+  box-shadow:0 0 0 1px rgba(224,32,32,.18),0 10px 26px rgba(0,0,0,.4)}
+.dfi-tete{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.dfi-tete .cnl-defi{margin-bottom:0}
+.dfi-quand{font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;font-weight:800}
+.dfi-obj{font-size:var(--fs-sm);color:var(--text-dim);margin-bottom:4px}
+.dfi-rec{font-size:var(--fs-sm);color:var(--text);margin:4px 0}
+.dfi-j{margin-top:10px}
+.dfi-j-l{display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-xs);color:var(--sub);margin-bottom:5px}
+.dfi-j-l b{color:var(--text);font-variant-numeric:tabular-nums}
+.dfi-barre{height:7px;border-radius:4px;background:rgba(255,255,255,.08);overflow:hidden}
+.dfi-barre span{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,#8e0403,#E02020 60%,#ff5a4a);
+  box-shadow:0 0 10px rgba(224,32,32,.7);transition:width .6s cubic-bezier(.2,.8,.3,1)}
+.dfi-avatars{display:flex;flex-wrap:wrap;margin-top:12px;padding-left:6px}
+.dfi-av{width:30px;height:30px;border-radius:50%;margin-left:-6px;display:inline-flex;align-items:center;justify-content:center;
+  background:#2a0606;border:2px solid var(--surface-1,#141416);color:#fff;font-size:10.5px;font-weight:800;letter-spacing:.3px}
+.dfi-av-plus{background:var(--surface-2,#1e1e22);color:var(--sub)}
+.dfi-classement{margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
+.dfi-cl-t{font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;text-transform:uppercase;font-weight:800;margin-bottom:6px}
+.dfi-cl-l{display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:3px 0}
+.dfi-cl-l b{font-variant-numeric:tabular-nums}
+.dfi-cl-moi{font-size:var(--fs-xs);color:var(--red-text,#ff6b6b);margin-top:6px;font-weight:700}
+.dfi-go{width:100%;margin:14px 0 0;min-height:46px}
+.dfi-inscrit{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;font-size:var(--fs-sm);font-weight:700;color:var(--text)}
+.dfi-lien{background:none;border:0;padding:6px 0;color:var(--sub);font:inherit;font-size:var(--fs-xs);text-decoration:underline;cursor:pointer;min-height:32px}
+.dfi-fait{margin-top:12px;font-weight:800;color:#ffd23a}
+.dfi-part{width:100%;margin:8px 0 0;min-height:40px}
+.cnl-systeme{background:var(--surface-2,#1e1e22);border-style:dashed;padding:11px 14px}
+.cnl-sys-t{font-size:var(--fs-sm);line-height:1.55;white-space:pre-line;color:var(--text)}
+.cnl-sys-b{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;font-size:var(--fs-2xs)}
+/* La feuille du coach et celle de l'inscription. */
+.dfm-feuille{background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto}
+.dfm-modeles{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.dfm-modele{background:var(--surface-1);border:1px solid var(--border);border-radius:999px;padding:8px 12px;color:var(--text);
+  font:inherit;font-size:var(--fs-xs);font-weight:700;cursor:pointer;min-height:36px;text-align:left}
+.dfm-modele[aria-pressed="true"]{border-color:var(--red);background:var(--red-bg)}
+.dfm-ligne{display:flex;gap:8px}
+.dfm-ligne input{flex:0 0 38%;min-width:0}
+.dfm-ligne select{flex:1;min-width:0}
+.dfm-seg{display:flex;gap:6px;margin-top:8px}
+.dfm-seg button{flex:1;min-height:40px;border-radius:var(--r-3);border:1px solid var(--border);background:transparent;color:var(--sub);
+  font:inherit;font-size:var(--fs-sm);font-weight:700;cursor:pointer}
+.dfm-seg button[aria-checked="true"]{border-color:var(--red);background:var(--red-bg);color:var(--text)}
+.dfm-apercu{margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:10px 12px;font-size:var(--fs-sm);line-height:1.5}
+.dfm-apercu b{display:block;margin-bottom:2px}
+.dfm-apercu span{color:var(--sub);font-size:var(--fs-xs)}
+.dfr-case{display:flex;gap:12px;align-items:flex-start;cursor:pointer;margin:0;text-transform:none;letter-spacing:normal;font-weight:400;color:var(--text);font-size:var(--fs-sm)}
+.dfr-case input{width:18px;height:18px;accent-color:#E02020;flex-shrink:0;margin-top:2px}
+.dfr-case .sub{display:block;font-size:var(--fs-xs);line-height:1.5;margin-top:3px}
+/* L'accueil. */
+.dfa-carte{background:linear-gradient(160deg,#1a0303,#120000 60%);border:1px solid #3a0000;border-left:3px solid var(--red);
+  border-radius:12px;padding:11px 14px;margin-bottom:14px;cursor:pointer}
+.dfa-t{font-weight:800;font-size:var(--fs-sm);margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dfa-t .cnl-defi{margin-bottom:0}
+.dfa-l{font-size:var(--fs-xs);color:var(--text-dim);margin-bottom:6px}
+.dfa-l b{color:var(--text)}
+.dfa-go{font-size:var(--fs-sm);font-weight:800;color:#ff3b3b}
+/* Les badges « Défi relevé », un par défi, dans « Mes badges ». */
+.dfr-liste{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+.dfr-badge{display:flex;align-items:center;gap:12px;background:var(--surface-1);border:1px solid #3a0000;border-radius:var(--r-3);
+  padding:10px 12px;text-align:left;color:var(--text);font:inherit;cursor:pointer;min-height:48px}
+.dfr-ico{font-size:24px;filter:drop-shadow(0 0 6px rgba(224,32,32,.6))}
+.dfr-c{display:flex;flex-direction:column;min-width:0}
+.dfr-c b{font-size:var(--fs-xs);letter-spacing:1.5px}
+.dfr-c span{font-size:var(--fs-xs);color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

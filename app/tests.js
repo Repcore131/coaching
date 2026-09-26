@@ -48531,6 +48531,101 @@ async function testExercices(){
     ok('Volts : xp, xpRang et xpArchive sont classés non-santé',
       ['xp','xpRang','xpArchive'].every(k=>CHAMPS_NON_SANTE.indexOf(k)>=0));
 
+    // ── LES DÉFIS DU CANAL ───────────────────────────────────────────────
+    // ⚠ MÊMES FIXTURES ET MÊMES RÉSULTATS que functions/test/defis.test.js :
+    // la jauge perso (ici) et la progression serveur doivent compter pareil.
+    const _DT=iso=>Date.parse(iso);
+    const _DDEB=_DT('2026-09-30T22:00:00Z'), _DFIN=_DT('2026-10-31T22:59:59Z');
+    const _DS=(iso,squat,rowing,volume)=>({date:_DT(iso),volume,
+      data:{'Squat':{sets:[{weight:String(squat),reps:'5',done:true}]},'Rowing barre':{sets:[{weight:String(rowing),reps:'8',done:true}]}}});
+    const _DFIX={sessions_config:[{active:true},{active:true},{active:false}],sessions:[
+      _DS('2026-09-20T17:00:00Z',100,60,3000),_DS('2026-09-25T17:00:00Z',100,64,3100),
+      _DS('2026-10-05T17:00:00Z',105,64,3200),_DS('2026-10-07T17:00:00Z',110,66,3300),
+      _DS('2026-10-14T17:00:00Z',110,68,3400),_DS('2026-10-28T17:00:00Z',112,70,3500)]};
+    const _DD=(mesure,objectif,collectif,o)=>Object.assign({id:'m1',type:'defi',titre:'Octobre',mesure,objectif,collectif:!!collectif,debut:_DDEB,fin:_DFIN},o||{});
+    ok('Défis : la valeur perso compte comme le serveur (séances, tonnage, série, %)',(()=>{
+      const r=[defiValeur(_DFIX,_DD('seances',12)),defiValeur(_DFIX,_DD('tonnage',1)),defiValeur(_DFIX,_DD('serie',4)),defiValeur(_DFIX,_DD('progressionPct',5))];
+      return r.join()==='4,13400,1,10.7'?true:_echec(r.join());})());
+    ok('Défis : les trois modèles retombent sur leur titre',(()=>{
+      const t=_DT('2026-10-10T10:00:00Z');
+      const fm=new Date(2026,9,31,23,59,59).getTime();
+      const a=defiTitreAuto('seances',12,false,fm,t), b=defiTitreAuto('tonnage',100000,true,fm,t), c=defiTitreAuto('serie',4,true,t+28*864e5,t);
+      const ok1=a===DEFI_MODELES[0].titre&&b.replace(/\s/g,' ')===DEFI_MODELES[1].titre&&c===DEFI_MODELES[2].titre;
+      return ok1?true:_echec([a,b,c].join(' | '));})());
+    ok('Défis : le message écrit est de type defi, borné, et garde son début à la modification',(()=>{
+      const t=_DT('2026-10-10T10:00:00Z');
+      if(!defiMessage({mesure:'seances',objectif:0,fin:t+864e5},null,t).erreur) return _echec('objectif nul accepté');
+      if(!defiMessage({mesure:'seances',objectif:5,fin:t-1},null,t).erreur) return _echec('fin passée acceptée');
+      if(!defiMessage({mesure:'charges',objectif:5,fin:t+864e5},null,t).erreur) return _echec('mesure inconnue acceptée');
+      const r=defiMessage({mesure:'tonnage',objectif:100000,collectif:true,fin:t+9*864e5,recompense:'Un t-shirt'},null,t).msg;
+      if(r.type!=='defi'||r.debut!==t||r.collectif!==true||r.recompense!=='Un t-shirt'||!r.titre||!r.texte) return _echec(JSON.stringify(r));
+      const e=defiMessage({mesure:'tonnage',objectif:90000,collectif:true,fin:t+9*864e5},{at:5,debut:7},t+864e5).msg;
+      return (e.debut===7&&e.at===5&&!('recompense' in e))?true:_echec(JSON.stringify(e));})());
+    ok('Défis : en équipe, la jauge perso se mesure à SA part de l’objectif',(()=>{
+      const d=_DD('seances',20,true);
+      return (defiPartPerso(d,5,4)===1&&defiPartPerso(d,1,10)===0.5&&defiPartPerso(_DD('seances',20),5,4)===0.25)?true:_echec('parts');})());
+    ok('Défis : la carte — « Je relève le défi », les réactions, jamais de kilos au classement',(()=>{
+      const t=_DT('2026-10-10T10:00:00Z');
+      const d=document.createElement('div');
+      const pub={n:5,equipe:{part:.42,valeur:48000},classement:[{nom:'LéaFit',valeur:6,termine:false}],visibles:[{nom:'LéaFit',ini:'L'}]};
+      d.innerHTML=htmlCarteDefi(_DD('tonnage',100000,true),{pub,moi:null},_DFIX,{},'',t);
+      if(!d.querySelector('.dfi-go')||!/Je relève le défi/.test(d.textContent)) return _echec('bouton');
+      if(d.querySelectorAll('button[aria-pressed]').length!==4) return _echec('réactions');
+      if(!/\+4/.test(d.querySelector('.dfi-avatars').textContent)) return _echec('avatars +N');
+      const cl=d.querySelector('.dfi-classement').textContent;
+      if(/kg/.test(cl)||!/6 séances/.test(cl)) return _echec('classement : '+cl);
+      d.innerHTML=htmlCarteDefi(_DD('seances',12),{pub:{n:1},moi:{inscription:{le:1},place:1}},_DFIX,{},'',t);
+      if(d.querySelector('.dfi-go')||!/Tu relèves ce défi/.test(d.textContent)) return _echec('inscrit');
+      if(!/4 séances \/ 12 séances/.test(d.textContent)) return _echec('jauge perso : '+d.textContent);
+      d.innerHTML=htmlCarteDefi(_DD('seances',3),{pub:{n:1},moi:{inscription:{le:1},termine:true}},_DFIX,{},'',t);
+      return (d.querySelector('.dfi-part')&&/Défi relevé/.test(d.textContent))?true:_echec('défi relevé');})());
+    ok('Défis : le classement ne se lit qu’en opt-in, et le pseudo n’existe qu’avec lui',(()=>{
+      const a=defiInscription(false,'Caché',9), b=defiInscription(true,'  Léa   Fit ',9), c=defiInscription(true,'',9);
+      return (!('pseudo' in a)&&a.classement===false&&b.pseudo==='Léa Fit'&&!('pseudo' in c)&&a.le===9)?true:_echec(JSON.stringify([a,b,c]));})());
+    ok('Défis : épinglés en tête du fil tant qu’ils courent, à leur date ensuite',(()=>{
+      const t=_DT('2026-10-10T10:00:00Z');
+      const l=[{id:'a',at:3},{id:'d1',type:'defi',fin:t+5*864e5},{id:'b',at:2},{id:'d0',type:'defi',fin:t-864e5},{id:'d2',type:'defi',fin:t+864e5}];
+      const o=canalOrdreAvecDefis(l,t).map(x=>x.id).join();
+      return o==='d2,d1,a,b,d0'?true:_echec(o);})());
+    ok('Défis : le rappel d’accueil, tant que le défi court',(()=>{
+      const t=_DT('2026-10-10T10:00:00Z');
+      const d=_DD('seances',12);
+      if(htmlDefiAccueil([Object.assign({},d,{fin:t-1})],_DFIX,{},t)!=='') return _echec('défi fini affiché');
+      const x=document.createElement('div');
+      x.innerHTML=htmlDefiAccueil([d],_DFIX,{},t);
+      if(!/Je relève le défi/.test(x.textContent)) return _echec('non inscrit');
+      x.innerHTML=htmlDefiAccueil([d],_DFIX,{m1:1},t);
+      return /4 séances \/ 12 séances/.test(x.textContent)?true:_echec(x.textContent);})());
+    ok('Défis : CHAMPION daté par la clôture ; DÉFI RELEVÉ, un badge daté par défi hors des cinquante',(()=>{
+      const u=_VU({sessions:[]});
+      const n=defisFusionnerResultats(u,{m1:{titre:'Octobre',fin:_DFIN,termineLe:_DT('2026-10-20T10:00:00Z'),champion:true},m0:null});
+      if(n!==1||defisFusionnerResultats(u,{m1:{titre:'x'}})!==0) return _echec('fusion');
+      const c=badgesMeritesDates(u,_DFIN+864e5).find(x=>x.id==='champion');
+      if(!c||c.at!==_DFIN) return _echec('CHAMPION '+JSON.stringify(c));
+      if(BADGES_ACQUIS.length!==50) return _echec('la collection n’est plus de cinquante');
+      const d=document.createElement('div'); d.innerHTML=htmlDefisReleves(u);
+      return (/Défis relevés/.test(d.textContent)&&/CHAMPION · OCTOBRE/.test(d.textContent)&&/20\/10\/2026/.test(d.textContent))?true:_echec(d.textContent);})());
+    ok('Défis : la carte 1080×1920 — « J’AI RELEVÉ » / « LE DÉFI D’OCTOBRE », ou « CHAMPION »',(()=>{
+      if(defiMoisTexte(_DT('2026-10-15T10:00:00Z'))!=='D’OCTOBRE'||defiMoisTexte(_DT('2026-03-15T10:00:00Z'))!=='DE MARS') return _echec('mois');
+      const P=CanvasRenderingContext2D.prototype, f=P.fillText, vus=[];
+      P.fillText=function(t){ vus.push(String(t)); return f.apply(this,arguments); };
+      let c,k;
+      try{
+        c=_dessinerCarteDefi({titre:'12 séances ce mois',mois:'D’OCTOBRE',champion:false,valeur:'12 séances',signature:'LÉA'},'transparent');
+        const a=vus.join(''); vus.length=0;
+        k=_dessinerCarteDefi({titre:'x',mois:'D’OCTOBRE',champion:true,valeur:'',signature:''},'rouge');
+        if(a.indexOf('J’AI RELEVÉ')<0||a.indexOf('LE DÉFI D’OCTOBRE')<0||a.indexOf('LÉA · REPCORE')<0) return _echec(a.slice(0,200));
+      } finally{ P.fillText=f; }
+      if(c.width!==1080||c.height!==1920) return _echec(c.width+'x'+c.height);
+      return vus.join('').indexOf('CHAMPION')>=0?true:_echec('champion');})());
+    ok('Défis : le visuel partagé n’affiche jamais de kilos (tonnage → séances)',(()=>{
+      const d=defiCarteDonnees(Object.assign({fname:'Léa'},_DFIX),_DD('tonnage',100000,true),null);
+      return (d.valeur==='4 séances'&&!/kg/.test(d.valeur))?true:_echec(d.valeur);})());
+    ok('Défis : un message système s’échappe, et defisReleves est classé non-santé',(()=>{
+      const d=document.createElement('div');
+      d.innerHTML=htmlCarteSysteme({texte:'<img src=x onerror=alert(1)>',at:1},false);
+      return (!d.querySelector('img')&&CHAMPS_NON_SANTE.indexOf('defisReleves')>=0)?true:_echec('échappement ou classement');})());
+
     ok('Les badges n’ont que quatre points d’appel',(()=>{
       const s=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
       const n=(s.match(/majBadges\(/g)||[]).length;
@@ -48540,7 +48635,13 @@ async function testExercices(){
       // c'est lui qui rend a un dossier ancien ses badges a la mise a jour. Une
       // sixieme signalerait un rendu qui attribue des badges a chaque passage,
       // et une celebration qui surgit sans que rien ne vienne de se passer.
-      if(n!==5) return _echec(n+' occurrences de majBadges( au lieu de cinq');
+      // SIXIEME, ET JUSTIFIEE (defis du Canal) : l'arrivee des resultats d'un
+      // defi (majDefisResultats), une fois par jour au plus, et seulement quand
+      // un defi NOUVEAU est boucle — CHAMPION et DEFI RELEVE viennent du
+      // serveur, jamais d'une seance ni d'un bilan.
+      if(n!==6) return _echec(n+' occurrences de majBadges( au lieu de six');
+      if(!/defisFusionnerResultats\(u,r\);\s*if\(n\)\{[\s\S]{0,300}?majBadges\(\)/.test(s))
+        return _echec('l’appel des resultats de defi n’est plus garde par « un defi nouveau »');
       if(!/_riteEnregistrer\(q,true\);[\s\S]{0,300}?majBadges\(\)/.test(s))
         return _echec('l’appel apres le rite a disparu');
       if(!/_rattraperBadges\(\)\{\s*if\(_badgesRattrapes\) return \[\];/.test(s))

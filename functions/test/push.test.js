@@ -70,12 +70,12 @@ const assert=(c,m)=>{ if(!c){ console.log('ECHEC:',m); process.exitCode=1; } els
   set('users/tom,t/streakWeek','2026-09-28');
   await F.pushSerieEnDanger();
   assert(envoyes.length===n0,'semaine validée : pas de rappel');
-  // 8. Défi du Canal : aux athlètes de l'annuaire, seulement si defi:true.
+  // 8. Défi du Canal : aux athlètes de l'annuaire, seulement pour un message de type 'defi'.
   set('annuaire_coach/kev,t',{'tom,t':{email:'tom@t'}});
   a('2026-10-02T12:00:00Z');
   await F.pushDefiCanal({data:{val:()=>({titre:'Info',texte:'x'})},params:{coach:'kev,t',msg:'m1'}});
   assert(envoyes.length===n0,'un message ordinaire du Canal ne notifie pas');
-  await F.pushDefiCanal({data:{val:()=>({titre:'100 pompes',texte:'Cette semaine',defi:true})},params:{coach:'kev,t',msg:'m2'}});
+  await F.pushDefiCanal({data:{val:()=>({type:'defi',titre:'100 pompes',mesure:'seances',objectif:12,debut:1,fin:Date.parse('2026-10-31T22:00:00Z')})},params:{coach:'kev,t',msg:'m2'}});
   assert(envoyes.length===n0+1&&envoyes[envoyes.length-1][1].title==='Nouveau défi : 100 pompes','défi du Canal envoyé');
   Date.now=RealNow;
 })();
