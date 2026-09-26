@@ -21783,7 +21783,7 @@ async function testExercices(){
       const h=_courbePesee([{date:_pj(0),kg:103.8},{date:_pj(38),kg:100.9}]);
       if(!h) return _echec('aucun tracé');
       if(_trTraits(h)) return _echec('un trait de moyenne est apparu là où mm7 ne peut rien');
-      if(!/stroke-dasharray="3 2\.5"/.test(h)) return _echec('le relevé n’est pas en pointillé');
+      if(!/data-trait="releve"[^>]*stroke-dasharray=/.test(h)) return _echec('le relevé n’est pas en pointillé');
       if(_trPoints(h)!==2) return _echec(_trPoints(h)+' point(s) au lieu de 2');
       // ET LA LÉGENDE SUIT. Un pointillé annoncé « moyenne 7 j » serait pire
       // que pas de trait : il ferait lire une tendance là où il n'y a que
@@ -21795,7 +21795,7 @@ async function testExercices(){
       const h=_courbePesee(_ps(20,i=>80-i/14));
       if(_trTraits(h)!==1) return _echec('la moyenne a disparu');
       // Le pointillé « pesées reliées » est réservé au cas SANS tendance.
-      if(/stroke-dasharray="3 2\.5"/.test(h)) return _echec('le relevé est en pointillé alors qu’une tendance existe');
+      if(/data-trait="releve"[^>]*stroke-dasharray=/.test(h)) return _echec('le relevé est en pointillé alors qu’une tendance existe');
       if(!/data-trait="releve"/.test(h)) return _echec('le relevé a disparu');
       return _courbePesee.dernierTrait==='moyenne'?true
         :_echec('la courbe se déclare relevé alors qu’elle trace une moyenne');})());

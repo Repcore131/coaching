@@ -95860,20 +95860,30 @@ function _courbePesee(serie,opts){
       aires.push(`<path d="${haut} ${bas} Z" fill="url(#${gid})" stroke="none"/>`);
     }
     tendances.push(`<path data-trait="moyenne" d="${t.map((x,i)=>(i?'L':'M')+f2(X(x.d))+' '+f2(Y(x.v))).join(' ')}" fill="none"
-      stroke="var(--red)" stroke-width="1.6" stroke-dasharray="5 4" stroke-linecap="round" vector-effect="non-scaling-stroke" opacity=".9"/>`);
+      stroke="#ff5a5a" stroke-width="1.8" stroke-dasharray="7 5" stroke-linecap="round" vector-effect="non-scaling-stroke" opacity=".85"/>`);
   });
   // LE RELEVE : trait plein avec une tendance, pointille sans (et l'encadre le dit).
   // Il s'interrompt lui aussi a chaque longue coupure.
-  const releves=(brut?[pts]:segs).map(seg=>seg.length<2?'':`<path data-trait="releve" d="${seg.map((e,i)=>(i?'L':'M')+f2(X(e.date))+' '+f2(Y(e.kg))).join(' ')}" fill="none"
-      stroke="var(--red)" stroke-width="${brut?1.6:2.4}"${brut?' stroke-dasharray="3 2.5" opacity=".85"':''}
+  const segsR=(brut?[pts]:segs).filter(seg=>seg.length>=2);
+  const dR=seg=>seg.map((e,i)=>(i?'L':'M')+f2(X(e.date))+' '+f2(Y(e.kg))).join(' ');
+  const releves=segsR.map(seg=>`<path class="pc-rel" data-trait="releve" d="${dR(seg)}" fill="none"
+      stroke="#ff2a2a" stroke-width="${brut?2.2:2.8}"${brut?' stroke-dasharray="7 5"':''}
       stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`).join('');
+  // L'AIRE SOUS LE RELEVE, du trait jusqu'au bas du cadre : le rouge de la maquette.
+  const gidS='pesSous'+_courbePesee._n;
+  const sous=segsR.map(seg=>`<path d="${dR(seg)} L${f2(X(seg[seg.length-1].date))} 100 L${f2(X(seg[0].date))} 100 Z" fill="url(#${gidS})" stroke="none"/>`).join('');
   const defs=`<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" style="stop-color:var(--red);stop-opacity:.34"/>
-      <stop offset="1" style="stop-color:var(--red);stop-opacity:.06"/>
+      <stop offset="0" style="stop-color:#ff2a2a;stop-opacity:.30"/>
+      <stop offset="1" style="stop-color:#ff2a2a;stop-opacity:.12"/>
+    </linearGradient><linearGradient id="${gidS}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" style="stop-color:#e01818;stop-opacity:.42"/>
+      <stop offset=".55" style="stop-color:#b01010;stop-opacity:.16"/>
+      <stop offset="1" style="stop-color:#b01010;stop-opacity:0"/>
     </linearGradient></defs>`;
   // Les points : chaque pesee, et la derniere, soulignee une seule fois.
   const der=pts[pts.length-1];
-  const points=pts.map((e,i)=>`<span class="pc-pt${i===pts.length-1?' pc-der':''}" style="left:${f2(X(e.date))}%;top:${f2(Y(e.kg))}%"></span>`).join('');
+  const pasA=Math.max(1,Math.ceil(pts.length/6));
+  const points=pts.map((e,i)=>`<span class="pc-pt${i===pts.length-1?' pc-der':((i%pasA===0)?' pc-pt-a':'')}" style="left:${f2(X(e.date))}%;top:${f2(Y(e.kg))}%"></span>`).join('');
   // La bulle : le poids, et l'ecart depuis le debut de la periode affichee.
   const ecart=Math.round((der.kg-pts[0].kg)*10)/10;
   const coulE=(typeof o.couleur==='function')?o.couleur(ecart):'var(--sub)';
@@ -95897,7 +95907,7 @@ function _courbePesee(serie,opts){
       <div class="pc-cadre">${lignes}
         <div class="pc-zone">
           <svg class="arc-courbe" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-            ${defs}${aires.join('')}${releves}${tendances.join('')}
+            ${defs}${sous}${aires.join('')}${releves}${tendances.join('')}
           </svg>
           ${points}${bulle}
         </div>
@@ -95905,9 +95915,7 @@ function _courbePesee(serie,opts){
       <div class="pc-x">${xs}</div>
       ${legende}
       ${brut?`<div class="pc-note"><span class="pc-note-i" aria-hidden="true">${_pesIcone('barres')}</span><div>
-         Trait en pointillé : les pesées reliées entre elles.<br>La moyenne sur sept
-         jours demande quatre pesées dans la même semaine — elle prendra le relais
-         dès que tu te pèseras plus souvent.</div></div>`:''}
+Trait en pointillé : les pesées reliées entre elles. La moyenne sur sept jours demande quatre pesées dans la même semaine, elle prendra le relais dès que tu te pèseras plus souvent.</div></div>`:''}
     </div>`;
 }
 function _fmtJourCourt(iso){
