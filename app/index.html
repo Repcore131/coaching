@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1595';
+window.RC_BUILD='1596';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -422,7 +422,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1595.css">
+<link rel="stylesheet" href="./rc-style.1596.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -1610,6 +1610,9 @@ const COACH_PHOTO='icons/coach.jpg';
              et on la lit d'un seul regard au lieu de defiler jusqu'en bas.
              Rempli par loadCoachHome. -->
         <div id="ch-croissance" style="margin-bottom:18px"></div>
+        <!-- LE RECAP D'EQUIPE : seances, records, tonnage, top 3 de regularite,
+             en visuel a partager (ouvrirRecapTeam). -->
+        <button type="button" class="btn btn-outline btn-sm btn-casse" onclick="ouvrirRecapTeam()" style="width:100%;margin:0 0 18px;min-height:44px">Récap de l’équipe · à partager</button>
         <!-- ══ QUATRE BOUTONS D'ÉGALE LARGEUR, SUR TOUTE LA LIGNE ══════════
              Demande de Kevin, 19/09/2026.
 
@@ -2322,6 +2325,8 @@ const COACH_PHOTO='icons/coach.jpg';
              Rempli par _majBoutonBilan : le libelle depend de ce qu'il y a a
              lire, et le bouton disparait quand il n'y a aucun bilan. -->
         <div id="ccd-tete-act"></div>
+        <!-- « PARTAGER UNE VICTOIRE » : _rendreBoutonVictoire (openClientDetail). -->
+        <div id="ccd-victoire"></div>
         </div>
       </div>
       <!-- LES ALERTES RESTENT PLEINE LARGEUR, ET AU-DESSUS DE LA LIGNE.
@@ -3152,6 +3157,10 @@ const COACH_PHOTO='icons/coach.jpg';
         </span>
       </label>
     </div>
+
+    <!-- L'ACCORD DE PARTAGE AVEC LE COACH (victoires, recap d'equipe,
+         avant/apres) : _majConsentementCoachReglages. -->
+    <div id="cr-partage-coach"></div>
 
     <!-- LES NOTIFICATIONS PUSH. Rendu par _rendreReglagesPush (ouvrirReglagesAthlete) :
          l'état de l'appareil, le bouton d'activation (le geste qu'exige iOS) et
@@ -5726,5 +5735,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1595.js"></script>
+<script src="./rc-core.1596.js"></script>
 </body></html>

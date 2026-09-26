@@ -48807,6 +48807,62 @@ async function testExercices(){
     ok('Pages : réglages publics classés non-santé',
       ['pagePublique','vitrineSlug','vitrinePubliee','specialites'].every(k=>CHAMPS_NON_SANTE.indexOf(k)>=0));
 
+    // ── LES VISUELS DU COACH : VICTOIRE ET RÉCAP D'ÉQUIPE ───────────────
+    const _VCJ=864e5, _VCT0=Date.parse('2026-06-01T17:00:00Z');
+    const _VCS=(j,squat,rowing)=>({date:_VCT0+j*_VCJ,volume:4000,data:{'SQUAT':{sets:[{weight:String(squat),reps:'5',done:true}]},
+      'ROWING BARRE':{sets:[{weight:String(rowing),reps:'8',done:true}]}}});
+    const _VCA=o=>Object.assign({id:'a1',role:'athlete',fname:'Julie',lname:'Durand',sessions:[_VCS(0,80,60),_VCS(30,95,62),_VCS(84,110,63)]},o||{});
+    ok('Victoire : la plus forte progression d’abord, avant → après, durée du suivi',(()=>{
+      const v=victoiresDe(_VCA());
+      if(v.length!==2||v[0].exo!=='SQUAT'||v[0].avant!==80||v[0].apres!==110||v[0].pct!==38) return _echec(JSON.stringify(v[0]));
+      const d=victoireDonnees(_VCA(),v[0],'prenom');
+      return (d.duree==='12 SEMAINES DE SUIVI'&&d.exo==='SQUAT')?true:_echec(JSON.stringify(d));})());
+    ok('Victoire : sans l’accord de l’athlète, anonyme et seulement anonyme',(()=>{
+      const sans=_VCA(), avec=_VCA({consentementPartageCoach:{date:1}});
+      if(vcNomAffiche(sans,'prenom')!==''||vcNomAffiche(sans,'initiales')!=='') return _echec('nom sans accord');
+      if(vcNomAffiche(avec,'prenom')!=='JULIE'||vcNomAffiche(avec,'initiales')!=='J. D.'||vcNomAffiche(avec,'anonyme')!=='') return _echec('modes avec accord');
+      const d=document.createElement('div');
+      d.innerHTML=htmlReglagesVisuelCoach({type:'victoire',u:sans,victoires:victoiresDe(sans),i:0,mode:'prenom',format:'story'});
+      const dis=[...d.querySelectorAll('.aa-seg button[disabled]')].map(b=>b.textContent).join();
+      if(dis!=='Prénom,Initiales') return _echec('boutons grisés : '+dis);
+      return /anonyme/.test(d.textContent)?true:_echec('la raison n’est pas dite');})());
+    ok('Victoire : 1080×1920 et 1080×1350, « VICTOIRE DE LA SEMAINE », avant → après, « COACHÉ AVEC REPCORE », sans QR',(()=>{
+      const P=CanvasRenderingContext2D.prototype, f=P.fillText, vus=[];
+      P.fillText=function(t){ vus.push(String(t)); return f.apply(this,arguments); };
+      let a,b;
+      try{
+        const d={exo:'SQUAT',avant:80,apres:110,pct:38,duree:'12 SEMAINES DE SUIVI',nom:'JULIE'};
+        a=_dessinerVictoireCoach(d,'transparent','story'); b=_dessinerVictoireCoach(d,'rouge','post');
+      } finally { P.fillText=f; }
+      if(a.width!==1080||a.height!==1920||b.width!==1080||b.height!==1350) return _echec('formats');
+      const tout=vus.join('');
+      for(const x of ['VICTOIRE DE LA SEMAINE','SQUAT','80 → 110 KG','+38 %','12 SEMAINES DE SUIVI','COACHÉ AVEC REPCORE','JULIE'])
+        if(tout.indexOf(x)<0) return _echec('manque '+x);
+      return String(_dessinerVictoireCoach).indexOf('_qrMatrice')<0?true:_echec('un QR');})());
+    ok('Récap d’équipe : séances, records, tonnage, équivalent, top 3 — prénoms seulement avec l’accord',(()=>{
+      const t=_VCT0+86*_VCJ;
+      const a=_VCA({consentementPartageCoach:{date:1}}), b=_VCA({id:'b',fname:'Tom',sessions:[_VCS(83,100,60),_VCS(85,101,60)]});
+      const d=recapTeamDonnees([a,b],'semaine',t,'TEAM K');
+      if(d.seances!==3||d.tonnage!==12000||d.records!==3||!d.equivalent) return _echec(JSON.stringify(d));
+      if(d.top[0].nom!=='UN ATHLÈTE'||d.top[0].n!==2||d.top[1].nom!=='JULIE') return _echec(JSON.stringify(d.top));
+      const P=CanvasRenderingContext2D.prototype, f=P.fillText, vus=[];
+      P.fillText=function(x){ vus.push(String(x)); return f.apply(this,arguments); };
+      let c; try{ c=_dessinerRecapTeam(d,'transparent','post'); } finally { P.fillText=f; }
+      const tout=vus.join('');
+      if(c.height!==1350||tout.indexOf('LA SEMAINE DE LA TEAM')<0||tout.indexOf('TOP RÉGULARITÉ')<0||tout.indexOf('TOM')>=0) return _echec(tout.slice(0,200));
+      return recapTeamDonnees([a],'mois',t).titre==='LE MOIS DE LA TEAM'?true:_echec('période');})());
+    ok('Visuels coach : sélecteur de fond, Télécharger et Partager, sortie par _storySortir* (lien de la vitrine)',(()=>{
+      const s=String(_vcRendre)+String(vcSortir);
+      if(s.indexOf("_htmlVisuelFonds('vc-fonds')")<0||s.indexOf('monterSelecteurFond')<0) return _echec('sélecteur de fond');
+      if(s.indexOf('_storySortirPartage')<0||s.indexOf('_storySortirTelechargement')<0) return _echec('sorties');
+      if(!/Télécharger/.test(s)||!/Partager/.test(s)) return _echec('boutons');
+      const c={role:'coach',vitrineSlug:'kevin',vitrinePubliee:true};
+      return /\/coach\/kevin|c\/\?s=kevin/.test(lienPerso('victoire',c))?true:_echec(lienPerso('victoire',c));})());
+    ok('Visuels coach : le bouton n’apparaît que s’il y a une progression ; l’accord se règle dans les réglages athlète',(()=>{
+      if(htmlBoutonVictoire({id:'x',sessions:[]})!=='') return _echec('bouton sans victoire');
+      if(!/Partager une victoire/.test(htmlBoutonVictoire(_VCA()))) return _echec('bouton absent');
+      return (document.getElementById('cr-partage-coach')&&document.getElementById('ccd-victoire'))?true:_echec('emplacements');})());
+
     ok('Les badges n’ont que quatre points d’appel',(()=>{
       const s=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
       const n=(s.match(/majBadges\(/g)||[]).length;

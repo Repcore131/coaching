@@ -10997,3 +10997,11 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .tsk-ok{text-align:right;color:#4da3ff;font-size:10px;font-weight:800;margin-bottom:6px}
 .tsk-on{outline:2px solid #E02020;outline-offset:1px;box-shadow:0 0 12px rgba(224,32,32,.8)}
 .tsk-grille .tsk-on{background:#ffe3e3}
+
+/* ══ LES VISUELS DU COACH (victoire, récap d'équipe) ══════════════════════ */
+.vc-ecran select{width:100%;margin-bottom:6px}
+.vc-l{font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;text-transform:uppercase;font-weight:800;margin:12px 0 6px}
+.vc-note{font-size:var(--fs-xs);color:var(--sub);line-height:1.55;margin:8px 0 0}
+.vc-ecran .vc-dl{width:100%;margin:0 0 8px;min-height:48px}
+.vc-ecran .vc-part{width:100%;margin:0 0 8px;min-height:44px}
+.vc-bouton{margin-top:10px}

@@ -2236,6 +2236,7 @@ function ouvrirReglagesAthlete(){
   // L'interrupteur du son reflète le dossier à chaque ouverture.
   try{ _majSonReglages(); }catch(e){}
   try{ _rendreReglagesPush(); }catch(e){}
+  try{ _majConsentementCoachReglages(); }catch(e){}
   const v=document.getElementById('cr-version');
   if(v) versionSW().then(x=>{ if(x) v.textContent='RepCore · '+x; });
   return true;
@@ -17253,6 +17254,392 @@ function renderEpingleAccueil(){
     +'onclick="go(\'s-athlete-profile\')">Ajouter ma photo</button></div>';
 }
 
+// ══ LES VISUELS DU COACH : « VICTOIRE DE LA SEMAINE » ET RÉCAP D'ÉQUIPE ══════
+//
+// Même épure que _dessinerBilanSeance (texte blanc, ombre en double passe,
+// fond au choix — idée 02), en story 1080×1920 ou en post 1080×1350. Pas de
+// QR : à la sortie, _storyCopierLien copie lienPerso(), qui mène un coach à sa
+// vitrine publique (/coach/<slug>).
+//
+// ⚠ LE NOM D'UN ATHLÈTE NE SORT QU'AVEC SON ACCORD. u.consentementPartageCoach
+//   = {date}, posé par l'athlète lui-même (réglages, ou son avant/après). Sans
+//   lui : anonyme, et seulement anonyme — le prénom et les initiales sont
+//   grisés, et le dessin les refuse de lui-même (vcNomAffiche).
+const VC_FORMATS=Object.freeze({story:{w:1080,h:1920,lib:'Story 9:16'},post:{w:1080,h:1350,lib:'Post 4:5'}});
+const VC_MODES=Object.freeze([{k:'prenom',lib:'Prénom'},{k:'initiales',lib:'Initiales'},{k:'anonyme',lib:'Anonyme'}]);
+function vcConsentement(u){ const c=u&&u.consentementPartageCoach; return !!(c&&Number(c.date)>0); }
+// PURE. Le nom sur le visuel, selon le mode — et l'accord.
+function vcNomAffiche(u,mode){
+  if(!u||mode==='anonyme'||!vcConsentement(u)) return '';
+  const net=x=>String(x||'').replace(/\s+/g,' ').trim();
+  const up=x=>{ try{ return x.toLocaleUpperCase('fr-FR'); }catch(e){ return x.toUpperCase(); } };
+  if(mode==='initiales'){
+    const i=[net(u.fname),net(u.lname)].filter(Boolean).map(x=>x[0]+'.');
+    return up(i.join(' '));
+  }
+  return up(net(u.fname).slice(0,24));
+}
+// PURE. Les victoires d'un athlète : pour chaque exercice, sa première meilleure
+// charge et sa meilleure charge aujourd'hui. Seulement ce qui a progressé, la
+// plus forte progression d'abord.
+function victoiresDe(u){
+  const ses=((u&&u.sessions)||[]).filter(s=>s&&s.date>0&&s.data&&typeof s.data==='object').slice().sort((a,b)=>a.date-b.date);
+  const ex={};
+  const cle=nm=>{ try{ return resoudreAlias(exKey(nm)); }catch(e){ return String(nm); } };
+  for(const s of ses){
+    for(const nm of Object.keys(s.data)){
+      let cur=0;
+      for(const st of (((s.data[nm]||{}).sets)||[])){
+        if(!st||st.done!==true) continue;
+        const w=parseFloat(st.weight)||0;
+        if(w>cur) cur=w;
+      }
+      if(!cur) continue;
+      const k=cle(nm);
+      const e=ex[k]||(ex[k]={exo:String(nm).trim(),avant:cur,depuis:s.date,apres:cur,le:s.date});
+      if(cur>e.apres){ e.apres=cur; e.le=s.date; e.exo=String(nm).trim(); }
+    }
+  }
+  return Object.keys(ex).map(k=>{
+    const e=ex[k];
+    return Object.assign({},e,{gain:Math.round((e.apres-e.avant)*10)/10,pct:Math.round((e.apres/e.avant-1)*100)});
+  }).filter(e=>e.apres>e.avant).sort((a,b)=>(b.pct-a.pct)||(b.le-a.le));
+}
+// PURE. Les données du dessin.
+function victoireDonnees(u,v,mode){
+  if(!v) return null;
+  let duree=''; try{ duree=aaEcart(v.depuis,v.le)+' DE SUIVI'; }catch(e){ duree=''; }
+  const up=x=>{ try{ return String(x).toLocaleUpperCase('fr-FR'); }catch(e){ return String(x).toUpperCase(); } };
+  return {exo:up(v.exo).slice(0,40),avant:v.avant,apres:v.apres,pct:v.pct,duree,nom:vcNomAffiche(u,mode)};
+}
+function _vcKg(v){ return String(Math.round(Number(v)*10)/10).replace('.',','); }
+// La marque et la ligne « COACHÉ AVEC REPCORE », communes aux deux visuels.
+// Rend la hauteur consommée.
+function _vcPied(g,o,y,W,marque,nomCoach,rouge){
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const cx=W/2, y0=y;
+  o.ombre(false);
+  g.strokeStyle='rgba(255,255,255,.5)'; g.lineWidth=2;
+  g.beginPath(); g.moveTo(W*0.3,y); g.lineTo(W*0.7,y); g.stroke();
+  o.ombre(true);
+  y+=36;
+  if(marque){
+    const MH=120, MW=W*0.5;
+    const r=Math.min(MW/marque.naturalWidth,MH/marque.naturalHeight);
+    const w=Math.round(marque.naturalWidth*r), h=Math.round(marque.naturalHeight*r);
+    try{ g.drawImage(marque,Math.round(cx-w/2),y,w,h); }catch(e){}
+    y+=h+30;
+  }else if(nomCoach){
+    g.fillStyle='#fff'; g.textAlign='center';
+    const s=o.ajuste(nomCoach,'700',64,BEBAS,W-144,30);
+    g.font='700 '+s+'px '+BEBAS; o.ecrire(nomCoach,cx,y+s*0.8);
+    y+=s+24;
+  }
+  g.fillStyle=rouge?'#fff':'rgba(255,255,255,.85)'; g.textAlign='center';
+  g.font='800 26px '+MONT; o.ecrireEspace('COACHÉ AVEC REPCORE',cx,y+26,8,true);
+  return y+40-y0;
+}
+function _vcMarque(){ try{ return _marqueCoachPrete(); }catch(e){ return null; } }
+function _vcNomCoach(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  const n=String((u&&(u.teamName||((u.fname||'')+' '+(u.lname||''))))||'').replace(/\s+/g,' ').trim();
+  try{ return n.toLocaleUpperCase('fr-FR'); }catch(e){ return n.toUpperCase(); }
+}
+/**
+ * « VICTOIRE DE LA SEMAINE » — l'exercice, avant → après, la durée du suivi,
+ * la marque du coach, « COACHÉ AVEC REPCORE ». `format` : 'story' | 'post'.
+ */
+function _dessinerVictoireCoach(d,fond,format){
+  const F=VC_FORMATS[format]||VC_FORMATS.story, W=F.w, H=F.h;
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const g=cv.getContext('2d');
+  const f=fond||'transparent', rouge=f==='rouge';
+  _visuelPeindreFond(g,W,H,f);
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const o=_visuelOutils(g), M=72, LARG=W-M*2, cx=W/2;
+  const marque=_vcMarque();
+  const ligne=_vcKg(d.avant)+' → '+_vcKg(d.apres)+' KG';
+  g.font='700 230px '+BEBAS;
+  const cs=o.ajuste(ligne,'700',format==='post'?200:230,BEBAS,LARG,90);
+  const hNom=d.nom?120:0;
+  const HTOT=64+hNom+84+cs*0.9+40+120+70+40+(marque?190:110)+40;
+  let y=Math.max(90,Math.round((H-HTOT)/2));
+  g.textAlign='center'; g.textBaseline='alphabetic';
+  o.ombre(true);
+  g.fillStyle=rouge?'#fff':'#E02020';
+  const ss=o.ajusteEspace('VICTOIRE DE LA SEMAINE','800',40,MONT,10,LARG,24);
+  g.font='800 '+ss+'px '+MONT; o.ecrireEspace('VICTOIRE DE LA SEMAINE',cx,y+ss,10,true);
+  y+=64;
+  if(d.nom){
+    g.fillStyle='#fff';
+    const ns=o.ajuste(d.nom,'700',110,BEBAS,LARG,48);
+    g.font='700 '+ns+'px '+BEBAS; o.ecrire(d.nom,cx,y+ns*0.82);
+    y+=hNom;
+  }
+  g.fillStyle='rgba(255,255,255,.92)';
+  const es=o.ajusteEspace(d.exo,'800',46,MONT,5,LARG,24);
+  g.font='800 '+es+'px '+MONT; o.ecrireEspace(d.exo,cx,y+es,5,true);
+  y+=84;
+  g.fillStyle='#fff'; g.font='700 '+cs+'px '+BEBAS; o.ecrire(ligne,cx,y+cs*0.82);
+  y+=cs*0.9+40;
+  if(d.pct>0){
+    g.fillStyle=rouge?'#fff':'#ff3b3b'; g.font='700 120px '+BEBAS;
+    o.ecrire('+'+d.pct+' %',cx,y+98);
+  }
+  y+=120;
+  if(d.duree){
+    g.fillStyle='rgba(255,255,255,.88)';
+    const ds=o.ajusteEspace(d.duree,'700',34,MONT,4,LARG,20);
+    g.font='700 '+ds+'px '+MONT; o.ecrireEspace(d.duree,cx,y+ds,4,true);
+  }
+  y+=70+40;
+  _vcPied(g,o,y,W,marque,_vcNomCoach(),rouge);
+  o.ombre(false);
+  return cv;
+}
+// ── Le récap d'équipe ──────────────────────────────────────────────────────
+// PURE. `athletes` : les dossiers ; `periode` : 'semaine' (7 jours) ou 'mois'
+// (30 jours). Les records sont des records de CHARGE (recordsDeSeance), comme
+// partout ailleurs. Le top 3 de régularité ne nomme qu'avec l'accord.
+function recapTeamDonnees(athletes,periode,maintenant,equipe){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const jours=periode==='mois'?30:7;
+  const debut=t-jours*864e5;
+  let seances=0, records=0, tonnage=0;
+  const reg=[];
+  for(const u of (athletes||[]).filter(Boolean)){
+    const tout=((u.sessions)||[]).filter(s=>s&&s.date>0).slice().sort((a,b)=>a.date-b.date);
+    let n=0;
+    for(let i=0;i<tout.length;i++){
+      const s=tout[i];
+      if(s.date<debut||s.date>t) continue;
+      n++;
+      try{ tonnage+=defiTonnageSeance(s); }catch(e){}
+      try{ records+=recordsDeSeance(s,tout.slice(0,i)).length; }catch(e){}
+    }
+    seances+=n;
+    if(n>0) reg.push({u,n});
+  }
+  reg.sort((a,b)=>b.n-a.n);
+  const top=reg.slice(0,3).map(x=>({nom:vcNomAffiche(x.u,'prenom')||'UN ATHLÈTE',n:x.n}));
+  let equivalent=null; try{ equivalent=equivalentTonnage(tonnage); }catch(e){ equivalent=null; }
+  return {titre:periode==='mois'?'LE MOIS DE LA TEAM':'LA SEMAINE DE LA TEAM',equipe:String(equipe||''),
+    seances,records,tonnage:Math.round(tonnage),equivalent,top};
+}
+function _dessinerRecapTeam(d,fond,format){
+  const F=VC_FORMATS[format]||VC_FORMATS.story, W=F.w, H=F.h;
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const g=cv.getContext('2d');
+  const f=fond||'transparent', rouge=f==='rouge';
+  _visuelPeindreFond(g,W,H,f);
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const o=_visuelOutils(g), M=72, LARG=W-M*2, cx=W/2;
+  const marque=_vcMarque();
+  const post=format==='post';
+  const hEq=d.equivalent?70:0, hTop=d.top.length?(70+d.top.length*62):0;
+  const HTOT=64+(d.equipe?110:0)+230+hEq+hTop+40+(marque?190:110);
+  let y=Math.max(70,Math.round((H-HTOT)/2));
+  g.textAlign='center'; g.textBaseline='alphabetic';
+  o.ombre(true);
+  g.fillStyle=rouge?'#fff':'#E02020';
+  const ss=o.ajusteEspace(d.titre,'800',40,MONT,10,LARG,24);
+  g.font='800 '+ss+'px '+MONT; o.ecrireEspace(d.titre,cx,y+ss,10,true);
+  y+=64;
+  if(d.equipe){
+    g.fillStyle='#fff';
+    const es=o.ajuste(d.equipe,'700',100,BEBAS,LARG,44);
+    g.font='700 '+es+'px '+BEBAS; o.ecrire(d.equipe,cx,y+es*0.82);
+    y+=110;
+  }
+  // LES TROIS CHIFFRES.
+  const ch=[{v:String(d.seances),l:'SÉANCES'},{v:String(d.records),l:d.records>1?'RECORDS':'RECORD'},
+    {v:d.tonnage>=1000?bilanVolumeLib(d.tonnage).toUpperCase():(d.tonnage+' KG'),l:'SOULEVÉS'}];
+  const cw=LARG/3;
+  ch.forEach((c,i)=>{
+    const x=M+cw*i+cw/2;
+    g.fillStyle='#fff';
+    const vs=o.ajuste(c.v,'700',post?130:150,BEBAS,cw-20,50);
+    g.font='700 '+vs+'px '+BEBAS; o.ecrire(c.v,x,y+150);
+    g.fillStyle='rgba(255,255,255,.8)'; g.font='800 24px '+MONT; o.ecrireEspace(c.l,x,y+196,5,true);
+  });
+  y+=230;
+  if(d.equivalent){
+    const t='= '+String(d.equivalent.texte).toUpperCase()+' '+d.equivalent.emoji;
+    g.fillStyle='#fff';
+    const es=o.ajuste(t,'800',38,MONT,LARG,20);
+    g.font='800 '+es+'px '+MONT; o.ecrire(t,cx,y+40);
+    y+=hEq;
+  }
+  if(d.top.length){
+    y+=10;
+    g.fillStyle=rouge?'#fff':'#ff3b3b'; g.font='800 28px '+MONT;
+    o.ecrireEspace('TOP RÉGULARITÉ',cx,y+28,8,true);
+    y+=60;
+    d.top.forEach((x,i)=>{
+      const t=(i+1)+'.  '+x.nom+'  ·  '+x.n+' SÉANCE'+(x.n>1?'S':'');
+      g.fillStyle=i===0?'#fff':'rgba(255,255,255,.88)';
+      const ts=o.ajuste(t,'700',56,BEBAS,LARG,28);
+      g.font='700 '+ts+'px '+BEBAS; o.ecrire(t,cx,y+46);
+      y+=62;
+    });
+  }
+  y+=40;
+  _vcPied(g,o,y,W,marque,d.equipe?'':_vcNomCoach(),rouge);
+  o.ombre(false);
+  return cv;
+}
+// ── L'ÉCRAN : aperçu, réglages, fond, Télécharger / Partager ──────────────
+let _vc=null;   // {type:'victoire'|'recap', u?, victoires?, i, mode, format, periode}
+function _vcDonnees(){
+  if(!_vc) return null;
+  if(_vc.type==='victoire') return victoireDonnees(_vc.u,_vc.victoires[_vc.i],vcConsentement(_vc.u)?_vc.mode:'anonyme');
+  const u=currentUser;
+  const ath=Object.values(DB.get('users')||{}).filter(x=>x&&x.role==='athlete'&&_estMonAthlete(x,u));
+  return recapTeamDonnees(ath,_vc.periode,Date.now(),String((u&&u.teamName)||'').trim().toUpperCase());
+}
+function _vcDessiner(fond){
+  const d=_vcDonnees(); if(!d) return null;
+  return _vc.type==='victoire'?_dessinerVictoireCoach(d,fond,_vc.format):_dessinerRecapTeam(d,fond,_vc.format);
+}
+function _vcNomFichier(fond){ return visuelNomFichier(_vc&&_vc.type==='recap'?'repcore-team':'repcore-victoire',fond); }
+function ouvrirVictoireCoach(cid){
+  let u=null; try{ u=getOwnedClient(cid||currentClientId); }catch(e){ u=null; }
+  if(!u) return false;
+  const v=victoiresDe(u);
+  if(!v.length){ toast('Pas encore de progression de charge à partager.','var(--orange)'); return false; }
+  _vc={type:'victoire',u,victoires:v,i:0,mode:vcConsentement(u)?'prenom':'anonyme',format:'story'};
+  _vcOuvrir();
+  return true;
+}
+function ouvrirRecapTeam(){
+  if(!currentUser||currentUser.role!=='coach') return false;
+  _vc={type:'recap',periode:'semaine',format:'story'};
+  _vcOuvrir();
+  return true;
+}
+function _vcOuvrir(){
+  fermerVisuelCoach();
+  try{ _prechaufferMarqueCoach(); }catch(e){}
+  const z=document.createElement('div');
+  z.id='vc-ecran'; z.className='aa-ecran vc-ecran';
+  z.setAttribute('role','dialog'); z.setAttribute('aria-modal','true');
+  z.setAttribute('aria-label',_vc.type==='victoire'?'Partager une victoire':'Récap de l’équipe');
+  z.tabIndex=-1;
+  z.addEventListener('keydown',e=>{ if(e.key==='Escape'){ e.preventDefault(); fermerVisuelCoach(); } });
+  document.body.appendChild(z);
+  _vcRendre();
+  try{ z.focus({preventScroll:true}); }catch(e){}
+}
+function fermerVisuelCoach(){
+  const z=document.getElementById('vc-ecran'); if(z) z.remove();
+  try{ _visuelFondsMontes.delete('vc-fonds'); }catch(e){}
+  return true;
+}
+// PURE. Les réglages de l'écran.
+function htmlReglagesVisuelCoach(vc){
+  const seg=(nom,val,liste)=>'<div class="aa-seg" role="group">'+liste.map(([k,lib,dis])=>'<button type="button"'
+    +(dis?' disabled':'')+' aria-pressed="'+(val===k)+'" onclick="vcReglage(\''+nom+'\',\''+k+'\')">'+escapeHtml(lib)+'</button>').join('')+'</div>';
+  let h='';
+  if(vc.type==='victoire'){
+    const cons=vcConsentement(vc.u);
+    h+='<label class="vc-l" for="vc-exo">Victoire</label><select id="vc-exo" onchange="vcReglage(\'i\',this.value)">'
+      +vc.victoires.slice(0,20).map((v,i)=>'<option value="'+i+'"'+(i===vc.i?' selected':'')+'>'
+        +escapeHtml(v.exo+' · '+_vcKg(v.avant)+' → '+_vcKg(v.apres)+' kg (+'+v.pct+' %)')+'</option>').join('')+'</select>'
+      +'<div class="vc-l">Nom</div>'+seg('mode',cons?vc.mode:'anonyme',VC_MODES.map(m=>[m.k,m.lib,!cons&&m.k!=='anonyme']))
+      +(cons?'':'<p class="vc-note">Sans l’accord de '+escapeHtml(vc.u.fname||'l’athlète')+', la victoire se partage anonyme. Il peut l’accorder dans ses réglages.</p>');
+  }else{
+    h+='<div class="vc-l">Période</div>'+seg('periode',vc.periode,[['semaine','7 derniers jours'],['mois','30 derniers jours']])
+      +'<p class="vc-note">Les prénoms du top 3 n’apparaissent qu’avec l’accord de chacun ; sinon « un athlète ».</p>';
+  }
+  h+='<div class="vc-l">Format</div>'+seg('format',vc.format,Object.keys(VC_FORMATS).map(k=>[k,VC_FORMATS[k].lib]));
+  return h;
+}
+function _vcRendre(){
+  const z=document.getElementById('vc-ecran'); if(!z||!_vc) return;
+  const part=(typeof navigator!=='undefined'&&navigator.share)
+    ?'<button type="button" class="btn btn-outline btn-casse vc-part" onclick="vcSortir(\'partager\',this)">'+icon('share',16)+' <span>Partager</span></button>':'';
+  z.innerHTML='<div class="aa-haut"><span>'+(_vc.type==='victoire'?'Victoire de '+escapeHtml(_vc.u.fname||'l’athlète'):'Récap de l’équipe')+'</span>'
+    +'<button type="button" class="aa-fermer" aria-label="Fermer" onclick="fermerVisuelCoach()">✕</button></div>'
+    +'<div class="aa-apercu"><canvas id="vc-canvas" aria-label="Aperçu de l’image"></canvas></div>'
+    +'<div class="aa-bas">'
+    +'<button type="button" class="btn btn-red vc-dl" onclick="vcSortir(\'telecharger\',this)">'+icon('download',18)+' <span>Télécharger</span></button>'+part
+    +'<details class="aa-perso" open><summary>Réglages</summary>'+htmlReglagesVisuelCoach(_vc)
+    +'<div class="vc-l">Fond</div>'+_htmlVisuelFonds('vc-fonds')
+    +'<div class="rcf-note" id="vc-note"></div></details></div>';
+  monterSelecteurFond('vc-fonds',f=>{
+    const cv=_vcDessiner(f);
+    // Le fond choisi repeint aussi l'aperçu.
+    if(f===visuelFondEffectif()) setTimeout(_vcApercu,0);
+    return cv;
+  },'vc-note');
+  _vcApercu();
+}
+function _vcApercu(){
+  const c=document.getElementById('vc-canvas'); if(!c||!_vc) return;
+  const v=_vcDessiner(visuelFondEffectif()); if(!v) return;
+  c.width=v.width; c.height=v.height;
+  const x=c.getContext('2d');
+  if(visuelFondEffectif()==='transparent'){ x.fillStyle='#1c1c20'; x.fillRect(0,0,c.width,c.height); }
+  x.drawImage(v,0,0);
+  v.width=0; v.height=0;
+}
+function vcReglage(nom,val){
+  if(!_vc) return false;
+  if(nom==='i') _vc.i=Math.max(0,Math.min(_vc.victoires.length-1,Number(val)||0));
+  else if(nom==='mode'){ if(val!=='anonyme'&&!vcConsentement(_vc.u)) return false; _vc.mode=val; }
+  else if(nom==='format'&&VC_FORMATS[val]) _vc.format=val;
+  else if(nom==='periode'&&(val==='semaine'||val==='mois')) _vc.periode=val;
+  _vcRendre();
+  return true;
+}
+// SYNCHRONE jusqu'à la sortie : un await consommerait le geste, et iOS
+// refuserait le partage. La sortie copie lienPerso() — la vitrine du coach.
+function vcSortir(quoi,btn){
+  if(!_vc||_storyEnCours) return false;
+  const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond), nom=_vcNomFichier(fond);
+  _storyEnCours=true;
+  let ok=false;
+  try{
+    if(quoi==='partager') ok=_storySortirPartage(_vcDessiner(fond),nom,undefined,fmt);
+    if(!ok) ok=_storySortirTelechargement(_vcDessiner(fond),nom,fmt);
+  }catch(e){ toast('Export impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
+  finally{ _storyEnCours=false; }
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp&&ok){ const l=sp.textContent; sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  try{ if(ok) rcm(_vc&&_vc.type==='recap'?'coach_recap_partage':'coach_victoire_partage'); }catch(e){}
+  return ok;
+}
+// Les boutons, là où ils servent.
+function htmlBoutonVictoire(u){
+  let v=[]; try{ v=victoiresDe(u); }catch(e){ v=[]; }
+  if(!v.length) return '';
+  const b=v[0];
+  return '<button type="button" class="aa-bouton vc-bouton" onclick="ouvrirVictoireCoach(\''+escapeHtml(String(u.id||''))+'\')">'
+    +'<span class="aa-bouton-i" aria-hidden="true">'+icon('zap',18)+'</span>'
+    +'<span><b>Partager une victoire</b><span>'+escapeHtml(b.exo+' : '+_vcKg(b.avant)+' → '+_vcKg(b.apres)+' kg')+'</span></span></button>';
+}
+function _rendreBoutonVictoire(u){
+  const z=document.getElementById('ccd-victoire');
+  if(!z) return;
+  z.innerHTML=htmlBoutonVictoire(u);
+}
+// L'accord de l'athlète, dans ses réglages : c'est le même que celui de son
+// avant/après (u.consentementPartageCoach), et il couvre désormais aussi les
+// victoires et le récap d'équipe.
+function _majConsentementCoachReglages(){
+  const z=document.getElementById('cr-partage-coach');
+  if(!z) return;
+  const u=currentUser;
+  if(!u||u.role!=='athlete'||!(u.coachId||u.coachEmailKey)){ z.innerHTML=''; return; }
+  z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:18px">'
+    +'<label for="cr-partage-case" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0;text-transform:none;letter-spacing:normal;font-weight:400;color:var(--text)">'
+    +'<input type="checkbox" id="cr-partage-case"'+(vcConsentement(u)?' checked':'')+' onchange="aaConsentementCoach(this.checked);_majConsentementCoachReglages()" style="width:18px;height:18px;accent-color:#E02020;flex-shrink:0;margin-top:2px;cursor:pointer">'
+    +'<span style="flex:1;min-width:0"><span style="display:block;font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Mon coach peut partager mes progrès</span>'
+    +'<span style="display:block;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Tes victoires, ton prénom dans le récap de l’équipe, ton avant/après. Sans cet accord, ce qu’il partage reste anonyme.</span></span></label></div>';
+}
 // ══ LE LIEN PERSO ET LES PAGES PUBLIQUES ════════════════════════════════════
 //
 // Deux pages HORS DE L'APP, servies par l'hébergement et rendues en moins
@@ -25262,6 +25649,8 @@ function openClientDetail(cid,_refresh,_force){
     saveUser();
   }
   try{ _majBoutonBilan(c); }catch(e){}
+  // « Partager une victoire » : sa meilleure progression de charge.
+  try{ _rendreBoutonVictoire(c); }catch(e){}
   const _pq=document.getElementById('ccd-pourquoi');
   if(_pq) _pq.innerHTML=_htmlPourquoiIci(c);
   document.getElementById('ccd-badge').innerHTML=c._fromCode
@@ -39548,7 +39937,11 @@ function bilanVolumeLib(kg){
 let _marqueCoachImg=null;
 function _prechaufferMarqueCoach(){
   try{
-    const src=(typeof marqueCoachDe==='function')?marqueCoachDe(currentUser):'';
+    // LE COACH LUI-MÊME (victoire, récap d'équipe) signe avec SA marque ; un
+    // athlète, avec celle de son coach.
+    const src=(currentUser&&currentUser.role==='coach')
+      ?String(currentUser.logo||currentUser.signature||'')
+      :((typeof marqueCoachDe==='function')?marqueCoachDe(currentUser):'');
     if(!src){ _marqueCoachImg=null; return; }
     if(_marqueCoachImg&&_marqueCoachImg.getAttribute('data-src')===src) return;
     const im=new Image();
@@ -70862,7 +71255,7 @@ function _aaRendreEcran(){
       +'<label class="aa-case"><input type="checkbox"'+(o.flou?' checked':'')+' onchange="aaReglage(\'flou\',this.checked)"> Flouter le visage</label>'
       +'<label class="aa-case"><input type="checkbox"'+(o.poids?' checked':'')+' onchange="aaReglage(\'poids\',this.checked)"> Afficher le poids</label>'
       +((role!=='coach'&&u&&u.coachId)
-        ?'<label class="aa-case"><input type="checkbox"'+(cons?' checked':'')+' onchange="aaConsentementCoach(this.checked)"> Autoriser mon coach à exporter mon avant/après</label>':'')
+        ?'<label class="aa-case"><input type="checkbox"'+(cons?' checked':'')+' onchange="aaConsentementCoach(this.checked)"> Autoriser mon coach à partager mes progrès</label>':'')
       +'<p class="aa-local">Tout est composé sur ton téléphone : aucune photo n’est envoyée.</p>'
     +'</details></div>';
 }
@@ -70888,7 +71281,7 @@ function aaConsentementCoach(on){
   const u=currentUser; if(!u) return false;
   u.consentementPartageCoach=on?{date:Date.now()}:null;
   try{ saveUser(); }catch(e){}
-  toast(on?'Ton coach peut exporter ton avant/après.':'Ton coach ne peut plus exporter ton avant/après.');
+  toast(on?'Ton coach peut partager tes progrès.':'Ton coach ne peut plus partager tes progrès sous ton nom.');
   return true;
 }
 // Les données du dessin pour les réglages courants (images comprises).
