@@ -20452,7 +20452,7 @@ async function testExercices(){
       for(const interdit of ['await ','fetch(','new Image','XMLHttpRequest','import(']) 
         if(s.indexOf(interdit)>=0) return _echec(interdit+' dans le chemin du dessin');
       if(/^async/.test(String(_dessinerStorySeance))) return _echec('le dessin est asynchrone');
-      const m=_qrMatrice(RC_URL_VITRINE);
+      const m=_qrMatrice(urlQrSeance());
       if(!m) return _echec('aucune matrice');
       if(m.length!==m[0].length) return _echec('matrice non carrée : '+m.length+'×'+m[0].length);
       if((m.length-17)%4!==0) return _echec('taille hors norme : '+m.length);
@@ -20483,10 +20483,10 @@ async function testExercices(){
       // rendu de reference — s'ils divergent, c'est le dessin qui a tort.
       const cv=_dessinerStorySeance({sel:0,todayIdx:0,sc:[{active:true}],coach:'K',
         titre:'L',repos:'',ex:[{n:'A',d:'1×1'}],coupes:0});
-      const m=_qrMatrice(RC_URL_VITRINE);
+      const m=_qrMatrice(urlQrSeance());
       if(!m) return _echec('aucune matrice');
       const total=m.length+8, pas=Math.max(2,Math.round(96/total)), cote=total*pas;
-      const ref=RepCoreQR.versCanvas(RC_URL_VITRINE,cote);
+      const ref=RepCoreQR.versCanvas(urlQrSeance(),cote);
       if(!ref||ref.width!==cote) return _echec('référence de taille '+(ref&&ref.width)+' pour '+cote);
       const A=cv.getContext('2d').getImageData(cv.width-52-cote,
         Math.round(cv.height-132+(132-cote)/2),cote,cote).data;
@@ -20643,14 +20643,15 @@ async function testExercices(){
         return _echec('story_partagee n’est pas émis');
       return true;})());
 
-    ok('RC_URL_VITRINE est le lien court, et il mène quelque part',(()=>{
+    // DEPUIS LES PAGES PUBLIQUES (26/09/2026) : RC_URL_VITRINE est leur
+    // racine, et le QR encode le lien perso (urlQrSeance).
+    ok('RC_URL_VITRINE est la racine des pages publiques, et le QR mène quelque part',(()=>{
       if(typeof RC_URL_VITRINE!=='string'||!RC_URL_VITRINE)
         return _echec('constante absente ou vide');
-      if(RC_URL_VITRINE!==RC_LIEN_COURT)
-        return _echec('ce n’est pas le lien du flyer : '+RC_URL_VITRINE);
-      // Un QR qui ne mene nulle part est pire que pas de QR : la constante doit
-      // toujours produire une adresse encodable.
-      return _qrMatrice(RC_URL_VITRINE)?true:_echec('le lien n’est pas encodable : '+RC_URL_VITRINE);})());
+      const attendu=/\/i$/.test(RC_LIEN_COURT)?RC_LIEN_COURT.replace(/\/i$/,''):APP_BASE_URL.replace(/app\/$/,'');
+      if(RC_URL_VITRINE!==attendu) return _echec('racine inattendue : '+RC_URL_VITRINE);
+      // Un QR qui ne mene nulle part est pire que pas de QR.
+      return _qrMatrice(urlQrSeance())?true:_echec('le lien n’est pas encodable : '+urlQrSeance());})());
 
     ok('La pastille de vente DIT l’état, elle ne le change pas',(()=>{
       const _sU=currentUser;
@@ -48636,11 +48637,11 @@ async function testExercices(){
       if(!/^JULIE[A-Z2-9]{3}$/.test(a)||!/^ELOR/.test(b)||!/^MAXIMI[A-Z2-9]{3}$/.test(c)||!/^REPC/.test(d)) return _echec([a,b,c,d].join());
       for(let i=0;i<200;i++){ const x=parrainageCodeDe('Léa-Marie'); if(!PARRAINAGE_CODE_RE.test(x)||/[01IO]$|[01IO].$|[01IO]..$/.test(x.slice(-3))) return _echec(x); }
       return true;})());
-    ok('Parrainage : le lien personnel, RC_LIEN_COURT + ?ref=, et rien sans code ni fonctions',(()=>{
+    ok('Parrainage : le lien personnel porte ?ref= quand il y a un code, et pas sinon',(()=>{
       const u={parrainage:{code:'JULIE7K2'}};
-      const l=lienPerso(u,true);
+      const l=lienPerso('',u);
       if(l!==RC_LIEN_COURT+(RC_LIEN_COURT.indexOf('?')>=0?'&':'?')+'ref=JULIE7K2') return _echec(l);
-      if(lienPerso({},true)!==''||lienPerso(u,false)!=='') return _echec('lien sans code ou fonctions éteintes');
+      if(lienPerso('',{})!==RC_LIEN_COURT) return _echec('lien sans code : '+lienPerso('',{}));
       const m=parrainageMessage('JULIE7K2',l);
       return (m.indexOf('JULIE7K2')>=0&&m.indexOf(l)>=0&&/2 mois/.test(m))?true:_echec(m);})());
     ok('Parrainage : /i/ garde ?ref= jusqu’à /app/, y compris dans Instagram',(()=>{
@@ -48730,6 +48731,81 @@ async function testExercices(){
     ok('Parrainage : le miroir est classé non-santé, et l’entrée reste fermée sans fonctions serveur',(()=>{
       if(CHAMPS_NON_SANTE.indexOf('parrainage')<0) return _echec('non classé');
       return PARRAINAGE_ACTIF===FONCTIONS_SERVEUR?true:_echec('PARRAINAGE_ACTIF découplé de FONCTIONS_SERVEUR');})());
+
+    // ── LE LIEN PERSO ET LES PAGES PUBLIQUES ────────────────────────────
+    const _PPU=o=>Object.assign({role:'athlete',email:'j@t.fr',fname:'Julie',sessions:[],parrainage:{code:'JULIE7K2'}},o||{});
+    ok('Pages : lienPerso — la page /@pseudo (ou p/?u=), ref et src',(()=>{
+      const fb=/\/i$/.test(RC_LIEN_COURT), base=RC_URL_VITRINE.replace(/\/$/,'');
+      const u=_PPU({pagePublique:{pseudo:'julie.fit',active:true}});
+      const page=fb?base+'/@julie.fit':base+'/p/?u=julie.fit';
+      const l=lienPerso('seance',u);
+      if(l!==page+(page.indexOf('?')>=0?'&':'?')+'ref=JULIE7K2&src=seance') return _echec(l);
+      const c={role:'coach',email:'k@t.fr',vitrineSlug:'kevin-guellec',vitrinePubliee:true};
+      if(lienPerso('bio',c)!==(fb?base+'/coach/kevin-guellec?src=bio':base+'/c/?s=kevin-guellec&src=bio')) return _echec(lienPerso('bio',c));
+      // Page éteinte : le lien court, toujours avec le code.
+      const off=lienPerso('qr',_PPU({pagePublique:{pseudo:'julie.fit',active:false}}));
+      return off===RC_LIEN_COURT+'?ref=JULIE7K2&src=qr'?true:_echec(off);})());
+    ok('Pages : le pseudo public — 3 à 20 caractères, minuscules, chiffres, point, tiret bas',(()=>{
+      const bons=['abc','julie.fit','j_2','a'.repeat(20)], mauvais=['ab','a'.repeat(21),'Julie','.julie','julie.','jul ie','ju/lie','é'];
+      const b=bons.filter(x=>!PSEUDO_PUBLIC_RE.test(x)), m=mauvais.filter(x=>PSEUDO_PUBLIC_RE.test(x));
+      if(b.length||m.length) return _echec(JSON.stringify({b,m}));
+      return pseudoPublicNormalise(' @Julie.Fit ')==='julie.fit'?true:_echec('normalisation');})());
+    ok('Pages : la page publique ne porte JAMAIS de poids, de photo ni de donnée de santé',(()=>{
+      const J=864e5, t0=Date.parse('2026-01-05T18:00:00Z');
+      const S=(j,w)=>({date:t0+j*J,data:{'SQUAT':{sets:[{weight:String(w),reps:'5',done:true}]}}});
+      const u=_PPU({sessions:[S(0,100),S(2,105),S(4,110)],weightLog:[{kg:82}],athletePhoto:'https://x/p.jpg',
+        bilans:[{date:t0,poids:80}],sleepLog:[{date:'2026-01-05',duration:7}],pseudo:'Juju'});
+      const d=pagePubliqueDonnees(u,{rang:true,serie:true,badges:true,records:true,seances:true},t0+9*J);
+      const permis=['prenom','rang','serie','seances','badges','records','ref','maj'];
+      const trop=Object.keys(d).filter(k=>permis.indexOf(k)<0);
+      if(trop.length) return _echec('champs en trop : '+trop.join());
+      const txt=JSON.stringify(d);
+      if(/\b(100|105|110|82|80)\b/.test(txt.replace(/"date":\d+|"maj":\d+/g,''))||/photo|poids|kg/i.test(txt)) return _echec('une charge ou une mesure fuit : '+txt);
+      if(!d.records||d.records.length!==1||d.records[0].exo!=='SQUAT'||Object.keys(d.records[0]).join()!=='exo,date') return _echec('records : '+JSON.stringify(d.records));
+      const rien=pagePubliqueDonnees(u,{},t0);
+      return (Object.keys(rien).sort().join()==='maj,prenom,ref')?true:_echec('sans choix : '+Object.keys(rien).join());})());
+    ok('Pages : la vitrine publique — sans base64, sans coordonnées, en https seulement',(()=>{
+      const c={role:'coach',fname:'Kévin',lname:'Guellec',teamName:'Team K',catchphrase:'La force.',bio:'B',vision:'V',
+        coachPhoto:'data:image/png;base64,AAAA',photoVitrine:'https://res.cloudinary.com/k.jpg',phone:'0600000000',
+        specialites:'Force, perte de poids ; prépa',contact:{mode:'whatsapp'},canalEpingle:{texte:'privé'},
+        coachPrograms:[]};
+      const v=vitrinePubliqueDonnees(c,5);
+      const permis=['nom','equipe','phrase','bio','vision','photo','specialites','programmes','maj'];
+      const trop=Object.keys(v).filter(k=>permis.indexOf(k)<0);
+      if(trop.length) return _echec('champs en trop : '+trop.join());
+      if(v.photo!=='https://res.cloudinary.com/k.jpg'||/base64|0600|privé/.test(JSON.stringify(v))) return _echec(JSON.stringify(v));
+      if(v.specialites.join('|')!=='Force|perte de poids|prépa'||v.nom!=='Kévin Guellec') return _echec('spécialités ou nom');
+      return (slugDe('Kévin','Guellec')==='kevin-guellec'&&SLUG_PUBLIC_RE.test(slugDe('Jo','')))?true:_echec('slug');})());
+    ok('Pages : le partage d’un visuel copie le lien perso, avec son type (src)',(()=>{
+      if(srcDuVisuel('repcore-seance.png')!=='seance'||srcDuVisuel('repcore-cycle-rouge.jpg')!=='cycle'||srcDuVisuel('x.png')!=='visuel') return _echec('src');
+      const a=String(_storySortirPartage), b=String(_storySortirTelechargement);
+      if(a.indexOf('_storyCopierLien(srcDuVisuel(nomFichier))')<0||b.indexOf('_storyCopierLien(srcDuVisuel(nomFichier))')<0) return _echec('copie absente d’une sortie');
+      return /Sticker > Lien > coller/.test(String(_storyCopierLien))?true:_echec('toast');})());
+    ok('Pages : le tuto du sticker Lien — trois étapes, images fixes, une seule fois',(()=>{
+      const d=document.createElement('div'); d.innerHTML=htmlTutoSticker();
+      if(d.querySelectorAll('.tsk-etape').length!==3) return _echec('étapes');
+      if(d.querySelector('video,img[src$=".gif"]')) return _echec('une vidéo ou un gif');
+      let v=null; try{ v=localStorage.getItem(TUTO_STICKER_CLE); localStorage.setItem(TUTO_STICKER_CLE,'1'); }catch(e){}
+      try{ if(montrerTutoSticker()) return _echec('montré deux fois'); }
+      finally{ try{ if(v==null) localStorage.removeItem(TUTO_STICKER_CLE); else localStorage.setItem(TUTO_STICKER_CLE,v); }catch(e){} fermerTutoSticker(); }
+      return true;})());
+    ok('Pages : réglages du profil — désactivée par défaut, cinq choix, le lien de la bio',(()=>{
+      const d=document.createElement('div'); d.innerHTML=htmlReglagesPagePublique(_PPU());
+      if(d.querySelector('#pp-active').checked) return _echec('page activée par défaut');
+      if(d.querySelectorAll('[data-montrer]').length!==5) return _echec('choix');
+      if(!/Copier mon lien pour ma bio Instagram/.test(d.textContent)) return _echec('bouton bio');
+      return d.querySelectorAll('button.btn:not(.btn-casse)').length===0?true:_echec('R31 : bouton en capitales');})());
+    ok('Pages : pages publiques et réécritures présentes, lecture publique bornée',(()=>{
+      const lire=u=>{ try{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; }catch(e){ return ''; } };
+      const p=lire('../p/index.html'), c=lire('../c/index.html'), fj=lire('../firebase.json');
+      if(!/profils_publics/.test(p)||!/<!--og:debut-->[\s\S]*og:image[\s\S]*<!--og:fin-->/.test(p)) return _echec('p/index.html');
+      if(!/\/vitrines\//.test(c)||!/Commencer avec/.test(c)) return _echec('c/index.html');
+      if(/<script[^>]+src=|<link[^>]+stylesheet/.test(p+c)) return _echec('une ressource externe bloquante');
+      if(p.length>12000||c.length>12000) return _echec('pages trop lourdes');
+      if(fj&&(!/"source": "\/@\*"/.test(fj)||!/"source": "\/coach\/\*"/.test(fj))) return _echec('réécritures');
+      return true;})());
+    ok('Pages : réglages publics classés non-santé',
+      ['pagePublique','vitrineSlug','vitrinePubliee','specialites'].every(k=>CHAMPS_NON_SANTE.indexOf(k)>=0));
 
     ok('Les badges n’ont que quatre points d’appel',(()=>{
       const s=_prodSrc().replace(/\/\/[^\r\n]*/g,'');

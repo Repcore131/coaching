@@ -1613,3 +1613,43 @@ async function parrainagePaiement(cle, source) {
     title: txt.title, body: txt.body });
   return res;
 }
+
+// ══ LES PAGES PUBLIQUES, AVEC LEUR APERÇU (Open Graph) ════════════════════
+//
+// /@<pseudo> et /coach/<slug> sont des pages STATIQUES (p/ et c/), servies
+// telles quelles par l'hébergement. Leur aperçu dans un DM Instagram ou
+// WhatsApp est celui par défaut : les robots n'exécutent pas le script qui
+// remplit la page.
+//
+// CETTE FONCTION SERT LA MÊME PAGE AVEC L'APERÇU DE LA PERSONNE : prénom et
+// rang (image : l'emblème du rang, app/img/rangs/rang_<n>-og.jpg), ou nom,
+// phrase et photo du coach. Le gabarit est relu sur l'hébergement lui-même
+// (une seule page à maintenir), gardé dix minutes en mémoire.
+//
+// ⚠ ELLE NE SERT QUE SI firebase.json LUI CONFIE LES DEUX CHEMINS — voir le
+//   commentaire « //pages » de firebase.json. Plan Blaze.
+const OG = require("./pages-og");
+const _gabarits = {};
+async function _gabarit(dossier) {
+  const g = _gabarits[dossier];
+  if (g && Date.now() - g.t < 600e3) return g.html;
+  const r = await fetch(OG.ORIGINE + "/" + dossier + "/index.html");
+  if (!r.ok) throw new Error("gabarit " + dossier + " : " + r.status);
+  const html = await r.text();
+  _gabarits[dossier] = { t: Date.now(), html };
+  return html;
+}
+exports.pagePublique = onRequest({ cors: false, memory: "256MiB" }, async (req, res) => {
+  const c = OG.analyserChemin(req.path);
+  const dossier = c && c.type === "coach" ? "c" : "p";
+  let html;
+  try { html = await _gabarit(dossier); }
+  catch (e) { res.redirect(302, OG.ORIGINE + "/i"); return; }
+  let o = null;
+  try {
+    if (c && c.type === "athlete") o = OG.ogAthlete(c.cle, await _val("profils_publics/" + c.cle));
+    else if (c && c.type === "coach") o = OG.ogCoach(c.cle, await _val("vitrines/" + c.cle));
+  } catch (e) { o = null; }
+  res.set("Cache-Control", "public, max-age=300, s-maxage=600");
+  res.status(200).send(OG.injecterOg(html, o));
+});

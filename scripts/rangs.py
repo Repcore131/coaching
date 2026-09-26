@@ -21,6 +21,9 @@ SORTIE, dans app/img/rangs/ :
                         elles entrent dans le cache du service worker ;
     rang_<n>-512.webp   512×512 — l'écran de passage de rang et la carte
                         1080×1920.
+    rang_<n>-og.jpg     1200×630 — l'aperçu Open Graph de la page publique
+                        /@<pseudo> (DM Instagram, WhatsApp) : JPEG, que les
+                        deux lisent partout, sur un fond sombre et rouge.
 
 Et la liste EMBLEMES_RANGS de app/sw.js est réécrite entre ses deux marqueurs
 (// rangs.py:debut … // rangs.py:fin), avec les deux tailles : l'écran de
@@ -87,6 +90,25 @@ def decouper_planche(chemin):
     return faits
 
 
+def apercu_og(im):
+    """1200×630 : un halo rouge sur fond presque noir, l'emblème au centre."""
+    W, H = 1200, 630
+    fond = Image.new('RGB', (W, H), (11, 11, 12))
+    halo = Image.new('L', (W, H), 0)
+    hp = halo.load()
+    cx, cy, r = W / 2, H / 2, 420.0
+    for y in range(H):
+        for x in range(0, W):
+            d = ((x - cx) ** 2 + (y - cy) ** 2) ** 0.5 / r
+            if d < 1:
+                hp[x, y] = int(150 * (1 - d) ** 2)
+    rouge = Image.new('RGB', (W, H), (224, 32, 32))
+    fond = Image.composite(rouge, fond, halo)
+    e = ajuster(im, (540, 540))
+    fond.paste(e, ((W - 540) // 2, (H - 540) // 2), e)
+    return fond
+
+
 def maj_sw(verifier):
     s = open(SW, encoding='utf-8', newline='').read()
     deb, fin = '// rangs.py:debut', '// rangs.py:fin'
@@ -126,7 +148,9 @@ def main():
         if not verifier:
             ajuster(im, PETIT).save(p, 'WEBP', quality=84, alpha_quality=90, method=6)
             ajuster(im, GRAND).save(g, 'WEBP', quality=86, alpha_quality=92, method=6)
-            print('rang %-2d  %6d o  %6d o' % (n, os.path.getsize(p), os.path.getsize(g)))
+            o = os.path.join(SORTIE, 'rang_%d-og.jpg' % n)
+            apercu_og(im).save(o, 'JPEG', quality=85, optimize=True, progressive=True)
+            print('rang %-2d  %6d o  %6d o  %6d o' % (n, os.path.getsize(p), os.path.getsize(g), os.path.getsize(o)))
     if maj_sw(verifier):
         print('sw.js    EMBLEMES_RANGS : %d emblèmes × 2 tailles' % N)
 

@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>RepCore</title>
+<!-- LA PAGE PUBLIQUE D'UN ATHLETE : /@<pseudo> (reecriture firebase.json), ou
+     p/?u=<pseudo> la ou il n'y a pas de reecriture (GitHub Pages).
+     AUTONOME ET LEGERE, C'EST TOUT SON CAHIER DES CHARGES : ni l'app, ni une
+     police, ni une bibliotheque — une requete a /profils_publics/<pseudo>
+     (lecture publique, champs publics seulement : database.rules.json), et le
+     rendu. Moins d'une seconde sur un telephone en 4G.
+     Les balises og: entre les deux marqueurs sont l'apercu PAR DEFAUT ; la
+     fonction pagePublique (functions/index.js) les remplace par celles de
+     l'athlete quand les pages lui sont confiees (plan Blaze). -->
+<!--og:debut-->
+<meta property="og:type" content="profile">
+<meta property="og:site_name" content="RepCore">
+<meta property="og:title" content="Rejoins-moi sur RepCore">
+<meta property="og:description" content="Ma progression, séance après séance. Rejoins-moi sur RepCore ⚡">
+<meta property="og:image" content="https://repcore-sync.web.app/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<!--og:fin-->
+<meta name="theme-color" content="#0b0b0c">
+<link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
+<style>
+:root{--rouge:#E02020;--fond:#0b0b0c;--carte:#151518;--bord:#2a2a2e;--gris:#a1a1aa}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--fond);color:#fff;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+main{max-width:480px;margin:0 auto;padding:28px 18px calc(28px + env(safe-area-inset-bottom,0px))}
+.emb{display:block;width:170px;height:170px;margin:0 auto 6px;object-fit:contain;filter:drop-shadow(0 0 24px rgba(224,32,32,.55))}
+.pseudo{text-align:center;color:var(--gris);font-size:14px;letter-spacing:.5px}
+h1{text-align:center;font-size:34px;line-height:1.1;margin:4px 0 2px;letter-spacing:.5px}
+.rang{text-align:center;color:#ff3b3b;font-weight:800;letter-spacing:3px;font-size:13px;text-transform:uppercase}
+.chiffres{display:flex;gap:10px;margin:22px 0 8px}
+.chiffres div{flex:1;background:var(--carte);border:1px solid var(--bord);border-radius:12px;padding:12px 8px;text-align:center}
+.chiffres b{display:block;font-size:28px;line-height:1}
+.chiffres span{font-size:12px;color:var(--gris)}
+h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);margin:22px 0 8px}
+.puces{display:flex;flex-wrap:wrap;gap:6px}
+.puces span{background:#240707;border:1px solid #4a0c0c;border-radius:999px;padding:5px 11px;font-size:13px;font-weight:700}
+.rec{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--bord);font-size:14px}
+.rec span{color:var(--gris);white-space:nowrap}
+.cta{display:block;margin:28px 0 10px;background:var(--rouge);color:#fff;text-align:center;text-decoration:none;font-weight:800;
+  letter-spacing:.5px;padding:17px 14px;border-radius:14px;font-size:17px;box-shadow:0 10px 30px rgba(224,32,32,.35)}
+.sous{text-align:center;color:var(--gris);font-size:13px}
+.pied{text-align:center;margin-top:30px;font-size:12px;color:#6b6b72}
+.pied a{color:#6b6b72}
+.vide{text-align:center;padding:60px 10px;color:var(--gris)}
+.sq{background:linear-gradient(90deg,#161619,#1f1f23,#161619);background-size:200% 100%;animation:s 1.2s infinite;border-radius:10px}
+@keyframes s{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.sq{animation:none}}
+</style>
+</head>
+<body>
+<main id="m" aria-busy="true">
+  <div class="sq" style="width:170px;height:170px;margin:0 auto 14px;border-radius:50%"></div>
+  <div class="sq" style="height:34px;width:60%;margin:0 auto 10px"></div>
+  <div class="sq" style="height:70px;margin-top:22px"></div>
+</main>
+<script>
+(function(){
+  var DB='https://repcore-sync-default-rtdb.firebaseio.com';
+  // /@julie sur Firebase (reecriture) ; p/?u=julie ailleurs.
+  var chemin=location.pathname, q=new URLSearchParams(location.search);
+  var m=/\/@([^\/?#]+)/.exec(chemin);
+  var pseudo=decodeURIComponent(m?m[1]:(q.get('u')||'')).toLowerCase();
+  // Les chemins relatifs changent selon la forme : /@julie est a la racine,
+  // p/ est un dossier.
+  var racine=m?'/':'../';
+  var z=document.getElementById('m');
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function vide(t){z.removeAttribute('aria-busy');z.innerHTML='<div class="vide"><p>'+esc(t)+'</p><a class="cta" href="'+racine+'i/">Découvrir RepCore</a></div>';}
+  if(!/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/.test(pseudo)) return vide('Cette page n’existe pas.');
+  var ctrl=window.AbortController?new AbortController():null;
+  setTimeout(function(){ if(ctrl) ctrl.abort(); },6000);
+  fetch(DB+'/profils_publics/'+encodeURIComponent(pseudo)+'.json',ctrl?{signal:ctrl.signal}:{})
+    .then(function(r){ return r.ok?r.json():null; })
+    .then(function(p){
+      if(!p||!p.prenom) return vide('Cette page n’existe pas, ou son titulaire l’a rendue privée.');
+      var prenom=esc(p.prenom);
+      document.title=p.prenom+' sur RepCore';
+      var h='';
+      if(p.rang&&p.rang.n) h+='<img class="emb" src="'+racine+'app/img/rangs/rang_'+(p.rang.n|0)+'-512.webp" alt="" width="170" height="170">';
+      h+='<div class="pseudo">@'+esc(pseudo)+'</div><h1>'+prenom+'</h1>';
+      if(p.rang&&p.rang.nom) h+='<div class="rang">'+esc(p.rang.nom)+'</div>';
+      var ch='';
+      if(p.seances!=null) ch+='<div><b>'+(p.seances|0)+'</b><span>séances</span></div>';
+      if(p.serie!=null) ch+='<div><b>'+(p.serie|0)+'</b><span>semaines d’affilée</span></div>';
+      if(ch) h+='<div class="chiffres">'+ch+'</div>';
+      var b=p.badges?Object.keys(p.badges).map(function(k){return p.badges[k];}):[];
+      if(b.length) h+='<h2>Badges</h2><div class="puces">'+b.map(function(x){return '<span>⚡ '+esc(x.nom)+'</span>';}).join('')+'</div>';
+      var r=p.records?Object.keys(p.records).map(function(k){return p.records[k];}):[];
+      if(r.length) h+='<h2>Derniers records</h2>'+r.map(function(x){
+        var d=''; try{ d=new Date(x.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }catch(e){}
+        return '<div class="rec"><b>'+esc(x.exo)+'</b><span>record battu · '+esc(d)+'</span></div>';}).join('');
+      // LE CODE PARRAIN : celui du lien suivi s'il y en a un, sinon celui du profil.
+      var ref=(q.get('ref')||p.ref||'').toUpperCase();
+      var src=(q.get('src')||'page').replace(/[^a-z0-9_-]/gi,'').slice(0,20);
+      var cible=racine+'i/?'+(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)?'ref='+ref+'&':'')+'src='+src;
+      h+='<a class="cta" href="'+cible+'">Rejoins '+prenom+' sur RepCore</a>';
+      if(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)) h+='<div class="sous">Avec son code, tu as 2 mois pour essayer au lieu d’un.</div>';
+      h+='<div class="pied"><a href="'+racine+'">RepCore</a> — l’app d’entraînement qui te suit séance après séance.</div>';
+      z.removeAttribute('aria-busy'); z.innerHTML=h;
+    })
+    .catch(function(){ vide('Page injoignable pour l’instant. Réessaie dans un moment.'); });
+})();
+</script>
+</body>
+</html>

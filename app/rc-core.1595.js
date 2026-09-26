@@ -974,7 +974,12 @@ const RC_LIEN_COURT=(()=>{
 // hisse. Posee plus haut, elle lirait RC_LIEN_COURT avant son initialisation —
 // une ReferenceError a l'evaluation du fichier, donc une application qui ne
 // demarre pas du tout.
-const RC_URL_VITRINE=RC_LIEN_COURT;
+// ⚠ DEPUIS LES PAGES PUBLIQUES (26/09/2026), C'EST LEUR RACINE : /@<pseudo>
+// et /coach/<slug> y vivent (urlPagePerso, lienPerso). Sur Firebase, l'origine ;
+// servi depuis un sous-dossier, le dossier du site (où p/ et c/ existent). Le
+// QR de la carte « Séance du jour » ne l'encode plus nue : il encode
+// lienPerso('qr') (urlQrSeance), et ne retombe sur elle que sans lien perso.
+const RC_URL_VITRINE=/\/i$/.test(RC_LIEN_COURT)?RC_LIEN_COURT.replace(/\/i$/,''):APP_BASE_URL.replace(/app\/$/,'');
 
 // PAYPAL_CLIENT_ID / PAYPAL_PLAN_ID : liés au compte PayPal du créateur
 //   (App créée sur developer.paypal.com avec guellec.coachingpro@gmail.com).
@@ -4667,6 +4672,8 @@ const CLOUD={
       throw new Error('Publication du profil refusée ('+r.status+').');
     }
     this._defilerProfil();
+    // LA VITRINE PUBLIQUE (/coach/<slug>) suit le profil, sans le retenir.
+    try{ publierVitrinePublique(u).catch(()=>{}); }catch(e){}
     return true;
   },
 
@@ -4860,6 +4867,15 @@ const CLOUD={
     const r=await fetch(this._urlCanal(key,'messages')+'?auth='+token+'&orderBy=%22type%22&equalTo=%22defi%22');
     if(!r.ok) throw new Error('Défis : '+r.status);
     return await r.json();
+  },
+  // Une écriture MULTI-CHEMINS à la racine ({'a/b':v, 'c/d':null}) : une
+  // réservation et sa page partent ensemble, et les règles les jugent
+  // ensemble. true ou false, sans lever.
+  async racinePatch(chemins){
+    const token=await this._getToken();
+    if(!token) return false;
+    const r=await fetch(this._fbUrl.replace('users.json','.json')+'?auth='+token,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(chemins)});
+    return r.ok;
   },
   // ── Le parrainage : /parrainage/<sous>. get rend null sur un refus (les
   // règles cachent /codes) ; put/patch rendent true ou false, sans lever.
@@ -5480,7 +5496,8 @@ function _validateAthletePkg(o){
     const params=new URLSearchParams(window.location.search);
     aNettoyer=!!(params.get('coachpkg')||params.get('athletepkg')||params.get('s')
       ||params.get('bilan')==='1'||params.get('wo')==='1'||params.get('diete')==='1'
-      ||!!params.get('wrapped')||params.get('canal')==='1'||!!params.get('ref')||params.get('parrainage')==='1');
+      ||!!params.get('wrapped')||params.get('canal')==='1'||!!params.get('ref')||params.get('parrainage')==='1'
+      ||!!params.get('coach')||!!params.get('src'));
     // Coach invite → athlete device
     const cpkg=params.get('coachpkg');
     if(cpkg){
@@ -5546,6 +5563,9 @@ function _validateAthletePkg(o){
       try{ sessionStorage.setItem('rc_ref',_v); }catch(e){}
       window._refCode=_ref;
     }
+    // ?coach=<slug> — arrivé par la vitrine publique d'un coach (/coach/<slug>).
+    const _vit=String(params.get('coach')||'').toLowerCase();
+    if(/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(_vit)) try{ localStorage.setItem('rc_vitrine_coach',_vit); }catch(e){}
     // ?parrainage=1 — les push du parrainage (filleul inscrit, abonné).
     if(params.get('parrainage')==='1') window._pendingParrainageOpen=true;
   }catch(e){}
@@ -5742,6 +5762,10 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // Le MIROIR du parrainage (code, compteurs, dates des filleuls abonnés) —
   // l'original, qui seul fait foi, vit dans /parrainage/comptes.
   'parrainage',
+  // Les pages publiques : le pseudo, l'état et les choix de la page d'un
+  // athlète ; le slug et les spécialités de la vitrine d'un coach. Des
+  // réglages d'affichage — la page elle-même n'accepte aucune donnée de santé.
+  'pagePublique','vitrineSlug','vitrinePubliee','specialites',
   // Les types de notification push que l'athlète a coupés : {type:false}.
   // Un réglage, lu par le serveur avant chaque envoi — aucune donnée de santé.
   'pushPrefs',
@@ -17229,6 +17253,280 @@ function renderEpingleAccueil(){
     +'onclick="go(\'s-athlete-profile\')">Ajouter ma photo</button></div>';
 }
 
+// ══ LE LIEN PERSO ET LES PAGES PUBLIQUES ════════════════════════════════════
+//
+// Deux pages HORS DE L'APP, servies par l'hébergement et rendues en moins
+// d'une seconde (p/index.html, c/index.html) :
+//   /@<pseudo>      la page d'un athlète — désactivée par défaut ; il choisit
+//                   ce qu'elle montre, jamais un poids, une photo ni une
+//                   donnée de santé (aucun champ n'existe pour les recevoir).
+//   /coach/<slug>   la vitrine d'un coach — ce que s-vitrine montre déjà à ses
+//                   athlètes, sans ses coordonnées ni ses images en base64.
+// Là où il n'y a pas de réécriture (GitHub Pages), p/?u=<pseudo> et c/?s=<slug>.
+//
+// LES NŒUDS (database.rules.json) : /pseudos/<pseudo> et /slugs/<slug> → clé
+// (une réservation, lisible par PERSONNE : une clé est un e-mail ; on la
+// prend en écrivant, un refus veut dire « déjà pris ») ; /profils_publics et
+// /vitrines, lus sans connexion, en liste blanche de champs.
+const PSEUDO_PUBLIC_RE=/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/;
+const SLUG_PUBLIC_RE=/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
+const PAGE_MONTRER=Object.freeze([
+  {cle:'rang',lib:'Mon emblème de rang'},
+  {cle:'serie',lib:'Ma série de semaines'},
+  {cle:'badges',lib:'Mes badges'},
+  {cle:'records',lib:'Mes derniers records (jamais les charges)'},
+  {cle:'seances',lib:'Mon nombre de séances'}
+]);
+function _pagesSurFirebase(){ return /\/i$/.test(String(RC_LIEN_COURT||'')); }
+// PURE. L'adresse de la page de quelqu'un, ou '' s'il n'en a pas (encore).
+function urlPagePerso(u){
+  if(!u) return '';
+  const base=String(RC_URL_VITRINE||'').replace(/\/$/,'');
+  const fb=_pagesSurFirebase();
+  if(u.role==='coach'){
+    const s=u.vitrineSlug;
+    if(!u.vitrinePubliee||!SLUG_PUBLIC_RE.test(s||'')) return '';
+    return fb?base+'/coach/'+s:base+'/c/?s='+s;
+  }
+  const p=u.pagePublique;
+  if(!p||!p.active||!PSEUDO_PUBLIC_RE.test(p.pseudo||'')) return '';
+  return fb?base+'/@'+p.pseudo:base+'/p/?u='+p.pseudo;
+}
+// LE LIEN PERSO (idée 16) : la page de la personne — ou, faute de page, le
+// lien court —, avec son code de parrainage (ref) et le type de visuel qui l'a
+// fait circuler (src). `src` : 'seance', 'rang', 'bio', 'qr'…
+function lienPerso(src,u){
+  const x=u||((typeof currentUser!=='undefined')?currentUser:null);
+  const page=urlPagePerso(x)||String(RC_LIEN_COURT||'');
+  if(!page) return '';
+  const p=[];
+  const c=x&&x.parrainage&&x.parrainage.code;
+  if(typeof parrainageCodeValide==='function'&&parrainageCodeValide(c)) p.push('ref='+encodeURIComponent(c));
+  const s=String(src||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20);
+  if(s) p.push('src='+s);
+  return p.length?page+(page.indexOf('?')>=0?'&':'?')+p.join('&'):page;
+}
+// L'adresse du QR de la carte « Séance du jour » : le lien perso.
+function urlQrSeance(){ return lienPerso('qr')||RC_URL_VITRINE; }
+// PURE. Le type d'un visuel, lu dans son nom de fichier (repcore-seance.png,
+// repcore-cycle-rouge.jpg…) : c'est le `src` du lien copié à sa sortie.
+function srcDuVisuel(nomFichier){
+  const m=/^repcore-([a-z]+)/i.exec(String(nomFichier||''));
+  return m?m[1].toLowerCase():'visuel';
+}
+// ── Le tuto du sticker Lien : trois images fixes, une fois ─────────────────
+const TUTO_STICKER_CLE='rc_tuto_sticker';
+function htmlTutoSticker(){
+  const url=escapeHtml(String(lienPerso('story')||'repcore…').replace(/^https?:\/\//,'').slice(0,34));
+  const e=(n,titre,dessin)=>'<figure class="tsk-etape" style="--i:'+(n-1)+'"><div class="tsk-tel">'+dessin+'</div>'
+    +'<figcaption><b>'+n+'</b> '+titre+'</figcaption></figure>';
+  return '<div class="tsk-carte" role="dialog" aria-modal="true" aria-labelledby="tsk-h" onclick="event.stopPropagation()">'
+    +'<h2 id="tsk-h">Ton lien, dans ta story</h2>'
+    +'<p class="tsk-sous">Il est copié. Instagram ne lit pas les liens posés sur une image : c’est le sticker Lien qui les rend cliquables.</p>'
+    +'<div class="tsk-etapes">'
+    +e(1,'Touche l’icône <i>Sticker</i>','<div class="tsk-barre"><span>Aa</span><span class="tsk-on">☺</span><span>♫</span><span>✦</span></div><div class="tsk-img"></div>')
+    +e(2,'Choisis <i>Lien</i>','<div class="tsk-grille"><span>📍 LIEU</span><span class="tsk-on">🔗 LIEN</span><span>@ MENTION</span><span># HASHTAG</span></div>')
+    +e(3,'Colle, et c’est fini','<div class="tsk-champ"><small>URL</small><span class="tsk-on">'+url+'</span></div><div class="tsk-ok">Terminé</div>')
+    +'</div><button type="button" class="btn btn-red" style="width:100%;margin:14px 0 0;min-height:46px" onclick="fermerTutoSticker()">Compris</button></div>';
+}
+function montrerTutoSticker(force){
+  try{ if(!force&&localStorage.getItem(TUTO_STICKER_CLE)) return false; localStorage.setItem(TUTO_STICKER_CLE,String(Date.now())); }catch(e){}
+  if(document.getElementById('tuto-sticker')) return false;
+  const z=document.createElement('div');
+  z.id='tuto-sticker'; z.className='tsk-fond';
+  z.innerHTML=htmlTutoSticker();
+  z.addEventListener('click',fermerTutoSticker);
+  z.addEventListener('keydown',ev=>{ if(ev.key==='Escape') fermerTutoSticker(); });
+  document.body.appendChild(z);
+  try{ z.querySelector('.btn').focus({preventScroll:true}); }catch(e){}
+  return true;
+}
+function fermerTutoSticker(){ const z=document.getElementById('tuto-sticker'); if(z) z.remove(); return true; }
+// ── La page d'un athlète ───────────────────────────────────────────────────
+// PURE. Les derniers records : l'exercice et la date. JAMAIS LA CHARGE. Un
+// exercice n'y paraît qu'une fois (son record le plus récent).
+function recordsRecentsPublics(u,n){
+  const ses=((u&&u.sessions)||[]).filter(s=>s&&s.date>0).slice().sort((a,b)=>a.date-b.date);
+  const meilleur={}, vus=[];
+  const cle=nm=>{ try{ return resoudreAlias(exKey(nm)); }catch(e){ return String(nm); } };
+  for(const s of ses){
+    const exos=(s.data&&typeof s.data==='object'&&Object.keys(s.data).length)
+      ?Object.keys(s.data).map(nm=>({nom:nm,sets:((s.data[nm]||{}).sets)||[]}))
+      :((s.exercises)||[]).filter(e=>e&&(e.name||e.nm)).map(e=>({nom:e.name||e.nm,sets:e.sets||[]}));
+    for(const e of exos){
+      let cur=0;
+      for(const st of e.sets){ if(!st||st.done===false) continue; const w=parseFloat(st.weight)||0; if(w>cur) cur=w; }
+      if(!cur) continue;
+      const k=cle(e.nom), h=meilleur[k]||0;
+      if(h>0&&cur>h) vus.push({k,exo:String(e.nom).trim().slice(0,60),date:Number(s.date)});
+      if(cur>h) meilleur[k]=cur;
+    }
+  }
+  const out=[], deja={};
+  for(let i=vus.length-1;i>=0&&out.length<(n||5);i--){
+    if(deja[vus[i].k]) continue;
+    deja[vus[i].k]=1; out.push({exo:vus[i].exo,date:vus[i].date});
+  }
+  return out;
+}
+// PURE. Ce que la page montre — et RIEN d'autre : la liste blanche des règles
+// n'accepte que ces champs-là.
+function pagePubliqueDonnees(u,montrer,maintenant){
+  const m=montrer||{}, t=(typeof maintenant==='number')?maintenant:Date.now();
+  const pp=(u&&u.pagePublique)||{};
+  const o={prenom:String((u&&u.fname)||pp.pseudo||'').replace(/\s+/g,' ').trim().slice(0,24),maj:t};
+  if(m.rang){ try{ const r=rangDe(xpDe(u)); o.rang={n:r.rang.n,nom:r.rang.nom}; }catch(e){} }
+  if(m.serie){ try{ o.serie=Math.max(0,Math.min(999,streakSemaines(u)||0)); }catch(e){} }
+  if(m.seances) o.seances=Math.min(99999,((u&&u.sessions)||[]).filter(s=>s&&s.date>0).length);
+  if(m.badges){
+    try{
+      const b=badgesObtenus(u).sort((a,x)=>x.at-a.at).slice(0,8)
+        .map(x=>{ const d=badgeAcquisDef(x.id); return d?{id:String(d.id).slice(0,40),nom:String(d.nom).slice(0,40)}:null; }).filter(Boolean);
+      if(b.length) o.badges=b;
+    }catch(e){}
+  }
+  if(m.records){ const r=recordsRecentsPublics(u,5); if(r.length) o.records=r; }
+  const c=u&&u.parrainage&&u.parrainage.code;
+  if(typeof parrainageCodeValide==='function'&&parrainageCodeValide(c)) o.ref=c;
+  return o;
+}
+function pseudoPublicNormalise(p){ return String(p||'').trim().replace(/^@/,'').toLowerCase(); }
+// Publie, déplace ou éteint la page. Rend {ok, erreur?}.
+async function publierPagePublique(u,reg,o){
+  if(!u||!u.email||u.role==='coach') return {ok:false,erreur:'Réservé aux athlètes.'};
+  const neu=pseudoPublicNormalise(reg&&reg.pseudo);
+  if(!PSEUDO_PUBLIC_RE.test(neu)) return {ok:false,erreur:'Pseudo : 3 à 20 caractères, lettres minuscules, chiffres, point ou tiret bas.'};
+  const moi=u.email.replace(/\./g,',');
+  const ancien=(u.pagePublique||{}).pseudo;
+  const patch={};
+  if(ancien&&ancien!==neu){ patch['pseudos/'+ancien]=null; patch['profils_publics/'+ancien]=null; }
+  patch['pseudos/'+neu]=moi;
+  patch['profils_publics/'+neu]=reg.active?pagePubliqueDonnees(u,reg.montrer):null;
+  const ok=await CLOUD.racinePatch(patch).catch(()=>false);
+  if(!ok) return {ok:false,erreur:'Ce pseudo est déjà pris.'};
+  u.pagePublique={pseudo:neu,active:!!reg.active,montrer:Object.assign({},reg.montrer||{}),publieLe:Date.now()};
+  if(!(o&&o.silencieux)) try{ saveUser(); }catch(e){}
+  return {ok:true};
+}
+// La page suit l'athlète : après une séance, et au plus toutes les six heures
+// depuis l'accueil. Silencieuse, sans toast.
+async function majPagePublique(o){
+  const u=currentUser, p=u&&u.pagePublique;
+  if(!p||!p.active||!PSEUDO_PUBLIC_RE.test(p.pseudo||'')||!CLOUD.ok()) return false;
+  if(!(o&&o.force)&&Date.now()-(Number(p.publieLe)||0)<6*3600e3) return false;
+  const r=await publierPagePublique(u,{pseudo:p.pseudo,active:true,montrer:p.montrer||{}},{silencieux:true});
+  if(r.ok) try{ saveUser(); }catch(e){}
+  return r.ok;
+}
+// PURE. Le bloc des réglages, dans le profil.
+function htmlReglagesPagePublique(u){
+  const p=(u&&u.pagePublique)||{};
+  const m=p.montrer||{rang:true,serie:true,badges:true,seances:true};
+  const dom=_pagesSurFirebase()?String(RC_URL_VITRINE).replace(/^https?:\/\//,'').replace(/\/$/,'')+'/@':'…/p/?u=';
+  const cases=PAGE_MONTRER.map(x=>'<label class="pp-case"><input type="checkbox" data-montrer="'+x.cle+'"'+(m[x.cle]?' checked':'')+'> <span>'+escapeHtml(x.lib)+'</span></label>').join('');
+  const url=urlPagePerso(u);
+  return '<div class="card pp-carte"><div class="pp-titre">Ma page publique</div>'
+    +'<p class="pp-sous">Une page à mettre dans ta bio : ton rang, ta régularité, tes badges. Jamais de poids, de photos ni de données de santé.</p>'
+    +'<label for="pp-pseudo" class="pp-lab">Ton pseudo</label>'
+    +'<div class="pp-url"><span>'+escapeHtml(dom)+'</span><input id="pp-pseudo" type="text" maxlength="20" autocapitalize="none" autocomplete="off" spellcheck="false" value="'+escapeHtml(p.pseudo||'')+'" placeholder="ton.pseudo"></div>'
+    +'<label class="pp-case pp-active"><input type="checkbox" id="pp-active"'+(p.active?' checked':'')+'> <span><b>Activer ma page</b></span></label>'
+    +'<div class="pp-montrer"><div class="pp-lab">Ce qu’elle montre</div>'+cases+'</div>'
+    +'<div id="pp-etat" class="pp-etat" aria-live="polite">'+(url?'En ligne : '+escapeHtml(url.replace(/^https?:\/\//,'')):(p.pseudo?'Page désactivée.':''))+'</div>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:10px 0 8px;min-height:44px" onclick="enregistrerPagePublique(this)">Enregistrer ma page</button>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:0;min-height:44px" onclick="copierLienBio(this)">Copier mon lien pour ma bio Instagram</button></div>';
+}
+function _rendrePagePublique(){
+  const z=document.getElementById('atp-page');
+  if(!z) return;
+  if(!currentUser||currentUser.role==='coach'){ z.innerHTML=''; return; }
+  z.innerHTML=htmlReglagesPagePublique(currentUser);
+}
+async function enregistrerPagePublique(btn){
+  if(!currentUser) return false;
+  if(!CLOUD.ok()){ toast('Impossible hors connexion','var(--orange)'); return false; }
+  const montrer={};
+  document.querySelectorAll('#atp-page [data-montrer]').forEach(c=>{ montrer[c.dataset.montrer]=!!c.checked; });
+  const reg={pseudo:document.getElementById('pp-pseudo')?.value,active:!!document.getElementById('pp-active')?.checked,montrer};
+  if(btn){ btn.disabled=true; btn.textContent='Enregistrement…'; }
+  const r=await publierPagePublique(currentUser,reg);
+  if(btn){ btn.disabled=false; btn.textContent='Enregistrer ma page'; }
+  if(!r.ok){ toast(r.erreur,'var(--orange)'); const e=document.getElementById('pp-etat'); if(e) e.textContent=r.erreur; return false; }
+  toast(reg.active?'Ta page est en ligne ⚡':'Ta page est désactivée.');
+  _rendrePagePublique();
+  return true;
+}
+// Le lien de la bio : la page (ou le lien court), avec le code et src=bio.
+function copierLienBio(btn){
+  const l=lienPerso('bio');
+  if(!l) return false;
+  const lib=btn?btn.textContent:'';
+  const fait=()=>{ toast('Lien copié · colle-le dans ta bio : Modifier le profil > Liens','var(--green)',4000);
+    if(btn){ btn.textContent='Lien copié ✓'; setTimeout(()=>{ btn.textContent=lib; },2000); } };
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(l).then(fait,()=>toast(l)); return true; } }catch(e){}
+  toast(l);
+  return false;
+}
+// ── La vitrine d'un coach ──────────────────────────────────────────────────
+// PURE. « Kévin Guellec » → « kevin-guellec ».
+function slugDe(prenom,nom){
+  let s=String((prenom||'')+' '+(nom||''));
+  try{ s=s.normalize('NFD').replace(/[̀-ͯ]/g,''); }catch(e){}
+  s=s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,36).replace(/-+$/,'');
+  return s.length>=3?s:('coach-'+s).replace(/-+$/,'').slice(0,40);
+}
+function _httpsOuRien(u){ const s=String(u||''); return /^https:\/\//.test(s)&&s.length<=500?s:''; }
+// PURE. La vitrine publique : ce que s-vitrine montre, sans les coordonnées,
+// sans les messages du Canal, sans les images en base64 (trop lourdes pour une
+// page web — seule une photo en https passe).
+function vitrinePubliqueDonnees(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const o={nom:String(((u&&u.fname)||'')+' '+((u&&u.lname)||'')).replace(/\s+/g,' ').trim().slice(0,120),maj:t};
+  const txt=(k,n,d)=>{ const v=String((u&&u[k])||'').trim().slice(0,n); if(v) o[d||k]=v; };
+  txt('teamName',120,'equipe'); txt('catchphrase',300,'phrase'); txt('bio',2000); txt('vision',2000);
+  const ph=_httpsOuRien(u&&u.coachPhoto)||_httpsOuRien(u&&u.photoVitrine);
+  if(ph) o.photo=ph;
+  const sp=String((u&&u.specialites)||'').split(/[,;\n]/).map(x=>x.trim().slice(0,40)).filter(Boolean).slice(0,6);
+  if(sp.length) o.specialites=sp;
+  let pr=[]; try{ pr=vitrineProgrammesDe(u); }catch(e){ pr=[]; }
+  pr=pr.slice(0,12).map(p=>{
+    const x={name:String(p.name||'').slice(0,80)};
+    if(p.pitch) x.pitch=String(p.pitch).slice(0,300);
+    if(p.prix!=null&&String(p.prix)) x.prix=String(p.prix).slice(0,20);
+    if(_httpsOuRien(p.lienAchat)) x.lienAchat=p.lienAchat;
+    if(_httpsOuRien(p.visuel)) x.visuel=p.visuel;
+    return x;
+  }).filter(x=>x.name);
+  if(pr.length) o.programmes=pr;
+  return o;
+}
+// Publiée à chaque enregistrement du profil coach (pushProfilCoach). Le slug
+// se prend une fois (kevin-guellec, sinon kevin-guellec-2…), puis se garde.
+async function publierVitrinePublique(u){
+  if(!u||u.role!=='coach'||!u.email) return false;
+  const d=vitrinePubliqueDonnees(u);
+  if(!d.nom) return false;
+  const moi=u.email.replace(/\./g,',');
+  const base=SLUG_PUBLIC_RE.test(u.vitrineSlug||'')?u.vitrineSlug:slugDe(u.fname,u.lname);
+  const essais=u.vitrineSlug?[base]:[base].concat([2,3,4,5,6,7,8,9].map(n=>base.slice(0,37)+'-'+n));
+  for(const s of essais){
+    const ok=await CLOUD.racinePatch({['slugs/'+s]:moi,['vitrines/'+s]:d}).catch(()=>false);
+    if(ok){
+      if(u.vitrineSlug!==s||!u.vitrinePubliee){ u.vitrineSlug=s; u.vitrinePubliee=true; try{ saveUser(); }catch(e){} }
+      try{ _rendreLienVitrineCoach(); }catch(e){}
+      return true;
+    }
+  }
+  return false;
+}
+function _rendreLienVitrineCoach(){
+  const z=document.getElementById('coach-page-publique');
+  if(!z||!currentUser||currentUser.role!=='coach') return;
+  const url=urlPagePerso(currentUser);
+  z.innerHTML='<div class="pp-lab">Ta page publique</div>'
+    +(url?'<div class="pp-etat">'+escapeHtml(url.replace(/^https?:\/\//,''))+'</div>'
+          +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:8px 0 0;min-height:44px" onclick="copierLienBio(this)">Copier mon lien pour ma bio Instagram</button>'
+        :'<div class="pp-etat">Elle se publie à l’enregistrement de ton profil : photo (en ligne), bio, spécialités, programmes en vente.</div>');
+}
 // ══ LE PARRAINAGE ══════════════════════════════════════════════════════════
 //
 // LA RÉCOMPENSE : le filleul a 1 mois d'essai en plus (OFFRES.essai_parrainage) ;
@@ -17288,18 +17586,7 @@ function rcAppareilId(){
     return id;
   }catch(e){ return 'sansstockage0000'; }
 }
-// ── Le lien ────────────────────────────────────────────────────────────────
-// LE LIEN PERSONNEL (idée 16). Il n'existait pas : le voici, et
-// _storyCopierLien s'en sert désormais à la sortie de chaque visuel partagé.
-// RC_LIEN_COURT mène à /i, qui transmet ?ref= à /app/ sans y toucher.
-function lienPerso(u,actif){
-  const x=u||((typeof currentUser!=='undefined')?currentUser:null);
-  const c=x&&x.parrainage&&x.parrainage.code;
-  const on=(typeof actif==='boolean')?actif:PARRAINAGE_ACTIF;
-  if(!on||!parrainageCodeValide(c)) return '';
-  const base=String(RC_LIEN_COURT||'');
-  return base+(base.indexOf('?')>=0?'&':'?')+'ref='+encodeURIComponent(c);
-}
+// ── Le lien : lienPerso(), plus haut (pages publiques) ────────────────────
 // PURE. Le message prêt à partager.
 function parrainageMessage(code,lien){
   return 'Je m’entraîne avec RepCore ⚡ Avec mon code '+code+', tu as 2 mois pour essayer au lieu d’un. '
@@ -17345,6 +17632,23 @@ function parrainageChampInscription(role){
   if(i&&c&&!i.value) i.value=c;
   const info=document.getElementById('r-parrain-info');
   if(info) info.textContent=c?'Invité par un ami : 2 mois pour essayer au lieu d’un.':'Le code d’un ami t’offre 1 mois de plus pour essayer.';
+  // ARRIVÉ PAR LA VITRINE D'UN COACH (/coach/<slug> → ?coach=) : on le dit, et
+  // on dit la suite — c'est le coach qui donne le code d'accès qui relie.
+  try{ _infoVitrineInscription(role); }catch(e){}
+}
+async function _infoVitrineInscription(role){
+  const z=document.getElementById('r-vitrine-info');
+  if(!z) return;
+  let slug=''; try{ slug=localStorage.getItem('rc_vitrine_coach')||''; }catch(e){}
+  if(role!=='athlete'||!SLUG_PUBLIC_RE.test(slug)){ z.textContent=''; z.style.display='none'; return; }
+  let nom='';
+  try{
+    const r=await fetch(CLOUD._fbUrl.replace('users.json','vitrines/'+slug+'/nom.json'));
+    if(r.ok) nom=String((await r.json())||'').slice(0,120);
+  }catch(e){}
+  if(!nom){ z.style.display='none'; return; }
+  z.textContent='Tu viens de la page de '+nom+' : une fois inscrit, demande-lui ton code d’accès pour qu’il te suive.';
+  z.style.display='';
 }
 // ── À l'inscription ────────────────────────────────────────────────────────
 // Rend le nombre de jours offerts en plus (0 si rien). Le compte existe et le jeton
@@ -17459,7 +17763,7 @@ async function ouvrirParrainage(){
   return true;
 }
 function parrainageCopier(btn){
-  const l=lienPerso();
+  const l=lienPerso('parrainage');
   if(!l) return false;
   const fait=()=>{ if(btn){ btn.textContent='Lien copié ✓'; setTimeout(()=>{ btn.textContent='Copier le lien'; },2000); } };
   try{
@@ -17473,7 +17777,7 @@ function parrainageCopier(btn){
 function parrainagePartager(btn){
   const c=currentUser&&currentUser.parrainage&&currentUser.parrainage.code;
   if(!c) return false;
-  const l=lienPerso();
+  const l=lienPerso('parrainage');
   const texte=parrainageMessage(c,l);
   try{ rcm('parrainage_partage'); }catch(e){}
   if(navigator.share){
@@ -34720,6 +35024,7 @@ function loadClientHome(){
   try{ renderDefiAccueil(); }catch(e){}
   // Une fois par jour : défis bouclés et parrainage (badges et mois gagnés).
   try{ majRecompensesServeur(); }catch(e){}
+  try{ majPagePublique(); }catch(e){}
   // Avatar athlète
   const avatar=document.getElementById('clh-athlete-avatar');
   if(avatar) avatar.innerHTML=u.athletePhoto?`<img src="${escapeHtml(u.athletePhoto)}" style="width:100%;height:100%;object-fit:cover">`:ini(u.fname,u.lname);
@@ -39062,7 +39367,7 @@ function _dessinerStorySeance(d){
   // LE QR EST PLACE EN PREMIER parce que c'est lui qui decide de la largeur
   // qui reste au nom. Dans l'autre ordre, un nom d'equipe long passait dessous.
   let droite=CX+CW-52;
-  const mat=_qrMatrice(RC_URL_VITRINE);
+  const mat=_qrMatrice(urlQrSeance());
   if(mat){
     const nq=mat.length, marge=4, total=nq+marge*2;
     // 96 PX VISES, PAS ENTIER IMPOSE. Un pas fractionnaire etale chaque module
@@ -40082,13 +40387,17 @@ function _estIOS(){
 // les liens poses sur une image ; le sticker « Lien » de la story, si. On met
 // donc le lien dans le presse-papiers au moment ou l'athlete s'apprete a
 // publier, et on lui dit quoi en faire.
-function _storyCopierLien(){
+function _storyCopierLien(src){
   if(typeof lienPerso!=='function') return false;
   try{
-    const l=lienPerso();
+    const l=lienPerso(src||'visuel');
     if(!l||!navigator.clipboard||!navigator.clipboard.writeText) return false;
     navigator.clipboard.writeText(String(l))
-      .then(()=>toast('Lien copié · ajoute le sticker Lien dans ta story','var(--green)',4000))
+      .then(()=>{
+        toast('Lien copié · dans ta story : Sticker > Lien > coller','var(--green)',4000);
+        // LA PREMIÈRE FOIS : les trois étapes du sticker Lien, en images fixes.
+        try{ montrerTutoSticker(); }catch(e){}
+      })
       .catch(()=>{});
     return true;
   }catch(e){ return false; }
@@ -40105,7 +40414,7 @@ function _storySortirTelechargement(cv,nomFichier,fmt){
   a.click();
   a.remove();
   toast('Image téléchargée','var(--green)');
-  _storyCopierLien();
+  _storyCopierLien(srcDuVisuel(nomFichier));
   return true;
 }
 // Rend false quand le partage natif n'existe pas : l'appelant retombe alors
@@ -40132,7 +40441,7 @@ function _storySortirPartage(cv,nomFichier,meta,fmt){
       const riche=Object.assign({files:[f]},meta);
       try{ if(navigator.canShare(riche)) charge=riche; }catch(e){}
     }
-    _storyCopierLien();
+    _storyCopierLien(srcDuVisuel(nomFichier));
     navigator.share(charge).catch(()=>{});
     return true;
   }
@@ -40345,7 +40654,7 @@ function partagerSeanceDuJour(){
     const _n=d.ex.length;
     const _meta={title:'Ma séance du jour',
       text:(d.coach?(d.coach+' — '):'')+d.titre+' · '+_n+' exercice'+(_n>1?'s':''),
-      url:RC_URL_VITRINE};
+      url:lienPerso('seance')||RC_URL_VITRINE};
     if(_storySortirPartage(_dessinerStorySeance(d),'repcore-seance.png',_meta)){
       // ⚠ ON COMPTE UNE FEUILLE DE PARTAGE OUVERTE, PAS UNE PUBLICATION. Ce qui
       // se passe ensuite — publier, annuler, choisir une application — se passe
@@ -43050,6 +43359,8 @@ function finishWorkout(incomplete=false){
   // (rang, série ou badge en file de célébration), une fois par semaine.
   try{ rendreRappelParrainage(currentUser,{records:(_cmp&&_cmp.records&&_cmp.records.length)|0,
     palier:!!(_xpFin&&_xpFin.fete)||_bdgFile.length>0}); }catch(e){}
+  // La page publique suit la séance (rang, série, records), sans rien dire.
+  try{ majPagePublique({force:true}); }catch(e){}
   // LA BOUCLE DE RETOUR PAR MUSCLE. Vide la plupart du temps — une fois par
   // semaine et par muscle, sur la derniere seance qui le touche.
   try{ rcRendreSrpe(); }catch(e){}
@@ -107276,6 +107587,9 @@ function saveCoachIdentity(){
   // Les images sont deja posees sur currentUser par _majImageVitrine.
   if(_bio!==null) currentUser.bio=_bio;
   if(_vis!==null) currentUser.vision=_vis;
+  // Les spécialités : la vitrine publique (/coach/<slug>) en fait des puces.
+  const _spe=_v('coach-specialites');
+  if(_spe!==null) currentUser.specialites=_spe.slice(0,200);
   // Une URL vide efface le champ ; une URL non http est refusee plutot que
   // publiee telle quelle a tous les athletes.
 
@@ -107739,6 +108053,7 @@ function _apercuVisuelNom(){
 function openAthleteProfile(){
   const u=currentUser;
   try{ _rendreEntreeParrainage(); }catch(e){}
+  try{ _rendrePagePublique(); }catch(e){}
   const circle=document.getElementById('atp-photo-circle');
   if(circle) circle.innerHTML=u.athletePhoto?`<img src="${escapeHtml(u.athletePhoto)}" style="width:100%;height:100%;object-fit:cover">`:icon('user',36);
   const fnEl=document.getElementById('atp-fname');
@@ -108074,12 +108389,13 @@ function loadMonetisationTab(){
   setIf(teamNameEl,u.teamName||'');suivre(teamNameEl);
   const catchEl=document.getElementById('coach-catchphrase');
   setIf(catchEl,u.catchphrase||'');suivre(catchEl);
-  ['coach-bio:bio','coach-vision:vision'].forEach(paire=>{
+  ['coach-bio:bio','coach-vision:vision','coach-specialites:specialites'].forEach(paire=>{
     const [id,champ]=paire.split(':');
     const el=document.getElementById(id);
     if(el){ setIf(el,u[champ]||''); suivre(el); }
   });
   Object.keys(_IMG_VITRINE).forEach(id=>_apercuVitrine(id,u[_IMG_VITRINE[id][0]]||''));
+  try{ _rendreLienVitrineCoach(); }catch(e){}
   const _dz=document.getElementById('coach-diplomes-liste');
   if(_dz){ _dz.innerHTML=''; (u.diplomes||[]).forEach(d=>ajouterDiplomeRow(d&&d.titre,d&&d.image)); }
   _chargerDispoCoach(u);

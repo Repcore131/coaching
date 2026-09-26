@@ -1094,6 +1094,85 @@
     },
     // Le journal du plafond (1 push par jour) et les messages mis de cote
     // pendant les heures calmes : SERVEUR SEULEMENT.
+    // ── LES PAGES PUBLIQUES : /@<pseudo> et /coach/<slug> ───────────────
+    // Deux reservations et deux vitrines. La reservation (pseudos, slugs)
+    // porte la cle du titulaire — un e-mail — et n est donc LISIBLE PAR
+    // PERSONNE : on la prend en ecrivant, et un refus veut dire « deja pris ».
+    // Les vitrines, elles, sont lues SANS CONNEXION (ce sont des pages web),
+    // et c est pour cela qu elles sont a part : une liste blanche de champs
+    // publics, bornes, et rien d autre. Jamais de poids, de photo corporelle
+    // ni de donnee de sante — aucun champ n existe pour les recevoir.
+    // Ecrire une vitrine : le titulaire de la reservation existante (y compris
+    // pour l effacer), ou celui qui la prend DANS LA MEME ecriture (newData).
+    "pseudos": {
+      "$p": {
+        ".write": "auth != null && ((!data.exists() && newData.val() === auth.token.email.replace('.', ',')) || (data.val() === auth.token.email.replace('.', ',') && (!newData.exists() || newData.val() === auth.token.email.replace('.', ','))))",
+        ".validate": "$p.matches(/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/) && newData.isString()"
+      }
+    },
+    "profils_publics": {
+      "$p": {
+        ".read": true,
+        ".write": "auth != null && (root.child('pseudos').child($p).val() === auth.token.email.replace('.', ',') || (!root.child('pseudos').child($p).exists() && newData.parent().parent().child('pseudos').child($p).val() === auth.token.email.replace('.', ',')))",
+        "prenom":  { ".validate": "newData.isString() && newData.val().length <= 24" },
+        "rang": {
+          "n":   { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10" },
+          "nom": { ".validate": "newData.isString() && newData.val().length <= 20" },
+          "$autre": { ".validate": false }
+        },
+        "serie":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 1000" },
+        "seances": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000" },
+        "badges": {
+          "$i": {
+            "id":  { ".validate": "newData.isString() && newData.val().length <= 40" },
+            "nom": { ".validate": "newData.isString() && newData.val().length <= 40" },
+            "$autre": { ".validate": false }
+          }
+        },
+        "records": {
+          "$i": {
+            "exo":  { ".validate": "newData.isString() && newData.val().length <= 60" },
+            "date": { ".validate": "newData.isNumber()" },
+            "$autre": { ".validate": false }
+          }
+        },
+        "ref":     { ".validate": "newData.isString() && newData.val().matches(/^[A-Z]{4,6}[A-Z2-9]{3}$/)" },
+        "maj":     { ".validate": "newData.isNumber()" },
+        "$autre":  { ".validate": false }
+      }
+    },
+    "slugs": {
+      "$s": {
+        ".write": "auth != null && ((!data.exists() && newData.val() === auth.token.email.replace('.', ',')) || (data.val() === auth.token.email.replace('.', ',') && (!newData.exists() || newData.val() === auth.token.email.replace('.', ','))))",
+        ".validate": "$s.matches(/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/) && newData.isString()"
+      }
+    },
+    "vitrines": {
+      "$s": {
+        ".read": true,
+        ".write": "auth != null && (root.child('slugs').child($s).val() === auth.token.email.replace('.', ',') || (!root.child('slugs').child($s).exists() && newData.parent().parent().child('slugs').child($s).val() === auth.token.email.replace('.', ',')))",
+        "nom":         { ".validate": "newData.isString() && newData.val().length <= 120" },
+        "equipe":      { ".validate": "newData.isString() && newData.val().length <= 120" },
+        "phrase":      { ".validate": "newData.isString() && newData.val().length <= 300" },
+        "bio":         { ".validate": "newData.isString() && newData.val().length <= 2000" },
+        "vision":      { ".validate": "newData.isString() && newData.val().length <= 2000" },
+        "photo":       { ".validate": "newData.isString() && newData.val().length <= 500 && newData.val().beginsWith('https://')" },
+        "specialites": { "$i": { ".validate": "newData.isString() && newData.val().length <= 40" } },
+        "programmes": {
+          "$i": {
+            "name":      { ".validate": "newData.isString() && newData.val().length <= 80" },
+            "pitch":     { ".validate": "newData.isString() && newData.val().length <= 300" },
+            "prix":      { ".validate": "newData.isString() && newData.val().length <= 20" },
+            "lienAchat": { ".validate": "newData.isString() && newData.val().length <= 500 && newData.val().beginsWith('https://')" },
+            "visuel":    { ".validate": "newData.isString() && newData.val().length <= 500 && newData.val().beginsWith('https://')" },
+            "$autre":    { ".validate": false }
+          }
+        },
+        "maj":         { ".validate": "newData.isNumber()" },
+        "$autre":      { ".validate": false }
+      }
+    },
+
     // ── LE PARRAINAGE ────────────────────────────────────────────────────
     // Ce que le client ecrit : son code (une fois, avec son pendant public et
     // l entree des codes, dans UNE meme ecriture qui se verifie elle-meme),

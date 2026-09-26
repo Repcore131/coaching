@@ -343,3 +343,52 @@ enregistrée, essai du dossier allongé d'un mois).
 ```bash
 node functions/test/parrainage.test.js
 ```
+
+## Le lien perso et les pages publiques (26/09/2026)
+
+Deux pages **hors de l'app**, autonomes (HTML + CSS inline, une seule requête, sans police ni
+bibliothèque) — rendues en ~0,1 s une fois la page chargée :
+
+| Adresse | Fichier | Lit |
+|---|---|---|
+| `/@<pseudo>` (ou `p/?u=<pseudo>`) | `p/index.html` | `/profils_publics/<pseudo>` |
+| `/coach/<slug>` (ou `c/?s=<slug>`) | `c/index.html` | `/vitrines/<slug>` |
+
+Les réécritures sont dans `firebase.json` ; `deploie.sh` copie `p/` et `c/`. Sur GitHub Pages (sans
+réécriture), l'app produit la forme `p/?u=` / `c/?s=`.
+
+**Les nœuds** (`database.rules.json`) :
+- `/pseudos/<pseudo>`, `/slugs/<slug>` → clé du titulaire. Une réservation, **lisible par
+  personne** (une clé est un e-mail) : on la prend en écrivant, un refus veut dire « déjà pris ».
+- `/profils_publics/<pseudo>`, `/vitrines/<slug>` → **lecture publique**, en liste blanche de champs
+  bornés : `prenom, rang{n,nom}, serie, seances, badges[{id,nom}], records[{exo,date}], ref, maj`
+  pour un athlète ; `nom, equipe, phrase, bio, vision, photo (https), specialites[], programmes[],
+  maj` pour un coach. Aucun champ n'existe pour un poids, une photo corporelle ou une donnée de
+  santé. Écrits par le titulaire de la réservation, dans la même écriture que celle-ci.
+
+**La page d'un athlète** est désactivée par défaut ; il l'active dans son profil (« Ma page
+publique ») et choisit ce qu'elle montre. Elle se republie après chaque séance et au plus toutes
+les six heures depuis l'accueil. **La vitrine d'un coach** se publie à chaque enregistrement de son
+profil, depuis ce que `s-vitrine` montre déjà — sans ses coordonnées, sans son Canal, sans ses
+images en base64 (seule une photo en `https` passe).
+
+### L'aperçu Open Graph (DM Instagram, WhatsApp)
+
+Les robots n'exécutent pas de JavaScript : l'aperçu se lit dans le HTML servi. Les deux pages
+portent un aperçu **par défaut** (`og-image.png`) entre `<!--og:debut-->` et `<!--og:fin-->`.
+
+La fonction **`pagePublique`** sert la **même** page (relue sur l'hébergement, gardée dix minutes)
+avec l'aperçu de la personne : prénom, rang, séances, et **l'emblème du rang en image**
+(`app/img/rangs/rang_<n>-og.jpg`, 1200×630, produits par `scripts/rangs.py`) ; nom, phrase et photo
+pour un coach. Pour l'activer (plan Blaze), remplacer dans `firebase.json` les deux
+`"destination"` de `/@*` et `/coach/*` par :
+
+```json
+"function": { "functionId": "pagePublique", "region": "europe-west1" }
+```
+
+Pas avant : une réécriture vers une fonction absente fait échouer le déploiement de l'hébergement.
+
+```bash
+node functions/test/pages.test.js
+```
