@@ -48030,6 +48030,119 @@ async function testExercices(){
       try{ _dessinerWrapped(w,per,4,'K'); } finally { P.fillText=f; }
       return vus.join('|').indexOf('= 1 BALEINE BLEUE')>=0?true:_echec('absent du résumé dessiné');})());
 
+    // ══ MON AVANT / APRÈS (26/09/2026) ════════════════════════════════════
+    const _AA=(()=>{
+      const px=(()=>{ const c=document.createElement('canvas'); c.width=8; c.height=12;
+        const x=c.getContext('2d'); x.fillStyle='#855'; x.fillRect(0,0,8,12); return c.toDataURL('image/png'); })();
+      const J=864e5, t0=new Date(2026,5,1,10).getTime();
+      const bil=(k,vues,o)=>Object.assign({date:t0+k*J,type:k?'bilan':'depart'},
+        Object.fromEntries(vues.map(v=>[(k?'bil':'deb')+'-photo-'+v,px])),o||{});
+      return {px,J,t0,bil};
+    })();
+    ok('Avant/après : disponible dès deux bilans à photo du même angle',(()=>{
+      const {bil}=_AA;
+      if(aaDisponible({bilans:[bil(0,['face']),bil(84,['back'])]})) return _echec('deux angles différents suffisent');
+      if(htmlBoutonAvantApres({bilans:[bil(0,['face'])]})!=='') return _echec('bouton avec un seul bilan');
+      const u={bilans:[bil(0,['face','back']),bil(40,['back']),bil(84,['face','back'])]};
+      if(aaVuesDisponibles(u).join()!=='face,back') return _echec('vues '+aaVuesDisponibles(u).join());
+      if(htmlBoutonAvantApres(u).indexOf('Mon avant/après')<0) return _echec('libellé du bouton');
+      const d=aaDefaut(u);
+      if(d.vue!=='face'||d.avant!==u.bilans[0].date||d.apres!==u.bilans[2].date) return _echec('défaut '+JSON.stringify(d));
+      if(d.indicateur!=='aucun'||d.poids||d.flou) return _echec('le défaut montre un chiffre');
+      // Sans face, l'angle disponible.
+      const v=aaDefaut({bilans:[bil(0,['back']),bil(30,['back'])]});
+      return v.vue==='back'?true:_echec('angle par défaut '+v.vue);})());
+    ok('Avant/après : écart, indicateurs (aucun par défaut, taille, charge max)',(()=>{
+      const {bil,J,t0}=_AA;
+      if(aaEcart(t0,t0+84*J)!=='12 SEMAINES') return _echec(aaEcart(t0,t0+84*J));
+      if(aaEcart(t0,t0+9*J)!=='9 JOURS'||aaEcart(t0,t0+J)!=='1 JOUR') return _echec('jours');
+      if(aaEcart(t0,t0+400*J)!=='13 MOIS') return _echec(aaEcart(t0,t0+400*J));
+      const a=bil(0,['face'],{'deb-waist':'86'}), b=bil(84,['face'],{'bil-waist':'80'});
+      const u={bilans:[a,b],sessions:[{date:t0-J,data:{DC:{sets:[{weight:80,reps:5,done:true}]}}},
+        {date:t0+50*J,data:{DC:{sets:[{weight:100,reps:5,done:true}]}}}]};
+      if(aaIndicateur(u,a,b,'aucun')!==null) return _echec('aucun');
+      const ta=aaIndicateur(u,a,b,'taille');
+      if(!ta||ta.avant!==86||ta.apres!==80) return _echec('taille '+JSON.stringify(ta));
+      const ch=aaIndicateur(u,a,b,'charge');
+      if(!ch||ch.avant!==80||ch.apres!==100) return _echec('charge '+JSON.stringify(ch));
+      return aaIndicateur(u,a,bil(90,['face']),'taille')===null?true:_echec('taille sans mesure');})());
+    ok('Avant/après : 1080×1920 et 1080×1350, AVANT / APRÈS, écart, signature, poids en option',(()=>{
+      const c=document.createElement('canvas'); c.width=60; c.height=90;
+      c.getContext('2d').fillStyle='#a66'; c.getContext('2d').fillRect(0,0,60,90);
+      const t0=new Date(2026,0,5).getTime();
+      const base={avant:{img:c,date:t0,poids:82},apres:{img:c,date:t0+84*864e5,poids:76},signature:'KEVIN'};
+      const P=CanvasRenderingContext2D.prototype, f=P.fillText, vus=[];
+      P.fillText=function(t){ vus.push(String(t)); return f.apply(this,arguments); };
+      try{
+        const s1=_dessinerAvantApres(Object.assign({},base,{format:'story'}));
+        if(s1.width!==1080||s1.height!==1920) return _echec('story '+s1.width+'x'+s1.height);
+        const tout=vus.join('|');
+        for(const x of ['AVANT / APRÈS','AVANT','APRÈS']) if(tout.indexOf(x)<0) return _echec(x+' absent');
+        // La signature est espacée : dessinée lettre à lettre.
+        if(vus.join('').indexOf('KEVIN · REPCORE')<0) return _echec('signature absente');
+        if(vus.join('').indexOf('12 SEMAINES')<0) return _echec('écart absent');
+        if(/POIDS|82/.test(tout)) return _echec('le poids est montré par défaut');
+        vus.length=0;
+        const s2=_dessinerAvantApres(Object.assign({},base,{format:'post',poids:true,flou:true,fond:'rouge',
+          indicateur:{lib:'TOUR DE TAILLE',avant:86,apres:80,unite:'cm'}}));
+        if(s2.width!==1080||s2.height!==1350) return _echec('post '+s2.width+'x'+s2.height);
+        const t2=vus.join('|');
+        if(t2.indexOf('POIDS')<0||t2.indexOf('82 → 76')<0) return _echec('poids demandé absent');
+        if(t2.indexOf('TOUR DE TAILLE')<0||t2.indexOf('(-6)')<0) return _echec('indicateur absent');
+      } finally { P.fillText=f; }
+      return true;})());
+    ok('Avant/après : 100 % local — rien n’est envoyé',(()=>{
+      const src=[_dessinerAvantApres,_aaFlouterHaut,aaChargerPhoto,_aaSortir,_aaComposer,ouvrirAvantApres].map(String).join('\n');
+      for(const x of ['phpUploadImage','CLOUD.','fetch(','XMLHttpRequest','sendBeacon'])
+        if(src.indexOf(x)>=0) return _echec('appel réseau : '+x);
+      // Le flou ne lit aucun pixel : il marche aussi sur une photo sans CORS.
+      return String(_aaFlouterHaut).indexOf('getImageData')<0?true:_echec('le flou lit les pixels');})());
+    ok('Avant/après : aperçu plein écran, UN gros bouton, avertissement au premier partage',(()=>{
+      const sv=currentUser, {bil}=_AA;
+      let ls=null;
+      try{
+        currentUser={role:'athlete',email:'aa@t.fr',fname:'Léa',bilans:[bil(0,['face']),bil(84,['face'])]};
+        ls=localStorage.getItem('rc_aa_averti_athlete_aa@t.fr'); localStorage.removeItem('rc_aa_averti_athlete_aa@t.fr');
+        if(!ouvrirAvantApres('athlete')) return _echec('ne s’ouvre pas');
+        const z=document.getElementById('aa-ecran');
+        if(z.querySelectorAll('.aa-partager').length!==1) return _echec('pas UN bouton Partager');
+        if(z.querySelector('.aa-partager').textContent.indexOf('Partager en story')<0) return _echec('libellé');
+        if(!z.querySelector('.aa-enregistrer')) return _echec('pas d’Enregistrer');
+        if(!z.querySelector('details.aa-perso')) return _echec('pas de Personnaliser');
+        for(const x of ['Flouter le visage','Afficher le poids','Tour de taille','Charge max','Noir','Rouge'])
+          if(z.textContent.indexOf(x)<0) return _echec('« '+x+' » manque');
+        // Images « chargées » : le premier partage demande confirmation.
+        const c=document.createElement('canvas'); c.width=20; c.height=30;
+        _aa.imgs.avant=c; _aa.imgs.apres=c;
+        if(aaPartager(null)) return _echec('partagé sans avertissement');
+        const av=document.getElementById('aa-avert');
+        if(av.hidden||av.textContent.indexOf('Cette image contient ta photo. Continuer ?')<0) return _echec('avertissement absent');
+        return true;
+      } finally { fermerAvantApres(); try{ if(ls) localStorage.setItem('rc_aa_averti_athlete_aa@t.fr',ls); }catch(e){} currentUser=sv; }})());
+    ok('Avant/après côté coach : export seulement avec l’accord daté de l’athlète',(()=>{
+      if(aaExportAutorise('coach',{})) return _echec('export sans accord');
+      if(aaExportAutorise('coach',{consentementPartageCoach:{date:0}})) return _echec('accord sans date');
+      if(!aaExportAutorise('coach',{consentementPartageCoach:{date:Date.now()}})) return _echec('accord ignoré');
+      if(!aaExportAutorise('athlete',{})) return _echec('l’athlète bloqué');
+      if(CHAMPS_NON_SANTE.indexOf('consentementPartageCoach')<0) return _echec('champ non classé');
+      const sv=currentUser, svC=window.getOwnedClient, svId=currentClientId, {bil}=_AA;
+      try{
+        const cl={id:'k1',fname:'Tom',bilans:[bil(0,['face']),bil(60,['face'])]};
+        window.getOwnedClient=()=>cl; currentClientId='k1';
+        ouvrirAvantApres('coach');
+        const z=document.getElementById('aa-ecran');
+        if(z.querySelector('.aa-partager')||z.querySelector('.aa-enregistrer')) return _echec('boutons d’export sans accord');
+        if(!z.querySelector('.aa-refus')) return _echec('le refus n’est pas dit');
+        fermerAvantApres();
+        cl.consentementPartageCoach={date:Date.now()};
+        ouvrirAvantApres('coach');
+        return document.querySelector('#aa-ecran .aa-partager')?true:_echec('pas d’export malgré l’accord');
+      } finally { fermerAvantApres(); window.getOwnedClient=svC; currentClientId=svId; currentUser=sv; }})());
+    ok('Avant/après : le bouton est posé dans Évolution, le bilan et la fiche coach',(()=>{
+      if(String(showProgressTab).indexOf('htmlBoutonAvantApres(currentUser)')<0) return _echec('Évolution');
+      if(String(bPhotoCards).indexOf('htmlBoutonAvantApres')<0) return _echec('bilan');
+      return String(renderBilanEvolution).indexOf("htmlBoutonAvantApres(c,'coach')")>=0?true:_echec('fiche coach');})());
+
     ok('Les badges n’ont que trois points d’appel',(()=>{
       const s=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
       const n=(s.match(/majBadges\(/g)||[]).length;

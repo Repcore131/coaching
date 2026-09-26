@@ -9318,6 +9318,51 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   color:var(--text-dim);margin:0 0 12px;cursor:pointer;min-height:36px;
   text-transform:none;letter-spacing:.2px;font-weight:600}
 .rcf-eq-opt input{width:18px;height:18px;accent-color:#E02020;margin:0}
+
+/* ══ MON AVANT / APRÈS ═══════════════════════════════════════════════════
+   Le bouton d'entrée, puis l'aperçu plein écran : l'image composée, UN gros
+   bouton « Partager en story », « Enregistrer » en second, et le reste sous
+   « Personnaliser ». Au-dessus de tout sauf du toast. */
+.aa-bouton{width:100%;display:flex;align-items:center;gap:12px;margin:0 0 14px;padding:13px 14px;
+  background:linear-gradient(135deg,#1a0404,#0b0b0c 70%);border:1px solid rgba(224,32,32,.5);
+  border-radius:var(--r-3);color:#fff;text-align:left;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.12)}
+.aa-bouton-i{width:36px;height:36px;border-radius:var(--r-full);background:#E02020;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center}
+.aa-bouton b{display:block;font-size:var(--fs-sm);font-weight:800}
+.aa-bouton span span{display:block;font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px}
+.aa-ecran{position:fixed;inset:0;z-index:1795;background:#000;color:#fff;display:flex;flex-direction:column;
+  padding:max(10px,env(safe-area-inset-top)) 14px max(12px,env(safe-area-inset-bottom));overflow-y:auto}
+.aa-haut{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:var(--fs-sm);
+  font-weight:800;letter-spacing:.6px;min-height:44px}
+.aa-fermer{width:44px;height:44px;border-radius:var(--r-full);border:none;background:rgba(255,255,255,.08);
+  color:#fff;font-size:var(--fs-lg);cursor:pointer}
+.aa-apercu{position:relative;flex:0 0 auto;min-height:260px;display:flex;align-items:center;justify-content:center;margin:6px 0 12px}
+.aa-apercu canvas{max-width:100%;max-height:58vh;height:auto;width:auto;border-radius:var(--r-2);
+  box-shadow:0 10px 40px rgba(224,32,32,.18);background:#111}
+.aa-charge{position:absolute;font-size:var(--fs-sm);color:var(--text-dim)}
+.aa-bas{flex-shrink:0;max-width:480px;width:100%;margin:0 auto}
+.aa-partager{width:100%;min-height:58px;font-size:var(--fs-md);display:flex;align-items:center;justify-content:center;gap:10px}
+.aa-enregistrer{width:100%;margin-top:8px;display:flex;align-items:center;justify-content:center;gap:8px}
+.aa-refus{font-size:var(--fs-sm);color:var(--text-dim);line-height:1.5;text-align:center;margin:4px 0 8px}
+.aa-avert{margin:10px 0 0;padding:12px;border:1px solid rgba(224,32,32,.45);border-radius:var(--r-2);
+  font-size:var(--fs-sm);font-weight:700;text-align:center;background:#140404}
+.aa-avert span{display:flex;gap:8px;margin-top:10px}
+.aa-avert .btn{flex:1;margin:0}
+.aa-perso{margin-top:12px;border-top:1px solid #1d1d20;padding-top:8px}
+.aa-perso summary{cursor:pointer;font-size:var(--fs-sm);font-weight:800;color:var(--text-dim);min-height:40px;
+  display:flex;align-items:center}
+.aa-perso label{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:var(--fs-sm);
+  margin:8px 0;text-transform:none;letter-spacing:.2px;color:var(--text)}
+.aa-perso select{flex:0 0 58%;min-height:40px}
+.aa-l{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--sub);margin:12px 0 6px}
+.aa-seg{display:flex;gap:4px;background:var(--surface-2);border-radius:var(--r-full);padding:3px}
+.aa-seg button{flex:1;border:none;background:none;color:var(--sub);font-size:var(--fs-xs);font-weight:800;
+  padding:8px 6px;border-radius:var(--r-full);cursor:pointer;min-height:36px}
+.aa-seg button[aria-pressed="true"]{background:#E02020;color:#fff}
+.aa-seg button:disabled{opacity:.35;cursor:default}
+.aa-perso .aa-case{justify-content:flex-start}
+.aa-case input{width:18px;height:18px;accent-color:#E02020;margin:0}
+.aa-local{font-size:var(--fs-2xs);color:var(--sub);text-align:center;margin:12px 0 4px}
 /* La carte de l'accueil. */
 .wr-carte{width:100%;display:flex;align-items:center;gap:12px;margin:0 0 12px;padding:14px 14px;
   background:linear-gradient(135deg,#1a0404,#0b0b0c 70%);border:1px solid rgba(224,32,32,.45);

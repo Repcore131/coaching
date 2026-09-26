@@ -5618,6 +5618,10 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // un reglage d'affichage et un pseudo qu'il choisit. Aucune donnee de sante,
   // mais ils DOIVENT etre classes, sinon ils ne sont proteges par rien.
   'pseudo','visuelNom',
+  // L'accord de l'athlète pour que son coach EXPORTE son avant/après : une
+  // date, ou null. Un consentement, pas une donnée de santé — et il doit être
+  // lu par le coach, donc rester dans /users.
+  'consentementPartageCoach',
   // La date a laquelle les medias d'un dossier dormant ont ete detruits. Une
   // date, et rien d'autre : ni mesure, ni ressenti. Elle DOIT etre classee,
   // sinon elle n'est protegee par rien — signale par l'assertion « Chaque champ
@@ -24929,6 +24933,7 @@ function renderBilanEvolution(c){
         FRESQUE ÉVOLUTION
         <div style="height:1px;background:rgba(224,32,32,.2);flex:1"></div>
       </div>
+      ${(()=>{ try{ return htmlBoutonAvantApres(c,'coach'); }catch(e){ return ''; } })()}
       ${viewSections}
     </div>`;
   };
@@ -62557,7 +62562,10 @@ function bPhotoCards(prefix){
   const paumes=!!(currentUser&&currentUser.photoPaumes);
   if(paumes&&typeof bilData==='object'&&bilData) bilData[prefix+'-photo-paumes']='oui';
   const P=[{k:'face',l:'DE FACE',img:B.face},{k:'back',l:'DE DOS',img:B.back},{k:'side',l:'DE PROFIL',img:B.side}];
-  return `<div style="display:flex;gap:8px">`+P.map(p=>{
+  // MON AVANT/APRÈS : sur les bilans DÉJÀ enregistrés — celui qu'on remplit
+  // ne compte qu'une fois envoyé.
+  let _aaBtn=''; try{ _aaBtn=htmlBoutonAvantApres(currentUser); }catch(e){ _aaBtn=''; }
+  return _aaBtn+`<div style="display:flex;gap:8px">`+P.map(p=>{
     const key=prefix+'-photo-'+p.k;
     const done=!!bilData[key];
     return `<div style="flex:1;min-width:0;background:var(--surface-1);border:1px solid #222;border-radius:var(--r-3);padding:14px 6px 12px;text-align:center">
@@ -68769,6 +68777,397 @@ function rendreMusclesEvolution(){
   monterCarteMuscles('ev');
   return true;
 }
+// ══════════════════ MON AVANT / APRÈS ══════════════════════════════════════
+//
+// DEUX GESTES : toucher « Mon avant/après », puis « Partager en story ». Tout le
+// reste est déjà choisi — le premier et le dernier bilan, la vue de face — et
+// se change sous « Personnaliser » pour qui le veut.
+//
+// ⚠ 100 % LOCAL. Les photos sont lues là où elles sont — le blob sur
+//   l'appareil d'abord, sinon l'URL de l'hébergeur (téléchargée, jamais
+//   renvoyée) — et composées dans un canvas. Le flou du visage, le fond, les
+//   chiffres : tout se fait ici. Rien ne part, sauf ce que l'athlète partage
+//   lui-même, et la PREMIÈRE fois il est prévenu que l'image contient sa photo.
+//
+// ⚠ CÔTÉ COACH, MÊME OUTIL, EXPORT SOUS ACCORD. Le coach voit l'aperçu ; il ne
+//   partage ni n'enregistre qu'avec u.consentementPartageCoach = {date}, posé
+//   par l'athlète lui-même dans son propre avant/après.
+const AA_VUES=Object.freeze([{k:'face',lib:'Face'},{k:'back',lib:'Dos'},{k:'side',lib:'Profil'}]);
+const AA_FORMATS=Object.freeze({story:{w:1080,h:1920},post:{w:1080,h:1350}});
+// PURE. Les bilans qui portent une photo de cette vue, dans l'ordre.
+function aaBilansAvecPhoto(u,vue){
+  let bl=[]; try{ bl=bilansOrdonnes(u)||[]; }catch(e){ bl=[]; }
+  return bl.filter(b=>{ try{ return photoBilanExiste(b,vue); }catch(e){ return false; } });
+}
+// PURE. Les vues pour lesquelles un avant/après existe (au moins deux bilans).
+function aaVuesDisponibles(u){
+  return AA_VUES.map(v=>v.k).filter(k=>aaBilansAvecPhoto(u,k).length>=2);
+}
+function aaDisponible(u){ return aaVuesDisponibles(u).length>0; }
+// PURE. « 12 SEMAINES », « 9 JOURS », « 1 AN ET 3 MOIS » n'existe pas : au-delà
+// d'un an, des mois.
+function aaEcart(d1,d2){
+  const j=Math.max(0,Math.round((Number(d2)-Number(d1))/864e5));
+  if(j<14) return j+(j>1?' JOURS':' JOUR');
+  const s=Math.round(j/7);
+  if(s<=52) return s+' SEMAINES';
+  return Math.round(j/30.44)+' MOIS';
+}
+// PURE. La meilleure charge soulevée jusqu'à la date `t` (séries validées).
+function aaChargeMax(u,t){
+  let best=null;
+  for(const s of ((u&&u.sessions)||[])){
+    if(!s||!(s.date<=t)) continue;
+    for(const e of _wrExos(s)) for(const st of e.sets){
+      if(!st||st.done===false) continue;
+      const kg=parseFloat(st.weight)||0;
+      if(kg>0&&(!best||kg>best.kg)) best={kg,nom:e.nom};
+    }
+  }
+  return best;
+}
+// PURE. L'indicateur choisi, ou null : 'aucun' (défaut), 'taille', 'charge'.
+function aaIndicateur(u,avant,apres,cle){
+  if(cle==='taille'){
+    const a=getBM(avant,'waist'), b=getBM(apres,'waist');
+    if(!(a>0&&b>0)) return null;
+    return {lib:'TOUR DE TAILLE',avant:a,apres:b,unite:'cm'};
+  }
+  if(cle==='charge'){
+    const a=aaChargeMax(u,avant.date), b=aaChargeMax(u,apres.date);
+    if(!a||!b) return null;
+    return {lib:'CHARGE MAX',avant:a.kg,apres:b.kg,unite:'kg'};
+  }
+  return null;
+}
+// PURE. Les options par défaut : premier et dernier bilan, face si possible.
+function aaDefaut(u){
+  const vues=aaVuesDisponibles(u);
+  if(!vues.length) return null;
+  const vue=vues.indexOf('face')>=0?'face':vues[0];
+  const l=aaBilansAvecPhoto(u,vue);
+  return {vue,avant:Number(l[0].date),apres:Number(l[l.length-1].date),
+    flou:false,poids:false,indicateur:'aucun',fond:'noir',format:'story'};
+}
+// Le bouton, là où il sert : l'onglet Évolution (photos), l'étape photos du
+// bilan, la fiche coach. Rien tant qu'il n'y a pas deux photos du même angle.
+function htmlBoutonAvantApres(u,role){
+  if(!aaDisponible(u)) return '';
+  return '<button type="button" class="aa-bouton" onclick="ouvrirAvantApres(\''+(role==='coach'?'coach':'athlete')+'\')">'
+    +'<span class="aa-bouton-i" aria-hidden="true">'+icon('zap',18)+'</span>'
+    +'<span><b>'+(role==='coach'?'Avant / après':'Mon avant/après')+'</b>'
+    +'<span>'+(role==='coach'?'Aperçu composé en un geste':'Composé en un geste, prêt pour ta story')+'</span></span></button>';
+}
+
+// ── LES PHOTOS, LUES SUR PLACE ─────────────────────────────────────────
+// Le blob local d'abord (la haute définition, sans réseau) ; sinon l'URL,
+// demandée en CORS pour que le canvas reste exportable ; sinon le data-URL
+// de l'ancien format.
+const _aaImages=new Map();
+function aaChargerPhoto(b,vue){
+  const k=Number(b&&b.date)+'|'+vue;
+  if(_aaImages.has(k)) return _aaImages.get(k);
+  const p=(async()=>{
+    let src=null, objet=null;
+    const ref=photoBilanRef(b,vue);
+    if(ref&&ref.cle){
+      try{ const bl=await photoBilanBlob(ref); if(bl){ objet=URL.createObjectURL(bl); src=objet; } }catch(e){}
+    }
+    if(!src) src=photoBilanSrc(b,vue);
+    if(!src) throw new Error('photo introuvable');
+    return await new Promise((ok,ko)=>{
+      const i=new Image();
+      if(/^https?:/i.test(src)) i.crossOrigin='anonymous';
+      i.onload=()=>ok(i);
+      i.onerror=()=>{ _aaImages.delete(k); ko(new Error('photo illisible')); };
+      i.src=src;
+    });
+  })();
+  p.catch(()=>_aaImages.delete(k));
+  _aaImages.set(k,p);
+  return p;
+}
+
+// ── LA COMPOSITION ─────────────────────────────────────────────────────
+// Recadre une photo pour REMPLIR un cadre (cover), centrée en largeur, calée
+// un peu haut : on coupe les pieds plutôt que la tête.
+function _aaCouvrir(g,img,x,y,w,h){
+  const iw=img.naturalWidth||img.width, ih=img.naturalHeight||img.height;
+  const k=Math.max(w/iw,h/ih), dw=iw*k, dh=ih*k;
+  g.save(); g.beginPath(); g.rect(x,y,w,h); g.clip();
+  g.drawImage(img,x+(w-dw)/2,y+(h-dh)*0.3,dw,dh);
+  g.restore();
+}
+// LE FLOU DU VISAGE : le tiers haut du cadre, réduit par paliers puis agrandi
+// avec lissage — l'équivalent d'un flou gaussien large, SANS lire un seul
+// pixel (getImageData lèverait sur une photo sans en-tête CORS). Le visage
+// est illisible ; la silhouette, elle, reste.
+function _aaFlouterHaut(g,x,y,w,h){
+  const hh=Math.round(h/3);
+  const src=document.createElement('canvas'); src.width=w; src.height=hh;
+  src.getContext('2d').drawImage(g.canvas,x,y,w,hh,0,0,w,hh);
+  let cur=src, cw=w, ch=hh;
+  while(cw>w/28){
+    const n=document.createElement('canvas'); n.width=Math.max(2,Math.round(cw/2)); n.height=Math.max(2,Math.round(ch/2));
+    const nx=n.getContext('2d'); nx.imageSmoothingEnabled=true; nx.imageSmoothingQuality='high';
+    nx.drawImage(cur,0,0,n.width,n.height); cur=n; cw=n.width; ch=n.height;
+  }
+  // LE BAS DE LA BANDE EST FONDU (le dernier quart) : pas de coupure nette
+  // au niveau des épaules.
+  const t=document.createElement('canvas'); t.width=w; t.height=hh;
+  const tx=t.getContext('2d'); tx.imageSmoothingEnabled=true; tx.imageSmoothingQuality='high';
+  tx.drawImage(cur,0,0,w,hh);
+  const m=tx.createLinearGradient(0,hh*0.72,0,hh);
+  m.addColorStop(0,'rgba(0,0,0,1)'); m.addColorStop(1,'rgba(0,0,0,0)');
+  tx.globalCompositeOperation='destination-in';
+  tx.fillStyle=m; tx.fillRect(0,0,w,hh);
+  g.save(); g.beginPath(); g.rect(x,y,w,hh); g.clip();
+  g.drawImage(t,x,y);
+  g.restore();
+  return hh;
+}
+/**
+ * Le visuel, 1080×1920 (story) ou 1080×1350 (post).
+ * @param {{avant:{img:any,date:number,poids:?number},apres:{img:any,date:number,poids:?number},
+ *   format?:'story'|'post', fond?:'noir'|'rouge', flou?:boolean, poids?:boolean,
+ *   indicateur?:?{lib:string,avant:number,apres:number,unite:string}, signature?:string}} o
+ */
+function _dessinerAvantApres(o){
+  const F=AA_FORMATS[o.format==='post'?'post':'story'];
+  const W=F.w, H=F.h, post=o.format==='post';
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const g=cv.getContext('2d');
+  if(o.fond==='rouge') _visuelPeindreFond(g,W,H,'rouge');
+  else { g.fillStyle='#000'; g.fillRect(0,0,W,H); }
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const vo=_visuelOutils(g);
+  const cx=W/2, M=post?40:48;
+  // En-tête : AVANT / APRÈS, l'écart.
+  g.textAlign='center'; g.textBaseline='alphabetic';
+  vo.ombre(true); g.fillStyle='#fff';
+  const tT=post?110:150;
+  g.font='700 '+tT+'px '+BEBAS;
+  const yT=post?130:210;
+  vo.ecrire('AVANT / APRÈS',cx,yT);
+  g.fillStyle=o.fond==='rouge'?'#fff':'#E02020'; g.font='800 '+(post?30:38)+'px '+MONT;
+  vo.ecrireEspace(aaEcart(o.avant.date,o.apres.date),cx,yT+(post?48:64),8,true);
+  vo.ombre(false);
+  // Les deux photos, côte à côte, séparées par l'éclair.
+  const gap=post?34:40;
+  const pw=(W-2*M-gap)/2;
+  const py=yT+(post?78:110);
+  const lignes=(o.indicateur?1:0)+(o.poids&&o.avant.poids>0&&o.apres.poids>0?1:0);
+  const bas=(post?120:210)+lignes*(post?56:74);
+  const ph=H-py-bas;
+  [[o.avant,M,'AVANT'],[o.apres,M+pw+gap,'APRÈS']].forEach(([c,x,lib])=>{
+    g.fillStyle='#111'; g.fillRect(x,py,pw,ph);
+    if(c.img) _aaCouvrir(g,c.img,x,py,pw,ph);
+    if(o.flou) _aaFlouterHaut(g,x,py,pw,ph);
+    // Le libellé et la date, en pied de photo, sur un voile.
+    const v=g.createLinearGradient(0,py+ph-150,0,py+ph);
+    v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,0,0,.75)');
+    g.fillStyle=v; g.fillRect(x,py+ph-150,pw,150);
+    vo.ombre(true); g.fillStyle='#fff'; g.font='700 '+(post?60:74)+'px '+BEBAS;
+    vo.ecrire(lib,x+pw/2,py+ph-(post?44:56));
+    g.fillStyle='rgba(255,255,255,.85)'; g.font='700 '+(post?22:26)+'px '+MONT;
+    let dt=''; try{ dt=new Date(c.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}); }catch(e){}
+    vo.ecrire(dt,x+pw/2,py+ph-(post?16:22));
+    vo.ombre(false);
+  });
+  // L'ÉCLAIR ROUGE VERTICAL dans l'interstice : tiré d'une graine (le même
+  // à chaque rendu), halo, trait, cœur.
+  const al=_recAlea(_recGraine(String(o.avant.date)+'|'+o.apres.date));
+  let pts=[{x:cx,y:py-10},{x:cx,y:py+ph+10}], d=gap*0.55;
+  for(let k=0;k<7;k++){
+    const nv=[pts[0]];
+    for(let i=0;i<pts.length-1;i++){
+      const a=pts[i], b=pts[i+1];
+      nv.push({x:Math.max(cx-gap/2+3,Math.min(cx+gap/2-3,(a.x+b.x)/2+(al()*2-1)*d)),y:(a.y+b.y)/2},b);
+    }
+    pts=nv; d*=0.6;
+  }
+  const trace=(w,c,sh)=>{ g.save(); g.lineJoin='round'; g.lineCap='round'; g.strokeStyle=c; g.lineWidth=w;
+    if(sh){ g.shadowColor='#E02020'; g.shadowBlur=sh; }
+    g.beginPath(); g.moveTo(pts[0].x,pts[0].y); for(const p of pts) g.lineTo(p.x,p.y); g.stroke(); g.restore(); };
+  trace(10,'rgba(224,32,32,.55)',30); trace(4,'#E02020',0); trace(1.6,'#fff',0);
+  // Les chiffres : l'indicateur choisi, puis le poids s'il est demandé.
+  let y=py+ph+(post?56:78);
+  const ligne=(lib,a,b,u)=>{
+    const f=v=>String(Math.round(v*10)/10).replace('.',',');
+    const dv=Math.round((b-a)*10)/10;
+    const t=lib+'   '+f(a)+' → '+f(b)+' '+u+'   ('+(dv>0?'+':'')+f(dv)+')';
+    vo.ombre(true); g.fillStyle='#fff';
+    const s=vo.ajuste(t,'800',post?30:38,MONT,W-2*M,18);
+    g.font='800 '+s+'px '+MONT; vo.ecrire(t,cx,y); vo.ombre(false);
+    y+=post?50:66;
+  };
+  if(o.indicateur) ligne(o.indicateur.lib,o.indicateur.avant,o.indicateur.apres,o.indicateur.unite.toUpperCase());
+  if(o.poids&&o.avant.poids>0&&o.apres.poids>0) ligne('POIDS',o.avant.poids,o.apres.poids,'KG');
+  _recSignature(g,vo,String(o.signature||''),H-(post?46:90),W-2*M);
+  vo.ombre(false);
+  return cv;
+}
+
+// ── L'ÉCRAN : l'aperçu plein écran ─────────────────────────────────────
+let _aa=null;           // {role, u, o, imgs:{avant,apres}}
+function _aaDossier(role){
+  if(role==='coach'){ try{ return getOwnedClient(currentClientId)||null; }catch(e){ return null; } }
+  return (typeof currentUser!=='undefined')?currentUser:null;
+}
+function aaExportAutorise(role,u){
+  if(role!=='coach') return true;
+  const c=u&&u.consentementPartageCoach;
+  return !!(c&&Number(c.date)>0);
+}
+function ouvrirAvantApres(role){
+  const u=_aaDossier(role);
+  const o=aaDefaut(u);
+  if(!u||!o){ toast('Il faut deux bilans avec une photo du même angle.','var(--orange)'); return false; }
+  fermerAvantApres();
+  _aa={role:role==='coach'?'coach':'athlete',u,o,imgs:{}};
+  const z=document.createElement('div');
+  z.id='aa-ecran'; z.className='aa-ecran';
+  z.setAttribute('role','dialog'); z.setAttribute('aria-modal','true'); z.setAttribute('aria-label','Avant / après');
+  z.tabIndex=-1;
+  z.addEventListener('keydown',e=>{ if(e.key==='Escape'){ e.preventDefault(); fermerAvantApres(); } });
+  document.body.appendChild(z);
+  _aaRendreEcran();
+  _aaComposer();
+  try{ z.focus({preventScroll:true}); }catch(e){}
+  return true;
+}
+function fermerAvantApres(){
+  const z=document.getElementById('aa-ecran'); if(z) z.remove();
+  _aa=null;
+  return true;
+}
+function _aaRendreEcran(){
+  const z=document.getElementById('aa-ecran'); if(!z||!_aa) return;
+  const {role,u,o}=_aa;
+  const autorise=aaExportAutorise(role,u);
+  const l=aaBilansAvecPhoto(u,o.vue);
+  const date=b=>{ try{ return new Date(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}); }catch(e){ return ''; } };
+  const opts=sel=>l.map(b=>'<option value="'+Number(b.date)+'"'+(Number(b.date)===sel?' selected':'')+'>'+escapeHtml(date(b))+'</option>').join('');
+  const seg=(nom,val,liste)=>'<div class="aa-seg" role="group">'+liste.map(([k,lib,dis])=>'<button type="button"'
+    +(dis?' disabled':'')+' aria-pressed="'+(val===k)+'" onclick="aaReglage(\''+nom+'\',\''+k+'\')">'+escapeHtml(lib)+'</button>').join('')+'</div>';
+  const vues=aaVuesDisponibles(u);
+  const cons=u&&u.consentementPartageCoach&&Number(u.consentementPartageCoach.date)>0;
+  z.innerHTML='<div class="aa-haut"><span>'+(role==='coach'?'Avant / après de '+escapeHtml(u.fname||'l’athlète'):'Mon avant/après')+'</span>'
+    +'<button type="button" class="aa-fermer" aria-label="Fermer" onclick="fermerAvantApres()">✕</button></div>'
+    +'<div class="aa-apercu"><canvas id="aa-canvas" aria-label="Aperçu de l’image"></canvas><div class="aa-charge" id="aa-charge">Composition…</div></div>'
+    +'<div class="aa-bas">'
+    +(autorise
+      ?('<button type="button" class="btn btn-red aa-partager" onclick="aaPartager(this)">'+icon('share',18)
+          +' <span>'+(o.format==='post'?'Partager en post':'Partager en story')+'</span></button>'
+        +'<button type="button" class="btn btn-outline btn-casse aa-enregistrer" onclick="aaEnregistrer(this)">'+icon('download',16)+' <span>Enregistrer</span></button>')
+      :'<p class="aa-refus">L’export demande l’accord de '+escapeHtml(u.fname||'l’athlète')
+        +'. Il peut l’accorder depuis son propre avant/après, sous « Personnaliser ».</p>')
+    +'<p class="aa-avert" id="aa-avert" hidden></p>'
+    +'<details class="aa-perso"><summary>Personnaliser</summary>'
+      +'<label>Avant<select onchange="aaReglage(\'avant\',this.value)">'+opts(o.avant)+'</select></label>'
+      +'<label>Après<select onchange="aaReglage(\'apres\',this.value)">'+opts(o.apres)+'</select></label>'
+      +'<div class="aa-l">Angle</div>'+seg('vue',o.vue,AA_VUES.map(v=>[v.k,v.lib,vues.indexOf(v.k)<0]))
+      +'<div class="aa-l">Chiffre</div>'+seg('indicateur',o.indicateur,[['aucun','Aucun'],['taille','Tour de taille'],['charge','Charge max']])
+      +'<div class="aa-l">Fond</div>'+seg('fond',o.fond,[['noir','Noir'],['rouge','Rouge']])
+      +'<div class="aa-l">Format</div>'+seg('format',o.format,[['story','Story 9:16'],['post','Post 4:5']])
+      +'<label class="aa-case"><input type="checkbox"'+(o.flou?' checked':'')+' onchange="aaReglage(\'flou\',this.checked)"> Flouter le visage</label>'
+      +'<label class="aa-case"><input type="checkbox"'+(o.poids?' checked':'')+' onchange="aaReglage(\'poids\',this.checked)"> Afficher le poids</label>'
+      +((role!=='coach'&&u&&u.coachId)
+        ?'<label class="aa-case"><input type="checkbox"'+(cons?' checked':'')+' onchange="aaConsentementCoach(this.checked)"> Autoriser mon coach à exporter mon avant/après</label>':'')
+      +'<p class="aa-local">Tout est composé sur ton téléphone : aucune photo n’est envoyée.</p>'
+    +'</details></div>';
+}
+// Un réglage change : on recompose, sans refermer « Personnaliser ».
+function aaReglage(nom,val){
+  if(!_aa) return;
+  const o=_aa.o;
+  if(nom==='avant'||nom==='apres') o[nom]=Number(val);
+  else if(nom==='flou'||nom==='poids') o[nom]=!!val;
+  else if(nom==='vue'){
+    const l=aaBilansAvecPhoto(_aa.u,val);
+    if(l.length<2) return;
+    o.vue=val; o.avant=Number(l[0].date); o.apres=Number(l[l.length-1].date);
+  } else o[nom]=val;
+  if(o.avant===o.apres){ toast('Choisis deux bilans différents.','var(--orange)'); }
+  const ouvert=!!document.querySelector('#aa-ecran .aa-perso[open]');
+  _aaRendreEcran();
+  if(ouvert){ const d=document.querySelector('#aa-ecran .aa-perso'); if(d) d.open=true; }
+  _aaComposer();
+}
+// L'ACCORD DE L'ATHLÈTE pour l'export par son coach : une date, ou rien.
+function aaConsentementCoach(on){
+  const u=currentUser; if(!u) return false;
+  u.consentementPartageCoach=on?{date:Date.now()}:null;
+  try{ saveUser(); }catch(e){}
+  toast(on?'Ton coach peut exporter ton avant/après.':'Ton coach ne peut plus exporter ton avant/après.');
+  return true;
+}
+// Les données du dessin pour les réglages courants (images comprises).
+function _aaDonnees(){
+  const {u,o,imgs}=_aa;
+  const bl=aaBilansAvecPhoto(u,o.vue);
+  const av=bl.find(b=>Number(b.date)===o.avant)||bl[0];
+  const ap=bl.find(b=>Number(b.date)===o.apres)||bl[bl.length-1];
+  let sig=''; try{ sig=nomSurVisuels(u); }catch(e){ sig=''; }
+  return {avant:{img:imgs.avant||null,date:Number(av.date),poids:getBW(av)},
+    apres:{img:imgs.apres||null,date:Number(ap.date),poids:getBW(ap)},
+    format:o.format,fond:o.fond,flou:o.flou,poids:o.poids,
+    indicateur:o.indicateur==='aucun'?null:aaIndicateur(u,av,ap,o.indicateur),signature:sig,_av:av,_ap:ap};
+}
+// COMPOSITION IMMÉDIATE : les deux photos sont lues, puis dessinées. Tant
+// qu'elles arrivent, le cadre dit « Composition… ».
+function _aaComposer(){
+  if(!_aa) return;
+  const moi=_aa;
+  const d=_aaDonnees();
+  const ch=document.getElementById('aa-charge'); if(ch) ch.hidden=false;
+  Promise.all([aaChargerPhoto(d._av,moi.o.vue),aaChargerPhoto(d._ap,moi.o.vue)]).then(([a,b])=>{
+    if(_aa!==moi) return;
+    moi.imgs.avant=a; moi.imgs.apres=b;
+    const cv=_dessinerAvantApres(_aaDonnees());
+    const c=document.getElementById('aa-canvas'); if(!c) return;
+    c.width=cv.width; c.height=cv.height;
+    c.getContext('2d').drawImage(cv,0,0);
+    if(ch) ch.hidden=true;
+  }).catch(()=>{ if(ch){ ch.hidden=false; ch.textContent='Une des deux photos n’est pas lisible sur cet appareil.'; } });
+}
+// AVANT LE PREMIER PARTAGE SEULEMENT : « Cette image contient ta photo.
+// Continuer ? ». Une question dans l'écran, pas un confirm() : le « oui » est
+// un nouveau geste, et c'est lui qui ouvre le partage (iOS exige un geste).
+function _aaAvertiCle(){ return 'rc_aa_averti_'+(((_aa&&_aa.role)||'')+'_'+((currentUser&&currentUser.email)||'')); }
+function _aaDejaAverti(){ try{ return localStorage.getItem(_aaAvertiCle())==='1'; }catch(e){ return false; } }
+function _aaSortir(partager,btn,confirme){
+  if(!_aa||!_aa.imgs.avant||!_aa.imgs.apres){ toast('L’image se compose, un instant.','var(--orange)'); return false; }
+  if(!aaExportAutorise(_aa.role,_aa.u)) return false;
+  if(!confirme&&!_aaDejaAverti()){
+    const p=document.getElementById('aa-avert');
+    if(p){
+      const qui=_aa.role==='coach'?('la photo de '+escapeHtml(_aa.u.fname||'ton athlète')):'ta photo';
+      p.innerHTML='Cette image contient '+qui+'. Continuer ?'
+        +'<span><button type="button" class="btn btn-red btn-sm" onclick="_aaSortir('+(partager?'true':'false')+',null,true)">Continuer</button>'
+        +'<button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById(\'aa-avert\').hidden=true">Annuler</button></span>';
+      p.hidden=false;
+    }
+    return false;
+  }
+  try{ localStorage.setItem(_aaAvertiCle(),'1'); }catch(e){}
+  const p=document.getElementById('aa-avert'); if(p) p.hidden=true;
+  if(_storyEnCours) return false;
+  const nom='repcore-avant-apres.jpg', fmt={type:'image/jpeg',ext:'jpg',q:0.9};
+  _storyEnCours=true;
+  let ok=false;
+  try{
+    ok=(partager&&_storySortirPartage(_dessinerAvantApres(_aaDonnees()),nom,undefined,fmt))
+      ||_storySortirTelechargement(_dessinerAvantApres(_aaDonnees()),nom,fmt);
+  }catch(e){ toast('Image impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
+  finally{ _storyEnCours=false; }
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp&&ok){ const t=sp.textContent; sp.textContent='Image prête ✓'; setTimeout(()=>{ sp.textContent=t; },2000); }
+  return ok;
+}
+function aaPartager(btn){ return _aaSortir(true,btn,false); }
+function aaEnregistrer(btn){ return _aaSortir(false,btn,false); }
 // ══════════ LE PLANNING DE RAPPEL, ECRIT EN UN SEUL ENDROIT ════════════
 //
 // Extrait de saveWoReminderConfig le 15/09/2026, quand l'ecran d'accueil des
@@ -71713,7 +72112,8 @@ function showProgressTab(tab,btn,sansMemo){
     // --fq porte la largeur d'une photo. C'est une VARIABLE et non une valeur
     // écrite dans chaque cellule : elle est réajustée après le rendu, une fois
     // la place réellement disponible mesurée, et une seule écriture suffit.
-    let html=`<div data-fresque class="fq-carte" style="--fq:${cellW}px;background:linear-gradient(160deg,#141414 0%,#0b0b0b 55%,#080808 100%);border:1px solid #202020;border-radius:var(--r-4);position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 14px 34px rgba(0,0,0,.55);animation:fadeInUp var(--t-3) var(--c-out)">
+    // MON AVANT/APRÈS : dès deux bilans à photo du même angle, en tête.
+    let html=htmlBoutonAvantApres(currentUser)+`<div data-fresque class="fq-carte" style="--fq:${cellW}px;background:linear-gradient(160deg,#141414 0%,#0b0b0b 55%,#080808 100%);border:1px solid #202020;border-radius:var(--r-4);position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 14px 34px rgba(0,0,0,.55);animation:fadeInUp var(--t-3) var(--c-out)">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 17px,rgba(255,255,255,.016) 17px,rgba(255,255,255,.016) 18px);pointer-events:none"></div>
       <div style="position:absolute;left:-16px;top:34px;width:66px;height:150px;background:repeating-linear-gradient(-58deg,#E02020,#E02020 9px,transparent 9px,transparent 22px);opacity:.4;pointer-events:none;z-index:0"></div>
       <div style="position:absolute;right:-16px;bottom:44px;width:66px;height:150px;background:repeating-linear-gradient(-58deg,#E02020,#E02020 9px,transparent 9px,transparent 22px);opacity:.4;pointer-events:none;z-index:0"></div>
