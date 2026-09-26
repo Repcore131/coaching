@@ -10599,3 +10599,20 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   .an-sv-m{left:auto;right:0;width:min(320px,calc(100vw - 32px))}
   .an-inf .an-dr-r{flex-basis:calc(100% - 40px);min-width:0}
 }
+/* E5 — le menu « Exporter » de l'en-tête de l'analyse. */
+.an-exp{position:relative}
+.an-exp>summary{list-style:none;display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:0 12px;border-radius:10px;border:1px solid #33333a;background:#0e0e10;
+  color:#e4e4e7;font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;white-space:nowrap}
+.an-exp>summary::-webkit-details-marker{display:none}
+.an-exp>summary svg{width:16px;height:16px;flex:none}
+.an-exp>summary svg:last-child{width:14px;height:14px;opacity:.7;transition:transform .15s}
+.an-exp[open]>summary{border-color:rgba(224,32,32,.6)}
+.an-exp[open]>summary svg:last-child{transform:rotate(180deg)}
+.an-exp-m{position:absolute;right:0;top:calc(100% + 6px);z-index:20;width:min(280px,calc(100vw - 32px));display:grid;gap:6px;padding:8px;border-radius:12px;
+  border:1px solid rgba(224,32,32,.55);background:#101013;box-shadow:0 12px 30px rgba(0,0,0,.6)}
+.an-exp-m button{display:grid;gap:2px;text-align:left;padding:9px 11px;border-radius:9px;border:1px solid #26262b;background:#16161a;color:#fff;cursor:pointer}
+.an-exp-m button:hover,.an-exp-m button:focus-visible{border-color:rgba(224,32,32,.6);background:#1c1c21}
+.an-exp-m b{font-size:var(--fs-sm);font-weight:800}
+.an-exp-m span{font-size:var(--fs-2xs);color:#a1a1aa;line-height:1.35}
+/* Sur téléphone, le bouton passe à la ligne, à gauche : le menu s'ouvre depuis son bord gauche. */
+@media (max-width:600px){ .an-exp-m{right:auto;left:0} }

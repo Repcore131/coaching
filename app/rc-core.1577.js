@@ -47476,6 +47476,7 @@ const ANAT_SVG={
   relancer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>',
   points:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="9" r="2.2"/><circle cx="9" cy="18" r="2.2"/><path d="M8 7l8 1.6M16.8 10.8l-6.4 5.6"/></svg>',
   x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  export:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2"/><path d="M6 14h12v7H6z"/></svg>',
   disquette:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l5 5v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v5h8V3M7 21v-7h10v7"/></svg>',
   cadrer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V4h4M17 4h4v4M21 16v4h-4M7 20H3v-4"/><circle cx="12" cy="9" r="2"/><path d="M9 17l1-4h4l1 4"/></svg>',
   entiere:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 16l5-5 4 4 3-3 4 4"/></svg>',
@@ -47745,7 +47746,9 @@ function anatPriorites(res,objectif){
     const conf=ANAT_PRIO.CONF[f.conf]!=null?ANAT_PRIO.CONF[f.conf]:ANAT_PRIO.CONF.C;
     const score=Math.abs(f.niveau)*conf*(rel.indexOf(f.cle)>=0?1:ANAT_PRIO.AUTRE);
     out.push({cle:f.cle,lib:f.lib,verdict:anatVerdict(f),niveau:f.niveau,conf:f.conf||null,score,action,
-      exercices:(am&&am.exercices)||(pr&&pr.exercices)||[]});
+      exercices:(am&&am.exercices)||(pr&&pr.exercices)||[],
+      // E5 : de quoi la dire à l'athlète — l'exercice, et le réglage sans un mot du lexique.
+      quoi:(am&&am.quoi)||'',consigne:(am&&am.consigne)||''});
   }
   return out.sort((a,b)=>b.score-a.score||Math.abs(b.niveau)-Math.abs(a.niveau)).slice(0,3);
 }
@@ -47764,6 +47767,177 @@ function _htmlAnatPriorites(res,c){
       +'<span class="an-prio-a">'+escapeHtml(x.action)+'</span></span></button>').join('')+'</div>'
     :'<p class="an-prio-vide">Rien à corriger : leviers dans la moyenne. Aucune zone n’est au-dessus de « léger » sur ce bilan.</p>';
   return '<div class="an-prio"><div class="an-prio-h"><h5>3 priorités</h5>'+seg+'</div>'+corps+'</div>';
+}
+// ── LES DEUX EXPORTS (E5, 26/09/2026) ─────────────────────────────────────
+// Un HTML d'impression A4, avec les polices du dépôt, imprimé par le
+// navigateur depuis une iframe dédiée : pas de service tiers, rien ne quitte
+// l'appareil. Deux versions :
+//   COACH   — tout : priorités, chiffres, repères, sources, dates et marges ;
+//   ATHLÈTE — la photo avec ses points, et les trois priorités dites en
+//             consignes d'exécution. Aucun chiffre de population, aucun mot du
+//             lexique morphologique (ANAT_LEXIQUE_MORPHO) : c'est ce qui peut
+//             descendre chez l'athlète, et rien d'autre.
+/** Le style d'impression, commun aux deux versions. */
+function _anatExportCss(){
+  // LES POLICES DU DÉPÔT, par leur chemin relatif : un document srcdoc prend
+  // l'adresse de la page qui l'ouvre, et l'impression attend fonts.ready.
+  return "@font-face{font-family:'RC Texte';src:url('fonts/montserrat-var-latin.woff2') format('woff2');font-weight:100 900;font-display:swap;}"
+    +"@font-face{font-family:'RC Titre';src:url('fonts/bebasneue-400-latin.woff2') format('woff2');font-display:swap;}"
+    +'@page{size:A4;margin:14mm 13mm}'
+    +'*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +'html,body{margin:0;background:#fff;color:#18181b;font:10pt/1.45 "RC Texte",Arial,sans-serif}'
+    +'h1,h2,h3{font-family:"RC Titre","Arial Narrow",Impact,sans-serif;font-weight:400;letter-spacing:.04em;margin:0;color:#111}'
+    +'h1{font-size:24pt;line-height:1}h1 span{color:#c81e1e}h2{font-size:14pt;margin:16px 0 6px;border-bottom:1.5px solid #c81e1e;padding-bottom:2px}h3{font-size:11.5pt;margin:0 0 3px}'
+    +'.ex-t{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;border-bottom:3px solid #111;padding-bottom:8px;margin-bottom:10px}'
+    +'.ex-t p{margin:3px 0 0;font-size:9pt;color:#52525b}.ex-m{font-size:8pt;color:#52525b;text-align:right}'
+    +'.ex-ph{display:flex;gap:10px;justify-content:center;margin:6px 0 4px}'
+    +'.ex-f{margin:0;text-align:center;break-inside:avoid}.ex-f figcaption{font-size:8pt;color:#52525b;margin-top:3px}'
+    +'.ex-c{position:relative;height:118mm;margin:0 auto;border-radius:6px;overflow:hidden;background:#111}'
+    +'.ex-a .ex-c{height:150mm}'
+    +'.ex-c img,.ex-c svg{position:absolute;inset:0;width:100%;height:100%}.ex-c img{object-fit:fill}'
+    +'.ex-c .an-t{stroke:#ff3b3b;stroke-width:3;stroke-linecap:round;opacity:.9}.ex-c .an-t-plomb,.ex-c .an-t-sol{stroke:#fff;stroke-width:2;stroke-dasharray:8 6;opacity:.7}'
+    +'.ex-c .an-pt{fill:#ff3b3b;stroke:#fff;stroke-width:2.5}.ex-c .an-pt.est{fill:#f5a524}.ex-c .an-pt.man{fill:#22c55e}.ex-c .an-hit{display:none}'
+    +'.ex-p{display:grid;gap:7px;margin:4px 0}.ex-p>div{display:grid;grid-template-columns:26px 1fr;gap:9px;align-items:start;border:1px solid #e4e4e7;border-left:4px solid #c81e1e;border-radius:6px;padding:8px 10px;break-inside:avoid}'
+    +'.ex-p b.n{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#c81e1e;color:#fff;font:400 13pt "RC Titre","Arial Narrow",Impact,sans-serif}'
+    +'.ex-p p{margin:2px 0 0}.ex-p em{font-style:normal;color:#52525b;font-size:8.5pt}'
+    +'table{width:100%;border-collapse:collapse;font-size:8.5pt;margin:4px 0 8px}th,td{text-align:left;vertical-align:top;padding:3px 5px;border-bottom:1px solid #e4e4e7}'
+    +'th{font-size:7.5pt;text-transform:uppercase;letter-spacing:.05em;color:#52525b;border-bottom:1.5px solid #18181b}td.v{white-space:nowrap;font-weight:700}'
+    +'.ex-z{break-inside:avoid;border:1px solid #e4e4e7;border-radius:6px;padding:8px 10px;margin:0 0 8px}'
+    +'.ex-z .h{display:flex;justify-content:space-between;gap:10px;align-items:baseline}.ex-z .h span{font-size:8.5pt;font-weight:700;color:#c81e1e}'
+    +'.ex-z small,.ex-s{display:block;font-size:7.5pt;color:#71717a;margin-top:3px}.ex-z ul{margin:3px 0 0 16px;padding:0}'
+    +'.ex-n{font-size:8pt;color:#52525b;margin-top:12px;border-top:1px solid #e4e4e7;padding-top:6px}';
+}
+/** La photo d'une vue, avec ses points et ses traits — sans un mot : ni étiquette ni infobulle. */
+function _anatExportPhoto(a,pb,vue,legende){
+  const v=a&&a[vue], src=_anatSrcVue(pb,vue), pts=anatPoints(a,vue);
+  if(!v||!src||!pts||!v.w||!v.h) return '';
+  const dessin=String(_anatDessin(vue,pts,v.w,v.h,false)||'')
+    .replace(/<circle class="an-hit"[^>]*>[\s\S]*?<\/circle>/g,'').replace(/<title>[\s\S]*?<\/title>/g,'').replace(/<text[\s\S]*?<\/text>/g,'');
+  return '<figure class="ex-f"><div class="ex-c" style="aspect-ratio:'+v.w+'/'+v.h+'"><img src="'+escapeHtml(src)+'" alt="">'
+    +'<svg viewBox="0 0 '+v.w+' '+v.h+'" preserveAspectRatio="none" aria-hidden="true">'+dessin+'</svg></div>'
+    +(legende?'<figcaption>'+escapeHtml(legende)+'</figcaption>':'')+'</figure>';
+}
+/**
+ * Les trois priorités, dites en consignes pour l'athlète : le nom de
+ * l'exercice et le réglage, clause par clause, sans aucune qui porte un mot du
+ * lexique. Une priorité qui n'a plus rien à dire une fois filtrée est omise.
+ * PURE.
+ */
+function anatConsignesExport(prios){
+  const out=[];
+  for(const x of (prios||[])){
+    const texte=x.consigne||anatConsigneAthlete(x.action||'');
+    if(!texte||ANAT_LEXIQUE_MORPHO.test(texte)) continue;
+    const titre=(x.quoi&&!ANAT_LEXIQUE_MORPHO.test(x.quoi))?x.quoi:'Consigne '+(out.length+1);
+    out.push({titre,texte});
+  }
+  return out;
+}
+/**
+ * PURE (hors lecture des polices). Le document d'impression complet.
+ * @param {any} c le dossier  @param {'coach'|'athlete'} mode
+ * @returns {string} le HTML, ou '' s'il n'y a pas d'analyse à exporter
+ */
+function anatExportHtml(c,mode){
+  if(!c||!c.morphoAnat) return '';
+  const pb=anatPremierBilan(c);
+  const a=(c.morphoAnat.v===ANAT_VERSION&&Number(c.morphoAnat.bilan)===pb.date)?c.morphoAnat:null;
+  if(!a||pb.manque.length) return '';
+  const res=anatMesuresRendu(a,c);
+  const obj=_anatPrioObj||anatObjectif(c);
+  const prios=anatPriorites(res,obj);
+  const prenom=String(c.fname||'').trim(), nom=(prenom+' '+String(c.lname||'').trim()).trim()||'Athlète';
+  const dBilan=_anatDateFr(pb.date), dJour=_anatDateFr(Date.now());
+  const tete=(titre,sous,droite)=>'<header class="ex-t"><div><h1>'+titre+'</h1><p>'+escapeHtml(sous)+'</p></div><div class="ex-m">'+droite+'</div></header>';
+  const doc=(titre,corps,cls)=>'<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>'+escapeHtml(titre)+'</title><style>'+_anatExportCss()+'</style></head><body class="'+cls+'">'+corps+'</body></html>';
+
+  if(mode==='athlete'){
+    const cs=anatConsignesExport(prios);
+    const corps=tete('Tes <span>consignes</span>',(prenom||'')+(prenom?' · ':'')+'bilan du '+dBilan,'Préparé par ton coach<br>le '+dJour)
+      +'<div class="ex-ph">'+_anatExportPhoto(a,pb,'face','Ta photo de face, bilan du '+dBilan)+'</div>'
+      +'<h2>Tes '+(cs.length>1?cs.length+' priorités':'priorités')+' à l’entraînement</h2>'
+      +(cs.length?'<div class="ex-p">'+cs.map((x,i)=>'<div><b class="n">'+(i+1)+'</b><div><h3>'+escapeHtml(x.titre)+'</h3><p>'+escapeHtml(x.texte)+'</p></div></div>').join('')+'</div>'
+        :'<p>Rien à changer pour l’instant : garde tes réglages habituels, séance après séance.</p>')
+      +'<p class="ex-n">Applique-les dès l’échauffement, puis à ta charge de travail. On en reparle à ta prochaine séance ou à ton prochain bilan.</p>';
+    return doc('Consignes · '+(prenom||'athlète'),corps,'ex-a');
+  }
+
+  // ── LA VERSION COACH : tout, avec ses sources, ses dates et ses marges.
+  const ech=res.echelle;
+  const echTxt=ech&&ech.cmPx?'Échelle par la taille du dossier : '+_anatN(ech.taille,0)+' cm, ±'+ech.pct+' %':'Sans taille au dossier : des rapports, aucun centimètre';
+  const textes={};
+  res.fiches.forEach(f=>{ textes[f.cle]=_anatSafe(()=>anatTexte(f,res))||{}; });
+  const lignePrio=(x,i)=>'<div><b class="n">'+(i+1)+'</b><div><h3>'+escapeHtml(x.lib)+'</h3><em>'+escapeHtml(x.verdict)+(x.conf?' · confiance '+x.conf:'')+'</em><p>'+escapeHtml(x.action)+'</p></div></div>';
+  const synthese='<table><thead><tr><th>Zone</th><th>Lecture</th><th>Valeur</th><th>Marge</th><th>Confiance</th></tr></thead><tbody>'
+    +res.fiches.map(f=>'<tr><td>'+escapeHtml(f.lib)+'</td><td>'+escapeHtml(f.etat==='ok'?anatVerdict(f):'non lisible')+(f.grise?' (à confirmer)':'')+'</td><td class="v">'+escapeHtml(f.valeur||'—')+'</td><td>'+escapeHtml(f.tolerance||'—')+'</td><td>'+escapeHtml(f.conf||'—')+'</td></tr>').join('')
+    +'</tbody></table>';
+  const zone=(f)=>{
+    const t=textes[f.cle]||{};
+    const lis=(l)=>(l&&l.length)?'<ul>'+l.map(x=>'<li>'+escapeHtml(typeof x==='string'?x:(x&&x.quoi?x.quoi+' : '+x.reglage:String(x)))+'</li>').join('')+'</ul>':'';
+    const ch=(f.chiffres||[]).length?'<table><thead><tr><th>Mesure</th><th>Valeur</th><th>Repère</th><th>Écart</th></tr></thead><tbody>'
+      +f.chiffres.map(l=>'<tr><td>'+escapeHtml(l.lib)+(l.def?'<small>'+escapeHtml(l.def)+'</small>':'')+'</td><td class="v">'+escapeHtml(l.val==null?'—':String(l.val))+'</td><td>'+escapeHtml(l.ref==null?'':String(l.ref))+'</td><td>'+escapeHtml(l.ecart==null?'':String(l.ecart))+'</td></tr>').join('')+'</tbody></table>':'';
+    return '<section class="ex-z"><div class="h"><h3>'+escapeHtml(f.lib)+'</h3><span>'+escapeHtml(f.etat==='ok'?anatVerdict(f):'non lisible')+(f.conf?' · confiance '+f.conf:'')+'</span></div>'
+      +(t.court?'<p>'+escapeHtml(t.court)+'</p>':'')+ch
+      +(t.privilegier&&t.privilegier.length?'<b>À privilégier</b>'+lis(t.privilegier):'')
+      +(t.amenager&&t.amenager.length?'<b>À aménager</b>'+lis(t.amenager):'')
+      +(t.verifier?'<small>À vérifier : '+escapeHtml(t.verifier)+'</small>':'')
+      +'<small>Marge : '+escapeHtml(f.tolerance||'—')+' · Source : '+escapeHtml(f.source||'photo du bilan du '+dBilan)+'</small></section>';
+  };
+  const corps=tete('Analyse <span>morpho-anatomique</span>',nom+' · bilan du '+dBilan+(pb.bilan&&pb.bilan.type==='depart'?' (départ)':''),
+      'Analyse du '+_anatDateFr(a.date||pb.date)+'<br>Exportée le '+dJour)
+    +'<div class="ex-ph">'+_anatExportPhoto(a,pb,'face','Face · '+dBilan)+_anatExportPhoto(a,pb,'dos','Dos · '+dBilan)+(a.profil?_anatExportPhoto(a,pb,'profil','Profil · '+dBilan):'')+'</div>'
+    +'<p class="ex-s">'+escapeHtml(echTxt)+' · repères '+escapeHtml(ANAT_REF.SOURCE)+' · points rouges lus par le moteur, verts posés à la main, orangés estimés.</p>'
+    +'<h2>3 priorités — objectif '+escapeHtml(ANAT_PRIO.LIB[obj]||obj)+'</h2>'
+    +(prios.length?'<div class="ex-p">'+prios.map(lignePrio).join('')+'</div>':'<p>Rien au-dessus de « léger » sur ce bilan.</p>')
+    +'<h2>Résultats</h2>'+synthese
+    +'<h2>Détail par zone</h2>'+res.fiches.map(zone).join('')
+    +'<p class="ex-n">Les repères sont posés sur les photos du bilan, puis ajustables à la main ; la photo est mise à l’échelle par la taille du dossier. Chaque écart à la moyenne est un levier à connaître, pas un défaut. Document de travail du coach : il ne se transmet pas tel quel à l’athlète.</p>';
+  // ⚠ PAS « ex-c » : c'est la classe du cadre photo (fond noir, hauteur fixe, rogné).
+  return doc('Analyse · '+nom+' · '+dBilan,corps,'ex-coach');
+}
+/**
+ * « Exporter » : le document dans une iframe dédiée, puis la boîte d'impression
+ * du navigateur — qui propose aussi « Enregistrer en PDF ». On attend les
+ * polices et la photo : imprimer avant, c'est imprimer une page sans elles.
+ * @param {'coach'|'athlete'} mode  @param {{imprimer?:boolean}} [o]  imprimer:false pour le banc et les tests
+ * @returns {Promise<HTMLIFrameElement|null>}
+ */
+async function anatExporter(mode,o){
+  const opt=o||{};
+  try{ document.querySelectorAll('details.an-exp[open]').forEach(d=>d.open=false); }catch(e){}
+  const c=getOwnedClient(currentClientId);
+  const html=_anatSafe(()=>anatExportHtml(c,mode==='athlete'?'athlete':'coach'));
+  if(!html){ toast('Rien à exporter : l’analyse n’est pas encore faite.','var(--orange)'); return null; }
+  document.getElementById('an-export')?.remove();
+  const f=document.createElement('iframe');
+  f.id='an-export'; f.setAttribute('aria-hidden','true'); f.tabIndex=-1;
+  f.style.cssText='position:fixed;right:0;bottom:0;width:210mm;height:297mm;border:0;opacity:0;pointer-events:none;z-index:-1';
+  const pret=new Promise(r=>{ f.onload=()=>r(); });
+  f.srcdoc=html;
+  document.body.appendChild(f);
+  await Promise.race([pret,new Promise(r=>setTimeout(r,4000))]);
+  const d=f.contentDocument;
+  try{
+    await Promise.race([Promise.all([
+      d.fonts?d.fonts.ready:Promise.resolve(),
+      ...[...d.images].map(i=>i.complete?Promise.resolve():new Promise(r=>{ i.onload=i.onerror=()=>r(); }))
+    ]),new Promise(r=>setTimeout(r,8000))]);
+  }catch(e){}
+  if(opt.imprimer===false) return f;
+  const w=f.contentWindow;
+  const retirer=()=>{ setTimeout(()=>{ try{ f.remove(); }catch(e){} },500); };
+  try{ w.addEventListener('afterprint',retirer,{once:true}); }catch(e){}
+  setTimeout(retirer,120000);
+  try{ w.focus(); w.print(); }catch(e){ toast('Impression impossible sur ce navigateur.','var(--orange)'); retirer(); }
+  return f;
+}
+/** Le menu « Exporter » de l'en-tête. */
+function _htmlAnatExport(){
+  return '<details class="an-exp"><summary aria-label="Exporter l’analyse">'+ANAT_SVG.export+'<span>Exporter</span>'+ANAT_SVG.chev+'</summary>'
+    +'<div class="an-exp-m" role="menu">'
+    +'<button type="button" role="menuitem" onclick="anatExporter(\'coach\')"><b>Coach</b><span>Tous les chiffres, sources, dates et marges</span></button>'
+    +'<button type="button" role="menuitem" onclick="anatExporter(\'athlete\')"><b>Athlète</b><span>Sa photo et ses consignes d’exécution</span></button>'
+    +'</div></details>';
 }
 /** E1 : ce que le contrôle à l'envoi a dit des photos de ce bilan, pour le coach. */
 function _anatCtlEnvoi(b){
@@ -49038,6 +49212,7 @@ function _htmlAnat(c){
   const edit=_anatEdit&&_anatEdit.email===c.email?_anatEdit:null;
   const tete='<div class="an-tete"><span class="an-tete-i">'+ANAT_SVG.tete+'</span><div class="an-tete-c"><h4>Analyse <span>morpho-anatomique</span></h4>'
     +_htmlAnatChoixBilan(c,pb,!!edit)+'</div>'
+    +((grise||!a)?'':_htmlAnatExport())
     +((grise||!a)?'':'<div class="an-vues" role="tablist">'
       +['face','dos','profil'].map(v=>{ const sans=v==='profil'&&!a.profil, on=_anatVueDe(a,_anatVueActive)===v;
         return '<button type="button" role="tab" class="an-vue-b'+(on?' actif':'')+'" aria-selected="'+on+'"'+((edit||sans)?' disabled':'')

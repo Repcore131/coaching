@@ -45744,6 +45744,65 @@ async function testExercices(){
         if(appels!==1) return _echec('pas parti sur Données : '+appels);
         return true;
       }finally{ _ccdVue=sv.vue; anatAnalyser=sv.an; }}));
+    // E5 (26/09/2026) : deux exports propres.
+    const _e5Dossier=()=>{
+      const bl=[{date:1,type:'depart',photos:{face:'data:image/gif;base64,R0lGODlhAQABAAAAACw=',back:'data:image/gif;base64,R0lGODlhAQABAAAAACw='}}];
+      const g=_anatGab(); const p=g.face.auto.pts;
+      // Un humérus allongé : de quoi sortir au moins une zone au-dessus de « léger ».
+      const e=p.epaule_l, co=p.coude_l; p.coude_l=[co[0],e[1]+(co[1]-e[1])*1.25,co[2]||0.9];
+      return _anatDossier({email:'e5@t.fr',fname:'Léa',lname:'Test',bilans:bl,morphoAnat:Object.assign(g,{dos:null,date:2})});
+    };
+    const _e5Texte=(h)=>String(h).replace(/<style[\s\S]*?<\/style>/g,' ').replace(/<[^>]+>/g,' ').replace(/&[a-z#0-9]+;/g,' ');
+    ok('E5 — LA VERSION ATHLÈTE NE PORTE AUCUN MOT DU LEXIQUE, AUCUN PERCENTILE, AUCUN POURCENTAGE',(()=>{
+      const c=_e5Dossier();
+      const h=anatExportHtml(c,'athlete');
+      if(!h) return _echec('pas d’export athlète');
+      const t=_e5Texte(h);
+      if(ANAT_LEXIQUE_MORPHO.test(t)) return _echec('mot du lexique : « '+t.match(ANAT_LEXIQUE_MORPHO)[0]+' »');
+      if(/%|percentile|ᵉ/i.test(t)) return _echec('une valeur de population : '+(t.match(/.{0,30}(%|percentile|ᵉ).{0,10}/i)||[''])[0]);
+      if(/\b(long|longue|longs|longues|court|courte|courts|courtes|étroit|étroite|étroits|étroites)\b/i.test(t)) return _echec('un mot de longueur ou de largeur');
+      if(h.indexOf('<img')<0||h.indexOf('<svg')<0) return _echec('la photo avec ses repères manque');
+      if(/<text|<title>[^<]*(Humérus|Acromion|Clavicule|Sommet)/i.test(h)) return _echec('une étiquette de repère sur la photo');
+      if(h.indexOf('@page{size:A4')<0||h.indexOf('montserrat-var-latin.woff2')<0) return _echec('ni A4 ni polices du dépôt');
+      return true;})());
+    ok('E5 — LES PRIORITÉS SE DISENT EN CONSIGNES : UNE CLAUSE QUI PORTE UN MOT DU LEXIQUE EST RETIRÉE',(()=>{
+      const l=anatConsignesExport([
+        {quoi:'Squat',consigne:'',action:'Squat : cale de 2 cm sous les talons ; tes fémurs longs font partir le buste'},
+        {quoi:'Humérus long',consigne:'Coudes à 45° du buste en bas du mouvement',action:''},
+        {quoi:'Curl',consigne:'',action:'levier du bras défavorable'}]);
+      if(l.length!==2) return _echec(l.length+' consignes : '+JSON.stringify(l));
+      if(l[0].texte.indexOf('cale')<0||/fémur|long/i.test(l[0].texte)) return _echec('clause mal filtrée : '+l[0].texte);
+      if(l[1].titre!=='Consigne 2') return _echec('un titre du lexique passe : '+l[1].titre);
+      for(const x of l) if(ANAT_LEXIQUE_MORPHO.test(x.titre+' '+x.texte)) return _echec('lexique : '+x.titre+' / '+x.texte);
+      return true;})());
+    ok('E5 — LA VERSION COACH PORTE CHAQUE VALEUR AVEC SA MARGE, SA SOURCE ET SES DATES',(()=>{
+      const c=_e5Dossier();
+      const h=anatExportHtml(c,'coach');
+      if(!h) return _echec('pas d’export coach');
+      const t=_e5Texte(h);
+      const res=anatMesures(c.morphoAnat,c,{});
+      const f=res.fiches.find(x=>x.etat==='ok'&&x.tolerance);
+      if(!f||t.indexOf(f.tolerance.slice(0,12))<0) return _echec('marge absente');
+      if(!/Source/.test(t)||!/Exportée le/.test(t)||!/bilan du/.test(t)) return _echec('source ou dates absentes');
+      // Le corps du document ne porte pas la classe du cadre photo (fond noir, hauteur fixe, rogné).
+      if(/<body class="ex-c"/.test(h)) return _echec('le document entier est pris pour un cadre photo');
+      if(t.indexOf(_anatDateFr(1))<0) return _echec('date du bilan absente');
+      if(anatExportHtml(_anatDossier({email:'vide@t.fr'}),'coach')!=='') return _echec('un export sans analyse');
+      return true;})());
+    okA('E5 — « EXPORTER » POSE LE DOCUMENT DANS UNE IFRAME DÉDIÉE, SANS SERVICE TIERS',(async()=>{
+      const c=_e5Dossier(); const sv={own:getOwnedClient};
+      try{
+        getOwnedClient=()=>c;
+        const f=await anatExporter('athlete',{imprimer:false});
+        if(!f||f.tagName!=='IFRAME') return _echec('pas d’iframe');
+        const d=f.contentDocument;
+        if(!d||!d.body.classList.contains('ex-a')) return _echec('le document athlète n’est pas dans l’iframe');
+        if(!/Tes/.test(d.querySelector('h1').textContent)) return _echec('titre : '+d.querySelector('h1').textContent);
+        const ext=[...d.querySelectorAll('[src],link[href]')].map(e=>e.getAttribute('src')||e.getAttribute('href')).filter(u=>/^https?:/i.test(u)&&u.indexOf(location.origin)!==0);
+        if(ext.length) return _echec('ressource tierce : '+ext[0]);
+        f.remove();
+        return true;
+      }finally{ getOwnedClient=sv.own; document.getElementById('an-export')?.remove(); }}));
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());
