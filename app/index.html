@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1582';
+window.RC_BUILD='1583';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -422,7 +422,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1582.css">
+<link rel="stylesheet" href="./rc-style.1583.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -4457,7 +4457,7 @@ const COACH_PHOTO='icons/coach.jpg';
            On paie donc en hauteur ce qu on gagne en lisibilite.
            L enveloppe garde son position:relative, sans consequence. -->
       <div style="position:relative;margin-bottom:20px">
-      <div style="display:flex;flex-wrap:wrap;gap:6px;position:relative;padding-bottom:2px" id="prog-tabs">
+      <div style="position:relative;padding-bottom:2px" id="prog-tabs" class="prog-onglets">
         <button class="btn btn-red btn-sm" onclick="showProgressTab('poids',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 13px;font-size:10.5px;letter-spacing:1px">Poids</button>
         <button class="btn btn-outline btn-sm" onclick="showProgressTab('mensus',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 13px;font-size:10.5px;letter-spacing:1px">Mensurations</button>
         <button class="btn btn-outline btn-sm" onclick="showProgressTab('masseGrasse',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 13px;font-size:10.5px;letter-spacing:1px">Masse Grasse</button>
@@ -5671,5 +5671,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1582.js"></script>
+<script src="./rc-core.1583.js"></script>
 </body></html>

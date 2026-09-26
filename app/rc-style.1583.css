@@ -10673,3 +10673,9 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   .pc-titre{font-size:var(--fs-lg)}
   .pc-per button{min-width:34px;padding:0 6px;font-size:var(--fs-sm)}
 }
+/* Les sept onglets d'Évolution : deux lignes qui prennent toute la largeur
+   (26/09/2026) — trois boutons en haut, quatre en bas, sur une grille de 12. */
+.prog-onglets{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:8px}
+.prog-onglets>button{grid-column:span 3;min-width:0;width:100%;margin:0;justify-content:center;text-align:center;min-height:42px}
+.prog-onglets>button:nth-child(-n+3){grid-column:span 4}
+@media (max-width:420px){ .prog-onglets{gap:6px} .prog-onglets>button{padding-left:4px!important;padding-right:4px!important;letter-spacing:.5px!important} }
