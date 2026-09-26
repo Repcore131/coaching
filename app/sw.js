@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1582';
+const CACHE = 'repcore-v1583';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -110,6 +110,17 @@ const MEDAILLONS = ['new_record', 'multiple_records', 'new_load', 'personal_best
   'new_perf', 'progression', 'monster', 'high_volume', 'no_mercy', 'full_session',
   'no_fail', 'perfect', 'streak', 'return', 'discipline']
   .map(n => './img/badges/' + n + '.png');
+// LA COLLECTION (26/09/2026) : les médaillons 184×200 de la vitrine « Mes
+// badges » et de la bannière. Liste réécrite par scripts/badges.py entre les
+// deux marqueurs — ne pas l'éditer à la main. Les 512 px n'y sont pas : ils ne
+// servent qu'à la fiche et au partage, et 2 Mo de plus à chaque installation
+// ne se justifient pas pour un geste rare.
+// badges.py:debut
+const MEDAILLONS_COLLECTION = [
+  'tonnage_1', 'tonnage_2', 'tonnage_3', 'tonnage_4', 'verrouille'
+]
+  .map(n => './img/badges/' + n + '.webp');
+// badges.py:fin
 // LES QUATRE SILHOUETTES DU CADRE « EVOLUTION ELEVE » de la fiche coach
 // (140 ko) : le coach ouvre une fiche en salle aussi, et sans elles le cadre
 // sortirait sans corps, les etiquettes pointant dans le vide.
@@ -143,7 +154,7 @@ CORPS.push('./img/complements.webp');
 // ni code ni style — c'est-a-dire rien du tout.
 // Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
 // chaque build et reecrit cette ligne comme celle d'index.html.
-const ASSETS = ['./index.html', './rc-core.1582.js', './rc-style.1582.css',
+const ASSETS = ['./index.html', './rc-core.1583.js', './rc-style.1583.css',
   './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
@@ -152,7 +163,7 @@ const ASSETS = ['./index.html', './rc-core.1582.js', './rc-style.1582.css',
   './vendor/mp4/mp4box.all.min.js', './vendor/mp4/mp4-muxer.js',
   './fonts/montserrat-var-latin.woff2',
   './fonts/bebasneue-400-latin.woff2', './img/arn.png']
-  .concat(AVATARS).concat(MEDAILLONS).concat(CORPS);
+  .concat(AVATARS).concat(MEDAILLONS).concat(MEDAILLONS_COLLECTION).concat(CORPS);
 
 // Une séance en cours interdit la bascule. Prendre le contrôle en pleine
 // séance, c'est purger le cache sous les pieds de quelqu'un qui est peut-être

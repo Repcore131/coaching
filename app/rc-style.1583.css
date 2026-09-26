@@ -8890,6 +8890,39 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .bdg-case[data-attente] .bdg-nom{color:var(--sub);font-weight:700}
 .bdg-date{font-size:var(--fs-xs);color:var(--sub);line-height:1.3;
   margin-top:3px;font-variant-numeric:tabular-nums}
+/* La collection : le compteur, les familles en lignes, puis les grilles. */
+.bdg-compte{color:var(--text-strong);font-weight:800;margin-left:4px;font-variant-numeric:tabular-nums}
+.bdg-case,.bdg-fam{cursor:pointer;-webkit-tap-highlight-color:transparent}
+.bdg-case:active,.bdg-fam:active{opacity:.75}
+.bdg-fams{display:flex;flex-direction:column;gap:10px;margin-bottom:6px}
+.bdg-fam{display:flex;align-items:center;gap:12px;min-width:0}
+.bdg-fam img{width:46px;height:50px;object-fit:contain;flex-shrink:0;display:block}
+.bdg-fam[data-attente] img{filter:grayscale(1);opacity:.3}
+.bdg-fam-c{flex:1;min-width:0}
+.bdg-fam-n{display:flex;justify-content:space-between;gap:8px;font-size:var(--fs-xs);
+  font-weight:800;letter-spacing:.8px;color:var(--text-strong)}
+.bdg-fam[data-attente] .bdg-fam-n{color:var(--sub)}
+.bdg-fam-p{color:var(--red-text);font-variant-numeric:tabular-nums}
+.bdg-barre{height:5px;border-radius:var(--r-full);background:var(--surface-3,#26262a);
+  overflow:hidden;margin:6px 0 4px}
+.bdg-barre>span{display:block;height:100%;background:linear-gradient(90deg,#8d0000,#e02020);
+  border-radius:inherit}
+.bdg-fam-r{font-size:var(--fs-2xs);color:var(--sub);line-height:1.35;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bdg-sous{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;
+  color:var(--sub);margin:18px 0 10px}
+/* Un secret verrouillé montre SON visuel verrouillé, pas un badge grisé. */
+.bdg-case[data-secret] img{filter:none;opacity:.8}
+/* La fiche d'un badge : une feuille du bas. */
+.bdg-fiche{background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px 20px 22px;
+  width:100%;max-width:480px;max-height:88vh;overflow-y:auto;text-align:center}
+.bdg-fiche-img img{width:min(62vw,240px);height:auto;aspect-ratio:1;object-fit:contain;display:block;margin:0 auto 10px}
+.bdg-fiche-img.attente img{filter:grayscale(1);opacity:.35}
+.bdg-fiche h2{margin:0 0 4px;letter-spacing:1px}
+.bdg-fiche-date{font-size:var(--fs-xs);color:var(--red-text);font-weight:800;letter-spacing:.6px;margin-bottom:8px}
+.bdg-fiche p{font-size:var(--fs-sm);color:var(--text-dim);line-height:1.55;margin:0 0 12px}
+.bdg-fiche .bdg-fiche-etat{color:var(--text-strong);font-weight:700}
+.bdg-fiche .btn{width:100%;display:flex;align-items:center;justify-content:center;gap:8px}
 
 /* ══ LA CARTE « SÉANCE GELÉE » ════════════════════════════════════════════
    Deux colonnes : le texte à gauche, le bloc de glace à droite. Tout le décor

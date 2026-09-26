@@ -47218,17 +47218,33 @@ async function testExercices(){
       return ecart>2&&ecart<14?true:_echec('espace entre les deux : '+Math.round(ecart)+' px');})());
 
     // ══ 15/09/2026 — LES CINQ BADGES ══════════════════════════════════════
-    // « Cinq badges, pas un de plus. RepCore se vend sur le serieux : une
-    // collection sans fin transformerait un signal de reconnaissance en bruit. »
-    // Ce n'est pas une contrainte technique, donc rien dans le code ne la tient
-    // tout seul : il faut une assertion, et la voici. Le SERVEUR la tient aussi
-    // — le motif de cle de /users/$emailKey/badges n'accepte que ces cinq
-    // identifiants — et scripts/verif/regles.mjs compare les deux listes.
-    ok('Cinq badges, pas un de plus',(()=>{
+    // LA COLLECTION EST FERMEE. Elle etait de cinq (« cinq badges, pas un de
+    // plus ») ; elle est de cinquante depuis le 26/09/2026, en familles a
+    // paliers, uniques et secrets — decision de Kevin. Fermee quand meme : le
+    // SERVEUR n'accepte que ces identifiants (motif de cle de
+    // /users/$emailKey/badges), et scripts/verif/regles.mjs compare les deux
+    // listes. Un badge de plus doit donc passer par ici, a la main.
+    ok('Cinquante badges, la collection est fermée',(()=>{
       if(!Array.isArray(BADGES_ACQUIS)) return _echec('BADGES_ACQUIS n’est pas une liste');
-      if(BADGES_ACQUIS.length!==5) return _echec(BADGES_ACQUIS.length+' badges au lieu de cinq');
+      // Huit familles de quatre paliers, huit uniques, dix secrets.
+      const par=f=>BADGES_ACQUIS.filter(b=>b.famille===f).length;
+      if(par('unique')!==8||par('secret')!==10) return _echec(par('unique')+' uniques, '+par('secret')+' secrets');
+      for(const fam of BADGE_FAMILLES)
+        if(par(fam.cle)!==4) return _echec(fam.cle+' : '+par(fam.cle)+' paliers');
+      // Les cinq anciennes clés, telles quelles : elles vivent dans u.badges.
+      for(const id of ['premiere-seance','semaine-validee','premier-record','premier-bilan','quatre-semaines'])
+        if(!badgeAcquisDef(id)) return _echec('l’ancienne clé '+id+' a disparu');
+      if(badgeAcquisDef('quatre-semaines').nom!=='INARRÊTABLE I') return _echec('« quatre-semaines » n’est pas INARRÊTABLE I');
+      // Chaque entrée porte ses champs, et les secrets leur indice.
+      for(const b of BADGES_ACQUIS){
+        for(const c of ['id','nom','famille','icone','condition'])
+          if(!b[c]||typeof b[c]!=='string') return _echec(b.id+' n’a pas de '+c);
+        if(typeof b.test!=='function') return _echec(b.id+' n’a pas de fonction de test');
+        if(b.famille==='secret'&&!b.indice) return _echec(b.id+' : secret sans indice');
+      }
       const ids=BADGES_ACQUIS.map(b=>b.id);
-      if(new Set(ids).size!==5) return _echec('deux badges portent le meme identifiant');
+      if(new Set(ids).size!==ids.length) return _echec('deux badges portent le meme identifiant');
+      if(ids.length!==50) return _echec(ids.length+' badges au lieu de cinquante');
       // Chacun dit ce qu'il RECOMPENSE et ce qu'il FAUT FAIRE : la vitrine du
       // profil montre les cinq, obtenus et a obtenir, et sans `attendu` la
       // moitie de la carte serait vide.
@@ -47245,7 +47261,8 @@ async function testExercices(){
     // permanents EMPRUNTENT donc cinq des quinze, par leur clef de fin de
     // seance — et cette assertion verifie que ces clefs existent vraiment.
     ok('Les badges permanents empruntent les medaillons existants',(()=>{
-      for(const b of BADGES_ACQUIS){
+      // Les CINQ D'ORIGINE, et eux seuls, gardent leur médaillon attitré.
+      for(const b of BADGES_ACQUIS.filter(x=>BADGE_ACQUIS_IMG[x.id])){
         const k=BADGE_ACQUIS_IMG[b.id];
         if(!k) return _echec(b.id+' ne designe aucun medaillon');
         if(!BADGES[k]) return _echec(b.id+' designe '+k+', qui n’est pas un badge de seance');
@@ -47311,9 +47328,14 @@ async function testExercices(){
         [{sessions:[],bilans:[],sessions_config:cfg3,streak:3,lastSession:now},
          []]
       ];
+      // LA COLLECTION A GRANDI (26/09/2026) : ces cas éprouvent les CINQ
+      // d'origine, on ne compare donc qu'eux. Les séances du décor tombent à
+      // minuit — AUBE et NUIT y sont légitimement gagnés, et ont leurs propres
+      // tests plus bas.
+      const cinq=['premiere-seance','semaine-validee','premier-record','premier-bilan','quatre-semaines'];
       for(let i=0;i<cas.length;i++){
         const [u,attendu]=cas[i];
-        const r=badgesMerites(Object.assign({role:'athlete'},u),now);
+        const r=badgesMerites(Object.assign({role:'athlete'},u),now).filter(id=>cinq.includes(id));
         if(r.join(',')!==attendu.join(','))
           return _echec('cas '+i+' → ['+r.join(',')+'] au lieu de ['+attendu.join(',')+']');
       }
@@ -47326,7 +47348,7 @@ async function testExercices(){
       const rang=tous.map(id=>BADGES_ACQUIS.findIndex(b=>b.id===id));
       for(let i=1;i<rang.length;i++)
         if(rang[i]<=rang[i-1]) return _echec('l’ordre flotte : '+tous.join(','));
-      return tous.length===5?true:_echec('les cinq ne tombent pas ensemble : '+tous.join(','));})());
+      return cinq.every(id=>tous.includes(id))?true:_echec('les cinq ne tombent pas ensemble : '+tous.join(','));})());
 
     // ⚠ LE GARDE EST EN PREMIERE LIGNE, ET IL BLOQUE L'ECRITURE AUTANT QUE LA
     // BANNIERE. « Aucun badge ne doit se declencher pendant une suspension ou
@@ -47374,8 +47396,10 @@ async function testExercices(){
         // TROIS CRENEAUX, ET NON UN. Avec un seul creneau le quota vaut 1,
         // et l'unique seance validait aussi la semaine : l'assertion sur un
         // badge unique tombait sur un code parfaitement correct.
+        // UNE DATE FIXE, un mardi à midi : « il y a une heure » tombait la nuit
+        // quand la suite tournait tôt le matin, et AUBE ou NUIT s'ajoutaient.
         currentUser={id:'b2',email:'b2@t.fr',role:'athlete',
-          sessions:[{date:Date.now()-3600e3,exercises:[]}],bilans:[],
+          sessions:[{date:new Date(2026,2,10,12,0).getTime(),duration:60,exercises:[]}],bilans:[],
           sessions_config:[{active:true},{active:true},{active:true}]};
         const un=majBadges();
         const quand=currentUser.badges['premiere-seance'].at;
@@ -47443,45 +47467,252 @@ async function testExercices(){
     // LA VITRINE DU PROFIL : les cinq, toujours les cinq. Montrer seulement les
     // acquis repondrait a « qu'ai-je gagne » et jamais a « que reste-t-il »,
     // qui est la question qu'on se pose en ouvrant cette carte.
-    ok('« Mes badges » montre les obtenus ET ceux qui restent',(()=>{
-      const h=htmlMesBadges({badges:{'premiere-seance':{at:Date.parse('2026-09-01T10:00:00')}}});
-      // ⚠ ON COMPTE LES BALISES, PAS LES ATTRIBUTS. `class="bdg-case"` est un
-      // PREFIXE de `class="bdg-case" data-attente` : les deux motifs se
-      // recouvraient et les quatre cases en attente etaient comptees deux fois.
-      const cases=(h.match(/<div class="bdg-case"/g)||[]).length;
-      if(cases!==5) return _echec(cases+' cases au lieu de cinq');
-      if((h.match(/data-attente/g)||[]).length!==4)
-        return _echec('les quatre badges restants ne sont pas marques en attente');
-      if(h.indexOf('01/09/26')<0) return _echec('la date d’obtention n’est pas montree');
-      if(h.indexOf('1/5')<0) return _echec('le decompte n’est pas montre');
-      // Ce qu'il faut faire pour ceux qui restent.
-      for(const b of BADGES_ACQUIS.slice(1))
-        if(h.indexOf(escapeHtml(b.attendu))<0) return _echec('« '+b.attendu+' » manque');
+    ok('« Mes badges » : compteur, une ligne par famille, uniques, secrets',(()=>{
+      const h=htmlMesBadges({badges:{'premiere-seance':{at:new Date(2026,8,1,10).getTime()}},
+        sessions:[],bilans:[],sessions_config:[{active:true}]},new Date(2026,8,2).getTime());
+      const d=document.createElement('div'); d.innerHTML=h;
+      if(h.indexOf('1/50')<0) return _echec('le compteur global ne dit pas 1/50');
+      const fams=d.querySelectorAll('.bdg-fam');
+      if(fams.length!==8) return _echec(fams.length+' familles au lieu de huit');
+      if(h.indexOf('Encore 10 séances pour ASSIDU I')<0) return _echec('la barre ne dit pas ce qui reste');
+      if(d.querySelectorAll('.bdg-barre').length!==8) return _echec('une famille sans barre');
+      const cases=d.querySelectorAll('.bdg-case');
+      if(cases.length!==18) return _echec(cases.length+' cases au lieu de 8 uniques + 10 secrets');
+      if(h.indexOf('01/09/2026')<0) return _echec('la date d’obtention n’est pas montrée');
+      // LES SECRETS NE SE DÉVOILENT PAS : ??? et l'indice, jamais la condition.
+      const sec=d.querySelectorAll('.bdg-case[data-secret]');
+      if(sec.length!==10) return _echec(sec.length+' secrets verrouillés au lieu de dix');
+      for(const b of BADGES_ACQUIS.filter(x=>x.famille==='secret')){
+        if(h.indexOf(escapeHtml(b.condition))>=0) return _echec('la condition de '+b.id+' est dévoilée');
+        if(h.indexOf(escapeHtml(b.indice))<0) return _echec('l’indice de '+b.id+' manque');
+      }
+      if((h.match(/>\?\?\?</g)||[]).length!==10) return _echec('les secrets ne s’affichent pas en ???');
+      if(h.indexOf('verrouille.webp')<0) return _echec('le visuel verrouillé n’est pas utilisé');
+      // TOUCHER UN BADGE OUVRE SA FICHE.
+      if(d.querySelectorAll('[onclick^="ouvrirFicheBadge("]').length!==26) return _echec('un badge ne s’ouvre pas');
       // Un dossier vierge ne casse pas la carte.
       const v=htmlMesBadges({});
-      if((v.match(/data-attente/g)||[]).length!==5) return _echec('le dossier vierge n’affiche pas les cinq');
-      return v.indexOf('0/5')>=0?true:_echec('le dossier vierge ne dit pas 0/5');})());
+      return v.indexOf('0/50')>=0?true:_echec('le dossier vierge ne dit pas 0/50');})());
+    ok('La fiche d’un badge : grand visuel, date, condition, Partager si obtenu',(()=>{
+      const sv=currentUser;
+      try{
+        currentUser={role:'athlete',badges:{'premier-bilan':{at:new Date(2026,8,1,10).getTime()}},sessions:[],bilans:[]};
+        ouvrirFicheBadge('premier-bilan');
+        let f=document.querySelector('#modal-overlay .bdg-fiche');
+        if(!f) return _echec('la fiche ne s’ouvre pas');
+        if(!/-512\.webp/.test(f.innerHTML)) return _echec('la fiche ne montre pas le grand visuel');
+        if(f.textContent.indexOf('01/09/2026')<0) return _echec('la date manque');
+        if(f.textContent.indexOf('Remplis un premier bilan')<0) return _echec('la condition manque');
+        if(!f.querySelector('[onclick^="partagerBadge("]')) return _echec('pas de bouton Partager');
+        closeModal();
+        ouvrirFicheBadge('aube');
+        f=document.querySelector('#modal-overlay .bdg-fiche');
+        if(f.textContent.indexOf('???')<0||f.textContent.indexOf('avant 6 h')>=0) return _echec('le secret est dévoilé');
+        if(f.querySelector('[onclick^="partagerBadge("]')) return _echec('un badge non obtenu se partage');
+        closeModal();
+        return true;
+      } finally { try{ closeModal(); }catch(e){} currentUser=sv; }})());
 
-    // « Sans nouvelle colle » : deux points d'appel, pas un de plus, et tous
-    // deux au moment ou la donnee vient d'etre ecrite.
-    ok('Les badges n’ont que deux points d’appel',(()=>{
+    // ══ LA COLLECTION DE CINQUANTE (26/09/2026) ═══════════════════════════
+    // Chaque condition, une à une, avec ses dates limites. Toutes les dates
+    // sont construites en HEURE LOCALE (new Date(a,m,j,h,mn)) : c'est l'heure
+    // de l'appareil qui fait foi, et la suite tourne en Europe/Paris.
+    const _B=(()=>{
+      const J=864e5;
+      // Une séance au format de finishWorkout : `data` nom → séries.
+      const sc=(t,exos,o)=>Object.assign({date:t,duration:60,data:Object.fromEntries(
+        Object.entries(exos||{}).map(([nm,[w,r]])=>[nm,{sets:[{weight:w,reps:r,repsDone:r,rir:1,done:true}]}]))},o||{});
+      const u=o=>Object.assign({role:'athlete',sessions:[],bilans:[],sessions_config:[{active:true}]},o||{});
+      const at=(user,id,t)=>{ const x=badgesMeritesDates(user,t||new Date(2027,0,1).getTime()).find(y=>y.id===id); return x?x.at:0; };
+      // Un mardi à midi, loin de toute fête et de tout vendredi 13.
+      const base=new Date(2026,2,3,12,0).getTime();
+      return {J,sc,u,at,base};
+    })();
+    ok('ASSIDU : le palier tombe à la 10e séance, daté de la 10e',(()=>{
+      const {J,sc,u,at,base}=_B;
+      const l=Array.from({length:10},(_,i)=>sc(base+i*J));
+      if(at(u({sessions:l.slice(0,9)}),'assidu_1')) return _echec('9 séances suffisent');
+      const d=at(u({sessions:l}),'assidu_1');
+      return d===l[9].date?true:_echec('date '+d+' au lieu de '+l[9].date);})());
+    ok('INARRÊTABLE : 4 semaines consécutives au quota, une semaine vide rompt la série',(()=>{
+      const {J,sc,u,at,base}=_B;
+      const l=[0,1,2,3].map(k=>sc(base+k*7*J));
+      const d=at(u({sessions:l}),'quatre-semaines');
+      if(d!==l[3].date) return _echec('4 semaines → '+d);
+      const trou=[0,1,2,4].map(k=>sc(base+k*7*J));
+      if(at(u({sessions:trou}),'quatre-semaines')) return _echec('une semaine vide ne rompt pas la série');
+      // Le quota compte : à 2 séances prévues, une par semaine ne valide rien.
+      if(at(u({sessions:l,sessions_config:[{active:true},{active:true}]}),'quatre-semaines'))
+        return _echec('le quota n’est pas appliqué');
+      // Le compteur du dossier fait foi aussi (gel des suspensions).
+      if(!at(u({streak:12,lastSession:Date.now()}),'inarretable_2',Date.now()))
+        return _echec('streak 12 ne donne pas INARRÊTABLE II');
+      return true;})());
+    ok('BRISEUR DE RECORDS : records de charge cumulés, la 1re séance n’en est pas un',(()=>{
+      const {J,sc,u,at,base}=_B;
+      const l=Array.from({length:6},(_,i)=>sc(base+i*J,{DEV:[100+i*2.5,5]}));
+      if(at(u({sessions:l.slice(0,5)}),'briseur_1')) return _echec('4 records suffisent');
+      const d=at(u({sessions:l}),'briseur_1');
+      if(d!==l[5].date) return _echec('date du 5e record : '+d);
+      return at(u({sessions:[l[0]]}),'premier-record')?_echec('une première séance est un record'):true;})());
+    ok('TONNAGE : cumul des volumes, daté du franchissement',(()=>{
+      const {J,sc,u,at,base}=_B;
+      const l=[sc(base,{},{volume:6000}),sc(base+J,{},{volume:3999}),sc(base+2*J,{},{volume:1})];
+      if(at(u({sessions:l.slice(0,2)}),'tonnage_1')) return _echec('9 999 kg suffisent');
+      return at(u({sessions:l}),'tonnage_1')===l[2].date?true:_echec('mauvaise date');})());
+    ok('SANS FAUTE : 4 semaines au quota sans séance partielle',(()=>{
+      const {J,sc,u,at,base}=_B;
+      const l=[0,1,2,3].map(k=>sc(base+k*7*J,{},{sets:10,setsPlanned:10}));
+      if(!at(u({sessions:l}),'sans_faute_1')) return _echec('4 semaines parfaites → rien');
+      const p=l.slice(); p[2]=sc(base+14*J,{},{sets:8,setsPlanned:10});
+      return at(u({sessions:p}),'sans_faute_1')?_echec('une séance partielle compte'):true;})());
+    ok('MIROIR, CYCLES, CARBURANT : bilans, rites de 28 j, jours de journal',(()=>{
+      const {J,u,at,base}=_B;
+      const b=[0,1,2].map(k=>({date:base+k*30*J}));
+      if(at(u({bilans:b}),'miroir_1')!==b[2].date) return _echec('MIROIR I');
+      if(at(u({rites:[{cycle:1,date:base}]}),'cycles_1')!==base) return _echec('CYCLES I');
+      const log={};
+      for(let k=1;k<=7;k++) log['2026-03-0'+k]={entries:[{nom:'riz'}]};
+      log['2026-03-08']={entries:[]};           // un jour vide ne compte pas
+      const d=at(u({nutrition:{log}}),'carburant_1');
+      if(d!==new Date(2026,2,7,20).getTime()) return _echec('CARBURANT I daté '+d);
+      delete log['2026-03-07'];
+      return at(u({nutrition:{log}}),'carburant_1')?_echec('6 jours suffisent'):true;})());
+    ok('Les uniques inactifs ne sont jamais attribués',(()=>{
+      const {u}=_B;
+      const r=badgesMerites(u({createdAt:1,streak:99,lastSession:Date.now()}),Date.now());
+      for(const id of ['recruteur','mentor','champion'])
+        if(r.includes(id)) return _echec(id+' attribué');
+      if(!(FONDATEUR_LIMITE>0)&&r.includes('fondateur')) return _echec('fondateur sans date limite');
+      return true;})());
+    ok('Secrets AUBE et NUIT : heure locale, bornes 6 h, 23 h et 4 h',(()=>{
+      const {sc,u,at}=_B;
+      const d=(h,mn,dur)=>sc(new Date(2026,2,3,h,mn).getTime(),{},{duration:dur});
+      // AUBE : le DÉBUT compte (fin - durée).
+      if(!at(u({sessions:[d(6,59,60)]}),'aube')) return _echec('début 5 h 59 : pas d’aube');
+      if(at(u({sessions:[d(7,0,60)]}),'aube')) return _echec('début 6 h 00 : aube');
+      // NUIT : la FIN compte.
+      if(at(u({sessions:[d(22,59,60)]}),'nuit')) return _echec('22 h 59 : nuit');
+      if(!at(u({sessions:[d(23,0,60)]}),'nuit')) return _echec('23 h 00 : pas de nuit');
+      if(!at(u({sessions:[d(3,59,30)]}),'nuit')) return _echec('3 h 59 : pas de nuit');
+      if(at(u({sessions:[d(4,0,0)]}),'nuit')) return _echec('4 h 00 : nuit');
+      return true;})());
+    ok('Secrets de calendrier : 1er janvier, 25 décembre, vendredi 13 — en heure locale',(()=>{
+      const {sc,u,at}=_B;
+      const s1=t=>u({sessions:[sc(t,{},{duration:0})]});
+      if(!at(s1(new Date(2027,0,1,0,30).getTime()),'nouvel_an')) return _echec('1er janvier 0 h 30');
+      if(at(s1(new Date(2026,11,31,23,59).getTime()),'nouvel_an')) return _echec('31 décembre 23 h 59');
+      if(!at(s1(new Date(2026,11,25,18).getTime()),'noel')) return _echec('25 décembre');
+      if(at(s1(new Date(2026,11,24,23,59).getTime()),'noel')) return _echec('24 décembre 23 h 59');
+      // Un vendredi 13, trouvé et non supposé.
+      let v=new Date(2026,0,13,12);
+      while(v.getDay()!==5) v=new Date(v.getFullYear(),v.getMonth()+1,13,12);
+      if(!at(s1(v.getTime()),'vendredi13')) return _echec('vendredi 13 non reconnu');
+      if(at(s1(v.getTime()-864e5),'vendredi13')) return _echec('jeudi 12 reconnu');
+      if(at(s1(v.getTime()+864e5),'vendredi13')) return _echec('samedi 14 reconnu');
+      // LE FUSEAU : 1er janvier 0 h 30 à Paris est encore le 31 décembre en UTC.
+      // Une lecture UTC (getUTCDate) manquerait ce cas ; la locale le prend.
+      const src=String(_badgesFaits);
+      if(/getUTC/.test(src)) return _echec('les secrets lisent l’heure UTC');
+      return true;})());
+    ok('Secrets TEMPÊTE et FOUDRE EN SÉRIE : 3 records d’une séance, 3 séances d’affilée',(()=>{
+      const {J,sc,u,at,base}=_B;
+      const ref=sc(base,{A:[50,5],B:[60,5],C:[70,5]});
+      if(!at(u({sessions:[ref,sc(base+J,{A:[55,5],B:[65,5],C:[75,5]})]}),'tempete')) return _echec('3 records → pas de tempête');
+      if(at(u({sessions:[ref,sc(base+J,{A:[55,5],B:[65,5],C:[70,5]})]}),'tempete')) return _echec('2 records → tempête');
+      const serie=[ref,sc(base+J,{A:[55,5]}),sc(base+2*J,{A:[57.5,5]}),sc(base+3*J,{A:[60,5]})];
+      if(at(u({sessions:serie}),'foudre_serie')!==serie[3].date) return _echec('3 séances d’affilée → rien');
+      const rompue=[ref,sc(base+J,{A:[55,5]}),sc(base+2*J,{A:[40,5]}),sc(base+3*J,{A:[60,5]})];
+      return at(u({sessions:rompue}),'foudre_serie')?_echec('série rompue récompensée'):true;})());
+    ok('Secret PHÉNIX : 30 jours d’arrêt, puis 4 semaines validées',(()=>{
+      const {J,sc,u,at,base}=_B;
+      const retour=base+30*J;
+      const l=[sc(base)].concat([0,1,2,3].map(k=>sc(retour+k*7*J)));
+      if(at(u({sessions:l}),'phenix')!==l[4].date) return _echec('phénix non daté de la 4e semaine');
+      const court=[sc(base)].concat([0,1,2,3].map(k=>sc(base+29*J+k*7*J)));
+      if(at(u({sessions:court}),'phenix')) return _echec('29 jours suffisent');
+      return at(u({sessions:l.slice(0,4)}),'phenix')?_echec('3 semaines suffisent'):true;})());
+    ok('Secrets PALINDROME et CENTURION',(()=>{
+      const {J,sc,u,at,base}=_B;
+      const v=n=>u({sessions:[sc(base,{},{volume:n})]});
+      if(!at(v(12321),'palindrome')) return _echec('12 321 kg');
+      if(at(v(12345),'palindrome')) return _echec('12 345 kg');
+      if(at(v(9999),'palindrome')) return _echec('9 999 kg (sous 10 000)');
+      const lundi=_lundiDe(base).getTime()+12*36e5;
+      if(!at(u({sessions:[sc(lundi,{},{sets:60}),sc(lundi+2*J,{},{sets:40})]}),'centurion')) return _echec('100 séries');
+      if(at(u({sessions:[sc(lundi,{},{sets:60}),sc(lundi+2*J,{},{sets:39})]}),'centurion')) return _echec('99 séries');
+      return at(u({sessions:[sc(lundi,{},{sets:60}),sc(lundi+7*J,{},{sets:40})]}),'centurion')
+        ?_echec('deux semaines additionnées'):true;})());
+    // LA RÉTRO-ATTRIBUTION : un dossier ancien reçoit tout, daté du jour où
+    // chaque badge a été mérité, et UNE seule célébration récapitulative.
+    ok('Rétro-attribution : les vraies dates, et une seule bannière récapitulative',(()=>{
+      const sv=currentUser, svC=_celebrerBadge, svR=_badgesRattrapes;
+      const vues=[];
+      try{
+        const {J,sc,base}=_B;
+        const l=Array.from({length:12},(_,i)=>sc(base+i*J,{DEV:[100+i,5]}));
+        currentUser={id:'r1',email:'r1@t.fr',role:'athlete',sessions:l,
+          bilans:[{date:base+2*J}],sessions_config:[{active:true}]};
+        _celebrerBadge=(id,n)=>{ vues.push([id,n]); };
+        _badgesRattrapes=false;
+        const n=_rattraperBadges();
+        if(n.length<5) return _echec('seulement '+n.length+' badges rendus : '+n.join(','));
+        if(vues.length!==1) return _echec(vues.length+' célébrations au lieu d’une');
+        if(vues[0][1]!==n.length) return _echec('le récapitulatif annonce '+vues[0][1]+' pour '+n.length);
+        const b=currentUser.badges;
+        if(b['premiere-seance'].at!==l[0].date) return _echec('première séance datée du jour de la mise à jour');
+        if(b['assidu_1'].at!==l[9].date) return _echec('ASSIDU I pas daté de la 10e séance');
+        if(b['briseur_1'].at!==l[5].date) return _echec('BRISEUR I pas daté du 5e record');
+        if(b['premier-bilan'].at!==base+2*J) return _echec('premier bilan mal daté');
+        // Une seule fois par session.
+        if(_rattraperBadges().length) return _echec('le rattrapage se rejoue');
+        // Le récapitulatif dit le nombre.
+        _celebrerBadge=svC;
+        return true;
+      } finally { currentUser=sv; _celebrerBadge=svC; _badgesRattrapes=svR; }})());
+    ok('La bannière récapitulative dit « Tu as débloqué N badges »',(()=>{
+      const src=String(_celebrerBadge);
+      return /Tu as débloqué '\+n\+' badges/.test(src)?true:_echec('libellé du récapitulatif absent');})());
+    // ── PERSONAL_BEST : corrigé, pas supprimé ─────────────────────────────
+    ok('PERSONAL BEST : meilleure e1RM battue sans record de charge',(()=>{
+      const J=864e5, t=Date.now();
+      const s=(d,w,r)=>({date:d,data:{DEV:{sets:[{weight:w,reps:r,repsDone:r,rir:1,done:true}]}}});
+      const ant=[s(t-2*J,100,5)];
+      const plus=e1rmRecordsDeSeance(s(t,100,8),ant,{});
+      if(plus.length!==1) return _echec('100×8 après 100×5 : '+plus.length+' record(s) d’e1RM');
+      if(e1rmRecordsDeSeance(s(t,100,4),ant,{}).length) return _echec('100×4 est un record d’e1RM');
+      if(e1rmRecordsDeSeance(s(t,100,8),[],{}).length) return _echec('rien à battre, et pourtant un record');
+      const pb=achievementEngine({records:[],recordsE1rm:plus,sets:3,setsPlanned:3});
+      if(!pb.some(b=>b.k==='PERSONAL_BEST')) return _echec('le moteur ne pose pas PERSONAL_BEST');
+      // Sur un exercice qui a déjà son record de charge, il ne dit rien de plus.
+      const deja=achievementEngine({records:[{nm:'DEV',curMax:110,histMax:100,gain:10}],recordsE1rm:[{nm:'DEV',avant:116,apres:128}]});
+      if(deja.some(b=>b.k==='PERSONAL_BEST')) return _echec('doublon avec NEW_RECORD');
+      return /1RM estimée/.test(descRecompense(pb.find(b=>b.k==='PERSONAL_BEST'),{}))?true:_echec('description');})());
+
+    ok('Les badges n’ont que trois points d’appel',(()=>{
       const s=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
       const n=(s.match(/majBadges\(\)/g)||[]).length;
-      // Trois occurrences : la definition, l'appel de fin de seance, l'appel
-      // de fin de bilan. Une quatrieme signalerait un rendu qui attribue des
-      // badges — un accueil, un onglet — et donc une banniere qui surgit sans
+      // Quatre occurrences : la definition, l'appel de fin de seance, l'appel
+      // de fin de bilan, et le RATTRAPAGE (_rattraperBadges), une fois par
+      // session depuis l'accueil — c'est lui qui rend a un dossier ancien ses
+      // badges a la mise a jour. Une cinquieme signalerait un rendu qui
+      // attribue des badges a chaque passage, et une banniere qui surgit sans
       // que rien ne vienne de se passer.
-      if(n!==3) return _echec(n+' occurrences de majBadges() au lieu de trois');
+      if(n!==4) return _echec(n+' occurrences de majBadges() au lieu de quatre');
+      if(!/_rattraperBadges\(\)\{\s*if\(_badgesRattrapes\) return \[\];/.test(s))
+        return _echec('le rattrapage n’est plus limite a une fois par session');
+      if(!/function loadClientHome\(\)\{[\s\S]{0,4000}?_rattraperBadges\(\)/.test(s))
+        return _echec('le rattrapage n’est plus appele depuis l’accueil');
       if(!/if\(\(currentUser\.bilans\|\|\[\]\)\.length===1\) rcm\('first_bilan_completed'\);[\s\S]{0,400}?majBadges\(\)/.test(s))
         return _echec('l’appel apres le bilan a disparu');
       if(!/_rendreInvitationInstall\(\);[\s\S]{0,400}?majBadges\(\)/.test(s))
         return _echec('l’appel apres la seance a disparu');
-      // ET AUCUN COMPTEUR PARALLELE : badgesMerites ne tient rien, elle lit.
-      const bm=String(badgesMerites);
+      // ET AUCUN COMPTEUR PARALLELE : le calcul ne tient rien, il lit.
+      const bm=String(badgesMerites)+String(badgesMeritesDates)+String(_badgesFaits);
       if(/saveUser|localStorage|currentUser/.test(bm))
-        return _echec('badgesMerites ecrit ou lit hors de son argument');
-      for(const f of ['seancesPrevuesParSemaine','_lundiDe','_riteRecords','streakSemaines'])
-        if(bm.indexOf(f)<0) return _echec('badgesMerites n’utilise plus '+f);
+        return _echec('le calcul des badges ecrit ou lit hors de son argument');
+      for(const f of ['seancesPrevuesParSemaine','_lundiDe','streakSemaines'])
+        if(bm.indexOf(f)<0) return _echec('le calcul des badges n’utilise plus '+f);
       return true;})());
 
     // ══ 15/09/2026 — TON POINT DU JOUR ════════════════════════════════════

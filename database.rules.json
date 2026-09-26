@@ -125,21 +125,21 @@
           }
         },
 
-        // ── Les cinq badges ────────────────────────────────────────────────
+        // ── La collection de badges ────────────────────────────────────────
         // LA LISTE EST FERMEE ICI AUSSI, et c est tout l interet de ce bloc.
-        // La regle produit de RepCore est « cinq badges, pas un de plus » :
-        // ecrite dans le seul index.html, elle tiendrait le temps qu un lot
-        // pense bien faire en ajoutant un sixieme. Le motif ci-dessous refuse
-        // toute autre cle cote SERVEUR, et scripts/verif/regles.mjs compare
-        // BADGES a ce motif pour que le refus se voie au moment du lot et non
-        // en production — meme mecanique que RCM_EVENEMENTS, ecrite apres que
-        // quinze compteurs eurent ete rejetes en silence pendant des mois.
+        // Elle etait de cinq ; elle est de cinquante depuis le 26/09/2026
+        // (familles a paliers, uniques, secrets — decision de Kevin). Le motif
+        // ci-dessous refuse toute autre cle cote SERVEUR, et
+        // scripts/verif/regles.mjs compare BADGES_ACQUIS a ce motif pour que
+        // le refus se voie au moment du lot et non en production — meme
+        // mecanique que RCM_EVENEMENTS, ecrite apres que quinze compteurs
+        // eurent ete rejetes en silence pendant des mois.
         //
         // Un badge, c est une DATE et rien d autre : il n y a pas de valeur a
         // porter, pas de niveau, pas de compteur. "$autre": false le dit.
         "badges": {
           "$badge": {
-            ".validate": "$badge.matches(/^(premiere-seance|semaine-validee|premier-record|premier-bilan|quatre-semaines)$/)",
+            ".validate": "$badge.matches(/^(assidu_1|assidu_2|assidu_3|assidu_4|quatre-semaines|inarretable_2|inarretable_3|inarretable_4|briseur_1|briseur_2|briseur_3|briseur_4|tonnage_1|tonnage_2|tonnage_3|tonnage_4|sans_faute_1|sans_faute_2|sans_faute_3|sans_faute_4|miroir_1|miroir_2|miroir_3|miroir_4|cycles_1|cycles_2|cycles_3|cycles_4|carburant_1|carburant_2|carburant_3|carburant_4|premiere-seance|semaine-validee|premier-record|premier-bilan|fondateur|recruteur|mentor|champion|aube|nuit|nouvel_an|noel|tempete|foudre_serie|phenix|palindrome|vendredi13|centurion)$/)",
             "at": { ".validate": "newData.isNumber() && newData.val() > 0" },
             "$autre": { ".validate": false }
           }

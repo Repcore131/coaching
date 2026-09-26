@@ -22,7 +22,7 @@
 #   gh repo clone Repcore131/coaching
 #
 # ── CE QUI EST ENVOYE, ET CE QUI NE L'EST PAS ─────────────────────────────
-# hosting ET database. database.rules.json fige les cinq identifiants de
+# hosting ET database. database.rules.json fige les identifiants de
 # badges cote serveur : sans lui, un badge est gagne sur le telephone puis
 # efface a la premiere synchro, sans le moindre message.
 # PAS functions : firebase.json en declare un codebase, mais le plan Spark ne

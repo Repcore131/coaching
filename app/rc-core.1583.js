@@ -33594,6 +33594,10 @@ function loadClientHome(){
   // donc un second passage ne deplace rien.
   if(!window._retoursAppliques){ window._retoursAppliques=true;
     try{ appliquerRetoursEnAttente(currentUser); }catch(e){} }
+  // LES BADGES DÉJÀ MÉRITÉS, rendus une fois par session : un athlète ancien
+  // retrouve toute sa collection à la mise à jour, datée, sans attendre sa
+  // prochaine séance — et une seule bannière récapitulative.
+  _rattraperBadges();
   try{ rcRendreRetourAccueil(); }catch(e){}
   // LE MOT AU COACH. Repeint a chaque retour sur l'accueil : l'edition en
   // cours est portee par _motEdition, elle ne se perd donc pas au passage.
@@ -41827,6 +41831,7 @@ function finishWorkout(incomplete=false){
       ? Math.max(0,(Date.now()-new Date(_derniere.date).getTime())/864e5) : 0;
     _ctxFin={
       records:(_cmp&&_cmp.records)||[],
+      recordsE1rm:(()=>{ try{ return e1rmRecordsDeSeance(sess,_sess.slice(0,-1),currentUser); }catch(e){ return []; } })(),
       sets,setsPlanned,volume:vol,
       volumesPrecedents:_prec.map(x=>Number(x&&x.volume)||0),
       streak:Number(currentUser.streak)||0,
@@ -51799,7 +51804,17 @@ function achievementEngine(ctx){
     // 102 en est un, 101 -> 104 n'en est pas.
     const palier=rec.find(r=>Math.floor(r.curMax/10)>Math.floor((r.histMax||0)/10));
     if(palier) pose('NEW_LOAD',{exercice:palier.nm,valeur:Math.floor(palier.curMax/10)*10});
-  } else if(Number(c.exosAmeliores)>0){
+  }
+  // PERSONAL BEST : la meilleure e1RM historique battue, SUR UN EXERCICE DONT
+  // LA CHARGE N'A PAS ÉTÉ BATTUE. Il était déclaré et jamais posé — la fiche
+  // l'annonçait, le moteur ne le rendait pas. Il n'est pas un doublon de
+  // NEW_RECORD : plus de répétitions à la même charge est une meilleure
+  // performance sans être une charge record. Sur un exercice qui a DÉJÀ son
+  // record de charge, il ne dirait rien de plus : on ne le pose pas.
+  const pb=(Array.isArray(c.recordsE1rm)?c.recordsE1rm:[])
+    .find(r=>r&&r.nm&&!rec.some(x=>x&&x.nm===r.nm));
+  if(pb) pose('PERSONAL_BEST',{exercice:pb.nm,valeur:pb.apres,ancien:pb.avant});
+  if(!rec.length&&Number(c.exosAmeliores)>0){
     // Pas de record, mais ca monte : c'est une autre nouvelle, pas la meme.
     if(Number(c.exosAmeliores)>=2) pose('PROGRESSION',{valeur:Number(c.exosAmeliores)});
     else pose('NEW_PERF',{valeur:Number(c.exosAmeliores)});
@@ -51952,7 +51967,7 @@ function descRecompense(b,ctx){
     return (f&&t)?('Tout tenu : '+f+' / '+t+' séries'):String(b.desc||'');
   }
   if(k==='PERSONAL_BEST')
-    return ex?(ex+' · meilleure performance'):String(b.desc||'');
+    return ex?(ex+' · 1RM estimée '+(ok(v)?dec(v)+' kg':'record')):String(b.desc||'');
   return String(b.desc||'');
 }
 
@@ -52179,6 +52194,39 @@ function recordsDeSeance(sc,anterieures){
   out.sort((a,b)=>b.gain-a.gain);
   return out;
 }
+// PURE. Les records d'e1RM de la séance : pour chaque exercice, la meilleure
+// 1RM estimée (e1rm, séries validées dans les bornes de PERF_REPS_MAX_E1RM)
+// dépasse la meilleure des séances antérieures. C'est ce que PERSONAL_BEST
+// constate : 100 kg × 8 après un meilleur à 100 kg × 5 n'est PAS un record de
+// charge (recordsDeSeance ne le voit pas), mais c'est la meilleure
+// performance jamais faite sur l'exercice.
+function e1rmRecordsDeSeance(sc,anterieures,user){
+  const best=sets=>{
+    let v=0;
+    for(const st of (sets||[])){
+      if(!st||st.done!==true) continue;
+      const w=parseFloat(st.weight)||0, r=_perfReps(st);
+      if(!(w>0)||!(r>0)||r>PERF_REPS_MAX_E1RM) continue;
+      let x=0; try{ x=e1rm(w,r,_perfRir(st,user)); }catch(e){ x=0; }
+      if(x>v) v=x;
+    }
+    return v;
+  };
+  const out=[];
+  const data=(sc&&sc.data&&typeof sc.data==='object')?sc.data:{};
+  for(const nm of Object.keys(data)){
+    const cur=best((data[nm]||{}).sets);
+    if(!(cur>0)) continue;
+    let hist=0;
+    for(const p of (anterieures||[])){
+      let d=null; try{ d=_dataDeSeance(p,nm); }catch(e){ d=null; }
+      const v=best(d&&d.sets); if(v>hist) hist=v;
+    }
+    if(hist>0&&cur>hist) out.push({nm,avant:Math.round(hist*10)/10,apres:Math.round(cur*10)/10});
+  }
+  out.sort((a,b)=>(b.apres-b.avant)-(a.apres-a.avant));
+  return out;
+}
 // PURE. Le contexte que les fabricants d'HTML de fin de seance attendent,
 // reconstruit depuis une seance ENREGISTREE. C'est ce qui permet de reutiliser
 // _htmlRecompenses, _htmlRecordsFin et achievementEngine tels quels, au lieu
@@ -52199,8 +52247,10 @@ function contexteSeanceRelue(sc,u){
     meilleur=l[0]||null;
   }catch(e){ meilleur=null; }
   const sets=Number(sc.sets)||0, prevus=Number(sc.setsPlanned)||0;
+  let e1=[]; try{ e1=e1rmRecordsDeSeance(sc,ant,u); }catch(e){ e1=[]; }
   return {
     records:rec,
+    recordsE1rm:e1,
     sets,setsPlanned:prevus,volume:Number(sc.volume)||0,
     volumesPrecedents:prec.map(x=>Number(x&&x.volume)||0),
     // LA SERIE N'EST PAS RECONSTITUEE. On ne sait pas ce qu'elle valait ce
@@ -66868,108 +66918,335 @@ function pdjValiderEnergie(n){
   toastEcriture(saveUser(),'Énergie enregistrée 👍','ton énergie est');
   _pdjAccuser('energie');
 }
-// ══════════════════ LES CINQ BADGES ═══════════════════════════════════════
+// ══════════════════ LA COLLECTION DE BADGES ══════════════════════════════
 //
-// CINQ, ET ON S'ARRÊTE. Ce n'est pas une contrainte technique, c'est la
-// valeur du signal : une collection qui s'allonge cesse d'être une
-// reconnaissance et devient du bruit de fond. Le jour où l'on voudra un
-// sixième badge, la question à trancher sera « lequel des cinq sort ».
-// La liste est gelée ici ET dans database.rules.json, dont le motif de clé
-// n'accepte que ces cinq identifiants : un badge ajouté dans ce fichier
-// seul serait refusé par le serveur, et scripts/verif/regles.mjs compare
-// les deux listes pour que le refus soit vu ici plutôt qu'en production.
+// CINQUANTE, EN TROIS SORTES. Le « cinq, et on s'arrête » d'origine est levé
+// par Kevin le 26/09/2026 : la collection devient un parcours, et un parcours
+// se lit par PALIERS — une ligne par famille, un palier atteint, une barre
+// vers le suivant. C'est ce qui garde le signal lisible à cinquante : on ne
+// regarde pas cinquante cases, on regarde huit lignes.
 //
-// AUCUN CALCUL NOUVEAU. Les cinq critères se lisent dans ce qui est déjà
-// enregistré — `sessions`, `bilans`, `sessions_config`, `streak` — par des
-// fonctions qui existaient avant ce lot : seancesPrevuesParSemaine,
-// _lundiDe, _riteRecords, streakSemaines. Aucun compteur parallèle n'est
-// tenu, donc aucun ne peut diverger de la réalité du dossier.
+//   • 8 FAMILLES À 4 PALIERS (I à IV)          32
+//   • 8 UNIQUES (dont 4 inactifs pour l'instant) 8
+//   • 10 SECRETS, montrés « ??? » + un indice    10
+//
+// LES CINQ ANCIENNES CLÉS SONT GARDÉES TELLES QUELLES : elles vivent déjà dans
+// u.badges de chaque dossier, avec leur date. « quatre-semaines » devient le
+// palier I d'INARRÊTABLE — même critère, même clé, rien n'est migré.
+//
+// LA LISTE RESTE FERMÉE CÔTÉ SERVEUR. database.rules.json n'accepte que ces
+// identifiants, et scripts/verif/regles.mjs compare les deux listes : un
+// badge ajouté ici seul serait gagné sur l'appareil puis effacé à la synchro.
+//
+// CHAQUE ENTRÉE : id (la clé du dossier), nom, famille, palier (1 à 4, ou
+// null), icone (le visuel, img/badges/<icone>.webp), condition (ce qu'il faut
+// faire, lisible), indice (les secrets seulement), test (f → date d'obtention
+// en ms, ou 0). `lib`, `phrase` et `attendu` restent pour la bannière et les
+// anciens appelants.
+//
+// LE TEST NE LIT QUE `f`, les faits tirés de l'historique par _badgesFaits.
+// Il rend la DATE où le badge a été mérité, pas un booléen : c'est ce qui
+// permet de rendre à un athlète ancien ses badges avec leur vraie date.
+const BADGE_ROMAINS=['I','II','III','IV'];
 const BADGES_ACQUIS=Object.freeze([
-  {id:'premiere-seance',lib:'Première séance',
-   phrase:'La première est faite. C\'est celle qui coûte le plus.',
-   attendu:'Termine une première séance.'},
-  {id:'semaine-validee',lib:'Semaine validée',
-   phrase:'Toutes les séances prévues, sur une même semaine.',
-   attendu:'Fais toutes tes séances prévues sur une même semaine.'},
-  {id:'premier-record',lib:'Premier record',
-   phrase:'Tu viens de passer ta meilleure performance.',
-   attendu:'Dépasse ta meilleure performance sur un exercice.'},
-  {id:'premier-bilan',lib:'Premier bilan',
-   phrase:'Ton premier bilan est enregistré. La suite se mesure.',
-   attendu:'Remplis un premier bilan.'},
-  {id:'quatre-semaines',lib:'Quatre semaines',
-   phrase:'Quatre semaines de suite. Ce n\'est plus un essai.',
-   attendu:'Enchaîne quatre semaines consécutives.'}
+  // ── ASSIDU : séances terminées ──────────────────────────────────────
+  {id:'assidu_1',nom:'ASSIDU I',famille:'assidu',palier:1,icone:'assidu_1',condition:'Termine 10 séances.',test:f=>_bdgNieme(f.seances,10)},
+  {id:'assidu_2',nom:'ASSIDU II',famille:'assidu',palier:2,icone:'assidu_2',condition:'Termine 50 séances.',test:f=>_bdgNieme(f.seances,50)},
+  {id:'assidu_3',nom:'ASSIDU III',famille:'assidu',palier:3,icone:'assidu_3',condition:'Termine 100 séances.',test:f=>_bdgNieme(f.seances,100)},
+  {id:'assidu_4',nom:'ASSIDU IV',famille:'assidu',palier:4,icone:'assidu_4',condition:'Termine 250 séances.',test:f=>_bdgNieme(f.seances,250)},
+  // ── INARRÊTABLE : semaines consécutives au quota ────────────────────
+  // Le palier I est l'ancien « Quatre semaines », sous son ancienne clé.
+  {id:'quatre-semaines',nom:'INARRÊTABLE I',famille:'inarretable',palier:1,icone:'inarretable_1',condition:'Enchaîne 4 semaines consécutives.',test:f=>f.serie(4)},
+  {id:'inarretable_2',nom:'INARRÊTABLE II',famille:'inarretable',palier:2,icone:'inarretable_2',condition:'Enchaîne 12 semaines consécutives.',test:f=>f.serie(12)},
+  {id:'inarretable_3',nom:'INARRÊTABLE III',famille:'inarretable',palier:3,icone:'inarretable_3',condition:'Enchaîne 26 semaines consécutives.',test:f=>f.serie(26)},
+  {id:'inarretable_4',nom:'INARRÊTABLE IV',famille:'inarretable',palier:4,icone:'inarretable_4',condition:'Enchaîne 52 semaines consécutives.',test:f=>f.serie(52)},
+  // ── BRISEUR DE RECORDS : records de charge, cumulés ─────────────────
+  {id:'briseur_1',nom:'BRISEUR DE RECORDS I',famille:'briseur',palier:1,icone:'briseur_1',condition:'Bats 5 records.',test:f=>_bdgNieme(f.records,5)},
+  {id:'briseur_2',nom:'BRISEUR DE RECORDS II',famille:'briseur',palier:2,icone:'briseur_2',condition:'Bats 25 records.',test:f=>_bdgNieme(f.records,25)},
+  {id:'briseur_3',nom:'BRISEUR DE RECORDS III',famille:'briseur',palier:3,icone:'briseur_3',condition:'Bats 50 records.',test:f=>_bdgNieme(f.records,50)},
+  {id:'briseur_4',nom:'BRISEUR DE RECORDS IV',famille:'briseur',palier:4,icone:'briseur_4',condition:'Bats 100 records.',test:f=>_bdgNieme(f.records,100)},
+  // ── TONNAGE : volume soulevé, cumulé ────────────────────────────────
+  {id:'tonnage_1',nom:'TONNAGE I',famille:'tonnage',palier:1,icone:'tonnage_1',condition:'Soulève 10 tonnes au total.',test:f=>f.tonnage(10000)},
+  {id:'tonnage_2',nom:'TONNAGE II',famille:'tonnage',palier:2,icone:'tonnage_2',condition:'Soulève 100 tonnes au total.',test:f=>f.tonnage(100000)},
+  {id:'tonnage_3',nom:'TONNAGE III',famille:'tonnage',palier:3,icone:'tonnage_3',condition:'Soulève 500 tonnes au total.',test:f=>f.tonnage(500000)},
+  {id:'tonnage_4',nom:'TONNAGE IV',famille:'tonnage',palier:4,icone:'tonnage_4',condition:'Soulève 1 000 tonnes au total.',test:f=>f.tonnage(1000000)},
+  // ── SANS FAUTE : semaines à 100 %, cumulées ─────────────────────────
+  {id:'sans_faute_1',nom:'SANS FAUTE I',famille:'sans_faute',palier:1,icone:'sans_faute_1',condition:'Réussis 4 semaines à 100 %.',test:f=>_bdgNieme(f.sansFaute,4)},
+  {id:'sans_faute_2',nom:'SANS FAUTE II',famille:'sans_faute',palier:2,icone:'sans_faute_2',condition:'Réussis 12 semaines à 100 %.',test:f=>_bdgNieme(f.sansFaute,12)},
+  {id:'sans_faute_3',nom:'SANS FAUTE III',famille:'sans_faute',palier:3,icone:'sans_faute_3',condition:'Réussis 26 semaines à 100 %.',test:f=>_bdgNieme(f.sansFaute,26)},
+  {id:'sans_faute_4',nom:'SANS FAUTE IV',famille:'sans_faute',palier:4,icone:'sans_faute_4',condition:'Réussis 52 semaines à 100 %.',test:f=>_bdgNieme(f.sansFaute,52)},
+  // ── MIROIR : bilans remplis ─────────────────────────────────────────
+  {id:'miroir_1',nom:'MIROIR I',famille:'miroir',palier:1,icone:'miroir_1',condition:'Remplis 3 bilans.',test:f=>_bdgNieme(f.bilans,3)},
+  {id:'miroir_2',nom:'MIROIR II',famille:'miroir',palier:2,icone:'miroir_2',condition:'Remplis 10 bilans.',test:f=>_bdgNieme(f.bilans,10)},
+  {id:'miroir_3',nom:'MIROIR III',famille:'miroir',palier:3,icone:'miroir_3',condition:'Remplis 25 bilans.',test:f=>_bdgNieme(f.bilans,25)},
+  {id:'miroir_4',nom:'MIROIR IV',famille:'miroir',palier:4,icone:'miroir_4',condition:'Remplis 50 bilans.',test:f=>_bdgNieme(f.bilans,50)},
+  // ── CYCLES : cycles de 28 jours clôturés (rites de fin de cycle) ────
+  {id:'cycles_1',nom:'CYCLES I',famille:'cycles',palier:1,icone:'cycles_1',condition:'Clôture 1 cycle de 28 jours.',test:f=>_bdgNieme(f.cycles,1)},
+  {id:'cycles_2',nom:'CYCLES II',famille:'cycles',palier:2,icone:'cycles_2',condition:'Clôture 3 cycles de 28 jours.',test:f=>_bdgNieme(f.cycles,3)},
+  {id:'cycles_3',nom:'CYCLES III',famille:'cycles',palier:3,icone:'cycles_3',condition:'Clôture 6 cycles de 28 jours.',test:f=>_bdgNieme(f.cycles,6)},
+  {id:'cycles_4',nom:'CYCLES IV',famille:'cycles',palier:4,icone:'cycles_4',condition:'Clôture 12 cycles de 28 jours.',test:f=>_bdgNieme(f.cycles,12)},
+  // ── CARBURANT : jours de journal alimentaire ────────────────────────
+  {id:'carburant_1',nom:'CARBURANT I',famille:'carburant',palier:1,icone:'carburant_1',condition:'Tiens ton journal 7 jours.',test:f=>_bdgNieme(f.journal,7)},
+  {id:'carburant_2',nom:'CARBURANT II',famille:'carburant',palier:2,icone:'carburant_2',condition:'Tiens ton journal 30 jours.',test:f=>_bdgNieme(f.journal,30)},
+  {id:'carburant_3',nom:'CARBURANT III',famille:'carburant',palier:3,icone:'carburant_3',condition:'Tiens ton journal 90 jours.',test:f=>_bdgNieme(f.journal,90)},
+  {id:'carburant_4',nom:'CARBURANT IV',famille:'carburant',palier:4,icone:'carburant_4',condition:'Tiens ton journal 365 jours.',test:f=>_bdgNieme(f.journal,365)},
+  // ── LES UNIQUES ─────────────────────────────────────────────────────
+  {id:'premiere-seance',nom:'PREMIÈRE SÉANCE',famille:'unique',palier:null,icone:'premiere_seance',condition:'Termine une première séance.',test:f=>_bdgNieme(f.seances,1),
+   lib:'Première séance',phrase:'La première est faite. C\'est celle qui coûte le plus.'},
+  {id:'semaine-validee',nom:'SEMAINE VALIDÉE',famille:'unique',palier:null,icone:'semaine_validee',condition:'Fais toutes tes séances prévues sur une même semaine.',test:f=>_bdgNieme(f.semaines,1),
+   lib:'Semaine validée',phrase:'Toutes les séances prévues, sur une même semaine.'},
+  {id:'premier-record',nom:'PREMIER RECORD',famille:'unique',palier:null,icone:'premier_record',condition:'Dépasse ta meilleure charge sur un exercice.',test:f=>_bdgNieme(f.records,1),
+   lib:'Premier record',phrase:'Tu viens de passer ta meilleure performance.'},
+  {id:'premier-bilan',nom:'PREMIER BILAN',famille:'unique',palier:null,icone:'premier_bilan',condition:'Remplis un premier bilan.',test:f=>_bdgNieme(f.bilans,1),
+   lib:'Premier bilan',phrase:'Ton premier bilan est enregistré. La suite se mesure.'},
+  // FONDATEUR : parmi les 500 premiers inscrits. Le rang d'inscription ne se
+  // lit pas depuis un dossier : on compare la date d'inscription à celle du
+  // 500e, FONDATEUR_LIMITE. Tant qu'elle n'est pas posée, le badge dort.
+  {id:'fondateur',nom:'FONDATEUR',famille:'unique',palier:null,icone:'fondateur',condition:'Fais partie des 500 premiers inscrits.',test:f=>f.fondateur,inactif:()=>!(FONDATEUR_LIMITE>0)},
+  // Les trois suivants attendent le parrainage et les défis, qui n'existent
+  // pas encore : ils sont montrés, jamais attribués.
+  {id:'recruteur',nom:'RECRUTEUR',famille:'unique',palier:null,icone:'recruteur',condition:'Parraine 3 personnes.',test:()=>0,inactif:()=>true},
+  {id:'mentor',nom:'MENTOR',famille:'unique',palier:null,icone:'mentor',condition:'Parraine 10 personnes.',test:()=>0,inactif:()=>true},
+  {id:'champion',nom:'CHAMPION',famille:'unique',palier:null,icone:'champion',condition:'Gagne un défi.',test:()=>0,inactif:()=>true},
+  // ── LES SECRETS : heure et date LOCALES de l'appareil ───────────────
+  {id:'aube',nom:'AUBE',famille:'secret',palier:null,icone:'aube',condition:'Lance une séance avant 6 h du matin.',indice:'Le fer est plus froid avant le lever du jour.',test:f=>f.aube},
+  {id:'nuit',nom:'NUIT',famille:'secret',palier:null,icone:'nuit',condition:'Termine une séance après 23 h.',indice:'Certains s’entraînent quand la ville dort.',test:f=>f.nuit},
+  {id:'nouvel_an',nom:'NOUVEL AN',famille:'secret',palier:null,icone:'nouvel_an',condition:'Entraîne-toi un 1er janvier.',indice:'La première résolution tenue de l’année.',test:f=>f.nouvelAn},
+  {id:'noel',nom:'NOËL',famille:'secret',palier:null,icone:'noel',condition:'Entraîne-toi un 25 décembre.',indice:'Un cadeau que personne d’autre ne t’offrira.',test:f=>f.noel},
+  {id:'tempete',nom:'TEMPÊTE',famille:'secret',palier:null,icone:'tempete',condition:'Bats 3 records dans une même séance.',indice:'Quand ça tombe, ça tombe en rafale.',test:f=>f.tempete},
+  {id:'foudre_serie',nom:'FOUDRE EN SÉRIE',famille:'secret',palier:null,icone:'foudre_serie',condition:'Bats au moins un record sur 3 séances d’affilée.',indice:'La foudre frappe parfois trois fois au même endroit.',test:f=>f.foudreSerie},
+  {id:'phenix',nom:'PHÉNIX',famille:'secret',palier:null,icone:'phenix',condition:'Reviens après 30 jours d’arrêt, puis valide 4 semaines.',indice:'Ce qui tombe peut renaître.',test:f=>f.phenix},
+  {id:'palindrome',nom:'PALINDROME',famille:'secret',palier:null,icone:'palindrome',condition:'Soulève un tonnage de séance palindrome, 10 000 kg ou plus.',indice:'Un tonnage qui se lit dans les deux sens.',test:f=>f.palindrome},
+  {id:'vendredi13',nom:'VENDREDI 13',famille:'secret',palier:null,icone:'vendredi13',condition:'Entraîne-toi un vendredi 13.',indice:'Il y a des jours où l’on ne croit pas à la chance.',test:f=>f.vendredi13},
+  {id:'centurion',nom:'CENTURION',famille:'secret',palier:null,icone:'centurion',condition:'Valide 100 séries dans la même semaine.',indice:'Cent, sans compter.',test:f=>f.centurion}
+].map(b=>Object.freeze(Object.assign({
+  // Les champs des anciens appelants, dérivés quand l'entrée ne les écrit pas.
+  // « Assidu III », « Aube » : la casse d'une phrase, le chiffre romain intact.
+  lib:(b.palier
+    ?(b.nom.replace(/ [IV]+$/,'').toLowerCase().replace(/^./,c=>c.toUpperCase())+' '+BADGE_ROMAINS[b.palier-1])
+    :b.nom.toLowerCase().replace(/^./,c=>c.toUpperCase())),
+  phrase:b.famille==='secret'?('Badge secret débloqué : '+b.condition.replace(/\.$/,'').toLowerCase()+'.'):b.condition,
+  attendu:b.condition,indice:null,inactif:null
+},b))));
+// La date du 500e inscrit (ms), à poser le jour où il arrive. D'ici là,
+// FONDATEUR n'est attribué à personne : mieux vaut le donner en retard que le
+// donner au 501e.
+const FONDATEUR_LIMITE=0;
+// Les familles, pour la vitrine : le nom sans chiffre romain, les seuils, et
+// comment dire ce qui reste. `valeur(f)` lit la MÊME source que les tests.
+const BADGE_FAMILLES=Object.freeze([
+  {cle:'assidu',nom:'ASSIDU',seuils:[10,50,100,250],valeur:f=>f.seances.length,reste:n=>n+' séance'+(n>1?'s':'')},
+  {cle:'inarretable',nom:'INARRÊTABLE',seuils:[4,12,26,52],valeur:f=>f.serieCourante,reste:n=>n+' semaine'+(n>1?'s':'')+' d’affilée'},
+  {cle:'briseur',nom:'BRISEUR DE RECORDS',seuils:[5,25,50,100],valeur:f=>f.records.length,reste:n=>n+' record'+(n>1?'s':'')},
+  {cle:'tonnage',nom:'TONNAGE',seuils:[10,100,500,1000],valeur:f=>Math.floor(f.tonnageTotal/100)/10,
+   reste:n=>String(Math.ceil(n*10)/10).replace('.',',')+' t'},
+  {cle:'sans_faute',nom:'SANS FAUTE',seuils:[4,12,26,52],valeur:f=>f.sansFaute.length,reste:n=>n+' semaine'+(n>1?'s':'')+' à 100 %'},
+  {cle:'miroir',nom:'MIROIR',seuils:[3,10,25,50],valeur:f=>f.bilans.length,reste:n=>n+' bilan'+(n>1?'s':'')},
+  {cle:'cycles',nom:'CYCLES',seuils:[1,3,6,12],valeur:f=>f.cycles.length,reste:n=>n+' cycle'+(n>1?'s':'')},
+  {cle:'carburant',nom:'CARBURANT',seuils:[7,30,90,365],valeur:f=>f.journal.length,reste:n=>n+' jour'+(n>1?'s':'')+' de journal'}
 ]);
-// ⚠ AUCUNE IMAGE NOUVELLE. Les quinze médaillons de la planche sont déjà
-// découpés dans app/img/badges/ depuis le 14/09, avec leur fond rendu
-// transparent, et _badgeFichier sait déjà les nommer. Découper une seconde
-// fois les mêmes hexagones pour cette carte aurait mis deux versions du même
-// dessin dans le dépôt, qui auraient divergé au premier retouchage.
-//
-// On emprunte donc cinq des quinze, par leur clef de fin de séance. Quatre
-// tombent juste — la couronne pour un record, la cible pour « validé », la
-// chaîne pour la série, la courbe pour un bilan ; la fusée de NOUVEAU PALIER
-// sert la première séance, qui est le premier palier de tous.
-const BADGE_ACQUIS_IMG=Object.freeze({
-  'premiere-seance':'NEW_LOAD',      // fusée
-  'semaine-validee':'FULL_SESSION',  // cible
-  'premier-record':'NEW_RECORD',     // couronne
-  'premier-bilan':'PROGRESSION',     // courbe
-  'quatre-semaines':'STREAK'         // chaîne
+// Le visuel de REPLI d'un badge dont le dessin n'est pas encore déposé : un
+// des quinze médaillons de fin de séance, choisi par le sens. Un badge obtenu
+// n'est jamais montré sans image.
+const BADGE_REPLI=Object.freeze({
+  assidu:'DISCIPLINE',inarretable:'STREAK',briseur:'NEW_RECORD',tonnage:'HIGH_VOLUME',
+  sans_faute:'PERFECT',miroir:'PROGRESSION',cycles:'FULL_SESSION',carburant:'MONSTER',
+  'premiere-seance':'NEW_LOAD','semaine-validee':'FULL_SESSION','premier-record':'NEW_RECORD',
+  'premier-bilan':'PROGRESSION',fondateur:'PERSONAL_BEST',recruteur:'MULTIPLE_RECORDS',
+  mentor:'MULTIPLE_RECORDS',champion:'NO_MERCY',aube:'NEW_PERF',nuit:'NEW_PERF',
+  nouvel_an:'MONSTER',noel:'MONSTER',tempete:'NEW_PERF',foudre_serie:'NEW_PERF',
+  phenix:'RETURN',palindrome:'NO_FAIL',vendredi13:'NO_MERCY',centurion:'HIGH_VOLUME'
 });
+// L'ancien nom de la table : les cinq d'origine gardent leur médaillon.
+const BADGE_ACQUIS_IMG=Object.freeze({
+  'premiere-seance':'NEW_LOAD','semaine-validee':'FULL_SESSION','premier-record':'NEW_RECORD',
+  'premier-bilan':'PROGRESSION','quatre-semaines':'STREAK'
+});
+// Le visuel dessiné (webp, 184×200), posé par scripts/badges.py.
+function badgeVisuel(id,grand){
+  const b=badgeAcquisDef(id); if(!b) return '';
+  return BADGE_IMG_DOSSIER+b.icone+(grand?'-512':'')+'.webp';
+}
+// Le médaillon de repli, qui existe toujours.
 function badgeAcquisFichier(id){
-  const k=BADGE_ACQUIS_IMG[id];
+  const b=badgeAcquisDef(id); if(!b) return '';
+  const k=BADGE_ACQUIS_IMG[id]||BADGE_REPLI[id]||BADGE_REPLI[b.famille];
   return k?_badgeFichier(k):'';
 }
+const BADGE_VERROU='img/badges/verrouille.webp';
+// Une balise <img> qui tente le visuel dessiné et retombe sur le médaillon :
+// la collection s'affiche complète même avant que les cinquante soient là.
+function _htmlBadgeImg(id,o){
+  o=o||{};
+  const vis=o.verrou?BADGE_VERROU:badgeVisuel(id,o.grand);
+  const repli=badgeAcquisFichier(id);
+  return '<img src="'+escapeHtml(vis)+'" alt="" loading="lazy"'+(o.id?' id="'+o.id+'"':'')
+    +' onerror="this.onerror=null;this.src=\''+escapeHtml(repli)+'\'">';
+}
 function badgeAcquisDef(id){ return BADGES_ACQUIS.find(b=>b&&b.id===id)||null; }
-// PURE. Les badges que le dossier MÉRITE — pas ceux qu'il porte. C'est la
-// seule fonction qui connaisse les critères, et elle ne décide de rien :
-// majBadges compare son résultat à ce qui est déjà inscrit.
+function _bdgNieme(l,n){ return (Array.isArray(l)&&l.length>=n)?(Number(l[n-1])||0):0; }
+function _bdgInactif(b){ try{ return !!(b.inactif&&b.inactif()); }catch(e){ return true; } }
+
+// PURE. LES FAITS, tirés une fois de l'historique. Chaque liste est TRIÉE et
+// porte la date de chaque occurrence : la n-ième séance, le n-ième record, le
+// n-ième jour de journal. Un palier se lit donc « quand a-t-on atteint N »,
+// et c'est ce qui date correctement une rétro-attribution.
 //
-// Elle est relisible de bout en bout : cinq conditions, cinq lignes de
-// données. Si un badge apparaît à tort, il n'y a qu'un endroit à ouvrir.
-function badgesMerites(u,maintenant){
+// L'HEURE EST CELLE DE L'APPAREIL (getHours, getDay, getDate), jamais UTC :
+// « avant 6 h » veut dire 6 h là où l'athlète s'entraîne.
+function _badgesFaits(u,maintenant){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
-  const ses=((u&&u.sessions)||[]).filter(s=>s&&s.date).slice()
-              .sort((a,b)=>a.date-b.date);
-  const out=[];
-  // 1. La première séance TERMINÉE. Une séance n'entre dans `sessions` qu'à
-  //    la fin de finishWorkout : la présence vaut achèvement, il n'y a pas
-  //    de drapeau à consulter.
-  if(ses.length>=1) out.push('premiere-seance');
-  // 2. Le quota d'une semaine CALENDAIRE atteint — lundi à dimanche, par
-  //    _lundiDe, la même découpe que « Cette semaine » de l'accueil. Le
-  //    quota est celui d'aujourd'hui : un athlète passé de 4 à 2 séances
-  //    garde le badge, et c'est juste — il l'a gagné sous l'ancien quota,
-  //    et rien ne reprend un badge dans ce produit.
+  const ses=((u&&u.sessions)||[]).filter(s=>s&&s.date>0).slice().sort((a,b)=>a.date-b.date);
   let quota=1; try{ quota=seancesPrevuesParSemaine(u); }catch(e){ quota=1; }
-  const parSemaine={};
-  for(const x of ses){
-    let k=0; try{ k=_lundiDe(x.date).getTime(); }catch(e){ continue; }
-    parSemaine[k]=(parSemaine[k]||0)+1;
+  const f={seances:ses.map(s=>s.date),records:[],semaines:[],sansFaute:[],
+    bilans:[],cycles:[],journal:[],tonnageTotal:0,serieCourante:0,
+    aube:0,nuit:0,nouvelAn:0,noel:0,tempete:0,foudreSerie:0,phenix:0,
+    palindrome:0,vendredi13:0,centurion:0,fondateur:0};
+  const premier=(k,v)=>{ if(!f[k]) f[k]=v; };
+  // Les séances passent dans l'ordre ; on retient au passage tout ce qui se
+  // lit séance par séance.
+  const meilleur={};                     // meilleure charge par exercice
+  let volCumul=0, recSuite=0;
+  const tonnages=[];                     // [seuil atteint → date]
+  const semaine={};                      // lundi → {n, completes, series, derniere}
+  for(const s of ses){
+    const d=new Date(s.date);
+    // Le début de séance : la fin moins la durée (minutes).
+    const debut=new Date(s.date-(Number(s.duration)||0)*60000);
+    if(debut.getHours()<6) premier('aube',s.date);
+    // « Après 23 h » : de 23 h à 4 h du matin — minuit passé, c'est toujours
+    // la même nuit.
+    if(d.getHours()>=23||d.getHours()<4) premier('nuit',s.date);
+    if(d.getMonth()===0&&d.getDate()===1) premier('nouvelAn',s.date);
+    if(d.getMonth()===11&&d.getDate()===25) premier('noel',s.date);
+    if(d.getDay()===5&&d.getDate()===13) premier('vendredi13',s.date);
+    // Records de CHARGE : la charge maximale de la séance dépasse la
+    // meilleure des séances précédentes. Même règle que recordsDeSeance (et
+    // que « Mes records ») : un exercice fait pour la première fois n'est pas
+    // un record, il n'y a rien à battre.
+    const exos=_bdgExos(s);
+    let nRec=0, nSeries=0, volCalc=0;
+    for(const e of exos){
+      let cur=0;
+      for(const st of e.sets){
+        if(!st||st.done===false) continue;
+        const w=parseFloat(st.weight)||0, r=parseFloat(st.repsDone!=null?st.repsDone:st.reps)||0;
+        if(st.done===true) nSeries++;
+        if(w>cur) cur=w;
+        volCalc+=w*r;
+      }
+      if(!cur) continue;
+      const h=meilleur[e.cle]||0;
+      if(h>0&&cur>h){ nRec++; f.records.push(s.date); }
+      if(cur>h) meilleur[e.cle]=cur;
+    }
+    if(nRec>=3) premier('tempete',s.date);
+    recSuite=nRec>0?recSuite+1:0;
+    if(recSuite>=3) premier('foudreSerie',s.date);
+    const vol=Number(s.volume)>0?Math.round(Number(s.volume)):Math.round(volCalc);
+    if(vol>=10000&&String(vol)===String(vol).split('').reverse().join('')) premier('palindrome',s.date);
+    volCumul+=vol;
+    tonnages.push([volCumul,s.date]);
+    let cle=0; try{ cle=_lundiDe(s.date).getTime(); }catch(e){ continue; }
+    const w=semaine[cle]||(semaine[cle]={n:0,completes:true,series:0,derniere:0,validee:0});
+    w.n++; w.derniere=s.date;
+    w.series+=Number(s.sets)>0?Number(s.sets):nSeries;
+    if(s.complete===false||(Number(s.setsPlanned)>0&&Number(s.sets)<Number(s.setsPlanned))) w.completes=false;
+    if(!w.validee&&w.n>=quota) w.validee=s.date;
+    if(w.series>=100) premier('centurion',s.date);
   }
-  for(const k in parSemaine){ if(parSemaine[k]>=quota){ out.push('semaine-validee'); break; } }
-  // 3. Le premier record, lu par _riteRecords — la fonction du rite de
-  //    période, inchangée. La fenêtre s'ouvre à la DEUXIÈME séance : tout ce
-  //    qui la précède est la référence à battre. Avec une seule séance il
-  //    n'y a rien à comparer, et tout serait un record.
-  if(ses.length>=2){
-    let r=[]; try{ r=_riteRecords(u,ses[1].date,t)||[]; }catch(e){ r=[]; }
-    if(r.length) out.push('premier-record');
+  f.tonnageTotal=volCumul;
+  f.tonnage=seuil=>{ for(const [v,d] of tonnages) if(v>=seuil) return d; return 0; };
+  // LES SEMAINES : validée = le quota atteint dans la semaine calendaire
+  // (lundi-dimanche, _lundiDe, la découpe de « Cette semaine »). À 100 % =
+  // validée ET sans aucune séance partielle.
+  const lundis=Object.keys(semaine).map(Number).sort((a,b)=>a-b);
+  const serieDates=[];                   // n-ième semaine consécutive → date
+  let suite=0, prec=null;
+  for(const l of lundis){
+    const w=semaine[l];
+    if(!w.validee){ suite=0; prec=l; continue; }
+    f.semaines.push(w.validee);
+    if(w.completes) f.sansFaute.push(w.derniere);
+    // Consécutive = la semaine calendaire d'avant était validée. Six ou huit
+    // jours d'écart selon l'heure d'été : on compare les lundis au jour près.
+    const suivante=prec!=null&&semaine[prec]&&semaine[prec].validee
+      &&Math.round((l-prec)/864e5)===7;
+    suite=suivante?suite+1:1;
+    prec=l;
+    if(!serieDates[suite-1]) serieDates[suite-1]=w.validee;
   }
-  // 4. Le premier bilan, quel que soit son type.
-  if((((u&&u.bilans)||[]).length)>=1) out.push('premier-bilan');
-  // 5. Quatre semaines, lues par streakSemaines — qui porte déjà la
-  //    péremption et le gel de suspension. On ne recompte pas les semaines
-  //    de son côté : il n'existe qu'une définition de la série.
-  let st=0; try{ st=streakSemaines(u)||0; }catch(e){ st=0; }
-  if(st>=4) out.push('quatre-semaines');
+  // La série EN COURS : celle de la dernière semaine validée, si elle n'est
+  // pas rompue — la semaine courante ou la précédente.
+  let courante=0;
+  if(lundis.length){
+    let lc=0; try{ lc=_lundiDe(t).getTime(); }catch(e){ lc=0; }
+    const der=lundis[lundis.length-1];
+    const ecart=Math.round((lc-der)/864e5);
+    if(semaine[der].validee&&ecart<=7) courante=suite;
+  }
+  // LE COMPTEUR DU DOSSIER FAIT FOI AUSSI : streakSemaines porte le gel des
+  // suspensions, que l'historique seul ne connaît pas. Un athlète à 4 dans
+  // son compteur a mérité INARRÊTABLE I, même si ses séances ont été saisies
+  // de façon irrégulière.
+  let stocke=0; try{ stocke=streakSemaines(u)||0; }catch(e){ stocke=0; }
+  f.serieCourante=Math.max(courante,stocke);
+  f.serie=n=>serieDates[n-1]||(stocke>=n?Math.min(t,Number(u&&u.lastSession)||t):0);
+  // PHÉNIX : un retour après 30 jours sans séance, puis 4 semaines validées
+  // d'affilée à partir de la semaine du retour.
+  for(let i=1;i<ses.length&&!f.phenix;i++){
+    if(ses[i].date-ses[i-1].date<30*864e5) continue;
+    let l0=0; try{ l0=_lundiDe(ses[i].date).getTime(); }catch(e){ continue; }
+    let ok=0, d=0;
+    for(let k=0;k<4;k++){
+      const lk=_lundiDe(l0+k*7*864e5+36e5*12).getTime();
+      const w=semaine[lk];
+      if(!w||!w.validee) break;
+      ok++; d=w.validee;
+    }
+    if(ok===4) f.phenix=d;
+  }
+  // Bilans, cycles de 28 jours (rites clôturés), jours de journal.
+  f.bilans=((u&&u.bilans)||[]).filter(Boolean).map(b=>Number(b.date)||Number(b.at)||t).sort((a,b)=>a-b);
+  f.cycles=((u&&u.rites)||[]).filter(r=>r&&r.date).map(r=>Number(r.date)).sort((a,b)=>a-b);
+  const log=(((u&&u.nutrition)||{}).log)||{};
+  f.journal=Object.keys(log).filter(j=>/^\d{4}-\d{2}-\d{2}$/.test(j)
+      &&(((log[j]&&log[j].entries)||[]).length>0))
+    .sort().map(j=>{ const [a,m,dd]=j.split('-').map(Number); return new Date(a,m-1,dd,20).getTime(); });
+  const cree=Number(u&&u.createdAt)||0;
+  if(FONDATEUR_LIMITE>0&&cree>0&&cree<=FONDATEUR_LIMITE) f.fondateur=cree;
+  return f;
+}
+// Les exercices d'une séance, qu'elle soit écrite en `data` (nom → séries,
+// la forme de finishWorkout) ou en `exercises` (la forme ancienne). La clé
+// passe par les alias : un exercice renommé reste le même exercice.
+function _bdgExos(s){
+  const cle=nm=>{ try{ return resoudreAlias(exKey(nm)); }catch(e){ return String(nm); } };
+  if(s&&s.data&&typeof s.data==='object'&&Object.keys(s.data).length)
+    return Object.keys(s.data).map(nm=>({cle:cle(nm),sets:((s.data[nm]||{}).sets)||[]}));
+  return ((s&&s.exercises)||[]).filter(e=>e&&(e.name||e.nm))
+    .map(e=>({cle:cle(e.name||e.nm),sets:e.sets||[]}));
+}
+// PURE. Les badges mérités, AVEC LA DATE où chacun l'a été — dans l'ordre de
+// BADGES_ACQUIS. Un badge inactif n'est jamais rendu.
+function badgesMeritesDates(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  let f; try{ f=_badgesFaits(u,t); }catch(e){ return []; }
+  const out=[];
+  for(const b of BADGES_ACQUIS){
+    if(_bdgInactif(b)) continue;
+    let at=0; try{ at=Number(b.test(f))||0; }catch(e){ at=0; }
+    if(at>0) out.push({id:b.id,at:Math.min(at,t)});
+  }
   return out;
 }
-// Les badges INSCRITS au dossier, dans l'ordre de BADGES et non dans celui
-// des clés d'un objet — l'ordre d'itération d'un objet reconstruit par le
-// sync n'est pas celui de l'écriture.
+// PURE. Les identifiants seuls — la forme d'origine, gardée pour ses appelants.
+function badgesMerites(u,maintenant){
+  return badgesMeritesDates(u,maintenant).map(x=>x.id);
+}
+// Les badges INSCRITS au dossier, dans l'ordre de BADGES_ACQUIS et non dans
+// celui des clés d'un objet — l'ordre d'itération d'un objet reconstruit par
+// le sync n'est pas celui de l'écriture.
 function badgesObtenus(u){
   const m=(u&&u.badges&&typeof u.badges==='object')?u.badges:{};
   return BADGES_ACQUIS.filter(b=>m[b.id]&&m[b.id].at>0)
@@ -66979,49 +67256,68 @@ function badgesObtenus(u){
 //
 // Sous suspension ou drapeau, RIEN ne se déclenche : ni la célébration, ni
 // l'inscription au dossier. Fêter une série pendant qu'une douleur est
-// déclarée, c'est applaudir précisément ce qu'on demande d'arrêter, et un
-// badge inscrit en silence pour être fêté plus tard serait la même chose
-// avec un délai. Le critère, lui, ne s'efface pas : il se lit dans les
-// données, il restera vrai à la levée, et le badge tombera au prochain
-// passage — avec la date de ce jour-là, qui est la vérité de ce qui s'est
-// passé.
+// déclarée, c'est applaudir précisément ce qu'on demande d'arrêter. Le
+// critère, lui, ne s'efface pas : il se lit dans les données, et le badge
+// tombera au prochain passage.
+//
+// LA DATE INSCRITE EST CELLE OÙ LE BADGE A ÉTÉ MÉRITÉ, lue dans l'historique
+// — pas celle du passage. C'est ce qui rend à un athlète ancien, à la mise à
+// jour, ses cinquante séances avec la date de la cinquantième.
 function majBadges(){
   const u=(typeof currentUser!=='undefined')?currentUser:null;
   if(!u||u.role==='coach') return [];
   try{ if(suspensionEtat(u).actif) return []; }catch(e){}
   try{ if(drapeauQuelconqueActif(u)) return []; }catch(e){}
   const deja=(u.badges&&typeof u.badges==='object')?u.badges:{};
-  let merites=[]; try{ merites=badgesMerites(u,Date.now()); }catch(e){ return []; }
-  const neufs=merites.filter(id=>badgeAcquisDef(id)&&!(deja[id]&&deja[id].at>0));
-  if(!neufs.length) return [];
   const t=Date.now();
+  let merites=[]; try{ merites=badgesMeritesDates(u,t); }catch(e){ return []; }
+  const nouveaux=merites.filter(x=>badgeAcquisDef(x.id)&&!(deja[x.id]&&deja[x.id].at>0));
+  if(!nouveaux.length) return [];
   u.badges=deja;
-  for(const id of neufs) u.badges[id]={at:t};
+  for(const x of nouveaux) u.badges[x.id]={at:(x.at>0?x.at:t)};
   try{ saveUser(); }catch(e){}
-  // UNE SEULE BANNIÈRE, même quand plusieurs badges tombent ensemble — cas
-  // réel : la première séance d'un programme à une séance par semaine vaut
-  // aussi la semaine validée. Trois bannières à la file seraient la
-  // collection sans fin qu'on refuse, en accéléré. Les autres sont inscrits
-  // et attendent dans le profil, qui est fait pour ça.
-  try{ _celebrerBadge(neufs[0]); }catch(e){}
+  const neufs=nouveaux.map(x=>x.id);
+  // UNE SEULE CÉLÉBRATION, quel que soit le nombre. À la mise à jour, un
+  // athlète ancien en reçoit parfois vingt d'un coup : vingt bannières à la
+  // file seraient du bruit. Au-delà d'un, la bannière devient un récapitulatif
+  // — « Tu as débloqué 7 badges » — et le détail attend dans le profil.
+  try{ _celebrerBadge(neufs[0],neufs.length); }catch(e){}
   return neufs;
+}
+// LE RATTRAPAGE À LA MISE À JOUR. Une fois par ouverture de l'accueil
+// athlète, et une seule : c'est ce qui rend ses badges à un dossier ancien
+// sans attendre sa prochaine séance. Il ne fête rien de nouveau — il ne peut
+// rien arriver entre deux ouvertures qui n'ait déjà été attribué par la fin de
+// séance ou le bilan — il rattrape.
+let _badgesRattrapes=false;
+function _rattraperBadges(){
+  if(_badgesRattrapes) return [];
+  _badgesRattrapes=true;
+  try{ return majBadges(); }catch(e){ return []; }
 }
 let _bdgMinuteur=null;
 // LA CÉLÉBRATION. Une bannière posée, une image, une phrase, cinq secondes.
 // Elle ne prend pas le focus et ne bloque aucun geste : pointer-events est à
 // none sur le bloc entier (feuille de style), il n'y a donc rien à fermer.
 //
+// `nombre` > 1 : le RÉCAPITULATIF — le premier visuel, « Tu as débloqué N
+// badges », et l'invitation à les voir dans le profil.
+//
 // LE DÉLAI D'UNE SECONDE n'est pas cosmétique : majBadges est appelée avant
 // go('s-workout-done'), et _feterFinSeance joue sa propre séquence à
 // l'arrivée. Deux mouvements en même temps sur le même écran ne se lisent
 // ni l'un ni l'autre.
-function _celebrerBadge(id){
+function _celebrerBadge(id,nombre){
   const b=badgeAcquisDef(id); if(!b) return;
   const z=document.getElementById('bdg-fete'); if(!z) return;
   if(_bdgMinuteur){ clearTimeout(_bdgMinuteur); _bdgMinuteur=null; }
+  const n=Math.max(1,Number(nombre)||1);
+  const titre=n>1?('Tu as débloqué '+n+' badges'):b.lib;
+  const phrase=n>1?'Retrouve-les dans ton profil, avec la date de chacun.':b.phrase;
   const poser=()=>{
-    z.innerHTML='<img src="'+escapeHtml(badgeAcquisFichier(b.id))+'" alt="" width="54" height="54">'
-      +'<div><b>'+escapeHtml(b.lib)+'</b><span>'+escapeHtml(b.phrase)+'</span></div>';
+    z.innerHTML='<img src="'+escapeHtml(badgeVisuel(b.id))+'" alt="" width="54" height="54"'
+      +' onerror="this.onerror=null;this.src=\''+escapeHtml(badgeAcquisFichier(b.id))+'\'">'
+      +'<div><b>'+escapeHtml(titre)+'</b><span>'+escapeHtml(phrase)+'</span></div>';
     z.setAttribute('data-vu','');
     try{ arcHaptique('legere'); }catch(e){}
     _bdgMinuteur=setTimeout(()=>{
@@ -67034,34 +67330,182 @@ function _celebrerBadge(id){
   };
   setTimeout(poser,arcReduit()?0:1000);
 }
-// LA VITRINE. Les cinq, toujours les cinq : obtenus en couleur avec leur
-// date, à obtenir en gris avec ce qu'il faut faire. Montrer seulement les
-// acquis répondrait à « qu'ai-je gagné » et jamais à « que reste-t-il », qui
-// est la question qu'on se pose en ouvrant cette carte.
-function htmlMesBadges(u){
+// PURE. L'état d'une famille : le palier atteint (0 à 4), la valeur, et ce
+// qui reste pour le suivant.
+function badgeFamilleEtat(fam,f,m){
+  const ids=BADGES_ACQUIS.filter(b=>b.famille===fam.cle).sort((a,b)=>a.palier-b.palier);
+  let atteint=0;
+  ids.forEach((b,i)=>{ if(m[b.id]&&m[b.id].at>0) atteint=Math.max(atteint,i+1); });
+  let v=0; try{ v=Number(fam.valeur(f))||0; }catch(e){ v=0; }
+  const suivant=atteint<4?ids[atteint]:null;
+  const seuil=atteint<4?fam.seuils[atteint]:null;
+  const bas=atteint>0?fam.seuils[atteint-1]:0;
+  const part=seuil?Math.max(0,Math.min(1,(v-bas)/(seuil-bas))):1;
+  return {atteint,valeur:v,suivant,seuil,part,reste:seuil?Math.max(0,seuil-v):0,ids};
+}
+function _bdgDate(at){
+  try{ return new Date(at).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}); }
+  catch(e){ return ''; }
+}
+// LA VITRINE. Un compteur global, puis une ligne par famille — le palier
+// atteint et la barre vers le suivant —, les uniques, et les secrets en
+// « ??? ». Montrer seulement les acquis répondrait à « qu'ai-je gagné » et
+// jamais à « que reste-t-il », qui est la question qu'on se pose ici.
+// Toucher un badge ouvre sa fiche.
+function htmlMesBadges(u,maintenant){
   const m=(u&&u.badges&&typeof u.badges==='object')?u.badges:{};
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  let f=null; try{ f=_badgesFaits(u||{},t); }catch(e){ f=null; }
   const n=BADGES_ACQUIS.filter(b=>m[b.id]&&m[b.id].at>0).length;
+  const a=id=>' onclick="ouvrirFicheBadge(\''+id+'\')" role="button" tabindex="0"';
   let h='<label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;'
     +'text-transform:uppercase;display:block;margin-bottom:10px">Mes badges'
-    +' <span style="color:var(--sub)">— '+n+'/'+BADGES_ACQUIS.length+'</span></label>'
-    +'<div class="bdg-grille">';
-  for(const b of BADGES_ACQUIS){
-    const g=m[b.id]&&m[b.id].at>0;
-    let d='';
-    if(g){ try{ d=new Date(m[b.id].at).toLocaleDateString('fr-FR',
-      {day:'2-digit',month:'2-digit',year:'2-digit'}); }catch(e){ d=''; } }
-    h+='<div class="bdg-case"'+(g?'':' data-attente')+' title="'
-      +escapeHtml(g?b.phrase:b.attendu)+'">'
-      +'<img src="'+escapeHtml(badgeAcquisFichier(b.id))+'" alt="" loading="lazy">'
-      +'<div class="bdg-nom">'+escapeHtml(b.lib)+'</div>'
-      +'<div class="bdg-date">'+escapeHtml(g?d:b.attendu)+'</div></div>';
+    +' <span class="bdg-compte">'+n+'/'+BADGES_ACQUIS.length+'</span></label>';
+  // ── Les familles ───────────────────────────────────────────────────
+  h+='<div class="bdg-fams">';
+  for(const fam of BADGE_FAMILLES){
+    const e=f?badgeFamilleEtat(fam,f,m):{atteint:0,part:0,reste:0,ids:BADGES_ACQUIS.filter(b=>b.famille===fam.cle)};
+    const vitrine=e.atteint>0?e.ids[e.atteint-1]:e.ids[0];
+    const texte=e.suivant
+      ?('Encore '+fam.reste(e.reste)+' pour '+e.suivant.nom)
+      :'Palier IV atteint';
+    h+='<div class="bdg-fam"'+(e.atteint?'':' data-attente')+a(vitrine.id)+'>'
+      +_htmlBadgeImg(vitrine.id)
+      +'<div class="bdg-fam-c"><div class="bdg-fam-n">'+escapeHtml(fam.nom)
+        +'<span class="bdg-fam-p">'+(e.atteint?BADGE_ROMAINS[e.atteint-1]:'—')+'</span></div>'
+      +'<div class="bdg-barre" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'
+        +Math.round(e.part*100)+'"><span style="width:'+Math.round(e.part*100)+'%"></span></div>'
+      +'<div class="bdg-fam-r">'+escapeHtml(texte)+'</div></div></div>';
   }
   h+='</div>';
+  // ── Les uniques ────────────────────────────────────────────────────
+  const cases=(liste,secret)=>liste.map(b=>{
+    const g=m[b.id]&&m[b.id].at>0;
+    const inactif=_bdgInactif(b);
+    const nom=(secret&&!g)?'???':b.nom;
+    const sous=g?_bdgDate(m[b.id].at):(secret?b.indice:(inactif?'Bientôt':b.condition));
+    return '<div class="bdg-case"'+(g?'':' data-attente')+(secret&&!g?' data-secret':'')+a(b.id)+'>'
+      +_htmlBadgeImg(b.id,{verrou:secret&&!g})
+      +'<div class="bdg-nom">'+escapeHtml(nom)+'</div>'
+      +'<div class="bdg-date">'+escapeHtml(sous||'')+'</div></div>';
+  }).join('');
+  h+='<div class="bdg-sous">Uniques</div><div class="bdg-grille">'
+    +cases(BADGES_ACQUIS.filter(b=>b.famille==='unique'),false)+'</div>';
+  h+='<div class="bdg-sous">Secrets</div><div class="bdg-grille">'
+    +cases(BADGES_ACQUIS.filter(b=>b.famille==='secret'),true)+'</div>';
   return h;
 }
 function _rendreMesBadges(){
+
   const z=document.getElementById('atp-badges'); if(!z) return;
   try{ z.innerHTML=htmlMesBadges(currentUser); }catch(e){ z.innerHTML=''; }
+}
+// ── LA FICHE D'UN BADGE ────────────────────────────────────────────────
+// Le grand visuel, la date, la condition, et « Partager » quand il est obtenu.
+// Un secret non obtenu reste un secret : « ??? », le cadenas et l'indice.
+// Une feuille du bas, la même que les autres (modal-overlay / closeModal) :
+// Échap et le voile la ferment.
+function ouvrirFicheBadge(id){
+  const b=badgeAcquisDef(id); if(!b) return false;
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  const m=(u&&u.badges&&typeof u.badges==='object')?u.badges:{};
+  const g=!!(m[id]&&m[id].at>0);
+  const secret=b.famille==='secret'&&!g;
+  let etat='';
+  if(!g&&b.palier){
+    try{
+      const fam=BADGE_FAMILLES.find(x=>x.cle===b.famille);
+      const e=badgeFamilleEtat(fam,_badgesFaits(u||{},Date.now()),m);
+      if(e.suivant&&e.suivant.id===id) etat='Encore '+fam.reste(e.reste)+'.';
+    }catch(e){ etat=''; }
+  }
+  if(!g&&_bdgInactif(b)) etat='Bientôt disponible.';
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',
+  '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+  +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="'+escapeHtml(secret?'Badge secret':b.nom)+'" class="bdg-fiche">'
+  +'<div class="bdg-fiche-img'+(g?'':' attente')+'">'+_htmlBadgeImg(id,{grand:true,verrou:secret,id:'bdg-fiche-img'})+'</div>'
+  +'<h2>'+escapeHtml(secret?'???':b.nom)+'</h2>'
+  +(g?'<div class="bdg-fiche-date">Obtenu le '+escapeHtml(_bdgDate(m[id].at))+'</div>':'')
+  +'<p>'+escapeHtml(secret?('Indice : '+b.indice):b.condition)+'</p>'
+  +(etat?'<p class="bdg-fiche-etat">'+escapeHtml(etat)+'</p>':'')
+  +(g?('<button type="button" class="btn btn-red" onclick="partagerBadge(\''+id+'\',this)">'
+      +icon('share',16)+' <span>Partager</span></button>'):'')
+  +'<button type="button" class="btn btn-outline btn-sm" onclick="closeModal()" style="margin-top:8px">Fermer</button>'
+  +'</div></div>');
+  // Le visuel est préchargé ici, à l'ouverture : le dessin du partage est
+  // synchrone et ne peut pas attendre une image.
+  try{ _prechaufferMarqueCoach(); }catch(e){}
+  return true;
+}
+// LE VISUEL DE PARTAGE, 1080×1920, sur le modèle de la carte de record :
+// mêmes outils d'écriture, même fond au choix, même signature. `img` est
+// l'image DÉJÀ CHARGÉE de la fiche.
+function _dessinerCarteBadge(b,at,img,fond,signature){
+  const cv=document.createElement('canvas');
+  cv.width=STORY_L; cv.height=STORY_H;
+  const g=cv.getContext('2d');
+  const f=fond||'transparent';
+  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const o=_visuelOutils(g);
+  let y=360;
+  g.textBaseline='alphabetic'; g.textAlign='center';
+  o.ombre(true); g.fillStyle='#ffffff'; g.font='800 34px '+MONT;
+  o.ecrireEspace(b.famille==='secret'?'BADGE SECRET DÉBLOQUÉ':'BADGE DÉBLOQUÉ',cx,y,10,true);
+  o.ombre(false);
+  g.fillStyle=f==='rouge'?'rgba(255,255,255,.85)':'#E02020';
+  g.fillRect(cx-44,y+20,88,5);
+  y+=70;
+  // Le médaillon, 620 px, sans ombre de texte : il porte déjà sa lueur.
+  if(img&&img.complete&&img.naturalWidth){
+    const T=620, r=Math.min(T/img.naturalWidth,T/img.naturalHeight);
+    const w=img.naturalWidth*r, h=img.naturalHeight*r;
+    try{ g.drawImage(img,cx-w/2,y+(T-h)/2,w,h); }catch(e){}
+  }
+  y+=660;
+  o.ombre(true); g.fillStyle='#ffffff';
+  const ns=o.ajuste(b.nom,'700',140,BEBAS,LARG,60);
+  g.font='700 '+ns+'px '+BEBAS;
+  o.ecrire(b.nom,cx,y+ns*0.8);
+  y+=ns+30;
+  g.fillStyle='rgba(255,255,255,.9)';
+  const cs=o.ajuste(b.condition,'700',36,MONT,LARG,22);
+  g.font='700 '+cs+'px '+MONT;
+  o.ecrire(b.condition,cx,y+cs);
+  y+=cs+50;
+  g.fillStyle='rgba(255,255,255,.82)'; g.font='700 30px '+MONT;
+  o.ecrireEspace(_bdgDate(at),cx,y+30,4,true);
+  _recSignature(g,o,String(signature||''),STORY_H-150,LARG);
+  o.ombre(false);
+  return cv;
+}
+// Le partage : natif d'abord, téléchargement sinon, par les sorties communes
+// qui copient le lien perso. SYNCHRONE jusqu'au partage (iOS).
+function partagerBadge(id,btn){
+  const b=badgeAcquisDef(id); if(!b) return false;
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  const m=(u&&u.badges)||{};
+  if(!(m[id]&&m[id].at>0)){ toast('Ce badge n’est pas encore obtenu.','var(--orange)'); return false; }
+  if(_storyEnCours) return false;
+  const img=document.getElementById('bdg-fiche-img');
+  if(!img||!img.complete||!img.naturalWidth){ toast('Le visuel se charge, réessaie dans un instant.','var(--orange)'); return false; }
+  let sig=''; try{ sig=nomSurVisuels(u); }catch(e){ sig=''; }
+  const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond);
+  const nom=visuelNomFichier('repcore-badge',fond);
+  _storyEnCours=true;
+  let ok=false;
+  try{
+    ok=_storySortirPartage(_dessinerCarteBadge(b,m[id].at,img,fond,sig),nom,undefined,fmt)
+      ||_storySortirTelechargement(_dessinerCarteBadge(b,m[id].at,img,fond,sig),nom,fmt);
+  }catch(e){
+    toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false;
+  }finally{ _storyEnCours=false; }
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp&&ok){ sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent='Partager'; },2000); }
+  return ok;
 }
 // ══════════ LE PLANNING DE RAPPEL, ECRIT EN UN SEUL ENDROIT ════════════
 //
