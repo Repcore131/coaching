@@ -37786,10 +37786,196 @@ function nomSurVisuels(u){
   const n=(r==='pseudo'&&p)?p:f;
   try{ return n.toLocaleUpperCase('fr-FR'); }catch(e){ return n.toUpperCase(); }
 }
-function _dessinerBilanSeance(d){
+// ══ LE FOND DES VISUELS ═══════════════════════════════════════════════
+// Trois fonds pour tous les visuels 1080×1920, présents et à venir (bilan de
+// séance aujourd'hui ; record, badge, série, cycle demain) :
+//   'transparent' — PNG sans fond, à poser sur sa propre photo en story ;
+//   'photo'       — la photo de l'athlète en « cover », assombrie en bas ;
+//   'rouge'       — le dégradé rouge et la trame diagonale de la carte séance.
+// ⚠ LA PHOTO NE QUITTE JAMAIS LE TÉLÉPHONE. Elle est lue par un <input>,
+//   gardée en mémoire le temps de la page (une URL d'objet), et dessinée dans
+//   le canevas : rien ne l'envoie, rien ne la stocke. Seul le CHOIX du fond
+//   est retenu, dans localStorage.
+//
+// POUR UN NOUVEAU VISUEL, trois gestes :
+//   1. son dessin prend un `fond` et appelle _visuelPeindreFond(g,W,H,fond)
+//      avant tout le reste ;
+//   2. son écran pose _htmlVisuelFonds(id) puis monterSelecteurFond(id,
+//      fond=>sonDessin(donnees,fond)) — les vignettes, la note et le choix
+//      suivent tout seuls ;
+//   3. sa sortie passe visuelFondFormat(fond) à _storySortirTelechargement /
+//      _storySortirPartage, avec le nom visuelNomFichier('repcore-xxx',fond).
+const VISUEL_FOND=Object.freeze({
+  LISTE:Object.freeze(['transparent','photo','rouge']),
+  CLE:'rc_visuel_fond',
+  LIB:Object.freeze({transparent:'Sans fond',photo:'Ma photo',rouge:'Rouge'}),
+  // La vignette : 180 × 320, le 9:16 de la story.
+  VL:180, VH:320
+});
+/** La photo choisie, en mémoire seulement : {img,url} ou null. */
+let _visuelPhoto=null;
+function _visuelPhotoPrete(){
+  const im=_visuelPhoto&&_visuelPhoto.img;
+  return !!(im&&im.complete&&im.naturalWidth>0);
+}
+/** Le dernier fond choisi sur cet appareil. localStorage peut manquer : 'transparent'. */
+function visuelFondChoisi(){
+  let f=null;
+  try{ f=localStorage.getItem(VISUEL_FOND.CLE); }catch(e){ f=null; }
+  return VISUEL_FOND.LISTE.indexOf(f)>=0?f:'transparent';
+}
+function visuelFondMemoriser(f){
+  if(VISUEL_FOND.LISTE.indexOf(f)<0) return false;
+  try{ localStorage.setItem(VISUEL_FOND.CLE,f); return true; }catch(e){ return false; }
+}
+/** Le fond qu'on dessine vraiment : « photo » sans photo chargée retombe sur « sans fond ». */
+function visuelFondEffectif(){
+  const f=visuelFondChoisi();
+  return (f==='photo'&&!_visuelPhotoPrete())?'transparent':f;
+}
+/** PURE. Le format de sortie : PNG pour garder la transparence, JPEG 0,9 sinon. */
+function visuelFondFormat(fond){
+  return fond==='transparent'?{type:'image/png',ext:'png',q:null}:{type:'image/jpeg',ext:'jpg',q:0.9};
+}
+/** PURE. repcore-bilan.png ou repcore-bilan.jpg. */
+function visuelNomFichier(base,fond){ return base+'.'+visuelFondFormat(fond).ext; }
+/**
+ * Peint le fond sur tout le canevas, AVANT le reste du visuel.
+ * @param {CanvasRenderingContext2D} g @param {number} W @param {number} H
+ * @param {'transparent'|'photo'|'rouge'} fond
+ */
+function _visuelPeindreFond(g,W,H,fond){
+  if(fond==='rouge'){
+    // Le dégradé et la trame de _dessinerStorySeance, sur tout le format.
+    const grad=g.createLinearGradient(0,0,W,H);
+    grad.addColorStop(0,'#e02020'); grad.addColorStop(0.55,'#c01818'); grad.addColorStop(1,'#8e1010');
+    g.fillStyle=grad; g.fillRect(0,0,W,H);
+    g.save();
+    g.strokeStyle='rgba(255,255,255,.05)'; g.lineWidth=2;
+    for(let x=-H;x<W+H;x+=26){ g.beginPath(); g.moveTo(x,0); g.lineTo(x+H,H); g.stroke(); }
+    g.restore();
+    return true;
+  }
+  if(fond==='photo'&&_visuelPhotoPrete()){
+    const im=_visuelPhoto.img, iw=im.naturalWidth, ih=im.naturalHeight;
+    // « cover » : la photo remplit tout, centrée, rognée sur le côté qui dépasse.
+    const k=Math.max(W/iw,H/ih), dw=iw*k, dh=ih*k;
+    g.fillStyle='#000'; g.fillRect(0,0,W,H);
+    g.drawImage(im,(W-dw)/2,(H-dh)/2,dw,dh);
+    // LE BAS ASSOMBRI : de 0 à 70 % de noir, là où le texte descend.
+    const v=g.createLinearGradient(0,H*0.3,0,H);
+    v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,0,0,.7)');
+    g.fillStyle=v; g.fillRect(0,0,W,H);
+    return true;
+  }
+  return false;                                   // transparent : rien
+}
+/** Le sélecteur : trois vignettes cliquables, et l'<input> de la photo. */
+function _htmlVisuelFonds(id){
+  const f=visuelFondEffectif();
+  return '<div class="vf" id="'+id+'" role="radiogroup" aria-label="Fond du visuel">'
+    +VISUEL_FOND.LISTE.map(k=>'<button type="button" class="vf-b'+(k===f?' actif':'')+'" role="radio" aria-checked="'+(k===f)+'" data-fond="'+k+'"'
+      // Un libellé d'une ligne pour les trois : « changer » se dit au survol.
+      +(k==='photo'?' title="Touche à nouveau pour changer de photo"':'')
+      +' onclick="visuelFondChoisir(\''+id+'\',\''+k+'\')">'
+      +'<canvas class="vf-c" width="'+VISUEL_FOND.VL+'" height="'+VISUEL_FOND.VH+'" aria-hidden="true"></canvas>'
+      +'<span>'+VISUEL_FOND.LIB[k]+'</span></button>').join('')
+    +'<input type="file" accept="image/*" capture="environment" class="vf-f" hidden onchange="visuelFondPhoto(\''+id+'\',this)">'
+    +'</div>';
+}
+/** La note sous les boutons : ce que le fichier sera, selon le fond. */
+function _visuelNoteFond(fond){
+  if(fond==='transparent') return 'PNG sans fond, à apposer sur ta photo en story.<br>'
+    +'Dans la galerie, le visuel s’affichera en blanc : c’est normal.';
+  if(fond==='photo') return 'JPEG sur ta photo, prêt à poster.<br>Ta photo reste sur ton téléphone : rien n’est envoyé.';
+  return 'JPEG sur fond rouge, prêt à poster.';
+}
+// Les sélecteurs à l'écran : id → {dessiner, note}. Un écran qui se redessine
+// remonte le sien ; un id absent du document est oublié au passage.
+const _visuelFondsMontes=new Map();
+/**
+ * Branche un sélecteur posé par _htmlVisuelFonds.
+ * @param {string} id
+ * @param {(fond:string)=>HTMLCanvasElement|null} dessiner le visuel complet, pour un fond
+ * @param {string} [noteId] l'élément dont le texte suit le fond
+ */
+function monterSelecteurFond(id,dessiner,noteId){
+  _visuelFondsMontes.set(id,{dessiner,noteId:noteId||null});
+  _visuelFondsPeindre(id);
+  // Les polices peuvent arriver après : on repeint alors les vignettes.
+  try{ if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>_visuelFondsPeindre(id)); }catch(e){}
+}
+function _visuelFondsPeindre(id){
+  const m=_visuelFondsMontes.get(id), z=document.getElementById(id);
+  if(!m||!z){ _visuelFondsMontes.delete(id); return false; }
+  const f=visuelFondEffectif();
+  z.querySelectorAll('.vf-b').forEach(b=>{
+    const on=b.getAttribute('data-fond')===f;
+    b.classList.toggle('actif',on); b.setAttribute('aria-checked',String(on));
+  });
+  if(m.noteId){ const n=document.getElementById(m.noteId); if(n) n.innerHTML=_visuelNoteFond(f); }
+  // LES VIGNETTES SE DESSINENT APRÈS LA PEINTURE, une par tâche : trois
+  // visuels complets d'affilée bloqueraient l'écran de fin de séance.
+  const cvs=[...z.querySelectorAll('.vf-b')];
+  cvs.forEach((b,i)=>setTimeout(()=>{
+    const c=b.querySelector('canvas'); if(!c||!c.isConnected) return;
+    const k=b.getAttribute('data-fond'), x=c.getContext('2d'); if(!x) return;
+    x.clearRect(0,0,c.width,c.height);
+    if(k==='transparent'){
+      // Le damier dit « transparent » mieux qu'un mot.
+      for(let yy=0;yy<c.height;yy+=12) for(let xx=0;xx<c.width;xx+=12){
+        x.fillStyle=((xx+yy)/12)%2?'#2a2a2e':'#1c1c20'; x.fillRect(xx,yy,12,12); }
+    }
+    if(k==='photo'&&!_visuelPhotoPrete()){
+      x.fillStyle='#16161a'; x.fillRect(0,0,c.width,c.height);
+      x.strokeStyle='rgba(255,255,255,.35)'; x.lineWidth=3; x.setLineDash([8,6]);
+      x.strokeRect(10,10,c.width-20,c.height-20); x.setLineDash([]);
+      x.fillStyle='rgba(255,255,255,.7)'; x.font='800 64px Montserrat,sans-serif'; x.textAlign='center'; x.textBaseline='middle';
+      x.fillText('+',c.width/2,c.height/2);
+      return;
+    }
+    let v=null;
+    try{ v=m.dessiner(k); }catch(e){ v=null; }
+    if(v){ x.drawImage(v,0,0,c.width,c.height); v.width=0; v.height=0; }
+  },40+i*60));
+  return true;
+}
+/** Un clic sur une vignette. « Ma photo » sans photo : on ouvre le choix du fichier. */
+function visuelFondChoisir(id,fond){
+  if(VISUEL_FOND.LISTE.indexOf(fond)<0) return false;
+  if(fond==='photo'&&(!_visuelPhotoPrete()||visuelFondEffectif()==='photo')){
+    const inp=document.querySelector('#'+id+' .vf-f');
+    if(inp){ inp.value=''; inp.click(); }
+    return true;
+  }
+  visuelFondMemoriser(fond);
+  for(const k of [..._visuelFondsMontes.keys()]) _visuelFondsPeindre(k);
+  return true;
+}
+/** La photo choisie : lue ici, gardée en mémoire, jamais envoyée. */
+function visuelFondPhoto(id,input){
+  const f=input&&input.files&&input.files[0];
+  if(!f||!/^image\//.test(f.type||'image/')) return false;
+  const url=URL.createObjectURL(f);
+  const im=new Image();
+  im.onload=()=>{
+    try{ if(_visuelPhoto&&_visuelPhoto.url) URL.revokeObjectURL(_visuelPhoto.url); }catch(e){}
+    _visuelPhoto={img:im,url};
+    visuelFondMemoriser('photo');
+    for(const k of [..._visuelFondsMontes.keys()]){
+      _visuelFondsPeindre(k);
+    }
+  };
+  im.onerror=()=>{ try{ URL.revokeObjectURL(url); }catch(e){} toast('Cette image ne s’ouvre pas.','var(--orange)'); };
+  im.src=url;
+  return true;
+}
+// `fond` (FACULTATIF) : 'transparent' (défaut, le PNG d'avant), 'photo' ou 'rouge'.
+function _dessinerBilanSeance(d,fond){
   const cv=document.createElement('canvas');
   cv.width=STORY_L; cv.height=STORY_H;
   const g=cv.getContext('2d');
+  _visuelPeindreFond(g,STORY_L,STORY_H,fond||'transparent');
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
   const M=72;                                   // la marge laterale
@@ -38110,8 +38296,9 @@ function _storyCopierLien(){
     return true;
   }catch(e){ return false; }
 }
-function _storySortirTelechargement(cv,nomFichier){
-  const dataUrl=cv.toDataURL('image/png');
+// `fmt` FACULTATIF (visuelFondFormat) : JPEG qualité 0,9 quand le visuel a un fond, PNG sinon.
+function _storySortirTelechargement(cv,nomFichier,fmt){
+  const dataUrl=(fmt&&fmt.type==='image/jpeg')?cv.toDataURL('image/jpeg',fmt.q||0.9):cv.toDataURL('image/png');
   cv.width=0; cv.height=0;            // 8 Mo rendus tout de suite
   if(_estIOS()){ _ouvrirApercuStory(dataUrl); return true; }
   const a=document.createElement('a');
@@ -38135,12 +38322,13 @@ function _storySortirTelechargement(cv,nomFichier){
 // on DEMANDE au navigateur, avec la charge exacte qu'on s'apprete a envoyer, et
 // on retombe sur le fichier seul des qu'il repond non. L'image est ce qu'on
 // partage ; le texte n'est qu'un bonus, et un bonus ne coute pas le principal.
-function _storySortirPartage(cv,nomFichier,meta){
-  const dataUrl=cv.toDataURL('image/png');
+function _storySortirPartage(cv,nomFichier,meta,fmt){
+  const jpeg=!!(fmt&&fmt.type==='image/jpeg');
+  const dataUrl=jpeg?cv.toDataURL('image/jpeg',fmt.q||0.9):cv.toDataURL('image/png');
   cv.width=0; cv.height=0;
   const blob=_b64versBlob(dataUrl);
   let f=null;
-  try{ f=new File([blob],nomFichier,{type:'image/png'}); }catch(e){}
+  try{ f=new File([blob],nomFichier,{type:jpeg?'image/jpeg':'image/png'}); }catch(e){}
   if(f&&navigator.canShare&&navigator.canShare({files:[f]})&&navigator.share){
     let charge={files:[f]};
     if(meta){
@@ -38256,7 +38444,8 @@ function telechargerBilanSeance(sc){
   const d=_bilanDonneesDe(sc);
   if(!d){ toast('Aucune séance à partager.','var(--orange)'); return false; }
   _storyEnCours=true;
-  try{ return _storySortirTelechargement(_dessinerBilanSeance(d),'repcore-bilan.png'); }
+  const fond=visuelFondEffectif();
+  try{ return _storySortirTelechargement(_dessinerBilanSeance(d,fond),visuelNomFichier('repcore-bilan',fond),visuelFondFormat(fond)); }
   catch(e){ toast('Téléchargement impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); return false; }
   finally{ _storyEnCours=false; }
 }
@@ -38265,8 +38454,9 @@ function partagerBilanSeance(sc){
   const d=_bilanDonneesDe(sc);
   if(!d){ toast('Aucune séance à partager.','var(--orange)'); return false; }
   _storyEnCours=true;
+  const fond=visuelFondEffectif();
   try{
-    if(_storySortirPartage(_dessinerBilanSeance(d),'repcore-bilan.png')) return true;
+    if(_storySortirPartage(_dessinerBilanSeance(d,fond),visuelNomFichier('repcore-bilan',fond),undefined,visuelFondFormat(fond))) return true;
     _storyEnCours=false;
     return telechargerBilanSeance(sc);
   }catch(e){
@@ -38307,14 +38497,17 @@ function renderPartageBilan(){
   const part=(typeof navigator!=='undefined'&&navigator.share)
     ?'<button type="button" class="rcf-share" onclick="partagerBilanSeance()">'
       +'Partager ma séance</button>':'';
-  z.innerHTML='<button type="button" class="rcf-dl" id="wd-dl" '
+  // LE FOND AVANT LES BOUTONS : on choisit, puis on télécharge.
+  z.innerHTML=_htmlVisuelFonds('wd-fonds')
+    +'<button type="button" class="rcf-dl" id="wd-dl" '
     +'onclick="_telechargerAvecEtat(this)">'+icon('download',18)
     +'<span>Télécharger ma séance</span></button>'+part
     // Les deux phrases, et les deux-points. « en blanc : c'est normal » se lit
     // comme une explication ; un tiret ou un separateur graphique en aurait
-    // fait deux affirmations sans lien.
-    +'<div class="rcf-note">PNG sans fond, à apposer sur ta photo en story.<br>'
-    +'Dans la galerie, le visuel s’affichera en blanc : c’est normal.</div>';
+    // fait deux affirmations sans lien. La note suit le fond choisi : « en
+    // blanc » ne se dit que du PNG sans fond.
+    +'<div class="rcf-note" id="wd-note">'+_visuelNoteFond(visuelFondEffectif())+'</div>';
+  monterSelecteurFond('wd-fonds',f=>{ const d=_bilanDonneesDe(); return d?_dessinerBilanSeance(d,f):null; },'wd-note');
   return true;
 }
 // Le partage natif, en plus et jamais a la place. Tout est SYNCHRONE : le
@@ -51299,10 +51492,11 @@ function _rendrePartageSeanceRelue(sc){
   const part=(typeof navigator!=='undefined'&&navigator.share)
     ?'<button type="button" class="rcf-share" onclick="partagerSeanceRelue()">'
       +'Partager cette séance</button>':'';
-  z.innerHTML='<button type="button" class="rcf-dl" onclick="telechargerSeanceRelue(this)">'
+  z.innerHTML=_htmlVisuelFonds('sd-fonds')
+    +'<button type="button" class="rcf-dl" onclick="telechargerSeanceRelue(this)">'
     +icon('download',18)+'<span>Télécharger cette séance</span></button>'+part
-    +'<div class="rcf-note">PNG sans fond, à apposer sur ta photo en story.<br>'
-    +'Dans la galerie, le visuel s\u2019affichera en blanc : c\u2019est normal.</div>';
+    +'<div class="rcf-note" id="sd-note">'+_visuelNoteFond(visuelFondEffectif())+'</div>';
+  monterSelecteurFond('sd-fonds',f=>_dessinerBilanSeance(d,f),'sd-note');
   return true;
 }
 // Les deux gestes. Ils passent par la seance RETENUE a l'ouverture de l'ecran,

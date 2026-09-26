@@ -51466,6 +51466,98 @@ async function testExercices(){
       if(!/32kg×12[\s\S]*34kg×11[\s\S]*36kg×10(?!-)/.test(carte)) return _echec('carte coach : '+(carte.match(/\d+kg×[\d-]+/g)||[]).join(' '));
       return true;})());
 
+    // ══ 26/09/2026 — LE FOND DES VISUELS : sans fond, ma photo, rouge ════════
+    const _vfBilan=()=>bilanSeanceDonnees({date:Date.now(),name:'Push',duration:40,sets:3,setsPlanned:3,volume:900,
+      data:{'Développé haltères':{sets:[{weight:'30',reps:'10',done:true},{weight:'32',reps:'10',done:true},{weight:'34',reps:'8',done:true}]}}},null);
+    const _vfPx=(cv,x,y)=>{ const d=cv.getContext('2d').getImageData(x,y,1,1).data; return [d[0],d[1],d[2],d[3]]; };
+    ok('FONDS — PNG POUR « SANS FOND », JPEG POUR « PHOTO » ET « ROUGE », NOMMÉS repcore-bilan',(()=>{
+      const t=visuelFondFormat('transparent'), r=visuelFondFormat('rouge'), ph=visuelFondFormat('photo');
+      if(t.type!=='image/png'||r.type!=='image/jpeg'||ph.type!=='image/jpeg') return _echec('formats : '+[t.type,r.type,ph.type].join(','));
+      if(r.q!==0.9||ph.q!==0.9) return _echec('qualité JPEG : '+r.q);
+      if(visuelNomFichier('repcore-bilan','transparent')!=='repcore-bilan.png'||visuelNomFichier('repcore-bilan','rouge')!=='repcore-bilan.jpg') return _echec('noms');
+      return true;})());
+    ok('FONDS — LE DERNIER CHOIX EST RETENU, ET UN localStorage QUI LÈVE NE CASSE RIEN',(()=>{
+      let avant=null; try{ avant=localStorage.getItem(VISUEL_FOND.CLE); }catch(e){}
+      const _get=Storage.prototype.getItem, _set=Storage.prototype.setItem;
+      try{
+        visuelFondMemoriser('rouge');
+        if(visuelFondChoisi()!=='rouge') return _echec('choix non retenu : '+visuelFondChoisi());
+        if(visuelFondMemoriser('violet')) return _echec('un fond inconnu accepté');
+        Storage.prototype.getItem=function(){ throw new Error('bloqué'); };
+        Storage.prototype.setItem=function(){ throw new Error('bloqué'); };
+        if(visuelFondChoisi()!=='transparent') return _echec('repli : '+visuelFondChoisi());
+        if(visuelFondMemoriser('rouge')!==false) return _echec('écriture bloquée annoncée comme réussie');
+        // « Ma photo » retenue mais aucune photo en mémoire : on dessine sans fond.
+        Storage.prototype.getItem=_get; Storage.prototype.setItem=_set;
+        const sv=_visuelPhoto; _visuelPhoto=null; visuelFondMemoriser('photo');
+        const e=visuelFondEffectif(); _visuelPhoto=sv;
+        if(e!=='transparent') return _echec('photo absente : '+e);
+        return true;
+      }finally{
+        Storage.prototype.getItem=_get; Storage.prototype.setItem=_set;
+        try{ if(avant==null) localStorage.removeItem(VISUEL_FOND.CLE); else localStorage.setItem(VISUEL_FOND.CLE,avant); }catch(e){}
+      }})());
+    okA('FONDS — LE ROUGE EST OPAQUE, LE SANS-FOND TRANSPARENT, LA PHOTO EN COVER ET ASSOMBRIE EN BAS',(async()=>{
+      const b=_vfBilan(); if(!b) return _echec('pas de bilan');
+      const t=_dessinerBilanSeance(b,'transparent');
+      if(_vfPx(t,4,4)[3]!==0) return _echec('le sans-fond a un fond');
+      const r=_dessinerBilanSeance(b,'rouge'), pr=_vfPx(r,4,4);
+      if(pr[3]!==255||pr[0]<180||pr[1]>80) return _echec('coin du rouge : '+pr.join(','));
+      // Une photo grise unie de 600 × 400 (paysage) : la cover doit remplir tout le 9:16.
+      const src=document.createElement('canvas'); src.width=600; src.height=400;
+      const sg=src.getContext('2d'); sg.fillStyle='rgb(200,200,200)'; sg.fillRect(0,0,600,400);
+      const im=new Image(); await new Promise(ok=>{ im.onload=ok; im.onerror=ok; im.src=src.toDataURL('image/png'); });
+      const sv=_visuelPhoto;
+      try{
+        _visuelPhoto={img:im,url:null};
+        const p=_dessinerBilanSeance(b,'photo');
+        const haut=_vfPx(p,4,4), bas=_vfPx(p,4,STORY_H-4);
+        if(haut[3]!==255||bas[3]!==255) return _echec('la photo ne couvre pas tout : '+haut[3]+'/'+bas[3]);
+        if(Math.abs(haut[0]-200)>3) return _echec('le haut est touché : '+haut.join(','));
+        // 70 % de noir en bas : 200 × 0,3 = 60.
+        if(Math.abs(bas[0]-60)>6) return _echec('le bas n’est pas assombri à 70 % : '+bas.join(','));
+      }finally{ _visuelPhoto=sv; }
+      return true;}));
+    ok('FONDS — LA SORTIE COMMUNE ÉCRIT DU JPEG 0,9 QUAND ON LE LUI DEMANDE, DU PNG SINON',(()=>{
+      const _ios=_estIOS, _ap=_ouvrirApercuStory; let recu=null, ouvert=null;
+      try{
+        _estIOS=()=>true; _ouvrirApercuStory=u=>{ ouvert=u; };
+        const faux=()=>({width:1,height:1,toDataURL:(t,q)=>{ recu=[t,q]; return 'data:'+(t||'image/png')+';base64,AAAA'; }});
+        _storySortirTelechargement(faux(),'repcore-bilan.jpg',visuelFondFormat('rouge'));
+        if(!recu||recu[0]!=='image/jpeg'||recu[1]!==0.9) return _echec('jpeg : '+JSON.stringify(recu));
+        _storySortirTelechargement(faux(),'repcore-bilan.png',visuelFondFormat('transparent'));
+        if(recu[0]!=='image/png') return _echec('png : '+JSON.stringify(recu));
+        _storySortirTelechargement(faux(),'repcore-bilan.png');
+        if(recu[0]!=='image/png') return _echec('sans format, ce n’est plus du PNG');
+        for(const f of [telechargerBilanSeance,partagerBilanSeance]){
+          const t=String(f);
+          if(t.indexOf('visuelFondFormat(fond)')<0||t.indexOf("visuelNomFichier('repcore-bilan',fond)")<0) return _echec('un geste ignore le fond');
+        }
+        return true;
+      }finally{ _estIOS=_ios; _ouvrirApercuStory=_ap; }})());
+    ok('FONDS — TROIS VIGNETTES, « MA PHOTO » PAR UN INPUT LOCAL, ET « EN BLANC » SEULEMENT SANS FOND',(()=>{
+      const z=document.createElement('div'); z.innerHTML=_htmlVisuelFonds('vf-test');
+      const bs=z.querySelectorAll('.vf-b');
+      if(bs.length!==3) return _echec(bs.length+' vignettes');
+      const c=z.querySelector('canvas.vf-c');
+      if(!c||c.width!==180||c.height!==320) return _echec('vignette : '+(c&&c.width+'×'+c.height));
+      const inp=z.querySelector('input[type=file]');
+      if(!inp||inp.getAttribute('accept')!=='image/*'||inp.getAttribute('capture')!=='environment') return _echec('input photo');
+      if(!/en blanc/.test(_visuelNoteFond('transparent'))) return _echec('la note du PNG a perdu « en blanc »');
+      if(/en blanc/.test(_visuelNoteFond('rouge')+_visuelNoteFond('photo'))) return _echec('« en blanc » annoncé pour un JPEG');
+      // La photo ne part nulle part.
+      const src=String(visuelFondPhoto)+String(_visuelPeindreFond)+String(visuelFondChoisir);
+      if(/fetch|XMLHttpRequest|phpUpload|CLOUD\.|localStorage\.setItem\([^)]*img/i.test(src)) return _echec('la photo quitte le téléphone');
+      if(String(visuelFondPhoto).indexOf('createObjectURL')<0) return _echec('la photo n’est pas lue localement');
+      return true;})());
+    ok('FONDS — L’HISTORIQUE (#sd-partage) PORTE LE MÊME SÉLECTEUR QUE L’ÉCRAN DE FIN',(()=>{
+      for(const [nom,f,id] of [['fin',renderPartageBilan,'wd-fonds'],['historique',_rendrePartageSeanceRelue,'sd-fonds']]){
+        const t=String(f);
+        if(t.indexOf("_htmlVisuelFonds('"+id+"')")<0||t.indexOf("monterSelecteurFond('"+id+"'")<0) return _echec(nom+' sans sélecteur');
+        if(t.indexOf('_visuelNoteFond(')<0) return _echec(nom+' : note figée');
+      }
+      return true;})());
+
     // ══ 17/09/2026 — R28 : PAS ET SOMMEIL, LA SAISIE DU JOUR D'ABORD ════════
 
     // L'ordre des repères dans un rendu : chacun doit SUIVRE le précédent dans

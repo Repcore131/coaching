@@ -10616,3 +10616,11 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .an-exp-m span{font-size:var(--fs-2xs);color:#a1a1aa;line-height:1.35}
 /* Sur téléphone, le bouton passe à la ligne, à gauche : le menu s'ouvre depuis son bord gauche. */
 @media (max-width:600px){ .an-exp-m{right:auto;left:0} }
+/* Le choix du fond des visuels : trois vignettes 9:16. */
+.vf{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 12px}
+.vf-b{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:5px;border-radius:14px;border:2px solid var(--border,#2a2a2e);
+  background:var(--surface-1,#141416);color:var(--sub,#a1a1aa);cursor:pointer;min-width:0;font:inherit}
+.vf-b.actif{border-color:var(--red,#e02020);color:var(--text,#fff);box-shadow:0 0 0 3px rgba(224,32,32,.18)}
+.vf-b:focus-visible{outline:2px solid var(--red,#e02020);outline-offset:2px}
+.vf-c{display:block;width:100%;height:auto;aspect-ratio:9/16;border-radius:9px;background:#0e0e10}
+.vf-b span{font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;text-align:center;line-height:1.25;overflow-wrap:anywhere}
