@@ -110,7 +110,7 @@ const assert = (c, m) => { if (!c) { console.log("ECHEC:", m); process.exitCode 
   assert(compte.filleuls[id].statut === "payant" && compte.moisGagnes === 1, "premier paiement : Julie « payante », 1 mois gagné");
   const ech = get("droits/kev@t,fr/echeance");
   assert(ech === Date.now() + 30 * 864e5 && get("droits/kev@t,fr/palier") === "essentielle", "droits du parrain prolongés d'un mois");
-  assert(envoyes.some((x) => x[0] === "https://p/kev" && x[1].title === "Julie vient de s’abonner : 1 mois offert ⚡"), "le parrain est prévenu");
+  assert(envoyes.some((x) => x[0] === "https://p/kev" && x[1].title === "Julie vient de s’abonner : 1 mois offert"), "le parrain est prévenu");
   assert(Object.values(get("parrainage/evenements/kev@t,fr") || {}).some((e) => e.type === "paiement" && e.prenom === "Julie"), "événement écrit");
   await F.verifyPaypalSubscription(req);
   assert(get("parrainage/comptes/kev@t,fr/moisGagnes") === 1 && get("droits/kev@t,fr/echeance") === ech, "renouvellement : aucun mois de plus");

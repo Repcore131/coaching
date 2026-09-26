@@ -197,7 +197,7 @@ function annonceSuivante(defi, etat, parts, equipe, jour) {
     const anonymes = finisseurs.length - noms.length;
     const qui = _liste3(noms, anonymes);
     const pluriel = finisseurs.length > 1;
-    texte = (noms.length ? "⚡ " + qui : "⚡ " + (pluriel ? finisseurs.length + " athlètes" : "Un athlète"))
+    texte = (noms.length ? qui : (pluriel ? finisseurs.length + " athlètes" : "Un athlète"))
       + (pluriel ? " ont bouclé" : " a bouclé") + " « " + titre + " » !";
     finisseurs.forEach((p) => { e.finis[p.cle] = true; });
   } else if (enAttente.length) {

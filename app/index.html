@@ -42,7 +42,18 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1598';
+window.RC_BUILD='1599';
+// La date de cette livraison, posee par scripts/versionner_actifs.py : les
+// reglages l'affichent (« Mis à jour le … »).
+window.RC_MAJ='2026-09-26';
+// L'APPARENCE, AVANT LE PREMIER AFFICHAGE. Sombre par defaut ; « clair » ou
+// « auto » (comme le telephone) si l'utilisateur l'a choisi dans ses reglages.
+// Pose ici, et non dans rc-core, pour que l'ecran ne clignote pas en noir
+// avant de passer au blanc. Le reste (bouton, couleur de la barre) : themeAppliquer.
+(function(){ try{ var c=localStorage.getItem('rc_theme');
+  if(c==='clair'||(c==='auto'&&window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches))
+    document.documentElement.setAttribute('data-theme','clair');
+}catch(e){} })();
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -171,16 +182,16 @@ try{
 <meta name="description" content="Ton coach te suit à chaque séance : charges ajustées à ta phase de cycle, ta fiche papier importée par photo, et la base Ciqual consultable hors ligne.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://repcore131.github.io/coaching/">
-<meta property="og:title" content="RepCore — Ton coach te suit à chaque séance">
+<meta property="og:title" content="RepCore : Ton coach te suit à chaque séance">
 <meta property="og:description" content="Ton coach te suit à chaque séance : charges ajustées à ta phase de cycle, ta fiche papier importée par photo, et la base Ciqual consultable hors ligne.">
 <meta property="og:image" content="https://repcore131.github.io/coaching/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="RepCore — Ton coach te suit à chaque séance">
+<meta property="og:image:alt" content="RepCore : Ton coach te suit à chaque séance">
 <meta property="og:locale" content="fr_FR">
 <meta property="og:site_name" content="RepCore">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="RepCore — Ton coach te suit à chaque séance">
+<meta name="twitter:title" content="RepCore : Ton coach te suit à chaque séance">
 <meta name="twitter:description" content="Ton coach te suit à chaque séance : charges ajustées à ta phase de cycle, ta fiche papier importée par photo, et la base Ciqual consultable hors ligne.">
 <meta name="twitter:image" content="https://repcore131.github.io/coaching/og-image.png">
 <link rel="manifest" href="manifest.json">
@@ -215,7 +226,7 @@ if('serviceWorker' in navigator){
   // boucle. Le numéro tenté y est inscrit — retomber sur le même ne relance
   // rien.
   //
-  // ⚠ ET ELLE NE TOURNE PLUS SEULEMENT AU CHARGEMENT. Kevin, 20/09/2026 :
+  // ET ELLE NE TOURNE PLUS SEULEMENT AU CHARGEMENT. Kevin, 20/09/2026 :
   //   « ça n'a pas bougé ». Le site servait bien la version du jour — mesure
   //   faite : /app/ rendait le build neuf, en no-cache, et /app/sw.js le
   //   numero neuf. Son ONGLET, lui, etait ouvert depuis le matin : cette
@@ -230,7 +241,7 @@ if('serviceWorker' in navigator){
   const RC_MAJ_SURS=['s-splash','s-welcome','s-coach-home','s-client-home',
     's-coach-entry','s-athlete-entry'];
   let _rcDerniereVerifMaj=0;
-  // ⚠ LA SORTIE QUE LE WORKER NE PEUT PAS INTERCEPTER. Recharger la MEME
+  // LA SORTIE QUE LE WORKER NE PEUT PAS INTERCEPTER. Recharger la MEME
   //   adresse repasse par lui : s'il repond depuis son cache, on revient sur
   //   la meme version, indefiniment. `?rcv=<numero>` est une adresse qu'il n'a
   //   jamais mise en cache — sa branche generique ne trouve rien et va au
@@ -242,7 +253,7 @@ if('serviceWorker' in navigator){
     try{ sessionStorage.removeItem('rc_maj_forcee'); }catch(e){}
     location.replace(location.pathname+'?rcv='+(n||Date.now()));
   };
-  // ⚠ UNE VERSION EN RETARD NE SE TAIT PLUS. C'est la lecon des 19 et
+  // UNE VERSION EN RETARD NE SE TAIT PLUS. C'est la lecon des 19 et
   //   20/09/2026 : Kevin est reste deux jours sur une version pendant que six
   //   etaient publiees, et RIEN a l'ecran ne le disait — ni un mot, ni un
   //   point. Il a fallu une capture d'ecran et trois quarts d'heure de mesures
@@ -298,14 +309,14 @@ if('serviceWorker' in navigator){
         return false;
       }
       const deja=parseInt(sessionStorage.getItem('rc_maj_forcee')||'0',10)||0;
-      // ⚠ UNE TENTATIVE QUI N'A PAS ABOUTI NE DOIT PAS NOUS FAIRE TAIRE. Le
+      // UNE TENTATIVE QUI N'A PAS ABOUTI NE DOIT PAS NOUS FAIRE TAIRE. Le
       //   verrou existait pour ne pas relancer la page en boucle — mais il
       //   rendait AUSSI muet le cas ou le rechargement echoue : on avait
       //   inscrit « j'ai tente 1321 », on etait toujours en 1317, et la sonde
       //   repondait « deja tente » a chaque ouverture, pour toujours. On ne
       //   recharge plus dans ce cas — la boucle reste evitee — mais on le DIT.
       if(deja>=distant){ window._rcAnnoncerMaj(distant); return false; }
-      // ⚠ ON NE RECHARGE PAS SOUS LES DOIGTS. Au chargement, l'ecran actif est
+      // ON NE RECHARGE PAS SOUS LES DOIGTS. Au chargement, l'ecran actif est
       //   le splash et la question ne se posait pas ; au retour au premier
       //   plan, le coach peut etre au milieu d'un programme ou d'un bilan, et
       //   recharger lui prendrait sa saisie. On pose alors le drapeau que go()
@@ -333,11 +344,11 @@ if('serviceWorker' in navigator){
   document.addEventListener('visibilitychange',()=>{
     if(document.visibilityState==='visible') window._rcVerifierVersion(false);
   });
-  // ⚠ UN SEUL ENDROIT DECIDE SI L'ON PEUT RECHARGER. Deux chemins y menent —
+  // UN SEUL ENDROIT DECIDE SI L'ON PEUT RECHARGER. Deux chemins y menent —
   //   `controllerchange` et le message du worker — et ils repondaient
   //   autrefois chacun pour soi. La regle est la meme dans les deux cas : on
   //   ne recharge jamais sous les doigts de quelqu'un qui saisit.
-  // ⚠ UNE PREMIERE INSTALLATION N'EST PAS UNE MISE A JOUR. Mesure du
+  // UNE PREMIERE INSTALLATION N'EST PAS UNE MISE A JOUR. Mesure du
   //   24/09/2026 (Lighthouse, profil vierge) : a la toute premiere ouverture,
   //   le worker s'installe, prend la page (clients.claim) et poste « maj » —
   //   et le visiteur arrive le plus souvent sur l'ecran d'installation, hors
@@ -356,7 +367,7 @@ if('serviceWorker' in navigator){
     try{ window._rcAnnoncerMaj&&window._rcAnnoncerMaj(0); }catch(e){}
     return false;
   };
-  // ⚠ LE MESSAGE DU WORKER, ET PAS SEULEMENT `controllerchange`. C'est la
+  // LE MESSAGE DU WORKER, ET PAS SEULEMENT `controllerchange`. C'est la
   //   lecon des 19 et 20/09/2026 : un onglet laisse ouvert ne rechargeait
   //   jamais, donc ne recevait jamais rien. `controllerchange` ne se declenche
   //   que si l'onglet n'avait pas deja un controleur — ce qui n'est justement
@@ -422,7 +433,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1598.css">
+<link rel="stylesheet" href="./rc-style.1599.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -802,8 +813,8 @@ const COACH_PHOTO='icons/coach.jpg';
       <img src="./icons/logo.webp" alt="RepCore" width="200" height="200">
     </div>
     <div class="wel-accroche">
-      <div class="wel-titre">Entraîne-toi<br>comme un<br><span class="wel-titre-r">pro.</span></div>
-      <div class="wel-sous">DISCIPLINE &nbsp;·&nbsp; TRAVAIL &nbsp;·&nbsp; RÉSULTAT</div>
+      <div class="wel-titre">La bonne<br>charge, à chaque<br><span class="wel-titre-r">série.</span></div>
+      <div class="wel-sous">PROGRAMME &nbsp;·&nbsp; CHARGES &nbsp;·&nbsp; DIÈTE &nbsp;·&nbsp; COACH</div>
     </div>
 
     <!-- LES TROIS PORTES. L'ordre compte : le code d'abord (c'est le plus
@@ -872,8 +883,8 @@ const COACH_PHOTO='icons/coach.jpg';
       <button type="button" onclick="go('s-athlete-entry')">J'ai déjà un compte</button>
       <button type="button" onclick="go('s-coach-entry')">Espace coach</button>
     </div>
-    <button class="hv-teinte wel-install" id="install-btn" onclick="installApp()" style="display:none">⬇ Installer l'app sur ce téléphone</button>
-    <button class="hv-teinte wel-install" id="ios-install-btn" onclick="showIosInstallGuide()" style="display:none">📲 Installer l'app</button>
+    <button class="hv-teinte wel-install" id="install-btn" onclick="installApp()" style="display:none">Installer l'app sur ce téléphone</button>
+    <button class="hv-teinte wel-install" id="ios-install-btn" onclick="showIosInstallGuide()" style="display:none">Installer l'app</button>
   </div>
 
 </div>
@@ -962,7 +973,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
     <!-- Info box rouge -->
     <div style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.24);border-radius:var(--r-3);padding:14px 16px;margin-top:4px">
-      <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:var(--red-text);font-weight:700;margin-bottom:6px">ℹ️ ESPACE COACH : TARIFS</div>
+      <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:var(--red-text);font-weight:700;margin-bottom:6px">ESPACE COACH : TARIFS</div>
       <!-- Cet écran est lu AVANT l'inscription, donc par de futurs coachs affiliés.
            L'encart disait ce que le COACH paie, jamais ce que ses athlètes
              paient. On ne dit pas non plus « compte coach gratuit » tout court :
@@ -1067,7 +1078,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
     <!-- Info box athlète -->
     <div style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.24);border-radius:var(--r-3);padding:14px 16px;margin-top:4px">
-      <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:var(--red-text);font-weight:700;margin-bottom:6px">ℹ️ ESPACE ATHLÈTE</div>
+      <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:var(--red-text);font-weight:700;margin-bottom:6px">ESPACE ATHLÈTE</div>
       <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.82);line-height:1.6">Avec un code fourni par ton coach, l'accès est compris dans son suivi. Sans code, <span data-promesse-athlete></span> L'accès en autonomie coûte ensuite <span data-prix-autonomie></span>, sur douze mois d'engagement.</div>
     </div>
 
@@ -1085,7 +1096,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="margin-bottom:8px">
       <div style="width:24px;height:2px;background:var(--red);margin-bottom:12px"></div>
       <div style="font-size:var(--fs-xl);font-weight:900">Connexion</div>
-      <div class="sub" style="font-size:var(--fs-sm);margin-top:4px">Continu ton parcours</div>
+      <div class="sub" style="font-size:var(--fs-sm);margin-top:4px">Retrouve tes séances et ton suivi</div>
     </div>
 
     <!-- LES COMPTES DEJA CONNECTES SUR CET APPAREIL. Rempli par go(), et
@@ -1387,7 +1398,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="anim-in" style="text-align:center;max-width:380px;width:100%">
     <div style="font-size:var(--fs-3xl);margin-bottom:12px">🏋️</div>
     <h1 style="margin-bottom:6px">Ton code coach</h1>
-    <div class="code-display" id="coach-code-val" style="margin:16px 0">——</div>
+    <div class="code-display" id="coach-code-val" style="margin:16px 0">-</div>
 
     <!-- ACTION PRINCIPALE : lien d'invitation -->
     <!-- Bouton UNIFIE : un prenom, un nom, et le lien part. Le lien porte
@@ -1409,7 +1420,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
     <!-- Info code court -->
     <div style="background:#111;border:1px solid var(--surface-2);border-radius:var(--r-3);padding:12px;text-align:left;margin-bottom:20px">
-      <div style="font-size:var(--fs-xs);color:var(--text-dim);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px">⚠️ Code court (même appareil uniquement)</div>
+      <div style="font-size:var(--fs-xs);color:var(--text-dim);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px">Code court (même appareil uniquement)</div>
       <p style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin:0">Le code GCP ci-dessus ne fonctionne que si le coach et l'athlète utilisent le même téléphone/ordi. Pour un autre appareil, utilise le lien d'invitation.</p>
     </div>
       </div>
@@ -1700,7 +1711,7 @@ const COACH_PHOTO='icons/coach.jpg';
              jamais une bascule : elle DIT, le coach decide. -->
         <div id="ch-alerte-palier"></div>
         <button onclick="openCoachPrograms()" class="content-card ch-nav-large" style="width:100%;margin-bottom:16px;padding:13px 16px;background:linear-gradient(135deg,#0d0d0d,#1a0000);border:1px solid #2a0000;border-left:3px solid var(--red);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px;text-align:left">
-          <span>🗂️ MES PROGRAMMES (H/F)</span>
+          <span>MES PROGRAMMES (H/F)</span>
           <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
         </button>
         <button onclick="loadCharges()" class="content-card ch-nav-large pil-lien" style="margin-bottom:16px;padding:14px 16px;text-align:left;letter-spacing:1px">
@@ -2012,6 +2023,8 @@ const COACH_PHOTO='icons/coach.jpg';
           <div id="coach-phone-preview" style="font-size:var(--fs-xs);color:var(--sub)"></div>
         </div>
 
+        <!-- APPARENCE ET AIDE : rendrePrefsAide (coachTab). -->
+        <div id="ct-prefs"></div>
       </div>
     </div>
 
@@ -2178,7 +2191,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
         <!-- Zone dangereuse : self-service -->
         <div style="background:#0f0000;border:1px solid #2a0000;border-radius:var(--r-4);padding:18px;margin-top:24px;margin-bottom:8px">
-          <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:14px">⚠ Zone dangereuse</div>
+          <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:14px">Zone dangereuse</div>
 
           <div style="margin-bottom:16px">
             <div style="font-weight:700;font-size:var(--fs-md);margin-bottom:4px">Réassigner mes athlètes</div>
@@ -2212,7 +2225,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
         <!-- Admin : offboarding d'un coach tiers — visible créateur seulement -->
         <div id="coach-admin-offboard" style="display:none;background:#0d0d00;border:1px solid #3a3a00;border-radius:var(--r-4);padding:18px;margin-top:24px">
-          <div style="font-size:var(--fs-xs);color:#a3a300;letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:10px">⚙ Admin : Offboarding coach</div>
+          <div style="font-size:var(--fs-xs);color:#a3a300;letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:10px">Admin : Offboarding coach</div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:12px;line-height:1.5">Réassigner les athlètes d'un coach avant de désactiver son compte.</div>
           <select id="admin-offboard-select" style="width:100%;margin-bottom:10px;padding:10px;background:#1a1a08;border:1px solid #3a3a00;border-radius:var(--r-2);color:var(--text);font-size:var(--fs-sm);font-family:Montserrat,sans-serif">
             <option value="">Sélectionne un coach</option>
@@ -2269,7 +2282,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <span class="ccd-tu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3v7a2.5 2.5 0 0 1-2.5 2.5A2.5 2.5 0 0 1 2 10V3"/><path d="M4.5 3v9.5M4.5 12.5V21"/><path d="M18 3c-2 0-3.5 2.2-3.5 5s1.5 4.5 3.5 4.5V21"/></svg></span>
       <span class="ccd-tu-lib">Nutrition</span>
     </button>
-    <button class="ccd-tuile" data-vue="lifestyle" onclick="ccdVue('lifestyle')" style="--tu:#a855f7">
+    <button class="ccd-tuile" data-vue="lifestyle" onclick="ccdVue('lifestyle')" style="--tu:#3d9bff">
       <span class="ccd-tu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.6A8.5 8.5 0 1 1 9.4 3.5a6.6 6.6 0 0 0 11.1 11.1Z"/></svg></span>
       <span class="ccd-tu-lib">Lifestyle</span>
     </button>
@@ -2328,7 +2341,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div class="metric-box"><div class="metric-val" id="ccd-streak">0</div><div class="metric-label">Semaines</div></div>
           <div class="metric-box" id="ccd-taux"></div>
           <div class="metric-box"><div class="metric-val" id="ccd-sessions">0</div><div class="metric-label">Séances</div></div>
-          <div class="metric-box"><div class="metric-val" id="ccd-weight">—</div><div class="metric-label">Poids</div></div>
+          <div class="metric-box"><div class="metric-val" id="ccd-weight">-</div><div class="metric-label">Poids</div></div>
         </div>
         <div class="ccd-tete-bas">
         <div id="ccd-profile-details" style="display:none"></div>
@@ -3114,7 +3127,7 @@ const COACH_PHOTO='icons/coach.jpg';
            Le ⓘ est pose par openCalc dans [data-lex], comme sur la fiche coach :
            un gabarit statique ne peut pas appeler rcInfo. -->
       <div style="display:flex;align-items:center;font-size:var(--fs-xs);color:#fca5a5;text-transform:uppercase;letter-spacing:.5px;font-weight:700">Force max estimée<span class="calc-i" data-lex="e1rm"></span></div>
-      <div style="font-size:var(--fs-2xl);font-weight:900;color:var(--text)" id="calc-e1rm-val">—</div>
+      <div style="font-size:var(--fs-2xl);font-weight:900;color:var(--text)" id="calc-e1rm-val">-</div>
     </div>
     <h3 style="margin-bottom:10px;font-size:var(--fs-md)">Table des charges suggérées</h3>
     <div style="overflow-x:auto">
@@ -3197,6 +3210,10 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="cr-manifeste" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:10px"></div>
     </div>
 
+    <!-- APPARENCE ET AIDE (theme, questions frequentes, contact du createur,
+         date de mise a jour) : rendu par rendrePrefsAide, le meme bloc que
+         dans l'onglet PROFIL du coach. -->
+    <div id="cr-prefs"></div>
     <div id="cr-version" style="font-size:var(--fs-2xs);color:var(--text-faint);text-align:center;margin-bottom:20px"></div>
   </div>
 </div>
@@ -3374,15 +3391,15 @@ const COACH_PHOTO='icons/coach.jpg';
              « de la diète » — la ou il portait une valeur calculee. Le quota
              de la semaine a demenage DANS le chiffre : « 5/6 » dit d'un coup
              ce que « 5 » et « / 6 prévues » disaient en deux endroits. -->
-        <div class="metric-box"><div class="metric-val" id="clh-m1">—</div><div class="metric-label">Séances</div>
+        <div class="metric-box"><div class="metric-val" id="clh-m1">-</div><div class="metric-label">Séances</div>
           <div class="clh-m-sub" id="clh-m1-sub">cette semaine</div></div>
-        <div class="metric-box"><div class="metric-val" id="clh-m2">—</div><div class="metric-label">Séances</div>
+        <div class="metric-box"><div class="metric-val" id="clh-m2">-</div><div class="metric-label">Séances</div>
           <div class="clh-m-sub" id="clh-m2-sub">depuis le début</div></div>
         <!-- R34 — LA TUILE EST LE BOUTON. Son ⓘ de coin est retire (Kevin,
              17/09/2026) : toucher la tuile ouvre la fiche « Diète respectée ». -->
         <div class="metric-box clh-m-clic" role="button" tabindex="0" aria-haspopup="dialog"
              onclick="rcInfoOuvrir('score_diete')"
-             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><div class="metric-val" id="clh-m3">—</div><div class="metric-label">Respect</div>
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><div class="metric-val" id="clh-m3">-</div><div class="metric-label">Respect</div>
           <div class="clh-m-sub" id="clh-m3-sub">de la diète</div></div>
       </div>
 
@@ -3426,7 +3443,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- REPRISE SÉANCE EN COURS -->
       <div id="clh-resume-workout" class="gv-carte" style="display:none"
            onclick="woResumeAndGo()" role="button" tabindex="0"
-           aria-label="Séance gelée — reprendre"
+           aria-label="Séance gelée : reprendre"
            onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target===this){event.preventDefault();this.click()}">
         <svg class="gv-decor" viewBox="0 0 480 190" preserveAspectRatio="none" aria-hidden="true"><defs><radialGradient id="gvHalo" cx=".72" cy=".38" r=".62"><stop offset="0" stop-color="#2d6ea8" stop-opacity=".38"/><stop offset="1" stop-color="#0a1524" stop-opacity="0"/></radialGradient><filter id="gvPoudre" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="41" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  1.4 0 0 0 -1.14"/></filter></defs><rect width="480" height="190" fill="url(#gvHalo)"/><path d="M0,116 L0.0,82.5 L80.0,89.9 L160.0,93.2 L240.0,93.6 L320.0,89.7 L400.0,85.2 L480.0,95.1 L480,116 Z" fill="#7fb3e8" opacity="0.03"/><path d="M0,124 L0.0,103.9 L60.0,109.6 L120.0,104.0 L180.0,106.0 L240.0,106.2 L300.0,103.9 L360.0,112.0 L420.0,105.2 L480.0,110.7 L480,124 Z" fill="#5f93c8" opacity="0.03"/><rect width="480" height="190" filter="url(#gvPoudre)" opacity=".38"/></svg>
         <svg class="gv-hex" viewBox="0 0 44 48" fill="none" aria-hidden="true"><path d="M22 2 40.6 12.5v21L22 44 3.4 33.5v-21Z" stroke="#6ea8dd" stroke-opacity=".34" stroke-width="1.4"/><g transform="translate(22,23) scale(.78) translate(-12,-12)" stroke="#8cc0ee" stroke-opacity=".62" stroke-width="1.9" stroke-linecap="round"><line x1="6" y1="12" x2="18" y2="12"/><line x1="6" y1="8" x2="6" y2="16"/><line x1="18" y1="8" x2="18" y2="16"/><line x1="3" y1="9.5" x2="7" y2="9.5"/><line x1="3" y1="14.5" x2="7" y2="14.5"/><line x1="17" y1="9.5" x2="21" y2="9.5"/><line x1="17" y1="14.5" x2="21" y2="14.5"/></g></svg>
@@ -3551,7 +3568,7 @@ const COACH_PHOTO='icons/coach.jpg';
            diète : voir renderNutriAnneaux. -->
       <div class="card card-nut nut-hud nut-lien" id="clh-nut-card"
            onclick="_nutRaccourci(event)" role="button" tabindex="0"
-           aria-label="Nutrition — ouvrir l'onglet"
+           aria-label="Nutrition : ouvrir l'onglet"
            onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target===this){event.preventDefault();this.click()}">
         <!-- LE CIEL D'ECLAIRS. Il est POSE ICI, en dur, et non produit par le
              rendu : il ne depend d'aucune donnee, et le refabriquer a chaque
@@ -3572,7 +3589,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
         <div id="clh-nutri-rings"></div>
         <div class="nut-bloc">
-          <div id="clh-nutri-sem-label" class="nut-cap nut-sem">Cette semaine, ton score est : <b id="clh-nutri-score">—</b></div>
+          <div id="clh-nutri-sem-label" class="nut-cap nut-sem">Cette semaine, ton score est : <b id="clh-nutri-score">-</b></div>
           <div class="nut-jours" id="clh-nutri-dots"></div>
         </div>
       </div>
@@ -4085,7 +4102,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="ios-install-modal" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeIosInstallGuide()">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px 36px;width:100%;max-width:480px;animation:slideUp var(--t-3) var(--c-out)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:.3px">📲 Installer l'app</div>
+      <div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:.3px">Installer l'app</div>
       <button onclick="closeIosInstallGuide()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-xl);cursor:pointer;line-height:1">✕</button>
     </div>
     <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:28px">
@@ -4176,8 +4193,8 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="font-size:var(--fs-md);font-weight:800;letter-spacing:.5px;margin-bottom:4px">Séance en cours</div>
     <div style="font-size:var(--fs-sm);color:var(--text-faint);margin-bottom:20px">Que veux-tu faire ?</div>
     <div style="display:flex;flex-direction:column;gap:10px">
-      <button onclick="_feuilleFermer('wo-pause-modal')" style="padding:14px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">▶ Continuer la séance</button>
-      <button onclick="confirmPauseWorkout()" style="padding:14px;background:#111;border:1px solid var(--border);border-radius:var(--r-3);color:#aaa;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">⏸ Mettre en pause</button>
+      <button onclick="_feuilleFermer('wo-pause-modal')" style="padding:14px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">Continuer la séance</button>
+      <button onclick="confirmPauseWorkout()" style="padding:14px;background:#111;border:1px solid var(--border);border-radius:var(--r-3);color:#aaa;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">Mettre en pause</button>
       <button onclick="cancelWorkout()" style="padding:14px;background:#1a0000;border:1px solid var(--red);border-radius:var(--r-3);color:#fca5a5;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">✕ Annuler la séance</button>
     </div>
   </div>
@@ -4442,7 +4459,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- Bilan de départ (1ère visite) -->
     <div id="bilan-choice-first" style="display:none;margin-bottom:12px">
       <div onclick="openBilan('depart')" style="background:linear-gradient(135deg,#1a0000,#2a0000);border:1px solid var(--red);border-radius:var(--r-4);padding:20px;cursor:pointer" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-weight:900;font-size:var(--fs-lg);margin-bottom:6px;letter-spacing:.5px;text-transform:uppercase">🏁 Bilan de départ</div>
+        <div style="font-weight:900;font-size:var(--fs-lg);margin-bottom:6px;letter-spacing:.5px;text-transform:uppercase">Bilan de départ</div>
         <div class="sub" style="font-size:var(--fs-sm);line-height:1.5">Premier bilan complet : point de départ, objectifs, historique, mensurations initiales.</div>
       </div>
     </div>
@@ -4611,7 +4628,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <label class="form-label">Nom du complément</label>
         <input class="form-input" id="supp-name" list="supp-name-list" placeholder="Ex: Créatine monohydrate" autocomplete="off" oninput="checkSuppCaffeineRedirect(this.value);majSelectForme(this.value)">
         <datalist id="supp-name-list"></datalist>
-        <div id="supp-caff-warning" style="display:none;margin-top:8px;background:var(--warning-bg);border:1px solid var(--warning);border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-xs);color:var(--warning)">☕ La caféine a son propre module dédié : utilise la section <strong>Caféine</strong> pour la traquer avec précision (mg, équivalents, historique).</div>
+        <div id="supp-caff-warning" style="display:none;margin-top:8px;background:var(--warning-bg);border:1px solid var(--warning);border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-xs);color:var(--warning)">La caféine a son propre module dédié : utilise la section <strong>Caféine</strong> pour la traquer avec précision (mg, équivalents, historique).</div>
       </div>
       <!-- Forme : n'apparaît que pour les produits dont la fiche en porte -->
       <div class="form-group" id="supp-forme-group" style="display:none">
@@ -4704,9 +4721,9 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:var(--r-3);padding:14px;margin-bottom:18px">
-        <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:4px" id="fja-food-group">—</div>
+        <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:4px" id="fja-food-group">-</div>
         <div style="display:flex;align-items:flex-start;gap:6px">
-          <div style="flex:1;min-width:0;font-size:var(--fs-lg);font-weight:800;line-height:1.3" id="fja-food-name">—</div>
+          <div style="flex:1;min-width:0;font-size:var(--fs-lg);font-weight:800;line-height:1.3" id="fja-food-name">-</div>
           <span id="fja-epingle-slot" style="flex-shrink:0"></span>
         </div>
       </div>
@@ -4765,7 +4782,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <input type="file" id="perso-etiq-file" accept="image/*" capture="environment"
         style="display:none" onchange="lireEtiquette(this)">
       <button type="button" id="perso-etiq-btn" class="btn btn-outline btn-sm btn-doigt" style="width:100%"
-        onclick="document.getElementById('perso-etiq-file').click()">📷 Lire l'étiquette (photo)</button>
+        onclick="document.getElementById('perso-etiq-file').click()">Lire l'étiquette (photo)</button>
       <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:7px">
         La lecture se fait sur ton téléphone, sans envoi. Cadre le tableau
         nutritionnel bien à plat. Vérifie toujours les valeurs obtenues.
@@ -4812,14 +4829,14 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="display:flex;gap:8px;margin-bottom:12px">
           <div style="flex:1;min-width:0">
             <label for="perso-f" style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:5px">Fibres</label>
-            <input type="number" id="perso-f" inputmode="decimal" step="any" min="0" placeholder="—"
+            <input type="number" id="perso-f" inputmode="decimal" step="any" min="0" placeholder="-"
               style="width:100%;padding:11px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-lg);font-weight:700;text-align:center"
               oninput="majPersoCoherence()">
             <div style="font-size:var(--fs-2xs);color:var(--text-faint);text-align:center;margin-top:3px">g / 100 g (facultatif)</div>
           </div>
           <div style="flex:1;min-width:0">
             <label for="perso-e" style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:5px">Sel</label>
-            <input type="number" id="perso-e" inputmode="decimal" step="any" min="0" placeholder="—"
+            <input type="number" id="perso-e" inputmode="decimal" step="any" min="0" placeholder="-"
               style="width:100%;padding:11px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-lg);font-weight:700;text-align:center"
               oninput="majPersoCoherence()">
             <div style="font-size:var(--fs-2xs);color:var(--text-faint);text-align:center;margin-top:3px">g / 100 g (facultatif)</div>
@@ -4831,7 +4848,7 @@ const COACH_PHOTO='icons/coach.jpg';
                  l'autre. Facultatif, et vide pour presque tout : c'est
                  pourquoi il est en fin de rangee, avec les fibres et le sel. -->
             <label for="perso-alcool" style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:5px">Alcool</label>
-            <input type="number" id="perso-alcool" inputmode="decimal" step="any" min="0" placeholder="—"
+            <input type="number" id="perso-alcool" inputmode="decimal" step="any" min="0" placeholder="-"
               style="width:100%;padding:11px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-lg);font-weight:700;text-align:center"
               oninput="majPersoCoherence()">
             <div style="font-size:var(--fs-2xs);color:var(--text-faint);text-align:center;margin-top:3px">g / 100 g (facultatif)</div>
@@ -4996,7 +5013,7 @@ const COACH_PHOTO='icons/coach.jpg';
             style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:var(--r-2);border:1px solid var(--border);background:linear-gradient(180deg,#0b0b0b,#0f0f0f);color:var(--text);font-size:var(--fs-md);font-family:inherit;margin-bottom:9px;box-shadow:var(--e-inset)"
             onkeydown="if(event.key==='Enter')addVideoLink()"
             oninput="document.getElementById('vid-drive-hint').style.display=this.value.includes('drive.google.com')?'block':'none'">
-          <div id="vid-drive-hint" style="display:none;background:var(--warning-bg);border:1px solid #7c2d1244;border-radius:var(--r-2);padding:9px 12px;font-size:var(--fs-xs);color:var(--warning);line-height:1.5;margin-bottom:10px;text-align:left">⚠️ Vérifie que le lien est accessible à tous ceux qui l'ont (pas seulement toi) avant de l'envoyer · dans Drive : <strong>Partager → Toute personne avec le lien</strong>.</div>
+          <div id="vid-drive-hint" style="display:none;background:var(--warning-bg);border:1px solid #7c2d1244;border-radius:var(--r-2);padding:9px 12px;font-size:var(--fs-xs);color:var(--warning);line-height:1.5;margin-bottom:10px;text-align:left">Vérifie que le lien est accessible à tous ceux qui l'ont (pas seulement toi) avant de l'envoyer · dans Drive : <strong>Partager → Toute personne avec le lien</strong>.</div>
           <button onclick="addVideoLink()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Envoyer à mon coach</button>
           <div class="sub" style="font-size:var(--fs-xs);margin-top:11px;line-height:1.6">Partage sur <b style="color:var(--text-strong)">YouTube</b> (non répertoriée) ou <b style="color:var(--text-strong)">Google Drive</b>, puis colle le lien ici. L'exercice indiqué plus haut part avec le lien.</div>
         </div>
@@ -5156,7 +5173,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="display:flex;gap:8px;margin:0 0 16px">
         <button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:46px" onclick="openMessageCanal('')">+ NOUVEAU MESSAGE</button>
         <!-- LES DÉFIS : la feuille à trois champs et ses modèles (openDefiCanal). R31 : btn-casse. -->
-        <button class="btn btn-outline btn-sm btn-casse" style="flex:1;margin:0;min-height:46px" onclick="openDefiCanal('')">⚡ Lancer un défi</button>
+        <button class="btn btn-outline btn-sm btn-casse" style="flex:1;margin:0;min-height:46px" onclick="openDefiCanal('')">Créer un défi</button>
       </div>
       <div id="canal-coach-fil"></div>
     </div>
@@ -5441,7 +5458,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- max-width : le message d'apres-installation fait quinze mots, et sans
      borne le toast s'etendait au-dela de l'ecran sur un telephone etroit —
      min-width etait la seule contrainte de largeur. Il enveloppe desormais. -->
-<div id="toast" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(28px);background:#222;color:var(--text);padding:12px 20px;border-radius:var(--r-3);font-size:var(--fs-md);font-weight:600;z-index:var(--z-toast);transition:opacity var(--t-2) var(--c-out),transform var(--t-2) var(--c-out);opacity:0;min-width:200px;max-width:min(92vw,420px);line-height:1.4;text-align:center;pointer-events:none"></div>
+<div id="toast" role="status" aria-live="polite" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(28px);background:#222;color:var(--text);padding:12px 20px;border-radius:var(--r-3);font-size:var(--fs-md);font-weight:600;z-index:var(--z-toast);transition:opacity var(--t-2) var(--c-out),transform var(--t-2) var(--c-out);opacity:0;min-width:200px;max-width:min(92vw,420px);line-height:1.4;text-align:center;pointer-events:none"></div>
 
 <!-- LA CÉLÉBRATION DES BADGES est un écran plein, créé à la demande par
      _celebrerBadges (#bdg-ecran) : rien à poser ici. -->
@@ -5777,5 +5794,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1598.js"></script>
+<script src="./rc-core.1599.js"></script>
 </body></html>

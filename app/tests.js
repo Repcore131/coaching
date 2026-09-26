@@ -17021,7 +17021,7 @@ async function testExercices(){
             // c'est la consigne telle que le coach l'a écrite.
             const t='Montées en charge 40 / 60 / 80 %';
             if(etapeMontee(t,null)!==t) return _echec('le texte a changé : « '+etapeMontee(t,null)+' »');
-            if(etapeMontee(t,100)!==t+' — 40 · 60 · 80 kg')
+            if(etapeMontee(t,100)!==t+' · 40 · 60 · 80 kg')
               return _echec('rendu : « '+etapeMontee(t,100)+' »');
             // LES POURCENTAGES SURVIVENT À L'AJOUT : on augmente, on ne
             // remplace pas.
@@ -25112,8 +25112,8 @@ async function testExercices(){
         // actif, le tiret seulement quand il n'y en a aucun. Les deux disent
         // « rien fait », mais « 0/1 » dit AUSSI sur combien.
         const m1=txt('clh-m1');
-        if(m1!=='—'&&!/^0\/\d+$/.test(m1)) return _echec('première case : '+m1);
-        return (txt('clh-m3')==='—'&&val('clh-m2')==='0')
+        if(m1!=='-'&&!/^0\/\d+$/.test(m1)) return _echec('première case : '+m1);
+        return (txt('clh-m3')==='-'&&val('clh-m2')==='0')
           ?true:_echec(m1+' | '+val('clh-m2')+' | '+txt('clh-m3'));})());
       // ⚠ LE CONTRAT S'EST INVERSE LE 16/09/2026, et c'est voulu. Les cases
       // disaient « Aucune séance enregistrée. » et « Aucun jour renseigné. » :
@@ -25145,17 +25145,17 @@ async function testExercices(){
         const z=document.getElementById('progress-content');
         const vals=[...(z?z.querySelectorAll('.metric-val'):[])].map(e=>e.textContent.trim());
         if(vals.length!==3) return _echec('cases trouvées : '+vals.length+' → '+vals.join('|'));
-        return vals.every(v=>v==='—');})());
+        return vals.every(v=>v==='-');})());
       // Ces trois-là sont réécrites par finishWorkout : au repos elles portent
       // le tiret posé dans le HTML. On lit donc la SOURCE, pas le DOM courant
       // qu'un test précédent a pu remplir.
       ok('Les champs à remplir gardent leur indication « — »',(()=>{
         const h=document.getElementById('s-bilan')?document.getElementById('s-bilan').innerHTML:'';
         const src=bQ.toString();
-        return /placeholder="—"/.test(src);})());
+        return /placeholder="-"/.test(src);})());
       ok('Les tableaux gardent leur cellule « — »',(()=>{
         const h=renderDataTable(['','A','B'],[{label:'L',values:[null,3]}]);
-        return /—/.test(h);})());
+        return /-/.test(h);})());
 
       if(sauveUsers) DB.set('users',sauveUsers);
       currentUser=sauveU; currentClientId=sauveCid;
@@ -27455,7 +27455,7 @@ async function testExercices(){
         // test sur son propre repère.
         if(/class="fj-pct">0%</.test(t)) return _echec('un « 0 % » est écrit pour le sel');
         if(/class="fj-cible"/.test(t)) return _echec('une cible est écrite pour le sel');
-        return /class="fj-pct">—</.test(t)?true:_echec('le tiret manque : '+t.slice(0,200));})());
+        return /class="fj-pct">-</.test(t)?true:_echec('le tiret manque : '+t.slice(0,200));})());
       ok('La jauge est plafonnée à 100 %, le pourcentage ne l\'est pas',(()=>{
         // Deux fois la cible de protéines : « 200 % » doit se lire, mais un
         // trait qui déborderait de sa piste ne voudrait rien dire.
@@ -28077,7 +28077,7 @@ async function testExercices(){
       ok('Sans valeur, un tiret — jamais un zero',(()=>{
         // Un « 0 » en face de « / objectif » annoncerait une cible nulle.
         const h=htmlCadranOA(OA_MACROS[0],null);
-        return /class="oa-nb">—/.test(h)?true:_echec(h.slice(0,160));})());
+        return /class="oa-nb">-/.test(h)?true:_echec(h.slice(0,160));})());
       ok('Le titre porte son second mot en rouge, et suit le jour ON/OFF',(()=>{
         const src=String(_htmlPlanAthlete);
         if(src.indexOf('<em>entraînement</em>')<0)
@@ -29465,7 +29465,7 @@ async function testExercices(){
           //    qui se lirait comme un échec alors qu'il n'y a rien à lire.
           let e=lire();
           if(e.dots!=='ggggggg') return _echec('au départ : '+e.dots);
-          if(e.score!=='—') return _echec('au départ : '+e.score);
+          if(e.score!=='-') return _echec('au départ : '+e.score);
           // 2. Un jour PILE sur ses cibles : vert, et le dénominateur ne compte
           //    que lui. 1/1, et non 1/7 — six jours comptés comme ratés avant
           //    d'avoir eu lieu.
@@ -29525,7 +29525,7 @@ async function testExercices(){
             .map(x=>x.dataset.etat||'?').join('');
           if(/r/.test(d)) return _echec('du rouge sans cible : '+d);
           if(d!=='ggggggg') return _echec('pastilles : '+d);
-          return document.getElementById('clh-nutri-score').textContent==='—'
+          return document.getElementById('clh-nutri-score').textContent==='-'
             ?true:_echec('score : '+document.getElementById('clh-nutri-score').textContent);
         } finally { currentUser=_sv; window.saveUser=_ss; _arcMq=_mq; }})());
 
@@ -33904,9 +33904,11 @@ async function testExercices(){
           return _echec('« Je cherche un coach » ne mène pas à la page de coaching');
         if((portes[2].getAttribute('onclick')||'').indexOf('accueilVersTarifs')<0)
           return _echec('« Je m’entraîne seul » ne mène pas aux tarifs');
-        // ET L'ACCROCHE D'ORIGINE EST TOUJOURS LA : elle etait bonne.
+        // L'ACCROCHE EST CONCRETE (26/09/2026) : « Entraîne-toi comme un pro »
+        // est un slogan qui irait a n'importe quelle app ; celle-ci dit ce que
+        // RepCore fait, la meme phrase que la page de vente.
         const titre=(un.querySelector('.wel-titre')||{}).textContent||'';
-        return /Entraîne-toi/.test(titre)&&/pro\./.test(titre)
+        return /bonne\s*charge/.test(titre)&&/série\./.test(titre)
           ?true:_echec('l’accroche a changé : '+titre);})());
 
       ok('LOT 2 — LES DEUX FORMULES, L’ANNUEL PAR DÉFAUT, LE PRIX AU MOIS EN GROS',(()=>{
@@ -36444,7 +36446,7 @@ async function testExercices(){
                 cld_envois:12,cld_ko:450000}},'2026-09');
               _capaciteGlobale.mois='2026-09';
               const plein=_htmlCapaciteGlobale();
-              for(const mot of ['Base — entrant','Base — sortant','Hébergeur — envois','Hébergeur — octets reçus'])
+              for(const mot of ['Base : entrant','Base : sortant','Hébergeur : envois','Hébergeur : octets reçus'])
                 if(plein.indexOf(mot)<0) return _echec('la carte n’affiche pas « '+mot+' »');
               if(plein.indexOf('%')<0) return _echec('aucun pourcentage');
               // LE PLAFOND DE L'HÉBERGEUR EST UNE ESTIMATION, et la carte le DIT :
@@ -42020,7 +42022,7 @@ async function testExercices(){
       // SAIT qu'aucune seance n'a ete faite, alors qu'on ne sait rien de la
       // diete.
       ok('Aucune séance : le compte sur le quota, un zéro et un tiret',
-         lire('clh-m1')==='0/1'&&lire('clh-m2')==='0'&&lire('clh-m3')==='—',
+         lire('clh-m1')==='0/1'&&lire('clh-m2')==='0'&&lire('clh-m3')==='-',
          lire('clh-m1')+' | '+lire('clh-m2')+' | '+lire('clh-m3'));
       // ⚠ LES QUALIFICATIFS SONT FIXES DEPUIS LE 16/09/2026, et c'est le
       // troisieme contrat de cette ligne en deux jours. Ils portaient d'abord
@@ -44986,7 +44988,7 @@ async function testExercices(){
       for(const k of ['epaules','bassin','pieds']){
         const f=F(k);
         if(f.niveau!=null||f.etat!=='illisible') return _echec(k+' encore lu : '+f.niveau);
-        if(!f.chiffres.every(c=>/non lisible — corps tourné d’environ 2[89]°/.test(c.val))) return _echec(k+' : '+f.chiffres.map(c=>c.val).join(' | '));
+        if(!f.chiffres.every(c=>/non lisible : corps tourné d’environ 2[89]°/.test(c.val))) return _echec(k+' : '+f.chiffres.map(c=>c.val).join(' | '));
         const t=anatTexte(f,res);
         if(!/tourné/.test(t.court)||!/de face à l’objectif/.test(t.verifier)) return _echec(k+' : pas de consigne de reprise');
       }
@@ -48910,6 +48912,68 @@ async function testExercices(){
       return /localStorage\.setItem\('rc_amb'/.test(_prodSrc())?true:_echec('arrivée dans l’app');})());
     ok('Ambassadeurs : le code d’arrivée est classé non-santé',CHAMPS_NON_SANTE.indexOf('ambassadeur')>=0);
 
+    // ══ APPARENCE, AIDE, RETOUR D'ACTION, CHARTE — 26/09/2026 ═══════════
+    ok('Apparence : sombre par défaut, clair ou auto (comme le téléphone)',(()=>{
+      if(themeEffectif('sombre',true)!=='sombre'||themeEffectif('clair',false)!=='clair') return _echec('choix fixes');
+      if(themeEffectif('auto',true)!=='clair'||themeEffectif('auto',false)!=='sombre') return _echec('auto');
+      if(themeEffectif('n’importe quoi',true)!=='sombre') return _echec('défaut');
+      const lire=u=>{ try{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; }catch(e){ return ''; } };
+      const h=lire('index.html');
+      if(h&&!/localStorage\.getItem\('rc_theme'\)[\s\S]{0,300}setAttribute\('data-theme','clair'\)/.test(h)) return _echec('le thème n’est pas posé avant le premier affichage');
+      const css=[...document.styleSheets].map(f=>{ try{ return [...f.cssRules].map(r=>r.cssText).join('\n'); }catch(e){ return ''; } }).join('\n');
+      if(css.indexOf('[data-theme="clair"]')<0) return _echec('la surcouche claire manque (scripts/theme_clair.py)');
+      return true;})());
+    ok('Aide : apparence, FAQ dépliable, contact du créateur, date de mise à jour',(()=>{
+      const d=document.createElement('div'); d.innerHTML=htmlPrefsAide('client','clair','2026-09-26','1598','UA');
+      const seg=[...d.querySelectorAll('.prf-theme button')];
+      if(seg.length!==3||seg.filter(x=>x.getAttribute('aria-pressed')==='true').map(x=>x.dataset.theme).join()!=='clair') return _echec('sélecteur');
+      const q=d.querySelectorAll('details.prf-q');
+      if(q.length<5||[...q].some(x=>x.open)) return _echec(q.length+' questions, ou une ouverte');
+      const a=d.querySelector('a.prf-contact');
+      if(!a||a.getAttribute('href').indexOf('mailto:'+CREATOR_EMAIL+'?')!==0||decodeURIComponent(a.getAttribute('href')).indexOf('Version : 1598 du 2026-09-26')<0) return _echec('contact');
+      if(d.querySelector('.prf-maj').textContent!=='Mis à jour le 26 septembre 2026 · version 1598') return _echec(d.querySelector('.prf-maj').textContent);
+      const c=document.createElement('div'); c.innerHTML=htmlPrefsAide('coach','sombre','','1598','');
+      if(/résilier/i.test(c.textContent)||!/inviter un athlète/i.test(c.textContent)) return _echec('FAQ coach');
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(String(window.RC_MAJ||''))) return _echec('RC_MAJ absent');
+      if(!document.getElementById('cr-prefs')||!document.getElementById('ct-prefs')) return _echec('conteneurs');
+      return /rendrePrefsAide\(\)/.test(String(ouvrirReglagesAthlete))&&/rendrePrefsAide\(\)/.test(String(coachTab))?true:_echec('non appelé');})());
+    ok('Retour d’action : échec ou confirmation, jamais en double',(()=>{
+      const g={le:100,ecritures:1,echecs:0};
+      if(actMessage(g,50,true).texte!==ACT_TEXTES.ok) return _echec('confirmation');
+      if(actMessage(g,150,true)!==null) return _echec('un écran qui a déjà parlé est doublé');
+      if(!actMessage({le:100,ecritures:2,echecs:1},0,true).erreur) return _echec('échec');
+      if(actMessage({le:100,ecritures:1,echecs:1},0,false).texte!==ACT_TEXTES.horsLigne) return _echec('hors ligne');
+      if(actMessage({le:100,ecritures:0,echecs:0},0,true)!==null) return _echec('une lecture annoncée');
+      if(!window.fetch._rcAct) return _echec('fetch non suivi');
+      return /_rcToastLe=Date\.now\(\)/.test(String(toast))&&document.getElementById('toast').getAttribute('aria-live')==='polite'?true:_echec('toast');})());
+    ok('Barre de lecture : seulement sur une zone longue',(()=>{
+      if(lectureProgression(0,700,600)!==null||lectureProgression(0,4000,150)!==null) return _echec('zone courte');
+      const a=lectureProgression(0,3000,600), b=lectureProgression(1200,3000,600), c=lectureProgression(9999,3000,600);
+      return (a===0&&b===0.5&&c===1)?true:_echec([a,b,c].join());})());
+    ok('Charte : ni tiret cadratin affiché, ni pilule, ni violet, ni emoji en tête de titre',(()=>{
+      const lire=u=>{ try{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; }catch(e){ return ''; } };
+      const h=lire('index.html');
+      if(h){
+        const balisage=h.replace(/<!--[\s\S]*?-->/g,'').replace(/<script\b[\s\S]*?<\/script>/g,'').replace(/<style\b[\s\S]*?<\/style>/g,'');
+        const t=(balisage.match(/>[^<]*—[^<]*</g)||[]).concat(balisage.match(/(content|title|placeholder|aria-label)="[^"]*—[^"]*"/g)||[]);
+        if(t.length) return _echec('tiret cadratin : '+t.slice(0,3).join(' | '));
+        if(/<(h[1-4]|button)\b[^>]*>\s*\p{Extended_Pictographic}/u.test(balisage)) return _echec('emoji en tête de titre ou de bouton');
+      }
+      const css=[...document.styleSheets].map(f=>{ try{ return [...f.cssRules].map(r=>r.cssText).join('\n'); }catch(e){ return ''; } }).join('\n');
+      const pil=(css.match(/[^{}]*\{[^{}]*border-radius:\s*(999|9999|99)px[^{}]*\}/g)||[]).filter(r=>!/rc-envoi/.test(r));
+      if(pil.length) return _echec('pilule : '+pil[0].slice(0,80));
+      const v=getComputedStyle(document.documentElement);
+      for(const k of ['--arc-charge','--arc-peak']){ const c=v.getPropertyValue(k).trim().toLowerCase(); if(['#7b3bff','#ff2e93'].indexOf(c)>=0) return _echec(k+' est violet'); }
+      return true;})());
+    ok('Aucune fausse métrique : la page de vente annonce le vrai nombre de vidéos',(()=>{
+      const lire=u=>{ try{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; }catch(e){ return ''; } };
+      const v=lire('../index.html');
+      if(!v) return true;
+      const n=Object.keys(EX_VIDEOS).length;
+      const annonces=(v.match(/(\d{3})\+?<\/b><span>exercices filmés|[Pp]lus de (\d{3}) exercices filmés|(\d{3}) exercices filmés/g)||[]);
+      for(const a of annonces){ const k=Number((a.match(/\d{3}/)||[])[0]); if(k>n) return _echec(a+' pour '+n+' vidéos'); }
+      return annonces.length?true:_echec('aucune annonce lue');})());
+
     // ══ L'ATTRIBUTION — 26/09/2026 ════════════════════════════════════════
     ok('Attribution : UNE fonction pose src, ref et amb — l’ambassadeur exclut le parrain, un code faux est ignoré',(()=>{
       const r=[lienAttribue('https://x.fr/@lea',{src:'Record',ref:'JULIE7K2'}),
@@ -51177,7 +51241,7 @@ async function testExercices(){
           return _echec('intitulé : « '+(det.querySelector('summary')||{}).textContent+' »');
         const contenu=det.querySelector('div');
         const nom=b.source==='katch'?'Katch-McArdle':'Mifflin-St Jeor';
-        const attendu=nom+' · dépense estimée '+b.depense+' kcal — '+b.hypotheses.join(' · ')+'.';
+        const attendu=nom+' · dépense estimée '+b.depense+' kcal : '+b.hypotheses.join(' · ')+'.';
         const cl=contenu.cloneNode(true); cl.querySelectorAll('.rc-i').forEach(x=>x.remove());
         if(cl.textContent!==attendu) return _echec('le texte a changé : « '+cl.textContent+' »');
         const i=_r10Infos(contenu);
@@ -56837,7 +56901,7 @@ async function testExercices(){
           return _echec('la consigne retirée est revenue');
         // DEUX GESTES PLEINS, et rien d'autre à côté d'eux.
         const act=[...fg.querySelectorAll('.cpl-actions .btn')].map(b=>b.textContent.trim());
-        if(act.join(' | ')!=='▶ Assigner | Mettre en vente') return _echec('actions : '+act.join(' | '));
+        if(act.join(' | ')!=='Assigner | Mettre en vente') return _echec('actions : '+act.join(' | '));
         // Le rayon de la boutique n'existe que pour le créateur.
         // ⚠ ON DESIGNE LE RAYON, ON NE CHERCHE PLUS SON NOM. Depuis le
         //   20/09/2026 l'en-tete de la vitrine porte lui aussi le titre « Ma
@@ -58704,7 +58768,7 @@ async function testExercices(){
         return _echec('le plancher de seancesPrevuesParSemaine a disparu : ecartNormalJours diviserait par zéro');
       // Aucun créneau : pas de dénominateur à annoncer, donc le tiret seul.
       const a=_subFix(_subU({sessions_config:[{active:false},{active:false}]}),r=>r.m1.val);
-      if(a!=='—') return _echec('sans créneau actif, le chiffre dit « '+a+' »');
+      if(a!=='-') return _echec('sans créneau actif, le chiffre dit « '+a+' »');
       // Un seul créneau, aucune séance faite.
       const b=_subFix(_subU({sessions_config:[{active:true},{active:false}]}),r=>r.m1.val);
       if(b!=='0/1') return _echec('un créneau : « '+b+' »');
@@ -58786,7 +58850,7 @@ async function testExercices(){
       // Aucun jour répondu du tout : rien à dire, et « — » sur la tuile.
       if(t(mk({}))!==null) return _echec('sans diète, une tendance est inventée');
       const v=_subFix(mk({}),r=>r.m3.val);
-      if(v!=='—') return _echec('sans diète, la tuile affiche : '+v);
+      if(v!=='-') return _echec('sans diète, la tuile affiche : '+v);
       return true;})());
 
     // ⚠ UN JOUR NON REPONDU N'EST PAS UN JOUR RATE. Le compter ferait tomber
@@ -63945,7 +64009,7 @@ async function testExercices(){
             ?true:_echec('phrase absente à +82 %');})());
         ok('La phrase de signal porte le rappel « repère de terrain »',(()=>{
           const h=_htmlChargeAxiale(_hist(20,11,11,11),0,G,{});
-          return /Repère de terrain, pas une mesure — à regarder avec ton coach\./.test(h)
+          return /Repère de terrain, pas une mesure : à regarder avec ton coach\./.test(h)
             ?true:_echec('rappel absent');})());
         ok('Aucune couleur d\'alerte sur le bloc',(()=>{
           const h=_htmlChargeAxiale(_hist(20,11,11,11),0,G,{});
@@ -69276,7 +69340,7 @@ async function testExercices(){
             ?true:_echec(JSON.stringify(lc.alertes));})());
         ok('Les quantités s\'écrivent en grammes puis en kilos',(()=>{
           return (planFormatQte(210,'g')==='210 g'&&planFormatQte(1490,'g')==='1,49 kg'
-            &&planFormatQte(null,'g')==='—')
+            &&planFormatQte(null,'g')==='-')
             ?true:_echec([planFormatQte(210,'g'),planFormatQte(1490,'g'),
               planFormatQte(null,'g')].join(' | '));})());
         ok('Les unités à la pièce s\'accordent, et une seule fois',(()=>{

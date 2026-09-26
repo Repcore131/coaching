@@ -17,7 +17,7 @@
 <meta property="og:type" content="profile">
 <meta property="og:site_name" content="RepCore">
 <meta property="og:title" content="Rejoins-moi sur RepCore">
-<meta property="og:description" content="Ma progression, séance après séance. Rejoins-moi sur RepCore ⚡">
+<meta property="og:description" content="Ma progression, séance après séance. Rejoins-moi sur RepCore.">
 <meta property="og:image" content="https://repcore-sync.web.app/og-image.png">
 <meta name="twitter:card" content="summary_large_image">
 <!--og:fin-->
@@ -38,7 +38,7 @@ h1{text-align:center;font-size:34px;line-height:1.1;margin:4px 0 2px;letter-spac
 .chiffres span{font-size:12px;color:var(--gris)}
 h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);margin:22px 0 8px}
 .puces{display:flex;flex-wrap:wrap;gap:6px}
-.puces span{background:#240707;border:1px solid #4a0c0c;border-radius:999px;padding:5px 11px;font-size:13px;font-weight:700}
+.puces span{background:#240707;border:1px solid #4a0c0c;border-radius:6px;padding:5px 11px;font-size:13px;font-weight:700}
 .rec{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--bord);font-size:14px}
 .rec span{color:var(--gris);white-space:nowrap}
 .cta{display:block;margin:28px 0 10px;background:var(--rouge);color:#fff;text-align:center;text-decoration:none;font-weight:800;
@@ -89,7 +89,7 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
       if(p.serie!=null) ch+='<div><b>'+(p.serie|0)+'</b><span>semaines d’affilée</span></div>';
       if(ch) h+='<div class="chiffres">'+ch+'</div>';
       var b=p.badges?Object.keys(p.badges).map(function(k){return p.badges[k];}):[];
-      if(b.length) h+='<h2>Badges</h2><div class="puces">'+b.map(function(x){return '<span>⚡ '+esc(x.nom)+'</span>';}).join('')+'</div>';
+      if(b.length) h+='<h2>Badges</h2><div class="puces">'+b.map(function(x){return '<span>'+esc(x.nom)+'</span>';}).join('')+'</div>';
       var r=p.records?Object.keys(p.records).map(function(k){return p.records[k];}):[];
       if(r.length) h+='<h2>Derniers records</h2>'+r.map(function(x){
         var d=''; try{ d=new Date(x.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }catch(e){}

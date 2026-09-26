@@ -95,6 +95,12 @@ def main():
     html = lire(INDEX)
     crlf_avant = html.count('\r\n')
     build = build_de(html)
+    # LA DATE DE MISE A JOUR affichee dans les reglages (« Mis à jour le … ») :
+    # posee ici, au meme geste que le numero de build, pour qu'elles ne
+    # divergent jamais. Heure de Paris.
+    import datetime, zoneinfo
+    jour = datetime.datetime.now(zoneinfo.ZoneInfo('Europe/Paris')).strftime('%Y-%m-%d')
+    html = re.sub(r"window\.RC_MAJ='[0-9-]*';", "window.RC_MAJ='%s';" % jour, html)
     avant = lire(INDEX, binaire=True)
     faits = []
 

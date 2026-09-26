@@ -37,7 +37,7 @@ function ogAthlete(pseudo, p) {
   const n = p.rang && p.rang.n ? Math.max(1, Math.min(10, p.rang.n | 0)) : 0;
   return {
     titre: court(p.prenom, 24) + " sur RepCore",
-    description: (bouts.length ? bouts.join(" · ") + ". " : "") + "Rejoins " + court(p.prenom, 24) + " sur RepCore ⚡",
+    description: (bouts.length ? bouts.join(" · ") + ". " : "") + "Rejoins " + court(p.prenom, 24) + " sur RepCore.",
     image: n ? ORIGINE + "/app/img/rangs/rang_" + n + "-og.jpg" : IMAGE_DEFAUT,
     url: ORIGINE + "/@" + pseudo
   };

@@ -86,8 +86,8 @@ function premierPaiement(compte, id, maintenant) {
 // Le texte du push au parrain.
 function textePaiement(p) {
   return p.mentor
-    ? { title: "10 filleuls abonnés : 1 mois d’Ultime offert ⚡", body: p.prenom + " vient de s’abonner. Tu gagnes aussi 1 mois offert." }
-    : { title: p.prenom + " vient de s’abonner : 1 mois offert ⚡", body: "Merci de faire découvrir RepCore. Ton accès est prolongé d’un mois." };
+    ? { title: "10 filleuls abonnés : 1 mois d’Ultime offert", body: p.prenom + " vient de s’abonner. Tu gagnes aussi 1 mois offert." }
+    : { title: p.prenom + " vient de s’abonner : 1 mois offert", body: "Merci de faire découvrir RepCore. Ton accès est prolongé d’un mois." };
 }
 
 module.exports = { CODE_RE, PALIER_MENTOR, DELAI_RATTACHEMENT_MS, emailNormalise, cleNormalisee, cleVersEmail,

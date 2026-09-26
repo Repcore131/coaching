@@ -1362,7 +1362,7 @@ exports.pushFilleulInscrit = onValueCreated(Object.assign({ ref: "/parrainage/co
   const f = ev.data.val() || {};
   await envoyerPush(ev.params.parrain, { type: "filleul", url: "./?parrainage=1", tag: "filleul-" + ev.params.filleul,
     title: (f.prenom ? f.prenom + " vient" : "Ton filleul vient") + " de s’inscrire avec ton code",
-    body: "Son premier paiement t’offrira 1 mois de RepCore ⚡" });
+    body: "Son premier paiement t’offrira 1 mois de RepCore." });
 });
 // NOUVEAU DÉFI DANS LE CANAL : un message du coach marqué defi:true. Les
 // destinataires sont ses athlètes, lus dans l'annuaire du coach.
