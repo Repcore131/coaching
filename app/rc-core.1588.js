@@ -16694,7 +16694,10 @@ function renderEpingleAccueil(){
   const el=document.getElementById('clh-annonce');
   if(!el) return;
   const u=currentUser;
-  const manque=!!(u&&u.role==='athlete'&&!u.athletePhoto);
+  // ⚠ SEULEMENT AVEC UN COACH RATTACHE (QA du 27/09/2026). Le bandeau dit
+  //   « permet à ton coach de te reconnaître » : a un athlete sans coach, il
+  //   promettait un tableau de bord qui n'existe pas. Meme regle que le canal.
+  const manque=!!(u&&u.role==='athlete'&&!u.athletePhoto&&canalAccessible(u));
   if(!manque){ el.innerHTML=''; el.style.display='none'; return; }
   el.style.display='block';
   el.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);'
@@ -79407,8 +79410,8 @@ function depenseSportsParJour(liste){
 //   NAF_DEPUIS_METIER), ET PLUS L'ANCIENNE 1,15 / 1,25 / 1,40 / 1,55 (QA du
 //   27/09/2026). Le calcul des besoins etait passe a l'echelle du tableur, mais
 //   ce tableau-ci gardait l'ancienne : le bilan annoncait « facteur 1,15 » a
-//   l'athlete pendant que ses cibles etaient calculees a 1,20, et le plafond du
-//   surplus se bornait sur une depense plus basse que celle affichee.
+//   l'athlete pendant que ses cibles etaient calculees a 1,20, et le plancher
+//   calorique se plafonnait sur une depense plus basse que celle affichee.
 const METIER_NIVEAUX=Object.freeze({
   sedentaire:Object.freeze({lib:'Assis la majeure partie de la journée', f:1.2}),
   leger:     Object.freeze({lib:'Debout, peu de marche',                 f:1.4}),
@@ -79616,9 +79619,9 @@ const NEAT_BASE=1.20;
 // compte en kcal, pas en multiplicateur.
 // ⚠ UNE SEULE SOURCE : nafRetenu (QA du 27/09/2026). Cette fonction tenait sa
 //   propre echelle — l'ancienne, 1,15 pour un metier assis — et ignorait le
-//   reglage du coach. _depensePourPlafond passait par elle : le plafond du
-//   surplus se calculait sur une depense qui n'etait pas celle affichee, et
-//   corriger le niveau d'activite de l'athlete ne changeait pas ce plafond.
+//   reglage du coach. _depensePourPlafond passait par elle : le plancher
+//   calorique se plafonnait sur une depense qui n'etait pas celle affichee, et
+//   corriger le niveau d'activite de l'athlete ne deplacait pas ce plafond.
 //   Elle rend desormais exactement le niveau que retient le calcul des besoins.
 function facteurNEAT(user){
   const metier=_dernierChamp(user,'deb-job');
@@ -93782,7 +93785,15 @@ function _depensePourPlafond(user){
     const sexe=(user&&(user._evol_gender||user.gender))||b['deb-gender']||'';
     const mm=masseMaigreDuBilan(user);
     let mb=(mm!=null)?mbKatch(mm):null;
-    if(mb==null) mb=mbMifflin(poids,taille,age,sexe);
+    // ⚠ mbEstime ET NON mbMifflin (QA du 27/09/2026). besoinsProposes est
+    //   passe a Harris-Benedict le 07/09 ; cette copie gardait Mifflin. Sans
+    //   tours de mesure, le plancher se plafonnait a 85 % de 2002 kcal quand la
+    //   depense affichee au coach en disait 2053.
+    //   LA CORRECTION DE METABOLISME DU COACH, ELLE, N'ENTRE PAS ICI, et c'est
+    //   voulu : cette depense ne sert qu'au plafond du plancher, et un
+    //   metabolisme corrige a la baisse ne doit pas pouvoir abaisser le
+    //   plancher (« Critère : la correction ne touche PAS au plancher »).
+    if(mb==null) mb=mbEstime(poids,taille,age,sexe);
     if(!(mb>0)) return null;
     // MÊME convention que besoinsProposes, et un seul chemin comme lui : deux
     // formules divergentes borneraient une dépense qui n'est pas celle qu'on
