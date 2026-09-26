@@ -2223,6 +2223,7 @@ function ouvrirReglagesAthlete(){
   _renderAbonnement();
   // L'interrupteur du son reflète le dossier à chaque ouverture.
   try{ _majSonReglages(); }catch(e){}
+  try{ _rendreReglagesPush(); }catch(e){}
   const v=document.getElementById('cr-version');
   if(v) versionSW().then(x=>{ if(x) v.textContent='RepCore · '+x; });
   return true;
@@ -4465,6 +4466,29 @@ const CLOUD={
   // ont mis ; ce qui change, c'est leur DESTINATION à l'envoi. Une couche
   // de lecture, pas une migration.
   _urlSantePrivee(key){ return this._fbUrl.replace('users.json','sante_privee/'+key+'.json'); },
+  // Les souscriptions Web Push : /push/<emailKey>/<id>. Hors de /users, que
+  // le PUT du dossier entier effacerait (voir pushAbonner).
+  _urlPush(key,id){ return this._fbUrl.replace('users.json','push/'+key+'/'+id+'.json'); },
+  async enregistrerPush(email,id,data){
+    const key=String(email||'').replace(/\./g,',');
+    if(!key||!/^[a-z0-9]{6,24}$/.test(id)) return false;
+    try{
+      const token=await this._getToken();
+      if(!token) return false;
+      const r=await fetch(this._urlPush(key,id)+'?auth='+token,{method:'PUT',
+        headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+      return r.ok;
+    }catch(e){ return false; }
+  },
+  async supprimerPush(email,id){
+    const key=String(email||'').replace(/\./g,',');
+    if(!key||!/^[a-z0-9]{6,24}$/.test(id)) return false;
+    try{
+      const token=await this._getToken();
+      if(!token) return false;
+      return (await fetch(this._urlPush(key,id)+'?auth='+token,{method:'DELETE'})).ok;
+    }catch(e){ return false; }
+  },
   _urlProfilCoach(key){ return this._fbUrl.replace('users.json','coach_public/'+key+'.json'); },
   _urlBoutique(id){ return this._fbUrl.replace('users.json',
     'boutique'+(id?('/'+encodeURIComponent(id)):'')+'.json'); },
@@ -5648,6 +5672,9 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // fichier et un message d'erreur. Du diagnostic, pas de la sante — mais il
   // DOIT etre classe, sinon il n'est protege par rien.
   'videoDiag',
+  // Les types de notification push que l'athlète a coupés : {type:false}.
+  // Un réglage, lu par le serveur avant chaque envoi — aucune donnée de santé.
+  'pushPrefs',
   'echeance','alertStatus','supprimes','_export',
   'coachId','coachName','coachEmailKey','coachCode','coachPhoto','code','clients',
   'coachPlan','coachSubActive','coachPlanSince','coachPrograms','coachNotes',
@@ -6836,6 +6863,9 @@ function routeUser(){
   // retarder l'écran d'arrivée d'un aller-retour réseau. Idempotente : la
   // rejouer à chaque démarrage ne crée aucun doublon.
   setTimeout(()=>{ try{ _migrerSantePriveeLocale(); }catch(e){} },2000);
+  // Le push serveur : la souscription de cet appareil, rafraîchie (au plus une
+  // fois par jour) ou refaite si la clé VAPID a changé. Jamais de demande.
+  setTimeout(()=>{ try{ pushVerifierAuDemarrage(); }catch(e){} },4000);
   // Le trapeze s'est dedouble le 08/09/2026 : on reporte l'ancien reglage sur
   // les deux portions, une fois, au demarrage. Elle ne sauve QUE si elle a
   // change quelque chose — un dossier deja migre ne declenche aucune poussee.
@@ -65864,6 +65894,7 @@ function requestBilanNotifPermission(){
       // rien ne le signale — c'est la regle deja posee pour le guide iOS.
       try{ rcm('notif_granted'); }catch(e){}
       currentUser._notifEnabled=true;saveUser();
+      try{ pushAbonner({geste:true}); }catch(e){}
       scheduleSwNotif();scheduleSuppNotif();
       toast(' Rappels activés ! Tu seras notifié chaque samedi de bilan à 7h.');
     } else {
@@ -66599,6 +66630,10 @@ async function invNotifOui(){
       // bilan et de seance. Les trois comptent le meme evenement.
       try{ rcm('notif_granted'); }catch(e){}
       await scheduleWoNotif();
+      // LE PUSH SERVEUR, DANS LE MEME GESTE : c'est le seul moment où iOS
+      // l'accepte sans redemander. Sans attente : l'enregistrement part en
+      // arrière-plan, le toast ne dépend pas du réseau.
+      try{ pushAbonner({geste:true}); }catch(e){}
       toast('C’est note — je te préviens avant ta prochaine séance ✓');
     } else {
       // AUCUNE INSISTANCE. Le refus est accepte sans un mot de plus : le
@@ -66607,6 +66642,244 @@ async function invNotifOui(){
     }
   }catch(e){}
   if(z) z.innerHTML='';
+}
+// ══════════ LE PUSH SERVEUR (Web Push, VAPID) ══════════════════════════════
+//
+// Jusqu'ici, tous les rappels étaient LOCAUX : le service worker se réveillait
+// quand le navigateur le voulait bien (periodicsync, Chrome seulement), et
+// iOS n'en recevait aucun. Le push serveur part de functions/index.js
+// (envoyerPush) à l'heure dite, sur tous les navigateurs qui le prennent en
+// charge — y compris Safari iOS 16.4+, À CONDITION que l'app soit installée.
+//
+// ⚠ LA CLÉ PUBLIQUE EST ICI, LA PRIVÉE N'EST NULLE PART DANS LE DÉPÔT : elle
+// vit dans les secrets Firebase Functions (VAPID_PRIVATE_KEY, defineSecret).
+// Les deux vont par paire : changer l'une sans l'autre et chaque envoi est
+// refusé (403). La même valeur figure dans functions/index.js (VAPID_PUBLIQUE).
+//
+// ⚠ LES SOUSCRIPTIONS VONT DANS /push/<emailKey>/<id>, PAS DANS /users : le
+// dossier est envoyé EN ENTIER par PUT (CLOUD._doPushOne) ; un enfant écrit à
+// part serait effacé au premier enregistrement suivant.
+const VAPID_PUBLIQUE='BEQvHnCStyK010R_ETviq4nAcu5PPTktlDX3AW245J60sLsMZdxe50t1N7Xs3WlYdY5FkMNRxtC71cHKi2DtZw0';
+// Les sept types, dans l'ordre de l'écran de réglages. Mêmes clés que
+// PUSH_TYPES (functions/index.js) : c'est u.pushPrefs[cle]===false qui coupe.
+const PUSH_TYPES=Object.freeze([
+  {cle:'coach',titre:'Réponse de ton coach',txt:'Quand ton coach répond à un bilan ou à un rite.'},
+  {cle:'serie',titre:'Série en danger',txt:'Le jeudi à 18 h, si ta semaine n’est pas encore validée.'},
+  {cle:'bilan',titre:'Rappel de bilan',txt:'Le samedi, quand ton dernier bilan date de deux semaines.'},
+  {cle:'badge',titre:'Badge à portée',txt:'Le dimanche, quand un badge n’est plus qu’à une ou deux séances.'},
+  {cle:'wrapped',titre:'Ton mois en chiffres',txt:'Le 1er du mois, quand ton Wrapped est prêt.'},
+  {cle:'defi',titre:'Défi dans le Canal',txt:'Quand ton coach lance un nouveau défi.'},
+  {cle:'filleul',titre:'Filleul inscrit',txt:'Quand quelqu’un s’inscrit grâce à toi.'}
+]);
+// PURE. La clé base64url en octets — ce qu'attend applicationServerKey.
+function pushB64VersOctets(b64){
+  const s=String(b64||'').replace(/-/g,'+').replace(/_/g,'/');
+  const bin=atob(s+'='.repeat((4-s.length%4)%4));
+  const o=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) o[i]=bin.charCodeAt(i);
+  return o;
+}
+// PURE. L'empreinte courte de la clé publique (≤ 12 caractères, règle
+// /push/$id/vapid). Elle dit, au démarrage, qu'une souscription a été prise
+// avec une AUTRE clé — et qu'il faut la refaire.
+function pushEmpreinte(cle){ return String(cle||'').slice(0,12); }
+// PURE. L'identifiant d'une souscription : un hachage de son endpoint, stable
+// (le même appareil réécrit le même nœud au lieu d'en empiler), et conforme à
+// la règle /^[a-z0-9]{6,24}$/.
+function pushIdSouscription(endpoint){
+  const e=String(endpoint||'');
+  let a=0x811c9dc5, b=0x01000193^e.length;
+  for(let i=0;i<e.length;i++){
+    const c=e.charCodeAt(i);
+    a=Math.imul(a^c,0x01000193)>>>0;
+    b=Math.imul(b^c,0x5bd1e995)>>>0;
+  }
+  return ('p'+a.toString(36)+b.toString(36)).slice(0,24);
+}
+// PURE. Où en est l'appareil ? env = {supporte, ios, autonome, permission,
+// abonne}. Rend :
+//   'installer' — iOS dans Safari : le push n'y existe qu'une fois l'app
+//                 ajoutée à l'écran d'accueil. On ne propose RIEN d'autre.
+//   'indispo'   — navigateur sans Push API.
+//   'refuse'    — permission refusée : seul le navigateur peut la rendre.
+//   'actif'     — abonné, permission accordée.
+//   'proposer'  — tout est possible, il manque le geste.
+function pushEtat(env){
+  const x=env||{};
+  if(x.ios&&!x.autonome) return 'installer';
+  if(!x.supporte) return 'indispo';
+  if(x.permission==='denied') return 'refuse';
+  if(x.abonne&&x.permission==='granted') return 'actif';
+  return 'proposer';
+}
+// PURE. Peut-on tenter l'abonnement ? Sur iOS : app installée ET geste.
+function pushPeutAbonner(env,geste){
+  const x=env||{};
+  if(x.ios&&(!x.autonome||!geste)) return false;
+  return !!x.supporte;
+}
+// PURE. Un type est-il actif ? Tout est allumé par défaut ; seul false coupe.
+function pushTypeActif(u,type){
+  const p=u&&u.pushPrefs;
+  return !(p&&typeof p==='object'&&p[type]===false);
+}
+function _pushSupporte(){
+  return typeof window!=='undefined'&&'serviceWorker' in navigator
+    &&'PushManager' in window&&_notifSupported();
+}
+function _pushEnv(abonne){
+  let ios=false, autonome=false;
+  try{ ios=rcInstalliOS(); }catch(e){}
+  try{ autonome=rcInstallAutonome(); }catch(e){}
+  return {supporte:_pushSupporte(),ios,autonome,
+    permission:_notifSupported()?Notification.permission:null,abonne:!!abonne};
+}
+function _pushMemo(v){
+  try{
+    if(v===undefined){ return JSON.parse(localStorage.getItem('rc_push')||'null'); }
+    if(v===null) localStorage.removeItem('rc_push'); else localStorage.setItem('rc_push',JSON.stringify(v));
+  }catch(e){}
+  return null;
+}
+// La souscription, et son enregistrement dans /push. o.geste : l'appel vient
+// d'un toucher (bouton). ⚠ SUR iOS, RIEN SANS GESTE ET RIEN HORS DE L'APP
+// INSTALLÉE : Safari refuse requestPermission hors d'un geste, et le push
+// n'existe pas dans l'onglet. Ailleurs, une permission déjà accordée suffit.
+async function pushAbonner(o){
+  o=o||{};
+  if(!currentUser||!currentUser.email) return false;
+  const env=_pushEnv(false);
+  if(!pushPeutAbonner(env,!!o.geste)||!_notifSupported()) return false;
+  try{
+    // La permission est DÉJÀ accordée : c'est l'appelant qui la demande
+    // (invitation, rappels, ou le bouton des réglages), et qui compte l'accord.
+    if(Notification.permission!=='granted') return false;
+    const reg=await navigator.serviceWorker.ready;
+    let sub=await reg.pushManager.getSubscription();
+    const memo=_pushMemo();
+    // Une souscription prise avec une autre clé ne recevra plus rien : on la
+    // défait avant d'en reprendre une.
+    if(sub&&memo&&memo.vapid&&memo.vapid!==pushEmpreinte(VAPID_PUBLIQUE)){
+      try{ await sub.unsubscribe(); }catch(e){}
+      sub=null;
+    }
+    if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true,
+      applicationServerKey:pushB64VersOctets(VAPID_PUBLIQUE)});
+    const j=sub.toJSON();
+    const id=pushIdSouscription(j.endpoint);
+    const ok=await CLOUD.enregistrerPush(currentUser.email,id,{
+      endpoint:j.endpoint,keys:{p256dh:j.keys.p256dh,auth:j.keys.auth},
+      cree:Date.now(),plateforme:env.ios?'ios':(/android/i.test(navigator.userAgent||'')?'android':'web'),
+      vapid:pushEmpreinte(VAPID_PUBLIQUE)});
+    if(ok) _pushMemo({id,email:currentUser.email,vapid:pushEmpreinte(VAPID_PUBLIQUE),le:Date.now()});
+    return ok;
+  }catch(e){ return false; }
+}
+// Au démarrage : SANS geste, donc sans jamais demander. Ailleurs qu'iOS, une
+// permission déjà accordée (par l'invitation, ou les rappels) donne une
+// souscription ; sur iOS, on ne fait que rafraîchir celle qui existe. Une
+// fois par jour au plus : l'enregistrement se réécrit s'il a été effacé par
+// le serveur (404/410).
+async function pushVerifierAuDemarrage(){
+  if(!currentUser||!_notifSupported()||!_pushSupporte()||Notification.permission!=='granted') return false;
+  const memo=_pushMemo();
+  if(memo&&memo.email===currentUser.email&&memo.vapid===pushEmpreinte(VAPID_PUBLIQUE)
+    &&Date.now()-(Number(memo.le)||0)<86400000) return true;
+  const env=_pushEnv(false);
+  if(env.ios){
+    if(!env.autonome) return false;
+    try{
+      const reg=await navigator.serviceWorker.ready;
+      if(!(await reg.pushManager.getSubscription())) return false;
+    }catch(e){ return false; }
+  }
+  return pushAbonner({geste:env.ios});
+}
+async function pushDesabonner(){
+  const memo=_pushMemo();
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    const sub=await reg.pushManager.getSubscription();
+    if(sub) await sub.unsubscribe();
+  }catch(e){}
+  if(memo&&memo.id&&currentUser) try{ await CLOUD.supprimerPush(currentUser.email,memo.id); }catch(e){}
+  _pushMemo(null);
+  return true;
+}
+// ── L'ÉCRAN DE RÉGLAGES : une case par type, et l'état de l'appareil ──────
+// PURE. Le bloc. etat : pushEtat(...).
+function htmlReglagesPush(u,etat){
+  const ligneEtat={
+    actif:'Activées sur cet appareil',
+    proposer:'Pas encore activées sur cet appareil',
+    refuse:'Bloquées dans les réglages du navigateur',
+    indispo:'Ce navigateur ne reçoit pas les notifications',
+    installer:'Ajoute RepCore à ton écran d’accueil pour les recevoir'
+  }[etat]||'';
+  let aide='';
+  if(etat==='installer') aide='Sur iPhone, les notifications n’existent que dans l’app installée : Partager, puis « Sur l’écran d’accueil ». Ouvre ensuite RepCore depuis l’icône et reviens ici.';
+  else if(etat==='refuse') aide='Pour les réactiver : réglages du navigateur, puis Notifications, puis RepCore.';
+  const bouton=etat==='proposer'
+    ?'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:0 0 12px;min-height:44px" onclick="pushActiverDepuisReglages()">Activer sur cet appareil</button>':'';
+  const cases=PUSH_TYPES.map(t=>{
+    const on=pushTypeActif(u,t.cle);
+    return '<label for="cr-push-'+t.cle+'" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0;padding:10px 0;border-top:1px solid var(--border);text-transform:none;letter-spacing:normal;font-weight:400;color:var(--text)">'
+      +'<input type="checkbox" id="cr-push-'+t.cle+'" data-push="'+t.cle+'"'+(on?' checked':'')
+      +' onchange="basculerPushType(\''+t.cle+'\',this.checked)"'
+      +' style="width:18px;height:18px;accent-color:#E02020;flex-shrink:0;margin-top:2px;cursor:pointer">'
+      +'<span style="flex:1;min-width:0"><span style="display:block;font-weight:700;font-size:var(--fs-sm)">'+escapeHtml(t.titre)+'</span>'
+      +'<span style="display:block;font-size:var(--fs-xs);color:var(--sub);line-height:1.5">'+escapeHtml(t.txt)+'</span></span></label>';
+  }).join('');
+  return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:18px">'
+    +'<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Notifications</div>'
+    +'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:6px">Une au plus par jour, et jamais entre 21 h et 8 h.</div>'
+    +'<div id="cr-push-etat" style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;font-weight:800;margin-bottom:10px">'+escapeHtml(ligneEtat)+'</div>'
+    +(aide?'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">'+escapeHtml(aide)+'</div>':'')
+    +bouton+cases+'</div>';
+}
+async function _rendreReglagesPush(){
+  const z=document.getElementById('cr-push');
+  if(!z||!currentUser) return false;
+  let abonne=false;
+  try{
+    if(_pushSupporte()){
+      const reg=await navigator.serviceWorker.ready;
+      abonne=!!(await reg.pushManager.getSubscription());
+    }
+  }catch(e){}
+  z.innerHTML=htmlReglagesPush(currentUser,pushEtat(_pushEnv(abonne)));
+  return true;
+}
+// LE GESTE. C'est lui qui rend l'abonnement possible sur iOS.
+// QUATRIÈME POINT D'ACCORD — voir les trois autres (invitation, rappels de
+// bilan et de séance). Sur iOS, c'est souvent le seul : l'invitation a pu
+// paraître dans l'onglet Safari, avant l'installation.
+async function pushActiverDepuisReglages(){
+  if(_notifSupported()&&Notification.permission==='default'){
+    let p='default';
+    try{ p=await Notification.requestPermission(); }catch(e){}
+    if(p==='granted'){ try{ rcm('notif_granted'); }catch(e){} }
+  }
+  const ok=await pushAbonner({geste:true});
+  if(ok){
+    try{ currentUser._notifEnabled=true; saveUser(); }catch(e){}
+    toast('Notifications activées ✓');
+  } else if(_notifSupported()&&Notification.permission==='denied'){
+    toast('Notifications bloquées par le navigateur.','var(--orange)');
+  } else toast('Impossible d’activer les notifications ici.','var(--orange)');
+  _rendreReglagesPush();
+  return ok;
+}
+// Couper un type : un champ du dossier (pushPrefs), lu par le serveur avant
+// chaque envoi ET par les rappels locaux (série, Wrapped).
+function basculerPushType(type,actif){
+  if(!currentUser||!PUSH_TYPES.some(t=>t.cle===type)) return false;
+  const p=(currentUser.pushPrefs&&typeof currentUser.pushPrefs==='object')?Object.assign({},currentUser.pushPrefs):{};
+  if(actif) delete p[type]; else p[type]=false;
+  currentUser.pushPrefs=p;
+  saveUser();
+  if(type==='serie') try{ _seriePlanifierNotif(currentUser); }catch(e){}
+  return true;
 }
 // ══════════ L'INSTALLATION DEVIENT UNE ETAPE, PAS UN BOUTON ════════════
 //
@@ -68471,16 +68744,20 @@ function _rendreCarteWrapped(){
 }
 // LA NOTIFICATION LOCALE, par le service worker (periodicsync 'wrapped') :
 // une par période, seulement si l'athlète a activé les rappels. Le push
-// serveur (idée 12) n'existe pas encore ; le jour où il existera, il enverra
-// le même titre et la même adresse (?wrapped=<clé>).
+// serveur (pushWrappedPret, functions/index.js) envoie le même titre, la même
+// adresse (?wrapped=<clé>) et le même tag : si les deux arrivent, l'un
+// remplace l'autre. Le local reste le filet quand les Functions manquent.
 function _wrPlanifierNotif(){
   try{
     if(!('serviceWorker' in navigator)) return;
     const u=currentUser;
     if(!u||!u._notifEnabled) return;
+    const coupe=!pushTypeActif(u,'wrapped');
     navigator.serviceWorker.ready.then(async reg=>{
       try{
         const c=await caches.open('repcore-sw-data');
+        // Coupé dans les réglages : le worker ne trouve plus de config, il se tait.
+        if(coupe){ await c.delete('/wrapped'); return; }
         // La dernière séance : le worker ne notifie pas une période où
         // l'athlète ne s'est pas entraîné — il n'y aurait rien à raconter.
         const der=((u.sessions||[]).reduce((m,x)=>Math.max(m,Number(x&&x.date)||0),0));
@@ -69623,7 +69900,8 @@ function partagerSerie(btn){
 }
 // ══ LE RAPPEL « SÉRIE EN DANGER » ═════════════════════════════════════════
 // Jeudi 18 h et samedi 10 h, si la semaine n'est pas validée. Le push serveur
-// (idée 12) n'existe pas encore : c'est la notification LOCALE du service
+// (pushSerieEnDanger) couvre le jeudi, avec le même tag : il remplace la
+// notification locale au lieu de s'y ajouter. Ici, c'est la notification LOCALE du service
 // worker (periodicsync 'serie-reminder'), qui ne sait pas l'heure exacte —
 // le navigateur la réveille à son rythme, au plus tôt toutes les 12 h, et
 // elle part à son premier réveil après l'heure dite. Seulement si l'athlète
@@ -69632,7 +69910,8 @@ function _seriePlanifierNotif(u){
   if(!u||!('serviceWorker' in navigator)) return false;
   let s=0; try{ s=streakSemaines(u)||0; }catch(e){ s=0; }
   let gel=false; try{ gel=suspensionEtat(u).actif; }catch(e){}
-  const actif=!!(u._notifEnabled&&s>0&&!gel);
+  // Le type coupé dans les réglages coupe AUSSI le rappel local.
+  const actif=!!(u._notifEnabled&&s>0&&!gel&&pushTypeActif(u,'serie'));
   navigator.serviceWorker.ready.then(async reg=>{
     try{
       const c=await caches.open('repcore-sw-data');
@@ -69843,6 +70122,7 @@ async function saveWoReminderConfig(){
   if(p==='granted'){
     // SECOND POINT D'ACCORD — voir le premier, dans le rappel de bilan.
     try{ rcm('notif_granted'); }catch(e){}
+    try{ pushAbonner({geste:true}); }catch(e){}
     await doSave();
   }
   else toast('Permission refusée : rappel non activé');

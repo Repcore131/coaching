@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1590';
+const CACHE = 'repcore-v1591';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -154,7 +154,7 @@ CORPS.push('./img/complements.webp');
 // ni code ni style — c'est-a-dire rien du tout.
 // Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
 // chaque build et reecrit cette ligne comme celle d'index.html.
-const ASSETS = ['./index.html', './rc-core.1590.js', './rc-style.1590.css',
+const ASSETS = ['./index.html', './rc-core.1591.js', './rc-style.1591.css',
   './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
@@ -745,17 +745,23 @@ async function swCheckAndNotify() {
   });
 }
 
-// ─── Notification click → open / focus app at bilan screen ─────────────────
+// ─── Notification click → ouvre l'écran visé ───────────────────────────────
+// L'adresse vient de data.url : notifications locales ET push serveur (qui
+// passe par swUrlSure). On NAVIGUE toujours quand l'app est déjà ouverte :
+// sans navigation, focus() ramènerait l'onglet sur l'écran où il était, et
+// « Ton coach t'a répondu » ouvrirait… la séance en cours.
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  const url = e.notification.data?.url || './';
+  const url = swUrlSure(e.notification.data && e.notification.data.url);
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(ws => {
       const w = ws.find(c => c.url.startsWith(self.registration.scope));
-      // LE WRAPPED OUVRE SON ÉCRAN même quand l'app est déjà ouverte : sans
-      // navigation, focus() ramènerait l'onglet sur l'écran où il était.
-      if (w && /[?&]wrapped=/.test(url) && w.navigate) return w.focus().then(c => c.navigate(url));
-      return w ? w.focus() : clients.openWindow(url);
+      if (!w) return clients.openWindow(url);
+      const cible = new URL(url, self.registration.scope).href;
+      if (w.navigate && cible !== w.url && url !== './') {
+        return w.focus().then(c => (c || w).navigate(cible)).catch(() => w.focus());
+      }
+      return w.focus();
     })
   );
 });
@@ -842,14 +848,35 @@ async function swCheckSuppReminders() {
   if (changed) await swSet('/supp-reminders', { ...sched, lastNotif: updatedLastNotif });
 }
 
-// ─── Server push (future backend / VAPID integration) ──────────────────────
+// ─── Push serveur (Web Push VAPID, functions/index.js → envoyerPush) ───────
+// Charge utile : {title, body, url, tag, type}. Chiffrée de bout en bout par
+// le protocole : seul ce worker la lit. Le serveur applique déjà le plafond
+// (1/jour) et les heures calmes ; ici, on AFFICHE — une notification push
+// silencieuse est interdite (userVisibleOnly) et Chrome la remplacerait par
+// « Ce site a été mis à jour en arrière-plan ».
+// PURE. Une adresse sûre : relative à l'app, ou de la même origine. Une URL
+// externe dans un push compromis n'ouvrira jamais une autre page.
+function swUrlSure(u) {
+  if (typeof u !== 'string' || !u) return './';
+  try {
+    const x = new URL(u, self.registration.scope);
+    if (x.origin !== new URL(self.registration.scope).origin) return './';
+    return x.pathname.startsWith(new URL(self.registration.scope).pathname) ? x.href : './';
+  } catch (e) { return './'; }
+}
 self.addEventListener('push', e => {
-  const d = e.data?.json() || {};
-  e.waitUntil(self.registration.showNotification(d.title || 'RepCore 💪', {
-    body: d.body || 'Rappel RepCore.',
-    icon: './icons/icon-192x192.png',
-    badge: './icons/icon-192x192.png',
-    tag: d.tag || 'repcore',
-    data: { url: d.url || './' }
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; }
+  catch (err) { try { d = { body: e.data.text() }; } catch (e2) { d = {}; } }
+  if (!d || typeof d !== 'object') d = {};
+  const titre = String(d.title || 'RepCore').slice(0, 80);
+  e.waitUntil(self.registration.showNotification(titre, {
+    body: String(d.body || '').slice(0, 240),
+    icon: d.icon && swUrlSure(d.icon) !== './' ? swUrlSure(d.icon) : './icons/icon-192x192.png',
+    badge: './icons/icon-96x96.png',
+    tag: String(d.tag || ('push-' + (d.type || 'repcore'))).slice(0, 64),
+    renotify: false,
+    requireInteraction: false,
+    data: { url: swUrlSure(d.url), type: d.type || null }
   }));
 });

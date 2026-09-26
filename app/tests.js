@@ -42733,13 +42733,15 @@ async function testExercices(){
         ?true:_echec('le conteneur a disparu de l’ecran de fin');})());
 
     // LES DEUX POINTS D'APPEL HISTORIQUES RESTENT : cette carte s'ajoute, elle
-    // ne remplace rien. Les trois comptent le meme evenement notif_granted.
-    ok('Les trois points d’accord comptent le meme evenement',(()=>{
+    // ne remplace rien. Le bouton « Activer sur cet appareil » des réglages
+    // (Web Push, 26/09/2026) en est le quatrième. Tous comptent le meme
+    // evenement notif_granted.
+    ok('Les quatre points d’accord comptent le meme evenement',(()=>{
       const prod=_prodSrc();
       const n=(prod.match(/rcm\('notif_granted'\)/g)||[]).length;
-      if(n!==3) return _echec(n+' point(s) d’appel sur 3');
+      if(n!==4) return _echec(n+' point(s) d’appel sur 4');
       const d=(prod.match(/Notification\.requestPermission\(\)/g)||[]).length;
-      return d===3?true:_echec(d+' appel(s) a requestPermission au lieu de 3');})());
+      return d===4?true:_echec(d+' appel(s) a requestPermission au lieu de 4');})());
     ok('La question des jours ne se pose qu’au nouvel inscrit',(()=>{
       const J=864e5, t=Date.parse('2026-09-15T12:00:00Z');
       const A=o=>Object.assign({email:'a@t.fr',role:'athlete',createdAt:t-2*J},o);
@@ -48307,6 +48309,62 @@ async function testExercices(){
         const ok1=_bdgFile.length===2&&_bdgFile[0].serie===4&&_bdgFile[1]==='quatre-semaines';
         return ok1?true:_echec(JSON.stringify(_bdgFile));
       } finally { clearTimeout(_bdgMinuterie); _bdgMinuterie=null; _bdgFile=svF; _bdgRecap=svR; }})());
+
+    // ── Web Push ─────────────────────────────────────────────────────────
+    ok('Push : la clé VAPID publique décode en 65 octets (point P-256 non compressé)',(()=>{
+      const o=pushB64VersOctets(VAPID_PUBLIQUE);
+      return (o.length===65&&o[0]===4)?true:_echec(o.length+' octets, premier '+o[0]);})());
+    ok('Push : l’identifiant de souscription est stable, distinct, et conforme à la règle',(()=>{
+      const a=pushIdSouscription('https://fcm.googleapis.com/fcm/send/abc'),
+        b=pushIdSouscription('https://fcm.googleapis.com/fcm/send/abd');
+      if(!/^[a-z0-9]{6,24}$/.test(a)) return _echec(a);
+      if(a!==pushIdSouscription('https://fcm.googleapis.com/fcm/send/abc')) return _echec('instable');
+      return (a!==b&&pushEmpreinte(VAPID_PUBLIQUE).length<=12)?true:_echec('collision '+a);})());
+    ok('Push : iOS hors de l’app installée ne propose QUE l’installation',(()=>{
+      const e=[
+        [{ios:true,autonome:false,supporte:true,permission:'default'},'installer'],
+        [{ios:true,autonome:false,supporte:false,permission:null},'installer'],
+        [{ios:true,autonome:true,supporte:true,permission:'default'},'proposer'],
+        [{ios:false,supporte:false},'indispo'],
+        [{ios:false,supporte:true,permission:'denied'},'refuse'],
+        [{ios:false,supporte:true,permission:'granted',abonne:true},'actif'],
+        [{ios:false,supporte:true,permission:'granted',abonne:false},'proposer']];
+      const f=e.filter(([x,r])=>pushEtat(x)!==r);
+      return f.length?_echec(JSON.stringify(f.map(([x])=>[x,pushEtat(x)]))):true;})());
+    ok('Push : sur iOS, pas d’abonnement sans geste ni hors de l’app installée',(()=>{
+      const ios={ios:true,supporte:true};
+      if(pushPeutAbonner(Object.assign({autonome:false},ios),true)) return _echec('onglet Safari abonné');
+      if(pushPeutAbonner(Object.assign({autonome:true},ios),false)) return _echec('abonné sans geste');
+      if(!pushPeutAbonner(Object.assign({autonome:true},ios),true)) return _echec('app installée + geste refusés');
+      if(!pushPeutAbonner({ios:false,supporte:true},false)) return _echec('Android sans geste, permission déjà là');
+      return /pushPeutAbonner\(env,!!o\.geste\)/.test(String(pushAbonner))?true:_echec('pushAbonner ne consulte pas la règle');})());
+    ok('Push : chaque type se coupe, tout est allumé par défaut',(()=>{
+      const svU=currentUser, svS=saveUser;
+      try{
+        currentUser={email:'p@test.fr'}; saveUser=()=>{};
+        if(!PUSH_TYPES.every(t=>pushTypeActif(currentUser,t.cle))) return _echec('défaut');
+        basculerPushType('defi',false);
+        if(pushTypeActif(currentUser,'defi')||currentUser.pushPrefs.defi!==false) return _echec('non coupé');
+        basculerPushType('defi',true);
+        if(!pushTypeActif(currentUser,'defi')||'defi' in currentUser.pushPrefs) return _echec('non rallumé');
+        if(basculerPushType('inconnu',false)) return _echec('type inconnu accepté');
+        return PUSH_TYPES.map(t=>t.cle).sort().join()==='badge,bilan,coach,defi,filleul,serie,wrapped'?true:_echec('types');
+      } finally { currentUser=svU; saveUser=svS; }})());
+    ok('Push : l’écran de réglages — une case par type, le bouton seulement quand il sert',(()=>{
+      const d=document.createElement('div');
+      d.innerHTML=htmlReglagesPush({pushPrefs:{serie:false}},'proposer');
+      const c=d.querySelectorAll('input[type=checkbox][data-push]');
+      if(c.length!==7) return _echec(c.length+' cases');
+      if(d.querySelector('[data-push=serie]').checked||!d.querySelector('[data-push=coach]').checked) return _echec('état des cases');
+      const b=d.querySelector('button');
+      if(!b||!b.classList.contains('btn-casse')) return _echec('bouton d’activation (R31 : btn-casse)');
+      d.innerHTML=htmlReglagesPush({},'installer');
+      if(d.querySelector('button')) return _echec('bouton proposé hors de l’app installée');
+      return /écran d’accueil/.test(d.textContent)?true:_echec('aide iOS absente');})());
+    ok('Push : pushPrefs est classé non-santé, et coupe aussi le rappel local',(()=>{
+      if(CHAMPS_NON_SANTE.indexOf('pushPrefs')<0) return _echec('pushPrefs non classé');
+      const src=String(_seriePlanifierNotif);
+      return /pushTypeActif\(u,'serie'\)/.test(src)?true:_echec('rappel local série');})());
 
     ok('Les badges n’ont que quatre points d’appel',(()=>{
       const s=_prodSrc().replace(/\/\/[^\r\n]*/g,'');

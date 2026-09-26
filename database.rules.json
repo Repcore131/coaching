@@ -544,6 +544,7 @@
             "texte":   { ".validate": "newData.isString() && newData.val().length <= 1000" },
             "lien":    { ".validate": "newData.isString() && newData.val().length <= 500" },
             "epingle": { ".validate": "newData.isBoolean()" },
+            "defi":    { ".validate": "newData.isBoolean()" },
             "$autre":  { ".validate": false }
           }
         },
@@ -1022,6 +1023,36 @@
     //   une console peut se declarer « ultime » et lire les fiches. C'est deja
     //   vrai de tout le reste sans fonctions, et la seule barriere qui ne se
     //   trafique pas reste droits/, ecrit a la main depuis la console Firebase.
+    // ── WEB PUSH : LES ABONNEMENTS ──────────────────────────────────────
+    // Un abonnement par appareil : /push/<cleEmail>/<id>. Le TITULAIRE seul le
+    // lit et l ecrit (s abonner, se desabonner) ; les fonctions (Admin SDK)
+    // le lisent pour envoyer et le suppriment quand le service de push
+    // repond 404/410. PAS sous /users : le dossier y est reecrit en entier a
+    // chaque synchronisation, un noeud pose a cote serait efface.
+    "push": {
+      "$emailKey": {
+        ".read":  "auth != null && auth.token.email.replace('.', ',') === $emailKey",
+        ".write": "auth != null && auth.token.email.replace('.', ',') === $emailKey",
+        "$id": {
+          ".validate": "$id.matches(/^[a-z0-9]{6,24}$/) && newData.hasChildren(['endpoint', 'keys'])",
+          "endpoint":   { ".validate": "newData.isString() && newData.val().matches(/^https:\\/\\//) && newData.val().length <= 1000" },
+          "keys": {
+            "p256dh": { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "auth":   { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "$autre": { ".validate": false }
+          },
+          "cree":       { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "plateforme": { ".validate": "newData.isString() && newData.val().length <= 20" },
+          "vapid":      { ".validate": "newData.isString() && newData.val().length <= 12" },
+          "$autre":     { ".validate": false }
+        }
+      }
+    },
+    // Le journal du plafond (1 push par jour) et les messages mis de cote
+    // pendant les heures calmes : SERVEUR SEULEMENT.
+    "push_log":     { ".read": false, ".write": false },
+    "push_attente": { ".read": false, ".write": false },
+
     // ── LA RARETE DES BADGES ────────────────────────────────────────────
     // Ecrite chaque nuit par la fonction planifiee statsBadges (Admin SDK, qui
     // ne passe pas par les regles) : { maj, total, pct: { idBadge: 4.2 } }.

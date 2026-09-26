@@ -1084,3 +1084,251 @@ exports.statsBadges = onSchedule(
     if (!r.total) return;
     await db.ref("stats/badges").set({ maj: Date.now(), total: r.total, pct: r.pct });
   });
+
+// ══ WEB PUSH ═══════════════════════════════════════════════════════════════
+//
+// Les notifications SERVEUR : elles partent même quand l'application est
+// fermée, iPhone compris (application installée, iOS 16.4+), là où la
+// notification locale du service worker ne part que sur Android.
+//
+// LES CLÉS VAPID. La publique est ci-dessous et dans le client
+// (VAPID_PUBLIQUE, app/rc-core.*.js) : elle est faite pour être publique. La
+// PRIVÉE n'est JAMAIS dans le dépôt : c'est un secret Functions,
+//   firebase functions:secrets:set VAPID_PRIVATE_KEY
+// Changer de paire, c'est changer les deux, et tous les abonnés devront se
+// réabonner (le client le fait seul quand la clé publique change).
+//
+// OÙ VIVENT LES ABONNEMENTS : /push/<cléEmail>/<id> = {endpoint, keys, cree,
+// plateforme}. Pas sous /users/<cléEmail>/push : le dossier est réécrit EN
+// ENTIER (PUT) à chaque synchronisation, et un nœud posé à côté par un autre
+// chemin y serait effacé au premier envoi. Les réglages (types coupés),
+// eux, sont dans le dossier : users/<cléEmail>/pushPrefs = {type: false}.
+//
+// LE PLAFOND : UN push par jour et par personne (journal /push_log), aucun
+// entre 21 h et 8 h heure de Paris — un message tombé la nuit attend 8 h
+// dans /push_attente (le plus récent seulement), puis part s'il reste de la
+// place dans la journée.
+const webpush = require("web-push");
+const { onValueCreated, onValueWritten } = require("firebase-functions/v2/database");
+const VAPID_PRIVATE_KEY = defineSecret("VAPID_PRIVATE_KEY");
+const VAPID_PUBLIQUE = "BEQvHnCStyK010R_ETviq4nAcu5PPTktlDX3AW245J60sLsMZdxe50t1N7Xs3WlYdY5FkMNRxtC71cHKi2DtZw0";
+const PUSH_TYPES = ["serie", "wrapped", "bilan", "badge", "coach", "filleul", "defi"];
+// La base par défaut vit en us-central1 : ses déclencheurs doivent y être
+// déployés, quel que soit setGlobalOptions.
+const DB_REGION = "us-central1";
+
+// PURE. L'heure, le jour et la date à Paris — l'heure du serveur est UTC.
+function _paris(t) {
+  const f = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit",
+    day: "2-digit", hour: "2-digit", minute: "2-digit", weekday: "short", hour12: false });
+  const p = {};
+  for (const x of f.formatToParts(new Date(t))) p[x.type] = x.value;
+  return { jour: p.year + "-" + p.month + "-" + p.day, heure: Number(p.hour) % 24, minute: Number(p.minute),
+    annee: Number(p.year), mois: Number(p.month), date: Number(p.day) };
+}
+// PURE. Heures calmes : de 21 h à 8 h, heure de Paris.
+function heuresCalmes(t) { const h = _paris(t).heure; return h >= 21 || h < 8; }
+// PURE. Le lundi (AAAA-MM-JJ, heure de Paris) de la semaine de t : même forme
+// que streakWeek côté client.
+function lundiParis(t) {
+  const p = _paris(t);
+  const d = new Date(Date.UTC(p.annee, p.mois - 1, p.date));
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+// PURE. Peut-on envoyer ? {ok, raison}. prefs : users/<k>/pushPrefs ;
+// log : /push_log/<k> = {jour}.
+function pushAutorise(type, prefs, log, t) {
+  if (PUSH_TYPES.indexOf(type) < 0) return { ok: false, raison: "type" };
+  if (prefs && prefs[type] === false) return { ok: false, raison: "coupe" };
+  if (heuresCalmes(t)) return { ok: false, raison: "calme" };
+  if (log && log.jour === _paris(t).jour) return { ok: false, raison: "plafond" };
+  return { ok: true, raison: null };
+}
+
+/**
+ * Envoie UN push à une personne, sur tous ses appareils.
+ * @param {string} uid  la clé email (points remplacés par des virgules)
+ * @param {{type:string,title:string,body:string,url?:string,tag?:string}} message
+ * @param {{attendre?:boolean}} [o]  attendre : mis de côté s'il tombe en heures calmes
+ * @returns {Promise<{envoye:number,raison:?string}>}
+ */
+async function envoyerPush(uid, message, o) {
+  const t = Date.now();
+  const type = String((message && message.type) || "");
+  const [prefsS, logS] = await Promise.all([
+    db.ref("users/" + uid + "/pushPrefs").get(), db.ref("push_log/" + uid).get()]);
+  const ok = pushAutorise(type, prefsS.val(), logS.val(), t);
+  if (!ok.ok) {
+    if (ok.raison === "calme" && (!o || o.attendre !== false))
+      await db.ref("push_attente/" + uid).set(Object.assign({}, message, { at: t }));
+    return { envoye: 0, raison: ok.raison };
+  }
+  const subsS = await db.ref("push/" + uid).get();
+  const subs = subsS.val() || {};
+  const ids = Object.keys(subs);
+  if (!ids.length) return { envoye: 0, raison: "aucun_abonnement" };
+  // LE JOURNAL D'ABORD, en transaction : deux déclencheurs simultanés ne
+  // passent pas tous les deux sous le plafond.
+  const jour = _paris(t).jour;
+  const tx = await db.ref("push_log/" + uid).transaction(cur =>
+    (cur && cur.jour === jour) ? undefined : { jour, at: t, type });
+  if (!tx.committed) return { envoye: 0, raison: "plafond" };
+  webpush.setVapidDetails("mailto:" + CREATOR_EMAIL, VAPID_PUBLIQUE, VAPID_PRIVATE_KEY.value());
+  const charge = JSON.stringify({ title: message.title, body: message.body || "",
+    url: message.url || "./", tag: message.tag || ("rc-" + type), type });
+  let envoye = 0;
+  await Promise.all(ids.map(async id => {
+    const s = subs[id];
+    if (!s || !s.endpoint || !s.keys) return;
+    try {
+      await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, charge, { TTL: 24 * 3600 });
+      envoye++;
+    } catch (e) {
+      // 404 / 410 : l'abonnement n'existe plus (appli désinstallée, permission
+      // retirée). On le supprime — sinon on y enverrait pour toujours.
+      if (e && (e.statusCode === 404 || e.statusCode === 410)) await db.ref("push/" + uid + "/" + id).remove();
+    }
+  }));
+  // Rien n'est parti : la place du jour est rendue.
+  if (!envoye) await db.ref("push_log/" + uid).remove();
+  return { envoye, raison: envoye ? null : "echec" };
+}
+
+// Les clés des personnes qui ont au moins un abonnement : /push est petit, on
+// le lit en shallow — jamais /users en entier.
+async function _abonnes() {
+  try {
+    const jeton = await admin.credential.applicationDefault().getAccessToken();
+    const racine = db.ref().toString().replace(/\/$/, "");
+    const r = await fetch(racine + "/push.json?shallow=true&access_token=" + encodeURIComponent(jeton.access_token));
+    if (r.ok) { const d = await r.json(); return d ? Object.keys(d) : []; }
+  } catch (e) { /* repli */ }
+  const s = await db.ref("push").get();
+  return Object.keys(s.val() || {});
+}
+async function _lire(uid, champ) { return (await db.ref("users/" + uid + "/" + champ).get()).val(); }
+const _optsPlanifie = { timeZone: "Europe/Paris", secrets: [VAPID_PRIVATE_KEY], timeoutSeconds: 540, memory: "512MiB" };
+
+// ── SÉRIE EN DANGER : jeudi 18 h ───────────────────────────────────────────
+// La semaine n'est pas validée (streakWeek n'est pas son lundi), et il y a
+// une série à perdre. Hors suspension.
+// ⚠ LE TAG EST CELUI DE LA NOTIFICATION LOCALE (sw.js, swCheckSerie :
+// 'serie-<lundi>-jeu'), comme celui du Wrapped ('wrapped-<clé>') : si les deux
+// arrivent, la seconde REMPLACE la première au lieu de s'y ajouter. Le rappel
+// local reste le filet quand les Functions ne sont pas déployées.
+exports.pushSerieEnDanger = onSchedule(Object.assign({ schedule: "0 18 * * 4" }, _optsPlanifie), async () => {
+  const lundi = lundiParis(Date.now());
+  for (const uid of await _abonnes()) {
+    const [streak, semaine, susp, fname, jokers] = await Promise.all(["streak", "streakWeek", "suspension", "fname", "streakJokers"].map(c => _lire(uid, c)));
+    if (!(Number(streak) > 0) || semaine === lundi || (susp && susp.actif)) continue;
+    const n = Number(streak);
+    await envoyerPush(uid, { type: "serie", url: "./?wo=1", tag: "serie-" + lundi + "-jeu",
+      title: "Ta série de " + n + " semaine" + (n > 1 ? "s" : "") + " est en danger",
+      body: (fname ? fname + ", il" : "Il") + " te reste jusqu’à dimanche pour valider ta semaine."
+        + (Number(jokers) > 0 ? " Ton joker la sauverait, mais garde-le pour un vrai coup dur." : "") }, { attendre: false });
+  }
+});
+
+// ── WRAPPED PRÊT : le 1er du mois, 10 h ───────────────────────────────────
+// Seulement pour qui s'est entraîné le mois écoulé (lastSession).
+exports.pushWrappedPret = onSchedule(Object.assign({ schedule: "0 10 1 * *" }, _optsPlanifie), async () => {
+  const p = _paris(Date.now());
+  const moisPrec = p.mois === 1 ? 12 : p.mois - 1, anPrec = p.mois === 1 ? p.annee - 1 : p.annee;
+  const debut = Date.UTC(anPrec, moisPrec - 1, 1) - 2 * 3600e3;
+  const cle = "m-" + anPrec + "-" + String(moisPrec).padStart(2, "0");
+  const nom = new Date(Date.UTC(anPrec, moisPrec - 1, 15)).toLocaleDateString("fr-FR", { month: "long", timeZone: "Europe/Paris" });
+  for (const uid of await _abonnes()) {
+    const der = Number(await _lire(uid, "lastSession")) || 0;
+    if (der < debut) continue;
+    await envoyerPush(uid, { type: "wrapped", url: "./?wrapped=" + cle, tag: "wrapped-" + cle,
+      title: "Ton mois de " + nom + " est prêt", body: "Tes chiffres, tes records et ton profil t’attendent." });
+  }
+});
+
+// ── RAPPEL DE BILAN : samedi 10 h ─────────────────────────────────────────
+// Le dernier bilan date de plus de 13 jours (quinzaine par défaut).
+exports.pushRappelBilan = onSchedule(Object.assign({ schedule: "0 10 * * 6" }, _optsPlanifie), async () => {
+  const t = Date.now();
+  for (const uid of await _abonnes()) {
+    const role = await _lire(uid, "role");
+    if (role === "coach") continue;
+    const s = await db.ref("users/" + uid + "/bilans").orderByKey().limitToLast(1).get();
+    let der = 0; s.forEach(c => { der = Number((c.val() || {}).date) || 0; });
+    if (der && t - der < 13 * 864e5) continue;
+    const fname = await _lire(uid, "fname");
+    await envoyerPush(uid, { type: "bilan", url: "./?bilan=1", tag: "bilan-" + _paris(t).jour,
+      title: "C’est l’heure de ton bilan", body: (fname ? fname + ", 10" : "10") + " minutes quand tu as le temps ce week-end." });
+  }
+});
+
+// ── BADGE PROCHE : dimanche 17 h ──────────────────────────────────────────
+// ASSIDU (séances terminées) : à deux séances ou moins du palier suivant. Le
+// nombre de séances se lit en shallow — jamais l'historique lui-même.
+const ASSIDU_SEUILS = [10, 50, 100, 250];
+exports.pushBadgeProche = onSchedule(Object.assign({ schedule: "0 17 * * 0" }, _optsPlanifie), async () => {
+  const jeton = await admin.credential.applicationDefault().getAccessToken();
+  const racine = db.ref().toString().replace(/\/$/, "");
+  for (const uid of await _abonnes()) {
+    let n = 0;
+    try {
+      const r = await fetch(racine + "/users/" + encodeURIComponent(uid) + "/sessions.json?shallow=true&access_token=" + encodeURIComponent(jeton.access_token));
+      if (r.ok) n = Object.keys((await r.json()) || {}).length;
+    } catch (e) { continue; }
+    const seuil = ASSIDU_SEUILS.find(x => x > n);
+    if (!seuil || seuil - n > 2) continue;
+    const reste = seuil - n, palier = ["I", "II", "III", "IV"][ASSIDU_SEUILS.indexOf(seuil)];
+    await envoyerPush(uid, { type: "badge", url: "./", tag: "badge-assidu-" + palier,
+      title: "Encore " + reste + " séance" + (reste > 1 ? "s" : "") + " pour ASSIDU " + palier,
+      body: "Le badge est à portée de main cette semaine." });
+  }
+});
+
+// ── LES MESSAGES MIS DE CÔTÉ la nuit : 8 h 05 ─────────────────────────────
+exports.pushApresHeuresCalmes = onSchedule(Object.assign({ schedule: "5 8 * * *" }, _optsPlanifie), async () => {
+  const s = await db.ref("push_attente").get();
+  const tout = s.val() || {};
+  for (const uid of Object.keys(tout)) {
+    const m = tout[uid];
+    await db.ref("push_attente/" + uid).remove();
+    // Au-delà de 12 h, le message a perdu son sens : on ne l'envoie pas.
+    if (!m || Date.now() - (Number(m.at) || 0) > 12 * 3600e3) continue;
+    await envoyerPush(uid, m, { attendre: false });
+  }
+});
+
+// ── DÉCLENCHEURS ──────────────────────────────────────────────────────────
+const _optsDecl = { region: DB_REGION, secrets: [VAPID_PRIVATE_KEY] };
+// RÉPONSE DU COACH à un bilan : reponseCoach passe de vide à écrit.
+exports.pushReponseCoachBilan = onValueWritten(Object.assign({ ref: "/users/{uid}/bilans/{i}/reponseCoach" }, _optsDecl), async (ev) => {
+  const avant = ev.data.before.val(), apres = ev.data.after.val();
+  if (!apres || avant) return;
+  await envoyerPush(ev.params.uid, { type: "coach", url: "./", tag: "coach-bilan-" + ev.params.i,
+    title: "Ton coach a répondu à ton bilan", body: String(apres).slice(0, 120) });
+});
+// … et à un bilan de fin de cycle (rite).
+exports.pushReponseCoachRite = onValueWritten(Object.assign({ ref: "/users/{uid}/rites/{i}/reponseCoach" }, _optsDecl), async (ev) => {
+  const avant = ev.data.before.val(), apres = ev.data.after.val();
+  if (!apres || avant) return;
+  await envoyerPush(ev.params.uid, { type: "coach", url: "./", tag: "coach-rite-" + ev.params.i,
+    title: "Ton coach a répondu à ton bilan de cycle", body: String(apres).slice(0, 120) });
+});
+// FILLEUL INSCRIT : /parrainage/<parrain>/filleuls/<filleul>. ⚠ Le parrainage
+// n'existe pas encore dans l'application : ce déclencheur attend son nœud, et
+// ne coûte rien tant que rien n'y est écrit.
+exports.pushFilleulInscrit = onValueCreated(Object.assign({ ref: "/parrainage/{parrain}/filleuls/{filleul}" }, _optsDecl), async (ev) => {
+  const f = ev.data.val() || {};
+  await envoyerPush(ev.params.parrain, { type: "filleul", url: "./", tag: "filleul-" + ev.params.filleul,
+    title: "Ton filleul vient de s’inscrire", body: (f.fname ? f.fname + " a" : "Quelqu’un a") + " rejoint RepCore grâce à toi." });
+});
+// NOUVEAU DÉFI DANS LE CANAL : un message du coach marqué defi:true. Les
+// destinataires sont ses athlètes, lus dans l'annuaire du coach.
+exports.pushDefiCanal = onValueCreated(Object.assign({ ref: "/canaux/{coach}/messages/{msg}" }, _optsDecl), async (ev) => {
+  const m = ev.data.val() || {};
+  if (m.defi !== true) return;
+  const a = await db.ref("annuaire_coach/" + ev.params.coach).get();
+  for (const uid of Object.keys(a.val() || {}))
+    await envoyerPush(uid, { type: "defi", url: "./", tag: "defi-" + ev.params.msg,
+      title: "Nouveau défi : " + String(m.titre || "ton coach te lance un défi").slice(0, 60),
+      body: String(m.texte || "").slice(0, 120) });
+});
