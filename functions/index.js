@@ -442,6 +442,12 @@ exports.verifyPaypalSubscription = onCall({ secrets: [PAYPAL_CLIENT_SECRET] }, a
   //   l'etre sans qu'un euro soit passe.
   if (offre.demi) champs.demiPackUtilise = true;
   await ecrireDroits(key, champs);
+  // LE PARRAINAGE : seulement si de l'argent est VRAIMENT passé (un
+  // abonnement ACTIVE à essai gratuit côté PayPal n'a rien payé).
+  try {
+    const dernier = sub.billing_info && sub.billing_info.last_payment;
+    if (dernier && Number(dernier.amount && dernier.amount.value) > 0) await parrainagePaiement(key, "paypal_abonnement");
+  } catch (e) { console.error("parrainage", e); }
   return { ok: true };
 });
 
@@ -818,6 +824,9 @@ exports.paypalWebhook = onRequest(
           source: "paypal",
           abonnement: String(ress.id || ress.billing_agreement_id || "").slice(0, 64),
         });
+        // Un encaissement, pas une simple activation : c'est lui qui compte
+        // pour le parrainage (premier paiement seulement, voir parrainagePaiement).
+        if (type === "PAYMENT.SALE.COMPLETED") await parrainagePaiement(cle, "paypal_vente").catch((e) => console.error("parrainage", e));
       } else if (type === "BILLING.SUBSCRIPTION.CANCELLED" || type === "BILLING.SUBSCRIPTION.EXPIRED"
               || type === "BILLING.SUBSCRIPTION.SUSPENDED") {
         // ⚠ ON NE COUPE PAS LE JOUR MEME. Un abonnement annule reste ouvert
@@ -837,6 +846,7 @@ exports.paypalWebhook = onRequest(
           echeance: prolonger(actuel && actuel.echeance, MONTH_MS),
           source: "paypal_achat",
         });
+        if (type === "PAYMENT.CAPTURE.COMPLETED") await parrainagePaiement(cle, "paypal_achat").catch((e) => console.error("parrainage", e));
       }
     } catch (e) {
       res.status(500).send("ecriture impossible"); return;
@@ -953,9 +963,12 @@ exports.ouvrirEssai = onCall(async (request) => {
     return { ouvert: false, raison: "acces", palier: deja.palier };
   }
   const t = Date.now();
-  const fin = t + jours * 86400000;
+  // LE MOIS D'ESSAI DU PARRAINAGE : posé par parrainageDemande quand l'essai
+  // n'était pas encore ouvert. Jamais demandé par le client.
+  const bonus = Math.max(0, Math.min(60, Number(deja && deja.bonusEssaiJours) || 0));
+  const fin = t + (jours + bonus) * 86400000;
   await ecrireDroits(cle, {
-    palier: "ultime", echeance: fin, essaiOuvertLe: t, essaiFinit: fin, source: "essai",
+    palier: "ultime", echeance: fin, essaiOuvertLe: t, essaiFinit: fin, source: "essai", bonusEssaiJours: null,
   });
   return { ouvert: true, essaiFinit: fin };
 });
@@ -1316,10 +1329,11 @@ exports.pushReponseCoachRite = onValueWritten(Object.assign({ ref: "/users/{uid}
 // FILLEUL INSCRIT : /parrainage/<parrain>/filleuls/<filleul>. ⚠ Le parrainage
 // n'existe pas encore dans l'application : ce déclencheur attend son nœud, et
 // ne coûte rien tant que rien n'y est écrit.
-exports.pushFilleulInscrit = onValueCreated(Object.assign({ ref: "/parrainage/{parrain}/filleuls/{filleul}" }, _optsDecl), async (ev) => {
+exports.pushFilleulInscrit = onValueCreated(Object.assign({ ref: "/parrainage/comptes/{parrain}/filleuls/{filleul}" }, _optsDecl), async (ev) => {
   const f = ev.data.val() || {};
-  await envoyerPush(ev.params.parrain, { type: "filleul", url: "./", tag: "filleul-" + ev.params.filleul,
-    title: "Ton filleul vient de s’inscrire", body: (f.fname ? f.fname + " a" : "Quelqu’un a") + " rejoint RepCore grâce à toi." });
+  await envoyerPush(ev.params.parrain, { type: "filleul", url: "./?parrainage=1", tag: "filleul-" + ev.params.filleul,
+    title: (f.prenom ? f.prenom + " vient" : "Ton filleul vient") + " de s’inscrire avec ton code",
+    body: "Son premier paiement t’offrira 1 mois de RepCore ⚡" });
 });
 // NOUVEAU DÉFI DANS LE CANAL : un message du coach marqué defi:true. Les
 // destinataires sont ses athlètes, lus dans l'annuaire du coach.
@@ -1488,3 +1502,114 @@ exports.defisQuotidien = onSchedule(Object.assign({ schedule: "0 9 * * *" }, _op
     }
   }
 });
+
+// ══ LE PARRAINAGE ══════════════════════════════════════════════════════════
+//
+// LES NŒUDS (règles : database.rules.json, bloc « parrainage ») :
+//   /parrainage/codes/<CODE>            → clé du parrain  (le parrain, une fois ; jamais relu par un client)
+//   /parrainage/codesPublics/<CODE>     → {prenom}        (le parrain, une fois ; lu à l'inscription)
+//   /parrainage/appareils/<id>          → clé             (le premier compte qui s'en sert)
+//   /parrainage/demandes/<filleul>      → {code, le, appareil}  (le filleul, UNE fois) + {etat, raison} (ici)
+//   /parrainage/comptes/<clé>           → {code (le titulaire, une fois), filleuls:{id:{date, statut, prenom}},
+//                                          moisGagnes, payants, mentorLe, parrain:{code, le}}  (ICI SEULEMENT)
+//   /parrainage/liens/<filleul>         → {parrain, id}   (ICI SEULEMENT, lu par personne)
+//   /parrainage/emails/<adresse normalisée> → filleul (ICI SEULEMENT)
+//   /parrainage/evenements/<parrain>/<id>  → {type, at, prenom, mois}  (ICI ; lu par le parrain)
+//
+// Le filleul reçoit son mois d'essai en plus dès que sa demande est acceptée ;
+// le PARRAIN ne reçoit rien tant que le filleul n'a pas payé (anti-fraude).
+const P = require("./parrainage-calcul");
+const BONUS_ESSAI_JOURS = 30;   // = OFFRES.essai_parrainage (1 mois) côté client
+
+async function _val(chemin) { return (await db.ref(chemin).get()).val(); }
+
+exports.parrainageDemande = onValueCreated(Object.assign({ ref: "/parrainage/demandes/{uid}" }, _optsDecl), async (ev) => {
+  const uid = ev.params.uid;
+  const d = ev.data.val() || {};
+  const t = Date.now();
+  const code = String(d.code || "").toUpperCase();
+  const parrain = P.CODE_RE.test(code) ? await _val("parrainage/codes/" + code) : null;
+  const filleulEmail = P.cleVersEmail(uid);
+  const [appareil, lien, emailVu, droits, creeLe, prenom] = await Promise.all([
+    d.appareil ? _val("parrainage/appareils/" + String(d.appareil).replace(/[^a-z0-9]/g, "")) : null,
+    _val("parrainage/liens/" + uid),
+    _val("parrainage/emails/" + P.cleNormalisee(filleulEmail)),
+    lireDroits(uid),
+    _val("users/" + uid + "/createdAt"),
+    _val("users/" + uid + "/fname")]);
+  const dec = P.deciderRattachement(Object.assign({}, d, { code }), {
+    filleul: uid, filleulEmail, parrain, parrainEmail: parrain ? P.cleVersEmail(parrain) : "",
+    appareilsParrain: (appareil && appareil === parrain) ? { [d.appareil]: true } : {},
+    dejaFilleul: !!lien, emailDejaVu: !!emailVu, creeLe, maintenant: t,
+    dejaPaye: !!(droits && /^paypal/.test(String(droits.source || "")))
+  });
+  const dem = "parrainage/demandes/" + uid;
+  if (!dec.ok) { await db.ref(dem).update({ etat: "refuse", raison: dec.raison, traiteLe: t }); return; }
+  const id = P.idFilleul(uid);
+  const nom = String(prenom || "").trim().slice(0, 24);
+  await db.ref().update({
+    ["parrainage/comptes/" + parrain + "/filleuls/" + id]: { date: t, statut: "inscrit", prenom: nom || null },
+    ["parrainage/comptes/" + uid + "/parrain"]: { code, le: t },
+    ["parrainage/liens/" + uid]: { parrain, id },
+    ["parrainage/emails/" + P.cleNormalisee(filleulEmail)]: uid,
+    [dem + "/etat"]: "accepte", [dem + "/traiteLe"]: t
+  });
+  // LE MOIS D'ESSAI EN PLUS. Essai déjà ouvert : il s'allonge. Pas encore :
+  // ouvrirEssai l'ajoutera à l'ouverture.
+  if (droits && Number(droits.essaiOuvertLe) > 0 && Number(droits.essaiFinit) > 0) {
+    const fin = Number(droits.essaiFinit) + BONUS_ESSAI_JOURS * 864e5;
+    const champs = { essaiFinit: fin };
+    if (droits.source === "essai") champs.echeance = Math.max(Number(droits.echeance) || 0, fin);
+    await ecrireDroits(uid, champs);
+  } else if (!droits || !droits.palier || droits.palier === "aucun") {
+    await db.ref("droits/" + uid + "/bonusEssaiJours").set(BONUS_ESSAI_JOURS);
+  }
+});
+
+/**
+ * LE PREMIER PAIEMENT D'UN FILLEUL : son statut passe à « payant », son
+ * parrain gagne 1 mois (prolongation de ses droits), un événement est écrit
+ * et le parrain est prévenu. Au 10e filleul payant : 1 mois d'Ultime en plus.
+ * Idempotent (transaction) : le webhook et l'appel du client peuvent tomber
+ * ensemble, un seul mois est donné. Rien aux renouvellements.
+ */
+async function parrainagePaiement(cle, source) {
+  const lien = await _val("parrainage/liens/" + cle);
+  if (!lien || !lien.parrain || !lien.id) return null;
+  const t = Date.now();
+  const prenom = await _val("users/" + cle + "/fname");
+  let res = null;
+  const tx = await db.ref("parrainage/comptes/" + lien.parrain).transaction((compte) => {
+    const c = compte || {};
+    const p = P.premierPaiement(c, lien.id, t);
+    if (!p) return undefined;                       // déjà payant : rien
+    res = p;
+    const f = Object.assign({}, c.filleuls[lien.id], p.filleul);
+    if (prenom && !f.prenom) f.prenom = String(prenom).slice(0, 24);
+    const out = Object.assign({}, c, { moisGagnes: p.moisGagnes, payants: p.payants,
+      filleuls: Object.assign({}, c.filleuls, { [lien.id]: f }) });
+    if (p.mentor) out.mentorLe = t;
+    return out;
+  });
+  if (!tx.committed || !res) return null;
+  if (prenom) res.prenom = String(prenom).trim().slice(0, 24) || res.prenom;
+  // LE MOIS OFFERT : les droits du parrain sont PROLONGÉS d'un mois, au palier
+  // qu'il a (Essentielle s'il n'en a aucun). La facturation PayPal n'est pas
+  // touchée — voir le commit « Parrainage » pour l'engagement de 12 mois.
+  const d = (await lireDroits(lien.parrain)) || {};
+  const palier = (d.palier && d.palier !== "aucun" && !(Number(d.echeance) > 0 && Number(d.echeance) < t)) ? d.palier : "essentielle";
+  const champs = { palier, echeance: prolonger(d.echeance, MONTH_MS),
+    moisOfferts: (Number(d.moisOfferts) || 0) + 1 };
+  if (!d.source) champs.source = "parrainage";
+  if (res.mentor) champs.bonusUltimeFin = prolonger(d.bonusUltimeFin, MONTH_MS);
+  await ecrireDroits(lien.parrain, champs);
+  const evt = db.ref("parrainage/evenements/" + lien.parrain).push
+    ? db.ref("parrainage/evenements/" + lien.parrain).push() : null;
+  const cleEvt = evt && evt.key ? evt.key : "e" + t;
+  await db.ref("parrainage/evenements/" + lien.parrain + "/" + cleEvt).set({
+    type: res.mentor ? "mentor" : "paiement", at: t, prenom: res.prenom, mois: 1, source: String(source || "") });
+  const txt = P.textePaiement(res);
+  await envoyerPush(lien.parrain, { type: "filleul", url: "./?parrainage=1", tag: "filleul-paie-" + lien.id,
+    title: txt.title, body: txt.body });
+  return res;
+}

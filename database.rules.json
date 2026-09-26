@@ -1094,6 +1094,67 @@
     },
     // Le journal du plafond (1 push par jour) et les messages mis de cote
     // pendant les heures calmes : SERVEUR SEULEMENT.
+    // ── LE PARRAINAGE ────────────────────────────────────────────────────
+    // Ce que le client ecrit : son code (une fois, avec son pendant public et
+    // l entree des codes, dans UNE meme ecriture qui se verifie elle-meme),
+    // l appareil qui le porte, et UNE demande de rattachement. Tout le reste —
+    // filleuls, statuts, mois gagnes, liens, evenements — n est ecrit que par
+    // les Cloud Functions (Admin SDK, hors de ces regles).
+    //
+    // Le code mene a une cle, et une cle est un e-mail : /codes n est donc
+    // lisible par PERSONNE. L inscription lit /codesPublics, qui ne porte que
+    // le prenom affiche. Chez le parrain, un filleul est un identifiant hache,
+    // jamais son adresse.
+    "parrainage": {
+      "codes": {
+        "$code": {
+          ".write": "auth != null && !data.exists() && newData.val() === auth.token.email.replace('.', ',') && newData.parent().parent().child('comptes').child(auth.token.email.replace('.', ',')).child('code').val() === $code",
+          ".validate": "$code.matches(/^[A-Z]{4,6}[A-Z2-9]{3}$/) && newData.isString()"
+        }
+      },
+      "codesPublics": {
+        "$code": {
+          ".read": "auth != null",
+          ".write": "auth != null && !data.exists() && newData.parent().parent().child('codes').child($code).val() === auth.token.email.replace('.', ',')",
+          "prenom": { ".validate": "newData.isString() && newData.val().length <= 24" },
+          "$autre": { ".validate": false }
+        }
+      },
+      "appareils": {
+        "$id": {
+          ".write": "auth != null && !data.exists() && newData.val() === auth.token.email.replace('.', ',')",
+          ".validate": "$id.matches(/^[a-z0-9]{12,32}$/)"
+        }
+      },
+      "comptes": {
+        "$k": {
+          ".read": "auth != null && auth.token.email.replace('.', ',') === $k",
+          "code": {
+            ".write": "auth != null && auth.token.email.replace('.', ',') === $k && !data.exists() && newData.parent().parent().parent().child('codes').child(newData.val()).val() === $k",
+            ".validate": "newData.isString() && newData.val().matches(/^[A-Z]{4,6}[A-Z2-9]{3}$/)"
+          }
+        }
+      },
+      // UNE demande par compte, a vie (un seul parrain). Refusee d emblee si
+      // le code n existe pas, s il est le sien, ou si l appareil est celui du
+      // parrain ; le reste (alias d e-mail, compte ancien, deja client) est
+      // juge par parrainageDemande.
+      "demandes": {
+        "$k": {
+          ".read": "auth != null && auth.token.email.replace('.', ',') === $k",
+          ".write": "auth != null && auth.token.email.replace('.', ',') === $k && !data.exists() && root.child('parrainage').child('codes').child(newData.child('code').val()).exists() && root.child('parrainage').child('codes').child(newData.child('code').val()).val() !== $k && root.child('parrainage').child('appareils').child(newData.child('appareil').val()).val() !== root.child('parrainage').child('codes').child(newData.child('code').val()).val()",
+          ".validate": "newData.hasChildren(['code', 'le', 'appareil'])",
+          "code":     { ".validate": "newData.isString() && newData.val().matches(/^[A-Z]{4,6}[A-Z2-9]{3}$/)" },
+          "le":       { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+          "appareil": { ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9]{12,32}$/)" },
+          "$autre":   { ".validate": false }
+        }
+      },
+      "evenements": {
+        "$k": { ".read": "auth != null && auth.token.email.replace('.', ',') === $k" }
+      }
+    },
+
     // Les defis boucles (et le CHAMPION) : ecrits par la cloture du defi
     // (Cloud Functions), lus par l athlete pour dater ses badges.
     "defis_resultats": {

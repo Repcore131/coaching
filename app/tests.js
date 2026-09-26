@@ -35121,6 +35121,9 @@ async function testExercices(){
           //   C'est LE test qui empeche un tarif de bouger en silence : les
           //   chiffres y sont ecrits a la main, et c'est voulu.
           essentielle:[9.50,'essentielle',0], ultime:[24.90,'ultime',0], essai:[0,'ultime',1],
+          // PARRAINAGE (26/09/2026) : le mois en plus du filleul, qui s'ajoute
+          // a l'essai. Gratuit, Ultime, un mois — ni plus, ni moins.
+          essai_parrainage:[0,'ultime',1],
           // LOT 10 : le premier mois apres un pack. Son prix se LIT sur
           // Ultime, il n'est pas recopie : la moitie de 24,90 fait 12,45, et
           // elle suivra le jour ou Ultime bougera.
@@ -48626,6 +48629,108 @@ async function testExercices(){
       d.innerHTML=htmlCarteSysteme({texte:'<img src=x onerror=alert(1)>',at:1},false);
       return (!d.querySelector('img')&&CHAMPS_NON_SANTE.indexOf('defisReleves')>=0)?true:_echec('échappement ou classement');})());
 
+    // ── LE PARRAINAGE ────────────────────────────────────────────────────
+    ok('Parrainage : le code, prénom (4-6 lettres) + 3 caractères lisibles',(()=>{
+      let k=0; const seq=[0,.5,.99]; const r=()=>seq[(k++)%3];
+      const a=parrainageCodeDe('Julie',r), b=parrainageCodeDe('Élo',r), c=parrainageCodeDe('Maximilien',r), d=parrainageCodeDe('',r);
+      if(!/^JULIE[A-Z2-9]{3}$/.test(a)||!/^ELOR/.test(b)||!/^MAXIMI[A-Z2-9]{3}$/.test(c)||!/^REPC/.test(d)) return _echec([a,b,c,d].join());
+      for(let i=0;i<200;i++){ const x=parrainageCodeDe('Léa-Marie'); if(!PARRAINAGE_CODE_RE.test(x)||/[01IO]$|[01IO].$|[01IO]..$/.test(x.slice(-3))) return _echec(x); }
+      return true;})());
+    ok('Parrainage : le lien personnel, RC_LIEN_COURT + ?ref=, et rien sans code ni fonctions',(()=>{
+      const u={parrainage:{code:'JULIE7K2'}};
+      const l=lienPerso(u,true);
+      if(l!==RC_LIEN_COURT+(RC_LIEN_COURT.indexOf('?')>=0?'&':'?')+'ref=JULIE7K2') return _echec(l);
+      if(lienPerso({},true)!==''||lienPerso(u,false)!=='') return _echec('lien sans code ou fonctions éteintes');
+      const m=parrainageMessage('JULIE7K2',l);
+      return (m.indexOf('JULIE7K2')>=0&&m.indexOf(l)>=0&&/2 mois/.test(m))?true:_echec(m);})());
+    ok('Parrainage : /i/ garde ?ref= jusqu’à /app/, y compris dans Instagram',(()=>{
+      let h=''; try{ const x=new XMLHttpRequest(); x.open('GET','../i/index.html',false); x.send(); h=x.responseText; }catch(e){ return _echec('lecture de /i'); }
+      const m=/<script>\s*(\(function\(\)\{[\s\S]*?\}\)\(\);)\s*<\/script>/.exec(h);
+      if(!m) return _echec('script de /i introuvable');
+      const run=(ua)=>{
+        const el={}; ['go','quand-meme','lien','interne','copier','ok'].forEach(k=>el[k]={hidden:true,addEventListener(){}});
+        const loc={search:'?ref=JULIE7K2&utm=x',hash:'',href:'https://repcore-sync.web.app/i/?ref=JULIE7K2&utm=x',replace(){}};
+        new Function('location','document','navigator','setTimeout',m[1])(loc,{getElementById:k=>el[k]},{userAgent:ua},()=>{});
+        return el;
+      };
+      const ig=run('Mozilla/5.0 (iPhone) Instagram 300.0'), sf=run('Mozilla/5.0 (iPhone) Safari');
+      if(!/^\.\.\/app\/\?ref=JULIE7K2/.test(ig.go.href)) return _echec('Instagram : '+ig.go.href);
+      if(!/\/app\/\?ref=JULIE7K2/.test(ig.lien.textContent||'')) return _echec('lien à copier : '+ig.lien.textContent);
+      return /^\.\.\/app\/\?ref=JULIE7K2/.test(sf.go.href)?true:_echec('Safari : '+sf.go.href);})());
+    ok('Parrainage : ?ref= est gardé à l’arrivée (même forme que PARRAINAGE_CODE_RE), 60 jours',(()=>{
+      const src=_prodSrc();
+      if(src.indexOf("/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(_ref)")<0||String(PARRAINAGE_CODE_RE)!=='/^[A-Z]{4,6}[A-Z2-9]{3}$/') return _echec('formes divergentes');
+      const sv=window._refCode;
+      let l0=null, s0=null; try{ l0=localStorage.getItem('rc_ref'); s0=sessionStorage.getItem('rc_ref'); }catch(e){}
+      try{
+        window._refCode='';
+        try{ sessionStorage.removeItem('rc_ref'); }catch(e){}
+        localStorage.setItem('rc_ref',JSON.stringify({code:'TOMMY2K9',le:Date.now()-5*864e5}));
+        if(parrainageRefEnAttente()!=='TOMMY2K9') return _echec('ref gardé');
+        localStorage.setItem('rc_ref',JSON.stringify({code:'TOMMY2K9',le:Date.now()-61*864e5}));
+        return parrainageRefEnAttente()===''?true:_echec('ref périmé encore lu');
+      } finally {
+        window._refCode=sv;
+        try{ if(l0==null) localStorage.removeItem('rc_ref'); else localStorage.setItem('rc_ref',l0); }catch(e){}
+        try{ if(s0==null) sessionStorage.removeItem('rc_ref'); else sessionStorage.setItem('rc_ref',s0); }catch(e){}
+      }})());
+    ok('Parrainage : le champ de l’inscription, athlète seulement',(()=>{
+      const z=document.getElementById('r-parrain-z'); if(!z) return _echec('champ absent');
+      const sv=z.style.display;
+      try{
+        parrainageChampInscription('coach'); if(z.style.display!=='none') return _echec('visible pour un coach');
+        parrainageChampInscription('athlete'); return z.style.display===''?true:_echec('masqué pour un athlète');
+      } finally { z.style.display=sv; }})());
+    ok('Parrainage : le filleul a un mois d’essai en plus (OFFRES.essai_parrainage)',(()=>{
+      const u={role:'athlete'}, v={role:'athlete'};
+      const t=Date.now();
+      essaiOuvrir(u,parrainageBonusJours()); essaiOuvrir(v,0);
+      const d=Math.round((u.essai.finit-v.essai.finit)/864e5);
+      if(OFFRES.essai_parrainage.mois!==1||OFFRES.essai_parrainage.type!=='essai'||d!==30) return _echec('écart '+d);
+      const w={role:'athlete'}; essaiOuvrir(w,999);
+      return (Math.round((w.essai.finit-t)/864e5)<=ESSAI_JOURS+60)?true:_echec('bonus non borné');})());
+    ok('Parrainage : le miroir compte inscrits et abonnés, et date RECRUTEUR au 3e abonné',(()=>{
+      const u={};
+      const ch=parrainageFusionnerCompte(u,{code:'JULIE7K2',moisGagnes:3,filleuls:{
+        a:{statut:'payant',payeLe:300,prenom:'Tom',date:1},b:{statut:'inscrit',date:2,prenom:'Lou'},
+        c:{statut:'payant',payeLe:100,date:3},d:{statut:'payant',payeLe:200,date:4}}});
+      const p=u.parrainage;
+      if(!ch||p.inscrits!==4||p.payants!==3||p.moisGagnes!==3||p.payantsLe.join()!=='100,200,300'||p.code!=='JULIE7K2') return _echec(JSON.stringify(p));
+      if(parrainageFusionnerCompte(u,{filleuls:{a:{statut:'payant',payeLe:300},c:{statut:'payant',payeLe:100},d:{statut:'payant',payeLe:200}}})) return _echec('changement fantôme');
+      const f=_badgesFaits(Object.assign({sessions:[]},u),1000);
+      const rec=BADGES_ACQUIS.find(b=>b.id==='recruteur'), men=BADGES_ACQUIS.find(b=>b.id==='mentor');
+      return (rec.test(f)===300&&!men.test(f))?true:_echec('RECRUTEUR '+rec.test(f));})());
+    ok('Parrainage : le mois d’Ultime des 10 s’ajoute au palier payé, sans le remplacer',(()=>{
+      const sv=droitsDe, t=Date.now();
+      try{
+        droitsDe=()=>({etat:'serveur',palier:'essentielle',echeance:t+864e5,bonusUltimeFin:t+5*864e5});
+        if(palierDe({email:'a@t.fr'})!=='ultime') return _echec('bonus ignoré');
+        droitsDe=()=>({etat:'serveur',palier:'essentielle',echeance:t+864e5,bonusUltimeFin:t-1});
+        if(palierDe({email:'a@t.fr'})!=='essentielle') return _echec('bonus échu encore appliqué');
+        droitsDe=()=>({etat:'serveur',palier:'suivi',echeance:t+864e5,bonusUltimeFin:t+864e5});
+        return palierDe({email:'a@t.fr'})==='suivi'?true:_echec('suivi rétrogradé');
+      } finally { droitsDe=sv; }})());
+    ok('Parrainage : l’écran — code, compteurs, paliers RECRUTEUR (3) et MENTOR (10), un seul bouton en capitales',(()=>{
+      const d=document.createElement('div');
+      d.innerHTML=htmlParrainage({parrainage:{code:'JULIE7K2',inscrits:5,payants:2,moisGagnes:2,prenoms:[{prenom:'Tom',statut:'payant'}]}});
+      const t=d.textContent;
+      if(!/JULIE7K2/.test(t)||!/2 \/ 3 filleuls abonnés/.test(t)||!/2 \/ 10 filleuls abonnés/.test(t)||!/1 mois d’Ultime offert/.test(t)) return _echec(t.slice(0,300));
+      if(d.querySelectorAll('.pr-tuile').length!==3||!/5inscrits/.test(d.querySelector('.pr-tuiles').textContent.replace(/\s/g,''))) return _echec('compteurs');
+      const b=[...d.querySelectorAll('button.btn')];
+      return (b.length===2&&b.filter(x=>!x.classList.contains('btn-casse')).length===1)?true:_echec('boutons (R31)');})());
+    ok('Parrainage : le rappel doux — après un record ou un palier, une fois par semaine',(()=>{
+      const u={role:'athlete'}, t=Date.now();
+      const c=[
+        [parrainageRappelDu(u,{records:1},0,t,true),true],[parrainageRappelDu(u,{palier:true},0,t,true),true],
+        [parrainageRappelDu(u,{records:0},0,t,true),false],[parrainageRappelDu(u,{records:2},t-3*864e5,t,true),false],
+        [parrainageRappelDu(u,{records:2},t-8*864e5,t,true),true],[parrainageRappelDu({role:'coach'},{records:2},0,t,true),false],
+        [parrainageRappelDu(u,{records:2},0,t,false),false]];
+      const f=c.findIndex(([a,b])=>a!==b);
+      return f<0?true:_echec('cas '+f);})());
+    ok('Parrainage : le miroir est classé non-santé, et l’entrée reste fermée sans fonctions serveur',(()=>{
+      if(CHAMPS_NON_SANTE.indexOf('parrainage')<0) return _echec('non classé');
+      return PARRAINAGE_ACTIF===FONCTIONS_SERVEUR?true:_echec('PARRAINAGE_ACTIF découplé de FONCTIONS_SERVEUR');})());
+
     ok('Les badges n’ont que quatre points d’appel',(()=>{
       const s=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
       const n=(s.match(/majBadges\(/g)||[]).length;
@@ -48635,13 +48740,13 @@ async function testExercices(){
       // c'est lui qui rend a un dossier ancien ses badges a la mise a jour. Une
       // sixieme signalerait un rendu qui attribue des badges a chaque passage,
       // et une celebration qui surgit sans que rien ne vienne de se passer.
-      // SIXIEME, ET JUSTIFIEE (defis du Canal) : l'arrivee des resultats d'un
-      // defi (majDefisResultats), une fois par jour au plus, et seulement quand
-      // un defi NOUVEAU est boucle — CHAMPION et DEFI RELEVE viennent du
-      // serveur, jamais d'une seance ni d'un bilan.
+      // SIXIEME, ET JUSTIFIEE (defis du Canal, parrainage) : l'arrivee des
+      // resultats serveur (majRecompensesServeur), une fois par jour au plus,
+      // et seulement quand il y a du nouveau — CHAMPION, RECRUTEUR et MENTOR
+      // viennent du serveur, jamais d'une seance ni d'un bilan.
       if(n!==6) return _echec(n+' occurrences de majBadges( au lieu de six');
-      if(!/defisFusionnerResultats\(u,r\);\s*if\(n\)\{[\s\S]{0,300}?majBadges\(\)/.test(s))
-        return _echec('l’appel des resultats de defi n’est plus garde par « un defi nouveau »');
+      if(!/defisFusionnerResultats\(u,r\)[^;]*;\s*if\(n\)\{[\s\S]{0,500}?majBadges\(\)/.test(s))
+        return _echec('l’appel des resultats serveur n’est plus garde par « du nouveau »');
       if(!/_riteEnregistrer\(q,true\);[\s\S]{0,300}?majBadges\(\)/.test(s))
         return _echec('l’appel apres le rite a disparu');
       if(!/_rattraperBadges\(\)\{\s*if\(_badgesRattrapes\) return \[\];/.test(s))
@@ -49234,7 +49339,8 @@ async function testExercices(){
       const src=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
       const n=(src.match(/essaiOuvrir\(/g)||[]).length;
       if(n!==2) return _echec(n+' mentions de essaiOuvrir au lieu de deux');
-      if(!/_appliquerCodeApresInscription\(\)\)\s*return;[\s\S]{0,600}?essaiOuvrir\(currentUser\)/.test(src))
+      // (Le second argument est le mois en plus d'un filleul — parrainage.)
+      if(!/_appliquerCodeApresInscription\(\)\)\s*return;[\s\S]{0,600}?essaiOuvrir\(currentUser[,)]/.test(src))
         return _echec('l’essai ne s’ouvre pas dans la branche sans code');
       const c={role:'coach',sessions:[]};
       if(essaiOuvrir(c)) return _echec('un coach reçoit un essai athlète');

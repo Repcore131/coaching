@@ -14,7 +14,7 @@ const set = (p, v) => {
 };
 const snap = (v, key) => ({ key, val: () => (v === undefined ? null : v), exists: () => v != null,
   forEach(fn) { if (v && typeof v === "object") Object.keys(v).forEach((k) => fn(snap(v[k], k))); } });
-const ref = (p, filtre) => ({
+const ref = (p = "", filtre) => ({
   get: async () => {
     let v = get(p);
     if (filtre && v && typeof v === "object") {

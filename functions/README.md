@@ -274,3 +274,72 @@ Le calcul est dans `defis-calcul.js` (pur, sans Firebase). Le client a la même 
 ```bash
 node functions/test/defis.test.js
 ```
+
+## Le parrainage (26/09/2026)
+
+**La récompense.** Le filleul a 1 mois d'essai en plus (`OFFRES.essai_parrainage`) dès que sa
+demande est acceptée. Le parrain gagne 1 mois offert — ses droits prolongés d'un mois — au
+**premier paiement** du filleul, et rien avant. Au 10e filleul abonné : 1 mois d'Ultime en plus
+(`droits/<clé>/bonusUltimeFin`, qui s'ajoute au palier payé sans le remplacer).
+
+### Les nœuds
+
+| Nœud | Qui écrit | Contenu |
+|---|---|---|
+| `/parrainage/codes/<CODE>` | le parrain, une fois | sa clé — **lisible par personne** (une clé est un e-mail) |
+| `/parrainage/codesPublics/<CODE>` | le parrain, une fois | `{prenom}` — lu à l'inscription du filleul |
+| `/parrainage/comptes/<clé>` | `code` : le titulaire, une fois ; **le reste : les fonctions seules** | `{code, filleuls:{<id haché>:{date, statut:'inscrit'\|'payant', prenom, payeLe}}, moisGagnes, payants, mentorLe, parrain:{code, le}}` — le titulaire le lit |
+| `/parrainage/appareils/<id>` | le premier compte qui s'en sert | sa clé (anti-fraude) |
+| `/parrainage/demandes/<clé>` | le filleul, **une fois à vie** | `{code, le, appareil}` ; puis `{etat, raison}` par la fonction |
+| `/parrainage/liens`, `/parrainage/emails` | les fonctions seules | filleul → parrain ; adresses normalisées déjà parrainées |
+| `/parrainage/evenements/<clé>` | les fonctions seules | `{type:'paiement'\|'mentor', at, prenom, mois}` — lu par le parrain |
+
+⚠ La demande prévoyait `/users/<uid>/parrainage`. Le dossier `/users` s'écrit en entier depuis
+l'appareil, et son titulaire peut y écrire n'importe quoi : un statut ou des mois gagnés posés là
+ne vaudraient rien. L'original vit donc dans `/parrainage/comptes`, fermé en écriture ;
+`u.parrainage` n'en est qu'un miroir (affichage, dates de RECRUTEUR et MENTOR). Chez le parrain,
+un filleul est un identifiant haché, jamais son adresse.
+
+### Les contrôles
+
+- **Un seul parrain** : la règle n'accepte qu'une demande par compte, à vie.
+- **Pas d'auto-parrainage** : la règle refuse son propre code ; la fonction compare les adresses
+  **normalisées** (minuscules, sans `+alias`, sans les points chez Gmail).
+- **Pas depuis l'appareil du parrain** : la règle refuse l'identifiant d'appareil enregistré par
+  le parrain à la création de son code.
+- **La fonction refuse aussi** : un compte de plus de 7 jours, une adresse déjà parrainée, un
+  compte qui a déjà payé.
+- **Rien pour le parrain tant que le filleul n'a pas payé** : seuls comptent un paiement vérifié
+  par `verifyPaypalSubscription` avec un dernier paiement non nul, et les webhooks
+  `PAYMENT.SALE.COMPLETED` et `PAYMENT.CAPTURE.COMPLETED`. `BILLING.SUBSCRIPTION.ACTIVATED` ne
+  compte pas (une activation n'est pas un encaissement). Le premier seulement : une transaction
+  sur le compte du parrain rend l'opération idempotente.
+
+### Les fonctions
+
+| Fonction | Quand | Ce qu'elle fait |
+|---|---|---|
+| `parrainageDemande` | création de `/parrainage/demandes/{uid}` | juge la demande ; si acceptée : filleul « inscrit » chez le parrain, lien, +30 jours d'essai (`essaiFinit`, ou `bonusEssaiJours` que `ouvrirEssai` ajoutera) |
+| `pushFilleulInscrit` | un filleul apparaît chez le parrain | push « Julie vient de s'inscrire avec ton code » |
+| `parrainagePaiement` (utilitaire) | `verifyPaypalSubscription`, webhook | statut « payant », +1 mois aux droits du parrain, événement, push « Julie vient de s'abonner : 1 mois offert ⚡ », palier des 10 |
+
+### Le mois offert et l'engagement de 12 mois
+
+Le mois offert **ne touche pas à PayPal** : l'abonnement du parrain, ses mensualités et son
+engagement de douze mois restent exactement ce qu'ils sont. Ce qui change, c'est `droits/echeance`,
+repoussée d'un mois (`prolonger`). Comme chaque renouvellement prolonge à son tour l'échéance
+existante, ce mois reste « devant » : il ne remplace aucun mois payé, ne raccourcit pas
+l'engagement et ne rembourse rien — il s'ajoute à la fin de l'accès. Concrètement, un parrain
+engagé sur douze mois garde son accès un mois de plus quand il arrête, ou, s'il n'a pas
+d'abonnement en cours, a un mois d'Essentielle ouvert tout de suite.
+
+### Tant que les fonctions ne tournent pas
+
+`PARRAINAGE_ACTIF` (client) vaut `FONCTIONS_SERVEUR` : sans elles, personne ne serait jamais
+crédité, donc l'écran « Inviter des amis », le rappel de fin de séance, le lien personnel et les
+badges RECRUTEUR/MENTOR restent fermés. Un code saisi à l'inscription fonctionne déjà (demande
+enregistrée, essai du dossier allongé d'un mois).
+
+```bash
+node functions/test/parrainage.test.js
+```

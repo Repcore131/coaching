@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1593';
+window.RC_BUILD='1594';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -422,7 +422,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1593.css">
+<link rel="stylesheet" href="./rc-style.1594.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -1252,6 +1252,12 @@ const COACH_PHOTO='icons/coach.jpg';
     <div><label for="r-email">Email</label><input type="email" id="r-email" placeholder="ton@email.com"></div>
     <div><label for="r-pwd">Mot de passe</label><input type="password" id="r-pwd" placeholder="Min. 6 caractères"></div>
     <div><label for="r-pwd2">Confirmer</label><input type="password" id="r-pwd2" placeholder="••••••••"></div>
+    <!-- LE CODE D'UN AMI (parrainage). Athletes seulement (selectRole), pre-rempli
+         depuis ?ref= — et saisissable a la main : sur iPhone, l'app installee
+         ne voit pas le stockage de Safari ou le lien avait ete ouvert. -->
+    <div id="r-parrain-z" style="display:none"><label for="r-parrain">Code d'un ami (optionnel)</label>
+      <input type="text" id="r-parrain" maxlength="12" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="JULIE7K2">
+      <div class="sub" id="r-parrain-info" style="font-size:var(--fs-xs);margin-top:5px"></div></div>
     <!-- ⚠ DATE DE NAISSANCE ET GENRE SONT DEPLACES, PAS SUPPRIMES. Ils sont
          demandes au premier calcul de charge ou au premier usage du suivi de
          cycle — voir demanderNaissanceGenre et l'ecran s-naissance.
@@ -3572,6 +3578,8 @@ const COACH_PHOTO='icons/coach.jpg';
         </span>
         <span aria-hidden="true" style="flex:none;color:var(--sub);font-size:var(--fs-lg)">›</span>
       </button>
+      <!-- INVITER DES AMIS (parrainage) : pose par _rendreEntreeParrainage. -->
+      <div id="atp-parrainage"></div>
       <div style="display:flex;justify-content:center;margin-bottom:24px;margin-top:8px">
         <label style="cursor:pointer;text-align:center">
           <div id="atp-photo-circle" style="width:90px;height:90px;border-radius:var(--r-full);background:var(--surface-2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;margin:0 auto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:36px;height:36px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
@@ -4311,6 +4319,8 @@ const COACH_PHOTO='icons/coach.jpg';
 
       <!-- 3 bis. LES VOLTS : « +180 ⚡ » compté, et le détail. rendreVoltsFin. -->
       <div id="wd-volts" class="rcf-e rcf-d3" style="margin-bottom:14px"></div>
+      <!-- Le rappel doux du parrainage : apres un record ou un palier. -->
+      <div id="wd-parrainage"></div>
 
       <!-- 4. LA PERFORMANCE : une bande, trois zones, et le delta dessous. -->
       <div id="wd-stats" class="rcf-e rcf-d3" style="margin-bottom:18px"></div>
@@ -5293,6 +5303,19 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
+<!-- ══════ INVITER DES AMIS (parrainage) ══════
+     Le code, le partage, les compteurs et les paliers. htmlParrainage. -->
+<div id="s-parrainage" class="screen">
+  <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+    <button class="back-btn" onclick="retourDe('s-parrainage','s-athlete-profile')">←</button>
+    <span class="topbar-title">Inviter des amis</span>
+    <span></span>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad"><div id="pr-contenu"></div></div>
+  </div>
+</div>
+
 <div id="s-lifestyle" class="screen">
   <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
     <button class="back-btn" onclick="retourDe('s-lifestyle')">←</button>
@@ -5693,5 +5716,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1593.js"></script>
+<script src="./rc-core.1594.js"></script>
 </body></html>

@@ -1067,6 +1067,8 @@ const OFFRES=Object.freeze({
                         palier:'ultime', mois:1, type:'abonnement'}),
   // ── Et l'essai, qui ne se paie pas ──────────────────────────────────
   essai:              Object.freeze({lib:'Essai',       prix:0,     palier:'ultime', mois:1, type:'essai'}),
+  // Le mois d'essai EN PLUS du filleul d'un parrainage (s'ajoute à `essai`).
+  essai_parrainage:   Object.freeze({lib:'Essai offert par un ami', prix:0, palier:'ultime', mois:1, type:'essai'}),
 });
 // PURE. Un montant en euros, a la francaise.
 // ⚠ ESPACE INSECABLE AVANT LE SYMBOLE : la coupure « 9,95 » / « € » en fin de
@@ -1607,11 +1609,16 @@ const PROMESSE_ATHLETE='Ton premier mois est complet, sans carte bancaire. '
 // chaque lecture derive au premier changement de constante, et deux dossiers
 // ouverts le meme jour n'auraient pas la meme fin. Le serveur, lui, posera la
 // sienne dans droits/, et c'est elle qui l'emportera.
-function essaiOuvrir(u){
+// `bonusJours` : le mois en plus d'un filleul (parrainage). Le serveur, lui,
+// ne le reçoit PAS du client : il l'ajoute de lui-même quand la demande de
+// rattachement est acceptée (parrainageDemande, bonusEssaiJours).
+function essaiOuvrir(u,bonusJours){
   if(!u||u.role==='coach') return false;
   if(u.essai&&typeof u.essai==='object') return false;   // deja ouvert, ou deja fini
   const t=Date.now();
-  u.essai={ouvertLe:t,finit:t+ESSAI_JOURS*86400000};
+  const b=Math.max(0,Math.min(60,Math.round(Number(bonusJours)||0)));
+  u.essai={ouvertLe:t,finit:t+(ESSAI_JOURS+b)*86400000};
+  if(b) u.essai.bonusParrainage=b;
   // LE SERVEUR SERAIT PREVENU, S'IL Y EN AVAIT UN. Il n'y en a pas : voir
   // FONCTIONS_SERVEUR. L'essai s'ouvre donc dans le dossier, et il y reste.
   // Le jour ou la fonction tourne, son echeance prendra la main a la premiere
@@ -4854,6 +4861,28 @@ const CLOUD={
     if(!r.ok) throw new Error('Défis : '+r.status);
     return await r.json();
   },
+  // ── Le parrainage : /parrainage/<sous>. get rend null sur un refus (les
+  // règles cachent /codes) ; put/patch rendent true ou false, sans lever.
+  _urlParrainage(sous){ return this._fbUrl.replace('users.json','parrainage'+(sous?'/'+sous:'')+'.json'); },
+  async parrainageGet(sous){
+    const token=await this._getToken();
+    if(!token) return null;
+    const r=await fetch(this._urlParrainage(sous)+'?auth='+token);
+    if(!r.ok) return null;
+    return await r.json();
+  },
+  async parrainagePut(sous,valeur){
+    const token=await this._getToken();
+    if(!token) return false;
+    const r=await fetch(this._urlParrainage(sous)+'?auth='+token,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(valeur)});
+    return r.ok;
+  },
+  async parrainagePatch(chemins){
+    const token=await this._getToken();
+    if(!token) return false;
+    const r=await fetch(this._urlParrainage('')+'?auth='+token,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(chemins)});
+    return r.ok;
+  },
   async pullDefisResultats(moi){
     const token=await this._getToken();
     if(!token) throw new Error('Session expirée.');
@@ -5451,7 +5480,7 @@ function _validateAthletePkg(o){
     const params=new URLSearchParams(window.location.search);
     aNettoyer=!!(params.get('coachpkg')||params.get('athletepkg')||params.get('s')
       ||params.get('bilan')==='1'||params.get('wo')==='1'||params.get('diete')==='1'
-      ||!!params.get('wrapped')||params.get('canal')==='1');
+      ||!!params.get('wrapped')||params.get('canal')==='1'||!!params.get('ref')||params.get('parrainage')==='1');
     // Coach invite → athlete device
     const cpkg=params.get('coachpkg');
     if(cpkg){
@@ -5505,6 +5534,20 @@ function _validateAthletePkg(o){
     if(_wrDeep&&/^(m-\d{4}-\d{2}|a-\d{4}|1)$/.test(_wrDeep)) window._pendingWrappedOpen=_wrDeep;
     // ?canal=1 — les push des défis (nouveau défi, plus que 48 h).
     if(params.get('canal')==='1') window._pendingCanalOpen=true;
+    // ?ref=<CODE> — le lien de parrainage. Gardé jusqu'à l'inscription.
+    // ⚠ ÉCRIT ICI, EN CLAIR, ET NON PAR parrainageMemoriserRef : ce bloc tourne
+    //   pendant le chargement du script, AVANT que les constantes du module
+    //   parrainage soient initialisées (elles lèveraient, et le code serait
+    //   perdu en silence). Même clé, même forme.
+    const _ref=String(params.get('ref')||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+    if(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(_ref)){
+      const _v=JSON.stringify({code:_ref,le:Date.now()});
+      try{ localStorage.setItem('rc_ref',_v); }catch(e){}
+      try{ sessionStorage.setItem('rc_ref',_v); }catch(e){}
+      window._refCode=_ref;
+    }
+    // ?parrainage=1 — les push du parrainage (filleul inscrit, abonné).
+    if(params.get('parrainage')==='1') window._pendingParrainageOpen=true;
   }catch(e){}
   finally{
     if(aNettoyer){
@@ -5696,6 +5739,9 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'xp','xpRang','xpArchive',
   // Les défis bouclés (titre, dates, champion) : recopiés de /defis_resultats.
   'defisReleves',
+  // Le MIROIR du parrainage (code, compteurs, dates des filleuls abonnés) —
+  // l'original, qui seul fait foi, vit dans /parrainage/comptes.
+  'parrainage',
   // Les types de notification push que l'athlète a coupés : {type:false}.
   // Un réglage, lu par le serveur avant chaque envoi — aucune donnée de santé.
   'pushPrefs',
@@ -6943,6 +6989,8 @@ function routeUser(){
     setTimeout(()=>{ try{ ouvrirWrapped(_k==='1'?null:_k); }catch(e){} },1000);}
   if(window._pendingCanalOpen){ window._pendingCanalOpen=false;
     setTimeout(()=>{ try{ loadCanal(); }catch(e){} },1000);}
+  if(window._pendingParrainageOpen){ window._pendingParrainageOpen=false;
+    setTimeout(()=>{ try{ ouvrirParrainage(); }catch(e){} },1000);}
 }
 // ARBITRAGE ASSUMÉ (24/07/2026, plan Spark) — status, paymentStatus et
 // paypalSubscriptionId ne sont protégés par AUCUNE règle serveur :
@@ -7021,7 +7069,9 @@ function droitsDe(u){
   return {etat:'serveur',palier:p,echeance:Number(d.echeance)||0,
     source:d.source||null,maj:Number(d.maj)||0,lu:o.lu,
     avant:(PALIERS_ORDRE.indexOf(String(d.avant))>0?String(d.avant):''),
-    essaiOuvertLe:Number(d.essaiOuvertLe)||0,essaiFinit:Number(d.essaiFinit)||0};
+    essaiOuvertLe:Number(d.essaiOuvertLe)||0,essaiFinit:Number(d.essaiFinit)||0,
+    // Le mois d'Ultime offert au 10e filleul abonné (parrainage).
+    bonusUltimeFin:Number(d.bonusUltimeFin)||0};
 }
 // ⚠ UN NOEUD VIDE NE FERME RIEN, ET C'EST LA CORRECTION DU 24/09/2026.
 //
@@ -7052,8 +7102,12 @@ function palierDe(u){
   if(u.role==='coach') return 'suivi';
   const d=droitsDe(u);
   if(d.etat==='serveur'){
-    if(d.echeance>0&&Date.now()>=d.echeance) return 'aucun';
-    return d.palier;
+    const p=(d.echeance>0&&Date.now()>=d.echeance)?'aucun':d.palier;
+    // LE MOIS D'ULTIME DU PARRAINAGE s'ajoute PAR-DESSUS le palier payé, sans
+    // le remplacer : un renouvellement Essentielle pendant ce mois ne le
+    // referme pas, et il retombe seul à sa date.
+    if(d.bonusUltimeFin>Date.now()&&PALIERS_ORDRE.indexOf(p)<PALIERS_ORDRE.indexOf('ultime')) return 'ultime';
+    return p;
   }
   return _palierHerite(u);
 }
@@ -9795,6 +9849,8 @@ function selectRole(r,implicite){
   // finiraient par diverger, et c'est celle-ci que les assertions verrouillent.
   if(_pc){ _pc.textContent=PROMESSE_COACH; _pc.style.display=(r==='coach')?'block':'none'; }
   if(_ri) _ri.style.display=(r==='coach')?'block':'none';
+  // Le code d'un ami : athlètes seulement, pré-rempli depuis ?ref=.
+  try{ parrainageChampInscription(r); }catch(e){}
   rcmVue(r==='coach'?'role_selected_coach':'role_selected_athlete');
 }
 // CONSERVEE, MAIS PLUS AUCUN LIEN NE L'APPELLE. Le formulaire ne reparle plus
@@ -10417,6 +10473,10 @@ async function doRegister(){
       // ici était la double saisie. On l'applique directement, et l'athlète part
       // sur son bilan de départ (code créateur) ou sur l'abonnement (code
       // affilié) sans jamais voir s-client-code.
+      // LE PARRAINAGE, AVANT le code coach : un filleul peut arriver avec les
+      // deux. La demande s'enregistre ; le mois en plus ne sert qu'à l'essai.
+      let _bonusParrain=0;
+      try{ _bonusParrain=await parrainageApresInscription(currentUser); }catch(e){ _bonusParrain=0; }
       if(await _appliquerCodeApresInscription()) return;
       // ⚠ PAS DE CODE : C'EST ICI QUE L'ESSAI S'OUVRE, et nulle part ailleurs.
       // Cette branche est exactement « un athlete sans code coach » — celui
@@ -10424,7 +10484,7 @@ async function doRegister(){
       // repetition. Un athlete qui ARRIVE avec un code n'en a pas besoin :
       // son acces est ouvert par son coach, et lui en ouvrir un en plus
       // laisserait un essai dormant a consommer le jour ou le code expire.
-      if(essaiOuvrir(currentUser)){
+      if(essaiOuvrir(currentUser,_bonusParrain)){
         saveUser();
         // L'accueil, pas l'ecran de code : l'essai est ouvert, il y a donc
         // quelque chose a faire. La promesse est rappelee a l'arrivee.
@@ -17169,6 +17229,292 @@ function renderEpingleAccueil(){
     +'onclick="go(\'s-athlete-profile\')">Ajouter ma photo</button></div>';
 }
 
+// ══ LE PARRAINAGE ══════════════════════════════════════════════════════════
+//
+// LA RÉCOMPENSE : le filleul a 1 mois d'essai en plus (OFFRES.essai_parrainage) ;
+// le parrain gagne 1 mois offert — ses droits prolongés — au PREMIER paiement
+// du filleul, et rien avant (anti-fraude). Au 10e filleul payant, 1 mois
+// d'Ultime en plus (droits.bonusUltimeFin, lu par palierDe).
+//
+// OÙ VIVENT LES DONNÉES (voir database.rules.json et functions/index.js) :
+//   /parrainage/codes/<CODE> → clé du parrain ; /parrainage/codesPublics/<CODE>
+//   → {prenom} ; /parrainage/comptes/<clé> → {code, filleuls, moisGagnes,
+//   payants, parrain} ; /parrainage/demandes/<filleul> → la demande de
+//   rattachement.
+// ⚠ PAS DANS /users/<clé>/parrainage COMME LE DISAIT LA DEMANDE : le dossier
+//   s'écrit en entier depuis l'appareil, et son titulaire peut y écrire ce
+//   qu'il veut — un statut « payant » ou des mois gagnés posés là ne vaudraient
+//   rien. u.parrainage n'est qu'un MIROIR, recopié de /parrainage/comptes, pour
+//   l'affichage et pour dater RECRUTEUR et MENTOR.
+//
+// ⚠ TOUT CE QUI RÉCOMPENSE PASSE PAR LES CLOUD FUNCTIONS. Tant qu'elles ne
+//   tournent pas (FONCTIONS_SERVEUR, plan Spark), personne ne serait jamais
+//   crédité : l'écran et le rappel restent donc fermés. Un code saisi à
+//   l'inscription, lui, fonctionne déjà (demande enregistrée, essai allongé).
+const PARRAINAGE_ACTIF=FONCTIONS_SERVEUR;
+const PARRAINAGE_CODE_RE=/^[A-Z]{4,6}[A-Z2-9]{3}$/;
+// Sans 0/O, 1/I : un code se dicte et se recopie.
+const PARRAINAGE_ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const PARRAINAGE_PALIERS=Object.freeze([
+  {n:3,badge:'recruteur',nom:'RECRUTEUR',gain:'Badge RECRUTEUR'},
+  {n:10,badge:'mentor',nom:'MENTOR',gain:'Badge MENTOR et 1 mois d’Ultime offert'}
+]);
+const PARRAINAGE_REF_CLE='rc_ref';
+const PARRAINAGE_REF_JOURS=60;
+function parrainageBonusJours(){ return Math.round((Number((OFFRES.essai_parrainage||{}).mois)||0)*30); }
+// PURE. Le code : le prénom (4 à 6 lettres, sans accent) + 3 caractères.
+// `alea` rend un nombre dans [0,1) — Math.random par défaut.
+function parrainageCodeDe(prenom,alea){
+  const r=typeof alea==='function'?alea:Math.random;
+  let l='';
+  try{ l=String(prenom||'').normalize('NFD').replace(/[̀-ͯ]/g,''); }catch(e){ l=String(prenom||''); }
+  l=l.toUpperCase().replace(/[^A-Z]/g,'').slice(0,6);
+  if(l.length<4) l=(l+'REPCORE').slice(0,4);
+  let s='';
+  for(let i=0;i<3;i++) s+=PARRAINAGE_ALPHABET[Math.floor(r()*PARRAINAGE_ALPHABET.length)%PARRAINAGE_ALPHABET.length];
+  return l+s;
+}
+function parrainageCodeNormalise(c){ return String(c||'').toUpperCase().replace(/[^A-Z0-9]/g,''); }
+function parrainageCodeValide(c){ return PARRAINAGE_CODE_RE.test(parrainageCodeNormalise(c)); }
+// L'identifiant de CET appareil (anti-fraude : un filleul ne s'inscrit pas
+// depuis le téléphone de son parrain). Tiré une fois, gardé sur l'appareil.
+function rcAppareilId(){
+  try{
+    let id=localStorage.getItem('rc_appareil');
+    if(!/^[a-z0-9]{12,32}$/.test(id||'')){
+      id=Array.from({length:20},()=>'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random()*36)]).join('');
+      localStorage.setItem('rc_appareil',id);
+    }
+    return id;
+  }catch(e){ return 'sansstockage0000'; }
+}
+// ── Le lien ────────────────────────────────────────────────────────────────
+// LE LIEN PERSONNEL (idée 16). Il n'existait pas : le voici, et
+// _storyCopierLien s'en sert désormais à la sortie de chaque visuel partagé.
+// RC_LIEN_COURT mène à /i, qui transmet ?ref= à /app/ sans y toucher.
+function lienPerso(u,actif){
+  const x=u||((typeof currentUser!=='undefined')?currentUser:null);
+  const c=x&&x.parrainage&&x.parrainage.code;
+  const on=(typeof actif==='boolean')?actif:PARRAINAGE_ACTIF;
+  if(!on||!parrainageCodeValide(c)) return '';
+  const base=String(RC_LIEN_COURT||'');
+  return base+(base.indexOf('?')>=0?'&':'?')+'ref='+encodeURIComponent(c);
+}
+// PURE. Le message prêt à partager.
+function parrainageMessage(code,lien){
+  return 'Je m’entraîne avec RepCore ⚡ Avec mon code '+code+', tu as 2 mois pour essayer au lieu d’un. '
+    +(lien?lien:'Le code se saisit à l’inscription.');
+}
+// ── L'arrivée par un lien ?ref= ────────────────────────────────────────────
+// Gardé sur l'appareil (localStorage ET sessionStorage) jusqu'à l'inscription.
+// ⚠ SUR iPHONE, L'APP INSTALLÉE NE VOIT PAS LE STOCKAGE DE SAFARI : c'est pour
+//   ça que le code est aussi RECOPIÉ dans le champ de l'inscription, et
+//   qu'il se tape à la main.
+function parrainageMemoriserRef(code){
+  const c=parrainageCodeNormalise(code);
+  if(!parrainageCodeValide(c)) return false;
+  const v=JSON.stringify({code:c,le:Date.now()});
+  try{ localStorage.setItem(PARRAINAGE_REF_CLE,v); }catch(e){}
+  try{ sessionStorage.setItem(PARRAINAGE_REF_CLE,v); }catch(e){}
+  window._refCode=c;
+  return true;
+}
+function parrainageRefEnAttente(maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(typeof window!=='undefined'&&window._refCode) return window._refCode;
+  for(const st of ['sessionStorage','localStorage']){
+    try{
+      const o=JSON.parse(window[st].getItem(PARRAINAGE_REF_CLE)||'null');
+      if(o&&parrainageCodeValide(o.code)&&t-Number(o.le)<PARRAINAGE_REF_JOURS*864e5) return o.code;
+    }catch(e){}
+  }
+  return '';
+}
+function parrainageOublierRef(){
+  try{ localStorage.removeItem(PARRAINAGE_REF_CLE); }catch(e){}
+  try{ sessionStorage.removeItem(PARRAINAGE_REF_CLE); }catch(e){}
+  window._refCode='';
+}
+// Le champ de l'inscription, pré-rempli. Athlète seulement.
+function parrainageChampInscription(role){
+  const z=document.getElementById('r-parrain-z');
+  if(!z) return;
+  z.style.display=role==='athlete'?'':'none';
+  const i=document.getElementById('r-parrain');
+  const c=parrainageRefEnAttente();
+  if(i&&c&&!i.value) i.value=c;
+  const info=document.getElementById('r-parrain-info');
+  if(info) info.textContent=c?'Invité par un ami : 2 mois pour essayer au lieu d’un.':'Le code d’un ami t’offre 1 mois de plus pour essayer.';
+}
+// ── À l'inscription ────────────────────────────────────────────────────────
+// Rend le nombre de jours offerts en plus (0 si rien). Le compte existe et le jeton
+// est là. UN SEUL PARRAIN (la règle refuse une deuxième demande), pas le sien,
+// pas depuis l'appareil du parrain ; le serveur juge le reste (alias
+// d'adresse, compte ancien, déjà client) et, lui seul, allonge l'essai côté
+// droits/. Ici, le dossier : c'est lui qui décide tant que les fonctions dorment.
+async function parrainageApresInscription(u){
+  if(!u||u.role==='coach') return 0;
+  const saisi=parrainageCodeNormalise((document.getElementById('r-parrain')||{}).value||parrainageRefEnAttente());
+  if(!saisi) return 0;
+  if(!parrainageCodeValide(saisi)){ toast('Code ami ignoré : il a la forme PRENOM + 3 caractères.','var(--orange)'); return 0; }
+  const moi=(u.email||'').replace(/\./g,',');
+  let pub=null;
+  try{ pub=await CLOUD.parrainageGet('codesPublics/'+saisi); }catch(e){ pub=null; }
+  if(!pub){ toast('Code ami inconnu : ton compte est créé, sans le mois en plus.','var(--orange)'); return 0; }
+  if(u.parrainage&&u.parrainage.code===saisi){ toast('C’est ton propre code.','var(--orange)'); return 0; }
+  const ok=await CLOUD.parrainagePut('demandes/'+moi,{code:saisi,le:Date.now(),appareil:rcAppareilId()}).catch(()=>false);
+  if(!ok){ toast('Ce code ne peut pas être utilisé ici (déjà parrainé, ou appareil de ton parrain).','var(--orange)'); return 0; }
+  u.parrainage=Object.assign({},u.parrainage||{},{parrainCode:saisi,parrainPrenom:String(pub.prenom||'').slice(0,24),parraineLe:Date.now()});
+  parrainageOublierRef();
+  try{ rcm('parrainage_filleul'); }catch(e){}
+  toast('Code de '+(pub.prenom||'ton ami')+' appliqué : 1 mois d’essai en plus ⚡','var(--green)');
+  return parrainageBonusJours();
+}
+// ── Le code du parrain : créé UNE fois ─────────────────────────────────────
+// Déjà dans le miroir : on le rend. Sinon on relit /parrainage/comptes (un
+// autre appareil a pu le créer). Sinon on en tire un, et on l'écrit en UNE
+// écriture — le code, son pendant public et la ligne du compte — que les
+// règles vérifient ensemble. Une collision fait échouer l'écriture : on tire
+// un autre code.
+async function parrainageAssurerCode(u){
+  if(!u||!u.email) return '';
+  if(u.parrainage&&parrainageCodeValide(u.parrainage.code)) return u.parrainage.code;
+  const moi=u.email.replace(/\./g,',');
+  let c=null;
+  try{ c=await CLOUD.parrainageGet('comptes/'+moi+'/code'); }catch(e){ c=null; }
+  for(let i=0;!c&&i<6;i++){
+    const essai=parrainageCodeDe(u.fname||u.pseudo||u.email.split('@')[0]);
+    const ok=await CLOUD.parrainagePatch({['codes/'+essai]:moi,['codesPublics/'+essai]:{prenom:String(u.fname||'').slice(0,24)},
+      ['comptes/'+moi+'/code']:essai}).catch(()=>false);
+    if(ok) c=essai;
+  }
+  if(!c) return '';
+  u.parrainage=Object.assign({},u.parrainage||{},{code:c});
+  try{ saveUser(); }catch(e){}
+  // L'appareil du parrain, pour que personne ne s'inscrive comme filleul depuis lui.
+  CLOUD.parrainagePut('appareils/'+rcAppareilId(),moi).catch(()=>false);
+  return c;
+}
+// PURE (écrit dans u). Le miroir de /parrainage/comptes/<moi>. Rend true
+// quand le nombre de filleuls payants a changé (RECRUTEUR, MENTOR).
+function parrainageFusionnerCompte(u,compte){
+  if(!u||!compte||typeof compte!=='object') return false;
+  const f=compte.filleuls&&typeof compte.filleuls==='object'?compte.filleuls:{};
+  const l=Object.keys(f).map(k=>f[k]).filter(Boolean);
+  const payantsLe=l.filter(x=>x.statut==='payant').map(x=>Number(x.payeLe)||Number(x.date)||0).filter(x=>x>0).sort((a,b)=>a-b);
+  const avant=(u.parrainage&&Array.isArray(u.parrainage.payantsLe))?u.parrainage.payantsLe.length:0;
+  const p=Object.assign({},u.parrainage||{});
+  if(parrainageCodeValide(compte.code)) p.code=compte.code;
+  if(compte.parrain&&parrainageCodeValide(compte.parrain.code)) p.parrainCode=compte.parrain.code;
+  p.inscrits=l.length; p.payants=payantsLe.length; p.payantsLe=payantsLe;
+  p.moisGagnes=Math.max(0,Number(compte.moisGagnes)||0);
+  p.prenoms=l.sort((a,b)=>(Number(b.date)||0)-(Number(a.date)||0)).slice(0,20)
+    .map(x=>({prenom:String(x.prenom||'').slice(0,24),statut:x.statut==='payant'?'payant':'inscrit',date:Number(x.date)||0}));
+  u.parrainage=p;
+  return payantsLe.length!==avant;
+}
+async function majParrainageMiroir(u){
+  if(!u||!u.email||!CLOUD.ok()) return false;
+  const c=await CLOUD.parrainageGet('comptes/'+u.email.replace(/\./g,','));
+  if(!c) return false;
+  return parrainageFusionnerCompte(u,c);
+}
+// ── L'écran « Inviter des amis » ───────────────────────────────────────────
+// PURE.
+function htmlParrainage(u){
+  const p=(u&&u.parrainage)||{};
+  const code=p.code||'';
+  const payants=Number(p.payants)||0, inscrits=Number(p.inscrits)||0, mois=Number(p.moisGagnes)||0;
+  const tuile=(v,l)=>'<div class="pr-tuile"><b>'+escapeHtml(String(v))+'</b><span>'+escapeHtml(l)+'</span></div>';
+  const paliers=PARRAINAGE_PALIERS.map(x=>{
+    const part=Math.min(1,payants/x.n);
+    return '<div class="pr-palier'+(payants>=x.n?' pr-atteint':'')+'"><div class="pr-pal-l"><b>'+escapeHtml(x.nom)+'</b><span>'
+      +escapeHtml(payants>=x.n?'Atteint ✓':payants+' / '+x.n+' filleuls abonnés')+'</span></div>'
+      +'<div class="dfi-barre"><span style="width:'+Math.round(part*100)+'%"></span></div>'
+      +'<div class="pr-pal-g">'+escapeHtml(x.gain)+'</div></div>';
+  }).join('');
+  const liste=(Array.isArray(p.prenoms)?p.prenoms:[]).map(x=>'<div class="pr-f"><span>'+escapeHtml(x.prenom||'Un ami')+'</span><b>'
+    +(x.statut==='payant'?'Abonné ✓':'Inscrit')+'</b></div>').join('');
+  return '<div class="pr-hero"><div class="pr-titre">Fais découvrir RepCore</div>'
+    +'<p>Ton ami a <b>1 mois d’essai en plus</b>. Toi, <b>1 mois offert</b> à son premier paiement.</p></div>'
+    +'<div class="pr-code-carte"><div class="pr-code-lib">Ton code</div>'
+    +'<div class="pr-code" id="pr-code">'+(code?escapeHtml(code):'…')+'</div>'
+    +'<button type="button" class="btn btn-red" style="width:100%;margin:12px 0 8px;min-height:48px" onclick="parrainagePartager(this)"'+(code?'':' disabled')+'>Partager mon code</button>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:0;min-height:42px" onclick="parrainageCopier(this)"'+(code?'':' disabled')+'>Copier le lien</button></div>'
+    +'<div class="pr-tuiles">'+tuile(inscrits,inscrits>1?'inscrits':'inscrit')+tuile(payants,payants>1?'abonnés':'abonné')
+      +tuile(mois,'mois gagné'+(mois>1?'s':''))+'</div>'
+    +'<div class="pr-paliers">'+paliers+'</div>'
+    +(liste?'<div class="pr-liste"><div class="pr-sous">Tes filleuls</div>'+liste+'</div>':'')
+    +'<p class="pr-note">Le mois offert s’ajoute à la fin de ta période en cours : ton abonnement n’est pas modifié, ton accès est prolongé. Rien n’est crédité tant que ton ami n’a pas payé.</p>';
+}
+async function ouvrirParrainage(){
+  if(!PARRAINAGE_ACTIF||!currentUser) return false;
+  go('s-parrainage');
+  const z=document.getElementById('pr-contenu');
+  if(z) z.innerHTML=htmlParrainage(currentUser);
+  try{ await parrainageAssurerCode(currentUser); }catch(e){}
+  // Les compteurs, relus au serveur, et les badges s'ils ont bougé.
+  try{ await majRecompensesServeur({force:true}); }catch(e){}
+  if(z&&document.getElementById('s-parrainage')?.classList.contains('active')) z.innerHTML=htmlParrainage(currentUser);
+  return true;
+}
+function parrainageCopier(btn){
+  const l=lienPerso();
+  if(!l) return false;
+  const fait=()=>{ if(btn){ btn.textContent='Lien copié ✓'; setTimeout(()=>{ btn.textContent='Copier le lien'; },2000); } };
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(l).then(fait,()=>toast(l)); return true; }
+  }catch(e){}
+  toast(l);
+  return false;
+}
+// SYNCHRONE jusqu'à navigator.share : un await consommerait le geste, et iOS
+// refuserait le partage.
+function parrainagePartager(btn){
+  const c=currentUser&&currentUser.parrainage&&currentUser.parrainage.code;
+  if(!c) return false;
+  const l=lienPerso();
+  const texte=parrainageMessage(c,l);
+  try{ rcm('parrainage_partage'); }catch(e){}
+  if(navigator.share){
+    navigator.share({title:'RepCore',text:texte,url:l||undefined}).catch(()=>{});
+    return true;
+  }
+  return parrainageCopier(btn);
+}
+// L'entrée, dans le profil.
+function _rendreEntreeParrainage(){
+  const z=document.getElementById('atp-parrainage');
+  if(!z) return;
+  if(!PARRAINAGE_ACTIF||!currentUser||currentUser.role==='coach'){ z.innerHTML=''; return; }
+  const p=currentUser.parrainage||{};
+  z.innerHTML='<button type="button" class="card" onclick="ouvrirParrainage()" style="display:flex;align-items:center;gap:12px;width:100%;box-sizing:border-box;margin:0 0 18px;padding:14px 16px;text-align:left;cursor:pointer;font-family:Montserrat,sans-serif;color:var(--text)">'
+    +'<span style="flex:1;min-width:0"><span style="display:block;font-size:var(--fs-sm);font-weight:800;letter-spacing:1.5px;text-transform:uppercase">Inviter des amis</span>'
+    +'<span style="display:block;font-size:var(--fs-xs);color:var(--sub);margin-top:3px">'+escapeHtml((Number(p.moisGagnes)||0)?(p.moisGagnes+' mois gagné'+(p.moisGagnes>1?'s':'')+' · ton code '+(p.code||'')):'1 mois offert par ami abonné')+'</span></span>'
+    +'<span aria-hidden="true" style="flex:none;color:var(--sub);font-size:var(--fs-lg)">›</span></button>';
+}
+// ── Le rappel doux, en fin de séance ───────────────────────────────────────
+// Après un record ou un palier (rang, série, badge), une ligne — pas une
+// carte, pas un bouton rouge. Une fois par semaine au plus.
+const PARRAINAGE_RAPPEL_CLE='rc_parr_rappel';
+// PURE.
+function parrainageRappelDu(u,o,dernier,maintenant,actif){
+  const on=(typeof actif==='boolean')?actif:PARRAINAGE_ACTIF;
+  if(!on||!u||u.role==='coach') return false;
+  const x=o||{};
+  if(!((Number(x.records)||0)>0||x.palier)) return false;
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  return !(Number(dernier)>0&&t-Number(dernier)<7*864e5);
+}
+function rendreRappelParrainage(u,o){
+  const z=document.getElementById('wd-parrainage');
+  if(!z) return false;
+  let der=0; try{ der=Number(localStorage.getItem(PARRAINAGE_RAPPEL_CLE))||0; }catch(e){}
+  if(!parrainageRappelDu(u,o,der)){ z.innerHTML=''; return false; }
+  z.innerHTML='<button type="button" class="pr-rappel" onclick="ouvrirParrainage()">⚡ Fais-le découvrir, gagne 1 mois <span aria-hidden="true">→</span></button>';
+  try{ localStorage.setItem(PARRAINAGE_RAPPEL_CLE,String(Date.now())); }catch(e){}
+  return true;
+}
 // ══ LES DÉFIS DU CANAL ═════════════════════════════════════════════════════
 //
 // Un défi est un message du Canal de type 'defi' : /canaux/<coach>/messages/<id>
@@ -17625,29 +17971,39 @@ async function renderDefiAccueil(){
     }
     z.innerHTML=htmlDefiAccueil(_dfAccueilCache.l,currentUser,_dfInscrits(),Date.now());
   }catch(e){ z.innerHTML=''; }
-  try{ await majDefisResultats(); }catch(e){}
   return true;
 }
 // ── Les résultats : CHAMPION et DÉFI RELEVÉ ────────────────────────────────
 // La clôture (Cloud Functions) écrit /defis_resultats/<moi>/<id>. On les
 // recopie dans le dossier (u.defisReleves) — c'est là que _badgesFaits lit,
 // et c'est ce qui date les badges. Une fois par jour au plus.
-async function majDefisResultats(){
+// ── Ce que le serveur a décidé : défis bouclés, parrainage ────────────────
+// La clôture d'un défi écrit /defis_resultats/<moi>/<id>, le parrainage
+// /parrainage/comptes/<moi>. On les recopie dans le dossier (u.defisReleves,
+// u.parrainage) — c'est là que _badgesFaits lit, et c'est ce qui date les
+// badges. Une fois par jour au plus, sauf o.force (l'écran « Inviter des amis »).
+async function majRecompensesServeur(o){
   const u=currentUser;
   if(!u||u.role!=='athlete'||!CLOUD.ok()) return 0;
   const j=localISODate(new Date());
-  try{ if(localStorage.getItem('rc_defis_res_jour')===j+'|'+u.email) return 0; }catch(e){}
-  const r=await CLOUD.pullDefisResultats((u.email||'').replace(/\./g,','));
+  if(!(o&&o.force)){
+    try{ if(localStorage.getItem('rc_defis_res_jour')===j+'|'+u.email) return 0; }catch(e){}
+  }
   try{ localStorage.setItem('rc_defis_res_jour',j+'|'+u.email); }catch(e){}
+  let r=null;
+  if(canalAccessible(u)||(u.defisReleves&&Object.keys(u.defisReleves).length))
+    try{ r=await CLOUD.pullDefisResultats((u.email||'').replace(/\./g,',')); }catch(e){ r=null; }
+  let pc=false;
+  if(PARRAINAGE_ACTIF) try{ pc=await majParrainageMiroir(u); }catch(e){ pc=false; }
   const avant=Object.keys(u.defisReleves||{});
-  const n=defisFusionnerResultats(u,r);
+  const n=defisFusionnerResultats(u,r)+(pc?1:0);
   if(n){
     try{ saveUser(); }catch(e){}
     // CHAQUE DÉFI RELEVÉ a son écran (dans la file des badges) : « J'AI
     // RELEVÉ LE DÉFI D'OCTOBRE », et sa carte à partager.
-    try{ Object.keys(u.defisReleves).filter(id=>avant.indexOf(id)<0).forEach(id=>_bdgFile.push({defi:id})); _bdgPlanifier(); }catch(e){}
-    // LE SIXIÈME POINT D'APPEL DES BADGES : CHAMPION et DÉFI RELEVÉ arrivent
-    // du serveur, jamais d'une séance ni d'un bilan.
+    try{ Object.keys(u.defisReleves||{}).filter(id=>avant.indexOf(id)<0).forEach(id=>_bdgFile.push({defi:id})); _bdgPlanifier(); }catch(e){}
+    // LE SIXIÈME POINT D'APPEL DES BADGES : CHAMPION, RECRUTEUR et MENTOR
+    // arrivent du serveur, jamais d'une séance ni d'un bilan.
     try{ majBadges(); }catch(e){}
     try{ majXp(); }catch(e){}
   }
@@ -34360,8 +34716,10 @@ function loadClientHome(){
   // Le rang et la jauge des volts, sous le prénom. majXp y tourne : c'est
   // aussi le rattrapage d'un dossier ancien à la mise à jour.
   try{ _rendreRang(u); }catch(e){}
-  // Le rappel du défi en cours (et, une fois par jour, ses résultats).
+  // Le rappel du défi en cours.
   try{ renderDefiAccueil(); }catch(e){}
+  // Une fois par jour : défis bouclés et parrainage (badges et mois gagnés).
+  try{ majRecompensesServeur(); }catch(e){}
   // Avatar athlète
   const avatar=document.getElementById('clh-athlete-avatar');
   if(avatar) avatar.innerHTML=u.athletePhoto?`<img src="${escapeHtml(u.athletePhoto)}" style="width:100%;height:100%;object-fit:cover">`:ini(u.fname,u.lname);
@@ -42685,8 +43043,13 @@ function finishWorkout(incomplete=false){
   try{ majBadges(); }catch(e){}
   // LES VOLTS, APRÈS LES BADGES : ceux que la séance vient de débloquer
   // comptent dans le gain, et un passage de rang passe dans la file APRÈS eux.
-  try{ majXp(); }catch(e){}
+  let _xpFin=null;
+  try{ _xpFin=majXp(); }catch(e){}
   try{ rendreVoltsFin(currentUser,sess); }catch(e){}
+  // LE RAPPEL DOUX DU PARRAINAGE : après un record ou un palier seulement
+  // (rang, série ou badge en file de célébration), une fois par semaine.
+  try{ rendreRappelParrainage(currentUser,{records:(_cmp&&_cmp.records&&_cmp.records.length)|0,
+    palier:!!(_xpFin&&_xpFin.fete)||_bdgFile.length>0}); }catch(e){}
   // LA BOUCLE DE RETOUR PAR MUSCLE. Vide la plupart du temps — une fois par
   // semaine et par muscle, sur la derniere seance qui le touche.
   try{ rcRendreSrpe(); }catch(e){}
@@ -68156,10 +68519,11 @@ const BADGES_ACQUIS=Object.freeze([
   // lit pas depuis un dossier : on compare la date d'inscription à celle du
   // 500e, FONDATEUR_LIMITE. Tant qu'elle n'est pas posée, le badge dort.
   {id:'fondateur',nom:'FONDATEUR',famille:'unique',palier:null,icone:'fondateur',condition:'Fais partie des 500 premiers inscrits.',test:f=>f.fondateur,inactif:()=>!(FONDATEUR_LIMITE>0)},
-  // Les deux suivants attendent le parrainage, qui n'existe pas encore : ils
-  // sont montrés, jamais attribués.
-  {id:'recruteur',nom:'RECRUTEUR',famille:'unique',palier:null,icone:'recruteur',condition:'Parraine 3 personnes.',test:()=>0,inactif:()=>true},
-  {id:'mentor',nom:'MENTOR',famille:'unique',palier:null,icone:'mentor',condition:'Parraine 10 personnes.',test:()=>0,inactif:()=>true},
+  // LE PARRAINAGE : des filleuls ABONNÉS (un inscrit ne compte pas —
+  // anti-fraude), datés au paiement du 3e et du 10e (u.parrainage.payantsLe,
+  // recopié de /parrainage/comptes). Fermés tant que PARRAINAGE_ACTIF l'est.
+  {id:'recruteur',nom:'RECRUTEUR',famille:'unique',palier:null,icone:'recruteur',condition:'Parraine 3 personnes abonnées.',test:f=>_bdgNieme(f.parrainages,3),inactif:()=>!PARRAINAGE_ACTIF},
+  {id:'mentor',nom:'MENTOR',famille:'unique',palier:null,icone:'mentor',condition:'Parraine 10 personnes abonnées.',test:f=>_bdgNieme(f.parrainages,10),inactif:()=>!PARRAINAGE_ACTIF},
   // LES DÉFIS DU CANAL : CHAMPION est daté par la clôture du défi
   // (defis_resultats → u.defisReleves) — le premier du classement d'un défi
   // bouclé. « DÉFI RELEVÉ » N'EST PAS ICI : c'est un badge daté PAR DÉFI, hors
@@ -68372,6 +68736,9 @@ function _badgesFaits(u,maintenant){
     .sort().map(j=>{ const [a,m,dd]=j.split('-').map(Number); return new Date(a,m-1,dd,20).getTime(); });
   const cree=Number(u&&u.createdAt)||0;
   if(FONDATEUR_LIMITE>0&&cree>0&&cree<=FONDATEUR_LIMITE) f.fondateur=cree;
+  // Les filleuls abonnés, datés (RECRUTEUR, MENTOR).
+  f.parrainages=((u&&u.parrainage&&Array.isArray(u.parrainage.payantsLe))?u.parrainage.payantsLe:[])
+    .map(Number).filter(x=>x>0).sort((a,b)=>a-b);
   // Le premier défi gagné (CHAMPION).
   const dr=(u&&u.defisReleves&&typeof u.defisReleves==='object')?Object.keys(u.defisReleves).map(k=>u.defisReleves[k]).filter(Boolean):[];
   const dc=dr.filter(x=>x.champion).map(x=>Number(x.fin)||Number(x.termineLe)||0).filter(x=>x>0).sort((a,b)=>a-b);
@@ -107371,6 +107738,7 @@ function _apercuVisuelNom(){
 }
 function openAthleteProfile(){
   const u=currentUser;
+  try{ _rendreEntreeParrainage(); }catch(e){}
   const circle=document.getElementById('atp-photo-circle');
   if(circle) circle.innerHTML=u.athletePhoto?`<img src="${escapeHtml(u.athletePhoto)}" style="width:100%;height:100%;object-fit:cover">`:icon('user',36);
   const fnEl=document.getElementById('atp-fname');
