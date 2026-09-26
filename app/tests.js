@@ -21859,6 +21859,23 @@ async function testExercices(){
         return _echec('la phrase ne distingue pas « un seul bilan » de « une seule mesure »');
       return /relevée qu’une fois/.test(s)?true
         :_echec('rien ne dit que c’est la MESURE qui manque, pas le bilan');})());
+    ok('MENSURATIONS — LES COURBES AU DESSIN DU POIDS : UNE PAR MESURE, À LA DATE DE CHAQUE BILAN',(()=>{
+      const S=[{label:'Droit',color:'#E02020',pts:[{d:'2026-07-01',v:38},{d:'2026-07-15',v:38.4},{d:'2026-09-01',v:39.2}]},
+               {label:'Gauche',color:'#f97316',pts:[{d:'2026-07-01',v:37.6},{d:'2026-09-01',v:38.5}]}];
+      const h=_courbeMesures(S,{unite:'cm',couleur:e=>e>0?'rgb(9, 9, 9)':'x'});
+      if(!h) return _echec('aucun tracé');
+      if((h.match(/data-serie="/g)||[]).length!==2) return _echec('une courbe par mesure attendue');
+      if((h.match(/class="pc-pt/g)||[]).length!==5) return _echec('chaque relevé est un point : '+(h.match(/class="pc-pt/g)||[]).length);
+      if((h.match(/pc-der/g)||[]).length!==2) return _echec('le dernier relevé de chaque courbe est souligné');
+      if(/<circle|<canvas/.test(h)) return _echec('cercle ou canevas');
+      if(!/39,2 cm/.test(h)||!/rgb\(9, 9, 9\)">\+1,2 cm/.test(h)) return _echec('bulle : dernière valeur et écart');
+      if(!/stroke="#f97316"/.test(h)) return _echec('la couleur de la mesure est perdue');
+      // À LA DATE : le bilan du 15/07 est au quart de la largeur, pas au milieu.
+      if(!/left:22\.5\d%/.test(h)) return _echec('le point du 15/07 n’est pas à sa date');
+      if(_courbeMesures([{label:'x',color:'red',pts:[{d:'2026-07-01',v:38}]}])!=='') return _echec('un tracé pour un seul relevé');
+      // Et l'onglet n'a plus de canevas à remplir après coup.
+      if(/lineChart\(canvasId|multiLineChart\(canvasId/.test(String(showProgressTab))) return _echec('l’onglet dessine encore au canevas');
+      return true;})());
     ok('Le tableau des mensurations grise ce qui a été reporté',(()=>{
       const s=String(showProgressTab);
       if(s.indexOf('bmReportee(bl[ci],m.k)')<0)

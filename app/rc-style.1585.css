@@ -10700,3 +10700,17 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .prog-onglets>button{grid-column:span 3;min-width:0;width:100%;margin:0;justify-content:center;text-align:center;min-height:42px}
 .prog-onglets>button:nth-child(-n+3){grid-column:span 4}
 @media (max-width:420px){ .prog-onglets{gap:6px} .prog-onglets>button{padding-left:4px!important;padding-right:4px!important;letter-spacing:.5px!important} }
+/* Les mensurations, au dessin de la courbe du poids (26/09/2026). */
+.pc-carte-m{margin-bottom:0}
+.pc-ecart{flex:none;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;white-space:nowrap}
+.pc-m .pc-cadre{height:170px}
+.pc-bulle-m{gap:3px;align-items:stretch}
+.pc-b-l{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.pc-b-l i{width:8px;height:8px;border-radius:50%;flex:none}
+.pc-b-l b{font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;color:#fff}
+.pc-b-l span{font-size:var(--fs-xs);font-weight:800}
+@media (max-width:480px){
+  .pc-m .pc-cadre{height:120px}
+  .pc-ecart{font-size:var(--fs-xs)}
+  .pc-b-l b{font-size:var(--fs-sm)}
+}

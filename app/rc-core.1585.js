@@ -68975,14 +68975,21 @@ function showProgressTab(tab,btn,sansMemo){
         :diff<0?'var(--green)':'var(--red)';
       // Le filet de gauche prend la couleur de la mesure : c'est ce qui
       // rattache la carte à sa courbe sans avoir à lire le titre.
-      miniCharts+=`<div class="evo-carte" style="padding:12px;margin-bottom:0;border-left:3px solid ${g.items[0].color}">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <div style="font-size:var(--fs-xs);font-weight:800;color:${g.items[0].color};letter-spacing:1.4px;text-transform:uppercase;--halo-c:${g.items[0].color};text-shadow:var(--halo-2)55">${g.label}</div>
-          ${diff!==null?`<div style="font-size:var(--fs-xs);font-weight:700;color:${col}">${diff>0?'+':''}${diff}cm</div>`:''}
+      // LA CARTE AU DESSIN DE LA COURBE DU POIDS (26/09/2026) : meme en-tete,
+      // meme trace — les couleurs des mesures distinguent droite et gauche.
+      const _iso=b=>{ try{ return localISODate(new Date(b.date)); }catch(e){ return ''; } };
+      const _series=g.items.map(it=>({label:it.l||'Mesure relevée',color:it.color,
+        pts:bl.map(b=>({d:_iso(b),v:getBM(b,it.k)})).filter(p=>p.v!==null&&p.d)}));
+      const _trace=tracable?_courbeMesures(_series,{unite:'cm',
+        couleur:e=>e===0?'var(--sub)':(e<0?'var(--green)':'var(--red)')}):'';
+      miniCharts+=`<div class="evo-carte pc-carte pc-carte-m">
+        <div class="pc-tete">
+          <span class="pc-ico" aria-hidden="true">${_pesIcone('barres')}</span>
+          <span class="pc-titre">${g.label}</span>
+          ${diff!==null?`<span class="pc-ecart" style="color:${col}">${diff>0?'+':''}${String(diff).replace('.',',')} cm</span>`:''}
         </div>
-        ${isGroup?`<div style="display:flex;gap:8px;margin-bottom:4px">${g.items.map(it=>`<span style="font-size:var(--fs-xs);color:${it.color};font-weight:700">● ${it.l}</span>`).join('')}</div>`:''}
-        ${tracable
-          ?`<canvas id="mc-${g.items.map(i=>i.k).join('-')}" height="96" style="width:100%;display:block"></canvas>`
+        ${tracable&&_trace
+          ?_trace
           :`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;padding:12px 2px 4px">
              ${bl.length<2
                ?'Une courbe demande deux bilans. Il en manque encore un.'
@@ -69023,19 +69030,9 @@ function showProgressTab(tab,btn,sansMemo){
     c.insertAdjacentHTML('afterbegin','<div id="prog-corps"></div>');
     try{ renderCorpsAthlete(document.getElementById('prog-corps')); }catch(e){}
     c.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
-    setTimeout(()=>{
-      groupsToRender.forEach(g=>{
-        const canvasId='mc-'+g.items.map(i=>i.k).join('-');
-        if(g.items.length===1){
-          const vals=bl.map(b=>getBM(b,g.items[0].k));
-          const cPairs=bilLabels.map((l,i)=>({l,v:vals[i]})).filter(p=>p.v!==null);
-          if(cPairs.length>1) lineChart(canvasId,cPairs.map(p=>p.l),cPairs.map(p=>p.v),g.items[0].color);
-        } else {
-          const series=g.items.map(it=>({data:bl.map(b=>getBM(b,it.k)),color:it.color,label:it.l}));
-          if(series.some(s=>s.data.filter(v=>v!==null).length>1)) multiLineChart(canvasId,bilLabels,series);
-        }
-      });
-    },60);
+    // Les courbes sont DEJA dans les cartes (_courbeMesures, du HTML et du
+    // SVG) : il ne reste qu'a lancer leur trace, comme celle du poids.
+    try{ if(typeof arcTracerCourbes==='function') arcTracerCourbes(c); }catch(e){}
 
   } else if(tab==='masseGrasse'){
     if(!bl.length){c.innerHTML=emptyState('clipboard','Ta masse grasse se calcule sur les mesures d\'un bilan. Il n\'y en a pas encore.','Remplir mon premier bilan','openBilanChoice()');return;}
@@ -95952,6 +95949,82 @@ function _carteCourbePoids(serie,opts){
         ${choix}
       </div>
       ${corps||vide}
+    </div>`;
+}
+/**
+ * LES COURBES DES MENSURATIONS, AU DESSIN DE LA COURBE DU POIDS (26/09/2026,
+ * demande de Kevin : « applique le même design »). Memes graduations, meme
+ * trait epais a halo, meme aire degradee, memes points et meme bulle — mais
+ * PLUSIEURS courbes possibles (droite / gauche), chacune dans SA couleur :
+ * c'est elle qui les distingue, et la legende la reprend.
+ * Les points sont places a la DATE de leur bilan : deux bilans a trois
+ * semaines d'ecart ne sont pas a la meme distance que deux bilans a deux mois.
+ * @param {{label:string,color:string,pts:{d:string,v:number}[]}[]} series  d = date ISO
+ * @param {{unite?:string,couleur?:(ecart:number)=>string}} [opts]
+ */
+function _courbeMesures(series,opts){
+  const o=opts||{}, u=o.unite||'cm';
+  const S=(series||[]).map(s=>Object.assign({},s,{pts:(s.pts||[]).filter(p=>p&&p.d&&isFinite(p.v)).sort((a,b)=>a.d<b.d?-1:(a.d>b.d?1:0))}))
+    .filter(s=>s.pts.length>=2);
+  if(!S.length) return '';
+  const tous=[].concat(...S.map(s=>s.pts));
+  const d0=tous.reduce((m,p)=>p.d<m?p.d:m,tous[0].d), d1=tous.reduce((m,p)=>p.d>m?p.d:m,tous[0].d);
+  const jours=_joursEntre(d0,d1)||1;
+  const vals=tous.map(p=>p.v);
+  let mn=Math.min(...vals), mx=Math.max(...vals);
+  if(mx-mn<1){ const c=(mx+mn)/2; mn=c-0.5; mx=c+0.5; }
+  const grad=_pesGraduations(mn-(mx-mn)*0.1,mx+(mx-mn)*0.1);
+  const g0=grad[0], g1=grad[grad.length-1];
+  const X=d=>(_joursEntre(d0,d)/jours)*100;
+  const Y=v=>100-((v-g0)/(g1-g0))*100;
+  const f2=n=>n.toFixed(2);
+  const n=(_courbeMesures._n=(_courbeMesures._n||0)+1);
+  let defs='', sous='', traits='', points='';
+  S.forEach((s,k)=>{
+    const id='mesSous'+n+'_'+k, d=s.pts.map((p,i)=>(i?'L':'M')+f2(X(p.d))+' '+f2(Y(p.v))).join(' ');
+    defs+=`<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" style="stop-color:${s.color};stop-opacity:${S.length>1?.22:.40}"/>
+      <stop offset="1" style="stop-color:${s.color};stop-opacity:0"/></linearGradient>`;
+    sous+=`<path d="${d} L${f2(X(s.pts[s.pts.length-1].d))} 100 L${f2(X(s.pts[0].d))} 100 Z" fill="url(#${id})" stroke="none"/>`;
+    traits+=`<path class="pc-rel" data-serie="${k}" d="${d}" fill="none" stroke="${s.color}" stroke-width="2.6"
+      stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"
+      style="filter:drop-shadow(0 0 3px ${s.color}) drop-shadow(0 0 7px ${s.color}88)"/>`;
+    const pas=Math.max(1,Math.ceil(s.pts.length/6));
+    points+=s.pts.map((p,i)=>{
+      const der=i===s.pts.length-1;
+      const cls='pc-pt'+(der?' pc-der':((i%pas===0)?' pc-pt-a':''));
+      const st=der?`border-color:${s.color};box-shadow:0 0 0 4px ${s.color}44,0 0 14px ${s.color}`
+        :((i%pas===0)?`border-color:${s.color};box-shadow:0 0 8px ${s.color}`:`background:${s.color};box-shadow:0 0 5px ${s.color}`);
+      return `<span class="${cls}" style="left:${f2(X(p.d))}%;top:${f2(Y(p.v))}%;${st}"></span>`;
+    }).join('');
+  });
+  // LA BULLE : la derniere valeur de chaque courbe, et son ecart depuis la premiere.
+  const lignesB=S.map(s=>{
+    const a=s.pts[0].v, z=s.pts[s.pts.length-1].v, e=Math.round((z-a)*10)/10;
+    const c=(typeof o.couleur==='function')?o.couleur(e):'var(--sub)';
+    return `<div class="pc-b-l">${S.length>1?`<i style="background:${s.color}"></i>`:''}<b>${_synNombre(z)} ${u}</b>`
+      +`<span style="color:${c}">${e>0?'+':(e<0?'−':'')}${_synNombre(Math.abs(e))} ${u}</span></div>`;
+  }).join('');
+  const yB=Math.min(...S.map(s=>Y(s.pts[s.pts.length-1].v)));
+  const bulle=`<div class="pc-bulle pc-bulle-m${yB<34?' pc-bulle-bas':''}" style="top:${f2(yB)}%">${lignesB}</div>`;
+  const lignes=grad.map(v=>`<div class="pc-g" style="top:${f2(Y(v))}%"><span>${String(v).replace('.',',')}</span></div>`).join('');
+  // Les dates : celles des bilans, jusqu'a cinq, sans chevauchement.
+  const ds=[...new Set(tous.map(p=>p.d))].sort();
+  const pasD=Math.max(1,Math.ceil(ds.length/5));
+  const choix=ds.filter((d,i)=>i%pasD===0||i===ds.length-1);
+  const xs=choix.map((d,i)=>`<span style="left:${f2(X(d))}%" class="${X(d)<8?'pc-x0':(X(d)>92?'pc-x1':'')}">${_fmtJourCourt(d)}</span>`).join('');
+  const legende=`<div class="pc-leg">${S.map(s=>`<span><i class="pc-l-pt" style="border-color:${s.color};box-shadow:0 0 6px ${s.color}"></i>${escapeHtml(s.label||'Mesure relevée')}</span>`).join('')}</div>`;
+  return `<div class="pc pc-m">
+      <div class="pc-cadre">${lignes}
+        <div class="pc-zone">
+          <svg class="arc-courbe" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <defs>${defs}</defs>${sous}${traits}
+          </svg>
+          ${points}${bulle}
+        </div>
+      </div>
+      <div class="pc-x">${xs}</div>
+      ${legende}
     </div>`;
 }
 /** Un clic sur une periode : la carte se refait, les autres ne bougent pas. */
