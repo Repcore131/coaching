@@ -5410,7 +5410,8 @@ function _validateAthletePkg(o){
   try{
     const params=new URLSearchParams(window.location.search);
     aNettoyer=!!(params.get('coachpkg')||params.get('athletepkg')||params.get('s')
-      ||params.get('bilan')==='1'||params.get('wo')==='1'||params.get('diete')==='1');
+      ||params.get('bilan')==='1'||params.get('wo')==='1'||params.get('diete')==='1'
+      ||!!params.get('wrapped'));
     // Coach invite → athlete device
     const cpkg=params.get('coachpkg');
     if(cpkg){
@@ -5459,6 +5460,9 @@ function _validateAthletePkg(o){
     // un drapeau ici, sa consommation dans la même liste plus bas.
     const _dieteDeepLink=params.get('diete')==='1';
     if(_dieteDeepLink) window._pendingDieteOpen=true;
+    // ?wrapped=<clé> — la notification du Wrapped (sw.js, 'wrapped-reminder').
+    const _wrDeep=params.get('wrapped');
+    if(_wrDeep&&/^(m-\d{4}-\d{2}|a-\d{4}|1)$/.test(_wrDeep)) window._pendingWrappedOpen=_wrDeep;
   }catch(e){}
   finally{
     if(aNettoyer){
@@ -6875,6 +6879,8 @@ function routeUser(){
   // avoir posé son écran avant qu'on en pousse un autre par-dessus.
   if(window._pendingDieteOpen){window._pendingDieteOpen=false;
     setTimeout(()=>{ try{ go('s-nutrition'); loadNutrition(); }catch(e){} },1000);}
+  if(window._pendingWrappedOpen){ const _k=window._pendingWrappedOpen; window._pendingWrappedOpen=false;
+    setTimeout(()=>{ try{ ouvrirWrapped(_k==='1'?null:_k); }catch(e){} },1000);}
 }
 // ARBITRAGE ASSUMÉ (24/07/2026, plan Spark) — status, paymentStatus et
 // paypalSubscriptionId ne sont protégés par AUCUNE règle serveur :
@@ -33598,6 +33604,8 @@ function loadClientHome(){
   // retrouve toute sa collection à la mise à jour, datée, sans attendre sa
   // prochaine séance — et une seule bannière récapitulative.
   _rattraperBadges();
+  // LE WRAPPED du mois (1er-7) ou de l'année (décembre), s'il y a de quoi.
+  try{ _rendreCarteWrapped(); }catch(e){}
   try{ rcRendreRetourAccueil(); }catch(e){}
   // LE MOT AU COACH. Repeint a chaque retour sur l'accueil : l'edition en
   // cours est portee par _motEdition, elle ne se perd donc pas au passage.
@@ -67776,6 +67784,437 @@ function partagerBadge(id,btn){
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
   if(sp&&ok){ sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent='Partager'; },2000); }
   return ok;
+}
+// ══════════════════ WRAPPED : LE MOIS, L'ANNÉE, EN CINQ HISTOIRES ══════════
+//
+// Le bilan d'une période, raconté comme une story : cinq slides plein écran,
+// des chiffres qui montent, et un profil révélé par la foudre. Mensuel du 1er
+// au 7 (sur le mois écoulé), annuel tout décembre (sur l'année qui s'achève).
+//
+// TOUT SE LIT DANS L'HISTORIQUE. calculerWrapped est PURE : elle ne tient
+// aucun compteur, elle relit `sessions`, `badges` et `sessions_config`. Rien
+// n'est enregistré au dossier — un Wrapped se recalcule à chaque ouverture,
+// il ne peut donc jamais diverger de ce qui a été fait.
+//
+// L'HEURE EST CELLE DE L'APPAREIL, comme pour les badges secrets : « tu
+// t'entraînes le mardi vers 18 h » veut dire 18 h là où l'athlète vit.
+const WR_JOURS=['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+// Les six profils. L'ORDRE EST LA PRIORITÉ : le premier dont la règle tient
+// l'emporte. Des règles simples, dites en clair, et vérifiables par l'athlète
+// sur ses propres chiffres — un profil qu'on ne comprend pas ne se partage pas.
+const WR_PROFILS=Object.freeze([
+  {cle:'revenant',nom:'Le Revenant',phrase:'Trois semaines d’arrêt ou plus, et tu es revenu. C’est le retour qui compte.',
+   regle:w=>w._retour&&w.seances>=2},
+  {cle:'records',nom:'La Machine à records',phrase:'Tu as battu tes charges plus souvent que la plupart ne s’entraînent.',
+   regle:w=>w._records>=3&&w._records>=w.seances*0.5},
+  {cle:'leve_tot',nom:'Le Lève-tôt',phrase:'La salle est à toi avant que la ville se réveille.',
+   regle:w=>w.heureMoyenne&&w.heureMoyenne.minutes<9*60&&w._partMatin>=0.6},
+  {cle:'metronome',nom:'Le Métronome',phrase:'Semaine après semaine, au rendez-vous. La régularité est une arme.',
+   regle:w=>w._semaines>=2&&w._semainesValidees/w._semaines>=0.75},
+  {cle:'volume',nom:'Le Volume',phrase:'Des tonnes, et encore des tonnes. Tu ne comptes pas, tu empiles.',
+   regle:w=>w.seances>0&&w.tonnage/w.seances>=8000},
+  {cle:'increvable',nom:'L’Increvable',phrase:'Rien ne t’arrête. Tu étais là, et tu as tenu.',
+   regle:w=>w.seances>0}
+]);
+// Les exercices d'une séance, avec leur NOM d'affichage et leur clé
+// d'identité (alias compris) : `data` (finishWorkout) ou `exercises`.
+function _wrExos(s){
+  const cle=nm=>{ try{ return resoudreAlias(exKey(nm)); }catch(e){ return String(nm); } };
+  if(s&&s.data&&typeof s.data==='object'&&Object.keys(s.data).length)
+    return Object.keys(s.data).map(nm=>({nom:nm,cle:cle(nm),sets:((s.data[nm]||{}).sets)||[]}));
+  return ((s&&s.exercises)||[]).filter(e=>e&&(e.name||e.nm))
+    .map(e=>({nom:e.name||e.nm,cle:cle(e.name||e.nm),sets:e.sets||[]}));
+}
+/**
+ * PURE. Le Wrapped de la période [debut, fin[ (ms). `maintenant` (facultatif)
+ * borne le compte des semaines d'une période en cours (l'année en décembre).
+ * @returns {{seances:number,tonnage:number,dureeTotale:number,
+ *   meilleurRecord:?{nom:string,avant:number,apres:number,gain:number,date:number},
+ *   muscleTop:?{cle:string,lib:string,series:number},
+ *   jourPrefere:?{jour:number,lib:string,n:number},
+ *   heureMoyenne:?{minutes:number,lib:string},
+ *   serieMax:number,badgesGagnes:string[],
+ *   profil:?{cle:string,nom:string,phrase:string},records:number}}
+ */
+function calculerWrapped(u,debut,fin,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const toutes=((u&&u.sessions)||[]).filter(s=>s&&s.date>0).slice().sort((a,b)=>a.date-b.date);
+  const dans=s=>s.date>=debut&&s.date<fin;
+  const ses=toutes.filter(dans);
+  const w={seances:ses.length,tonnage:0,dureeTotale:0,meilleurRecord:null,muscleTop:null,
+    jourPrefere:null,heureMoyenne:null,serieMax:0,badgesGagnes:[],profil:null,records:0};
+  // LES RECORDS se jugent contre TOUT ce qui précède, période ou non : le
+  // premier record de septembre bat peut-être une charge d'avril.
+  const meilleur={};
+  const muscles={}, jours=[0,0,0,0,0,0,0];
+  let minutes=0, matin=0;
+  for(const s of toutes){
+    const inclus=dans(s);
+    let vol=0;
+    for(const e of _wrExos(s)){
+      let cur=0, faites=0;
+      for(const st of e.sets){
+        if(!st||st.done===false) continue;
+        const kg=parseFloat(st.weight)||0, r=parseFloat(st.repsDone!=null?st.repsDone:st.reps)||0;
+        if(kg>cur) cur=kg;
+        vol+=kg*r;
+        if(st.done===true) faites++;
+      }
+      if(inclus&&cur>0){
+        const h=meilleur[e.cle]||0;
+        if(h>0&&cur>h){
+          w.records++;
+          const g=Math.round((cur-h)*100)/100;
+          if(!w.meilleurRecord||g>=w.meilleurRecord.gain)
+            w.meilleurRecord={nom:e.nom,avant:h,apres:cur,gain:g,date:s.date};
+        }
+      }
+      if(cur>(meilleur[e.cle]||0)) meilleur[e.cle]=cur;
+      if(inclus&&faites){
+        let cls=null; try{ cls=resoudreMusclesLecture(e.nom,null,u); }catch(err){ cls=null; }
+        if(cls&&cls!==VOL_CARDIO) for(const m of (cls.p||[])) muscles[m]=(muscles[m]||0)+faites;
+      }
+    }
+    if(!inclus) continue;
+    w.tonnage+=Number(s.volume)>0?Math.round(Number(s.volume)):Math.round(vol);
+    w.dureeTotale+=Math.max(0,Number(s.duration)||0);
+    const d=new Date(s.date-(Number(s.duration)||0)*60000);
+    jours[new Date(s.date).getDay()]++;
+    const mn=d.getHours()*60+d.getMinutes();
+    minutes+=mn; if(mn<9*60) matin++;
+  }
+  // LE MUSCLE N°1 : le plus de séries validées en muscle PRINCIPAL.
+  let top=null;
+  for(const m in muscles) if(!top||muscles[m]>muscles[top]) top=m;
+  if(top) w.muscleTop={cle:top,lib:(MUSCLES[top]&&MUSCLES[top].lib)||top,series:muscles[top]};
+  // LE JOUR PRÉFÉRÉ : à égalité, le premier de la semaine (lundi d'abord).
+  if(ses.length){
+    let j=-1;
+    for(const k of [1,2,3,4,5,6,0]) if(j<0||jours[k]>jours[j]) j=k;
+    w.jourPrefere={jour:j,lib:WR_JOURS[j],n:jours[j]};
+    const moy=Math.round(minutes/ses.length);
+    w.heureMoyenne={minutes:moy,lib:Math.floor(moy/60)+' h '+String(moy%60).padStart(2,'0')};
+  }
+  // LA SÉRIE : semaines calendaires consécutives au quota, DANS la période.
+  let quota=1; try{ quota=seancesPrevuesParSemaine(u); }catch(e){ quota=1; }
+  const sem={};
+  for(const s of ses){ let k=0; try{ k=_lundiDe(s.date).getTime(); }catch(e){ continue; } sem[k]=(sem[k]||0)+1; }
+  const lundis=Object.keys(sem).map(Number).sort((a,b)=>a-b);
+  let suite=0, prec=null, validees=0;
+  for(const l of lundis){
+    if(sem[l]<quota){ suite=0; prec=null; continue; }
+    validees++;
+    suite=(prec!=null&&Math.round((l-prec)/864e5)===7)?suite+1:1;
+    prec=l;
+    if(suite>w.serieMax) w.serieMax=suite;
+  }
+  // LES BADGES GAGNÉS dans la période, dans l'ordre de la collection.
+  const b=(u&&u.badges&&typeof u.badges==='object')?u.badges:{};
+  w.badgesGagnes=(typeof BADGES_ACQUIS!=='undefined'?BADGES_ACQUIS.map(x=>x.id):Object.keys(b))
+    .filter(id=>b[id]&&b[id].at>=debut&&b[id].at<fin);
+  // LE PROFIL. Les critères internes (préfixés _) servent aux règles puis
+  // disparaissent : ils ne font pas partie de ce que la fonction promet.
+  let nbSem=0;
+  try{ nbSem=Math.max(1,Math.round((_lundiDe(Math.max(debut,Math.min(fin-1,t))).getTime()-_lundiDe(debut).getTime())/(7*864e5))+1); }
+  catch(e){ nbSem=1; }
+  const avant=toutes.filter(s=>s.date<debut);
+  const retour=!!(ses.length&&avant.length&&ses[0].date-avant[avant.length-1].date>=21*864e5);
+  const ctx=Object.assign({},w,{_records:w.records,_retour:retour,_partMatin:ses.length?matin/ses.length:0,
+    _semaines:nbSem,_semainesValidees:validees});
+  const p=WR_PROFILS.find(x=>{ try{ return !!x.regle(ctx); }catch(e){ return false; } });
+  w.profil=p?{cle:p.cle,nom:p.nom,phrase:p.phrase}:null;
+  return w;
+}
+// PURE. Les périodes offertes à l'instant `t` : le mois écoulé du 1er au 7,
+// l'année qui s'achève tout décembre. Plus récente d'abord : en décembre,
+// l'annuelle passe devant.
+function wrappedPeriodes(t){
+  const d=new Date(typeof t==='number'?t:Date.now());
+  const out=[];
+  if(d.getMonth()===11){
+    const a=d.getFullYear();
+    out.push({type:'annee',cle:'a-'+a,debut:new Date(a,0,1).getTime(),fin:new Date(a+1,0,1).getTime(),
+      titre:'TON ANNÉE '+a,carte:'Ton année '+a+' est prête',lib:String(a)});
+  }
+  if(d.getDate()<=7){
+    const dm=new Date(d.getFullYear(),d.getMonth()-1,1), fm=new Date(d.getFullYear(),d.getMonth(),1);
+    let mois=''; try{ mois=dm.toLocaleDateString('fr-FR',{month:'long'}); }catch(e){ mois=''; }
+    out.push({type:'mois',cle:'m-'+dm.getFullYear()+'-'+String(dm.getMonth()+1).padStart(2,'0'),
+      debut:dm.getTime(),fin:fm.getTime(),titre:'TON MOIS DE '+mois.toUpperCase(),
+      carte:'Ton mois de '+mois+' est prêt',lib:mois});
+  }
+  return out;
+}
+// PURE. « 12,4 » t ou « 850 » kg : l'unité qui se lit.
+function _wrTonnage(kg){
+  if(kg>=1000){ const t=kg/1000; return {v:t<100?Math.round(t*10)/10:Math.round(t),u:'TONNES',dec:t<100?1:0}; }
+  return {v:Math.round(kg),u:'KG',dec:0};
+}
+const _wrNb=(v,dec)=>{ const x=Number(v)||0;
+  try{ return x.toLocaleString('fr-FR',{minimumFractionDigits:dec||0,maximumFractionDigits:dec||0}); }
+  catch(e){ return String(x); } };
+// PURE. Les cinq slides, en DONNÉES : l'écran et le dessin 1080×1920 lisent
+// la même liste, et ne peuvent donc pas se contredire.
+function wrappedSlides(w,per){
+  const t=_wrTonnage(w.tonnage);
+  const voitures=Math.floor(w.tonnage/1200);
+  const r=w.meilleurRecord;
+  const nb=w.badgesGagnes.length;
+  return [
+    {k:'seances',sur:per.titre,grand:w.seances,dec:0,unite:w.seances>1?'SÉANCES':'SÉANCE',
+     lignes:[fmtDureeHeures(w.dureeTotale)+' d’entraînement',
+       w.seances?('soit '+fmtDureeHeures(Math.round(w.dureeTotale/w.seances))+' par séance'):'']},
+    {k:'tonnage',sur:'TU AS SOULEVÉ',grand:t.v,dec:t.dec,unite:t.u,
+     lignes:[voitures>=1?('l’équivalent de '+_wrNb(voitures)+' voiture'+(voitures>1?'s':'')):'',
+       w.muscleTop?('Muscle n°1 : '+w.muscleTop.lib+' · '+w.muscleTop.series+' séries'):'']},
+    {k:'records',sur:'RECORDS BATTUS',grand:w.records,dec:0,unite:w.records>1?'RECORDS':'RECORD',
+     lignes:[r?(r.nom+' : '+_recKg(r.avant)+' → '+_recKg(r.apres)+' kg'):'Le prochain t’attend.',
+       nb?(nb+' badge'+(nb>1?'s':'')+' débloqué'+(nb>1?'s':'')):'']},
+    {k:'habitudes',sur:'TES HABITUDES',grand:w.serieMax,dec:0,unite:w.serieMax>1?'SEMAINES D’AFFILÉE':'SEMAINE D’AFFILÉE',
+     lignes:[w.jourPrefere?('Ton jour : le '+w.jourPrefere.lib):'',
+       w.heureMoyenne?('Ton heure : '+w.heureMoyenne.lib):'']},
+    {k:'profil',sur:'TON PROFIL',profil:w.profil,
+     resume:[[_wrNb(w.seances),w.seances>1?'séances':'séance'],[_wrNb(t.v,t.dec),t.u.toLowerCase()],
+       [_wrNb(w.records),w.records>1?'records':'record'],[_wrNb(w.serieMax),'sem. d’affilée']]}
+  ].map(s=>Object.assign(s,{lignes:(s.lignes||[]).filter(Boolean)}));
+}
+
+// ── LE DESSIN 1080×1920 ───────────────────────────────────────────────
+// Fond noir, accents rouges, un éclair en filigrane : l'identité de l'écran.
+// `i` : 0..4 — la slide 4 est le RÉSUMÉ, la carte qu'on publie. Mêmes outils
+// d'écriture que les autres visuels (ombre double passe, Bebas, Montserrat).
+function _dessinerWrapped(w,per,i,signature){
+  const cv=document.createElement('canvas');
+  cv.width=STORY_L; cv.height=STORY_H;
+  const g=cv.getContext('2d');
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const o=_visuelOutils(g);
+  const s=wrappedSlides(w,per)[Math.max(0,Math.min(4,i|0))];
+  g.fillStyle='#000'; g.fillRect(0,0,STORY_L,STORY_H);
+  // Les accents : une lueur rouge en haut, un trait rouge en bas.
+  const lu=g.createRadialGradient(cx,0,0,cx,0,STORY_H*0.6);
+  lu.addColorStop(0,'rgba(224,32,32,.35)'); lu.addColorStop(1,'rgba(224,32,32,0)');
+  g.fillStyle=lu; g.fillRect(0,0,STORY_L,STORY_H);
+  _recEclairFiligrane(g,cx+260,120,cx-200,STORY_H*0.62,_recGraine(per.cle+'|'+i),'transparent');
+  g.textAlign='center'; g.textBaseline='alphabetic';
+  o.ombre(true);
+  g.fillStyle='#E02020'; g.font='800 36px '+MONT;
+  const ss=o.ajusteEspace(s.sur,'800',36,MONT,8,LARG,22);
+  g.font='800 '+ss+'px '+MONT;
+  o.ecrireEspace(s.sur,cx,300,8,true);
+  if(s.k!=='profil'){
+    const v=_wrNb(s.grand,s.dec);
+    g.fillStyle='#fff';
+    const gs=o.ajuste(v,'700',380,BEBAS,LARG,140);
+    g.font='700 '+gs+'px '+BEBAS;
+    o.ecrire(v,cx,860);
+    g.font='800 52px '+MONT;
+    o.ecrireEspace(s.unite,cx,960,8,true);
+    g.fillStyle='rgba(255,255,255,.9)';
+    s.lignes.forEach((l,k)=>{
+      const ls=o.ajuste(l,'700',44,MONT,LARG,24);
+      g.font='700 '+ls+'px '+MONT;
+      o.ecrire(l,cx,1120+k*80);
+    });
+  } else {
+    const p=s.profil||{nom:'—',phrase:''};
+    g.fillStyle='#fff';
+    const ps=o.ajuste(p.nom.toUpperCase(),'700',170,BEBAS,LARG,70);
+    g.font='700 '+ps+'px '+BEBAS;
+    o.ecrire(p.nom.toUpperCase(),cx,560);
+    // La phrase, sur deux lignes au plus.
+    g.fillStyle='rgba(255,255,255,.88)'; g.font='600 38px '+MONT;
+    const mots=String(p.phrase).split(' '); const lignes=[]; let l='';
+    for(const m of mots){ const e=l?l+' '+m:m; if(g.measureText(e).width>LARG&&l){ lignes.push(l); l=m; } else l=e; }
+    if(l) lignes.push(l);
+    lignes.slice(0,3).forEach((x,k)=>o.ecrire(x,cx,660+k*54));
+    // Le résumé : quatre chiffres en grille 2×2.
+    s.resume.forEach(([v,lib],k)=>{
+      const x=M+LARG/4+(k%2)*LARG/2, y=1000+Math.floor(k/2)*260;
+      g.fillStyle='#fff'; g.font='700 150px '+BEBAS; o.ecrire(v,x,y);
+      g.fillStyle='#E02020'; g.font='800 32px '+MONT; o.ecrireEspace(lib.toUpperCase(),x,y+56,4,true);
+    });
+    g.fillStyle='rgba(255,255,255,.7)'; g.font='800 30px '+MONT;
+    o.ecrireEspace(per.titre,cx,1600,6,true);
+  }
+  o.ombre(false);
+  g.fillStyle='#E02020'; g.fillRect(cx-60,STORY_H-210,120,5);
+  _recSignature(g,o,String(signature||''),STORY_H-120,LARG);
+  o.ombre(false);
+  return cv;
+}
+
+// ── L'ÉCRAN (s-wrapped) ───────────────────────────────────────────────
+// Cinq slides, une barre de progression par slide en haut, tap à droite pour
+// avancer et à gauche pour reculer, avance seule toutes les 6,5 s sauf sur la
+// dernière. Les chiffres montent (arcCompteur) à chaque arrivée sur leur
+// slide ; la révélation du profil passe par rcFoudre.
+const WR_DUREE=6500;
+let _wr=null;                 // {w, per, i, minuteur, t0}
+function ouvrirWrapped(cle){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  const per=wrappedPeriodes(Date.now()).find(p=>!cle||p.cle===cle)
+    ||(cle&&_wrPeriodeDeCle(cle));
+  if(!u||!per) return false;
+  const w=calculerWrapped(u,per.debut,per.fin);
+  if(!w.seances){ toast('Aucune séance sur cette période.','var(--orange)'); return false; }
+  const z=document.getElementById('s-wrapped'); if(!z) return false;
+  _wrFermer(true);
+  _wr={w,per,i:0,minuteur:null};
+  const sl=wrappedSlides(w,per);
+  z.innerHTML='<div class="wr-barres">'+sl.map(()=>'<span><i></i></span>').join('')+'</div>'
+    +'<div class="wr-haut"><button type="button" class="wr-btn" aria-label="Partager cette slide" onclick="event.stopPropagation();partagerWrapped(_wr?_wr.i:0)">'+icon('share',18)+'</button>'
+    +'<button type="button" class="wr-btn" aria-label="Fermer" onclick="event.stopPropagation();fermerWrapped()">✕</button></div>'
+    +'<div class="wr-slides" onclick="_wrTap(event)">'+sl.map((s,k)=>_wrHtmlSlide(s,k)).join('')+'</div>';
+  try{ localStorage.setItem('rc_wrapped_vu_'+per.cle,'1'); }catch(e){}
+  go('s-wrapped');
+  _wrAller(0);
+  return true;
+}
+// Une période désignée par sa clé (lien de notification ouvert plus tard).
+function _wrPeriodeDeCle(cle){
+  let m=/^m-(\d{4})-(\d{2})$/.exec(cle||'');
+  if(m) return wrappedPeriodes(new Date(+m[1],+m[2],1,12).getTime()).find(p=>p.cle===cle)||null;
+  m=/^a-(\d{4})$/.exec(cle||'');
+  if(m) return wrappedPeriodes(new Date(+m[1],11,15,12).getTime()).find(p=>p.cle===cle)||null;
+  return null;
+}
+function _wrHtmlSlide(s,k){
+  if(s.k==='profil'){
+    const p=s.profil||{nom:'—',phrase:''};
+    return '<section class="wr-slide wr-profil" data-k="'+k+'" hidden>'
+      +'<div class="wr-sur">'+escapeHtml(s.sur)+'</div>'
+      +'<h2 class="wr-profil-nom">'+escapeHtml(p.nom)+'</h2>'
+      +'<p class="wr-phrase">'+escapeHtml(p.phrase)+'</p>'
+      +'<div class="wr-resume">'+s.resume.map(([v,l])=>'<div><b>'+escapeHtml(v)+'</b><span>'+escapeHtml(l)+'</span></div>').join('')+'</div>'
+      +'<button type="button" class="btn btn-red wr-partager" onclick="event.stopPropagation();partagerWrapped(4,this)">'
+        +icon('share',16)+' <span>Partager mon résumé</span></button>'
+      +'</section>';
+  }
+  return '<section class="wr-slide" data-k="'+k+'" hidden>'
+    +'<div class="wr-sur">'+escapeHtml(s.sur)+'</div>'
+    +'<div class="wr-grand" data-cible="'+s.grand+'" data-dec="'+(s.dec||0)+'">0</div>'
+    +'<div class="wr-unite">'+escapeHtml(s.unite)+'</div>'
+    +s.lignes.map(l=>'<p class="wr-ligne">'+escapeHtml(l)+'</p>').join('')
+    +'</section>';
+}
+function _wrAller(i){
+  if(!_wr) return;
+  const z=document.getElementById('s-wrapped'); if(!z) return;
+  const n=5;
+  i=Math.max(0,Math.min(n-1,i));
+  _wr.i=i;
+  if(_wr.minuteur){ clearTimeout(_wr.minuteur); _wr.minuteur=null; }
+  z.querySelectorAll('.wr-slide').forEach(s=>{ s.hidden=Number(s.dataset.k)!==i; });
+  // Les barres : pleines avant, vides après, la courante se remplit.
+  z.querySelectorAll('.wr-barres>span').forEach((b,k)=>{
+    const f=b.firstElementChild;
+    f.getAnimations&&f.getAnimations().forEach(a=>a.cancel());
+    f.style.width=k<i?'100%':'0%';
+    if(k===i){
+      if(i<n-1&&!arcReduit()) _animer(f,[{width:'0%'},{width:'100%'}],{duration:WR_DUREE,easing:'linear',fill:'forwards'});
+      else f.style.width='100%';
+    }
+  });
+  const s=z.querySelector('.wr-slide[data-k="'+i+'"]');
+  const el=s&&s.querySelector('.wr-grand');
+  if(el){
+    // Le chiffre repart de zéro à chaque arrivée : c'est la montée qu'on vient voir.
+    const v=Number(el.dataset.cible)||0, dec=Number(el.dataset.dec)||0;
+    el.dataset.valeur='0';
+    arcCompteur(el,v,{duree:1200,format:x=>_wrNb(x,dec)});
+  }
+  if(s&&s.classList.contains('wr-profil')){
+    const nom=s.querySelector('.wr-profil-nom');
+    try{ rcFoudre(nom,{eclairs:3,conteneur:z}); }catch(e){}
+    if(!arcReduit()) _animer(nom,[{opacity:0,transform:'scale(1.4)',filter:'blur(8px)'},
+      {opacity:1,transform:'scale(1)',filter:'blur(0)'}],{duration:ARC.release,delay:60,easing:ARC.snap,fill:'backwards'});
+  }
+  if(i<n-1) _wr.minuteur=setTimeout(()=>_wrAller(_wr?_wr.i+1:0),WR_DUREE);
+}
+// TAP : le tiers gauche recule, le reste avance.
+function _wrTap(e){
+  if(!_wr) return;
+  if(e&&e.target&&e.target.closest&&e.target.closest('button')) return;
+  const x=e&&typeof e.clientX==='number'?e.clientX:window.innerWidth;
+  if(x<window.innerWidth*0.33) _wrAller(_wr.i-1);
+  else if(_wr.i<4) _wrAller(_wr.i+1);
+}
+function _wrFermer(){
+  if(_wr&&_wr.minuteur) clearTimeout(_wr.minuteur);
+  _wr=null;
+}
+function fermerWrapped(){
+  _wrFermer();
+  try{ go('s-client-home'); loadClientHome(); }catch(e){}
+  return true;
+}
+// LE PARTAGE d'une slide (0..3) ou du résumé (4). Natif, sinon téléchargement ;
+// les deux copient le lien perso. SYNCHRONE jusqu'au partage (iOS).
+function partagerWrapped(i,btn){
+  if(!_wr||_storyEnCours) return false;
+  let sig=''; try{ sig=nomSurVisuels(currentUser); }catch(e){ sig=''; }
+  const fmt=visuelFondFormat('rouge');           // opaque : JPEG
+  const nom='repcore-wrapped'+(i===4?'':'-'+(i+1))+'.'+fmt.ext;
+  _storyEnCours=true;
+  let ok=false;
+  try{
+    ok=_storySortirPartage(_dessinerWrapped(_wr.w,_wr.per,i,sig),nom,undefined,fmt)
+      ||_storySortirTelechargement(_dessinerWrapped(_wr.w,_wr.per,i,sig),nom,fmt);
+  }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
+  finally{ _storyEnCours=false; }
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp&&ok){ const l=sp.textContent; sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  return ok;
+}
+
+// ── LA CARTE DE L'ACCUEIL ET LA NOTIFICATION ──────────────────────────
+// Du 1er au 7 : « Ton mois de septembre est prêt ». Tout décembre : « Ton
+// année 2026 est prête ». Rien quand la période est vide — il n'y a rien à
+// raconter, et une carte « 0 séance » serait un reproche.
+function _rendreCarteWrapped(){
+  const z=document.getElementById('clh-wrapped'); if(!z) return false;
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  let html='';
+  try{
+    for(const p of wrappedPeriodes(Date.now())){
+      const w=calculerWrapped(u||{},p.debut,p.fin);
+      if(!w.seances) continue;
+      let vu=false; try{ vu=localStorage.getItem('rc_wrapped_vu_'+p.cle)==='1'; }catch(e){}
+      html+='<button type="button" class="wr-carte" onclick="ouvrirWrapped(\''+p.cle+'\')">'
+        +'<span class="wr-carte-eclair" aria-hidden="true">'+icon('zap',18)+'</span>'
+        +'<span class="wr-carte-t"><b>'+escapeHtml(p.carte)+'</b>'
+        +'<span>'+w.seances+' séance'+(w.seances>1?'s':'')+(w.profil?' · '+escapeHtml(vu?w.profil.nom:'ton profil t’attend'):'')+'</span></span>'
+        +'<span class="wr-carte-v">'+(vu?'Revoir':'Voir')+'</span></button>';
+    }
+  }catch(e){ html=''; }
+  z.innerHTML=html;
+  _wrPlanifierNotif();
+  return !!html;
+}
+// LA NOTIFICATION LOCALE, par le service worker (periodicsync 'wrapped') :
+// une par période, seulement si l'athlète a activé les rappels. Le push
+// serveur (idée 12) n'existe pas encore ; le jour où il existera, il enverra
+// le même titre et la même adresse (?wrapped=<clé>).
+function _wrPlanifierNotif(){
+  try{
+    if(!('serviceWorker' in navigator)) return;
+    const u=currentUser;
+    if(!u||!u._notifEnabled) return;
+    navigator.serviceWorker.ready.then(async reg=>{
+      try{
+        const c=await caches.open('repcore-sw-data');
+        // La dernière séance : le worker ne notifie pas une période où
+        // l'athlète ne s'est pas entraîné — il n'y aurait rien à raconter.
+        const der=((u.sessions||[]).reduce((m,x)=>Math.max(m,Number(x&&x.date)||0),0));
+        await c.put('/wrapped',new Response(JSON.stringify({fname:u.fname||'',derniereSeance:der}),
+          {headers:{'Content-Type':'application/json'}}));
+        if('periodicSync' in reg) await reg.periodicSync.register('wrapped-reminder',{minInterval:12*3600*1000});
+      }catch(e){}
+    }).catch(()=>{});
+  }catch(e){}
 }
 // ══════════ LE PLANNING DE RAPPEL, ECRIT EN UN SEUL ENDROIT ════════════
 //

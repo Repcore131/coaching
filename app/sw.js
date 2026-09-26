@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1584';
+const CACHE = 'repcore-v1585';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -154,7 +154,7 @@ CORPS.push('./img/complements.webp');
 // ni code ni style — c'est-a-dire rien du tout.
 // Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
 // chaque build et reecrit cette ligne comme celle d'index.html.
-const ASSETS = ['./index.html', './rc-core.1584.js', './rc-style.1584.css',
+const ASSETS = ['./index.html', './rc-core.1585.js', './rc-style.1585.css',
   './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
@@ -622,7 +622,43 @@ self.addEventListener('periodicsync', e => {
   if (e.tag === 'bilan-reminder') e.waitUntil(swCheckAndNotify());
   if (e.tag === 'wo-reminder') e.waitUntil(swCheckWoReminder());
   if (e.tag === 'supp-reminder') e.waitUntil(swCheckSuppReminders());
+  if (e.tag === 'wrapped-reminder') e.waitUntil(swCheckWrapped());
 });
+
+// ─── Wrapped : « Ton mois de septembre est prêt » ──────────────────────────
+// Du 1er au 7 du mois (le mois écoulé), et tout décembre (l'année). UNE
+// notification par période, jamais deux : la clé notifiée est retenue. Rien
+// si l'athlète ne s'est pas entraîné pendant la période — la page écrit sa
+// dernière séance dans '/wrapped'. Même clés que wrappedPeriodes (rc-core).
+async function swCheckWrapped() {
+  const cfg = await swGet('/wrapped');
+  if (!cfg) return;
+  const d = new Date();
+  const faites = (await swGet('/wrapped-notifs')) || [];
+  const offres = [];
+  if (d.getMonth() === 11) {
+    const a = d.getFullYear();
+    offres.push({ cle: 'a-' + a, debut: new Date(a, 0, 1).getTime(), titre: 'Ton année ' + a + ' est prête' });
+  }
+  if (d.getDate() <= 7) {
+    const m = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+    let mois = '';
+    try { mois = m.toLocaleDateString('fr-FR', { month: 'long' }); } catch (e) {}
+    offres.push({ cle: 'm-' + m.getFullYear() + '-' + String(m.getMonth() + 1).padStart(2, '0'),
+      debut: m.getTime(), titre: 'Ton mois de ' + mois + ' est prêt' });
+  }
+  const o = offres.find(x => faites.indexOf(x.cle) < 0 && Number(cfg.derniereSeance) >= x.debut);
+  if (!o) return;
+  await swSet('/wrapped-notifs', faites.concat([o.cle]).slice(-24));
+  await self.registration.showNotification(o.titre, {
+    body: (cfg.fname ? cfg.fname + ', tes' : 'Tes') + ' chiffres, tes records et ton profil t’attendent.',
+    icon: './icons/icon-192x192.png',
+    badge: './icons/icon-192x192.png',
+    tag: 'wrapped-' + o.cle,
+    requireInteraction: false,
+    data: { url: './?wrapped=' + o.cle }
+  });
+}
 
 // Jour LOCAL au format AAAA-MM-JJ. toISOString() rend une date UTC : a
 // 00 h 30 en France l'ete, elle designe encore la veille, et la cle de
@@ -683,6 +719,9 @@ self.addEventListener('notificationclick', e => {
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(ws => {
       const w = ws.find(c => c.url.startsWith(self.registration.scope));
+      // LE WRAPPED OUVRE SON ÉCRAN même quand l'app est déjà ouverte : sans
+      // navigation, focus() ramènerait l'onglet sur l'écran où il était.
+      if (w && /[?&]wrapped=/.test(url) && w.navigate) return w.focus().then(c => c.navigate(url));
       return w ? w.focus() : clients.openWindow(url);
     })
   );

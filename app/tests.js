@@ -47754,6 +47754,134 @@ async function testExercices(){
       if(deja.some(b=>b.k==='PERSONAL_BEST')) return _echec('doublon avec NEW_RECORD');
       return /1RM estimée/.test(descRecompense(pb.find(b=>b.k==='PERSONAL_BEST'),{}))?true:_echec('description');})());
 
+    // ══ WRAPPED (26/09/2026) ══════════════════════════════════════════════
+    // calculerWrapped est PURE : chaque cas construit son dossier, en HEURE
+    // LOCALE, sur septembre 2026 (1er = mardi).
+    const _W=(()=>{
+      const deb=new Date(2026,8,1).getTime(), fin=new Date(2026,9,1).getTime(), apres=new Date(2026,9,3).getTime();
+      const sc=(j,h,exos,o)=>Object.assign({date:new Date(2026,8,j,h,0).getTime(),duration:60,
+        data:Object.fromEntries(Object.entries(exos||{}).map(([nm,[w,r,n]])=>[nm,{sets:Array.from({length:n||1},
+          ()=>({weight:w,reps:r,repsDone:r,rir:1,done:true}))}]))},o||{});
+      return {deb,fin,apres,sc};
+    })();
+    ok('Wrapped · mois vide : des zéros, aucun profil, rien d’inventé',(()=>{
+      const {deb,fin,apres,sc}=_W;
+      const w=calculerWrapped({sessions:[sc(-20,12,{DEV:[100,5]})],sessions_config:[{active:true}]},deb,fin,apres);
+      const attendu={seances:0,tonnage:0,dureeTotale:0,meilleurRecord:null,muscleTop:null,
+        jourPrefere:null,heureMoyenne:null,serieMax:0,profil:null};
+      for(const k in attendu) if(JSON.stringify(w[k])!==JSON.stringify(attendu[k])) return _echec(k+' = '+JSON.stringify(w[k]));
+      if(!Array.isArray(w.badgesGagnes)||w.badgesGagnes.length) return _echec('badges : '+JSON.stringify(w.badgesGagnes));
+      const v=calculerWrapped({},deb,fin,apres);
+      return v.seances===0&&v.profil===null?true:_echec('dossier vierge');})());
+    ok('Wrapped · une séance : chiffres, jour, heure, et L’Increvable',(()=>{
+      const {deb,fin,apres,sc}=_W;
+      // Mardi 8 septembre, fin 19 h, une heure : début 18 h 00.
+      const u={sessions:[sc(8,19,{'DEVELOPPE COUCHE':[100,5,3]},{volume:1500,sets:3})],sessions_config:[{active:true},{active:true},{active:true}]};
+      const w=calculerWrapped(u,deb,fin,apres);
+      if(w.seances!==1) return _echec('séances '+w.seances);
+      if(w.tonnage!==1500) return _echec('tonnage '+w.tonnage);
+      if(w.dureeTotale!==60) return _echec('durée '+w.dureeTotale);
+      if(!w.jourPrefere||w.jourPrefere.lib!=='mardi') return _echec('jour '+JSON.stringify(w.jourPrefere));
+      if(!w.heureMoyenne||w.heureMoyenne.lib!=='18 h 00') return _echec('heure '+JSON.stringify(w.heureMoyenne));
+      if(w.meilleurRecord) return _echec('une première séance fait un record');
+      if(w.serieMax!==0) return _echec('série '+w.serieMax+' avec 1 séance sur 3 prévues');
+      if(!w.profil||w.profil.cle!=='increvable') return _echec('profil '+JSON.stringify(w.profil));
+      // Le muscle, s'il est reconnu, est un muscle PRINCIPAL avec ses séries.
+      if(w.muscleTop&&!(w.muscleTop.series===3&&MUSCLES[w.muscleTop.cle])) return _echec('muscle '+JSON.stringify(w.muscleTop));
+      return true;})());
+    ok('Wrapped · mois complet : records, série, badges, Métronome',(()=>{
+      const {deb,fin,apres,sc}=_W;
+      // Référence en août, puis trois séances par semaine sur tout septembre,
+      // en soirée, une charge qui monte chaque semaine.
+      const ses=[sc(-5,19,{SQUAT:[100,5,3]})];
+      const jours=[1,3,5, 8,10,12, 15,17,19, 22,24,26, 29];
+      jours.forEach((j,k)=>ses.push(sc(j,19,{SQUAT:[100+Math.floor(k/3)*2.5,5,3]},{volume:4000,sets:12})));
+      const u={sessions:ses,sessions_config:[{active:true},{active:true},{active:true}],
+        badges:{assidu_1:{at:new Date(2026,8,12,19).getTime()},'premiere-seance':{at:new Date(2026,6,1).getTime()}}};
+      const w=calculerWrapped(u,deb,fin,apres);
+      if(w.seances!==13) return _echec('séances '+w.seances);
+      if(w.tonnage!==52000) return _echec('tonnage '+w.tonnage);
+      if(w.dureeTotale!==780) return _echec('durée '+w.dureeTotale);
+      if(w.records!==4) return _echec('records '+w.records);
+      const r=w.meilleurRecord;
+      if(!r||r.nom!=='SQUAT'||r.apres!==110||r.avant!==107.5||r.gain!==2.5) return _echec('meilleur record '+JSON.stringify(r));
+      // Semaines du 31/08, 7, 14, 21 : 3 séances chacune ; celle du 28/09 : 1.
+      if(w.serieMax!==4) return _echec('série '+w.serieMax);
+      if(w.badgesGagnes.join()!=='assidu_1') return _echec('badges '+w.badgesGagnes.join());
+      if(w.jourPrefere.lib!=='mardi') return _echec('jour '+w.jourPrefere.lib);
+      if(!w.profil||w.profil.cle!=='metronome') return _echec('profil '+JSON.stringify(w.profil));
+      return true;})());
+    ok('Wrapped · les profils suivent leurs règles',(()=>{
+      const {deb,fin,apres,sc}=_W;
+      const cfg=[{active:true},{active:true},{active:true},{active:true},{active:true}];
+      // LE REVENANT : rien depuis juillet, deux séances en septembre.
+      const rev=calculerWrapped({sessions:[sc(-60,19,{A:[50,5]}),sc(10,19,{A:[40,5]}),sc(20,19,{A:[40,5]})],sessions_config:cfg},deb,fin,apres);
+      if(rev.profil.cle!=='revenant') return _echec('revenant → '+rev.profil.cle);
+      // LA MACHINE À RECORDS : un record à chaque séance.
+      const rec=calculerWrapped({sessions:[sc(-3,19,{A:[50,5]}),sc(2,19,{A:[52,5]}),sc(9,19,{A:[54,5]}),sc(16,19,{A:[56,5]})],sessions_config:cfg},deb,fin,apres);
+      if(rec.profil.cle!=='records') return _echec('records → '+rec.profil.cle);
+      // LE LÈVE-TÔT : fin 7 h, une heure : début 6 h.
+      const tot=calculerWrapped({sessions:[sc(2,7,{}),sc(9,7,{}),sc(16,7,{})],sessions_config:cfg},deb,fin,apres);
+      if(tot.profil.cle!=='leve_tot') return _echec('lève-tôt → '+tot.profil.cle);
+      // LE VOLUME : 9 t par séance, sans régularité.
+      const vol=calculerWrapped({sessions:[sc(2,19,{},{volume:9000}),sc(16,19,{},{volume:9000})],sessions_config:cfg},deb,fin,apres);
+      if(vol.profil.cle!=='volume') return _echec('volume → '+vol.profil.cle);
+      return true;})());
+    ok('Wrapped · les fenêtres : le mois du 1er au 7, l’année en décembre',(()=>{
+      const cles=t=>wrappedPeriodes(t).map(p=>p.cle).join();
+      if(cles(new Date(2026,9,1,9).getTime())!=='m-2026-09') return _echec('1er octobre');
+      if(cles(new Date(2026,9,7,23,59).getTime())!=='m-2026-09') return _echec('7 octobre 23 h 59');
+      if(cles(new Date(2026,9,8,0,1).getTime())!=='') return _echec('8 octobre');
+      if(cles(new Date(2026,11,3).getTime())!=='a-2026,m-2026-11') return _echec('3 décembre : '+cles(new Date(2026,11,3).getTime()));
+      if(cles(new Date(2026,11,31,23).getTime())!=='a-2026') return _echec('31 décembre');
+      if(cles(new Date(2027,0,2).getTime())!=='m-2026-12') return _echec('2 janvier');
+      const p=wrappedPeriodes(new Date(2026,9,2).getTime())[0];
+      if(p.debut!==new Date(2026,8,1).getTime()||p.fin!==new Date(2026,9,1).getTime()) return _echec('bornes du mois');
+      return p.carte==='Ton mois de septembre est prêt'?true:_echec('libellé : '+p.carte);})());
+    ok('Wrapped · cinq slides, chaque slide et le résumé en 1080×1920',(()=>{
+      const {deb,fin,apres,sc}=_W;
+      const w=calculerWrapped({sessions:[sc(8,19,{A:[50,5]},{volume:1200})],sessions_config:[{active:true}]},deb,fin,apres);
+      const per=wrappedPeriodes(new Date(2026,9,2).getTime())[0];
+      const sl=wrappedSlides(w,per);
+      if(sl.length!==5||sl[4].k!=='profil') return _echec('slides '+sl.map(x=>x.k).join());
+      const P=CanvasRenderingContext2D.prototype, f=P.fillText, vus=[];
+      P.fillText=function(t){ vus.push(String(t)); return f.apply(this,arguments); };
+      try{
+        for(let i=0;i<5;i++){
+          const c=_dessinerWrapped(w,per,i,'KEVIN');
+          if(c.width!==1080||c.height!==1920) return _echec('slide '+i+' : '+c.width+'x'+c.height);
+        }
+      } finally { P.fillText=f; }
+      const tout=vus.join('');
+      if(tout.indexOf(w.profil.nom.toUpperCase())<0) return _echec('le résumé ne nomme pas le profil');
+      return tout.indexOf('REPCORE')>=0?true:_echec('pas de signature');})());
+    ok('Wrapped · l’écran : barres, tap, profil, partage par slide',(()=>{
+      const sv=currentUser, svGo=window.go;
+      try{
+        const {sc}=_W;
+        const now=new Date(), per=wrappedPeriodes(Date.now())[0];
+        // Hors fenêtre, l'écran s'ouvre quand même par sa clé.
+        const cle=per?per.cle:('m-'+now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0'));
+        const p=per||_wrPeriodeDeCle(cle);
+        currentUser={role:'athlete',fname:'K',sessions:[{date:p.debut+3*864e5+12*36e5,duration:60,volume:900,
+          data:{A:{sets:[{weight:50,reps:5,done:true}]}}}],sessions_config:[{active:true}]};
+        window.go=()=>{};
+        if(!ouvrirWrapped(cle)) return _echec('l’écran ne s’ouvre pas');
+        const z=document.getElementById('s-wrapped');
+        if(z.querySelectorAll('.wr-barres>span').length!==5) return _echec('pas cinq barres');
+        if(z.querySelectorAll('.wr-slide').length!==5) return _echec('pas cinq slides');
+        if(!z.querySelector('[aria-label="Partager cette slide"]')) return _echec('pas de partage par slide');
+        _wrTap({clientX:window.innerWidth-5,target:z});
+        if(_wr.i!==1) return _echec('le tap à droite n’avance pas');
+        _wrTap({clientX:2,target:z});
+        if(_wr.i!==0) return _echec('le tap à gauche ne recule pas');
+        _wrAller(4);
+        const prof=z.querySelector('.wr-slide[data-k="4"]');
+        if(prof.hidden) return _echec('la slide profil n’apparaît pas');
+        if(!prof.querySelector('[onclick*="partagerWrapped(4"]')) return _echec('pas de partage du résumé');
+        return String(_wrAller).indexOf('rcFoudre')>=0?true:_echec('pas de foudre au profil');
+      } finally { _wrFermer(); window.go=svGo; currentUser=sv; }})());
+
     ok('Les badges n’ont que trois points d’appel',(()=>{
       const s=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
       const n=(s.match(/majBadges\(/g)||[]).length;

@@ -9282,6 +9282,47 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 #rc-confirm.arc-entree,#rc-saisie.arc-entree,#wo-pause-modal.arc-entree{animation:arcVoile var(--t-2) var(--arc-c-discharge) both}
 #rc-confirm.arc-entree>div,#rc-saisie.arc-entree>div,#wo-pause-modal.arc-entree>div{animation:arcFeuille var(--arc-strike) var(--arc-c-discharge) both}
 
+/* ══ WRAPPED ═════════════════════════════════════════════════════════════
+   Plein écran façon stories : fond noir, accents rouges. Les barres en haut
+   disent où l'on en est ; le tiers gauche recule, le reste avance. */
+.wr-ecran{background:#000;color:#fff;position:relative;overflow:hidden;
+  flex-direction:column;padding:calc(10px + env(safe-area-inset-top,0px)) 0 env(safe-area-inset-bottom,0px)}
+.wr-ecran::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at 50% -10%,rgba(224,32,32,.32),transparent 60%)}
+.wr-barres{position:relative;display:flex;gap:4px;padding:0 12px;z-index:2}
+.wr-barres>span{flex:1;height:3px;border-radius:var(--r-full);background:rgba(255,255,255,.25);overflow:hidden}
+.wr-barres>span>i{display:block;height:100%;width:0;background:#E02020}
+.wr-haut{position:relative;display:flex;justify-content:flex-end;gap:6px;padding:8px 10px 0;z-index:2}
+.wr-btn{width:44px;height:44px;border-radius:var(--r-full);border:none;background:rgba(255,255,255,.08);
+  color:#fff;font-size:var(--fs-lg);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.wr-slides{position:relative;flex:1;display:flex;align-items:center;justify-content:center;
+  padding:0 24px 24px;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none}
+.wr-slide{width:100%;max-width:440px;text-align:center}
+.wr-sur{font-size:var(--fs-sm);font-weight:800;letter-spacing:3px;color:#E02020;margin-bottom:10px}
+.wr-grand{font-family:var(--pile-titre);font-size:clamp(96px,32vw,168px);line-height:.9;
+  font-variant-numeric:tabular-nums;text-shadow:0 0 28px rgba(224,32,32,.45)}
+.wr-unite{font-size:var(--fs-md);font-weight:800;letter-spacing:3px;margin:6px 0 18px}
+.wr-ligne{font-size:var(--fs-md);font-weight:700;color:rgba(255,255,255,.88);margin:0 0 8px;line-height:1.4}
+.wr-profil-nom{font-family:var(--pile-titre);font-size:clamp(48px,15vw,80px);line-height:1;margin:0 0 12px;
+  text-shadow:0 0 30px rgba(224,32,32,.6)}
+.wr-phrase{font-size:var(--fs-md);color:rgba(255,255,255,.85);line-height:1.5;margin:0 0 22px}
+.wr-resume{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px}
+.wr-resume b{display:block;font-family:var(--pile-titre);font-size:44px;line-height:1}
+.wr-resume span{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:#E02020}
+.wr-partager{width:100%;display:flex;align-items:center;justify-content:center;gap:8px}
+/* La carte de l'accueil. */
+.wr-carte{width:100%;display:flex;align-items:center;gap:12px;margin:0 0 12px;padding:14px 14px;
+  background:linear-gradient(135deg,#1a0404,#0b0b0c 70%);border:1px solid rgba(224,32,32,.45);
+  border-radius:var(--r-3);color:#fff;text-align:left;cursor:pointer;
+  box-shadow:0 0 22px rgba(224,32,32,.12)}
+.wr-carte-eclair{width:38px;height:38px;border-radius:var(--r-full);background:#E02020;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center}
+.wr-carte-t{flex:1;min-width:0}
+.wr-carte-t b{display:block;font-size:var(--fs-sm);font-weight:800;letter-spacing:.4px}
+.wr-carte-t span{display:block;font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px}
+.wr-carte-v{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--red-text)}
+
+
 /* ── Accessibilité : respect de « Réduire les animations » du système ──────────
    Doit rester en TOUTE FIN de feuille pour l'emporter sur les règles ci-dessus. */
 @media (prefers-reduced-motion: reduce){

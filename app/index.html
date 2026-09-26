@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1584';
+window.RC_BUILD='1585';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -422,7 +422,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1584.css">
+<link rel="stylesheet" href="./rc-style.1585.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -3287,6 +3287,10 @@ const COACH_PHOTO='icons/coach.jpg';
            coach. -->
       <div id="clh-essai"></div>
 
+      <!-- WRAPPED : « Ton mois de … est prêt » (1er-7), « Ton année … » (décembre).
+           Rempli par _rendreCarteWrapped ; vide hors de ces fenêtres. -->
+      <div id="clh-wrapped"></div>
+
       <!-- MOT DU COACH -->
       <div id="clh-annonce" style="display:none"></div>
 
@@ -4260,6 +4264,9 @@ const COACH_PHOTO='icons/coach.jpg';
     <div id="sd-exercices"></div>
   </div></div>
 </div>
+<!-- WRAPPED : cinq slides plein écran, remplies par ouvrirWrapped. -->
+<div id="s-wrapped" class="screen wr-ecran" role="dialog" aria-label="Ton Wrapped"></div>
+
 <div id="s-workout-done" class="screen">
   <!-- UNE SORTIE EXPLICITE. Sans .back-btn, _histPopstate tombait en cas 5 et
        remontait à _ecranOrigine — c’est-à-dire s-workout, la séance qu’on
@@ -5666,5 +5673,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1584.js"></script>
+<script src="./rc-core.1585.js"></script>
 </body></html>
