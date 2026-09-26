@@ -5669,6 +5669,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'programPdfStorageUrl','programPdfVersion',
   'exAlias','exMuscles','exCatalogVersion','exCustom','exFavoris','exRecents',
   'chargesSchema','sessions_config','sessions','streak','streakWeek','lastSession',
+  // Les jokers de série (26/09/2026) : des compteurs et une date, comme streak.
+  'streakJokers','streakJokersUtilises','streakJokerLe',
   // correctionsOrphelines porte EXACTEMENT ce que porte videos[].feedback :
   // le retour d'un coach sur un mouvement, quand la video qui l'a motive
   // n'existe plus (lot 7). Il est classe avec elle, et pour la meme raison.
@@ -33621,6 +33623,8 @@ function loadClientHome(){
   // LES BADGES DÉJÀ MÉRITÉS, rendus une fois par session : un athlète ancien
   // retrouve toute sa collection à la mise à jour, datée, sans attendre sa
   // prochaine séance — et une seule bannière récapitulative.
+  // LES JOKERS AVANT LE COMPTEUR : une série sauvée s'affiche sauvée.
+  try{ _streakRattrapage(); }catch(e){}
   _rattraperBadges();
   // LE WRAPPED du mois (1er-7) ou de l'année (décembre), s'il y a de quoi.
   try{ _rendreCarteWrapped(); }catch(e){}
@@ -54405,6 +54409,8 @@ function _streakPerime(u,now){
   // à la LEVÉE, pas à la dernière séance.
   let depart=u.lastSession;
   try{ depart=Math.max(depart,_suspFinDerniere(u)); }catch(e){}
+  // UN JOKER NON PLUS : la série sauvée repart de la date du joker.
+  depart=Math.max(depart,Number(u.streakJokerLe)||0);
   const jours=Math.floor((now-depart)/864e5);
   return jours>ecartNormalJours(u)+7;
 }
@@ -54475,6 +54481,22 @@ function _rendreStreak(u,s){
     ?a.valeur+' semaine'+(a.valeur>1?'s':'')+' d’assiduité'
     :'Semaine 1'+(a.reste?', '+a.reste.toLowerCase():''))+'. Voir ce qui est compté');
   if(zone) zone.toggleAttribute('data-nul',a.nul);
+  // LES JOKERS, À CÔTÉ DU COMPTEUR : un bouclier par joker en réserve (deux
+  // au plus). Rien quand il n'y en a pas — un bouclier vide ne protège rien.
+  try{
+    const jk=Math.max(0,Math.min(STREAK_JOKERS_MAX,Number(u&&u.streakJokers)||0));
+    let zj=document.getElementById('clh-streak-jokers');
+    const cadre=document.querySelector('#clh-streak .sk-cadre');
+    if(!zj&&cadre){ zj=document.createElement('span'); zj.id='clh-streak-jokers'; zj.className='sk-jokers'; cadre.appendChild(zj); }
+    if(zj){
+      zj.innerHTML=Array.from({length:jk},()=>'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l7.5 3v5.6c0 4.8-3.2 8.6-7.5 10.4-4.3-1.8-7.5-5.6-7.5-10.4V5.5z"/></svg>').join('');
+      zj.hidden=!jk;
+      zj.title=jk?(jk+' joker'+(jk>1?'s':'')+' : '+(jk>1?'ils sauvent':'il sauve')+' ta série si une semaine t’échappe'):'';
+    }
+    if(badge&&jk) badge.setAttribute('aria-label',badge.getAttribute('aria-label').replace(/\. Voir/,', '+jk+' joker'+(jk>1?'s':'')+'. Voir'));
+  }catch(e){}
+  // Le rappel « série en danger » suit l'état affiché.
+  try{ _seriePlanifierNotif(u); }catch(e){}
   if(!el) return;
   if(a.valeur===null){
     el.textContent='';
@@ -54499,7 +54521,12 @@ function streakSemaines(u){
   }catch(e){}
   const s=(u&&u.streak)||0;
   if(!s||!u.lastSession) return s;
-  return _streakPerime(u,Date.now()) ? 0 : s;
+  if(!_streakPerime(u,Date.now())) return s;
+  // PÉRIMÉE, SAUF SI LES JOKERS LA SAUVENT : l'affichage dit ce que la
+  // prochaine écriture fera — y compris sur la fiche du coach, avant que
+  // l'athlète ait rouvert l'application.
+  let b=null; try{ b=streakJokersBilan(u,Date.now()); }catch(e){ b=null; }
+  return (b&&b.consommes>0)?s:0;
 }
 
 
@@ -57269,6 +57296,106 @@ function tauxCompletionFleche(r){
   if(r.tendance<=-3) return '▼';
   return '=';
 }
+// ══ LES JOKERS DE SÉRIE ═══════════════════════════════════════════════════
+//
+// Une semaine ratée ne devrait pas effacer six mois. Un joker se GAGNE toutes
+// les quatre semaines validées (au plus deux en réserve) et se CONSOMME tout
+// seul, au moment où la série allait casser : chaque semaine terminée sans
+// validation en coûte un. S'il n'y en a pas assez, la série casse comme avant.
+//
+// ⚠ u.streak RESTE UN NOMBRE. La demande disait u.streak.jokers ; mais le
+//   compteur est lu comme un nombre par des dizaines d'endroits (accueil,
+//   fiche coach, rite, badges, rapports) et dans le dossier synchronisé. Les
+//   jokers vivent à côté : u.streakJokers (0 à 2), u.streakJokersUtilises (le
+//   nombre consommé dans la série EN COURS, remis à zéro quand elle casse) et
+//   u.streakJokerLe (la date de la dernière consommation).
+//
+// ⚠ UN JOKER N'EST PAS UNE ABSENCE, comme une suspension n'en est pas une :
+//   _streakPerime compte les jours à partir de streakJokerLe s'il est plus
+//   récent que la dernière séance. Sans cela, le compteur sauvé retombait à
+//   zéro à l'affichage suivant.
+const STREAK_JOKERS_MAX=2, STREAK_JOKER_TOUS=4;
+const SERIE_PALIERS=Object.freeze([4,8,12,26,52]);
+// PURE. La clé de la semaine calendaire (le lundi, AAAA-MM-JJ local) : même
+// forme que streakWeek.
+function _streakCleSemaine(t){ return localISODate(_lundiDe(t)); }
+function _streakLundiDeCle(cle){
+  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(cle||''));
+  return m?new Date(+m[1],+m[2]-1,+m[3]):null;
+}
+/**
+ * PURE. Que se passe-t-il pour la série à l'instant `now` ?
+ * @returns {{gel:boolean,perime:boolean,manquees:string[],consommes:number,
+ *   casse:boolean,cle:?string,semaines:number,jokers:number}}
+ *   `manquees` : les semaines TERMINÉES sans validation depuis la dernière
+ *   créditée (hors suspension) ; `consommes` : les jokers à dépenser pour
+ *   sauver la série ; `casse` : il n'y en a pas assez.
+ */
+function streakJokersBilan(u,now){
+  const t=(typeof now==='number')?now:Date.now();
+  const s=Math.max(0,Number(u&&u.streak)||0);
+  const jokers=Math.max(0,Math.min(STREAK_JOKERS_MAX,Number(u&&u.streakJokers)||0));
+  const out={gel:false,perime:false,manquees:[],consommes:0,casse:false,cle:null,semaines:s,jokers};
+  if(!s) return out;
+  // SOUS SUSPENSION, RIEN NE BOUGE : ni casse, ni joker. Le gel suffit.
+  try{ if(suspensionEtat(u,t).actif){ out.gel=true; return out; } }catch(e){}
+  out.perime=_streakPerime(u,t);
+  if(!out.perime) return out;
+  const l0=_streakLundiDeCle(u&&u.streakWeek);
+  if(!l0){ out.casse=true; return out; }
+  // Les semaines entre la dernière créditée et la semaine en cours (qui, elle,
+  // n'est pas terminée), moins celles qu'une suspension a couvertes.
+  let susp=[]; try{ susp=_tcSuspensions(u)||[]; }catch(e){ susp=[]; }
+  const lc=_lundiDe(t).getTime();
+  for(let k=1;k<600;k++){
+    const a=new Date(l0.getFullYear(),l0.getMonth(),l0.getDate()+7*k);
+    if(a.getTime()>=lc) break;
+    const b=new Date(a.getFullYear(),a.getMonth(),a.getDate()+7);
+    let suspendue=false; try{ suspendue=_tcSemaineSuspendue(susp,a.getTime(),b.getTime()); }catch(e){}
+    if(!suspendue) out.manquees.push(localISODate(a));
+  }
+  // Au moins un : la série allait casser, c'est donc qu'une absence la menace.
+  const besoin=Math.max(1,out.manquees.length);
+  if(jokers>=besoin){
+    out.consommes=besoin;
+    out.cle=out.manquees.length?out.manquees[out.manquees.length-1]:String(u.streakWeek);
+  } else out.casse=true;
+  return out;
+}
+// ÉCRIT. Consomme les jokers si la série allait casser et qu'ils suffisent.
+// Rend le bilan ; `sauve` dit qu'une série a été sauvée.
+function _streakAppliquerJokers(u,now){
+  const t=(typeof now==='number')?now:Date.now();
+  const b=streakJokersBilan(u,t);
+  if(!b.consommes) return Object.assign(b,{sauve:false});
+  u.streakJokers=b.jokers-b.consommes;
+  u.streakJokersUtilises=(Number(u.streakJokersUtilises)||0)+b.consommes;
+  u.streakWeek=b.cle;
+  u.streakJokerLe=t;
+  return Object.assign(b,{sauve:true});
+}
+// PURE. « Ton joker a sauvé ta série de 12 semaines » (deux jokers : « Tes
+// jokers ont sauvé… »).
+function streakMessageJoker(b){
+  if(!b||!b.sauve) return '';
+  return (b.consommes>1?'Tes '+b.consommes+' jokers ont sauvé':'Ton joker a sauvé')
+    +' ta série de '+b.semaines+' semaine'+(b.semaines>1?'s':'');
+}
+// AU RETOUR : une fois par session, depuis l'accueil — l'athlète qui revient
+// après une semaine ratée apprend tout de suite que sa série tient.
+let _streakRattrape=false;
+function _streakRattrapage(){
+  if(_streakRattrape) return null;
+  _streakRattrape=true;
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||u.role==='coach') return null;
+  let b=null; try{ b=_streakAppliquerJokers(u,Date.now()); }catch(e){ b=null; }
+  if(b&&b.sauve){
+    try{ saveUser(); }catch(e){}
+    try{ toast('🛡 '+streakMessageJoker(b),'var(--green)',5000); }catch(e){}
+  }
+  return b;
+}
 function updateStreak(){
   const now=Date.now();
   // RÈGLE 2 : le gel est un gel, pas un crédit. Sous suspension le compteur ne
@@ -57278,10 +57405,14 @@ function updateStreak(){
   try{
     if(suspensionEtat(currentUser,now).actif){ currentUser.lastSession=now; return; }
   }catch(e){}
+  // LES JOKERS D'ABORD : si la série allait casser et qu'il y en a assez,
+  // ils sont consommés, et elle ne casse pas.
+  let _jk=null; try{ _jk=_streakAppliquerJokers(currentUser,now); }catch(e){ _jk=null; }
   // Même prédicat que l'affichage : la valeur stockée et la valeur montrée ne
   // peuvent pas diverger.
   if(_streakPerime(currentUser,now)){
     currentUser.streak=0;currentUser.streakWeek=null;
+    currentUser.streakJokersUtilises=0;
   }
   const quota=seancesPrevuesParSemaine(currentUser);
   const depuis=now-7*864e5;
@@ -57292,8 +57423,15 @@ function updateStreak(){
   if(faites>=quota&&currentUser.streakWeek!==cle){
     currentUser.streak=(currentUser.streak||0)+1;
     currentUser.streakWeek=cle;
+    const n=currentUser.streak;
+    // UN JOKER TOUTES LES QUATRE SEMAINES VALIDÉES, deux au plus en réserve.
+    if(n%STREAK_JOKER_TOUS===0)
+      currentUser.streakJokers=Math.min(STREAK_JOKERS_MAX,(Number(currentUser.streakJokers)||0)+1);
+    // LES PALIERS : 4, 8, 12, 26, 52 semaines — la foudre, un écran, une carte.
+    if(SERIE_PALIERS.indexOf(n)>=0){ try{ _celebrerSerie(n); }catch(e){} }
   }
   currentUser.lastSession=now;
+  if(_jk&&_jk.sauve){ try{ toast('🛡 '+streakMessageJoker(_jk),'var(--green)',5000); }catch(e){} }
 }
 function roundWeight(w){return w<20?Math.ceil(w/1.25)*1.25:Math.round(w/2.5)*2.5;}
 // Détecte les exercices à contrepoids (DIPS/TRACTIONS assistés ou guidés)
@@ -67473,10 +67611,11 @@ function _celebrerBadges(ids,recapSeul){
   if(!l.length) return;
   try{ chargerStatsBadges(); }catch(e){}
   const p=_bdgPlan(l,recapSeul);
-  _bdgFile=p.ecrans; _bdgRecap=p.recap;
+  // À LA SUITE de ce qui attend déjà (un palier de série, par exemple).
+  _bdgFile=_bdgFile.concat(p.ecrans); _bdgRecap=_bdgRecap.concat(p.recap);
   // Le délai laisse l'écran de fin de séance se poser : deux mouvements en
   // même temps ne se lisent ni l'un ni l'autre.
-  setTimeout(_bdgSuivant,arcReduit()?0:900);
+  _bdgPlanifier();
 }
 // PURE. L'enchaînement : les écrans (trois au plus), puis le récapitulatif
 // de ce qui reste. Au rattrapage, le récapitulatif seul.
@@ -67489,7 +67628,12 @@ function _bdgPlan(ids,recapSeul){
 function _celebrerBadge(id){ _celebrerBadges([id]); }
 function _bdgSuivant(){
   _bdgFermerEcran(true);
-  if(_bdgFile.length){ _bdgEcran(_bdgFile.shift(),_bdgFile.length); return; }
+  if(_bdgFile.length){
+    const x=_bdgFile.shift();
+    if(x&&typeof x==='object'&&x.serie) _serieEcran(x.serie,_bdgFile.length);
+    else _bdgEcran(x,_bdgFile.length);
+    return;
+  }
   if(_bdgRecap.length){ const r=_bdgRecap; _bdgRecap=[]; _bdgEcranRecap(r); }
 }
 function _bdgCouche(html,etiquette){
@@ -69344,6 +69488,160 @@ function partagerCycle(btn){
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
   if(sp&&ok){ sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent='Partager mon cycle'; },2000); }
   return ok;
+}
+// ══ LES PALIERS DE SÉRIE : 4, 8, 12, 26, 52 SEMAINES ══════════════════════
+//
+// Même file que les badges : un palier atteint en même temps qu'un badge
+// (4 semaines = INARRÊTABLE I) passe D'ABORD — updateStreak tourne avant
+// majBadges —, puis le badge, sur le même écran plein.
+function _celebrerSerie(n){
+  const v=Number(n)||0; if(!v) return;
+  _bdgFile.push({serie:v});
+  _bdgPlanifier();
+}
+let _bdgMinuterie=null;
+function _bdgPlanifier(){
+  if(_bdgMinuterie||document.getElementById('bdg-ecran')) return;
+  _bdgMinuterie=setTimeout(()=>{ _bdgMinuterie=null; _bdgSuivant(); },arcReduit()?0:900);
+}
+// PURE. Les données de la carte de série.
+function serieCarteDonnees(u,n){
+  let sig=''; try{ sig=nomSurVisuels(u); }catch(e){ sig=''; }
+  return {semaines:Math.max(0,Number(n)||0),jokers:Math.max(0,Number(u&&u.streakJokersUtilises)||0),signature:sig};
+}
+let _serieCourante=null;
+// L'écran : le grand chiffre, frappé par la foudre, et les semaines en carrés.
+function _serieEcran(n,reste){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  const d=serieCarteDonnees(u,n);
+  _serieCourante=d;
+  const z=_bdgCouche(
+    '<div class="bdg-ecran-txt serie-ecran">'
+    +'<div class="bdg-ecran-sur">PALIER DE SÉRIE</div>'
+    +'<div class="serie-chiffre" id="serie-chiffre">'+d.semaines+'</div>'
+    +'<div class="serie-lib">SEMAINES D’AFFILÉE</div>'
+    +'<div class="serie-cal" aria-hidden="true">'+Array.from({length:d.semaines},()=>'<i></i>').join('')+'</div>'
+    +(d.jokers?'<p class="bdg-ecran-cond">Dont '+d.jokers+' semaine'+(d.jokers>1?'s':'')+' sauvée'+(d.jokers>1?'s':'')+' par un joker 🛡</p>':'')
+    +_htmlVisuelFonds('serie-fonds')
+    +'<button type="button" class="btn btn-red bdg-ecran-part" onclick="partagerSerie(this)">'+icon('share',16)+' <span>Partager</span></button>'
+    +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" onclick="bdgPlusTard()">'
+      +(reste||_bdgRecap.length?'Suivant':'Plus tard')+'</button>'
+    +'</div>',
+    d.semaines+' semaines d’affilée');
+  try{ monterSelecteurFond('serie-fonds',f=>_dessinerCarteSerie(_serieCourante||d,f),null); }catch(e){}
+  const ch=z.querySelector('#serie-chiffre');
+  if(arcReduit()){ try{ rcFoudre(ch,{son:false}); }catch(e){} }
+  else{
+    _animer(z,[{opacity:0},{opacity:1}],{duration:120,easing:'linear'});
+    try{ rcFoudre(ch,{eclairs:n>=26?3:2,conteneur:z}); }catch(e){}
+    _animer(ch,[{transform:'scale(.3)',opacity:0},{transform:'scale(1.12)',opacity:1,offset:.6},{transform:'scale(1)',opacity:1}],
+      {duration:700,delay:40,easing:ARC.snap,fill:'backwards'});
+    z.querySelectorAll('.serie-cal i').forEach((c,i)=>_animer(c,[{opacity:0,transform:'scale(.2)'},{opacity:1,transform:'scale(1)'}],
+      {duration:220,delay:500+Math.min(i,52)*18,easing:ARC.discharge,fill:'backwards'}));
+  }
+  try{ arcHaptique('succes'); }catch(e){}
+  try{ const p=z.querySelector('.bdg-ecran-part'); if(p) p.focus({preventScroll:true}); }catch(e){}
+}
+/**
+ * LA CARTE 1080×1920 : le grand chiffre, « SEMAINES D'AFFILÉE », le
+ * calendrier des semaines en carrés rouges, la signature. Fond au choix.
+ */
+function _dessinerCarteSerie(d,fond){
+  const cv=document.createElement('canvas');
+  cv.width=STORY_L; cv.height=STORY_H;
+  const g=cv.getContext('2d');
+  const f=fond||'transparent';
+  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const o=_visuelOutils(g);
+  const rouge=f==='rouge';
+  const n=Math.max(0,d.semaines|0);
+  g.textAlign='center'; g.textBaseline='alphabetic';
+  // LA MISE EN PAGE SE CALCULE D'ABORD : le bloc entier est centré entre le
+  // haut et la signature, quel que soit le nombre de semaines.
+  const cols=n<=4?4:(n<=8?4:(n<=12?6:13));
+  const rows=Math.max(1,Math.ceil(n/cols));
+  const gap=n>26?10:16;
+  g.font='700 560px '+BEBAS;
+  const cs=o.ajuste(String(n),'700',560,BEBAS,LARG,200);
+  const cote=Math.max(16,Math.min(n<=12?130:(n<=26?66:54),Math.floor((LARG-gap*(cols-1))/cols)));
+  const hCal=rows*(cote+gap)-gap;
+  const H=60+cs*0.82+90+70+hCal+(d.jokers?70:0);
+  let y=Math.max(150,Math.round((STORY_H-200-H)/2));
+  o.ombre(true);
+  g.fillStyle=rouge?'#fff':'#E02020'; g.font='800 34px '+MONT;
+  o.ecrireEspace('SÉRIE EN COURS',cx,y+34,10,true);
+  // LE GRAND CHIFFRE.
+  g.fillStyle='#fff';
+  g.font='700 '+cs+'px '+BEBAS; o.ecrire(String(n),cx,y+60+cs*0.82);
+  y+=60+cs*0.82+90;
+  const lib='SEMAINES D’AFFILÉE';
+  const ls=o.ajusteEspace(lib,'800',58,MONT,8,LARG,28);
+  g.font='800 '+ls+'px '+MONT; o.ecrireEspace(lib,cx,y,8,true);
+  o.ombre(false);
+  // LE CALENDRIER : une case par semaine, en lignes de 13 (un trimestre) au
+  // plus. Tout est rouge — ce sont des semaines tenues ; la dernière brille.
+  y+=70;
+  const larg=cols*cote+(cols-1)*gap;
+  const x0=cx-larg/2;
+  for(let i=0;i<n;i++){
+    const c=i%cols, r=Math.floor(i/cols);
+    const x=x0+c*(cote+gap), yy=y+r*(cote+gap);
+    g.save();
+    const dernier=i===n-1;
+    g.fillStyle=rouge?(dernier?'#fff':'rgba(255,255,255,.82)'):(dernier?'#ff3b3b':'#E02020');
+    g.shadowColor=rouge?'rgba(255,255,255,.5)':'rgba(224,32,32,.85)'; g.shadowBlur=dernier?26:10;
+    g.fillRect(x,yy,cote,cote);
+    g.restore();
+  }
+  y+=hCal+60;
+  if(d.jokers){
+    o.ombre(true); g.fillStyle='rgba(255,255,255,.88)'; g.font='700 32px '+MONT;
+    o.ecrire('dont '+d.jokers+' sauvée'+(d.jokers>1?'s':'')+' par un joker 🛡',cx,y);
+    o.ombre(false);
+  }
+  _recSignature(g,o,String(d.signature||''),STORY_H-110,LARG);
+  o.ombre(false);
+  return cv;
+}
+function partagerSerie(btn){
+  const d=_serieCourante; if(!d||_storyEnCours) return false;
+  const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond);
+  const nom=visuelNomFichier('repcore-serie',fond);
+  _storyEnCours=true;
+  let ok=false;
+  try{
+    ok=_storySortirPartage(_dessinerCarteSerie(d,fond),nom,undefined,fmt)
+      ||_storySortirTelechargement(_dessinerCarteSerie(d,fond),nom,fmt);
+  }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
+  finally{ _storyEnCours=false; }
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp&&ok){ sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent='Partager'; },2000); }
+  return ok;
+}
+// ══ LE RAPPEL « SÉRIE EN DANGER » ═════════════════════════════════════════
+// Jeudi 18 h et samedi 10 h, si la semaine n'est pas validée. Le push serveur
+// (idée 12) n'existe pas encore : c'est la notification LOCALE du service
+// worker (periodicsync 'serie-reminder'), qui ne sait pas l'heure exacte —
+// le navigateur la réveille à son rythme, au plus tôt toutes les 12 h, et
+// elle part à son premier réveil après l'heure dite. Seulement si l'athlète
+// a activé les rappels, a une série à perdre, et n'est pas suspendu.
+function _seriePlanifierNotif(u){
+  if(!u||!('serviceWorker' in navigator)) return false;
+  let s=0; try{ s=streakSemaines(u)||0; }catch(e){ s=0; }
+  let gel=false; try{ gel=suspensionEtat(u).actif; }catch(e){}
+  const actif=!!(u._notifEnabled&&s>0&&!gel);
+  navigator.serviceWorker.ready.then(async reg=>{
+    try{
+      const c=await caches.open('repcore-sw-data');
+      await c.put('/serie',new Response(JSON.stringify({actif,fname:u.fname||'',streak:s,
+        streakWeek:u.streakWeek||null,jokers:Number(u.streakJokers)||0}),{headers:{'Content-Type':'application/json'}}));
+      if(actif&&'periodicSync' in reg) await reg.periodicSync.register('serie-reminder',{minInterval:12*3600*1000});
+    }catch(e){}
+  }).catch(()=>{});
+  return actif;
 }
 // ══════════ LE PLANNING DE RAPPEL, ECRIT EN UN SEUL ENDROIT ════════════
 //

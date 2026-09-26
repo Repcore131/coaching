@@ -48210,6 +48210,104 @@ async function testExercices(){
           ?true:_echec('sortie différente du bilan');
       } finally { try{ closeModal(); }catch(e){} _celebrerBadges=svC; currentUser=sv; }})());
 
+    // ══ LES JOKERS DE SÉRIE (26/09/2026) ══════════════════════════════════
+    const _JK=(o)=>{
+      const J=864e5, now=Date.now(), l=_lundiDe(now).getTime();
+      const cle=k=>localISODate(new Date(new Date(l).getFullYear(),new Date(l).getMonth(),new Date(l).getDate()-7*k));
+      return Object.assign({id:'jk',email:'jk@t.fr',role:'athlete',createdAt:now-400*J,
+        sessions_config:[{active:true},{active:true},{active:true}],sessions:[],streak:8,
+        streakWeek:cle(3),lastSession:l-17*J},o||{});
+    };
+    const _jkCle=k=>{ const l=_lundiDe(Date.now()); return localISODate(new Date(l.getFullYear(),l.getMonth(),l.getDate()-7*k)); };
+    ok('Joker : deux semaines ratées, deux jokers → consommés, la série tient',(()=>{
+      const u=_JK({streakJokers:2});
+      const b=streakJokersBilan(u,Date.now());
+      if(!b.perime) return _echec('la série n’est pas menacée : le décor est faux');
+      if(b.manquees.join()!==[_jkCle(2),_jkCle(1)].join()) return _echec('semaines manquées '+b.manquees.join());
+      if(b.consommes!==2||b.casse) return _echec(JSON.stringify(b));
+      // Un seul joker ne suffit pas : la série casse.
+      if(!streakJokersBilan(_JK({streakJokers:1}),Date.now()).casse) return _echec('un joker sauve deux semaines');
+      const r=_streakAppliquerJokers(u,Date.now());
+      if(!r.sauve||u.streakJokers!==0||u.streakJokersUtilises!==2) return _echec('écriture '+JSON.stringify(u));
+      if(u.streakWeek!==_jkCle(1)) return _echec('semaine créditée '+u.streakWeek);
+      if(_streakPerime(u,Date.now())) return _echec('la série sauvée est encore périmée');
+      if(streakSemaines(u)!==8) return _echec('affichage '+streakSemaines(u));
+      if(streakMessageJoker(r)!=='Tes 2 jokers ont sauvé ta série de 8 semaines') return _echec(streakMessageJoker(r));
+      const u1=_JK({streakJokers:1,streakWeek:_jkCle(2),lastSession:_lundiDe(Date.now()).getTime()-13*864e5});
+      const r1=_streakAppliquerJokers(u1,Date.now());
+      return streakMessageJoker(r1)==='Ton joker a sauvé ta série de 8 semaines'?true:_echec(streakMessageJoker(r1));})());
+    ok('Joker : l’affichage (et la fiche coach) montre la série que les jokers sauveront',(()=>{
+      const u=_JK({streakJokers:2});
+      if(streakSemaines(u)!==8) return _echec('avec jokers : '+streakSemaines(u));
+      return streakSemaines(_JK({streakJokers:0}))===0?true:_echec('sans joker, la série n’est pas à zéro');})());
+    ok('Joker : gel pendant une suspension (_streakGele), rien n’est consommé',(()=>{
+      const sv=currentUser;
+      try{
+        const now=Date.now();
+        const u=_JK({streakJokers:2,drapeauRouge:{zone:'epaule',cases:['nuit'],date:now-5*864e5},
+          suspension:{actif:true,cause:'drapeau',debut:now-5*864e5,streakGele:8,fin:0}});
+        if(!suspensionEtat(u,now).actif) return _echec('le décor n’est pas suspendu');
+        const b=streakJokersBilan(u,now);
+        if(!b.gel||b.consommes) return _echec(JSON.stringify(b));
+        if(streakSemaines(u)!==_streakGele(u)||_streakGele(u)!==8) return _echec('gel '+streakSemaines(u));
+        currentUser=u; updateStreak();
+        return (u.streakJokers===2&&u.streak===8)?true:_echec('la suspension a consommé : '+u.streakJokers+'/'+u.streak);
+      } finally { currentUser=sv; }})());
+    ok('Joker : sans joker, remise à zéro (et le compte des jokers utilisés aussi)',(()=>{
+      const sv=currentUser;
+      try{
+        const u=_JK({streakJokers:0,streakJokersUtilises:1});
+        currentUser=u; updateStreak();
+        return (u.streak===0&&u.streakWeek===null&&u.streakJokersUtilises===0)?true:_echec(JSON.stringify({s:u.streak,w:u.streakWeek,j:u.streakJokersUtilises}));
+      } finally { currentUser=sv; }})());
+    ok('Joker : +1 toutes les 4 semaines validées, 2 au plus ; paliers 4/8/12/26/52',(()=>{
+      const sv=currentUser, svC=_celebrerSerie, vus=[];
+      try{
+        _celebrerSerie=n=>vus.push(n);
+        const now=Date.now(), J=864e5;
+        const ses=[{date:now-3*36e5},{date:now-J},{date:now-2*J}];
+        const u=_JK({streak:3,streakWeek:_jkCle(1),lastSession:now-2*J,sessions:ses,streakJokers:0});
+        currentUser=u; updateStreak();
+        if(u.streak!==4||u.streakJokers!==1) return _echec('4 semaines → '+u.streak+' / '+u.streakJokers+' joker(s)');
+        if(vus.join()!=='4') return _echec('palier 4 non fêté : '+vus.join());
+        const u2=_JK({streak:7,streakWeek:_jkCle(1),lastSession:now-2*J,sessions:ses,streakJokers:2});
+        currentUser=u2; updateStreak();
+        if(u2.streakJokers!==2) return _echec('plus de deux jokers : '+u2.streakJokers);
+        if(vus.join()!=='4,8') return _echec('palier 8 : '+vus.join());
+        const u3=_JK({streak:4,streakWeek:_jkCle(1),lastSession:now-2*J,sessions:ses,streakJokers:0});
+        currentUser=u3; updateStreak();
+        return (vus.join()==='4,8'&&SERIE_PALIERS.join()==='4,8,12,26,52')?true:_echec('palier fêté à 5 : '+vus.join());
+      } finally { currentUser=sv; _celebrerSerie=svC; }})());
+    ok('Série : les jokers s’affichent en boucliers à côté du compteur',(()=>{
+      if(!document.getElementById('clh-streak')) return true;
+      _rendreStreak({streakJokers:2,sessions_config:[]},5);
+      const z=document.getElementById('clh-streak-jokers');
+      if(!z||z.hidden||z.querySelectorAll('svg').length!==2) return _echec('deux boucliers attendus');
+      _rendreStreak({streakJokers:0,sessions_config:[]},5);
+      return document.getElementById('clh-streak-jokers').hidden?true:_echec('un bouclier sans joker');})());
+    ok('Série : la carte 1080×1920, grand chiffre, « SEMAINES D’AFFILÉE », une case par semaine',(()=>{
+      const P=CanvasRenderingContext2D.prototype, f=P.fillText, fr=P.fillRect, vus=[];
+      let cases=0;
+      P.fillText=function(t){ vus.push(String(t)); return f.apply(this,arguments); };
+      P.fillRect=function(x,y,w,h){ if(w===h&&w>=20) cases++; return fr.apply(this,arguments); };
+      let c;
+      try{ c=_dessinerCarteSerie({semaines:12,jokers:1,signature:'LÉA'},'transparent'); }
+      finally{ P.fillText=f; P.fillRect=fr; }
+      if(c.width!==1080||c.height!==1920) return _echec(c.width+'x'+c.height);
+      if(vus.indexOf('12')<0) return _echec('grand chiffre');
+      const tout=vus.join('');
+      if(tout.indexOf('SEMAINES D’AFFILÉE')<0) return _echec('libellé');
+      if(tout.indexOf('LÉA · REPCORE')<0) return _echec('signature');
+      return cases===12?true:_echec(cases+' cases pour 12 semaines');})());
+    ok('Série : un palier passe dans la même file que les badges, avant eux',(()=>{
+      const svF=_bdgFile, svR=_bdgRecap;
+      try{
+        _bdgFile=[]; _bdgRecap=[];
+        _celebrerSerie(4); _celebrerBadges(['quatre-semaines']);
+        const ok1=_bdgFile.length===2&&_bdgFile[0].serie===4&&_bdgFile[1]==='quatre-semaines';
+        return ok1?true:_echec(JSON.stringify(_bdgFile));
+      } finally { clearTimeout(_bdgMinuterie); _bdgMinuterie=null; _bdgFile=svF; _bdgRecap=svR; }})());
+
     ok('Les badges n’ont que quatre points d’appel',(()=>{
       const s=_prodSrc().replace(/\/\/[^\r\n]*/g,'');
       const n=(s.match(/majBadges\(/g)||[]).length;

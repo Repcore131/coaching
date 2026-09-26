@@ -9371,6 +9371,20 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .rite-fin h2{font-family:var(--pile-titre);font-size:clamp(34px,10vw,46px);letter-spacing:1px;margin:4px 0 6px}
 .rite-fin p{font-size:var(--fs-sm);color:var(--text-dim);line-height:1.5;margin:0 0 14px}
 .rite-fin .btn{width:100%;display:flex;align-items:center;justify-content:center;gap:8px}
+
+/* Les jokers de série : un bouclier par joker, au coin du compteur. */
+.sk-jokers{position:absolute;top:-7px;right:-7px;display:flex;gap:1px;z-index:2;pointer-events:none}
+.sk-jokers[hidden]{display:none}
+.sk-jokers svg{width:15px;height:15px;fill:#E02020;stroke:#fff;stroke-width:1.6;
+  filter:drop-shadow(0 0 4px rgba(224,32,32,.8))}
+/* Le palier de série : le grand chiffre et les semaines en carrés. */
+.serie-chiffre{font-family:var(--pile-titre);font-size:clamp(120px,42vw,200px);line-height:.9;color:#fff;
+  text-shadow:0 0 30px rgba(224,32,32,.6)}
+.serie-lib{font-size:var(--fs-md);font-weight:800;letter-spacing:3px;margin:6px 0 14px}
+.serie-cal{display:flex;flex-wrap:wrap;justify-content:center;gap:5px;max-width:320px;margin:0 auto 14px}
+.serie-cal i{display:block;width:16px;height:16px;border-radius:3px;background:#E02020;
+  box-shadow:0 0 8px rgba(224,32,32,.6)}
+.serie-cal i:last-child{background:#ff4040;box-shadow:0 0 14px rgba(255,64,64,.95)}
 /* La carte de l'accueil. */
 .wr-carte{width:100%;display:flex;align-items:center;gap:12px;margin:0 0 12px;padding:14px 14px;
   background:linear-gradient(135deg,#1a0404,#0b0b0c 70%);border:1px solid rgba(224,32,32,.45);

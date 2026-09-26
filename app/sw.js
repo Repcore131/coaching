@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1589';
+const CACHE = 'repcore-v1590';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -154,7 +154,7 @@ CORPS.push('./img/complements.webp');
 // ni code ni style — c'est-a-dire rien du tout.
 // Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
 // chaque build et reecrit cette ligne comme celle d'index.html.
-const ASSETS = ['./index.html', './rc-core.1589.js', './rc-style.1589.css',
+const ASSETS = ['./index.html', './rc-core.1590.js', './rc-style.1590.css',
   './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
@@ -623,7 +623,40 @@ self.addEventListener('periodicsync', e => {
   if (e.tag === 'wo-reminder') e.waitUntil(swCheckWoReminder());
   if (e.tag === 'supp-reminder') e.waitUntil(swCheckSuppReminders());
   if (e.tag === 'wrapped-reminder') e.waitUntil(swCheckWrapped());
+  if (e.tag === 'serie-reminder') e.waitUntil(swCheckSerie());
 });
+
+// ─── « Série en danger » : jeudi 18 h, samedi 10 h ─────────────────────────
+// Si la semaine en cours n'est pas encore validée (streakWeek n'est pas son
+// lundi) et qu'il y a une série à perdre. Deux créneaux par semaine au plus,
+// chacun une seule fois. Le réveil périodique n'est pas à l'heure : la
+// notification part au premier réveil APRÈS l'heure, tant qu'on est encore
+// le jour dit.
+async function swCheckSerie() {
+  const cfg = await swGet('/serie');
+  if (!cfg || !cfg.actif || !(cfg.streak > 0)) return;
+  const d = new Date();
+  const j = d.getDay(), h = d.getHours();
+  const creneau = (j === 4 && h >= 18) ? 'jeu' : (j === 6 && h >= 10) ? 'sam' : null;
+  if (!creneau) return;
+  const l = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((j + 6) % 7));
+  const lundi = _jourLocal(l);
+  if (cfg.streakWeek === lundi) return;                  // semaine déjà validée
+  const cle = lundi + '-' + creneau;
+  const faites = (await swGet('/serie-notifs')) || [];
+  if (faites.indexOf(cle) >= 0) return;
+  await swSet('/serie-notifs', faites.concat([cle]).slice(-8));
+  const n = cfg.streak;
+  await self.registration.showNotification('Ta série de ' + n + ' semaine' + (n > 1 ? 's' : '') + ' est en danger', {
+    body: (cfg.fname ? cfg.fname + ', il' : 'Il') + ' te reste jusqu’à dimanche pour valider ta semaine.'
+      + (cfg.jokers > 0 ? ' Ton joker la sauverait, mais garde-le pour un vrai coup dur.' : ''),
+    icon: './icons/icon-192x192.png',
+    badge: './icons/icon-192x192.png',
+    tag: 'serie-' + cle,
+    requireInteraction: false,
+    data: { url: './?wo=1' }
+  });
+}
 
 // ─── Wrapped : « Ton mois de septembre est prêt » ──────────────────────────
 // Du 1er au 7 du mois (le mois écoulé), et tout décembre (l'année). UNE
