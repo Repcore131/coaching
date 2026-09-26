@@ -45670,6 +45670,80 @@ async function testExercices(){
         if(c.morphoAnat.face.man) return _echec('des points posés dans le dossier sans « Analyser avec ces points »');
         return true;
       }finally{ DB.get=sv.get; DB.set=sv.set; _anatEdit=sv.ed; z.remove(); }}));
+    // E4 (26/09/2026) : zéro gel d'interface.
+    ok('E4 — LE TRAITEMENT DE NETTETÉ EST AUTONOME : SON TEXTE SEUL REND LES MÊMES PIXELS',(()=>{
+      if(typeof _anatNetPixels!=='function') return _echec('_anatNetPixels n’existe pas');
+      const w=9,h=7, d=new Uint8ClampedArray(w*h*4);
+      for(let i=0;i<d.length;i++) d[i]=(i*37+(i>>2)*11)%256;
+      const a=_anatNetPixels(new Uint8ClampedArray(d),w,h);
+      let f2;
+      try{ f2=new Function('return '+String(_anatNetPixels))(); }catch(e){ return _echec('texte non autonome : '+e.message); }
+      const b=f2(new Uint8ClampedArray(d),w,h);
+      for(let i=0;i<a.length;i++) if(a[i]!==b[i]) return _echec('pixel '+i+' : '+a[i]+' ≠ '+b[i]);
+      if(a.every((v,i)=>v===d[i])) return _echec('le traitement ne change rien');
+      return true;})());
+    okA('E4 — LA NETTETÉ PASSE PAR LE WORKER, PUIS SE RELIT DANS INDEXEDDB',(async()=>{
+      if(typeof Worker!=='function'||typeof OffscreenCanvas!=='function') return true;   // le repli suffit ailleurs
+      const cv=document.createElement('canvas'); cv.width=30; cv.height=40;
+      const x=cv.getContext('2d'); const g=x.createLinearGradient(0,0,30,40); g.addColorStop(0,'#111'); g.addColorStop(1,'#eee');
+      x.fillStyle=g; x.fillRect(0,0,30,40); x.fillStyle='#c33'; x.fillRect(10,12,8,14);
+      const src=cv.toDataURL('image/png')+'#e4-'+Date.now();
+      const cle=_anatNetCle(src);
+      const w0=_anatNetStats.worker, i0=_anatNetStats.idb;
+      try{
+        const u1=await anatAmeliorer(src);
+        if(!u1) return _echec('aucune image nette');
+        if(_anatNetStats.worker!==w0+1) return _echec('le worker n’a pas servi (worker '+_anatNetStats.worker+', principal '+_anatNetStats.principal+')');
+        // L'écriture IndexedDB n'est pas attendue par anatAmeliorer : on la laisse finir.
+        let b=null; for(let k=0;k<20&&!b;k++){ await new Promise(r=>setTimeout(r,50)); b=await phpLireBlob(cle).catch(()=>null); }
+        if(!b) return _echec('rien de gardé dans IndexedDB');
+        _anatNetCache.delete(src+'|'+ANAT_NET_VERSION);
+        const u2=await anatAmeliorer(src);
+        if(!u2||_anatNetStats.idb!==i0+1) return _echec('la seconde lecture ne vient pas d’IndexedDB');
+        if(_anatNetCle(src).indexOf('anat-net/'+ANAT_NET_VERSION+'/')!==0) return _echec('clé sans version : '+cle);
+        return true;
+      }finally{
+        _anatNetCache.delete(src+'|'+ANAT_NET_VERSION);
+        try{ await phpSupprimerBlob(cle); }catch(e){}
+        try{ const l=JSON.parse(localStorage.getItem(ANAT_NET_JOURNAL)||'[]').filter(k=>k!==cle); localStorage.setItem(ANAT_NET_JOURNAL,JSON.stringify(l)); }catch(e){}
+      }}));
+    ok('E4 — UN SEUL ANATMESURES PAR RENDU, ET LE ZOOM REPREND LE MÊME RÉSULTAT',(()=>{
+      const bl=[{date:1,type:'depart',photos:{face:'data:image/gif;base64,R0lGODlhAQABAAAAACw=',back:'data:image/gif;base64,R0lGODlhAQABAAAAACw='}}];
+      const c=_anatDossier({email:'e4@t.fr',bilans:bl,morphoAnat:Object.assign(_anatGab(),{dos:null})});
+      const orig=anatMesures; let n=0;
+      try{
+        anatMesures=function(){ n++; return orig.apply(this,arguments); };
+        const h=_htmlAnat(c);
+        if(!h||h.indexOf('an-grise')>=0) return _echec('pas d’analyse rendue');
+        if(n!==1) return _echec(n+' calculs pour un rendu');
+        const r1=anatMesuresRendu(c.morphoAnat,c);
+        if(n!==1) return _echec('le geste suivant recalcule');
+        if(!r1||!Array.isArray(r1.fiches)) return _echec('résultat vide');
+        // Un autre objet d'analyse : jamais le résultat d'un autre.
+        anatMesuresRendu(Object.assign({},c.morphoAnat),c);
+        if(n!==2) return _echec('le cache a servi pour un autre objet');
+        return true;
+      }finally{ anatMesures=orig; }})());
+    okA('E4 — LE MOTEUR NE PART QU’AVEC L’ONGLET DONNÉES, RELU AU DÉPART',(async()=>{
+      const bl=[{date:1,type:'depart',photos:{face:'f1',back:'b1'}}];
+      const c=_anatDossier({email:'e4b@t.fr',bilans:bl});
+      const sv={vue:_ccdVue,an:anatAnalyser}; let appels=0;
+      try{
+        anatAnalyser=async()=>{ appels++; return false; };
+        _ccdVue='entrainement';
+        if(_anatLancerFond(c)) return _echec('lancé sur Entraînement');
+        // Rendu pendant que l'onglet d'avant est encore Données, puis bascule :
+        // rien ne doit partir.
+        _ccdVue='donnees';
+        if(!_anatLancerFond(c)) return _echec('rien de prévu sur Données');
+        _ccdVue='entrainement';
+        await new Promise(r=>setTimeout(r,120));
+        if(appels) return _echec('parti alors que l’onglet a changé');
+        _ccdVue='donnees'; _anatLancerFond(c);
+        await new Promise(r=>setTimeout(r,120));
+        if(appels!==1) return _echec('pas parti sur Données : '+appels);
+        return true;
+      }finally{ _ccdVue=sv.vue; anatAnalyser=sv.an; }}));
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());

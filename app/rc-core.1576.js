@@ -23028,6 +23028,8 @@ function ccdVue(nom){
     // son milieu, sur une hauteur qui n'a aucune raison de correspondre.
     if(_change) _ccdRemonter();
   }catch(e){}
+  // E4 : le moteur de l'analyse morpho ne part qu'ici, à l'arrivée sur Données.
+  if(_change&&v==='donnees'){ try{ const c=getOwnedClient(currentClientId); if(c) _anatLancerFond(c); }catch(e){} }
   _ccdMajEtages();
   _ccdMajAlertes();
   _ccdMajColonnes();
@@ -47784,10 +47786,12 @@ function _anatNomExo(slug){
   return t.charAt(0).toUpperCase()+t.slice(1);
 }
 /** Les puces d'exercices d'une recommandation, et le menu « Ajouter au programme ». */
-function _htmlAnatExos(slugs){
+function _htmlAnatExos(slugs,dossier){
   const l=Array.isArray(slugs)?slugs:[];
   if(!l.length) return '';
-  const c=getOwnedClient(currentClientId);
+  // E4 : le rendu passe le dossier qu'il tient déjà. Relu ici, c'était 25
+  // lectures du magasin par rendu de la section.
+  const c=dossier||getOwnedClient(currentClientId);
   const sc=(c&&Array.isArray(c.sessions_config))?c.sessions_config:[];
   const puces=l.map(sl=>{
     // Les slugs d'ANAT_EXOS_LIENS existent tous dans app/exercices (un test le vérifie) :
@@ -47846,7 +47850,7 @@ function anatPoserConsigne(sessions,slugs,consigne){
 function anatEnvoyerConsigne(cle,i){
   const c=getOwnedClient(currentClientId);
   if(!c||!c.morphoAnat) return false;
-  const res=anatMesures(c.morphoAnat,c,{biais:anatBiaisCoach()});
+  const res=anatMesuresRendu(c.morphoAnat,c);
   const f=res.fiches.find(x=>x.cle===cle); if(!f) return false;
   const am=(anatTexte(f,res).amenager||[])[i];
   if(!am||!am.consigne){ toast('Pas de consigne à envoyer pour cet aménagement.','var(--orange)'); return false; }
@@ -48086,10 +48090,148 @@ function anatSupprimerSauvegarde(id){
 //   dessinerait des muscles : on rend lisible ce que la photo contient, rien
 //   de plus. Et c'est un affichage : la photo de l'athlète n'est pas touchée.
 const _anatNetCache=new Map();
+/** La version du traitement : la changer invalide les copies nettes gardées. */
+const ANAT_NET_VERSION=1;
+/** Ce que le traitement a fait, pour le banc et les tests. */
+const _anatNetStats={worker:0,principal:0,idb:0,memoire:0};
+/**
+ * PURE ET AUTONOME : les pixels RGBA d'une image, traités sur place — niveaux,
+ * gamma des photos sombres, accentuation. ⚠ ELLE EST ENVOYÉE TELLE QUELLE AU
+ * WORKER (son texte) : elle ne doit rien lire hors de ses arguments.
+ */
+function _anatNetPixels(d,w,h){
+  const n=w*h;
+  // 1. Les niveaux : histogramme de la luminance.
+  const hist=new Uint32Array(256);
+  for(let i=0;i<d.length;i+=4) hist[(d[i]*77+d[i+1]*150+d[i+2]*29)>>8]++;
+  const seuil=n*0.005;
+  let lo=0,hi=255,acc=0;
+  for(let v=0;v<256;v++){ acc+=hist[v]; if(acc>seuil){ lo=v; break; } }
+  acc=0;
+  for(let v=255;v>=0;v--){ acc+=hist[v]; if(acc>seuil){ hi=v; break; } }
+  if(hi-lo<40){ lo=Math.max(0,lo-20); hi=Math.min(255,hi+20); }
+  let somme=0;
+  for(let v=0;v<256;v++) somme+=hist[v]*Math.max(0,Math.min(1,(v-lo)/(hi-lo)));
+  const moy=somme/n;
+  // Gamma : on ne relève que les photos sombres, jamais on ne les assombrit.
+  const g=moy>0.02&&moy<0.42?Math.max(0.55,Math.log(0.45)/Math.log(moy)):1;
+  const lut=new Uint8ClampedArray(256);
+  for(let v=0;v<256;v++) lut[v]=Math.round(255*Math.pow(Math.max(0,Math.min(1,(v-lo)/(hi-lo))),g));
+  for(let i=0;i<d.length;i+=4){ d[i]=lut[d[i]]; d[i+1]=lut[d[i+1]]; d[i+2]=lut[d[i+2]]; }
+  // 2. L'accentuation : original + 0,7 × (original − flou), flou en boîte
+  //    séparable de rayon 2 (après agrandissement, ~1 px de la photo).
+  const r=2, flou=new Uint8ClampedArray(d.length), tmp=new Uint8ClampedArray(d.length);
+  const passe=(srcA,dst,horiz)=>{
+    const L=horiz?w:h, M=horiz?h:w;
+    for(let m=0;m<M;m++){
+      for(let ch=0;ch<3;ch++){
+        let s=0;
+        const at=(i)=>{ const ii=Math.max(0,Math.min(L-1,i)); return horiz?((m*w+ii)*4+ch):((ii*w+m)*4+ch); };
+        for(let i=-r;i<=r;i++) s+=srcA[at(i)];
+        for(let i=0;i<L;i++){
+          dst[at(i)]=s/(2*r+1);
+          s+=srcA[at(i+r+1)]-srcA[at(i-r)];
+        }
+      }
+    }
+  };
+  passe(d,tmp,true); passe(tmp,flou,false);
+  const A=0.7;
+  for(let i=0;i<d.length;i+=4){
+    d[i]=d[i]+A*(d[i]-flou[i]); d[i+1]=d[i+1]+A*(d[i+1]-flou[i+1]); d[i+2]=d[i+2]+A*(d[i+2]-flou[i+2]);
+  }
+  return d;
+}
+/**
+ * LE WORKER DE NETTETÉ (E4, 26/09/2026). Deux secondes de calcul par photo
+ * sur un téléphone, et 224 ms sur le banc : c'était un gel franc de l'écran à
+ * chaque ouverture de l'analyse. Le code est INLINE, par une URL de Blob — pas
+ * de fichier de plus à versionner ni à mettre en cache. Sans Worker ni
+ * OffscreenCanvas, on garde le calcul d'avant, sur le fil principal.
+ */
+let _anatNetWk=null, _anatNetSeq=0;
+const _anatNetAttente=new Map();
+function _anatNetWorker(){
+  if(_anatNetWk!==null) return _anatNetWk||null;
+  _anatNetWk=false;
+  try{
+    if(typeof Worker!=='function'||typeof OffscreenCanvas!=='function'||typeof createImageBitmap!=='function') return null;
+    const code='const _anatNetPixels='+String(_anatNetPixels)+';\n'
+      +'self.onmessage=async(ev)=>{ const m=ev.data;\n'
+      +'  try{ const cv=new OffscreenCanvas(m.w,m.h); const x=cv.getContext("2d",{willReadFrequently:true});\n'
+      +'    x.imageSmoothingEnabled=true; x.imageSmoothingQuality="high"; x.drawImage(m.bmp,0,0,m.w,m.h);\n'
+      +'    try{ m.bmp.close(); }catch(e){}\n'
+      +'    const id=x.getImageData(0,0,m.w,m.h); _anatNetPixels(id.data,m.w,m.h); x.putImageData(id,0,0);\n'
+      +'    const blob=await cv.convertToBlob({type:"image/jpeg",quality:0.92}); self.postMessage({id:m.id,blob});\n'
+      +'  }catch(e){ self.postMessage({id:m.id,err:String((e&&e.message)||e)}); } };';
+    const url=URL.createObjectURL(new Blob([code],{type:'text/javascript'}));
+    const wk=new Worker(url);
+    wk.onmessage=(ev)=>{ const f=_anatNetAttente.get(ev.data&&ev.data.id); if(f){ _anatNetAttente.delete(ev.data.id); f(ev.data); } };
+    wk.onerror=()=>{ for(const f of _anatNetAttente.values()) f({err:'worker'}); _anatNetAttente.clear(); _anatNetWk=false; };
+    _anatNetWk=wk;
+  }catch(e){ _anatNetWk=false; }
+  return _anatNetWk||null;
+}
+/** Le traitement dans le worker : un Blob JPEG, ou null (et l'on se replie). */
+async function _anatNetParWorker(im,w,h){
+  const wk=_anatNetWorker(); if(!wk) return null;
+  let bmp=null;
+  try{ bmp=await createImageBitmap(im); }catch(e){ return null; }
+  const id=++_anatNetSeq;
+  const r=await new Promise(res=>{
+    const garde=setTimeout(()=>{ _anatNetAttente.delete(id); res({err:'délai'}); },20000);
+    _anatNetAttente.set(id,(m)=>{ clearTimeout(garde); res(m); });
+    try{ wk.postMessage({id,bmp,w,h},[bmp]); }catch(e){ clearTimeout(garde); _anatNetAttente.delete(id); res({err:'envoi'}); }
+  });
+  return (r&&r.blob)||null;
+}
+/** Le traitement d'avant, sur le fil principal : le repli. */
+async function _anatNetPrincipal(im,w,h){
+  const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+  const x=cv.getContext('2d',{willReadFrequently:true});
+  if(!x) return null;
+  x.imageSmoothingEnabled=true; x.imageSmoothingQuality='high';
+  x.drawImage(im,0,0,w,h);
+  let id;
+  try{ id=x.getImageData(0,0,w,h); }catch(e){ return null; } // photo sans CORS
+  _anatNetPixels(id.data,w,h);
+  x.putImageData(id,0,0);
+  return await new Promise(res=>cv.toBlob(b=>res(b),'image/jpeg',0.92));
+}
+// LA COPIE NETTE GARDÉE SUR L'APPAREIL. Dans le magasin des photos (IndexedDB) :
+// c'est une image du corps de l'athlète, elle part donc avec lui quand le
+// magasin est vidé (retrait de l'accord). Douze au plus, les plus anciennes
+// s'effacent. Jamais pour une URL blob:, qui ne vit que le temps de la page.
+const ANAT_NET_MAX=12, ANAT_NET_JOURNAL='rc_anat_net';
+function _anatNetCle(src){
+  let h=0x811c9dc5;
+  const t=String(src);
+  for(let i=0;i<t.length;i++){ h^=t.charCodeAt(i); h=Math.imul(h,0x01000193)>>>0; }
+  return 'anat-net/'+ANAT_NET_VERSION+'/'+h.toString(16)+'-'+t.length.toString(36);
+}
+function _anatNetGarder(cle,blob){
+  try{
+    phpEcrireBlob(cle,blob).then(()=>{
+      let l=[];
+      try{ l=JSON.parse(localStorage.getItem(ANAT_NET_JOURNAL)||'[]'); }catch(e){ l=[]; }
+      l=(Array.isArray(l)?l:[]).filter(k=>k!==cle); l.push(cle);
+      while(l.length>ANAT_NET_MAX){ const k=l.shift(); try{ phpSupprimerBlob(k).catch(()=>{}); }catch(e){} }
+      try{ localStorage.setItem(ANAT_NET_JOURNAL,JSON.stringify(l)); }catch(e){}
+    }).catch(()=>{});
+  }catch(e){}
+}
 function anatAmeliorer(src){
   if(!src) return Promise.resolve(null);
-  if(_anatNetCache.has(src)) return _anatNetCache.get(src);
+  const cm=src+'|'+ANAT_NET_VERSION;
+  if(_anatNetCache.has(cm)){ _anatNetStats.memoire++; return _anatNetCache.get(cm); }
   const p=(async()=>{
+    const persist=!/^blob:/i.test(String(src));
+    const cle=persist?_anatNetCle(src):null;
+    if(cle){
+      let b=null;
+      try{ b=await phpLireBlob(cle); }catch(e){ b=null; }
+      if(b&&b.size){ _anatNetStats.idb++; return URL.createObjectURL(b); }
+    }
     const im=await new Promise(res=>{
       const i=new Image(); i.crossOrigin='anonymous';
       i.onload=()=>res(i); i.onerror=()=>res(null); i.src=src;
@@ -48097,59 +48239,33 @@ function anatAmeliorer(src){
     if(!im||!im.naturalWidth) return null;
     const k=Math.max(1,Math.min(2,2000/im.naturalHeight));
     const w=Math.round(im.naturalWidth*k),h=Math.round(im.naturalHeight*k);
-    const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
-    const x=cv.getContext('2d',{willReadFrequently:true});
-    if(!x) return null;
-    x.imageSmoothingEnabled=true; x.imageSmoothingQuality='high';
-    x.drawImage(im,0,0,w,h);
-    let id;
-    try{ id=x.getImageData(0,0,w,h); }catch(e){ return null; } // photo sans CORS
-    const d=id.data, n=w*h;
-    // 1. Les niveaux : histogramme de la luminance.
-    const hist=new Uint32Array(256);
-    for(let i=0;i<d.length;i+=4) hist[(d[i]*77+d[i+1]*150+d[i+2]*29)>>8]++;
-    const seuil=n*0.005;
-    let lo=0,hi=255,acc=0;
-    for(let v=0;v<256;v++){ acc+=hist[v]; if(acc>seuil){ lo=v; break; } }
-    acc=0;
-    for(let v=255;v>=0;v--){ acc+=hist[v]; if(acc>seuil){ hi=v; break; } }
-    if(hi-lo<40){ lo=Math.max(0,lo-20); hi=Math.min(255,hi+20); }
-    let somme=0;
-    for(let v=0;v<256;v++) somme+=hist[v]*Math.max(0,Math.min(1,(v-lo)/(hi-lo)));
-    const moy=somme/n;
-    // Gamma : on ne relève que les photos sombres, jamais on ne les assombrit.
-    const g=moy>0.02&&moy<0.42?Math.max(0.55,Math.log(0.45)/Math.log(moy)):1;
-    const lut=new Uint8ClampedArray(256);
-    for(let v=0;v<256;v++) lut[v]=Math.round(255*Math.pow(Math.max(0,Math.min(1,(v-lo)/(hi-lo))),g));
-    for(let i=0;i<d.length;i+=4){ d[i]=lut[d[i]]; d[i+1]=lut[d[i+1]]; d[i+2]=lut[d[i+2]]; }
-    // 2. L'accentuation : original + 0,7 × (original − flou), flou en boîte
-    //    séparable de rayon 2 (après agrandissement, ~1 px de la photo).
-    const r=2, flou=new Uint8ClampedArray(d.length), tmp=new Uint8ClampedArray(d.length);
-    const passe=(srcA,dst,horiz)=>{
-      const L=horiz?w:h, M=horiz?h:w;
-      for(let m=0;m<M;m++){
-        for(let ch=0;ch<3;ch++){
-          let s=0;
-          const at=(i)=>{ const ii=Math.max(0,Math.min(L-1,i)); return horiz?((m*w+ii)*4+ch):((ii*w+m)*4+ch); };
-          for(let i=-r;i<=r;i++) s+=srcA[at(i)];
-          for(let i=0;i<L;i++){
-            dst[at(i)]=s/(2*r+1);
-            s+=srcA[at(i+r+1)]-srcA[at(i-r)];
-          }
-        }
-      }
-    };
-    passe(d,tmp,true); passe(tmp,flou,false);
-    const A=0.7;
-    for(let i=0;i<d.length;i+=4){
-      d[i]=d[i]+A*(d[i]-flou[i]); d[i+1]=d[i+1]+A*(d[i+1]-flou[i+1]); d[i+2]=d[i+2]+A*(d[i+2]-flou[i+2]);
-    }
-    x.putImageData(id,0,0);
-    const blob=await new Promise(res=>cv.toBlob(b=>res(b),'image/jpeg',0.92));
-    return blob?URL.createObjectURL(blob):null;
+    let blob=await _anatNetParWorker(im,w,h);
+    if(blob) _anatNetStats.worker++;
+    else { blob=await _anatNetPrincipal(im,w,h); if(blob) _anatNetStats.principal++; }
+    if(!blob) return null;
+    if(cle) _anatNetGarder(cle,blob);
+    return URL.createObjectURL(blob);
   })().catch(()=>null);
-  _anatNetCache.set(src,p);
+  _anatNetCache.set(cm,p);
   return p;
+}
+/**
+ * LES MESURES DU RENDU (E4). Un seul anatMesures par rendu, et les gestes qui
+ * suivent de près — le zoom, l'ouverture de l'édition, « envoyer la consigne »
+ * — reprennent ce même résultat pendant 2 s au lieu de tout recalculer. La clé
+ * change dès que le dossier change (updatedAt, date de l'analyse, biais appris).
+ */
+// ⚠ LE RENDU CALCULE TOUJOURS (frais) : c'est lui qui range. Seuls les gestes
+//   qui le suivent relisent — et seulement sur LE MÊME objet d'analyse.
+let _anatMesCache={cle:'',t:0,a:null,res:null};
+function anatMesuresRendu(a,c,frais){
+  const biais=anatBiaisCoach();
+  const cle=[c&&c.email,c&&c.updatedAt,a&&a.date,a&&a.bilan,_anatBiaisCache&&_anatBiaisCache.cle].join('|');
+  const t=Date.now();
+  if(!frais&&_anatMesCache.res&&_anatMesCache.a===a&&_anatMesCache.cle===cle&&t-_anatMesCache.t<2000) return _anatMesCache.res;
+  const res=anatMesures(a,c,{biais});
+  _anatMesCache={cle,t,a,res};
+  return res;
 }
 /** Pose la version nette sur toutes les images d'une vue, dès qu'elle est prête. */
 function _anatNettete(z,c){
@@ -48364,7 +48480,7 @@ function anatEditer(sel){
   // A7 : sans point demandé, le premier point de confiance C de la dernière
   // fiche ouverte — c'est lui qu'il faut vérifier d'abord.
   if(!k&&_anatDerniereFiche){
-    const f=_anatSafe(()=>anatMesures(c.morphoAnat,c,{biais:anatBiaisCoach()}).fiches.find(x=>x.cle===_anatDerniereFiche));
+    const f=_anatSafe(()=>anatMesuresRendu(c.morphoAnat,c).fiches.find(x=>x.cle===_anatDerniereFiche));
     if(f&&f.confCles&&f.confCles.length){ k=f.confCles[0]; _anatVueActive=f.confVue; }
   }
   const vue=_anatVueDe(c.morphoAnat,_anatVueActive);
@@ -48859,15 +48975,33 @@ function renderAnatCoach(c){
   try{ _anatBrancherEdition(z); }catch(e){}
   try{ _anatNettete(z,c); }catch(e){}
   try{ _anatCalerListe(z); }catch(e){}
+  _anatLancerFond(c);
+  return true;
+}
+/**
+ * LES LECTURES DE FOND — détection, silhouettes, suivi postural. Elles
+ * chargent le moteur de pose et son modèle « full » (≈ 6 Mo, et des secondes
+ * de calcul) : E4 (26/09/2026) les réserve à L'ONGLET DONNÉES, où l'analyse
+ * se lit. Avant, ouvrir une fiche sur Entraînement gelait l'écran 3,6 s pour
+ * une analyse que personne ne regardait. ccdVue les relance à l'arrivée sur
+ * Données.
+ */
+function _anatLancerFond(c){
+  if(!c||_ccdVue!=='donnees') return false;
+  // ⚠ L'ONGLET EST RELU AU DÉPART, PAS SEULEMENT AU RENDU. openClientDetail
+  //   rend la nouvelle fiche AVANT de repasser sur Entraînement (un minuteur à
+  //   0) : au rendu, _ccdVue est encore l'onglet de l'athlète d'avant.
+  const surDonnees=()=>_ccdVue==='donnees';
   try{
     const pb=anatPremierBilan(c);
     if(anatARefaire(c,pb)&&!_anatEnCours.has(c.email)&&!_anatEchecs.has(c.email))
-      setTimeout(()=>{ anatAnalyser(c.email).catch(()=>{}); },50);
+      setTimeout(()=>{ if(surDonnees()) anatAnalyser(c.email).catch(()=>{}); },50);
     else if(anatSilhouettesAFaire(c).length&&!_anatSilEnCours.has(c.email))
-      setTimeout(()=>{ anatSuivreSilhouettes(c.email).catch(()=>{}); },400);
+      setTimeout(()=>{ if(surDonnees()) anatSuivreSilhouettes(c.email).catch(()=>{}); },400);
     else if(anatPostureAFaire(c).length&&!_anatSuiviEnCours.has(c.email))
-      setTimeout(()=>{ anatSuivrePosture(c.email).catch(()=>{}); },600);
-  }catch(e){}
+      setTimeout(()=>{ if(surDonnees()) anatSuivrePosture(c.email).catch(()=>{}); },600);
+    else return false;
+  }catch(e){ return false; }
   return true;
 }
 
@@ -48936,7 +49070,7 @@ function _htmlAnat(c){
   // ── L'ANALYSE ────────────────────────────────────────────────────────────
   // En édition, les chiffres restent ceux de l'analyse enregistrée : ils ne
   // bougent qu'au clic sur « Analyser avec ces points ».
-  const res=anatMesures(a,c,{biais:anatBiaisCoach()});
+  const res=anatMesuresRendu(a,c,true);
   const fiches=res.fiches;
   const textes={};
   fiches.forEach(f=>{ try{ textes[f.cle]=anatTexte(f,res); }catch(e){ textes[f.cle]={court:'',lecture:'',privilegier:[],amenager:[],verifier:''}; } });
@@ -49139,7 +49273,7 @@ function _htmlAnat(c){
     const vv=a[f.vue];
     const s2=_anatSrcVue(pb,f.vue);
     const cad=_anatCadrage(f.zone,vv,4/3);
-    const li=(l)=>l&&l.length?'<ul>'+l.map(x=>'<li>'+escapeHtml(String(x))+_htmlAnatExos(x&&x.exercices)+'</li>').join('')+'</ul>':'';
+    const li=(l)=>l&&l.length?'<ul>'+l.map(x=>'<li>'+escapeHtml(String(x))+_htmlAnatExos(x&&x.exercices,c)+'</li>').join('')+'</ul>':'';
     const tab=f.chiffres&&f.chiffres.length?'<table class="an-tab"><thead><tr><th>Mesure</th><th>Athlète</th><th>Repère</th><th>Écart</th></tr></thead><tbody>'
       +f.chiffres.map(r=>'<tr><th>'+escapeHtml(r.lib)+(r.def?'<small class="an-def">'+escapeHtml(r.def)+'</small>':'')+'</th><td'+(((r.val||'').length>16||/→/.test(r.val||''))?' class="an-td-txt"':'')+'>'+escapeHtml(r.val||'—')+'</td><td>'+escapeHtml(r.ref||'')+'</td><td>'+escapeHtml(r.ecart||'')+'</td></tr>').join('')+'</tbody></table>':'';
     // LA COURBE DU V (A13), avec la carte des courbes de l'onglet Données.
@@ -49155,7 +49289,7 @@ function _htmlAnat(c){
       +(t.lecture?'<h6>Lecture</h6><p class="an-f-lec">'+escapeHtml(t.lecture)+'</p>':'')
       +(t.privilegier&&t.privilegier.length?'<h6>À privilégier</h6>'+li(t.privilegier):'')
       +(t.amenager&&t.amenager.length?'<h6>À aménager</h6><ul>'+t.amenager.map((x,i)=>'<li><b>'+escapeHtml(x.quoi)+'</b> — '+escapeHtml(x.reglage)
-        +_htmlAnatExos(x.exercices)
+        +_htmlAnatExos(x.exercices,c)
         +(x.consigne?'<div class="an-cons"><span>Consigne pour l’athlète : « '+escapeHtml(x.consigne)+' »</span><button type="button" class="an-cons-b" onclick="anatEnvoyerConsigne(\''+f.cle+'\','+i+')">Envoyer la consigne</button></div>':'')+'</li>').join('')+'</ul>':'')
       +(t.verifier?'<h6>Comment vérifier</h6><p>'+escapeHtml(t.verifier)+'</p>':'')
       +'<p class="an-f-src">Source : '+escapeHtml(f.source||'')+(f.tolerance?' · marge '+escapeHtml(f.tolerance):'')+' · bilan du '+_anatDateFr(a.bilan)+'</p>'
@@ -49241,66 +49375,93 @@ function _anatJauge(l){
     +'<text x="4" y="38">−20 %</text><text x="50" y="38" text-anchor="middle">moyenne</text><text x="96" y="38" text-anchor="end">+20 %</text></svg>';
 }
 let _anatObsListe=null;
+let _anatCale=null;
 function _anatCalerListe(z){
   const liste=z&&z.querySelector('.an-liste');
   const scene=z&&z.querySelector('.an-scene');
   const grille=z&&z.querySelector('.an-grille');
   if(!liste||!scene||!grille) return;
-  const caler=()=>{
-    const cols=getComputedStyle(grille).gridTemplateColumns.split(' ').filter(Boolean).length;
+  // ⚠ LIRE TOUT, PUIS ÉCRIRE TOUT (E4). Lectures et écritures alternées
+  //   forçaient quatre mises en page par rendu — la moitié du temps de la
+  //   section. On remet d'abord à zéro ce qui fausserait les lectures, on lit
+  //   d'un bloc, on écrit d'un bloc : deux mises en page.
+  const caler=(prevu)=>{
     const col=liste.parentElement;
-    if(cols>=3){
-      const h=scene.getBoundingClientRect().height;
-      const titre=col.querySelector('h5');
-      liste.style.maxHeight=Math.max(260,Math.round(h-(titre?titre.getBoundingClientRect().height+8:0)))+'px';
-      col.classList.add('an-col-cale');
-    }else{
-      liste.style.maxHeight='';
-      col.classList.remove('an-col-cale');
-    }
-    const plus=liste.scrollHeight>liste.clientHeight+4;
-    col.classList.toggle('an-liste-defile',plus);
-    // LES RÉSULTATS À LA HAUTEUR DE LA PHOTO : leur bord bas s'aligne sur le
-    // bas de l'image dès que les deux sont côte à côte ; les lignes se
-    // répartissent la hauteur.
     const res=z.querySelector('.an-res');
+    // LE CALAGE D'AVANT, REPOSÉ AVANT TOUTE LECTURE (E4). À largeur égale, un
+    // nouveau rendu retombe presque toujours sur les mêmes hauteurs : posées
+    // d'avance, elles font de la première mise en page la bonne, et la
+    // seconde n'a lieu que si quelque chose a vraiment bougé.
+    if(prevu){
+      liste.style.maxHeight=prevu.max; col.classList.toggle('an-col-cale',prevu.colCale);
+      if(res){ res.style.height=prevu.resH; res.classList.toggle('an-res-cale',!!prevu.resH); }
+      col.classList.toggle('an-liste-defile',prevu.plus); col.classList.toggle('an-liste-bas',false);
+    }else if(res){ res.style.height=''; res.classList.remove('an-res-cale'); }
+    // ── Les lectures (une mise en page).
+    const cols=getComputedStyle(grille).gridTemplateColumns.split(' ').filter(Boolean).length;
+    const rS=scene.getBoundingClientRect();
+    const titre=col.querySelector('h5');
+    const hT=(cols>=3&&titre)?titre.getBoundingClientRect().height+8:0;
+    let cote=false;
     if(res){
-      res.style.height=''; res.classList.remove('an-res-cale');
-      const hS=scene.getBoundingClientRect().height;
+      // LES RÉSULTATS À LA HAUTEUR DE LA PHOTO : leur bord bas s'aligne sur le
+      // bas de l'image dès que les deux sont côte à côte ; les lignes se
+      // répartissent la hauteur.
       const nL=res.querySelectorAll('.an-r').length;
       const mini=(res.querySelector('.an-res-h')||{offsetHeight:0}).offsetHeight+(res.querySelector('.an-res-leg')||{offsetHeight:0}).offsetHeight+nL*26+(nL-1)*3+30;
-      const cote=cols>=2&&hS>=mini&&Math.abs(res.getBoundingClientRect().top-scene.getBoundingClientRect().top)<40;
-      res.style.height=cote?Math.round(scene.getBoundingClientRect().height)+'px':'';
-      res.classList.toggle('an-res-cale',cote);
+      // Le calage posé d'avance fausse cette lecture : la hauteur retenue
+      // est celle de la scène, qu'il ne touche pas.
+      cote=cols>=2&&rS.height>=mini&&Math.abs(res.getBoundingClientRect().top-rS.top)<40;
     }
+    const voulu={max:cols>=3?Math.max(260,Math.round(rS.height-hT))+'px':'',colCale:cols>=3,
+      resH:(res&&cote)?Math.round(rS.height)+'px':''};
+    // ── Rien n'a bougé : la mise en page déjà faite est la bonne.
+    //    (La mise en page est propre : lire le débordement ne coûte rien.)
+    if(prevu&&prevu.max===voulu.max&&prevu.colCale===voulu.colCale&&prevu.resH===voulu.resH){
+      const p2=liste.scrollHeight>liste.clientHeight+4, bas=p2&&liste.scrollTop+liste.clientHeight>=liste.scrollHeight-4;
+      col.classList.toggle('an-liste-defile',p2); col.classList.toggle('an-liste-bas',bas);
+      _anatCale.plus=p2;
+      return;
+    }
+    // ── Les écritures.
+    liste.style.maxHeight=voulu.max;
+    col.classList.toggle('an-col-cale',voulu.colCale);
+    if(res){ res.style.height=voulu.resH; res.classList.toggle('an-res-cale',!!voulu.resH); }
+    // ── La liste déborde-t-elle ? (seconde mise en page)
+    const plus=liste.scrollHeight>liste.clientHeight+4;
+    col.classList.toggle('an-liste-defile',plus);
     col.classList.toggle('an-liste-bas',plus&&liste.scrollTop+liste.clientHeight>=liste.scrollHeight-4);
+    _anatCale={largeur:window.innerWidth,max:voulu.max,colCale:voulu.colCale,resH:voulu.resH,plus};
   };
-  caler();
+  caler((_anatCale&&_anatCale.largeur===window.innerWidth)?_anatCale:null);
   liste.addEventListener('scroll',()=>{
     const col=liste.parentElement;
     col.classList.toggle('an-liste-bas',liste.scrollTop+liste.clientHeight>=liste.scrollHeight-4);
   },{passive:true});
   const img=scene.querySelector('img.an-photo');
-  if(img&&!img.complete) img.addEventListener('load',caler,{once:true});
+  if(img&&!img.complete) img.addEventListener('load',()=>caler(),{once:true});
   try{
     if(_anatObsListe) _anatObsListe.disconnect();
     // ⚠ LA SCÈNE ET LA GRILLE. Rendue pendant que l'onglet Données est caché,
     //   la scène n'a pas encore de taille : on recale quand elle en prend une,
     //   et quand la grille change de largeur (fenêtre, panneau latéral).
-    _anatObsListe=new ResizeObserver(()=>requestAnimationFrame(caler));
+    _anatObsListe=new ResizeObserver(()=>requestAnimationFrame(()=>caler()));
     _anatObsListe.observe(scene);
     _anatObsListe.observe(grille);
   }catch(e){}
   let essais=0;
   const reessayer=()=>{ if(!scene.isConnected) return; if(scene.getBoundingClientRect().height>0){ caler(); return; } if(++essais<40) setTimeout(reessayer,250); };
-  reessayer();
+  // ⚠ PAS UN SECOND CALAGE DANS LA MÊME TÂCHE (E4) : caler() vient de tourner.
+  //   On ne réessaie que si la scène n'avait pas encore de taille.
+  if(!(scene.getBoundingClientRect().height>0)) setTimeout(reessayer,250);
 }
 /** Le zoom d'une vignette : la photo d'origine, nette, avec ses repères. */
 function anatZoom(cle){
   const c=getOwnedClient(currentClientId);
   if(!c||!c.morphoAnat) return;
   const a=c.morphoAnat;
-  const f=anatMesures(a,c,{biais:anatBiaisCoach()}).fiches.find(x=>x.cle===cle);
+  const res=anatMesuresRendu(a,c);
+  const f=res.fiches.find(x=>x.cle===cle);
   if(!f||!f.zone) return;
   const vue=f.vue;
   const v=a[vue];
@@ -49311,7 +49472,7 @@ function anatZoom(cle){
   const cad=_anatCadrage(f.zone,v,asp);
   const z=cad.z;
   const pts=anatPoints(a,vue);
-  const t=anatTexte(f,anatMesures(a,c,{biais:anatBiaisCoach()}));
+  const t=anatTexte(f,res);
   document.getElementById('an-zoom')?.remove();
   const o=document.createElement('div');
   o.id='an-zoom'; o.className='an-zoom';

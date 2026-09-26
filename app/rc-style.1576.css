@@ -10593,3 +10593,9 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .an-bulle-l b{color:#fff;font-weight:800;text-align:right;white-space:nowrap}
 .an-bulle-l i{grid-column:2;font-style:normal;color:#888;text-align:right;font-size:.92em;margin-top:-1px}
 .an-bulle-s{margin-top:4px;padding-top:4px;border-top:1px solid rgba(255,255,255,.08);color:#777;font-size:.92em}
+/* E4 — à 390 px : le menu « Sauvegarde » s'ouvrait hors de l'écran (320 px depuis le bord
+   gauche d'un bouton posé à droite), et la ligne d'échelle débordait de sa carte (100 % + 40 px). */
+@media (max-width:600px){
+  .an-sv-m{left:auto;right:0;width:min(320px,calc(100vw - 32px))}
+  .an-inf .an-dr-r{flex-basis:calc(100% - 40px);min-width:0}
+}
