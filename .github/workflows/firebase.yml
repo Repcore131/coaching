@@ -21,6 +21,9 @@ on:
       # ⚠ 'functions/**' A QUITTE CETTE LISTE (lot 0). Les fonctions sont
       #   desormais deployees par ce meme workflow : les ignorer aurait laisse
       #   une correction de fonction dans le depot sans jamais la publier.
+  # ⚠ UN COMMIT VIDE NE DÉCLENCHE RIEN ICI : sans fichier modifié, paths-ignore
+  #   ne laisse passer aucun chemin (vu le 26/09/2026 : 1577 est resté sur 1576).
+  #   Relancer par workflow_dispatch, ou par un vrai changement hors des chemins ignorés.
   workflow_dispatch:
 
 concurrency:
