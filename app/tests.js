@@ -42748,12 +42748,14 @@ async function testExercices(){
     // ne remplace rien. Le bouton « Activer sur cet appareil » des réglages
     // (Web Push, 26/09/2026) en est le quatrième. Tous comptent le meme
     // evenement notif_granted.
-    ok('Les quatre points d’accord comptent le meme evenement',(()=>{
+    // CINQUIEME POINT (27/09/2026) : la demande au premier toucher
+    // (_pushAuPremierGeste). Elle compte le meme evenement que les autres.
+    ok('Les cinq points d’accord comptent le meme evenement',(()=>{
       const prod=_prodSrc();
       const n=(prod.match(/rcm\('notif_granted'\)/g)||[]).length;
-      if(n!==4) return _echec(n+' point(s) d’appel sur 4');
+      if(n!==5) return _echec(n+' point(s) d’appel sur 5');
       const d=(prod.match(/Notification\.requestPermission\(\)/g)||[]).length;
-      return d===4?true:_echec(d+' appel(s) a requestPermission au lieu de 4');})());
+      return d===5?true:_echec(d+' appel(s) a requestPermission au lieu de 5');})());
     ok('La question des jours ne se pose qu’au nouvel inscrit',(()=>{
       const J=864e5, t=Date.parse('2026-09-15T12:00:00Z');
       const A=o=>Object.assign({email:'a@t.fr',role:'athlete',createdAt:t-2*J},o);
@@ -48948,17 +48950,20 @@ async function testExercices(){
       if(actMessage({le:100,ecritures:0,echecs:0},0,true)!==null) return _echec('une lecture annoncée');
       if(!window.fetch._rcAct) return _echec('fetch non suivi');
       return /_rcToastLe=Date\.now\(\)/.test(String(toast))&&document.getElementById('toast').getAttribute('aria-live')==='polite'?true:_echec('toast');})());
-    ok('Notifications : allumées par défaut, aucune demande d’office, retrait dans les réglages',(()=>{
+    ok('Notifications activées par défaut, sans écran, retirables dans les réglages',(()=>{
+      const u={email:'a@t.fr',role:'client'};
+      if(!pushDemandeAuto(u,'proposer')) return _echec('pas demandées au départ');
+      if(pushDemandeAuto(Object.assign({pushRefus:true},u),'proposer')) return _echec('redemandées après un retrait');
+      if(pushDemandeAuto(u,'actif')||pushDemandeAuto(u,'refuse')||pushDemandeAuto(u,'installer')) return _echec('demandées à tort');
+      if(pushDemandeAuto({email:'c@t.fr',role:'coach'},'proposer')) return _echec('coach');
       const src=_prodSrc();
-      if(/id="rc-push-etape"|htmlPushEtape|pushActiverParDefaut|_pushAuPremierGeste/.test(src)) return _echec('une demande d’office est revenue');
-      if(/pushEtapeVerifier|pushActiverParDefaut/.test(String(routeUser))) return _echec('demande au démarrage');
+      if(/id="rc-push-etape"|htmlPushEtape/.test(src)) return _echec('un écran de demande est revenu');
       const r=document.createElement('div'); r.innerHTML=htmlReglagesPush({},'actif');
       if(!/pushDesactiverDepuisReglages\(\)/.test(r.innerHTML)) return _echec('pas de retrait dans les réglages');
-      r.innerHTML=htmlReglagesPush({},'proposer');
-      if(!/pushActiverDepuisReglages\(\)/.test(r.innerHTML)) return _echec('pas de remise en route dans les réglages');
       if(!PUSH_TYPES.every(t=>pushTypeActif({},t.cle))) return _echec('un type éteint par défaut');
+      if(!/addEventListener\('click'[\s\S]*_pushAuPremierGeste\(\)[\s\S]*once:true/.test(String(pushActiverParDefaut))) return _echec('pas de demande au premier toucher');
       if(!/pushRefus/.test(String(pushVerifierAuDemarrage))) return _echec('un appareil retiré serait réabonné');
-      return CHAMPS_NON_SANTE.indexOf('pushRefus')>=0?true:_echec('pushRefus non classé');})());
+      return /pushActiverParDefaut\(\)/.test(String(routeUser))?true:_echec('non appelée au démarrage');})());
     ok('Barre de lecture : seulement sur une zone longue',(()=>{
       if(lectureProgression(0,700,600)!==null||lectureProgression(0,4000,150)!==null) return _echec('zone courte');
       const a=lectureProgression(0,3000,600), b=lectureProgression(1200,3000,600), c=lectureProgression(9999,3000,600);

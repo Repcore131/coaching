@@ -7176,6 +7176,9 @@ function routeUser(){
   // aiguillages de meme nature, ils appartiennent donc a la meme fonction.
   // Consequence assumee et voulue : un retour a l'accueil par la fleche ou par
   // un onglet ne les redeclenche pas. Ce sont des RETOURS, pas des arrivees.
+  // LES NOTIFICATIONS, ACTIVÉES PAR DÉFAUT : aucun écran ; la question du
+  // téléphone part au premier toucher (pushActiverParDefaut).
+  setTimeout(()=>{ try{ pushActiverParDefaut(); }catch(e){} },1200);
   if(_aiguillerNouvelInscrit()) return;
   loadClientHome();
   if(window._pendingBilanOpen){window._pendingBilanOpen=false;setTimeout(()=>openBilanChoice(),800);}
@@ -69378,19 +69381,65 @@ async function pushActiverDepuisReglages(){
   _rendreReglagesPush();
   return ok;
 }
-// ══ LES NOTIFICATIONS : ALLUMÉES PAR DÉFAUT, AUCUNE DEMANDE (27/09/2026) ═══
+// ══ LES NOTIFICATIONS, ACTIVÉES PAR DÉFAUT, SANS ÉCRAN (27/09/2026) ══════
 //
-// DEMANDE DE KEVIN : aucun écran, aucune question posée d'office. Tous les
-// types sont cochés par défaut (pushPrefs vide), et c'est dans les réglages
-// qu'on les retire (« Désactiver sur cet appareil », ou type par type) ou
-// qu'on les remet. u.pushRefus retient le retrait : l'app ne réabonne plus
-// cet appareil d'elle-même, même si le navigateur a gardé son autorisation.
+// DEMANDE DE KEVIN : « les notifs se mettent direct », AUCUN écran pour les
+// proposer, et pour les retirer on va dans les réglages. Tous les types sont
+// allumés d'office (pushPrefs vide).
 //
-// ⚠ L'AUTORISATION DU TÉLÉPHONE reste nécessaire pour qu'une notification
-// arrive : elle n'est demandée que par les gestes qui l'appellent déjà
-// (« Activer sur cet appareil », les rappels de séance et de bilan,
-// l'invitation après la première séance). Jamais sans que l'utilisateur
-// l'ait voulu.
+// ⚠ CE QUE LE NAVIGATEUR IMPOSE : une notification n'arrive que si le
+// téléphone l'a autorisée, et l'autorisation ne peut être demandée que sur un
+// geste (Safari, Firefox) — c'est toujours le téléphone qui pose la question,
+// par sa propre fenêtre. On ne montre donc rien : au PREMIER TOUCHER dans
+// l'app, n'importe où, la question du téléphone part d'elle-même. Accordée,
+// l'appareil est abonné sans autre étape. Refusée (« Bloquer »), on n'insiste
+// jamais : seuls les réglages du navigateur peuvent la rendre. Ignorée, elle
+// repart au premier toucher de l'ouverture suivante.
+//
+// LE RETRAIT est dans les réglages : « Désactiver sur cet appareil »
+// (u.pushRefus, retenu dans le dossier : plus aucune demande, plus de
+// réabonnement) ou une case par type. « Activer sur cet appareil » les remet.
+// Sur iPhone dans Safari (app non installée), le push n'existe pas : rien.
+// PURE. Faut-il demander ? etat : pushEtat(...).
+function pushDemandeAuto(u,etat){
+  if(!u||!u.email||u.role==='coach'||u.pushRefus) return false;
+  return etat==='proposer';
+}
+let _pushGesteArme=false;
+async function _pushAuPremierGeste(){
+  _pushGesteArme=false;
+  if(!currentUser||currentUser.pushRefus||!_notifSupported()) return false;
+  let p=Notification.permission;
+  if(p==='default'){
+    try{ p=await Notification.requestPermission(); }catch(e){}
+    if(p==='granted'){ try{ rcm('notif_granted'); }catch(e){} }
+  }
+  if(p!=='granted') return false;
+  const ok=await pushAbonner({geste:true});
+  if(ok) try{ currentUser._notifEnabled=true; saveUser(); }catch(e){}
+  return ok;
+}
+async function pushActiverParDefaut(){
+  if(!currentUser||window._rcEnTests||!_notifSupported()) return false;
+  let abonne=false;
+  try{
+    if(_pushSupporte()){
+      const reg=await navigator.serviceWorker.ready;
+      abonne=!!(await reg.pushManager.getSubscription());
+    }
+  }catch(e){}
+  if(!pushDemandeAuto(currentUser,pushEtat(_pushEnv(abonne)))) return false;
+  // Déjà autorisé (hors iOS, qui exige le geste) : abonné tout de suite.
+  if(Notification.permission==='granted'&&!rcInstalliOS()){
+    if(await pushAbonner({geste:false})) return true;
+  }
+  if(_pushGesteArme) return true;
+  _pushGesteArme=true;
+  // UN SEUL ÉCOUTEUR, UNE SEULE FOIS : le premier toucher de la session.
+  // 'click' et non 'pointerdown' : Safari ne reconnaît le geste qu'au clic.
+  document.addEventListener('click',()=>{ try{ _pushAuPremierGeste(); }catch(e){} },{capture:true,once:true});
+  return true;
+}
 // RETIRER LES NOTIFICATIONS : l'abonnement de cet appareil est défait (le
 // serveur n'a plus où envoyer), et le refus retenu pour ne pas redemander.
 async function pushDesactiverDepuisReglages(){
