@@ -21,6 +21,8 @@
 import {readFileSync} from 'node:fs';
 import {join, dirname, resolve} from 'node:path';
 import crypto from 'node:crypto';
+import {createRequire} from 'node:module';
+const requireVrai = createRequire(import.meta.url);
 
 const RACINE = resolve(dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..', '..');
 const SRC = readFileSync(join(RACINE, 'functions', 'index.js'), 'utf8');
@@ -82,7 +84,19 @@ const faux = {
   'firebase-admin': {initializeApp: () => {}, database: () => db},
   'node:crypto': crypto,
   'crypto': crypto,
+  // ⚠ LES REQUIRE DE LA BRANCHE « VIRALITÉ » (builds 1591-1600) : tâches
+  //   planifiées, déclencheurs de base, web-push et les modules de calcul.
+  //   Sans eux, l'évaluation tombe sur « require inattendu » et CE CONTRÔLE
+  //   FAIT ÉCHOUER TOUT LE DÉPLOIEMENT FIREBASE — constaté au build 1601.
+  //   Les déclencheurs rendent leur gestionnaire : aucun ne s'exécute ici.
+  'firebase-functions/v2/scheduler': {onSchedule: (opts, handler) => handler || opts},
+  'firebase-functions/v2/database': {onValueCreated: (opts, handler) => handler || opts,
+    onValueWritten: (opts, handler) => handler || opts},
+  'web-push': {setVapidDetails: () => {}, sendNotification: async () => ({})},
 };
+// Les modules de calcul, purs : les vrais, relus dans functions/.
+for (const m of ['ambassadeurs-calcul', 'attribution-calcul', 'defis-calcul', 'pages-og', 'parrainage-calcul'])
+  faux['./' + m] = requireVrai(join(RACINE, 'functions', m + '.js'));
 const exportes = {};
 const module_ = {exports: exportes};
 new Function('require', 'exports', 'module', 'process', SRC)(
