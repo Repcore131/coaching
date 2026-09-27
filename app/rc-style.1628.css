@@ -13679,8 +13679,9 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .pc-note-i{color:#cc0000;background:rgba(224,32,32,.10);border:1px solid rgba(224,32,32,.35)}
 :root[data-theme="clair"] .pc-vide{color:var(--sub)}
 :root[data-theme="clair"] .pc-b-l b{color:#090909}
-:root[data-theme="clair"] .bn-select{color:#090909;background-color:#f4f4f4}
-:root[data-theme="clair"] .bn-select option{color:#090909;background:#fff}
+:root[data-theme="clair"] .bn-select{color:#090909;border:1px solid #ff2d2d;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ff3b3b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center/18px 18px,
+    linear-gradient(180deg,rgba(224,32,32,.22),rgba(120,0,0,.3));box-shadow:0 0 0 1px rgba(255,45,45,.25),0 0 12px rgba(224,32,32,.3)}
+:root[data-theme="clair"] .bn-select option{color:#090909;background:#e8e8e8}
 :root[data-theme="clair"] .bn-tete{border:1px solid rgba(9,9,9,0.12);background:linear-gradient(115deg,rgba(242,242,242,0.96) 0%,rgba(234,234,234,0.94) 48%,rgba(90,6,6,.72) 74%,rgba(250,230,230,0.9) 86%,rgba(140,10,10,.55) 100%),#efefef}
 :root[data-theme="clair"] .bn-titre{color:#090909}
 :root[data-theme="clair"] .bn-titre em{color:#cc0000}
