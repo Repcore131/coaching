@@ -89796,12 +89796,11 @@ function _htmlTableauxTableur(c){
       //   3 413 — les grammes sont arrondis, et la journee ecrite est recomptee
       //   depuis eux (_bloc). Deux chiffres pour la meme cible : on montre
       //   celui qui part.
-      if(!_cycT){
-        let j=null; try{ j=_tbJournees(c,t,false); }catch(e){ j=null; }
-        const jj=(j&&j.on)||{kcal:t.kcal,g:t.g};
-        return li('Tous les jours',_tbNb(jj.kcal)+' kcal',
-          _tbNb(jj.g)+' g de glucides, mêmes valeurs sept jours sur sept',true,'sigma');
-      }
+      // SANS CYCLAGE, RIEN À AJOUTER ICI (Kevin, 27/09/2026 : « je n'arrive pas
+      // à comprendre l'intérêt de le mettre là »). La ligne « Tous les jours »
+      // répétait le total des Macronutriments, juste en dessous. Le tableau ne
+      // montre des journées que quand elles diffèrent : jour ON, jour OFF.
+      if(!_cycT) return '';
       let j=null; try{ j=_tbJournees(c,t,true); }catch(e){ j=null; }
       if(!j) return '';
       return li('Jour ON',_tbNb(j.on.kcal)+' kcal',
