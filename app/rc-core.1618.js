@@ -33353,10 +33353,22 @@ const _exAClasser=new Set();
 // ouvrirSelecteurMuscles et le selecteur du classement. On corrige donc a LA
 // SOURCE : les deux resolveurs. Garder chaque point de chute laisserait passer
 // le quatrieme.
-function _normaliserMuscles(r){
+function _normaliserMuscles(r,k){
   if(!r||typeof r!=='object') return r;
   if(!Array.isArray(r.p)) r.p=[];
   if(!Array.isArray(r.s)) r.s=[];
+  // L'ANCIEN MUSCLE « TRAPEZES » (avant le 08/09/2026). migrerTrapezes ne
+  // reportait que les reperes de volume : un exercice classe a l'epoque,
+  // meme a la main, gardait la clef, que l'ecran affichait telle quelle
+  // (« TRAPEZES ») et que le volume ne comptait nulle part. Kevin, 27/09/2026 :
+  // « je ne veux plus de juste trapèze ». Un tirage ou un rowing retracte
+  // l'omoplate (trapeze median) ; le reste l'eleve (trapeze superieur).
+  if(r.p.indexOf('TRAPEZES')>=0||r.s.indexOf('TRAPEZES')>=0){
+    const med=/\bROW|ROWING|TIRAGE (HORIZONTAL|ASSIS)|FACE PULL|OISEAU|ELEVATION Y/.test(String(k||''));
+    const t=med?'TRAP_MED':'TRAP_SUP';
+    const conv=l=>l.map(m=>m==='TRAPEZES'?t:m).filter((m,i,a)=>a.indexOf(m)===i);
+    r.p=conv(r.p); r.s=conv(r.s).filter(m=>r.p.indexOf(m)<0);
+  }
   return r;
 }
 // ══ R15 — LES CLASSEMENTS AUTOMATIQUES D'AVANT UNE CORRECTION DE REGLE ══
@@ -33369,9 +33381,27 @@ function _normaliserMuscles(r){
 const EX_AUTO_REVUS=Object.freeze([
   {motif:/\bNORDIC\b/, faux:'BICEPS'}
 ]);
+// CE QUE LE GUIDE ET LES REGLES DISENT AUJOURD'HUI, sans rien ecrire.
+function _musclesDeduits(k){
+  const g=_exGuide().get(k);
+  if(g) return {p:g.p,s:g.s};
+  for(const rg of EX_REGLES) if(rg.motif.test(k)) return {p:rg.p,s:rg.s};
+  return null;
+}
+// ⚠ UN CLASSEMENT AUTOMATIQUE N'EST PAS UN CHOIX (27/09/2026). La liste
+//   EX_AUTO_REVUS ne corrigeait que les cas qu'on pensait a y ecrire : la
+//   revue des trapezes et des pull-overs (builds 1614-1615) ne touchait donc
+//   aucun exercice deja rencontre — Kevin : « c'est toujours pas mis en
+//   place ». Desormais, ce que l'app a DEDUIT est recalcule des que le guide
+//   ou les regles disent autre chose. Un choix fait a la main ('manuel') ne
+//   bouge jamais.
 function _autoARevoir(k,r){
   if(!r||r.src!=='auto'||!Array.isArray(r.p)) return false;
-  return EX_AUTO_REVUS.some(x=>x.motif.test(k)&&r.p.indexOf(x.faux)>=0);
+  if(EX_AUTO_REVUS.some(x=>x.motif.test(k)&&r.p.indexOf(x.faux)>=0)) return true;
+  const d=_musclesDeduits(k);
+  if(!d) return false;
+  const pareil=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every((m,i)=>m===b[i]);
+  return !(pareil(r.p,d.p)&&pareil(r.s||[],d.s));
 }
 function resoudreMuscles(nom,ex){
   if(!currentUser) return null;
@@ -33379,7 +33409,7 @@ function resoudreMuscles(nom,ex){
   if(!k) return null;
   k=resoudreAlias(k);
   const dejaVu=currentUser.exMuscles&&currentUser.exMuscles[k];
-  if(dejaVu&&!_autoARevoir(k,dejaVu)) return _normaliserMuscles(dejaVu);
+  if(dejaVu&&!_autoARevoir(k,dejaVu)) return _normaliserMuscles(dejaVu,k);
   // Cardio : aucun rattachement, et surtout pas de mise en file.
   if((ex&&isCardio(ex))||_exGuideEstCardio(k)||_exGuideEstPosing(k)) return null;
   // 1. Le guide du coach fait foi.
@@ -60715,7 +60745,7 @@ function resoudreMusclesLecture(nom,ex,user){
   const dejaVu=user&&user.exMuscles&&user.exMuscles[k];
   // R15 — meme revue que resoudreMuscles, mais SANS ECRIRE : cette lecture
   // sert aussi a la fiche coach, sur le dossier d'un autre.
-  if(dejaVu&&!_autoARevoir(k,dejaVu)) return _normaliserMuscles(dejaVu);
+  if(dejaVu&&!_autoARevoir(k,dejaVu)) return _normaliserMuscles(dejaVu,k);
   if((ex&&isCardio(ex))||_exGuideEstCardio(k)||_exGuideEstPosing(k)) return VOL_CARDIO;
   const g=_exGuide().get(k);
   if(g) return {p:g.p.slice(),s:g.s.slice(),src:'auto'};

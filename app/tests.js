@@ -58622,6 +58622,28 @@ async function testExercices(){
         return true;
       } finally { currentUser=sU; }})());
 
+    // ══ 27/09/2026 : UN CLASSEMENT AUTOMATIQUE SUIT LE GUIDE, ET « TRAPEZES » DISPARAIT ══
+    ok('Un classement automatique ancien suit le guide ; « TRAPEZES » est converti ; le manuel reste',(()=>{
+      const sU=currentUser;
+      try{
+        currentUser={email:'trap@t.fr',exAlias:{},exMuscles:{
+          'SHRUG HALTERE':{p:['TRAP_SUP'],s:['DORSAUX'],src:'auto'},
+          'PULL OVER':{p:['DORSAUX'],s:['BICEPS'],src:'auto'},
+          'EXO TRAPEZE DU COACH':{p:['TRAPEZES'],s:[],src:'manuel'},
+          'ROWING DU COACH':{p:['DORSAUX'],s:['TRAPEZES'],src:'manuel'},
+          'CURL BARRE':{p:['BICEPS'],s:['TRICEPS'],src:'manuel'}}};
+        const r=n=>resoudreMuscles(n,{reps:'10'});
+        if(r('SHRUG HALTERE').s.length) return _echec('shrug : '+JSON.stringify(r('SHRUG HALTERE')));
+        if(r('PULL OVER').s.indexOf('BICEPS')>=0) return _echec('pull-over : biceps encore compté');
+        if(r('EXO TRAPEZE DU COACH').p[0]!=='TRAP_SUP') return _echec('TRAPEZES seul : '+JSON.stringify(r('EXO TRAPEZE DU COACH')));
+        if(r('ROWING DU COACH').s.indexOf('TRAP_MED')<0) return _echec('TRAPEZES d’un rowing : '+JSON.stringify(r('ROWING DU COACH')));
+        if(r('CURL BARRE').s[0]!=='TRICEPS') return _echec('un choix manuel a été écrasé');
+        const autre={exAlias:{},exMuscles:{'PULL OVER':{p:['DORSAUX'],s:['BICEPS'],src:'auto'}}};
+        if(resoudreMusclesLecture('PULL OVER',null,autre).s.indexOf('BICEPS')>=0) return _echec('lecture : biceps encore compté');
+        if(autre.exMuscles['PULL OVER'].s[0]!=='BICEPS') return _echec('la lecture a écrit dans le dossier');
+        return true;
+      } finally { currentUser=sU; }})());
+
     // ⚠ DANS UNE VRAIE SÉANCE, ET SANS INDEX. C'est l'état d'une séance
     // reprise après une mise à jour : l'apercu, qui chargeait l'index, n'a pas
     // été ouvert.
