@@ -8275,7 +8275,9 @@ function go(id){
   // vraiment changement d'écran, donc s'il faut empiler une entrée d'historique.
   const _avant=document.querySelector('.screen.active')?.id;
   const _safe=['s-splash','s-welcome','s-coach-home','s-client-home','s-coach-entry','s-athlete-entry'];
-  if(window._swUpdatePending&&_safe.includes(id)){location.reload();return;}
+  // Par une adresse neuve, comme la sonde de version : location.reload()
+  // pouvait ressortir la page du cache du navigateur.
+  if(window._swUpdatePending&&_safe.includes(id)){ if(window._rcForcerMaj) window._rcForcerMaj(); else location.reload(); return; }
   // Filet de sécurité UI — le vrai contrôle d'accès reste côté données/serveur (P02).
   // s-coach-program est l'éditeur d'exercices partagé : l'athlète y accède pour SA propre
   // séance (openSessionExercises fixe le contexte juste avant l'appel à go()).
