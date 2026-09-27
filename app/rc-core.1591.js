@@ -69096,6 +69096,30 @@ function showProgressTab(tab,btn,sansMemo){
         :'aux bilans '+_ancSans.slice(0,-1).join(', ')+' et '+_ancSans[_ancSans.length-1])
         +' : une mesure y manquait.'
       :null;
+    // LA COURBE AU DESSIN DE CELLES DU POIDS ET DES MENSURATIONS (27/09/2026,
+    // Kevin : « comme les précédents graphiques, restylise celui sur le % de
+    // masse grasse »). Même en-tête, même tracé SVG, points à la DATE de chaque
+    // bilan — et l'ancienne couleur, gardée. L'écart suit R33 : sous la marge
+    // de la formule il se dit « stable », en gris.
+    const _isoMG=b=>{ try{ return localISODate(new Date(b.date)); }catch(e){ return ''; } };
+    const _ptsMG=bl.map((b,i)=>({d:_isoMG(b),v:bfPcts[i]})).filter(p=>p.v!==null&&p.d);
+    const _couleurMG=e=>(ecartMasseGrasse(e)==='stable')?'var(--sub)':(e<0?'var(--green)':'var(--red)');
+    const _traceMG=_ptsMG.length>1?_courbeMesures([{label:'Masse grasse estimée',color:'#E02020',pts:_ptsMG}],
+      {unite:'%',couleur:_couleurMG}):'';
+    const _ecartMG=ecartLib===null?''
+      :`<span class="pc-ecart" style="color:${col}">${ecartLib==='stable'?'stable'
+        :(diff>0?'+':'')+String(diff).replace('.',',')+' %'}</span>`;
+    const _carteCourbeMG=`<div class="evo-carte pc-carte">
+        <div class="pc-tete">
+          <span class="pc-ico" aria-hidden="true">${_pesIcone('barres')}</span>
+          <span class="pc-titre">% de masse grasse corporelle</span>
+          ${_ecartMG}
+        </div>
+        ${_traceMG||`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;padding:12px 2px 4px">${
+          !valid.length?'La courbe apparaîtra dès qu’une première estimation sera possible.'
+          :bl.length<2?'Une courbe demande deux bilans. Il en manque encore un.'
+          :'Une seule estimation pour l’instant. Reprends tes mesures au prochain bilan : c’est ce qui dira si elle bouge.'}</div>`}
+      </div>`;
     const pieSec=(idx,title)=>{
       const mg=mgKgs[idx]??0,mm=mmKgs[idx]??0;
       if(!mg&&!mm) return '';
@@ -69109,6 +69133,10 @@ function showProgressTab(tab,btn,sansMemo){
         </div>
       </div>`;
     };
+    // ⚠ PAS DE CARTE VIDE (27/09/2026) : sans estimation au premier ni au
+    //   dernier bilan, les deux camemberts rendaient '' et leur cadre restait,
+    //   vide, entre la courbe et le tableau.
+    const _camemberts=(bl.length>=1?pieSec(0,'Bilan 1'):'')+(bl.length>1?pieSec(bl.length-1,'Bilan '+bl.length):'');
     c.innerHTML=`
       <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
         <!-- Le titre nommait la METHODE — « Paramètres : Formule US Navy » —
@@ -69144,13 +69172,9 @@ function showProgressTab(tab,btn,sansMemo){
            « masse_grasse » du lexique, a un doigt, dans le coin de la tuile
            « MG actuel ». L'honnetete sur la fiabilite reste ; c'est sa
            repetition a chaque visite qui disparait. -->
-      <div class="evo-carte" style="padding:16px">
-        <div class="evo-titre">% de masse grasse corporelle</div>
-        <canvas id="mg-chart" height="150" style="width:100%;display:block"></canvas>
-      </div>
-      ${bl.length>=1?`<div class="evo-carte" style="display:flex;gap:12px;padding:18px 16px;justify-content:center">
-        ${pieSec(0,'Bilan 1')}
-        ${bl.length>1?pieSec(bl.length-1,'Bilan '+bl.length):''}
+      ${_carteCourbeMG}
+      ${_camemberts?`<div class="evo-carte" style="display:flex;gap:12px;padding:18px 16px;justify-content:center">
+        ${_camemberts}
       </div>`:''}
       ${renderDataTable(
         ['',...bilLabels],
@@ -69179,9 +69203,9 @@ function showProgressTab(tab,btn,sansMemo){
            du lexique : le ⓘ de la tuile « MG actuel ». -->
     `;
     c.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
+    // La courbe est DEJA dans la carte (_courbeMesures) : on lance son trace.
+    try{ if(typeof arcTracerCourbes==='function') arcTracerCourbes(c); }catch(e){}
     setTimeout(()=>{
-      const bfPairs=bfPcts.map((v,i)=>v!==null?{v,l:bilLabels[i]}:null).filter(Boolean);
-      if(bfPairs.length) lineChart('mg-chart',bfPairs.map(x=>x.l),bfPairs.map(x=>x.v),'#E02020');
       const mg0=mgKgs[0]??0,mm0=mmKgs[0]??0;
       if(mg0&&mm0) drawPie('pie-0',[{val:mg0,color:'#E02020'},{val:mm0,color:'#22c55e'}]);
       if(bl.length>1){
@@ -96059,7 +96083,18 @@ function _courbeMesures(series,opts){
   // Les dates : celles des bilans, jusqu'a cinq, sans chevauchement.
   const ds=[...new Set(tous.map(p=>p.d))].sort();
   const pasD=Math.max(1,Math.ceil(ds.length/5));
-  const choix=ds.filter((d,i)=>i%pasD===0||i===ds.length-1);
+  const choix0=ds.filter((d,i)=>i%pasD===0||i===ds.length-1);
+  // ⚠ DEUX BILANS A DEUX SEMAINES D'ECART SE CHEVAUCHAIENT sur un telephone
+  //   (« 21/0605/07 »). Une etiquette trop pres de la precedente saute ; la
+  //   derniere date reste toujours, c'est elle qu'on lit.
+  const ECART_MIN_X=16;
+  const choix=[];
+  choix0.forEach((d,i)=>{
+    const dern=i===choix0.length-1;
+    if(!choix.length||X(d)-X(choix[choix.length-1])>=ECART_MIN_X){ choix.push(d); return; }
+    if(dern&&choix.length>1) choix[choix.length-1]=d;
+    else if(dern) choix.push(d);
+  });
   const xs=choix.map((d,i)=>`<span style="left:${f2(X(d))}%" class="${X(d)<8?'pc-x0':(X(d)>92?'pc-x1':'')}">${_fmtJourCourt(d)}</span>`).join('');
   const legende=`<div class="pc-leg">${S.map(s=>`<span><i class="pc-l-pt" style="border-color:${s.color};box-shadow:0 0 6px ${s.color}"></i>${escapeHtml(s.label||'Mesure relevée')}</span>`).join('')}</div>`;
   return `<div class="pc pc-m">
