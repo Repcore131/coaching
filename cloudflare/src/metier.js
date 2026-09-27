@@ -84,11 +84,15 @@ export function creerMetier(deps) {
   }
 
   // ══ WEB PUSH ═══════════════════════════════════════════════════════════
+  // `o.urgent` : un message pour l'ADMINISTRATEUR (un litige PayPal). Ni
+  // heures calmes, ni plafond d'un par jour, ni préférences : chaque litige
+  // doit arriver, à l'heure où il arrive. Réservé au code du serveur.
   async function envoyerPush(uid, message, o) {
     const t = now();
     const type = String((message && message.type) || '');
-    const [prefs, log] = await Promise.all([_lire(uid, 'pushPrefs'), _val('push_log/' + uid)]);
-    const ok = pushAutorise(type, prefs, log, t);
+    const urgent = !!(o && o.urgent);
+    const [prefs, log] = urgent ? [null, null] : await Promise.all([_lire(uid, 'pushPrefs'), _val('push_log/' + uid)]);
+    const ok = urgent ? { ok: true, raison: null } : pushAutorise(type, prefs, log, t);
     if (!ok.ok) {
       if (ok.raison === 'calme' && (!o || o.attendre !== false))
         await db.ref('push_attente/' + uid).set(Object.assign({}, message, { at: t }));
@@ -98,8 +102,10 @@ export function creerMetier(deps) {
     const ids = Object.keys(subs);
     if (!ids.length) return { envoye: 0, raison: 'aucun_abonnement' };
     const jour = paris(t).jour;
-    const tx = await db.ref('push_log/' + uid).transaction((cur) => (cur && cur.jour === jour) ? undefined : { jour, at: t, type });
-    if (!tx.committed) return { envoye: 0, raison: 'plafond' };
+    if (!urgent) {
+      const tx = await db.ref('push_log/' + uid).transaction((cur) => (cur && cur.jour === jour) ? undefined : { jour, at: t, type });
+      if (!tx.committed) return { envoye: 0, raison: 'plafond' };
+    }
     const charge = JSON.stringify({ title: message.title, body: message.body || '',
       url: message.url || './', tag: message.tag || ('rc-' + type), type });
     let envoye = 0;
@@ -113,7 +119,7 @@ export function creerMetier(deps) {
         else if (r.statut === 404 || r.statut === 410) await db.ref('push/' + uid + '/' + id).remove();
       } catch (e) { /* un appareil injoignable n'arrête pas les autres */ }
     }));
-    if (!envoye) await db.ref('push_log/' + uid).remove();
+    if (!envoye && !urgent) await db.ref('push_log/' + uid).remove();
     return { envoye, raison: envoye ? null : 'echec' };
   }
   const abonnes = () => db.ref('push').shallow();
@@ -381,7 +387,10 @@ export function creerMetier(deps) {
     //     (paypal.js, fermerALaFin). Lui ouvrir Essentielle ferait descendre
     //     l'Ultime d'un programme, et un athlète suivi n'a rien à gagner ;
     //   · personne sans accès : un mois d'Essentielle s'ouvre tout de suite.
-    await crediterMoisOffert(lien.parrain, t);
+    const mode = await crediterMoisOffert(lien.parrain, t);
+    // LA TRACE DU CRÉDIT, pour pouvoir le reprendre si ce paiement est
+    // remboursé ou rétrofacturé (retirerMoisOffert) : à qui, et comment.
+    await db.ref('parrainage/credits/' + cle).set({ parrain: lien.parrain, id: lien.id, mode, le: t });
     await db.ref('parrainage/evenements/' + lien.parrain).push().set({
       type: res.mentor ? 'mentor' : 'paiement', at: t, prenom: res.prenom, mois: 1, source: String(source || '') });
     const txt = P.textePaiement(res);
@@ -392,6 +401,10 @@ export function creerMetier(deps) {
   async function crediterMoisOffert(parrain, t) {
     const [statut, paiementSt, ech, role, prog, finPaypal] = await Promise.all(['status', 'paymentStatus', 'accessExpiry', 'role', 'programmesAchetes', 'abonnement/finAccesPaypal'].map((c) => _lire(parrain, c)));
     if (role === 'coach') return 'coach';
+    // UNE DETTE PASSE AVANT : un mois offert pour un filleul remboursé, déjà
+    // consommé au moment du remboursement, se paie sur le mois suivant.
+    const dette = await db.ref('parrainage/comptes/' + parrain + '/dette').transaction((n) => (Number(n) > 0 ? (Number(n) - 1 || null) : undefined));
+    if (dette.committed) return 'dette_soldee';
     const e = Number(ech) || 0;
     const ultimeProgramme = !!(prog && typeof prog === 'object' && Object.values(prog).some((x) => x && Number(x.ouvertJusqu) > t));
     const b = 'users/' + parrain + '/';
@@ -421,6 +434,119 @@ export function creerMetier(deps) {
       [b + 'accessExpiry']: Math.max(e, t) + MONTH_MS, [b + 'abonnement/formule']: 'essentielle',
       [b + 'abonnement/source']: 'parrainage', [b + 'updatedAt']: t });
     return 'mois_ouvert';
+  }
+
+  // ══ QUAND UN PREMIER PAIEMENT EST REMBOURSÉ OU RÉTROFACTURÉ ══════════════
+  //
+  // LE MOIS OFFERT AU PARRAIN EST REPRIS, s'il ne l'a pas encore consommé :
+  //   · en réserve : il en sort ;
+  //   · ajouté au bout d'un accès : retiré, si le mois entier est encore à
+  //     venir (l'accès finit plus d'un mois après aujourd'hui) ;
+  //   · sinon (commencé, ou déjà écoulé) : une DETTE d'un mois, soldée sur le
+  //     prochain mois qu'il gagnera (crediterMoisOffert).
+  // Le filleul repasse de « payant » à « rembourse » dans son compte.
+  // Rend {parrain, resultat} ou null s'il n'y avait rien à reprendre.
+  async function retirerMoisOffert(cleFilleul, t) {
+    const c = await _val('parrainage/credits/' + cleFilleul);
+    if (!c || !c.parrain || c.retireLe) return null;
+    const parrain = c.parrain, b = 'users/' + parrain + '/';
+    const garde = await db.ref('parrainage/credits/' + cleFilleul + '/retireLe').transaction((v) => (v ? undefined : t));
+    if (!garde.committed) return null;
+    const reserve = async () => (await db.ref('parrainage/comptes/' + parrain + '/moisEnReserve')
+      .transaction((n) => (Number(n) >= 1 ? Number(n) - 1 : undefined))).committed;
+    let resultat = 'rien';
+    if (c.mode === 'coach') resultat = 'rien';
+    else if (c.mode === 'dette_soldee') {
+      await db.ref('parrainage/comptes/' + parrain + '/dette').transaction((n) => (Number(n) || 0) + 1);
+      resultat = 'dette';
+    } else if (c.mode === 'reserve') {
+      resultat = (await reserve()) ? 'reserve_retiree' : 'dette';
+    } else {
+      // fin_reculee, acces_prolonge, mois_ouvert : un mois au bout de l'accès.
+      const [ech, fp] = await Promise.all([_lire(parrain, 'accessExpiry'), _lire(parrain, 'abonnement/finAccesPaypal')]);
+      const e = Number(ech) || 0;
+      if (e - MONTH_MS > t) {
+        const maj = { [b + 'accessExpiry']: e - MONTH_MS, [b + 'updatedAt']: t };
+        if (Number(fp) > 0) maj[b + 'abonnement/finAccesPaypal'] = Number(fp) - MONTH_MS;
+        await db.ref().update(maj);
+        await db.ref('paypal_fins/' + parrain).transaction((f) => (f ? Object.assign({}, f, { fin: Number(f.fin) - MONTH_MS,
+          moisRecules: Math.max(0, (Number(f.moisRecules) || 0) - 1) }) : undefined));
+        resultat = 'mois_retire';
+      } else if (c.mode === 'fin_reculee' && !(Number(fp) > 0) && await reserve()) {
+        resultat = 'reserve_retiree';     // l'abonnement était reparti : le mois était retourné en réserve
+      } else resultat = 'dette';
+    }
+    if (resultat === 'dette' && c.mode !== 'dette_soldee')
+      await db.ref('parrainage/comptes/' + parrain + '/dette').transaction((n) => (Number(n) || 0) + 1);
+    await db.ref('parrainage/comptes/' + parrain).transaction((compte) => {
+      if (!compte || !compte.filleuls || !compte.filleuls[c.id]) return undefined;
+      const filleuls = Object.assign({}, compte.filleuls, { [c.id]: Object.assign({}, compte.filleuls[c.id], { statut: 'rembourse', annuleLe: t }) });
+      return Object.assign({}, compte, { filleuls, moisGagnes: Math.max(0, (Number(compte.moisGagnes) || 0) - 1),
+        payants: Object.keys(filleuls).filter((k) => filleuls[k] && filleuls[k].statut === 'payant').length });
+    });
+    await db.ref('parrainage/credits/' + cleFilleul + '/resultat').set(resultat);
+    return { parrain, resultat };
+  }
+
+  // L'ÉTAT « PAYANT » DE L'ATTRIBUTION : retiré du dossier, et décompté du
+  // jour où il avait été compté (écran « Viralité »).
+  async function annulerAttribution(cle, t) {
+    const origine = (await _val('users/' + cle + '/origine')) || {};
+    const payeLe = Number(origine.payeLe);
+    if (!(payeLe > 0)) return null;
+    const lien = await _val('ambassadeurs_liens/' + cle);
+    const o = Object.assign({}, origine, lien && lien.code ? { amb: lien.code } : {});
+    for (const c of ATT.cheminsEvenement('payant', o, payeLe))
+      await db.ref(c).transaction((n) => (Number(n) > 1 ? Number(n) - 1 : null));
+    await db.ref().update({ ['users/' + cle + '/origine/payeLe']: null, ['users/' + cle + '/origine/annuleLe']: t });
+    return { payeLe };
+  }
+
+  // ══ LA COMMISSION D'UNE VENTE : suspendue, rétablie, annulée, réduite ════
+  // Retrouvée par ambassadeurs_ventes/<vente> (posé au paiement). Rend
+  // {code, commission, avant, apres, dejaPayee} ou null (pas de commission).
+  async function commissionVente(vente, action, o) {
+    const id = String(vente || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60);
+    const v = id ? await _val('ambassadeurs_ventes/' + id) : null;
+    if (!v || !v.code || !v.mois || !v.pid) return null;
+    const t = now();
+    let out = null;
+    const tx = await db.ref('ambassadeurs/' + v.code + '/commissions/' + v.mois + '/' + v.pid).transaction((x) => {
+      if (!x) return undefined;
+      const y = Object.assign({}, x);
+      const avant = Number(x.commission) || 0;
+      if (action === 'suspendre') {
+        if (x.statut === 'annulee' || x.statut === 'rembourse' || x.statut === 'suspendue') return undefined;
+        y.statutAvant = x.statut || null; y.statut = 'suspendue'; y.suspendueLe = t;
+      } else if (action === 'retablir') {
+        if (x.statut !== 'suspendue') return undefined;
+        y.statut = x.statutAvant || null; y.statutAvant = null; y.suspendueLe = null;
+      } else if (action === 'annuler') {
+        if (x.statut === 'annulee' || x.statut === 'rembourse') return undefined;
+        if (x.statut === 'payee' || x.statutAvant === 'payee') y.etaitPayee = true;
+        y.statut = 'annulee'; y.statutAvant = null; y.annuleeLe = t;
+      } else if (action === 'prorata') {
+        const ref = String(o.ref || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60) || 'r';
+        if (x.rembourses && x.rembourses[ref] !== undefined) return undefined;
+        const initial = Number(x.montantInitial) || Number(x.montant) || 0;
+        const rembourses = Object.assign({}, x.rembourses, { [ref]: Math.round(Number(o.montant) * 100) / 100 });
+        const total = Object.values(rembourses).reduce((a, b) => a + (Number(b) || 0), 0);
+        const net = Math.max(0, Math.round((initial - total) * 100) / 100);
+        y.montantInitial = initial;
+        y.commissionInitiale = Number(x.commissionInitiale) || avant;
+        y.rembourses = rembourses; y.montant = net;
+        y.commission = Math.round(net * (Number(x.pct) || 0)) / 100;
+        if (net <= 0) { y.statut = 'annulee'; y.annuleeLe = t; }
+        if (x.statut === 'payee') y.etaitPayee = true;
+      } else return undefined;
+      out = { code: v.code, mois: v.mois, avant, apres: Number(y.commission) || 0, statut: y.statut || 'attente', dejaPayee: !!y.etaitPayee };
+      return y;
+    });
+    if (!tx.committed) return null;
+    if (action === 'prorata') await db.ref('ambassadeurs/' + v.code + '/stats/ca')
+      .transaction((n) => Math.max(0, Math.round(((Number(n) || 0) - (Number(o.montant) || 0)) * 100) / 100));
+    await ambMajVue(v.code);
+    return out;
   }
 
   // ══ LES AMBASSADEURS ═══════════════════════════════════════════════════
@@ -501,19 +627,16 @@ export function creerMetier(deps) {
     await ambMajVue(code);
     return c;
   }
+  // L'ancien point d'entrée (un remboursement, sans autre suite) : la
+  // commission de la vente est annulée. paypal.js passe désormais par
+  // commissionVente et les reprises ci-dessus.
   async function ambassadeurRemboursement(ress) {
     let id = String(ress.sale_id || '');
     if (!id && Array.isArray(ress.links)) {
       const up = ress.links.find((l) => l && l.rel === 'up');
       if (up && up.href) id = String(up.href).split('/').pop();
     }
-    id = id.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60);
-    if (!id) return null;
-    const v = await _val('ambassadeurs_ventes/' + id);
-    if (!v || !v.code || !v.mois || !v.pid) return null;
-    await db.ref('ambassadeurs/' + v.code + '/commissions/' + v.mois + '/' + v.pid + '/statut').set('rembourse');
-    await ambMajVue(v.code);
-    return v;
+    return commissionVente(id, 'annuler');
   }
   // LE PREMIER PAIEMENT pour l'écran « Viralité » : une seule fois.
   async function attributionPaiement(cle) {
@@ -589,5 +712,6 @@ export function creerMetier(deps) {
   return { envoyerPush, abonnes, planifies, apresHeuresCalmes, statsBadgesUn, statsBadgesFin,
     defisQuotidienCoach, coachsAvecCanal, recalculerDefi, parrainageDemande, parrainagePaiement,
     ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits,
-    crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement };
+    crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
+    retirerMoisOffert, annulerAttribution, commissionVente };
 }

@@ -118,6 +118,11 @@ async function lirePaypal(chemin, env, fetchImpl) {
 }
 const lireAbonnement = (id, env, f) => (/^I-[A-Z0-9]{8,}$/.test(id) ? lirePaypal('/v1/billing/subscriptions/' + id, env, f) : Promise.resolve(null));
 const lireCommande = (id, env, f) => (/^[A-Z0-9]{8,40}$/.test(id) ? lirePaypal('/v2/checkout/orders/' + id, env, f) : Promise.resolve(null));
+const lireVente = (id, env, f) => (/^[A-Z0-9]{8,40}$/.test(id) ? lirePaypal('/v1/payments/sale/' + id, env, f) : Promise.resolve(null));
+const lireCapture = (id, env, f) => (/^[A-Z0-9]{8,40}$/.test(id) ? lirePaypal('/v2/payments/captures/' + id, env, f) : Promise.resolve(null));
+const euros = (c) => (Number.isFinite(Number(c)) && c !== null && c !== '' ? (Number(c) / 100).toFixed(2).replace('.', ',') + ' €' : 'montant inconnu');
+const dateFr = (t) => new Date(t).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', day: 'numeric', month: 'long', year: 'numeric' });
+const CREATEUR = 'guellec,coachingpro@gmail,com';
 
 /**
  * @param {{db:any, M:any, env:any, fetchImpl?:Function, maintenant?:()=>number}} ctx
@@ -247,6 +252,8 @@ export function creerPaypal(ctx) {
     const valide = montantValide(plan, ress.amount && (ress.amount.total || ress.amount.value),
       ress.amount && (ress.amount.currency || ress.amount.currency_code), role);
     const premier = valide ? await premierPaiement(cle, abo, ress) : false;
+    await noterTransaction(ress.id, { cle, abo, type: 'abonnement', premier,
+      montant: centimes(ress.amount && (ress.amount.total || ress.amount.value)), devise: String((ress.amount && ress.amount.currency) || '') });
     return premier ? 'premier_paiement' : (ouvrir ? 'paiement' : 'paiement_sans_ouverture');
   }
 
@@ -271,15 +278,28 @@ export function creerPaypal(ctx) {
     const valide = role !== 'coach' && Number.isFinite(Number(prixCts)) && Number(prixCts) > 0
       && devise(pu.amount) === 'EUR' && devise(ress.amount) === 'EUR'
       && centimes(pu.amount.value) === Number(prixCts) && centimes(ress.amount.value) === Number(prixCts);
+    const premier = valide ? await premierPaiement(cle, null, ress) : false;
+    await noterTransaction(ress.id, { cle, prog: prog || null, commande: idCommande, type: 'programme', premier,
+      montant: centimes(ress.amount && ress.amount.value), devise: String((ress.amount && ress.amount.currency_code) || '') });
     if (!valide) return 'achat_non_compte';
-    return (await premierPaiement(cle, null, ress)) ? 'premier_paiement' : 'paiement';
+    return premier ? 'premier_paiement' : 'paiement';
+  }
+
+  // ── LE REGISTRE DES ENCAISSEMENTS ──────────────────────────────────────
+  // paypal_transactions/<vente ou capture> : à qui, combien, et si c'était le
+  // premier paiement du compte. C'est ce qu'un remboursement ou un litige
+  // relit pour savoir quoi reprendre — PayPal ne le redit pas.
+  async function noterTransaction(id, rec) {
+    const k = net(id);
+    if (!k) return;
+    await db.ref('paypal_transactions/' + k).update(Object.assign({ le: now() }, rec));
   }
 
   // LE PREMIER PAIEMENT, TOUS ACHATS CONFONDUS : un nœud du serveur seul,
   // pris en transaction — deux événements simultanés ne récompensent pas deux fois.
   async function premierPaiement(cle, abo, ress) {
     const t = now();
-    const tx = await db.ref('paypal_premiers/' + cle).transaction((v) => (v ? undefined : { le: t, abo: abo || null }));
+    const tx = await db.ref('paypal_premiers/' + cle).transaction((v) => (v ? undefined : { le: t, abo: abo || null, vente: net(ress.id) || null }));
     if (!tx.committed) return false;
     const montant = ress.amount && (ress.amount.total || ress.amount.value);
     await M.parrainagePaiement(cle, 'paypal').catch(() => null);
@@ -291,10 +311,10 @@ export function creerPaypal(ctx) {
   async function traiter(evt) {
     const type = String(evt.event_type || '');
     const ress = evt.resource || {};
-    if (type === 'PAYMENT.SALE.REFUNDED' || type === 'PAYMENT.CAPTURE.REFUNDED') {
-      await M.ambassadeurRemboursement(ress).catch(() => null);
-      return 'remboursement';
-    }
+    if (type === 'PAYMENT.SALE.REFUNDED' || type === 'PAYMENT.CAPTURE.REFUNDED') return rembourse(evt);
+    if (type === 'PAYMENT.SALE.REVERSED') return retrofacture(evt);
+    if (type === 'CUSTOMER.DISPUTE.CREATED') return litigeOuvert(evt);
+    if (type === 'CUSTOMER.DISPUTE.RESOLVED') return litigeClos(evt);
     if (type === 'PAYMENT.CAPTURE.COMPLETED') return achat(evt);
     const abo = net(ress.billing_agreement_id || (String(ress.id || '').startsWith('I-') ? ress.id : ''));
     const connus = ['BILLING.SUBSCRIPTION.ACTIVATED', 'PAYMENT.SALE.COMPLETED', 'BILLING.SUBSCRIPTION.CANCELLED',
@@ -312,6 +332,204 @@ export function creerPaypal(ctx) {
     if (type === 'BILLING.SUBSCRIPTION.PAYMENT.FAILED') return 'echec_note';   // PayPal réessaie ; SUSPENDED suivra s'il faut
     const r = await fermerALaFin(cle, abo, type.split('.').pop());
     return r.ignore || 'fin_posee';
+  }
+
+  // ══ REMBOURSEMENTS, RÉTROFACTURATIONS, LITIGES ══════════════════════════
+  //
+  // CE QUI EST REPRIS, ET QUAND :
+  //   · remboursement TOTAL, rétrofacturation, litige PERDU : la commission de
+  //     l'ambassadeur est « annulée ». Et si c'était le PREMIER paiement du
+  //     compte : le mois offert au parrain est repris (ou devient une dette),
+  //     l'état « payant » de l'attribution est retiré, et l'accès du remboursé
+  //     se ferme à la date du remboursement ;
+  //   · remboursement PARTIEL : la commission seule, au prorata ;
+  //   · litige ouvert : commission « suspendue » ; gagné : rétablie, rien d'autre.
+  // Chaque cas laisse une ligne dans paypal_journal (écran Ambassadeurs de
+  // l'administrateur) : qui, quoi, pourquoi, et ce qui a été fait. Chaque
+  // litige, ouvert ou clos, envoie un push à l'administrateur.
+  //
+  // IDEMPOTENT PAR TRANSACTION : une rétrofacturation suit souvent un litige
+  // perdu, et les deux annoncent la même chose. La seconde ne refait rien.
+
+  // La transaction d'origine, depuis le registre ; à défaut (paiement d'avant
+  // le registre), relue chez PayPal. null si elle reste inconnue.
+  async function origine(id, genre) {
+    const k = net(id);
+    if (!k) return null;
+    const rec = await lire('paypal_transactions/' + k);
+    if (rec && rec.cle) return Object.assign({ id: k }, rec);
+    let cle = null, abo = null, prog = null, montant = NaN, devise = '', le = 0, type = 'abonnement';
+    const v = genre !== 'capture' ? await lireVente(k, env, ctx.fetchImpl) : null;
+    if (v) {
+      abo = net(v.billing_agreement_id); montant = centimes(v.amount && v.amount.total);
+      devise = String((v.amount && v.amount.currency) || ''); le = Date.parse(v.create_time || '') || 0;
+      if (abo) cle = await lire('paypal_abonnes/' + abo);
+    } else {
+      const c = genre !== 'vente' ? await lireCapture(k, env, ctx.fetchImpl) : null;
+      if (!c) return null;
+      type = 'programme';
+      montant = centimes(c.amount && c.amount.value); devise = String((c.amount && c.amount.currency_code) || '');
+      le = Date.parse(c.create_time || '') || 0;
+      const rel = c.supplementary_data && c.supplementary_data.related_ids;
+      const cmd = rel && rel.order_id ? await lireCommande(String(rel.order_id), env, ctx.fetchImpl) : null;
+      const pu = cmd && Array.isArray(cmd.purchase_units) ? cmd.purchase_units[0] : null;
+      [cle, prog] = String((pu && pu.custom_id) || '').split('|');
+      if (!cle || /[.#$\[\]\/]/.test(cle)) cle = null;
+    }
+    if (!cle) return null;
+    // Était-ce le premier ? Le registre des premiers le dit depuis qu'il note
+    // la vente ; avant, par l'abonnement et la date (deux jours d'écart au plus).
+    const p = await lire('paypal_premiers/' + cle);
+    const premier = !!(p && (p.vente ? p.vente === k : (String(p.abo || '') === String(abo || '') && Math.abs((Number(p.le) || 0) - le) < 2 * 864e5)));
+    const out = { cle, abo: abo || null, prog: prog || null, type, premier, montant, devise, le };
+    await noterTransaction(k, out);
+    return Object.assign({ id: k }, out);
+  }
+
+  const journal = (ligne) => db.ref('paypal_journal').push().set(Object.assign({ le: now() }, ligne));
+  const qui = (cle) => String(cle || '').replace(/,/g, '.');
+
+  // L'ACCÈS DU REMBOURSÉ, fermé à la date du remboursement.
+  async function fermerAcces(rec, t) {
+    const b = 'users/' + rec.cle + '/';
+    if (rec.type === 'programme') {
+      if (rec.prog && (await lire(b + 'programmesAchetes/' + rec.prog)) !== null) {
+        await db.ref().update({ [b + 'programmesAchetes/' + rec.prog + '/ouvertJusqu']: t, [b + 'updatedAt']: t });
+        return 'programme fermé au ' + dateFr(t);
+      }
+      return null;
+    }
+    const [role, statut] = await Promise.all([lire(b + 'role'), lire(b + 'status')]);
+    const maj = { [b + 'abonnement/statutPaypal']: 'REMBOURSE', [b + 'abonnement/finAccesPaypal']: t, [b + 'updatedAt']: t,
+      ['paypal_fins/' + rec.cle]: null };
+    if (role === 'coach') { maj[b + 'coachPlan'] = 'libre'; maj[b + 'coachSubActive'] = false; }
+    else if (statut === 'AUTONOMIE_PREMIUM') maj[b + 'accessExpiry'] = t;
+    await db.ref().update(maj);
+    return (role === 'coach' ? 'palier coach refermé' : 'accès fermé') + ' au ' + dateFr(t);
+  }
+
+  // L'ANNULATION D'UNE TRANSACTION (total, rétrofacturation, litige perdu).
+  async function annuler(rec, quoi, pourquoi, extra) {
+    const t = now();
+    const garde = await db.ref('paypal_transactions/' + rec.id + '/annuleLe').transaction((v) => (v ? undefined : t));
+    if (!garde.committed) return 'deja_annule';
+    const actions = [];
+    const c = await M.commissionVente(rec.id, 'annuler');
+    if (c) actions.push('commission ' + c.code + ' annulée (' + euros(Math.round(c.avant * 100)) + ')' + (c.dejaPayee ? ' — déjà versée, à reprendre' : ''));
+    if (rec.premier) {
+      const m = await M.retirerMoisOffert(rec.cle, t);
+      if (m) actions.push({ reserve_retiree: 'mois offert retiré de la réserve de ', mois_retire: 'mois offert retiré de l’accès de ',
+        dette: 'mois offert déjà consommé : dette d’un mois pour ', rien: 'aucun mois à reprendre pour ' }[m.resultat] + qui(m.parrain));
+      if (await M.annulerAttribution(rec.cle, t)) actions.push('état « payant » retiré de l’attribution');
+      const a = await fermerAcces(rec, t);
+      if (a) actions.push(a);
+      await db.ref('paypal_premiers/' + rec.cle).remove();
+    }
+    if (!actions.length) actions.push('rien à reprendre');
+    await journal(Object.assign({ quoi, qui: qui(rec.cle), transaction: rec.id, montant: euros(rec.montant), premier: !!rec.premier,
+      pourquoi: String(pourquoi || '').slice(0, 300), actions }, extra || {}));
+    return quoi;
+  }
+
+  async function rembourse(evt) {
+    const ress = evt.resource || {};
+    const capture = evt.event_type === 'PAYMENT.CAPTURE.REFUNDED';
+    let id = String(ress.sale_id || '');
+    if (!id && Array.isArray(ress.links)) {
+      const up = ress.links.find((l) => l && l.rel === 'up');
+      if (up && up.href) id = String(up.href).split('/').pop();
+    }
+    const rec = await origine(id, capture ? 'capture' : 'vente');
+    const montant = centimes(ress.amount && (ress.amount.total || ress.amount.value));
+    const pourquoi = ress.note_to_payer || ress.reason || ress.description || '';
+    if (!rec) { await journal({ quoi: 'remboursement_inconnu', transaction: net(id), montant: euros(montant), pourquoi, actions: ['transaction introuvable : rien de repris'] }); return 'remboursement_inconnu'; }
+    // Le cumul des remboursements de cette transaction décide total ou partiel.
+    const ref = net(ress.id) || ('r' + now());
+    await db.ref('paypal_transactions/' + rec.id + '/rembourses/' + ref).set(montant);
+    const deja = (await lire('paypal_transactions/' + rec.id + '/rembourses')) || {};
+    const cumul = Object.values(deja).reduce((a, b) => a + (Number(b) || 0), 0);
+    if (Number.isFinite(rec.montant) && cumul < rec.montant) {
+      const c = await M.commissionVente(rec.id, 'prorata', { ref, montant: montant / 100 });
+      await journal({ quoi: 'remboursement_partiel', qui: qui(rec.cle), transaction: rec.id, montant: euros(montant), pourquoi,
+        actions: [c ? 'commission ' + c.code + ' ramenée de ' + euros(Math.round(c.avant * 100)) + ' à ' + euros(Math.round(c.apres * 100))
+          : 'aucune commission sur cette vente', 'accès et parrainage inchangés'] });
+      return 'remboursement_partiel';
+    }
+    return annuler(rec, 'remboursement', pourquoi, { rembourse: euros(cumul) });
+  }
+
+  async function retrofacture(evt) {
+    const ress = evt.resource || {};
+    const id = String(ress.sale_id || ress.id || '');
+    const rec = await origine(id, 'vente');
+    const pourquoi = ress.reason_code || ress.reason || 'rétrofacturation';
+    if (!rec) { await journal({ quoi: 'retrofacturation_inconnue', transaction: net(id), pourquoi, actions: ['transaction introuvable : rien de repris'] }); return 'retrofacturation_inconnue'; }
+    // Une rétrofacturation PARTIELLE se traite comme un litige perdu pour une
+    // partie : même clé (« contestation »), pour ne pas déduire deux fois le
+    // même argent quand PayPal annonce les deux.
+    const montant = Math.abs(centimes(ress.amount && (ress.amount.total || ress.amount.value)));
+    if (Number.isFinite(montant) && montant > 0 && Number.isFinite(rec.montant) && montant < rec.montant) {
+      const c = await M.commissionVente(rec.id, 'prorata', { ref: 'contestation', montant: montant / 100 });
+      await journal({ quoi: 'retrofacturation_partielle', qui: qui(rec.cle), transaction: rec.id, montant: euros(montant), pourquoi,
+        actions: [c ? 'commission ' + c.code + ' ramenée à ' + euros(Math.round(c.apres * 100)) : 'aucune commission sur cette vente'] });
+      return 'retrofacturation_partielle';
+    }
+    return annuler(rec, 'retrofacturation', pourquoi);
+  }
+
+  const transactionsDuLitige = (ress) => (Array.isArray(ress.disputed_transactions) ? ress.disputed_transactions : [])
+    .map((x) => net(x && (x.seller_transaction_id || x.transaction_id))).filter(Boolean);
+  const pousserAdmin = (titre, corps, id) => M.envoyerPush(CREATEUR, { type: 'admin', url: './?paiements=1', tag: 'litige-' + id,
+    title: titre, body: corps }, { urgent: true }).catch(() => null);
+
+  async function litigeOuvert(evt) {
+    const ress = evt.resource || {};
+    const lid = net(ress.dispute_id || ress.id);
+    const montant = centimes(ress.dispute_amount && ress.dispute_amount.value);
+    const pourquoi = String(ress.reason || '').replace(/_/g, ' ').toLowerCase();
+    const actions = [], gens = [];
+    for (const id of transactionsDuLitige(ress)) {
+      const rec = await origine(id);
+      if (rec) gens.push(qui(rec.cle));
+      const c = await M.commissionVente(id, 'suspendre');
+      actions.push(c ? 'commission ' + c.code + ' suspendue (' + euros(Math.round(c.avant * 100)) + ')' : 'transaction ' + id + ' : aucune commission');
+    }
+    await journal({ quoi: 'litige_ouvert', qui: gens.join(', ') || null, litige: lid, montant: euros(montant), pourquoi, actions: actions.length ? actions : ['aucune transaction reconnue'] });
+    await pousserAdmin('Litige PayPal ouvert : ' + euros(montant), (gens.join(', ') || 'client inconnu') + (pourquoi ? ' · ' + pourquoi : ''), lid);
+    return 'litige_ouvert';
+  }
+
+  async function litigeClos(evt) {
+    const ress = evt.resource || {};
+    const lid = net(ress.dispute_id || ress.id);
+    const issue = String((ress.dispute_outcome && ress.dispute_outcome.outcome_code) || '');
+    const perdu = issue === 'RESOLVED_BUYER_FAVOUR' || issue === 'ACCEPTED';
+    const rendu = centimes(ress.dispute_outcome && ress.dispute_outcome.amount_refunded && ress.dispute_outcome.amount_refunded.value);
+    const pourquoi = issue.replace(/_/g, ' ').toLowerCase() || 'clos';
+    const gens = [], resultats = [];
+    for (const id of transactionsDuLitige(ress)) {
+      const rec = await origine(id);
+      if (rec) gens.push(qui(rec.cle));
+      if (!perdu) {
+        const c = await M.commissionVente(id, 'retablir');
+        await journal({ quoi: 'litige_gagne', qui: rec ? qui(rec.cle) : null, litige: lid, transaction: id, pourquoi,
+          actions: [c ? 'commission ' + c.code + ' rétablie' : 'rien à rétablir'] });
+        resultats.push('gagne');
+      } else if (rec && Number.isFinite(rendu) && Number.isFinite(rec.montant) && rendu > 0 && rendu < rec.montant) {
+        // Perdu pour une partie seulement : comme un remboursement partiel.
+        await M.commissionVente(id, 'retablir');
+        const c = await M.commissionVente(id, 'prorata', { ref: 'contestation', montant: rendu / 100 });
+        await journal({ quoi: 'litige_perdu_partiel', qui: qui(rec.cle), litige: lid, transaction: id, montant: euros(rendu), pourquoi,
+          actions: [c ? 'commission ' + c.code + ' ramenée à ' + euros(Math.round(c.apres * 100)) : 'aucune commission sur cette vente'] });
+        resultats.push('perdu_partiel');
+      } else if (rec) {
+        resultats.push(await annuler(rec, 'litige_perdu', pourquoi, { litige: lid }));
+      } else {
+        await journal({ quoi: 'litige_perdu', litige: lid, transaction: id, pourquoi, actions: ['transaction introuvable : rien de repris'] });
+      }
+    }
+    await pousserAdmin('Litige PayPal ' + (perdu ? 'perdu' : 'clos en ta faveur'), (gens.join(', ') || 'client inconnu') + ' · ' + pourquoi, lid);
+    return perdu ? 'litige_perdu' : 'litige_gagne';
   }
 
   // ── LES FINS ATTEINTES (travail quotidien) ─────────────────────────────

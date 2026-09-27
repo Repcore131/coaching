@@ -49203,6 +49203,29 @@ async function testExercices(){
       const r=ambResume('LEA',_AMBF,500);
       if(r.due!==4||r.attente!==4||r.payee!==4||r.rembourse!==4||r.ca!==60||r.clics!==10) return _echec(JSON.stringify(r));
       return (ambEtatCommission({dueLe:10},9)==='attente'&&ambEtatCommission({dueLe:10},10)==='due'&&AMB_DELAI_DUE_MS===30*864e5)?true:_echec('états');})());
+    ok('1611 — Ambassadeurs : suspendue (litige) et annulée ne sont ni dues ni exportées ; le prorata garde l’initiale',(()=>{
+      const f={nom:'Léa',commissions:{'2026-10':{
+        s:{montant:20,commission:4,dueLe:100,statut:'suspendue'},
+        n:{montant:20,commission:4,dueLe:100,statut:'annulee'},
+        p:{montant:10,commission:2,commissionInitiale:4,montantInitial:20,dueLe:100}}}};
+      const r=ambResume('LEA',f,500);
+      if(r.suspendue!==4||r.rembourse!==4||r.due!==2) return _echec(JSON.stringify(r));
+      if(ambEtatCommission({statut:'suspendue',dueLe:1},500)!=='suspendue') return _echec('état suspendue');
+      if(ambEtatCommission({statut:'annulee',dueLe:1},500)!=='rembourse') return _echec('état annulée');
+      const csv=ambCsvDues({LEA:f},'2026-10',500);
+      return csv.lignes===1&&/;p;/.test(csv.csv)?true:_echec(csv.csv);})());
+    ok('1611 — Le journal PayPal de l’admin : qui, quoi, pourquoi, et ce qui a été repris',(()=>{
+      const h=htmlJournalPaypal({a:{le:1,quoi:'remboursement',qui:'lea@t.fr',montant:'9,50 €',premier:true,pourquoi:'geste <b>commercial</b>',
+        actions:['commission LEAFIT annulée (1,90 €)','accès fermé au 5 octobre 2026']},
+        b:{le:2,quoi:'litige_ouvert',qui:'tom@t.fr',montant:'24,90 €',pourquoi:'non reçu',actions:['commission X suspendue']}});
+      if(!/Remboursement total/.test(h)||!/Litige ouvert/.test(h)) return _echec('les libellés');
+      if(h.indexOf('Litige ouvert')>h.indexOf('Remboursement total')) return _echec('le plus récent d’abord');
+      if(!/lea@t\.fr · 9,50 € · premier paiement/.test(h)) return _echec('qui et combien');
+      if(/<b>commercial/.test(h)||!/Motif : geste &lt;b&gt;commercial/.test(h)) return _echec('le motif n’est pas échappé');
+      if(!/<li>accès fermé au 5 octobre 2026<\/li>/.test(h)) return _echec('les actions');
+      if(!/amb-jl-alerte/.test(h)) return _echec('un litige ouvert ne se distingue pas');
+      if(!/Aucun remboursement/.test(htmlJournalPaypal({}))) return _echec('journal vide');
+      return /illisible/.test(htmlJournalPaypal(null))?true:_echec('journal illisible');})());
     ok('Ambassadeurs : le CSV mensuel ne porte que les commissions dues',(()=>{
       const r=ambCsvDues({LEA:_AMBF,ZED:{nom:'Zed',commissions:{'2026-09':{x:{commission:9,dueLe:1}}}}},'2026-10',500);
       const l=r.csv.trim().split('\n');

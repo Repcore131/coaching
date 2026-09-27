@@ -72,10 +72,14 @@ function commissionPour(cfg, filleul, payants, p) {
   return { montant, pct, commission: Math.round(montant * pct) / 100, payeLe: le, dueLe: le + DELAI_DUE_MS,
     mois: moisParis(le), premier };
 }
-// L'état d'une commission, à l'instant t : 'rembourse' | 'payee' | 'due' | 'attente'.
+// L'état d'une commission, à l'instant t :
+//   'rembourse' (annulée : remboursement total, rétrofacturation, litige perdu),
+//   'suspendue' (litige ouvert), 'payee', 'due', 'attente'.
+// « annulee » est le statut écrit depuis le 27/09/2026 ; « rembourse », l'ancien.
 function etatCommission(x, t) {
   if (!x) return "attente";
-  if (x.statut === "rembourse") return "rembourse";
+  if (x.statut === "rembourse" || x.statut === "annulee") return "rembourse";
+  if (x.statut === "suspendue") return "suspendue";
   if (x.statut === "payee") return "payee";
   return Number(t) >= Number(x.dueLe) ? "due" : "attente";
 }
@@ -84,14 +88,15 @@ function etatCommission(x, t) {
 function resume(code, a, t) {
   const s = (a && a.stats) || {};
   const out = { code, nom: String((a && a.nom) || "").slice(0, 80), clics: Number(s.clics) || 0, inscrits: Number(s.inscrits) || 0,
-    payants: Number(s.payants) || 0, ca: 0, due: 0, payee: 0, attente: 0, rembourse: 0, mois: {} };
+    payants: Number(s.payants) || 0, ca: 0, due: 0, payee: 0, attente: 0, rembourse: 0, suspendue: 0, mois: {} };
   const com = (a && a.commissions) || {};
   for (const m of Object.keys(com).sort()) {
     const lm = { ca: 0, due: 0, payee: 0, attente: 0 };
     for (const id of Object.keys(com[m] || {})) {
       const x = com[m][id]; if (!x) continue;
       const e = etatCommission(x, t);
-      if (e === "rembourse") { out.rembourse += Number(x.commission) || 0; continue; }
+      if (e === "rembourse") { out.rembourse += Number(x.commissionInitiale) || Number(x.commission) || 0; continue; }
+      if (e === "suspendue") { out.suspendue += Number(x.commission) || 0; continue; }
       lm.ca += Number(x.montant) || 0; out.ca += Number(x.montant) || 0;
       lm[e] += Number(x.commission) || 0; out[e] += Number(x.commission) || 0;
     }
@@ -101,7 +106,7 @@ function resume(code, a, t) {
   // LE CHIFFRE D'AFFAIRES : tout ce qui a été encaissé (stats.ca), y compris
   // hors période de commission ; à défaut, la somme des paiements commissionnés.
   if (Number(s.ca) > 0) out.ca = Number(s.ca);
-  for (const k of ["ca", "due", "payee", "attente", "rembourse"]) out[k] = Math.round(out[k] * 100) / 100;
+  for (const k of ["ca", "due", "payee", "attente", "rembourse", "suspendue"]) out[k] = Math.round(out[k] * 100) / 100;
   return out;
 }
 // L'EXPORT DU MOIS : une ligne par commission DUE (ni en attente, ni payée,
