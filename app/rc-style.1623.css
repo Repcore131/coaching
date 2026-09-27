@@ -2307,11 +2307,8 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
   transition:transform .12s ease,border-color .12s ease}
 .rc-obj-pas:hover{border-color:rgba(224,32,32,.6)}
 .rc-obj-pas:active{transform:scale(.94)}
-.rc-obj-reinit{display:block;margin:8px auto 0;min-height:44px;padding:8px 16px;cursor:pointer;
-  background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);
-  font-family:inherit;font-size:var(--fs-xs);font-weight:800}
-.rc-obj-reinit span{font-weight:600;color:var(--sub)}
-.rc-obj-reinit:hover{border-color:rgba(224,32,32,.6)}
+.rc-obj-ajust{text-align:center;margin:8px 0 0;font-size:var(--fs-xs);color:var(--sub);font-weight:600}
+
 .rc-obj-centre{text-align:center;line-height:1.15;min-width:0}
 .rc-obj-nb{font-family:var(--pile-titre);font-size:clamp(30px,9vw,40px);color:#fff;letter-spacing:1px;
   text-shadow:0 0 18px rgba(224,32,32,.45)}
@@ -6019,7 +6016,7 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 /* LES DEUX BOUTONS DE ±20 DU TOTAL (build 1412). Assez grands pour le doigt
    (44 px de zone utile via le remplissage), assez discrets pour ne pas voler
    la vedette au nombre qu'ils ajustent. */
-.tbk-d20{display:inline-flex;gap:6px;margin-left:10px;vertical-align:middle}
+.tbk-d20{display:inline-flex;flex-wrap:wrap;gap:6px;margin-left:10px;vertical-align:middle}
 /* ⚠ 44 px DE HAUT, PAS 36. Mesure en mode telephone (375 px, tactile) : a
    36 px la pastille tombe sous la cible minimale d'un doigt — 44 px chez Apple,
    48 dp chez Android. Le coach regle ces vingt calories depuis son telephone,
@@ -6029,7 +6026,7 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
   border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;
   letter-spacing:.5px;padding:8px 10px;min-width:46px;min-height:44px;cursor:pointer}
 .tbk-d20-b:hover{border-color:var(--red);color:var(--red-text)}
-.tbk-d20-r{min-width:0}
+.tbk-d20-l{align-self:center;font-size:var(--fs-2xs);color:var(--sub);font-weight:600;letter-spacing:0}
 .tbk-carte .tbk-mac tr.tbk-tot{grid-column:1/-1;flex-direction:row;align-items:center;
   justify-content:space-between;gap:14px;border-color:rgba(224,32,32,.45);
   background:linear-gradient(90deg,rgba(224,32,32,.22),rgba(224,32,32,.08))}
@@ -11624,9 +11621,7 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .rc-obj-kcal{border:1px solid #d2d2d7;background:linear-gradient(180deg,#efeff1,#e6e6e9);box-shadow:0 2px 10px rgba(0,0,0,0.175) inset}
 :root[data-theme="clair"] .rc-obj-pas{color:var(--text);border:1px solid #c4c4cb;background:linear-gradient(180deg,#d9d9dd,#e2e2e7)}
 :root[data-theme="clair"] .rc-obj-pas:hover{border-color:rgba(224,32,32,.6)}
-:root[data-theme="clair"] .rc-obj-reinit{border:1px solid var(--border);color:var(--text)}
-:root[data-theme="clair"] .rc-obj-reinit span{color:var(--sub)}
-:root[data-theme="clair"] .rc-obj-reinit:hover{border-color:rgba(224,32,32,.6)}
+:root[data-theme="clair"] .rc-obj-ajust{color:var(--sub)}
 :root[data-theme="clair"] .rc-obj-nb{color:#090909;text-shadow:0 0 18px rgba(224,32,32,.45)}
 :root[data-theme="clair"] .rc-obj-u{color:var(--text-faint)}
 :root[data-theme="clair"] .rc-obj-l2{border-top:1px solid rgba(9,9,9,0.06)}
@@ -12467,6 +12462,7 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .tbk-carte .tbk-mac tr.tbk-swi-r .tbk-lt{color:#090909}
 :root[data-theme="clair"] .tbk-d20-b{background:var(--surface-2);border:1px solid var(--border);color:var(--text)}
 :root[data-theme="clair"] .tbk-d20-b:hover{border-color:var(--red);color:var(--red-text)}
+:root[data-theme="clair"] .tbk-d20-l{color:var(--sub)}
 :root[data-theme="clair"] .tbk-carte .tbk-mac tr.tbk-tot{border-color:rgba(224,32,32,.45);background:linear-gradient(90deg,rgba(224,32,32,.22),rgba(224,32,32,.08))}
 :root[data-theme="clair"] .tbk-carte .tbk-mac tr.tbk-tot .tbk-mv{color:#cc0000}
 :root[data-theme="clair"] .tbk-carte .tbk-mac.tbk-man tr:not(.tbk-swi-r)>td:nth-of-type(1)::before,:root[data-theme="clair"] .tbk-carte .tbk-mac.tbk-man tr:not(.tbk-swi-r)>td:nth-of-type(2)::before{color:var(--sub)}
@@ -13860,7 +13856,6 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"][data-theme="clair"] .vb-repere{background:#dbdbdb}
 :root[data-theme="clair"] [style^="background:#000"],:root[data-theme="clair"] [style*=";background:#000"],:root[data-theme="clair"] [style*="; background:#000"],:root[data-theme="clair"] [style*=" background:#000"],:root[data-theme="clair"] [style^="background: #000"],:root[data-theme="clair"] [style*=";background: #000"],:root[data-theme="clair"] [style*="; background: #000"],:root[data-theme="clair"] [style*=" background: #000"],:root[data-theme="clair"] [style^="background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=";background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*="; background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=" background: rgb(0, 0, 0)"]{background-color:#fbfbfb!important}
 :root[data-theme="clair"] [style^="background:#000b"],:root[data-theme="clair"] [style*=";background:#000b"],:root[data-theme="clair"] [style*="; background:#000b"],:root[data-theme="clair"] [style*=" background:#000b"],:root[data-theme="clair"] [style^="background: #000b"],:root[data-theme="clair"] [style*=";background: #000b"],:root[data-theme="clair"] [style*="; background: #000b"],:root[data-theme="clair"] [style*=" background: #000b"],:root[data-theme="clair"] [style^="background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=";background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*="; background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=" background: rgba(0, 0, 0, 0.733)"]{background-color:rgba(251,251,251,0.733)!important}
-:root[data-theme="clair"] [style^="background:#001a00"],:root[data-theme="clair"] [style*=";background:#001a00"],:root[data-theme="clair"] [style*="; background:#001a00"],:root[data-theme="clair"] [style*=" background:#001a00"],:root[data-theme="clair"] [style^="background: #001a00"],:root[data-theme="clair"] [style*=";background: #001a00"],:root[data-theme="clair"] [style*="; background: #001a00"],:root[data-theme="clair"] [style*=" background: #001a00"],:root[data-theme="clair"] [style^="background: rgb(0, 26, 0)"],:root[data-theme="clair"] [style*=";background: rgb(0, 26, 0)"],:root[data-theme="clair"] [style*="; background: rgb(0, 26, 0)"],:root[data-theme="clair"] [style*=" background: rgb(0, 26, 0)"]{background-color:#dfffdf!important}
 :root[data-theme="clair"] [style^="background:#040404"],:root[data-theme="clair"] [style*=";background:#040404"],:root[data-theme="clair"] [style*="; background:#040404"],:root[data-theme="clair"] [style*=" background:#040404"],:root[data-theme="clair"] [style^="background: #040404"],:root[data-theme="clair"] [style*=";background: #040404"],:root[data-theme="clair"] [style*="; background: #040404"],:root[data-theme="clair"] [style*=" background: #040404"],:root[data-theme="clair"] [style^="background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*=";background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*="; background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*=" background: rgb(4, 4, 4)"]{background-color:#f7f7f7!important}
 :root[data-theme="clair"] [style^="background:#050b14"],:root[data-theme="clair"] [style*=";background:#050b14"],:root[data-theme="clair"] [style*="; background:#050b14"],:root[data-theme="clair"] [style*=" background:#050b14"],:root[data-theme="clair"] [style^="background: #050b14"],:root[data-theme="clair"] [style*=";background: #050b14"],:root[data-theme="clair"] [style*="; background: #050b14"],:root[data-theme="clair"] [style*=" background: #050b14"],:root[data-theme="clair"] [style^="background: rgb(5, 11, 20)"],:root[data-theme="clair"] [style*=";background: rgb(5, 11, 20)"],:root[data-theme="clair"] [style*="; background: rgb(5, 11, 20)"],:root[data-theme="clair"] [style*=" background: rgb(5, 11, 20)"]{background-color:#e6edf9!important}
 :root[data-theme="clair"] [style^="background:#050f05"],:root[data-theme="clair"] [style*=";background:#050f05"],:root[data-theme="clair"] [style*="; background:#050f05"],:root[data-theme="clair"] [style*=" background:#050f05"],:root[data-theme="clair"] [style^="background: #050f05"],:root[data-theme="clair"] [style*=";background: #050f05"],:root[data-theme="clair"] [style*="; background: #050f05"],:root[data-theme="clair"] [style*=" background: #050f05"],:root[data-theme="clair"] [style^="background: rgb(5, 15, 5)"],:root[data-theme="clair"] [style*=";background: rgb(5, 15, 5)"],:root[data-theme="clair"] [style*="; background: rgb(5, 15, 5)"],:root[data-theme="clair"] [style*=" background: rgb(5, 15, 5)"]{background-color:#ebf8eb!important}
@@ -13948,7 +13943,6 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] [style^="background:rgba(255,255,255,.15)"],:root[data-theme="clair"] [style*=";background:rgba(255,255,255,.15)"],:root[data-theme="clair"] [style*="; background:rgba(255,255,255,.15)"],:root[data-theme="clair"] [style*=" background:rgba(255,255,255,.15)"],:root[data-theme="clair"] [style^="background: rgba(255,255,255,.15)"],:root[data-theme="clair"] [style*=";background: rgba(255,255,255,.15)"],:root[data-theme="clair"] [style*="; background: rgba(255,255,255,.15)"],:root[data-theme="clair"] [style*=" background: rgba(255,255,255,.15)"],:root[data-theme="clair"] [style^="background: rgba(255, 255, 255, 0.15)"],:root[data-theme="clair"] [style*=";background: rgba(255, 255, 255, 0.15)"],:root[data-theme="clair"] [style*="; background: rgba(255, 255, 255, 0.15)"],:root[data-theme="clair"] [style*=" background: rgba(255, 255, 255, 0.15)"]{background-color:rgba(9,9,9,0.15)!important}
 :root[data-theme="clair"] [style^="background:rgba(255,255,255,.16)"],:root[data-theme="clair"] [style*=";background:rgba(255,255,255,.16)"],:root[data-theme="clair"] [style*="; background:rgba(255,255,255,.16)"],:root[data-theme="clair"] [style*=" background:rgba(255,255,255,.16)"],:root[data-theme="clair"] [style^="background: rgba(255,255,255,.16)"],:root[data-theme="clair"] [style*=";background: rgba(255,255,255,.16)"],:root[data-theme="clair"] [style*="; background: rgba(255,255,255,.16)"],:root[data-theme="clair"] [style*=" background: rgba(255,255,255,.16)"],:root[data-theme="clair"] [style^="background: rgba(255, 255, 255, 0.16)"],:root[data-theme="clair"] [style*=";background: rgba(255, 255, 255, 0.16)"],:root[data-theme="clair"] [style*="; background: rgba(255, 255, 255, 0.16)"],:root[data-theme="clair"] [style*=" background: rgba(255, 255, 255, 0.16)"]{background-color:rgba(9,9,9,0.16)!important}
 :root[data-theme="clair"] [style^="background:rgba(255,255,255,.18)"],:root[data-theme="clair"] [style*=";background:rgba(255,255,255,.18)"],:root[data-theme="clair"] [style*="; background:rgba(255,255,255,.18)"],:root[data-theme="clair"] [style*=" background:rgba(255,255,255,.18)"],:root[data-theme="clair"] [style^="background: rgba(255,255,255,.18)"],:root[data-theme="clair"] [style*=";background: rgba(255,255,255,.18)"],:root[data-theme="clair"] [style*="; background: rgba(255,255,255,.18)"],:root[data-theme="clair"] [style*=" background: rgba(255,255,255,.18)"],:root[data-theme="clair"] [style^="background: rgba(255, 255, 255, 0.18)"],:root[data-theme="clair"] [style*=";background: rgba(255, 255, 255, 0.18)"],:root[data-theme="clair"] [style*="; background: rgba(255, 255, 255, 0.18)"],:root[data-theme="clair"] [style*=" background: rgba(255, 255, 255, 0.18)"]{background-color:rgba(9,9,9,0.18)!important}
-:root[data-theme="clair"] [style^="background:rgba(255,255,255,.45)"],:root[data-theme="clair"] [style*=";background:rgba(255,255,255,.45)"],:root[data-theme="clair"] [style*="; background:rgba(255,255,255,.45)"],:root[data-theme="clair"] [style*=" background:rgba(255,255,255,.45)"],:root[data-theme="clair"] [style^="background: rgba(255,255,255,.45)"],:root[data-theme="clair"] [style*=";background: rgba(255,255,255,.45)"],:root[data-theme="clair"] [style*="; background: rgba(255,255,255,.45)"],:root[data-theme="clair"] [style*=" background: rgba(255,255,255,.45)"],:root[data-theme="clair"] [style^="background: rgba(255, 255, 255, 0.45)"],:root[data-theme="clair"] [style*=";background: rgba(255, 255, 255, 0.45)"],:root[data-theme="clair"] [style*="; background: rgba(255, 255, 255, 0.45)"],:root[data-theme="clair"] [style*=" background: rgba(255, 255, 255, 0.45)"]{background-color:rgba(9,9,9,0.45)!important}
 :root[data-theme="clair"] [style*="border:1px dashed #1e1e1e"],:root[data-theme="clair"] [style*="border: 1px dashed #1e1e1e"],:root[data-theme="clair"] [style*="border: 1px dashed rgb(30, 30, 30)"]{border:1px dashed #dfdfdf!important}
 :root[data-theme="clair"] [style*="border:1px dashed #3a3a5a"],:root[data-theme="clair"] [style*="border: 1px dashed #3a3a5a"],:root[data-theme="clair"] [style*="border: 1px dashed rgb(58, 58, 90)"]{border:1px dashed #a5a5c5!important}
 :root[data-theme="clair"] [style*="border:1px solid #1e0000"],:root[data-theme="clair"] [style*="border: 1px solid #1e0000"],:root[data-theme="clair"] [style*="border: 1px solid rgb(30, 0, 0)"]{border:1px solid #ffdbdb!important}

@@ -33630,19 +33630,20 @@ async function testExercices(){
       ok('1412 — LE ±20 EST UN SEUL RÉGLAGE, PARTAGÉ PAR LES DEUX ÉCRANS',(()=>{
         for(const f of ['deltaKcalPartage','appliquerDeltaKcal','libelleDeltaKcal','tbkDelta','athDelta'])
           if(typeof window[f]!=='function') return _echec(f+' a disparu');
-        // LA LECTURE : la case partagee d'abord, les deux anciennes en repli.
-        if(deltaKcalPartage({nutrition:{tableur:{delta:40}}})!==40) return _echec('tableur.delta ignoré');
-        if(deltaKcalPartage({nutrition:{perso:{delta:-60}}})!==-60) return _echec('l’ancien perso.delta n’est plus repris');
-        if(deltaKcalPartage({nutrition:{tableur:{deltaAthlete:20}}})!==20) return _echec('l’ancien deltaAthlete n’est plus repris');
-        if(deltaKcalPartage({nutrition:{tableur:{delta:0},perso:{delta:80}}})!==0)
-          return _echec('la case partagée ne prime pas sur l’ancienne');
+        // LA LECTURE (27/09/2026) : une case par auteur, dont la somme s'applique.
+        // Les anciennes cases (tableur.delta, perso.delta, deltaAthlete) NE
+        // COMPTENT PLUS : elles accumulaient sans dire qui (voir ajustKcal).
+        const aj=(coach,athlete)=>({nutrition:{tableur:{ajust:{coach,athlete}}}});
+        if(deltaKcalPartage(aj(40,-20))!==20) return _echec('la somme des deux cases : '+deltaKcalPartage(aj(40,-20)));
+        for(const vieux of [{tableur:{delta:40}},{perso:{delta:-60}},{tableur:{deltaAthlete:20}}])
+          if(deltaKcalPartage({nutrition:vieux})!==0) return _echec('une ancienne case compte encore : '+JSON.stringify(vieux));
         // ⚠ PLUS DE BORNE (24/09/2026) : une cible à 2 400 doit pouvoir
         //   descendre à 1 800 par ce bouton, et elle ne le pouvait pas.
-        if(deltaKcalPartage({nutrition:{tableur:{delta:9000}}})!==9000) return _echec('le ±20 est encore borné');
+        if(deltaKcalPartage(aj(9000,0))!==9000) return _echec('le ±20 est encore borné');
         if(DELTA_KCAL_MAX!==Infinity) return _echec('la borne est revenue : '+DELTA_KCAL_MAX);
         if(deltaKcalPartage({})!==0) return _echec('un dossier sans nutrition ne rend pas 0');
-        if(libelleDeltaKcal({nutrition:{tableur:{delta:40}}})!=='+40') return _echec('le libellé : '+libelleDeltaKcal({nutrition:{tableur:{delta:40}}}));
-        if(libelleDeltaKcal({nutrition:{tableur:{delta:0}}})!=='') return _echec('un delta nul affiche quelque chose');
+        if(libelleDeltaKcal(aj(40,0))!=='+40') return _echec('le libellé : '+libelleDeltaKcal(aj(40,0)));
+        if(libelleDeltaKcal(aj(0,0))!=='') return _echec('un delta nul affiche quelque chose');
         // LES DEUX BOUTONS SONT DANS LES DEUX ECRANS.
         const coach=String(_htmlTableauxTableur);
         if(coach.indexOf('tbkDelta(-1)')<0||coach.indexOf('tbkDelta(1)')<0)
@@ -33655,35 +33656,41 @@ async function testExercices(){
           return _echec('le ±20 de l’athlète est encore bloqué par le verrou');
         return true;})());
 
-      ok('1616 — RÉINITIALISER REND LE TOTAL D’IL Y A 24 H ; PLUS DE LIGNE « SOUS LE PLANCHER »',(()=>{
+      ok('1623 — LE ±20 PAR AUTEUR : QUI A BAISSÉ, QUI A AUGMENTÉ ; LES ANCIENS CLICS NE COMPTENT PLUS',(()=>{
         const _sv=window.saveUser; window.saveUser=()=>true;
         try{
-          const H=3600000, now=Date.now();
           const u=_dossier1412();
-          // Rien d'ajusté : rien à réinitialiser.
-          if(deltaKcalReinitUtile(u)) return _echec('un bouton à rien sur un total jamais ajusté');
-          // Des −20 cumulés AVANT l'historique (le cas de Kevin : 1 931 → 1 191) : on revient au calcul.
-          u.nutrition.tableur=Object.assign({},u.nutrition.tableur,{delta:-740});
-          if(deltaKcalIlYa24h(u)!==0||!deltaKcalReinitUtile(u)) return _echec('sans historique, le retour au calcul');
-          const r=appliquerDeltaKcal(u,0,'tableur',deltaKcalIlYa24h(u));
-          if(!r||!r.bouge||deltaKcalPartage(u)!==0) return _echec('réinitialiser n’a pas remis le calcul : '+deltaKcalPartage(u));
-          const t=cibleTableur(u,{});
-          if(Math.abs(t.kcal-t.brut)>1) return _echec('le total n’est pas revenu au besoin selon l’objectif : '+t.kcal+' / '+t.brut);
-          // Avec historique : la valeur en vigueur il y a 24 h.
-          u.nutrition.tableur.delta=-400;
-          u.nutrition.tableur.deltaHisto=[{le:now-30*H,avant:0,apres:-20},{le:now-2*H,avant:-20,apres:-400}];
-          if(deltaKcalIlYa24h(u,now)!==-20) return _echec('24 h plus tôt : '+deltaKcalIlYa24h(u,now));
-          // Tout s'est joué dans les 24 h : ce qui précédait le premier geste.
-          u.nutrition.tableur.deltaHisto=[{le:now-5*H,avant:-60,apres:-80},{le:now-H,avant:-80,apres:-400}];
-          if(deltaKcalIlYa24h(u,now)!==-60) return _echec('avant le premier geste du jour : '+deltaKcalIlYa24h(u,now));
-          // Chaque geste s'inscrit ; au-delà de 48 h, il s'efface.
-          u.nutrition.tableur.deltaHisto=[{le:now-60*H,avant:0,apres:-20}];
-          appliquerDeltaKcal(u,1,'tableur');
-          const h=u.nutrition.tableur.deltaHisto;
-          if(h.length!==1||h[0].avant!==-400||h[0].apres!==-380) return _echec('historique : '+JSON.stringify(h));
-          // Les deux boutons, et la ligne retirée du tableau.
-          if(String(athDelta).indexOf('reinit')<0||String(tbkDelta).indexOf('reinit')<0) return _echec('un côté n’a pas son Réinitialiser');
-          if(/Sous le plancher de sécurité/.test(String(_htmlTableauxTableur))) return _echec('la ligne du plancher est encore dans le tableau');
+          const t0=cibleTableur(u,{});
+          if(t0.manque&&t0.manque.length) return _echec('calcul impossible : '+t0.manque.join(','));
+          // 1. L'ancienne case accumulait −740 sans dire qui : ignorée.
+          u.nutrition.tableur=Object.assign({},u.nutrition.tableur,{delta:-740,deltaHisto:[{le:1,avant:0,apres:-20}]});
+          if(deltaKcalPartage(u)!==0) return _echec('l’ancien ajustement compte encore : '+deltaKcalPartage(u));
+          const t1=cibleTableur(u,{});
+          if(Math.abs(t1.kcal-t1.brut)>1) return _echec('le total n’est pas le besoin selon l’objectif : '+t1.kcal+' / '+t1.brut);
+          // 2. En saisie manuelle, ce qu'elle avait mis dans les grammes est retiré, une fois.
+          const m={on:{kcal:1191,p:150,l:60,g:82},off:{kcal:1191,p:150,l:60,g:82},origine:'coach'};
+          const v={nutrition:{macros:JSON.parse(JSON.stringify(m)),tableur:{delta:-740}}};
+          const sm=window.saisieManuelle; window.saisieManuelle=()=>true;
+          try{
+            if(!_ajustMigrer(v)) return _echec('la migration ne voit pas l’ancienne case');
+            if(v.nutrition.macros.on.kcal!==1931||v.nutrition.macros.on.g!==267) return _echec('grammes après migration : '+JSON.stringify(v.nutrition.macros.on));
+            if(v.nutrition.tableur.delta!==undefined) return _echec('l’ancienne case survit');
+            if(_ajustMigrer(v)) return _echec('la migration se rejoue');
+          } finally { window.saisieManuelle=sm; }
+          // 3. Chacun sa case, et la mention dit qui.
+          appliquerDeltaKcal(u,-1,'athlete');
+          appliquerDeltaKcal(u,1,'tableur'); appliquerDeltaKcal(u,1,'tableur');
+          const a=ajustKcal(u);
+          if(a.athlete!==-20||a.coach!==40||deltaKcalPartage(u)!==20) return _echec('les cases : '+JSON.stringify(a));
+          if(libelleAjustKcal(u)!=='L’athlète a baissé de 20 · Le coach a augmenté de 40') return _echec('fiche coach : '+libelleAjustKcal(u));
+          if(libelleAjustKcal(u,'athlete')!=='Tu as baissé de 20 · Ton coach a augmenté de 40') return _echec('écran athlète : '+libelleAjustKcal(u,'athlete'));
+          // 4. Plus d'historique, plus de bouton Réinitialiser, plus de ligne « sous le plancher ».
+          if((u.nutrition.tableur||{}).deltaHisto!==undefined) return _echec('un historique est encore tenu');
+          if(String(athDelta).indexOf('reinit')>=0||String(tbkDelta).indexOf('reinit')>=0) return _echec('Réinitialiser est encore là');
+          if(/Sous le plancher de sécurité/.test(String(_htmlTableauxTableur))) return _echec('la ligne du plancher est revenue');
+          // 5. « Besoin selon l'objectif » ne bouge pas avec le ±20.
+          const t2=cibleTableur(u,{});
+          if(t2.brut!==t1.brut) return _echec('le besoin selon l’objectif a bougé avec le ±20');
           return true;
         } finally { window.saveUser=_sv; }})());
 
@@ -33756,7 +33763,7 @@ async function testExercices(){
           // ⚠ PLUS DE BORNE (24/09/2026) : a ±2 000 comme a ±20, le geste
           //   suivant passe encore. C'est ce que Kevin demande — « supprime les
           //   blocage et limite » — et c'est verifiable ici.
-          u.nutrition.tableur.delta=2000;
+          u.nutrition.tableur.ajust={coach:2000,athlete:0};
           const avant=u.nutrition.macros.on.kcal;
           const b=appliquerDeltaKcal(u,1,'tableur');
           if(b.bouge!==true) return _echec('le geste est retenu alors qu\'il n\'y a plus de borne');
@@ -41212,8 +41219,8 @@ async function testExercices(){
             return _echec('la grille du coach a bouge : '+JSON.stringify(tb));
           // LE DELTA PARTAGE, LUI, EST BIEN DANS LA GRILLE : c'est son foyer, et
           // c'est par la que le coach le voit.
-          if(tb.delta!==ATH_DELTA_PAS)
-            return _echec('le ±20 n’a pas atterri dans la case partagée : '+JSON.stringify(tb));
+          if(ajustKcal(currentUser).athlete!==ATH_DELTA_PAS||deltaKcalPartage(currentUser)!==ATH_DELTA_PAS)
+            return _echec('le ±20 n’a pas atterri dans la case de l’athlète : '+JSON.stringify(tb));
           const per=(currentUser.nutrition||{}).perso||{};
           return (!per.objectif&&!per.delta)?true
             :_echec('le reglage personnel a ete ecrit : '+JSON.stringify(per));})());

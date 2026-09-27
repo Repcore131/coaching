@@ -77684,16 +77684,67 @@ const ATH_DELTA_PAS=20;
 //   zero dans cibleTableur — des calories negatives n'existent pas — et c'est
 //   la seule borne qui reste.
 const DELTA_KCAL_MAX=Infinity;
-// PURE. Le ±20 en vigueur, quel que soit celui qui l'a pose.
+// ══ LE ±20, PAR AUTEUR (Kevin, 27/09/2026) ═══════════════════════════════
+// « Il faut que je sache qui a augmenté, qui a baissé. » Chaque côté a sa
+// case : nutrition.tableur.ajust = {coach, athlete}, en kilocalories. Le
+// total appliqué est leur somme, et la mention à côté des boutons dit qui a
+// fait quoi (« L'athlète a baissé de 20 »).
+//
+// ⚠ LES ANCIENS CLICS NE COMPTENT PLUS. L'ancienne case unique
+//   (tableur.delta, et avant elle perso.delta, tableur.deltaAthlete)
+//   accumulait sans dire qui : un athlète s'est retrouvé à −740 kcal (1 931
+//   ramenés à 1 191) sans que personne ne sache d'où. Elle est ignorée, et
+//   _ajustMigrer retire une fois ce qu'elle avait déjà appliqué aux cibles.
+function ajustKcal(u){
+  const a=((((u&&u.nutrition)||{}).tableur)||{}).ajust||{};
+  const n=v=>{ const x=Math.round(Number(v)); return isFinite(x)?x:0; };
+  return {coach:n(a.coach),athlete:n(a.athlete)};
+}
+// PURE. Le ±20 en vigueur : la part du coach plus celle de l'athlète.
 function deltaKcalPartage(u){
+  const a=ajustKcal(u);
+  return a.coach+a.athlete;
+}
+// PURE. L'ancien ajustement encore porté par le dossier (0 s'il n'y en a pas).
+function _ajustAncien(u){
   const nut=(u&&u.nutrition)||{};
   const tb=nut.tableur||{};
-  let v=Number(tb.delta);
-  // LES DEUX REPLIS SONT DU LEGS, dans l'ordre ou ils ont existe.
-  if(!isFinite(v)) v=Number(((nut.perso)||{}).delta);
-  if(!isFinite(v)) v=Number(tb.deltaAthlete);
-  if(!isFinite(v)) return 0;
-  return Math.max(-DELTA_KCAL_MAX,Math.min(DELTA_KCAL_MAX,Math.round(v)));
+  for(const v of [tb.delta,(nut.perso||{}).delta,tb.deltaAthlete]){
+    const x=Math.round(Number(v));
+    if(v!==undefined&&v!==null&&isFinite(x)) return x;
+  }
+  return 0;
+}
+function _ajustAncienPresent(u){
+  const nut=(u&&u.nutrition)||{};
+  const tb=nut.tableur||{};
+  return tb.delta!==undefined||tb.deltaAthlete!==undefined||tb.deltaHisto!==undefined
+    ||(nut.perso&&nut.perso.delta!==undefined);
+}
+// ECRIT, une fois par dossier. Efface l'ancienne case et, en saisie
+// manuelle — où chaque clic décalait directement les grammes —, retire des
+// cibles ce qu'elle y avait mis. En automatique, rien à défaire : les cibles
+// se recalculent sans elle (_tbReconcilier). Rend true si le dossier a changé.
+function _ajustMigrer(u){
+  if(!u||!_ajustAncienPresent(u)) return false;
+  const nut=u.nutrition;
+  const d=_ajustAncien(u);
+  let manuel=false; try{ manuel=saisieManuelle(u); }catch(e){ manuel=false; }
+  const m=nut.macros||{};
+  const tb=Object.assign({},nut.tableur||{});
+  delete tb.delta; delete tb.deltaAthlete; delete tb.deltaHisto;
+  nut.tableur=tb;
+  if(nut.perso&&nut.perso.delta!==undefined){ const p=Object.assign({},nut.perso); delete p.delta; nut.perso=p; }
+  if(d&&manuel&&m.on){
+    const dec=b=>{
+      const o=Object.assign({},b||{});
+      o.kcal=Math.max(0,Math.round(Number(o.kcal)||0)-d);
+      o.g=Math.max(0,Math.round((Number(o.g)||0)-d/4));
+      return o;
+    };
+    nut.macros=Object.assign({},m,{on:dec(m.on),off:dec(m.off||m.on)});
+  }
+  return true;
 }
 // ECRIT. Le seul ecrivain du ±20 : le bouton du coach et celui de l'athlete
 // passent tous les deux par lui, sur le meme champ, avec le meme pas.
@@ -77707,31 +77758,23 @@ function deltaKcalPartage(u){
 //
 // Rend {delta, bouge, kcal?, manque?, manuel?} — jamais null hors dossier
 // absent, pour que l'appelant puisse toujours dire ce qui s'est passe.
-// `valeur` (facultatif) : l'ajustement à poser tel quel, au lieu d'un pas —
-// c'est « Réinitialiser » (deltaKcalIlYa24h).
-function appliquerDeltaKcal(u,sens,origineSiAbsente,valeur){
+// L'AUTEUR : 'athlete' quand c'est l'athlète qui clique (origineSiAbsente
+// 'athlete'), le coach sinon. Chacun ne bouge que SA case.
+function appliquerDeltaKcal(u,sens,origineSiAbsente){
   if(!u) return null;
   if(!u.nutrition) u.nutrition={};
+  try{ _ajustMigrer(u); }catch(e){}
   const nut=u.nutrition;
+  const par=(origineSiAbsente==='athlete')?'athlete':'coach';
   const avant=deltaKcalPartage(u);
-  const n=(typeof valeur==='number'&&isFinite(valeur))?Math.round(valeur)
-    :Math.max(-DELTA_KCAL_MAX,Math.min(DELTA_KCAL_MAX,avant+(sens<0?-ATH_DELTA_PAS:ATH_DELTA_PAS)));
+  const pas=(sens<0?-ATH_DELTA_PAS:ATH_DELTA_PAS);
   const tb=Object.assign({},nut.tableur||{});
-  tb.delta=n;
-  // L'HISTORIQUE DU ±20, sur 48 heures : de quoi rendre, sur « Réinitialiser »,
-  // le total d'il y a 24 heures. Quelques octets par geste, et il se vide seul.
-  if(n!==avant){
-    const t0=Date.now();
-    tb.deltaHisto=(Array.isArray(tb.deltaHisto)?tb.deltaHisto:[])
-      .filter(x=>x&&Number(x.le)>t0-DELTA_HISTO_MS).concat([{le:t0,avant,apres:n}]).slice(-80);
-  }
-  delete tb.deltaAthlete;                       // un seul foyer, pas deux
+  const aj=Object.assign({coach:0,athlete:0},ajustKcal(u));
+  aj[par]+=pas;
+  tb.ajust={coach:aj.coach,athlete:aj.athlete,maj:Date.now(),dernier:par};
   nut.tableur=tb;
-  if(nut.perso&&nut.perso.delta!==undefined){
-    const p=Object.assign({},nut.perso); delete p.delta; nut.perso=p;
-  }
-  if(n===avant) return {delta:n,bouge:false};   // borne atteinte
-  const pas=n-avant;
+  const n=deltaKcalPartage(u);
+  if(n===avant) return {delta:n,bouge:false};
   let manuel=false; try{ manuel=saisieManuelle(u); }catch(e){ manuel=false; }
   if(manuel){
     // LES CHIFFRES ECRITS A LA MAIN SE DECALENT, ils ne se recalculent pas :
@@ -77765,29 +77808,23 @@ function appliquerDeltaKcal(u,sens,origineSiAbsente,valeur){
   try{ _histoNoter(u,origine==='athlete'?'athlete':'tableur'); }catch(e){}
   return {delta:n,bouge:true,kcal:j.on.kcal,sousPlancher:!!t.sousPlancher};
 }
-const DELTA_HISTO_MS=48*3600000;
-// PURE. L'AJUSTEMENT EN VIGUEUR IL Y A 24 HEURES — ce que « Réinitialiser »
-// rend. Le dernier geste d'avant ce moment-là ; à défaut, ce qui précédait le
-// premier geste des 24 heures ; et sans aucun historique (ajustements faits
-// avant qu'on le tienne), 0 : le total calculé, « Besoin selon l'objectif ».
-function deltaKcalIlYa24h(u,maintenant){
-  const t=Number(maintenant)||Date.now();
-  const h=((((u&&u.nutrition)||{}).tableur||{}).deltaHisto);
-  const l=(Array.isArray(h)?h:[]).filter(x=>x&&isFinite(Number(x.le))).sort((a,b)=>a.le-b.le);
-  if(!l.length) return 0;
-  const seuil=t-24*3600000;
-  const avantSeuil=l.filter(x=>x.le<=seuil);
-  if(avantSeuil.length) return Math.round(Number(avantSeuil[avantSeuil.length-1].apres)||0);
-  return Math.round(Number(l[0].avant)||0);
-}
-// PURE. « Réinitialiser » a-t-il quelque chose à rendre ?
-function deltaKcalReinitUtile(u,maintenant){
-  return deltaKcalIlYa24h(u,maintenant)!==deltaKcalPartage(u);
-}
 // PURE. La mention affichee a cote du total, des deux cotes : « +40 » ou rien.
 function libelleDeltaKcal(u){
   const d=deltaKcalPartage(u);
   return d?((d>0?'+':'')+d):'';
+}
+// PURE. QUI A BOUGÉ LE TOTAL, en toutes lettres, pour la mention posée à côté
+// du ±20 : « L'athlète a baissé de 20 · Le coach a augmenté de 40 ».
+// `vu` : 'athlete' sur l'écran de l'athlète (« Tu as… », « Ton coach a… »),
+// sinon la fiche du coach. Vide quand personne n'a rien ajusté.
+function libelleAjustKcal(u,vu){
+  const a=ajustKcal(u);
+  const verbe=v=>(v<0?'baissé':'augmenté')+' de '+Math.abs(v);
+  const moi=vu==='athlete';
+  const l=[];
+  if(a.athlete) l.push((moi?'Tu as ':'L’athlète a ')+verbe(a.athlete));
+  if(a.coach) l.push((moi?'Ton coach a ':'Le coach a ')+verbe(a.coach));
+  return l.join(' · ');
 }
 function _athPerso(u){
   const n=(u&&u.nutrition)||{};
@@ -77988,9 +78025,7 @@ function athObjectif(k){
  */
 function athDelta(sens){
   if(!currentUser) return;
-  const r=(sens==='reinit')
-    ?appliquerDeltaKcal(currentUser,0,'athlete',deltaKcalIlYa24h(currentUser))
-    :appliquerDeltaKcal(currentUser,sens,'athlete');
+  const r=appliquerDeltaKcal(currentUser,sens,'athlete');
   if(!r) return;
   if(r.manque&&r.manque.length){
     toast('Cibles impossibles à recalculer : il manque '+r.manque.join(', '),'var(--orange)');
@@ -78143,7 +78178,7 @@ function _htmlCiblesAthlete(u){
     // ⚠ LE ±20 REVIENT, MEME VERROUILLEE (build 1412). Il ne reprend pas la
     //   main sur la prescription : il decale le total PARTAGE, et le coach le
     //   voit sur sa grille comme elle voit le sien.
-    const _dl=libelleDeltaKcal(u);
+    const _dl=libelleAjustKcal(u,'athlete');
     // ⚠ QUEL JOUR EST AFFICHE, ET COMBIEN VAUT L'AUTRE (24/09/2026). La carte
     //   montre la journee D'AUJOURD'HUI (ciblesEnVigueur passe par
     //   _getEffectiveMacros et nutIsOnDay) sous un libelle qui disait « kcal
@@ -78167,11 +78202,10 @@ function _htmlCiblesAthlete(u){
         +'<button type="button" class="rc-obj-pas" onclick="athDelta(-1)" aria-label="Vingt calories de moins">−20</button>'
         +'<div class="rc-obj-centre">'
           +'<div class="rc-obj-nb">'+Number(v.kcal).toLocaleString('fr-FR')+'</div>'
-          +'<div class="rc-obj-u">'+_libJour+(_dl?' · '+_dl:'')+'</div></div>'
+          +'<div class="rc-obj-u">'+_libJour+'</div></div>'
         +'<button type="button" class="rc-obj-pas" onclick="athDelta(1)" aria-label="Vingt calories de plus">+20</button>'
       +'</div>'
-      +(deltaKcalReinitUtile(u)?'<button type="button" class="rc-obj-reinit" onclick="athDelta(\'reinit\')">'
-        +'Réinitialiser <span>le total d’il y a 24 h</span></button>':'')
+      +(_dl?'<div class="rc-obj-ajust">Mis à jour : '+_dl+'</div>':'')
       +'<div class="rc-obj-macros">'
         +l('Protéines',v.p,_gr?_sel('prot',Number(_gr.protGkg)||1.8,1.2,2.6):'')
         +l('Lipides',v.l,_gr?_sel('lip',Number(_gr.lipGkg)||0.9,0.6,1.4):'')
@@ -78218,12 +78252,10 @@ function _htmlCiblesAthlete(u){
         // AFFICHES, et non le total avant leur arrondi. Les deux ecrans
         // s'ecartaient d'une kilocalorie, ce qui suffit a faire douter.
         +'<div class="rc-obj-nb">'+Number(_bloc(c.p,c.l,c.g).kcal).toLocaleString('fr-FR')+'</div>'
-        +'<div class="rc-obj-u">kcal par jour'
-        +(c.delta?' · '+(c.delta>0?'+':'')+c.delta:'')+'</div></div>'
+        +'<div class="rc-obj-u">kcal par jour</div></div>'
       +'<button type="button" class="rc-obj-pas" onclick="athDelta(1)" aria-label="Vingt calories de plus">+20</button>'
     +'</div>'
-    +(deltaKcalReinitUtile(u)?'<button type="button" class="rc-obj-reinit" onclick="athDelta(\'reinit\')">'
-      +'Réinitialiser <span>le total d’il y a 24 h</span></button>':'')
+    +(libelleAjustKcal(u,'athlete')?'<div class="rc-obj-ajust">Mis à jour : '+libelleAjustKcal(u,'athlete')+'</div>':'')
     +'<div class="rc-obj-macros">'
       +ligne('Protéines',c.p,' g',sel('prot',Number(c.protGkg)||1.8,1.2,2.6))
       +ligne('Lipides',c.l,' g',sel('lip',Number(c.lipGkg)||0.9,0.6,1.4))
@@ -86173,6 +86205,12 @@ function _prefetchCiqual(){
 // caféine se naviguent séparément, chacun avec sa propre date. Les confondre
 // ferait sauter le journal au jour de la caféine, ou l’inverse.
 function loadNutrition(dateAff,dateCaff){
+  // Les anciens clics du ±20 (voir ajustKcal) : chez un athlète SANS coach,
+  // c'est ici qu'ils sont retirés ; avec un coach, sur sa fiche à lui, pour
+  // qu'un même dossier ne soit pas corrigé deux fois.
+  try{
+    if(currentUser&&!(currentUser.coachEmailKey||currentUser.coachId)&&_ajustMigrer(currentUser)) saveUser();
+  }catch(e){}
   // ⚠ PREMIER CALCUL DE CHARGE : l'ecran de nutrition est celui qui calcule
   // les reperes energetiques — mbEstime a besoin de l'age ET du genre, et
   // sans eux il rend null, c'est-a-dire un ecran de chiffres absents sans
@@ -88566,9 +88604,7 @@ function tbkDelta(sens){
   const users=DB.get('users')||{};
   const c=getOwnedClient(currentClientId,users);
   if(!c) return false;
-  const r=(sens==='reinit')
-    ?appliquerDeltaKcal(c,0,'tableur',deltaKcalIlYa24h(c))
-    :appliquerDeltaKcal(c,sens,'tableur');
+  const r=appliquerDeltaKcal(c,sens,'tableur');
   if(!r) return false;
   if(r.manque&&r.manque.length){
     try{ toast('Calcul incomplet : '+r.manque.join(', '),'var(--orange)'); }catch(e){}
@@ -89335,12 +89371,10 @@ function _htmlTableauxTableur(c){
   // LES DEUX BOUTONS DE ±20, sur la ligne du total et de ce cote-ci aussi
   // (build 1412). Le meme pas, le meme champ et le meme ecrivain que le ±20
   // de l'athlete : voir appliquerDeltaKcal.
-  const _dl20=libelleDeltaKcal(c);
   const _d20='<span class="tbk-d20">'
     +'<button type="button" class="tbk-d20-b" onclick="tbkDelta(-1)" aria-label="Vingt calories de moins">−20</button>'
     +'<button type="button" class="tbk-d20-b" onclick="tbkDelta(1)" aria-label="Vingt calories de plus">+20</button>'
-    +(deltaKcalReinitUtile(c)?'<button type="button" class="tbk-d20-b tbk-d20-r" onclick="tbkDelta(\'reinit\')" '
-      +'title="Revenir au total d’il y a 24 heures">Réinitialiser</button>':'')
+    +(libelleAjustKcal(c)?'<span class="tbk-d20-l">Mis à jour : '+libelleAjustKcal(c)+'</span>':'')
     +'</span>';
   h+=_tbkCarte('<table class="tbk tbk-mac'+(_man&&_cycT?' tbk-man':'')+'">'
     +_tbkCap('utensils','Macronutriments','Répartition de ses apports journaliers')
@@ -89400,8 +89434,7 @@ function _htmlTableauxTableur(c){
             return ' · jour d’entraînement '+_tbNb(j.on.kcal)
               +' kcal, jour de repos '+_tbNb(j.off.kcal)+' kcal';
           }catch(e){ return ''; }
-        })())
-        +(_dl20?(' · ajustement '+_dl20+' kcal, partagé avec elle'):''),
+        })()),
         true,_in('ccd-off-kcal',_mOff.kcal),'kcal',totK,'zap')
     +'</tbody></table>','tbk-mac-c');
   // LE BOUTON D'ENREGISTREMENT N'EXISTE QU'EN MANUEL. En automatique, ce sont
@@ -89638,6 +89671,17 @@ function _tbReconcilier(c){
   return true;
 }
 function renderCoachNutriSection(c){
+  // LES ANCIENS CLICS DU ±20 NE COMPTENT PLUS (voir ajustKcal) : retirés une
+  // fois, ici, sur la fiche du coach, puis envoyés. Avant la réconciliation,
+  // qui recalcule ensuite les cibles posées par la grille sans eux.
+  try{
+    if(_ajustMigrer(c)){
+      const users=DB.get('users')||{};
+      c.updatedAt=Date.now(); users[c.email]=c;
+      DB.set('users',users);
+      CLOUD.pushOne(c.email,c);
+    }
+  }catch(e){}
   // ⚠ AVANT LE RENDU, PAS APRES : les tableaux qu'on peint juste en dessous
   //   doivent montrer ce que l'athlete a REELLEMENT dans son dossier, pas ce
   //   qu'elle aurait si on reconciliait une fois l'ecran deja dessine.
