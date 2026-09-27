@@ -21,6 +21,13 @@ if ($LASTEXITCODE -ne 0) { throw "Connexion refusée ou interrompue." }
 
 Write-Host ""
 Write-Host "2/4  Mise en ligne du serveur (si Cloudflare demande un sous-domaine, choisis-en un)." -ForegroundColor Cyan
+# D'ABORD EN DIRECT : au premier déploiement, wrangler demande le nom du
+# sous-domaine workers.dev dans le terminal (il ne le peut pas si sa sortie
+# est capturée — c'est ce qui échouait). Réponds « y », puis tape un nom,
+# par exemple « repcore ».
+npx wrangler@4 deploy
+if ($LASTEXITCODE -ne 0) { throw "La mise en ligne a échoué (voir ci-dessus)." }
+# PUIS UNE SECONDE FOIS, capturée, pour lire l'adresse (plus aucune question).
 $sortie = npx wrangler@4 deploy 2>&1 | Tee-Object -Variable journal
 $journal | Out-String | Write-Host
 $adresse = ([regex]::Match(($journal | Out-String), 'https://repcore-serveur\.[a-z0-9-]+\.workers\.dev')).Value
