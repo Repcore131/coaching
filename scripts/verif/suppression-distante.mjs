@@ -21,6 +21,7 @@
 import {readFileSync} from 'node:fs';
 import {join, dirname, resolve} from 'node:path';
 import crypto from 'node:crypto';
+import {createRequire} from 'node:module';
 
 const RACINE = resolve(dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..', '..');
 const SRC = readFileSync(join(RACINE, 'functions', 'index.js'), 'utf8');
@@ -79,14 +80,30 @@ const faux = {
   },
   'firebase-functions/params': {defineSecret: (n) => ({value: () => 'secret-' + n, name: n})},
   'firebase-functions/v2': {setGlobalOptions: () => {}},
+  // LES DECLENCHEURS AJOUTES PAR LE PLAN VIRALITE (push, defis, parrainage,
+  // ambassadeurs). Le controle ne porte que sur cloudinaryDestroy : ces
+  // fabriques rendent le gestionnaire tel quel, pour que l'evaluation du
+  // fichier aille jusqu'au bout au lieu de s'arreter sur un require inconnu.
+  'firebase-functions/v2/scheduler': {onSchedule: (opts, handler) => handler || opts},
+  'firebase-functions/v2/database': {
+    onValueCreated: (opts, handler) => handler || opts,
+    onValueWritten: (opts, handler) => handler || opts,
+  },
+  'web-push': {setVapidDetails: () => {}, sendNotification: async () => ({})},
   'firebase-admin': {initializeApp: () => {}, database: () => db},
   'node:crypto': crypto,
   'crypto': crypto,
 };
+const requireLocal = createRequire(join(RACINE, 'functions', 'index.js'));
 const exportes = {};
 const module_ = {exports: exportes};
 new Function('require', 'exports', 'module', 'process', SRC)(
-  (n) => { if (!(n in faux)) throw new Error('require inattendu : ' + n); return faux[n]; },
+  (n) => {
+    // Les modules de calcul du dossier functions/ (./defis-calcul, ...) sont
+    // purs : on charge les vrais.
+    if (n.startsWith('./')) return requireLocal(n);
+    if (!(n in faux)) throw new Error('require inattendu : ' + n); return faux[n];
+  },
   exportes, module_, {env: {}});
 Object.assign(fonctions, exportes);
 
