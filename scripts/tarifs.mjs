@@ -26,7 +26,7 @@ import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 export const RACINE = fileURLToPath(new URL('../', import.meta.url));
-export const PAGES = ['index.html', 'terms.html', 'aide-apk.html'];
+export const PAGES = ['index.html', 'terms.html', 'aide-apk.html', 'i/index.html'];
 
 export function lireTarifs() { return JSON.parse(readFileSync(RACINE + 'tarifs.json', 'utf8')); }
 

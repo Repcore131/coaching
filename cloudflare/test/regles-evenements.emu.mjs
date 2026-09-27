@@ -101,4 +101,26 @@ await test('paypal_evenements : la requête de la purge (orderBy at, endAt) est 
   const r = await fetch(BASE + '/paypal_evenements.json?ns=' + NS + '&orderBy=%22at%22&endAt=1000&limitToFirst=200', { headers: { Authorization: 'Bearer owner' } });
   assert.deepEqual(Object.keys(await r.json()), ['WH-1']);
 });
+await test('codesPublics : un code se lit SANS compte (prénom et rang), la liste jamais', async () => {
+  await appel('owner', 'PATCH', 'parrainage', { codes: { JULIE7K2: K(LEA) }, codesPublics: { JULIE7K2: { prenom: 'Julie', rang: 3 } } });
+  const r = await fetch(BASE + '/parrainage/codesPublics/JULIE7K2.json?ns=' + NS);
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { prenom: 'Julie', rang: 3 });
+  assert.equal((await fetch(BASE + '/parrainage/codesPublics.json?ns=' + NS)).status, 401, 'la liste des codes');
+  assert.equal((await fetch(BASE + '/parrainage/codes/JULIE7K2.json?ns=' + NS)).status, 401, 'le code mène à une adresse : fermé');
+});
+await test('codesPublics/<code>/rang : son propriétaire seul, un entier de 1 à 10', async () => {
+  assert.equal((await appel(LEA, 'PUT', 'parrainage/codesPublics/JULIE7K2/rang', 5)).statut, 200);
+  assert.equal((await appel(KEV, 'PUT', 'parrainage/codesPublics/JULIE7K2/rang', 9)).statut, 401);
+  for (const v of [11, 0, 2.5, 'TITAN']) assert.equal((await appel(LEA, 'PUT', 'parrainage/codesPublics/JULIE7K2/rang', v)).statut, 401, String(v));
+  assert.equal((await appel(LEA, 'PUT', 'parrainage/codesPublics/JULIE7K2/prenom', 'Autre')).statut, 401, 'le prénom ne se réécrit pas');
+  assert.equal((await appel(LEA, 'PUT', 'parrainage/codesPublics/JULIE7K2/email', 'x')).statut, 401);
+});
+await test('filleul_seance : seulement pour un compte réellement parrainé', async () => {
+  const TOM = 'tom@t.fr';
+  assert.equal((await deposer(TOM, { type: 'filleul_seance', cible: '-' })).statut, 401);
+  await appel('owner', 'PUT', 'parrainage/liens/' + K(TOM), { parrain: K(LEA), id: 'f1' });
+  assert.equal((await deposer(TOM, { type: 'filleul_seance', cible: '-' })).statut, 200);
+  assert.equal((await deposer(TOM, { type: 'filleul_seance', cible: 'x' })).statut, 401);
+});
 console.log(ok + ' tests passés (émulateur)');

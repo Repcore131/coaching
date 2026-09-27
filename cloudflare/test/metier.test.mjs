@@ -206,6 +206,37 @@ await test('parrainage : la demande est jugée, le filleul rattaché, le parrain
   assert.equal(await w.M.parrainagePaiement(F1, 'test'), null, 'idempotent');
 });
 
+await test('première séance d’un filleul : son parrain est prévenu une fois, après relecture', async () => {
+  const P1 = 'parrain@t,fr', F1 = 'julie@t,fr', t = PARIS('2026-09-28T12:00:00');
+  const telP = appareil('https://push.test/p');
+  const ev = (id) => ({ ['e00000000' + id]: { type: 'filleul_seance', par: F1, cible: '-', at: t } });
+  const w = monde({ users: { [F1]: { fname: 'Julie' } }, push: { [P1]: { x: telP.abonnement } },
+    parrainage: { liens: { [F1]: { parrain: P1, id: 'f1' } }, comptes: { [P1]: { filleuls: { f1: { statut: 'inscrit', date: t } } } } },
+    evenements: ev(1) }, t);
+  // Le dossier n'est pas encore là : l'événement repart en fin de file.
+  const b1 = await w.minute();
+  assert.equal(b1.echecs, 1);
+  assert.equal(w.F.recus.length, 0);
+  w.F.ecrire('users/' + F1 + '/lastSession', t);
+  w.avance(60e3);
+  await w.minute();
+  assert.equal(w.F.recus.length, 1);
+  const m = telP.lire(w.F.recus[0].init.body);
+  assert.equal(m.title, 'Julie a fait sa première séance');
+  assert.equal(m.type, 'filleul');
+  assert.ok(w.F.lire('parrainage/comptes/' + P1 + '/filleuls/f1/premiereSeance') > 0);
+  // Une deuxième fois (autre appareil, rejoué) : rien.
+  w.F.ecrire('evenements', ev(2));
+  w.avance(864e5);
+  await w.minute();
+  assert.equal(w.F.recus.length, 1);
+  // Sans lien de parrainage : rien.
+  const w2 = monde({ users: { 'x@t,fr': { lastSession: t } }, evenements: { e000000001: { type: 'filleul_seance', par: 'x@t,fr', cible: '-', at: t } } }, t);
+  await w2.minute();
+  assert.equal(w2.F.recus.length, 0);
+  assert.equal(w2.F.lire('evenements'), null);
+});
+
 await test('parrainage : son propre code est refusé', async () => {
   const P1 = 'parrain@t,fr';
   const w = monde({ users: { [P1]: {} }, parrainage: { codes: { KEVIN7X9: P1 }, demandes: { [P1]: { code: 'KEVIN7X9', le: 1 } } },

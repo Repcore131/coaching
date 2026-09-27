@@ -49272,6 +49272,85 @@ async function testExercices(){
       if(h1.indexOf('Partager ce record')<0||h1.indexOf('Partager ce record')>h1.indexOf('rcf-rk-l')||/rcf-rk-p-ligne/.test(h1)) return _echec('un seul record : un bouton, en haut');
       if(/<button/.test(_htmlRecordsFin(rec(2),Date.now()))) return _echec('sans clé d’écran, pas de bouton');
       return true;})());
+    // ══ 27/09/2026 — L'ACCUEIL NOMINATIF DU FILLEUL ══════════════════════
+    okA('Accueil /i : « Julie t’invite », son rang et 2 mois ; l’ambassadeur par son nom ; le coach inchangé ; sans rien, pas de code coach',async()=>{
+      let h=''; try{ const x=new XMLHttpRequest(); x.open('GET','../i/index.html',false); x.send(); h=x.responseText; }catch(e){ return _echec('lecture de /i'); }
+      const m=/<script>\s*(\(function\(\)\{[\s\S]*?\}\)\(\);)\s*<\/script>/.exec(h);
+      if(!m) return _echec('script de /i introuvable');
+      const bloc=(id)=>{ const r=new RegExp('id="'+id+'"'); return r.test(h); };
+      for(const id of ['accueil','commencer','embleme','titre','interne-invite','etapes-generique','etapes-coach'])
+        if(!bloc(id)) return _echec('élément #'+id+' absent de la page');
+      const moisAmi=(/id="mois-ami"[^>]*>(\d+)</.exec(h)||[])[1];
+      if(moisAmi!==String(TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus)) return _echec('durée de l’essai parrainé : '+moisAmi);
+      const run=async(search,ua,reponse)=>{
+        const ids=['go','quand-meme','lien','interne','copier','ok','accueil','commencer','embleme','titre','interne-invite','etapes-generique','etapes-coach','mois-ami'];
+        const el={}; ids.forEach(k=>el[k]={hidden:k!=='titre'&&k!=='etapes-coach'&&k!=='mois-ami',textContent:k==='mois-ami'?moisAmi:'',addEventListener(){}});
+        const loc={search,hash:'',href:'https://repcore-sync.web.app/i/'+search,replace(){ el._parti=true; }};
+        const stock={}, lus=[];
+        const fetchF=async(u)=>{ lus.push(String(u)); return {ok:!!reponse,json:async()=>reponse}; };
+        const ls={setItem:(k,v)=>{ stock[k]=v; },getItem:k=>stock[k]||null};
+        new Function('location','document','navigator','setTimeout','fetch','localStorage',m[1])(loc,{getElementById:k=>el[k]},{userAgent:ua},(f)=>f(),fetchF,ls);
+        await new Promise(r=>setTimeout(r,0)); await new Promise(r=>setTimeout(r,0));
+        return {el,lus,stock,parti:!!el._parti};
+      };
+      const SF='Mozilla/5.0 (iPhone) Safari', IG='Mozilla/5.0 (iPhone) Instagram 300.0';
+      let r=await run('?ref=JULIE7K2',SF,{prenom:'Julie',rang:4});
+      if(!/parrainage\/codesPublics\/JULIE7K2\.json$/.test(r.lus[0]||'')) return _echec('lecture : '+r.lus.join());
+      if(r.el.titre.textContent!=='Julie t’invite sur RepCore') return _echec('titre : '+r.el.titre.textContent);
+      if(r.el.accueil.hidden||!r.el.ok.hidden||r.parti) return _echec('l’accueil doit se lire, sans ouvrir l’app tout seul');
+      if(r.el.embleme.hidden||!/rang_4-512\.webp$/.test(r.el.embleme.src)) return _echec('emblème : '+r.el.embleme.src);
+      if(!/^\.\.\/app\/\?ref=JULIE7K2/.test(r.el.commencer.href)) return _echec('Commencer : '+r.el.commencer.href);
+      if(JSON.parse(r.stock.rc_parrain_invite||'{}').prenom!=='Julie') return _echec('le prénom n’est pas gardé pour l’app');
+      // Un prénom piégé reste du texte.
+      r=await run('?ref=JULIE7K2',SF,{prenom:'<img src=x onerror=1>',rang:99});
+      if(!r.el.embleme.hidden) return _echec('un rang hors bornes affiche un emblème');
+      r=await run('?ref=JULIE7K2',IG,{prenom:'Julie',rang:2});
+      if(r.el.interne.hidden||r.el.titre.textContent!=='Julie t’invite sur RepCore'||r.el['interne-invite'].hidden
+        ||r.el['interne-invite'].textContent.indexOf(moisAmi+' mois pour essayer')!==0)
+        return _echec('Instagram : '+r.el.titre.textContent+' / '+r.el['interne-invite'].textContent);
+      if(!/\/app\/\?ref=JULIE7K2/.test(r.el.lien.textContent||'')) return _echec('Instagram : l’échappement est perdu');
+      r=await run('?amb=LEAFIT',SF,{nom:'Léa Fit',actif:true});
+      if(!/ambassadeurs_publics\/LEAFIT\.json$/.test(r.lus[0]||'')||r.el.titre.textContent!=='Léa Fit t’invite sur RepCore'||r.el.accueil.hidden) return _echec('ambassadeur : '+r.el.titre.textContent);
+      r=await run('?inv=RC-AAAA-BBBB',SF,null);
+      if(r.lus.length||!r.el.accueil.hidden||r.el.ok.hidden||r.el['etapes-coach'].hidden||!r.parti) return _echec('invitation de coach : le texte de toujours');
+      r=await run('',SF,null);
+      if(r.el.titre.textContent!=='Bienvenue sur RepCore'||r.el['etapes-generique'].hidden||!r.el['etapes-coach'].hidden) return _echec('sans rien : texte général');
+      const gen=(/<div class="carte" id="etapes-generique"[\s\S]*?<\/div>/.exec(h)||[''])[0];
+      if(/code/i.test(gen)) return _echec('le texte général parle d’un code');
+      return true;
+    });
+    ok('Inscription : « Invité par Julie · 2 mois pour essayer », et le code demandé en haut sur iPhone installé',(()=>{
+      const n=TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus;
+      if(phraseInvitationInscription('Julie')!=='Invité par Julie · '+n+' mois pour essayer') return _echec(phraseInvitationInscription('Julie'));
+      if(phraseInvitationInscription('','LEAFIT')!=='Invité par LEAFIT · '+n+' mois pour essayer') return _echec('ambassadeur');
+      if(!/1 mois de plus/.test(phraseInvitationInscription(''))) return _echec('sans code');
+      if(!parrainageDemanderCode('athlete',true,'')) return _echec('iPhone installé, code perdu : rien ne le demande');
+      if(parrainageDemanderCode('athlete',true,'JULIE7K2')||parrainageDemanderCode('athlete',false,'')||parrainageDemanderCode('coach',true,''))
+        return _echec('demandé à tort');
+      const b=document.getElementById('r-parrain-appel');
+      if(!b||!/Quelqu’un t’a invité \? Entre son code/.test(b.textContent)) return _echec('le bouton du haut manque');
+      const reg=document.getElementById('s-register');
+      const form=reg&&reg.querySelector('.scroll-area');
+      if(form&&form.querySelector('#r-parrain-appel')!==form.querySelector('button,input,label')) return _echec('le bouton n’est pas en haut du formulaire');
+      if(!/oninput="parrainageCodeSaisi/.test((document.getElementById('r-parrain')||{}).outerHTML||'')) return _echec('un code tapé ne dit pas de qui il vient');
+      // Le prénom gardé par /i est repris.
+      let sv=null; try{ sv=localStorage.getItem('rc_parrain_invite'); localStorage.setItem('rc_parrain_invite',JSON.stringify({code:'JULIE7K2',prenom:'Julie',rang:3})); }catch(e){}
+      const g=parrainInviteGarde('JULIE7K2'), g2=parrainInviteGarde('TOMMY2K9');
+      try{ if(sv===null) localStorage.removeItem('rc_parrain_invite'); else localStorage.setItem('rc_parrain_invite',sv); }catch(e){}
+      if(!g||g.prenom!=='Julie'||g2) return _echec('prénom gardé : '+JSON.stringify(g)+' / '+JSON.stringify(g2));
+      return true;})());
+    ok('Premier écran : « Julie sera prévenu… », et l’événement part à la première séance',(()=>{
+      const u={role:'athlete',sessions:[],parrainage:{parrainCode:'JULIE7K2',parrainPrenom:'Julie'}};
+      if(phraseParrainPremiereSeance(u)!=='Julie sera prévenu quand tu feras ta première séance.') return _echec(phraseParrainPremiereSeance(u));
+      if(phraseParrainPremiereSeance(Object.assign({},u,{sessions:[{date:1}]}))) return _echec('après la séance, la phrase reste');
+      if(phraseParrainPremiereSeance({sessions:[]})) return _echec('sans parrain');
+      let h=''; try{ h=_htmlDemarrage(u); }catch(e){ return _echec('_htmlDemarrage : '+e.message); }
+      if(h.indexOf('Julie sera prévenu')<0) return _echec('la phrase n’est pas sur l’écran de démarrage');
+      if(_htmlDemarrage(Object.assign({},u,{parrainage:{parrainCode:'X',parrainPrenom:'<b>x'}})).indexOf('<b>x')>=0) return _echec('prénom non échappé');
+      if(!/deposerEvenement\(\{type:'filleul_seance'\}\)/.test(_prodSrc())) return _echec('rien ne prévient le parrain');
+      const r=rangPublic({xp:15000});
+      if(!(r>=1&&r<=10)||rangPublic({})!==1) return _echec('rang public : '+r);
+      return true;})());
     ok('Ambassadeurs : le CSV mensuel ne porte que les commissions dues',(()=>{
       const r=ambCsvDues({LEA:_AMBF,ZED:{nom:'Zed',commissions:{'2026-09':{x:{commission:9,dueLe:1}}}}},'2026-10',500);
       const l=r.csv.trim().split('\n');

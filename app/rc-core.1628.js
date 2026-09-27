@@ -19148,6 +19148,58 @@ function parrainageOublierRef(){
   window._refCode='';
 }
 // Le champ de l'inscription, pré-rempli. Athlète seulement.
+// ── LE PRÉNOM DU PARRAIN, pour l'accueillir par son nom ────────────────────
+// La page /i l'a lu dans /parrainage/codesPublics et gardé (même domaine) ;
+// sinon on le lit ici — code par code, sans compte (règles). null : inconnu.
+function parrainInviteGarde(code){
+  try{
+    const g=JSON.parse(localStorage.getItem('rc_parrain_invite')||'null');
+    return (g&&g.code===code&&g.prenom)?{prenom:String(g.prenom).slice(0,24),rang:Number(g.rang)||0}:null;
+  }catch(e){ return null; }
+}
+async function parrainInviteLire(code){
+  if(!parrainageCodeValide(code)) return null;
+  const g=parrainInviteGarde(code);
+  if(g) return g;
+  try{
+    const r=await fetch(CLOUD._fbUrl.replace('users.json','parrainage/codesPublics/'+code+'.json'));
+    const d=r.ok?await r.json():null;
+    if(!d||!d.prenom) return null;
+    const v={prenom:String(d.prenom).slice(0,24),rang:Number(d.rang)||0};
+    try{ localStorage.setItem('rc_parrain_invite',JSON.stringify(Object.assign({code,le:Date.now()},v))); }catch(e){}
+    return v;
+  }catch(e){ return null; }
+}
+// PURE. La ligne sous le champ du code.
+function phraseInvitationInscription(prenom,amb){
+  const n=TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus;
+  if(amb) return 'Invité par '+amb+' · '+n+' mois pour essayer';
+  if(prenom) return 'Invité par '+prenom+' · '+n+' mois pour essayer';
+  return 'Le code d’un ami ou d’un ambassadeur t’offre '+TARIFS.essai_parrainage.moisEnPlus+' mois de plus pour essayer.';
+}
+// PURE. Faut-il le bouton « Quelqu'un t'a invité ? » en haut de l'inscription ?
+// L'app installée sur iPhone, un athlète, et aucun code arrivé par le lien.
+function parrainageDemanderCode(role,installeeIOS,code){
+  return role==='athlete'&&!!installeeIOS&&!code;
+}
+function parrainageAllerAuChamp(){
+  const i=document.getElementById('r-parrain');
+  if(!i) return false;
+  try{ i.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){}
+  try{ i.focus(); }catch(e){}
+  return true;
+}
+// Un code tapé à la main (l'app installée sur iPhone a perdu le lien) :
+// dès qu'il a la bonne forme, on dit de qui il vient — la preuve qu'il est bon.
+function parrainageCodeSaisi(v){
+  const c=parrainageCodeNormalise(v);
+  const x=document.getElementById('r-parrain-info');
+  if(!x||!parrainageCodeValide(c)) return false;
+  parrainInviteLire(c).then(g=>{
+    if(g&&parrainageCodeNormalise((document.getElementById('r-parrain')||{}).value)===c) x.textContent=phraseInvitationInscription(g.prenom);
+  }).catch(()=>{});
+  return true;
+}
 function parrainageChampInscription(role){
   const z=document.getElementById('r-parrain-z');
   if(!z) return;
@@ -19157,8 +19209,17 @@ function parrainageChampInscription(role){
   const a=ambEnAttente(), c=a||parrainageRefEnAttente();
   if(i&&c&&!i.value) i.value=c;
   const info=document.getElementById('r-parrain-info');
-  if(info) info.textContent=a?'Invité par '+a+' : 2 mois pour essayer au lieu d’un.'
-    :c?'Invité par un ami : 2 mois pour essayer au lieu d’un.':'Le code d’un ami ou d’un ambassadeur t’offre 1 mois de plus pour essayer.';
+  const g=(!a&&c)?parrainInviteGarde(c):null;
+  if(info) info.textContent=a?phraseInvitationInscription('',a)
+    :c?phraseInvitationInscription(g?g.prenom:'un ami'):phraseInvitationInscription('');
+  // Le prénom pas encore connu : lu, puis la ligne se complète.
+  if(!a&&c&&!g) parrainInviteLire(c).then(v=>{
+    const x=document.getElementById('r-parrain-info');
+    if(v&&x&&(document.getElementById('r-parrain')||{}).value===c) x.textContent=phraseInvitationInscription(v.prenom);
+  }).catch(()=>{});
+  const appel=document.getElementById('r-parrain-appel');
+  let ios=false; try{ ios=rcInstalliOS()&&rcInstallAutonome(); }catch(e){}
+  if(appel) appel.style.display=parrainageDemanderCode(role,ios,c)?'':'none';
   // ARRIVÉ PAR LA VITRINE D'UN COACH (/coach/<slug> → ?coach=) : on le dit, et
   // on dit la suite — c'est le coach qui donne le code d'accès qui relie.
   try{ _infoVitrineInscription(role); }catch(e){}
@@ -19216,7 +19277,7 @@ async function parrainageAssurerCode(u){
   try{ c=await CLOUD.parrainageGet('comptes/'+moi+'/code'); }catch(e){ c=null; }
   for(let i=0;!c&&i<6;i++){
     const essai=parrainageCodeDe(u.fname||u.pseudo||u.email.split('@')[0]);
-    const ok=await CLOUD.parrainagePatch({['codes/'+essai]:moi,['codesPublics/'+essai]:{prenom:String(u.fname||'').slice(0,24)},
+    const ok=await CLOUD.parrainagePatch({['codes/'+essai]:moi,['codesPublics/'+essai]:{prenom:String(u.fname||'').slice(0,24),rang:rangPublic(u)},
       ['comptes/'+moi+'/code']:essai}).catch(()=>false);
     if(ok) c=essai;
   }
@@ -19245,8 +19306,26 @@ function parrainageFusionnerCompte(u,compte){
   u.parrainage=p;
   return payantsLe.length!==avant;
 }
+// PURE. Le rang montré à qui reçoit le lien (1 à 10) : celui de l'accueil.
+function rangPublic(u){
+  let n=1; try{ n=rangDe(xpDe(u)).rang.n; }catch(e){ n=1; }
+  return Math.max(1,Math.min(10,Math.round(Number(n)||1)));
+}
+// LE RANG DE /codesPublics SUIT CELUI DU PARRAIN : écrit quand il change
+// (u.parrainage.rangPublie retient le dernier écrit). Les règles n'acceptent
+// que le propriétaire du code, et un entier de 1 à 10.
+async function parrainagePublierRang(u){
+  const p=u&&u.parrainage;
+  if(!p||!parrainageCodeValide(p.code)||!CLOUD.ok()) return false;
+  const n=rangPublic(u);
+  if(Number(p.rangPublie)===n) return false;
+  const ok=await CLOUD.parrainagePut('codesPublics/'+p.code+'/rang',n).catch(()=>false);
+  if(ok){ u.parrainage=Object.assign({},u.parrainage,{rangPublie:n}); try{ saveUser(); }catch(e){} }
+  return !!ok;
+}
 async function majParrainageMiroir(u){
   if(!u||!u.email||!CLOUD.ok()) return false;
+  parrainagePublierRang(u).catch(()=>{});
   const c=await CLOUD.parrainageGet('comptes/'+u.email.replace(/\./g,','));
   if(!c) return false;
   return parrainageFusionnerCompte(u,c);
@@ -39052,6 +39131,15 @@ function _pdRepas(u){
     ?{titre:'Note ta première journée',sous:'Dis chaque jour si tu as suivi ton plan'}
     :{titre:'Note ton premier repas',sous:'Pour voir tes macros se remplir'};
 }
+// PURE. « Julie sera prévenue… » : seulement pour un filleul qui n'a pas encore
+// fait de séance. La promesse est tenue par le serveur léger (événement
+// filleul_seance, déposé à la fin de la première séance).
+function phraseParrainPremiereSeance(u){
+  const p=u&&u.parrainage;
+  const nom=p&&p.parrainCode&&String(p.parrainPrenom||'').trim();
+  if(!nom||(u.sessions||[]).length) return '';
+  return nom+' sera prévenu quand tu feras ta première séance.';
+}
 // PURE. Le bloc.
 function _htmlDemarrage(u){
   const e=etapesDemarrage(u);
@@ -39074,6 +39162,8 @@ function _htmlDemarrage(u){
         :'<button type="button" class="pd-ligne" onclick="'+l.action+'">'+corps
           +'<span class="pd-go" aria-hidden="true">›</span></button>';
     }).join('')
+    +(phraseParrainPremiereSeance(u)?'<div class="pd-parrain" style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:10px">'
+      +escapeHtml(phraseParrainPremiereSeance(u))+'</div>':'')
     +'</div>';
 }
 // Le tour impur : poser le bloc, et marquer l'ecran pour que la feuille taise
@@ -45068,7 +45158,12 @@ function finishWorkout(incomplete=false){
   // La séance est déjà dans l'historique à ce stade : la toute première y est
   // donc seule. Même raisonnement que first_workout_started — c'est la donnée
   // qui décide, pas un drapeau d'appareil.
-  if((currentUser.sessions||[]).length===1) rcm('first_workout_completed');
+  if((currentUser.sessions||[]).length===1){
+    rcm('first_workout_completed');
+    // LE PARRAIN EST PRÉVENU (serveur léger, push « filleul ») : la promesse
+    // de l'accueil. Le serveur relit le lien et la séance avant d'envoyer.
+    try{ if(currentUser.parrainage&&currentUser.parrainage.parrainCode) deposerEvenement({type:'filleul_seance'}).catch(()=>{}); }catch(e){}
+  }
   // La séance vient d'être enregistrée : si le bilan de départ manque toujours,
   // c'est ici qu'on le propose. Même prédicat que la carte de l'accueil — les
   // deux relances doivent apparaître et disparaître ensemble.

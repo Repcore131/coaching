@@ -912,6 +912,26 @@ export function creerMetier(deps) {
       await recalculerDefi(coach, Object.assign({}, m, { id }), t);
       return 'recalcule';
     }
+    // LA PREMIÈRE SÉANCE D'UN FILLEUL : son parrain est prévenu, une fois.
+    // L'événement ne dit rien que le Worker croie : le lien de parrainage et
+    // la séance sont relus. La séance pas encore synchronisée (le dossier
+    // part juste après l'événement) : on LÈVE, et la file réessaie à la
+    // minute suivante (planif.js, cinq essais).
+    if (type === 'filleul_seance') {
+      const par = String(e.par || '');
+      const lien = await _val('parrainage/liens/' + par);
+      if (!lien || !lien.parrain || !lien.id) return 'sans_parrain';
+      const [der, prenom] = await Promise.all([_lire(par, 'lastSession'), _lire(par, 'fname')]);
+      if (!(Number(der) > 0)) throw new Error('première séance pas encore synchronisée');
+      const fait = await db.ref('parrainage/comptes/' + lien.parrain + '/filleuls/' + lien.id + '/premiereSeance')
+        .transaction((v) => (v ? undefined : t));
+      if (!fait.committed) return 'deja_prevenu';
+      const nom = String(prenom || '').trim().slice(0, 24);
+      await envoyerPush(lien.parrain, { type: 'filleul', url: './?parrainage=1', tag: 'filleul-seance-' + lien.id,
+        title: (nom || 'Ton filleul') + ' a fait sa première séance',
+        body: 'Ton invitation a pris. Son premier paiement t’offrira 1 mois de RepCore.' });
+      return 'prevenu';
+    }
     return 'type_inconnu';
   }
 
