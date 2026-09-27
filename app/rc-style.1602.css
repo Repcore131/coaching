@@ -11011,7 +11011,7 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .prf-t{font-size:var(--fs-md);font-weight:800;margin:0 0 4px;letter-spacing:0;text-transform:none;font-family:inherit}
 .prf-sub{font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin:0 0 12px}
 .prf-theme{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border:1px solid var(--border);border-radius:var(--r-2);overflow:hidden}
-.prf-theme button{min-height:44px;background:transparent;border:0;border-left:1px solid var(--border);color:var(--sub);font:700 var(--fs-sm) var(--pile-sans);cursor:pointer;transition:background var(--t-1),color var(--t-1)}
+.prf-theme button{min-height:44px;background:transparent;border:0;border-left:1px solid var(--border);color:var(--sub);font:700 var(--fs-sm) Montserrat,var(--pile-sans);cursor:pointer;transition:background var(--t-1),color var(--t-1)}
 .prf-theme button:first-child{border-left:0}
 .prf-theme button[aria-pressed="true"]{background:var(--surface-3);color:var(--text);box-shadow:inset 0 -2px 0 var(--red)}
 .prf-theme button:focus-visible{outline:2px solid var(--red);outline-offset:-2px}
@@ -11052,6 +11052,7 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .pe-note{margin:12px 0 0;text-align:center}
 .pe-msg{font-size:var(--fs-sm);color:var(--red-text);line-height:1.6;margin:0 0 16px}
 #rc-push-etape .btn{width:100%;margin:0}
+.pe-non{display:block;width:100%;min-height:44px;margin:12px 0 0;background:none;border:0;color:var(--sub);font:600 var(--fs-sm) Montserrat,var(--pile-sans);text-decoration:underline;cursor:pointer}
 /* ═══ THEME CLAIR — GENERE PAR scripts/theme_clair.py, NE PAS MODIFIER A LA MAIN ═══ */
 :root[data-theme="clair"] [style*="--halo-c"]{--halo-1:0 0 8px var(--halo-c,rgba(255,255,255,.45));--halo-2:0 0 14px var(--halo-c,rgba(255,255,255,.60)),0 0 30px var(--halo-c,rgba(255,255,255,.25));--halo-3:0 0 20px var(--halo-c,rgba(255,255,255,.85)),0 0 44px var(--halo-c,rgba(255,255,255,.40))}
 html[data-theme="clair"]{background:#f8f8f8}
@@ -13463,6 +13464,7 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .pe-liste,:root[data-theme="clair"] .pe-etapes{color:var(--text-strong)}
 :root[data-theme="clair"] .pe-regle,:root[data-theme="clair"] .pe-note{color:var(--sub)}
 :root[data-theme="clair"] .pe-msg{color:var(--red-text)}
+:root[data-theme="clair"] .pe-non{color:var(--sub)}
 :root[data-theme="clair"] [style^="background:#000"],:root[data-theme="clair"] [style*=";background:#000"],:root[data-theme="clair"] [style*="; background:#000"],:root[data-theme="clair"] [style*=" background:#000"],:root[data-theme="clair"] [style^="background: #000"],:root[data-theme="clair"] [style*=";background: #000"],:root[data-theme="clair"] [style*="; background: #000"],:root[data-theme="clair"] [style*=" background: #000"],:root[data-theme="clair"] [style^="background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=";background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*="; background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=" background: rgb(0, 0, 0)"]{background-color:#fbfbfb!important}
 :root[data-theme="clair"] [style^="background:#000b"],:root[data-theme="clair"] [style*=";background:#000b"],:root[data-theme="clair"] [style*="; background:#000b"],:root[data-theme="clair"] [style*=" background:#000b"],:root[data-theme="clair"] [style^="background: #000b"],:root[data-theme="clair"] [style*=";background: #000b"],:root[data-theme="clair"] [style*="; background: #000b"],:root[data-theme="clair"] [style*=" background: #000b"],:root[data-theme="clair"] [style^="background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=";background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*="; background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=" background: rgba(0, 0, 0, 0.733)"]{background-color:rgba(251,251,251,0.733)!important}
 :root[data-theme="clair"] [style^="background:#001a00"],:root[data-theme="clair"] [style*=";background:#001a00"],:root[data-theme="clair"] [style*="; background:#001a00"],:root[data-theme="clair"] [style*=" background:#001a00"],:root[data-theme="clair"] [style^="background: #001a00"],:root[data-theme="clair"] [style*=";background: #001a00"],:root[data-theme="clair"] [style*="; background: #001a00"],:root[data-theme="clair"] [style*=" background: #001a00"],:root[data-theme="clair"] [style^="background: rgb(0, 26, 0)"],:root[data-theme="clair"] [style*=";background: rgb(0, 26, 0)"],:root[data-theme="clair"] [style*="; background: rgb(0, 26, 0)"],:root[data-theme="clair"] [style*=" background: rgb(0, 26, 0)"]{background-color:#dfffdf!important}

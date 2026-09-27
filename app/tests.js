@@ -48950,18 +48950,19 @@ async function testExercices(){
       if(actMessage({le:100,ecritures:0,echecs:0},0,true)!==null) return _echec('une lecture annoncée');
       if(!window.fetch._rcAct) return _echec('fetch non suivi');
       return /_rcToastLe=Date\.now\(\)/.test(String(toast))&&document.getElementById('toast').getAttribute('aria-live')==='polite'?true:_echec('toast');})());
-    ok('Notifications obligatoires : l’étape bloque tant que le navigateur n’a pas eu de réponse',(()=>{
+    ok('Notifications activées par défaut, et on peut les retirer',(()=>{
       const u={email:'a@t.fr',role:'client'};
-      if(pushEtapeMode(u,'proposer',true)!=='demander') return _echec('pas bloquant');
-      if(pushEtapeMode(u,'actif',false)!==null||pushEtapeMode(u,'indispo',false)!==null) return _echec('montrée à tort');
-      if(pushEtapeMode(u,'refuse',false)!=='refuse'||pushEtapeMode(u,'refuse',true)!==null) return _echec('refus : une fois par jour');
-      if(pushEtapeMode(u,'installer',false)!=='installer') return _echec('iPhone');
-      if(pushEtapeMode({email:'c@t.fr',role:'coach'},'proposer',false)!==null) return _echec('coach');
+      if(pushEtapeMode(u,'proposer')!=='demander') return _echec('pas proposées au départ');
+      if(pushEtapeMode(Object.assign({pushRefus:true},u),'proposer')!==null) return _echec('redemandées après un refus');
+      if(pushEtapeMode(u,'actif')!==null||pushEtapeMode(u,'refuse')!==null||pushEtapeMode(u,'indispo')!==null) return _echec('montrées à tort');
+      if(pushEtapeMode(u,'installer')!=='installer'||pushEtapeMode(Object.assign({_pushInstallVu:true},u),'installer')!==null) return _echec('iPhone : une fois');
+      if(pushEtapeMode({email:'c@t.fr',role:'coach'},'proposer')!==null) return _echec('coach');
       const d=document.createElement('div'); d.innerHTML=htmlPushEtape('demander');
-      const bt=[...d.querySelectorAll('button')];
-      if(bt.length!==1||!/pushEtapeActiver\(\)/.test(bt[0].getAttribute('onclick'))) return _echec('plus d’une sortie sur la demande');
-      d.innerHTML=htmlPushEtape('refuse');
-      if(!/pushEtapeFermer/.test(d.innerHTML)) return _echec('un refus doit laisser continuer');
+      if(!/pushEtapeActiver\(\)/.test(d.innerHTML)||!/pushEtapeRefuser\(\)/.test(d.innerHTML)) return _echec('activer et refuser doivent être là');
+      const r=document.createElement('div'); r.innerHTML=htmlReglagesPush({},'actif');
+      if(!/pushDesactiverDepuisReglages\(\)/.test(r.innerHTML)) return _echec('pas de retrait dans les réglages');
+      if(!PUSH_TYPES.every(t=>pushTypeActif({},t.cle))) return _echec('un type éteint par défaut');
+      if(CHAMPS_NON_SANTE.indexOf('pushRefus')<0) return _echec('pushRefus non classé');
       return /pushEtapeVerifier\(\)/.test(String(routeUser))?true:_echec('non appelée au démarrage');})());
     ok('Barre de lecture : seulement sur une zone longue',(()=>{
       if(lectureProgression(0,700,600)!==null||lectureProgression(0,4000,150)!==null) return _echec('zone courte');
