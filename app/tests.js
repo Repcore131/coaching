@@ -21893,6 +21893,34 @@ async function testExercices(){
         return _echec('la phrase ne distingue pas « un seul bilan » de « une seule mesure »');
       return /relevée qu’une fois/.test(s)?true
         :_echec('rien ne dit que c’est la MESURE qui manque, pas le bilan');})());
+    ok('NOTES — LA MAQUETTE : UN BILAN À LA FOIS, QUATRE RUBRIQUES, DES JAUGES QUI LISENT LA RÉPONSE',(()=>{
+      const B=[{type:'depart',date:Date.now()-40*864e5,'deb-weight':'103.8','deb-goals':'Perte de poids'},
+        {type:'coaching',date:Date.now()-2*864e5,'bil-weight':'100.9','bil-motivation':'4','bil-diff-type':'Oui, avec les deux',
+         'bil-diff-detail':'En couple','bil-cheat-meals':'1','bil-cheat-reasons':'Mauvaise orga','bil-prog-modifs':'Review',
+         'bil-sleep-quality':BIL_OPTS_SOMMEIL[2],'bil-stress':'Beaucoup','bil-stress-detail':'Boulot','bil-new-goals-detail':'Deter'}];
+      const d=document.createElement('div'); d.innerHTML=renderReponsesBilans(B);
+      const pills=[...d.querySelectorAll('.bn-pill')].map(p=>p.textContent.trim());
+      if(pills.join('|')!=='Bilan 1|Questionnaire de départ') return _echec('pastilles : '+pills.join('|'));
+      const vis=[...d.querySelectorAll('.bn-bilan')].filter(c=>!c.hidden);
+      if(vis.length!==1||!/Bilan 1/.test(vis[0].querySelector('.bn-titre').textContent)) return _echec('le plus récent doit s’ouvrir seul');
+      if(!/100,9 kg/.test(vis[0].querySelector('.bn-poids').textContent)) return _echec('le poids de l’en-tête');
+      const rubs=[...vis[0].querySelectorAll('.bn-rub-t h3')].map(h=>h.textContent);
+      if(rubs.join('|')!=='État général|Difficultés et écarts|Récupération / sommeil / stress|Objectifs et demandes') return _echec('rubriques : '+rubs.join('|'));
+      const j=[...vis[0].querySelectorAll('.bn-jauge')].map(x=>x.querySelectorAll('i.on').length);
+      // Motivation 4/10 ; sommeil « Mal » = dernier des trois ; stress « Beaucoup » = 3e des quatre.
+      if(j.join(',')!=='4,3,7') return _echec('jauges : '+j.join(','));
+      if(!/Motivation modérée/.test(vis[0].textContent)) return _echec('la phrase sous la motivation');
+      if(!vis[0].querySelector('.bn-t-plein')||!/Boulot/.test(vis[0].querySelector('.bn-t-plein').textContent)) return _echec('« Source du stress », seule, prend la largeur');
+      // Une réponse hors liste n'a pas de jauge.
+      if(_bnJauge('bil-stress','Moyen')!==null||_bnJauge('bil-motivation','12')!==null) return _echec('jauge inventée');
+      if(!_bnJauge('bil-motivation','4/10')||_bnJauge('bil-motivation','4/10').plein!==4) return _echec('« 4/10 », la forme enregistrée, n’a pas sa jauge');
+      // Le questionnaire pose exactement les choix que les jauges lisent.
+      const src=String(BIL_STEPS.map(f=>String(f)).join(''));
+      if(src.indexOf('BIL_OPTS_SOMMEIL')<0||src.indexOf('BIL_OPTS_STRESS')<0) return _echec('le questionnaire a ses propres listes');
+      // Côté coach : un bilan sans réponse porte sa pastille.
+      d.innerHTML=renderReponsesBilans(B,{id:'c',email:'c@t',fname:'A',bilans:B});
+      if(!d.querySelector('.bn-pill .bn-pill-dot')) return _echec('le coach ne voit pas le bilan qui attend');
+      return true;})());
     ok('MASSE GRASSE — LA COURBE AU DESSIN DU POIDS, À LA DATE DE CHAQUE BILAN, ÉCART « STABLE » SOUS LA MARGE',(()=>{
       const sauve=currentUser;
       const zone=document.getElementById('progress-content');
@@ -65249,7 +65277,8 @@ async function testExercices(){
         if(h.indexOf('Où en es-tu de tes objectifs')<0)
           return _echec('le libellé autonome ne titre pas la réponse');
         if(/object Object/.test(h)) return _echec('une réponse structurée est rendue brute');
-        const RUB=/border-bottom:1px solid #141414/g;
+        // Une tuile par réponse : c'est son libellé qu'on compte (maquette du 27/09/2026).
+        const RUB=/class="bn-l"/g;
         const n=(h.match(RUB)||[]).length;
         if(n!==3) return _echec(n+' rubriques rendues au lieu de 3');
         // TÉMOIN : un bilan SANS réponse n'ouvre aucune rubrique. Sans lui, un

@@ -67532,6 +67532,7 @@ function openBilanNotes(id){
   go('s-progress');
   const btn=document.querySelector('#prog-tabs button[onclick*="notes"]');
   showProgressTab('notes',btn);
+  if(id) try{ _bnVoir(id); }catch(e){}
   if(id) setTimeout(()=>{
     const el=document.getElementById('bil-'+id);
     if(el&&el.scrollIntoView) el.scrollIntoView({block:'start'});
@@ -67723,6 +67724,91 @@ function blocReponseBilan(b,c){
 // le formulaire d'ecriture — ce rendu est partage par les deux ecrans, et
 // l'oublier aurait mis un bouton « Envoyer ma reponse » sur les bilans de
 // l'athlete lui-meme.
+// ══ L'ONGLET NOTES, AU DESSIN DE LA MAQUETTE DE KEVIN (27/09/2026) ═══════
+//
+// « change l'onglet info dans Évolution comme ça » : un bilan à la fois,
+// choisi par des pastilles ; une carte d'en-tête (numéro, date, poids) ; les
+// réponses rangées en quatre rubriques à icône, sur deux colonnes ; des
+// jauges pour la motivation, le sommeil et le stress.
+//
+// ⚠ LES JAUGES LISENT LA REPONSE, ELLES N'INVENTENT RIEN. La motivation est
+//   notée sur 10 : la jauge est ce chiffre. Le sommeil et le stress sont des
+//   CHOIX (BIL_OPTS_SOMMEIL, BIL_OPTS_STRESS, les mêmes que le questionnaire) :
+//   la jauge dit la place du choix dans la liste, et le texte coché reste
+//   écrit au-dessus. Une réponse hors liste n'a pas de jauge.
+//
+// Le rendu reste PARTAGÉ avec la fiche du coach (`client`) : il y garde son
+// champ de réponse, et une pastille marque les bilans qui l'attendent.
+const BIL_OPTS_SOMMEIL=Object.freeze(['Très bien, je me sens reposé(e)','Correct, quelques nuits agitées','Mal, j\'ai du mal à me reposer']);
+const BIL_OPTS_STRESS=Object.freeze(['Pas du tout','Un peu','Beaucoup','Énormément']);
+const BILAN_RUBRIQUES={
+  suivi:[
+    {titre:'État général',ico:'flame',cles:['bil-motivation']},
+    {titre:'Difficultés et écarts',ico:'alert-triangle',cles:['bil-diff-type','bil-diff-detail','bil-cheat-meals','bil-cheat-reasons']},
+    {titre:'Récupération / sommeil / stress',ico:'moon',cles:['bil-sleep-quality','bil-stress','bil-stress-detail']},
+    {titre:'Objectifs et demandes',ico:'target',cles:['bil-prog-modifs','bil-new-goals','bil-new-goals-detail']}
+  ],
+  depart:[
+    {titre:'Santé et précautions',ico:'alert-triangle',cles:['deb-health','deb-traitement','deb-traitement-detail','deb-allergies','deb-tca']},
+    {titre:'Objectifs',ico:'target',cles:['deb-goals']},
+    {titre:'Métier et rythme',ico:'activity',cles:['deb-job','deb-naf','deb-work-rhythm']},
+    {titre:'Entraînement',ico:'dumbbell',cles:['deb-location','deb-gym','deb-training-days','deb-training-time','deb-session-duration','deb-sports','deb-other-sports','deb-intensity-1','deb-intensity-2','deb-history']},
+    {titre:'Nutrition',ico:'utensils',cles:['deb-nutrition-type','deb-meals-day','deb-food-love','deb-food-hate','deb-water','deb-track-macros','deb-calories','deb-supplements','deb-supps-detail']}
+  ]
+};
+// PURE. La jauge d'une réponse : {plein, sur} en dixièmes, ou null.
+function _bnJauge(k,v){
+  if(k==='bil-motivation'){
+    const n=Math.round(parseFloat(String(_texteReponse(v)||v).replace(',','.')));
+    return (n>=1&&n<=10)?{plein:n,sur:10}:null;
+  }
+  const t=String(_texteReponse(v)||'').trim();
+  if(k==='bil-sleep-quality'){
+    const i=BIL_OPTS_SOMMEIL.indexOf(t); if(i<0) return null;
+    // La QUALITÉ : le premier choix remplit la jauge, le dernier la vide presque.
+    return {plein:Math.round(10*(BIL_OPTS_SOMMEIL.length-i)/BIL_OPTS_SOMMEIL.length),sur:10};
+  }
+  if(k==='bil-stress'){
+    const i=BIL_OPTS_STRESS.indexOf(t); if(i<0) return null;
+    // « Pas du tout » ne remplit rien : un stress absent n'est pas un segment rouge.
+    return {plein:Math.round(10*i/(BIL_OPTS_STRESS.length-1)),sur:10};
+  }
+  return null;
+}
+// PURE. La phrase sous la motivation — une lecture, pas un jugement de santé.
+function _bnMotivationNote(v){
+  const n=Math.round(parseFloat(String(_texteReponse(v)||v).replace(',','.')));
+  if(!(n>=1&&n<=10)) return '';
+  if(n<=3) return 'Motivation basse : un point à aborder ensemble.';
+  if(n<=6) return 'Motivation modérée, à travailler pour assurer la régularité.';
+  if(n<=8) return 'Bonne motivation, de quoi tenir le rythme.';
+  return 'Motivation au plus haut.';
+}
+function _bnSegments(j){
+  let h='';
+  for(let i=0;i<j.sur;i++) h+=`<i class="${i<j.plein?'on':''}"></i>`;
+  return `<span class="bn-jauge" aria-hidden="true">${h}</span>`;
+}
+// Montre UN bilan, et allume sa pastille. Toutes les listes « Notes » ouvertes
+// qui le portent suivent : il n'y en a qu'une à l'écran, mais on ne suppose rien.
+function _bnVoir(id){
+  document.querySelectorAll('.bn').forEach(bn=>{
+    if(!bn.querySelector('.bn-bilan[data-bn="'+id+'"]')) return;
+    bn.querySelectorAll('.bn-bilan').forEach(c=>{ c.hidden=c.getAttribute('data-bn')!==id; });
+    bn.querySelectorAll('.bn-pill').forEach(p=>{
+      const on=p.getAttribute('data-bn')===id;
+      p.classList.toggle('on',on); p.setAttribute('aria-selected',on?'true':'false');
+      if(on&&p.scrollIntoView) try{ p.scrollIntoView({block:'nearest',inline:'nearest'}); }catch(e){}
+    });
+  });
+}
+// R13 — CE QUE CETTE LISTE MONTRE : les REPONSES ECRITES de l'athlete dans
+// ses bilans, pas un retour du coach. Cote athlete, il peut donc la remplir
+// lui-meme ; cote coach (`client`), il ne peut qu'attendre le prochain bilan.
+// Le parametre `client` distingue les deux ecrans : c'est lui qui ajoute
+// le formulaire d'ecriture — ce rendu est partage par les deux ecrans, et
+// l'oublier aurait mis un bouton « Envoyer ma reponse » sur les bilans de
+// l'athlete lui-meme.
 function renderReponsesBilans(bilans,client){
   const bl=(bilans||[]).filter(b=>b&&b.date);
   // Numérotation des bilans de SUIVI seuls. Le questionnaire de départ porte
@@ -67730,46 +67816,87 @@ function renderReponsesBilans(bilans,client){
   // de suivi s'affichait « Bilan 2 » alors qu'il n'y en avait qu'un.
   let _n=0; const _rang=new Map();
   bl.forEach(b=>{ if(b.type!=='depart') _rang.set(b,++_n); });
-  const cartes=bl.slice().reverse().map(b=>{
+  const vus=[];
+  bl.slice().reverse().forEach(b=>{
     const depart=b.type==='depart';
-    const d=new Date(b.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
-    const w=getBW(b);
-    const answers=(depart?BILAN_QUESTIONS.depart:BILAN_QUESTIONS.suivi).map(q=>{
-      const txt=_texteReponseLue(q.k,b[q.k]);
-      if(!txt) return '';
-      return `<div style="padding:8px 0;border-bottom:1px solid #141414">
-        <div style="font-size:var(--fs-xs);color:${q.alerte?'#fca5a5':'var(--sub)'};font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">${q.lbl}</div>
-        <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5">${escapeHtml(txt)}</div>
-      </div>`;
-    }).filter(Boolean).join('');
-    // ⚠ UNE CARTE SANS TEXTE PEUT PORTER UNE REPONSE (QA du 27/09/2026). Un
-    //   bilan de mesures seules n'a aucune reponse ecrite : la carte etait
-    //   sautee, et la reponse du coach qu'elle portait ne s'affichait NULLE
-    //   PART chez l'athlete — openReponseBilan le menait sur une ancre absente.
-    //   Cote coach, la meme carte portait le seul champ pour lui repondre.
-    //   Elle reste donc des qu'il y a une reponse a lire, ou a ecrire — un
-    //   bilan de SUIVI ; un questionnaire de depart vide n'appelle rien.
+    const Q=depart?BILAN_QUESTIONS.depart:BILAN_QUESTIONS.suivi;
+    // Les réponses effectivement écrites, dans l'ordre des questions.
+    const rep=new Map();
+    Q.forEach(q=>{ const t=_texteReponseLue(q.k,b[q.k]); if(t) rep.set(q.k,{q,t}); });
+    // ⚠ UNE CARTE SANS TEXTE PEUT PORTER UNE REPONSE (QA du 27/09/2026) : elle
+    //   reste des qu'il y a une reponse du coach a lire, ou a ecrire — un bilan
+    //   de SUIVI ; un questionnaire de depart vide n'appelle rien.
     const _aLire=!client&&!!b.reponseCoach;
     const _aEcrire=!!client&&!depart;
-    if(!answers&&!_aLire&&!_aEcrire) return '';
-    const _corps=answers||`<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.5;padding:4px 0">Aucune réponse écrite dans ce bilan : mesures et photos seulement.</div>`;
-    return `<div id="bil-${escapeHtml(_idBilan(b))}" style="background:var(--dark);border:1px solid ${depart?'rgba(224,32,32,.35)':'var(--border)'};border-radius:var(--r-3);padding:16px;margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red-text);text-transform:uppercase;letter-spacing:1.5px">${depart?'Questionnaire de départ':'Bilan '+_rang.get(b)}</div>
-        <div style="text-align:right"><div style="font-size:var(--fs-xs);color:var(--text-dim)">${d}</div>${w?`<div style="font-size:var(--fs-sm);font-weight:700;color:var(--text);margin-top:2px">${w}kg</div>`:''}</div>
-      </div>
-      ${_corps}
-      ${(!client&&b.reponseCoach)?`<div style="margin-top:10px;background:var(--surface-2);border-left:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px">
-        <div style="font-size:var(--fs-xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--green);font-weight:800;margin-bottom:4px">Réponse de ton coach</div>
-        <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(b.reponseCoach)}</div>
-      </div>`:''}
-      ${client?blocReponseBilan(b,client):''}
-    </div>`;
-  }).filter(Boolean).join('');
-  // R13 — CE QUE CETTE LISTE MONTRE : les REPONSES ECRITES de l'athlete dans
-  // ses bilans, pas un retour du coach. Cote athlete, il peut donc la remplir
-  // lui-meme ; cote coach (`client`), il ne peut qu'attendre le prochain bilan.
-  if(cartes) return cartes;
+    if(!rep.size&&!_aLire&&!_aEcrire) return;
+    // Les rubriques : celles de la maquette, puis les mesures du corps et ce
+    // qui ne s'y range pas — rien d'écrit ne disparaît.
+    const rubs=(depart?BILAN_RUBRIQUES.depart:BILAN_RUBRIQUES.suivi).map(r=>({titre:r.titre,ico:r.ico,cles:r.cles.slice()}));
+    const ranges=new Set([].concat(...rubs.map(r=>r.cles)));
+    const mesures=Q.filter(q=>!ranges.has(q.k)&&q.emoji==='📏').map(q=>q.k);
+    const autres=Q.filter(q=>!ranges.has(q.k)&&q.emoji!=='📏').map(q=>q.k);
+    if(mesures.length) rubs.push({titre:'Mesures du corps',ico:'crosshair',cles:mesures});
+    if(autres.length) rubs.push({titre:'Autres réponses',ico:'clipboard',cles:autres});
+    const sections=rubs.map(r=>{
+      const items=r.cles.filter(k=>rep.has(k)).map(k=>rep.get(k));
+      if(!items.length) return '';
+      const tuiles=[];
+      items.forEach(({q,t})=>{
+        const j=_bnJauge(q.k,b[q.k]);
+        const val=q.k==='bil-motivation'&&j?(j.plein+' / 10'):t;
+        const large=String(t).length>60;
+        tuiles.push({large,html:`<div class="bn-t${j?' bn-t-j':''}${q.k==='bil-motivation'&&j?' bn-t-motiv':''}">
+            <div class="bn-l"${q.alerte?' style="color:#fca5a5"':''}>${escapeHtml(q.lbl)}</div>
+            <div class="bn-v">${escapeHtml(val)}${q.k==='bil-motivation'&&j?_bnSegments(j):''}</div>
+            ${j&&q.k!=='bil-motivation'?_bnSegments(j):''}
+          </div>`});
+        if(q.k==='bil-motivation'){
+          const note=_bnMotivationNote(b[q.k]);
+          if(note) tuiles.push({large:false,html:`<div class="bn-t bn-note">${escapeHtml(note)}</div>`});
+        }
+      });
+      // Une tuile seule en fin de rubrique prend toute la largeur, comme
+      // « Source du stress » sur la maquette.
+      let place=0;
+      const html=tuiles.map((x,i)=>{
+        const seule=!x.large&&place%2===0&&i===tuiles.length-1;
+        const plein=x.large||seule;
+        if(plein){ place=0; return x.html.replace('class="bn-t','class="bn-t bn-t-plein'); }
+        place++; return x.html;
+      }).join('');
+      return `<section class="bn-rub">
+          <div class="bn-rub-t"><span class="bn-ico" aria-hidden="true">${icon(r.ico,26)}</span><h3>${escapeHtml(r.titre)}</h3></div>
+          <div class="bn-g">${html}</div>
+        </section>`;
+    }).join('');
+    const d=new Date(b.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+    const w=getBW(b);
+    const id=_idBilan(b);
+    const nom=depart?'Questionnaire de départ':'Bilan '+_rang.get(b);
+    vus.push({id,nom,depart,attend:!!client&&!depart&&!b.reponseCoach,
+      html:`<div id="bil-${escapeHtml(id)}" class="bn-bilan" data-bn="${escapeHtml(id)}">
+        <div class="bn-tete${depart?' bn-tete-dep':''}">
+          <div class="bn-tete-g">
+            <div class="bn-titre">${depart?'Questionnaire <em>de départ</em>':'Bilan <em>'+_rang.get(b)+'</em>'}</div>
+            <div class="bn-date">${d}</div>
+          </div>
+          ${w?`<div class="bn-poids"><span>Poids</span><b>${String(w).replace('.',',')} kg</b></div>`:''}
+        </div>
+        ${sections||`<section class="bn-rub"><div class="bn-vide">Aucune réponse écrite dans ce bilan : mesures et photos seulement.</div></section>`}
+        ${(!client&&b.reponseCoach)?`<div class="bn-reponse">
+          <div class="bn-reponse-t">Réponse de ton coach</div>
+          <div class="bn-reponse-v">${escapeHtml(b.reponseCoach)}</div>
+        </div>`:''}
+        ${client?`<div class="bn-rub bn-rub-coach">${blocReponseBilan(b,client)}</div>`:''}
+      </div>`});
+  });
+  if(vus.length){
+    // Le plus récent s'ouvre ; les autres attendent leur pastille.
+    const pills=vus.map((v,i)=>`<button type="button" class="bn-pill${i===0?' on':''}${v.depart?' bn-pill-dep':''}" role="tab"
+        aria-selected="${i===0?'true':'false'}" data-bn="${escapeHtml(v.id)}" onclick="_bnVoir('${escapeHtml(v.id)}')">${escapeHtml(v.nom)}${v.attend?'<span class="bn-pill-dot" title="Sans réponse"></span>':''}</button>`).join('');
+    const cartes=vus.map((v,i)=>i===0?v.html:v.html.replace('class="bn-bilan"','class="bn-bilan" hidden')).join('');
+    return `<div class="bn">${vus.length>1?`<div class="bn-choix" role="tablist">${pills}</div>`:''}${cartes}</div>`;
+  }
   return client
     ?emptyState('message-circle','Pas encore de réponse écrite dans les bilans de '+escapeHtml(client.fname||'ton athlète')+'. Elles s\'afficheront ici dès son prochain bilan.')
     :emptyState('message-circle','Tes réponses écrites aux bilans s\'afficheront ici. Il n\'y en a pas encore.','Remplir mon bilan','openBilanChoice()');
@@ -67809,9 +67936,9 @@ const BIL_STEPS=[
   // Step 4 : Sommeil & Stress
   ()=>bSec('Sommeil & Stress',
     bLbl('Qualité du sommeil : comment dors-tu en ce moment ?')+
-    `<div>${bC('bil-sleep-quality',['Très bien, je me sens reposé(e)','Correct, quelques nuits agitées','Mal, j\'ai du mal à me reposer'])}</div>`+
+    `<div>${bC('bil-sleep-quality',BIL_OPTS_SOMMEIL.slice())}</div>`+
     bLbl('Es-tu stressé(e) en ce moment ?')+
-    `<div>${bC('bil-stress',['Pas du tout','Un peu','Beaucoup','Énormément'])}</div>`+
+    `<div>${bC('bil-stress',BIL_OPTS_STRESS.slice())}</div>`+
     bLbl('Si tu es stressé(e), peux-tu me donner des précisions sur ce qui te préoccupe en ce moment ?')+bTA('bil-stress-detail','Ce qui te préoccupe...')
   ),
   // Step 5 bis : le traitement, SEMESTRIELLEMENT et pas plus souvent.

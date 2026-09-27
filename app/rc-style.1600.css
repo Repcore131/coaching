@@ -13746,3 +13746,66 @@ html[data-theme="clair"]{background:#f8f8f8}
   .pc-ecart{font-size:var(--fs-xs)}
   .pc-b-l b{font-size:var(--fs-sm)}
 }
+
+/* L'onglet Notes, au dessin de la maquette de Kevin (27/09/2026). */
+.bn{display:flex;flex-direction:column;gap:12px}
+.bn-choix{display:flex;gap:10px;overflow-x:auto;padding:2px 2px 4px;scrollbar-width:none}
+.bn-choix::-webkit-scrollbar{display:none}
+.bn-pill{flex:none;position:relative;font-family:var(--pile-titre);font-size:15px;letter-spacing:1.2px;text-transform:uppercase;
+  color:var(--text-dim);background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:10px 22px;cursor:pointer;min-height:40px}
+.bn-pill.on{color:#fff;border-color:#ff2d2d;background:linear-gradient(180deg,rgba(224,32,32,.28),rgba(120,0,0,.35));
+  box-shadow:0 0 0 1px rgba(255,45,45,.35),0 0 16px rgba(224,32,32,.45)}
+.bn-pill-dot{position:absolute;top:6px;right:7px;width:7px;height:7px;border-radius:50%;background:#ff3b3b;box-shadow:0 0 6px #ff3b3b}
+.bn-bilan{display:flex;flex-direction:column;gap:12px}
+.bn-bilan[hidden]{display:none}
+.bn-tete{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:18px 22px;border-radius:var(--r-3);
+  border:1px solid rgba(255,255,255,.12);
+  background:linear-gradient(115deg,rgba(10,10,10,.96) 0%,rgba(18,18,18,.94) 48%,rgba(90,6,6,.72) 74%,rgba(20,4,4,.9) 86%,rgba(140,10,10,.55) 100%),#0d0d0d}
+.bn-tete-g{min-width:0}
+.bn-titre{font-family:var(--pile-titre);font-size:40px;line-height:1;letter-spacing:1.5px;color:#fff;text-transform:uppercase}
+.bn-titre em{font-style:normal;color:#ff2d2d}
+.bn-tete-dep .bn-titre{font-size:28px}
+.bn-date{font-size:var(--fs-md);color:var(--text-dim);margin-top:4px}
+.bn-poids{flex:none;display:flex;flex-direction:column;align-items:flex-start;padding-left:22px;border-left:1px solid rgba(255,255,255,.14)}
+.bn-poids span{font-family:var(--pile-titre);font-size:14px;letter-spacing:1.4px;color:var(--text-dim);text-transform:uppercase}
+.bn-poids b{font-family:var(--pile-titre);font-size:34px;line-height:1;color:#fff;letter-spacing:.5px;font-weight:400}
+.bn-rub{position:relative;overflow:hidden;padding:16px;border-radius:var(--r-3);border:1px solid rgba(255,255,255,.1);
+  background:radial-gradient(120% 90% at 0% 0%,rgba(224,32,32,.14),rgba(0,0,0,0) 45%),linear-gradient(180deg,#141414,#0e0e0e)}
+.bn-rub-t{display:flex;align-items:center;gap:14px;margin:2px 4px 14px}
+.bn-ico{display:flex;color:#ff3b3b;filter:drop-shadow(0 0 6px rgba(255,45,45,.55))}
+.bn-rub-t h3{margin:0;font-family:var(--pile-titre);font-size:24px;letter-spacing:1.4px;color:#fff;text-transform:uppercase;font-weight:400;line-height:1.1}
+.bn-g{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.bn-t{min-width:0;padding:14px 16px;border-radius:var(--r-2);border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.025)}
+.bn-t-plein{grid-column:1/-1}
+.bn-l{font-size:var(--fs-xs);font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:rgba(255,255,255,.58);margin-bottom:6px}
+.bn-v{font-size:var(--fs-md);color:#fff;line-height:1.45;overflow-wrap:anywhere}
+.bn-t-motiv .bn-v{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-family:var(--pile-titre);font-size:26px;letter-spacing:.5px;line-height:1}
+.bn-jauge{display:flex;gap:4px;margin-top:10px;flex:1;min-width:120px;max-width:280px}
+.bn-t-motiv .bn-jauge{margin-top:0}
+.bn-jauge i{flex:1;height:10px;border-radius:3px;background:rgba(255,255,255,.08)}
+.bn-jauge i.on{background:#ff2020;box-shadow:0 0 6px rgba(255,32,32,.6)}
+.bn-note{display:flex;align-items:center;color:rgba(255,255,255,.62);font-size:var(--fs-md);line-height:1.5}
+/* Le bloc de réponse du coach apportait son trait de séparation : dans sa propre carte, il n'a plus rien à séparer. */
+.bn-rub-coach > div:first-child{margin-top:0!important;border-top:0!important;padding-top:0!important}
+.bn-vide{font-size:var(--fs-sm);color:var(--text-dim);line-height:1.5}
+.bn-reponse{padding:14px 16px;border-radius:var(--r-2);background:var(--surface-2);border-left:3px solid var(--green)}
+.bn-reponse-t{font-size:var(--fs-xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--green);font-weight:800;margin-bottom:4px}
+.bn-reponse-v{font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6}
+@media (max-width:480px){
+  .bn-tete{padding:14px 16px}
+  .bn-titre{font-size:32px}
+  .bn-tete-dep .bn-titre{font-size:22px}
+  .bn-poids{padding-left:14px}
+  .bn-poids b{font-size:26px}
+  .bn-rub{padding:12px}
+  .bn-rub-t{gap:10px;margin-bottom:10px}
+  .bn-rub-t h3{font-size:19px}
+  .bn-g{gap:8px}
+  .bn-t{padding:11px 12px}
+  .bn-v{font-size:var(--fs-sm)}
+  .bn-l{font-size:var(--fs-2xs);letter-spacing:.2px}
+  .bn-t-motiv .bn-v{font-size:22px}
+  .bn-note{font-size:var(--fs-sm)}
+  .bn-pill{font-size:13px;padding:9px 16px}
+}
+@media (max-width:360px){ .bn-g{grid-template-columns:1fr} .bn-t-plein{grid-column:auto} }
