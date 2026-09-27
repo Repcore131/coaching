@@ -48472,7 +48472,7 @@ async function testExercices(){
       const ch=aaIndicateur(u,a,b,'charge');
       if(!ch||ch.avant!==80||ch.apres!==100) return _echec('charge '+JSON.stringify(ch));
       return aaIndicateur(u,a,bil(90,['face']),'taille')===null?true:_echec('taille sans mesure');})());
-    ok('Avant/après : 1080×1920 et 1080×1350, AVANT / APRÈS, écart, signature, poids en option',(()=>{
+    ok('Avant/après : 1080×1920 et 1080×1350, TRANSFORMATION, AVANT / APRÈS, écart, signature, poids en option',(()=>{
       const c=document.createElement('canvas'); c.width=60; c.height=90;
       c.getContext('2d').fillStyle='#a66'; c.getContext('2d').fillRect(0,0,60,90);
       const t0=new Date(2026,0,5).getTime();
@@ -48482,20 +48482,66 @@ async function testExercices(){
       try{
         const s1=_dessinerAvantApres(Object.assign({},base,{format:'story'}));
         if(s1.width!==1080||s1.height!==1920) return _echec('story '+s1.width+'x'+s1.height);
-        const tout=vus.join('|');
-        for(const x of ['AVANT / APRÈS','AVANT','APRÈS']) if(tout.indexOf(x)<0) return _echec(x+' absent');
-        // La signature est espacée : dessinée lettre à lettre.
-        if(vus.join('').indexOf('KEVIN · REPCORE')<0) return _echec('signature absente');
-        if(vus.join('').indexOf('12 SEMAINES')<0) return _echec('écart absent');
-        if(/POIDS|82/.test(tout)) return _echec('le poids est montré par défaut');
+        const tout=vus.join('|'), colle=vus.join('');
+        for(const x of ['TRANSFORMATION','AVANT','APRÈS']) if(tout.indexOf(x)<0) return _echec(x+' absent');
+        // La signature et les dates sont espacées : dessinées lettre à lettre.
+        if(colle.indexOf('KEVIN · REPCORE')<0) return _echec('signature absente');
+        if(colle.indexOf('12 SEMAINES')<0) return _echec('écart absent');
+        // Sans poids ni indicateur, un seul chiffre : l'écart (« 12 » / « SEMAINES »).
+        if(vus.indexOf('12')<0) return _echec('le chiffre de l’écart manque');
+        if(vus.indexOf('−6')>=0||colle.indexOf('KG')>=0) return _echec('le poids est montré par défaut');
+        // Sans coach : ni « COACHÉ PAR », ni nom d'équipe.
+        if(colle.indexOf('COACHÉ PAR')>=0) return _echec('« COACHÉ PAR » sans coach');
         vus.length=0;
         const s2=_dessinerAvantApres(Object.assign({},base,{format:'post',poids:true,flou:true,fond:'rouge',
-          indicateur:{lib:'TOUR DE TAILLE',avant:86,apres:80,unite:'cm'}}));
+          indicateur:{lib:'TOUR DE TAILLE',avant:86,apres:80,unite:'cm'},equipe:'Team Guellec'}));
         if(s2.width!==1080||s2.height!==1350) return _echec('post '+s2.width+'x'+s2.height);
-        const t2=vus.join('|');
-        if(t2.indexOf('POIDS')<0||t2.indexOf('82 → 76')<0) return _echec('poids demandé absent');
-        if(t2.indexOf('TOUR DE TAILLE')<0||t2.indexOf('(-6)')<0) return _echec('indicateur absent');
+        const c2=vus.join('');
+        if(vus.indexOf('−6')<0||c2.indexOf('KG')<0) return _echec('poids demandé absent');
+        if(c2.indexOf('CM · TAILLE')<0) return _echec('indicateur absent');
+        if(c2.indexOf('COACHÉ PAR')<0||c2.indexOf('TEAM GUELLEC')<0) return _echec('la team du coach manque');
       } finally { P.fillText=f; }
+      return true;})());
+    ok('Avant/après : chiffres (écart en complément), signe typographique, repères des articulations',(()=>{
+      const t0=new Date(2026,0,5).getTime(), J=864e5;
+      if(aaDelta(84.2,79.6)!=='−4,6'||aaDelta(100,120)!=='+20'||aaDelta(80,80)!=='0') return _echec('delta');
+      const b={avant:{date:t0,poids:82},apres:{date:t0+84*J,poids:76}};
+      let l=aaChiffres(Object.assign({},b));
+      if(l.length!==1||l[0].v!=='12'||l[0].lib!=='SEMAINES') return _echec('seul : '+JSON.stringify(l));
+      l=aaChiffres(Object.assign({},b,{poids:true,indicateur:{lib:'TOUR DE TAILLE',avant:86,apres:80,unite:'cm'}}));
+      if(l.map(x=>x.v).join('/')!=='12/−6/−6'||l[2].lib!=='CM · TAILLE') return _echec('trois : '+JSON.stringify(l));
+      // Repères : épaules 11/12, hanches 23/24, bien vus.
+      const pts=Array.from({length:33},()=>[0.5,0.5,0.9]);
+      pts[11]=[0.4,0.3,0.9]; pts[12]=[0.6,0.3,0.9]; pts[23]=[0.45,0.6,0.9]; pts[24]=[0.55,0.6,0.9];
+      const r=aaReperesDe({ok:true,pts,w:1000,h:2000});
+      if(!r||Math.abs(r.ex-0.5)>1e-9||Math.abs(r.ey-0.3)>1e-9||Math.abs(r.tronc-0.3)>1e-9||Math.abs(r.larg-0.1)>1e-9)
+        return _echec('repères '+JSON.stringify(r));
+      // Photo en buste : hanches hors cadre, le tronc disparaît, la largeur d'épaules reste.
+      const pb=pts.map(x=>x.slice()); pb[23]=[0.45,1.3,0]; pb[24]=[0.55,1.3,0];
+      const rb=aaReperesDe({ok:true,pts:pb,w:1000,h:2000});
+      if(!rb||rb.tronc!==null||!(rb.larg>0)) return _echec('buste '+JSON.stringify(rb));
+      if(aaModeCadrage(r,r)!=='tronc'||aaModeCadrage(r,rb)!=='epaules'||aaModeCadrage(r,null)!==null) return _echec('mode');
+      const pe=pts.map(x=>x.slice()); pe[11]=[0.4,0.3,0.1];
+      if(aaReperesDe({ok:true,pts:pe})!==null) return _echec('une épaule mal vue doit annuler');
+      if(aaReperesDe({ok:false})!==null) return _echec('lecture ratée');
+      return true;})());
+    ok('Avant/après : cadrage aligné — même tronc, épaules à la même hauteur, jamais de bande vide',(()=>{
+      const P=CanvasRenderingContext2D.prototype, d=P.drawImage, vus=[];
+      P.drawImage=function(im,x,y,w,h){ if(arguments.length===5) vus.push([x,y,w,h]); return d.apply(this,arguments); };
+      try{
+        const c=document.createElement('canvas'); c.width=1000; c.height=2000;
+        const g=c.getContext('2d'); const im=document.createElement('canvas'); im.width=1000; im.height=1500;
+        // Deux personnes : l'une loin (tronc 10 % de la photo), l'autre près (25 %).
+        _aaCadrer(g,im,0,0,400,1000,{ex:0.5,ey:0.3,tronc:0.10},'tronc');
+        _aaCadrer(g,im,500,0,400,1000,{ex:0.5,ey:0.3,tronc:0.25},'tronc');
+        const [a,b]=vus;
+        const troncA=0.10*a[3], troncB=0.25*b[3];
+        if(Math.abs(troncA-troncB)>1||Math.abs(troncA-AA_TRONC*1000)>1) return _echec('troncs '+troncA+' / '+troncB);
+        const epA=a[1]+0.3*a[3], epB=b[1]+0.3*b[3];
+        if(Math.abs(epA-epB)>1) return _echec('épaules '+epA+' / '+epB);
+        for(const [x,y,w,h,x0] of [[...a,0],[...b,500]])
+          if(x>x0+0.5||y>0.5||x+w<x0+400-0.5||y+h<1000-0.5) return _echec('bande vide');
+      } finally { P.drawImage=d; }
       return true;})());
     ok('Avant/après : 100 % local — rien n’est envoyé',(()=>{
       const src=[_dessinerAvantApres,_aaFlouterHaut,aaChargerPhoto,_aaSortir,_aaComposer,ouvrirAvantApres].map(String).join('\n');
