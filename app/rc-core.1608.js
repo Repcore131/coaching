@@ -5967,7 +5967,7 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'origine',
   // Les types de notification push que l'athlète a coupés : {type:false}.
   // Un réglage, lu par le serveur avant chaque envoi — aucune donnée de santé.
-  'pushPrefs',
+  'pushPrefs','pushRefus','_pushInstallVu',
   'echeance','alertStatus','supprimes','_export',
   'coachId','coachName','coachEmailKey','coachCode','coachPhoto','code','clients',
   'coachPlan','coachSubActive','coachPlanSince','coachPrograms','coachNotes',
@@ -7206,6 +7206,9 @@ function routeUser(){
   // aiguillages de meme nature, ils appartiennent donc a la meme fonction.
   // Consequence assumee et voulue : un retour a l'accueil par la fleche ou par
   // un onglet ne les redeclenche pas. Ce sont des RETOURS, pas des arrivees.
+  // LES NOTIFICATIONS, ACTIVÉES PAR DÉFAUT : aucun écran ; la question du
+  // téléphone part au premier toucher (pushActiverParDefaut).
+  setTimeout(()=>{ try{ pushActiverParDefaut(); }catch(e){} },1200);
   if(_aiguillerNouvelInscrit()) return;
   loadClientHome();
   if(window._pendingBilanOpen){window._pendingBilanOpen=false;setTimeout(()=>openBilanChoice(),800);}
@@ -69583,6 +69586,8 @@ async function pushAbonner(o){
 // fois par jour au plus : l'enregistrement se réécrit s'il a été effacé par
 // le serveur (404/410).
 async function pushVerifierAuDemarrage(){
+  // Retirées dans les réglages : on ne réabonne pas cet appareil.
+  if(currentUser&&currentUser.pushRefus) return false;
   if(!currentUser||!_notifSupported()||!_pushSupporte()||Notification.permission!=='granted') return false;
   const memo=_pushMemo();
   if(memo&&memo.email===currentUser.email&&memo.vapid===pushEmpreinte(VAPID_PUBLIQUE)
@@ -69622,7 +69627,9 @@ function htmlReglagesPush(u,etat){
   if(etat==='installer') aide='Sur iPhone, les notifications n’existent que dans l’app installée : Partager, puis « Sur l’écran d’accueil ». Ouvre ensuite RepCore depuis l’icône et reviens ici.';
   else if(etat==='refuse') aide='Pour les réactiver : réglages du navigateur, puis Notifications, puis RepCore.';
   const bouton=etat==='proposer'
-    ?'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:0 0 12px;min-height:44px" onclick="pushActiverDepuisReglages()">Activer sur cet appareil</button>':'';
+    ?'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:0 0 12px;min-height:44px" onclick="pushActiverDepuisReglages()">Activer sur cet appareil</button>'
+    :etat==='actif'
+    ?'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:0 0 12px;min-height:44px" onclick="pushDesactiverDepuisReglages()">Désactiver sur cet appareil</button>':'';
   const cases=PUSH_TYPES.map(t=>{
     const on=pushTypeActif(u,t.cle);
     return '<label for="cr-push-'+t.cle+'" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0;padding:10px 0;border-top:1px solid var(--border);text-transform:none;letter-spacing:normal;font-weight:400;color:var(--text)">'
@@ -69664,13 +69671,81 @@ async function pushActiverDepuisReglages(){
   }
   const ok=await pushAbonner({geste:true});
   if(ok){
-    try{ currentUser._notifEnabled=true; saveUser(); }catch(e){}
+    try{ currentUser._notifEnabled=true; delete currentUser.pushRefus; saveUser(); }catch(e){}
     toast('Notifications activées ✓');
   } else if(_notifSupported()&&Notification.permission==='denied'){
     toast('Notifications bloquées par le navigateur.','var(--orange)');
   } else toast('Impossible d’activer les notifications ici.','var(--orange)');
   _rendreReglagesPush();
   return ok;
+}
+// ══ LES NOTIFICATIONS, ACTIVÉES PAR DÉFAUT, SANS ÉCRAN (27/09/2026) ══════
+//
+// DEMANDE DE KEVIN : « les notifs se mettent direct », AUCUN écran pour les
+// proposer, et pour les retirer on va dans les réglages. Tous les types sont
+// allumés d'office (pushPrefs vide).
+//
+// ⚠ CE QUE LE NAVIGATEUR IMPOSE : une notification n'arrive que si le
+// téléphone l'a autorisée, et l'autorisation ne peut être demandée que sur un
+// geste (Safari, Firefox) — c'est toujours le téléphone qui pose la question,
+// par sa propre fenêtre. On ne montre donc rien : au PREMIER TOUCHER dans
+// l'app, n'importe où, la question du téléphone part d'elle-même. Accordée,
+// l'appareil est abonné sans autre étape. Refusée (« Bloquer »), on n'insiste
+// jamais : seuls les réglages du navigateur peuvent la rendre. Ignorée, elle
+// repart au premier toucher de l'ouverture suivante.
+//
+// LE RETRAIT est dans les réglages : « Désactiver sur cet appareil »
+// (u.pushRefus, retenu dans le dossier : plus aucune demande, plus de
+// réabonnement) ou une case par type. « Activer sur cet appareil » les remet.
+// Sur iPhone dans Safari (app non installée), le push n'existe pas : rien.
+// PURE. Faut-il demander ? etat : pushEtat(...).
+function pushDemandeAuto(u,etat){
+  if(!u||!u.email||u.role==='coach'||u.pushRefus) return false;
+  return etat==='proposer';
+}
+let _pushGesteArme=false;
+async function _pushAuPremierGeste(){
+  _pushGesteArme=false;
+  if(!currentUser||currentUser.pushRefus||!_notifSupported()) return false;
+  let p=Notification.permission;
+  if(p==='default'){
+    try{ p=await Notification.requestPermission(); }catch(e){}
+    if(p==='granted'){ try{ rcm('notif_granted'); }catch(e){} }
+  }
+  if(p!=='granted') return false;
+  const ok=await pushAbonner({geste:true});
+  if(ok) try{ currentUser._notifEnabled=true; saveUser(); }catch(e){}
+  return ok;
+}
+async function pushActiverParDefaut(){
+  if(!currentUser||window._rcEnTests||!_notifSupported()) return false;
+  let abonne=false;
+  try{
+    if(_pushSupporte()){
+      const reg=await navigator.serviceWorker.ready;
+      abonne=!!(await reg.pushManager.getSubscription());
+    }
+  }catch(e){}
+  if(!pushDemandeAuto(currentUser,pushEtat(_pushEnv(abonne)))) return false;
+  // Déjà autorisé (hors iOS, qui exige le geste) : abonné tout de suite.
+  if(Notification.permission==='granted'&&!rcInstalliOS()){
+    if(await pushAbonner({geste:false})) return true;
+  }
+  if(_pushGesteArme) return true;
+  _pushGesteArme=true;
+  // UN SEUL ÉCOUTEUR, UNE SEULE FOIS : le premier toucher de la session.
+  // 'click' et non 'pointerdown' : Safari ne reconnaît le geste qu'au clic.
+  document.addEventListener('click',()=>{ try{ _pushAuPremierGeste(); }catch(e){} },{capture:true,once:true});
+  return true;
+}
+// RETIRER LES NOTIFICATIONS : l'abonnement de cet appareil est défait (le
+// serveur n'a plus où envoyer), et le refus retenu pour ne pas redemander.
+async function pushDesactiverDepuisReglages(){
+  await pushDesabonner();
+  if(currentUser){ currentUser.pushRefus=true; try{ saveUser(); }catch(e){} }
+  toast('Notifications désactivées sur cet appareil.','var(--sub)');
+  _rendreReglagesPush();
+  return true;
 }
 // Couper un type : un champ du dossier (pushPrefs), lu par le serveur avant
 // chaque envoi ET par les rappels locaux (série, Wrapped).
@@ -113036,6 +113111,8 @@ async function _pfUtiliser(slug){
 // d’assertions la lisent de façon SYNCHRONE, à l’intérieur de leur test.
 // Un fetch à l’intérieur les aurait toutes rendues asynchrones.
 async function chargerTests(){
+  // L'étape notifications ne doit pas recouvrir les écrans que la suite mesure.
+  window._rcEnTests=true;
   if(!window._RC_SRC_PROD){
     try{
       const r=await fetch('./index.html',{cache:'no-store'});
