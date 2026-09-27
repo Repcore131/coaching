@@ -6838,7 +6838,7 @@ async function testExercices(){
           try{
             window.saveUser=()=>true; window.go=()=>{}; window.loadClientHome=()=>{};
             window.toastEcriture=()=>{};
-            currentUser=_ath({id:'h3'});
+            currentUser=Object.assign(_ath({id:'h3'}),{consent:{health:true,policyVersion:POLICY_VERSION}});
             bilType='depart';
             bilData={'deb-traitement':true,'deb-traitement-detail':'  un texte  '};
             saveBilanFinal();
@@ -6865,7 +6865,7 @@ async function testExercices(){
           try{
             window.saveUser=()=>true; window.go=()=>{}; window.loadClientHome=()=>{};
             window.toastEcriture=()=>{};
-            currentUser=_ath({id:'h4',trait:true});
+            currentUser=Object.assign(_ath({id:'h4',trait:true}),{consent:{health:true,policyVersion:POLICY_VERSION}});
             bilType='coaching';
             bilData={};
             saveBilanFinal();
@@ -6888,7 +6888,7 @@ async function testExercices(){
           try{
             window.saveUser=()=>true; window.go=()=>{}; window.loadClientHome=()=>{};
             window.toastEcriture=()=>{};
-            currentUser=_ath({id:'h5',trait:true,detail:'garde-moi'});
+            currentUser=Object.assign(_ath({id:'h5',trait:true,detail:'garde-moi'}),{consent:{health:true,policyVersion:POLICY_VERSION}});
             bilType='coaching';
             bilData={'bil-traitement-change':'Je ne prends plus de traitement'};
             saveBilanFinal();
@@ -14370,8 +14370,10 @@ async function testExercices(){
           // Vidéo d'exécution, photos de bilan, photo du coach, fiche
           // programme PDF : aucun rapport avec l'import de séance, et les
           // couper aurait été le vrai dégât collatéral.
+          // uploadCoachPdfInline a été retirée avec la carte PDF inline : aucun
+          // appelant ne reste (seul un commentaire la nomme encore).
           for(const nom of ['uploadVideoFile','addBilanPhoto','uploadCoachPhoto',
-                            'uploadAthletePdf','uploadCoachPdfInline','loadExImage']){
+                            'uploadAthletePdf','loadExImage']){
             if(typeof window[nom]!=='function') return _echec('disparue : '+nom);
             if(String(window[nom]).indexOf('_importLegacyOuvert')>=0)
               return _echec(nom+' a été gardée à tort');
@@ -16686,7 +16688,7 @@ async function testExercices(){
             }
             // Le partage retombe sur le téléchargement quand il n'existe pas :
             // on ne laisse pas l'athlète sans rien.
-            return String(partagerBilanSeance).indexOf('telechargerBilanSeance()')>=0
+            return /telechargerBilanSeance\(/.test(String(partagerBilanSeance))
               ?true:_echec('le partage ne retombe sur rien');})());
 
           ok('Les records viennent de l\'écran de fin, et c\'est un TABLEAU',(()=>{
@@ -19027,12 +19029,38 @@ async function testExercices(){
           // formulaire qui refuse de partir sans qu'on sache pourquoi.
           const s=_prodSrc().replace(/^\s*\/\/.*$/gm,'');
           const routes=(s.match(/go\('s-register'\)/g)||[]).length;
-          const poses=(s.match(/selectRole\('(?:coach|athlete)',true\)/g)||[]).length;
+          // Garder le rôle déjà choisi (« Créer mon compte avec cette adresse ») vaut pose.
+          const poses=(s.match(/selectRole\('(?:coach|athlete)',true\)|selectRole\(selRole,true\)/g)||[]).length;
           if(!routes) return _echec('plus aucune route vers l’inscription');
           if(poses<routes)
             return _echec(poses+' présélection(s) pour '+routes+' routes : une au moins ne pose pas le rôle');
           return true;})());
 
+        okA('QA — UNE COPIE REFUSÉE NE S’ANNONCE PAS RÉUSSIE : LE TEXTE S’AFFICHE À COPIER',(async()=>{
+          const sv={cb:navigator.clipboard,ex:document.execCommand,pr:window.prompt,to:window.toast,u:currentUser};
+          const toasts=[], invites=[];
+          try{
+            Object.defineProperty(navigator,'clipboard',{value:{writeText:()=>Promise.reject(new DOMException('Document is not focused','NotAllowedError'))},configurable:true});
+            document.execCommand=()=>false;
+            window.prompt=(t,v)=>{ invites.push(v); return null; };
+            window.toast=(m,c)=>{ toasts.push(String(m)); };
+            currentUser={id:'qc1',email:'qc1@t.fr',role:'coach',fname:'Q',lname:'C',code:'RC-QA'};
+            copyCoachInviteLink();
+            await new Promise(r=>setTimeout(r,60));
+            if(toasts.some(t=>/Lien copié/.test(t))) return _echec('« Lien copié » annoncé alors que rien n’a été copié');
+            if(!toasts.some(t=>/Copie refusée/.test(t))) return _echec('rien ne dit que la copie a échoué : '+toasts.join(' | '));
+            if(!invites.length||invites[0].indexOf('coachpkg=')<0) return _echec('le lien n’est pas montré à copier à la main');
+            // Et quand la copie passe, la réussite se dit, sans boîte.
+            toasts.length=0; invites.length=0;
+            Object.defineProperty(navigator,'clipboard',{value:{writeText:()=>Promise.resolve()},configurable:true});
+            copyCoachInviteLink();
+            await new Promise(r=>setTimeout(r,60));
+            if(!toasts.some(t=>/Lien copié/.test(t))||invites.length) return _echec('copie réussie mal annoncée : '+toasts.join(' | '));
+            return true;
+          }finally{
+            try{ Object.defineProperty(navigator,'clipboard',{value:sv.cb,configurable:true}); }catch(e){}
+            document.execCommand=sv.ex; window.prompt=sv.pr; window.toast=sv.to; currentUser=sv.u;
+          }}));
         ok('Critère : coller le lien complet mène à l\'inscription, coach lié',(()=>{
           const _sv=currentUser, _su=localStorage.getItem('rc_users');
           const _pc=localStorage.getItem('pendingCode'), _ss=window.saveUser;
@@ -19298,7 +19326,9 @@ async function testExercices(){
             return _echec('le cas « compte déjà pris » n\'est plus distingué');
           if(dr.indexOf("_signInErr==='network'")<0)
             return _echec('le cas hors ligne n\'est plus distingué');
-          if(!/Se connecter/.test(dr)||!/Mot de passe oublié/.test(dr))
+          // « Mot de passe oublié » est devenu un bouton sous le message
+          // (_boutonReprise) : le message y renvoie, le bouton envoie le lien.
+          if(!/Se connecter/.test(dr)||!/_boutonReprise\(em\)/.test(dr)||!/M.{1,2}envoyer un lien/.test(String(_boutonReprise)))
             return _echec('le message ne dit pas quoi faire');
           if(!/Pas de connexion/.test(dr))
             return _echec('le message hors ligne a disparu');
@@ -19522,11 +19552,14 @@ async function testExercices(){
           const dr=String(doRegister);
           if(dr.indexOf('_masquerSecondCompte()')<0)
             return _echec('la proposition n\'est pas remise à zéro à chaque tentative');
-          const n=dr.split('_proposerSecondCompte(em)').length-1;
-          if(n!==1) return _echec(n+' branche(s) offrent la sortie au lieu d\'une seule');
+          // DEUX branches, chacune sur une adresse PRISE : le refus Firebase
+          // « mot de passe faux », et le dossier trouvé avec un autre rôle.
+          const n=(dr.match(/_proposerSecondCompte\(em[,)]/g)||[]).length;
+          if(n!==2) return _echec(n+' branche(s) offrent la sortie au lieu de deux');
+          if(dr.indexOf('dossierExistant.role!==selRole')<0) return _echec('la branche des rôles divergents a disparu');
           // UN HORS LIGNE OU UNE ADRESSE MAL FORMÉE n'ont pas de second compte à
           // proposer : seul « mot de passe faux sur adresse prise » l'offre.
-          const i=dr.indexOf('CLOUD._signInErr===\'wrong_password\') _proposerSecondCompte(em)');
+          const i=dr.indexOf('CLOUD._signInErr===\'wrong_password\'){ _proposerSecondCompte(em);');
           if(i<0) return _echec('la branche Firebase l\'offre sur n\'importe quel refus');
           // ET LE COACH QUI S'AJOUTE COMME ATHLÈTE l'a aussi, depuis son propre
           // formulaire : c'est là qu'il se heurte à sa propre adresse.
@@ -21748,9 +21781,12 @@ async function testExercices(){
     // et un dernier point souligné : compter les <path> nus ne distinguerait
     // plus rien. On compte chaque forme par SA signature — même exigence,
     // lue au bon endroit.
-    const _trTraits=h=>(h.match(/stroke-width="1\.8"/g)||[]).length;
+    // REFONTE DU 26/09/2026 (maquette de Kevin) : la tendance est un trait
+    // marqué data-trait="moyenne", la plage de variation une aire par segment,
+    // et chaque pesée un point HTML posé sur le SVG.
+    const _trTraits=h=>(h.match(/data-trait="moyenne"/g)||[]).length;
     const _trAires=h=>(h.match(/fill="url\(#pesAire\d+\)"/g)||[]).length;
-    const _trPoints=h=>(h.match(/stroke="var\(--text-faint\)" stroke-width="2\.2"/g)||[]).length;
+    const _trPoints=h=>(h.match(/class="pc-pt/g)||[]).length;
     ok('Deux segments donnent deux traits',(()=>{
       const s=[]; for(let i=0;i<=10;i++) s.push({date:_pj(i),kg:80});
       for(let i=0;i<=10;i++) s.push({date:_pj(50+i),kg:78});
@@ -21763,8 +21799,8 @@ async function testExercices(){
        _trPoints(_courbePesee(_ps(20,()=>80)))===21);
     ok('La dernière pesée est soulignée, une seule fois',(()=>{
       const h=_courbePesee(_ps(20,()=>80));
-      return (h.match(/stroke-width="7"/g)||[]).length===1
-          &&(h.match(/stroke-width="4\.5"/g)||[]).length===1;})());
+      return (h.match(/pc-der/g)||[]).length===1
+          &&(h.match(/class="pc-bulle/g)||[]).length===1;})());
     ok('Aucun <circle> ne subsiste : ils rendaient des ovales',
        !/<circle/.test(_courbePesee(_ps(20,()=>80))));
     ok('Une série parfaitement plate ne divise pas par zéro',
@@ -21780,7 +21816,7 @@ async function testExercices(){
       const h=_courbePesee([{date:_pj(0),kg:103.8},{date:_pj(38),kg:100.9}]);
       if(!h) return _echec('aucun tracé');
       if(_trTraits(h)) return _echec('un trait de moyenne est apparu là où mm7 ne peut rien');
-      if(!/stroke-dasharray="3 2\.5"/.test(h)) return _echec('le relevé n’est pas en pointillé');
+      if(!/data-trait="releve"[^>]*stroke-dasharray=/.test(h)) return _echec('le relevé n’est pas en pointillé');
       if(_trPoints(h)!==2) return _echec(_trPoints(h)+' point(s) au lieu de 2');
       // ET LA LÉGENDE SUIT. Un pointillé annoncé « moyenne 7 j » serait pire
       // que pas de trait : il ferait lire une tendance là où il n'y a que
@@ -21788,20 +21824,38 @@ async function testExercices(){
       if(_courbePesee.dernierTrait!=='pesees')
         return _echec('le tracé ne se déclare pas comme un relevé');
       return /pesées reliées/.test(h)?true:_echec('rien ne dit ce qu’est ce trait');})());
-    ok('Une série dense garde sa moyenne mobile, sans pointillé',(()=>{
+    ok('Une série dense : le relevé en trait plein, la tendance en pointillé',(()=>{
       const h=_courbePesee(_ps(20,i=>80-i/14));
       if(_trTraits(h)!==1) return _echec('la moyenne a disparu');
-      if(/stroke-dasharray/.test(h)) return _echec('le relevé s’est ajouté à la moyenne');
+      // Le pointillé « pesées reliées » est réservé au cas SANS tendance.
+      if(/data-trait="releve"[^>]*stroke-dasharray=/.test(h)) return _echec('le relevé est en pointillé alors qu’une tendance existe');
+      if(!/data-trait="releve"/.test(h)) return _echec('le relevé a disparu');
       return _courbePesee.dernierTrait==='moyenne'?true
         :_echec('la courbe se déclare relevé alors qu’elle trace une moyenne');})());
-    ok('La légende du bloc Poids suit le trait réellement dessiné',(()=>{
-      const s=String(blocPoids);
-      if(s.indexOf('_courbePesee.dernierTrait')<0)
-        return _echec('la légende ne consulte pas le tracé');
-      // La courbe est construite AVANT la légende : dans l'autre sens elle
-      // annoncerait un trait qui n'existe pas encore.
-      return s.indexOf('const svgCourbe=')<s.indexOf('const legende=')
-        ?true:_echec('la légende est construite avant la courbe');})());
+    ok('La légende suit le trait réellement dessiné',(()=>{
+      // Elle est écrite PAR le tracé, sous lui : elle ne peut pas annoncer un
+      // trait qui n'existe pas.
+      const dense=_courbePesee(_ps(20,i=>80-i/14));
+      if(!/Tendance \(moy\. 7 jours\)/.test(dense)||/Pesées reliées/.test(dense)) return _echec('légende dense');
+      if(!/Plage de variation/.test(dense)) return _echec('la plage dessinée n’est pas nommée');
+      const rare=_courbePesee([{date:_pj(0),kg:103.8},{date:_pj(38),kg:100.9}]);
+      if(/Tendance/.test(rare)||/Plage de variation/.test(rare)) return _echec('une tendance annoncée sans tendance');
+      return /Pesées reliées/.test(rare)?true:_echec('légende du relevé seul');})());
+    ok('La bulle dit le dernier poids et l’écart sur la période, dans la couleur demandée',(()=>{
+      const h=_courbePesee([{date:_pj(0),kg:103.8},{date:_pj(38),kg:100.9}],{couleur:e=>e<0?'rgb(1, 2, 3)':'x'});
+      if(!/100,9 kg/.test(h)) return _echec('poids de la bulle');
+      if(!/rgb\(1, 2, 3\)">−2,9 kg/.test(h)) return _echec('écart de la bulle : '+(h.match(/pc-bulle[\s\S]{0,160}/)||[''])[0]);
+      return true;})());
+    ok('Les périodes 7J à 1A cadrent la courbe, 12 semaines par défaut',(()=>{
+      const s=[]; for(let i=0;i<=200;i+=2) s.push({date:_pj(i),kg:80-i/50});
+      const n=j=>_trPoints(_courbePesee(s,{jours:j}));
+      if(!(n(7)<n(28)&&n(28)<n(84)&&n(84)<n(182))) return _echec('fenêtres : '+[7,28,84,182].map(n).join(','));
+      if(_trPoints(_courbePesee(s))!==n(84)) return _echec('défaut ≠ 12 semaines');
+      const z=document.createElement('div'); z.innerHTML=_carteCourbePoids(s,{id:'pc-test'});
+      const b=[...z.querySelectorAll('.pc-per button')].map(x=>x.textContent);
+      if(b.join(',')!=='7J,4S,12S,6M,1A') return _echec('boutons : '+b.join(','));
+      if((z.querySelector('.pc-per .actif')||{}).textContent!=='12S') return _echec('12S n’est pas actif');
+      return true;})());
 
     // ── UNE MENSURATION INCHANGÉE RESTE UNE MENSURATION ──────────────────
     // Même signalement : « les mensurations restées identiques et inchangées
@@ -21838,6 +21892,79 @@ async function testExercices(){
         return _echec('la phrase ne distingue pas « un seul bilan » de « une seule mesure »');
       return /relevée qu’une fois/.test(s)?true
         :_echec('rien ne dit que c’est la MESURE qui manque, pas le bilan');})());
+    ok('NOTES — LA MAQUETTE : UN BILAN À LA FOIS, QUATRE RUBRIQUES, DES JAUGES QUI LISENT LA RÉPONSE',(()=>{
+      const B=[{type:'depart',date:Date.now()-40*864e5,'deb-weight':'103.8','deb-goals':'Perte de poids'},
+        {type:'coaching',date:Date.now()-2*864e5,'bil-weight':'100.9','bil-motivation':'4','bil-diff-type':'Oui, avec les deux',
+         'bil-diff-detail':'En couple','bil-cheat-meals':'1','bil-cheat-reasons':'Mauvaise orga','bil-prog-modifs':'Review',
+         'bil-sleep-quality':BIL_OPTS_SOMMEIL[2],'bil-stress':'Beaucoup','bil-stress-detail':'Boulot','bil-new-goals-detail':'Deter'}];
+      const d=document.createElement('div'); d.innerHTML=renderReponsesBilans(B);
+      const pills=[...d.querySelectorAll('.bn-pill')].map(p=>p.textContent.trim());
+      if(pills.join('|')!=='Bilan 1|Questionnaire de départ') return _echec('pastilles : '+pills.join('|'));
+      const vis=[...d.querySelectorAll('.bn-bilan')].filter(c=>!c.hidden);
+      if(vis.length!==1||!/Bilan 1/.test(vis[0].querySelector('.bn-titre').textContent)) return _echec('le plus récent doit s’ouvrir seul');
+      if(!/100,9 kg/.test(vis[0].querySelector('.bn-poids').textContent)) return _echec('le poids de l’en-tête');
+      const rubs=[...vis[0].querySelectorAll('.bn-rub-t h3')].map(h=>h.textContent);
+      if(rubs.join('|')!=='État général|Difficultés et écarts|Récupération / sommeil / stress|Objectifs et demandes') return _echec('rubriques : '+rubs.join('|'));
+      const j=[...vis[0].querySelectorAll('.bn-jauge')].map(x=>x.querySelectorAll('i.on').length);
+      // Motivation 4/10 ; sommeil « Mal » = dernier des trois ; stress « Beaucoup » = 3e des quatre.
+      if(j.join(',')!=='4,3,7') return _echec('jauges : '+j.join(','));
+      if(!/Motivation modérée/.test(vis[0].textContent)) return _echec('la phrase sous la motivation');
+      if(!vis[0].querySelector('.bn-t-plein')||!/Boulot/.test(vis[0].querySelector('.bn-t-plein').textContent)) return _echec('« Source du stress », seule, prend la largeur');
+      // Une réponse hors liste n'a pas de jauge.
+      if(_bnJauge('bil-stress','Moyen')!==null||_bnJauge('bil-motivation','12')!==null) return _echec('jauge inventée');
+      if(!_bnJauge('bil-motivation','4/10')||_bnJauge('bil-motivation','4/10').plein!==4) return _echec('« 4/10 », la forme enregistrée, n’a pas sa jauge');
+      // Le questionnaire pose exactement les choix que les jauges lisent.
+      const src=String(BIL_STEPS.map(f=>String(f)).join(''));
+      if(src.indexOf('BIL_OPTS_SOMMEIL')<0||src.indexOf('BIL_OPTS_STRESS')<0) return _echec('le questionnaire a ses propres listes');
+      // Côté coach : un bilan sans réponse porte sa pastille.
+      d.innerHTML=renderReponsesBilans(B,{id:'c',email:'c@t',fname:'A',bilans:B});
+      if(!d.querySelector('.bn-pill .bn-pill-dot')) return _echec('le coach ne voit pas le bilan qui attend');
+      return true;})());
+    ok('MASSE GRASSE — LA COURBE AU DESSIN DU POIDS, À LA DATE DE CHAQUE BILAN, ÉCART « STABLE » SOUS LA MARGE',(()=>{
+      const sauve=currentUser;
+      const zone=document.getElementById('progress-content');
+      if(!zone) return _echec('zone de l’onglet absente');
+      const avant=zone.innerHTML;
+      const bil=(j,w,waist)=>({type:'coaching',date:Date.now()-j*864e5,'bil-weight':String(w),'bil-waist':String(waist),'bil-neck':'39'});
+      try{
+        currentUser={id:'mg',email:'mg@t.fr',role:'athlete',gender:'H',_evol_gender:'H',_evol_height:178,
+          exAlias:{},exMuscles:{},sessions:[],videos:[],
+          bilans:[bil(60,84,92),bil(30,82,89),bil(2,80,85)]};
+        showProgressTab('masseGrasse',null,true);
+        const h=zone.innerHTML;
+        if(/id="mg-chart"/.test(h)) return _echec('le canevas est encore là');
+        if(!/class="pc pc-m"/.test(h)) return _echec('la courbe n’est pas au dessin du poids');
+        if((h.match(/class="pc-pt/g)||[]).length!==3) return _echec('un point par estimation attendu');
+        if(!/stroke="#E02020"/.test(h)) return _echec('l’ancienne couleur est perdue');
+        if(!/% de masse grasse corporelle/.test(h)||!/class="pc-ecart"/.test(h)) return _echec('l’en-tête ou l’écart manque');
+        if(/lineChart\('mg-chart'/.test(String(showProgressTab))) return _echec('l’onglet dessine encore au canevas');
+        // Un seul bilan : pas de courbe, une phrase.
+        currentUser.bilans=[bil(2,80,85)];
+        showProgressTab('masseGrasse',null,true);
+        if(/class="pc pc-m"/.test(zone.innerHTML)||!/deux bilans/.test(zone.innerHTML)) return _echec('un seul bilan : la phrase manque');
+        // Sans aucune estimation : ni courbe, ni cadre de camemberts vide.
+        currentUser.bilans=[{type:'coaching',date:Date.now()-864e5,'bil-weight':'80'}];
+        showProgressTab('masseGrasse',null,true);
+        if(/id="pie-0"/.test(zone.innerHTML)) return _echec('un cadre de camemberts vide reste affiché');
+        return true;
+      }finally{ currentUser=sauve; zone.innerHTML=avant; }})());
+    ok('MENSURATIONS — LES COURBES AU DESSIN DU POIDS : UNE PAR MESURE, À LA DATE DE CHAQUE BILAN',(()=>{
+      const S=[{label:'Droit',color:'#E02020',pts:[{d:'2026-07-01',v:38},{d:'2026-07-15',v:38.4},{d:'2026-09-01',v:39.2}]},
+               {label:'Gauche',color:'#f97316',pts:[{d:'2026-07-01',v:37.6},{d:'2026-09-01',v:38.5}]}];
+      const h=_courbeMesures(S,{unite:'cm',couleur:e=>e>0?'rgb(9, 9, 9)':'x'});
+      if(!h) return _echec('aucun tracé');
+      if((h.match(/data-serie="/g)||[]).length!==2) return _echec('une courbe par mesure attendue');
+      if((h.match(/class="pc-pt/g)||[]).length!==5) return _echec('chaque relevé est un point : '+(h.match(/class="pc-pt/g)||[]).length);
+      if((h.match(/pc-der/g)||[]).length!==2) return _echec('le dernier relevé de chaque courbe est souligné');
+      if(/<circle|<canvas/.test(h)) return _echec('cercle ou canevas');
+      if(!/39,2 cm/.test(h)||!/rgb\(9, 9, 9\)">\+1,2 cm/.test(h)) return _echec('bulle : dernière valeur et écart');
+      if(!/stroke="#f97316"/.test(h)) return _echec('la couleur de la mesure est perdue');
+      // À LA DATE : le bilan du 15/07 est au quart de la largeur, pas au milieu.
+      if(!/left:22\.5\d%/.test(h)) return _echec('le point du 15/07 n’est pas à sa date');
+      if(_courbeMesures([{label:'x',color:'red',pts:[{d:'2026-07-01',v:38}]}])!=='') return _echec('un tracé pour un seul relevé');
+      // Et l'onglet n'a plus de canevas à remplir après coup.
+      if(/lineChart\(canvasId|multiLineChart\(canvasId/.test(String(showProgressTab))) return _echec('l’onglet dessine encore au canevas');
+      return true;})());
     ok('Le tableau des mensurations grise ce qui a été reporté',(()=>{
       const s=String(showProgressTab);
       if(s.indexOf('bmReportee(bl[ci],m.k)')<0)
@@ -21955,11 +22082,16 @@ async function testExercices(){
     ok('Phase valide : rendue telle quelle',phaseCourante(_mkPh('seche',10)).type==='seche');
     ok('Type inconnu : neutre',phaseCourante({phase:{type:'peakweek',debut:Date.now()}})===null);
     ok('Phase sans date de début : neutre',phaseCourante({phase:{type:'seche'}})===null);
+    // La peak week existe depuis : posée par le COACH seul, et RepCore n'en
+    // calcule aucun protocole. L'athlète choisit toujours parmi les quatre.
     ok('Les quatre types, et seulement eux',
-       JSON.stringify(Object.keys(PHASES))==='["masse","seche","recomp","maintien"]',
-       JSON.stringify(Object.keys(PHASES)));
+       JSON.stringify(PHASES_ATHLETE)==='["masse","seche","recomp","maintien"]'
+       &&JSON.stringify(Object.keys(PHASES))==='["masse","seche","recomp","maintien","peak"]',
+       JSON.stringify(Object.keys(PHASES))+' / '+JSON.stringify(PHASES_ATHLETE));
     ok('Aucune phase de compétition n\'est proposée',
-       !/peak|comp[eé]tition|dessiccation|sodium|manipulation hydrique/i.test(JSON.stringify(PHASES)));
+       !/dessiccation|sodium|manipulation hydrique|diur[eé]tique/i.test(JSON.stringify(PHASES))
+       &&PHASES_ATHLETE.indexOf('peak')<0
+       &&/aucun protocole/i.test(PHASES.peak.texte));
     ok('Semaine 1 le premier jour',semainesPhase(_mkPh('masse',0))===1);
     ok('Semaine 7 au quarante-quatrième jour',semainesPhase(_mkPh('masse',44))===7,
        String(semainesPhase(_mkPh('masse',44))));
@@ -22148,7 +22280,7 @@ async function testExercices(){
         // quel par ouvrirChoixPhase, et c'est lui qu'on vérifie.
         ok('L\'accueil n\'affiche plus la carte de choix de phase',zP.innerHTML==='');
         ok('Le formulaire de choix reste complet',
-           /Ta phase/.test(_htmlChoixPhase())&&Object.keys(PHASES).every(t=>_htmlChoixPhase().includes(PHASES[t].lib)));
+           /Ta phase/.test(_htmlChoixPhase())&&PHASES_ATHLETE.every(t=>_htmlChoixPhase().includes(PHASES[t].lib)));
         ok('Sans phase : aucun bandeau',zB.innerHTML==='');
         ok('Sans phase : aucune relance',zR.innerHTML==='');
         // Comparaison au texte BRUT : escapeHtml encode l'apostrophe en &#39;
@@ -22157,8 +22289,8 @@ async function testExercices(){
         // Sortie BRUTE du formulaire : elle est encodée par escapeHtml, donc
         // on compare à la version encodée et non au texte source.
         ok('Les quatre textes sont repris tels quels',
-           Object.keys(PHASES).every(t=>_htmlChoixPhase().includes(escapeHtml(PHASES[t].texte))),
-           Object.keys(PHASES).filter(t=>!_htmlChoixPhase().includes(escapeHtml(PHASES[t].texte))).join(' '));
+           PHASES_ATHLETE.every(t=>_htmlChoixPhase().includes(escapeHtml(PHASES[t].texte))),
+           PHASES_ATHLETE.filter(t=>!_htmlChoixPhase().includes(escapeHtml(PHASES[t].texte))).join(' '));
         ok('Aucun bouton Confirmer actif sans sélection',/disabled/.test(_htmlChoixPhase()));
 
         // Critère 8 : deb-goals « prise de masse propre » pré-sélectionne, sans appliquer.
@@ -23450,7 +23582,9 @@ async function testExercices(){
         if(pl.abs!==KCAL_PLANCHER_ABS.F) return _echec('plancher absolu '+pl.abs+' au lieu de '+KCAL_PLANCHER_ABS.F);
         // Et il doit lire le sexe comme besoinsProposes, pas autrement.
         const bes=besoinsProposes(u,{});
-        const mbF=Math.round(10*48+6.25*162-5*29-161);
+        // La formule retenue (Harris-Benedict depuis le 07/09/2026), en FEMME.
+        const mbF=mbEstime(48,162,29,'Femme');
+        if(mbF===mbEstime(48,162,29,'Homme')) return _echec('fixture muette : la formule ignore le sexe');
         return bes.mb===mbF&&pl.kcal===Math.max(1200,Math.round(22*48));})());
       ok('Le plancher tient même sans taille ni poids connus',(()=>{
         const u=_ath('seche',-0.15);
@@ -24261,7 +24395,9 @@ async function testExercices(){
         // Elle est posée au bilan de départ et pas redonnée à chaque suivi.
         const u=_ath({bilans:[_bil(200,{'deb-job':'Maçon'}),_bil(60),_bil(2)]});
         const b=besoinsProposes(u);
-        return b.modele==='profession'&&b.act.niveau==='lourd';})());
+        // Le niveau est celui de l'échelle du tableur : un métier « lourd » y vaut « actif ».
+        return b.modele==='profession'&&b.act.niveau===NAF_DEPUIS_METIER.lourd
+          ?true:_echec(b.modele+' / '+b.act.niveau);})());
       ok('Les sports déclarés s\'ajoutent en kcal, pas en facteur',(()=>{
         const sansSport=_ath({bilans:[_bil(2,{'deb-job':'Comptable'})]});
         const avec=_ath({bilans:[_bil(2,{'deb-job':'Comptable',
@@ -24289,7 +24425,7 @@ async function testExercices(){
         // 6 créneaux × 1 h × 350 = 2100 ; déclaré 4 h × 350 = 1400. La somme
         // serait 3500 : c'est exactement ce qu'on refuse.
         if(sp.semaine!==2100) return _echec('semaine '+sp.semaine);
-        return b.depense===Math.round(b.mb*1.15)+Math.round(2100/7)
+        return b.depense===Math.round(b.mb*nafRetenu(u).n.f)+Math.round(2100/7)
           ?true:_echec('dépense '+b.depense);})());
       ok('Plus de créneaux, plus de dépense — les créneaux comptent enfin',(()=>{
         const bil={'deb-job':'Comptable'};
@@ -24330,7 +24466,9 @@ async function testExercices(){
         // la première version de ce test comparait donc deux athlètes qui
         // retombaient tous les deux sur le NEAT par défaut, et un écart nul
         // valait vrai. Le métier retenu est vérifié ci-dessous.
-        const METIER='Secrétaire';
+        // Un métier ASSIS vaut désormais le NEAT par défaut (1,2 des deux côtés) :
+        // la comparaison se fait donc avec un métier actif.
+        const METIER='Infirmier';
         if(!facteurProfession(METIER)) return _echec('fixture muette : '+METIER+' non reconnu');
         if(facteurProfession('Zzz')) return _echec('fixture muette : Zzz est reconnu');
         const connu=besoinsProposes(_ath({bilans:[_bil(2,{'deb-job':METIER,'deb-sports':sp})]}));
@@ -24480,10 +24618,34 @@ async function testExercices(){
         const prof=facteurNEAT(_ath({bilans:[_bil(2,{'deb-job':'Comptable'})]}));
         const pas=facteurNEAT(_ath({stepsLog:[j(1,12000),j(2,11000)]}));
         const def=facteurNEAT(_ath());
-        if(prof.source!=='profession'||prof.f!==1.15) return _echec('profession : '+JSON.stringify(prof));
+        // L'échelle est celle du tableur, la même que nafRetenu (QA du 27/09/2026).
+        if(prof.source!=='profession'||prof.f!==nafNiveau('sedentaire').f) return _echec('profession : '+JSON.stringify(prof));
         if(pas.source!=='pas'||pas.f<=NEAT_BASE) return _echec('pas : '+JSON.stringify(pas));
         return def.source==='defaut'&&def.f===NEAT_BASE
           ?true:_echec('défaut : '+JSON.stringify(def));})());
+      ok('QA — LE PLANCHER SE PLAFONNE SUR LA DÉPENSE AFFICHÉE, RÉGLAGE DU COACH COMPRIS',(()=>{
+        // Deux chemins calculaient la dépense : besoinsProposes (affichée) et
+        // _depensePourPlafond (qui plafonne le plancher à 85 %), sur deux
+        // échelles et deux formules. Ils doivent rendre le même chiffre — et
+        // suivre le niveau d'activité réglé par le coach.
+        const u=_ath({bilans:[_bil(2,{'deb-job':'Comptable'})]});
+        const a=besoinsProposes(u), p=_depensePourPlafond(u);
+        if(a.depense!==p) return _echec('affichée '+a.depense+' contre plafond '+p);
+        const uc=_ath({bilans:[_bil(2,{'deb-job':'Comptable'})],nutrition:{tableur:{naf:'actif'}}});
+        const ac=besoinsProposes(uc), pc=_depensePourPlafond(uc);
+        if(ac.depense<=a.depense) return _echec('le réglage du coach ne change pas la dépense affichée');
+        if(ac.depense!==pc) return _echec('réglage du coach : affichée '+ac.depense+' contre plafond '+pc);
+        // SANS TOURS DE MESURE (Harris-Benedict), et avec une correction du coach.
+        const _sansTours=x=>{ const bb=_bil(2,{'deb-job':'Comptable'}); delete bb['deb-neck']; delete bb['deb-waist']; delete bb['deb-hips'];
+          return _ath(Object.assign({bilans:[bb]},x||{})); };
+        const uh=_sansTours(), ah=besoinsProposes(uh), ph=_depensePourPlafond(uh);
+        if(ah.depense!==ph) return _echec('sans tours : affichée '+ah.depense+' contre plafond '+ph);
+        // La correction du coach, elle, ne déplace PAS ce plafond : il protège
+        // le plancher, qu'un métabolisme corrigé à la baisse ne doit pas abaisser.
+        if(_depensePourPlafond(_sansTours({correctionMB:0.85}))!==ph) return _echec('la correction du coach déplace le plafond du plancher');
+        // Et le bilan annonce le facteur que le calcul applique.
+        const f=facteurProfession('Comptable').f, n=nafRetenu(u).n.f;
+        return f===n?true:_echec('bilan annonce '+f+', le calcul applique '+n);})());
       ok('Le nombre de créneaux ne touche PLUS au facteur',(()=>{
         // C'était la racine du double comptage : ACT_SEANCES montait jusqu'à
         // 1,65, un multiplicateur qui englobe l'entraînement.
@@ -24542,7 +24704,8 @@ async function testExercices(){
           bilData['deb-job']='Maçon';
           const h=bMetier('deb-job');
           bilData={};
-          return /facteur 1,55/.test(h)&&/Effort physique continu/.test(h);})());
+          // Le facteur annoncé est celui que le calcul applique (échelle du tableur).
+          return /facteur 1,6(?!\d)/.test(h)&&/Effort physique continu/.test(h);})());
         ok('Un métier inconnu prévient au lieu de faire semblant',(()=>{
           bilData['deb-job']='Dresseur de licornes';
           const h=bMetier('deb-job');
@@ -24639,11 +24802,11 @@ async function testExercices(){
       ok('Critère 2 : mensurations complètes → Katch',(()=>{
         const b=besoinsProposes(_ath());
         return b.source==='katch';})());
-      ok('Critère 2 : sans tours de mesure mais poids/taille/âge/sexe → Mifflin',(()=>{
+      ok('Critère 2 : sans tours de mesure mais poids/taille/âge/sexe → la formule retenue',(()=>{
         const u=_ath({bilans:[{type:'suivi',date:Date.now()-2*864e5,
           'deb-weight':'80','deb-height':'178','deb-age':'32','deb-gender':'Homme'}]});
         const b=besoinsProposes(u);
-        return b.source==='mifflin';})());
+        return b.source===MB_FORMULE?true:_echec('source '+b.source+' au lieu de '+MB_FORMULE);})());
       ok('Critère 1 : sans taille, source vaut null et rien n\'est proposé',(()=>{
         const u=_ath({_evol_height:null,height:null,
           bilans:[{type:'suivi',date:Date.now()-2*864e5,
@@ -30428,12 +30591,13 @@ async function testExercices(){
     // VINGT-NEUF SONT FILMEES, et quatorze ne le sont pas — le guide ne leur
     // donne aucun lien. Un lien invente serait pire : le selecteur n'affiche la
     // pastille que s'il y en a un, et une pastille qui n'ouvre rien ment.
+    // `video` (chaîne) est devenu `videos` (tableau) avec le guide du 06/09/2026.
     ok('Vingt-neuf méthodes portent la vidéo du coach',
-       Object.values(TECHNIQUES).filter(t=>/^https:\/\/youtu\.be\//.test(t.video)).length===29,
-       String(Object.values(TECHNIQUES).filter(t=>t.video).length));
+       Object.values(TECHNIQUES).filter(t=>(t.videos||[]).some(v=>/^https:\/\/youtu\.be\//.test(v))).length===29,
+       String(Object.values(TECHNIQUES).filter(t=>(t.videos||[]).length).length));
     ok('Aucune vidéo inventée : ou un lien YouTube, ou rien',
-       Object.values(TECHNIQUES).every(t=>t.video===''||/^https:\/\/youtu\.be\/[\w-]+$/.test(t.video)),
-       String((Object.values(TECHNIQUES).find(t=>t.video&&!/^https:\/\/youtu\.be\/[\w-]+$/.test(t.video))||{}).video||''));
+       Object.values(TECHNIQUES).every(t=>Array.isArray(t.videos)&&t.videos.every(v=>/^https:\/\/youtu\.be\/[\w-]+$/.test(v))),
+       String(Object.values(TECHNIQUES).flatMap(t=>t.videos||[]).find(v=>!/^https:\/\/youtu\.be\/[\w-]+$/.test(v))||''));
     // AUCUNE METHODE HORS DU GUIDE. La sonde citait quatre noms interdits — dont
     // « occlusion » et « cluster », que le guide du 26/08 apporte pour de bon :
     // une liste de proscrits ne peut pas dire ce qui est legitime. On epingle
@@ -31633,9 +31797,13 @@ async function testExercices(){
         const b=besoinsProposes(u);
         if(!b||b.source===null) return _echec('aucune proposition : '+((b&&b.manque)||[]).join(', '));
         // Le metabolisme doit etre celui de 71 kg, pas celui de 80.
-        if(b.mb!==mbMifflin(71,178,32,'Homme'))
+        // mbEstime : la formule retenue (Harris-Benedict depuis le 07/09/2026).
+        if(b.mb!==mbEstime(71,178,32,'Homme'))
           return _echec('les grammages sont cales sur un autre poids : mb='+b.mb
-            +' contre '+mbMifflin(71,178,32,'Homme')+' a 71 kg');
+            +' contre '+mbEstime(71,178,32,'Homme')+' a 71 kg');
+        // Et le plafond du surplus se borne sur cette meme depense.
+        if(_depensePourPlafond(u)!==b.depense)
+          return _echec('plafond borne sur '+_depensePourPlafond(u)+' pour une depense affichee de '+b.depense);
         // (L'encadré « Poids de référence » qui l'affichait a été retiré de la
         // fiche coach le 22/09/2026, build 1402 : la lecture reste, pas lui.)
         // SANS AUCUNE PESEE NI BILAN CHIFFRE : le poids d'inscription sert de
@@ -33897,7 +34065,12 @@ async function testExercices(){
         if(t[2]!=='Je m\'entraîne seul') return _echec('la troisième porte : '+t[2]);
         // CHACUNE MENE QUELQUE PART, et la bonne : le code vers l'écran de
         // code, le coach vers la page de coaching, l'autonomie vers les prix.
-        if((portes[0].getAttribute('onclick')||'').indexOf('s-client-code')<0)
+        // Sans session, le code mène à l'Espace athlète (inscription) ; avec,
+        // à l'écran de rattachement. ouvrirCodeCoach choisit (26/09/2026).
+        const _codeCoachAiguille=()=>{ const f=String(ouvrirCodeCoach);
+          return f.indexOf("go('s-client-code')")>=0&&f.indexOf("go('s-athlete-entry')")>=0; };
+        if(((portes[0].getAttribute('onclick')||'').indexOf('s-client-code')<0)
+          &&!((portes[0].getAttribute('onclick')||'').indexOf('ouvrirCodeCoach()')>=0&&_codeCoachAiguille()))
           return _echec('« J’ai un code coach » ne mène pas à l’écran de code');
         if((portes[1].getAttribute('href')||'').indexOf('beacons.ai/kevin.gllc')<0)
           return _echec('« Je cherche un coach » ne mène pas à la page de coaching');
@@ -40194,20 +40367,23 @@ async function testExercices(){
           return b.on.kcal>b.off.kcal?true
             :_echec('les deux journees pesent pareil : '+b.on.kcal+' et '+b.off.kcal);})());
 
-        ok('AUCUNE JOURNEE NE PASSE SOUS LE PLANCHER, cycle ou pas',(()=>{
-          // Le report remonte la journee HAUTE ; il ne doit pas etre l'occasion
-          // de laisser filer la basse.
+        // ⚠ LE PLANCHER NE RELEVE PLUS LES JOURNEES (Kevin, 24/09/2026, build
+        //   1504 : « supprime les blocages et limites »). Il se calcule et se
+        //   dit, il ne corrige plus. Ce qu'on garde : il ne depasse jamais 85 %
+        //   de la depense AFFICHEE, sans quoi il interdirait toute seche — et
+        //   une journee qui passe dessous reste une journee calculee, pas
+        //   une journee remontee en silence.
+        ok('LE PLANCHER RESTE SOUS 85 % DE LA DEPENSE AFFICHEE, et ne releve rien',(()=>{
           for(const ph of ['seche','maintien','pdm']){
             const c=poser(ph);
-            const pl=plancherKcal(c);
-            if(pl==null) continue;
-            for(const cyc of [true,false]){
-              const b=besoinsProposes(c,{cycle:cyc});
-              if(!b||b.source===null) continue;
-              for(const [nom,j] of [['ON',b.on],['OFF',b.off]])
-                if(j.kcal<pl) return _echec(ph+', cycle='+cyc+' : '+nom+' a '+j.kcal
-                  +' kcal sous le plancher de '+pl);
-            }
+            const pe=plancherEffectif(c);
+            const b=besoinsProposes(c,{cycle:true});
+            if(!b||b.source===null||!(pe.kcal>0)) continue;
+            if(pe.plafonne&&pe.majoration===1&&pe.kcal>Math.max(pe.abs,Math.round(b.depense*PLANCHER_PLAFOND_DEPENSE))+1)
+              return _echec(ph+' : plancher '+pe.kcal+' au-dessus de 85 % de '+b.depense);
+            const sans=besoinsProposes(c,{cycle:false});
+            if(b.off.kcal>=b.on.kcal) return _echec(ph+' : le jour OFF a été remonté au niveau du ON');
+            if(!sans||sans.on.kcal!==sans.off.kcal) return _echec(ph+' : sans cycle, deux journées différentes');
           }
           return true;})());
 
@@ -40241,8 +40417,11 @@ async function testExercices(){
           if(!c.nutrition) c.nutrition={};
           c.nutrition.manuel=false;
           renderCoachNutriSection(getOwnedClient('Ap'));
-          const lire=()=>{ const e=document.getElementById('ccd-on-kcal');
-            return e?Number(e.value):null; };
+          // En calcul automatique la grille n'a plus de champ : le chiffre est
+          // ECRIT (« jour d'entraînement 2 101 kcal »). On lit ce que le coach voit.
+          const lire=()=>{ const e=document.getElementById('ccd-nutrition');
+            const m=((e&&e.innerText)||(e&&e.textContent)||'').match(/jour d.entraînement ([\d\s\u202f\u00a0]+?) kcal/);
+            return m?Number(m[1].replace(/\D/g,'')):null; };
           const avant=lire();
           if(!(avant>0)) return _echec('aucune cible avant le changement');
           coachSetPhase('masse');
@@ -45744,6 +45923,65 @@ async function testExercices(){
         if(appels!==1) return _echec('pas parti sur Données : '+appels);
         return true;
       }finally{ _ccdVue=sv.vue; anatAnalyser=sv.an; }}));
+    // E5 (26/09/2026) : deux exports propres.
+    const _e5Dossier=()=>{
+      const bl=[{date:1,type:'depart',photos:{face:'data:image/gif;base64,R0lGODlhAQABAAAAACw=',back:'data:image/gif;base64,R0lGODlhAQABAAAAACw='}}];
+      const g=_anatGab(); const p=g.face.auto.pts;
+      // Un humérus allongé : de quoi sortir au moins une zone au-dessus de « léger ».
+      const e=p.epaule_l, co=p.coude_l; p.coude_l=[co[0],e[1]+(co[1]-e[1])*1.25,co[2]||0.9];
+      return _anatDossier({email:'e5@t.fr',fname:'Léa',lname:'Test',bilans:bl,morphoAnat:Object.assign(g,{dos:null,date:2})});
+    };
+    const _e5Texte=(h)=>String(h).replace(/<style[\s\S]*?<\/style>/g,' ').replace(/<[^>]+>/g,' ').replace(/&[a-z#0-9]+;/g,' ');
+    ok('E5 — LA VERSION ATHLÈTE NE PORTE AUCUN MOT DU LEXIQUE, AUCUN PERCENTILE, AUCUN POURCENTAGE',(()=>{
+      const c=_e5Dossier();
+      const h=anatExportHtml(c,'athlete');
+      if(!h) return _echec('pas d’export athlète');
+      const t=_e5Texte(h);
+      if(ANAT_LEXIQUE_MORPHO.test(t)) return _echec('mot du lexique : « '+t.match(ANAT_LEXIQUE_MORPHO)[0]+' »');
+      if(/%|percentile|ᵉ/i.test(t)) return _echec('une valeur de population : '+(t.match(/.{0,30}(%|percentile|ᵉ).{0,10}/i)||[''])[0]);
+      if(/\b(long|longue|longs|longues|court|courte|courts|courtes|étroit|étroite|étroits|étroites)\b/i.test(t)) return _echec('un mot de longueur ou de largeur');
+      if(h.indexOf('<img')<0||h.indexOf('<svg')<0) return _echec('la photo avec ses repères manque');
+      if(/<text|<title>[^<]*(Humérus|Acromion|Clavicule|Sommet)/i.test(h)) return _echec('une étiquette de repère sur la photo');
+      if(h.indexOf('@page{size:A4')<0||h.indexOf('montserrat-var-latin.woff2')<0) return _echec('ni A4 ni polices du dépôt');
+      return true;})());
+    ok('E5 — LES PRIORITÉS SE DISENT EN CONSIGNES : UNE CLAUSE QUI PORTE UN MOT DU LEXIQUE EST RETIRÉE',(()=>{
+      const l=anatConsignesExport([
+        {quoi:'Squat',consigne:'',action:'Squat : cale de 2 cm sous les talons ; tes fémurs longs font partir le buste'},
+        {quoi:'Humérus long',consigne:'Coudes à 45° du buste en bas du mouvement',action:''},
+        {quoi:'Curl',consigne:'',action:'levier du bras défavorable'}]);
+      if(l.length!==2) return _echec(l.length+' consignes : '+JSON.stringify(l));
+      if(l[0].texte.indexOf('cale')<0||/fémur|long/i.test(l[0].texte)) return _echec('clause mal filtrée : '+l[0].texte);
+      if(l[1].titre!=='Consigne 2') return _echec('un titre du lexique passe : '+l[1].titre);
+      for(const x of l) if(ANAT_LEXIQUE_MORPHO.test(x.titre+' '+x.texte)) return _echec('lexique : '+x.titre+' / '+x.texte);
+      return true;})());
+    ok('E5 — LA VERSION COACH PORTE CHAQUE VALEUR AVEC SA MARGE, SA SOURCE ET SES DATES',(()=>{
+      const c=_e5Dossier();
+      const h=anatExportHtml(c,'coach');
+      if(!h) return _echec('pas d’export coach');
+      const t=_e5Texte(h);
+      const res=anatMesures(c.morphoAnat,c,{});
+      const f=res.fiches.find(x=>x.etat==='ok'&&x.tolerance);
+      if(!f||t.indexOf(f.tolerance.slice(0,12))<0) return _echec('marge absente');
+      if(!/Source/.test(t)||!/Exportée le/.test(t)||!/bilan du/.test(t)) return _echec('source ou dates absentes');
+      // Le corps du document ne porte pas la classe du cadre photo (fond noir, hauteur fixe, rogné).
+      if(/<body class="ex-c"/.test(h)) return _echec('le document entier est pris pour un cadre photo');
+      if(t.indexOf(_anatDateFr(1))<0) return _echec('date du bilan absente');
+      if(anatExportHtml(_anatDossier({email:'vide@t.fr'}),'coach')!=='') return _echec('un export sans analyse');
+      return true;})());
+    okA('E5 — « EXPORTER » POSE LE DOCUMENT DANS UNE IFRAME DÉDIÉE, SANS SERVICE TIERS',(async()=>{
+      const c=_e5Dossier(); const sv={own:getOwnedClient};
+      try{
+        getOwnedClient=()=>c;
+        const f=await anatExporter('athlete',{imprimer:false});
+        if(!f||f.tagName!=='IFRAME') return _echec('pas d’iframe');
+        const d=f.contentDocument;
+        if(!d||!d.body.classList.contains('ex-a')) return _echec('le document athlète n’est pas dans l’iframe');
+        if(!/Tes/.test(d.querySelector('h1').textContent)) return _echec('titre : '+d.querySelector('h1').textContent);
+        const ext=[...d.querySelectorAll('[src],link[href]')].map(e=>e.getAttribute('src')||e.getAttribute('href')).filter(u=>/^https?:/i.test(u)&&u.indexOf(location.origin)!==0);
+        if(ext.length) return _echec('ressource tierce : '+ext[0]);
+        f.remove();
+        return true;
+      }finally{ getOwnedClient=sv.own; document.getElementById('an-export')?.remove(); }}));
     ok('ANALYSE MORPHO : LA PHOTO EST MISE À L’ÉCHELLE PAR LA TAILLE DU DOSSIER',(()=>{
       if(typeof anatMesures!=='function') return _echec('anatMesures n’existe pas');
       const r=anatMesures(_anatGab(),_anatDossier());
@@ -45803,6 +46041,30 @@ async function testExercices(){
       if(p.vertex[1]!==0.02||p.vertex[2]!==2) return _echec('le point du coach n’est pas retenu');
       if(!p.genou_l) return _echec('les autres points ont disparu');
       return true;})());
+
+    // ══ LE NOM SUR LES VISUELS (26/09/2026) ═══════════════════════════════
+    ok('VISUELS : le nom affiché suit le réglage — prénom par défaut, pseudo, ou rien',(()=>{
+      if(typeof nomSurVisuels!=='function') return _echec('nomSurVisuels n’existe pas');
+      const cas=[
+        [{fname:'Kévin'},'KÉVIN'],
+        [{fname:'Kévin',pseudo:'KevFit',visuelNom:'prenom'},'KÉVIN'],
+        [{fname:'Kévin',pseudo:'KevFit',visuelNom:'pseudo'},'KEVFIT'],
+        [{fname:'Kévin',visuelNom:'pseudo'},'KÉVIN'],
+        [{fname:'Kévin',pseudo:'KevFit',visuelNom:'rien'},''],
+        [{},''],
+        [{fname:'  Jean   Paul '},'JEAN PAUL'],
+        [{fname:'x',visuelNom:'nimporte'},'X']];
+      for(const [u,att] of cas){
+        const r=nomSurVisuels(u);
+        if(r!==att) return _echec(JSON.stringify(u)+' → « '+r+' » au lieu de « '+att+' »');
+      }
+      if(CHAMPS_NON_SANTE.indexOf('pseudo')<0||CHAMPS_NON_SANTE.indexOf('visuelNom')<0)
+        return _echec('pseudo / visuelNom ne sont pas classés');
+      return true;})());
+    ok('VISUELS : sans lienPerso(), la sortie d’un visuel ne touche pas au presse-papiers',(()=>{
+      if(typeof _storyCopierLien!=='function') return _echec('_storyCopierLien n’existe pas');
+      if(typeof lienPerso==='function') return true;
+      return _storyCopierLien()===false?true:_echec('un lien serait copié sans lienPerso');})());
 
     // ══ LOT 8 : L'ANALYSE MORPHO, AUTOMATIQUE ET FIGÉE (23/09/2026) ══════
     // « Déclenchement automatique à l'enregistrement du premier bilan. Aux
@@ -48053,7 +48315,7 @@ async function testExercices(){
         if(b.length<4) return _echec(b.length+' portes seulement');
         if(!b.some(x=>/beacons\.ai\/kevin\.gllc/.test(x.getAttribute('href')||'')))
           return _echec('aucune porte ne mène au coaching');
-        if(!b.some(x=>/s-client-code/.test(x.getAttribute('onclick')||'')))
+        if(!b.some(x=>/s-client-code|ouvrirCodeCoach\(\)/.test(x.getAttribute('onclick')||'')))
           return _echec('aucune porte ne mène au code coach');
         // NI TIRET CADRATIN, NI VOCABULAIRE TECHNIQUE.
         if(txt.indexOf(String.fromCharCode(8212))>=0||txt.indexOf(String.fromCharCode(8211))>=0)
@@ -51381,6 +51643,153 @@ async function testExercices(){
       // LE COACH lit ce qui a été fait.
       const carte=_buildSessionCard({date:Date.now(),data:{'Développé haltères':dev}});
       if(!/32kg×12[\s\S]*34kg×11[\s\S]*36kg×10(?!-)/.test(carte)) return _echec('carte coach : '+(carte.match(/\d+kg×[\d-]+/g)||[]).join(' '));
+      return true;})());
+
+    // ══ 26/09/2026 — LE PREMIER BILAN D'UN CLIENT NEUF N'EST PLUS PERDU ═══════
+    ok('BILAN — SANS ACCORD DE SANTÉ : RIEN N’EST ÉCRIT, LE BROUILLON RESTE, ET L’ACCORD REPREND L’ENREGISTREMENT',(()=>{
+      const sU=currentUser, sT=bilType, sD=bilData;
+      const sv={go:window.go,save:window.saveUser,lch:window.loadClientHome,res:window.ouvrirRestitutionBilan,push:CLOUD.pushOne,
+        mig:window.photosBilanMigrer,badges:window.majBadges,toast:window.toast};
+      let ecran=null, restit=0, brouillon=null;
+      try{ brouillon=localStorage.getItem(BIL_DRAFT_KEY); }catch(e){}
+      try{
+        window.go=(id)=>{ ecran=id; }; window.saveUser=()=>true; window.loadClientHome=()=>{};
+        window.ouvrirRestitutionBilan=()=>{ restit++; return true; };
+        CLOUD.pushOne=()=>Promise.resolve(true); window.photosBilanMigrer=async()=>({faites:0});
+        window.majBadges=()=>{}; window.toast=()=>{};
+        currentUser={id:'nb1',email:'nb1@t',role:'athlete',fname:'Neuf',coachId:'c1',sessions:[],bilans:[],exAlias:{},exMuscles:{}};
+        bilType='depart';
+        bilData={'deb-weight':'72','deb-height':'175','deb-goals':['Prise de muscle']};
+        try{ localStorage.removeItem(BIL_DRAFT_KEY); }catch(e){}
+        saveBilanFinal();
+        if(ecran!=='s-consent-sante') return _echec('l’accord n’est pas demandé : '+ecran);
+        if(currentUser.bilans.length) return _echec('un bilan écrit sans accord');
+        if(currentUser.questionnaireComplete||currentUser.weight||currentUser.bilanGoals) return _echec('le dossier a bougé sans accord');
+        let d=null; try{ d=JSON.parse(localStorage.getItem(BIL_DRAFT_KEY)||'null'); }catch(e){}
+        if(!d||!d.bilData||d.bilData['deb-weight']!=='72') return _echec('le brouillon a été effacé avant l’accord');
+        // L'accord est donné : le même bilan s'enregistre, et la restitution suit.
+        const c=document.getElementById('cs-health'); if(!c) return _echec('case d’accord absente');
+        c.checked=true;
+        accepterConsentementSante();
+        if(currentUser.bilans.length!==1) return _echec('le bilan n’est pas enregistré après l’accord ('+currentUser.bilans.length+')');
+        if(currentUser.bilans[0]['deb-weight']!=='72') return _echec('le bilan enregistré n’est pas celui saisi');
+        if(!restit) return _echec('pas d’écran « Bilan enregistré »');
+        let d2=null; try{ d2=localStorage.getItem(BIL_DRAFT_KEY); }catch(e){}
+        if(d2) return _echec('le brouillon survit à l’enregistrement');
+        // Et la phrase de l'écran : le coach est prévenu.
+        if(!/Ton coach est prévenu/.test(_phraseCoachBilan(currentUser))) return _echec('phrase : '+_phraseCoachBilan(currentUser));
+        return true;
+      }finally{
+        currentUser=sU; bilType=sT; bilData=sD;
+        window.go=sv.go; window.saveUser=sv.save; window.loadClientHome=sv.lch; window.ouvrirRestitutionBilan=sv.res;
+        CLOUD.pushOne=sv.push; window.photosBilanMigrer=sv.mig; window.majBadges=sv.badges; window.toast=sv.toast;
+        try{ if(brouillon==null) localStorage.removeItem(BIL_DRAFT_KEY); else localStorage.setItem(BIL_DRAFT_KEY,brouillon); }catch(e){}
+        try{ const c=document.getElementById('cs-health'); if(c) c.checked=false; }catch(e){}
+      }})());
+    ok('CODE COACH — SANS SESSION, L’ESPACE ATHLÈTE CARTE OUVERTE ; CONNECTÉ, L’ÉCRAN DE RATTACHEMENT',(()=>{
+      const sU=currentUser, sGo=window.go; let ecran=null;
+      try{
+        window.go=(id)=>{ ecran=id; };
+        currentUser=null;
+        if(ouvrirCodeCoach()!=='s-athlete-entry'||ecran!=='s-athlete-entry') return _echec('sans session : '+ecran);
+        currentUser={id:'cc1',email:'cc1@t',role:'athlete'};
+        if(ouvrirCodeCoach()!=='s-client-code'||ecran!=='s-client-code') return _echec('connecté : '+ecran);
+        // Les deux boutons de l'accueil passent par là.
+        const w=document.querySelector('#s-welcome .wel-p-code');
+        if(!w||(w.getAttribute('onclick')||'').indexOf('ouvrirCodeCoach()')<0) return _echec('bouton de l’accueil : '+(w&&w.getAttribute('onclick')));
+        return true;
+      }finally{ currentUser=sU; window.go=sGo; }})());
+
+    // ══ 26/09/2026 — LE FOND DES VISUELS : sans fond, ma photo, rouge ════════
+    const _vfBilan=()=>bilanSeanceDonnees({date:Date.now(),name:'Push',duration:40,sets:3,setsPlanned:3,volume:900,
+      data:{'Développé haltères':{sets:[{weight:'30',reps:'10',done:true},{weight:'32',reps:'10',done:true},{weight:'34',reps:'8',done:true}]}}},null);
+    const _vfPx=(cv,x,y)=>{ const d=cv.getContext('2d').getImageData(x,y,1,1).data; return [d[0],d[1],d[2],d[3]]; };
+    ok('FONDS — PNG POUR « SANS FOND », JPEG POUR « PHOTO » ET « ROUGE », NOMMÉS repcore-bilan',(()=>{
+      const t=visuelFondFormat('transparent'), r=visuelFondFormat('rouge'), ph=visuelFondFormat('photo');
+      if(t.type!=='image/png'||r.type!=='image/jpeg'||ph.type!=='image/jpeg') return _echec('formats : '+[t.type,r.type,ph.type].join(','));
+      if(r.q!==0.9||ph.q!==0.9) return _echec('qualité JPEG : '+r.q);
+      if(visuelNomFichier('repcore-bilan','transparent')!=='repcore-bilan.png'||visuelNomFichier('repcore-bilan','rouge')!=='repcore-bilan.jpg') return _echec('noms');
+      return true;})());
+    ok('FONDS — LE DERNIER CHOIX EST RETENU, ET UN localStorage QUI LÈVE NE CASSE RIEN',(()=>{
+      let avant=null; try{ avant=localStorage.getItem(VISUEL_FOND.CLE); }catch(e){}
+      const _get=Storage.prototype.getItem, _set=Storage.prototype.setItem;
+      try{
+        visuelFondMemoriser('rouge');
+        if(visuelFondChoisi()!=='rouge') return _echec('choix non retenu : '+visuelFondChoisi());
+        if(visuelFondMemoriser('violet')) return _echec('un fond inconnu accepté');
+        Storage.prototype.getItem=function(){ throw new Error('bloqué'); };
+        Storage.prototype.setItem=function(){ throw new Error('bloqué'); };
+        if(visuelFondChoisi()!=='transparent') return _echec('repli : '+visuelFondChoisi());
+        if(visuelFondMemoriser('rouge')!==false) return _echec('écriture bloquée annoncée comme réussie');
+        // « Ma photo » retenue mais aucune photo en mémoire : on dessine sans fond.
+        Storage.prototype.getItem=_get; Storage.prototype.setItem=_set;
+        const sv=_visuelPhoto; _visuelPhoto=null; visuelFondMemoriser('photo');
+        const e=visuelFondEffectif(); _visuelPhoto=sv;
+        if(e!=='transparent') return _echec('photo absente : '+e);
+        return true;
+      }finally{
+        Storage.prototype.getItem=_get; Storage.prototype.setItem=_set;
+        try{ if(avant==null) localStorage.removeItem(VISUEL_FOND.CLE); else localStorage.setItem(VISUEL_FOND.CLE,avant); }catch(e){}
+      }})());
+    okA('FONDS — LE ROUGE EST OPAQUE, LE SANS-FOND TRANSPARENT, LA PHOTO EN COVER ET ASSOMBRIE EN BAS',(async()=>{
+      const b=_vfBilan(); if(!b) return _echec('pas de bilan');
+      const t=_dessinerBilanSeance(b,'transparent');
+      if(_vfPx(t,4,4)[3]!==0) return _echec('le sans-fond a un fond');
+      const r=_dessinerBilanSeance(b,'rouge'), pr=_vfPx(r,4,4);
+      if(pr[3]!==255||pr[0]<180||pr[1]>80) return _echec('coin du rouge : '+pr.join(','));
+      // Une photo grise unie de 600 × 400 (paysage) : la cover doit remplir tout le 9:16.
+      const src=document.createElement('canvas'); src.width=600; src.height=400;
+      const sg=src.getContext('2d'); sg.fillStyle='rgb(200,200,200)'; sg.fillRect(0,0,600,400);
+      const im=new Image(); await new Promise(ok=>{ im.onload=ok; im.onerror=ok; im.src=src.toDataURL('image/png'); });
+      const sv=_visuelPhoto;
+      try{
+        _visuelPhoto={img:im,url:null};
+        const p=_dessinerBilanSeance(b,'photo');
+        const haut=_vfPx(p,4,4), bas=_vfPx(p,4,STORY_H-4);
+        if(haut[3]!==255||bas[3]!==255) return _echec('la photo ne couvre pas tout : '+haut[3]+'/'+bas[3]);
+        if(Math.abs(haut[0]-200)>3) return _echec('le haut est touché : '+haut.join(','));
+        // 70 % de noir en bas : 200 × 0,3 = 60.
+        if(Math.abs(bas[0]-60)>6) return _echec('le bas n’est pas assombri à 70 % : '+bas.join(','));
+      }finally{ _visuelPhoto=sv; }
+      return true;}));
+    ok('FONDS — LA SORTIE COMMUNE ÉCRIT DU JPEG 0,9 QUAND ON LE LUI DEMANDE, DU PNG SINON',(()=>{
+      const _ios=_estIOS, _ap=_ouvrirApercuStory; let recu=null, ouvert=null;
+      try{
+        _estIOS=()=>true; _ouvrirApercuStory=u=>{ ouvert=u; };
+        const faux=()=>({width:1,height:1,toDataURL:(t,q)=>{ recu=[t,q]; return 'data:'+(t||'image/png')+';base64,AAAA'; }});
+        _storySortirTelechargement(faux(),'repcore-bilan.jpg',visuelFondFormat('rouge'));
+        if(!recu||recu[0]!=='image/jpeg'||recu[1]!==0.9) return _echec('jpeg : '+JSON.stringify(recu));
+        _storySortirTelechargement(faux(),'repcore-bilan.png',visuelFondFormat('transparent'));
+        if(recu[0]!=='image/png') return _echec('png : '+JSON.stringify(recu));
+        _storySortirTelechargement(faux(),'repcore-bilan.png');
+        if(recu[0]!=='image/png') return _echec('sans format, ce n’est plus du PNG');
+        for(const f of [telechargerBilanSeance,partagerBilanSeance]){
+          const t=String(f);
+          if(t.indexOf('visuelFondFormat(fond)')<0||t.indexOf("visuelNomFichier('repcore-bilan',fond)")<0) return _echec('un geste ignore le fond');
+        }
+        return true;
+      }finally{ _estIOS=_ios; _ouvrirApercuStory=_ap; }})());
+    ok('FONDS — TROIS VIGNETTES, « MA PHOTO » PAR UN INPUT LOCAL, ET « EN BLANC » SEULEMENT SANS FOND',(()=>{
+      const z=document.createElement('div'); z.innerHTML=_htmlVisuelFonds('vf-test');
+      const bs=z.querySelectorAll('.vf-b');
+      if(bs.length!==3) return _echec(bs.length+' vignettes');
+      const c=z.querySelector('canvas.vf-c');
+      if(!c||c.width!==180||c.height!==320) return _echec('vignette : '+(c&&c.width+'×'+c.height));
+      const inp=z.querySelector('input[type=file]');
+      if(!inp||inp.getAttribute('accept')!=='image/*'||inp.getAttribute('capture')!=='environment') return _echec('input photo');
+      if(!/en blanc/.test(_visuelNoteFond('transparent'))) return _echec('la note du PNG a perdu « en blanc »');
+      if(/en blanc/.test(_visuelNoteFond('rouge')+_visuelNoteFond('photo'))) return _echec('« en blanc » annoncé pour un JPEG');
+      // La photo ne part nulle part.
+      const src=String(visuelFondPhoto)+String(_visuelPeindreFond)+String(visuelFondChoisir);
+      if(/fetch|XMLHttpRequest|phpUpload|CLOUD\.|localStorage\.setItem\([^)]*img/i.test(src)) return _echec('la photo quitte le téléphone');
+      if(String(visuelFondPhoto).indexOf('createObjectURL')<0) return _echec('la photo n’est pas lue localement');
+      return true;})());
+    ok('FONDS — L’HISTORIQUE (#sd-partage) PORTE LE MÊME SÉLECTEUR QUE L’ÉCRAN DE FIN',(()=>{
+      for(const [nom,f,id] of [['fin',renderPartageBilan,'wd-fonds'],['historique',_rendrePartageSeanceRelue,'sd-fonds']]){
+        const t=String(f);
+        if(t.indexOf("_htmlVisuelFonds('"+id+"')")<0||t.indexOf("monterSelecteurFond('"+id+"'")<0) return _echec(nom+' sans sélecteur');
+        if(t.indexOf('_visuelNoteFond(')<0) return _echec(nom+' : note figée');
+      }
       return true;})());
 
     // ══ 17/09/2026 — R28 : PAS ET SOMMEIL, LA SAISIE DU JOUR D'ABORD ════════
@@ -58299,6 +58708,21 @@ async function testExercices(){
     // ── _majPastilleBilan ──
     ok('La pastille de l\'onglet Bilan existe dans le HTML',
        !!document.querySelector('#client-tabbar .tab-btn[data-tab="bilan"] .tab-dot'));
+    ok('QA — LA RÉPONSE LUE DANS L’ONGLET NOTES ÉTEINT LA PASTILLE, MÊME SUR UN BILAN SANS TEXTE',(()=>{
+      const sauve=currentUser;
+      try{
+        // Un bilan de mesures SEULES, avec une réponse du coach non lue.
+        currentUser=_rbU([_rbB(3,{reponseCoach:'Belle régularité',reponseDate:Date.now(),reponseVue:false})]);
+        currentUser.bilans.forEach(b=>{ for(const k of Object.keys(b)) if(/^bil-(?!weight)/.test(k)) delete b[k]; });
+        const h=renderReponsesBilans(currentUser.bilans);
+        if(!/Belle régularité/.test(h)) return _echec('la réponse d’un bilan sans texte ne s’affiche pas');
+        // Côté coach, la carte porte le champ pour répondre.
+        const hc=renderReponsesBilans(currentUser.bilans,{id:'c',email:'c@t',fname:'A',bilans:currentUser.bilans});
+        if(!/rb-texte_/.test(hc)) return _echec('le coach n’a aucun champ pour répondre à ce bilan');
+        const _save=window.saveUser; window.saveUser=()=>true;
+        try{ showProgressTab('notes',null,true); }finally{ window.saveUser=_save; }
+        return currentUser.bilans.every(b=>b.reponseVue!==false)?true:_echec('la réponse affichée reste non lue');
+      }finally{ currentUser=sauve; try{ _majPastilleBilan(); }catch(e){} }})());
     ok('Pastille allumée puis éteinte',(()=>{
       const sauve=currentUser;
       const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="bilan"]');
@@ -58306,7 +58730,7 @@ async function testExercices(){
       if(!dot){ currentUser=sauve; return false; }
       currentUser=_rbU([_rbB(3,{reponseCoach:'x',reponseDate:Date.now(),reponseVue:false})]);
       _majPastilleBilan();
-      const on=dot.classList.contains('on')&&/1 réponse/.test(btn.getAttribute('aria-label')||'');
+      const on=dot.classList.contains('on')&&/Bilan : 1 élément/.test(btn.getAttribute('aria-label')||'');
       currentUser=_rbU([_rbB(3,{reponseCoach:'x',reponseDate:Date.now(),reponseVue:true})]);
       _majPastilleBilan();
       const off=!dot.classList.contains('on')&&!btn.getAttribute('aria-label');
@@ -60557,18 +60981,20 @@ async function testExercices(){
 
       const _sauveU=currentUser;
       try{
-        ok('La bannière d\'accueil rend le message épinglé',(()=>{
+        // La zone ne recopie plus le canal : elle porte la relance photo (voir
+        // renderEpingleAccueil). Avec un coach et sans photo, elle se montre ;
+        // la photo posee, elle se tait.
+        ok('La bannière d\'accueil relance la photo, et se tait une fois posée',(()=>{
           currentUser=U('lea@t.fr');
-          try{ localStorage.setItem('rc_coach_profil',JSON.stringify({key:null,
-            d:{canalEpingle:{id:'m1',at:Date.now(),titre:'Nouvelle vidéo',
-               texte:'Regardez-la avant jeudi.',lien:''}}})); }catch(e){}
+          currentUser.role='athlete'; delete currentUser.athletePhoto;
           renderEpingleAccueil();
           const el=document.getElementById('clh-annonce');
           if(!el) return _echec('emplacement absent du DOM');
-          if(el.style.display!=='block') return _echec('emplacement masqué');
-          const t=el.textContent||'';
-          return /Nouvelle vidéo/.test(t)&&/avant jeudi/.test(t)
-            ?true:_echec('«'+t.slice(0,70)+'»');})());
+          if(el.style.display!=='block') return _echec('relance masquée malgré un coach et aucune photo');
+          if(!/photo de profil/.test(el.textContent||'')) return _echec('«'+(el.textContent||'').slice(0,70)+'»');
+          currentUser.athletePhoto='data:image/png;base64,x';
+          renderEpingleAccueil();
+          return el.style.display==='none'?true:_echec('la relance reste après la photo');})());
         ok('Sans coach rattaché, la bannière reste muette',(()=>{
           // Le profil coach en cache peut survivre à un détachement : sans ce
           // garde, l'ex-athlète continuait de voir le mot de son ancien coach.
@@ -61530,8 +61956,12 @@ async function testExercices(){
           const el=document.getElementById('ccd-nutrition');
           if(!el) return _echec('section absente du DOM');
           if(document.getElementById('ccd-on-s')) return _echec('le champ SUCRE est encore là');
-          // Les fibres, elles, restent affichées dans le journal : on les garde.
-          return !!document.getElementById('ccd-on-f')
+          // Les fibres, elles, restent : une ligne calculée, et un champ quand
+          // le coach saisit ses cibles à la main.
+          // La fixture n'a pas de bilan : le tableau ne se calcule pas. C'est
+          // son rendu qu'on lit — une ligne Fibres, un champ en saisie manuelle.
+          const src=String(_htmlTableauxTableur);
+          return /'Fibres'/.test(src)&&src.indexOf("'ccd-on-f'")>=0
             ?true:_echec('les fibres ont disparu avec le sucre');
         } finally { currentUser=sauve; }})());
       ok('L\'enregistrement des macros n\'écrit plus de sucre',(()=>{
@@ -63224,7 +63654,8 @@ async function testExercices(){
         if(h.indexOf('Où en es-tu de tes objectifs')<0)
           return _echec('le libellé autonome ne titre pas la réponse');
         if(/object Object/.test(h)) return _echec('une réponse structurée est rendue brute');
-        const RUB=/border-bottom:1px solid #141414/g;
+        // Une tuile par réponse : c'est son libellé qu'on compte (maquette du 27/09/2026).
+        const RUB=/class="bn-l"/g;
         const n=(h.match(RUB)||[]).length;
         if(n!==3) return _echec(n+' rubriques rendues au lieu de 3');
         // TÉMOIN : un bilan SANS réponse n'ouvre aucune rubrique. Sans lui, un
@@ -64512,7 +64943,7 @@ async function testExercices(){
           try{
             window.saveUser=()=>true;
             currentUser={id:'bq',email:'bq@t',role:'athlete',exAlias:{},exMuscles:{},
-              sessions:[],bilans:[]};
+              sessions:[],bilans:[],consent:{health:true,policyVersion:POLICY_VERSION}};
             if(nutDepart) currentUser.nutrition=nutDepart;
             bilType='depart';
             bilData=reponse==null?{}:{'deb-nutrition-type':reponse};
@@ -67502,42 +67933,44 @@ async function testExercices(){
           const c=planCiblesJour(u,true,null);
           return c.kcal===2600
             ?true:_echec('les cibles sont encore multipliees : '+c.kcal+' au lieu de 2600');})());
+        // ⚠ LES PALIERS ONT ETE RETIRES le 08/09/2026 avec la periodisation
+        //   (voir planCiblesJour) : « plus aucun multiplicateur de palier ». Ces
+        //   assertions verrouillent desormais l'inverse — aucune phase, aucun
+        //   plan ancien ne refrappe les chiffres du coach.
         ok('Sans phase déclarée, aucun palier et aucun multiplicateur',(()=>{
           const u=_pa({nutrition:_macros({kcal:2600,p:200,g:300,l:70,f:36})});
           const c=planCiblesJour(u,true,null);
-          return (c.palier===null&&c.mult===1&&c.kcal===2600&&c.p===200&&c.c===300)
+          return (!(c.mult>0&&c.mult!==1)&&!c.palier&&c.kcal===2600&&c.p===200&&c.c===300)
             ?true:_echec(JSON.stringify(c));})());
-        ok('Le multiplicateur agit sur les GLUCIDES, protéines et lipides intacts',(()=>{
+        ok('En sèche, AUCUN palier ne refrappe les chiffres du coach',(()=>{
+          // Avant le 08/09 : 3374 × 0,85 = 2868, une seconde réduction que rien
+          // à l'écran ne montrait. Le plan sert désormais les chiffres de la fiche.
           const u=_pa({phase:_phase('seche',1),
             nutrition:_macros({kcal:3374,p:253,g:316,l:122,f:47})});
           const c=planCiblesJour(u,true,null);
-          // 3374 × 0,85 = 2868 ; protéines et lipides gardent leurs grammes
-          if(c.p!==253||c.l!==122) return _echec('P/L touchés : '+c.p+'/'+c.l);
-          if(c.c>=316) return _echec('les glucides n\'ont pas baissé : '+c.c);
-          return Math.abs(c.kcal-2868)<=4?true:_echec('kcal '+c.kcal);})());
+          return (c.kcal===3374&&c.p===253&&c.l===122&&c.c===316)
+            ?true:_echec(JSON.stringify(c));})());
         ok('Les fibres suivent les calories réellement servies',(()=>{
           const u=_pa({phase:_phase('seche',1),
             nutrition:_macros({kcal:3374,p:253,g:316,l:122,f:47})});
           const c=planCiblesJour(u,true,null);
           return c.f===Math.round(FIBRES_PAR_1000*c.kcal/1000)?true:_echec(String(c.f));})());
-        ok('Le palier ne descend JAMAIS sous le plancher calorique',(()=>{
+        ok('En fin de sèche, aucun palier ne creuse sous les chiffres du coach',(()=>{
+          // Semaine 30 : l'ancien dernier palier (× 0,65) aurait servi 1 300 kcal.
           const u=_pa({phase:_phase('seche',30),
             nutrition:_macros({kcal:2000,p:120,g:200,l:50,f:28})});
           const c=planCiblesJour(u,true,null);
-          const pl=plancherKcal(u);
-          if(!(pl>0)) return _echec('plancher illisible');
-          return (c.kcal>=pl&&c.plancherAtteint===true)
-            ?true:_echec('kcal '+c.kcal+' pour un plancher de '+pl);})());
+          return c.kcal===2000?true:_echec('kcal '+c.kcal+' au lieu des 2000 du coach');})());
         ok('Sans objectif enregistré, rien n\'est inventé',(()=>{
           const u=_pa({phase:_phase('seche',1)});
           const c=planCiblesJour(u,true,null);
           return (c.kcal===null&&c.p===null)?true:_echec(JSON.stringify(c));})());
-        ok('Les paliers du plan priment sur ceux de la phase',(()=>{
+        ok('Un plan ancien qui portait des paliers ne les réveille pas',(()=>{
           const u=_pa({phase:_phase('seche',1),
             nutrition:Object.assign(_macros({kcal:3000,p:200,g:300,l:80,f:42}),
-              {plan:{phases:[{lib:'Perso',sem:null,mult:1}],squelette:[{id:'a',repas:'midi',src:'p'}]}})});
+              {plan:{phases:[{lib:'Perso',sem:null,mult:0.7}],squelette:[{id:'a',repas:'midi',src:'p'}]}})});
           const c=planCiblesJour(u,true,null);
-          return (c.mult===1&&c.kcal===3000)?true:_echec(JSON.stringify(c));})());
+          return c.kcal===3000?true:_echec(JSON.stringify(c));})());
 
         // ── Liste de courses : les deux #REF! du tableur ne peuvent pas revenir ──
         ok('Aucune ligne de courses ne peut porter une quantité illisible',(()=>{
@@ -67734,7 +68167,8 @@ async function testExercices(){
           if(!/Repas du midi/.test(h)) return _echec('les repas ne sont pas rendus');
           if(!/Volaille/.test(h)) return _echec('la source n\'est pas rendue');
           if(!/al dente/.test(h)) return _echec('la note de cuisson a disparu');
-          if(!/Semaines 1-2/.test(h)) return _echec('le palier n\'est pas annoncé');
+          // Les paliers sont retirés (08/09/2026) : plus aucun « Semaines 1-2 ».
+          if(/Semaines 1-2/.test(h)) return _echec('un palier est encore annoncé');
           return true;})());
         ok('L\'écran de l\'athlète ne porte AUCUN bouton de modification',(()=>{
           const u=_pa({nutrition:Object.assign(_macros({kcal:2600,p:200,g:300,l:70,f:36}),
@@ -67863,7 +68297,9 @@ async function testExercices(){
 
         ok('Les quatre modèles existent, un par phase et par sexe',(()=>{
           const c=Object.keys(PLAN_MODELES).sort().join(',');
-          return c==='masse_F,masse_H,seche_F,seche_H'?true:_echec(c);})());
+          // Un modèle par phase — les cinq, peak comprise — et par sexe.
+          const att=Object.keys(PHASES).flatMap(ph=>[ph+'_F',ph+'_H']).sort().join(',');
+          return c===att?true:_echec(c+' au lieu de '+att);})());
         ok('Le sexe et la phase choisissent le bon modèle, sans exception',(()=>{
           const faux=[];
           for(const [g,t,att] of [['H','seche','seche_H'],['F','seche','seche_F'],
@@ -67892,9 +68328,10 @@ async function testExercices(){
           }
           return faux.length?_echec(faux.join(', ')):true;})());
         ok('Une phase de recomposition n\'empêche plus de poser un modèle',(()=>{
+          // La recomposition a désormais SON modèle : la phase répond, elle prime.
           const u=_pa({gender:'F',phase:_phase('recomp',1),objective:'Perte de poids'});
           const s=planModeleSuggere(u);
-          if(s.cle!=='seche_F') return _echec(String(s.cle));
+          if(s.cle!=='recomp_F') return _echec(String(s.cle));
           return planDepuisModele(u,true)!==null?true:_echec('aucun plan construit');})());
         ok('La phase prime sur l\'objectif quand elle sait répondre',(()=>{
           const s=planModeleSuggere(_pa({gender:'H',phase:_phase('masse',1),
@@ -67909,14 +68346,13 @@ async function testExercices(){
             else if(m.modele!==k) faux.push(k+' → '+m.modele);
           }
           return faux.length?_echec(faux.join(', ')):true;})());
-        ok('Les paliers viennent du MODÈLE, pas de la phase déclarée',(()=>{
-          // Un athlète noté en recomposition à qui on pose une sèche doit
-          // recevoir 0,85 / 0,80 / 0,75 / 0,65, et non le « ×1 » de la
-          // recomposition qui ne périodise rien.
+        ok('Un modèle posé ne porte plus aucun palier',(()=>{
+          // Avant le 08/09 : 0,85 / 0,80 / 0,75 / 0,65. Le modèle pose désormais
+          // les repas et les sources, jamais un multiplicateur.
           const u=_pa({gender:'H',phase:_phase('recomp',1)});
           const m=planDepuisModele(u,true,'seche_H');
-          const mult=(m.phases||[]).map(x=>x.mult).join('/');
-          return mult==='0.85/0.8/0.75/0.65'?true:_echec(mult||'aucun palier');})());
+          if(!m||!(m.squelette||[]).length) return _echec('aucun plan construit');
+          return !(m.phases||[]).some(x=>x&&x.mult!==1)?true:_echec(JSON.stringify(m.phases));})());
         ok('Chaque modèle porte deux repas à source libre, protéines ET glucides',(()=>{
           const faux=[];
           for(const [cle,u] of [['seche_H',_pa({gender:'H',phase:_phase('seche',1)})],
@@ -70436,7 +70872,10 @@ vendredi 78 6h 44m
         return src.indexOf(motif)===-1?true
           :_echec('le refus sec sur le cache local est revenu dans doRegister');})());
       ok('_resizeImage ne peut plus rester sans réponse',(()=>{
-        const src=_sansCom(_resizeImage);
+        // Le décodage vit dans _decoderImage (IMG_DECODE_MS) : c'est lui qui
+        // porte les gestionnaires d'échec, _resizeImage garde son délai de garde.
+        const src=_sansCom(_resizeImage)+_sansCom(_decoderImage);
+        if(src.indexOf('_decoderImage(')===-1) return _echec('le décodage borné n’est plus utilisé');
         if(src.indexOf('on'+'error')===-1) return _echec('onerror manque');
         if(src.indexOf('on'+'abort')===-1) return _echec('onabort manque');
         return src.indexOf('setTimeout')!==-1?true

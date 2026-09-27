@@ -5610,6 +5610,10 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // date de naissance — seulement un horodatage d'ouverture et un nombre de
   // seances deja faites au depart.
   'essai',
+  // Le nom sous lequel l'athlete signe ses visuels (seance, et ceux a venir) :
+  // un reglage d'affichage et un pseudo qu'il choisit. Aucune donnee de sante,
+  // mais ils DOIVENT etre classes, sinon ils ne sont proteges par rien.
+  'pseudo','visuelNom',
   // La date a laquelle les medias d'un dossier dormant ont ete detruits. Une
   // date, et rien d'autre : ni mesure, ni ressenti. Elle DOIT etre classee,
   // sinon elle n'est protegee par rien — signale par l'assertion « Chaque champ
@@ -9213,7 +9217,7 @@ function _toastCoachLarge(){
     return !!(a&&a.id==='s-coach-program'&&a.getAttribute('data-ctx')==='coach');
   }catch(e){ return false; }
 }
-function toast(msg,c='var(--green)'){
+function toast(msg,c='var(--green)',duree){
   const t=document.getElementById('toast');
   // L'erreur se reconnaît à sa COULEUR, seule chose que les cent sites d'appel
   // fournissent déjà. Aucun d'eux n'a été touché : les vingt-six qui passent
@@ -9245,7 +9249,7 @@ function toast(msg,c='var(--green)'){
       t.style.transform=_large?'translateX(-50%) translateY(-40px)'
                               :'translateX(-50%) translateY(80px)';
       _toastMinuteur=null;
-    },_large?4500:2800);
+    },(duree>0)?duree:(_large?4500:2800));
   };
   // LE RELAIS. Un toast deja affiche sort en 90 ms avant que le suivant entre :
   // sans lui, le texte etait remplace sur place et rien ne disait qu'un nouveau
@@ -9517,6 +9521,10 @@ function _boutonSous(zoneId,cle,libelle,action){
 function _lienVersInscription(em){
   _boutonSous('l-err','l-vers-inscription','Créer mon compte avec cette adresse',()=>{
     go('s-register');
+    // LE ROLE DEJA CHOISI EST GARDE, et s'il n'y en a pas, le choix se montre :
+    // un bloc masque par une visite precedente laissait un formulaire qui
+    // refusait de partir sans qu'on voie pourquoi (QA du 27/09/2026).
+    try{ if(selRole) selectRole(selRole,true); else rcRoleRouvrir(); }catch(e){}
     const i=document.getElementById('r-email');
     if(i) i.value=em||'';
   });
@@ -10255,6 +10263,21 @@ function goRegisterAthlete(){
   go('s-register');
   setTimeout(()=>selectRole('athlete',true),50);
 }
+/**
+ * « J'ai un code coach » (26/09/2026). s-client-code RATTACHE un compte
+ * connecte a un coach : sans session, doLinkCoach lisait currentUser.fname et
+ * echouait. Sans compte, la bonne porte est l'Espace athlete, carte du code
+ * ouverte — doAthleteCode y garde le code et enchaine sur l'inscription.
+ */
+function ouvrirCodeCoach(){
+  if(typeof currentUser!=='undefined'&&currentUser){ go('s-client-code'); return 's-client-code'; }
+  go('s-athlete-entry');
+  setTimeout(()=>{ try{
+    const z=document.getElementById('ae-code-zone');
+    if(z&&z.style.display==='none') aeToggleCode();
+  }catch(e){} },60);
+  return 's-athlete-entry';
+}
 function aeToggleCode(){
   const zone=document.getElementById('ae-code-zone');
   const arrow=document.getElementById('ae-arrow');
@@ -10349,12 +10372,25 @@ function copyCoachInviteLink(){
   };
   const encoded=btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
   const url=APP_BASE_URL+'?coachpkg='+encoded;
-  if(navigator.clipboard){
-    navigator.clipboard.writeText(url).then(()=>toast('✓ Lien copié ! Envoie-le à ton athlète par WhatsApp ou SMS.'));
-  }else{
-    const ta=document.createElement('textarea');ta.value=url;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();
-    toast('✓ Lien copié !');
-  }
+  // LA COPIE PEUT ETRE REFUSEE (QA du 27/09/2026) : permission, navigateur
+  // integre d'une application, page sans le focus. writeText rejetait alors
+  // sans rien dire — aucun toast, et le coach croyait le lien copie. _rcCopier
+  // essaie le presse-papiers puis l'ancienne copie ; en dernier recours, le
+  // lien s'affiche pour etre copie a la main.
+  _rcCopierOuMontrer(url,'✓ Lien copié ! Envoie-le à ton athlète par WhatsApp ou SMS.','Copie ce lien et envoie-le à ton athlète :');
+}
+/**
+ * Copier, et DIRE ce qui s'est passe : le toast de reussite seulement si la
+ * copie a reussi ; sinon le texte s'affiche dans une boite ou il se
+ * selectionne a la main. Rend une promesse de booleen (copie faite ou non).
+ */
+function _rcCopierOuMontrer(texte,okMsg,titreManuel){
+  return _rcCopier(String(texte||'')).then(ok=>{
+    if(ok){ try{ toast(okMsg,'var(--green)'); }catch(e){} return true; }
+    try{ toast('Copie refusée par le navigateur : copie-le à la main.','var(--orange)'); }catch(e){}
+    try{ window.prompt(titreManuel||'Copie ce texte :',String(texte||'')); }catch(e){}
+    return false;
+  });
 }
 
 async function doAthleteCode(){
@@ -16658,7 +16694,10 @@ function renderEpingleAccueil(){
   const el=document.getElementById('clh-annonce');
   if(!el) return;
   const u=currentUser;
-  const manque=!!(u&&u.role==='athlete'&&!u.athletePhoto);
+  // ⚠ SEULEMENT AVEC UN COACH RATTACHE (QA du 27/09/2026). Le bandeau dit
+  //   « permet à ton coach de te reconnaître » : a un athlete sans coach, il
+  //   promettait un tableau de bord qui n'existe pas. Meme regle que le canal.
+  const manque=!!(u&&u.role==='athlete'&&!u.athletePhoto&&canalAccessible(u));
   if(!manque){ el.innerHTML=''; el.style.display='none'; return; }
   el.style.display='block';
   el.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);'
@@ -34438,7 +34477,8 @@ function ouvrirAchatProgramme(id){
   if(!p){ toast('Programme introuvable.','var(--orange)'); return; }
   if(!currentUser){
     toast('Crée ton compte avant d\'acheter.','var(--orange)');
-    go('s-register'); return;
+    // Un programme s'achete en athlete : le role est pose (QA du 27/09/2026).
+    go('s-register'); try{ selectRole('athlete',true); }catch(e){} return;
   }
   _achatProgId=id;
   const z=document.getElementById('ach-corps');
@@ -37766,10 +37806,212 @@ function _marqueCoachPrete(){
   const im=_marqueCoachImg;
   return (im&&im.complete&&im.naturalWidth>0)?im:null;
 }
-function _dessinerBilanSeance(d){
+// ══ LE NOM SUR LES VISUELS ════════════════════════════════════════════
+// PURE. Le nom que l'athlete a choisi de montrer sur ses visuels, en
+// majuscules, ou '' s'il ne veut rien montrer. Un seul reglage pour tous les
+// visuels, presents et a venir : « Nom affiche sur mes visuels » dans le
+// profil — prenom (defaut), pseudo, ou rien. Un pseudo demande mais absent
+// retombe sur le prenom ; sans prenom non plus, rien.
+const VISUEL_NOMS=Object.freeze(['prenom','pseudo','rien']);
+function nomSurVisuels(u){
+  if(!u) return '';
+  const r=VISUEL_NOMS.indexOf(u.visuelNom)>=0?u.visuelNom:'prenom';
+  if(r==='rien') return '';
+  const net=x=>String(x||'').replace(/\s+/g,' ').trim().slice(0,24);
+  const p=net(u.pseudo), f=net(u.fname);
+  const n=(r==='pseudo'&&p)?p:f;
+  try{ return n.toLocaleUpperCase('fr-FR'); }catch(e){ return n.toUpperCase(); }
+}
+// ══ LE FOND DES VISUELS ═══════════════════════════════════════════════
+// Trois fonds pour tous les visuels 1080×1920, présents et à venir (bilan de
+// séance aujourd'hui ; record, badge, série, cycle demain) :
+//   'transparent' — PNG sans fond, à poser sur sa propre photo en story ;
+//   'photo'       — la photo de l'athlète en « cover », assombrie en bas ;
+//   'rouge'       — le dégradé rouge et la trame diagonale de la carte séance.
+// ⚠ LA PHOTO NE QUITTE JAMAIS LE TÉLÉPHONE. Elle est lue par un <input>,
+//   gardée en mémoire le temps de la page (une URL d'objet), et dessinée dans
+//   le canevas : rien ne l'envoie, rien ne la stocke. Seul le CHOIX du fond
+//   est retenu, dans localStorage.
+//
+// POUR UN NOUVEAU VISUEL, trois gestes :
+//   1. son dessin prend un `fond` et appelle _visuelPeindreFond(g,W,H,fond)
+//      avant tout le reste ;
+//   2. son écran pose _htmlVisuelFonds(id) puis monterSelecteurFond(id,
+//      fond=>sonDessin(donnees,fond)) — les vignettes, la note et le choix
+//      suivent tout seuls ;
+//   3. sa sortie passe visuelFondFormat(fond) à _storySortirTelechargement /
+//      _storySortirPartage, avec le nom visuelNomFichier('repcore-xxx',fond).
+const VISUEL_FOND=Object.freeze({
+  LISTE:Object.freeze(['transparent','photo','rouge']),
+  CLE:'rc_visuel_fond',
+  LIB:Object.freeze({transparent:'Sans fond',photo:'Ma photo',rouge:'Rouge'}),
+  // La vignette : 180 × 320, le 9:16 de la story.
+  VL:180, VH:320
+});
+/** La photo choisie, en mémoire seulement : {img,url} ou null. */
+let _visuelPhoto=null;
+function _visuelPhotoPrete(){
+  const im=_visuelPhoto&&_visuelPhoto.img;
+  return !!(im&&im.complete&&im.naturalWidth>0);
+}
+/** Le dernier fond choisi sur cet appareil. localStorage peut manquer : 'transparent'. */
+function visuelFondChoisi(){
+  let f=null;
+  try{ f=localStorage.getItem(VISUEL_FOND.CLE); }catch(e){ f=null; }
+  return VISUEL_FOND.LISTE.indexOf(f)>=0?f:'transparent';
+}
+function visuelFondMemoriser(f){
+  if(VISUEL_FOND.LISTE.indexOf(f)<0) return false;
+  try{ localStorage.setItem(VISUEL_FOND.CLE,f); return true; }catch(e){ return false; }
+}
+/** Le fond qu'on dessine vraiment : « photo » sans photo chargée retombe sur « sans fond ». */
+function visuelFondEffectif(){
+  const f=visuelFondChoisi();
+  return (f==='photo'&&!_visuelPhotoPrete())?'transparent':f;
+}
+/** PURE. Le format de sortie : PNG pour garder la transparence, JPEG 0,9 sinon. */
+function visuelFondFormat(fond){
+  return fond==='transparent'?{type:'image/png',ext:'png',q:null}:{type:'image/jpeg',ext:'jpg',q:0.9};
+}
+/** PURE. repcore-bilan.png ou repcore-bilan.jpg. */
+function visuelNomFichier(base,fond){ return base+'.'+visuelFondFormat(fond).ext; }
+/**
+ * Peint le fond sur tout le canevas, AVANT le reste du visuel.
+ * @param {CanvasRenderingContext2D} g @param {number} W @param {number} H
+ * @param {'transparent'|'photo'|'rouge'} fond
+ */
+function _visuelPeindreFond(g,W,H,fond){
+  if(fond==='rouge'){
+    // Le dégradé et la trame de _dessinerStorySeance, sur tout le format.
+    const grad=g.createLinearGradient(0,0,W,H);
+    grad.addColorStop(0,'#e02020'); grad.addColorStop(0.55,'#c01818'); grad.addColorStop(1,'#8e1010');
+    g.fillStyle=grad; g.fillRect(0,0,W,H);
+    g.save();
+    g.strokeStyle='rgba(255,255,255,.05)'; g.lineWidth=2;
+    for(let x=-H;x<W+H;x+=26){ g.beginPath(); g.moveTo(x,0); g.lineTo(x+H,H); g.stroke(); }
+    g.restore();
+    return true;
+  }
+  if(fond==='photo'&&_visuelPhotoPrete()){
+    const im=_visuelPhoto.img, iw=im.naturalWidth, ih=im.naturalHeight;
+    // « cover » : la photo remplit tout, centrée, rognée sur le côté qui dépasse.
+    const k=Math.max(W/iw,H/ih), dw=iw*k, dh=ih*k;
+    g.fillStyle='#000'; g.fillRect(0,0,W,H);
+    g.drawImage(im,(W-dw)/2,(H-dh)/2,dw,dh);
+    // LE BAS ASSOMBRI : de 0 à 70 % de noir, là où le texte descend.
+    const v=g.createLinearGradient(0,H*0.3,0,H);
+    v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,0,0,.7)');
+    g.fillStyle=v; g.fillRect(0,0,W,H);
+    return true;
+  }
+  return false;                                   // transparent : rien
+}
+/** Le sélecteur : trois vignettes cliquables, et l'<input> de la photo. */
+function _htmlVisuelFonds(id){
+  const f=visuelFondEffectif();
+  return '<div class="vf" id="'+id+'" role="radiogroup" aria-label="Fond du visuel">'
+    +VISUEL_FOND.LISTE.map(k=>'<button type="button" class="vf-b'+(k===f?' actif':'')+'" role="radio" aria-checked="'+(k===f)+'" data-fond="'+k+'"'
+      // Un libellé d'une ligne pour les trois : « changer » se dit au survol.
+      +(k==='photo'?' title="Touche à nouveau pour changer de photo"':'')
+      +' onclick="visuelFondChoisir(\''+id+'\',\''+k+'\')">'
+      +'<canvas class="vf-c" width="'+VISUEL_FOND.VL+'" height="'+VISUEL_FOND.VH+'" aria-hidden="true"></canvas>'
+      +'<span>'+VISUEL_FOND.LIB[k]+'</span></button>').join('')
+    +'<input type="file" accept="image/*" capture="environment" class="vf-f" hidden onchange="visuelFondPhoto(\''+id+'\',this)">'
+    +'</div>';
+}
+/** La note sous les boutons : ce que le fichier sera, selon le fond. */
+function _visuelNoteFond(fond){
+  if(fond==='transparent') return 'PNG sans fond, à apposer sur ta photo en story.<br>'
+    +'Dans la galerie, le visuel s’affichera en blanc : c’est normal.';
+  if(fond==='photo') return 'JPEG sur ta photo, prêt à poster.<br>Ta photo reste sur ton téléphone : rien n’est envoyé.';
+  return 'JPEG sur fond rouge, prêt à poster.';
+}
+// Les sélecteurs à l'écran : id → {dessiner, note}. Un écran qui se redessine
+// remonte le sien ; un id absent du document est oublié au passage.
+const _visuelFondsMontes=new Map();
+/**
+ * Branche un sélecteur posé par _htmlVisuelFonds.
+ * @param {string} id
+ * @param {(fond:string)=>HTMLCanvasElement|null} dessiner le visuel complet, pour un fond
+ * @param {string} [noteId] l'élément dont le texte suit le fond
+ */
+function monterSelecteurFond(id,dessiner,noteId){
+  _visuelFondsMontes.set(id,{dessiner,noteId:noteId||null});
+  _visuelFondsPeindre(id);
+  // Les polices peuvent arriver après : on repeint alors les vignettes.
+  try{ if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>_visuelFondsPeindre(id)); }catch(e){}
+}
+function _visuelFondsPeindre(id){
+  const m=_visuelFondsMontes.get(id), z=document.getElementById(id);
+  if(!m||!z){ _visuelFondsMontes.delete(id); return false; }
+  const f=visuelFondEffectif();
+  z.querySelectorAll('.vf-b').forEach(b=>{
+    const on=b.getAttribute('data-fond')===f;
+    b.classList.toggle('actif',on); b.setAttribute('aria-checked',String(on));
+  });
+  if(m.noteId){ const n=document.getElementById(m.noteId); if(n) n.innerHTML=_visuelNoteFond(f); }
+  // LES VIGNETTES SE DESSINENT APRÈS LA PEINTURE, une par tâche : trois
+  // visuels complets d'affilée bloqueraient l'écran de fin de séance.
+  const cvs=[...z.querySelectorAll('.vf-b')];
+  cvs.forEach((b,i)=>setTimeout(()=>{
+    const c=b.querySelector('canvas'); if(!c||!c.isConnected) return;
+    const k=b.getAttribute('data-fond'), x=c.getContext('2d'); if(!x) return;
+    x.clearRect(0,0,c.width,c.height);
+    if(k==='transparent'){
+      // Le damier dit « transparent » mieux qu'un mot.
+      for(let yy=0;yy<c.height;yy+=12) for(let xx=0;xx<c.width;xx+=12){
+        x.fillStyle=((xx+yy)/12)%2?'#2a2a2e':'#1c1c20'; x.fillRect(xx,yy,12,12); }
+    }
+    if(k==='photo'&&!_visuelPhotoPrete()){
+      x.fillStyle='#16161a'; x.fillRect(0,0,c.width,c.height);
+      x.strokeStyle='rgba(255,255,255,.35)'; x.lineWidth=3; x.setLineDash([8,6]);
+      x.strokeRect(10,10,c.width-20,c.height-20); x.setLineDash([]);
+      x.fillStyle='rgba(255,255,255,.7)'; x.font='800 64px Montserrat,sans-serif'; x.textAlign='center'; x.textBaseline='middle';
+      x.fillText('+',c.width/2,c.height/2);
+      return;
+    }
+    let v=null;
+    try{ v=m.dessiner(k); }catch(e){ v=null; }
+    if(v){ x.drawImage(v,0,0,c.width,c.height); v.width=0; v.height=0; }
+  },40+i*60));
+  return true;
+}
+/** Un clic sur une vignette. « Ma photo » sans photo : on ouvre le choix du fichier. */
+function visuelFondChoisir(id,fond){
+  if(VISUEL_FOND.LISTE.indexOf(fond)<0) return false;
+  if(fond==='photo'&&(!_visuelPhotoPrete()||visuelFondEffectif()==='photo')){
+    const inp=document.querySelector('#'+id+' .vf-f');
+    if(inp){ inp.value=''; inp.click(); }
+    return true;
+  }
+  visuelFondMemoriser(fond);
+  for(const k of [..._visuelFondsMontes.keys()]) _visuelFondsPeindre(k);
+  return true;
+}
+/** La photo choisie : lue ici, gardée en mémoire, jamais envoyée. */
+function visuelFondPhoto(id,input){
+  const f=input&&input.files&&input.files[0];
+  if(!f||!/^image\//.test(f.type||'image/')) return false;
+  const url=URL.createObjectURL(f);
+  const im=new Image();
+  im.onload=()=>{
+    try{ if(_visuelPhoto&&_visuelPhoto.url) URL.revokeObjectURL(_visuelPhoto.url); }catch(e){}
+    _visuelPhoto={img:im,url};
+    visuelFondMemoriser('photo');
+    for(const k of [..._visuelFondsMontes.keys()]){
+      _visuelFondsPeindre(k);
+    }
+  };
+  im.onerror=()=>{ try{ URL.revokeObjectURL(url); }catch(e){} toast('Cette image ne s’ouvre pas.','var(--orange)'); };
+  im.src=url;
+  return true;
+}
+// `fond` (FACULTATIF) : 'transparent' (défaut, le PNG d'avant), 'photo' ou 'rouge'.
+function _dessinerBilanSeance(d,fond){
   const cv=document.createElement('canvas');
   cv.width=STORY_L; cv.height=STORY_H;
   const g=cv.getContext('2d');
+  _visuelPeindreFond(g,STORY_L,STORY_H,fond||'transparent');
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
   const M=72;                                   // la marge laterale
@@ -37947,8 +38189,27 @@ function _dessinerBilanSeance(d){
   }
   ombre(true);
   g.textAlign='center';
-  g.fillStyle='rgba(255,255,255,.48)'; g.font='700 34px '+BEBAS;
-  ecrireEspace('REPCORE',cxm,y+30,5,true);
+  // LA SIGNATURE DE L'ATHLETE. Kevin, 26/09/2026 : « <PRENOM OU PSEUDO> ·
+  // REPCORE » a la place du mot-symbole seul, meme police, meme double passe
+  // d'ombre, en blanc a 85 %, espacement large. Sans nom a montrer (reglage
+  // « rien », ou ni prenom ni pseudo), le mot-symbole d'avant, inchange.
+  // La mise en page ne bouge pas : la ligne occupe exactement la place du
+  // mot-symbole, et la taille se plie si un nom long depasse la largeur.
+  // ⚠ LE DESSIN NE LIT QUE `d`, jamais le dossier (test « L'image reprend
+  //   les chiffres de l'écran ») : la signature y est posée par _bilanDonneesDe.
+  const sig=String(d.signature||'');
+  if(sig){
+    const t=sig+' · REPCORE', esp=7;
+    let ts=34;
+    const larg=()=>{ g.font='700 '+ts+'px '+BEBAS;
+      return String(t).split('').reduce((a,c)=>a+g.measureText(c).width+esp,0)-esp; };
+    while(larg()>LARG&&ts>22) ts-=1;
+    g.fillStyle='rgba(255,255,255,.85)'; g.font='700 '+ts+'px '+BEBAS;
+    ecrireEspace(t,cxm,y+30,esp,true);
+  } else {
+    g.fillStyle='rgba(255,255,255,.48)'; g.font='700 34px '+BEBAS;
+    ecrireEspace('REPCORE',cxm,y+30,5,true);
+  }
   ombre(false);
   return cv;
 }
@@ -38055,8 +38316,25 @@ function _estIOS(){
 //
 // TOUT EST SYNCHRONE, et ce n'est pas un detail : le moindre await
 // consommerait le geste utilisateur, et iOS refuserait le partage.
-function _storySortirTelechargement(cv,nomFichier){
-  const dataUrl=cv.toDataURL('image/png');
+// LE LIEN DE L'ATHLETE, COPIE A LA SORTIE D'UN VISUEL. Seulement si
+// lienPerso() existe (idee 16) : sans elle, rien du tout. Instagram ne lit pas
+// les liens poses sur une image ; le sticker « Lien » de la story, si. On met
+// donc le lien dans le presse-papiers au moment ou l'athlete s'apprete a
+// publier, et on lui dit quoi en faire.
+function _storyCopierLien(){
+  if(typeof lienPerso!=='function') return false;
+  try{
+    const l=lienPerso();
+    if(!l||!navigator.clipboard||!navigator.clipboard.writeText) return false;
+    navigator.clipboard.writeText(String(l))
+      .then(()=>toast('Lien copié · ajoute le sticker Lien dans ta story','var(--green)',4000))
+      .catch(()=>{});
+    return true;
+  }catch(e){ return false; }
+}
+// `fmt` FACULTATIF (visuelFondFormat) : JPEG qualité 0,9 quand le visuel a un fond, PNG sinon.
+function _storySortirTelechargement(cv,nomFichier,fmt){
+  const dataUrl=(fmt&&fmt.type==='image/jpeg')?cv.toDataURL('image/jpeg',fmt.q||0.9):cv.toDataURL('image/png');
   cv.width=0; cv.height=0;            // 8 Mo rendus tout de suite
   if(_estIOS()){ _ouvrirApercuStory(dataUrl); return true; }
   const a=document.createElement('a');
@@ -38066,6 +38344,7 @@ function _storySortirTelechargement(cv,nomFichier){
   a.click();
   a.remove();
   toast('Image téléchargée','var(--green)');
+  _storyCopierLien();
   return true;
 }
 // Rend false quand le partage natif n'existe pas : l'appelant retombe alors
@@ -38079,18 +38358,20 @@ function _storySortirTelechargement(cv,nomFichier){
 // on DEMANDE au navigateur, avec la charge exacte qu'on s'apprete a envoyer, et
 // on retombe sur le fichier seul des qu'il repond non. L'image est ce qu'on
 // partage ; le texte n'est qu'un bonus, et un bonus ne coute pas le principal.
-function _storySortirPartage(cv,nomFichier,meta){
-  const dataUrl=cv.toDataURL('image/png');
+function _storySortirPartage(cv,nomFichier,meta,fmt){
+  const jpeg=!!(fmt&&fmt.type==='image/jpeg');
+  const dataUrl=jpeg?cv.toDataURL('image/jpeg',fmt.q||0.9):cv.toDataURL('image/png');
   cv.width=0; cv.height=0;
   const blob=_b64versBlob(dataUrl);
   let f=null;
-  try{ f=new File([blob],nomFichier,{type:'image/png'}); }catch(e){}
+  try{ f=new File([blob],nomFichier,{type:jpeg?'image/jpeg':'image/png'}); }catch(e){}
   if(f&&navigator.canShare&&navigator.canShare({files:[f]})&&navigator.share){
     let charge={files:[f]};
     if(meta){
       const riche=Object.assign({files:[f]},meta);
       try{ if(navigator.canShare(riche)) charge=riche; }catch(e){}
     }
+    _storyCopierLien();
     navigator.share(charge).catch(()=>{});
     return true;
   }
@@ -38190,6 +38471,8 @@ function _bilanDonneesDe(sc){
     const ant=listeHistoriqueSeances(currentUser).filter(x=>x.date<sc.date);
     d.records=recordsDeSeance(sc,ant).length;
   }catch(e){ d.records=0; }
+  // LA SIGNATURE DE L'ATHLETE, selon son reglage « Nom affiche sur mes visuels ».
+  try{ d.signature=nomSurVisuels(currentUser); }catch(e){ d.signature=''; }
   return d;
 }
 function telechargerBilanSeance(sc){
@@ -38197,7 +38480,8 @@ function telechargerBilanSeance(sc){
   const d=_bilanDonneesDe(sc);
   if(!d){ toast('Aucune séance à partager.','var(--orange)'); return false; }
   _storyEnCours=true;
-  try{ return _storySortirTelechargement(_dessinerBilanSeance(d),'repcore-bilan.png'); }
+  const fond=visuelFondEffectif();
+  try{ return _storySortirTelechargement(_dessinerBilanSeance(d,fond),visuelNomFichier('repcore-bilan',fond),visuelFondFormat(fond)); }
   catch(e){ toast('Téléchargement impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); return false; }
   finally{ _storyEnCours=false; }
 }
@@ -38206,8 +38490,9 @@ function partagerBilanSeance(sc){
   const d=_bilanDonneesDe(sc);
   if(!d){ toast('Aucune séance à partager.','var(--orange)'); return false; }
   _storyEnCours=true;
+  const fond=visuelFondEffectif();
   try{
-    if(_storySortirPartage(_dessinerBilanSeance(d),'repcore-bilan.png')) return true;
+    if(_storySortirPartage(_dessinerBilanSeance(d,fond),visuelNomFichier('repcore-bilan',fond),undefined,visuelFondFormat(fond))) return true;
     _storyEnCours=false;
     return telechargerBilanSeance(sc);
   }catch(e){
@@ -38248,14 +38533,17 @@ function renderPartageBilan(){
   const part=(typeof navigator!=='undefined'&&navigator.share)
     ?'<button type="button" class="rcf-share" onclick="partagerBilanSeance()">'
       +'Partager ma séance</button>':'';
-  z.innerHTML='<button type="button" class="rcf-dl" id="wd-dl" '
+  // LE FOND AVANT LES BOUTONS : on choisit, puis on télécharge.
+  z.innerHTML=_htmlVisuelFonds('wd-fonds')
+    +'<button type="button" class="rcf-dl" id="wd-dl" '
     +'onclick="_telechargerAvecEtat(this)">'+icon('download',18)
     +'<span>Télécharger ma séance</span></button>'+part
     // Les deux phrases, et les deux-points. « en blanc : c'est normal » se lit
     // comme une explication ; un tiret ou un separateur graphique en aurait
-    // fait deux affirmations sans lien.
-    +'<div class="rcf-note">PNG sans fond, à apposer sur ta photo en story.<br>'
-    +'Dans la galerie, le visuel s’affichera en blanc : c’est normal.</div>';
+    // fait deux affirmations sans lien. La note suit le fond choisi : « en
+    // blanc » ne se dit que du PNG sans fond.
+    +'<div class="rcf-note" id="wd-note">'+_visuelNoteFond(visuelFondEffectif())+'</div>';
+  monterSelecteurFond('wd-fonds',f=>{ const d=_bilanDonneesDe(); return d?_dessinerBilanSeance(d,f):null; },'wd-note');
   return true;
 }
 // Le partage natif, en plus et jamais a la place. Tout est SYNCHRONE : le
@@ -47476,6 +47764,7 @@ const ANAT_SVG={
   relancer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>',
   points:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.2"/><circle cx="18" cy="9" r="2.2"/><circle cx="9" cy="18" r="2.2"/><path d="M8 7l8 1.6M16.8 10.8l-6.4 5.6"/></svg>',
   x:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  export:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2"/><path d="M6 14h12v7H6z"/></svg>',
   disquette:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l5 5v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v5h8V3M7 21v-7h10v7"/></svg>',
   cadrer:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V4h4M17 4h4v4M21 16v4h-4M7 20H3v-4"/><circle cx="12" cy="9" r="2"/><path d="M9 17l1-4h4l1 4"/></svg>',
   entiere:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 16l5-5 4 4 3-3 4 4"/></svg>',
@@ -47745,7 +48034,9 @@ function anatPriorites(res,objectif){
     const conf=ANAT_PRIO.CONF[f.conf]!=null?ANAT_PRIO.CONF[f.conf]:ANAT_PRIO.CONF.C;
     const score=Math.abs(f.niveau)*conf*(rel.indexOf(f.cle)>=0?1:ANAT_PRIO.AUTRE);
     out.push({cle:f.cle,lib:f.lib,verdict:anatVerdict(f),niveau:f.niveau,conf:f.conf||null,score,action,
-      exercices:(am&&am.exercices)||(pr&&pr.exercices)||[]});
+      exercices:(am&&am.exercices)||(pr&&pr.exercices)||[],
+      // E5 : de quoi la dire à l'athlète — l'exercice, et le réglage sans un mot du lexique.
+      quoi:(am&&am.quoi)||'',consigne:(am&&am.consigne)||''});
   }
   return out.sort((a,b)=>b.score-a.score||Math.abs(b.niveau)-Math.abs(a.niveau)).slice(0,3);
 }
@@ -47764,6 +48055,177 @@ function _htmlAnatPriorites(res,c){
       +'<span class="an-prio-a">'+escapeHtml(x.action)+'</span></span></button>').join('')+'</div>'
     :'<p class="an-prio-vide">Rien à corriger : leviers dans la moyenne. Aucune zone n’est au-dessus de « léger » sur ce bilan.</p>';
   return '<div class="an-prio"><div class="an-prio-h"><h5>3 priorités</h5>'+seg+'</div>'+corps+'</div>';
+}
+// ── LES DEUX EXPORTS (E5, 26/09/2026) ─────────────────────────────────────
+// Un HTML d'impression A4, avec les polices du dépôt, imprimé par le
+// navigateur depuis une iframe dédiée : pas de service tiers, rien ne quitte
+// l'appareil. Deux versions :
+//   COACH   — tout : priorités, chiffres, repères, sources, dates et marges ;
+//   ATHLÈTE — la photo avec ses points, et les trois priorités dites en
+//             consignes d'exécution. Aucun chiffre de population, aucun mot du
+//             lexique morphologique (ANAT_LEXIQUE_MORPHO) : c'est ce qui peut
+//             descendre chez l'athlète, et rien d'autre.
+/** Le style d'impression, commun aux deux versions. */
+function _anatExportCss(){
+  // LES POLICES DU DÉPÔT, par leur chemin relatif : un document srcdoc prend
+  // l'adresse de la page qui l'ouvre, et l'impression attend fonts.ready.
+  return "@font-face{font-family:'RC Texte';src:url('fonts/montserrat-var-latin.woff2') format('woff2');font-weight:100 900;font-display:swap;}"
+    +"@font-face{font-family:'RC Titre';src:url('fonts/bebasneue-400-latin.woff2') format('woff2');font-display:swap;}"
+    +'@page{size:A4;margin:14mm 13mm}'
+    +'*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +'html,body{margin:0;background:#fff;color:#18181b;font:10pt/1.45 "RC Texte",Arial,sans-serif}'
+    +'h1,h2,h3{font-family:"RC Titre","Arial Narrow",Impact,sans-serif;font-weight:400;letter-spacing:.04em;margin:0;color:#111}'
+    +'h1{font-size:24pt;line-height:1}h1 span{color:#c81e1e}h2{font-size:14pt;margin:16px 0 6px;border-bottom:1.5px solid #c81e1e;padding-bottom:2px}h3{font-size:11.5pt;margin:0 0 3px}'
+    +'.ex-t{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;border-bottom:3px solid #111;padding-bottom:8px;margin-bottom:10px}'
+    +'.ex-t p{margin:3px 0 0;font-size:9pt;color:#52525b}.ex-m{font-size:8pt;color:#52525b;text-align:right}'
+    +'.ex-ph{display:flex;gap:10px;justify-content:center;margin:6px 0 4px}'
+    +'.ex-f{margin:0;text-align:center;break-inside:avoid}.ex-f figcaption{font-size:8pt;color:#52525b;margin-top:3px}'
+    +'.ex-c{position:relative;height:118mm;margin:0 auto;border-radius:6px;overflow:hidden;background:#111}'
+    +'.ex-a .ex-c{height:150mm}'
+    +'.ex-c img,.ex-c svg{position:absolute;inset:0;width:100%;height:100%}.ex-c img{object-fit:fill}'
+    +'.ex-c .an-t{stroke:#ff3b3b;stroke-width:3;stroke-linecap:round;opacity:.9}.ex-c .an-t-plomb,.ex-c .an-t-sol{stroke:#fff;stroke-width:2;stroke-dasharray:8 6;opacity:.7}'
+    +'.ex-c .an-pt{fill:#ff3b3b;stroke:#fff;stroke-width:2.5}.ex-c .an-pt.est{fill:#f5a524}.ex-c .an-pt.man{fill:#22c55e}.ex-c .an-hit{display:none}'
+    +'.ex-p{display:grid;gap:7px;margin:4px 0}.ex-p>div{display:grid;grid-template-columns:26px 1fr;gap:9px;align-items:start;border:1px solid #e4e4e7;border-left:4px solid #c81e1e;border-radius:6px;padding:8px 10px;break-inside:avoid}'
+    +'.ex-p b.n{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#c81e1e;color:#fff;font:400 13pt "RC Titre","Arial Narrow",Impact,sans-serif}'
+    +'.ex-p p{margin:2px 0 0}.ex-p em{font-style:normal;color:#52525b;font-size:8.5pt}'
+    +'table{width:100%;border-collapse:collapse;font-size:8.5pt;margin:4px 0 8px}th,td{text-align:left;vertical-align:top;padding:3px 5px;border-bottom:1px solid #e4e4e7}'
+    +'th{font-size:7.5pt;text-transform:uppercase;letter-spacing:.05em;color:#52525b;border-bottom:1.5px solid #18181b}td.v{white-space:nowrap;font-weight:700}'
+    +'.ex-z{break-inside:avoid;border:1px solid #e4e4e7;border-radius:6px;padding:8px 10px;margin:0 0 8px}'
+    +'.ex-z .h{display:flex;justify-content:space-between;gap:10px;align-items:baseline}.ex-z .h span{font-size:8.5pt;font-weight:700;color:#c81e1e}'
+    +'.ex-z small,.ex-s{display:block;font-size:7.5pt;color:#71717a;margin-top:3px}.ex-z ul{margin:3px 0 0 16px;padding:0}'
+    +'.ex-n{font-size:8pt;color:#52525b;margin-top:12px;border-top:1px solid #e4e4e7;padding-top:6px}';
+}
+/** La photo d'une vue, avec ses points et ses traits — sans un mot : ni étiquette ni infobulle. */
+function _anatExportPhoto(a,pb,vue,legende){
+  const v=a&&a[vue], src=_anatSrcVue(pb,vue), pts=anatPoints(a,vue);
+  if(!v||!src||!pts||!v.w||!v.h) return '';
+  const dessin=String(_anatDessin(vue,pts,v.w,v.h,false)||'')
+    .replace(/<circle class="an-hit"[^>]*>[\s\S]*?<\/circle>/g,'').replace(/<title>[\s\S]*?<\/title>/g,'').replace(/<text[\s\S]*?<\/text>/g,'');
+  return '<figure class="ex-f"><div class="ex-c" style="aspect-ratio:'+v.w+'/'+v.h+'"><img src="'+escapeHtml(src)+'" alt="">'
+    +'<svg viewBox="0 0 '+v.w+' '+v.h+'" preserveAspectRatio="none" aria-hidden="true">'+dessin+'</svg></div>'
+    +(legende?'<figcaption>'+escapeHtml(legende)+'</figcaption>':'')+'</figure>';
+}
+/**
+ * Les trois priorités, dites en consignes pour l'athlète : le nom de
+ * l'exercice et le réglage, clause par clause, sans aucune qui porte un mot du
+ * lexique. Une priorité qui n'a plus rien à dire une fois filtrée est omise.
+ * PURE.
+ */
+function anatConsignesExport(prios){
+  const out=[];
+  for(const x of (prios||[])){
+    const texte=x.consigne||anatConsigneAthlete(x.action||'');
+    if(!texte||ANAT_LEXIQUE_MORPHO.test(texte)) continue;
+    const titre=(x.quoi&&!ANAT_LEXIQUE_MORPHO.test(x.quoi))?x.quoi:'Consigne '+(out.length+1);
+    out.push({titre,texte});
+  }
+  return out;
+}
+/**
+ * PURE (hors lecture des polices). Le document d'impression complet.
+ * @param {any} c le dossier  @param {'coach'|'athlete'} mode
+ * @returns {string} le HTML, ou '' s'il n'y a pas d'analyse à exporter
+ */
+function anatExportHtml(c,mode){
+  if(!c||!c.morphoAnat) return '';
+  const pb=anatPremierBilan(c);
+  const a=(c.morphoAnat.v===ANAT_VERSION&&Number(c.morphoAnat.bilan)===pb.date)?c.morphoAnat:null;
+  if(!a||pb.manque.length) return '';
+  const res=anatMesuresRendu(a,c);
+  const obj=_anatPrioObj||anatObjectif(c);
+  const prios=anatPriorites(res,obj);
+  const prenom=String(c.fname||'').trim(), nom=(prenom+' '+String(c.lname||'').trim()).trim()||'Athlète';
+  const dBilan=_anatDateFr(pb.date), dJour=_anatDateFr(Date.now());
+  const tete=(titre,sous,droite)=>'<header class="ex-t"><div><h1>'+titre+'</h1><p>'+escapeHtml(sous)+'</p></div><div class="ex-m">'+droite+'</div></header>';
+  const doc=(titre,corps,cls)=>'<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>'+escapeHtml(titre)+'</title><style>'+_anatExportCss()+'</style></head><body class="'+cls+'">'+corps+'</body></html>';
+
+  if(mode==='athlete'){
+    const cs=anatConsignesExport(prios);
+    const corps=tete('Tes <span>consignes</span>',(prenom||'')+(prenom?' · ':'')+'bilan du '+dBilan,'Préparé par ton coach<br>le '+dJour)
+      +'<div class="ex-ph">'+_anatExportPhoto(a,pb,'face','Ta photo de face, bilan du '+dBilan)+'</div>'
+      +'<h2>Tes '+(cs.length>1?cs.length+' priorités':'priorités')+' à l’entraînement</h2>'
+      +(cs.length?'<div class="ex-p">'+cs.map((x,i)=>'<div><b class="n">'+(i+1)+'</b><div><h3>'+escapeHtml(x.titre)+'</h3><p>'+escapeHtml(x.texte)+'</p></div></div>').join('')+'</div>'
+        :'<p>Rien à changer pour l’instant : garde tes réglages habituels, séance après séance.</p>')
+      +'<p class="ex-n">Applique-les dès l’échauffement, puis à ta charge de travail. On en reparle à ta prochaine séance ou à ton prochain bilan.</p>';
+    return doc('Consignes · '+(prenom||'athlète'),corps,'ex-a');
+  }
+
+  // ── LA VERSION COACH : tout, avec ses sources, ses dates et ses marges.
+  const ech=res.echelle;
+  const echTxt=ech&&ech.cmPx?'Échelle par la taille du dossier : '+_anatN(ech.taille,0)+' cm, ±'+ech.pct+' %':'Sans taille au dossier : des rapports, aucun centimètre';
+  const textes={};
+  res.fiches.forEach(f=>{ textes[f.cle]=_anatSafe(()=>anatTexte(f,res))||{}; });
+  const lignePrio=(x,i)=>'<div><b class="n">'+(i+1)+'</b><div><h3>'+escapeHtml(x.lib)+'</h3><em>'+escapeHtml(x.verdict)+(x.conf?' · confiance '+x.conf:'')+'</em><p>'+escapeHtml(x.action)+'</p></div></div>';
+  const synthese='<table><thead><tr><th>Zone</th><th>Lecture</th><th>Valeur</th><th>Marge</th><th>Confiance</th></tr></thead><tbody>'
+    +res.fiches.map(f=>'<tr><td>'+escapeHtml(f.lib)+'</td><td>'+escapeHtml(f.etat==='ok'?anatVerdict(f):'non lisible')+(f.grise?' (à confirmer)':'')+'</td><td class="v">'+escapeHtml(f.valeur||'—')+'</td><td>'+escapeHtml(f.tolerance||'—')+'</td><td>'+escapeHtml(f.conf||'—')+'</td></tr>').join('')
+    +'</tbody></table>';
+  const zone=(f)=>{
+    const t=textes[f.cle]||{};
+    const lis=(l)=>(l&&l.length)?'<ul>'+l.map(x=>'<li>'+escapeHtml(typeof x==='string'?x:(x&&x.quoi?x.quoi+' : '+x.reglage:String(x)))+'</li>').join('')+'</ul>':'';
+    const ch=(f.chiffres||[]).length?'<table><thead><tr><th>Mesure</th><th>Valeur</th><th>Repère</th><th>Écart</th></tr></thead><tbody>'
+      +f.chiffres.map(l=>'<tr><td>'+escapeHtml(l.lib)+(l.def?'<small>'+escapeHtml(l.def)+'</small>':'')+'</td><td class="v">'+escapeHtml(l.val==null?'—':String(l.val))+'</td><td>'+escapeHtml(l.ref==null?'':String(l.ref))+'</td><td>'+escapeHtml(l.ecart==null?'':String(l.ecart))+'</td></tr>').join('')+'</tbody></table>':'';
+    return '<section class="ex-z"><div class="h"><h3>'+escapeHtml(f.lib)+'</h3><span>'+escapeHtml(f.etat==='ok'?anatVerdict(f):'non lisible')+(f.conf?' · confiance '+f.conf:'')+'</span></div>'
+      +(t.court?'<p>'+escapeHtml(t.court)+'</p>':'')+ch
+      +(t.privilegier&&t.privilegier.length?'<b>À privilégier</b>'+lis(t.privilegier):'')
+      +(t.amenager&&t.amenager.length?'<b>À aménager</b>'+lis(t.amenager):'')
+      +(t.verifier?'<small>À vérifier : '+escapeHtml(t.verifier)+'</small>':'')
+      +'<small>Marge : '+escapeHtml(f.tolerance||'—')+' · Source : '+escapeHtml(f.source||'photo du bilan du '+dBilan)+'</small></section>';
+  };
+  const corps=tete('Analyse <span>morpho-anatomique</span>',nom+' · bilan du '+dBilan+(pb.bilan&&pb.bilan.type==='depart'?' (départ)':''),
+      'Analyse du '+_anatDateFr(a.date||pb.date)+'<br>Exportée le '+dJour)
+    +'<div class="ex-ph">'+_anatExportPhoto(a,pb,'face','Face · '+dBilan)+_anatExportPhoto(a,pb,'dos','Dos · '+dBilan)+(a.profil?_anatExportPhoto(a,pb,'profil','Profil · '+dBilan):'')+'</div>'
+    +'<p class="ex-s">'+escapeHtml(echTxt)+' · repères '+escapeHtml(ANAT_REF.SOURCE)+' · points rouges lus par le moteur, verts posés à la main, orangés estimés.</p>'
+    +'<h2>3 priorités — objectif '+escapeHtml(ANAT_PRIO.LIB[obj]||obj)+'</h2>'
+    +(prios.length?'<div class="ex-p">'+prios.map(lignePrio).join('')+'</div>':'<p>Rien au-dessus de « léger » sur ce bilan.</p>')
+    +'<h2>Résultats</h2>'+synthese
+    +'<h2>Détail par zone</h2>'+res.fiches.map(zone).join('')
+    +'<p class="ex-n">Les repères sont posés sur les photos du bilan, puis ajustables à la main ; la photo est mise à l’échelle par la taille du dossier. Chaque écart à la moyenne est un levier à connaître, pas un défaut. Document de travail du coach : il ne se transmet pas tel quel à l’athlète.</p>';
+  // ⚠ PAS « ex-c » : c'est la classe du cadre photo (fond noir, hauteur fixe, rogné).
+  return doc('Analyse · '+nom+' · '+dBilan,corps,'ex-coach');
+}
+/**
+ * « Exporter » : le document dans une iframe dédiée, puis la boîte d'impression
+ * du navigateur — qui propose aussi « Enregistrer en PDF ». On attend les
+ * polices et la photo : imprimer avant, c'est imprimer une page sans elles.
+ * @param {'coach'|'athlete'} mode  @param {{imprimer?:boolean}} [o]  imprimer:false pour le banc et les tests
+ * @returns {Promise<HTMLIFrameElement|null>}
+ */
+async function anatExporter(mode,o){
+  const opt=o||{};
+  try{ document.querySelectorAll('details.an-exp[open]').forEach(d=>d.open=false); }catch(e){}
+  const c=getOwnedClient(currentClientId);
+  const html=_anatSafe(()=>anatExportHtml(c,mode==='athlete'?'athlete':'coach'));
+  if(!html){ toast('Rien à exporter : l’analyse n’est pas encore faite.','var(--orange)'); return null; }
+  document.getElementById('an-export')?.remove();
+  const f=document.createElement('iframe');
+  f.id='an-export'; f.setAttribute('aria-hidden','true'); f.tabIndex=-1;
+  f.style.cssText='position:fixed;right:0;bottom:0;width:210mm;height:297mm;border:0;opacity:0;pointer-events:none;z-index:-1';
+  const pret=new Promise(r=>{ f.onload=()=>r(); });
+  f.srcdoc=html;
+  document.body.appendChild(f);
+  await Promise.race([pret,new Promise(r=>setTimeout(r,4000))]);
+  const d=f.contentDocument;
+  try{
+    await Promise.race([Promise.all([
+      d.fonts?d.fonts.ready:Promise.resolve(),
+      ...[...d.images].map(i=>i.complete?Promise.resolve():new Promise(r=>{ i.onload=i.onerror=()=>r(); }))
+    ]),new Promise(r=>setTimeout(r,8000))]);
+  }catch(e){}
+  if(opt.imprimer===false) return f;
+  const w=f.contentWindow;
+  const retirer=()=>{ setTimeout(()=>{ try{ f.remove(); }catch(e){} },500); };
+  try{ w.addEventListener('afterprint',retirer,{once:true}); }catch(e){}
+  setTimeout(retirer,120000);
+  try{ w.focus(); w.print(); }catch(e){ toast('Impression impossible sur ce navigateur.','var(--orange)'); retirer(); }
+  return f;
+}
+/** Le menu « Exporter » de l'en-tête. */
+function _htmlAnatExport(){
+  return '<details class="an-exp"><summary aria-label="Exporter l’analyse">'+ANAT_SVG.export+'<span>Exporter</span>'+ANAT_SVG.chev+'</summary>'
+    +'<div class="an-exp-m" role="menu">'
+    +'<button type="button" role="menuitem" onclick="anatExporter(\'coach\')"><b>Coach</b><span>Tous les chiffres, sources, dates et marges</span></button>'
+    +'<button type="button" role="menuitem" onclick="anatExporter(\'athlete\')"><b>Athlète</b><span>Sa photo et ses consignes d’exécution</span></button>'
+    +'</div></details>';
 }
 /** E1 : ce que le contrôle à l'envoi a dit des photos de ce bilan, pour le coach. */
 function _anatCtlEnvoi(b){
@@ -49038,6 +49500,7 @@ function _htmlAnat(c){
   const edit=_anatEdit&&_anatEdit.email===c.email?_anatEdit:null;
   const tete='<div class="an-tete"><span class="an-tete-i">'+ANAT_SVG.tete+'</span><div class="an-tete-c"><h4>Analyse <span>morpho-anatomique</span></h4>'
     +_htmlAnatChoixBilan(c,pb,!!edit)+'</div>'
+    +((grise||!a)?'':_htmlAnatExport())
     +((grise||!a)?'':'<div class="an-vues" role="tablist">'
       +['face','dos','profil'].map(v=>{ const sans=v==='profil'&&!a.profil, on=_anatVueDe(a,_anatVueActive)===v;
         return '<button type="button" role="tab" class="an-vue-b'+(on?' actif':'')+'" aria-selected="'+on+'"'+((edit||sans)?' disabled':'')
@@ -51065,10 +51528,11 @@ function _rendrePartageSeanceRelue(sc){
   const part=(typeof navigator!=='undefined'&&navigator.share)
     ?'<button type="button" class="rcf-share" onclick="partagerSeanceRelue()">'
       +'Partager cette séance</button>':'';
-  z.innerHTML='<button type="button" class="rcf-dl" onclick="telechargerSeanceRelue(this)">'
+  z.innerHTML=_htmlVisuelFonds('sd-fonds')
+    +'<button type="button" class="rcf-dl" onclick="telechargerSeanceRelue(this)">'
     +icon('download',18)+'<span>Télécharger cette séance</span></button>'+part
-    +'<div class="rcf-note">PNG sans fond, à apposer sur ta photo en story.<br>'
-    +'Dans la galerie, le visuel s\u2019affichera en blanc : c\u2019est normal.</div>';
+    +'<div class="rcf-note" id="sd-note">'+_visuelNoteFond(visuelFondEffectif())+'</div>';
+  monterSelecteurFond('sd-fonds',f=>_dessinerBilanSeance(d,f),'sd-note');
   return true;
 }
 // Les deux gestes. Ils passent par la seance RETENUE a l'ouverture de l'ecran,
@@ -63455,6 +63919,7 @@ function openBilanNotes(id){
   go('s-progress');
   const btn=document.querySelector('#prog-tabs button[onclick*="notes"]');
   showProgressTab('notes',btn);
+  if(id) try{ _bnVoir(id); }catch(e){}
   if(id) setTimeout(()=>{
     const el=document.getElementById('bil-'+id);
     if(el&&el.scrollIntoView) el.scrollIntoView({block:'start'});
@@ -63646,6 +64111,91 @@ function blocReponseBilan(b,c){
 // le formulaire d'ecriture — ce rendu est partage par les deux ecrans, et
 // l'oublier aurait mis un bouton « Envoyer ma reponse » sur les bilans de
 // l'athlete lui-meme.
+// ══ L'ONGLET NOTES, AU DESSIN DE LA MAQUETTE DE KEVIN (27/09/2026) ═══════
+//
+// « change l'onglet info dans Évolution comme ça » : un bilan à la fois,
+// choisi par des pastilles ; une carte d'en-tête (numéro, date, poids) ; les
+// réponses rangées en quatre rubriques à icône, sur deux colonnes ; des
+// jauges pour la motivation, le sommeil et le stress.
+//
+// ⚠ LES JAUGES LISENT LA REPONSE, ELLES N'INVENTENT RIEN. La motivation est
+//   notée sur 10 : la jauge est ce chiffre. Le sommeil et le stress sont des
+//   CHOIX (BIL_OPTS_SOMMEIL, BIL_OPTS_STRESS, les mêmes que le questionnaire) :
+//   la jauge dit la place du choix dans la liste, et le texte coché reste
+//   écrit au-dessus. Une réponse hors liste n'a pas de jauge.
+//
+// Le rendu reste PARTAGÉ avec la fiche du coach (`client`) : il y garde son
+// champ de réponse, et une pastille marque les bilans qui l'attendent.
+const BIL_OPTS_SOMMEIL=Object.freeze(['Très bien, je me sens reposé(e)','Correct, quelques nuits agitées','Mal, j\'ai du mal à me reposer']);
+const BIL_OPTS_STRESS=Object.freeze(['Pas du tout','Un peu','Beaucoup','Énormément']);
+const BILAN_RUBRIQUES={
+  suivi:[
+    {titre:'État général',ico:'flame',cles:['bil-motivation']},
+    {titre:'Difficultés et écarts',ico:'alert-triangle',cles:['bil-diff-type','bil-diff-detail','bil-cheat-meals','bil-cheat-reasons']},
+    {titre:'Récupération / sommeil / stress',ico:'moon',cles:['bil-sleep-quality','bil-stress','bil-stress-detail']},
+    {titre:'Objectifs et demandes',ico:'target',cles:['bil-prog-modifs','bil-new-goals','bil-new-goals-detail']}
+  ],
+  depart:[
+    {titre:'Santé et précautions',ico:'alert-triangle',cles:['deb-health','deb-traitement','deb-traitement-detail','deb-allergies','deb-tca']},
+    {titre:'Objectifs',ico:'target',cles:['deb-goals']},
+    {titre:'Métier et rythme',ico:'activity',cles:['deb-job','deb-naf','deb-work-rhythm']},
+    {titre:'Entraînement',ico:'dumbbell',cles:['deb-location','deb-gym','deb-training-days','deb-training-time','deb-session-duration','deb-sports','deb-other-sports','deb-intensity-1','deb-intensity-2','deb-history']},
+    {titre:'Nutrition',ico:'utensils',cles:['deb-nutrition-type','deb-meals-day','deb-food-love','deb-food-hate','deb-water','deb-track-macros','deb-calories','deb-supplements','deb-supps-detail']}
+  ]
+};
+// PURE. La jauge d'une réponse : {plein, sur} en dixièmes, ou null.
+function _bnJauge(k,v){
+  if(k==='bil-motivation'){
+    const n=Math.round(parseFloat(String(_texteReponse(v)||v).replace(',','.')));
+    return (n>=1&&n<=10)?{plein:n,sur:10}:null;
+  }
+  const t=String(_texteReponse(v)||'').trim();
+  if(k==='bil-sleep-quality'){
+    const i=BIL_OPTS_SOMMEIL.indexOf(t); if(i<0) return null;
+    // La QUALITÉ : le premier choix remplit la jauge, le dernier la vide presque.
+    return {plein:Math.round(10*(BIL_OPTS_SOMMEIL.length-i)/BIL_OPTS_SOMMEIL.length),sur:10};
+  }
+  if(k==='bil-stress'){
+    const i=BIL_OPTS_STRESS.indexOf(t); if(i<0) return null;
+    // « Pas du tout » ne remplit rien : un stress absent n'est pas un segment rouge.
+    return {plein:Math.round(10*i/(BIL_OPTS_STRESS.length-1)),sur:10};
+  }
+  return null;
+}
+// PURE. La phrase sous la motivation — une lecture, pas un jugement de santé.
+function _bnMotivationNote(v){
+  const n=Math.round(parseFloat(String(_texteReponse(v)||v).replace(',','.')));
+  if(!(n>=1&&n<=10)) return '';
+  if(n<=3) return 'Motivation basse : un point à aborder ensemble.';
+  if(n<=6) return 'Motivation modérée, à travailler pour assurer la régularité.';
+  if(n<=8) return 'Bonne motivation, de quoi tenir le rythme.';
+  return 'Motivation au plus haut.';
+}
+function _bnSegments(j){
+  let h='';
+  for(let i=0;i<j.sur;i++) h+=`<i class="${i<j.plein?'on':''}"></i>`;
+  return `<span class="bn-jauge" aria-hidden="true">${h}</span>`;
+}
+// Montre UN bilan, et allume sa pastille. Toutes les listes « Notes » ouvertes
+// qui le portent suivent : il n'y en a qu'une à l'écran, mais on ne suppose rien.
+function _bnVoir(id){
+  document.querySelectorAll('.bn').forEach(bn=>{
+    if(!bn.querySelector('.bn-bilan[data-bn="'+id+'"]')) return;
+    bn.querySelectorAll('.bn-bilan').forEach(c=>{ c.hidden=c.getAttribute('data-bn')!==id; });
+    bn.querySelectorAll('.bn-pill').forEach(p=>{
+      const on=p.getAttribute('data-bn')===id;
+      p.classList.toggle('on',on); p.setAttribute('aria-selected',on?'true':'false');
+      if(on&&p.scrollIntoView) try{ p.scrollIntoView({block:'nearest',inline:'nearest'}); }catch(e){}
+    });
+  });
+}
+// R13 — CE QUE CETTE LISTE MONTRE : les REPONSES ECRITES de l'athlete dans
+// ses bilans, pas un retour du coach. Cote athlete, il peut donc la remplir
+// lui-meme ; cote coach (`client`), il ne peut qu'attendre le prochain bilan.
+// Le parametre `client` distingue les deux ecrans : c'est lui qui ajoute
+// le formulaire d'ecriture — ce rendu est partage par les deux ecrans, et
+// l'oublier aurait mis un bouton « Envoyer ma reponse » sur les bilans de
+// l'athlete lui-meme.
 function renderReponsesBilans(bilans,client){
   const bl=(bilans||[]).filter(b=>b&&b.date);
   // Numérotation des bilans de SUIVI seuls. Le questionnaire de départ porte
@@ -63653,36 +64203,87 @@ function renderReponsesBilans(bilans,client){
   // de suivi s'affichait « Bilan 2 » alors qu'il n'y en avait qu'un.
   let _n=0; const _rang=new Map();
   bl.forEach(b=>{ if(b.type!=='depart') _rang.set(b,++_n); });
-  const cartes=bl.slice().reverse().map(b=>{
+  const vus=[];
+  bl.slice().reverse().forEach(b=>{
     const depart=b.type==='depart';
+    const Q=depart?BILAN_QUESTIONS.depart:BILAN_QUESTIONS.suivi;
+    // Les réponses effectivement écrites, dans l'ordre des questions.
+    const rep=new Map();
+    Q.forEach(q=>{ const t=_texteReponseLue(q.k,b[q.k]); if(t) rep.set(q.k,{q,t}); });
+    // ⚠ UNE CARTE SANS TEXTE PEUT PORTER UNE REPONSE (QA du 27/09/2026) : elle
+    //   reste des qu'il y a une reponse du coach a lire, ou a ecrire — un bilan
+    //   de SUIVI ; un questionnaire de depart vide n'appelle rien.
+    const _aLire=!client&&!!b.reponseCoach;
+    const _aEcrire=!!client&&!depart;
+    if(!rep.size&&!_aLire&&!_aEcrire) return;
+    // Les rubriques : celles de la maquette, puis les mesures du corps et ce
+    // qui ne s'y range pas — rien d'écrit ne disparaît.
+    const rubs=(depart?BILAN_RUBRIQUES.depart:BILAN_RUBRIQUES.suivi).map(r=>({titre:r.titre,ico:r.ico,cles:r.cles.slice()}));
+    const ranges=new Set([].concat(...rubs.map(r=>r.cles)));
+    const mesures=Q.filter(q=>!ranges.has(q.k)&&q.emoji==='📏').map(q=>q.k);
+    const autres=Q.filter(q=>!ranges.has(q.k)&&q.emoji!=='📏').map(q=>q.k);
+    if(mesures.length) rubs.push({titre:'Mesures du corps',ico:'crosshair',cles:mesures});
+    if(autres.length) rubs.push({titre:'Autres réponses',ico:'clipboard',cles:autres});
+    const sections=rubs.map(r=>{
+      const items=r.cles.filter(k=>rep.has(k)).map(k=>rep.get(k));
+      if(!items.length) return '';
+      const tuiles=[];
+      items.forEach(({q,t})=>{
+        const j=_bnJauge(q.k,b[q.k]);
+        const val=q.k==='bil-motivation'&&j?(j.plein+' / 10'):t;
+        const large=String(t).length>60;
+        tuiles.push({large,html:`<div class="bn-t${j?' bn-t-j':''}${q.k==='bil-motivation'&&j?' bn-t-motiv':''}">
+            <div class="bn-l"${q.alerte?' style="color:#fca5a5"':''}>${escapeHtml(q.lbl)}</div>
+            <div class="bn-v">${escapeHtml(val)}${q.k==='bil-motivation'&&j?_bnSegments(j):''}</div>
+            ${j&&q.k!=='bil-motivation'?_bnSegments(j):''}
+          </div>`});
+        if(q.k==='bil-motivation'){
+          const note=_bnMotivationNote(b[q.k]);
+          if(note) tuiles.push({large:false,html:`<div class="bn-t bn-note">${escapeHtml(note)}</div>`});
+        }
+      });
+      // Une tuile seule en fin de rubrique prend toute la largeur, comme
+      // « Source du stress » sur la maquette.
+      let place=0;
+      const html=tuiles.map((x,i)=>{
+        const seule=!x.large&&place%2===0&&i===tuiles.length-1;
+        const plein=x.large||seule;
+        if(plein){ place=0; return x.html.replace('class="bn-t','class="bn-t bn-t-plein'); }
+        place++; return x.html;
+      }).join('');
+      return `<section class="bn-rub">
+          <div class="bn-rub-t"><span class="bn-ico" aria-hidden="true">${icon(r.ico,26)}</span><h3>${escapeHtml(r.titre)}</h3></div>
+          <div class="bn-g">${html}</div>
+        </section>`;
+    }).join('');
     const d=new Date(b.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
     const w=getBW(b);
-    const answers=(depart?BILAN_QUESTIONS.depart:BILAN_QUESTIONS.suivi).map(q=>{
-      const txt=_texteReponseLue(q.k,b[q.k]);
-      if(!txt) return '';
-      return `<div style="padding:8px 0;border-bottom:1px solid #141414">
-        <div style="font-size:var(--fs-xs);color:${q.alerte?'#fca5a5':'var(--sub)'};font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">${q.emoji} ${q.lbl}</div>
-        <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5">${escapeHtml(txt)}</div>
-      </div>`;
-    }).filter(Boolean).join('');
-    if(!answers) return '';
-    return `<div id="bil-${escapeHtml(_idBilan(b))}" style="background:var(--dark);border:1px solid ${depart?'rgba(224,32,32,.35)':'var(--border)'};border-radius:var(--r-3);padding:16px;margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red-text);text-transform:uppercase;letter-spacing:1.5px">${depart?'Questionnaire de départ':'Bilan '+_rang.get(b)}</div>
-        <div style="text-align:right"><div style="font-size:var(--fs-xs);color:var(--text-dim)">${d}</div>${w?`<div style="font-size:var(--fs-sm);font-weight:700;color:var(--text);margin-top:2px">⚖️ ${w}kg</div>`:''}</div>
-      </div>
-      ${answers}
-      ${(!client&&b.reponseCoach)?`<div style="margin-top:10px;background:var(--surface-2);border-left:3px solid var(--green);border-radius:var(--r-2);padding:10px 12px">
-        <div style="font-size:var(--fs-xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--green);font-weight:800;margin-bottom:4px">Réponse de ton coach</div>
-        <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(b.reponseCoach)}</div>
-      </div>`:''}
-      ${client?blocReponseBilan(b,client):''}
-    </div>`;
-  }).filter(Boolean).join('');
-  // R13 — CE QUE CETTE LISTE MONTRE : les REPONSES ECRITES de l'athlete dans
-  // ses bilans, pas un retour du coach. Cote athlete, il peut donc la remplir
-  // lui-meme ; cote coach (`client`), il ne peut qu'attendre le prochain bilan.
-  if(cartes) return cartes;
+    const id=_idBilan(b);
+    const nom=depart?'Questionnaire de départ':'Bilan '+_rang.get(b);
+    vus.push({id,nom,depart,attend:!!client&&!depart&&!b.reponseCoach,
+      html:`<div id="bil-${escapeHtml(id)}" class="bn-bilan" data-bn="${escapeHtml(id)}">
+        <div class="bn-tete${depart?' bn-tete-dep':''}">
+          <div class="bn-tete-g">
+            <div class="bn-titre">${depart?'Questionnaire <em>de départ</em>':'Bilan <em>'+_rang.get(b)+'</em>'}</div>
+            <div class="bn-date">${d}</div>
+          </div>
+          ${w?`<div class="bn-poids"><span>Poids</span><b>${String(w).replace('.',',')} kg</b></div>`:''}
+        </div>
+        ${sections||`<section class="bn-rub"><div class="bn-vide">Aucune réponse écrite dans ce bilan : mesures et photos seulement.</div></section>`}
+        ${(!client&&b.reponseCoach)?`<div class="bn-reponse">
+          <div class="bn-reponse-t">Réponse de ton coach</div>
+          <div class="bn-reponse-v">${escapeHtml(b.reponseCoach)}</div>
+        </div>`:''}
+        ${client?`<div class="bn-rub bn-rub-coach">${blocReponseBilan(b,client)}</div>`:''}
+      </div>`});
+  });
+  if(vus.length){
+    // Le plus récent s'ouvre ; les autres attendent leur pastille.
+    const pills=vus.map((v,i)=>`<button type="button" class="bn-pill${i===0?' on':''}${v.depart?' bn-pill-dep':''}" role="tab"
+        aria-selected="${i===0?'true':'false'}" data-bn="${escapeHtml(v.id)}" onclick="_bnVoir('${escapeHtml(v.id)}')">${escapeHtml(v.nom)}${v.attend?'<span class="bn-pill-dot" title="Sans réponse"></span>':''}</button>`).join('');
+    const cartes=vus.map((v,i)=>i===0?v.html:v.html.replace('class="bn-bilan"','class="bn-bilan" hidden')).join('');
+    return `<div class="bn">${vus.length>1?`<div class="bn-choix" role="tablist">${pills}</div>`:''}${cartes}</div>`;
+  }
   return client
     ?emptyState('message-circle','Pas encore de réponse écrite dans les bilans de '+escapeHtml(client.fname||'ton athlète')+'. Elles s\'afficheront ici dès son prochain bilan.')
     :emptyState('message-circle','Tes réponses écrites aux bilans s\'afficheront ici. Il n\'y en a pas encore.','Remplir mon bilan','openBilanChoice()');
@@ -63722,9 +64323,9 @@ const BIL_STEPS=[
   // Step 4 : Sommeil & Stress
   ()=>bSec('Sommeil & Stress',
     bLbl('Qualité du sommeil : comment dors-tu en ce moment ?')+
-    `<div>${bC('bil-sleep-quality',['Très bien, je me sens reposé(e)','Correct, quelques nuits agitées','Mal, j\'ai du mal à me reposer'])}</div>`+
+    `<div>${bC('bil-sleep-quality',BIL_OPTS_SOMMEIL.slice())}</div>`+
     bLbl('Es-tu stressé(e) en ce moment ?')+
-    `<div>${bC('bil-stress',['Pas du tout','Un peu','Beaucoup','Énormément'])}</div>`+
+    `<div>${bC('bil-stress',BIL_OPTS_STRESS.slice())}</div>`+
     bLbl('Si tu es stressé(e), peux-tu me donner des précisions sur ce qui te préoccupe en ce moment ?')+bTA('bil-stress-detail','Ce qui te préoccupe...')
   ),
   // Step 5 bis : le traitement, SEMESTRIELLEMENT et pas plus souvent.
@@ -63880,6 +64481,21 @@ function saveBilanFinal(){
   // seuil : on ecrit la trace quoi qu il arrive, absence du coach comprise.
   // Elle remonte par la synchronisation, et l appareil du coach la relevera.
   try{ _dispoTracerSante('bilan'); }catch(e){}
+  // ⚠ L'ACCORD DE SANTE AVANT TOUT LE RESTE (26/09/2026). La porte etait posee
+  //   plus bas, juste avant l'ecriture du bilan — mais APRES l'effacement du
+  //   brouillon et apres les ecritures dans le dossier (questionnaire marque
+  //   complet, niveau, poids...), et sans rien pour reprendre ensuite. Le
+  //   premier bilan d'un client neuf, qui n'a pas encore donne son accord,
+  //   etait donc PERDU : accord donne, retour a l'accueil, brouillon efface,
+  //   aucun bilan, jamais « Bilan enregistré — Ton coach est prévenu. ».
+  //   Ici, rien n'a encore bouge : on demande, et on REPREND le meme
+  //   enregistrement une fois l'accord donne. Refuser ne coute rien : le
+  //   brouillon est ecrit juste avant, il se reprendra plus tard.
+  if(!aConsentiSante(currentUser)){
+    try{ _bilEcrireDraft(); }catch(e){}
+    demanderConsentementSante('mensuration',_bilanReprendreApresAccord);
+    return;
+  }
   const n=(currentUser.bilans||[]).filter(b=>b.type===bilType).length+1;
   const bi=Object.assign({type:bilType,date:Date.now(),num:n},bilData);
   // Le bilan est validé : le brouillon n'a plus de raison d'être, et le laisser
@@ -64025,10 +64641,8 @@ function saveBilanFinal(){
   // questionnaire : quelqu'un a le droit de PARCOURIR le formulaire pour voir
   // ce qu'on lui demande avant de decider. C'est au moment ou ca s'ecrit que
   // la question se pose.
-  if(!aConsentiSante(currentUser)){
-    demanderConsentementSante('mensuration',null);
-    return;
-  }
+  // (La porte de l'article 9 est en tete de fonction : rien de ce qui precede
+  //  ne s'ecrit sans l'accord.)
   if(!currentUser.bilans) currentUser.bilans=[];
   currentUser.bilans.push(bi);
   // LE BILAN ETEINT LES DEMANDES DE MESURE QU'IL SATISFAIT (lot 6). Il est
@@ -65553,7 +66167,7 @@ function rendreEssaiBilan(u){
       +'Avec un coach, l’application est comprise, et tes vidéos sont corrigées.</p>'
       +'<a class="eb-lien" href="https://beacons.ai/kevin.gllc" target="_blank" rel="noopener">'
       +'Voir les formules de coaching</a>'
-      +'<button type="button" class="eb-lien" onclick="go(\'s-client-code\')">J’ai un code coach</button>'
+      +'<button type="button" class="eb-lien" onclick="ouvrirCodeCoach()">J’ai un code coach</button>'
     +'</div>';
   return true;
 }
@@ -66360,6 +66974,16 @@ function _htmlRestitutionBilan(user){
     +'<p class="rb-coach">'+escapeHtml(r?r.coach:_phraseCoachBilan(user))+'</p>'
     +'<button type="button" class="btn btn-red" onclick="loadProgress()">Voir ma progression</button>'
     +'<button type="button" class="btn btn-outline" style="margin-top:10px" onclick="go(\'s-client-home\');loadClientHome()">Retour à l\'accueil</button>';
+}
+// LA REPRISE APRES L'ACCORD DE SANTE. Le bilan attendait en memoire (bilData,
+// bilType) pendant la question : on l'enregistre, et l'ecran de restitution
+// suit exactement comme depuis bilNext — seulement si le bilan s'est ecrit.
+function _bilanReprendreApresAccord(){
+  if(!currentUser) return false;
+  const avant=(currentUser.bilans||[]).length;
+  try{ saveBilanFinal(); }catch(e){ return false; }
+  if((currentUser.bilans||[]).length>avant){ try{ ouvrirRestitutionBilan(); }catch(e){} return true; }
+  return false;
 }
 // Ouvert par bilNext, APRES saveBilanFinal — qui n'est pas modifiee : elle
 // ramene a l'accueil, et cet ecran prend la place tout de suite derriere.
@@ -68509,14 +69133,21 @@ function showProgressTab(tab,btn,sansMemo){
         :diff<0?'var(--green)':'var(--red)';
       // Le filet de gauche prend la couleur de la mesure : c'est ce qui
       // rattache la carte à sa courbe sans avoir à lire le titre.
-      miniCharts+=`<div class="evo-carte" style="padding:12px;margin-bottom:0;border-left:3px solid ${g.items[0].color}">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <div style="font-size:var(--fs-xs);font-weight:800;color:${g.items[0].color};letter-spacing:1.4px;text-transform:uppercase;--halo-c:${g.items[0].color};text-shadow:var(--halo-2)55">${g.label}</div>
-          ${diff!==null?`<div style="font-size:var(--fs-xs);font-weight:700;color:${col}">${diff>0?'+':''}${diff}cm</div>`:''}
+      // LA CARTE AU DESSIN DE LA COURBE DU POIDS (26/09/2026) : meme en-tete,
+      // meme trace — les couleurs des mesures distinguent droite et gauche.
+      const _iso=b=>{ try{ return localISODate(new Date(b.date)); }catch(e){ return ''; } };
+      const _series=g.items.map(it=>({label:it.l||'Mesure relevée',color:it.color,
+        pts:bl.map(b=>({d:_iso(b),v:getBM(b,it.k)})).filter(p=>p.v!==null&&p.d)}));
+      const _trace=tracable?_courbeMesures(_series,{unite:'cm',
+        couleur:e=>e===0?'var(--sub)':(e<0?'var(--green)':'var(--red)')}):'';
+      miniCharts+=`<div class="evo-carte pc-carte pc-carte-m">
+        <div class="pc-tete">
+          <span class="pc-ico" aria-hidden="true">${_pesIcone('barres')}</span>
+          <span class="pc-titre">${g.label}</span>
+          ${diff!==null?`<span class="pc-ecart" style="color:${col}">${diff>0?'+':''}${String(diff).replace('.',',')} cm</span>`:''}
         </div>
-        ${isGroup?`<div style="display:flex;gap:8px;margin-bottom:4px">${g.items.map(it=>`<span style="font-size:var(--fs-xs);color:${it.color};font-weight:700">● ${it.l}</span>`).join('')}</div>`:''}
-        ${tracable
-          ?`<canvas id="mc-${g.items.map(i=>i.k).join('-')}" height="96" style="width:100%;display:block"></canvas>`
+        ${tracable&&_trace
+          ?_trace
           :`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;padding:12px 2px 4px">
              ${bl.length<2
                ?'Une courbe demande deux bilans. Il en manque encore un.'
@@ -68557,19 +69188,9 @@ function showProgressTab(tab,btn,sansMemo){
     c.insertAdjacentHTML('afterbegin','<div id="prog-corps"></div>');
     try{ renderCorpsAthlete(document.getElementById('prog-corps')); }catch(e){}
     c.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
-    setTimeout(()=>{
-      groupsToRender.forEach(g=>{
-        const canvasId='mc-'+g.items.map(i=>i.k).join('-');
-        if(g.items.length===1){
-          const vals=bl.map(b=>getBM(b,g.items[0].k));
-          const cPairs=bilLabels.map((l,i)=>({l,v:vals[i]})).filter(p=>p.v!==null);
-          if(cPairs.length>1) lineChart(canvasId,cPairs.map(p=>p.l),cPairs.map(p=>p.v),g.items[0].color);
-        } else {
-          const series=g.items.map(it=>({data:bl.map(b=>getBM(b,it.k)),color:it.color,label:it.l}));
-          if(series.some(s=>s.data.filter(v=>v!==null).length>1)) multiLineChart(canvasId,bilLabels,series);
-        }
-      });
-    },60);
+    // Les courbes sont DEJA dans les cartes (_courbeMesures, du HTML et du
+    // SVG) : il ne reste qu'a lancer leur trace, comme celle du poids.
+    try{ if(typeof arcTracerCourbes==='function') arcTracerCourbes(c); }catch(e){}
 
   } else if(tab==='masseGrasse'){
     if(!bl.length){c.innerHTML=emptyState('clipboard','Ta masse grasse se calcule sur les mesures d\'un bilan. Il n\'y en a pas encore.','Remplir mon premier bilan','openBilanChoice()');return;}
@@ -68602,6 +69223,30 @@ function showProgressTab(tab,btn,sansMemo){
         :'aux bilans '+_ancSans.slice(0,-1).join(', ')+' et '+_ancSans[_ancSans.length-1])
         +' : une mesure y manquait.'
       :null;
+    // LA COURBE AU DESSIN DE CELLES DU POIDS ET DES MENSURATIONS (27/09/2026,
+    // Kevin : « comme les précédents graphiques, restylise celui sur le % de
+    // masse grasse »). Même en-tête, même tracé SVG, points à la DATE de chaque
+    // bilan — et l'ancienne couleur, gardée. L'écart suit R33 : sous la marge
+    // de la formule il se dit « stable », en gris.
+    const _isoMG=b=>{ try{ return localISODate(new Date(b.date)); }catch(e){ return ''; } };
+    const _ptsMG=bl.map((b,i)=>({d:_isoMG(b),v:bfPcts[i]})).filter(p=>p.v!==null&&p.d);
+    const _couleurMG=e=>(ecartMasseGrasse(e)==='stable')?'var(--sub)':(e<0?'var(--green)':'var(--red)');
+    const _traceMG=_ptsMG.length>1?_courbeMesures([{label:'Masse grasse estimée',color:'#E02020',pts:_ptsMG}],
+      {unite:'%',couleur:_couleurMG}):'';
+    const _ecartMG=ecartLib===null?''
+      :`<span class="pc-ecart" style="color:${col}">${ecartLib==='stable'?'stable'
+        :(diff>0?'+':'')+String(diff).replace('.',',')+' %'}</span>`;
+    const _carteCourbeMG=`<div class="evo-carte pc-carte">
+        <div class="pc-tete">
+          <span class="pc-ico" aria-hidden="true">${_pesIcone('barres')}</span>
+          <span class="pc-titre">% de masse grasse corporelle</span>
+          ${_ecartMG}
+        </div>
+        ${_traceMG||`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;padding:12px 2px 4px">${
+          !valid.length?'La courbe apparaîtra dès qu’une première estimation sera possible.'
+          :bl.length<2?'Une courbe demande deux bilans. Il en manque encore un.'
+          :'Une seule estimation pour l’instant. Reprends tes mesures au prochain bilan : c’est ce qui dira si elle bouge.'}</div>`}
+      </div>`;
     const pieSec=(idx,title)=>{
       const mg=mgKgs[idx]??0,mm=mmKgs[idx]??0;
       if(!mg&&!mm) return '';
@@ -68615,6 +69260,10 @@ function showProgressTab(tab,btn,sansMemo){
         </div>
       </div>`;
     };
+    // ⚠ PAS DE CARTE VIDE (27/09/2026) : sans estimation au premier ni au
+    //   dernier bilan, les deux camemberts rendaient '' et leur cadre restait,
+    //   vide, entre la courbe et le tableau.
+    const _camemberts=(bl.length>=1?pieSec(0,'Bilan 1'):'')+(bl.length>1?pieSec(bl.length-1,'Bilan '+bl.length):'');
     c.innerHTML=`
       <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
         <!-- Le titre nommait la METHODE — « Paramètres : Formule US Navy » —
@@ -68650,13 +69299,9 @@ function showProgressTab(tab,btn,sansMemo){
            « masse_grasse » du lexique, a un doigt, dans le coin de la tuile
            « MG actuel ». L'honnetete sur la fiabilite reste ; c'est sa
            repetition a chaque visite qui disparait. -->
-      <div class="evo-carte" style="padding:16px">
-        <div class="evo-titre">% de masse grasse corporelle</div>
-        <canvas id="mg-chart" height="150" style="width:100%;display:block"></canvas>
-      </div>
-      ${bl.length>=1?`<div class="evo-carte" style="display:flex;gap:12px;padding:18px 16px;justify-content:center">
-        ${pieSec(0,'Bilan 1')}
-        ${bl.length>1?pieSec(bl.length-1,'Bilan '+bl.length):''}
+      ${_carteCourbeMG}
+      ${_camemberts?`<div class="evo-carte" style="display:flex;gap:12px;padding:18px 16px;justify-content:center">
+        ${_camemberts}
       </div>`:''}
       ${renderDataTable(
         ['',...bilLabels],
@@ -68685,9 +69330,9 @@ function showProgressTab(tab,btn,sansMemo){
            du lexique : le ⓘ de la tuile « MG actuel ». -->
     `;
     c.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
+    // La courbe est DEJA dans la carte (_courbeMesures) : on lance son trace.
+    try{ if(typeof arcTracerCourbes==='function') arcTracerCourbes(c); }catch(e){}
     setTimeout(()=>{
-      const bfPairs=bfPcts.map((v,i)=>v!==null?{v,l:bilLabels[i]}:null).filter(Boolean);
-      if(bfPairs.length) lineChart('mg-chart',bfPairs.map(x=>x.l),bfPairs.map(x=>x.v),'#E02020');
       const mg0=mgKgs[0]??0,mm0=mmKgs[0]??0;
       if(mg0&&mm0) drawPie('pie-0',[{val:mg0,color:'#E02020'},{val:mm0,color:'#22c55e'}]);
       if(bl.length>1){
@@ -68859,6 +69504,15 @@ function showProgressTab(tab,btn,sansMemo){
     // BILAN_QUESTIONS et renderReponsesBilans. Elles vivaient ici, en local,
     // et l'athlète était donc le seul à pouvoir lire ses propres réponses.
     c.innerHTML=renderReponsesBilans(bl);
+    // ⚠ LUE A L'AFFICHAGE (QA du 27/09/2026), comme renderRiteReponse. Seul
+    //   openReponseBilan — la notification, la ligne de l'accueil — marquait la
+    //   reponse lue : l'athlete qui allait la lire ici par l'onglet la lisait
+    //   bel et bien, et la pastille restait allumee pour toujours.
+    try{
+      let _lu=false;
+      for(const b of bl) if(b&&b.reponseCoach&&b.reponseVue===false){ b.reponseVue=true; _lu=true; }
+      if(_lu){ saveUser(); _majPastilleBilan(); }
+    }catch(e){}
   }
   // arcTracerCourbes n'etait declenchee que par go() : la premiere arrivee sur
   // Evolution tracait bien la courbe, mais un aller-retour vers Mensurations
@@ -78922,11 +79576,17 @@ function depenseSportsParJour(liste){
 // appelle le NEAT. Il est donc plus bas que les multiplicateurs classiques,
 // qui englobent l'entraînement : ici le sport est ajouté à part, en kcal, et
 // le compter deux fois gonflerait la dépense de plusieurs centaines de kcal.
+// ⚠ LES FACTEURS SONT CEUX DE L'ECHELLE DU TABLEUR (NAF_ECHELLE, via
+//   NAF_DEPUIS_METIER), ET PLUS L'ANCIENNE 1,15 / 1,25 / 1,40 / 1,55 (QA du
+//   27/09/2026). Le calcul des besoins etait passe a l'echelle du tableur, mais
+//   ce tableau-ci gardait l'ancienne : le bilan annoncait « facteur 1,15 » a
+//   l'athlete pendant que ses cibles etaient calculees a 1,20, et le plancher
+//   calorique se plafonnait sur une depense plus basse que celle affichee.
 const METIER_NIVEAUX=Object.freeze({
-  sedentaire:Object.freeze({lib:'Assis la majeure partie de la journée', f:1.15}),
-  leger:     Object.freeze({lib:'Debout, peu de marche',                 f:1.25}),
-  modere:    Object.freeze({lib:'Marche soutenue, charges légères',      f:1.40}),
-  lourd:     Object.freeze({lib:'Effort physique continu, port de charges',f:1.55})
+  sedentaire:Object.freeze({lib:'Assis la majeure partie de la journée', f:1.2}),
+  leger:     Object.freeze({lib:'Debout, peu de marche',                 f:1.4}),
+  modere:    Object.freeze({lib:'Marche soutenue, charges légères',      f:1.5}),
+  lourd:     Object.freeze({lib:'Effort physique continu, port de charges',f:1.6})
 });
 const METIERS_FAMILLES=Object.freeze([
   Object.freeze({fam:'Bureau, gestion, informatique',n:'sedentaire',l:Object.freeze([
@@ -79088,8 +79748,8 @@ function masseMaigreDuBilan(user){
 // appelant en production ; elle n'etait plus tenue que par cinq assertions
 // qui ne verifiaient qu'elle-meme. Elles sont parties avec.
 //
-// CE QUI RESTE EST VIVANT : moyennePas14j et ACT_PAS alimentent facteurNEAT,
-// ACT_MIN et ACT_MAX le bornent.
+// moyennePas14j reste vivante (nafRetenu la lit). ACT_PAS, ACT_MIN et ACT_MAX ne
+// servent plus a facteurNEAT depuis qu'il suit nafRetenu (QA du 27/09/2026).
 //
 // Comme REPERES_VOLUME, ce bareme est un repere de PRATIQUE DE TERRAIN et non
 // une mesure. Le compteur de pas d'un telephone pose sur un bureau ne vaut
@@ -79127,25 +79787,19 @@ function moyennePas14j(user){
 const NEAT_BASE=1.20;
 // Facteur d'activité HORS SPORT : le nombre de créneaux est du sport, il se
 // compte en kcal, pas en multiplicateur.
+// ⚠ UNE SEULE SOURCE : nafRetenu (QA du 27/09/2026). Cette fonction tenait sa
+//   propre echelle — l'ancienne, 1,15 pour un metier assis — et ignorait le
+//   reglage du coach. _depensePourPlafond passait par elle : le plancher
+//   calorique se plafonnait sur une depense qui n'etait pas celle affichee, et
+//   corriger le niveau d'activite de l'athlete ne deplacait pas ce plafond.
+//   Elle rend desormais exactement le niveau que retient le calcul des besoins.
 function facteurNEAT(user){
   const metier=_dernierChamp(user,'deb-job');
-  const prof=facteurProfession(metier);
   const pas=moyennePas14j(user);
-  // MEME PRIORITE QUE nafRetenu, et pour la meme raison : deux fonctions qui
-  // classent le meme athlete doivent le classer pareil, sinon l'estimation
-  // affichee ici contredit la cible affichee la.
-  const dec=nafDepuisReponse(_dernierChamp(user,'deb-naf'));
-  if(dec) return {f:dec.f,source:'declare',pas,
-    niveau:dec.cle,lib:dec.lib,metier:metier||null};
-  if(prof) return {f:prof.f,source:'profession',pas,
-    niveau:prof.niveau,lib:prof.lib,metier};
-  // Sans profession reconnue, les PAS SEULS ajustent la base. Aucun relevé :
-  // on reste à la base et on le dit, plutôt que d'inventer un niveau.
-  if(pas==null) return {f:NEAT_BASE,source:'defaut',pas:null,metier:metier||null};
-  let d=0;
-  for(const x of ACT_PAS) if(pas<=x.max){ d=x.d; break; }
-  const f=Math.min(ACT_MAX,Math.max(ACT_MIN,NEAT_BASE+d));
-  return {f:Math.round(f*1000)/1000,source:'pas',pas,metier:metier||null};
+  const r=nafRetenu(user);
+  const n=(r&&r.n)||nafNiveau('sedentaire');
+  const source=r&&r.source==='metier'?'profession':((r&&r.source)||'defaut');
+  return {f:n.f,source,pas:pas==null?null:pas,niveau:n.cle,lib:n.lib,metier:metier||null};
 }
 
 // Durée d'une séance, lue dans un champ de TEXTE LIBRE déjà collecté et
@@ -93301,7 +93955,15 @@ function _depensePourPlafond(user){
     const sexe=(user&&(user._evol_gender||user.gender))||b['deb-gender']||'';
     const mm=masseMaigreDuBilan(user);
     let mb=(mm!=null)?mbKatch(mm):null;
-    if(mb==null) mb=mbMifflin(poids,taille,age,sexe);
+    // ⚠ mbEstime ET NON mbMifflin (QA du 27/09/2026). besoinsProposes est
+    //   passe a Harris-Benedict le 07/09 ; cette copie gardait Mifflin. Sans
+    //   tours de mesure, le plancher se plafonnait a 85 % de 2002 kcal quand la
+    //   depense affichee au coach en disait 2053.
+    //   LA CORRECTION DE METABOLISME DU COACH, ELLE, N'ENTRE PAS ICI, et c'est
+    //   voulu : cette depense ne sert qu'au plafond du plancher, et un
+    //   metabolisme corrige a la baisse ne doit pas pouvoir abaisser le
+    //   plancher (« Critère : la correction ne touche PAS au plancher »).
+    if(mb==null) mb=mbEstime(poids,taille,age,sexe);
     if(!(mb>0)) return null;
     // MÊME convention que besoinsProposes, et un seul chemin comme lui : deux
     // formules divergentes borneraient une dépense qui n'est pas celle qu'on
@@ -95311,93 +95973,281 @@ async function savePesee(){
   const v=parseFloat(String(inp.value).replace(',','.'));
   if(await _enregistrerPesee(v,localISODate(new Date()))) renderCartePesee();
 }
-// ── Onglet Poids : points bruts + moyenne mobile ────────────────────────────
-// Tracé en SVG et non au canevas parce qu'il faut deux choses que
-// multiLineChart ne sait pas faire : un axe des abscisses en DATES (les pesées
-// ne sont pas régulières) et une vraie rupture du trait après une longue
-// interruption — filtrer les valeurs nulles relierait les deux bouts et
-// inventerait une tendance à travers le trou.
-const PESEE_COURBE_JOURS=90;
-function _courbePesee(serie){
+// ── Onglet Poids : la courbe (refonte du 26/09/2026, maquette de Kevin) ────
+// UN SEUL DESSIN pour l'athlete (Evolution > Poids) et pour le coach (fiche,
+// « Poids ») : _carteCourbePoids pose la carte — titre, periodes, courbe,
+// legende — et _courbePesee trace le corps. Ce qui est dessine :
+//   - LE RELEVE : les pesees, reliees par un trait plein, en anneaux ;
+//   - LA TENDANCE : la moyenne sur sept jours (mm7), en pointille, une par
+//     segment — elle s'interrompt a chaque longue coupure ;
+//   - LA PLAGE DE VARIATION : du plus bas au plus haut des pesees des sept
+//     derniers jours, la ou la tendance existe ;
+//   - la derniere pesee, soulignee, avec sa bulle : le poids, et l'ecart
+//     depuis le debut de la periode affichee.
+// SANS TENDANCE (moins de quatre pesees dans une semaine), les pesees sont
+// reliees EN POINTILLE, et l'encadre du bas le dit : c'est le cas de
+// l'athlete qui ne se pese qu'aux bilans.
+//
+// ⚠ LES POINTS ET LES LIBELLES SONT DU HTML POSE PAR-DESSUS LE SVG. Le SVG est
+//   etire (preserveAspectRatio="none") pour remplir la largeur : un cercle y
+//   devenait un ovale, et un texte y serait deforme. Les traits, eux, gardent
+//   leur epaisseur (vector-effect="non-scaling-stroke").
+const PESEE_COURBE_JOURS=84;                    // la periode par defaut : 12 semaines
+const PESEE_PERIODES=Object.freeze([
+  Object.freeze({k:'7J',j:7,lib:'7 jours'}),Object.freeze({k:'4S',j:28,lib:'4 semaines'}),
+  Object.freeze({k:'12S',j:84,lib:'12 semaines'}),Object.freeze({k:'6M',j:182,lib:'6 mois'}),
+  Object.freeze({k:'1A',j:365,lib:'1 an'})]);
+let _pesPeriode='12S';
+// Les cartes a l'ecran : id → {serie, opts}. Un clic sur une periode refait la sienne.
+const _pesCartes=new Map();
+/** PURE. Des graduations rondes (1, 2 ou 5 kg) qui encadrent [mn, mx]. */
+function _pesGraduations(mn,mx){
+  const et=Math.max(0.5,mx-mn);
+  const pas=[0.5,1,2,5,10,20].find(p=>et/p<=5)||20;
+  const bas=Math.floor(mn/pas)*pas, haut=Math.ceil(mx/pas)*pas;
+  const out=[]; for(let v=bas;v<=haut+1e-9;v+=pas) out.push(Math.round(v*10)/10);
+  if(out.length<2) out.push(Math.round((bas+pas)*10)/10);
+  return out;
+}
+/**
+ * Le corps de la courbe. `opts` (FACULTATIF) :
+ *   jours     — la fenetre, comptee depuis la derniere pesee (84 par defaut) ;
+ *   couleur   — (ecartKg)=>couleur CSS de l'ecart dans la bulle ;
+ * Declare le trait dessine dans _courbePesee.dernierTrait : 'moyenne' ou 'pesees'.
+ */
+function _courbePesee(serie,opts){
+  const o=opts||{};
+  _courbePesee.dernierTrait='';
   if(!serie||serie.length<2) return '';
   const fin=serie[serie.length-1].date;
-  const debut=_jourPlus(fin,-(PESEE_COURBE_JOURS-1));
+  const debut=_jourPlus(fin,-((o.jours||PESEE_COURBE_JOURS)-1));
   const pts=serie.filter(e=>e.date>=debut);
   if(pts.length<2) return '';
   const segs=segmentsWeight(pts);
   const jours=_joursEntre(pts[0].date,fin)||1;
+  // LA TENDANCE ET LA PLAGE, segment par segment.
+  const plage=(seg,d)=>{ const f=seg.filter(e=>e.date<=d&&e.date>=_jourPlus(d,-(PESEE_FENETRE_MM-1))).map(e=>e.kg);
+    return f.length?[Math.min(...f),Math.max(...f)]:null; };
+  const courbes=segs.map(seg=>{
+    const t=[];
+    for(const e of seg){ const v=mm7(seg,e.date); if(v!=null) t.push({d:e.date,v,p:plage(seg,e.date)}); }
+    return t.length>=2?t:null;
+  }).filter(Boolean);
+  const brut=!courbes.length;
+  // L'ECHELLE couvre les pesees ET la plage : rien ne sort du cadre.
   const vals=pts.map(e=>e.kg);
+  courbes.forEach(t=>t.forEach(x=>{ if(x.p) vals.push(x.p[0],x.p[1]); }));
   let mn=Math.min(...vals), mx=Math.max(...vals);
-  if(mx-mn<1){ const c=(mx+mn)/2; mn=c-0.5; mx=c+0.5; }   // série plate : bande d'1 kg
-  const L=100,H=64,mg=4;
-  const X=d=>(_joursEntre(pts[0].date,d)/jours)*L;
-  const Y=v=>H-mg-((v-mn)/(mx-mn))*(H-2*mg);
-  // LES POINTS ETAIENT DES ELLIPSES. Le viewBox fait 100x64 et le svg est
-  // etire en preserveAspectRatio="none" jusqu'a ~350x120 : l'abscisse est
-  // grossie 3,5 fois, l'ordonnee 1,9 fois. Un <circle r="1.1" devenait donc
-  // un ovale couche de 7,7 sur 4,1 pixels. Un segment nul de longueur 0.01
-  // termine en bout ROND et trace en non-scaling-stroke echappe a la
-  // deformation : sa taille est en pixels d'ecran, pas en unites du viewBox.
-  const _pt=(x,y,c,w)=>`<path d="M${x.toFixed(2)} ${y.toFixed(2)} l0.01 0" stroke="${c}" stroke-width="${w}" stroke-linecap="round" vector-effect="non-scaling-stroke" fill="none"/>`;
-  const bruts=pts.map(e=>_pt(X(e.date),Y(e.kg),'var(--text-faint)',2.2)).join('');
-  // LA DERNIERE PESEE porte le regard : c'est celle qu'on vient de poser.
-  // Le disque sombre pose dessous la decolle du trait quand elle tombe
-  // exactement sur la moyenne.
-  const _d=pts[pts.length-1];
-  const dernier=_pt(X(_d.date),Y(_d.kg),'#0b0b0b',7)+_pt(X(_d.date),Y(_d.kg),'var(--red)',4.5);
-  // Une moyenne mobile par SEGMENT : le trait s'interrompt à chaque coupure.
-  // L'IDENTIFIANT EST UNIQUE PAR TRACE. blocPoids et blocPoidsCoach appellent
-  // tous deux cette fonction, et les ecrans restent dans le document une fois
-  // rendus : un id fixe en aurait mis deux. url(#...) prend le premier venu.
+  if(mx-mn<1){ const c=(mx+mn)/2; mn=c-0.5; mx=c+0.5; }   // série plate : bande d'1 kg
+  const grad=_pesGraduations(mn-(mx-mn)*0.08,mx+(mx-mn)*0.08);
+  const g0=grad[0], g1=grad[grad.length-1];
+  const X=d=>(_joursEntre(pts[0].date,d)/jours)*100;
+  const Y=v=>100-((v-g0)/(g1-g0))*100;
+  const f2=n=>n.toFixed(2);
+  // L'IDENTIFIANT EST UNIQUE PAR TRACE : plusieurs courbes restent dans le
+  // document une fois rendues, et url(#...) prend la premiere venue.
   const gid='pesAire'+(_courbePesee._n=(_courbePesee._n||0)+1);
-  // L'AIRE SUIT LE SEGMENT, pas la courbe entiere : une coupure dans les
-  // pesees doit se voir comme un trou, pas se laisser combler par un aplat.
-  const aires=[],traits=[];
-  segs.forEach(seg=>{
-    const d=[],xy=[];
-    for(let i=0;i<seg.length;i++){
-      const v=mm7(seg,seg[i].date);
-      if(v!=null){ const x=X(seg[i].date),y=Y(v);
-        xy.push([x,y]);
-        d.push((d.length?'L':'M')+x.toFixed(2)+' '+y.toFixed(2)); }
+  const aires=[], tendances=[];
+  courbes.forEach(t=>{
+    const avecP=t.filter(x=>x.p);
+    if(avecP.length>=2){
+      const haut=avecP.map((x,i)=>(i?'L':'M')+f2(X(x.d))+' '+f2(Y(x.p[1]))).join(' ');
+      const bas=avecP.slice().reverse().map(x=>'L'+f2(X(x.d))+' '+f2(Y(x.p[0]))).join(' ');
+      aires.push(`<path d="${haut} ${bas} Z" fill="url(#${gid})" stroke="none"/>`);
     }
-    if(d.length<2) return;
-    aires.push(`<path d="M${xy[0][0].toFixed(2)} ${H} ${d.join(' ').slice(1)} L${xy[xy.length-1][0].toFixed(2)} ${H} Z" fill="url(#${gid})" stroke="none"/>`);
-    traits.push(`<path d="${d.join(' ')}" fill="none" stroke="var(--red)" stroke-width="1.8"
-      stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`);
+    tendances.push(`<path data-trait="moyenne" d="${t.map((x,i)=>(i?'L':'M')+f2(X(x.d))+' '+f2(Y(x.v))).join(' ')}" fill="none"
+      stroke="#ff5a5a" stroke-width="1.8" stroke-dasharray="7 5" stroke-linecap="round" vector-effect="non-scaling-stroke" opacity=".85"/>`);
   });
-  // AUCUNE MOYENNE TRACABLE : on relie les pesees elles-memes, en pointille.
-  // C'est le cas de l'athlete qui ne se pese qu'aux bilans — deux points a
-  // cinq semaines d'ecart, et jusqu'ici un graphique vide.
-  const brut=!traits.length;
-  if(brut){
-    const d=pts.map((e,i)=>(i?'L':'M')+X(e.date).toFixed(2)+' '+Y(e.kg).toFixed(2)).join(' ');
-    traits.push(`<path d="${d}" fill="none" stroke="var(--red)" stroke-width="1.6"
-      stroke-dasharray="3 2.5" stroke-linejoin="round" stroke-linecap="round"
-      vector-effect="non-scaling-stroke" opacity=".85"/>`);
-  }
-  // Le degrade est declare en style inline : var() n'est substitue que dans
-  // une declaration CSS, et stop-color en attribut ne le resoudrait pas
-  // partout de la meme facon.
+  // LE RELEVE : trait plein avec une tendance, pointille sans (et l'encadre le dit).
+  // Il s'interrompt lui aussi a chaque longue coupure.
+  const segsR=(brut?[pts]:segs).filter(seg=>seg.length>=2);
+  const dR=seg=>seg.map((e,i)=>(i?'L':'M')+f2(X(e.date))+' '+f2(Y(e.kg))).join(' ');
+  const releves=segsR.map(seg=>`<path class="pc-rel" data-trait="releve" d="${dR(seg)}" fill="none"
+      stroke="#ff2a2a" stroke-width="${brut?2.2:2.8}"${brut?' stroke-dasharray="7 5"':''}
+      stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`).join('');
+  // L'AIRE SOUS LE RELEVE, du trait jusqu'au bas du cadre : le rouge de la maquette.
+  const gidS='pesSous'+_courbePesee._n;
+  const sous=segsR.map(seg=>`<path d="${dR(seg)} L${f2(X(seg[seg.length-1].date))} 100 L${f2(X(seg[0].date))} 100 Z" fill="url(#${gidS})" stroke="none"/>`).join('');
   const defs=`<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" style="stop-color:var(--red);stop-opacity:.30"/>
-      <stop offset="1" style="stop-color:var(--red);stop-opacity:0"/>
+      <stop offset="0" style="stop-color:#ff2a2a;stop-opacity:.30"/>
+      <stop offset="1" style="stop-color:#ff2a2a;stop-opacity:.12"/>
+    </linearGradient><linearGradient id="${gidS}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" style="stop-color:#e01818;stop-opacity:.42"/>
+      <stop offset=".55" style="stop-color:#b01010;stop-opacity:.16"/>
+      <stop offset="1" style="stop-color:#b01010;stop-opacity:0"/>
     </linearGradient></defs>`;
+  // Les points : chaque pesee, et la derniere, soulignee une seule fois.
+  const der=pts[pts.length-1];
+  const pasA=Math.max(1,Math.ceil(pts.length/6));
+  const points=pts.map((e,i)=>`<span class="pc-pt${i===pts.length-1?' pc-der':((i%pasA===0)?' pc-pt-a':'')}" style="left:${f2(X(e.date))}%;top:${f2(Y(e.kg))}%"></span>`).join('');
+  // La bulle : le poids, et l'ecart depuis le debut de la periode affichee.
+  const ecart=Math.round((der.kg-pts[0].kg)*10)/10;
+  const coulE=(typeof o.couleur==='function')?o.couleur(ecart):'var(--sub)';
+  const yD=Y(der.kg);
+  const bulle=`<div class="pc-bulle${yD<30?' pc-bulle-bas':''}" style="top:${f2(yD)}%">
+      <b>${_synNombre(der.kg)} kg</b><span style="color:${coulE}">${ecart>0?'+':(ecart<0?'−':'')}${_synNombre(Math.abs(ecart))} kg</span></div>`;
+  // Les graduations et les dates : du HTML, jamais du texte etire.
+  const lignes=grad.map(v=>`<div class="pc-g" style="top:${f2(Y(v))}%"><span>${String(v).replace('.',',')}</span></div>`).join('');
+  const nX=Math.min(5,Math.max(2,jours>=6?5:2));
+  const dates=[];
+  for(let i=0;i<nX;i++){ const d=_jourPlus(pts[0].date,Math.round(jours*i/(nX-1)));
+    if(!dates.some(x=>x===d)) dates.push(d); }
+  const xs=dates.map((d,i)=>`<span style="left:${f2(X(d))}%" class="${i===0?'pc-x0':(i===dates.length-1?'pc-x1':'')}">${_fmtJourCourt(d)}</span>`).join('');
   _courbePesee.dernierTrait=brut?'pesees':'moyenne';
-  return `<svg class="arc-courbe" viewBox="0 0 ${L} ${H}" preserveAspectRatio="none" style="width:100%;height:120px;overflow:visible" aria-hidden="true">
-      ${defs}${aires.join('')}${bruts}${traits.join('')}${dernier}
-    </svg>
-    <div style="display:flex;justify-content:space-between;font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">
-      <span>${_fmtJourCourt(pts[0].date)}</span><span>${_synNombre(mn)} à ${_synNombre(mx)} kg</span><span>${_fmtJourCourt(fin)}</span>
-    </div>
-    ${brut?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:6px">
-       Trait en pointillé : les pesées reliées entre elles. La moyenne sur sept
-       jours demande quatre pesées dans la même semaine — elle prendra le relais
-       dès que tu te pèseras plus souvent.</div>`:''}`;
+  const legende=`<div class="pc-leg">
+      <span><i class="pc-l-pt"></i>Poids relevé</span>
+      ${brut?'<span><i class="pc-l-poin"></i>Pesées reliées</span>'
+        :'<span><i class="pc-l-tend"></i>Tendance (moy. 7 jours)</span>'+(aires.length?'<span><i class="pc-l-plage"></i>Plage de variation</span>':'')}
+    </div>`;
+  return `<div class="pc">
+      <div class="pc-cadre">${lignes}
+        <div class="pc-zone">
+          <svg class="arc-courbe" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            ${defs}${sous}${aires.join('')}${releves}${tendances.join('')}
+          </svg>
+          ${points}${bulle}
+        </div>
+      </div>
+      <div class="pc-x">${xs}</div>
+      ${legende}
+      ${brut?`<div class="pc-note"><span class="pc-note-i" aria-hidden="true">${_pesIcone('barres')}</span><div>
+Trait en pointillé : les pesées reliées entre elles. La moyenne sur sept jours demande quatre pesées dans la même semaine, elle prendra le relais dès que tu te pèseras plus souvent.</div></div>`:''}
+    </div>`;
 }
 function _fmtJourCourt(iso){
   const [a,m,j]=String(iso).split('-');
   return j+'/'+m;
+}
+/** Les deux pictogrammes de la maquette : l'eclair de la vitesse, les barres du graphique. */
+function _pesIcone(k){
+  if(k==='eclair') return '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true"><path d="M13.2 2 4.5 13.4h6.2L9.6 22l9.9-12.6h-6.4L13.2 2z"/></svg>';
+  return '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><rect x="3" y="13" width="4.2" height="8" rx="1"/><rect x="9.9" y="8" width="4.2" height="13" rx="1"/><rect x="16.8" y="3" width="4.2" height="18" rx="1"/></svg>';
+}
+/**
+ * La carte complete : titre, periodes, courbe. `opts` :
+ *   id       — l'identifiant de la carte (un par ecran) ;
+ *   couleur  — (ecartKg)=>couleur de l'ecart ;
+ *   periodes — false pour masquer le choix (la fiche coach suit alors SA periode) ;
+ *   jours    — impose la fenetre (sinon, la periode choisie).
+ */
+function _carteCourbePoids(serie,opts){
+  const o=Object.assign({id:'pc-carte'},opts||{});
+  _pesCartes.set(o.id,{serie,opts:o});
+  const per=PESEE_PERIODES.find(p=>p.k===_pesPeriode)||PESEE_PERIODES[2];
+  const jours=o.jours||per.j;
+  const corps=_courbePesee(serie,Object.assign({},o,{jours}));
+  const choix=o.periodes===false?'':`<div class="pc-per" role="group" aria-label="Période du graphique">${PESEE_PERIODES.map(p=>
+      `<button type="button" class="${p.k===per.k?'actif':''}" aria-pressed="${p.k===per.k}" title="${p.lib}" onclick="pesPeriode('${o.id}','${p.k}')">${p.k}</button>`).join('')}</div>`;
+  const vide=(serie&&serie.length>=2)
+    ?'<div class="pc-vide">Moins de deux pesées sur '+escapeHtml(o.jours?'cette période':per.lib)+' : choisis une période plus longue.</div>'
+    :'<div class="pc-vide">Au moins deux pesées sont nécessaires pour tracer une courbe.</div>';
+  return `<div class="evo-carte pc-carte" id="${o.id}">
+      <div class="pc-tete">
+        <span class="pc-ico" aria-hidden="true">${_pesIcone('barres')}</span>
+        <span class="pc-titre">Évolution du poids</span>
+        ${choix}
+      </div>
+      ${corps||vide}
+    </div>`;
+}
+/**
+ * LES COURBES DES MENSURATIONS, AU DESSIN DE LA COURBE DU POIDS (26/09/2026,
+ * demande de Kevin : « applique le même design »). Memes graduations, meme
+ * trait epais a halo, meme aire degradee, memes points et meme bulle — mais
+ * PLUSIEURS courbes possibles (droite / gauche), chacune dans SA couleur :
+ * c'est elle qui les distingue, et la legende la reprend.
+ * Les points sont places a la DATE de leur bilan : deux bilans a trois
+ * semaines d'ecart ne sont pas a la meme distance que deux bilans a deux mois.
+ * @param {{label:string,color:string,pts:{d:string,v:number}[]}[]} series  d = date ISO
+ * @param {{unite?:string,couleur?:(ecart:number)=>string}} [opts]
+ */
+function _courbeMesures(series,opts){
+  const o=opts||{}, u=o.unite||'cm';
+  const S=(series||[]).map(s=>Object.assign({},s,{pts:(s.pts||[]).filter(p=>p&&p.d&&isFinite(p.v)).sort((a,b)=>a.d<b.d?-1:(a.d>b.d?1:0))}))
+    .filter(s=>s.pts.length>=2);
+  if(!S.length) return '';
+  const tous=[].concat(...S.map(s=>s.pts));
+  const d0=tous.reduce((m,p)=>p.d<m?p.d:m,tous[0].d), d1=tous.reduce((m,p)=>p.d>m?p.d:m,tous[0].d);
+  const jours=_joursEntre(d0,d1)||1;
+  const vals=tous.map(p=>p.v);
+  let mn=Math.min(...vals), mx=Math.max(...vals);
+  if(mx-mn<1){ const c=(mx+mn)/2; mn=c-0.5; mx=c+0.5; }
+  const grad=_pesGraduations(mn-(mx-mn)*0.1,mx+(mx-mn)*0.1);
+  const g0=grad[0], g1=grad[grad.length-1];
+  const X=d=>(_joursEntre(d0,d)/jours)*100;
+  const Y=v=>100-((v-g0)/(g1-g0))*100;
+  const f2=n=>n.toFixed(2);
+  const n=(_courbeMesures._n=(_courbeMesures._n||0)+1);
+  let defs='', sous='', traits='', points='';
+  S.forEach((s,k)=>{
+    const id='mesSous'+n+'_'+k, d=s.pts.map((p,i)=>(i?'L':'M')+f2(X(p.d))+' '+f2(Y(p.v))).join(' ');
+    defs+=`<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" style="stop-color:${s.color};stop-opacity:${S.length>1?.22:.40}"/>
+      <stop offset="1" style="stop-color:${s.color};stop-opacity:0"/></linearGradient>`;
+    sous+=`<path d="${d} L${f2(X(s.pts[s.pts.length-1].d))} 100 L${f2(X(s.pts[0].d))} 100 Z" fill="url(#${id})" stroke="none"/>`;
+    traits+=`<path class="pc-rel" data-serie="${k}" d="${d}" fill="none" stroke="${s.color}" stroke-width="2.6"
+      stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"
+      style="filter:drop-shadow(0 0 3px ${s.color}) drop-shadow(0 0 7px ${s.color}88)"/>`;
+    const pas=Math.max(1,Math.ceil(s.pts.length/6));
+    points+=s.pts.map((p,i)=>{
+      const der=i===s.pts.length-1;
+      const cls='pc-pt'+(der?' pc-der':((i%pas===0)?' pc-pt-a':''));
+      const st=der?`border-color:${s.color};box-shadow:0 0 0 4px ${s.color}44,0 0 14px ${s.color}`
+        :((i%pas===0)?`border-color:${s.color};box-shadow:0 0 8px ${s.color}`:`background:${s.color};box-shadow:0 0 5px ${s.color}`);
+      return `<span class="${cls}" style="left:${f2(X(p.d))}%;top:${f2(Y(p.v))}%;${st}"></span>`;
+    }).join('');
+  });
+  // LA BULLE : la derniere valeur de chaque courbe, et son ecart depuis la premiere.
+  const lignesB=S.map(s=>{
+    const a=s.pts[0].v, z=s.pts[s.pts.length-1].v, e=Math.round((z-a)*10)/10;
+    const c=(typeof o.couleur==='function')?o.couleur(e):'var(--sub)';
+    return `<div class="pc-b-l">${S.length>1?`<i style="background:${s.color}"></i>`:''}<b>${_synNombre(z)} ${u}</b>`
+      +`<span style="color:${c}">${e>0?'+':(e<0?'−':'')}${_synNombre(Math.abs(e))} ${u}</span></div>`;
+  }).join('');
+  const yB=Math.min(...S.map(s=>Y(s.pts[s.pts.length-1].v)));
+  const bulle=`<div class="pc-bulle pc-bulle-m${yB<34?' pc-bulle-bas':''}" style="top:${f2(yB)}%">${lignesB}</div>`;
+  const lignes=grad.map(v=>`<div class="pc-g" style="top:${f2(Y(v))}%"><span>${String(v).replace('.',',')}</span></div>`).join('');
+  // Les dates : celles des bilans, jusqu'a cinq, sans chevauchement.
+  const ds=[...new Set(tous.map(p=>p.d))].sort();
+  const pasD=Math.max(1,Math.ceil(ds.length/5));
+  const choix0=ds.filter((d,i)=>i%pasD===0||i===ds.length-1);
+  // ⚠ DEUX BILANS A DEUX SEMAINES D'ECART SE CHEVAUCHAIENT sur un telephone
+  //   (« 21/0605/07 »). Une etiquette trop pres de la precedente saute ; la
+  //   derniere date reste toujours, c'est elle qu'on lit.
+  const ECART_MIN_X=16;
+  const choix=[];
+  choix0.forEach((d,i)=>{
+    const dern=i===choix0.length-1;
+    if(!choix.length||X(d)-X(choix[choix.length-1])>=ECART_MIN_X){ choix.push(d); return; }
+    if(dern&&choix.length>1) choix[choix.length-1]=d;
+    else if(dern) choix.push(d);
+  });
+  const xs=choix.map((d,i)=>`<span style="left:${f2(X(d))}%" class="${X(d)<8?'pc-x0':(X(d)>92?'pc-x1':'')}">${_fmtJourCourt(d)}</span>`).join('');
+  const legende=`<div class="pc-leg">${S.map(s=>`<span><i class="pc-l-pt" style="border-color:${s.color};box-shadow:0 0 6px ${s.color}"></i>${escapeHtml(s.label||'Mesure relevée')}</span>`).join('')}</div>`;
+  return `<div class="pc pc-m">
+      <div class="pc-cadre">${lignes}
+        <div class="pc-zone">
+          <svg class="arc-courbe" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <defs>${defs}</defs>${sous}${traits}
+          </svg>
+          ${points}${bulle}
+        </div>
+      </div>
+      <div class="pc-x">${xs}</div>
+      ${legende}
+    </div>`;
+}
+/** Un clic sur une periode : la carte se refait, les autres ne bougent pas. */
+function pesPeriode(id,k){
+  if(!PESEE_PERIODES.some(p=>p.k===k)) return false;
+  _pesPeriode=k;
+  const c=_pesCartes.get(id), z=document.getElementById(id);
+  if(!c||!z){ _pesCartes.delete(id); return false; }
+  const t=document.createElement('div'); t.innerHTML=_carteCourbePoids(c.serie,c.opts);
+  const neuf=t.firstElementChild; if(!neuf) return false;
+  z.replaceWith(neuf);
+  try{ if(typeof arcTracerCourbes==='function') arcTracerCourbes(neuf); }catch(e){}
+  return true;
 }
 // Encadré vitesse. En mode neutre il n'est jamais construit — pas caché : pas
 // construit du tout, pour qu'aucun chemin d'affichage ne puisse le ressortir.
@@ -95455,33 +96305,18 @@ function blocPoids(user){
       <div class="metric-box"><div class="metric-val">${act??'—'}kg</div><div class="metric-label">Actuel</div></div>
       <div class="metric-box"><div class="metric-val" style="color:${colEvol}">${diff!=null?(diff>0?'+':'')+diff+'kg':'—'}</div><div class="metric-label">Évolution</div></div>
     </div>`;
-  // LA COURBE D'ABORD : c'est elle qui sait si le trait est une moyenne ou
-  // les pesées reliées, et la légende ne peut le dire qu'après.
-  const svgCourbe=_courbePesee(serie);
-  const legende=!svgCourbe?'points = pesées'
-    :(_courbePesee.dernierTrait==='pesees'?'points = pesées · trait = relevé'
-                                          :'points = pesées · trait = moyenne 7 j');
-  const courbe=`<div class="evo-carte" style="padding:16px">
-      <!-- LE TITRE ET SA VALEUR TIENNENT SUR UNE LIGNE, la legende passe
-           dessous. Mesure au navigateur, ecran de 375 px : la ligne offre
-           300 px, le titre « Évolution du poids 103.8 kg » en reclame 227 et
-           la legende « points = pesées · trait = moyenne 7 j » 178 — 413 a
-           deux, pour 300 disponibles. Les deux ne pouvaient donc PAS
-           cohabiter, et c est le titre qui payait : reduit a 164 px, il
-           cassait apres « poids » et laissait « KG » seul a la ligne.
-           flex-wrap renvoie la legende a la ligne suivante ; le titre
-           retrouve les 300 px et ses 227 y tiennent. Au-dela de 413 px de
-           colonne — la fiche coach — les deux se remettent d eux-memes cote
-           a cote, sans regle supplementaire. -->
-      <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:2px 8px;margin-bottom:10px">
-        <span class="evo-titre" style="margin-bottom:0">Évolution du poids${act!=null?`<span style="font-family:var(--pile-titre);font-size:var(--fs-lg);color:var(--text-strong);letter-spacing:1px;margin-left:9px">${act} kg</span>`:''}</span>
-        <span style="font-size:var(--fs-2xs);color:var(--text-faint)">${legende}</span>
+  // LA COURBE, ET SA LEGENDE AVEC ELLE (refonte du 26/09/2026) : c'est
+  // _courbePesee qui sait si le trait est une moyenne ou les pesees reliees,
+  // et c'est donc elle qui l'ecrit, sous le trace.
+  // Mode neutre : l'ecart de la bulle reste neutre, sans couleur de verdict.
+  const courbe=_carteCourbePoids(serie,{id:'pc-athlete',
+    couleur:e=>neutre?'var(--sub)':couleurEvolution(user,e)});
+  const vitesse=neutre?'':`<div class="evo-carte pv-carte">
+      <span class="pv-ico" aria-hidden="true">${_pesIcone('eclair')}</span>
+      <div class="pv-c">
+        <div class="evo-titre pv-t">Vitesse</div>
+        ${_blocVitesse(user)}
       </div>
-      ${svgCourbe||'<div style="font-size:var(--fs-xs);color:var(--sub)">Au moins deux pesées sont nécessaires pour tracer une courbe.</div>'}
-    </div>`;
-  const vitesse=neutre?'':`<div class="evo-carte" style="padding:13px">
-      <div class="evo-titre">Vitesse</div>
-      ${_blocVitesse(user)}
     </div>`;
   const neutreNote=neutre?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:14px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
       Tu as signalé un antécédent de trouble du comportement alimentaire dans ton
@@ -95557,9 +96392,12 @@ function blocPoidsCoach(user,depuis){
       </div>
       ${alerte?`<div style="font-size:var(--fs-xs);color:var(--orange);line-height:1.6;margin-top:4px">Au-delà du seuil${cible.phase?' de la phase '+cible.lib:''} — à vérifier avec l'athlète.</div>`:''}`
      :`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:6px">Pas assez de pesées pour une vitesse (il en faut au moins quatre par semaine sur trois semaines).</div>`}
-    ${_courbePesee(_pDep?serie.filter(e=>{
+    ${_carteCourbePoids(_pDep?serie.filter(e=>{
       try{ return new Date(e.date+'T12:00:00').getTime()>=_pDep; }catch(x){ return true; }
-    }):serie)}
+    }):serie,{id:'pc-coach',couleur:e=>couleurEvolution(user,e),
+      // LA PERIODE DU COACH PRIME : posee en haut de « Ses courbes », elle cadre
+      // deja la serie — pas de second choix de periode dans la carte.
+      periodes:!_pDep,jours:_pDep?100000:0})}
     ${_pDep?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:4px">La courbe suit la période choisie en haut de « Ses courbes ». La vitesse, elle, garde sa fenêtre de mesure.</div>':''}
   </div>`;
 }
@@ -102193,6 +103031,31 @@ function setAthleteGender(g){
   if(bm){bm.style.background=g==='H'?'var(--red)':'none';bm.style.borderColor=g==='H'?'var(--red)':'var(--border)';}
   if(bf){bf.style.background=g==='F'?'var(--red)':'none';bf.style.borderColor=g==='F'?'var(--red)':'var(--border)';}
 }
+// « NOM AFFICHE SUR MES VISUELS ». Trois choix, un pseudo s'il le veut.
+let _atpVisuelNom='prenom';
+function setVisuelNom(v){
+  _atpVisuelNom=VISUEL_NOMS.indexOf(v)>=0?v:'prenom';
+  for(const k of VISUEL_NOMS){
+    const b=document.getElementById('atp-vn-'+k);
+    if(!b) continue;
+    const on=k===_atpVisuelNom;
+    b.style.background=on?'var(--red)':'none';
+    b.style.borderColor=on?'var(--red)':'var(--border)';
+    b.setAttribute('aria-pressed',on?'true':'false');
+  }
+  const bloc=document.getElementById('atp-pseudo-bloc');
+  if(bloc) bloc.style.display=_atpVisuelNom==='pseudo'?'block':'none';
+  _apercuVisuelNom();
+}
+function _apercuVisuelNom(){
+  const z=document.getElementById('atp-vn-apercu');
+  if(!z||!currentUser) return;
+  const essai=Object.assign({},currentUser,{visuelNom:_atpVisuelNom,
+    pseudo:(document.getElementById('atp-pseudo')?.value||''),
+    fname:(document.getElementById('atp-fname')?.value||currentUser.fname||'')});
+  const n=nomSurVisuels(essai);
+  z.textContent=n?(n+' · REPCORE'):'REPCORE';
+}
 function openAthleteProfile(){
   const u=currentUser;
   const circle=document.getElementById('atp-photo-circle');
@@ -102201,6 +103064,9 @@ function openAthleteProfile(){
   if(fnEl) fnEl.value=u.fname||'';
   const lnEl=document.getElementById('atp-lname');
   if(lnEl) lnEl.value=u.lname||'';
+  const psEl=document.getElementById('atp-pseudo');
+  if(psEl) psEl.value=u.pseudo||'';
+  setVisuelNom(u.visuelNom||'prenom');
   // LA DATE D'ABORD. Le champ d'âge n'apparaît qu'à défaut — dossiers créés
   // par doRescue, qui ne portent pas de date de naissance.
   const bdEl=document.getElementById('atp-birthdate');
@@ -102241,6 +103107,10 @@ function saveAthleteProfile(){
   const _ln=(document.getElementById('atp-lname')?.value||'').trim().slice(0,40);
   if(_fn) currentUser.fname=_fn;
   if(_ln) currentUser.lname=_ln;
+  // Le nom sur les visuels : le reglage, et le pseudo (vide = retire).
+  currentUser.visuelNom=_atpVisuelNom;
+  const _ps=(document.getElementById('atp-pseudo')?.value||'').replace(/\s+/g,' ').trim().slice(0,24);
+  if(_ps) currentUser.pseudo=_ps; else delete currentUser.pseudo;
   // L'ÂGE EST DÉDUIT, JAMAIS SAISI — quand une date est disponible. C'est ce
   // qui met fin à la correction effacée au redémarrage : le boot recalcule
   // depuis `birthdate`, il retrouvera donc exactement ce qui est écrit ici.
@@ -102420,8 +103290,8 @@ function relancerAccesAthlete(id){
   if(!tel){
     // Pas de numero : on ne fait pas semblant. Le message est copie, le coach
     // l'envoie par le canal qu'il veut.
-    try{ navigator.clipboard.writeText(msg); toast('Pas de numéro : message copié.','var(--orange)'); }
-    catch(e){ toast('Pas de numéro enregistré pour '+(c.fname||'cet athlète')+'.','var(--orange)'); }
+    // La copie est ATTENDUE : « message copié » ne s'annonce que s'il l'est.
+    _rcCopierOuMontrer(msg,'Pas de numéro : message copié.','Pas de numéro pour '+(c.fname||'cet athlète')+'. Copie ce message :');
     return false;
   }
   window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(msg),'_blank','noopener');
@@ -103661,12 +104531,7 @@ async function generateStudentCode(){
 }
 function copyStudentCode(){
   if(!lastGeneratedCode) return;
-  if(navigator.clipboard){
-    navigator.clipboard.writeText(lastGeneratedCode).then(()=>toast('Code copié. Envoie-le à l\'élève par WhatsApp/SMS'));
-  } else {
-    const t=document.createElement('textarea');t.value=lastGeneratedCode;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();
-    toast('Code copié');
-  }
+  _rcCopierOuMontrer(lastGeneratedCode,'Code copié. Envoie-le à l\'élève par WhatsApp/SMS','Copie ce code et envoie-le à l\'élève :');
 }
 function loadStudentCodes(){
   const isCreator=currentUser.email===CREATOR_EMAIL;
