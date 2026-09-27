@@ -26755,7 +26755,6 @@ function openClientDetail(cid,_refresh,_force){
   try{ renderRedsCoach(c); }catch(e){}
   try{ renderPostPartumCoach(c); }catch(e){}
   try{ renderDossierSanteCoach(c); }catch(e){}
-  try{ renderPhotosCoach(c); }catch(e){}
   // Chips de reponse au bilan : la zone n'existe qu'apres le rendu des
   // reponses, on la peuple donc ici et non a la construction du bloc.
   setTimeout(()=>{ try{ _renderQuickCommentChips('bilan'); }catch(e){} },0);
@@ -36600,8 +36599,6 @@ function loadClientHome(){
       });
     }
   }catch(e){}
-  // REGLE 6 : la file des photos repart a la reconnexion, jamais avant.
-  try{ if(navigator.onLine!==false) setTimeout(()=>{ phpViderFile(); },2200); }catch(e){}
   setTimeout(checkWoReminderToday, 1100);
   // Rite de fin de cycle : il s AFFICHE, il ne notifie pas, et il ne bloque
   // jamais l acces. riteAAfficher decide seule.
@@ -58775,7 +58772,6 @@ const PHP_POSES=Object.freeze([
 const PHP_MAX_DIM=1280;
 const PHP_QUALITE=0.75;
 const PHP_MAX_SEANCES=200;
-const PHP_MAX_OCTETS=400*1024;      // au-delà, la compression a échoué
 const PHP_DB='repcore-photos';
 const PHP_STORE='blobs';
 const PHP_FILE_CLE='rc_photos_attente';
@@ -58800,61 +58796,6 @@ function phpEtat(u){
 function phpDisponible(u){
   const g=u&&u.grossesse&&u.grossesse.etat;
   return !(g==='enceinte'||g==='allaitement');
-}
-// PURE. RÈGLE 1 : sans consentement, aucun envoi possible. Le bouton n'est pas
-// « désactivé » quelque part dans le rendu — la fonction qui décide est ici, et
-// tout le reste la lit.
-function phpEnvoiAutorise(u){
-  return phpDisponible(u)&&phpEtat(u).donne;
-}
-// ÉCRIT. Le consentement se donne sur un écran DÉDIÉ, jamais dans les CGU, et
-// jamais coché d'avance.
-function phpConsentir(u,partageCoach){
-  if(!u||!phpDisponible(u)) return false;
-  if(!u.photosProgression||typeof u.photosProgression!=='object') u.photosProgression={};
-  u.photosProgression.consentement={donne:true,date:Date.now(),partageCoach:!!partageCoach};
-  if(!Array.isArray(u.photosProgression.seances)) u.photosProgression.seances=[];
-  return true;
-}
-// PURE. Bornes : une séance par jour, deux cents au plus.
-function phpSeanceDuJour(u,dateISO){
-  const j=dateISO||localISODate(new Date());
-  return phpEtat(u).seances.find(s=>s&&localISODate(new Date(s.date))===j)||null;
-}
-function phpPeutCreerSeance(u,dateISO){
-  if(!phpEnvoiAutorise(u)) return {ok:false,raison:'Consentement requis.'};
-  if(phpSeanceDuJour(u,dateISO)) return {ok:false,raison:'Une séance photo par jour. Complète celle d\'aujourd\'hui.'};
-  if(phpEtat(u).seances.length>=PHP_MAX_SEANCES)
-    return {ok:false,raison:'Deux cents séances au maximum. Supprime les plus anciennes.'};
-  return {ok:true};
-}
-// PURE. La dernière photo de la MÊME pose, pour la superposition à 25 %.
-function phpDernierePose(u,pose,avant){
-  const t=(typeof avant==='number')?avant:Date.now();
-  const l=phpEtat(u).seances.filter(s=>s&&s.date<t&&s.poses&&s.poses[pose]);
-  if(!l.length) return null;
-  l.sort((a,b)=>b.date-a.date);
-  return {date:l[0].date,...l[0].poses[pose]};
-}
-// PURE. Les dates où une pose existe — alimente le comparateur et la frise.
-// Une séance à UNE SEULE pose reste comparable : elle apparaît pour cette
-// pose-là et pour aucune autre, sans jamais casser le sélecteur.
-function phpDatesDePose(u,pose){
-  return phpEtat(u).seances.filter(s=>s&&s.poses&&s.poses[pose])
-    .map(s=>s.date).sort((a,b)=>a-b);
-}
-// PURE. La frise : une entrée par séance, avec les poses présentes.
-function phpFrise(u){
-  return phpEtat(u).seances.slice().sort((a,b)=>a.date-b.date).map(s=>({
-    date:s.date,
-    poses:PHP_POSES.filter(p=>s.poses&&s.poses[p.cle]).map(p=>p.cle)
-  }));
-}
-// PURE. Le comparateur a-t-il de quoi travailler ? Deux dates suffisent ; une
-// seule affiche la photo sans fondu, et ne plante pas.
-function phpComparateurEtat(u,pose){
-  const d=phpDatesDePose(u,pose);
-  return {dates:d,comparable:d.length>=2,unique:d.length===1,vide:d.length===0};
 }
 
 // ── Compression : un BLOB, jamais du base64 ───────────────────────────────
@@ -58921,7 +58862,6 @@ function _phpTx(mode,fn){
     tx.onerror=()=>reject(new Error('Écriture locale impossible.'));
   }));
 }
-function phpCle(dateISO,pose){ return dateISO+'/'+pose; }
 function phpEcrireBlob(cle,blob){ return _phpTx('readwrite',st=>st.put(blob,cle)); }
 function phpLireBlob(cle){ return _phpTx('readonly',st=>st.get(cle)); }
 function phpSupprimerBlob(cle){ return _phpTx('readwrite',st=>st.delete(cle)); }
@@ -58929,58 +58869,11 @@ function phpSupprimerBlob(cle){ return _phpTx('readwrite',st=>st.delete(cle)); }
 // exactement pourquoi les photos restent locales par défaut.
 function phpViderBlobs(){ return _phpTx('readwrite',st=>st.clear()); }
 
-// ── File d'attente hors ligne ─────────────────────────────────────────────
-// RÈGLE 6 : le blob COMPRESSÉ attend la reconnexion. Il attend en IndexedDB
-// comme les autres — `localStorage` ne stocke que des chaînes, y mettre un
-// blob voudrait dire le rebase64er, c'est-à-dire refaire précisément ce que le
-// lot interdit. localStorage ne porte donc que la LISTE des clés en attente.
-function phpFileLire(){
-  try{ const l=JSON.parse(localStorage.getItem(PHP_FILE_CLE)||'[]');
-    return Array.isArray(l)?l.filter(x=>x&&x.cle):[]; }catch(e){ return []; }
-}
 function phpFileEcrire(l){
   try{ localStorage.setItem(PHP_FILE_CLE,JSON.stringify((l||[]).slice(0,PHP_MAX_SEANCES*4)));
     return true; }catch(e){ return false; }
 }
-function phpFileAjouter(cle,pose,dateISO){
-  const l=phpFileLire();
-  if(l.some(x=>x.cle===cle)) return false;
-  l.push({cle,pose,dateISO,at:Date.now()});
-  return phpFileEcrire(l);
-}
-function phpFileRetirer(cle){
-  return phpFileEcrire(phpFileLire().filter(x=>x.cle!==cle));
-}
 
-// ── Enregistrer une pose ──────────────────────────────────────────────────
-// RÈGLE 7 : ce qui entre dans `user` est {cle, w, h, octets} — et, seulement
-// après un partage explicite, {url, publicId}. Jamais un octet d'image.
-async function phpEnregistrerPose(u,pose,file,dateISO){
-  if(!phpEnvoiAutorise(u)) return {ok:false,raison:'Consentement requis.'};
-  if(!PHP_POSES.some(p=>p.cle===pose)) return {ok:false,raison:'Pose inconnue.'};
-  const j=dateISO||localISODate(new Date());
-  const existante=phpSeanceDuJour(u,j);
-  if(!existante){
-    const c=phpPeutCreerSeance(u,j);
-    if(!c.ok) return c;
-  }
-  let r;
-  try{ r=await compressImageBlob(file,PHP_MAX_DIM,PHP_QUALITE); }
-  catch(e){ return {ok:false,raison:e.message||'La compression a échoué.'}; }
-  // RÈGLE 3 : au-delà du plafond, la compression n'a pas fait son travail. On
-  // REFUSE — on n'envoie jamais l'original en repli.
-  if(r.octets>PHP_MAX_OCTETS)
-    return {ok:false,raison:'Image trop lourde après compression ('+Math.round(r.octets/1024)+' Ko). Envoi refusé.'};
-  const cle=phpCle(j,pose);
-  try{ await phpEcrireBlob(cle,r.blob); }
-  catch(e){ return {ok:false,raison:e.message||'Écriture locale impossible.'}; }
-  if(!u.photosProgression.seances) u.photosProgression.seances=[];
-  let s=existante;
-  if(!s){ s={date:Date.now(),poses:{}}; u.photosProgression.seances.push(s); }
-  if(!s.poses) s.poses={};
-  s.poses[pose]={cle,w:r.w,h:r.h,octets:r.octets};
-  return {ok:true,pose,cle,w:r.w,h:r.h,octets:r.octets};
-}
 // PURE. Toutes les poses partagées, pour la liste de purge honnête.
 function phpPartagees(u){
   const out=[];
@@ -58990,34 +58883,6 @@ function phpPartagees(u){
       if(x&&x.publicId) out.push({date:s.date,pose:p.cle,publicId:x.publicId,url:x.url});
     }
   return out;
-}
-// ── Partage au coach ──────────────────────────────────────────────────────
-// RÈGLE 4 : SECONDE CONFIRMATION. Le consentement initial autorise le suivi ;
-// il n'autorise pas chaque envoi. Un partage se redemande.
-async function phpPartagerPose(u,seance,pose){
-  const e=phpEtat(u);
-  if(!e.donne||!e.partageCoach) return {ok:false,raison:'Le partage au coach n\'est pas activé.'};
-  const x=seance&&seance.poses&&seance.poses[pose];
-  if(!x||!x.cle) return {ok:false,raison:'Photo introuvable.'};
-  if(x.publicId) return {ok:true,deja:true};
-  let blob;
-  try{ blob=await phpLireBlob(x.cle); }catch(err){ blob=null; }
-  if(!blob) return {ok:false,raison:'Photo absente de cet appareil.'};
-  // Hors ligne : le blob COMPRESSÉ attend, il ne se reprend pas au vol.
-  if(typeof navigator!=='undefined'&&navigator.onLine===false){
-    phpFileAjouter(x.cle,pose,localISODate(new Date(seance.date)));
-    return {ok:false,differe:true,raison:'Hors ligne : la photo partira à la reconnexion.'};
-  }
-  try{
-    const d=await phpUploadImage(blob,x.cle);
-    x.url=d.secure_url; x.publicId=d.public_id;
-    if(d.delete_token) x.deleteToken=d.delete_token;   // dix minutes, pas plus
-    phpFileRetirer(x.cle);
-    return {ok:true,url:d.secure_url};
-  }catch(err){
-    phpFileAjouter(x.cle,pose,localISODate(new Date(seance.date)));
-    return {ok:false,raison:_cloudinaryUserMsg(err,'photo')};
-  }
 }
 // L'endpoint IMAGE, et non /video/upload que l'existant utilise pour tout.
 // AUCUNE transformation n'est demandée : elles consomment des crédits, et la
@@ -59044,91 +58909,6 @@ async function phpUploadImage(blob,nom,dossier){
   // n'apparait sur aucun ecran et ne se decide nulle part.
   try{ rcq('cld_envois',1); rcqOctets('cld_ko',(blob&&blob.size)||Number(data.bytes)||0); }catch(e){}
   return data;
-}
-// RÈGLE 6 : la file repart à la reconnexion, jamais avant.
-async function phpViderFile(){
-  if(typeof navigator!=='undefined'&&navigator.onLine===false) return 0;
-  const l=phpFileLire();
-  if(!l.length) return 0;
-  let n=0;
-  for(const item of l.slice(0,8)){
-    const s=phpEtat(currentUser).seances.find(x=>x&&localISODate(new Date(x.date))===item.dateISO);
-    if(!s){ phpFileRetirer(item.cle); continue; }
-    const r=await phpPartagerPose(currentUser,s,item.pose);
-    if(r.ok) n++;
-  }
-  if(n) saveUser();
-  return n;
-}
-// ── Retrait d'une seule photo ─────────────────────────────────────────────
-// phpPeutCreerSeance conseille « Supprime les plus anciennes » depuis
-// toujours, sans qu'aucun chemin ne le permette : phpSupprimerBlob n'avait
-// aucun appelant, et phpRevoquerUI détruit tout en retirant le consentement.
-//
-// LE delete_token EST TENTE D'ABORD, comme dans phpRevoquer. Ce module
-// distingue partout une suppression RÉELLE d'une liste de choses à
-// supprimer : dans les dix minutes qui suivent un envoi, la copie distante
-// peut encore être détruite. On n'inscrit dans aPurger que ce qu'on n'a pas
-// pu effacer.
-async function phpSupprimerPose(u,seanceDate,pose){
-  if(!u||!u.photosProgression) return {ok:false,raison:'Aucun dossier.'};
-  const l=phpEtat(u).seances;
-  const s=l.find(x=>x&&x.date===seanceDate);
-  if(!s||!s.poses||!s.poses[pose]) return {ok:false,raison:'Photo introuvable.'};
-  const x=s.poses[pose];
-  // Le blob d'abord : c'est la seule copie qu'on puisse VRAIMENT détruire.
-  let local=false;
-  try{ await phpSupprimerBlob(x.cle); local=true; }catch(e){ local=false; }
-  // La file hors ligne pointait peut-être sur ce blob. L'y laisser ferait
-  // réessayer un partage à chaque reconnexion, sur une photo qui n'existe
-  // plus : phpViderFile ne retire que les séances introuvables.
-  try{ phpFileRetirer(x.cle); }catch(e){}
-  let restant=null;
-  if(x.publicId){
-    let efface=false;
-    if(x.deleteToken){ try{ efface=await phpAnnulerUpload(x.deleteToken); }catch(e){ efface=false; } }
-    // PUIS LA FONCTION SERVEUR, qui n'a pas de fenetre de dix minutes. Ce qui
-    // lui echappe entre dans DEUX registres, et les deux servent : `aPurger`
-    // dans le dossier, que l'ecran des photos annonce, et la file locale, qui
-    // est rejouee a chaque demarrage.
-    if(!efface){
-      const _d=await _cldDetruire(x.publicId,'image',
-        {proprietaire:u.email,quoi:'photo de progression ('+pose+', '+s.date+')'});
-      efface=_d.ok;
-    }
-    if(!efface) restant={publicId:x.publicId,date:s.date,pose};
-  }
-  delete s.poses[pose];
-  // LA SÉANCE PART AVEC SA DERNIÈRE POSE : une entrée sans photo compterait
-  // encore dans le plafond de deux cents, soit exactement le problème que ce
-  // retrait sert à résoudre.
-  if(!Object.keys(s.poses).length) u.photosProgression.seances=l.filter(y=>y!==s);
-  if(restant){
-    if(!Array.isArray(u.photosProgression.aPurger)) u.photosProgression.aPurger=[];
-    u.photosProgression.aPurger.push(restant);
-  }
-  return {ok:true,local,restant:restant?restant.publicId:null};
-}
-// LE GESTE. La question nomme la photo et son jour, et dit la vérité quand la
-// photo est déjà partie chez le coach — l'écran de consentement l'a promis.
-async function phpSupprimerPoseUI(seanceDate,pose){
-  const u=currentUser;
-  if(!u) return false;
-  const s=phpEtat(u).seances.find(x=>x&&x.date===seanceDate);
-  const x=s&&s.poses&&s.poses[pose];
-  if(!x){ toast('Photo introuvable.','var(--orange)'); return false; }
-  const lib=(PHP_POSES.find(q=>q.cle===pose)||{}).lib||pose;
-  const jour=new Date(seanceDate).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
-  if(!await rcConfirm('Supprimer « '+lib+' » du '+jour+' ?\n\n'
-    +(x.publicId?'Cette photo a déjà été transmise à ton coach : elle part de ce téléphone, mais sa copie ne peut pas toujours être effacée à distance.\n\n':'')
-    +'C’est définitif.',null,'Supprimer')) return false;
-  const r=await phpSupprimerPose(u,seanceDate,pose);
-  if(!r.ok){ toast(r.raison||'Suppression impossible.','var(--orange)'); return false; }
-  saveUser();
-  renderPhotosProgression();
-  toast(r.restant?'Photo supprimée de ce téléphone. Une copie reste à purger côté coach.'
-    :'Photo supprimée.','var(--green)');
-  return true;
 }
 // ── Révocation ────────────────────────────────────────────────────────────
 // CE QU'ELLE FAIT VRAIMENT, et ce qu'elle ne peut pas faire.
@@ -59470,356 +59250,14 @@ async function photosBilanMigrer(user,options){
   return {faites:faites,restantes:photosBilanAMigrer(u).length,octets:octets,echecs:echecs};
 }
 
-// ── L'écran de consentement ───────────────────────────────────────────────
-// RÈGLE 1 : DÉDIÉ, distinct des CGU, et il DIT que ce sont des données de
-// santé. Rien n'est coché d'avance, et il n'y a pas de « continuer » qui
-// vaudrait accord.
-const PHP_TEXTE_SANTE='Une photo de ton corps est une donnée de santé au sens de l\'article 9 du RGPD. Elle n\'est pas traitée comme une photo ordinaire, et elle ne se donne pas par défaut.';
-function htmlPhotosConsentement(u){
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px 16px;margin-bottom:16px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Photos de progression</div>
-    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7;margin-bottom:10px">${escapeHtml(PHP_TEXTE_SANTE)}</div>
-    <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.7">Ce que fait RepCore : tes photos restent <strong style="color:var(--text)">sur ton téléphone</strong>. Elles ne partent nulle part tant que tu ne les partages pas, photo par photo, avec une confirmation à chaque fois.</div>
-    <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.7;margin-top:8px">Ce que RepCore ne peut pas faire : une photo <em>déjà partagée</em> ne peut plus être effacée à distance depuis l'application. Si tu retires ton accord, tout ce qui est sur ce téléphone est détruit, et la liste de ce qui a été transmis est affichée pour que ton coach le supprime de son côté. On préfère te le dire avant.</div>
-    <div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-top:8px">Aucune analyse automatique : ni silhouette, ni masse grasse, ni comparaison à qui que ce soit. Ce sont tes photos, rangées côte à côte.</div>
-    <label class="hit44" style="display:flex;align-items:flex-start;gap:10px;margin:14px 0 0;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:400;font-size:var(--fs-xs);color:var(--sub)">
-      <input type="checkbox" id="php-partage" style="width:16px;height:16px;margin:2px 0 0;accent-color:var(--red);flex-shrink:0">
-      <span>J'autorise aussi mon coach à voir les photos que je choisirai de partager. Je peux revenir dessus.</span>
-    </label>
-    <button class="btn btn-red" style="width:100%;margin-top:14px" onclick="phpDonnerConsentement()">J'ai compris, j'active les photos</button>
-    <button class="btn btn-outline" style="width:100%;margin-top:8px" onclick="showProgressTab('photos',null)">Non, pas de photos</button>
-  </div>`;
-}
-async function phpDonnerConsentement(){
-  const partage=!!(document.getElementById('php-partage')||{}).checked;
-  if(!await rcConfirm('Activer les photos de progression ?\n\nCe sont des données de santé. Elles restent sur ton téléphone.',null,'Activer')) return false;
-  if(!phpConsentir(currentUser,partage)) return false;
-  saveUser();
-  renderPhotosProgression();
-  return true;
-}
-// ── La séance photo ───────────────────────────────────────────────────────
-// Quatre poses, chacune OPTIONNELLE. `capture="environment"` ouvre l'appareil
-// arrière ; sur ordinateur l'attribut est ignoré et le sélecteur s'ouvre.
-function htmlPhotosSeance(u){
-  const j=localISODate(new Date());
-  const s=phpSeanceDuJour(u,j);
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
-    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
-      <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Nouvelle séance photo</span>
-      <span style="font-size:var(--fs-2xs);color:var(--text-faint)">${s?Object.keys(s.poses||{}).length:0}/4</span>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      ${PHP_POSES.map(p=>{
-        const faite=!!(s&&s.poses&&s.poses[p.cle]);
-        return `<label class="hit44" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:64px;border-radius:var(--r-3);cursor:pointer;padding:10px 6px;text-transform:none;letter-spacing:normal;margin:0;
-          background:${faite?'rgba(34,197,94,.12)':'#111'};border:1px solid ${faite?'var(--green)':'var(--border)'};color:${faite?'var(--text)':'var(--sub)'}">
-          <span style="font-size:var(--fs-lg)">${faite?'●':'○'}</span>
-          <span style="font-size:var(--fs-xs);font-weight:800">${escapeHtml(p.lib)}</span>
-          <input type="file" accept="image/*" capture="environment" style="display:none"
-            onchange="phpPrendrePose('${p.cle}',this)">
-        </label>`;}).join('')}
-    </div>
-    <div id="php-apercu" style="margin-top:12px"></div>
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:10px">Chaque pose est facultative. Aligne-toi sur la photo précédente en transparence et sur la ligne d'horizon.</div>
-  </div>`;
-}
-async function phpPrendrePose(pose,input){
-  const f=input&&input.files&&input.files[0];
-  if(!f) return false;
-  const z=document.getElementById('php-apercu');
-  if(z) z.innerHTML='<div style="font-size:var(--fs-xs);color:var(--sub)">Compression…</div>';
-  const r=await phpEnregistrerPose(currentUser,pose,f);
-  input.value='';
-  if(!r.ok){
-    if(z) z.innerHTML='';
-    return toast(r.raison,'var(--orange)');
-  }
-  saveUser();
-  await phpApercu(pose);
-  renderPhotosProgression();
-  return true;
-}
-// L'aperçu : la photo qui vient d'être prise, la DERNIÈRE de la même pose
-// superposée à 25 %, et une ligne d'horizon. Aucune transformation distante —
-// tout est fait avec deux <img> et un trait.
-async function phpApercu(pose){
-  const z=document.getElementById('php-apercu');
-  if(!z) return;
-  const j=localISODate(new Date());
-  const s=phpSeanceDuJour(currentUser,j);
-  const x=s&&s.poses&&s.poses[pose];
-  if(!x) return;
-  let src='',ancienne='';
-  try{ const b=await phpLireBlob(x.cle); if(b) src=URL.createObjectURL(b); }catch(e){}
-  const prec=phpDernierePose(currentUser,pose,s.date);
-  if(prec){ try{ const b=await phpLireBlob(prec.cle); if(b) ancienne=URL.createObjectURL(b); }catch(e){} }
-  z.innerHTML=`<div style="position:relative;border-radius:var(--r-3);overflow:hidden;border:1px solid var(--border);background:#000">
-    ${src?`<img src="${src}" style="width:100%;display:block">`:''}
-    ${ancienne?`<img src="${ancienne}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.25;pointer-events:none">`:''}
-    <div style="position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(255,255,255,.45);pointer-events:none"></div>
-  </div>
-  <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:6px">${ancienne?'La photo pâle est ta dernière '+escapeHtml((PHP_POSES.find(p=>p.cle===pose)||{}).lib||'').toLowerCase()+'. La ligne t\'aide à tenir le même cadrage.':'Première photo de cette pose : c\'est elle qui servira de repère la prochaine fois.'}</div>`;
-}
-// ── Le comparateur ────────────────────────────────────────────────────────
-// Deux dates, une pose, côte à côte, plus un fondu. Le curseur est un
-// <input type="range"> NATIF : il est opérable au clavier sans une ligne de
-// code — flèches, Origine, Fin — là où un curseur maison aurait exigé qu'on
-// réimplémente ce que le navigateur fait déjà bien.
-let _phpPose='face', _phpA=null, _phpB=null;
-// LES URL D OBJET DE LA FRISE SE REVOQUENT. Une vignette par pose et par
-// seance, repeint a chaque suppression : sans revocation, chaque passage
-// laisserait un blob entier retenu en memoire par le navigateur, et la frise
-// est justement l ecran qu on repeint le plus.
-let _phpUrlsFrise=[];
-function htmlPhotosComparateur(u){
-  const st=phpComparateurEtat(u,_phpPose);
-  const dl=st.dates;
-  if(!_phpA||dl.indexOf(_phpA)<0) _phpA=dl.length?dl[0]:null;
-  if(!_phpB||dl.indexOf(_phpB)<0) _phpB=dl.length?dl[dl.length-1]:null;
-  const opt=d=>dl.map(x=>`<option value="${x}"${x===d?' selected':''}>${new Date(x).toLocaleDateString('fr-FR')}</option>`).join('');
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Comparer</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-      ${PHP_POSES.map(p=>`<button type="button" onclick="phpChoisirPose('${p.cle}')"
-        style="flex:1;min-width:66px;min-height:44px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;
-          background:${p.cle===_phpPose?'rgba(224,32,32,.14)':'#111'};border:1px solid ${p.cle===_phpPose?'var(--red)':'var(--border)'};color:${p.cle===_phpPose?'var(--text)':'var(--sub)'}">${escapeHtml(p.lib)}</button>`).join('')}
-    </div>
-    ${st.vide
-      ? '<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Aucune photo dans cette pose.</div>'
-      : `<div style="display:flex;gap:8px;margin-bottom:10px">
-          <select onchange="_phpA=Number(this.value);phpRendreComparateur()" style="flex:1">${opt(_phpA)}</select>
-          <select onchange="_phpB=Number(this.value);phpRendreComparateur()" style="flex:1"${st.unique?' disabled':''}>${opt(_phpB)}</select>
-        </div>
-        <div id="php-cmp"></div>
-        ${st.comparable?`<label style="margin-top:10px;font-size:var(--fs-2xs);color:var(--sub);text-transform:none;letter-spacing:normal;font-weight:400" for="php-fondu">Fondu : flèches du clavier</label>
-        <input id="php-fondu" type="range" min="0" max="100" value="50" step="1"
-          aria-label="Fondu entre les deux dates"
-          oninput="phpFondu(this.value)" style="width:100%;accent-color:var(--red)">`
-        :'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">Une seule date dans cette pose : le fondu apparaîtra à la deuxième.</div>'}`}
-  </div>`;
-}
-function phpChoisirPose(p){ _phpPose=p; _phpA=null; _phpB=null; renderPhotosProgression(); }
-function phpFondu(v){
-  const el=document.getElementById('php-cmp-b');
-  if(el) el.style.opacity=String(Math.max(0,Math.min(100,Number(v)||0))/100);
-}
-async function phpRendreComparateur(){
-  const z=document.getElementById('php-cmp');
-  if(!z) return;
-  const st=phpComparateurEtat(currentUser,_phpPose);
-  if(st.vide){ z.innerHTML=''; return; }
-  const src=async d=>{
-    const s=phpEtat(currentUser).seances.find(x=>x.date===d);
-    const x=s&&s.poses&&s.poses[_phpPose];
-    if(!x) return '';
-    try{ const b=await phpLireBlob(x.cle); return b?URL.createObjectURL(b):''; }catch(e){ return ''; }
-  };
-  const a=await src(_phpA), b=st.comparable?await src(_phpB):'';
-  z.innerHTML=`<div style="position:relative;border-radius:var(--r-3);overflow:hidden;border:1px solid var(--border);background:#000">
-    ${a?`<img src="${a}" style="width:100%;display:block">`:''}
-    ${b?`<img id="php-cmp-b" src="${b}" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.5">`:''}
-  </div>`;
-}
-// ── La frise ──────────────────────────────────────────────────────────────
-function htmlPhotosFrise(u){
-  const f=phpFrise(u);
-  if(!f.length) return '';
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Frise</div>
-    <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">
-      ${f.map(s=>{
-        const _j=new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
-        return `<div style="flex-shrink:0;background:#111;border:1px solid var(--border);border-radius:var(--r-2);padding:8px 10px 6px">
-          <div style="font-size:var(--fs-2xs);font-weight:800;color:var(--text);margin-bottom:6px">${_j}</div>
-          <div style="display:flex;gap:6px">
-          ${s.poses.map(_c=>{
-            const _l=(PHP_POSES.find(q=>q.cle===_c)||{}).lib||_c;
-            return `<div style="width:74px;flex:none">
-              <div style="position:relative;width:74px;height:98px;border-radius:var(--r-1);overflow:hidden;background:#080808;border:1px solid var(--border)">
-                <img data-php-frise="${s.date}|${escapeHtml(_c)}" alt=""
-                  style="width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity var(--t-2) var(--c-out)">
-                <div style="position:absolute;top:0;right:0">
-                  ${_htmlRetraitReleve(`phpSupprimerPoseUI(${s.date},&quot;${_c}&quot;)`,`la photo ${escapeHtml(_l)} du ${_j}`)}
-                </div>
-              </div>
-              <div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(_l)}</div>
-            </div>`;}).join('')}
-          </div>
-        </div>`;}).join('')}
-    </div>
-  </div>`;
-}
-// LA PEINTURE DE LA FRISE, a part et asynchrone — meme forme que
-// phpRendreComparateur. htmlPhotosFrise est appelee dans une concatenation de
-// chaines, elle ne peut pas attendre IndexedDB : elle pose les emplacements,
-// celle-ci va chercher les blobs et les remplit.
-//
-// AUCUNE IMAGE NE SORT DU TELEPHONE ICI : une URL d objet ne designe qu un
-// blob deja en memoire, elle n est ni une adresse reseau ni un cache.
-async function phpPeindreFrise(){
-  const z=document.getElementById('prog-photos-progression');
-  if(!z) return;
-  const cases=z.querySelectorAll('img[data-php-frise]');
-  // On revoque le tour PRECEDENT, pas celui-ci : innerHTML a deja remplace les
-  // <img> qui portaient ces URL, plus personne ne les regarde.
-  const vieilles=_phpUrlsFrise; _phpUrlsFrise=[];
-  vieilles.forEach(u=>{ try{ URL.revokeObjectURL(u); }catch(e){} });
-  if(!cases.length) return;
-  const seances=phpEtat(currentUser).seances;
-  for(const img of cases){
-    try{
-      const [d,pose]=String(img.getAttribute('data-php-frise')||'').split('|');
-      const se=seances.find(x=>x&&String(x.date)===d);
-      const x=se&&se.poses&&se.poses[pose];
-      if(!x||!x.cle) continue;
-      const b=await phpLireBlob(x.cle);
-      if(!b) continue;
-      // L emplacement a pu disparaitre pendant l attente : une suppression
-      // repeint la frise, et ce <img>-la n est plus dans le document.
-      if(!img.isConnected) continue;
-      const u=URL.createObjectURL(b);
-      _phpUrlsFrise.push(u);
-      img.src=u; img.style.opacity='1';
-    }catch(e){}
-  }
-}
-// PURE. Ce qui peut être partagé, et ce qui l'est déjà. Aucun rendu ici : la
-// carte se contente de mettre en forme ce que cette fonction décide, et le
-// banc peut donc éprouver la décision sans DOM.
-//
-// RIEN si le partage au coach n'est pas couvert par l'accord : ce n'est pas
-// le rendu qui décide, c'est ici — même doctrine que phpEnvoiAutorise.
-function phpAPartager(u){
-  if(!phpEtat(u).partageCoach) return [];
-  return phpEtat(u).seances.slice().sort((a,b)=>b.date-a.date).map(s=>({
-    date:s.date,
-    dateISO:localISODate(new Date(s.date)),
-    poses:PHP_POSES.filter(p=>s.poses&&s.poses[p.cle]).map(p=>({
-      cle:p.cle,lib:p.lib,partagee:!!(s.poses[p.cle]&&s.poses[p.cle].publicId)
-    }))
-  })).filter(x=>x.poses.length);
-}
-// ── Le partage, pose par pose ─────────────────────────────────────────────
-// SOUS LA FRISE, et non dedans : la frise est une bande de vignettes de 74 px
-// où un bouton par pose ne tient pas, et surtout le partage n'est pas de la
-// consultation. Une carte à part, qui dit ce quelle fait.
-function htmlPhotosPartage(u){
-  const l=phpAPartager(u);
-  if(!l.length) return '';
-  const dj=t=>new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'});
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Partager avec mon coach</div>
-    <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.65;margin-bottom:12px">Photo par photo, et jamais toute seule. Une photo déjà transmise ne peut plus être effacée à distance depuis l’application.</div>
-    ${l.slice(0,12).map(s=>`<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:10px">
-      <div style="font-size:var(--fs-2xs);font-weight:800;color:var(--text-dim);letter-spacing:1px;margin-bottom:6px">${dj(s.date)}</div>
-      ${s.poses.map(p=>`<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-        <div style="flex:1;min-width:0;font-size:var(--fs-xs);color:var(--text-strong)">${escapeHtml(p.lib)}</div>
-        ${p.partagee
-          ?`<span style="flex-shrink:0;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--green);background:#001a00;border:1px solid #1e5c2e;border-radius:var(--r-1);padding:4px 8px">Partagée</span>`
-          :`<button type="button" class="hit44" onclick="phpPartagerPoseUI('${s.dateISO}','${p.cle}')"
-            aria-label="Partager la pose ${escapeHtml(p.lib)} du ${dj(s.date)} avec mon coach"
-            style="flex-shrink:0;min-height:34px;padding:6px 12px;border-radius:var(--r-2);cursor:pointer;background:var(--surface-2);border:1px solid var(--border);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px">Partager</button>`}
-      </div>`).join('')}
-    </div>`).join('')}
-  </div>`;
-}
-// LE GESTE. Regroupe ici tout ce qui doit accompagner un envoi : la seconde
-// confirmation de la règle 4, l'écriture, le rendu, et un mot sur ce qui
-// s'est réellement passé — phpPartagerPose a quatre issues, pas deux.
-async function phpPartagerPoseUI(dateISO,pose){
-  const u=currentUser;
-  if(!u||!phpEtat(u).partageCoach){ toast('Le partage au coach n’est pas activé.','var(--orange)'); return false; }
-  // phpSeanceDuJour retrouve la séance PAR SA DATE : le nom dit « du jour »,
-  // mais elle accepte n'importe quel jour ISO, et c'est exactement ce qu'il
-  // faut ici. On ne réécrit pas une seconde recherche qui pourrait diverger.
-  const s=phpSeanceDuJour(u,dateISO);
-  if(!s){ toast('Séance photo introuvable.','var(--orange)'); return false; }
-  const x=s.poses&&s.poses[pose];
-  if(!x){ toast('Photo introuvable.','var(--orange)'); return false; }
-  if(x.publicId){ toast('Cette photo est déjà partagée.','var(--orange)'); return false; }
-  const lib=(PHP_POSES.find(q=>q.cle===pose)||{}).lib||pose;
-  const jour=new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
-  // RÈGLE 4. L'accord initial autorise le suivi, pas cet envoi-ci. La question
-  // nomme LA photo et LE jour : « partager mes photos » ne veut rien dire.
-  if(!await rcConfirm('Partager « '+lib+' » du '+jour+' avec ton coach ?\n\n'
-    +'Cette photo quitte ton téléphone. Une fois transmise, elle ne pourra plus être effacée à distance depuis l’application.\n\n'
-    +'Aucune autre photo ne part.',null,'Partager')) return false;
-  const r=await phpPartagerPose(u,s,pose);
-  saveUser();
-  renderPhotosProgression();
-  if(r.ok&&r.deja) toast('Cette photo était déjà partagée.','var(--orange)');
-  else if(r.ok) toast('« '+lib+' » partagée avec ton coach.','var(--green)');
-  else toast(r.raison||'Partage impossible.','var(--orange)');
-  return !!r.ok;
-}
-// ── La révocation, côté écran ─────────────────────────────────────────────
-function htmlPhotosReglages(u){
-  const e=phpEtat(u);
-  const purge=(u.photosProgression&&u.photosProgression.aPurger)||[];
-  const partagees=phpPartagees(u).length;
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Tes photos</div>
-    <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.65">${e.seances.length} séance${e.seances.length>1?'s':''} sur cet appareil${partagees?' · '+partagees+' photo'+(partagees>1?'s':'')+' partagée'+(partagees>1?'s':''):' · rien de partagé'}.</div>
-    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.65;margin-top:8px">Partage au coach : ${e.partageCoach?'activé':'désactivé'}.</div>
-    ${purge.length?`<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-2);padding:10px 12px;margin-top:10px;font-size:var(--fs-xs);color:var(--text-strong);line-height:1.65">
-      ${purge.length} fichier${purge.length>1?'s':''} déjà transmis n'${purge.length>1?'ont':'a'} pas pu être supprimé${purge.length>1?'s':''} à distance. Montre cette liste à ton coach : c'est lui qui les efface chez l'hébergeur.
-      <div style="font-family:monospace;font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px;word-break:break-all">${purge.map(p=>escapeHtml(p.publicId)).join('<br>')}</div>
-    </div>`:''}
-    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="phpRevoquerUI()">Retirer mon accord et supprimer mes photos</button>
-  </div>`;
-}
-async function phpRevoquerUI(){
-  const n=phpPartagees(currentUser).length;
-  if(!await rcConfirm('Supprimer toutes tes photos de cet appareil et retirer ton accord ?\n\nC\'est définitif.',null,'Supprimer')) return false;
-  if(n&&!await rcConfirm(n+' photo(s) ont déjà été transmises à ton coach.\n\nElles ne peuvent pas être effacées à distance depuis l\'app. La liste des fichiers à purger te sera affichée.\n\nContinuer ?',null,'Confirmer')) return false;
-  const r=await phpRevoquer(currentUser);
-  saveUser();
-  renderPhotosProgression();
-  // SUR LA FUSION, et non sur les seuls restants de ce passage : la carte de
-  // htmlPhotosReglages liste `aPurger` en entier, et un toast qui annoncerait
-  // moins de fichiers que la carte n’en montre ferait douter des deux.
-  const _aPurger=(r.aPurger||r.restants||[]).length;
-  toast(_aPurger?'Photos locales supprimées. '+_aPurger+' à purger côté coach.':'Photos supprimées.','var(--green)');
-  return true;
-}
-// ── Le rendu de l'onglet ──────────────────────────────────────────────────
-function htmlPhotosProgression(u){
-  if(!phpDisponible(u)) return '';          // RÈGLE 5 : masquée, sans un mot
-  if(!phpEtat(u).donne) return htmlPhotosConsentement(u);
-  return htmlPhotosSeance(u)+htmlPhotosComparateur(u)+htmlPhotosFrise(u)+htmlPhotosPartage(u)+htmlPhotosReglages(u);
-}
-function renderPhotosProgression(){
-  const z=document.getElementById('prog-photos-progression');
-  if(!z) return;
-  let h=''; try{ h=htmlPhotosProgression(currentUser); }catch(e){ h=''; }
-  z.innerHTML=h;
-  try{ phpRendreComparateur(); }catch(e){}
-  try{ phpPeindreFrise(); }catch(e){}
-}
-// ── Côté coach : LECTURE SEULE, et seulement sous partage actif ───────────
-function htmlPhotosCoach(c){
-  const e=phpEtat(c);
-  if(!e.donne||!e.partageCoach) return '';
-  const l=phpPartagees(c);
-  if(!l.length) return '';
-  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Photos partagées</div>
-    <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">
-      ${l.slice(-12).map(p=>`<div style="flex-shrink:0;width:96px">
-        <img src="${escapeHtml(p.url)}" alt="" style="width:96px;height:128px;object-fit:cover;border-radius:var(--r-2);border:1px solid var(--border);display:block">
-        <div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:4px;text-align:center">${new Date(p.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})}</div>
-      </div>`).join('')}
-    </div>
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:8px">Lecture seule. Ce sont des données de santé : elles ne se rediffusent pas, et l'athlète peut retirer son accord à tout moment.</div>
-  </div>`;
-}
-function renderPhotosCoach(c){
-  const z=document.getElementById('ccd-photos-progression');
-  if(!z) return;
-  let h=''; try{ h=c?htmlPhotosCoach(c):''; }catch(e){ h=''; }
-  z.innerHTML=h;
-}
+// ══ L'INTERFACE DES PHOTOS DE PROGRESSION A ETE RETIREE (27/09/2026) ══════
+// Kevin : « il demande deja les photos dans les bilans, [...] le comparateur
+// ne marche pas, retire ces deux cadres ». La seance quatre poses, le
+// comparateur, la frise « Tes photos », l'accord, le partage et la vue coach
+// sont partis. RESTENT, parce que d'autres s'en servent : le stockage des
+// images sur l'appareil et l'envoi a l'hebergeur (les photos de BILAN passent
+// par eux), et la revocation, que la suppression de compte appelle pour purger
+// ce que d'anciens dossiers auraient deja partage.
 // ══════════════ TROIS HABITUDES, UNE PASTILLE ═════════════════════════════
 // Trois comportements hors salle, un appui par jour, aucun écran nouveau.
 //
@@ -76314,9 +75752,7 @@ function _progOngletVide(tab,u){
     try{ return !_calculSemaine(u,_volCleDecalee(_volDecalage)).seances; }catch(e){ return false; }
   }
   if(tab==='photos'){
-    if(bl.some(b=>['face','back','side'].some(t=>_progPhotoBilan(b,t)))) return false;
-    let php=''; try{ php=htmlPhotosProgression(u); }catch(e){ php=''; }
-    return !php;
+    return !bl.some(b=>['face','back','side'].some(t=>_progPhotoBilan(b,t)));
   }
   return false;
 }
@@ -76649,20 +76085,12 @@ function showProgressTab(tab,btn,sansMemo){
     c.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
 
   } else if(tab==='photos'){
-    // PHOTOS DE PROGRESSION : elles se rendent AVANT la fresque des bilans,
-    // qui n est pas touchee. Deux dispositifs distincts, deux sources.
-    const _php=(()=>{ try{ return htmlPhotosProgression(currentUser); }catch(e){ return ''; } })();
+    // LES PHOTOS DE BILAN, ET ELLES SEULES (27/09/2026) : la seance photo
+    // quatre poses et son comparateur, qui passaient devant, ont ete retires.
     const getP=_progPhotoBilan;
     const hasSome=bl.some(b=>getP(b,'face')||getP(b,'back')||getP(b,'side'));
     if(!hasSome){
-      // LE BLOC NE SE POSE QU'À UN ENDROIT : la zone, que renderPhotosProgression
-      // remplit. Il était aussi concaténé ici, derrière la zone vide, puis la
-      // zone se remplissait à son tour : un compte neuf voyait deux fois
-      // « J'ai compris, j'active les photos ». _php ne sert plus qu'à décider
-      // de l'état vide. Sans setTimeout : le bloc est là dès le retour.
-      c.innerHTML='<div id="prog-photos-progression"></div>'
-        +(_php?'':emptyState('image','Aucune photo de bilan.<br>Ajoute des photos lors de ton prochain bilan.','Remplir mon bilan','openBilanChoice()'));
-      try{ renderPhotosProgression(); }catch(e){}
+      c.innerHTML=emptyState('image','Aucune photo de bilan.<br>Ajoute des photos lors de ton prochain bilan.','Remplir mon bilan','openBilanChoice()');
       return;
     }
     // Fresque : lignes = pose (Face/Dos/Profil), colonnes = bilans
@@ -76761,15 +76189,8 @@ function showProgressTab(tab,btn,sansMemo){
       </div>
     </div>
     <div style="margin-top:10px;font-size:var(--fs-xs);color:var(--text-dim);text-align:center">Touche une photo pour l'agrandir · fais défiler pour voir tous tes bilans</div>`;
-    // Les photos guidées passent DEVANT la fresque des bilans : deux
-    // dispositifs distincts, deux sources, et la fresque n'est pas touchée.
-    c.innerHTML='<div id="prog-photos-progression"></div>'+html;
-    setTimeout(()=>{
-      try{ renderPhotosProgression(); }catch(e){}
-      // APRÈS les photos guidées : elles s'insèrent au-dessus de la fresque et
-      // décalent son sommet. Mesurer avant les aurait ignorées.
-      try{ _fresqueTenirEcran(c,POSES_N,cellW); }catch(e){}
-    },0);
+    c.innerHTML=html;
+    setTimeout(()=>{ try{ _fresqueTenirEcran(c,POSES_N,cellW); }catch(e){} },0);
     c.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
   } else if(tab==='notes'){
     if(!bl.length){c.innerHTML=emptyState('clipboard','Tes réponses aux bilans s\'afficheront ici. Il n\'y en a pas encore.','Remplir mon premier bilan','openBilanChoice()');return;}
