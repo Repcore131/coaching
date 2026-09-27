@@ -19800,6 +19800,10 @@ async function testExercices(){
                                      // photo retirée chez l'hébergeur. C'est un
                                      // sous-traitant réel, il est déclaré, et
                                      // POLICY_VERSION est passée à 2026-09.
+            'workers.dev',           // Cloudflare Workers — le serveur léger (build
+                                     // 1602, 27/09/2026) : notifications, défis,
+                                     // parrainage. Ligne ajoutée à la politique,
+                                     // POLICY_VERSION passée à 2026-09c.
             // Ce qui suit n'est PAS déclaré, et ne doit pas l'être : rien
             // n'est contacté. w3.org est l'espace de noms XML des SVG (jamais
             // téléchargé) ; repcore131 est un lien que l'utilisateur clique.
@@ -21911,6 +21915,14 @@ async function testExercices(){
         if(src.indexOf("'"+t+"'")<0) return _echec('le geste « '+t+' » ne dépose rien');
       // La réponse du coach ne part qu’APRÈS l’envoi du dossier (le serveur la relit).
       if(!/envoi\)\.then\([^)]*=>\{ if\([a-z]+!==false\) deposerEvenement\(\{type:'reponse_bilan'/.test(String(saveReponseBilan))) return _echec('l’événement n’attend pas l’envoi');
+      return true;})());
+    ok('SERVEUR LÉGER — LES APPELS, L’ABONNEMENT PAYPAL ET LA FIN D’ACCÈS',(()=>{
+      if(SERVEUR_LEGER&&CLOUD._functionsBase!==SERVEUR_LEGER_URL+'/fn') return _echec('les appels ne vont pas au serveur léger : '+CLOUD._functionsBase);
+      if(!PUSH_TYPES.some(t=>t.cle==='acces')) return _echec('la notification de fin d’accès n’est pas réglable');
+      if(typeof abonnementSignaler!=='function') return _echec('abonnementSignaler manque');
+      if(!/abonnementSignaler\(data\.subscriptionID,true\)/.test(String(renderPaypalButton))) return _echec('le paiement ne signale pas l’abonnement au serveur');
+      // Le 503 « pas encore configurée » du serveur fait attendre la file, sans insister.
+      if(!/pas encore configurée\|injoignable/.test(String(_cldDetruire))) return _echec('le 503 du serveur n’arrête pas les essais');
       return true;})());
     ok('NOTES — LA MAQUETTE : UN BILAN À LA FOIS, QUATRE RUBRIQUES, DES JAUGES QUI LISENT LA RÉPONSE',(()=>{
       const B=[{type:'depart',date:Date.now()-40*864e5,'deb-weight':'103.8','deb-goals':'Perte de poids'},
@@ -48558,13 +48570,13 @@ async function testExercices(){
         basculerPushType('defi',true);
         if(!pushTypeActif(currentUser,'defi')||'defi' in currentUser.pushPrefs) return _echec('non rallumé');
         if(basculerPushType('inconnu',false)) return _echec('type inconnu accepté');
-        return PUSH_TYPES.map(t=>t.cle).sort().join()==='badge,bilan,coach,defi,filleul,serie,wrapped'?true:_echec('types');
+        return PUSH_TYPES.map(t=>t.cle).sort().join()==='acces,badge,bilan,coach,defi,filleul,serie,wrapped'?true:_echec('types');
       } finally { currentUser=svU; saveUser=svS; }})());
     ok('Push : l’écran de réglages — une case par type, le bouton seulement quand il sert',(()=>{
       const d=document.createElement('div');
       d.innerHTML=htmlReglagesPush({pushPrefs:{serie:false}},'proposer');
       const c=d.querySelectorAll('input[type=checkbox][data-push]');
-      if(c.length!==7) return _echec(c.length+' cases');
+      if(c.length!==PUSH_TYPES.length||c.length!==8) return _echec(c.length+' cases');
       if(d.querySelector('[data-push=serie]').checked||!d.querySelector('[data-push=coach]').checked) return _echec('état des cases');
       const b=d.querySelector('button');
       if(!b||!b.classList.contains('btn-casse')) return _echec('bouton d’activation (R31 : btn-casse)');
@@ -48936,7 +48948,8 @@ async function testExercices(){
       return f<0?true:_echec('cas '+f);})());
     ok('Parrainage : le miroir est classé non-santé, et l’entrée reste fermée sans fonctions serveur',(()=>{
       if(CHAMPS_NON_SANTE.indexOf('parrainage')<0) return _echec('non classé');
-      return PARRAINAGE_ACTIF===FONCTIONS_SERVEUR?true:_echec('PARRAINAGE_ACTIF découplé de FONCTIONS_SERVEUR');})());
+      // Le serveur léger (Cloudflare, 0 €) ouvre le parrainage autant que les Cloud Functions.
+      return PARRAINAGE_ACTIF===(FONCTIONS_SERVEUR||SERVEUR_LEGER)?true:_echec('PARRAINAGE_ACTIF découplé des serveurs');})());
 
     // ── LE LIEN PERSO ET LES PAGES PUBLIQUES ────────────────────────────
     const _PPU=o=>Object.assign({role:'athlete',email:'j@t.fr',fname:'Julie',sessions:[],parrainage:{code:'JULIE7K2'}},o||{});
@@ -49106,8 +49119,9 @@ async function testExercices(){
       const lire=u=>{ try{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; }catch(e){ return ''; } };
       const i=lire('../i/index.html'), r=lire('../index.html'), a=lire('../a/index.html');
       // Le clic est compté par attribArrivee (lot attribution, 26/09/2026).
-      if(!/attribArrivee\?src=/.test(i)||!/p\.set\('amb',amb\)/.test(i)) return _echec('/i');
-      if(!/\['amb','ref','src','coach'\]/.test(r)||!/attribArrivee/.test(r)) return _echec('page d’accueil');
+      // Le clic est compté par /arrivee du serveur léger (Cloudflare) depuis le build 1602.
+      if(!/\/arrivee\?src=/.test(i)||!/p\.set\('amb',amb\)/.test(i)) return _echec('/i');
+      if(!/\['amb','ref','src','coach'\]/.test(r)||!/\/arrivee\?/.test(r)) return _echec('page d’accueil');
       if(!/ambassadeurs_vue\//.test(a)||!/noindex/.test(a)||!/no-referrer/.test(a)) return _echec('page secrète');
       return /localStorage\.setItem\('rc_amb'/.test(_prodSrc())?true:_echec('arrivée dans l’app');})());
     ok('Ambassadeurs : le code d’arrivée est classé non-santé',CHAMPS_NON_SANTE.indexOf('ambassadeur')>=0);
@@ -49263,7 +49277,7 @@ async function testExercices(){
       for(const f of ['../i/index.html','../index.html','../p/index.html','../c/index.html']){
         const h=lire(f);
         if(!h) continue;
-        if(!/attribArrivee\?src=/.test(h)||!/'rc_attr_'/.test(h)||!/&ref=1/.test(h)) return _echec(f);
+        if(!/\/arrivee\?src=/.test(h)||!/'rc_attr_'/.test(h)||!/&ref=1/.test(h)) return _echec(f);
         if(/document\.cookie/.test(h)) return _echec(f+' : cookie');
       }
       const p=lire('../privacy.html');

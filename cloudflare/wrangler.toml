@@ -13,7 +13,11 @@ crons = ["* * * * *"]
 FIREBASE_DB_URL = "https://repcore-sync-default-rtdb.firebaseio.com"
 # La clé PUBLIQUE VAPID : la même que VAPID_PUBLIQUE dans l'app.
 VAPID_PUBLIC_KEY = "BLOS0J9PpSZcViPM4ySSKDd0Ss-rnuo8yhmdqpvyhAE6s_HQvSM7QK5nIs329I-4tbix3-8S_3Kl3L3Z0pnf3-4"
+# L'identifiant PUBLIC de l'application PayPal : le même que client-id dans l'app.
+PAYPAL_CLIENT_ID = "AS9pdM1fxqdyzKzvuiQB3mTPAIHZW12rW_KWAOKB8XkalJXV8kEyWWBzwHPUxCBZtMMzqjJNnAjfa1f1"
 
 # SECRETS, posés à la main (jamais ici) :
 #   npx wrangler secret put FIREBASE_DB_SECRET
 #   npx wrangler secret put VAPID_PRIVATE_KEY
+# et, pour les paiements et la suppression des vidéos (secrets-paiements.ps1) :
+#   PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
