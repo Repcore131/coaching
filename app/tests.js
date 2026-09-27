@@ -48216,7 +48216,8 @@ async function testExercices(){
     ok('volumeParMuscle : vide, normalisé 0..1, plafonné, secondaires à moitié',(()=>{
       const {u,sc}=_MU;
       const v0=volumeParMuscle([],{user:u});
-      if(Object.keys(v0.groupes).length!==11) return _echec(Object.keys(v0.groupes).length+' groupes au lieu de onze');
+      // DOUZE depuis le 27/09/2026 : « Trapèzes » s'est scindé en supérieur et médian.
+      if(Object.keys(v0.groupes).length!==12) return _echec(Object.keys(v0.groupes).length+' groupes au lieu de douze');
       if(Object.values(v0.groupes).some(x=>x!==0)) return _echec('un groupe vide n’est pas à 0');
       // 10 séries de pecs sur une semaine : 10 / MAV max (20) = 0,5.
       const v=volumeParMuscle([sc({'TEST PECS':10})],{user:u,semaines:1});
