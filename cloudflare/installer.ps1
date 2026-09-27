@@ -25,24 +25,24 @@ Write-Host "2/4  Mise en ligne du serveur (si Cloudflare demande un sous-domaine
 # sous-domaine workers.dev dans le terminal (il ne le peut pas si sa sortie
 # est capturée — c'est ce qui échouait). Réponds « y », puis tape un nom,
 # par exemple « repcore ».
-npx wrangler@4 deploy
+npx --yes wrangler@4 deploy
 if ($LASTEXITCODE -ne 0) { throw "La mise en ligne a échoué (voir ci-dessus)." }
 # PUIS UNE SECONDE FOIS, capturée, pour lire l'adresse (plus aucune question).
-$sortie = npx wrangler@4 deploy 2>&1 | Tee-Object -Variable journal
+$sortie = npx --yes wrangler@4 deploy 2>&1 | Tee-Object -Variable journal
 $journal | Out-String | Write-Host
 $adresse = ([regex]::Match(($journal | Out-String), 'https://repcore-serveur\.[a-z0-9-]+\.workers\.dev')).Value
 if (-not $adresse) { throw "Adresse du serveur introuvable dans la sortie de wrangler." }
 
 Write-Host ""
 Write-Host "3/4  Clé des notifications (automatique)." -ForegroundColor Cyan
-(Get-Content $vapid -Raw).Trim() | npx wrangler@4 secret put VAPID_PRIVATE_KEY
+(Get-Content $vapid -Raw).Trim() | npx --yes wrangler@4 secret put VAPID_PRIVATE_KEY
 if ($LASTEXITCODE -ne 0) { throw "La clé des notifications n'a pas été posée." }
 
 Write-Host ""
 Write-Host "4/4  Code secret de la base Firebase." -ForegroundColor Cyan
 Write-Host "     Console Firebase > ⚙ Paramètres du projet > Comptes de service >"
 Write-Host "     Codes secrets de la base de données > Afficher > copier, puis colle-le ici."
-npx wrangler@4 secret put FIREBASE_DB_SECRET
+npx --yes wrangler@4 secret put FIREBASE_DB_SECRET
 if ($LASTEXITCODE -ne 0) { throw "Le code secret de la base n'a pas été posé." }
 
 Set-Content -Path (Join-Path $PSScriptRoot 'adresse.txt') -Value $adresse -Encoding ascii
