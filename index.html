@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>RepCore : la bonne charge, à chaque série | App de musculation</title>
-<meta name="description" content="L'application de musculation qui réunit tout : séance avec la bonne charge à chaque série, nutrition (scan, recherche, photo d'étiquette), sommeil, pas, et ton coach. Plus de 400 exercices filmés et expliqués. 1 mois d'essai offert.">
+<meta name="description" content="L'application de musculation qui réunit tout : séance avec la bonne charge à chaque série, nutrition (scan, recherche, photo d'étiquette), sommeil, pas et courbes de progression. Plus de 400 exercices filmés et expliqués. 1 mois d'essai offert.">
 <link rel="canonical" href="https://repcore131.github.io/coaching/">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://repcore131.github.io/coaching/">
 <meta property="og:title" content="RepCore : la bonne charge, à chaque série">
-<meta property="og:description" content="Charge proposée à chaque série, plus de 400 exercices filmés, nutrition hors ligne, espace coach. 1 mois d'essai offert, sans carte bancaire.">
+<meta property="og:description" content="Charge proposée à chaque série, plus de 400 exercices filmés, nutrition hors ligne, courbes de progression. 1 mois d'essai offert, sans carte bancaire.">
 <meta property="og:image" content="https://repcore131.github.io/coaching/app/img/vente/og-vente.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -26,7 +26,7 @@
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   "name": "RepCore",
-  "description": "Application de coaching musculation avec suivi personnalisé : charges ajustées à la phase du cycle menstruel, import d'une fiche programme papier par photo, bilans et journal nutrition.",
+  "description": "Application de musculation pour progresser en autonomie : charge proposée à chaque série, nutrition, bilans et courbes de progression, charges ajustées à la phase du cycle si tu l'actives.",
   "applicationCategory": "HealthApplication",
   "applicationSubCategory": "Fitness",
   "operatingSystem": "Web, Android, iOS",
@@ -41,11 +41,10 @@
   ],
   "featureList": [
     "Ajustement des charges selon la phase du cycle menstruel",
-    "Import d'un programme par photo d'une fiche papier",
     "Suggestion de charge basée sur la séance précédente du même jour",
     "Bilans avec mensurations et photos",
-    "Journal nutrition avec base Ciqual hors ligne",
-    "Correction de vidéos technique par le coach",
+    "Journal nutrition hors ligne, scan de code-barres et photo d'étiquette",
+    "Courbes de poids, de masse grasse et de mensurations",
     "Banque de plus de 400 exercices filmés"
   ]
 }
@@ -73,18 +72,10 @@
   },
   {
    "@type": "Question",
-   "name": "Comment j'obtiens un code coach ?",
-   "acceptedAnswer": {
-    "@type": "Answer",
-    "text": "C'est ton coach qui te le donne. Il le génère depuis son propre espace RepCore et te l'envoie : un code de la forme RC-XXXX-XXXX. Tu le saisis à la première ouverture de l'application, et ton accès s'active immédiatement pour toute la durée qu'il a choisie. Si tu n'as pas de coach, tu peux commencer l'essai sans code."
-   }
-  },
-  {
-   "@type": "Question",
    "name": "Puis-je annuler ?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Oui, à tout moment et sans justification. L'abonnement est sans engagement : la résiliation se fait depuis ton compte PayPal, en une manipulation, et prend effet à la fin de la période déjà payée. Si tu passes par un coach, tu n'as rien à résilier : l'accès suit simplement la durée de ton suivi."
+    "text": "Oui, à tout moment et sans justification. L'abonnement est sans engagement : la résiliation se fait depuis ton compte PayPal, en une manipulation, et prend effet à la fin de la période déjà payée."
    }
   },
   {
@@ -100,7 +91,7 @@
    "name": "Est-ce que ça marche sans réseau, en salle ?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Oui. Tes séances, ta base d'aliments et ton programme sont gardés sur l'appareil. Tu peux saisir une séance entière sans connexion ; tout remonte vers ton coach dès que le réseau revient."
+    "text": "Oui. Tes séances, ta base d'aliments et ton programme sont gardés sur l'appareil. Tu peux saisir une séance entière sans connexion ; tout se synchronise dès que le réseau revient."
    }
   },
   {
@@ -116,7 +107,7 @@
    "name": "Qui voit mes données ?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Ton coach, et personne d'autre. Il accède à ton dossier parce que tu as saisi son code ; ce lien peut être rompu depuis ton profil, ce qui lui retire l'accès immédiatement. Les détails figurent dans la politique de confidentialité."
+    "text": "Toi. Si tu choisis d'être coaché, ton coach y accède aussi, parce que tu as saisi son code ; ce lien peut être rompu depuis ton profil, ce qui lui retire l'accès immédiatement. Les détails figurent dans la politique de confidentialité."
    }
   }
  ]
@@ -308,7 +299,7 @@ header{padding:56px 0 72px;overflow:hidden;
 .hero h1 em{display:block}
 .hero .sub{color:#bdbdbd;font-size:clamp(16px,2.2vw,19px);max-width:52ch;margin-bottom:30px}
 .hero .visuel{position:relative;display:flex;justify-content:center}
-.hero .b1{top:47%;left:-10%}
+.hero .b1{top:58%;left:-10%}
 .hero .b2{bottom:16%;right:-2%}
 .auteur{display:inline-flex;align-items:center;gap:12px;margin-top:30px;text-decoration:none;color:#bdbdbd;font-size:13.5px}
 .auteur img{width:48px;height:48px;border-radius:50%;border:2px solid var(--red)}
@@ -340,7 +331,6 @@ ul.coches{list-style:none;margin-top:16px}
 ul.coches li{position:relative;padding-left:28px;margin-bottom:10px;font-size:14.5px;color:#d4d4d4}
 ul.coches li::before{content:'';position:absolute;left:0;top:4px;width:17px;height:17px;border-radius:50%;
   background:rgba(224,32,32,.15) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e96363' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5L20 7'/%3E%3C/svg%3E") center/11px no-repeat}
-.fonction .b3{top:3%;right:-3%}
 .fonction .b4{bottom:22%;left:-6%}
 /* ---------- clip video ---------- */
 .clip{position:relative;width:min(340px,82vw);aspect-ratio:398/552;border-radius:22px;overflow:hidden;
@@ -404,11 +394,16 @@ ul.coches li::before{content:'';position:absolute;left:0;top:4px;width:17px;heig
   background:rgba(224,32,32,.12);border:1px solid rgba(224,32,32,.35);margin-bottom:16px}
 .tuile h3{font-size:26px;color:#fff;margin-bottom:8px}
 .tuile p{font-size:14.5px;color:#b8b8b8}
-/* ---------- coach ---------- */
-#coachs{background:linear-gradient(180deg,#0b0b0b,#080808)}
+/* ---------- écrans par deux ou par trois ---------- */
 .duo{position:relative;display:flex;justify-content:center;gap:0}
 .duo .tel{width:min(250px,42vw)}
 .duo .tel:last-child{margin-left:-40px;margin-top:60px}
+/* Trois écrans en éventail : celui du milieu devant, les deux autres en retrait. */
+.trio{position:relative;display:flex;justify-content:center;align-items:flex-start}
+.trio .tel{width:min(200px,34vw);flex:none}
+.trio .tel:nth-child(1){margin-top:56px;z-index:1}
+.trio .tel:nth-child(2){margin-left:-18px;margin-right:-18px;z-index:2}
+.trio .tel:nth-child(3){margin-top:56px;z-index:1}
 /* ---------- tarifs ---------- */
 .bascule{display:inline-flex;background:#121212;border:1px solid #262626;border-radius:6px;padding:4px;margin-top:22px}
 .bascule button{font:inherit;font-size:13px;font-weight:800;letter-spacing:1px;color:#aaa;background:none;border:0;
@@ -416,7 +411,7 @@ ul.coches li::before{content:'';position:absolute;left:0;top:4px;width:17px;heig
 .bascule button[aria-pressed="true"]{background:var(--red);color:#fff}
 .bascule .eco{font-size:10.5px;color:var(--ok);margin-left:6px}
 .bascule button[aria-pressed="true"] .eco{color:#fff}
-.prix{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:34px;align-items:stretch}
+.prix{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-top:34px;align-items:stretch;max-width:780px;margin-left:auto;margin-right:auto}
 .offre{position:relative;background:var(--card);border:1px solid var(--border);border-radius:18px;padding:30px 26px;
   display:flex;flex-direction:column}
 .offre.vedette{border-color:var(--red);background:linear-gradient(180deg,#1a0b0b,#111 40%);
@@ -433,14 +428,6 @@ ul.coches li::before{content:'';position:absolute;left:0;top:4px;width:17px;heig
 .offre .cta{width:100%}
 .essai{margin-top:26px;text-align:center;font-size:14px;color:#bdbdbd}
 .essai strong{color:#fff}
-/* coach : tarifs compacts */
-.paliers{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:26px}
-.palier{background:#101010;border:1px solid var(--border);border-radius:14px;padding:18px}
-.palier.vedette{border-color:rgba(224,32,32,.55)}
-.palier b{display:block;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:#fff}
-.palier .m{font-family:'Bebas Neue',var(--pile-titre);font-size:36px;color:#fff;line-height:1.1}
-.palier .m small{font-family:Montserrat,var(--pile-sans);font-size:12px;color:var(--dim)}
-.palier span{font-size:12.5px;color:#a0a0a0}
 /* ---------- coaching humain ---------- */
 .ancre{display:grid;grid-template-columns:1.2fr .8fr;gap:30px;align-items:center;
   background:linear-gradient(120deg,#170909,#0f0f0f 60%);border:1px solid rgba(224,32,32,.35);border-radius:20px;padding:40px}
@@ -504,14 +491,15 @@ footer a{color:var(--dim);margin:0 8px}
   .nav a.lien{display:none}
   .nav-cta{display:none}
   .nav .lien.garde{display:inline}
-  .tuiles,.paliers{grid-template-columns:1fr}
+  .tuiles{grid-template-columns:1fr}
   .bulle{font-size:11.5px;max-width:170px;padding:8px 11px}
   .nutri-scene{padding:10px 6px}
   .nutri-duo .tel:last-child{margin-left:-30px;margin-top:50px}
   .bulle b{font-size:13.5px}
   .hero .b1{left:0;top:auto;bottom:4%}.hero .b2,.fonction .bulle{display:none}
-  .prix .offre:first-child{order:2}
   .duo .tel:last-child{margin-left:-28px;margin-top:44px}
+  .trio .tel{width:34vw}.trio .tel:nth-child(2){margin-left:-22px;margin-right:-22px}
+  .trio .tel:nth-child(1),.trio .tel:nth-child(3){margin-top:36px}
   .barre{display:flex}
   .portrait{gap:14px}.portrait img{width:76px;height:76px}.portrait q{font-size:14px}
   .ancre .ligne{flex-direction:column;gap:2px}
@@ -528,7 +516,7 @@ footer a{color:var(--dim);margin:0 8px}
       <a class="marque" href="#"><img src="app/img/vente/logo-72.webp" width="36" height="36" alt="">RepCore</a>
       <div>
         <a class="lien" href="#fonctions">Fonctions</a>
-        <a class="lien" href="#coachs">Coachs</a>
+        <a class="lien" href="#p-evolution">Progression</a>
         <a class="lien" href="#tarifs">Tarifs</a>
         <a class="lien garde" href="app/">Se connecter</a>
         <a class="cta nav-cta" href="app/#install">Essai gratuit</a>
@@ -538,12 +526,12 @@ footer a{color:var(--dim);margin:0 8px}
       <div>
         <p class="eyebrow">Application de musculation · créée par un coach</p>
         <h1>La bonne charge,<em>à chaque série.</em></h1>
-        <p class="sub">Ta séance, ta nutrition, ton sommeil et ton coach, enfin dans une seule application.
+        <p class="sub">Ta séance, ta nutrition, ton sommeil et ta progression, enfin dans une seule application.
           RepCore se souvient de ce que tu as soulevé la dernière fois et te propose la suite.
           Tu t'entraînes, tu manges juste, et tu te vois évoluer chaque semaine.</p>
         <div class="ctas">
           <a class="cta" href="app/#install">Essayer gratuitement 1&nbsp;mois</a>
-          <a class="cta ghost" href="app/">J'ai un code coach</a>
+          <a class="cta ghost" href="#tarifs">Voir les tarifs</a>
         </div>
         <a class="auteur" href="#coaching"><img src="app/img/vente/kevin-96.webp" width="48" height="48" alt="">
           <span>Créée par <b>Kevin Guellec</b>, coach diplômé d'État</span></a>
@@ -560,7 +548,7 @@ footer a{color:var(--dim);margin:0 8px}
 
 <div class="preuves" role="list">
   <div class="wrap">
-    <div class="preuve" role="listitem"><b>4 en 1</b><span>entraînement · nutrition · vie · coach</span></div>
+    <div class="preuve" role="listitem"><b>4 en 1</b><span>entraînement · nutrition · sommeil · progression</span></div>
     <div class="preuve" role="listitem"><b>400+</b><span>exercices filmés et expliqués</span></div>
     <div class="preuve" role="listitem"><b>3 façons</b><span>d'ajouter un aliment : scan, recherche, photo</span></div>
     <div class="preuve" role="listitem"><b>Chaque semaine</b><span>tes chiffres, ta progression</span></div>
@@ -570,16 +558,16 @@ footer a{color:var(--dim);margin:0 8px}
 <section id="probleme">
   <div class="wrap center">
     <p class="eyebrow">Tu te reconnais&nbsp;?</p>
-    <h2>Une appli pour la diète. Une pour la muscu.<br><em>Une pour ton coach. Tu t'y perds.</em></h2>
+    <h2>Une appli pour la diète. Une pour la muscu.<br><em>Une pour le sommeil. Tu t'y perds.</em></h2>
     <p class="lead">Ton programme est dans un PDF, tes repas dans une autre appli, tes charges dans tes notes,
-      ton sommeil sur ta montre, et ton coach sur WhatsApp. Rien ne se parle, et tu ne vois jamais l'ensemble.</p>
+      ton sommeil sur ta montre, et ta progression nulle part. Rien ne se parle, et tu ne vois jamais l'ensemble.</p>
     <div class="eparpille" aria-hidden="true">
       <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8"/></svg>Programme en PDF</span><span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"/></svg>Appli de calories</span><span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Notes de charges</span>
-      <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>Appli sommeil</span><span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M4 16v-2.4C4 11.5 3 10.5 3 8c0-2.7 1.5-6 4.5-6C9.4 2 10 3.8 10 5.5c0 3.1-2 5.7-2 8.7V16a2 2 0 1 1-4 0Z"/><path d="M20 20v-2.4c0-2.1 1-3.1 1-5.6 0-2.7-1.5-6-4.5-6C14.6 6 14 7.8 14 9.5c0 3.1 2 5.7 2 8.7V20a2 2 0 1 0 4 0Z"/></svg>Podomètre</span><span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>WhatsApp du coach</span>
+      <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>Appli sommeil</span><span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M4 16v-2.4C4 11.5 3 10.5 3 8c0-2.7 1.5-6 4.5-6C9.4 2 10 3.8 10 5.5c0 3.1-2 5.7-2 8.7V16a2 2 0 1 1-4 0Z"/><path d="M20 20v-2.4c0-2.1 1-3.1 1-5.6 0-2.7-1.5-6-4.5-6C14.6 6 14 7.8 14 9.5c0 3.1 2 5.7 2 8.7V20a2 2 0 1 0 4 0Z"/></svg>Podomètre</span><span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 6-6"/></svg>Progression à l'œil</span>
     </div>
     <div class="fleche" aria-hidden="true">↓</div>
     <div class="reuni"><img src="app/img/vente/logo-72.webp" width="44" height="44" alt="">
-      <div><b>RepCore réunit tout.</b><span>Séance, nutrition, sommeil, pas, bilans et coach, au même endroit, et qui se parlent enfin.</span></div></div>
+      <div><b>RepCore réunit tout.</b><span>Séance, nutrition, sommeil, pas, bilans et progression, au même endroit, et qui se parlent enfin.</span></div></div>
   </div>
 </section>
 
@@ -601,7 +589,6 @@ footer a{color:var(--dim);margin:0 8px}
       <div class="visuel">
         <div class="tel"><img src="app/img/vente/seance-apercu.webp" srcset="app/img/vente/seance-apercu-300.webp 300w, app/img/vente/seance-apercu.webp 600w" sizes="(max-width:640px) 78vw, 300px" width="600" height="1299" loading="lazy"
           alt="Aperçu d'une séance PUSH : cinq exercices, dix-sept séries, environ trente-cinq minutes"></div>
-        <div class="bulle b3"><b>~35 min</b>durée estimée avant même de commencer</div>
       </div>
     </div>
 
@@ -609,7 +596,7 @@ footer a{color:var(--dim);margin:0 8px}
       <div class="texte">
         <span class="badge">Nutrition</span>
         <h3>Ta nutrition, au même endroit<br>que ta séance.</h3>
-        <p>Diète flexible ou plan strict, c'est toi (ou ton coach) qui choisis. Tu ajoutes tes aliments en deux secondes, tes macros se remplissent, et ta journée se lit d'un coup d'œil.</p>
+        <p>Diète flexible ou plan strict, c'est toi qui choisis. Tu ajoutes tes aliments en deux secondes, tes macros se remplissent, et ta journée se lit d'un coup d'œil.</p>
         <ul class="coches">
           <li><strong>Scanne le code-barres</strong> d'un produit, ses valeurs arrivent seules</li>
           <li><strong>Cherche</strong> dans les bases d'aliments, même sans réseau</li>
@@ -633,13 +620,13 @@ footer a{color:var(--dim);margin:0 8px}
       <div class="tableur-t">
         <span class="badge">Tableur nutrition</span>
         <h3>Tes besoins calculés, pas devinés.</h3>
-        <p>Poids, taille, âge, activité, sport, objectif : le tableur calcule tes besoins étape par étape, puis les répartit en protéines, glucides, lipides et fibres. Ton coach ajuste, tu vois tes cibles bouger en direct.</p>
+        <p>Poids, taille, âge, activité, sport, objectif : le tableur calcule tes besoins étape par étape, puis les répartit en protéines, glucides, lipides et fibres. Tu ajustes, et tu vois tes cibles bouger en direct.</p>
       </div>
       <ul class="coches">
         <li>Besoins de base, activité hors sport et dépense sportive, détaillés</li>
         <li>Jours d'entraînement et jours de repos : les glucides suivent ta semaine</li>
         <li>Protéines et lipides au kilo de poids de corps, fibres et sel compris</li>
-        <li>Un réglage à ±20 kcal, et les deux écrans restent synchronisés</li>
+        <li>Un réglage à ±20 kcal près, depuis ton écran Nutrition</li>
       </ul>
     </div>
 
@@ -664,14 +651,14 @@ footer a{color:var(--dim);margin:0 8px}
 
     <div class="fonction inverse" id="p-coach">
       <div class="texte">
-        <span class="badge">Avec ton coach</span>
+        <span class="badge">Coaching avec Kevin</span>
         <h3>Ta technique corrigée,<br>image par image.</h3>
-        <p>Tu filmes ta série, tu l'envoies depuis ta séance. Ton coach la reprend image par image et te répond avec des tracés : angles, trajectoire de la charge, amplitude mesurée.</p>
+        <p>Coaché par Kevin, tu filmes ta série et tu l'envoies depuis ta séance. Il la reprend image par image et te répond avec des tracés : angles, trajectoire de la charge, amplitude mesurée.</p>
         <ul class="coches">
           <li>Angles articulaires et trajectoires dessinés sur ta vidéo</li>
           <li>Mesures d'amplitude, pas des impressions</li>
           <li>La correction revient dans l'application, à côté de l'exercice</li>
-          <li>Et tes échanges avec ton coach, sans passer par une autre messagerie</li>
+          <li>Compris dans <a href="#coaching">le coaching</a>, sans autre messagerie</li>
         </ul>
       </div>
       <div class="visuel">
@@ -690,19 +677,21 @@ footer a{color:var(--dim);margin:0 8px}
       <div class="texte">
         <span class="badge">Ultime</span>
         <h3>Tu évolues avec l'application,<br>semaine après semaine.</h3>
-        <p>Chaque semaine, tes chiffres te disent où tu en es : ta courbe par exercice, ton poids, tes mensurations, et le volume que ton programme donne à chaque muscle. Tu ne progresses plus à l'impression.</p>
+        <p>Chaque semaine, tes chiffres te disent où tu en es : ton poids, ta masse grasse, tes mensurations et tes records. Tu ne progresses plus à l'impression.</p>
         <ul class="coches">
+          <li>Courbe de poids lissée sur sept jours : la tendance, pas le bruit d'une pesée</li>
+          <li>Masse grasse estimée à chaque bilan, avec son évolution</li>
+          <li>Tes mensurations posées sur ta silhouette, centimètre par centimètre</li>
           <li>Maximum estimé (e1RM) et records, exercice par exercice</li>
-          <li>Carte du corps : volume par muscle, vue avant et vue arrière</li>
-          <li>Poids, tour de taille, masse grasse et photos, reliés à ta silhouette</li>
-          <li>Bilans réguliers et rapport de période, à revoir avec ton coach</li>
         </ul>
       </div>
-      <div class="visuel duo">
-        <div class="tel"><img src="app/img/vente/progression.webp" srcset="app/img/vente/progression-300.webp 300w, app/img/vente/progression.webp 600w" sizes="(max-width:640px) 42vw, 250px" width="600" height="1299" loading="lazy"
-          alt="Écran Perfs : courbes de progression par exercice"></div>
-        <div class="tel"><img src="app/img/vente/evolution-corps.webp" srcset="app/img/vente/evolution-corps-300.webp 300w, app/img/vente/evolution-corps.webp 600w" sizes="(max-width:640px) 42vw, 250px" width="600" height="1299" loading="lazy"
-          alt="Écran Évolution : silhouette colorée selon le volume par muscle"></div>
+      <div class="visuel trio">
+        <div class="tel"><img src="app/img/vente/evolution-poids.webp" srcset="app/img/vente/evolution-poids-300.webp 300w, app/img/vente/evolution-poids.webp 600w" sizes="(max-width:640px) 36vw, 210px" width="600" height="1299" loading="lazy"
+          alt="Écran Évolution, onglet Poids : courbe des pesées et tendance sur sept jours, de 63,4 à 61,1 kg"></div>
+        <div class="tel"><img src="app/img/vente/evolution-mensurations.webp" srcset="app/img/vente/evolution-mensurations-300.webp 300w, app/img/vente/evolution-mensurations.webp 600w" sizes="(max-width:640px) 36vw, 210px" width="600" height="1299" loading="lazy"
+          alt="Écran Évolution, onglet Mensurations : silhouette avec l'écart de chaque mesure, biceps +1 cm, taille −4 cm"></div>
+        <div class="tel"><img src="app/img/vente/evolution-masse-grasse.webp" srcset="app/img/vente/evolution-masse-grasse-300.webp 300w, app/img/vente/evolution-masse-grasse.webp 600w" sizes="(max-width:640px) 36vw, 210px" width="600" height="1299" loading="lazy"
+          alt="Écran Évolution, onglet Masse grasse : courbe de 28,1 % à 25,3 %"></div>
       </div>
     </div>
 
@@ -721,40 +710,6 @@ footer a{color:var(--dim);margin:0 8px}
   </div>
 </section>
 
-<section id="coachs">
-  <div class="wrap">
-    <div class="fonction inverse" style="padding-top:0">
-      <div class="texte">
-        <p class="eyebrow">Pour les coachs</p>
-        <h2>Tes athlètes.<br><em>Un seul écran.</em></h2>
-        <p>Fini les bilans éparpillés dans WhatsApp et les programmes en PDF. Tu vois qui avance, qui décroche, et ce qui attend ta réponse.</p>
-        <!-- Même liste que l'écran ESPACE COACH de l'app (s-coach-entry) : les
-             deux surfaces doivent promettre la même chose. Toute modification
-             ici se répercute là-bas, et inversement. -->
-        <ul class="coches">
-          <li>Repère les athlètes en alerte et les nouveaux bilans</li>
-          <li>Assigne un programme-modèle à un athlète en un geste</li>
-          <li>Affiche ta team, ta photo et ton accroche chez eux</li>
-          <li>Reste joignable sur WhatsApp depuis l'accueil de tes athlètes</li>
-        </ul>
-        <div class="paliers">
-          <div class="palier"><b>Libre</b><div class="m">0&nbsp;€</div><span>1 athlète suivi, sans carte bancaire</span></div>
-          <div class="palier vedette"><b>Coach</b><div class="m">19&nbsp;€<small> /mois</small></div><span>Jusqu'à 15 athlètes actifs</span></div>
-          <div class="palier"><b>Pro</b><div class="m">39&nbsp;€<small> /mois</small></div><span>Athlètes illimités</span></div>
-        </div>
-        <p style="font-size:12.5px;color:#999;margin-top:12px">Seuls les athlètes actifs comptent : qui n'a fait aucune séance depuis 60 jours ne te coûte rien. Tes athlètes, eux, ne paient jamais l'application.</p>
-        <p style="margin-top:22px"><a class="cta" href="app/">Créer mon espace coach</a></p>
-      </div>
-      <div class="visuel duo">
-        <div class="tel"><img src="app/img/vente/coach-tableau.webp" srcset="app/img/vente/coach-tableau-300.webp 300w, app/img/vente/coach-tableau.webp 600w" sizes="(max-width:640px) 42vw, 250px" width="600" height="1299" loading="lazy"
-          alt="Tableau de bord du coach : notifications classées urgent, important, à traiter"></div>
-        <div class="tel"><img src="app/img/vente/coach-fiche.webp" srcset="app/img/vente/coach-fiche-300.webp 300w, app/img/vente/coach-fiche.webp 600w" sizes="(max-width:640px) 42vw, 250px" width="600" height="1299" loading="lazy"
-          alt="Fiche d'une athlète vue par le coach : séances faites, poids, nouveau bilan à lire"></div>
-      </div>
-    </div>
-  </div>
-</section>
-
 <section id="tarifs">
   <div class="wrap center">
     <p class="eyebrow">Tarifs</p>
@@ -766,18 +721,6 @@ footer a{color:var(--dim);margin:0 8px}
     </div>
     <div class="prix">
       <div class="offre">
-        <h3>Avec ton coach</h3>
-        <p class="pour">Tu es suivi par un coach qui utilise RepCore.</p>
-        <div class="montant">Inclus</div>
-        <p class="facture">dans son suivi, rien à payer ici</p>
-        <ul class="coches" style="text-align:left">
-          <li>Ton coach te remet un code <span style="white-space:nowrap">RC-XXXX-XXXX</span></li>
-          <li>Tout Ultime, plus la correction vidéo de tes mouvements</li>
-          <li>Bilans, messages et programme gérés avec lui</li>
-        </ul>
-        <a class="cta ghost" href="app/">Entrer mon code</a>
-      </div>
-      <div class="offre">
         <h3>Essentielle</h3>
         <p class="pour">Tu t'entraînes seul et tu veux un carnet sérieux.</p>
         <div class="montant" data-m="9,95&nbsp;€" data-a="8,25&nbsp;€">9,95&nbsp;€<small> /mois</small></div>
@@ -786,7 +729,7 @@ footer a{color:var(--dim);margin:0 8px}
           <li>Tu composes tes séances et tu les enchaînes</li>
           <li>Charges proposées, séries, minuteur</li>
           <li>Historique, bilans, poids, nutrition</li>
-          <li>Import de fiche papier et suivi du cycle</li>
+          <li>Sommeil, pas et suivi du cycle</li>
         </ul>
         <a class="cta ghost" href="app/#install">Essayer 1 mois gratuit</a>
       </div>
@@ -867,18 +810,10 @@ footer a{color:var(--dim);margin:0 8px}
       exercices filmés, le volume par muscle, les maxima estimés, la planification de tes blocs et ta
       diète calculée. L'essai ouvre Ultime : tu vois la différence avant de choisir.</p></details>
 
-    <details><summary>Comment j'obtiens un code coach&nbsp;?</summary>
-      <p>C'est ton coach qui te le donne. Il le génère depuis son propre espace RepCore et
-      te l'envoie : un code de la forme <strong>RC-XXXX-XXXX</strong>. Tu le saisis à la
-      première ouverture de l'application, et ton accès s'active immédiatement pour toute
-      la durée qu'il a choisie. Si tu n'as pas de coach, tu peux commencer l'essai
-      sans code.</p></details>
-
     <details><summary>Puis-je annuler&nbsp;?</summary>
       <p>Oui, à tout moment et sans justification. L'abonnement est sans
       engagement&nbsp;: la résiliation se fait depuis ton compte PayPal, en une manipulation,
-      et prend effet à la fin de la période déjà payée. Si tu passes par un coach, tu n'as
-      rien à résilier : l'accès suit simplement la durée de ton suivi.</p></details>
+      et prend effet à la fin de la période déjà payée.</p></details>
 
     <details><summary>Faut-il installer quelque chose&nbsp;?</summary>
       <p>Non. RepCore s'ouvre dans le navigateur. Tu peux ensuite l'ajouter à ton écran
@@ -888,7 +823,7 @@ footer a{color:var(--dim);margin:0 8px}
 
     <details><summary>Est-ce que ça marche sans réseau, en salle&nbsp;?</summary>
       <p>Oui. Tes séances, ta base d'aliments et ton programme sont gardés sur l'appareil.
-      Tu peux saisir une séance entière sans connexion&nbsp;; tout remonte vers ton coach
+      Tu peux saisir une séance entière sans connexion&nbsp;; tout se synchronise
       dès que le réseau revient.</p></details>
 
     <details><summary>Le suivi du cycle est-il obligatoire&nbsp;?</summary>
@@ -897,8 +832,8 @@ footer a{color:var(--dim);margin:0 8px}
       chaque valeur proposée.</p></details>
 
     <details><summary>Qui voit mes données&nbsp;?</summary>
-      <p>Ton coach, et personne d'autre. Il accède à ton dossier parce que tu as saisi son
-      code&nbsp;; ce lien peut être rompu depuis ton profil, ce qui lui retire l'accès
+      <p>Toi. Si tu choisis d'être coaché, ton coach y accède aussi, parce que tu as saisi
+      son code&nbsp;; ce lien peut être rompu depuis ton profil, ce qui lui retire l'accès
       immédiatement. Les détails figurent dans la
       <a href="privacy.html">politique de confidentialité</a>.</p></details>
     </div>
@@ -908,7 +843,7 @@ footer a{color:var(--dim);margin:0 8px}
 <section class="final">
   <div class="wrap center">
     <h2>Programme, charges, diète, bilans.<br><em>Dans une seule application.</em></h2>
-    <p class="lead">Un mois complet, offert. Installe l'application en un geste, ou entre le code de ton coach.</p>
+    <p class="lead">Un mois complet, offert. Installe l'application en un geste.</p>
     <div class="ctas">
       <a class="cta" href="app/#install">Essayer gratuitement 1&nbsp;mois</a>
       <a class="cta ghost" href="app/">Ouvrir dans le navigateur</a>
