@@ -7176,10 +7176,6 @@ function routeUser(){
   // aiguillages de meme nature, ils appartiennent donc a la meme fonction.
   // Consequence assumee et voulue : un retour a l'accueil par la fleche ou par
   // un onglet ne les redeclenche pas. Ce sont des RETOURS, pas des arrivees.
-  // LES NOTIFICATIONS, ACTIVÉES PAR DÉFAUT : l'écran passe par-dessus l'arrivée
-  // (après l'accord de confidentialité), tant que l'athlète n'a ni activé ni
-  // refusé.
-  setTimeout(()=>{ try{ pushEtapeVerifier(); }catch(e){} },1200);
   if(_aiguillerNouvelInscrit()) return;
   loadClientHome();
   if(window._pendingBilanOpen){window._pendingBilanOpen=false;setTimeout(()=>openBilanChoice(),800);}
@@ -69289,6 +69285,8 @@ async function pushAbonner(o){
 // fois par jour au plus : l'enregistrement se réécrit s'il a été effacé par
 // le serveur (404/410).
 async function pushVerifierAuDemarrage(){
+  // Retirées dans les réglages : on ne réabonne pas cet appareil.
+  if(currentUser&&currentUser.pushRefus) return false;
   if(!currentUser||!_notifSupported()||!_pushSupporte()||Notification.permission!=='granted') return false;
   const memo=_pushMemo();
   if(memo&&memo.email===currentUser.email&&memo.vapid===pushEmpreinte(VAPID_PUBLIQUE)
@@ -69380,126 +69378,19 @@ async function pushActiverDepuisReglages(){
   _rendreReglagesPush();
   return ok;
 }
-// ══ LES NOTIFICATIONS, ACTIVÉES PAR DÉFAUT (27/09/2026) ═══════════════════
+// ══ LES NOTIFICATIONS : ALLUMÉES PAR DÉFAUT, AUCUNE DEMANDE (27/09/2026) ═══
 //
-// DEMANDE DE KEVIN : « les notifs se mettent direct, mais possibilité de les
-// retirer ». Tous les types sont allumés d'office (pushPrefs vide) ; à la
-// première ouverture, un écran les active en un geste, et offre une sortie
-// franche. Le refus est retenu dans le DOSSIER (u.pushRefus) : on ne
-// redemande plus, et les réglages permettent de revenir dessus à tout moment
-// (Activer / Désactiver sur cet appareil, et une case par type).
+// DEMANDE DE KEVIN : aucun écran, aucune question posée d'office. Tous les
+// types sont cochés par défaut (pushPrefs vide), et c'est dans les réglages
+// qu'on les retire (« Désactiver sur cet appareil », ou type par type) ou
+// qu'on les remet. u.pushRefus retient le retrait : l'app ne réabonne plus
+// cet appareil d'elle-même, même si le navigateur a gardé son autorisation.
 //
-// ⚠ CE QUE LE NAVIGATEUR IMPOSE : l'autorisation ne se demande que sur un
-// geste — d'où le bouton — et un « Bloquer » du navigateur ne se reprend que
-// dans ses réglages : dans ce cas on n'insiste pas. Sur iPhone dans Safari,
-// les notifications n'existent qu'une fois l'app installée : l'écran le dit
-// une fois, et revient pour les activer au premier lancement depuis l'icône.
-// PURE. Que montrer ? etat : pushEtat(...). Rend null (rien), 'demander'
-// (activer en un geste, ou refuser) ou 'installer' (une fois).
-function pushEtapeMode(u,etat){
-  if(!u||!u.email||u.role==='coach'||u.pushRefus) return null;
-  if(etat==='proposer') return 'demander';
-  if(etat==='installer'&&!u._pushInstallVu) return 'installer';
-  return null;
-}
-// PURE.
-function htmlPushEtape(mode,message){
-  const liste='<ul class="pe-liste">'
-    +'<li>La réponse de ton coach à tes bilans</li>'
-    +'<li>Le rappel quand ta semaine n’est pas encore validée</li>'
-    +'<li>Tes défis, tes badges et ton bilan du mois</li></ul>'
-    +'<p class="pe-regle">Une notification par jour au plus, jamais entre 21 h et 8 h. Tu choisis les types dans tes réglages.</p>';
-  let corps='', bas='';
-  if(mode==='demander'){
-    corps='<p class="pe-sub">RepCore te prévient au bon moment, même quand l’app est fermée. Elles sont activées par défaut ; tu peux les retirer ici ou plus tard dans tes réglages.</p>'+liste;
-    bas='<button type="button" class="btn btn-red" id="pe-activer" onclick="pushEtapeActiver()">Activer les notifications</button>'
-      +'<p class="pe-note">Ton téléphone va te demander l’autorisation : choisis « Autoriser ».</p>'
-      +'<button type="button" class="pe-non" onclick="pushEtapeRefuser()">Je ne veux pas de notifications</button>';
-  } else {
-    corps='<p class="pe-sub">Sur iPhone, les notifications n’arrivent que dans l’app installée :</p>'
-      +'<ol class="pe-etapes"><li>Bouton Partager de Safari.</li><li>« Sur l’écran d’accueil ».</li><li>Ouvre RepCore depuis la nouvelle icône : cette étape reviendra pour les activer.</li></ol>';
-    bas='<button type="button" class="btn btn-outline btn-casse" onclick="pushEtapeFermer(true)">Continuer</button>'
-      +'<button type="button" class="pe-non" onclick="pushEtapeRefuser()">Je ne veux pas de notifications</button>';
-  }
-  return '<div id="rc-push-etape" class="pe-fond" role="dialog" aria-modal="true" aria-labelledby="pe-t">'
-    +'<div class="pe-carte"><h2 id="pe-t" class="pe-t">Active les notifications</h2>'+corps
-    +(message?'<p class="pe-msg" role="alert">'+escapeHtml(message)+'</p>':'')+bas+'</div></div>';
-}
-function _pushEtapePoser(mode,message){
-  const vieux=document.getElementById('rc-push-etape');
-  if(vieux) vieux.remove();
-  const d=document.createElement('div');
-  d.innerHTML=htmlPushEtape(mode,message);
-  document.body.appendChild(d.firstChild);
-  const b=document.querySelector('#rc-push-etape button');
-  if(b) try{ b.focus({preventScroll:true}); }catch(e){}
-}
-function pushEtapeFermer(installVu){
-  const e=document.getElementById('rc-push-etape');
-  if(e) e.remove();
-  if(installVu&&currentUser){ currentUser._pushInstallVu=true; try{ saveUser(); }catch(x){} }
-  return true;
-}
-// LA SORTIE : retenue dans le dossier, réversible dans les réglages.
-function pushEtapeRefuser(){
-  if(currentUser){ currentUser.pushRefus=true; try{ saveUser(); }catch(x){} }
-  pushEtapeFermer();
-  toast('Notifications désactivées. Tu peux les réactiver dans tes réglages.','var(--sub)');
-  return true;
-}
-async function pushEtapeVerifier(essai){
-  const n=Number(essai)||0;
-  if(!currentUser||window._rcEnTests||document.getElementById('rc-push-etape')) return false;
-  // L'ACCORD DE CONFIDENTIALITÉ PASSE D'ABORD : on attend qu'il soit fermé.
-  if(document.getElementById('rc-consent-modal')){
-    if(n<60) setTimeout(()=>pushEtapeVerifier(n+1),2000);
-    return false;
-  }
-  let abonne=false;
-  try{
-    if(_pushSupporte()){
-      const reg=await navigator.serviceWorker.ready;
-      abonne=!!(await reg.pushManager.getSubscription());
-    }
-  }catch(e){}
-  const mode=pushEtapeMode(currentUser,pushEtat(_pushEnv(abonne)));
-  // Permission déjà accordée mais pas encore d'abonnement : on le prend sans
-  // rien demander (hors iOS, qui exige le geste, donc l'étape).
-  if(mode==='demander'&&_notifSupported()&&Notification.permission==='granted'&&!rcInstalliOS()){
-    if(await pushAbonner({geste:false})) return true;
-  }
-  if(!mode) return false;
-  _pushEtapePoser(mode);
-  return true;
-}
-async function pushEtapeActiver(){
-  const b=document.getElementById('pe-activer');
-  if(b){ b.disabled=true; b.setAttribute('aria-busy','true'); }
-  let p=_notifSupported()?Notification.permission:'denied';
-  if(p==='default'){
-    try{ p=await Notification.requestPermission(); }catch(e){}
-    if(p==='granted'){ try{ rcm('notif_granted'); }catch(e){} }
-  }
-  if(p==='granted'){
-    const ok=await pushAbonner({geste:true});
-    if(ok){
-      try{ currentUser._notifEnabled=true; delete currentUser.pushRefus; saveUser(); }catch(e){}
-      pushEtapeFermer();
-      toast('Notifications activées.');
-      return true;
-    }
-    _pushEtapePoser('demander','L’abonnement n’a pas abouti. Vérifie ta connexion, puis réessaie.');
-    return false;
-  }
-  // BLOQUÉ PAR LE NAVIGATEUR : c'est une réponse, on n'insiste pas.
-  if(p==='denied'){
-    pushEtapeFermer();
-    toast('Notifications bloquées par le navigateur. Tu peux les réautoriser dans ses réglages.','var(--orange)');
-    return false;
-  }
-  _pushEtapePoser('demander','Ton téléphone n’a pas eu de réponse. Touche à nouveau le bouton, ou choisis de ne pas en recevoir.');
-  return false;
-}
+// ⚠ L'AUTORISATION DU TÉLÉPHONE reste nécessaire pour qu'une notification
+// arrive : elle n'est demandée que par les gestes qui l'appellent déjà
+// (« Activer sur cet appareil », les rappels de séance et de bilan,
+// l'invitation après la première séance). Jamais sans que l'utilisateur
+// l'ait voulu.
 // RETIRER LES NOTIFICATIONS : l'abonnement de cet appareil est défait (le
 // serveur n'a plus où envoyer), et le refus retenu pour ne pas redemander.
 async function pushDesactiverDepuisReglages(){

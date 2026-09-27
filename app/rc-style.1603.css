@@ -11041,18 +11041,6 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 #rc-lecture{position:fixed;height:2px;z-index:var(--z-bar);pointer-events:none;background:var(--red);transform-origin:0 50%;transform:scaleX(var(--lecture,0));opacity:0;transition:opacity var(--t-2)}
 #rc-lecture.on{opacity:.9}
 @media (prefers-reduced-motion:reduce){#rc-activite::before{animation-duration:2.4s}.rc-occupe::after{animation-duration:1.4s}}
-
-/* ══ L'ETAPE NOTIFICATIONS (htmlPushEtape) : un ecran plein, un bouton ═════ */
-#rc-push-etape{position:fixed;inset:0;z-index:var(--z-modal-2);background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px 20px calc(24px + env(safe-area-inset-bottom,0px));overflow-y:auto}
-.pe-carte{width:100%;max-width:420px}
-.pe-t{font-family:var(--pile-titre);font-size:var(--fs-2xl);letter-spacing:1px;margin:0 0 12px;color:var(--text)}
-.pe-sub{font-size:var(--fs-md);color:var(--text-strong);line-height:1.6;margin:0 0 16px}
-.pe-liste,.pe-etapes{margin:0 0 16px;padding:0 0 0 20px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.8}
-.pe-regle,.pe-note{font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin:0 0 20px}
-.pe-note{margin:12px 0 0;text-align:center}
-.pe-msg{font-size:var(--fs-sm);color:var(--red-text);line-height:1.6;margin:0 0 16px}
-#rc-push-etape .btn{width:100%;margin:0}
-.pe-non{display:block;width:100%;min-height:44px;margin:12px 0 0;background:none;border:0;color:var(--sub);font:600 var(--fs-sm) Montserrat,var(--pile-sans);text-decoration:underline;cursor:pointer}
 /* ═══ THEME CLAIR — GENERE PAR scripts/theme_clair.py, NE PAS MODIFIER A LA MAIN ═══ */
 :root[data-theme="clair"] [style*="--halo-c"]{--halo-1:0 0 8px var(--halo-c,rgba(255,255,255,.45));--halo-2:0 0 14px var(--halo-c,rgba(255,255,255,.60)),0 0 30px var(--halo-c,rgba(255,255,255,.25));--halo-3:0 0 20px var(--halo-c,rgba(255,255,255,.85)),0 0 44px var(--halo-c,rgba(255,255,255,.40))}
 html[data-theme="clair"]{background:#f8f8f8}
@@ -13458,13 +13446,6 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .prf-maj{color:var(--text-faint)}
 :root[data-theme="clair"] #rc-activite::before{background:var(--red)}
 :root[data-theme="clair"] #rc-lecture{background:var(--red)}
-:root[data-theme="clair"] #rc-push-etape{background:var(--bg)}
-:root[data-theme="clair"] .pe-t{color:var(--text)}
-:root[data-theme="clair"] .pe-sub{color:var(--text-strong)}
-:root[data-theme="clair"] .pe-liste,:root[data-theme="clair"] .pe-etapes{color:var(--text-strong)}
-:root[data-theme="clair"] .pe-regle,:root[data-theme="clair"] .pe-note{color:var(--sub)}
-:root[data-theme="clair"] .pe-msg{color:var(--red-text)}
-:root[data-theme="clair"] .pe-non{color:var(--sub)}
 :root[data-theme="clair"] [style^="background:#000"],:root[data-theme="clair"] [style*=";background:#000"],:root[data-theme="clair"] [style*="; background:#000"],:root[data-theme="clair"] [style*=" background:#000"],:root[data-theme="clair"] [style^="background: #000"],:root[data-theme="clair"] [style*=";background: #000"],:root[data-theme="clair"] [style*="; background: #000"],:root[data-theme="clair"] [style*=" background: #000"],:root[data-theme="clair"] [style^="background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=";background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*="; background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=" background: rgb(0, 0, 0)"]{background-color:#fbfbfb!important}
 :root[data-theme="clair"] [style^="background:#000b"],:root[data-theme="clair"] [style*=";background:#000b"],:root[data-theme="clair"] [style*="; background:#000b"],:root[data-theme="clair"] [style*=" background:#000b"],:root[data-theme="clair"] [style^="background: #000b"],:root[data-theme="clair"] [style*=";background: #000b"],:root[data-theme="clair"] [style*="; background: #000b"],:root[data-theme="clair"] [style*=" background: #000b"],:root[data-theme="clair"] [style^="background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=";background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*="; background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=" background: rgba(0, 0, 0, 0.733)"]{background-color:rgba(251,251,251,0.733)!important}
 :root[data-theme="clair"] [style^="background:#001a00"],:root[data-theme="clair"] [style*=";background:#001a00"],:root[data-theme="clair"] [style*="; background:#001a00"],:root[data-theme="clair"] [style*=" background:#001a00"],:root[data-theme="clair"] [style^="background: #001a00"],:root[data-theme="clair"] [style*=";background: #001a00"],:root[data-theme="clair"] [style*="; background: #001a00"],:root[data-theme="clair"] [style*=" background: #001a00"],:root[data-theme="clair"] [style^="background: rgb(0, 26, 0)"],:root[data-theme="clair"] [style*=";background: rgb(0, 26, 0)"],:root[data-theme="clair"] [style*="; background: rgb(0, 26, 0)"],:root[data-theme="clair"] [style*=" background: rgb(0, 26, 0)"]{background-color:#dfffdf!important}
