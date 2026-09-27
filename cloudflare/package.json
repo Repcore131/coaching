@@ -1,6 +1,7 @@
 {
   "name": "repcore-serveur",
   "private": true,
+  "type": "module",
   "description": "Le serveur léger de RepCore (Cloudflare Worker). Voir README.md.",
   "scripts": {
     "test": "node --test \"test/*.test.mjs\""

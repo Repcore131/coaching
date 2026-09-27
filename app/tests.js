@@ -35975,12 +35975,79 @@ async function testExercices(){
             _cldIndispo=false;
             return true;});
 
+          okA('1609 — UN REFUS DÉFINITIF (400, 403) SORT DE LA FILE ; 409 ET 503 Y RESTENT',async()=>{
+            const sFn=CLOUD._callFn;
+            try{
+            cldFileEcrire([]); _cldIndispo=false;
+            const refus=(statut,msg)=>async()=>{ const e=new Error(msg); e.statut=statut; throw e; };
+            cldFileAjouter('repcore/A1/interdit','image',{proprietaire:'a@t.fr'});
+            CLOUD._callFn=refus(403,'Ce média n’est pas le tien.');
+            let r=await _cldDetruire('repcore/A1/interdit','image',{proprietaire:'a@t.fr'});
+            if(r.ok||!r.definitif) return _echec('un 403 n’est pas compté comme définitif');
+            if(cldFileLire().length) return _echec('un 403 reste en file : il serait rejoué à chaque démarrage');
+            CLOUD._callFn=refus(400,'Identifiant de média invalide.');
+            r=await _cldDetruire('repcore/A1/bizarre','image',{});
+            if(cldFileLire().length) return _echec('un 400 entre en file');
+            CLOUD._callFn=refus(409,'Le propriétaire de ce média n’est pas encore indexé : le média reste à purger.');
+            await _cldDetruire('repcore/A1/attend','image',{});
+            CLOUD._callFn=refus(503,'La suppression distante n’est pas encore configurée : le média reste à purger.');
+            await _cldDetruire('repcore/A1/panne','image',{});
+            const l=cldFileLire().map(x=>x.publicId).sort().join(',');
+            if(l!=='repcore/A1/attend,repcore/A1/panne') return _echec('la file après 409 et 503 : '+l);
+            // LE COMPTE CLOUDINARY N'EST PLUS ENVOYÉ : le serveur le tient de sa configuration.
+            let vu=null; _cldIndispo=false;
+            CLOUD._callFn=async(n,d)=>{ vu=d; return {result:'ok'}; };
+            await _cldDetruire('repcore/A1/v','video',{proprietaire:'a@t.fr',cloudName:'pirate'});
+            if(!vu||'cloudName' in vu) return _echec('cloudName part encore vers le serveur : '+JSON.stringify(vu));
+            cldFileEcrire([]); _cldIndispo=false;
+            return true;
+            } finally { CLOUD._callFn=sFn; }});
+
+          okA('1609 — L’INDEX DES MÉDIAS ET LA LISTE DU COACH S’ÉCRIVENT AU BON ENDROIT, UNE FOIS',async()=>{
+            const sF=window.fetch, sT=CLOUD._getToken, sU=currentUser;
+            const vus=[];
+            window.fetch=async(url,init)=>{ vus.push({url:String(url),m:(init&&init.method)||'GET',b:init&&init.body}); return {ok:true,status:200}; };
+            CLOUD._getToken=async()=>'JETON';
+            try{
+              try{ localStorage.removeItem('rc_medias_proprio_lea.b@t.fr'); }catch(e){}
+              const u={id:'u_123',email:'lea.b@t.fr',role:'athlete'};
+              await CLOUD.poserProprioMedias(u);
+              if(vus.length!==1) return _echec(vus.length+' écriture(s) de l’index');
+              if(!/\/medias_proprio\/u_123\.json\?auth=JETON$/.test(vus[0].url)||vus[0].m!=='PUT')
+                return _echec('index écrit ailleurs : '+vus[0].m+' '+vus[0].url);
+              if(vus[0].b!==JSON.stringify('lea,b@t,fr')) return _echec('valeur de l’index : '+vus[0].b);
+              await CLOUD.poserProprioMedias(u);
+              if(vus.length!==1) return _echec('l’index est réécrit à chaque démarrage');
+              // Un id que la règle refuserait n'est même pas envoyé.
+              await CLOUD.poserProprioMedias({id:'a/b',email:'x@t.fr'});
+              if(vus.length!==1) return _echec('un id invalide part vers la base');
+              // LA LISTE DU COACH : seulement un coach, sous SA clé.
+              vus.length=0; CLOUD._clientsInscrits={};
+              currentUser={id:'u_c',email:'kev.g@t.fr',role:'coach'};
+              await CLOUD.inscrireClientCoach('lea.b@t.fr');
+              await CLOUD.inscrireClientCoach('lea.b@t.fr');
+              if(vus.length!==1) return _echec(vus.length+' écriture(s) pour une inscription');
+              if(!/\/coachs\/kev,g@t,fr\/clients\/lea,b@t,fr\.json\?auth=JETON$/.test(vus[0].url)||vus[0].m!=='PUT'||vus[0].b!=='true')
+                return _echec('inscription : '+vus[0].m+' '+vus[0].url+' '+vus[0].b);
+              await CLOUD.inscrireClientCoach('lea.b@t.fr',false);
+              if(vus.length!==2||vus[1].m!=='DELETE') return _echec('le détachement ne retire pas l’entrée');
+              currentUser={id:'u_a',email:'ath@t.fr',role:'athlete'};
+              await CLOUD.inscrireClientCoach('lea.b@t.fr');
+              if(vus.length!==2) return _echec('un athlète écrit une liste de coach');
+              return true;
+            } finally {
+              window.fetch=sF; CLOUD._getToken=sT; currentUser=sU; CLOUD._clientsInscrits={};
+              try{ localStorage.removeItem('rc_medias_proprio_lea.b@t.fr'); }catch(e){}
+            }});
+
           okA('1418 — LE REJEU AU DÉMARRAGE VIDE CE QU’IL PEUT ET GARDE LE RESTE',async()=>{
             // ⚠ IL EXIGE UN JETON, et il a raison : sans authentification la
             //   fonction serveur refuse, et l'entrée serait comptée comme un
             //   essai pour rien. La suite n'est pas connectée — on le simule,
             //   au lieu de retirer la garde.
             const _sCan=CLOUD.canWrite; CLOUD.canWrite=()=>true;
+            const _sProp=CLOUD.poserProprioMedias; let _index=0;
+            CLOUD.poserProprioMedias=async()=>{ _index++; return true; };
             try{
             cldFileEcrire([]); _cldIndispo=false; _cldRejeuFait=false;
             cldFileAjouter('repcore/A1/part','video',{proprietaire:'a@t.fr'});
@@ -35990,6 +36057,7 @@ async function testExercices(){
               throw new Error('Erreur serveur (503).'); };
             const n=await cldFileRejouer();
             if(n!==1) return _echec(n+' média(s) détruit(s) au rejeu au lieu d’un');
+            if(_index!==1) return _echec('le rejeu ne pose pas l’index des médias avant de partir');
             const l=cldFileLire();
             if(l.length!==1||l[0].publicId!=='repcore/A1/reste')
               return _echec('la file après rejeu : '+JSON.stringify(l.map(x=>x.publicId)));
@@ -36001,7 +36069,7 @@ async function testExercices(){
             if(encore) return _echec('le rejeu est reparti une seconde fois');
             _cldRejeuFait=false;
             return true;
-            } finally { CLOUD.canWrite=_sCan; }});
+            } finally { CLOUD.canWrite=_sCan; CLOUD.poserProprioMedias=_sProp; }});
 
           okA('1418 — SUPPRIMER UNE VIDÉO DEMANDE SA DESTRUCTION, ET LE DIT QUAND ELLE RÉSISTE',async()=>{
             const sU=currentUser, sDB=DB.get('users'), sPush=CLOUD.pushOne,
@@ -48148,7 +48216,8 @@ async function testExercices(){
     ok('volumeParMuscle : vide, normalisé 0..1, plafonné, secondaires à moitié',(()=>{
       const {u,sc}=_MU;
       const v0=volumeParMuscle([],{user:u});
-      if(Object.keys(v0.groupes).length!==11) return _echec(Object.keys(v0.groupes).length+' groupes au lieu de onze');
+      // DOUZE depuis le 27/09/2026 : « Trapèzes » s'est scindé en supérieur et médian.
+      if(Object.keys(v0.groupes).length!==12) return _echec(Object.keys(v0.groupes).length+' groupes au lieu de douze');
       if(Object.values(v0.groupes).some(x=>x!==0)) return _echec('un groupe vide n’est pas à 0');
       // 10 séries de pecs sur une semaine : 10 / MAV max (20) = 0,5.
       const v=volumeParMuscle([sc({'TEST PECS':10})],{user:u,semaines:1});
@@ -49181,6 +49250,29 @@ async function testExercices(){
       const r=ambResume('LEA',_AMBF,500);
       if(r.due!==4||r.attente!==4||r.payee!==4||r.rembourse!==4||r.ca!==60||r.clics!==10) return _echec(JSON.stringify(r));
       return (ambEtatCommission({dueLe:10},9)==='attente'&&ambEtatCommission({dueLe:10},10)==='due'&&AMB_DELAI_DUE_MS===30*864e5)?true:_echec('états');})());
+    ok('1611 — Ambassadeurs : suspendue (litige) et annulée ne sont ni dues ni exportées ; le prorata garde l’initiale',(()=>{
+      const f={nom:'Léa',commissions:{'2026-10':{
+        s:{montant:20,commission:4,dueLe:100,statut:'suspendue'},
+        n:{montant:20,commission:4,dueLe:100,statut:'annulee'},
+        p:{montant:10,commission:2,commissionInitiale:4,montantInitial:20,dueLe:100}}}};
+      const r=ambResume('LEA',f,500);
+      if(r.suspendue!==4||r.rembourse!==4||r.due!==2) return _echec(JSON.stringify(r));
+      if(ambEtatCommission({statut:'suspendue',dueLe:1},500)!=='suspendue') return _echec('état suspendue');
+      if(ambEtatCommission({statut:'annulee',dueLe:1},500)!=='rembourse') return _echec('état annulée');
+      const csv=ambCsvDues({LEA:f},'2026-10',500);
+      return csv.lignes===1&&/;p;/.test(csv.csv)?true:_echec(csv.csv);})());
+    ok('1611 — Le journal PayPal de l’admin : qui, quoi, pourquoi, et ce qui a été repris',(()=>{
+      const h=htmlJournalPaypal({a:{le:1,quoi:'remboursement',qui:'lea@t.fr',montant:'9,50 €',premier:true,pourquoi:'geste <b>commercial</b>',
+        actions:['commission LEAFIT annulée (1,90 €)','accès fermé au 5 octobre 2026']},
+        b:{le:2,quoi:'litige_ouvert',qui:'tom@t.fr',montant:'24,90 €',pourquoi:'non reçu',actions:['commission X suspendue']}});
+      if(!/Remboursement total/.test(h)||!/Litige ouvert/.test(h)) return _echec('les libellés');
+      if(h.indexOf('Litige ouvert')>h.indexOf('Remboursement total')) return _echec('le plus récent d’abord');
+      if(!/lea@t\.fr · 9,50 € · premier paiement/.test(h)) return _echec('qui et combien');
+      if(/<b>commercial/.test(h)||!/Motif : geste &lt;b&gt;commercial/.test(h)) return _echec('le motif n’est pas échappé');
+      if(!/<li>accès fermé au 5 octobre 2026<\/li>/.test(h)) return _echec('les actions');
+      if(!/amb-jl-alerte/.test(h)) return _echec('un litige ouvert ne se distingue pas');
+      if(!/Aucun remboursement/.test(htmlJournalPaypal({}))) return _echec('journal vide');
+      return /illisible/.test(htmlJournalPaypal(null))?true:_echec('journal illisible');})());
     ok('Ambassadeurs : le CSV mensuel ne porte que les commissions dues',(()=>{
       const r=ambCsvDues({LEA:_AMBF,ZED:{nom:'Zed',commissions:{'2026-09':{x:{commission:9,dueLe:1}}}}},'2026-10',500);
       const l=r.csv.trim().split('\n');
