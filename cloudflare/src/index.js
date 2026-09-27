@@ -38,14 +38,26 @@ function outils(env) {
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Cache-Control': 'no-store' };
-const reponse = (corps, statut, type) => new Response(corps, { status: statut || 200,
-  headers: Object.assign({ 'Content-Type': type || 'application/json; charset=utf-8' }, CORS) });
+// ⚠ UN 204 OU UN 304 N'A PAS DE CORPS, pas même '' : le constructeur Response
+// lève alors « Invalid response status code 204 ». C'est ce qui cassait la
+// pré-vérification CORS (OPTIONS) de /fn/cloudinaryDestroy : l'exception
+// sortait sans en-têtes CORS, le navigateur y voyait « Impossible de joindre
+// le serveur », et l'app coupait les suppressions (_cldIndispo).
+const SANS_CORPS = new Set([101, 204, 205, 304]);
+const reponse = (corps, statut, type) => {
+  const st = statut || 200;
+  const vide = SANS_CORPS.has(st);
+  const entetes = Object.assign(vide ? {} : { 'Content-Type': type || 'application/json; charset=utf-8' }, CORS);
+  return new Response(vide ? null : corps, { status: st, headers: entetes });
+};
 
 export default {
   async fetch(req, env, ctx) {
-    const url = new URL(req.url);
-    if (req.method === 'OPTIONS') return reponse('', 204);
+    // TOUT EST DANS LE try, pré-vérification comprise : aucune exception ne
+    // doit sortir d'ici sans en-têtes CORS.
     try {
+      if (req.method === 'OPTIONS') return reponse(null, 204);
+      const url = new URL(req.url);
       // LES FONCTIONS DE L'APP : /fn/<nom>, comme les Cloud Functions.
       if (url.pathname.startsWith('/fn/') && req.method === 'POST') {
         const o = outils(env);

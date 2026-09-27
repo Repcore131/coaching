@@ -105,8 +105,33 @@ de vidéos attendent dans la file de l'app jusqu'à ce que le serveur sache les 
 
 ## Tester
 
+**Tous les tests d'un coup** (Node 22 ou plus, rien à installer) :
+
 ```
-node cloudflare/test/push.test.mjs         # chiffrement RFC 8291 et jeton VAPID, vérifiés côté appareil
-node cloudflare/test/metier.test.mjs       # le métier sur une base en mémoire, budget de requêtes compris
-sh cloudflare/test/essai-workerd.sh <dossier>   # le Worker dans le vrai moteur Cloudflare (wrangler dev)
+cd cloudflare
+npm test
 ```
+
+`npm test` lance `node --test "test/*.test.mjs"` : chaque fichier `*.test.mjs` tourne dans son
+propre processus, l'un après l'autre, et le tout échoue si un seul échoue. Aujourd'hui :
+
+| Fichier | Ce qu'il vérifie |
+|---|---|
+| `index.test.mjs` | le point d'entrée `fetch` : `OPTIONS /fn/cloudinaryDestroy` → 204 **sans corps** et en-têtes CORS ; `POST` sans jeton → 401 avec CORS ; aucune erreur ne sort sans CORS |
+| `appels.test.mjs` | le jeton Firebase (RS256) et la suppression Cloudinary |
+| `metier.test.mjs` | le métier sur une base en mémoire, budget de requêtes compris |
+| `paypal.test.mjs` | les webhooks PayPal (signature, paiement, résiliation) |
+| `push.test.mjs` | chiffrement RFC 8291 et jeton VAPID, vérifiés côté appareil |
+
+Un fichier seul : `node test/index.test.mjs` (depuis `cloudflare/`).
+
+Dans le vrai moteur Cloudflare (wrangler dev) :
+
+```
+sh cloudflare/test/essai-workerd.sh <dossier>
+```
+
+⚠ **Une réponse 204 ou 304 n'a jamais de corps**, pas même `''` : `new Response('', {status:204})`
+lève « Invalid response status code 204 ». Le helper `reponse()` de `src/index.js` passe `null`
+pour ces statuts ; tout le `fetch` est dans le `try`, pour qu'aucune exception ne sorte sans
+en-têtes CORS (le navigateur la verrait comme « Impossible de joindre le serveur »).
