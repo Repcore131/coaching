@@ -33917,6 +33917,38 @@ async function testExercices(){
           return _echec('le ±20 de l’athlète est encore bloqué par le verrou');
         return true;})());
 
+      ok('1616 — RÉINITIALISER REND LE TOTAL D’IL Y A 24 H ; PLUS DE LIGNE « SOUS LE PLANCHER »',(()=>{
+        const _sv=window.saveUser; window.saveUser=()=>true;
+        try{
+          const H=3600000, now=Date.now();
+          const u=_dossier1412();
+          // Rien d'ajusté : rien à réinitialiser.
+          if(deltaKcalReinitUtile(u)) return _echec('un bouton à rien sur un total jamais ajusté');
+          // Des −20 cumulés AVANT l'historique (le cas de Kevin : 1 931 → 1 191) : on revient au calcul.
+          u.nutrition.tableur=Object.assign({},u.nutrition.tableur,{delta:-740});
+          if(deltaKcalIlYa24h(u)!==0||!deltaKcalReinitUtile(u)) return _echec('sans historique, le retour au calcul');
+          const r=appliquerDeltaKcal(u,0,'tableur',deltaKcalIlYa24h(u));
+          if(!r||!r.bouge||deltaKcalPartage(u)!==0) return _echec('réinitialiser n’a pas remis le calcul : '+deltaKcalPartage(u));
+          const t=cibleTableur(u,{});
+          if(Math.abs(t.kcal-t.brut)>1) return _echec('le total n’est pas revenu au besoin selon l’objectif : '+t.kcal+' / '+t.brut);
+          // Avec historique : la valeur en vigueur il y a 24 h.
+          u.nutrition.tableur.delta=-400;
+          u.nutrition.tableur.deltaHisto=[{le:now-30*H,avant:0,apres:-20},{le:now-2*H,avant:-20,apres:-400}];
+          if(deltaKcalIlYa24h(u,now)!==-20) return _echec('24 h plus tôt : '+deltaKcalIlYa24h(u,now));
+          // Tout s'est joué dans les 24 h : ce qui précédait le premier geste.
+          u.nutrition.tableur.deltaHisto=[{le:now-5*H,avant:-60,apres:-80},{le:now-H,avant:-80,apres:-400}];
+          if(deltaKcalIlYa24h(u,now)!==-60) return _echec('avant le premier geste du jour : '+deltaKcalIlYa24h(u,now));
+          // Chaque geste s'inscrit ; au-delà de 48 h, il s'efface.
+          u.nutrition.tableur.deltaHisto=[{le:now-60*H,avant:0,apres:-20}];
+          appliquerDeltaKcal(u,1,'tableur');
+          const h=u.nutrition.tableur.deltaHisto;
+          if(h.length!==1||h[0].avant!==-400||h[0].apres!==-380) return _echec('historique : '+JSON.stringify(h));
+          // Les deux boutons, et la ligne retirée du tableau.
+          if(String(athDelta).indexOf('reinit')<0||String(tbkDelta).indexOf('reinit')<0) return _echec('un côté n’a pas son Réinitialiser');
+          if(/Sous le plancher de sécurité/.test(String(_htmlTableauxTableur))) return _echec('la ligne du plancher est encore dans le tableau');
+          return true;
+        } finally { window.saveUser=_sv; }})());
+
       ok('1412 — LE ±20 DÉPLACE LE MÊME TOTAL, DES DEUX CÔTÉS, SANS LEVER LE VERROU',(()=>{
         const _sv=window.saveUser; window.saveUser=()=>true;
         try{

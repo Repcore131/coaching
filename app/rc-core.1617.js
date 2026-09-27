@@ -78080,15 +78080,24 @@ function deltaKcalPartage(u){
 //
 // Rend {delta, bouge, kcal?, manque?, manuel?} — jamais null hors dossier
 // absent, pour que l'appelant puisse toujours dire ce qui s'est passe.
-function appliquerDeltaKcal(u,sens,origineSiAbsente){
+// `valeur` (facultatif) : l'ajustement à poser tel quel, au lieu d'un pas —
+// c'est « Réinitialiser » (deltaKcalIlYa24h).
+function appliquerDeltaKcal(u,sens,origineSiAbsente,valeur){
   if(!u) return null;
   if(!u.nutrition) u.nutrition={};
   const nut=u.nutrition;
   const avant=deltaKcalPartage(u);
-  const n=Math.max(-DELTA_KCAL_MAX,Math.min(DELTA_KCAL_MAX,
-    avant+(sens<0?-ATH_DELTA_PAS:ATH_DELTA_PAS)));
+  const n=(typeof valeur==='number'&&isFinite(valeur))?Math.round(valeur)
+    :Math.max(-DELTA_KCAL_MAX,Math.min(DELTA_KCAL_MAX,avant+(sens<0?-ATH_DELTA_PAS:ATH_DELTA_PAS)));
   const tb=Object.assign({},nut.tableur||{});
   tb.delta=n;
+  // L'HISTORIQUE DU ±20, sur 48 heures : de quoi rendre, sur « Réinitialiser »,
+  // le total d'il y a 24 heures. Quelques octets par geste, et il se vide seul.
+  if(n!==avant){
+    const t0=Date.now();
+    tb.deltaHisto=(Array.isArray(tb.deltaHisto)?tb.deltaHisto:[])
+      .filter(x=>x&&Number(x.le)>t0-DELTA_HISTO_MS).concat([{le:t0,avant,apres:n}]).slice(-80);
+  }
   delete tb.deltaAthlete;                       // un seul foyer, pas deux
   nut.tableur=tb;
   if(nut.perso&&nut.perso.delta!==undefined){
@@ -78128,6 +78137,25 @@ function appliquerDeltaKcal(u,sens,origineSiAbsente){
   nut.macros={on:j.on,off:cyc?j.off:j.on,origine,origineDate:Date.now()};
   try{ _histoNoter(u,origine==='athlete'?'athlete':'tableur'); }catch(e){}
   return {delta:n,bouge:true,kcal:j.on.kcal,sousPlancher:!!t.sousPlancher};
+}
+const DELTA_HISTO_MS=48*3600000;
+// PURE. L'AJUSTEMENT EN VIGUEUR IL Y A 24 HEURES — ce que « Réinitialiser »
+// rend. Le dernier geste d'avant ce moment-là ; à défaut, ce qui précédait le
+// premier geste des 24 heures ; et sans aucun historique (ajustements faits
+// avant qu'on le tienne), 0 : le total calculé, « Besoin selon l'objectif ».
+function deltaKcalIlYa24h(u,maintenant){
+  const t=Number(maintenant)||Date.now();
+  const h=((((u&&u.nutrition)||{}).tableur||{}).deltaHisto);
+  const l=(Array.isArray(h)?h:[]).filter(x=>x&&isFinite(Number(x.le))).sort((a,b)=>a.le-b.le);
+  if(!l.length) return 0;
+  const seuil=t-24*3600000;
+  const avantSeuil=l.filter(x=>x.le<=seuil);
+  if(avantSeuil.length) return Math.round(Number(avantSeuil[avantSeuil.length-1].apres)||0);
+  return Math.round(Number(l[0].avant)||0);
+}
+// PURE. « Réinitialiser » a-t-il quelque chose à rendre ?
+function deltaKcalReinitUtile(u,maintenant){
+  return deltaKcalIlYa24h(u,maintenant)!==deltaKcalPartage(u);
 }
 // PURE. La mention affichee a cote du total, des deux cotes : « +40 » ou rien.
 function libelleDeltaKcal(u){
@@ -78333,7 +78361,9 @@ function athObjectif(k){
  */
 function athDelta(sens){
   if(!currentUser) return;
-  const r=appliquerDeltaKcal(currentUser,sens,'athlete');
+  const r=(sens==='reinit')
+    ?appliquerDeltaKcal(currentUser,0,'athlete',deltaKcalIlYa24h(currentUser))
+    :appliquerDeltaKcal(currentUser,sens,'athlete');
   if(!r) return;
   if(r.manque&&r.manque.length){
     toast('Cibles impossibles à recalculer : il manque '+r.manque.join(', '),'var(--orange)');
@@ -78513,6 +78543,8 @@ function _htmlCiblesAthlete(u){
           +'<div class="rc-obj-u">'+_libJour+(_dl?' · '+_dl:'')+'</div></div>'
         +'<button type="button" class="rc-obj-pas" onclick="athDelta(1)" aria-label="Vingt calories de plus">+20</button>'
       +'</div>'
+      +(deltaKcalReinitUtile(u)?'<button type="button" class="rc-obj-reinit" onclick="athDelta(\'reinit\')">'
+        +'Réinitialiser <span>le total d’il y a 24 h</span></button>':'')
       +'<div class="rc-obj-macros">'
         +l('Protéines',v.p,_gr?_sel('prot',Number(_gr.protGkg)||1.8,1.2,2.6):'')
         +l('Lipides',v.l,_gr?_sel('lip',Number(_gr.lipGkg)||0.9,0.6,1.4):'')
@@ -78563,6 +78595,8 @@ function _htmlCiblesAthlete(u){
         +(c.delta?' · '+(c.delta>0?'+':'')+c.delta:'')+'</div></div>'
       +'<button type="button" class="rc-obj-pas" onclick="athDelta(1)" aria-label="Vingt calories de plus">+20</button>'
     +'</div>'
+    +(deltaKcalReinitUtile(u)?'<button type="button" class="rc-obj-reinit" onclick="athDelta(\'reinit\')">'
+      +'Réinitialiser <span>le total d’il y a 24 h</span></button>':'')
     +'<div class="rc-obj-macros">'
       +ligne('Protéines',c.p,' g',sel('prot',Number(c.protGkg)||1.8,1.2,2.6))
       +ligne('Lipides',c.l,' g',sel('lip',Number(c.lipGkg)||0.9,0.6,1.4))
@@ -88348,7 +88382,7 @@ function saveClientNutriManuel(v){
         window._plDerniereViol={email:c.email,liste:viol};
         try{ toast((pl.tca||pl.deficit)
           ?'Le calcul passe sous le plancher, et un antécédent est déclaré : cibles écrites quand même'
-          :'Le calcul passe sous le plancher : cibles écrites, le détail est sous la grille',
+          :'Le calcul passe sous le plancher : cibles écrites',
           'var(--red)'); }catch(e){}
       }
     }
@@ -88905,7 +88939,9 @@ function tbkDelta(sens){
   const users=DB.get('users')||{};
   const c=getOwnedClient(currentClientId,users);
   if(!c) return false;
-  const r=appliquerDeltaKcal(c,sens,'tableur');
+  const r=(sens==='reinit')
+    ?appliquerDeltaKcal(c,0,'tableur',deltaKcalIlYa24h(c))
+    :appliquerDeltaKcal(c,sens,'tableur');
   if(!r) return false;
   if(r.manque&&r.manque.length){
     try{ toast('Calcul incomplet : '+r.manque.join(', '),'var(--orange)'); }catch(e){}
@@ -89502,16 +89538,10 @@ function _htmlTableauxTableur(c){
     +li('Besoin selon l’objectif',_tbNb(t.brut)+' kcal',
         '× '+String(t.coef).replace('.',',')
         +(_cycT?' · avant cyclage : voir « Journées » juste en dessous':''),true,'target')
-    // ⚠ CETTE LIGNE ANNONCAIT L'INVERSE DE CE QU'ELLE FAISAIT. Elle citait
-    //   `brut` — le total AVANT le ±20 — et le donnait pour « sous le plancher »
-    //   alors qu'il etait au-dessus : « Releve au plancher : 1 749 kcal, le
-    //   calcul descendait a 1 931 kcal ». Elle dit maintenant ce qui est vrai :
-    //   les chiffres passent sous le plancher, et voici lequel.
-    +(t.sousPlancher
-      ? li('Sous le plancher de sécurité',_tbNb(t.kcal)+' kcal',
-          'le plancher calculé pour cet athlète est de '+_tbNb(t.plancher)
-          +' kcal : ces chiffres passent en dessous',true,'alert-triangle')
-      : '')
+    // LA LIGNE « SOUS LE PLANCHER DE SÉCURITÉ » EST RETIRÉE (Kevin, 27/09/2026) :
+    //   « ça sert à rien comme indication, je veux pas avoir ça sous les yeux ».
+    //   Elle citait un second total sous « Besoin selon l'objectif », et on ne
+    //   savait plus lequel valait. Le total du jour est celui de « Journées ».
     +'</tbody>'
     // CE QUE DIT LA MAQUETTE, DIT AU COACH : ce sont des estimations. Une
     // formule de metabolisme se trompe de quelques centaines de kilocalories
@@ -89683,6 +89713,8 @@ function _htmlTableauxTableur(c){
   const _d20='<span class="tbk-d20">'
     +'<button type="button" class="tbk-d20-b" onclick="tbkDelta(-1)" aria-label="Vingt calories de moins">−20</button>'
     +'<button type="button" class="tbk-d20-b" onclick="tbkDelta(1)" aria-label="Vingt calories de plus">+20</button>'
+    +(deltaKcalReinitUtile(c)?'<button type="button" class="tbk-d20-b tbk-d20-r" onclick="tbkDelta(\'reinit\')" '
+      +'title="Revenir au total d’il y a 24 heures">Réinitialiser</button>':'')
     +'</span>';
   h+=_tbkCarte('<table class="tbk tbk-mac'+(_man&&_cycT?' tbk-man':'')+'">'
     +_tbkCap('utensils','Macronutriments','Répartition de ses apports journaliers')
