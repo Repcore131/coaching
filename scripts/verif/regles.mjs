@@ -151,26 +151,23 @@ if(refuses.length){
 const inutiles=[...acceptes].filter(n=>!evts.includes(n));
 if(inutiles.length) console.log('nom(s) accepte(s) que le code n\'ecrit plus : '+inutiles.join(', '));
 
-// ══ LES CINQ BADGES : LA MEME LISTE, AUX DEUX BOUTS ════════════════════════
+// ══ LES BADGES : LA MEME LISTE, AUX DEUX BOUTS ═════════════════════════════
 //
-// « Cinq badges, pas un de plus » est une decision de produit, pas une limite
-// technique : une collection qui s'allonge cesse d'etre une reconnaissance.
-// Elle est donc ecrite DEUX FOIS — BADGES_ACQUIS dans app/index.html, et le motif de
-// cle de /users/$emailKey/badges dans database.rules.json — et ce bloc verifie
-// qu'elles disent la meme chose.
+// La collection est FERMEE : cinquante identifiants depuis le 26/09/2026 (ils
+// etaient cinq). Elle est ecrite DEUX FOIS — BADGES_ACQUIS dans le code, et le
+// motif de cle de /users/$emailKey/badges dans database.rules.json — et ce
+// bloc verifie qu'elles disent la meme chose.
 //
 // Les deux sens comptent ici, contrairement aux compteurs de tunnel :
 //  — un badge que le code attribue et que le serveur refuse serait gagne sur
 //    l'appareil puis perdu a la premiere synchro, sans le moindre signal ;
-//  — un badge accepte par les regles et absent du code est la porte ouverte
-//    au sixieme, qu'un lot futur n'aurait plus qu'a pousser.
-const mBadges=source.match(/const BADGES_ACQUIS=Object\.freeze\(\[([\s\S]*?)\]\);/);
-if(!mBadges){ console.error('BADGES_ACQUIS introuvable dans app/index.html'); process.exit(1); }
+//  — un badge accepte par les regles et absent du code est une place libre
+//    qu'un lot futur n'aurait plus qu'a remplir sans le dire.
+const mBadges=source.match(/const BADGES_ACQUIS=Object\.freeze\(\[([\s\S]*?)\n\]\.map/);
+if(!mBadges){ console.error('BADGES_ACQUIS introuvable dans le code'); process.exit(1); }
 const badges=[...mBadges[1].matchAll(/\bid:'([^']+)'/g)].map(m=>m[1]);
-if(badges.length!==5){
-  console.error('\nBADGES_ACQUIS : '+badges.length+' identifiant(s) lu(s), il en faut CINQ.');
-  console.error('Cinq badges, pas un de plus, pas un de moins — c\'est la regle');
-  console.error('de produit. Si elle doit changer, elle change ICI aussi, a la main.');
+if(new Set(badges).size!==badges.length){
+  console.error('\nBADGES_ACQUIS : deux badges portent le meme identifiant.');
   process.exit(1);
 }
 const mBadgeRegex=regles.match(/\$badge\.matches\(\/\^\(([^)]*)\)\$\/\)/);

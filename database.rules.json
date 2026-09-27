@@ -125,21 +125,21 @@
           }
         },
 
-        // ── Les cinq badges ────────────────────────────────────────────────
+        // ── La collection de badges ────────────────────────────────────────
         // LA LISTE EST FERMEE ICI AUSSI, et c est tout l interet de ce bloc.
-        // La regle produit de RepCore est « cinq badges, pas un de plus » :
-        // ecrite dans le seul index.html, elle tiendrait le temps qu un lot
-        // pense bien faire en ajoutant un sixieme. Le motif ci-dessous refuse
-        // toute autre cle cote SERVEUR, et scripts/verif/regles.mjs compare
-        // BADGES a ce motif pour que le refus se voie au moment du lot et non
-        // en production — meme mecanique que RCM_EVENEMENTS, ecrite apres que
-        // quinze compteurs eurent ete rejetes en silence pendant des mois.
+        // Elle etait de cinq ; elle est de cinquante depuis le 26/09/2026
+        // (familles a paliers, uniques, secrets — decision de Kevin). Le motif
+        // ci-dessous refuse toute autre cle cote SERVEUR, et
+        // scripts/verif/regles.mjs compare BADGES_ACQUIS a ce motif pour que
+        // le refus se voie au moment du lot et non en production — meme
+        // mecanique que RCM_EVENEMENTS, ecrite apres que quinze compteurs
+        // eurent ete rejetes en silence pendant des mois.
         //
         // Un badge, c est une DATE et rien d autre : il n y a pas de valeur a
         // porter, pas de niveau, pas de compteur. "$autre": false le dit.
         "badges": {
           "$badge": {
-            ".validate": "$badge.matches(/^(premiere-seance|semaine-validee|premier-record|premier-bilan|quatre-semaines)$/)",
+            ".validate": "$badge.matches(/^(assidu_1|assidu_2|assidu_3|assidu_4|quatre-semaines|inarretable_2|inarretable_3|inarretable_4|briseur_1|briseur_2|briseur_3|briseur_4|tonnage_1|tonnage_2|tonnage_3|tonnage_4|sans_faute_1|sans_faute_2|sans_faute_3|sans_faute_4|miroir_1|miroir_2|miroir_3|miroir_4|cycles_1|cycles_2|cycles_3|cycles_4|carburant_1|carburant_2|carburant_3|carburant_4|premiere-seance|semaine-validee|premier-record|premier-bilan|fondateur|recruteur|mentor|champion|aube|nuit|nouvel_an|noel|tempete|foudre_serie|phenix|palindrome|vendredi13|centurion)$/)",
             "at": { ".validate": "newData.isNumber() && newData.val() > 0" },
             "$autre": { ".validate": false }
           }
@@ -544,7 +544,52 @@
             "texte":   { ".validate": "newData.isString() && newData.val().length <= 1000" },
             "lien":    { ".validate": "newData.isString() && newData.val().length <= 500" },
             "epingle": { ".validate": "newData.isBoolean()" },
+            // LES DEFIS. Un defi est un message de type 'defi' ; le coach seul
+            // l ecrit (.write ci-dessus). Les messages 'systeme' (paliers,
+            // podium) ne viennent QUE des Cloud Functions, qui ne passent pas
+            // par ces regles : le coach ne peut donc pas en fabriquer.
+            "type":       { ".validate": "newData.isString() && newData.val() === 'defi'" },
+            "mesure":     { ".validate": "newData.isString() && newData.val().matches(/^(seances|tonnage|serie|progressionPct)$/)" },
+            "objectif":   { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 10000000" },
+            "collectif":  { ".validate": "newData.isBoolean()" },
+            "debut":      { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "fin":        { ".validate": "newData.isNumber() && newData.val() > newData.parent().child('debut').val()" },
+            "recompense": { ".validate": "newData.isString() && newData.val().length <= 120" },
             "$autre":  { ".validate": false }
+          },
+          ".indexOn": ["type"]
+        },
+
+        // CE QUE LE COACH N ECRIT PAS : l inscription (l athlete), la
+        // progression, le resume public et l etat (les Cloud Functions seules,
+        // qui ne passent pas par ces regles).
+        //
+        // ⚠ LES PARTICIPANTS SONT RANGES PAR CLE D ATHLETE, et une cle est un
+        // e-mail. Aucun athlete ne lit donc /participants : seulement SA
+        // feuille. Ce que le groupe voit — l equipe, le classement, les
+        // avatars — vient de /public, ecrit par le serveur SANS aucune cle, et
+        // n y nomme que ceux qui ont choisi le classement (opt-in).
+        "defis": {
+          ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
+          "$msgId": {
+            "public": {
+              ".read": "auth != null && root.child('users').child(auth.token.email.replace('.', ',')).child('coachEmailKey').val() === $coachKey"
+            },
+            "participants": {
+              "$athleteKey": {
+                ".read": "auth != null && auth.token.email.replace('.', ',') === $athleteKey",
+                // S inscrire (ou se desinscrire) : soi-meme, rattache a CE
+                // coach, a un defi qui existe et n est pas termine.
+                "inscription": {
+                  ".write": "auth != null && auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey && root.child('canaux').child($coachKey).child('messages').child($msgId).child('type').val() === 'defi' && now <= root.child('canaux').child($coachKey).child('messages').child($msgId).child('fin').val()",
+                  ".validate": "newData.hasChildren(['le'])",
+                  "le":         { ".validate": "newData.isNumber() && newData.val() > 0" },
+                  "classement": { ".validate": "newData.isBoolean()" },
+                  "pseudo":     { ".validate": "newData.isString() && newData.val().length <= 24" },
+                  "$autre":     { ".validate": false }
+                }
+              }
+            }
           }
         },
 
@@ -1022,6 +1067,296 @@
     //   une console peut se declarer « ultime » et lire les fiches. C'est deja
     //   vrai de tout le reste sans fonctions, et la seule barriere qui ne se
     //   trafique pas reste droits/, ecrit a la main depuis la console Firebase.
+    // ── WEB PUSH : LES ABONNEMENTS ──────────────────────────────────────
+    // Un abonnement par appareil : /push/<cleEmail>/<id>. Le TITULAIRE seul le
+    // lit et l ecrit (s abonner, se desabonner) ; les fonctions (Admin SDK)
+    // le lisent pour envoyer et le suppriment quand le service de push
+    // repond 404/410. PAS sous /users : le dossier y est reecrit en entier a
+    // chaque synchronisation, un noeud pose a cote serait efface.
+    "push": {
+      "$emailKey": {
+        ".read":  "auth != null && auth.token.email.replace('.', ',') === $emailKey",
+        ".write": "auth != null && auth.token.email.replace('.', ',') === $emailKey",
+        "$id": {
+          ".validate": "$id.matches(/^[a-z0-9]{6,24}$/) && newData.hasChildren(['endpoint', 'keys'])",
+          "endpoint":   { ".validate": "newData.isString() && newData.val().matches(/^https:\\/\\//) && newData.val().length <= 1000" },
+          "keys": {
+            "p256dh": { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "auth":   { ".validate": "newData.isString() && newData.val().length <= 100" },
+            "$autre": { ".validate": false }
+          },
+          "cree":       { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "plateforme": { ".validate": "newData.isString() && newData.val().length <= 20" },
+          "vapid":      { ".validate": "newData.isString() && newData.val().length <= 12" },
+          "$autre":     { ".validate": false }
+        }
+      }
+    },
+    // Le journal du plafond (1 push par jour) et les messages mis de cote
+    // pendant les heures calmes : SERVEUR SEULEMENT.
+    // ── LES PAGES PUBLIQUES : /@<pseudo> et /coach/<slug> ───────────────
+    // Deux reservations et deux vitrines. La reservation (pseudos, slugs)
+    // porte la cle du titulaire — un e-mail — et n est donc LISIBLE PAR
+    // PERSONNE : on la prend en ecrivant, et un refus veut dire « deja pris ».
+    // Les vitrines, elles, sont lues SANS CONNEXION (ce sont des pages web),
+    // et c est pour cela qu elles sont a part : une liste blanche de champs
+    // publics, bornes, et rien d autre. Jamais de poids, de photo corporelle
+    // ni de donnee de sante — aucun champ n existe pour les recevoir.
+    // Ecrire une vitrine : le titulaire de la reservation existante (y compris
+    // pour l effacer), ou celui qui la prend DANS LA MEME ecriture (newData).
+    "pseudos": {
+      "$p": {
+        ".write": "auth != null && ((!data.exists() && newData.val() === auth.token.email.replace('.', ',')) || (data.val() === auth.token.email.replace('.', ',') && (!newData.exists() || newData.val() === auth.token.email.replace('.', ','))))",
+        ".validate": "$p.matches(/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/) && newData.isString()"
+      }
+    },
+    "profils_publics": {
+      "$p": {
+        ".read": true,
+        ".write": "auth != null && (root.child('pseudos').child($p).val() === auth.token.email.replace('.', ',') || (!root.child('pseudos').child($p).exists() && newData.parent().parent().child('pseudos').child($p).val() === auth.token.email.replace('.', ',')))",
+        "prenom":  { ".validate": "newData.isString() && newData.val().length <= 24" },
+        "rang": {
+          "n":   { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10" },
+          "nom": { ".validate": "newData.isString() && newData.val().length <= 20" },
+          "$autre": { ".validate": false }
+        },
+        "serie":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 1000" },
+        "seances": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000" },
+        "badges": {
+          "$i": {
+            "id":  { ".validate": "newData.isString() && newData.val().length <= 40" },
+            "nom": { ".validate": "newData.isString() && newData.val().length <= 40" },
+            "$autre": { ".validate": false }
+          }
+        },
+        "records": {
+          "$i": {
+            "exo":  { ".validate": "newData.isString() && newData.val().length <= 60" },
+            "date": { ".validate": "newData.isNumber()" },
+            "$autre": { ".validate": false }
+          }
+        },
+        "ref":     { ".validate": "newData.isString() && newData.val().matches(/^[A-Z]{4,6}[A-Z2-9]{3}$/)" },
+        "maj":     { ".validate": "newData.isNumber()" },
+        "$autre":  { ".validate": false }
+      }
+    },
+    "slugs": {
+      "$s": {
+        ".write": "auth != null && ((!data.exists() && newData.val() === auth.token.email.replace('.', ',')) || (data.val() === auth.token.email.replace('.', ',') && (!newData.exists() || newData.val() === auth.token.email.replace('.', ','))))",
+        ".validate": "$s.matches(/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/) && newData.isString()"
+      }
+    },
+    "vitrines": {
+      "$s": {
+        ".read": true,
+        ".write": "auth != null && (root.child('slugs').child($s).val() === auth.token.email.replace('.', ',') || (!root.child('slugs').child($s).exists() && newData.parent().parent().child('slugs').child($s).val() === auth.token.email.replace('.', ',')))",
+        "nom":         { ".validate": "newData.isString() && newData.val().length <= 120" },
+        "equipe":      { ".validate": "newData.isString() && newData.val().length <= 120" },
+        "phrase":      { ".validate": "newData.isString() && newData.val().length <= 300" },
+        "bio":         { ".validate": "newData.isString() && newData.val().length <= 2000" },
+        "vision":      { ".validate": "newData.isString() && newData.val().length <= 2000" },
+        "photo":       { ".validate": "newData.isString() && newData.val().length <= 500 && newData.val().beginsWith('https://')" },
+        "specialites": { "$i": { ".validate": "newData.isString() && newData.val().length <= 40" } },
+        "programmes": {
+          "$i": {
+            "name":      { ".validate": "newData.isString() && newData.val().length <= 80" },
+            "pitch":     { ".validate": "newData.isString() && newData.val().length <= 300" },
+            "prix":      { ".validate": "newData.isString() && newData.val().length <= 20" },
+            "lienAchat": { ".validate": "newData.isString() && newData.val().length <= 500 && newData.val().beginsWith('https://')" },
+            "visuel":    { ".validate": "newData.isString() && newData.val().length <= 500 && newData.val().beginsWith('https://')" },
+            "$autre":    { ".validate": false }
+          }
+        },
+        "maj":         { ".validate": "newData.isNumber()" },
+        "$autre":      { ".validate": false }
+      }
+    },
+
+    // ── LE PARRAINAGE ────────────────────────────────────────────────────
+    // Ce que le client ecrit : son code (une fois, avec son pendant public et
+    // l entree des codes, dans UNE meme ecriture qui se verifie elle-meme),
+    // l appareil qui le porte, et UNE demande de rattachement. Tout le reste —
+    // filleuls, statuts, mois gagnes, liens, evenements — n est ecrit que par
+    // les Cloud Functions (Admin SDK, hors de ces regles).
+    //
+    // Le code mene a une cle, et une cle est un e-mail : /codes n est donc
+    // lisible par PERSONNE. L inscription lit /codesPublics, qui ne porte que
+    // le prenom affiche. Chez le parrain, un filleul est un identifiant hache,
+    // jamais son adresse.
+    "parrainage": {
+      "codes": {
+        "$code": {
+          ".write": "auth != null && !data.exists() && newData.val() === auth.token.email.replace('.', ',') && newData.parent().parent().child('comptes').child(auth.token.email.replace('.', ',')).child('code').val() === $code",
+          ".validate": "$code.matches(/^[A-Z]{4,6}[A-Z2-9]{3}$/) && newData.isString()"
+        }
+      },
+      "codesPublics": {
+        "$code": {
+          ".read": "auth != null",
+          ".write": "auth != null && !data.exists() && newData.parent().parent().child('codes').child($code).val() === auth.token.email.replace('.', ',')",
+          "prenom": { ".validate": "newData.isString() && newData.val().length <= 24" },
+          "$autre": { ".validate": false }
+        }
+      },
+      "appareils": {
+        "$id": {
+          ".write": "auth != null && !data.exists() && newData.val() === auth.token.email.replace('.', ',')",
+          ".validate": "$id.matches(/^[a-z0-9]{12,32}$/)"
+        }
+      },
+      "comptes": {
+        "$k": {
+          ".read": "auth != null && auth.token.email.replace('.', ',') === $k",
+          "code": {
+            ".write": "auth != null && auth.token.email.replace('.', ',') === $k && !data.exists() && newData.parent().parent().parent().child('codes').child(newData.val()).val() === $k",
+            ".validate": "newData.isString() && newData.val().matches(/^[A-Z]{4,6}[A-Z2-9]{3}$/)"
+          }
+        }
+      },
+      // UNE demande par compte, a vie (un seul parrain). Refusee d emblee si
+      // le code n existe pas, s il est le sien, ou si l appareil est celui du
+      // parrain ; le reste (alias d e-mail, compte ancien, deja client) est
+      // juge par parrainageDemande.
+      "demandes": {
+        "$k": {
+          ".read": "auth != null && auth.token.email.replace('.', ',') === $k",
+          ".write": "auth != null && auth.token.email.replace('.', ',') === $k && !data.exists() && root.child('parrainage').child('codes').child(newData.child('code').val()).exists() && root.child('parrainage').child('codes').child(newData.child('code').val()).val() !== $k && root.child('parrainage').child('appareils').child(newData.child('appareil').val()).val() !== root.child('parrainage').child('codes').child(newData.child('code').val()).val()",
+          ".validate": "newData.hasChildren(['code', 'le', 'appareil'])",
+          "code":     { ".validate": "newData.isString() && newData.val().matches(/^[A-Z]{4,6}[A-Z2-9]{3}$/)" },
+          "le":       { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+          "appareil": { ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9]{12,32}$/)" },
+          "$autre":   { ".validate": false }
+        }
+      },
+      "evenements": {
+        "$k": { ".read": "auth != null && auth.token.email.replace('.', ',') === $k" }
+      }
+    },
+
+    // Les defis boucles (et le CHAMPION) : ecrits par la cloture du defi
+    // (Cloud Functions), lus par l athlete pour dater ses badges.
+    "defis_resultats": {
+      "$emailKey": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') === $emailKey",
+        ".write": false
+      }
+    },
+    "push_log":     { ".read": false, ".write": false },
+    "push_attente": { ".read": false, ".write": false },
+
+    // ── LA RARETE DES BADGES ────────────────────────────────────────────
+    // Ecrite chaque nuit par la fonction planifiee statsBadges (Admin SDK, qui
+    // ne passe pas par les regles) : { maj, total, pct: { idBadge: 4.2 } }.
+    // LECTURE PUBLIQUE : ce ne sont que des pourcentages, aucun dossier n'y
+    // figure, et l'ecran de celebration doit pouvoir les lire meme avant la
+    // fin de la connexion. ECRITURE : personne, cote client.
+    "stats": {
+      ".read": true,
+      ".write": false
+    },
+
+    // ── L ATTRIBUTION : d ou viennent les inscrits ───────────────────────
+    // Des ENTIERS par jour, par src (type de visuel ou de lien) et par code
+    // ambassadeur (public), et le nombre d utilisateurs actifs par semaine.
+    // Meme principe que /metrics : ecriture anonyme, UN de plus a la fois,
+    // noms fermes, aucune cle ne designe une personne (le code d un parrain,
+    // lui, n est jamais enregistre). Lecture : le createur (ecran Viralite).
+    "attribution": {
+      ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      "jours": {
+        "$jour": {
+          ".validate": "$jour.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+          "src": {
+            "$s": {
+              ".validate": "$s.matches(/^[a-z0-9_-]{1,20}$/)",
+              "$m": {
+                ".write": true,
+                ".validate": "$m.matches(/^(partage|telechargement|copie|clic|inscription|payant)$/) && newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && ((!data.exists() && newData.val() === 1) || newData.val() === data.val() + 1)"
+              }
+            }
+          },
+          "amb": {
+            "$c": {
+              ".validate": "$c.matches(/^[A-Z0-9]{3,16}$/)",
+              "$m": {
+                ".write": true,
+                ".validate": "$m.matches(/^(clic|inscription|payant)$/) && newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && ((!data.exists() && newData.val() === 1) || newData.val() === data.val() + 1)"
+              }
+            }
+          },
+          "$autre": { ".validate": false }
+        }
+      },
+      "semaines": {
+        "$lundi": {
+          ".validate": "$lundi.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+          "actifs": { ".write": true, ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && ((!data.exists() && newData.val() === 1) || newData.val() === data.val() + 1)" },
+          "$autre": { ".validate": false }
+        }
+      }
+    },
+
+    // ── LES AMBASSADEURS ─────────────────────────────────────────────────
+    // La fiche, les statistiques et les commissions : L ADMINISTRATEUR SEUL
+    // (lecture et ecriture), et les Cloud Functions (hors de ces regles), qui
+    // comptent clics, inscriptions, paiements et commissions. L admin n y
+    // touche, en pratique, que pour creer une fiche et marquer « payee ».
+    "ambassadeurs": {
+      ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      "$code": {
+        ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+        ".validate": "$code.matches(/^[A-Z0-9]{3,16}$/)",
+        "nom":           { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 80" },
+        "instagram":     { ".validate": "newData.isString() && newData.val().length <= 60" },
+        "avantage":      { ".validate": "newData.isString() && newData.val() === 'essai+1mois'" },
+        "commissionPct": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+        "palierPct":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+        "palierSeuil":   { ".validate": "newData.isNumber() && newData.val() >= 1" },
+        "dureeMois":     { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 120" },
+        "actif":         { ".validate": "newData.isBoolean()" },
+        "secret":        { ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9]{24}$/)" },
+        "creeLe":        { ".validate": "newData.isNumber()" },
+        "stats": {},
+        "filleuls": {},
+        "commissions": {},
+        "$autre":        { ".validate": false }
+      }
+    },
+    // Lu a l inscription (le code existe-t-il, est-il actif ?) : ni taux, ni
+    // chiffres, ni secret.
+    "ambassadeurs_publics": {
+      "$code": {
+        ".read": true,
+        ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+        "nom":      { ".validate": "newData.isString() && newData.val().length <= 80" },
+        "avantage": { ".validate": "newData.isString() && newData.val() === 'essai+1mois'" },
+        "actif":    { ".validate": "newData.isBoolean()" },
+        "$autre":   { ".validate": false }
+      }
+    },
+    // LA PAGE DE L AMBASSADEUR : lisible par qui connait le secret (24
+    // caracteres), jamais listable — aucun .read au-dessus de $secret.
+    "ambassadeurs_vue": {
+      "$secret": {
+        ".read": true,
+        ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'"
+      }
+    },
+    // UNE demande par compte, a vie, vers un code actif ; jugee par
+    // ambassadeurDemande. Liens, paiements et ventes : les fonctions seules.
+    "ambassadeurs_demandes": {
+      "$k": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') === $k",
+        ".write": "auth != null && auth.token.email.replace('.', ',') === $k && !data.exists() && root.child('ambassadeurs_publics').child(newData.child('code').val()).child('actif').val() === true",
+        ".validate": "newData.hasChildren(['code', 'le', 'appareil'])",
+        "code":     { ".validate": "newData.isString() && newData.val().matches(/^[A-Z0-9]{3,16}$/)" },
+        "le":       { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+        "appareil": { ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9]{12,32}$/)" },
+        "$autre":   { ".validate": false }
+      }
+    },
+
     "exercices": {
       ".read": "auth != null && (\n  root.child('users').child(auth.token.email.replace('.', ',')).child('role').val() === 'coach' ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('palier').val() === 'ultime' ||\n  (root.child('users').child(auth.token.email.replace('.', ',')).child('status').val() === 'AUTONOMIE_PREMIUM' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('paymentStatus').val() === 'active' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('abonnement').child('formule').val() === 'ultime')\n)",
       ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'"
