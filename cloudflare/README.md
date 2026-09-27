@@ -62,19 +62,44 @@ les pages publiques (`index.html`, `i/`, `p/`, `c/`), puis livrée : c'est ce qu
 
 - **Pas de déclencheurs de base** (Firebase ne sait pas appeler un Worker) : l'app **dépose un
   événement** dans `/evenements` (réponse du coach, défi publié ou mis à jour, demande de
-  parrainage ou d'ambassadeur) et appelle `/reveil`. Le Worker le relève tout de suite, ou au
+  parrainage ou d'ambassadeur, abonnement PayPal souscrit) et appelle `/reveil`. Le Worker le relève tout de suite, ou au
   plus tard dans la minute, **relit la base** pour vérifier ce qu'il annonce, agit, puis le supprime.
 - **Le Worker ne relit jamais les séances d'un athlète** (10 ms de calcul) : c'est l'app de
   l'athlète qui écrit sa progression dans chaque défi où il est inscrit.
 - **Le Worker n'écrit jamais dans `droits/`** : dans l'app, un nœud `droits/` non vide prime sur le
   dossier, et y écrire aurait coupé l'essai d'un filleul ou rétrogradé un parrain abonné.
 - État de travail (curseurs des lots) : `/worker/jobs/<nom>`, fermé à tous les clients.
+- **PayPal** (`POST /paypal`) : chaque événement est vérifié chez PayPal (signature), traité une
+  seule fois (`paypal_evenements`). Paiement : premier paiement (parrain, ambassadeur, statistique
+  « payant »), et réouverture après un impayé. Résiliation : l'accès reste ouvert jusqu'à la fin
+  payée (`accessExpiry`, jamais `paymentStatus` coupé net), plus les mois offerts en réserve. Un
+  coach garde son palier jusque-là ; le travail `fins_coachs` (6 h) le referme ensuite.
+- **Le mois offert au parrain** est crédité dans son dossier : fin de résiliation reculée d'un mois,
+  mois en réserve s'il paie déjà (ou est suivi, ou a un Ultime acheté), sinon un mois d'Essentielle.
+- **Les appels de l'app** (`POST /fn/<nom>`, jeton Firebase vérifié) : `cloudinaryDestroy`, qui
+  supprime une vidéo de correction (la sienne, ou celle d'un de ses athlètes pour le coach).
+- **Fin d'accès** : chaque jour à 11 h, « Ton accès se termine dans N jours » (3 jours ou moins),
+  une fois par échéance.
+
+## Brancher les paiements (une seule fois)
+
+1. PayPal Developer (https://developer.paypal.com/dashboard/applications/live) > l'application
+   RepCore > **Webhooks > Add Webhook** :
+   - URL : `https://repcore-serveur.repcore.workers.dev/paypal`
+   - Événements : `BILLING.SUBSCRIPTION.ACTIVATED`, `.CANCELLED`, `.EXPIRED`, `.SUSPENDED`,
+     `.PAYMENT.FAILED`, `PAYMENT.SALE.COMPLETED`, `PAYMENT.SALE.REFUNDED`,
+     `PAYMENT.CAPTURE.COMPLETED`, `PAYMENT.CAPTURE.REFUNDED`.
+   - Noter le **Webhook ID** affiché, et le **Secret** de l'application (même page).
+2. Cloudinary (https://console.cloudinary.com/settings/api-keys) : **API Key** et **API Secret**.
+3. `powershell -ExecutionPolicy Bypass -File C:\RepCore-web\cloudflare\secrets-paiements.ps1`
+   pose les quatre secrets. `/sante` doit alors dire `"paypal":true,"cloudinary":true`.
+
+Sans ces secrets, rien ne casse : `/paypal` refuse (signature invérifiable), et les suppressions
+de vidéos attendent dans la file de l'app jusqu'à ce que le serveur sache les faire.
 
 ## Pas encore branché
 
-- **Le mois offert au parrain** au premier paiement de son filleul : compté (`moisGagnes`), annoncé
-  (événement, notification), mais pas encore crédité sur l'accès. Il se branchera avec le webhook
-  PayPal, quand les paiements seront actifs.
+- **Le mois de mentorat** de l'Ultime (il vivait dans `droits/`, que le Worker n'écrit pas).
 - **L'aperçu personnalisé** des liens `/@pseudo` et `/coach/slug` (emblème du rang, prénom) : ils
   gardent l'aperçu par défaut.
 

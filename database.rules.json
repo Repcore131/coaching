@@ -84,6 +84,15 @@
           //   Sans cette ligne, le premier abonne aurait cesse de se synchroniser
           //   a la seconde ou il paie — c'est le defaut qu'a evite `formule`.
           "engagementJusqu": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          // ⚠ ECRITS PAR LE SERVEUR LEGER (27/09/2026, webhook PayPal et mois
+          //   offert du parrainage), et DECLARES ICI pour la meme raison que
+          //   `formule` : l app renvoie le dossier entier, et un champ inconnu
+          //   ferait rejeter tout le PUT, en silence.
+          "statutPaypal": { ".validate": "newData.isString() && newData.val().length < 40" },
+          "finAccesPaypal": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "resilieLe": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "dernierPaiementLe": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "source": { ".validate": "newData.isString() && newData.val().length < 40" },
           "resiliationDemandee": {
             "ts": { ".validate": "newData.isNumber()" },
             "motif": { ".validate": "newData.isString() && newData.val().length < 300" },
@@ -1258,7 +1267,7 @@
       "$id": {
         ".write": "auth != null && !data.exists() && newData.exists() && newData.child('par').val() === auth.token.email.replace('.', ',')",
         ".validate": "$id.matches(/^e[a-z0-9]{8,24}$/) && newData.hasChildren(['type', 'par', 'at'])",
-        "type":  { ".validate": "newData.isString() && newData.val().matches(/^(reponse_bilan|reponse_rite|defi_publie|defi_maj|parrainage_demande|ambassadeur_demande)$/)" },
+        "type":  { ".validate": "newData.isString() && newData.val().matches(/^(reponse_bilan|reponse_rite|defi_publie|defi_maj|parrainage_demande|ambassadeur_demande|abonnement)$/)" },
         "par":   { ".validate": "newData.isString() && newData.val().length <= 200" },
         "at":    { ".validate": "newData.isNumber() && newData.val() > 0" },
         "dest":  { ".validate": "newData.isString() && newData.val().length <= 200" },
@@ -1266,6 +1275,7 @@
         "msg":   { ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,60}$/)" },
         "id":    { ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,60}$/)" },
         "coach": { ".validate": "newData.isString() && newData.val().length <= 200" },
+        "abo":   { ".validate": "newData.isString() && newData.val().matches(/^I-[A-Z0-9]{6,30}$/)" },
         "$autre": { ".validate": false }
       }
     },
@@ -1273,6 +1283,12 @@
     "worker": { ".read": false, ".write": false },
     "push_log":     { ".read": false, ".write": false },
     "push_attente": { ".read": false, ".write": false },
+    // PayPal cote serveur leger : abonnement -> compte, evenements deja
+    // traites, premiers paiements, fins de palier coach. Lui seul.
+    "paypal_abonnes":    { ".read": false, ".write": false },
+    "paypal_evenements": { ".read": false, ".write": false },
+    "paypal_premiers":   { ".read": false, ".write": false },
+    "paypal_fins":       { ".read": false, ".write": false },
 
     // ── LA RARETE DES BADGES ────────────────────────────────────────────
     // Ecrite chaque nuit par la fonction planifiee statsBadges (Admin SDK, qui

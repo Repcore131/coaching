@@ -15,6 +15,12 @@
 import { creerBase } from './base.js';
 import { creerMetier } from './metier.js';
 import { minute } from './planif.js';
+import { repondreAppel } from './appels.js';
+import { cloudinaryDestroy } from './medias.js';
+import { creerPaypal, recevoirWebhook } from './paypal.js';
+
+// Les fonctions appelées par l'app (protocole onCall, jeton Firebase vérifié).
+const APPELS = { cloudinaryDestroy };
 
 // Toutes les requêtes sortantes passent ici : c'est le compteur du budget.
 function outils(env) {
@@ -26,11 +32,12 @@ function outils(env) {
   const M = creerMetier({ db, vapid: { publique: net(env.VAPID_PUBLIC_KEY), privee: net(env.VAPID_PRIVATE_KEY) }, fetchImpl: fetchCompte });
   // Les clés de tous les dossiers, pour la rareté des badges (lecture en shallow).
   M.coachsEtUsers = () => db.ref('users').shallow();
-  return { db, M, compteur: () => n };
+  M.paypal = creerPaypal({ db, M, env, fetchImpl: fetchCompte });
+  return { db, M, env, compteur: () => n };
 }
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type', 'Cache-Control': 'no-store' };
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Cache-Control': 'no-store' };
 const reponse = (corps, statut, type) => new Response(corps, { status: statut || 200,
   headers: Object.assign({ 'Content-Type': type || 'application/json; charset=utf-8' }, CORS) });
 
@@ -39,6 +46,16 @@ export default {
     const url = new URL(req.url);
     if (req.method === 'OPTIONS') return reponse('', 204);
     try {
+      // LES FONCTIONS DE L'APP : /fn/<nom>, comme les Cloud Functions.
+      if (url.pathname.startsWith('/fn/') && req.method === 'POST') {
+        const o = outils(env);
+        return await repondreAppel(req, APPELS, { db: o.db, env, projet: 'repcore-sync' });
+      }
+      // PAYPAL : chaque événement d'abonnement ou de paiement, signature vérifiée chez PayPal.
+      if (url.pathname === '/paypal' && req.method === 'POST') {
+        const o = outils(env);
+        return await recevoirWebhook(req, { db: o.db, M: o.M, env });
+      }
       // L'app vient de déposer un événement : on le traite tout de suite,
       // sans attendre le réveil de la minute. Aucune donnée n'est lue ici.
       if (url.pathname === '/reveil') {
@@ -56,7 +73,9 @@ export default {
       }
       if (url.pathname === '/sante') {
         return reponse(JSON.stringify({ ok: true, base: !!env.FIREBASE_DB_URL, secret: !!env.FIREBASE_DB_SECRET,
-          vapid: !!(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY) }));
+          vapid: !!(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY),
+          paypal: !!(env.PAYPAL_CLIENT_ID && env.PAYPAL_CLIENT_SECRET && env.PAYPAL_WEBHOOK_ID),
+          cloudinary: !!(env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET) }));
       }
       return reponse(JSON.stringify({ repcore: 'serveur léger' }), 404);
     } catch (e) {

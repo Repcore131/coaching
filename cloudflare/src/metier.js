@@ -31,7 +31,7 @@ import { envoyerA } from './push.js';
 
 export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
-export const PUSH_TYPES = ['serie', 'wrapped', 'bilan', 'badge', 'coach', 'filleul', 'defi'];
+export const PUSH_TYPES = ['serie', 'wrapped', 'bilan', 'badge', 'coach', 'filleul', 'defi', 'acces'];
 const BONUS_ESSAI_JOURS = 30;
 const PALIERS = ['aucun', 'essentielle', 'ultime', 'suivi'];
 
@@ -154,6 +154,26 @@ export function creerMetier(deps) {
       const fname = await _lire(uid, 'fname');
       await envoyerPush(uid, { type: 'bilan', url: './?bilan=1', tag: 'bilan-' + paris(t).jour,
         title: 'C’est l’heure de ton bilan', body: (fname ? fname + ', 10' : '10') + ' minutes quand tu as le temps ce week-end.' });
+    },
+    // FIN D'ACCÈS : chaque jour, 11 h — trois jours ou moins avant l'échéance,
+    // UNE fois par échéance. C'était le bandeau de l'accueil, qu'on ne voit
+    // qu'en ouvrant l'app : la notification le dit à qui ne l'ouvre plus.
+    async acces(uid, t) {
+      const [statut, ech, fin, fname, deja] = await Promise.all([_lire(uid, 'status'), _lire(uid, 'accessExpiry'),
+        _lire(uid, 'abonnement/finAccesPaypal'), _lire(uid, 'fname'), _val('worker/relances_acces/' + uid)]);
+      const e = Number(ech) || 0;
+      if (!(e > t) || e - t > 3 * 864e5 || Number(deja) === e) return;
+      const j = Math.max(1, Math.ceil((e - t) / 864e5));
+      const quand = j === 1 ? 'dans moins de 24 heures' : 'dans ' + j + ' jours';
+      const date = new Date(e).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', day: 'numeric', month: 'long' });
+      let m = null;
+      if (statut === 'COACHING_SUIVI')
+        m = { title: 'Ton accès se termine ' + quand, body: (fname ? fname + ', il' : 'Il') + ' prend fin le ' + date + '. Préviens ton coach s’il doit le prolonger.' };
+      else if (statut === 'AUTONOMIE_PREMIUM')
+        m = { title: 'Ton abonnement prend fin ' + quand, body: fin ? 'Tu as résilié : ton accès reste ouvert jusqu’au ' + date + '.' : 'Ton accès prend fin le ' + date + '.' };
+      if (!m) return;
+      const r = await envoyerPush(uid, Object.assign({ type: 'acces', url: './', tag: 'acces-' + e }, m), { attendre: false });
+      if (r.envoye) await db.ref('worker/relances_acces/' + uid).set(e);
     },
     // Badge proche : dimanche 17 h — ASSIDU à deux séances ou moins.
     async badge(uid) {
@@ -352,14 +372,40 @@ export function creerMetier(deps) {
     });
     if (!tx.committed || !res) return null;
     if (prenom) res.prenom = String(prenom).trim().slice(0, 24) || res.prenom;
-    // LE MOIS OFFERT N'EST PAS ÉCRIT DANS droits/ (voir bonusEssai) : il est
-    // compté ici (moisGagnes) et annoncé (événement, push). Son crédit sur
-    // l'accès se branchera avec les paiements PayPal.
+    // LE MOIS OFFERT, CRÉDITÉ DANS LE DOSSIER (jamais dans droits/, voir
+    // bonusEssai), et SANS JAMAIS RIEN RETIRER :
+    //   · abonné qui a résilié (fin posée, pas encore atteinte) : sa fin recule d'un mois ;
+    //   · abonné en cours, athlète suivi, ou accès Ultime par un programme :
+    //     le mois va en RÉSERVE — il s'ajoutera à la fin de son abonnement
+    //     (paypal.js, fermerALaFin). Lui ouvrir Essentielle ferait descendre
+    //     l'Ultime d'un programme, et un athlète suivi n'a rien à gagner ;
+    //   · personne sans accès : un mois d'Essentielle s'ouvre tout de suite.
+    await crediterMoisOffert(lien.parrain, t);
     await db.ref('parrainage/evenements/' + lien.parrain).push().set({
       type: res.mentor ? 'mentor' : 'paiement', at: t, prenom: res.prenom, mois: 1, source: String(source || '') });
     const txt = P.textePaiement(res);
     await envoyerPush(lien.parrain, { type: 'filleul', url: './?parrainage=1', tag: 'filleul-paie-' + lien.id, title: txt.title, body: txt.body });
     return res;
+  }
+
+  async function crediterMoisOffert(parrain, t) {
+    const [statut, paiementSt, ech, role, prog] = await Promise.all(['status', 'paymentStatus', 'accessExpiry', 'role', 'programmesAchetes'].map((c) => _lire(parrain, c)));
+    if (role === 'coach') return 'coach';
+    const e = Number(ech) || 0;
+    const ultimeProgramme = !!(prog && typeof prog === 'object' && Object.values(prog).some((x) => x && Number(x.ouvertJusqu) > t));
+    const b = 'users/' + parrain + '/';
+    if (statut === 'AUTONOMIE_PREMIUM' && paiementSt === 'active' && e > t) {
+      await db.ref().update({ [b + 'accessExpiry']: e + MONTH_MS, [b + 'abonnement/finAccesPaypal']: e + MONTH_MS, [b + 'updatedAt']: t });
+      return 'fin_reculee';
+    }
+    if ((statut === 'AUTONOMIE_PREMIUM' && paiementSt === 'active') || statut === 'COACHING_SUIVI' || ultimeProgramme) {
+      await db.ref('parrainage/comptes/' + parrain + '/moisEnReserve').transaction((n) => (Number(n) || 0) + 1);
+      return 'reserve';
+    }
+    await db.ref().update({ [b + 'status']: 'AUTONOMIE_PREMIUM', [b + 'paymentStatus']: 'active',
+      [b + 'accessExpiry']: Math.max(e, t) + MONTH_MS, [b + 'abonnement/formule']: 'essentielle',
+      [b + 'abonnement/source']: 'parrainage', [b + 'updatedAt']: t });
+    return 'mois_ouvert';
   }
 
   // ══ LES AMBASSADEURS ═══════════════════════════════════════════════════
@@ -406,6 +452,64 @@ export function creerMetier(deps) {
     await bonusEssai(uid, droits);
     await ambMajVue(code);
     return { ok: true };
+  }
+  async function ambassadeurPaiement(cle, p) {
+    const lien = await _val('ambassadeurs_liens/' + cle);
+    if (!lien || !lien.code || !lien.id) return null;
+    const montant = Number(p && p.montant);
+    if (!(montant > 0)) return null;
+    const code = lien.code;
+    const pid = A.idPaiement(Object.assign({}, p, { montant }));
+    const vente = p.venteId ? String(p.venteId).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60) : '';
+    const tx = await db.ref('ambassadeurs_paiements/' + pid).transaction((cur) => (cur ? undefined : { code, le: now() }));
+    if (!tx.committed) return null;
+    const cfg = (await ambConfig(code)) || {};
+    const fRef = 'ambassadeurs/' + code + '/filleuls/' + lien.id;
+    const filleul = (await _val(fRef)) || {};
+    let payants = Number(await _val('ambassadeurs/' + code + '/stats/payants')) || 0;
+    if (!filleul.premierPaiement) {
+      const r = await db.ref('ambassadeurs/' + code + '/stats/payants').transaction((n) => (Number(n) || 0) + 1);
+      payants = Number(r.snapshot.val()) || payants + 1;
+    }
+    const le = Number(p.le) || now();
+    await db.ref('ambassadeurs/' + code + '/stats/ca').transaction((n) => Math.round(((Number(n) || 0) + montant) * 100) / 100);
+    const c = A.commissionPour(cfg, filleul, payants, { montant, le });
+    const maj = {};
+    if (!filleul.premierPaiement) maj[fRef + '/premierPaiement'] = le;
+    if (c) {
+      maj['ambassadeurs/' + code + '/commissions/' + c.mois + '/' + pid] = { filleul: lien.id, montant: c.montant, pct: c.pct,
+        commission: c.commission, payeLe: c.payeLe, dueLe: c.dueLe };
+      maj['ambassadeurs_paiements/' + pid + '/mois'] = c.mois;
+      if (vente) maj['ambassadeurs_ventes/' + vente] = { code, mois: c.mois, pid };
+    }
+    if (Object.keys(maj).length) await db.ref().update(maj);
+    await ambMajVue(code);
+    return c;
+  }
+  async function ambassadeurRemboursement(ress) {
+    let id = String(ress.sale_id || '');
+    if (!id && Array.isArray(ress.links)) {
+      const up = ress.links.find((l) => l && l.rel === 'up');
+      if (up && up.href) id = String(up.href).split('/').pop();
+    }
+    id = id.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60);
+    if (!id) return null;
+    const v = await _val('ambassadeurs_ventes/' + id);
+    if (!v || !v.code || !v.mois || !v.pid) return null;
+    await db.ref('ambassadeurs/' + v.code + '/commissions/' + v.mois + '/' + v.pid + '/statut').set('rembourse');
+    await ambMajVue(v.code);
+    return v;
+  }
+  // LE PREMIER PAIEMENT pour l'écran « Viralité » : une seule fois.
+  async function attributionPaiement(cle) {
+    const t = now();
+    const tx = await db.ref('users/' + cle + '/origine/payeLe').transaction((cur) => (cur ? undefined : t));
+    if (!tx.committed) return null;
+    const origine = (await _val('users/' + cle + '/origine')) || {};
+    const lien = await _val('ambassadeurs_liens/' + cle);
+    const o = Object.assign({}, origine, lien && lien.code ? { amb: lien.code } : {});
+    for (const c of ATT.cheminsEvenement('payant', o, t)) await incr(c);
+    return origine;
   }
   async function ambassadeursQuotidien() {
     const tous = (await _val('ambassadeurs_publics')) || {};
@@ -469,5 +573,6 @@ export function creerMetier(deps) {
 
   return { envoyerPush, abonnes, planifies, apresHeuresCalmes, statsBadgesUn, statsBadgesFin,
     defisQuotidienCoach, coachsAvecCanal, recalculerDefi, parrainageDemande, parrainagePaiement,
-    ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits, ecrireDroits };
+    ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits,
+    crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement };
 }

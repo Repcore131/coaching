@@ -13,6 +13,8 @@ npx --yes wrangler@4 dev --port $PW --test-scheduled --var FIREBASE_DB_URL:http:
 PWR=$!
 i=0; while [ $i -lt 90 ] && ! grep -q "Ready on" "$D/wrangler.log" 2>/dev/null; do sleep 1; i=$((i+1)); done
 echo "santé : $(curl -s http://127.0.0.1:$PW/sante)"
+echo "paypal sans signature : $(curl -s -o /dev/null -w '%{http_code}' -X POST -d '{"id":"WH-1"}' http://127.0.0.1:$PW/paypal) (401 attendu)"
+echo "appel sans jeton : $(curl -s -o /dev/null -w '%{http_code}' -X POST -d '{"data":{}}' http://127.0.0.1:$PW/fn/cloudinaryDestroy) (401 attendu)"
 curl -s "http://127.0.0.1:$PW/__scheduled?cron=*+*+*+*+*" > /dev/null
 sleep 5
 node test/scenario-local.mjs verif "$D"

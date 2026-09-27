@@ -21,6 +21,10 @@ export function travaux(M) {
   return [
     { nom: 'stats_badges', quand: (p) => apres(p, 3, 17), cles: () => M.coachsEtUsers(), un: (c, t, acc) => M.statsBadgesUn(c, acc), fin: M.statsBadgesFin, cout: 3 },
     { nom: 'ambassadeurs', quand: (p) => apres(p, 6, 20), une: M.ambassadeursQuotidien },
+    // Les coachs qui ont résilié : leur palier se referme à la fin payée.
+    { nom: 'fins_coachs', quand: (p) => apres(p, 6, 0), une: () => (M.paypal ? M.paypal.finsCoachs() : null) },
+    // « Ton accès se termine dans N jours », une fois par échéance.
+    { nom: 'acces', quand: (p) => apres(p, 11, 0) && p.heure < 21, cles: () => M.abonnes(), un: M.planifies.acces, cout: 12 },
     // Pas en heures calmes : ce serait relire les messages mis de côté pour la
     // nuit et les jeter au lieu de les envoyer le lendemain à 8 h 05.
     { nom: 'attente', quand: (p) => apres(p, 8, 5) && p.heure < 21, une: M.apresHeuresCalmes },
@@ -56,6 +60,8 @@ export async function minute({ db, M, compteur, maintenant }) {
       } else if (e && e.type === 'ambassadeur_demande') {
         const d = (await db.ref('ambassadeurs_demandes/' + e.par).get()).val();
         if (d && !d.etat) await M.ambassadeurDemande(e.par, d);
+      } else if (e && e.type === 'abonnement') {
+        if (M.paypal) await M.paypal.indexer(e.par, e.abo);
       } else if (e) {
         await M.evenement(e);
       }

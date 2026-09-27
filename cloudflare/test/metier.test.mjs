@@ -181,4 +181,30 @@ await test('l’arrivée par un lien compte un clic, et celui de l’ambassadeur
   assert.ok(jour, 'compteur du jour');
 });
 
+await test('fin d’accès : 11 h, trois jours avant, une seule fois par échéance', async () => {
+  const t0 = PARIS('2026-09-28T11:02:00');
+  const w = monde({ users: { [A1]: { status: 'COACHING_SUIVI', accessExpiry: t0 + 2.5 * 864e5, fname: 'Léa' },
+    'loin@t,fr': { status: 'COACHING_SUIVI', accessExpiry: t0 + 9 * 864e5 } },
+    push: { [A1]: { a1b2c3: tel.abonnement }, 'loin@t,fr': { x: appareil('https://push.test/loin').abonnement } } }, t0);
+  let tours = 0;
+  while (tours++ < 10) { const b = await w.minute(); if (b.travaux.acces === 'fini') break; }
+  const miens = w.F.recus.filter((r) => r.endpoint === 'https://push.test/lea1');
+  assert.equal(miens.length, 1);
+  assert.match(tel.lire(miens[0].init.body).title, /Ton accès se termine dans 3 jours/);
+  assert.equal(w.F.recus.length, 1, 'l’échéance à 9 jours ne dit rien');
+  // Le lendemain, même échéance : rien.
+  w.avance(864e5);
+  for (let i = 0; i < 10; i++) await w.minute();
+  assert.equal(w.F.recus.filter((r) => r.endpoint === 'https://push.test/lea1').length, 1);
+});
+
+await test('l’événement « abonnement » va à PayPal (indexer), pas au métier', async () => {
+  const w = monde({ evenements: { e1: { type: 'abonnement', par: A1, abo: 'I-ABC123', at: 1 } } }, PARIS('2026-09-28T12:00:00'));
+  const vus = [];
+  w.M.paypal = { indexer: async (c, a) => { vus.push([c, a]); }, finsCoachs: async () => {} };
+  await w.minute();
+  assert.deepEqual(vus, [[A1, 'I-ABC123']]);
+  assert.equal(w.F.lire('evenements'), null);
+});
+
 console.log(ok + ' tests passés — budget par réveil : ' + BUDGET + ' requêtes');
