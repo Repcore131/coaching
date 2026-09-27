@@ -20,8 +20,10 @@ import { minute } from './planif.js';
 function outils(env) {
   let n = 0;
   const fetchCompte = (url, init) => { n++; return fetch(url, init); };
-  const db = creerBase({ url: env.FIREBASE_DB_URL, auth: env.FIREBASE_DB_SECRET, fetchImpl: fetchCompte });
-  const M = creerMetier({ db, vapid: { publique: env.VAPID_PUBLIC_KEY, privee: env.VAPID_PRIVATE_KEY }, fetchImpl: fetchCompte });
+  // Un secret collé à la main peut traîner un retour à la ligne : on le retire.
+  const net = (v) => String(v || '').trim();
+  const db = creerBase({ url: net(env.FIREBASE_DB_URL), auth: net(env.FIREBASE_DB_SECRET), fetchImpl: fetchCompte });
+  const M = creerMetier({ db, vapid: { publique: net(env.VAPID_PUBLIC_KEY), privee: net(env.VAPID_PRIVATE_KEY) }, fetchImpl: fetchCompte });
   // Les clés de tous les dossiers, pour la rareté des badges (lecture en shallow).
   M.coachsEtUsers = () => db.ref('users').shallow();
   return { db, M, compteur: () => n };
