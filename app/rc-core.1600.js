@@ -1881,7 +1881,7 @@ function alertePalier(coach,users){
   if(suivant&&quota!==Infinity&&n===quota-1){
     return {type:'falaise',palier:suivant.cle,
       titre:'Au prochain athlète, ta formule passe à '+suivant.titre
-        +' · '+suivant.prix+' €/mois.',
+        +', '+suivant.prix+' €/mois.',
       texte:'Tu peux ajouter cet athlète sans changer de formule maintenant. '
         +'Rien n\'est prélevé tant que tu ne l\'as pas décidé toi-même.'};
   }
@@ -2420,7 +2420,7 @@ function _ouvrirResiliation(){
 function _confirmerResiliation(){
   const m=(document.getElementById('resil-motif')||{}).value||'';
   const l=(document.getElementById('resil-libre')||{}).value||'';
-  const motif=[m,l].filter(Boolean).join(' · ');
+  const motif=[m,l].filter(Boolean).join(' : ');
   if(!demanderResiliation(motif)){ toast('Résiliation déjà enregistrée.','var(--sub)'); return false; }
   _renderAbonnement();
   toast('Résiliation enregistrée ✓','var(--green)');
@@ -6072,7 +6072,7 @@ const SANTE_MOTIFS=Object.freeze({
   pas:        'Ton nombre de pas quotidiens est une donnée de santé.',
   energie:    'Ton niveau d\'énergie est une donnée de santé.',
   age:        'Ta date de naissance sert à calculer tes repères : c\'est une donnée de santé.',
-  ressenti:   'Ton ressenti de séance, fatigue, sensations, est une donnée de santé.'
+  ressenti:   'Ton ressenti de séance (fatigue, sensations) est une donnée de santé.'
 });
 // ── LES DEUX AUTRES DEPLACEMENTS ────────────────────────────────────────
 //
@@ -14466,7 +14466,7 @@ function morphoAxes(user,opts){
     }
     a.tolerance=tol;
     a.texte=_morphoNb(a.valeur,a.unite)+' '+_morphoAttribut(r.source,r.date,tol)
-      +(a.repereTexte?' · '+a.repereTexte:'');
+      +(a.repereTexte?' : '+a.repereTexte:'');
     // LA PHOTO CONCLUT. Elle ne remplace rien : elle confirme ou elle
     // contredit. Et quand elle contredit franchement — l'un dit haut,
     // l'autre dit bas — on ne tranche pas, on suspend et on demande la
@@ -14517,7 +14517,7 @@ const MORPHO_PROFILS=Object.freeze([
    amenager:[{quoi:'Rien à retirer',reglage:'on déplace des séries : les mêmes séances, une répartition différente. C’est la correction la moins coûteuse du document.',schema:'isolation-genou'}],
    accent:'Ramener le rapport sous 1,5 sur huit à douze semaines, et le vérifier avec le compteur de volume qui existe déjà.',
    specificite:'Le même raisonnement se généralise à tous les couples : pectoraux/dos, deltoïde antérieur/postérieur, biceps/triceps, abdominaux/lombaires.',
-   piege:'Expliquer des ischios plats par « la génétique » alors que le carnet montre deux séries par semaine contre douze au quadriceps. L’ordre de lecture, acquis, fonctionnel, osseux, existe pour ça.'},
+   piege:'Expliquer des ischios plats par « la génétique » alors que le carnet montre deux séries par semaine contre douze au quadriceps. L’ordre de lecture (acquis, fonctionnel, osseux) existe pour ça.'},
 
   {cle:'P14',lib:'Asymétrie latérale soutenue',nature:'acquis',segment:'global',
    axes:['A9'],signature:[{axe:'A9',positions:['haut'],asymetrie:true}],
@@ -14547,7 +14547,7 @@ const MORPHO_PROFILS=Object.freeze([
    privilegier:'La recherche du stance, méthodiquement : écartement et rotation des pointes testés par paliers, à charge légère, en notant la profondeur confortable. Puis les machines qui contournent l’amplitude : presse avec pieds hauts, hack, leg curl, extension.',
    amenager:[{quoi:'Squat profond imposé',reglage:'profondeur choisie, celle où il n’y a pas de pincement',schema:'squat'},
      {quoi:'Squat pieds serrés',reglage:'ouvrir les pointes et élargir le stance',schema:'squat'},
-     {quoi:'Soulevé sumo',reglage:'prudence : il demande de la rotation externe que ce profil n’a pas forcément, à tester à charge légère avant de le programmer',schema:'charniere-hanche'}],
+     {quoi:'Soulevé sumo',reglage:'prudence : il demande de la rotation externe que ce profil n’a pas forcément (à tester à charge légère avant de le programmer)',schema:'charniere-hanche'}],
    accent:'Amplitude utile plutôt qu’amplitude maximale. Le travail en position longue se cherche sur des exercices où la hanche n’est pas la butée : leg curl allongé, fentes, presse.',
    specificite:'Distinguer butée osseuse et raideur demande une imagerie que personne n’ira faire. RepCore décrit le test et se tait sur la cause : « l’arrêt est net et s’accompagne d’une bascule du bassin » est un constat.',
    piege:'Prescrire des mois d’étirements de hanche contre une butée qui ne cédera pas. On n’allonge pas un os ; on irrite une articulation.'},
@@ -14574,14 +14574,14 @@ const MORPHO_PROFILS=Object.freeze([
      {quoi:'Good morning',reglage:'plus tard, quand l’amplitude est revenue',schema:'charniere-hanche'},
      {quoi:'Jambes tendues au sol',reglage:'sur banc, amplitude choisie',schema:'charniere-hanche'}],
    accent:'Amplitude d’abord, charge ensuite. Et une réévaluation datée : ce profil doit disparaître en quelques mois si le travail est fait.',
-   specificite:'À ne pas confondre avec un tronc long, qui produit la même image, un dos qui souffre au soulevé, pour une raison opposée. Le test de flexion avant les départage en dix secondes.',
+   specificite:'À ne pas confondre avec un tronc long, qui produit la même image (un dos qui souffre au soulevé) pour une raison opposée. Le test de flexion avant les départage en dix secondes.',
    piege:'L’envoyer en sumo « parce que son dos s’arrondit ». Le sumo demande plus de rotation de hanche et ne règle pas une raideur postérieure ; il la cache.'},
 
   {cle:'P1',lib:'Fémur long, tronc court : le squatteur penché',nature:'osseux',segment:'bas',
    axes:['A1','A2'],signature:[{axe:'A1',positions:['haut']},{axe:'A2',positions:['haut']}],
    signatureTexte:'Entrejambe au-delà de ~49 % de la taille, et rapport fémur/tibia élevé. Sur la photo de profil : assis, les genoux montent au-dessus des hanches. En vidéo : le buste plonge dès le premier tiers de la descente.',
    mecanique:'Pour garder la charge au-dessus du milieu du pied, un fémur long oblige le bassin à reculer davantage, donc le buste à s’incliner. L’inclinaison raccourcit le bras de levier du genou et allonge celui de la hanche : à charge égale, ce squat sollicite les extenseurs de hanche plus qu’un squat droit. Ce n’est pas une faute technique, c’est la solution que la géométrie impose.',
-   privilegier:'Tout ce qui découple genou et hanche, presse à cuisses, hack squat, squat bulgare, extension de jambes, parce qu’ils permettent de charger le quadriceps sans passer par l’inclinaison de buste. Et tout ce qui rentabilise le levier de hanche : soulevé de terre, charnière, fessiers.',
+   privilegier:'Tout ce qui découple genou et hanche (presse à cuisses, hack squat, squat bulgare, extension de jambes) parce qu’ils permettent de charger le quadriceps sans passer par l’inclinaison de buste. Et tout ce qui rentabilise le levier de hanche : soulevé de terre, charnière, fessiers.',
    amenager:[{quoi:'Squat barre haute profond',reglage:'barre basse ou squat guidé, stance élargi, pointes ouvertes, cale de 1,5 à 2,5 cm',schema:'squat'},
      {quoi:'Front squat',reglage:'souvent le plus pénalisant : la charge devant impose un buste droit qu’il n’a pas ; le remplacer par un hack ou une presse pieds bas',schema:'squat'},
      {quoi:'Fentes longues',reglage:'raccourcir le pas ou passer en bulgare',schema:'fente'}],
@@ -14596,7 +14596,7 @@ const MORPHO_PROFILS=Object.freeze([
    privilegier:'Squat sous toutes ses formes, y compris front squat et gobelet : c’est son terrain. Fentes, bulgares, travail de profondeur.',
    amenager:[{quoi:'Soulevé de terre conventionnel lourd',reglage:'sumo, ou départ surélevé, ou trap bar, la littérature va dans ce sens : un rapport tronc/taille plus élevé s’accompagne de meilleures performances en sumo',schema:'charniere-hanche'},
      {quoi:'Good morning lourd',reglage:'hip thrust ou charnière guidée',schema:'charniere-hanche'}],
-   accent:'Quadriceps au squat libre, sans complexe. Chaîne postérieure par des exercices à bras de levier court, hip thrust, leg curl, extension lombaire réglée, plutôt que par le soulevé lourd.',
+   accent:'Quadriceps au squat libre, sans complexe. Chaîne postérieure par des exercices à bras de levier court (hip thrust, leg curl, extension lombaire réglée) plutôt que par le soulevé lourd.',
    specificite:'Le rapport tronc/membres compte plus que la taille absolue. Un grand athlète à tronc long et jambes courtes est un profil conventionnel ; c’est la proportion qui décide, pas le mètre.',
    piege:'Le pousser au soulevé conventionnel lourd parce qu’il squatte bien et qu’on suppose qu’il « devrait » tout bien faire. C’est exactement le mouvement où son levier joue contre lui.'},
 
@@ -14625,9 +14625,9 @@ const MORPHO_PROFILS=Object.freeze([
   {cle:'P5',lib:'Bras courts, humérus court : le pousseur',nature:'osseux',segment:'haut',
    axes:['A3','A4'],signature:[{axe:'A3',positions:['bas']},{axe:'A4',positions:['bas']}],
    signatureTexte:'Bras sous ~42 % de la taille, humérus court pour l’avant-bras. Au développé, la barre touche vite et la course paraît courte. Chiffres de charge élevés par rapport au reste du corps.',
-   mecanique:'Amplitude courte, bras de levier court : la charge grimpe vite. L’inconvénient est symétrique : moins d’amplitude utile par répétition, donc moins de temps passé en position longue, la position qui compte le plus pour l’hypertrophie.',
+   mecanique:'Amplitude courte, bras de levier court : la charge grimpe vite. L’inconvénient est symétrique : moins d’amplitude utile par répétition, donc moins de temps passé en position longue (la position qui compte le plus pour l’hypertrophie).',
    privilegier:'Poussées lourdes : développé couché, incliné, militaire. Et les tractions, où un bras court est un levier favorable.',
-   amenager:[{quoi:'Rien n’est à retirer',reglage:'c’est un profil avantagé ; le réglage porte sur l’amplitude, planche sur la poitrine, écartés à grande amplitude, presse à pectoraux avec départ étiré, pour compenser la course courte',schema:'poussee-horizontale'},
+   amenager:[{quoi:'Rien n’est à retirer',reglage:'c’est un profil avantagé ; le réglage porte sur l’amplitude (planche sur la poitrine, écartés à grande amplitude, presse à pectoraux avec départ étiré) pour compenser la course courte',schema:'poussee-horizontale'},
      {quoi:'Tirages',reglage:'allonger la course plutôt que charger',schema:'tirage-horizontal'}],
    accent:'Amplitude avant charge. C’est le seul profil où le compteur de charge trompe : les kilos montent vite, le stimulus ne suit pas forcément. La position longue doit être recherchée exercice par exercice.',
    specificite:'Attention au dos : un bras court raccourcit aussi l’amplitude des tirages. C’est souvent le profil qui « ne sent pas son dos », pas par manque de connexion, par manque de course.',
@@ -14660,7 +14660,7 @@ const MORPHO_PROFILS=Object.freeze([
    mecanique:'La circonférence mesure os + muscle + gras. Avec moins d’os, il faut plus de muscle pour le même chiffre. En contrepartie, la définition apparaît plus tôt et la silhouette paraît plus sèche à masse grasse égale.',
    privilegier:'Rien de particulier mécaniquement. C’est un profil de programmation et d’attentes, pas de réglage.',
    amenager:[{quoi:'Les objectifs, pas les exercices',reglage:'et le suivi : si le mètre est le seul indicateur, l’athlète conclura qu’il ne progresse pas. Croiser avec la photo et la charge soulevée.',schema:'isolation-epaule'}],
-   accent:'Volume sur les groupes qui portent la silhouette, deltoïdes, dos, mollets, parce que chez lui, ce sont les proportions qui font l’effet visuel, pas les circonférences absolues.',
+   accent:'Volume sur les groupes qui portent la silhouette (deltoïdes, dos, mollets) parce que chez lui, ce sont les proportions qui font l’effet visuel, pas les circonférences absolues.',
    specificite:'C’est le profil qui abandonne. Il faut lui donner le bon instrument de mesure dès le départ : rapport taille/bras, photo à éclairage constant, charge de travail, et lui expliquer pourquoi le centimètre lui ment.',
    piege:'Lui parler de « potentiel génétique » ou de « FFMI ». Un tour de poignet ne prédit aucun plafond : il change l’unité de mesure, pas le résultat atteignable. RepCore ne dira jamais le contraire.'}
 ]);
@@ -15715,7 +15715,7 @@ function _htmlMorphoPhoto(){
       +(pr.verdict==='bon'?'var(--green)':pr.verdict==='a_ameliorer'?'var(--orange)':'var(--red)')+'">'
       +'Prise de vue : '+(pr.verdict==='bon'?'bonne'
         :pr.verdict==='a_ameliorer'?'à améliorer':'à refaire')
-      +(pr.raisons.length?' · '+E(pr.raisons.join(' ; ')):'')+'</p>':'')
+      +(pr.raisons.length?', '+E(pr.raisons.join(' ; ')):'')+'</p>':'')
     +(enr.length?'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6;margin-bottom:10px">'
       +enr.map(t=>'<div>'+E(t)+'</div>').join('')+'</div>'
       :'<p style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin-bottom:10px">'
@@ -16036,7 +16036,7 @@ function _htmlDeficitCoach(c){
   const col=bloc?'var(--red)':'var(--orange)';
   const leve=((c&&c.cycle)||{}).leveDeficit;
   const lignes=r.criteres.map(x=>
-    `<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.65">· ${escapeHtml(x.lib)} · ${escapeHtml(String(x.valeur))}</div>`).join('');
+    `<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.65">· ${escapeHtml(x.lib)} : ${escapeHtml(String(x.valeur))}</div>`).join('');
   // La levée est un GESTE du coach, jamais une expiration automatique. Deux
   // motifs, pas de champ libre : on ne fait pas raconter un dossier médical.
   const boutons=bloc
@@ -23339,7 +23339,7 @@ function _actParagraphe(ath,mois,es,anc,comp,partiel){
   if(partiel) p.push('En dessous de '+ACT_MIN_ATHLETES+' athlètes, les médianes et les tendances restent masquées : elles se liraient comme des faits alors qu\'elles n\'en sont pas.');
   p.push('Ces chiffres décrivent ce qui a été enregistré dans RepCore, rien d\'autre.');
   return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">${escapeHtml(p.join(' '))}
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">Une pause non déclarée, ou déclarée sans être partagée avec toi, n'est pas visible ici : elle apparaîtra comme une absence de séance.</div>
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">Une pause non déclarée (ou déclarée sans être partagée avec toi) n'est pas visible ici : elle apparaîtra comme une absence de séance.</div>
   </div>`;
 }
 function loadCoachActivite(){
@@ -24579,7 +24579,7 @@ function _majResumeTunnel(clients){
   if(r.tiedes) rep.push(r.tiedes+' tiède'+(r.tiedes>1?'s':''));
   if(r.froids) rep.push(r.froids+' froid'+(r.froids>1?'s':''));
   if(rep.length) bouts.push(rep.join(' · '));
-  z.textContent=tunnelPhrase(r)+(bouts.length?'  ·  '+bouts.join('  ·  '):'');
+  z.textContent=tunnelPhrase(r)+(bouts.length?' : '+bouts.join('  ·  '):'');
   return true;
 }
 function tunnelOuvrir(){
@@ -26546,7 +26546,7 @@ function openClientDetail(cid,_refresh,_force){
   if(_ap){
     if(c.assignedProgramName){
       _ap.innerHTML='<strong style="color:var(--text-strong)">Programme :</strong> '+escapeHtml(c.assignedProgramName)
-        +(c.assignedProgramAt?' : assigné le '+new Date(c.assignedProgramAt).toLocaleDateString('fr-FR'):'');
+        +(c.assignedProgramAt?', assigné le '+new Date(c.assignedProgramAt).toLocaleDateString('fr-FR'):'');
       _ap.style.display='block';
     } else _ap.style.display='none';
   }
@@ -26963,7 +26963,7 @@ async function supprimerAthleteDefinitivement(){
     const saisi=await rcSaisie('Effacer définitivement le dossier de '+nom+' ?\n\n'
       +'Ses séances, bilans, mesures et photos seront SUPPRIMÉS de la base. '
       +'Ce sont ses données, et rien ne les rendra.\n\n'
-      +'Retape son prénom : '+attendu+' : pour confirmer.','',
+      +'Retape son prénom ('+attendu+') pour confirmer.','',
       {libelleOk:'Effacer définitivement'});
     if(saisi===null) return false;
     if(exKey(saisi)!==exKey(attendu)){
@@ -28061,7 +28061,7 @@ const EX_VARIANTES=Object.freeze({
   'DIPS SUR BARRE LESTE':{base:'DIPS SUR BARRE',nom:'DIPS SUR BARRE : LESTÉ',intro:'Avec une charge accrochée à la ceinture. La résistance est constante sur toute l\'amplitude.'},
   'DIPS SUR BARRE ELASTIQUE':{base:'DIPS SUR BARRE',nom:'DIPS SUR BARRE : ÉLASTIQUE',intro:'Avec un élastique en assistance. L\'aide est maximale en bas et disparaît en haut, là où le mouvement est le plus facile.'},
   'DEVELOPPE COUCHE BARRE VERSION INTERMEDIAIRE':{base:'DEVELOPPE COUCHE BARRE',nom:'DEVELOPPE COUCHE BARRE : VERSION INTERMÉDIAIRE',intro:'Version intermédiaire du guide, sans le décompte en trois temps.'},
-  'TIRAGE POITRINE MACHINE CONVERGENTE AVEC POIGNEES':{base:'TIRAGE POITRINE MACHINE CONVERGENTE',nom:'TIRAGE POITRINE MACHINE CONVERGENTE : AVEC POIGNÉES',intro:'Avec les poignées indépendantes plutôt que la barre : chaque bras tire sa propre trajectoire.'},
+  'TIRAGE POITRINE MACHINE CONVERGENTE AVEC POIGNEES':{base:'TIRAGE POITRINE MACHINE CONVERGENTE',nom:'TIRAGE POITRINE MACHINE CONVERGENTE, AVEC POIGNÉES',intro:'Avec les poignées indépendantes plutôt que la barre : chaque bras tire sa propre trajectoire.'},
   'PULL OVER CORDE':{base:'PULL OVER',nom:'PULL OVER : CORDE',intro:'À la corde plutôt qu\'à la barre. Les mains peuvent s\'écarter en fin de mouvement et la contraction se prolonge.'},
   'MONTEE DE CORDE SANS LES JAMBES':{base:'MONTEE DE CORDE',nom:'MONTEE DE CORDE, SANS LES JAMBES',intro:'Sans se servir des jambes : tout le corps est monté à la force des bras et du dos.'},
   'PRESSE A CUISSE ASSISE PIEDS EN HAUT':{base:'PRESSE A CUISSE ASSISE',nom:'PRESSE A CUISSE ASSISE : PIEDS EN HAUT',intro:'Pieds hauts et écartés sur la plateforme, orteils vers l\'extérieur. La hanche travaille davantage, le genou moins : les fessiers et les ischios prennent une part réelle de l\'effort.'},
@@ -28069,8 +28069,8 @@ const EX_VARIANTES=Object.freeze({
   'PRESSE A CUISSE INCLINE PIEDS EN HAUT':{base:'PRESSE A CUISSE INCLINE',nom:'PRESSE A CUISSE INCLINE : PIEDS EN HAUT',intro:'Pieds hauts et écartés sur la plateforme, orteils vers l\'extérieur. La hanche travaille davantage, le genou moins : les fessiers et les ischios prennent une part réelle de l\'effort.'},
   'PRESSE A CUISSE INCLINE PIEDS EN BAS':{base:'PRESSE A CUISSE INCLINE',nom:'PRESSE A CUISSE INCLINE : PIEDS EN BAS',intro:'Pieds bas sur la plateforme, sous le niveau des hanches. L\'amplitude de genou augmente, le quadriceps encaisse presque tout. Surveille le décollement du bassin en fin de descente.'},
   'PRESSE A CUISSE INCLINE PIEDS ECARTES':{base:'PRESSE A CUISSE INCLINE',nom:'PRESSE A CUISSE INCLINE : PIEDS ÉCARTÉS',intro:'Pieds larges sur la plateforme, orteils vers l\'extérieur. L\'intérieur de cuisse entre dans le mouvement à côté du quadriceps.'},
-  'CRUNCH AU SOL AVEC POIDS':{base:'CRUNCH AU SOL',nom:'CRUNCH AU SOL : AVEC POIDS',intro:'Une charge tenue contre la poitrine ou derrière la tête. Le mouvement ne change pas, la résistance oui.'},
-  'CRUNCH JAMBES EN APPUI SUR BANC AVEC POIDS':{base:'CRUNCH JAMBES EN APPUI SUR BANC',nom:'CRUNCH JAMBES EN APPUI SUR BANC : AVEC POIDS',intro:'Une charge tenue contre la poitrine ou derrière la tête. Le mouvement ne change pas, la résistance oui.'},
+  'CRUNCH AU SOL AVEC POIDS':{base:'CRUNCH AU SOL',nom:'CRUNCH AU SOL, AVEC POIDS',intro:'Une charge tenue contre la poitrine ou derrière la tête. Le mouvement ne change pas, la résistance oui.'},
+  'CRUNCH JAMBES EN APPUI SUR BANC AVEC POIDS':{base:'CRUNCH JAMBES EN APPUI SUR BANC',nom:'CRUNCH JAMBES EN APPUI SUR BANC, AVEC POIDS',intro:'Une charge tenue contre la poitrine ou derrière la tête. Le mouvement ne change pas, la résistance oui.'},
   'TAPIS DE COURSE COURIR':{base:'TAPIS DE COURSE',nom:'TAPIS DE COURSE : COURIR',intro:'En course, sans se tenir à la structure. Balancer les bras comme lors d\'un vrai footing.'},
   'TAPIS DE COURSE MARCHE AVEC PENTE':{base:'TAPIS DE COURSE',nom:'TAPIS DE COURSE : MARCHE AVEC PENTE',intro:'En marche, pente montée. L\'allure baisse, la pente fait le travail.'}
 });
@@ -32484,7 +32484,7 @@ function ouvrirFicheBanque(slug,ev){
       <div style="font-size:var(--fs-sm);color:#bbb;line-height:1.65">${escapeHtml(f.execution)}</div></div>`:''}
     ${liste('Erreurs fréquentes',f.erreurs)}
     ${liste('Consignes',f.consignes)}
-    ${(f.videos||[]).map(v=>`<a href="https://youtu.be/${escapeHtml(v.id)}" target="_blank" rel="noopener" style="display:block;margin-top:10px;font-size:var(--fs-sm);color:var(--link)">Vidéo technique${v.lib?' · '+escapeHtml(v.lib):''}</a>`).join('')}
+    ${(f.videos||[]).map(v=>`<a href="https://youtu.be/${escapeHtml(v.id)}" target="_blank" rel="noopener" style="display:block;margin-top:10px;font-size:var(--fs-sm);color:var(--link)">Vidéo technique${v.lib?' : '+escapeHtml(v.lib):''}</a>`).join('')}
     ${variantes.length?`<div style="margin-top:14px"><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Même schéma moteur</div>
       ${variantes.map(v=>`<button class="pf-chip" style="margin:0 6px 6px 0" onclick="closeModal();ouvrirFicheBanque('${escapeHtml(v.slug)}')">${escapeHtml(v.nom)}</button>`).join('')}</div>`:''}
     <button class="btn btn-red" style="margin-top:16px" onclick="closeModal();bqChoisir('${escapeHtml(f.slug)}')">Ajouter à la séance</button>
@@ -35033,7 +35033,7 @@ function renderProgEx(){
         <div class="px-duo">
         <!-- Tempo : ligne propre, la grille au-dessus n'a que trois colonnes -->
         <div style="margin-bottom:8px">
-          <label style="margin-top:0">Tempo <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(ex: 3-1-1-0, descente, bas, montée, haut)</span></label>
+          <label style="margin-top:0">Tempo <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(ex: 3-1-1-0 : descente, bas, montée, haut)</span></label>
           <input class="px-court" value="${escapeHtml(ex.tempo||'')}" onchange="_progTempoSaisie(${i},this)" placeholder="3-1-1-0" title="3-1-1-0 ou 3110 : descente, pause basse, montée, pause haute. Un autre texte est conservé tel quel.">
         </div>
         <!-- Matériel : son propre champ depuis que la banque le pré-remplit.
@@ -38152,7 +38152,7 @@ function alternerSeance(i){
       +'style="width:100%;margin:0 0 6px;text-transform:none;letter-spacing:.4px;'
       +'text-align:left;padding:10px 12px" onclick="_alternerVers('+i+','+c.i+')">'
       +'<span style="font-weight:800">'+escapeHtml(c.jour)+'</span>'
-      +'<span style="color:var(--text-faint)"> · '+escapeHtml(c.nom)+'</span>'
+      +'<span style="color:var(--text-faint)"> : '+escapeHtml(c.nom)+'</span>'
       +(c.actif?'':'<span style="color:var(--text-faint)"> · jour éteint</span>')
       +'</button>').join('')
     +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;'
@@ -38448,7 +38448,7 @@ function _htmlReprise(avecProgramme){
     +'<div style="font-size:var(--fs-lg);font-family:var(--pile-titre);letter-spacing:.5px;'
     +'line-height:1.25;margin-bottom:8px">On commence maintenant.</div>'
     +'<div class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:20px">'
-    +'Quinze minutes suffisent pour commencer'+' '+'tu t’arrêtes quand tu veux.</div>'
+    +'Quinze minutes suffisent pour commencer'+' '+': tu t’arrêtes quand tu veux.</div>'
     +'<button class="btn btn-red" onclick="reprendreMaintenant()" style="margin:0;min-height:52px;'
     +'letter-spacing:1.5px;font-size:var(--fs-md);box-shadow:var(--e-inset),var(--glow-red)">'
     +'Démarrer maintenant</button>'
@@ -41868,7 +41868,7 @@ function partagerSeanceDuJour(){
     // legende — d'ou le pied, qui lui ne se perd pas.
     const _n=d.ex.length;
     const _meta={title:'Ma séance du jour',
-      text:(d.coach?(d.coach+' · '):'')+d.titre+' · '+_n+' exercice'+(_n>1?'s':''),
+      text:(d.coach?(d.coach+' : '):'')+d.titre+' · '+_n+' exercice'+(_n>1?'s':''),
       url:lienPerso('seance')||RC_URL_VITRINE};
     if(_storySortirPartage(_dessinerStorySeance(d),'repcore-seance.png',_meta)){
       // ⚠ ON COMPTE UNE FEUILLE DE PARTAGE OUVERTE, PAS UNE PUBLICATION. Ce qui
@@ -50679,7 +50679,7 @@ function _anatTexteBrut(f,res){
   }
   if(f.etat==='illisible'&&f.cle==='coudes'){
     if(m.raison==='paumes'){
-      T.court='Non lisible : paumes tournées vers les cuisses, l’angle de port du coude ne se lit que paumes vers l’avant.';
+      T.court='Non lisible : paumes tournées vers les cuisses (l’angle de port du coude ne se lit que paumes vers l’avant).';
       T.lecture='Paumes vers les cuisses, l’avant-bras tourne sur lui-même et son axe se replace sous le bras : l’angle de port disparaît de la photo. On ne le devine pas.';
       T.verifier='Si la photo montre les paumes vers l’avant : cocher « paumes vers l’avant » dans « Ajuster les points ». Sinon, demander les prochaines photos paumes vers l’avant (« Échelle et prise de vue »). '+ANAT_COUDE.CONSIGNE;
     }else{
@@ -50714,7 +50714,7 @@ function _anatTexteBrut(f,res){
     return T;
   }
   if(f.grise){
-    T.court='Longueurs en gris : les deux repères d’échelle ne donnent pas la même mesure, sommet du crâne, talons et genoux à vérifier.';
+    T.court='Longueurs en gris : les deux repères d’échelle ne donnent pas la même mesure (sommet du crâne, talons et genoux à vérifier).';
     T.lecture='L’échelle par la taille (sommet du crâne → talons) et celle par le genou diffèrent de plus de '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' % : un point mal placé fausse toutes les longueurs du même facteur, sans que rien ne le montre. Tant que les deux ne s’accordent pas, aucune longueur n’est classée.'
       +(f.cle==='buste'&&f.mesure&&f.mesure.s!=null?' L’axe du buste, lui, ne dépend pas de l’échelle : décalage de '+_anatN(f.mesure.s,1)+' % du tronc.':'');
     T.verifier='Replacer le sommet du crâne, les talons et les genoux (« Ajuster les points »), puis relancer l’analyse ; ou saisir au prochain bilan la hauteur du sol au milieu de la rotule, qui donne une échelle au mètre.';
@@ -50729,7 +50729,7 @@ function _anatTexteBrut(f,res){
         :'Talon qui part en dehors'+cote+' : '+_anatSN(m.pire,0)+'°, '+intens(n)+'. Posture d’appui du moment, à confirmer au bilan suivant.');
     T.lecture='Vu de dos, quand l’arrière-pied s’affaisse vers l’intérieur, la ligne du mollet et celle du talon se cassent au niveau du tendon d’Achille : le bas du talon part en dehors de l’axe de la jambe. C’est une lecture visuelle inspirée du FPI-6 (Redmond et al., 2006), pas le score lui-même : debout, pieds nus, elle dépend de l’appui du moment et des chaussures portées juste avant.';
     if(an){
-      T.privilegier=['Pied « trépied » : talon, base du gros orteil et base du petit orteil posés, l’arche se soulève sans crisper les orteils, à tenir debout, puis au squat',
+      T.privilegier=['Pied « trépied » : talon, base du gros orteil et base du petit orteil posés, l’arche se soulève sans crisper les orteils (à tenir debout, puis au squat)',
         'Short foot : raccourcir le pied en rapprochant la base du gros orteil du talon, 5 à 10 s, 8 à 10 répétitions',
         'Montées sur pointes lentes : 3 s en montée, 3 s en descente, genou tendu puis genou fléchi',
         'Pour le squat, une chaussure à semelle ferme et stable'];
@@ -50778,9 +50778,9 @@ function _anatTexteBrut(f,res){
     if(m.nBassin) parts.push('bassin (grand trochanter) '+_anatN(Math.abs(d.trochanter.cm),1)+' cm '+(d.trochanter.cm>0?'en avant':'en arrière')+' du fil');
     if(m.nGenou) parts.push('genou tendu au-delà de l’axe ('+_anatN(m.genouAng,0)+'°)');
     T.court=(parts.length?'Sur cette photo de profil : '+parts.join(', ')+'.':'Alignement de profil dans la marge : les repères tombent près du fil à plomb.')+moment;
-    T.lecture='Le fil à plomb passe par la malléole latérale. Kendall décrit une ligne de référence qui passe près du tragus, de l’acromion, du grand trochanter et de l’axe du genou : chaque repère en est ici à une distance horizontale, avec sa marge. Un genou à plus de 180° + '+ANAT_PROFIL.recurvatum+'° se tend au-delà de l’axe de la jambe (ce qu’on appelle un recurvatum de posture). Une photo debout saisit une posture du moment, respiration, fatigue, chaussures - , jamais une structure : elle dit où regarder, pas pourquoi.';
+    T.lecture='Le fil à plomb passe par la malléole latérale. Kendall décrit une ligne de référence qui passe près du tragus, de l’acromion, du grand trochanter et de l’axe du genou : chaque repère en est ici à une distance horizontale, avec sa marge. Un genou à plus de 180° + '+ANAT_PROFIL.recurvatum+'° se tend au-delà de l’axe de la jambe (ce qu’on appelle un recurvatum de posture). Une photo debout saisit une posture du moment (respiration, fatigue, chaussures), jamais une structure : elle dit où regarder, pas pourquoi.';
     if(an){
-      T.privilegier=['Gainage : planche, dead bug, Pallof press, côtes basses, bassin sous les côtes'];
+      T.privilegier=['Gainage : planche, dead bug, Pallof press (côtes basses, bassin sous les côtes)'];
       if(m.nTronc>0||(d.acromion&&d.acromion.cm>3)) T.privilegier.push('Mobilité thoracique : extensions sur rouleau, rotations en quadrupédie','Rétraction scapulaire : face pull, Y-raise sur banc incliné');
       T.privilegier.push('Chaîne postérieure : soulevé de terre roumain, hip thrust, extensions de hanche au banc à 45°, amplitude contrôlée');
       T.amenager=[{quoi:'Squat',reglage:'buste gainé avant la descente, côtes basses ; talons surélevés d’une cale de 1 à 2,5 cm si le buste part loin devant'+(m.nGenou?' ; en haut de chaque répétition, genoux « déverrouillés », légèrement fléchis':'')},
@@ -50803,10 +50803,10 @@ function _anatTexteBrut(f,res){
     T.lecture='Largeur biacromiale '+c(bi)+', bassin (crêtes iliaques) '+c(bc)+(r?', soit un rapport épaules / bassin de '+_anatN(r,2)+' pour '+_anatN(m.rRef,2)+(m.rEt?' ± '+_anatN(m.rEt,2):'')+' en moyenne chez des adultes actifs ('+(m.femme?'femmes':'hommes')+', ANSUR II)':'')+'. '
       +'La clavicule fixe l’écartement des épaules : c’est elle qui donne le bras de levier au développé prise large et la base de la silhouette en V. Elle ne change pas avec l’entraînement ; ce qui change, c’est ce qui s’y attache (deltoïdes, trapèzes, grands dorsaux). '
       +(n>0?'Une charpente large offre le V : le piège est de s’appuyer dessus et de laisser le bas du corps en retrait.'
-        :n<0?'Une charpente étroite ne limite pas le physique : elle déplace la priorité vers les faisceaux qui élargissent à l’œil, deltoïde latéral et dorsaux, et vers une taille fine.'
+        :n<0?'Une charpente étroite ne limite pas le physique : elle déplace la priorité vers les faisceaux qui élargissent à l’œil (deltoïde latéral et dorsaux) et vers une taille fine.'
         :'Rien à rattraper : la silhouette dépendra de ce qui sera développé.');
     if(n<0){
-      T.privilegier=['Deltoïde latéral en priorité : élévations latérales (haltères, poulie basse derrière le corps, machine), 12 à 20 séries par semaine en phase de priorité, dont une partie en position allongée (poulie)','Largeur de dos : tractions et tirage vertical prise large, pull-over à la poulie','Deltoïde postérieur (oiseau, face pull) : il élargit aussi la silhouette vue de dos','Taille : gainage anti-rotation (Pallof press), vacuum, masse grasse maîtrisée, le rapport deltoïdes / taille fait le V autant que l’os'];
+      T.privilegier=['Deltoïde latéral en priorité : élévations latérales (haltères, poulie basse derrière le corps, machine), 12 à 20 séries par semaine en phase de priorité, dont une partie en position allongée (poulie)','Largeur de dos : tractions et tirage vertical prise large, pull-over à la poulie','Deltoïde postérieur (oiseau, face pull) : il élargit aussi la silhouette vue de dos','Taille : gainage anti-rotation (Pallof press), vacuum, masse grasse maîtrisée (le rapport deltoïdes / taille fait le V autant que l’os)'];
       T.amenager=[{quoi:'Développé couché',reglage:'prise moyenne (avant-bras verticaux en bas) : une prise très large n’apporte rien à une charpente étroite et charge l’épaule en bout d’amplitude'},{quoi:'Travail lourd du moyen fessier et des abducteurs',reglage:'à doser selon l’objectif esthétique : il élargit la hanche visuelle'}];
     }else if(n>0){
       T.privilegier=['Quadriceps, ischios et fessiers au même niveau d’exigence que le haut : l’équilibre haut / bas se remarque le plus sur une charpente large','Rowing et tirages horizontaux pour l’épaisseur du dos, qui accompagne la largeur','Deltoïde postérieur et coiffe des rotateurs : une longue clavicule allonge le levier sur l’épaule'];
@@ -50847,7 +50847,7 @@ function _anatTexteBrut(f,res){
     T.lecture='Le tronc se mesure du milieu des épaules au milieu des hanches, centre à centre : '+(tr&&tr.cm!=null?_anatN(tr.cm,1)+' cm':'-')+' pour '+(tr&&tr.cm!=null?_anatN(rTr*tr.cm/tr.fr,1)+' cm':_anatN(rTr*100,1)+' % de la taille')+' en moyenne à même taille ('+ANAT_REF.SOURCE+', '+(m.femme?'femmes':'hommes')+'). '
       +'Un tronc long est un bras de levier long au squat et au soulevé : la barre est plus loin des hanches, les érecteurs du rachis travaillent plus. '
       +(sq?'Au squat, le modèle donne '+sq.val+'° d’inclinaison du buste à la parallèle, pour '+sq.ref+'° avec des proportions moyennes. ':'')
-      +(V?'Le rapport deltoïdes / taille de '+_anatN(V,2)+' mesure la silhouette, pas l’os : il monte quand la carrure prend ou que la taille descend, c’est le chiffre à suivre de bilan en bilan. ':'')
+      +(V?'Le rapport deltoïdes / taille de '+_anatN(V,2)+' mesure la silhouette, pas l’os : il monte quand la carrure prend ou que la taille descend (c’est le chiffre à suivre de bilan en bilan). ':'')
       +(m.statV?'Repère de population : '+m.statV.txt+' ('+ANAT_V_REF.AVERT+'). ':'')
       +(m.varV!=null?'Depuis le premier bilan : '+_anatSN(m.varV,2)+' sur '+m.serieV.length+' bilans'+(Math.abs(m.varV)<=ANAT_V_REF.BRUIT?', dans le bruit de placement des points.':'.')+' ':'')
       +(s!=null?(ns?'Le milieu des épaules est décalé de '+_anatN(s,1)+' % du tronc par rapport au milieu du bassin : le buste se porte d’un côté (posture du moment ou habitude).':'Le buste est à l’aplomb du bassin (écart '+_anatN(s,1)+' %).'):'');
@@ -50894,7 +50894,7 @@ function _anatTexteBrut(f,res){
       T.court='Hanche '+haut+' plus haute de '+_anatN(a)+'° : appui probablement plus chargé d’un côté sur la photo.';
       T.lecture='Une hanche plus haute sur une photo debout vient d’abord de l’appui : le poids porté sur une jambe, un genou un peu fléchi de l’autre côté. La photo ne permet pas de dire s’il y a autre chose ; refaire la photo pieds à largeur de hanches, poids réparti, est le premier geste.'
         +(m.ecartVues!=null?(m.ecartVues<2?' Face et dos disent la même chose.':' Face et dos ne disent pas la même chose ('+_anatN(m.ecartVues)+'° d’écart) : c’est probablement la pose.'):'');
-      T.privilegier=['Unilatéral des membres inférieurs : split squat bulgare, fente arrière, soulevé roumain à une jambe, commencer par le côté faible','Moyen fessier : abduction de hanche (machine ou poulie), marche latérale avec élastique','Carry unilatéral et planche latérale contre l’inclinaison du tronc'];
+      T.privilegier=['Unilatéral des membres inférieurs : split squat bulgare, fente arrière, soulevé roumain à une jambe (commencer par le côté faible)','Moyen fessier : abduction de hanche (machine ou poulie), marche latérale avec élastique','Carry unilatéral et planche latérale contre l’inclinaison du tronc'];
       T.amenager=[{quoi:'Squat et soulevé de terre',reglage:'pieds symétriques (repères au sol), contrôler en vidéo de dos que le bassin ne glisse pas d’un côté en remontant'},{quoi:'Presse à cuisses',reglage:'pieds à la même hauteur sur la plateforme, amplitude arrêtée avant que le bassin ne décolle'}];
     }
     T.verifier='Marge ±'+_anatN(m.marge||ANAT_TOL.bassin)+'°, placement des crêtes compris. Les crêtes iliaques sont estimées : les palper, ou les replacer sur la photo. Si l’écart revient au même endroit d’un bilan à l’autre sur une photo bien prise, en parler avec l’athlète, et, s’il a une gêne, l’orienter vers un professionnel de santé.';
@@ -50908,10 +50908,10 @@ function _anatTexteBrut(f,res){
     else if(n>0) T.court='Fémur long par rapport au tibia ('+_anatN(r,2)+' pour '+_anatN(m.rRef,2)+') : au squat, le buste penche davantage'+(sq?' (~'+sq.val+'° contre '+sq.ref+'°)':'')+'.';
     else T.court='Tibia long par rapport au fémur ('+_anatN(r,2)+' pour '+_anatN(m.rRef,2)+') : squat naturellement droit'+(sq?' (~'+sq.val+'° contre '+sq.ref+'°)':'')+', genoux qui avancent loin.';
     T.lecture='Cuisse '+c(cu)+', jambe '+c(ja)+(m.hh&&m.hh.cm!=null?', hauteur de hanche '+c(m.hh):'')+'. '
-      +'Au squat, la barre doit rester au-dessus du milieu du pied : plus le fémur est long par rapport au tibia et au tronc, plus la hanche recule et plus le buste s’incline pour compenser, fessiers et érecteurs prennent une plus grande part du mouvement. '
+      +'Au squat, la barre doit rester au-dessus du milieu du pied : plus le fémur est long par rapport au tibia et au tronc, plus la hanche recule et plus le buste s’incline pour compenser (fessiers et érecteurs prennent une plus grande part du mouvement). '
       +(sq?'Modèle : cuisse parallèle, tibia incliné de 30°, barre au-dessus du milieu du pied. Buste estimé à '+sq.val+'° de la verticale, '+sq.ref+'° pour des proportions moyennes ; avec une cale de 2,5 cm sous les talons (tibia à ~37°), '+sq.cale+'°. ':'')
       +(m.tj?'Tronc / hauteur de hanche : '+_anatN(m.tj,2)+' (moyenne '+_anatN(m.tjRef,2)+'). ':'')
-      +(m.asy!=null&&Math.abs(m.asy)>3?'Les deux jambes diffèrent de '+_anatN(m.asy,1)+' % sur la photo : c’est au-delà de la marge, mais une photo ne mesure pas une longueur de jambe au millimètre, à regarder avec la hauteur du bassin, sans conclure.':'');
+      +(m.asy!=null&&Math.abs(m.asy)>3?'Les deux jambes diffèrent de '+_anatN(m.asy,1)+' % sur la photo : c’est au-delà de la marge, mais une photo ne mesure pas une longueur de jambe au millimètre (à regarder avec la hauteur du bassin, sans conclure).':'');
     if(n>0){
       T.privilegier=['Squat talons surélevés (cale de 2 à 3 cm) ou hack squat pour recentrer le travail sur les quadriceps','Presse à cuisses et fente longue : les quadriceps y travaillent sans contrainte de buste','Soulevé roumain et hip thrust : le levier long y devient un avantage'];
       T.amenager=[{quoi:'Squat barre haute pieds serrés',reglage:'élargir l’appui et ouvrir les pointes (20 à 30°), l’ouverture raccourcit le fémur « vu de face », ou ajouter une cale sous les talons'},{quoi:'Soulevé de terre conventionnel',reglage:'essayer le sumo ou la barre hexagonale si le dos s’arrondit au départ'}];
@@ -50969,11 +50969,11 @@ function _anatTexteBrut(f,res){
     if(m.oiDiff!=null&&Math.abs(p.nOi||0)) parts.push('omoplate '+(m.oiDiff>0?'gauche':'droite')+' plus écartée de la colonne ('+_anatN(Math.abs(m.oiDiff),1)+' cm)');
     T.court=(parts[0]?parts[0].charAt(0).toUpperCase()+parts[0].slice(1):'Dos lu')+(parts.length>1?' ; '+parts.slice(1).join(' ; '):'')+'.'
       +(an?' Position du moment, à confirmer au bilan suivant.':'');
-    T.lecture='Vu de dos, on regarde trois choses : la hauteur des deux pointes d’omoplate (repère de la position de la ceinture scapulaire), la ligne de la base du cou (C7) aux fossettes du sacrum (l’axe du dos) et les deux « triangles » entre les bras et la taille. Un écart sur une photo debout traduit une posture, du moment ou habituelle - , jamais une structure : la photo dit où regarder, pas pourquoi.'
+    T.lecture='Vu de dos, on regarde trois choses : la hauteur des deux pointes d’omoplate (repère de la position de la ceinture scapulaire), la ligne de la base du cou (C7) aux fossettes du sacrum (l’axe du dos) et les deux « triangles » entre les bras et la taille. Un écart sur une photo debout traduit une posture (du moment ou habituelle), jamais une structure : la photo dit où regarder, pas pourquoi.'
       +(Math.abs(p.nOm)?' Une omoplate plus basse va souvent avec un trapèze inférieur et un dentelé moins actifs de ce côté, ou une épaule plus basse sur la photo de face.':'');
-    T.lecture+=' Le bord interne des omoplates se mesure à sa distance à la ligne C7 → sacrum : une omoplate plus écartée de la colonne que l’autre, sur une photo debout, est une position du moment, une épaule qui s’enroule, un bras un peu tendu vers l’avant - , à relire au bilan suivant.';
+    T.lecture+=' Le bord interne des omoplates se mesure à sa distance à la ligne C7 → sacrum : une omoplate plus écartée de la colonne que l’autre, sur une photo debout, est une position du moment (une épaule qui s’enroule, un bras un peu tendu vers l’avant), à relire au bilan suivant.';
     T.privilegier=['Rétraction et abaissement des omoplates : face pull, Y-raise sur banc incliné, rowing un bras en finissant omoplate serrée et basse',
-      'Unilatéral dos : rowing un bras, tirage poulie un bras, commencer par le côté faible',
+      'Unilatéral dos : rowing un bras, tirage poulie un bras (commencer par le côté faible)',
       'Contrôle des omoplates : pompes scapulaires, shrug en rétraction',
       'Carry unilatéral (valise), planche latérale, bird dog, Pallof press'];
     T.amenager=[{quoi:'Soulevé de terre et squat',reglage:'contrôler en vidéo de dos que la barre reste horizontale et que le bassin ne glisse pas'},{quoi:'Tractions',reglage:'amplitude complète des deux côtés, sans tirer « de travers » en fin de série'}];
@@ -52966,7 +52966,7 @@ function _htmlAnat(c){
         +(opts.telephone?'<span class="an-puce an-puce-o">Téléphone tenu : bras '+ath(opts.telephone)+' : écarté des mesures</span>':''))
       +'</div>':'';
   const aideSel=edit&&(edit.aide||edit.sel)?(edit.aide||edit.sel):null;
-  const liste=edit?'<div class="an-rep"><h6>Repères <span> - touche un nom pour le sélectionner, « * » pour sa consigne ; ◂ ▸ : côté gauche ou droit de l’écran</span></h6><div class="an-rep-l">'
+  const liste=edit?'<div class="an-rep"><h6>Repères <span> : touche un nom pour le sélectionner, « * » pour sa consigne ; ◂ ▸ : côté gauche ou droit de l’écran</span></h6><div class="an-rep-l">'
       +anatCles(vueAct).filter(k=>pts[k]).map(k=>{
         const e2=pts[k][2];
         return '<span class="an-rep-c'+(edit.sel===k?' actif':'')+'" data-e="'+(e2>=2?'man':e2<1?'est':'auto')+'">'
@@ -53059,7 +53059,7 @@ function _htmlAnat(c){
           ?_anatN(ver.mesureCm,1)+' cm du sol au milieu de la rotule, mesurés au mètre au bilan'
           :'hauteur de rotule estimée ('+ANAT_ROTULE.source+')')
         +(ver.genouCm1!=null&&ver.genouCm2!=null?' : le genou est à '+_anatN(ver.genouCm1,1)+' cm du sol par la taille, '+_anatN(ver.genouCm2,1)+' cm par '+(ver.source==='metre'?'le mètre':'l’estimation'):'')
-        +'. Écart entre les deux : '+_anatN(ver.ecart*100,1)+' % : '+ANAT_ECHELLE_MOTS[ver.statut]
+        +'. Écart entre les deux : '+_anatN(ver.ecart*100,1)+' %, '+ANAT_ECHELLE_MOTS[ver.statut]
         +(ver.statut==='confirmee'?' (au plus '+_anatN(ANAT_ECHELLE_CONFIRMEE*100,0)+' %).'
           :ver.statut==='verifier'?' (entre '+_anatN(ANAT_ECHELLE_CONFIRMEE*100,0)+' et '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' %) : marge d’échelle portée à ±'+ANAT_ECHELLE_A_VERIFIER_PCT+' %.'
           :' (au-delà de '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' %) : longueurs en gris.')
@@ -53098,7 +53098,7 @@ function _htmlAnat(c){
     const detail='<div class="an-f-long" id="an-long-'+f.cle+'">'+tab+(courbe?'<div class="an-f-courbe">'+courbe+'</div>':'')+(cP?'<div class="an-f-courbe">'+cP+'</div>':'')
       +(t.lecture?'<h6>Lecture</h6><p class="an-f-lec">'+escapeHtml(t.lecture)+'</p>':'')
       +(t.privilegier&&t.privilegier.length?'<h6>À privilégier</h6>'+li(t.privilegier):'')
-      +(t.amenager&&t.amenager.length?'<h6>À aménager</h6><ul>'+t.amenager.map((x,i)=>'<li><b>'+escapeHtml(x.quoi)+'</b> · '+escapeHtml(x.reglage)
+      +(t.amenager&&t.amenager.length?'<h6>À aménager</h6><ul>'+t.amenager.map((x,i)=>'<li><b>'+escapeHtml(x.quoi)+'</b> : '+escapeHtml(x.reglage)
         +_htmlAnatExos(x.exercices,c)
         +(x.consigne?'<div class="an-cons"><span>Consigne pour l’athlète : « '+escapeHtml(x.consigne)+' »</span><button type="button" class="an-cons-b" onclick="anatEnvoyerConsigne(\''+f.cle+'\','+i+')">Envoyer la consigne</button></div>':'')+'</li>').join('')+'</ul>':'')
       +(t.verifier?'<h6>Comment vérifier</h6><p>'+escapeHtml(t.verifier)+'</p>':'')
@@ -53382,7 +53382,7 @@ function renderMethodesCoach(c){
       +(forces.length>1?'s':'')+' outre cette semaine :</div>';
     for(const f of forces.slice(-4))
       h+='<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:4px">'
-        +'· '+escapeHtml(f.exercice||'-')+' · '+escapeHtml(f.regle||'')+'</div>';
+        +'· '+escapeHtml(f.exercice||'—')+' : '+escapeHtml(f.regle||'')+'</div>';
   }
   h+='</div>';
   z.innerHTML=h;
@@ -57716,7 +57716,7 @@ function htmlRapport(r){
     h+=`<section class="rap-bloc"><h2>Signaux détectés</h2>`;
     if(!r.signaux.liste.length) h+=`<p class="rap-note">Aucun signal sur la période.</p>`;
     else h+=`<ul class="rap-liste">${r.signaux.liste.map(s=>
-      `<li>${escapeHtml(s.lib)}${s.fenetre?' <span class="rap-u">- '+escapeHtml(s.fenetre)+'</span>':''}</li>`).join('')}</ul>
+      `<li>${escapeHtml(s.lib)}${s.fenetre?' <span class="rap-u"> : '+escapeHtml(s.fenetre)+'</span>':''}</li>`).join('')}</ul>
       <p class="rap-note">Constaté le ${new Date(r.signaux.constateLe).toLocaleDateString('fr-FR')}. Chaque signal porte la fenêtre sur laquelle il a été établi : l'application ne conserve pas de date de survenue, et le rapport n'en invente pas.</p>`;
     h+=`</section>`;
   }
@@ -64241,7 +64241,7 @@ function _htmlJournalSeance(c){
     const cause=DISPO_LIB_CAUSE[e&&e.cause]||'';
     const quoi=(e&&e.origine==='dispo_decharge')
       ? 'Semaine allégée'
-      : ('Dernière série retirée'+(e&&e.exercice?' · '+escapeHtml(e.exercice):''));
+      : ('Dernière série retirée'+(e&&e.exercice?' : '+escapeHtml(e.exercice):''));
     return '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px">'
       +'<span style="font-size:var(--fs-xs);color:var(--text);min-width:0">'+quoi+'</span>'
       +'<span style="font-size:var(--fs-2xs);color:var(--sub);white-space:nowrap;flex-shrink:0">'
@@ -65951,7 +65951,7 @@ function _htmlCalendrierBilansCoach(c){
     const coul=sel?'#fff':n?'var(--red-text)':'var(--text-dim)';
     cases+='<button type="button"'+(n?'':' disabled')
       +' onclick="ccdBilCalJour(\''+iso+'\')"'
-      +' aria-label="'+j+' '+_ccdBilMoisLib(cle)+(n?' · '+n+' bilan'+(n>1?'s':''):'')+'"'
+      +' aria-label="'+j+' '+_ccdBilMoisLib(cle)+(n?', '+n+' bilan'+(n>1?'s':''):'')+'"'
       +' style="aspect-ratio:1;min-height:26px;display:flex;align-items:center;justify-content:center;'
       +'background:'+fond+';border:'+bord+';border-radius:var(--r-2);color:'+coul+';'
       +'font-size:var(--fs-2xs);font-weight:'+(n?'800':'500')+';'
@@ -66333,7 +66333,7 @@ async function supprimerAnalyseUI(dateISO,marqueur){
   const e=((u.analyses)||[]).find(x=>x&&x.date===dateISO&&x.marqueur===marqueur);
   if(!e){ toast('Analyse introuvable.','var(--orange)'); return false; }
   const m=marqueurDe(marqueur);
-  if(!await rcConfirm('Supprimer '+((m&&m.lib)||marqueur)+' · '+String(e.valeur).replace('.',',')
+  if(!await rcConfirm('Supprimer '+((m&&m.lib)||marqueur)+' : '+String(e.valeur).replace('.',',')
     +' '+e.unite+' du '+_fmtDateCourte(e.date)+' ?\n\nC’est définitif.',null,'Supprimer')) return false;
   const r=supprimerAnalyse(u,dateISO,marqueur);
   if(!r.ok){ toast(r.raison,'var(--orange)'); return false; }
@@ -66980,7 +66980,7 @@ function _blocAvertissementContrainte(ex,i){
   const subs=(()=>{ try{ return substitutsDe(ex,{zone:c.zone}).slice(0,3); }catch(e){ return []; } })();
   return `<div style="margin-top:8px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);padding:10px 12px">
     <div style="font-size:var(--fs-xs);color:var(--text);line-height:1.6">
-      ${escapeHtml(cible.fname||'Cet athlète')} a signalé : <b>${escapeHtml(libZone(c.zone))}</b>, ${escapeHtml(libNiveau(c.niveau))}${c.libelle?' · '+escapeHtml(c.libelle):''}.
+      ${escapeHtml(cible.fname||'Cet athlète')} a signalé : <b>${escapeHtml(libZone(c.zone))}</b>, ${escapeHtml(libNiveau(c.niveau))}${c.libelle?' : '+escapeHtml(c.libelle):''}.
     </div>
     <div style="font-size:var(--fs-xs);color:var(--text);line-height:1.6;margin-top:4px">
       <b>${escapeHtml(ex.name)}</b> sollicite fortement ${escapeHtml(libZone(c.zone))}.
@@ -75111,7 +75111,7 @@ async function confirmDechargeGroupee(pose){
   const nl=String.fromCharCode(10);
   let txt=(_p?'Programmer une semaine de décharge ?':'Retirer la semaine de décharge ?')+nl+nl;
   txt+=prep.cibles.length
-    ?prep.cibles.map(x=>'· '+x.nom+' · '+x.n+' créneau'+(x.n>1?'x':'')).join(nl)
+    ?prep.cibles.map(x=>'· '+x.nom+' : '+x.n+' créneau'+(x.n>1?'x':'')).join(nl)
     :'Aucun athlète traitable dans cette sélection.';
   if(prep.echecs.length) txt+=nl+nl+'Ne seront PAS traités :'+nl
     +prep.echecs.map(e=>'· '+e.nom+' ('+e.raison+')').join(nl);
@@ -76436,7 +76436,7 @@ function _htmlDossierSante(user,pourCoach){
       :'<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Rien de déclaré.</div>'}
     ${titre('Ce que RepCore applique')}
     ${d.effets.length?d.effets.map(x=>ligne(
-        escapeHtml(x.effet)+' <span style="color:var(--text-dim)">- '+escapeHtml(x.cause)+'</span>',
+        escapeHtml(x.effet)+' <span style="color:var(--text-dim)"> : '+escapeHtml(x.cause)+'</span>',
         _dossDate(x.date))).join('')
       :'<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Aucun effet en cours.</div>'}
     ${d.renvois.length?titre('Ce vers quoi RepCore renvoie')
@@ -76444,7 +76444,7 @@ function _htmlDossierSante(user,pourCoach){
     ${d.journal.length?titre('Historique des déclarations')
       +d.journal.slice().reverse().map(x=>ligne(
         escapeHtml((DOSSIER_BLOCS.find(y=>y.bloc===x.bloc)||{}).lib||x.bloc)
-        +' <span style="color:var(--text-dim)">- '+(x.action==='retire'?'retiré':'déclaré')+'</span>',
+        +' <span style="color:var(--text-dim)"> : '+(x.action==='retire'?'retiré':'déclaré')+'</span>',
         _dossDate(x.date))).join(''):''}
     ${blocDisclaimerSante()}
     ${!pourCoach?`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
@@ -76500,7 +76500,7 @@ function exportDossierSanteTexte(user){
   e.etats.forEach(x=>l.push('  '+x.valeur+'  ['+(x.declare_le||DOSSIER_DATE_INCONNUE)+']'));
   if(!e.etats.length) l.push('  (rien)');
   l.push('','CE QUE REPCORE APPLIQUE');
-  e.effets.forEach(x=>l.push('  '+x.effet+' · '+x.cause+'  ['+(x.depuis||DOSSIER_DATE_INCONNUE)+']'));
+  e.effets.forEach(x=>l.push('  '+x.effet+' : '+x.cause+'  ['+(x.depuis||DOSSIER_DATE_INCONNUE)+']'));
   if(!e.effets.length) l.push('  (aucun)');
   l.push('','RENVOIS');
   e.renvois.forEach(x=>l.push('  '+x.texte+'  ['+(x.depuis||DOSSIER_DATE_INCONNUE)+']'));
@@ -81105,7 +81105,7 @@ function onPlanSearch(val){
       onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
       style="padding:12px 16px;border-bottom:1px solid var(--surface-2);cursor:pointer">
       <div style="font-size:var(--fs-md);font-weight:700;line-height:1.35">${escapeHtml(f.n)}</div>
-      ${_ev&&_ev.niveau==='intolerance'?`<div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.5;margin-top:4px">${escapeHtml(_ev.libelle+' · '+_ev.raison)}</div>`:''}
+      ${_ev&&_ev.niveau==='intolerance'?`<div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.5;margin-top:4px">${escapeHtml(_ev.libelle+' : '+_ev.raison)}</div>`:''}
       <div style="display:flex;gap:10px;align-items:center;margin-top:4px">
         ${rappel}<span style="font-size:var(--fs-2xs);color:var(--text-faint);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(f.g||'')}</span>
       </div>
@@ -82891,7 +82891,7 @@ function prepNom(etat){
   const noms=((etat&&etat.ing)||[]).map(i=>String(i&&i.n||'').trim()).filter(Boolean);
   const t=(etat&&etat.mode)==='prep'?'Meal prep':'Recette';
   if(!noms.length) return t;
-  return t+' · '+noms.slice(0,3).join(', ')+(noms.length>3?'…':'');
+  return t+' : '+noms.slice(0,3).join(', ')+(noms.length>3?'…':'');
 }
 function ouvrirPrep(mode){
   _prepEtat={mode:(mode==='recette'?'recette':'prep'),
@@ -83800,7 +83800,7 @@ const OFF_PAGE=12;
 const OFF_TIMEOUT=8000;
 const OFF_MAX_KCAL=900;           // au-delà, la fiche est fausse : l'huile pure est à 900
 const OFF_ECART_MACRO=0.30;
-const OFF_ATTRIBUTION='Source : Open Food Facts, donnée contributive sous licence ODbL. '
+const OFF_ATTRIBUTION='Source : Open Food Facts (donnée contributive sous licence ODbL). '
   +'Les valeurs sont saisies par des contributeurs, pas mesurées en laboratoire.';
 // OFF normalise ses champs `_100g` en GRAMMES, l'énergie exceptée. MICRO_REFS,
 // lui, attend des mg pour cinq clés et des µg pour trois. Le facteur est ici,
@@ -87206,7 +87206,7 @@ function besoinsProposes(user,opts){
         +' : je compte les créneaux, pas les deux'
       :'musculation déclarée dans les sports et '+sport.creneaux+' créneau'
         +(sport.creneaux>1?'x':'')+' actif'+(sport.creneaux>1?'s':'')
-        +' : je retiens la déclaration, plus élevée, jamais les deux');
+        +' : je retiens la déclaration, plus élevée (jamais les deux)');
   // ── La durée de séance : le repli est DIT, jamais silencieux ──
   if(sport.creneaux>0&&sport.dureeSource==='defaut')
     hypotheses.push('durée de séance '+(sport.dureeBrut?'illisible (« '+sport.dureeBrut+' »)'
@@ -88501,7 +88501,7 @@ function _tbSportsEcrire(modif,texte){
   c.updatedAt=Date.now(); users[c.email]=c;
   const ok=DB.set('users',users);
   _tbAvis(ok,CLOUD.pushOne(c.email,c),
-    j?((texte?texte+' · ':'')+'ton athlète est sur '+_tbNb(j.on.kcal)+' kcal')
+    j?((texte?texte+', ':'')+'ton athlète est sur '+_tbNb(j.on.kcal)+' kcal')
      :(manuel?'Sport enregistré : en saisie manuelle, tes chiffres priment'
              :'Sport enregistré : calcul incomplet, cibles inchangées'));
   try{ renderCoachNutriSection(c); }catch(e){}
@@ -89328,7 +89328,7 @@ function _htmlTableauxTableur(c){
   const _tr=(function(){ try{ return _transmisLire()[c.email]||null; }catch(e){ return null; } })();
   if(_tr&&_tr.d>0) h+='<div class="tbk-tr">'+icon('check',14)
     +'<span>Transmis le '+escapeHtml(_histoDate(_tr.d))
-    +(_tr.kcal>0?(' · '+_tbNb(_tr.kcal)+' kcal'):'')+'</span></div>';
+    +(_tr.kcal>0?(', '+_tbNb(_tr.kcal)+' kcal'):'')+'</span></div>';
   h+=_man
     ? ''
     // ON DIT LE DELAI PLUTOT QUE « immédiatement ». La modification part a
@@ -89914,7 +89914,7 @@ async function ccdJournalRetirer(iso,id){
   const i=e.findIndex(x=>x&&String(x.id)===String(id)&&x.par==='coach');
   if(i<0){ toast('Seuls les repas que tu as ajoutés peuvent être retirés','var(--orange)'); return false; }
   const ok=await rcConfirm('Retirer ce repas ?',
-    escapeHtml(e[i].nom||'Repas')+' · '+Math.round(Number(e[i].kcal)||0)+' kcal. '
+    escapeHtml(e[i].nom||'Repas')+' : '+Math.round(Number(e[i].kcal)||0)+' kcal. '
     +'Il disparaîtra du journal de ton athlète.','Retirer');
   if(!ok) return false;
   e.splice(i,1);
@@ -91132,7 +91132,7 @@ function evictionTrier(user,liste){
 // reste — et notamment pour « choix », qui ne s'annonce jamais.
 function evictionMention(ev){
   if(!ev||ev.niveau!=='intolerance') return '';
-  return ev.libelle+' · '+ev.raison;
+  return ev.libelle+' : '+ev.raison;
 }
 
 // ⚠ LA PHRASE DU SCAN, ET ELLE N'EST PAS DECORATIVE.
@@ -91726,7 +91726,7 @@ function phraseTraitementsCoach(user){
   const lib=id=>{ const t=TIMINGS_LIST.filter(x=>x.id===id)[0]; return t?t.label.toLowerCase():id; };
   const n=l.length;
   return n+' traitement'+(n>1?'s':'')+' en cours'
-    +(ordre.length?' · '+ordre.map(lib).join(', '):'')
+    +(ordre.length?' : '+ordre.map(lib).join(', '):'')
     +'. Tiens-en compte avant de proposer un complément.';
 }
 // ══════════════ L'ECRAN DES TRAITEMENTS ════════════════════════════════
@@ -91882,7 +91882,7 @@ function renderTraitements(){
          +'line-height:1.6">'
          +'<a href="#" onclick="event.preventDefault();ouvrirFicheTraitement(\''
          +escapeHtml(t.id)+'\')" style="color:var(--text-faint);text-decoration:underline">'
-         +escapeHtml(t.nom)+'</a> : jusqu’au '
+         +escapeHtml(t.nom)+'</a>, jusqu’au '
          +new Date(Number(t.fin)).toLocaleDateString('fr-FR')+'</div>').join('')
        +'</div>';
   }
@@ -92119,7 +92119,7 @@ function renderEditeurTraitement(){
       +'color:var(--text);line-height:1.5">Montrer ce traitement à mon coach</span>'
       +'<span style="display:block;font-size:var(--fs-2xs);color:var(--text-faint);'
       +'line-height:1.55;margin-top:4px">Sans ça, il voit seulement qu’un traitement '
-      +'est pris à ce moment de la journée : ni le nom, ni la dose, ni le '
+      +'est pris à ce moment de la journée, ni le nom, ni la dose, ni le '
       +'prescripteur. Ce que tu ne partages pas ne quitte pas ce téléphone, et '
       +'ne sera donc pas retrouvé si tu en changes.</span></span></label>';
 
@@ -92261,7 +92261,7 @@ function ouvrirFicheTraitement(id){
   if(t.notes) l.push(t.notes);
   l.push(t.partageCoach===true
     ? 'Ton coach voit le nom et la dose de ce traitement.'
-    : 'Ton coach voit seulement qu’un traitement est actif à ce moment de la journée : ni le nom, ni la dose.');
+    : 'Ton coach voit seulement qu’un traitement est actif à ce moment de la journée, ni le nom, ni la dose.');
   // ⚠ AUCUNE MODIFICATION DE POSOLOGIE DEPUIS L'APP. Ni ici, ni cote
   // coach : la dose se change chez le medecin, et une application qui
   // offrirait le geste laisserait croire qu'elle en a le droit. Cette fiche
@@ -93082,7 +93082,7 @@ function _htmlEvictionsCoach(c){
           +escapeHtml(LIB[e.niveau])+'</span></div>'
           +'<div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:2px">'
           +escapeHtml(e.cible.type+' « '+e.cible.valeur+' »'
-            +(e.note?' · '+e.note:''))+'</div></div>').join('')
+            +(e.note?' : '+e.note:''))+'</div></div>').join('')
       : '<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;'
         +'padding:4px 0">Aucune éviction déclarée. Lui seul peut les déclarer, '
         +'depuis son application.</div>')
@@ -93100,7 +93100,7 @@ function _htmlEvictionsCoach(c){
           +(conflits.length>1?'s':'')+' qui correspond'+(conflits.length>1?'ent':'')
           +' à une éviction.')+'</div>'
         +conflits.slice(0,8).map(x=>'<div style="font-size:var(--fs-2xs);color:var(--text-dim);'
-          +'line-height:1.55;margin-top:4px">· '+escapeHtml(x.libelle+' · '
+          +'line-height:1.55;margin-top:4px">· '+escapeHtml(x.libelle+' : '
           +x.eviction.libelle+' ('+x.eviction.raison+')')+'</div>').join('')
         +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;'
         +'margin-top:8px">RepCore ne retire rien du plan : à toi de trancher.</div></div>'
@@ -94875,7 +94875,7 @@ function gardeVideo(id){
   if(!r.ok){ toast(r.raison,'var(--orange)'); return false; }
   saveUser();
   CLOUD.pushOne(currentUser.email,currentUser).catch(()=>{});
-  toast(r.epingle?('Gardée. Elle n’expirera pas'+(r.reste!==undefined?' · '+r.reste+' place'+(r.reste>1?'s':'')+' restante'+(r.reste>1?'s':''):'')+'.')
+  toast(r.epingle?('Gardée. Elle n’expirera pas'+(r.reste!==undefined?', '+r.reste+' place'+(r.reste>1?'s':'')+' restante'+(r.reste>1?'s':''):'')+'.')
                  :'Elle reprend le cours normal : '+VIDEO_RETENTION_J+' jours.',
     r.epingle?'var(--green)':'var(--sub)');
   _renderVideosListe();
@@ -106748,9 +106748,9 @@ function showDrivePdfModal(driveUrl,targetEmail){
       <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
     </div>
     <p style="font-size:var(--fs-sm);color:var(--sub);line-height:1.8;margin-bottom:20px">Google Drive bloque la lecture directe depuis l'app (restriction navigateur).<br>
-    <span style="color:var(--text);font-weight:700">Étape 1 - </span> Ouvre le PDF sur Drive ↓<br>
-    <span style="color:var(--text);font-weight:700">Étape 2 - </span> Télécharge-le (icône ↓ en haut à droite de Drive)<br>
-    <span style="color:var(--text);font-weight:700">Étape 3 - </span> Sélectionne le fichier téléchargé ↓</p>
+    <span style="color:var(--text);font-weight:700">Étape 1 : </span> Ouvre le PDF sur Drive ↓<br>
+    <span style="color:var(--text);font-weight:700">Étape 2 : </span> Télécharge-le (icône ↓ en haut à droite de Drive)<br>
+    <span style="color:var(--text);font-weight:700">Étape 3 : </span> Sélectionne le fichier téléchargé ↓</p>
     <a href="${openUrl}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;text-align:center;background:linear-gradient(180deg,#0a2a1a,#061508);border:1px solid #1a4a2a;border-radius:var(--r-2);color:var(--green);font-size:var(--fs-xs);font-weight:800;text-decoration:none;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">
        Ouvrir sur Google Drive
     </a>
@@ -109266,7 +109266,7 @@ function _chargerDispoCoach(u){
       :'Ton délai réel médian sur '+DISPO_MEDIAN_FENETRE_J+' jours : <b>'
         +(m<24?(Math.round(m*10)/10).toString().replace('.',',')+' h'
               :(Math.round(m/2.4)/10).toString().replace('.',',')+' jours')
-        +'</b> <span style="color:var(--text-faint)"> - visible de toi seul.</span>';
+        +'</b> <span style="color:var(--text-faint)">: visible de toi seul.</span>';
   }
 }
 // ── Côté athlète : le bandeau, AVANT la saisie ────────────────────────────
@@ -111210,7 +111210,7 @@ async function supprimerCodeEtFiche(i){
     const saisi=await rcSaisie('Supprimer '+quoi+' ?\n\n'
       +'Ses séances, bilans, mesures et photos seront SUPPRIMÉS de la base. '
       +'Ce sont ses données, et rien ne les rendra.\n\n'
-      +'Retape son prénom : '+attendu+' : pour confirmer.','',
+      +'Retape son prénom ('+attendu+') pour confirmer.','',
       {libelleOk:'Supprimer définitivement'});
     if(saisi===null) return false;
     if(exKey(saisi)!==exKey(attendu)){
@@ -112346,7 +112346,7 @@ function etapeMontee(txt,refKg){
   const t=String(txt||'');
   const kg=paliersMontee(t,refKg);
   if(!kg.length) return t;
-  return t+' · '+kg.map(k=>String(k).replace('.',','))
+  return t+' : '+kg.map(k=>String(k).replace('.',','))
     .join(' · ')+' kg';
 }
 

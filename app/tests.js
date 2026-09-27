@@ -17023,7 +17023,7 @@ async function testExercices(){
             // c'est la consigne telle que le coach l'a écrite.
             const t='Montées en charge 40 / 60 / 80 %';
             if(etapeMontee(t,null)!==t) return _echec('le texte a changé : « '+etapeMontee(t,null)+' »');
-            if(etapeMontee(t,100)!==t+' · 40 · 60 · 80 kg')
+            if(etapeMontee(t,100)!==t+' : 40 · 60 · 80 kg')
               return _echec('rendu : « '+etapeMontee(t,100)+' »');
             // LES POURCENTAGES SURVIVENT À L'AJOUT : on augmente, on ne
             // remplace pas.
