@@ -33431,9 +33431,11 @@ async function testExercices(){
         if(!tot) return _echec('le total calorique n’est pas rendu');
         if(lu(tot.textContent)!==j.kcal)
           return _echec('le tableau annonce '+tot.textContent+', l’athlète reçoit '+j.kcal+' kcal');
-        const tj=[...d.querySelectorAll('.tbk-jr tbody tr')].find(r=>/Tous les jours/.test(r.textContent));
-        if(!tj||lu((tj.querySelector('td')||{}).textContent)!==j.kcal)
-          return _echec('« Tous les jours » annonce '+(tj&&tj.querySelector('td').textContent)+' pour '+j.kcal);
+        // SANS CYCLAGE, « Journées » ne répète plus le total (27/09/2026) : seul
+        // le choix du cyclage y reste, le total est celui des Macronutriments.
+        if([...d.querySelectorAll('.tbk-jr tbody tr')].some(r=>/Tous les jours/.test(r.textContent)))
+          return _echec('« Journées » répète encore le total sans cyclage');
+        if(!d.querySelector('.tbk-jr #tbk-cycle')) return _echec('le choix du cyclage a disparu');
         // Le total est bien la somme de ses grammes.
         return j.kcal===Math.round(4*j.p+9*j.l+4*j.g)
           ?true:_echec('la journée écrite n’est pas la somme de ses grammes');})());
