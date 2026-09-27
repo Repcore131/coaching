@@ -3593,7 +3593,11 @@ const CLOUD={
   // projet passe un jour en Blaze, mais elle ne protege RIEN aujourd'hui.
   // L'en-tete precedent annoncait des « tokens RCACCESS signes cote serveur » :
   // cette signature n'existe pas.
-  _functionsBase:'https://europe-west1-repcore-sync.cloudfunctions.net',
+  //
+  // ⚠ 27/09/2026 : LE SERVEUR LÉGER RÉPOND À CES APPELS (/fn/<nom>, même
+  //   protocole, jeton Firebase vérifié). Seul cloudinaryDestroy y est ;
+  //   ouvrirEssai et verifierAchatProgramme restent coupés par FONCTIONS_SERVEUR.
+  get _functionsBase(){ return SERVEUR_LEGER?SERVEUR_LEGER_URL+'/fn':'https://europe-west1-repcore-sync.cloudfunctions.net'; },
   async _callFn(name,data){
     const token=await this._getToken();
     const headers={'Content-Type':'application/json'};
@@ -7158,6 +7162,7 @@ function routeUser(){
   // LE CODE PARRAIN, DÈS LE DÉMARRAGE et pas seulement à l'ouverture de
   // « Inviter des amis » : sans lui, les liens partagés partaient sans ref.
   setTimeout(()=>{ try{ if(PARRAINAGE_ACTIF&&currentUser&&currentUser.role!=='coach') parrainageAssurerCode(currentUser).catch(()=>{}); }catch(e){} },6000);
+  setTimeout(()=>{ try{ if(currentUser&&currentUser.paypalSubscriptionId) abonnementSignaler(currentUser.paypalSubscriptionId,false); }catch(e){} },7000);
   // Le trapeze s'est dedouble le 08/09/2026 : on reporte l'ancien reglage sur
   // les deux portions, une fois, au demarrage. Elle ne sauve QUE si elle a
   // change quelque chose — un dossier deja migre ne declenche aucune poussee.
@@ -19194,6 +19199,15 @@ function _dfMemoInscrit(id,oui){
 // Ne lève jamais, ne bloque jamais : une notification perdue ne vaut pas un
 // geste raté. Le serveur RELIT la base avant d'agir (il ne croit pas
 // l'événement sur parole) ; ici on ne fait que le prévenir.
+// L'abonnement PayPal de ce compte, signalé au serveur une fois (et au
+// démarrage pour ceux d'avant 1603). Le serveur le vérifie chez PayPal.
+function abonnementSignaler(id,force){
+  const abo=String(id||'');
+  if(!SERVEUR_LEGER||!/^I-[A-Z0-9]{6,30}$/.test(abo)) return;
+  const cle='rc_abo_signale';
+  try{ if(!force&&localStorage.getItem(cle)===abo) return; }catch(e){}
+  deposerEvenement({type:'abonnement',abo}).then((ok)=>{ if(ok){ try{ localStorage.setItem(cle,abo); }catch(e){} } }).catch(()=>{});
+}
 async function deposerEvenement(ev){
   if(!SERVEUR_LEGER||!currentUser||!currentUser.email||!CLOUD||!CLOUD.ok()) return false;
   const par=currentUser.email.replace(/\./g,',');
@@ -69456,7 +69470,8 @@ const PUSH_TYPES=Object.freeze([
   {cle:'badge',titre:'Badge à portée',txt:'Le dimanche, quand un badge n’est plus qu’à une ou deux séances.'},
   {cle:'wrapped',titre:'Ton mois en chiffres',txt:'Le 1er du mois, quand ton Wrapped est prêt.'},
   {cle:'defi',titre:'Défi dans le Canal',txt:'Quand ton coach lance un nouveau défi.'},
-  {cle:'filleul',titre:'Filleul inscrit',txt:'Quand quelqu’un s’inscrit grâce à toi.'}
+  {cle:'filleul',titre:'Filleul inscrit',txt:'Quand quelqu’un s’inscrit grâce à toi.'},
+  {cle:'acces',titre:'Fin de ton accès',txt:'Trois jours avant la fin de ton accès ou de ton abonnement.'}
 ]);
 // PURE. La clé base64url en octets — ce qu'attend applicationServerKey.
 function pushB64VersOctets(b64){
@@ -95244,8 +95259,11 @@ async function _cldDetruire(publicId,type,opts){
     // hors ligne donne le meme message, et c'est tres bien : dans les deux cas,
     // insister vingt fois dans la meme session ne sert a rien, et la file, elle,
     // garde tout jusqu'au prochain demarrage.
+    // Le serveur léger ajoute la sienne : 503 tant que les clés Cloudinary
+    // n'y sont pas posées, ou Cloudinary injoignable.
     if(/\(404\)/.test(m)||/introuvable sur le serveur/i.test(m)
-       ||/Impossible de joindre le serveur/i.test(m)) _cldIndispo=true;
+       ||/Impossible de joindre le serveur/i.test(m)
+       ||/pas encore configurée|injoignable/i.test(m)) _cldIndispo=true;
     cldFileAjouter(publicId,type,Object.assign({raison:m.slice(0,120)},entree));
     return {ok:false,raison:m};
   }
@@ -111848,6 +111866,9 @@ function renderPaypalButton(planId,coachId){
            //     promettrait un engagement que personne n'a pris.
            engagementJusqu:(_estCoach?undefined:moisApres(Date.now(),12))});
         rcm('subscription_activated');
+        // LE SERVEUR APPREND QUEL ABONNEMENT EST À QUI : les avis de PayPal
+        // (paiement, résiliation) ne portent que son identifiant.
+        abonnementSignaler(data.subscriptionID,true);
         try{ attribPremierPaiement(currentUser); }catch(e){}
         if(pending){
           currentUser.coachId=pending.coachId||currentUser.coachId||null;

@@ -21916,6 +21916,14 @@ async function testExercices(){
       // La réponse du coach ne part qu’APRÈS l’envoi du dossier (le serveur la relit).
       if(!/envoi\)\.then\([^)]*=>\{ if\([a-z]+!==false\) deposerEvenement\(\{type:'reponse_bilan'/.test(String(saveReponseBilan))) return _echec('l’événement n’attend pas l’envoi');
       return true;})());
+    ok('SERVEUR LÉGER — LES APPELS, L’ABONNEMENT PAYPAL ET LA FIN D’ACCÈS',(()=>{
+      if(SERVEUR_LEGER&&CLOUD._functionsBase!==SERVEUR_LEGER_URL+'/fn') return _echec('les appels ne vont pas au serveur léger : '+CLOUD._functionsBase);
+      if(!PUSH_TYPES.some(t=>t.cle==='acces')) return _echec('la notification de fin d’accès n’est pas réglable');
+      if(typeof abonnementSignaler!=='function') return _echec('abonnementSignaler manque');
+      if(!/abonnementSignaler\(data\.subscriptionID,true\)/.test(String(renderPaypalButton))) return _echec('le paiement ne signale pas l’abonnement au serveur');
+      // Le 503 « pas encore configurée » du serveur fait attendre la file, sans insister.
+      if(!/pas encore configurée\|injoignable/.test(String(_cldDetruire))) return _echec('le 503 du serveur n’arrête pas les essais');
+      return true;})());
     ok('NOTES — LA MAQUETTE : UN BILAN À LA FOIS, QUATRE RUBRIQUES, DES JAUGES QUI LISENT LA RÉPONSE',(()=>{
       const B=[{type:'depart',date:Date.now()-40*864e5,'deb-weight':'103.8','deb-goals':'Perte de poids'},
         {type:'coaching',date:Date.now()-2*864e5,'bil-weight':'100.9','bil-motivation':'4','bil-diff-type':'Oui, avec les deux',
@@ -48562,13 +48570,13 @@ async function testExercices(){
         basculerPushType('defi',true);
         if(!pushTypeActif(currentUser,'defi')||'defi' in currentUser.pushPrefs) return _echec('non rallumé');
         if(basculerPushType('inconnu',false)) return _echec('type inconnu accepté');
-        return PUSH_TYPES.map(t=>t.cle).sort().join()==='badge,bilan,coach,defi,filleul,serie,wrapped'?true:_echec('types');
+        return PUSH_TYPES.map(t=>t.cle).sort().join()==='acces,badge,bilan,coach,defi,filleul,serie,wrapped'?true:_echec('types');
       } finally { currentUser=svU; saveUser=svS; }})());
     ok('Push : l’écran de réglages — une case par type, le bouton seulement quand il sert',(()=>{
       const d=document.createElement('div');
       d.innerHTML=htmlReglagesPush({pushPrefs:{serie:false}},'proposer');
       const c=d.querySelectorAll('input[type=checkbox][data-push]');
-      if(c.length!==7) return _echec(c.length+' cases');
+      if(c.length!==PUSH_TYPES.length||c.length!==8) return _echec(c.length+' cases');
       if(d.querySelector('[data-push=serie]').checked||!d.querySelector('[data-push=coach]').checked) return _echec('état des cases');
       const b=d.querySelector('button');
       if(!b||!b.classList.contains('btn-casse')) return _echec('bouton d’activation (R31 : btn-casse)');
