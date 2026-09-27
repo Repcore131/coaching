@@ -2517,6 +2517,17 @@ const RC_LEXIQUE=Object.freeze({
   volume:Object.freeze({
     t:'Volume',
     d:'La quantité de travail accumulée sur une période, muscle par muscle.'}),
+  // La fiche du ⓘ de chaque carte de muscle, onglet Volume : ce que disent
+  // les couleurs de la barre et le trait blanc.
+  zones_volume:Object.freeze({
+    t:'Lire la barre de volume',
+    d:'La barre situe tes séries de la semaine par rapport aux repères de ce muscle.',
+    p:'Le trait blanc marque le repère haut. Au-delà, la récupération devient difficile.',
+    e:Object.freeze([Object.freeze(['Gris','Sous le minimum utile']),
+      Object.freeze(['Bleu','Maintien : tu gardes ce que tu as']),
+      Object.freeze(['Vert','Zone de progrès']),
+      Object.freeze(['Orange','Volume élevé']),
+      Object.freeze(['Rouge','Au-dessus du repère'])])}),
   surcharge:Object.freeze({
     t:'Surcharge progressive',
     d:'Augmenter un peu la charge dès que tu gardes des répétitions en réserve.',
@@ -74114,9 +74125,12 @@ function calcBF(waist,neck,hips,height,gender){
 // choses qu'un camembert masque ne donne pas : un jeu entre les segments,
 // des bouts arrondis, et une piste sombre visible derriere — ce qui fait la
 // difference entre un diagramme et un objet dessine.
-function drawPie(id,slices){
+// `opts.label` : un mot au-dessus du pourcentage (« masse grasse ») ;
+// `opts.max` : le diametre plafond, 120 px par defaut.
+function drawPie(id,slices,opts){
+  const o=opts||{};
   const cv=document.getElementById(id);if(!cv)return;
-  const sz=Math.min(cv.parentElement.offsetWidth||120,120);
+  const sz=Math.min(cv.parentElement.offsetWidth||120,o.max||120);
   // DENSITÉ D'ÉCRAN, comme _setupCanvas : sans elle, 110 pixels de toile sont
   // étirés sur 330 pixels physiques et tout l'anneau est mou.
   const dpr=Math.min(window.devicePixelRatio||1,3);
@@ -74162,7 +74176,14 @@ function drawPie(id,slices){
   ctx.fillStyle=_tok('--text','#efefef');ctx.font=`800 ${Math.round(sz*0.145)}px Montserrat,sans-serif`;
   ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.shadowColor='rgba(255,255,255,.35)';ctx.shadowBlur=10;
-  ctx.fillText(Math.round(slices[0].val/total*100)+'%',cx,cy);
+  if(o.label){
+    ctx.font=`800 ${Math.round(sz*0.19)}px Montserrat,sans-serif`;
+    ctx.fillText(Math.round(slices[0].val/total*100)+'%',cx,cy+sz*0.07);
+    ctx.shadowBlur=0;
+    ctx.fillStyle=_tok('--sub','#9a9a9a');ctx.font=`600 ${Math.round(sz*0.058)}px Montserrat,sans-serif`;
+    const mots=String(o.label).toUpperCase().split(' ');
+    mots.forEach((m,i)=>ctx.fillText(m,cx,cy-sz*0.1+(i-(mots.length-1)/2)*sz*0.075));
+  }else ctx.fillText(Math.round(slices[0].val/total*100)+'%',cx,cy);
   ctx.shadowBlur=0;
 }
 
@@ -74214,22 +74235,43 @@ function _volBarre(m,n,rep,aberrant,user){
   // Sans repère, aucune zone : on montre la quantité, on ne la juge pas.
   const echelle=rep?Math.max(rep.mrv*1.25,n*1.05):Math.max(n*1.15,10);
   const pc=v=>Math.max(0,Math.min(100,v/echelle*100));
-  const seg=(a,b,c)=>b>a?`<div style="position:absolute;left:${pc(a)}%;width:${pc(b)-pc(a)}%;top:0;bottom:0;background:${c};opacity:.34"></div>`:'';
+  const seg=(a,b,c)=>b>a?`<div class="vb-seg" style="left:${pc(a)}%;width:${pc(b)-pc(a)}%;background:${c}"></div>`:'';
   const fond=rep
     ? seg(0,rep.mev,VOL_ZONES[0].c)+seg(rep.mev,rep.mavMin,VOL_ZONES[1].c)
       +seg(rep.mavMin,rep.mavMax,VOL_ZONES[2].c)+seg(rep.mavMax,rep.mrv,VOL_ZONES[3].c)
       +seg(rep.mrv,echelle,VOL_ZONES[4].c)
-    : `<div style="position:absolute;inset:0;background:var(--surface-3)"></div>`;
-  const couleur=z?z.c:'var(--sub)';
+    : `<div class="vb-seg" style="left:0;width:100%;background:var(--surface-3)"></div>`;
+  const couleur=z?z.c:'#8a8a8a';
   // Le remplissage est PLUS FIN que la piste, et centré : à pleine hauteur il
   // recouvrait les seuils déjà franchis, alors que situer la valeur par rapport
   // à eux est tout l'intérêt de la barre. Les zones restent lisibles au-dessus
   // et au-dessous, le trait de MRV traverse le tout.
-  return `<div style="position:relative;height:16px;border-radius:var(--r-2);overflow:hidden;background:var(--surface-2);${aberrant?'outline:1.5px solid var(--orange);outline-offset:1px':''}">
-      ${fond}
-      <div class="rc-barre" data-bar-w="${pc(n).toFixed(1)}" style="position:absolute;left:0;top:5px;height:6px;width:0;background:${couleur};border-radius:var(--r-1);box-shadow:0 0 0 1px rgba(0,0,0,.45);transition:width 480ms var(--c-out) var(--rcv-d,0ms)"></div>
-      ${rep?`<div style="position:absolute;left:${pc(rep.mrv)}%;top:0;bottom:0;width:1.5px;background:#fff;opacity:.6"></div>`:''}
+  // LA PISTE EST UN CALQUE A PART (27/09/2026, maquette de Kevin) : elle seule
+  // rogne ses zones, pour que le halo du remplissage et du trait deborde.
+  return `<div class="vb${aberrant?' vb-aberrant':''}">
+      <div class="vb-piste">${fond}</div>
+      <div class="rc-barre vb-rempli" data-bar-w="${pc(n).toFixed(1)}" style="--vb-c:${couleur};width:0;transition:width 480ms var(--c-out) var(--rcv-d,0ms)"></div>
+      ${rep?`<div class="vb-repere" style="left:${pc(rep.mrv)}%"></div>`:''}
     </div>`;
+}
+// L'ICONE DU STATUT, devant son libellé : un triangle pour ce qui monte trop,
+// une coche pour la zone de progrès, un rond pour le reste.
+function _volIconeZone(z){
+  const c=z?z.c:'var(--text-faint)';
+  const tri='<path d="M12 3 22 20H2z" fill="'+c+'" fill-opacity=".18" stroke="'+c+'" stroke-width="2" stroke-linejoin="round"/><path d="M12 9.5v5" stroke="'+c+'" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="17.3" r="1.25" fill="'+c+'"/>';
+  const coche='<circle cx="12" cy="12" r="10" fill="'+c+'"/><path d="m7.5 12.3 3 3 6-6.3" fill="none" stroke="#0b0b0b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>';
+  const rond='<circle cx="12" cy="12" r="9" fill="'+c+'" fill-opacity=".18" stroke="'+c+'" stroke-width="2"/><path d="M12 8v4.5" stroke="'+c+'" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="16" r="1.25" fill="'+c+'"/>';
+  const k=z&&z.cle;
+  return '<svg class="vc-ico" viewBox="0 0 24 24" aria-hidden="true">'
+    +(k==='ELEVE'||k==='AU_DESSUS'?tri:k==='PROGRES'?coche:rond)+'</svg>';
+}
+// L'ILLUSTRATION DU MUSCLE (planche de Kevin, 27/09/2026), teintée à sa
+// couleur. Un muscle sans image garde sa carte, sans vignette.
+const VOL_ILLUS=new Set(['PECTORAUX','DORSAUX','TRAP_SUP','TRAP_MED','LOMBAIRES','DELT_ANT','DELT_LAT',
+  'DELT_POST','BICEPS','TRICEPS','AVANT_BRAS','QUADRICEPS','ISCHIOS','FESSIERS','ABDUCTEURS',
+  'ADDUCTEURS','MOLLETS','ABDOS']);
+function _volIllus(m){
+  return VOL_ILLUS.has(m)?'./img/muscles/'+m.toLowerCase().replace(/_/g,'-')+'.webp':'';
 }
 
 function renderVolume(){
@@ -74290,19 +74332,24 @@ function renderVolume(){
       const d=n-moy;
       const signe=d>0?'+':'';
       // Un écart sous une demi-série n'est pas un mouvement, c'est du bruit.
-      if(Math.abs(d)>=0.5) delta=`<span style="font-size:var(--fs-xs);font-weight:800;color:${d>0?'var(--success)':'var(--orange)'};margin-left:6px">${signe}${volAffiche(d)}</span>`;
-      else delta=`<span style="font-size:var(--fs-xs);color:var(--text-faint);margin-left:6px">stable</span>`;
+      if(Math.abs(d)>=0.5) delta=`<span class="vc-delta ${d>0?'vc-plus':'vc-moins'}">${signe}${volAffiche(d)}</span>`;
+      else delta=`<span class="vc-delta vc-stable">stable</span>`;
     }
-    return `<div style="margin-bottom:14px">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px">
-        <span style="font-size:var(--fs-sm);font-weight:800;color:${(MUSCLES[m]||{}).c||'var(--text)'}">${(MUSCLES[m]||{}).lib||m}${(()=>{ const _s=(rep&&rep.source)||'table'; if(_s==='table') return ''; return `<span style="font-weight:400;color:var(--text-faint);font-size:var(--fs-2xs)"> · ${_s==='perso'?'ajusté sur ses retours':'fixé par toi'}</span>`; })()}</span>
-        <span style="font-size:var(--fs-xs);color:var(--sub);white-space:nowrap">${volAffiche(n)} série${n>=2?'s':''}${freq?' · '+freq+'×/sem':''}${delta}</span>
+    const illus=_volIllus(m);
+    const mc=(MUSCLES[m]||{}).c||'var(--text)';
+    return `<div class="vc${illus?'':' vc-sans-illus'}" style="--vc-c:${z?z.c:'#3a3a3a'}">
+      ${illus?`<img class="vc-illus" src="${illus}" alt="" loading="lazy" decoding="async" onerror="this.remove()">`:''}
+      <div class="vc-corps">
+        <div class="vc-tete">
+          <span class="vc-nom" style="color:${mc}">${(MUSCLES[m]||{}).lib||m}${rcInfo('zones_volume')}${(()=>{ const _s=(rep&&rep.source)||'table'; if(_s==='table') return ''; return `<span style="font-weight:400;color:var(--text-faint);font-size:var(--fs-2xs)"> · ${_s==='perso'?'ajusté sur ses retours':'fixé par toi'}</span>`; })()}</span>
+          <span class="vc-chiffres"><span class="vc-series">${volAffiche(n)} série${n>=2?'s':''}${freq?' · '+freq+'×/sem':''}</span>${delta}</span>
+        </div>
+        ${_volBarre(m,n,rep,c.aberrants[m],u)}
+        <div class="vc-zone" style="color:${z?z.c:'var(--text-faint)'}">
+          ${_volIconeZone(z)}<span>${z?z.lib:'pas de repère établi'}</span>${c.aberrants[m]?' <span style="color:var(--orange);font-weight:600">· inhabituel</span>':''}
+        </div>
+        ${_htmlConcentration(c,m)}
       </div>
-      ${_volBarre(m,n,rep,c.aberrants[m],u)}
-      <div style="font-size:var(--fs-2xs);color:${z?z.c:'var(--text-faint)'};margin-top:4px">
-        ${z?z.lib:'pas de repère établi'}${c.aberrants[m]?' <span style="color:var(--orange)">· inhabituel</span>':''}
-      </div>
-      ${_htmlConcentration(c,m)}
     </div>`;
   }).join('');
 
@@ -76081,23 +76128,27 @@ function showProgressTab(tab,btn,sansMemo){
           :bl.length<2?'Une courbe demande deux bilans. Il en manque encore un.'
           :'Une seule estimation pour l’instant. Reprends tes mesures au prochain bilan : c’est ce qui dira si elle bouge.'}</div>`}
       </div>`;
+    // LA CARTE DES DEUX BILANS AU DESSIN DE LA MAQUETTE (27/09/2026, Kevin :
+    // « change l'image 1 en 2 »). Chaque bilan a son bandeau rouge avec sa
+    // date, l'anneau nomme ce qu'il chiffre (« masse grasse »), MG et MM sont
+    // separes d'un filet, et un trait rouge en biais coupe les deux bilans.
+    const _dateBil=b=>{ try{ return new Date(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}); }catch(e){ return ''; } };
     const pieSec=(idx,title)=>{
       const mg=mgKgs[idx]??0,mm=mmKgs[idx]??0;
       if(!mg&&!mm) return '';
       const mgC=idx===0?'#E02020':'#3b82f6';
-      return `<div style="flex:1;text-align:center">
-        <div class="evo-titre" style="letter-spacing:1.5px;margin-bottom:10px">${title}</div>
-        <canvas id="pie-${idx}" style="max-width:110px;margin:0 auto;display:block"></canvas>
-        <div style="margin-top:8px;display:flex;justify-content:center;gap:12px">
-          <div style="text-align:center"><div style="width:8px;height:8px;border-radius:var(--r-full);background:${mgC};margin:0 auto 4px"></div><div style="font-size:var(--fs-xs);color:var(--sub)">MG</div><div style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${mg}kg</div></div>
-          <div style="text-align:center"><div style="width:8px;height:8px;border-radius:var(--r-full);background:#22c55e;margin:0 auto 4px"></div><div style="font-size:var(--fs-xs);color:var(--sub)">MM</div><div style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${mm}kg</div></div>
+      const kg=v=>String(v)+'<small> kg</small>';
+      return `<div class="mgc-col">
+        <div class="mgc-tete"><div class="mgc-titre">${title}</div><div class="mgc-date">${_dateBil(bl[idx])}</div></div>
+        <canvas id="pie-${idx}" class="mgc-pie"></canvas>
+        <div class="mgc-leg">
+          <div class="mgc-item"><div class="mgc-nom"><span class="mgc-pt" style="background:${mgC};box-shadow:0 0 8px ${mgC}"></span>MG</div><div class="mgc-val">${kg(mg)}</div></div>
+          <div class="mgc-item"><div class="mgc-nom"><span class="mgc-pt" style="background:#22c55e;box-shadow:0 0 8px #22c55e"></span>MM</div><div class="mgc-val">${kg(mm)}</div></div>
         </div>
       </div>`;
     };
-    // ⚠ PAS DE CARTE VIDE (27/09/2026) : sans estimation au premier ni au
-    //   dernier bilan, les deux camemberts rendaient '' et leur cadre restait,
-    //   vide, entre la courbe et le tableau.
-    const _camemberts=(bl.length>=1?pieSec(0,'Bilan 1'):'')+(bl.length>1?pieSec(bl.length-1,'Bilan '+bl.length):'');
+    const _pie1=bl.length>=1?pieSec(0,'Bilan 1'):'',_pieN=bl.length>1?pieSec(bl.length-1,'Bilan '+bl.length):'';
+    const _camemberts=_pie1+(_pie1&&_pieN?'<div class="mgc-eclair" aria-hidden="true"></div>':'')+_pieN;
     c.innerHTML=`
       <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
         <!-- Le titre nommait la METHODE, « Paramètres : Formule US Navy »,              la ou l athlete cherche ce que la carte lui donne. Renomme sur
@@ -76133,7 +76184,9 @@ function showProgressTab(tab,btn,sansMemo){
            « MG actuel ». L'honnetete sur la fiabilite reste ; c'est sa
            repetition a chaque visite qui disparait. -->
       ${_carteCourbeMG}
-      ${_camemberts?`<div class="evo-carte" style="display:flex;gap:12px;padding:20px 16px;justify-content:center">
+      ${_camemberts?`<div class="evo-carte mgc">
+        <span class="mgc-coin mgc-coin-hg"></span><span class="mgc-coin mgc-coin-hd"></span>
+        <span class="mgc-coin mgc-coin-bg"></span><span class="mgc-coin mgc-coin-bd"></span>
         ${_camemberts}
       </div>`:''}
       ${renderDataTable(
@@ -76167,10 +76220,10 @@ function showProgressTab(tab,btn,sansMemo){
     try{ if(typeof arcTracerCourbes==='function') arcTracerCourbes(c); }catch(e){}
     setTimeout(()=>{
       const mg0=mgKgs[0]??0,mm0=mmKgs[0]??0;
-      if(mg0&&mm0) drawPie('pie-0',[{val:mg0,color:'#E02020'},{val:mm0,color:'#22c55e'}]);
+      if(mg0&&mm0) drawPie('pie-0',[{val:mg0,color:'#E02020'},{val:mm0,color:'#22c55e'}],{label:'Masse grasse',max:170});
       if(bl.length>1){
         const mgL=mgKgs[bl.length-1]??0,mmL=mmKgs[bl.length-1]??0;
-        if(mgL&&mmL) drawPie('pie-'+(bl.length-1),[{val:mgL,color:'#3b82f6'},{val:mmL,color:'#22c55e'}]);
+        if(mgL&&mmL) drawPie('pie-'+(bl.length-1),[{val:mgL,color:'#3b82f6'},{val:mmL,color:'#22c55e'}],{label:'Masse grasse',max:170});
       }
     },60);
 
