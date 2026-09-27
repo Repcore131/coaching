@@ -76,7 +76,13 @@ export default {
       // et le code HTTP, jamais une clé.
       if (url.pathname === '/sante' && url.searchParams.get('cles') === '1') {
         const r = {};
-        try { await jetonPaypal(env); r.paypal = 'ok'; } catch (e) { r.paypal = String(e.message || e).slice(0, 60); }
+        try {
+          const jeton = await jetonPaypal(env); r.paypal = 'ok';
+          // Le Webhook ID posé est-il celui qui pointe ici ?
+          const l = await (await fetch('https://api-m.paypal.com/v1/notifications/webhooks', { headers: { Authorization: 'Bearer ' + jeton } })).json();
+          const w = ((l && l.webhooks) || []).find((x) => x.id === String(env.PAYPAL_WEBHOOK_ID || '').trim());
+          r.webhook = !w ? 'Webhook ID inconnu de PayPal' : (/repcore-serveur\.repcore\.workers\.dev\/paypal$/.test(w.url) ? 'ok' : 'pointe ailleurs');
+        } catch (e) { r.paypal = r.paypal || String(e.message || e).slice(0, 60); }
         try {
           const k = String(env.CLOUDINARY_API_KEY || '').trim(), sec = String(env.CLOUDINARY_API_SECRET || '').trim();
           if (!k || !sec) r.cloudinary = 'non configuré';
