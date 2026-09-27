@@ -35148,9 +35148,14 @@ async function testExercices(){
       ok('1614 — DROITS PORTÉS PAR LE SERVEUR : effacer accessExpiry ou s’écrire abonné dans son dossier n’ouvre rien',(()=>{
         const mail='test-droits-1614@t.fr', now=Date.now();
         const u={email:mail,role:'athlete',status:'AUTONOMIE_PREMIUM',paymentStatus:'active',abonnement:{formule:'ultime'}};
-        const sauve=localStorage.getItem(DROITS_CLE), sauveP=localStorage.getItem(PAIEMENT_RECENT_CLE);
+        const sauve=localStorage.getItem(DROITS_CLE), sauveP=localStorage.getItem(PAIEMENT_RECENT_CLE), sauveS=localStorage.getItem(DROITS_SERVEUR_CLE);
         try{
           localStorage.removeItem(PAIEMENT_RECENT_CLE);
+          // 0. AVANT LA BASCULE (rattrapage pas encore passé) : un nœud vide ne coupe personne.
+          localStorage.removeItem(DROITS_SERVEUR_CLE);
+          _droitsPoser(mail,null,true);
+          if(palierDe(u)!=='ultime') return _echec('avant le rattrapage, un nœud vide coupe un abonné : '+palierDe(u));
+          localStorage.setItem(DROITS_SERVEUR_CLE,'1');
           // 1. droits/ porte une fin passée : le dossier sans accessExpiry n'y change rien.
           _droitsPoser(mail,{palier:'ultime',echeance:now-864e5,source:'paypal',abo:'I-ABC12345678'},false);
           if(palierDe(u)!=='aucun') return _echec('fin passée dans droits/, dossier nettoyé : '+palierDe(u));
@@ -35178,6 +35183,7 @@ async function testExercices(){
         } finally {
           if(sauve===null) localStorage.removeItem(DROITS_CLE); else localStorage.setItem(DROITS_CLE,sauve);
           if(sauveP===null) localStorage.removeItem(PAIEMENT_RECENT_CLE); else localStorage.setItem(PAIEMENT_RECENT_CLE,sauveP);
+          if(sauveS===null) localStorage.removeItem(DROITS_SERVEUR_CLE); else localStorage.setItem(DROITS_SERVEUR_CLE,sauveS);
         }})());
 
       ok('1614 — FERMER À LA MAIN UN ACCÈS PAYPAL, PUIS ROUVRIR, LE REND TEL QU’IL ÉTAIT',(()=>{
@@ -35564,9 +35570,12 @@ async function testExercices(){
           //   moins de 72 h (paiementRecent), le temps que PayPal prévienne.
           poser(null,true);
           if(droitsDe(u).etat!=='absent') return _echec('l’état d’un nœud vide : '+droitsDe(u).etat);
-          const _pr=localStorage.getItem(PAIEMENT_RECENT_CLE); localStorage.removeItem(PAIEMENT_RECENT_CLE);
+          // (une fois la bascule faite : reglages_publics/droitsServeur)
+          const _pr=localStorage.getItem(PAIEMENT_RECENT_CLE), _ds=localStorage.getItem(DROITS_SERVEUR_CLE);
+          localStorage.removeItem(PAIEMENT_RECENT_CLE); localStorage.setItem(DROITS_SERVEUR_CLE,'1');
           const _vide=palierDe(u);
           if(_pr!==null) localStorage.setItem(PAIEMENT_RECENT_CLE,_pr);
+          if(_ds===null) localStorage.removeItem(DROITS_SERVEUR_CLE); else localStorage.setItem(DROITS_SERVEUR_CLE,_ds);
           if(_vide!=='aucun') return _echec('un nœud vide rend encore la main au dossier : '+_vide);
           // ET UN NŒUD QUI PORTE « aucun » FERME, LUI : c'est ainsi que Kevin
           // referme un accès à la main depuis la console, et ça, un navigateur

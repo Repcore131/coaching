@@ -1134,12 +1134,15 @@
     //   qu'il a), mais la porte ouverte dans l'interface ne donne rien tant que
     //   `firebase deploy --only database` n'a pas tourne.
     //
-    // ⚠ PLUS DE BRANCHE « DOSSIER » (27/09/2026). Elle lisait status,
-    //   paymentStatus et abonnement.formule dans /users : son titulaire les
-    //   ecrit, et n importe qui pouvait s y declarer Ultime. Le serveur leger
-    //   ecrit maintenant droits/ a chaque paiement : Ultime en cours (sans
-    //   echeance ou avant elle), un programme achete (ultimeJusqu), ou le mois
-    //   d Ultime du parrainage (bonusUltimeFin).
+    // ⚠ LA BRANCHE « DOSSIER » S ETEINT A LA BASCULE (27/09/2026). Elle lit
+    //   status, paymentStatus et abonnement.formule dans /users : son
+    //   titulaire les ecrit, et n importe qui pouvait s y declarer Ultime. Le
+    //   serveur leger ecrit maintenant droits/ a chaque paiement : Ultime en
+    //   cours (sans echeance ou avant elle), un programme achete (ultimeJusqu),
+    //   ou le mois d Ultime du parrainage (bonusUltimeFin). La branche ne vaut
+    //   plus que tant que reglages_publics/droitsServeur n existe pas : le
+    //   script de rattrapage le pose apres avoir rempli droits/ pour les
+    //   abonnes d avant, qui sinon perdraient le catalogue en attendant.
     // ── WEB PUSH : LES ABONNEMENTS ──────────────────────────────────────
     // Un abonnement par appareil : /push/<cleEmail>/<id>. Le TITULAIRE seul le
     // lit et l ecrit (s abonner, se desabonner) ; les fonctions (Admin SDK)
@@ -1472,8 +1475,22 @@
       }
     },
 
+    // Reglages lus par toute l app, ecrits par le createur seul. droitsServeur :
+    // pose par le script de rattrapage des paiements (remplir-paiements.mjs)
+    // une fois droits/ rempli pour les abonnes d avant ; l app ne ferme qu a
+    // partir de la l abonnement que seul le dossier affirme.
+    "reglages_publics": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      "droitsServeur": {
+        "le": { ".validate": "newData.isNumber() && newData.val() > 0" },
+        "$autre": { ".validate": false }
+      },
+      "$autre": { ".validate": false }
+    },
+
     "exercices": {
-      ".read": "auth != null && (\n  root.child('users').child(auth.token.email.replace('.', ',')).child('role').val() === 'coach' ||\n  (root.child('droits').child(auth.token.email.replace('.', ',')).child('palier').val() === 'ultime' &&\n   (root.child('droits').child(auth.token.email.replace('.', ',')).child('echeance').val() === 0 || root.child('droits').child(auth.token.email.replace('.', ',')).child('echeance').val() > now)) ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('ultimeJusqu').val() > now ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('bonusUltimeFin').val() > now\n)",
+      ".read": "auth != null && (\n  root.child('users').child(auth.token.email.replace('.', ',')).child('role').val() === 'coach' ||\n  (root.child('droits').child(auth.token.email.replace('.', ',')).child('palier').val() === 'ultime' &&\n   (root.child('droits').child(auth.token.email.replace('.', ',')).child('echeance').val() === 0 || root.child('droits').child(auth.token.email.replace('.', ',')).child('echeance').val() > now)) ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('ultimeJusqu').val() > now ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('bonusUltimeFin').val() > now ||\n  (!root.child('reglages_publics').child('droitsServeur').exists() &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('status').val() === 'AUTONOMIE_PREMIUM' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('paymentStatus').val() === 'active' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('abonnement').child('formule').val() === 'ultime')\n)",
       ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'"
     }
   }

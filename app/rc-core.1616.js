@@ -4525,6 +4525,20 @@ const CLOUD={
       return {ok:true,droits:(d&&typeof d==='object')?d:null};
     }catch(e){ return {ok:false,raison:'reseau'}; }
   },
+  // L'interrupteur de la bascule : posé par le script de rattrapage
+  // (remplir-paiements.mjs --ecrire) une fois droits/ rempli pour les abonnés
+  // d'avant. true, false (absent), ou null quand la lecture échoue.
+  async pullDroitsServeur(){
+    const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),6000);
+    try{
+      const token=await this._getToken();
+      if(!token) return null;
+      const r=await fetch(this._fbUrl.replace('users.json','reglages_publics/droitsServeur.json')+'?auth='+token,{signal:ctrl.signal});
+      if(!r.ok) return null;
+      const d=await r.json();
+      return !!(d&&Number(d.le)>0);
+    }catch(e){ return null; }
+  },
   // ══ ECRIRE UN DROIT, DEPUIS L’APPLICATION (24/09/2026) ══════════════════
   //
   // ⚠ C’EST LA SEULE ECRITURE DE CE NOEUD DANS TOUT LE FICHIER, et la regle ne
@@ -7475,7 +7489,7 @@ function _palierHerite(u,etat){
   const ech=Number(u&&u.accessExpiry)||0;
   if(ech>0&&Date.now()>=ech) return 'aucun';
   if(s==='COACHING_SUIVI') return 'suivi';
-  const payeCru=(etat!=='absent')||paiementRecent(u);
+  const payeCru=(etat!=='absent')||!droitsServeurActif()||paiementRecent(u);
   if(!payeCru) return 'aucun';
   if(s==='AUTONOMIE_PREMIUM'&&u.paymentStatus==='active'){
     // LA FORMULE PAYEE, quand le dossier la porte. Les dossiers ouverts avant
@@ -7488,6 +7502,22 @@ function _palierHerite(u,etat){
   // sursis que le reste de ce repli : le serveur decidera des qu'il parlera.
   if(programmeOuvreUltime(u)) return 'ultime';
   return 'aucun';
+}
+// ⚠ LA BASCULE NE SE FAIT QU'UNE FOIS LE RATTRAPAGE PASSÉ. Tant que le script
+//   remplir-paiements.mjs n'a pas écrit droits/ pour les abonnés d'avant (et
+//   posé reglages_publics/droitsServeur), un nœud vide ne prouve rien : ce
+//   sont eux, justement, qui n'en ont pas. Le dossier décide alors comme avant.
+//   Lu une fois par session avec droits/, et gardé : un réglage qui passe à
+//   vrai n'a pas de raison de revenir en arrière.
+const DROITS_SERVEUR_CLE='rc_droits_serveur';
+function droitsServeurActif(){ try{ return localStorage.getItem(DROITS_SERVEUR_CLE)==='1'; }catch(e){ return false; } }
+let _droitsServeurLu=false;
+async function rafraichirDroitsServeur(){
+  if(_droitsServeurLu||droitsServeurActif()) return;
+  const v=await CLOUD.pullDroitsServeur().catch(()=>null);
+  if(v===null) return;
+  _droitsServeurLu=true;
+  if(v){ try{ localStorage.setItem(DROITS_SERVEUR_CLE,'1'); }catch(e){} }
 }
 // LA PREUVE LOCALE D'UN PAIEMENT QUI VIENT D'ABOUTIR, pour 72 heures : posée
 // par onApprove (abonnement) et par l'achat d'un programme, sur l'appareil qui
@@ -7531,6 +7561,7 @@ async function rafraichirDroits(u,force){
   if(!mail||(cible&&cible.role==='coach')) return false;
   const o=_droitsLus(mail);
   if(!force&&o&&(Date.now()-Number(o.lu||0))<DROITS_FRAIS_MS) return true;
+  try{ await rafraichirDroitsServeur(); }catch(e){}
   let r=null;
   try{ r=await CLOUD.pullDroits(mail); }catch(e){ r=null; }
   if(!r||!r.ok) return false;

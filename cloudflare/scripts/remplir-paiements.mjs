@@ -31,5 +31,10 @@ for (const [k, v] of Object.entries(maj)) console.log((ecrire ? 'écrit   ' : '�
 console.log('\n' + rapport.comptes + ' comptes avec un paiement PayPal · ' + rapport.premiers + ' premiers paiements · '
   + rapport.droits + ' nœuds droits/ · ' + rapport.index + ' index · ' + rapport.programmes + ' programmes');
 for (const r of rapport.refuses) console.log('  refusé : ' + r);
-if (ecrire && Object.keys(maj).length) { await db.ref().update(maj); console.log('\nÉcrit.'); }
+if (ecrire) {
+  // L'INTERRUPTEUR DE LA BASCULE, posé en dernier : à partir de lui, l'app ne
+  // croit plus un abonnement que seul le dossier affirme (voir _palierHerite).
+  await db.ref().update(Object.assign({}, maj, { 'reglages_publics/droitsServeur': { le: Date.now() } }));
+  console.log('\nÉcrit, et la bascule est activée (reglages_publics/droitsServeur).');
+}
 else if (!ecrire) console.log('\nÀ blanc : rien n\'a été écrit. Relancer avec --ecrire pour appliquer.');

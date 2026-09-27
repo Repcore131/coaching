@@ -371,11 +371,15 @@ console.log('regles : aucun appel JavaScript inconnu du langage');
       process.exit(1);
     }
     const lecture=String((R.exercices||{})['.read']||'');
-    if(/child\('(status|paymentStatus|abonnement|accessExpiry|programmesAchetes)'\)/.test(lecture)){
-      console.error('\nLe catalogue d\'exercices s\'ouvre encore sur la foi du dossier (status, paymentStatus, abonnement) : son titulaire l\'ecrit.');
+    // La branche « dossier » n'est admise que gardée par l'interrupteur de la
+    // bascule : elle s'éteint quand reglages_publics/droitsServeur existe.
+    const garde="!root.child('reglages_publics').child('droitsServeur').exists() &&";
+    const sansGarde=lecture.split('||').filter((b)=>/child\('(status|paymentStatus|abonnement|accessExpiry|programmesAchetes)'\)/.test(b)&&b.indexOf(garde)<0);
+    if(sansGarde.length){
+      console.error('\nLe catalogue d\'exercices s\'ouvre encore sur la foi du dossier (status, paymentStatus, abonnement) sans l\'interrupteur de la bascule : son titulaire l\'ecrit.');
       process.exit(1);
     }
-    console.log('droits : aucune regle au-dessus ne l\'ouvre ; le catalogue ne lit plus le dossier');
+    console.log('droits : aucune regle au-dessus ne l\'ouvre ; le catalogue ne lit le dossier que jusqu\'a la bascule');
   }
 }
 
