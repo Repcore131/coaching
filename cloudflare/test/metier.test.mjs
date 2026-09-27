@@ -120,7 +120,8 @@ await test('parrainage : la demande est jugée, le filleul rattaché, le parrain
   await w.minute();
   assert.equal(w.F.lire('parrainage/demandes/' + F1 + '/etat'), 'accepte');
   assert.equal(w.F.lire('parrainage/liens/' + F1).parrain, P1);
-  // Le serveur n'écrit RIEN dans droits/ : un nœud non vide y primerait sur le dossier.
+  // L'inscription avec un code n'écrit rien dans droits/ : l'essai du filleul
+  // vit dans son dossier (essaiOuvrir), et un nœud sans palier le fermerait.
   assert.equal(w.F.lire('droits'), null);
   const m = telP.lire(w.F.recus[0].init.body);
   assert.match(m.title, /Julie vient de s’inscrire avec ton code/);
@@ -128,7 +129,10 @@ await test('parrainage : la demande est jugée, le filleul rattaché, le parrain
   const r = await w.M.parrainagePaiement(F1, 'test');
   assert.ok(r);
   assert.equal(w.F.lire('parrainage/comptes/' + P1 + '/moisGagnes'), 1);
-  assert.equal(w.F.lire('droits'), null, 'toujours rien dans droits/');
+  // Le mois offert au parrain sans accès s'écrit dans droits/ (source parrainage) : c'est ce que l'app lit d'abord.
+  assert.equal(w.F.lire('droits/' + F1), null, 'rien chez le filleul');
+  assert.equal(w.F.lire('droits/' + P1 + '/palier'), 'essentielle');
+  assert.equal(w.F.lire('droits/' + P1 + '/source'), 'parrainage');
   assert.equal(await w.M.parrainagePaiement(F1, 'test'), null, 'idempotent');
 });
 

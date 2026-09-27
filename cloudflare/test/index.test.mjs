@@ -52,4 +52,12 @@ await test('une URL illisible ne sort jamais sans CORS', async () => {
   corsPresent(r);
 });
 
+await test('/sante dit quel accès à la base sert : compte de service, ou l’ancien secret à retirer', async () => {
+  const lire = async (env) => (await (await worker.fetch(new Request('https://s.t/sante'), env, CTX)).json()).acces;
+  assert.equal(await lire(ENV), 'secret_historique');
+  const compte = JSON.stringify({ client_email: 'w@p.iam.gserviceaccount.com', private_key: '-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----\n' });
+  assert.equal(await lire(Object.assign({}, ENV, { FIREBASE_SERVICE_ACCOUNT: compte })), 'compte_service');
+  assert.equal(await lire({ FIREBASE_DB_URL: 'https://b' }), 'aucun');
+});
+
 console.log(ok + ' tests passés');

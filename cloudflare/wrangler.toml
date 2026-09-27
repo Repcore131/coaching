@@ -17,7 +17,8 @@ VAPID_PUBLIC_KEY = "BLOS0J9PpSZcViPM4ySSKDd0Ss-rnuo8yhmdqpvyhAE6s_HQvSM7QK5nIs32
 PAYPAL_CLIENT_ID = "AS9pdM1fxqdyzKzvuiQB3mTPAIHZW12rW_KWAOKB8XkalJXV8kEyWWBzwHPUxCBZtMMzqjJNnAjfa1f1"
 
 # SECRETS, posés à la main (jamais ici) :
-#   npx wrangler secret put FIREBASE_DB_SECRET
+#   FIREBASE_SERVICE_ACCOUNT  (compte-service.ps1 ; README, « Accès à la base »)
+#   (FIREBASE_DB_SECRET : l'ancien code secret, à retirer une fois le compte de service posé)
 #   npx wrangler secret put VAPID_PRIVATE_KEY
 # et, pour les paiements et la suppression des vidéos (secrets-paiements.ps1) :
 #   PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET

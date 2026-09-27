@@ -18,12 +18,16 @@
 //   on écrit avec `if-match` ; un 412 veut dire « quelqu'un est passé entre
 //   les deux », et on recommence (cinq fois au plus).
 
-export function creerBase({ url, auth, fetchImpl }) {
+// L'ACCÈS : `jeton` (une fonction qui rend un jeton d'accès OAuth, envoyé dans
+// l'en-tête Authorization — voir google.js) ; à défaut `auth`, l'ancien code
+// secret de la base, qui ne sait voyager que dans l'URL. Le premier est celui
+// qu'on veut : le second est gardé pour la bascule, et /sante le signale.
+export function creerBase({ url, auth, jeton, fetchImpl }) {
   const F = fetchImpl || fetch;
   const racine = String(url).replace(/\/$/, '');
   const q = (params) => {
     const p = new URLSearchParams();
-    if (auth) p.set('auth', auth);
+    if (auth && !jeton) p.set('auth', auth);
     for (const [k, v] of Object.entries(params || {})) if (v !== undefined) p.set(k, v);
     const s = p.toString();
     return s ? '?' + s : '';
@@ -36,9 +40,10 @@ export function creerBase({ url, auth, fetchImpl }) {
 
   async function appel(methode, c, corps, params, entetes) {
     compteur++;
+    const acces = jeton ? { Authorization: 'Bearer ' + (await jeton()) } : {};
     const r = await F(adresse(c, params), {
       method: methode,
-      headers: Object.assign({ 'Content-Type': 'application/json' }, entetes || {}),
+      headers: Object.assign({ 'Content-Type': 'application/json' }, acces, entetes || {}),
       body: corps === undefined ? undefined : JSON.stringify(corps),
     });
     return r;

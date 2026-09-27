@@ -37,12 +37,11 @@ pire, un jour de dépassement, les appels suivants sont refusés jusqu'à minuit
    cd cloudflare
    npx wrangler@4 login
    ```
-3. **Le code secret de la base** : console Firebase → ⚙ Paramètres du projet → Comptes de
-   service → **Codes secrets de la base de données** → Afficher → copier. Puis :
+3. **L'accès à la base : un compte de service** (voir « Accès à la base » plus bas) — la clé JSON
+   dans `C:\Users\kevin\RepCore-secrets\compte-service.json`, puis :
    ```
-   npx wrangler@4 secret put FIREBASE_DB_SECRET
+   powershell -ExecutionPolicy Bypass -File C:\RepCore-web\cloudflare\compte-service.ps1
    ```
-   et coller le code quand il est demandé.
 4. **La clé privée des notifications** (elle est dans `C:\Users\kevin\RepCore-secrets\vapid-privee.txt`,
    hors du dépôt) :
    ```
@@ -53,7 +52,7 @@ pire, un jour de dépassement, les appels suivants sont refusés jusqu'à minuit
    npx wrangler@4 deploy
    ```
 6. Vérifier : `https://repcore-serveur.<sous-domaine>.workers.dev/sante` doit répondre
-   `{"ok":true,"base":true,"secret":true,"vapid":true}`.
+   `{"ok":true,"base":true,"secret":true,"acces":"compte_service","vapid":true}`.
 
 L'adresse du serveur est ensuite posée dans l'app (`SERVEUR_LEGER_URL`, `app/rc-core.*.js`) et dans
 les pages publiques (`index.html`, `i/`, `p/`, `c/`), puis livrée : c'est ce qui allume le tout.
@@ -146,6 +145,44 @@ Le **nom du compte Cloudinary** vient du worker, jamais de l'app : secret facult
 - **L'aperçu personnalisé** des liens `/@pseudo` et `/coach/slug` (emblème du rang, prénom) : ils
   gardent l'aperçu par défaut.
 
+## Accès à la base
+
+Le worker lit et écrit la Realtime Database **en administrateur**, avec un **jeton d'accès OAuth** tiré
+d'un compte de service Google et envoyé dans l'en-tête `Authorization` (`src/google.js`). Il vaut
+une heure, se renouvelle seul, et la clé qui le signe ne quitte jamais le worker.
+
+Il remplace l'ancien **code secret de la base de données** (`FIREBASE_DB_SECRET`) : un accès total,
+sans expiration, envoyé dans l'URL de chaque requête (`?auth=…`), donc dans les journaux de ce
+qu'elle traverse. Tant que le compte de service n'est pas posé, le worker s'en sert encore, et
+`/sante` le dit : `"acces":"secret_historique"`. L'état voulu est `"acces":"compte_service"`.
+
+### Mise en place (une fois)
+
+1. Console Google Cloud, projet `repcore-sync` :
+   <https://console.cloud.google.com/iam-admin/serviceaccounts?project=repcore-sync> → **Créer un
+   compte de service** → nom `repcore-worker`.
+2. Rôle : **Firebase Realtime Database Admin** (`roles/firebasedatabase.admin`), et rien d'autre.
+   Pas le compte `firebase-adminsdk` : il ouvre tout le projet (authentification, hébergement…).
+3. Le compte → **Clés** → **Ajouter une clé** → **JSON**. Enregistrer le fichier sous
+   `C:\Users\kevin\RepCore-secrets\compte-service.json`, **hors du dépôt**.
+4. `powershell -ExecutionPolicy Bypass -File C:\RepCore-web\cloudflare\compte-service.ps1` : pose
+   le secret `FIREBASE_SERVICE_ACCOUNT`, vérifie `/sante`, puis retire `FIREBASE_DB_SECRET` du worker.
+5. **Révoquer l'ancien code secret** : console Firebase → ⚙ Paramètres du projet → Comptes de
+   service → Codes secrets de la base de données → supprimer. Tant qu'il existe, il ouvre toute la
+   base, à qui l'a.
+
+### Rotation (tous les 90 jours, ou tout de suite si la clé a pu fuiter)
+
+1. Même page, compte `repcore-worker` → **Clés** → **Ajouter une clé** → JSON : remplacer
+   `compte-service.json` par le nouveau fichier.
+2. Relancer `compte-service.ps1` : le worker prend la nouvelle clé au déploiement du secret (les
+   jetons déjà émis avec l'ancienne restent valables au plus une heure).
+3. `/sante` doit dire `"acces":"compte_service"`.
+4. Supprimer l'**ancienne** clé dans **Clés** (son identifiant est `private_key_id` dans l'ancien
+   fichier), puis effacer l'ancien fichier.
+
+Une clé supprimée chez Google ne signe plus rien : c'est la révocation. Aucun code à changer.
+
 ## Tester
 
 **Tous les tests d'un coup** (Node 22 ou plus, rien à installer) :
@@ -160,6 +197,7 @@ propre processus, l'un après l'autre, et le tout échoue si un seul échoue. Au
 
 | Fichier | Ce qu'il vérifie |
 |---|---|
+| `google.test.mjs` | le jeton du compte de service : JWT RS256 signé par la clé, échangé chez Google, gardé jusqu'à 5 min de son expiration ; la base l'envoie en en-tête, plus rien dans l'URL |
 | `index.test.mjs` | le point d'entrée `fetch` : `OPTIONS /fn/cloudinaryDestroy` → 204 **sans corps** et en-têtes CORS ; `POST` sans jeton → 401 avec CORS ; aucune erreur ne sort sans CORS |
 | `appels.test.mjs` | le jeton Firebase (RS256) et la suppression Cloudinary : propriétaire et coach réel acceptés, id usurpé et coach usurpé refusés (403), index absent (409), compte Cloudinary pris dans le worker |
 | `metier.test.mjs` | le métier sur une base en mémoire, budget de requêtes compris |
