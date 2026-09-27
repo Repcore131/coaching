@@ -5,7 +5,14 @@
    Limite connue : un halo imbriqué dans un halo coloré hériterait de sa
    couleur. Il n'y en a aucun aujourd'hui. */
 [style*="--halo-c"]{--halo-1:0 0 8px var(--halo-c,rgba(255,255,255,.45));--halo-2:0 0 14px var(--halo-c,rgba(255,255,255,.60)),0 0 30px var(--halo-c,rgba(255,255,255,.25));--halo-3:0 0 20px var(--halo-c,rgba(255,255,255,.85)),0 0 44px var(--halo-c,rgba(255,255,255,.40));}
-html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+/* LA PAGE NE S ELARGIT JAMAIS (27/09/2026). Un seul element qui depasse a
+   droite (le badge des semaines, l ecran qui entre en glissant de 20 px)
+   suffisait, sur iPhone, a elargir la page : tout paraissait sortir du cadre
+   et la page glissait de cote. Le debordement horizontal est coupe a la
+   racine ; « clip » ne cree pas de zone de defilement, les en-tetes
+   collants (sticky) continuent de fonctionner. */
+html{background:#030303}
+@supports (overflow:clip){html{overflow-x:clip}}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{--bg:#080808;--red:#E02020;--red2:#b81515;--red-bg:#0d0000;--red-glow:#FF3345;--red-light:color-mix(in srgb,var(--red) 70%,white);
   /* ROUGE DE TEXTE — le même que --red, sur décision du propriétaire du produit
      (20/08/2026). Il valait #FF5A5A, choisi pour son contraste : 6,17:1 sur
@@ -154,6 +161,13 @@ html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-h
    bas de l'écran passe sous le pli. dvh suit la hauteur réellement visible.
    Un navigateur qui ignore dvh laisse simplement la première déclaration. */
 body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;min-height:100vh;min-height:100dvh;max-width:480px;margin:0 auto;overflow-x:hidden;position:relative}
+@supports (overflow:clip){body{overflow-x:clip}}
+/* SAFARI iOS ZOOME SUR TOUT CHAMP ECRIT A MOINS DE 16 PX, et ne dezoome pas
+   ensuite : la page reste agrandie, coupee a droite. Sur iPhone seulement
+   (-webkit-touch-callout n existe que la), les champs passent a 16 px. */
+@supports (-webkit-touch-callout:none){
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),select,textarea{font-size:max(16px,1em)!important}
+}
 /* ── DESKTOP: fond brande autour de l'app ── */
 @media(min-width:600px){
   html{background:radial-gradient(ellipse at 50% 0%,#1a0000 0%,#060606 50%,#030303 100%);min-height:100vh;min-height:100dvh}
@@ -8123,7 +8137,10 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
    bien tomber le chiffre à 19,76, mais emporterait AUSSI le cadran, la flambée
    et le cadre néon — trois pièces dessinées à 29, qu'aucun constat ne remet en
    cause. Le min() ne touche qu'au corps du chiffre, qui est le seul écart. */
-.sk-badge{--sk-d:29px;--sk-f:min(calc(var(--sk-d)*.76),var(--fs-xl));position:relative;flex-shrink:0}
+.sk-badge{--sk-d:29px;--sk-f:min(calc(var(--sk-d)*.76),var(--fs-xl));position:relative;flex-shrink:0;
+  /* EN HAUT A DROITE, a la hauteur de « MON PROFIL », et jamais hors de l ecran
+     (Kevin, 27/09/2026) : le bloc de gauche cede la place, pas le badge. */
+  align-self:flex-start;margin-top:-2px}
 /* ── La flambée ────────────────────────────────────────────────────────────
    DERRIÈRE le cadre, et c'est tout le principe : le corps noir du cadre
    masque le milieu des langues, et il n'en reste que les léchures autour du
