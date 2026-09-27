@@ -8123,7 +8123,10 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
    bien tomber le chiffre à 19,76, mais emporterait AUSSI le cadran, la flambée
    et le cadre néon — trois pièces dessinées à 29, qu'aucun constat ne remet en
    cause. Le min() ne touche qu'au corps du chiffre, qui est le seul écart. */
-.sk-badge{--sk-d:29px;--sk-f:min(calc(var(--sk-d)*.76),var(--fs-xl));position:relative;flex-shrink:0}
+.sk-badge{--sk-d:29px;--sk-f:min(calc(var(--sk-d)*.76),var(--fs-xl));position:relative;flex-shrink:0;
+  /* EN HAUT A DROITE, a la hauteur de « MON PROFIL », et jamais hors de l ecran
+     (Kevin, 27/09/2026) : le bloc de gauche cede la place, pas le badge. */
+  align-self:flex-start;margin-top:-2px}
 /* ── La flambée ────────────────────────────────────────────────────────────
    DERRIÈRE le cadre, et c'est tout le principe : le corps noir du cadre
    masque le milieu des langues, et il n'en reste que les léchures autour du
