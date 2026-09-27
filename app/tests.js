@@ -24545,10 +24545,25 @@ async function testExercices(){
         const prof=facteurNEAT(_ath({bilans:[_bil(2,{'deb-job':'Comptable'})]}));
         const pas=facteurNEAT(_ath({stepsLog:[j(1,12000),j(2,11000)]}));
         const def=facteurNEAT(_ath());
-        if(prof.source!=='profession'||prof.f!==1.15) return _echec('profession : '+JSON.stringify(prof));
+        // L'échelle est celle du tableur, la même que nafRetenu (QA du 27/09/2026).
+        if(prof.source!=='profession'||prof.f!==nafNiveau('sedentaire').f) return _echec('profession : '+JSON.stringify(prof));
         if(pas.source!=='pas'||pas.f<=NEAT_BASE) return _echec('pas : '+JSON.stringify(pas));
         return def.source==='defaut'&&def.f===NEAT_BASE
           ?true:_echec('défaut : '+JSON.stringify(def));})());
+      ok('QA — LE PLAFOND DU SURPLUS SE BORNE SUR LA DÉPENSE AFFICHÉE, RÉGLAGE DU COACH COMPRIS',(()=>{
+        // Deux chemins calculaient la dépense : besoinsProposes (affichée) et
+        // _depensePourPlafond (qui borne le surplus), sur deux échelles. Ils
+        // doivent rendre le même chiffre — et suivre le niveau réglé par le coach.
+        const u=_ath({bilans:[_bil(2,{'deb-job':'Comptable'})]});
+        const a=besoinsProposes(u), p=_depensePourPlafond(u);
+        if(a.depense!==p) return _echec('affichée '+a.depense+' contre plafond '+p);
+        const uc=_ath({bilans:[_bil(2,{'deb-job':'Comptable'})],nutrition:{tableur:{naf:'actif'}}});
+        const ac=besoinsProposes(uc), pc=_depensePourPlafond(uc);
+        if(ac.depense<=a.depense) return _echec('le réglage du coach ne change pas la dépense affichée');
+        if(ac.depense!==pc) return _echec('réglage du coach : affichée '+ac.depense+' contre plafond '+pc);
+        // Et le bilan annonce le facteur que le calcul applique.
+        const f=facteurProfession('Comptable').f, n=nafRetenu(u).n.f;
+        return f===n?true:_echec('bilan annonce '+f+', le calcul applique '+n);})());
       ok('Le nombre de créneaux ne touche PLUS au facteur',(()=>{
         // C'était la racine du double comptage : ACT_SEANCES montait jusqu'à
         // 1,65, un multiplicateur qui englobe l'entraînement.
@@ -24607,7 +24622,8 @@ async function testExercices(){
           bilData['deb-job']='Maçon';
           const h=bMetier('deb-job');
           bilData={};
-          return /facteur 1,55/.test(h)&&/Effort physique continu/.test(h);})());
+          // Le facteur annoncé est celui que le calcul applique (échelle du tableur).
+          return /facteur 1,6(?!\d)/.test(h)&&/Effort physique continu/.test(h);})());
         ok('Un métier inconnu prévient au lieu de faire semblant',(()=>{
           bilData['deb-job']='Dresseur de licornes';
           const h=bMetier('deb-job');
