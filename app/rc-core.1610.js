@@ -2517,6 +2517,17 @@ const RC_LEXIQUE=Object.freeze({
   volume:Object.freeze({
     t:'Volume',
     d:'La quantité de travail accumulée sur une période, muscle par muscle.'}),
+  // La fiche du ⓘ de chaque carte de muscle, onglet Volume : ce que disent
+  // les couleurs de la barre et le trait blanc.
+  zones_volume:Object.freeze({
+    t:'Lire la barre de volume',
+    d:'La barre situe tes séries de la semaine par rapport aux repères de ce muscle.',
+    p:'Le trait blanc marque le repère haut. Au-delà, la récupération devient difficile.',
+    e:Object.freeze([Object.freeze(['Gris','Sous le minimum utile']),
+      Object.freeze(['Bleu','Maintien : tu gardes ce que tu as']),
+      Object.freeze(['Vert','Zone de progrès']),
+      Object.freeze(['Orange','Volume élevé']),
+      Object.freeze(['Rouge','Au-dessus du repère'])])}),
   surcharge:Object.freeze({
     t:'Surcharge progressive',
     d:'Augmenter un peu la charge dès que tu gardes des répétitions en réserve.',
@@ -74151,22 +74162,43 @@ function _volBarre(m,n,rep,aberrant,user){
   // Sans repère, aucune zone : on montre la quantité, on ne la juge pas.
   const echelle=rep?Math.max(rep.mrv*1.25,n*1.05):Math.max(n*1.15,10);
   const pc=v=>Math.max(0,Math.min(100,v/echelle*100));
-  const seg=(a,b,c)=>b>a?`<div style="position:absolute;left:${pc(a)}%;width:${pc(b)-pc(a)}%;top:0;bottom:0;background:${c};opacity:.34"></div>`:'';
+  const seg=(a,b,c)=>b>a?`<div class="vb-seg" style="left:${pc(a)}%;width:${pc(b)-pc(a)}%;background:${c}"></div>`:'';
   const fond=rep
     ? seg(0,rep.mev,VOL_ZONES[0].c)+seg(rep.mev,rep.mavMin,VOL_ZONES[1].c)
       +seg(rep.mavMin,rep.mavMax,VOL_ZONES[2].c)+seg(rep.mavMax,rep.mrv,VOL_ZONES[3].c)
       +seg(rep.mrv,echelle,VOL_ZONES[4].c)
-    : `<div style="position:absolute;inset:0;background:var(--surface-3)"></div>`;
-  const couleur=z?z.c:'var(--sub)';
+    : `<div class="vb-seg" style="left:0;width:100%;background:var(--surface-3)"></div>`;
+  const couleur=z?z.c:'#8a8a8a';
   // Le remplissage est PLUS FIN que la piste, et centré : à pleine hauteur il
   // recouvrait les seuils déjà franchis, alors que situer la valeur par rapport
   // à eux est tout l'intérêt de la barre. Les zones restent lisibles au-dessus
   // et au-dessous, le trait de MRV traverse le tout.
-  return `<div style="position:relative;height:16px;border-radius:var(--r-2);overflow:hidden;background:var(--surface-2);${aberrant?'outline:1.5px solid var(--orange);outline-offset:1px':''}">
-      ${fond}
-      <div class="rc-barre" data-bar-w="${pc(n).toFixed(1)}" style="position:absolute;left:0;top:5px;height:6px;width:0;background:${couleur};border-radius:var(--r-1);box-shadow:0 0 0 1px rgba(0,0,0,.45);transition:width 480ms var(--c-out) var(--rcv-d,0ms)"></div>
-      ${rep?`<div style="position:absolute;left:${pc(rep.mrv)}%;top:0;bottom:0;width:1.5px;background:#fff;opacity:.6"></div>`:''}
+  // LA PISTE EST UN CALQUE A PART (27/09/2026, maquette de Kevin) : elle seule
+  // rogne ses zones, pour que le halo du remplissage et du trait deborde.
+  return `<div class="vb${aberrant?' vb-aberrant':''}">
+      <div class="vb-piste">${fond}</div>
+      <div class="rc-barre vb-rempli" data-bar-w="${pc(n).toFixed(1)}" style="--vb-c:${couleur};width:0;transition:width 480ms var(--c-out) var(--rcv-d,0ms)"></div>
+      ${rep?`<div class="vb-repere" style="left:${pc(rep.mrv)}%"></div>`:''}
     </div>`;
+}
+// L'ICONE DU STATUT, devant son libellé : un triangle pour ce qui monte trop,
+// une coche pour la zone de progrès, un rond pour le reste.
+function _volIconeZone(z){
+  const c=z?z.c:'var(--text-faint)';
+  const tri='<path d="M12 3 22 20H2z" fill="'+c+'" fill-opacity=".18" stroke="'+c+'" stroke-width="2" stroke-linejoin="round"/><path d="M12 9.5v5" stroke="'+c+'" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="17.3" r="1.25" fill="'+c+'"/>';
+  const coche='<circle cx="12" cy="12" r="10" fill="'+c+'"/><path d="m7.5 12.3 3 3 6-6.3" fill="none" stroke="#0b0b0b" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>';
+  const rond='<circle cx="12" cy="12" r="9" fill="'+c+'" fill-opacity=".18" stroke="'+c+'" stroke-width="2"/><path d="M12 8v4.5" stroke="'+c+'" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="16" r="1.25" fill="'+c+'"/>';
+  const k=z&&z.cle;
+  return '<svg class="vc-ico" viewBox="0 0 24 24" aria-hidden="true">'
+    +(k==='ELEVE'||k==='AU_DESSUS'?tri:k==='PROGRES'?coche:rond)+'</svg>';
+}
+// L'ILLUSTRATION DU MUSCLE (planche de Kevin, 27/09/2026), teintée à sa
+// couleur. Un muscle sans image garde sa carte, sans vignette.
+const VOL_ILLUS=new Set(['PECTORAUX','DORSAUX','TRAP_SUP','TRAP_MED','LOMBAIRES','DELT_ANT','DELT_LAT',
+  'DELT_POST','BICEPS','TRICEPS','AVANT_BRAS','QUADRICEPS','ISCHIOS','FESSIERS','ABDUCTEURS',
+  'ADDUCTEURS','MOLLETS','ABDOS']);
+function _volIllus(m){
+  return VOL_ILLUS.has(m)?'./img/muscles/'+m.toLowerCase().replace(/_/g,'-')+'.webp':'';
 }
 
 function renderVolume(){
@@ -74227,19 +74259,24 @@ function renderVolume(){
       const d=n-moy;
       const signe=d>0?'+':'';
       // Un écart sous une demi-série n'est pas un mouvement, c'est du bruit.
-      if(Math.abs(d)>=0.5) delta=`<span style="font-size:var(--fs-xs);font-weight:800;color:${d>0?'var(--success)':'var(--orange)'};margin-left:6px">${signe}${volAffiche(d)}</span>`;
-      else delta=`<span style="font-size:var(--fs-xs);color:var(--text-faint);margin-left:6px">stable</span>`;
+      if(Math.abs(d)>=0.5) delta=`<span class="vc-delta ${d>0?'vc-plus':'vc-moins'}">${signe}${volAffiche(d)}</span>`;
+      else delta=`<span class="vc-delta vc-stable">stable</span>`;
     }
-    return `<div style="margin-bottom:14px">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px">
-        <span style="font-size:var(--fs-sm);font-weight:800;color:${(MUSCLES[m]||{}).c||'var(--text)'}">${(MUSCLES[m]||{}).lib||m}${(()=>{ const _s=(rep&&rep.source)||'table'; if(_s==='table') return ''; return `<span style="font-weight:400;color:var(--text-faint);font-size:var(--fs-2xs)"> · ${_s==='perso'?'ajusté sur ses retours':'fixé par toi'}</span>`; })()}</span>
-        <span style="font-size:var(--fs-xs);color:var(--sub);white-space:nowrap">${volAffiche(n)} série${n>=2?'s':''}${freq?' · '+freq+'×/sem':''}${delta}</span>
+    const illus=_volIllus(m);
+    const mc=(MUSCLES[m]||{}).c||'var(--text)';
+    return `<div class="vc${illus?'':' vc-sans-illus'}" style="--vc-c:${z?z.c:'#3a3a3a'}">
+      ${illus?`<img class="vc-illus" src="${illus}" alt="" loading="lazy" decoding="async" onerror="this.remove()">`:''}
+      <div class="vc-corps">
+        <div class="vc-tete">
+          <span class="vc-nom" style="color:${mc}">${(MUSCLES[m]||{}).lib||m}${rcInfo('zones_volume')}${(()=>{ const _s=(rep&&rep.source)||'table'; if(_s==='table') return ''; return `<span style="font-weight:400;color:var(--text-faint);font-size:var(--fs-2xs)"> · ${_s==='perso'?'ajusté sur ses retours':'fixé par toi'}</span>`; })()}</span>
+          <span class="vc-chiffres"><span class="vc-series">${volAffiche(n)} série${n>=2?'s':''}${freq?' · '+freq+'×/sem':''}</span>${delta}</span>
+        </div>
+        ${_volBarre(m,n,rep,c.aberrants[m],u)}
+        <div class="vc-zone" style="color:${z?z.c:'var(--text-faint)'}">
+          ${_volIconeZone(z)}<span>${z?z.lib:'pas de repère établi'}</span>${c.aberrants[m]?' <span style="color:var(--orange);font-weight:600">· inhabituel</span>':''}
+        </div>
+        ${_htmlConcentration(c,m)}
       </div>
-      ${_volBarre(m,n,rep,c.aberrants[m],u)}
-      <div style="font-size:var(--fs-2xs);color:${z?z.c:'var(--text-faint)'};margin-top:4px">
-        ${z?z.lib:'pas de repère établi'}${c.aberrants[m]?' <span style="color:var(--orange)">· inhabituel</span>':''}
-      </div>
-      ${_htmlConcentration(c,m)}
     </div>`;
   }).join('');
 
