@@ -42748,12 +42748,14 @@ async function testExercices(){
     // ne remplace rien. Le bouton « Activer sur cet appareil » des réglages
     // (Web Push, 26/09/2026) en est le quatrième. Tous comptent le meme
     // evenement notif_granted.
-    ok('Les quatre points d’accord comptent le meme evenement',(()=>{
+    // CINQUIEME POINT (27/09/2026) : l'etape obligatoire du demarrage
+    // (pushEtapeActiver). Elle compte le meme evenement que les quatre autres.
+    ok('Les cinq points d’accord comptent le meme evenement',(()=>{
       const prod=_prodSrc();
       const n=(prod.match(/rcm\('notif_granted'\)/g)||[]).length;
-      if(n!==4) return _echec(n+' point(s) d’appel sur 4');
+      if(n!==5) return _echec(n+' point(s) d’appel sur 5');
       const d=(prod.match(/Notification\.requestPermission\(\)/g)||[]).length;
-      return d===4?true:_echec(d+' appel(s) a requestPermission au lieu de 4');})());
+      return d===5?true:_echec(d+' appel(s) a requestPermission au lieu de 5');})());
     ok('La question des jours ne se pose qu’au nouvel inscrit',(()=>{
       const J=864e5, t=Date.parse('2026-09-15T12:00:00Z');
       const A=o=>Object.assign({email:'a@t.fr',role:'athlete',createdAt:t-2*J},o);
@@ -48948,6 +48950,19 @@ async function testExercices(){
       if(actMessage({le:100,ecritures:0,echecs:0},0,true)!==null) return _echec('une lecture annoncée');
       if(!window.fetch._rcAct) return _echec('fetch non suivi');
       return /_rcToastLe=Date\.now\(\)/.test(String(toast))&&document.getElementById('toast').getAttribute('aria-live')==='polite'?true:_echec('toast');})());
+    ok('Notifications obligatoires : l’étape bloque tant que le navigateur n’a pas eu de réponse',(()=>{
+      const u={email:'a@t.fr',role:'client'};
+      if(pushEtapeMode(u,'proposer',true)!=='demander') return _echec('pas bloquant');
+      if(pushEtapeMode(u,'actif',false)!==null||pushEtapeMode(u,'indispo',false)!==null) return _echec('montrée à tort');
+      if(pushEtapeMode(u,'refuse',false)!=='refuse'||pushEtapeMode(u,'refuse',true)!==null) return _echec('refus : une fois par jour');
+      if(pushEtapeMode(u,'installer',false)!=='installer') return _echec('iPhone');
+      if(pushEtapeMode({email:'c@t.fr',role:'coach'},'proposer',false)!==null) return _echec('coach');
+      const d=document.createElement('div'); d.innerHTML=htmlPushEtape('demander');
+      const bt=[...d.querySelectorAll('button')];
+      if(bt.length!==1||!/pushEtapeActiver\(\)/.test(bt[0].getAttribute('onclick'))) return _echec('plus d’une sortie sur la demande');
+      d.innerHTML=htmlPushEtape('refuse');
+      if(!/pushEtapeFermer/.test(d.innerHTML)) return _echec('un refus doit laisser continuer');
+      return /pushEtapeVerifier\(\)/.test(String(routeUser))?true:_echec('non appelée au démarrage');})());
     ok('Barre de lecture : seulement sur une zone longue',(()=>{
       if(lectureProgression(0,700,600)!==null||lectureProgression(0,4000,150)!==null) return _echec('zone courte');
       const a=lectureProgression(0,3000,600), b=lectureProgression(1200,3000,600), c=lectureProgression(9999,3000,600);

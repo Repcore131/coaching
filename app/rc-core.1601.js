@@ -7176,6 +7176,9 @@ function routeUser(){
   // aiguillages de meme nature, ils appartiennent donc a la meme fonction.
   // Consequence assumee et voulue : un retour a l'accueil par la fleche ou par
   // un onglet ne les redeclenche pas. Ce sont des RETOURS, pas des arrivees.
+  // LES NOTIFICATIONS, DÈS LE DÉPART : l'étape passe par-dessus l'écran
+  // d'arrivée, une fois celui-ci peint (et après l'accord de confidentialité).
+  setTimeout(()=>{ try{ pushEtapeVerifier(); }catch(e){} },1200);
   if(_aiguillerNouvelInscrit()) return;
   loadClientHome();
   if(window._pendingBilanOpen){window._pendingBilanOpen=false;setTimeout(()=>openBilanChoice(),800);}
@@ -69374,6 +69377,124 @@ async function pushActiverDepuisReglages(){
   _rendreReglagesPush();
   return ok;
 }
+// ══ L'ÉTAPE NOTIFICATIONS, OBLIGATOIRE DÈS LE DÉPART (27/09/2026) ══════════
+//
+// DEMANDE DE KEVIN : les notifications ne se proposent plus, elles font partie
+// de l'arrivée. À chaque ouverture de l'app par un athlète, tant que cet
+// appareil n'est pas abonné, un écran plein les demande — sans « plus tard ».
+//
+// ⚠ CE QUE LE NAVIGATEUR INTERDIT, ET QUE L'ÉTAPE RESPECTE :
+//   • La permission ne peut être demandée QUE sur un geste : l'écran porte donc
+//     un seul bouton, et c'est lui qui ouvre la question du navigateur.
+//   • Un « Bloquer » est DÉFINITIF pour le site : aucune page ne peut reposer
+//     la question. Bloquer l'app à ce moment enfermerait l'athlète dehors pour
+//     de bon ; l'étape explique alors comment les réautoriser, et laisse
+//     continuer. Elle revient une fois par jour tant que ce n'est pas fait.
+//   • Sur iPhone, dans Safari, le push n'existe pas tant que l'app n'est pas
+//     sur l'écran d'accueil : l'étape montre comment l'installer, et laisse
+//     continuer (même rythme).
+// Ce qui est vraiment obligatoire : répondre. Tant que le navigateur n'a pas
+// eu de réponse (permission 'default'), l'étape ne se ferme pas.
+const PUSH_ETAPE_CLE='rc_push_etape_le';
+// PURE. Que montrer ? etat : pushEtat(...). Rend null (rien), 'demander'
+// (bloquant, un seul bouton), 'refuse' ou 'installer' (explication + continuer,
+// une fois par jour au plus).
+function pushEtapeMode(u,etat,dejaVuAujourdhui){
+  if(!u||!u.email||u.role==='coach') return null;
+  if(etat==='proposer') return 'demander';
+  if((etat==='refuse'||etat==='installer')&&!dejaVuAujourdhui) return etat;
+  return null;
+}
+// PURE.
+function htmlPushEtape(mode,message){
+  const liste='<ul class="pe-liste">'
+    +'<li>La réponse de ton coach à tes bilans</li>'
+    +'<li>Le rappel quand ta semaine n’est pas encore validée</li>'
+    +'<li>Tes défis, tes badges et ton bilan du mois</li></ul>'
+    +'<p class="pe-regle">Une notification par jour au plus, jamais entre 21 h et 8 h. Tu choisis les types dans tes réglages.</p>';
+  let corps='', bas='';
+  if(mode==='demander'){
+    corps='<p class="pe-sub">RepCore te prévient au bon moment, même quand l’app est fermée. Cette étape est nécessaire pour continuer.</p>'+liste;
+    bas='<button type="button" class="btn btn-red" id="pe-activer" onclick="pushEtapeActiver()">Activer les notifications</button>'
+      +'<p class="pe-note">Ton téléphone va te demander l’autorisation : choisis « Autoriser ».</p>';
+  } else if(mode==='refuse'){
+    corps='<p class="pe-sub">Les notifications sont bloquées pour RepCore sur cet appareil. Seul ton navigateur peut les réautoriser :</p>'
+      +'<ol class="pe-etapes"><li>Ouvre les réglages du navigateur (ou le cadenas à gauche de l’adresse).</li><li>Notifications, puis RepCore.</li><li>Choisis « Autoriser », puis rouvre l’app.</li></ol>';
+    bas='<button type="button" class="btn btn-outline btn-casse" onclick="pushEtapeFermer()">Continuer</button>';
+  } else {
+    corps='<p class="pe-sub">Sur iPhone, les notifications n’arrivent que dans l’app installée :</p>'
+      +'<ol class="pe-etapes"><li>Bouton Partager de Safari.</li><li>« Sur l’écran d’accueil ».</li><li>Ouvre RepCore depuis la nouvelle icône : cette étape reviendra pour les activer.</li></ol>';
+    bas='<button type="button" class="btn btn-outline btn-casse" onclick="pushEtapeFermer()">Continuer</button>';
+  }
+  return '<div id="rc-push-etape" class="pe-fond" role="dialog" aria-modal="true" aria-labelledby="pe-t">'
+    +'<div class="pe-carte"><h2 id="pe-t" class="pe-t">Active les notifications</h2>'+corps
+    +(message?'<p class="pe-msg" role="alert">'+escapeHtml(message)+'</p>':'')+bas+'</div></div>';
+}
+function _pushEtapePoser(mode,message){
+  const vieux=document.getElementById('rc-push-etape');
+  if(vieux) vieux.remove();
+  const d=document.createElement('div');
+  d.innerHTML=htmlPushEtape(mode,message);
+  document.body.appendChild(d.firstChild);
+  const b=document.querySelector('#rc-push-etape button');
+  if(b) try{ b.focus({preventScroll:true}); }catch(e){}
+}
+function pushEtapeFermer(){
+  const e=document.getElementById('rc-push-etape');
+  if(e) e.remove();
+  try{ localStorage.setItem(PUSH_ETAPE_CLE,localISODate(new Date())); }catch(x){}
+  return true;
+}
+async function pushEtapeVerifier(essai){
+  const n=Number(essai)||0;
+  if(!currentUser||window._rcEnTests||document.getElementById('rc-push-etape')) return false;
+  // L'ACCORD DE CONFIDENTIALITÉ PASSE D'ABORD : on attend qu'il soit fermé.
+  if(document.getElementById('rc-consent-modal')){
+    if(n<60) setTimeout(()=>pushEtapeVerifier(n+1),2000);
+    return false;
+  }
+  let abonne=false;
+  try{
+    if(_pushSupporte()){
+      const reg=await navigator.serviceWorker.ready;
+      abonne=!!(await reg.pushManager.getSubscription());
+    }
+  }catch(e){}
+  let vu=false;
+  try{ vu=localStorage.getItem(PUSH_ETAPE_CLE)===localISODate(new Date()); }catch(e){}
+  const mode=pushEtapeMode(currentUser,pushEtat(_pushEnv(abonne)),vu);
+  // Permission déjà accordée mais pas encore d'abonnement : on le prend sans
+  // rien demander (hors iOS, qui exige le geste, donc l'étape).
+  if(mode==='demander'&&_notifSupported()&&Notification.permission==='granted'&&!rcInstalliOS()){
+    if(await pushAbonner({geste:false})) return true;
+  }
+  if(!mode) return false;
+  _pushEtapePoser(mode);
+  return true;
+}
+async function pushEtapeActiver(){
+  const b=document.getElementById('pe-activer');
+  if(b){ b.disabled=true; b.setAttribute('aria-busy','true'); }
+  let p=_notifSupported()?Notification.permission:'denied';
+  if(p==='default'){
+    try{ p=await Notification.requestPermission(); }catch(e){}
+    if(p==='granted'){ try{ rcm('notif_granted'); }catch(e){} }
+  }
+  if(p==='granted'){
+    const ok=await pushAbonner({geste:true});
+    if(ok){
+      try{ currentUser._notifEnabled=true; saveUser(); }catch(e){}
+      pushEtapeFermer();
+      toast('Notifications activées.');
+      return true;
+    }
+    _pushEtapePoser('demander','L’abonnement n’a pas abouti. Vérifie ta connexion, puis réessaie.');
+    return false;
+  }
+  if(p==='denied'){ _pushEtapePoser('refuse'); return false; }
+  _pushEtapePoser('demander','Pour continuer, réponds « Autoriser » à la question de ton téléphone.');
+  return false;
+}
 // Couper un type : un champ du dossier (pushPrefs), lu par le serveur avant
 // chaque envoi ET par les rappels locaux (série, Wrapped).
 function basculerPushType(type,actif){
@@ -112507,6 +112628,8 @@ async function _pfUtiliser(slug){
 // d’assertions la lisent de façon SYNCHRONE, à l’intérieur de leur test.
 // Un fetch à l’intérieur les aurait toutes rendues asynchrones.
 async function chargerTests(){
+  // L'étape notifications ne doit pas recouvrir les écrans que la suite mesure.
+  window._rcEnTests=true;
   if(!window._RC_SRC_PROD){
     try{
       const r=await fetch('./index.html',{cache:'no-store'});
