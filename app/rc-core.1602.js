@@ -8,7 +8,7 @@
 // Tout compte dont consent.policyVersion differe de cette valeur revoit l'ecran
 // de consentement au demarrage — y compris les comptes crees avant l'existence
 // du champ, qui n'en portent aucun.
-const POLICY_VERSION='2026-09b';
+const POLICY_VERSION='2026-09c';
 
 // ── Identité créateur & configuration PayPal ─────────────────────────────────
 // Ces constantes sont en dur et NE doivent jamais être exposées ni modifiables
@@ -111,7 +111,7 @@ const FONCTIONS_SERVEUR=false;
 //     la minute, et tout de suite si l'appel à /reveil passe ;
 //   · les pages publiques comptent l'arrivée par un lien sur /arrivee.
 // VIDE, rien ne part, et tout se comporte comme avant.
-const SERVEUR_LEGER_URL='';
+const SERVEUR_LEGER_URL='https://repcore-serveur.repcore.workers.dev';
 const SERVEUR_LEGER=!!SERVEUR_LEGER_URL;
 const RC_BOUTIQUE_GRATUITE=false;
 const RC_PROGRAMMES=Object.freeze([

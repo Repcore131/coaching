@@ -19800,6 +19800,10 @@ async function testExercices(){
                                      // photo retirée chez l'hébergeur. C'est un
                                      // sous-traitant réel, il est déclaré, et
                                      // POLICY_VERSION est passée à 2026-09.
+            'workers.dev',           // Cloudflare Workers — le serveur léger (build
+                                     // 1602, 27/09/2026) : notifications, défis,
+                                     // parrainage. Ligne ajoutée à la politique,
+                                     // POLICY_VERSION passée à 2026-09c.
             // Ce qui suit n'est PAS déclaré, et ne doit pas l'être : rien
             // n'est contacté. w3.org est l'espace de noms XML des SVG (jamais
             // téléchargé) ; repcore131 est un lien que l'utilisateur clique.
@@ -48936,7 +48940,8 @@ async function testExercices(){
       return f<0?true:_echec('cas '+f);})());
     ok('Parrainage : le miroir est classé non-santé, et l’entrée reste fermée sans fonctions serveur',(()=>{
       if(CHAMPS_NON_SANTE.indexOf('parrainage')<0) return _echec('non classé');
-      return PARRAINAGE_ACTIF===FONCTIONS_SERVEUR?true:_echec('PARRAINAGE_ACTIF découplé de FONCTIONS_SERVEUR');})());
+      // Le serveur léger (Cloudflare, 0 €) ouvre le parrainage autant que les Cloud Functions.
+      return PARRAINAGE_ACTIF===(FONCTIONS_SERVEUR||SERVEUR_LEGER)?true:_echec('PARRAINAGE_ACTIF découplé des serveurs');})());
 
     // ── LE LIEN PERSO ET LES PAGES PUBLIQUES ────────────────────────────
     const _PPU=o=>Object.assign({role:'athlete',email:'j@t.fr',fname:'Julie',sessions:[],parrainage:{code:'JULIE7K2'}},o||{});
@@ -49106,8 +49111,9 @@ async function testExercices(){
       const lire=u=>{ try{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; }catch(e){ return ''; } };
       const i=lire('../i/index.html'), r=lire('../index.html'), a=lire('../a/index.html');
       // Le clic est compté par attribArrivee (lot attribution, 26/09/2026).
-      if(!/attribArrivee\?src=/.test(i)||!/p\.set\('amb',amb\)/.test(i)) return _echec('/i');
-      if(!/\['amb','ref','src','coach'\]/.test(r)||!/attribArrivee/.test(r)) return _echec('page d’accueil');
+      // Le clic est compté par /arrivee du serveur léger (Cloudflare) depuis le build 1602.
+      if(!/\/arrivee\?src=/.test(i)||!/p\.set\('amb',amb\)/.test(i)) return _echec('/i');
+      if(!/\['amb','ref','src','coach'\]/.test(r)||!/\/arrivee\?/.test(r)) return _echec('page d’accueil');
       if(!/ambassadeurs_vue\//.test(a)||!/noindex/.test(a)||!/no-referrer/.test(a)) return _echec('page secrète');
       return /localStorage\.setItem\('rc_amb'/.test(_prodSrc())?true:_echec('arrivée dans l’app');})());
     ok('Ambassadeurs : le code d’arrivée est classé non-santé',CHAMPS_NON_SANTE.indexOf('ambassadeur')>=0);
@@ -49263,7 +49269,7 @@ async function testExercices(){
       for(const f of ['../i/index.html','../index.html','../p/index.html','../c/index.html']){
         const h=lire(f);
         if(!h) continue;
-        if(!/attribArrivee\?src=/.test(h)||!/'rc_attr_'/.test(h)||!/&ref=1/.test(h)) return _echec(f);
+        if(!/\/arrivee\?src=/.test(h)||!/'rc_attr_'/.test(h)||!/&ref=1/.test(h)) return _echec(f);
         if(/document\.cookie/.test(h)) return _echec(f+' : cookie');
       }
       const p=lire('../privacy.html');
