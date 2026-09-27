@@ -116,6 +116,8 @@ jobs:
       # il verifie les dix refus, les deux autorisations, et que la signature
       # couvre exactement les parametres envoyes — une signature incomplete rend
       # 401 et fait echouer TOUTES les suppressions en silence.
+      # ⚠ Il evalue functions/index.js avec de faux require : un require ajoute
+      #   sans son faux fait echouer TOUT le deploiement (build 1601, 27/09/2026).
       - name: Verifier la suppression distante des medias
         run: node scripts/verif/suppression-distante.mjs
 
