@@ -99,7 +99,12 @@ def main():
     # posee ici, au meme geste que le numero de build, pour qu'elles ne
     # divergent jamais. Heure de Paris.
     import datetime, zoneinfo
-    jour = datetime.datetime.now(zoneinfo.ZoneInfo('Europe/Paris')).strftime('%Y-%m-%d')
+    # Windows n'embarque pas la base des fuseaux (paquet tzdata absent) : on
+    # retombe alors sur l'heure locale de la machine, qui est celle de Paris.
+    try:
+        jour = datetime.datetime.now(zoneinfo.ZoneInfo('Europe/Paris')).strftime('%Y-%m-%d')
+    except Exception:
+        jour = datetime.datetime.now().strftime('%Y-%m-%d')
     html = re.sub(r"window\.RC_MAJ='[0-9-]*';", "window.RC_MAJ='%s';" % jour, html)
     avant = lire(INDEX, binaire=True)
     faits = []

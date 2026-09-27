@@ -1,0 +1,19 @@
+# Le serveur léger de RepCore : un Cloudflare Worker sur le plan GRATUIT.
+# Voir cloudflare/README.md pour l'installation (compte, secrets, déploiement).
+name = "repcore-serveur"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+# UNE seule tâche programmée, chaque minute (le plan gratuit en permet cinq).
+# Tout le reste — heures de Paris, lots, reprises — est décidé dans planif.js.
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+FIREBASE_DB_URL = "https://repcore-sync-default-rtdb.firebaseio.com"
+# La clé PUBLIQUE VAPID : la même que VAPID_PUBLIQUE dans l'app.
+VAPID_PUBLIC_KEY = "BLOS0J9PpSZcViPM4ySSKDd0Ss-rnuo8yhmdqpvyhAE6s_HQvSM7QK5nIs329I-4tbix3-8S_3Kl3L3Z0pnf3-4"
+
+# SECRETS, posés à la main (jamais ici) :
+#   npx wrangler secret put FIREBASE_DB_SECRET
+#   npx wrangler secret put VAPID_PRIVATE_KEY
