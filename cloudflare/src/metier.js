@@ -64,6 +64,52 @@ function prolonger(echeanceActuelle, ms, t) {
 }
 export const emailKey = (e) => String(e || '').toLowerCase().trim().replace(/\./g, ',');
 
+// ── LA SÉRIE, RECALCULÉE À LA DATE DU JOUR ────────────────────────────────
+// PORTÉ DE L'APP (rc-core : ecartNormalJours, _streakPerime, streakJokersBilan)
+// et gardé identique : le compteur stocké ne bouge qu'à la fin d'une séance,
+// et un push « ta série de 9 semaines est en danger » à quelqu'un dont l'app
+// affiche 0 depuis trois semaines était faux.
+//   · périmée : l'absence dépasse d'une semaine pleine l'écart normal
+//     (7 / créneaux actifs, arrondi au-dessus, + 1 jour), à compter de la
+//     dernière séance, d'une suspension levée ou d'un joker ;
+//   · sauvée : les jokers couvrent les semaines terminées sans validation
+//     (au moins une) — l'app les consommera à la prochaine ouverture ;
+//   · cassée : sinon.
+// ⚠ UNE DIFFÉRENCE, ASSUMÉE : l'app retire aussi des semaines manquées celles
+//   qu'un historique de suspensions a couvertes (_tcSuspensions). Le serveur
+//   ne lit pas cet historique ; il n'en tient compte que pour la dernière
+//   suspension levée (depart). Au pire, il juge cassée une série que les
+//   jokers sauveraient : il se tait, il ne ment pas.
+export const SERIE_MAX_JOURS = 14;
+const JOUR_MS = 864e5;
+const lundiDeCle = (cle) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(cle || ''));
+  return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : null;
+};
+export function serieDuJour(u, t) {
+  const s = Math.max(0, Number(u && u.streak) || 0);
+  const out = { valeur: 0, etat: 'aucune', semaines: s };
+  if (!s) return out;
+  if (u.suspension && u.suspension.actif) return Object.assign(out, { valeur: s, etat: 'gel' });
+  const der = Number(u.lastSession) || 0;
+  if (!der || t - der > SERIE_MAX_JOURS * JOUR_MS) return Object.assign(out, { etat: 'ancienne' });
+  const creneaux = (Array.isArray(u.sessions_config) ? u.sessions_config : Object.values(u.sessions_config || {}))
+    .filter((x) => x && x.active).length;
+  const ecart = Math.ceil(7 / Math.max(1, creneaux)) + 1;
+  const finSusp = (u.suspension && !u.suspension.actif && Number(u.suspension.fin) > 0) ? Number(u.suspension.fin) : 0;
+  const depart = Math.max(der, finSusp, Number(u.streakJokerLe) || 0);
+  if (Math.floor((t - depart) / JOUR_MS) <= ecart + 7) return Object.assign(out, { valeur: s, etat: 'vivante' });
+  // Périmée : les jokers la sauvent-ils ?
+  const l0 = lundiDeCle(u.streakWeek);
+  const jokers = Math.max(0, Math.min(2, Number(u.streakJokers) || 0));
+  if (l0 === null) return Object.assign(out, { etat: 'cassee' });
+  const lc = lundiDeCle(lundiParis(t));
+  let manquees = 0;
+  for (let k = 1; k < 600 && l0 + 7 * k * JOUR_MS < lc; k++) manquees++;
+  if (jokers >= Math.max(1, manquees)) return Object.assign(out, { valeur: s, etat: 'sauvee' });
+  return Object.assign(out, { etat: 'cassee' });
+}
+
 // ── LE BUDGET D'UNE EXÉCUTION (plan gratuit : 50 sous-requêtes, 10 ms de calcul)
 // Un push coûte ~7 requêtes (préférences, journal, abonnements, transaction,
 // l'envoi) et ~1,5 ms de chiffrement par appareil (mesuré : test/charge.test.mjs).
@@ -231,12 +277,20 @@ export function creerMetier(deps) {
   // Chacun rend la même chose : il traite UNE clé. Le découpage en lots et le
   // curseur sont dans planif.js.
   const planifies = {
-    // Série en danger : jeudi 18 h.
+    // Série en danger : jeudi 18 h. LA SÉRIE EST RECALCULÉE À LA DATE DU JOUR
+    // (serieDuJour, la règle de l'app) : rien si elle est cassée, gelée, ou
+    // si la dernière séance date de plus de 14 jours. Deux temps : trois
+    // champs d'abord, qui écartent la plupart des dossiers ; le reste ensuite.
     async serie(uid, t) {
       const lundi = lundiParis(t);
-      const [streak, semaine, susp, fname, jokers] = await Promise.all(['streak', 'streakWeek', 'suspension', 'fname', 'streakJokers'].map((c) => _lire(uid, c)));
-      if (!(Number(streak) > 0) || semaine === lundi || (susp && susp.actif)) return;
-      const n = Number(streak);
+      const [streak, semaine, der] = await Promise.all(['streak', 'streakWeek', 'lastSession'].map((c) => _lire(uid, c)));
+      if (!(Number(streak) > 0) || semaine === lundi) return 'rien';
+      if (!(Number(der) > 0) || t - Number(der) > SERIE_MAX_JOURS * JOUR_MS) return 'ancienne';
+      const [susp, fname, jokers, jokerLe, config] = await Promise.all(['suspension', 'fname', 'streakJokers', 'streakJokerLe', 'sessions_config'].map((c) => _lire(uid, c)));
+      const etat = serieDuJour({ streak, streakWeek: semaine, lastSession: der, suspension: susp, streakJokers: jokers,
+        streakJokerLe: jokerLe, sessions_config: config }, t);
+      if (etat.etat !== 'vivante' && etat.etat !== 'sauvee') return etat.etat;
+      const n = etat.valeur;
       await envoyerPush(uid, { type: 'serie', url: './?wo=1', tag: 'serie-' + lundi + '-jeu',
         title: 'Ta série de ' + n + ' semaine' + (n > 1 ? 's' : '') + ' est en danger',
         body: (fname ? fname + ', il' : 'Il') + ' te reste jusqu’à dimanche pour valider ta semaine.'
@@ -255,11 +309,16 @@ export function creerMetier(deps) {
         title: 'Ton mois de ' + nom + ' est prêt', body: 'Tes chiffres, tes records et ton profil t’attendent.' });
     },
     // Rappel de bilan : samedi 10 h, dernier bilan vieux de 13 jours ou plus.
+    // SEULEMENT POUR QUI A UN COACH ET A DÉJÀ FAIT UN BILAN : le bilan est
+    // ce que le coach lit ; sans coach, ou avant le premier, ce rappel
+    // demandait un geste que personne n'attendait.
     async bilan(uid, t) {
-      if ((await _lire(uid, 'role')) === 'coach') return;
+      const [role, coach] = await Promise.all([_lire(uid, 'role'), _lire(uid, 'coachEmailKey')]);
+      if (role === 'coach' || !coach) return 'sans_coach';
       const s = await db.ref('users/' + uid + '/bilans').orderByKey().limitToLast(1).get();
       let der = 0; s.forEach((c) => { der = Number((c.val() || {}).date) || 0; });
-      if (der && t - der < 13 * 864e5) return;
+      if (!der) return 'aucun_bilan';
+      if (t - der < 13 * 864e5) return 'recent';
       const fname = await _lire(uid, 'fname');
       await envoyerPush(uid, { type: 'bilan', url: './?bilan=1', tag: 'bilan-' + paris(t).jour,
         title: 'C’est l’heure de ton bilan', body: (fname ? fname + ', 10' : '10') + ' minutes quand tu as le temps ce week-end.' });

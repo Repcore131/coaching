@@ -19104,10 +19104,18 @@ function rcAppareilId(){
   }catch(e){ return 'sansstockage0000'; }
 }
 // ── Le lien : lienPerso(), plus haut (pages publiques) ────────────────────
-// PURE. Le message prêt à partager.
+// PURE. Le message prêt à partager. La durée vient de TARIFS (tarifs.json),
+// comme la page de vente : « 2 mois au lieu d'un » ne peut plus mentir le
+// jour où l'essai change.
+// `lien` : ajouté à la fin ; '' (chaîne vide) quand le lien voyage à part
+// (navigator.share le porte dans `url` : l'écrire aussi dans le texte le
+// faisait apparaître deux fois) ; absent : on dit où saisir le code.
 function parrainageMessage(code,lien){
-  return 'Je m’entraîne avec RepCore Avec mon code '+code+', tu as 2 mois pour essayer au lieu d’un. '
-    +(lien?lien:'Le code se saisit à l’inscription.');
+  const base=TARIFS.essai.mois, total=base+TARIFS.essai_parrainage.moisEnPlus;
+  const auLieu=base===1?'au lieu d’un':'au lieu de '+base;
+  return 'Je m’entraîne avec RepCore. Avec mon code '+code+', tu as '+total+' mois d’essai '+auLieu
+    +', toute l’app ouverte, sans carte bancaire.'
+    +(lien?' '+lien:(lien===''?'':' Le code se saisit à l’inscription.'));
 }
 // ── L'arrivée par un lien ?ref= ────────────────────────────────────────────
 // Gardé sur l'appareil (localStorage ET sessionStorage) jusqu'à l'inscription.
@@ -19299,10 +19307,10 @@ function parrainagePartager(btn){
   const c=currentUser&&currentUser.parrainage&&currentUser.parrainage.code;
   if(!c) return false;
   const l=lienPerso('parrainage');
-  const texte=parrainageMessage(c,l);
   try{ rcm('parrainage_partage'); }catch(e){}
   if(navigator.share){
-    navigator.share({title:'RepCore',text:texte,url:l||undefined}).then(()=>{ try{ attribCompter('partage','parrainage'); }catch(e){} }).catch(()=>{});
+    // Le lien part dans `url` : le texte ne le répète pas.
+    navigator.share({title:'RepCore',text:parrainageMessage(c,l?'':undefined),url:l||undefined}).then(()=>{ try{ attribCompter('partage','parrainage'); }catch(e){} }).catch(()=>{});
     return true;
   }
   return parrainageCopier(btn);
@@ -42024,30 +42032,45 @@ function _texteCoupe(g,t,x,y,max){
 // n a aucune transparence a preserver. Le PNG bloquait l application treize
 // secondes, et faisait donc expirer le geste utilisateur qu on cherche
 // justement a preserver.
+// Le type est LU dans l'en-tête de la dataURL : un JPEG déclaré PNG part
+// avec le mauvais type, et certaines applications le refusent.
 function _b64versBlob(dataUrl){
   const i=dataUrl.indexOf(',');
+  const m=/^data:([^;,]+)/.exec(dataUrl.slice(0,i));
   const bin=atob(dataUrl.slice(i+1));
   const n=bin.length;
   const u=new Uint8Array(n);
   for(let k=0;k<n;k++) u[k]=bin.charCodeAt(k);
-  return new Blob([u],{type:'image/png'});
+  return new Blob([u],{type:m?m[1]:'image/png'});
+}
+// PURE. Le nom de fichier accordé au format RÉELLEMENT produit : un appelant
+// qui passe « repcore-seance.png » avec un format JPEG (visuelFondFormat)
+// obtient « repcore-seance.jpg ». Sans format, PNG — ce que toDataURL rend.
+function _nomSelonFormat(nom,fmt){
+  const ext=(fmt&&fmt.ext)||'png';
+  const base=String(nom||'repcore').replace(/\.(png|jpe?g|webp)$/i,'');
+  return base+'.'+ext;
 }
 // L ecran de secours, et le seul geste qui marche sur TOUS les telephones :
 // l appui long sur une image affichee. iOS propose « Ajouter aux photos »,
 // Android « Telecharger l image ». On le dit, parce que personne ne devine
 // qu il faut appuyer longtemps.
-function _ouvrirApercuStory(url){
+// `nomFichier` et `fmt` : le nom et le type RÉELS (visuelNomFichier,
+// visuelFondFormat) — le lien « Télécharger » nommait « repcore-seance.png »
+// un bilan, un record ou un JPEG.
+function _ouvrirApercuStory(url,nomFichier,fmt){
   document.getElementById('story-apercu')?.remove();
+  const nom=_nomSelonFormat(nomFichier||'repcore-visuel',fmt);
   const d=document.createElement('div');
   d.id='story-apercu';
   d.style.cssText='position:fixed;inset:0;z-index:var(--z-modal);background:var(--scrim);display:flex;'
     +'flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px';
-  d.innerHTML='<img src="'+url+'" alt="Ta séance du jour" '
+  d.innerHTML='<img src="'+url+'" alt="Ton visuel RepCore" '
     +'style="max-width:100%;max-height:64vh;border-radius:var(--r-3);box-shadow:var(--e4)">'
     +'<div style="font-size:var(--fs-sm);color:var(--text-strong);text-align:center;line-height:1.6;max-width:320px">'
     +'Appuie <b>longuement</b> sur l’image, puis choisis <b>Ajouter aux photos</b> '
     +'(iPhone) ou <b>Télécharger l’image</b> (Android).</div>'
-    +'<a href="'+url+'" download="repcore-seance.png" class="btn btn-outline btn-sm" '
+    +'<a href="'+url+'" download="'+escapeHtml(nom)+'" type="'+escapeHtml((fmt&&fmt.type)||'image/png')+'" class="btn btn-outline btn-sm" '
     +'style="width:auto;padding:8px 20px">Télécharger</a>'
     +'<button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:8px 20px" '
     +'onclick="fermerApercuStory()">Fermer</button>';
@@ -42109,19 +42132,26 @@ function _storyCopierLien(src){
   }catch(e){ return false; }
 }
 // `fmt` FACULTATIF (visuelFondFormat) : JPEG qualité 0,9 quand le visuel a un fond, PNG sinon.
+//
+// ⚠ LE LIEN EST COPIÉ D'ABORD, DANS LE GESTE. Il ne l'était qu'après le
+//   téléchargement, et jamais sur iPhone (la branche de l'aperçu rendait la
+//   main avant) : or c'est là que la story se publie, et le presse-papiers
+//   refuse une écriture hors du geste de l'utilisateur.
 function _storySortirTelechargement(cv,nomFichier,fmt){
-  const dataUrl=(fmt&&fmt.type==='image/jpeg')?cv.toDataURL('image/jpeg',fmt.q||0.9):cv.toDataURL('image/png');
+  const jpeg=!!(fmt&&fmt.type==='image/jpeg');
+  const dataUrl=jpeg?cv.toDataURL('image/jpeg',fmt.q||0.9):cv.toDataURL('image/png');
   cv.width=0; cv.height=0;            // 8 Mo rendus tout de suite
+  const nom=_nomSelonFormat(nomFichier,jpeg?fmt:null);
   try{ attribCompter('telechargement',srcDuVisuel(nomFichier)); }catch(e){}
-  if(_estIOS()){ _ouvrirApercuStory(dataUrl); return true; }
+  _storyCopierLien(srcDuVisuel(nomFichier));
+  if(_estIOS()){ _ouvrirApercuStory(dataUrl,nom,jpeg?fmt:{type:'image/png',ext:'png'}); return true; }
   const a=document.createElement('a');
   a.href=dataUrl;                     // pas d'URL d'objet : rien a liberer,
-  a.download=nomFichier;              // et rien qui puisse expirer trop tot
+  a.download=nom;                     // et rien qui puisse expirer trop tot
   document.body.appendChild(a);
   a.click();
   a.remove();
   toast('Image téléchargée','var(--green)');
-  _storyCopierLien(srcDuVisuel(nomFichier));
   return true;
 }
 // Rend false quand le partage natif n'existe pas : l'appelant retombe alors
@@ -42141,7 +42171,7 @@ function _storySortirPartage(cv,nomFichier,meta,fmt){
   cv.width=0; cv.height=0;
   const blob=_b64versBlob(dataUrl);
   let f=null;
-  try{ f=new File([blob],nomFichier,{type:jpeg?'image/jpeg':'image/png'}); }catch(e){}
+  try{ f=new File([blob],_nomSelonFormat(nomFichier,jpeg?fmt:null),{type:jpeg?'image/jpeg':'image/png'}); }catch(e){}
   if(f&&navigator.canShare&&navigator.canShare({files:[f]})&&navigator.share){
     let charge={files:[f]};
     if(meta){
@@ -55574,19 +55604,24 @@ function _htmlRecordsFin(ctx,date,cle){
   const nb=v=>Number(v).toLocaleString('fr-FR');
   const k=(cle==='wd'||cle==='sd')?cle:'';
   if(k) _recordsAffiches[k]={liste:rec,date:date||Date.now()};
-  const bouton=(i,lib)=>k?('<button type="button" class="rcf-rk-p" '
+  const bouton=(i,lib,cls,aria)=>k?('<button type="button" class="'+cls+'" '
+    +(aria?'aria-label="'+escapeHtml(aria)+'" ':'')
     +'onclick="partagerRecord(\''+k+'\','+i+',this)">'+icon('share',14)
     +'<span>'+lib+'</span></button>'):'';
+  // LE BOUTON EST AU-DESSUS DE LA LISTE, ET C'EST UN BOUTON. « Partager ce
+  // record » était un lien rouge en petites capitales sous chaque ligne, que
+  // personne ne prenait pour un geste. Un record : ce bouton le partage.
+  // Plusieurs : il les réunit sur un visuel, et chaque ligne garde sa pastille
+  // « Partager » — on peut vouloir publier le plus beau des trois.
+  const plusieurs=rec.length>1;
   return '<div class="rcf-rk"><div class="rcf-rk-t">Mes records</div>'
+    +(k?('<div class="rcf-rk-tous">'+bouton(plusieurs?-1:0,plusieurs?'Partager mes '+rec.length+' records':'Partager ce record','rcf-rk-p rcf-rk-p-tous')+'</div>'):'')
     +rec.map((r,i)=>'<div class="rcf-rk-l">'
       +'<span class="rcf-rk-ex">'+escapeHtml(String(r.nm))+'</span>'
       +'<span class="rcf-rk-v"><span class="rcf-rk-a">'+nb(r.histMax)+' → </span>'
         +nb(r.curMax)+' kg<span class="rcf-rk-g">+'+nb(r.gain)+'</span></span>'
-      +bouton(i,'Partager ce record')
+      +(plusieurs?bouton(i,'Partager','rcf-rk-p rcf-rk-p-ligne','Partager le record '+String(r.nm)):'')
       +'</div>').join('')
-    // PLUSIEURS RECORDS : un visuel de plus, qui les réunit. Il ne remplace
-    // pas les cartes seules — on peut vouloir publier le plus beau des trois.
-    +(rec.length>1?('<div class="rcf-rk-tous">'+bouton(-1,'Partager mes '+rec.length+' records')+'</div>'):'')
     +'</div>';
 }
 // Les données d'un visuel de record, lues dans la liste AFFICHÉE. `i` = -1 :
@@ -69198,10 +69233,62 @@ function etatInvitationNotif(u,supporte,permission){
   if(permission==='granted'||permission==='denied') return 'rien';
   return 'demander';
 }
+// ── CE QUE L'ATHLETE ACCEPTE, EN TROIS CASES (27/09/2026) ─────────────────
+// « Oui, préviens-moi » ouvrait TOUS les types d'un coup, sous une phrase qui
+// promettait « un rappel, ces jours-là, et rien d'autre ». Chaque case
+// regroupe des types de PUSH_TYPES ; ce qui est décoché est écrit dans
+// u.pushPrefs (false) AVANT l'abonnement, et le serveur comme les rappels
+// locaux lisent pushPrefs avant chaque envoi. `acces` (fin d'accès) n'est
+// dans aucune case : il reste, et la carte le dit.
+const NOTIF_GROUPES=Object.freeze([
+  Object.freeze({cle:'seances',titre:'Mes séances et ma série',types:Object.freeze(['serie','badge','wrapped']),
+    detail:'un rappel avant chacune de tes séances, le jeudi à 18 h si ta série est en danger, le dimanche quand un badge est à une ou deux séances, et le 1er du mois ton mois en chiffres'}),
+  Object.freeze({cle:'coach',titre:'Mon coach',types:Object.freeze(['coach','bilan','defi']),
+    detail:'quand ton coach répond à un bilan ou lance un défi, et le samedi si ton dernier bilan date de deux semaines'}),
+  Object.freeze({cle:'invitations',titre:'Mes invitations',types:Object.freeze(['filleul']),
+    detail:'quand quelqu’un s’inscrit avec ton lien'})
+]);
+// PURE. Les cases cochées d'office, selon le profil : les séances toujours ;
+// le coach s'il y en a un ; les invitations si l'athlète a déjà un code à
+// partager. Une case qui ne concerne personne ne se coche pas toute seule.
+function notifGroupesDefaut(u){
+  const x=u||{};
+  return {seances:true,
+    coach:!!x.coachEmailKey,
+    invitations:!!(x.parrainage&&x.parrainage.code)};
+}
+// PURE. u.pushPrefs après le choix : un type décoché passe à false, un type
+// coché redevient permis (la clé disparaît). Les types hors cases ne bougent pas.
+function pushPrefsDepuisChoix(prefs,choix){
+  const p=(prefs&&typeof prefs==='object')?Object.assign({},prefs):{};
+  for(const g of NOTIF_GROUPES) for(const t of g.types){ if(choix&&choix[g.cle]) delete p[t]; else p[t]=false; }
+  return p;
+}
+// PURE. EXACTEMENT ce qui sera envoyé, pour les cases cochées.
+function texteInvitationNotif(choix){
+  const l=NOTIF_GROUPES.filter(g=>choix&&choix[g.cle]).map(g=>g.detail);
+  if(!l.length) return 'Aucune case cochée : rien ne te sera envoyé.';
+  const t=l.length===1?l[0]:l.slice(0,-1).join(' ; ')+' ; et '+l[l.length-1];
+  return 'Tu recevras '+t+'. Et, trois jours avant la fin de ton accès, un rappel. '
+    +'Une notification par jour au plus, jamais entre 21 h et 8 h.';
+}
+function _invNotifChoixLus(){
+  const c={};
+  for(const g of NOTIF_GROUPES){ const e=document.getElementById('inv-notif-g-'+g.cle); c[g.cle]=!!(e&&e.checked); }
+  return c;
+}
+function invNotifMaj(){
+  const c=_invNotifChoixLus();
+  const d=document.getElementById('inv-notif-detail');
+  if(d) d.textContent=texteInvitationNotif(c);
+  const b=document.getElementById('inv-notif-oui');
+  if(b) b.disabled=!Object.keys(c).some(k=>c[k]);
+}
 // PURE. La carte. Deux boutons, jamais trois, et « Non merci » a le meme
 // poids visuel qu'un refus doit avoir : lisible, pas honteux, pas cache.
-function _htmlInvitationNotif(etat,phrase){
+function _htmlInvitationNotif(etat,phrase,choix){
   if(etat==='rien') return '';
+  const ch=choix||{seances:true,coach:false,invitations:false};
   const cadre=(titre,corps,actions)=>
     '<div style="background:var(--info-bg);border:1px solid var(--info-border);'
     +'border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px">'
@@ -69213,14 +69300,22 @@ function _htmlInvitationNotif(etat,phrase){
   const promesse=phrase
     ? 'Ta prochaine séance est <strong style="color:var(--text)">'+escapeHtml(phrase)+'</strong>. Je te préviens ?'
     : 'Je peux te prévenir avant chacune de tes séances. On essaie ?';
+  const cases=NOTIF_GROUPES.map(g=>'<label for="inv-notif-g-'+g.cle+'" style="display:flex;align-items:center;gap:10px;'
+      +'margin:0;padding:8px 0;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:700;'
+      +'font-size:var(--fs-sm);color:var(--text)">'
+      +'<input type="checkbox" id="inv-notif-g-'+g.cle+'" data-groupe="'+g.cle+'"'+(ch[g.cle]?' checked':'')
+      +' onchange="invNotifMaj()" style="width:20px;height:20px;accent-color:#E02020;flex-shrink:0;margin:0;cursor:pointer">'
+      +escapeHtml(g.titre)+'</label>').join('');
+  const aucune=!NOTIF_GROUPES.some(g=>ch[g.cle]);
   return cadre('Et la prochaine ?',
     '<div style="font-size:var(--fs-md);color:var(--text-strong);line-height:1.5;margin-bottom:4px">'
       +promesse+'</div>'
-    +'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-bottom:12px">'
-      +'Un rappel, ces jours-là, et rien d’autre.</div>',
+    +'<div style="margin:4px 0 6px">'+cases+'</div>'
+    +'<div id="inv-notif-detail" style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-bottom:12px">'
+      +escapeHtml(texteInvitationNotif(ch))+'</div>',
     '<div style="display:flex;gap:8px">'
-    +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px;letter-spacing:.5px" '
-    +'onclick="invNotifOui()">Oui, préviens-moi</button>'
+    +'<button type="button" id="inv-notif-oui" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px;letter-spacing:.5px" '
+    +(aucune?'disabled ':'')+'onclick="invNotifOui()">Oui, préviens-moi</button>'
     +'<button type="button" class="btn btn-outline btn-sm" style="flex:0 0 auto;width:auto;padding:0 16px;margin:0;'
     +'min-height:44px;letter-spacing:.5px" onclick="invNotifNon()">Non merci</button>'
     +'</div>');
@@ -69242,15 +69337,25 @@ function _rendreInvitationNotif(){
   if(etat==='rien'){ z.innerHTML=''; return; }
   let phrase='';
   try{ phrase=texteProchainCreneau(prochainCreneau(currentUser,Date.now())); }catch(e){}
-  z.innerHTML=_htmlInvitationNotif(etat,phrase);
+  z.innerHTML=_htmlInvitationNotif(etat,phrase,notifGroupesDefaut(currentUser));
   try{ currentUser._notifDemandeeLe=Date.now(); saveUser(); }catch(e){}
 }
 // ⚠ LA PERMISSION N'EST DEMANDEE QUE SUR ACCEPTATION. C'est tout l'interet de
 // cette carte : le navigateur n'ouvre sa boite qu'a quelqu'un qui vient de dire
 // oui, donc il ne la refuse presque jamais — et un refus navigateur est
 // definitif, il n'y a pas de seconde chance a gaspiller.
+//
+// ⚠ LE CHOIX EST ECRIT AVANT TOUT AWAIT : dans u.pushPrefs, que le serveur lit
+// avant chaque envoi — l'abonnement ne part qu'ensuite. Et la demande de
+// permission reste le PREMIER await : Safari la refuse hors du geste.
 async function invNotifOui(){
   const z=document.getElementById('wd-notif-invite');
+  const choix=_invNotifChoixLus();
+  if(!NOTIF_GROUPES.some(g=>choix[g.cle])) return invNotifNon();
+  try{
+    currentUser.pushPrefs=pushPrefsDepuisChoix(currentUser.pushPrefs,choix);
+    saveUser();
+  }catch(e){}
   try{
     if(!_notifSupported()){ toast(_NOTIF_INDISPO,'var(--orange)'); if(z) z.innerHTML=''; return; }
     const p=await Notification.requestPermission();
@@ -69258,12 +69363,13 @@ async function invNotifOui(){
       // TROISIEME POINT D'ACCORD — voir les deux autres, dans les rappels de
       // bilan et de seance. Les trois comptent le meme evenement.
       try{ rcm('notif_granted'); }catch(e){}
-      await scheduleWoNotif();
+      // Le rappel avant chaque séance appartient à la case « Mes séances ».
+      if(choix.seances) await scheduleWoNotif();
       // LE PUSH SERVEUR, DANS LE MEME GESTE : c'est le seul moment où iOS
       // l'accepte sans redemander. Sans attente : l'enregistrement part en
       // arrière-plan, le toast ne dépend pas du réseau.
       try{ pushAbonner({geste:true}); }catch(e){}
-      toast('C’est note : je te préviens avant ta prochaine séance ✓');
+      toast(choix.seances?'C’est noté : je te préviens avant ta prochaine séance ✓':'C’est noté ✓');
     } else {
       // AUCUNE INSISTANCE. Le refus est accepte sans un mot de plus : le
       // reprocher, c'est se faire desinstaller.
@@ -69403,7 +69509,7 @@ async function pushAbonner(o){
       endpoint:j.endpoint,keys:{p256dh:j.keys.p256dh,auth:j.keys.auth},
       cree:Date.now(),plateforme:env.ios?'ios':(/android/i.test(navigator.userAgent||'')?'android':'web'),
       vapid:pushEmpreinte(VAPID_PUBLIQUE)});
-    if(ok) _pushMemo({id,email:currentUser.email,vapid:pushEmpreinte(VAPID_PUBLIQUE),le:Date.now()});
+    if(ok){ _pushMemo({id,email:currentUser.email,vapid:pushEmpreinte(VAPID_PUBLIQUE),le:Date.now()}); _swPushServeur(true); }
     return ok;
   }catch(e){ return false; }
 }
@@ -69438,7 +69544,20 @@ async function pushDesabonner(){
   }catch(e){}
   if(memo&&memo.id&&currentUser) try{ await CLOUD.supprimerPush(currentUser.email,memo.id); }catch(e){}
   _pushMemo(null);
+  _swPushServeur(false);
   return true;
+}
+// LE PLAFOND COMMUN : le service worker lit '/push-serveur' pour savoir si le
+// serveur porte déjà série, bilan et Wrapped sur cet appareil (sw.js,
+// swPushServeurActif) — sinon ses rappels locaux doublaient ceux du serveur.
+function _swPushServeur(actif){
+  try{
+    if(typeof caches==='undefined') return false;
+    caches.open('repcore-sw-data').then(c=>actif
+      ?c.put('/push-serveur',new Response(JSON.stringify({actif:true,le:Date.now()}),{headers:{'Content-Type':'application/json'}}))
+      :c.delete('/push-serveur')).catch(()=>{});
+    return true;
+  }catch(e){ return false; }
 }
 // ── L'ÉCRAN DE RÉGLAGES : une case par type, et l'état de l'appareil ──────
 // PURE. Le bloc. etat : pushEtat(...).
@@ -110181,8 +110300,8 @@ function messageRelanceAcces(c,etat){
     :('Ton accès à RepCore se termine'+(d?(' le '+d):' bientôt')+'.');
   return (p?('Salut '+p+' ! '):'Salut ! ')+quand
     +' Pour continuer, ouvre l\'app et prends l\'abonnement à '+PRIX_ATHLETE_MOIS
-    +' par mois : '+lienAbonnement()
-    +' : dis-moi si tu as le moindre souci, je m\'en occupe.';
+    +' par mois (engagement '+TARIFS.engagementMois+' mois) : '+lienAbonnement()
+    +'. Dis-moi si tu as le moindre souci, je m\'en occupe.';
 }
 // Ouvre WhatsApp avec le message pre-rempli. ⚠ REPCORE N'ENVOIE RIEN : il
 // ouvre la conversation, c'est le coach qui appuie sur envoyer. Meme regle que
@@ -111674,23 +111793,22 @@ function _texteInvitationAthlete(c){
     '1️⃣ Ouvre ce lien 👇',
     lien,
     '',
-    '',
     'Dans Safari (iPhone) ou Chrome (Android), PAS dans Instagram.',
     'Si un écran te dit "ouvre dans ton navigateur", clique dessus,',
     'c\'est normal.',
     '',
     '2️⃣ Installe l\'app, le bouton te le propose direct.',
     '',
-    '3️⃣ Une fois l\'app installée. Il va te demander un code, colle celui-là :',
+    '3️⃣ Une fois l\'app installée, elle te demande un code : colle celui-ci.',
     // ⚠ LE CODE EST NU, SANS PARENTHESES. Il est colle tel quel dans le champ
     // de l'athlete, et _lierCoach ne retire que les ESPACES : « (RC-XXXX) »
     // serait cherche avec ses parentheses et rendrait « code introuvable » —
     // la panne exacte que ce message existe pour eviter.
     String((c&&c.token)||''),
     '',
-    'Le code est obligatoire, sans lui tu n\'as pas d\'accès et je ne te vois pas apparaître de mon côté.',
+    'Le code est obligatoire : sans lui, tu n\'as pas d\'accès et je ne te vois pas apparaître de mon côté.',
     '',
-    'Si t\'es bloqué, le lien : '+lien
+    'Si tu es bloqué, reprends le lien : '+lien
   ].join('\n');
 }
 function _copierInvitationAthlete(i){

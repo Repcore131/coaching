@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1626';
+const CACHE = 'repcore-v1627';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -167,7 +167,7 @@ CORPS.push('./img/complements.webp');
 // ni code ni style — c'est-a-dire rien du tout.
 // Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
 // chaque build et reecrit cette ligne comme celle d'index.html.
-const ASSETS = ['./index.html', './rc-core.1626.js', './rc-style.1626.css',
+const ASSETS = ['./index.html', './rc-core.1627.js', './rc-style.1627.css',
   './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
@@ -649,6 +649,31 @@ self.addEventListener('periodicsync', e => {
   if (e.tag === 'serie-reminder') e.waitUntil(swCheckSerie());
 });
 
+// ─── LE PLAFOND COMMUN (27/09/2026) ────────────────────────────────────────
+// Série, bilan et Wrapped existent deux fois : ici, en local, et chez le
+// serveur léger (push). Les deux se cumulaient : jusqu'à deux « série en
+// danger » le même jeudi, plus un Wrapped, sur un seul téléphone.
+//   · PUSH SERVEUR ACTIF sur cet appareil (la page écrit '/push-serveur' à
+//     l'abonnement, le retire au désabonnement) : ces trois rappels locaux se
+//     taisent, le serveur les porte ;
+//   · SINON, ils suivent SA règle : une notification par jour au plus
+//     ('/notif-jour', le jour de la dernière), jamais entre 21 h et 8 h. Un
+//     push reçu compte aussi dans la journée.
+// Le rappel de séance et les compléments, réglés par l'athlète à l'heure
+// près, restent hors du plafond : ce sont des alarmes qu'il a posées.
+const NOTIF_JOUR = '/notif-jour';
+async function swPushServeurActif() {
+  const p = await swGet('/push-serveur');
+  return !!(p && p.actif);
+}
+// Rend true quand un rappel local de ce plafond peut partir MAINTENANT.
+async function swPeutNotifier() {
+  const h = new Date().getHours();
+  if (h >= 21 || h < 8) return false;
+  return (await swGet(NOTIF_JOUR)) !== _jourLocal();
+}
+async function swNoterNotif() { await swSet(NOTIF_JOUR, _jourLocal()); }
+
 // ─── « Série en danger » : jeudi 18 h, samedi 10 h ─────────────────────────
 // Si la semaine en cours n'est pas encore validée (streakWeek n'est pas son
 // lundi) et qu'il y a une série à perdre. Deux créneaux par semaine au plus,
@@ -656,6 +681,7 @@ self.addEventListener('periodicsync', e => {
 // notification part au premier réveil APRÈS l'heure, tant qu'on est encore
 // le jour dit.
 async function swCheckSerie() {
+  if (await swPushServeurActif()) return;
   const cfg = await swGet('/serie');
   if (!cfg || !cfg.actif || !(cfg.streak > 0)) return;
   const d = new Date();
@@ -668,7 +694,9 @@ async function swCheckSerie() {
   const cle = lundi + '-' + creneau;
   const faites = (await swGet('/serie-notifs')) || [];
   if (faites.indexOf(cle) >= 0) return;
+  if (!(await swPeutNotifier())) return;       // réessayé au réveil suivant
   await swSet('/serie-notifs', faites.concat([cle]).slice(-8));
+  await swNoterNotif();
   const n = cfg.streak;
   await self.registration.showNotification('Ta série de ' + n + ' semaine' + (n > 1 ? 's' : '') + ' est en danger', {
     body: (cfg.fname ? cfg.fname + ', il' : 'Il') + ' te reste jusqu’à dimanche pour valider ta semaine.'
@@ -687,6 +715,7 @@ async function swCheckSerie() {
 // si l'athlète ne s'est pas entraîné pendant la période — la page écrit sa
 // dernière séance dans '/wrapped'. Même clés que wrappedPeriodes (rc-core).
 async function swCheckWrapped() {
+  if (await swPushServeurActif()) return;
   const cfg = await swGet('/wrapped');
   if (!cfg) return;
   const d = new Date();
@@ -705,7 +734,9 @@ async function swCheckWrapped() {
   }
   const o = offres.find(x => faites.indexOf(x.cle) < 0 && Number(cfg.derniereSeance) >= x.debut);
   if (!o) return;
+  if (!(await swPeutNotifier())) return;
   await swSet('/wrapped-notifs', faites.concat([o.cle]).slice(-24));
+  await swNoterNotif();
   await self.registration.showNotification(o.titre, {
     body: (cfg.fname ? cfg.fname + ', tes' : 'Tes') + ' chiffres, tes records et ton profil t’attendent.',
     icon: './icons/icon-192x192.png',
@@ -744,12 +775,15 @@ function _freqBilan(sched) {
 }
 
 async function swCheckAndNotify() {
+  if (await swPushServeurActif()) return;
   const sched = await swGet('/bilan-schedule');
   if (!sched?.nextDate) return;
   if (Date.now() < sched.nextDate) return;
   const today = _jourLocal();
   if (await swGet('/bilan-last-notif') === today) return;
+  if (!(await swPeutNotifier())) return;
   await swSet('/bilan-last-notif', today);
+  await swNoterNotif();
   // Advance schedule by 14 days for the next cycle
   // Avance paramétrée par la fréquence CHOISIE par l'athlète. Le repli sur 2
   // est obligatoire : les caches écrits par les versions antérieures ne
@@ -893,6 +927,8 @@ self.addEventListener('push', e => {
   catch (err) { try { d = { body: e.data.text() }; } catch (e2) { d = {}; } }
   if (!d || typeof d !== 'object') d = {};
   const titre = String(d.title || 'RepCore').slice(0, 80);
+  // Un push reçu compte dans la journée : un rappel local ne s'y ajoute pas.
+  e.waitUntil(swNoterNotif().catch(() => {}));
   e.waitUntil(self.registration.showNotification(titre, {
     body: String(d.body || '').slice(0, 240),
     icon: d.icon && swUrlSure(d.icon) !== './' ? swUrlSure(d.icon) : './icons/icon-192x192.png',

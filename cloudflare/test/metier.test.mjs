@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { creerBase } from '../src/base.js';
-import { creerMetier, paris } from '../src/metier.js';
+import { creerMetier, paris, serieDuJour } from '../src/metier.js';
 import { minute, BUDGET } from '../src/planif.js';
 import { fausseBase, appareil } from './fausse-base.mjs';
 
@@ -91,15 +91,16 @@ await test('jeudi 18 h : la série en danger, par lots, reprise d’une minute �
   const users = {}, push = {}, tels = {};
   for (let i = 0; i < 9; i++) {
     const k = 'a' + i + '@t,fr';
-    users[k] = { streak: 3, streakWeek: '2026-09-14', fname: 'A' + i };
+    users[k] = { streak: 3, streakWeek: '2026-09-21', lastSession: PARIS('2026-09-26T10:00:00'), fname: 'A' + i };
     tels[k] = appareil('https://push.test/' + i);
     push[k] = { a1b2c3: tels[k].abonnement };
   }
   users['a0@t,fr'].streakWeek = '2026-09-28';     // semaine déjà validée : rien
-  const w = monde({ users, push }, PARIS('2026-10-01T18:01:00'));   // un jeudi
+  // Un jeudi 1er : le Wrapped du mois est marqué fait, on ne mesure que la série.
+  const w = monde({ users, push, worker: { jobs: { wrapped: { jour: '2026-10-01', fini: true } } } }, PARIS('2026-10-01T18:01:00'));
   assert.equal(paris(w.t).joursem, 4);
   let tours = 0;
-  while (tours++ < 10) {
+  while (tours++ < 20) {
     const b = await w.minute();
     assert.ok(b.requetes <= 50, 'jamais plus de 50 requêtes : ' + b.requetes);
     if (b.travaux.serie === 'fini') break;
@@ -112,6 +113,69 @@ await test('jeudi 18 h : la série en danger, par lots, reprise d’une minute �
   const avant = w.F.recus.length;
   await w.minute();
   assert.equal(w.F.recus.length, avant);
+});
+
+// ── La série du jeudi, recalculée à la date du jour ──────────────────────
+const JEUDI = PARIS('2026-10-01T18:01:00');          // semaine du lundi 28/09
+const J = 864e5;
+const trois = [{ active: true }, { active: true }, { active: true }, { active: false }];   // écart normal : 4 jours
+await test('série : la règle de l’app — vivante, périmée, sauvée par un joker, ancienne, gelée', () => {
+  const u = (o) => Object.assign({ streak: 6, streakWeek: '2026-09-21', sessions_config: trois }, o);
+  // 3 créneaux : périmée au-delà de 4 + 7 = 11 jours d'absence.
+  assert.equal(serieDuJour(u({ lastSession: JEUDI - 11 * J }), JEUDI).etat, 'vivante');
+  assert.equal(serieDuJour(u({ lastSession: JEUDI - 12 * J }), JEUDI).etat, 'cassee');
+  // Un seul créneau : écart 8, périmée au-delà de 15 jours — mais plus de 14 : ancienne.
+  assert.equal(serieDuJour(u({ lastSession: JEUDI - 13 * J, sessions_config: [{ active: true }] }), JEUDI).etat, 'vivante');
+  assert.equal(serieDuJour(u({ lastSession: JEUDI - 15 * J, sessions_config: [{ active: true }] }), JEUDI).etat, 'ancienne');
+  // Un joker couvre la semaine du 21/09 manquée (streakWeek du 14/09).
+  const perimee = u({ lastSession: JEUDI - 12 * J, streakWeek: '2026-09-14' });
+  assert.equal(serieDuJour(perimee, JEUDI).etat, 'cassee');
+  assert.equal(serieDuJour(Object.assign({}, perimee, { streakJokers: 1 }), JEUDI).etat, 'sauvee');
+  assert.equal(serieDuJour(Object.assign({}, perimee, { streakWeek: '2026-09-07', streakJokers: 1 }), JEUDI).etat, 'cassee', 'deux semaines manquées, un joker');
+  // Le décompte repart d'une suspension levée, ou du joker.
+  assert.equal(serieDuJour(u({ lastSession: JEUDI - 13 * J, suspension: { actif: false, fin: JEUDI - 3 * J } }), JEUDI).etat, 'vivante');
+  assert.equal(serieDuJour(u({ lastSession: JEUDI - 13 * J, streakJokerLe: JEUDI - 2 * J }), JEUDI).etat, 'vivante');
+  assert.equal(serieDuJour(u({ lastSession: JEUDI - 30 * J, suspension: { actif: true } }), JEUDI).etat, 'gel');
+  assert.equal(serieDuJour(u({ streak: 0, lastSession: JEUDI }), JEUDI).etat, 'aucune');
+});
+await test('jeudi 18 h : rien pour une série cassée ou une dernière séance de plus de 14 jours ; le bon chiffre sinon', async () => {
+  const users = {
+    'vivante@t,fr': { streak: 5, streakWeek: '2026-09-21', lastSession: JEUDI - 3 * J, sessions_config: trois, fname: 'Vi' },
+    'cassee@t,fr': { streak: 9, streakWeek: '2026-09-14', lastSession: JEUDI - 12 * J, sessions_config: trois },
+    'ancienne@t,fr': { streak: 4, streakWeek: '2026-09-21', lastSession: JEUDI - 15 * J, sessions_config: [{ active: true }] },
+    'sauvee@t,fr': { streak: 7, streakWeek: '2026-09-14', lastSession: JEUDI - 12 * J, sessions_config: trois, streakJokers: 1 },
+    'validee@t,fr': { streak: 2, streakWeek: '2026-09-28', lastSession: JEUDI - J, sessions_config: trois },
+  };
+  const tels = {}, push = {};
+  for (const k of Object.keys(users)) { tels[k] = appareil('https://push.test/' + k); push[k] = { x: tels[k].abonnement }; }
+  const w = monde({ users, push, worker: { jobs: { wrapped: { jour: '2026-10-01', fini: true } } } }, JEUDI);
+  for (let i = 0; i < 10; i++) { const b = await w.minute(); if (b.travaux.serie === 'fini') break; }
+  const recu = (k) => w.F.recus.filter((r) => r.endpoint === 'https://push.test/' + k).map((r) => tels[k].lire(r.init.body));
+  assert.equal(recu('vivante@t,fr').length, 1);
+  assert.match(recu('vivante@t,fr')[0].title, /Ta série de 5 semaines est en danger/);
+  assert.equal(recu('sauvee@t,fr').length, 1, 'sauvée par un joker : elle est toujours là');
+  assert.match(recu('sauvee@t,fr')[0].body, /joker/);
+  assert.equal(recu('cassee@t,fr').length, 0, 'cassée : l’app affiche 0, on ne parle pas d’une série de 9');
+  assert.equal(recu('ancienne@t,fr').length, 0, 'dernière séance de plus de 14 jours');
+  assert.equal(recu('validee@t,fr').length, 0, 'semaine déjà validée');
+});
+await test('samedi 10 h : le rappel de bilan seulement avec un coach ET un premier bilan', async () => {
+  const SAMEDI = PARIS('2026-10-03T10:01:00');
+  const vieux = [{ date: SAMEDI - 20 * J }];
+  const users = {
+    'suivi@t,fr': { coachEmailKey: C1, bilans: vieux, fname: 'Su' },
+    'recent@t,fr': { coachEmailKey: C1, bilans: [{ date: SAMEDI - 5 * J }] },
+    'jamais@t,fr': { coachEmailKey: C1, fname: 'Ja' },
+    'seul@t,fr': { bilans: vieux, fname: 'Se' },
+    [C1]: { role: 'coach', coachEmailKey: 'x@t,fr', bilans: vieux },
+  };
+  const tels = {}, push = {};
+  for (const k of Object.keys(users)) { tels[k] = appareil('https://push.test/' + k); push[k] = { x: tels[k].abonnement }; }
+  const w = monde({ users, push }, SAMEDI);
+  for (let i = 0; i < 10; i++) { const b = await w.minute(); if (b.travaux.bilan === 'fini') break; }
+  const qui = w.F.recus.map((r) => r.endpoint.replace('https://push.test/', ''));
+  assert.deepEqual(qui, ['suivi@t,fr']);
+  assert.match(tels['suivi@t,fr'].lire(w.F.recus[0].init.body).title, /C’est l’heure de ton bilan/);
 });
 
 await test('parrainage : la demande est jugée, le filleul rattaché, le parrain prévenu', async () => {

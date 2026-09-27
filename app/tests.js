@@ -49123,6 +49123,155 @@ async function testExercices(){
       if(!/effacerEvenementKo\('e1'/.test(h)) return _echec('pas de bouton pour effacer');
       if(htmlEvenementsKo({})!=='') return _echec('rien à montrer : la carte doit disparaître');
       return /illisible/.test(htmlEvenementsKo(null))?true:_echec('liste illisible');})());
+    // ══ 27/09/2026 — NOTIFICATIONS CHOISIES, PLAFOND COMMUN, VISUELS ══════
+    ok('Notifications : trois cases, cochées selon le profil, et le texte dit exactement ce qui partira',(()=>{
+      const d0=notifGroupesDefaut({});
+      if(!d0.seances||d0.coach||d0.invitations) return _echec('sans coach ni code : '+JSON.stringify(d0));
+      const d1=notifGroupesDefaut({coachEmailKey:'kev@t,fr',parrainage:{code:'JULIE7K2'}});
+      if(!d1.seances||!d1.coach||!d1.invitations) return _echec('avec coach et code : '+JSON.stringify(d1));
+      // Chaque type réglable est dans une case, sauf la fin d'accès, qui reste.
+      const dans=NOTIF_GROUPES.reduce((a,g)=>a.concat(g.types),[]);
+      const hors=PUSH_TYPES.map(t=>t.cle).filter(k=>dans.indexOf(k)<0);
+      if(hors.join()!=='acces') return _echec('types hors cases : '+hors.join());
+      const h=_htmlInvitationNotif('demander','demain à 18 h',{seances:true,coach:false,invitations:true});
+      for(const g of NOTIF_GROUPES) if(h.indexOf('id="inv-notif-g-'+g.cle+'"')<0) return _echec('case '+g.cle+' absente');
+      if(!/id="inv-notif-g-seances"[^>]*checked/.test(h)||/id="inv-notif-g-coach"[^>]*checked/.test(h)||!/id="inv-notif-g-invitations"[^>]*checked/.test(h))
+        return _echec('les cases ne suivent pas le choix');
+      for(const t of ['Mes séances et ma série','Mon coach','Mes invitations']) if(h.indexOf(t)<0) return _echec('libellé « '+t+' » absent');
+      if(/rien d’autre/.test(h)) return _echec('la carte promet encore « rien d’autre »');
+      const tx=texteInvitationNotif({seances:true,coach:false,invitations:true});
+      if(tx.indexOf('série est en danger')<0||tx.indexOf('s’inscrit avec ton lien')<0) return _echec('ce qui est coché n’est pas dit : '+tx);
+      if(tx.indexOf('ton coach')>=0) return _echec('ce qui est décoché est promis : '+tx);
+      if(!/fin de ton accès/.test(tx)||!/une par jour au plus|par jour au plus/.test(tx)) return _echec('fin d’accès ou plafond non dits');
+      if(!/Aucune case/.test(texteInvitationNotif({}))) return _echec('aucune case');
+      if(!/inv-notif-oui[^>]*disabled/.test(_htmlInvitationNotif('demander','',{}))) return _echec('« Oui » actif sans case cochée');
+      // pushPrefs : décoché → false, coché → permis, hors cases → intact.
+      const p=pushPrefsDepuisChoix({acces:false,coach:false,filleul:false},{seances:true,coach:true,invitations:false});
+      // Case « Mon coach » cochée : coach, bilan et défi permis (clés retirées) ; « invitations » décochée : filleul coupé.
+      if(p.acces!==false||('coach' in p)||('bilan' in p)||('defi' in p)||p.filleul!==false||('serie' in p)) return _echec(JSON.stringify(p));
+      const q=pushPrefsDepuisChoix({},{seances:false,coach:true,invitations:true});
+      if(q.serie!==false||q.badge!==false||q.wrapped!==false||('coach' in q)) return _echec('séances décochées : '+JSON.stringify(q));
+      return true;})());
+    ok('Notifications : le choix est écrit dans u.pushPrefs AVANT la demande de permission',(()=>{
+      const svU=currentUser, svSave=window.saveUser, svN=Object.getOwnPropertyDescriptor(window,'Notification');
+      const z=document.createElement('div'); z.id='wd-notif-invite'; document.body.appendChild(z);
+      let vu=null, demande=0;
+      try{
+        currentUser={email:'lea@t.fr',role:'athlete',coachEmailKey:'k',pushPrefs:{acces:false}};
+        window.saveUser=()=>true;
+        Object.defineProperty(window,'Notification',{configurable:true,writable:true,value:{permission:'default',
+          requestPermission(){ demande++; vu=JSON.parse(JSON.stringify(currentUser.pushPrefs)); return new Promise(()=>{}); }}});
+        z.innerHTML=_htmlInvitationNotif('demander','',{seances:true,coach:true,invitations:true});
+        document.getElementById('inv-notif-g-coach').checked=false;
+        invNotifOui();                          // la suite attend une permission qui ne vient jamais
+        if(demande!==1) return _echec('la permission n’est pas demandée dans le geste');
+        if(!vu||vu.coach!==false||vu.bilan!==false||vu.defi!==false||('serie' in vu)||('filleul' in vu)||vu.acces!==false)
+          return _echec('pushPrefs au moment de la demande : '+JSON.stringify(vu));
+      }finally{
+        z.remove(); currentUser=svU; window.saveUser=svSave;
+        if(svN) Object.defineProperty(window,'Notification',svN); else delete window.Notification;
+      }
+      return true;})());
+    okA('Notifications : sw.js se tait quand le push serveur est actif, sinon une par jour au plus, jamais la nuit',async()=>{
+      let src='';
+      try{ src=(await (await fetch('./sw.js',{cache:'no-store'})).text()).replace(/\r\n/g,'\n'); }catch(e){ return _echec('sw.js illisible'); }
+      const fn=(nom)=>{ const i=src.indexOf('function '+nom+'('); if(i<0) throw new Error(nom+' absente');
+        const d=src.lastIndexOf('\n',i)+1, j=src.indexOf('\n}\n',i); return src.slice(d,j+2); };
+      let corps;
+      try{ corps=['_jourLocal','swPushServeurActif','swPeutNotifier','swNoterNotif','swCheckSerie','swCheckWrapped','swCheckAndNotify'].map(fn).join('\n'); }
+      catch(e){ return _echec(e.message); }
+      const monde=(iso,donnees)=>{
+        const NOW=new Date(iso).getTime(), RD=Date;
+        const D=class extends RD{ constructor(...a){ if(a.length) super(...a); else super(NOW); } static now(){ return NOW; } };
+        const m=Object.assign({},donnees), vus=[];
+        const self={registration:{showNotification:async(t)=>{ vus.push(t); }}};
+        const f=new Function('Date','self','swGet','swSet',"const NOTIF_JOUR='/notif-jour';\n"+corps
+          +'\nreturn {serie:swCheckSerie,wrapped:swCheckWrapped,bilan:swCheckAndNotify};');
+        const api=f(D,self,async k=>(k in m?JSON.parse(JSON.stringify(m[k])):null),async(k,v)=>{ m[k]=v; });
+        return {api,m,vus};
+      };
+      const serie={'/serie':{actif:true,streak:4,streakWeek:'2026-09-21',fname:'Léa'}};
+      // Jeudi 1er octobre 2026, 18 h 30, heure locale.
+      let w=monde('2026-10-01T18:30:00',serie);
+      await w.api.serie();
+      if(w.vus.length!==1) return _echec('série seule : '+w.vus.length+' notification(s)');
+      if(w.m['/notif-jour']!=='2026-10-01') return _echec('le jour n’est pas noté');
+      w=monde('2026-10-01T18:30:00',Object.assign({'/push-serveur':{actif:true}},serie));
+      await w.api.serie(); await w.api.bilan(); await w.api.wrapped();
+      if(w.vus.length) return _echec('push serveur actif : le local double');
+      w=monde('2026-10-01T18:30:00',Object.assign({'/notif-jour':'2026-10-01'},serie));
+      await w.api.serie();
+      if(w.vus.length) return _echec('déjà une notification aujourd’hui : une deuxième est partie');
+      if((w.m['/serie-notifs']||[]).length) return _echec('le créneau est consommé sans rien envoyer');
+      w=monde('2026-10-01T21:30:00',serie);
+      await w.api.serie();
+      if(w.vus.length) return _echec('partie à 21 h 30');
+      // Un Wrapped et une série le même jour : un seul des deux.
+      w=monde('2026-10-01T18:30:00',Object.assign({'/wrapped':{derniereSeance:new Date('2026-09-20').getTime()}},serie));
+      await w.api.wrapped(); await w.api.serie();
+      if(w.vus.length!==1) return _echec('Wrapped + série le même jour : '+w.vus.length);
+      // Un push reçu compte dans la journée ; la page pose et retire le témoin.
+      if(!/addEventListener\('push'[\s\S]{0,700}swNoterNotif\(\)/.test(src)) return _echec('un push reçu ne compte pas dans la journée');
+      if(!/_swPushServeur\(true\)/.test(String(pushAbonner))) return _echec('l’abonnement ne pose pas /push-serveur');
+      if(!/_swPushServeur\(false\)/.test(String(pushDesabonner))) return _echec('le désabonnement ne retire pas /push-serveur');
+      return true;
+    });
+    ok('Visuels : le lien est copié AVANT la branche iPhone, et l’aperçu porte le vrai nom et le vrai type',(()=>{
+      if(_nomSelonFormat('repcore-seance.png',{ext:'jpg'})!=='repcore-seance.jpg') return _echec('extension non accordée');
+      if(_nomSelonFormat('repcore-bilan.jpg',null)!=='repcore-bilan.png') return _echec('sans format : png');
+      if(_b64versBlob('data:image/jpeg;base64,AAAA').type!=='image/jpeg') return _echec('le blob d’un JPEG se dit PNG');
+      const sv={ios:window._estIOS,cop:window._storyCopierLien,ap:window._ouvrirApercuStory,t:window.toast,ac:window.attribCompter};
+      const ordre=[]; let args=null;
+      const cv=()=>{ const c=document.createElement('canvas'); c.width=4; c.height=4; return c; };
+      try{
+        window.toast=()=>{}; window.attribCompter=()=>{};
+        window._storyCopierLien=(src)=>{ ordre.push('lien:'+src); return true; };
+        window._ouvrirApercuStory=(u,n,f)=>{ ordre.push('apercu'); args=[n,f&&f.type]; };
+        window._estIOS=()=>true;
+        _storySortirTelechargement(cv(),visuelNomFichier('repcore-bilan','carbone'),visuelFondFormat('carbone'));
+        if(ordre.join()!=='lien:bilan,apercu') return _echec('iPhone : '+ordre.join());
+        if(!args||args[0]!=='repcore-bilan.jpg'||args[1]!=='image/jpeg') return _echec('aperçu : '+JSON.stringify(args));
+        ordre.length=0; args=null;
+        _storySortirTelechargement(cv(),'repcore-seance.png');
+        if(!args||args[0]!=='repcore-seance.png'||args[1]!=='image/png') return _echec('aperçu PNG : '+JSON.stringify(args));
+        // Ailleurs : le lien aussi, et le fichier au bon nom.
+        window._estIOS=()=>false; ordre.length=0;
+        const clic=HTMLAnchorElement.prototype.click; let nom='';
+        HTMLAnchorElement.prototype.click=function(){ nom=this.download; };
+        try{ _storySortirTelechargement(cv(),'repcore-record.png',visuelFondFormat('photo')); }
+        finally{ HTMLAnchorElement.prototype.click=clic; }
+        if(ordre.join()!=='lien:record') return _echec('ordinateur : '+ordre.join());
+        if(nom!=='repcore-record.jpg') return _echec('fichier : '+nom);
+      }finally{
+        window._estIOS=sv.ios; window._storyCopierLien=sv.cop; window._ouvrirApercuStory=sv.ap; window.toast=sv.t; window.attribCompter=sv.ac;
+      }
+      // L'aperçu lui-même : le lien « Télécharger » porte le nom et le type réels.
+      _ouvrirApercuStory('data:image/jpeg;base64,AAAA','repcore-wrapped.jpg',{type:'image/jpeg',ext:'jpg'});
+      const a=document.querySelector('#story-apercu a[download]');
+      const bon=a&&a.getAttribute('download')==='repcore-wrapped.jpg'&&a.getAttribute('type')==='image/jpeg';
+      fermerApercuStory();
+      return bon?true:_echec('lien de l’aperçu : '+(a?a.outerHTML:'absent'));})());
+    ok('Partage : le message de parrainage se lit, et le lien n’apparaît pas deux fois',(()=>{
+      const m=parrainageMessage('JULIE7K2','https://x/?ref=JULIE7K2');
+      if(m.indexOf('Je m’entraîne avec RepCore. Avec mon code JULIE7K2, tu as 2 mois d’essai au lieu d’un')!==0) return _echec(m);
+      if(!/https:\/\/x\/\?ref=JULIE7K2$/.test(m)) return _echec('le lien manque à la fin');
+      if(/https?:/.test(parrainageMessage('JULIE7K2',''))) return _echec('lien vide : il ne doit rien ajouter');
+      if(!/Le code se saisit/.test(parrainageMessage('JULIE7K2'))) return _echec('sans lien : où saisir le code');
+      if(!/text:parrainageMessage\(c,l\?'':undefined\),url:l/.test(String(parrainagePartager))) return _echec('le partage répète le lien dans le texte');
+      const r=messageRelanceAcces({fname:'Léa',accessExpiry:Date.now()+3*864e5},{cle:'bientot'});
+      if(/ : [^ ]+ : /.test(r)||!/engagement 12 mois/.test(r)) return _echec(r);
+      return true;})());
+    ok('Records : un vrai bouton « Partager » au-dessus de la liste, une pastille par ligne s’il y en a plusieurs',(()=>{
+      const rec=(n)=>({records:Array.from({length:n},(_,i)=>({nm:'SQUAT '+i,curMax:100+i,histMax:90,gain:10+i}))});
+      const h3=_htmlRecordsFin(rec(3),Date.now(),'wd');
+      const iTous=h3.indexOf('Partager mes 3 records'), iLigne=h3.indexOf('rcf-rk-l');
+      if(iTous<0||iLigne<0||iTous>iLigne) return _echec('le bouton n’est pas au-dessus de la liste');
+      if(!/<button type="button" class="rcf-rk-p rcf-rk-p-tous"/.test(h3)) return _echec('pas un vrai bouton');
+      if((h3.match(/rcf-rk-p-ligne/g)||[]).length!==3) return _echec('une pastille par ligne attendue');
+      const h1=_htmlRecordsFin(rec(1),Date.now(),'wd');
+      if(h1.indexOf('Partager ce record')<0||h1.indexOf('Partager ce record')>h1.indexOf('rcf-rk-l')||/rcf-rk-p-ligne/.test(h1)) return _echec('un seul record : un bouton, en haut');
+      if(/<button/.test(_htmlRecordsFin(rec(2),Date.now()))) return _echec('sans clé d’écran, pas de bouton');
+      return true;})());
     ok('Ambassadeurs : le CSV mensuel ne porte que les commissions dues',(()=>{
       const r=ambCsvDues({LEA:_AMBF,ZED:{nom:'Zed',commissions:{'2026-09':{x:{commission:9,dueLe:1}}}}},'2026-10',500);
       const l=r.csv.trim().split('\n');
