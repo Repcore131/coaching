@@ -72525,85 +72525,232 @@ function _aaFlouterHaut(g,x,y,w,h){
   g.restore();
   return hh;
 }
+// ── LE CADRAGE : les deux corps à la même taille, à la même hauteur ─────
+// Les repères viennent de la lecture des articulations de Motion Lab
+// (mlAnatPhoto, sur le téléphone, rien n'est envoyé) : le milieu des épaules et
+// celui des hanches. Le tronc (épaules → hanches) prend la même part du cadre
+// sur les deux photos, et les épaules tombent à la même hauteur : deux photos
+// prises à des distances différentes se comparent enfin d'égal à égal. Sans
+// repères (moteur absent, personne mal vue), on revient au recadrage simple.
+const AA_TRONC=0.34, AA_EPAULES=0.28, AA_LARG=0.46;
+const _aaReperesCache=new Map();
+// PURE. Les repères d'une lecture, ou null si les épaules ne sont pas bien
+// vues. ex, ey : le milieu des épaules (fractions de la largeur et de la
+// hauteur) ; tronc : épaules → hanches, en fraction de la hauteur, null si les
+// hanches sont hors cadre (photo en buste) ; larg : la largeur d'épaules,
+// ramenée elle aussi à la hauteur de la photo.
+function aaReperesDe(r){
+  const p=r&&r.ok&&Array.isArray(r.pts)?r.pts:null;
+  if(!p||p.length<25) return null;
+  const vu=i=>p[i]&&Number(p[i][2])>=0.5;
+  if(!vu(11)||!vu(12)) return null;
+  const ex=(p[11][0]+p[12][0])/2, ey=(p[11][1]+p[12][1])/2;
+  const asp=(Number(r.w)>0&&Number(r.h)>0)?Number(r.w)/Number(r.h):1;
+  const larg=Math.abs(p[11][0]-p[12][0])*asp;
+  let tronc=null;
+  if(vu(23)&&vu(24)){ const t=(p[23][1]+p[24][1])/2-ey; if(t>0.05) tronc=t; }
+  if(tronc===null&&!(larg>0.03)) return null;
+  // LE NEZ situe la tête : le haut du crâne est à peu près deux fois plus
+  // haut au-dessus des épaules que le nez.
+  const nez=(vu(0)&&p[0][1]<ey)?ey-p[0][1]:null;
+  return {ex,ey,tronc,larg:larg>0.03?larg:null,nez};
+}
+// PURE. La mesure commune aux deux photos : le tronc si les deux le montrent,
+// sinon la largeur d'épaules si les deux la montrent (vue de face ou de dos),
+// sinon rien — une seule photo calée ne se comparerait plus à l'autre.
+function aaModeCadrage(ra,rb){
+  if(!ra||!rb) return null;
+  if(ra.tronc&&rb.tronc) return 'tronc';
+  if(ra.larg&&rb.larg) return 'epaules';
+  return null;
+}
+// La lecture, une fois par photo. Motion Lab se charge à la demande.
+function aaReperes(img){
+  const src=img&&img.src;
+  if(!src) return Promise.resolve(null);
+  if(_aaReperesCache.has(src)) return _aaReperesCache.get(src);
+  const p=(async()=>{
+    try{
+      await chargerMotionLab();
+      const lire=(typeof window!=='undefined')?/** @type {any} */(window).mlAnatPhoto:null;
+      if(typeof lire!=='function') return null;
+      return aaReperesDe(await lire(src,{}));
+    }catch(e){ _aaReperesCache.delete(src); return null; }
+  })();
+  _aaReperesCache.set(src,p);
+  return p;
+}
+// Dessine une photo dans son cadre : alignée sur ses repères si elle en a,
+// sinon recadrée « cover » calée haut (_aaCouvrir). L'image couvre toujours
+// tout le cadre : jamais de bande vide.
+function _aaCadrer(g,img,x,y,w,h,rep,mode){
+  if(!rep||!mode){ _aaCouvrir(g,img,x,y,w,h); return; }
+  const iw=img.naturalWidth||img.width, ih=img.naturalHeight||img.height;
+  const cover=Math.max(w/iw,h/ih);
+  const voulu=mode==='tronc'?(AA_TRONC*h)/(rep.tronc*ih):(AA_LARG*w)/(rep.larg*ih);
+  const s=Math.max(cover,voulu);
+  // LA PLACE DE LA TÊTE au-dessus des épaules : environ une largeur d'épaules
+  // (ou 60 % du tronc), plus une marge. Sur une photo en buste, les épaules
+  // descendent d'autant ; la tête n'est jamais coupée.
+  const tete=rep.nez?rep.nez*ih*s*2:(mode==='tronc'?rep.tronc*ih*s*0.62:(rep.larg||0)*ih*s*1.5);
+  const yE=Math.max(AA_EPAULES*h,tete+0.05*h);
+  let dx=x+w/2-rep.ex*iw*s, dy=y+yE-rep.ey*ih*s;
+  dx=Math.min(x,Math.max(x+w-iw*s,dx)); dy=Math.min(y,Math.max(y+h-ih*s,dy));
+  g.save(); g.beginPath(); g.rect(x,y,w,h); g.clip();
+  g.drawImage(img,dx,dy,iw*s,ih*s);
+  g.restore();
+}
+// PURE. « −4,6 », « +20 », « −8 » : le signe typographique, la virgule.
+function aaDelta(a,b){
+  const d=Math.round((Number(b)-Number(a))*10)/10;
+  const v=String(Math.abs(d)).replace('.',',');
+  return (d>0?'+':d<0?'−':'')+v;
+}
+// PURE. Les chiffres du bas, dans l'ordre : le poids s'il est demandé, puis
+// l'indicateur choisi ; l'écart complète quand il reste de la place (il y a
+// toujours au moins un chiffre).
+function aaChiffres(o){
+  const l=[];
+  if(o.poids&&o.avant&&o.apres&&o.avant.poids>0&&o.apres.poids>0) l.push({v:aaDelta(o.avant.poids,o.apres.poids),lib:'KG'});
+  const ind=o.indicateur;
+  if(ind) l.push({v:aaDelta(ind.avant,ind.apres),lib:(ind.unite||'').toUpperCase()+' · '+(ind.lib==='TOUR DE TAILLE'?'TAILLE':ind.lib)});
+  if(l.length<3){
+    const e=aaEcart(o.avant.date,o.apres.date).split(' ');
+    l.unshift({v:e[0],lib:e.slice(1).join(' ')});
+  }
+  return l;
+}
 /**
- * Le visuel, 1080×1920 (story) ou 1080×1350 (post).
- * @param {{avant:{img:any,date:number,poids:?number},apres:{img:any,date:number,poids:?number},
+ * Le visuel « TRANSFORMATION », 1080×1920 (story) ou 1080×1350 (post) :
+ * titre, dates, deux cartes photo (l'après cerclée de rouge), l'éclair entre
+ * les deux, les chiffres en colonnes, puis la marque du coach et la signature.
+ * @param {{avant:{img:any,date:number,poids:?number,rep?:any},apres:{img:any,date:number,poids:?number,rep?:any},
  *   format?:'story'|'post', fond?:'noir'|'rouge', flou?:boolean, poids?:boolean,
- *   indicateur?:?{lib:string,avant:number,apres:number,unite:string}, signature?:string}} o
+ *   indicateur?:?{lib:string,avant:number,apres:number,unite:string}, signature?:string,
+ *   equipe?:string, marque?:any}} o
  */
 function _dessinerAvantApres(o){
-  const F=AA_FORMATS[o.format==='post'?'post':'story'];
-  const W=F.w, H=F.h, post=o.format==='post';
+  const post=o.format==='post';
+  const F=AA_FORMATS[post?'post':'story'], W=F.w, H=F.h;
   const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
-  if(o.fond==='rouge') _visuelPeindreFond(g,W,H,'rouge');
-  else { g.fillStyle='#000'; g.fillRect(0,0,W,H); }
+  const rouge=o.fond==='rouge';
+  if(rouge) _visuelPeindreFond(g,W,H,'rouge');
+  else {
+    g.fillStyle='#070707'; g.fillRect(0,0,W,H);
+    const hl=g.createRadialGradient(W*0.75,H*0.45,50,W*0.75,H*0.45,H*0.5);
+    hl.addColorStop(0,'rgba(224,32,32,.22)'); hl.addColorStop(1,'rgba(224,32,32,0)');
+    g.fillStyle=hl; g.fillRect(0,0,W,H);
+  }
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
   const vo=_visuelOutils(g);
-  const cx=W/2, M=post?40:48;
-  // En-tête : AVANT / APRÈS, l'écart.
-  g.textAlign='center'; g.textBaseline='alphabetic';
+  const L=post?{M:60,T:104,yT:150,D:24,yD:196,yR:226,py:258,ph:712,lib:66,dt:19,v:96,ys:118,etq:20,
+                 yb:88,logo:62,eq:44,sig:40}
+              :{M:72,T:150,yT:250,D:30,yD:312,yR:352,py:400,ph:980,lib:84,dt:22,v:130,ys:170,etq:24,
+                 yb:118,logo:88,eq:58,sig:72};
+  const M=L.M, cx=W/2;
+  // ── Le titre et les dates
+  g.textAlign='left'; g.textBaseline='alphabetic';
   vo.ombre(true); g.fillStyle='#fff';
-  const tT=post?110:150;
-  g.font='700 '+tT+'px '+BEBAS;
-  const yT=post?130:210;
-  vo.ecrire('AVANT / APRÈS',cx,yT);
-  g.fillStyle=o.fond==='rouge'?'#fff':'#E02020'; g.font='800 '+(post?30:38)+'px '+MONT;
-  vo.ecrireEspace(aaEcart(o.avant.date,o.apres.date),cx,yT+(post?48:64),8,true);
+  vo.ajuste('TRANSFORMATION','400',L.T,BEBAS,W-2*M,60);
+  vo.ecrire('TRANSFORMATION',M,L.yT);
+  const dates=_recDate(o.avant.date)+'   →   '+_recDate(o.apres.date)+'   ·   '+aaEcart(o.avant.date,o.apres.date);
+  g.fillStyle='rgba(255,255,255,.88)';
+  vo.ajusteEspace(dates,'700',L.D,MONT,3,W-2*M,16);
+  vo.ecrireEspace(dates,M,L.yD,3,false);
   vo.ombre(false);
-  // Les deux photos, côte à côte, séparées par l'éclair.
-  const gap=post?34:40;
-  const pw=(W-2*M-gap)/2;
-  const py=yT+(post?78:110);
-  const lignes=(o.indicateur?1:0)+(o.poids&&o.avant.poids>0&&o.apres.poids>0?1:0);
-  const bas=(post?120:210)+lignes*(post?56:74);
-  const ph=H-py-bas;
-  [[o.avant,M,'AVANT'],[o.apres,M+pw+gap,'APRÈS']].forEach(([c,x,lib])=>{
+  g.strokeStyle=rouge?'rgba(255,255,255,.7)':'rgba(255,255,255,.55)'; g.lineWidth=2;
+  g.beginPath(); g.moveTo(M,L.yR); g.lineTo(W-M,L.yR); g.stroke();
+  // ── Les deux cartes
+  const mode=aaModeCadrage(o.avant.rep,o.apres.rep);
+  const gap=28, pw=(W-2*M-gap)/2, ph=L.ph, py=L.py, R=28;
+  const arrondi=(x,y,w,h,r)=>{ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r);
+    g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); };
+  [[o.avant,M,'AVANT',false],[o.apres,M+pw+gap,'APRÈS',true]].forEach(([c,x,lib,fort])=>{
+    g.save(); arrondi(x,py,pw,ph,R); g.clip();
     g.fillStyle='#111'; g.fillRect(x,py,pw,ph);
-    if(c.img) _aaCouvrir(g,c.img,x,py,pw,ph);
+    if(c.img){
+      // LES DEUX PHOTOS PARLENT LA MÊME LANGUE : même contraste, même
+      // saturation, même voile rouge (ignoré sans erreur là où le filtre de
+      // canvas n'existe pas).
+      try{ g.filter='contrast(1.08) saturate(0.88)'; }catch(e){}
+      _aaCadrer(g,c.img,x,py,pw,ph,c.rep||null,mode);
+      try{ g.filter='none'; }catch(e){}
+      g.globalCompositeOperation='soft-light'; g.fillStyle='rgba(224,32,32,.10)'; g.fillRect(x,py,pw,ph);
+      g.globalCompositeOperation='source-over';
+    }
     if(o.flou) _aaFlouterHaut(g,x,py,pw,ph);
-    // Le libellé et la date, en pied de photo, sur un voile.
-    const v=g.createLinearGradient(0,py+ph-150,0,py+ph);
-    v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,0,0,.75)');
-    g.fillStyle=v; g.fillRect(x,py+ph-150,pw,150);
-    vo.ombre(true); g.fillStyle='#fff'; g.font='700 '+(post?60:74)+'px '+BEBAS;
-    vo.ecrire(lib,x+pw/2,py+ph-(post?44:56));
-    g.fillStyle='rgba(255,255,255,.85)'; g.font='700 '+(post?22:26)+'px '+MONT;
-    let dt=''; try{ dt=new Date(c.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}); }catch(e){}
-    vo.ecrire(dt,x+pw/2,py+ph-(post?16:22));
+    const v=g.createLinearGradient(0,py+ph-240,0,py+ph);
+    v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,0,0,.85)');
+    g.fillStyle=v; g.fillRect(x,py+ph-240,pw,240);
+    g.restore();
+    g.save();
+    if(fort){ g.shadowColor=rouge?'rgba(255,255,255,.6)':'#E02020'; g.shadowBlur=40; g.strokeStyle=rouge?'#fff':'#E02020'; g.lineWidth=5; }
+    else { g.strokeStyle='rgba(255,255,255,.25)'; g.lineWidth=2; }
+    arrondi(x,py,pw,ph,R); g.stroke(); g.restore();
+    vo.ombre(true); g.fillStyle='#fff'; g.textAlign='left';
+    g.font='400 '+L.lib+'px '+BEBAS; vo.ecrire(lib,x+(post?22:30),py+ph-(post?30:44));
+    g.textAlign='right'; g.fillStyle='rgba(255,255,255,.85)'; g.font='700 '+L.dt+'px '+MONT;
+    vo.ecrire(_recDate(c.date),x+pw-(post?20:26),py+ph-(post?36:52));
     vo.ombre(false);
   });
-  // L'ÉCLAIR ROUGE VERTICAL dans l'interstice : tiré d'une graine (le même
-  // à chaque rendu), halo, trait, cœur.
+  // ── L'éclair entre les deux cartes, tiré d'une graine (le même à chaque rendu)
   const al=_recAlea(_recGraine(String(o.avant.date)+'|'+o.apres.date));
-  let pts=[{x:cx,y:py-10},{x:cx,y:py+ph+10}], d=gap*0.55;
+  let pts=[{x:cx+6,y:py-30},{x:cx-6,y:py+ph+30}], d=16;
   for(let k=0;k<7;k++){
     const nv=[pts[0]];
     for(let i=0;i<pts.length-1;i++){
       const a=pts[i], b=pts[i+1];
-      nv.push({x:Math.max(cx-gap/2+3,Math.min(cx+gap/2-3,(a.x+b.x)/2+(al()*2-1)*d)),y:(a.y+b.y)/2},b);
+      nv.push({x:Math.max(cx-gap/2+2,Math.min(cx+gap/2-2,(a.x+b.x)/2+(al()*2-1)*d)),y:(a.y+b.y)/2},b);
     }
-    pts=nv; d*=0.6;
+    pts=nv; d*=0.55;
   }
   const trace=(w,c,sh)=>{ g.save(); g.lineJoin='round'; g.lineCap='round'; g.strokeStyle=c; g.lineWidth=w;
-    if(sh){ g.shadowColor='#E02020'; g.shadowBlur=sh; }
+    if(sh){ g.shadowColor=rouge?'rgba(255,255,255,.7)':'#E02020'; g.shadowBlur=sh; }
     g.beginPath(); g.moveTo(pts[0].x,pts[0].y); for(const p of pts) g.lineTo(p.x,p.y); g.stroke(); g.restore(); };
-  trace(10,'rgba(224,32,32,.55)',30); trace(4,'#E02020',0); trace(1.6,'#fff',0);
-  // Les chiffres : l'indicateur choisi, puis le poids s'il est demandé.
-  let y=py+ph+(post?56:78);
-  const ligne=(lib,a,b,u)=>{
-    const f=v=>String(Math.round(v*10)/10).replace('.',',');
-    const dv=Math.round((b-a)*10)/10;
-    const t=lib+'   '+f(a)+' → '+f(b)+' '+u+'   ('+(dv>0?'+':'')+f(dv)+')';
-    vo.ombre(true); g.fillStyle='#fff';
-    const s=vo.ajuste(t,'800',post?30:38,MONT,W-2*M,18);
-    g.font='800 '+s+'px '+MONT; vo.ecrire(t,cx,y); vo.ombre(false);
-    y+=post?50:66;
-  };
-  if(o.indicateur) ligne(o.indicateur.lib,o.indicateur.avant,o.indicateur.apres,o.indicateur.unite.toUpperCase());
-  if(o.poids&&o.avant.poids>0&&o.apres.poids>0) ligne('POIDS',o.avant.poids,o.apres.poids,'KG');
-  _recSignature(g,vo,String(o.signature||''),H-(post?46:90),W-2*M);
+  trace(10,rouge?'rgba(255,255,255,.45)':'rgba(224,32,32,.45)',30); trace(4,rouge?'#fff':'#E02020',0); trace(1.4,'#fff',0);
+  // ── Les chiffres, en colonnes, comme le bilan de séance
+  const chiffres=aaChiffres(o).slice(0,3), n=chiffres.length, cw=(W-2*M)/n;
+  const ys=py+ph+L.ys;
+  chiffres.forEach((c,i)=>{
+    const x=M+i*cw+cw/2;
+    vo.ombre(true); g.fillStyle='#fff'; g.textAlign='center';
+    vo.ajuste(c.v,'400',L.v,BEBAS,cw-20,40); vo.ecrire(c.v,x,ys);
+    g.fillStyle=(i===0&&!rouge)?'#E02020':'rgba(255,255,255,.78)';
+    vo.ajusteEspace(c.lib,'800',L.etq,MONT,4,cw-24,12);
+    vo.ecrireEspace(c.lib,x,ys+(post?36:50),4,true);
+    vo.ombre(false);
+  });
+  g.strokeStyle='rgba(255,255,255,.18)'; g.lineWidth=2;
+  for(let i=1;i<n;i++){ const x=M+i*cw; g.beginPath(); g.moveTo(x,ys-L.v*0.85); g.lineTo(x,ys+(post?44:60)); g.stroke(); }
+  // ── LA MARQUE DU COACH : « COACHÉ PAR », son logo et le nom de sa team.
+  // Sans coach, le mot-symbole REPCORE tient la place.
+  const marque=o.marque||null, equipe=String(o.equipe||'').trim();
+  const yb=ys+L.yb;
+  if(marque||equipe){
+    vo.ombre(true); g.fillStyle=rouge?'#fff':'#E02020'; g.textAlign='center';
+    g.font='800 '+(post?16:20)+'px '+MONT; vo.ecrireEspace('COACHÉ PAR',cx,yb,6,true);
+    const hl=L.logo, yl=yb+(post?14:20);
+    let lw=0, lh=0;
+    if(marque){ const r=Math.min((hl*2.4)/marque.naturalWidth,hl/marque.naturalHeight);
+      lw=Math.round(marque.naturalWidth*r); lh=Math.round(marque.naturalHeight*r); }
+    let tw=0, ts=L.eq, nom='';
+    if(equipe){ nom=equipe.toLocaleUpperCase('fr-FR');
+      ts=vo.ajusteEspace(nom,'400',L.eq,BEBAS,3,W-2*M-(lw?lw+24:0),24);
+      g.font='400 '+ts+'px '+BEBAS;
+      tw=String(nom).split('').reduce((a,c)=>a+g.measureText(c).width+3,0)-3; }
+    const tot=lw+(lw&&tw?24:0)+tw; let x0=cx-tot/2;
+    const my=yl+hl/2;
+    if(marque){ try{ g.drawImage(marque,Math.round(x0),Math.round(my-lh/2),lw,lh); }catch(e){} x0+=lw+(tw?24:0); }
+    if(equipe){ g.fillStyle='#fff'; g.font='400 '+ts+'px '+BEBAS; g.textAlign='left';
+      vo.ecrireEspace(nom,x0,my+ts*0.36,3,false); }
+    vo.ombre(false);
+  } else {
+    vo.ombre(true); g.fillStyle='#fff'; g.textAlign='center'; g.font='400 '+(post?40:52)+'px '+BEBAS;
+    vo.ecrireEspace('REPCORE',cx,yb+(post?30:40),14,true); vo.ombre(false);
+  }
+  _recSignature(g,vo,String(o.signature||''),H-L.sig,W-2*M);
   vo.ombre(false);
   return cv;
 }
@@ -72625,6 +72772,10 @@ function ouvrirAvantApres(role){
   if(!u||!o){ toast('Il faut deux bilans avec une photo du même angle.','var(--orange)'); return false; }
   fermerAvantApres();
   _aa={role:role==='coach'?'coach':'athlete',u,o,imgs:{}};
+  // LE LOGO DU COACH se charge maintenant : le dessin est synchrone (geste iOS).
+  // S'il arrive après la première composition, l'aperçu est repeint.
+  try{ _prechaufferMarqueCoach(); }catch(e){}
+  try{ const im=_marqueCoachImg; if(im&&!(im.complete&&im.naturalWidth>0)) im.addEventListener('load',()=>{ try{ _aaPeindre(); }catch(e){} },{once:true}); }catch(e){}
   const z=document.createElement('div');
   z.id='aa-ecran'; z.className='aa-ecran';
   z.setAttribute('role','dialog'); z.setAttribute('aria-modal','true'); z.setAttribute('aria-label','Avant / après');
@@ -72709,13 +72860,27 @@ function _aaDonnees(){
   const av=bl.find(b=>Number(b.date)===o.avant)||bl[0];
   const ap=bl.find(b=>Number(b.date)===o.apres)||bl[bl.length-1];
   let sig=''; try{ sig=nomSurVisuels(u); }catch(e){ sig=''; }
-  return {avant:{img:imgs.avant||null,date:Number(av.date),poids:getBW(av)},
-    apres:{img:imgs.apres||null,date:Number(ap.date),poids:getBW(ap)},
+  let equipe=''; try{ equipe=_nomCoachStory(u); }catch(e){ equipe=''; }
+  let marque=null; try{ marque=_marqueCoachPrete(); }catch(e){ marque=null; }
+  const reps=_aa.reps||{};
+  return {avant:{img:imgs.avant||null,date:Number(av.date),poids:getBW(av),rep:reps.avant||null},
+    apres:{img:imgs.apres||null,date:Number(ap.date),poids:getBW(ap),rep:reps.apres||null},
     format:o.format,fond:o.fond,flou:o.flou,poids:o.poids,
-    indicateur:o.indicateur==='aucun'?null:aaIndicateur(u,av,ap,o.indicateur),signature:sig,_av:av,_ap:ap};
+    indicateur:o.indicateur==='aucun'?null:aaIndicateur(u,av,ap,o.indicateur),signature:sig,
+    equipe,marque,_av:av,_ap:ap};
 }
 // COMPOSITION IMMÉDIATE : les deux photos sont lues, puis dessinées. Tant
 // qu'elles arrivent, le cadre dit « Composition… ».
+// Peint l'aperçu avec les réglages et ce qui est déjà arrivé (photos,
+// repères, logo du coach).
+function _aaPeindre(){
+  if(!_aa||!_aa.imgs.avant||!_aa.imgs.apres) return false;
+  const cv=_dessinerAvantApres(_aaDonnees());
+  const c=document.getElementById('aa-canvas'); if(!c) return false;
+  c.width=cv.width; c.height=cv.height;
+  c.getContext('2d').drawImage(cv,0,0);
+  return true;
+}
 function _aaComposer(){
   if(!_aa) return;
   const moi=_aa;
@@ -72724,11 +72889,21 @@ function _aaComposer(){
   Promise.all([aaChargerPhoto(d._av,moi.o.vue),aaChargerPhoto(d._ap,moi.o.vue)]).then(([a,b])=>{
     if(_aa!==moi) return;
     moi.imgs.avant=a; moi.imgs.apres=b;
-    const cv=_dessinerAvantApres(_aaDonnees());
-    const c=document.getElementById('aa-canvas'); if(!c) return;
-    c.width=cv.width; c.height=cv.height;
-    c.getContext('2d').drawImage(cv,0,0);
+    _aaPeindre();
     if(ch) ch.hidden=true;
+    // LE CADRAGE FIN ARRIVE ENSUITE : les articulations sont lues sur le
+    // téléphone (Motion Lab), puis l'image est recomposée, alignée. Tant
+    // qu'elles n'arrivent pas, le recadrage simple reste affiché.
+    if(!moi.reps||moi.reps.a!==a||moi.reps.b!==b){
+      moi.reps={a,b,avant:null,apres:null};
+      // L'UNE APRÈS L'AUTRE : le moteur de lecture ne se partage pas entre
+      // deux photos lues en même temps.
+      aaReperes(a).then(ra=>aaReperes(b).then(rb=>[ra,rb])).then(([ra,rb])=>{
+        if(_aa!==moi||!moi.reps||moi.reps.a!==a||moi.reps.b!==b) return;
+        // Les deux ou aucune : une seule photo alignée ne se comparerait plus.
+        if(aaModeCadrage(ra,rb)){ moi.reps.avant=ra; moi.reps.apres=rb; _aaPeindre(); }
+      });
+    }
   }).catch(()=>{ if(ch){ ch.hidden=false; ch.textContent='Une des deux photos n’est pas lisible sur cet appareil.'; } });
 }
 // AVANT LE PREMIER PARTAGE SEULEMENT : « Cette image contient ta photo.
