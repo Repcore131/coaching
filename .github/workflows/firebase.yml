@@ -47,7 +47,9 @@ jobs:
           # maj/ : la page de deblocage, DEHORS de /app/ et donc hors de
           # portee du service worker de l'app. Elle doit etre deployee,
           # sinon elle n'existe que sur le disque.
-          cp -a app blog i maj _site/
+          # p/ c/ a/ : les pages publiques (/@pseudo, /coach/slug) et la page
+          # secrete des ambassadeurs, servies par les reecritures de firebase.json.
+          cp -a app blog i maj p c a _site/
           cp -a index.html legal.html privacy.html terms.html 404.html _site/
           cp -a logo.png og-image.png robots.txt sitemap.xml _site/
           if [ -f .nojekyll ]; then cp -a .nojekyll _site/; fi
