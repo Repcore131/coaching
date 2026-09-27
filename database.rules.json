@@ -1338,6 +1338,9 @@
     "paypal_evenements": { ".read": false, ".write": false },
     "paypal_premiers":   { ".read": false, ".write": false },
     "paypal_fins":       { ".read": false, ".write": false },
+    // Les evenements PayPal arrives avant que leur abonnement soit relie a un
+    // compte : ranges par le serveur leger, rejoues par lui des le lien fait.
+    "paypal_orphelins":  { ".read": false, ".write": false },
 
     // ── LA RARETE DES BADGES ────────────────────────────────────────────
     // Ecrite chaque nuit par la fonction planifiee statsBadges (Admin SDK, qui
