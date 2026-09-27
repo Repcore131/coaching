@@ -82,6 +82,52 @@ export function creerMetier(deps) {
     await db.ref('droits/' + cle).update(patch);
     return patch;
   }
+  // ── droits/ SUIT CHAQUE CHANGEMENT DE PAIEMENT (27/09/2026) ────────────
+  // Le dossier, son titulaire l'écrit : un accès qui ne vit que là se
+  // trafique depuis une console. droits/, seul le créateur l'écrit (et ce
+  // serveur, avec son accès administrateur) : c'est ce que l'app lit d'abord.
+  //
+  // `fn(actuel)` rend les champs à poser, ou rien. En transaction : deux
+  // événements PayPal simultanés ne s'écrasent pas.
+  // ⚠ UN ACCÈS POSÉ À LA MAIN N'EST PAS RÉÉCRIT. Ouvert (« main ») ou fermé
+  //   (« suspension ») par le créateur depuis l'écran Accès, il prime sur ce
+  //   que PayPal annonce ; « rendre » la main efface le nœud, et le serveur
+  //   reprend au changement suivant.
+  const SOURCES_MAIN = ['main', 'suspension'];
+  // A-T-IL DÉJÀ PAYÉ ? Trois traces que son titulaire ne peut pas fabriquer
+  // pour lui-même, ou qui l'engagent : le premier paiement noté par le
+  // serveur, un abonnement PayPal dans le dossier (le vider n'efface pas
+  // paypal_premiers), et un accès posé par PayPal dans droits/.
+  // ⚠ PAS createdAt : un compte ancien n'a pas forcément payé, et createdAt,
+  //   son titulaire l'écrit — le remettre à aujourd'hui passait pour neuf.
+  async function dejaPaye(cle, droits) {
+    const [premier, abo] = await Promise.all([_val('paypal_premiers/' + cle), _lire(cle, 'paypalSubscriptionId')]);
+    const d = droits === undefined ? await lireDroits(cle) : droits;
+    return !!(premier || (abo && /^I-/.test(String(abo))) || (d && /^paypal/.test(String(d.source || '')))
+      || (d && String(d.abo || '')));
+  }
+  async function majDroits(cle, fn) {
+    if (!cle) return null;
+    let res = null;
+    const tx = await db.ref('droits/' + cle).transaction((d) => {
+      if (d && SOURCES_MAIN.indexOf(String(d.source)) >= 0) return undefined;
+      const n = fn(d || null);
+      if (!n) return undefined;
+      const out = Object.assign({}, d || {}, n, { maj: now() });
+      out.palier = PALIERS.indexOf(String(out.palier)) >= 0 ? String(out.palier) : 'aucun';
+      out.echeance = Math.max(0, Number(out.echeance) || 0);
+      for (const k of Object.keys(out)) if (out[k] === null || out[k] === undefined) delete out[k];
+      res = out;
+      return out;
+    });
+    return tx.committed ? res : null;
+  }
+  // Le palier ouvert à l'instant t par un nœud droits/, comme l'app le lit.
+  const palierDroits = (d, t) => {
+    if (!d) return null;
+    const p = PALIERS.indexOf(String(d.palier)) > 0 ? String(d.palier) : 'aucun';
+    return (Number(d.echeance) > 0 && t >= Number(d.echeance)) ? 'aucun' : p;
+  };
 
   // ══ WEB PUSH ═══════════════════════════════════════════════════════════
   // `o.urgent` : un message pour l'ADMINISTRATEUR (un litige PayPal). Ni
@@ -328,7 +374,7 @@ export function creerMetier(deps) {
       filleul: uid, filleulEmail, parrain, parrainEmail: parrain ? P.cleVersEmail(parrain) : '',
       appareilsParrain: (appareil && appareil === parrain) ? { [d.appareil]: true } : {},
       dejaFilleul: !!lien, dejaAmbassadeur: !!amb, emailDejaVu: !!emailVu, creeLe, maintenant: t,
-      dejaPaye: !!(droits && /^paypal/.test(String(droits.source || ''))) });
+      dejaPaye: await dejaPaye(uid, droits) });
     const dem = 'parrainage/demandes/' + uid;
     if (!dec.ok) { await db.ref(dem).update({ etat: 'refuse', raison: dec.raison, traiteLe: t }); return { ok: false, raison: dec.raison }; }
     const id = P.idFilleul(uid);
@@ -346,16 +392,12 @@ export function creerMetier(deps) {
       body: 'Son premier paiement t’offrira 1 mois de RepCore.' });
     return { ok: true };
   }
-  // ⚠ LE SERVEUR LÉGER N'ÉCRIT JAMAIS DANS droits/ (27/09/2026).
-  //   Dans l'app, un nœud droits/ qui porte QUOI QUE CE SOIT prime sur le
-  //   dossier (droitsDe, palierDe). La version Cloud Functions y posait
-  //   `bonusEssaiJours` chez le filleul : son nœud devenait non vide, sans
-  //   palier, donc « aucun » — le filleul PERDAIT son essai au moment même où
-  //   il utilisait un code ami. Et le mois offert au parrain y posait
-  //   « essentielle » pour un mois : un parrain abonné Ultime dans son
-  //   dossier était rétrogradé, puis coupé à la fin du mois.
-  //   LE MOIS D'ESSAI DU FILLEUL, c'est l'app qui le donne à l'inscription
-  //   (essaiOuvrir, bonusJours). Rien à faire ici.
+  // ⚠ L'ESSAI DU FILLEUL NE PASSE PAS PAR droits/. La version Cloud Functions
+  //   y posait `bonusEssaiJours` seul : un nœud sans palier, lu « aucun », qui
+  //   fermait l'accès au moment même où le filleul utilisait un code ami.
+  //   Le serveur léger n'écrit dans droits/ que des accès complets (palier et
+  //   échéance, voir majDroits) ; l'essai, c'est l'app qui le donne à
+  //   l'inscription (essaiOuvrir, bonusJours). Rien à faire ici.
   async function bonusEssai() { return null; }
   // LE PREMIER PAIEMENT D'UN FILLEUL : 1 mois au parrain. Idempotent.
   async function parrainagePaiement(cle, source) {
@@ -399,7 +441,8 @@ export function creerMetier(deps) {
   }
 
   async function crediterMoisOffert(parrain, t) {
-    const [statut, paiementSt, ech, role, prog, finPaypal] = await Promise.all(['status', 'paymentStatus', 'accessExpiry', 'role', 'programmesAchetes', 'abonnement/finAccesPaypal'].map((c) => _lire(parrain, c)));
+    const [statut, paiementSt, ech, role, prog, finPaypal, d] = await Promise.all(['status', 'paymentStatus', 'accessExpiry', 'role',
+      'programmesAchetes', 'abonnement/finAccesPaypal'].map((c) => _lire(parrain, c)).concat([lireDroits(parrain)]));
     if (role === 'coach') return 'coach';
     // UNE DETTE PASSE AVANT : un mois offert pour un filleul remboursé, déjà
     // consommé au moment du remboursement, se paie sur le mois suivant.
@@ -408,30 +451,57 @@ export function creerMetier(deps) {
     const e = Number(ech) || 0;
     const ultimeProgramme = !!(prog && typeof prog === 'object' && Object.values(prog).some((x) => x && Number(x.ouvertJusqu) > t));
     const b = 'users/' + parrain + '/';
-    // ⚠ « FIN RECULÉE » SEULEMENT SI PAYPAL A VRAIMENT POSÉ UNE FIN. Un
-    //   accessExpiry seul (un mois déjà offert, un essai) n'est pas une
-    //   résiliation : y écrire finAccesPaypal inventait une fin PayPal, que le
-    //   paiement suivant aurait « rouverte » en effaçant l'accès offert.
-    //   Le mois compté ici est noté dans paypal_fins : si l'abonnement repart
-    //   avant la fin, il retourne en réserve (paypal.js).
     const fp = Number(finPaypal) || 0;
-    if (statut === 'AUTONOMIE_PREMIUM' && paiementSt === 'active' && e > t && fp > 0) {
-      const fin = Math.max(e, fp) + MONTH_MS;
-      await db.ref().update({ [b + 'accessExpiry']: fin, [b + 'abonnement/finAccesPaypal']: fin, [b + 'updatedAt']: t });
-      await db.ref('paypal_fins/' + parrain).transaction((f) => (f ? Object.assign({}, f, { fin, moisRecules: (Number(f.moisRecules) || 0) + 1 }) : undefined));
-      return 'fin_reculee';
-    }
-    // Un accès daté qui ne vient pas de PayPal (mois déjà offert) : il s'allonge.
-    if (statut === 'AUTONOMIE_PREMIUM' && paiementSt === 'active' && e > t) {
-      await db.ref().update({ [b + 'accessExpiry']: e + MONTH_MS, [b + 'updatedAt']: t });
-      return 'acces_prolonge';
-    }
-    if ((statut === 'AUTONOMIE_PREMIUM' && paiementSt === 'active') || statut === 'COACHING_SUIVI' || ultimeProgramme) {
+    const reserve = async () => {
       await db.ref('parrainage/comptes/' + parrain + '/moisEnReserve').transaction((n) => (Number(n) || 0) + 1);
       return 'reserve';
+    };
+    // ── droits/ D'ABORD, quand il porte un accès ouvert ──────────────────
+    //   · daté (une résiliation, un mois déjà offert) : la date recule d'un mois ;
+    //   · sans fin (abonnement en cours, accès posé à la main) : en réserve.
+    // Le mois compté sur une fin PayPal est noté dans paypal_fins : si
+    // l'abonnement repart avant la fin, il retourne en réserve (paypal.js).
+    const pd = palierDroits(d, t);
+    const de = Number(d && d.echeance) || 0;
+    const manuel = !!(d && SOURCES_MAIN.indexOf(String(d.source)) >= 0);
+    if (pd && pd !== 'aucun') {
+      if (de > t && !manuel) {
+        const fin = Math.max(de, e, fp) + MONTH_MS;
+        await majDroits(parrain, () => ({ echeance: fin }));
+        const maj = { [b + 'updatedAt']: t };
+        if (e > 0) maj[b + 'accessExpiry'] = fin;
+        if (fp > 0) maj[b + 'abonnement/finAccesPaypal'] = fin;
+        await db.ref().update(maj);
+        const paypal = fp > 0 || String(d.source) === 'paypal';
+        if (paypal) await db.ref('paypal_fins/' + parrain).transaction((f) => (f ? Object.assign({}, f, { fin, moisRecules: (Number(f.moisRecules) || 0) + 1 }) : undefined));
+        return paypal ? 'fin_reculee' : 'acces_prolonge';
+      }
+      return reserve();
     }
+    if (!d) {
+      // ── SANS NŒUD droits/ : l'ancien modèle, le temps de la transition ──
+      // ⚠ « FIN RECULÉE » SEULEMENT SI PAYPAL A VRAIMENT POSÉ UNE FIN. Un
+      //   accessExpiry seul (un mois déjà offert, un essai) n'est pas une
+      //   résiliation : y écrire finAccesPaypal inventait une fin PayPal.
+      if (statut === 'AUTONOMIE_PREMIUM' && paiementSt === 'active' && e > t && fp > 0) {
+        const fin = Math.max(e, fp) + MONTH_MS;
+        await db.ref().update({ [b + 'accessExpiry']: fin, [b + 'abonnement/finAccesPaypal']: fin, [b + 'updatedAt']: t });
+        await db.ref('paypal_fins/' + parrain).transaction((f) => (f ? Object.assign({}, f, { fin, moisRecules: (Number(f.moisRecules) || 0) + 1 }) : undefined));
+        return 'fin_reculee';
+      }
+      // Un accès daté qui ne vient pas de PayPal (mois déjà offert) : il s'allonge.
+      if (statut === 'AUTONOMIE_PREMIUM' && paiementSt === 'active' && e > t) {
+        await db.ref().update({ [b + 'accessExpiry']: e + MONTH_MS, [b + 'updatedAt']: t });
+        return 'acces_prolonge';
+      }
+      if ((statut === 'AUTONOMIE_PREMIUM' && paiementSt === 'active') || statut === 'COACHING_SUIVI' || ultimeProgramme) return reserve();
+    } else if (manuel || statut === 'COACHING_SUIVI' || ultimeProgramme) return reserve();
+    // UN MOIS D'ESSENTIELLE S'OUVRE, dans droits/ (ce que l'app lit d'abord)
+    // et dans le dossier (l'ancien modèle, pour les versions d'avant).
+    const fin = Math.max(de, e, t) + MONTH_MS;
+    await majDroits(parrain, (x) => ({ palier: 'essentielle', echeance: fin, source: 'parrainage', abo: (x && x.abo) || null }));
     await db.ref().update({ [b + 'status']: 'AUTONOMIE_PREMIUM', [b + 'paymentStatus']: 'active',
-      [b + 'accessExpiry']: Math.max(e, t) + MONTH_MS, [b + 'abonnement/formule']: 'essentielle',
+      [b + 'accessExpiry']: fin, [b + 'abonnement/formule']: 'essentielle',
       [b + 'abonnement/source']: 'parrainage', [b + 'updatedAt']: t });
     return 'mois_ouvert';
   }
@@ -463,12 +533,14 @@ export function creerMetier(deps) {
       resultat = (await reserve()) ? 'reserve_retiree' : 'dette';
     } else {
       // fin_reculee, acces_prolonge, mois_ouvert : un mois au bout de l'accès.
-      const [ech, fp] = await Promise.all([_lire(parrain, 'accessExpiry'), _lire(parrain, 'abonnement/finAccesPaypal')]);
-      const e = Number(ech) || 0;
+      const [ech, fp, dr] = await Promise.all([_lire(parrain, 'accessExpiry'), _lire(parrain, 'abonnement/finAccesPaypal'), lireDroits(parrain)]);
+      const e = Math.max(Number(ech) || 0, Number(dr && dr.echeance) || 0);
       if (e - MONTH_MS > t) {
-        const maj = { [b + 'accessExpiry']: e - MONTH_MS, [b + 'updatedAt']: t };
+        const maj = { [b + 'updatedAt']: t };
+        if (Number(ech) > 0) maj[b + 'accessExpiry'] = Number(ech) - MONTH_MS;
         if (Number(fp) > 0) maj[b + 'abonnement/finAccesPaypal'] = Number(fp) - MONTH_MS;
         await db.ref().update(maj);
+        if (Number(dr && dr.echeance) > 0) await majDroits(parrain, (x) => ({ echeance: Number(x.echeance) - MONTH_MS }));
         await db.ref('paypal_fins/' + parrain).transaction((f) => (f ? Object.assign({}, f, { fin: Number(f.fin) - MONTH_MS,
           moisRecules: Math.max(0, (Number(f.moisRecules) || 0) - 1) }) : undefined));
         resultat = 'mois_retire';
@@ -580,7 +652,7 @@ export function creerMetier(deps) {
     if (!cfg || cfg.actif === false) raison = 'code_inconnu';
     else if (lien) raison = 'deja_rattache';
     else if (parrain) raison = 'deja_parraine';
-    else if (droits && /^paypal/.test(String(droits.source || ''))) raison = 'deja_client';
+    else if (await dejaPaye(uid, droits)) raison = 'deja_client';
     else if (Number(creeLe) > 0 && t - Number(creeLe) > P.DELAI_RATTACHEMENT_MS) raison = 'compte_ancien';
     if (raison) { await db.ref(dem).update({ etat: 'refuse', raison, traiteLe: t }); return { ok: false, raison }; }
     const id = P.idFilleul(uid);
@@ -711,7 +783,7 @@ export function creerMetier(deps) {
 
   return { envoyerPush, abonnes, planifies, apresHeuresCalmes, statsBadgesUn, statsBadgesFin,
     defisQuotidienCoach, coachsAvecCanal, recalculerDefi, parrainageDemande, parrainagePaiement,
-    ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits,
+    ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits, majDroits, palierDroits,
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente };
 }

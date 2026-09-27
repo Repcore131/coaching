@@ -39,11 +39,11 @@ Write-Host "3/4  Clé des notifications (automatique)." -ForegroundColor Cyan
 if ($LASTEXITCODE -ne 0) { throw "La clé des notifications n'a pas été posée." }
 
 Write-Host ""
-Write-Host "4/4  Code secret de la base Firebase." -ForegroundColor Cyan
-Write-Host "     Console Firebase > ⚙ Paramètres du projet > Comptes de service >"
-Write-Host "     Codes secrets de la base de données > Afficher > copier, puis colle-le ici."
-npx --yes wrangler@4 secret put FIREBASE_DB_SECRET
-if ($LASTEXITCODE -ne 0) { throw "Le code secret de la base n'a pas été posé." }
+Write-Host "4/4  Accès à la base : compte de service (README, « Accès à la base »)." -ForegroundColor Cyan
+$cle = Join-Path $env:USERPROFILE 'RepCore-secrets\compte-service.json'
+if (-not (Test-Path $cle)) { throw "Clé du compte de service introuvable : $cle" }
+(Get-Content $cle -Raw).Trim() | npx --yes wrangler@4 secret put FIREBASE_SERVICE_ACCOUNT
+if ($LASTEXITCODE -ne 0) { throw "La clé du compte de service n'a pas été posée." }
 
 Set-Content -Path (Join-Path $PSScriptRoot 'adresse.txt') -Value $adresse -Encoding ascii
 Start-Sleep -Seconds 5

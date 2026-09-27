@@ -373,6 +373,11 @@ def main():
     css = open(css_f[0], encoding='utf-8').read()
     i = css.find(DEBUT)
     base = css[:i].rstrip('\n') + '\n' if i >= 0 else css
+    # ⚠ CE QUI SUIT LE BLOC GENERE EST GARDE (27/09/2026). Des styles poses
+    #   APRES la fin du theme (maquettes Masse grasse et Volume) etaient
+    #   effaces a chaque regeneration : le bloc allait jusqu'au bout du fichier.
+    j = css.find(FIN, i) if i >= 0 else -1
+    apres = css[j + len(FIN):].lstrip('\n') if j >= 0 else ''
     lire_jetons(sans_commentaires(base))
     gen = generer_css(sans_commentaires(base))
     html = open(os.path.join(RACINE, 'app', 'index.html'), encoding='utf-8', newline='').read()
@@ -380,7 +385,7 @@ def main():
     # ses styles en ligne, si.
     lignes = styles_en_ligne([html, open(js_f[0], encoding='utf-8').read()])
     bloc = '\n'.join([DEBUT, gen, lignes, JETONS, FIN]) + '\n'
-    open(css_f[0], 'w', encoding='utf-8').write(base + bloc)
+    open(css_f[0], 'w', encoding='utf-8').write(base + bloc + ('\n' + apres if apres else ''))
     print('theme clair : %d regles de feuille, %d styles en ligne, %d Ko' % (
         gen.count('{') - gen.count('@'), lignes.count('!important'), len(bloc.encode('utf-8')) // 1024))
 

@@ -8,11 +8,15 @@
 //   · le comptage des arrivées par un lien (/arrivee).
 //
 // SECRETS (posés par Kevin, jamais dans le dépôt) :
-//   FIREBASE_DB_SECRET   le code secret de la base (console Firebase)
+//   FIREBASE_SERVICE_ACCOUNT  le JSON d'un compte de service Google (accès à la
+//                        base par jeton OAuth, en en-tête ; voir google.js)
+//   FIREBASE_DB_SECRET   l'ANCIEN code secret de la base : lu seulement tant
+//                        que le compte de service n'est pas posé. À supprimer.
 //   VAPID_PRIVATE_KEY    la clé privée VAPID (base64url, 43 caractères)
 // VARIABLES (wrangler.toml) : FIREBASE_DB_URL, VAPID_PUBLIC_KEY.
 
 import { creerBase } from './base.js';
+import { lireCompteService, jetonCompteService } from './google.js';
 import { creerMetier } from './metier.js';
 import { minute } from './planif.js';
 import { repondreAppel } from './appels.js';
@@ -28,7 +32,10 @@ function outils(env) {
   const fetchCompte = (url, init) => { n++; return fetch(url, init); };
   // Un secret collé à la main peut traîner un retour à la ligne : on le retire.
   const net = (v) => String(v || '').trim();
-  const db = creerBase({ url: net(env.FIREBASE_DB_URL), auth: net(env.FIREBASE_DB_SECRET), fetchImpl: fetchCompte });
+  const compte = lireCompteService(env.FIREBASE_SERVICE_ACCOUNT);
+  const db = creerBase({ url: net(env.FIREBASE_DB_URL), fetchImpl: fetchCompte,
+    jeton: compte ? () => jetonCompteService(compte, { fetchImpl: fetchCompte }) : null,
+    auth: compte ? null : net(env.FIREBASE_DB_SECRET) });
   const M = creerMetier({ db, vapid: { publique: net(env.VAPID_PUBLIC_KEY), privee: net(env.VAPID_PRIVATE_KEY) }, fetchImpl: fetchCompte });
   // Les clés de tous les dossiers, pour la rareté des badges (lecture en shallow).
   M.coachsEtUsers = () => db.ref('users').shallow();
@@ -106,7 +113,11 @@ export default {
         return reponse(JSON.stringify(r));
       }
       if (url.pathname === '/sante') {
-        return reponse(JSON.stringify({ ok: true, base: !!env.FIREBASE_DB_URL, secret: !!env.FIREBASE_DB_SECRET,
+        // `acces` : « compte_service » est l'état voulu ; « secret_historique »
+        // dit que l'ancien code secret sert encore et qu'il reste à le retirer.
+        const cs = !!lireCompteService(env.FIREBASE_SERVICE_ACCOUNT);
+        return reponse(JSON.stringify({ ok: true, base: !!env.FIREBASE_DB_URL, secret: cs || !!env.FIREBASE_DB_SECRET,
+          acces: cs ? 'compte_service' : (env.FIREBASE_DB_SECRET ? 'secret_historique' : 'aucun'),
           vapid: !!(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY),
           paypal: !!(env.PAYPAL_CLIENT_ID && env.PAYPAL_CLIENT_SECRET && env.PAYPAL_WEBHOOK_ID),
           cloudinary: !!(env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET) }));

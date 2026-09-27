@@ -282,7 +282,11 @@ await test('premier paiement d’un filleul : compté seulement si plan, montant
   assert.equal(w.F.lire('users/kev@t,fr/status'), 'AUTONOMIE_PREMIUM');
   assert.equal(w.F.lire('users/kev@t,fr/accessExpiry'), T0 + MOIS);
   assert.equal(w.F.lire('users/lea@t,fr/abonnement/formule'), 'ultime');
-  assert.equal(w.F.lire('droits'), null, 'toujours rien dans droits/');
+  // droits/ porte désormais chaque accès : l'abonnée, et le mois offert au parrain.
+  assert.deepEqual(Object.assign({}, w.F.lire('droits/lea@t,fr'), { maj: 0 }), { palier: 'ultime', echeance: 0, source: 'paypal', abo: 'I-ABC12345678', maj: 0 });
+  assert.equal(w.F.lire('droits/kev@t,fr/palier'), 'essentielle');
+  assert.equal(w.F.lire('droits/kev@t,fr/echeance'), T0 + MOIS);
+  assert.equal(w.F.lire('droits/kev@t,fr/source'), 'parrainage');
   await w.envoyer(evt('PAYMENT.SALE.COMPLETED', vente('I-ABC12345678', '24.90')));
   assert.equal(w.F.lire('users/kev@t,fr/accessExpiry'), T0 + MOIS, 'un second paiement ne recrédite rien');
 });
