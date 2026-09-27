@@ -21893,6 +21893,25 @@ async function testExercices(){
         return _echec('la phrase ne distingue pas « un seul bilan » de « une seule mesure »');
       return /relevée qu’une fois/.test(s)?true
         :_echec('rien ne dit que c’est la MESURE qui manque, pas le bilan');})());
+    ok('SERVEUR LÉGER — SANS ADRESSE, RIEN NE PART ; LE CLASSEMENT D’UN DÉFI SUIT LA RÈGLE DU SERVEUR',(()=>{
+      if(typeof deposerEvenement!=='function'||typeof defisPublierProgression!=='function') return _echec('le dépôt d’événements manque');
+      if(SERVEUR_LEGER!==!!SERVEUR_LEGER_URL) return _echec('SERVEUR_LEGER ne suit pas son adresse');
+      if(PARRAINAGE_ACTIF!==(FONCTIONS_SERVEUR||SERVEUR_LEGER)) return _echec('le parrainage ne s’ouvre pas avec le serveur léger');
+      // Un défi de tonnage se classe aux séances ; progression et série, à leur propre valeur.
+      const u={sessions:[],sessions_config:[]};
+      const d={type:'defi',mesure:'tonnage',objectif:10000,debut:0,fin:9e15};
+      if(defiMetriqueClassement(u,d)!==defiValeur(u,Object.assign({},d,{mesure:'seances'}))) return _echec('tonnage : classement aux séances attendu');
+      // L’inscription porte le prénom (le serveur ne relit plus le dossier).
+      const i=defiInscription(true,'',123,'  Léa  ');
+      if(i.prenom!=='Léa'||i.le!==123||i.classement!==true) return _echec(JSON.stringify(i));
+      if('prenom' in defiInscription(false,'',1,'')) return _echec('un prénom vide est écrit');
+      // Chaque geste qui doit prévenir le serveur passe par le dépôt.
+      const src=[saveReponseBilan,saveReponseRite,enregistrerDefiCanal,defiInscrire,parrainageApresInscription].map(String).join('\n');
+      for(const t of ['reponse_bilan','reponse_rite','defi_publie','parrainage_demande'])
+        if(src.indexOf("'"+t+"'")<0) return _echec('le geste « '+t+' » ne dépose rien');
+      // La réponse du coach ne part qu’APRÈS l’envoi du dossier (le serveur la relit).
+      if(!/envoi\)\.then\([^)]*=>\{ if\([a-z]+!==false\) deposerEvenement\(\{type:'reponse_bilan'/.test(String(saveReponseBilan))) return _echec('l’événement n’attend pas l’envoi');
+      return true;})());
     ok('NOTES — LA MAQUETTE : UN BILAN À LA FOIS, QUATRE RUBRIQUES, DES JAUGES QUI LISENT LA RÉPONSE',(()=>{
       const B=[{type:'depart',date:Date.now()-40*864e5,'deb-weight':'103.8','deb-goals':'Perte de poids'},
         {type:'coaching',date:Date.now()-2*864e5,'bil-weight':'100.9','bil-motivation':'4','bil-diff-type':'Oui, avec les deux',

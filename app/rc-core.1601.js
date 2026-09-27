@@ -100,6 +100,19 @@ const RC_WHATSAPP='33778439205';
 // LE JOUR OU CES FONCTIONS TOURNENT : ce booleen passe a true, et rien
 // d'autre ne bouge.
 const FONCTIONS_SERVEUR=false;
+// ══ LE SERVEUR LÉGER : 0 €, UN CLOUDFLARE WORKER (27/09/2026) ════════════
+//
+// Kevin : « le but, 0 € dépensé ». Ce que les Cloud Functions devaient faire
+// (notifications app fermée, travaux à heure fixe, jugement des parrainages et
+// des codes ambassadeur, défis), un Worker Cloudflare gratuit le fait —
+// voir cloudflare/README.md. L'app lui parle de deux façons :
+//   · elle DÉPOSE un événement dans /evenements (réponse du coach, défi
+//     publié ou mis à jour, demande de parrainage) : le Worker le relève dans
+//     la minute, et tout de suite si l'appel à /reveil passe ;
+//   · les pages publiques comptent l'arrivée par un lien sur /arrivee.
+// VIDE, rien ne part, et tout se comporte comme avant.
+const SERVEUR_LEGER_URL='';
+const SERVEUR_LEGER=!!SERVEUR_LEGER_URL;
 const RC_BOUTIQUE_GRATUITE=false;
 const RC_PROGRAMMES=Object.freeze([
   Object.freeze({
@@ -5050,6 +5063,15 @@ const CLOUD={
     if(!r.ok) throw new Error('Ambassadeurs : '+r.status);
     return await r.json();
   },
+  // UN ÉVÉNEMENT POUR LE SERVEUR LÉGER : /evenements/<id>, écrit une fois
+  // (règles : `par` est la clé du compte connecté). true ou false, sans lever.
+  async evenementPoser(id,ev){
+    const token=await this._getToken();
+    if(!token) return false;
+    const r=await fetch(this._fbUrl.replace('users.json','evenements/'+id+'.json')+'?auth='+token,
+      {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(ev)});
+    return r.ok;
+  },
   async pullDefisResultats(moi){
     const token=await this._getToken();
     if(!token) throw new Error('Session expirée.');
@@ -7133,6 +7155,9 @@ function routeUser(){
   // Le push serveur : la souscription de cet appareil, rafraîchie (au plus une
   // fois par jour) ou refaite si la clé VAPID a changé. Jamais de demande.
   setTimeout(()=>{ try{ pushVerifierAuDemarrage(); }catch(e){} },4000);
+  // LE CODE PARRAIN, DÈS LE DÉMARRAGE et pas seulement à l'ouverture de
+  // « Inviter des amis » : sans lui, les liens partagés partaient sans ref.
+  setTimeout(()=>{ try{ if(PARRAINAGE_ACTIF&&currentUser&&currentUser.role!=='coach') parrainageAssurerCode(currentUser).catch(()=>{}); }catch(e){} },6000);
   // Le trapeze s'est dedouble le 08/09/2026 : on reporte l'ancien reglage sur
   // les deux portions, une fois, au demarrage. Elle ne sauve QUE si elle a
   // change quelque chose — un dossier deja migre ne declenche aucune poussee.
@@ -18517,6 +18542,7 @@ async function ambassadeurApresInscription(u,saisi){
     try{ pub=await CLOUD.ambPublicGet(c.code); }catch(e){ pub=null; }
     if(!pub||pub.actif!==true) continue;
     const ok=await CLOUD.ambDemande(moi,{code:c.code,le:Date.now(),appareil:rcAppareilId()}).catch(()=>false);
+    if(ok) deposerEvenement({type:'ambassadeur_demande'}).catch(()=>{});
     if(!ok) continue;
     u.ambassadeur={code:c.code,nom:String(pub.nom||'').slice(0,80),le:Date.now()};
     ambOublier();
@@ -18751,7 +18777,7 @@ function ambCopier(l,btn){
 //   tournent pas (FONCTIONS_SERVEUR, plan Spark), personne ne serait jamais
 //   crédité : l'écran et le rappel restent donc fermés. Un code saisi à
 //   l'inscription, lui, fonctionne déjà (demande enregistrée, essai allongé).
-const PARRAINAGE_ACTIF=FONCTIONS_SERVEUR;
+const PARRAINAGE_ACTIF=FONCTIONS_SERVEUR||SERVEUR_LEGER;
 const PARRAINAGE_CODE_RE=/^[A-Z]{4,6}[A-Z2-9]{3}$/;
 // Sans 0/O, 1/I : un code se dicte et se recopie.
 const PARRAINAGE_ALPHABET='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -18872,6 +18898,7 @@ async function parrainageApresInscription(u){
   if(u.parrainage&&u.parrainage.code===saisi){ toast('C’est ton propre code.','var(--orange)'); return 0; }
   const ok=await CLOUD.parrainagePut('demandes/'+moi,{code:saisi,le:Date.now(),appareil:rcAppareilId()}).catch(()=>false);
   if(!ok){ toast('Ce code ne peut pas être utilisé ici (déjà parrainé, ou appareil de ton parrain).','var(--orange)'); return 0; }
+  deposerEvenement({type:'parrainage_demande'}).catch(()=>{});
   u.parrainage=Object.assign({},u.parrainage||{},{parrainCode:saisi,parrainPrenom:String(pub.prenom||'').slice(0,24),parraineLe:Date.now()});
   parrainageOublierRef();
   try{ rcm('parrainage_filleul'); }catch(e){}
@@ -19163,6 +19190,57 @@ function _dfInscrits(){ try{ const o=JSON.parse(localStorage.getItem(DEFI_INSCRI
 function _dfMemoInscrit(id,oui){
   try{ const o=_dfInscrits(); if(oui) o[id]=Date.now(); else delete o[id]; localStorage.setItem(DEFI_INSCRITS_CLE,JSON.stringify(o)); }catch(e){}
 }
+// ══ DÉPOSER UN ÉVÉNEMENT POUR LE SERVEUR LÉGER ═══════════════════════════
+// Ne lève jamais, ne bloque jamais : une notification perdue ne vaut pas un
+// geste raté. Le serveur RELIT la base avant d'agir (il ne croit pas
+// l'événement sur parole) ; ici on ne fait que le prévenir.
+async function deposerEvenement(ev){
+  if(!SERVEUR_LEGER||!currentUser||!currentUser.email||!CLOUD||!CLOUD.ok()) return false;
+  const par=currentUser.email.replace(/\./g,',');
+  const id='e'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+  let ok=false;
+  try{ ok=await CLOUD.evenementPoser(id,Object.assign({},ev,{par,at:Date.now()})); }catch(e){ ok=false; }
+  if(ok){ try{ fetch(SERVEUR_LEGER_URL+'/reveil',{method:'POST',keepalive:true}).catch(()=>{}); }catch(e){} }
+  return ok;
+}
+// PURE. Ce sur quoi le classement se fait : la même règle que le serveur
+// (functions/defis-calcul.js, metriqueClassement) — la progression en %, les
+// semaines validées, sinon les séances. Jamais les charges.
+function defiMetriqueClassement(u,d){
+  if(d.mesure==='progressionPct'||d.mesure==='serie') return defiValeur(u,d);
+  return defiValeur(u,Object.assign({},d,{mesure:'seances'}));
+}
+// ── LA PROGRESSION, ÉCRITE PAR L'ATHLÈTE ────────────────────────────────
+// Le serveur léger ne relit JAMAIS les séances d'un athlète (dix
+// millisecondes de calcul par exécution) : c'est l'app, qui calcule déjà la
+// jauge perso, qui écrit sa valeur dans chaque défi où il est inscrit, après
+// une séance et à l'inscription. Le serveur en tire l'équipe, le classement,
+// les paliers et le podium.
+async function defisPublierProgression(ids){
+  if(!SERVEUR_LEGER||!currentUser||currentUser.role==='coach') return 0;
+  if(!canalAccessible(currentUser)||!CLOUD.ok()) return 0;
+  const cle=canalCle(currentUser);
+  if(!cle) return 0;
+  const moi=(currentUser.email||'').replace(/\./g,',');
+  const cibles=Array.isArray(ids)?ids:Object.keys(_dfInscrits());
+  if(!cibles.length) return 0;
+  let tous={};
+  try{ tous=(await CLOUD.pullDefisCanal(cle))||{}; }catch(e){ return 0; }
+  const t=Date.now();
+  let n=0;
+  for(const id of cibles){
+    const m=tous[id];
+    if(!m||m.type!=='defi'||!defiActif(m,t)) continue;
+    const d=Object.assign({},m,{id});
+    try{
+      await CLOUD._canalPut(cle,'defis/'+id+'/participants/'+moi,
+        {valeur:defiValeur(currentUser,d),metrique:defiMetriqueClassement(currentUser,d),maj:t},'PATCH');
+      await deposerEvenement({type:'defi_maj',coach:cle,id});
+      n++;
+    }catch(e){ /* le prochain passage rattrapera */ }
+  }
+  return n;
+}
 // ── Le coach : « Lancer un défi » ──────────────────────────────────────────
 let _dfModele=-1;
 function openDefiCanal(id){
@@ -19253,6 +19331,7 @@ function defiMessage(f,ancien,maintenant){
   return {msg};
 }
 async function enregistrerDefiCanal(){
+  const nouveau=!window._defiEdite;
   const id=window._defiEdite||('d'+Date.now()+'-'+Math.random().toString(36).slice(2,7));
   const r=defiMessage(_dfLireFormulaire(),(window._canalMsgsCoach||{})[window._defiEdite]||null);
   if(r.erreur){ toast(r.erreur,'var(--orange)'); return false; }
@@ -19271,6 +19350,8 @@ async function enregistrerDefiCanal(){
     return false;
   }
   closeModal();
+  // UN NOUVEAU DÉFI prévient les athlètes (une modification, non).
+  if(nouveau) deposerEvenement({type:'defi_publie',msg:id}).catch(()=>{});
   toast(window._defiEdite?'Défi modifié':'Défi lancé ⚡');
   window._defiEdite='';
   _canalChargerCoach(id);
@@ -19421,8 +19502,12 @@ function defiRelever(id){
   return true;
 }
 // PURE. L'inscription écrite : {le, classement, pseudo?}.
-function defiInscription(classement,pseudo,maintenant){
+function defiInscription(classement,pseudo,maintenant,prenom){
   const o={le:(typeof maintenant==='number')?maintenant:Date.now(),classement:!!classement};
+  // Le prénom, pour le classement quand il n'y a pas de pseudo : le serveur
+  // léger ne relit pas le dossier. Il n'apparaît que sur opt-in (classement).
+  const pr=String(prenom||'').replace(/\s+/g,' ').trim().slice(0,24);
+  if(pr) o.prenom=pr;
   const p=String(pseudo||'').replace(/\s+/g,' ').trim().slice(0,24);
   if(classement&&p) o.pseudo=p;
   return o;
@@ -19431,7 +19516,7 @@ async function defiInscrire(id,oui){
   const cle=canalCle(currentUser), moi=(currentUser.email||'').replace(/\./g,',');
   if(!cle||!CLOUD.ok()){ toast('Impossible hors connexion','var(--orange)'); return false; }
   const ins=oui?defiInscription(!!document.getElementById('dfr-classement')?.checked,
-    document.getElementById('dfr-pseudo')?.value,Date.now()):null;
+    document.getElementById('dfr-pseudo')?.value,Date.now(),currentUser.fname):null;
   try{
     if(ins) await CLOUD._canalPut(cle,'defis/'+id+'/participants/'+moi+'/inscription',ins);
     else await CLOUD._canalPut(cle,'defis/'+id+'/participants/'+moi+'/inscription',null,'DELETE');
@@ -19443,8 +19528,11 @@ async function defiInscrire(id,oui){
   if(ins){ try{ arcHaptique('succes'); }catch(x){} toast('Défi relevé Tes séances depuis le début comptent déjà.'); }
   else toast('Tu t’es retiré du défi.');
   _canalRepeindre();
-  // Le résumé public se met à jour côté serveur (defiInscription) : on le relit.
-  setTimeout(()=>{ try{ if(document.getElementById('canal-fil')) _canalCharger(); }catch(x){} },2500);
+  // Ma valeur (les séances déjà faites depuis le début comptent), puis le
+  // serveur recalcule le résumé public ; on le relit ensuite.
+  if(ins) defisPublierProgression([id]).catch(()=>{});
+  else deposerEvenement({type:'defi_maj',coach:cle,id}).catch(()=>{});
+  setTimeout(()=>{ try{ if(document.getElementById('canal-fil')) _canalCharger(); }catch(x){} },4000);
   return true;
 }
 // ── L'accueil : le rappel tant qu'un défi est actif ────────────────────────
@@ -20279,7 +20367,7 @@ function saveReponseRite(email,cycle,taId){
   // second pour le même, via riteTenu.
   const r=c.rites.find(x=>x&&Number(x.cycle)===Number(cycle)&&!x.reponseCoach);
   if(!r){ toast('Bilan de cycle introuvable','var(--red)'); return false; }
-  const _avant=c.rites.length;
+  const _avant=c.rites.length, _indiceRite=c.rites.indexOf(r);
   r.reponseCoach=txt.slice(0,2000);
   r.reponseDate=Date.now();
   // On ne pousse RIEN dans rites[] : le plafond de 24 ne peut pas bouger.
@@ -20288,6 +20376,7 @@ function saveReponseRite(email,cycle,taId){
   users[email]=c;
   const ok=DB.set('users',users);
   const envoi=CLOUD.pushOne(email,c);
+  Promise.resolve(envoi).then(x=>{ if(x!==false) deposerEvenement({type:'reponse_rite',dest:email.replace(/\./g,','),i:String(_indiceRite)}); }).catch(()=>{});
   toastSync(ok,envoi,'Réponse envoyée. '+(c.fname||'Ton athlète')+' la verra à sa prochaine ouverture.',
     'la réponse est');
   try{ openClientDetail(c.id,true); }catch(e){}
@@ -44408,6 +44497,8 @@ function finishWorkout(incomplete=false){
     if(suspensionSynchroniser(currentUser)) scheduleWoNotif();
   }catch(e){}
   saveUser();
+  // Les défis du Canal : ma progression, écrite par moi (serveur léger).
+  try{ setTimeout(()=>{ defisPublierProgression().catch(()=>{}); },3000); }catch(e){}
   // ══ LA SEANCE EST ENREGISTREE. TOUT CE QUI SUIT N'EST QUE DU RENDU ══════
   //
   // Et ce rendu est le plus charge de l'application : trois chiffres, la
@@ -67592,6 +67683,7 @@ function saveReponseBilan(email,bilanId,taId){
   if(!Array.isArray(c.bilans)){ toast('Athlète introuvable','var(--red)'); return false; }
   const b=c.bilans.find(x=>_idBilan(x)===bilanId);
   if(!b){ toast('Bilan introuvable','var(--red)'); return false; }
+  const _premiere=!b.reponseCoach, _indice=c.bilans.indexOf(b);
   b.reponseCoach=txt.slice(0,2000);
   b.reponseDate=Date.now();
   // Repasse à false même si la réponse avait déjà été lue : une réponse
@@ -67604,6 +67696,9 @@ function saveReponseBilan(email,bilanId,taId){
   // locale, qui est ce qui rend la reponse reelle.
   try{ rbOublierBrouillon(email,bilanId); }catch(e){}
   const envoi=CLOUD.pushOne(email,c);
+  // LA NOTIFICATION, À LA PREMIÈRE RÉPONSE SEULEMENT, et APRÈS l'envoi : le
+  // serveur relit la réponse dans la base avant de prévenir l'athlète.
+  if(_premiere) Promise.resolve(envoi).then(r=>{ if(r!==false) deposerEvenement({type:'reponse_bilan',dest:email.replace(/\./g,','),i:String(_indice)}); }).catch(()=>{});
   toastSync(ok,envoi,'Réponse envoyée. '+(c.fname||'Ton athlète')+' la verra à sa prochaine ouverture.',
     'la réponse est');
   // ENCHAÎNEMENT. Quand le coach est entré par la ligne « Nouveaux bilans à
@@ -69349,7 +69444,9 @@ async function invNotifOui(){
 // ⚠ LES SOUSCRIPTIONS VONT DANS /push/<emailKey>/<id>, PAS DANS /users : le
 // dossier est envoyé EN ENTIER par PUT (CLOUD._doPushOne) ; un enfant écrit à
 // part serait effacé au premier enregistrement suivant.
-const VAPID_PUBLIQUE='BEQvHnCStyK010R_ETviq4nAcu5PPTktlDX3AW245J60sLsMZdxe50t1N7Xs3WlYdY5FkMNRxtC71cHKi2DtZw0';
+// Paire du serveur léger (27/09/2026) : la privée est dans les secrets du
+// Worker (VAPID_PRIVATE_KEY), jamais dans le dépôt.
+const VAPID_PUBLIQUE='BLOS0J9PpSZcViPM4ySSKDd0Ss-rnuo8yhmdqpvyhAE6s_HQvSM7QK5nIs329I-4tbix3-8S_3Kl3L3Z0pnf3-4';
 // Les sept types, dans l'ordre de l'écran de réglages. Mêmes clés que
 // PUSH_TYPES (functions/index.js) : c'est u.pushPrefs[cle]===false qui coupe.
 const PUSH_TYPES=Object.freeze([

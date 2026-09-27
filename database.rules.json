@@ -586,8 +586,15 @@
                   "le":         { ".validate": "newData.isNumber() && newData.val() > 0" },
                   "classement": { ".validate": "newData.isBoolean()" },
                   "pseudo":     { ".validate": "newData.isString() && newData.val().length <= 24" },
+                  "prenom":     { ".validate": "newData.isString() && newData.val().length <= 24" },
                   "$autre":     { ".validate": false }
-                }
+                },
+                // SA PROGRESSION, ECRITE PAR L ATHLETE LUI-MEME (serveur leger,
+                // 27/09/2026) : le Worker Cloudflare ne relit pas les seances.
+                // Memes conditions que l inscription ; des nombres bornes.
+                "valeur":   { ".write": "auth != null && auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey && root.child('canaux').child($coachKey).child('messages').child($msgId).child('type').val() === 'defi'", ".validate": "newData.isNumber() && newData.val() >= -1000 && newData.val() <= 10000000" },
+                "metrique": { ".write": "auth != null && auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey && root.child('canaux').child($coachKey).child('messages').child($msgId).child('type').val() === 'defi'", ".validate": "newData.isNumber() && newData.val() >= -1000 && newData.val() <= 10000000" },
+                "maj":      { ".write": "auth != null && auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey && root.child('canaux').child($coachKey).child('messages').child($msgId).child('type').val() === 'defi'", ".validate": "newData.isNumber() && newData.val() > 0" }
               }
             }
           }
@@ -1242,6 +1249,28 @@
         ".write": false
       }
     },
+    // ── LES EVENEMENTS POUR LE SERVEUR LEGER (Cloudflare Worker) ─────────
+    // L app depose, le Worker releve chaque minute et supprime. Ecrit UNE fois
+    // par le compte connecte (par = sa cle), jamais relu par un client. Le
+    // Worker ne croit rien sur parole : il relit la base avant d agir.
+    "evenements": {
+      ".read": false,
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.exists() && newData.child('par').val() === auth.token.email.replace('.', ',')",
+        ".validate": "$id.matches(/^e[a-z0-9]{8,24}$/) && newData.hasChildren(['type', 'par', 'at'])",
+        "type":  { ".validate": "newData.isString() && newData.val().matches(/^(reponse_bilan|reponse_rite|defi_publie|defi_maj|parrainage_demande|ambassadeur_demande)$/)" },
+        "par":   { ".validate": "newData.isString() && newData.val().length <= 200" },
+        "at":    { ".validate": "newData.isNumber() && newData.val() > 0" },
+        "dest":  { ".validate": "newData.isString() && newData.val().length <= 200" },
+        "i":     { ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,40}$/)" },
+        "msg":   { ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,60}$/)" },
+        "id":    { ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,60}$/)" },
+        "coach": { ".validate": "newData.isString() && newData.val().length <= 200" },
+        "$autre": { ".validate": false }
+      }
+    },
+    // L etat de travail du Worker (curseurs, comptes en cours) : lui seul.
+    "worker": { ".read": false, ".write": false },
     "push_log":     { ".read": false, ".write": false },
     "push_attente": { ".read": false, ".write": false },
 
