@@ -1,4 +1,4 @@
-# ══ INSTALLER LE SERVEUR LÉGER — une commande, trois gestes de Kevin ══════
+﻿# ══ INSTALLER LE SERVEUR LÉGER — une commande, trois gestes de Kevin ══════
 #
 #   powershell -ExecutionPolicy Bypass -File C:\RepCore-web\cloudflare\installer.ps1
 #
