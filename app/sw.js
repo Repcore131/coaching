@@ -154,6 +154,12 @@ CORPS.push('./img/complements.webp');
 ['apple','garmin','samsung','google','huawei','fitbit','xiaomi','amazfit','polar','coros',
   'suunto','whoop','oura','withings','casio','autre']
   .forEach(n => CORPS.push('./img/appareils/' + n + '.webp'));
+// LES DIX-HUIT MUSCLES DE L'ONGLET VOLUME (88 ko), decoupes dans la planche
+// de Kevin et teintes a la couleur de chaque muscle.
+['pectoraux','dorsaux','trap-sup','trap-med','lombaires','delt-ant','delt-lat','delt-post',
+  'biceps','triceps','avant-bras','quadriceps','ischios','fessiers','abducteurs','adducteurs',
+  'mollets','abdos']
+  .forEach(n => CORPS.push('./img/muscles/' + n + '.webp'));
 // ⚠ LES DEUX ACTIFS VERSIONNES (build 1417). Le code et la feuille de styles
 // ne sont plus dans index.html : ils sont servis sous un nom qui porte le
 // numero de build, avec un cache d'un an et `immutable`. Ils DOIVENT entrer
