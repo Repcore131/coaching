@@ -21893,6 +21893,34 @@ async function testExercices(){
         return _echec('la phrase ne distingue pas « un seul bilan » de « une seule mesure »');
       return /relevée qu’une fois/.test(s)?true
         :_echec('rien ne dit que c’est la MESURE qui manque, pas le bilan');})());
+    ok('MASSE GRASSE — LA COURBE AU DESSIN DU POIDS, À LA DATE DE CHAQUE BILAN, ÉCART « STABLE » SOUS LA MARGE',(()=>{
+      const sauve=currentUser;
+      const zone=document.getElementById('progress-content');
+      if(!zone) return _echec('zone de l’onglet absente');
+      const avant=zone.innerHTML;
+      const bil=(j,w,waist)=>({type:'coaching',date:Date.now()-j*864e5,'bil-weight':String(w),'bil-waist':String(waist),'bil-neck':'39'});
+      try{
+        currentUser={id:'mg',email:'mg@t.fr',role:'athlete',gender:'H',_evol_gender:'H',_evol_height:178,
+          exAlias:{},exMuscles:{},sessions:[],videos:[],
+          bilans:[bil(60,84,92),bil(30,82,89),bil(2,80,85)]};
+        showProgressTab('masseGrasse',null,true);
+        const h=zone.innerHTML;
+        if(/id="mg-chart"/.test(h)) return _echec('le canevas est encore là');
+        if(!/class="pc pc-m"/.test(h)) return _echec('la courbe n’est pas au dessin du poids');
+        if((h.match(/class="pc-pt/g)||[]).length!==3) return _echec('un point par estimation attendu');
+        if(!/stroke="#E02020"/.test(h)) return _echec('l’ancienne couleur est perdue');
+        if(!/% de masse grasse corporelle/.test(h)||!/class="pc-ecart"/.test(h)) return _echec('l’en-tête ou l’écart manque');
+        if(/lineChart\('mg-chart'/.test(String(showProgressTab))) return _echec('l’onglet dessine encore au canevas');
+        // Un seul bilan : pas de courbe, une phrase.
+        currentUser.bilans=[bil(2,80,85)];
+        showProgressTab('masseGrasse',null,true);
+        if(/class="pc pc-m"/.test(zone.innerHTML)||!/deux bilans/.test(zone.innerHTML)) return _echec('un seul bilan : la phrase manque');
+        // Sans aucune estimation : ni courbe, ni cadre de camemberts vide.
+        currentUser.bilans=[{type:'coaching',date:Date.now()-864e5,'bil-weight':'80'}];
+        showProgressTab('masseGrasse',null,true);
+        if(/id="pie-0"/.test(zone.innerHTML)) return _echec('un cadre de camemberts vide reste affiché');
+        return true;
+      }finally{ currentUser=sauve; zone.innerHTML=avant; }})());
     ok('MENSURATIONS — LES COURBES AU DESSIN DU POIDS : UNE PAR MESURE, À LA DATE DE CHAQUE BILAN',(()=>{
       const S=[{label:'Droit',color:'#E02020',pts:[{d:'2026-07-01',v:38},{d:'2026-07-15',v:38.4},{d:'2026-09-01',v:39.2}]},
                {label:'Gauche',color:'#f97316',pts:[{d:'2026-07-01',v:37.6},{d:'2026-09-01',v:38.5}]}];
