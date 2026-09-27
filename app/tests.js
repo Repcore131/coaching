@@ -53401,13 +53401,17 @@ async function testExercices(){
       let avant=null; try{ avant=localStorage.getItem(VISUEL_FOND.CLE); }catch(e){}
       const _get=Storage.prototype.getItem, _set=Storage.prototype.setItem;
       try{
-        visuelFondMemoriser('rouge');
-        if(visuelFondChoisi()!=='rouge') return _echec('choix non retenu : '+visuelFondChoisi());
+        visuelFondMemoriser('carbone');
+        if(visuelFondChoisi()!=='carbone') return _echec('choix non retenu : '+visuelFondChoisi());
+        // UN ANCIEN CHOIX « rouge » retombe sur le carbone, qui l'a remplacé (27/09/2026).
+        try{ localStorage.setItem(VISUEL_FOND.CLE,'rouge'); }catch(e){}
+        if(visuelFondChoisi()!=='carbone') return _echec('l’ancien rouge : '+visuelFondChoisi());
+        if(visuelFondMemoriser('rouge')) return _echec('le rouge est encore proposé');
         if(visuelFondMemoriser('violet')) return _echec('un fond inconnu accepté');
         Storage.prototype.getItem=function(){ throw new Error('bloqué'); };
         Storage.prototype.setItem=function(){ throw new Error('bloqué'); };
         if(visuelFondChoisi()!=='transparent') return _echec('repli : '+visuelFondChoisi());
-        if(visuelFondMemoriser('rouge')!==false) return _echec('écriture bloquée annoncée comme réussie');
+        if(visuelFondMemoriser('carbone')!==false) return _echec('écriture bloquée annoncée comme réussie');
         // « Ma photo » retenue mais aucune photo en mémoire : on dessine sans fond.
         Storage.prototype.getItem=_get; Storage.prototype.setItem=_set;
         const sv=_visuelPhoto; _visuelPhoto=null; visuelFondMemoriser('photo');
@@ -53422,8 +53426,9 @@ async function testExercices(){
       const b=_vfBilan(); if(!b) return _echec('pas de bilan');
       const t=_dessinerBilanSeance(b,'transparent');
       if(_vfPx(t,4,4)[3]!==0) return _echec('le sans-fond a un fond');
-      const r=_dessinerBilanSeance(b,'rouge'), pr=_vfPx(r,4,4);
-      if(pr[3]!==255||pr[0]<180||pr[1]>80) return _echec('coin du rouge : '+pr.join(','));
+      // LE CARBONE : opaque, sombre, et SANS dominante rouge (27/09/2026).
+      const r=_dessinerBilanSeance(b,'carbone'), pr=_vfPx(r,4,4);
+      if(pr[3]!==255||pr[0]>60||Math.abs(pr[0]-pr[2])>8) return _echec('coin du carbone : '+pr.join(','));
       // Une photo grise unie de 600 × 400 (paysage) : la cover doit remplir tout le 9:16.
       const src=document.createElement('canvas'); src.width=600; src.height=400;
       const sg=src.getContext('2d'); sg.fillStyle='rgb(200,200,200)'; sg.fillRect(0,0,600,400);
