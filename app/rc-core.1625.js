@@ -5163,12 +5163,23 @@ const CLOUD={
   },
   // UN ÉVÉNEMENT POUR LE SERVEUR LÉGER : /evenements/<id>, écrit une fois
   // (règles : `par` est la clé du compte connecté). true ou false, sans lever.
-  async evenementPoser(id,ev){
+  // ⚠ AVEC SON VERROU, DANS LA MÊME REQUÊTE : evenements_attente/<par>/<type>/
+  //   <cible> = {id, at: heure du serveur}. Les règles refusent l'un sans
+  //   l'autre, et un deuxième tant que le premier attend ou date de moins de
+  //   30 s. Un refus n'est pas une panne : le serveur a déjà de quoi faire.
+  evenementPoser(id,ev){
+    return this.racinePatch({['evenements/'+id]:ev,
+      ['evenements_attente/'+ev.par+'/'+ev.type+'/'+ev.cible]:{id,at:{'.sv':'timestamp'}}});
+  },
+  // Réservé à l'administrateur (règles) : ce que le serveur léger a rangé
+  // après cinq échecs (événements, sous-tâches, travaux du jour).
+  async evenementsKo(){
     const token=await this._getToken();
-    if(!token) return false;
-    const r=await fetch(this._fbUrl.replace('users.json','evenements/'+id+'.json')+'?auth='+token,
-      {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(ev)});
-    return r.ok;
+    if(!token) throw new Error('Non connecté.');
+    const r=await fetch(this._fbUrl.replace('users.json','evenements_ko.json')+'?auth='+token
+      +'&orderBy=%22%24key%22&limitToLast=50');
+    if(!r.ok) throw new Error('Échecs : '+r.status);
+    return (await r.json())||{};
   },
   async pullDefisResultats(moi){
     const token=await this._getToken();
@@ -18821,10 +18832,51 @@ async function ouvrirAmbassadeurs(){
   // LE JOURNAL NE BLOQUE PAS L'ÉCRAN : illisible (règles pas encore
   // déployées), la carte le dit et les ambassadeurs s'affichent quand même.
   try{ _ambJournal=await CLOUD.journalPaypal(); }catch(e){ _ambJournal=null; }
+  try{ _ambKo=await CLOUD.evenementsKo(); }catch(e){ _ambKo=null; }
   _ambRendre();
   return true;
 }
-let _ambJournal=null;
+let _ambJournal=null, _ambKo=null;
+const _KO_QUOI={reponse_bilan:'Notification « réponse à ton bilan »',reponse_rite:'Notification « réponse au bilan de cycle »',
+  defi_publie:'Notification « nouveau défi »',defi_maj:'Recalcul d’un défi',parrainage_demande:'Demande de parrainage',
+  ambassadeur_demande:'Code ambassadeur',abonnement:'Abonnement PayPal à relier au compte',
+  push:'Notification différée',amb_vue:'Page de suivi d’un ambassadeur',defis_coach:'Défis du matin d’un coach',
+  fin_paypal:'Fin d’abonnement PayPal'};
+const _koCompte=k=>String(k||'').replace(/,/g,'.');
+// PURE. Ce que le serveur léger a abandonné après cinq échecs : quoi, pour
+// qui, pourquoi. Rien à montrer : rien du tout. null : illisible.
+function htmlEvenementsKo(ko){
+  if(ko===null) return '<div class="card amb-journal" id="amb-ko"><div class="amb-t">Serveur : tâches en échec</div>'
+    +'<p class="sub amb-note">Liste illisible pour l’instant.</p></div>';
+  const ids=Object.keys(ko||{}).filter(k=>ko[k]&&typeof ko[k]==='object').sort().reverse();
+  if(!ids.length) return '';
+  let h='<div class="card amb-journal" id="amb-ko"><div class="amb-t">Serveur : tâches en échec</div>'
+    +'<p class="sub amb-note">Abandonnées après '+ids.map(k=>Number(ko[k].essais)||0).reduce((a,b)=>Math.max(a,b),0)
+    +' essais. Les suivantes sont passées : rien n’est bloqué.</p>';
+  for(const id of ids){
+    const x=ko[id];
+    const quoi=x.type==='travail'?'Travail du jour « '+String(x.nom||'?')+' »'
+      :(_KO_QUOI[x.type==='tache'?x.quoi:x.type]||String(x.type==='tache'?x.quoi:x.type||'?'));
+    const qui=x.type==='tache'?(x.uid||x.cle||x.code||x.coach):(x.dest||x.par);
+    const d=Number(x.le)?new Date(Number(x.le)).toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+    h+='<div class="amb-jl amb-jl-alerte">'
+      +'<div class="amb-jl-tete"><b>'+escapeHtml(quoi)+'</b><span class="sub">'+escapeHtml(d)+'</span></div>'
+      +(qui?'<div class="sub">'+escapeHtml(_koCompte(qui))+(x.par&&x.par!=='worker'&&x.dest?' · par '+escapeHtml(_koCompte(x.par)):'')+'</div>':'')
+      +(x.erreur?'<div class="sub">Motif : '+escapeHtml(x.erreur)+'</div>':'')
+      +'<button type="button" class="dfi-lien" onclick="effacerEvenementKo(\''+escapeHtml(id)+'\',this)">Vu, effacer</button>'
+      +'</div>';
+  }
+  return h+'</div>';
+}
+async function effacerEvenementKo(id,btn){
+  if(!estAdminAmbassadeurs()||!/^[A-Za-z0-9_-]{1,40}$/.test(String(id))) return false;
+  if(btn) btn.disabled=true;
+  const ok=await CLOUD.racinePatch({['evenements_ko/'+id]:null}).catch(()=>false);
+  if(!ok){ if(btn) btn.disabled=false; toast('Non effacé','var(--orange)'); return false; }
+  if(_ambKo) delete _ambKo[id];
+  _ambRendre();
+  return true;
+}
 const _JOURNAL_QUOI={remboursement:'Remboursement total',remboursement_partiel:'Remboursement partiel',
   remboursement_inconnu:'Remboursement (transaction inconnue)',retrofacturation:'Rétrofacturation',
   retrofacturation_partielle:'Rétrofacturation partielle',retrofacturation_inconnue:'Rétrofacturation (transaction inconnue)',
@@ -18903,7 +18955,7 @@ function htmlAmbassadeurs(tous,t){
 }
 function _ambRendre(){
   const z=document.getElementById('amb-contenu');
-  if(z) z.innerHTML=htmlJournalPaypal(_ambJournal)+htmlAmbassadeurs(_ambTous||{},Date.now());
+  if(z) z.innerHTML=htmlEvenementsKo(_ambKo)+htmlJournalPaypal(_ambJournal)+htmlAmbassadeurs(_ambTous||{},Date.now());
 }
 // PURE. La fiche à écrire, ou {erreur}.
 function ambFiche(f,existants,maintenant){
@@ -19429,12 +19481,23 @@ function abonnementSignaler(id,force){
   try{ if(!force&&localStorage.getItem(cle)===abo) return; }catch(e){}
   deposerEvenement({type:'abonnement',abo}).then((ok)=>{ if(ok){ try{ localStorage.setItem(cle,abo); }catch(e){} } }).catch(()=>{});
 }
+// PURE. Ce que l'événement vise, pour son verrou (voir evenementPoser) : les
+// règles exigent exactement cette valeur, type par type.
+function evenementCible(ev){
+  const t=ev&&ev.type;
+  if(t==='reponse_bilan'||t==='reponse_rite') return String(ev.dest||'');
+  if(t==='defi_maj') return String(ev.id||'');
+  if(t==='defi_publie') return String(ev.msg||'');
+  return '-';
+}
 async function deposerEvenement(ev){
   if(!SERVEUR_LEGER||!currentUser||!currentUser.email||!CLOUD||!CLOUD.ok()) return false;
   const par=currentUser.email.replace(/\./g,',');
   const id='e'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+  const cible=evenementCible(ev);
+  if(!cible) return false;
   let ok=false;
-  try{ ok=await CLOUD.evenementPoser(id,Object.assign({},ev,{par,at:Date.now()})); }catch(e){ ok=false; }
+  try{ ok=await CLOUD.evenementPoser(id,Object.assign({},ev,{par,at:Date.now(),cible})); }catch(e){ ok=false; }
   if(ok){ try{ fetch(SERVEUR_LEGER_URL+'/reveil',{method:'POST',keepalive:true}).catch(()=>{}); }catch(e){} }
   return ok;
 }

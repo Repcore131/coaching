@@ -77,8 +77,14 @@ await test('la nuit, le message attend 8 h 05, puis part', async () => {
   assert.ok(w.F.lire('push_attente/' + A1));
   w.avance(8 * 3600e3 + 40 * 60e3);            // 8 h 10 le lendemain
   await w.minute();
-  assert.equal(w.F.recus.length, 1);
+  // Passé en sous-tâche dans la même écriture qui le retire de push_attente…
   assert.equal(w.F.lire('push_attente/' + A1), null);
+  assert.equal(Object.values(w.F.lire('evenements')).filter((e) => e.type === 'tache' && e.uid === A1).length, 1);
+  // … et parti au réveil suivant.
+  w.avance(60e3);
+  await w.minute();
+  assert.equal(w.F.recus.length, 1);
+  assert.equal(w.F.lire('evenements'), null);
 });
 
 await test('jeudi 18 h : la série en danger, par lots, reprise d’une minute à l’autre', async () => {
@@ -169,7 +175,7 @@ await test('défi : les valeurs écrites par les athlètes font le résumé publ
 await test('la nuit, 3 h 17 : la rareté des badges', async () => {
   const w = monde({ users: {
     'a@t,fr': { badges: { assidu1: { at: 5 } } }, 'b@t,fr': { badges: { assidu1: { at: 5 }, record: { at: 6 } } },
-    'c@t,fr': {}, 'coach@t,fr': { role: 'coach', badges: { assidu1: { at: 1 } } } } }, PARIS('2026-09-28T03:20:00'));
+    'c@t,fr': { fname: 'C' }, 'coach@t,fr': { role: 'coach', badges: { assidu1: { at: 1 } } } } }, PARIS('2026-09-28T03:20:00'));
   let tours = 0; while (tours++ < 5) { const b = await w.minute(); if (b.travaux.stats_badges === 'fini') break; }
   const s = w.F.lire('stats/badges');
   assert.equal(s.total, 3);

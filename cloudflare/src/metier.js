@@ -64,6 +64,24 @@ function prolonger(echeanceActuelle, ms, t) {
 }
 export const emailKey = (e) => String(e || '').toLowerCase().trim().replace(/\./g, ',');
 
+// ── LE BUDGET D'UNE EXÉCUTION (plan gratuit : 50 sous-requêtes, 10 ms de calcul)
+// Un push coûte ~7 requêtes (préférences, journal, abonnements, transaction,
+// l'envoi) et ~1,5 ms de chiffrement par appareil (mesuré : test/charge.test.mjs).
+// Cinq chiffrements par exécution tiennent sous les 10 ms avec la marge du
+// reste (lecture, JSON) ; au-delà, la suite part en sous-tâches.
+export const COUT_PUSH = 8;
+export const MAX_CHIFFREMENTS = 5;
+const MARGE = 2;
+
+// UN IDENTIFIANT EN FIN DE FILE /evenements : après tout ce qui y est déjà
+// (horodaté, trié comme ceux de l'app), au format que les règles acceptent.
+let _nFile = 0;
+export function idFile(t, marque) {
+  const a = new Uint8Array(4); crypto.getRandomValues(a);
+  return 'e' + Number(t).toString(36) + (marque || 'r') + (_nFile++ % 46656).toString(36).padStart(3, '0')
+    + Array.from(a, (b) => (b % 36).toString(36)).join('');
+}
+
 /**
  * @param {{db:any, vapid:{publique:string, privee:string}, fetchImpl?:Function, maintenant?:()=>number}} deps
  */
@@ -72,6 +90,44 @@ export function creerMetier(deps) {
   const now = deps.maintenant || (() => Date.now());
   const _val = async (c) => (await db.ref(c).get()).val();
   const _lire = (uid, champ) => _val('users/' + uid + '/' + champ);
+
+  // ══ LE BUDGET, ET CE QUI NE TIENT PAS DEDANS ═══════════════════════════
+  // planif.js fixe `reste` (les requêtes encore permises) à chaque réveil.
+  // Les boucles internes — un défi à tous les athlètes, le rappel des 48 h,
+  // les messages de la nuit, les ambassadeurs, les fins PayPal — le consultent
+  // AVANT chaque tour. Quand il ne suffit plus, elles écrivent la suite en
+  // SOUS-TÂCHES (une par athlète) au bout de /evenements, en une seule
+  // écriture, et rendent la main : le réveil suivant les reprend.
+  // Hors d'un réveil (webhook PayPal), rien n'est fixé : pas de limite ici.
+  let _reste = () => Infinity;
+  let _chiffres = 0;
+  function fixerBudget(fn) { _reste = typeof fn === 'function' ? fn : () => Infinity; _chiffres = 0; }
+  const reste = () => _reste();
+  const peutPousser = () => _reste() >= COUT_PUSH + MARGE && _chiffres < MAX_CHIFFREMENTS;
+  const chiffrements = () => _chiffres;
+  // `maj` : d'autres écritures à faire DANS LA MÊME requête (le passage de
+  // relais est atomique : rien n'est retiré sans que sa suite soit écrite).
+  async function differer(taches, maj0) {
+    const t = now();
+    const maj = Object.assign({}, maj0 || {});
+    for (const x of taches) maj['evenements/' + idFile(t, 't')] = Object.assign({ type: 'tache', par: 'worker', at: t }, x);
+    if (Object.keys(maj).length) await db.ref().update(maj);
+    return taches.length;
+  }
+  const tachePush = (uid, message, o) => Object.assign({ quoi: 'push', uid, message }, o && o.attendre === false ? { attendre: false } : {});
+  // [{uid, message}] : envoyés tant que le budget le permet, le reste différé.
+  async function pousserA(liste, o) {
+    let envoyes = 0;
+    for (let i = 0; i < liste.length; i++) {
+      if (!peutPousser()) {
+        await differer(liste.slice(i).map((x) => tachePush(x.uid, x.message, o)));
+        return { envoyes, differes: liste.length - i };
+      }
+      const r = await envoyerPush(liste[i].uid, liste[i].message, o);
+      if (r.envoye) envoyes++;
+    }
+    return { envoyes, differes: 0 };
+  }
 
   // ── LES DROITS (palier, échéance) — écrits par le serveur seul ──────────
   async function lireDroits(cle) { return _val('droits/' + cle); }
@@ -158,6 +214,7 @@ export function creerMetier(deps) {
     await Promise.all(ids.map(async (id) => {
       const s = subs[id];
       if (!s || !s.endpoint || !s.keys) return;
+      _chiffres++;
       try {
         const r = await envoyerA(s, charge, { publique: deps.vapid.publique, privee: deps.vapid.privee,
           contact: 'mailto:' + CREATOR_EMAIL, fetchImpl: deps.fetchImpl });
@@ -239,15 +296,21 @@ export function creerMetier(deps) {
         body: 'Le badge est à portée de main cette semaine.' });
     },
   };
-  // Les messages mis de côté pendant la nuit : 8 h 05.
+  // Les messages mis de côté pendant la nuit : 8 h 05. TOUS passent en
+  // sous-tâches, dans la même écriture qui les retire de push_attente : un
+  // par athlète, envoyés au rythme du budget, et rien ne se perd en route.
   async function apresHeuresCalmes() {
     const tout = (await _val('push_attente')) || {};
+    const maj = {}, taches = [];
     for (const uid of Object.keys(tout)) {
       const m = tout[uid];
-      await db.ref('push_attente/' + uid).remove();
+      maj['push_attente/' + uid] = null;
       if (!m || now() - (Number(m.at) || 0) > 12 * 3600e3) continue;
-      await envoyerPush(uid, m, { attendre: false });
+      const message = Object.assign({}, m); delete message.at;
+      taches.push(tachePush(uid, message, { attendre: false }));
     }
+    if (Object.keys(maj).length) await differer(taches, maj);
+    return taches.length;
   }
 
   // ── LA RARETÉ DES BADGES (la nuit), dossier par dossier ────────────────
@@ -337,9 +400,15 @@ export function creerMetier(deps) {
     await db.ref().update(maj);
   }
   // Tous les matins, 9 h : rappel des 48 h, annonces en attente, clôture.
+  // Un défi coûte ~5 requêtes (~8 à la clôture) : si le budget ne suffit plus
+  // pour le suivant, le coach entier est repris en sous-tâche. Tout y est
+  // idempotent (rappel48, dernierSysteme, clos) ; le premier défi passe
+  // toujours, pour que chaque reprise avance.
   async function defisQuotidienCoach(coach, t) {
     const jour = paris(t).jour;
+    let n = 0;
     for (const defi of await defisDuCoach(coach)) {
+      if (n++ > 0 && _reste() < 10) { await differer([{ quoi: 'defis_coach', coach }]); return 'differe'; }
       const etat = (await _val(defiChemin(coach, defi.id, 'etat'))) || {};
       if (etat.clos || t < Number(defi.debut)) continue;
       if (t > Number(defi.fin)) {
@@ -348,11 +417,12 @@ export function creerMetier(deps) {
       }
       if (Number(defi.fin) - t <= 48 * 3600e3 && !etat.rappel48) {
         const parts = await participants(coach, defi);
-        for (const p of parts.filter((x) => !x.termine))
-          await envoyerPush(p.cle, { type: 'defi', url: './?canal=1', tag: 'defi-48h-' + defi.id,
-            title: 'Plus que 48 h : ' + String(defi.titre || 'ton défi').slice(0, 60),
-            body: 'Objectif : ' + D.texteObjectif(defi) + '. Tu en es à ' + String(p.valeur).replace('.', ',') + '.' }, { attendre: false });
+        // Noté AVANT les envois : ceux qui ne tiennent pas dans le budget sont
+        // déjà écrits en sous-tâches quand pousserA rend la main.
         await db.ref(defiChemin(coach, defi.id, 'etat/rappel48')).set(true);
+        await pousserA(parts.filter((x) => !x.termine).map((p) => ({ uid: p.cle, message: { type: 'defi', url: './?canal=1', tag: 'defi-48h-' + defi.id,
+          title: 'Plus que 48 h : ' + String(defi.titre || 'ton défi').slice(0, 60),
+          body: 'Objectif : ' + D.texteObjectif(defi) + '. Tu en es à ' + String(p.valeur).replace('.', ',') + '.' } })), { attendre: false });
       }
       await recalculerDefi(coach, defi, t);
     }
@@ -721,9 +791,14 @@ export function creerMetier(deps) {
     for (const c of ATT.cheminsEvenement('payant', o, t)) await incr(c);
     return origine;
   }
+  // Une vue coûte 2 requêtes : au-delà du budget, un ambassadeur par sous-tâche.
   async function ambassadeursQuotidien() {
-    const tous = (await _val('ambassadeurs_publics')) || {};
-    for (const code of Object.keys(tous)) { try { await ambMajVue(code); } catch (e) { /* le suivant */ } }
+    const codes = Object.keys((await _val('ambassadeurs_publics')) || {});
+    for (let i = 0; i < codes.length; i++) {
+      if (i > 0 && _reste() < 6) { await differer(codes.slice(i).map((code) => ({ quoi: 'amb_vue', code }))); return 'differe'; }
+      try { await ambMajVue(codes[i]); } catch (e) { /* le suivant */ }
+    }
+    return codes.length;
   }
 
   // ══ L'ATTRIBUTION : l'arrivée par un lien ══════════════════════════════
@@ -763,11 +838,11 @@ export function creerMetier(deps) {
       const obj = D.texteObjectif(m);
       const fin = Number(m.fin) ? new Date(Number(m.fin)).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', day: 'numeric', month: 'long' }) : '';
       const annuaire = await db.ref('annuaire_coach/' + coach).shallow();
-      for (const uid of annuaire)
-        await envoyerPush(uid, { type: 'defi', url: './?canal=1', tag: 'defi-' + msg,
-          title: 'Nouveau défi : ' + String(m.titre || 'ton coach te lance un défi').slice(0, 60),
-          body: (m.collectif ? 'En équipe : ' : 'Objectif : ') + obj + (fin ? ' d’ici le ' + fin : '') + '. Tu le relèves ?' });
-      return 'envoye';
+      const message = { type: 'defi', url: './?canal=1', tag: 'defi-' + msg,
+        title: 'Nouveau défi : ' + String(m.titre || 'ton coach te lance un défi').slice(0, 60),
+        body: (m.collectif ? 'En équipe : ' : 'Objectif : ') + obj + (fin ? ' d’ici le ' + fin : '') + '. Tu le relèves ?' };
+      const r = await pousserA(annuaire.map((uid) => ({ uid, message })));
+      return r.differes ? 'differe' : 'envoye';
     }
     if (type === 'defi_maj') {
       const coach = String(e.coach || ''), id = String(e.id || '').replace(/[^A-Za-z0-9_-]/g, '');
@@ -781,9 +856,23 @@ export function creerMetier(deps) {
     return 'type_inconnu';
   }
 
+  // ══ UNE SOUS-TÂCHE (écrite par differer, jamais par l'app : les règles
+  // refusent le type « tache » à un client) ══════════════════════════════
+  async function tache(e) {
+    const quoi = String((e && e.quoi) || '');
+    if (quoi === 'push') {
+      const r = await envoyerPush(String(e.uid || ''), e.message || {}, e.attendre === false ? { attendre: false } : undefined);
+      return r.envoye ? 'envoye' : (r.raison || 'rien');
+    }
+    if (quoi === 'amb_vue') { await ambMajVue(String(e.code || '')); return 'vue'; }
+    if (quoi === 'defis_coach') return defisQuotidienCoach(String(e.coach || ''), now());
+    return 'tache_inconnue';
+  }
+
   return { envoyerPush, abonnes, planifies, apresHeuresCalmes, statsBadgesUn, statsBadgesFin,
     defisQuotidienCoach, coachsAvecCanal, recalculerDefi, parrainageDemande, parrainagePaiement,
     ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits, majDroits, palierDroits,
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
-    retirerMoisOffert, annulerAttribution, commissionVente };
+    retirerMoisOffert, annulerAttribution, commissionVente,
+    fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, tache };
 }

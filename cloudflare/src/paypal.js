@@ -64,6 +64,9 @@ function montantValide(plan, montant, devise, role) {
 // Deux sous-requêtes de moins par webhook (le plan gratuit en compte 50 par
 // exécution). En mémoire de l'isolat : il vit tant que le worker reste chaud,
 // et se redemande sinon. Rendu une minute avant son expiration.
+export const GARDE_EVENEMENTS_MS = 90 * 864e5;
+const LOT_PURGE = 200;
+
 let _jeton = null;          // { cle, valeur, expire }
 let _jetonEnVol = null;     // { cle, promesse } : deux appels simultanés, une requête
 export function oublierJetonPaypal() { _jeton = null; _jetonEnVol = null; }
@@ -568,22 +571,58 @@ export function creerPaypal(ctx) {
   // Le coach : son palier se referme. L'athlète : son accès se ferme tout
   // seul (accessExpiry) ; ici, les mois de réserve comptés dans cette fin
   // sont enfin consommés — en transaction, sans toucher à ceux gagnés depuis.
+  // UNE FIN à la fois (~3 requêtes). Au-delà du budget du réveil, les
+  // suivantes partent en sous-tâches (une par compte), reprises plus tard.
+  const resteM = () => (M && typeof M.reste === 'function' ? M.reste() : Infinity);
   async function fins() {
     const tout = (await lire('paypal_fins')) || {};
     const t = now();
-    for (const cle of Object.keys(tout)) {
-      const f = tout[cle];
-      if (!f || !(Number(f.fin) <= t)) continue;
-      const role = f.role || 'coach';          // les entrées d'avant ne portaient que les coachs
-      if (role === 'coach') {
-        await db.ref().update({ ['users/' + cle + '/coachSubActive']: false, ['users/' + cle + '/coachPlan']: 'libre',
-          ['users/' + cle + '/updatedAt']: t });
-      } else if (Number(f.reserve) > 0) {
-        const r = Number(f.reserve);
-        await db.ref('parrainage/comptes/' + cle + '/moisEnReserve').transaction((n) => Math.max(0, (Number(n) || 0) - r));
+    const dues = Object.keys(tout).filter((cle) => tout[cle] && Number(tout[cle].fin) <= t);
+    for (let i = 0; i < dues.length; i++) {
+      if (i > 0 && resteM() < 8 && M && M.differer) {
+        await M.differer(dues.slice(i).map((cle) => ({ quoi: 'fin_paypal', cle })));
+        return 'differe';
       }
-      await db.ref('paypal_fins/' + cle).remove();
+      await finUne(dues[i], tout[dues[i]], t);
     }
+    return dues.length;
+  }
+  // La sous-tâche : relue, car elle a pu changer (abonnement reparti) depuis.
+  async function finTache(cle) {
+    const f = await lire('paypal_fins/' + cle);
+    if (f && Number(f.fin) <= now()) { await finUne(cle, f, now()); return 'fin'; }
+    return 'plus_due';
+  }
+  async function finUne(cle, f, t) {
+    const role = f.role || 'coach';          // les entrées d'avant ne portaient que les coachs
+    if (role === 'coach') {
+      await db.ref().update({ ['users/' + cle + '/coachSubActive']: false, ['users/' + cle + '/coachPlan']: 'libre',
+        ['users/' + cle + '/updatedAt']: t });
+    } else if (Number(f.reserve) > 0) {
+      const r = Number(f.reserve);
+      await db.ref('parrainage/comptes/' + cle + '/moisEnReserve').transaction((n) => Math.max(0, (Number(n) || 0) - r));
+    }
+    await db.ref('paypal_fins/' + cle).remove();
+  }
+
+  // ── LA PURGE MENSUELLE de paypal_evenements (le 1er, planif.js) ─────────
+  // Plus de 90 jours : PayPal ne renvoie plus un événement après trois jours,
+  // l'idempotence n'a plus rien à garder. Par lots de 200, les plus anciens
+  // d'abord (".indexOn": ["at"]). Rend false si le budget a coupé avant la fin.
+  async function purgerEvenements(t) {
+    const limite = (t || now()) - GARDE_EVENEMENTS_MS;
+    let n = 0;
+    while (resteM() >= 6) {
+      const vieux = await db.ref('paypal_evenements').jusqua('at', limite, LOT_PURGE);
+      const ks = Object.keys(vieux);
+      if (!ks.length) return n;
+      const maj = {};
+      for (const k of ks) maj['paypal_evenements/' + k] = null;
+      await db.ref().update(maj);
+      n += ks.length;
+      if (ks.length < LOT_PURGE) return n;
+    }
+    return false;
   }
 
   // L'INDEX abonnement → compte, déposé par l'app à l'approbation (événement
@@ -603,7 +642,7 @@ export function creerPaypal(ctx) {
     return 'indexe';
   }
 
-  return { traiter, fins, finsCoachs: fins, indexer, fermerALaFin, rejouerOrphelins };
+  return { traiter, fins, finsCoachs: fins, finTache, indexer, fermerALaFin, rejouerOrphelins, purgerEvenements };
 }
 
 // ══ LE POINT D'ENTRÉE HTTP : /paypal (POST, appelé par PayPal) ═══════════

@@ -44,11 +44,25 @@ export function fausseBase(initial) {
         const n = Number(u.searchParams.get('limitToLast')); const o = {};
         for (const k of Object.keys(v).sort().slice(-n)) o[k] = v[k]; v = o;
       }
+      if (u.searchParams.get('orderBy') === '"$key"' && u.searchParams.get('limitToFirst') && v && typeof v === 'object') {
+        const n = Number(u.searchParams.get('limitToFirst')); const o = {};
+        for (const k of Object.keys(v).sort().slice(0, n)) o[k] = v[k]; v = o;
+      }
       const ob = u.searchParams.get('orderBy');
       if (ob && ob !== '"$key"' && u.searchParams.has('equalTo')) {
         const champ = JSON.parse(ob), eq = JSON.parse(u.searchParams.get('equalTo'));
         const n = Number(u.searchParams.get('limitToFirst')) || Infinity; const o = {};
         for (const k of Object.keys(v || {}).sort()) if (Object.keys(o).length < n && v[k] && v[k][champ] === eq) o[k] = v[k];
+        v = o;
+      }
+      if (ob && ob !== '"$key"' && u.searchParams.has('endAt')) {
+        // Comme Firebase : les enfants sans ce champ viennent en tête.
+        const champ = JSON.parse(ob), fin = JSON.parse(u.searchParams.get('endAt'));
+        const n = Number(u.searchParams.get('limitToFirst')) || Infinity;
+        const val = (k) => (v[k] && typeof v[k] === 'object' && v[k][champ] != null ? v[k][champ] : null);
+        const ks = Object.keys(v || {}).filter((k) => val(k) === null || val(k) <= fin)
+          .sort((a, b) => (val(a) === null ? -Infinity : val(a)) - (val(b) === null ? -Infinity : val(b)) || (a < b ? -1 : 1));
+        const o = {}; for (const k of ks.slice(0, n)) o[k] = v[k];
         v = o;
       }
       return reponse(200, v, h['X-Firebase-ETag'] ? { ETag: etag(lire(p)) } : {});

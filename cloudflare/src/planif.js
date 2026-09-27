@@ -4,100 +4,190 @@
 // le plan gratuit en autorise cinq). À chaque réveil, avec un BUDGET de
 // requêtes (le plan gratuit en permet 50 par exécution, on s'arrête avant) :
 //
-//   1. les événements déposés par l'app (/evenements), un par un ;
+//   0. le VERROU : un bail de 55 s dans /worker/verrou. Deux exécutions (la
+//      minute et un /reveil de l'app) ne traitent jamais la file ensemble ;
+//   1. les événements déposés par l'app (/evenements) et les sous-tâches que
+//      le Worker s'est laissées (type « tache »), dans l'ordre des clés ;
 //   2. les travaux du jour dont l'heure est passée (heure de Paris), repris
 //      là où le réveil précédent s'est arrêté : /worker/jobs/<nom> garde le
 //      jour, le curseur et, pour la rareté des badges, les comptes en cours.
 //
 // UN TRAVAIL MANQUÉ SE RATTRAPE : la condition est « l'heure est passée
 // aujourd'hui et ce n'est pas fini », pas « il est exactement 18 h 00 ».
+//
+// UN ÉVÉNEMENT QUI ÉCHOUE NE BLOQUE RIEN : il repart en fin de file avec un
+// compteur d'essais ; au cinquième échec, il est rangé dans /evenements_ko
+// (écran Ambassadeurs de l'administrateur) et retiré de la file.
 
-import { paris } from './metier.js';
+import { paris, idFile } from './metier.js';
 
 export const BUDGET = 38;          // requêtes par réveil (plafond Cloudflare : 50)
+export const VERROU_MS = 55e3;     // le bail : moins que la minute entre deux réveils
+export const REVEIL_MIN_MS = 30e3; // /reveil ne relance pas une file traitée il y a moins
+export const ESSAIS_MAX = 5;
+const LOT = 25;                    // événements lus d'un coup (une requête)
 const apres = (p, h, m) => p.heure * 60 + p.minute >= h * 60 + m;
 
 export function travaux(M) {
   return [
     { nom: 'stats_badges', quand: (p) => apres(p, 3, 17), cles: () => M.coachsEtUsers(), un: (c, t, acc) => M.statsBadgesUn(c, acc), fin: M.statsBadgesFin, cout: 3 },
+    // Le 1er du mois : l'idempotence PayPal de plus de 90 jours.
+    { nom: 'purge_paypal', quand: (p) => p.date === 1 && apres(p, 4, 10), une: (t) => (M.paypal ? M.paypal.purgerEvenements(t) : null) },
     { nom: 'ambassadeurs', quand: (p) => apres(p, 6, 20), une: M.ambassadeursQuotidien },
     // Les coachs qui ont résilié : leur palier se referme à la fin payée.
     { nom: 'fins_coachs', quand: (p) => apres(p, 6, 0), une: () => (M.paypal ? M.paypal.finsCoachs() : null) },
     // « Ton accès se termine dans N jours », une fois par échéance.
-    { nom: 'acces', quand: (p) => apres(p, 11, 0) && p.heure < 21, cles: () => M.abonnes(), un: M.planifies.acces, cout: 12 },
+    { nom: 'acces', quand: (p) => apres(p, 11, 0) && p.heure < 21, cles: () => M.abonnes(), un: M.planifies.acces, cout: 12, push: true },
     // Pas en heures calmes : ce serait relire les messages mis de côté pour la
     // nuit et les jeter au lieu de les envoyer le lendemain à 8 h 05.
     { nom: 'attente', quand: (p) => apres(p, 8, 5) && p.heure < 21, une: M.apresHeuresCalmes },
     { nom: 'defis', quand: (p) => apres(p, 9, 0), cles: () => M.coachsAvecCanal(), un: (c, t) => M.defisQuotidienCoach(c, t), cout: 8 },
-    { nom: 'serie', quand: (p) => p.joursem === 4 && apres(p, 18, 0), cles: () => M.abonnes(), un: M.planifies.serie, cout: 12 },
-    { nom: 'bilan', quand: (p) => p.joursem === 6 && apres(p, 10, 0), cles: () => M.abonnes(), un: M.planifies.bilan, cout: 12 },
-    { nom: 'wrapped', quand: (p) => p.date === 1 && apres(p, 10, 0), cles: () => M.abonnes(), un: M.planifies.wrapped, cout: 10 },
-    { nom: 'badge', quand: (p) => p.joursem === 0 && apres(p, 17, 0), cles: () => M.abonnes(), un: M.planifies.badge, cout: 10 },
+    { nom: 'serie', quand: (p) => p.joursem === 4 && apres(p, 18, 0), cles: () => M.abonnes(), un: M.planifies.serie, cout: 12, push: true },
+    { nom: 'bilan', quand: (p) => p.joursem === 6 && apres(p, 10, 0), cles: () => M.abonnes(), un: M.planifies.bilan, cout: 12, push: true },
+    { nom: 'wrapped', quand: (p) => p.date === 1 && apres(p, 10, 0), cles: () => M.abonnes(), un: M.planifies.wrapped, cout: 10, push: true },
+    { nom: 'badge', quand: (p) => p.joursem === 0 && apres(p, 17, 0), cles: () => M.abonnes(), un: M.planifies.badge, cout: 10, push: true },
   ];
+}
+
+const texteErreur = (err) => String((err && err.message) || err).slice(0, 200);
+
+// UN ÉVÉNEMENT (ou une sous-tâche). Lève en cas d'échec : c'est minute() qui
+// décide de la suite (fin de file, ou evenements_ko).
+async function traiter(db, M, e) {
+  if (!e || typeof e !== 'object') return 'vide';
+  if (e.type === 'tache') {
+    if (e.quoi === 'fin_paypal') return M.paypal ? M.paypal.finTache(String(e.cle || '')) : 'sans_paypal';
+    return M.tache(e);
+  }
+  if (e.type === 'parrainage_demande') {
+    const d = (await db.ref('parrainage/demandes/' + e.par).get()).val();
+    return d && !d.etat ? M.parrainageDemande(e.par, d) : 'deja_juge';
+  }
+  if (e.type === 'ambassadeur_demande') {
+    const d = (await db.ref('ambassadeurs_demandes/' + e.par).get()).val();
+    return d && !d.etat ? M.ambassadeurDemande(e.par, d) : 'deja_juge';
+  }
+  if (e.type === 'abonnement') return M.paypal ? M.paypal.indexer(e.par, e.abo) : 'sans_paypal';
+  return M.evenement(e);
+}
+
+// L'ÉCHEC : en fin de file avec un essai de plus, ou, au cinquième, rangé
+// dans evenements_ko. Une seule écriture : retrait et dépôt ensemble. Le
+// verrou de l'app (evenements_attente) suit le nouvel identifiant, pour que
+// l'événement compte toujours comme « en attente ».
+async function echec(db, id, e, err, t) {
+  const essais = (Number(e && e.essais) || 0) + 1;
+  const erreur = texteErreur(err);
+  const maj = { ['evenements/' + id]: null };
+  if (essais >= ESSAIS_MAX) {
+    maj['evenements_ko/' + id] = Object.assign({}, e, { essais, erreur, le: t });
+  } else {
+    const nid = idFile(t, 'r');
+    maj['evenements/' + nid] = Object.assign({}, e, { essais, erreur });
+    if (e && e.par && e.type && e.cible && e.type !== 'tache')
+      maj['evenements_attente/' + e.par + '/' + e.type + '/' + e.cible + '/id'] = nid;
+  }
+  await db.ref().update(maj);
+  return essais;
 }
 
 /**
  * Un réveil. `compteur()` rend le nombre de requêtes déjà émises dans ce
- * réveil (base ET services de push).
+ * réveil (base ET services de push). `source` : 'reveil' quand c'est l'app
+ * qui l'a demandé (/reveil), sinon la minute de Cloudflare.
  */
-export async function minute({ db, M, compteur, maintenant }) {
-  const t = (maintenant || Date.now)();
+export async function minute({ db, M, compteur, maintenant, source }) {
+  const horloge = maintenant || Date.now;
+  const t = horloge();
   const p = paris(t);
   const reste = () => BUDGET - compteur();
-  const bilan = { evenements: 0, travaux: {} };
+  if (M.fixerBudget) M.fixerBudget(reste);
+  const bilan = { evenements: 0, echecs: 0, travaux: {} };
 
-  // 1. LES ÉVÉNEMENTS. Relus un par un et SUPPRIMÉS une fois traités — même
-  //    en échec : un événement qui planterait à chaque réveil bloquerait tout.
-  const ids = await db.ref('evenements').shallow();
-  ids.sort();
-  for (const id of ids) {
-    if (reste() < 12) break;
-    const e = (await db.ref('evenements/' + id).get()).val();
-    try {
-      if (e && e.type === 'parrainage_demande') {
-        const d = (await db.ref('parrainage/demandes/' + e.par).get()).val();
-        if (d && !d.etat) await M.parrainageDemande(e.par, d);
-      } else if (e && e.type === 'ambassadeur_demande') {
-        const d = (await db.ref('ambassadeurs_demandes/' + e.par).get()).val();
-        if (d && !d.etat) await M.ambassadeurDemande(e.par, d);
-      } else if (e && e.type === 'abonnement') {
-        if (M.paypal) await M.paypal.indexer(e.par, e.abo);
-      } else if (e) {
-        await M.evenement(e);
-      }
-    } catch (err) { bilan.erreur = String(err && err.message || err).slice(0, 200); }
-    await db.ref('evenements/' + id).remove();
-    bilan.evenements++;
-  }
+  // 0. LE VERROU. Pris en transaction : de deux exécutions simultanées, une
+  //    seule l'obtient. Un bail échu (exécution morte en route) se reprend.
+  const moi = idFile(t, 'v');
+  let refus = null;
+  const pris = await db.ref('worker/verrou').transaction((v) => {
+    if (v && Number(v.jusqua) > t) { refus = 'occupe'; return undefined; }
+    if (source === 'reveil' && v && t - (Number(v.fileLe) || 0) < REVEIL_MIN_MS) { refus = 'recent'; return undefined; }
+    refus = null;
+    return Object.assign({}, v || {}, { jusqua: t + VERROU_MS, id: moi });
+  });
+  if (!pris.committed) return Object.assign(bilan, { verrou: refus || 'occupe', requetes: compteur() });
+  bilan.verrou = 'pris';
 
-  // 2. LES TRAVAUX DU JOUR.
-  for (const w of travaux(M)) {
-    if (!w.quand(p) || reste() < 6) continue;
-    const ref = db.ref('worker/jobs/' + w.nom);
-    let etat = (await ref.get()).val();
-    if (!etat || etat.jour !== p.jour) etat = { jour: p.jour, curseur: 0, fini: false, acc: {} };
-    if (etat.fini) continue;
-    // Firebase ne garde pas un objet vide : relu, il revient null.
-    if (!etat.acc || typeof etat.acc !== 'object') etat.acc = {};
-    if (w.une) {
-      await w.une(t);
-      etat.fini = true;
-    } else {
-      const cles = (await w.cles()).sort();
-      let i = Number(etat.curseur) || 0;
-      while (i < cles.length && reste() >= (w.cout || 10) + 2) {
-        try { await w.un(cles[i], t, etat.acc); } catch (err) { bilan.erreur = String(err && err.message || err).slice(0, 200); }
-        i++;
+  let fileLe = null;
+  try {
+    // 1. LES ÉVÉNEMENTS, un lot lu en une requête, traités dans l'ordre.
+    const lot = (await db.ref('evenements').orderByKey().limitToFirst(LOT).get()).val() || {};
+    const ids = Object.keys(lot).sort();
+    let fini = true;
+    for (const id of ids) {
+      if (reste() < 12) { fini = false; break; }
+      const e = lot[id];
+      let ok = true;
+      try { await traiter(db, M, e); } catch (err) {
+        ok = false;
+        bilan.echecs++;
+        bilan.erreur = texteErreur(err);
+        try { await echec(db, id, e, err, t); } catch (e2) { /* il reste en tête : réessayé au réveil suivant */ }
       }
-      etat.curseur = i;
-      if (i >= cles.length) {
-        if (w.fin) await w.fin(etat.acc || {});
-        etat.fini = true;
-      }
+      if (ok) await db.ref('evenements/' + id).remove();
+      bilan.evenements++;
     }
-    bilan.travaux[w.nom] = etat.fini ? 'fini' : etat.curseur;
-    await ref.set(etat);
+    // La file est « traitée » si ce réveil l'a parcourue jusqu'au bout.
+    if (fini) fileLe = horloge();
+
+    // 2. LES TRAVAUX DU JOUR.
+    for (const w of travaux(M)) {
+      if (!w.quand(p) || reste() < 6) continue;
+      const ref = db.ref('worker/jobs/' + w.nom);
+      let etat = (await ref.get()).val();
+      if (!etat || etat.jour !== p.jour) etat = { jour: p.jour, curseur: 0, fini: false, acc: {} };
+      if (etat.fini) continue;
+      // Firebase ne garde pas un objet vide : relu, il revient null.
+      if (!etat.acc || typeof etat.acc !== 'object') etat.acc = {};
+      if (w.une) {
+        // `false` : coupé par le budget, à reprendre au réveil suivant.
+        // Une erreur cinq fois de suite le range dans evenements_ko.
+        try {
+          const r = await w.une(t);
+          etat.fini = r !== false;
+          etat.essais = null;
+        } catch (err) {
+          bilan.erreur = texteErreur(err);
+          etat.essais = (Number(etat.essais) || 0) + 1;
+          if (etat.essais >= ESSAIS_MAX) {
+            etat.fini = true;
+            await db.ref('evenements_ko/' + idFile(t, 'j')).set({ type: 'travail', nom: w.nom, essais: etat.essais, erreur: bilan.erreur, le: t });
+          }
+        }
+      } else {
+        const cles = (await w.cles()).sort();
+        let i = Number(etat.curseur) || 0;
+        const assez = () => reste() >= (w.cout || 10) + 2 && (!w.push || !M.peutPousser || M.peutPousser());
+        while (i < cles.length && assez()) {
+          try { await w.un(cles[i], t, etat.acc); } catch (err) { bilan.erreur = texteErreur(err); }
+          i++;
+        }
+        etat.curseur = i;
+        if (i >= cles.length) {
+          if (w.fin) await w.fin(etat.acc || {});
+          etat.fini = true;
+        }
+      }
+      bilan.travaux[w.nom] = etat.fini ? 'fini' : etat.curseur;
+      await ref.set(etat);
+    }
+  } finally {
+    // LE BAIL EST RENDU, et l'heure de la file notée — s'il est encore à nous.
+    try {
+      await db.ref('worker/verrou').transaction((v) => (v && v.id === moi
+        ? Object.assign({}, v, { jusqua: 0, id: null }, fileLe ? { fileLe } : {}) : undefined));
+    } catch (e) { /* le bail expire seul dans 55 s */ }
   }
   bilan.requetes = compteur();
+  if (M.chiffrements) bilan.chiffrements = M.chiffrements();
   return bilan;
 }

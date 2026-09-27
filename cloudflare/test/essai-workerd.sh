@@ -15,6 +15,9 @@ i=0; while [ $i -lt 90 ] && ! grep -q "Ready on" "$D/wrangler.log" 2>/dev/null; 
 echo "santé : $(curl -s http://127.0.0.1:$PW/sante)"
 echo "paypal sans signature : $(curl -s -o /dev/null -w '%{http_code}' -X POST -d '{"id":"WH-1"}' http://127.0.0.1:$PW/paypal) (401 attendu)"
 echo "appel sans jeton : $(curl -s -o /dev/null -w '%{http_code}' -X POST -d '{"data":{}}' http://127.0.0.1:$PW/fn/cloudinaryDestroy) (401 attendu)"
+echo "clés sans secret : $(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$PW/sante?cles=1) (401 attendu)"
+n429=0; for k in $(seq 1 35); do c=$(curl -s -o /dev/null -w '%{http_code}' -H 'CF-Connecting-IP: 9.9.9.9' "http://127.0.0.1:$PW/arrivee?src=essai"); [ "$c" = 429 ] && n429=$((n429+1)); done
+echo "arrivées limitées : $n429 refus sur 35 appels d'une même IP (5 attendus : 30 par minute)"
 curl -s "http://127.0.0.1:$PW/__scheduled?cron=*+*+*+*+*" > /dev/null
 sleep 5
 node test/scenario-local.mjs verif "$D"

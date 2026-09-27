@@ -49103,6 +49103,26 @@ async function testExercices(){
       if(!/amb-jl-alerte/.test(h)) return _echec('un litige ouvert ne se distingue pas');
       if(!/Aucun remboursement/.test(htmlJournalPaypal({}))) return _echec('journal vide');
       return /illisible/.test(htmlJournalPaypal(null))?true:_echec('journal illisible');})());
+    ok('Serveur léger : l’événement part AVEC son verrou, et la cible que les règles attendent',(()=>{
+      const c=[['reponse_bilan',{dest:'lea@t,fr'},'lea@t,fr'],['reponse_rite',{dest:'lea@t,fr'},'lea@t,fr'],['defi_maj',{coach:'k',id:'d1'},'d1'],
+        ['defi_publie',{msg:'m9'},'m9'],['parrainage_demande',{},'-'],['ambassadeur_demande',{},'-'],['abonnement',{abo:'I-X'},'-']];
+      for(const [type,ev,attendu] of c){ const v=evenementCible(Object.assign({type},ev)); if(v!==attendu) return _echec(type+' → '+v); }
+      if(evenementCible({type:'reponse_bilan'})!=='') return _echec('sans destinataire, rien ne doit partir');
+      const src=String(CLOUD.evenementPoser);
+      if(!/evenements_attente\/'\+ev\.par\+'\/'\+ev\.type\+'\/'\+ev\.cible/.test(src)) return _echec('le verrou n’est pas écrit');
+      if(!/racinePatch/.test(src)||!/'\.sv':'timestamp'/.test(src)) return _echec('pas dans la même requête, ou pas à l’heure du serveur');
+      return true;})());
+    ok('Serveur léger : les tâches abandonnées se lisent dans l’écran admin (quoi, qui, pourquoi)',(()=>{
+      const h=htmlEvenementsKo({e2:{type:'defi_publie',par:'kev@t,fr',msg:'m1',cible:'m1',essais:5,erreur:'base 500 <x>',le:2},
+        e1:{type:'tache',quoi:'push',uid:'lea@t,fr',essais:5,erreur:'x',le:1},
+        e3:{type:'travail',nom:'purge_paypal',essais:5,erreur:'Index not defined',le:3}});
+      if(!/Notification « nouveau défi »/.test(h)||!/Notification différée/.test(h)||!/Travail du jour « purge_paypal »/.test(h)) return _echec('les libellés');
+      if(!/kev@t\.fr/.test(h)||!/lea@t\.fr/.test(h)) return _echec('qui');
+      if(/<x>/.test(h)||!/Motif : base 500 &lt;x&gt;/.test(h)) return _echec('le motif n’est pas échappé');
+      if(h.indexOf('purge_paypal')>h.indexOf('nouveau défi')) return _echec('le plus récent d’abord');
+      if(!/effacerEvenementKo\('e1'/.test(h)) return _echec('pas de bouton pour effacer');
+      if(htmlEvenementsKo({})!=='') return _echec('rien à montrer : la carte doit disparaître');
+      return /illisible/.test(htmlEvenementsKo(null))?true:_echec('liste illisible');})());
     ok('Ambassadeurs : le CSV mensuel ne porte que les commissions dues',(()=>{
       const r=ambCsvDues({LEA:_AMBF,ZED:{nom:'Zed',commissions:{'2026-09':{x:{commission:9,dueLe:1}}}}},'2026-10',500);
       const l=r.csv.trim().split('\n');
