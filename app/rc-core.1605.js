@@ -76069,9 +76069,14 @@ function showProgressTab(tab,btn,sansMemo){
     const getP=_progPhotoBilan;
     const hasSome=bl.some(b=>getP(b,'face')||getP(b,'back')||getP(b,'side'));
     if(!hasSome){
-      c.innerHTML='<div id="prog-photos-progression"></div>'+_php
+      // LE BLOC NE SE POSE QU'À UN ENDROIT : la zone, que renderPhotosProgression
+      // remplit. Il était aussi concaténé ici, derrière la zone vide, puis la
+      // zone se remplissait à son tour : un compte neuf voyait deux fois
+      // « J'ai compris, j'active les photos ». _php ne sert plus qu'à décider
+      // de l'état vide. Sans setTimeout : le bloc est là dès le retour.
+      c.innerHTML='<div id="prog-photos-progression"></div>'
         +(_php?'':emptyState('image','Aucune photo de bilan.<br>Ajoute des photos lors de ton prochain bilan.','Remplir mon bilan','openBilanChoice()'));
-      setTimeout(()=>{ try{ renderPhotosProgression(); }catch(e){} },0);
+      try{ renderPhotosProgression(); }catch(e){}
       return;
     }
     // Fresque : lignes = pose (Face/Dos/Profil), colonnes = bilans

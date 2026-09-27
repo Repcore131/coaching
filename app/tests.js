@@ -29517,6 +29517,53 @@ async function testExercices(){
           .test(src)
           ?true:_echec('une analyse a été trouvée');})());
 
+      // ── L'onglet Photos ne montre le bloc qu'une fois ──
+      // Sur un compte neuf, l'écran d'accord sortait DEUX fois : concaténé
+      // derrière la zone #prog-photos-progression, puis la zone remplie à son
+      // tour par renderPhotosProgression, un tour de boucle plus tard. Juste
+      // après l'appel on n'en comptait qu'un : c'est APRÈS l'attente qu'il faut
+      // compter, d'où okA. Et okA joue à la fin de la suite : le compte de test
+      // est posé et rendu ici même, pas hérité du bloc.
+      okA('Onglet Photos : le bloc des photos de progression ne sort qu\'une fois',(async()=>{
+        const sauveU2=currentUser;
+        const attendre=()=>new Promise(r=>setTimeout(r,30));
+        const zone=()=>document.getElementById('progress-content');
+        const nb=sel=>{ const c=zone(); return c?c.querySelectorAll(sel).length:-1; };
+        const activer=()=>{ const c=zone(); if(!c) return -1;
+          return [...c.querySelectorAll('button')].filter(b=>/j'active les photos/i.test(b.textContent)).length; };
+        const photo='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==';
+        const compte=x=>Object.assign({id:'php-onglet',email:'php-onglet@t.fr',fname:'N',lname:'N',role:'athlete',
+          exAlias:{},exMuscles:{},sessions:[],bilans:[],videos:[],programs:{},contraintesSante:[],
+          consent:{health:true,policyVersion:POLICY_VERSION}},x||{});
+        try{
+          // 1. Compte neuf, aucune photo de bilan : l'écran d'accord, une fois,
+          // et dès le retour de l'appel.
+          currentUser=compte();
+          showProgressTab('photos',null);
+          if(activer()!==1) return _echec('au retour de l\'appel : '+activer()+' bouton(s) « j\'active les photos »');
+          await attendre();
+          if(activer()!==1) return _echec('compte neuf : '+activer()+' bouton(s) « j\'active les photos » au lieu d\'un');
+          if(nb('#php-partage')!==1) return _echec('compte neuf : '+nb('#php-partage')+' case(s) de partage');
+          // 2. Accord donné, toujours sans photo de bilan : la séance, une fois.
+          currentUser=compte(); phpConsentir(currentUser,false);
+          showProgressTab('photos',null); await attendre();
+          if(nb('#php-apercu')!==1) return _echec('accord donné : '+nb('#php-apercu')+' séance(s) photo');
+          // 3. Avec photos de bilan : la fresque, et le bloc une fois au-dessus.
+          currentUser=compte({bilans:[{type:'suivi',date:Date.now()-2*864e5,'deb-weight':'62','deb-photo-face':photo}]});
+          showProgressTab('photos',null); await attendre();
+          if(zone().innerHTML.indexOf('MA TRANSFORMATION')<0) return _echec('avec photos de bilan : la fresque ne s\'est pas rendue');
+          if(activer()!==1) return _echec('avec photos de bilan : '+activer()+' bouton(s) « j\'active les photos » au lieu d\'un');
+          // 4. L'état vide survit. Fonction masquée (règle 5) et aucune photo
+          // de bilan : _php est vide, c'est « Aucune photo de bilan » qui parle.
+          currentUser=compte({grossesse:{etat:'enceinte',declareLe:Date.now()}});
+          showProgressTab('photos',null); await attendre();
+          if(zone().innerHTML.indexOf('Aucune photo de bilan')<0) return _echec('l\'état vide « Aucune photo de bilan » a disparu');
+          if(activer()!==0) return _echec('fonction masquée : l\'écran d\'accord s\'affiche');
+          return nb('#prog-photos-progression')===1
+            ?true:_echec(nb('#prog-photos-progression')+' zone(s) #prog-photos-progression');
+        } finally { currentUser=sauveU2; }
+      }));
+
       currentUser=sauveU;
     })();
 
