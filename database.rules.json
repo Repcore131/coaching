@@ -181,12 +181,14 @@
         },
 
         // ── L IDENTIFIANT NE BOUGE PLUS UNE FOIS POSE (27/09/2026) ─────────
+        // Un nombre est accepte : un dossier ancien qui en porte un serait
+        // sinon refuse EN ENTIER a chaque envoi, codes compris, sans un mot.
         // Il nomme le dossier des medias chez Cloudinary (repcore/<id>/...) et
         // /medias_proprio/<id> designe son titulaire : le serveur leger ne
         // supprime un media que pour ce titulaire ou son coach. Un id qu on
         // pourrait changer ferait passer un compte pour un autre.
         "id": {
-          ".validate": "newData.isString() && newData.val().length < 40 && (!data.exists() || data.val() === newData.val())"
+          ".validate": "((newData.isString() && newData.val().length < 40) || newData.isNumber()) && (!data.exists() || data.val() === newData.val())"
         },
         // ET NE S EFFACE PAS NON PLUS : un .validate ne joue pas sur un null,
         // la regle ci-dessus laisserait donc retirer l id pour en reposer un
