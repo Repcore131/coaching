@@ -14370,8 +14370,10 @@ async function testExercices(){
           // Vidéo d'exécution, photos de bilan, photo du coach, fiche
           // programme PDF : aucun rapport avec l'import de séance, et les
           // couper aurait été le vrai dégât collatéral.
+          // uploadCoachPdfInline a été retirée avec la carte PDF inline : aucun
+          // appelant ne reste (seul un commentaire la nomme encore).
           for(const nom of ['uploadVideoFile','addBilanPhoto','uploadCoachPhoto',
-                            'uploadAthletePdf','uploadCoachPdfInline','loadExImage']){
+                            'uploadAthletePdf','loadExImage']){
             if(typeof window[nom]!=='function') return _echec('disparue : '+nom);
             if(String(window[nom]).indexOf('_importLegacyOuvert')>=0)
               return _echec(nom+' a été gardée à tort');
@@ -16686,7 +16688,7 @@ async function testExercices(){
             }
             // Le partage retombe sur le téléchargement quand il n'existe pas :
             // on ne laisse pas l'athlète sans rien.
-            return String(partagerBilanSeance).indexOf('telechargerBilanSeance()')>=0
+            return /telechargerBilanSeance\(/.test(String(partagerBilanSeance))
               ?true:_echec('le partage ne retombe sur rien');})());
 
           ok('Les records viennent de l\'écran de fin, et c\'est un TABLEAU',(()=>{
@@ -22020,11 +22022,16 @@ async function testExercices(){
     ok('Phase valide : rendue telle quelle',phaseCourante(_mkPh('seche',10)).type==='seche');
     ok('Type inconnu : neutre',phaseCourante({phase:{type:'peakweek',debut:Date.now()}})===null);
     ok('Phase sans date de début : neutre',phaseCourante({phase:{type:'seche'}})===null);
+    // La peak week existe depuis : posée par le COACH seul, et RepCore n'en
+    // calcule aucun protocole. L'athlète choisit toujours parmi les quatre.
     ok('Les quatre types, et seulement eux',
-       JSON.stringify(Object.keys(PHASES))==='["masse","seche","recomp","maintien"]',
-       JSON.stringify(Object.keys(PHASES)));
+       JSON.stringify(PHASES_ATHLETE)==='["masse","seche","recomp","maintien"]'
+       &&JSON.stringify(Object.keys(PHASES))==='["masse","seche","recomp","maintien","peak"]',
+       JSON.stringify(Object.keys(PHASES))+' / '+JSON.stringify(PHASES_ATHLETE));
     ok('Aucune phase de compétition n\'est proposée',
-       !/peak|comp[eé]tition|dessiccation|sodium|manipulation hydrique/i.test(JSON.stringify(PHASES)));
+       !/dessiccation|sodium|manipulation hydrique|diur[eé]tique/i.test(JSON.stringify(PHASES))
+       &&PHASES_ATHLETE.indexOf('peak')<0
+       &&/aucun protocole/i.test(PHASES.peak.texte));
     ok('Semaine 1 le premier jour',semainesPhase(_mkPh('masse',0))===1);
     ok('Semaine 7 au quarante-quatrième jour',semainesPhase(_mkPh('masse',44))===7,
        String(semainesPhase(_mkPh('masse',44))));
@@ -22213,7 +22220,7 @@ async function testExercices(){
         // quel par ouvrirChoixPhase, et c'est lui qu'on vérifie.
         ok('L\'accueil n\'affiche plus la carte de choix de phase',zP.innerHTML==='');
         ok('Le formulaire de choix reste complet',
-           /Ta phase/.test(_htmlChoixPhase())&&Object.keys(PHASES).every(t=>_htmlChoixPhase().includes(PHASES[t].lib)));
+           /Ta phase/.test(_htmlChoixPhase())&&PHASES_ATHLETE.every(t=>_htmlChoixPhase().includes(PHASES[t].lib)));
         ok('Sans phase : aucun bandeau',zB.innerHTML==='');
         ok('Sans phase : aucune relance',zR.innerHTML==='');
         // Comparaison au texte BRUT : escapeHtml encode l'apostrophe en &#39;
@@ -22222,8 +22229,8 @@ async function testExercices(){
         // Sortie BRUTE du formulaire : elle est encodée par escapeHtml, donc
         // on compare à la version encodée et non au texte source.
         ok('Les quatre textes sont repris tels quels',
-           Object.keys(PHASES).every(t=>_htmlChoixPhase().includes(escapeHtml(PHASES[t].texte))),
-           Object.keys(PHASES).filter(t=>!_htmlChoixPhase().includes(escapeHtml(PHASES[t].texte))).join(' '));
+           PHASES_ATHLETE.every(t=>_htmlChoixPhase().includes(escapeHtml(PHASES[t].texte))),
+           PHASES_ATHLETE.filter(t=>!_htmlChoixPhase().includes(escapeHtml(PHASES[t].texte))).join(' '));
         ok('Aucun bouton Confirmer actif sans sélection',/disabled/.test(_htmlChoixPhase()));
 
         // Critère 8 : deb-goals « prise de masse propre » pré-sélectionne, sans appliquer.
@@ -23515,7 +23522,9 @@ async function testExercices(){
         if(pl.abs!==KCAL_PLANCHER_ABS.F) return _echec('plancher absolu '+pl.abs+' au lieu de '+KCAL_PLANCHER_ABS.F);
         // Et il doit lire le sexe comme besoinsProposes, pas autrement.
         const bes=besoinsProposes(u,{});
-        const mbF=Math.round(10*48+6.25*162-5*29-161);
+        // La formule retenue (Harris-Benedict depuis le 07/09/2026), en FEMME.
+        const mbF=mbEstime(48,162,29,'Femme');
+        if(mbF===mbEstime(48,162,29,'Homme')) return _echec('fixture muette : la formule ignore le sexe');
         return bes.mb===mbF&&pl.kcal===Math.max(1200,Math.round(22*48));})());
       ok('Le plancher tient même sans taille ni poids connus',(()=>{
         const u=_ath('seche',-0.15);
@@ -24326,7 +24335,9 @@ async function testExercices(){
         // Elle est posée au bilan de départ et pas redonnée à chaque suivi.
         const u=_ath({bilans:[_bil(200,{'deb-job':'Maçon'}),_bil(60),_bil(2)]});
         const b=besoinsProposes(u);
-        return b.modele==='profession'&&b.act.niveau==='lourd';})());
+        // Le niveau est celui de l'échelle du tableur : un métier « lourd » y vaut « actif ».
+        return b.modele==='profession'&&b.act.niveau===NAF_DEPUIS_METIER.lourd
+          ?true:_echec(b.modele+' / '+b.act.niveau);})());
       ok('Les sports déclarés s\'ajoutent en kcal, pas en facteur',(()=>{
         const sansSport=_ath({bilans:[_bil(2,{'deb-job':'Comptable'})]});
         const avec=_ath({bilans:[_bil(2,{'deb-job':'Comptable',
@@ -24354,7 +24365,7 @@ async function testExercices(){
         // 6 créneaux × 1 h × 350 = 2100 ; déclaré 4 h × 350 = 1400. La somme
         // serait 3500 : c'est exactement ce qu'on refuse.
         if(sp.semaine!==2100) return _echec('semaine '+sp.semaine);
-        return b.depense===Math.round(b.mb*1.15)+Math.round(2100/7)
+        return b.depense===Math.round(b.mb*nafRetenu(u).n.f)+Math.round(2100/7)
           ?true:_echec('dépense '+b.depense);})());
       ok('Plus de créneaux, plus de dépense — les créneaux comptent enfin',(()=>{
         const bil={'deb-job':'Comptable'};
@@ -24395,7 +24406,9 @@ async function testExercices(){
         // la première version de ce test comparait donc deux athlètes qui
         // retombaient tous les deux sur le NEAT par défaut, et un écart nul
         // valait vrai. Le métier retenu est vérifié ci-dessous.
-        const METIER='Secrétaire';
+        // Un métier ASSIS vaut désormais le NEAT par défaut (1,2 des deux côtés) :
+        // la comparaison se fait donc avec un métier actif.
+        const METIER='Infirmier';
         if(!facteurProfession(METIER)) return _echec('fixture muette : '+METIER+' non reconnu');
         if(facteurProfession('Zzz')) return _echec('fixture muette : Zzz est reconnu');
         const connu=besoinsProposes(_ath({bilans:[_bil(2,{'deb-job':METIER,'deb-sports':sp})]}));
@@ -24729,11 +24742,11 @@ async function testExercices(){
       ok('Critère 2 : mensurations complètes → Katch',(()=>{
         const b=besoinsProposes(_ath());
         return b.source==='katch';})());
-      ok('Critère 2 : sans tours de mesure mais poids/taille/âge/sexe → Mifflin',(()=>{
+      ok('Critère 2 : sans tours de mesure mais poids/taille/âge/sexe → la formule retenue',(()=>{
         const u=_ath({bilans:[{type:'suivi',date:Date.now()-2*864e5,
           'deb-weight':'80','deb-height':'178','deb-age':'32','deb-gender':'Homme'}]});
         const b=besoinsProposes(u);
-        return b.source==='mifflin';})());
+        return b.source===MB_FORMULE?true:_echec('source '+b.source+' au lieu de '+MB_FORMULE);})());
       ok('Critère 1 : sans taille, source vaut null et rien n\'est proposé',(()=>{
         const u=_ath({_evol_height:null,height:null,
           bilans:[{type:'suivi',date:Date.now()-2*864e5,
@@ -30518,12 +30531,13 @@ async function testExercices(){
     // VINGT-NEUF SONT FILMEES, et quatorze ne le sont pas — le guide ne leur
     // donne aucun lien. Un lien invente serait pire : le selecteur n'affiche la
     // pastille que s'il y en a un, et une pastille qui n'ouvre rien ment.
+    // `video` (chaîne) est devenu `videos` (tableau) avec le guide du 06/09/2026.
     ok('Vingt-neuf méthodes portent la vidéo du coach',
-       Object.values(TECHNIQUES).filter(t=>/^https:\/\/youtu\.be\//.test(t.video)).length===29,
-       String(Object.values(TECHNIQUES).filter(t=>t.video).length));
+       Object.values(TECHNIQUES).filter(t=>(t.videos||[]).some(v=>/^https:\/\/youtu\.be\//.test(v))).length===29,
+       String(Object.values(TECHNIQUES).filter(t=>(t.videos||[]).length).length));
     ok('Aucune vidéo inventée : ou un lien YouTube, ou rien',
-       Object.values(TECHNIQUES).every(t=>t.video===''||/^https:\/\/youtu\.be\/[\w-]+$/.test(t.video)),
-       String((Object.values(TECHNIQUES).find(t=>t.video&&!/^https:\/\/youtu\.be\/[\w-]+$/.test(t.video))||{}).video||''));
+       Object.values(TECHNIQUES).every(t=>Array.isArray(t.videos)&&t.videos.every(v=>/^https:\/\/youtu\.be\/[\w-]+$/.test(v))),
+       String(Object.values(TECHNIQUES).flatMap(t=>t.videos||[]).find(v=>!/^https:\/\/youtu\.be\/[\w-]+$/.test(v))||''));
     // AUCUNE METHODE HORS DU GUIDE. La sonde citait quatre noms interdits — dont
     // « occlusion » et « cluster », que le guide du 26/08 apporte pour de bon :
     // une liste de proscrits ne peut pas dire ce qui est legitime. On epingle
@@ -40354,8 +40368,11 @@ async function testExercices(){
           if(!c.nutrition) c.nutrition={};
           c.nutrition.manuel=false;
           renderCoachNutriSection(getOwnedClient('Ap'));
-          const lire=()=>{ const e=document.getElementById('ccd-on-kcal');
-            return e?Number(e.value):null; };
+          // En calcul automatique la grille n'a plus de champ : le chiffre est
+          // ECRIT (« jour d'entraînement 2 101 kcal »). On lit ce que le coach voit.
+          const lire=()=>{ const e=document.getElementById('ccd-nutrition');
+            const m=((e&&e.innerText)||(e&&e.textContent)||'').match(/jour d.entraînement ([\d\s\u202f\u00a0]+?) kcal/);
+            return m?Number(m[1].replace(/\D/g,'')):null; };
           const avant=lire();
           if(!(avant>0)) return _echec('aucune cible avant le changement');
           coachSetPhase('masse');
@@ -63486,8 +63503,12 @@ async function testExercices(){
           const el=document.getElementById('ccd-nutrition');
           if(!el) return _echec('section absente du DOM');
           if(document.getElementById('ccd-on-s')) return _echec('le champ SUCRE est encore là');
-          // Les fibres, elles, restent affichées dans le journal : on les garde.
-          return !!document.getElementById('ccd-on-f')
+          // Les fibres, elles, restent : une ligne calculée, et un champ quand
+          // le coach saisit ses cibles à la main.
+          // La fixture n'a pas de bilan : le tableau ne se calcule pas. C'est
+          // son rendu qu'on lit — une ligne Fibres, un champ en saisie manuelle.
+          const src=String(_htmlTableauxTableur);
+          return /'Fibres'/.test(src)&&src.indexOf("'ccd-on-f'")>=0
             ?true:_echec('les fibres ont disparu avec le sucre');
         } finally { currentUser=sauve; }})());
       ok('L\'enregistrement des macros n\'écrit plus de sucre',(()=>{
@@ -69458,42 +69479,44 @@ async function testExercices(){
           const c=planCiblesJour(u,true,null);
           return c.kcal===2600
             ?true:_echec('les cibles sont encore multipliees : '+c.kcal+' au lieu de 2600');})());
+        // ⚠ LES PALIERS ONT ETE RETIRES le 08/09/2026 avec la periodisation
+        //   (voir planCiblesJour) : « plus aucun multiplicateur de palier ». Ces
+        //   assertions verrouillent desormais l'inverse — aucune phase, aucun
+        //   plan ancien ne refrappe les chiffres du coach.
         ok('Sans phase déclarée, aucun palier et aucun multiplicateur',(()=>{
           const u=_pa({nutrition:_macros({kcal:2600,p:200,g:300,l:70,f:36})});
           const c=planCiblesJour(u,true,null);
-          return (c.palier===null&&c.mult===1&&c.kcal===2600&&c.p===200&&c.c===300)
+          return (!(c.mult>0&&c.mult!==1)&&!c.palier&&c.kcal===2600&&c.p===200&&c.c===300)
             ?true:_echec(JSON.stringify(c));})());
-        ok('Le multiplicateur agit sur les GLUCIDES, protéines et lipides intacts',(()=>{
+        ok('En sèche, AUCUN palier ne refrappe les chiffres du coach',(()=>{
+          // Avant le 08/09 : 3374 × 0,85 = 2868, une seconde réduction que rien
+          // à l'écran ne montrait. Le plan sert désormais les chiffres de la fiche.
           const u=_pa({phase:_phase('seche',1),
             nutrition:_macros({kcal:3374,p:253,g:316,l:122,f:47})});
           const c=planCiblesJour(u,true,null);
-          // 3374 × 0,85 = 2868 ; protéines et lipides gardent leurs grammes
-          if(c.p!==253||c.l!==122) return _echec('P/L touchés : '+c.p+'/'+c.l);
-          if(c.c>=316) return _echec('les glucides n\'ont pas baissé : '+c.c);
-          return Math.abs(c.kcal-2868)<=4?true:_echec('kcal '+c.kcal);})());
+          return (c.kcal===3374&&c.p===253&&c.l===122&&c.c===316)
+            ?true:_echec(JSON.stringify(c));})());
         ok('Les fibres suivent les calories réellement servies',(()=>{
           const u=_pa({phase:_phase('seche',1),
             nutrition:_macros({kcal:3374,p:253,g:316,l:122,f:47})});
           const c=planCiblesJour(u,true,null);
           return c.f===Math.round(FIBRES_PAR_1000*c.kcal/1000)?true:_echec(String(c.f));})());
-        ok('Le palier ne descend JAMAIS sous le plancher calorique',(()=>{
+        ok('En fin de sèche, aucun palier ne creuse sous les chiffres du coach',(()=>{
+          // Semaine 30 : l'ancien dernier palier (× 0,65) aurait servi 1 300 kcal.
           const u=_pa({phase:_phase('seche',30),
             nutrition:_macros({kcal:2000,p:120,g:200,l:50,f:28})});
           const c=planCiblesJour(u,true,null);
-          const pl=plancherKcal(u);
-          if(!(pl>0)) return _echec('plancher illisible');
-          return (c.kcal>=pl&&c.plancherAtteint===true)
-            ?true:_echec('kcal '+c.kcal+' pour un plancher de '+pl);})());
+          return c.kcal===2000?true:_echec('kcal '+c.kcal+' au lieu des 2000 du coach');})());
         ok('Sans objectif enregistré, rien n\'est inventé',(()=>{
           const u=_pa({phase:_phase('seche',1)});
           const c=planCiblesJour(u,true,null);
           return (c.kcal===null&&c.p===null)?true:_echec(JSON.stringify(c));})());
-        ok('Les paliers du plan priment sur ceux de la phase',(()=>{
+        ok('Un plan ancien qui portait des paliers ne les réveille pas',(()=>{
           const u=_pa({phase:_phase('seche',1),
             nutrition:Object.assign(_macros({kcal:3000,p:200,g:300,l:80,f:42}),
-              {plan:{phases:[{lib:'Perso',sem:null,mult:1}],squelette:[{id:'a',repas:'midi',src:'p'}]}})});
+              {plan:{phases:[{lib:'Perso',sem:null,mult:0.7}],squelette:[{id:'a',repas:'midi',src:'p'}]}})});
           const c=planCiblesJour(u,true,null);
-          return (c.mult===1&&c.kcal===3000)?true:_echec(JSON.stringify(c));})());
+          return c.kcal===3000?true:_echec(JSON.stringify(c));})());
 
         // ── Liste de courses : les deux #REF! du tableur ne peuvent pas revenir ──
         ok('Aucune ligne de courses ne peut porter une quantité illisible',(()=>{
@@ -69690,7 +69713,8 @@ async function testExercices(){
           if(!/Repas du midi/.test(h)) return _echec('les repas ne sont pas rendus');
           if(!/Volaille/.test(h)) return _echec('la source n\'est pas rendue');
           if(!/al dente/.test(h)) return _echec('la note de cuisson a disparu');
-          if(!/Semaines 1-2/.test(h)) return _echec('le palier n\'est pas annoncé');
+          // Les paliers sont retirés (08/09/2026) : plus aucun « Semaines 1-2 ».
+          if(/Semaines 1-2/.test(h)) return _echec('un palier est encore annoncé');
           return true;})());
         ok('L\'écran de l\'athlète ne porte AUCUN bouton de modification',(()=>{
           const u=_pa({nutrition:Object.assign(_macros({kcal:2600,p:200,g:300,l:70,f:36}),
@@ -69819,7 +69843,9 @@ async function testExercices(){
 
         ok('Les quatre modèles existent, un par phase et par sexe',(()=>{
           const c=Object.keys(PLAN_MODELES).sort().join(',');
-          return c==='masse_F,masse_H,seche_F,seche_H'?true:_echec(c);})());
+          // Un modèle par phase — les cinq, peak comprise — et par sexe.
+          const att=Object.keys(PHASES).flatMap(ph=>[ph+'_F',ph+'_H']).sort().join(',');
+          return c===att?true:_echec(c+' au lieu de '+att);})());
         ok('Le sexe et la phase choisissent le bon modèle, sans exception',(()=>{
           const faux=[];
           for(const [g,t,att] of [['H','seche','seche_H'],['F','seche','seche_F'],
@@ -69848,9 +69874,10 @@ async function testExercices(){
           }
           return faux.length?_echec(faux.join(', ')):true;})());
         ok('Une phase de recomposition n\'empêche plus de poser un modèle',(()=>{
+          // La recomposition a désormais SON modèle : la phase répond, elle prime.
           const u=_pa({gender:'F',phase:_phase('recomp',1),objective:'Perte de poids'});
           const s=planModeleSuggere(u);
-          if(s.cle!=='seche_F') return _echec(String(s.cle));
+          if(s.cle!=='recomp_F') return _echec(String(s.cle));
           return planDepuisModele(u,true)!==null?true:_echec('aucun plan construit');})());
         ok('La phase prime sur l\'objectif quand elle sait répondre',(()=>{
           const s=planModeleSuggere(_pa({gender:'H',phase:_phase('masse',1),
@@ -69865,14 +69892,13 @@ async function testExercices(){
             else if(m.modele!==k) faux.push(k+' → '+m.modele);
           }
           return faux.length?_echec(faux.join(', ')):true;})());
-        ok('Les paliers viennent du MODÈLE, pas de la phase déclarée',(()=>{
-          // Un athlète noté en recomposition à qui on pose une sèche doit
-          // recevoir 0,85 / 0,80 / 0,75 / 0,65, et non le « ×1 » de la
-          // recomposition qui ne périodise rien.
+        ok('Un modèle posé ne porte plus aucun palier',(()=>{
+          // Avant le 08/09 : 0,85 / 0,80 / 0,75 / 0,65. Le modèle pose désormais
+          // les repas et les sources, jamais un multiplicateur.
           const u=_pa({gender:'H',phase:_phase('recomp',1)});
           const m=planDepuisModele(u,true,'seche_H');
-          const mult=(m.phases||[]).map(x=>x.mult).join('/');
-          return mult==='0.85/0.8/0.75/0.65'?true:_echec(mult||'aucun palier');})());
+          if(!m||!(m.squelette||[]).length) return _echec('aucun plan construit');
+          return !(m.phases||[]).some(x=>x&&x.mult!==1)?true:_echec(JSON.stringify(m.phases));})());
         ok('Chaque modèle porte deux repas à source libre, protéines ET glucides',(()=>{
           const faux=[];
           for(const [cle,u] of [['seche_H',_pa({gender:'H',phase:_phase('seche',1)})],
@@ -72489,7 +72515,10 @@ vendredi 78 6h 44m
         return src.indexOf(motif)===-1?true
           :_echec('le refus sec sur le cache local est revenu dans doRegister');})());
       ok('_resizeImage ne peut plus rester sans réponse',(()=>{
-        const src=_sansCom(_resizeImage);
+        // Le décodage vit dans _decoderImage (IMG_DECODE_MS) : c'est lui qui
+        // porte les gestionnaires d'échec, _resizeImage garde son délai de garde.
+        const src=_sansCom(_resizeImage)+_sansCom(_decoderImage);
+        if(src.indexOf('_decoderImage(')===-1) return _echec('le décodage borné n’est plus utilisé');
         if(src.indexOf('on'+'error')===-1) return _echec('onerror manque');
         if(src.indexOf('on'+'abort')===-1) return _echec('onabort manque');
         return src.indexOf('setTimeout')!==-1?true
