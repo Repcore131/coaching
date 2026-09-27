@@ -178,6 +178,55 @@
 
         "coachEmailKey": {
           ".validate": "auth.token.email.replace('.', ',') === $emailKey || (data.exists() && newData.val() === data.val())"
+        },
+
+        // ── L IDENTIFIANT NE BOUGE PLUS UNE FOIS POSE (27/09/2026) ─────────
+        // Il nomme le dossier des medias chez Cloudinary (repcore/<id>/...) et
+        // /medias_proprio/<id> designe son titulaire : le serveur leger ne
+        // supprime un media que pour ce titulaire ou son coach. Un id qu on
+        // pourrait changer ferait passer un compte pour un autre.
+        "id": {
+          ".validate": "newData.isString() && newData.val().length < 40 && (!data.exists() || data.val() === newData.val())"
+        },
+        // ET NE S EFFACE PAS NON PLUS : un .validate ne joue pas sur un null,
+        // la regle ci-dessus laisserait donc retirer l id pour en reposer un
+        // autre. Celle-ci l interdit tant que le dossier existe.
+        ".validate": "!data.child('id').exists() || newData.child('id').val() === data.child('id').val()"
+      },
+      // Le serveur leger verifie qu aucun AUTRE dossier ne porte l id d un
+      // media avant de le supprimer : requete indexee, sans lire /users entier.
+      ".indexOn": ["id"]
+    },
+
+    // ── A QUI APPARTIENT repcore/<id>/... CHEZ CLOUDINARY (27/09/2026) ─────
+    // Ecrit UNE fois par le compte lui-meme, a sa creation (et a la premiere
+    // ouverture pour les comptes d avant) : la valeur est sa propre cle, et un
+    // index deja pose ne se reecrit plus. Lu par le serveur leger seul, qui ne
+    // passe pas par les regles. Un compte neuf qui recopierait l id d un autre
+    // et reclamerait l index avant lui est arrete la-bas : deux dossiers qui
+    // portent le meme id, et plus rien ne se supprime sous cet id.
+    "medias_proprio": {
+      "$id": {
+        ".read": false,
+        ".write": "auth != null && !data.exists() && newData.val() === auth.token.email.replace('.', ',')",
+        ".validate": "$id.matches(/^[A-Za-z0-9_-]{1,39}$/)"
+      }
+    },
+
+    // ── LES ATHLETES QU UN COACH RECONNAIT (27/09/2026) ───────────────────
+    // coachEmailKey est ecrit par l athlete : il y met qui il veut. Cette
+    // liste-ci est ecrite par le COACH, et seulement pour un athlete dont le
+    // dossier le designe deja. Le serveur leger exige les deux avant de
+    // laisser un coach supprimer un media de son athlete. Retirer une entree
+    // reste permis au coach a tout moment (detachement).
+    "coachs": {
+      "$coachKey": {
+        "clients": {
+          ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
+          "$athleteKey": {
+            ".write": "auth != null && auth.token.email.replace('.', ',') === $coachKey && (!newData.exists() || root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey)",
+            ".validate": "newData.val() === true"
+          }
         }
       }
     },

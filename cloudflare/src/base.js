@@ -92,6 +92,13 @@ export function creerBase({ url, auth, fetchImpl }) {
         }
         return instantane(cle, v);
       },
+      // Requête INDEXÉE, faite par le serveur de la base (".indexOn" requis) :
+      // pour les gros nœuds, où tout lire pour filtrer ici serait ruineux.
+      async parChamp(champ, valeur, limite) {
+        const v = await lireJson(await appel('GET', c, undefined, { orderBy: JSON.stringify(champ),
+          equalTo: JSON.stringify(valeur), limitToFirst: limite ? String(limite) : undefined }), c);
+        return v && typeof v === 'object' ? v : {};
+      },
       async shallow() {
         const v = await lireJson(await appel('GET', c, undefined, { shallow: 'true' }), c);
         return v && typeof v === 'object' ? Object.keys(v) : [];

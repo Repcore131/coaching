@@ -16,7 +16,7 @@ import { creerBase } from './base.js';
 import { creerMetier } from './metier.js';
 import { minute } from './planif.js';
 import { repondreAppel } from './appels.js';
-import { cloudinaryDestroy } from './medias.js';
+import { cloudinaryDestroy, compteCloudinary } from './medias.js';
 import { creerPaypal, recevoirWebhook, jetonPaypal } from './paypal.js';
 
 // Les fonctions appelées par l'app (protocole onCall, jeton Firebase vérifié).
@@ -99,7 +99,7 @@ export default {
           const k = String(env.CLOUDINARY_API_KEY || '').trim(), sec = String(env.CLOUDINARY_API_SECRET || '').trim();
           if (!k || !sec) r.cloudinary = 'non configuré';
           else {
-            const c = await fetch('https://api.cloudinary.com/v1_1/dntu57ml/ping', { headers: { Authorization: 'Basic ' + btoa(k + ':' + sec) } });
+            const c = await fetch('https://api.cloudinary.com/v1_1/' + compteCloudinary(env) + '/ping', { headers: { Authorization: 'Basic ' + btoa(k + ':' + sec) } });
             r.cloudinary = c.ok ? 'ok' : 'HTTP ' + c.status;
           }
         } catch (e) { r.cloudinary = 'injoignable'; }

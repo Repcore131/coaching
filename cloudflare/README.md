@@ -97,6 +97,22 @@ les pages publiques (`index.html`, `i/`, `p/`, `c/`), puis livrée : c'est ce qu
 Sans ces secrets, rien ne casse : `/paypal` refuse (signature invérifiable), et les suppressions
 de vidéos attendent dans la file de l'app jusqu'à ce que le serveur sache les faire.
 
+Le **nom du compte Cloudinary** vient du worker, jamais de l'app : secret facultatif
+`CLOUDINARY_CLOUD_NAME` (`npx wrangler@4 secret put CLOUDINARY_CLOUD_NAME`), `dntu57ml` à défaut.
+
+### Qui peut supprimer quoi
+
+`cloudinaryDestroy` ne croit rien de ce que l'app envoie, à part l'identifiant du média :
+
+- le propriétaire de `repcore/<id>/…` est lu dans `/medias_proprio/<id>` (écrit une seule fois par le
+  compte lui-même), et doit porter `users/<proprio>/id === <id>`, id qu'aucun autre dossier ne porte
+  (requête indexée sur `users/.indexOn: ["id"]`) ;
+- l'appelant est ce propriétaire, ou son coach : `users/<proprio>/coachEmailKey` le désigne **et**
+  `coachs/<coach>/clients/<proprio>` vaut `true` (liste écrite par le coach seul, et seulement pour un
+  athlète qui le désigne) ;
+- réponses : 400 (identifiant invalide) et 403 (pas le tien) sont définitives, l'app sort le média de
+  sa file ; 409 (propriétaire pas encore indexé) et 503 le laissent en file.
+
 ## Pas encore branché
 
 - **Le mois de mentorat** de l'Ultime (il vivait dans `droits/`, que le Worker n'écrit pas).
@@ -118,7 +134,7 @@ propre processus, l'un après l'autre, et le tout échoue si un seul échoue. Au
 | Fichier | Ce qu'il vérifie |
 |---|---|
 | `index.test.mjs` | le point d'entrée `fetch` : `OPTIONS /fn/cloudinaryDestroy` → 204 **sans corps** et en-têtes CORS ; `POST` sans jeton → 401 avec CORS ; aucune erreur ne sort sans CORS |
-| `appels.test.mjs` | le jeton Firebase (RS256) et la suppression Cloudinary |
+| `appels.test.mjs` | le jeton Firebase (RS256) et la suppression Cloudinary : propriétaire et coach réel acceptés, id usurpé et coach usurpé refusés (403), index absent (409), compte Cloudinary pris dans le worker |
 | `metier.test.mjs` | le métier sur une base en mémoire, budget de requêtes compris |
 | `paypal.test.mjs` | les webhooks PayPal (signature, paiement, résiliation) |
 | `push.test.mjs` | chiffrement RFC 8291 et jeton VAPID, vérifiés côté appareil |

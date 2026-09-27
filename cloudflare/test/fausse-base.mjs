@@ -1,5 +1,5 @@
 // Une Realtime Database en mémoire qui parle l'API REST (GET/PUT/PATCH/DELETE,
-// shallow, orderBy "$key" + limitToLast, ETag/if-match), et un faux service
+// shallow, orderBy "$key" + limitToLast, orderBy "<champ>" + equalTo, ETag/if-match), et un faux service
 // de push qui garde ce qu'il reçoit. Branchés sur un seul `fetch`.
 import crypto from 'node:crypto';
 
@@ -43,6 +43,13 @@ export function fausseBase(initial) {
       if (u.searchParams.get('orderBy') === '"$key"' && u.searchParams.get('limitToLast') && v && typeof v === 'object') {
         const n = Number(u.searchParams.get('limitToLast')); const o = {};
         for (const k of Object.keys(v).sort().slice(-n)) o[k] = v[k]; v = o;
+      }
+      const ob = u.searchParams.get('orderBy');
+      if (ob && ob !== '"$key"' && u.searchParams.has('equalTo')) {
+        const champ = JSON.parse(ob), eq = JSON.parse(u.searchParams.get('equalTo'));
+        const n = Number(u.searchParams.get('limitToFirst')) || Infinity; const o = {};
+        for (const k of Object.keys(v || {}).sort()) if (Object.keys(o).length < n && v[k] && v[k][champ] === eq) o[k] = v[k];
+        v = o;
       }
       return reponse(200, v, h['X-Firebase-ETag'] ? { ETag: etag(lire(p)) } : {});
     }
