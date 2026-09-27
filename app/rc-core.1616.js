@@ -1700,6 +1700,10 @@ function essaiFini(u){
 // qu'un endroit a ouvrir, et aucun des six ne peut etre oublie.
 function doitVoirLePaywall(u){
   if(!u||u.role==='coach') return false;
+  // UN ABONNEMENT QUE LE SERVEUR NE CONFIRME PAS n'évite plus l'écran de
+  // paiement : s'écrire AUTONOMIE_PREMIUM dans son dossier ne suffit plus
+  // quand droits/ a été lu (voir _palierHerite).
+  if(u.status==='AUTONOMIE_PREMIUM'&&droitsDe(u).etat!=='inconnu'&&palierDe(u)==='aucun') return !essaiActif(u);
   if((u.status||'FREE')!=='FREE') return false;
   return !essaiActif(u);
 }
@@ -4520,6 +4524,20 @@ const CLOUD={
       const d=txt?JSON.parse(txt):null;
       return {ok:true,droits:(d&&typeof d==='object')?d:null};
     }catch(e){ return {ok:false,raison:'reseau'}; }
+  },
+  // L'interrupteur de la bascule : posé par le script de rattrapage
+  // (remplir-paiements.mjs --ecrire) une fois droits/ rempli pour les abonnés
+  // d'avant. true, false (absent), ou null quand la lecture échoue.
+  async pullDroitsServeur(){
+    const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),6000);
+    try{
+      const token=await this._getToken();
+      if(!token) return null;
+      const r=await fetch(this._fbUrl.replace('users.json','reglages_publics/droitsServeur.json')+'?auth='+token,{signal:ctrl.signal});
+      if(!r.ok) return null;
+      const d=await r.json();
+      return !!(d&&Number(d.le)>0);
+    }catch(e){ return null; }
   },
   // ══ ECRIRE UN DROIT, DEPUIS L’APPLICATION (24/09/2026) ══════════════════
   //
@@ -7391,7 +7409,11 @@ function droitsDe(u){
     avant:(PALIERS_ORDRE.indexOf(String(d.avant))>0?String(d.avant):''),
     essaiOuvertLe:Number(d.essaiOuvertLe)||0,essaiFinit:Number(d.essaiFinit)||0,
     // Le mois d'Ultime offert au 10e filleul abonné (parrainage).
-    bonusUltimeFin:Number(d.bonusUltimeFin)||0};
+    bonusUltimeFin:Number(d.bonusUltimeFin)||0,
+    // Ultime ouvert par un programme acheté, par-dessus l'abonnement (serveur léger).
+    ultimeJusqu:Number(d.ultimeJusqu)||0,abo:d.abo||null,
+    // Ce qu'une fermeture à la main a remplacé, pour que « Rouvrir » le rende.
+    avantEcheance:Number(d.avantEcheance)||0,avantSource:d.avantSource||null};
 }
 // ⚠ UN NOEUD VIDE NE FERME RIEN, ET C'EST LA CORRECTION DU 24/09/2026.
 //
@@ -7426,10 +7448,16 @@ function palierDe(u){
     // LE MOIS D'ULTIME DU PARRAINAGE s'ajoute PAR-DESSUS le palier payé, sans
     // le remplacer : un renouvellement Essentielle pendant ce mois ne le
     // referme pas, et il retombe seul à sa date.
-    if(d.bonusUltimeFin>Date.now()&&PALIERS_ORDRE.indexOf(p)<PALIERS_ORDRE.indexOf('ultime')) return 'ultime';
-    return p;
+    // UN PROGRAMME ACHETÉ, de même (ultimeJusqu, posé par le serveur léger).
+    const p2=(Math.max(Number(d.bonusUltimeFin)||0,Number(d.ultimeJusqu)||0)>Date.now()&&PALIERS_ORDRE.indexOf(p)<PALIERS_ORDRE.indexOf('ultime'))?'ultime':p;
+    // LE SUIVI D'UN COACH NE PASSE PAS PAR PayPal : un ancien abonné, suivi
+    // depuis, garde son suivi même si droits/ ne porte que l'abonnement. Pas
+    // quand droits/ a été posé À LA MAIN : une fermeture du créateur tient.
+    const auto=(d.source==='paypal'||d.source==='parrainage');
+    const h=(auto&&String(u.status)==='COACHING_SUIVI')?_palierHerite(u,'absent'):'aucun';
+    return PALIERS_ORDRE.indexOf(h)>PALIERS_ORDRE.indexOf(p2)?h:p2;
   }
-  return _palierHerite(u);
+  return _palierHerite(u,d.etat);
 }
 // LE MODELE DU DOSSIER, ET IL N'EST PLUS EN SURSIS. Il servait « le temps que
 // les regles soient deployees et que la migration ait tourne » : sans plan
@@ -7441,11 +7469,28 @@ function palierDe(u){
 //   dossier : qui sait ouvrir une console de navigateur peut s'ecrire
 //   status:'AUTONOMIE_PREMIUM'. C'est le meme arbitrage qu'avant le lot 0,
 //   assume, et la seule barriere reelle reste droits/, ecrit a la main.
-function _palierHerite(u){
+//
+// ⚠ DEPUIS LE 27/09/2026, LE SERVEUR LÉGER ÉCRIT droits/ À CHAQUE PAIEMENT.
+//   Ce que le dossier dit avoir PAYÉ (abonnement, programme) ne compte donc
+//   plus dès que droits/ a pu être lu : un nœud vide veut dire « rien de payé
+//   côté serveur », et effacer accessExpiry ou s'écrire AUTONOMIE_PREMIUM dans
+//   son propre dossier n'ouvre plus rien. Deux exceptions, le temps de la
+//   transition :
+//     · droits/ jamais lu (`etat` 'inconnu' : hors ligne à la première
+//       ouverture, règles pas encore publiées) : l'ancien modèle, entier ;
+//     · un paiement fait SUR CET APPAREIL il y a moins de 72 h
+//       (paiementRecent) : le webhook de PayPal n'a peut-être pas encore
+//       écrit droits/, et quelqu'un qui vient de payer ne doit pas trouver
+//       la porte fermée.
+//   Le suivi par un coach (COACHING_SUIVI) n'est pas un paiement PayPal : il
+//   reste lu ici.
+function _palierHerite(u,etat){
   const s=String((u&&u.status)||'FREE');
   const ech=Number(u&&u.accessExpiry)||0;
   if(ech>0&&Date.now()>=ech) return 'aucun';
   if(s==='COACHING_SUIVI') return 'suivi';
+  const payeCru=(etat!=='absent')||!droitsServeurActif()||paiementRecent(u);
+  if(!payeCru) return 'aucun';
   if(s==='AUTONOMIE_PREMIUM'&&u.paymentStatus==='active'){
     // LA FORMULE PAYEE, quand le dossier la porte. Les dossiers ouverts avant
     // le 24/09/2026 n'en ont pas : ils valent Essentielle, qui est ce qu'ils
@@ -7457,6 +7502,38 @@ function _palierHerite(u){
   // sursis que le reste de ce repli : le serveur decidera des qu'il parlera.
   if(programmeOuvreUltime(u)) return 'ultime';
   return 'aucun';
+}
+// ⚠ LA BASCULE NE SE FAIT QU'UNE FOIS LE RATTRAPAGE PASSÉ. Tant que le script
+//   remplir-paiements.mjs n'a pas écrit droits/ pour les abonnés d'avant (et
+//   posé reglages_publics/droitsServeur), un nœud vide ne prouve rien : ce
+//   sont eux, justement, qui n'en ont pas. Le dossier décide alors comme avant.
+//   Lu une fois par session avec droits/, et gardé : un réglage qui passe à
+//   vrai n'a pas de raison de revenir en arrière.
+const DROITS_SERVEUR_CLE='rc_droits_serveur';
+function droitsServeurActif(){ try{ return localStorage.getItem(DROITS_SERVEUR_CLE)==='1'; }catch(e){ return false; } }
+let _droitsServeurLu=false;
+async function rafraichirDroitsServeur(){
+  if(_droitsServeurLu||droitsServeurActif()) return;
+  const v=await CLOUD.pullDroitsServeur().catch(()=>null);
+  if(v===null) return;
+  _droitsServeurLu=true;
+  if(v){ try{ localStorage.setItem(DROITS_SERVEUR_CLE,'1'); }catch(e){} }
+}
+// LA PREUVE LOCALE D'UN PAIEMENT QUI VIENT D'ABOUTIR, pour 72 heures : posée
+// par onApprove (abonnement) et par l'achat d'un programme, sur l'appareil qui
+// a payé. Elle ne voyage pas avec le dossier : la trafiquer ne vaut que pour
+// cet appareil, et trois jours.
+const PAIEMENT_RECENT_CLE='rc_paiement_recent';
+const PAIEMENT_RECENT_MS=72*3600000;
+function paiementRecentNoter(u,quoi){
+  try{ if(u&&u.email) localStorage.setItem(PAIEMENT_RECENT_CLE,JSON.stringify({email:String(u.email).toLowerCase(),le:Date.now(),quoi:String(quoi||'')})); }catch(e){}
+}
+function paiementRecent(u,maintenant){
+  try{
+    const o=JSON.parse(localStorage.getItem(PAIEMENT_RECENT_CLE)||'null');
+    const t=Number(maintenant)||Date.now();
+    return !!(o&&u&&u.email&&o.email===String(u.email).toLowerCase()&&t-Number(o.le)>=0&&t-Number(o.le)<PAIEMENT_RECENT_MS);
+  }catch(e){ return false; }
 }
 // PURE. Un programme achete, encore dans sa fenetre. Rend false sur un dossier
 // sans achat, ce qui est le cas de presque tout le monde.
@@ -7484,6 +7561,7 @@ async function rafraichirDroits(u,force){
   if(!mail||(cible&&cible.role==='coach')) return false;
   const o=_droitsLus(mail);
   if(!force&&o&&(Date.now()-Number(o.lu||0))<DROITS_FRAIS_MS) return true;
+  try{ await rafraichirDroitsServeur(); }catch(e){}
   let r=null;
   try{ r=await CLOUD.pullDroits(mail); }catch(e){ r=null; }
   if(!r||!r.ok) return false;
@@ -7542,14 +7620,26 @@ function nomDuPalier(p){
 //   'ouvrir'     pose le palier demandé pour `mois` mois (0 = sans fin)
 //   'prolonger'  garde le palier, repousse l’échéance de `mois` mois
 //   'suspendre'  palier 'aucun', et GARDE dans `avant` ce qui était ouvert
-//   'rendre'     null, c’est-à-dire : efface le nœud, le dossier redécide
+//   'rendre'     après une fermeture à la main : rend ce qu’elle avait
+//                remplacé (palier, échéance, source) ; sinon null, c’est-à-
+//                dire efface le nœud (le serveur léger le repose au prochain
+//                événement PayPal)
 // `d` est ce que droitsDe rend — y compris {etat:'absent'} quand le nœud est
 // vide, ce qui est le cas de presque tout le monde.
 function accesCalcul(action,d,opt){
   const o=opt||{};
   const now=Number(o.maintenant)||Date.now();
-  if(action==='rendre') return null;
   const actuel=(d&&d.etat==='serveur')?d:null;
+  if(action==='rendre'){
+    // UNE FERMETURE SUR UN ACCÈS PAYPAL SE DÉFAIT EN LE RENDANT TEL QU’IL
+    // ÉTAIT. Effacer le nœud le fermerait : depuis que droits/ porte les
+    // paiements, un nœud vide veut dire « rien de payé ».
+    if(actuel&&actuel.source==='suspension'&&actuel.avantSource)
+      return {palier:(PALIERS_ORDRE.indexOf(String(actuel.avant))>0?String(actuel.avant):'essentielle'),
+        echeance:Number(actuel.avantEcheance)||0,source:String(actuel.avantSource),
+        avant:null,avantEcheance:null,avantSource:null,maj:now};
+    return null;
+  }
   const pal=actuel?String(actuel.palier||'aucun'):'aucun';
   const mois=(o.mois==null)?1:Number(o.mois);
   if(action==='suspendre'){
@@ -7558,7 +7648,9 @@ function accesCalcul(action,d,opt){
     const avant=(pal!=='aucun')?pal
       :((PALIERS_ORDRE.indexOf(String(actuel&&actuel.avant))>0)?String(actuel.avant)
         :((PALIERS_ORDRE.indexOf(String(o.avant))>0)?String(o.avant):'essentielle'));
-    return {palier:'aucun',echeance:0,source:'suspension',avant:avant,maj:now};
+    const garde=(actuel&&pal!=='aucun'&&actuel.source&&actuel.source!=='suspension')
+      ?{avantEcheance:Number(actuel.echeance)||0,avantSource:String(actuel.source)}:{};
+    return Object.assign({palier:'aucun',echeance:0,source:'suspension',avant:avant,maj:now},garde);
   }
   // L’ÉCHÉANCE REPART DE LA PLUS TARDIVE DES DEUX. Prolonger d’un mois le 3,
   // alors que l’accès court jusqu’au 28, doit donner le 28 du mois suivant et
@@ -7580,7 +7672,7 @@ function accesEtatPhrase(d,maintenant){
   if(!d||d.etat==='inconnu')
     return {cle:'inconnu',phrase:'Pas encore lu',couleur:'var(--sub)',verifier:false};
   if(d.etat==='absent')
-    return {cle:'absent',phrase:'Rien de posé ici : son dossier décide',
+    return {cle:'absent',phrase:'Rien de payé côté serveur : seul un suivi coach ouvre l’accès',
       couleur:'var(--sub)',verifier:false};
   const pal=String(d.palier||'aucun');
   if(pal==='aucun')
@@ -7644,7 +7736,7 @@ async function accesAgir(action,email,opt){
   const dit=(action==='suspendre')
     ?('Fermer l’accès de '+mail+' ? Rien n’est effacé, et tu le rouvres quand tu veux.')
     :((action==='rendre')
-      ?('Rouvrir l’accès de '+mail+' ? Son dossier reprend la main : abonnement ou suivi, selon ce qu’il a.')
+      ?('Rouvrir l’accès de '+mail+' ? Ce que la fermeture avait remplacé revient (abonnement PayPal compris) ; sinon, seul un suivi coach l’ouvre.')
       :((action==='prolonger')
         ?('Prolonger l’accès de '+mail+' d’un mois ?')
         :('Ouvrir '+nomDuPalier(champs.palier)+' à '+mail
@@ -37881,6 +37973,7 @@ function _enregistrerAchat(id,ordre){
   //   vaut un champ du dossier : le meme arbitrage, deja assume, que pour
   //   `status` et `programmesAchetes` eux-memes.
   const mois=(offre('boutique_prog')||{}).mois||3;
+  paiementRecentNoter(currentUser,'programme');
   currentUser.programmesAchetes[p.id]={le:t,prixCts:p.prixCts,
     ordre:String(ordre||'').slice(0,64),ouvertJusqu:t+mois*30*86400000};
   saveUser();
@@ -112135,6 +112228,7 @@ function renderPaypalButton(planId,coachId){
         if(!_estCoach) currentUser.status='AUTONOMIE_PREMIUM';
         currentUser.paymentStatus='active';
         currentUser.paypalSubscriptionId=data.subscriptionID;
+        paiementRecentNoter(currentUser,'abonnement');
         // LE PALIER PAYÉ, ÉCRIT DANS LE DOSSIER. `coachPlan` n’était écrit
         // qu’à l’inscription : un coach qui payait dix-neuf euros restait au
         // palier `libre`, quota UN athlète. coachPlanDe et getCoachQuota lisent

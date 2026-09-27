@@ -31,6 +31,7 @@
 const API = 'https://api-m.paypal.com';
 const MOIS_MS = 30 * 864e5;
 const EN_COURS_MAX_MS = 10 * 60 * 1000;
+const PROGRAMME_MS = 3 * MOIS_MS;          // OFFRES.boutique_prog.mois de l'app
 const cleEmail = (e) => String(e || '').toLowerCase().trim().replace(/\./g, ',');
 const net = (s) => String(s || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
 const centimes = (v) => { const n = Number(v); return Number.isFinite(n) ? Math.round(n * 100) : NaN; };
@@ -183,6 +184,23 @@ export function creerPaypal(ctx) {
     return n;
   }
 
+  // ── droits/<compte>, CE QUE L'APP LIT D'ABORD (27/09/2026) ──────────────
+  // Chaque changement (paiement, résiliation, fin, remboursement, achat) y
+  // est écrit EN PLUS du dossier : le dossier, son titulaire l'écrit ; ce
+  // nœud, seul le créateur (et ce serveur, en administrateur). Les coachs
+  // n'en ont pas : leur palier est coachPlan, et l'app ne lit pas droits/
+  // pour eux. Un accès posé à la main par le créateur n'est pas réécrit
+  // (voir majDroits, metier.js).
+  const PALIERS_OUVERTS = ['essentielle', 'ultime', 'suivi'];
+  const palierPaye = (x, plan) => (x && x.palier === 'suivi') ? 'suivi'
+    : (plan && plan.formule) || (x && PALIERS_OUVERTS.indexOf(String(x.palier)) >= 0 ? String(x.palier) : 'essentielle');
+  async function droitsOuverts(cle, abo, plan) {
+    return M.majDroits(cle, (x) => ({ palier: palierPaye(x, plan), echeance: 0, source: 'paypal', abo: abo || (x && x.abo) || null }));
+  }
+  async function droitsJusqua(cle, abo, plan, fin) {
+    return M.majDroits(cle, (x) => ({ palier: palierPaye(x, plan), echeance: fin, source: 'paypal', abo: abo || (x && x.abo) || null }));
+  }
+
   // EST-CE L'ABONNEMENT COURANT DU DOSSIER ? Celui que paypalSubscriptionId
   // désigne ; à défaut d'en désigner un (l'app n'a pas encore envoyé le
   // dossier), celui dont PayPal atteste qu'il a été créé pour ce compte.
@@ -215,6 +233,7 @@ export function creerPaypal(ctx) {
       ['paypal_fins/' + cle]: Object.assign({}, finNotee || {}, { fin, type, le: t, role: role === 'coach' ? 'coach' : 'athlete', reserve: reserveComptee, abo: abo || null }) };
     if (role !== 'coach' && statut === 'AUTONOMIE_PREMIUM') maj['users/' + cle + '/accessExpiry'] = fin;
     await db.ref().update(maj);
+    if (role !== 'coach') await droitsJusqua(cle, abo, sub && OFFRES_PAYPAL[sub.plan_id], fin);
     return { fin, reserve: reserveComptee };
   }
 
@@ -245,6 +264,7 @@ export function creerPaypal(ctx) {
         maj[b + 'abonnement/formule'] = plan.formule;
       }
       await db.ref().update(maj);
+      if (role !== 'coach') await droitsOuverts(cle, abo, plan);
       // Les mois offerts ajoutés à une fin qui disparaît retournent en réserve.
       const recules = Number(finNotee && finNotee.moisRecules) || 0;
       if (recules > 0) await db.ref('parrainage/comptes/' + cle + '/moisEnReserve').transaction((n) => (Number(n) || 0) + recules);
@@ -279,6 +299,13 @@ export function creerPaypal(ctx) {
       && devise(pu.amount) === 'EUR' && devise(ress.amount) === 'EUR'
       && centimes(pu.amount.value) === Number(prixCts) && centimes(ress.amount.value) === Number(prixCts);
     const premier = valide ? await premierPaiement(cle, null, ress) : false;
+    // LE PROGRAMME OUVRE ULTIME TROIS MOIS, par-dessus le palier de
+    // l'abonnement (ultimeJusqu), sans le remplacer.
+    if (valide) {
+      const t = now();
+      await M.majDroits(cle, (x) => ({ palier: (x && x.palier) || 'aucun', echeance: Number(x && x.echeance) || 0, source: (x && x.source) || 'paypal',
+        ultimeJusqu: Math.max(Number(x && x.ultimeJusqu) || 0, t) + PROGRAMME_MS }));
+    }
     await noterTransaction(ress.id, { cle, prog: prog || null, commande: idCommande, type: 'programme', premier,
       montant: centimes(ress.amount && ress.amount.value), devise: String((ress.amount && ress.amount.currency_code) || '') });
     if (!valide) return 'achat_non_compte';
@@ -326,6 +353,10 @@ export function creerPaypal(ctx) {
       const courant = await lire('users/' + cle + '/paypalSubscriptionId');
       if (!estCourant(courant, abo, sub || ress, cle)) return 'ancien_abonnement';
       await db.ref().update({ ['users/' + cle + '/abonnement/statutPaypal']: 'ACTIVE' });
+      // L'ACCÈS S'OUVRE DÈS L'ACTIVATION, sans attendre le paiement qui suit :
+      // l'app ne donne plus l'abonnement sur la foi du dossier.
+      const s2 = sub || ress;
+      if (s2.status === 'ACTIVE' && (await lire('users/' + cle + '/role')) !== 'coach') await droitsOuverts(cle, abo, OFFRES_PAYPAL[s2.plan_id]);
       return 'active';
     }
     if (type === 'PAYMENT.SALE.COMPLETED') return paiementAbonnement(cle, abo, ress, sub);
@@ -395,9 +426,9 @@ export function creerPaypal(ctx) {
     if (rec.type === 'programme') {
       if (rec.prog && (await lire(b + 'programmesAchetes/' + rec.prog)) !== null) {
         await db.ref().update({ [b + 'programmesAchetes/' + rec.prog + '/ouvertJusqu']: t, [b + 'updatedAt']: t });
-        return 'programme fermé au ' + dateFr(t);
       }
-      return null;
+      const d = await M.majDroits(rec.cle, (x) => (x && Number(x.ultimeJusqu) > t ? { ultimeJusqu: t } : null));
+      return (d || rec.prog) ? 'programme fermé au ' + dateFr(t) : null;
     }
     const [role, statut] = await Promise.all([lire(b + 'role'), lire(b + 'status')]);
     const maj = { [b + 'abonnement/statutPaypal']: 'REMBOURSE', [b + 'abonnement/finAccesPaypal']: t, [b + 'updatedAt']: t,
@@ -405,6 +436,7 @@ export function creerPaypal(ctx) {
     if (role === 'coach') { maj[b + 'coachPlan'] = 'libre'; maj[b + 'coachSubActive'] = false; }
     else if (statut === 'AUTONOMIE_PREMIUM') maj[b + 'accessExpiry'] = t;
     await db.ref().update(maj);
+    if (role !== 'coach') await M.majDroits(rec.cle, (x) => ({ palier: (x && x.palier) || 'aucun', echeance: t, source: 'paypal', abo: rec.abo || (x && x.abo) || null }));
     return (role === 'coach' ? 'palier coach refermé' : 'accès fermé') + ' au ' + dateFr(t);
   }
 

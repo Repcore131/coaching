@@ -35145,6 +35145,57 @@ async function testExercices(){
         const c3=accesCalcul('ouvrir',{etat:'absent'},{maintenant:now,mois:0,palier:'ultime'});
         return c3.echeance===0?true:_echec('sans fin vaut '+c3.echeance);})());
 
+      ok('1614 — DROITS PORTÉS PAR LE SERVEUR : effacer accessExpiry ou s’écrire abonné dans son dossier n’ouvre rien',(()=>{
+        const mail='test-droits-1614@t.fr', now=Date.now();
+        const u={email:mail,role:'athlete',status:'AUTONOMIE_PREMIUM',paymentStatus:'active',abonnement:{formule:'ultime'}};
+        const sauve=localStorage.getItem(DROITS_CLE), sauveP=localStorage.getItem(PAIEMENT_RECENT_CLE), sauveS=localStorage.getItem(DROITS_SERVEUR_CLE);
+        try{
+          localStorage.removeItem(PAIEMENT_RECENT_CLE);
+          // 0. AVANT LA BASCULE (rattrapage pas encore passé) : un nœud vide ne coupe personne.
+          localStorage.removeItem(DROITS_SERVEUR_CLE);
+          _droitsPoser(mail,null,true);
+          if(palierDe(u)!=='ultime') return _echec('avant le rattrapage, un nœud vide coupe un abonné : '+palierDe(u));
+          localStorage.setItem(DROITS_SERVEUR_CLE,'1');
+          // 1. droits/ porte une fin passée : le dossier sans accessExpiry n'y change rien.
+          _droitsPoser(mail,{palier:'ultime',echeance:now-864e5,source:'paypal',abo:'I-ABC12345678'},false);
+          if(palierDe(u)!=='aucun') return _echec('fin passée dans droits/, dossier nettoyé : '+palierDe(u));
+          if(!doitVoirLePaywall(u)) return _echec('l’abonnement que le serveur ne confirme pas évite l’écran de paiement');
+          // 2. droits/ lu et vide : l'abonnement écrit dans le dossier ne vaut plus rien.
+          _droitsPoser(mail,null,true);
+          if(palierDe(u)!=='aucun') return _echec('nœud vide, dossier « abonné » : '+palierDe(u));
+          if(palierDe(Object.assign({},u,{programmesAchetes:{p:{ouvertJusqu:now+864e5}}}))!=='aucun')
+            return _echec('un programme écrit dans le dossier ouvre Ultime');
+          // 3. … sauf un paiement fait sur CET appareil il y a moins de 72 h.
+          paiementRecentNoter(u,'abonnement');
+          if(palierDe(u)!=='ultime') return _echec('le paiement qui vient d’aboutir ne compte pas : '+palierDe(u));
+          localStorage.setItem(PAIEMENT_RECENT_CLE,JSON.stringify({email:mail,le:now-73*3600000}));
+          if(palierDe(u)!=='aucun') return _echec('la preuve locale vaut plus de 72 h');
+          localStorage.removeItem(PAIEMENT_RECENT_CLE);
+          // 4. droits/ jamais lu (hors ligne, règles pas publiées) : l'ancien modèle, pour la transition.
+          const o=_droitsTous(); delete o[mail]; localStorage.setItem(DROITS_CLE,JSON.stringify(o));
+          if(palierDe(u)!=='ultime') return _echec('transition : droits/ jamais lu, le dossier ne décide plus');
+          // 5. Ce que droits/ ouvre : le palier payé, Ultime d'un programme par-dessus, le suivi d'un coach à côté.
+          _droitsPoser(mail,{palier:'essentielle',echeance:0,source:'paypal',ultimeJusqu:now+864e5},false);
+          if(palierDe(u)!=='ultime') return _echec('ultimeJusqu ne s’ajoute pas');
+          _droitsPoser(mail,{palier:'essentielle',echeance:now-1,source:'paypal'},false);
+          if(palierDe(Object.assign({},u,{status:'COACHING_SUIVI'}))!=='suivi') return _echec('un ancien abonné suivi perd son suivi');
+          return true;
+        } finally {
+          if(sauve===null) localStorage.removeItem(DROITS_CLE); else localStorage.setItem(DROITS_CLE,sauve);
+          if(sauveP===null) localStorage.removeItem(PAIEMENT_RECENT_CLE); else localStorage.setItem(PAIEMENT_RECENT_CLE,sauveP);
+          if(sauveS===null) localStorage.removeItem(DROITS_SERVEUR_CLE); else localStorage.setItem(DROITS_SERVEUR_CLE,sauveS);
+        }})());
+
+      ok('1614 — FERMER À LA MAIN UN ACCÈS PAYPAL, PUIS ROUVRIR, LE REND TEL QU’IL ÉTAIT',(()=>{
+        const now=Date.now();
+        const paypal={etat:'serveur',palier:'ultime',echeance:now+10*864e5,source:'paypal',avant:''};
+        const f=accesCalcul('suspendre',paypal,{maintenant:now});
+        if(f.avantSource!=='paypal'||f.avantEcheance!==paypal.echeance) return _echec('la fermeture perd la source ou l’échéance : '+JSON.stringify(f));
+        const r=accesCalcul('rendre',Object.assign({etat:'serveur'},f),{maintenant:now});
+        if(!r||r.palier!=='ultime'||r.echeance!==paypal.echeance||r.source!=='paypal') return _echec('rouvrir : '+JSON.stringify(r));
+        if(r.avant!==null||r.avantSource!==null||r.avantEcheance!==null) return _echec('rouvrir laisse la trace de la fermeture');
+        return true;})());
+
       ok('ACCÈS — FERMER GARDE DE QUOI ROUVRIR, ROUVRIR REND LA MAIN AU DOSSIER',(()=>{
         const now=Date.now();
         const ouvert={etat:'serveur',palier:'ultime',echeance:now+30*864e5,source:'main',avant:''};
@@ -35506,24 +35557,26 @@ async function testExercices(){
           poser({palier:'essentielle',echeance:Date.now()+10*864e5,source:'paypal',maj:Date.now()});
           if(palierDe(u)!=='essentielle') return _echec('le dossier a pris le dessus : '+palierDe(u));
           if(droitsDe(u).etat!=='serveur') return _echec('l’état lu : '+droitsDe(u).etat);
-          // 2. LE SERVEUR A REPONDU, ET IL NE DIT RIEN : LE DOSSIER DECIDE.
+          // 2. LE SERVEUR A RÉPONDU, ET IL NE DIT RIEN : RIEN DE PAYÉ.
           //
-          // ⚠ CETTE ASSERTION EST L'INVERSE DE CE QU'ELLE DISAIT, ET C'EST UNE
-          //   DECISION DE KEVIN, PAS UN RELACHEMENT. Elle tenait « un nœud vide
-          //   ferme tout », parce qu'une Cloud Function allait le remplir à
-          //   chaque paiement. Le 24/09/2026 : « je ne payerai pas le plan
-          //   Blaze ». Sans fonctions, PERSONNE n'écrira jamais ce nœud, et la
-          //   garder aurait coupé l'accès à TOUS les abonnés et à TOUS les
-          //   athlètes suivis le jour où les règles seraient publiées.
-          //
-          //   CE QU'ON TIENT MAINTENANT, ET IL FAUT LE TENIR : un nœud VIDE
-          //   laisse décider le dossier, un nœud QUI PORTE QUELQUE CHOSE prime
-          //   sur lui. Remettre « vide = fermé » sans fonction pour le remplir,
-          //   c'est fermer la porte à tout le monde.
+          // ⚠ CETTE ASSERTION A CHANGÉ DEUX FOIS, ET VOICI LA DERNIÈRE (27/09/2026).
+          //   Le 24/09, sans serveur pour remplir droits/, un nœud vide laissait
+          //   décider le dossier : sinon tous les abonnés auraient été coupés.
+          //   Depuis, le serveur léger écrit droits/ à CHAQUE paiement, et un
+          //   script rattrape les abonnés d'avant (remplir-paiements.mjs). Le
+          //   dossier, son titulaire l'écrit : « AUTONOMIE_PREMIUM » y ouvrait
+          //   tout à qui savait ouvrir une console. Un nœud lu et vide veut donc
+          //   dire « rien de payé » — sauf paiement fait sur cet appareil il y a
+          //   moins de 72 h (paiementRecent), le temps que PayPal prévienne.
           poser(null,true);
           if(droitsDe(u).etat!=='absent') return _echec('l’état d’un nœud vide : '+droitsDe(u).etat);
-          if(palierDe(u)!=='essentielle') return _echec('un nœud vide ne rend plus la main au dossier : '+palierDe(u));
-          if(checkAccess(u)!==true) return _echec('un nœud vide coupe un abonné');
+          // (une fois la bascule faite : reglages_publics/droitsServeur)
+          const _pr=localStorage.getItem(PAIEMENT_RECENT_CLE), _ds=localStorage.getItem(DROITS_SERVEUR_CLE);
+          localStorage.removeItem(PAIEMENT_RECENT_CLE); localStorage.setItem(DROITS_SERVEUR_CLE,'1');
+          const _vide=palierDe(u);
+          if(_pr!==null) localStorage.setItem(PAIEMENT_RECENT_CLE,_pr);
+          if(_ds===null) localStorage.removeItem(DROITS_SERVEUR_CLE); else localStorage.setItem(DROITS_SERVEUR_CLE,_ds);
+          if(_vide!=='aucun') return _echec('un nœud vide rend encore la main au dossier : '+_vide);
           // ET UN NŒUD QUI PORTE « aucun » FERME, LUI : c'est ainsi que Kevin
           // referme un accès à la main depuis la console, et ça, un navigateur
           // ne peut pas le défaire.

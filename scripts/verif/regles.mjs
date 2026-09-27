@@ -303,7 +303,7 @@ console.log('regles : aucun appel JavaScript inconnu du langage');
 //   navigateur ; droits/ non.
 {
   const i=regles.indexOf('"droits"');
-  const bloc=i<0?'':regles.slice(i,i+2000);
+  const bloc=i<0?'':regles.slice(i,regles.indexOf('\n  },',i)+5);
   if(!bloc){
     console.error('\ndroits/ ABSENT de database.rules.json : le palier serveur ne peut pas etre lu.');
     process.exit(1);
@@ -357,6 +357,30 @@ console.log('regles : aucun appel JavaScript inconnu du langage');
     process.exit(1);
   }
   console.log('droits : lisible par le titulaire, son coach et le createur ; ecrit par le createur seul');
+  // ── RIEN D'AUTRE NE L'OUVRE (27/09/2026) ──────────────────────────────
+  // Une regle posee AU-DESSUS (la racine) s'ajouterait a celle de droits/ :
+  // Firebase accorde des qu'un ancetre accorde. Et aucune autre regle ne doit
+  // ouvrir un contenu paye sur la foi du DOSSIER, que son titulaire ecrit.
+  {
+    const sansCommentaires=regles.split('\n').map((l)=>{ let q=false,o='';
+      for(let i=0;i<l.length;i++){ const c=l[i]; if(c==='"'&&l[i-1]!=='\\') q=!q; if(!q&&c==='/'&&l[i+1]==='/') break; o+=c; }
+      return o; }).join('\n');
+    const R=JSON.parse(sansCommentaires).rules;
+    if(R['.write']!==undefined||R['.read']!==undefined){
+      console.error('\nUne regle a la racine s\'ajoute a celle de droits/ : '+JSON.stringify(R['.write']||R['.read']).slice(0,90));
+      process.exit(1);
+    }
+    const lecture=String((R.exercices||{})['.read']||'');
+    // La branche « dossier » n'est admise que gardée par l'interrupteur de la
+    // bascule : elle s'éteint quand reglages_publics/droitsServeur existe.
+    const garde="!root.child('reglages_publics').child('droitsServeur').exists() &&";
+    const sansGarde=lecture.split('||').filter((b)=>/child\('(status|paymentStatus|abonnement|accessExpiry|programmesAchetes)'\)/.test(b)&&b.indexOf(garde)<0);
+    if(sansGarde.length){
+      console.error('\nLe catalogue d\'exercices s\'ouvre encore sur la foi du dossier (status, paymentStatus, abonnement) sans l\'interrupteur de la bascule : son titulaire l\'ecrit.');
+      process.exit(1);
+    }
+    console.log('droits : aucune regle au-dessus ne l\'ouvre ; le catalogue ne lit le dossier que jusqu\'a la bascule');
+  }
 }
 
 console.log('\nRien de bloquant.');
