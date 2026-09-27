@@ -22,10 +22,19 @@
       "**/.*",
       "!.well-known/**"
     ],
+    "//pages": "LES PAGES PUBLIQUES (lien perso). /@<pseudo> sert p/index.html, /coach/<slug> sert c/index.html : deux pages AUTONOMES qui lisent /profils_publics et /vitrines (lecture publique). Leur apercu Open Graph est celui par defaut. LE JOUR DU PLAN BLAZE, remplacer les deux « destination » par « \"function\": {\"functionId\": \"pagePublique\", \"region\": \"europe-west1\"} » : la fonction sert la MEME page avec l'apercu de la personne (nom, rang, photo). Pas avant : une reecriture vers une fonction absente fait echouer le deploiement de l'hebergement.",
     "rewrites": [
       {
         "source": "/i",
         "destination": "/i/index.html"
+      },
+      {
+        "source": "/@*",
+        "destination": "/p/index.html"
+      },
+      {
+        "source": "/coach/*",
+        "destination": "/c/index.html"
       }
     ],
     "headers": [
@@ -48,6 +57,15 @@
             "value": "no-cache"
           }
         ]
+      },
+      {
+        "//": "Les pages publiques n'ont pas d'extension : la regle **/*.html ne les voit pas.",
+        "source": "/@*",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      },
+      {
+        "source": "/coach/*",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
       },
       {
         "source": "/app/sw.js",

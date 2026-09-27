@@ -77,3 +77,24 @@ SI TU AS LA PLANCHE COMPLETE ET PAS LES QUINZE FICHIERS
 Depose-la telle quelle a la racine du depot sous le nom `planche-badges.png`
 et demande le decoupage : il se fait ici, une fois, et les quinze .png
 atterrissent dans ce dossier.
+
+LA COLLECTION DE CINQUANTE (26/09/2026)
+---------------------------------------
+La carte « Mes badges » porte desormais cinquante badges (BADGES_ACQUIS dans
+app/rc-core.*.js) : huit familles a quatre paliers, huit uniques, dix
+secrets. Chacun a une ICONE, et son visuel vit ici en deux tailles webp :
+
+  <icone>.webp       184 x 200, vitrine et banniere (dans le cache du SW)
+  <icone>-512.webp   512 x 512, fiche du badge et visuel de partage
+
+Ils ne se deposent PAS a la main : les bruts vont dans badges-bruts/ a la
+racine du depot (<icone>.png, ou <cle>_<palier>.png, ou une planche 2x2 des
+quatre paliers sur fond noir, detectee et decoupee), puis :
+
+  python scripts/badges.py
+
+qui ecrit les deux tailles ici et tient a jour MEDAILLONS_COLLECTION dans
+app/sw.js. verrouille.webp est le visuel des secrets non obtenus.
+
+TANT QU'UN VISUEL MANQUE, le badge emprunte un des quinze medaillons
+ci-dessus (BADGE_REPLI, choisi par le sens) : la collection reste complete.

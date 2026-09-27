@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1592';
+const CACHE = 'repcore-v1601';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -110,6 +110,24 @@ const MEDAILLONS = ['new_record', 'multiple_records', 'new_load', 'personal_best
   'new_perf', 'progression', 'monster', 'high_volume', 'no_mercy', 'full_session',
   'no_fail', 'perfect', 'streak', 'return', 'discipline']
   .map(n => './img/badges/' + n + '.png');
+// LA COLLECTION (26/09/2026) : les médaillons 184×200 de la vitrine « Mes
+// badges » et de la bannière. Liste réécrite par scripts/badges.py entre les
+// deux marqueurs — ne pas l'éditer à la main. Les 512 px n'y sont pas : ils ne
+// servent qu'à la fiche et au partage, et 2 Mo de plus à chaque installation
+// ne se justifient pas pour un geste rare.
+// LES DIX EMBLÈMES DE RANG (les « volts »), aux deux tailles : l'écran de
+// passage de rang peut tomber en fin de séance, hors ligne. Liste écrite par
+// scripts/rangs.py entre ses deux marqueurs — ne pas l'éditer à la main.
+// rangs.py:debut
+const EMBLEMES_RANGS = Array.from({ length: 10 }, (_, i) => i + 1)
+  .flatMap(n => ['./img/rangs/rang_' + n + '.webp', './img/rangs/rang_' + n + '-512.webp']);
+// rangs.py:fin
+// badges.py:debut
+const MEDAILLONS_COLLECTION = [
+  'tonnage_1', 'tonnage_2', 'tonnage_3', 'tonnage_4', 'verrouille'
+]
+  .map(n => './img/badges/' + n + '.webp');
+// badges.py:fin
 // LES QUATRE SILHOUETTES DU CADRE « EVOLUTION ELEVE » de la fiche coach
 // (140 ko) : le coach ouvre une fiche en salle aussi, et sans elles le cadre
 // sortirait sans corps, les etiquettes pointant dans le vide.
@@ -143,7 +161,7 @@ CORPS.push('./img/complements.webp');
 // ni code ni style — c'est-a-dire rien du tout.
 // Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
 // chaque build et reecrit cette ligne comme celle d'index.html.
-const ASSETS = ['./index.html', './rc-core.1592.js', './rc-style.1592.css',
+const ASSETS = ['./index.html', './rc-core.1601.js', './rc-style.1601.css',
   './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
@@ -152,7 +170,7 @@ const ASSETS = ['./index.html', './rc-core.1592.js', './rc-style.1592.css',
   './vendor/mp4/mp4box.all.min.js', './vendor/mp4/mp4-muxer.js',
   './fonts/montserrat-var-latin.woff2',
   './fonts/bebasneue-400-latin.woff2', './img/arn.png']
-  .concat(AVATARS).concat(MEDAILLONS).concat(CORPS);
+  .concat(AVATARS).concat(MEDAILLONS).concat(MEDAILLONS_COLLECTION).concat(EMBLEMES_RANGS).concat(CORPS);
 
 // Une séance en cours interdit la bascule. Prendre le contrôle en pleine
 // séance, c'est purger le cache sous les pieds de quelqu'un qui est peut-être
@@ -611,7 +629,76 @@ self.addEventListener('periodicsync', e => {
   if (e.tag === 'bilan-reminder') e.waitUntil(swCheckAndNotify());
   if (e.tag === 'wo-reminder') e.waitUntil(swCheckWoReminder());
   if (e.tag === 'supp-reminder') e.waitUntil(swCheckSuppReminders());
+  if (e.tag === 'wrapped-reminder') e.waitUntil(swCheckWrapped());
+  if (e.tag === 'serie-reminder') e.waitUntil(swCheckSerie());
 });
+
+// ─── « Série en danger » : jeudi 18 h, samedi 10 h ─────────────────────────
+// Si la semaine en cours n'est pas encore validée (streakWeek n'est pas son
+// lundi) et qu'il y a une série à perdre. Deux créneaux par semaine au plus,
+// chacun une seule fois. Le réveil périodique n'est pas à l'heure : la
+// notification part au premier réveil APRÈS l'heure, tant qu'on est encore
+// le jour dit.
+async function swCheckSerie() {
+  const cfg = await swGet('/serie');
+  if (!cfg || !cfg.actif || !(cfg.streak > 0)) return;
+  const d = new Date();
+  const j = d.getDay(), h = d.getHours();
+  const creneau = (j === 4 && h >= 18) ? 'jeu' : (j === 6 && h >= 10) ? 'sam' : null;
+  if (!creneau) return;
+  const l = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((j + 6) % 7));
+  const lundi = _jourLocal(l);
+  if (cfg.streakWeek === lundi) return;                  // semaine déjà validée
+  const cle = lundi + '-' + creneau;
+  const faites = (await swGet('/serie-notifs')) || [];
+  if (faites.indexOf(cle) >= 0) return;
+  await swSet('/serie-notifs', faites.concat([cle]).slice(-8));
+  const n = cfg.streak;
+  await self.registration.showNotification('Ta série de ' + n + ' semaine' + (n > 1 ? 's' : '') + ' est en danger', {
+    body: (cfg.fname ? cfg.fname + ', il' : 'Il') + ' te reste jusqu’à dimanche pour valider ta semaine.'
+      + (cfg.jokers > 0 ? ' Ton joker la sauverait, mais garde-le pour un vrai coup dur.' : ''),
+    icon: './icons/icon-192x192.png',
+    badge: './icons/icon-192x192.png',
+    tag: 'serie-' + cle,
+    requireInteraction: false,
+    data: { url: './?wo=1' }
+  });
+}
+
+// ─── Wrapped : « Ton mois de septembre est prêt » ──────────────────────────
+// Du 1er au 7 du mois (le mois écoulé), et tout décembre (l'année). UNE
+// notification par période, jamais deux : la clé notifiée est retenue. Rien
+// si l'athlète ne s'est pas entraîné pendant la période — la page écrit sa
+// dernière séance dans '/wrapped'. Même clés que wrappedPeriodes (rc-core).
+async function swCheckWrapped() {
+  const cfg = await swGet('/wrapped');
+  if (!cfg) return;
+  const d = new Date();
+  const faites = (await swGet('/wrapped-notifs')) || [];
+  const offres = [];
+  if (d.getMonth() === 11) {
+    const a = d.getFullYear();
+    offres.push({ cle: 'a-' + a, debut: new Date(a, 0, 1).getTime(), titre: 'Ton année ' + a + ' est prête' });
+  }
+  if (d.getDate() <= 7) {
+    const m = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+    let mois = '';
+    try { mois = m.toLocaleDateString('fr-FR', { month: 'long' }); } catch (e) {}
+    offres.push({ cle: 'm-' + m.getFullYear() + '-' + String(m.getMonth() + 1).padStart(2, '0'),
+      debut: m.getTime(), titre: 'Ton mois de ' + mois + ' est prêt' });
+  }
+  const o = offres.find(x => faites.indexOf(x.cle) < 0 && Number(cfg.derniereSeance) >= x.debut);
+  if (!o) return;
+  await swSet('/wrapped-notifs', faites.concat([o.cle]).slice(-24));
+  await self.registration.showNotification(o.titre, {
+    body: (cfg.fname ? cfg.fname + ', tes' : 'Tes') + ' chiffres, tes records et ton profil t’attendent.',
+    icon: './icons/icon-192x192.png',
+    badge: './icons/icon-192x192.png',
+    tag: 'wrapped-' + o.cle,
+    requireInteraction: false,
+    data: { url: './?wrapped=' + o.cle }
+  });
+}
 
 // Jour LOCAL au format AAAA-MM-JJ. toISOString() rend une date UTC : a
 // 00 h 30 en France l'ete, elle designe encore la veille, et la cle de
@@ -665,14 +752,23 @@ async function swCheckAndNotify() {
   });
 }
 
-// ─── Notification click → open / focus app at bilan screen ─────────────────
+// ─── Notification click → ouvre l'écran visé ───────────────────────────────
+// L'adresse vient de data.url : notifications locales ET push serveur (qui
+// passe par swUrlSure). On NAVIGUE toujours quand l'app est déjà ouverte :
+// sans navigation, focus() ramènerait l'onglet sur l'écran où il était, et
+// « Ton coach t'a répondu » ouvrirait… la séance en cours.
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  const url = e.notification.data?.url || './';
+  const url = swUrlSure(e.notification.data && e.notification.data.url);
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(ws => {
       const w = ws.find(c => c.url.startsWith(self.registration.scope));
-      return w ? w.focus() : clients.openWindow(url);
+      if (!w) return clients.openWindow(url);
+      const cible = new URL(url, self.registration.scope).href;
+      if (w.navigate && cible !== w.url && url !== './') {
+        return w.focus().then(c => (c || w).navigate(cible)).catch(() => w.focus());
+      }
+      return w.focus();
     })
   );
 });
@@ -759,14 +855,35 @@ async function swCheckSuppReminders() {
   if (changed) await swSet('/supp-reminders', { ...sched, lastNotif: updatedLastNotif });
 }
 
-// ─── Server push (future backend / VAPID integration) ──────────────────────
+// ─── Push serveur (Web Push VAPID, functions/index.js → envoyerPush) ───────
+// Charge utile : {title, body, url, tag, type}. Chiffrée de bout en bout par
+// le protocole : seul ce worker la lit. Le serveur applique déjà le plafond
+// (1/jour) et les heures calmes ; ici, on AFFICHE — une notification push
+// silencieuse est interdite (userVisibleOnly) et Chrome la remplacerait par
+// « Ce site a été mis à jour en arrière-plan ».
+// PURE. Une adresse sûre : relative à l'app, ou de la même origine. Une URL
+// externe dans un push compromis n'ouvrira jamais une autre page.
+function swUrlSure(u) {
+  if (typeof u !== 'string' || !u) return './';
+  try {
+    const x = new URL(u, self.registration.scope);
+    if (x.origin !== new URL(self.registration.scope).origin) return './';
+    return x.pathname.startsWith(new URL(self.registration.scope).pathname) ? x.href : './';
+  } catch (e) { return './'; }
+}
 self.addEventListener('push', e => {
-  const d = e.data?.json() || {};
-  e.waitUntil(self.registration.showNotification(d.title || 'RepCore 💪', {
-    body: d.body || 'Rappel RepCore.',
-    icon: './icons/icon-192x192.png',
-    badge: './icons/icon-192x192.png',
-    tag: d.tag || 'repcore',
-    data: { url: d.url || './' }
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; }
+  catch (err) { try { d = { body: e.data.text() }; } catch (e2) { d = {}; } }
+  if (!d || typeof d !== 'object') d = {};
+  const titre = String(d.title || 'RepCore').slice(0, 80);
+  e.waitUntil(self.registration.showNotification(titre, {
+    body: String(d.body || '').slice(0, 240),
+    icon: d.icon && swUrlSure(d.icon) !== './' ? swUrlSure(d.icon) : './icons/icon-192x192.png',
+    badge: './icons/icon-96x96.png',
+    tag: String(d.tag || ('push-' + (d.type || 'repcore'))).slice(0, 64),
+    renotify: false,
+    requireInteraction: false,
+    data: { url: swUrlSure(d.url), type: d.type || null }
   }));
 });

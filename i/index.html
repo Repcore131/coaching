@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>RepCore — ton accès</title>
+<title>RepCore : ton accès</title>
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#080808">
 <link rel="icon" href="../app/icons/icon-192x192.png">
@@ -66,7 +66,7 @@ code{background:#000;border:1px solid var(--bord);border-radius:6px;padding:2px 
   <!-- Navigateur interne d'une application (Instagram, Messenger, TikTok…). -->
   <div id="interne" hidden>
     <div class="carte">
-      <p style="color:var(--txt);margin-bottom:10px"><strong>⚠️ Tu es dans le navigateur d'Instagram.</strong>
+      <p style="color:var(--txt);margin-bottom:10px"><strong>Tu es dans le navigateur d'Instagram.</strong>
       L'application ne peut pas s'installer depuis ici.</p>
       <ol>
         <li>Touche le menu <strong>⋯</strong> (iPhone : <strong>Aa</strong> ou <strong>⋯</strong>) en haut de l'écran.</li>
@@ -79,8 +79,23 @@ code{background:#000;border:1px solid var(--bord);border-radius:6px;padding:2px 
     </div>
   </div>
 
-  <p class="petit">RepCore — <a href="../" style="color:var(--gris)">en savoir plus</a></p>
+  <p class="petit">RepCore : <a href="../" style="color:var(--gris)">en savoir plus</a></p>
 </div>
+<script>
+// L'ARRIVEE (attribution) : src, amb, et le SEUL fait qu'un code parrain etait
+// la (ref=1, jamais le code : il designe une personne). Une fois par jour et
+// par lien sur cet appareil (localStorage, premiere partie) ; ni cookie, ni
+// IP, ni identifiant. La fonction attribArrivee ne repond rien : absente
+// (plan Spark), rien ne casse.
+(function(){try{var p=new URLSearchParams(location.search);
+var src=(p.get('src')||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20);
+var amb=(p.get('amb')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,16);
+var ref=p.get('ref')?1:0;
+var k='rc_attr_'+new Date().toISOString().slice(0,10)+'_'+(src||'-')+'_'+(amb||'-');
+if(localStorage.getItem(k)) return; localStorage.setItem(k,'1');
+fetch('https://europe-west1-repcore-sync.cloudfunctions.net/attribArrivee?src='+encodeURIComponent(src)+(amb?'&amb='+amb:'')+(ref?'&ref=1':''),{mode:'no-cors',keepalive:true}).catch(function(){});
+}catch(e){}})();
+</script>
 <script>
 (function(){
   var p=new URLSearchParams(location.search);
@@ -90,6 +105,9 @@ code{background:#000;border:1px solid var(--bord);border-radius:6px;padding:2px 
   var c=(p.get('c')||p.get('code')||'').trim().toUpperCase();
   if(c&&!p.get('inv')) p.set('inv',c);
   p.delete('c');p.delete('code');
+  // L'AMBASSADEUR : le code voyage jusqu'a /app/ avec le reste (?amb=).
+  var amb=(p.get('amb')||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(amb) p.set('amb',amb);
   var q=p.toString();
   // Chemin RELATIF : la meme page sert sur repcore-sync.web.app/i/ et sur
   // repcore131.github.io/coaching/i/, ou « /app/ » ne designerait rien.

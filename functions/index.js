@@ -442,6 +442,18 @@ exports.verifyPaypalSubscription = onCall({ secrets: [PAYPAL_CLIENT_SECRET] }, a
   //   l'etre sans qu'un euro soit passe.
   if (offre.demi) champs.demiPackUtilise = true;
   await ecrireDroits(key, champs);
+  // LE PARRAINAGE : seulement si de l'argent est VRAIMENT passé (un
+  // abonnement ACTIVE à essai gratuit côté PayPal n'a rien payé).
+  try {
+    const dernier = sub.billing_info && sub.billing_info.last_payment;
+    if (dernier && Number(dernier.amount && dernier.amount.value) > 0) {
+      await parrainagePaiement(key, "paypal_abonnement");
+      await ambassadeurPaiement(key, { montant: dernier.amount.value, le: Date.parse(dernier.time) || Date.now(), abonnement: sub.id });
+      await attributionPaiement(key);
+    }
+  } catch (e) { console.error("parrainage/ambassadeur", e); }
+  // L'abonnement -> le compte : les ventes suivantes (webhook) n'ont que lui.
+  try { await db.ref("paypal_abonnes/" + String(sub.id || subscriptionId).replace(/[^A-Za-z0-9_-]/g, "")).set(key); } catch (e) { /* non bloquant */ }
   return { ok: true };
 });
 
@@ -803,8 +815,20 @@ exports.paypalWebhook = onRequest(
       (ress.payer && ress.payer.payer_info && ress.payer.payer_info.email) ||
       (corps.summary_email || "")
     ).toLowerCase().trim();
-    if (!mail || mail.indexOf("@") < 0) { res.status(200).send("sans adresse, rien a faire"); return; }
-    const cle = emailKey(mail);
+    // UN REMBOURSEMENT annule la commission d'ambassadeur du paiement concerne
+    // (elle n'etait « due » qu'apres 30 jours precisement pour ce cas).
+    if (type === "PAYMENT.SALE.REFUNDED" || type === "PAYMENT.CAPTURE.REFUNDED") {
+      try { await ambassadeurRemboursement(ress); } catch (e) { console.error("ambassadeur", e); }
+      res.status(200).send("ok"); return;
+    }
+    // ⚠ UNE VENTE D'ABONNEMENT (PAYMENT.SALE.COMPLETED) NE PORTE PAS L'ADRESSE
+    //   DU PAYEUR, seulement l'identifiant de l'abonnement : on la retrouve par
+    //   l'index que verifyPaypalSubscription pose a l'activation.
+    let cleAbo = null;
+    if ((!mail || mail.indexOf("@") < 0) && ress.billing_agreement_id)
+      cleAbo = await _val("paypal_abonnes/" + String(ress.billing_agreement_id).replace(/[^A-Za-z0-9_-]/g, ""));
+    if ((!mail || mail.indexOf("@") < 0) && !cleAbo) { res.status(200).send("sans adresse, rien a faire"); return; }
+    const cle = cleAbo || emailKey(mail);
     const table = await chargerPlans();
     const actuel = await lireDroits(cle);
 
@@ -818,6 +842,15 @@ exports.paypalWebhook = onRequest(
           source: "paypal",
           abonnement: String(ress.id || ress.billing_agreement_id || "").slice(0, 64),
         });
+        // Un encaissement, pas une simple activation : c'est lui qui compte
+        // pour le parrainage (premier paiement seulement, voir parrainagePaiement).
+        if (type === "PAYMENT.SALE.COMPLETED") {
+          await parrainagePaiement(cle, "paypal_vente").catch((e) => console.error("parrainage", e));
+          await ambassadeurPaiement(cle, { montant: ress.amount && (ress.amount.total || ress.amount.value),
+            le: Date.parse(ress.create_time) || Date.now(), abonnement: ress.billing_agreement_id, venteId: ress.id })
+            .catch((e) => console.error("ambassadeur", e));
+          await attributionPaiement(cle).catch((e) => console.error("attribution", e));
+        }
       } else if (type === "BILLING.SUBSCRIPTION.CANCELLED" || type === "BILLING.SUBSCRIPTION.EXPIRED"
               || type === "BILLING.SUBSCRIPTION.SUSPENDED") {
         // ⚠ ON NE COUPE PAS LE JOUR MEME. Un abonnement annule reste ouvert
@@ -837,6 +870,12 @@ exports.paypalWebhook = onRequest(
           echeance: prolonger(actuel && actuel.echeance, MONTH_MS),
           source: "paypal_achat",
         });
+        if (type === "PAYMENT.CAPTURE.COMPLETED") {
+          await parrainagePaiement(cle, "paypal_achat").catch((e) => console.error("parrainage", e));
+          await ambassadeurPaiement(cle, { montant: ress.amount && ress.amount.value, le: Date.parse(ress.create_time) || Date.now(),
+            id: ress.id, venteId: ress.id }).catch((e) => console.error("ambassadeur", e));
+          await attributionPaiement(cle).catch((e) => console.error("attribution", e));
+        }
       }
     } catch (e) {
       res.status(500).send("ecriture impossible"); return;
@@ -953,9 +992,12 @@ exports.ouvrirEssai = onCall(async (request) => {
     return { ouvert: false, raison: "acces", palier: deja.palier };
   }
   const t = Date.now();
-  const fin = t + jours * 86400000;
+  // LE MOIS D'ESSAI DU PARRAINAGE : posé par parrainageDemande quand l'essai
+  // n'était pas encore ouvert. Jamais demandé par le client.
+  const bonus = Math.max(0, Math.min(60, Number(deja && deja.bonusEssaiJours) || 0));
+  const fin = t + (jours + bonus) * 86400000;
   await ecrireDroits(cle, {
-    palier: "ultime", echeance: fin, essaiOuvertLe: t, essaiFinit: fin, source: "essai",
+    palier: "ultime", echeance: fin, essaiOuvertLe: t, essaiFinit: fin, source: "essai", bonusEssaiJours: null,
   });
   return { ouvert: true, essaiFinit: fin };
 });
@@ -1000,3 +1042,844 @@ exports.migrerDroits = onCall(async (request) => {
   }
   return { simulation, compte };
 });
+
+// ══ LA RARETE DES BADGES, COMPTEE CHAQUE NUIT ═════════════════════════════
+//
+// L'ecran de celebration dit « possede par 4 % des athletes ». Ce chiffre ne
+// peut PAS se calculer sur un telephone : il demanderait de lire le dossier de
+// tout le monde. Il est donc compte ici, une fois par nuit, et ecrit dans
+// /stats/badges — lecture publique, ecriture serveur seulement (voir
+// database.rules.json). L'Admin SDK ne passe pas par les regles.
+//
+// CE QUI EST ECRIT, et rien de plus :
+//   { maj: <ms>, total: <nombre d'athletes>, pct: { <idBadge>: 4.2, ... } }
+// Aucun identifiant de personne, aucune liste : un pourcentage par badge.
+//
+// LE DENOMINATEUR : les dossiers ATHLETES (role different de « coach »). Un
+// coach ne gagne aucun badge ; le compter ferait baisser tous les chiffres.
+//
+// ⚠ ON NE LIT PAS /users EN ENTIER. Un dossier porte ses seances, ses bilans,
+// ses references de photos : tout lire chaque nuit ferait descendre la base
+// entiere. On lit la LISTE des cles (?shallow=true, REST, jeton de service),
+// puis, par paquets, deux petits noeuds par dossier : role et badges.
+//
+// ⚠ PLAN BLAZE. Les fonctions planifiees reposent sur Cloud Scheduler :
+// comme les autres fonctions de ce fichier, celle-ci ne tourne pas sur Spark.
+// Tant qu'elle ne tourne pas, /stats/badges reste vide et l'application
+// n'affiche simplement pas la ligne de rarete.
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+
+async function _clesUtilisateurs() {
+  try {
+    const jeton = await admin.credential.applicationDefault().getAccessToken();
+    const racine = db.ref().toString().replace(/\/$/, "");
+    const r = await fetch(racine + "/users.json?shallow=true&access_token=" +
+      encodeURIComponent(jeton.access_token));
+    if (r.ok) {
+      const d = await r.json();
+      if (d && typeof d === "object") return Object.keys(d);
+    }
+  } catch (e) { /* repli ci-dessous */ }
+  // REPLI : la lecture complete. Plus lourde, mais juste.
+  const s = await db.ref("users").get();
+  return Object.keys(s.val() || {});
+}
+
+// PURE : les pourcentages, a un chiffre apres
+// la virgule, depuis une liste de dossiers {role, badges}.
+function calculerRareteBadges(dossiers) {
+  let total = 0;
+  const n = {};
+  for (const d of dossiers) {
+    if (!d || d.role === "coach") continue;
+    total++;
+    const b = (d.badges && typeof d.badges === "object") ? d.badges : {};
+    for (const id of Object.keys(b)) {
+      if (b[id] && Number(b[id].at) > 0) n[id] = (n[id] || 0) + 1;
+    }
+  }
+  const pct = {};
+  for (const id of Object.keys(n)) pct[id] = Math.round(n[id] / total * 1000) / 10;
+  return { total, pct };
+}
+
+exports.statsBadges = onSchedule(
+  { schedule: "every day 03:17", timeZone: "Europe/Paris", timeoutSeconds: 540, memory: "512MiB" },
+  async () => {
+    const cles = await _clesUtilisateurs();
+    const dossiers = [];
+    const PAQUET = 50;
+    for (let i = 0; i < cles.length; i += PAQUET) {
+      const lot = cles.slice(i, i + PAQUET);
+      const lus = await Promise.all(lot.map(async (k) => {
+        const [role, badges] = await Promise.all([
+          db.ref("users/" + k + "/role").get(),
+          db.ref("users/" + k + "/badges").get(),
+        ]);
+        return { role: role.val(), badges: badges.val() };
+      }));
+      dossiers.push(...lus);
+    }
+    const r = calculerRareteBadges(dossiers);
+    // Aucun athlete : on n'ecrit rien plutot qu'un tableau de zeros, que
+    // l'application afficherait comme « 0 % ».
+    if (!r.total) return;
+    await db.ref("stats/badges").set({ maj: Date.now(), total: r.total, pct: r.pct });
+  });
+
+// ══ WEB PUSH ═══════════════════════════════════════════════════════════════
+//
+// Les notifications SERVEUR : elles partent même quand l'application est
+// fermée, iPhone compris (application installée, iOS 16.4+), là où la
+// notification locale du service worker ne part que sur Android.
+//
+// LES CLÉS VAPID. La publique est ci-dessous et dans le client
+// (VAPID_PUBLIQUE, app/rc-core.*.js) : elle est faite pour être publique. La
+// PRIVÉE n'est JAMAIS dans le dépôt : c'est un secret Functions,
+//   firebase functions:secrets:set VAPID_PRIVATE_KEY
+// Changer de paire, c'est changer les deux, et tous les abonnés devront se
+// réabonner (le client le fait seul quand la clé publique change).
+//
+// OÙ VIVENT LES ABONNEMENTS : /push/<cléEmail>/<id> = {endpoint, keys, cree,
+// plateforme}. Pas sous /users/<cléEmail>/push : le dossier est réécrit EN
+// ENTIER (PUT) à chaque synchronisation, et un nœud posé à côté par un autre
+// chemin y serait effacé au premier envoi. Les réglages (types coupés),
+// eux, sont dans le dossier : users/<cléEmail>/pushPrefs = {type: false}.
+//
+// LE PLAFOND : UN push par jour et par personne (journal /push_log), aucun
+// entre 21 h et 8 h heure de Paris — un message tombé la nuit attend 8 h
+// dans /push_attente (le plus récent seulement), puis part s'il reste de la
+// place dans la journée.
+const webpush = require("web-push");
+const { onValueCreated, onValueWritten } = require("firebase-functions/v2/database");
+const VAPID_PRIVATE_KEY = defineSecret("VAPID_PRIVATE_KEY");
+const VAPID_PUBLIQUE = "BEQvHnCStyK010R_ETviq4nAcu5PPTktlDX3AW245J60sLsMZdxe50t1N7Xs3WlYdY5FkMNRxtC71cHKi2DtZw0";
+const PUSH_TYPES = ["serie", "wrapped", "bilan", "badge", "coach", "filleul", "defi"];
+// La base par défaut vit en us-central1 : ses déclencheurs doivent y être
+// déployés, quel que soit setGlobalOptions.
+const DB_REGION = "us-central1";
+
+// PURE. L'heure, le jour et la date à Paris — l'heure du serveur est UTC.
+function _paris(t) {
+  const f = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit",
+    day: "2-digit", hour: "2-digit", minute: "2-digit", weekday: "short", hour12: false });
+  const p = {};
+  for (const x of f.formatToParts(new Date(t))) p[x.type] = x.value;
+  return { jour: p.year + "-" + p.month + "-" + p.day, heure: Number(p.hour) % 24, minute: Number(p.minute),
+    annee: Number(p.year), mois: Number(p.month), date: Number(p.day) };
+}
+// PURE. Heures calmes : de 21 h à 8 h, heure de Paris.
+function heuresCalmes(t) { const h = _paris(t).heure; return h >= 21 || h < 8; }
+// PURE. Le lundi (AAAA-MM-JJ, heure de Paris) de la semaine de t : même forme
+// que streakWeek côté client.
+function lundiParis(t) {
+  const p = _paris(t);
+  const d = new Date(Date.UTC(p.annee, p.mois - 1, p.date));
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+// PURE. Peut-on envoyer ? {ok, raison}. prefs : users/<k>/pushPrefs ;
+// log : /push_log/<k> = {jour}.
+function pushAutorise(type, prefs, log, t) {
+  if (PUSH_TYPES.indexOf(type) < 0) return { ok: false, raison: "type" };
+  if (prefs && prefs[type] === false) return { ok: false, raison: "coupe" };
+  if (heuresCalmes(t)) return { ok: false, raison: "calme" };
+  if (log && log.jour === _paris(t).jour) return { ok: false, raison: "plafond" };
+  return { ok: true, raison: null };
+}
+
+/**
+ * Envoie UN push à une personne, sur tous ses appareils.
+ * @param {string} uid  la clé email (points remplacés par des virgules)
+ * @param {{type:string,title:string,body:string,url?:string,tag?:string}} message
+ * @param {{attendre?:boolean}} [o]  attendre : mis de côté s'il tombe en heures calmes
+ * @returns {Promise<{envoye:number,raison:?string}>}
+ */
+async function envoyerPush(uid, message, o) {
+  const t = Date.now();
+  const type = String((message && message.type) || "");
+  const [prefsS, logS] = await Promise.all([
+    db.ref("users/" + uid + "/pushPrefs").get(), db.ref("push_log/" + uid).get()]);
+  const ok = pushAutorise(type, prefsS.val(), logS.val(), t);
+  if (!ok.ok) {
+    if (ok.raison === "calme" && (!o || o.attendre !== false))
+      await db.ref("push_attente/" + uid).set(Object.assign({}, message, { at: t }));
+    return { envoye: 0, raison: ok.raison };
+  }
+  const subsS = await db.ref("push/" + uid).get();
+  const subs = subsS.val() || {};
+  const ids = Object.keys(subs);
+  if (!ids.length) return { envoye: 0, raison: "aucun_abonnement" };
+  // LE JOURNAL D'ABORD, en transaction : deux déclencheurs simultanés ne
+  // passent pas tous les deux sous le plafond.
+  const jour = _paris(t).jour;
+  const tx = await db.ref("push_log/" + uid).transaction(cur =>
+    (cur && cur.jour === jour) ? undefined : { jour, at: t, type });
+  if (!tx.committed) return { envoye: 0, raison: "plafond" };
+  webpush.setVapidDetails("mailto:" + CREATOR_EMAIL, VAPID_PUBLIQUE, VAPID_PRIVATE_KEY.value());
+  const charge = JSON.stringify({ title: message.title, body: message.body || "",
+    url: message.url || "./", tag: message.tag || ("rc-" + type), type });
+  let envoye = 0;
+  await Promise.all(ids.map(async id => {
+    const s = subs[id];
+    if (!s || !s.endpoint || !s.keys) return;
+    try {
+      await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, charge, { TTL: 24 * 3600 });
+      envoye++;
+    } catch (e) {
+      // 404 / 410 : l'abonnement n'existe plus (appli désinstallée, permission
+      // retirée). On le supprime — sinon on y enverrait pour toujours.
+      if (e && (e.statusCode === 404 || e.statusCode === 410)) await db.ref("push/" + uid + "/" + id).remove();
+    }
+  }));
+  // Rien n'est parti : la place du jour est rendue.
+  if (!envoye) await db.ref("push_log/" + uid).remove();
+  return { envoye, raison: envoye ? null : "echec" };
+}
+
+// Les clés des personnes qui ont au moins un abonnement : /push est petit, on
+// le lit en shallow — jamais /users en entier.
+async function _abonnes() {
+  try {
+    const jeton = await admin.credential.applicationDefault().getAccessToken();
+    const racine = db.ref().toString().replace(/\/$/, "");
+    const r = await fetch(racine + "/push.json?shallow=true&access_token=" + encodeURIComponent(jeton.access_token));
+    if (r.ok) { const d = await r.json(); return d ? Object.keys(d) : []; }
+  } catch (e) { /* repli */ }
+  const s = await db.ref("push").get();
+  return Object.keys(s.val() || {});
+}
+async function _lire(uid, champ) { return (await db.ref("users/" + uid + "/" + champ).get()).val(); }
+const _optsPlanifie = { timeZone: "Europe/Paris", secrets: [VAPID_PRIVATE_KEY], timeoutSeconds: 540, memory: "512MiB" };
+
+// ── SÉRIE EN DANGER : jeudi 18 h ───────────────────────────────────────────
+// La semaine n'est pas validée (streakWeek n'est pas son lundi), et il y a
+// une série à perdre. Hors suspension.
+// ⚠ LE TAG EST CELUI DE LA NOTIFICATION LOCALE (sw.js, swCheckSerie :
+// 'serie-<lundi>-jeu'), comme celui du Wrapped ('wrapped-<clé>') : si les deux
+// arrivent, la seconde REMPLACE la première au lieu de s'y ajouter. Le rappel
+// local reste le filet quand les Functions ne sont pas déployées.
+exports.pushSerieEnDanger = onSchedule(Object.assign({ schedule: "0 18 * * 4" }, _optsPlanifie), async () => {
+  const lundi = lundiParis(Date.now());
+  for (const uid of await _abonnes()) {
+    const [streak, semaine, susp, fname, jokers] = await Promise.all(["streak", "streakWeek", "suspension", "fname", "streakJokers"].map(c => _lire(uid, c)));
+    if (!(Number(streak) > 0) || semaine === lundi || (susp && susp.actif)) continue;
+    const n = Number(streak);
+    await envoyerPush(uid, { type: "serie", url: "./?wo=1", tag: "serie-" + lundi + "-jeu",
+      title: "Ta série de " + n + " semaine" + (n > 1 ? "s" : "") + " est en danger",
+      body: (fname ? fname + ", il" : "Il") + " te reste jusqu’à dimanche pour valider ta semaine."
+        + (Number(jokers) > 0 ? " Ton joker la sauverait, mais garde-le pour un vrai coup dur." : "") }, { attendre: false });
+  }
+});
+
+// ── WRAPPED PRÊT : le 1er du mois, 10 h ───────────────────────────────────
+// Seulement pour qui s'est entraîné le mois écoulé (lastSession).
+exports.pushWrappedPret = onSchedule(Object.assign({ schedule: "0 10 1 * *" }, _optsPlanifie), async () => {
+  const p = _paris(Date.now());
+  const moisPrec = p.mois === 1 ? 12 : p.mois - 1, anPrec = p.mois === 1 ? p.annee - 1 : p.annee;
+  const debut = Date.UTC(anPrec, moisPrec - 1, 1) - 2 * 3600e3;
+  const cle = "m-" + anPrec + "-" + String(moisPrec).padStart(2, "0");
+  const nom = new Date(Date.UTC(anPrec, moisPrec - 1, 15)).toLocaleDateString("fr-FR", { month: "long", timeZone: "Europe/Paris" });
+  for (const uid of await _abonnes()) {
+    const der = Number(await _lire(uid, "lastSession")) || 0;
+    if (der < debut) continue;
+    await envoyerPush(uid, { type: "wrapped", url: "./?wrapped=" + cle, tag: "wrapped-" + cle,
+      title: "Ton mois de " + nom + " est prêt", body: "Tes chiffres, tes records et ton profil t’attendent." });
+  }
+});
+
+// ── RAPPEL DE BILAN : samedi 10 h ─────────────────────────────────────────
+// Le dernier bilan date de plus de 13 jours (quinzaine par défaut).
+exports.pushRappelBilan = onSchedule(Object.assign({ schedule: "0 10 * * 6" }, _optsPlanifie), async () => {
+  const t = Date.now();
+  for (const uid of await _abonnes()) {
+    const role = await _lire(uid, "role");
+    if (role === "coach") continue;
+    const s = await db.ref("users/" + uid + "/bilans").orderByKey().limitToLast(1).get();
+    let der = 0; s.forEach(c => { der = Number((c.val() || {}).date) || 0; });
+    if (der && t - der < 13 * 864e5) continue;
+    const fname = await _lire(uid, "fname");
+    await envoyerPush(uid, { type: "bilan", url: "./?bilan=1", tag: "bilan-" + _paris(t).jour,
+      title: "C’est l’heure de ton bilan", body: (fname ? fname + ", 10" : "10") + " minutes quand tu as le temps ce week-end." });
+  }
+});
+
+// ── BADGE PROCHE : dimanche 17 h ──────────────────────────────────────────
+// ASSIDU (séances terminées) : à deux séances ou moins du palier suivant. Le
+// nombre de séances se lit en shallow — jamais l'historique lui-même.
+const ASSIDU_SEUILS = [10, 50, 100, 250];
+exports.pushBadgeProche = onSchedule(Object.assign({ schedule: "0 17 * * 0" }, _optsPlanifie), async () => {
+  const jeton = await admin.credential.applicationDefault().getAccessToken();
+  const racine = db.ref().toString().replace(/\/$/, "");
+  for (const uid of await _abonnes()) {
+    let n = 0;
+    try {
+      const r = await fetch(racine + "/users/" + encodeURIComponent(uid) + "/sessions.json?shallow=true&access_token=" + encodeURIComponent(jeton.access_token));
+      if (r.ok) n = Object.keys((await r.json()) || {}).length;
+    } catch (e) { continue; }
+    const seuil = ASSIDU_SEUILS.find(x => x > n);
+    if (!seuil || seuil - n > 2) continue;
+    const reste = seuil - n, palier = ["I", "II", "III", "IV"][ASSIDU_SEUILS.indexOf(seuil)];
+    await envoyerPush(uid, { type: "badge", url: "./", tag: "badge-assidu-" + palier,
+      title: "Encore " + reste + " séance" + (reste > 1 ? "s" : "") + " pour ASSIDU " + palier,
+      body: "Le badge est à portée de main cette semaine." });
+  }
+});
+
+// ── LES MESSAGES MIS DE CÔTÉ la nuit : 8 h 05 ─────────────────────────────
+exports.pushApresHeuresCalmes = onSchedule(Object.assign({ schedule: "5 8 * * *" }, _optsPlanifie), async () => {
+  const s = await db.ref("push_attente").get();
+  const tout = s.val() || {};
+  for (const uid of Object.keys(tout)) {
+    const m = tout[uid];
+    await db.ref("push_attente/" + uid).remove();
+    // Au-delà de 12 h, le message a perdu son sens : on ne l'envoie pas.
+    if (!m || Date.now() - (Number(m.at) || 0) > 12 * 3600e3) continue;
+    await envoyerPush(uid, m, { attendre: false });
+  }
+});
+
+// ── DÉCLENCHEURS ──────────────────────────────────────────────────────────
+const _optsDecl = { region: DB_REGION, secrets: [VAPID_PRIVATE_KEY] };
+// RÉPONSE DU COACH à un bilan : reponseCoach passe de vide à écrit.
+exports.pushReponseCoachBilan = onValueWritten(Object.assign({ ref: "/users/{uid}/bilans/{i}/reponseCoach" }, _optsDecl), async (ev) => {
+  const avant = ev.data.before.val(), apres = ev.data.after.val();
+  if (!apres || avant) return;
+  await envoyerPush(ev.params.uid, { type: "coach", url: "./", tag: "coach-bilan-" + ev.params.i,
+    title: "Ton coach a répondu à ton bilan", body: String(apres).slice(0, 120) });
+});
+// … et à un bilan de fin de cycle (rite).
+exports.pushReponseCoachRite = onValueWritten(Object.assign({ ref: "/users/{uid}/rites/{i}/reponseCoach" }, _optsDecl), async (ev) => {
+  const avant = ev.data.before.val(), apres = ev.data.after.val();
+  if (!apres || avant) return;
+  await envoyerPush(ev.params.uid, { type: "coach", url: "./", tag: "coach-rite-" + ev.params.i,
+    title: "Ton coach a répondu à ton bilan de cycle", body: String(apres).slice(0, 120) });
+});
+// FILLEUL INSCRIT : /parrainage/<parrain>/filleuls/<filleul>. ⚠ Le parrainage
+// n'existe pas encore dans l'application : ce déclencheur attend son nœud, et
+// ne coûte rien tant que rien n'y est écrit.
+exports.pushFilleulInscrit = onValueCreated(Object.assign({ ref: "/parrainage/comptes/{parrain}/filleuls/{filleul}" }, _optsDecl), async (ev) => {
+  const f = ev.data.val() || {};
+  await envoyerPush(ev.params.parrain, { type: "filleul", url: "./?parrainage=1", tag: "filleul-" + ev.params.filleul,
+    title: (f.prenom ? f.prenom + " vient" : "Ton filleul vient") + " de s’inscrire avec ton code",
+    body: "Son premier paiement t’offrira 1 mois de RepCore." });
+});
+// NOUVEAU DÉFI DANS LE CANAL : un message du coach marqué defi:true. Les
+// destinataires sont ses athlètes, lus dans l'annuaire du coach.
+exports.pushDefiCanal = onValueCreated(Object.assign({ ref: "/canaux/{coach}/messages/{msg}" }, _optsDecl), async (ev) => {
+  const m = ev.data.val() || {};
+  if (m.type !== "defi") return;
+  const obj = require("./defis-calcul").texteObjectif(m);
+  const fin = Number(m.fin) ? new Date(Number(m.fin)).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "numeric", month: "long" }) : "";
+  const a = await db.ref("annuaire_coach/" + ev.params.coach).get();
+  for (const uid of Object.keys(a.val() || {}))
+    await envoyerPush(uid, { type: "defi", url: "./?canal=1", tag: "defi-" + ev.params.msg,
+      title: "Nouveau défi : " + String(m.titre || "ton coach te lance un défi").slice(0, 60),
+      body: (m.collectif ? "En équipe : " : "Objectif : ") + obj + (fin ? " d’ici le " + fin : "") + ". Tu le relèves ?" });
+});
+
+// ══ LES DÉFIS DU CANAL ═════════════════════════════════════════════════════
+//
+// Un défi est un message du Canal de type 'defi' :
+//   /canaux/<coach>/messages/<id> = {at, type:'defi', titre, texte?, mesure,
+//     objectif, collectif, debut, fin, recompense?}            (écrit par le coach)
+// À côté, hors du message, ce que le coach n'écrit pas :
+//   /canaux/<coach>/defis/<id>/participants/<athlète>/inscription  (l'athlète : {le, classement, pseudo?})
+//   /canaux/<coach>/defis/<id>/participants/<athlète>/{valeur, metrique, termine, termineLe, place, maj}
+//                                                                  (ICI SEULEMENT)
+//   /canaux/<coach>/defis/<id>/public   le résumé que lisent les athlètes (ICI SEULEMENT)
+//   /canaux/<coach>/defis/<id>/etat     paliers annoncés, dernier message système, clôture (ICI SEULEMENT)
+//   /defis_resultats/<athlète>/<id>     un défi bouclé : de quoi dater les badges (ICI SEULEMENT)
+// Le calcul lui-même vit dans defis-calcul.js, pur.
+const D = require("./defis-calcul");
+
+async function _defisDuCoach(coach) {
+  const s = await db.ref("canaux/" + coach + "/messages").orderByChild("type").equalTo("defi").get();
+  const out = [];
+  s.forEach((c) => { const v = c.val(); if (v && v.type === "defi") out.push(Object.assign({}, v, { id: c.key })); });
+  return out;
+}
+function _defiRef(coach, id, sous) { return db.ref("canaux/" + coach + "/defis/" + id + (sous ? "/" + sous : "")); }
+// La valeur d'un athlète, relue dans SON dossier (séances et créneaux seulement).
+async function _majParticipant(coach, defi, cle, t) {
+  const [ses, cfg] = await Promise.all([_lire(cle, "sessions"), _lire(cle, "sessions_config")]);
+  const u = { sessions: ses, sessions_config: cfg };
+  const valeur = D.valeurDefi(u, defi);
+  const metrique = D.metriqueClassement(defi, u).valeur;
+  await _defiRef(coach, defi.id, "participants/" + cle).update({ valeur, metrique, maj: t });
+}
+async function _participants(coach, defi) {
+  const s = await _defiRef(coach, defi.id, "participants").get();
+  const brut = s.val() || {};
+  const cles = Object.keys(brut).filter((k) => brut[k] && brut[k].inscription);
+  const prenoms = await Promise.all(cles.map((k) => _lire(k, "fname")));
+  return cles.map((k, i) => {
+    const p = brut[k], ins = p.inscription || {};
+    return { cle: k, nom: String(ins.pseudo || prenoms[i] || "").trim() || "Athlète", classement: ins.classement === true,
+      valeur: Number(p.valeur) || 0, metrique: Number(p.metrique) || 0, termine: !!p.termine, termineLe: Number(p.termineLe) || 0 };
+  });
+}
+// UN MESSAGE SYSTÈME dans le Canal, et la pastille des athlètes rallumée.
+async function _publierSysteme(coach, defi, texte, t) {
+  const id = "s" + t + "-" + String(defi.id).slice(-6).replace(/[^a-z0-9]/gi, "");
+  await db.ref("canaux/" + coach + "/messages/" + id).set({ at: t, type: "systeme", texte: String(texte).slice(0, 1000), defiId: defi.id });
+  await db.ref("coach_public/" + coach + "/canalDernier").set(t);
+  return id;
+}
+// Tout ce qui découle des valeurs : qui a fini, les places, le résumé public,
+// et l'annonce du jour s'il y en a une.
+async function _recalculerDefi(coach, defi, t, o) {
+  const parts = await _participants(coach, defi);
+  const equipe = D.partEquipe(defi, parts.map((p) => p.valeur));
+  for (const p of parts) {
+    const fini = D.aTermine(defi, p.valeur, equipe);
+    if (fini && !p.termineLe) p.termineLe = t;
+    p.termine = fini;
+  }
+  const pl = D.places(parts);
+  await Promise.all(parts.map((p) => _defiRef(coach, defi.id, "participants/" + p.cle)
+    .update({ termine: p.termine, termineLe: p.termine ? p.termineLe : null, place: pl[p.cle] || null })));
+  await _defiRef(coach, defi.id, "public").set(Object.assign(D.resumePublic(defi, parts), { maj: t }));
+  if (!(o && o.sansAnnonce)) {
+    const etat = (await _defiRef(coach, defi.id, "etat").get()).val() || {};
+    const a = D.annonceSuivante(defi, etat, parts, equipe, _paris(t).jour);
+    if (a) {
+      await _publierSysteme(coach, defi, a.texte, t);
+      await _defiRef(coach, defi.id, "etat").set(a.etat);
+    }
+  }
+  return { parts, equipe };
+}
+async function _estClos(coach, id) { return (await _defiRef(coach, id, "etat/clos").get()).val() === true; }
+
+// ── À CHAQUE SÉANCE TERMINÉE ─────────────────────────────────────────────
+// Le dossier part en entier (PUT) : ce déclencheur ne se réveille que si
+// `sessions` a changé. La valeur est RECALCULÉE depuis les séances, jamais
+// incrémentée : une séance supprimée ou resynchronisée deux fois ne fausse rien.
+exports.defiApresSeance = onValueWritten(Object.assign({ ref: "/users/{uid}/sessions" }, _optsDecl), async (ev) => {
+  const uid = ev.params.uid;
+  const coach = await _lire(uid, "coachEmailKey");
+  if (!coach) return;
+  const t = Date.now();
+  for (const defi of await _defisDuCoach(coach)) {
+    if (t < Number(defi.debut) || await _estClos(coach, defi.id)) continue;
+    const ins = (await _defiRef(coach, defi.id, "participants/" + uid + "/inscription").get()).val();
+    if (!ins) continue;
+    await _majParticipant(coach, defi, uid, t);
+    await _recalculerDefi(coach, defi, t);
+  }
+});
+// ── À L'INSCRIPTION (et à la désinscription) ─────────────────────────────
+// Les séances déjà faites depuis le début du défi comptent tout de suite.
+exports.defiInscription = onValueWritten(Object.assign({ ref: "/canaux/{coach}/defis/{id}/participants/{uid}/inscription" }, _optsDecl), async (ev) => {
+  const { coach, id, uid } = ev.params;
+  const m = (await db.ref("canaux/" + coach + "/messages/" + id).get()).val();
+  if (!m || m.type !== "defi" || await _estClos(coach, id)) return;
+  const defi = Object.assign({}, m, { id });
+  const t = Date.now();
+  if (ev.data.after.val()) await _majParticipant(coach, defi, uid, t);
+  await _recalculerDefi(coach, defi, t, { sansAnnonce: !ev.data.after.val() });
+});
+
+// ── LA TÂCHE DU MATIN : rappel des 48 h, annonces en attente, clôture ─────
+async function _cloturer(coach, defi, t) {
+  const parts = await _participants(coach, defi);
+  for (const p of parts) await _majParticipant(coach, defi, p.cle, t);
+  const r = await _recalculerDefi(coach, defi, t, { sansAnnonce: true });
+  const g = D.gagnant(r.parts);
+  await _publierSysteme(coach, defi, D.textePodium(defi, r.parts), t);
+  for (const p of r.parts.filter((x) => x.termine)) {
+    await db.ref("defis_resultats/" + p.cle + "/" + defi.id).set({
+      titre: String(defi.titre || "").slice(0, 80), mesure: defi.mesure, collectif: !!defi.collectif,
+      fin: Number(defi.fin), termineLe: p.termineLe || t, champion: !!(g && g.cle === p.cle), coach });
+  }
+  const etat = (await _defiRef(coach, defi.id, "etat").get()).val() || {};
+  await _defiRef(coach, defi.id, "etat").set(Object.assign({}, etat, { clos: true, closLe: t, dernierSysteme: _paris(t).jour,
+    champion: g ? g.cle : null }));
+}
+async function _coachsAvecCanal() {
+  try {
+    const jeton = await admin.credential.applicationDefault().getAccessToken();
+    const racine = db.ref().toString().replace(/\/$/, "");
+    const r = await fetch(racine + "/canaux.json?shallow=true&access_token=" + encodeURIComponent(jeton.access_token));
+    if (r.ok) { const d = await r.json(); return d ? Object.keys(d) : []; }
+  } catch (e) { /* repli */ }
+  return Object.keys((await db.ref("canaux").get()).val() || {});
+}
+exports.defisQuotidien = onSchedule(Object.assign({ schedule: "0 9 * * *" }, _optsPlanifie), async () => {
+  const t = Date.now(), jour = _paris(t).jour;
+  for (const coach of await _coachsAvecCanal()) {
+    for (const defi of await _defisDuCoach(coach)) {
+      const etat = (await _defiRef(coach, defi.id, "etat").get()).val() || {};
+      if (etat.clos || t < Number(defi.debut)) continue;
+      if (t > Number(defi.fin)) {
+        // Un message système est déjà parti aujourd'hui pour ce défi : la
+        // clôture attend demain — un par jour, podium compris.
+        if (etat.dernierSysteme !== jour) await _cloturer(coach, defi, t);
+        continue;
+      }
+      if (Number(defi.fin) - t <= 48 * 3600e3 && !etat.rappel48) {
+        const parts = await _participants(coach, defi);
+        for (const p of parts.filter((x) => !x.termine))
+          await envoyerPush(p.cle, { type: "defi", url: "./?canal=1", tag: "defi-48h-" + defi.id,
+            title: "Plus que 48 h : " + String(defi.titre || "ton défi").slice(0, 60),
+            body: "Objectif : " + D.texteObjectif(defi) + ". Tu en es à " + String(p.valeur).replace(".", ",") + "." }, { attendre: false });
+        await _defiRef(coach, defi.id, "etat/rappel48").set(true);
+      }
+      // Les annonces restées en attente (plafond d'un message par jour).
+      await _recalculerDefi(coach, defi, t);
+    }
+  }
+});
+
+// ══ LE PARRAINAGE ══════════════════════════════════════════════════════════
+//
+// LES NŒUDS (règles : database.rules.json, bloc « parrainage ») :
+//   /parrainage/codes/<CODE>            → clé du parrain  (le parrain, une fois ; jamais relu par un client)
+//   /parrainage/codesPublics/<CODE>     → {prenom}        (le parrain, une fois ; lu à l'inscription)
+//   /parrainage/appareils/<id>          → clé             (le premier compte qui s'en sert)
+//   /parrainage/demandes/<filleul>      → {code, le, appareil}  (le filleul, UNE fois) + {etat, raison} (ici)
+//   /parrainage/comptes/<clé>           → {code (le titulaire, une fois), filleuls:{id:{date, statut, prenom}},
+//                                          moisGagnes, payants, mentorLe, parrain:{code, le}}  (ICI SEULEMENT)
+//   /parrainage/liens/<filleul>         → {parrain, id}   (ICI SEULEMENT, lu par personne)
+//   /parrainage/emails/<adresse normalisée> → filleul (ICI SEULEMENT)
+//   /parrainage/evenements/<parrain>/<id>  → {type, at, prenom, mois}  (ICI ; lu par le parrain)
+//
+// Le filleul reçoit son mois d'essai en plus dès que sa demande est acceptée ;
+// le PARRAIN ne reçoit rien tant que le filleul n'a pas payé (anti-fraude).
+const P = require("./parrainage-calcul");
+const BONUS_ESSAI_JOURS = 30;   // = OFFRES.essai_parrainage (1 mois) côté client
+
+async function _val(chemin) { return (await db.ref(chemin).get()).val(); }
+
+exports.parrainageDemande = onValueCreated(Object.assign({ ref: "/parrainage/demandes/{uid}" }, _optsDecl), async (ev) => {
+  const uid = ev.params.uid;
+  const d = ev.data.val() || {};
+  const t = Date.now();
+  const code = String(d.code || "").toUpperCase();
+  const parrain = P.CODE_RE.test(code) ? await _val("parrainage/codes/" + code) : null;
+  const filleulEmail = P.cleVersEmail(uid);
+  const [appareil, lien, emailVu, droits, creeLe, prenom, amb] = await Promise.all([
+    d.appareil ? _val("parrainage/appareils/" + String(d.appareil).replace(/[^a-z0-9]/g, "")) : null,
+    _val("parrainage/liens/" + uid),
+    _val("parrainage/emails/" + P.cleNormalisee(filleulEmail)),
+    lireDroits(uid),
+    _val("users/" + uid + "/createdAt"),
+    _val("users/" + uid + "/fname"),
+    _val("ambassadeurs_liens/" + uid)]);
+  const dec = P.deciderRattachement(Object.assign({}, d, { code }), {
+    filleul: uid, filleulEmail, parrain, parrainEmail: parrain ? P.cleVersEmail(parrain) : "",
+    appareilsParrain: (appareil && appareil === parrain) ? { [d.appareil]: true } : {},
+    dejaFilleul: !!lien, dejaAmbassadeur: !!amb, emailDejaVu: !!emailVu, creeLe, maintenant: t,
+    dejaPaye: !!(droits && /^paypal/.test(String(droits.source || "")))
+  });
+  const dem = "parrainage/demandes/" + uid;
+  if (!dec.ok) { await db.ref(dem).update({ etat: "refuse", raison: dec.raison, traiteLe: t }); return; }
+  const id = P.idFilleul(uid);
+  const nom = String(prenom || "").trim().slice(0, 24);
+  await db.ref().update({
+    ["parrainage/comptes/" + parrain + "/filleuls/" + id]: { date: t, statut: "inscrit", prenom: nom || null },
+    ["parrainage/comptes/" + uid + "/parrain"]: { code, le: t },
+    ["parrainage/liens/" + uid]: { parrain, id },
+    ["parrainage/emails/" + P.cleNormalisee(filleulEmail)]: uid,
+    [dem + "/etat"]: "accepte", [dem + "/traiteLe"]: t
+  });
+  // LE MOIS D'ESSAI EN PLUS. Essai déjà ouvert : il s'allonge. Pas encore :
+  // ouvrirEssai l'ajoutera à l'ouverture.
+  if (droits && Number(droits.essaiOuvertLe) > 0 && Number(droits.essaiFinit) > 0) {
+    const fin = Number(droits.essaiFinit) + BONUS_ESSAI_JOURS * 864e5;
+    const champs = { essaiFinit: fin };
+    if (droits.source === "essai") champs.echeance = Math.max(Number(droits.echeance) || 0, fin);
+    await ecrireDroits(uid, champs);
+  } else if (!droits || !droits.palier || droits.palier === "aucun") {
+    await db.ref("droits/" + uid + "/bonusEssaiJours").set(BONUS_ESSAI_JOURS);
+  }
+});
+
+/**
+ * LE PREMIER PAIEMENT D'UN FILLEUL : son statut passe à « payant », son
+ * parrain gagne 1 mois (prolongation de ses droits), un événement est écrit
+ * et le parrain est prévenu. Au 10e filleul payant : 1 mois d'Ultime en plus.
+ * Idempotent (transaction) : le webhook et l'appel du client peuvent tomber
+ * ensemble, un seul mois est donné. Rien aux renouvellements.
+ */
+async function parrainagePaiement(cle, source) {
+  const lien = await _val("parrainage/liens/" + cle);
+  if (!lien || !lien.parrain || !lien.id) return null;
+  const t = Date.now();
+  const prenom = await _val("users/" + cle + "/fname");
+  let res = null;
+  const tx = await db.ref("parrainage/comptes/" + lien.parrain).transaction((compte) => {
+    const c = compte || {};
+    const p = P.premierPaiement(c, lien.id, t);
+    if (!p) return undefined;                       // déjà payant : rien
+    res = p;
+    const f = Object.assign({}, c.filleuls[lien.id], p.filleul);
+    if (prenom && !f.prenom) f.prenom = String(prenom).slice(0, 24);
+    const out = Object.assign({}, c, { moisGagnes: p.moisGagnes, payants: p.payants,
+      filleuls: Object.assign({}, c.filleuls, { [lien.id]: f }) });
+    if (p.mentor) out.mentorLe = t;
+    return out;
+  });
+  if (!tx.committed || !res) return null;
+  if (prenom) res.prenom = String(prenom).trim().slice(0, 24) || res.prenom;
+  // LE MOIS OFFERT : les droits du parrain sont PROLONGÉS d'un mois, au palier
+  // qu'il a (Essentielle s'il n'en a aucun). La facturation PayPal n'est pas
+  // touchée — voir le commit « Parrainage » pour l'engagement de 12 mois.
+  const d = (await lireDroits(lien.parrain)) || {};
+  const palier = (d.palier && d.palier !== "aucun" && !(Number(d.echeance) > 0 && Number(d.echeance) < t)) ? d.palier : "essentielle";
+  const champs = { palier, echeance: prolonger(d.echeance, MONTH_MS),
+    moisOfferts: (Number(d.moisOfferts) || 0) + 1 };
+  if (!d.source) champs.source = "parrainage";
+  if (res.mentor) champs.bonusUltimeFin = prolonger(d.bonusUltimeFin, MONTH_MS);
+  await ecrireDroits(lien.parrain, champs);
+  const evt = db.ref("parrainage/evenements/" + lien.parrain).push
+    ? db.ref("parrainage/evenements/" + lien.parrain).push() : null;
+  const cleEvt = evt && evt.key ? evt.key : "e" + t;
+  await db.ref("parrainage/evenements/" + lien.parrain + "/" + cleEvt).set({
+    type: res.mentor ? "mentor" : "paiement", at: t, prenom: res.prenom, mois: 1, source: String(source || "") });
+  const txt = P.textePaiement(res);
+  await envoyerPush(lien.parrain, { type: "filleul", url: "./?parrainage=1", tag: "filleul-paie-" + lien.id,
+    title: txt.title, body: txt.body });
+  return res;
+}
+
+// ══ LES PAGES PUBLIQUES, AVEC LEUR APERÇU (Open Graph) ════════════════════
+//
+// /@<pseudo> et /coach/<slug> sont des pages STATIQUES (p/ et c/), servies
+// telles quelles par l'hébergement. Leur aperçu dans un DM Instagram ou
+// WhatsApp est celui par défaut : les robots n'exécutent pas le script qui
+// remplit la page.
+//
+// CETTE FONCTION SERT LA MÊME PAGE AVEC L'APERÇU DE LA PERSONNE : prénom et
+// rang (image : l'emblème du rang, app/img/rangs/rang_<n>-og.jpg), ou nom,
+// phrase et photo du coach. Le gabarit est relu sur l'hébergement lui-même
+// (une seule page à maintenir), gardé dix minutes en mémoire.
+//
+// ⚠ ELLE NE SERT QUE SI firebase.json LUI CONFIE LES DEUX CHEMINS — voir le
+//   commentaire « //pages » de firebase.json. Plan Blaze.
+const OG = require("./pages-og");
+const _gabarits = {};
+async function _gabarit(dossier) {
+  const g = _gabarits[dossier];
+  if (g && Date.now() - g.t < 600e3) return g.html;
+  const r = await fetch(OG.ORIGINE + "/" + dossier + "/index.html");
+  if (!r.ok) throw new Error("gabarit " + dossier + " : " + r.status);
+  const html = await r.text();
+  _gabarits[dossier] = { t: Date.now(), html };
+  return html;
+}
+exports.pagePublique = onRequest({ cors: false, memory: "256MiB" }, async (req, res) => {
+  const c = OG.analyserChemin(req.path);
+  const dossier = c && c.type === "coach" ? "c" : "p";
+  let html;
+  try { html = await _gabarit(dossier); }
+  catch (e) { res.redirect(302, OG.ORIGINE + "/i"); return; }
+  let o = null;
+  try {
+    if (c && c.type === "athlete") o = OG.ogAthlete(c.cle, await _val("profils_publics/" + c.cle));
+    else if (c && c.type === "coach") o = OG.ogCoach(c.cle, await _val("vitrines/" + c.cle));
+  } catch (e) { o = null; }
+  res.set("Cache-Control", "public, max-age=300, s-maxage=600");
+  res.status(200).send(OG.injecterOg(html, o));
+});
+
+// ══ LES AMBASSADEURS ═══════════════════════════════════════════════════════
+//
+// LES NŒUDS (database.rules.json) :
+//   /ambassadeurs/<CODE>          la fiche — {nom, instagram, avantage, commissionPct, palierPct,
+//                                 palierSeuil, dureeMois, actif, secret, creeLe} (l'administrateur),
+//                                 et, ICI : stats {clics, inscrits, payants, ca}, filleuls/<id>,
+//                                 commissions/<AAAA-MM>/<paiement> {montant, pct, commission, payeLe,
+//                                 dueLe, statut?} — l'administrateur n'y pose que statut:'payee'
+//   /ambassadeurs_publics/<CODE>  {nom, avantage, actif} — lu à l'inscription
+//   /ambassadeurs_vue/<secret>    le résumé, lu par l'ambassadeur via son lien secret
+//   /ambassadeurs_demandes/<clé>  l'inscrit, UNE fois ; /ambassadeurs_liens, _paiements, _ventes : ici
+// AUCUN PAIEMENT AUTOMATIQUE : les commissions dues s'exportent en CSV (écran admin).
+const A = require("./ambassadeurs-calcul");
+
+// LE CLIC, appelé par /i (et la page d'accueil) au passage d'un lien ?amb=.
+// Aucune réponse à lire : 204, et rien si le code n'existe pas ou est éteint.
+exports.ambClic = onRequest({ cors: true, memory: "128MiB" }, async (req, res) => {
+  const code = String((req.query && req.query.c) || "").toUpperCase();
+  try {
+    if (A.CODE_AMB_RE.test(code)) {
+      const [nom, actif] = await Promise.all([_val("ambassadeurs/" + code + "/nom"), _val("ambassadeurs/" + code + "/actif")]);
+      if (nom && actif !== false) await db.ref("ambassadeurs/" + code + "/stats/clics").transaction((n) => (Number(n) || 0) + 1);
+    }
+  } catch (e) { /* un clic perdu ne vaut pas une erreur */ }
+  res.set("Cache-Control", "no-store");
+  res.status(204).send("");
+});
+
+async function _ambConfig(code) {
+  const ch = ["nom", "actif", "commissionPct", "palierPct", "palierSeuil", "dureeMois", "secret"];
+  const v = await Promise.all(ch.map((k) => _val("ambassadeurs/" + code + "/" + k)));
+  const o = {}; ch.forEach((k, i) => { if (v[i] !== null && v[i] !== undefined) o[k] = v[i]; });
+  return o.nom ? o : null;
+}
+// LE RÉSUMÉ PUBLIC (lien secret), recalculé après chaque événement et chaque matin.
+async function _ambMajVue(code) {
+  const a = await _val("ambassadeurs/" + code);
+  if (!a || !/^[a-z0-9]{24}$/.test(String(a.secret || ""))) return null;
+  const t = Date.now();
+  const cfg = A.config(a);
+  const v = Object.assign(A.resume(code, a, t), { commissionPct: cfg.commissionPct, palierPct: cfg.palierPct,
+    palierSeuil: cfg.palierSeuil, dureeMois: cfg.dureeMois, actif: cfg.actif, maj: t });
+  await db.ref("ambassadeurs_vue/" + a.secret).set(v);
+  return v;
+}
+
+// L'INSCRIPTION : une demande par compte, jugée ici. Un seul avantage : venu
+// par un ambassadeur, on n'est pas filleul d'un parrain (et inversement).
+exports.ambassadeurDemande = onValueCreated(Object.assign({ ref: "/ambassadeurs_demandes/{uid}" }, _optsDecl), async (ev) => {
+  const uid = ev.params.uid;
+  const d = ev.data.val() || {};
+  const t = Date.now();
+  const code = String(d.code || "").toUpperCase();
+  const dem = "ambassadeurs_demandes/" + uid;
+  const cfg = A.CODE_AMB_RE.test(code) ? await _ambConfig(code) : null;
+  const [lien, parrain, droits, creeLe] = await Promise.all([
+    _val("ambassadeurs_liens/" + uid), _val("parrainage/liens/" + uid), lireDroits(uid), _val("users/" + uid + "/createdAt")]);
+  let raison = null;
+  if (!cfg || cfg.actif === false) raison = "code_inconnu";
+  else if (lien) raison = "deja_rattache";
+  else if (parrain) raison = "deja_parraine";
+  else if (droits && /^paypal/.test(String(droits.source || ""))) raison = "deja_client";
+  else if (Number(creeLe) > 0 && t - Number(creeLe) > P.DELAI_RATTACHEMENT_MS) raison = "compte_ancien";
+  if (raison) { await db.ref(dem).update({ etat: "refuse", raison, traiteLe: t }); return; }
+  const id = P.idFilleul(uid);
+  await db.ref().update({
+    ["ambassadeurs_liens/" + uid]: { code, id, le: t },
+    ["ambassadeurs/" + code + "/filleuls/" + id]: { inscritLe: t },
+    [dem + "/etat"]: "accepte", [dem + "/traiteLe"]: t
+  });
+  await db.ref("ambassadeurs/" + code + "/stats/inscrits").transaction((n) => (Number(n) || 0) + 1);
+  // L'inscription par ambassadeur, au jour, pour l'écran « Viralité » (l'app
+  // ne compte, elle, que l'inscription par src).
+  await db.ref("attribution/jours/" + ATT.jourParis(t) + "/amb/" + code + "/inscription").transaction((n) => (Number(n) || 0) + 1);
+  // L'AVANTAGE « essai+1mois » : le même mois que celui du parrainage.
+  if (droits && Number(droits.essaiOuvertLe) > 0 && Number(droits.essaiFinit) > 0) {
+    const fin = Number(droits.essaiFinit) + BONUS_ESSAI_JOURS * 864e5;
+    const champs = { essaiFinit: fin };
+    if (droits.source === "essai") champs.echeance = Math.max(Number(droits.echeance) || 0, fin);
+    await ecrireDroits(uid, champs);
+  } else if (!droits || !droits.palier || droits.palier === "aucun") {
+    await db.ref("droits/" + uid + "/bonusEssaiJours").set(BONUS_ESSAI_JOURS);
+  }
+  await _ambMajVue(code);
+});
+
+/**
+ * UN PAIEMENT D'UN INSCRIT D'AMBASSADEUR : la commission, pendant `dureeMois`
+ * à partir de son PREMIER paiement, inscrite dans
+ * /ambassadeurs/<CODE>/commissions/<mois>/<paiement>. Idempotent : un même
+ * encaissement vu deux fois (appel du client, webhook) ne compte qu'une fois.
+ * @param {string} cle
+ * @param {{montant:number|string, le?:number, abonnement?:string, id?:string, venteId?:string}} p
+ */
+async function ambassadeurPaiement(cle, p) {
+  const lien = await _val("ambassadeurs_liens/" + cle);
+  if (!lien || !lien.code || !lien.id) return null;
+  const montant = Number(p && p.montant);
+  if (!(montant > 0)) return null;
+  const code = lien.code;
+  const pid = A.idPaiement(Object.assign({}, p, { montant }));
+  const vente = p.venteId ? String(p.venteId).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 60) : "";
+  const tx = await db.ref("ambassadeurs_paiements/" + pid).transaction((cur) => (cur ? undefined : { code, le: Date.now() }));
+  if (!tx.committed) {
+    // Déjà compté : on garde seulement l'identifiant de vente, pour un
+    // éventuel remboursement.
+    if (vente) { const x = await _val("ambassadeurs_paiements/" + pid); if (x && x.mois) await db.ref("ambassadeurs_ventes/" + vente).set({ code, mois: x.mois, pid }); }
+    return null;
+  }
+  const cfg = (await _ambConfig(code)) || {};
+  const fRef = "ambassadeurs/" + code + "/filleuls/" + lien.id;
+  const filleul = (await _val(fRef)) || {};
+  let payants = Number(await _val("ambassadeurs/" + code + "/stats/payants")) || 0;
+  if (!filleul.premierPaiement) {
+    const r = await db.ref("ambassadeurs/" + code + "/stats/payants").transaction((n) => (Number(n) || 0) + 1);
+    payants = Number(r && r.snapshot && r.snapshot.val ? r.snapshot.val() : payants + 1) || payants + 1;
+  }
+  const le = Number(p.le) || Date.now();
+  await db.ref("ambassadeurs/" + code + "/stats/ca").transaction((n) => Math.round(((Number(n) || 0) + montant) * 100) / 100);
+  const c = A.commissionPour(cfg, filleul, payants, { montant, le });
+  const maj = {};
+  if (!filleul.premierPaiement) maj[fRef + "/premierPaiement"] = le;
+  if (c) {
+    maj["ambassadeurs/" + code + "/commissions/" + c.mois + "/" + pid] = { filleul: lien.id, montant: c.montant, pct: c.pct,
+      commission: c.commission, payeLe: c.payeLe, dueLe: c.dueLe };
+    maj["ambassadeurs_paiements/" + pid + "/mois"] = c.mois;
+    if (vente) maj["ambassadeurs_ventes/" + vente] = { code, mois: c.mois, pid };
+  }
+  if (Object.keys(maj).length) await db.ref().update(maj);
+  await _ambMajVue(code);
+  return c;
+}
+// Un remboursement : la commission du paiement passe « remboursée ».
+async function ambassadeurRemboursement(ress) {
+  let id = String(ress.sale_id || "");
+  if (!id && Array.isArray(ress.links)) {
+    const up = ress.links.find((l) => l && l.rel === "up");
+    if (up && up.href) id = String(up.href).split("/").pop();
+  }
+  id = id.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 60);
+  if (!id) return null;
+  const v = await _val("ambassadeurs_ventes/" + id);
+  if (!v || !v.code || !v.mois || !v.pid) return null;
+  await db.ref("ambassadeurs/" + v.code + "/commissions/" + v.mois + "/" + v.pid + "/statut").set("rembourse");
+  await _ambMajVue(v.code);
+  return v;
+}
+// CHAQUE MATIN : les commissions passent « dues » à 30 jours — les résumés suivent.
+exports.ambassadeursQuotidien = onSchedule(Object.assign({ schedule: "20 6 * * *" }, _optsPlanifie), async () => {
+  const tous = (await _val("ambassadeurs_publics")) || {};
+  for (const code of Object.keys(tous)) { try { await _ambMajVue(code); } catch (e) { console.error("ambassadeur", code, e); } }
+});
+
+// ══ L'ATTRIBUTION ══════════════════════════════════════════════════════════
+//
+// D'où viennent les inscrits : un compteur par jour, par `src` (le type de
+// visuel ou de lien qui a circulé) et par code ambassadeur, dans
+// /attribution/jours/<AAAA-MM-JJ>/{src|amb}/<clé>/<métrique>. Métriques :
+// partage, telechargement, copie (écrits par l'app), clic (ici), inscription
+// (l'app), payant (ici, au premier encaissement). Lu par l'écran « Viralité ».
+// AUCUNE DONNÉE PERSONNELLE : ni IP, ni cookie, ni code parrain, ni
+// identifiant — des entiers. Voir privacy.html, « Mesure d'audience ».
+const ATT = require("./attribution-calcul");
+async function _incr(chemin) { await db.ref(chemin).transaction((n) => (Number(n) || 0) + 1); }
+
+// L'ARRIVÉE : appelée par /i, la page d'accueil et les pages publiques, une
+// fois par jour et par lien sur un même appareil (dédoublonné chez lui, en
+// localStorage). Elle compte aussi le clic d'un ambassadeur (comme ambClic).
+exports.attribArrivee = onRequest({ cors: true, memory: "128MiB" }, async (req, res) => {
+  const q = req.query || {};
+  try {
+    const t = Date.now();
+    for (const c of ATT.cheminsArrivee(q, t)) await _incr(c);
+    const amb = String(q.amb || "").toUpperCase();
+    if (ATT.AMB_RE.test(amb)) {
+      const [nom, actif] = await Promise.all([_val("ambassadeurs/" + amb + "/nom"), _val("ambassadeurs/" + amb + "/actif")]);
+      if (nom && actif !== false) await _incr("ambassadeurs/" + amb + "/stats/clics");
+    }
+  } catch (e) { /* un clic perdu ne vaut pas une erreur */ }
+  res.set("Cache-Control", "no-store");
+  res.status(204).send("");
+});
+
+// LE PREMIER PAIEMENT : la source d'origine du compte (users/<clé>/origine,
+// posée par l'app à l'inscription) reçoit sa date de paiement, et le compteur
+// « payant » de son src (et de son ambassadeur) prend un. Une seule fois.
+async function attributionPaiement(cle) {
+  const t = Date.now();
+  let origine = null;
+  const tx = await db.ref("users/" + cle + "/origine/payeLe").transaction((cur) => (cur ? undefined : t));
+  if (!tx.committed) return null;
+  origine = (await _val("users/" + cle + "/origine")) || {};
+  // L'ambassadeur qui compte est celui du RATTACHEMENT (lien suivi ou code
+  // saisi à l'inscription), pas seulement celui du lien d'arrivée.
+  const lien = await _val("ambassadeurs_liens/" + cle);
+  const o = Object.assign({}, origine, lien && lien.code ? { amb: lien.code } : {});
+  for (const c of ATT.cheminsEvenement("payant", o, t)) await _incr(c);
+  return origine;
+}
