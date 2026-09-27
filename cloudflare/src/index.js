@@ -17,7 +17,7 @@ import { creerMetier } from './metier.js';
 import { minute } from './planif.js';
 import { repondreAppel } from './appels.js';
 import { cloudinaryDestroy } from './medias.js';
-import { creerPaypal, recevoirWebhook } from './paypal.js';
+import { creerPaypal, recevoirWebhook, jetonPaypal } from './paypal.js';
 
 // Les fonctions appelées par l'app (protocole onCall, jeton Firebase vérifié).
 const APPELS = { cloudinaryDestroy };
@@ -70,6 +70,22 @@ export default {
         const o = outils(env);
         ctx.waitUntil(o.M.arrivee(q).catch(() => {}));
         return reponse('', 204);
+      }
+      // LES CLÉS SONT-ELLES JUSTES, et pas seulement posées ? Un jeton PayPal
+      // demandé, un ping Cloudinary authentifié. Rien d'autre ne sort que oui/non
+      // et le code HTTP, jamais une clé.
+      if (url.pathname === '/sante' && url.searchParams.get('cles') === '1') {
+        const r = {};
+        try { await jetonPaypal(env); r.paypal = 'ok'; } catch (e) { r.paypal = String(e.message || e).slice(0, 60); }
+        try {
+          const k = String(env.CLOUDINARY_API_KEY || '').trim(), sec = String(env.CLOUDINARY_API_SECRET || '').trim();
+          if (!k || !sec) r.cloudinary = 'non configuré';
+          else {
+            const c = await fetch('https://api.cloudinary.com/v1_1/dntu57ml/ping', { headers: { Authorization: 'Basic ' + btoa(k + ':' + sec) } });
+            r.cloudinary = c.ok ? 'ok' : 'HTTP ' + c.status;
+          }
+        } catch (e) { r.cloudinary = 'injoignable'; }
+        return reponse(JSON.stringify(r));
       }
       if (url.pathname === '/sante') {
         return reponse(JSON.stringify({ ok: true, base: !!env.FIREBASE_DB_URL, secret: !!env.FIREBASE_DB_SECRET,
