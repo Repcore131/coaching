@@ -37699,7 +37699,7 @@ function _rendreBoutonAchat(){
       return actions.order.create({
         purchase_units:[{
           description:('RepCore : '+(p.nom||'Programme')).slice(0,127),
-          custom_id:p.id,
+          custom_id:_cleComptePaypal()+'|'+p.id,
           // ⚠ LE MONTANT SE CONSTRUIT DEPUIS LES CENTIMES. Passer un flottant
           // ici est le chemin le plus court vers un ordre a 14.899999999999999.
           amount:{currency_code:'EUR',value:(p.prixCts/100).toFixed(2)}
@@ -37722,7 +37722,7 @@ function _rendreBoutonAchat(){
         if(!p) return null;
         return actions.order.create({purchase_units:[{
           description:('RepCore : '+(p.nom||'Programme')).slice(0,127),
-          custom_id:p.id,
+          custom_id:_cleComptePaypal()+'|'+p.id,
           amount:{currency_code:'EUR',value:(p.prixCts/100).toFixed(2)}
         }]});
       },
@@ -37770,6 +37770,12 @@ function _paiementPayPalOptions(sdk){
 // L'ACHAT EST ECRIT, PUIS LE PROGRAMME S'APPLIQUE. Dans cet ordre : si
 // l'application echoue ou si l'athlete refuse d'ecraser ses seances, il a
 // PAYE et doit garder son programme — il le retrouvera dans la boutique.
+// LA CLÉ DU COMPTE, DANS custom_id (127 caractères au plus chez PayPal) : le
+// serveur léger relit l'abonnement ou la commande chez PayPal pour savoir qui
+// a payé — « <clé>|<programme> » pour un achat. Jamais l'adresse du payeur.
+function _cleComptePaypal(){
+  return String((currentUser&&currentUser.email)||'').toLowerCase().replace(/\./g,',').slice(0,100);
+}
 function _enregistrerAchat(id,ordre){
   const p=programmeDuCatalogue(id);
   if(!p||!currentUser) return false;
@@ -111972,7 +111978,10 @@ function renderPaypalButton(planId,coachId){
       // frottement que cette étape sert à détecter.
       rcm('paypal_clicked');
       sessionStorage.setItem('rc_paypal_return','1');
-      return actions.subscription.create({'plan_id':planId});
+      // LE COMPTE VOYAGE AVEC L'ABONNEMENT : custom_id est ce que le serveur
+      // léger relit chez PayPal pour savoir à qui il appartient, jamais
+      // l'adresse du payeur.
+      return actions.subscription.create({'plan_id':planId,'custom_id':_cleComptePaypal()});
     },
     onApprove:async function(data){
       const pendingStr=sessionStorage.getItem('pendingCodePayload');

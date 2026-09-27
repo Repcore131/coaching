@@ -69,13 +69,27 @@ les pages publiques (`index.html`, `i/`, `p/`, `c/`), puis livrée : c'est ce qu
 - **Le Worker n'écrit jamais dans `droits/`** : dans l'app, un nœud `droits/` non vide prime sur le
   dossier, et y écrire aurait coupé l'essai d'un filleul ou rétrogradé un parrain abonné.
 - État de travail (curseurs des lots) : `/worker/jobs/<nom>`, fermé à tous les clients.
-- **PayPal** (`POST /paypal`) : chaque événement est vérifié chez PayPal (signature), traité une
-  seule fois (`paypal_evenements`). Paiement : premier paiement (parrain, ambassadeur, statistique
-  « payant »), et réouverture après un impayé. Résiliation : l'accès reste ouvert jusqu'à la fin
-  payée (`accessExpiry`, jamais `paymentStatus` coupé net), plus les mois offerts en réserve. Un
-  coach garde son palier jusque-là ; le travail `fins_coachs` (6 h) le referme ensuite.
-- **Le mois offert au parrain** est crédité dans son dossier : fin de résiliation reculée d'un mois,
-  mois en réserve s'il paie déjà (ou est suivi, ou a un Ultime acheté), sinon un mois d'Essentielle.
+- **PayPal** (`POST /paypal`) : chaque événement est vérifié chez PayPal (signature).
+  - **Une seule fois** : `paypal_evenements/<id>` passe à `en_cours` avant le traitement, à `fait`
+    après son succès seulement. Un renvoi d'un événement `fait` : 200. Pendant un `en_cours` de moins
+    de 10 min : 503 (PayPal renverra). Plus vieux : repris. Une erreur : état `erreur`, réponse 500.
+  - **Le compte** se lit dans `custom_id` (posé par l'app sur l'abonnement, `<clé>|<programme>` sur
+    la commande d'un programme), relu chez PayPal ; jamais d'après l'adresse du payeur. Un événement
+    sans compte est rangé dans `paypal_orphelins/<abonnement>` et rejoué, dans l'ordre, dès que le lien
+    est fait (par `indexer()` ou par un événement suivant).
+  - **Paiement** : n'ouvre que si l'abonnement, relu chez PayPal, est `ACTIVE` et que c'est le courant
+    du dossier (`paypalSubscriptionId`). Un coach retrouve le palier du plan payé. Le premier paiement
+    (parrain, ambassadeur, statistique « payant ») n'est compté que si plan, montant et devise sont
+    dans `OFFRES_PAYPAL` (miroir des offres de l'app, vérifié par un test) ; un programme, au prix de
+    la boutique.
+  - **Résiliation, suspension, fin** : ignorées pour un abonnement qui n'est pas le courant. L'accès
+    reste ouvert jusqu'à `max(fin déjà posée, fin payée + mois en réserve)`. La réserve n'est consommée
+    qu'à la fin effective (travail `fins_coachs`, 6 h, en transaction) ; si l'abonnement repart avant,
+    elle reste acquise. Un coach garde son palier jusque-là, puis il se referme.
+  - **Jeton OAuth** gardé en mémoire du worker jusqu'à son expiration.
+- **Le mois offert au parrain** est crédité dans son dossier : fin PayPal reculée d'un mois (seulement
+  si PayPal a vraiment posé une fin), accès daté prolongé, mois en réserve s'il paie déjà (ou est
+  suivi, ou a un Ultime acheté), sinon un mois d'Essentielle.
 - **Les appels de l'app** (`POST /fn/<nom>`, jeton Firebase vérifié) : `cloudinaryDestroy`, qui
   supprime une vidéo de correction (la sienne, ou celle d'un de ses athlètes pour le coach).
 - **Fin d'accès** : chaque jour à 11 h, « Ton accès se termine dans N jours » (3 jours ou moins),
@@ -136,7 +150,7 @@ propre processus, l'un après l'autre, et le tout échoue si un seul échoue. Au
 | `index.test.mjs` | le point d'entrée `fetch` : `OPTIONS /fn/cloudinaryDestroy` → 204 **sans corps** et en-têtes CORS ; `POST` sans jeton → 401 avec CORS ; aucune erreur ne sort sans CORS |
 | `appels.test.mjs` | le jeton Firebase (RS256) et la suppression Cloudinary : propriétaire et coach réel acceptés, id usurpé et coach usurpé refusés (403), index absent (409), compte Cloudinary pris dans le worker |
 | `metier.test.mjs` | le métier sur une base en mémoire, budget de requêtes compris |
-| `paypal.test.mjs` | les webhooks PayPal (signature, paiement, résiliation) |
+| `paypal.test.mjs` | les webhooks PayPal : signature, double envoi, erreur puis renvoi, `en_cours` repris, orphelin rejoué, liaison par `custom_id`, paiement après annulation, suspension + annulation avec mois en réserve, ancien abonnement annulé, coach qui repaie, montants contre `OFFRES_PAYPAL`, achat de programme, jeton en cache |
 | `push.test.mjs` | chiffrement RFC 8291 et jeton VAPID, vérifiés côté appareil |
 
 Un fichier seul : `node test/index.test.mjs` (depuis `cloudflare/`).

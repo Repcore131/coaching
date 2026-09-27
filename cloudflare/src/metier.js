@@ -374,7 +374,8 @@ export function creerMetier(deps) {
     if (prenom) res.prenom = String(prenom).trim().slice(0, 24) || res.prenom;
     // LE MOIS OFFERT, CRÉDITÉ DANS LE DOSSIER (jamais dans droits/, voir
     // bonusEssai), et SANS JAMAIS RIEN RETIRER :
-    //   · abonné qui a résilié (fin posée, pas encore atteinte) : sa fin recule d'un mois ;
+    //   · abonné qui a résilié (fin PayPal posée, pas encore atteinte) : sa fin recule d'un mois ;
+    //   · accès daté sans fin PayPal (un mois déjà offert) : il s'allonge d'un mois ;
     //   · abonné en cours, athlète suivi, ou accès Ultime par un programme :
     //     le mois va en RÉSERVE — il s'ajoutera à la fin de son abonnement
     //     (paypal.js, fermerALaFin). Lui ouvrir Essentielle ferait descendre
@@ -389,14 +390,28 @@ export function creerMetier(deps) {
   }
 
   async function crediterMoisOffert(parrain, t) {
-    const [statut, paiementSt, ech, role, prog] = await Promise.all(['status', 'paymentStatus', 'accessExpiry', 'role', 'programmesAchetes'].map((c) => _lire(parrain, c)));
+    const [statut, paiementSt, ech, role, prog, finPaypal] = await Promise.all(['status', 'paymentStatus', 'accessExpiry', 'role', 'programmesAchetes', 'abonnement/finAccesPaypal'].map((c) => _lire(parrain, c)));
     if (role === 'coach') return 'coach';
     const e = Number(ech) || 0;
     const ultimeProgramme = !!(prog && typeof prog === 'object' && Object.values(prog).some((x) => x && Number(x.ouvertJusqu) > t));
     const b = 'users/' + parrain + '/';
-    if (statut === 'AUTONOMIE_PREMIUM' && paiementSt === 'active' && e > t) {
-      await db.ref().update({ [b + 'accessExpiry']: e + MONTH_MS, [b + 'abonnement/finAccesPaypal']: e + MONTH_MS, [b + 'updatedAt']: t });
+    // ⚠ « FIN RECULÉE » SEULEMENT SI PAYPAL A VRAIMENT POSÉ UNE FIN. Un
+    //   accessExpiry seul (un mois déjà offert, un essai) n'est pas une
+    //   résiliation : y écrire finAccesPaypal inventait une fin PayPal, que le
+    //   paiement suivant aurait « rouverte » en effaçant l'accès offert.
+    //   Le mois compté ici est noté dans paypal_fins : si l'abonnement repart
+    //   avant la fin, il retourne en réserve (paypal.js).
+    const fp = Number(finPaypal) || 0;
+    if (statut === 'AUTONOMIE_PREMIUM' && paiementSt === 'active' && e > t && fp > 0) {
+      const fin = Math.max(e, fp) + MONTH_MS;
+      await db.ref().update({ [b + 'accessExpiry']: fin, [b + 'abonnement/finAccesPaypal']: fin, [b + 'updatedAt']: t });
+      await db.ref('paypal_fins/' + parrain).transaction((f) => (f ? Object.assign({}, f, { fin, moisRecules: (Number(f.moisRecules) || 0) + 1 }) : undefined));
       return 'fin_reculee';
+    }
+    // Un accès daté qui ne vient pas de PayPal (mois déjà offert) : il s'allonge.
+    if (statut === 'AUTONOMIE_PREMIUM' && paiementSt === 'active' && e > t) {
+      await db.ref().update({ [b + 'accessExpiry']: e + MONTH_MS, [b + 'updatedAt']: t });
+      return 'acces_prolonge';
     }
     if ((statut === 'AUTONOMIE_PREMIUM' && paiementSt === 'active') || statut === 'COACHING_SUIVI' || ultimeProgramme) {
       await db.ref('parrainage/comptes/' + parrain + '/moisEnReserve').transaction((n) => (Number(n) || 0) + 1);
