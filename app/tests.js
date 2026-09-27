@@ -24550,10 +24550,11 @@ async function testExercices(){
         if(pas.source!=='pas'||pas.f<=NEAT_BASE) return _echec('pas : '+JSON.stringify(pas));
         return def.source==='defaut'&&def.f===NEAT_BASE
           ?true:_echec('défaut : '+JSON.stringify(def));})());
-      ok('QA — LE PLAFOND DU SURPLUS SE BORNE SUR LA DÉPENSE AFFICHÉE, RÉGLAGE DU COACH COMPRIS',(()=>{
+      ok('QA — LE PLANCHER SE PLAFONNE SUR LA DÉPENSE AFFICHÉE, RÉGLAGE DU COACH COMPRIS',(()=>{
         // Deux chemins calculaient la dépense : besoinsProposes (affichée) et
-        // _depensePourPlafond (qui borne le surplus), sur deux échelles. Ils
-        // doivent rendre le même chiffre — et suivre le niveau réglé par le coach.
+        // _depensePourPlafond (qui plafonne le plancher à 85 %), sur deux
+        // échelles et deux formules. Ils doivent rendre le même chiffre — et
+        // suivre le niveau d'activité réglé par le coach.
         const u=_ath({bilans:[_bil(2,{'deb-job':'Comptable'})]});
         const a=besoinsProposes(u), p=_depensePourPlafond(u);
         if(a.depense!==p) return _echec('affichée '+a.depense+' contre plafond '+p);
@@ -24561,6 +24562,14 @@ async function testExercices(){
         const ac=besoinsProposes(uc), pc=_depensePourPlafond(uc);
         if(ac.depense<=a.depense) return _echec('le réglage du coach ne change pas la dépense affichée');
         if(ac.depense!==pc) return _echec('réglage du coach : affichée '+ac.depense+' contre plafond '+pc);
+        // SANS TOURS DE MESURE (Harris-Benedict), et avec une correction du coach.
+        const _sansTours=x=>{ const bb=_bil(2,{'deb-job':'Comptable'}); delete bb['deb-neck']; delete bb['deb-waist']; delete bb['deb-hips'];
+          return _ath(Object.assign({bilans:[bb]},x||{})); };
+        const uh=_sansTours(), ah=besoinsProposes(uh), ph=_depensePourPlafond(uh);
+        if(ah.depense!==ph) return _echec('sans tours : affichée '+ah.depense+' contre plafond '+ph);
+        // La correction du coach, elle, ne déplace PAS ce plafond : il protège
+        // le plancher, qu'un métabolisme corrigé à la baisse ne doit pas abaisser.
+        if(_depensePourPlafond(_sansTours({correctionMB:0.85}))!==ph) return _echec('la correction du coach déplace le plafond du plancher');
         // Et le bilan annonce le facteur que le calcul applique.
         const f=facteurProfession('Comptable').f, n=nafRetenu(u).n.f;
         return f===n?true:_echec('bilan annonce '+f+', le calcul applique '+n);})());
@@ -31714,9 +31723,13 @@ async function testExercices(){
         const b=besoinsProposes(u);
         if(!b||b.source===null) return _echec('aucune proposition : '+((b&&b.manque)||[]).join(', '));
         // Le metabolisme doit etre celui de 71 kg, pas celui de 80.
-        if(b.mb!==mbMifflin(71,178,32,'Homme'))
+        // mbEstime : la formule retenue (Harris-Benedict depuis le 07/09/2026).
+        if(b.mb!==mbEstime(71,178,32,'Homme'))
           return _echec('les grammages sont cales sur un autre poids : mb='+b.mb
-            +' contre '+mbMifflin(71,178,32,'Homme')+' a 71 kg');
+            +' contre '+mbEstime(71,178,32,'Homme')+' a 71 kg');
+        // Et le plafond du surplus se borne sur cette meme depense.
+        if(_depensePourPlafond(u)!==b.depense)
+          return _echec('plafond borne sur '+_depensePourPlafond(u)+' pour une depense affichee de '+b.depense);
         // (L'encadré « Poids de référence » qui l'affichait a été retiré de la
         // fiche coach le 22/09/2026, build 1402 : la lecture reste, pas lui.)
         // SANS AUCUNE PESEE NI BILAN CHIFFRE : le poids d'inscription sert de
@@ -40291,20 +40304,23 @@ async function testExercices(){
           return b.on.kcal>b.off.kcal?true
             :_echec('les deux journees pesent pareil : '+b.on.kcal+' et '+b.off.kcal);})());
 
-        ok('AUCUNE JOURNEE NE PASSE SOUS LE PLANCHER, cycle ou pas',(()=>{
-          // Le report remonte la journee HAUTE ; il ne doit pas etre l'occasion
-          // de laisser filer la basse.
+        // ⚠ LE PLANCHER NE RELEVE PLUS LES JOURNEES (Kevin, 24/09/2026, build
+        //   1504 : « supprime les blocages et limites »). Il se calcule et se
+        //   dit, il ne corrige plus. Ce qu'on garde : il ne depasse jamais 85 %
+        //   de la depense AFFICHEE, sans quoi il interdirait toute seche — et
+        //   une journee qui passe dessous reste une journee calculee, pas
+        //   une journee remontee en silence.
+        ok('LE PLANCHER RESTE SOUS 85 % DE LA DEPENSE AFFICHEE, et ne releve rien',(()=>{
           for(const ph of ['seche','maintien','pdm']){
             const c=poser(ph);
-            const pl=plancherKcal(c);
-            if(pl==null) continue;
-            for(const cyc of [true,false]){
-              const b=besoinsProposes(c,{cycle:cyc});
-              if(!b||b.source===null) continue;
-              for(const [nom,j] of [['ON',b.on],['OFF',b.off]])
-                if(j.kcal<pl) return _echec(ph+', cycle='+cyc+' : '+nom+' a '+j.kcal
-                  +' kcal sous le plancher de '+pl);
-            }
+            const pe=plancherEffectif(c);
+            const b=besoinsProposes(c,{cycle:true});
+            if(!b||b.source===null||!(pe.kcal>0)) continue;
+            if(pe.plafonne&&pe.majoration===1&&pe.kcal>Math.max(pe.abs,Math.round(b.depense*PLANCHER_PLAFOND_DEPENSE))+1)
+              return _echec(ph+' : plancher '+pe.kcal+' au-dessus de 85 % de '+b.depense);
+            const sans=besoinsProposes(c,{cycle:false});
+            if(b.off.kcal>=b.on.kcal) return _echec(ph+' : le jour OFF a été remonté au niveau du ON');
+            if(!sans||sans.on.kcal!==sans.off.kcal) return _echec(ph+' : sans cycle, deux journées différentes');
           }
           return true;})());
 
@@ -62495,18 +62511,20 @@ async function testExercices(){
 
       const _sauveU=currentUser;
       try{
-        ok('La bannière d\'accueil rend le message épinglé',(()=>{
+        // La zone ne recopie plus le canal : elle porte la relance photo (voir
+        // renderEpingleAccueil). Avec un coach et sans photo, elle se montre ;
+        // la photo posee, elle se tait.
+        ok('La bannière d\'accueil relance la photo, et se tait une fois posée',(()=>{
           currentUser=U('lea@t.fr');
-          try{ localStorage.setItem('rc_coach_profil',JSON.stringify({key:null,
-            d:{canalEpingle:{id:'m1',at:Date.now(),titre:'Nouvelle vidéo',
-               texte:'Regardez-la avant jeudi.',lien:''}}})); }catch(e){}
+          currentUser.role='athlete'; delete currentUser.athletePhoto;
           renderEpingleAccueil();
           const el=document.getElementById('clh-annonce');
           if(!el) return _echec('emplacement absent du DOM');
-          if(el.style.display!=='block') return _echec('emplacement masqué');
-          const t=el.textContent||'';
-          return /Nouvelle vidéo/.test(t)&&/avant jeudi/.test(t)
-            ?true:_echec('«'+t.slice(0,70)+'»');})());
+          if(el.style.display!=='block') return _echec('relance masquée malgré un coach et aucune photo');
+          if(!/photo de profil/.test(el.textContent||'')) return _echec('«'+(el.textContent||'').slice(0,70)+'»');
+          currentUser.athletePhoto='data:image/png;base64,x';
+          renderEpingleAccueil();
+          return el.style.display==='none'?true:_echec('la relance reste après la photo');})());
         ok('Sans coach rattaché, la bannière reste muette',(()=>{
           // Le profil coach en cache peut survivre à un détachement : sans ce
           // garde, l'ex-athlète continuait de voir le mot de son ancien coach.
