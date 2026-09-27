@@ -1039,6 +1039,16 @@ function planIdOffre(cle,annuel){
 }
 // Les deux paliers, dans l'ordre d'affichage. `dispo` est ce qui décide de
 // montrer ou non une carte : il n'y a pas d'état « bientôt disponible ».
+// ══ LES TARIFS : tarifs.json, A LA RACINE DU DEPOT ════════════════════════
+// Les prix de l'app, de la page de vente et des CGV viennent de ce fichier, et
+// de lui seul. Le bloc ci-dessous en est la COPIE, posee par
+// scripts/tarifs.mjs : ne le modifie pas ici, modifie tarifs.json et relance
+// le script (scripts/verif/tarifs.mjs refuse une copie en retard).
+// Pas de fetch au demarrage : les prix doivent exister avant le premier
+// ecran, hors ligne compris.
+/* TARIFS:DEBUT */
+const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":12,"essentielle":{"mois":9.5,"an":114},"ultime":{"mois":24.9,"an":298.8},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":1},"coach":{"libre":0,"coach":19,"pro":39},"coaching":{"programme_perso":{"prix":99,"mois":3},"revision_prog":{"prix":40,"mois":1},"boutique_prog":{"prix":14.9,"mois":3},"coaching_essentiel":{"prix":150,"mois":1},"coaching_transfo":{"prix":350,"mois":3},"coaching_evolution":{"prix":600,"mois":6}}});
+/* TARIFS:FIN */
 // ══ LES OFFRES, ECRITES UNE SEULE FOIS (lot 1) ═══════════════════════════
 //
 // UNE SEULE TABLE POUR LE COACHING ET POUR LES ABONNEMENTS. Deux tables
@@ -1054,15 +1064,16 @@ function planIdOffre(cle,annuel){
 //   prixAn   le tarif annuel d'un abonnement, quand il existe
 //
 // ⚠ AUCUN MONTANT EN DUR AILLEURS. Tout ecran qui affiche un prix le lit ici,
-//   par prixOffre ou prixMoisAnnuel.
+//   par prixOffre ou prixMoisAnnuel ; et ici, chaque montant vient de TARIFS.
+const _TC=TARIFS.coaching;
 const OFFRES=Object.freeze({
   // ── Ce que le coach vend ────────────────────────────────────────────
-  programme_perso:    Object.freeze({lib:'Programme personnalisé',   prix:99,   palier:'ultime', mois:3, type:'ponctuel'}),
-  revision_prog:      Object.freeze({lib:'Révision de programme',    prix:40,   palier:'ultime', mois:1, type:'ponctuel'}),
-  boutique_prog:      Object.freeze({lib:'Programme de la boutique', prix:14.9, palier:'ultime', mois:3, type:'ponctuel'}),
-  coaching_essentiel: Object.freeze({lib:'Coaching Essentiel',       prix:150,  palier:'suivi',  mois:1, type:'coaching'}),
-  coaching_transfo:   Object.freeze({lib:'Coaching Transformation',  prix:350,  palier:'suivi',  mois:3, type:'coaching'}),
-  coaching_evolution: Object.freeze({lib:'Coaching Évolution',       prix:600,  palier:'suivi',  mois:6, type:'coaching'}),
+  programme_perso:    Object.freeze({lib:'Programme personnalisé',   prix:_TC.programme_perso.prix,    palier:'ultime', mois:_TC.programme_perso.mois,    type:'ponctuel'}),
+  revision_prog:      Object.freeze({lib:'Révision de programme',    prix:_TC.revision_prog.prix,      palier:'ultime', mois:_TC.revision_prog.mois,      type:'ponctuel'}),
+  boutique_prog:      Object.freeze({lib:'Programme de la boutique', prix:_TC.boutique_prog.prix,      palier:'ultime', mois:_TC.boutique_prog.mois,      type:'ponctuel'}),
+  coaching_essentiel: Object.freeze({lib:'Coaching Essentiel',       prix:_TC.coaching_essentiel.prix, palier:'suivi',  mois:_TC.coaching_essentiel.mois, type:'coaching'}),
+  coaching_transfo:   Object.freeze({lib:'Coaching Transformation',  prix:_TC.coaching_transfo.prix,   palier:'suivi',  mois:_TC.coaching_transfo.mois,   type:'coaching'}),
+  coaching_evolution: Object.freeze({lib:'Coaching Évolution',       prix:_TC.coaching_evolution.prix, palier:'suivi',  mois:_TC.coaching_evolution.mois, type:'coaching'}),
   // ── Ce que l'application vend, quand personne ne suit la personne ───
   // ⚠ ENGAGEMENT DOUZE MOIS, DEUX FAÇONS DE LE RÉGLER (24/09/2026, demande de
   //   Kevin). `prixAn` N'EST PLUS UN TARIF REMISÉ : c'est le même total, payé en
@@ -1072,8 +1083,8 @@ const OFFRES=Object.freeze({
   //   plus « sans engagement », et la remise (− x %) disparaît d'elle-même
   //   puisqu'elle se calcule — elle reviendra le jour où `prixAn` redescendra
   //   sous douze mensualités, sans qu'une ligne bouge.
-  essentielle:        Object.freeze({lib:'Essentielle', prix:9.50,  prixAn:114,   palier:'essentielle', mois:0, type:'abonnement'}),
-  ultime:             Object.freeze({lib:'Ultime',      prix:24.90, prixAn:298.80, palier:'ultime',      mois:0, type:'abonnement'}),
+  essentielle:        Object.freeze({lib:'Essentielle', prix:TARIFS.essentielle.mois, prixAn:TARIFS.essentielle.an, palier:'essentielle', mois:0, type:'abonnement'}),
+  ultime:             Object.freeze({lib:'Ultime',      prix:TARIFS.ultime.mois,      prixAn:TARIFS.ultime.an,      palier:'ultime',      mois:0, type:'abonnement'}),
   // ── La sortie de pack : le premier mois a moitie prix, UNE SEULE FOIS ──
   // ⚠ LE PRIX SE CALCULE, IL NE S'ECRIT PAS : la moitie d'Ultime suit Ultime
   //   le jour ou Ultime bouge. Un 12,45 ecrit en dur aurait vecu plus
@@ -1081,12 +1092,12 @@ const OFFRES=Object.freeze({
   //   Le prix se LIT sur Ultime au moment ou on le demande : un nombre
   //   recopie ici serait la moitie d'un prix d'hier.
   ultime_demi:        Object.freeze({lib:'Ultime, premier mois',
-                        get prix(){ return Math.round(OFFRES.ultime.prix*50)/100; },
+                        get prix(){ return Math.round(OFFRES.ultime.prix*TARIFS.ultime_demi.part*100)/100; },
                         palier:'ultime', mois:1, type:'abonnement'}),
   // ── Et l'essai, qui ne se paie pas ──────────────────────────────────
-  essai:              Object.freeze({lib:'Essai',       prix:0,     palier:'ultime', mois:1, type:'essai'}),
+  essai:              Object.freeze({lib:'Essai',       prix:0,     palier:'ultime', mois:TARIFS.essai.mois, type:'essai'}),
   // Le mois d'essai EN PLUS du filleul d'un parrainage (s'ajoute à `essai`).
-  essai_parrainage:   Object.freeze({lib:'Essai offert par un ami', prix:0, palier:'ultime', mois:1, type:'essai'}),
+  essai_parrainage:   Object.freeze({lib:'Essai offert par un ami', prix:0, palier:'ultime', mois:TARIFS.essai_parrainage.moisEnPlus, type:'essai'}),
 });
 // PURE. Un montant en euros, a la francaise.
 // ⚠ ESPACE INSECABLE AVANT LE SYMBOLE : la coupure « 9,95 » / « € » en fin de
@@ -1395,13 +1406,13 @@ const COACH_PLANS=Object.freeze(['libre','coach','pro']);
 const PAYPAL_PLAN_ID_COACH='P-9JD300001T4718058NK2RF5Q';   // à créer sur developer.paypal.com — 19 EUR/mois
 const PAYPAL_PLAN_ID_PRO='P-1WS20264K4576284KNK2RF5Y';     // idem — 39 EUR/mois
 const COACH_PALIERS=Object.freeze([
-  Object.freeze({cle:'libre', titre:'Libre', prix:0, quota:1,
+  Object.freeze({cle:'libre', titre:'Libre', prix:TARIFS.coach.libre, quota:1,
    periode:'', detail:'Un athlète suivi, sans carte bancaire et sans durée.',
    planId:()=>''}),
-  Object.freeze({cle:'coach', titre:'Coach', prix:19, quota:15,
+  Object.freeze({cle:'coach', titre:'Coach', prix:TARIFS.coach.coach, quota:15,
    periode:'par mois', detail:'Jusqu\'à quinze athlètes actifs.',
    planId:()=>PAYPAL_PLAN_ID_COACH}),
-  Object.freeze({cle:'pro', titre:'Pro', prix:39, quota:Infinity,
+  Object.freeze({cle:'pro', titre:'Pro', prix:TARIFS.coach.pro, quota:Infinity,
    periode:'par mois', detail:'Sans limite de nombre.',
    planId:()=>PAYPAL_PLAN_ID_PRO}),
 ]);
@@ -1605,7 +1616,7 @@ const PROMESSE_COACH='Gratuit pour votre premier client, sans limite de durée, 
 // UN MOIS COMPLET, ET COMPLET VEUT DIRE ULTIME. On ne convertit personne en
 // lui montrant une version amputee : pendant l'essai, tout ce qu'Ultime ouvre
 // est ouvert. Ce qu'un coach fait reste a un coach.
-const ESSAI_JOURS=30;
+const ESSAI_JOURS=TARIFS.essai.jours;
 // ⚠ CE QUE LE CLIENT TIENT, ET CE QU'IL NE TIENT PAS.
 //
 // Tant que les fonctions ne tournent pas (plan Spark), l'essai est garde par
@@ -112064,7 +112075,7 @@ function renderPaypalButton(planId,coachId){
            //   ⚠ POUR L'ATHLETE SEULEMENT : les formules coach se facturent au
            //     mois, sans duree, et un terme ecrit dans leur dossier
            //     promettrait un engagement que personne n'a pris.
-           engagementJusqu:(_estCoach?undefined:moisApres(Date.now(),12))});
+           engagementJusqu:(_estCoach?undefined:moisApres(Date.now(),TARIFS.engagementMois))});
         rcm('subscription_activated');
         // LE SERVEUR APPREND QUEL ABONNEMENT EST À QUI : les avis de PayPal
         // (paiement, résiliation) ne portent que son identifiant.

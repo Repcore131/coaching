@@ -81,6 +81,14 @@ const src = readFileSync(CHEMIN, 'utf8');
 
 // OFFRES est un objet gele dont une entree porte un accesseur (`get prix()`)
 // qui lit OFFRES lui-meme : on l'evalue tel quel, sous son propre nom.
+// SES PRIX VIENNENT DE TARIFS (la copie de tarifs.json posee dans rc-core par
+// scripts/tarifs.mjs) : on evalue ce bloc d'abord, puis OFFRES.
+function blocTarifs() {
+  const i = src.indexOf('/* TARIFS:DEBUT */'), j = src.indexOf('/* TARIFS:FIN */');
+  if (i < 0 || j < i) throw new Error('bloc TARIFS introuvable dans ' + fichierCore + ' (node scripts/tarifs.mjs)');
+  const k = src.indexOf('const _TC=');
+  return src.slice(i, j).replace('const TARIFS=', 'var TARIFS=') + (k < 0 ? '' : src.slice(k, src.indexOf(';', k) + 1).replace('const _TC=', 'var _TC='));
+}
 function lireOffres() {
   const i = src.indexOf('const OFFRES=Object.freeze({');
   if (i < 0) throw new Error('OFFRES introuvable dans ' + fichierCore);
@@ -88,7 +96,7 @@ function lireOffres() {
   if (fin < 0) throw new Error('fin d\'OFFRES introuvable');
   const bloc = src.slice(i, fin + 4).replace('const OFFRES=', 'var OFFRES=');
   // eslint-disable-next-line no-new-func
-  return new Function(bloc + ' return OFFRES;')();
+  return new Function(blocTarifs() + bloc + ' return OFFRES;')();
 }
 const OFFRES = lireOffres();
 // LES PALIERS COACH VIVENT DANS UNE AUTRE TABLE, et leurs prix aussi. Meme
@@ -101,7 +109,7 @@ function lireCoachPaliers() {
   if (fin < 0) throw new Error('fin de COACH_PALIERS introuvable');
   const bloc = src.slice(i, fin + 4).replace('const COACH_PALIERS=', 'var COACH_PALIERS=');
   // eslint-disable-next-line no-new-func
-  return new Function('var PAYPAL_PLAN_ID_COACH="",PAYPAL_PLAN_ID_PRO="";'
+  return new Function(blocTarifs() + 'var PAYPAL_PLAN_ID_COACH="",PAYPAL_PLAN_ID_PRO="";'
     + bloc + ' return COACH_PALIERS;')();
 }
 const COACH_PALIERS = lireCoachPaliers();
