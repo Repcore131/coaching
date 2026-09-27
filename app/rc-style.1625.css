@@ -14062,3 +14062,7 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"]{color-scheme:light;--scrim:rgba(0,0,0,.45)}
 :root[data-theme="clair"] img,:root[data-theme="clair"] video,:root[data-theme="clair"] canvas{color-scheme:normal}
 /* ═══ FIN DU THEME CLAIR GENERE ═══ */
+
+/* LE HALO DES SILHOUETTES dans la carte musculaire a l ecran (27/09/2026) :
+   meme lecon que le visuel exporte, le corps au repos se perdait dans le fond. */
+.musc-vue canvas.musc-base{filter:drop-shadow(0 0 6px rgba(255,255,255,.24)) drop-shadow(0 0 14px rgba(255,255,255,.1))}

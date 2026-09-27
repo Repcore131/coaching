@@ -41188,7 +41188,9 @@ function nomSurVisuels(u){
 // séance aujourd'hui ; record, badge, série, cycle demain) :
 //   'transparent' — PNG sans fond, à poser sur sa propre photo en story ;
 //   'photo'       — la photo de l'athlète en « cover », assombrie en bas ;
-//   'rouge'       — le dégradé rouge et la trame diagonale de la carte séance.
+//   'carbone'     — un dégradé noir et une trame de fibre de carbone. Il a
+//                   remplacé le fond ROUGE le 27/09/2026 (Kevin : « des muscles
+//                   coloriés en rouge sur du rouge, c'est pas foufou »).
 // ⚠ LA PHOTO NE QUITTE JAMAIS LE TÉLÉPHONE. Elle est lue par un <input>,
 //   gardée en mémoire le temps de la page (une URL d'objet), et dessinée dans
 //   le canevas : rien ne l'envoie, rien ne la stocke. Seul le CHOIX du fond
@@ -41203,9 +41205,9 @@ function nomSurVisuels(u){
 //   3. sa sortie passe visuelFondFormat(fond) à _storySortirTelechargement /
 //      _storySortirPartage, avec le nom visuelNomFichier('repcore-xxx',fond).
 const VISUEL_FOND=Object.freeze({
-  LISTE:Object.freeze(['transparent','photo','rouge']),
+  LISTE:Object.freeze(['transparent','photo','carbone']),
   CLE:'rc_visuel_fond',
-  LIB:Object.freeze({transparent:'Sans fond',photo:'Ma photo',rouge:'Rouge'}),
+  LIB:Object.freeze({transparent:'Sans fond',photo:'Ma photo',carbone:'Carbone'}),
   // La vignette : 180 × 320, le 9:16 de la story.
   VL:180, VH:320
 });
@@ -41219,6 +41221,8 @@ function _visuelPhotoPrete(){
 function visuelFondChoisi(){
   let f=null;
   try{ f=localStorage.getItem(VISUEL_FOND.CLE); }catch(e){ f=null; }
+  // Qui avait choisi le rouge retrouve le fond plein qui l'a remplacé.
+  if(f==='rouge') f='carbone';
   return VISUEL_FOND.LISTE.indexOf(f)>=0?f:'transparent';
 }
 function visuelFondMemoriser(f){
@@ -41239,9 +41243,33 @@ function visuelNomFichier(base,fond){ return base+'.'+visuelFondFormat(fond).ext
 /**
  * Peint le fond sur tout le canevas, AVANT le reste du visuel.
  * @param {CanvasRenderingContext2D} g @param {number} W @param {number} H
- * @param {'transparent'|'photo'|'rouge'} fond
+ * @param {'transparent'|'photo'|'carbone'|'rouge'} fond
  */
 function _visuelPeindreFond(g,W,H,fond){
+  if(fond==='carbone'){
+    // LE DÉGRADÉ : un noir qui s'éclaircit à peine au centre-haut, là où se
+    // posent le titre et les silhouettes, et se referme vers les bords.
+    const grad=g.createLinearGradient(0,0,W,H);
+    grad.addColorStop(0,'#1b1b1d'); grad.addColorStop(0.5,'#0f0f10'); grad.addColorStop(1,'#050505');
+    g.fillStyle=grad; g.fillRect(0,0,W,H);
+    // LA TRAME DE CARBONE : un tissage de petites cases dont le reflet
+    // alterne (horizontal, vertical), très discret pour ne rien voler aux
+    // muscles.
+    const c=Math.max(8,Math.round(W/90));
+    g.save();
+    for(let y=0;y<H;y+=c) for(let x=0;x<W;x+=c){
+      const hz=((x/c)+(y/c))%2===0;
+      const r=hz?g.createLinearGradient(x,y,x,y+c):g.createLinearGradient(x,y,x+c,y);
+      r.addColorStop(0,'rgba(255,255,255,.045)'); r.addColorStop(0.5,'rgba(255,255,255,0)'); r.addColorStop(1,'rgba(0,0,0,.25)');
+      g.fillStyle=r; g.fillRect(x,y,c,c);
+    }
+    g.restore();
+    // LE HALO : un voile clair derrière le centre, et les coins assombris.
+    const hal=g.createRadialGradient(W/2,H*0.42,0,W/2,H*0.42,Math.max(W,H)*0.62);
+    hal.addColorStop(0,'rgba(255,255,255,.07)'); hal.addColorStop(0.55,'rgba(0,0,0,0)'); hal.addColorStop(1,'rgba(0,0,0,.55)');
+    g.fillStyle=hal; g.fillRect(0,0,W,H);
+    return true;
+  }
   if(fond==='rouge'){
     // Le dégradé et la trame de _dessinerStorySeance, sur tout le format.
     const grad=g.createLinearGradient(0,0,W,H);
@@ -41285,7 +41313,7 @@ function _visuelNoteFond(fond){
   if(fond==='transparent') return 'PNG sans fond, à apposer sur ta photo en story.<br>'
     +'Dans la galerie, le visuel s’affichera en blanc : c’est normal.';
   if(fond==='photo') return 'JPEG sur ta photo, prêt à poster.<br>Ta photo reste sur ton téléphone : rien n’est envoyé.';
-  return 'JPEG sur fond rouge, prêt à poster.';
+  return 'JPEG sur fond carbone, prêt à poster.';
 }
 // Les sélecteurs à l'écran : id → {dessiner, note}. Un écran qui se redessine
 // remonte le sien ; un id absent du document est oublié au passage.
@@ -71774,7 +71802,14 @@ function _dessinerCarteMuscles(d,fond,res,signature){
     const ws=vs.map(v=>v.w*H/v.h);
     const gap=30, tot=ws[0]+ws[1]+gap;
     let x=cx-tot/2;
-    vs.forEach((v,i)=>{ _muscPoser(g,v,x,y,ws[i],H,1); x+=ws[i]+gap; });
+    // UN HALO CLAIR AUTOUR DES SILHOUETTES (Kevin, 27/09/2026 : « un petit
+    // ombrage, qu'on puisse les distinguer »). Sur un fond sombre, le corps
+    // au repos (#2a2a2a) se confondait avec lui. La silhouette est d'abord
+    // posée avec son ombre, puis repeinte nette par _muscPoser.
+    vs.forEach((v,i)=>{
+      g.save(); g.shadowColor='rgba(255,255,255,.42)'; g.shadowBlur=34;
+      g.drawImage(v.base,x,y,ws[i],H); g.drawImage(v.base,x,y,ws[i],H); g.restore();
+      _muscPoser(g,v,x,y,ws[i],H,1); x+=ws[i]+gap; });
   }
   // Les trois chiffres.
   const cw=LARG/3;
