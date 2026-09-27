@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1621';
+window.RC_BUILD='1622';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-09-27';
@@ -246,12 +246,19 @@ if('serviceWorker' in navigator){
   //   la meme version, indefiniment. `?rcv=<numero>` est une adresse qu'il n'a
   //   jamais mise en cache — sa branche generique ne trouve rien et va au
   //   reseau. C'est le dernier recours, apres desinscription et vidage.
+  // ⚠ LES AUTRES PARAMETRES SONT GARDES (27/09/2026) : une notification ouvre
+  //   « ./?bilan=1 », et une mise a jour qui la ramenait a l'accueil perdait
+  //   la raison pour laquelle on avait ouvert l'app.
+  window._rcUrlNeuve=function(n){
+    try{ const u=new URL(location.href); u.searchParams.set('rcv',String(n||Date.now()));
+      return u.pathname+u.search+u.hash; }catch(e){ return location.pathname+'?rcv='+(n||Date.now()); }
+  };
   window._rcForcerMaj=async function(n){
     try{ const regs=await navigator.serviceWorker.getRegistrations();
       for(const g of regs) await g.unregister(); }catch(e){}
     try{ const ks=await caches.keys(); for(const k of ks) await caches.delete(k); }catch(e){}
     try{ sessionStorage.removeItem('rc_maj_forcee'); }catch(e){}
-    location.replace(location.pathname+'?rcv='+(n||Date.now()));
+    location.replace(window._rcUrlNeuve(n));
   };
   // UNE VERSION EN RETARD NE SE TAIT PLUS. C'est la lecon des 19 et
   //   20/09/2026 : Kevin est reste deux jours sur une version pendant que six
@@ -305,7 +312,7 @@ if('serviceWorker' in navigator){
       // resterait inscrite et bloquerait la prochaine mise a jour de la
       // session.
       if(!distant||distant<=local){
-        try{ sessionStorage.removeItem('rc_maj_forcee'); }catch(e){}
+        try{ sessionStorage.removeItem('rc_maj_forcee'); sessionStorage.removeItem('rc_maj_forcee2'); }catch(e){}
         return false;
       }
       const deja=parseInt(sessionStorage.getItem('rc_maj_forcee')||'0',10)||0;
@@ -315,7 +322,20 @@ if('serviceWorker' in navigator){
       //   inscrit « j'ai tente 1321 », on etait toujours en 1317, et la sonde
       //   repondait « deja tente » a chaque ouverture, pour toujours. On ne
       //   recharge plus dans ce cas — la boucle reste evitee — mais on le DIT.
-      if(deja>=distant){ window._rcAnnoncerMaj(distant); return false; }
+      // ⚠ ET ON RETENTE, SEUL, AVANT DE PARLER (27/09/2026). Kevin : « il faut
+      //   que ce soit toi qui mettes tout en place ». Le bandeau attendait son
+      //   doigt chaque fois que le premier rechargement retombait sur la copie
+      //   gardee par le navigateur — GitHub Pages la garde dix minutes
+      //   (max-age=600). La seconde tentative part sur une adresse neuve,
+      //   qu'aucun cache ne connait. Le bandeau ne reste qu'au-dela, et un
+      //   second verrou empeche toute boucle.
+      if(deja>=distant){
+        const deja2=parseInt(sessionStorage.getItem('rc_maj_forcee2')||'0',10)||0;
+        if(deja2>=distant){ window._rcAnnoncerMaj(distant); return false; }
+        sessionStorage.setItem('rc_maj_forcee2',String(distant));
+        window._rcForcerMaj(distant);
+        return true;
+      }
       // ON NE RECHARGE PAS SOUS LES DOIGTS. Au chargement, l'ecran actif est
       //   le splash et la question ne se posait pas ; au retour au premier
       //   plan, le coach peut etre au milieu d'un programme ou d'un bilan, et
@@ -324,8 +344,11 @@ if('serviceWorker' in navigator){
       //   ecran sur. Et on NE POSE PAS le verrou de session dans ce cas —
       //   sinon la version ne serait plus jamais reprise.
       const actif=document.querySelector('.screen.active');
+      // PLUS DE BANDEAU ICI (27/09/2026) : la mise a jour se fait seule au
+      //   prochain ecran sur (go() consomme le drapeau), ou a la prochaine
+      //   ouverture. Personne n'a rien a toucher.
       if(actif&&RC_MAJ_SURS.indexOf(actif.id)<0){
-        window._swUpdatePending=true; window._rcAnnoncerMaj(distant); return false;
+        window._swUpdatePending=true; return false;
       }
       sessionStorage.setItem('rc_maj_forcee',String(distant));
       try{
@@ -336,7 +359,9 @@ if('serviceWorker' in navigator){
         const ks=await caches.keys();
         for(const k of ks) await caches.delete(k);
       }catch(e){}
-      location.reload();
+      // UNE ADRESSE NEUVE DES LE PREMIER ESSAI : location.reload() pouvait
+      // ressortir la page du cache du navigateur.
+      location.replace(window._rcUrlNeuve(distant));
       return true;
     }catch(e){ return false; }
   };
@@ -364,7 +389,6 @@ if('serviceWorker' in navigator){
     const active=document.querySelector('.screen.active')?.id;
     if(!active||RC_MAJ_SURS.includes(active)){ location.reload(); return true; }
     window._swUpdatePending=true;
-    try{ window._rcAnnoncerMaj&&window._rcAnnoncerMaj(0); }catch(e){}
     return false;
   };
   // LE MESSAGE DU WORKER, ET PAS SEULEMENT `controllerchange`. C'est la
@@ -433,7 +457,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1621.css">
+<link rel="stylesheet" href="./rc-style.1622.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -5790,5 +5814,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1621.js"></script>
+<script src="./rc-core.1622.js"></script>
 </body></html>

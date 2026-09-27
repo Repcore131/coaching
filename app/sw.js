@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1621';
+const CACHE = 'repcore-v1622';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -167,7 +167,7 @@ CORPS.push('./img/complements.webp');
 // ni code ni style — c'est-a-dire rien du tout.
 // Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
 // chaque build et reecrit cette ligne comme celle d'index.html.
-const ASSETS = ['./index.html', './rc-core.1621.js', './rc-style.1621.css',
+const ASSETS = ['./index.html', './rc-core.1622.js', './rc-style.1622.css',
   './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
@@ -216,7 +216,10 @@ self.addEventListener('install', e => {
     // faire échouer toute l'installation du Service Worker.
     try {
       const c = await caches.open(CACHE);
-      await Promise.allSettled(ASSETS.map(a => c.add(a)));
+      // cache:'reload' : SANS LE CACHE DU NAVIGATEUR (27/09/2026). GitHub
+      // Pages sert index.html avec max-age=600 : un worker neuf installe dans
+      // ces dix minutes rangeait l'ANCIENNE page dans le cache NEUF.
+      await Promise.allSettled(ASSETS.map(a => c.add(new Request(a, { cache: 'reload' }))));
     } catch (err) {}
     // Sans séance en cours, comportement inchangé : la mise à jour est
     // immédiate. Avec, on retient la bascule jusqu'à SEANCE_TERMINEE.
@@ -522,7 +525,14 @@ self.addEventListener('fetch', e => {
   if (url.includes('index.html') || url.endsWith('/') || url.endsWith('/coaching/')
       || _chemin0 === '/i') {
     e.respondWith((async () => {
-      const reseau = fetch(e.request).then(r => {
+      // cache:'no-cache' : on REVALIDE aupres du serveur. Sans lui, la
+      // requete sortait du cache du navigateur (dix minutes sur GitHub
+      // Pages) et le « reseau-d'abord » servait l'ancienne page.
+      // On GARDE la requete d'origine (sa redirection « manual », que la
+      // navigation exige) et on ne change que son mode de cache.
+      let _req = e.request;
+      try { _req = new Request(e.request, { cache: 'no-cache' }); } catch (err) {}
+      const reseau = fetch(_req).then(r => {
         // La mise en cache est DÉTACHÉE de la réponse servie : si le quota
         // est saturé, on journalise et on sert quand même. Un put qui échoue
         // ne doit pas casser un affichage qui, lui, fonctionne.
