@@ -5133,6 +5133,16 @@ const CLOUD={
     if(!r.ok) throw new Error('Ambassadeurs : '+r.status);
     return await r.json();
   },
+  // Réservé à l'administrateur (règles) : les cinquante dernières lignes du
+  // journal des remboursements, rétrofacturations et litiges PayPal.
+  async journalPaypal(){
+    const token=await this._getToken();
+    if(!token) throw new Error('Non connecté.');
+    const r=await fetch(this._fbUrl.replace('users.json','paypal_journal.json')+'?auth='+token
+      +'&orderBy=%22%24key%22&limitToLast=50');
+    if(!r.ok) throw new Error('Journal : '+r.status);
+    return (await r.json())||{};
+  },
   // UN ÉVÉNEMENT POUR LE SERVEUR LÉGER : /evenements/<id>, écrit une fois
   // (règles : `par` est la clé du compte connecté). true ou false, sans lever.
   async evenementPoser(id,ev){
@@ -5748,7 +5758,7 @@ function _validateAthletePkg(o){
     aNettoyer=!!(params.get('coachpkg')||params.get('athletepkg')||params.get('s')
       ||params.get('bilan')==='1'||params.get('wo')==='1'||params.get('diete')==='1'
       ||!!params.get('wrapped')||params.get('canal')==='1'||!!params.get('ref')||params.get('parrainage')==='1'
-      ||!!params.get('coach')||!!params.get('src')||!!params.get('amb'));
+      ||!!params.get('coach')||!!params.get('src')||!!params.get('amb')||params.get('paiements')==='1');
     // Coach invite → athlete device
     const cpkg=params.get('coachpkg');
     if(cpkg){
@@ -5836,6 +5846,8 @@ function _validateAthletePkg(o){
     if(/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(_vit)) try{ localStorage.setItem('rc_vitrine_coach',_vit); }catch(e){}
     // ?parrainage=1 — les push du parrainage (filleul inscrit, abonné).
     if(params.get('parrainage')==='1') window._pendingParrainageOpen=true;
+    // ?paiements=1 — le push d'un litige PayPal, pour l'administrateur.
+    if(params.get('paiements')==='1') window._pendingPaiementsOpen=true;
   }catch(e){}
   finally{
     if(aNettoyer){
@@ -7297,6 +7309,8 @@ function routeUser(){
     setTimeout(()=>{ try{ loadCanal(); }catch(e){} },1000);}
   if(window._pendingParrainageOpen){ window._pendingParrainageOpen=false;
     setTimeout(()=>{ try{ ouvrirParrainage(); }catch(e){} },1000);}
+  if(window._pendingPaiementsOpen){ window._pendingPaiementsOpen=false;
+    setTimeout(()=>{ try{ if(estAdminAmbassadeurs()) ouvrirAmbassadeurs(); }catch(e){} },1000);}
 }
 // ARBITRAGE ASSUMÉ (24/07/2026, plan Spark) — status, paymentStatus et
 // paypalSubscriptionId ne sont protégés par AUCUNE règle serveur :
@@ -18640,7 +18654,10 @@ async function ambassadeurApresInscription(u,saisi){
 // ── Les règles de « due », les mêmes que le serveur ────────────────────────
 function ambEtatCommission(x,t){
   if(!x) return 'attente';
-  if(x.statut==='rembourse') return 'rembourse';
+  // « annulee » (remboursement total, rétrofacturation, litige perdu) et
+  // l'ancien « rembourse » ; « suspendue » tant qu'un litige est ouvert.
+  if(x.statut==='rembourse'||x.statut==='annulee') return 'rembourse';
+  if(x.statut==='suspendue') return 'suspendue';
   if(x.statut==='payee') return 'payee';
   return Number(t)>=Number(x.dueLe)?'due':'attente';
 }
@@ -18648,14 +18665,15 @@ function ambEtatCommission(x,t){
 function ambResume(code,a,t){
   const s=(a&&a.stats)||{};
   const out={code,nom:String((a&&a.nom)||'').slice(0,80),clics:Number(s.clics)||0,inscrits:Number(s.inscrits)||0,
-    payants:Number(s.payants)||0,ca:0,due:0,payee:0,attente:0,rembourse:0,mois:{}};
+    payants:Number(s.payants)||0,ca:0,due:0,payee:0,attente:0,rembourse:0,suspendue:0,mois:{}};
   const com=(a&&a.commissions)||{};
   for(const m of Object.keys(com).sort()){
     const lm={ca:0,due:0,payee:0,attente:0};
     for(const id of Object.keys(com[m]||{})){
       const x=com[m][id]; if(!x) continue;
       const e=ambEtatCommission(x,t);
-      if(e==='rembourse'){ out.rembourse+=Number(x.commission)||0; continue; }
+      if(e==='rembourse'){ out.rembourse+=Number(x.commissionInitiale)||Number(x.commission)||0; continue; }
+      if(e==='suspendue'){ out.suspendue+=Number(x.commission)||0; continue; }
       lm.ca+=Number(x.montant)||0; out.ca+=Number(x.montant)||0;
       lm[e]+=Number(x.commission)||0; out[e]+=Number(x.commission)||0;
     }
@@ -18664,7 +18682,7 @@ function ambResume(code,a,t){
   }
   // LE CHIFFRE D'AFFAIRES : tout l'encaissé (stats.ca), comme le serveur.
   if(Number(s.ca)>0) out.ca=Number(s.ca);
-  for(const k of ['ca','due','payee','attente','rembourse']) out[k]=Math.round(out[k]*100)/100;
+  for(const k of ['ca','due','payee','attente','rembourse','suspendue']) out[k]=Math.round(out[k]*100)/100;
   return out;
 }
 // PURE. Le CSV des commissions DUES d'un mois, tous ambassadeurs confondus.
@@ -18706,8 +18724,36 @@ async function ouvrirAmbassadeurs(){
   if(z) z.innerHTML='<div class="sub" style="padding:32px 0;text-align:center">Chargement…</div>';
   try{ _ambTous=(await CLOUD.ambListe())||{}; }
   catch(e){ if(z) z.innerHTML='<p class="sub">Lecture impossible : '+escapeHtml(e.message||'erreur')+'</p>'; return false; }
+  // LE JOURNAL NE BLOQUE PAS L'ÉCRAN : illisible (règles pas encore
+  // déployées), la carte le dit et les ambassadeurs s'affichent quand même.
+  try{ _ambJournal=await CLOUD.journalPaypal(); }catch(e){ _ambJournal=null; }
   _ambRendre();
   return true;
+}
+let _ambJournal=null;
+const _JOURNAL_QUOI={remboursement:'Remboursement total',remboursement_partiel:'Remboursement partiel',
+  remboursement_inconnu:'Remboursement (transaction inconnue)',retrofacturation:'Rétrofacturation',
+  retrofacturation_partielle:'Rétrofacturation partielle',retrofacturation_inconnue:'Rétrofacturation (transaction inconnue)',
+  litige_ouvert:'Litige ouvert',litige_gagne:'Litige gagné',litige_perdu:'Litige perdu',litige_perdu_partiel:'Litige perdu en partie'};
+// PURE. Le journal PayPal, du plus récent au plus ancien : qui, quoi,
+// pourquoi, et ce que le serveur a repris. null : illisible.
+function htmlJournalPaypal(j){
+  if(j===null) return '<div class="card amb-journal" id="amb-journal"><div class="amb-t">Remboursements et litiges</div>'
+    +'<p class="sub amb-note">Journal illisible pour l’instant.</p></div>';
+  const lignes=Object.keys(j||{}).sort().reverse().map(k=>j[k]).filter(x=>x&&x.quoi);
+  let h='<div class="card amb-journal" id="amb-journal"><div class="amb-t">Remboursements et litiges</div>';
+  if(!lignes.length) return h+'<p class="sub amb-note">Aucun remboursement ni litige.</p></div>';
+  for(const x of lignes){
+    const d=Number(x.le)?new Date(Number(x.le)).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'}):'';
+    const litige=/^litige_(ouvert|perdu)/.test(x.quoi);
+    h+='<div class="amb-jl'+(litige?' amb-jl-alerte':'')+'">'
+      +'<div class="amb-jl-tete"><b>'+escapeHtml(_JOURNAL_QUOI[x.quoi]||x.quoi)+'</b><span class="sub">'+escapeHtml(d)+'</span></div>'
+      +'<div class="sub">'+escapeHtml([x.qui||'client inconnu',x.montant,x.premier?'premier paiement':''].filter(Boolean).join(' · '))+'</div>'
+      +(x.pourquoi?'<div class="sub">Motif : '+escapeHtml(x.pourquoi)+'</div>':'')
+      +(Array.isArray(x.actions)&&x.actions.length?'<ul class="amb-jl-actions">'+x.actions.map(a=>'<li>'+escapeHtml(a)+'</li>').join('')+'</ul>':'')
+      +'</div>';
+  }
+  return h+'</div>';
 }
 // PURE. L'écran : le formulaire, puis une carte par code.
 function htmlAmbassadeurs(tous,t){
@@ -18749,7 +18795,9 @@ function htmlAmbassadeurs(tous,t){
         +'<div><span>Chiffre d’affaires</span><b>'+_ambEuros(r.ca)+'</b></div>'
         +'<div><span>Commission due</span><b class="amb-due">'+_ambEuros(r.due)+'</b></div>'
         +'<div><span>Payée</span><b>'+_ambEuros(r.payee)+'</b></div>'
-        +'<div><span>En attente (30 j)</span><b>'+_ambEuros(r.attente)+'</b></div></div>'
+        +'<div><span>En attente (30 j)</span><b>'+_ambEuros(r.attente)+'</b></div>'
+        +(r.suspendue?'<div><span>Suspendue (litige)</span><b>'+_ambEuros(r.suspendue)+'</b></div>':'')
+        +(r.rembourse?'<div><span>Annulée</span><b>'+_ambEuros(r.rembourse)+'</b></div>':'')+'</div>'
       +(mdus.length?'<div class="amb-dus">'+mdus.map(m=>'<button type="button" class="btn btn-outline btn-sm btn-casse" style="margin:0" onclick="marquerCommissionsPayees(\''+code+'\',\''+m+'\',this)">'
         +m+' : marquer '+_ambEuros(r.mois[m].due)+' payé</button>').join('')+'</div>':'')
       +'<div class="amb-liens">'
@@ -18761,7 +18809,7 @@ function htmlAmbassadeurs(tous,t){
 }
 function _ambRendre(){
   const z=document.getElementById('amb-contenu');
-  if(z) z.innerHTML=htmlAmbassadeurs(_ambTous||{},Date.now());
+  if(z) z.innerHTML=htmlJournalPaypal(_ambJournal)+htmlAmbassadeurs(_ambTous||{},Date.now());
 }
 // PURE. La fiche à écrire, ou {erreur}.
 function ambFiche(f,existants,maintenant){

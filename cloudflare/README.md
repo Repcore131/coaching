@@ -87,6 +87,19 @@ les pages publiques (`index.html`, `i/`, `p/`, `c/`), puis livrée : c'est ce qu
     qu'à la fin effective (travail `fins_coachs`, 6 h, en transaction) ; si l'abonnement repart avant,
     elle reste acquise. Un coach garde son palier jusque-là, puis il se referme.
   - **Jeton OAuth** gardé en mémoire du worker jusqu'à son expiration.
+  - **Remboursements, rétrofacturations, litiges** (`PAYMENT.SALE.REFUNDED`, `PAYMENT.CAPTURE.REFUNDED`,
+    `PAYMENT.SALE.REVERSED`, `CUSTOMER.DISPUTE.CREATED` / `RESOLVED`). Chaque encaissement est noté dans
+    `paypal_transactions` (à qui, combien, premier paiement ou non) ; ceux d'avant sont relus chez PayPal.
+    - total, rétrofacturation, litige perdu : commission « annulée » ; et si c'était le premier paiement,
+      mois offert au parrain repris (réserve, ou mois au bout d'un accès encore à venir), sinon une
+      **dette** d'un mois soldée sur son prochain mois gagné ; état « payant » retiré de l'attribution ;
+      accès du remboursé fermé à la date du remboursement (programme : ce programme seul) ;
+    - partiel : la commission seule, au prorata (`commissionInitiale` gardée) ;
+    - litige ouvert : commission « suspendue » (ni due ni exportée) ; gagné : rétablie, rien d'autre ;
+    - une seule reprise par transaction : la rétrofacturation qui suit un litige perdu ne refait rien.
+    Chaque cas écrit une ligne dans `paypal_journal` (qui, quoi, pourquoi, ce qui a été fait), lue en
+    tête de l'écran Ambassadeurs de l'administrateur ; chaque litige envoie un push à Kevin, à toute
+    heure et hors plafond quotidien.
 - **Le mois offert au parrain** est crédité dans son dossier : fin PayPal reculée d'un mois (seulement
   si PayPal a vraiment posé une fin), accès daté prolongé, mois en réserve s'il paie déjà (ou est
   suivi, ou a un Ultime acheté), sinon un mois d'Essentielle.
@@ -150,6 +163,7 @@ propre processus, l'un après l'autre, et le tout échoue si un seul échoue. Au
 | `index.test.mjs` | le point d'entrée `fetch` : `OPTIONS /fn/cloudinaryDestroy` → 204 **sans corps** et en-têtes CORS ; `POST` sans jeton → 401 avec CORS ; aucune erreur ne sort sans CORS |
 | `appels.test.mjs` | le jeton Firebase (RS256) et la suppression Cloudinary : propriétaire et coach réel acceptés, id usurpé et coach usurpé refusés (403), index absent (409), compte Cloudinary pris dans le worker |
 | `metier.test.mjs` | le métier sur une base en mémoire, budget de requêtes compris |
+| `remboursements.test.mjs` | remboursement total d'un premier paiement, mois consommé (dette puis soldée), mois retiré d'un accès, rétrofacturation, remboursement partiel puis solde, litige ouvert puis gagné (push à Kevin), litige perdu puis rétrofacturation, litige perdu en partie, paiement suivant remboursé, paiement d'avant le registre, programme remboursé |
 | `paypal.test.mjs` | les webhooks PayPal : signature, double envoi, erreur puis renvoi, `en_cours` repris, orphelin rejoué, liaison par `custom_id`, paiement après annulation, suspension + annulation avec mois en réserve, ancien abonnement annulé, coach qui repaie, montants contre `OFFRES_PAYPAL`, achat de programme, jeton en cache |
 | `push.test.mjs` | chiffrement RFC 8291 et jeton VAPID, vérifiés côté appareil |
 
