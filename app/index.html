@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1620';
+window.RC_BUILD='1621';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-09-27';
@@ -433,7 +433,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1620.css">
+<link rel="stylesheet" href="./rc-style.1621.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -2739,10 +2739,6 @@ const COACH_PHOTO='icons/coach.jpg';
         <section class="cc-sect" style="--cc-accent:var(--border)">
           <div class="cc-sect-t"><span>Photos de progression</span></div>
           <div class="cc-sect-c" id="ccd-pp"></div>
-        </section>
-        <section class="cc-sect" style="--cc-accent:var(--border)">
-          <div class="cc-sect-t"><span>Photos</span></div>
-          <div class="cc-sect-c" id="ccd-photos-progression"></div>
         </section>
         <section class="cc-sect" style="--cc-accent:var(--border)">
           <div class="cc-sect-t"><span>Dossier</span></div>
@@ -5794,5 +5790,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1620.js"></script>
+<script src="./rc-core.1621.js"></script>
 </body></html>

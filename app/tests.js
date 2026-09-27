@@ -29287,285 +29287,19 @@ async function testExercices(){
       currentUser=sauveU;
     })();
 
-    // ── Photos de progression : les six critères d'acceptation ──
-    (function(){
-      const sauveU=currentUser;
-      const N=Date.now();
-
-      // Critère 1 : sans consentement, aucun envoi actif.
-      ok('Critère 1 : sans consentement, aucun bouton d\'envoi actif',(()=>{
-        const u={};
-        if(phpEnvoiAutorise(u)) return _echec('l\'envoi est autorisé sans accord');
-        const h=htmlPhotosProgression(u);
-        // L'écran rendu est celui du CONSENTEMENT, pas la séance photo.
-        if(/type="file"/.test(h)) return _echec('un champ de fichier est offert');
-        if(!/article 9/i.test(h)) return _echec('l\'écran ne dit pas « donnée de santé »');
-        return /phpDonnerConsentement/.test(h)?true:_echec('aucun recueil d\'accord');})());
-
-      // Critère 6 : nœud absent ⇒ aucune écriture au chargement.
-      ok('Critère 6 : nœud absent, aucune écriture au chargement',(()=>{
-        const u={};
-        phpEtat(u); phpDisponible(u); phpEnvoiAutorise(u);
-        phpFrise(u); phpDatesDePose(u,'face'); phpComparateurEtat(u,'face');
-        htmlPhotosProgression(u);
-        return u.photosProgression===undefined
-          ?true:_echec('un nœud a été créé : '+JSON.stringify(u.photosProgression));})());
-      ok('Nœud absent : l\'état initial est lisible sans exister',(()=>{
-        const e=phpEtat({});
-        return (e.donne===false&&e.partageCoach===false&&e.seances.length===0)
-          ?true:_echec(JSON.stringify(e));})());
-
-      // Critère 3 : L'ASSERTION DURE. Aucune chaîne « data:image » dans le nœud.
-      ok('Critère 3 : photosProgression ne contient JAMAIS de « data:image »',(()=>{
-        const u={};
-        phpConsentir(u,true);
-        u.photosProgression.seances=[{date:N,poses:{
-          face:{cle:'2026-08-08/face',w:960,h:1280,octets:180000},
-          dos:{cle:'2026-08-08/dos',w:960,h:1280,octets:172000,
-            url:'https://res.cloudinary.com/x/image/upload/v1/a.jpg',publicId:'repcore/x/a'}}}];
-        const brut=JSON.stringify(u);
-        if(brut.indexOf('data:image')>=0) return _echec('base64 dans le document');
-        if(/base64/i.test(brut)) return _echec('mention de base64 dans le document');
-        // Ce que le nœud porte : des clés locales, des dimensions, des octets.
-        const p=u.photosProgression.seances[0].poses.face;
-        return (p.cle&&p.w===960&&p.h===1280&&p.octets>0&&p.url===undefined)
-          ?true:_echec(JSON.stringify(p));})());
-
-      // Le VERROU sur la dette existante. Huit champs stockent encore du base64
-      // et partent vers la RTDB : c'est antérieur à ce lot et documenté. Cette
-      // assertion ne les fait pas disparaître — elle interdit qu'un NEUVIÈME
-      // apparaisse sans qu'on s'en aperçoive. Même mécanique que _cpAttendus.
-      ok('Verrou : la dette base64 existante n\'a pas grandi',(()=>{
-        const tout=_prodSrc();
-        const prod=tout;
-        // Les cibles de compressImage, qui rend un data URL.
-        const attendues=['cible.image','currentUser.sessions_config[idx].photo',
-          'currentUser.sessions_config[idx].photo2','bilData[key]','img.src',
-          'input._data','progPhotoData','progPhoto2Data'];
-        const re=/([A-Za-z_.\[\]'0-9]+)\s*=\s*data;/g;
-        const vues=new Set(); let m;
-        while((m=re.exec(prod))!==null) vues.add(m[1]);
-        const nouvelles=[...vues].filter(x=>attendues.indexOf(x)<0);
-        if(nouvelles.length) return _echec('nouveau champ base64 : '+nouvelles.join(', '));
-        // Et compressImageBlob, elle, ne produit PAS de data URL.
-        return !/toDataURL/.test(String(compressImageBlob))
-          ?true:_echec('compressImageBlob rend un data URL');})());
-
-      // Critère 2 : compression — côté long 1 280, poids plafonné.
-      ok('Critère 2 : la compression vise 1 280 px et refuse au-delà du plafond',(()=>{
-        if(PHP_MAX_DIM!==1280) return _echec('maxDim = '+PHP_MAX_DIM);
-        if(PHP_QUALITE!==0.75) return _echec('qualité = '+PHP_QUALITE);
-        if(PHP_MAX_OCTETS!==400*1024) return _echec('plafond = '+PHP_MAX_OCTETS);
-        // Le redimensionnement, sur le canvas, sans dépendre d'un vrai fichier.
-        const calc=(w,h)=>{ const md=PHP_MAX_DIM;
-          if(w>md||h>md){ if(w>=h){h=Math.round(h*md/w);w=md;} else {w=Math.round(w*md/h);h=md;} }
-          return [w,h]; };
-        const a=calc(4032,3024), b=calc(3024,4032), c2=calc(800,600);
-        if(a[0]!==1280||a[1]!==960) return _echec('paysage → '+a.join('x'));
-        if(b[1]!==1280||b[0]!==960) return _echec('portrait → '+b.join('x'));
-        return (c2[0]===800&&c2[1]===600)?true:_echec('petite image agrandie');})());
-      ok('Règle 3 : un fichier non-image est refusé, l\'original ne part jamais',(()=>{
-        // Sur le GARDE lui-même, pas sur son message : le texte du message
-        // porte une apostrophe échappée, et l'épingler revenait à tester
-        // l'échappement plutôt que la règle.
-        const src=String(compressImageBlob);
-        if(!/\^image\\\//.test(src)) return _echec('aucun contrôle de type MIME');
-        if(!/reject\(/.test(src)) return _echec('aucun rejet');
-        // Et l'original ne repart nulle part : le seul chemin de sortie est le
-        // Blob issu du canvas.
-        return (/toBlob/.test(src)&&!/resolve\(\s*file/.test(src))
-          ?true:_echec('l\'original peut sortir');})());
-      ok('Règle 3 : un échec de compression est un échec d\'ENVOI',(()=>{
-        const src=String(phpEnregistrerPose);
-        // Le catch rend {ok:false} : il n'y a aucun repli sur l'original.
-        if(!/catch\(e\)\{\s*return\s*\{ok:false/.test(src)) return _echec('pas de refus sur échec');
-        return /octets>PHP_MAX_OCTETS/.test(src)
-          ?true:_echec('aucun plafond de poids');})());
-
-      // Critère 4 : révocation.
-      ok('Critère 4 : révocation ⇒ seances vide et consentement retiré',(()=>{
-        const u={};
-        phpConsentir(u,true);
-        u.photosProgression.seances=[{date:N,poses:{face:{cle:'a/face',w:9,h:9,octets:1}}}];
-        // phpRevoquer est asynchrone à cause d'IndexedDB : on vérifie ici la
-        // partie synchrone du contrat, la suppression réelle des blobs étant
-        // couverte par phpViderBlobs.
-        u.photosProgression.seances=[];
-        u.photosProgression.consentement={donne:false,date:N,partageCoach:false};
-        const e=phpEtat(u);
-        if(e.seances.length) return _echec('des séances subsistent');
-        if(e.donne||e.partageCoach) return _echec('le consentement subsiste');
-        if(phpEnvoiAutorise(u)) return _echec('l\'envoi reste autorisé');
-        return JSON.stringify(u).indexOf('cloudinary')<0
-          ?true:_echec('une URL résiduelle');})());
-      ok('La révocation vide RÉELLEMENT le stockage local',
-        /phpViderBlobs/.test(String(phpRevoquer))&&/st\.clear\(\)/.test(String(phpViderBlobs)));
-      ok('Ce qui n\'a pas pu être supprimé est DIT, pas caché',(()=>{
-        const src=String(phpRevoquer)+String(htmlPhotosReglages);
-        return /aPurger/.test(src)&&/publicId/.test(src)
-          ?true:_echec('la liste de purge n\'est pas restituée');})());
-
-      // Critère 5 : une séance à une seule pose ne casse pas le comparateur.
-      ok('Critère 5 : séance à une seule pose ⇒ comparateur intact',(()=>{
-        const u={};
-        phpConsentir(u,false);
-        u.photosProgression.seances=[{date:N,poses:{face:{cle:'a/face',w:9,h:9,octets:1}}}];
-        const f=phpComparateurEtat(u,'face');
-        if(f.dates.length!==1||f.comparable||!f.unique) return _echec(JSON.stringify(f));
-        const d=phpComparateurEtat(u,'dos');
-        if(!d.vide||d.dates.length) return _echec('pose absente : '+JSON.stringify(d));
-        // Le rendu ne lève pas et n'offre pas de fondu impossible.
-        const h=htmlPhotosComparateur(u);
-        if(/php-fondu/.test(h)) return _echec('un fondu est offert pour une seule date');
-        return /Aucune photo dans cette pose/.test(h)||h.length>0
-          ?true:_echec('rendu vide');})());
-
-      // Bornes et règles.
-      ok('Règle 8 : une séance photo par jour',(()=>{
-        const u={}; phpConsentir(u,false);
-        const j=localISODate(new Date());
-        u.photosProgression.seances=[{date:N,poses:{}}];
-        return phpPeutCreerSeance(u,j).ok===false
-          ?true:_echec('une deuxième séance du jour est acceptée');})());
-      ok('Règle 8 : deux cents séances au plus',(()=>{
-        const u={}; phpConsentir(u,false);
-        u.photosProgression.seances=Array.from({length:PHP_MAX_SEANCES},(_,i)=>
-          ({date:N-(i+1)*864e5,poses:{}}));
-        const r=phpPeutCreerSeance(u,localISODate(new Date()));
-        return (r.ok===false&&/[Dd]eux cents/.test(r.raison))
-          ?true:_echec(JSON.stringify(r));})());
-      ok('Règle 5 : grossesse ou allaitement ⇒ fonction masquée',(()=>{
-        for(const etat of ['enceinte','allaitement']){
-          const u={grossesse:{etat}};
-          phpConsentir(u,true);
-          if(phpDisponible(u)) return _echec(etat+' : la fonction reste disponible');
-          if(htmlPhotosProgression(u)!=='') return _echec(etat+' : un écran est rendu');
-          if(phpEnvoiAutorise(u)) return _echec(etat+' : l\'envoi reste autorisé');
-        }
-        return true;})());
-      ok('Règle 4 : le partage exige une seconde confirmation',(()=>{
-        const src=String(phpRevoquerUI)+String(phpDonnerConsentement);
-        // Même correction : le dialogue maison rcConfirm() a remplacé le
-        // confirm() natif. Mesuré sur la version servie : trois appels, donc
-        // la seconde confirmation est bien là.
-        return (src.match(/(rc)?[Cc]onfirm\(/g)||[]).length>=2
-          ?true:_echec('une seule confirmation');})());
-      // L'assertion ci-dessus porte sur la révocation et le consentement. Le
-      // PARTAGE lui-même n'avait pas de bouton, donc rien à couvrir ; il en a
-      // un depuis le 14/08, et c'est lui que la règle 4 vise en premier.
-      ok('Règle 4 : un envoi au coach se confirme, et nomme la photo',(()=>{
-        const src=String(phpPartagerPoseUI);
-        // Même correction : rcConfirm() a remplacé confirm(). L'ORDRE reste
-        // mesuré, et c'est lui qui compte — vérifié sur la version servie, la
-        // question est posée à l'octet 1067 et l'envoi part au 1347.
-        const iQ=src.search(/(rc)?[Cc]onfirm\(/);
-        if(iQ<0) return _echec('aucune confirmation avant l\'envoi');
-        if(iQ>src.indexOf('phpPartagerPose(u,s,pose)'))
-          return _echec('la confirmation vient APRÈS l\'envoi');
-        return /effacée à distance/.test(src)
-          ?true:_echec('la confirmation ne dit pas ce qui est irréversible');})());
-      ok('Aucun envoi automatique : le partage part d\'un clic',(()=>{
-        // phpViderFile ne renvoie que ce qu'un partage explicite a déjà mis en
-        // file : ce n'est pas un envoi automatique, c'est une reprise.
-        const src=String(htmlPhotosProgression)+String(htmlPhotosPartage)
-          +String(renderPhotosProgression)+String(phpAPartager);
-        return !/phpPartagerPose\(/.test(src)
-          ?true:_echec('un rendu déclenche un envoi');})());
-      ok('Une pose déjà partagée n\'a plus de bouton',(()=>{
-        const u={}; phpConsentir(u,true);
-        u.photosProgression.seances=[{date:N,poses:{face:{cle:'a'},dos:{cle:'b',publicId:'x/b'}}}];
-        const h=htmlPhotosPartage(u);
-        const n=(h.match(/phpPartagerPoseUI\(/g)||[]).length;
-        if(n!==1) return _echec(n+' bouton(s) au lieu d\'un seul');
-        return /Partagée/.test(h)?true:_echec('la pose partagée n\'est pas marquée');})());
-      ok('Sans accord de partage, la carte n\'existe pas',(()=>{
-        const u={}; phpConsentir(u,false);
-        u.photosProgression.seances=[{date:N,poses:{face:{cle:'a'}}}];
-        return htmlPhotosPartage(u)===''&&phpAPartager(u).length===0
-          ?true:_echec('la carte s\'affiche sans accord');})());
-      ok('Le partage au coach est refusé si l\'accord ne le couvre pas',(()=>{
-        const u={}; phpConsentir(u,false);
-        // phpPartagerPose est asynchrone ; on vérifie la garde en tête.
-        return /partageCoach/.test(String(phpPartagerPose))
-          ?true:_echec('aucune garde sur le partage');})());
-
-      // Coach : lecture seule, et seulement sous partage actif.
-      ok('Coach : rien sans partage actif',(()=>{
-        const c={}; phpConsentir(c,false);
-        c.photosProgression.seances=[{date:N,poses:{face:{cle:'a',w:9,h:9,octets:1,
-          url:'https://res.cloudinary.com/x/image/upload/v1/a.jpg',publicId:'x/a'}}}];
-        if(htmlPhotosCoach(c)!=='') return _echec('des photos s\'affichent sans partage');
-        c.photosProgression.consentement.partageCoach=true;
-        const h=htmlPhotosCoach(c);
-        if(h==='') return _echec('rien ne s\'affiche avec partage');
-        if(/<input|onclick=/.test(h)) return _echec('l\'écran coach n\'est pas en lecture seule');
-        return /donnée|santé/i.test(h)?true:_echec('le registre n\'est pas rappelé');})());
-
-      // Ce que le lot n'utilise pas.
-      ok('Aucun Firebase Storage, aucune transformation Cloudinary',(()=>{
-        const src=String(phpUploadImage)+String(phpEnregistrerPose)+String(phpPartagerPose);
-        if(/firebasestorage|storage\.googleapis/.test(src)) return _echec('Firebase Storage');
-        if(/\/upload\/[cwhqf]_|transformation|eager/.test(src)) return _echec('transformation Cloudinary');
-        return /image\/upload/.test(src)?true:_echec('mauvais endpoint');})());
-      ok('Aucune analyse de pose, de silhouette ni de masse grasse',(()=>{
-        const src=String(phpEnregistrerPose)+String(htmlPhotosProgression)
-          +String(htmlPhotosSeance)+String(htmlPhotosComparateur);
-        // Pas de `pose[A-Z]` : sous le drapeau /i, [A-Z] matche aussi les
-        // minuscules, et « poses » — le champ légitime — déclenchait la garde.
-        // On vise des termes d'analyse, pas un motif de nommage.
-        return !/silhouette|bodyfat|masse ?grasse|body ?scan|détection|detection|tensorflow|posenet|mediapipe|estimation/i
-          .test(src)
-          ?true:_echec('une analyse a été trouvée');})());
-
-      // ── L'onglet Photos ne montre le bloc qu'une fois ──
-      // Sur un compte neuf, l'écran d'accord sortait DEUX fois : concaténé
-      // derrière la zone #prog-photos-progression, puis la zone remplie à son
-      // tour par renderPhotosProgression, un tour de boucle plus tard. Juste
-      // après l'appel on n'en comptait qu'un : c'est APRÈS l'attente qu'il faut
-      // compter, d'où okA. Et okA joue à la fin de la suite : le compte de test
-      // est posé et rendu ici même, pas hérité du bloc.
-      okA('Onglet Photos : le bloc des photos de progression ne sort qu\'une fois',(async()=>{
-        const sauveU2=currentUser;
-        const attendre=()=>new Promise(r=>setTimeout(r,30));
-        const zone=()=>document.getElementById('progress-content');
-        const nb=sel=>{ const c=zone(); return c?c.querySelectorAll(sel).length:-1; };
-        const activer=()=>{ const c=zone(); if(!c) return -1;
-          return [...c.querySelectorAll('button')].filter(b=>/j'active les photos/i.test(b.textContent)).length; };
-        const photo='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==';
-        const compte=x=>Object.assign({id:'php-onglet',email:'php-onglet@t.fr',fname:'N',lname:'N',role:'athlete',
-          exAlias:{},exMuscles:{},sessions:[],bilans:[],videos:[],programs:{},contraintesSante:[],
-          consent:{health:true,policyVersion:POLICY_VERSION}},x||{});
-        try{
-          // 1. Compte neuf, aucune photo de bilan : l'écran d'accord, une fois,
-          // et dès le retour de l'appel.
-          currentUser=compte();
-          showProgressTab('photos',null);
-          if(activer()!==1) return _echec('au retour de l\'appel : '+activer()+' bouton(s) « j\'active les photos »');
-          await attendre();
-          if(activer()!==1) return _echec('compte neuf : '+activer()+' bouton(s) « j\'active les photos » au lieu d\'un');
-          if(nb('#php-partage')!==1) return _echec('compte neuf : '+nb('#php-partage')+' case(s) de partage');
-          // 2. Accord donné, toujours sans photo de bilan : la séance, une fois.
-          currentUser=compte(); phpConsentir(currentUser,false);
-          showProgressTab('photos',null); await attendre();
-          if(nb('#php-apercu')!==1) return _echec('accord donné : '+nb('#php-apercu')+' séance(s) photo');
-          // 3. Avec photos de bilan : la fresque, et le bloc une fois au-dessus.
-          currentUser=compte({bilans:[{type:'suivi',date:Date.now()-2*864e5,'deb-weight':'62','deb-photo-face':photo}]});
-          showProgressTab('photos',null); await attendre();
-          if(zone().innerHTML.indexOf('MA TRANSFORMATION')<0) return _echec('avec photos de bilan : la fresque ne s\'est pas rendue');
-          if(activer()!==1) return _echec('avec photos de bilan : '+activer()+' bouton(s) « j\'active les photos » au lieu d\'un');
-          // 4. L'état vide survit. Fonction masquée (règle 5) et aucune photo
-          // de bilan : _php est vide, c'est « Aucune photo de bilan » qui parle.
-          currentUser=compte({grossesse:{etat:'enceinte',declareLe:Date.now()}});
-          showProgressTab('photos',null); await attendre();
-          if(zone().innerHTML.indexOf('Aucune photo de bilan')<0) return _echec('l\'état vide « Aucune photo de bilan » a disparu');
-          if(activer()!==0) return _echec('fonction masquée : l\'écran d\'accord s\'affiche');
-          return nb('#prog-photos-progression')===1
-            ?true:_echec(nb('#prog-photos-progression')+' zone(s) #prog-photos-progression');
-        } finally { currentUser=sauveU2; }
-      }));
-
-      currentUser=sauveU;
-    })();
+    // ── Photos de progression : l'interface a été retirée (27/09/2026) ──
+    // Kevin : « il demande déjà les photos dans les bilans ; le comparateur ne
+    // marche pas ». L'onglet Photos ne montre plus que les photos de bilan.
+    ok('Photos : ni séance quatre poses, ni comparateur, ni « Tes photos »',(()=>{
+      for(const f of ['htmlPhotosProgression','renderPhotosProgression','htmlPhotosComparateur',
+        'phpRendreComparateur','htmlPhotosSeance','htmlPhotosCoach','phpViderFile'])
+        if(typeof window[f]==='function') return _echec(f+' existe encore');
+      // CE QUI RESTE : le stockage des photos de BILAN et la révocation, que la
+      // suppression de compte appelle.
+      for(const f of ['phpEcrireBlob','phpLireBlob','phpUploadImage','phpRevoquer'])
+        if(typeof window[f]!=='function') return _echec(f+' a disparu, les photos de bilan en ont besoin');
+      return document.getElementById('ccd-photos-progression')===null
+        ?true:_echec('la section « Photos » de la fiche coach est encore là');})());
 
     // ── Trois habitudes : les cinq critères d'acceptation ──
     (function(){
@@ -31254,7 +30988,7 @@ async function testExercices(){
             'ccd-asymetrie':'detail','ccd-forme':'detail','ccd-volume':'detail',
             'ccd-plateaux':'detail','ccd-douleur':'detail','ccd-bloc':'detail',
             'ccd-bilans':'detail','ccd-journal':'detail',
-            'ccd-dossier':'detail','ccd-photos-progression':'detail','ccd-bil-cal':'detail'};
+            'ccd-dossier':'detail','ccd-bil-cal':'detail'};
           for(const id in chez){
             const z=document.getElementById(id);
             if(!z) return _echec(id+' a disparu de la fiche');
@@ -31297,7 +31031,7 @@ async function testExercices(){
           // Les quatre sections les plus riches s'ouvraient fermees : « c'est
           // la raison numero un pour laquelle le coach croit que l'app ne sait
           // rien faire ». Elles s'ouvrent maintenant deployees.
-          for(const id of ['ccd-bilans','ccd-poids','ccd-pp','ccd-photos-progression'])
+          for(const id of ['ccd-bilans','ccd-poids','ccd-pp'])
             if(CCD_REPLI_DEFAUT.indexOf(id)>=0)
               return _echec(id+' s\'ouvre encore replie');
           if(CCD_REPLI_DEFAUT.indexOf('ccd-detail')<0)
@@ -31501,7 +31235,7 @@ async function testExercices(){
               return s?s.classList.contains('replie'):null; };
             for(const id of ['ccd-journal','ccd-detail','ccd-dossier'])
               if(replie(id)===false) return _echec(id+' s\'ouvre deploye');
-            for(const id of ['ccd-bilans','ccd-poids','ccd-pp','ccd-photos-progression',
+            for(const id of ['ccd-bilans','ccd-poids','ccd-pp',
                              'ccd-nutrition','ccd-phase','ccd-volume'])
               if(replie(id)===true) return _echec(id+' s\'ouvre replie');
             return true;
@@ -36246,7 +35980,7 @@ async function testExercices(){
             if(avant.indexOf('setTimeout')<0)
               return _echec('le rejeu n’est pas différé : il retiendrait le démarrage');
             // ET LES TROIS GESTES DE SUPPRESSION PASSENT PAR LA MÊME PORTE.
-            for(const f of ['deleteVideo','phpSupprimerPose','phpRevoquer'])
+            for(const f of ['deleteVideo','phpRevoquer'])
               if(String(window[f]).indexOf('_cldDetruire')<0)
                 return _echec(f+' ne demande pas la destruction de la copie distante');
             return true;})());
