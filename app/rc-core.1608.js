@@ -72990,13 +72990,17 @@ function majXp(){
 function htmlRangAccueil(xp){
   const r=rangDe(xp);
   const txt=r.suivant
-    ?'⚡ '+xpFormat(r.xp)+' / '+xpFormat(r.suivant.seuil)+' V vers '+r.suivant.nom
-    :'⚡ '+xpFormat(r.xp)+' V · rang maximal';
+    ?xpFormat(r.xp)+' / '+xpFormat(r.suivant.seuil)+' V vers '+r.suivant.nom
+    :xpFormat(r.xp)+' V · rang maximal';
   return '<div class="rg-ligne"><img class="rg-emb" src="'+rangEmbleme(r.rang.n)+'" alt="" width="22" height="22" decoding="async">'
     +'<span class="rg-nom">'+escapeHtml(r.rang.nom)+'</span></div>'
     +'<div class="rg-jauge" role="progressbar" aria-label="Volts vers le rang suivant" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'
       +Math.round(r.part*100)+'"><span style="width:'+Math.round(r.part*100)+'%"></span></div>'
-    +'<div class="rg-txt">'+escapeHtml(txt)+'</div>';
+    // LA MAQUETTE DE L'EN-TETE (27/09/2026) : les chiffres en blanc, « vers »
+    // plus petit et gris, le rang suivant en blanc.
+    +'<div class="rg-txt">'+(r.suivant
+      ?'<b>'+escapeHtml(xpFormat(r.xp)+' / '+xpFormat(r.suivant.seuil)+' V')+'</b> <span class="rg-vers">vers</span> '+escapeHtml(r.suivant.nom)
+      :escapeHtml(txt))+'</div>';
 }
 function _rendreRang(u){
   const z=document.getElementById('clh-rang');

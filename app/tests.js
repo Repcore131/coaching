@@ -42364,37 +42364,16 @@ async function testExercices(){
     //
     // Si le halo redevient un sujet, c'est une assertion à lui, avec sa propre
     // justification. Pas une clause greffée sur celle-ci.
-    ok('Le compteur de streak ne dépasse pas le cran --fs-xl',(()=>{
+    // LA MAQUETTE DE L'EN-TETE (Kevin, 27/09/2026) remplace le plafond --fs-xl :
+    // le compteur y est dessine a 6,5 % de la largeur de l'ecran (1 cqw = 20 px
+    // de la maquette de 2000 px). On verifie la PROPORTION, pas un nombre de px.
+    ok('Le compteur de streak suit la maquette de l’en-tête (6,5 % de la largeur)',(()=>{
       const e=document.getElementById('clh-streak-val');
       if(!e) return false;
-      // COLLISION SIGNALEE A KEVIN. Le plafond etait ecrit en px : 18 au plus.
-      // L'echelle a huit crans n'a pas de 18 — le cran voisin est --fs-xl, qui
-      // vaut 20px. Le compteur a donc GRANDI de deux points, alors que ce test
-      // existait justement pour l'empecher de grossir.
-      //
-      // On verifie le CRAN, et on refuse tout ce qui est au-dessus : si un jour
-      // il passe a --fs-2xl ou --fs-3xl, ce test tombera comme avant.
-      // ⚠ LA SONDE NE POUVAIT PLUS RIEN LIRE. La taille n'est plus posée dans
-      // l'attribut style — il ne porte qu'un « font-variant-numeric » — mais
-      // par une règle de feuille. Elle cherchait donc un motif absent et
-      // échouait sans jamais mesurer le compteur. On lit le style CALCULÉ,
-      // qui dit ce que l'athlète voit réellement, quel que soit l'endroit
-      // d'où la valeur vient.
-      // ⚠ ON LIT LA PROPRIÉTÉ SUR L'ÉLÉMENT, jamais l'innerHTML ni l'attribut
-      // style : la taille ne vient plus d'un style en ligne mais d'une règle
-      // de feuille, et la sérialisation d'un style en ligne insère de toute
-      // façon une espace (« color: var(--text); ») qui fait rater tout motif
-      // écrit sans elle.
-      const cs=getComputedStyle(e);
-      const px=parseFloat(cs.fontSize);
-      // LE PLAFOND EST LE CRAN, pas un nombre écrit une seconde fois : on le
-      // lit sur la racine plutôt que de recopier « 20 ». Le jour où l'échelle
-      // bouge, le test suit au lieu de mentir.
-      const cran=parseFloat(getComputedStyle(document.documentElement)
-        .getPropertyValue('--fs-xl'))||20;
-      if(!isFinite(px)) return _echec('taille illisible : « '+cs.fontSize+' »');
-      return px<=cran
-        ?true:_echec('le compteur mesure '+px+' px, au-dessus du cran xl ('+cran+' px)');})());
+      const ecr=document.getElementById('s-client-home');
+      const css=_stylesProd().map(x=>x.textContent).join('\n');
+      if(!/#clh-streak-val\{[^}]*font-size:6\.5cqw/.test(css)) return _echec('taille du compteur hors maquette');
+      return /#s-client-home\{container-type:inline-size\}/.test(css)?true:_echec('l’en-tête ne se mesure plus sur l’écran');})());
     ok('Le compteur de streak reste affiché',!!document.getElementById('clh-streak-val'));
 
     // ══ 15/09/2026 — LES QUATRE RETOUCHES DE L'ACCUEIL ATHLETE ═════════════
@@ -48752,11 +48731,12 @@ async function testExercices(){
         if(rangA(Math.floor(w*0.75))>=n) f.push(RANGS[n-1].nom+' déjà atteint à '+Math.floor(w*0.75)+' sem.');
       }
       return f.length?_echec(f.join(' ; ')):true;})());
-    ok('Volts : l’accueil dit « ⚡ total / seuil V vers RANG », avec l’emblème',(()=>{
+    ok('Volts : l’accueil dit « total / seuil V vers RANG », avec l’emblème',(()=>{
       const d=document.createElement('div');
       d.innerHTML=htmlRangAccueil(1240);
       const t=d.textContent;
-      if(!/⚡ 1\s240 \/ 1\s800 V vers IMPULSION/.test(t)) return _echec(t);
+      // Sans ⚡ depuis la maquette de l'en-tete (27/09/2026).
+      if(!/1\s240 \/ 1\s800 V vers IMPULSION/.test(t)||/⚡/.test(t)) return _echec(t);
       if(!/ÉTINCELLE/.test(t)) return _echec('nom du rang');
       const img=d.querySelector('img.rg-emb');
       if(!img||!/img\/rangs\/rang_1\.webp$/.test(img.getAttribute('src'))) return _echec('emblème');
