@@ -21930,8 +21930,10 @@ async function testExercices(){
          'bil-diff-detail':'En couple','bil-cheat-meals':'1','bil-cheat-reasons':'Mauvaise orga','bil-prog-modifs':'Review',
          'bil-sleep-quality':BIL_OPTS_SOMMEIL[2],'bil-stress':'Beaucoup','bil-stress-detail':'Boulot','bil-new-goals-detail':'Deter'}];
       const d=document.createElement('div'); d.innerHTML=renderReponsesBilans(B);
-      const pills=[...d.querySelectorAll('.bn-pill')].map(p=>p.textContent.trim());
-      if(pills.join('|')!=='Bilan 1|Questionnaire de départ') return _echec('pastilles : '+pills.join('|'));
+      // Un menu déroulant, et non des pastilles (27/09/2026).
+      if(d.querySelector('.bn-pill')) return _echec('des pastilles restent');
+      const pills=[...d.querySelectorAll('.bn-select option')].map(p=>p.textContent.trim());
+      if(pills.join('|')!=='Bilan 1|Bilan d’inscription') return _echec('menu : '+pills.join('|'));
       const vis=[...d.querySelectorAll('.bn-bilan')].filter(c=>!c.hidden);
       if(vis.length!==1||!/Bilan 1/.test(vis[0].querySelector('.bn-titre').textContent)) return _echec('le plus récent doit s’ouvrir seul');
       if(!/100,9 kg/.test(vis[0].querySelector('.bn-poids').textContent)) return _echec('le poids de l’en-tête');
@@ -21950,7 +21952,7 @@ async function testExercices(){
       if(src.indexOf('BIL_OPTS_SOMMEIL')<0||src.indexOf('BIL_OPTS_STRESS')<0) return _echec('le questionnaire a ses propres listes');
       // Côté coach : un bilan sans réponse porte sa pastille.
       d.innerHTML=renderReponsesBilans(B,{id:'c',email:'c@t',fname:'A',bilans:B});
-      if(!d.querySelector('.bn-pill .bn-pill-dot')) return _echec('le coach ne voit pas le bilan qui attend');
+      if(!/sans réponse/.test((d.querySelector('.bn-select option')||{}).textContent||'')) return _echec('le coach ne voit pas le bilan qui attend');
       return true;})());
     ok('MASSE GRASSE — LA COURBE AU DESSIN DU POIDS, À LA DATE DE CHAQUE BILAN, ÉCART « STABLE » SOUS LA MARGE',(()=>{
       const sauve=currentUser;
