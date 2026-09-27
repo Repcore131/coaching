@@ -74041,9 +74041,12 @@ function calcBF(waist,neck,hips,height,gender){
 // choses qu'un camembert masque ne donne pas : un jeu entre les segments,
 // des bouts arrondis, et une piste sombre visible derriere — ce qui fait la
 // difference entre un diagramme et un objet dessine.
-function drawPie(id,slices){
+// `opts.label` : un mot au-dessus du pourcentage (« masse grasse ») ;
+// `opts.max` : le diametre plafond, 120 px par defaut.
+function drawPie(id,slices,opts){
+  const o=opts||{};
   const cv=document.getElementById(id);if(!cv)return;
-  const sz=Math.min(cv.parentElement.offsetWidth||120,120);
+  const sz=Math.min(cv.parentElement.offsetWidth||120,o.max||120);
   // DENSITÉ D'ÉCRAN, comme _setupCanvas : sans elle, 110 pixels de toile sont
   // étirés sur 330 pixels physiques et tout l'anneau est mou.
   const dpr=Math.min(window.devicePixelRatio||1,3);
@@ -74089,7 +74092,14 @@ function drawPie(id,slices){
   ctx.fillStyle=_tok('--text','#efefef');ctx.font=`800 ${Math.round(sz*0.145)}px Montserrat,sans-serif`;
   ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.shadowColor='rgba(255,255,255,.35)';ctx.shadowBlur=10;
-  ctx.fillText(Math.round(slices[0].val/total*100)+'%',cx,cy);
+  if(o.label){
+    ctx.font=`800 ${Math.round(sz*0.19)}px Montserrat,sans-serif`;
+    ctx.fillText(Math.round(slices[0].val/total*100)+'%',cx,cy+sz*0.07);
+    ctx.shadowBlur=0;
+    ctx.fillStyle=_tok('--sub','#9a9a9a');ctx.font=`600 ${Math.round(sz*0.058)}px Montserrat,sans-serif`;
+    const mots=String(o.label).toUpperCase().split(' ');
+    mots.forEach((m,i)=>ctx.fillText(m,cx,cy-sz*0.1+(i-(mots.length-1)/2)*sz*0.075));
+  }else ctx.fillText(Math.round(slices[0].val/total*100)+'%',cx,cy);
   ctx.shadowBlur=0;
 }
 
@@ -76008,23 +76018,27 @@ function showProgressTab(tab,btn,sansMemo){
           :bl.length<2?'Une courbe demande deux bilans. Il en manque encore un.'
           :'Une seule estimation pour l’instant. Reprends tes mesures au prochain bilan : c’est ce qui dira si elle bouge.'}</div>`}
       </div>`;
+    // LA CARTE DES DEUX BILANS AU DESSIN DE LA MAQUETTE (27/09/2026, Kevin :
+    // « change l'image 1 en 2 »). Chaque bilan a son bandeau rouge avec sa
+    // date, l'anneau nomme ce qu'il chiffre (« masse grasse »), MG et MM sont
+    // separes d'un filet, et un trait rouge en biais coupe les deux bilans.
+    const _dateBil=b=>{ try{ return new Date(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'}); }catch(e){ return ''; } };
     const pieSec=(idx,title)=>{
       const mg=mgKgs[idx]??0,mm=mmKgs[idx]??0;
       if(!mg&&!mm) return '';
       const mgC=idx===0?'#E02020':'#3b82f6';
-      return `<div style="flex:1;text-align:center">
-        <div class="evo-titre" style="letter-spacing:1.5px;margin-bottom:10px">${title}</div>
-        <canvas id="pie-${idx}" style="max-width:110px;margin:0 auto;display:block"></canvas>
-        <div style="margin-top:8px;display:flex;justify-content:center;gap:12px">
-          <div style="text-align:center"><div style="width:8px;height:8px;border-radius:var(--r-full);background:${mgC};margin:0 auto 4px"></div><div style="font-size:var(--fs-xs);color:var(--sub)">MG</div><div style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${mg}kg</div></div>
-          <div style="text-align:center"><div style="width:8px;height:8px;border-radius:var(--r-full);background:#22c55e;margin:0 auto 4px"></div><div style="font-size:var(--fs-xs);color:var(--sub)">MM</div><div style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${mm}kg</div></div>
+      const kg=v=>String(v)+'<small> kg</small>';
+      return `<div class="mgc-col">
+        <div class="mgc-tete"><div class="mgc-titre">${title}</div><div class="mgc-date">${_dateBil(bl[idx])}</div></div>
+        <canvas id="pie-${idx}" class="mgc-pie"></canvas>
+        <div class="mgc-leg">
+          <div class="mgc-item"><div class="mgc-nom"><span class="mgc-pt" style="background:${mgC};box-shadow:0 0 8px ${mgC}"></span>MG</div><div class="mgc-val">${kg(mg)}</div></div>
+          <div class="mgc-item"><div class="mgc-nom"><span class="mgc-pt" style="background:#22c55e;box-shadow:0 0 8px #22c55e"></span>MM</div><div class="mgc-val">${kg(mm)}</div></div>
         </div>
       </div>`;
     };
-    // ⚠ PAS DE CARTE VIDE (27/09/2026) : sans estimation au premier ni au
-    //   dernier bilan, les deux camemberts rendaient '' et leur cadre restait,
-    //   vide, entre la courbe et le tableau.
-    const _camemberts=(bl.length>=1?pieSec(0,'Bilan 1'):'')+(bl.length>1?pieSec(bl.length-1,'Bilan '+bl.length):'');
+    const _pie1=bl.length>=1?pieSec(0,'Bilan 1'):'',_pieN=bl.length>1?pieSec(bl.length-1,'Bilan '+bl.length):'';
+    const _camemberts=_pie1+(_pie1&&_pieN?'<div class="mgc-eclair" aria-hidden="true"></div>':'')+_pieN;
     c.innerHTML=`
       <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
         <!-- Le titre nommait la METHODE, « Paramètres : Formule US Navy »,              la ou l athlete cherche ce que la carte lui donne. Renomme sur
@@ -76060,7 +76074,9 @@ function showProgressTab(tab,btn,sansMemo){
            « MG actuel ». L'honnetete sur la fiabilite reste ; c'est sa
            repetition a chaque visite qui disparait. -->
       ${_carteCourbeMG}
-      ${_camemberts?`<div class="evo-carte" style="display:flex;gap:12px;padding:20px 16px;justify-content:center">
+      ${_camemberts?`<div class="evo-carte mgc">
+        <span class="mgc-coin mgc-coin-hg"></span><span class="mgc-coin mgc-coin-hd"></span>
+        <span class="mgc-coin mgc-coin-bg"></span><span class="mgc-coin mgc-coin-bd"></span>
         ${_camemberts}
       </div>`:''}
       ${renderDataTable(
@@ -76094,10 +76110,10 @@ function showProgressTab(tab,btn,sansMemo){
     try{ if(typeof arcTracerCourbes==='function') arcTracerCourbes(c); }catch(e){}
     setTimeout(()=>{
       const mg0=mgKgs[0]??0,mm0=mmKgs[0]??0;
-      if(mg0&&mm0) drawPie('pie-0',[{val:mg0,color:'#E02020'},{val:mm0,color:'#22c55e'}]);
+      if(mg0&&mm0) drawPie('pie-0',[{val:mg0,color:'#E02020'},{val:mm0,color:'#22c55e'}],{label:'Masse grasse',max:170});
       if(bl.length>1){
         const mgL=mgKgs[bl.length-1]??0,mmL=mmKgs[bl.length-1]??0;
-        if(mgL&&mmL) drawPie('pie-'+(bl.length-1),[{val:mgL,color:'#3b82f6'},{val:mmL,color:'#22c55e'}]);
+        if(mgL&&mmL) drawPie('pie-'+(bl.length-1),[{val:mgL,color:'#3b82f6'},{val:mmL,color:'#22c55e'}],{label:'Masse grasse',max:170});
       }
     },60);
 
