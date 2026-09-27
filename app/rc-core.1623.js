@@ -67633,11 +67633,7 @@ function _bnVoir(id){
   document.querySelectorAll('.bn').forEach(bn=>{
     if(!bn.querySelector('.bn-bilan[data-bn="'+id+'"]')) return;
     bn.querySelectorAll('.bn-bilan').forEach(c=>{ c.hidden=c.getAttribute('data-bn')!==id; });
-    bn.querySelectorAll('.bn-pill').forEach(p=>{
-      const on=p.getAttribute('data-bn')===id;
-      p.classList.toggle('on',on); p.setAttribute('aria-selected',on?'true':'false');
-      if(on&&p.scrollIntoView) try{ p.scrollIntoView({block:'nearest',inline:'nearest'}); }catch(e){}
-    });
+    bn.querySelectorAll('.bn-select').forEach(sel=>{ if(sel.value!==id) sel.value=id; });
   });
 }
 // R13 — CE QUE CETTE LISTE MONTRE : les REPONSES ECRITES de l'athlete dans
@@ -67703,19 +67699,20 @@ function renderReponsesBilans(bilans,client){
         place++; return x.html;
       }).join('');
       return `<section class="bn-rub">
-          <div class="bn-rub-t"><span class="bn-ico" aria-hidden="true">${icon(r.ico,26)}</span><h3>${escapeHtml(r.titre)}</h3></div>
+          <div class="bn-rub-t"><span class="bn-ico" aria-hidden="true">${icon(r.ico,18)}</span><h3>${escapeHtml(r.titre)}</h3></div>
           <div class="bn-g">${html}</div>
         </section>`;
     }).join('');
     const d=new Date(b.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
     const w=getBW(b);
     const id=_idBilan(b);
-    const nom=depart?'Questionnaire de départ':'Bilan '+_rang.get(b);
+    // « BILAN D'INSCRIPTION » (Kevin, 27/09/2026), le mot qu'il emploie.
+    const nom=depart?'Bilan d’inscription':'Bilan '+_rang.get(b);
     vus.push({id,nom,depart,attend:!!client&&!depart&&!b.reponseCoach,
       html:`<div id="bil-${escapeHtml(id)}" class="bn-bilan" data-bn="${escapeHtml(id)}">
         <div class="bn-tete${depart?' bn-tete-dep':''}">
           <div class="bn-tete-g">
-            <div class="bn-titre">${depart?'Questionnaire <em>de départ</em>':'Bilan <em>'+_rang.get(b)+'</em>'}</div>
+            <div class="bn-titre">${depart?'Bilan <em>d’inscription</em>':'Bilan <em>'+_rang.get(b)+'</em>'}</div>
             <div class="bn-date">${d}</div>
           </div>
           ${w?`<div class="bn-poids"><span>Poids</span><b>${String(w).replace('.',',')} kg</b></div>`:''}
@@ -67729,11 +67726,13 @@ function renderReponsesBilans(bilans,client){
       </div>`});
   });
   if(vus.length){
-    // Le plus récent s'ouvre ; les autres attendent leur pastille.
-    const pills=vus.map((v,i)=>`<button type="button" class="bn-pill${i===0?' on':''}${v.depart?' bn-pill-dep':''}" role="tab"
-        aria-selected="${i===0?'true':'false'}" data-bn="${escapeHtml(v.id)}" onclick="_bnVoir('${escapeHtml(v.id)}')">${escapeHtml(v.nom)}${v.attend?'<span class="bn-pill-dot" title="Sans réponse"></span>':''}</button>`).join('');
+    // UN MENU DÉROULANT, PLEINE LARGEUR (Kevin, 27/09/2026 : « mets un menu
+    // déroulant, pas la suite bilan 1, bilan 2 ; ça prend trop de place »).
+    // Le plus récent s'ouvre. Côté coach, un bilan sans réponse le dit dans
+    // son libellé : le point rouge des pastilles n'existe plus.
+    const opts=vus.map((v,i)=>`<option value="${escapeHtml(v.id)}"${i===0?' selected':''}>${escapeHtml(v.nom)}${v.attend?' · sans réponse':''}</option>`).join('');
     const cartes=vus.map((v,i)=>i===0?v.html:v.html.replace('class="bn-bilan"','class="bn-bilan" hidden')).join('');
-    return `<div class="bn">${vus.length>1?`<div class="bn-choix" role="tablist">${pills}</div>`:''}${cartes}</div>`;
+    return `<div class="bn">${vus.length>1?`<div class="bn-choix"><select class="bn-select" aria-label="Bilan affiché" onchange="_bnVoir(this.value)">${opts}</select></div>`:''}${cartes}</div>`;
   }
   return client
     ?emptyState('message-circle','Pas encore de réponse écrite dans les bilans de '+escapeHtml(client.fname||'ton athlète')+'. Elles s\'afficheront ici dès son prochain bilan.')
