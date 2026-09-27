@@ -1806,7 +1806,7 @@ async function incrementerCompteurLibres(){
 const LIBRE_ATTENTE_TEXTE='Les '+LIBRE_MAX+' comptes gratuits ouverts sont pris. '
   +'Ce n\'est pas un refus : c\'est la place qu\'il reste sur l\'hébergement, et elle se '
   +'libère. Écris à '+CREATOR_EMAIL+' pour être prévenu dès qu\'une place se '
-  +'rouvre — aucun compte n\'a été créé, et rien n\'a été enregistré.';
+  +'rouvre : aucun compte n\'a été créé, et rien n\'a été enregistré.';
 // Le quota, en toutes lettres. Infinity ne s'affiche pas.
 function _quotaTexte(q){ return q===Infinity?'sans limite':String(q); }
 // Le palier PAYANT qui vient après le palier courant, s'il en existe un.
@@ -1869,7 +1869,7 @@ function alertePalier(coach,users){
   if(suivant&&quota!==Infinity&&n===quota-1){
     return {type:'falaise',palier:suivant.cle,
       titre:'Au prochain athlète, ta formule passe à '+suivant.titre
-        +' — '+suivant.prix+' €/mois.',
+        +', '+suivant.prix+' €/mois.',
       texte:'Tu peux ajouter cet athlète sans changer de formule maintenant. '
         +'Rien n\'est prélevé tant que tu ne l\'as pas décidé toi-même.'};
   }
@@ -1893,7 +1893,7 @@ function alertePalier(coach,users){
         +' te suffirait.',
       texte:(cible.prix?('Il est à '+cible.prix+' €/mois. '):'Il est gratuit. ')
         +'Le changement prend effet à la fin de la période déjà réglée, '
-        +'quand tu veux — aucune fenêtre, aucun préavis.'};
+        +'quand tu veux : aucune fenêtre, aucun préavis.'};
   }
   return null;
 }
@@ -2273,7 +2273,7 @@ function _ouvrirResiliation(){
   const z=document.getElementById('cr-resil');
   if(!z) return false;
   z.style.display='block';
-  z.innerHTML=`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:8px">Si tu veux nous dire pourquoi — c'est facultatif, et ça ne change rien à ta résiliation.</div>
+  z.innerHTML=`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:8px">Si tu veux nous dire pourquoi : c'est facultatif, et ça ne change rien à ta résiliation.</div>
     <select id="resil-motif" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--text);padding:11px 13px;border-radius:var(--r-3);font-family:Montserrat,sans-serif;font-size:var(--fs-md);margin-bottom:8px">
       <option value="">Sans réponse</option>
       ${RESIL_MOTIFS.map(m=>'<option value="'+escapeHtml(m)+'">'+escapeHtml(m)+'</option>').join('')}
@@ -2285,7 +2285,7 @@ function _ouvrirResiliation(){
 function _confirmerResiliation(){
   const m=(document.getElementById('resil-motif')||{}).value||'';
   const l=(document.getElementById('resil-libre')||{}).value||'';
-  const motif=[m,l].filter(Boolean).join(' — ');
+  const motif=[m,l].filter(Boolean).join(' : ');
   if(!demanderResiliation(motif)){ toast('Résiliation déjà enregistrée.','var(--sub)'); return false; }
   _renderAbonnement();
   toast('Résiliation enregistrée ✓','var(--green)');
@@ -5741,7 +5741,7 @@ function _sansSante(u){
   if(coupes.length){
     try{ console.error('[RepCore] donnée de santé écrite sans consentement, '
       +'coupée avant enregistrement : '+coupes.join(', ')
-      +' — il manque une porte en amont.'); }catch(e){}
+      +' : il manque une porte en amont.'); }catch(e){}
     try{ window._santeCoupee=(window._santeCoupee||[]).concat(coupes); }catch(e){}
   }
   return copie;
@@ -5768,7 +5768,7 @@ const SANTE_MOTIFS=Object.freeze({
   pas:        'Ton nombre de pas quotidiens est une donnée de santé.',
   energie:    'Ton niveau d\'énergie est une donnée de santé.',
   age:        'Ta date de naissance sert à calculer tes repères : c\'est une donnée de santé.',
-  ressenti:   'Ton ressenti de séance — fatigue, sensations — est une donnée de santé.'
+  ressenti:   'Ton ressenti de séance (fatigue, sensations) est une donnée de santé.'
 });
 // ── LES DEUX AUTRES DEPLACEMENTS ────────────────────────────────────────
 //
@@ -9431,8 +9431,8 @@ function _proposerSecondCompte(email,rejoindre){
     // d'autre le jour ou une branche le rallumerait.
     delete b.dataset.alias;
   } else {
-    t.innerHTML='Tu veux un <b style="color:var(--text)">second compte</b> — celui-ci en '
-      +roleMot+' — sur la même boîte mail ? Utilise '
+    t.innerHTML='Tu veux un <b style="color:var(--text)">second compte</b> : celui-ci en '
+      +roleMot+' : sur la même boîte mail ? Utilise '
       +'<b style="color:var(--text);word-break:break-all">'+escapeHtml(alias)+'</b>. '
       +'Le courrier arrive au même endroit, et le sélecteur de comptes te fera '
       +'passer de l\u2019un à l\u2019autre sans ressaisir ton mot de passe.';
@@ -9541,7 +9541,7 @@ function _boutonReprise(em){
     // MEME RESERVE QUE forgotPassword : la protection contre l'enumeration des
     // adresses fait repondre « succes » meme sur une adresse inconnue. On ne
     // promet donc pas un envoi, on dit ou regarder.
-    toast(ok?'Si un compte existe, le lien part maintenant — pense aux spams'
+    toast(ok?'Si un compte existe, le lien part maintenant : pense aux spams'
             :'Envoi impossible : verifie ta connexion',
           ok?'var(--green)':'var(--orange)');
   });
@@ -11218,7 +11218,7 @@ const EXPORT_NON_INCLUS=Object.freeze([
   // exactement pour dire ce qui manque et pourquoi.
   Object.freeze({categorie:'Notes privées de ton coach à ton sujet',
     raison:'Elles sont enregistrées dans le dossier de ton coach, auquel RepCore ne te donne pas accès : '
-      +'cet export ne peut pas les contenir. Elles te sont néanmoins communicables — demande-les-lui.'}),
+      +'cet export ne peut pas les contenir. Elles te sont néanmoins communicables : demande-les-lui.'}),
   Object.freeze({categorie:'Compteurs techniques (quota, mesure de tunnel)',
     raison:'Agrégats anonymes sans lien avec ton compte : ils ne te concernent pas individuellement.'}),
   Object.freeze({categorie:'Brouillon de séance en cours',
@@ -12137,7 +12137,7 @@ function phraseCouvertureMicro(c){
   if(!c) return '';
   let s=c.lib+' : '+Math.round(c.part*100)+' % de la référence sur '+c.nJours+' jours';
   if(c.partDocumentee<1)
-    s+=' — calculé sur '+Math.round(c.partDocumentee*100)
+    s+=' : calculé sur '+Math.round(c.partDocumentee*100)
       +' % de ce que tu as journalisé, le reste n\'a pas de donnée';
   s+='.';
   if(!c.sexeConnu)
@@ -12559,7 +12559,7 @@ function risquesMicro(user,ref){
     let _sig=null;
     try{ _sig=signalMicro(user,localISODate(date)); }catch(e){ _sig=null; }
     if(_sig) out.push({cle:'couverture_'+_sig.cle,
-      lib:'Couverture '+_sig.lib.toLowerCase()+' — deux semaines',
+      lib:'Couverture '+_sig.lib.toLowerCase()+' : deux semaines',
       motif:phraseSignalMicroCoach(_sig),
       question:'Un bilan sanguin récent existe-t-il ?'});
     for(const _cle in MICRO_REFS){
@@ -12857,7 +12857,7 @@ const MORPHO_COHERENCES=Object.freeze([
    question:'Peux-tu reprendre l’avant-bras, coude plié à angle droit ?'},
   // Un bassin plus large que les épaules existe ; plus large d'un tiers, non.
   {cle:'coherence_bassin',a:'deb-bassin',b:'deb-epaules',k:1.3,lib:'Bassin et épaules',
-   motif:'Le bassin est donné nettement plus large que les épaules — plus d’un tiers d’écart.',
+   motif:'Le bassin est donné nettement plus large que les épaules : plus d’un tiers d’écart.',
    question:'Peux-tu reprendre les deux largeurs en ligne droite, de dos ?'}
 ]);
 /**
@@ -12872,7 +12872,7 @@ function coherencesMorpho(user){
   for(const c of MORPHO_COHERENCES){
     const a=mesureMorpho(user,c.a), b=mesureMorpho(user,c.b);
     if(a.cm==null||b.cm==null) continue;
-    if(a.cm>b.cm*c.k+1e-9) out.push({cle:c.cle,lib:'Mesures à revérifier — '+c.lib,
+    if(a.cm>b.cm*c.k+1e-9) out.push({cle:c.cle,lib:'Mesures à revérifier : '+c.lib,
       motif:c.motif,question:c.question});
   }
   return out;
@@ -12893,17 +12893,17 @@ const MORPHO_TESTS=Object.freeze([
    protocole:'Pied nu, orteils face à un mur. Avance le genou jusqu’à toucher le mur sans '
      +'décoller le talon, puis recule le pied jusqu’à la distance la plus grande où le genou '
      +'touche encore. Mesure de l’orteil au mur.'},
-  {cle:'hanche',lib:'Hanche — flexion et rotations',champ:'deg',unite:'°',min:30,max:160,
+  {cle:'hanche',lib:'Hanche : flexion et rotations',champ:'deg',unite:'°',min:30,max:160,
    protocole:'Allongé sur le dos, l’autre jambe tendue au sol : monte le genou vers la '
      +'poitrine jusqu’à ce que le bassin commence à basculer. Note l’angle atteint, et si '
      +'l’arrêt est net ou élastique.'},
-  {cle:'epaule',lib:'Épaule — au mur et main dans le dos',champ:'paire',unite:'cm',min:0,max:60,
+  {cle:'epaule',lib:'Épaule : au mur et main dans le dos',champ:'paire',unite:'cm',min:0,max:60,
    mur:true,
    protocole:'Dos au mur, lombaires plaquées : monte les bras tendus, note la distance des '
      +'poignets au mur. Puis main dans le dos, note la distance entre les deux mains. '
      +'Un côté après l’autre. Note aussi si les bras touchent le mur sans que les lombaires '
      +'décollent.'},
-  {cle:'posterieur',lib:'Chaîne postérieure — flexion avant',champ:'niveau',unite:'',
+  {cle:'posterieur',lib:'Chaîne postérieure : flexion avant',champ:'niveau',unite:'',
    protocole:'Debout, jambes tendues, descends les mains vers le sol sans forcer. Note où le '
      +'dos commence à s’enrouler : haut du dos, milieu, ou bas du dos.',
    niveaux:['haut','milieu','bas']}
@@ -13184,7 +13184,7 @@ function _morphoBrut(user,cle){
     const e=_morphoSource(user,'deb-entrejambe'), g=_morphoSource(user,'deb-genou');
     if(e.motif==='desaccord'||g.motif==='desaccord') return {valeur:null,erreur:0,unite:'',
       source:null,date:null,conf:0,motif:'desaccord',aMesurer:null};
-    if(g.cm==null) return manque('la hauteur de genou, du sol au creux du genou — une minute au mur');
+    if(g.cm==null) return manque('la hauteur de genou, du sol au creux du genou : une minute au mur');
     if(e.cm==null) return manque('l’entrejambe, du sol au pubis, pieds nus et dos au mur');
     if(e.cm<=g.cm) return {valeur:null,erreur:0,unite:'',source:null,date:null,conf:0,
       motif:'incoherente',aMesurer:null};
@@ -13414,7 +13414,7 @@ function morphoAxes(user,opts){
       a.tolerance='1 cm'; a.perime=!!t.perime;
       a.position=v<10?'bas':'neutre';
       a.texte=Math.round(v)+' cm au mur '+_morphoAttribut('test',t.date,'1 cm')
-        +(t.perime?' — périmé, à refaire':'');
+        +(t.perime?' : périmé, à refaire':'');
       return a;
     }
 
@@ -13553,7 +13553,7 @@ function morphoAxes(user,opts){
     }
     a.tolerance=tol;
     a.texte=_morphoNb(a.valeur,a.unite)+' '+_morphoAttribut(r.source,r.date,tol)
-      +(a.repereTexte?' — '+a.repereTexte:'');
+      +(a.repereTexte?' : '+a.repereTexte:'');
     // LA PHOTO CONCLUT. Elle ne remplace rien : elle confirme ou elle
     // contredit. Et quand elle contredit franchement — l'un dit haut,
     // l'autre dit bas — on ne tranche pas, on suspend et on demande la
@@ -13570,7 +13570,7 @@ function morphoAxes(user,opts){
       } else if(pp){
         a.texte+=' · '+rp.lib+' à '+_morphoVirgule(Math.round(rp.valeur*100)/100)
           +' '+_morphoAttribut('photo',rp.date,null)
-          +(pp===a.position?' — la photo confirme.':' — la photo ne contredit pas.');
+          +(pp===a.position?' : la photo confirme.':' : la photo ne contredit pas.');
       }
     }
     return a;
@@ -13599,22 +13599,22 @@ const MORPHO_PROFILS=Object.freeze([
   {cle:'P13',lib:'Dominance quadriceps / ischios installée',nature:'acquis',segment:'bas',
    axes:['A9'],signature:[{axe:'A9',positions:['haut'],dominance:'quad_ischio'}],
    signatureTexte:'Rapport de volume quadriceps / ischios au-delà de 2,0 sur les dernières semaines entraînées. Sur la photo de profil : cuisse développée devant, plate derrière.',
-   mecanique:'Aucune. C’est une histoire de programmation, pas de morphologie — et c’est précisément pour ça qu’il faut la lire en premier.',
+   mecanique:'Aucune. C’est une histoire de programmation, pas de morphologie, et c’est précisément pour ça qu’il faut la lire en premier.',
    privilegier:'Leg curl sous deux profils de résistance (allongé pour la position longue, assis pour la position courte), soulevé roumain, hip thrust, fentes longues.',
    amenager:[{quoi:'Rien à retirer',reglage:'on déplace des séries : les mêmes séances, une répartition différente. C’est la correction la moins coûteuse du document.',schema:'isolation-genou'}],
    accent:'Ramener le rapport sous 1,5 sur huit à douze semaines, et le vérifier avec le compteur de volume qui existe déjà.',
    specificite:'Le même raisonnement se généralise à tous les couples : pectoraux/dos, deltoïde antérieur/postérieur, biceps/triceps, abdominaux/lombaires.',
-   piege:'Expliquer des ischios plats par « la génétique » alors que le carnet montre deux séries par semaine contre douze au quadriceps. L’ordre de lecture — acquis, fonctionnel, osseux — existe pour ça.'},
+   piege:'Expliquer des ischios plats par « la génétique » alors que le carnet montre deux séries par semaine contre douze au quadriceps. L’ordre de lecture (acquis, fonctionnel, osseux) existe pour ça.'},
 
   {cle:'P14',lib:'Asymétrie latérale soutenue',nature:'acquis',segment:'global',
    axes:['A9'],signature:[{axe:'A9',positions:['haut'],asymetrie:true}],
    signatureTexte:'Écart droite/gauche sur biceps, cuisse ou mollet, soutenu sur au moins trois bilans consécutifs et supérieur à l’erreur de mesure. En vidéo : déviation latérale de la barre, appui inégal.',
-   mecanique:'Sans objet — c’est un constat, pas une structure. Et il y a une asymétrie normale chez tout le monde.',
-   privilegier:'Travail unilatéral, en commençant systématiquement par le côté faible et en alignant le côté fort sur son nombre de répétitions — pas l’inverse.',
+   mecanique:'Sans objet : c’est un constat, pas une structure. Et il y a une asymétrie normale chez tout le monde.',
+   privilegier:'Travail unilatéral, en commençant systématiquement par le côté faible et en alignant le côté fort sur son nombre de répétitions, pas l’inverse.',
    amenager:[{quoi:'Les mouvements bilatéraux lourds',reglage:'ils ne sont pas à retirer : on ajoute de l’unilatéral à côté, et Motion Lab sert à vérifier que la barre ne dérive plus.',schema:'fente'}],
    accent:'Réévaluation à trois bilans. Si l’écart ne bouge pas malgré le travail unilatéral, on arrête d’insister et on oriente vers un professionnel de santé si une gêne existe.',
    specificite:'Le seuil compte plus que le signal. Avec une erreur technique de l’ordre du centimètre sur un tour de bras auto-mesuré, un écart de 1 cm ne veut rien dire. Il faut un écart franc, répété, et jamais isolé.',
-   piege:'Lancer une chasse à l’asymétrie sur du bruit de mesure. C’est le plus sûr moyen de rendre un athlète anxieux sur son corps — et c’est exactement ce qu’une app ne doit jamais faire.'},
+   piege:'Lancer une chasse à l’asymétrie sur du bruit de mesure. C’est le plus sûr moyen de rendre un athlète anxieux sur son corps, et c’est exactement ce qu’une app ne doit jamais faire.'},
 
   {cle:'P9',lib:'Cheville verrouillée',nature:'fonctionnel',segment:'bas',
    axes:['A7'],signature:[{axe:'A7',positions:['bas']}],
@@ -13623,7 +13623,7 @@ const MORPHO_PROFILS=Object.freeze([
    privilegier:'Presse à cuisses, hack squat, extension de jambes : le quadriceps se charge sans exiger la cheville. Squat talons surélevés : la méta-analyse montre un gain d’amplitude de cheville et de genou à partir d’environ 2,5 cm d’élévation, avec un effet dose.',
    amenager:[{quoi:'Squat pieds serrés profond',reglage:'cale de 2,5 cm, ou stance élargi avec pointes ouvertes',schema:'squat'},
      {quoi:'Fentes avant',reglage:'fentes arrière ou bulgares, qui demandent moins de flexion dorsale à l’avant',schema:'fente'}],
-   accent:'Deux voies en parallèle : la cale pour s’entraîner aujourd’hui, le travail d’amplitude pour ne plus en avoir besoin. L’app doit dire lequel des deux elle propose — une cale est un contournement, pas un traitement.',
+   accent:'Deux voies en parallèle : la cale pour s’entraîner aujourd’hui, le travail d’amplitude pour ne plus en avoir besoin. L’app doit dire lequel des deux elle propose : une cale est un contournement, pas un traitement.',
    specificite:'La cale n’est pas gratuite : la même méta-analyse montre qu’une élévation importante réduit l’amplitude de hanche et de tronc. On déplace le travail vers le quadriceps, on ne l’ajoute pas. À assumer explicitement.',
    piege:'Attribuer à la morphologie ce qui vient de la cheville. Le test du genou au mur prend trente secondes et doit être fait avant toute conclusion sur les leviers.'},
 
@@ -13631,10 +13631,10 @@ const MORPHO_PROFILS=Object.freeze([
    axes:['A8'],signature:[{axe:'A8',facette:'hanche',positions:['haut']}],
    signatureTexte:'Flexion de hanche qui bute franchement, avec bascule du bassin, et un arrêt net plutôt qu’élastique. Souvent une nette asymétrie entre rotation interne et externe. En squat : profondeur limitée quel que soit le stance, ou pincement à l’aine.',
    mecanique:'La structure de hanche varie énormément d’une personne à l’autre : l’orientation du col du fémur s’étale sur une trentaine de degrés, celle du cotyle autant. Concrètement, l’un squatte pointes presque droites et descend loin, l’autre bute tôt et a besoin d’ouvrir. Ce n’est pas de la souplesse à gagner.',
-   privilegier:'La recherche du stance, méthodiquement : écartement et rotation des pointes testés par paliers, à charge légère, en notant la profondeur confortable. Puis les machines qui contournent l’amplitude — presse avec pieds hauts, hack, leg curl, extension.',
+   privilegier:'La recherche du stance, méthodiquement : écartement et rotation des pointes testés par paliers, à charge légère, en notant la profondeur confortable. Puis les machines qui contournent l’amplitude : presse avec pieds hauts, hack, leg curl, extension.',
    amenager:[{quoi:'Squat profond imposé',reglage:'profondeur choisie, celle où il n’y a pas de pincement',schema:'squat'},
      {quoi:'Squat pieds serrés',reglage:'ouvrir les pointes et élargir le stance',schema:'squat'},
-     {quoi:'Soulevé sumo',reglage:'prudence : il demande de la rotation externe que ce profil n’a pas forcément — à tester à charge légère avant de le programmer',schema:'charniere-hanche'}],
+     {quoi:'Soulevé sumo',reglage:'prudence : il demande de la rotation externe que ce profil n’a pas forcément (à tester à charge légère avant de le programmer)',schema:'charniere-hanche'}],
    accent:'Amplitude utile plutôt qu’amplitude maximale. Le travail en position longue se cherche sur des exercices où la hanche n’est pas la butée : leg curl allongé, fentes, presse.',
    specificite:'Distinguer butée osseuse et raideur demande une imagerie que personne n’ira faire. RepCore décrit le test et se tait sur la cause : « l’arrêt est net et s’accompagne d’une bascule du bassin » est un constat.',
    piege:'Prescrire des mois d’étirements de hanche contre une butée qui ne cédera pas. On n’allonge pas un os ; on irrite une articulation.'},
@@ -13652,7 +13652,7 @@ const MORPHO_PROFILS=Object.freeze([
    specificite:'C’est le profil le plus évolutif du document : un athlète reconnu en janvier peut ne plus l’être en mai. Le profil porte donc une date de péremption.',
    piege:'Figer l’aménagement. Un exercice écarté pour cause d’amplitude et jamais rouvert devient un interdit permanent né d’un test de trente secondes.'},
 
-  {cle:'P12',lib:'Chaîne postérieure raide — le faux mauvais tireur',nature:'fonctionnel',segment:'bas',
+  {cle:'P12',lib:'Chaîne postérieure raide : le faux mauvais tireur',nature:'fonctionnel',segment:'bas',
    axes:['A8'],signature:[{axe:'A8',facette:'posterieur',positions:['bas']}],
    signatureTexte:'Dos qui s’enroule tôt en flexion avant jambes tendues. Au soulevé : lombaires arrondies dès le départ, pas seulement sous fatigue.',
    mecanique:'Ce n’est pas un problème de levier : c’est une amplitude manquante. La différence est décisive parce que les deux réponses sont opposées : un levier défavorable se contourne par la variante, une raideur se travaille.',
@@ -13661,47 +13661,47 @@ const MORPHO_PROFILS=Object.freeze([
      {quoi:'Good morning',reglage:'plus tard, quand l’amplitude est revenue',schema:'charniere-hanche'},
      {quoi:'Jambes tendues au sol',reglage:'sur banc, amplitude choisie',schema:'charniere-hanche'}],
    accent:'Amplitude d’abord, charge ensuite. Et une réévaluation datée : ce profil doit disparaître en quelques mois si le travail est fait.',
-   specificite:'À ne pas confondre avec un tronc long, qui produit la même image — un dos qui souffre au soulevé — pour une raison opposée. Le test de flexion avant les départage en dix secondes.',
+   specificite:'À ne pas confondre avec un tronc long, qui produit la même image (un dos qui souffre au soulevé) pour une raison opposée. Le test de flexion avant les départage en dix secondes.',
    piege:'L’envoyer en sumo « parce que son dos s’arrondit ». Le sumo demande plus de rotation de hanche et ne règle pas une raideur postérieure ; il la cache.'},
 
-  {cle:'P1',lib:'Fémur long, tronc court — le squatteur penché',nature:'osseux',segment:'bas',
+  {cle:'P1',lib:'Fémur long, tronc court : le squatteur penché',nature:'osseux',segment:'bas',
    axes:['A1','A2'],signature:[{axe:'A1',positions:['haut']},{axe:'A2',positions:['haut']}],
    signatureTexte:'Entrejambe au-delà de ~49 % de la taille, et rapport fémur/tibia élevé. Sur la photo de profil : assis, les genoux montent au-dessus des hanches. En vidéo : le buste plonge dès le premier tiers de la descente.',
    mecanique:'Pour garder la charge au-dessus du milieu du pied, un fémur long oblige le bassin à reculer davantage, donc le buste à s’incliner. L’inclinaison raccourcit le bras de levier du genou et allonge celui de la hanche : à charge égale, ce squat sollicite les extenseurs de hanche plus qu’un squat droit. Ce n’est pas une faute technique, c’est la solution que la géométrie impose.',
-   privilegier:'Tout ce qui découple genou et hanche — presse à cuisses, hack squat, squat bulgare, extension de jambes — parce qu’ils permettent de charger le quadriceps sans passer par l’inclinaison de buste. Et tout ce qui rentabilise le levier de hanche : soulevé de terre, charnière, fessiers.',
+   privilegier:'Tout ce qui découple genou et hanche (presse à cuisses, hack squat, squat bulgare, extension de jambes) parce qu’ils permettent de charger le quadriceps sans passer par l’inclinaison de buste. Et tout ce qui rentabilise le levier de hanche : soulevé de terre, charnière, fessiers.',
    amenager:[{quoi:'Squat barre haute profond',reglage:'barre basse ou squat guidé, stance élargi, pointes ouvertes, cale de 1,5 à 2,5 cm',schema:'squat'},
-     {quoi:'Front squat',reglage:'souvent le plus pénalisant — la charge devant impose un buste droit qu’il n’a pas ; le remplacer par un hack ou une presse pieds bas',schema:'squat'},
+     {quoi:'Front squat',reglage:'souvent le plus pénalisant : la charge devant impose un buste droit qu’il n’a pas ; le remplacer par un hack ou une presse pieds bas',schema:'squat'},
      {quoi:'Fentes longues',reglage:'raccourcir le pas ou passer en bulgare',schema:'fente'}],
    accent:'Quadriceps par les machines et le travail unilatéral, pas par le squat libre. La charnière devient l’exercice fort : la programmer comme telle plutôt que de s’acharner sur un squat qui ne sera jamais son terrain.',
    specificite:'Ces athlètes sont systématiquement corrigés à tort sur « le buste trop penché ». Motion Lab tranche la question : si le bras de levier de hanche reste stable pendant la descente, l’inclinaison est structurelle ; si elle s’aggrave sous fatigue, c’est technique.',
    piege:'Lui vendre de la mobilité de cheville pendant six mois pour « redresser » son squat. Une cale règle en une séance ce qu’un fémur long ne lâchera jamais. Vérifier la cheville avant d’attribuer au fémur.'},
 
-  {cle:'P2',lib:'Tronc long, jambes courtes — le levier de dos',nature:'osseux',segment:'bas',
+  {cle:'P2',lib:'Tronc long, jambes courtes : le levier de dos',nature:'osseux',segment:'bas',
    axes:['A1'],signature:[{axe:'A1',positions:['bas']}],
    signatureTexte:'Entrejambe sous ~43 % de la taille. Assis, la tête dépasse celle des autres ; debout, non. Photo de profil : tronc visuellement long par rapport aux jambes.',
-   mecanique:'Le squat devient confortable — buste plus droit, profondeur peu chère. En revanche, en charnière de hanche, un tronc long est un long bras de levier horizontal : le soulevé de terre conventionnel coûte davantage aux lombaires à charge égale.',
+   mecanique:'Le squat devient confortable : buste plus droit, profondeur peu chère. En revanche, en charnière de hanche, un tronc long est un long bras de levier horizontal : le soulevé de terre conventionnel coûte davantage aux lombaires à charge égale.',
    privilegier:'Squat sous toutes ses formes, y compris front squat et gobelet : c’est son terrain. Fentes, bulgares, travail de profondeur.',
-   amenager:[{quoi:'Soulevé de terre conventionnel lourd',reglage:'sumo, ou départ surélevé, ou trap bar — la littérature va dans ce sens : un rapport tronc/taille plus élevé s’accompagne de meilleures performances en sumo',schema:'charniere-hanche'},
+   amenager:[{quoi:'Soulevé de terre conventionnel lourd',reglage:'sumo, ou départ surélevé, ou trap bar, la littérature va dans ce sens : un rapport tronc/taille plus élevé s’accompagne de meilleures performances en sumo',schema:'charniere-hanche'},
      {quoi:'Good morning lourd',reglage:'hip thrust ou charnière guidée',schema:'charniere-hanche'}],
-   accent:'Quadriceps au squat libre, sans complexe. Chaîne postérieure par des exercices à bras de levier court — hip thrust, leg curl, extension lombaire réglée — plutôt que par le soulevé lourd.',
+   accent:'Quadriceps au squat libre, sans complexe. Chaîne postérieure par des exercices à bras de levier court (hip thrust, leg curl, extension lombaire réglée) plutôt que par le soulevé lourd.',
    specificite:'Le rapport tronc/membres compte plus que la taille absolue. Un grand athlète à tronc long et jambes courtes est un profil conventionnel ; c’est la proportion qui décide, pas le mètre.',
    piege:'Le pousser au soulevé conventionnel lourd parce qu’il squatte bien et qu’on suppose qu’il « devrait » tout bien faire. C’est exactement le mouvement où son levier joue contre lui.'},
 
-  {cle:'P3',lib:'Tibia long — le squat qui ne coûte rien',nature:'osseux',segment:'bas',
+  {cle:'P3',lib:'Tibia long : le squat qui ne coûte rien',nature:'osseux',segment:'bas',
    axes:['A2'],signature:[{axe:'A2',positions:['bas']}],
    signatureTexte:'Hauteur de genou élevée pour l’entrejambe. En vidéo : genoux très avancés au fond, buste presque droit, sans effort apparent.',
    mecanique:'Un tibia long autorise le genou à s’avancer davantage à profondeur égale, ce qui maintient le buste droit et garde le bras de levier sur le genou. La charge reste sur le quadriceps.',
    privilegier:'Squat profond, front squat, squat gobelet, hack. C’est le profil qui peut vraiment charger le quadriceps au squat libre.',
    amenager:[{quoi:'Peu de choses au squat',reglage:'en revanche, attention à la cheville : un genou très avancé demande beaucoup de flexion dorsale, et un tibia long amplifie la demande',schema:'squat'}],
-   accent:'Ne pas gâcher l’avantage : le squat est ici un vrai exercice de quadriceps, pas un exercice global bricolé. Les ischios, eux, demanderont un travail dédié — ils ne suivront pas.',
+   accent:'Ne pas gâcher l’avantage : le squat est ici un vrai exercice de quadriceps, pas un exercice global bricolé. Les ischios, eux, demanderont un travail dédié : ils ne suivront pas.',
    specificite:'Ce profil est souvent pris pour « doué ». Il est simplement bien proportionné pour ce mouvement-là. Le dire évite deux choses : qu’il se croie supérieur, et que les autres se croient limités.',
    piege:'Faire de son squat le modèle montré aux autres. Une vidéo envoyée à un athlète aux fémurs longs comme « voilà la bonne technique » produit six mois de frustration pour une géométrie inatteignable.'},
 
-  {cle:'P4',lib:'Bras longs, grande envergure — le tireur',nature:'osseux',segment:'haut',
+  {cle:'P4',lib:'Bras longs, grande envergure : le tireur',nature:'osseux',segment:'haut',
    axes:['A3'],signature:[{axe:'A3',positions:['haut']}],
    signatureTexte:'Longueur de bras au-delà de ~48 % de la taille. Envergure nettement supérieure à la taille. Photo de face : mains au-dessous de la mi-cuisse, bras le long du corps.',
    mecanique:'En poussée, un bras long allonge l’amplitude et le bras de levier à franchir : plus de travail mécanique pour la même charge, et une contrainte d’épaule plus longue. En tirage, la même longueur devient un avantage : plus d’amplitude utile, plus de temps sous tension pour le dos.',
-   privilegier:'Tous les tirages — rowing, tirage horizontal, tirage vertical, pull-over. Et les poussées à amplitude bornée par la machine : développé convergent, presse à pectoraux, où la course n’est pas dictée par son bras.',
+   privilegier:'Tous les tirages : rowing, tirage horizontal, tirage vertical, pull-over. Et les poussées à amplitude bornée par la machine : développé convergent, presse à pectoraux, où la course n’est pas dictée par son bras.',
    amenager:[{quoi:'Développé couché barre',reglage:'prise autour de 180–200 % de sa largeur d’épaules, ce qui réduit l’amplitude et raccourcit le bras de levier ; haltères s’il a une gêne d’épaule en fin d’amplitude',schema:'poussee-horizontale'},
      {quoi:'Tractions lestées',reglage:'coûteuses (long bras de levier) : privilégier le tirage vertical guidé pour le volume',schema:'tirage-vertical'},
      {quoi:'Dips profonds',reglage:'limiter la descente : l’amplitude coûte déjà plus cher qu’aux autres, la chercher en plus n’ajoute rien',schema:'poussee-horizontale'}],
@@ -13709,46 +13709,46 @@ const MORPHO_PROFILS=Object.freeze([
    specificite:'C’est le profil pour lequel Motion Lab apporte le plus : la largeur de prise se règle en mesurant le bras de levier réel sur trois largeurs, plutôt qu’en appliquant un pourcentage.',
    piege:'Lire sa faiblesse au développé comme un manque de pectoraux et ajouter du volume de poussée. Il fait déjà plus de travail que les autres à charge égale : le problème est l’amplitude, pas le volume.'},
 
-  {cle:'P5',lib:'Bras courts, humérus court — le pousseur',nature:'osseux',segment:'haut',
+  {cle:'P5',lib:'Bras courts, humérus court : le pousseur',nature:'osseux',segment:'haut',
    axes:['A3','A4'],signature:[{axe:'A3',positions:['bas']},{axe:'A4',positions:['bas']}],
    signatureTexte:'Bras sous ~42 % de la taille, humérus court pour l’avant-bras. Au développé, la barre touche vite et la course paraît courte. Chiffres de charge élevés par rapport au reste du corps.',
-   mecanique:'Amplitude courte, bras de levier court : la charge grimpe vite. L’inconvénient est symétrique : moins d’amplitude utile par répétition, donc moins de temps passé en position longue — la position qui compte le plus pour l’hypertrophie.',
+   mecanique:'Amplitude courte, bras de levier court : la charge grimpe vite. L’inconvénient est symétrique : moins d’amplitude utile par répétition, donc moins de temps passé en position longue (la position qui compte le plus pour l’hypertrophie).',
    privilegier:'Poussées lourdes : développé couché, incliné, militaire. Et les tractions, où un bras court est un levier favorable.',
-   amenager:[{quoi:'Rien n’est à retirer',reglage:'c’est un profil avantagé ; le réglage porte sur l’amplitude — planche sur la poitrine, écartés à grande amplitude, presse à pectoraux avec départ étiré — pour compenser la course courte',schema:'poussee-horizontale'},
+   amenager:[{quoi:'Rien n’est à retirer',reglage:'c’est un profil avantagé ; le réglage porte sur l’amplitude (planche sur la poitrine, écartés à grande amplitude, presse à pectoraux avec départ étiré) pour compenser la course courte',schema:'poussee-horizontale'},
      {quoi:'Tirages',reglage:'allonger la course plutôt que charger',schema:'tirage-horizontal'}],
    accent:'Amplitude avant charge. C’est le seul profil où le compteur de charge trompe : les kilos montent vite, le stimulus ne suit pas forcément. La position longue doit être recherchée exercice par exercice.',
-   specificite:'Attention au dos : un bras court raccourcit aussi l’amplitude des tirages. C’est souvent le profil qui « ne sent pas son dos » — pas par manque de connexion, par manque de course.',
+   specificite:'Attention au dos : un bras court raccourcit aussi l’amplitude des tirages. C’est souvent le profil qui « ne sent pas son dos », pas par manque de connexion, par manque de course.',
    piege:'Le féliciter sur ses charges et ne jamais regarder son amplitude. Deux ans plus tard, un développé énorme et des pectoraux moyens.'},
 
-  {cle:'P6',lib:'Charpente étroite — le V à construire',nature:'osseux',segment:'haut',
+  {cle:'P6',lib:'Charpente étroite : le V à construire',nature:'osseux',segment:'haut',
    axes:['A5'],signature:[{axe:'A5',positions:['bas']}],
    signatureTexte:'Rapport épaules/bassin bas. À distinguer absolument d’un tour de taille élevé : le rapport osseux ne bouge pas avec le gras.',
-   mecanique:'Moins de largeur osseuse au départ. Le V ne viendra pas de la charpente, donc il viendra du deltoïde latéral et de la largeur du grand dorsal — deux muscles qui répondent bien au volume et aux profils de résistance adaptés.',
+   mecanique:'Moins de largeur osseuse au départ. Le V ne viendra pas de la charpente, donc il viendra du deltoïde latéral et de la largeur du grand dorsal : deux muscles qui répondent bien au volume et aux profils de résistance adaptés.',
    privilegier:'Élévations latérales à haute fréquence, sous plusieurs profils de résistance (poulie pour la position longue, haltère pour la position courte). Tirages prise large et pull-over pour la largeur de dos.',
    amenager:[{quoi:'Rien à écarter',reglage:'mais on hiérarchise : le développé militaire lourd construit moins de largeur visuelle que trois fois par semaine d’élévations bien placées',schema:'isolation-epaule'},
-     {quoi:'Obliques chargés',reglage:'lever le pied — ils élargissent la taille et travaillent contre l’effet recherché',schema:'gainage-tronc'}],
+     {quoi:'Obliques chargés',reglage:'lever le pied : ils élargissent la taille et travaillent contre l’effet recherché',schema:'gainage-tronc'}],
    accent:'Deltoïde latéral en priorité absolue, puis largeur de dos, puis gestion du tour de taille. Dans cet ordre.',
    specificite:'C’est le profil où l’écart entre « mesure » et « photo » est le plus grand : le tour de bras peut stagner pendant que la silhouette change complètement. Suivre la photo, pas seulement le mètre.',
    piege:'Confondre charpente étroite et taille épaisse, et mettre l’athlète en déficit pour « faire ressortir le V » alors que le rapport osseux ne bougera pas d’un millimètre.'},
 
-  {cle:'P7',lib:'Charpente large, bassin large — la densité d’abord',nature:'osseux',segment:'global',
+  {cle:'P7',lib:'Charpente large, bassin large : la densité d’abord',nature:'osseux',segment:'global',
    axes:['A5','A6'],signature:[{axe:'A5',positions:['neutre','haut']},{axe:'A6',positions:['haut']}],
    signatureTexte:'Largeur biacromiale et biiliaque élevées, poignet et cheville épais. Photo de face : carrure marquée même sans muscle.',
-   mecanique:'Avantage visuel d’emblée sur la carrure, désavantage sur la finesse de taille — qui est osseuse elle aussi, en partie. Les circonférences seront élevées à masse musculaire égale : le mètre flatte, la définition trompe.',
-   privilegier:'Tout le travail lourd polyarticulaire : la charpente le supporte bien. Densité et épaisseur — rowing lourd, développés, squat.',
+   mecanique:'Avantage visuel d’emblée sur la carrure, désavantage sur la finesse de taille, qui est osseuse elle aussi, en partie. Les circonférences seront élevées à masse musculaire égale : le mètre flatte, la définition trompe.',
+   privilegier:'Tout le travail lourd polyarticulaire : la charpente le supporte bien. Densité et épaisseur : rowing lourd, développés, squat.',
    amenager:[{quoi:'Peu de contraintes mécaniques',reglage:'la vigilance porte sur le tour de taille : obliques chargés et respiration en poussée à surveiller si l’objectif est esthétique',schema:'gainage-tronc'}],
    accent:'Gestion de l’enveloppe. Sur ce profil, la composition corporelle pèse plus lourd que le choix d’exercice : un point de masse grasse se voit davantage.',
-   specificite:'Objectifs de circonférence à recalibrer à la hausse — ils partent de plus haut et progressent moins vite en pourcentage. Un même gain de muscle donne un écart de mètre plus faible.',
+   specificite:'Objectifs de circonférence à recalibrer à la hausse : ils partent de plus haut et progressent moins vite en pourcentage. Un même gain de muscle donne un écart de mètre plus faible.',
    piege:'Comparer ses tours de bras à ceux d’une ossature fine et conclure qu’il « prend mieux ». À muscle égal, il mesure plus. Ce n’est pas la même chose.'},
 
-  {cle:'P8',lib:'Ossature fine — le trompe-l’œil du mètre',nature:'osseux',segment:'global',
+  {cle:'P8',lib:'Ossature fine : le trompe-l’œil du mètre',nature:'osseux',segment:'global',
    axes:['A6'],signature:[{axe:'A6',positions:['bas']}],
    signatureTexte:'Poignet sous ~16,5 cm chez l’homme de plus de 1,65 m, cheville fine. Tours de bras et de mollet modestes malgré un entraînement sérieux et une masse grasse basse.',
    mecanique:'La circonférence mesure os + muscle + gras. Avec moins d’os, il faut plus de muscle pour le même chiffre. En contrepartie, la définition apparaît plus tôt et la silhouette paraît plus sèche à masse grasse égale.',
    privilegier:'Rien de particulier mécaniquement. C’est un profil de programmation et d’attentes, pas de réglage.',
    amenager:[{quoi:'Les objectifs, pas les exercices',reglage:'et le suivi : si le mètre est le seul indicateur, l’athlète conclura qu’il ne progresse pas. Croiser avec la photo et la charge soulevée.',schema:'isolation-epaule'}],
-   accent:'Volume sur les groupes qui portent la silhouette — deltoïdes, dos, mollets — parce que chez lui, ce sont les proportions qui font l’effet visuel, pas les circonférences absolues.',
-   specificite:'C’est le profil qui abandonne. Il faut lui donner le bon instrument de mesure dès le départ : rapport taille/bras, photo à éclairage constant, charge de travail — et lui expliquer pourquoi le centimètre lui ment.',
+   accent:'Volume sur les groupes qui portent la silhouette (deltoïdes, dos, mollets) parce que chez lui, ce sont les proportions qui font l’effet visuel, pas les circonférences absolues.',
+   specificite:'C’est le profil qui abandonne. Il faut lui donner le bon instrument de mesure dès le départ : rapport taille/bras, photo à éclairage constant, charge de travail, et lui expliquer pourquoi le centimètre lui ment.',
    piege:'Lui parler de « potentiel génétique » ou de « FFMI ». Un tour de poignet ne prédit aucun plafond : il change l’unité de mesure, pas le résultat atteignable. RepCore ne dira jamais le contraire.'}
 ]);
 
@@ -13832,7 +13832,7 @@ function morphoProfils(axes){
   l.forEach(a=>{
     if(a&&a.aMesurer&&!vus[a.aMesurer]){ vus[a.aMesurer]=1; out.aMesurer.push(a.aMesurer); }
     if(a&&a.manque==='repere-a-calibrer'){
-      const t='un repère calibré pour « '+a.court+' » — il faut '+MORPHO_CALIB_MIN
+      const t='un repère calibré pour « '+a.court+' » : il faut '+MORPHO_CALIB_MIN
         +' athlètes mesurés pour le poser';
       if(!vus[t]){ vus[t]=1; out.aMesurer.push(t); }
     }
@@ -14013,9 +14013,9 @@ function morphoReglages(axes,profils){
     out.push({cle:'cale',lib:'Cale sous les talons',
       consigne:'Cale d’au moins '+String(MORPHO_CALE_CM).replace('.',',')+' cm sous les talons.',
       pourquoi:a7.texte+'. C’est un contournement, pas un traitement : la cale permet de '
-        +'s’entraîner aujourd’hui, le travail d’amplitude de ne plus en avoir besoin — et les '
+        +'s’entraîner aujourd’hui, le travail d’amplitude de ne plus en avoir besoin, et les '
         +'deux se mènent en parallèle. Ce n’est pas gratuit : une élévation importante réduit '
-        +'l’amplitude de hanche et de tronc — on déplace le travail vers le quadriceps, on ne l’ajoute pas.',
+        +'l’amplitude de hanche et de tronc : on déplace le travail vers le quadriceps, on ne l’ajoute pas.',
       schemas:['squat','fente']});
   }
   // LE STANCE. Il se trouve en salle, par paliers — pas au mètre.
@@ -14132,11 +14132,11 @@ function _htmlMorphoExercice(ex){
   });
   if(r.variantes.length)
     h+=bloc('Variantes du même schéma',escapeHtml(r.variantes.join(', '))
-      +' — à envisager à côté, jamais à la place.');
+      +' : à envisager à côté, jamais à la place.');
   return '<div style="background:#0c0c0c;border:1px solid var(--border);border-left:2px solid var(--arc-calm);'
     +'border-radius:var(--r-2);padding:10px 12px;margin:0 0 12px;font-size:var(--fs-xs);line-height:1.6">'
     +'<div style="color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase;'
-    +'margin-bottom:6px;font-size:var(--fs-2xs)">Proportions — pour toi, pas pour lui</div>'+h+'</div>';
+    +'margin-bottom:6px;font-size:var(--fs-2xs)">Proportions : pour toi, pas pour lui</div>'+h+'</div>';
 }
 /** Le calibrage, calculé une fois par rendu d'écran et non par carte. */
 let _morphoCal=null, _morphoCalT=0;
@@ -14206,7 +14206,7 @@ function _htmlMorphoLecture(user,cal){
       +'renseignés : deux axes ne font pas un profil, ils font une impression.</div>';
   } else if(res.silence==='aucun-profil-marque'){
     h+=titre('Profils composés');
-    h+='<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6">Aucun profil marqué — '
+    h+='<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6">Aucun profil marqué : '
       +'c’est le résultat le plus fréquent, et c’en est un.</div>';
   }
 
@@ -14802,7 +14802,7 @@ function _htmlMorphoPhoto(){
       +(pr.verdict==='bon'?'var(--green)':pr.verdict==='a_ameliorer'?'var(--orange)':'var(--red)')+'">'
       +'Prise de vue : '+(pr.verdict==='bon'?'bonne'
         :pr.verdict==='a_ameliorer'?'à améliorer':'à refaire')
-      +(pr.raisons.length?' — '+E(pr.raisons.join(' ; ')):'')+'</p>':'')
+      +(pr.raisons.length?', '+E(pr.raisons.join(' ; ')):'')+'</p>':'')
     +(enr.length?'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6;margin-bottom:10px">'
       +enr.map(t=>'<div>'+E(t)+'</div>').join('')+'</div>'
       :'<p style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;margin-bottom:10px">'
@@ -14911,7 +14911,7 @@ function _ampRendre(){
     +escapeHtml(E.nom)+' · quatre tests, chacun avec son protocole. Tout est facultatif : '
     +'une case vide vaut mieux qu’une mesure prise autrement que ce qui est écrit.</p>'
     +'<p style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin-bottom:16px">'
-    +'On note ce qu’on voit — une distance, un angle, un arrêt net ou élastique. '
+    +'On note ce qu’on voit : une distance, un angle, un arrêt net ou élastique. '
     +'Rien ici ne dit d’où vient une limite, et rien ne descend côté athlète.</p>'
     +MORPHO_TESTS.map(d=>{
       const v=E.v[d.cle]||{};
@@ -15102,7 +15102,7 @@ function risqueDeficitQuestion(user,jourISO){
   if(!rd||pal!=='aucun'||rd.points<1) return null;
   return {cle:'deficit',lib:'Éléments qui se cumulent',
     motif:rd.criteres.map(x=>x.lib.toLowerCase()+' : '+x.valeur).join(' · ')+'.',
-    question:'Comment se passe la récupération en ce moment — fatigue, sommeil, appétit ?'};
+    question:'Comment se passe la récupération en ce moment : fatigue, sommeil, appétit ?'};
 }
 function _htmlDeficitCoach(c){
   let pal='aucun', r=null;
@@ -15123,7 +15123,7 @@ function _htmlDeficitCoach(c){
   const col=bloc?'var(--red)':'var(--orange)';
   const leve=((c&&c.cycle)||{}).leveDeficit;
   const lignes=r.criteres.map(x=>
-    `<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.65">· ${escapeHtml(x.lib)} — ${escapeHtml(String(x.valeur))}</div>`).join('');
+    `<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.65">· ${escapeHtml(x.lib)} : ${escapeHtml(String(x.valeur))}</div>`).join('');
   // La levée est un GESTE du coach, jamais une expiration automatique. Deux
   // motifs, pas de champ libre : on ne fait pas raconter un dossier médical.
   const boutons=bloc
@@ -16803,7 +16803,7 @@ function _canalCarteCoach(m,compteurs,vrai,reactions,neuve){
     ${lien&&safeUrlRaw(lien)!=='#'?`<a href="${safeUrl(lien)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:9px;font-size:var(--fs-sm);color:var(--info);font-weight:700">${escapeHtml(canalDomaine(lien)||'lien')} ↗</a>`:''}
     ${lignes?`<div style="margin-top:11px;padding-top:10px;border-top:1px solid var(--border)">${lignes}</div>`
             :'<div class="sub" style="margin-top:11px;padding-top:10px;border-top:1px solid var(--border);font-size:var(--fs-xs)">Aucune réaction pour l\'instant.</div>'}
-    ${derive?`<button class="btn btn-outline btn-sm" style="width:100%;margin:9px 0 0;min-height:38px;color:var(--orange);border-color:var(--orange)" onclick="resyncCompteursCanal('${escapeHtml(m.id)}')">Le compteur public a dérivé — resynchroniser</button>`:''}
+    ${derive?`<button class="btn btn-outline btn-sm" style="width:100%;margin:9px 0 0;min-height:38px;color:var(--orange);border-color:var(--orange)" onclick="resyncCompteursCanal('${escapeHtml(m.id)}')">Le compteur public a dérivé : resynchroniser</button>`:''}
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
       <button class="btn btn-outline btn-sm" style="width:auto;padding:0 14px;min-height:34px;font-size:10.5px;margin:0" onclick="openMessageCanal('${escapeHtml(m.id)}')">Modifier</button>
       <button class="btn btn-outline btn-sm" style="width:auto;padding:0 14px;min-height:34px;font-size:10.5px;margin:0;color:var(--sub)" onclick="supprimerMessageCanal('${escapeHtml(m.id)}')">Supprimer</button>
@@ -17015,7 +17015,7 @@ function ouvrirCrmCoach(){
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div class="mdl-large" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:4px;font-size:var(--fs-lg)">CARNET D'ADRESSES</h2>
-    <div class="sub" style="font-size:var(--fs-xs);margin-bottom:12px">${l.length} athlète${l.length>1?'s':''}. Un tap ouvre ton mail, ton téléphone ou WhatsApp — RepCore n'envoie rien à ta place.</div>
+    <div class="sub" style="font-size:var(--fs-xs);margin-bottom:12px">${l.length} athlète${l.length>1?'s':''}. Un tap ouvre ton mail, ton téléphone ou WhatsApp : RepCore n'envoie rien à ta place.</div>
     ${adresses?`<button class="btn btn-outline btn-sm" style="width:100%;margin:0 0 12px" onclick="_crmCopierAdresses()">Copier toutes les adresses</button>`:''}
     ${l.length?_htmlSectionsSuivi(l,_crmLigne):'<div class="sub" style="text-align:center;padding:24px 0">Aucun athlète pour l\'instant.</div>'}
     <button class="btn btn-outline" style="margin-top:16px" onclick="closeModal()">Fermer</button>
@@ -17499,7 +17499,7 @@ function ouvrirRite(cycle){
       Ton bilan de cette semaine est déjà enregistré : il n'est pas redemandé ici.</div>`:''}
 
     <label style="margin-top:0">Une question à ton coach&nbsp;?</label>
-    <textarea id="rite-question" rows="2" placeholder="Facultatif — ce que tu veux lui demander pour la suite"></textarea>
+    <textarea id="rite-question" rows="2" placeholder="Facultatif : ce que tu veux lui demander pour la suite"></textarea>
 
     <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
       <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text);margin-bottom:2px">${escapeHtml(nom)}</div>
@@ -18103,7 +18103,7 @@ function renderFileReprise(){
   if(!f.lignes.length){
     el.innerHTML=tete+_htmlCalendrierAcces()+`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);
       padding:22px 16px;text-align:center;font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6">
-      Personne à relancer. Les athlètes en pause déclarée et ceux qui portent un signal de santé n'entrent jamais ici — ils gardent leur ligne dans « Mes notifications ».</div>`;
+      Personne à relancer. Les athlètes en pause déclarée et ceux qui portent un signal de santé n'entrent jamais ici : ils gardent leur ligne dans « Mes notifications ».</div>`;
     return;
   }
   const bouton=(lib,act,fort)=>`<button type="button" onclick="${act}"
@@ -18126,8 +18126,8 @@ function renderFileReprise(){
         ${bouton('Reporter',"frMarquer('"+r.id+"',false)")}
       </div>
     </div>`).join('')
-    +(f.reste?`<div class="sub" style="font-size:var(--fs-xs);padding:6px 2px">et ${f.reste} autre${f.reste>1?'s':''} — traite ceux-ci d'abord.</div>`:'')
-    +`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:10px">Le message est préparé, pas envoyé : tu choisis le contact et tu relis avant d'appuyer. Il ne contient aucune information de santé — le canal n'est pas chiffré.</div>`;
+    +(f.reste?`<div class="sub" style="font-size:var(--fs-xs);padding:6px 2px">et ${f.reste} autre${f.reste>1?'s':''} : traite ceux-ci d'abord.</div>`:'')
+    +`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:10px">Le message est préparé, pas envoyé : tu choisis le contact et tu relis avant d'appuyer. Il ne contient aucune information de santé : le canal n'est pas chiffré.</div>`;
 }
 function loadFileReprise(){
   go('s-coach-file');
@@ -20353,7 +20353,7 @@ function renderCoachActivite(){
       ${_actChiffre(es.sorties,'Sans séance','var(--orange)')}
       ${_actChiffre(es.pauses,'En pause','#8a8a8a')}
     </div>`,
-    '« Sans séance » : aucune séance depuis '+es.seuilJours+' jours. Un athlète en pause déclarée n\'y figure jamais — et la raison de sa pause n\'est pas affichée ici.');
+    '« Sans séance » : aucune séance depuis '+es.seuilJours+' jours. Un athlète en pause déclarée n\'y figure jamais, et la raison de sa pause n\'est pas affichée ici.');
   // ── Carte 3 : ancienneté ──
   const c3=_actCarte('Ancienneté',
     anc==null
@@ -20391,7 +20391,7 @@ function _actParagraphe(ath,mois,es,anc,comp,partiel){
   if(partiel) p.push('En dessous de '+ACT_MIN_ATHLETES+' athlètes, les médianes et les tendances restent masquées : elles se liraient comme des faits alors qu\'elles n\'en sont pas.');
   p.push('Ces chiffres décrivent ce qui a été enregistré dans RepCore, rien d\'autre.');
   return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:13px 14px;font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">${escapeHtml(p.join(' '))}
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">Une pause non déclarée — ou déclarée sans être partagée avec toi — n'est pas visible ici : elle apparaîtra comme une absence de séance.</div>
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">Une pause non déclarée (ou déclarée sans être partagée avec toi) n'est pas visible ici : elle apparaîtra comme une absence de séance.</div>
   </div>`;
 }
 function loadCoachActivite(){
@@ -21115,7 +21115,7 @@ function brouillonInactif(c,maintenant){
   // du bruit, et inventer une duree serait pire.
   const depuis=j>0?(' depuis '+j+' jour'+(j>1?'s':'')):'';
   return 'Salut '+(p||'toi')+', je n’ai pas vu de séance de ton côté'+depuis+'. '
-    +'Aucun reproche — je veux juste savoir ce qui bloque : le temps, le '
+    +'Aucun reproche, je veux juste savoir ce qui bloque : le temps, le '
     +'programme, la motivation ? Dis-moi, on ajuste ensemble.';
 }
 // Les objets de mail. Courts, et sans point d'interrogation anxieux dans la
@@ -21402,7 +21402,7 @@ function tunnelRelancer(codeId){
   //   parce qu'ils sont separes en fait.
   +'<div id="tun-ouvrir" style="margin-bottom:12px"></div>'
   +'<div class="ml-lab" style="margin-bottom:6px">Note (facultative)</div>'
-  +'<textarea id="tun-note" rows="3" maxlength="400" placeholder="WhatsApp envoyé — rappel de l’activation RepCore."'
+  +'<textarea id="tun-note" rows="3" maxlength="400" placeholder="WhatsApp envoyé : rappel de l’activation RepCore."'
   +' style="width:100%;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);padding:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);resize:vertical;margin-bottom:14px"></textarea>'
   +'<div style="display:flex;gap:8px">'
   +'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="closeModal()">Annuler</button>'
@@ -21631,7 +21631,7 @@ function _majResumeTunnel(clients){
   if(r.tiedes) rep.push(r.tiedes+' tiède'+(r.tiedes>1?'s':''));
   if(r.froids) rep.push(r.froids+' froid'+(r.froids>1?'s':''));
   if(rep.length) bouts.push(rep.join(' · '));
-  z.textContent=tunnelPhrase(r)+(bouts.length?'  —  '+bouts.join('  ·  '):'');
+  z.textContent=tunnelPhrase(r)+(bouts.length?' : '+bouts.join('  ·  '):'');
   return true;
 }
 function tunnelOuvrir(){
@@ -21786,7 +21786,7 @@ function _tunCarte(p){
       +'<span>Relance <b>'+p.nb+'/'+TUNNEL_MAX+'</b></span>'
       +'<span>Dernière : <b>'+(p.derniere?_tunJour(p.derniere):'jamais')+'</b></span>'
       +ech
-      +(p.fini&&!p.actif?'<span>Accès désactivé — tunnel terminé</span>':'')
+      +(p.fini&&!p.actif?'<span>Accès désactivé : tunnel terminé</span>':'')
     +'</div>'
     +'<div class="tun-cmd">'
       +(p.fini?''
@@ -22065,7 +22065,7 @@ function _viserOuLeDire(nom){
   catch(e){ console.warn('ciblage d\'exercice : ', e); }
   if(ok) return true;
   console.warn('ciblage d\'exercice : « '+nom+' » introuvable parmi les cartes rendues');
-  try{ toast('Modification enregistrée — la carte « '+nom+' » n’a pas pu être retrouvée à l’écran.','var(--orange)'); }catch(e){}
+  try{ toast('Modification enregistrée : la carte « '+nom+' » n’a pas pu être retrouvée à l’écran.','var(--orange)'); }catch(e){}
   return false;
 }
 function _viserExercice(nom){
@@ -22197,7 +22197,7 @@ function poserMotCoach(user,texte){
   const brut=String(texte==null?'':texte);
   if(brut.length>MOT_COACH_MAX)
     return {ok:false,raison:'Ton mot fait '+brut.length+' caractères. Le maximum est '
-      +MOT_COACH_MAX+' — l’essentiel tient dedans, et le reste se dit de vive voix.'};
+      +MOT_COACH_MAX+' : l’essentiel tient dedans, et le reste se dit de vive voix.'};
   const t=brut.trim();
   if(!t){ delete u.motCoach; try{ saveUser(); }catch(e){} return {ok:true,efface:true}; }
   // ⚠ LE TEXTE EST STOCKE TEL QUEL. Pas de normalisation, pas de majuscule
@@ -22606,7 +22606,7 @@ function _tunnelHistorique(codeId){
       (r.note?escapeHtml(String(r.note)):'<i style="color:var(--text-faint)">Sans note</i>'));
   });
   if(k.termineLe) frise+=ligne(dt(k.termineLe),'Fin du tunnel',
-    c.active===false?'Accès désactivé — tunnel terminé.'
+    c.active===false?'Accès désactivé : tunnel terminé.'
                     :'Quatre relances atteintes. L’accès n’a PAS pu être désactivé : ferme le code à la main.');
   const ech=(n<TUNNEL_MAX&&k.prochaine)
     ?'<div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:8px">Prochaine relance : <b style="color:var(--text-strong)">'+dt(k.prochaine)+'</b></div>'
@@ -23529,7 +23529,7 @@ function openClientDetail(cid,_refresh,_force){
     // décidé de ce badge — la fiche l’a lu un temps, et elle annonçait alors
     // autre chose que la liste sur le même dossier.
     :_enAttenteAbonnement(c)?'<span class="badge badge-orange">⏳ Abonnement à souscrire</span>'
-    :_accesExpire(c)?'<span class="badge badge-gray">Lecture seule — accès expiré</span>'
+    :_accesExpire(c)?'<span class="badge badge-gray">Lecture seule : accès expiré</span>'
     // ⚠ « NOUVEAU BILAN » A QUITTE CE BADGE le 08/09/2026 : la barre
     // cliquable de la carte le dit desormais, en toutes lettres, avec la date
     // et un chemin vers le bilan. Le garder ici aurait fait dire deux fois la
@@ -23596,7 +23596,7 @@ function openClientDetail(cid,_refresh,_force){
   if(_ap){
     if(c.assignedProgramName){
       _ap.innerHTML='<strong style="color:var(--text-strong)">Programme :</strong> '+escapeHtml(c.assignedProgramName)
-        +(c.assignedProgramAt?' — assigné le '+new Date(c.assignedProgramAt).toLocaleDateString('fr-FR'):'');
+        +(c.assignedProgramAt?', assigné le '+new Date(c.assignedProgramAt).toLocaleDateString('fr-FR'):'');
       _ap.style.display='block';
     } else _ap.style.display='none';
   }
@@ -24013,7 +24013,7 @@ async function supprimerAthleteDefinitivement(){
     const saisi=await rcSaisie('Effacer définitivement le dossier de '+nom+' ?\n\n'
       +'Ses séances, bilans, mesures et photos seront SUPPRIMÉS de la base. '
       +'Ce sont ses données, et rien ne les rendra.\n\n'
-      +'Retape son prénom — '+attendu+' — pour confirmer.','',
+      +'Retape son prénom ('+attendu+') pour confirmer.','',
       {libelleOk:'Effacer définitivement'});
     if(saisi===null) return false;
     if(exKey(saisi)!==exKey(attendu)){
@@ -25093,35 +25093,35 @@ const EX_PRECISIONS=Object.freeze({
 });
 
 const EX_VARIANTES=Object.freeze({
-  'CURL BARRE PRISE SERREE':{base:'CURL BARRE',nom:'CURL BARRE — PRISE SERRÉE',intro:'Mains à l\'intérieur de la largeur d\'épaules. Le chef long du biceps est mis en avant.'},
-  'CURL BARRE PRISE LARGE':{base:'CURL BARRE',nom:'CURL BARRE — PRISE LARGE',intro:'Mains au-delà de la largeur d\'épaules. Le chef court du biceps prend le relais.'},
-  'CURL BARRE POULIE ELASTIQUE ELASTIQUE':{base:'CURL BARRE POULIE ELASTIQUE',nom:'CURL BARRE POULIE/ÉLASTIQUE — ÉLASTIQUE',intro:'À l\'élastique et non à la poulie. La résistance monte avec l\'étirement : le haut du mouvement devient le passage dur.'},
-  'CURL LARRY SCOTT HALTERES UNILATERALE':{base:'CURL LARRY SCOTT HALTERES',nom:'CURL LARRY SCOTT HALTERES — UNILATÉRALE',intro:'Un bras à la fois. Le second bras se repose pendant que le premier travaille.'},
-  'CURL LARRY SCOTT MACHINE GUIDEE UNILATERALE':{base:'CURL LARRY SCOTT MACHINE GUIDEE',nom:'CURL LARRY SCOTT MACHINE GUIDEE — UNILATÉRALE',intro:'Une poignée à la fois. Le second bras se repose pendant que le premier travaille.'},
-  'CURL LARRY SCOTT POULIE BASSE UNILATERALE':{base:'CURL LARRY SCOTT POULIE BASSE',nom:'CURL LARRY SCOTT POULIE BASSE — UNILATÉRALE',intro:'Une poignée à la fois. Le second bras se repose pendant que le premier travaille.'},
-  'CURL MARTEAU A L INTERIEUR':{base:'CURL MARTEAU',nom:'CURL MARTEAU — À L\'INTÉRIEUR',intro:'L\'haltère monte vers l\'épaule opposée, en travers du buste, au lieu de monter devant soi.'},
-  'CURL ROTATION ALTERNE':{base:'CURL ROTATION',nom:'CURL ROTATION — ALTERNÉ',intro:'Un bras après l\'autre. Chaque bras récupère pendant que l\'autre monte.'},
-  'CURL ROTATION ASSIS ALTERNE':{base:'CURL ROTATION ASSIS',nom:'CURL ROTATION ASSIS — ALTERNÉ',intro:'Un bras après l\'autre. Chaque bras récupère pendant que l\'autre monte.'},
-  'CURL SUR BANC INCLINE ALTERNE':{base:'CURL SUR BANC INCLINE',nom:'CURL SUR BANC INCLINE — ALTERNÉ',intro:'Un bras après l\'autre. Chaque bras récupère pendant que l\'autre monte.'},
-  'REVERSE CURL HALTERE ALTERNE':{base:'REVERSE CURL HALTERE',nom:'REVERSE CURL HALTÈRE — ALTERNÉ',intro:'Un bras après l\'autre. Chaque bras récupère pendant que l\'autre monte.'},
-  'EXTENTION TRICEPS SUR BANC ALTERNE':{base:'EXTENTION TRICEPS SUR BANC',nom:'EXTENTION TRICEPS SUR BANC — ALTERNÉ',intro:'Un bras après l\'autre. Chaque bras récupère pendant que l\'autre travaille.'},
-  'DIPS LESTE':{base:'DIPS',nom:'DIPS — LESTÉ',intro:'Avec une charge accrochée à la ceinture. La résistance est constante sur toute l\'amplitude.'},
-  'DIPS ELASTIQUE':{base:'DIPS',nom:'DIPS — ÉLASTIQUE',intro:'Avec un élastique en assistance. L\'aide est maximale en bas et disparaît en haut, là où le mouvement est le plus facile.'},
-  'DIPS SUR BARRE LESTE':{base:'DIPS SUR BARRE',nom:'DIPS SUR BARRE — LESTÉ',intro:'Avec une charge accrochée à la ceinture. La résistance est constante sur toute l\'amplitude.'},
-  'DIPS SUR BARRE ELASTIQUE':{base:'DIPS SUR BARRE',nom:'DIPS SUR BARRE — ÉLASTIQUE',intro:'Avec un élastique en assistance. L\'aide est maximale en bas et disparaît en haut, là où le mouvement est le plus facile.'},
-  'DEVELOPPE COUCHE BARRE VERSION INTERMEDIAIRE':{base:'DEVELOPPE COUCHE BARRE',nom:'DEVELOPPE COUCHE BARRE — VERSION INTERMÉDIAIRE',intro:'Version intermédiaire du guide, sans le décompte en trois temps.'},
-  'TIRAGE POITRINE MACHINE CONVERGENTE AVEC POIGNEES':{base:'TIRAGE POITRINE MACHINE CONVERGENTE',nom:'TIRAGE POITRINE MACHINE CONVERGENTE — AVEC POIGNÉES',intro:'Avec les poignées indépendantes plutôt que la barre : chaque bras tire sa propre trajectoire.'},
-  'PULL OVER CORDE':{base:'PULL OVER',nom:'PULL OVER — CORDE',intro:'À la corde plutôt qu\'à la barre. Les mains peuvent s\'écarter en fin de mouvement et la contraction se prolonge.'},
-  'MONTEE DE CORDE SANS LES JAMBES':{base:'MONTEE DE CORDE',nom:'MONTEE DE CORDE — SANS LES JAMBES',intro:'Sans se servir des jambes : tout le corps est monté à la force des bras et du dos.'},
-  'PRESSE A CUISSE ASSISE PIEDS EN HAUT':{base:'PRESSE A CUISSE ASSISE',nom:'PRESSE A CUISSE ASSISE — PIEDS EN HAUT',intro:'Pieds hauts et écartés sur la plateforme, orteils vers l\'extérieur. La hanche travaille davantage, le genou moins : les fessiers et les ischios prennent une part réelle de l\'effort.'},
-  'PRESSE A CUISSE ASSISE PIEDS EN BAS':{base:'PRESSE A CUISSE ASSISE',nom:'PRESSE A CUISSE ASSISE — PIEDS EN BAS',intro:'Pieds bas sur la plateforme, sous le niveau des hanches. L\'amplitude de genou augmente, le quadriceps encaisse presque tout. Surveille le décollement du bassin en fin de descente.'},
-  'PRESSE A CUISSE INCLINE PIEDS EN HAUT':{base:'PRESSE A CUISSE INCLINE',nom:'PRESSE A CUISSE INCLINE — PIEDS EN HAUT',intro:'Pieds hauts et écartés sur la plateforme, orteils vers l\'extérieur. La hanche travaille davantage, le genou moins : les fessiers et les ischios prennent une part réelle de l\'effort.'},
-  'PRESSE A CUISSE INCLINE PIEDS EN BAS':{base:'PRESSE A CUISSE INCLINE',nom:'PRESSE A CUISSE INCLINE — PIEDS EN BAS',intro:'Pieds bas sur la plateforme, sous le niveau des hanches. L\'amplitude de genou augmente, le quadriceps encaisse presque tout. Surveille le décollement du bassin en fin de descente.'},
-  'PRESSE A CUISSE INCLINE PIEDS ECARTES':{base:'PRESSE A CUISSE INCLINE',nom:'PRESSE A CUISSE INCLINE — PIEDS ÉCARTÉS',intro:'Pieds larges sur la plateforme, orteils vers l\'extérieur. L\'intérieur de cuisse entre dans le mouvement à côté du quadriceps.'},
-  'CRUNCH AU SOL AVEC POIDS':{base:'CRUNCH AU SOL',nom:'CRUNCH AU SOL — AVEC POIDS',intro:'Une charge tenue contre la poitrine ou derrière la tête. Le mouvement ne change pas, la résistance oui.'},
-  'CRUNCH JAMBES EN APPUI SUR BANC AVEC POIDS':{base:'CRUNCH JAMBES EN APPUI SUR BANC',nom:'CRUNCH JAMBES EN APPUI SUR BANC — AVEC POIDS',intro:'Une charge tenue contre la poitrine ou derrière la tête. Le mouvement ne change pas, la résistance oui.'},
-  'TAPIS DE COURSE COURIR':{base:'TAPIS DE COURSE',nom:'TAPIS DE COURSE — COURIR',intro:'En course, sans se tenir à la structure. Balancer les bras comme lors d\'un vrai footing.'},
-  'TAPIS DE COURSE MARCHE AVEC PENTE':{base:'TAPIS DE COURSE',nom:'TAPIS DE COURSE — MARCHE AVEC PENTE',intro:'En marche, pente montée. L\'allure baisse, la pente fait le travail.'}
+  'CURL BARRE PRISE SERREE':{base:'CURL BARRE',nom:'CURL BARRE : PRISE SERRÉE',intro:'Mains à l\'intérieur de la largeur d\'épaules. Le chef long du biceps est mis en avant.'},
+  'CURL BARRE PRISE LARGE':{base:'CURL BARRE',nom:'CURL BARRE : PRISE LARGE',intro:'Mains au-delà de la largeur d\'épaules. Le chef court du biceps prend le relais.'},
+  'CURL BARRE POULIE ELASTIQUE ELASTIQUE':{base:'CURL BARRE POULIE ELASTIQUE',nom:'CURL BARRE POULIE/ÉLASTIQUE : ÉLASTIQUE',intro:'À l\'élastique et non à la poulie. La résistance monte avec l\'étirement : le haut du mouvement devient le passage dur.'},
+  'CURL LARRY SCOTT HALTERES UNILATERALE':{base:'CURL LARRY SCOTT HALTERES',nom:'CURL LARRY SCOTT HALTERES : UNILATÉRALE',intro:'Un bras à la fois. Le second bras se repose pendant que le premier travaille.'},
+  'CURL LARRY SCOTT MACHINE GUIDEE UNILATERALE':{base:'CURL LARRY SCOTT MACHINE GUIDEE',nom:'CURL LARRY SCOTT MACHINE GUIDEE : UNILATÉRALE',intro:'Une poignée à la fois. Le second bras se repose pendant que le premier travaille.'},
+  'CURL LARRY SCOTT POULIE BASSE UNILATERALE':{base:'CURL LARRY SCOTT POULIE BASSE',nom:'CURL LARRY SCOTT POULIE BASSE : UNILATÉRALE',intro:'Une poignée à la fois. Le second bras se repose pendant que le premier travaille.'},
+  'CURL MARTEAU A L INTERIEUR':{base:'CURL MARTEAU',nom:'CURL MARTEAU : À L\'INTÉRIEUR',intro:'L\'haltère monte vers l\'épaule opposée, en travers du buste, au lieu de monter devant soi.'},
+  'CURL ROTATION ALTERNE':{base:'CURL ROTATION',nom:'CURL ROTATION : ALTERNÉ',intro:'Un bras après l\'autre. Chaque bras récupère pendant que l\'autre monte.'},
+  'CURL ROTATION ASSIS ALTERNE':{base:'CURL ROTATION ASSIS',nom:'CURL ROTATION ASSIS : ALTERNÉ',intro:'Un bras après l\'autre. Chaque bras récupère pendant que l\'autre monte.'},
+  'CURL SUR BANC INCLINE ALTERNE':{base:'CURL SUR BANC INCLINE',nom:'CURL SUR BANC INCLINE : ALTERNÉ',intro:'Un bras après l\'autre. Chaque bras récupère pendant que l\'autre monte.'},
+  'REVERSE CURL HALTERE ALTERNE':{base:'REVERSE CURL HALTERE',nom:'REVERSE CURL HALTÈRE : ALTERNÉ',intro:'Un bras après l\'autre. Chaque bras récupère pendant que l\'autre monte.'},
+  'EXTENTION TRICEPS SUR BANC ALTERNE':{base:'EXTENTION TRICEPS SUR BANC',nom:'EXTENTION TRICEPS SUR BANC : ALTERNÉ',intro:'Un bras après l\'autre. Chaque bras récupère pendant que l\'autre travaille.'},
+  'DIPS LESTE':{base:'DIPS',nom:'DIPS : LESTÉ',intro:'Avec une charge accrochée à la ceinture. La résistance est constante sur toute l\'amplitude.'},
+  'DIPS ELASTIQUE':{base:'DIPS',nom:'DIPS : ÉLASTIQUE',intro:'Avec un élastique en assistance. L\'aide est maximale en bas et disparaît en haut, là où le mouvement est le plus facile.'},
+  'DIPS SUR BARRE LESTE':{base:'DIPS SUR BARRE',nom:'DIPS SUR BARRE : LESTÉ',intro:'Avec une charge accrochée à la ceinture. La résistance est constante sur toute l\'amplitude.'},
+  'DIPS SUR BARRE ELASTIQUE':{base:'DIPS SUR BARRE',nom:'DIPS SUR BARRE : ÉLASTIQUE',intro:'Avec un élastique en assistance. L\'aide est maximale en bas et disparaît en haut, là où le mouvement est le plus facile.'},
+  'DEVELOPPE COUCHE BARRE VERSION INTERMEDIAIRE':{base:'DEVELOPPE COUCHE BARRE',nom:'DEVELOPPE COUCHE BARRE : VERSION INTERMÉDIAIRE',intro:'Version intermédiaire du guide, sans le décompte en trois temps.'},
+  'TIRAGE POITRINE MACHINE CONVERGENTE AVEC POIGNEES':{base:'TIRAGE POITRINE MACHINE CONVERGENTE',nom:'TIRAGE POITRINE MACHINE CONVERGENTE, AVEC POIGNÉES',intro:'Avec les poignées indépendantes plutôt que la barre : chaque bras tire sa propre trajectoire.'},
+  'PULL OVER CORDE':{base:'PULL OVER',nom:'PULL OVER : CORDE',intro:'À la corde plutôt qu\'à la barre. Les mains peuvent s\'écarter en fin de mouvement et la contraction se prolonge.'},
+  'MONTEE DE CORDE SANS LES JAMBES':{base:'MONTEE DE CORDE',nom:'MONTEE DE CORDE, SANS LES JAMBES',intro:'Sans se servir des jambes : tout le corps est monté à la force des bras et du dos.'},
+  'PRESSE A CUISSE ASSISE PIEDS EN HAUT':{base:'PRESSE A CUISSE ASSISE',nom:'PRESSE A CUISSE ASSISE : PIEDS EN HAUT',intro:'Pieds hauts et écartés sur la plateforme, orteils vers l\'extérieur. La hanche travaille davantage, le genou moins : les fessiers et les ischios prennent une part réelle de l\'effort.'},
+  'PRESSE A CUISSE ASSISE PIEDS EN BAS':{base:'PRESSE A CUISSE ASSISE',nom:'PRESSE A CUISSE ASSISE : PIEDS EN BAS',intro:'Pieds bas sur la plateforme, sous le niveau des hanches. L\'amplitude de genou augmente, le quadriceps encaisse presque tout. Surveille le décollement du bassin en fin de descente.'},
+  'PRESSE A CUISSE INCLINE PIEDS EN HAUT':{base:'PRESSE A CUISSE INCLINE',nom:'PRESSE A CUISSE INCLINE : PIEDS EN HAUT',intro:'Pieds hauts et écartés sur la plateforme, orteils vers l\'extérieur. La hanche travaille davantage, le genou moins : les fessiers et les ischios prennent une part réelle de l\'effort.'},
+  'PRESSE A CUISSE INCLINE PIEDS EN BAS':{base:'PRESSE A CUISSE INCLINE',nom:'PRESSE A CUISSE INCLINE : PIEDS EN BAS',intro:'Pieds bas sur la plateforme, sous le niveau des hanches. L\'amplitude de genou augmente, le quadriceps encaisse presque tout. Surveille le décollement du bassin en fin de descente.'},
+  'PRESSE A CUISSE INCLINE PIEDS ECARTES':{base:'PRESSE A CUISSE INCLINE',nom:'PRESSE A CUISSE INCLINE : PIEDS ÉCARTÉS',intro:'Pieds larges sur la plateforme, orteils vers l\'extérieur. L\'intérieur de cuisse entre dans le mouvement à côté du quadriceps.'},
+  'CRUNCH AU SOL AVEC POIDS':{base:'CRUNCH AU SOL',nom:'CRUNCH AU SOL, AVEC POIDS',intro:'Une charge tenue contre la poitrine ou derrière la tête. Le mouvement ne change pas, la résistance oui.'},
+  'CRUNCH JAMBES EN APPUI SUR BANC AVEC POIDS':{base:'CRUNCH JAMBES EN APPUI SUR BANC',nom:'CRUNCH JAMBES EN APPUI SUR BANC, AVEC POIDS',intro:'Une charge tenue contre la poitrine ou derrière la tête. Le mouvement ne change pas, la résistance oui.'},
+  'TAPIS DE COURSE COURIR':{base:'TAPIS DE COURSE',nom:'TAPIS DE COURSE : COURIR',intro:'En course, sans se tenir à la structure. Balancer les bras comme lors d\'un vrai footing.'},
+  'TAPIS DE COURSE MARCHE AVEC PENTE':{base:'TAPIS DE COURSE',nom:'TAPIS DE COURSE : MARCHE AVEC PENTE',intro:'En marche, pente montée. L\'allure baisse, la pente fait le travail.'}
 });
 
 // ── LES VARIANTES D'EXECUTION SONT DES EXERCICES A PART ENTIERE ────────
@@ -26799,7 +26799,7 @@ function loadCoachProgramsList(){
   let bq=''; try{ bq=_htmlCplBoutique(); }catch(e){ bq=''; }
   if(!progs.length){
     // R13 — le geste est offert ici, plus renvoye au « + CRÉER » de la barre.
-    container.innerHTML=emptyState('folder','<strong style="font-size:var(--fs-md)">Aucun programme pour l\'instant</strong><br><span style="font-size:var(--fs-sm);display:inline-block;margin-top:6px">Un modèle créé une fois sert à tous tes athlètes — pour eux, pour elles, ou pour les deux.</span>','Créer un programme','createCoachProgTemplate()')+bq;return;
+    container.innerHTML=emptyState('folder','<strong style="font-size:var(--fs-md)">Aucun programme pour l\'instant</strong><br><span style="font-size:var(--fs-sm);display:inline-block;margin-top:6px">Un modèle créé une fois sert à tous tes athlètes : pour eux, pour elles, ou pour les deux.</span>','Créer un programme','createCoachProgTemplate()')+bq;return;
   }
   let cadran=''; try{ cadran=_htmlCplCadran(); }catch(e){ cadran=''; }
   let hero=''; try{ hero=_htmlCplHero(); }catch(e){ hero=''; }
@@ -26881,7 +26881,7 @@ async function createCoachProgTemplate(){
   const nl=String.fromCharCode(10);
   const avecFondation=await rcConfirm(
     'Partir du Programme Fondation ?'+nl+nl
-    +'La Fondation garnit trois jours de six exercices, dans les deux genres — '
+    +'La Fondation garnit trois jours de six exercices, dans les deux genres : '
     +'un point de depart si tu debutes.'+nl
     +'Sinon, tu obtiens sept jours vides a remplir toi-meme.',
     null,'Fondation','Modèle vide');
@@ -27104,12 +27104,12 @@ function _cpvErreur(m){
 }
 async function enregistrerVenteProgramme(){
   const p=((currentUser&&currentUser.coachPrograms)||[])[_cpvIdx];
-  if(!p) return _cpvErreur('Programme introuvable — rouvre la fiche.');
+  if(!p) return _cpvErreur('Programme introuvable : rouvre la fiche.');
   const v=_cpvLire();
   // LE LIEN EST REFUSE AVANT TOUTE ECRITURE, et le message dit pourquoi : un
   // champ qui refuse sans expliquer se remplit deux fois de la meme facon.
   if(v.lienAchat&&!_lienAchatValide(v.lienAchat))
-    return _cpvErreur('Le lien d’achat doit commencer par https:// — c’est une page de paiement, elle ne peut pas être en clair.');
+    return _cpvErreur('Le lien d’achat doit commencer par https:// : c’est une page de paiement, elle ne peut pas être en clair.');
   // EN VENTE SANS LIEN : ON PREVIENT, ON NE BLOQUE PAS. Un coach peut vouloir
   // annoncer avant d'avoir sa page de paiement ; ce qu'il ne doit pas pouvoir
   // faire, c'est l'ignorer.
@@ -27281,7 +27281,7 @@ function _echecOuvertureEditeur(e){
   try{ if(navigator.clipboard&&navigator.clipboard.writeText)
     navigator.clipboard.writeText(detail).catch(()=>{}); }catch(_e){}
   try{ toast("Cette séance n'a pas pu être ouverte. "+detail
-    +" — détail copié, envoie-le à ton coach.","var(--red)"); }catch(_e){}
+    +" : détail copié, envoie-le à ton coach.","var(--red)"); }catch(_e){}
 }
 // LES SEANCES D UN MODELE, PAR GENRE — ET GARANTIES EXISTANTES.
 //
@@ -27632,7 +27632,7 @@ async function reglerBlocProgramme(){
   if(!isFinite(d.getTime())){ toast('Date illisible.','var(--orange)'); return false; }
   // ── Lesquelles sont des décharges ──
   const rdech=await rcSaisie('Quelles semaines sont des décharges ?'+nl+nl
-    +'Leurs numéros, séparés par des virgules — « 4 » pour la quatrième, « 4,8 » '
+    +'Leurs numéros, séparés par des virgules : « 4 » pour la quatrième, « 4,8 » '
     +'pour deux. Laisse vide s’il n’y en a aucune.',
     (actuel?actuel.decharges.map(x=>x+1).join(','):''),{libelleOk:'Enregistrer'});
   if(rdech===null||rdech===undefined) return false;
@@ -29533,7 +29533,7 @@ function ouvrirFicheBanque(slug,ev){
       <div style="font-size:var(--fs-sm);color:#bbb;line-height:1.65">${escapeHtml(f.execution)}</div></div>`:''}
     ${liste('Erreurs fréquentes',f.erreurs)}
     ${liste('Consignes',f.consignes)}
-    ${(f.videos||[]).map(v=>`<a href="https://youtu.be/${escapeHtml(v.id)}" target="_blank" rel="noopener" style="display:block;margin-top:9px;font-size:var(--fs-sm);color:var(--link)">▶ Vidéo technique${v.lib?' — '+escapeHtml(v.lib):''}</a>`).join('')}
+    ${(f.videos||[]).map(v=>`<a href="https://youtu.be/${escapeHtml(v.id)}" target="_blank" rel="noopener" style="display:block;margin-top:9px;font-size:var(--fs-sm);color:var(--link)">▶ Vidéo technique${v.lib?' : '+escapeHtml(v.lib):''}</a>`).join('')}
     ${variantes.length?`<div style="margin-top:14px"><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Même schéma moteur</div>
       ${variantes.map(v=>`<button class="pf-chip" style="margin:0 5px 5px 0" onclick="closeModal();ouvrirFicheBanque('${escapeHtml(v.slug)}')">${escapeHtml(v.nom)}</button>`).join('')}</div>`:''}
     <button class="btn btn-red" style="margin-top:16px" onclick="closeModal();bqChoisir('${escapeHtml(f.slug)}')">Ajouter à la séance</button>
@@ -29558,7 +29558,7 @@ function ouvrirCreationExo(){
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:4px;font-size:var(--fs-lg)">Créer un exercice</h2>
-    <p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px;line-height:1.6">Il n'appartient qu'à toi : aucun autre coach ne le voit. L'illustration est facultative — il n'y en aura pas.</p>
+    <p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px;line-height:1.6">Il n'appartient qu'à toi : aucun autre coach ne le voit. L'illustration est facultative : il n'y en aura pas.</p>
     <label for="ce-nom">Nom</label>
     <input id="ce-nom" placeholder="Ex : TIRAGE POITRINE PRISE NEUTRE" autocapitalize="characters">
     <label for="ce-muscle" style="margin-top:10px">Muscle principal</label>
@@ -31860,7 +31860,7 @@ async function remplacerDepuisBanque(i,mode){
       +'choisir.',null,'Choisir la fiche')) return false;
   } else if(nom){
     if(!await rcConfirm('Remplacer « '+nom+' » ?'+nl+nl
-      +'Le mouvement change — nom, photo, vidéos, exécution. C’est un AUTRE '
+      +'Le mouvement change : nom, photo, vidéos, exécution. C’est un AUTRE '
       +'exercice : son historique de charge repart de zéro. Tes séries, reps, '
       +'repos et RIR cible sont conservés.',null,'Choisir dans la bibliothèque')) return false;
   }
@@ -31884,7 +31884,7 @@ async function remplacerDepuisBanque(i,mode){
     const _dit=[_photo?'photo':'', _nv?(_nv+' vidéo'+(_nv>1?'s':'')):''].filter(Boolean).join(' · ')
       ||'aucun média sur cette fiche';
     toast(maj
-      ?('« '+_ap.name+' » mis à jour ✓ — historique conservé · '+_dit)
+      ?('« '+_ap.name+' » mis à jour ✓ : historique conservé · '+_dit)
       :('Remplacé par « '+f.nom+' » ✓ · '+_dit),
       (_photo||_nv)?'var(--green)':'var(--orange)');
   },'s-coach-program');
@@ -32083,7 +32083,7 @@ function renderProgEx(){
         <div class="px-duo">
         <!-- Tempo : ligne propre, la grille au-dessus n'a que trois colonnes -->
         <div style="margin-bottom:8px">
-          <label style="margin-top:0">Tempo <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(ex: 3-1-1-0 — descente, bas, montée, haut)</span></label>
+          <label style="margin-top:0">Tempo <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(ex: 3-1-1-0 : descente, bas, montée, haut)</span></label>
           <input class="px-court" value="${escapeHtml(ex.tempo||'')}" onchange="_progTempoSaisie(${i},this)" placeholder="3-1-1-0" title="3-1-1-0 ou 3110 : descente, pause basse, montée, pause haute. Un autre texte est conservé tel quel.">
         </div>
         <!-- Matériel : son propre champ depuis que la banque le pré-remplit.
@@ -32242,14 +32242,14 @@ function _htmlBoutonProgEx(ex,i){
       ${c.kg!=null?`· <b style="color:var(--sub)">${c.kg} kg</b> (${String(c.pct).replace('.',',')} % de ${c.maxRetenu} kg)`
                   :`· <span style="color:var(--orange)">charge non calculable au-delà de ${RPE_REPS_MAX} répétitions</span>`}
       ${fin!=null&&fin<=PROG_EX_FIN_PREVENIR+1?`<span style="color:var(--orange)"> · ${fin===1?'dernière semaine':fin+' semaines restantes'}</span>`:''}
-      ${c.maxDepasse?`<div style="color:var(--orange);margin-top:3px">1RM au dossier : ${c.max} kg · observé en séance : ${c.maxObserve} kg. La charge est calculée sur l’observé — corrige le 1RM pour figer la progression.</div>`:''}
+      ${c.maxDepasse?`<div style="color:var(--orange);margin-top:3px">1RM au dossier : ${c.max} kg · observé en séance : ${c.maxObserve} kg. La charge est calculée sur l’observé : corrige le 1RM pour figer la progression.</div>`:''}
     </div>`;
   } else if(p){
     // UNE PROGRAMMATION QUI NE S'APPLIQUE PAS SE DIT. Terminee, pas encore
     // commencee, ou semaine incomplete : dans les trois cas l'athlete ne
     // recoit rien, et le coach doit le savoir sans ouvrir la feuille.
     resume=`<div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.5;margin-top:5px">
-      Programmation de ${p.semaines.length} semaine${p.semaines.length>1?'s':''} — aucune consigne active cette semaine.</div>`;
+      Programmation de ${p.semaines.length} semaine${p.semaines.length>1?'s':''} : aucune consigne active cette semaine.</div>`;
   }
   return `<div class="px-grp">Programmation</div>
     <div style="margin-bottom:8px">
@@ -32400,7 +32400,7 @@ function validerProgEx(){
   const n=b.semaines.length-trous.length;
   toast(trous.length
     ?('Programmation enregistrée · '+n+' semaine'+(n>1?'s':'')+' sur '+b.semaines.length
-      +' — semaine'+(trous.length>1?'s':'')+' '+trous.join(', ')+' incomplète'+(trous.length>1?'s':''))
+      +' : semaine'+(trous.length>1?'s':'')+' '+trous.join(', ')+' incomplète'+(trous.length>1?'s':''))
     :('Programmation sur '+b.semaines.length+' semaine'+(b.semaines.length>1?'s':'')+' ✓'),
     trous.length?'var(--orange)':'var(--green)');
   _progExFermer();
@@ -32574,7 +32574,7 @@ const RIR_CIBLE_ECHELLE=Object.freeze([
 const RIR_CIBLE_SENS=Object.freeze({
   '0':'À l’échec : la dernière répétition ne passe pas.',
   '1':'Une répétition en réserve.',
-  '2':'Deux répétitions en réserve — le réglage le plus courant.',
+  '2':'Deux répétitions en réserve : le réglage le plus courant.',
   '3':'Trois en réserve : technique et volume avant l’intensité.',
   '4':'Quatre en réserve : travail léger, reprise ou décharge.',
   '5':'Cinq en réserve : très facile, échauffement ou récupération.'
@@ -34280,7 +34280,7 @@ function ouvrirFicheVente(id,idxModele){
     // RETIRER N'EST PAS SUPPRIMER : la fiche reste lisible par ceux qui l'ont
     // payee. La case n'existe que pour ce qui est deja dans la boutique.
     +(p?('<label class="vn-cb"><input type="checkbox" id="vn-off"'+(p.masque?' checked':'')
-        +'> Retirer de la vente — ceux qui l’ont acheté le gardent</label>'):'')
+        +'> Retirer de la vente : ceux qui l’ont acheté le gardent</label>'):'')
     +'<div class="cpv-mention">'+mention+'</div>'
     +'<div class="vn-lab">Ce que verra l’acheteur</div>'
     +'<div id="vn-apercu" class="vn-apercu" inert></div>';
@@ -34534,7 +34534,7 @@ function _chargerPaypalAchat(){
   sc.onload=rendre;
   sc.onerror=()=>{ const b=document.getElementById('ach-paypal');
     if(b) b.innerHTML='<button class="btn btn-outline btn-sm" style="width:100%" '
-      +'onclick="_chargerPaypalAchat()">Erreur de chargement — réessayer</button>'; };
+      +'onclick="_chargerPaypalAchat()">Erreur de chargement : réessayer</button>'; };
   document.head.appendChild(sc);
 }
 function _rendreBoutonAchat(){
@@ -34559,7 +34559,7 @@ function _rendreBoutonAchat(){
       if(!p) return null;
       return actions.order.create({
         purchase_units:[{
-          description:('RepCore — '+(p.nom||'Programme')).slice(0,127),
+          description:('RepCore : '+(p.nom||'Programme')).slice(0,127),
           custom_id:p.id,
           // ⚠ LE MONTANT SE CONSTRUIT DEPUIS LES CENTIMES. Passer un flottant
           // ici est le chemin le plus court vers un ordre a 14.899999999999999.
@@ -34582,7 +34582,7 @@ function _rendreBoutonAchat(){
         const p=programmeDuCatalogue(_achatProgId);
         if(!p) return null;
         return actions.order.create({purchase_units:[{
-          description:('RepCore — '+(p.nom||'Programme')).slice(0,127),
+          description:('RepCore : '+(p.nom||'Programme')).slice(0,127),
           custom_id:p.id,
           amount:{currency_code:'EUR',value:(p.prixCts/100).toFixed(2)}
         }]});
@@ -35186,7 +35186,7 @@ function alternerSeance(i){
       +'style="width:100%;margin:0 0 6px;text-transform:none;letter-spacing:.4px;'
       +'text-align:left;padding:9px 11px" onclick="_alternerVers('+i+','+c.i+')">'
       +'<span style="font-weight:800">'+escapeHtml(c.jour)+'</span>'
-      +'<span style="color:var(--text-faint)"> — '+escapeHtml(c.nom)+'</span>'
+      +'<span style="color:var(--text-faint)"> : '+escapeHtml(c.nom)+'</span>'
       +(c.actif?'':'<span style="color:var(--text-faint)"> · jour éteint</span>')
       +'</button>').join('')
     +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;'
@@ -35482,7 +35482,7 @@ function _htmlReprise(avecProgramme){
     +'<div style="font-size:var(--fs-lg);font-family:var(--pile-titre);letter-spacing:.5px;'
     +'line-height:1.25;margin-bottom:8px">On commence maintenant.</div>'
     +'<div class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:18px">'
-    +'Quinze minutes suffisent pour commencer'+' '+'— tu t’arrêtes quand tu veux.</div>'
+    +'Quinze minutes suffisent pour commencer'+' '+': tu t’arrêtes quand tu veux.</div>'
     +'<button class="btn btn-red" onclick="reprendreMaintenant()" style="margin:0;min-height:52px;'
     +'letter-spacing:1.5px;font-size:var(--fs-md);box-shadow:var(--e-inset),var(--glow-red)">'
     +'Démarrer maintenant</button>'
@@ -38560,7 +38560,7 @@ function partagerSeanceDuJour(){
     // legende — d'ou le pied, qui lui ne se perd pas.
     const _n=d.ex.length;
     const _meta={title:'Ma séance du jour',
-      text:(d.coach?(d.coach+' — '):'')+d.titre+' · '+_n+' exercice'+(_n>1?'s':''),
+      text:(d.coach?(d.coach+' : '):'')+d.titre+' · '+_n+' exercice'+(_n>1?'s':''),
       url:RC_URL_VITRINE};
     if(_storySortirPartage(_dessinerStorySeance(d),'repcore-seance.png',_meta)){
       // ⚠ ON COMPTE UNE FEUILLE DE PARTAGE OUVERTE, PAS UNE PUBLICATION. Ce qui
@@ -40401,7 +40401,7 @@ function renderSets(ex,data,idx,opts){
     // qui est aussi ce que « a droite » veut dire.
     const rirSelect=s.rpeCible
       ?`<div class="set-input" role="img" aria-label="RPE demandé par ton coach : ${s.rpeCible} sur 10"
-          title="Intensité demandée par ton coach — tu ne la règles pas"
+          title="Intensité demandée par ton coach : tu ne la règles pas"
           style="padding:4px 5px;font-size:var(--fs-xs);min-width:44px;min-height:38px;display:flex;
             align-items:center;justify-content:center;gap:4px;background:var(--surface-2);color:var(--text-strong);
             border:1px solid var(--border);border-radius:var(--r-1);white-space:nowrap">${icon('lock',10)}RPE ${s.rpeCible}</div>${i===_iPremierRpe?rcInfo('rpe'):''}`
@@ -45342,7 +45342,7 @@ function anatSerieV(u,courant){
  * des deux côtés.
  */
 const ANAT_PIEDS=Object.freeze({CORR:0.4,SEUILS:[0,7,18],MOTS:['fermé','droit','ouvert','très ouvert'],
-  CONSIGNE:'Photo de face pieds nus, posés comme d’habitude — sans les tourner exprès, ni vers l’avant ni vers l’extérieur.'});
+  CONSIGNE:'Photo de face pieds nus, posés comme d’habitude, sans les tourner exprès, ni vers l’avant ni vers l’extérieur.'});
 function anatMotPied(corr){
   const S=ANAT_PIEDS.SEUILS;
   return ANAT_PIEDS.MOTS[corr<S[0]?0:(corr<=S[1]?1:(corr<=S[2]?2:3))];
@@ -46333,7 +46333,7 @@ function anatMesures(anat,u,o){
       niveau:st?st.niveau:null,
       bornes:['carrure étroite','carrure large'],
       valeur:bi?(bi.cm!=null?cm(bi.cm):'')+(r?' · ép./bassin '+_anatN(r,2):''):'',
-      tolerance:tolTxt(err,pl,BI)+(estime?' — points estimés, à vérifier':''),
+      tolerance:tolTxt(err,pl,BI)+(estime?' : points estimés, à vérifier':''),
       chiffres:[ligne('Largeur biacromiale',bi,larg.biacromial,'acromion → acromion',larg.biacromial_et),ligne('Largeur bicrêtale (bassin)',bc,larg.bicretal,'crête iliaque → crête iliaque',larg.bicretal_et),
         {lib:'Épaules / bassin',def:'biacromiale ÷ bicrêtale',val:r?_anatN(r,2):'—',ref:_anatN(rRef,2)+' ± '+_anatN(rEt,2),ecart:r?pct((r/rRef-1)*100):''}]
         .concat(st?[posLigne(st,'largeur biacromiale')]:[]),
@@ -46770,7 +46770,7 @@ function anatMesures(anat,u,o){
   //   du dos passent en « non lisible », avec la consigne de reprise.
   const rotation=_anatSafe(()=>anatRotation(anat));
   if(rotation&&rotation.fiable&&rotation.deg>ANAT_ROTATION_SEUIL){
-    const nl='non lisible — corps tourné d’environ '+_anatN(rotation.deg,0)+'°';
+    const nl='non lisible : corps tourné d’environ '+_anatN(rotation.deg,0)+'°';
     const par={}; fiches.forEach(f=>{ par[f.cle]=f; });
     for(const cle of ['epaules','bassin','pieds','arriere_pied']){
       const f=par[cle]; if(!f) continue;
@@ -47319,7 +47319,7 @@ function _anatTexteBrut(f,res){
   const L=k=>lev.find(x=>x.cle===k)||null;
   const intens=n=>['dans la marge','léger','net','marqué'][Math.abs(n||0)];
   if(f.etat==='illisible'&&f.tourne){
-    T.court='Non lisible : corps tourné d’environ '+_anatN(f.tourne,0)+'° sur la photo — un écart gauche / droite y serait celui de la projection.';
+    T.court='Non lisible : corps tourné d’environ '+_anatN(f.tourne,0)+'° sur la photo : un écart gauche / droite y serait celui de la projection.';
     T.lecture='Quand le corps n’est pas de face, un côté s’éloigne de l’objectif : il paraît plus court, plus bas ou plus fermé que l’autre, sans l’être. La rotation se lit sur le rapport épaules / hanches, de face et de dos.';
     T.verifier=ANAT_ROTATION_CONSIGNE;
     return T;
@@ -47332,11 +47332,11 @@ function _anatTexteBrut(f,res){
   }
   if(f.etat==='illisible'&&f.cle==='coudes'){
     if(m.raison==='paumes'){
-      T.court='Non lisible : paumes tournées vers les cuisses — l’angle de port du coude ne se lit que paumes vers l’avant.';
+      T.court='Non lisible : paumes tournées vers les cuisses (l’angle de port du coude ne se lit que paumes vers l’avant).';
       T.lecture='Paumes vers les cuisses, l’avant-bras tourne sur lui-même et son axe se replace sous le bras : l’angle de port disparaît de la photo. On ne le devine pas.';
       T.verifier='Si la photo montre les paumes vers l’avant : cocher « paumes vers l’avant » dans « Ajuster les points ». Sinon, demander les prochaines photos paumes vers l’avant (« Échelle et prise de vue »). '+ANAT_COUDE.CONSIGNE;
     }else{
-      T.court='Non lisible : bras fléchis sur la photo (ou le seul bras tendu tient le téléphone) — l’angle de port ne se lit que bras tendus.';
+      T.court='Non lisible : bras fléchis sur la photo (ou le seul bras tendu tient le téléphone), l’angle de port ne se lit que bras tendus.';
       T.lecture='Un coude fléchi, même un peu, ferme l’angle dans le plan de la photo et raccourcit l’avant-bras : la mesure serait celle de la flexion.';
       T.verifier=ANAT_COUDE.CONSIGNE+' Vérifier aussi le centre du coude et du poignet (« Ajuster les points »).';
     }
@@ -47367,7 +47367,7 @@ function _anatTexteBrut(f,res){
     return T;
   }
   if(f.grise){
-    T.court='Longueurs en gris : les deux repères d’échelle ne donnent pas la même mesure — sommet du crâne, talons et genoux à vérifier.';
+    T.court='Longueurs en gris : les deux repères d’échelle ne donnent pas la même mesure (sommet du crâne, talons et genoux à vérifier).';
     T.lecture='L’échelle par la taille (sommet du crâne → talons) et celle par le genou diffèrent de plus de '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' % : un point mal placé fausse toutes les longueurs du même facteur, sans que rien ne le montre. Tant que les deux ne s’accordent pas, aucune longueur n’est classée.'
       +(f.cle==='buste'&&f.mesure&&f.mesure.s!=null?' L’axe du buste, lui, ne dépend pas de l’échelle : décalage de '+_anatN(f.mesure.s,1)+' % du tronc.':'');
     T.verifier='Replacer le sommet du crâne, les talons et les genoux (« Ajuster les points »), puis relancer l’analyse ; ou saisir au prochain bilan la hauteur du sol au milieu de la rotule, qui donne une échelle au mètre.';
@@ -47382,7 +47382,7 @@ function _anatTexteBrut(f,res){
         :'Talon qui part en dehors'+cote+' : '+_anatSN(m.pire,0)+'°, '+intens(n)+'. Posture d’appui du moment, à confirmer au bilan suivant.');
     T.lecture='Vu de dos, quand l’arrière-pied s’affaisse vers l’intérieur, la ligne du mollet et celle du talon se cassent au niveau du tendon d’Achille : le bas du talon part en dehors de l’axe de la jambe. C’est une lecture visuelle inspirée du FPI-6 (Redmond et al., 2006), pas le score lui-même : debout, pieds nus, elle dépend de l’appui du moment et des chaussures portées juste avant.';
     if(an){
-      T.privilegier=['Pied « trépied » : talon, base du gros orteil et base du petit orteil posés, l’arche se soulève sans crisper les orteils — à tenir debout, puis au squat',
+      T.privilegier=['Pied « trépied » : talon, base du gros orteil et base du petit orteil posés, l’arche se soulève sans crisper les orteils (à tenir debout, puis au squat)',
         'Short foot : raccourcir le pied en rapprochant la base du gros orteil du talon, 5 à 10 s, 8 à 10 répétitions',
         'Montées sur pointes lentes : 3 s en montée, 3 s en descente, genou tendu puis genou fléchi',
         'Pour le squat, une chaussure à semelle ferme et stable'];
@@ -47431,9 +47431,9 @@ function _anatTexteBrut(f,res){
     if(m.nBassin) parts.push('bassin (grand trochanter) '+_anatN(Math.abs(d.trochanter.cm),1)+' cm '+(d.trochanter.cm>0?'en avant':'en arrière')+' du fil');
     if(m.nGenou) parts.push('genou tendu au-delà de l’axe ('+_anatN(m.genouAng,0)+'°)');
     T.court=(parts.length?'Sur cette photo de profil : '+parts.join(', ')+'.':'Alignement de profil dans la marge : les repères tombent près du fil à plomb.')+moment;
-    T.lecture='Le fil à plomb passe par la malléole latérale. Kendall décrit une ligne de référence qui passe près du tragus, de l’acromion, du grand trochanter et de l’axe du genou : chaque repère en est ici à une distance horizontale, avec sa marge. Un genou à plus de 180° + '+ANAT_PROFIL.recurvatum+'° se tend au-delà de l’axe de la jambe (ce qu’on appelle un recurvatum de posture). Une photo debout saisit une posture du moment — respiration, fatigue, chaussures —, jamais une structure : elle dit où regarder, pas pourquoi.';
+    T.lecture='Le fil à plomb passe par la malléole latérale. Kendall décrit une ligne de référence qui passe près du tragus, de l’acromion, du grand trochanter et de l’axe du genou : chaque repère en est ici à une distance horizontale, avec sa marge. Un genou à plus de 180° + '+ANAT_PROFIL.recurvatum+'° se tend au-delà de l’axe de la jambe (ce qu’on appelle un recurvatum de posture). Une photo debout saisit une posture du moment (respiration, fatigue, chaussures), jamais une structure : elle dit où regarder, pas pourquoi.';
     if(an){
-      T.privilegier=['Gainage : planche, dead bug, Pallof press — côtes basses, bassin sous les côtes'];
+      T.privilegier=['Gainage : planche, dead bug, Pallof press (côtes basses, bassin sous les côtes)'];
       if(m.nTronc>0||(d.acromion&&d.acromion.cm>3)) T.privilegier.push('Mobilité thoracique : extensions sur rouleau, rotations en quadrupédie','Rétraction scapulaire : face pull, Y-raise sur banc incliné');
       T.privilegier.push('Chaîne postérieure : soulevé de terre roumain, hip thrust, extensions de hanche au banc à 45°, amplitude contrôlée');
       T.amenager=[{quoi:'Squat',reglage:'buste gainé avant la descente, côtes basses ; talons surélevés d’une cale de 1 à 2,5 cm si le buste part loin devant'+(m.nGenou?' ; en haut de chaque répétition, genoux « déverrouillés », légèrement fléchis':'')},
@@ -47456,10 +47456,10 @@ function _anatTexteBrut(f,res){
     T.lecture='Largeur biacromiale '+c(bi)+', bassin (crêtes iliaques) '+c(bc)+(r?', soit un rapport épaules / bassin de '+_anatN(r,2)+' pour '+_anatN(m.rRef,2)+(m.rEt?' ± '+_anatN(m.rEt,2):'')+' en moyenne chez des adultes actifs ('+(m.femme?'femmes':'hommes')+', ANSUR II)':'')+'. '
       +'La clavicule fixe l’écartement des épaules : c’est elle qui donne le bras de levier au développé prise large et la base de la silhouette en V. Elle ne change pas avec l’entraînement ; ce qui change, c’est ce qui s’y attache (deltoïdes, trapèzes, grands dorsaux). '
       +(n>0?'Une charpente large offre le V : le piège est de s’appuyer dessus et de laisser le bas du corps en retrait.'
-        :n<0?'Une charpente étroite ne limite pas le physique : elle déplace la priorité vers les faisceaux qui élargissent à l’œil — deltoïde latéral et dorsaux — et vers une taille fine.'
+        :n<0?'Une charpente étroite ne limite pas le physique : elle déplace la priorité vers les faisceaux qui élargissent à l’œil (deltoïde latéral et dorsaux) et vers une taille fine.'
         :'Rien à rattraper : la silhouette dépendra de ce qui sera développé.');
     if(n<0){
-      T.privilegier=['Deltoïde latéral en priorité : élévations latérales (haltères, poulie basse derrière le corps, machine), 12 à 20 séries par semaine en phase de priorité, dont une partie en position allongée (poulie)','Largeur de dos : tractions et tirage vertical prise large, pull-over à la poulie','Deltoïde postérieur (oiseau, face pull) : il élargit aussi la silhouette vue de dos','Taille : gainage anti-rotation (Pallof press), vacuum, masse grasse maîtrisée — le rapport deltoïdes / taille fait le V autant que l’os'];
+      T.privilegier=['Deltoïde latéral en priorité : élévations latérales (haltères, poulie basse derrière le corps, machine), 12 à 20 séries par semaine en phase de priorité, dont une partie en position allongée (poulie)','Largeur de dos : tractions et tirage vertical prise large, pull-over à la poulie','Deltoïde postérieur (oiseau, face pull) : il élargit aussi la silhouette vue de dos','Taille : gainage anti-rotation (Pallof press), vacuum, masse grasse maîtrisée (le rapport deltoïdes / taille fait le V autant que l’os)'];
       T.amenager=[{quoi:'Développé couché',reglage:'prise moyenne (avant-bras verticaux en bas) : une prise très large n’apporte rien à une charpente étroite et charge l’épaule en bout d’amplitude'},{quoi:'Travail lourd du moyen fessier et des abducteurs',reglage:'à doser selon l’objectif esthétique : il élargit la hanche visuelle'}];
     }else if(n>0){
       T.privilegier=['Quadriceps, ischios et fessiers au même niveau d’exigence que le haut : l’équilibre haut / bas se remarque le plus sur une charpente large','Rowing et tirages horizontaux pour l’épaisseur du dos, qui accompagne la largeur','Deltoïde postérieur et coiffe des rotateurs : une longue clavicule allonge le levier sur l’épaule'];
@@ -47479,9 +47479,9 @@ function _anatTexteBrut(f,res){
       T.privilegier=['Garder l’équilibre tirage / poussée : au moins autant de séries de tirage que de développé','Stabilité des omoplates : Y-raise sur banc incliné, pompes scapulaires, face pull'];
     }else{
       T.court='Épaule '+bas+' plus basse de '+_anatN(a)+'°'+(m.dh!=null?' ('+_anatN(m.dh,1)+' cm)':'')+' : décalage '+intens(n)+', à surveiller au développé et aux tirages.';
-      T.lecture='Sur une photo debout, une épaule plus basse vient le plus souvent d’une habitude (côté dominant, sac porté d’un côté), d’un trapèze supérieur plus tonique d’un côté ou d’un tronc qui s’incline — la photo ne dit pas lequel. Ce n’est pas une anomalie : c’est un point de départ pour regarder l’exécution.'
+      T.lecture='Sur une photo debout, une épaule plus basse vient le plus souvent d’une habitude (côté dominant, sac porté d’un côté), d’un trapèze supérieur plus tonique d’un côté ou d’un tronc qui s’incline : la photo ne dit pas lequel. Ce n’est pas une anomalie : c’est un point de départ pour regarder l’exécution.'
         +((m.af!=null&&m.ad!=null)?' Face : '+_anatSigneTexte(m.af)+' ; dos : '+_anatSigneTexte(m.ad)+'. '+(Math.sign(m.af)===Math.sign(m.ad)&&Math.abs(m.af-m.ad)<2?'Les deux photos disent la même chose : c’est la posture habituelle, pas la pose du moment.':'Les deux photos ne disent pas tout à fait la même chose : une part vient de la pose du moment.'):'');
-      T.privilegier=['Unilatéral en priorité : développé haltère un bras, rowing un bras, tirage poulie un bras — commencer par le côté '+bas+' et aligner l’autre sur ses répétitions','Porter lourd d’un seul côté (suitcase carry) en gardant les épaules de niveau','Planche latérale des deux côtés, 3 × 30 à 45 s','Trapèze inférieur et dentelé : Y-raise sur banc incliné, pompes scapulaires'];
+      T.privilegier=['Unilatéral en priorité : développé haltère un bras, rowing un bras, tirage poulie un bras, commencer par le côté '+bas+' et aligner l’autre sur ses répétitions','Porter lourd d’un seul côté (suitcase carry) en gardant les épaules de niveau','Planche latérale des deux côtés, 3 × 30 à 45 s','Trapèze inférieur et dentelé : Y-raise sur banc incliné, pompes scapulaires'];
       T.amenager=[{quoi:'Développé et rowing à la barre',reglage:'vérifier en vidéo de face que la barre reste horizontale ; si elle penche, passer une partie du volume aux haltères'},{quoi:'Shrugs',reglage:'aux haltères plutôt qu’à la barre, en contrôlant que les deux épaules montent à la même hauteur'}];
     }
     T.verifier='Marge ±'+_anatN(m.marge||ANAT_TOL.epaules)+'°, placement des acromions compris. Si la personne tient son téléphone, l’épaule de ce bras monte : relire la photo de dos, prise bras relâchés.';
@@ -47500,12 +47500,12 @@ function _anatTexteBrut(f,res){
     T.lecture='Le tronc se mesure du milieu des épaules au milieu des hanches, centre à centre : '+(tr&&tr.cm!=null?_anatN(tr.cm,1)+' cm':'—')+' pour '+(tr&&tr.cm!=null?_anatN(rTr*tr.cm/tr.fr,1)+' cm':_anatN(rTr*100,1)+' % de la taille')+' en moyenne à même taille ('+ANAT_REF.SOURCE+', '+(m.femme?'femmes':'hommes')+'). '
       +'Un tronc long est un bras de levier long au squat et au soulevé : la barre est plus loin des hanches, les érecteurs du rachis travaillent plus. '
       +(sq?'Au squat, le modèle donne '+sq.val+'° d’inclinaison du buste à la parallèle, pour '+sq.ref+'° avec des proportions moyennes. ':'')
-      +(V?'Le rapport deltoïdes / taille de '+_anatN(V,2)+' mesure la silhouette, pas l’os : il monte quand la carrure prend ou que la taille descend — c’est le chiffre à suivre de bilan en bilan. ':'')
+      +(V?'Le rapport deltoïdes / taille de '+_anatN(V,2)+' mesure la silhouette, pas l’os : il monte quand la carrure prend ou que la taille descend (c’est le chiffre à suivre de bilan en bilan). ':'')
       +(m.statV?'Repère de population : '+m.statV.txt+' ('+ANAT_V_REF.AVERT+'). ':'')
       +(m.varV!=null?'Depuis le premier bilan : '+_anatSN(m.varV,2)+' sur '+m.serieV.length+' bilans'+(Math.abs(m.varV)<=ANAT_V_REF.BRUIT?', dans le bruit de placement des points.':'.')+' ':'')
       +(s!=null?(ns?'Le milieu des épaules est décalé de '+_anatN(s,1)+' % du tronc par rapport au milieu du bassin : le buste se porte d’un côté (posture du moment ou habitude).':'Le buste est à l’aplomb du bassin (écart '+_anatN(s,1)+' %).'):'');
     T.privilegier=['Deltoïde latéral : élévations latérales aux haltères, à la poulie basse derrière le corps, à la machine','Largeur de dos : tractions et tirage vertical prise large, pull-over à la poulie','Taille : gainage anti-rotation (Pallof press), vacuum ; la taille visuelle se joue surtout sur la masse grasse'];
-    if((m.nTr||0)>0) T.privilegier.push('Tronc long : renforcer les érecteurs et le gainage (soulevé roumain, good morning léger, planches) — c’est le maillon qui cède le premier sous charge');
+    if((m.nTr||0)>0) T.privilegier.push('Tronc long : renforcer les érecteurs et le gainage (soulevé roumain, good morning léger, planches), c’est le maillon qui cède le premier sous charge');
     if(ns) T.privilegier.push('Pour l’axe : carry unilatéral et planche latérale, côté opposé au décalage en premier');
     T.amenager=[{quoi:'Obliques lestés en rotation',reglage:'pas nécessaires pour la silhouette : garder le gainage, sans surcharger les rotations lestées si la taille est une priorité'}];
     if((m.nTr||0)>0) T.amenager.push({quoi:'Soulevé de terre conventionnel',reglage:'le sumo ou la barre hexagonale rapprochent la barre des hanches et raccourcissent le levier du dos'});
@@ -47545,12 +47545,12 @@ function _anatTexteBrut(f,res){
       T.privilegier=['Garder de l’unilatéral dans chaque bloc (fente, split squat, soulevé roumain une jambe) : c’est ce qui entretient la symétrie'];
     }else{
       T.court='Hanche '+haut+' plus haute de '+_anatN(a)+'° : appui probablement plus chargé d’un côté sur la photo.';
-      T.lecture='Une hanche plus haute sur une photo debout vient d’abord de l’appui — le poids porté sur une jambe, un genou un peu fléchi de l’autre côté. La photo ne permet pas de dire s’il y a autre chose ; refaire la photo pieds à largeur de hanches, poids réparti, est le premier geste.'
+      T.lecture='Une hanche plus haute sur une photo debout vient d’abord de l’appui : le poids porté sur une jambe, un genou un peu fléchi de l’autre côté. La photo ne permet pas de dire s’il y a autre chose ; refaire la photo pieds à largeur de hanches, poids réparti, est le premier geste.'
         +(m.ecartVues!=null?(m.ecartVues<2?' Face et dos disent la même chose.':' Face et dos ne disent pas la même chose ('+_anatN(m.ecartVues)+'° d’écart) : c’est probablement la pose.'):'');
-      T.privilegier=['Unilatéral des membres inférieurs : split squat bulgare, fente arrière, soulevé roumain à une jambe — commencer par le côté faible','Moyen fessier : abduction de hanche (machine ou poulie), marche latérale avec élastique','Carry unilatéral et planche latérale contre l’inclinaison du tronc'];
+      T.privilegier=['Unilatéral des membres inférieurs : split squat bulgare, fente arrière, soulevé roumain à une jambe (commencer par le côté faible)','Moyen fessier : abduction de hanche (machine ou poulie), marche latérale avec élastique','Carry unilatéral et planche latérale contre l’inclinaison du tronc'];
       T.amenager=[{quoi:'Squat et soulevé de terre',reglage:'pieds symétriques (repères au sol), contrôler en vidéo de dos que le bassin ne glisse pas d’un côté en remontant'},{quoi:'Presse à cuisses',reglage:'pieds à la même hauteur sur la plateforme, amplitude arrêtée avant que le bassin ne décolle'}];
     }
-    T.verifier='Marge ±'+_anatN(m.marge||ANAT_TOL.bassin)+'°, placement des crêtes compris. Les crêtes iliaques sont estimées : les palper, ou les replacer sur la photo. Si l’écart revient au même endroit d’un bilan à l’autre sur une photo bien prise, en parler avec l’athlète — et, s’il a une gêne, l’orienter vers un professionnel de santé.';
+    T.verifier='Marge ±'+_anatN(m.marge||ANAT_TOL.bassin)+'°, placement des crêtes compris. Les crêtes iliaques sont estimées : les palper, ou les replacer sur la photo. Si l’écart revient au même endroit d’un bilan à l’autre sur une photo bien prise, en parler avec l’athlète, et, s’il a une gêne, l’orienter vers un professionnel de santé.';
     return T;
   }
   case 'jambes':{
@@ -47561,13 +47561,13 @@ function _anatTexteBrut(f,res){
     else if(n>0) T.court='Fémur long par rapport au tibia ('+_anatN(r,2)+' pour '+_anatN(m.rRef,2)+') : au squat, le buste penche davantage'+(sq?' (~'+sq.val+'° contre '+sq.ref+'°)':'')+'.';
     else T.court='Tibia long par rapport au fémur ('+_anatN(r,2)+' pour '+_anatN(m.rRef,2)+') : squat naturellement droit'+(sq?' (~'+sq.val+'° contre '+sq.ref+'°)':'')+', genoux qui avancent loin.';
     T.lecture='Cuisse '+c(cu)+', jambe '+c(ja)+(m.hh&&m.hh.cm!=null?', hauteur de hanche '+c(m.hh):'')+'. '
-      +'Au squat, la barre doit rester au-dessus du milieu du pied : plus le fémur est long par rapport au tibia et au tronc, plus la hanche recule et plus le buste s’incline pour compenser — fessiers et érecteurs prennent une plus grande part du mouvement. '
+      +'Au squat, la barre doit rester au-dessus du milieu du pied : plus le fémur est long par rapport au tibia et au tronc, plus la hanche recule et plus le buste s’incline pour compenser (fessiers et érecteurs prennent une plus grande part du mouvement). '
       +(sq?'Modèle : cuisse parallèle, tibia incliné de 30°, barre au-dessus du milieu du pied. Buste estimé à '+sq.val+'° de la verticale, '+sq.ref+'° pour des proportions moyennes ; avec une cale de 2,5 cm sous les talons (tibia à ~37°), '+sq.cale+'°. ':'')
       +(m.tj?'Tronc / hauteur de hanche : '+_anatN(m.tj,2)+' (moyenne '+_anatN(m.tjRef,2)+'). ':'')
-      +(m.asy!=null&&Math.abs(m.asy)>3?'Les deux jambes diffèrent de '+_anatN(m.asy,1)+' % sur la photo : c’est au-delà de la marge, mais une photo ne mesure pas une longueur de jambe au millimètre — à regarder avec la hauteur du bassin, sans conclure.':'');
+      +(m.asy!=null&&Math.abs(m.asy)>3?'Les deux jambes diffèrent de '+_anatN(m.asy,1)+' % sur la photo : c’est au-delà de la marge, mais une photo ne mesure pas une longueur de jambe au millimètre (à regarder avec la hauteur du bassin, sans conclure).':'');
     if(n>0){
       T.privilegier=['Squat talons surélevés (cale de 2 à 3 cm) ou hack squat pour recentrer le travail sur les quadriceps','Presse à cuisses et fente longue : les quadriceps y travaillent sans contrainte de buste','Soulevé roumain et hip thrust : le levier long y devient un avantage'];
-      T.amenager=[{quoi:'Squat barre haute pieds serrés',reglage:'élargir l’appui et ouvrir les pointes (20 à 30°) — l’ouverture raccourcit le fémur « vu de face » — ou ajouter une cale sous les talons'},{quoi:'Soulevé de terre conventionnel',reglage:'essayer le sumo ou la barre hexagonale si le dos s’arrondit au départ'}];
+      T.amenager=[{quoi:'Squat barre haute pieds serrés',reglage:'élargir l’appui et ouvrir les pointes (20 à 30°), l’ouverture raccourcit le fémur « vu de face », ou ajouter une cale sous les talons'},{quoi:'Soulevé de terre conventionnel',reglage:'essayer le sumo ou la barre hexagonale si le dos s’arrondit au départ'}];
     }else if(n<0){
       T.privilegier=['Squat barre haute et front squat : le levier est favorable','Leg curl et soulevé roumain pour équilibrer : ischios et fessiers travaillent moins au squat','Mobilité de cheville (genou au mur) : le genou a besoin d’avancer'];
       T.amenager=[{quoi:'Squat profond',reglage:'chaussures à talon ou cale si la cheville bloque avant la profondeur voulue'}];
@@ -47606,9 +47606,9 @@ function _anatTexteBrut(f,res){
     }else{
       const ouvert=m.asy>0?'gauche':'droit';
       T.court='Pied '+ouvert+' plus ouvert que l’autre ('+_anatN(m.asy,0)+'° d’écart) : l’appui n’est pas symétrique.';
-      T.lecture=(m.sol?'Gauche '+_anatSN(m.g,0)+'°, droit '+_anatSN(m.d,0)+'° d’ouverture, photo prise vers le sol.':'Pied gauche '+m.motG+', pied droit '+m.motD+' (estimation sur l’angle apparent) — on lit la différence.')+' Un pied nettement plus ouvert traduit souvent une rotation de hanche de ce côté (rotation interne limitée, rotateurs externes raides), ou simplement la façon dont la photo a été prise.';
+      T.lecture=(m.sol?'Gauche '+_anatSN(m.g,0)+'°, droit '+_anatSN(m.d,0)+'° d’ouverture, photo prise vers le sol.':'Pied gauche '+m.motG+', pied droit '+m.motD+' (estimation sur l’angle apparent) : on lit la différence.')+' Un pied nettement plus ouvert traduit souvent une rotation de hanche de ce côté (rotation interne limitée, rotateurs externes raides), ou simplement la façon dont la photo a été prise.';
       T.privilegier=['Mobilité de hanche en rotation interne (90/90, rotation assise) du côté '+ouvert,'Travail du pied : short foot, montées sur pointes lentes','Unilatéral jambes (split squat, step-up) en plaçant les deux pieds de façon identique'];
-      T.amenager=[{quoi:'Squat et soulevé de terre',reglage:'marquer au sol la position des pieds pour qu’elle soit la même à gauche et à droite ; ne pas forcer une ouverture que la hanche refuse — on la travaille à côté'}];
+      T.amenager=[{quoi:'Squat et soulevé de terre',reglage:'marquer au sol la position des pieds pour qu’elle soit la même à gauche et à droite ; ne pas forcer une ouverture que la hanche refuse : on la travaille à côté'}];
     }
     T.verifier=ANAT_PIEDS.CONSIGNE+' La voûte plantaire ne se lit pas sur une photo de face : regarder la vignette, et le talon sur la photo de dos. Marge ±'+ANAT_TOL.pieds+'°.';
     return T;
@@ -47622,11 +47622,11 @@ function _anatTexteBrut(f,res){
     if(m.oiDiff!=null&&Math.abs(p.nOi||0)) parts.push('omoplate '+(m.oiDiff>0?'gauche':'droite')+' plus écartée de la colonne ('+_anatN(Math.abs(m.oiDiff),1)+' cm)');
     T.court=(parts[0]?parts[0].charAt(0).toUpperCase()+parts[0].slice(1):'Dos lu')+(parts.length>1?' ; '+parts.slice(1).join(' ; '):'')+'.'
       +(an?' Position du moment, à confirmer au bilan suivant.':'');
-    T.lecture='Vu de dos, on regarde trois choses : la hauteur des deux pointes d’omoplate (repère de la position de la ceinture scapulaire), la ligne de la base du cou (C7) aux fossettes du sacrum (l’axe du dos) et les deux « triangles » entre les bras et la taille. Un écart sur une photo debout traduit une posture — du moment ou habituelle —, jamais une structure : la photo dit où regarder, pas pourquoi.'
+    T.lecture='Vu de dos, on regarde trois choses : la hauteur des deux pointes d’omoplate (repère de la position de la ceinture scapulaire), la ligne de la base du cou (C7) aux fossettes du sacrum (l’axe du dos) et les deux « triangles » entre les bras et la taille. Un écart sur une photo debout traduit une posture (du moment ou habituelle), jamais une structure : la photo dit où regarder, pas pourquoi.'
       +(Math.abs(p.nOm)?' Une omoplate plus basse va souvent avec un trapèze inférieur et un dentelé moins actifs de ce côté, ou une épaule plus basse sur la photo de face.':'');
-    T.lecture+=' Le bord interne des omoplates se mesure à sa distance à la ligne C7 → sacrum : une omoplate plus écartée de la colonne que l’autre, sur une photo debout, est une position du moment — une épaule qui s’enroule, un bras un peu tendu vers l’avant —, à relire au bilan suivant.';
+    T.lecture+=' Le bord interne des omoplates se mesure à sa distance à la ligne C7 → sacrum : une omoplate plus écartée de la colonne que l’autre, sur une photo debout, est une position du moment (une épaule qui s’enroule, un bras un peu tendu vers l’avant), à relire au bilan suivant.';
     T.privilegier=['Rétraction et abaissement des omoplates : face pull, Y-raise sur banc incliné, rowing un bras en finissant omoplate serrée et basse',
-      'Unilatéral dos : rowing un bras, tirage poulie un bras — commencer par le côté faible',
+      'Unilatéral dos : rowing un bras, tirage poulie un bras (commencer par le côté faible)',
       'Contrôle des omoplates : pompes scapulaires, shrug en rétraction',
       'Carry unilatéral (valise), planche latérale, bird dog, Pallof press'];
     T.amenager=[{quoi:'Soulevé de terre et squat',reglage:'contrôler en vidéo de dos que la barre reste horizontale et que le bassin ne glisse pas'},{quoi:'Tractions',reglage:'amplitude complète des deux côtés, sans tirer « de travers » en fin de série'}];
@@ -47806,7 +47806,7 @@ function _anatTraits(vue){
  * ce qu'on VOIT, et où ça tombe quand on ne le voit pas.
  */
 const ANAT_AIDE=Object.freeze({
-  vertex:{court:'Crâne',aide:'Le point le plus haut du crâne, cheveux aplatis : c’est lui qui fixe l’échelle avec les talons. Si le téléphone cache le visage, estime le haut de la tête dans l’axe du cou — jamais la lampe ou le mur derrière.'},
+  vertex:{court:'Crâne',aide:'Le point le plus haut du crâne, cheveux aplatis : c’est lui qui fixe l’échelle avec les talons. Si le téléphone cache le visage, estime le haut de la tête dans l’axe du cou : jamais la lampe ou le mur derrière.'},
   acromion:{court:'Acromion',aide:'La pointe osseuse du dessus de l’épaule, là où la clavicule se termine : sur le haut du moignon de l’épaule, 2 à 3 cm en dedans du bord du deltoïde. C’est l’os, pas le muscle.'},
   epaule:{court:'Épaule',aide:'Le centre de l’articulation de l’épaule : au milieu du moignon, environ 3 cm sous l’acromion, dans le prolongement de l’axe du bras.'},
   deltoide:{court:'Deltoïde',aide:'Le bord extérieur du deltoïde, à l’endroit où l’épaule est la plus large sur la photo. Sert au rapport deltoïdes / taille (le V).'},
@@ -47831,7 +47831,7 @@ const ANAT_AIDE=Object.freeze({
 });
 /** Les consignes qui changent de profil (A9) : même repère, autre prise de vue. */
 const ANAT_AIDE_PROFIL=Object.freeze({
-  acromion:{court:'Acromion',aide:'De profil, la pointe osseuse du dessus de l’épaule, au milieu de l’épaisseur de l’épaule vue de côté — pas le bord avant du deltoïde.'},
+  acromion:{court:'Acromion',aide:'De profil, la pointe osseuse du dessus de l’épaule, au milieu de l’épaisseur de l’épaule vue de côté, pas le bord avant du deltoïde.'},
   c7:{court:'C7',aide:'De profil, la bosse la plus saillante à la base de la nuque (C7), sur le contour du cou vu de côté, au-dessus de la ligne des épaules.'},
   genou:{court:'Genou',aide:'De profil, le milieu du genou vu de côté (condyle latéral du fémur), à mi-épaisseur entre la rotule et le creux du genou.'},
   talon:{court:'Talon',aide:'Le bas du talon, là où il touche le sol. Avec le sommet du crâne, il met la photo de profil à l’échelle de la taille.'}
@@ -47958,7 +47958,7 @@ function _htmlCouples(l,c){
   const rows=l.rows.map(r=>{
     const f=force[r.cle], haut=r.arts.reduce((a,b)=>Math.abs(b.pct)>Math.abs(a.pct)?b:a,r.arts[0]);
     const note=f&&f.faible?'<p class="an-cpl-note">Carnet : 1RM estimé '+_anatN(f.e1,0)+' kg ('+escapeHtml(f.nom)+'), à '+_anatN(f.rel*100,0)+' % de tes autres mouvements'
-      +(haut.pct>P?' — le levier ('+haut.art+' '+_anatSN(haut.pct,0)+' %) y contribue : à charge égale, le mouvement demande plus.':' — le levier n’explique pas l’écart ('+haut.art+' '+_anatSN(haut.pct,0)+' %).')+'</p>':'';
+      +(haut.pct>P?' : le levier ('+haut.art+' '+_anatSN(haut.pct,0)+' %) y contribue : à charge égale, le mouvement demande plus.':' : le levier n’explique pas l’écart ('+haut.art+' '+_anatSN(haut.pct,0)+' %).')+'</p>':'';
     return '<div class="an-cpl-r"><b>'+escapeHtml(r.lib)+'</b>'
       +r.arts.map(a=>'<div class="an-cpl-a" title="'+escapeHtml(a.def)+'"><span class="an-cpl-l">'+escapeHtml(a.art)+'</span>'+barre(a.pct)+'<span class="an-cpl-v">'+_anatSN(a.pct,0)+' %</span><span class="an-cpl-m">'+escapeHtml(mot(a.pct))+'</span></div>').join('')
       +note+'</div>';
@@ -48175,7 +48175,7 @@ function anatExportHtml(c,mode){
       'Analyse du '+_anatDateFr(a.date||pb.date)+'<br>Exportée le '+dJour)
     +'<div class="ex-ph">'+_anatExportPhoto(a,pb,'face','Face · '+dBilan)+_anatExportPhoto(a,pb,'dos','Dos · '+dBilan)+(a.profil?_anatExportPhoto(a,pb,'profil','Profil · '+dBilan):'')+'</div>'
     +'<p class="ex-s">'+escapeHtml(echTxt)+' · repères '+escapeHtml(ANAT_REF.SOURCE)+' · points rouges lus par le moteur, verts posés à la main, orangés estimés.</p>'
-    +'<h2>3 priorités — objectif '+escapeHtml(ANAT_PRIO.LIB[obj]||obj)+'</h2>'
+    +'<h2>3 priorités : objectif '+escapeHtml(ANAT_PRIO.LIB[obj]||obj)+'</h2>'
     +(prios.length?'<div class="ex-p">'+prios.map(lignePrio).join('')+'</div>':'<p>Rien au-dessus de « léger » sur ce bilan.</p>')
     +'<h2>Résultats</h2>'+synthese
     +'<h2>Détail par zone</h2>'+res.fiches.map(zone).join('')
@@ -48376,7 +48376,7 @@ function _htmlAnatVideo(l){
   const v=l&&l.video; if(!v) return '';
   const c=getOwnedClient(currentClientId);
   const loin=Math.abs(v.ecart)>ANAT_VIDEO_ECART;
-  return '<p class="an-vid'+(loin?' an-vid-loin':'')+'">Prévu <b>'+_anatN(v.prevu,0)+'°</b> · mesuré en vidéo <b>'+_anatN(v.mesure,0)+'°</b> ('+_anatDateFr(v.date)+') — écart '+_anatSN(v.ecart,0)+'°.'
+  return '<p class="an-vid'+(loin?' an-vid-loin':'')+'">Prévu <b>'+_anatN(v.prevu,0)+'°</b> · mesuré en vidéo <b>'+_anatN(v.mesure,0)+'°</b> ('+_anatDateFr(v.date)+') : écart '+_anatSN(v.ecart,0)+'°.'
     +(loin?' '+escapeHtml(ANAT_VIDEO_PHRASE):'')
     +(c&&v.videoId?' <button type="button" class="an-vid-b" onclick="ouvrirMotionLab(\''+escapeHtml(c.email)+'\',\''+escapeHtml(String(v.videoId))+'\')">Voir la vidéo analysée</button>':'')+'</p>';
 }
@@ -49212,7 +49212,7 @@ function _anatBrancherEdition(z){
     svg.querySelectorAll('.an-pt').forEach(c=>c.classList.toggle('actif',c.getAttribute('data-k')===k));
     svg.querySelectorAll('.an-pt-t').forEach(t=>t.classList.toggle('actif',t.getAttribute('data-t')===k));
     const nom=scene.parentElement&&scene.parentElement.querySelector('.an-nom');
-    if(nom) nom.textContent=nomDe(k)+' — glisse-le, ou touche l’endroit où il doit aller';
+    if(nom) nom.textContent=nomDe(k)+' : glisse-le, ou touche l’endroit où il doit aller';
     // La consigne suit le point choisi, et la liste aussi.
     const z2=scene.closest('.an');
     const cs=z2&&z2.querySelector('.an-consigne');
@@ -49370,7 +49370,7 @@ function _anatDessin(vue,pts,W,H,edit,E){
     const rep=anatRepere(vue,k);
     const cls='an-pt'+(p.e>=2?' man':(p.e<1?' est':''))+(rep&&rep.est?' an-pt-os':'');
     s+='<circle class="an-hit" data-k="'+k+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="'+(E*(edit?0.03:0.02)).toFixed(1)+'">'
-      +(edit?'':'<title>'+escapeHtml((rep?rep.lib:k)+' — double-clic pour le déplacer')+'</title>')+'</circle>';
+      +(edit?'':'<title>'+escapeHtml((rep?rep.lib:k)+' : double-clic pour le déplacer')+'</title>')+'</circle>';
     s+='<circle class="'+cls+'" data-k="'+k+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="'+r.toFixed(1)+'"'
       +(edit?' tabindex="0" role="button" aria-label="'+escapeHtml((rep?rep.lib:k)+(k.endsWith('_l')?', côté gauche de l’écran':k.endsWith('_r')?', côté droit de l’écran':''))+'. Flèches pour déplacer."':'')+'/>';
     // LE NOM DU POINT, en édition : côté extérieur, pour ne pas couvrir le corps.
@@ -49616,10 +49616,10 @@ function _htmlAnat(c){
       :'<span class="an-puce">'+(opts.miroir?'Photo au miroir':'Photo sans miroir')+'</span>'
         +(opts.cheveux?'<span class="an-puce">Cheveux volumineux : crâne posé sur l’os, échelle ±'+ANAT_ECHELLE_CHEVEUX_PCT+' %</span>':'')
         +(opts.paumes?'<span class="an-puce">Paumes vers l’avant</span>':'')
-        +(opts.telephone?'<span class="an-puce an-puce-o">Téléphone tenu : bras '+ath(opts.telephone)+' — écarté des mesures</span>':''))
+        +(opts.telephone?'<span class="an-puce an-puce-o">Téléphone tenu : bras '+ath(opts.telephone)+' : écarté des mesures</span>':''))
       +'</div>':'';
   const aideSel=edit&&(edit.aide||edit.sel)?(edit.aide||edit.sel):null;
-  const liste=edit?'<div class="an-rep"><h6>Repères <span>— touche un nom pour le sélectionner, « * » pour sa consigne ; ◂ ▸ : côté gauche ou droit de l’écran</span></h6><div class="an-rep-l">'
+  const liste=edit?'<div class="an-rep"><h6>Repères <span> : touche un nom pour le sélectionner, « * » pour sa consigne ; ◂ ▸ : côté gauche ou droit de l’écran</span></h6><div class="an-rep-l">'
       +anatCles(vueAct).filter(k=>pts[k]).map(k=>{
         const e2=pts[k][2];
         return '<span class="an-rep-c'+(edit.sel===k?' actif':'')+'" data-e="'+(e2>=2?'man':e2<1?'est':'auto')+'">'
@@ -49657,7 +49657,7 @@ function _htmlAnat(c){
       :'<p class="an-sv-t">Aucune version enregistrée pour l’instant.</p>')
     +'</div></details>';
   const outils=edit
-    ?'<div class="an-outils an-outils-edit"><p class="an-aide">Glisse chaque point sur son repère (loupe au-dessus du doigt ; double-clic ou appui pour le saisir ; au clavier : Tab puis flèches). Les points <b class="an-aide-est">orangés</b> sont estimés — à vérifier en priorité.</p>'+liste
+    ?'<div class="an-outils an-outils-edit"><p class="an-aide">Glisse chaque point sur son repère (loupe au-dessus du doigt ; double-clic ou appui pour le saisir ; au clavier : Tab puis flèches). Les points <b class="an-aide-est">orangés</b> sont estimés : à vérifier en priorité.</p>'+liste
       +'<div class="an-outils-b"><button type="button" class="btn btn-red btn-casse an-analyser" onclick="anatEnregistrerPoints()">'+ANAT_SVG.relancer+'<span>Analyser avec ces points</span></button>'
       +'<button type="button" class="an-b2" onclick="anatPointsAutomatiques()">Points automatiques</button>'
       +'<button type="button" class="an-b2" onclick="anatAnnulerEdition()">Annuler</button>'
@@ -49702,23 +49702,23 @@ function _htmlAnat(c){
   const infos='<details class="an-dr an-inf"'+(_anatDeplie.inf?' open':'')+' ontoggle="_anatDeplie.inf=this.open">'
     +'<summary><span class="an-dr-i">'+ANAT_SVG.info+'</span><span class="an-dr-t">Échelle et prise de vue</span>'
     +'<span class="an-dr-r">'+(echelle&&echelle.cmPx?_anatN(echelle.taille,0)+' cm · ±'+echelle.pct+' %':'sans taille')+(ver?' · '+ANAT_ECHELLE_MOTS[ver.statut]:'')+(res.rotation&&res.rotation.fiable&&res.rotation.deg>ANAT_ROTATION_SEUIL?' · corps tourné ≈ '+_anatN(res.rotation.deg,0)+'°':'')+'</span>'+ANAT_SVG.chev+'</summary>'
-    +'<div class="an-inf-c"><p>'+(echelle&&echelle.cmPx?'Échelle 1, par la taille : '+_anatN(echelle.taille,0)+' cm du sommet du crâne aux talons (taille du dossier), ±'+echelle.pct+' % — perspective et posture.'
+    +'<div class="an-inf-c"><p>'+(echelle&&echelle.cmPx?'Échelle 1, par la taille : '+_anatN(echelle.taille,0)+' cm du sommet du crâne aux talons (taille du dossier), ±'+echelle.pct+' % : perspective et posture.'
         :'Taille absente du dossier : les longueurs sont données en % de la hauteur sur la photo.')
       +' Biais du moteur : '+(res.biais?Object.keys(res.biais).map(k=>(ANAT_BIAIS_SEGMENTS.find(x=>x.cle===k)||{}).lib+' '+_anatSN((res.biais[k].k-1)*100,1)+' % (calibré sur '+res.biais[k].n+' athlètes)').join(', ')+'.'
-        :'non calibré — il faut au moins '+MORPHO_CALIB_MIN+' athlètes avec photo et mesures au mètre ; d’ici là, ±'+ANAT_BIAIS_DEFAUT_PCT+' % de biais possible dans la marge des longueurs.')
+        :'non calibré : il faut au moins '+MORPHO_CALIB_MIN+' athlètes avec photo et mesures au mètre ; d’ici là, ±'+ANAT_BIAIS_DEFAUT_PCT+' % de biais possible dans la marge des longueurs.')
       +(echelle&&echelle.cheveux?' Cheveux volumineux : le sommet du crâne est posé sur l’os, marge d’échelle ±'+ANAT_ECHELLE_CHEVEUX_PCT+' % au moins.':'')
       +(echelle&&echelle.piedsCoupes?' Pieds coupés : le talon est deviné, l’échelle est estimée.':'')
       +(ver?' Échelle 2, par le genou : '+(ver.source==='metre'
           ?_anatN(ver.mesureCm,1)+' cm du sol au milieu de la rotule, mesurés au mètre au bilan'
           :'hauteur de rotule estimée ('+ANAT_ROTULE.source+')')
-        +(ver.genouCm1!=null&&ver.genouCm2!=null?' — le genou est à '+_anatN(ver.genouCm1,1)+' cm du sol par la taille, '+_anatN(ver.genouCm2,1)+' cm par '+(ver.source==='metre'?'le mètre':'l’estimation'):'')
-        +'. Écart entre les deux : '+_anatN(ver.ecart*100,1)+' % — '+ANAT_ECHELLE_MOTS[ver.statut]
+        +(ver.genouCm1!=null&&ver.genouCm2!=null?' : le genou est à '+_anatN(ver.genouCm1,1)+' cm du sol par la taille, '+_anatN(ver.genouCm2,1)+' cm par '+(ver.source==='metre'?'le mètre':'l’estimation'):'')
+        +'. Écart entre les deux : '+_anatN(ver.ecart*100,1)+' %, '+ANAT_ECHELLE_MOTS[ver.statut]
         +(ver.statut==='confirmee'?' (au plus '+_anatN(ANAT_ECHELLE_CONFIRMEE*100,0)+' %).'
           :ver.statut==='verifier'?' (entre '+_anatN(ANAT_ECHELLE_CONFIRMEE*100,0)+' et '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' %) : marge d’échelle portée à ±'+ANAT_ECHELLE_A_VERIFIER_PCT+' %.'
           :' (au-delà de '+_anatN(MORPHO_ECHELLE_ECART_MAX*100,0)+' %) : longueurs en gris.')
         +(ver.source==='estimation'?' Pour une échelle au mètre : la hauteur du sol au milieu de la rotule, au prochain bilan.':''):'')
       +(res.rotation&&res.rotation.deg!=null?' Rotation du corps estimée : environ '+_anatN(res.rotation.deg,0)+'° (rapport épaules / hanches de face ÷ de dos : '+_anatN(res.rotation.rapport,2)+')'
-          +(res.rotation.fiable&&res.rotation.deg>ANAT_ROTATION_SEUIL?' — au-delà de '+ANAT_ROTATION_SEUIL+'°, les écarts gauche / droite ne sont pas lus. '+ANAT_ROTATION_CONSIGNE
+          +(res.rotation.fiable&&res.rotation.deg>ANAT_ROTATION_SEUIL?' : au-delà de '+ANAT_ROTATION_SEUIL+'°, les écarts gauche / droite ne sont pas lus. '+ANAT_ROTATION_CONSIGNE
             :!res.rotation.fiable?' : dans le bruit du placement des points (±'+_anatN(ANAT_ROTATION_BRUIT*100,0)+' % sur ce rapport), le corps est lu de face.':'.')
         :(res.rotation?' Rotation du corps : non estimée sans photo de dos.':''))
       +(res.rotation&&res.rotation.asyBras!=null?' Écart des deux bras sur la photo de face : '+_anatN(res.rotation.asyBras*100,1)+' %.':'')
@@ -49751,7 +49751,7 @@ function _htmlAnat(c){
     const detail='<div class="an-f-long" id="an-long-'+f.cle+'">'+tab+(courbe?'<div class="an-f-courbe">'+courbe+'</div>':'')+(cP?'<div class="an-f-courbe">'+cP+'</div>':'')
       +(t.lecture?'<h6>Lecture</h6><p class="an-f-lec">'+escapeHtml(t.lecture)+'</p>':'')
       +(t.privilegier&&t.privilegier.length?'<h6>À privilégier</h6>'+li(t.privilegier):'')
-      +(t.amenager&&t.amenager.length?'<h6>À aménager</h6><ul>'+t.amenager.map((x,i)=>'<li><b>'+escapeHtml(x.quoi)+'</b> — '+escapeHtml(x.reglage)
+      +(t.amenager&&t.amenager.length?'<h6>À aménager</h6><ul>'+t.amenager.map((x,i)=>'<li><b>'+escapeHtml(x.quoi)+'</b> : '+escapeHtml(x.reglage)
         +_htmlAnatExos(x.exercices,c)
         +(x.consigne?'<div class="an-cons"><span>Consigne pour l’athlète : « '+escapeHtml(x.consigne)+' »</span><button type="button" class="an-cons-b" onclick="anatEnvoyerConsigne(\''+f.cle+'\','+i+')">Envoyer la consigne</button></div>':'')+'</li>').join('')+'</ul>':'')
       +(t.verifier?'<h6>Comment vérifier</h6><p>'+escapeHtml(t.verifier)+'</p>':'')
@@ -49787,7 +49787,7 @@ function _htmlAnat(c){
       +'<span class="an-r-l">'+escapeHtml(f.lib)+'</span>'+_anatPoints(f)+'<span class="an-r-v">'+escapeHtml(anatVerdict(f))+(f.stat?'<small class="an-r-p">'+escapeHtml(f.stat.court||f.stat.txt)+'</small>':'')+'</span></button>').join('')+'</div>'
     +'<p class="an-res-leg"><span><i data-i="0"></i>dans la marge</span><span><i data-i="1"></i>léger</span><span><i data-i="2"></i>net</span><span><i data-i="3"></i>marqué</span><span>gris : non lisible</span></p></div>';
   const pourquoi='<div class="an-pq"><span class="an-pq-i">'+ANAT_SVG.info+'</span><div class="an-pq-c"><h5>Méthode</h5>'
-    +'<span>Les repères sont posés sur les vraies photos du bilan — automatiquement, puis ajustables à la main. La photo est mise à l’échelle par la taille du dossier (du sommet du crâne aux talons), les longueurs sont mesurées d’un centre articulaire à l’autre et comparées aux longueurs publiées par de Leva (1996), mesurées elles aussi d’un centre articulaire à l’autre, pour le même sexe ; la hauteur de hanche et les largeurs d’os, aux moyennes ANSUR II (2012). Sous chaque mesure, sa définition. Un écart à la moyenne est un levier à connaître, pas un défaut. '
+    +'<span>Les repères sont posés sur les vraies photos du bilan : automatiquement, puis ajustables à la main. La photo est mise à l’échelle par la taille du dossier (du sommet du crâne aux talons), les longueurs sont mesurées d’un centre articulaire à l’autre et comparées aux longueurs publiées par de Leva (1996), mesurées elles aussi d’un centre articulaire à l’autre, pour le même sexe ; la hauteur de hanche et les largeurs d’os, aux moyennes ANSUR II (2012). Sous chaque mesure, sa définition. Un écart à la moyenne est un levier à connaître, pas un défaut. '
     +escapeHtml(MORPHO_DISCLAIMER)+'</span></div>'
     +'<button type="button" class="an-b2" onclick="anatRelancer()"'+(enCours?' disabled':'')+'>'+ANAT_SVG.relancer+'<span>'+(enCours?'Détection…':'Refaire la détection')+'</span></button></div>';
   return '<div class="an" data-vue="'+vueAct+'">'+tete
@@ -50035,7 +50035,7 @@ function renderMethodesCoach(c){
       +(forces.length>1?'s':'')+' outre cette semaine :</div>';
     for(const f of forces.slice(-4))
       h+='<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:3px">'
-        +'· '+escapeHtml(f.exercice||'—')+' — '+escapeHtml(f.regle||'')+'</div>';
+        +'· '+escapeHtml(f.exercice||'—')+' : '+escapeHtml(f.regle||'')+'</div>';
   }
   h+='</div>';
   z.innerHTML=h;
@@ -50341,8 +50341,8 @@ function phraseChargeHebdo(u){
   const l=lectureChargeHebdo(c.pct);
   return 'Charge de la semaine : '+(c.pct>0?'+':'')+c.pct
     +' % sur la moyenne des 4 précédentes'
-    +(l==='pic'?' — pic de charge : au-delà d’un tiers d’écart, le risque de blessure augmente.'
-     :l==='creux'?' — creux : décharge voulue, ou semaine manquée ?':'');
+    +(l==='pic'?', pic de charge : au-delà d’un tiers d’écart, le risque de blessure augmente.'
+     :l==='creux'?', creux : décharge voulue, ou semaine manquée ?':'');
 }
 function phraseExercicesEnProgres(u){
   let p=null; try{ p=_exercicesEnProgres(u); }catch(e){ p=null; }
@@ -53315,7 +53315,7 @@ function _formeComposantes(user,pourCoach){
       // Dans sa normale, la note reste blanche et sa barre d'un blanc voile.
       return '<div class="fm-carte" style="--fm-c:'+coul
         +(coul==='var(--text)'?';--fm-b:rgba(255,255,255,.55)':'')+'"'
-        +' title="'+escapeHtml(c.titre+' : '+_fmtForme(der)+' / 10 — moyenne '+_fmtForme(moy)+' / 10')+'">'
+        +' title="'+escapeHtml(c.titre+' : '+_fmtForme(der)+' / 10 : moyenne '+_fmtForme(moy)+' / 10')+'">'
         +'<span class="fm-ico fm-ico-'+it.cle+'" aria-hidden="true"><svg viewBox="0 0 24 24">'+(FORME_ICONES[it.cle]||'')+'</svg></span>'
         +'<div class="fm-carte-txt"><div class="fm-carte-t">'+escapeHtml(c.titre)+'</div>'
         +'<div class="fm-carte-s">'+escapeHtml(pourCoach?c.coach:c.athlete)+'</div></div>'
@@ -54236,7 +54236,7 @@ function htmlRapport(r){
     h+=`<section class="rap-bloc"><h2>Signaux détectés</h2>`;
     if(!r.signaux.liste.length) h+=`<p class="rap-note">Aucun signal sur la période.</p>`;
     else h+=`<ul class="rap-liste">${r.signaux.liste.map(s=>
-      `<li>${escapeHtml(s.lib)}${s.fenetre?' <span class="rap-u">— '+escapeHtml(s.fenetre)+'</span>':''}</li>`).join('')}</ul>
+      `<li>${escapeHtml(s.lib)}${s.fenetre?' <span class="rap-u"> : '+escapeHtml(s.fenetre)+'</span>':''}</li>`).join('')}</ul>
       <p class="rap-note">Constaté le ${new Date(r.signaux.constateLe).toLocaleDateString('fr-FR')}. Chaque signal porte la fenêtre sur laquelle il a été établi : l'application ne conserve pas de date de survenue, et le rapport n'en invente pas.</p>`;
     h+=`</section>`;
   }
@@ -55719,7 +55719,7 @@ function htmlPhotosComparateur(u){
           <select onchange="_phpB=Number(this.value);phpRendreComparateur()" style="flex:1"${st.unique?' disabled':''}>${opt(_phpB)}</select>
         </div>
         <div id="php-cmp"></div>
-        ${st.comparable?`<label style="margin-top:10px;font-size:var(--fs-2xs);color:var(--sub);text-transform:none;letter-spacing:normal;font-weight:400" for="php-fondu">Fondu — flèches du clavier</label>
+        ${st.comparable?`<label style="margin-top:10px;font-size:var(--fs-2xs);color:var(--sub);text-transform:none;letter-spacing:normal;font-weight:400" for="php-fondu">Fondu : flèches du clavier</label>
         <input id="php-fondu" type="range" min="0" max="100" value="50" step="1"
           aria-label="Fondu entre les deux dates"
           oninput="phpFondu(this.value)" style="width:100%;accent-color:var(--red)">`
@@ -56948,9 +56948,9 @@ function _rendreGrilleCharge(){
         // pointillee dit « c est ce qui est prevu, rien n a encore ete fait ».
         +(m.prevision?';outline:1px dashed rgba(255,255,255,.55);outline-offset:-2px':'')
         +(m.courante?';box-shadow:0 0 0 2px var(--red)':'');
-      const titre=escapeHtml(((MUSCLES[mu]||{}).lib||mu)+' — S'+(i+1)+' : '
+      const titre=escapeHtml(((MUSCLES[mu]||{}).lib||mu)+' : S'+(i+1)+' : '
         +(c?c.series:0)+' séries'+(c&&c.repere?(' ('+c.repere+')'):'')
-        +(m.prevision?' — prévisionnel':''));
+        +(m.prevision?' : prévisionnel':''));
       h+='<td><div title="'+titre+'" aria-label="'+titre+'" style="'+style+'">'
         +(c?c.series:0)+'</div></td>';
     }
@@ -57002,7 +57002,7 @@ async function ajusterSemaineBloc(i){
   if(!_gcModifiable()){ toast('Réservé aux coachs.','var(--orange)'); return false; }
   const nl='\n';
   const porte=(()=>{ try{ return semainePorteEcart(u,i); }catch(e){ return false; } })();
-  const r=await rcSaisie('Semaine '+(i+1)+' — écart au gabarit'+nl+nl
+  const r=await rcSaisie('Semaine '+(i+1)+' : écart au gabarit'+nl+nl
     +'Séries, puis intensité, séparées par une virgule.'+nl
     +'« +1,0 » ajoute une série à chaque exercice. « -1,+1 » en retire une et laisse '
     +'une répétition de plus en réserve.'+nl+nl
@@ -57097,7 +57097,7 @@ function dessinerGrilleCharge(u){
     });
   });
   g.fillStyle='#5a5a5a'; g.textAlign='left'; g.font='600 10px sans-serif';
-  g.fillText('RepCore — charge du bloc, séries pondérées par muscle',MARGE,cv.height-MARGE);
+  g.fillText('RepCore : charge du bloc, séries pondérées par muscle',MARGE,cv.height-MARGE);
   return cv;
 }
 function exporterGrilleCharge(){
@@ -58092,7 +58092,7 @@ async function _echPoserEquivalents(u,e){
 // de sodium en grammes de sel avec le moteur sodique, et REFUSER ce qui sort
 // des bornes de securite.
 const ECH_PHRASE_CANEVAS='Les cibles de peak week sont posées par ton coach. '
-  +'RepCore les affiche, les rappelle et les enregistre — il ne les invente pas.';
+  +'RepCore les affiche, les rappelle et les enregistre : il ne les invente pas.';
 const ECH_PHRASE_MEDICALE='Une préparation se prépare avec un professionnel. '
   +'RepCore n\'est pas un dispositif médical et ne remplace ni un médecin, '
   +'ni un diététicien.';
@@ -58127,7 +58127,7 @@ function echeanceRefus(fiche,poidsKg){
   if(isFinite(eau)&&eau>0){
     if(eau>ECH_EAU_MAX_L)
       out.push('Eau : '+eau+' L par jour. Le maximum accepté est '+ECH_EAU_MAX_L
-        +' L — au-delà, le risque d\'hyponatrémie devient réel.');
+        +' L : au-delà, le risque d\'hyponatrémie devient réel.');
     if(eau<ECH_EAU_MIN_L)
       out.push('Eau : '+eau+' L par jour. RepCore n\'enregistre pas de cible '
         +'sous '+String(ECH_EAU_MIN_L).replace('.',',')+' L. La restriction hydrique '
@@ -58838,7 +58838,7 @@ function _rotPourquoi(x){
   if(x.regularite!=null&&x.regularite<0.6)
     return 'Fait '+Math.round(x.regularite*100)+' % des fois prévues : trop irrégulier pour rendre quoi que ce soit.';
   if(x.cout>=0.4)
-    return 'Ne progresse plus, et coûte cher — douleurs ou effort au-delà de la consigne.';
+    return 'Ne progresse plus, et coûte cher : douleurs ou effort au-delà de la consigne.';
   return 'Plus de progression sur '+REND_SEMAINES+' semaines et '+x.n+' séances.';
 }
 // LA VUE COACH. Une seule, dans la fiche client.
@@ -59986,7 +59986,7 @@ function _dispoMotif(cause,drapeau,user,dateISO){
   const rouge=(drapeau==='rouge');
   if(cause==='sommeil')
     return rouge
-      ? 'Deux nuits nettement plus courtes que d’habitude. Séance légère ou repos — dis-le à ton coach.'
+      ? 'Deux nuits nettement plus courtes que d’habitude. Séance légère ou repos : dis-le à ton coach.'
       : 'Deux nuits courtes. Garde la charge, enlève la dernière série.';
   if(cause==='douleur'){
     let n=0;
@@ -59999,15 +59999,15 @@ function _dispoMotif(cause,drapeau,user,dateISO){
       }
     }catch(e){}
     return rouge
-      ? (n?n+' séances avec douleur cette semaine. ':'')+'Séance légère ou repos — dis-le à ton coach.'
+      ? (n?n+' séances avec douleur cette semaine. ':'')+'Séance légère ou repos : dis-le à ton coach.'
       : 'Des douleurs déclarées cette semaine. Garde la charge, enlève la dernière série.';
   }
   if(cause==='rir')
     return rouge
-      ? 'Tu es allé nettement plus près de l’échec que prévu cette semaine. Séance légère ou repos — dis-le à ton coach.'
+      ? 'Tu es allé nettement plus près de l’échec que prévu cette semaine. Séance légère ou repos : dis-le à ton coach.'
       : 'Tu pousses plus près de l’échec que prévu. Garde la charge, enlève la dernière série.';
   return rouge
-    ? 'Ta charge a beaucoup augmenté cette semaine. Séance légère ou repos — dis-le à ton coach.'
+    ? 'Ta charge a beaucoup augmenté cette semaine. Séance légère ou repos : dis-le à ton coach.'
     : 'Charge en nette hausse cette semaine. Garde la charge, enlève la dernière série.';
 }
 // ══════════ L'EFFET REEL ═══════════════════════════════════════════════
@@ -60631,7 +60631,7 @@ function _htmlJournalSeance(c){
     const cause=DISPO_LIB_CAUSE[e&&e.cause]||'';
     const quoi=(e&&e.origine==='dispo_decharge')
       ? 'Semaine allégée'
-      : ('Dernière série retirée'+(e&&e.exercice?' — '+escapeHtml(e.exercice):''));
+      : ('Dernière série retirée'+(e&&e.exercice?' : '+escapeHtml(e.exercice):''));
     return '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px">'
       +'<span style="font-size:var(--fs-xs);color:var(--text);min-width:0">'+quoi+'</span>'
       +'<span style="font-size:var(--fs-2xs);color:var(--sub);white-space:nowrap;flex-shrink:0">'
@@ -62205,7 +62205,7 @@ const BILAN_QUESTIONS={
     {k:'deb-pied',lbl:'Longueur de pied (cm)',emoji:'📏'},
     {k:'deb-thorax',lbl:'Profondeur du thorax (cm)',emoji:'📏'},
     {k:'deb-traitement',lbl:'Traitement médicamenteux régulier',emoji:'💊',alerte:true},
-    {k:'deb-traitement-detail',lbl:'Traitement — précisions',emoji:'💊'},
+    {k:'deb-traitement-detail',lbl:'Traitement : précisions',emoji:'💊'},
     {k:'deb-allergies',lbl:'Allergies / régime particulier',emoji:'🥜',alerte:true},
     {k:'deb-tca',lbl:'Troubles du comportement alimentaire',emoji:'🚨',alerte:true},
     {k:'deb-goals',lbl:'Objectifs principaux',emoji:'🎯'},
@@ -62338,7 +62338,7 @@ function _htmlCalendrierBilansCoach(c){
     const coul=sel?'#fff':n?'var(--red-text)':'var(--text-dim)';
     cases+='<button type="button"'+(n?'':' disabled')
       +' onclick="ccdBilCalJour(\''+iso+'\')"'
-      +' aria-label="'+j+' '+_ccdBilMoisLib(cle)+(n?' — '+n+' bilan'+(n>1?'s':''):'')+'"'
+      +' aria-label="'+j+' '+_ccdBilMoisLib(cle)+(n?', '+n+' bilan'+(n>1?'s':''):'')+'"'
       +' style="aspect-ratio:1;min-height:26px;display:flex;align-items:center;justify-content:center;'
       +'background:'+fond+';border:'+bord+';border-radius:var(--r-2);color:'+coul+';'
       +'font-size:var(--fs-2xs);font-weight:'+(n?'800':'500')+';'
@@ -62438,7 +62438,7 @@ function _texteReponse(val){
 // texte va au coach, qui est un humain. Un test interdit sa lecture.
 const TRAITEMENT_MENTION='Ce texte n\'est lu que par ton coach, '
   +'l\'application ne l\'analyse pas.';
-const TRAITEMENT_VITESSE='Ta vitesse sort de la fourchette habituelle — un '
+const TRAITEMENT_VITESSE='Ta vitesse sort de la fourchette habituelle : un '
   +'traitement en cours peut l\'expliquer, parles-en à ton coach.';
 // Familles FACULTATIVES, dans les réglages et non dans l'accueil.
 //
@@ -62720,7 +62720,7 @@ async function supprimerAnalyseUI(dateISO,marqueur){
   const e=((u.analyses)||[]).find(x=>x&&x.date===dateISO&&x.marqueur===marqueur);
   if(!e){ toast('Analyse introuvable.','var(--orange)'); return false; }
   const m=marqueurDe(marqueur);
-  if(!await rcConfirm('Supprimer '+((m&&m.lib)||marqueur)+' — '+String(e.valeur).replace('.',',')
+  if(!await rcConfirm('Supprimer '+((m&&m.lib)||marqueur)+' : '+String(e.valeur).replace('.',',')
     +' '+e.unite+' du '+_fmtDateCourte(e.date)+' ?\n\nC’est définitif.',null,'Supprimer')) return false;
   const r=supprimerAnalyse(u,dateISO,marqueur);
   if(!r.ok){ toast(r.raison,'var(--orange)'); return false; }
@@ -63367,7 +63367,7 @@ function _blocAvertissementContrainte(ex,i){
   const subs=(()=>{ try{ return substitutsDe(ex,{zone:c.zone}).slice(0,3); }catch(e){ return []; } })();
   return `<div style="margin-top:8px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);padding:10px 12px">
     <div style="font-size:var(--fs-xs);color:var(--text);line-height:1.6">
-      ${escapeHtml(cible.fname||'Cet athlète')} a signalé : <b>${escapeHtml(libZone(c.zone))}</b>, ${escapeHtml(libNiveau(c.niveau))}${c.libelle?' — '+escapeHtml(c.libelle):''}.
+      ${escapeHtml(cible.fname||'Cet athlète')} a signalé : <b>${escapeHtml(libZone(c.zone))}</b>, ${escapeHtml(libNiveau(c.niveau))}${c.libelle?' : '+escapeHtml(c.libelle):''}.
     </div>
     <div style="font-size:var(--fs-xs);color:var(--text);line-height:1.6;margin-top:4px">
       <b>${escapeHtml(ex.name)}</b> sollicite fortement ${escapeHtml(libZone(c.zone))}.
@@ -63381,7 +63381,7 @@ function _blocAvertissementContrainte(ex,i){
         </div></div>`).join('')}`
       :`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:7px">Aucun mouvement de remplacement à proposer : les charges articulaires ne sont pas encore renseignées pour les autres familles.</div>`}
     <div style="display:flex;gap:7px;margin-top:9px">
-      <button onclick="_garderMalgreContrainte(${i})" class="btn btn-outline btn-sm" style="flex:1;letter-spacing:.5px;font-size:var(--fs-2xs)">Garder — je sais ce que je fais</button>
+      <button onclick="_garderMalgreContrainte(${i})" class="btn btn-outline btn-sm" style="flex:1;letter-spacing:.5px;font-size:var(--fs-2xs)">Garder : je sais ce que je fais</button>
     </div>
     ${blocDisclaimerSante()}
   </div>`;
@@ -65120,7 +65120,7 @@ function htmlRepriseSeance(u){
   const zero=r.remiseAZero?suspensionMessageReprise(u):'';
   return `<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:12px">
     <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:7px">Séance de retour</div>
-    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.65">Ton coach a levé la pause. Cette séance t'est proposée en volume réduit — tu peux décocher.</div>
+    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.65">Ton coach a levé la pause. Cette séance t'est proposée en volume réduit : tu peux décocher.</div>
     ${r.mouvement?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:7px">Mouvement à l'origine de la pause : <strong style="color:var(--text)">${escapeHtml(r.mouvement)}</strong>.</div>`:''}
     ${ci?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:5px">${escapeHtml(ci)}</div>`:''}
     ${zero?`<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-top:7px">${escapeHtml(zero)}</div>`:''}
@@ -65705,7 +65705,7 @@ async function invNotifOui(){
       // bilan et de seance. Les trois comptent le meme evenement.
       try{ rcm('notif_granted'); }catch(e){}
       await scheduleWoNotif();
-      toast('C’est note — je te préviens avant ta prochaine séance ✓');
+      toast('C’est note : je te préviens avant ta prochaine séance ✓');
     } else {
       // AUCUNE INSISTANCE. Le refus est accepte sans un mot de plus : le
       // reprocher, c'est se faire desinstaller.
@@ -66427,7 +66427,7 @@ function htmlMesBadges(u){
   const n=BADGES_ACQUIS.filter(b=>m[b.id]&&m[b.id].at>0).length;
   let h='<label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;'
     +'text-transform:uppercase;display:block;margin-bottom:10px">Mes badges'
-    +' <span style="color:var(--sub)">— '+n+'/'+BADGES_ACQUIS.length+'</span></label>'
+    +' <span style="color:var(--sub)"> : '+n+'/'+BADGES_ACQUIS.length+'</span></label>'
     +'<div class="bdg-grille">';
   for(const b of BADGES_ACQUIS){
     const g=m[b.id]&&m[b.id].at>0;
@@ -66605,7 +66605,7 @@ async function jenValider(){
   // ne doit pas revenir a la prochaine ouverture.
   _jenMarquer(currentUser);
   try{ await _appliquerRappelSeance(_jenJours,h,_jenMin); }catch(e){}
-  toast('C’est note — rappel a '+String(h).padStart(2,'0')+':'
+  toast('C’est note : rappel a '+String(h).padStart(2,'0')+':'
     +String(_jenMin).padStart(2,'0')+' ✓');
   go('s-client-home');
   loadClientHome();
@@ -67434,7 +67434,7 @@ function renderVolume(){
     </div>`;
   // Bandeau d'honnêteté : permanent, non masquable.
   const bandeau=`<div style="background:var(--surface-2);border-left:3px solid var(--sub);border-radius:var(--r-2);padding:10px 12px;margin-top:16px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
-      Repères indicatifs. Ils varient fortement d'une personne à l'autre —
+      Repères indicatifs. Ils varient fortement d'une personne à l'autre : 
       selon l'expérience, l'âge, le sommeil et la récupération.
       Ils ne remplacent pas l'avis de ton coach.
     </div>`;
@@ -67565,7 +67565,7 @@ function _volNav(d){
 // alerte.
 const AXIAL_ZONE='rachis-lombaire';
 const AXIAL_HAUSSE_SIGNAL=0.50;
-const AXIAL_NOTE_REPERE='Repère de terrain, pas une mesure — à regarder avec ton coach.';
+const AXIAL_NOTE_REPERE='Repère de terrain, pas une mesure : à regarder avec ton coach.';
 const AXIAL_INVITE_GRILLE='Charge lombaire : pas encore notée. Renseigne la colonne rachis lombaire de tes schémas pour la suivre.';
 
 // Charge lombaire d'un schéma moteur, de 0 à 3.
@@ -68546,7 +68546,7 @@ async function confirmDechargeGroupee(pose){
   const nl=String.fromCharCode(10);
   let txt=(_p?'Programmer une semaine de décharge ?':'Retirer la semaine de décharge ?')+nl+nl;
   txt+=prep.cibles.length
-    ?prep.cibles.map(x=>'· '+x.nom+' — '+x.n+' créneau'+(x.n>1?'x':'')).join(nl)
+    ?prep.cibles.map(x=>'· '+x.nom+' : '+x.n+' créneau'+(x.n>1?'x':'')).join(nl)
     :'Aucun athlète traitable dans cette sélection.';
   if(prep.echecs.length) txt+=nl+nl+'Ne seront PAS traités :'+nl
     +prep.echecs.map(e=>'· '+e.nom+' ('+e.raison+')').join(nl);
@@ -69654,7 +69654,7 @@ const DOSSIER_BLOCS=Object.freeze([
 const DOSSIER_DATE_INCONNUE='date inconnue';
 const DOSSIER_VIDE='Rien n\'est déclaré. Cet écran n\'affiche que ce que tu as '
   +'renseigné toi-même, et il reste vide tant que tu ne déclares rien.';
-const DOSSIER_ART9='DONNÉES DE SANTÉ — ARTICLE 9 DU RGPD. Ce dossier contient '
+const DOSSIER_ART9='DONNÉES DE SANTÉ : ARTICLE 9 DU RGPD. Ce dossier contient '
   +'des données relatives à la santé, dont le traitement relève du régime '
   +'renforcé de l\'article 9. Il n\'est ni chiffré ni protégé par mot de passe : '
   +'ne le dépose pas sur un service partagé.';
@@ -69867,7 +69867,7 @@ function _htmlDossierSante(user,pourCoach){
       :'<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Rien de déclaré.</div>'}
     ${titre('Ce que RepCore applique')}
     ${d.effets.length?d.effets.map(x=>ligne(
-        escapeHtml(x.effet)+' <span style="color:var(--text-dim)">— '+escapeHtml(x.cause)+'</span>',
+        escapeHtml(x.effet)+' <span style="color:var(--text-dim)"> : '+escapeHtml(x.cause)+'</span>',
         _dossDate(x.date))).join('')
       :'<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Aucun effet en cours.</div>'}
     ${d.renvois.length?titre('Ce vers quoi RepCore renvoie')
@@ -69875,7 +69875,7 @@ function _htmlDossierSante(user,pourCoach){
     ${d.journal.length?titre('Historique des déclarations')
       +d.journal.slice().reverse().map(x=>ligne(
         escapeHtml((DOSSIER_BLOCS.find(y=>y.bloc===x.bloc)||{}).lib||x.bloc)
-        +' <span style="color:var(--text-dim)">— '+(x.action==='retire'?'retiré':'déclaré')+'</span>',
+        +' <span style="color:var(--text-dim)"> : '+(x.action==='retire'?'retiré':'déclaré')+'</span>',
         _dossDate(x.date))).join(''):''}
     ${blocDisclaimerSante()}
     ${!pourCoach?`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:13px;padding-top:12px;border-top:1px solid var(--border)">
@@ -69927,16 +69927,16 @@ function exportDossierSanteTexte(user){
   const e=exportDossierSante(user);
   const l=[e._avertissement,''];
   l.push('Généré le '+e.genereLe,'');
-  l.push('— CE QUI EST DÉCLARÉ —');
+  l.push('CE QUI EST DÉCLARÉ');
   e.etats.forEach(x=>l.push('  '+x.valeur+'  ['+(x.declare_le||DOSSIER_DATE_INCONNUE)+']'));
   if(!e.etats.length) l.push('  (rien)');
-  l.push('','— CE QUE REPCORE APPLIQUE —');
-  e.effets.forEach(x=>l.push('  '+x.effet+' — '+x.cause+'  ['+(x.depuis||DOSSIER_DATE_INCONNUE)+']'));
+  l.push('','CE QUE REPCORE APPLIQUE');
+  e.effets.forEach(x=>l.push('  '+x.effet+' : '+x.cause+'  ['+(x.depuis||DOSSIER_DATE_INCONNUE)+']'));
   if(!e.effets.length) l.push('  (aucun)');
-  l.push('','— RENVOIS —');
+  l.push('','RENVOIS');
   e.renvois.forEach(x=>l.push('  '+x.texte+'  ['+(x.depuis||DOSSIER_DATE_INCONNUE)+']'));
   if(!e.renvois.length) l.push('  (aucun)');
-  l.push('','— HISTORIQUE —');
+  l.push('','HISTORIQUE');
   e.historique.forEach(x=>l.push('  '+x.bloc+' '+x.action+'  ['+(x.date||DOSSIER_DATE_INCONNUE)+']'));
   if(!e.historique.length) l.push('  (vide)');
   return l.join('\n');
@@ -70052,7 +70052,7 @@ const PRISE_PHRASE_PLANCHER='Repère : au moins '+PROT_PLANCHER_PRISE+' g de '
 const PRISE_PHRASE_RELEVE='Repère : au moins '+PROT_PLANCHER_PRISE_RELEVE+' g '
   +'de protéines par prise. C\'est un ordre de grandeur, pas une consigne.';
 const PRISE_PHRASE_TENSION='Avec ce nombre de repas, chaque prise reste en '
-  +'dessous de ce repère. Regrouper en moins de repas s\'en approche — le total '
+  +'dessous de ce repère. Regrouper en moins de repas s\'en approche : le total '
   +'de la journée, lui, ne change pas.';
 function phrasePlancherPrise(r){
   if(!r) return '';
@@ -70382,7 +70382,7 @@ const GROSSESSE_MSG='Merci de me l\'avoir dit. RepCore n\'est pas conçu pour '
 // Sans AUCUN chiffre : le surcoût de la lactation varie trop pour être annoncé,
 // et l'annoncer serait exactement le genre de prescription que ce lot retire.
 const GROSSESSE_MSG_ALLAITEMENT='Ton besoin est plus élevé pendant '
-  +'l\'allaitement, dans une proportion qui varie beaucoup — c\'est à voir avec '
+  +'l\'allaitement, dans une proportion qui varie beaucoup : c\'est à voir avec '
   +'un professionnel.';
 const GROSSESSE_REFUS_SECHE='Pas d\'objectif de perte de poids pendant cette '
   +'période. C\'est ton médecin ou ta sage-femme qui suit ce sujet.';
@@ -70585,10 +70585,10 @@ function _htmlPostPartum(user){
   // fait, pas ce qu'elle est.
   const bloc=f?`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7;margin-top:10px;padding-top:9px;border-top:1px solid var(--border)">
       <b>${escapeHtml(PP_LIB_FENETRES[f]||'')}</b>${f==='0_6'
-        ?' — je te propose seulement de la mobilité et des échauffements.'
-        :(f==='6_12'?' — du renforcement progressif, sans impact.'
-          :(ppImpactAutorise(u)?' — plus de restriction de ma part.'
-            :' — les impacts attendent que tu aies fait le point.'))}
+        ?' : je te propose seulement de la mobilité et des échauffements.'
+        :(f==='6_12'?' : du renforcement progressif, sans impact.'
+          :(ppImpactAutorise(u)?' : plus de restriction de ma part.'
+            :' : les impacts attendent que tu aies fait le point.'))}
     </div>`:'';
   const evalRow=(f==='12_plus'||f==='6_12')
     ?`<label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;margin-top:10px">
@@ -71772,7 +71772,7 @@ function _renderCycleNutSettings(nut){
       <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0 2px;margin-top:9px;border-top:1px solid var(--border)">
         <div>
           <div style="font-size:var(--fs-sm);font-weight:700;color:var(--text)">Partager avec mon coach</div>
-          <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;line-height:1.5">Désactivé, cette réponse ne quitte pas ce téléphone — et un changement d'appareil la perd.</div>
+          <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;line-height:1.5">Désactivé, cette réponse ne quitte pas ce téléphone, et un changement d'appareil la perd.</div>
         </div>
         <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px;cursor:pointer">
           <input type="checkbox" id="cycle-contra-partage" ${_partage?'checked':''} onchange="saveCycleNutSettings()" style="opacity:0;width:0;height:0;position:absolute">
@@ -71919,7 +71919,7 @@ function _htmlDepartAthlete(nut){
     </div>`;
   return `<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:var(--r-4);padding:14px;margin-bottom:18px">
     <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:4px">Point de départ proposé</div>
-    <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:11px">Ton coach n'a pas encore fixé tes objectifs. Voici un point de départ calculé sur ton dernier bilan — tu peux l'utiliser en attendant.</div>
+    <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:11px">Ton coach n'a pas encore fixé tes objectifs. Voici un point de départ calculé sur ton dernier bilan : tu peux l'utiliser en attendant.</div>
     <div style="display:flex;gap:8px;margin-bottom:10px">
       ${bloc('⚡ JOUR ON',b.on,'var(--success)')}
       ${bloc('💤 JOUR OFF',b.off,'var(--sub)')}
@@ -71930,7 +71930,7 @@ function _htmlDepartAthlete(nut){
          apres le premier emploi du mot. -->
     <details class="nut-hyp" style="margin-top:9px">
       <summary style="font-size:var(--fs-2xs);color:var(--sub);cursor:pointer">Comment ces objectifs sont calculés</summary>
-      <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:6px">${escapeHtml(nom)} · dépense estimée ${b.depense} kcal — ${_premierNeatInfo(escapeHtml(b.hypotheses.join(' · ')))}.</div>
+      <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:6px">${escapeHtml(nom)} · dépense estimée ${b.depense} kcal : ${_premierNeatInfo(escapeHtml(b.hypotheses.join(' · ')))}.</div>
     </details>
     ${blocDisclaimerSante()}
   </div>`;
@@ -72740,7 +72740,7 @@ const STRICT_VERROU=Object.freeze({
   non_valide:Object.freeze({
     titre:'Ton coach ne l\'a pas encore ouverte',
     texte:'Ton coach prépare ton plan alimentaire. Tu y auras accès dès '
-      +'qu\'il te l\'aura ouvert — tu n\'as rien à faire.',
+      +'qu\'il te l\'aura ouvert : tu n\'as rien à faire.',
     action:'En attendant, tu peux suivre ta nutrition en diète flexible.'
   })
 });
@@ -73022,7 +73022,7 @@ function _htmlSuiviAlimentaire(u,sjour){
   for(let t=new Date(auj+'T12:00:00');localISODate(t)>=min;t.setDate(t.getDate()-1)){
     const iso=localISODate(t);
     opts+='<option value="'+iso+'"'+(iso===sjour?' selected':'')+'>'
-      +(iso===auj?'Aujourd’hui — ':'')+t.toLocaleDateString('fr-FR')+'</option>';
+      +(iso===auj?'Aujourd’hui : ':'')+t.toLocaleDateString('fr-FR')+'</option>';
   }
   const dateLib=new Date(sjour+'T12:00:00').toLocaleDateString('fr-FR');
   const bouton=(val,titre,sous,ico)=>{
@@ -74318,9 +74318,9 @@ function planListeCourses(plan,porteur,chercher){
       alertes.push((macro==='p'?'Protéines':'Glucides')+' : '
         +totJours+' jour'+(totJours>1?'s':'')+' répartis sur '+PLAN_JOURS_SEMAINE
         +(totJours<PLAN_JOURS_SEMAINE
-          ?' — il reste '+(PLAN_JOURS_SEMAINE-totJours)+' jour'
+          ?' : il reste '+(PLAN_JOURS_SEMAINE-totJours)+' jour'
             +((PLAN_JOURS_SEMAINE-totJours)>1?'s':'')+' sans source attribuée.'
-          :' — la semaine est dépassée.'));
+          :' : la semaine est dépassée.'));
   }
   return {lignes:_lcFusionner(lignes),alertes,restant:rest,couverture:couv,cibles};
 }
@@ -74536,7 +74536,7 @@ function onPlanSearch(val){
       onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
       style="padding:12px 16px;border-bottom:1px solid var(--surface-2);cursor:pointer">
       <div style="font-size:var(--fs-md);font-weight:700;line-height:1.35">${escapeHtml(f.n)}</div>
-      ${_ev&&_ev.niveau==='intolerance'?`<div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.5;margin-top:3px">${escapeHtml(_ev.libelle+' — '+_ev.raison)}</div>`:''}
+      ${_ev&&_ev.niveau==='intolerance'?`<div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.5;margin-top:3px">${escapeHtml(_ev.libelle+' : '+_ev.raison)}</div>`:''}
       <div style="display:flex;gap:10px;align-items:center;margin-top:4px">
         ${rappel}<span style="font-size:var(--fs-2xs);color:var(--text-faint);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(f.g||'')}</span>
       </div>
@@ -75128,11 +75128,11 @@ function _cplHtmlModele(c){
   if(pose){
     entete=_cplNeuf
       ?'Composition posée depuis le modèle <b>'+escapeHtml(planModeleLib(pose))
-        +'</b>. Relis-la, ajuste les quantités, puis enregistre — rien n\'est encore parti chez l\'athlète.'
+        +'</b>. Relis-la, ajuste les quantités, puis enregistre : rien n\'est encore parti chez l\'athlète.'
       :'Cette composition part du modèle <b>'+escapeHtml(planModeleLib(pose))+'</b>.';
   } else if(s.cle){
     entete='Modèle suggéré pour cet athlète : <b>'+escapeHtml(planModeleLib(s.cle))+'</b>'
-      +(s.source==='objectif'?' — d\'après son objectif, faute de phase déclarée.':' — d\'après sa phase.');
+      +(s.source==='objectif'?' : d\'après son objectif, faute de phase déclarée.':' : d\'après sa phase.');
   } else {
     let t=null; try{ t=typePhase(c); }catch(e){}
     entete=(t?'Sa phase est en '+escapeHtml(PHASES[t]?PHASES[t].lib.toLowerCase():t)
@@ -76177,7 +76177,7 @@ function fjaChangerUnite(cle){
   if(n){ n.style.display='block'; if(!(parseFloat(n.value)>0)) n.value=1; }
   // Le champ des grammes reste visible et modifiable : l'unité le remplit, elle
   // ne le remplace pas. Un athlète qui connaît le poids exact le tape.
-  if(lbl) lbl.textContent='Quantité (grammes) — remplie depuis l\'unité';
+  if(lbl) lbl.textContent='Quantité (grammes) : remplie depuis l\'unité';
   fjaMajDepuisUnite();
 }
 function fjaMajDepuisUnite(){
@@ -76191,7 +76191,7 @@ function fjaMajDepuisUnite(){
   // valeur hors bornes dans le champ — on le dit, et saveFoodEntry redira non
   // avec SON message, qui n'est pas réécrit.
   if(eq){
-    eq.textContent=libelleUnite(n.value,u,g)+(g>9999?' — au-delà du maximum enregistrable.':'');
+    eq.textContent=libelleUnite(n.value,u,g)+(g>9999?' : au-delà du maximum enregistrable.':'');
     eq.style.color=(g>9999)?'var(--orange)':'var(--sub)';
   }
   const inp=document.getElementById('fja-qty');
@@ -76322,7 +76322,7 @@ function prepNom(etat){
   const noms=((etat&&etat.ing)||[]).map(i=>String(i&&i.n||'').trim()).filter(Boolean);
   const t=(etat&&etat.mode)==='prep'?'Meal prep':'Recette';
   if(!noms.length) return t;
-  return t+' — '+noms.slice(0,3).join(', ')+(noms.length>3?'…':'');
+  return t+' : '+noms.slice(0,3).join(', ')+(noms.length>3?'…':'');
 }
 function ouvrirPrep(mode){
   _prepEtat={mode:(mode==='recette'?'recette':'prep'),
@@ -77231,7 +77231,7 @@ const OFF_PAGE=12;
 const OFF_TIMEOUT=8000;
 const OFF_MAX_KCAL=900;           // au-delà, la fiche est fausse : l'huile pure est à 900
 const OFF_ECART_MACRO=0.30;
-const OFF_ATTRIBUTION='Source : Open Food Facts — donnée contributive sous licence ODbL. '
+const OFF_ATTRIBUTION='Source : Open Food Facts (donnée contributive sous licence ODbL). '
   +'Les valeurs sont saisies par des contributeurs, pas mesurées en laboratoire.';
 // OFF normalise ses champs `_100g` en GRAMMES, l'énergie exceptée. MICRO_REFS,
 // lui, attend des mg pour cinq clés et des µg pour trois. Le facteur est ici,
@@ -77692,7 +77692,7 @@ async function scanDemarrer(){
     // application. Dire « indisponible ou refusée » laissait l athlete sans
     // rien a faire dans les trois cas.
     const nom=(e&&e.name)||'';
-    let m='Caméra indisponible. Saisis le code à la main — ça marche tout aussi bien.';
+    let m='Caméra indisponible. Saisis le code à la main : ça marche tout aussi bien.';
     if(nom==='NotAllowedError'||nom==='SecurityError')
       m='Accès à la caméra refusé. Pour l\'autoriser : touche le cadenas à gauche de l\'adresse, puis active la caméra. En attendant, saisis le code à la main.';
     else if(nom==='NotFoundError'||nom==='OverconstrainedError')
@@ -77742,7 +77742,7 @@ async function scanTenter(mod){
     }
     if(++_scanEssais>=SCAN_MAX_ESSAIS){
       scanArreter();
-      _scanDire('Code illisible. Éclairage, distance, ou code abîmé — saisis-le à la main.','var(--orange)');
+      _scanDire('Code illisible. Éclairage, distance, ou code abîmé : saisis-le à la main.','var(--orange)');
       scanSaisieManuelle();
     }
   }catch(e){
@@ -77959,7 +77959,7 @@ async function offChercherUI(){
     return true;
   }
   z.innerHTML=`<div style="margin-top:12px">
-    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:8px">Produits de marque — source Open Food Facts (donnée contributive)</div>
+    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:8px">Produits de marque : source Open Food Facts (donnée contributive)</div>
     ${r.liste.map(a=>_offResultHtml(a)).join('')}
     ${r.rejetes?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">${r.rejetes} fiche${r.rejetes>1?'s':''} écartée${r.rejetes>1?'s':''} : valeurs manquantes ou incohérentes.</div>`:''}
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">${escapeHtml(OFF_ATTRIBUTION)}</div>
@@ -79302,14 +79302,14 @@ let _pastilleCacheFaite=false;
 function _pastilleServiParCache(){
   if(_pastilleCacheFaite||!window._rcServiParCache) return false;
   _pastilleCacheFaite=true;
-  try{ toast('Hors ligne — version en cache','var(--sub)'); }catch(e){}
+  try{ toast('Hors ligne : version en cache','var(--sub)'); }catch(e){}
   return true;
 }
 // ── Carte « Capacité », créateur seulement ──────────────────────────────
 // C'est une PENTE, pas une vérité, et l'écran le dit deux fois plutôt qu'une :
 // la console Firebase reste la seule source faisant foi. Un chiffre affiché
 // sans cette réserve serait pris pour une mesure.
-const QUOTA_REGISTRE='Estimation CLIENT, mesurée sur cet appareil seulement — '
+const QUOTA_REGISTRE='Estimation CLIENT, mesurée sur cet appareil seulement : '
   +'sans déduplication entre appareils, et sans le trafic de tes athlètes. '
   +'La console Firebase est la seule source faisant foi.';
 function _fmtOctets(n){
@@ -79385,9 +79385,9 @@ function _htmlCapaciteGlobale(){
       ${q.refuses} écriture(s) de compteur REFUSÉE(S). Les quatre noms (oct_in_ko,
       oct_out_ko, cld_envois, cld_ko) doivent être déclarés dans database.rules.json,
       et les règles déployées : <code>firebase deploy --only database</code>.
-      Tant que ce n'est pas fait, ce bloc ne mesure rien — et ne prétend rien.</div>`;
+      Tant que ce n'est pas fait, ce bloc ne mesure rien, et ne prétend rien.</div>`;
   if(!g) return titre+`<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6">Lecture en cours…</div>`;
-  if(g.erreur) return titre+`<div style="font-size:var(--fs-xs);color:var(--orange);line-height:1.6">Relevé illisible : ${escapeHtml(g.erreur)}. Le droit de lecture sur le nœud metrics est réservé au créateur, et il vient des règles — déployées ou non.</div>`;
+  if(g.erreur) return titre+`<div style="font-size:var(--fs-xs);color:var(--orange);line-height:1.6">Relevé illisible : ${escapeHtml(g.erreur)}. Le droit de lecture sur le nœud metrics est réservé au créateur, et il vient des règles : déployées ou non.</div>`;
   if(!g.jours) return titre+`<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6">Aucun compteur pour ${escapeHtml(g.mois||'')} : soit rien n'a été consommé, soit les règles ne sont pas déployées. ${q.envoyes?('Cet appareil en a fait accepter '+q.envoyes+', donc la première hypothèse est la bonne.'):'Cet appareil n\'en a encore fait accepter aucun.'}</div>`;
   const part=(o,max)=>{ const p=o/max*100; return (p<0.1?'<0,1':p.toFixed(1)).replace('.',',')+' %'; };
   const rtdb=g.rtdbOctets;
@@ -79395,12 +79395,12 @@ function _htmlCapaciteGlobale(){
   // règle du « pas assez de recul », un seul calcul dans le fichier.
   const pj=projectionQuota({octets:rtdb,debut:new Date(g.premier+'T00:00:00').getTime()});
   return titre
-    +l('Base — entrant',_fmtOctets(g.oct_in_ko*1024))
-    +l('Base — sortant',_fmtOctets(g.oct_out_ko*1024))
-    +l('Base — total / quota',_fmtOctets(rtdb)+' / '+_fmtOctets(QUOTA_MOIS_OCTETS)+' · '+part(rtdb,QUOTA_MOIS_OCTETS),
+    +l('Base : entrant',_fmtOctets(g.oct_in_ko*1024))
+    +l('Base : sortant',_fmtOctets(g.oct_out_ko*1024))
+    +l('Base : total / quota',_fmtOctets(rtdb)+' / '+_fmtOctets(QUOTA_MOIS_OCTETS)+' · '+part(rtdb,QUOTA_MOIS_OCTETS),
        rtdb>=QUOTA_MOIS_OCTETS*SEUIL_DEGRADATION?'var(--orange)':'var(--text)')
-    +l('Hébergeur — envois',String(g.cld_envois))
-    +l('Hébergeur — octets reçus',_fmtOctets(g.cldOctets)+' / '+_fmtOctets(CLOUDINARY_QUOTA_MOIS_OCTETS)
+    +l('Hébergeur : envois',String(g.cld_envois))
+    +l('Hébergeur : octets reçus',_fmtOctets(g.cldOctets)+' / '+_fmtOctets(CLOUDINARY_QUOTA_MOIS_OCTETS)
        +' · '+part(g.cldOctets,CLOUDINARY_QUOTA_MOIS_OCTETS),
        g.cldOctets>=CLOUDINARY_QUOTA_MOIS_OCTETS*SEUIL_DEGRADATION?'var(--orange)':'var(--text)')
     +l('Jours relevés',g.jours+' (du '+String(g.premier).slice(8)+' au '+String(g.dernier).slice(8)+')')
@@ -80637,7 +80637,7 @@ function besoinsProposes(user,opts){
         +' : je compte les créneaux, pas les deux'
       :'musculation déclarée dans les sports et '+sport.creneaux+' créneau'
         +(sport.creneaux>1?'x':'')+' actif'+(sport.creneaux>1?'s':'')
-        +' : je retiens la déclaration, plus élevée — jamais les deux');
+        +' : je retiens la déclaration, plus élevée (jamais les deux)');
   // ── La durée de séance : le repli est DIT, jamais silencieux ──
   if(sport.creneaux>0&&sport.dureeSource==='defaut')
     hypotheses.push('durée de séance '+(sport.dureeBrut?'illisible (« '+sport.dureeBrut+' »)'
@@ -81671,7 +81671,7 @@ async function actualiserClient(){
     // taper une note ou un grammage : lui reecrire la fiche sous les doigts
     // perdrait sa saisie. On le dit, et il rouvrira quand il aura fini.
     if(_saisieEnCours()){
-      toast('Du nouveau est arrivé — termine ta saisie, la fiche se mettra à jour ensuite.','var(--info)');
+      toast('Du nouveau est arrivé : termine ta saisie, la fiche se mettra à jour ensuite.','var(--info)');
       _majFraicheur();
       return true;
     }
@@ -81903,8 +81903,8 @@ function majTableauTableur(quoi,val){
   // aurait annonce un envoi qui n'a pas eu lieu.
   _tbAvis(ok,CLOUD.pushOne(c.email,c),
     j?('Ton athlète est sur '+_tbNb(j.on.kcal)+' kcal')
-     :(manuel?'Réglage enregistré — en saisie manuelle, tes chiffres priment'
-             :'Réglage enregistré — calcul incomplet, cibles inchangées'));
+     :(manuel?'Réglage enregistré : en saisie manuelle, tes chiffres priment'
+             :'Réglage enregistré : calcul incomplet, cibles inchangées'));
   try{ renderCoachNutriSection(c); }catch(e){}
   return true;
 }
@@ -81932,9 +81932,9 @@ function _tbSportsEcrire(modif,texte){
   c.updatedAt=Date.now(); users[c.email]=c;
   const ok=DB.set('users',users);
   _tbAvis(ok,CLOUD.pushOne(c.email,c),
-    j?((texte?texte+' — ':'')+'ton athlète est sur '+_tbNb(j.on.kcal)+' kcal')
-     :(manuel?'Sport enregistré — en saisie manuelle, tes chiffres priment'
-             :'Sport enregistré — calcul incomplet, cibles inchangées'));
+    j?((texte?texte+', ':'')+'ton athlète est sur '+_tbNb(j.on.kcal)+' kcal')
+     :(manuel?'Sport enregistré : en saisie manuelle, tes chiffres priment'
+             :'Sport enregistré : calcul incomplet, cibles inchangées'));
   try{ renderCoachNutriSection(c); }catch(e){}
   return true;
 }
@@ -81977,7 +81977,7 @@ function sportsTableurAuto(){
   c.updatedAt=Date.now(); users[c.email]=c;
   const ok=DB.set('users',users);
   _tbAvis(ok,CLOUD.pushOne(c.email,c),
-    'Sports recalculés depuis les créneaux et le bilan'+(j?' — ton athlète est sur '+_tbNb(j.on.kcal)+' kcal':''));
+    'Sports recalculés depuis les créneaux et le bilan'+(j?' : ton athlète est sur '+_tbNb(j.on.kcal)+' kcal':''));
   try{ renderCoachNutriSection(c); }catch(e){}
   return true;
 }
@@ -82057,7 +82057,7 @@ function _confirmerTransmission(c,localOk,envoi){
     if(r===false) throw new Error('envoi refusé');
     const _on=((c.nutrition||{}).macros||{}).on||{};
     _transmisPoser(c.email,{d:Date.now(),kcal:Math.round(Number(_on.kcal)||0)});
-    toast('Transmis à ton athlète ✓ — reçu à sa prochaine ouverture, au plus tard dans cinq minutes','var(--green)');
+    toast('Transmis à ton athlète ✓ : reçu à sa prochaine ouverture, au plus tard dans cinq minutes','var(--green)');
     try{ renderCoachNutriSection(getOwnedClient(currentClientId)||c); }catch(e){}
     return true;
   }).catch(()=>{
@@ -82759,7 +82759,7 @@ function _htmlTableauxTableur(c){
   const _tr=(function(){ try{ return _transmisLire()[c.email]||null; }catch(e){ return null; } })();
   if(_tr&&_tr.d>0) h+='<div class="tbk-tr">'+icon('check',14)
     +'<span>Transmis le '+escapeHtml(_histoDate(_tr.d))
-    +(_tr.kcal>0?(' — '+_tbNb(_tr.kcal)+' kcal'):'')+'</span></div>';
+    +(_tr.kcal>0?(', '+_tbNb(_tr.kcal)+' kcal'):'')+'</span></div>';
   h+=_man
     ? ''
     // ON DIT LE DELAI PLUTOT QUE « immédiatement ». La modification part a
@@ -83346,7 +83346,7 @@ async function ccdJournalRetirer(iso,id){
   const i=e.findIndex(x=>x&&String(x.id)===String(id)&&x.par==='coach');
   if(i<0){ toast('Seuls les repas que tu as ajoutés peuvent être retirés','var(--orange)'); return false; }
   const ok=await rcConfirm('Retirer ce repas ?',
-    escapeHtml(e[i].nom||'Repas')+' — '+Math.round(Number(e[i].kcal)||0)+' kcal. '
+    escapeHtml(e[i].nom||'Repas')+' : '+Math.round(Number(e[i].kcal)||0)+' kcal. '
     +'Il disparaîtra du journal de ton athlète.','Retirer');
   if(!ok) return false;
   e.splice(i,1);
@@ -83440,7 +83440,7 @@ function _htmlJournalCal(c){
   if(_ccdCalForm){
     const dl=new Date(_ccdCalForm+'T12:00:00');
     const lib=isNaN(dl.getTime())?_ccdCalForm:dl.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
-    form='<div class="jr-form"><div class="jr-form-t">Ajouter un repas — '
+    form='<div class="jr-form"><div class="jr-form-t">Ajouter un repas : '
       +escapeHtml(lib.charAt(0).toUpperCase()+lib.slice(1))+'</div>'
       +'<div class="jr-form-g">'
       +'<label>Jour<input type="date" id="ccd-jr-date" value="'+escapeHtml(_ccdCalForm)+'"></label>'
@@ -84564,7 +84564,7 @@ function evictionTrier(user,liste){
 // reste — et notamment pour « choix », qui ne s'annonce jamais.
 function evictionMention(ev){
   if(!ev||ev.niveau!=='intolerance') return '';
-  return ev.libelle+' — '+ev.raison;
+  return ev.libelle+' : '+ev.raison;
 }
 
 // ⚠ LA PHRASE DU SCAN, ET ELLE N'EST PAS DECORATIVE.
@@ -84639,7 +84639,7 @@ function renderEditeurEviction(){
   // sont. « Intolérance » ne veut rien dire tant qu'on ne sait pas que
   // l'aliment restera proposable.
   const NIV=[['allergie','Allergie',
-      'Retiré des listes. Si l’aliment entre malgré tout, RepCore te prévient avant d’enregistrer — sans bloquer.'],
+      'Retiré des listes. Si l’aliment entre malgré tout, RepCore te prévient avant d’enregistrer, sans bloquer.'],
     ['intolerance','Intolérance',
       'Gardé, mais rangé en fin de liste avec la raison. Beaucoup de gens en tolèrent une petite quantité.'],
     ['choix','Choix personnel',
@@ -84796,7 +84796,7 @@ function renderEvictions(){
       +escapeHtml(e.id)+'\',\'s-evictions\')">Modifier</button></div>').join('')
       :'<div class="sub" style="font-size:var(--fs-sm);line-height:1.6;padding:8px 0">'
        +'Aucune éviction déclarée. Ce que tu déclares ici est retiré de toutes '
-       +'les listes de l’app — recherche, équivalences, plan de ton coach.</div>');
+       +'les listes de l’app : recherche, équivalences, plan de ton coach.</div>');
   return true;
 }
 // ══════════════ LES TRAITEMENTS ════════════════════════════════════════
@@ -84955,7 +84955,7 @@ const INTERACTIONS=Object.freeze([
     phrase:'Le fer et le calcium diminuent l’absorption de l’hormone '
       +'thyroïdienne. Prends l’hormone à jeun, et attends 4 heures avant le fer '
       +'ou le calcium.',
-    source:'NICE, British National Formulary — interaction lévothyroxine / sels '
+    source:'NICE, British National Formulary : interaction lévothyroxine / sels '
       +'de fer et de calcium : intervalle d’au moins 4 heures. Absorption '
       +'réduite de 20 à 64 % (fer) et de 15 à 20 % (calcium).'
   },
@@ -85158,7 +85158,7 @@ function phraseTraitementsCoach(user){
   const lib=id=>{ const t=TIMINGS_LIST.filter(x=>x.id===id)[0]; return t?t.label.toLowerCase():id; };
   const n=l.length;
   return n+' traitement'+(n>1?'s':'')+' en cours'
-    +(ordre.length?' — '+ordre.map(lib).join(', '):'')
+    +(ordre.length?' : '+ordre.map(lib).join(', '):'')
     +'. Tiens-en compte avant de proposer un complément.';
 }
 // ══════════════ L'ECRAN DES TRAITEMENTS ════════════════════════════════
@@ -85212,7 +85212,7 @@ function renderTraitements(){
       +escapeHtml(x.phrase)+'</div>'
       +'<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.55;margin-top:5px">'
       +escapeHtml(x.traitement)+' · '+escapeHtml(x.complement)
-      +(x.aDecaler?' — décaler « '+escapeHtml(x.aDecaler)+' » de '
+      +(x.aDecaler?' : décaler « '+escapeHtml(x.aDecaler)+' » de '
         +(x.delaiMin>=60?(x.delaiMin/60)+' h':x.delaiMin+' min'):'')+'</div>'
       // LA SOURCE EST LISIBLE, pas cachee dans le code : c'est ce qui
       // distingue un avertissement d'une opinion.
@@ -85314,7 +85314,7 @@ function renderTraitements(){
          +'line-height:1.6">'
          +'<a href="#" onclick="event.preventDefault();ouvrirFicheTraitement(\''
          +escapeHtml(t.id)+'\')" style="color:var(--text-faint);text-decoration:underline">'
-         +escapeHtml(t.nom)+'</a> — jusqu’au '
+         +escapeHtml(t.nom)+'</a>, jusqu’au '
          +new Date(Number(t.fin)).toLocaleDateString('fr-FR')+'</div>').join('')
        +'</div>';
   }
@@ -85551,7 +85551,7 @@ function renderEditeurTraitement(){
       +'color:var(--text);line-height:1.5">Montrer ce traitement à mon coach</span>'
       +'<span style="display:block;font-size:var(--fs-2xs);color:var(--text-faint);'
       +'line-height:1.55;margin-top:3px">Sans ça, il voit seulement qu’un traitement '
-      +'est pris à ce moment de la journée — ni le nom, ni la dose, ni le '
+      +'est pris à ce moment de la journée, ni le nom, ni la dose, ni le '
       +'prescripteur. Ce que tu ne partages pas ne quitte pas ce téléphone, et '
       +'ne sera donc pas retrouvé si tu en changes.</span></span></label>';
 
@@ -85693,7 +85693,7 @@ function ouvrirFicheTraitement(id){
   if(t.notes) l.push(t.notes);
   l.push(t.partageCoach===true
     ? 'Ton coach voit le nom et la dose de ce traitement.'
-    : 'Ton coach voit seulement qu’un traitement est actif à ce moment de la journée — ni le nom, ni la dose.');
+    : 'Ton coach voit seulement qu’un traitement est actif à ce moment de la journée, ni le nom, ni la dose.');
   // ⚠ AUCUNE MODIFICATION DE POSOLOGIE DEPUIS L'APP. Ni ici, ni cote
   // coach : la dose se change chez le medecin, et une application qui
   // offrirait le geste laisserait croire qu'elle en a le droit. Cette fiche
@@ -85766,7 +85766,7 @@ function _htmlFormesFiche(fiche,cleRetenue){
   return `<div style="margin-top:8px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--sub);text-transform:uppercase;margin-bottom:5px">Formes</div>
     ${l.map(f=>`<div style="font-size:var(--fs-xs);color:${f.cle===cleRetenue?'var(--text)':'#bbb'};line-height:1.55;margin-bottom:4px">
-      <b style="font-weight:800">${escapeHtml(f.lib)}</b> — ${escapeHtml(f.note)}</div>`).join('')}
+      <b style="font-weight:800">${escapeHtml(f.lib)}</b> : ${escapeHtml(f.note)}</div>`).join('')}
   </div>`;
 }
 
@@ -86514,7 +86514,7 @@ function _htmlEvictionsCoach(c){
           +escapeHtml(LIB[e.niveau])+'</span></div>'
           +'<div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:2px">'
           +escapeHtml(e.cible.type+' « '+e.cible.valeur+' »'
-            +(e.note?' — '+e.note:''))+'</div></div>').join('')
+            +(e.note?' : '+e.note:''))+'</div></div>').join('')
       : '<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;'
         +'padding:4px 0">Aucune éviction déclarée. Lui seul peut les déclarer, '
         +'depuis son application.</div>')
@@ -86532,7 +86532,7 @@ function _htmlEvictionsCoach(c){
           +(conflits.length>1?'s':'')+' qui correspond'+(conflits.length>1?'ent':'')
           +' à une éviction.')+'</div>'
         +conflits.slice(0,8).map(x=>'<div style="font-size:var(--fs-2xs);color:var(--text-dim);'
-          +'line-height:1.55;margin-top:4px">· '+escapeHtml(x.libelle+' — '
+          +'line-height:1.55;margin-top:4px">· '+escapeHtml(x.libelle+' : '
           +x.eviction.libelle+' ('+x.eviction.raison+')')+'</div>').join('')
         +'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;'
         +'margin-top:7px">RepCore ne retire rien du plan : à toi de trancher.</div></div>'
@@ -86882,7 +86882,7 @@ function renderCoachCaffeineSection(c){
         ?emptyState('coffee',escapeHtml(c.fname||'Ton athlète')+' n\'a noté aucune prise sur 28 jours. Elles s\'afficheront ici dès la première.',null,null,'padding:16px 0')
         :`<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-bottom:8px">Historique 28 jours</div>
           <canvas id="ccd-caff-history" height="100" style="width:100%;display:block;border-radius:var(--r-2)"></canvas>
-          <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:6px">Seuils (pour ${wKg}kg${_wConnu?'':' — poids non renseigné, seuils estimés'}) : vert &lt;${thr.green}mg · jaune &lt;${thr.yellow}mg · orange &lt;${thr.orange}mg · rouge ${thr.red}mg</div>
+          <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:6px">Seuils (pour ${wKg}kg${_wConnu?'':' : poids non renseigné, seuils estimés'}) : vert &lt;${thr.green}mg · jaune &lt;${thr.yellow}mg · orange &lt;${thr.orange}mg · rouge ${thr.red}mg</div>
           <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:4px;line-height:1.5">${escapeHtml(legendeSeuilsCafeine(thr,!_wConnu))}</div>`
       }
     </div>`;
@@ -87115,7 +87115,7 @@ function legendeSeuilsCafeine(thr,poidsEstime){
   else
     s='Seuils calculés sur la référence adulte (EFSA, '+CAFFEINE_MAX_EFSA+' mg par jour).';
   if(poidsEstime)
-    s+=' Seuils calculés sur un poids estimé — renseigne ton poids pour qu\'ils soient justes.';
+    s+=' Seuils calculés sur un poids estimé : renseigne ton poids pour qu\'ils soient justes.';
   return s;
 }
 function caffeineEquiv(mg){
@@ -88307,7 +88307,7 @@ function gardeVideo(id){
   if(!r.ok){ toast(r.raison,'var(--orange)'); return false; }
   saveUser();
   CLOUD.pushOne(currentUser.email,currentUser).catch(()=>{});
-  toast(r.epingle?('Gardée. Elle n’expirera pas'+(r.reste!==undefined?' — '+r.reste+' place'+(r.reste>1?'s':'')+' restante'+(r.reste>1?'s':''):'')+'.')
+  toast(r.epingle?('Gardée. Elle n’expirera pas'+(r.reste!==undefined?', '+r.reste+' place'+(r.reste>1?'s':'')+' restante'+(r.reste>1?'s':''):'')+'.')
                  :'Elle reprend le cours normal : '+VIDEO_RETENTION_J+' jours.',
     r.epingle?'var(--green)':'var(--sub)');
   _renderVideosListe();
@@ -90198,7 +90198,7 @@ async function purgerMetricsPerimes(){
       const d=await fetch(RCM_BASE+'/'+k+'.json?auth='+encodeURIComponent(jeton),{method:'DELETE'});
       if(d.ok) n++; else refus++;
     }
-    if(refus) console.warn('[RepCore] purge des métriques : '+refus+' jour(s) refusé(s) — '
+    if(refus) console.warn('[RepCore] purge des métriques : '+refus+' jour(s) refusé(s) : '
       +'database.rules.json n’est peut-être pas déployé');
     return {jours:n,refus:refus,total:cles.length,restants:vieux.length-n};
   }catch(e){ return {saute:String(e&&e.message||e)}; }
@@ -93111,7 +93111,7 @@ const PHASES=Object.freeze({
   peak:{lib:'Peak week', apres:'peak week', sens:0, min:-0.5, max:0.5, alerteAbs:3,
     texte:"La semaine avant la scène. Le poids sur la balance ne dit plus rien "
       +"d'utile : il suit l'eau et le glycogène, pas le gras. RepCore ne calcule "
-      +"aucun protocole de peak week — c'est ton coach qui le conduit."}
+      +"aucun protocole de peak week : c'est ton coach qui le conduit."}
 });
 // Les phases qu'un athlete peut choisir SEUL. Peak week n'y est pas : voir
 // _htmlChoixPhase. La liste est derivee de PHASES pour qu'une phase ajoutee
@@ -93338,7 +93338,7 @@ function phraseRegimeMesure(a){
   if(!a) return '';
   if(a.regime==='etendu')
     return 'Vitesse estimée sur '+Math.round(PESEE_FENETRE_VIT_ETENDUE/7)+' semaines et '
-      +(a.nPesees||0)+' pesées — moins précise, donc on corrige par petits pas.';
+      +(a.nPesees||0)+' pesées : moins précise, donc on corrige par petits pas.';
   return 'Vitesse mesurée sur '+PESEE_FENETRE_VIT+' jours.';
 }
 // Registre de TEXTE_ARRET_DRAPEAU : on décrit ce qu'on constate, on ne nomme
@@ -93381,7 +93381,7 @@ function _htmlDernierAjust(nut){
   if(!h) return '';
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:16px">
     <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">Dernier ajustement proposé</div>
-    <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">${new Date(h.date).toLocaleDateString('fr-FR')} · ${h.sens==='baisse'?'baisse':'hausse'} de ${Math.abs(h.kcalDelta)} kcal les jours ${h.jour==='off'?'OFF':'ON'} (${_fmtPct(h.gDelta)} g de glucides) — vitesse mesurée ${_fmtPct(h.mesuree)} %/sem.<br><strong style="color:${h.decision==='applique'?'var(--success)':'var(--sub)'}">${h.decision==='applique'?'Appliqué par l\'athlète':'Refusé : il garde ses objectifs'}</strong></div>
+    <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">${new Date(h.date).toLocaleDateString('fr-FR')} · ${h.sens==='baisse'?'baisse':'hausse'} de ${Math.abs(h.kcalDelta)} kcal les jours ${h.jour==='off'?'OFF':'ON'} (${_fmtPct(h.gDelta)} g de glucides) : vitesse mesurée ${_fmtPct(h.mesuree)} %/sem.<br><strong style="color:${h.decision==='applique'?'var(--success)':'var(--sub)'}">${h.decision==='applique'?'Appliqué par l\'athlète':'Refusé : il garde ses objectifs'}</strong></div>
   </div>`;
 }
 function _htmlAjustement(user,lectureSeule){
@@ -94839,7 +94839,7 @@ function controlerMacros(macros,user){
       out.push({champ:pref+'kcal',valeur:kcal,plancher:pl.kcal,
         message:kcal+' kcal'+lib+' pour un plancher de '+pl.kcal+' kcal'
           +direRegplePlancher(pl)
-          +(pl.tca?' — plancher majoré de 15 % : antécédent déclaré au bilan':'')});
+          +(pl.tca?', plancher majoré de 15 % : antécédent déclaré au bilan':'')});
     const p=Number(j.p);
     if(pl.p!=null&&isFinite(p)&&p>0&&p<pl.p)
       out.push({champ:pref+'p',valeur:p,plancher:pl.p,
@@ -96390,7 +96390,7 @@ function blocPoidsCoach(user,depuis){
     ${v?`<div style="font-size:var(--fs-sm);font-weight:700;color:${c};margin-top:6px">
         ${v.kgSem>0?'+':''}${v.kgSem.toFixed(2)} kg/sem · ${v.kgSem>0?'+':''}${v.pctSem.toFixed(2)} %/sem
       </div>
-      ${alerte?`<div style="font-size:var(--fs-xs);color:var(--orange);line-height:1.6;margin-top:4px">Au-delà du seuil${cible.phase?' de la phase '+cible.lib:''} — à vérifier avec l'athlète.</div>`:''}`
+      ${alerte?`<div style="font-size:var(--fs-xs);color:var(--orange);line-height:1.6;margin-top:4px">Au-delà du seuil${cible.phase?' de la phase '+cible.lib:''} : à vérifier avec l'athlète.</div>`:''}`
      :`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:6px">Pas assez de pesées pour une vitesse (il en faut au moins quatre par semaine sur trois semaines).</div>`}
     ${_carteCourbePoids(_pDep?serie.filter(e=>{
       try{ return new Date(e.date+'T12:00:00').getTime()>=_pDep; }catch(x){ return true; }
@@ -96450,7 +96450,7 @@ function _htmlChoixPhase(){
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:11px">
       Ce que tu cherches en ce moment. Ça ne change ni tes séances ni tes macros :
       ça change la façon dont l'app lit tes chiffres.
-      ${sugg?'<br>Une suggestion est faite d\'après l\'objectif que tu as déjà indiqué — à toi de confirmer.':''}
+      ${sugg?'<br>Une suggestion est faite d\'après l\'objectif que tu as déjà indiqué : à toi de confirmer.':''}
     </div>
     ${opts}
     <div style="display:flex;gap:8px;margin-top:4px">
@@ -96610,7 +96610,7 @@ function _htmlPhaseCoach(c){
           style="flex:1;min-width:140px;padding:7px 9px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700">
         ${quand?`<span style="font-size:var(--fs-md);font-weight:800;color:var(--red-text);white-space:nowrap">${escapeHtml(quand)}</span>`:''}
       </div>
-      <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:8px">Le suivi du poids est neutralisé : cette semaine, la balance suit l’eau et le glycogène, pas le gras. Aucun ajustement automatique n’est proposé. RepCore ne calcule pas de protocole de peak week — la charge, l’eau et le sel restent ta décision, hors de l’application.</div>
+      <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:8px">Le suivi du poids est neutralisé : cette semaine, la balance suit l’eau et le glycogène, pas le gras. Aucun ajustement automatique n’est proposé. RepCore ne calcule pas de protocole de peak week : la charge, l’eau et le sel restent ta décision, hors de l’application.</div>
     </div>`;
   })();
   // La combinaison sèche + antécédent déclaré est nommée explicitement : c'est
@@ -100172,9 +100172,9 @@ function showDrivePdfModal(driveUrl,targetEmail){
       <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
     </div>
     <p style="font-size:var(--fs-sm);color:var(--sub);line-height:1.8;margin-bottom:18px">Google Drive bloque la lecture directe depuis l'app (restriction navigateur).<br>
-    <span style="color:var(--text);font-weight:700">Étape 1 —</span> Ouvre le PDF sur Drive ↓<br>
-    <span style="color:var(--text);font-weight:700">Étape 2 —</span> Télécharge-le (icône ↓ en haut à droite de Drive)<br>
-    <span style="color:var(--text);font-weight:700">Étape 3 —</span> Sélectionne le fichier téléchargé ↓</p>
+    <span style="color:var(--text);font-weight:700">Étape 1 : </span> Ouvre le PDF sur Drive ↓<br>
+    <span style="color:var(--text);font-weight:700">Étape 2 : </span> Télécharge-le (icône ↓ en haut à droite de Drive)<br>
+    <span style="color:var(--text);font-weight:700">Étape 3 : </span> Sélectionne le fichier téléchargé ↓</p>
     <a href="${openUrl}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px;text-align:center;background:linear-gradient(180deg,#0a2a1a,#061508);border:1px solid #1a4a2a;border-radius:var(--r-2);color:var(--green);font-size:var(--fs-xs);font-weight:800;text-decoration:none;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">
        Ouvrir sur Google Drive
     </a>
@@ -101415,7 +101415,7 @@ window.addEventListener('rc-install-fait',()=>{
   // ✓ » constate ; les gens restent alors dans l'onglet du navigateur et
   // n'ouvrent jamais l'icone — l'installation ne sert a rien. La phrase
   // nomme les deux gestes suivants.
-  try{ toast('RepCore est sur ton écran d\'accueil — tu peux fermer cet onglet et lancer l\'app depuis l\'icône'); }catch(e){}
+  try{ toast('RepCore est sur ton écran d\'accueil : tu peux fermer cet onglet et lancer l\'app depuis l\'icône'); }catch(e){}
   // L'ECRAN D'INSTALLATION N'A PLUS RIEN A PROPOSER : il repasse en branche A.
   try{ if(document.getElementById('s-install')?.classList.contains('active')) go('s-welcome'); }catch(e){}
 });
@@ -102229,7 +102229,7 @@ function _majImageVitrine(input,id){
     _detourerSignature(_fs,b64=>{
       currentUser[_detour[0]]=b64;
       _apercuVitrine(id,b64);
-      toast(_detour[1]+' — pense à enregistrer');
+      toast(_detour[1]+' : pense à enregistrer');
     },IMG_BUDGET_KO[_detour[0]]);
     return;
   }
@@ -102245,7 +102245,7 @@ function _majImageVitrine(input,id){
       _pngRamener(brut,IMG_BUDGET_KO[cfg[0]]||240,b64=>{
         currentUser[cfg[0]]=b64;
         _apercuVitrine(id,b64);
-        toast('Image ajoutée — pense à enregistrer');
+        toast('Image ajoutée : pense à enregistrer');
       });
     });
     return;
@@ -102254,7 +102254,7 @@ function _majImageVitrine(input,id){
   _lireImage(input,cfg[1],cfg[2],b64=>{
     currentUser[cfg[0]]=b64;
     _apercuVitrine(id,b64);
-    toast('Image ajoutée — pense à enregistrer');
+    toast('Image ajoutée : pense à enregistrer');
   });
 }
 function _viderImageVitrine(id){
@@ -102385,7 +102385,7 @@ function _htmlVitrineCoach(pub){
       +'<div style="'+CARTE+';border-left:3px solid var(--red)">'+grain
       +'<div style="position:relative;font-size:var(--fs-md);color:var(--text-strong);line-height:1.75">'
       +(currentUser&&currentUser.role==='coach'
-        ?'Ta présentation est vide. Remplis « Qui tu es » dans ton profil, puis touche <strong>Enregistrer</strong> — le bouton rouge, pas « Prévisualiser ».'
+        ?'Ta présentation est vide. Remplis « Qui tu es » dans ton profil, puis touche <strong>Enregistrer</strong> : le bouton rouge, pas « Prévisualiser ».'
         :('Ton coach n’a pas encore rempli sa présentation.'+_diagVitrine()))
       +'</div></div></div>';
   }
@@ -102686,7 +102686,7 @@ function _chargerDispoCoach(u){
       :'Ton délai réel médian sur '+DISPO_MEDIAN_FENETRE_J+' jours : <b>'
         +(m<24?(Math.round(m*10)/10).toString().replace('.',',')+' h'
               :(Math.round(m/2.4)/10).toString().replace('.',',')+' jours')
-        +'</b> <span style="color:var(--text-faint)">— visible de toi seul.</span>';
+        +'</b> <span style="color:var(--text-faint)">: visible de toi seul.</span>';
   }
 }
 // ── Côté athlète : le bandeau, AVANT la saisie ────────────────────────────
@@ -103277,7 +103277,7 @@ function messageRelanceAcces(c,etat){
   return (p?('Salut '+p+' ! '):'Salut ! ')+quand
     +' Pour continuer, ouvre l\'app et prends l\'abonnement à '+PRIX_ATHLETE_MOIS
     +' par mois : '+lienAbonnement()
-    +' — dis-moi si tu as le moindre souci, je m\'en occupe.';
+    +' : dis-moi si tu as le moindre souci, je m\'en occupe.';
 }
 // Ouvre WhatsApp avec le message pre-rempli. ⚠ REPCORE N'ENVOIE RIEN : il
 // ouvre la conversation, c'est le coach qui appuie sur envoyer. Meme regle que
@@ -103925,7 +103925,7 @@ function messageRelance(c,user){
   const prenom=(c&&(c.prenom||String(c.studentName||'').split(' ')[0]))||'';
   const nom=((u&&u.fname)||'').trim();
   return (prenom?('Salut '+prenom+', '):'Salut, ')
-    +'je t\'ai préparé ton accès RepCore'+(nom?(' — c\'est '+nom):'')+'. '
+    +'je t\'ai préparé ton accès RepCore'+(nom?(' : c\'est '+nom):'')+'. '
     +'Tu peux le récupérer ici quand tu veux, le lien n\'expire pas :'+NL_MSG
     +lienInvitation(c&&c.token,u);
 }
@@ -104012,7 +104012,7 @@ function relancerInvitation(token){
   if(!c) return false;
   const r=relancePossible(c);
   if(!r.ok){
-    toast('Déjà relancé. Attends encore '+r.reste+' h — un rappel de trop se '
+    toast('Déjà relancé. Attends encore '+r.reste+' h : un rappel de trop se '
       +'retient plus qu\'un rappel utile.','var(--orange)');
     return false;
   }
@@ -104064,7 +104064,7 @@ async function _envoyerInvitation(){
       partage=true;
     }
   }catch(e){}   // annule par l utilisateur : ce n est pas une erreur
-  toast(partage?'Invitation envoyée ✓':'✓ Lien copié — envoie-le à '
+  toast(partage?'Invitation envoyée ✓':'✓ Lien copié : envoie-le à '
     +(r.invitation.prenom||'ton athlète'),'var(--green)');
   _rendreInvitations();
   return true;
@@ -104255,7 +104255,7 @@ async function _genAccessCode(studentName,months,type){
   // qui partirait plus tard, sans que le coach le sache, est pire.
   if(typeof navigator!=='undefined'&&navigator.onLine===false)
     throw new Error('Tu es hors ligne : le code doit être enregistré avant '
-      +'d\'être envoyé. Reconnecte-toi et réessaie — rien n\'a été créé.');
+      +'d\'être envoyé. Reconnecte-toi et réessaie : rien n\'a été créé.');
   const url=_rcCodesUrl(code)+(fbTok?'?auth='+fbTok:'');
   let r;
   try{
@@ -104626,7 +104626,7 @@ async function supprimerCodeEtFiche(i){
     const saisi=await rcSaisie('Supprimer '+quoi+' ?\n\n'
       +'Ses séances, bilans, mesures et photos seront SUPPRIMÉS de la base. '
       +'Ce sont ses données, et rien ne les rendra.\n\n'
-      +'Retape son prénom — '+attendu+' — pour confirmer.','',
+      +'Retape son prénom ('+attendu+') pour confirmer.','',
       {libelleOk:'Supprimer définitivement'});
     if(saisi===null) return false;
     if(exKey(saisi)!==exKey(attendu)){
@@ -104793,7 +104793,7 @@ function _copierInvitationAthlete(i){
     // ON NE DIT « COPIE » QUE SI CA L'EST. Un accuse de reception faux fait
     // coller dans le vide — ici, envoyer un message vide a un athlete qui
     // attend son acces, et ne s'en apercevoir que par son silence.
-    if(ok) toast('Invitation copiée — colle-la dans WhatsApp','var(--green)');
+    if(ok) toast('Invitation copiée : colle-la dans WhatsApp','var(--green)');
     else toast('Copie refusée par le navigateur. Réessaie, ou copie le code à la main.','var(--orange)');
   });
 }
@@ -105761,7 +105761,7 @@ function etapeMontee(txt,refKg){
   const t=String(txt||'');
   const kg=paliersMontee(t,refKg);
   if(!kg.length) return t;
-  return t+' — '+kg.map(k=>String(k).replace('.',','))
+  return t+' : '+kg.map(k=>String(k).replace('.',','))
     .join(' · ')+' kg';
 }
 

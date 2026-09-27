@@ -1864,9 +1864,9 @@ function mlProfilResistance(serie){
 }
 /** Les trois classes, dites en français de coach. */
 const ML_PROFIL_LIB=Object.freeze({
-  longue:'la charge pèse le plus en position longue — profil descendant',
-  cloche:'la charge pèse le plus au milieu de l’amplitude — profil en cloche',
-  courte:'la charge pèse le plus en position courte — profil ascendant'});
+  longue:'la charge pèse le plus en position longue : profil descendant',
+  cloche:'la charge pèse le plus au milieu de l’amplitude : profil en cloche',
+  courte:'la charge pèse le plus en position courte : profil ascendant'});
 
 // ══ LOT 11 — LE REPÈRE CORPOREL ═════════════════════════════════════════════
 //
@@ -2360,7 +2360,7 @@ function mlPhrases(ctx){
   } else {
     out.push({cle:'tempo',mesurable:false,tMs:null,
       texte:c.tempo
-        ?'Pas de tempo : la répétition est tronquée par les bornes du segment — ça bougeait '
+        ?'Pas de tempo : la répétition est tronquée par les bornes du segment, ça bougeait '
           +'déjà à la première image, ou encore à la dernière. Élargis les bornes de quelques '
           +'dixièmes de seconde de chaque côté.'
         :'Pas de tempo : la trajectoire n’a pas été analysée sur cette répétition.'});
@@ -2513,7 +2513,7 @@ const ML_DISQUES=Object.freeze([
     c:[['25 kg',450],['20 kg',450],['15 kg',400],['10 kg',325],['5 kg',228],['2,5 kg',190],['1,25 kg',160]]},
   {id:'rogue-hg',m:'Rogue',g:'HG 2.0 Bumper',src:'Rogue : « chaque bumper fait 450 mm, norme IWF »',
     c:[['25 kg',450],['20 kg',450],['15 kg',450],['10 kg',450],['5 kg',450]]},
-  {id:'rogue-cal',m:'Rogue',g:'Acier calibré (kg)',src:'Garage Gym Reviews — Rogue indique « variable »',
+  {id:'rogue-cal',m:'Rogue',g:'Acier calibré (kg)',src:'Garage Gym Reviews : Rogue indique « variable »',
     c:[['25 kg',450],['20 kg',450],['15 kg',400],['10 kg',325]]},
   {id:'rogue-dd',m:'Rogue',g:'Deep Dish, fonte (lb)',src:'Rogue, fiche Deep Dish',
     c:[['100 lb',450],['45 lb',450],['35 lb',360],['25 lb',276],['10 lb',229],['5 lb',190]]},
@@ -2532,7 +2532,7 @@ const ML_DISQUES=Object.freeze([
   {id:'panatta-pl',m:'Panatta',g:'Powerlifting Pro',src:'Panatta : 20 et 25 kg à 450 mm, norme IPF',
     c:[['25 kg',450],['20 kg',450]]},
   {id:'technogym-releve',m:'Technogym',g:'Relevé au mètre ruban',tol:5,
-    src:'Relevé au mètre ruban par Kevin, 22/09/2026 — Technogym ne publie pas ses diamètres',
+    src:'Relevé au mètre ruban par Kevin, 22/09/2026 : Technogym ne publie pas ses diamètres',
     c:[['20 kg',460],['10 kg',320],['5 kg',240],['2,5 kg',200],['1,25 kg',165]]}
 ]);
 // LES MARQUES SANS COTE PUBLIÉE : le diamètre se mesure, et se retient.
@@ -2704,7 +2704,7 @@ function mlNomDefaut(t,c,sens){
     if(s&&(!p||s!==p.sens)) return s;
     if(c==='#ff3b3b') return 'Trajectoire actuelle';
     if(c==='#22c55e') return 'Trajectoire idéale';
-    return s?('Trajectoire — '+s).slice(0,ANNOT_NOM_MAX):'Trajectoire';
+    return s?('Trajectoire : '+s).slice(0,ANNOT_NOM_MAX):'Trajectoire';
   }
   if(t==='angle'||t==='texte') return ML_TYPE_LIB[t];
   return s||ML_TYPE_LIB[t]||'Annotation';
@@ -4505,7 +4505,7 @@ function mlEchMarques(){
  */
 function mlEchGammes(m){
   const l=ML_DISQUES.filter(x=>x.m===m).map(x=>({id:x.id,lib:x.g}));
-  if(ML_DISQUES_A_MESURER.includes(m)) l.push({id:'mesure',lib:l.length?'Autre gamme — je la mesure':'Je mesure mon disque'});
+  if(ML_DISQUES_A_MESURER.includes(m)) l.push({id:'mesure',lib:l.length?'Autre gamme : je la mesure':'Je mesure mon disque'});
   return l;
 }
 /** @param {string} m */
@@ -4640,7 +4640,7 @@ async function _mlxEchDetecter(p){
   if('erreur' in r){
     toast(r.erreur==='dehors'
       ?'Le toucher tombe hors du disque trouvé : touche le centre du disque, sur son moyeu.'
-      :'Aucun bord de disque net autour du toucher. Touche le centre sur une image nette — ou glisse du haut au bas pour le poser à la main.',
+      :'Aucun bord de disque net autour du toucher. Touche le centre sur une image nette, ou glisse du haut au bas pour le poser à la main.',
       'var(--orange)');
     _mlxMajOutils(); _mlDessinerCalque();
     return false;
@@ -5641,7 +5641,7 @@ async function mlModeleCreer(){
   if(!_ml||!currentUser) return false;
   const l=_ml.annot.a.filter(a=>!a.h);
   if(!l.length){ toast('Pose d’abord les tracés du modèle : il reprendra leurs outils, couleurs et noms.','var(--orange)'); return false; }
-  const nom=await rcSaisie('Nom du modèle','',{libelleOk:'Créer',placeholder:'Ex. : Squat — genoux'});
+  const nom=await rcSaisie('Nom du modèle','',{libelleOk:'Créer',placeholder:'Ex. : Squat (genoux)'});
   const n=String(nom==null?'':nom).trim().slice(0,30);
   if(!n||!_ml||!currentUser) return false;
   const perso=Array.isArray(currentUser.mlModelesAnnot)?currentUser.mlModelesAnnot.slice():[];
@@ -6346,7 +6346,7 @@ async function _mlxProlongerTronques(){
   if(!noms.length) return 0;
   const enreg=propre&&_mlxEnregistrerReparation();
   toast((noms.length>1?noms.length+' suivis prolongés':'Suivi « '+noms[0]+' » prolongé')
-    +' jusqu’à la fin de la vidéo — '+(noms.length>1?'ils s’arrêtaient':'il s’arrêtait')+' à 20 s'
+    +' jusqu’à la fin de la vidéo : '+(noms.length>1?'ils s’arrêtaient':'il s’arrêtait')+' à 20 s'
     +(enreg?'. Enregistré ✓':'. Pense à enregistrer.'));
   return noms.length;
 }
@@ -6444,7 +6444,7 @@ async function mlTrajectoireAuto(p,rVid){
     const msg={cors:'L’hébergeur de cette vidéo n’autorise pas la lecture de ses images : le suivi est impossible sur ce fichier. Trace la trajectoire à la main.',
       chargement:'La vidéo n’a pas pu être chargée. Vérifie la connexion, puis réessaie.',
       recherche:'La vidéo ne se laisse pas parcourir image par image sur cet appareil. Trace la trajectoire à la main.',
-      gabarit:'Rien ne se distingue à cet endroit d’une image à l’autre. Touche un détail contrasté — le bout de la barre, un disque, une articulation.',
+      gabarit:'Rien ne se distingue à cet endroit d’une image à l’autre. Touche un détail contrasté : le bout de la barre, un disque, une articulation.',
       arret:'Suivi arrêté.'}[res.code]||'Le suivi a échoué.';
     toast(msg,res.code==='arret'?undefined:'var(--orange)');
     _mlxMajOutils(); _mlDessinerCalque();
@@ -7226,19 +7226,19 @@ function _mlxMajOutils(){
   const cours=_ml.trace&&(_ml.trace.t==='courbe'||_ml.trace.t==='point'||_ml.trace.t==='angle')?_ml.trace:null;
   /** @type {Object<string,string>} */
   const aides={selection:'Touche un tracé pour le choisir ; glisse-le, ou tire un de ses points. Double-clique une étiquette ou la légende pour la déplacer.',
-    ligne:'Glisse sur la vidéo — ou touche le départ, puis l’arrivée.',
-    fleche:'Glisse sur la vidéo — ou touche le départ, puis la pointe.',
+    ligne:'Glisse sur la vidéo, ou touche le départ, puis l’arrivée.',
+    fleche:'Glisse sur la vidéo, ou touche le départ, puis la pointe.',
     libre:_ml.trajAuto
-      ?'Touche le détail à suivre — le bout de la barre, un genou — ou entoure-le en glissant : la vidéo avance et la trajectoire se trace seule.'
-      :'Dessine d’un seul geste — ou touche pour commencer, suis le mouvement à la souris, touche pour finir.',
+      ?'Touche le détail à suivre (le bout de la barre, un genou) ou entoure-le en glissant : la vidéo avance et la trajectoire se trace seule.'
+      :'Dessine d’un seul geste, ou touche pour commencer, suis le mouvement à la souris, touche pour finir.',
     courbe:'Touche la vidéo point par point : la courbe passe par chacun. Entrée pour terminer.',
-    cercle:'Glisse du centre vers le bord — ou touche le centre, puis le bord.',
+    cercle:'Glisse du centre vers le bord, ou touche le centre, puis le bord.',
     echelle:_ml.echAuto
-      ?'Touche le centre d’un disque : RepCore trouve son bord et en tire le diamètre — le grand axe, même vu de biais. Ou glisse du haut au bas pour le poser à la main. Tire un bout pour l’ajuster.'
-      :'Touche le HAUT d’un disque, puis son BAS — ou glisse de l’un à l’autre. La hauteur d’un disque reste son diamètre même vu de biais. Tire un bout pour l’ajuster.',
-    angle:'Touche trois points — par exemple épaule, coude, poignet : l’angle au deuxième s’affiche.',
+      ?'Touche le centre d’un disque : RepCore trouve son bord et en tire le diamètre (le grand axe, même vu de biais). Ou glisse du haut au bas pour le poser à la main. Tire un bout pour l’ajuster.'
+      :'Touche le HAUT d’un disque, puis son BAS, ou glisse de l’un à l’autre. La hauteur d’un disque reste son diamètre même vu de biais. Tire un bout pour l’ajuster.',
+    angle:'Touche trois points, par exemple épaule, coude, poignet : l’angle au deuxième s’affiche.',
     point:'Touche les repères anatomiques un par un ; ils se relient. Entrée pour terminer.',
-    texte:'Touche la vidéo là où le texte doit apparaître.',zone:'Glisse pour surligner une zone — ou touche un coin, puis l’autre.',
+    texte:'Touche la vidéo là où le texte doit apparaître.',zone:'Glisse pour surligner une zone, ou touche un coin, puis l’autre.',
     gomme:'Touche un tracé pour l’effacer.'};
   let h='<div class="mlx-outils">'+ML_OUTILS.map(x=>'<button type="button" class="mlx-outil" data-outil="'+x.o+'" '
     +'aria-pressed="'+(x.o===o)+'" onclick="mlOutil(\''+x.o+'\')" title="'+escapeHtml(x.lib+' ('+x.r.toUpperCase()+')')+'">'
@@ -7248,7 +7248,7 @@ function _mlxMajOutils(){
   if(o==='echelle') h+=_mlxHtmlEchelle();
   else h+='<div class="mlx-ligne"><span class="mlx-lab-s">Couleur</span><div class="mlx-couleurs">'
     +ML_PALETTE.map(p=>'<button type="button" class="mlx-pastille" style="--c:'+p.c+'" aria-pressed="'+(p.c===_ml?.couleur)+'" '
-      +'title="'+escapeHtml(p.nom+(sens[p.c]?' — '+sens[p.c]:''))+'" aria-label="'+escapeHtml(p.nom)+'" onclick="mlCouleur(\''+p.c+'\')"></button>').join('')
+      +'title="'+escapeHtml(p.nom+(sens[p.c]?' : '+sens[p.c]:''))+'" aria-label="'+escapeHtml(p.nom)+'" onclick="mlCouleur(\''+p.c+'\')"></button>').join('')
     +'<label class="mlx-perso" title="Couleur personnalisée"><input type="color" value="'+escapeHtml(_ml.couleur)+'" '
       +'aria-label="Couleur personnalisée" onchange="mlCouleur(this.value)"></label></div></div>'
     +'<div class="mlx-ligne"><span class="mlx-lab-s">Épaisseur</span><input type="range" min="1" max="12" step="1" value="'+_ml.epaisseur+'" '
@@ -7348,8 +7348,8 @@ function _mlxHtmlEchelle(){
   // CE QUI A ÉTÉ TROUVÉ, pour que le coach le vérifie d'un coup d'œil : le
   // liseré bleu sur la vidéo, et la part du tour où le bord a été vu.
   if(trouve) h+='<p class="mlx-note">Bord trouvé sur '+Math.round(trouve.couverture*100)+' % du tour, à '
-    +mlNombre(trouve.residu,1)+' px près. Vérifie le liseré bleu sur le disque ; s’il en suit un autre — un disque plus petit '
-    +'devant —, touche le centre de celui que tu veux, ou tire un bout de l’échelle.</p>';
+    +mlNombre(trouve.residu,1)+' px près. Vérifie le liseré bleu sur le disque ; s’il en suit un autre (un disque plus petit '
+    +'devant), touche le centre de celui que tu veux, ou tire un bout de l’échelle.</p>';
   const gammes=ui.m?mlEchGammes(ui.m):[];
   h+=sel('mlEchMarque','Marque',mlEchMarques().map(m=>[m,m]),ui.m);
   if(gammes.length>1) h+=sel('mlEchGamme','Gamme',gammes.map(g=>[g.id,g.lib]),ui.g);
@@ -7413,7 +7413,7 @@ function _mlxMajListe(){
       +'<button type="button" class="mlx-an-act" onclick="mlAnnotChoisir(\''+escapeHtml(a.id)+'\',true)" aria-label="Modifier '+escapeHtml(a.n)+'">'+S('crayon',16)+'</button>'
       +'<button type="button" class="mlx-an-act" onclick="mlAnnotSupprimer(\''+escapeHtml(a.id)+'\')" aria-label="Supprimer '+escapeHtml(a.n)+'">'+S('corbeille',16)+'</button>'
     +'</div>').join('')
-    :'<p class="mlx-vide">Aucun tracé. Choisis un outil et dessine sur la vidéo — ou arme un modèle à gauche.</p>';
+    :'<p class="mlx-vide">Aucun tracé. Choisis un outil et dessine sur la vidéo, ou arme un modèle à gauche.</p>';
   // L'ORDRE AU GLISSER : le tracé lâché prend la place de celui qu'il survole.
   z.querySelectorAll('.mlx-an').forEach(x=>{
     const el=/** @type {HTMLElement} */(x);
@@ -7507,7 +7507,7 @@ function _mlxMajEditeur(){
       +'<button type="button" id="mlx-cle-suppr" class="mlx-b" onclick="mlCleSupprimer()"'+(cle>=0?'':' disabled')+'>Retirer la clé</button></div>'
       +'<p class="mlx-note">Avance image par image (→) et replace les points : chaque déplacement pose une image clé, et le mouvement '
         +'se remplit entre elles.</p>'
-      :'<p class="mlx-note">Allume-le pour que le tracé suive un repère — genou, barre, coude — image par image.</p>')+'</div>'
+      :'<p class="mlx-note">Allume-le pour que le tracé suive un repère (genou, barre, coude) image par image.</p>')+'</div>'
     +'<div class="mlx-ed-pied"><button type="button" class="mlx-b mlx-suppr" onclick="mlAnnotSupprimer(\''+id+'\')">'+S('corbeille',14)+' Supprimer</button></div>'
   +'</div>';
   z.innerHTML=h;
@@ -7555,7 +7555,7 @@ function _mlxMajSens(){
   if(!z||!_ml) return;
   const sens=_mlxSens();
   z.innerHTML='<p class="mlx-note">Le sens d’une couleur devient le nom des tracés que tu poses avec elle. Une trajectoire '
-      +'rouge s’appelle « Trajectoire actuelle », une verte « Trajectoire idéale » — sauf si tu réécris leur sens. Ce réglage suit ton compte.</p>'
+      +'rouge s’appelle « Trajectoire actuelle », une verte « Trajectoire idéale », sauf si tu réécris leur sens. Ce réglage suit ton compte.</p>'
     +ML_PALETTE.map(p=>'<label class="mlx-sens-l"><i class="mlx-an-pt" style="--c:'+p.c+'"></i><span>'+p.nom+'</span>'
       +'<input class="mlx-in" type="text" maxlength="'+ANNOT_NOM_MAX+'" value="'+escapeHtml(sens[p.c]||'')+'" placeholder="Sans nom par défaut" '
       +'onchange="mlCouleurSens(\''+p.c+'\',this.value)"></label>').join('');
@@ -8021,7 +8021,7 @@ function _mlMajEnregistrer(){
   const m=_mlModifie();
   b.disabled=!m;
   const pt=b.querySelector('.mlx-enreg-pt'); if(pt) pt.textContent=m?'•':'';
-  b.setAttribute('aria-label',m?'Enregistrer la correction — des modifications attendent':'Enregistrer la correction : tout est enregistré');
+  b.setAttribute('aria-label',m?'Enregistrer la correction : des modifications attendent':'Enregistrer la correction : tout est enregistré');
 }
 
 // ══ LES MINIATURES ════════════════════════════════════════════════════════════
@@ -8961,8 +8961,8 @@ function _mlMajReperes(){
           +'<b>'+escapeHtml(p.nom)+'</b>'+_mlRepEtat(a,i)
           +'<button type="button" class="ml-mini" onclick="mlRepSupprimer('+i+')" aria-label="Retirer '
           +escapeHtml(p.nom)+'">✕</button></li>').join('')+'</ul>'
-      :'<p class="ml-traj-aide">Aucun point suivi. Donne un nom à un endroit de l’image — « trajectoire », '
-        +'« genou », « coude » — et son déplacement se dessinera sous ce nom.</p>')
+      :'<p class="ml-traj-aide">Aucun point suivi. Donne un nom à un endroit de l’image (« trajectoire », '
+        +'« genou », « coude ») et son déplacement se dessinera sous ce nom.</p>')
       +'<div class="ml-traj-cmd"><button type="button" class="btn btn-outline btn-sm" onclick="mlRepAjouter()"'
         +(n>=SEG_REP_MAX?' disabled':bloque)+'>Ajouter un point</button></div>'
       // ON DIT CE QUI TIENT ET CE QUI NE TIENT PAS. Le suivi reconnaît un motif
@@ -8970,7 +8970,7 @@ function _mlMajReperes(){
       // coach qui l'apprend après coup accuse l'outil d'être capricieux.
       +'<p class="ml-traj-aide">'+(n>=SEG_REP_MAX?'Six points au plus par répétition. ':'')
         +'Un repère tient sur ce qui CONTRASTE : un disque, un autocollant, une chaussure claire sur un '
-        +'sol sombre. Sur un aplat — une peau nue, un vêtement uni — il décroche, et le tracé s’arrête '
+        +'sol sombre. Sur un aplat (une peau nue, un vêtement uni) il décroche, et le tracé s’arrête '
         +'là où il a décroché plutôt que d’inventer la suite.</p>';
   }
   z.innerHTML=h+'</div>';
@@ -9177,7 +9177,7 @@ function _mlMajTrajectoire(){
     const replacer=_ml.mode==='replacer';
     h+='</div><p class="ml-traj-aide">'+(replacer
         ?'Touche la vraie position du disque sur cette image ('+mlTempsTexte(g?g.tMs:0)+'), puis relance.'
-        :'Touche le centre du disque'+(g&&Math.abs(g.tMs-a.debutMs)>20?' — l’analyse part de cette image':'')
+        :'Touche le centre du disque'+(g&&Math.abs(g.tMs-a.debutMs)>20?' : l’analyse part de cette image':'')
           +'. Ajuste sa taille pour que le cercle suive son bord.')+'</p>'
       +(replacer?'':'<label class="ml-champ"><span>Taille du disque</span><input type="range" id="ml-rayon" min="4" max="'
           +Math.round((_mlVideo()?.videoHeight||720)/4)+'" step="0.5" value="'+(g?g.r:20)+'" oninput="mlGraineTaille(this.value)"></label>'
@@ -9346,7 +9346,7 @@ function _mlMajLecture(){
   if(L&&L.profil&&L.profil.couverture>=ML_COUVERTURE_MIN){
     h+='<canvas id="ml-profil" class="ml-courbe" aria-label="Profil de résistance en fonction de l’amplitude"></canvas>'
       +'<p class="ml-traj-aide">Bras de levier rapporté à son maximum, en fonction de l’amplitude '
-      +'d’articulation — et non du temps : c’est ce qui rend deux machines superposables. '
+      +'d’articulation, et non du temps : c’est ce qui rend deux machines superposables. '
       +'Couverture '+Math.round(L.profil.couverture*100)+' %.</p>';
   }
   if(L&&L.repere&&L.repere.n>=3){
@@ -9360,7 +9360,7 @@ function _mlMajLecture(){
     h+='<p class="ml-traj-aide">Point dur : la vitesse creuse de '+Math.round(L.zone.creux*100)
       +' % après le pic, dans le concentrique.</p>';
   } else if(L&&L.r&&!L.zone){
-    h+='<p class="ml-traj-aide">Pas de point dur marqué sur cette répétition — c’est une information, '
+    h+='<p class="ml-traj-aide">Pas de point dur marqué sur cette répétition : c’est une information, '
       +'pas un échec.</p>';
   }
   // LE TABLEAU DE LA SÉRIE. Les répétitions non analysées y sont en ligne
@@ -10645,7 +10645,7 @@ function _mlMajPrise(){
       ?'Corrigé à la main : c’est cette valeur qui sert.'
       :auto
         ?'Estimé sur le bassin de '+auto.n+' images (±'+Math.round(auto.ecartType)+'°).'
-        :'Non estimé — il vaut zéro. De profil, une hanche cache l’autre et le bassin ne dit plus rien : '
+        :'Non estimé : il vaut zéro. De profil, une hanche cache l’autre et le bassin ne dit plus rien : '
           +'corrige au doigt si le téléphone était penché.')+'</p>'
     +'<label class="ml-champ"><span>Redressement</span>'
       +'<input type="range" id="ml-aplomb" min="'+(-ML_APLOMB_MAX)+'" max="'+ML_APLOMB_MAX+'" step="1" '
@@ -10665,7 +10665,7 @@ function _mlMajPrise(){
       :_mlEchelleEtalon()?'Sans étalon ici, l’échelle vient de l’outil Échelle (onglet Tracé) : '
         +mlNombre(100*_mlMpp(),2)+' cm par pixel.'
       :'Sans étalon, l’échelle vient du disque suivi et de son diamètre. Sur machine, pose deux points '
-        +'sur une longueur que tu connais — ou l’outil Échelle, dans l’onglet Tracé.')+'</p>'
+        +'sur une longueur que tu connais, ou l’outil Échelle, dans l’onglet Tracé.')+'</p>'
     +'<div class="ml-champ"><span>Étalon</span><span class="ml-choix">'
       +ML_ETALONS.map(x=>'<button type="button" class="ml-b" aria-pressed="'+(e.type===x.cle)+'" '
         +'onclick="mlEtalonType(\''+x.cle+'\')">'+escapeHtml(x.nom)+'</button>').join('')+'</span></div>'
@@ -11176,7 +11176,7 @@ function _mlMajCorrection(){
   } else {
     const st={brouillon:'Prête à envoyer',envoi:'Envoi en cours…',envoye:'Envoyée ✓',erreur:'Échec de l’envoi'}[c.statut];
     h+='<p class="ml-traj-aide"><b class="ml-statut ml-statut-'+c.statut+'">'+st+'</b> · '+_mlDureeCourte(c.motion.dureeMs)
-      +(c.blob?'':' · sans voix')+(c.erreur?' — '+escapeHtml(c.erreur):'')+'</p>'
+      +(c.blob?'':' · sans voix')+(c.erreur?' : '+escapeHtml(c.erreur):'')+'</p>'
       +'<div id="ml-corr-lecteur" class="ml-corr-lecteur"></div>'
       +'<div class="ml-traj-cmd">'
       +(c.statut==='envoye'
@@ -12418,7 +12418,7 @@ function mlMorphoPrise(p,w,h){
     (p[24]&&p[28])?_mlmDist(p[24],p[28],w,h):0):0;
   if(span<ML_MORPHO_SPAN_MIN)
     raisons.push('la photo est trop petite pour mesurer ('+Math.round(span)+' pixels de la hanche '
-      +'au pied, il en faut '+ML_MORPHO_SPAN_MIN+') — c’est la version haute définition qu’il faut, '
+      +'au pied, il en faut '+ML_MORPHO_SPAN_MIN+') : c’est la version haute définition qu’il faut, '
       +'sur l’appareil qui a pris la photo');
   if(p[23]&&p[24]&&span>0){
     const large=Math.abs(p[23].x-p[24].x)*w/span;

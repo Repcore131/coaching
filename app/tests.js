@@ -17023,7 +17023,7 @@ async function testExercices(){
             // c'est la consigne telle que le coach l'a écrite.
             const t='Montées en charge 40 / 60 / 80 %';
             if(etapeMontee(t,null)!==t) return _echec('le texte a changé : « '+etapeMontee(t,null)+' »');
-            if(etapeMontee(t,100)!==t+' — 40 · 60 · 80 kg')
+            if(etapeMontee(t,100)!==t+' : 40 · 60 · 80 kg')
               return _echec('rendu : « '+etapeMontee(t,100)+' »');
             // LES POURCENTAGES SURVIVENT À L'AJOUT : on augmente, on ne
             // remplace pas.
@@ -36613,7 +36613,7 @@ async function testExercices(){
                 cld_envois:12,cld_ko:450000}},'2026-09');
               _capaciteGlobale.mois='2026-09';
               const plein=_htmlCapaciteGlobale();
-              for(const mot of ['Base — entrant','Base — sortant','Hébergeur — envois','Hébergeur — octets reçus'])
+              for(const mot of ['Base : entrant','Base : sortant','Hébergeur : envois','Hébergeur : octets reçus'])
                 if(plein.indexOf(mot)<0) return _echec('la carte n’affiche pas « '+mot+' »');
               if(plein.indexOf('%')<0) return _echec('aucun pourcentage');
               // LE PLAFOND DE L'HÉBERGEUR EST UNE ESTIMATION, et la carte le DIT :
@@ -45155,7 +45155,7 @@ async function testExercices(){
       for(const k of ['epaules','bassin','pieds']){
         const f=F(k);
         if(f.niveau!=null||f.etat!=='illisible') return _echec(k+' encore lu : '+f.niveau);
-        if(!f.chiffres.every(c=>/non lisible — corps tourné d’environ 2[89]°/.test(c.val))) return _echec(k+' : '+f.chiffres.map(c=>c.val).join(' | '));
+        if(!f.chiffres.every(c=>/non lisible : corps tourné d’environ 2[89]°/.test(c.val))) return _echec(k+' : '+f.chiffres.map(c=>c.val).join(' | '));
         const t=anatTexte(f,res);
         if(!/tourné/.test(t.court)||!/de face à l’objectif/.test(t.verifier)) return _echec(k+' : pas de consigne de reprise');
       }
@@ -49835,7 +49835,7 @@ async function testExercices(){
           return _echec('intitulé : « '+(det.querySelector('summary')||{}).textContent+' »');
         const contenu=det.querySelector('div');
         const nom=b.source==='katch'?'Katch-McArdle':'Mifflin-St Jeor';
-        const attendu=nom+' · dépense estimée '+b.depense+' kcal — '+b.hypotheses.join(' · ')+'.';
+        const attendu=nom+' · dépense estimée '+b.depense+' kcal : '+b.hypotheses.join(' · ')+'.';
         const cl=contenu.cloneNode(true); cl.querySelectorAll('.rc-i').forEach(x=>x.remove());
         if(cl.textContent!==attendu) return _echec('le texte a changé : « '+cl.textContent+' »');
         const i=_r10Infos(contenu);
@@ -62679,7 +62679,7 @@ async function testExercices(){
             ?true:_echec('phrase absente à +82 %');})());
         ok('La phrase de signal porte le rappel « repère de terrain »',(()=>{
           const h=_htmlChargeAxiale(_hist(20,11,11,11),0,G,{});
-          return /Repère de terrain, pas une mesure — à regarder avec ton coach\./.test(h)
+          return /Repère de terrain, pas une mesure : à regarder avec ton coach\./.test(h)
             ?true:_echec('rappel absent');})());
         ok('Aucune couleur d\'alerte sur le bloc',(()=>{
           const h=_htmlChargeAxiale(_hist(20,11,11,11),0,G,{});

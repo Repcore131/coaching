@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1592';
+window.RC_BUILD='1593';
 // IL DOIT VALOIR LE NUMERO DE CACHE DE sw.js, ET RIEN D'AUTRE. Il annoncait
 // 1125 quand le service worker livre etait en 1166 : le repere mentait de
 // quarante et une versions, et il est precisement ce qu'on regarde pour
@@ -171,16 +171,16 @@ try{
 <meta name="description" content="Ton coach te suit à chaque séance : charges ajustées à ta phase de cycle, ta fiche papier importée par photo, et la base Ciqual consultable hors ligne.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://repcore131.github.io/coaching/">
-<meta property="og:title" content="RepCore — Ton coach te suit à chaque séance">
+<meta property="og:title" content="RepCore : Ton coach te suit à chaque séance">
 <meta property="og:description" content="Ton coach te suit à chaque séance : charges ajustées à ta phase de cycle, ta fiche papier importée par photo, et la base Ciqual consultable hors ligne.">
 <meta property="og:image" content="https://repcore131.github.io/coaching/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="RepCore — Ton coach te suit à chaque séance">
+<meta property="og:image:alt" content="RepCore : Ton coach te suit à chaque séance">
 <meta property="og:locale" content="fr_FR">
 <meta property="og:site_name" content="RepCore">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="RepCore — Ton coach te suit à chaque séance">
+<meta name="twitter:title" content="RepCore : Ton coach te suit à chaque séance">
 <meta name="twitter:description" content="Ton coach te suit à chaque séance : charges ajustées à ta phase de cycle, ta fiche papier importée par photo, et la base Ciqual consultable hors ligne.">
 <meta name="twitter:image" content="https://repcore131.github.io/coaching/og-image.png">
 <link rel="manifest" href="manifest.json">
@@ -422,7 +422,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1592.css">
+<link rel="stylesheet" href="./rc-style.1593.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -3372,7 +3372,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- REPRISE SÉANCE EN COURS -->
       <div id="clh-resume-workout" class="gv-carte" style="display:none"
            onclick="woResumeAndGo()" role="button" tabindex="0"
-           aria-label="Séance gelée — reprendre"
+           aria-label="Séance gelée : reprendre"
            onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target===this){event.preventDefault();this.click()}">
         <svg class="gv-decor" viewBox="0 0 480 190" preserveAspectRatio="none" aria-hidden="true"><defs><radialGradient id="gvHalo" cx=".72" cy=".38" r=".62"><stop offset="0" stop-color="#2d6ea8" stop-opacity=".38"/><stop offset="1" stop-color="#0a1524" stop-opacity="0"/></radialGradient><filter id="gvPoudre" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="41" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  1.4 0 0 0 -1.14"/></filter></defs><rect width="480" height="190" fill="url(#gvHalo)"/><path d="M0,116 L0.0,82.5 L80.0,89.9 L160.0,93.2 L240.0,93.6 L320.0,89.7 L400.0,85.2 L480.0,95.1 L480,116 Z" fill="#7fb3e8" opacity="0.03"/><path d="M0,124 L0.0,103.9 L60.0,109.6 L120.0,104.0 L180.0,106.0 L240.0,106.2 L300.0,103.9 L360.0,112.0 L420.0,105.2 L480.0,110.7 L480,124 Z" fill="#5f93c8" opacity="0.03"/><rect width="480" height="190" filter="url(#gvPoudre)" opacity=".38"/></svg>
         <svg class="gv-hex" viewBox="0 0 44 48" fill="none" aria-hidden="true"><path d="M22 2 40.6 12.5v21L22 44 3.4 33.5v-21Z" stroke="#6ea8dd" stroke-opacity=".34" stroke-width="1.4"/><g transform="translate(22,23) scale(.78) translate(-12,-12)" stroke="#8cc0ee" stroke-opacity=".62" stroke-width="1.9" stroke-linecap="round"><line x1="6" y1="12" x2="18" y2="12"/><line x1="6" y1="8" x2="6" y2="16"/><line x1="18" y1="8" x2="18" y2="16"/><line x1="3" y1="9.5" x2="7" y2="9.5"/><line x1="3" y1="14.5" x2="7" y2="14.5"/><line x1="17" y1="9.5" x2="21" y2="9.5"/><line x1="17" y1="14.5" x2="21" y2="14.5"/></g></svg>
@@ -3497,7 +3497,7 @@ const COACH_PHOTO='icons/coach.jpg';
            diète : voir renderNutriAnneaux. -->
       <div class="card card-nut nut-hud nut-lien" id="clh-nut-card"
            onclick="_nutRaccourci(event)" role="button" tabindex="0"
-           aria-label="Nutrition — ouvrir l'onglet"
+           aria-label="Nutrition : ouvrir l'onglet"
            onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target===this){event.preventDefault();this.click()}">
         <!-- LE CIEL D'ECLAIRS. Il est POSE ICI, en dur, et non produit par le
              rendu : il ne depend d'aucune donnee, et le refabriquer a chaque
@@ -5671,5 +5671,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1592.js"></script>
+<script src="./rc-core.1593.js"></script>
 </body></html>
