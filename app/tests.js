@@ -33656,6 +33656,30 @@ async function testExercices(){
           return _echec('le ±20 de l’athlète est encore bloqué par le verrou');
         return true;})());
 
+      okA('1626 — UN CODE REFUSÉ FAUTE DE SESSION LE DIT, ET NE PARLE PAS DE CONNEXION',async()=>{
+        const sU=currentUser, sT=CLOUD._getToken, sF=window.fetch, sE=CLOUD._jetonEtranger;
+        try{
+          currentUser={id:'u_c',email:'coach@t.fr',role:'coach',fname:'K',lname:'G'};
+          let appels=0; window.fetch=async()=>{ appels++; return {ok:false,status:401,json:async()=>({error:'Permission denied'})}; };
+          // 1. Pas de jeton : rien n'est envoyé, le message nomme la session.
+          CLOUD._getToken=async()=>null; CLOUD._jetonEtranger='';
+          let m=''; try{ await _genAccessCode('Guillaume',3); }catch(e){ m=e.message; }
+          if(appels) return _echec('une écriture est partie sans jeton');
+          if(!/session a expiré/.test(m)||/connexion/.test(m)) return _echec('sans jeton : '+m);
+          // 2. Le jeton d'un autre compte (bascule ⇄) : le message le nomme.
+          CLOUD._jetonEtranger='autre@t.fr';
+          m=''; try{ await _genAccessCode('Guillaume',3); }catch(e){ m=e.message; }
+          if(m.indexOf('autre@t.fr')<0||m.indexOf('coach@t.fr')<0) return _echec('mauvais compte : '+m);
+          // 3. Le serveur refuse (401) : c'est la session, pas le réseau.
+          CLOUD._getToken=async()=>'tok'; CLOUD._jetonEtranger='';
+          m=''; try{ await _genAccessCode('Guillaume',3); }catch(e){ m=e.message; }
+          if(appels!==1||!/session/.test(m)||/vérifie ta connexion/.test(m)) return _echec('refus 401 : '+m);
+          // 4. Un prénom déjà utilisé n'empêche rien.
+          window.fetch=async()=>({ok:true,status:200,json:async()=>({})});
+          const a=await _genAccessCode('Guillaume',3), b=await _genAccessCode('Guillaume',3);
+          return (a.token&&b.token&&a.token!==b.token)?true:_echec('deux Guillaume, deux codes : '+a.token+' / '+b.token);
+        } finally { currentUser=sU; CLOUD._getToken=sT; window.fetch=sF; CLOUD._jetonEtranger=sE; }});
+
       ok('1623 — LE ±20 PAR AUTEUR : QUI A BAISSÉ, QUI A AUGMENTÉ ; LES ANCIENS CLICS NE COMPTENT PLUS',(()=>{
         const _sv=window.saveUser; window.saveUser=()=>true;
         try{

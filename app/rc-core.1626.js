@@ -111089,7 +111089,13 @@ async function _genAccessCode(studentName,months,type){
   if(typeof navigator!=='undefined'&&navigator.onLine===false)
     throw new Error('Tu es hors ligne : le code doit être enregistré avant '
       +'d\'être envoyé. Reconnecte-toi et réessaie : rien n\'a été créé.');
-  const url=_rcCodesUrl(code)+(fbTok?'?auth='+fbTok:'');
+  // ⚠ SANS JETON, LE SERVEUR REFUSE (27/09/2026). Constaté chez Kévin : un
+  //   code impossible à créer, et pour seul retour « Erreur sauvegarde du code
+  //   (401) : vérifie ta connexion » — alors que la connexion allait très
+  //   bien. C'est la SESSION qui manquait (jeton d'un autre compte après une
+  //   bascule ⇄, ou session expirée) : on le dit, avec le geste qui répare.
+  if(!fbTok) throw new Error(_msgSessionCode());
+  const url=_rcCodesUrl(code)+'?auth='+fbTok;
   let r;
   try{
     r=await fetch(url,{method:'PUT',headers:{'Content-Type':'application/json'},
@@ -111103,8 +111109,28 @@ async function _genAccessCode(studentName,months,type){
     throw new Error('Le code n\'a pas pu être enregistré : vérifie ta connexion. '
       +'Rien n\'a été créé, tu peux réessayer.');
   }
-  if(!r.ok) throw new Error('Erreur sauvegarde du code ('+r.status+') : vérifie ta connexion.');
+  if(!r.ok){
+    // LE MOTIF DU SERVEUR, EN CLAIR. Un 401 ou un 403, c'est un refus des
+    // règles : la session, pas le réseau.
+    let motif='';
+    try{ const j=await r.json(); motif=String((j&&j.error)||''); }catch(e){}
+    if(r.status===401||r.status===403) throw new Error(_msgSessionCode());
+    throw new Error('Le serveur n’a pas enregistré le code ('+r.status+(motif?' : '+motif:'')+'). '
+      +'Rien n’a été créé, tu peux réessayer.');
+  }
   return {token:code,payload};
+}
+// Le message quand le serveur refuse faute de session valide : il nomme le
+// compte en cause quand c'en est un autre (bascule ⇄), sinon il demande de se
+// reconnecter. Rien n'a été créé dans les deux cas.
+function _msgSessionCode(){
+  const affiche=(currentUser&&currentUser.email)||'';
+  const autre=(CLOUD&&CLOUD._jetonEtranger)||'';
+  return autre
+    ?('Code non créé : la session ouverte est celle de « '+autre+' », pas de « '+affiche
+      +' ». Déconnecte-toi (Profil) puis reconnecte-toi avec '+affiche+'.')
+    :('Code non créé : ta session a expiré. Déconnecte-toi (Profil) puis reconnecte-toi, '
+      +'et génère le code à nouveau.');
 }
 // ── Invitation coach ────────────────────────────────────────────────────────
 // L'inscription coach était libre : n'importe qui pouvait se déclarer coach et
