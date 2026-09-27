@@ -42,8 +42,8 @@ await test('refusés : autre projet, expiré, signature falsifiée, clé inconnu
 });
 
 // La suppression : une base, un faux Cloudinary qui vérifie la signature.
-function monde(users) {
-  const F = fausseBase({ users });
+function monde(users, extra) {
+  const F = fausseBase(Object.assign({ users }, extra || {}));
   const vus = [];
   const fetchImpl = async (url, init) => {
     if (String(url).startsWith('https://api.cloudinary.com/')) {
@@ -55,33 +55,77 @@ function monde(users) {
     return F.fetchImpl(url, init);
   };
   const db = creerBase({ url: 'https://b.t', auth: 's', fetchImpl });
-  return { db, vus, ctx: { db, env: { CLOUDINARY_API_KEY: 'KEY', CLOUDINARY_API_SECRET: 'SECRET\n' }, fetchImpl, projet: PROJET, cles: CLES } };
+  return { F, db, vus, ctx: { db, env: { CLOUDINARY_API_KEY: 'KEY', CLOUDINARY_API_SECRET: 'SECRET\n' }, fetchImpl, projet: PROJET, cles: CLES } };
 }
-const USERS = { 'lea@t,fr': { id: 'u_lea', role: 'athlete', coachId: 'u_kev' }, 'kev@t,fr': { id: 'u_kev', role: 'coach' },
-  'autre@t,fr': { id: 'u_autre', role: 'coach' } };
+// Léa est l'athlète de Kev : elle le désigne, et il l'a inscrite dans sa liste.
+const USERS = { 'lea@t,fr': { id: 'u_lea', role: 'athlete', coachId: 'u_kev', coachEmailKey: 'kev@t,fr' },
+  'kev@t,fr': { id: 'u_kev', role: 'coach' }, 'autre@t,fr': { id: 'u_autre', role: 'coach' } };
+const INDEX = { medias_proprio: { u_lea: 'lea@t,fr', u_kev: 'kev@t,fr', u_autre: 'autre@t,fr' },
+  coachs: { 'kev@t,fr': { clients: { 'lea@t,fr': true } } } };
+const detruire = (w, email, publicId, extra) =>
+  cloudinaryDestroy({ auth: { email }, data: Object.assign({ publicId, resourceType: 'image' }, extra) }, w.ctx);
+const refus = (statut) => (e) => e.statut === statut;
 
-await test('son propre média : détruit, signature Cloudinary exacte (secret nettoyé)', async () => {
-  const w = monde(USERS);
+await test('propriétaire : détruit, signature Cloudinary exacte (secret nettoyé)', async () => {
+  const w = monde(USERS, INDEX);
   const r = await cloudinaryDestroy({ auth: { email: 'lea@t.fr' }, data: { publicId: 'repcore/u_lea/v1', resourceType: 'video' } }, w.ctx);
   assert.equal(r.result, 'ok');
   assert.equal(w.vus.length, 1);
   assert.ok(w.vus[0].signatureOk, 'signature SHA-1 des paramètres triés + secret');
   assert.match(w.vus[0].url, /\/dntu57ml\/video\/destroy$/);
+  // Un ancien envoi rangé sous l'adresse appartient à l'adresse.
+  assert.equal((await detruire(w, 'lea@t.fr', 'repcore/lea@t.fr/p0')).result, 'ok');
 });
-await test('le coach désigné détruit le média de son athlète ; un autre coach, non', async () => {
+await test('coach réel (désigné ET inscrit dans sa liste) : détruit', async () => {
+  const w = monde(USERS, INDEX);
+  assert.equal((await detruire(w, 'kev@t.fr', 'repcore/u_lea/p1')).result, 'ok');
+  assert.equal(w.vus.length, 1);
+});
+await test('id usurpé : 403', async () => {
+  // 1. L'appelant nomme le média d'un autre.
+  let w = monde(USERS, INDEX);
+  await assert.rejects(() => detruire(w, 'autre@t.fr', 'repcore/u_lea/p1'), refus(403));
+  // 2. Le champ « proprietaire » de l'appel n'est plus cru.
+  await assert.rejects(() => detruire(w, 'autre@t.fr', 'repcore/u_lea/p1', { proprietaire: 'autre@t.fr' }), refus(403));
+  // 3. Un compte neuf recopie l'id de Léa dans son dossier et réclame l'index avant elle.
+  w = monde(Object.assign({}, USERS, { 'pirate@t,fr': { id: 'u_lea', role: 'athlete' } }),
+    Object.assign({}, INDEX, { medias_proprio: { u_lea: 'pirate@t,fr' } }));
+  await assert.rejects(() => detruire(w, 'pirate@t.fr', 'repcore/u_lea/p1'), refus(403));
+  // 4. L'index désigne un dossier dont l'id n'est pas celui-là.
+  w = monde(USERS, Object.assign({}, INDEX, { medias_proprio: { u_lea: 'autre@t,fr' } }));
+  await assert.rejects(() => detruire(w, 'autre@t.fr', 'repcore/u_lea/p1'), refus(403));
+  // 5. L'adresse d'un autre en guise de dossier.
+  await assert.rejects(() => detruire(w, 'autre@t.fr', 'repcore/lea@t.fr/p1'), refus(403));
+  assert.equal(w.vus.length, 0, 'aucune destruction pour les refus');
+});
+await test('coach usurpé : 403', async () => {
+  // 1. L'athlète désigne un coach qui ne l'a jamais inscrite (champ écrit par elle seule).
+  let w = monde(Object.assign({}, USERS, { 'lea@t,fr': Object.assign({}, USERS['lea@t,fr'], { coachEmailKey: 'autre@t,fr' }) }), INDEX);
+  await assert.rejects(() => detruire(w, 'autre@t.fr', 'repcore/u_lea/p1'), refus(403));
+  // 2. Un coach s'inscrit Léa dans sa liste, alors qu'elle ne le désigne pas.
+  w = monde(USERS, Object.assign({}, INDEX, { coachs: { 'kev@t,fr': { clients: { 'lea@t,fr': true } }, 'autre@t,fr': { clients: { 'lea@t,fr': true } } } }));
+  await assert.rejects(() => detruire(w, 'autre@t.fr', 'repcore/u_lea/p1'), refus(403));
+  // 3. Le coach d'avant : Léa ne le désigne plus, même s'il l'a gardée dans sa liste.
+  w = monde(Object.assign({}, USERS, { 'lea@t,fr': Object.assign({}, USERS['lea@t,fr'], { coachEmailKey: null }) }), INDEX);
+  await assert.rejects(() => detruire(w, 'kev@t.fr', 'repcore/u_lea/p1'), refus(403));
+  assert.equal(w.vus.length, 0);
+});
+await test('index absent (compte d’avant l’index) : 409, la file de l’app attend', async () => {
   const w = monde(USERS);
-  const r = await cloudinaryDestroy({ auth: { email: 'kev@t.fr' }, data: { publicId: 'repcore/u_lea/p1', resourceType: 'image', proprietaire: 'lea@t.fr' } }, w.ctx);
-  assert.equal(r.result, 'ok');
-  await assert.rejects(() => cloudinaryDestroy({ auth: { email: 'autre@t.fr' }, data: { publicId: 'repcore/u_lea/p1', resourceType: 'image', proprietaire: 'lea@t.fr' } }, w.ctx),
-    /pas dans ta liste/);
-  await assert.rejects(() => cloudinaryDestroy({ auth: { email: 'autre@t.fr' }, data: { publicId: 'repcore/u_lea/p1', resourceType: 'image' } }, w.ctx),
-    /pas le tien/);
-  assert.equal(w.vus.length, 1, 'aucune destruction pour les refus');
+  await assert.rejects(() => detruire(w, 'lea@t.fr', 'repcore/u_lea/p1'), refus(409));
+});
+await test('le compte Cloudinary vient du worker, jamais de l’appel', async () => {
+  const w = monde(USERS, INDEX);
+  await detruire(w, 'lea@t.fr', 'repcore/u_lea/p1', { cloudName: 'pirate' });
+  assert.match(w.vus[0].url, /\/dntu57ml\/image\/destroy$/);
+  w.ctx.env.CLOUDINARY_CLOUD_NAME = 'moncompte';
+  await detruire(w, 'lea@t.fr', 'repcore/u_lea/p2', { cloudName: 'pirate' });
+  assert.match(w.vus[1].url, /\/moncompte\/image\/destroy$/);
 });
 await test('identifiants refusés : hors repcore/, remontée de chemin, type inconnu', async () => {
   const w = monde(USERS);
-  for (const [pid, t] of [['autre/u_lea/x', 'video'], ['repcore/../x', 'video'], ['repcore/u_lea/x', 'raw']])
-    await assert.rejects(() => cloudinaryDestroy({ auth: { email: 'lea@t.fr' }, data: { publicId: pid, resourceType: t } }, w.ctx));
+  for (const [pid, t] of [['autre/u_lea/x', 'video'], ['repcore/../x', 'video'], ['repcore/u_lea/x', 'raw'], ['repcore/a[b]/x', 'image'], ['repcore/x@y#z/x', 'image']])
+    await assert.rejects(() => cloudinaryDestroy({ auth: { email: 'lea@t.fr' }, data: { publicId: pid, resourceType: t } }, w.ctx), refus(400));
   assert.equal(w.vus.length, 0);
 });
 await test('sans secrets Cloudinary : « indisponible », et la file de l’app attend', async () => {
@@ -90,7 +134,7 @@ await test('sans secrets Cloudinary : « indisponible », et la file de l’app 
     (e) => e.statut === 503);
 });
 await test('le protocole onCall : 401 sans jeton, {result} avec', async () => {
-  const w = monde(USERS);
+  const w = monde(USERS, INDEX);
   const req = (h) => new Request('https://s.t/fn/cloudinaryDestroy', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, h),
     body: JSON.stringify({ data: { publicId: 'repcore/u_lea/v1', resourceType: 'video' } }) });
   const sans = await repondreAppel(req({}), { cloudinaryDestroy }, w.ctx);

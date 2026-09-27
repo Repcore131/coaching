@@ -3616,7 +3616,11 @@ const CLOUD={
       throw new Error('Réponse serveur invalide ('+r.status+') : le service est peut-être indisponible.');
     }
     if(!r.ok||j.error){
-      throw new Error((j.error&&j.error.message)||'Erreur serveur ('+r.status+').');
+      // LE STATUT HTTP VOYAGE AVEC L'ERREUR : un 400 ou un 403 est une réponse
+      // définitive, qu'un appelant doit pouvoir distinguer d'une panne.
+      const err=new Error((j.error&&j.error.message)||'Erreur serveur ('+r.status+').');
+      err.statut=r.status;
+      throw err;
     }
     if(!('result' in j)){
       throw new Error('Réponse serveur inattendue : réessaie.');
@@ -4865,6 +4869,57 @@ const CLOUD={
       return !!(r&&r.ok);
     }catch(e){ return false; }
   },
+  // ── À QUI APPARTIENT repcore/<id>/… CHEZ CLOUDINARY (27/09/2026) ─────────
+  // Le serveur léger ne supprime un média que pour le compte que
+  // /medias_proprio/<id> désigne, ou pour son coach. Ce compte l'écrit LUI-MÊME,
+  // une seule fois : la règle refuse toute réécriture et toute autre valeur que
+  // sa propre clé. À la création du compte, et au démarrage pour ceux d'avant.
+  //
+  // Un refus (401) veut dire « déjà posé » : on ne le retente pas à chaque
+  // ouverture. Si c'était l'œuvre d'un autre compte, c'est le serveur qui le
+  // verra (deux dossiers portant le même id), pas l'app.
+  async poserProprioMedias(user){
+    try{
+      const u=user||currentUser;
+      if(!u||!u.email||!u.id) return false;
+      const id=String(u.id);
+      if(!/^[A-Za-z0-9_-]{1,39}$/.test(id)) return false;
+      const drapeau='rc_medias_proprio_'+u.email;
+      try{ if(localStorage.getItem(drapeau)===id) return true; }catch(e){}
+      const token=await this._getToken();
+      if(!token) return false;
+      const r=await fetch(this._fbUrl.replace('users.json','medias_proprio/'+id+'.json')+'?auth='+token,
+        {method:'PUT',headers:{'Content-Type':'application/json'},
+         body:JSON.stringify(String(u.email).toLowerCase().replace(/\./g,','))});
+      if(r&&(r.ok||r.status===401||r.status===403)){
+        try{ localStorage.setItem(drapeau,id); }catch(e){}
+      }
+      return !!(r&&r.ok);
+    }catch(e){ return false; }
+  },
+  // ── LES ATHLÈTES QUE CE COACH RECONNAÎT ────────────────────────────────
+  // coachEmailKey est écrit par l'athlète, qui peut y mettre n'importe qui :
+  // le serveur léger exige AUSSI que le coach l'ait inscrit ici avant de le
+  // laisser supprimer un média de cet athlète. La règle n'accepte l'entrée que
+  // si le dossier de l'athlète désigne déjà ce coach. Une fois par session.
+  async inscrireClientCoach(athleteEmail,oui){
+    try{
+      const u=currentUser;
+      if(!u||u.role!=='coach'||!u.email||!athleteEmail) return false;
+      const ck=String(u.email).toLowerCase().replace(/\./g,',');
+      const ak=String(athleteEmail).toLowerCase().replace(/\./g,',');
+      this._clientsInscrits=this._clientsInscrits||{};
+      const vu=ak+(oui===false?':non':':oui');
+      if(this._clientsInscrits[vu]) return true;
+      const token=await this._getToken();
+      if(!token) return false;
+      const r=await fetch(this._fbUrl.replace('users.json','coachs/'+ck+'/clients/'+ak+'.json')+'?auth='+token,
+        {method:oui===false?'DELETE':'PUT',headers:{'Content-Type':'application/json'},
+         body:oui===false?undefined:'true'});
+      if(r&&r.ok){ this._clientsInscrits[vu]=true; delete this._clientsInscrits[ak+(oui===false?':oui':':non')]; }
+      return !!(r&&r.ok);
+    }catch(e){ return false; }
+  },
   // Côté coach. Rend les adresses inscrites, ou [] — jamais null : l'appelant
   // boucle dessus, et distinguer « aucun élève » de « lecture en échec » n'y
   // changerait rien.
@@ -5191,6 +5246,14 @@ const CLOUD={
     if(!force&&distantAt!==null&&_b&&_b.maj===distantAt&&(_m==null||_m===distantAt)){ this._noterDescente(email,false); return false; }
     const cloudUser=await this.pullUser(email);
     if(!cloudUser) return false;
+    // LE COACH INSCRIT DANS SA LISTE l'athlète dont le dossier, tel que le
+    // serveur le rend, le désigne. C'est ce qui l'autorise à supprimer les
+    // médias de cet athlète chez Cloudinary (voir inscrireClientCoach).
+    try{
+      if(currentUser&&currentUser.role==='coach'&&email!==currentUser.email
+         &&String(cloudUser.coachEmailKey||'').toLowerCase()===String(currentUser.email||'').toLowerCase().replace(/\./g,','))
+        this.inscrireClientCoach(email).catch(()=>{});
+    }catch(e){}
     // ⚠ rc_users EST LU ICI, APRES LES DEUX ALLERS-RETOURS, et non en tete. Il
     //   etait lu avant, puis reecrit EN ENTIER apres : tout ce qui s'etait
     //   ecrit entre-temps disparaissait — un geste du coach, et surtout la
@@ -10854,6 +10917,8 @@ async function doRegister(){
     // Idempotente — elle remplace l'entrée de même adresse — donc la rejouer
     // depuis routeUser ne fabrique aucun doublon.
     try{ comptesEnregistrer(currentUser); }catch(e){}
+    // L'index de ses médias, dès la naissance du compte (voir poserProprioMedias).
+    try{ CLOUD.poserProprioMedias(currentUser).catch(()=>{}); }catch(e){}
     // Ici et pas plus haut : le compte existe vraiment à cette ligne. Les deux
     // sorties précédentes (compte déjà présent côté cloud, invitation coach
     // refusée) ne sont pas des inscriptions abouties et ne doivent pas compter.
@@ -11033,7 +11098,7 @@ function doRescue(em,pwEnc,role){
   users[em]=user;DB.set('users',users);
   currentUser=user;DB.set('session',user);
   document.getElementById('rescue-panel')?.remove();
-  CLOUD.signIn(em,pw).then(()=>{if(CLOUD.canWrite()) saveUser();}).catch(()=>{});
+  CLOUD.signIn(em,pw).then(()=>{if(CLOUD.canWrite()){ saveUser(); CLOUD.poserProprioMedias(user).catch(()=>{}); }}).catch(()=>{});
   if(role==='coach'){document.getElementById('coach-code-val').textContent=user.code;go('s-coach-code');}
   else{go('s-client-code');}
 }
@@ -27007,6 +27072,8 @@ async function confirmDeleteClient(){
       // serveur, et donc le droit d'accès de l'ex-coach au dossier de santé.
       // Tant qu'il n'a pas abouti, le détachement n'est que cosmétique.
       envoi=CLOUD.pushOne(athlete.email,athlete);
+      // Et il sort de la liste du coach : plus de suppression de ses médias.
+      try{ CLOUD.inscrireClientCoach(athlete.email,false).catch(()=>{}); }catch(e){}
     }
     // Le serveur a accepté : la liste du coach peut suivre. Sans cette ligne,
     // getClients recréerait l’élève fantôme au prochain rendu.
@@ -95318,7 +95385,6 @@ async function _cldDetruire(publicId,type,opts){
   if(!publicId) return {ok:true,rien:true};
   const entree={type:type||'image'};
   if(o.proprietaire) entree.proprietaire=o.proprietaire;
-  if(o.cloudName) entree.cloudName=o.cloudName;
   if(o.quoi) entree.quoi=o.quoi;
   if(_cldIndispo){
     cldFileAjouter(publicId,type,Object.assign({raison:'service de suppression indisponible'},entree));
@@ -95327,7 +95393,7 @@ async function _cldDetruire(publicId,type,opts){
   try{
     const r=await CLOUD._callFn('cloudinaryDestroy',{
       publicId,resourceType:(type==='video'?'video':'image'),
-      proprietaire:o.proprietaire||'',cloudName:o.cloudName||''});
+      proprietaire:o.proprietaire||''});
     if(r&&(r.result==='ok'||r.result==='not found')){
       cldFileRetirer(publicId);
       return {ok:true,resultat:r.result};
@@ -95336,6 +95402,14 @@ async function _cldDetruire(publicId,type,opts){
     return {ok:false,raison:'réponse inattendue'};
   }catch(e){
     const m=String(e&&e.message||e);
+    // UN REFUS DÉFINITIF SORT DE LA FILE. 400 (identifiant invalide) ou 403
+    // (pas le tien, pas ton athlète) : rejouer la même demande donnera la même
+    // réponse à chaque démarrage, pour toujours. Une panne, un 409 (propriétaire
+    // pas encore indexé) ou un 503 restent, eux, en file.
+    if(e&&(e.statut===400||e.statut===403)){
+      cldFileRetirer(publicId);
+      return {ok:false,raison:m,definitif:true};
+    }
     // LE SERVICE EST-IL LA ? Deux formes, et la seconde m'a surpris : une
     // fonction non deployee repond 404 SANS en-tete CORS, donc le navigateur ne
     // rend pas le 404 — il leve une erreur reseau. Mesure au banc le
@@ -95363,6 +95437,9 @@ async function cldFileRejouer(){
   if(_cldRejeuFait) return 0;
   _cldRejeuFait=true;
   if(!navigator.onLine||!CLOUD.canWrite()) return 0;
+  // L'INDEX DES MÉDIAS D'ABORD : sans lui, le serveur ne sait pas à qui
+  // appartient repcore/<id>/… et la suppression attend (409).
+  try{ await CLOUD.poserProprioMedias(currentUser); }catch(e){}
   const l=cldFileLire();
   if(!l.length) return 0;
   let partis=0;
