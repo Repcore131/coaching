@@ -71647,7 +71647,7 @@ function _htmlBilanRetard(d){
   const chrono='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="14" r="7.5"/><path d="M12 10v4l-2 2.5"/><path d="M10 3h4M12 3v3.5M18.2 7.3l1.3-1.3"/></svg>';
   const doc='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 12h6M9 15.5h6M9 19h4"/></svg>';
   const chev='<svg viewBox="0 0 16 24" aria-hidden="true"><polyline points="4 4 12 12 4 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  return '<div class="bal2-haut"><span class="bal2-ico">'+chrono+'</span>'
+  return '<div class="bal2-in"><div class="bal2-haut"><span class="bal2-ico">'+chrono+'</span>'
     +'<div class="bal2-txt"><div class="bal2-titre">Bilan'+(rythme?' <span>'+rythme+'</span>':'')+'</div>'
     +'<span class="bal2-pastille"><i></i>'+(n===0?'Aujourd’hui':'En retard')+'</span>'
     +'<div class="bal2-sous">'+sous+'</div></div>'
@@ -71656,7 +71656,7 @@ function _htmlBilanRetard(d){
     +'<div class="bal2-frise"><div class="bal2-bout"><small>Dernier bilan</small><b>'+date(d&&d.dernier)+(d&&d.dernier?' <i class="bal2-ok" aria-label="fait">✓</i>':'')+'</b></div>'
     +'<div class="bal2-ligne" aria-hidden="true"><i class="p0"></i><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i></div>'
     +'<div class="bal2-bout bal2-fin"><small>Prochain bilan</small><b>'+date(d&&d.echeance)+'</b><small>À compléter</small></div></div>'
-    +'<span class="bal2-go"><span class="bal2-go-ico">'+doc+'</span><span class="bal2-go-t">Compléter mon bilan</span><span class="bal2-go-ch">'+chev+'</span></span>';
+    +'<span class="bal2-go"><span class="bal2-go-ico">'+doc+'</span><span class="bal2-go-t">Compléter mon bilan</span><span class="bal2-go-ch">'+chev+'</span></span>'+'</div>';
 }
 function isBilanNotifDay(){
   const bilans=currentUser.bilans||[];
