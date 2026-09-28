@@ -44211,18 +44211,18 @@ async function testExercices(){
       // « TOUT » A L'OUVERTURE : une fiche qui s'ouvre ne cache rien de ce
       // qu'elle porte. On le lit avant d'y toucher.
       if(_ccdPeriode!==0) return _echec('la période ouverte n’est pas « tout » : '+_ccdPeriode);
-      if(CCD_PERIODES.map(p=>p.j).join('/')!=='30/90/365/0')
+      if(CCD_PERIODES.map(p=>p.j).join('/')!=='182/365/0')
         return _echec('les périodes ont changé : '+CCD_PERIODES.map(p=>p.j).join('/'));
       const sp=_ccdPeriode;
       try{
-        if(ccdPeriode(90)!==90) return _echec('90 jours ne se pose pas');
+        if(ccdPeriode(182)!==182) return _echec('6 mois ne se pose pas');
         if(ccdPeriode(7)!==0) return _echec('une période inconnue ne retombe pas sur « tout »');
         const J=864e5, t=Date.now();
         const pts=[{x:t-200*J,v:10},{x:t-20*J,v:11},{x:t-2*J,v:12}];
         if(ccdFenetre(pts).length!==3) return _echec('« tout » coupe des points');
-        ccdPeriode(30);
-        if(ccdFenetre(pts).length!==2) return _echec('30 jours ne coupe pas le point de 200 jours');
-        if(!ccdDepuis()) return _echec('30 jours ne donne pas de borne');
+        ccdPeriode(182);
+        if(ccdFenetre(pts).length!==2) return _echec('6 mois ne coupe pas le point de 200 jours');
+        if(!ccdDepuis()) return _echec('6 mois ne donne pas de borne');
         // LES DEUX AUTRES BLOCS SUIVENT : les mensurations du cadre, et la
         // courbe de pesée. C'était la plainte de départ.
         const u={id:'C4A',email:'c4a@t.fr',role:'athlete',gender:'H',bilans:[
@@ -44266,25 +44266,27 @@ async function testExercices(){
       const v=ccdVerdict(u);
       if(!v.maigre||Math.abs(v.maigre.kg-comp[comp.length-1].maigre)>0.01)
         return _echec('la carte et la courbe ne disent pas la même masse maigre : '+v.maigre.kg+' / '+comp[comp.length-1].maigre);
-      const h=_htmlCcdCourbes(u);
-      if(!/Poids et masse maigre/.test(h)) return _echec('la courbe principale n’existe pas');
-      if(!/Masse maigre/.test(h)) return _echec('la masse maigre n’est pas en légende');
-      // LA PHRASE DE LA MISSION, MOT POUR MOT.
-      if(h.indexOf('L’écart entre les deux courbes, c’est le gras.')<0)
-        return _echec('la phrase sous le graphique a changé');
+      // 28/09/2026 : L'ETAGE EST LE TABLEAU DE BORD DE LA MAQUETTE DE KEVIN.
+      // La masse maigre et la masse grasse (kg) ont leur carte, a cote du poids.
+      const h=_htmlCcdCourbes(u,1200);
+      if(!/Poids et masse grasse/.test(h)) return _echec('la carte du poids n’existe pas');
+      if(!/Masse maigre et masse grasse/.test(h)) return _echec('la carte des masses n’existe pas');
+      if(!/Masse maigre \(kg\)/.test(h)) return _echec('la masse maigre n’est pas en légende');
       // LA MARGE DE MESURE EST ANNONCÉE, ET LES DEUX SONT LES CONSTANTES MESURÉES.
-      if(h.indexOf('± '+String(SYN_BRUIT_POIDS).replace('.',',')+' kg sur la balance')<0)
+      if(h.indexOf('marge de la balance : ± '+String(SYN_BRUIT_POIDS).replace('.',',')+' kg')<0)
         return _echec('la marge de la balance n’est pas dite');
-      if(h.indexOf('± '+String(CCD_MAIGRE_BRUIT).replace('.',',')+' kg sur la masse maigre')<0)
+      if(h.indexOf('Marge de la masse maigre : ± '+String(CCD_MAIGRE_BRUIT).replace('.',',')+' kg')<0)
         return _echec('la marge de la masse maigre n’est pas dite');
+      // ET ELLE EST DESSINÉE : une bande autour du poids et de la masse maigre.
+      if((h.match(/class="db-bande"/g)||[]).length<2) return _echec('la bande de marge n’est pas dessinée');
       // SANS LES MESURES DE LA FORMULE : pas de courbe muette, on dit ce qui manque.
       const sans={id:'C4D',email:'c4d@t.fr',role:'athlete',gender:'H',_evol_height:'178',bilans:[
         {date:t-60*J,'bil-weight':'86'},{date:t-2*J,'bil-weight':'84'}]};
       const h2=_htmlCcdCourbes(sans);
-      if(/Masse maigre/.test(h2)) return _echec('une masse maigre sort sans tour de taille');
+      if(/id="db-mm"/.test(h2)) return _echec('une masse maigre sort sans tour de taille');
       if(!/Pas de courbe de masse maigre/.test(h2)) return _echec('rien ne dit pourquoi la courbe manque : '+h2.slice(0,200));
       if(!/tour de cou|tour de taille/.test(h2)) return _echec('la phrase ne nomme pas la mesure absente');
-      if(/L’écart entre les deux courbes/.test(h2)) return _echec('la phrase de l’écart sort avec une seule courbe');
+      if(/db-mm[^-]/.test(h2)) return _echec('une courbe des masses sort sans tour de taille');
       // LES MENSURATIONS PAR GROUPE SONT DANS L'ÉTAGE, PLUS DANS LE CADRE.
       if(!/Mensurations/.test(h)) return _echec('les mensurations ne sont pas rapatriées dans l’étage');
       if(!/graphes:false/.test(String(renderCorpsCoach))) return _echec('le cadre du coach porte encore ses graphiques');
@@ -44292,6 +44294,45 @@ async function testExercices(){
       cad.innerHTML=_htmlCorpsCadre(u,{graphes:false});
       if(cad.querySelector('.cc-corps-g')) return _echec('un graphique reste dans le cadre');
       return true;
+      } finally { _ccdPeriode=sp; }})());
+
+    // ══ 28/09/2026 — LE TABLEAU DE BORD DE LA MAQUETTE ═══════════════════
+    ok('SES COURBES : SIX CARTES, TROIS RANGS, ET RIEN D’INVENTÉ',(()=>{
+      const J=864e5, t=Date.now(), sp=_ccdPeriode; _ccdPeriode=0;
+      try{
+        const u={id:'DB1',email:'db1@t.fr',role:'athlete',gender:'H',_evol_height:'180',bilans:[
+          {type:'depart',date:t-120*J,'deb-weight':'90','deb-waist':'95','deb-neck':'40','deb-hips':'102','deb-chest':'105','deb-bicep-r':'37','deb-bicep-l':'36','deb-thigh-r':'60','deb-thigh-l':'59','deb-age':'30'},
+          {date:t-60*J,'bil-weight':'88','bil-waist':'92','bil-neck':'40','bil-hips':'101','bil-chest':'106','bil-bicep-r':'38','bil-thigh-r':'61'},
+          {date:t-2*J,'bil-weight':'86','bil-waist':'89','bil-neck':'40','bil-hips':'100','bil-chest':'107','bil-bicep-r':'38.5','bil-bicep-l':'37.5','bil-thigh-r':'61','bil-thigh-l':'60'}]};
+        const d=document.createElement('div'); d.innerHTML=_htmlCcdCourbes(u,1300);
+        const cartes=[...d.querySelectorAll('.db-carte')].map(c=>c.className.split(' ')[1]);
+        if(cartes.join(',')!=='db-c-pg,db-c-mm,db-c-me,db-c-sd,db-c-rp,db-c-cz,db-c-rk') return _echec('cartes : '+cartes.join(','));
+        if(d.querySelectorAll('.db-rang').length!==3) return _echec('pas trois rangs');
+        // RIEN D'INVENTÉ : ni masse musculaire, ni osseuse, ni hydrique.
+        if(/musculaire \(kg\)|osseuse|hydrique/i.test(d.textContent.replace(/on ne l’invente pas|impédance/g,''))) return _echec('une mesure inventée s’affiche');
+        // LES RAPPORTS CLÉS SE CALCULENT : IMC = 86 / 1,8².
+        const imc=dbRapports(u,'precedent').find(r=>r.cle==='imc');
+        if(Math.abs(imc.valeur-86/3.24)>0.01) return _echec('IMC '+imc.valeur);
+        const th=dbRapports(u,'debut').find(r=>r.cle==='th');
+        if(Math.abs(th.ecart-(89/100-95/102))>0.0001) return _echec('ratio taille/hanches depuis le début : '+th.ecart);
+        // LES TOURS PAR ZONE : l'écart depuis la première mesure, deux côtés moyennés.
+        const bras=dbZones(u,'tours').find(z=>z.lib==='Bras');
+        if(bras.valeur!==1.5) return _echec('bras : '+bras.valeur);
+        // L'UNITÉ : un pouce, 2,54 cm.
+        const sv=_dbUnite; _dbUnite='in';
+        const hi=_htmlCcdCourbes(u,1300); _dbUnite=sv;
+        if(!/in<\/|inch/.test(hi)) return _echec('la bascule en pouces ne se voit pas');
+        // UNE SEULE PÉRIODE : chaque carte qui en porte une affiche la même.
+        const actifs=[...d.querySelectorAll('.db-c-pg .db-seg button.actif,.db-c-mm .db-seg button.actif')].map(b=>b.textContent);
+        if(actifs.join(',')!=='Tout,Tout') return _echec('périodes : '+actifs.join(','));
+        // LA COURBE MONOTONE PASSE PAR CHAQUE POINT (pas de bosse inventée).
+        const c=_dbLisse([[0,10],[50,20],[100,20]]);
+        if(!/^M0,10C/.test(c)||!/100,20$/.test(c)) return _echec('courbe : '+c);
+        // SANS POIDS EN MODE NEUTRE (antécédent déclaré).
+        const n=Object.assign({},u,{bilans:u.bilans.map((b,i)=>i?b:Object.assign({},b,{'deb-tca':'Oui'}))});
+        let neutre=false; try{ neutre=aTCA(n); }catch(e){}
+        if(neutre&&/db-pg/.test(_htmlCcdCourbes(n,1300).replace('db-c-pg',''))) return _echec('le poids sort en mode neutre');
+        return true;
       } finally { _ccdPeriode=sp; }})());
 
     ok('LA MARGE DE MESURE EST DESSINÉE AUTOUR DE CHAQUE COURBE',(()=>{

@@ -51524,8 +51524,8 @@ function renderVerdictCoach(c){
 //   Une fenetre de 30 jours par defaut aurait fait disparaitre trois bilans sur
 //   quatre chez un athlete suivi au trimestre, sans que personne ne le voie.
 //   C'est le coach qui retrecit.
-const CCD_PERIODES=Object.freeze([{j:30,lib:'30 jours'},{j:90,lib:'90 jours'},
-  {j:365,lib:'1 an'},{j:0,lib:'Tout'}]);
+// 6M, 1 AN, TOUT : les trois boutons de la maquette de Kevin (28/09/2026).
+const CCD_PERIODES=Object.freeze([{j:182,lib:'6 mois'},{j:365,lib:'1 an'},{j:0,lib:'Tout'}]);
 let _ccdPeriode=0;
 function ccdPeriode(j){
   const n=Number(j)||0;
@@ -51539,7 +51539,7 @@ function ccdPeriode(j){
       // propre fenetre de mesure — c'est un protocole, pas un cadrage.
       renderPoidsCoach(c);
     }
-    const b=document.querySelector('#ccd-courbes .ccd-per .cc-corps-o.actif');
+    const b=document.querySelector('#ccd-courbes .db-seg button.actif');
     if(b) b.focus();
   }catch(e){}
   return _ccdPeriode;
@@ -51698,51 +51698,10 @@ function _htmlCcdPeriodes(){
       +'" onclick="ccdPeriode('+p.j+')">'+escapeHtml(p.lib)+'</button>').join('')
     +'</span></div>';
 }
-function _htmlCcdCourbes(c){
-  const u=_dossier(c);
-  if(!u) return '';
-  if(c&&c._fromCode) return '';
-  try{ if(!phpDisponible(u)) return ''; }catch(e){}
-  const poids=ccdFenetre(corpsPointsPoids(u));
-  const maigre=ccdFenetre(ccdPointsMaigre(u));
-  // ⚠ LA MARGE DE MESURE EST DESSINEE, PAS SEULEMENT ECRITE. Kevin : « sans
-  //   elles, un coach lit une progression la ou il n'y a que du bruit de
-  //   ruban ». Les deux bandes sont celles qui sont deja mesurees ailleurs :
-  //   0,3 kg pour la balance, 0,9 kg pour la masse maigre (un demi-centimetre
-  //   de ruban passe dans la formule, plus le bruit de la balance).
-  // ⚠ PAS DE LEGENDE POUR UNE COURBE QUI N'EST PAS TRACEE. _htmlCorpsGraphe
-  //   liste TOUTES les series qu'on lui passe : une masse maigre sans point
-  //   sortait en legende sous un graphique qui ne la montrait pas, ce qui se
-  //   lit comme une courbe disparue.
-  const series=[{lib:'Poids',couleur:'#E02020',points:poids,bande:SYN_BRUIT_POIDS}];
-  if(maigre.length>1) series.push({lib:'Masse maigre',couleur:'#3b82f6',
-    points:maigre,bande:CCD_MAIGRE_BRUIT});
-  const principale=_htmlCorpsGraphe((series.length>1)?'Poids et masse maigre':'Poids','kg',
-    series,
-    {h:72,dates:true,valeur:'',
-     pied:'Relevé au bilan · la bande grise est la marge de mesure : ± '
-       +String(SYN_BRUIT_POIDS).replace('.',',')+' kg sur la balance'
-       +((series.length>1)?(', ± '+String(CCD_MAIGRE_BRUIT).replace('.',',')
-         +' kg sur la masse maigre'):'')});
-  // LA PHRASE QUE KEVIN A ECRITE, MOT POUR MOT, et elle ne sort que si les
-  // deux courbes sont la : sans masse maigre, il n'y a pas d'ecart a lire.
-  const phrase=(principale&&maigre.length>1)
-    ?'<p class="ccd-ecart">L’écart entre les deux courbes, c’est le gras.</p>'
-    :'';
-  // SANS MASSE MAIGRE, ON DIT CE QUI MANQUE — jamais une courbe muette.
-  const manque=(principale&&maigre.length<2)?_htmlCcdManqueMaigre(u):'';
-  const groupes=(function(){ try{ return _htmlCorpsGraphes(u,{poids:false,depuis:ccdDepuis()})||''; }
-    catch(e){ return ''; } })();
-  const corps=principale+phrase+manque+_htmlCcdProjection(u)+groupes;
-  // ⚠ LE SELECTEUR RESTE MEME QUAND LA PERIODE NE MONTRE RIEN, sans quoi le
-  //   coach qui retrecit a 30 jours n'a plus de quoi revenir en arriere.
-  if(!corps.trim())
-    return '<div class="ccd-courbes">'+_htmlCcdPeriodes()
-      +'<p class="ccd-proj ccd-proj-non">'
-      +escapeHtml(_ccdPeriode?('Rien à tracer sur '+ccdPeriodeLib()+'. Ouvre « Tout » pour voir l’historique.')
-        :'Rien à tracer : il faut deux relevés d’une même mesure.')
-      +'</p></div>';
-  return '<div class="ccd-courbes">'+_htmlCcdPeriodes()+corps+'</div>';
+// L'ETAGE DES COURBES EST LE TABLEAU DE BORD DE LA MAQUETTE (28/09/2026) :
+// voir _htmlCcdTableau. Le nom reste, ses appelants aussi.
+function _htmlCcdCourbes(c,largeur){
+  return _htmlCcdTableau(c,largeur||_dbLargeur||0);
 }
 // Ce qui manque pour tracer la masse maigre, dans les memes mots que la carte
 // du verdict — une seule facon de nommer une mesure absente.
@@ -51755,13 +51714,499 @@ function _htmlCcdManqueMaigre(u){
       :'Pas de courbe de masse maigre : il faut deux bilans qui portent le tour de taille et le tour de cou.')
     +'</p>';
 }
+// ══ SES COURBES : LE TABLEAU DE BORD DE LA MAQUETTE DE KEVIN (28/09/2026) ═════
+//
+// « Remplace exactement pareil, répartition pareil » : six cartes, trois rangs.
+//   1. Poids et masse grasse  |  Masse maigre et masse grasse
+//   2. Mensurations  |  Séries dures par semaine  |  Répartition des séries
+//   3. Composition corporelle  |  Rapports clés
+//
+// ⚠ RIEN N'EST INVENTÉ, ET C'EST LA SEULE LIBERTÉ PRISE AVEC LA MAQUETTE. Elle
+//   montre une masse musculaire, des masses osseuse et hydrique, et des kilos
+//   gagnés par bras ou par dorsal : aucune de ces mesures n'existe au dossier
+//   (il faudrait une balance à impédance segmentaire). La deuxième carte trace
+//   donc ce qui se calcule vraiment, masse maigre et masse grasse en kilos, par
+//   la formule déjà en place (ccdCompositionSerie) ; la composition par zone
+//   montre les TOURS relevés au ruban et les SÉRIES du programme.
+// ⚠ UNE SEULE PÉRIODE POUR TOUT L'ÉTAGE (lot 4, 23/09/2026) : les trois cartes
+//   qui portent le sélecteur écrivent le même état, _ccdPeriode.
+// ⚠ LA MARGE DE MESURE RESTE DESSINÉE autour du poids et de la masse maigre.
+// ⚠ AUCUNE COURBE DE POIDS EN MODE NEUTRE (aTCA), comme blocPoidsCoach.
+
+const DB_MOIS=['Janv.','Févr.','Mars','Avr.','Mai','Juin','Juil.','Août','Sept.','Oct.','Nov.','Déc.'];
+// Les groupes de la répartition et des séries, dans l'ordre de la maquette.
+const DB_GROUPES=Object.freeze([
+  {cle:'pec',lib:'Pectoraux',c:'#ef4444',m:['PECTORAUX'],img:'PECTORAUX'},
+  {cle:'dos',lib:'Dorsaux',c:'#3b82f6',m:['DORSAUX','TRAP_SUP','TRAP_MED','LOMBAIRES'],img:'DORSAUX'},
+  {cle:'jam',lib:'Jambes',c:'#22c55e',m:['QUADRICEPS','ISCHIOS','FESSIERS','ABDUCTEURS','ADDUCTEURS','MOLLETS'],img:'QUADRICEPS'},
+  {cle:'epa',lib:'Épaules',c:'#eab308',m:['DELT_ANT','DELT_LAT','DELT_POST'],img:'DELT_LAT'},
+  {cle:'bra',lib:'Bras',c:'#a855f7',m:['BICEPS','TRICEPS','AVANT_BRAS'],img:'BICEPS'},
+  {cle:'abd',lib:'Abdos',c:'#f97316',m:['ABDOS'],img:'ABDOS'}
+]);
+// Les tours de la carte Mensurations et de la composition, dans l'ordre de la maquette.
+const DB_TOURS=Object.freeze([
+  {cle:'poitrine',lib:'Poitrine',c:'#3b82f6',k:['chest'],img:'PECTORAUX'},
+  {cle:'taille',lib:'Taille',c:'#ef4444',k:['waist'],img:'ABDOS'},
+  {cle:'hanches',lib:'Hanches',c:'#f59e0b',k:['hips'],img:'FESSIERS'},
+  {cle:'cuisses',lib:'Cuisses',c:'#22c55e',k:['thigh-r','thigh-l'],img:'QUADRICEPS'},
+  {cle:'bras',lib:'Bras',c:'#a855f7',k:['bicep-r','bicep-l'],img:'BICEPS'}
+]);
+let _dbUnite='cm', _dbZone='tours', _dbRef='precedent', _dbLargeur=0, _dbClient=null;
+const _dbDonnees={};
+
+// ── LES DONNÉES (PURES, sauf mention) ──────────────────────────────────────
+function _dbNb(v,d){
+  if(v==null||!isFinite(v)) return '';
+  const k=Math.pow(10,d==null?1:d);
+  return String(Math.round(v*k)/k).replace('.',',');
+}
+function _dbSigne(v,d){ return (v>0?'+':v<0?'−':'')+_dbNb(Math.abs(v),d); }
+// La moyenne des deux côtés quand les deux sont relevés, sinon le côté relevé.
+function _dbTourBilan(b,k){
+  const vals=k.map(x=>{ let v=null; try{ v=getBM(b,x); }catch(e){ v=null; } return v>0?v:null; }).filter(v=>v!=null);
+  if(!vals.length) return null;
+  return Math.round(vals.reduce((a,v)=>a+v,0)/vals.length*10)/10;
+}
+function dbPointsTour(u,t){
+  let bl=[]; try{ bl=bilansOrdonnes(u)||[]; }catch(e){ return []; }
+  const out=[];
+  for(const b of bl){
+    let rep=false; try{ rep=t.k.every(x=>bmReportee(b,x)); }catch(e){ rep=false; }
+    if(rep) continue;
+    const v=_dbTourBilan(b,t.k);
+    if(v>0) out.push({x:Number(b&&b.date)||0,v});
+  }
+  return out;
+}
+function dbTaille(u){
+  const t=parseFloat((u&&(u._evol_height||u['init-height']||u.height))||0);
+  if(t>0) return t;
+  try{ const d=(bilansOrdonnes(u)||[]).find(b=>b&&b.type==='depart'); const v=parseFloat(d&&d['deb-height']); return v>0?v:null; }catch(e){ return null; }
+}
+// Le poids et le pourcentage de gras, bilan par bilan.
+function dbSeriesPoidsGras(u){
+  const comp=ccdCompositionSerie(u);
+  return {poids:corpsPointsPoids(u), pct:comp.map(c=>({x:c.date,v:c.pct})),
+    maigre:comp.map(c=>({x:c.date,v:c.maigre})), gras:comp.map(c=>({x:c.date,v:c.gras}))};
+}
+// Les séries dures d'un groupe dans une semaine (muscles additionnés).
+function _dbSomme(vol,g){ return Math.round(g.m.reduce((a,m)=>a+(Number((vol||{})[m])||0),0)*10)/10; }
+/**
+ * Les séries dures par groupe, semaine par semaine, datées. IMPURE : horloge.
+ * Même règle que corpsCourbesVolume : avec un programme, la semaine en cours
+ * est la semaine ENTIÈRE du programme, en pointillé ; sans programme, on
+ * s'arrête à la dernière semaine travaillée.
+ */
+function dbSeriesVolume(u,semaines){
+  const N=Math.max(4,Math.min(26,Number(semaines)||CORPS_GRAPHE_SEMAINES));
+  let prev=null; try{ prev=corpsSemainePrevue(u); }catch(e){ prev=null; }
+  let fin=0, sem=null;
+  if(!prev){ try{ sem=corpsSemaineVolume(u); }catch(e){ sem=null; } if(!sem) return null; fin=sem.decalage||0; }
+  else fin=1;
+  const lundi0=(()=>{ try{ return new Date(_lundiDeSemaine(_volCleDecalee(0))).getTime(); }catch(e){ const d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()-((d.getDay()+6)%7)); return d.getTime(); } })();
+  const semaine=[];
+  const nPasses=prev?N-1:N;
+  for(let i=fin+nPasses-1;i>=fin;i--){
+    let vol={}; try{ vol=volumeSemaine(u,_volCleDecalee(i))||{}; }catch(e){ vol={}; }
+    semaine.push({x:lundi0-i*6048e5,vol});
+  }
+  if(prev) semaine.push({x:lundi0,vol:prev.muscles,prevu:true});
+  // PAS DE SEMAINES VIDES AVANT LA PREMIERE SEANCE : sur « Tout », vingt
+  // semaines a zero ecrasaient les huit qui comptent.
+  const tot=s=>DB_GROUPES.reduce((a,g)=>a+_dbSomme(s.vol,g),0);
+  while(semaine.length>4&&!semaine[0].prevu&&tot(semaine[0])===0) semaine.shift();
+  const series=DB_GROUPES.map(g=>({lib:g.lib,couleur:g.c,cle:g.cle,
+    points:semaine.map(s=>Object.assign({x:s.x,v:_dbSomme(s.vol,g)},s.prevu?{prevu:true}:{}))}))
+    .filter(s=>s.points.some(p=>p.v>0));
+  if(!series.length) return null;
+  // Les quatre groupes les plus chargés sur la période : au-delà, une pelote.
+  series.sort((a,b)=>b.points.reduce((t,p)=>t+p.v,0)-a.points.reduce((t,p)=>t+p.v,0));
+  return {series:series.slice(0,4),prevu:!!prev,semaines:N,
+    ref:prev?{muscles:prev.muscles,lib:'la semaine du programme'}:{muscles:(semaine[semaine.length-1]||{}).vol||{},lib:'la dernière semaine travaillée'}};
+}
+// La répartition de la semaine de référence, par groupe (+ « Autres »).
+function dbRepartition(muscles){
+  const m=muscles||{};
+  const groupes=DB_GROUPES.map(g=>({lib:g.lib,c:g.c,n:_dbSomme(m,g)}));
+  const pris=new Set(DB_GROUPES.flatMap(g=>g.m));
+  const autres=Math.round(Object.keys(m).filter(k=>!pris.has(k)).reduce((a,k)=>a+(Number(m[k])||0),0)*10)/10;
+  if(autres>0) groupes.push({lib:'Autres',c:'#9ca3af',n:autres});
+  const total=Math.round(groupes.reduce((a,g)=>a+g.n,0)*10)/10;
+  if(!(total>0)) return null;
+  return {total,groupes:groupes.filter(g=>g.n>0).map(g=>Object.assign(g,{pct:Math.round(g.n/total*100)}))};
+}
+// Les rapports clés : la dernière valeur de chaque mesure, et son écart à la
+// précédente (« Dernière mesure ») ou à la première (« Depuis le début »).
+function dbRapports(u,ref){
+  let bl=[]; try{ bl=bilansOrdonnes(u)||[]; }catch(e){ bl=[]; }
+  const taille=dbTaille(u);
+  const comp=ccdCompositionSerie(u);
+  const parDate=d=>comp.find(c=>c.date===d)||null;
+  const sexe=(u&&(u._evol_gender||u.gender))||'';
+  let age=null;
+  try{ const d=bl.find(b=>b&&b.type==='depart'); age=parseFloat((u&&u.age)||(d&&d['deb-age']))||null; }catch(e){ age=null; }
+  const lire={
+    imc:b=>{ const p=getBW(b); return (p>0&&taille)?p/Math.pow(taille/100,2):null; },
+    th:b=>{ const w=getBM(b,'waist'), h=getBM(b,'hips'); return (w>0&&h>0)?w/h:null; },
+    bras:b=>_dbTourBilan(b,['bicep-r','bicep-l']),
+    cuisse:b=>_dbTourBilan(b,['thigh-r','thigh-l']),
+    maigre:b=>{ const c=parDate(Number(b.date)||0); return c?(c.maigre/c.poids*100):null; },
+    mb:b=>{ const c=parDate(Number(b.date)||0); if(c) return mbKatch(c.maigre);
+      const p=getBW(b); return (p>0&&taille&&age)?mbMifflin(p,taille,age,sexe):null; }
+  };
+  const defs=[
+    {cle:'imc',lib:'IMC',unite:'',d:1},
+    {cle:'th',lib:'Tour de taille / hanches',unite:'',d:2},
+    {cle:'bras',lib:'Tour de bras',unite:' cm',d:1},
+    {cle:'cuisse',lib:'Tour de cuisse',unite:' cm',d:1},
+    {cle:'maigre',lib:'Ratio masse maigre',unite:' %',d:1},
+    {cle:'mb',lib:'Métabolisme estimé',unite:' kcal',d:0}];
+  return defs.map(df=>{
+    const vals=bl.map(b=>{ let v=null; try{ v=lire[df.cle](b); }catch(e){ v=null; } return v; }).filter(v=>v!=null&&isFinite(v));
+    const der=vals.length?vals[vals.length-1]:null;
+    const base=vals.length>1?(ref==='debut'?vals[0]:vals[vals.length-2]):null;
+    return Object.assign({},df,{valeur:der,ecart:(der!=null&&base!=null)?der-base:null,
+      formule:df.cle==='mb'?(comp.length?'Katch-McArdle':'Mifflin-St Jeor'):''});
+  });
+}
+// La composition par zone. `tours` : l'écart du ruban depuis la première
+// mesure. `series` : la charge de la semaine de référence et sa part.
+function dbZones(u,mode,ref){
+  if(mode==='series'){
+    const r=dbRepartition(ref||{});
+    return DB_GROUPES.filter(g=>g.cle!=='abd').map(g=>{
+      const n=_dbSomme(ref||{},g);
+      return {lib:g.lib,img:g.img,valeur:n,unite:'séries',part:r?(n/r.total):0,pct:r?Math.round(n/r.total*100):0};
+    });
+  }
+  return DB_TOURS.map(t=>{
+    const p=dbPointsTour(u,t);
+    if(p.length<2) return {lib:t.lib,img:t.img,valeur:null};
+    const e=Math.round((p[p.length-1].v-p[0].v)*10)/10;
+    return {lib:t.lib,img:t.img,valeur:e,unite:'cm',pct:p[0].v?Math.round(e/p[0].v*1000)/10:0};
+  });
+}
+
+// ── LE MOTEUR DE COURBE (PUR) ──────────────────────────────────────────────
+// Interpolation monotone (Fritsch-Carlson) : la courbe passe par chaque point
+// et ne dessine jamais un creux ou une bosse que les mesures n'ont pas.
+function _dbLisse(pts){
+  const n=pts.length;
+  if(n<2) return n?('M'+pts[0][0]+','+pts[0][1]):'';
+  if(n===2) return 'M'+pts[0][0]+','+pts[0][1]+'L'+pts[1][0]+','+pts[1][1];
+  const dx=[],dy=[],m=[],t=[];
+  for(let i=0;i<n-1;i++){ dx[i]=pts[i+1][0]-pts[i][0]; dy[i]=pts[i+1][1]-pts[i][1]; m[i]=dx[i]?dy[i]/dx[i]:0; }
+  t[0]=m[0]; t[n-1]=m[n-2];
+  for(let i=1;i<n-1;i++) t[i]=(m[i-1]*m[i]<=0)?0:(m[i-1]+m[i])/2;
+  for(let i=0;i<n-1;i++){
+    if(m[i]===0){ t[i]=0; t[i+1]=0; continue; }
+    const a=t[i]/m[i], b=t[i+1]/m[i], s=a*a+b*b;
+    if(s>9){ const k=3/Math.sqrt(s); t[i]=k*a*m[i]; t[i+1]=k*b*m[i]; }
+  }
+  const f=v=>Math.round(v*10)/10;
+  let d='M'+f(pts[0][0])+','+f(pts[0][1]);
+  for(let i=0;i<n-1;i++){
+    const h=dx[i]/3;
+    d+='C'+f(pts[i][0]+h)+','+f(pts[i][1]+t[i]*h)+' '+f(pts[i+1][0]-h)+','+f(pts[i+1][1]-t[i+1]*h)+' '+f(pts[i+1][0])+','+f(pts[i+1][1]);
+  }
+  return d;
+}
+function _dbPas(etendue,cible){
+  const brut=etendue/Math.max(1,cible), p=Math.pow(10,Math.floor(Math.log10(brut||1)));
+  for(const k of [1,2,2.5,5,10]) if(brut<=k*p) return k*p;
+  return 10*p;
+}
+function _dbAxe(vals,bande,forcer){
+  let lo=Math.min(...vals.map(v=>v-(bande||0))), hi=Math.max(...vals.map(v=>v+(bande||0)));
+  if(forcer&&forcer.min!=null) lo=Math.min(lo,forcer.min);
+  if(!(hi>lo)){ lo-=1; hi+=1; }
+  const pas=_dbPas(hi-lo,4);
+  lo=Math.floor(lo/pas)*pas; hi=Math.ceil(hi/pas)*pas;
+  if(hi===lo) hi=lo+pas;
+  const ticks=[]; for(let v=lo;v<=hi+pas/1000;v+=pas) ticks.push(Math.round(v*1000)/1000);
+  return {lo,hi,ticks};
+}
+function _dbTicksX(x0,x1,largeur){
+  const J=864e5, jours=(x1-x0)/J, out=[];
+  if(jours<=75){
+    const n=Math.max(2,Math.min(6,Math.floor(largeur/80)));
+    for(let i=0;i<=n;i++){ const x=x0+(x1-x0)*i/n, d=new Date(x); out.push({x,lib:String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')}); }
+    return out;
+  }
+  const mois=[]; const d=new Date(x0); d.setDate(1); d.setHours(0,0,0,0); d.setMonth(d.getMonth()+1);
+  while(d.getTime()<=x1){ mois.push(d.getTime()); d.setMonth(d.getMonth()+1); }
+  const pas=Math.max(1,Math.ceil(mois.length/Math.max(2,Math.floor(largeur/70))));
+  mois.forEach((x,i)=>{ if(i%pas===0) out.push({x,lib:DB_MOIS[new Date(x).getMonth()]}); });
+  return out;
+}
+/**
+ * Une courbe complète : grille, axes, aires dégradées, traits lissés, points,
+ * bande de marge, et la zone de survol qui porte l'info-bulle.
+ * @param {{id:string,W:number,H:number,series:Array,axeD?:boolean,fmtG?:Function,fmtD?:Function,repere?:boolean,minG?:number}} o
+ */
+function _dbCourbe(o){
+  const S=(o.series||[]).filter(s=>s&&s.points&&s.points.length);
+  if(!S.length) return '';
+  const W=Math.max(220,Math.round(o.W)), H=o.H||170;
+  const aD=S.some(s=>s.axe==='d');
+  const pg=38, pd=aD?42:12, ph=10, pb=24;
+  const xs=[...new Set(S.flatMap(s=>s.points.map(p=>p.x)))].sort((a,b)=>a-b);
+  let x0=xs[0], x1=xs[xs.length-1]; if(x1===x0){ x0-=864e5; x1+=864e5; }
+  const sx=x=>pg+(x-x0)/(x1-x0)*(W-pg-pd);
+  const axe=cote=>{ const l=S.filter(s=>(s.axe||'g')===cote); if(!l.length) return null;
+    return _dbAxe(l.flatMap(s=>s.points.map(p=>p.v)),Math.max(0,...l.map(s=>s.bande||0)),cote==='g'&&o.minG!=null?{min:o.minG}:null); };
+  const A={g:axe('g'),d:axe('d')};
+  const sy=(v,cote)=>{ const a=A[cote]||A.g; return ph+(1-(v-a.lo)/(a.hi-a.lo))*(H-ph-pb); };
+  const fG=o.fmtG||(v=>_dbNb(v,0)), fD=o.fmtD||(v=>_dbNb(v,0)+' %');
+  let g='';
+  const aG=A.g||A.d;
+  for(const t of aG.ticks){ const y=sy(t,A.g?'g':'d');
+    g+='<line x1="'+pg+'" x2="'+(W-pd)+'" y1="'+y+'" y2="'+y+'" class="db-grille-l"/>'
+      +'<text x="'+(pg-8)+'" y="'+(y+4)+'" text-anchor="end" class="db-ax">'+escapeHtml(A.g?fG(t):fD(t))+'</text>'; }
+  if(A.g&&A.d) for(const t of A.d.ticks){ const y=sy(t,'d');
+    g+='<text x="'+(W-pd+8)+'" y="'+(y+4)+'" class="db-ax">'+escapeHtml(fD(t))+'</text>'; }
+  for(const t of _dbTicksX(x0,x1,W-pg-pd)){
+    const X=sx(t.x), ancre=X>W-pd-22?'end':(X<pg+22?'start':'middle');
+    g+='<text x="'+X+'" y="'+(H-6)+'" text-anchor="'+ancre+'" class="db-ax">'+escapeHtml(t.lib)+'</text>';
+  }
+  let defs='', aires='', bandes='', traits='', points='';
+  S.forEach((s,i)=>{
+    const c=escapeHtml(s.couleur), cote=s.axe||'g';
+    const reels=s.points.filter(p=>!p.prevu), prevus=s.points.filter(p=>p.prevu);
+    const pts=reels.map(p=>[sx(p.x),sy(p.v,cote)]);
+    const gid=o.id+'-g'+i;
+    defs+='<linearGradient id="'+gid+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+c+'" stop-opacity="'+(s.aire===false?0:.32)+'"/><stop offset="1" stop-color="'+c+'" stop-opacity="0"/></linearGradient>';
+    if(pts.length>1&&s.aire!==false){
+      const bas=H-pb;
+      aires+='<path d="'+_dbLisse(pts)+'L'+pts[pts.length-1][0]+','+bas+'L'+pts[0][0]+','+bas+'Z" fill="url(#'+gid+')"/>';
+    }
+    if(s.bande&&pts.length>1){
+      const haut=reels.map(p=>[sx(p.x),sy(p.v+s.bande,cote)]), bas=reels.map(p=>[sx(p.x),sy(p.v-s.bande,cote)]).reverse();
+      bandes+='<path d="'+_dbLisse(haut)+'L'+bas.map(q=>q[0]+','+q[1]).join('L')+'Z" class="db-bande"/>';
+    }
+    if(pts.length>1) traits+='<path d="'+_dbLisse(pts)+'" fill="none" stroke="'+c+'" stroke-width="2.4" stroke-linecap="round" style="filter:drop-shadow(0 0 4px '+c+')"/>';
+    if(prevus.length&&pts.length){ const q=prevus[prevus.length-1];
+      traits+='<path d="M'+pts[pts.length-1][0]+','+pts[pts.length-1][1]+'L'+sx(q.x)+','+sy(q.v,cote)+'" fill="none" stroke="'+c+'" stroke-width="2.2" stroke-dasharray="5 4"/>'; }
+    pts.forEach((q,j)=>{ const der=j===pts.length-1&&!prevus.length;
+      points+='<circle cx="'+q[0]+'" cy="'+q[1]+'" r="'+(der?4.5:3)+'" fill="'+c+'" stroke="#0b0b0b" stroke-width="1.2"'+(der?' style="filter:drop-shadow(0 0 5px '+c+')"':'')+'/>'; });
+  });
+  const repere=o.repere?'<line x1="'+sx(x1)+'" x2="'+sx(x1)+'" y1="'+ph+'" y2="'+(H-pb)+'" class="db-repere"/>':'';
+  // L'info-bulle lit ces lignes : une par date, les valeurs de chaque série.
+  _dbDonnees[o.id]={W,H,pg,pd,ph,pb,xs:xs.map(x=>sx(x)),dates:xs,
+    lignes:xs.map(x=>S.map(s=>{ const p=s.points.find(q=>q.x===x); return p?{lib:s.lib,c:s.couleur,v:p.v,prevu:!!p.prevu,fmt:s.fmt}:null; }).filter(Boolean)),
+    semaine:!!o.semaine};
+  return '<div class="db-zone-g" id="'+escapeHtml(o.id)+'"><svg class="db-svg" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+escapeHtml(o.titre||'Courbe')+'">'
+    +'<defs>'+defs+'</defs>'+g+bandes+aires+repere+traits+points
+    +'<line class="db-curseur" x1="0" x2="0" y1="'+ph+'" y2="'+(H-pb)+'" style="display:none"/>'
+    +'<rect x="'+pg+'" y="0" width="'+(W-pg-pd)+'" height="'+(H-pb)+'" fill="transparent" onpointermove="dbSurvol(event,\''+escapeHtml(o.id)+'\')" onpointerdown="dbSurvol(event,\''+escapeHtml(o.id)+'\')" onpointerleave="dbQuitter(\''+escapeHtml(o.id)+'\')"/>'
+    +'</svg><div class="db-bulle" style="display:none"></div></div>';
+}
+function dbSurvol(ev,id){
+  const d=_dbDonnees[id], z=document.getElementById(id);
+  if(!d||!z) return;
+  const svg=z.querySelector('svg'), r=svg.getBoundingClientRect();
+  const x=(ev.clientX-r.left)*(d.W/(r.width||d.W));
+  let i=0, best=Infinity; d.xs.forEach((v,k)=>{ const e=Math.abs(v-x); if(e<best){ best=e; i=k; } });
+  const l=z.querySelector('.db-curseur'); l.setAttribute('x1',d.xs[i]); l.setAttribute('x2',d.xs[i]); l.style.display='';
+  const b=z.querySelector('.db-bulle');
+  const dt=new Date(d.dates[i]);
+  const tete=(d.semaine?'Semaine du ':'')+String(dt.getDate()).padStart(2,'0')+'/'+String(dt.getMonth()+1).padStart(2,'0')+'/'+dt.getFullYear();
+  b.innerHTML='<b>'+escapeHtml(tete)+'</b>'+d.lignes[i].map(p=>'<span><i style="background:'+escapeHtml(p.c)+'"></i>'
+    +escapeHtml(p.lib)+' : '+escapeHtml(p.fmt?p.fmt(p.v):_dbNb(p.v,1))+(p.prevu?' (prévu)':'')+'</span>').join('');
+  b.style.display='block';
+  const px=d.xs[i]*(r.width/d.W);
+  const bw=b.offsetWidth||150;
+  b.style.left=Math.max(0,Math.min((r.width-bw),px+(px>r.width/2?-bw-12:12)))+'px';
+  b.style.top='6px';
+}
+function dbQuitter(id){
+  const z=document.getElementById(id); if(!z) return;
+  const l=z.querySelector('.db-curseur'), b=z.querySelector('.db-bulle');
+  if(l) l.style.display='none'; if(b) b.style.display='none';
+}
+
+// ── LES CARTES ─────────────────────────────────────────────────────────────
+function _dbInfo(cle,texte){
+  return '<button type="button" class="db-i" aria-label="Explication" aria-expanded="false" onclick="dbInfo(this)">i</button>'
+    +'<p class="db-info" hidden>'+escapeHtml(texte)+'</p>';
+}
+function dbInfo(b){
+  const p=b&&b.closest('.db-carte')&&b.closest('.db-carte').querySelector('.db-info');
+  if(!p) return;
+  p.hidden=!p.hidden; b.setAttribute('aria-expanded',String(!p.hidden));
+}
+function _dbPeriodes(){
+  const L={182:'6M',365:'1 an',0:'Tout'};
+  return '<span class="db-seg" role="group" aria-label="Période">'
+    +CCD_PERIODES.map(p=>'<button type="button" class="'+(p.j===_ccdPeriode?'actif':'')+'" aria-pressed="'+(p.j===_ccdPeriode)+'" onclick="ccdPeriode('+p.j+')">'+escapeHtml(L[p.j]||p.lib)+'</button>').join('')+'</span>';
+}
+function _dbCarte(cls,titre,info,droite,corps){
+  return '<section class="db-carte '+cls+'"><div class="db-tete"><h4 class="db-titre">'+escapeHtml(titre)+(info?' '+info:'')+'</h4>'+(droite||'')+'</div>'+corps+'</section>';
+}
+function _dbLegende(series){
+  return '<div class="db-leg">'+series.map(s=>'<span><i style="background:'+escapeHtml(s.couleur)+';color:'+escapeHtml(s.couleur)+'"></i>'+escapeHtml(s.lib)+'</span>').join('')+'</div>';
+}
+function _dbVide(t){ return '<p class="db-vide">'+escapeHtml(t)+'</p>'; }
+
+function _dbCartePoids(u,W,neutre){
+  const info=_dbInfo('pg','Poids relevé au bilan (axe de gauche) et masse grasse estimée par la formule de la Navy à partir des tours de taille, de cou'
+    +' et de hanches (axe de droite). La bande grise autour du poids est la marge de la balance : ± '+String(SYN_BRUIT_POIDS).replace('.',',')+' kg.');
+  if(neutre) return _dbCarte('db-c-pg','Poids et masse grasse',info,'',_dbVide('Courbe de poids masquée : un antécédent est déclaré au questionnaire de départ.'));
+  const s=dbSeriesPoidsGras(u);
+  const series=[{lib:'Poids (kg)',couleur:'#ef4444',points:ccdFenetre(s.poids),bande:SYN_BRUIT_POIDS,fmt:v=>_dbNb(v,1)+' kg'}];
+  const pct=ccdFenetre(s.pct);
+  if(pct.length) series.push({lib:'Masse grasse (%)',couleur:'#3b82f6',points:pct,axe:'d',fmt:v=>_dbNb(v,1)+' %'});
+  const c=_dbCourbe({id:'db-pg',titre:'Poids et masse grasse',W,H:180,series,repere:true,fmtD:v=>_dbNb(v,0)+'%'});
+  let proj=''; try{ proj=_htmlCcdProjection(u)||''; }catch(e){ proj=''; }
+  return _dbCarte('db-c-pg','Poids et masse grasse',info,_dbPeriodes(),
+    c?(_dbLegende(series)+c+(pct.length?'':_htmlCcdManqueMaigre(u).replace('Pas de courbe de masse maigre','Pas de courbe de masse grasse'))+proj):_dbVide('Rien à tracer sur cette période : il faut deux bilans avec un poids.'));
+}
+function _dbCarteMasses(u,W,neutre){
+  const info=_dbInfo('mm','Masse maigre (tout ce qui n’est pas du gras : muscles, os, eau, organes) et masse grasse, en kilos, par la même formule que la carte voisine.'
+    +' La masse musculaire seule ne se mesure qu’avec une balance à impédance : on ne l’invente pas. Marge de la masse maigre : ± '+String(CCD_MAIGRE_BRUIT).replace('.',',')+' kg.');
+  if(neutre) return _dbCarte('db-c-mm','Masse maigre et masse grasse',info,'',_dbVide('Masquée pour la même raison que le poids.'));
+  const s=dbSeriesPoidsGras(u);
+  const maigre=ccdFenetre(s.maigre), gras=ccdFenetre(s.gras);
+  if(maigre.length<2) return _dbCarte('db-c-mm','Masse maigre et masse grasse',info,_dbPeriodes(),_htmlCcdManqueMaigre(u));
+  const series=[{lib:'Masse grasse (kg)',couleur:'#22c55e',points:gras,fmt:v=>_dbNb(v,1)+' kg'},
+    {lib:'Masse maigre (kg)',couleur:'#a855f7',points:maigre,bande:CCD_MAIGRE_BRUIT,fmt:v=>_dbNb(v,1)+' kg'}];
+  return _dbCarte('db-c-mm','Masse maigre et masse grasse',info,_dbPeriodes(),
+    _dbLegende(series)+_dbCourbe({id:'db-mm',titre:'Masse maigre et masse grasse',W,H:180,series,minG:0}));
+}
+function _dbCarteMens(u,W){
+  const info=_dbInfo('me','Tours relevés au ruban à chaque bilan. Cuisses et bras : moyenne des deux côtés. Marge du ruban : ± '+String(SYN_BRUIT_MESURE).replace('.',',')+' cm.');
+  const k=_dbUnite==='in'?1/2.54:1, u2=_dbUnite==='in'?' in':' cm';
+  const series=DB_TOURS.map(t=>({lib:t.lib,couleur:t.c,points:ccdFenetre(dbPointsTour(u,t)).map(p=>({x:p.x,v:Math.round(p.v*k*10)/10})),aire:false,fmt:v=>_dbNb(v,1)+u2}))
+    .filter(s=>s.points.length);
+  const seg='<span class="db-seg" role="group" aria-label="Unité"><button type="button" class="'+(_dbUnite==='cm'?'actif':'')+'" onclick="dbUnite(\'cm\')">cm</button><button type="button" class="'+(_dbUnite==='in'?'actif':'')+'" onclick="dbUnite(\'in\')">inch</button></span>';
+  if(!series.some(s=>s.points.length>1)) return _dbCarte('db-c-me','Mensurations',info,seg,_dbVide('Il faut deux bilans avec un même tour pour tracer une courbe.'));
+  return _dbCarte('db-c-me','Mensurations',info,seg,_dbLegende(series)+_dbCourbe({id:'db-me',titre:'Mensurations',W,H:150,series}));
+}
+function _dbCarteSeries(u,W,v){
+  const info=_dbInfo('sd','Séries dures par semaine et par groupe musculaire (un muscle secondaire compte une demi-série). Les quatre groupes les plus chargés.'
+    +(v&&v.prevu?' La dernière semaine, en pointillé, est la semaine entière telle que le programme la prévoit, pas son avancée.':''));
+  if(!v) return _dbCarte('db-c-sd','Séries dures par semaine',info,_dbPeriodes(),_dbVide('Aucune séance ni programme à compter pour l’instant.'));
+  const series=v.series.map(s=>Object.assign({},s,{aire:true,fmt:x=>_dbNb(x,1)+' séries'}));
+  return _dbCarte('db-c-sd','Séries dures par semaine',info,_dbPeriodes(),
+    _dbLegende(series)+_dbCourbe({id:'db-sd',titre:'Séries dures par semaine',W,H:150,series,minG:0,semaine:true}));
+}
+function _dbCarteRepartition(v){
+  const info=_dbInfo('rp','Répartition des séries dures de '+(v?v.ref.lib:'la semaine')+' entre les groupes musculaires.');
+  const r=v?dbRepartition(v.ref.muscles):null;
+  if(!r) return _dbCarte('db-c-rp','Répartition des séries',info,'',_dbVide('Rien à répartir pour l’instant.'));
+  const R=54, C=2*Math.PI*R; let acc=0;
+  const arcs=r.groupes.map(g=>{ const l=g.n/r.total*C, gap=r.groupes.length>1?2:0;
+    const a='<circle cx="70" cy="70" r="'+R+'" fill="none" stroke="'+escapeHtml(g.c)+'" stroke-width="20" stroke-dasharray="'+Math.max(0,l-gap)+' '+(C-Math.max(0,l-gap))+'" stroke-dashoffset="'+(-acc)+'" transform="rotate(-90 70 70)"/>';
+    acc+=l; return a; }).join('');
+  const donut='<svg class="db-donut" viewBox="0 0 140 140" role="img" aria-label="Répartition des séries"><circle cx="70" cy="70" r="'+R+'" fill="none" stroke="#1a1a1a" stroke-width="20"/>'+arcs
+    +'<text x="70" y="70" text-anchor="middle" class="db-don-n">'+escapeHtml(_dbNb(r.total,1))+'</text><text x="70" y="88" text-anchor="middle" class="db-don-s">séries / sem.</text></svg>';
+  const leg='<ul class="db-rleg">'+r.groupes.map(g=>'<li><i style="background:'+escapeHtml(g.c)+'"></i><span>'+escapeHtml(g.lib)+'</span><b>'+g.pct+'%</b><em>('+escapeHtml(_dbNb(g.n,1))+')</em></li>').join('')+'</ul>';
+  return _dbCarte('db-c-rp','Répartition des séries',info,'','<div class="db-rep">'+donut+leg+'</div>');
+}
+function _dbCarteZones(u,v){
+  const info=_dbInfo('cz','Tours : l’écart du ruban depuis la première mesure, zone par zone ; la couleur dit le sens de la mesure, jamais un jugement. '
+    +'Séries : la charge de '+(v?v.ref.lib:'la semaine')+' par zone et sa part du total. Les masses par zone demanderaient une balance à impédance segmentaire.');
+  const seg='<span class="db-seg db-seg-l" role="group" aria-label="Lecture"><button type="button" class="'+(_dbZone==='tours'?'actif':'')+'" onclick="dbZone(\'tours\')">Tours</button><button type="button" class="'+(_dbZone==='series'?'actif':'')+'" onclick="dbZone(\'series\')">Séries</button></span>';
+  const z=dbZones(u,_dbZone,v?v.ref.muscles:null);
+  const max=Math.max(0.0001,...z.map(x=>Math.abs(x.valeur||0)));
+  const tuiles=z.map(x=>{
+    const img=_volIllus(x.img);
+    const vide=x.valeur==null;
+    const val=vide?'':(_dbZone==='series'?_dbNb(x.valeur,1)+' séries':_dbSigne(x.valeur,1)+' cm');
+    const part=_dbZone==='series'?(x.part||0):(Math.abs(x.valeur||0)/max);
+    const coul=_dbZone==='series'?'#ef4444':((x.valeur||0)>=0?'#22c55e':'#ef4444');
+    const sous=vide?'':(_dbZone==='series'?(x.pct+' % du total'):(_dbSigne(x.pct,1)+' %'));
+    return '<div class="db-tz">'+(img?'<img src="'+img+'" alt="">':'<span class="db-tz-i"></span>')
+      +'<div class="db-tz-c"><b class="db-tz-n">'+escapeHtml(x.lib)+'</b>'
+      +(vide?'<span class="db-tz-v db-tz-vide">pas deux mesures</span>':'<span class="db-tz-v" style="color:'+coul+'">'+escapeHtml(val)+'</span>'
+        +'<span class="db-tz-b"><i style="width:'+Math.round(part*100)+'%;background:'+coul+'"></i></span><span class="db-tz-p" style="color:'+coul+'">'+escapeHtml(sous)+'</span>')
+      +'</div></div>';
+  }).join('');
+  return _dbCarte('db-c-cz','Composition corporelle',info,seg,'<div class="db-tzs">'+tuiles+'</div>');
+}
+const DB_ICONES={
+  imc:'<path d="M5 20h14M7 20V9h10v11M9 9V6a3 3 0 0 1 6 0v3"/>',
+  th:'<path d="M8 3c0 5 2 6 2 9s-2 4-2 9M16 3c0 5-2 6-2 9s2 4 2 9M7 12h10"/>',
+  bras:'<path d="M4 16c3-1 5-4 6-8 1-2 3-3 5-2 2 1 2 4 0 5-2 1-3 2-3 4 0 3 4 3 8 3"/>',
+  cuisse:'<path d="M9 3c-1 6-2 10-1 18M15 3c1 6 1 10 0 18M8 12h8"/>',
+  maigre:'<circle cx="12" cy="5" r="2"/><path d="M12 7v7m0 0-3 7m3-7 3 7M7 10h10"/>',
+  mb:'<path d="M12 21c4 0 6-3 6-6 0-4-3-5-3-9-2 2-3 3-3 5-1-1-2-2-2-4-2 2-4 5-4 8 0 3 2 6 6 6z"/>'
+};
+function _dbCarteRapports(u,neutre){
+  const info=_dbInfo('rk','IMC : poids / taille². Ratio taille / hanches : tour de taille divisé par tour de hanches. Ratio masse maigre : part du poids qui n’est pas du gras. '
+    +'Métabolisme : dépense au repos, par Katch-McArdle (masse maigre) ou, à défaut, Mifflin-St Jeor. Écarts comparés à la mesure précédente ou à la première.');
+  const sel='<select class="db-sel" onchange="dbRapportRef(this.value)" aria-label="Comparer à"><option value="precedent"'+(_dbRef==='precedent'?' selected':'')+'>Dernière mesure</option><option value="debut"'+(_dbRef==='debut'?' selected':'')+'>Depuis le début</option></select>';
+  const masquer=new Set(neutre?['imc','maigre','mb']:[]);
+  const t=dbRapports(u,_dbRef).filter(r=>!masquer.has(r.cle)).map(r=>{
+    const vide=r.valeur==null;
+    return '<div class="db-rk"><svg class="db-rk-i" viewBox="0 0 24 24" aria-hidden="true">'+DB_ICONES[r.cle]+'</svg><div>'
+      +'<span class="db-rk-l">'+escapeHtml(r.lib)+'</span>'
+      +'<b class="db-rk-v">'+(vide?'<span class="db-rk-vide">à mesurer</span>':escapeHtml(_dbNb(r.valeur,r.d)+r.unite))+'</b>'
+      +(r.ecart!=null?'<span class="db-rk-e">'+(Math.abs(r.ecart)<Math.pow(10,-r.d)/2?'stable':((r.ecart>0?'↑ ':'↓ ')+escapeHtml(_dbSigne(r.ecart,r.d))))+'</span>':'')
+      +'</div></div>';
+  }).join('');
+  return _dbCarte('db-c-rk','Rapports clés',info,sel,'<div class="db-rks">'+t+'</div>');
+}
+// Les réglages de l'étage : chacun redessine l'étage entier.
+function _dbRedessiner(){
+  try{ const c=getOwnedClient(currentClientId); if(c) renderCourbesCoach(c); }catch(e){}
+}
+function dbUnite(v){ _dbUnite=(v==='in')?'in':'cm'; _dbRedessiner(); return _dbUnite; }
+function dbZone(v){ _dbZone=(v==='series')?'series':'tours'; _dbRedessiner(); return _dbZone; }
+function dbRapportRef(v){ _dbRef=(v==='debut')?'debut':'precedent'; _dbRedessiner(); return _dbRef; }
+
+/**
+ * L'étage entier. `largeur` est celle du conteneur : les courbes sont
+ * dessinées à leur taille réelle, pixel pour pixel, pour que les textes des
+ * axes gardent leur taille sur téléphone comme sur ordinateur.
+ */
+function _htmlCcdTableau(c,largeur){
+  const u=_dossier(c);
+  if(!u) return '';
+  if(c&&c._fromCode) return '';
+  try{ if(!phpDisponible(u)) return ''; }catch(e){}
+  let neutre=false; try{ neutre=aTCA(u); }catch(e){ neutre=false; }
+  const L=Math.max(300,Number(largeur)||1100);
+  const cols=L>=900?3:(L>=640?2:1);
+  const gap=14, pad=36;
+  // La largeur utile de chaque courbe : celle de sa carte, moins ses marges.
+  const w1=Math.floor(cols===1?L:(L-gap)/2)-pad;
+  const w2=Math.floor(cols===3?(L-2*gap)*1.3/3.6:(cols===2?(L-gap)/2:L))-pad;
+  let v=null; try{ v=dbSeriesVolume(u,_ccdPeriode?Math.round(_ccdPeriode/7):26); }catch(e){ v=null; }
+  const r1=_dbCartePoids(u,w1,neutre)+_dbCarteMasses(u,w1,neutre);
+  const r2=_dbCarteMens(u,w2)+_dbCarteSeries(u,w2,v)+_dbCarteRepartition(v);
+  const r3=_dbCarteZones(u,v)+_dbCarteRapports(u,neutre);
+  // LA TROISIEME RANGEE A COTE A COTE SEULEMENT QUAND ELLE Y TIENT : cinq zones
+  // et six rapports dans deux demi-cartes de 470 px coupaient leurs chiffres.
+  return '<div class="db" data-cols="'+cols+'"'+(L>=1150?' data-large="1"':'')+'>'
+    +'<div class="db-rang db-r1">'+r1+'</div>'
+    +'<div class="db-rang db-r2">'+r2+'</div>'
+    +'<div class="db-rang db-r3">'+r3+'</div></div>';
+}
+
 function renderCourbesCoach(c){
   const z=document.getElementById('ccd-courbes');
   if(!z) return false;
+  // LES COURBES SONT DESSINEES A LEUR TAILLE REELLE : on mesure le conteneur.
+  // Masque (autre vue de la fiche), il mesure 0 : on garde la derniere largeur
+  // connue, et l'observateur redessine des qu'il reapparait.
+  const l=z.clientWidth||0;
+  if(l) _dbLargeur=l;
   let h='';
-  try{ h=_htmlCcdCourbes(c)||''; }catch(e){ h=''; }
+  try{ h=_htmlCcdCourbes(c,_dbLargeur)||''; }catch(e){ h=''; }
   z.innerHTML=h;
+  _dbSuivreLargeur(z);
   return !!h;
+}
+function _dbSuivreLargeur(z){
+  if(!z||z._dbRO||typeof ResizeObserver!=='function') return;
+  z._dbRO=new ResizeObserver(()=>{
+    const l=z.clientWidth;
+    if(!l||Math.abs(l-_dbLargeur)<40) return;
+    _dbLargeur=l;
+    try{ const c=getOwnedClient(currentClientId); if(c) z.innerHTML=_htmlCcdCourbes(c,l)||''; }catch(e){}
+  });
+  z._dbRO.observe(z);
 }
 // ══ ANALYSE MORPHO-ANATOMIQUE — LA MAQUETTE DE KEVIN (24/09/2026) ═══════════
 //
@@ -108027,7 +108472,7 @@ function blocPoidsCoach(user,depuis){
       // LA PERIODE DU COACH PRIME : posee en haut de « Ses courbes », elle cadre
       // deja la serie — pas de second choix de periode dans la carte.
       periodes:!_pDep,jours:_pDep?100000:0})}
-    ${_pDep?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:4px">La courbe suit la période choisie en haut de « Ses courbes ». La vitesse, elle, garde sa fenêtre de mesure.</div>':''}
+    ${_pDep?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:4px">La courbe suit la période choisie dans « Ses courbes ». La vitesse, elle, garde sa fenêtre de mesure.</div>':''}
   </div>`;
 }
 function renderPoidsCoach(c){
