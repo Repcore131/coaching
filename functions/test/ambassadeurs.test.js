@@ -74,7 +74,7 @@ const T = (iso) => Date.parse(iso);
   set("ambassadeurs_demandes/max@t,fr", d);
   await F.ambassadeurDemande({ params: { uid: "max@t,fr" }, data: { val: () => d } });
   assert(get("ambassadeurs_demandes/max@t,fr/etat") === "accepte" && get("ambassadeurs/LEAFIT/stats/inscrits") === 1, "inscription attribuée à Léa");
-  assert(get("droits/max@t,fr/essaiFinit") === Date.now() + 60 * 864e5, "avantage : un mois d'essai en plus");
+  assert(get("droits/max@t,fr/essaiFinit") === Date.now() + 30 * 864e5, "un seul mois, présenté comme offert");
   // Max, venu par un ambassadeur, ne peut plus devenir filleul d'un parrain.
   set("parrainage/codes/KEVIN7K2", "kev@t,fr");
   const dp = { code: "KEVIN7K2", le: Date.now(), appareil: "appmax12345678" };

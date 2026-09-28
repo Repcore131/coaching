@@ -190,7 +190,7 @@ h2 em{font-style:normal;color:#fff;letter-spacing:0;text-transform:none}
       var src=(q.get('src')||'page').replace(/[^a-z0-9_-]/gi,'').slice(0,20);
       var cible=racine+'i/?'+(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)?'ref='+ref+'&':'')+'src='+src;
       h+='<a class="cta r" href="'+cible+'">Rejoins '+prenom+' sur RepCore</a>';
-      if(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)) h+='<div class="sous">Avec son code, tu as 2 mois pour essayer au lieu d’un.</div>';
+      if(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)) h+='<div class="sous">Grâce à '+prenom+', ton premier mois est offert.</div>';
       h+='<button type="button" class="part r" id="part">Partager cette page</button>';
       h+='<div class="pied"><a href="'+racine+'">RepCore</a> · l’app d’entraînement qui te suit séance après séance.</div>';
       z.removeAttribute('aria-busy'); z.innerHTML=h;
