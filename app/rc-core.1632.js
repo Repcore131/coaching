@@ -19330,9 +19330,42 @@ function parrainageFusionnerCompte(u,compte){
   p.inscrits=l.length; p.payants=payantsLe.length; p.payantsLe=payantsLe;
   p.moisGagnes=Math.max(0,Number(compte.moisGagnes)||0);
   p.prenoms=l.sort((a,b)=>(Number(b.date)||0)-(Number(a.date)||0)).slice(0,20)
-    .map(x=>({prenom:String(x.prenom||'').slice(0,24),statut:x.statut==='payant'?'payant':'inscrit',date:Number(x.date)||0}));
+    .map(x=>({prenom:String(x.prenom||'').slice(0,24),statut:filleulStatut(x),date:Number(x.date)||0}));
   u.parrainage=p;
   return payantsLe.length!==avant;
+}
+// PURE. Où en est un filleul : 'payant' (abonné), 'seance' (sa première
+// séance est faite : le Worker l'a notée, événement filleul_seance) ou
+// 'inscrit'. Les trois marches de l'écran parrainage.
+function filleulStatut(x){
+  if(!x||typeof x!=='object') return 'inscrit';
+  if(x.statut==='payant') return 'payant';
+  if(x.statut==='seance'||Number(x.premiereSeance)>0) return 'seance';
+  return 'inscrit';
+}
+const FILLEUL_ETAPES=Object.freeze([['inscrit','Inscrit'],['seance','1re séance'],['payant','Abonné']]);
+// PURE. La ligne d'un filleul : son prénom, et ses trois marches.
+function htmlFilleul(x){
+  const st=filleulStatut(x);
+  const k=FILLEUL_ETAPES.findIndex(e=>e[0]===st);
+  const lib=FILLEUL_ETAPES[k][1]+(st==='payant'?' ✓':'');
+  return '<div class="pr-f" data-statut="'+st+'"><span class="pr-f-nom">'+escapeHtml(x&&x.prenom||'Un ami')+'</span>'
+    +'<span class="pr-f-etapes" aria-hidden="true">'+FILLEUL_ETAPES.map((e,i)=>'<i class="'+(i<=k?'on':'')+'" title="'+e[1]+'"></i>').join('')+'</span>'
+    +'<b>'+escapeHtml(lib)+'</b></div>';
+}
+// PURE. La ligne de l'accueil, sous le rang, dès le premier filleul (rien avant).
+function htmlLigneFilleuls(u){
+  const p=(u&&u.parrainage)||{};
+  const n=Number(p.inscrits)||0;
+  if(!PARRAINAGE_ACTIF||!(n>0)) return '';
+  const l=Array.isArray(p.prenoms)?p.prenoms:[];
+  const seance=l.filter(x=>filleulStatut(x)==='seance').length, pay=Number(p.payants)||0, mois=Number(p.moisGagnes)||0;
+  const bouts=[n+' filleul'+(n>1?'s':'')];
+  if(seance) bouts.push(seance+' en route');
+  if(pay) bouts.push(pay+' abonné'+(pay>1?'s':''));
+  if(mois) bouts.push(mois+' mois gagné'+(mois>1?'s':''));
+  return '<button type="button" class="clh-filleuls-b" onclick="ouvrirParrainage()"><span aria-hidden="true">⚡</span> '
+    +escapeHtml(bouts.join(' · '))+'<span class="clh-filleuls-f" aria-hidden="true">›</span></button>';
 }
 // PURE. Le rang montré à qui reçoit le lien (1 à 10) : celui de l'accueil.
 function rangPublic(u){
@@ -19372,14 +19405,23 @@ function htmlParrainage(u){
       +'<div class="dfi-barre"><span style="width:'+Math.round(part*100)+'%"></span></div>'
       +'<div class="pr-pal-g">'+escapeHtml(x.gain)+'</div></div>';
   }).join('');
-  const liste=(Array.isArray(p.prenoms)?p.prenoms:[]).map(x=>'<div class="pr-f"><span>'+escapeHtml(x.prenom||'Un ami')+'</span><b>'
-    +(x.statut==='payant'?'Abonné ✓':'Inscrit')+'</b></div>').join('');
+  const liste=(Array.isArray(p.prenoms)?p.prenoms:[]).map(htmlFilleul).join('');
+  const plus=TARIFS.essai_parrainage.moisEnPlus;
+  // LA CARTE D'ABORD (28/09/2026) : une image se partage en story, un texte
+  // se perd dans une conversation. Le texte et le lien restent, en second.
   return '<div class="pr-hero"><div class="pr-titre">Fais découvrir RepCore</div>'
-    +'<p>Ton ami a <b>1 mois d’essai en plus</b>. Toi, <b>1 mois offert</b> à son premier paiement.</p></div>'
-    +'<div class="pr-code-carte"><div class="pr-code-lib">Ton code</div>'
+    +'<p>Ton ami a <b>'+plus+' mois d’essai en plus</b>. Toi, <b>1 mois offert</b> à son premier paiement.</p></div>'
+    +'<div class="pr-carte-inv">'
+    +'<button type="button" class="btn btn-red pr-carte-b" onclick="partagerCarteInvitation(this)"'+(code?'':' disabled')+'>'
+      +icon('share',16)+' <span>Partager ma carte d’invitation</span></button>'
+    +'<div class="pr-carte-note">Story : ton lien est copié, colle-le avec le sticker Lien. Post : la légende avec ton code est copiée.</div>'
+    +_htmlVisuelFonds('pr-fonds')
+    +'</div>'
+    +'<div class="pr-code-carte pr-secondaire"><div class="pr-code-lib">Ton code</div>'
     +'<div class="pr-code" id="pr-code">'+(code?escapeHtml(code):'…')+'</div>'
-    +'<button type="button" class="btn btn-red" style="width:100%;margin:12px 0 8px;min-height:48px" onclick="parrainagePartager(this)"'+(code?'':' disabled')+'>Partager mon code</button>'
-    +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:0;min-height:42px" onclick="parrainageCopier(this)"'+(code?'':' disabled')+'>Copier le lien</button></div>'
+    +'<div class="pr-sec-btns">'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="parrainagePartager(this)"'+(code?'':' disabled')+'>Envoyer le texte</button>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="parrainageCopier(this)"'+(code?'':' disabled')+'>Copier le lien</button></div></div>'
     +'<div class="pr-tuiles">'+tuile(inscrits,inscrits>1?'inscrits':'inscrit')+tuile(payants,payants>1?'abonnés':'abonné')
       +tuile(mois,'mois gagné'+(mois>1?'s':''))+'</div>'
     +'<div class="pr-paliers">'+paliers+'</div>'
@@ -19390,11 +19432,13 @@ async function ouvrirParrainage(){
   if(!PARRAINAGE_ACTIF||!currentUser) return false;
   go('s-parrainage');
   const z=document.getElementById('pr-contenu');
-  if(z) z.innerHTML=htmlParrainage(currentUser);
+  const poser=()=>{ if(!z) return; z.innerHTML=htmlParrainage(currentUser);
+    try{ monterSelecteurFond('pr-fonds',f=>_dessinerCarteInvitation(invitationDonnees(currentUser),f),null); }catch(e){} };
+  poser();
   try{ await parrainageAssurerCode(currentUser); }catch(e){}
   // Les compteurs, relus au serveur, et les badges s'ils ont bougé.
   try{ await majRecompensesServeur({force:true}); }catch(e){}
-  if(z&&document.getElementById('s-parrainage')?.classList.contains('active')) z.innerHTML=htmlParrainage(currentUser);
+  if(z&&document.getElementById('s-parrainage')?.classList.contains('active')) poser();
   return true;
 }
 function parrainageCopier(btn){
@@ -19421,6 +19465,142 @@ function parrainagePartager(btn){
     return true;
   }
   return parrainageCopier(btn);
+}
+// ══ LA CARTE D'INVITATION (28/09/2026) ═════════════════════════════════
+// Même épure que les autres visuels : fond au choix, Bebas et Montserrat,
+// l'éclair en filigrane, la signature en bas. « PRÉNOM T'INVITE », les mois
+// d'essai en très gros (TARIFS : jamais un chiffre en dur), le code dans un
+// cadre. Story 1080×1920 ou post 1080×1350 (visuelFormat).
+// Au partage : en story, le LIEN avec ?ref= est copié (sticker Lien) ; en
+// post, la LÉGENDE qui porte le code (_LEGENDES.invitation).
+// PURE (sauf nomSurVisuels). Les données de la carte.
+function invitationDonnees(u){
+  const p=(u&&u.parrainage)||{};
+  let sig=''; try{ sig=nomSurVisuels(u); }catch(e){ sig=''; }
+  let n=1; try{ n=rangPublic(u); }catch(e){ n=1; }
+  return {prenom:String((u&&u.fname)||'').trim().slice(0,24),code:parrainageCodeValide(p.code)?parrainageCodeNormalise(p.code):'',
+    mois:TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus,base:TARIFS.essai.mois,rang:n,signature:sig};
+}
+function _dessinerCarteInvitation(d,fond,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
+  const cv=document.createElement('canvas');
+  cv.width=W; cv.height=H;
+  const g=cv.getContext('2d');
+  const f=fond||'transparent';
+  _visuelPeindreFond(g,W,H,f);
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const M=72, LARG=W-M*2, cx=W/2;
+  const o=_visuelOutils(g);
+  const rouge=f==='rouge';
+  const x=d||{};
+  const qui=(x.prenom?String(x.prenom).toUpperCase()+' T’INVITE':'TU ES INVITÉ');
+  const grand=String(x.mois||2)+' MOIS';
+  const sous='D’ESSAI OFFERTS';
+  const detail=(x.base&&x.mois>x.base?(x.base===1?'au lieu d’un':'au lieu de '+x.base)+' · ':'')+'toute l’app · sans carte bancaire';
+  const code=String(x.code||'');
+  // LA MISE EN PAGE SE CALCULE D'ABORD, puis le bloc est centré entre le
+  // haut et la signature.
+  const H_TAG=70, H_QUI=post?120:150, CS=post?300:380, H_SOUS=90, H_DET=70, H_CODE=code?(post?210:250):0;
+  const HB=H_TAG+H_QUI+CS*0.86+H_SOUS+H_DET+H_CODE;
+  let y=Math.max(post?60:150,Math.round((H-(post?120:200)-HB)/2));
+  g.textAlign='center'; g.textBaseline='alphabetic';
+  o.ombre(true);
+  g.fillStyle='#fff'; g.font='800 34px '+MONT;
+  o.ecrireEspace('INVITATION',cx,y+34,10,true);
+  o.ombre(false);
+  g.fillStyle=rouge?'rgba(255,255,255,.85)':'#E02020';
+  g.fillRect(cx-44,y+54,88,5);
+  y+=H_TAG;
+  o.ombre(true);
+  g.fillStyle='rgba(255,255,255,.96)';
+  const qs=o.ajuste(qui,'700',post?96:112,BEBAS,LARG,44);
+  g.font='700 '+qs+'px '+BEBAS;
+  o.ecrire(o.coupe(qui,LARG),cx,y+qs*0.86);
+  y+=H_QUI;
+  // LE CHIFFRE, l'éclair derrière.
+  const base=y+CS*0.86;
+  _recEclairFiligrane(g,cx+210,y-10,cx-170,base+30,_recGraine('invitation|'+code),f);
+  o.ombre(true);
+  g.fillStyle='#fff';
+  const gs=o.ajuste(grand,'700',CS,BEBAS,LARG,140);
+  g.font='700 '+gs+'px '+BEBAS;
+  o.ecrire(grand,cx,base);
+  y=base;
+  const ss=o.ajusteEspace(sous,'800',54,MONT,8,LARG,26);
+  g.font='800 '+ss+'px '+MONT;
+  o.ecrireEspace(sous,cx,y+74,8,true);
+  y+=H_SOUS;
+  g.fillStyle='rgba(255,255,255,.85)';
+  const ds=o.ajuste(detail,'700',34,MONT,LARG,20);
+  g.font='700 '+ds+'px '+MONT;
+  o.ecrire(o.coupe(detail,LARG),cx,y+44);
+  y+=H_DET;
+  // LE CODE, dans un cadre : c'est lui qu'on recopie.
+  if(code){
+    const hc=post?170:200, lc=Math.min(LARG,760), yc=y+(post?20:30);
+    o.ombre(false);
+    g.save();
+    g.strokeStyle=rouge?'rgba(255,255,255,.9)':'#E02020'; g.lineWidth=5;
+    g.fillStyle=f==='transparent'?'rgba(0,0,0,.35)':'rgba(0,0,0,.28)';
+    const r=24, x0=cx-lc/2;
+    g.beginPath();
+    g.moveTo(x0+r,yc); g.lineTo(x0+lc-r,yc); g.quadraticCurveTo(x0+lc,yc,x0+lc,yc+r);
+    g.lineTo(x0+lc,yc+hc-r); g.quadraticCurveTo(x0+lc,yc+hc,x0+lc-r,yc+hc);
+    g.lineTo(x0+r,yc+hc); g.quadraticCurveTo(x0,yc+hc,x0,yc+hc-r);
+    g.lineTo(x0,yc+r); g.quadraticCurveTo(x0,yc,x0+r,yc); g.closePath();
+    g.fill(); g.stroke();
+    g.restore();
+    o.ombre(true);
+    g.fillStyle='rgba(255,255,255,.8)'; g.font='800 28px '+MONT;
+    o.ecrireEspace('MON CODE',cx,yc+50,8,true);
+    g.fillStyle='#fff';
+    const cs=o.ajusteEspace(code,'700',post?104:120,BEBAS,10,lc-60,50);
+    g.font='700 '+cs+'px '+BEBAS;
+    o.ecrireEspace(code,cx,yc+hc-(post?30:36),10,true);
+  }
+  _recSignature(g,o,String(x.signature||''),H-(post?50:110),LARG);
+  o.ombre(false);
+  return cv;
+}
+// LE GESTE, SYNCHRONE jusqu'au partage (iOS). Le partage natif, sinon le
+// téléchargement ; les deux copient le lien (story) ou la légende (post).
+function partagerCarteInvitation(btn,format){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  const d=invitationDonnees(u);
+  if(!d.code||_storyEnCours) return false;
+  const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond);
+  const nom=visuelNomFichier('repcore-invitation',fond,format);
+  try{ rcm('parrainage_partage'); }catch(e){}
+  _storyEnCours=true;
+  let ok=false;
+  try{
+    ok=_storySortirPartage(_dessinerCarteInvitation(d,fond,format),nom,undefined,fmt)
+      ||_storySortirTelechargement(_dessinerCarteInvitation(d,fond,format),nom,fmt);
+  }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
+  finally{ _storyEnCours=false; }
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp&&ok){ const l=sp.textContent; sp.textContent='Carte prête ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  return ok;
+}
+// « INVITER UN POTE », le bouton secondaire des grands moments (rang,
+// palier de série, fin du Wrapped). Le code existe : la carte part tout de
+// suite. Pas encore de code (jamais ouvert l'écran) : l'écran parrainage,
+// qui le crée.
+function htmlBoutonInviter(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!PARRAINAGE_ACTIF||!u||u.role==='coach') return '';
+  return '<button type="button" class="btn btn-outline btn-sm rc-inviter" onclick="event.stopPropagation();inviterUnPote(this)">'
+    +icon('share',14)+' <span>Inviter un pote</span></button>';
+}
+function inviterUnPote(btn){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u) return false;
+  if(invitationDonnees(u).code) return partagerCarteInvitation(btn);
+  try{ _bdgFermerEcran(true); }catch(e){}
+  try{ if(document.getElementById('s-wrapped')?.classList.contains('active')) _wrFermer(); }catch(e){}
+  ouvrirParrainage();
+  return true;
 }
 // L'entrée, dans le profil.
 function _rendreEntreeParrainage(){
@@ -42369,6 +42549,8 @@ function _storyCopierLien(src){
 // ⚠ À REMPLIR : le compte Instagram officiel, avec son @ (ex. '@repcore.app').
 //   Vide, il n'apparaît pas.
 const RC_COMPTE_INSTAGRAM='';
+// Les mois d'essai d'un invité, lus dans TARIFS au moment d'écrire.
+function _legMois(){ return TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus; }
 const LEGENDE_MAX=220;
 const _LEGENDES=Object.freeze({
   bilan:[d=>'Séance bouclée. Et toi, tu t’entraînes quand cette semaine ?',
@@ -42417,6 +42599,12 @@ const _LEGENDES=Object.freeze({
   team:[d=>'La team a tout donné cette semaine ⚡ Tu nous rejoins ?',
     d=>'Toute l’équipe, en chiffres. Tu veux en faire partie ?',
     d=>'Séances, records, tonnage : la team avance. Et toi ?'],
+  // Le CODE est dans chaque modèle (celui qui lit le post ne peut pas
+  // cliquer : il recopie). Sans code connu, on dit de le demander.
+  invitation:[d=>'Je t’offre '+_legMois()+' mois d’essai sur RepCore ⚡ '+(d.code?'Mon code : '+d.code+'.':'Demande-moi mon code.')+' Tu t’y mets ?',
+    d=>'Tu cherches une app pour suivre tes séances ? '+(d.code?'Avec le code '+d.code+', tu':'Avec mon code, tu')+' as '+_legMois()+' mois pour essayer, sans carte.',
+    d=>'On s’entraîne ensemble ? '+(d.code?'Code '+d.code+' à l’inscription : ':'Mon code à l’inscription : ')+_legMois()+' mois d’essai pour toi.',
+    d=>'Toute l’app ouverte, '+_legMois()+' mois, sans carte bancaire. '+(d.code?'Ton code : '+d.code+'.':'Demande-moi mon code.')+' Tu viens ?'],
   visuel:[d=>'Une séance de plus ⚡ Et toi, tu t’entraînes quand ?',
     d=>'La régularité, c’est tout. Tu viens ?',
     d=>'Chaque séance compte. Tu te lances ?']
@@ -42471,6 +42659,7 @@ function _legendeDonneesEcran(type){
     if(type==='rang'&&_rangCourant) d.nom=String(_rangCourant.nom||'');
     if((type==='defi'||type==='champion')&&_defiCourant) d.titre=String(_defiCourant.titre||'').slice(0,60);
     if(type==='wrapped'&&_wr&&_wr.w) d.seances=Number(_wr.w.seances)||0;
+    if(type==='invitation'){ const c=invitationDonnees(currentUser).code; if(c) d.code=c; }
   }catch(e){}
   return d;
 }
@@ -42502,7 +42691,7 @@ function _storyCopierSelonFormat(nomFichier,legende){
 // ── « Voir la légende » : lue, modifiable, copiée avant le partage ───────
 // Le type suit le sélecteur de fond de l'écran (son id).
 const _TYPE_DU_SELECTEUR=Object.freeze({'wd-fonds':'bilan','sd-fonds':'bilan','dfe-fonds':'defi','bdg-ecran-fonds':'badge',
-  'bdg-fiche-fonds':'badge','rg-fonds':'rang','rite-fonds':'cycle','serie-fonds':'serie','vc-fonds':'victoire'});
+  'bdg-fiche-fonds':'badge','rg-fonds':'rang','rite-fonds':'cycle','serie-fonds':'serie','vc-fonds':'victoire','pr-fonds':'invitation'});
 function typeDuSelecteur(id){
   const s=String(id||'');
   if(/^musc-/.test(s)) return 'muscles';
@@ -72349,6 +72538,7 @@ function _wrHtmlSlide(s,k){
       +'<button type="button" class="btn btn-outline wr-partager wr-carrousel" onclick="event.stopPropagation();partagerCarrouselWrapped(this)">'
         +icon('share',16)+' <span>Carrousel pour mon fil</span></button>'
       +'<button type="button" class="vf-legende" onclick="event.stopPropagation();voirLegende(\'wrapped\')">Voir la légende</button>'
+      +htmlBoutonInviter()
       +'</section>';
   }
   return '<section class="wr-slide" data-k="'+k+'" hidden>'
@@ -73772,6 +73962,7 @@ function _serieEcran(n,reste){
     +(d.jokers?'<p class="bdg-ecran-cond">Dont '+d.jokers+' semaine'+(d.jokers>1?'s':'')+' sauvée'+(d.jokers>1?'s':'')+' par un joker</p>':'')
     +_htmlVisuelFonds('serie-fonds')
     +'<button type="button" class="btn btn-red bdg-ecran-part" onclick="partagerSerie(this)">'+icon('share',16)+' <span>Partager</span></button>'
+    +htmlBoutonInviter()
     +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" onclick="bdgPlusTard()">'
       +(reste||_bdgRecap.length?'Suivant':'Plus tard')+'</button>'
     +'</div>',
@@ -74082,6 +74273,15 @@ function _rendreRang(u){
   let m=null; try{ m=majXp(); }catch(e){ m=null; }
   z.hidden=false;
   z.innerHTML=htmlRangAccueil(m?m.total:xpDe(u));
+  // LA LIGNE DES FILLEULS, sous l'en-tête (la bande a une hauteur fixe) :
+  // rien avant le premier filleul.
+  try{
+    const t=z.closest('.clh-tete');
+    let l=document.getElementById('clh-filleuls');
+    const h=htmlLigneFilleuls(u);
+    if(!l&&h&&t){ l=document.createElement('div'); l.id='clh-filleuls'; t.insertAdjacentElement('afterend',l); }
+    if(l){ l.innerHTML=h; l.hidden=!h; }
+  }catch(e){}
   return true;
 }
 // ── LA FIN DE SÉANCE : « +180 ⚡ », compté par arcCompteur, et le détail ──
@@ -74143,6 +74343,7 @@ function _rangEcran(n,reste){
     +'<p class="bdg-ecran-cond">'+escapeHtml(suiv?'Prochain rang : '+suiv.nom+', à '+xpFormat(suiv.seuil)+' V.':'Le rang le plus haut. Il n’y a rien au-dessus.')+'</p>'
     +_htmlVisuelFonds('rg-fonds')+_htmlVisuelMedia()
     +'<button type="button" class="btn btn-red bdg-ecran-part" onclick="partagerRang(this)">'+icon('share',16)+' <span>Partager</span></button>'
+    +htmlBoutonInviter()
     +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" onclick="bdgPlusTard()">'
       +(reste||_bdgRecap.length?'Suivant':'Plus tard')+'</button>'
     +'</div>',

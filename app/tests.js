@@ -48960,7 +48960,8 @@ async function testExercices(){
       if(!/JULIE7K2/.test(t)||!/2 \/ 3 filleuls abonnés/.test(t)||!/2 \/ 10 filleuls abonnés/.test(t)||!/1 mois d’Ultime offert/.test(t)) return _echec(t.slice(0,300));
       if(d.querySelectorAll('.pr-tuile').length!==3||!/5inscrits/.test(d.querySelector('.pr-tuiles').textContent.replace(/\s/g,''))) return _echec('compteurs');
       const b=[...d.querySelectorAll('button.btn')];
-      return (b.length===2&&b.filter(x=>!x.classList.contains('btn-casse')).length===1)?true:_echec('boutons (R31)');})());
+      // La carte d'invitation en tête (rouge), le texte et le lien en second (R31 : un seul bouton en capitales).
+      return (b.length===3&&b.filter(x=>!x.classList.contains('btn-casse')).length===1)?true:_echec('boutons (R31)');})());
     ok('Parrainage : le rappel doux — après un record ou un palier, une fois par semaine',(()=>{
       const u={role:'athlete'}, t=Date.now();
       const c=[
@@ -49595,6 +49596,89 @@ async function testExercices(){
       if(_legendePour('rang')!=='Ma légende à moi #RepCore') return _echec('la légende modifiée n’est pas celle qui part');
       if(_legendePour('rang')==='Ma légende à moi #RepCore') return _echec('elle ne sert qu’une fois');
       return (legendeModifiee('rang','x'.repeat(400)).length===220)?true:_echec('longueur non bornée');})());
+    // ══ 28/09/2026 — LA CARTE D'INVITATION ═══════════════════════════════
+    ok('Invitation : la carte, story et post, données extrêmes — rien ne déborde, le code est dans son cadre',(()=>{
+      const cas=[{prenom:'Maximilien-Alexandre',code:'MAXIMI7K2',mois:2,base:1,signature:'MAXIMILIEN-ALEXANDRE DE LA TOUR'},
+        {prenom:'',code:'',mois:12,base:12,signature:''},{prenom:'Lou',code:'LOUX2K9',mois:2,base:1,signature:'LOU'}];
+      for(const d of cas) for(const fmt of ['story','post']) for(const f of ['transparent','carbone','rouge']){
+        const cv=_dessinerCarteInvitation(d,f,fmt);
+        if(cv.width!==1080||cv.height!==(fmt==='post'?1350:1920)) return _echec('taille '+cv.width+'×'+cv.height);
+        // Les bords de l'image restent vides de texte : 20 px de marge, sur les quatre côtés.
+        const g=cv.getContext('2d');
+        const bande=(x,y,w,h)=>{ const p=g.getImageData(x,y,w,h).data; let n=0; for(let i=3;i<p.length;i+=4) if(f==='transparent'&&p[i]>40) n++; return n; };
+        if(f==='transparent'&&(bande(0,0,20,cv.height)||bande(cv.width-20,0,20,cv.height)||bande(0,cv.height-12,cv.width,12))) return _echec('débord '+fmt+' '+JSON.stringify(d.prenom));
+      }
+      const d=invitationDonnees({fname:'Julie',parrainage:{code:'julie7k2'}});
+      return (d.code==='JULIE7K2'&&d.mois===TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus&&invitationDonnees({}).code==='')?true:_echec(JSON.stringify(d));})());
+    ok('Invitation : au partage, en story le lien avec ?ref= ; en post la légende avec le code',(()=>{
+      const sv={u:currentUser,lien:window._storyCopierLien,leg:window._storyCopierLegende,t:window.toast,ac:window.attribCompter,ios:window._estIOS,f:window.visuelFormatChoisi};
+      const vus=[]; let charge=null;
+      try{
+        currentUser={fname:'Julie',role:'athlete',parrainage:{code:'JULIE7K2'}};
+        window.toast=()=>{}; window.attribCompter=()=>{}; window._estIOS=()=>false;
+        window._storyCopierLien=(src)=>{ vus.push('lien:'+lienPerso(src)); return true; };
+        window._storyCopierLegende=(t)=>{ vus.push('legende:'+t); return true; };
+        Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>true});
+        Object.defineProperty(navigator,'share',{configurable:true,value:(o)=>{ charge=o; return Promise.resolve(); }});
+        partagerCarteInvitation(null,'story');
+        if(!/^lien:.*ref=JULIE7K2/.test(vus[0]||'')||charge.files[0].name.indexOf('repcore-invitation')!==0) return _echec('story : '+vus.join(' | '));
+        vus.length=0;
+        partagerCarteInvitation(null,'post');
+        if(!/^legende:.*JULIE7K2.*#RepCore/s.test(vus[0]||'')||!/-post\./.test(charge.files[0].name)) return _echec('post : '+vus.join(' | '));
+        // Chaque modèle de légende d'invitation porte le code.
+        for(let i=0;i<_LEGENDES.invitation.length;i++) if(legendePartage('invitation',{code:'JULIE7K2'},{indice:i,u:null}).indexOf('JULIE7K2')<0) return _echec('modèle '+i+' sans code');
+        if(typeDuSelecteur('pr-fonds')!=='invitation') return _echec('sélecteur');
+        // Sans code : rien ne part.
+        currentUser={fname:'X',role:'athlete'};
+        if(partagerCarteInvitation(null,'story')!==false) return _echec('partagé sans code');
+      }finally{
+        delete navigator.canShare; delete navigator.share;
+        currentUser=sv.u; window._storyCopierLien=sv.lien; window._storyCopierLegende=sv.leg; window.toast=sv.t; window.attribCompter=sv.ac; window._estIOS=sv.ios;
+      }
+      return true;})());
+    ok('Invitation : l’écran parrainage — la carte en tête, le texte et le lien en second',(()=>{
+      const d=document.createElement('div');
+      d.innerHTML=htmlParrainage({parrainage:{code:'JULIE7K2',inscrits:1,payants:0,prenoms:[]}});
+      const kids=[...d.children].map(x=>x.className);
+      const iCarte=kids.indexOf('pr-carte-inv'), iCode=kids.findIndex(c=>/pr-code-carte/.test(c));
+      if(iCarte<0||iCode<0||iCarte>iCode) return _echec('ordre : '+kids.join());
+      const rouge=d.querySelector('button.btn-red');
+      if(!rouge||!/Partager ma carte d’invitation/.test(rouge.textContent)||!/partagerCarteInvitation/.test(rouge.getAttribute('onclick'))) return _echec('bouton principal');
+      if(!d.querySelector('.pr-carte-inv .vfmt')||!d.querySelector('.pr-carte-inv #pr-fonds')) return _echec('formats et fonds absents');
+      const sec=[...d.querySelectorAll('.pr-secondaire button')].map(b=>b.textContent);
+      return (sec.join('|')==='Envoyer le texte|Copier le lien')?true:_echec(sec.join('|'));})());
+    ok('Invitation : « Inviter un pote » sur le rang, le palier de série et la dernière slide du Wrapped',(()=>{
+      const sv=currentUser;
+      try{
+        currentUser={fname:'Julie',role:'athlete',parrainage:{code:'JULIE7K2'}};
+        const h=htmlBoutonInviter();
+        if(!/Inviter un pote/.test(h)||!/btn-outline/.test(h)||/btn-red/.test(h)) return _echec('pas un bouton secondaire : '+h);
+        const wr=_wrHtmlSlide({k:'profil',sur:'TON PROFIL',profil:{nom:'X',phrase:'Y'},resume:[],equivalent:null},4);
+        if(!/Inviter un pote/.test(wr)) return _echec('Wrapped');
+        if(/Inviter un pote/.test(_wrHtmlSlide({k:'seances',sur:'S',grand:1,unite:'U',lignes:[]},0))) return _echec('sur une slide du milieu');
+        for(const f of [_rangEcran,_serieEcran]) if(!/htmlBoutonInviter\(\)/.test(String(f))) return _echec(f.name);
+        currentUser={role:'coach'};
+        if(htmlBoutonInviter()!=='') return _echec('proposé à un coach');
+      }finally{ currentUser=sv; }
+      return /_rangEcran\(x\.rang|_celebrerRang/.test(String(_bdgSuivant)+String(_celebrerRang))?true:_echec('le rang ne passe plus par _rangEcran');})());
+    ok('Invitation : l’accueil — une ligne sous le rang dès le premier filleul, rien avant',(()=>{
+      if(htmlLigneFilleuls({parrainage:{inscrits:0}})!==''||htmlLigneFilleuls({})!=='') return _echec('ligne sans filleul');
+      if(!PARRAINAGE_ACTIF) return true;
+      const h=htmlLigneFilleuls({parrainage:{inscrits:3,payants:1,moisGagnes:1,prenoms:[{prenom:'A',statut:'payant'},{prenom:'B',statut:'seance'},{prenom:'C',statut:'inscrit'}]}});
+      const t=h.replace(/<[^>]+>/g,'');
+      if(!/3 filleuls · 1 en route · 1 abonné · 1 mois gagné/.test(t)||!/ouvrirParrainage\(\)/.test(h)) return _echec(t);
+      return /1 filleul(?!s)/.test(htmlLigneFilleuls({parrainage:{inscrits:1,prenoms:[{prenom:'A',statut:'inscrit'}]}}).replace(/<[^>]+>/g,''))?true:_echec('singulier');})());
+    ok('Invitation : chaque filleul par son prénom — inscrit, 1re séance, abonné',(()=>{
+      const u={};
+      parrainageFusionnerCompte(u,{code:'JULIE7K2',filleuls:{a:{prenom:'Tom',statut:'payant',payeLe:5,date:3},b:{prenom:'Lou',date:2,premiereSeance:10},c:{prenom:'Zoé',date:1}}});
+      const st=u.parrainage.prenoms.map(x=>x.prenom+':'+x.statut).join();
+      if(st!=='Tom:payant,Lou:seance,Zoé:inscrit') return _echec(st);
+      const d=document.createElement('div');
+      d.innerHTML=htmlParrainage(u);
+      const l=[...d.querySelectorAll('.pr-f')].map(x=>x.querySelector('.pr-f-nom').textContent+'='+x.querySelector('b').textContent+'/'+x.querySelectorAll('.pr-f-etapes i.on').length);
+      if(l.join()!=='Tom=Abonné ✓/3,Lou=1re séance/2,Zoé=Inscrit/1') return _echec(l.join());
+      // Un miroir déjà écrit avec « seance » se relit tel quel.
+      return (filleulStatut({statut:'seance'})==='seance'&&filleulStatut(null)==='inscrit')?true:_echec('relecture');})());
     // ══ 28/09/2026 — LA VIDÉO D'UN VISUEL ════════════════════════════════
     ok('Vidéo : MP4 quand l’enregistreur le sait (Safari iOS), sinon WebM VP9, sinon rien',(()=>{
       const que=(l)=>(t)=>l.indexOf(t)>=0;
