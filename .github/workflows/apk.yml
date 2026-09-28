@@ -1,0 +1,122 @@
+# L'APK ANDROID, COMPILÉ, SIGNÉ, VÉRIFIÉ ET PUBLIÉ TOUT SEUL.
+#
+# À chaque changement de android/ sur main (ou à la demande), GitHub :
+#   1. compile la version release (tests JUnit compris) ;
+#   2. la signe avec la clé de l'APK 3, prise dans les secrets du dépôt ;
+#   3. VÉRIFIE que le certificat est celui de well-known/assetlinks.json —
+#      sinon il s'arrête : une autre clé obligerait chaque athlète Android à
+#      désinstaller puis réinstaller ;
+#   4. publie la release GitHub apk-<versionCode> (RepCore-<v>.apk, SHA-256
+#      dans les notes), une seule fois par versionCode.
+#
+# LES QUATRE SECRETS (Settings > Secrets and variables > Actions), posés une
+# fois par Kevin, jamais dans le dépôt :
+#   RC_KEYSTORE_B64    le fichier .keystore, encodé en base64
+#   RC_KEYSTORE_PASS   son mot de passe
+#   RC_KEY_ALIAS       l'alias de la clé
+#   RC_KEY_PASS        le mot de passe de la clé
+# Sans eux, le travail le dit et s'arrête proprement, sans rien publier.
+name: APK Android
+
+on:
+  push:
+    branches: [main]
+    paths: ['android/**', 'well-known/assetlinks.json', '.github/workflows/apk.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    env:
+      RC_KEYSTORE_B64: ${{ secrets.RC_KEYSTORE_B64 }}
+      RC_KEYSTORE_PASS: ${{ secrets.RC_KEYSTORE_PASS }}
+      RC_KEY_ALIAS: ${{ secrets.RC_KEY_ALIAS }}
+      RC_KEY_PASS: ${{ secrets.RC_KEY_PASS }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: La clé est-elle posée ?
+        id: cle
+        run: |
+          if [ -z "$RC_KEYSTORE_B64" ] || [ -z "$RC_KEYSTORE_PASS" ] || [ -z "$RC_KEY_ALIAS" ] || [ -z "$RC_KEY_PASS" ]; then
+            echo "::warning::Clé de signature absente des secrets (RC_KEYSTORE_B64, RC_KEYSTORE_PASS, RC_KEY_ALIAS, RC_KEY_PASS) : rien n'est publié."
+            echo "ok=non" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=oui" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Déjà publiée ?
+        id: deja
+        if: steps.cle.outputs.ok == 'oui'
+        run: |
+          V=$(grep -o 'versionCode [0-9]*' android/app/build.gradle | grep -o '[0-9]*' | head -1)
+          echo "v=$V" >> "$GITHUB_OUTPUT"
+          if gh release view "apk-$V" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::notice::La release apk-$V existe déjà : augmenter versionCode pour publier une nouvelle version."
+            echo "oui=oui" >> "$GITHUB_OUTPUT"
+          else
+            echo "oui=non" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-java@v4
+        if: steps.cle.outputs.ok == 'oui' && steps.deja.outputs.oui == 'non'
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: SDK Android (plateforme et outils 36)
+        if: steps.cle.outputs.ok == 'oui' && steps.deja.outputs.oui == 'non'
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" >/dev/null
+          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+
+      - name: Compiler et signer
+        if: steps.cle.outputs.ok == 'oui' && steps.deja.outputs.oui == 'non'
+        working-directory: android
+        run: |
+          printf '%s' "$RC_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/cle.keystore"
+          export RC_KEYSTORE="$RUNNER_TEMP/cle.keystore"
+          chmod +x gradlew
+          ./gradlew --no-daemon testReleaseUnitTest assembleRelease
+
+      - name: Vérifier la signature contre assetlinks.json
+        if: steps.cle.outputs.ok == 'oui' && steps.deja.outputs.oui == 'non'
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          CERT=$("$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$APK" | grep -i 'SHA-256 digest' | head -1 | sed 's/.*: *//' | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')
+          PUBLIE=$(grep -o '"[0-9A-F:]\{95\}"' well-known/assetlinks.json | tr -d '"' | head -1)
+          echo "certificat de l'APK : $CERT"
+          echo "assetlinks.json     : $PUBLIE"
+          if [ -z "$CERT" ] || [ "$CERT" != "$PUBLIE" ]; then
+            echo "::error::La clé n'est pas celle de l'APK 3 (assetlinks.json). Rien n'est publié."
+            exit 1
+          fi
+          echo "CERT=$CERT" >> "$GITHUB_ENV"
+
+      - name: Publier la release
+        if: steps.cle.outputs.ok == 'oui' && steps.deja.outputs.oui == 'non'
+        run: |
+          V=${{ steps.deja.outputs.v }}
+          cp android/app/build/outputs/apk/release/app-release.apk "RepCore-$V.apk"
+          SHA=$(sha256sum "RepCore-$V.apk" | cut -d' ' -f1)
+          printf '%s\n' "RepCore pour Android, version $V." "" \
+            "- Synchronisation automatique de Health Connect : pas, sommeil, fréquence cardiaque au repos, variabilité cardiaque, poids, masse grasse (lecture seule)." \
+            "- Installer par-dessus la version précédente, sans désinstaller." \
+            "- Aide : https://repcore-sync.web.app/aide-apk.html" "" \
+            "SHA-256 du fichier RepCore-$V.apk :" "$SHA" "" \
+            "Empreinte du certificat de signature (identique à /.well-known/assetlinks.json) :" "$CERT" > notes.md
+          gh release create "apk-$V" "RepCore-$V.apk" --repo "$GITHUB_REPOSITORY" --title "RepCore Android $V" --notes-file notes.md
+          echo "::notice::Publiée : https://github.com/$GITHUB_REPOSITORY/releases/tag/apk-$V"
+
+      - name: Nettoyer la clé
+        if: always()
+        run: rm -f "$RUNNER_TEMP/cle.keystore"
