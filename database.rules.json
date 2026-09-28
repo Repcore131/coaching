@@ -1185,7 +1185,7 @@
     "pseudos": {
       "$p": {
         ".write": "auth != null && ((!data.exists() && newData.val() === auth.token.email.replace('.', ',')) || (data.val() === auth.token.email.replace('.', ',') && (!newData.exists() || newData.val() === auth.token.email.replace('.', ','))))",
-        ".validate": "$p.matches(/^[a-z0-9][a-z0-9,_]{1,18}[a-z0-9]$/) && newData.isString()"
+        ".validate": "$p.matches(/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/) && newData.isString()"
       }
     },
     "profils_publics": {

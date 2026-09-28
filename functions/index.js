@@ -1677,7 +1677,7 @@ exports.pagePublique = onRequest({ cors: false, memory: "256MiB" }, async (req, 
   catch (e) { res.redirect(302, OG.ORIGINE + "/i"); return; }
   let o = null;
   try {
-    if (c && c.type === "athlete") o = OG.ogAthlete(c.cle, await _val("profils_publics/" + c.cle.replace(/\./g, ",")));
+    if (c && c.type === "athlete") o = OG.ogAthlete(c.cle, await _val("profils_publics/" + c.cle.replace(/\./g, "__")));
     else if (c && c.type === "coach") o = OG.ogCoach(c.cle, await _val("vitrines/" + c.cle));
   } catch (e) { o = null; }
   res.set("Cache-Control", "public, max-age=300, s-maxage=600");

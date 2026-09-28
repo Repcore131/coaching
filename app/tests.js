@@ -49160,7 +49160,7 @@ async function testExercices(){
       ['pagePublique','vitrineSlug','vitrinePubliee','specialites','pagePropose'].every(k=>CHAMPS_NON_SANTE.indexOf(k)>=0));
     // 28/09/2026 : « kevin.gllc » rendait « déjà pris » — Firebase refuse le
     // point dans une clé, et tout échec était lu comme un refus.
-    okA('Pages : un pseudo avec un point part en base avec une virgule, et seul un refus dit « déjà pris »',(async()=>{
+    okA('Pages : un pseudo avec un point part en base en « __ », et seul un refus dit « déjà pris »',(async()=>{
       const sv=CLOUD.racinePatchStatut; let vu=null, st=200;
       CLOUD.racinePatchStatut=async(c)=>{ vu=c; return st; };
       try{
@@ -49169,12 +49169,22 @@ async function testExercices(){
         if(!r.ok) return _echec(r.erreur);
         const k=Object.keys(vu);
         if(k.some(x=>/\./.test(x))) return _echec('un point dans une clé : '+k.join(' '));
-        if(vu['pseudos/kevin,gllc']!=='k,g@t,fr'||vu['pseudos/vieux,nom']!==null) return _echec(JSON.stringify(vu).slice(0,200));
+        if(vu['pseudos/kevin__gllc']!=='k,g@t,fr'||vu['pseudos/vieux__nom']!==null) return _echec(JSON.stringify(vu).slice(0,200));
+        // Les règles en ligne n'acceptent pas la virgule : la clé doit passer l'ancienne expression.
+        if(!/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/.test('kevin__gllc')) return _echec('clé refusée par les règles');
         if(u.pagePublique.pseudo!=='kevin.gllc') return _echec('le pseudo affiché perd son point');
         st=400; const r2=await publierPagePublique(u,{pseudo:'autre.nom',active:true,montrer:{}},{silencieux:true});
         if(/déjà pris/.test(r2.erreur||'')) return _echec('une requête refusée pour une autre raison dit « déjà pris »');
         st=401; const r3=await publierPagePublique(u,{pseudo:'autre.nom',active:true,montrer:{}},{silencieux:true});
-        return /déjà pris/.test(r3.erreur||'')?true:_echec('un vrai refus ne dit plus « déjà pris »');
+        if(!/déjà pris/.test(r3.erreur||'')) return _echec('un vrai refus ne dit plus « déjà pris »');
+        const r4=await publierPagePublique(u,{pseudo:'a__b',active:true,montrer:{}},{silencieux:true});
+        if(r4.ok||/déjà pris/.test(r4.erreur||'')) return _echec('deux signes à la suite acceptés');
+        // Anciennes règles : un premier refus, puis la page part sans volts ni 12 semaines.
+        let n=0; CLOUD.racinePatchStatut=async(c)=>{ vu=c; n++; return n===1?401:200; };
+        const r5=await publierPagePublique(u,{pseudo:'kevin.gllc',active:true,montrer:{rang:true,serie:true,badges:true,seances:true}},{silencieux:true});
+        const f=vu['profils_publics/kevin__gllc']||{};
+        if(!r5.ok||n!==2) return _echec('pas de second essai : '+(r5.erreur||n));
+        return ('volts' in f||'semaines' in f)?_echec('le second essai garde des champs récents'):true;
       }finally{ CLOUD.racinePatchStatut=sv; }
     }));
     // ══ 28/09/2026 — LA PAGE PUBLIQUE : CONTENU, PROPOSITION, APERÇU ══════

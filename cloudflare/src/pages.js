@@ -172,8 +172,8 @@ export async function servirPagePublique(req, o) {
   try {
     const [g, d] = await Promise.all([
       html ? Promise.resolve(null) : f(ORIGINE + '/' + dossier + '/index.html'),
-      // Le point d'un pseudo est une virgule en base (Firebase refuse le point dans une clé).
-      f(base + '/' + noeud + encodeURIComponent(c.type === 'coach' ? c.cle : c.cle.replace(/\./g, ',')) + '.json'),
+      // Le point d'un pseudo est « __ » en base (Firebase refuse le point dans une clé).
+      f(base + '/' + noeud + encodeURIComponent(c.type === 'coach' ? c.cle : c.cle.replace(/\./g, '__')) + '.json'),
     ]);
     if (!html) {
       if (!g || !g.ok) throw new Error('gabarit ' + (g && g.status));
