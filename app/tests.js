@@ -20325,7 +20325,9 @@ async function testExercices(){
       if(!el||!document.getElementById('s-client-home').contains(el)) return _echec('le conteneur n’est pas sur l’accueil');
       if(document.querySelectorAll('[id$="promo-banners"]').length!==1) return _echec('plus d’un conteneur de bannières');
       // EN BAS : le dernier bloc de l'accueil, sous la carte Nutrition.
-      if(el.parentElement.lastElementChild!==el||(el.previousElementSibling||{}).id!=='clh-nut-card') return _echec('le conteneur n’est pas en bas de l’accueil, sous la Nutrition');
+      // L'objectif actuel s'intercale entre les deux depuis le 28/09/2026.
+      const av=el.previousElementSibling||{}, av2=(av.id==='clh-bandeau-phase'?av.previousElementSibling:av)||{};
+      if(el.parentElement.lastElementChild!==el||av2.id!=='clh-nut-card') return _echec('le conteneur n’est pas en bas de l’accueil, sous la Nutrition');
       const s=String(_renderPromoBanners);
       if(s.indexOf('clh-promo-banners')<0||s.indexOf('vit-promo-banners')>=0) return _echec('_renderPromoBanners ne vise pas l’accueil');
       if(String(loadClientHome).indexOf('_renderPromoBanners(coachUser)')<0) return _echec('l’accueil ne rend pas les bannières du coach');
