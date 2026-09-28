@@ -47466,11 +47466,12 @@ async function testExercices(){
     // SERVEUR n'accepte que ces identifiants (motif de cle de
     // /users/$emailKey/badges), et scripts/verif/regles.mjs compare les deux
     // listes. Un badge de plus doit donc passer par ici, a la main.
-    ok('Cinquante badges, la collection est fermée',(()=>{
+    ok('Cinquante et un badges, la collection est fermée',(()=>{
       if(!Array.isArray(BADGES_ACQUIS)) return _echec('BADGES_ACQUIS n’est pas une liste');
-      // Huit familles de quatre paliers, huit uniques, dix secrets.
+      // Huit familles de quatre paliers, neuf uniques (SOUS TENSION, le
+      // parcours de démarrage, depuis le 28/09/2026), dix secrets.
       const par=f=>BADGES_ACQUIS.filter(b=>b.famille===f).length;
-      if(par('unique')!==8||par('secret')!==10) return _echec(par('unique')+' uniques, '+par('secret')+' secrets');
+      if(par('unique')!==9||par('secret')!==10) return _echec(par('unique')+' uniques, '+par('secret')+' secrets');
       for(const fam of BADGE_FAMILLES)
         if(par(fam.cle)!==4) return _echec(fam.cle+' : '+par(fam.cle)+' paliers');
       // Les cinq anciennes clés, telles quelles : elles vivent dans u.badges.
@@ -47486,7 +47487,7 @@ async function testExercices(){
       }
       const ids=BADGES_ACQUIS.map(b=>b.id);
       if(new Set(ids).size!==ids.length) return _echec('deux badges portent le meme identifiant');
-      if(ids.length!==50) return _echec(ids.length+' badges au lieu de cinquante');
+      if(ids.length!==51) return _echec(ids.length+' badges au lieu de cinquante et un');
       // Chacun dit ce qu'il RECOMPENSE et ce qu'il FAUT FAIRE : la vitrine du
       // profil montre les cinq, obtenus et a obtenir, et sans `attendu` la
       // moitie de la carte serait vide.
@@ -47769,13 +47770,13 @@ async function testExercices(){
       const h=htmlMesBadges({badges:{'premiere-seance':{at:new Date(2026,8,1,10).getTime()}},
         sessions:[],bilans:[],sessions_config:[{active:true}]},new Date(2026,8,2).getTime());
       const d=document.createElement('div'); d.innerHTML=h;
-      if(h.indexOf('1/50')<0) return _echec('le compteur global ne dit pas 1/50');
+      if(h.indexOf('1/51')<0) return _echec('le compteur global ne dit pas 1/51');
       const fams=d.querySelectorAll('.bdg-fam');
       if(fams.length!==8) return _echec(fams.length+' familles au lieu de huit');
       if(h.indexOf('Encore 10 séances pour ASSIDU I')<0) return _echec('la barre ne dit pas ce qui reste');
       if(d.querySelectorAll('.bdg-barre').length!==8) return _echec('une famille sans barre');
       const cases=d.querySelectorAll('.bdg-case');
-      if(cases.length!==18) return _echec(cases.length+' cases au lieu de 8 uniques + 10 secrets');
+      if(cases.length!==19) return _echec(cases.length+' cases au lieu de 9 uniques + 10 secrets');
       if(h.indexOf('01/09/2026')<0) return _echec('la date d’obtention n’est pas montrée');
       // LES SECRETS NE SE DÉVOILENT PAS : ??? et l'indice, jamais la condition.
       const sec=d.querySelectorAll('.bdg-case[data-secret]');
@@ -47787,10 +47788,10 @@ async function testExercices(){
       if((h.match(/>\?\?\?</g)||[]).length!==10) return _echec('les secrets ne s’affichent pas en ???');
       if(h.indexOf('verrouille.webp')<0) return _echec('le visuel verrouillé n’est pas utilisé');
       // TOUCHER UN BADGE OUVRE SA FICHE.
-      if(d.querySelectorAll('[onclick^="ouvrirFicheBadge("]').length!==26) return _echec('un badge ne s’ouvre pas');
+      if(d.querySelectorAll('[onclick^="ouvrirFicheBadge("]').length!==27) return _echec('un badge ne s’ouvre pas');
       // Un dossier vierge ne casse pas la carte.
       const v=htmlMesBadges({});
-      return v.indexOf('0/50')>=0?true:_echec('le dossier vierge ne dit pas 0/50');})());
+      return v.indexOf('0/51')>=0?true:_echec('le dossier vierge ne dit pas 0/51');})());
     ok('La fiche d’un badge : grand visuel, date, condition, Partager si obtenu',(()=>{
       const sv=currentUser;
       try{
@@ -48886,7 +48887,7 @@ async function testExercices(){
       if(n!==1||defisFusionnerResultats(u,{m1:{titre:'x'}})!==0) return _echec('fusion');
       const c=badgesMeritesDates(u,_DFIN+864e5).find(x=>x.id==='champion');
       if(!c||c.at!==_DFIN) return _echec('CHAMPION '+JSON.stringify(c));
-      if(BADGES_ACQUIS.length!==50) return _echec('la collection n’est plus de cinquante');
+      if(BADGES_ACQUIS.length!==51) return _echec('la collection n’est plus de cinquante et un');
       const d=document.createElement('div'); d.innerHTML=htmlDefisReleves(u);
       return (/Défis relevés/.test(d.textContent)&&/CHAMPION · OCTOBRE/.test(d.textContent)&&/20\/10\/2026/.test(d.textContent))?true:_echec(d.textContent);})());
     ok('Défis : la carte 1080×1920 — « J’AI RELEVÉ » / « LE DÉFI D’OCTOBRE », ou « CHAMPION »',(()=>{
@@ -49840,6 +49841,153 @@ async function testExercices(){
         if(htmlReglageCelebrations({role:'coach'})!=='') return _echec('coach');
       }finally{ currentUser=sv.u; window.saveUser=sv.s; }
       return CHAMPS_NON_SANTE.indexOf('celebrations')>=0?true:_echec('non classé');})());
+    // ══ 28/09/2026 — LE PARCOURS DE DÉMARRAGE « MISE SOUS TENSION » ═══════
+    const _PJ=864e5, _PT0=new Date(2026,9,5,18).getTime();   // lundi 5 octobre 2026, 18 h
+    const _PS=(j,kg)=>({date:_PT0+j*_PJ,duration:60,sets:1,setsPlanned:1,data:{'Squat':{sets:[{weight:String(kg),reps:'8',done:true}]}}});
+    const _PU=o=>Object.assign({role:'athlete',email:'p@t.fr',fname:'Léa',createdAt:_PT0-3600e3,
+      sessions_config:[{active:true},{active:true}],sessions:[],bilans:[]},o||{});
+    ok('Parcours : sept étapes, clés uniques, figées ; « inviter un pote » seulement si le parrainage est actif',(()=>{
+      if(PARCOURS_DEMARRAGE.length!==7) return _echec(PARCOURS_DEMARRAGE.length+' étapes');
+      const c=PARCOURS_DEMARRAGE.map(e=>e.cle);
+      if(new Set(c).size!==7) return _echec('clés en double');
+      if(!Object.isFrozen(PARCOURS_DEMARRAGE)||!Object.isFrozen(PARCOURS_DEMARRAGE[0])) return _echec('pas figé');
+      for(const e of PARCOURS_DEMARRAGE) if(typeof e.test!=='function'||!e.lib||!(e.volts>=0)) return _echec(e.cle);
+      if(parcoursEtapes(true).length!==7) return _echec('actif');
+      const s=parcoursEtapes(false);
+      if(s.length!==6||s.some(e=>e.cle==='inviter')) return _echec('inactif : '+s.map(e=>e.cle));
+      if(parcoursEtat(_PU({parcours:{debut:_PT0,etapes:{}}})).total!==parcoursEtapes().length) return _echec('total');
+      return PARCOURS_BADGE==='parcours_sous_tension'?true:_echec('clé du badge');})());
+    ok('Parcours : les étapes se datent une fois, le parcours finit, les volts sont hors plafond et comptés une seule fois',(()=>{
+      const u=_PU();
+      let r=majParcours(u,_PT0,{notif:false});
+      if(!u.parcours||u.parcours.existant||r.nouvelles.length) return _echec('départ '+JSON.stringify(u.parcours));
+      u.sessions=[_PS(0,100)];
+      r=majParcours(u,_PT0+60e3,{notif:false});
+      if(r.nouvelles.join()!=='premiere_seance') return _echec('1re séance : '+r.nouvelles);
+      u.pseudo='lea_fer';
+      r=majParcours(u,_PT0+120e3,{notif:true});
+      if(r.nouvelles.sort().join()!=='notifications,profil') return _echec('profil/notifs : '+r.nouvelles);
+      u.sessions.push(_PS(1,110));
+      r=majParcours(u,_PT0+_PJ+60e3,{notif:true});
+      if(r.nouvelles.sort().join()!=='deuxieme_seance,premier_record,premiere_semaine') return _echec('2e séance : '+r.nouvelles);
+      if(u.parcours.fini) return _echec('fini trop tôt');
+      const actif=parcoursEtapes().some(e=>e.cle==='inviter');
+      if(actif){
+        u.parcours.invite=_PT0+2*_PJ;
+        r=majParcours(u,_PT0+2*_PJ,{notif:true});
+      }
+      if(!r.fini||!(u.parcours.fini>0)) return _echec('pas fini');
+      const v=parcoursVolts(u);
+      const attendu=parcoursEtapes().reduce((a,e)=>a+e.volts,0);
+      if(v!==attendu||attendu!==(actif?300:200)) return _echec('volts '+v+' / '+attendu);
+      // Une seule fois : relu, rien ne se redate.
+      const avant=JSON.stringify(u.parcours.etapes);
+      majParcours(u,_PT0+5*_PJ,{notif:true});
+      if(JSON.stringify(u.parcours.etapes)!==avant||parcoursVolts(u)!==v) return _echec('redaté');
+      // Hors plafond : une catégorie à part, jamais écrêtée.
+      const x=xpCalcul(u,_PT0+6*_PJ);
+      if(x.cat.parcours!==v) return _echec('xpCalcul : '+JSON.stringify(x.cat));
+      const sans=xpCalcul(Object.assign({},u,{parcours:null}),_PT0+6*_PJ);
+      if(x.ecrete!==sans.ecrete) return _echec('les volts du parcours entrent dans le plafond');
+      // Datées : avant la date d'une étape, ses volts n'existent pas.
+      if(parcoursVolts(u,_PT0+90e3)!==0) return _echec('volts avant la date');
+      return true;})());
+    ok('Parcours : le gain d’une séance montre « Mise sous tension »',(()=>{
+      const u=_PU({pseudo:'x'});
+      majParcours(u,_PT0,{notif:false});
+      u.sessions=[_PS(0,100)];
+      majParcours(u,_PT0+30e3,{notif:false});
+      u.sessions.push(_PS(1,110));
+      majParcours(u,_PT0+_PJ+30e3,{notif:false});
+      const g=xpGainsSeance(u,u.sessions[1],_PT0+_PJ+60e3);
+      const l=g.lignes.find(x=>x.lib==='Mise sous tension');
+      return l&&l.v===100?true:_echec(JSON.stringify(g.lignes));})());
+    ok('Parcours : un compte existant est terminé d’office — ni carte, ni volts, ni badge',(()=>{
+      const u=_PU({createdAt:new Date(2026,5,1).getTime(),sessions:[_PS(0,100)]});
+      majParcours(u,_PT0,{notif:true});
+      if(!u.parcours.existant||!(u.parcours.fini>0)) return _echec(JSON.stringify(u.parcours));
+      if(parcoursVolts(u)!==0||xpCalcul(u,_PT0+_PJ).cat.parcours!==0) return _echec('volts');
+      if(htmlParcoursAccueil(u,_PT0)!=='') return _echec('carte');
+      if(badgesMeritesDates(u,_PT0+_PJ).some(x=>x.id===PARCOURS_BADGE)) return _echec('badge');
+      // Sans createdAt, la plus ancienne séance, ou l'ouverture de l'essai, décident.
+      const v=_PU({createdAt:0,sessions:[{date:new Date(2026,2,3).getTime()}]}); majParcours(v,_PT0);
+      const w=_PU({createdAt:0,essai:{ouvertLe:new Date(2026,8,1).getTime()}}); majParcours(w,_PT0);
+      if(!v.parcours.existant||!w.parcours.existant) return _echec('ancienneté non lue');
+      // Un coach n'a pas de parcours.
+      const c={role:'coach',createdAt:_PT0}; majParcours(c,_PT0);
+      return !c.parcours?true:_echec('coach');})());
+    ok('Parcours : la carte « Mise sous tension · 3/7 », 14 jours ou jusqu’à la fin',(()=>{
+      const u=_PU({parcours:{debut:_PT0,etapes:{premiere_seance:_PT0,profil:_PT0,notifications:_PT0}}});
+      const t=parcoursEtapes().length;
+      const d=document.createElement('div'); d.innerHTML=htmlParcoursAccueil(u,_PT0+2*_PJ);
+      const tx=d.textContent;
+      if(tx.indexOf('Mise sous tension · 3/'+t)<0) return _echec(tx);
+      if(tx.indexOf('Jour 3/14')<0) return _echec('jour');
+      if(d.querySelectorAll('.mst-points i').length!==t||d.querySelectorAll('.mst-points i.on').length!==3) return _echec('points');
+      if(tx.indexOf('Bats un 1er record')<0||tx.indexOf('+50 V')<0) return _echec('prochaine étape');
+      if(tx.indexOf('badge SOUS TENSION')<0) return _echec('note');
+      if(htmlParcoursAccueil(u,_PT0+14*_PJ+1)!=='') return _echec('encore là au 15e jour');
+      if(htmlParcoursAccueil(Object.assign({},u,{parcours:Object.assign({},u.parcours,{fini:_PT0})}),_PT0+_PJ)!=='') return _echec('encore là une fois fini');
+      // Le push du 21e jour la rouvre trois jours.
+      const r=Object.assign({},u,{parcours:Object.assign({},u.parcours,{relance:_PT0+21*_PJ})});
+      if(!parcoursVisible(r,_PT0+22*_PJ)||parcoursVisible(r,_PT0+25*_PJ)) return _echec('relance');
+      // La première étape manquante porte son bouton quand elle en a un.
+      const p=_PU({parcours:{debut:_PT0,etapes:{premiere_seance:_PT0,premier_record:_PT0}}});
+      const e=document.createElement('div'); e.innerHTML=htmlParcoursAccueil(p,_PT0);
+      const b=e.querySelector('.mst-b');
+      if(!b||b.getAttribute('onclick')!=='openAthleteProfile()') return _echec('bouton profil');
+      return document.getElementById('clh-parcours')?true:_echec('#clh-parcours absent de l’accueil');})());
+    ok('Parcours : fini, le badge unique SOUS TENSION tombe à sa date ; il passe devant un palier IV',(()=>{
+      const b=badgeAcquisDef(PARCOURS_BADGE);
+      if(!b||b.famille!=='unique'||b.nom!=='SOUS TENSION'||b.icone!=='sous_tension') return _echec(JSON.stringify(b));
+      const u=_PU({sessions:[_PS(0,100)],parcours:{debut:_PT0,etapes:{premiere_seance:_PT0},fini:_PT0+3*_PJ}});
+      const m=badgesMeritesDates(u,_PT0+4*_PJ).find(x=>x.id===PARCOURS_BADGE);
+      if(!m||m.at!==_PT0+3*_PJ) return _echec('daté : '+JSON.stringify(m));
+      const n=_PU({sessions:[_PS(0,100)],parcours:{debut:_PT0,etapes:{}}});
+      if(badgesMeritesDates(n,_PT0+4*_PJ).some(x=>x.id===PARCOURS_BADGE)) return _echec('sans fin');
+      if(!(bdgRarete(PARCOURS_BADGE)>bdgRarete('assidu_4'))||!(bdgRarete(PARCOURS_BADGE)<bdgRarete('aube'))) return _echec('rareté');
+      if(bdgRepartir(['assidu_1',PARCOURS_BADGE],'completes',0).ecrans[0]!==PARCOURS_BADGE) return _echec('pas en écran plein');
+      if(!badgeAcquisFichier(PARCOURS_BADGE)) return _echec('pas de repli');
+      return badgeVisuel(PARCOURS_BADGE,true).indexOf('sous_tension-512.webp')>=0?true:_echec('visuel');})());
+    ok('Parcours : aucun libellé ne se mélange avec le temps sous tension',(()=>{
+      const n=BADGES_ACQUIS.filter(b=>/TENSION/i.test(b.nom));
+      if(n.length!==1||n[0].id!==PARCOURS_BADGE) return _echec('noms : '+n.map(b=>b.id));
+      // Le parcours dit « Mise sous tension » partout ; jamais « temps ».
+      for(const e of PARCOURS_DEMARRAGE) if(/tension/i.test(e.lib)) return _echec('étape '+e.cle);
+      const u=_PU({parcours:{debut:_PT0,etapes:{}}});
+      const h=htmlParcoursAccueil(u,_PT0);
+      if(/temps sous tension|TUT/i.test(h)) return _echec('carte');
+      if((h.match(/sous tension/gi)||[]).length!==3) return _echec('occurrences : '+h);
+      // Les clés du parcours portent toutes le préfixe parcours.
+      if(!/^parcours_/.test(PARCOURS_BADGE)) return _echec('clé');
+      // La carte des charges garde son titre.
+      const tout={}; for(const g of MUSC_GROUPES) tout[g.cle]=1;
+      if(muscTitre(tout)!=='Tout le corps sous tension') return _echec('titre des charges : '+muscTitre(tout));
+      return CHAMPS_NON_SANTE.indexOf('parcours')>=0?true:_echec('parcours non classé');})());
+    ok('Parcours : le rappel du 21e jour d’essai — la date, la valeur écrite',(()=>{
+      const o=new Date(2026,9,1,10).getTime();
+      if(parcoursJourJ21({essai:{ouvertLe:o}})!=='2026-10-22') return _echec(parcoursJourJ21({essai:{ouvertLe:o}}));
+      if(parcoursJourJ21({})!=='') return _echec('sans essai');
+      return true;})());
+    okA('Parcours : parcoursEcrireJ21 écrit le nombre d’étapes restantes, puis null une fois fini',async()=>{
+      const sv={f:window.fetch,ok:CLOUD.ok,tk:CLOUD._getToken,s:window.saveUser};
+      const vus=[];
+      try{
+        window.saveUser=()=>{};
+        CLOUD.ok=()=>true; CLOUD._getToken=async()=>'jeton';
+        window.fetch=async(url,i)=>{ vus.push({url:String(url),corps:i&&i.body}); return {ok:true,json:async()=>null}; };
+        const u=_PU({essai:{ouvertLe:new Date(2026,9,1,10).getTime()},parcours:{debut:_PT0,etapes:{premiere_seance:_PT0}}});
+        if(!(await parcoursEcrireJ21(u))) return _echec('pas écrit');
+        const reste=parcoursEtapes().length-1;
+        if(vus.length!==1||vus[0].url.indexOf('parcours_j21/2026-10-22/p@t,fr.json')<0||vus[0].corps!==String(reste)) return _echec(JSON.stringify(vus));
+        if(await parcoursEcrireJ21(u)) return _echec('réécrit sans changement');
+        u.parcours.fini=_PT0;
+        if(!(await parcoursEcrireJ21(u))||vus[1].corps!=='null') return _echec('fini : '+JSON.stringify(vus[1]));
+        const x=_PU({createdAt:new Date(2026,5,1).getTime(),essai:{ouvertLe:_PT0},parcours:{existant:true,fini:_PT0}});
+        if(await parcoursEcrireJ21(x)) return _echec('compte existant');
+        return true;
+      }finally{ window.fetch=sv.f; CLOUD.ok=sv.ok; CLOUD._getToken=sv.tk; window.saveUser=sv.s; }
+    });
     // ══ 28/09/2026 — LES ÉVÉNEMENTS SAISONNIERS ════════════════════════════
     const _SAT=new Date(2026,9,15,12).getTime();
     const _SAS=(x)=>Object.assign({nom:'Hiver de fer',debut:new Date(2026,9,5).getTime(),fin:new Date(2026,9,25,23,59,59).getTime(),mesure:'seances',
@@ -50694,7 +50842,11 @@ async function testExercices(){
       // resultats serveur (majRecompensesServeur), une fois par jour au plus,
       // et seulement quand il y a du nouveau — CHAMPION, RECRUTEUR et MENTOR
       // viennent du serveur, jamais d'une seance ni d'un bilan.
-      if(n!==6) return _echec(n+' occurrences de majBadges( au lieu de six');
+      // SEPTIEME (28/09/2026) : la fin du parcours « Mise sous tension »
+      // (parcoursAvancer), et SEULEMENT quand il vient de finir — le badge
+      // SOUS TENSION est fete en ecran plein, hors seance.
+      if(n!==7) return _echec(n+' occurrences de majBadges( au lieu de sept');
+      if(!/if\(r\.fini\)\{ try\{ majBadges\(\); \}/.test(s)) return _echec('l’appel du parcours n’est plus garde par sa fin');
       if(!/defisFusionnerResultats\(u,r\)[^;]*;\s*if\(n\)\{[\s\S]{0,500}?majBadges\(\)/.test(s))
         return _echec('l’appel des resultats serveur n’est plus garde par « du nouveau »');
       if(!/_riteEnregistrer\(q,true\);[\s\S]{0,300}?majBadges\(\)/.test(s))

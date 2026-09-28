@@ -5799,7 +5799,7 @@ function _validateAthletePkg(o){
       ||params.get('bilan')==='1'||params.get('wo')==='1'||params.get('diete')==='1'
       ||!!params.get('wrapped')||params.get('canal')==='1'||!!params.get('ref')||params.get('parrainage')==='1'
       ||!!params.get('coach')||!!params.get('src')||!!params.get('amb')||params.get('paiements')==='1'
-      ||!!params.get('duel')||params.get('duels')==='1'||!!params.get('saison'));
+      ||!!params.get('duel')||params.get('duels')==='1'||!!params.get('saison')||params.get('parcours')==='1');
     // Coach invite → athlete device
     const cpkg=params.get('coachpkg');
     if(cpkg){
@@ -5896,6 +5896,8 @@ function _validateAthletePkg(o){
     }
     // ?saison=<id> — les push d'un événement saisonnier.
     if(/^[a-z0-9][a-z0-9-]{2,40}$/.test(String(params.get('saison')||''))) window._pendingSaisonOpen=true;
+    // ?parcours=1 — le rappel du 21e jour d'essai : la carte revient.
+    if(params.get('parcours')==='1') window._pendingParcoursOpen=true;
     // ?duels=1 — les push des duels (début, J-2, résultat).
     if(params.get('duels')==='1') window._pendingDuelsOpen=true;
     // ?paiements=1 — le push d'un litige PayPal, pour l'administrateur.
@@ -6105,6 +6107,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'duels',
   // Le réglage des célébrations (complètes ou discrètes).
   'celebrations',
+  // Le parcours de démarrage : des étapes datées, rien de santé.
+  'parcours',
   // Les éditions saisonnières : les badges reçus, la dernière valeur envoyée.
   'saisonsReleves','saisonsVal',
   // Combien de fois la page a été proposée à un passage de rang (deux au plus).
@@ -7374,6 +7378,8 @@ function routeUser(){
     setTimeout(()=>{ try{ ouvrirParrainage(); }catch(e){} },1000);}
   if(window._pendingSaisonOpen){ window._pendingSaisonOpen=false;
     setTimeout(()=>{ try{ chargerSaisons(true).then(()=>renderSaisonAccueil()); }catch(e){} },1000);}
+  if(window._pendingParcoursOpen){ window._pendingParcoursOpen=false;
+    setTimeout(()=>{ try{ parcoursRelancer(); }catch(e){} },1000);}
   if(window._pendingDuelsOpen){ window._pendingDuelsOpen=false;
     setTimeout(()=>{ try{ _duelsLusLe=0; _rendreDuelsAccueil(); }catch(e){} },1000);}
   if(window._pendingPaiementsOpen){ window._pendingPaiementsOpen=false;
@@ -19649,6 +19655,7 @@ function parrainagePartager(btn){
   if(!c) return false;
   const l=lienPerso('parrainage');
   try{ rcm('parrainage_partage'); }catch(e){}
+  try{ parcoursInvitation(); }catch(e){}
   if(navigator.share){
     // Le lien part dans `url` : le texte ne le répète pas.
     navigator.share({title:'RepCore',text:parrainageMessage(c,l?'':undefined),url:l||undefined}).then(()=>{ try{ attribCompter('partage','parrainage'); }catch(e){} }).catch(()=>{});
@@ -19762,6 +19769,7 @@ function partagerCarteInvitation(btn,format){
   const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond);
   const nom=visuelNomFichier('repcore-invitation',fond,format);
   try{ rcm('parrainage_partage'); }catch(e){}
+  try{ parcoursInvitation(); }catch(e){}
   _storyEnCours=true;
   let ok=false;
   try{
@@ -20635,6 +20643,7 @@ function envoyerDuel(id,btn){
   if(!l) return false;
   const pr=String((u&&u.fname)||'').trim();
   const txt=(pr?pr+' te défie':'Je te défie')+' sur RepCore : '+texteDuel(d&&d.mesure,d&&d.duree)+'. Tu relèves ?';
+  try{ parcoursInvitation(); }catch(e){}
   if(navigator.share){
     navigator.share({title:'Duel RepCore',text:txt,url:l}).then(()=>{ try{ attribCompter('partage','duel'); }catch(e){} }).catch(()=>{});
     return true;
@@ -37915,6 +37924,9 @@ function loadClientHome(){
   // prochaine séance — et une seule bannière récapitulative.
   // LES JOKERS AVANT LE COMPTEUR : une série sauvée s'affiche sauvée.
   try{ _streakRattrapage(); }catch(e){}
+  // LE PARCOURS « MISE SOUS TENSION » : avant le rattrapage, pour que sa fin
+  // soit fêtée en écran plein et pas noyée dans le récapitulatif.
+  try{ parcoursAvancer(); }catch(e){}
   _rattraperBadges();
   // LE WRAPPED du mois (1er-7) ou de l'année (décembre), s'il y a de quoi.
   try{ _rendreCarteWrapped(); }catch(e){}
@@ -47163,6 +47175,8 @@ function finishWorkout(incomplete=false){
   // critères lisent est donc déjà écrit. La bannière, elle, s'affiche une
   // seconde plus tard — _celebrerBadge attend que la fête de fin de séance
   // ait joué la sienne.
+  // Le parcours d'abord : sa fin débloque le badge SOUS TENSION.
+  try{ majParcours(currentUser); parcoursEcrireJ21(currentUser).catch(()=>{}); }catch(e){}
   try{ majBadges(); }catch(e){}
   // LES VOLTS, APRÈS LES BADGES : ceux que la séance vient de débloquer
   // comptent dans le gain, et un passage de rang passe dans la file APRÈS eux.
@@ -72414,6 +72428,12 @@ const BADGES_ACQUIS=Object.freeze([
   // bouclé. « DÉFI RELEVÉ » N'EST PAS ICI : c'est un badge daté PAR DÉFI, hors
   // de la collection des cinquante (voir htmlDefisReleves).
   {id:'champion',nom:'CHAMPION',famille:'unique',palier:null,icone:'champion',condition:'Gagne un défi.',test:f=>f.champion},
+  // LE PARCOURS DE DÉMARRAGE : les sept étapes des 14 premiers jours. Seul
+  // NOM de l'app à dire « SOUS TENSION » sans « temps » devant — la clé,
+  // elle, dit parcours_ (voir PARCOURS_DEMARRAGE). Le visuel : badges-bruts/
+  // sous_tension.png, converti par scripts/badges.py (repli : FULL_SESSION).
+  {id:'parcours_sous_tension',nom:'SOUS TENSION',famille:'unique',palier:null,icone:'sous_tension',condition:'Termine le parcours Mise sous tension.',test:f=>f.parcoursFini,
+   lib:'Mise sous tension',phrase:'Toutes les étapes sont faites. Le courant passe.'},
   // ── LES SECRETS : heure et date LOCALES de l'appareil ───────────────
   {id:'aube',nom:'AUBE',famille:'secret',palier:null,icone:'aube',condition:'Lance une séance avant 6 h du matin.',indice:'Le fer est plus froid avant le lever du jour.',test:f=>f.aube},
   {id:'nuit',nom:'NUIT',famille:'secret',palier:null,icone:'nuit',condition:'Termine une séance après 23 h.',indice:'Certains s’entraînent quand la ville dort.',test:f=>f.nuit},
@@ -72459,7 +72479,7 @@ const BADGE_REPLI=Object.freeze({
   sans_faute:'PERFECT',miroir:'PROGRESSION',cycles:'FULL_SESSION',carburant:'MONSTER',
   'premiere-seance':'NEW_LOAD','semaine-validee':'FULL_SESSION','premier-record':'NEW_RECORD',
   'premier-bilan':'PROGRESSION',fondateur:'PERSONAL_BEST',recruteur:'MULTIPLE_RECORDS',
-  mentor:'MULTIPLE_RECORDS',champion:'NO_MERCY',aube:'NEW_PERF',nuit:'NEW_PERF',
+  mentor:'MULTIPLE_RECORDS',champion:'NO_MERCY',parcours_sous_tension:'FULL_SESSION',aube:'NEW_PERF',nuit:'NEW_PERF',
   nouvel_an:'MONSTER',noel:'MONSTER',tempete:'NEW_PERF',foudre_serie:'NEW_PERF',
   phenix:'RETURN',palindrome:'NO_FAIL',vendredi13:'NO_MERCY',centurion:'HIGH_VOLUME'
 });
@@ -72507,7 +72527,7 @@ function _badgesFaits(u,maintenant){
   const f={seances:ses.map(s=>s.date),records:[],semaines:[],sansFaute:[],
     bilans:[],cycles:[],journal:[],tonnageTotal:0,serieCourante:0,
     aube:0,nuit:0,nouvelAn:0,noel:0,tempete:0,foudreSerie:0,phenix:0,
-    palindrome:0,vendredi13:0,centurion:0,fondateur:0};
+    palindrome:0,vendredi13:0,centurion:0,fondateur:0,parcoursFini:0};
   const premier=(k,v)=>{ if(!f[k]) f[k]=v; };
   // Les séances passent dans l'ordre ; on retient au passage tout ce qui se
   // lit séance par séance.
@@ -72628,6 +72648,8 @@ function _badgesFaits(u,maintenant){
   const dr=(u&&u.defisReleves&&typeof u.defisReleves==='object')?Object.keys(u.defisReleves).map(k=>u.defisReleves[k]).filter(Boolean):[];
   const dc=dr.filter(x=>x.champion).map(x=>Number(x.fin)||Number(x.termineLe)||0).filter(x=>x>0).sort((a,b)=>a-b);
   f.champion=dc[0]||0;
+  // Le parcours « Mise sous tension » : sa date de fin (jamais pour un compte existant).
+  f.parcoursFini=(u&&u.parcours&&!u.parcours.existant&&Number(u.parcours.fini)>0)?Number(u.parcours.fini):0;
   return f;
 }
 // Les exercices d'une séance, qu'elle soit écrite en `data` (nom → séries,
@@ -72840,6 +72862,9 @@ function bdgRarete(x,stats){
   const b=badgeAcquisDef(x);
   if(!b) return 0;
   if(b.famille==='secret') return 100;
+  // Le badge du parcours ne se gagne qu'une fois dans une vie de compte : il
+  // passe devant un palier, derrière un secret.
+  if(b.id===PARCOURS_BADGE) return 95;
   const base=b.palier?[0,30,42,58,86][b.palier]:50;
   const s=stats||null;
   const p=s&&s.pct&&Number(s.total)>0?Number(s.pct[x]):NaN;
@@ -75304,6 +75329,197 @@ const XP_PLAFOND_JOUR=400;
 // VOLTAGE ~1 mois, MACHINE ~2 mois, ÉLITE ~4 mois, SURTENSION ~6 mois,
 // MONSTRE ~9 mois, FOUDRE ~1 an, TITAN ~1 an et demi, LÉGENDE ~2 ans et demi.
 // Le test « Volts : la courbe tient le calendrier » rejoue cet athlète.
+// ══ LE PARCOURS DE DÉMARRAGE « MISE SOUS TENSION » (28/09/2026) ══════════
+//
+// Les premiers paliers de badges demandent dix séances ou cinq records : un
+// nouveau ne débloquait presque rien la première semaine, celle où tout se
+// joue. Sept étapes, chacune avec ses volts, à faire dans les 14 premiers
+// jours ; toutes faites, le badge unique SOUS TENSION (écran plein, carte
+// partageable).
+//
+// ⚠ « SOUS TENSION » EXISTE DÉJÀ DANS L'APP : le TEMPS SOUS TENSION d'une
+//   série (champ `tut`, TUT_MIN_S…), et le titre de la carte des charges
+//   (« Dos et jambes sous tension »). Tout ce qui appartient au parcours porte
+//   donc le préfixe PARCOURS / parcours_ (u.parcours, parcours_sous_tension,
+//   parcours_j21) et le libellé « Mise sous tension » ; seul le NOM du badge
+//   dit « SOUS TENSION ». Le test « Parcours : aucun libellé ne se mélange »
+//   le vérifie.
+//
+// LES VOLTS DU PARCOURS ne comptent pas dans le plafond du jour et ne se
+// gagnent qu'une fois : l'étape est DATÉE dans u.parcours.etapes à sa
+// première réussite, et xpCalcul les ajoute à part (cat.parcours). La 1re
+// séance et la 1re semaine validée rapportent déjà leurs volts ordinaires
+// (130 V et 150 V) : leur étape n'en ajoute pas.
+//
+// LES COMPTES EXISTANTS (créés avant PARCOURS_DEPUIS) : parcours considéré
+// comme terminé, sans carte, sans volts, sans badge — pas de rétro-célébration.
+//
+// L'ESSAI : au 21e jour de l'essai, si le parcours n'est pas fini, le serveur
+// léger envoie « encore N étapes » (push de type serie). L'app tient à jour
+// /parcours_j21/<jour J21>/<moi> = le nombre d'étapes restantes ; le Worker
+// ne lit que la liste du jour.
+const PARCOURS_DEPUIS=Date.parse('2026-09-28T00:00:00+02:00');
+const PARCOURS_JOURS=14;
+const PARCOURS_BADGE='parcours_sous_tension';
+const PARCOURS_DEMARRAGE=Object.freeze([
+  Object.freeze({cle:'premiere_seance',lib:'Termine ta 1re séance',volts:0,test:(u,f)=>f.seances.length>=1}),
+  Object.freeze({cle:'premier_record',lib:'Bats un 1er record',volts:50,test:(u,f)=>f.records.length>=1}),
+  Object.freeze({cle:'profil',lib:'Complète ton profil : une photo ou un pseudo',volts:50,
+    test:u=>!!(u&&(u.athletePhoto||String(u.pseudo||'').trim())),action:'openAthleteProfile()',bouton:'Compléter mon profil'}),
+  Object.freeze({cle:'notifications',lib:'Active les notifications',volts:50,
+    test:(u,f,env)=>!!(env&&env.notif),action:'parcoursActiverNotifs(this)',bouton:'Activer'}),
+  Object.freeze({cle:'deuxieme_seance',lib:'Fais ta 2e séance',volts:50,test:(u,f)=>f.seances.length>=2}),
+  Object.freeze({cle:'premiere_semaine',lib:'Valide ta 1re semaine',volts:0,test:(u,f)=>f.semaines.length>=1}),
+  Object.freeze({cle:'inviter',lib:'Invite un pote',volts:100,parrainage:true,
+    test:u=>!!(u&&u.parcours&&u.parcours.invite)||Number(u&&u.parrainage&&u.parrainage.inscrits)>0,
+    action:'inviterUnPote(this)',bouton:'Inviter un pote'})
+]);
+/** PURE. Les étapes : « inviter un pote » seulement si le parrainage est actif. */
+function parcoursEtapes(actif){
+  const on=(typeof actif==='boolean')?actif:PARRAINAGE_ACTIF;
+  return PARCOURS_DEMARRAGE.filter(e=>!e.parrainage||on);
+}
+// Les notifications sont-elles actives sur cet appareil ?
+function _parcoursNotifActives(u){
+  try{ return !!(u&&!u.pushRefus&&typeof Notification!=='undefined'&&Notification.permission==='granted'&&_pushMemo()); }
+  catch(e){ return false; }
+}
+/**
+ * PURE (horloge et environnement donnés, écrit dans u). Pose le parcours
+ * d'un compte qui n'en a pas (existant : terminé d'office), date les étapes
+ * réussies, et le termine. Rend {nouvelles:[cles], fini:bool (à l'instant)}.
+ */
+function majParcours(u,maintenant,env){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(!u||u.role==='coach') return {nouvelles:[],fini:false};
+  if(!u.parcours||typeof u.parcours!=='object'){
+    const ses=((u.sessions)||[]).filter(s=>s&&s.date>0).map(s=>Number(s.date));
+    const cree=Math.min(Number(u.createdAt)||Infinity,Number(u.essai&&u.essai.ouvertLe)||Infinity,ses.length?Math.min(...ses):Infinity);
+    // Aucune date : un compte qui vient de naître.
+    if(!isFinite(cree)) u.parcours={debut:t,etapes:{}};
+    else u.parcours=cree<PARCOURS_DEPUIS?{existant:true,fini:t,debut:cree}:{debut:cree,etapes:{}};
+  }
+  const p=u.parcours;
+  if(p.existant||p.fini) return {nouvelles:[],fini:false};
+  p.etapes=(p.etapes&&typeof p.etapes==='object')?p.etapes:{};
+  let f; try{ f=_badgesFaits(u,t); }catch(e){ return {nouvelles:[],fini:false}; }
+  const e=Object.assign({notif:_parcoursNotifActives(u)},env||{});
+  const nouvelles=[];
+  for(const x of parcoursEtapes()){
+    if(p.etapes[x.cle]) continue;
+    let ok=false; try{ ok=!!x.test(u,f,e); }catch(er){ ok=false; }
+    if(ok){ p.etapes[x.cle]=t; nouvelles.push(x.cle); }
+  }
+  const total=parcoursEtapes().length;
+  p.total=total;
+  const fini=parcoursEtapes().every(x=>p.etapes[x.cle]);
+  if(fini) p.fini=t;
+  return {nouvelles,fini};
+}
+/** PURE. Les volts du parcours (hors plafond, une fois) : 0 pour un compte existant. */
+function parcoursVolts(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Infinity;
+  const p=u&&u.parcours;
+  if(!p||p.existant||!p.etapes) return 0;
+  return PARCOURS_DEMARRAGE.reduce((a,x)=>a+((Number(p.etapes[x.cle])>0&&Number(p.etapes[x.cle])<=t)?x.volts:0),0);
+}
+/** PURE. Faite, sur combien : {faites, total, prochaine}. */
+function parcoursEtat(u){
+  const l=parcoursEtapes(), p=(u&&u.parcours)||{};
+  const et=p.etapes||{};
+  const faites=l.filter(x=>et[x.cle]).length;
+  return {faites,total:l.length,prochaine:l.find(x=>!et[x.cle])||null};
+}
+/** PURE. La carte se montre-t-elle ? 14 jours, ou jusqu'à la fin. */
+function parcoursVisible(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const p=u&&u.parcours;
+  if(!p||p.existant||p.fini||!u||u.role==='coach') return false;
+  // Rouverte par le rappel du 21e jour : trois jours de plus.
+  if(Number(p.relance)>0&&t-Number(p.relance)<3*864e5) return true;
+  return t-(Number(p.debut)||t)<PARCOURS_JOURS*864e5;
+}
+// PURE. La carte « Mise sous tension · 3/7 ».
+function htmlParcoursAccueil(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(!parcoursVisible(u,t)) return '';
+  const e=parcoursEtat(u), p=u.parcours, et=p.etapes||{};
+  const j=Math.max(1,Math.min(PARCOURS_JOURS,Math.floor((t-Number(p.debut))/864e5)+1));
+  const x=e.prochaine;
+  return '<div class="mst-carte" role="region" aria-label="Mise sous tension">'
+    +'<div class="mst-tete"><b>Mise sous tension · '+e.faites+'/'+e.total+'</b><span>Jour '+j+'/'+PARCOURS_JOURS+'</span></div>'
+    +'<div class="mst-points" aria-hidden="true">'+parcoursEtapes().map(y=>'<i class="'+(et[y.cle]?'on':'')+'"></i>').join('')+'</div>'
+    +(x?'<div class="mst-suite"><span>'+escapeHtml(x.lib)+(x.volts?' <em>+'+x.volts+' V</em>':'')+'</span>'
+      +(x.action?'<button type="button" class="btn btn-red btn-sm mst-b" onclick="'+x.action+'">'+escapeHtml(x.bouton||'Y aller')+'</button>':'')+'</div>':'')
+    +'<div class="mst-note">Les '+e.total+' étapes débloquent le badge SOUS TENSION.</div></div>';
+}
+function _rendreParcours(u){
+  const z=document.getElementById('clh-parcours');
+  if(!z) return false;
+  z.innerHTML=htmlParcoursAccueil(u,Date.now());
+  return !!z.innerHTML;
+}
+// Le parcours avance hors séance (profil, notifications, invitation) : on
+// le relit, et s'il vient de finir, le badge est fêté (écran plein).
+function parcoursAvancer(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u) return null;
+  const r=majParcours(u);
+  if(r.nouvelles.length){ try{ saveUser(); }catch(e){} }
+  if(r.fini){ try{ majBadges(); }catch(e){} try{ majXp(); }catch(e){} }
+  try{ _rendreParcours(u); }catch(e){}
+  parcoursEcrireJ21(u).catch(()=>{});
+  return r;
+}
+// Le push du 21e jour ouvre l'app : la carte, cachée après 14 jours, revient.
+function parcoursRelancer(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||!u.parcours||u.parcours.existant||u.parcours.fini) return false;
+  u.parcours.relance=Date.now();
+  try{ saveUser(); }catch(e){}
+  try{ _rendreParcours(u); }catch(e){}
+  return true;
+}
+async function parcoursActiverNotifs(btn){
+  if(btn) btn.disabled=true;
+  try{ await pushActiverDepuisReglages(); }catch(e){}
+  if(btn) btn.disabled=false;
+  parcoursAvancer();
+  return true;
+}
+// ── Le rappel du 21e jour de l'essai ──────────────────────────────────────
+/** PURE. Le jour J21 (AAAA-MM-JJ) de l'essai, ou ''. */
+function parcoursJourJ21(u){
+  const o=Number(u&&u.essai&&u.essai.ouvertLe);
+  if(!(o>0)) return '';
+  try{ return localISODate(new Date(o+21*864e5)); }catch(e){ return ''; }
+}
+async function parcoursEcrireJ21(u){
+  if(!SERVEUR_LEGER||!u||!u.email||!u.parcours||u.parcours.existant||!CLOUD.ok()) return false;
+  const jour=parcoursJourJ21(u);
+  if(!jour) return false;
+  const e=parcoursEtat(u);
+  const v=u.parcours.fini?null:Math.max(1,e.total-e.faites);
+  if(u.parcours.j21===v||(v===null&&u.parcours.j21==null&&u.parcours.j21Ecrit)) return false;
+  const token=await CLOUD._getToken();
+  if(!token) return false;
+  const moi=String(u.email).replace(/\./g,',');
+  const r=await fetch(CLOUD._fbUrl.replace('users.json','parcours_j21/'+jour+'/'+moi+'.json')+'?auth='+token,
+    {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(v)}).catch(()=>null);
+  if(r&&r.ok){ u.parcours.j21=v; u.parcours.j21Ecrit=true; try{ saveUser(); }catch(er){} return true; }
+  return false;
+}
+// Une invitation partie (lien de parrainage, carte, duel) : l'étape
+// « Invite un pote » est faite — on ne peut pas savoir si le message a été
+// envoyé, le partage ouvert suffit.
+function parcoursInvitation(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||!u.parcours||u.parcours.existant||u.parcours.fini||u.parcours.invite) return false;
+  u.parcours.invite=Date.now();
+  try{ parcoursAvancer(); }catch(e){}
+  return true;
+}
+
 const RANGS=Object.freeze([
   {n:1, nom:'ÉTINCELLE', seuil:0},
   {n:2, nom:'IMPULSION', seuil:1800},
@@ -75342,7 +75558,7 @@ function _xpJour(t){ try{ return localISODate(new Date(t)); }catch(e){ return ''
 // jusqu'au plafond : la séance d'abord, la nuit en dernier.
 function xpCalcul(u,maintenant){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
-  const cat={seance:0,complete:0,record:0,bilan:0,nutrition:0,sommeil:0,semaine:0,badge:0,archive:0};
+  const cat={seance:0,complete:0,record:0,bilan:0,nutrition:0,sommeil:0,semaine:0,badge:0,parcours:0,archive:0};
   const vide={total:0,cat,ecrete:0};
   if(!u) return vide;
   let f; try{ f=_badgesFaits(u,t); }catch(e){ return vide; }
@@ -75387,6 +75603,8 @@ function xpCalcul(u,maintenant){
     let at=0; try{ at=Number(b.test(f))||0; }catch(e){ at=0; }
     if(at>0&&at<=t) cat.badge+=(b.palier===4?XP_ACTIONS.badgePalier4:XP_ACTIONS.badge);
   }
+  // Le parcours « Mise sous tension » : chaque étape une fois, à sa date.
+  cat.parcours=parcoursVolts(u,t);
   const ar=u.xpArchive&&typeof u.xpArchive==='object'?Number(u.xpArchive.sommeil)||0:0;
   cat.archive=Math.max(0,Math.round(ar));
   const total=Object.keys(cat).reduce((a,k)=>a+cat[k],0);
@@ -75400,6 +75618,12 @@ function xpGainsSeance(u,sess,maintenant){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
   const apres=xpCalcul(u,t);
   const sans=Object.assign({},u,{sessions:(u.sessions||[]).filter(s=>s!==sess&&!(s&&s.date===sess.date))});
+  // Les étapes du parcours datées à la fin de CETTE séance comptent dans son gain.
+  if(u.parcours&&u.parcours.etapes){
+    const et={};
+    for(const k of Object.keys(u.parcours.etapes)){ const d=Number(u.parcours.etapes[k]); if(!(d>=sess.date&&d-sess.date<15*60e3)) et[k]=d; }
+    sans.parcours=Object.assign({},u.parcours,{etapes:et});
+  }
   const avant=xpCalcul(sans,t);
   const d=k=>(apres.cat[k]||0)-(avant.cat[k]||0);
   const lignes=[];
@@ -75409,6 +75633,7 @@ function xpGainsSeance(u,sess,maintenant){
   if(d('record')>0) lignes.push({lib:nRec>1?nRec+' records':'Record battu',v:d('record')});
   if(d('semaine')>0) lignes.push({lib:'Semaine validée',v:d('semaine')});
   if(d('badge')>0) lignes.push({lib:'Badge débloqué',v:d('badge')});
+  if(d('parcours')>0) lignes.push({lib:'Mise sous tension',v:d('parcours')});
   const autres=(apres.total-avant.total)-lignes.reduce((a,l)=>a+l.v,0);
   if(autres>0) lignes.push({lib:'Autres gains du jour',v:autres});
   return {total:Math.max(0,apres.total-avant.total),lignes,ecrete:apres.ecrete>avant.ecrete,

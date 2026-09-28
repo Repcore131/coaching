@@ -211,4 +211,13 @@ await test('saisons : les résultats, lus par leur titulaire, écrits par le Wor
   assert.equal((await appel(LEA, 'PUT', 'stats/saisons/hiver-2026', { total: 9999 })).statut, 401);
   assert.equal((await fetch(BASE + '/stats/saisons/hiver-2026.json?ns=' + NS)).status, 200);
 });
+await test('parcours_j21 : chacun écrit SES étapes restantes (1 à 7) sous un jour, personne ne lit', async () => {
+  const j = 'parcours_j21/2026-10-19/';
+  assert.equal((await appel(LEA, 'PUT', j + K(LEA), 2)).statut, 200);
+  assert.equal((await appel(LEA, 'PUT', j + K(KEV), 2)).statut, 401, 'celle d’un autre');
+  for (const v of [0, 8, 2.5, 'deux']) assert.equal((await appel(LEA, 'PUT', j + K(LEA), v)).statut, 401, String(v));
+  assert.equal((await appel(LEA, 'PUT', 'parcours_j21/19-10-2026/' + K(LEA), 2)).statut, 401, 'jour mal formé');
+  assert.equal((await appel(LEA, 'PUT', j + K(LEA), null)).statut, 200, 'fini : effacé');
+  assert.equal((await appel(LEA, 'GET', j + K(LEA))).statut, 401, 'pas même le sien');
+});
 console.log(ok + ' tests passés (émulateur)');

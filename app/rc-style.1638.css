@@ -14276,3 +14276,19 @@ html[data-theme="clair"]{background:#f8f8f8}
 /* LE HALO DES SILHOUETTES dans la carte musculaire a l ecran (27/09/2026) :
    meme lecon que le visuel exporte, le corps au repos se perdait dans le fond. */
 .musc-vue canvas.musc-base{filter:drop-shadow(0 0 6px rgba(255,255,255,.24)) drop-shadow(0 0 14px rgba(255,255,255,.1))}
+
+/* ══ LE PARCOURS « MISE SOUS TENSION » (accueil, 14 premiers jours) ══ */
+.mst-carte{margin:0 0 20px;padding:14px 16px;border-radius:var(--r-4);border:1px solid rgba(224,32,32,.45);
+  background:radial-gradient(120% 80% at 0% 0%,rgba(224,32,32,.14),transparent 60%),var(--surface-1);
+  box-shadow:0 0 18px rgba(224,32,32,.18)}
+.mst-tete{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.mst-tete b{font-family:var(--pile-titre);font-weight:400;font-size:var(--fs-lg);letter-spacing:1px;text-transform:uppercase;color:var(--text)}
+.mst-tete span{font-size:var(--fs-xs);color:var(--sub);white-space:nowrap}
+.mst-points{display:flex;gap:6px;margin:10px 0 12px}
+.mst-points i{flex:1;height:6px;border-radius:3px;background:var(--surface-3)}
+.mst-points i.on{background:#E02020;box-shadow:0 0 8px rgba(224,32,32,.7)}
+.mst-suite{display:flex;align-items:center;gap:12px;justify-content:space-between}
+.mst-suite span{flex:1;min-width:0;font-size:var(--fs-sm);font-weight:600;color:var(--text)}
+.mst-suite em{font-style:normal;color:#ff3434;font-weight:800;white-space:nowrap}
+.mst-b{flex:none}
+.mst-note{margin-top:10px;font-size:var(--fs-xs);color:var(--sub)}

@@ -148,7 +148,7 @@
         // porter, pas de niveau, pas de compteur. "$autre": false le dit.
         "badges": {
           "$badge": {
-            ".validate": "$badge.matches(/^(assidu_1|assidu_2|assidu_3|assidu_4|quatre-semaines|inarretable_2|inarretable_3|inarretable_4|briseur_1|briseur_2|briseur_3|briseur_4|tonnage_1|tonnage_2|tonnage_3|tonnage_4|sans_faute_1|sans_faute_2|sans_faute_3|sans_faute_4|miroir_1|miroir_2|miroir_3|miroir_4|cycles_1|cycles_2|cycles_3|cycles_4|carburant_1|carburant_2|carburant_3|carburant_4|premiere-seance|semaine-validee|premier-record|premier-bilan|fondateur|recruteur|mentor|champion|aube|nuit|nouvel_an|noel|tempete|foudre_serie|phenix|palindrome|vendredi13|centurion)$/)",
+            ".validate": "$badge.matches(/^(assidu_1|assidu_2|assidu_3|assidu_4|quatre-semaines|inarretable_2|inarretable_3|inarretable_4|briseur_1|briseur_2|briseur_3|briseur_4|tonnage_1|tonnage_2|tonnage_3|tonnage_4|sans_faute_1|sans_faute_2|sans_faute_3|sans_faute_4|miroir_1|miroir_2|miroir_3|miroir_4|cycles_1|cycles_2|cycles_3|cycles_4|carburant_1|carburant_2|carburant_3|carburant_4|premiere-seance|semaine-validee|premier-record|premier-bilan|fondateur|recruteur|mentor|champion|aube|nuit|nouvel_an|noel|tempete|foudre_serie|phenix|palindrome|vendredi13|centurion|parcours_sous_tension)$/)",
             "at": { ".validate": "newData.isNumber() && newData.val() > 0" },
             "$autre": { ".validate": false }
           }
@@ -1440,6 +1440,19 @@
           "valeur": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 1000000000" },
           "maj":    { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
           "$autre": { ".validate": false }
+        }
+      }
+    },
+    // LE RAPPEL DU 21e JOUR DE L ESSAI (parcours « Mise sous tension ») :
+    // chaque app ecrit, sous le jour J21 de son essai, le nombre d etapes qui
+    // lui restent (null une fois le parcours fini). Le Worker lit la liste du
+    // jour, envoie « encore N etapes » et efface. Personne d autre ne lit.
+    "parcours_j21": {
+      ".read": false,
+      "$jour": {
+        "$k": {
+          ".write": "auth != null && $k === auth.token.email.replace('.', ',')",
+          ".validate": "$jour.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.isNumber() && newData.val() >= 1 && newData.val() <= 7 && newData.val() % 1 === 0"
         }
       }
     },

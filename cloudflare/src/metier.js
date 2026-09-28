@@ -47,6 +47,13 @@ export function paris(t) {
   return { jour: p.year + '-' + p.month + '-' + p.day, heure: Number(p.hour) % 24, minute: Number(p.minute),
     annee, mois, date, joursem: new Date(Date.UTC(annee, mois - 1, date)).getUTCDay() };
 }
+// PURE. Le push du 21e jour d'essai, parcours « Mise sous tension » pas fini.
+export function messageParcoursJ21(n, jour) {
+  const k = Math.max(1, Math.min(7, Math.round(Number(n)) || 1));
+  return { type: 'serie', url: './?parcours=1', tag: 'parcours-j21-' + String(jour || ''),
+    title: 'Encore ' + k + ' étape' + (k > 1 ? 's' : '') + ' ⚡',
+    body: 'Ta Mise sous tension est presque bouclée : ' + (k > 1 ? 'les ' + k + ' dernières étapes débloquent' : 'la dernière étape débloque') + ' le badge SOUS TENSION.' };
+}
 export function heuresCalmes(t) { const h = paris(t).heure; return h >= 21 || h < 8; }
 export function lundiParis(t) {
   const p = paris(t);
@@ -1044,6 +1051,25 @@ export function creerMetier(deps) {
     return true;
   }
 
+  // ══ LE PARCOURS « MISE SOUS TENSION » : LE RAPPEL DU 21e JOUR D'ESSAI ══
+  // Chaque app tient /parcours_j21/<jour J21 de son essai>/<elle> = le
+  // nombre d'étapes qui lui restent (null quand le parcours est fini). Le
+  // Worker lit la liste DU JOUR seulement (une lecture), pousse « encore N
+  // étapes » (type serie : même réglage que les rappels de régularité), et
+  // efface le jour. Rend false quand le budget coupe.
+  async function parcoursJ21(t) {
+    const jour = paris(t).jour;
+    const liste = (await _val('parcours_j21/' + jour)) || {};
+    const dest = Object.keys(liste).map((uid) => ({ uid, n: Math.round(Number(liste[uid])) }))
+      .filter((x) => x.n >= 1 && x.n <= 7).sort((a, b) => (a.uid < b.uid ? -1 : 1));
+    if (dest.length && _reste() < 6) return false;
+    // Effacé AVANT les push : pousserA diffère ce qui dépasse le budget, rien
+    // ne repart donc deux fois.
+    await db.ref('parcours_j21/' + jour).remove();
+    if (dest.length) await pousserA(dest.map((x) => ({ uid: x.uid, message: messageParcoursJ21(x.n, jour) })), { attendre: false });
+    return true;
+  }
+
   // ══ UNE SOUS-TÂCHE (écrite par differer, jamais par l'app : les règles
   // refusent le type « tache » à un client) ══════════════════════════════
   async function tache(e) {
@@ -1063,5 +1089,5 @@ export function creerMetier(deps) {
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente,
     fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, tache,
-    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, saisonsHeure };
+    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, saisonsHeure, parcoursJ21 };
 }
