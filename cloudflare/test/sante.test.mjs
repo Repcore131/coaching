@@ -284,6 +284,31 @@ await test('un envoi iPhone en lignes passe par la même validation', async () =
   assert.equal(M.F.lire('sante_sync/lea@t,fr/meta/source'), 'raccourci');
 });
 
+await test('le corps EXACT de la fiche du Raccourci : lignes vides, espaces fines, libellés iOS, v en texte', async () => {
+  const M = monde();
+  const { jeton } = await santeJeton({ auth: LEA, data: { action: 'creer' } }, M.ctx);
+  // Formater la date : yyyy-MM-dd'T'HH:mm:ssZZZZZ ; « Grouper par jour » pour les pas.
+  const corps = { v: '1', plateforme: 'ios', source: 'raccourci', lignes: {
+    pas: '2026-10-13T00:00:00+02:00;7\u202f412\n2026-10-14T00:00:00+02:00;10\u202f031\n2026-10-15T00:00:00+02:00;2\u202f210',
+    sommeil: ['2026-10-14T23:05:00+02:00;2026-10-14T23:20:00+02:00;Au lit',
+      '2026-10-14T23:20:00+02:00;2026-10-15T01:00:00+02:00;Essentiel',
+      '2026-10-15T01:00:00+02:00;2026-10-15T02:10:00+02:00;Sommeil profond',
+      '2026-10-15T02:10:00+02:00;2026-10-15T02:20:00+02:00;Éveillé(e)',
+      '2026-10-15T02:20:00+02:00;2026-10-15T03:50:00+02:00;Paradoxal',
+      '2026-10-15T03:50:00+02:00;2026-10-15T06:45:00+02:00;Asleep Core'].join('\n'),
+    fcRepos: '2026-10-15T08:00:00+02:00;57', vfc: '2026-10-15T03:00:00+02:00;38,6',
+    poids: '', masseGrasse: '' } };
+  const r = await envoyer(M, jeton, corps);
+  assert.equal(r.statut, 200);
+  assert.equal(r.corps.ignores, 0);
+  const j = M.F.lire('sante_sync/lea@t,fr/jours/2026-10-15');
+  assert.equal(j.pas, 2210); assert.equal(M.F.lire('sante_sync/lea@t,fr/jours/2026-10-14/pas'), 10031);
+  assert.equal(j.sommeilMin, 100 + 70 + 90 + 175); assert.equal(j.coucher, '23:20'); assert.equal(j.lever, '06:45');
+  assert.deepEqual(j.phases, { profond: 70, leger: 275, paradoxal: 90, eveil: 10 });
+  assert.equal(j.vfc, 38.6); assert.equal(j.vfcMethode, 'sdnn'); assert.equal(j.fcRepos, 57);
+  assert.equal((await envoyer(M, jeton, Object.assign({}, corps, { v: '2' }))).statut, 400);
+});
+
 await test('le Worker route /sante/i/… avec CORS, sans casser /sante', async () => {
   const r = await worker.fetch(new Request('https://s.t/sante/i/x', { method: 'OPTIONS' }), { FIREBASE_DB_URL: 'https://b.t', FIREBASE_DB_SECRET: 'x' }, { waitUntil() {} });
   assert.equal(r.status, 204);

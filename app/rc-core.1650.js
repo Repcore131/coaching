@@ -110290,7 +110290,7 @@ function _htmlSanSyncFeuille(){
   if(p==='ios'){
     corps=_ssEtape(1,'Copie ton <span class="ss-r">adresse personnelle</span>','Le Raccourci l’utilise pour envoyer tes données à RepCore.',_ssAdresseHtml())
       +_ssEtape(2,'Installe le Raccourci <span class="ss-r">RepCore Santé</span>',
-        raccourciSanteUrl()?'Au premier lancement, colle ton adresse et autorise l’accès à Santé.':'Le lien du Raccourci arrive très bientôt.',
+        raccourciSanteUrl()?'À l’ajout, colle ton adresse quand il la demande ; au premier lancement, autorise l’accès à Santé.':'Le lien du Raccourci arrive très bientôt.',
         raccourciSanteUrl()?'<a class="ss-btn ss-btn-2" href="'+escapeHtml(raccourciSanteUrl())+'" target="_blank" rel="noopener">Obtenir le Raccourci</a>':'')
       +_ssEtape(3,'Automatise-le à <span class="ss-r">9 h</span>',
         'Raccourcis › Automatisation › + › Heure de la journée : 09:00, tous les jours, Exécuter immédiatement › RepCore Santé.')

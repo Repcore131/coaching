@@ -19,17 +19,22 @@ import { paris } from './metier.js';
 export const LIGNES_MAX = 2000;
 // Une nuit : des segments qui se suivent à moins de 3 h d'écart.
 const NUIT_TROU_MS = 3 * 3600e3;
-// Les états, en français et en anglais, sans accent ni casse.
-const ETATS = {
-  profond: 'profond', deep: 'profond',
-  essentiel: 'leger', core: 'leger', leger: 'leger', light: 'leger',
-  paradoxal: 'paradoxal', rem: 'paradoxal',
-  endormi: 'endormi', asleep: 'endormi', asleepunspecified: 'endormi', sommeil: 'endormi',
-  eveille: 'eveil', eveil: 'eveil', awake: 'eveil',
-  aulit: 'aulit', inbed: 'aulit', danslelit: 'aulit',
-};
-const net = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '');
-export const etatSommeil = (s) => ETATS[net(s)] || null;
+// Les états, en français et en anglais, sans accent ni casse. iOS ne les
+// écrit pas toujours pareil selon la langue et la version : « Endormi(e) »,
+// « Éveillé(e) », « Sommeil profond », « Asleep Core », « Asleep (Unspecified) »…
+// On cherche donc un MOT dans le libellé, et l'ordre compte : la phase
+// précise (profond, paradoxal, essentiel) passe avant le générique
+// (endormi, sommeil), sinon « Asleep Core » serait un sommeil sans phase.
+const ETATS = [
+  [/profond|deep/, 'profond'],
+  [/paradox|^rem$|asleeprem|sommeilrem/, 'paradoxal'],
+  [/essentiel|core|leger|light/, 'leger'],
+  [/eveil|awake/, 'eveil'],
+  [/aulit|inbed|danslelit|aucouche/, 'aulit'],
+  [/endormi|asleep|sommeil|sleep/, 'endormi'],
+];
+const net = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+export const etatSommeil = (s) => { const n = net(s); if (!n) return null; for (const [re, e] of ETATS) if (re.test(n)) return e; return null; };
 export const nombre = (s) => { const v = Number(String(s == null ? '' : s).trim().replace(/\s/g, '').replace(',', '.')); return Number.isFinite(v) ? v : NaN; };
 const instant = (s) => { const t = Date.parse(String(s || '').trim()); return Number.isFinite(t) ? t : NaN; };
 const hhmm = (t) => { const p = paris(t); return String(p.heure).padStart(2, '0') + ':' + String(p.minute).padStart(2, '0'); };

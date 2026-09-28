@@ -196,7 +196,8 @@ export async function recevoirSante(req, ctx) {
   let corps = null;
   try { corps = JSON.parse(texte); } catch (e) { corps = null; }
   const source = corps && PLATEFORMES[corps.plateforme];
-  if (!corps || typeof corps !== 'object' || corps.v !== 1 || !source || corps.source !== source) {
+  // v : 1, ou « 1 » quand le Dictionnaire du Raccourci l'a typé Texte.
+  if (!corps || typeof corps !== 'object' || String(corps.v) !== '1' || !source || corps.source !== source) {
     await db.ref('').update(maj);
     return refus(400, 'format');
   }
