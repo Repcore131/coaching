@@ -82,7 +82,7 @@ const assert = (c, m) => { if (!c) { console.log("ECHEC:", m); process.exitCode 
   const id = P.idFilleul("julie@t,fr");
   assert(get("parrainage/comptes/kev@t,fr/filleuls/" + id + "/statut") === "inscrit" && !JSON.stringify(get("parrainage/comptes/kev@t,fr")).includes("julie@"),
     "Kevin voit Julie « inscrite », sans son adresse");
-  assert(get("droits/julie@t,fr/essaiFinit") === t0 + 60 * 864e5 && get("droits/julie@t,fr/echeance") === t0 + 60 * 864e5, "Julie : un mois d'essai en plus");
+  assert(get("droits/julie@t,fr/essaiFinit") === t0 + 30 * 864e5 && get("droits/julie@t,fr/echeance") === t0 + 30 * 864e5, "Julie : un seul mois, présenté comme offert");
   // Refus : même appareil que le parrain ; alias ; deuxième demande.
   set("users/tom@t,fr", { fname: "Tom", createdAt: t0 });
   await demande("tom@t,fr", { code: "KEVIN7K2", le: t0, appareil: "appkevin1234" });

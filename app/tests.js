@@ -35295,9 +35295,10 @@ async function testExercices(){
           //   C'est LE test qui empeche un tarif de bouger en silence : les
           //   chiffres y sont ecrits a la main, et c'est voulu.
           essentielle:[9.50,'essentielle',0], ultime:[24.90,'ultime',0], essai:[0,'ultime',1],
-          // PARRAINAGE (26/09/2026) : le mois en plus du filleul, qui s'ajoute
-          // a l'essai. Gratuit, Ultime, un mois — ni plus, ni moins.
-          essai_parrainage:[0,'ultime',1],
+          // PARRAINAGE : plus de mois en plus (Kevin, 28/09/2026). Le filleul a
+          // le mois d'essai de tout le monde, presente comme offert par son
+          // parrain : zero mois ajoute, ni plus, ni moins.
+          essai_parrainage:[0,'ultime',0],
           // LOT 10 : le premier mois apres un pack. Son prix se LIT sur
           // Ultime, il n'est pas recopie : la moitie de 24,90 fait 12,45, et
           // elle suivra le jour ou Ultime bougera.
@@ -48967,7 +48968,7 @@ async function testExercices(){
       if(l!==RC_LIEN_COURT+(RC_LIEN_COURT.indexOf('?')>=0?'&':'?')+'ref=JULIE7K2') return _echec(l);
       if(lienPerso('',{})!==RC_LIEN_COURT) return _echec('lien sans code : '+lienPerso('',{}));
       const m=parrainageMessage('JULIE7K2',l);
-      return (m.indexOf('JULIE7K2')>=0&&m.indexOf(l)>=0&&/2 mois/.test(m))?true:_echec(m);})());
+      return (m.indexOf('JULIE7K2')>=0&&m.indexOf(l)>=0&&/premier mois est offert/.test(m)&&!/2 mois|au lieu/.test(m))?true:_echec(m);})());
     ok('Parrainage : /i/ garde ?ref= jusqu’à /app/, y compris dans Instagram',(()=>{
       let h=''; try{ const x=new XMLHttpRequest(); x.open('GET','../i/index.html',false); x.send(); h=x.responseText; }catch(e){ return _echec('lecture de /i'); }
       const m=/<script>\s*(\(function\(\)\{[\s\S]*?\}\)\(\);)\s*<\/script>/.exec(h);
@@ -49006,7 +49007,7 @@ async function testExercices(){
         parrainageChampInscription('coach'); if(z.style.display!=='none') return _echec('visible pour un coach');
         parrainageChampInscription('athlete'); return z.style.display===''?true:_echec('masqué pour un athlète');
       } finally { z.style.display=sv; }})());
-    ok('Parrainage : le filleul a un mois d’essai en plus (OFFRES.essai_parrainage)',(()=>{
+    ok('Parrainage : un mois, pas deux — le filleul a le même essai, présenté comme offert (OFFRES.essai_parrainage)',(()=>{
     ok('Notifications activées par défaut, sans écran, retirables dans les réglages',(()=>{
       const u={email:'a@t.fr',role:'client'};
       if(!pushDemandeAuto(u,'proposer')) return _echec('pas demandées au départ');
@@ -49025,7 +49026,7 @@ async function testExercices(){
       const t=Date.now();
       essaiOuvrir(u,parrainageBonusJours()); essaiOuvrir(v,0);
       const d=Math.round((u.essai.finit-v.essai.finit)/864e5);
-      if(OFFRES.essai_parrainage.mois!==1||OFFRES.essai_parrainage.type!=='essai'||d!==30) return _echec('écart '+d);
+      if(OFFRES.essai_parrainage.mois!==0||OFFRES.essai_parrainage.type!=='essai'||d!==0) return _echec('écart '+d);
       const w={role:'athlete'}; essaiOuvrir(w,999);
       return (Math.round((w.essai.finit-t)/864e5)<=ESSAI_JOURS+60)?true:_echec('bonus non borné');})());
     ok('Parrainage : le miroir compte inscrits et abonnés, et date RECRUTEUR au 3e abonné',(()=>{
@@ -49522,7 +49523,7 @@ async function testExercices(){
       return bon?true:_echec('lien de l’aperçu : '+(a?a.outerHTML:'absent'));})());
     ok('Partage : le message de parrainage se lit, et le lien n’apparaît pas deux fois',(()=>{
       const m=parrainageMessage('JULIE7K2','https://x/?ref=JULIE7K2');
-      if(m.indexOf('Je m’entraîne avec RepCore. Avec mon code JULIE7K2, tu as 2 mois d’essai au lieu d’un')!==0) return _echec(m);
+      if(m.indexOf('Je m’entraîne avec RepCore. Avec mon code JULIE7K2, ton premier mois est offert')!==0) return _echec(m);
       if(!/https:\/\/x\/\?ref=JULIE7K2$/.test(m)) return _echec('le lien manque à la fin');
       if(/https?:/.test(parrainageMessage('JULIE7K2',''))) return _echec('lien vide : il ne doit rien ajouter');
       if(!/Le code se saisit/.test(parrainageMessage('JULIE7K2'))) return _echec('sans lien : où saisir le code');
@@ -49556,7 +49557,7 @@ async function testExercices(){
       if(/musc-actions|Télécharger|Partager/.test(sans)) return _echec('la carte de fin de séance garde son partage');
       return /sansPartage:true/.test(String(rendreMusclesFinSeance))?true:_echec('la fin de séance ne demande pas la carte sans partage');})());
     // ══ 27/09/2026 — L'ACCUEIL NOMINATIF DU FILLEUL ══════════════════════
-    okA('Accueil /i : « Julie t’invite », son rang et 2 mois ; l’ambassadeur par son nom ; le coach inchangé ; sans rien, pas de code coach',async()=>{
+    okA('Accueil /i : « Julie t’invite », son rang et « grâce à Julie, ton premier mois est offert » ; l’ambassadeur par son nom ; le coach inchangé ; sans rien, pas de code coach',async()=>{
       let h=''; try{ const x=new XMLHttpRequest(); x.open('GET','../i/index.html',false); x.send(); h=x.responseText; }catch(e){ return _echec('lecture de /i'); }
       const m=/<script>\s*(\(function\(\)\{[\s\S]*?\}\)\(\);)\s*<\/script>/.exec(h);
       if(!m) return _echec('script de /i introuvable');
@@ -49589,7 +49590,7 @@ async function testExercices(){
       if(!r.el.embleme.hidden) return _echec('un rang hors bornes affiche un emblème');
       r=await run('?ref=JULIE7K2',IG,{prenom:'Julie',rang:2});
       if(r.el.interne.hidden||r.el.titre.textContent!=='Julie t’invite sur RepCore'||r.el['interne-invite'].hidden
-        ||r.el['interne-invite'].textContent.indexOf(moisAmi+' mois pour essayer')!==0)
+        ||r.el['interne-invite'].textContent.indexOf('Grâce à Julie, ton premier mois est offert')!==0)
         return _echec('Instagram : '+r.el.titre.textContent+' / '+r.el['interne-invite'].textContent);
       if(!/\/app\/\?ref=JULIE7K2/.test(r.el.lien.textContent||'')) return _echec('Instagram : l’échappement est perdu');
       r=await run('?amb=LEAFIT',SF,{nom:'Léa Fit',actif:true});
@@ -49602,11 +49603,10 @@ async function testExercices(){
       if(/code/i.test(gen)) return _echec('le texte général parle d’un code');
       return true;
     });
-    ok('Inscription : « Invité par Julie · 2 mois pour essayer », et le code demandé en haut sur iPhone installé',(()=>{
-      const n=TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus;
-      if(phraseInvitationInscription('Julie')!=='Invité par Julie · '+n+' mois pour essayer') return _echec(phraseInvitationInscription('Julie'));
-      if(phraseInvitationInscription('','LEAFIT')!=='Invité par LEAFIT · '+n+' mois pour essayer') return _echec('ambassadeur');
-      if(!/1 mois de plus/.test(phraseInvitationInscription(''))) return _echec('sans code');
+    ok('Inscription : « Grâce à Julie, ton premier mois est offert », et le code demandé en haut sur iPhone installé',(()=>{
+      if(phraseInvitationInscription('Julie')!=='Grâce à Julie, ton premier mois est offert') return _echec(phraseInvitationInscription('Julie'));
+      if(phraseInvitationInscription('','Léa Fit')!=='Grâce à Léa Fit, ton premier mois est offert') return _echec('ambassadeur');
+      if(!/t’offre ton premier mois/.test(phraseInvitationInscription(''))) return _echec('sans code');
       if(!parrainageDemanderCode('athlete',true,'')) return _echec('iPhone installé, code perdu : rien ne le demande');
       if(parrainageDemanderCode('athlete',true,'JULIE7K2')||parrainageDemanderCode('athlete',false,'')||parrainageDemanderCode('coach',true,''))
         return _echec('demandé à tort');

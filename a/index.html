@@ -69,7 +69,7 @@ th{color:var(--gris);font-weight:600;font-size:12px}
     var ms=Object.keys(v.mois||{}).sort().reverse();
     if(ms.length) h+='<h2>Par mois</h2><table><tr><th>Mois</th><th>CA</th><th>Due</th><th>Payée</th><th>Attente</th></tr>'
       +ms.map(function(m){ var x=v.mois[m]; return '<tr><td>'+esc(m)+'</td><td>'+eur(x.ca)+'</td><td>'+eur(x.due)+'</td><td>'+eur(x.payee)+'</td><td>'+eur(x.attente)+'</td></tr>'; }).join('')+'</table>';
-    h+='<p class="note">Ceux qui s’inscrivent avec ton lien ou ton code ont 1 mois de plus pour essayer. Tu touches '+(v.commissionPct|0)+' % de ce qu’ils paient'
+    h+='<p class="note">Ceux qui s’inscrivent avec ton lien ou ton code ont leur premier mois offert grâce à toi. Tu touches '+(v.commissionPct|0)+' % de ce qu’ils paient'
       +(v.palierPct?' ('+(v.palierPct|0)+' % au-delà de '+(v.palierSeuil|0)+' payants)':'')+', pendant '+(v.dureeMois|0)+' mois à partir de leur premier paiement. '
       +'Une commission devient due 30 jours après le paiement (délai des remboursements), et se règle chaque mois.'
       +(v.maj?'<br>Mis à jour le '+esc(new Date(v.maj).toLocaleString('fr-FR'))+'.':'')+'</p>';
