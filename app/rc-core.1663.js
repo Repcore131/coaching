@@ -38704,11 +38704,17 @@ function loadClientHome(){
   // a sa propre carte, clh-first-bilan-card, juste au-dessus.
   const _alerte=document.getElementById('clh-bilan-alert');
   if(_alerte){
-    let _txt=null;
-    try{ _txt=_bilTexteRetard(_bilRetardJours(getNextBilanSaturday())); }catch(e){ _txt=null; }
-    _alerte.style.display=_txt?'block':'none';
-    const _sub=document.getElementById('clh-bilan-alert-sub');
-    if(_sub&&_txt) _sub.textContent=_txt+' Suis ton évolution : remplis ton bilan.';
+    let _h='';
+    try{
+      const _ech=getNextBilanSaturday();
+      const _n=_bilRetardJours(_ech);
+      if(_bilTexteRetard(_n)){
+        const _bs=(currentUser.bilans||[]).slice().sort((a,b)=>a.date-b.date);
+        _h=_htmlBilanRetard({retard:_n,echeance:_ech?_ech.getTime():0,dernier:_bs.length?_bs[_bs.length-1].date:0,freq:currentUser._bilanFreq||2});
+      }
+    }catch(e){ _h=''; }
+    _alerte.innerHTML=_h;
+    _alerte.style.display=_h?'block':'none';
   }
   // `users` sert plus bas à _applyCoachData : il reste, la carte PDF non.
   const users=DB.get('users')||{};
@@ -71629,6 +71635,28 @@ function _bilTexteRetard(n){
   if(n===0) return 'C’est aujourd’hui.';
   if(n===1) return 'Attendu depuis hier.';
   return 'Attendu depuis '+n+' jours.';
+}
+// PURE. La carte du bilan en retard (maquette de Kevin, 28/09/2026).
+// {retard, echeance, dernier, freq} → HTML. retard : jours (0 = aujourd'hui).
+function _htmlBilanRetard(d){
+  const n=Math.max(0,Math.round(Number(d&&d.retard)||0));
+  const freq=Number(d&&d.freq)||2;
+  const rythme=freq===1?'hebdomadaire':freq===4?'mensuel':freq===2?'bimensuel':'';
+  const date=t=>{ try{ return t?new Date(t).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}).toUpperCase():'—'; }catch(e){ return '—'; } };
+  const sous=n===0?'Ton bilan est attendu <b>aujourd’hui</b>.':n===1?'Bilan attendu depuis <b>hier</b>.':'Bilan attendu depuis <b>'+n+' jours</b>.';
+  const chrono='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="14" r="7.5"/><path d="M12 10v4l-2 2.5"/><path d="M10 3h4M12 3v3.5M18.2 7.3l1.3-1.3"/></svg>';
+  const doc='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 12h6M9 15.5h6M9 19h4"/></svg>';
+  const chev='<svg viewBox="0 0 16 24" aria-hidden="true"><polyline points="4 4 12 12 4 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  return '<div class="bal2-haut"><span class="bal2-ico">'+chrono+'</span>'
+    +'<div class="bal2-txt"><div class="bal2-titre">Bilan'+(rythme?' <span>'+rythme+'</span>':'')+'</div>'
+    +'<span class="bal2-pastille"><i></i>'+(n===0?'Aujourd’hui':'En retard')+'</span>'
+    +'<div class="bal2-sous">'+sous+'</div></div>'
+    +'<div class="bal2-j"><b>J'+(n?' + <span>'+n+'</span>':' <span>0</span>')+'</b><small>'+(n?'de retard':'c’est le jour')+'</small></div>'
+    +'<span class="bal2-ch">'+chev+'</span></div>'
+    +'<div class="bal2-frise"><div class="bal2-bout"><small>Dernier bilan</small><b>'+date(d&&d.dernier)+(d&&d.dernier?' <i class="bal2-ok" aria-label="fait">✓</i>':'')+'</b></div>'
+    +'<div class="bal2-ligne" aria-hidden="true"><i class="p0"></i><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i></div>'
+    +'<div class="bal2-bout bal2-fin"><small>Prochain bilan</small><b>'+date(d&&d.echeance)+'</b><small>À compléter</small></div></div>'
+    +'<span class="bal2-go"><span class="bal2-go-ico">'+doc+'</span><span class="bal2-go-t">Compléter mon bilan</span><span class="bal2-go-ch">'+chev+'</span></span>';
 }
 function isBilanNotifDay(){
   const bilans=currentUser.bilans||[];
