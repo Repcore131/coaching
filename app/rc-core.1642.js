@@ -1360,7 +1360,14 @@ function subPaliersDe(cle){
     detail:'soit '+prixMoisAnnuel(cle)+' / mois',
     econ:_economie(cle).texte, remise:_economie(cle).pourcent,
     planId:()=>planIdOffre(cle,true)});
-  if(mois) l.push({cle:'mensuel',titre:'Mensuel',prix:prixOffre(cle),periode:'par mois',
+  // LE DEMI-TARIF (sortie de pack, ou code ambassadeur de lancement) : le
+  // mensuel d'Ultime passe par le plan « demi » — 1er mois à moitié prix.
+  let demi=false;
+  try{ demi=cle==='ultime'&&typeof currentUser!=='undefined'&&!!currentUser&&demiPremierMoisDispo(currentUser); }catch(e){ demi=false; }
+  if(mois&&demi) l.push({cle:'mensuel',titre:'Mensuel',prix:prixOffre('ultime_demi'),periode:'le 1er mois',
+    detail:'puis '+prixOffre(cle)+' par mois',econ:'1er mois à -50 %',remise:'',
+    planId:()=>planIdOffre('ultime_demi')});
+  else if(mois) l.push({cle:'mensuel',titre:'Mensuel',prix:prixOffre(cle),periode:'par mois',
     detail:_euros(Math.round(mois*12*100)/100)+' sur un an',econ:'',remise:'',
     planId:()=>planIdOffre(cle)});
   return l;
@@ -7479,7 +7486,10 @@ function droitsDe(u){
     // Ultime ouvert par un programme acheté, par-dessus l'abonnement (serveur léger).
     ultimeJusqu:Number(d.ultimeJusqu)||0,abo:d.abo||null,
     // Ce qu'une fermeture à la main a remplacé, pour que « Rouvrir » le rende.
-    avantEcheance:Number(d.avantEcheance)||0,avantSource:d.avantSource||null};
+    avantEcheance:Number(d.avantEcheance)||0,avantSource:d.avantSource||null,
+    // Le demi-tarif du 1er mois d'Ultime, déjà consommé ; l'offre de lancement
+    // d'un code ambassadeur (écrite par le serveur léger).
+    demiPackUtilise:d.demiPackUtilise===true,offreAmb:d.offreAmb==='ultime_demi'?'ultime_demi':''};
 }
 // ⚠ UN NOEUD VIDE NE FERME RIEN, ET C'EST LA CORRECTION DU 24/09/2026.
 //
@@ -11164,9 +11174,11 @@ async function doRegister(){
       // LE PARRAINAGE, AVANT le code coach : un filleul peut arriver avec les
       // deux. La demande s'enregistre ; le mois en plus ne sert qu'à l'essai.
       // L'AMBASSADEUR D'ABORD (un seul avantage : ambassadeur > parrain).
-      let _bonusParrain=0;
-      try{ _bonusParrain=(await ambassadeurApresInscription(currentUser,(document.getElementById('r-parrain')||{}).value)).jours; }catch(e){ _bonusParrain=0; }
-      if(!_bonusParrain){ try{ _bonusParrain=await parrainageApresInscription(currentUser); }catch(e){ _bonusParrain=0; } }
+      let _bonusParrain=0, _amb=null;
+      try{ _amb=await ambassadeurApresInscription(currentUser,(document.getElementById('r-parrain')||{}).value); _bonusParrain=_amb.jours; }catch(e){ _bonusParrain=0; }
+      // Un code ambassadeur appliqué, même sans jour en plus (offre de
+      // lancement), ferme le parrainage : un seul avantage.
+      if(!(_amb&&_amb.type)){ try{ _bonusParrain=await parrainageApresInscription(currentUser); }catch(e){ _bonusParrain=0; } }
       if(await _appliquerCodeApresInscription()) return;
       // ⚠ PAS DE CODE : C'EST ICI QUE L'ESSAI S'OUVRE, et nulle part ailleurs.
       // Cette branche est exactement « un athlete sans code coach » — celui
@@ -18188,6 +18200,301 @@ function _dessinerRecapTeam(d,fond,format){
   o.ombre(false);
   return cv;
 }
+
+// ══ MON KIT (espace coach, 28/09/2026) ════════════════════════════════
+// Chaque lundi, trois contenus prêts à publier, 1080×1350, tirés des vraies
+// données de la semaine écoulée : le récap de la team (_dessinerRecapTeam),
+// la victoire de la semaine (_dessinerVictoireCoach — le prénom seulement
+// avec l'accord de l'athlète, vcConsentement, sinon anonyme), et le défi en
+// cours du Canal, ou un défi à lancer. Chaque légende est modifiable, porte
+// le lien de la vitrine du coach et #RepCore. « Tout télécharger » (partage
+// natif de plusieurs fichiers, sinon un par un), « Copier la légende ».
+// Et les ÉLÉMENTS DE MARQUE : logo (clair / sombre), les 3 fonds, les
+// emblèmes de rang, et trois règles d'usage.
+const KIT_FORMAT='post';
+const KIT_HASHTAGS='#RepCore #coaching #musculation';
+const KIT_VU_CLE='rc_kit_vu';
+const KIT_REGLES=Object.freeze([
+  'Le logo ne se déforme pas, ne se recolore pas et garde de l’air autour de lui.',
+  'Le rouge RepCore (#E02020) sert aux accents, jamais aux longs textes.',
+  'Pas de montage d’un emblème de rang sur un compte qui ne l’a pas gagné.'
+]);
+const KIT_FONDS=Object.freeze([{cle:'carbone',lib:'Carbone'},{cle:'rouge',lib:'Rouge'},{cle:'noir',lib:'Noir'}]);
+/** PURE. Le lundi (00 h, heure locale) de la semaine de `t`. */
+function kitLundi(maintenant){
+  const d=new Date((typeof maintenant==='number')?maintenant:Date.now());
+  d.setHours(0,0,0,0);
+  d.setDate(d.getDate()-((d.getDay()+6)%7));
+  return d;
+}
+function kitSemaineCle(maintenant){ return localISODate(kitLundi(maintenant)); }
+/** PURE. La meilleure progression de la semaine (7 jours, sinon 30), ou null. */
+function kitVictoire(athletes,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  for(const jours of [7,30]){
+    let best=null;
+    for(const u of (athletes||[]).filter(Boolean)){
+      let l=[]; try{ l=victoiresDe(u); }catch(e){ l=[]; }
+      for(const v of l){
+        if(!(v.le>t-jours*864e5&&v.le<=t)) continue;
+        if(!best||v.pct>best.v.pct) best={u,v};
+      }
+    }
+    if(best) return best;
+  }
+  return null;
+}
+/** PURE. Le défi du Canal en cours (commencé, pas fini), ou null. */
+function kitDefiEnCours(liste,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  return (liste||[]).filter(m=>m&&m.type==='defi'&&Number(m.fin)>t&&!(Number(m.debut)>t))
+    .sort((a,b)=>Number(a.fin)-Number(b.fin))[0]||null;
+}
+const _kitKg=v=>String(Math.round(Number(v)*10)/10).replace('.',',');
+/** PURE. Les trois contenus de la semaine : {type, titre, d, legende, fichier}. */
+function kitContenus(coach,athletes,defi,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const equipe=String((coach&&coach.teamName)||'').trim();
+  let lien=''; try{ lien=urlPagePerso(coach); }catch(e){ lien=''; }
+  const pied=(lien?'\n\n'+lien:'')+'\n'+KIT_HASHTAGS;
+  const out=[];
+  // 1. Le récap de la team.
+  const r=recapTeamDonnees(athletes,'semaine',t,equipe.toUpperCase());
+  const ton=r.tonnage>=1000?(String(Math.round(r.tonnage/100)/10).replace('.',',')+' t'):(r.tonnage+' kg');
+  out.push({type:'recap',titre:'Récap de la team',d:r,fichier:'repcore-team-semaine',
+    legende:'La semaine de la team'+(equipe?' '+equipe:'')+' : '+r.seances+' séance'+(r.seances>1?'s':'')+', '+r.records+' record'+(r.records>1?'s':'')
+      +', '+ton+' soulevés'+(r.equivalent?' (soit '+r.equivalent.texte+')':'')+'. Fier de vous 💪'+pied});
+  // 2. La victoire de la semaine — le prénom avec l'accord, sinon anonyme.
+  const vic=kitVictoire(athletes,t);
+  if(vic){
+    const mode=vcConsentement(vic.u)?'prenom':'anonyme';
+    const d=victoireDonnees(vic.u,vic.v,mode);
+    const qui=d.nom?('Bravo '+String(vic.u.fname||'').trim().slice(0,24)+' !'):'Bravo à toi, tu te reconnaîtras !';
+    out.push({type:'victoire',titre:'Victoire de la semaine',d,fichier:'repcore-victoire-semaine',
+      legende:'Victoire de la semaine ⚡ '+vic.v.exo+' : '+_kitKg(vic.v.avant)+' → '+_kitKg(vic.v.apres)+' kg (+'+vic.v.pct+' %)'
+        +(d.duree?' en '+d.duree.toLowerCase():'')+'. '+qui+pied});
+  }else out.push({type:'victoire',titre:'Victoire de la semaine',d:null,fichier:'',legende:''});
+  // 3. Le défi en cours, ou un défi à lancer.
+  if(defi){
+    let obj=''; try{ obj=defiTexteObjectif(defi); }catch(e){ obj=''; }
+    const fin=new Date(Number(defi.fin)).toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
+    out.push({type:'defi',titre:'Défi en cours',fichier:'repcore-defi-en-cours',
+      d:{sur:'DÉFI EN COURS',titre:String(defi.titre||'Le défi').slice(0,60),sous:obj,date:'JUSQU’AU '+fin.toUpperCase()},
+      legende:'Défi en cours : « '+String(defi.titre||'Le défi')+' »'+(obj?' — '+obj:'')+', jusqu’au '+fin+'. Qui le relève ? 🔥'+pied+' #defi'});
+  }else{
+    out.push({type:'defi',titre:'Défi à lancer',fichier:'repcore-defi-semaine',
+      d:{sur:'LE DÉFI DE LA SEMAINE',titre:'3 SÉANCES EN 7 JOURS',sous:'Tu relèves ?',date:'DU LUNDI AU DIMANCHE'},
+      legende:'Le défi de la semaine : 3 séances en 7 jours. Tu relèves ? Réponds « JE RELÈVE » en commentaire 🔥'+pied+' #defi'});
+  }
+  return out;
+}
+/** Le visuel du défi (en cours, ou à lancer). */
+function _dessinerDefiKit(d,fond,format){
+  const F=visuelFormat(format), W=F.w, H=F.h;
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const g=cv.getContext('2d');
+  const f=fond||'carbone', rouge=f==='rouge';
+  _kitPeindreFond(g,W,H,f);
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const o=_visuelOutils(g), cx=W/2, LARG=W-144;
+  g.textAlign='center'; g.textBaseline='alphabetic';
+  // L'éclair, derrière le titre.
+  g.save();
+  g.fillStyle=rouge?'rgba(255,255,255,.18)':'rgba(224,32,32,.35)';
+  g.shadowColor=rouge?'rgba(255,255,255,.4)':'rgba(224,32,32,.9)'; g.shadowBlur=60;
+  g.beginPath();
+  [[610,200],[400,620],[540,620],[450,1000],[720,480],[580,480],[690,200]].forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));
+  g.closePath(); g.fill(); g.restore();
+  o.ombre(true);
+  g.fillStyle=rouge?'#fff':'#ff3b3b'; g.font='800 38px '+MONT;
+  o.ecrireEspace(d.sur,cx,220,9,true);
+  g.fillStyle='#fff';
+  const s=o.ajuste(d.titre,'700',170,BEBAS,LARG,70);
+  g.font='700 '+s+'px '+BEBAS;
+  o.ecrire(o.coupe(d.titre,LARG),cx,640);
+  if(d.sous){ g.fillStyle='rgba(255,255,255,.9)'; const ss=o.ajuste(d.sous,'700',48,MONT,LARG,26); g.font='700 '+ss+'px '+MONT; o.ecrire(d.sous,cx,760); }
+  if(d.date){ g.fillStyle='rgba(255,255,255,.8)'; g.font='800 30px '+MONT; o.ecrireEspace(d.date,cx,840,5,true); }
+  let marque=null; try{ marque=_vcMarque(); }catch(e){ marque=null; }
+  _vcPied(g,o,H-330,W,marque,_vcNomCoach(),rouge);
+  o.ombre(false);
+  return cv;
+}
+// Les fonds du kit : ceux des visuels, et un noir uni.
+function _kitPeindreFond(g,W,H,f){
+  if(f==='noir'){ g.fillStyle='#0b0b0c'; g.fillRect(0,0,W,H); return true; }
+  return _visuelPeindreFond(g,W,H,f==='rouge'?'rouge':'carbone');
+}
+function kitDessiner(c,fond){
+  if(!c||!c.d) return null;
+  const f=fond||'carbone';
+  const vf=f==='noir'?'transparent':f;
+  let cv=null;
+  if(c.type==='defi') return _dessinerDefiKit(c.d,f,KIT_FORMAT);
+  cv=c.type==='recap'?_dessinerRecapTeam(c.d,vf,KIT_FORMAT):_dessinerVictoireCoach(c.d,vf,KIT_FORMAT);
+  if(f!=='noir') return cv;
+  // Le noir uni : le visuel transparent posé sur le fond.
+  const out=document.createElement('canvas'); out.width=cv.width; out.height=cv.height;
+  const g=out.getContext('2d'); _kitPeindreFond(g,out.width,out.height,'noir'); g.drawImage(cv,0,0);
+  return out;
+}
+// ── L'écran ────────────────────────────────────────────────────────────
+let _kit=null;   // {contenus, fond, semaine}
+function _kitLegendesGardees(sem){
+  try{ const x=JSON.parse(localStorage.getItem('rc_kit_leg')||'null'); return (x&&x.sem===sem)?(x.l||{}):{}; }catch(e){ return {}; }
+}
+function kitLegendeModifiee(i,val){
+  if(!_kit||!_kit.contenus[i]) return;
+  _kit.contenus[i].legende=String(val||'');
+  try{ const l=_kitLegendesGardees(_kit.semaine); l[i]=_kit.contenus[i].legende;
+    localStorage.setItem('rc_kit_leg',JSON.stringify({sem:_kit.semaine,l})); }catch(e){}
+}
+/** PURE. Le kit de la semaine a-t-il déjà été ouvert ? (la pastille « Nouveau ») */
+function kitNouveau(vu,maintenant){ return String(vu||'')!==kitSemaineCle(maintenant); }
+function _kitMarquerVu(){ try{ localStorage.setItem(KIT_VU_CLE,kitSemaineCle()); }catch(e){} _rendreBoutonKit(); }
+function _rendreBoutonKit(){
+  const b=document.getElementById('ch-kit-btn'); if(!b) return;
+  let vu=''; try{ vu=localStorage.getItem(KIT_VU_CLE)||''; }catch(e){ vu=''; }
+  b.classList.toggle('kit-neuf',kitNouveau(vu));
+}
+async function ouvrirKitCoach(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||u.role!=='coach') return false;
+  const ath=Object.values(DB.get('users')||{}).filter(x=>x&&x.role==='athlete'&&_estMonAthlete(x,u));
+  // Le défi en cours : le Canal du coach, s'il répond.
+  let liste=window._canalListe||null;
+  if(!liste){ try{ const cle=canalCle(u); liste=cle?canalTrier(await CLOUD.pullCanalMessages(cle)):[]; }catch(e){ liste=[]; } }
+  const sem=kitSemaineCle();
+  const contenus=kitContenus(u,ath,kitDefiEnCours(liste),Date.now());
+  const gardees=_kitLegendesGardees(sem);
+  contenus.forEach((c,i)=>{ if(typeof gardees[i]==='string'&&c.d) c.legende=gardees[i]; });
+  _kit={contenus,fond:'carbone',semaine:sem};
+  try{ _prechaufferMarqueCoach(); }catch(e){}
+  document.getElementById('kit-ecran')?.remove();
+  const z=document.createElement('div');
+  z.id='kit-ecran'; z.className='aa-ecran kit-ecran';
+  z.setAttribute('role','dialog'); z.setAttribute('aria-modal','true'); z.setAttribute('aria-label','Mon kit de la semaine');
+  z.addEventListener('keydown',e=>{ if(e.key==='Escape'){ e.preventDefault(); fermerKitCoach(); } });
+  document.body.appendChild(z);
+  _kitRendre();
+  _kitMarquerVu();
+  return true;
+}
+function fermerKitCoach(){ document.getElementById('kit-ecran')?.remove(); return true; }
+function kitFond(f){ if(!_kit||!KIT_FONDS.some(x=>x.cle===f)) return false; _kit.fond=f; _kitRendre(); return true; }
+function htmlKit(k){
+  const lundi=kitLundi(Date.parse(k.semaine+'T12:00:00')).toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
+  const prets=k.contenus.filter(c=>c.d).length;
+  let h='<div class="aa-haut"><span>Mon kit · semaine du '+escapeHtml(lundi)+'</span>'
+    +'<button type="button" class="aa-fermer" aria-label="Fermer" onclick="fermerKitCoach()">✕</button></div>'
+    +'<div class="kit-corps">'
+    +'<p class="kit-intro">Trois contenus prêts à poster (1080×1350), tirés des chiffres de ta team. Modifie la légende si tu veux, puis publie.</p>'
+    +'<div class="kit-fonds" role="group" aria-label="Fond">'+KIT_FONDS.map(f=>'<button type="button" class="kit-f'+(k.fond===f.cle?' on':'')+'" onclick="kitFond(\''+f.cle+'\')">'+f.lib+'</button>').join('')+'</div>'
+    +'<button type="button" class="btn btn-red btn-casse kit-tout" onclick="kitToutTelecharger(this)"'+(prets?'':' disabled')+'>'+icon('download',18)+' <span>Tout télécharger ('+prets+')</span></button>';
+  k.contenus.forEach((c,i)=>{
+    h+='<section class="kit-c"><div class="kit-t">'+(i+1)+' · '+escapeHtml(c.titre)+'</div>';
+    if(!c.d){ h+='<p class="kit-vide">Pas encore de progression de charge à montrer cette semaine. Elle viendra.</p></section>'; return; }
+    h+='<canvas class="kit-apercu" id="kit-cv-'+i+'" aria-label="Aperçu : '+escapeHtml(c.titre)+'"></canvas>'
+      +'<label class="kit-l" for="kit-leg-'+i+'">Légende</label>'
+      +'<textarea id="kit-leg-'+i+'" class="kit-leg" rows="5" oninput="kitLegendeModifiee('+i+',this.value)">'+escapeHtml(c.legende)+'</textarea>'
+      +'<div class="kit-b"><button type="button" class="btn btn-outline btn-sm btn-casse" onclick="kitCopierLegende('+i+',this)">Copier la légende</button>'
+      +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="kitTelecharger('+i+',this)">Télécharger</button></div></section>';
+  });
+  h+=htmlElementsMarque()+'</div>';
+  return h;
+}
+function _kitRendre(){
+  const z=document.getElementById('kit-ecran'); if(!z||!_kit) return;
+  z.innerHTML=htmlKit(_kit);
+  _kit.contenus.forEach((c,i)=>{
+    const el=document.getElementById('kit-cv-'+i); if(!el||!c.d) return;
+    try{ const v=kitDessiner(c,_kit.fond); if(!v) return; el.width=v.width; el.height=v.height; el.getContext('2d').drawImage(v,0,0); v.width=0; v.height=0; }catch(e){}
+  });
+}
+async function kitCopierLegende(i,btn){
+  const c=_kit&&_kit.contenus[i]; if(!c) return false;
+  let ok=false;
+  try{ await navigator.clipboard.writeText(c.legende); ok=true; }catch(e){ ok=false; }
+  if(btn){ const t=btn.textContent; btn.textContent=ok?'Copiée ✓':'Copie impossible'; setTimeout(()=>{ btn.textContent=t; },1800); }
+  return ok;
+}
+function _kitBlob(c){
+  return new Promise(res=>{
+    try{ const cv=kitDessiner(c,_kit.fond); if(!cv) return res(null);
+      cv.toBlob(b=>{ cv.width=0; cv.height=0; res(b); },'image/jpeg',0.9); }catch(e){ res(null); }
+  });
+}
+function _kitNom(c){ return (c.fichier||'repcore-kit')+'-'+(_kit&&_kit.semaine||'')+'.jpg'; }
+async function kitTelecharger(i){
+  const c=_kit&&_kit.contenus[i]; if(!c||!c.d) return false;
+  const b=await _kitBlob(c); if(!b) return false;
+  _kitEnregistrer(b,_kitNom(c));
+  return true;
+}
+function _kitEnregistrer(b,nom){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(b); a.download=nom;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>{ try{ URL.revokeObjectURL(a.href); }catch(e){} },4000);
+}
+// LE PARTAGE NATIF DE PLUSIEURS FICHIERS d'abord (Instagram les reçoit en
+// carrousel) ; sinon, un téléchargement par fichier.
+async function kitToutTelecharger(btn){
+  if(!_kit) return 0;
+  if(btn) btn.disabled=true;
+  const l=_kit.contenus.filter(c=>c.d);
+  const blobs=[];
+  for(const c of l){ const b=await _kitBlob(c); if(b) blobs.push({b,nom:_kitNom(c)}); }
+  let n=0;
+  try{
+    const files=blobs.map(x=>new File([x.b],x.nom,{type:'image/jpeg'}));
+    if(files.length&&navigator.canShare&&navigator.canShare({files})){
+      await navigator.share({files,title:'Mon kit RepCore'}); n=files.length;
+    }
+  }catch(e){ n=0; }
+  if(!n){ for(const x of blobs){ _kitEnregistrer(x.b,x.nom); n++; await new Promise(r=>setTimeout(r,350)); } }
+  try{ rcm('coach_kit_telecharge'); }catch(e){}
+  if(btn) btn.disabled=false;
+  return n;
+}
+// ── Les éléments de marque ─────────────────────────────────────────────
+function htmlElementsMarque(){
+  return '<section class="kit-c kit-marque"><div class="kit-t">Éléments de marque</div>'
+    +'<div class="kit-l">Logo</div><div class="kit-b">'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="kitLogo(\'sombre\')">Logo · fond sombre</button>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="kitLogo(\'clair\')">Logo · fond clair</button></div>'
+    +'<div class="kit-l">Les 3 fonds (1080×1350)</div><div class="kit-b">'
+    +KIT_FONDS.map(f=>'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="kitFondTelecharger(\''+f.cle+'\')">'+f.lib+'</button>').join('')+'</div>'
+    +'<div class="kit-l">Emblèmes de rang</div><div class="kit-emb">'
+    +RANGS.map(r=>'<a href="'+rangEmbleme(r.n,true)+'" download="repcore-rang-'+r.n+'.webp" title="'+escapeHtml(r.nom)+'"><img src="'+rangEmbleme(r.n)+'" alt="'+escapeHtml(r.nom)+'" loading="lazy" width="44" height="44"></a>').join('')+'</div>'
+    +'<div class="kit-l">Règles d’usage</div><ol class="kit-regles">'+KIT_REGLES.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')+'</ol></section>';
+}
+/** Le logo : l'icône et le mot REPCORE, blanc (fond sombre) ou noir (fond clair). */
+function kitLogoCanvas(variante,icone){
+  const cv=document.createElement('canvas'); cv.width=1200; cv.height=400;
+  const g=cv.getContext('2d');
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  if(icone){ try{ g.drawImage(icone,40,40,320,320); }catch(e){} }
+  g.fillStyle=variante==='clair'?'#0b0b0c':'#ffffff';
+  g.font='700 250px '+BEBAS; g.textBaseline='middle'; g.textAlign='left';
+  g.fillText('REPCORE',400,212);
+  return cv;
+}
+function kitLogo(variante){
+  const img=new Image();
+  const fin=()=>{ const cv=kitLogoCanvas(variante,img.naturalWidth?img:null);
+    cv.toBlob(b=>{ if(b) _kitEnregistrer(b,'repcore-logo-'+(variante==='clair'?'fond-clair':'fond-sombre')+'.png'); },'image/png'); };
+  img.onload=fin; img.onerror=fin;
+  img.src='./icons/icon-512x512.png';
+  return true;
+}
+function kitFondTelecharger(f){
+  const cv=document.createElement('canvas'); cv.width=1080; cv.height=1350;
+  _kitPeindreFond(cv.getContext('2d'),1080,1350,f);
+  cv.toBlob(b=>{ if(b) _kitEnregistrer(b,'repcore-fond-'+f+'.jpg'); },'image/jpeg',0.92);
+  return true;
+}
+
 // ── L'ÉCRAN : aperçu, réglages, fond, Télécharger / Partager ──────────────
 let _vc=null;   // {type:'victoire'|'recap', u?, victoires?, i, mode, format, periode}
 function _vcDonnees(){
@@ -18987,12 +19294,14 @@ async function ambassadeurApresInscription(u,saisi){
     const ok=await CLOUD.ambDemande(moi,{code:c.code,le:Date.now(),appareil:rcAppareilId()}).catch(()=>false);
     if(ok) deposerEvenement({type:'ambassadeur_demande'}).catch(()=>{});
     if(!ok) continue;
-    u.ambassadeur={code:c.code,nom:String(pub.nom||'').slice(0,80),le:Date.now()};
+    const demi=pub.avantage==='ultime_demi';
+    u.ambassadeur={code:c.code,nom:String(pub.nom||'').slice(0,80),le:Date.now(),avantage:demi?'ultime_demi':'essai+1mois'};
     ambOublier();
     try{ if(typeof parrainageOublierRef==='function') parrainageOublierRef(); }catch(e){}
     try{ rcm('ambassadeur_inscrit'); }catch(e){}
-    toast('Code '+c.code+' appliqué : 1 mois de plus pour essayer ⚡','var(--green)');
-    return {jours:parrainageBonusJours(),type:'amb'};
+    // L'OFFRE DE LANCEMENT remplace le mois d'essai en plus (un seul avantage).
+    toast('Code '+c.code+' appliqué : '+(demi?'ton 1er mois d’Ultime à moitié prix ⚡':'1 mois de plus pour essayer ⚡'),'var(--green)');
+    return {jours:demi?0:parrainageBonusJours(),type:'amb'};
   }
   return {jours:0,type:null};
 }
@@ -19156,7 +19465,9 @@ function htmlAmbassadeurs(tous,t){
     +'<label>Palier %<input id="amb-palier" type="number" min="0" max="100" value="'+AMB_DEFAUTS.palierPct+'"></label>'
     +'<label>Au-delà de (payants)<input id="amb-seuil" type="number" min="1" value="'+AMB_DEFAUTS.palierSeuil+'"></label>'
     +'<label>Durée (mois)<input id="amb-duree" type="number" min="1" max="120" value="'+AMB_DEFAUTS.dureeMois+'"></label>'
-    +'</div><p class="sub amb-note">Avantage de ses inscrits : 1 mois de plus pour essayer.</p>'
+    +'<label>Avantage de ses inscrits<select id="amb-avantage"><option value="essai+1mois">1 mois de plus pour essayer</option>'
+      +'<option value="ultime_demi">Offre de lancement : 1er mois d’Ultime à moitié prix</option></select></label>'
+    +'</div><p class="sub amb-note">Un seul avantage par code : le mois d’essai en plus, OU le 1er mois d’Ultime à moitié prix (plan PayPal ULTIME_DEMI, une fois par compte).</p>'
     +'<button type="button" class="btn btn-red" style="width:100%;margin:8px 0 0" onclick="creerAmbassadeur(this)">Créer l’ambassadeur</button></details>';
   if(moisDispo.size){
     const ms=[...moisDispo].sort().reverse();
@@ -19205,7 +19516,7 @@ function ambFiche(f,existants,maintenant){
   const nom=String(f.nom||'').replace(/\s+/g,' ').trim().slice(0,80);
   if(!nom) return {erreur:'Donne un nom.'};
   const n=(v,d,min,max)=>{ const k=Number(v); return isFinite(k)&&k>=min&&k<=max?k:d; };
-  return {code,fiche:{nom,instagram:String(f.instagram||'').replace(/^@/,'').trim().slice(0,60),avantage:'essai+1mois',
+  return {code,fiche:{nom,instagram:String(f.instagram||'').replace(/^@/,'').trim().slice(0,60),avantage:f.avantage==='ultime_demi'?'ultime_demi':'essai+1mois',
     commissionPct:n(f.commissionPct,AMB_DEFAUTS.commissionPct,0,100),palierPct:n(f.palierPct,AMB_DEFAUTS.palierPct,0,100),
     palierSeuil:n(f.palierSeuil,AMB_DEFAUTS.palierSeuil,1,100000),dureeMois:n(f.dureeMois,AMB_DEFAUTS.dureeMois,1,120),
     actif:true,secret:f.secret||_ambSecret(),creeLe:(typeof maintenant==='number')?maintenant:Date.now()}};
@@ -19214,7 +19525,7 @@ async function creerAmbassadeur(btn){
   if(!estAdminAmbassadeurs()) return false;
   const g=id=>(document.getElementById(id)||{}).value;
   const r=ambFiche({code:g('amb-code'),nom:g('amb-nom'),instagram:g('amb-insta'),commissionPct:g('amb-pct'),
-    palierPct:g('amb-palier'),palierSeuil:g('amb-seuil'),dureeMois:g('amb-duree')},_ambTous||{});
+    palierPct:g('amb-palier'),palierSeuil:g('amb-seuil'),dureeMois:g('amb-duree'),avantage:g('amb-avantage')},_ambTous||{});
   if(r.erreur){ toast(r.erreur,'var(--orange)'); return false; }
   if(btn) btn.disabled=true;
   const f=r.fiche;
@@ -19400,8 +19711,11 @@ async function parrainInviteLire(code){
   }catch(e){ return null; }
 }
 // PURE. La ligne sous le champ du code.
-function phraseInvitationInscription(prenom,amb){
+function phraseInvitationInscription(prenom,amb,avantage){
   const n=TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus;
+  // L'offre de lancement d'un code ambassadeur : pas de mois en plus, le 1er
+  // mois d'Ultime à moitié prix.
+  if(amb&&avantage==='ultime_demi') return 'Invité par '+amb+' · '+TARIFS.essai.mois+' mois pour essayer, puis ton 1er mois d’Ultime à '+prixOffre('ultime_demi');
   if(amb) return 'Invité par '+amb+' · '+n+' mois pour essayer';
   if(prenom) return 'Invité par '+prenom+' · '+n+' mois pour essayer';
   return 'Le code d’un ami ou d’un ambassadeur t’offre '+TARIFS.essai_parrainage.moisEnPlus+' mois de plus pour essayer.';
@@ -19441,6 +19755,14 @@ function parrainageChampInscription(role){
   const g=(!a&&c)?parrainInviteGarde(c):null;
   if(info) info.textContent=a?phraseInvitationInscription('',a)
     :c?phraseInvitationInscription(g?g.prenom:'un ami'):phraseInvitationInscription('');
+  // L'ambassadeur : son nom et son offre, lus dans sa fiche publique.
+  if(a&&info){
+    try{ CLOUD.ambPublicGet(a).then(p=>{
+      if(!p||p.actif===false) return;
+      if(ambEnAttente()!==a) return;
+      info.textContent=phraseInvitationInscription('',String(p.nom||a).slice(0,80),p.avantage);
+    }).catch(()=>{}); }catch(e){}
+  }
   // ARRIVÉ PAR UN DUEL : on le dit d'abord (le défi est la raison de venir).
   try{
     const dv=duelInviteEnAttente();
@@ -22459,6 +22781,8 @@ function _htmlEnteteTableau(){
 function renderClientList(clients){
   // Les volts du serveur de ses athlètes, en tâche de fond (xp_serveur).
   try{ chargerXpServeurClients(); }catch(e){}
+  // La pastille « Nouveau » du kit : le lundi, jusqu'à la première ouverture.
+  try{ _rendreBoutonKit(); }catch(e){}
   const el=document.getElementById('ch-clients-list');
   if(!el) return;
   const tous=clients||getClients();
@@ -72174,6 +72498,14 @@ function finDePack(u,maintenant){
   if(j>0) return {etat:'bientot',jours:j,fin:fin};
   return {etat:'finie',jours:j,fin:fin};
 }
+// PURE. L'athlète est-il arrivé par un code ambassadeur qui porte l'offre de
+// lancement ? Le serveur (droits.offreAmb) d'abord ; le dossier en attendant
+// que la demande soit jugée.
+function offreAmbDemi(u){
+  if(!u||u.role==='coach') return false;
+  try{ const d=droitsDe(u); if(d.etat==='serveur'&&d.offreAmb==='ultime_demi') return true; }catch(e){}
+  return !!(u.ambassadeur&&u.ambassadeur.avantage==='ultime_demi');
+}
 // PURE. Le premier mois d'Ultime a moitie prix, apres un pack, UNE SEULE FOIS.
 //
 // ⚠ ELLE REND false TANT QUE LE PLAN PAYPAL N'EXISTE PAS. Annoncer 12,45 € et
@@ -72185,6 +72517,9 @@ function demiPremierMoisDispo(u,maintenant){
   try{ if(!planIdOffre('ultime_demi')) return false; }catch(e){ return false; }
   if(x.demiPackUtilise===true) return false;
   try{ const d=droitsDe(x); if(d.etat==='serveur'&&d.demiPackUtilise===true) return false; }catch(e){}
+  // L'OFFRE DE LANCEMENT d'un code ambassadeur « ultime_demi » : même demi-
+  // tarif, même unicité (demiPackUtilise).
+  if(offreAmbDemi(x)) return true;
   return finDePack(x,maintenant).etat!=='non';
 }
 // PURE. La phrase, selon le moment et selon ce qu'on sait encaisser.

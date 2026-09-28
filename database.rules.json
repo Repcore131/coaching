@@ -317,6 +317,10 @@
       "abo": { ".validate": "newData.isString() && newData.val().length < 40" },
       "ultimeJusqu": { ".validate": "newData.isNumber() && newData.val() >= 0" },
       "bonusUltimeFin": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+      // L offre de lancement d un code ambassadeur (1er mois d Ultime a moitie
+      // prix), et la marque qu elle a ete consommee (une fois par compte).
+      "offreAmb": { ".validate": "newData.isString() && newData.val() === 'ultime_demi'" },
+      "demiPackUtilise": { ".validate": "newData.isBoolean()" },
       // Ce qu une fermeture a la main (source « suspension ») a remplace :
       // « Rouvrir » le rend tel quel, abonnement PayPal compris.
       "avantEcheance": { ".validate": "newData.isNumber() && newData.val() >= 0" },
@@ -1645,7 +1649,7 @@
         ".validate": "$code.matches(/^[A-Z0-9]{3,16}$/)",
         "nom":           { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 80" },
         "instagram":     { ".validate": "newData.isString() && newData.val().length <= 60" },
-        "avantage":      { ".validate": "newData.isString() && newData.val() === 'essai+1mois'" },
+        "avantage":      { ".validate": "newData.isString() && (newData.val() === 'essai+1mois' || newData.val() === 'ultime_demi')" },
         "commissionPct": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
         "palierPct":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
         "palierSeuil":   { ".validate": "newData.isNumber() && newData.val() >= 1" },
@@ -1666,7 +1670,7 @@
         ".read": true,
         ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
         "nom":      { ".validate": "newData.isString() && newData.val().length <= 80" },
-        "avantage": { ".validate": "newData.isString() && newData.val() === 'essai+1mois'" },
+        "avantage": { ".validate": "newData.isString() && (newData.val() === 'essai+1mois' || newData.val() === 'ultime_demi')" },
         "actif":    { ".validate": "newData.isBoolean()" },
         "$autre":   { ".validate": false }
       }

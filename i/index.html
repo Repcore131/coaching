@@ -70,6 +70,9 @@ code{background:#000;border:1px solid var(--bord);border-radius:6px;padding:2px 
   <div id="accueil" hidden>
     <img id="embleme" class="embleme" alt="" hidden>
     <p class="promesse"><strong><span id="mois-ami" data-nb="essai.moisParraine">2</span> mois pour essayer</strong>, toute l'app ouverte, sans carte bancaire.</p>
+    <!-- L'OFFRE DE LANCEMENT d'un code ambassadeur « ultime_demi » : elle
+         remplace le mois d'essai en plus (un seul avantage). -->
+    <p class="promesse" id="offre-demi" hidden>Avec ce code : <strong>ton 1er mois d'Ultime à <span data-tarif="ultime_demi.premierMois">12,45&nbsp;€</span></strong>, puis <span data-tarif="ultime.mois">24,90&nbsp;€</span> par mois, sans engagement.</p>
     <a class="bouton" id="commencer" href="../app/">Commencer</a>
     <p class="petit" style="margin-top:10px">L'app s'ouvre et te propose de l'installer sur ton écran d'accueil.</p>
   </div>
@@ -189,7 +192,18 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
         .then(function(r){ return r.ok?r.json():null; })
         .then(function(d){
           if(!d||typeof d!=='object') return;
-          if(mode==='amb'){ if(d.actif!==false) poserNom(String(d.nom||'').slice(0,80)); return; }
+          if(mode==='amb'){
+            if(d.actif===false) return;
+            // L'offre de lancement : le 1er mois d'Ultime à moitié prix, au
+            // lieu du mois d'essai en plus. Le texte du nom suit l'offre.
+            if(d.avantage==='ultime_demi'){
+              var n1=document.querySelector('[data-nb="essai.mois"]'); mois=(n1&&n1.textContent)||'1';
+              var ma=el('mois-ami'); if(ma) ma.textContent=mois;
+              var od=el('offre-demi'); if(od) od.hidden=false;
+            }
+            poserNom(String(d.nom||'').slice(0,80));
+            return;
+          }
           var prenom=String(d.prenom||'').trim().slice(0,24);
           poserNom(prenom,d.rang);
           // L'app (même domaine) le reprend à l'inscription.

@@ -14355,3 +14355,28 @@ html[data-theme="clair"]{background:#f8f8f8}
 .tr-sous{display:inline-flex;flex-direction:column;align-items:center;gap:4px}
 .tr-sous img{width:56px;height:56px;object-fit:contain}
 .tr-chev{width:30px;height:10px;filter:drop-shadow(0 0 3px rgba(255,42,42,.75))}
+
+/* ══ MON KIT (coach) ══ */
+#ch-kit-btn{position:relative}
+#ch-kit-btn.kit-neuf::after{content:'Nouveau';position:absolute;top:-8px;right:10px;padding:2px 8px;border-radius:10px;
+  background:#fff;color:#E02020;font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;box-shadow:0 0 10px rgba(224,32,32,.6)}
+.kit-ecran{overflow-y:auto}
+.kit-corps{padding:0 16px 32px;max-width:560px;margin:0 auto;box-sizing:border-box}
+.kit-intro{font-size:var(--fs-sm);color:var(--sub);line-height:1.55;margin:4px 0 12px}
+.kit-fonds{display:flex;gap:8px;margin:0 0 12px}
+.kit-f{flex:1;min-height:40px;border-radius:var(--r-2);border:1px solid var(--border);background:transparent;color:var(--sub);
+  font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-xs);cursor:pointer}
+.kit-f.on{border-color:#E02020;color:#fff;background:rgba(224,32,32,.15)}
+.kit-tout{width:100%;margin:0 0 16px}
+.kit-c{margin:0 0 18px;padding:14px;border:1px solid var(--border);border-radius:var(--r-4);background:var(--surface-1)}
+.kit-t{font-weight:800;font-size:var(--fs-sm);color:var(--text);margin-bottom:10px}
+.kit-apercu{display:block;width:100%;height:auto;border-radius:var(--r-2);background:#111}
+.kit-l{display:block;margin:12px 0 6px;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--sub)}
+.kit-leg{width:100%;box-sizing:border-box;min-height:110px;padding:10px;border-radius:var(--r-2);border:1px solid var(--border);
+  background:var(--surface-2);color:var(--text);font:inherit;font-size:var(--fs-sm);line-height:1.5;resize:vertical}
+.kit-b{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.kit-b .btn{flex:1;min-width:140px;margin:0}
+.kit-vide{font-size:var(--fs-sm);color:var(--sub);margin:0}
+.kit-emb{display:flex;flex-wrap:wrap;gap:8px}
+.kit-emb img{display:block;width:44px;height:44px;object-fit:contain}
+.kit-regles{margin:0;padding-left:20px;font-size:var(--fs-sm);color:var(--text);line-height:1.55}

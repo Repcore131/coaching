@@ -49844,6 +49844,82 @@ async function testExercices(){
         if(htmlReglageCelebrations({role:'coach'})!=='') return _echec('coach');
       }finally{ currentUser=sv.u; window.saveUser=sv.s; }
       return CHAMPS_NON_SANTE.indexOf('celebrations')>=0?true:_echec('non classé');})());
+    // ══ 28/09/2026 — MON KIT, ÉLÉMENTS DE MARQUE, OFFRE DE LANCEMENT, PAGE AMBASSADEUR ══
+    const _KT=new Date(2026,9,7,10).getTime();   // mercredi 7 octobre 2026
+    const _KS=(j,kg)=>({date:_KT-j*864e5,duration:60,sets:6,setsPlanned:6,volume:kg*30,data:{'Squat':{sets:Array.from({length:6},()=>({weight:String(kg),reps:'5',done:true}))}}});
+    const _KA=(nom,o)=>Object.assign({role:'athlete',email:nom+'@t.fr',fname:nom,sessions:[_KS(40,80),_KS(20,90),_KS(2,100)]},o||{});
+    ok('Kit : la semaine commence le lundi ; la pastille « Nouveau » jusqu’à la première ouverture',(()=>{
+      if(kitSemaineCle(_KT)!=='2026-10-05') return _echec(kitSemaineCle(_KT));
+      if(kitSemaineCle(new Date(2026,9,11,23).getTime())!=='2026-10-05'||kitSemaineCle(new Date(2026,9,12,0,5).getTime())!=='2026-10-12') return _echec('bornes');
+      if(!kitNouveau('',_KT)||kitNouveau('2026-10-05',_KT)||!kitNouveau('2026-09-28',_KT)) return _echec('pastille');
+      return document.getElementById('ch-kit-btn')?true:_echec('bouton absent de l’espace coach');})());
+    ok('Kit : trois contenus — récap, victoire (prénom avec accord, sinon anonyme), défi en cours ou à lancer — légendes avec le lien et #RepCore',(()=>{
+      const coach={role:'coach',email:'k@t.fr',fname:'Kev',teamName:'Team Kev',vitrineSlug:'kevin-guellec',vitrinePubliee:true};
+      const lea=_KA('Lea',{consentementPartageCoach:{date:1}}), tom=_KA('Tom',{sessions:[_KS(30,50),_KS(3,80)]});
+      const defi={type:'defi',id:'d1',titre:'Octobre de fer',mesure:'seances',objectif:12,debut:_KT-3*864e5,fin:_KT+10*864e5};
+      const c=kitContenus(coach,[lea,tom],defi,_KT);
+      if(c.length!==3||c.map(x=>x.type).join()!=='recap,victoire,defi') return _echec(c.map(x=>x.type).join());
+      const lien=urlPagePerso(coach);
+      if(!lien) return _echec('vitrine');
+      for(const x of c) if(x.legende.indexOf(lien)<0||x.legende.indexOf('#RepCore')<0) return _echec('légende sans lien ou #RepCore : '+x.type);
+      // Tom a le meilleur % (50 → 80) mais sans accord : anonyme.
+      if(c[1].d.nom!==''||/Tom/.test(c[1].legende)) return _echec('nom sans accord');
+      if(!/Défi en cours : « Octobre de fer »/.test(c[2].legende)||c[2].d.sur!=='DÉFI EN COURS') return _echec('défi');
+      // Avec l'accord : le prénom.
+      const c2=kitContenus(coach,[lea],null,_KT);
+      if(c2[1].d.nom!=='LEA'||!/Bravo Lea/.test(c2[1].legende)) return _echec('prénom avec accord');
+      if(c2[2].d.sur!=='LE DÉFI DE LA SEMAINE'||!/JE RELÈVE/.test(c2[2].legende)) return _echec('défi à lancer');
+      // Pas de victoire : le contenu le dit, rien à dessiner.
+      const c3=kitContenus(coach,[],null,_KT);
+      if(c3[1].d!==null) return _echec('victoire inventée');
+      if(kitDefiEnCours([defi,{type:'defi',titre:'fini',fin:_KT-1}],_KT)!==defi||kitDefiEnCours([],_KT)!==null) return _echec('défi en cours');
+      return true;})());
+    ok('Kit : les images font 1080×1350, sur les 3 fonds',(()=>{
+      const coach={role:'coach',email:'k@t.fr',teamName:'Team Kev'};
+      const c=kitContenus(coach,[_KA('Lea',{consentementPartageCoach:{date:1}})],null,_KT);
+      for(const f of ['carbone','rouge','noir']) for(const x of c){
+        const cv=kitDessiner(x,f);
+        if(!cv||cv.width!==1080||cv.height!==1350) return _echec(x.type+' '+f+' : '+(cv&&cv.width+'×'+cv.height));
+      }
+      const src=String(kitToutTelecharger);
+      if(!/navigator\.canShare/.test(src)||!/_kitEnregistrer/.test(src)) return _echec('tout télécharger : partage, sinon un par un');
+      return /navigator\.clipboard\.writeText/.test(String(kitCopierLegende))?true:_echec('copier la légende');})());
+    ok('Kit : les éléments de marque — logo clair / sombre, 3 fonds, les emblèmes de rang, 3 règles',(()=>{
+      const d=document.createElement('div'); d.innerHTML=htmlElementsMarque();
+      if(!/Logo · fond sombre/.test(d.textContent)||!/Logo · fond clair/.test(d.textContent)) return _echec('logos');
+      if(KIT_FONDS.length!==3||KIT_FONDS.some(f=>d.textContent.indexOf(f.lib)<0)) return _echec('fonds');
+      if(d.querySelectorAll('.kit-emb a[download]').length!==RANGS.length) return _echec('emblèmes');
+      if(d.querySelectorAll('.kit-regles li').length!==3) return _echec('règles');
+      const cv=kitLogoCanvas('clair',null);
+      return cv.width===1200&&cv.height===400?true:_echec('logo');})());
+    ok('Offre de lancement : un code « ultime_demi » donne le 1er mois d’Ultime à moitié prix (plan ULTIME_DEMI), une fois, au lieu du mois en plus',(()=>{
+      const sv=currentUser;
+      try{
+        const u={role:'athlete',email:'lancement@t.fr',ambassadeur:{code:'LANCE',avantage:'ultime_demi'}};
+        if(!offreAmbDemi(u)) return _echec('offre');
+        if(!demiPremierMoisDispo(u)) return _echec('demi-tarif non ouvert');
+        if(demiPremierMoisDispo(Object.assign({},u,{demiPackUtilise:true}))) return _echec('deux fois');
+        if(offreAmbDemi({role:'athlete',ambassadeur:{code:'JULIE',avantage:'essai+1mois'}})) return _echec('code classique');
+        currentUser=u;
+        const m=subPaliersDe('ultime').find(p=>p.cle==='mensuel');
+        if(!m||m.planId()!==PAYPAL_PLAN_ID_ULTIME_DEMI||m.prix!==prixOffre('ultime_demi')||!/puis/.test(m.detail)) return _echec('écran d’abonnement : '+JSON.stringify(m));
+        currentUser={role:'athlete',email:'x@t.fr'};
+        if(subPaliersDe('ultime').find(p=>p.cle==='mensuel').planId()!==PAYPAL_PLAN_ID_ULTIME) return _echec('sans offre');
+      }finally{ currentUser=sv; }
+      const ph=phraseInvitationInscription('','Julie Fit','ultime_demi');
+      if(!/Invité par Julie Fit/.test(ph)||!/Ultime à/.test(ph)||ph.indexOf(prixOffre('ultime_demi'))<0) return _echec(ph);
+      if(!/2 mois pour essayer/.test(phraseInvitationInscription('','Julie Fit'))) return _echec('phrase classique');
+      if(ambFiche({code:'LANCE',nom:'L',avantage:'ultime_demi'},{}).fiche.avantage!=='ultime_demi') return _echec('création');
+      if(ambFiche({code:'JULIE',nom:'J',avantage:'nimporte'},{}).fiche.avantage!=='essai+1mois') return _echec('valeur hors liste');
+      return /ultime_demi/.test(String(ambassadeurApresInscription))&&/jours:demi\?0:/.test(String(ambassadeurApresInscription))?true:_echec('inscription');})());
+    ok('Offre de lancement : affichée à l’arrivée (/i) ; la page ambassadeur a la semaine, la carte, 5 idées et le rappel légal',(()=>{
+      const lire=u=>{ try{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; }catch(e){ return ''; } };
+      const i=lire('../i/index.html'), a=lire('../a/index.html');
+      if(!/id="offre-demi"/.test(i)||!/data-tarif="ultime_demi\.premierMois"/.test(i)||!/avantage==='ultime_demi'/.test(i)) return _echec('/i');
+      if(!/v\.semaine/.test(a)||!/width="1080" height="1920"/.test(a)||!/5 idées de publications/.test(a)) return _echec('page ambassadeur');
+      if((a.match(/<li>|'<li>'/g)||[]).length<1||!/var idees=\[/.test(a)) return _echec('idées');
+      if(!/partenariat commercial/i.test(a)||!/Collaboration commerciale/.test(a)||!/2023-451/.test(a)) return _echec('rappel légal');
+      return true;})());
     // ══ 28/09/2026 — SOUS-NIVEAUX, VOLTS DE SÉANCE, TOTAL DU SERVEUR ════════
     ok('Sous-niveaux : I / II / III à partir de VOLTAGE, trois tiers égaux, LÉGENDE sans',(()=>{
       if(sousNiveauDe(0)!==null||sousNiveauDe(RANGS[1].seuil+100)!==null) return _echec('avant VOLTAGE');

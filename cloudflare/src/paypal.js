@@ -49,7 +49,10 @@ export const OFFRES_PAYPAL = Object.freeze({
   'P-92T09491KF550281RNK2LZWY': { formule: 'essentielle', montants: ['114.00', '99.00'] },
   'P-2W777608239063532NK2LZXA': { formule: 'ultime', montants: ['24.90'] },
   'P-16Y44630WF304553UNK2LZXI': { formule: 'ultime', montants: ['298.80', '249.00'] },
-  'P-57P40267XP026613FNK2LZXQ': { formule: 'ultime', montants: ['12.45', '24.90'] },
+  // `demi` : le 1er mois d'Ultime à moitié prix — UNE fois par compte
+  // (droits.demiPackUtilise, posé à l'ouverture), sortie de pack ou code
+  // ambassadeur « ultime_demi ».
+  'P-57P40267XP026613FNK2LZXQ': { formule: 'ultime', montants: ['12.45', '24.90'], demi: true },
   'P-9JD300001T4718058NK2RF5Q': { coachPlan: 'coach', montants: ['19.00'] },
   'P-1WS20264K4576284KNK2RF5Y': { coachPlan: 'pro', montants: ['39.00'] },
 });
@@ -197,11 +200,12 @@ export function creerPaypal(ctx) {
   const PALIERS_OUVERTS = ['essentielle', 'ultime', 'suivi'];
   const palierPaye = (x, plan) => (x && x.palier === 'suivi') ? 'suivi'
     : (plan && plan.formule) || (x && PALIERS_OUVERTS.indexOf(String(x.palier)) >= 0 ? String(x.palier) : 'essentielle');
+  const demi = (plan) => (plan && plan.demi ? { demiPackUtilise: true } : {});
   async function droitsOuverts(cle, abo, plan) {
-    return M.majDroits(cle, (x) => ({ palier: palierPaye(x, plan), echeance: 0, source: 'paypal', abo: abo || (x && x.abo) || null }));
+    return M.majDroits(cle, (x) => Object.assign({ palier: palierPaye(x, plan), echeance: 0, source: 'paypal', abo: abo || (x && x.abo) || null }, demi(plan)));
   }
   async function droitsJusqua(cle, abo, plan, fin) {
-    return M.majDroits(cle, (x) => ({ palier: palierPaye(x, plan), echeance: fin, source: 'paypal', abo: abo || (x && x.abo) || null }));
+    return M.majDroits(cle, (x) => Object.assign({ palier: palierPaye(x, plan), echeance: fin, source: 'paypal', abo: abo || (x && x.abo) || null }, demi(plan)));
   }
 
   // EST-CE L'ABONNEMENT COURANT DU DOSSIER ? Celui que paypalSubscriptionId

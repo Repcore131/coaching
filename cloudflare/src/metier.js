@@ -56,6 +56,19 @@ export function messageParcoursJ21(n, jour) {
     title: 'Encore ' + k + ' étape' + (k > 1 ? 's' : '') + ' ⚡',
     body: 'Ta Mise sous tension est presque bouclée : ' + (k > 1 ? 'les ' + k + ' dernières étapes débloquent' : 'la dernière étape débloque') + ' le badge SOUS TENSION.' };
 }
+// Les avantages qu'un code ambassadeur peut porter (un seul).
+export const AVANTAGES_AMB = ['essai+1mois', 'ultime_demi'];
+// PURE. La semaine d'un ambassadeur : la somme de 7 jours d'attribution.
+export function semaineAmbassadeur(jours) {
+  const o = { clics: 0, inscrits: 0, payants: 0 };
+  for (const j of jours || []) {
+    if (!j || typeof j !== 'object') continue;
+    o.clics += Math.max(0, Number(j.clic) || 0);
+    o.inscrits += Math.max(0, Number(j.inscription) || 0);
+    o.payants += Math.max(0, Number(j.payant) || 0);
+  }
+  return o;
+}
 export function heuresCalmes(t) { const h = paris(t).heure; return h >= 21 || h < 8; }
 export function lundiParis(t) {
   const p = paris(t);
@@ -768,7 +781,7 @@ export function creerMetier(deps) {
     const a = await _val('ambassadeurs/' + code);
     if (!a || !a.nom) return null;
     const o = {};
-    for (const k of ['nom', 'actif', 'commissionPct', 'palierPct', 'palierSeuil', 'dureeMois', 'secret'])
+    for (const k of ['nom', 'actif', 'commissionPct', 'palierPct', 'palierSeuil', 'dureeMois', 'secret', 'avantage'])
       if (a[k] !== null && a[k] !== undefined) o[k] = a[k];
     return o;
   }
@@ -777,8 +790,13 @@ export function creerMetier(deps) {
     if (!a || !/^[a-z0-9]{24}$/.test(String(a.secret || ''))) return null;
     const t = now();
     const cfg = A.config(a);
+    // LA SEMAINE : les 7 derniers jours de Paris, lus dans l'attribution
+    // (attribution/jours/<jour>/amb/<code> : clic, inscription, payant).
+    const jours = Array.from({ length: 7 }, (_, i) => ATT.jourParis(t - i * 864e5));
+    const lus = await Promise.all(jours.map((j) => _val('attribution/jours/' + j + '/amb/' + code).catch(() => null)));
     const v = Object.assign(A.resume(code, a, t), { commissionPct: cfg.commissionPct, palierPct: cfg.palierPct,
-      palierSeuil: cfg.palierSeuil, dureeMois: cfg.dureeMois, actif: cfg.actif, maj: t });
+      palierSeuil: cfg.palierSeuil, dureeMois: cfg.dureeMois, actif: cfg.actif, maj: t,
+      avantage: AVANTAGES_AMB.indexOf(a.avantage) >= 0 ? a.avantage : 'essai+1mois', semaine: semaineAmbassadeur(lus) });
     await db.ref('ambassadeurs_vue/' + a.secret).set(v);
     return v;
   }
@@ -804,7 +822,11 @@ export function creerMetier(deps) {
       [dem + '/etat']: 'accepte', [dem + '/traiteLe']: t });
     await incr('ambassadeurs/' + code + '/stats/inscrits');
     await incr('attribution/jours/' + ATT.jourParis(t) + '/amb/' + code + '/inscription');
-    await bonusEssai(uid, droits);
+    // L'OFFRE DE LANCEMENT : le code porte « ultime_demi » (1er mois d'Ultime
+    // à moitié prix) AU LIEU du mois d'essai en plus. Écrite dans droits/,
+    // que l'app lit d'abord et que le client ne peut pas écrire.
+    if (cfg.avantage === 'ultime_demi') await majDroits(uid, () => ({ offreAmb: 'ultime_demi' }));
+    else await bonusEssai(uid, droits);
     await ambMajVue(code);
     return { ok: true };
   }

@@ -240,4 +240,10 @@ await test('xp_serveur : écrit par le Worker seul, lu par l’athlète et son c
   assert.equal((await appel(LEA, 'PUT', 'volts_publics/lea_fer', { xp: 1 })).statut, 401);
   assert.equal((await fetch(BASE + '/volts_publics/lea_fer.json?ns=' + NS)).status, 200);
 });
+await test('offre de lancement : un code peut porter « ultime_demi » ; droits.offreAmb et demiPackUtilise écrits par le serveur seul', async () => {
+  assert.equal((await appel(KEVIN, 'PUT', 'ambassadeurs_publics/LANCE', { nom: 'Julie', avantage: 'ultime_demi', actif: true })).statut, 200);
+  assert.equal((await appel(KEVIN, 'PUT', 'ambassadeurs_publics/TRICHE', { nom: 'X', avantage: 'ultime_gratuit', actif: true })).statut, 401);
+  assert.equal((await appel(LEA, 'PATCH', 'droits/' + K(LEA), { offreAmb: 'ultime_demi' })).statut, 401, 'l’athlète ne s’offre pas le demi-tarif');
+  assert.equal((await appel(KEVIN, 'PATCH', 'droits/' + K(LEA), { offreAmb: 'ultime_demi', demiPackUtilise: true })).statut, 200);
+});
 console.log(ok + ' tests passés (émulateur)');
