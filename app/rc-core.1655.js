@@ -2678,6 +2678,8 @@ function rcInfoFermer(tout_de_suite){ _feuilleFermer('rc-lexique',tout_de_suite)
 const ICONS={
   // Une petite hache (« Défie un pote », 28/09/2026), dessin Lucide « axe » (licence ISC).
   hache:'<path d="m14 12-8.5 8.5a2.12 2.12 0 1 1-3-3L11 9" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 13 9 7l4-4 6 6h3a8 8 0 0 1-7 7z" stroke-linecap="round" stroke-linejoin="round"/>',
+  // Deux haches croisées, têtes pleines (bandeau « Défie un pote », 28/09/2026) : la hache Lucide et son miroir.
+  haches:'<g transform="rotate(38 12 13)"><path d="M12 3v19.5" stroke-width="2.4" stroke-linecap="round"/><path d="M11.2 4.4 15 4.8 16.6 1.6c3 1.4 4.2 4.6 3.3 8.2-2-.7-3.3-1.2-4.9-1.2l-3.8.4z" fill="currentColor" stroke-linejoin="round" stroke-width="1.2"/></g><g transform="rotate(-38 12 13) matrix(-1 0 0 1 24 0)"><path d="M12 3v19.5" stroke-width="2.4" stroke-linecap="round"/><path d="M11.2 4.4 15 4.8 16.6 1.6c3 1.4 4.2 4.6 3.3 8.2-2-.7-3.3-1.2-4.9-1.2l-3.8.4z" fill="currentColor" stroke-linejoin="round" stroke-width="1.2"/></g>',
   // Le logo Instagram, au trait (bouton « Mon avant/après », 28/09/2026).
   instagram:'<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.4" cy="6.6" r="1.1" fill="currentColor" stroke="none"/>',
   home:'<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
@@ -21132,8 +21134,14 @@ function htmlDuelsAccueil(u,duels,invite,maintenant){
     h+='<button type="button" class="du-ligne" onclick="ouvrirDuel(\''+d.id+'\')"><span aria-hidden="true">⚔</span> '
       +'<span>'+escapeHtml(duelLigne(d,moi,maintenant))+'</span><span class="du-f" aria-hidden="true">›</span></button>';
   }
-  // SOUS LES TROIS CASES, PLUS FIN, AVEC UNE HACHE (Kevin, 28/09/2026).
-  h+='<button type="button" class="du-defier" onclick="ouvrirCreationDuel()">'+icon('hache',16)+'<span>Défie un pote</span></button>';
+  // SOUS LES TROIS CASES : LE BANDEAU ROUGE (Kevin, 28/09/2026, sur son
+  // modèle) — deux haches dans un écusson, le titre, un trait, la promesse
+  // sur deux lignes, un chevron.
+  h+='<button type="button" class="du-defier" onclick="ouvrirCreationDuel()">'
+    +'<span class="du-d-ico" aria-hidden="true">'+icon('haches',28)+'</span>'
+    +'<span class="du-d-t">Défie un pote</span>'
+    +'<span class="du-d-s" aria-hidden="true">Comparez vos séances<br>et progressez ensemble</span>'
+    +'<span class="du-d-ch" aria-hidden="true">'+icon('chevron-right',20)+'</span></button>';
   return h+'</div>';
 }
 async function _rendreDuelsAccueil(){
