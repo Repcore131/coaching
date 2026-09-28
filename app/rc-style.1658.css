@@ -11332,6 +11332,44 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .du-c small{display:block;font-size:var(--fs-2xs);font-weight:600;color:var(--sub,#a0a0a8);margin-top:2px}
 .du-c.actif{border-color:var(--red,#e02020);box-shadow:0 0 0 3px rgba(224,32,32,.18)}
 .du-go{width:100%;margin:10px 0 0;min-height:46px;display:flex;align-items:center;justify-content:center;gap:8px}
+/* ══ LA FEUILLE « DÉFIE UN POTE », À LA MAQUETTE (Kevin, 28/09/2026) ══ */
+.du-v2{position:relative;overflow:hidden;padding:20px 16px 16px;border-radius:18px;
+  background:linear-gradient(160deg,#141414 0%,#0b0b0b 55%,#120505 100%);border:1px solid rgba(224,32,32,.7);
+  box-shadow:0 0 24px rgba(224,32,32,.28),0 20px 50px rgba(0,0,0,.6)}
+.du-v2::before{content:"";position:absolute;right:-24px;top:-14px;width:150px;height:160px;pointer-events:none;
+  background:linear-gradient(135deg,transparent 49.4%,rgba(255,42,42,.55) 49.7%,transparent 50.2%),
+    linear-gradient(135deg,transparent 57.6%,rgba(255,42,42,.3) 57.9%,transparent 58.3%)}
+.du-x{position:absolute;top:12px;right:12px;z-index:2;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.55);border:1.5px solid rgba(255,255,255,.75);color:#fff;cursor:pointer;padding:0}
+.du-ecu{position:absolute;top:20px;right:46px;width:74px;height:74px;filter:drop-shadow(0 0 12px rgba(224,32,32,.55));pointer-events:none}
+.du-ecu svg{width:100%;height:100%;display:block}
+.du-v2 .du-titre{position:relative;font-family:var(--pile-titre);font-weight:400;font-size:40px;line-height:.95;letter-spacing:.5px;
+  text-transform:uppercase;color:#fff;margin:14px 0 8px;white-space:nowrap}
+.du-v2 .du-titre span{color:#e41e1e}
+.du-v2 .du-sous{position:relative;font-style:italic;font-size:12.5px;color:#c9c9c9;line-height:1.45;margin:0 0 16px;white-space:nowrap}
+@media (max-width:360px){.du-v2 .du-sous{white-space:normal}}
+.du-v2 .du-sous b{color:#ff2a2a;font-weight:800}
+.du-v2 .du-lab{letter-spacing:3px;color:#b9b9b9;margin:14px 0 8px}
+.du-v2 .du-choix{gap:8px}
+.du-v2 .du-choix:not(.du-duree) .du-c{display:flex;align-items:center;gap:0;padding:0;min-height:62px;text-align:left;
+  background:#101010;border:1.5px solid #2c2c2c;border-radius:12px}
+.du-c-ico{flex:none;width:58px;align-self:stretch;display:flex;align-items:center;justify-content:center;color:#e8e8e8;
+  border-right:1px solid #2c2c2c;margin:10px 0}
+.du-c-t{flex:1;min-width:0;padding:0 12px;font-size:var(--fs-md);font-weight:800}
+.du-v2 .du-c-t small{font-size:var(--fs-xs);font-weight:500;color:#bdbdbd;margin-top:2px}
+.du-radio{flex:none;width:24px;height:24px;margin-right:16px;border-radius:50%;border:2px solid #6b6b6b;box-sizing:border-box}
+.du-v2 .du-choix:not(.du-duree) .du-c.actif{border-color:#ff2a2a;background:linear-gradient(100deg,rgba(150,10,10,.45),rgba(40,6,6,.6) 60%,#120606);
+  box-shadow:0 0 14px rgba(255,42,42,.45),inset 0 0 12px rgba(224,32,32,.15)}
+.du-v2 .du-c.actif .du-c-ico{color:#ff2a2a;border-right-color:rgba(255,80,80,.35)}
+.du-v2 .du-c.actif .du-radio{border-color:#fff;background:radial-gradient(circle,#ff2a2a 0 45%,transparent 50%);box-shadow:0 0 8px rgba(255,42,42,.8)}
+.du-v2 .du-duree .du-c{min-height:48px;background:#101010;border:1.5px solid #2c2c2c;font-size:var(--fs-md);font-weight:800}
+.du-v2 .du-duree .du-c.actif{border-color:#ff2a2a;background:#1a0505;box-shadow:0 0 12px rgba(255,42,42,.4)}
+.du-lancer{position:relative;min-height:56px;margin-top:16px;padding:0;gap:0;border-radius:12px;justify-content:flex-start;
+  background:linear-gradient(100deg,#ff1f1f,#d90f0f 55%,#b80b0b);box-shadow:0 8px 26px rgba(224,32,32,.45)}
+.du-l-ico{flex:none;width:74px;display:flex;align-items:center;justify-content:center;border-right:1px solid rgba(255,255,255,.55);margin:12px 0;color:#fff}
+.du-l-t{flex:1;text-align:center;letter-spacing:3px}
+.du-l-ch{flex:none;width:52px;display:flex;align-items:center;justify-content:center;color:#fff}
+.du-v2 .du-annuler{min-height:48px;background:#101010;border:1.5px solid #3a3a3a;color:#cfcfcf;font-size:var(--fs-md)}
 .pr-duel{width:100%;margin:10px 0 0;min-height:42px}
 .dm-carte{margin:12px 0 0;padding:12px 14px;border:1px solid var(--border,#2a2a2e);border-radius:14px;background:var(--surface-1,#111)}
 .dm-carte.dm-fait{border-color:var(--red,#e02020)}
@@ -14174,6 +14212,29 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .du-c{border:2px solid var(--border,#cfcfd3);color:var(--text,#090909)}
 :root[data-theme="clair"] .du-c small{color:var(--sub,#5b5b64)}
 :root[data-theme="clair"] .du-c.actif{border-color:var(--red,#e02020);box-shadow:0 0 0 3px rgba(224,32,32,.18)}
+:root[data-theme="clair"] .du-v2{background:linear-gradient(160deg,#e8e8e8 0%,#f1f1f1 55%,#f9e8e8 100%);border:1px solid rgba(224,32,32,.7);box-shadow:0 0 24px rgba(224,32,32,.28),0 20px 50px rgba(0,0,0,0.21)}
+:root[data-theme="clair"] .du-v2::before{background:linear-gradient(135deg,transparent 49.4%,rgba(255,42,42,.55) 49.7%,transparent 50.2%),
+    linear-gradient(135deg,transparent 57.6%,rgba(255,42,42,.3) 57.9%,transparent 58.3%)}
+:root[data-theme="clair"] .du-x{background:rgba(251,251,251,0.55);border:1.5px solid rgba(9,9,9,0.75);color:#090909}
+:root[data-theme="clair"] .du-ecu{filter:drop-shadow(0 0 12px rgba(224,32,32,.55))}
+:root[data-theme="clair"] .du-v2 .du-titre{color:#090909}
+:root[data-theme="clair"] .du-v2 .du-titre span{color:#b61616}
+:root[data-theme="clair"] .du-v2 .du-sous{color:#3c3c3c}
+:root[data-theme="clair"] .du-v2 .du-sous b{color:#cc0000}
+:root[data-theme="clair"] .du-v2 .du-lab{color:#4b4b4b}
+:root[data-theme="clair"] .du-v2 .du-choix:not(.du-duree) .du-c{background:#ececec;border:1.5px solid #d1d1d1}
+:root[data-theme="clair"] .du-c-ico{color:#1f1f1f;border-right:1px solid #d1d1d1}
+:root[data-theme="clair"] .du-v2 .du-c-t small{color:#484848}
+:root[data-theme="clair"] .du-radio{border:2px solid #969696}
+:root[data-theme="clair"] .du-v2 .du-choix:not(.du-duree) .du-c.actif{border-color:#ff2a2a;background:linear-gradient(100deg,rgba(150,10,10,.45),rgba(248,210,210,0.6) 60%,#f7e8e8);box-shadow:0 0 14px rgba(255,42,42,.45),inset 0 0 12px rgba(224,32,32,.15)}
+:root[data-theme="clair"] .du-v2 .du-c.actif .du-c-ico{color:#cc0000;border-right-color:rgba(255,80,80,.35)}
+:root[data-theme="clair"] .du-v2 .du-c.actif .du-radio{border-color:#090909;background:radial-gradient(circle,#ff2a2a 0 45%,transparent 50%);box-shadow:0 0 8px rgba(255,42,42,.8)}
+:root[data-theme="clair"] .du-v2 .du-duree .du-c{background:#ececec;border:1.5px solid #d1d1d1}
+:root[data-theme="clair"] .du-v2 .du-duree .du-c.actif{border-color:#ff2a2a;background:#f9e0e0;box-shadow:0 0 12px rgba(255,42,42,.4)}
+:root[data-theme="clair"] .du-lancer{background:linear-gradient(100deg,#ff1f1f,#d90f0f 55%,#b80b0b);box-shadow:0 8px 26px rgba(224,32,32,.45)}
+:root[data-theme="clair"] .du-l-ico{border-right:1px solid rgba(9,9,9,0.55);color:#090909}
+:root[data-theme="clair"] .du-l-ch{color:#090909}
+:root[data-theme="clair"] .du-v2 .du-annuler{background:#ececec;border:1.5px solid #c4c4c4;color:#373737}
 :root[data-theme="clair"] .dm-carte{border:1px solid var(--border,#cfcfd3);background:var(--surface-1,#ebebeb)}
 :root[data-theme="clair"] .dm-carte.dm-fait{border-color:var(--red,#e02020)}
 :root[data-theme="clair"] .dm-sur{color:var(--red,#b31919)}

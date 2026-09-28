@@ -2678,6 +2678,8 @@ function rcInfoFermer(tout_de_suite){ _feuilleFermer('rc-lexique',tout_de_suite)
 const ICONS={
   // Une petite hache (« Défie un pote », 28/09/2026), dessin Lucide « axe » (licence ISC).
   hache:'<path d="m14 12-8.5 8.5a2.12 2.12 0 1 1-3-3L11 9" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 13 9 7l4-4 6 6h3a8 8 0 0 1-7 7z" stroke-linecap="round" stroke-linejoin="round"/>',
+  // Des barres qui montent et une flèche (mesure « Progression » des duels).
+  progres:'<rect x="4" y="15" width="3.2" height="6" fill="currentColor" stroke="none"/><rect x="10" y="12" width="3.2" height="9" fill="currentColor" stroke="none"/><rect x="16" y="9" width="3.2" height="12" fill="currentColor" stroke="none"/><polyline points="3 11 9 6 13 8 20 3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="16 3 20 3 20 7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
   // Deux haches croisées, têtes pleines (bandeau « Défie un pote », 28/09/2026) : la hache Lucide et son miroir.
   haches:'<g transform="rotate(38 12 13)"><path d="M12 3v19.5" stroke-width="2.4" stroke-linecap="round"/><path d="M11.2 4.4 15 4.8 16.6 1.6c3 1.4 4.2 4.6 3.3 8.2-2-.7-3.3-1.2-4.9-1.2l-3.8.4z" fill="currentColor" stroke-linejoin="round" stroke-width="1.2"/></g><g transform="rotate(-38 12 13) matrix(-1 0 0 1 24 0)"><path d="M12 3v19.5" stroke-width="2.4" stroke-linecap="round"/><path d="M11.2 4.4 15 4.8 16.6 1.6c3 1.4 4.2 4.6 3.3 8.2-2-.7-3.3-1.2-4.9-1.2l-3.8.4z" fill="currentColor" stroke-linejoin="round" stroke-width="1.2"/></g>',
   // Le logo Instagram, au trait (bouton « Mon avant/après », 28/09/2026).
@@ -20963,10 +20965,20 @@ async function renderDefiAccueil(){
 const DUEL_ID_RE=/^d[a-z0-9]{10,24}$/;
 const DUEL_DUREES=Object.freeze([7,14,21,28]);
 const DUEL_MESURES=Object.freeze([
-  Object.freeze({cle:'seances',lib:'Régularité',mot:'régularité',detail:'le plus de séances'}),
-  Object.freeze({cle:'tonnage',lib:'Volume',mot:'volume',detail:'le plus de kilos soulevés'}),
-  Object.freeze({cle:'progressionPct',lib:'Progression',mot:'progression',detail:'la plus forte progression, en %'})
+  Object.freeze({cle:'seances',lib:'Régularité',mot:'régularité',detail:'le plus de séances',ico:'calendar'}),
+  Object.freeze({cle:'tonnage',lib:'Volume',mot:'volume',detail:'le plus de kilos soulevés',ico:'haltere'}),
+  Object.freeze({cle:'progressionPct',lib:'Progression',mot:'progression',detail:'la plus forte progression, en %',ico:'progres'})
 ]);
+// L'ÉCUSSON DE LA FEUILLE « Défie un pote » (maquette de Kevin, 28/09/2026) :
+// un hexagone rouge, deux haches croisées — manches rouges, têtes claires.
+const DUEL_ECUSSON='<svg viewBox="0 0 120 120" aria-hidden="true"><defs>'
+  +'<linearGradient id="duT" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#d9d9d9"/><stop offset="1" stop-color="#9a9a9a"/></linearGradient></defs>'
+  +'<polygon points="60,6 107,33 107,87 60,114 13,87 13,33" fill="rgba(120,8,8,.25)" stroke="#e02020" stroke-width="2.5"/>'
+  +'<polygon points="60,16 98,38 98,82 60,104 22,82 22,38" fill="none" stroke="rgba(224,32,32,.35)" stroke-width="1"/>'
+  +'<g transform="translate(60 62) rotate(40)"><rect x="-3" y="-34" width="6" height="68" rx="3" fill="#c81212"/>'
+  +'<path d="M-2 -40h5c11 2 18 9 19 19-8-1-13-3-19-3h-5z" fill="url(#duT)" stroke="#e02020" stroke-width="1.5"/></g>'
+  +'<g transform="translate(60 62) rotate(-40) scale(-1 1)"><rect x="-3" y="-34" width="6" height="68" rx="3" fill="#c81212"/>'
+  +'<path d="M-2 -40h5c11 2 18 9 19 19-8-1-13-3-19-3h-5z" fill="url(#duT)" stroke="#e02020" stroke-width="1.5"/></g></svg>';
 const DUEL_INVITE_CLE='rc_duel_invite';
 /** PURE. « 14 jours de régularité » — la même phrase que le Worker. */
 function texteDuel(mesure,duree){
@@ -21174,16 +21186,24 @@ function ouvrirCreationDuel(){
   d.id='duel-feuille';
   d.setAttribute('role','dialog'); d.setAttribute('aria-modal','true'); d.setAttribute('aria-label','Défie un pote');
   d.className='du-fond';
-  d.innerHTML='<div class="du-carte">'
-    +'<div class="du-titre">Défie un pote</div>'
-    +'<p class="du-sous">Le duel commence à sa première séance. Le gagnant décroche le badge CHAMPION.</p>'
+  // LA FEUILLE À LA MAQUETTE (Kevin, 28/09/2026) : titre rouge et blanc,
+  // l'écusson aux haches, une icône et un bouton radio par mesure, le bouton
+  // de lancement avec ses haches et son chevron, une croix pour fermer.
+  d.innerHTML='<div class="du-carte du-v2">'
+    +'<button type="button" class="du-x" aria-label="Fermer" onclick="fermerDuelFeuille()">'+icon('x',18)+'</button>'
+    +'<div class="du-ecu">'+DUEL_ECUSSON+'</div>'
+    +'<div class="du-titre"><span>Défie</span> un pote</div>'
+    +'<p class="du-sous">Le duel commence à sa première séance.<br>Le gagnant décroche le badge <b>CHAMPION</b>.</p>'
     +'<div class="du-lab">Sur quoi ?</div>'
     +'<div class="du-choix" role="radiogroup">'+DUEL_MESURES.map((m,i)=>'<button type="button" role="radio" aria-checked="'+(i===0)+'" class="du-c'+(i===0?' actif':'')+'" data-mesure="'+m.cle+'" onclick="_duelChoix(this)">'
-      +m.lib+'<small>'+m.detail+'</small></button>').join('')+'</div>'
+      +'<span class="du-c-ico" aria-hidden="true">'+icon(m.ico,26)+'</span>'
+      +'<span class="du-c-t">'+m.lib+'<small>'+m.detail+'</small></span><span class="du-radio" aria-hidden="true"></span></button>').join('')+'</div>'
     +'<div class="du-lab">Combien de temps ?</div>'
     +'<div class="du-choix du-duree" role="radiogroup">'+[7,14,28].map(j=>'<button type="button" role="radio" aria-checked="'+(j===14)+'" class="du-c'+(j===14?' actif':'')+'" data-duree="'+j+'" onclick="_duelChoix(this)">'+j+' jours</button>').join('')+'</div>'
-    +'<button type="button" class="btn btn-red du-go" onclick="lancerDuel(this)">Lancer le duel</button>'
-    +'<button type="button" class="btn btn-outline btn-sm du-go" onclick="fermerDuelFeuille()">Annuler</button>'
+    +'<button type="button" class="btn btn-red du-go du-lancer" onclick="lancerDuel(this)">'
+      +'<span class="du-l-ico" aria-hidden="true">'+icon('haches',26)+'</span><span class="du-l-t">Lancer le duel</span>'
+      +'<span class="du-l-ch" aria-hidden="true">'+icon('chevron-right',22)+'</span></button>'
+    +'<button type="button" class="btn btn-outline btn-sm du-go du-annuler" onclick="fermerDuelFeuille()">Annuler</button>'
     +'</div>';
   d.addEventListener('click',e=>{ if(e.target===d) fermerDuelFeuille(); });
   document.body.appendChild(d);
@@ -21199,9 +21219,10 @@ async function lancerDuel(btn){
   const f=document.getElementById('duel-feuille');
   const m=(f&&f.querySelector('[data-mesure].actif'))?f.querySelector('[data-mesure].actif').dataset.mesure:'seances';
   const j=(f&&f.querySelector('[data-duree].actif'))?Number(f.querySelector('[data-duree].actif').dataset.duree):14;
-  if(btn){ btn.disabled=true; btn.textContent='Création…'; }
+  const lib=btn&&(btn.querySelector('.du-l-t')||btn);
+  if(btn){ btn.disabled=true; lib.textContent='Création…'; }
   const r=await creerDuel(m,j);
-  if(!r.ok){ if(btn){ btn.disabled=false; btn.textContent='Lancer le duel'; } toast(r.erreur,'var(--orange)'); return false; }
+  if(!r.ok){ if(btn){ btn.disabled=false; lib.textContent='Lancer le duel'; } toast(r.erreur,'var(--orange)'); return false; }
   // L'ENVOI EST UN NOUVEAU TOUCHER : la création a pris du temps réseau, et
   // iOS refuserait la feuille de partage ouverte hors du geste.
   if(f) f.querySelector('.du-carte').innerHTML='<div class="du-titre">Ton duel est prêt ⚡</div>'
