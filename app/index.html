@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1626';
+window.RC_BUILD='1628';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-09-27';
@@ -457,7 +457,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1626.css">
+<link rel="stylesheet" href="./rc-style.1628.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -1245,6 +1245,11 @@ const COACH_PHOTO='icons/coach.jpg';
   <!-- R21 — retour force : tunnel d'inscription, on revient a l'accueil du tunnel. -->
   <div class="topbar"><button class="back-btn" onclick="go('s-welcome')">←</button><span class="topbar-title">Créer un compte</span><span></span></div>
   <div class="pad scroll-area gap" style="flex:1">
+    <!-- L'APP INSTALLEE SUR iPHONE NE VOIT PAS LE STOCKAGE DE SAFARI : le
+         ?ref= du lien d'un ami s'y perd. On le demande donc en haut, et le
+         bouton mene au champ du code (parrainageChampInscription). -->
+    <button type="button" id="r-parrain-appel" class="btn btn-outline btn-sm" style="display:none;margin:0;min-height:44px"
+      onclick="parrainageAllerAuChamp()">Quelqu’un t’a invité ? Entre son code</button>
     <!-- ══ LA PHOTO EST DEMANDEE A L'INSCRIPTION ══════════════════════════
          Demande de Kevin, 08/09/2026. L'accueil du coach s'ouvre desormais sur
          une grille de visages : sans photo, ce sont des initiales dans un rond
@@ -1291,7 +1296,7 @@ const COACH_PHOTO='icons/coach.jpg';
          depuis ?ref= — et saisissable a la main : sur iPhone, l'app installee
          ne voit pas le stockage de Safari ou le lien avait ete ouvert. -->
     <div id="r-parrain-z" style="display:none"><label for="r-parrain">Code d'un ami ou d'un ambassadeur (optionnel)</label>
-      <input type="text" id="r-parrain" maxlength="12" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="JULIE7K2">
+      <input type="text" id="r-parrain" maxlength="12" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="JULIE7K2" oninput="parrainageCodeSaisi(this.value)">
       <div class="sub" id="r-parrain-info" style="font-size:var(--fs-xs);margin-top:6px"></div></div>
     <!-- Arrive par la vitrine publique d'un coach (?coach=<slug>) : _infoVitrineInscription. -->
     <div id="r-vitrine-info" class="sub" style="display:none;font-size:var(--fs-xs);line-height:1.55;margin-top:8px;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-2);padding:10px 12px"></div>
@@ -5814,5 +5819,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1626.js"></script>
+<script src="./rc-core.1628.js"></script>
 </body></html>

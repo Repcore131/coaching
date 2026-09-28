@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { creerBase } from '../src/base.js';
-import { creerMetier, paris } from '../src/metier.js';
+import { creerMetier, paris, serieDuJour } from '../src/metier.js';
 import { minute, BUDGET } from '../src/planif.js';
 import { fausseBase, appareil } from './fausse-base.mjs';
 
@@ -91,20 +91,24 @@ await test('jeudi 18 h : la série en danger, par lots, reprise d’une minute �
   const users = {}, push = {}, tels = {};
   for (let i = 0; i < 9; i++) {
     const k = 'a' + i + '@t,fr';
-    users[k] = { streak: 3, streakWeek: '2026-09-14', fname: 'A' + i };
+    users[k] = { streak: 3, streakWeek: '2026-09-21', lastSession: PARIS('2026-09-26T10:00:00'), fname: 'A' + i };
     tels[k] = appareil('https://push.test/' + i);
     push[k] = { a1b2c3: tels[k].abonnement };
   }
   users['a0@t,fr'].streakWeek = '2026-09-28';     // semaine déjà validée : rien
-  const w = monde({ users, push }, PARIS('2026-10-01T18:01:00'));   // un jeudi
+  // Un jeudi 1er : le Wrapped du mois est marqué fait, on ne mesure que la série.
+  const w = monde({ users, push, worker: { jobs: { wrapped: { jour: '2026-10-01', fini: true } } } }, PARIS('2026-10-01T18:01:00'));
   assert.equal(paris(w.t).joursem, 4);
   let tours = 0;
-  while (tours++ < 10) {
+  while (tours++ < 20) {
     const b = await w.minute();
     assert.ok(b.requetes <= 50, 'jamais plus de 50 requêtes : ' + b.requetes);
     if (b.travaux.serie === 'fini') break;
   }
   assert.ok(tours > 1, 'le travail s’est bien étalé sur plusieurs minutes');
+  // Le journal du jour est écrit avec le curseur, pour chaque push parti.
+  assert.equal(w.F.lire('push_log/a3@t,fr').jour, '2026-10-01');
+  assert.equal(w.F.lire('push_log/a0@t,fr'), null, 'semaine validée : rien, pas même au journal');
   assert.equal(w.F.recus.length, 8);
   const m = tels['a3@t,fr'].lire(w.F.recus.find((r) => r.endpoint.endsWith('/3')).init.body);
   assert.match(m.title, /Ta série de 3 semaines est en danger/);
@@ -114,11 +118,11 @@ await test('jeudi 18 h : la série en danger, par lots, reprise d’une minute �
   assert.equal(w.F.recus.length, avant);
 });
 
-await test('série : trois lectures du dossier, abonnements et journal par lot ; ce qui déborde sur 21 h part le vendredi, sauf semaine validée', async () => {
+await test('série : quatre lectures du dossier, abonnements et journal par lot ; ce qui déborde sur 21 h part le vendredi, sauf semaine validée', async () => {
   const users = {}, push = {};
   for (let i = 0; i < 4; i++) {
     const k = 'b' + i + '@t,fr';
-    users[k] = { streak: 2, streakWeek: '2026-09-14', fname: 'B' + i, sessions: { s1: { at: 1 } } };
+    users[k] = { streak: 2, streakWeek: '2026-09-21', lastSession: PARIS('2026-09-29T10:00:00'), fname: 'B' + i, sessions: { s1: { at: 1 } } };
     push[k] = { a1b2c3: appareil('https://push.test/b' + i).abonnement };
   }
   users['b1@t,fr'].pushPrefs = { serie: false };                 // coupé : relu, rien ne part
@@ -134,16 +138,17 @@ await test('série : trois lectures du dossier, abonnements et journal par lot ;
   assert.equal(Object.keys(lot.subs).length, 4);
   urls.length = 0;
   await M.planifies.serie('b0@t,fr', w.t, {}, lot);
-  // À la base : streak…streakWeek (une plage de clés), la liste des clés, le
-  // prénom ; puis le journal (écriture simple). Plus l'envoi.
-  assert.equal(urls.length, 4);
+  // À la base : streak…streakWeek (une plage de clés) et lastSession, la liste
+  // des clés, le prénom ; puis le journal (écriture simple). Plus l'envoi.
+  assert.equal(urls.length, 5);
   assert.match(decodeURIComponent(urls[0]), /users\/b0@t,fr\.json.*orderBy="\$key".*startAt="streak".*endAt="streakWeek"/);
   assert.equal(w.F.recus.length, 1);
   for (const k of cles.slice(1)) await M.planifies.serie(k, w.t, {}, lot);
   assert.equal(w.F.recus.length, 1, 'coupé, suspendu, déjà servi aujourd’hui : rien');
 
   // 21 h : plus d'envoi, mais rien de perdu.
-  const w2 = monde({ users: { 'b0@t,fr': { streak: 2, streakWeek: '2026-09-14' }, 'b1@t,fr': { streak: 5, streakWeek: '2026-09-14' } },
+  const recent = PARIS('2026-09-29T10:00:00');
+  const w2 = monde({ users: { 'b0@t,fr': { streak: 2, streakWeek: '2026-09-21', lastSession: recent }, 'b1@t,fr': { streak: 5, streakWeek: '2026-09-21', lastSession: recent } },
     push: { 'b0@t,fr': push['b0@t,fr'], 'b1@t,fr': push['b1@t,fr'] } }, PARIS('2026-10-01T21:10:00'));
   for (const k of ['b0@t,fr', 'b1@t,fr']) await w2.M.planifies.serie(k, w2.t, {}, await w2.M.prechargerPush([k]));
   assert.equal(w2.F.recus.length, 0);
@@ -156,6 +161,69 @@ await test('série : trois lectures du dossier, abonnements et journal par lot ;
   assert.ok(w2.F.recus[0].endpoint.endsWith('/b0'));
   assert.equal(w2.F.lire('push_attente'), null);
   assert.equal(w2.F.lire('evenements'), null);
+});
+
+// ── La série du jeudi, recalculée à la date du jour ──────────────────────
+const JEUDI = PARIS('2026-10-01T18:01:00');          // semaine du lundi 28/09
+const J = 864e5;
+const trois = [{ active: true }, { active: true }, { active: true }, { active: false }];   // écart normal : 4 jours
+await test('série : la règle de l’app — vivante, périmée, sauvée par un joker, ancienne, gelée', () => {
+  const u = (o) => Object.assign({ streak: 6, streakWeek: '2026-09-21', sessions_config: trois }, o);
+  // 3 créneaux : périmée au-delà de 4 + 7 = 11 jours d'absence.
+  assert.equal(serieDuJour(u({ lastSession: JEUDI - 11 * J }), JEUDI).etat, 'vivante');
+  assert.equal(serieDuJour(u({ lastSession: JEUDI - 12 * J }), JEUDI).etat, 'cassee');
+  // Un seul créneau : écart 8, périmée au-delà de 15 jours — mais plus de 14 : ancienne.
+  assert.equal(serieDuJour(u({ lastSession: JEUDI - 13 * J, sessions_config: [{ active: true }] }), JEUDI).etat, 'vivante');
+  assert.equal(serieDuJour(u({ lastSession: JEUDI - 15 * J, sessions_config: [{ active: true }] }), JEUDI).etat, 'ancienne');
+  // Un joker couvre la semaine du 21/09 manquée (streakWeek du 14/09).
+  const perimee = u({ lastSession: JEUDI - 12 * J, streakWeek: '2026-09-14' });
+  assert.equal(serieDuJour(perimee, JEUDI).etat, 'cassee');
+  assert.equal(serieDuJour(Object.assign({}, perimee, { streakJokers: 1 }), JEUDI).etat, 'sauvee');
+  assert.equal(serieDuJour(Object.assign({}, perimee, { streakWeek: '2026-09-07', streakJokers: 1 }), JEUDI).etat, 'cassee', 'deux semaines manquées, un joker');
+  // Le décompte repart d'une suspension levée, ou du joker.
+  assert.equal(serieDuJour(u({ lastSession: JEUDI - 13 * J, suspension: { actif: false, fin: JEUDI - 3 * J } }), JEUDI).etat, 'vivante');
+  assert.equal(serieDuJour(u({ lastSession: JEUDI - 13 * J, streakJokerLe: JEUDI - 2 * J }), JEUDI).etat, 'vivante');
+  assert.equal(serieDuJour(u({ lastSession: JEUDI - 30 * J, suspension: { actif: true } }), JEUDI).etat, 'gel');
+  assert.equal(serieDuJour(u({ streak: 0, lastSession: JEUDI }), JEUDI).etat, 'aucune');
+});
+await test('jeudi 18 h : rien pour une série cassée ou une dernière séance de plus de 14 jours ; le bon chiffre sinon', async () => {
+  const users = {
+    'vivante@t,fr': { streak: 5, streakWeek: '2026-09-21', lastSession: JEUDI - 3 * J, sessions_config: trois, fname: 'Vi' },
+    'cassee@t,fr': { streak: 9, streakWeek: '2026-09-14', lastSession: JEUDI - 12 * J, sessions_config: trois },
+    'ancienne@t,fr': { streak: 4, streakWeek: '2026-09-21', lastSession: JEUDI - 15 * J, sessions_config: [{ active: true }] },
+    'sauvee@t,fr': { streak: 7, streakWeek: '2026-09-14', lastSession: JEUDI - 12 * J, sessions_config: trois, streakJokers: 1 },
+    'validee@t,fr': { streak: 2, streakWeek: '2026-09-28', lastSession: JEUDI - J, sessions_config: trois },
+  };
+  const tels = {}, push = {};
+  for (const k of Object.keys(users)) { tels[k] = appareil('https://push.test/' + k); push[k] = { x: tels[k].abonnement }; }
+  const w = monde({ users, push, worker: { jobs: { wrapped: { jour: '2026-10-01', fini: true } } } }, JEUDI);
+  for (let i = 0; i < 10; i++) { const b = await w.minute(); if (b.travaux.serie === 'fini') break; }
+  const recu = (k) => w.F.recus.filter((r) => r.endpoint === 'https://push.test/' + k).map((r) => tels[k].lire(r.init.body));
+  assert.equal(recu('vivante@t,fr').length, 1);
+  assert.match(recu('vivante@t,fr')[0].title, /Ta série de 5 semaines est en danger/);
+  assert.equal(recu('sauvee@t,fr').length, 1, 'sauvée par un joker : elle est toujours là');
+  assert.match(recu('sauvee@t,fr')[0].body, /joker/);
+  assert.equal(recu('cassee@t,fr').length, 0, 'cassée : l’app affiche 0, on ne parle pas d’une série de 9');
+  assert.equal(recu('ancienne@t,fr').length, 0, 'dernière séance de plus de 14 jours');
+  assert.equal(recu('validee@t,fr').length, 0, 'semaine déjà validée');
+});
+await test('samedi 10 h : le rappel de bilan seulement avec un coach ET un premier bilan', async () => {
+  const SAMEDI = PARIS('2026-10-03T10:01:00');
+  const vieux = [{ date: SAMEDI - 20 * J }];
+  const users = {
+    'suivi@t,fr': { coachEmailKey: C1, bilans: vieux, fname: 'Su' },
+    'recent@t,fr': { coachEmailKey: C1, bilans: [{ date: SAMEDI - 5 * J }] },
+    'jamais@t,fr': { coachEmailKey: C1, fname: 'Ja' },
+    'seul@t,fr': { bilans: vieux, fname: 'Se' },
+    [C1]: { role: 'coach', coachEmailKey: 'x@t,fr', bilans: vieux },
+  };
+  const tels = {}, push = {};
+  for (const k of Object.keys(users)) { tels[k] = appareil('https://push.test/' + k); push[k] = { x: tels[k].abonnement }; }
+  const w = monde({ users, push }, SAMEDI);
+  for (let i = 0; i < 10; i++) { const b = await w.minute(); if (b.travaux.bilan === 'fini') break; }
+  const qui = w.F.recus.map((r) => r.endpoint.replace('https://push.test/', ''));
+  assert.deepEqual(qui, ['suivi@t,fr']);
+  assert.match(tels['suivi@t,fr'].lire(w.F.recus[0].init.body).title, /C’est l’heure de ton bilan/);
 });
 
 await test('parrainage : la demande est jugée, le filleul rattaché, le parrain prévenu', async () => {
@@ -184,6 +252,37 @@ await test('parrainage : la demande est jugée, le filleul rattaché, le parrain
   assert.equal(w.F.lire('droits/' + P1 + '/palier'), 'essentielle');
   assert.equal(w.F.lire('droits/' + P1 + '/source'), 'parrainage');
   assert.equal(await w.M.parrainagePaiement(F1, 'test'), null, 'idempotent');
+});
+
+await test('première séance d’un filleul : son parrain est prévenu une fois, après relecture', async () => {
+  const P1 = 'parrain@t,fr', F1 = 'julie@t,fr', t = PARIS('2026-09-28T12:00:00');
+  const telP = appareil('https://push.test/p');
+  const ev = (id) => ({ ['e00000000' + id]: { type: 'filleul_seance', par: F1, cible: '-', at: t } });
+  const w = monde({ users: { [F1]: { fname: 'Julie' } }, push: { [P1]: { x: telP.abonnement } },
+    parrainage: { liens: { [F1]: { parrain: P1, id: 'f1' } }, comptes: { [P1]: { filleuls: { f1: { statut: 'inscrit', date: t } } } } },
+    evenements: ev(1) }, t);
+  // Le dossier n'est pas encore là : l'événement repart en fin de file.
+  const b1 = await w.minute();
+  assert.equal(b1.echecs, 1);
+  assert.equal(w.F.recus.length, 0);
+  w.F.ecrire('users/' + F1 + '/lastSession', t);
+  w.avance(60e3);
+  await w.minute();
+  assert.equal(w.F.recus.length, 1);
+  const m = telP.lire(w.F.recus[0].init.body);
+  assert.equal(m.title, 'Julie a fait sa première séance');
+  assert.equal(m.type, 'filleul');
+  assert.ok(w.F.lire('parrainage/comptes/' + P1 + '/filleuls/f1/premiereSeance') > 0);
+  // Une deuxième fois (autre appareil, rejoué) : rien.
+  w.F.ecrire('evenements', ev(2));
+  w.avance(864e5);
+  await w.minute();
+  assert.equal(w.F.recus.length, 1);
+  // Sans lien de parrainage : rien.
+  const w2 = monde({ users: { 'x@t,fr': { lastSession: t } }, evenements: { e000000001: { type: 'filleul_seance', par: 'x@t,fr', cible: '-', at: t } } }, t);
+  await w2.minute();
+  assert.equal(w2.F.recus.length, 0);
+  assert.equal(w2.F.lire('evenements'), null);
 });
 
 await test('parrainage : son propre code est refusé', async () => {

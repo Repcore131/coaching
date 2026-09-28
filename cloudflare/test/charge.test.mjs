@@ -31,7 +31,7 @@ function donnees(n, t) {
   const users = { [K]: { role: 'coach' } }, push = {}, annuaire = {};
   for (let i = 0; i < n; i++) {
     const k = 'a' + String(i).padStart(5, '0') + '@t,fr';
-    users[k] = { coachEmailKey: K, fname: 'A' + i, streak: 3, streakWeek: '2026-09-14' };
+    users[k] = { coachEmailKey: K, fname: 'A' + i, streak: 3, streakWeek: '2026-09-21', lastSession: t - 2 * 864e5 };
     push[k] = { x: Object.assign({}, MODELES[i % 8].abonnement, { endpoint: 'https://push.test/' + i }) };
     annuaire[k] = { email: k };
   }
@@ -44,7 +44,8 @@ async function simuler(n, scenario) {
   const init = donnees(n, t0);
   // Les autres travaux du jour sont faits : on mesure ce chemin-là seul.
   const jour = t0 ? new Intl.DateTimeFormat('fr-CA', { timeZone: 'Europe/Paris' }).format(new Date(t0)) : '';
-  init.worker = { jobs: Object.fromEntries(['stats_badges', 'ambassadeurs', 'fins_coachs', 'attente', 'defis', 'acces']
+  // Le jeudi 1er octobre est aussi le jour du Wrapped : marqué fait lui aussi.
+  init.worker = { jobs: Object.fromEntries(['stats_badges', 'ambassadeurs', 'fins_coachs', 'attente', 'defis', 'acces', 'wrapped']
     .map((j) => [j, { jour, fini: true }])) };
   if (scenario === 'defi') init.evenements = { e0000000001: { type: 'defi_publie', par: K, msg: 'm1', cible: 'm1', at: t0 } };
   const F = fausseBase(init);

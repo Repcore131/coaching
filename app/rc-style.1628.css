@@ -1980,14 +1980,17 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .rcf-rk-l{flex-wrap:wrap}
 /* Le nom se resserre avant de repousser la valeur a la ligne : base nulle. */
 .rcf-rk-l .rcf-rk-ex{flex:1 1 0}
-.rcf-rk-p{display:inline-flex;align-items:center;gap:6px;flex-basis:100%;justify-content:flex-start;
-  min-height:32px;margin-top:2px;padding:0;background:none;border:none;cursor:pointer;
+.rcf-rk-p{display:inline-flex;align-items:center;gap:6px;justify-content:center;
+  min-height:36px;padding:0 12px;background:rgba(224,32,32,.08);border:1px solid rgba(224,32,32,.35);
+  border-radius:var(--r-2);cursor:pointer;
   color:var(--red-text);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;
   letter-spacing:1.2px;text-transform:uppercase;-webkit-tap-highlight-color:transparent}
 .rcf-rk-p:active{opacity:.7}
-.rcf-rk-tous{position:relative;padding:4px 16px 0;border-top:1px solid rgba(255,255,255,.045)}
-.rcf-rk-tous .rcf-rk-p{display:flex;width:100%;justify-content:center;min-height:40px;
-  border:1px solid rgba(224,32,32,.35);border-radius:var(--r-2);margin-top:8px}
+/* Au-dessus de la liste : le geste principal, pleine largeur. */
+.rcf-rk-tous{position:relative;padding:10px 16px 6px}
+.rcf-rk-tous .rcf-rk-p{display:flex;width:100%;min-height:44px}
+/* Sur chaque ligne : une pastille, alignée à droite sous le chiffre. */
+.rcf-rk-p-ligne{margin:6px 0 2px auto}
 
 /* ── LA BANDE STATISTIQUE : un seul bloc, trois zones ────────────────── */
 .rcf-stats{display:grid;grid-template-columns:repeat(3,1fr);
@@ -11562,9 +11565,7 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .rcf-rk-v{color:#090909}
 :root[data-theme="clair"] .rcf-rk-a{color:var(--text-faint)}
 :root[data-theme="clair"] .rcf-rk-g{color:var(--red-text)}
-:root[data-theme="clair"] .rcf-rk-p{color:var(--red-text)}
-:root[data-theme="clair"] .rcf-rk-tous{border-top:1px solid rgba(9,9,9,0.045)}
-:root[data-theme="clair"] .rcf-rk-tous .rcf-rk-p{border:1px solid rgba(224,32,32,.35)}
+:root[data-theme="clair"] .rcf-rk-p{background:rgba(224,32,32,.08);border:1px solid rgba(224,32,32,.35);color:var(--red-text)}
 :root[data-theme="clair"] .rcf-stats{background:linear-gradient(180deg,#e6e6e8,#f0f0f1);border:1px solid #dedee1;box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}
 :root[data-theme="clair"] .rcf-st{border-left:1px solid rgba(9,9,9,0.05)}
 :root[data-theme="clair"] .rcf-st-v{color:#090909}

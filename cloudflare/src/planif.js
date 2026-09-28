@@ -38,15 +38,17 @@ export function travaux(M) {
     // Les coachs qui ont résilié : leur palier se referme à la fin payée.
     { nom: 'fins_coachs', quand: (p) => apres(p, 6, 0), une: () => (M.paypal ? M.paypal.finsCoachs() : null) },
     // « Ton accès se termine dans N jours », une fois par échéance.
-    // `cout` : les requêtes d'UNE clé au pire (dossier, sous-nœuds, journal,
-    // envoi, place rendue sur échec), abonnements et journal lus par lot.
+    // `cout` : les requêtes d'UNE clé à pousser (lectures du dossier, journal,
+    // envoi, place rendue sur échec), abonnements et journal lus par lot. Les
+    // lectures rares (suspension, préférences réglées, créneaux de la série)
+    // tiennent dans l'écart entre BUDGET et le plafond de 50.
     { nom: 'acces', quand: (p) => apres(p, 11, 0) && p.heure < 21, cles: () => M.abonnes(), un: M.planifies.acces, cout: 10, push: true },
     // Pas en heures calmes : ce serait relire les messages mis de côté pour la
     // nuit et les jeter au lieu de les envoyer le lendemain à 8 h 05.
     { nom: 'attente', quand: (p) => apres(p, 8, 5) && p.heure < 21, une: M.apresHeuresCalmes },
     { nom: 'defis', quand: (p) => apres(p, 9, 0), cles: () => M.coachsAvecCanal(), un: (c, t) => M.defisQuotidienCoach(c, t), cout: 8 },
     { nom: 'serie', quand: (p) => p.joursem === 4 && apres(p, 18, 0), cles: () => M.abonnes(), un: M.planifies.serie, cout: 7, push: true },
-    { nom: 'bilan', quand: (p) => p.joursem === 6 && apres(p, 10, 0), cles: () => M.abonnes(), un: M.planifies.bilan, cout: 7, push: true },
+    { nom: 'bilan', quand: (p) => p.joursem === 6 && apres(p, 10, 0), cles: () => M.abonnes(), un: M.planifies.bilan, cout: 8, push: true },
     { nom: 'wrapped', quand: (p) => p.date === 1 && apres(p, 10, 0), cles: () => M.abonnes(), un: M.planifies.wrapped, cout: 5, push: true },
     { nom: 'badge', quand: (p) => p.joursem === 0 && apres(p, 17, 0), cles: () => M.abonnes(), un: M.planifies.badge, cout: 5, push: true },
   ];
@@ -154,6 +156,7 @@ export async function minute({ db, M, compteur, maintenant, source }) {
       if (etat.fini) continue;
       // Firebase ne garde pas un objet vide : relu, il revient null.
       if (!etat.acc || typeof etat.acc !== 'object') etat.acc = {};
+      let ecrits = null;
       if (w.une) {
         // `false` : coupé par le budget, à reprendre au réveil suivant.
         // Une erreur cinq fois de suite le range dans evenements_ko.
@@ -176,13 +179,17 @@ export async function minute({ db, M, compteur, maintenant, source }) {
         // Un rappel lit les abonnements et le journal du jour PAR LOT de
         // LOT_PUSH clés (deux requêtes), plus un par un. Faute de lot (lecture
         // en échec), chaque clé relit les siens.
+        // Les entrées du journal (push_log) de tout le réveil : écrites avec le
+        // curseur, en une requête (voir plus bas).
         let lot = null, finLot = i;
+        ecrits = {};
         while (i < cles.length) {
           const charger = !!(w.push && M.prechargerPush) && i >= finLot;
           if (!assez(charger ? 2 : 0)) break;
           if (charger) {
             finLot = Math.min(cles.length, i + LOT_PUSH);
             try { lot = await M.prechargerPush(cles.slice(i, finLot)); } catch (err) { lot = null; bilan.erreur = texteErreur(err); }
+            if (lot) lot.ecrits = ecrits;
           }
           try { await w.un(cles[i], t, etat.acc, lot); } catch (err) { bilan.erreur = texteErreur(err); }
           i++;
@@ -194,7 +201,13 @@ export async function minute({ db, M, compteur, maintenant, source }) {
         }
       }
       bilan.travaux[w.nom] = etat.fini ? 'fini' : etat.curseur;
-      await ref.set(etat);
+      if (ecrits && Object.keys(ecrits).length) {
+        // Le curseur ET le journal des push partis, ensemble : ce qui a avancé
+        // est noté, ou rien ne l'est et le réveil suivant reprend ces clés.
+        const maj = { ['worker/jobs/' + w.nom]: etat };
+        for (const uid of Object.keys(ecrits)) maj['push_log/' + uid] = ecrits[uid];
+        await db.ref().update(maj);
+      } else await ref.set(etat);
     }
   } finally {
     // LE BAIL EST RENDU, et l'heure de la file notée — s'il est encore à nous.
