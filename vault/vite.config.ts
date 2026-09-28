@@ -6,11 +6,13 @@ import { VitePWA } from 'vite-plugin-pwa';
 // base './' : le build fonctionne quel que soit le dossier où il est publié.
 export default defineConfig({
   base: './',
+  // Le build est COMMITÉ dans vault/app/ : GitHub Pages publie le dépôt tel quel,
+  // l'appli est donc en ligne sur https://repcore131.github.io/coaching/vault/app/
+  build: { outDir: 'app', emptyOutDir: true },
   plugins: [
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['fonts/*.woff2', 'icons/*.png'],
       manifest: {
         name: 'VAULT',
         short_name: 'VAULT',

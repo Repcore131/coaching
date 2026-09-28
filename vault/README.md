@@ -9,8 +9,16 @@ cd vault
 npm install
 npm run dev       # développement
 npm test          # tests de la logique métier
-npm run build     # version installable dans dist/ (publiable dans n'importe quel dossier)
+npm run build     # régénère vault/app/, la version en ligne
 ```
+
+## En ligne
+
+https://repcore131.github.io/coaching/vault/app/
+
+Sur le téléphone : ouvrir ce lien, puis « Ajouter à l'écran d'accueil »
+(Safari : bouton Partager ; Chrome : menu ⋮). Pour publier une mise à jour :
+`npm run build`, commit de `vault/app/`, fusion dans `main`.
 
 ## Structure
 

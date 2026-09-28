@@ -3,3 +3,4 @@ dist/
 dev-dist/
 *.local
 *.tsbuildinfo
+# app/ est le build publié : il est versionné exprès.
