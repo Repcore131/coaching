@@ -8,7 +8,7 @@
 // Tout compte dont consent.policyVersion differe de cette valeur revoit l'ecran
 // de consentement au demarrage — y compris les comptes crees avant l'existence
 // du champ, qui n'en portent aucun.
-const POLICY_VERSION='2026-09c';
+const POLICY_VERSION='2026-10';
 
 // ── Identité créateur & configuration PayPal ─────────────────────────────────
 // Ces constantes sont en dur et NE doivent jamais être exposées ni modifiables
@@ -60452,11 +60452,14 @@ function rapLifestyle(u,debut,fin){
   // dernieres : le rapport ne doit rien contenir qui deborde de ses bornes.
   const nuits=((u&&u.sleepLog)||[]).filter(e=>e&&e.date>=jours[0]&&e.date<=jours[jours.length-1]);
   const reg=regulariteCoucher({sleepLog:nuits},nuits.length||1);
+  const cardio=_coachCardio(u,jours[0],jours[jours.length-1]);
   return {
     jours:jours.length,
     pas:{moyenne:moy(pas),renseignes:pas.length,objectif:sanObjPas(u)},
     sommeil:{moyenne:moy(som),renseignes:som.length,objectif:sanObjSommeil(u)},
-    regularite:reg
+    regularite:reg,
+    // Synchronisation santé : null sans mesure sur la période.
+    fcRepos:cardio.fcRepos,vfc:cardio.vfc
   };
 }
 // PURE. Le mois calendaire PRÉCÉDENT, borne à borne.
@@ -61070,6 +61073,8 @@ function htmlRapport(r){
         <div><div class="rap-lbl">Sommeil / nuit</div>${L.sommeil.moyenne!=null?nb(sanHM(L.sommeil.moyenne),'en moyenne'):nb('-','')}</div>
         <div><div class="rap-lbl">Nuits renseignées</div>${nb(L.sommeil.renseignes,'/ '+L.jours)}</div>
       </div>`;
+      if(L.fcRepos) h+=`<p class="rap-note">FC de repos : ${L.fcRepos.moyenne} bpm en moyenne, sur ${L.fcRepos.n} mesure${L.fcRepos.n>1?'s':''} synchronisée${L.fcRepos.n>1?'s':''}.</p>`;
+      if(L.vfc) h+=`<p class="rap-note">Variabilité cardiaque (${_libVfc(L.vfc.methode)}) : ${L.vfc.moyenne} ms en moyenne, sur ${L.vfc.n} mesure${L.vfc.n>1?'s':''} synchronisée${L.vfc.n>1?'s':''}.</p>`;
       if(L.regularite) h+=`<p class="rap-note">Couchers : ± ${L.regularite.ecart} min autour de ${_libHeure(L.regularite.moyenne)}, sur ${L.regularite.n} nuit${L.regularite.n>1?'s':''} horodatée${L.regularite.n>1?'s':''}.</p>`;
       h+=`<p class="rap-note">Objectifs en vigueur : ${sanNb(L.pas.objectif)} pas, ${sanHM(L.sommeil.objectif)} de sommeil. Les jours non renseignés ne sont pas comptés dans les moyennes.</p>`;
     }
@@ -105765,7 +105770,126 @@ function scoreRecuperation(user){
     return {lib:'Volume au-dessus du repère',valeur:n+' muscles'};
   });
 
+  // (e) La récupération MESURÉE : FC de repos et VFC (voir recupCardio).
+  // Un point au plus. Sans journaux synchronisés, ce critère n'existe pas.
+  essai('cardio',()=>{
+    const c=recupCardio(u);
+    const f=c.fc&&c.fc.signal, v=c.vfc&&c.vfc.signal;
+    if(!f&&!v) return null;
+    return {lib:f&&v?'FC de repos haute et VFC basse':(f?'FC de repos au-dessus de ta moyenne':'VFC sous ta moyenne'),
+      valeur:[f?'+'+String(c.fc.ecart).replace('.',',')+' bpm':'',v?c.vfc.ecart+' %':''].filter(Boolean).join(', ')+' sur 28 j'};
+  });
+
   return {points:criteres.length,criteres:criteres};
+}
+// ══ LA RÉCUPÉRATION MESURÉE : FC DE REPOS ET VFC (synchronisation santé) ══
+// Deux mesures arrivent désormais sans saisie : la fréquence cardiaque de
+// repos (fcReposLog [{date,bpm}]) et la variabilité cardiaque (vfcLog
+// [{date,ms,methode}]). Elles entrent dans scoreRecuperation comme UN critère
+// de plus (« cardio », un point au plus, que la FC, la VFC ou les deux
+// sonnent) : un poids égal à celui du sommeil ou du stress, jamais davantage,
+// et le score garde son rôle — ouvrir une conversation, rien déclencher seul.
+//
+// LE CALCUL, chacun contre SA PROPRE HISTOIRE (jamais contre une norme de
+// population, qui varie trop d'une personne à l'autre) :
+//   · fenêtre : les 28 derniers jours (aujourd'hui compris) ;
+//   · « récent » : les 3 dernières mesures, prises dans les 7 derniers jours ;
+//   · « base » : les autres mesures de la fenêtre, 7 au moins (sinon rien) ;
+//   · FC de repos : signal si la moyenne récente dépasse la base d'au moins
+//     max(5 bpm, 1 écart-type). Une FC de repos qui monte de quelques
+//     battements sur plusieurs jours accompagne la fatigue accumulée ou un
+//     début d'infection (Buchheit 2014, Front Physiol 5:73 ; Bosquet et al.
+//     2008, Br J Sports Med 42:709) ; 5 bpm dépasse la variation d'un jour à
+//     l'autre d'une mesure au repos.
+//   · VFC : comparée en LOGARITHME (ln), comme le recommandent Plews et al.
+//     2012-2013 (Eur J Appl Physiol 112:3729 ; Sports Med 43:773), parce que
+//     sa distribution est asymétrique. Signal si la moyenne ln récente passe
+//     sous la base de plus d'1 écart-type. Plews retient 0,5 écart-type comme
+//     plus petit changement utile ; on prend le double, parce qu'un point du
+//     score doit être rare.
+//   · UNE MÉTHODE À LA FOIS : la base ne contient que les valeurs de la
+//     méthode de la dernière mesure. RMSSD (Health Connect) et SDNN (Apple
+//     Santé) ne mesurent pas la même chose : on ne les compare JAMAIS.
+// Sans ces journaux (ou sans base suffisante), le critère n'existe pas, et
+// le score est exactement celui d'avant (test de non-régression).
+const RECUP_FENETRE_JOURS=28, RECUP_RECENTS=3, RECUP_RECENTS_JOURS=7, RECUP_BASE_MIN=7;
+const RECUP_FC_ECART_BPM=5, RECUP_VFC_ECARTS_TYPE=1;
+function _recupMoySd(a){
+  const m=a.reduce((t,x)=>t+x,0)/a.length;
+  const sd=a.length>1?Math.sqrt(a.reduce((t,x)=>t+(x-m)*(x-m),0)/(a.length-1)):0;
+  return {m,sd};
+}
+// PURE. Les points de la fenêtre, triés : [{d, v, methode}].
+function _recupPoints(log,champ,maintenant,methode){
+  const t=Number(maintenant)||Date.now();
+  const fin=localISODate(new Date(t)), debut=localISODate(new Date(t-(RECUP_FENETRE_JOURS-1)*864e5));
+  return (Array.isArray(log)?log:[]).filter(e=>e&&e.date>=debut&&e.date<=fin&&isFinite(Number(e[champ]))&&Number(e[champ])>0
+      &&(!methode||e.methode===methode))
+    .map(e=>({d:e.date,v:Number(e[champ]),methode:e.methode||null}))
+    .sort((a,b)=>a.d<b.d?-1:(a.d>b.d?1:0));
+}
+// PURE. {fc, vfc} : chacun null, ou {recent, base, ecart, n, signal[, methode]}.
+function recupCardio(user,maintenant){
+  const u=user||{}, t=Number(maintenant)||Date.now();
+  const limRecent=localISODate(new Date(t-(RECUP_RECENTS_JOURS-1)*864e5));
+  const couper=pts=>{
+    const rec=pts.slice(-RECUP_RECENTS).filter(p=>p.d>=limRecent);
+    const base=pts.slice(0,pts.length-rec.length);
+    return (rec.length>=1&&base.length>=RECUP_BASE_MIN)?{rec,base}:null;
+  };
+  let fc=null, vfc=null;
+  const pf=couper(_recupPoints(u.fcReposLog,'bpm',t));
+  if(pf){
+    const r=_recupMoySd(pf.rec.map(p=>p.v)).m, b=_recupMoySd(pf.base.map(p=>p.v));
+    const ecart=Math.round((r-b.m)*10)/10;
+    fc={recent:Math.round(r),base:Math.round(b.m),ecart,n:pf.base.length+pf.rec.length,
+      signal:ecart>=Math.max(RECUP_FC_ECART_BPM,b.sd)};
+  }
+  const tous=_recupPoints(u.vfcLog,'ms',t);
+  const meth=tous.length?tous[tous.length-1].methode:null;
+  if(meth){
+    const pv=couper(tous.filter(p=>p.methode===meth));
+    if(pv){
+      const r=_recupMoySd(pv.rec.map(p=>Math.log(p.v))).m, b=_recupMoySd(pv.base.map(p=>Math.log(p.v)));
+      vfc={recent:Math.round(Math.exp(r)),base:Math.round(Math.exp(b.m)),methode:meth,
+        ecart:Math.round((Math.exp(r-b.m)-1)*100),n:pv.base.length+pv.rec.length,
+        signal:b.sd>0&&(r-b.m)< -RECUP_VFC_ECARTS_TYPE*b.sd};
+    }
+  }
+  return {fc,vfc};
+}
+// Les deux courbes de Lifestyle, sous la carte « Ce qui va dans le même sens » :
+// au dessin des courbes d'Évolution (_courbeMesures). La VFC ne montre que la
+// méthode de sa dernière mesure.
+function _htmlCourbesRecup(user,maintenant){
+  const u=user||{}, t=Number(maintenant)||Date.now();
+  const fc=_recupPoints(u.fcReposLog,'bpm',t);
+  const tv=_recupPoints(u.vfcLog,'ms',t);
+  const meth=tv.length?tv[tv.length-1].methode:null;
+  const vf=meth?tv.filter(p=>p.methode===meth):[];
+  const carte=(titre,trace)=>trace?`<div class="evo-carte pc-carte">
+      <div class="pc-tete"><span class="pc-ico" aria-hidden="true">${_pesIcone('barres')}</span>
+        <span class="pc-titre">${titre}</span></div>${trace}</div>`:'';
+  // La couleur de l'écart : une FC qui baisse, une VFC qui monte, c'est dans le bon sens.
+  const cFc=e=>Math.abs(e)<2?'var(--sub)':(e<0?'var(--green)':'var(--orange)');
+  const cVf=e=>Math.abs(e)<3?'var(--sub)':(e>0?'var(--green)':'var(--orange)');
+  const h=carte('FC de repos · 28 jours',fc.length>1?_courbeMesures([{label:'FC de repos',color:'#E02020',pts:fc}],{unite:'bpm',couleur:cFc}):'')
+    +carte('Variabilité cardiaque ('+(meth==='sdnn'?'SDNN':'RMSSD')+') · 28 jours',vf.length>1?_courbeMesures([{label:'VFC',color:'#60a5fa',pts:vf}],{unite:'ms',couleur:cVf}):'');
+  return h?'<div class="recup-courbes">'+h+'</div>':'';
+}
+// « 1 h 11 », « 45 min ».
+function _hMin(m){ const n=Math.round(Number(m)||0); return n<60?n+' min':Math.floor(n/60)+' h '+String(n%60).padStart(2,'0'); }
+// PURE. La ligne des phases sous la nuit, dans MON SOMMEIL : la dernière nuit
+// de la période qui en porte (synchronisation). Rien sinon.
+function _htmlPhasesNuit(u,jours){
+  const l=(u&&u.sleepLog)||[];
+  for(let i=(jours||[]).length-1;i>=0;i--){
+    const e=l.find(x=>x&&x.date===jours[i].iso);
+    const p=e&&e.phases;
+    if(p&&(p.profond>0||p.paradoxal>0))
+      return '<div class="sv-phases">'+[p.profond>0?'Profond '+_hMin(p.profond):'',p.paradoxal>0?'Paradoxal '+_hMin(p.paradoxal):''].filter(Boolean).join(' · ')+'</div>';
+  }
+  return '';
 }
 // « 5 h 20 » plutôt que « 5,3 h » : c'est ainsi qu'on parle d'une nuit.
 function _recupHeures(h){
@@ -105843,11 +105967,29 @@ function bilanDomaineCoach(u,quoi,jours){
     const dd=new Date(der+'T12:00:00');
     depuis=Math.max(0,Math.round((d.getTime()-dd.getTime())/864e5));
   }
+  // LA RÉCUPÉRATION MESURÉE (synchronisation), avec le sommeil : moyenne de
+  // la fenêtre. null quand rien n'est arrivé — le coach ne voit rien d'un
+  // athlète qui n'a pas activé la synchronisation.
+  const cardio=quoi==='sommeil'?_coachCardio(u,serie[0].iso,serie[serie.length-1].iso):{fcRepos:null,vfc:null};
   return {serie,fenetre:n,renseignes:lus.length,moyenne:moy(lus),
     semaine:m0,semaineAvant:m1,
     delta:(m0!=null&&m1!=null)?(m0-m1):null,
-    dernier:der,depuis};
+    dernier:der,depuis,fcRepos:cardio.fcRepos,vfc:cardio.vfc};
 }
+// PURE. FC de repos et VFC entre deux dates ISO : {fcRepos:{moyenne,n}|null,
+// vfc:{moyenne,n,methode}|null}. La VFC ne garde que la méthode de sa
+// dernière mesure (RMSSD et SDNN ne se moyennent pas ensemble).
+function _coachCardio(u,debut,fin){
+  const dans=e=>e&&e.date>=debut&&e.date<=fin;
+  const fc=((u&&u.fcReposLog)||[]).filter(e=>dans(e)&&Number(e.bpm)>0);
+  const v0=((u&&u.vfcLog)||[]).filter(e=>dans(e)&&Number(e.ms)>0).sort((a,b)=>a.date<b.date?-1:1);
+  const meth=v0.length?v0[v0.length-1].methode:null;
+  const v=v0.filter(e=>e.methode===meth);
+  const moy=(a,k)=>Math.round(a.reduce((t,e)=>t+Number(e[k]),0)/a.length);
+  return {fcRepos:fc.length?{moyenne:moy(fc,'bpm'),n:fc.length}:null,
+    vfc:v.length?{moyenne:moy(v,'ms'),n:v.length,methode:meth}:null};
+}
+function _libVfc(m){ return m==='sdnn'?'SDNN':'RMSSD'; }
 // ⚠ LA SPARKLINE, PUIS LA CARTE DE PERIODE ET LES LIGNES « 7 j vs 7 j », SONT
 // PARTIES : le tableau de bord de chaque domaine (_htmlDomaineCoach) porte
 // maintenant la courbe sur 7 jours, 28 jours ou 3 mois, et la tendance.
@@ -106160,6 +106302,8 @@ function _htmlDomaineCoach(c,quoi){
         +ligne(Nom+' atteignant l’objectif',s.atteints+' / 7')
         +ligne('Renseigné sur '+bil.fenetre+' jours',bil.renseignes+' / '+bil.fenetre)
         +(reg?ligne('Régularité des couchers','± '+reg.ecart+' min'):'')
+        +(bil.fcRepos?ligne('FC de repos ('+bil.fenetre+' j)',bil.fcRepos.moyenne+' bpm · '+bil.fcRepos.n+' mesure'+(bil.fcRepos.n>1?'s':'')):'')
+        +(bil.vfc?ligne('VFC '+_libVfc(bil.vfc.methode)+' ('+bil.fenetre+' j)',bil.vfc.moyenne+' ms · '+bil.vfc.n+' mesure'+(bil.vfc.n>1?'s':'')):'')
         +'<div class="cso-note">'+D.note+'</div>'
       +'</section>'
       +'<section class="cso-carte cso-attn"><div class="cso-s-t" data-ton="orange">'+CS_ICO.alerte+'<h4>Points d’attention</h4></div>'+attH+'</section>'
@@ -109454,7 +109598,7 @@ function _htmlCarteSante(u,quoi){
   // pas, #60a5fa pour le sommeil. Tout le reste en derive.
   return '<section class="san-carte sv-carte" data-quoi="'+(nuit?'sommeil':'pas')+'"'
     +' style="--sv-c:'+(nuit?'#60a5fa':'#e02020')+'">'
-    +'<div class="sv-bloc sv-g">'+_svEnTete(quoi,r,bloc,fmt)+_sanGraphe(quoi,serie,bloc.objectif,fmt)+'</div>'
+    +'<div class="sv-bloc sv-g">'+_svEnTete(quoi,r,bloc,fmt)+_sanGraphe(quoi,serie,bloc.objectif,fmt)+(nuit?_htmlPhasesNuit(u,r.jours):'')+'</div>'
     +'<div class="sv-duo">'+_svMoyenne(quoi,bloc,fmt)+_svProgression(quoi,r,bloc)+'</div>'
     +(nuit?_svDette(u):'')
     +_htmlRattraper(u,quoi)
@@ -109555,7 +109699,7 @@ function sanRendre(){
        if(zh) zh.innerHTML=htmlHabitudes(u,{taux:true}); }catch(e){
        const zh=document.getElementById('lifestyle-habitudes'); if(zh) zh.innerHTML=''; }
   try{ const zc=document.getElementById('lifestyle-croise');
-       if(zc) zc.innerHTML=_htmlCafeLimite(u)+_htmlRecuperationLifestyle(u); }catch(e){
+       if(zc) zc.innerHTML=_htmlCafeLimite(u)+_htmlRecuperationLifestyle(u)+_htmlCourbesRecup(u); }catch(e){
        const zc=document.getElementById('lifestyle-croise'); if(zc) zc.innerHTML=''; }
 }
 // ── LA FEUILLE DU JOUR ─────────────────────────────────────────────────
@@ -115674,6 +115818,21 @@ function exportMyData(){
     toast('Export impossible : '+(e&&e.message||'erreur'),'var(--red)');
   }
 }
+// LA SANTÉ SYNCHRONISÉE, À LA SUPPRESSION DU COMPTE. Le serveur révoque le
+// jeton : il efface sante_sync/<clé> ET les entrées de sante_jetons qui
+// pointent vers ce compte (l'empreinte y porte la clé). Puis l'app efface
+// elle-même sante_sync/<clé> (les règles l'y autorisent, nœud entier) : si
+// le serveur était injoignable, le jeton meurt quand même, et l'entrée
+// orpheline est nettoyée à la prochaine révocation. Rend {revoque, efface}.
+async function _supprimerSanteSync(safeKey,fbTok){
+  const r={revoque:false,efface:false};
+  try{ await CLOUD._callFn('santeJeton',{action:'revoquer'}); r.revoque=true; }catch(e){}
+  try{
+    const x=await fetch(CLOUD._fbUrl.replace('users.json','sante_sync/'+safeKey+'.json')+(fbTok?'?auth='+fbTok:''),{method:'DELETE'});
+    r.efface=!!(x&&x.ok);
+  }catch(e){}
+  return r;
+}
 async function requestAccountDeletion(){
   // L'article 17 vaut pour TOUT LE MONDE. Le garde d'origine reservait la
   // suppression aux coachs : un athlete ne pouvait pas faire effacer son
@@ -115754,13 +115913,8 @@ async function requestAccountDeletion(){
       await fetch(CLOUD._fbUrl.replace('users.json','activite/'+safeKey+'.json')+(fbTok?'?auth='+fbTok:''),{method:'DELETE'});
     }catch(e){}
 
-    // 1 ter. La santé synchronisée : le serveur révoque le jeton (son
-    //    empreinte porte la clé du compte) et efface sante_sync. À défaut,
-    //    l'app efface le nœud elle-même — ce qui suffit à tuer le jeton.
-    try{ await CLOUD._callFn('santeJeton',{action:'revoquer'}); }catch(e){}
-    try{
-      await fetch(CLOUD._fbUrl.replace('users.json','sante_sync/'+safeKey+'.json')+(fbTok?'?auth='+fbTok:''),{method:'DELETE'});
-    }catch(e){}
+    // 1 ter. La santé synchronisée : voir _supprimerSanteSync.
+    await _supprimerSanteSync(safeKey,fbTok);
 
     // 2. Fiche programme PDF dans Storage. Chemin encode en entier : le nom
     //    d'objet contient des barres obliques qui doivent etre echappees.

@@ -51210,6 +51210,84 @@ async function testExercices(){
       if(!/visibilitychange/.test(_prodSrc())||!/sanEnvoiRetour\(\)/.test(_prodSrc())) return _echec('retour au premier plan');
       const ty=PUSH_TYPES.find(x=>x.cle==='sante');
       return ty&&/Données santé non reçues/.test(ty.titre)&&/le matin/i.test(ty.txt)?true:_echec('type sante');})());
+    // ══ 28/09/2026 — LOT E : LA RÉCUPÉRATION MESURÉE, LE COACH, LA CONFIDENTIALITÉ ══
+    const _RE_T=Date.now();
+    const _reJ=n=>localISODate(new Date(_RE_T-n*864e5));
+    // 25 jours de base, puis les 3 derniers : FC 55 ± 1, VFC RMSSD 50 ± 3.
+    const _reFc=(fin)=>Array.from({length:28},(_,i)=>({date:_reJ(27-i),bpm:i>=25?fin:(55+(i%3)-1)}));
+    const _reVf=(fin,meth)=>Array.from({length:28},(_,i)=>({date:_reJ(27-i),ms:i>=25?fin:(50+((i%5)-2)*1.5),methode:meth||'rmssd'}));
+    ok('Récupération : FC de repos et VFC contre leur propre moyenne de 28 jours ; jamais SDNN contre RMSSD',(()=>{
+      const a=recupCardio({fcReposLog:_reFc(63),vfcLog:_reVf(32)},_RE_T);
+      if(!a.fc||!a.fc.signal||a.fc.recent!==63||a.fc.base!==55) return _echec('FC '+JSON.stringify(a.fc));
+      if(!a.vfc||!a.vfc.signal||a.vfc.methode!=='rmssd'||!(a.vfc.ecart<-30)) return _echec('VFC '+JSON.stringify(a.vfc));
+      const b=recupCardio({fcReposLog:_reFc(57),vfcLog:_reVf(49)},_RE_T);
+      if(b.fc.signal||b.vfc.signal) return _echec('dans la norme : '+JSON.stringify(b));
+      // La dernière mesure est en SDNN : la base RMSSD ne compte pas, il n'y a pas assez de SDNN.
+      const v=_reVf(50); v.push({date:_reJ(0),ms:20,methode:'sdnn'});
+      if(recupCardio({vfcLog:v.filter(x=>x.date!==_reJ(0)||x.methode==='sdnn')},_RE_T).vfc!==null) return _echec('SDNN comparé à RMSSD');
+      // Moins de 7 mesures de base : rien.
+      return recupCardio({fcReposLog:_reFc(70).slice(-9)},_RE_T).fc===null?true:_echec('base trop courte');})());
+    ok('Récupération : sans FC ni VFC, le score est EXACTEMENT celui d’avant ; avec un signal, un point de plus',(()=>{
+      const nuits=[1,2,3,4,5,6,7].map(n=>({date:_reJ(n),duration:5}));
+      const u0={role:'athlete',sleepLog:nuits};
+      const avant=JSON.stringify(scoreRecuperation(u0));
+      if(JSON.stringify(scoreRecuperation(Object.assign({},u0,{fcReposLog:[],vfcLog:[]})))!==avant) return _echec('journaux vides');
+      if(JSON.stringify(scoreRecuperation(Object.assign({},u0,{fcReposLog:_reFc(56),vfcLog:_reVf(50)})))!==avant) return _echec('mesures normales');
+      if(JSON.stringify(scoreRecuperation({}))!=='{"points":0,"criteres":[]}') return _echec('dossier vide');
+      const s=scoreRecuperation(Object.assign({},u0,{fcReposLog:_reFc(63),vfcLog:_reVf(32)}));
+      const c=s.criteres.find(x=>x.cle==='cardio');
+      if(s.points!==JSON.parse(avant).points+1||!c) return _echec(JSON.stringify(s));
+      return /FC de repos haute et VFC basse/.test(c.lib)&&/\+8 bpm/.test(c.valeur)?true:_echec(JSON.stringify(c));})());
+    ok('Lifestyle : deux courbes sur 28 jours sous la carte (dessin d’Évolution), la ligne des phases sous la nuit',(()=>{
+      const d=document.createElement('div');
+      d.innerHTML=_htmlCourbesRecup({fcReposLog:_reFc(56),vfcLog:_reVf(50,'sdnn')},_RE_T);
+      const t=[...d.querySelectorAll('.pc-titre')].map(x=>x.textContent);
+      if(t.join('|')!=='FC de repos · 28 jours|Variabilité cardiaque (SDNN) · 28 jours') return _echec(t.join('|'));
+      if(d.querySelectorAll('.pc-carte path.pc-rel').length!==2) return _echec('courbes');
+      if(_htmlCourbesRecup({},_RE_T)!=='') return _echec('sans données');
+      if(!/_htmlCourbesRecup\(u\)/.test(_prodSrc())) return _echec('branchement dans #lifestyle-croise');
+      const jours=[{iso:_reJ(2)},{iso:_reJ(1)}];
+      const l=_htmlPhasesNuit({sleepLog:[{date:_reJ(1),duration:7.5,phases:{profond:71,leger:250,paradoxal:98,eveil:10}}]},jours);
+      if(!/>Profond 1 h 11 · Paradoxal 1 h 38</.test(l)) return _echec(l);
+      return _htmlPhasesNuit({sleepLog:[{date:_reJ(1),duration:7}]},jours)===''?true:_echec('sans phases');})());
+    ok('Coach : FC de repos et VFC dans le tableau Sommeil et le rapport ; rien si l’athlète n’a pas activé la synchronisation',(()=>{
+      const u={role:'athlete',email:'c@t.fr',sleepLog:[{date:_reJ(1),duration:7}],fcReposLog:_reFc(56),vfcLog:_reVf(50)};
+      const b=bilanDomaineCoach(u,'sommeil',28);
+      if(!b.fcRepos||b.fcRepos.n!==28||!b.vfc||b.vfc.methode!=='rmssd') return _echec(JSON.stringify([b.fcRepos,b.vfc]));
+      if(bilanDomaineCoach(u,'pas',28).fcRepos!==null) return _echec('dans les pas');
+      const sans=bilanDomaineCoach({sleepLog:u.sleepLog},'sommeil',28);
+      if(sans.fcRepos!==null||sans.vfc!==null) return _echec('sans synchronisation');
+      const d=document.createElement('div'); d.innerHTML=_htmlDomaineCoach(u,'sommeil');
+      if(!/FC de repos \(28 j\)/.test(d.textContent)||!/VFC RMSSD \(28 j\)/.test(d.textContent)) return _echec('tableau');
+      d.innerHTML=_htmlDomaineCoach({sleepLog:u.sleepLog,email:'x@t.fr'},'sommeil');
+      if(/FC de repos|VFC/.test(d.textContent)) return _echec('affiché sans synchronisation');
+      const L=rapLifestyle(u,_RE_T-27*864e5,_RE_T);
+      if(!L.fcRepos||!L.vfc) return _echec('rapport');
+      const sv=_rapBlocs;
+      try{
+        _rapBlocs={lifestyle:true};
+        const h=htmlRapport({lifestyle:L});
+        if(!/FC de repos : \d+ bpm/.test(h)||!/Variabilité cardiaque \(RMSSD\)/.test(h)) return _echec('rapport rendu');
+        return /FC de repos/.test(htmlRapport({lifestyle:rapLifestyle({sleepLog:u.sleepLog},_RE_T-27*864e5,_RE_T)}))?_echec('rapport sans synchronisation'):true;
+      } finally { _rapBlocs=sv; }})());
+    ok('Confidentialité : ligne « Synchronisation santé » (lu, d’où, où, qui, comment arrêter), POLICY_VERSION 2026-10',(()=>{
+      const lire=u=>{ try{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; }catch(e){ return ''; } };
+      const p=lire('../privacy.html');
+      const i=p.indexOf('<strong>Synchronisation santé</strong>'); if(i<0) return _echec('ligne absente');
+      const r=p.slice(i,p.indexOf('</tr>',i));
+      for(const x of ['pas','sommeil','fréquence cardiaque au repos','variabilité cardiaque','poids','masse grasse','Health Connect','Apple Santé','Raccourci','Cloudflare','Firebase','vous et votre coach','Déconnecter','Réglages › Santé'])
+        if(r.indexOf(x)<0) return _echec('manque : '+x);
+      return POLICY_VERSION==='2026-10'?true:_echec(POLICY_VERSION);})());
+    okA('Suppression du compte : le serveur révoque (sante_sync et sante_jetons), puis l’app efface sante_sync',async()=>{
+      const sv={fn:CLOUD._callFn,f:window.fetch}, appels=[];
+      try{
+        CLOUD._callFn=async(n,d)=>{ appels.push('fn:'+n+':'+(d&&d.action)); return {actif:false}; };
+        window.fetch=async(u,o)=>{ appels.push((o&&o.method)+' '+String(u).replace(/\?.*/,'').replace(/^.*\.com/,'')); return {ok:true}; };
+        const r=await _supprimerSanteSync('lea@t,fr','TOK');
+        if(!r.revoque||!r.efface) return _echec(JSON.stringify(r));
+        if(appels.join('|')!=='fn:santeJeton:revoquer|DELETE /sante_sync/lea@t,fr.json') return _echec(appels.join('|'));
+        return /await _supprimerSanteSync\(safeKey,fbTok\)/.test(String(requestAccountDeletion))?true:_echec('non appelée');
+      } finally { CLOUD._callFn=sv.fn; window.fetch=sv.f; }});
     // ══ 28/09/2026 — LA VIDÉO D'UN VISUEL ════════════════════════════════
     ok('Vidéo : MP4 quand l’enregistreur le sait (Safari iOS), sinon WebM VP9, sinon rien',(()=>{
       const que=(l)=>(t)=>l.indexOf(t)>=0;

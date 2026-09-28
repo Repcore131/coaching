@@ -2611,6 +2611,10 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .san-bande-t{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:#f97316}
 .san-bande-d{font-size:var(--fs-xs);color:#c9c9c9;line-height:1.6;margin-top:6px}
 .san-bande-b{margin-top:12px;min-height:42px;display:flex;align-items:center;justify-content:center;font-size:var(--fs-sm);letter-spacing:1px;text-decoration:none}
+/* Les phases de la dernière nuit, sous le graphe de MON SOMMEIL : une ligne. */
+.sv-phases{margin-top:8px;font-size:var(--fs-xs);color:var(--text-dim);text-align:center}
+/* FC de repos et VFC sur 28 jours, sous la carte de récupération. */
+.recup-courbes{display:grid;gap:12px;margin-top:12px}
 /* Chez le coach : « synchronisé » et la dernière réception, sur leur ligne. */
 .cso-tete:has(.cso-sync-l){flex-wrap:wrap}
 .cso-sync-l{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding-top:10px;border-top:1px solid #26262b}
@@ -12021,6 +12025,7 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .san-bande{background:linear-gradient(168deg,#e2e2e2,#ebebeb 55%,#f1f1f1);border:1px solid var(--border);border-left:3px solid #f97316;box-shadow:var(--e3)}
 :root[data-theme="clair"] .san-bande-t{color:#c75505}
 :root[data-theme="clair"] .san-bande-d{color:#3c3c3c}
+:root[data-theme="clair"] .sv-phases{color:var(--text-dim)}
 :root[data-theme="clair"] .cso-sync-l{border-top:1px solid #d2d2d7}
 :root[data-theme="clair"] .cso-sync{background:#e1eee5;border:1px solid #1d3a24;color:#1eae53}
 :root[data-theme="clair"] .cso-sync-d{color:#494951}

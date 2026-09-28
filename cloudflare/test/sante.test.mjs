@@ -186,6 +186,20 @@ await test('révoquer : le jeton meurt, le dossier synchronisé est effacé', as
   assert.equal((await santeJeton({ auth: LEA, data: { action: 'etat' } }, M.ctx)).actif, false);
 });
 
+await test('suppression du compte : sante_sync effacé à la main, puis révocation — l’empreinte orpheline part aussi', async () => {
+  const M = monde({ sante_jetons: { vieux: { cle: 'lea@t,fr', creeLe: 1 }, autre: { cle: 'tom@t,fr', creeLe: 1 } } });
+  const { jeton } = await santeJeton({ auth: LEA, data: { action: 'creer' } }, M.ctx);
+  const emp = await empreinte(jeton);
+  // L'app a effacé sante_sync elle-même (serveur injoignable ce jour-là).
+  M.F.ecrire('sante_sync/lea@t,fr', null);
+  assert.ok(M.F.lire('sante_jetons/' + emp));
+  await santeJeton({ auth: LEA, data: { action: 'revoquer' } }, M.ctx);
+  assert.equal(M.F.lire('sante_jetons/' + emp), null, 'l’empreinte du jeton courant');
+  assert.equal(M.F.lire('sante_jetons/vieux'), null, 'une empreinte orpheline');
+  assert.deepEqual(M.F.lire('sante_jetons/autre'), { cle: 'tom@t,fr', creeLe: 1 }, 'celle d’un autre compte reste');
+  assert.equal(M.F.lire('sante_sync/lea@t,fr'), null);
+});
+
 await test('un dossier effacé par son propriétaire vaut révocation', async () => {
   const M = monde();
   const { jeton } = await santeJeton({ auth: LEA, data: { action: 'creer' } }, M.ctx);

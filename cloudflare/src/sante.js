@@ -66,6 +66,14 @@ export async function santeJeton({ auth, data }, ctx) {
   if (action === 'revoquer') {
     const maj = { ['sante_sync/' + cle]: null };
     if (meta && meta.empreinte) maj['sante_jetons/' + meta.empreinte] = null;
+    // Et toute entrée de sante_jetons qui pointe encore vers ce compte : un
+    // nœud sante_sync effacé à la main (suppression de compte, app hors
+    // ligne) laissait son empreinte orpheline, porteuse de la clé du compte.
+    // Requête indexée (".indexOn": "cle" dans les règles).
+    try {
+      const orph = await db.ref('sante_jetons').parChamp('cle', cle, 10);
+      for (const emp of Object.keys(orph || {})) maj['sante_jetons/' + emp] = null;
+    } catch (e) { /* sans index : l'empreinte connue suffit */ }
     await db.ref('').update(maj);
     return { actif: false };
   }

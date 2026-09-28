@@ -832,7 +832,9 @@
     // service. sante_jetons ne garde que des EMPREINTES SHA-256 : ferme a tous.
     "sante_jetons": {
       ".read": false,
-      ".write": false
+      ".write": false,
+      // Pour que la revocation retrouve une empreinte orpheline par sa cle.
+      ".indexOn": ["cle"]
     },
     // Lu par le proprietaire et par le coach que son dossier designe (meme
     // condition que users/). Ecrit par personne, sauf :
