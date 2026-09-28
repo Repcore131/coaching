@@ -56823,15 +56823,19 @@ function _htmlRecordsFin(ctx,date,cle){
   // personne ne prenait pour un geste. Un record : ce bouton le partage.
   // Plusieurs : il les réunit sur un visuel, et chaque ligne garde sa pastille
   // « Partager » — on peut vouloir publier le plus beau des trois.
-  const plusieurs=rec.length>1;
+  // ⚠ PLUS DE PARTAGE ICI (Kevin, 28/09/2026) : « ne mets pas la possibilité
+  //   de télécharger l'image, ça sert à rien et ça mange de l'info ». Plus de
+  //   choix image / vidéo ni de bouton : chaque record dit ce qu'il est, en
+  //   une phrase. Le visuel de la séance, lui, reste à télécharger plus bas.
+  //   `bouton` et partagerRecord restent pour les autres écrans qui s'en servent.
+  void bouton;
   return '<div class="rcf-rk"><div class="rcf-rk-t">Mes records</div>'
-    +(k?_htmlVisuelMedia():'')
-    +(k?('<div class="rcf-rk-tous">'+bouton(plusieurs?-1:0,plusieurs?'Partager mes '+rec.length+' records':'Partager ce record','rcf-rk-p rcf-rk-p-tous')+'</div>'):'')
     +rec.map((r,i)=>'<div class="rcf-rk-l">'
       +'<span class="rcf-rk-ex">'+escapeHtml(String(r.nm))+'</span>'
       +'<span class="rcf-rk-v"><span class="rcf-rk-a">'+nb(r.histMax)+' → </span>'
         +nb(r.curMax)+' kg<span class="rcf-rk-g">+'+nb(r.gain)+'</span></span>'
-      +(plusieurs?bouton(i,'Partager','rcf-rk-p rcf-rk-p-ligne','Partager le record '+String(r.nm)):'')
+      +'<div class="rcf-rk-x">Nouvelle meilleure charge sur cet exercice : '+nb(r.curMax)
+        +' kg, soit '+nb(r.gain)+' kg de plus que ton meilleur jusqu’ici ('+nb(r.histMax)+' kg).</div>'
       +'</div>').join('')
     +'</div>';
 }
@@ -73225,11 +73229,13 @@ function htmlCarteMuscles(id,d,o){
     +'</div>'
     +'<div class="musc-chiffres">'+d.chiffres.map(c=>'<div><b>'+escapeHtml(c.v)+'</b><span>'+escapeHtml(c.l)+'</span></div>').join('')+'</div>'
     +'<div class="musc-legende"><span>Repos</span><i aria-hidden="true"></i><span>Cible atteinte</span></div>'
-    +_htmlVisuelFonds('musc-'+id+'-fonds')
+    // `o.sansPartage` : la carte se lit, elle ne se télécharge pas (fin de
+    // séance, Kevin 28/09/2026 — seul le visuel de la séance y est à télécharger).
+    +(o.sansPartage?'':(_htmlVisuelFonds('musc-'+id+'-fonds')
     +'<div class="musc-actions">'
       +'<button type="button" class="btn btn-red btn-casse" onclick="partagerCarteMuscles(\''+id+'\',this)">'+icon('share',16)+' <span>Partager</span></button>'
       +'<button type="button" class="btn btn-outline" onclick="telechargerCarteMuscles(\''+id+'\',this)">'+icon('download',16)+' <span>Télécharger</span></button>'
-    +'</div></section>';
+    +'</div>'))+'</section>';
 }
 // Peint les trois toiles de chaque vue, une fois les images lues.
 function monterCarteMuscles(id){
@@ -73245,7 +73251,7 @@ function monterCarteMuscles(id){
       const poser=(sel,src)=>{ const c=box.querySelector(sel); c.width=pv.w; c.height=pv.h; c.getContext('2d').drawImage(src,0,0); };
       poser('.musc-base',pv.base); poser('.musc-lueur',pv.lueur); poser('.musc-veines',pv.veines);
     }
-    try{ monterSelecteurFond('musc-'+id+'-fonds',f=>_muscCarteDe(id,f),null); }catch(e){}
+    if(!p.sansPartage){ try{ monterSelecteurFond('musc-'+id+'-fonds',f=>_muscCarteDe(id,f),null); }catch(e){} }
     return true;
   }).catch(()=>false);
 }
@@ -73346,7 +73352,7 @@ function rendreMusclesFinSeance(u,sess){
   let q=1; try{ q=seancesPrevuesParSemaine(u); }catch(e){ q=1; }
   const d=muscDonnees([sess],{user:u,semaines:1/q,periode:'cette séance'});
   if(!d.series||!Object.values(d.series).some(v=>v>0)){ z.innerHTML=''; return false; }
-  z.innerHTML=htmlCarteMuscles('wd',d,{genre:woGenreAvatar(u)});
+  z.innerHTML=htmlCarteMuscles('wd',d,{genre:woGenreAvatar(u),sansPartage:true});
   monterCarteMuscles('wd');
   return true;
 }
