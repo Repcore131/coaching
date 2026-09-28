@@ -49481,17 +49481,22 @@ async function testExercices(){
       const r=messageRelanceAcces({fname:'Léa',accessExpiry:Date.now()+3*864e5},{cle:'bientot'});
       if(/ : [^ ]+ : /.test(r)||!/engagement 12 mois/.test(r)) return _echec(r);
       return true;})());
-    ok('Records : un vrai bouton « Partager » au-dessus de la liste, une pastille par ligne s’il y en a plusieurs',(()=>{
+    ok('Records (28/09/2026) : plus de partage ni de choix image/vidéo, une phrase par record',(()=>{
       const rec=(n)=>({records:Array.from({length:n},(_,i)=>({nm:'SQUAT '+i,curMax:100+i,histMax:90,gain:10+i}))});
-      const h3=_htmlRecordsFin(rec(3),Date.now(),'wd');
-      const iTous=h3.indexOf('Partager mes 3 records'), iLigne=h3.indexOf('rcf-rk-l');
-      if(iTous<0||iLigne<0||iTous>iLigne) return _echec('le bouton n’est pas au-dessus de la liste');
-      if(!/<button type="button" class="rcf-rk-p rcf-rk-p-tous"/.test(h3)) return _echec('pas un vrai bouton');
-      if((h3.match(/rcf-rk-p-ligne/g)||[]).length!==3) return _echec('une pastille par ligne attendue');
-      const h1=_htmlRecordsFin(rec(1),Date.now(),'wd');
-      if(h1.indexOf('Partager ce record')<0||h1.indexOf('Partager ce record')>h1.indexOf('rcf-rk-l')||/rcf-rk-p-ligne/.test(h1)) return _echec('un seul record : un bouton, en haut');
-      if(/<button/.test(_htmlRecordsFin(rec(2),Date.now()))) return _echec('sans clé d’écran, pas de bouton');
-      return true;})());
+      for(const cle of ['wd','sd',undefined]){
+        const h=_htmlRecordsFin(rec(3),Date.now(),cle);
+        if(/<button/.test(h)||/Partager/.test(h)) return _echec('un bouton de partage reste ('+cle+')');
+        if(/vs-media|Vidéo|VIDÉO/.test(h)) return _echec('le choix image / vidéo reste ('+cle+')');
+        if((h.match(/class="rcf-rk-x"/g)||[]).length!==3) return _echec('une explication par record attendue ('+cle+')');
+      }
+      const h1=_htmlRecordsFin({records:[{nm:'Développé',curMax:140,histMax:132.5,gain:7.5}]},Date.now(),'wd');
+      return /140 kg, soit 7,5 kg de plus que ton meilleur jusqu’ici \(132,5 kg\)/.test(h1)?true:_echec(h1);})());
+    ok('Fin de séance (28/09/2026) : la carte musculaire se lit, sans rien à télécharger',(()=>{
+      const d={titre:'T',periode:'cette séance',chiffres:[],groupes:{},series:{}};
+      const avec=htmlCarteMuscles('t1',d,{}), sans=htmlCarteMuscles('t2',d,{sansPartage:true});
+      if(!/musc-actions/.test(avec)) return _echec('les autres écrans perdent leur partage');
+      if(/musc-actions|Télécharger|Partager/.test(sans)) return _echec('la carte de fin de séance garde son partage');
+      return /sansPartage:true/.test(String(rendreMusclesFinSeance))?true:_echec('la fin de séance ne demande pas la carte sans partage');})());
     // ══ 27/09/2026 — L'ACCUEIL NOMINATIF DU FILLEUL ══════════════════════
     okA('Accueil /i : « Julie t’invite », son rang et 2 mois ; l’ambassadeur par son nom ; le coach inchangé ; sans rien, pas de code coach',async()=>{
       let h=''; try{ const x=new XMLHttpRequest(); x.open('GET','../i/index.html',false); x.send(); h=x.responseText; }catch(e){ return _echec('lecture de /i'); }
@@ -49920,7 +49925,7 @@ async function testExercices(){
         if(!clair) return _echec(s.type+' : pas de flash de foudre');
       }
       return true;})());
-    ok('Vidéo : la bascule « Image / Vidéo » — absente sans MediaRecorder, posée sur les écrans record, rang et Wrapped',(()=>{
+    ok('Vidéo : la bascule « Image / Vidéo » — absente sans MediaRecorder, posée sur les écrans rang et Wrapped',(()=>{
       const sv=Object.getOwnPropertyDescriptor(window,'MediaRecorder');
       let avant=null; try{ avant=localStorage.getItem(VISUEL_MEDIA_CLE); }catch(e){}
       try{
@@ -49938,9 +49943,10 @@ async function testExercices(){
         if(!/event\.stopPropagation\(\);visuelMediaChoisir/.test(h)) return _echec('un toucher dans Wrapped ferait avancer la slide');
         visuelMediaChoisir('image');
         if(visuelMediaChoisi()!=='image') return _echec('choix non retenu');
-        // Les trois écrans.
+        // Les écrans rang et Wrapped. Plus l'écran des records, depuis le
+        // 28/09/2026 : il ne se partage plus (Kevin), et n'a donc plus rien à choisir.
         const rec=_htmlRecordsFin({records:[{nm:'SQUAT',histMax:100,curMax:105,gain:5}]},Date.now(),'wd');
-        if(rec.indexOf('class="vmed"')<0) return _echec('écran record');
+        if(rec.indexOf('class="vmed"')>=0) return _echec('écran record : la bascule est revenue');
         const wr=_wrHtmlSlide({k:'profil',sur:'TON PROFIL',profil:{nom:'X',phrase:'Y'},resume:[],equivalent:null},4);
         if(wr.indexOf('class="vmed"')<0) return _echec('écran Wrapped');
         if(!/_htmlVisuelFonds\('rg-fonds'\)\+_htmlVisuelMedia\(\)/.test(String(_rangEcran))) return _echec('écran rang');
@@ -72629,17 +72635,6 @@ vendredi 78 6h 44m
         const a=_recAlea(_recGraine('Squat|105')), b=_recAlea(_recGraine('Squat|105'));
         for(let i=0;i<20;i++) if(a()!==b()) return _echec('tirage différent');
         return true;})());
-      ok('Mes records : un bouton par record, et un récapitulatif dès deux',(()=>{
-        const l=[{nm:'A',histMax:10,curMax:12,gain:2},{nm:'B',histMax:20,curMax:25,gain:5}];
-        const d=document.createElement('div');
-        d.innerHTML=_htmlRecordsFin({records:l},Date.now(),'sd');
-        const n=d.querySelectorAll('.rcf-rk-l .rcf-rk-p').length, t=d.querySelectorAll('.rcf-rk-tous .rcf-rk-p').length;
-        if(n!==2||t!==1) return _echec(n+' bouton(s), '+t+' récapitulatif');
-        d.innerHTML=_htmlRecordsFin({records:[l[0]]},Date.now(),'sd');
-        if(d.querySelector('.rcf-rk-tous')) return _echec('récapitulatif pour un seul record');
-        // Sans clé d'écran, le bloc d'avant, sans bouton.
-        d.innerHTML=_htmlRecordsFin({records:l});
-        return d.querySelector('.rcf-rk-p')?_echec('bouton sans clé'):true;})());
       ok('Le partage d\'un record copie le lien perso, par les sorties communes',(()=>{
         const s=String(partagerRecord);
         return (s.indexOf('_storySortirPartage')>=0&&s.indexOf('_storySortirTelechargement')>=0
