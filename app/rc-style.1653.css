@@ -9415,6 +9415,13 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   display:flex;align-items:center;justify-content:center}
 .aa-bouton b{display:block;font-size:var(--fs-sm);font-weight:800}
 .aa-bouton span span{display:block;font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px}
+/* « Mon avant/après » : rouge, logo Instagram blanc sans pastille (28/09/2026). */
+.aa-bouton.aa-bouton-ig{background:linear-gradient(135deg,#E02020,#a30d0d);border:1px solid #ff4d4d;color:#fff;
+  box-shadow:0 8px 24px rgba(224,32,32,.35)}
+.aa-bouton-ig .aa-bouton-i{background:none!important;width:36px;height:36px}
+/* Couleur HERITEE, et !important : les copies claires generees de .aa-bouton
+   (plus specifiques, :root[data-theme]) remettaient une pastille et un gris. */
+.aa-bouton-ig span span{color:inherit!important;opacity:.88}
 .aa-ecran{position:fixed;inset:0;z-index:1795;background:#000;color:#fff;display:flex;flex-direction:column;
   padding:max(10px,env(safe-area-inset-top)) 14px max(12px,env(safe-area-inset-bottom));overflow-y:auto}
 .aa-haut{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:var(--fs-sm);
@@ -13416,6 +13423,7 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .aa-bouton{background:linear-gradient(135deg,#fae0e0,#f0f0f1 70%);border:1px solid rgba(224,32,32,.5);color:#090909;box-shadow:0 0 20px rgba(224,32,32,.12)}
 :root[data-theme="clair"] .aa-bouton-i{background:#E02020}
 :root[data-theme="clair"] .aa-bouton span span{color:var(--text-dim)}
+:root[data-theme="clair"] .aa-bouton.aa-bouton-ig{background:linear-gradient(135deg,#E02020,#a30d0d);border:1px solid #ff4d4d;color:#fff;box-shadow:0 8px 24px rgba(224,32,32,.35)}
 :root[data-theme="clair"] .aa-ecran{background:#fbfbfb;color:#090909}
 :root[data-theme="clair"] .aa-fermer{background:rgba(9,9,9,0.08);color:#090909}
 :root[data-theme="clair"] .aa-apercu canvas{box-shadow:0 10px 40px rgba(224,32,32,.18);background:#ebebeb}

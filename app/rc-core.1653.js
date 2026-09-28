@@ -2676,6 +2676,8 @@ function rcInfoOuvrir(cle){
 function rcInfoFermer(tout_de_suite){ _feuilleFermer('rc-lexique',tout_de_suite); }
 // ── Système d'icônes SVG inline (style Lucide / Feather) ─────────────────────
 const ICONS={
+  // Le logo Instagram, au trait (bouton « Mon avant/après », 28/09/2026).
+  instagram:'<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.4" cy="6.6" r="1.1" fill="currentColor" stroke="none"/>',
   home:'<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
   // Suppression : la corbeille dit ce que fait le bouton là où une croix
   // signifierait « fermer ». Ajoutée au jeu plutôt qu'inlinée, pour que le
@@ -75652,8 +75654,11 @@ function aaDefaut(u){
 // bilan, la fiche coach. Rien tant qu'il n'y a pas deux photos du même angle.
 function htmlBoutonAvantApres(u,role){
   if(!aaDisponible(u)) return '';
-  return '<button type="button" class="aa-bouton" onclick="ouvrirAvantApres(\''+(role==='coach'?'coach':'athlete')+'\')">'
-    +'<span class="aa-bouton-i" aria-hidden="true">'+icon('zap',18)+'</span>'
+  // ROUGE, AVEC LE LOGO INSTAGRAM (Kevin, 28/09/2026) : le bouton mène à une
+  // story, il le dit par son logo plutôt que par un éclair. La variante
+  // aa-bouton-ig ne touche que lui : « Partager une victoire » garde son style.
+  return '<button type="button" class="aa-bouton aa-bouton-ig" onclick="ouvrirAvantApres(\''+(role==='coach'?'coach':'athlete')+'\')">'
+    +'<span class="aa-bouton-i" aria-hidden="true">'+icon('instagram',26)+'</span>'
     +'<span><b>'+(role==='coach'?'Avant / après':'Mon avant/après')+'</b>'
     +'<span>'+(role==='coach'?'Aperçu composé en un geste':'Composé en un geste, prêt pour ta story')+'</span></span></button>';
 }

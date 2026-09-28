@@ -48372,6 +48372,9 @@ async function testExercices(){
       const u={bilans:[bil(0,['face','back']),bil(40,['back']),bil(84,['face','back'])]};
       if(aaVuesDisponibles(u).join()!=='face,back') return _echec('vues '+aaVuesDisponibles(u).join());
       if(htmlBoutonAvantApres(u).indexOf('Mon avant/après')<0) return _echec('libellé du bouton');
+      // 28/09/2026 : ROUGE, AVEC LE LOGO INSTAGRAM, et plus l'éclair.
+      if(!/aa-bouton-ig/.test(htmlBoutonAvantApres(u))||htmlBoutonAvantApres(u).indexOf(ICONS.instagram)<0) return _echec('le bouton n’a pas son logo Instagram');
+      if(htmlBoutonAvantApres(u).indexOf(ICONS.zap)>=0) return _echec('l’éclair est encore sur le bouton');
       const d=aaDefaut(u);
       if(d.vue!=='face'||d.avant!==u.bilans[0].date||d.apres!==u.bilans[2].date) return _echec('défaut '+JSON.stringify(d));
       if(d.indicateur!=='aucun'||d.poids||d.flou) return _echec('le défaut montre un chiffre');
