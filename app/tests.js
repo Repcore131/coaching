@@ -16634,7 +16634,9 @@ async function testExercices(){
             const bloc=src.slice(i,i+9000);
             if(bloc.indexOf('REPCORE')<0) return _echec('la signature a disparu');
             // ET ELLE OCCUPE TOUTE L'IMAGE : un fond, pas un autocollant.
-            if(!/cv\.width=STORY_L;\s*cv\.height=STORY_H/.test(bloc))
+            // Story (1080×1920) ou post (1080×1350) : les dimensions viennent du
+            // format choisi (visuelFormat, 27/09/2026), l'image les occupe toutes.
+            if(!/cv\.width=(?:STORY_L|W);\s*cv\.height=(?:STORY_H|H)/.test(bloc)||(bloc.indexOf('STORY_L')<0&&bloc.indexOf('visuelFormat(format)')<0))
               return _echec('l’image ne fait plus le format story');
             if(bloc.indexOf('fillRect(0,0,STORY_L,STORY_H)')<0)
               return _echec('le fond a disparu : l’image redevient transparente');
@@ -49375,6 +49377,145 @@ async function testExercices(){
       const r=rangPublic({xp:15000});
       if(!(r>=1&&r<=10)||rangPublic({})!==1) return _echec('rang public : '+r);
       return true;})());
+    // ══ 27/09/2026 — STORY / POST : UN RÉGLAGE COMMUN, UNE MISE EN PAGE PAR FORMAT ══
+    ok('Formats : VISUEL_FORMATS commun, dernier format retenu (et sans stockage : la story), noms repcore-<type>-post.jpg',(()=>{
+      if(VISUEL_FORMATS.story.h!==1920||VISUEL_FORMATS.post.h!==1350||VISUEL_FORMATS.post.w!==1080) return _echec('table');
+      if(AA_FORMATS!==VISUEL_FORMATS) return _echec('l’avant/après garde sa propre table');
+      let sv=null; try{ sv=localStorage.getItem(VISUEL_FORMAT_CLE); }catch(e){}
+      const gi=Storage.prototype.getItem;
+      try{
+        try{ localStorage.removeItem(VISUEL_FORMAT_CLE); }catch(e){}
+        if(visuelFormatChoisi()!=='story') return _echec('défaut');
+        visuelFormatMemoriser('post');
+        if(visuelFormatChoisi()!=='post'||visuelFormat().h!==1350) return _echec('non retenu');
+        if(visuelNomFichier('repcore-bilan','carbone')!=='repcore-bilan-post.jpg') return _echec(visuelNomFichier('repcore-bilan','carbone'));
+        if(visuelNomFichier('repcore-bilan','transparent','story')!=='repcore-bilan.png') return _echec('story sans fond');
+        // Sans format donné, chaque dessin prend le dernier choisi.
+        const c=_dessinerCarteSerie({semaines:5,jokers:0,signature:'LÉA'},'carbone');
+        if(c.height!==1350) return _echec('dessin sans format : '+c.height);
+        if(visuelFormatMemoriser('carre')) return _echec('un format inconnu est retenu');
+        Storage.prototype.getItem=function(){ throw new Error('stockage bloqué'); };
+        if(visuelFormatChoisi()!=='story') return _echec('stockage bloqué : la story attendue');
+      }finally{
+        Storage.prototype.getItem=gi;
+        try{ if(sv===null) localStorage.removeItem(VISUEL_FORMAT_CLE); else localStorage.setItem(VISUEL_FORMAT_CLE,sv); }catch(e){}
+      }
+      if(wrappedNomsCarrousel().join()!==[1,2,3,4,5].map(i=>'repcore-wrapped-'+i+'-post.jpg').join()) return _echec('carrousel : '+wrappedNomsCarrousel());
+      return true;})());
+    ok('Formats : « Story / Post » est posé à côté du fond, partout où il y a un fond',(()=>{
+      const h=_htmlVisuelFonds('x-fonds');
+      const d=document.createElement('div'); d.innerHTML=h;
+      const b=[...d.querySelectorAll('.vfmt .vfmt-b')].map(x=>x.getAttribute('data-format')+':'+x.textContent);
+      if(b.join()!=='story:Story9:16,post:Post4:5') return _echec(b.join());
+      if(d.firstElementChild.className!=='vfmt'||!d.querySelector('.vfmt+.vf#x-fonds')) return _echec('pas à côté du sélecteur de fond');
+      // Le visuel du coach n'a plus son propre choix : le commun.
+      const r=htmlReglagesVisuelCoach({type:'recap',periode:'semaine'});
+      if(/Format/.test(r)) return _echec('le visuel du coach garde un second choix de format');
+      return true;})());
+    ok('Formats : chaque visuel, en story ET en post, avec des données extrêmes — rien ne déborde',(()=>{
+      // Mesure ce qu'un dessin pose hors du canevas. Rend {w,h,hors:[...]}.
+      const _sondeVisuel=function(dessiner){
+        const P=CanvasRenderingContext2D.prototype, ft=P.fillText, fr=P.fillRect, hors=[];
+        let cv=null, fond=0;
+        // Le fond (trame de carbone, photo) déborde par construction : ignoré.
+        const pf=window._visuelPeindreFond;
+        window._visuelPeindreFond=function(){ fond++; try{ return pf.apply(this,arguments); } finally{ fond--; } };
+        P.fillText=function(t,x,y){
+          const W=this.canvas.width, H=this.canvas.height;
+          if(W>=1000){
+            const m=this.measureText(String(t)), al=this.textAlign;
+            const x0=al==='center'?x-m.width/2:(al==='right'||al==='end')?x-m.width:x;
+            const x1=x0+m.width, y0=y-(m.actualBoundingBoxAscent||0), y1=y+(m.actualBoundingBoxDescent||0);
+            if(String(t).trim()&&(x0<-1||x1>W+1||y0<-1||y1>H+1)) hors.push(JSON.stringify(String(t).slice(0,40))+' ['+[x0,y0,x1,y1].map(Math.round)+'] dans '+W+'x'+H);
+          }
+          return ft.apply(this,arguments);
+        };
+        P.fillRect=function(x,y,w,h){
+          const W=this.canvas.width, H=this.canvas.height;
+          if(!fond&&W>=1000&&!(w>=W-2&&h>=H-2)&&w>0&&h>0&&w<W&&(x<-1||y<-1||x+w>W+1||y+h>H+1)) hors.push('rect ['+[x,y,x+w,y+h].map(Math.round)+'] dans '+W+'x'+H);
+          return fr.apply(this,arguments);
+        };
+        try{ cv=dessiner(); } finally { P.fillText=ft; P.fillRect=fr; window._visuelPeindreFond=pf; }
+        return {w:cv&&cv.width,h:cv&&cv.height,hors};
+      };
+  const L='MAXIMILIEN-ALEXANDRE DE LA TOUR D’AUVERGNE';
+  const long='DÉVELOPPÉ COUCHÉ PRISE SERRÉE HALTÈRES SUR BANC INCLINÉ À TRENTE DEGRÉS';
+  const img=document.createElement('canvas'); img.width=600; img.height=800; img.getContext('2d').fillRect(0,0,600,800);
+  img.naturalWidth=600; img.naturalHeight=800; img.complete=true;
+  const rec=(i)=>({nm:long+' '+i,histMax:987.5,curMax:1234.75,gain:247.25,date:Date.now(),signature:L});
+  const w={seances:9999,dureeTotale:99999*60000,tonnage:98765432,records:999,serieMax:52,badgesGagnes:Array(88).fill('x'),
+    meilleurRecord:{nom:long,avant:987.5,apres:1234.75},jourPrefere:{lib:'mercredi soir après le travail'},heureMoyenne:{lib:'18 h 45 environ'},
+    muscleTop:{lib:'Ischio-jambiers et fessiers profonds',series:9999},profil:{nom:'LE MÉTRONOME INFATIGABLE DE LA SALLE',phrase:'Tu reviens chaque semaine à la même heure, comme une horloge suisse, et rien ne t’arrête : ni la pluie, ni le froid, ni les lundis.'}};
+  const per={titre:'TON ANNÉE 2026 COMPLÈTE DE JANVIER À DÉCEMBRE',cle:'a-2026'};
+  const V={
+    bilan:(fo,f)=>_dessinerBilanSeance({titre:'PUSH PULL LEGS ÉPAULES BRAS ET ABDOMINAUX',dateCourte:'27/09/2026',dureeLib:'2 H 45 MIN',records:14,
+      ex:Array.from({length:25},(_,i)=>({nom:long+i,series:12,reps:1000,kg:1234.5,rmin:8,rmax:12})),autres:0,volume:12345678,nbEx:25,series:188,reps:99999,
+      equivalent:{texte:'un éléphant d’Afrique adulte et son petit',emoji:'🐘'},signature:L},fo,f),
+    record:(fo,f)=>_dessinerCarteRecord(rec(1),fo,f),
+    records:(fo,f)=>_dessinerCarteRecords({records:[rec(1),rec(2),rec(3),rec(4)],date:Date.now(),signature:L},fo,f),
+    serie52:(fo,f)=>_dessinerCarteSerie({semaines:52,jokers:2,signature:L},fo,f),
+    serie3:(fo,f)=>_dessinerCarteSerie({semaines:3,jokers:0,signature:L},fo,f),
+    serie999:(fo,f)=>_dessinerCarteSerie({semaines:999,jokers:9,signature:L},fo,f),
+    rang:(fo,f)=>_dessinerCarteRang({nom:'SURTENSION ABSOLUE',xp:98765432,signature:L},fo,img,f),
+    cycle:(fo,f)=>_dessinerCarteCycle({cycle:99,nom:'Hypertrophie des membres supérieurs et du tronc',jours:28,taux:100,faites:99,prevues:99,tonnage:98765432,records:999,
+      equivalent:{texte:'une baleine bleue adulte et deux orques',emoji:'🐋'},groupes:null,prochain:'FORCE MAXIMALE ET PUISSANCE EXPLOSIVE DU BAS DU CORPS',signature:L},fo,null,f),
+    defi:(fo,f)=>_dessinerCarteDefi({titre:'Cent séances en cent jours sans jamais rater un seul lundi matin',mois:'DE SEPTEMBRE 2026',champion:false,valeur:'100 SÉANCES SUR 100 PRÉVUES',signature:L},fo,f),
+    champion:(fo,f)=>_dessinerCarteDefi({titre:'Cent séances en cent jours sans jamais rater un seul lundi matin',mois:'DE SEPTEMBRE 2026',champion:true,valeur:'100 SÉANCES SUR 100 PRÉVUES',signature:L},fo,f),
+    badge:(fo,f)=>_dessinerCarteBadge(Object.assign({},badgeAcquisDef('aube')||{},{nom:'LÈVE-TÔT DU PETIT MATIN AVANT LE SOLEIL IV',palier:4,indice:'Une séance avant sept heures, cinq jours de suite, en plein hiver'}),Date.now(),img,fo,L,'Possédé par 0,1 % des athlètes du monde entier',f),
+    muscles:(fo,f)=>_dessinerCarteMuscles({titre:'TOUT LE CORPS SOUS TENSION MAXIMALE CETTE SEMAINE',periode:'les douze dernières semaines',
+      chiffres:[{v:'98 765',l:'séries effectives au total'},{v:'123 456 KG',l:'tonnage cumulé'},{v:'999',l:'séances enregistrées'}]},fo,null,L,f),
+    victoire:(fo,f)=>_dessinerVictoireCoach({exo:long,avant:987.5,apres:1234.75,pct:999,duree:'152 SEMAINES DE SUIVI SANS INTERRUPTION',nom:L},fo,f),
+    recap:(fo,f)=>_dessinerRecapTeam({titre:'LA TEAM DU MOIS DE SEPTEMBRE',equipe:'TEAM GUELLEC COACHING PERFORMANCE',seances:99999,tonnage:98765432,records:9999,
+      equivalent:{texte:'une baleine bleue adulte',emoji:'🐋'},top:[{nom:L,n:999},{nom:L,n:998},{nom:L,n:997}]},fo,f)
+  };
+  for(let i=0;i<5;i++) V['wrapped'+i]=(fo,f)=>_dessinerWrapped(w,per,i,L,f);
+      const pb=[];
+      let sv=null; try{ sv=localStorage.getItem(VISUEL_FORMAT_CLE); }catch(e){}
+      try{
+        for(const k of Object.keys(V)) for(const f of ['story','post']) for(const fo of ['transparent','carbone']){
+          let r; try{ r=_sondeVisuel(()=>V[k](fo,f)); }catch(e){ pb.push(k+'/'+f+' : '+e.message); continue; }
+          if(r.w!==1080||r.h!==(f==='post'?1350:1920)) pb.push(k+'/'+f+' : '+r.w+'x'+r.h);
+          else if(r.hors.length) pb.push(k+'/'+f+'/'+fo+' : '+r.hors[0]);
+        }
+      }finally{ try{ if(sv===null) localStorage.removeItem(VISUEL_FORMAT_CLE); else localStorage.setItem(VISUEL_FORMAT_CLE,sv); }catch(e){} }
+      return pb.length?_echec(pb.slice(0,4).join(' ; ')+(pb.length>4?' (+'+(pb.length-4)+')':'')):true;})());
+    ok('Formats : un long bilan en post garde ce qui tient, et le reste devient « +N autres »',(()=>{
+      const ex=Array.from({length:18},(_,i)=>({nom:'EXO '+i,series:4,reps:10,kg:50}));
+      const vus=[], P=CanvasRenderingContext2D.prototype, ft=P.fillText;
+      P.fillText=function(t){ vus.push(String(t)); return ft.apply(this,arguments); };
+      try{ _dessinerBilanSeance({titre:'PUSH',dateCourte:'27/09/2026',dureeLib:'1 H',records:0,ex,autres:2,volume:9000,nbEx:20,series:72,reps:720,signature:'LÉA'},'carbone','post'); }
+      finally{ P.fillText=ft; }
+      const montres=ex.filter(e=>vus.indexOf(e.nom)>=0).length;
+      const autres=vus.find(t=>/^\+ \d+ AUTRES$/.test(t));
+      if(!(montres>=5&&montres<18)) return _echec(montres+' exercices montrés en post');
+      if(autres!=='+ '+(20-montres)+' AUTRES') return _echec('ligne : '+autres+' pour '+montres+' montrés sur 20');
+      return true;})());
+    ok('Wrapped : « Carrousel pour mon fil » partage les 5 slides en 4:5 d’un coup, sinon une par une',(()=>{
+      const sv={wr:_wr,cs:navigator.canShare,sh:navigator.share,cop:window._storyCopierLien,ac:window.attribCompter};
+      let recu=null;
+      const w={seances:12,dureeTotale:600*60000,tonnage:42000,records:3,serieMax:4,badgesGagnes:[],meilleurRecord:null,
+        jourPrefere:null,heureMoyenne:null,muscleTop:null,profil:{nom:'RÉGULIER',phrase:'Tu tiens.'}};
+      try{
+        window._storyCopierLien=()=>true; window.attribCompter=()=>{};
+        _wr={w,per:{titre:'SEPTEMBRE',cle:'m-2026-09'},i:4};
+        Object.defineProperty(navigator,'canShare',{configurable:true,value:(o)=>!!(o&&o.files&&o.files.length===5)});
+        Object.defineProperty(navigator,'share',{configurable:true,value:(o)=>{ recu=o; return Promise.resolve(); }});
+        if(!partagerCarrouselWrapped(null)) return _echec('rien n’est parti');
+        if(!recu||recu.files.length!==5) return _echec('pas un seul partage de cinq fichiers');
+        if(recu.files.map(f=>f.name).join()!==wrappedNomsCarrousel().join()||recu.files.some(f=>f.type!=='image/jpeg')) return _echec('fichiers : '+recu.files.map(f=>f.name+' '+f.type));
+        // Sans partage de plusieurs fichiers : les cinq, une par une, chacune son bouton.
+        Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>false});
+        recu=null;
+        partagerCarrouselWrapped(null);
+        const a=[...document.querySelectorAll('#story-apercu a[download]')].map(x=>x.getAttribute('download'));
+        fermerApercuStory();
+        if(recu||a.join()!==wrappedNomsCarrousel().join()) return _echec('une par une : '+a.join());
+      }finally{
+        _wr=sv.wr; window._storyCopierLien=sv.cop; window.attribCompter=sv.ac;
+        // Les bouchons sont des propriétés PROPRES : les retirer rend celles du prototype.
+        delete navigator.canShare; delete navigator.share;
+      }
+      return /Carrousel pour mon fil/.test(_wrHtmlSlide(wrappedSlides(w,{titre:'S',cle:'x'})[4],4))?true:_echec('le bouton manque');})());
     ok('Ambassadeurs : le CSV mensuel ne porte que les commissions dues',(()=>{
       const r=ambCsvDues({LEA:_AMBF,ZED:{nom:'Zed',commissions:{'2026-09':{x:{commission:9,dueLe:1}}}}},'2026-10',500);
       const l=r.csv.trim().split('\n');
