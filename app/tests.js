@@ -58948,10 +58948,18 @@ async function testExercices(){
       if(document.getElementById('lifestyle-import')) return _echec('le cadre de tête de Lifestyle est toujours là');
       return true;})());
 
-    ok('R22 — « Tension et analyses » est la première ligne du profil, et mène à un écran athlète',(()=>{
+    ok('R22 — « Tension et analyses » vient juste après l’identité (photo, nom, visuels), et mène à un écran athlète',(()=>{
       const pad=document.querySelector('#s-athlete-profile .scroll-area .pad');
-      const b=pad&&pad.firstElementChild;
-      if(!b||b.tagName!=='BUTTON') return _echec('la première ligne du profil n’est pas un bouton');
+      // L'IDENTITÉ D'ABORD (Kevin, 28/09/2026) : la photo ouvre l'écran, puis
+      // la carte identité et le nom affiché sur les visuels.
+      const premier=pad&&pad.firstElementChild;
+      if(!premier||!premier.querySelector('#atp-photo-circle')) return _echec('la photo n’est pas tout en haut du profil');
+      const kids=pad?[...pad.children]:[];
+      const iId=kids.findIndex(x=>x.querySelector&&x.querySelector('#atp-fname'));
+      const iVn=kids.findIndex(x=>x.querySelector&&x.querySelector('#atp-vn-prenom'));
+      const b=kids.find(x=>x.tagName==='BUTTON'&&/Tension et analyses/i.test(x.textContent));
+      const iB=kids.indexOf(b);
+      if(!(iId===1&&iVn===2&&iB===3)) return _echec('ordre du profil : identité '+iId+', visuels '+iVn+', tension '+iB);
       if(!/Tension et analyses/i.test(b.textContent)||!/Tension, analyses, constantes/.test(b.textContent))
         return _echec('libellé : « '+b.textContent.replace(/\s+/g,' ').trim()+' »');
       const m=(b.getAttribute('onclick')||'').match(/go\('([^']+)'\)/);
