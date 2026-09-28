@@ -149,7 +149,10 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
   if(!/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)) ref='';
   // Le coach passe devant (son invitation relie le compte), puis
   // l'ambassadeur (un seul avantage, comme dans l'app), puis l'ami.
-  var mode=(p.get('inv')||p.get('coach'))?'coach':amb?'amb':ref?'ami':'generique';
+  // LE DUEL (?duel=<id>) : « Léa te défie : 14 jours de régularité ».
+  var duel=(p.get('duel')||'').toLowerCase();
+  if(!/^d[a-z0-9]{10,24}$/.test(duel)) duel='';
+  var mode=(p.get('inv')||p.get('coach'))?'coach':amb?'amb':ref?'ami':duel?'duel':'generique';
   var q=p.toString();
   // Chemin RELATIF : la meme page sert sur repcore-sync.web.app/i/ et sur
   // repcore131.github.io/coaching/i/, ou « /app/ » ne designerait rien.
@@ -193,7 +196,26 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
           try{ localStorage.setItem('rc_parrain_invite',JSON.stringify({code:ref,prenom:prenom,rang:Number(d.rang)||0,le:Date.now()})); }catch(e){}
         }).catch(function(){});
     }catch(e){}
-  } else if(mode==='generique'){
+  }
+  // LE DUEL, par-dessus l'invitation : c'est lui la raison de venir. Le
+  // prénom est gardé (rc_duel_invite) : l'app le reprend à l'inscription et
+  // propose de relever le défi.
+  if(duel&&el('accueil')){
+    var t1=el('titre'); if(t1&&mode==='duel') t1.textContent='Un ami te d\u00e9fie sur RepCore';
+    var mots={seances:'r\u00e9gularit\u00e9',serie:'r\u00e9gularit\u00e9',tonnage:'volume',progressionPct:'progression'};
+    try{
+      fetch(BASE+'duels_publics/'+duel+'.json')
+        .then(function(r){ return r.ok?r.json():null; })
+        .then(function(d){
+          if(!d||!d.prenom) return;
+          var pr=String(d.prenom).trim().slice(0,24);
+          var j=[7,14,21,28].indexOf(Number(d.duree))>=0?Number(d.duree):14;
+          var t=el('titre'); if(t) t.textContent=pr+' te d\u00e9fie : '+j+' jours de '+(mots[d.mesure]||mots.seances);
+          try{ localStorage.setItem('rc_duel_invite',JSON.stringify({id:duel,prenom:pr,mesure:String(d.mesure||''),duree:j,le:Date.now()})); }catch(e){}
+        }).catch(function(){});
+    }catch(e){}
+  }
+  if(mode==='generique'){
     var g=el('etapes-generique'), k=el('etapes-coach');
     if(g) g.hidden=false; if(k) k.hidden=true;
     var tg=el('titre'); if(tg) tg.textContent='Bienvenue sur RepCore';
@@ -225,7 +247,7 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
 
   // INVITÉ PAR UN AMI OU UN AMBASSADEUR : la page est l'accueil, on la laisse
   // lire. Le bouton « Commencer » ouvre l'app.
-  if((mode==='ami'||mode==='amb')&&el('accueil')){ el('accueil').hidden=false; return; }
+  if((mode==='ami'||mode==='amb'||mode==='duel')&&el('accueil')){ el('accueil').hidden=false; return; }
 
   document.getElementById('ok').hidden=false;
   // replace() et non href : le retour arriere doit ramener a Instagram, pas

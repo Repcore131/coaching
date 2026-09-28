@@ -11143,6 +11143,37 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 
 /* ══ LES PAGES PUBLIQUES : réglages du profil ═════════════════════════════ */
 .pp-carte{margin:0 0 20px;padding:14px 16px}
+.du-accueil{margin:12px 0 0;display:flex;flex-direction:column;gap:8px}
+.du-invite{padding:12px;border:1px solid var(--red,#e02020);border-radius:14px;background:rgba(224,32,32,.08)}
+.du-invite-t{font-weight:800;font-size:var(--fs-sm);margin-bottom:10px;line-height:1.4}
+.du-btns{display:flex;gap:8px}
+.du-btns .btn{flex:1;margin:0;min-height:44px}
+.du-ligne{display:flex;align-items:center;gap:8px;width:100%;min-height:44px;padding:8px 12px;border:1px solid var(--border,#2a2a2e);border-radius:12px;
+  background:var(--surface-1,#111);color:var(--text,#fff);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;text-align:left;cursor:pointer}
+.du-ligne>span:nth-child(2){flex:1;min-width:0}
+.du-f{color:var(--sub,#a0a0a8);font-size:var(--fs-md)}
+.du-defier{width:100%;margin:0;min-height:44px}
+.du-fond{position:fixed;inset:0;z-index:var(--z-modal);background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:20px}
+.du-carte{width:min(420px,100%);max-height:100%;overflow-y:auto;background:var(--surface-1,#111);border:1px solid var(--border,#2a2a2e);border-radius:var(--r-3);padding:16px}
+.du-titre{font-weight:800;font-size:var(--fs-md);margin-bottom:6px}
+.du-sous{font-size:var(--fs-xs);color:var(--sub,#a0a0a8);line-height:1.5;margin:0 0 12px}
+.du-lab{font-size:var(--fs-2xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--sub,#a0a0a8);font-weight:800;margin:10px 0 6px}
+.du-choix{display:flex;flex-direction:column;gap:6px}
+.du-choix.du-duree{flex-direction:row}
+.du-c{flex:1;min-height:44px;padding:8px 12px;border-radius:12px;border:2px solid var(--border,#2a2a2e);background:transparent;color:var(--text,#fff);
+  font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;text-align:left;cursor:pointer}
+.du-choix.du-duree .du-c{text-align:center}
+.du-c small{display:block;font-size:var(--fs-2xs);font-weight:600;color:var(--sub,#a0a0a8);margin-top:2px}
+.du-c.actif{border-color:var(--red,#e02020);box-shadow:0 0 0 3px rgba(224,32,32,.18)}
+.du-go{width:100%;margin:10px 0 0;min-height:46px;display:flex;align-items:center;justify-content:center;gap:8px}
+.pr-duel{width:100%;margin:10px 0 0;min-height:42px}
+.dm-carte{margin:12px 0 0;padding:12px 14px;border:1px solid var(--border,#2a2a2e);border-radius:14px;background:var(--surface-1,#111)}
+.dm-carte.dm-fait{border-color:var(--red,#e02020)}
+.dm-sur{font-size:var(--fs-2xs);letter-spacing:2px;color:var(--red,#e02020);font-weight:800}
+.dm-titre{font-weight:800;font-size:var(--fs-md);margin:4px 0}
+.dm-texte{font-size:var(--fs-xs);color:var(--sub,#a0a0a8);margin:0 0 8px;line-height:1.5}
+.dm-jauge{margin:8px 0 6px}
+.dm-etat{font-size:var(--fs-xs);color:var(--text-dim,#c8c8cc)}
 .ca-accueil{margin:12px 16px 0;padding:12px;border:1px solid var(--border,#2a2a2e);border-radius:16px;background:var(--surface-1,#111)}
 .ca-tete{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;font-size:var(--fs-sm)}
 .ca-fermer{background:none;border:0;color:var(--sub,#a0a0a8);font-size:var(--fs-md);min-width:40px;min-height:40px;cursor:pointer}
@@ -13863,6 +13894,21 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .clh-filleuls-f{color:var(--sub,#5b5b64)}
 :root[data-theme="clair"] .pr-note{color:var(--sub)}
 :root[data-theme="clair"] .pr-rappel{color:#cc0000}
+:root[data-theme="clair"] .du-invite{border:1px solid var(--red,#e02020);background:rgba(224,32,32,.08)}
+:root[data-theme="clair"] .du-ligne{border:1px solid var(--border,#cfcfd3);background:var(--surface-1,#ebebeb);color:var(--text,#090909)}
+:root[data-theme="clair"] .du-f{color:var(--sub,#5b5b64)}
+:root[data-theme="clair"] .du-fond{background:var(--scrim)}
+:root[data-theme="clair"] .du-carte{background:var(--surface-1,#ebebeb);border:1px solid var(--border,#cfcfd3)}
+:root[data-theme="clair"] .du-sous{color:var(--sub,#5b5b64)}
+:root[data-theme="clair"] .du-lab{color:var(--sub,#5b5b64)}
+:root[data-theme="clair"] .du-c{border:2px solid var(--border,#cfcfd3);color:var(--text,#090909)}
+:root[data-theme="clair"] .du-c small{color:var(--sub,#5b5b64)}
+:root[data-theme="clair"] .du-c.actif{border-color:var(--red,#e02020);box-shadow:0 0 0 3px rgba(224,32,32,.18)}
+:root[data-theme="clair"] .dm-carte{border:1px solid var(--border,#cfcfd3);background:var(--surface-1,#ebebeb)}
+:root[data-theme="clair"] .dm-carte.dm-fait{border-color:var(--red,#e02020)}
+:root[data-theme="clair"] .dm-sur{color:var(--red,#b31919)}
+:root[data-theme="clair"] .dm-texte{color:var(--sub,#5b5b64)}
+:root[data-theme="clair"] .dm-etat{color:var(--text-dim,#39393e)}
 :root[data-theme="clair"] .ca-accueil{border:1px solid var(--border,#cfcfd3);background:var(--surface-1,#ebebeb)}
 :root[data-theme="clair"] .ca-fermer{color:var(--sub,#5b5b64)}
 :root[data-theme="clair"] .ca-evo-t2{color:var(--sub,#5b5b64)}

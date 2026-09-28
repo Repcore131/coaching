@@ -46,6 +46,8 @@ export function travaux(M) {
     { nom: 'bilan', quand: (p) => p.joursem === 6 && apres(p, 10, 0), cles: () => M.abonnes(), un: M.planifies.bilan, cout: 12, push: true },
     { nom: 'wrapped', quand: (p) => p.date === 1 && apres(p, 10, 0), cles: () => M.abonnes(), un: M.planifies.wrapped, cout: 10, push: true },
     { nom: 'badge', quand: (p) => p.joursem === 0 && apres(p, 17, 0), cles: () => M.abonnes(), un: M.planifies.badge, cout: 10, push: true },
+    // Les duels suivis (/duels_actifs) : le push de J-2, la clôture, l'oubli.
+    { nom: 'duels', quand: (p) => apres(p, 18, 30), cles: () => (M.duelsActifs ? M.duelsActifs() : []), un: (id, t) => M.duelQuotidienUn(id, t), cout: 10, push: true },
   ];
 }
 
@@ -165,10 +167,15 @@ export async function minute({ db, M, compteur, maintenant, source }) {
         }
       } else {
         const cles = (await w.cles()).sort();
-        let i = Number(etat.curseur) || 0;
+        // LA REPRISE SE FAIT APRÈS LA DERNIÈRE CLÉ TRAITÉE, pas à un index :
+        // une liste qui rétrécit entre deux réveils (un duel clos sort de
+        // /duels_actifs) décalerait l'index et sauterait des clés.
+        let i = etat.dernier != null ? cles.findIndex((k) => String(k) > String(etat.dernier)) : (Number(etat.curseur) || 0);
+        if (i < 0) i = cles.length;
         const assez = () => reste() >= (w.cout || 10) + 2 && (!w.push || !M.peutPousser || M.peutPousser());
         while (i < cles.length && assez()) {
           try { await w.un(cles[i], t, etat.acc); } catch (err) { bilan.erreur = texteErreur(err); }
+          etat.dernier = String(cles[i]);
           i++;
         }
         etat.curseur = i;

@@ -28,6 +28,7 @@ import P from '../../functions/parrainage-calcul.js';
 import A from '../../functions/ambassadeurs-calcul.js';
 import ATT from '../../functions/attribution-calcul.js';
 import { envoyerA } from './push.js';
+import * as DU from './duels.js';
 
 export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
@@ -932,8 +933,80 @@ export function creerMetier(deps) {
         body: 'Ton invitation a pris. Son premier paiement t’offrira 1 mois de RepCore.' });
       return 'prevenu';
     }
+    if (type === 'duel_rejoint' || type === 'duel_maj') return duelEvenement(e, t);
     return 'type_inconnu';
   }
+
+  // ══ LES DUELS (voir duels.js) ═════════════════════════════════════════
+  // Une lecture du duel, une écriture multi-chemins, et les push : quatre
+  // sous-requêtes au plus par événement (plus celles des push, comptées par
+  // pousserA). L'index /duels_actifs porte les duels à suivre chaque jour
+  // (J-2, clôture) : le travail du jour ne balaie jamais /duels.
+  async function duelEvenement(e, t) {
+    const id = String(e.cible || e.id || '');
+    if (!DU.DUEL_ID_RE.test(id)) return 'duel_invalide';
+    const d = await _val('duels/' + id);
+    if (!d) return 'duel_inconnu';
+    d.id = id;
+    const par = String(e.par || '');
+    if (par !== d.createur && par !== d.invite) return 'pas_participant';
+    if (e.type === 'duel_rejoint') {
+      if (d.statut !== 'attente' || par !== d.invite) return 'deja_' + d.statut;
+      await db.ref().update({ ['duels/' + id + '/statut']: 'accepte', ['duels/' + id + '/rejointLe']: t, ['duels/' + id + '/maj']: t,
+        ['duels_actifs/' + id]: { fin: 0, depuis: t } });
+      await pousserA([{ uid: d.createur, message: DU.pushRejoint(d) }], { attendre: false });
+      return 'accepte';
+    }
+    // duel_maj : une séance terminée (ou une progression réécrite).
+    if (d.statut === 'accepte') {
+      if (par !== d.invite) return 'pas_commence';
+      const { debut, fin } = DU.demarrage(d, t, e.at);
+      // La progression d'avant le début ne compte pas : elle est effacée.
+      await db.ref().update({ ['duels/' + id + '/statut']: 'en_cours', ['duels/' + id + '/debut']: debut,
+        ['duels/' + id + '/fin']: fin, ['duels/' + id + '/scores']: { createur: 0, invite: 0 },
+        ['duels/' + id + '/progres']: null, ['duels/' + id + '/maj']: t, ['duels_actifs/' + id]: { fin } });
+      Object.assign(d, { statut: 'en_cours', debut, fin, scores: { createur: 0, invite: 0 } });
+      await pousserA([d.createur, d.invite].map((uid) => ({ uid, message: DU.pushDebut(d, uid) })), { attendre: false });
+      return 'demarre';
+    }
+    if (d.statut !== 'en_cours') return 'clos';
+    if (t > Number(d.fin)) return duelCloturer(d, t);
+    const scores = DU.scoresDe(d);
+    await db.ref('duels/' + id).update({ scores, maj: t });
+    return 'scores';
+  }
+  async function duelCloturer(d, t) {
+    const scores = DU.scoresDe(d);
+    const gagnant = DU.gagnantDe(scores);
+    Object.assign(d, { scores });
+    const maj = { ['duels/' + d.id + '/statut']: 'termine', ['duels/' + d.id + '/scores']: scores,
+      ['duels/' + d.id + '/gagnant']: gagnant, ['duels/' + d.id + '/termineLe']: t, ['duels/' + d.id + '/maj']: t,
+      ['duels_actifs/' + d.id]: null };
+    // Les deux reçoivent leur résultat ; le gagnant, le badge CHAMPION (l'app le lit ici).
+    for (const cle of [d.createur, d.invite]) if (cle) maj['defis_resultats/' + cle + '/' + d.id] = DU.resultatPour(d, cle, gagnant, t);
+    await db.ref().update(maj);
+    await pousserA([d.createur, d.invite].filter(Boolean).map((uid) => ({ uid, message: DU.pushResultat(d, uid, gagnant) })), { attendre: false });
+    return 'termine';
+  }
+  // Le travail du jour, un duel à la fois (planif.js) : J-2, clôture, oubli.
+  async function duelQuotidienUn(id, t) {
+    const d = await _val('duels/' + id);
+    if (d) d.id = id;
+    const suite = DU.suiteDuel(d, t);
+    if (suite === 'oublier') { await db.ref('duels_actifs/' + id).remove(); return 'oublie'; }
+    if (suite === 'cloturer') return duelCloturer(d, t);
+    if (suite === 'annuler') {
+      await db.ref().update({ ['duels/' + id + '/statut']: 'annule', ['duels/' + id + '/maj']: t, ['duels_actifs/' + id]: null });
+      return 'annule';
+    }
+    if (suite === 'rappel') {
+      await db.ref('duels/' + id + '/rappel').set(true);
+      await pousserA([d.createur, d.invite].map((uid) => ({ uid, message: DU.pushRappel(d, uid) })), { attendre: false });
+      return 'rappel';
+    }
+    return 'rien';
+  }
+  const duelsActifs = () => db.ref('duels_actifs').shallow();
 
   // ══ UNE SOUS-TÂCHE (écrite par differer, jamais par l'app : les règles
   // refusent le type « tache » à un client) ══════════════════════════════
@@ -953,5 +1026,6 @@ export function creerMetier(deps) {
     ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits, majDroits, palierDroits,
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente,
-    fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, tache };
+    fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, tache,
+    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs };
 }

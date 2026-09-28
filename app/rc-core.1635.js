@@ -5798,7 +5798,8 @@ function _validateAthletePkg(o){
     aNettoyer=!!(params.get('coachpkg')||params.get('athletepkg')||params.get('s')
       ||params.get('bilan')==='1'||params.get('wo')==='1'||params.get('diete')==='1'
       ||!!params.get('wrapped')||params.get('canal')==='1'||!!params.get('ref')||params.get('parrainage')==='1'
-      ||!!params.get('coach')||!!params.get('src')||!!params.get('amb')||params.get('paiements')==='1');
+      ||!!params.get('coach')||!!params.get('src')||!!params.get('amb')||params.get('paiements')==='1'
+      ||!!params.get('duel')||params.get('duels')==='1');
     // Coach invite → athlete device
     const cpkg=params.get('coachpkg');
     if(cpkg){
@@ -5886,6 +5887,15 @@ function _validateAthletePkg(o){
     if(/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(_vit)) try{ localStorage.setItem('rc_vitrine_coach',_vit); }catch(e){}
     // ?parrainage=1 — les push du parrainage (filleul inscrit, abonné).
     if(params.get('parrainage')==='1') window._pendingParrainageOpen=true;
+    // ?duel=<id> — un défi reçu (« Défie un pote ») : gardé jusqu'à ce que
+    // l'athlète, connecté, le relève. /i y a déjà mis le prénom de qui défie.
+    const _duel=String(params.get('duel')||'').toLowerCase();
+    if(/^d[a-z0-9]{10,24}$/.test(_duel)){
+      let _dv=null; try{ _dv=JSON.parse(localStorage.getItem('rc_duel_invite')||'null'); }catch(e){ _dv=null; }
+      if(!_dv||_dv.id!==_duel) try{ localStorage.setItem('rc_duel_invite',JSON.stringify({id:_duel,le:Date.now()})); }catch(e){}
+    }
+    // ?duels=1 — les push des duels (début, J-2, résultat).
+    if(params.get('duels')==='1') window._pendingDuelsOpen=true;
     // ?paiements=1 — le push d'un litige PayPal, pour l'administrateur.
     if(params.get('paiements')==='1') window._pendingPaiementsOpen=true;
   }catch(e){}
@@ -6089,6 +6099,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // athlète ; le slug et les spécialités de la vitrine d'un coach. Des
   // réglages d'affichage — la page elle-même n'accepte aucune donnée de santé.
   'pagePublique','vitrineSlug','vitrinePubliee','specialites',
+  // Les duels de l'athlète : leurs identifiants, son rôle, une date.
+  'duels',
   // Combien de fois la page a été proposée à un passage de rang (deux au plus).
   'pagePropose',
   // L'ambassadeur par qui le compte est arrivé : un code, un nom, une date.
@@ -7354,6 +7366,8 @@ function routeUser(){
     setTimeout(()=>{ try{ loadCanal(); }catch(e){} },1000);}
   if(window._pendingParrainageOpen){ window._pendingParrainageOpen=false;
     setTimeout(()=>{ try{ ouvrirParrainage(); }catch(e){} },1000);}
+  if(window._pendingDuelsOpen){ window._pendingDuelsOpen=false;
+    setTimeout(()=>{ try{ _duelsLusLe=0; _rendreDuelsAccueil(); }catch(e){} },1000);}
   if(window._pendingPaiementsOpen){ window._pendingPaiementsOpen=false;
     setTimeout(()=>{ try{ if(estAdminAmbassadeurs()) ouvrirAmbassadeurs(); }catch(e){} },1000);}
 }
@@ -19154,7 +19168,7 @@ function htmlAmbassadeurs(tous,t){
 }
 function _ambRendre(){
   const z=document.getElementById('amb-contenu');
-  if(z) z.innerHTML=htmlEvenementsKo(_ambKo)+htmlJournalPaypal(_ambJournal)+htmlAmbassadeurs(_ambTous||{},Date.now());
+  if(z) z.innerHTML=htmlEvenementsKo(_ambKo)+htmlJournalPaypal(_ambJournal)+htmlDefiMoisAdmin(Date.now())+htmlAmbassadeurs(_ambTous||{},Date.now());
 }
 // PURE. La fiche à écrire, ou {erreur}.
 function ambFiche(f,existants,maintenant){
@@ -19400,6 +19414,11 @@ function parrainageChampInscription(role){
   const g=(!a&&c)?parrainInviteGarde(c):null;
   if(info) info.textContent=a?phraseInvitationInscription('',a)
     :c?phraseInvitationInscription(g?g.prenom:'un ami'):phraseInvitationInscription('');
+  // ARRIVÉ PAR UN DUEL : on le dit d'abord (le défi est la raison de venir).
+  try{
+    const dv=duelInviteEnAttente();
+    if(info&&dv&&dv.prenom&&role==='athlete') info.textContent=dv.prenom+' te défie : '+texteDuel(dv.mesure,dv.duree)+' · '+info.textContent;
+  }catch(e){}
   // Le prénom pas encore connu : lu, puis la ligne se complète.
   if(!a&&c&&!g) parrainInviteLire(c).then(v=>{
     const x=document.getElementById('r-parrain-info');
@@ -19581,7 +19600,9 @@ function htmlParrainage(u){
     +'<div class="pr-code" id="pr-code">'+(code?escapeHtml(code):'…')+'</div>'
     +'<div class="pr-sec-btns">'
     +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="parrainagePartager(this)"'+(code?'':' disabled')+'>Envoyer le texte</button>'
-    +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="parrainageCopier(this)"'+(code?'':' disabled')+'>Copier le lien</button></div></div>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="parrainageCopier(this)"'+(code?'':' disabled')+'>Copier le lien</button></div>'
+    // Défier plutôt qu'inviter : le lien du duel porte aussi le code.
+    +(SERVEUR_LEGER?'<button type="button" class="btn btn-outline btn-sm btn-casse pr-duel" onclick="ouvrirCreationDuel()">⚔ Défie un pote</button>':'')+'</div>'
     +'<div class="pr-tuiles">'+tuile(inscrits,inscrits>1?'inscrits':'inscrit')+tuile(payants,payants>1?'abonnés':'abonné')
       +tuile(mois,'mois gagné'+(mois>1?'s':''))+'</div>'
     +'<div class="pr-paliers">'+paliers+'</div>'
@@ -19954,6 +19975,8 @@ function evenementCible(ev){
   if(t==='reponse_bilan'||t==='reponse_rite') return String(ev.dest||'');
   if(t==='defi_maj') return String(ev.id||'');
   if(t==='defi_publie') return String(ev.msg||'');
+  // Un duel : l'événement vise le duel (les règles vérifient qu'on en est).
+  if(t==='duel_rejoint'||t==='duel_maj') return DUEL_ID_RE.test(String(ev.id||''))?String(ev.id):'';
   return '-';
 }
 async function deposerEvenement(ev){
@@ -20334,6 +20357,486 @@ async function renderDefiAccueil(){
   }catch(e){ z.innerHTML=''; }
   return true;
 }
+// ══ LES DUELS (28/09/2026) ═══════════════════════════════════════════════
+//
+// « Défie un pote » : deux athlètes, une mesure, 7 à 28 jours. Le lien porte
+// le duel (?duel=<id>) ET le code parrain (lienPerso) : l'ami qui n'a pas
+// l'app arrive par /i, accueilli par son nom (« Léa te défie : 14 jours de
+// régularité »), s'inscrit, et relève le défi. Le duel DÉMARRE à sa première
+// séance.
+//
+// OÙ VIVENT LES DONNÉES (database.rules.json) :
+//   /duels/<id>          lu par les deux participants seulement. Le créateur
+//                        l'écrit en attente ; l'invité s'y inscrit ; chacun
+//                        écrit SA progression (progres/<lui>) ; le Worker
+//                        écrit le reste (début, fin, statut, scores, gagnant).
+//   /duels_publics/<id>  le prénom, la mesure, la durée : lu sans compte (/i).
+//   /defis_resultats     la clôture y écrit le résultat : CHAMPION au gagnant.
+// LE CALCUL EST CELUI DES DÉFIS DU CANAL (defiValeur) : l'app écrit sa
+// valeur après chaque séance, le Worker compare (cloudflare/src/duels.js).
+const DUEL_ID_RE=/^d[a-z0-9]{10,24}$/;
+const DUEL_DUREES=Object.freeze([7,14,21,28]);
+const DUEL_MESURES=Object.freeze([
+  Object.freeze({cle:'seances',lib:'Régularité',mot:'régularité',detail:'le plus de séances'}),
+  Object.freeze({cle:'tonnage',lib:'Volume',mot:'volume',detail:'le plus de kilos soulevés'}),
+  Object.freeze({cle:'progressionPct',lib:'Progression',mot:'progression',detail:'la plus forte progression, en %'})
+]);
+const DUEL_INVITE_CLE='rc_duel_invite';
+/** PURE. « 14 jours de régularité » — la même phrase que le Worker. */
+function texteDuel(mesure,duree){
+  const d=DUEL_DUREES.indexOf(Number(duree))>=0?Number(duree):14;
+  const m={seances:'régularité',serie:'régularité',tonnage:'volume',progressionPct:'progression'}[mesure]||'régularité';
+  return d+' jours de '+m;
+}
+/** PURE. Un score lisible (le Worker a le même). */
+function texteScoreDuel(mesure,v){
+  const n=Number(v)||0;
+  if(mesure==='tonnage') return n>=10000?String(Math.round(n/100)/10).replace('.',',')+' t':Math.round(n)+' kg';
+  if(mesure==='progressionPct') return String(Math.round(n*10)/10).replace('.',',')+' %';
+  if(mesure==='serie') return Math.round(n)+' sem.';
+  return Math.round(n)+' séance'+(Math.round(n)>1?'s':'');
+}
+function duelNouvelId(){
+  const a='abcdefghijklmnopqrstuvwxyz0123456789';
+  let s='d';
+  try{ const b=new Uint8Array(14); crypto.getRandomValues(b); for(const x of b) s+=a[x%36]; }
+  catch(e){ for(let i=0;i<14;i++) s+=a[Math.floor(Math.random()*36)]; }
+  return s;
+}
+const _moiCle=()=>String((currentUser&&currentUser.email)||'').replace(/\./g,',');
+/** PURE. Le lien d'un duel : le lien perso (page, ref, src=duel) et ?duel=. */
+function lienDuel(id,u){
+  const l=lienPerso('duel',u);
+  if(!l||!DUEL_ID_RE.test(String(id||''))) return '';
+  return l+(l.indexOf('?')>=0?'&':'?')+'duel='+id;
+}
+// ── Les lectures et écritures ─────────────────────────────────────────────
+async function _duelLire(id){
+  const token=await CLOUD._getToken();
+  if(!token) return null;
+  const r=await fetch(CLOUD._fbUrl.replace('users.json','duels/'+id+'.json')+'?auth='+token);
+  return r.ok?await r.json():null;
+}
+async function _duelPublic(id){
+  try{
+    const r=await fetch(CLOUD._fbUrl.replace('users.json','duels_publics/'+id+'.json'));
+    return r.ok?await r.json():null;
+  }catch(e){ return null; }
+}
+// Mes duels, dans le dossier : {id: {role, le, fini?}}. Les duels finis
+// depuis plus de 60 jours sont oubliés.
+function _mesDuels(u){
+  const x=(u&&u.duels&&typeof u.duels==='object')?u.duels:{};
+  return Object.keys(x).filter(id=>DUEL_ID_RE.test(id)&&x[id]&&typeof x[id]==='object');
+}
+// ── Créer ─────────────────────────────────────────────────────────────────
+/** Rend {ok, id?, erreur?}. */
+async function creerDuel(mesure,duree){
+  const u=currentUser;
+  if(!u||u.role==='coach') return {ok:false,erreur:'Réservé aux athlètes.'};
+  if(!CLOUD.ok()) return {ok:false,erreur:'Impossible hors connexion.'};
+  const m=DUEL_MESURES.find(x=>x.cle===mesure)?mesure:'seances';
+  const d=DUEL_DUREES.indexOf(Number(duree))>=0?Number(duree):14;
+  const id=duelNouvelId(), moi=_moiCle();
+  const prenom=String(u.fname||u.pseudo||'').trim().slice(0,24)||'Un ami';
+  const ok=await CLOUD.racinePatch({
+    ['duels/'+id]:{createur:moi,createurNom:prenom,mesure:m,duree:d,creeLe:Date.now(),statut:'attente'},
+    ['duels_publics/'+id]:{prenom,mesure:m,duree:d}}).catch(()=>false);
+  if(!ok) return {ok:false,erreur:'Création impossible pour l’instant.'};
+  u.duels=Object.assign({},u.duels||{},{[id]:{role:'createur',le:Date.now()}});
+  try{ saveUser(); }catch(e){}
+  _duelsCache[id]={createur:moi,createurNom:prenom,mesure:m,duree:d,statut:'attente',creeLe:Date.now()};
+  return {ok:true,id};
+}
+// ── Rejoindre ─────────────────────────────────────────────────────────────
+/** L'invitation en attente sur cet appareil (arrivée par ?duel=), ou null. */
+function duelInviteEnAttente(){
+  try{
+    const o=JSON.parse(localStorage.getItem(DUEL_INVITE_CLE)||'null');
+    if(o&&DUEL_ID_RE.test(o.id)&&Date.now()-Number(o.le)<30*864e5) return o;
+  }catch(e){}
+  return null;
+}
+function duelOublierInvite(){ try{ localStorage.removeItem(DUEL_INVITE_CLE); }catch(e){} }
+async function rejoindreDuel(id,btn){
+  const u=currentUser;
+  if(!u||!DUEL_ID_RE.test(String(id||''))) return false;
+  if(btn){ btn.disabled=true; }
+  const moi=_moiCle();
+  const prenom=String(u.fname||u.pseudo||'').trim().slice(0,24)||'Un ami';
+  const ok=await CLOUD.racinePatch({['duels/'+id+'/invite']:moi,['duels/'+id+'/inviteNom']:prenom}).catch(()=>false);
+  duelOublierInvite();
+  if(!ok){
+    if(btn) btn.disabled=false;
+    toast('Ce duel n’est plus ouvert (déjà relevé, ou c’est le tien).','var(--orange)');
+    _rendreDuelsAccueil();
+    return false;
+  }
+  u.duels=Object.assign({},u.duels||{},{[id]:{role:'invite',le:Date.now()}});
+  try{ saveUser(); }catch(e){}
+  deposerEvenement({type:'duel_rejoint',id}).catch(()=>{});
+  toast('Défi relevé ⚡ Il commence à ta prochaine séance.','var(--green)',4000);
+  delete _duelsCache[id];
+  _rendreDuelsAccueil();
+  return true;
+}
+// ── Après une séance : chacun écrit SA valeur ────────────────────────────
+// En cours : la valeur (defiValeur, la règle des défis du Canal) dans
+// progres/<moi>, puis l'événement. Accepté et invité : l'événement seul (c'est
+// la première séance, le Worker démarre le duel).
+async function duelsApresSeance(){
+  const u=currentUser;
+  if(!SERVEUR_LEGER||!u||u.role==='coach'||!CLOUD.ok()) return 0;
+  const moi=_moiCle();
+  let n=0;
+  for(const id of _mesDuels(u)){
+    const x=u.duels[id];
+    if(x.fini) continue;
+    let d=null; try{ d=await _duelLire(id); }catch(e){ d=null; }
+    if(!d) continue;
+    _duelsCache[id]=d;
+    if(d.statut==='termine'||d.statut==='annule'){ x.fini=true; continue; }
+    if(d.statut==='accepte'&&d.invite===moi){ await deposerEvenement({type:'duel_maj',id}).catch(()=>{}); n++; continue; }
+    if(d.statut!=='en_cours') continue;
+    const v=defiValeur(u,{mesure:d.mesure,debut:Number(d.debut),fin:Number(d.fin)});
+    const token=await CLOUD._getToken();
+    if(!token) continue;
+    const r=await fetch(CLOUD._fbUrl.replace('users.json','duels/'+id+'/progres/'+moi+'.json')+'?auth='+token,
+      {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({valeur:Math.max(0,Number(v)||0),maj:Date.now()})}).catch(()=>null);
+    if(r&&r.ok){ await deposerEvenement({type:'duel_maj',id}).catch(()=>{}); n++; }
+  }
+  try{ saveUser(); }catch(e){}
+  return n;
+}
+// ── L'accueil : l'invitation reçue, les duels en cours, « Défie un pote » ──
+const _duelsCache={};
+let _duelsLusLe=0;
+// PURE. Où en est un duel, vu par `moi` : une ligne.
+function duelLigne(d,moi,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(!d) return '';
+  const lui=d.createur===moi?(d.inviteNom||'ton pote'):(d.createurNom||'ton adversaire');
+  const txt=texteDuel(d.mesure,d.duree);
+  if(d.statut==='attente') return txt+' · en attente de ton pote';
+  if(d.statut==='accepte') return txt+' contre '+lui+' · démarre à '+(d.invite===moi?'ta':'sa')+' première séance';
+  if(d.statut==='en_cours'){
+    const s=d.scores||{};
+    const a=d.createur===moi?Number(s.createur)||0:Number(s.invite)||0, b=d.createur===moi?Number(s.invite)||0:Number(s.createur)||0;
+    const j=Math.max(0,Math.ceil((Number(d.fin)-t)/864e5));
+    return 'Contre '+lui+' · '+texteScoreDuel(d.mesure,a)+' à '+texteScoreDuel(d.mesure,b)+' · '+(j?'J-'+j:'dernier jour');
+  }
+  if(d.statut==='termine'){
+    const g=d.gagnant, role=d.createur===moi?'createur':'invite';
+    return (g==='egalite'?'Égalité':(g===role?'Gagné':'Perdu'))+' contre '+lui;
+  }
+  if(d.statut==='annule') return 'Duel annulé contre '+lui;
+  return '';
+}
+function htmlDuelsAccueil(u,duels,invite,maintenant){
+  if(!u||u.role==='coach'||!SERVEUR_LEGER) return '';
+  const moi=String((u.email||'')).replace(/\./g,',');
+  let h='<div class="du-accueil">';
+  if(invite&&invite.prenom){
+    h+='<div class="du-invite"><div class="du-invite-t">'+escapeHtml(invite.prenom)+' te défie : '+escapeHtml(texteDuel(invite.mesure,invite.duree))+'</div>'
+      +'<div class="du-btns"><button type="button" class="btn btn-red btn-sm" onclick="rejoindreDuel(\''+invite.id+'\',this)">Relever le défi</button>'
+      +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="duelOublierInvite();_rendreDuelsAccueil()">Plus tard</button></div></div>';
+  }
+  const l=Object.keys(duels||{}).map(id=>Object.assign({id},duels[id])).filter(d=>d&&d.statut)
+    .filter(d=>d.statut!=='annule'&&!(d.statut==='termine'&&Number(d.termineLe)<(maintenant||Date.now())-7*864e5))
+    .sort((a,b)=>(Number(b.creeLe)||0)-(Number(a.creeLe)||0)).slice(0,3);
+  for(const d of l){
+    h+='<button type="button" class="du-ligne" onclick="ouvrirDuel(\''+d.id+'\')"><span aria-hidden="true">⚔</span> '
+      +'<span>'+escapeHtml(duelLigne(d,moi,maintenant))+'</span><span class="du-f" aria-hidden="true">›</span></button>';
+  }
+  h+='<button type="button" class="btn btn-outline btn-sm btn-casse du-defier" onclick="ouvrirCreationDuel()">⚔ Défie un pote</button>';
+  return h+'</div>';
+}
+async function _rendreDuelsAccueil(){
+  const z=document.getElementById('clh-duels');
+  const u=currentUser;
+  if(!z) return false;
+  if(!u||u.role==='coach'||!SERVEUR_LEGER){ z.innerHTML=''; return false; }
+  const inv=duelInviteEnAttente();
+  let invite=null;
+  if(inv&&!(u.duels&&u.duels[inv.id])){
+    invite=inv.prenom?inv:null;
+    if(!invite){ const p=await _duelPublic(inv.id); if(p) invite=Object.assign({id:inv.id},p); }
+  }
+  // Une lecture par duel en cours, toutes les 10 minutes au plus.
+  if(CLOUD.ok()&&Date.now()-_duelsLusLe>10*60e3){
+    _duelsLusLe=Date.now();
+    for(const id of _mesDuels(u).slice(-6)){
+      if(u.duels[id].fini&&_duelsCache[id]) continue;
+      try{ const d=await _duelLire(id); if(d) _duelsCache[id]=d; }catch(e){}
+    }
+  }
+  z.innerHTML=htmlDuelsAccueil(u,_duelsCache,invite,Date.now());
+  return true;
+}
+// ── Créer un duel : la feuille ─────────────────────────────────────────────
+function ouvrirCreationDuel(){
+  if(!currentUser) return false;
+  document.getElementById('duel-feuille')?.remove();
+  const d=document.createElement('div');
+  d.id='duel-feuille';
+  d.setAttribute('role','dialog'); d.setAttribute('aria-modal','true'); d.setAttribute('aria-label','Défie un pote');
+  d.className='du-fond';
+  d.innerHTML='<div class="du-carte">'
+    +'<div class="du-titre">Défie un pote</div>'
+    +'<p class="du-sous">Le duel commence à sa première séance. Le gagnant décroche le badge CHAMPION.</p>'
+    +'<div class="du-lab">Sur quoi ?</div>'
+    +'<div class="du-choix" role="radiogroup">'+DUEL_MESURES.map((m,i)=>'<button type="button" role="radio" aria-checked="'+(i===0)+'" class="du-c'+(i===0?' actif':'')+'" data-mesure="'+m.cle+'" onclick="_duelChoix(this)">'
+      +m.lib+'<small>'+m.detail+'</small></button>').join('')+'</div>'
+    +'<div class="du-lab">Combien de temps ?</div>'
+    +'<div class="du-choix du-duree" role="radiogroup">'+[7,14,28].map(j=>'<button type="button" role="radio" aria-checked="'+(j===14)+'" class="du-c'+(j===14?' actif':'')+'" data-duree="'+j+'" onclick="_duelChoix(this)">'+j+' jours</button>').join('')+'</div>'
+    +'<button type="button" class="btn btn-red du-go" onclick="lancerDuel(this)">Lancer le duel</button>'
+    +'<button type="button" class="btn btn-outline btn-sm du-go" onclick="fermerDuelFeuille()">Annuler</button>'
+    +'</div>';
+  d.addEventListener('click',e=>{ if(e.target===d) fermerDuelFeuille(); });
+  document.body.appendChild(d);
+  return true;
+}
+function _duelChoix(b){
+  const g=b.parentNode;
+  g.querySelectorAll('.du-c').forEach(x=>{ x.classList.toggle('actif',x===b); x.setAttribute('aria-checked',String(x===b)); });
+  return true;
+}
+function fermerDuelFeuille(){ document.getElementById('duel-feuille')?.remove(); return true; }
+async function lancerDuel(btn){
+  const f=document.getElementById('duel-feuille');
+  const m=(f&&f.querySelector('[data-mesure].actif'))?f.querySelector('[data-mesure].actif').dataset.mesure:'seances';
+  const j=(f&&f.querySelector('[data-duree].actif'))?Number(f.querySelector('[data-duree].actif').dataset.duree):14;
+  if(btn){ btn.disabled=true; btn.textContent='Création…'; }
+  const r=await creerDuel(m,j);
+  if(!r.ok){ if(btn){ btn.disabled=false; btn.textContent='Lancer le duel'; } toast(r.erreur,'var(--orange)'); return false; }
+  // L'ENVOI EST UN NOUVEAU TOUCHER : la création a pris du temps réseau, et
+  // iOS refuserait la feuille de partage ouverte hors du geste.
+  if(f) f.querySelector('.du-carte').innerHTML='<div class="du-titre">Ton duel est prêt ⚡</div>'
+    +'<p class="du-sous">'+escapeHtml(texteDuel(m,j))+'. Envoie-le à ton pote : il commence à sa première séance.</p>'
+    +'<button type="button" class="btn btn-red du-go" onclick="envoyerDuel(\''+r.id+'\',this)">'+icon('share',16)+' <span>Envoyer le défi</span></button>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse du-go" onclick="partagerCarteDuel(\''+r.id+'\',\'lancement\',this)">Partager la carte DUEL</button>'
+    +'<button type="button" class="btn btn-outline btn-sm du-go" onclick="fermerDuelFeuille();_rendreDuelsAccueil()">Fermer</button>';
+  _rendreDuelsAccueil();
+  return true;
+}
+// SYNCHRONE jusqu'à navigator.share (iOS).
+function envoyerDuel(id,btn){
+  const u=currentUser, d=_duelsCache[id];
+  const l=lienDuel(id,u);
+  if(!l) return false;
+  const pr=String((u&&u.fname)||'').trim();
+  const txt=(pr?pr+' te défie':'Je te défie')+' sur RepCore : '+texteDuel(d&&d.mesure,d&&d.duree)+'. Tu relèves ?';
+  if(navigator.share){
+    navigator.share({title:'Duel RepCore',text:txt,url:l}).then(()=>{ try{ attribCompter('partage','duel'); }catch(e){} }).catch(()=>{});
+    return true;
+  }
+  try{ navigator.clipboard.writeText(txt+' '+l).then(()=>toast('Lien du duel copié','var(--green)'),()=>toast(l)); }catch(e){ toast(l); }
+  return true;
+}
+// ── L'écran d'un duel ─────────────────────────────────────────────────────
+async function ouvrirDuel(id){
+  document.getElementById('duel-feuille')?.remove();
+  let d=_duelsCache[id];
+  try{ const x=await _duelLire(id); if(x){ d=x; _duelsCache[id]=x; } }catch(e){}
+  if(!d) return false;
+  const moi=_moiCle();
+  const f=document.createElement('div');
+  f.id='duel-feuille'; f.className='du-fond';
+  f.setAttribute('role','dialog'); f.setAttribute('aria-modal','true'); f.setAttribute('aria-label','Duel');
+  const fini=d.statut==='termine';
+  f.innerHTML='<div class="du-carte"><div class="du-titre">DUEL · '+escapeHtml(texteDuel(d.mesure,d.duree))+'</div>'
+    +'<p class="du-sous">'+escapeHtml(duelLigne(d,moi,Date.now()))+'</p>'
+    +(d.statut==='attente'?'<button type="button" class="btn btn-red du-go" onclick="envoyerDuel(\''+id+'\',this)">'+icon('share',16)+' <span>Renvoyer le défi</span></button>':'')
+    +'<button type="button" class="btn '+(fini?'btn-red':'btn-outline btn-sm btn-casse')+' du-go" onclick="partagerCarteDuel(\''+id+'\',\''+(fini?'resultat':'lancement')+'\',this)">'
+      +icon('share',14)+' <span>'+(fini?'Partager le résultat':'Partager la carte DUEL')+'</span></button>'
+    +'<button type="button" class="btn btn-outline btn-sm du-go" onclick="fermerDuelFeuille()">Fermer</button></div>';
+  f.addEventListener('click',e=>{ if(e.target===f) fermerDuelFeuille(); });
+  document.body.appendChild(f);
+  return true;
+}
+// ── Les cartes DUEL : lancement et résultat ───────────────────────────────
+// Même épure que les autres visuels (fond au choix, éclair en filigrane,
+// signature). Jamais une charge : la valeur montrée est celle du duel.
+function duelCarteDonnees(d,type,u){
+  let sig=''; try{ sig=nomSurVisuels(u); }catch(e){ sig=''; }
+  const x=d||{};
+  const moi=String((u&&u.email)||'').replace(/\./g,',');
+  const s=x.scores||{};
+  return {type:type==='resultat'?'resultat':'lancement',a:String(x.createurNom||'').toUpperCase(),b:String(x.inviteNom||'').toUpperCase(),
+    texte:texteDuel(x.mesure,x.duree).toUpperCase(),mesure:x.mesure,sa:Number(s.createur)||0,sb:Number(s.invite)||0,
+    gagnant:x.gagnant||null,moiCreateur:x.createur===moi,signature:sig};
+}
+function _dessinerCarteDuel(d,fond,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const g=cv.getContext('2d');
+  const f=fond||'transparent';
+  _visuelPeindreFond(g,W,H,f);
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const M=72, LARG=W-M*2, cx=W/2;
+  const o=_visuelOutils(g);
+  const x=d||{};
+  const rouge=f==='rouge';
+  const acc=rouge?'#fff':'#E02020';
+  g.textAlign='center'; g.textBaseline='alphabetic';
+  // En story, le bloc est centré dans la hauteur (il fait ~1 000 px).
+  let y=post?150:(x.type==='resultat'?500:560);
+  o.ombre(true);
+  g.fillStyle='#fff'; g.font='800 34px '+MONT;
+  o.ecrireEspace(x.type==='resultat'?'RÉSULTAT DU DUEL':'DUEL LANCÉ',cx,y,10,true);
+  o.ombre(false); g.fillStyle=acc; g.fillRect(cx-44,y+20,88,5);
+  // « DUEL » en très gros, l'éclair derrière.
+  y+=post?260:330;
+  _recEclairFiligrane(g,cx+220,y-300,cx-180,y+40,_recGraine('duel|'+x.a+'|'+x.b),f);
+  o.ombre(true); g.fillStyle='#fff';
+  const ds=o.ajuste('DUEL','700',post?300:360,BEBAS,LARG,160);
+  g.font='700 '+ds+'px '+BEBAS; o.ecrire('DUEL',cx,y);
+  // Les deux noms, face à face.
+  y+=post?120:160;
+  const b=x.b||'?';
+  const noms=(x.a||'MOI')+'  ⚡  '+b;
+  const ns=o.ajuste(noms,'700',post?96:120,BEBAS,LARG,44);
+  g.font='700 '+ns+'px '+BEBAS; o.ecrire(o.coupe(noms,LARG),cx,y);
+  y+=post?80:110;
+  g.fillStyle=acc;
+  const ts=o.ajusteEspace(String(x.texte||''),'800',44,MONT,6,LARG,24);
+  g.font='800 '+ts+'px '+MONT; o.ecrireEspace(o.coupeEspace(String(x.texte||''),6,LARG),cx,y,6,true);
+  if(x.type==='resultat'){
+    y+=post?150:220;
+    g.fillStyle='#fff';
+    const sc=texteScoreDuel(x.mesure,x.sa)+'  —  '+texteScoreDuel(x.mesure,x.sb);
+    const ss=o.ajuste(sc,'700',post?120:150,BEBAS,LARG,50);
+    g.font='700 '+ss+'px '+BEBAS; o.ecrire(o.coupe(sc,LARG),cx,y);
+    y+=post?90:120;
+    const vainq=x.gagnant==='egalite'?'ÉGALITÉ':('VAINQUEUR : '+(x.gagnant==='invite'?b:(x.a||'MOI')));
+    g.fillStyle=acc;
+    const vs=o.ajusteEspace(vainq,'800',54,MONT,8,LARG,26);
+    g.font='800 '+vs+'px '+MONT; o.ecrireEspace(o.coupeEspace(vainq,8,LARG),cx,y,8,true);
+  } else {
+    y+=post?110:160;
+    g.fillStyle='rgba(255,255,255,.88)';
+    const l=x.b?'Que le meilleur gagne.':'Tu relèves le défi ?';
+    g.font='700 44px '+MONT; o.ecrire(l,cx,y);
+  }
+  _recSignature(g,o,String(x.signature||''),H-(post?50:110),LARG);
+  o.ombre(false);
+  return cv;
+}
+// SYNCHRONE jusqu'au partage (iOS). La story copie le lien du duel s'il est
+// en attente (le sticker Lien l'ouvre), sinon le lien perso.
+function partagerCarteDuel(id,type,btn){
+  const u=currentUser, d=_duelsCache[id];
+  if(!u||!d||_storyEnCours) return false;
+  const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond);
+  const nom=visuelNomFichier('repcore-duel',fond);
+  _storyEnCours=true;
+  let ok=false;
+  try{
+    const des=()=>_dessinerCarteDuel(duelCarteDonnees(d,type,u),fond);
+    ok=_storySortirPartage(des(),nom,undefined,fmt)||_storySortirTelechargement(des(),nom,fmt);
+    if(d.statut==='attente'){
+      const l=lienDuel(id,u);
+      if(l&&navigator.clipboard) navigator.clipboard.writeText(l).catch(()=>{});
+    }
+  }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
+  finally{ _storyEnCours=false; }
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp&&ok){ const l=sp.textContent; sp.textContent='Carte prête ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  return ok;
+}
+
+// ══ LE DÉFI REPCORE DU MOIS (28/09/2026) ═════════════════════════════════
+// Un défi pour tous, créé par Kevin (écran admin), montré aux AUTONOMES
+// (sans coach : ceux qui ont un coach ont les défis de leur Canal). Pas de
+// classement : la jauge perso, calculée comme un défi du Canal.
+const DEFI_MOIS_CACHE='rc_defi_mois';
+/** PURE. 'AAAA-MM' d'un instant (heure de l'appareil). */
+function defiMoisCle(maintenant){
+  const d=new Date((typeof maintenant==='number')?maintenant:Date.now());
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+/** PURE. Autonome : un athlète sans coach. */
+function estAutonome(u){ return !!(u&&u.role==='athlete'&&!u.coachId&&!u.coachEmailKey); }
+async function _defiMoisLire(mois){
+  try{
+    const c=JSON.parse(localStorage.getItem(DEFI_MOIS_CACHE)||'null');
+    if(c&&c.mois===mois&&Date.now()-c.t<6*3600e3) return c.d;
+  }catch(e){}
+  const token=await CLOUD._getToken();
+  if(!token) return null;
+  const r=await fetch(CLOUD._fbUrl.replace('users.json','defi_mois/'+mois+'.json')+'?auth='+token).catch(()=>null);
+  const d=(r&&r.ok)?await r.json():null;
+  try{ localStorage.setItem(DEFI_MOIS_CACHE,JSON.stringify({mois,t:Date.now(),d})); }catch(e){}
+  return d;
+}
+// PURE.
+function htmlDefiMois(d,u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(!d||!d.titre||!estAutonome(u)||t<Number(d.debut)||t>Number(d.fin)) return '';
+  const v=defiValeur(u,{mesure:d.mesure,debut:Number(d.debut),fin:Number(d.fin)});
+  const obj=Number(d.objectif)||1;
+  const part=Math.max(0,Math.min(1,v/obj));
+  const j=Math.max(0,Math.ceil((Number(d.fin)-t)/864e5));
+  const fait=v>=obj;
+  return '<div class="dm-carte'+(fait?' dm-fait':'')+'"><div class="dm-sur">DÉFI REPCORE DU MOIS</div>'
+    +'<div class="dm-titre">'+escapeHtml(d.titre)+'</div>'
+    +(d.texte?'<p class="dm-texte">'+escapeHtml(d.texte)+'</p>':'')
+    +'<div class="rg-jauge dm-jauge" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.round(part*100)+'"><span style="width:'+Math.round(part*100)+'%"></span></div>'
+    +'<div class="dm-etat">'+(fait?'Relevé ⚡ ':'')+escapeHtml(texteScoreDuel(d.mesure,v))+' sur '+escapeHtml(texteScoreDuel(d.mesure,obj))
+      +(fait?'':' · '+(j?j+' jour'+(j>1?'s':'')+' restant'+(j>1?'s':''):'dernier jour'))+'</div></div>';
+}
+async function renderDefiMoisAccueil(){
+  const z=document.getElementById('clh-defi-mois');
+  const u=currentUser;
+  if(!z) return false;
+  if(!estAutonome(u)||!CLOUD.ok()){ z.innerHTML=''; return false; }
+  let d=null; try{ d=await _defiMoisLire(defiMoisCle()); }catch(e){ d=null; }
+  z.innerHTML=htmlDefiMois(d,u,Date.now());
+  return !!z.innerHTML;
+}
+// ── L'écran admin : créer le défi du mois ─────────────────────────────────
+// PURE. Le défi à écrire, ou {erreur}.
+function defiMoisFiche(f,maintenant){
+  const titre=String(f&&f.titre||'').replace(/\s+/g,' ').trim().slice(0,80);
+  if(titre.length<3) return {erreur:'Donne un titre (3 caractères au moins).'};
+  const mesure=['seances','tonnage','serie','progressionPct'].indexOf(f.mesure)>=0?f.mesure:null;
+  if(!mesure) return {erreur:'Choisis une mesure.'};
+  const objectif=Number(String(f.objectif||'').replace(',','.'));
+  if(!(objectif>0&&objectif<1e8)) return {erreur:'L’objectif doit être un nombre positif.'};
+  const m=/^(\d{4})-(\d{2})$/.exec(String(f.mois||''));
+  if(!m) return {erreur:'Mois : AAAA-MM.'};
+  const debut=new Date(+m[1],+m[2]-1,1,0,0,0).getTime(), fin=new Date(+m[1],+m[2],1,0,0,0).getTime()-1;
+  const o={titre,mesure,objectif,debut,fin};
+  const texte=String(f.texte||'').trim().slice(0,300);
+  if(texte) o.texte=texte;
+  return {mois:m[1]+'-'+m[2],fiche:o};
+}
+function htmlDefiMoisAdmin(maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const cur=defiMoisCle(t), d=new Date(t); d.setMonth(d.getMonth()+1,1);
+  const suiv=defiMoisCle(d.getTime());
+  return '<div class="card amb-journal" id="dm-admin"><div class="amb-t">Défi RepCore du mois</div>'
+    +'<p class="sub amb-note">Pour tous les athlètes sans coach : il s’affiche sur leur accueil, avec leur jauge.</p>'
+    +'<label class="pp-lab" for="dm-mois">Mois</label><select id="dm-mois"><option value="'+cur+'">'+cur+'</option><option value="'+suiv+'">'+suiv+'</option></select>'
+    +'<label class="pp-lab" for="dm-titre">Titre</label><input id="dm-titre" type="text" maxlength="80" placeholder="12 séances en octobre">'
+    +'<label class="pp-lab" for="dm-texte">Texte (facultatif)</label><input id="dm-texte" type="text" maxlength="300">'
+    +'<label class="pp-lab" for="dm-mesure">Mesure</label><select id="dm-mesure"><option value="seances">Séances</option><option value="serie">Semaines validées</option><option value="tonnage">Tonnage (kg)</option><option value="progressionPct">Progression (%)</option></select>'
+    +'<label class="pp-lab" for="dm-obj">Objectif</label><input id="dm-obj" type="number" min="1" inputmode="decimal" placeholder="12">'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:10px 0 0;min-height:44px" onclick="enregistrerDefiMois(this)">Publier le défi</button></div>';
+}
+async function enregistrerDefiMois(btn){
+  if(!estAdminAmbassadeurs()) return false;
+  const v=id=>(document.getElementById(id)||{}).value;
+  const r=defiMoisFiche({mois:v('dm-mois'),titre:v('dm-titre'),texte:v('dm-texte'),mesure:v('dm-mesure'),objectif:v('dm-obj')});
+  if(r.erreur){ toast(r.erreur,'var(--orange)'); return false; }
+  if(btn) btn.disabled=true;
+  const ok=await CLOUD.racinePatch({['defi_mois/'+r.mois]:r.fiche}).catch(()=>false);
+  if(btn) btn.disabled=false;
+  try{ localStorage.removeItem(DEFI_MOIS_CACHE); }catch(e){}
+  toast(ok?'Défi de '+r.mois+' publié ⚡':'Publication refusée','var('+(ok?'--green':'--orange')+')');
+  return ok;
+}
 // ── Les résultats : CHAMPION et DÉFI RELEVÉ ────────────────────────────────
 // La clôture (Cloud Functions) écrit /defis_resultats/<moi>/<id>. On les
 // recopie dans le dossier (u.defisReleves) — c'est là que _badgesFaits lit,
@@ -20352,7 +20855,7 @@ async function majRecompensesServeur(o){
   }
   try{ localStorage.setItem('rc_defis_res_jour',j+'|'+u.email); }catch(e){}
   let r=null;
-  if(canalAccessible(u)||(u.defisReleves&&Object.keys(u.defisReleves).length))
+  if(canalAccessible(u)||(u.defisReleves&&Object.keys(u.defisReleves).length)||(u.duels&&Object.keys(u.duels).length))
     try{ r=await CLOUD.pullDefisResultats((u.email||'').replace(/\./g,',')); }catch(e){ r=null; }
   let pc=false;
   if(PARRAINAGE_ACTIF) try{ pc=await majParrainageMiroir(u); }catch(e){ pc=false; }
@@ -20362,7 +20865,8 @@ async function majRecompensesServeur(o){
     try{ saveUser(); }catch(e){}
     // CHAQUE DÉFI RELEVÉ a son écran (dans la file des badges) : « J'AI
     // RELEVÉ LE DÉFI D'OCTOBRE », et sa carte à partager.
-    try{ Object.keys(u.defisReleves||{}).filter(id=>avant.indexOf(id)<0).forEach(id=>_bdgFile.push({defi:id})); _bdgPlanifier(); }catch(e){}
+    // Un DUEL clos n'est pas un défi du Canal : il a sa carte sur l'accueil.
+    try{ Object.keys(u.defisReleves||{}).filter(id=>avant.indexOf(id)<0&&!u.defisReleves[id].duel).forEach(id=>_bdgFile.push({defi:id})); _bdgPlanifier(); }catch(e){}
     // LE SIXIÈME POINT D'APPEL DES BADGES : CHAMPION, RECRUTEUR et MENTOR
     // arrivent du serveur, jamais d'une séance ni d'un bilan.
     try{ majBadges(); }catch(e){}
@@ -20379,6 +20883,7 @@ function defisFusionnerResultats(u,r){
     const x=r[id]; if(!x||m[id]) continue;
     m[id]={titre:String(x.titre||'').slice(0,80),mesure:String(x.mesure||''),fin:Number(x.fin)||0,
       termineLe:Number(x.termineLe)||Number(x.fin)||0,champion:x.champion===true};
+    if(x.duel===true) m[id].duel=true;
     n++;
   }
   if(n) u.defisReleves=m;
@@ -37149,6 +37654,9 @@ function loadClientHome(){
   try{ _rendreCarteAccueil(u); }catch(e){}
   // Le rappel du défi en cours.
   try{ renderDefiAccueil(); }catch(e){}
+  // Les duels (l'invitation reçue, ceux en cours) et le défi RepCore du mois.
+  try{ _rendreDuelsAccueil(); }catch(e){}
+  try{ renderDefiMoisAccueil(); }catch(e){}
   // Une fois par jour : défis bouclés et parrainage (badges et mois gagnés).
   try{ majRecompensesServeur(); }catch(e){}
   try{ majPagePublique(); }catch(e){}
@@ -42767,6 +43275,9 @@ const _LEGENDES=Object.freeze({
     d=>'Tu cherches une app pour suivre tes séances ? '+(d.code?'Avec le code '+d.code+', tu':'Avec mon code, tu')+' as '+_legMois()+' mois pour essayer, sans carte.',
     d=>'On s’entraîne ensemble ? '+(d.code?'Code '+d.code+' à l’inscription : ':'Mon code à l’inscription : ')+_legMois()+' mois d’essai pour toi.',
     d=>'Toute l’app ouverte, '+_legMois()+' mois, sans carte bancaire. '+(d.code?'Ton code : '+d.code+'.':'Demande-moi mon code.')+' Tu viens ?'],
+  duel:[d=>'Duel lancé ⚡ Qui tient le plus longtemps ? Tu relèves ?',
+    d=>'Un contre un, pas de cadeau. Et toi, tu défies qui ?',
+    d=>'Le duel est tranché. Tu veux ta revanche ?'],
   carte:[d=>'Ma carte d’athlète'+(d.note?' : '+d.note:'')+' ⚡ Et toi, tu sortirais combien ?',
     d=>'Force, volume, régularité, progression, endurance : tout est noté. Tu montes à combien ?',
     d=>(d.note?d.note+' de note globale.':'Ma note monte.')+' Douze semaines de travail. Tu relèves le défi ?'],
@@ -46124,6 +46635,8 @@ function finishWorkout(incomplete=false){
   saveUser();
   // Les défis du Canal : ma progression, écrite par moi (serveur léger).
   try{ setTimeout(()=>{ defisPublierProgression().catch(()=>{}); },3000); }catch(e){}
+  // Les duels : chacun écrit sa valeur, ou démarre le duel (1re séance de l'invité).
+  try{ setTimeout(()=>{ duelsApresSeance().catch(()=>{}); },3500); }catch(e){}
   // ══ LA SEANCE EST ENREGISTREE. TOUT CE QUI SUIT N'EST QUE DU RENDU ══════
   //
   // Et ce rendu est le plus charge de l'application : trois chiffres, la

@@ -138,7 +138,8 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
       // LE CODE PARRAIN : celui du lien suivi s'il y en a un, sinon celui du profil.
       var ref=(q.get('ref')||p.ref||'').toUpperCase();
       var src=(q.get('src')||'page').replace(/[^a-z0-9_-]/gi,'').slice(0,20);
-      var cible=racine+'i/?'+(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)?'ref='+ref+'&':'')+'src='+src;
+      var duel=(q.get('duel')||'').toLowerCase();
+      var cible=racine+'i/?'+(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)?'ref='+ref+'&':'')+'src='+src+(/^d[a-z0-9]{10,24}$/.test(duel)?'&duel='+duel:'');
       h+='<a class="cta" href="'+cible+'">Rejoins '+prenom+' sur RepCore</a>';
       if(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)) h+='<div class="sous">Avec son code, tu as 2 mois pour essayer au lieu d’un.</div>';
       h+='<div class="pied"><a href="'+racine+'">RepCore</a> · l’app d’entraînement qui te suit séance après séance.</div>';

@@ -49017,7 +49017,8 @@ async function testExercices(){
       if(d.querySelectorAll('.pr-tuile').length!==3||!/5inscrits/.test(d.querySelector('.pr-tuiles').textContent.replace(/\s/g,''))) return _echec('compteurs');
       const b=[...d.querySelectorAll('button.btn')];
       // La carte d'invitation en tête (rouge), le texte et le lien en second (R31 : un seul bouton en capitales).
-      return (b.length===3&&b.filter(x=>!x.classList.contains('btn-casse')).length===1)?true:_echec('boutons (R31)');})());
+      // + « Défie un pote » (duels, serveur léger).
+      return (b.length===(SERVEUR_LEGER?4:3)&&b.filter(x=>!x.classList.contains('btn-casse')).length===1)?true:_echec('boutons (R31)');})());
     ok('Parrainage : le rappel doux — après un record ou un palier, une fois par semaine',(()=>{
       const u={role:'athlete'}, t=Date.now();
       const c=[
@@ -49737,6 +49738,148 @@ async function testExercices(){
       if(_legendePour('rang')!=='Ma légende à moi #RepCore') return _echec('la légende modifiée n’est pas celle qui part');
       if(_legendePour('rang')==='Ma légende à moi #RepCore') return _echec('elle ne sert qu’une fois');
       return (legendeModifiee('rang','x'.repeat(400)).length===220)?true:_echec('longueur non bornée');})());
+    // ══ 28/09/2026 — LES DUELS ET LE DÉFI DU MOIS ═══════════════════════════
+    ok('Duels : « 14 jours de régularité » — la même phrase que le Worker',(()=>{
+      const att={seances:'régularité',serie:'régularité',tonnage:'volume',progressionPct:'progression'};
+      for(const m of Object.keys(att)) for(const d of [7,14,21,28]) if(texteDuel(m,d)!==d+' jours de '+att[m]) return _echec(m+' '+d+' → '+texteDuel(m,d));
+      if(texteDuel('x',99)!=='14 jours de régularité') return _echec('défaut');
+      if(texteScoreDuel('tonnage',12500)!=='12,5 t'||texteScoreDuel('seances',1)!=='1 séance'||texteScoreDuel('progressionPct',3.25)!=='3,3 %') return _echec('scores');
+      const x=new XMLHttpRequest(); x.open('GET','../cloudflare/src/duels.js',false); x.send();
+      if(x.status!==200) return true;
+      return /const MOTS = \{ seances: 'régularité', serie: 'régularité', tonnage: 'volume', progressionPct: 'progression' \};/.test(x.responseText)?true:_echec('le Worker a changé ses mots');})());
+    ok('Duels : le lien garde la page perso, le code parrain (ref) et porte ?duel=',(()=>{
+      const u={role:'athlete',email:'j@t.fr',fname:'Julie',parrainage:{code:'JULIE7K2'}};
+      const l=lienDuel('dabc123def456',u);
+      if(!/[?&]ref=JULIE7K2/.test(l)||!/[?&]src=duel/.test(l)||!/[?&]duel=dabc123def456$/.test(l)) return _echec(l);
+      if(lienDuel('pasunid',u)!==''||lienDuel('<script>',u)!=='') return _echec('id non vérifié');
+      if(evenementCible({type:'duel_maj',id:'dabc123def456'})!=='dabc123def456'||evenementCible({type:'duel_rejoint',id:'x'})!=='') return _echec('cible');
+      return true;})());
+    okA('Duels : créer écrit le duel en attente et sa fiche publique ; rejoindre écrit l’invité et prévient le Worker',async()=>{
+      const sv={u:currentUser,rp:CLOUD.racinePatch,ok:CLOUD.ok,su:window.saveUser,de:window.deposerEvenement,t:window.toast,ra:window._rendreDuelsAccueil};
+      const ecrits=[], evs=[];
+      try{
+        CLOUD.racinePatch=async(c)=>{ ecrits.push(c); return true; };
+        CLOUD.ok=()=>true; window.saveUser=()=>{}; window.toast=()=>{}; window._rendreDuelsAccueil=()=>true;
+        window.deposerEvenement=async(e)=>{ evs.push(e); return true; };
+        currentUser={role:'athlete',email:'lea@t.fr',fname:'Léa'};
+        const r=await creerDuel('tonnage',7);
+        if(!r.ok||!DUEL_ID_RE.test(r.id)) return _echec(JSON.stringify(r));
+        const c=ecrits[0], d=c['duels/'+r.id], p=c['duels_publics/'+r.id];
+        if(!d||d.createur!=='lea@t,fr'||d.statut!=='attente'||d.mesure!=='tonnage'||d.duree!==7||d.invite||d.scores) return _echec('duel : '+JSON.stringify(d));
+        if(!p||p.prenom!=='Léa'||Object.keys(p).sort().join()!=='duree,mesure,prenom') return _echec('fiche publique : '+JSON.stringify(p));
+        if(currentUser.duels[r.id].role!=='createur') return _echec('dossier');
+        // Valeurs hors liste : ramenées.
+        await creerDuel('poids',30);
+        const d2=Object.values(ecrits[1]).find(x=>x.createur);
+        if(d2.mesure!=='seances'||d2.duree!==14) return _echec('bornes : '+JSON.stringify(d2));
+        if((await creerDuel.call(null,'seances',14)).ok!==true) return _echec('recréation');
+        const coach=currentUser; currentUser={role:'coach',email:'c@t.fr'};
+        if((await creerDuel('seances',14)).ok) return _echec('un coach crée un duel');
+        currentUser=coach;
+        // Rejoindre.
+        currentUser={role:'athlete',email:'tom@t.fr',fname:'Tom'};
+        try{ localStorage.setItem(DUEL_INVITE_CLE,JSON.stringify({id:r.id,prenom:'Léa',mesure:'tonnage',duree:7,le:Date.now()})); }catch(e){}
+        ecrits.length=0;
+        if(!(await rejoindreDuel(r.id,null))) return _echec('rejoindre');
+        const j=ecrits[0];
+        if(j['duels/'+r.id+'/invite']!=='tom@t,fr'||j['duels/'+r.id+'/inviteNom']!=='Tom'||Object.keys(j).length!==2) return _echec('rejoint : '+JSON.stringify(j));
+        if(!evs.some(e=>e.type==='duel_rejoint'&&e.id===r.id)) return _echec('événement');
+        if(duelInviteEnAttente()) return _echec('invitation non oubliée');
+        if(currentUser.duels[r.id].role!=='invite') return _echec('dossier invité');
+      }finally{
+        currentUser=sv.u; CLOUD.racinePatch=sv.rp; CLOUD.ok=sv.ok; window.saveUser=sv.su; window.deposerEvenement=sv.de; window.toast=sv.t; window._rendreDuelsAccueil=sv.ra;
+        duelOublierInvite();
+      }
+      return true;});
+    okA('Duels : après une séance, chacun écrit SA valeur (règle des défis du Canal) ; la 1re séance de l’invité démarre le duel',async()=>{
+      const sv={u:currentUser,ok:CLOUD.ok,tk:CLOUD._getToken,f:window.fetch,dl:window._duelLire,de:window.deposerEvenement,su:window.saveUser,sl:SERVEUR_LEGER};
+      const puts=[], evs=[];
+      const t=Date.now();
+      const D={dencours12345:{createur:'lea@t,fr',invite:'tom@t,fr',statut:'en_cours',mesure:'seances',debut:t-5*864e5,fin:t+9*864e5},
+        daccepte12345:{createur:'zoe@t,fr',invite:'lea@t,fr',statut:'accepte',mesure:'seances'},
+        dtermine12345:{createur:'lea@t,fr',invite:'tom@t,fr',statut:'termine'}};
+      try{
+        if(!SERVEUR_LEGER) return true;
+        CLOUD.ok=()=>true; CLOUD._getToken=async()=>'jeton'; window.saveUser=()=>{};
+        window._duelLire=async(id)=>D[id]||null;
+        window.deposerEvenement=async(e)=>{ evs.push(e); return true; };
+        window.fetch=async(u,o)=>{ puts.push({u:String(u),o}); return {ok:true,json:async()=>null}; };
+        const S=(j)=>({date:t-j*864e5,data:{SQUAT:{sets:[{weight:'100',reps:'5',done:true}]}}});
+        currentUser={role:'athlete',email:'lea@t.fr',sessions:[S(1),S(2),S(8)],
+          duels:{dencours12345:{role:'createur',le:1},daccepte12345:{role:'invite',le:1},dtermine12345:{role:'createur',le:1}}};
+        await duelsApresSeance();
+        const p=puts.find(x=>/duels\/dencours12345\/progres\/lea@t,fr\.json/.test(x.u));
+        if(!p||p.o.method!=='PUT'||JSON.parse(p.o.body).valeur!==2) return _echec('progression : '+(p&&p.o.body));
+        if(puts.some(x=>/daccepte|dtermine/.test(x.u))) return _echec('une valeur écrite hors duel en cours');
+        const ids=evs.filter(e=>e.type==='duel_maj').map(e=>e.id).sort().join();
+        if(ids!=='daccepte12345,dencours12345') return _echec('événements : '+ids);
+        if(!currentUser.duels.dtermine12345.fini) return _echec('le duel fini n’est pas marqué');
+      }finally{
+        currentUser=sv.u; CLOUD.ok=sv.ok; CLOUD._getToken=sv.tk; window.fetch=sv.f; window._duelLire=sv.dl; window.deposerEvenement=sv.de; window.saveUser=sv.su;
+      }
+      return true;});
+    ok('Duels : l’accueil — l’invitation par son prénom, les duels en cours, « Défie un pote »',(()=>{
+      if(!SERVEUR_LEGER) return true;
+      const u={role:'athlete',email:'lea@t.fr'}, t=Date.now();
+      const h=htmlDuelsAccueil(u,{d1:{createur:'lea@t,fr',inviteNom:'Tom',statut:'en_cours',mesure:'seances',duree:14,fin:t+3*864e5-1000,scores:{createur:4,invite:2},creeLe:2}},
+        {id:'dinvit123456',prenom:'Zoé',mesure:'tonnage',duree:7},t);
+      const d=document.createElement('div'); d.innerHTML=h;
+      if(!/Zoé te défie : 7 jours de volume/.test(d.textContent)) return _echec('invitation');
+      if(!/rejoindreDuel\('dinvit123456'/.test(h)) return _echec('bouton relever');
+      if(!/Contre Tom · 4 séances à 2 séances · J-3/.test(d.textContent)) return _echec('ligne : '+d.textContent);
+      if(!/Défie un pote/.test(d.textContent)) return _echec('bouton défier');
+      if(htmlDuelsAccueil({role:'coach'},{},null,t)!=='') return _echec('coach');
+      // Les lignes selon l'état.
+      const L=(x)=>duelLigne(Object.assign({createur:'lea@t,fr',createurNom:'Léa',inviteNom:'Tom',mesure:'seances',duree:14},x),'lea@t,fr',t);
+      if(L({statut:'attente'})!=='14 jours de régularité · en attente de ton pote') return _echec(L({statut:'attente'}));
+      if(!/démarre à sa première séance/.test(L({statut:'accepte',invite:'tom@t,fr'}))) return _echec('accepté');
+      if(L({statut:'termine',gagnant:'createur'})!=='Gagné contre Tom'||L({statut:'termine',gagnant:'invite'})!=='Perdu contre Tom'||L({statut:'termine',gagnant:'egalite'})!=='Égalité contre Tom') return _echec('terminé');
+      // L'écran parrainage a aussi son bouton.
+      return /ouvrirCreationDuel\(\)/.test(htmlParrainage({parrainage:{code:'JULIE7K2'}}))?true:_echec('parrainage');})());
+    ok('Duels : les cartes DUEL — lancement et résultat, story et post, noms extrêmes',(()=>{
+      const long='MAXIMILIEN-ALEXANDRE DE LA TOUR';
+      for(const type of ['lancement','resultat']) for(const f of ['story','post']) for(const fond of ['transparent','carbone','rouge']){
+        const d={type,a:long,b:type==='lancement'?'':long,texte:'28 JOURS DE PROGRESSION',mesure:'progressionPct',sa:12.5,sb:3,gagnant:'invite',signature:long};
+        const cv=_dessinerCarteDuel(d,fond,f);
+        if(cv.width!==1080||cv.height!==(f==='post'?1350:1920)) return _echec(type+' '+f);
+        if(fond==='transparent'){
+          const g=cv.getContext('2d'), px=g.getImageData(0,0,20,cv.height).data;
+          for(let i=3;i<px.length;i+=4) if(px[i]>40) return _echec('débord à gauche '+type+' '+f);
+        }
+      }
+      const cd=duelCarteDonnees({createurNom:'Léa',inviteNom:'Tom',mesure:'seances',duree:14,scores:{createur:3,invite:5},gagnant:'invite'},'resultat',{email:'lea@t.fr'});
+      return (cd.a==='LÉA'&&cd.b==='TOM'&&cd.sb===5&&cd.texte==='14 JOURS DE RÉGULARITÉ'&&srcDuVisuel('repcore-duel.jpg')==='duel')?true:_echec(JSON.stringify(cd));})());
+    ok('Duels : le CHAMPION d’un duel gagné vient de defis_resultats, sans écran de défi du Canal',(()=>{
+      const u={};
+      const n=defisFusionnerResultats(u,{dabc123def456:{titre:'Duel contre Tom',mesure:'seances',fin:5,termineLe:6,champion:true,duel:true}});
+      if(n!==1||!u.defisReleves.dabc123def456.duel||!u.defisReleves.dabc123def456.champion) return _echec(JSON.stringify(u.defisReleves));
+      const f=_badgesFaits(Object.assign({sessions:[]},u),10);
+      const ch=BADGES_ACQUIS.find(b=>b.id==='champion');
+      if(!ch.test(f)) return _echec('CHAMPION non attribué');
+      return /!u\.defisReleves\[id\]\.duel/.test(String(majRecompensesServeur))&&/u\.duels&&Object\.keys\(u\.duels\)\.length/.test(String(majRecompensesServeur))?true:_echec('résultats des duels non relus');})());
+    ok('Duels : l’arrivée — /i accueille par le prénom, la page publique passe le duel, l’app le garde',(()=>{
+      const lire=u=>{ try{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; }catch(e){ return ''; } };
+      const i=lire('../i/index.html'), p=lire('../p/index.html');
+      if(i&&(!/duels_publics\//.test(i)||!/te d\\u00e9fie : /.test(i)||!/rc_duel_invite/.test(i))) return _echec('/i');
+      if(p&&!/'&duel='\+duel/.test(p)) return _echec('p/index.html');
+      if(DUEL_INVITE_CLE!=='rc_duel_invite'||!/duelInviteEnAttente\(\)/.test(String(parrainageChampInscription))) return _echec('inscription');
+      return true;})());
+    ok('Défi du mois : la fiche (Kevin), montrée aux autonomes seulement, pendant son mois',(()=>{
+      if(!defiMoisFiche({titre:'x',mesure:'seances',objectif:12,mois:'2026-10'}).erreur) return _echec('titre court');
+      if(!defiMoisFiche({titre:'Octobre',mesure:'poids',objectif:12,mois:'2026-10'}).erreur) return _echec('mesure');
+      if(!defiMoisFiche({titre:'Octobre',mesure:'seances',objectif:0,mois:'2026-10'}).erreur) return _echec('objectif');
+      const r=defiMoisFiche({titre:' 12 séances  en octobre ',mesure:'seances',objectif:'12',mois:'2026-10',texte:''});
+      if(r.mois!=='2026-10'||r.fiche.titre!=='12 séances en octobre'||r.fiche.objectif!==12||r.fiche.texte!==undefined) return _echec(JSON.stringify(r));
+      if(new Date(r.fiche.debut).getDate()!==1||new Date(r.fiche.fin).getMonth()!==9||new Date(r.fiche.fin+1).getMonth()!==10) return _echec('bornes du mois');
+      const t=new Date(2026,9,15,12).getTime();
+      const S=j=>({date:t-j*864e5,data:{SQUAT:{sets:[{weight:'100',reps:'5',done:true}]}}});
+      const auto={role:'athlete',sessions:[S(1),S(3),S(40)]};
+      const h=htmlDefiMois(r.fiche,auto,t);
+      if(!/DÉFI REPCORE DU MOIS/.test(h)||!/2 séances sur 12 séances/.test(h)) return _echec(h);
+      if(htmlDefiMois(r.fiche,Object.assign({},auto,{coachEmailKey:'k'}),t)!=='') return _echec('montré à un athlète suivi');
+      if(htmlDefiMois(r.fiche,auto,new Date(2026,10,2).getTime())!=='') return _echec('hors de son mois');
+      if(!/Défi RepCore du mois/.test(htmlDefiMoisAdmin(t))) return _echec('écran admin');
+      return (defiMoisCle(t)==='2026-10'&&estAutonome(auto)&&!estAutonome({role:'coach'}))?true:_echec('clé ou autonome');})());
     // ══ 28/09/2026 — LA CARTE D'ATHLÈTE ══════════════════════════════════
     // Un lundi fixe : la fenêtre est 06/07 → 27/09/2026 (12 semaines complètes).
     const _CAT=Date.parse('2026-09-28T12:00:00+02:00');
@@ -49940,7 +50083,8 @@ async function testExercices(){
       if(!rouge||!/Partager ma carte d’invitation/.test(rouge.textContent)||!/partagerCarteInvitation/.test(rouge.getAttribute('onclick'))) return _echec('bouton principal');
       if(!d.querySelector('.pr-carte-inv .vfmt')||!d.querySelector('.pr-carte-inv #pr-fonds')) return _echec('formats et fonds absents');
       const sec=[...d.querySelectorAll('.pr-secondaire button')].map(b=>b.textContent);
-      return (sec.join('|')==='Envoyer le texte|Copier le lien')?true:_echec(sec.join('|'));})());
+      // « Défie un pote » (les duels) vit avec eux, en second.
+      return (sec.join('|')==='Envoyer le texte|Copier le lien'+(SERVEUR_LEGER?'|⚔ Défie un pote':''))?true:_echec(sec.join('|'));})());
     ok('Invitation : « Inviter un pote » sur le rang, le palier de série et la dernière slide du Wrapped',(()=>{
       const sv=currentUser;
       try{

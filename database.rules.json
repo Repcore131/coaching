@@ -1354,6 +1354,78 @@
       }
     },
 
+    // ── LES DUELS (28/09/2026) ──────────────────────────────────────────
+    // Deux athletes, une mesure, une duree. LUS PAR LES DEUX PARTICIPANTS
+    // SEULEMENT. Le createur ecrit le duel (statut « attente », sans invite ni
+    // score) ; l invite s y inscrit une fois (invite, inviteNom) ; chacun ecrit
+    // SA progression (progres/<lui>), comme dans les defis du Canal. Tout le
+    // reste — debut, fin, statut au-dela de l attente, scores, gagnant — est
+    // ecrit par le Worker (qui passe outre les regles).
+    "duels": {
+      "$id": {
+        ".read": "auth != null && (data.child('createur').val() === auth.token.email.replace('.', ',') || data.child('invite').val() === auth.token.email.replace('.', ','))",
+        ".write": "auth != null && !data.exists() && newData.child('createur').val() === auth.token.email.replace('.', ',') && newData.child('statut').val() === 'attente' && !newData.child('invite').exists() && !newData.child('scores').exists() && !newData.child('debut').exists()",
+        ".validate": "$id.matches(/^d[a-z0-9]{10,24}$/) && newData.hasChildren(['createur', 'createurNom', 'mesure', 'duree', 'creeLe', 'statut'])",
+        "createur":    { ".validate": "newData.isString() && newData.val().length <= 200" },
+        "createurNom": { ".validate": "newData.isString() && newData.val().length <= 24" },
+        "mesure":      { ".validate": "newData.isString() && newData.val().matches(/^(seances|tonnage|serie|progressionPct)$/)" },
+        "duree":       { ".validate": "newData.isNumber() && (newData.val() === 7 || newData.val() === 14 || newData.val() === 21 || newData.val() === 28)" },
+        "creeLe":      { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+        "statut":      { ".validate": "newData.isString() && newData.val().matches(/^(attente|accepte|en_cours|termine|annule)$/)" },
+        "invite": {
+          ".write": "auth != null && !data.exists() && newData.val() === auth.token.email.replace('.', ',') && root.child('duels').child($id).child('statut').val() === 'attente' && root.child('duels').child($id).child('createur').val() !== auth.token.email.replace('.', ',')",
+          ".validate": "newData.isString() && newData.val().length <= 200"
+        },
+        "inviteNom": {
+          ".write": "auth != null && !data.exists() && newData.parent().child('invite').val() === auth.token.email.replace('.', ',')",
+          ".validate": "newData.isString() && newData.val().length <= 24"
+        },
+        "progres": {
+          "$k": {
+            ".write": "auth != null && $k === auth.token.email.replace('.', ',') && ($k === root.child('duels').child($id).child('createur').val() || $k === root.child('duels').child($id).child('invite').val()) && root.child('duels').child($id).child('statut').val() === 'en_cours'",
+            ".validate": "newData.hasChildren(['valeur', 'maj'])",
+            "valeur": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 1000000000" },
+            "maj":    { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+            "$autre": { ".validate": false }
+          }
+        },
+        // debut, fin, scores, gagnant, rejointLe, termineLe, rappel, maj : le
+        // Worker seul (il passe outre les regles) ; un client ne les ecrit pas.
+        "$autre": { ".validate": false }
+      }
+    },
+    // Ce que l invite voit AVANT de rejoindre (arrivee nominative, /i) :
+    // le prenom du createur, la mesure, la duree. Lecture publique, ecrit une
+    // fois par le createur, avec le duel.
+    "duels_publics": {
+      "$id": {
+        ".read": true,
+        ".write": "auth != null && !data.exists() && newData.parent().parent().child('duels').child($id).child('createur').val() === auth.token.email.replace('.', ',')",
+        ".validate": "$id.matches(/^d[a-z0-9]{10,24}$/) && newData.hasChildren(['prenom', 'mesure', 'duree'])",
+        "prenom": { ".validate": "newData.isString() && newData.val().length <= 24" },
+        "mesure": { ".validate": "newData.isString() && newData.val().matches(/^(seances|tonnage|serie|progressionPct)$/)" },
+        "duree":  { ".validate": "newData.isNumber() && (newData.val() === 7 || newData.val() === 14 || newData.val() === 21 || newData.val() === 28)" },
+        "$autre": { ".validate": false }
+      }
+    },
+    // L index des duels a suivre (J-2, cloture) : le Worker seul.
+    "duels_actifs": { ".read": false, ".write": false },
+    // LE DEFI REPCORE DU MOIS, pour tous : ecrit par Kevin (ecran admin), lu
+    // par tout compte connecte.
+    "defi_mois": {
+      ".read": "auth != null",
+      "$mois": {
+        ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+        ".validate": "$mois.matches(/^[0-9]{4}-[0-9]{2}$/) && newData.hasChildren(['titre', 'mesure', 'objectif', 'debut', 'fin'])",
+        "titre":    { ".validate": "newData.isString() && newData.val().length >= 3 && newData.val().length <= 80" },
+        "texte":    { ".validate": "newData.isString() && newData.val().length <= 300" },
+        "mesure":   { ".validate": "newData.isString() && newData.val().matches(/^(seances|tonnage|serie|progressionPct)$/)" },
+        "objectif": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 100000000" },
+        "debut":    { ".validate": "newData.isNumber()" },
+        "fin":      { ".validate": "newData.isNumber() && newData.val() > newData.parent().child('debut').val()" },
+        "$autre":   { ".validate": false }
+      }
+    },
     // Les defis boucles (et le CHAMPION) : ecrits par la cloture du defi
     // (Cloud Functions), lus par l athlete pour dater ses badges.
     "defis_resultats": {
@@ -1379,7 +1451,7 @@
       "$id": {
         ".write": "auth != null && !data.exists() && newData.exists() && newData.child('par').val() === auth.token.email.replace('.', ',') && newData.parent().parent().child('evenements_attente').child(newData.child('par').val()).child(newData.child('type').val()).child(newData.child('cible').val()).child('id').val() === $id",
         ".validate": "$id.matches(/^e[a-z0-9]{8,24}$/) && newData.hasChildren(['type', 'par', 'at', 'cible'])",
-        "type":  { ".validate": "newData.isString() && newData.val().matches(/^(reponse_bilan|reponse_rite|defi_publie|defi_maj|parrainage_demande|ambassadeur_demande|abonnement|filleul_seance)$/)" },
+        "type":  { ".validate": "newData.isString() && newData.val().matches(/^(reponse_bilan|reponse_rite|defi_publie|defi_maj|parrainage_demande|ambassadeur_demande|abonnement|filleul_seance|duel_rejoint|duel_maj)$/)" },
         "par":   { ".validate": "newData.isString() && newData.val().length <= 200" },
         "at":    { ".validate": "newData.isNumber() && newData.val() > 0" },
         "dest":  { ".validate": "newData.isString() && newData.val().length <= 200" },
@@ -1388,7 +1460,7 @@
         "id":    { ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,60}$/)" },
         "coach": { ".validate": "newData.isString() && newData.val().length <= 200" },
         "abo":   { ".validate": "newData.isString() && newData.val().matches(/^I-[A-Z0-9]{6,30}$/)" },
-        "cible": { ".validate": "newData.isString() && (((newData.parent().child('type').val() === 'reponse_bilan' || newData.parent().child('type').val() === 'reponse_rite') && newData.val() === newData.parent().child('dest').val() && root.child('users').child(newData.val()).child('coachEmailKey').val() === auth.token.email.replace('.', ',')) || (newData.parent().child('type').val() === 'defi_maj' && newData.val() === newData.parent().child('id').val() && root.child('canaux').child(newData.parent().child('coach').val()).child('messages').child(newData.val()).child('type').val() === 'defi') || (newData.parent().child('type').val() === 'defi_publie' && newData.val() === newData.parent().child('msg').val() && root.child('canaux').child(auth.token.email.replace('.', ',')).child('messages').child(newData.val()).child('type').val() === 'defi') || ((newData.parent().child('type').val() === 'parrainage_demande' || newData.parent().child('type').val() === 'ambassadeur_demande' || newData.parent().child('type').val() === 'abonnement') && newData.val() === '-') || (newData.parent().child('type').val() === 'filleul_seance' && newData.val() === '-' && root.child('parrainage').child('liens').child(auth.token.email.replace('.', ',')).exists()))" },
+        "cible": { ".validate": "newData.isString() && (((newData.parent().child('type').val() === 'reponse_bilan' || newData.parent().child('type').val() === 'reponse_rite') && newData.val() === newData.parent().child('dest').val() && root.child('users').child(newData.val()).child('coachEmailKey').val() === auth.token.email.replace('.', ',')) || (newData.parent().child('type').val() === 'defi_maj' && newData.val() === newData.parent().child('id').val() && root.child('canaux').child(newData.parent().child('coach').val()).child('messages').child(newData.val()).child('type').val() === 'defi') || (newData.parent().child('type').val() === 'defi_publie' && newData.val() === newData.parent().child('msg').val() && root.child('canaux').child(auth.token.email.replace('.', ',')).child('messages').child(newData.val()).child('type').val() === 'defi') || ((newData.parent().child('type').val() === 'parrainage_demande' || newData.parent().child('type').val() === 'ambassadeur_demande' || newData.parent().child('type').val() === 'abonnement') && newData.val() === '-') || (newData.parent().child('type').val() === 'filleul_seance' && newData.val() === '-' && root.child('parrainage').child('liens').child(auth.token.email.replace('.', ',')).exists()) || ((newData.parent().child('type').val() === 'duel_rejoint' || newData.parent().child('type').val() === 'duel_maj') && newData.val().matches(/^d[a-z0-9]{10,24}$/) && (root.child('duels').child(newData.val()).child('createur').val() === auth.token.email.replace('.', ',') || root.child('duels').child(newData.val()).child('invite').val() === auth.token.email.replace('.', ','))))" },
         "$autre": { ".validate": false }
       }
     },

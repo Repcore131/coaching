@@ -123,4 +123,60 @@ await test('filleul_seance : seulement pour un compte réellement parrainé', as
   assert.equal((await deposer(TOM, { type: 'filleul_seance', cible: '-' })).statut, 200);
   assert.equal((await deposer(TOM, { type: 'filleul_seance', cible: 'x' })).statut, 401);
 });
+// ── LES DUELS ─────────────────────────────────────────────────────────────
+const TOMD = 'tom@t.fr', ZOE = 'zoe@t.fr', DID = 'dtest1234567';
+const creerDuel = (qui, id, x) => appel(qui, 'PATCH', '', {
+  ['duels/' + id]: Object.assign({ createur: K(qui), createurNom: 'Léa', mesure: 'seances', duree: 14, creeLe: Date.now(), statut: 'attente' }, x || {}),
+  ['duels_publics/' + id]: { prenom: 'Léa', mesure: 'seances', duree: 14 } });
+await test('duel : créé par son créateur, en attente, sans invité ni score ; la fiche publique se lit sans compte', async () => {
+  assert.equal((await creerDuel(LEA, DID)).statut, 200);
+  assert.equal((await creerDuel(LEA, 'dtest7654321', { statut: 'en_cours' })).statut, 401, 'statut imposé');
+  assert.equal((await creerDuel(LEA, 'dtest7654322', { scores: { createur: 9 } })).statut, 401, 'scores par le client');
+  assert.equal((await creerDuel(LEA, 'dtest7654323', { invite: K(TOMD) })).statut, 401, 'invité imposé');
+  assert.equal((await creerDuel(LEA, 'dtest7654324', { duree: 30 })).statut, 401, 'durée hors liste');
+  assert.equal((await appel(KEV, 'PATCH', '', { ['duels/dtest7654325']: { createur: K(LEA), createurNom: 'x', mesure: 'seances', duree: 14, creeLe: 1, statut: 'attente' } })).statut, 401, 'pour quelqu’un d’autre');
+  assert.equal((await creerDuel(LEA, DID)).statut, 401, 'pas deux fois');
+  const pub = await fetch(BASE + '/duels_publics/' + DID + '.json?ns=' + NS);
+  assert.equal(pub.status, 200);
+  assert.equal((await pub.json()).prenom, 'Léa');
+});
+await test('duel : lu par ses deux participants seulement', async () => {
+  assert.equal((await appel(LEA, 'GET', 'duels/' + DID)).statut, 200);
+  assert.equal((await appel(TOMD, 'GET', 'duels/' + DID)).statut, 401, 'pas encore invité');
+  assert.equal((await appel(TOMD, 'PATCH', 'duels/' + DID, { invite: K(TOMD), inviteNom: 'Tom' })).statut, 200, 'rejoindre');
+  assert.equal((await appel(TOMD, 'GET', 'duels/' + DID)).statut, 200);
+  assert.equal((await appel(ZOE, 'GET', 'duels/' + DID)).statut, 401);
+  assert.equal((await appel(ZOE, 'PATCH', 'duels/' + DID, { invite: K(ZOE) })).statut, 401, 'la place est prise');
+  assert.equal((await appel(LEA, 'PATCH', 'duels/dtest7654321', { invite: K(LEA) })).statut, 401);
+});
+await test('duel : le créateur ne se défie pas lui-même ; statut, scores et dates restent au Worker', async () => {
+  assert.equal((await creerDuel(LEA, 'dtest0000001')).statut, 200);
+  assert.equal((await appel(LEA, 'PUT', 'duels/dtest0000001/invite', K(LEA))).statut, 401);
+  for (const [c, v] of [['statut', 'termine'], ['scores', { createur: 99 }], ['debut', 1], ['gagnant', 'createur']]) {
+    assert.equal((await appel(LEA, 'PUT', 'duels/' + DID + '/' + c, v)).statut, 401, c);
+    assert.equal((await appel(TOMD, 'PUT', 'duels/' + DID + '/' + c, v)).statut, 401, c);
+  }
+});
+await test('duel : chacun écrit SA progression, seulement pendant le duel', async () => {
+  const prog = { valeur: 3, maj: Date.now() };
+  assert.equal((await appel(TOMD, 'PUT', 'duels/' + DID + '/progres/' + K(TOMD), prog)).statut, 401, 'pas encore commencé');
+  await appel('owner', 'PUT', 'duels/' + DID + '/statut', 'en_cours');
+  assert.equal((await appel(TOMD, 'PUT', 'duels/' + DID + '/progres/' + K(TOMD), prog)).statut, 200);
+  assert.equal((await appel(TOMD, 'PUT', 'duels/' + DID + '/progres/' + K(LEA), prog)).statut, 401, 'celle de l’autre');
+  assert.equal((await appel(ZOE, 'PUT', 'duels/' + DID + '/progres/' + K(ZOE), prog)).statut, 401, 'hors duel');
+  assert.equal((await appel(TOMD, 'PUT', 'duels/' + DID + '/progres/' + K(TOMD), { valeur: -1, maj: 1 })).statut, 401);
+});
+await test('duel : les événements duel_rejoint / duel_maj, par un participant seulement', async () => {
+  assert.equal((await deposer(TOMD, { type: 'duel_maj', cible: DID })).statut, 200);
+  assert.equal((await deposer(LEA, { type: 'duel_rejoint', cible: DID })).statut, 200);
+  assert.equal((await deposer(ZOE, { type: 'duel_maj', cible: DID })).statut, 401);
+  assert.equal((await deposer(LEA, { type: 'duel_maj', cible: 'dinexistant12' })).statut, 401);
+});
+await test('le défi RepCore du mois : écrit par Kevin seul, lu par tout compte connecté', async () => {
+  const d = { titre: '12 séances en octobre', mesure: 'seances', objectif: 12, debut: 1, fin: 2 };
+  assert.equal((await appel(LEA, 'PUT', 'defi_mois/2026-10', d)).statut, 401);
+  assert.equal((await appel('guellec.coachingpro@gmail.com', 'PUT', 'defi_mois/2026-10', d)).statut, 200);
+  assert.equal((await appel(LEA, 'GET', 'defi_mois/2026-10')).statut, 200);
+  assert.equal((await appel('guellec.coachingpro@gmail.com', 'PUT', 'defi_mois/2026-11', Object.assign({}, d, { fin: 0 }))).statut, 401, 'fin avant début');
+});
 console.log(ok + ' tests passés (émulateur)');

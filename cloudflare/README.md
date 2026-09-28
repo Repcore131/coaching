@@ -75,6 +75,18 @@ les pages publiques (`index.html`, `i/`, `p/`, `c/`), puis livrée : c'est ce qu
   elle doit exister (un coach ne vise que ses athlètes, un défi que son Canal). Testé sur l'émulateur :
   `node test/regles-evenements.emu.mjs` (Java et l'émulateur de la Realtime Database requis).
 
+## Les duels (`src/duels.js`)
+
+Deux athlètes, une mesure, 7 à 28 jours (`/duels/<id>`, lu par les deux
+seulement). L'app dépose `duel_rejoint` (l'invité a relevé) et `duel_maj`
+(une séance terminée) ; le Worker démarre le duel à la première séance de
+l'invité, recopie les scores depuis la progression que chacun écrit (règle des
+défis du Canal : il ne relit jamais les séances), pousse le début, J-2 et le
+résultat, et écrit le CHAMPION dans `/defis_resultats`. `/duels_actifs` est
+l'index du travail du jour « duels » (18 h 30). Une lecture et une écriture
+par événement. Tests : `test/duels.test.mjs`, règles :
+`test/regles-evenements.emu.mjs` (émulateur).
+
 ## L'aperçu des pages publiques (`src/pages.js`)
 
 `/@<pseudo>` et `/coach/<slug>` : `firebase.json` y redirige, et le Worker
