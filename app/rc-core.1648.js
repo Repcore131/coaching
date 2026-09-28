@@ -5825,6 +5825,8 @@ function _validateAthletePkg(o){
     const _apkV=String(params.get('apk')||'');
     if(/^\d{1,6}$/.test(_apkV)){ try{ localStorage.setItem('rc_apk',_apkV); }catch(e){} }
     // ?sante=ok|erreur — le retour de ConnecterSanteActivity, après « Autoriser ».
+    // #sante-envoyer — la notification du matin (iPhone) : Lifestyle, et la bande.
+    try{ if(location.hash==='#sante-envoyer') window._pendingSanteEnvoyer=true; }catch(e){}
     const _santeR=params.get('sante');
     if(_santeR==='ok'||_santeR==='erreur') window._pendingSanteRetour=_santeR;
     // Coach invite → athlete device
@@ -7408,6 +7410,8 @@ function routeUser(){
   if(window._pendingWoOpen){window._pendingWoOpen=false;setTimeout(()=>openSessionPicker(),900);}
   // MEME DELAI ECHELONNE que ses deux voisins : le routage de démarrage doit
   // avoir posé son écran avant qu'on en pousse un autre par-dessus.
+  if(window._pendingSanteEnvoyer){ window._pendingSanteEnvoyer=false;
+    setTimeout(()=>{ try{ sanEnvoyerOuvrir(); }catch(e){} },1000);}
   if(window._pendingSanteRetour){ const _r=window._pendingSanteRetour; window._pendingSanteRetour=false;
     setTimeout(()=>{ try{ loadLifestyle(); _sanSyncLu=0; sanSyncTirer(true).catch(()=>{});
       toast(_r==='ok'?'Données santé connectées':'Première synchronisation à reprendre : elle repartira à la prochaine ouverture',_r==='ok'?'var(--green)':'var(--orange)'); }catch(e){} },1000);}
@@ -72016,8 +72020,8 @@ function etatInvitationNotif(u,supporte,permission){
 // locaux lisent pushPrefs avant chaque envoi. `acces` (fin d'accès) n'est
 // dans aucune case : il reste, et la carte le dit.
 const NOTIF_GROUPES=Object.freeze([
-  Object.freeze({cle:'seances',titre:'Mes séances et ma série',types:Object.freeze(['serie','badge','wrapped','retour']),
-    detail:'un rappel avant chacune de tes séances, le jeudi à 18 h si ta série est en danger, le dimanche quand un badge est à une ou deux séances, le 1er du mois ton mois en chiffres, et après une pause (7, 14 et 30 jours sans séance)'}),
+  Object.freeze({cle:'seances',titre:'Mes séances et ma série',types:Object.freeze(['serie','badge','wrapped','retour','sante']),
+    detail:'un rappel avant chacune de tes séances, le jeudi à 18 h si ta série est en danger, le dimanche quand un badge est à une ou deux séances, le 1er du mois ton mois en chiffres, après une pause (7, 14 et 30 jours sans séance), et le matin si ta nuit n’est pas arrivée (synchronisation iPhone)'}),
   Object.freeze({cle:'coach',titre:'Mon coach',types:Object.freeze(['coach','bilan','defi']),
     detail:'quand ton coach répond à un bilan ou lance un défi, et le samedi si ton dernier bilan date de deux semaines'}),
   Object.freeze({cle:'invitations',titre:'Mes invitations',types:Object.freeze(['filleul']),
@@ -72183,7 +72187,8 @@ const PUSH_TYPES=Object.freeze([
   {cle:'defi',titre:'Défi dans le Canal',txt:'Quand ton coach lance un nouveau défi.'},
   {cle:'filleul',titre:'Filleul inscrit',txt:'Quand quelqu’un s’inscrit grâce à toi.'},
   {cle:'acces',titre:'Fin de ton accès',txt:'Trois jours avant la fin de ton accès ou de ton abonnement.'},
-  {cle:'retour',titre:'Après une pause',txt:'À 7, 14 et 30 jours sans séance : trois messages au plus, puis silence.'}
+  {cle:'retour',titre:'Après une pause',txt:'À 7, 14 et 30 jours sans séance : trois messages au plus, puis silence.'},
+  {cle:'sante',titre:'Données santé non reçues',txt:'Le matin, si la nuit n’est pas arrivée (iPhone). Deux rappels au plus, puis silence jusqu’à la prochaine réception.'}
 ]);
 // PURE. La clé base64url en octets — ce qu'attend applicationServerKey.
 function pushB64VersOctets(b64){
@@ -109538,6 +109543,7 @@ function sanRendre(){
   // R22 — L'IMPORT PAR CAPTURE N'EST PLUS EN TETE D'ECRAN : chaque carte le
   // porte sous son bouton de saisie (_htmlCarteSante). Le repli de
   // loadLifestyle, s'il joue, rend donc loadSteps/loadSleep AVEC leur import.
+  try{ _rendreBandeSante(); }catch(e){}
   try{ if(zs) zs.innerHTML=_htmlCarteSante(u,'sommeil'); }catch(e){ if(zs) zs.innerHTML=''; }
   try{ if(zp) zp.innerHTML=_htmlCarteSante(u,'pas'); }catch(e){ if(zp) zp.innerHTML=''; }
   // LE MENU DE PERIODE VIT DANS L'EN-TETE DE SECTION, a droite du titre,
@@ -109947,6 +109953,7 @@ async function sanSyncTirer(force){
       const n=sanAppliquerSync(plan);
       if(n){ saveUser(); try{ CLOUD.pushOne(currentUser.email,currentUser); }catch(e){} }
       if(n||JSON.stringify(_sanSyncMeta)!==avant){ try{ if(document.getElementById('s-lifestyle')?.classList.contains('active')) sanRendre(); }catch(e){} }
+      try{ _rendreBandeSante(); }catch(e){}
       if(sync.meta.derniereReception&&!(Number(sync.consomme)>=Number(sync.meta.derniereReception))){
         try{ await fetch(url.replace('.json','/consomme.json')+'?auth='+token,{method:'PUT',body:JSON.stringify(Date.now())}); }catch(e){}
       }
@@ -109968,7 +109975,14 @@ try{
 // SAN_SYNC_APK_LIEN : le lien que l'APK (TWA com.repcore.app, version 4 et
 // plus) intercepte : ConnecterSanteActivity range le jeton, fait confirmer le
 // compte, demande l'accès à Health Connect et lance la première lecture.
+// ⚠ À POSER : le lien iCloud que Kevin a publié (Raccourcis › RepCore Santé ›
+//   Partager › Copier le lien iCloud). Seule forme acceptée : RACCOURCI_SANTE_FORME.
 const RACCOURCI_SANTE_URL='';
+const RACCOURCI_SANTE_FORME=/^https:\/\/www\.icloud\.com\/shortcuts\/[0-9a-f]{32}$/;
+function raccourciSanteUrl(){ return RACCOURCI_SANTE_FORME.test(RACCOURCI_SANTE_URL)?RACCOURCI_SANTE_URL:''; }
+// Plus de 48 h sans réception sur iPhone : la tuile passe à « À relancer ».
+const SAN_SYNC_RELANCER_MS=48*3600e3;
+let _sanEnvoiAt=0;   // l'heure où « Envoyer / Tester maintenant » a été touché
 const SAN_SYNC_RACCOURCI_LANCER='shortcuts://run-shortcut?name=RepCore%20Sant%C3%A9';
 const SAN_SYNC_APK_LIEN=j=>'intent://sante/connecter?jeton='+encodeURIComponent(j)+'#Intent;scheme=repcore;package=com.repcore.app;end';
 const SAN_SYNC_APK_MIN=4;   // l'APK 3 (PWABuilder) ne sait pas lire Health Connect
@@ -109992,7 +110006,8 @@ function rcVersionApk(){ try{ return Number(localStorage.getItem('rc_apk'))||0; 
 function _sanMetaNorm(m){
   if(!m||typeof m!=='object') return null;
   return {actif:!!(m.empreinte||m.actif),creeLe:Number(m.creeLe)||null,derniereReception:Number(m.derniereReception)||null,
-    plateforme:m.plateforme||null,source:m.source||null,origines:m.origines||null};
+    plateforme:m.plateforme||null,source:m.source||null,origines:m.origines||null,
+    dernierEnvoi:(m.dernierEnvoi&&typeof m.dernierEnvoi==='object')?m.dernierEnvoi:null};
 }
 function sanSyncActif(){ return !!(_sanSyncMeta&&_sanSyncMeta.actif); }
 // PURE. « à l'instant », « il y a 12 min », « il y a 3 h », « hier », « il y a 4 jours ».
@@ -110011,16 +110026,79 @@ function sanSyncEtat(meta,quoi,maintenant){
   const o=(m.origines||{})[quoi==='sommeil'?'sommeil':'pas'];
   const source=(o&&SAN_SOURCES[o]&&o!=='manuel')?SAN_SOURCES[o]:(SAN_SYNC_SOURCES[m.source]||'');
   if(!m.derniereReception) return {actif:true,recu:false,lib:'En attente',source,quand:'rien reçu pour l’instant'};
-  return {actif:true,recu:true,lib:'Synchronisé',source,quand:_sanIlYa(m.derniereReception,maintenant)};
+  const quand=_sanIlYa(m.derniereReception,maintenant);
+  // iPhone : l'automatisation ne part pas toujours. Au-delà de 48 h, on le dit.
+  if(m.plateforme==='ios'&&(Number(maintenant)||Date.now())-m.derniereReception>SAN_SYNC_RELANCER_MS)
+    return {actif:true,recu:true,relancer:true,lib:'À relancer',source,quand};
+  return {actif:true,recu:true,lib:'Synchronisé',source,quand};
 }
+// PURE. « Données reçues : 3 jours, 2 nuits ».
+function texteDonneesRecues(d){
+  const j=Math.max(0,Math.round(Number(d&&d.jours)||0)), n=Math.max(0,Math.round(Number(d&&d.nuits)||0));
+  return 'Données reçues : '+j+' jour'+(j>1?'s':'')+', '+(n?n+' nuit'+(n>1?'s':''):'aucune nuit');
+}
+// PURE. La bande du matin (#sante-envoyer) : affichée depuis `depuis`, tant
+// qu'aucune réception n'est arrivée après, et 24 h au plus.
+function htmlBandeSante(meta,depuis,maintenant){
+  const d=Number(depuis)||0, t=Number(maintenant)||Date.now();
+  if(!d||t-d>864e5) return '';
+  const m=_sanMetaNorm(meta);
+  if(m&&m.derniereReception&&m.derniereReception>=d) return '';
+  return '<div class="san-bande" role="status">'
+    +'<div class="san-bande-t">Ta nuit n’est pas encore arrivée</div>'
+    +'<div class="san-bande-d">Lance le Raccourci RepCore Santé : tes données arrivent en quelques secondes.</div>'
+    +'<a class="btn btn-red san-bande-b" href="'+SAN_SYNC_RACCOURCI_LANCER+'" onclick="sanEnvoiLance()">Envoyer mes données</a>'
+    +'</div>';
+}
+function _sanBandeDepuis(){ try{ return Number(localStorage.getItem('rc_sante_bande'))||0; }catch(e){ return 0; } }
+function _sanBandePoser(v){ try{ if(v) localStorage.setItem('rc_sante_bande',String(v)); else localStorage.removeItem('rc_sante_bande'); }catch(e){} }
+function _rendreBandeSante(){
+  const z=document.getElementById('ls-sante-bande');
+  if(!z) return;
+  const h=htmlBandeSante(_sanSyncMeta,_sanBandeDepuis(),Date.now());
+  if(!h&&_sanBandeDepuis()) _sanBandePoser(0);
+  z.innerHTML=h; z.style.display=h?'':'none';
+}
+// La notification du matin (./#sante-envoyer) : Lifestyle, et la bande en haut.
+function sanEnvoyerOuvrir(){
+  _sanBandePoser(Date.now());
+  try{ history.replaceState(null,'',location.pathname+location.search); }catch(e){}
+  try{ loadLifestyle(); }catch(e){}
+  try{ santeJetonEtat().then(()=>_rendreBandeSante()).catch(()=>{}); }catch(e){}
+}
+try{ window.addEventListener('hashchange',()=>{ if(location.hash==='#sante-envoyer') sanEnvoyerOuvrir(); }); }catch(e){}
+// Touché : « Envoyer mes données », « Envoyer maintenant », « Tester maintenant ».
+// Le lien shortcuts:// part du GESTE lui-même (un <a href>, jamais
+// location.href dans un délai) : iOS bloque un lien d'app qui n'en vient pas.
+function sanEnvoiLance(){ _sanEnvoiAt=Date.now(); return true; }
+// Au retour au premier plan, après un envoi : relire, fusionner, le dire.
+async function sanEnvoiRetour(){
+  if(!_sanEnvoiAt||Date.now()-_sanEnvoiAt>15*60e3) return null;
+  const depuis=_sanEnvoiAt-5000;
+  for(let i=0;i<7;i++){
+    try{
+      const m=await santeJetonEtat();
+      if(m&&m.derniereReception&&m.derniereReception>=depuis){
+        _sanEnvoiAt=0;
+        toast(texteDonneesRecues(m.dernierEnvoi),'var(--green)');
+        _sanSyncLu=0; sanSyncTirer(true).catch(()=>{});
+        _rendreBandeSante();
+        return m;
+      }
+    }catch(e){}
+    await new Promise(r=>setTimeout(r,10000));
+  }
+  return null;
+}
+try{ document.addEventListener('visibilitychange',()=>{ if(!document.hidden) sanEnvoiRetour().catch(()=>{}); }); }catch(e){}
 function _svTuileSync(u,quoi){
   const e=sanSyncEtat(_sanSyncMeta,quoi,Date.now());
   const nuit=(quoi==='sommeil');
-  return '<button type="button" class="sv-tuile sv-tuile-s'+(e.actif?' sv-sync-on':'')+'" onclick="sanSyncOuvrir()">'
+  return '<button type="button" class="sv-tuile sv-tuile-s'+(e.relancer?' sv-sync-relancer':(e.actif?' sv-sync-on':''))+'" onclick="sanSyncOuvrir()">'
     +'<span class="sv-tuile-h"><span class="sv-tuile-ico">'+SAN_ICO.synchro+'</span>'
       +'<span class="sv-tuile-t">'+(e.actif?escapeHtml(e.lib):'Synchronisation automatique')+'</span><span class="sv-chev">'+SAN_ICO.droite+'</span></span>'
     +(e.actif
-      ?'<span class="sv-tuile-d"><span class="sv-sync-pt" data-recu="'+e.recu+'" aria-hidden="true"></span>'
+      ?'<span class="sv-tuile-d"><span class="sv-sync-pt" data-recu="'+e.recu+'"'+(e.relancer?' data-relancer="true"':'')+' aria-hidden="true"></span>'
         +escapeHtml([e.source,e.quand].filter(Boolean).join(' · '))+'</span>'
       :'<span class="sv-tuile-d">'+(nuit?'Ton sommeil arrive tout seul':'Tes pas arrivent tout seuls')
         +' depuis ton téléphone (Health Connect, Apple Santé).</span>')
@@ -110068,12 +110146,12 @@ function _htmlSanSyncFeuille(){
   if(p==='ios'){
     corps=_ssEtape(1,'Copie ton <span class="ss-r">adresse personnelle</span>','Le Raccourci l’utilise pour envoyer tes données à RepCore.',_ssAdresseHtml())
       +_ssEtape(2,'Installe le Raccourci <span class="ss-r">RepCore Santé</span>',
-        RACCOURCI_SANTE_URL?'Au premier lancement, colle ton adresse et autorise l’accès à Santé.':'Le lien du Raccourci arrive très bientôt.',
-        RACCOURCI_SANTE_URL?'<a class="ss-btn ss-btn-2" href="'+escapeHtml(RACCOURCI_SANTE_URL)+'" target="_blank" rel="noopener">Obtenir le Raccourci</a>':'')
+        raccourciSanteUrl()?'Au premier lancement, colle ton adresse et autorise l’accès à Santé.':'Le lien du Raccourci arrive très bientôt.',
+        raccourciSanteUrl()?'<a class="ss-btn ss-btn-2" href="'+escapeHtml(raccourciSanteUrl())+'" target="_blank" rel="noopener">Obtenir le Raccourci</a>':'')
       +_ssEtape(3,'Automatise-le à <span class="ss-r">9 h</span>',
         'Raccourcis › Automatisation › + › Heure de la journée : 09:00, tous les jours, Exécuter immédiatement › RepCore Santé.')
       +_ssEtape(4,'Teste maintenant','Lance le Raccourci une fois : RepCore guette la réception pendant 2 minutes.',
-        '<a class="ss-btn ss-btn-2" href="'+SAN_SYNC_RACCOURCI_LANCER+'" onclick="sanSyncGuetter()">Lancer RepCore Santé</a>')
+        '<a class="ss-btn ss-btn-2" href="'+SAN_SYNC_RACCOURCI_LANCER+'" onclick="sanEnvoiLance();sanSyncGuetter()">Tester maintenant</a>')
       +_ssEtape(5,'C’est reçu ?','',_ssGuetHtml()||'<div class="ss-etat">Le test s’affiche ici.</div>');
   } else if(p==='apk'){
     const src=(TRK_APPAREILS.find(a=>a.id===sanSource(currentUser,'pas').cle)||{}).app||'l’application de ta montre';
@@ -110092,9 +110170,19 @@ function _htmlSanSyncFeuille(){
     corps=_ssEtape(1,'Ouvre RepCore sur ton <span class="ss-r">téléphone</span>','La synchronisation lit Apple Santé (iPhone) ou Health Connect (Android), qui vivent sur le téléphone.');
   }
   const e=sanSyncEtat(m,'pas',Date.now());
+  // iPhone déjà connecté : l'envoi à la main en tête ; À RELANCER : l'aide d'abord.
+  if(p==='ios'&&e.actif){
+    corps=(e.relancer?'<div class="ss-aide"><div class="ss-t">Rien n’est arrivé depuis '+escapeHtml(e.quand.replace(/^il y a /,''))+'</div>'
+        +'<div class="ss-d">Trois causes, presque toujours :</div><ul class="ss-causes">'
+        +'<li><b>iPhone verrouillé</b> à l’heure de l’automatisation : iOS la reporte, parfois jusqu’au lendemain.</li>'
+        +'<li><b>Automatisation désactivée</b> : Raccourcis › Automatisation › RepCore Santé, « Exécuter immédiatement » coché.</li>'
+        +'<li><b>Autorisations Santé refusées</b> au Raccourci : Réglages › Santé › Accès aux données › Raccourcis.</li></ul></div>':'')
+      +'<a class="ss-btn ss-envoi" href="'+SAN_SYNC_RACCOURCI_LANCER+'" onclick="sanEnvoiLance()">Envoyer maintenant</a>'
+      +corps;
+  }
   return '<div class="ss-tete"><div class="ss-titre">Connecter mes données santé</div>'
       +'<button type="button" class="ss-x" onclick="sanSyncFermer()" aria-label="Fermer">✕</button></div>'
-    +(e.actif?'<div class="ss-statut"><span class="sv-sync-pt" data-recu="'+e.recu+'" aria-hidden="true"></span><b>'+escapeHtml(e.lib)+'</b>'
+    +(e.actif?'<div class="ss-statut'+(e.relancer?' ss-relancer':'')+'"><span class="sv-sync-pt" data-recu="'+e.recu+'"'+(e.relancer?' data-relancer="true"':'')+' aria-hidden="true"></span><b>'+escapeHtml(e.lib)+'</b>'
       +escapeHtml([e.source,e.quand].filter(Boolean).map(x=>' · '+x).join(''))+'</div>':'')
     +'<div class="ss-etapes">'+corps+'</div>'
     +'<div class="ss-note">Pas, sommeil, fréquence cardiaque au repos, variabilité, poids : rien d’autre. Une saisie à la main reste prioritaire.</div>'

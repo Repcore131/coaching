@@ -2594,6 +2594,23 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .ss-note{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;text-align:center}
 .ss-deco{display:block;margin:14px auto 0;min-height:44px;padding:6px 12px;border:0;background:transparent;color:var(--text-faint);
   font-family:inherit;font-size:var(--fs-2xs);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+/* « À relancer » (iPhone, plus de 48 h sans réception) : orange. */
+.sv-tuile-s.sv-sync-relancer{border-color:color-mix(in srgb,#f97316 60%,transparent);
+  background:linear-gradient(170deg,color-mix(in srgb,#f97316 12%,#0d0d10),#0d0d10 70%)}
+.sv-tuile-s.sv-sync-relancer .sv-tuile-ico{color:#f97316;background:color-mix(in srgb,#f97316 16%,transparent)}
+.sv-sync-pt[data-relancer="true"]{background:#f97316;box-shadow:0 0 0 3px color-mix(in srgb,#f97316 25%,transparent)}
+.ss-statut.ss-relancer{background:#1f1206;border-color:#4a2a0c}
+.ss-aide{margin:0 0 12px;padding:12px;border-radius:var(--r-3);background:#1f1206;border:1px solid #4a2a0c}
+.ss-causes{margin:6px 0 0;padding-left:18px;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55}
+.ss-causes li{margin-bottom:4px}
+.ss-causes b{color:var(--text)}
+.ss-envoi{display:flex;width:100%;margin:0 0 16px}
+/* La bande du matin (#sante-envoyer), au dessin de celle de l'échéance d'accès. */
+.san-bande{position:relative;overflow:hidden;border-radius:var(--r-3);padding:14px;margin-bottom:16px;
+  background:linear-gradient(168deg,#1b1b1b,#111 55%,#0b0b0b);border:1px solid var(--border);border-left:3px solid #f97316;box-shadow:var(--e3)}
+.san-bande-t{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:#f97316}
+.san-bande-d{font-size:var(--fs-xs);color:#c9c9c9;line-height:1.6;margin-top:6px}
+.san-bande-b{margin-top:12px;min-height:42px;display:flex;align-items:center;justify-content:center;font-size:var(--fs-sm);letter-spacing:1px;text-decoration:none}
 /* Chez le coach : « synchronisé » et la dernière réception, sur leur ligne. */
 .cso-tete:has(.cso-sync-l){flex-wrap:wrap}
 .cso-sync-l{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding-top:10px;border-top:1px solid #26262b}
@@ -11994,6 +12011,16 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .ss-etat[data-ok="false"]{color:#c47e08}
 :root[data-theme="clair"] .ss-note{color:var(--text-faint)}
 :root[data-theme="clair"] .ss-deco{color:var(--text-faint)}
+:root[data-theme="clair"] .sv-tuile-s.sv-sync-relancer{border-color:color-mix(in srgb,#f97316 60%,transparent);background:linear-gradient(170deg,color-mix(in srgb,#f97316 12%,#ececef),#ececef 70%)}
+:root[data-theme="clair"] .sv-tuile-s.sv-sync-relancer .sv-tuile-ico{color:#f97316;background:color-mix(in srgb,#f97316 16%,transparent)}
+:root[data-theme="clair"] .sv-sync-pt[data-relancer="true"]{background:#f97316;box-shadow:0 0 0 3px color-mix(in srgb,#f97316 25%,transparent)}
+:root[data-theme="clair"] .ss-statut.ss-relancer{background:#f8e9db;border-color:#4a2a0c}
+:root[data-theme="clair"] .ss-aide{background:#f8e9db;border:1px solid #4a2a0c}
+:root[data-theme="clair"] .ss-causes{color:var(--text-dim)}
+:root[data-theme="clair"] .ss-causes b{color:var(--text)}
+:root[data-theme="clair"] .san-bande{background:linear-gradient(168deg,#e2e2e2,#ebebeb 55%,#f1f1f1);border:1px solid var(--border);border-left:3px solid #f97316;box-shadow:var(--e3)}
+:root[data-theme="clair"] .san-bande-t{color:#c75505}
+:root[data-theme="clair"] .san-bande-d{color:#3c3c3c}
 :root[data-theme="clair"] .cso-sync-l{border-top:1px solid #d2d2d7}
 :root[data-theme="clair"] .cso-sync{background:#e1eee5;border:1px solid #1d3a24;color:#1eae53}
 :root[data-theme="clair"] .cso-sync-d{color:#494951}

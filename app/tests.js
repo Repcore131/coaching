@@ -48677,13 +48677,13 @@ async function testExercices(){
         basculerPushType('defi',true);
         if(!pushTypeActif(currentUser,'defi')||'defi' in currentUser.pushPrefs) return _echec('non rallumé');
         if(basculerPushType('inconnu',false)) return _echec('type inconnu accepté');
-        return PUSH_TYPES.map(t=>t.cle).sort().join()==='acces,badge,bilan,coach,defi,filleul,retour,serie,wrapped'?true:_echec('types');
+        return PUSH_TYPES.map(t=>t.cle).sort().join()==='acces,badge,bilan,coach,defi,filleul,retour,sante,serie,wrapped'?true:_echec('types');
       } finally { currentUser=svU; saveUser=svS; }})());
     ok('Push : l’écran de réglages — une case par type, le bouton seulement quand il sert',(()=>{
       const d=document.createElement('div');
       d.innerHTML=htmlReglagesPush({pushPrefs:{serie:false}},'proposer');
       const c=d.querySelectorAll('input[type=checkbox][data-push]');
-      if(c.length!==PUSH_TYPES.length||c.length!==9) return _echec(c.length+' cases');
+      if(c.length!==PUSH_TYPES.length||c.length!==10) return _echec(c.length+' cases');
       if(d.querySelector('[data-push=serie]').checked||!d.querySelector('[data-push=coach]').checked) return _echec('état des cases');
       const b=d.querySelector('button');
       if(!b||!b.classList.contains('btn-casse')) return _echec('bouton d’activation (R31 : btn-casse)');
@@ -51152,6 +51152,64 @@ async function testExercices(){
       if(!j||!(j.versionCode>=4)||!/^https:\/\/repcore-sync\.web\.app\/aide-apk\.html$/.test(j.url)||!j.notes) return _echec(JSON.stringify(j));
       const aide=lire('../aide-apk.html');
       return (new RegExp('RepCore-'+j.versionCode+'\\.apk').test(aide)&&/releases\/download\/apk-/.test(aide))?true:_echec('aide-apk.html pas à jour');})());
+    ok('iPhone : le lien du Raccourci — nom exact, un <a href> touché (jamais location.href), lien iCloud bien formé',(()=>{
+      if(SAN_SYNC_RACCOURCI_LANCER!=='shortcuts://run-shortcut?name=RepCore%20Sant%C3%A9') return _echec('lien');
+      if(decodeURIComponent(SAN_SYNC_RACCOURCI_LANCER.split('name=')[1])!=='RepCore Santé') return _echec('nom');
+      if(/location\.(href|assign|replace)\s*[=(]\s*SAN_SYNC_RACCOURCI_LANCER/.test(_prodSrc())) return _echec('lien lancé par script : iOS le bloque');
+      if(RACCOURCI_SANTE_URL&&!RACCOURCI_SANTE_FORME.test(RACCOURCI_SANTE_URL)) return _echec('lien iCloud mal formé');
+      if(!RACCOURCI_SANTE_FORME.test('https://www.icloud.com/shortcuts/0123456789abcdef0123456789abcdef')||RACCOURCI_SANTE_FORME.test('https://exemple.fr/shortcuts/x')) return _echec('forme');
+      return true;})());
+    ok('iPhone : la feuille — « Envoyer maintenant » et « Tester maintenant » sont des liens qui notent l’envoi ; À RELANCER ouvre l’aide',(()=>{
+      const _p=window._ssPlateforme, _m=_sanSyncMeta;
+      try{
+        window._ssPlateforme=()=>'ios';
+        const d=document.createElement('div');
+        _sanSyncMeta=null; d.innerHTML=_htmlSanSyncFeuille();
+        const t=[...d.querySelectorAll('a')].find(a=>a.textContent==='Tester maintenant');
+        if(!t||t.getAttribute('href')!==SAN_SYNC_RACCOURCI_LANCER||!/sanEnvoiLance\(\)/.test(t.getAttribute('onclick'))) return _echec('tester');
+        if(/preventDefault/.test(t.getAttribute('onclick'))) return _echec('geste annulé');
+        _sanSyncMeta=_sanMetaNorm({empreinte:'e',plateforme:'ios',source:'raccourci',derniereReception:Date.now()-3600e3});
+        d.innerHTML=_htmlSanSyncFeuille();
+        const e=d.querySelector('a.ss-envoi');
+        if(!e||e.textContent!=='Envoyer maintenant'||e.getAttribute('href')!==SAN_SYNC_RACCOURCI_LANCER) return _echec('envoyer');
+        if(d.querySelector('.ss-aide')) return _echec('aide sans raison');
+        _sanSyncMeta=_sanMetaNorm({empreinte:'e',plateforme:'ios',source:'raccourci',derniereReception:Date.now()-50*3600e3});
+        d.innerHTML=_htmlSanSyncFeuille();
+        const l=[...d.querySelectorAll('.ss-aide li')].map(x=>x.textContent).join('|');
+        if(!/verrouillé/.test(l)||!/Automatisation désactivée/.test(l)||!/Autorisations Santé/.test(l)) return _echec('aide '+l);
+        return /À relancer/.test(d.querySelector('.ss-statut').textContent)?true:_echec('statut');
+      } finally { window._ssPlateforme=_p; _sanSyncMeta=_m; }})());
+    ok('iPhone : plus de 48 h sans réception → « À relancer » (orange) sur la tuile ; Android, non',(()=>{
+      const t=Date.now();
+      const a=sanSyncEtat({empreinte:'e',plateforme:'ios',derniereReception:t-49*3600e3},'pas',t);
+      if(!a.relancer||a.lib!=='À relancer') return _echec(JSON.stringify(a));
+      if(sanSyncEtat({empreinte:'e',plateforme:'ios',derniereReception:t-47*3600e3},'pas',t).relancer) return _echec('47 h');
+      if(sanSyncEtat({empreinte:'e',plateforme:'android',derniereReception:t-72*3600e3},'pas',t).relancer) return _echec('android');
+      const _m=_sanSyncMeta;
+      try{
+        _sanSyncMeta=_sanMetaNorm({empreinte:'e',plateforme:'ios',derniereReception:t-49*3600e3});
+        const d=document.createElement('div'); d.innerHTML=_svMethodes({},'pas');
+        const s=d.querySelector('.sv-tuile-s');
+        if(!s.classList.contains('sv-sync-relancer')||!/À relancer/.test(s.textContent)) return _echec('tuile');
+        return /À relancer/.test(d.querySelector('.sv-pied').textContent)?true:_echec('pied');
+      } finally { _sanSyncMeta=_m; }})());
+    ok('iPhone : la bande du matin — montrée depuis la notification, partie dès la réception, 24 h au plus',(()=>{
+      const t=Date.now(), dep=t-600e3;
+      const d=document.createElement('div'); d.innerHTML=htmlBandeSante({empreinte:'e',derniereReception:t-86400e3},dep,t);
+      const a=d.querySelector('.san-bande a');
+      if(!a||a.textContent!=='Envoyer mes données'||a.getAttribute('href')!==SAN_SYNC_RACCOURCI_LANCER||!/sanEnvoiLance/.test(a.getAttribute('onclick'))) return _echec('bande');
+      if(htmlBandeSante({empreinte:'e',derniereReception:t-60e3},dep,t)!=='') return _echec('reçu : la bande reste');
+      if(htmlBandeSante(null,t-25*3600e3,t)!==''||htmlBandeSante(null,0,t)!=='') return _echec('24 h / sans notification');
+      if(!/#sante-envoyer/.test(String(sanEnvoyerOuvrir)+_prodSrc().slice(0,0))&&!/sante-envoyer/.test(_prodSrc())) return _echec('ancre');
+      if(!/location\.hash==='#sante-envoyer'/.test(_prodSrc())) return _echec('ancre au chargement / hashchange');
+      return document.getElementById('ls-sante-bande')?true:_echec('conteneur');})());
+    ok('iPhone : le retour — « Données reçues : 3 jours, 2 nuits » ; le type de notification « sante » est réglable',(()=>{
+      if(texteDonneesRecues({jours:3,nuits:2})!=='Données reçues : 3 jours, 2 nuits') return _echec(texteDonneesRecues({jours:3,nuits:2}));
+      if(texteDonneesRecues({jours:1,nuits:1})!=='Données reçues : 1 jour, 1 nuit') return _echec('singulier');
+      if(texteDonneesRecues({jours:2,nuits:0})!=='Données reçues : 2 jours, aucune nuit') return _echec('sans nuit');
+      if(!/visibilitychange/.test(_prodSrc())||!/sanEnvoiRetour\(\)/.test(_prodSrc())) return _echec('retour au premier plan');
+      const ty=PUSH_TYPES.find(x=>x.cle==='sante');
+      return ty&&/Données santé non reçues/.test(ty.titre)&&/le matin/i.test(ty.txt)?true:_echec('type sante');})());
     // ══ 28/09/2026 — LA VIDÉO D'UN VISUEL ════════════════════════════════
     ok('Vidéo : MP4 quand l’enregistreur le sait (Safari iOS), sinon WebM VP9, sinon rien',(()=>{
       const que=(l)=>(t)=>l.indexOf(t)>=0;

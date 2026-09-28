@@ -1,7 +1,9 @@
 // La synchronisation santé : le jeton, la réception, les lignes du Raccourci.
 //   node cloudflare/test/sante.test.mjs
 import assert from 'node:assert/strict';
-import { santeJeton, recevoirSante, empreinte, nettoyerJour, CORPS_MAX, compteDuJeton, masquer } from '../src/sante.js';
+import { santeJeton, recevoirSante, empreinte, nettoyerJour, CORPS_MAX, compteDuJeton, masquer, rappelSante, rappelSanteUn, MESSAGE_RAPPEL, RAPPEL_MAX } from '../src/sante.js';
+import { travaux } from '../src/planif.js';
+import { PUSH_TYPES, pushAutorise } from '../src/metier.js';
 import { lignesVersJours, etatSommeil } from '../src/lignes.js';
 import { creerBase } from '../src/base.js';
 import { fausseBase } from './fausse-base.mjs';
@@ -291,6 +293,68 @@ await test('/sante/qui : le compte du jeton, masqué ; inconnu ou révoqué → 
   assert.equal((await qui(jeton)).statut, 401);
   assert.equal(masquer('kevin,guellec@gmail,com'), 'k•••@gmail.com');
   assert.equal(masquer('x'), '•••');
+});
+
+// ── LE RAPPEL DU MATIN (iPhone) ───────────────────────────────────────────
+const H = (s) => Date.parse(s);                  // instants explicites, fuseau compris
+const J15_10H = H('2026-10-15T10:00:00+02:00');
+const IOS = (recu) => ({ empreinte: 'e', plateforme: 'ios', derniereReception: recu });
+
+await test('rappel : iPhone sans réception depuis 4 h ce matin → oui ; reçu à 6 h → non', async () => {
+  assert.deepEqual(rappelSante({ meta: IOS(H('2026-10-14T09:00:00+02:00')), rappel: null, t: J15_10H }),
+    { ok: true, raison: null, n: 1, recu: H('2026-10-14T09:00:00+02:00') });
+  assert.equal(rappelSante({ meta: IOS(H('2026-10-15T03:30:00+02:00')), t: J15_10H }).ok, true, 'avant 4 h : la nuit n’y est pas');
+  assert.equal(rappelSante({ meta: IOS(H('2026-10-15T06:00:00+02:00')), t: J15_10H }).raison, 'recu');
+});
+await test('rappel : pas iPhone, inactif, jamais reçu → non', async () => {
+  const hier = H('2026-10-14T09:00:00+02:00');
+  assert.equal(rappelSante({ meta: { empreinte: 'e', plateforme: 'android', derniereReception: hier }, t: J15_10H }).raison, 'pas_ios');
+  assert.equal(rappelSante({ meta: { plateforme: 'ios', derniereReception: hier }, t: J15_10H }).raison, 'inactif');
+  assert.equal(rappelSante({ meta: IOS(null), t: J15_10H }).raison, 'jamais_recu');
+  assert.equal(rappelSante({ meta: null, t: J15_10H }).raison, 'inactif');
+});
+await test('rappel : une fois par jour, jamais deux jours de suite, silence après deux sans effet', async () => {
+  const recu = H('2026-10-12T08:00:00+02:00');
+  const j = (d) => H(d + 'T10:00:00+02:00');
+  assert.equal(rappelSante({ meta: IOS(recu), rappel: { jour: '2026-10-15', n: 1, recu }, t: j('2026-10-15') }).raison, 'deja');
+  assert.equal(rappelSante({ meta: IOS(recu), rappel: { jour: '2026-10-14', n: 1, recu }, t: j('2026-10-15') }).raison, 'hier');
+  assert.equal(rappelSante({ meta: IOS(recu), rappel: { jour: '2026-10-13', n: 1, recu }, t: j('2026-10-15') }).n, 2);
+  assert.equal(rappelSante({ meta: IOS(recu), rappel: { jour: '2026-10-13', n: RAPPEL_MAX, recu }, t: j('2026-10-20') }).raison, 'silence');
+  // Une réception entre-temps remet à zéro.
+  const recu2 = H('2026-10-18T08:00:00+02:00');
+  assert.deepEqual(rappelSante({ meta: IOS(recu2), rappel: { jour: '2026-10-13', n: 2, recu }, t: j('2026-10-20') }).n, 1);
+});
+await test('rappel : exécutant — pousse le bon message, retient l’état ; refusé : rien retenu', async () => {
+  const recu = H('2026-10-14T09:00:00+02:00');
+  const F = fausseBase({ sante_sync: { 'lea@t,fr': { meta: IOS(recu) }, 'tom@t,fr': { meta: { empreinte: 'e', plateforme: 'android', derniereReception: recu } } } });
+  const db = creerBase({ url: 'https://b.t', auth: 's', fetchImpl: F.fetchImpl });
+  const envois = [];
+  const envoyerPush = async (uid, m, o) => { envois.push({ uid, m, o }); return { envoye: 1 }; };
+  assert.equal(await rappelSanteUn('lea@t,fr', J15_10H, { db, envoyerPush }), 'envoye');
+  assert.equal(await rappelSanteUn('tom@t,fr', J15_10H, { db, envoyerPush }), 'pas_ios');
+  assert.equal(await rappelSanteUn('lea@t,fr', J15_10H + 3600e3, { db, envoyerPush }), 'deja');
+  assert.equal(envois.length, 1);
+  assert.deepEqual(envois[0].m, MESSAGE_RAPPEL);
+  assert.equal(envois[0].m.url, './#sante-envoyer'); assert.equal(envois[0].o.attendre, false);
+  assert.deepEqual(F.lire('sante_sync/lea@t,fr/rappel'), { jour: '2026-10-15', n: 1, recu });
+  const refus = async () => ({ envoye: 0, raison: 'plafond' });
+  assert.equal(await rappelSanteUn('lea@t,fr', H('2026-10-17T10:00:00+02:00'), { db, envoyerPush: refus }), 'plafond');
+  assert.equal(F.lire('sante_sync/lea@t,fr/rappel/jour'), '2026-10-15');
+});
+await test('rappel : le type « sante » existe, se coupe par pushPrefs, se tait en heures calmes ; travail de 10 h', async () => {
+  assert.ok(PUSH_TYPES.includes('sante'));
+  assert.equal(pushAutorise('sante', { sante: false }, null, J15_10H).raison, 'coupe');
+  assert.equal(pushAutorise('sante', {}, null, H('2026-10-15T22:30:00+02:00')).raison, 'calme');
+  const w = travaux({ planifies: {} }).find((x) => x.nom === 'sante_rappel');
+  assert.ok(w && w.push);
+  const p = (h, m) => ({ heure: h, minute: m });
+  assert.equal(w.quand(p(9, 59)), false); assert.equal(w.quand(p(10, 0)), true); assert.equal(w.quand(p(21, 0)), false);
+});
+await test('réception : meta.dernierEnvoi dit les jours et les nuits', async () => {
+  const M = monde();
+  const { jeton } = await santeJeton({ auth: LEA, data: { action: 'creer' } }, M.ctx);
+  await envoyer(M, jeton, android({ '2026-10-15': { pas: 1, sommeilMin: 400 }, '2026-10-14': { pas: 2 }, '2026-10-13': { sommeilMin: 420 } }));
+  assert.deepEqual(M.F.lire('sante_sync/lea@t,fr/meta/dernierEnvoi'), { jours: 3, nuits: 2 });
 });
 
 console.log(ok + ' tests santé passés');

@@ -60,7 +60,8 @@ export async function santeJeton({ auth, data }, ctx) {
   if (action === 'etat') {
     const m = meta || {};
     return { actif: !!m.empreinte, creeLe: m.creeLe || null, derniereReception: m.derniereReception || null,
-      plateforme: m.plateforme || null, source: m.source || null, origines: m.origines || null };
+      plateforme: m.plateforme || null, source: m.source || null, origines: m.origines || null,
+      dernierEnvoi: m.dernierEnvoi || null };
   }
   if (action === 'revoquer') {
     const maj = { ['sante_sync/' + cle]: null };
@@ -206,13 +207,14 @@ export async function recevoirSante(req, ctx) {
     return bon;
   }).sort();
   if (dates.length > JOURS_MAX) { ignores += dates.length - JOURS_MAX; dates = dates.slice(-JOURS_MAX); }
-  let jours = 0;
+  let jours = 0, nuits = 0;
   for (const d of dates) {
     const { v, ignores: n } = nettoyerJour(brut[d], source);
     ignores += n;
     const cles = Object.keys(v);
     if (!cles.length) { ignores++; continue; }
     jours++;
+    if (v.sommeilMin) nuits++;
     // Champ par champ : un envoi des pas seuls n'efface pas le sommeil reçu.
     const p = 'sante_sync/' + cle + '/jours/' + d + '/';
     for (const k of cles) maj[p + k] = v[k];
@@ -233,6 +235,52 @@ export async function recevoirSante(req, ctx) {
   maj[base + 'source'] = source;
   if (Object.keys(origines).length) maj[base + 'origines'] = origines;
   maj[base + 'recus'] = (Number(meta.recus) || 0) + 1;
+  // Ce que l'app dit après un envoi : « Données reçues : 3 jours, 2 nuits ».
+  maj[base + 'dernierEnvoi'] = { jours, nuits };
   await db.ref('').update(maj);
   return { statut: 200, corps: { jours, ignores } };
+}
+
+// ══ LE RAPPEL DU MATIN (iPhone) ══════════════════════════════════════════
+// Le Raccourci « RepCore Santé » tourne par une automatisation iOS, qui ne
+// part pas toujours (téléphone verrouillé, automatisation coupée). Vers 10 h
+// (planif.js), un compte iPhone dont la nuit n'est pas arrivée reçoit :
+// « Ta nuit n'est pas encore arrivée » — une fois par jour au plus, jamais
+// deux jours de suite sans réception entre les deux, et plus rien après
+// deux rappels restés sans effet, jusqu'à la prochaine réception.
+// L'état vit dans sante_sync/<clé>/rappel {jour, n, recu} (serveur seul).
+export const RAPPEL_MAX = 2;
+export const MESSAGE_RAPPEL = { type: 'sante', title: 'Ta nuit n\u2019est pas encore arriv\u00e9e',
+  body: 'Touche pour l\u2019envoyer \u00e0 RepCore.', url: './#sante-envoyer', tag: 'sante-rappel' };
+
+/** PURE. Faut-il notifier ce compte maintenant ? Rend {ok, raison, n}. */
+export function rappelSante({ meta, rappel, t }) {
+  const m = meta || {};
+  if (!m.empreinte) return { ok: false, raison: 'inactif' };
+  if (m.plateforme !== 'ios') return { ok: false, raison: 'pas_ios' };
+  const recu = Number(m.derniereReception) || 0;
+  if (!recu) return { ok: false, raison: 'jamais_recu' };
+  const p = paris(t), r = paris(recu);
+  // Reçu aujourd'hui après 4 h (Paris) : la nuit est là.
+  if (r.jour === p.jour && r.heure >= 4) return { ok: false, raison: 'recu' };
+  if (r.jour > p.jour) return { ok: false, raison: 'recu' };
+  // Les rappels comptent depuis la DERNIÈRE réception : une nouvelle remet à zéro.
+  const e = rappel && Number(rappel.recu) === recu ? rappel : { jour: null, n: 0, recu };
+  if (e.jour === p.jour) return { ok: false, raison: 'deja' };
+  if ((Number(e.n) || 0) >= RAPPEL_MAX) return { ok: false, raison: 'silence' };
+  if (e.jour && e.jour === decaler(p.jour, -1)) return { ok: false, raison: 'hier' };
+  return { ok: true, raison: null, n: (Number(e.n) || 0) + 1, recu };
+}
+
+/** Un compte (clé de sante_sync) : lit, décide, pousse, retient. */
+export async function rappelSanteUn(cle, t, { db, envoyerPush }) {
+  const node = (await db.ref('sante_sync/' + cle + '/meta').get()).val();
+  if (!node || node.plateforme !== 'ios') return 'pas_ios';
+  const rappel = (await db.ref('sante_sync/' + cle + '/rappel').get()).val();
+  const d = rappelSante({ meta: node, rappel, t });
+  if (!d.ok) return d.raison;
+  const r = await envoyerPush(cle, MESSAGE_RAPPEL, { attendre: false });
+  if (!r || !r.envoye) return (r && r.raison) || 'echec';
+  await db.ref('sante_sync/' + cle + '/rappel').set({ jour: paris(t).jour, n: d.n, recu: d.recu });
+  return 'envoye';
 }

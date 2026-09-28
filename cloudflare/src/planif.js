@@ -54,6 +54,9 @@ export function travaux(M) {
       fin: (acc) => M.retentionFin(acc), cout: 3 },
     // La relance des inactifs : J+7, J+14, J+30 après la dernière séance.
     { nom: 'retour', quand: (p) => apres(p, 11, 0), cles: () => M.abonnes(), un: (uid, t) => (M.retourUn ? M.retourUn(uid, t) : null), cout: 12, push: true },
+    // La santé synchronisée : « Ta nuit n'est pas encore arrivée » (iPhone), vers 10 h.
+    { nom: 'sante_rappel', quand: (p) => apres(p, 10, 0) && p.heure < 21, cles: () => (M.santeComptes ? M.santeComptes() : []),
+      un: (k, t) => (M.santeRappelUn ? M.santeRappelUn(k, t) : null), cout: 8, push: true },
     // Le parcours « Mise sous tension » : le rappel du 21e jour d'essai.
     { nom: 'parcours', quand: (p) => apres(p, 18, 15), une: (t) => (M.parcoursJ21 ? M.parcoursJ21(t) : null) },
     // Les événements saisonniers : CHAQUE HEURE (heure: true), le compteur

@@ -36,7 +36,7 @@ import * as RT from './retention.js';
 
 export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
-export const PUSH_TYPES = ['serie', 'wrapped', 'bilan', 'badge', 'coach', 'filleul', 'defi', 'acces', 'retour'];
+export const PUSH_TYPES = ['serie', 'wrapped', 'bilan', 'badge', 'coach', 'filleul', 'defi', 'acces', 'retour', 'sante'];
 const BONUS_ESSAI_JOURS = 0;   // un mois, pas deux : = TARIFS.essai_parrainage.moisEnPlus
 const PALIERS = ['aucun', 'essentielle', 'ultime', 'suivi'];
 
