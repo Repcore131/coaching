@@ -89,7 +89,7 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
   var ctrl=window.AbortController?new AbortController():null;
   setTimeout(function(){ if(ctrl) ctrl.abort(); },6000);
   // Le rang du serveur prime (/volts_publics) : voir ficheAvecServeur (cloudflare/src/pages.js).
-  function lire(n){ return fetch(DB+'/'+n+'/'+encodeURIComponent(pseudo)+'.json',ctrl?{signal:ctrl.signal}:{}).then(function(r){ return r.ok?r.json():null; }).catch(function(){ return null; }); }
+  function lire(n){ return fetch(DB+'/'+n+'/'+encodeURIComponent(pseudo.replace(/\./g,','))+'.json',ctrl?{signal:ctrl.signal}:{}).then(function(r){ return r.ok?r.json():null; }).catch(function(){ return null; }); }
   function vals(o){ return o?(Array.isArray(o)?o:Object.keys(o).map(function(k){return o[k];})):[]; }
   Promise.all([lire('profils_publics'),lire('volts_publics')]).then(function(l){
       var p=l[0], v=l[1], mq=vals(v&&v.masquer);

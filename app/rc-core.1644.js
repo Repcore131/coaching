@@ -5118,6 +5118,17 @@ const CLOUD={
     const r=await fetch(this._fbUrl.replace('users.json','.json')+'?auth='+token,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(chemins)});
     return r.ok;
   },
+  // Comme racinePatch, mais rend le statut HTTP (0 : pas de jeton, pas de
+  // réseau) : un refus des règles (401/403) ne se confond plus avec une
+  // requête mal formée (400) ni avec une session tombée.
+  async racinePatchStatut(chemins){
+    const token=await this._getToken().catch(()=>null);
+    if(!token) return 0;
+    try{
+      const r=await fetch(this._fbUrl.replace('users.json','.json')+'?auth='+token,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(chemins)});
+      return r.status;
+    }catch(e){ return 0; }
+  },
   // ── Le parrainage : /parrainage/<sous>. get rend null sur un refus (les
   // règles cachent /codes) ; put/patch rendent true ou false, sans lever.
   _urlParrainage(sous){ return this._fbUrl.replace('users.json','parrainage'+(sous?'/'+sous:'')+'.json'); },
@@ -7282,9 +7293,13 @@ function htmlSelecteurComptes(opts){
               style="flex:0 0 auto;background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:0 4px" title="Retirer">✕</button>`}
     </div>`;
   };
+  // DEUX GROUPES, NOMMÉS (Kevin, 28/09/2026) : le compte athlète, puis le
+  // compte coach. Un groupe vide ne s'affiche pas.
+  const groupe=(titre,liste)=>liste.length?(`<div class="cpt-groupe">${titre}</div>`+liste.map(ligne).join('')):'';
   return `<div id="cpt-selecteur">
-    ${l.length>1?`<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:10px">Mes comptes</div>`:''}
-    ${l.map(ligne).join('')}
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:10px">Mes comptes</div>
+    ${groupe('Compte athlète',l.filter(c=>c.role!=='coach'))}
+    ${groupe('Compte coach',l.filter(c=>c.role==='coach'))}
     <button class="btn btn-outline btn-sm" style="width:100%;margin:2px 0 0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="ajouterCompte()">+ Ajouter un compte</button>
     ${l.length>1?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:8px">Les rappels de notification suivent le compte actif : le compte en veille n'en reçoit pas.</div>`:''}
   </div>`;
@@ -18859,6 +18874,11 @@ function pagePubliqueDonnees(u,montrer,maintenant){
   return o;
 }
 function pseudoPublicNormalise(p){ return String(p||'').trim().replace(/^@/,'').toLowerCase(); }
+// LA CLÉ EN BASE. Firebase refuse le point dans une clé : « kevin.gllc »
+// faisait échouer toute la requête, affichée « déjà pris » (28/09/2026). Le
+// point devient une virgule en base, comme pour les e-mails ; l'adresse
+// publique garde le point (/@kevin.gllc).
+function pseudoPublicCle(p){ return String(p||'').replace(/\./g,','); }
 // Publie, déplace ou éteint la page. Rend {ok, erreur?}.
 async function publierPagePublique(u,reg,o){
   if(!u||!u.email||u.role==='coach') return {ok:false,erreur:'Réservé aux athlètes.'};
@@ -18867,11 +18887,14 @@ async function publierPagePublique(u,reg,o){
   const moi=u.email.replace(/\./g,',');
   const ancien=(u.pagePublique||{}).pseudo;
   const patch={};
-  if(ancien&&ancien!==neu){ patch['pseudos/'+ancien]=null; patch['profils_publics/'+ancien]=null; }
-  patch['pseudos/'+neu]=moi;
-  patch['profils_publics/'+neu]=reg.active?pagePubliqueDonnees(u,reg.montrer):null;
-  const ok=await CLOUD.racinePatch(patch).catch(()=>false);
-  if(!ok) return {ok:false,erreur:'Ce pseudo est déjà pris.'};
+  const kA=pseudoPublicCle(ancien), kN=pseudoPublicCle(neu);
+  if(ancien&&ancien!==neu){ patch['pseudos/'+kA]=null; patch['profils_publics/'+kA]=null; }
+  patch['pseudos/'+kN]=moi;
+  patch['profils_publics/'+kN]=reg.active?pagePubliqueDonnees(u,reg.montrer):null;
+  const st=await CLOUD.racinePatchStatut(patch).catch(()=>0);
+  if(st===401||st===403) return {ok:false,erreur:'Ce pseudo est déjà pris.'};
+  if(st===0) return {ok:false,erreur:'Connexion perdue : vérifie ta connexion, ou déconnecte-toi puis reconnecte-toi.'};
+  if(!(st>=200&&st<300)) return {ok:false,erreur:'Enregistrement impossible (erreur '+st+'). Réessaie dans un instant.'};
   u.pagePublique={pseudo:neu,active:!!reg.active,montrer:Object.assign({},reg.montrer||{}),publieLe:Date.now()};
   if(!(o&&o.silencieux)) try{ saveUser(); }catch(e){}
   return {ok:true};
@@ -18896,11 +18919,16 @@ function htmlReglagesPagePublique(u){
   return '<div class="card pp-carte"><div class="pp-titre">Ma page publique</div>'
     +'<p class="pp-sous">Une page à mettre dans ta bio : ton rang, ta régularité, tes badges. Jamais de poids, de photos ni de données de santé.</p>'
     +'<label for="pp-pseudo" class="pp-lab">Ton pseudo</label>'
-    +'<div class="pp-url"><span>'+escapeHtml(dom)+'</span><input id="pp-pseudo" type="text" maxlength="20" autocapitalize="none" autocomplete="off" spellcheck="false" value="'+escapeHtml(p.pseudo||'')+'" placeholder="ton.pseudo"></div>'
+    // L'ADRESSE EN DEUX PARTIES (Kevin, 28/09/2026) : le début, fixe, en rouge
+    // et hors d'atteinte du doigt ; la case du pseudo, seule chose à écrire.
+    +'<div class="pp-url pp-url-2"><span class="pp-url-pre" aria-hidden="true">'+escapeHtml(dom)+'</span><input id="pp-pseudo" type="text" maxlength="20" autocapitalize="none" autocomplete="off" spellcheck="false" value="'+escapeHtml(p.pseudo||'')+'" placeholder="ton.pseudo" aria-label="Ton pseudo, après '+escapeHtml(dom)+'"></div>'
     +'<label class="pp-case pp-active"><input type="checkbox" id="pp-active"'+(p.active?' checked':'')+'> <span><b>Activer ma page</b></span></label>'
     +'<div class="pp-montrer"><div class="pp-lab">Ce qu’elle montre</div>'+cases+'</div>'
     +'<div id="pp-etat" class="pp-etat" aria-live="polite">'+(url?'En ligne : '+escapeHtml(url.replace(/^https?:\/\//,'')):(p.pseudo?'Page désactivée.':''))+'</div>'
-    +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:10px 0 8px;min-height:44px" onclick="enregistrerPagePublique(this)">Enregistrer ma page</button>'
+    // Trois gestes, du plus fort au plus léger : enregistrer (rouge), voir sa
+    // page (cadre blanc, seulement quand elle est en ligne), copier le lien.
+    +'<button type="button" class="btn btn-red btn-sm btn-casse" style="width:100%;margin:10px 0 8px;min-height:44px" onclick="enregistrerPagePublique(this)">Enregistrer ma page</button>'
+    +(url?'<a class="btn btn-sm pp-voir" href="'+escapeHtml(url)+'" target="_blank" rel="noopener">Visualiser ma page</a>':'')
     +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:0;min-height:44px" onclick="copierLienBio(this)">Copier mon lien pour ma bio Instagram</button></div>';
 }
 // ── LA PROPOSITION, À UN PASSAGE DE RANG (28/09/2026) ────────────────────
@@ -40722,11 +40750,13 @@ function _htmlReprise(avecProgramme){
 // de seances, comme partout ailleurs. Il n'a rien publie : on ouvre le parcours
 // de premiere seance, qui pose trois questions et rend une seance a lancer.
 // Dans les deux cas, on emprunte un chemin qui existe deja.
+// SANS PROGRAMME, ON OUVRE « GÉRER MES SÉANCES » (28/09/2026) : la semaine est
+// vierge et c'est a l'athlete de la remplir, plus aucune seance generee.
 function reprendreMaintenant(){
   try{
     if(_configReelle(currentUser&&currentUser.sessions_config)){ openSessionPicker(); return; }
   }catch(e){}
-  try{ ouvrirPremiereSeance(); }
+  try{ loadSessionManager(); }
   catch(e){ try{ openSessionPicker(); }catch(_e){} }
 }
 // Le tour impur : poser le bloc, et faire taire ce qu'il remplace.
@@ -40821,12 +40851,13 @@ function _pdSeance(u){
   if(reel) return {voie:'selecteur',sous:'Ton programme t’attend'};
   if(sc.some(s=>s&&s.active&&s.exercises&&s.exercises.length))
     return {voie:'selecteur',sous:'Ton programme d’essai t’attend'};
-  return {voie:'parcours',sous:'Trois questions, et ta séance est prête'};
+  // SEMAINE VIERGE : l'athlete cree sa seance lui-meme (28/09/2026).
+  return {voie:'gerer',sous:'Crée ta séance, exercice par exercice'};
 }
 function pdLancerSeance(){
-  let v='parcours';
+  let v='gerer';
   try{ v=_pdSeance(currentUser).voie; }catch(e){}
-  if(v==='selecteur') openSessionPicker(); else ouvrirPremiereSeance();
+  if(v==='selecteur') openSessionPicker(); else loadSessionManager();
 }
 // PURE. La troisieme ligne suit la diete. En stricte ouverte, il n'y a pas de
 // journal : l'acte est de dire si le plan du jour a ete suivi. Une stricte
@@ -40883,7 +40914,30 @@ function _rendreDemarrage(){
   if(z) z.innerHTML=actif?_htmlDemarrage(currentUser):'';
   const ecran=document.getElementById('s-client-home');
   if(ecran) ecran.toggleAttribute('data-demarrage',actif);
+  try{ _placerHeroDemarrage(actif&&!etapesDemarrage(currentUser).seance); }catch(e){}
   return actif;
+}
+// LA CARTE ENTRAINEMENT RESTE, JUSTE SOUS « POUR DEMARRER » (Kevin, 28/09/2026).
+// Pour un compte sans seance, _rendreReprise la masquait (deux boutons vides de
+// sens pour qui n'a jamais commence), et pendant « Pour démarrer » la carte de
+// reprise est elle-meme masquee : l'athlete n'avait plus AUCUN chemin vers
+// « Gérer mes séances ». Une athlete n'a pas pu noter ses seances et a
+// abandonne. Ici, et seulement ici (bloc affiche ET aucune seance), la carte
+// reste visible et remonte sous le bloc ; la ligne « Ton suivi se termine »
+// (#clh-essai) vient ensuite. Hors de ce cas, elle reprend sa place normale,
+// sous les trois chiffres, et son affichage reste celui de _rendreReprise.
+function _placerHeroDemarrage(monter){
+  const hero=document.getElementById('clh-hero');
+  const bloc=document.getElementById('clh-demarrer');
+  const stats=document.getElementById('clh-stats');
+  if(!hero||!bloc||!stats) return false;
+  if(monter){
+    if(bloc.nextElementSibling!==hero) bloc.parentNode.insertBefore(hero,bloc.nextSibling);
+    hero.style.display='';
+    return true;
+  }
+  if(stats.nextElementSibling!==hero) stats.parentNode.insertBefore(hero,stats.nextSibling);
+  return false;
 }
 // PURE. Faut-il proposer la premiere marche a ce dossier ?
 //
@@ -40896,7 +40950,14 @@ function _rendreDemarrage(){
 //   • AUCUN HISTORIQUE. Quelqu'un qui s'est deja entraine a trouve sa
 //     premiere marche tout seul : la lui proposer serait insultant.
 // Et le parcours ne se represente pas une fois traverse ou passe.
+// ⚠ RETIRE LE 28/09/2026 (Kevin) : « on laisse les pages de séance vierges ».
+//   Le parcours generait une seance toute faite ; les programmes se trouvent
+//   desormais en boutique ou au coaching, et l'athlete construit les siennes
+//   au fur et a mesure dans « Gérer mes séances ». La fonction reste (routeUser
+//   l'interroge toujours) mais ne propose plus rien.
+const PS_PARCOURS_ACTIF=false;
 function _doitProposerPremiereSeance(u,dejaVu){
+  if(!PS_PARCOURS_ACTIF) return false;
   if(!u||!u.email||u.role==='coach') return false;
   if(dejaVu) return false;
   if((u.sessions||[]).length) return false;
@@ -58222,15 +58283,24 @@ function _htmlRecordsFin(ctx,date,cle){
   // personne ne prenait pour un geste. Un record : ce bouton le partage.
   // Plusieurs : il les réunit sur un visuel, et chaque ligne garde sa pastille
   // « Partager » — on peut vouloir publier le plus beau des trois.
-  const plusieurs=rec.length>1;
+  // ⚠ PLUS DE PARTAGE ICI (Kevin, 28/09/2026) : « ne mets pas la possibilité
+  //   de télécharger l'image, ça sert à rien et ça mange de l'info ». Plus de
+  //   choix image / vidéo ni de bouton : chaque record dit ce qu'il est, en
+  //   une phrase. Le visuel de la séance, lui, reste à télécharger plus bas.
+  //   `bouton` et partagerRecord restent pour les autres écrans qui s'en servent.
+  void bouton;
   return '<div class="rcf-rk"><div class="rcf-rk-t">Mes records</div>'
-    +(k?_htmlVisuelMedia():'')
-    +(k?('<div class="rcf-rk-tous">'+bouton(plusieurs?-1:0,plusieurs?'Partager mes '+rec.length+' records':'Partager ce record','rcf-rk-p rcf-rk-p-tous')+'</div>'):'')
     +rec.map((r,i)=>'<div class="rcf-rk-l">'
       +'<span class="rcf-rk-ex">'+escapeHtml(String(r.nm))+'</span>'
       +'<span class="rcf-rk-v"><span class="rcf-rk-a">'+nb(r.histMax)+' → </span>'
         +nb(r.curMax)+' kg<span class="rcf-rk-g">+'+nb(r.gain)+'</span></span>'
-      +(plusieurs?bouton(i,'Partager','rcf-rk-p rcf-rk-p-ligne','Partager le record '+String(r.nm)):'')
+      // LA PETITE ANIMATION DU RECORD : une barre qui part de l'ancienne
+      // charge (en gris) et monte jusqu'à la nouvelle (en rouge), une fois.
+      +'<div class="rcf-rk-barre" aria-hidden="true" style="--avant:'
+        +Math.max(5,Math.min(98,Math.round(Number(r.histMax)/Number(r.curMax)*100)))+'%">'
+        +'<i class="rcf-rk-ancien"></i><i class="rcf-rk-nouveau"></i></div>'
+      +'<div class="rcf-rk-x">Nouvelle meilleure charge sur cet exercice : '+nb(r.curMax)
+        +' kg, soit '+nb(r.gain)+' kg de plus que ton meilleur jusqu’ici ('+nb(r.histMax)+' kg).</div>'
       +'</div>').join('')
     +'</div>';
 }
@@ -58302,7 +58372,8 @@ function _htmlStatsFin(mins,sets,setsPlanned,vol,delta){
     +'<div class="rcf-st-l">'+l+'</div>'+(apres||'')+'</div>';
   // « = 2 éléphants 🐘 », sous le VOLUME. Rien sous 2 kg.
   let _eq=null; try{ _eq=equivalentTonnage(vol); }catch(e){ _eq=null; }
-  const _eqHtml=_eq?('<div class="rcf-st-eq">= '+escapeHtml(_eq.texte)+' <span aria-hidden="true">'+_eq.emoji+'</span></div>'):'';
+  const _eqHtml=_eq?('<div class="rcf-st-eq">= '+escapeHtml(_eq.texte)+' <span aria-hidden="true">'+_eq.emoji+'</span></div>'
+    +_htmlRouteEquivalent(_eq)):'';
   // La duree ne se compte PAS : « 3 h 25 » n'a pas de trajectoire depuis zero,
   // et la faire defiler en « 0 h 01, 0 h 02 » serait absurde. Les deux autres,
   // si — ce sont des quantites, et les voir monter est la recompense.
@@ -58317,6 +58388,27 @@ function _htmlStatsFin(mins,sets,setsPlanned,vol,delta){
     +'</div>'
     +(d>0?'<div class="rcf-delta"><span class="rcf-delta-v">+'+nb(d)+' kg</span>'
       +'<span class="rcf-delta-l">vs dernière séance</span></div>':'');
+}
+
+// ── LE PETIT BUS QUI PASSE (Kevin, 28/09/2026) ─────────────────────────
+// Sous « = 1,1 bus », une route en pointillés et le véhicule qui la traverse,
+// en boucle. Le bus est DESSINÉ, au trait, dans la palette de l'écran (blanc,
+// vitres rouges) : un emoji qui glisse ferait jouet. Les autres équivalents
+// (éléphant, T-Rex…) font passer leur emoji, plus petit. Immobile, garé au
+// milieu, quand le téléphone demande moins d'animations.
+function _htmlBusSvg(){
+  return '<svg viewBox="0 0 34 16" width="34" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round">'
+    +'<path d="M2 12V4.5C2 3.1 3.1 2 4.5 2H27c2.2 0 3.6 1.3 4.3 3.4L32 8.5V12H2Z"/>'
+    +'<path class="rcf-bus-vitres" stroke="none" d="M5 4.5h4.2v3.4H5zM10.6 4.5h4.2v3.4h-4.2zM16.2 4.5h4.2v3.4h-4.2zM21.8 4.5h4.4v3.4h-4.4zM27.5 4.5h1.6l1.3 3.4h-2.9z"/>'
+    +'<path d="M2 9.6h30" stroke-width="1"/>'
+    +'<circle cx="8.5" cy="12.6" r="2" fill="#0b0b0c"/><circle cx="25.5" cy="12.6" r="2" fill="#0b0b0c"/>'
+    +'</svg>';
+}
+function _htmlRouteEquivalent(eq){
+  if(!eq) return '';
+  const bus=eq.emoji==='🚌';
+  return '<div class="rcf-route" aria-hidden="true"><span class="rcf-vehicule'+(bus?' rcf-bus':'')+'">'
+    +(bus?_htmlBusSvg():eq.emoji)+'</span></div>';
 }
 
 // ── TON PROCHAIN OBJECTIF : UNE ASCENSION ──────────────────────────────
@@ -73770,9 +73862,11 @@ function htmlMesBadges(u,maintenant){
       +'<div class="bdg-nom">'+escapeHtml(nom)+'</div>'
       +'<div class="bdg-date">'+escapeHtml(sous||'')+'</div></div>';
   }).join('');
-  h+='<div class="bdg-sous">Uniques</div><div class="bdg-grille">'
+  // 4 PAR LIGNE POUR LES UNIQUES (8), 5 POUR LES SECRETS (10) : deux lignes
+  // chacun, au lieu d'une colonne qui s'étirait (Kevin, 28/09/2026).
+  h+='<div class="bdg-sous">Uniques</div><div class="bdg-grille bdg-grille-4">'
     +cases(BADGES_ACQUIS.filter(b=>b.famille==='unique'),false)+'</div>';
-  h+='<div class="bdg-sous">Secrets</div><div class="bdg-grille">'
+  h+='<div class="bdg-sous">Secrets</div><div class="bdg-grille bdg-grille-5">'
     +cases(BADGES_ACQUIS.filter(b=>b.famille==='secret'),true)+'</div>';
   // Les éditions : bouclées, en cours, et « Plus jamais disponible ».
   try{ h+=htmlEditions(u,_saisonsDuCache(),t); }catch(e){}
@@ -74814,11 +74908,13 @@ function htmlCarteMuscles(id,d,o){
     +'</div>'
     +'<div class="musc-chiffres">'+d.chiffres.map(c=>'<div><b>'+escapeHtml(c.v)+'</b><span>'+escapeHtml(c.l)+'</span></div>').join('')+'</div>'
     +'<div class="musc-legende"><span>Repos</span><i aria-hidden="true"></i><span>Cible atteinte</span></div>'
-    +_htmlVisuelFonds('musc-'+id+'-fonds')
+    // `o.sansPartage` : la carte se lit, elle ne se télécharge pas (fin de
+    // séance, Kevin 28/09/2026 — seul le visuel de la séance y est à télécharger).
+    +(o.sansPartage?'':(_htmlVisuelFonds('musc-'+id+'-fonds')
     +'<div class="musc-actions">'
       +'<button type="button" class="btn btn-red btn-casse" onclick="partagerCarteMuscles(\''+id+'\',this)">'+icon('share',16)+' <span>Partager</span></button>'
       +'<button type="button" class="btn btn-outline" onclick="telechargerCarteMuscles(\''+id+'\',this)">'+icon('download',16)+' <span>Télécharger</span></button>'
-    +'</div></section>';
+    +'</div>'))+'</section>';
 }
 // Peint les trois toiles de chaque vue, une fois les images lues.
 function monterCarteMuscles(id){
@@ -74834,7 +74930,7 @@ function monterCarteMuscles(id){
       const poser=(sel,src)=>{ const c=box.querySelector(sel); c.width=pv.w; c.height=pv.h; c.getContext('2d').drawImage(src,0,0); };
       poser('.musc-base',pv.base); poser('.musc-lueur',pv.lueur); poser('.musc-veines',pv.veines);
     }
-    try{ monterSelecteurFond('musc-'+id+'-fonds',f=>_muscCarteDe(id,f),null); }catch(e){}
+    if(!p.sansPartage){ try{ monterSelecteurFond('musc-'+id+'-fonds',f=>_muscCarteDe(id,f),null); }catch(e){} }
     return true;
   }).catch(()=>false);
 }
@@ -74935,7 +75031,7 @@ function rendreMusclesFinSeance(u,sess){
   let q=1; try{ q=seancesPrevuesParSemaine(u); }catch(e){ q=1; }
   const d=muscDonnees([sess],{user:u,semaines:1/q,periode:'cette séance'});
   if(!d.series||!Object.values(d.series).some(v=>v>0)){ z.innerHTML=''; return false; }
-  z.innerHTML=htmlCarteMuscles('wd',d,{genre:woGenreAvatar(u)});
+  z.innerHTML=htmlCarteMuscles('wd',d,{genre:woGenreAvatar(u),sansPartage:true});
   monterCarteMuscles('wd');
   return true;
 }
@@ -81079,6 +81175,9 @@ function _htmlDossierSante(user,pourCoach){
   let d=null;
   try{ d=dossierSante(user,pourCoach); }catch(e){ d=null; }
   if(!d) return '';
+  // CÔTÉ ATHLÈTE, UN DOSSIER VIDE NE DIT RIEN (Kevin, 28/09/2026) : la phrase
+  // « rien n'est déclaré… » occupait le menu médical pour n'annoncer que du vide.
+  if(dossierSanteVide(d)&&!pourCoach) return '';
   if(dossierSanteVide(d))
     return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.75">${escapeHtml(DOSSIER_VIDE)}</div>`;
   const titre=t=>`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin:14px 0 8px">${escapeHtml(t)}</div>`;
@@ -114455,7 +114554,10 @@ function saveAthleteProfile(){
   // sa date de naissance par inadvertance ferait disparaître son âge partout.
   currentUser.profileWeight=parseFloat(document.getElementById('atp-weight')?.value)||undefined;
   currentUser.gender=_atpGender||currentUser.gender;
-  currentUser.objective=(document.getElementById('atp-objective')?.value||'').trim()||undefined;
+  // Le champ « Objectif » a quitté le profil (28/09/2026 : il est demandé
+  // ailleurs). Sans lui, on ne touche pas à l'objectif déjà enregistré.
+  const _objEl=document.getElementById('atp-objective');
+  if(_objEl) currentUser.objective=(_objEl.value||'').trim()||undefined;
   // Les états déclarés. Une liste vide EFFACE : se retirer d'une déclaration
   // doit être aussi simple que de la faire.
   // On compare AVANT d ecrire : une sauvegarde de profil qui ne touche pas
@@ -114917,6 +115019,16 @@ function executeOffboard(coachId){
 // sous rc_photo_<date>_<champ>, précisément pour ne jamais partir en base. Un
 // export qui les oublierait rendrait un dossier amputé de ce que l'athlète
 // considère comme le plus personnel.
+// LE LIEN DU PIED DU PROFIL : on dit ce que contient le fichier, puis on
+// l'exporte. Rien ne part tant que la personne n'a pas confirmé.
+async function exporterMesDonneesConfirme(){
+  const ok=await rcConfirm('EXPORTER MES DONNÉES ?\n\n'
+    +'RGPD (Art. 20) : tu récupères l’intégralité de ton dossier dans un fichier JSON : '
+    +'bilans, séances, nutrition, mensurations et photos. Les mots de passe en sont exclus.',null,'Exporter');
+  if(!ok) return false;
+  exportMyData();
+  return true;
+}
 function exportMyData(){
   try{
     const src=(DB.get('users')||{})[currentUser.email];
@@ -114974,13 +115086,19 @@ async function requestAccountDeletion(){
       return;
     }
   }
-  const ok=await rcConfirm(
-    'SUPPRIMER DÉFINITIVEMENT MON COMPTE ?\n\n'
-    +'Cette action est irréversible.\n'
-    +'Toutes tes données personnelles (profil, programmes, codes d\'accès, messages audio)\n'
-    +'seront effacées conformément au RGPD (Art. 17).\n\n'
-    +'Les données financières sont conservées 5 ans (obligation légale).'
-  ,null,'Confirmer');
+  // L'ATHLÈTE LIT CE QU'IL PERD, données de santé comprises : le texte qui
+  // était sur le profil passe ici, au moment du geste (28/09/2026).
+  const ok=await rcConfirm(currentUser.role==='coach'
+    ?('SUPPRIMER DÉFINITIVEMENT MON COMPTE ?\n\n'
+      +'Cette action est irréversible.\n'
+      +'Toutes tes données personnelles (profil, programmes, codes d\'accès, messages audio)\n'
+      +'seront effacées conformément au RGPD (Art. 17).\n\n'
+      +'Les données financières sont conservées 5 ans (obligation légale).')
+    :('SUPPRIMER DÉFINITIVEMENT MON COMPTE ?\n\n'
+      +'Action irréversible. Conformément au RGPD (Art. 17), toutes tes données seront effacées : '
+      +'profil, séances, bilans, photos, et tes données de santé (poids, mensurations, cycle, constantes, analyses).\n\n'
+      +'Les données financières sont conservées 5 ans (obligation légale).')
+  ,null,'Supprimer');
   if(!ok) return;
   toast('Suppression en cours…','var(--sub)');
   try{

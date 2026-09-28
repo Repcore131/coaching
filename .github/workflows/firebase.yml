@@ -18,6 +18,8 @@ on:
       - '**.md'
       - 'scripts/**'
       - 'docs/**'
+      # VAULT (appli d'épargne) n'est pas servie par Firebase : GitHub Pages la publie.
+      - 'vault/**'
       # ⚠ 'functions/**' A QUITTE CETTE LISTE (lot 0). Les fonctions sont
       #   desormais deployees par ce meme workflow : les ignorer aurait laisse
       #   une correction de fonction dans le depot sans jamais la publier.

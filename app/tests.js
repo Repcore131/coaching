@@ -3841,17 +3841,15 @@ async function testExercices(){
         gender:'Femme',_evol_gender:'Femme',exAlias:{},exMuscles:{},programs:{},
         sessions:[],bilans:[],nutrition:{}},o||{});
       try{
-        ok('Critère : aucune déclaration → écran vide et message, aucune relance',(()=>{
+        ok('Critère : aucune déclaration → rien du tout côté athlète, aucune relance',(()=>{
           const u=_mk();
           const d=dossierSante(u,false);
           if(!dossierSanteVide(d))
             return _echec(JSON.stringify({e:d.etats.length,f:d.effets.length,r:d.renvois.length}));
+          // Kevin, 28/09/2026 : la phrase « rien n'est déclaré… » est retirée
+          // du profil athlète. Un dossier vide n'affiche rien.
           const h=_htmlDossierSante(u,false);
-          if(h.indexOf(escapeHtml(DOSSIER_VIDE))<0) return _echec('message absent');
-          // Aucune relance : pas de bouton, pas d'invitation a declarer.
-          return /onclick|declare|Ajouter|Renseigne/i.test(h.replace(/DOSSIER_VIDE/,''))
-            &&!/n'affiche que ce que tu as/.test(h)
-            ?_echec('une relance est proposée'):true;})());
+          return h===''?true:_echec('le dossier vide affiche encore : '+h.slice(0,80));})());
         ok('Critère : allaitement → « objectifs de perte désactivés », cause et date',(()=>{
           const t=Date.now()-40*864e5;
           const u=_mk({grossesse:{etat:'allaitement',declareLe:t}});
@@ -7459,7 +7457,9 @@ async function testExercices(){
           if(!b) return _echec('aucun bouton de suppression');
           if(!/requestAccountDeletion\(\)/.test(b.getAttribute('onclick')||''))
             return _echec('le bouton n\'appelle pas la suppression');
-          const t=(z.innerText||z.textContent||'').replace(/\s+/g,' ');
+          // Le texte vit dans la confirmation (28/09/2026) : le profil ne
+          // garde qu'un lien discret en pied de page.
+          const t=String(requestAccountDeletion).replace(/\s+/g,' ');
           if(!/Art\. 17/.test(t)) return _echec('le fondement RGPD n\'est pas cité');
           // Ce qu'un athlete perd n'est pas « des donnees » : ce sont SES
           // donnees de sante. Les nommer est le seul moyen qu'il le sache.
@@ -24220,12 +24220,12 @@ async function testExercices(){
         d.innerHTML=htmlSelecteurComptes();
         const l=[...d.querySelectorAll('[onclick^="basculerCompte"]')];
         return l.length===1&&l[0].getAttribute('onclick').indexOf(CO)>=0;})());
-      ok('Avec un seul compte, pas de titre mais le bouton d\'ajout reste',(()=>{
+      ok('Avec un seul compte, le titre, le compte rangé sous son rôle et le bouton d\'ajout',(()=>{
         _poser();
         currentUser=(DB.get('users'))[CO];
         comptesEnregistrer(currentUser);
         const h=htmlSelecteurComptes();
-        return !/Mes comptes/.test(h)&&/Ajouter un compte/.test(h);})());
+        return /Mes comptes/.test(h)&&/Compte (athlète|coach)/.test(h)&&/Ajouter un compte/.test(h);})());
       ok('La limite des rappels est annoncée dès qu\'il y a deux comptes',(()=>{
         _poser();
         const u=DB.get('users');
@@ -42634,17 +42634,57 @@ async function testExercices(){
         }
       }})());
 
-    ok('Le bouton mène au programme du coach, ou au parcours de départ',(()=>{
+    // ══ 28/09/2026 — « GÉRER MES SÉANCES » SOUS « POUR DÉMARRER » ═══════════
+    // Un compte neuf, sans seance : le bloc « Pour démarrer » masquait la carte
+    // de reprise, et la reprise masquait la carte Entraînement. Plus aucun
+    // chemin vers ses seances : une athlete a abandonne l'application.
+    ok('Compte neuf : la carte Entraînement reste, juste sous « Pour démarrer »',(()=>{
+      const sv=currentUser;
+      const hero=()=>document.getElementById('clh-hero');
+      const vis=e=>!!e&&e.style.display!=='none';
+      try{
+        const t=Date.now();
+        currentUser={id:'pd',email:'pd@t.fr',role:'athlete',createdAt:t-2*864e5,sessions:[],bilans:[],nutrition:{}};
+        _rendreReprise(); _rendreDemarrage();
+        const h=hero();
+        if(!document.getElementById('clh-demarrer').innerHTML) return _echec('« Pour démarrer » ne parait pas');
+        if(!vis(h)) return _echec('la carte Entraînement reste masquée');
+        if(document.getElementById('clh-demarrer').nextElementSibling!==h) return _echec('la carte n’est pas juste sous « Pour démarrer »');
+        if(!h.querySelector('[onclick="loadSessionManager()"]')) return _echec('« Gérer mes séances » a disparu de la carte');
+        // « Ton suivi se termine » (#clh-essai) vient APRES la carte.
+        const ess=document.getElementById('clh-essai');
+        if(ess&&!(h.compareDocumentPosition(ess)&Node.DOCUMENT_POSITION_FOLLOWING)) return _echec('la ligne du suivi passe devant la carte');
+        // Premiere seance faite : la carte retourne sous les trois chiffres.
+        currentUser.sessions=[{date:t}];
+        _rendreReprise(); _rendreDemarrage();
+        if(document.getElementById('clh-stats').nextElementSibling!==hero()) return _echec('la carte ne reprend pas sa place');
+        if(!vis(hero())) return _echec('la carte est masquée après la première séance');
+        // Hors « Pour démarrer » (compte ancien sans séance) : comportement d'avant.
+        currentUser={id:'pd2',email:'pd2@t.fr',role:'athlete',createdAt:t-90*864e5,sessions:[]};
+        _rendreReprise(); _rendreDemarrage();
+        if(document.getElementById('clh-stats').nextElementSibling!==hero()) return _echec('la carte bouge hors « Pour démarrer »');
+        return true;
+      } finally {
+        currentUser=sv;
+        try{ _placerHeroDemarrage(false); }catch(e){}
+        try{ document.getElementById('clh-reprise').innerHTML=''; document.getElementById('clh-demarrer').innerHTML=''; }catch(e){}
+        try{ document.getElementById('s-client-home').removeAttribute('data-demarrage'); }catch(e){}
+        for(const id of ['clh-stats','clh-hero']){ const e=document.getElementById(id); if(e) e.style.display=''; }
+      }})());
+
+    ok('Le bouton mène au programme du coach, ou à « Gérer mes séances »',(()=>{
       const s=String(reprendreMaintenant);
       // LE COACH A PUBLIE : on ouvre le selecteur, comme partout ailleurs.
       // _configReelle est le predicat deja en place, celui qui distingue un
       // programme publie d'un repli generique.
       if(s.indexOf('_configReelle')<0) return _echec('il ne regarde pas si un programme existe');
       if(s.indexOf('openSessionPicker')<0) return _echec('il n’ouvre pas le selecteur de seances');
-      // IL N'A RIEN PUBLIE : on ouvre le parcours de premiere seance.
-      if(s.indexOf('ouvrirPremiereSeance')<0) return _echec('il n’ouvre pas le parcours de depart');
-      const iC=s.indexOf('_configReelle'), iP=s.indexOf('ouvrirPremiereSeance');
-      if(!(iP>iC)) return _echec('le parcours passe avant le programme du coach');
+      // IL N'A RIEN PUBLIE : semaine vierge, l'athlete construit sa seance
+      // (28/09/2026 : plus de seance generee).
+      if(s.indexOf('ouvrirPremiereSeance')>=0) return _echec('il ouvre encore le parcours qui génère une séance');
+      const iC=s.indexOf('_configReelle'), iP=s.indexOf('loadSessionManager');
+      if(iP<0) return _echec('il n’ouvre pas « Gérer mes séances »');
+      if(!(iP>iC)) return _echec('« Gérer mes séances » passe avant le programme du coach');
       // ET IL EST BRANCHE : loadClientHome rend le bloc, apres les chiffres
       // qu'il masque et avant les blocs de sante qu'il ne touche pas.
       const l=String(loadClientHome);
@@ -42653,12 +42693,12 @@ async function testExercices(){
       if(!(iM>=0&&iR>iM)) return _echec('le bloc est rendu avant les chiffres qu’il masque');
       const iD=l.indexOf('renderDouleurAthlete');
       return (iD>iR)?true:_echec('le bloc est rendu apres les blocs de sante');})());
-    ok('Le parcours ne s’ouvre que pour un compte sans programme ni historique',(()=>{
+    ok('Le parcours qui génère une séance ne s’ouvre plus pour personne (28/09/2026)',(()=>{
       const A=o=>Object.assign({email:'a@t.fr',role:'athlete',sessions:[]},o);
       const vrai=[{active:true,exercises:[{name:'DC'}]},{active:false},{active:false},
                   {active:false},{active:false},{active:false},{active:false}];
       const cas=[
-        ['compte neuf',              A({}),                      false, true],
+        ['compte neuf',              A({}),                      false, false],
         ['deja vu',                  A({}),                      true,  false],
         // Quelqu'un qui s'est deja entraine a trouve sa premiere marche tout
         // seul : la lui proposer serait insultant.
@@ -42667,7 +42707,7 @@ async function testExercices(){
         // distingue un programme publie d'un repli generique. Le reecrire
         // aurait fait diverger deux definitions du meme mot.
         ['a un vrai programme',      A({sessions_config:vrai}),  false, false],
-        ['a le repli generique',     A({sessions_config:[{active:true,exercises:[{name:'X'}],_essai:true}]}), false, true],
+        ['a le repli generique',     A({sessions_config:[{active:true,exercises:[{name:'X'}],_essai:true}]}), false, false],
         ['un coach',                 A({role:'coach'}),          false, false],
         ['sans dossier',             null,                       false, false]
       ];
@@ -49123,6 +49163,25 @@ async function testExercices(){
       return true;})());
     ok('Pages : réglages publics classés non-santé',
       ['pagePublique','vitrineSlug','vitrinePubliee','specialites','pagePropose'].every(k=>CHAMPS_NON_SANTE.indexOf(k)>=0));
+    // 28/09/2026 : « kevin.gllc » rendait « déjà pris » — Firebase refuse le
+    // point dans une clé, et tout échec était lu comme un refus.
+    okA('Pages : un pseudo avec un point part en base avec une virgule, et seul un refus dit « déjà pris »',(async()=>{
+      const sv=CLOUD.racinePatchStatut; let vu=null, st=200;
+      CLOUD.racinePatchStatut=async(c)=>{ vu=c; return st; };
+      try{
+        const u={email:'k.g@t.fr',role:'athlete',fname:'Kevin',pagePublique:{pseudo:'vieux.nom'}};
+        const r=await publierPagePublique(u,{pseudo:'Kevin.gllc',active:true,montrer:{}},{silencieux:true});
+        if(!r.ok) return _echec(r.erreur);
+        const k=Object.keys(vu);
+        if(k.some(x=>/\./.test(x))) return _echec('un point dans une clé : '+k.join(' '));
+        if(vu['pseudos/kevin,gllc']!=='k,g@t,fr'||vu['pseudos/vieux,nom']!==null) return _echec(JSON.stringify(vu).slice(0,200));
+        if(u.pagePublique.pseudo!=='kevin.gllc') return _echec('le pseudo affiché perd son point');
+        st=400; const r2=await publierPagePublique(u,{pseudo:'autre.nom',active:true,montrer:{}},{silencieux:true});
+        if(/déjà pris/.test(r2.erreur||'')) return _echec('une requête refusée pour une autre raison dit « déjà pris »');
+        st=401; const r3=await publierPagePublique(u,{pseudo:'autre.nom',active:true,montrer:{}},{silencieux:true});
+        return /déjà pris/.test(r3.erreur||'')?true:_echec('un vrai refus ne dit plus « déjà pris »');
+      }finally{ CLOUD.racinePatchStatut=sv; }
+    }));
     // ══ 28/09/2026 — LA PAGE PUBLIQUE : CONTENU, PROPOSITION, APERÇU ══════
     ok('Page : les 12 dernières semaines — 1 validée, 0 manquée, e la semaine en cours',(()=>{
       const t=Date.parse('2026-09-30T12:00:00+02:00');     // un mercredi
@@ -49446,17 +49505,31 @@ async function testExercices(){
       const r=messageRelanceAcces({fname:'Léa',accessExpiry:Date.now()+3*864e5},{cle:'bientot'});
       if(/ : [^ ]+ : /.test(r)||!/engagement 12 mois/.test(r)) return _echec(r);
       return true;})());
-    ok('Records : un vrai bouton « Partager » au-dessus de la liste, une pastille par ligne s’il y en a plusieurs',(()=>{
+    ok('Records (28/09/2026) : plus de partage ni de choix image/vidéo, une phrase par record',(()=>{
       const rec=(n)=>({records:Array.from({length:n},(_,i)=>({nm:'SQUAT '+i,curMax:100+i,histMax:90,gain:10+i}))});
-      const h3=_htmlRecordsFin(rec(3),Date.now(),'wd');
-      const iTous=h3.indexOf('Partager mes 3 records'), iLigne=h3.indexOf('rcf-rk-l');
-      if(iTous<0||iLigne<0||iTous>iLigne) return _echec('le bouton n’est pas au-dessus de la liste');
-      if(!/<button type="button" class="rcf-rk-p rcf-rk-p-tous"/.test(h3)) return _echec('pas un vrai bouton');
-      if((h3.match(/rcf-rk-p-ligne/g)||[]).length!==3) return _echec('une pastille par ligne attendue');
-      const h1=_htmlRecordsFin(rec(1),Date.now(),'wd');
-      if(h1.indexOf('Partager ce record')<0||h1.indexOf('Partager ce record')>h1.indexOf('rcf-rk-l')||/rcf-rk-p-ligne/.test(h1)) return _echec('un seul record : un bouton, en haut');
-      if(/<button/.test(_htmlRecordsFin(rec(2),Date.now()))) return _echec('sans clé d’écran, pas de bouton');
-      return true;})());
+      for(const cle of ['wd','sd',undefined]){
+        const h=_htmlRecordsFin(rec(3),Date.now(),cle);
+        if(/<button/.test(h)||/Partager/.test(h)) return _echec('un bouton de partage reste ('+cle+')');
+        if(/vs-media|Vidéo|VIDÉO/.test(h)) return _echec('le choix image / vidéo reste ('+cle+')');
+        if((h.match(/class="rcf-rk-x"/g)||[]).length!==3) return _echec('une explication par record attendue ('+cle+')');
+      }
+      const h1=_htmlRecordsFin({records:[{nm:'Développé',curMax:140,histMax:132.5,gain:7.5}]},Date.now(),'wd');
+      return /140 kg, soit 7,5 kg de plus que ton meilleur jusqu’ici \(132,5 kg\)/.test(h1)?true:_echec(h1);})());
+    ok('Fin de séance (28/09/2026) : le bus dessiné passe sous « = 1 bus », l’emoji pour les autres ; la barre du record part de l’ancienne charge',(()=>{
+      const h=_htmlStatsFin(331,24,28,13300,0);
+      if(!/class="rcf-route"/.test(h)||!/rcf-vehicule rcf-bus"><svg/.test(h)) return _echec('pas de bus dessiné sous le volume');
+      const e=_htmlStatsFin(60,10,10,6500,0);
+      if(!/rcf-vehicule">🐘/.test(e)) return _echec('l’éléphant ne passe pas');
+      if(/rcf-route/.test(_htmlStatsFin(1,1,1,1,0))) return _echec('une route sans équivalent');
+      const r=_htmlRecordsFin({records:[{nm:'Développé',curMax:140,histMax:132.5,gain:7.5}]},Date.now(),'wd');
+      if(!/class="rcf-rk-barre" aria-hidden="true" style="--avant:95%"/.test(r)) return _echec('la barre du record : '+r);
+      return /<button/.test(r)?_echec('un bouton est revenu dans les records'):true;})());
+    ok('Fin de séance (28/09/2026) : la carte musculaire se lit, sans rien à télécharger',(()=>{
+      const d={titre:'T',periode:'cette séance',chiffres:[],groupes:{},series:{}};
+      const avec=htmlCarteMuscles('t1',d,{}), sans=htmlCarteMuscles('t2',d,{sansPartage:true});
+      if(!/musc-actions/.test(avec)) return _echec('les autres écrans perdent leur partage');
+      if(/musc-actions|Télécharger|Partager/.test(sans)) return _echec('la carte de fin de séance garde son partage');
+      return /sansPartage:true/.test(String(rendreMusclesFinSeance))?true:_echec('la fin de séance ne demande pas la carte sans partage');})());
     // ══ 27/09/2026 — L'ACCUEIL NOMINATIF DU FILLEUL ══════════════════════
     okA('Accueil /i : « Julie t’invite », son rang et 2 mois ; l’ambassadeur par son nom ; le coach inchangé ; sans rien, pas de code coach',async()=>{
       let h=''; try{ const x=new XMLHttpRequest(); x.open('GET','../i/index.html',false); x.send(); h=x.responseText; }catch(e){ return _echec('lecture de /i'); }
@@ -50963,7 +51036,7 @@ async function testExercices(){
         if(!clair) return _echec(s.type+' : pas de flash de foudre');
       }
       return true;})());
-    ok('Vidéo : la bascule « Image / Vidéo » — absente sans MediaRecorder, posée sur les écrans record, rang et Wrapped',(()=>{
+    ok('Vidéo : la bascule « Image / Vidéo » — absente sans MediaRecorder, posée sur les écrans rang et Wrapped',(()=>{
       const sv=Object.getOwnPropertyDescriptor(window,'MediaRecorder');
       let avant=null; try{ avant=localStorage.getItem(VISUEL_MEDIA_CLE); }catch(e){}
       try{
@@ -50981,9 +51054,10 @@ async function testExercices(){
         if(!/event\.stopPropagation\(\);visuelMediaChoisir/.test(h)) return _echec('un toucher dans Wrapped ferait avancer la slide');
         visuelMediaChoisir('image');
         if(visuelMediaChoisi()!=='image') return _echec('choix non retenu');
-        // Les trois écrans.
+        // Les écrans rang et Wrapped. Plus l'écran des records, depuis le
+        // 28/09/2026 : il ne se partage plus (Kevin), et n'a donc plus rien à choisir.
         const rec=_htmlRecordsFin({records:[{nm:'SQUAT',histMax:100,curMax:105,gain:5}]},Date.now(),'wd');
-        if(rec.indexOf('class="vmed"')<0) return _echec('écran record');
+        if(rec.indexOf('class="vmed"')>=0) return _echec('écran record : la bascule est revenue');
         const wr=_wrHtmlSlide({k:'profil',sur:'TON PROFIL',profil:{nom:'X',phrase:'Y'},resume:[],equivalent:null},4);
         if(wr.indexOf('class="vmed"')<0) return _echec('écran Wrapped');
         if(!/_htmlVisuelFonds\('rg-fonds'\)\+_htmlVisuelMedia\(\)/.test(String(_rangEcran))) return _echec('écran rang');
@@ -54382,7 +54456,7 @@ async function testExercices(){
         const titres=[...z.querySelectorAll('.pd-titre')].map(x=>x.textContent).join('|');
         if(titres!=='1 · Complète ton questionnaire|2 · Lance ta première séance|3 · Note ton premier repas') return _echec('titres : '+titres);
         const sous=[...z.querySelectorAll('.pd-sous')].map(x=>x.textContent).join('|');
-        if(sous!=='~12 min · c’est ce qui permet à ton coach d’adapter tes charges|Trois questions, et ta séance est prête|Pour voir tes macros se remplir') return _echec('sous-titres : '+sous);
+        if(sous!=='~12 min · c’est ce qui permet à ton coach d’adapter tes charges|Crée ta séance, exercice par exercice|Pour voir tes macros se remplir') return _echec('sous-titres : '+sous);
         if(/Pour démarrer/.test(z.textContent)===false||z.querySelector('.pd-compte').textContent!=='0 sur 3') return _echec('en-tête : '+z.textContent.slice(0,40));
         // CE QUI PEUT ATTENDRE SE TAIT ; la santé et l'accès, jamais.
         for(const id of MASQUES) if(!cache(id)) return _echec('#'+id+' reste affiché pendant la mise en route');
@@ -54421,9 +54495,10 @@ async function testExercices(){
       const essai=vierge.map((s,i)=>i?s:Object.assign({},s,{active:true,exercises:[{name:'SQUAT'}]}));
       const reel=essai.map(s=>{ const c=Object.assign({},s); delete c._essai; return c; });
       const r=[vierge,essai,reel].map(sc=>{ const x=_pdSeance(_r36Ath({sessions_config:sc})); return x.voie+':'+x.sous; }).join('|');
-      if(r!=='parcours:Trois questions, et ta séance est prête|selecteur:Ton programme d’essai t’attend|selecteur:Ton programme t’attend') return _echec(r);
+      if(r!=='gerer:Crée ta séance, exercice par exercice|selecteur:Ton programme d’essai t’attend|selecteur:Ton programme t’attend') return _echec(r);
       const s=String(pdLancerSeance);
-      if(s.indexOf('openSessionPicker')<0||s.indexOf('ouvrirPremiereSeance')<0) return _echec('le routage a changé');
+      if(s.indexOf('openSessionPicker')<0||s.indexOf('loadSessionManager')<0) return _echec('le routage a changé');
+      if(s.indexOf('ouvrirPremiereSeance')>=0) return _echec('« Lance ta première séance » génère encore une séance');
       // LA RAISON : sur sept créneaux éteints, le sélecteur n'a rien à montrer.
       if(String(openSessionPicker).indexOf('if(!active.length)')<0) return _echec('le sélecteur a changé : revoir la ligne 2');
       // Ce qui ne devait pas bouger n'a pas bougé.
@@ -59979,10 +60054,21 @@ async function testExercices(){
       if(document.getElementById('lifestyle-import')) return _echec('le cadre de tête de Lifestyle est toujours là');
       return true;})());
 
-    ok('R22 — « Tension et analyses » est la première ligne du profil, et mène à un écran athlète',(()=>{
+    ok('R22 — « Tension et analyses » vient juste après l’identité (photo, nom, visuels), et mène à un écran athlète',(()=>{
       const pad=document.querySelector('#s-athlete-profile .scroll-area .pad');
-      const b=pad&&pad.firstElementChild;
-      if(!b||b.tagName!=='BUTTON') return _echec('la première ligne du profil n’est pas un bouton');
+      // L'IDENTITÉ D'ABORD (Kevin, 28/09/2026) : la photo ouvre l'écran, puis
+      // la carte identité et le nom affiché sur les visuels.
+      const premier=pad&&pad.firstElementChild;
+      if(!premier||!premier.querySelector('#atp-photo-circle')) return _echec('la photo n’est pas tout en haut du profil');
+      const kids=pad?[...pad.children]:[];
+      const iId=kids.findIndex(x=>x.querySelector&&x.querySelector('#atp-fname'));
+      const iVn=kids.findIndex(x=>x.querySelector&&x.querySelector('#atp-vn-prenom'));
+      // Kevin, 28/09/2026 : la tension ouvre le menu déroulant « Mes
+      // informations médicales », juste sous les visuels.
+      const iMed=kids.findIndex(x=>x.id==='atp-med');
+      const b=pad&&pad.querySelector('#atp-med .atp-med-corps button');
+      if(!(iId===1&&iVn===2&&iMed===3)) return _echec('ordre du profil : identité '+iId+', visuels '+iVn+', médical '+iMed);
+      if(!b) return _echec('le bouton Tension n’est pas dans le menu médical');
       if(!/Tension et analyses/i.test(b.textContent)||!/Tension, analyses, constantes/.test(b.textContent))
         return _echec('libellé : « '+b.textContent.replace(/\s+/g,' ').trim()+' »');
       const m=(b.getAttribute('onclick')||'').match(/go\('([^']+)'\)/);
@@ -73675,17 +73761,6 @@ vendredi 78 6h 44m
         const a=_recAlea(_recGraine('Squat|105')), b=_recAlea(_recGraine('Squat|105'));
         for(let i=0;i<20;i++) if(a()!==b()) return _echec('tirage différent');
         return true;})());
-      ok('Mes records : un bouton par record, et un récapitulatif dès deux',(()=>{
-        const l=[{nm:'A',histMax:10,curMax:12,gain:2},{nm:'B',histMax:20,curMax:25,gain:5}];
-        const d=document.createElement('div');
-        d.innerHTML=_htmlRecordsFin({records:l},Date.now(),'sd');
-        const n=d.querySelectorAll('.rcf-rk-l .rcf-rk-p').length, t=d.querySelectorAll('.rcf-rk-tous .rcf-rk-p').length;
-        if(n!==2||t!==1) return _echec(n+' bouton(s), '+t+' récapitulatif');
-        d.innerHTML=_htmlRecordsFin({records:[l[0]]},Date.now(),'sd');
-        if(d.querySelector('.rcf-rk-tous')) return _echec('récapitulatif pour un seul record');
-        // Sans clé d'écran, le bloc d'avant, sans bouton.
-        d.innerHTML=_htmlRecordsFin({records:l});
-        return d.querySelector('.rcf-rk-p')?_echec('bouton sans clé'):true;})());
       ok('Le partage d\'un record copie le lien perso, par les sorties communes',(()=>{
         const s=String(partagerRecord);
         return (s.indexOf('_storySortirPartage')>=0&&s.indexOf('_storySortirTelechargement')>=0

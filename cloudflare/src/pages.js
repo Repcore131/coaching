@@ -192,9 +192,10 @@ export async function servirPagePublique(req, o) {
   try {
     const [g, d, vs] = await Promise.all([
       html ? Promise.resolve(null) : f(ORIGINE + '/' + dossier + '/index.html'),
-      f(base + '/' + noeud + encodeURIComponent(c.cle) + '.json'),
+      // Le point d'un pseudo est une virgule en base (Firebase refuse le point dans une clé).
+      f(base + '/' + noeud + encodeURIComponent(c.type === 'coach' ? c.cle : c.cle.replace(/\./g, ',')) + '.json'),
       // Le rang recalculé par le serveur (/volts_publics), pour un athlète.
-      c.type === 'coach' ? Promise.resolve(null) : f(base + '/volts_publics/' + encodeURIComponent(c.cle) + '.json').catch(() => null),
+      c.type === 'coach' ? Promise.resolve(null) : f(base + '/volts_publics/' + encodeURIComponent(c.cle.replace(/\./g, ',')) + '.json').catch(() => null),
     ]);
     if (!html) {
       if (!g || !g.ok) throw new Error('gabarit ' + (g && g.status));
