@@ -50932,16 +50932,12 @@ async function testExercices(){
       }
       if(CARTE_FORMATS.carte.w!==1080||CARTE_FORMATS.carte.h!==1512) return _echec('format');
       return /img\/cartes\//.test(String(carteCadreImage))?true:_echec('gabarits');})());
-    ok('Carte : l’onglet Évolution — la carte et la courbe de la note',(()=>{
-      if(!/deux semaines/.test(htmlCourbeCarte([{s:'2026-09-21',g:50}]))) return _echec('une seule semaine');
-      const h=htmlCourbeCarte([{s:'2026-09-14',g:50},{s:'2026-09-21',g:55},{s:'2026-09-28',g:61}]);
-      const d=document.createElement('div'); d.innerHTML=h;
-      if(d.querySelectorAll('circle').length!==3||!d.querySelector('polyline')) return _echec('points');
-      if(!/Semaine du .* : 61/.test(d.querySelectorAll('circle')[2].textContent)) return _echec('survol');
-      if(d.querySelector('.ca-der').textContent!=='61') return _echec('dernière valeur');
-      if(!/50 à 61/.test(d.querySelector('svg').getAttribute('aria-label'))) return _echec('aria');
-      const x=new XMLHttpRequest(); x.open('GET','index.html',false); x.send();
-      return (x.status!==200||/id="prog-carte"/.test(x.responseText))?true:_echec('prog-carte absent d’Évolution');})());
+    // 28/09/2026 : Kevin a retiré la carte d'athlète de l'onglet Évolution.
+    ok('Carte : l’onglet Évolution ne porte plus la carte d’athlète',(()=>{
+      if(/_renderCarteProgression|prog-carte/.test(String(loadProgress))) return _echec('loadProgress peint encore la carte');
+      if(document.getElementById('prog-carte')) return _echec('le conteneur #prog-carte est encore dans Évolution');
+      // Elle reste ailleurs : sa note et son partage existent toujours.
+      return (typeof noteAthlete==='function'&&typeof partagerCarteAthlete==='function')?true:_echec('la carte a disparu de l’application');})());
     ok('Carte : la page publique — vignette seulement si activée, des notes et jamais le poids',(()=>{
       if(pageMontrerDefaut().carte!==false) return _echec('activée par défaut');
       const u={fname:'Julie',gender:'femme',weightLog:[{date:'2026-09-20',kg:61}],sessions:[_CAS(2,[['SQUAT',_CAK(80),1]])],

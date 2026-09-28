@@ -77434,48 +77434,9 @@ function fermerCarteAccueil(){
   const z=document.getElementById('clh-carte'); if(z){ z.innerHTML=''; z.hidden=true; }
   return true;
 }
-// ── L'onglet Évolution : la carte et la courbe de la note ─────────────────
-// PURE. La courbe de la globale, semaine par semaine (SVG). Une seule série :
-// pas de légende, le titre la nomme ; chaque point dit sa valeur au survol.
-function htmlCourbeCarte(hist){
-  const l=(Array.isArray(hist)?hist:[]).filter(x=>x&&x.s&&x.g>0).slice(-26);
-  if(l.length<2) return '<p class="ca-vide">La courbe apparaît après deux semaines de note.</p>';
-  const W=320, H=120, px=14, py=14;
-  const mn=Math.max(1,Math.min(...l.map(x=>x.g))-5), mx=Math.min(99,Math.max(...l.map(x=>x.g))+5);
-  const X=i=>px+i*(W-2*px)/(l.length-1), Y=v=>H-py-(v-mn)*(H-2*py)/Math.max(1,mx-mn);
-  const pts=l.map((x,i)=>X(i).toFixed(1)+','+Y(x.g).toFixed(1)).join(' ');
-  const der=l[l.length-1];
-  const date=s=>{ try{ return new Date(s+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }catch(e){ return s; } };
-  return '<svg class="ca-courbe" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Note globale sur '+l.length+' semaines, de '+l[0].g+' à '+der.g+'">'
-    +'<line x1="'+px+'" x2="'+(W-px)+'" y1="'+(H-py)+'" y2="'+(H-py)+'" class="ca-axe"/>'
-    +'<polyline points="'+pts+'" fill="none" class="ca-ligne"/>'
-    +l.map((x,i)=>'<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(x.g).toFixed(1)+'" r="'+(i===l.length-1?5:4)+'" class="ca-point"><title>Semaine du '+escapeHtml(date(x.s))+' : '+x.g+'</title></circle>').join('')
-    +'<text x="'+(X(l.length-1)-6).toFixed(1)+'" y="'+(Y(der.g)-10).toFixed(1)+'" text-anchor="end" class="ca-der">'+der.g+'</text>'
-    +'</svg>';
-}
-function _renderCarteProgression(){
-  const z=document.getElementById('prog-carte');
-  const u=currentUser;
-  if(!z) return false;
-  if(!u||u.role==='coach'){ z.innerHTML=''; return false; }
-  try{ majCarteAthlete(u); }catch(e){}
-  const c=u.carte||noteAthlete(u);
-  z.innerHTML='<div class="ca-evo card">'
-    +'<div class="ca-evo-t">Ta carte d’athlète</div>'
-    +'<div class="ca-evo-l"><canvas class="ca-vignette" id="ca-evo-vignette" width="240" height="336" role="img" aria-label="Carte d’athlète, note '+c.globale+'"></canvas>'
-    +'<div class="ca-evo-notes">'+CARTE_NOTES.map(k=>'<div><b>'+c[k]+'</b><span>'+CARTE_LIB[k]+'</span></div>').join('')
-    +(c.sansPoids?'<p class="ca-note">Ajoute une pesée : la force se mesure par rapport à ton poids.</p>':'')
-    +'</div></div>'
-    +'<div class="ca-evo-t2">Ta note, semaine après semaine</div>'
-    +htmlCourbeCarte(u.carteHist)
-    +'<div class="ca-btns"><button type="button" class="btn btn-outline btn-sm btn-casse" onclick="partagerCarteAthlete(this,\'carte\')">'+icon('share',14)+' <span>Partager ma carte</span></button></div>'
-    +'</div>';
-  const emb=_carteEmbleme(u);
-  const peindre=()=>{ try{ _peindreVignetteCarte('ca-evo-vignette',u); }catch(e){} };
-  peindre();
-  if(emb&&!emb.complete) emb.addEventListener('load',peindre,{once:true});
-  return true;
-}
+// ── L'onglet Évolution ne porte plus la carte d'athlète ──────────────────
+// Retirée le 28/09/2026 (Kevin : « ça n'a rien à faire dans Évolution »).
+// La carte garde sa note, son accueil et son partage ; seul l'onglet la perd.
 // ── LA FIN DE SÉANCE : « +180 ⚡ », compté par arcCompteur, et le détail ──
 // PURE.
 function htmlVoltsFin(g,xpTotal){
@@ -77953,8 +77914,6 @@ function loadProgress(){
   go('s-progress');_renderEncartOsseux();renderBandeauPhase();
   // R32 — la phrase de synthese, en tete.
   try{ _renderSyntheseProgression(); }catch(e){}
-  // La carte d'athlète et la courbe de sa note.
-  try{ _renderCarteProgression(); }catch(e){}
   // R20 — L'ONGLET OU L'ATHLETE S'ETAIT ARRETE, et non plus toujours « Poids ».
   // Un nom inconnu (ancien onglet, valeur abimee) retombe sur « Poids ».
   // LE REPLI SUR DONNEES ABSENTES N'EST PAS ECRIT : « Perfs » choisi sur un
