@@ -42693,7 +42693,8 @@ async function testExercices(){
       // « Défie un pote » juste sous les trois cases, et la carte Entraînement après lui.
       const st=document.getElementById('clh-stats');
       if(!st||st.nextElementSibling!==document.getElementById('clh-duels')) return _echec('« Défie un pote » n’est pas sous les trois cases');
-      if(String(htmlDuelsAccueil).indexOf("icon('hache'")<0) return _echec('le bouton n’a pas sa hache');
+      // Le bandeau rouge (Kevin, 28/09/2026) : deux haches croisées dans l'écusson.
+      if(String(htmlDuelsAccueil).indexOf("icon('haches'")<0||!ICONS.haches) return _echec('le bouton n’a pas ses haches');
       if(String(loadClientHome).indexOf('_rendreRecordAPortee(')>=0) return _echec('« Record à portée » est encore peint sur l’accueil');
       return true;})());
 
