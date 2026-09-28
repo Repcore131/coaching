@@ -714,7 +714,9 @@ async function testExercices(){
         if(!(somme(vD)<somme(vN)))
           return _echec('la grille montrera deux colonnes identiques : '+somme(vD)+' contre '+somme(vN));
         // LE PONT VERS LA DETECTION DE PLATEAU TIENT TOUJOURS.
-        return semaineEstDecharge(u,new Date(u.programme.debut+4*604800000))
+        // Quatre semaines EN CALENDRIER : 4*604800000 ms tombe le dimanche a
+        // 23 h quand le bloc enjambe le passage a l'heure d'hiver.
+        return semaineEstDecharge(u,_datePlusJours(u.programme.debut,4*7))
           ?true:_echec('la semaine n\'est plus reconnue comme decharge');})());
 
       ok('B3.3 — retirer la decharge remet la semaine a son niveau',(()=>{
@@ -15198,7 +15200,7 @@ async function testExercices(){
             return _echec('au-delà du maximum est accepté');
           // La date de début est ramenée au LUNDI : un bloc démarré un jeudi
           // ne décale pas toutes ses semaines d'un demi-cran.
-          const jeudi=_lun+3*86400000;
+          const jeudi=_datePlusJours(_lun,3).getTime();
           const r=programmeDe(_prog({programme:{debut:jeudi,semaines:4}}));
           return r&&r.debut===_lun?true:_echec('le début n\'est pas ramené au lundi');})());
         ok('Une décharge hors bloc est IGNORÉE, pas rejetée',(()=>{
@@ -15211,19 +15213,27 @@ async function testExercices(){
           const u=_prog({programme:{debut:_lun,semaines:4}});
           if(indexSemaineBloc(u,new Date(_lun))!==0) return _echec('la première semaine n\'est pas 0');
           // N'importe quel jour de la semaine donne le même index.
-          if(indexSemaineBloc(u,new Date(_lun+6*86400000))!==0) return _echec('le dimanche bascule');
-          if(indexSemaineBloc(u,new Date(_lun+7*86400000))!==1) return _echec('la deuxième semaine');
-          if(indexSemaineBloc(u,new Date(_lun+3*7*86400000))!==3) return _echec('la dernière semaine');
-          if(indexSemaineBloc(u,new Date(_lun+4*7*86400000))!==null) return _echec('après la fin');
-          return indexSemaineBloc(u,new Date(_lun-86400000))===null
-            ?true:_echec('avant le début');})());
+          if(indexSemaineBloc(u,_datePlusJours(_lun,6))!==0) return _echec('le dimanche bascule');
+          if(indexSemaineBloc(u,_datePlusJours(_lun,7))!==1) return _echec('la deuxième semaine');
+          if(indexSemaineBloc(u,_datePlusJours(_lun,3*7))!==3) return _echec('la dernière semaine');
+          if(indexSemaineBloc(u,_datePlusJours(_lun,4*7))!==null) return _echec('après la fin');
+          if(indexSemaineBloc(u,_datePlusJours(_lun,-1))!==null) return _echec('avant le début');
+          // LE MEME BLOC, A DATE FIXE, A CHEVAL SUR L'HEURE D'HIVER : parti le
+          // lundi 28 septembre 2026, sa semaine 4 commence le lundi 26
+          // octobre, au lendemain du dimanche de vingt-cinq heures. C'est la
+          // date qui a revele que le test ajoutait des millisecondes.
+          const h=_prog({programme:{debut:new Date(2026,8,28).getTime(),semaines:4}});
+          if(indexSemaineBloc(h,new Date(2026,9,25,23,30))!==3) return _echec('le dimanche 25 octobre');
+          if(indexSemaineBloc(h,new Date(2026,9,26))!==null) return _echec('après la fin, heure d\'hiver');
+          return indexSemaineBloc(h,new Date(2026,9,19))===3
+            ?true:_echec('la dernière semaine, heure d\'été');})());
         ok('getSemaineEffective n\'écrit RIEN, même sur une semaine future',(()=>{
           // LA propriété qui compte : une vue qui parcourt 24 semaines l'appelle
           // 24 fois. Si elle écrivait, consulter un programme le modifierait.
           const u=_prog({programme:{debut:_lun,semaines:12,decharges:[4],
             ecarts:{'2':{'0':{name:'HAUT LOURD'}}}}});
           const avant=JSON.stringify(u);
-          for(let i=0;i<12;i++) getSemaineEffective(u,new Date(_lun+i*7*86400000));
+          for(let i=0;i<12;i++) getSemaineEffective(u,_datePlusJours(_lun,i*7));
           semainesDuBloc(u); indexSemaineBloc(u,new Date());
           if(JSON.stringify(u)!==avant) return _echec('le dossier a été modifié');
           // Copie DÉFENSIVE : modifier le résultat ne doit pas toucher le
@@ -15248,31 +15258,31 @@ async function testExercices(){
           const s0=getSemaineEffective(u,new Date(_lun));
           if(s0.creneaux[0].name!=='HAUT') return _echec('semaine 0 : '+s0.creneaux[0].name);
           if(s0.decharge) return _echec('la semaine 0 est dite en décharge');
-          const s1=getSemaineEffective(u,new Date(_lun+7*86400000));
+          const s1=getSemaineEffective(u,_datePlusJours(_lun,7));
           if(s1.creneaux[0].name!=='HAUT LOURD') return _echec('l\'écart de nom n\'est pas appliqué');
           // Un écart partiel ne DÉTRUIT pas le reste du créneau.
           if(!s1.creneaux[0].exercises.length) return _echec('les exercices ont disparu');
           if(s1.creneaux[0].exercises[0].series!==4) return _echec('les séries ont bougé');
-          const s3=getSemaineEffective(u,new Date(_lun+3*7*86400000));
+          const s3=getSemaineEffective(u,_datePlusJours(_lun,3*7));
           if(!s3.decharge) return _echec('la décharge n\'est pas signalée');
           if(s3.creneaux[0].exercises[0].series!==2) return _echec('la décharge ne réduit pas le volume');
           if(s3.creneaux[1].active!==false) return _echec('le créneau désactivé reste actif');
           if(s3.seancesPrevues!==1) return _echec('séances prévues : '+s3.seancesPrevues);
           // Une semaine sans écart rend le gabarit nu.
-          const s2=getSemaineEffective(u,new Date(_lun+2*7*86400000));
+          const s2=getSemaineEffective(u,_datePlusJours(_lun,2*7));
           return (s2.creneaux[0].name==='HAUT'&&s2.seancesPrevues===2)
             ?true:_echec('semaine sans écart altérée');})());
         ok('Une semaine FUTURE se résout comme une autre',(()=>{
           // C'est ce qui rendra le prévisionnel possible : la grille lit une
           // semaine à venir sans que rien n'ait été loggé.
           const u=_prog({programme:{debut:_lun,semaines:8}});
-          const w=getSemaineEffective(u,new Date(_lun+5*7*86400000));
+          const w=getSemaineEffective(u,_datePlusJours(_lun,5*7));
           if(!w) return _echec('une semaine future ne se résout pas');
           if(!w.future) return _echec('elle n\'est pas marquée future');
           if(w.courante) return _echec('elle est dite courante');
           if(!w.creneaux.length) return _echec('elle n\'a pas de créneaux');
           // La semaine en cours est courante, et n'est PAS future.
-          const c=getSemaineEffective(u,new Date(_lun+2*86400000));
+          const c=getSemaineEffective(u,_datePlusJours(_lun,2));
           if(!c.courante) return _echec('la semaine en cours n\'est pas dite courante');
           return !c.future?true:_echec('la semaine en cours est dite future');})());
         ok('semainesDuBloc rend le bloc entier, dans l\'ordre',(()=>{
@@ -38094,7 +38104,7 @@ async function testExercices(){
         if(semainesDuBloc(u).length!==4)
           return _echec('semainesDuBloc rend '+semainesDuBloc(u).length+' semaines');
         // HORS BLOC : la cinquième semaine n'en fait pas partie.
-        if(indexSemaineBloc(u,lundi+4*604800000)!==null)
+        if(indexSemaineBloc(u,_datePlusJours(lundi,4*7))!==null)
           return _echec('une date hors bloc reçoit un index');
         // LES BORNES SONT CELLES DU MODELE.
         if(PROG_SEMAINES_MIN!==1||PROG_SEMAINES_MAX!==24)
@@ -38549,7 +38559,7 @@ async function testExercices(){
           programme:{debut:lundi,semaines:4,decharges:[3],ecarts:{}},
           sessions_config:Array.from({length:7},(_,k)=>({day:DAYS[k],name:'',active:false,exercises:[]}))};
         if(!programmeDe(u)) return _echec('programmeDe rend null sur un bloc écrit');
-        if(!semaineEstDecharge(u,new Date(lundi+3*604800000)))
+        if(!semaineEstDecharge(u,_datePlusJours(lundi,3*7)))
           return _echec('la semaine cochée n’est pas une décharge');
         if(semaineEstDecharge(u,new Date(lundi)))
           return _echec('la première semaine est prise pour une décharge');
