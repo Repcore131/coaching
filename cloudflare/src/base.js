@@ -6,7 +6,7 @@
 //
 // CETTE COUCHE IMITE LE SOUS-ENSEMBLE DU SDK dont le code métier se sert —
 // ref(chemin).get() / set() / update() / remove() / transaction() / push(),
-// orderByKey().limitToLast(n), orderByChild(c).equalTo(v), snapshot.val(),
+// orderByKey().limitToLast(n), orderByKey().startAt(k), orderByChild(c).equalTo(v), snapshot.val(),
 // .key, .forEach() — pour que ce code (écrit d'abord pour les Cloud Functions,
 // et testé) passe tel quel.
 //
@@ -85,8 +85,9 @@ export function creerBase({ url, auth, jeton, fetchImpl }) {
       child: (sous) => ref((c ? c + '/' : '') + sous),
       async get() {
         const rq = requete || {};
-        if ((rq.limitToLast || rq.limitToFirst) && rq.orderBy === '$key') {
+        if ((rq.limitToLast || rq.limitToFirst || rq.startAt !== undefined) && rq.orderBy === '$key') {
           const v = await lireJson(await appel('GET', c, undefined, { orderBy: '"$key"',
+            startAt: rq.startAt !== undefined ? JSON.stringify(String(rq.startAt)) : undefined,
             limitToLast: rq.limitToLast ? String(rq.limitToLast) : undefined,
             limitToFirst: rq.limitToFirst ? String(rq.limitToFirst) : undefined }), c);
           return instantane(cle, v);
@@ -147,6 +148,8 @@ export function creerBase({ url, auth, jeton, fetchImpl }) {
       equalTo: (v) => ref(c, Object.assign({}, requete, { equalTo: v })),
       limitToLast: (n) => ref(c, Object.assign({}, requete, { limitToLast: n })),
       limitToFirst: (n) => ref(c, Object.assign({}, requete, { limitToFirst: n })),
+      // Les clés entières (un tableau Firebase) se trient comme des nombres.
+      startAt: (k) => ref(c, Object.assign({}, requete, { startAt: k })),
     };
     return R;
   }

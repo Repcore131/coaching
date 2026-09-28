@@ -4,15 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>RepCore</title>
-<!-- LA PAGE PUBLIQUE D'UN ATHLETE : /@<pseudo> (reecriture firebase.json), ou
-     p/?u=<pseudo> la ou il n'y a pas de reecriture (GitHub Pages).
-     AUTONOME ET LEGERE, C'EST TOUT SON CAHIER DES CHARGES : ni l'app, ni une
-     police, ni une bibliotheque — une requete a /profils_publics/<pseudo>
-     (lecture publique, champs publics seulement : database.rules.json), et le
-     rendu. Moins d'une seconde sur un telephone en 4G.
-     Les balises og: entre les deux marqueurs sont l'apercu PAR DEFAUT ; le
-     Worker (cloudflare/src/pages.js, vers qui firebase.json redirige /@*) les
-     remplace par celles de l'athlete : prenom, rang, emblème. -->
+<!-- LA PAGE PUBLIQUE D'UN ATHLETE : /@<pseudo> (firebase.json), ou p/?u=<pseudo>.
+     Autonome et legere : /profils_publics/<pseudo> et /volts_publics/<pseudo>
+     (lecture publique), puis le rendu. Les balises og: entre les marqueurs
+     sont l'apercu par defaut ; le Worker (cloudflare/src/pages.js) les remplace. -->
 <!--og:debut-->
 <meta property="og:type" content="profile">
 <meta property="og:site_name" content="RepCore">
@@ -93,8 +88,15 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
   if(!/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/.test(pseudo)) return vide('Cette page n’existe pas.');
   var ctrl=window.AbortController?new AbortController():null;
   setTimeout(function(){ if(ctrl) ctrl.abort(); },6000);
-  fetch(DB+'/profils_publics/'+encodeURIComponent(pseudo)+'.json',ctrl?{signal:ctrl.signal}:{})
-    .then(function(r){ return r.ok?r.json():null; })
+  // Le rang du serveur prime (/volts_publics) : voir ficheAvecServeur (cloudflare/src/pages.js).
+  function lire(n){ return fetch(DB+'/'+n+'/'+encodeURIComponent(pseudo)+'.json',ctrl?{signal:ctrl.signal}:{}).then(function(r){ return r.ok?r.json():null; }).catch(function(){ return null; }); }
+  function vals(o){ return o?(Array.isArray(o)?o:Object.keys(o).map(function(k){return o[k];})):[]; }
+  Promise.all([lire('profils_publics'),lire('volts_publics')]).then(function(l){
+      var p=l[0], v=l[1], mq=vals(v&&v.masquer);
+      if(p&&v&&p.rang&&v.rang){ p.rang=v.rang; p.volts={xp:+v.xp||0,de:+v.de||0,a:+v.a||0}; }
+      if(p&&p.badges&&mq.length) p.badges=vals(p.badges).filter(function(b){ return b&&mq.indexOf(b.id)<0; });
+      return p;
+    })
     .then(function(p){
       if(!p||!p.prenom) return vide('Cette page n’existe pas, ou son titulaire l’a rendue privée.');
       var prenom=esc(p.prenom);
@@ -149,11 +151,8 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
 })();
 </script>
 <script>
-// L'ARRIVEE (attribution) : src, amb, et le SEUL fait qu'un code parrain etait
-// la (ref=1, jamais le code : il designe une personne). Une fois par jour et
-// par lien sur cet appareil (localStorage, premiere partie) ; ni cookie, ni
-// IP, ni identifiant. La fonction attribArrivee ne repond rien : absente
-// (plan Spark), rien ne casse.
+// L'ARRIVEE (attribution) : src, amb, ref=1 (jamais le code). Une fois par jour
+// et par lien (localStorage) ; ni cookie, ni IP, ni identifiant.
 (function(){try{var p=new URLSearchParams(location.search);
 var src=(p.get('src')||'page').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20);
 var amb=(p.get('amb')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,16);

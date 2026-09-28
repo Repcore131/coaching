@@ -224,4 +224,20 @@ await test('retour_etat : la relance des inactifs, fermée à tout client', asyn
   assert.equal((await appel(LEA, 'PUT', 'retour_etat/' + K(LEA), { depuis: 1, paliers: {} })).statut, 401);
   assert.equal((await appel(LEA, 'GET', 'retour_etat/' + K(LEA))).statut, 401);
 });
+await test('seance_fin : tout compte connecté, cible « - » seulement', async () => {
+  assert.equal((await deposer(LEA, { type: 'seance_fin', cible: '-' })).statut, 200);
+  assert.equal((await deposer(KEV, { type: 'seance_fin', cible: 'x' })).statut, 401);
+});
+await test('xp_serveur : écrit par le Worker seul, lu par l’athlète et son coach ; volts_publics lisible par tous', async () => {
+  await appel('owner', 'PUT', 'users/' + K(LEA) + '/coachEmailKey', K(KEVIN));
+  await appel('owner', 'PUT', 'xp_serveur/' + K(LEA), { total: 5000 });
+  await appel('owner', 'PUT', 'volts_publics/lea_fer', { xp: 5000 });
+  assert.equal((await appel(LEA, 'PUT', 'xp_serveur/' + K(LEA), { total: 999999 })).statut, 401, 'l’athlète n’écrit pas son total');
+  assert.equal((await appel(LEA, 'GET', 'xp_serveur/' + K(LEA))).statut, 200);
+  assert.equal((await appel(KEVIN, 'GET', 'xp_serveur/' + K(LEA))).statut, 200, 'son coach le lit');
+  assert.equal((await appel(KEV, 'GET', 'xp_serveur/' + K(LEA))).statut, 401, 'un autre, non');
+  assert.equal((await appel(LEA, 'GET', 'xp_etat/' + K(LEA))).statut, 401);
+  assert.equal((await appel(LEA, 'PUT', 'volts_publics/lea_fer', { xp: 1 })).statut, 401);
+  assert.equal((await fetch(BASE + '/volts_publics/lea_fer.json?ns=' + NS)).status, 200);
+});
 console.log(ok + ' tests passés (émulateur)');

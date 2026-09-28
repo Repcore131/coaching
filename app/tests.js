@@ -26010,8 +26010,10 @@ async function testExercices(){
       ok('Critère 2 : sans coche, la séance ne porte aucun champ nouveau',(()=>{
         const r=_fFin([]);
         if(r.err) return _echec('exception: '+r.err);
+        // `tz` (28/09/2026) : le fuseau de l'appareil, pour le contrôle serveur
+        // des badges secrets horaires.
         const attendu=['complete','data','date','deload','duration','id','name',
-          'sets','setsPlanned','slot','substitutions','volume'];
+          'sets','setsPlanned','slot','substitutions','tz','volume'];
         return Object.keys(r.sess).sort().join(',')===attendu.join(',')
           &&!('aFilmer' in r.sess);})());
       ok('Une seule coche : un seul nom, un seul bouton',(()=>{
@@ -48651,8 +48653,9 @@ async function testExercices(){
 
     // ── LES VOLTS ET LES RANGS ───────────────────────────────────────────
     const _VJ=864e5, _VT0=new Date(2025,0,6,18).getTime();   // un lundi, 18 h
+    // Six séries validées en 60 min : une séance « pleine » (100 V, voltsSeance).
     const _VS=(j,o)=>Object.assign({date:_VT0+j*_VJ,duration:60,sets:15,setsPlanned:15,
-      data:{'Squat':{sets:[{weight:'100',reps:'8',done:true}]}}},o||{});
+      data:{'Squat':{sets:Array.from({length:6},()=>({weight:'100',reps:'8',done:true}))}}},o||{});
     const _VU=o=>Object.assign({role:'athlete',email:'v@t.fr',createdAt:_VT0-_VJ,
       sessions_config:[{active:true},{active:true},{active:true}],sessions:[],bilans:[]},o||{});
     const _VFIN=_VT0+400*_VJ;
@@ -49841,6 +49844,82 @@ async function testExercices(){
         if(htmlReglageCelebrations({role:'coach'})!=='') return _echec('coach');
       }finally{ currentUser=sv.u; window.saveUser=sv.s; }
       return CHAMPS_NON_SANTE.indexOf('celebrations')>=0?true:_echec('non classé');})());
+    // ══ 28/09/2026 — SOUS-NIVEAUX, VOLTS DE SÉANCE, TOTAL DU SERVEUR ════════
+    ok('Sous-niveaux : I / II / III à partir de VOLTAGE, trois tiers égaux, LÉGENDE sans',(()=>{
+      if(sousNiveauDe(0)!==null||sousNiveauDe(RANGS[1].seuil+100)!==null) return _echec('avant VOLTAGE');
+      const v=RANGS[2], m=RANGS[3], w=(m.seuil-v.seuil)/3;
+      const a=sousNiveauDe(v.seuil);
+      if(!a||a.lib!=='I'||a.de!==v.seuil||a.a!==Math.round(v.seuil+w)||a.vers!=='VOLTAGE II') return _echec('VOLTAGE I : '+JSON.stringify(a));
+      if(sousNiveauDe(Math.round(v.seuil+w)).lib!=='II') return _echec('II');
+      const c=sousNiveauDe(m.seuil-1);
+      if(c.lib!=='III'||c.a!==m.seuil||c.vers!=='MACHINE') return _echec('III : '+JSON.stringify(c));
+      if(sousNiveauDe(RANGS[9].seuil+5000)!==null) return _echec('LÉGENDE');
+      const mo=RANGS[6], fo=RANGS[7];
+      if(nomRangComplet(mo.seuil+(fo.seuil-mo.seuil)/2)!=='MONSTRE II') return _echec(nomRangComplet(mo.seuil+(fo.seuil-mo.seuil)/2));
+      if(nomRangComplet(RANGS[1].seuil)!=='IMPULSION') return _echec('sans sous-niveau');
+      if(!(niveauCode(v.seuil+w)>niveauCode(v.seuil))||!(niveauCode(m.seuil)>niveauCode(m.seuil-1))) return _echec('codes');
+      return true;})());
+    ok('Sous-niveaux : les chevrons dessinés sous l’emblème, et la jauge vers le sous-niveau suivant',(()=>{
+      if((htmlChevrons(1).match(/<path/g)||[]).length!==1||(htmlChevrons(3).match(/<path/g)||[]).length!==3||htmlChevrons(0)!=='') return _echec('chevrons');
+      const mo=RANGS[6], fo=RANGS[7], xp=mo.seuil+Math.round((fo.seuil-mo.seuil)/2);
+      const d=document.createElement('div'); d.innerHTML=htmlRangAccueil(xp);
+      if(d.querySelector('.rg-nom').textContent!=='MONSTRE II') return _echec('nom');
+      if(d.querySelectorAll('.rg-emb-w svg.rg-chev path').length!==2) return _echec('deux chevrons');
+      if(!/vers MONSTRE III/.test(d.querySelector('.rg-txt').textContent)) return _echec(d.querySelector('.rg-txt').textContent);
+      d.innerHTML=htmlRangAccueil(RANGS[1].seuil+10);
+      if(d.querySelector('svg')) return _echec('chevrons avant VOLTAGE');
+      return /img\//.test(htmlChevrons(2))?_echec('une image'):true;})());
+    ok('Sous-niveaux : le passage se fête petit (toast, foudre, trophée) — posé sans fête au premier calcul, jamais doublé par un rang',(()=>{
+      const sv={u:currentUser,s:window.saveUser,x:window.xpCalcul,c:window._celebrerSousNiveau,r:window._celebrerRang};
+      const fetes=[], rangs=[];
+      try{
+        window.saveUser=()=>{}; window._celebrerSousNiveau=x=>fetes.push(x); window._celebrerRang=n=>rangs.push(n);
+        const v=RANGS[2], w=(RANGS[3].seuil-v.seuil)/3;
+        let total=v.seuil+10;
+        window.xpCalcul=()=>({total,cat:{seance:total},ecrete:0});
+        currentUser={role:'athlete',email:'sn@t.fr'};
+        majXp();
+        if(fetes.length||currentUser.xpNiveau!==niveauCode(total)) return _echec('premier calcul fêté');
+        total=v.seuil+w+10; majXp();
+        if(fetes.length!==1) return _echec('II non fêté');
+        total=RANGS[3].seuil+10; majXp();
+        if(fetes.length!==1||rangs.join()!=='4') return _echec('rang + sous-niveau : '+fetes.length+' / '+rangs);
+        if(!currentUser.xpDetail||currentUser.xpDetail.total!==total) return _echec('xpDetail');
+      }finally{ currentUser=sv.u; window.saveUser=sv.s; window.xpCalcul=sv.x; window._celebrerSousNiveau=sv.c; window._celebrerRang=sv.r; }
+      if(tropheeVignette({sous:{nom:'MONSTRE II',n:2,rang:7}}).nom!=='MONSTRE II') return _echec('trophée');
+      const src=String(_celebrerSousNiveau);
+      if(!/toast\(/.test(src)||!/rcFoudre\(/.test(src)||/_bdgCouche|_bdgFile\.push/.test(src)) return _echec('pas d’écran plein, un toast et une foudre');
+      return CHAMPS_NON_SANTE.indexOf('xpDetail')>=0&&CHAMPS_NON_SANTE.indexOf('xpNiveau')>=0?true:_echec('champs');})());
+    ok('Volts de séance : 100 V seulement si ≥ 15 min ET ≥ 6 séries validées, sinon séries × 10 (max 100)',(()=>{
+      const S=(n,min)=>({date:1,duration:min,data:{Squat:{sets:Array.from({length:n},()=>({weight:'50',reps:'5',done:true}))}}});
+      if(voltsSeance(S(6,15))!==100) return _echec('pleine');
+      if(voltsSeance(S(8,10))!==80) return _echec('trop courte');
+      if(voltsSeance(S(3,60))!==30) return _echec('trop peu de séries');
+      if(voltsSeance(S(14,5))!==100) return _echec('plafond 100');
+      const x=S(6,30); x.sets=40; x.data.Squat.sets[0].done=false;
+      if(seriesValideesSeance(x)!==5||voltsSeance(x)!==50) return _echec('séries non validées comptées');
+      // Une séance d'une minute : plus 130 V.
+      const c=xpCalcul({role:'athlete',sessions:[Object.assign(S(1,1),{date:Date.now()-3600e3,sets:1,setsPlanned:1})]}).cat;
+      if(c.seance!==10||c.complete!==30) return _echec(JSON.stringify(c));
+      return XP_ACTIONS.complete===30?true:_echec('bonus complète');})());
+    ok('Total du serveur : le coach, les défis et le Canal lisent /xp_serveur ; l’athlète garde son calcul',(()=>{
+      const sv=currentUser;
+      try{
+        currentUser={role:'coach',email:'coach@t.fr'};
+        const a={email:'lea@t.fr',xp:99999};
+        if(xpDe(a)!==99999) return _echec('sans valeur serveur, le dossier');
+        _xpServeur['lea@t,fr']={lu:Date.now(),v:{total:4200}};
+        if(xpDe(a)!==4200) return _echec('la valeur du serveur');
+        if(htmlNomRang('Léa',xpDe(a)).indexOf('VOLTAGE')<0) return _echec('défis / Canal');
+        currentUser={role:'athlete',email:'lea@t.fr'};
+        if(xpDe(a)!==99999) return _echec('l’athlète lit son propre calcul');
+      }finally{ currentUser=sv; delete _xpServeur['lea@t,fr']; }
+      return /chargerXpServeurClients\(\)/.test(String(renderClientList))?true:_echec('chargement côté coach');})());
+    ok('Total du serveur : la séance porte son fuseau, l’événement seance_fin part après l’envoi du dossier',(()=>{
+      const f=String(finishWorkout);
+      if(!/sess\.tz=new Date\(sess\.date\)\.getTimezoneOffset\(\)/.test(f)) return _echec('fuseau');
+      if(!/deposerEvenement\(\{type:'seance_fin'\}\)/.test(f)) return _echec('événement');
+      return evenementCible({type:'seance_fin'})==='-'?true:_echec('cible');})());
     // ══ 28/09/2026 — CHECK-IN DU MATIN, REPRISE EN DOUCEUR, RETOUR AU COMBAT ══
     const _CJ=864e5, _CT=new Date(2026,9,20,9,30).getTime();   // mardi 20 octobre, 9 h 30
     const _Cjour=(k)=>localISODate(new Date(_CT-k*_CJ));
@@ -49905,7 +49984,7 @@ async function testExercices(){
       if(a.cat.checkin!==10) return _echec('un check-in complet, un incomplet : '+a.cat.checkin);
       // Une journée déjà au plafond : le check-in est écrêté.
       const ses=[];
-      for(let i=0;i<5;i++) ses.push({date:_CT+i*60e3,duration:60,sets:1,setsPlanned:1,data:{['Ex'+i]:{sets:[{weight:'10',reps:'5',done:true}]}}});
+      for(let i=0;i<5;i++) ses.push({date:_CT+i*60e3,duration:60,sets:6,setsPlanned:6,data:{['Ex'+i]:{sets:Array.from({length:6},()=>({weight:'10',reps:'5',done:true}))}}});
       const plein=xpCalcul(Object.assign({},u,{sessions:ses}),_CT+3600e3);
       if(plein.cat.checkin!==0||!(plein.ecrete>0)) return _echec('hors plafond : '+JSON.stringify(plein.cat)+' écrêté '+plein.ecrete);
       return true;})());

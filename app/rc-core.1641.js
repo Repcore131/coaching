@@ -6116,6 +6116,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // Le tonnage cumulé (relance du serveur léger) et le choix de la reprise
   // en douceur (une date, oui ou non).
   'tonnageTotal','_repriseDouce',
+  // Le détail des volts (lu et borné par le serveur) et le sous-niveau fêté.
+  'xpDetail','xpNiveau',
   // Les éditions saisonnières : les badges reçus, la dernière valeur envoyée.
   'saisonsReleves','saisonsVal',
   // Combien de fois la page a été proposée à un passage de rang (deux au plus).
@@ -9574,7 +9576,8 @@ const FOUDRE_IMPACT=30;
 function _foudreScene(impact,W,o){
   o=o||{};
   const k=Number(o.echelle)>0?Number(o.echelle):1;
-  const nb=(o.eclairs===2||o.eclairs===3)?o.eclairs:(Math.random()<0.5?2:3);
+  // 1 éclair : la « petite foudre » (sous-niveau).
+  const nb=(o.eclairs===1||o.eclairs===2||o.eclairs===3)?o.eclairs:(Math.random()<0.5?2:3);
   const eclairs=[];
   for(let i=0;i<nb;i++){ const e=_foudreEclair(impact,W,[0,45,95][i]); e.epais*=k; e.echelle=k; eclairs.push(e); }
   const etincelles=_foudreEtincelles(impact,FOUDRE_IMPACT);
@@ -22454,6 +22457,8 @@ function _htmlEnteteTableau(){
     +'<span>Accès profil</span><span>Suivi</span><span>État</span></div>';
 }
 function renderClientList(clients){
+  // Les volts du serveur de ses athlètes, en tâche de fond (xp_serveur).
+  try{ chargerXpServeurClients(); }catch(e){}
   const el=document.getElementById('ch-clients-list');
   if(!el) return;
   const tous=clients||getClients();
@@ -47023,6 +47028,9 @@ function finishWorkout(incomplete=false){
   // Écrit seulement s'il y a quelque chose à écrire : une séance sans aucune
   // case cochée doit rester octet pour octet celle d'avant ce lot.
   if((woState.aFilmer||[]).length) sess.aFilmer=woState.aFilmer.slice();
+  // Le fuseau de l'appareil (minutes, comme getTimezoneOffset) : le serveur
+  // contrôle les badges secrets horaires à SON heure, lue à l'heure locale.
+  try{ sess.tz=new Date(sess.date).getTimezoneOffset(); }catch(e){}
   // L'objectif « record à portée » que portait la séance : la carte record
   // dira « OBJECTIF ATTEINT » s'il est battu, aujourd'hui comme à la relecture.
   if(woState.objectif&&woState.objectif.nm) sess.objectif={nm:woState.objectif.nm,charge:woState.objectif.charge,reps:woState.objectif.reps};
@@ -47053,6 +47061,9 @@ function finishWorkout(incomplete=false){
   try{ setTimeout(()=>{ defisPublierProgression().catch(()=>{}); },3000); }catch(e){}
   // Les duels : chacun écrit sa valeur, ou démarre le duel (1re séance de l'invité).
   try{ setTimeout(()=>{ duelsApresSeance().catch(()=>{}); },3500); }catch(e){}
+  // LES VOLTS DU SERVEUR : l'événement « seance_fin », après l'envoi du dossier
+  // (le serveur relève et réessaie s'il arrive avant).
+  try{ setTimeout(()=>{ deposerEvenement({type:'seance_fin'}).catch(()=>{}); },4500); }catch(e){}
   // L'événement saisonnier : la valeur de l'athlète, pour le compteur collectif.
   try{ setTimeout(()=>{ saisonsPublierProgression().catch(()=>{}); },4000); }catch(e){}
   // ══ LA SEANCE EST ENREGISTREE. TOUT CE QUI SUIT N'EST QUE DU RENDU ══════
@@ -72914,6 +72925,7 @@ function bdgRarete(x,stats){
     if(x.serie){ const n=Number(x.serie); return n>=52?92:n>=26?82:n>=12?68:n>=8?56:44; }
     // Le retour au combat passe devant les paliers : il n'arrive qu'après une absence.
     if(x.retour) return 90;
+    if(x.sous) return 30;
     if(x.defi){ const r=(typeof currentUser!=='undefined'&&currentUser&&currentUser.defisReleves||{})[x.defi]; return r&&r.champion?84:60; }
     return 0;
   }
@@ -72982,6 +72994,7 @@ function tropheeVignette(x,u){
   if(x&&typeof x==='object'){
     if(x.serie) return {img:'<span class="tr-chiffre">'+Number(x.serie)+'</span>',nom:Number(x.serie)+' semaines',sur:'Palier de série'};
     if(x.retour) return {img:'<img src="'+escapeHtml(_badgeFichier('RETURN'))+'" alt="">',nom:'Retour au combat',sur:Number(x.retour.jours)+' jours d’absence'};
+    if(x.sous) return {img:'<span class="tr-sous"><img src="'+rangEmbleme(x.sous.rang)+'" alt="" decoding="async">'+htmlChevrons(x.sous.n,'tr-chev')+'</span>',nom:String(x.sous.nom||''),sur:'Nouveau sous-niveau'};
     if(x.rang){ const r=RANGS[Math.max(0,Math.min(RANGS.length-1,Number(x.rang)-1))];
       return {img:'<img src="'+rangEmbleme(r.n)+'" alt="" data-rang="'+r.n+'" decoding="async">',nom:r.nom,sur:'Nouveau rang'}; }
     if(x.defi){ const res=((u&&u.defisReleves)||{})[x.defi]||{};
@@ -75606,6 +75619,127 @@ function rangDe(xp){
   const part=suivant?Math.max(0,Math.min(1,(v-rang.seuil)/(suivant.seuil-rang.seuil))):1;
   return {rang,suivant,part,reste:suivant?Math.max(0,suivant.seuil-v):0,xp:v};
 }
+// ══ LES SOUS-NIVEAUX I / II / III (28/09/2026) ═════════════════════════
+// Après ÉLITE, six mois et plus sans rien entre deux rangs : chaque
+// intervalle de RANGS, À PARTIR DE VOLTAGE, est coupé en trois sous-niveaux
+// égaux. Le passage se fête petit — un toast et une petite foudre, jamais un
+// écran plein — et s'inscrit dans « Tes trophées du jour ». Les chevrons
+// (1, 2 ou 3) sont DESSINÉS sous l'emblème : aucune image nouvelle.
+// LÉGENDE, le dernier rang, n'a pas de borne haute : pas de sous-niveau.
+const SOUS_NIVEAU_DES=3;                  // VOLTAGE
+const SOUS_ROMAINS=Object.freeze(['I','II','III']);
+/** PURE. Le sous-niveau d'un total, ou null (avant VOLTAGE, et LÉGENDE). */
+function sousNiveauDe(xp){
+  const r=rangDe(xp);
+  if(r.rang.n<SOUS_NIVEAU_DES||!r.suivant) return null;
+  // Les bornes, arrondies au volt : ce sont ELLES qui font foi (affichées et comparées).
+  const w=(r.suivant.seuil-r.rang.seuil)/3;
+  const b=[r.rang.seuil,Math.round(r.rang.seuil+w),Math.round(r.rang.seuil+2*w),r.suivant.seuil];
+  const k=r.xp>=b[2]?2:(r.xp>=b[1]?1:0);
+  const de=b[k], a=b[k+1];
+  return {n:k+1,lib:SOUS_ROMAINS[k],de,a,part:Math.max(0,Math.min(1,(r.xp-de)/(a-de))),
+    vers:k<2?(r.rang.nom+' '+SOUS_ROMAINS[k+1]):r.suivant.nom};
+}
+/** PURE. « MONSTRE II », ou le nom du rang seul. */
+function nomRangComplet(xp){
+  const r=rangDe(xp), s=sousNiveauDe(xp);
+  return r.rang.nom+(s?' '+s.lib:'');
+}
+/** PURE. Le code d'un niveau, pour comparer : rang × 10 + sous-niveau. */
+function niveauCode(xp){
+  const r=rangDe(xp), s=sousNiveauDe(xp);
+  return r.rang.n*10+(s?s.n:0);
+}
+/** PURE. 1, 2 ou 3 chevrons rouges, en SVG. */
+function htmlChevrons(n,classe){
+  const k=Math.max(0,Math.min(3,Math.round(Number(n)||0)));
+  if(!k) return '';
+  const W=k*8+2;
+  let p='';
+  for(let i=0;i<k;i++){ const x=1+i*8; p+='<path d="M'+x+' 6 L'+(x+3.5)+' 2 L'+(x+7)+' 6"/>'; }
+  return '<svg class="'+(classe||'rg-chev')+'" viewBox="0 0 '+W+' 8" width="'+W+'" height="8" aria-hidden="true" focusable="false">'
+    +'<g fill="none" stroke="#ff2a2a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</g></svg>';
+}
+// Le passage : toast, petite foudre sur l'en-tête, trophée du jour si la fin
+// de séance est à l'écran.
+function _celebrerSousNiveau(xp){
+  const nom=nomRangComplet(xp), s=sousNiveauDe(xp);
+  if(!s) return false;
+  try{ toast('⚡ '+nom+' · nouveau sous-niveau'); }catch(e){}
+  try{ const el=document.getElementById('clh-rang'); rcFoudre(el&&el.offsetParent?el:null,{eclairs:1,son:false}); }catch(e){}
+  try{
+    const ancre=document.getElementById('wd-volts');
+    if(ancre&&ancre.isConnected&&ancre.closest('.screen.active')) _bdgAjouterTrophees([{sous:{nom,n:s.n,rang:rangDe(xp).rang.n}}]);
+  }catch(e){}
+  return true;
+}
+
+// ══ LES VOLTS D'UNE SÉANCE ════════════════════════════════════════════
+// Une séance d'une minute valait 130 V. Désormais : 100 V seulement si elle
+// dure au moins 15 min ET compte au moins 6 séries validées ; sinon 10 V par
+// série validée (100 au plus). Le bonus « complète » (+30) ne change pas.
+// MÊME RÈGLE AU SERVEUR (cloudflare/src/xp.js, voltsSeance).
+const SEANCE_VOLTS_MIN_MIN=15, SEANCE_VOLTS_MIN_SERIES=6, VOLTS_PAR_SERIE=10;
+/** PURE. Les séries validées, comptées dans les données de la séance. */
+function seriesValideesSeance(s){
+  const d=s&&s.data&&typeof s.data==='object'?s.data:null;
+  if(!d) return Math.max(0,Math.round(Number(s&&s.sets)||0));
+  let n=0;
+  for(const k of Object.keys(d)) for(const st of ((d[k]||{}).sets||[])) if(st&&st.done===true) n++;
+  return n;
+}
+/** PURE. Les volts d'une séance (hors bonus « complète » et records). */
+function voltsSeance(s){
+  const n=seriesValideesSeance(s), m=Number(s&&s.duration)||0;
+  if(m>=SEANCE_VOLTS_MIN_MIN&&n>=SEANCE_VOLTS_MIN_SERIES) return XP_ACTIONS.seance;
+  return Math.min(XP_ACTIONS.seance,n*VOLTS_PAR_SERIE);
+}
+
+// ══ LE TOTAL DU SERVEUR (/xp_serveur/<compte>) ═════════════════════════
+// Écrit par le serveur léger à chaque séance terminée (événement seance_fin,
+// cloudflare/src/xp.js) : séances recalculées, le reste borné, les badges
+// secrets horaires contrôlés à son heure. LE COACH, LES DÉFIS ET LE CANAL
+// LE LISENT (xpDe d'un autre dossier que le sien) ; la page publique lit sa
+// copie /volts_publics/<pseudo>. L'athlète, lui, voit son calcul local :
+// immédiat, et le même aux bornes près.
+const _xpServeur={};
+const XP_SERVEUR_TTL=10*60e3;
+function _cleCompte(u){ return (u&&u.email)?String(u.email).replace(/\./g,','):''; }
+async function chargerXpServeur(k,force){
+  if(!k||!SERVEUR_LEGER||!CLOUD||!CLOUD.ok()) return null;
+  const c=_xpServeur[k];
+  if(c&&!force&&Date.now()-c.lu<XP_SERVEUR_TTL) return c.v;
+  _xpServeur[k]={lu:Date.now(),v:c?c.v:null};
+  try{
+    const token=await CLOUD._getToken();
+    if(!token) return null;
+    const r=await fetch(CLOUD._fbUrl.replace('users.json','xp_serveur/'+k+'.json')+'?auth='+token);
+    const v=r.ok?await r.json():null;
+    _xpServeur[k]={lu:Date.now(),v:(v&&typeof v.total==='number')?v:null};
+    return _xpServeur[k].v;
+  }catch(e){ return null; }
+}
+// Les athlètes du coach, en tâche de fond (dix minutes de mémoire).
+function chargerXpServeurClients(){
+  try{
+    if(!currentUser||currentUser.role!=='coach') return 0;
+    const users=DB.get('users')||{};
+    const moi=_cleCompte(currentUser);
+    let n=0;
+    for(const e of Object.keys(users)){
+      const c=users[e];
+      if(!c||c.role==='coach'||(c.coachEmailKey&&c.coachEmailKey!==moi)) continue;
+      const k=_cleCompte(c);
+      if(k){ chargerXpServeur(k).catch(()=>{}); n++; }
+    }
+    return n;
+  }catch(e){ return 0; }
+}
+/** PURE (mémoire lue). Le total serveur connu d'un dossier, ou null. */
+function xpServeurDe(u){
+  const c=_xpServeur[_cleCompte(u)];
+  return (c&&c.v&&typeof c.v.total==='number')?c.v.total:null;
+}
 // PURE. Une séance complète : même règle que les semaines « à 100 % » des
 // badges — ni marquée incomplète, ni moins de séries que prévu.
 function _xpComplete(s){
@@ -75631,7 +75765,7 @@ function xpCalcul(u,maintenant){
   const ses=((u.sessions)||[]).filter(s=>s&&s.date>0&&s.date<=t);
   for(const s of ses){
     const j=_xpJour(s.date);
-    pose(j,'seance',XP_ACTIONS.seance);
+    pose(j,'seance',voltsSeance(s));
     if(_xpComplete(s)) pose(j,'complete',XP_ACTIONS.complete);
     if(recs[s.date]){ pose(j,'record',XP_ACTIONS.record*recs[s.date]); recs[s.date]=0; }
   }
@@ -75708,6 +75842,12 @@ function xpGainsSeance(u,sess,maintenant){
 // u.xp quand elle existe, sinon le calcul.
 function xpDe(u){
   if(!u) return 0;
+  // Un autre dossier que le sien (le coach, les défis, le Canal) : le total
+  // du SERVEUR quand il est connu — celui que le client ne peut pas écrire.
+  if(typeof currentUser!=='undefined'&&currentUser&&u!==currentUser&&_cleCompte(u)!==_cleCompte(currentUser)){
+    const v=xpServeurDe(u);
+    if(v!=null) return v;
+  }
   if(typeof u.xp==='number'&&isFinite(u.xp)) return u.xp;
   try{ return xpCalcul(u).total; }catch(e){ return 0; }
 }
@@ -75724,34 +75864,53 @@ function majXp(){
   const rg=rangDe(r.total);
   let change=false;
   if(u.xp!==r.total){ u.xp=r.total; change=true; }
+  // Le détail, pour le serveur léger : il recalcule les séances et BORNE le
+  // reste avec (xp_serveur). Écrit seulement quand il change.
+  const det=Object.assign({total:r.total},r.cat);
+  if(JSON.stringify(u.xpDetail||null)!==JSON.stringify(det)){ u.xpDetail=det; change=true; }
+  let bloque=false;
+  try{ if(suspensionEtat(u).actif) bloque=true; }catch(e){}
+  try{ if(drapeauQuelconqueActif(u)) bloque=true; }catch(e){}
   const vu=Number(u.xpRang)||0;
   let fete=0;
   if(!vu){ u.xpRang=rg.rang.n; change=true; }
   else if(rg.rang.n>vu){
-    let bloque=false;
-    try{ if(suspensionEtat(u).actif) bloque=true; }catch(e){}
-    try{ if(drapeauQuelconqueActif(u)) bloque=true; }catch(e){}
     if(!bloque){ u.xpRang=rg.rang.n; fete=rg.rang.n; change=true; }
+  }
+  // LE SOUS-NIVEAU : posé sans fête au premier calcul ; fêté petit ensuite,
+  // sauf quand un rang entier vient d'être passé (son écran le dit déjà).
+  const code=niveauCode(r.total), vuN=Number(u.xpNiveau)||0;
+  let sous=0;
+  if(!vuN){ u.xpNiveau=code; change=true; }
+  else if(code>vuN&&!bloque){
+    u.xpNiveau=code; change=true;
+    if(!fete&&Math.floor(code/10)===Math.floor(vuN/10)) sous=code;
   }
   if(change) try{ saveUser(); }catch(e){}
   if(fete) try{ _celebrerRang(fete); }catch(e){}
-  return {total:r.total,rang:rg.rang.n,fete};
+  if(sous) try{ _celebrerSousNiveau(r.total); }catch(e){}
+  return {total:r.total,rang:rg.rang.n,fete,sous};
 }
 // ── L'ACCUEIL : l'emblème et le nom du rang sous le prénom, et la jauge ──
 // PURE.
 function htmlRangAccueil(xp){
   const r=rangDe(xp);
-  const txt=r.suivant
-    ?xpFormat(r.xp)+' / '+xpFormat(r.suivant.seuil)+' V vers '+r.suivant.nom
+  // À partir de VOLTAGE, la jauge va au sous-niveau suivant : « MONSTRE II ·
+  // 30 240 / 31 667 V vers MONSTRE III ».
+  const s=sousNiveauDe(xp);
+  const part=s?s.part:r.part, cible=s?s.a:(r.suivant?r.suivant.seuil:0), vers=s?s.vers:(r.suivant?r.suivant.nom:'');
+  const txt=cible
+    ?xpFormat(r.xp)+' / '+xpFormat(cible)+' V vers '+vers
     :xpFormat(r.xp)+' V · rang maximal';
-  return '<div class="rg-ligne"><img class="rg-emb" src="'+rangEmbleme(r.rang.n)+'" alt="" width="22" height="22" decoding="async">'
-    +'<span class="rg-nom">'+escapeHtml(r.rang.nom)+'</span></div>'
-    +'<div class="rg-jauge" role="progressbar" aria-label="Volts vers le rang suivant" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'
-      +Math.round(r.part*100)+'"><span style="width:'+Math.round(r.part*100)+'%"></span></div>'
+  return '<div class="rg-ligne"><span class="rg-emb-w"><img class="rg-emb" src="'+rangEmbleme(r.rang.n)+'" alt="" width="22" height="22" decoding="async">'
+    +(s?htmlChevrons(s.n):'')+'</span>'
+    +'<span class="rg-nom">'+escapeHtml(r.rang.nom+(s?' '+s.lib:''))+'</span></div>'
+    +'<div class="rg-jauge" role="progressbar" aria-label="Volts vers le '+(s?'sous-niveau':'rang')+' suivant" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'
+      +Math.round(part*100)+'"><span style="width:'+Math.round(part*100)+'%"></span></div>'
     // LA MAQUETTE DE L'EN-TETE (27/09/2026) : les chiffres en blanc, « vers »
     // plus petit et gris, le rang suivant en blanc.
-    +'<div class="rg-txt">'+(r.suivant
-      ?'<b>'+escapeHtml(xpFormat(r.xp)+' / '+xpFormat(r.suivant.seuil)+' V')+'</b> <span class="rg-vers">vers</span> '+escapeHtml(r.suivant.nom)
+    +'<div class="rg-txt">'+(cible
+      ?'<b>'+escapeHtml(xpFormat(r.xp)+' / '+xpFormat(cible)+' V')+'</b> <span class="rg-vers">vers</span> '+escapeHtml(vers)
       :escapeHtml(txt))+'</div>';
 }
 function _rendreRang(u){

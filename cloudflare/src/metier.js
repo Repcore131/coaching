@@ -31,6 +31,7 @@ import { envoyerA } from './push.js';
 import * as DU from './duels.js';
 import * as SA from './saisons.js';
 import * as RE from './retour.js';
+import * as XPS from './xp.js';
 
 export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
@@ -945,6 +946,8 @@ export function creerMetier(deps) {
       return 'prevenu';
     }
     if (type === 'duel_rejoint' || type === 'duel_maj') return duelEvenement(e, t);
+    // UNE SÉANCE TERMINÉE : les volts recalculés par le serveur.
+    if (type === 'seance_fin') return xpRecalculer(String(e.par || ''), t, true);
     return 'type_inconnu';
   }
 
@@ -1054,6 +1057,54 @@ export function creerMetier(deps) {
     return true;
   }
 
+  // ══ LES VOLTS RECALCULÉS PAR LE SERVEUR (xp.js) ═════════════════════════
+  // Les séances NOUVELLES seulement (xp_etat/<k>.n = l'index de la suivante),
+  // par lots de XPS.LOT_SEANCES : un historique ancien se rattrape en
+  // sous-tâches, jamais d'un bloc. Une écriture multi-chemins pose l'état, le
+  // total (/xp_serveur/<k>, lu par le coach) et, si l'athlète montre son rang
+  // sur sa page publique, /volts_publics/<pseudo>.
+  async function xpRecalculer(k, t, exigerNouvelle) {
+    if (!/^[^/.#$\[\]]{3,200}$/.test(k)) return 'cle';
+    const etat0 = (await _val('xp_etat/' + k)) || XPS.etatVide();
+    const n0 = Number(etat0.n) || 0;
+    const brut = (await db.ref('users/' + k + '/sessions').orderByKey().startAt(n0).limitToFirst(XPS.LOT_SEANCES).get()).val();
+    const nouvelles = XPS.listeSeances(brut, n0);
+    // L'événement part à la fin de la séance, le dossier juste après : s'il
+    // n'est pas encore là, on LÈVE et la file réessaie à la minute suivante
+    // (planif.js, cinq essais) — comme filleul_seance.
+    if (exigerNouvelle && !nouvelles.length) {
+      const der = Number(await _lire(k, 'lastSession')) || 0;
+      if (der > (Number(etat0.derniere) || 0) + 60e3) throw new Error('séance pas encore synchronisée');
+    }
+    const [alias, detail, badges, bilans, cree, pp] = await Promise.all([
+      nouvelles.length ? _lire(k, 'exAlias') : null, _lire(k, 'xpDetail'), _lire(k, 'badges'),
+      db.ref('users/' + k + '/bilans').shallow(), _lire(k, 'createdAt'), _lire(k, 'pagePublique')]);
+    const etat = nouvelles.length ? XPS.avancer(etat0, nouvelles, alias, t) : etat0;
+    const premiere = nouvelles.length && Number(nouvelles[0].date) > 0 ? Number(nouvelles[0].date) : 0;
+    etat.debut = Math.min(...[Number(etat0.debut) || Infinity, Number(cree) || Infinity, premiere || Infinity]);
+    if (!isFinite(etat.debut)) etat.debut = t;
+    const r = XPS.totalServeur(etat, detail, { nBilans: bilans.length, badges, debut: etat.debut }, t);
+    const rg = XPS.rangDe(r.total);
+    etat.maj = t;
+    const maj = {
+      ['xp_etat/' + k]: etat,
+      ['xp_serveur/' + k]: { total: r.total, cat: r.cat, rang: { n: rg.rang.n, nom: rg.rang.nom },
+        client: Math.round(Number(detail && detail.total) || 0), secrets: Object.keys(etat.secrets || {}),
+        nonVerifies: r.nonVerifies, seances: etat.n, maj: t },
+    };
+    // La page publique : seulement si ce pseudo est bien le sien et qu'il y montre son rang.
+    const pseudo = pp && typeof pp.pseudo === 'string' ? pp.pseudo : '';
+    if (/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/.test(pseudo)) {
+      const [proprio, rangPublic] = await Promise.all([_val('pseudos/' + pseudo), _val('profils_publics/' + pseudo + '/rang')]);
+      if (proprio === k) maj['volts_publics/' + pseudo] = rangPublic
+        ? Object.assign({ rang: { n: rg.rang.n, nom: rg.rang.nom }, maj: t, masquer: r.nonVerifies }, XPS.voltsPublics(r.total)) : null;
+    }
+    await db.ref().update(maj);
+    // Un lot plein : la suite en sous-tâche.
+    if (nouvelles.length >= XPS.LOT_SEANCES) { await differer([{ quoi: 'xp', cle: k }]); return 'suite'; }
+    return 'recalcule';
+  }
+
   // ══ LA RELANCE DES INACTIFS (J+7, J+14, J+30) — 11 h, une personne à la fois ══
   // Trois champs d'abord (la dernière séance écarte presque tout le monde),
   // le reste seulement pour qui est au bon jour. retour_etat/<uid> retient
@@ -1103,6 +1154,7 @@ export function creerMetier(deps) {
     }
     if (quoi === 'amb_vue') { await ambMajVue(String(e.code || '')); return 'vue'; }
     if (quoi === 'defis_coach') return defisQuotidienCoach(String(e.coach || ''), now());
+    if (quoi === 'xp') return xpRecalculer(String(e.cle || ''), now());
     return 'tache_inconnue';
   }
 
@@ -1112,5 +1164,5 @@ export function creerMetier(deps) {
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente,
     fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, tache,
-    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, saisonsHeure, parcoursJ21, retourUn };
+    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, saisonsHeure, parcoursJ21, retourUn, xpRecalculer };
 }

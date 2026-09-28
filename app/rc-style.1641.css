@@ -14346,3 +14346,12 @@ html[data-theme="clair"]{background:#f8f8f8}
 .rc-phenix-cases i{width:44px;height:10px;border-radius:5px;background:rgba(255,255,255,.14)}
 .rc-phenix-cases i.on{background:#E02020;box-shadow:0 0 10px rgba(224,32,32,.7)}
 .rc-phenix-txt{margin-top:10px;font-size:var(--fs-xs);color:rgba(255,255,255,.82);text-align:center;line-height:1.5}
+
+/* ══ LES SOUS-NIVEAUX : chevrons dessinés sous l'emblème du rang ══ */
+.rg-emb-w{position:relative;display:inline-flex;flex-direction:column;align-items:center;flex-shrink:0}
+.rg-chev{display:block;margin-top:1px;filter:drop-shadow(0 0 3px rgba(255,42,42,.75))}
+.clh-tete .rg-emb-w{position:static;display:block}
+.clh-tete .rg-chev{position:absolute;left:20.175cqw;top:calc(var(--st) + 22.55cqw);width:6.85cqw;height:1.7cqw;margin:0}
+.tr-sous{display:inline-flex;flex-direction:column;align-items:center;gap:4px}
+.tr-sous img{width:56px;height:56px;object-fit:contain}
+.tr-chev{width:30px;height:10px;filter:drop-shadow(0 0 3px rgba(255,42,42,.75))}

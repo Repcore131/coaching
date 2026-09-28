@@ -48,6 +48,26 @@ export function analyserChemin(chemin) {
   if (m && SLUG_RE.test(m[1].toLowerCase())) return { type: 'coach', cle: m[1].toLowerCase() };
   return null;
 }
+/**
+ * LE RANG DU SERVEUR PRIME. /volts_publics/<pseudo> est écrit par le Worker
+ * à chaque séance terminée (xp.js) : le rang et la jauge y remplacent ceux que
+ * le client a publiés, et les badges secrets horaires qu'il n'a pas prouvés
+ * (`masquer`) disparaissent de la page. Même règle dans p/index.html.
+ */
+export function ficheAvecServeur(fiche, vs) {
+  if (!fiche || !vs || typeof vs !== 'object') return fiche;
+  const o = Object.assign({}, fiche);
+  if (o.rang && vs.rang && vs.rang.n) {
+    o.rang = { n: Math.max(1, Math.min(10, vs.rang.n | 0)), nom: String(vs.rang.nom || '').slice(0, 20) };
+    o.volts = { xp: Number(vs.xp) || 0, de: Number(vs.de) || 0, a: Number(vs.a) || 0 };
+  }
+  const masquer = Array.isArray(vs.masquer) ? vs.masquer : Object.values(vs.masquer || {});
+  if (o.badges && masquer.length) {
+    const l = Array.isArray(o.badges) ? o.badges : Object.values(o.badges);
+    o.badges = l.filter((b) => b && masquer.indexOf(b.id) < 0);
+  }
+  return o;
+}
 /** L'aperçu d'un athlète : prénom, rang, séances, série — jamais une charge ni une mesure. */
 export function ogAthlete(pseudo, p) {
   if (!p || !p.prenom) return null;
@@ -170,9 +190,11 @@ export async function servirPagePublique(req, o) {
   let html = _lireMemoire('gabarit:' + dossier, t);
   let fiche = null;
   try {
-    const [g, d] = await Promise.all([
+    const [g, d, vs] = await Promise.all([
       html ? Promise.resolve(null) : f(ORIGINE + '/' + dossier + '/index.html'),
       f(base + '/' + noeud + encodeURIComponent(c.cle) + '.json'),
+      // Le rang recalculé par le serveur (/volts_publics), pour un athlète.
+      c.type === 'coach' ? Promise.resolve(null) : f(base + '/volts_publics/' + encodeURIComponent(c.cle) + '.json').catch(() => null),
     ]);
     if (!html) {
       if (!g || !g.ok) throw new Error('gabarit ' + (g && g.status));
@@ -181,6 +203,7 @@ export async function servirPagePublique(req, o) {
       _poserMemoire('gabarit:' + dossier, html, t);
     }
     if (d && d.ok) fiche = await d.json();
+    if (fiche && vs && vs.ok) { try { fiche = ficheAvecServeur(fiche, await vs.json()); } catch (e) { /* la fiche du client reste */ } }
   } catch (e) {
     return new Response(null, { status: 302, headers: { Location: statique(c) + url.search.replace(/^\?/, '&'), 'Cache-Control': 'no-store' } });
   }
