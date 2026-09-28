@@ -11273,7 +11273,13 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   font-size:3.2cqw;line-height:1;letter-spacing:0;color:#fff;transform:scaleX(0.925);transform-origin:0 50%}
 #clh-streak .sk-date{position:absolute;left:13.9cqw;top:7.65cqw;font-family:Montserrat,sans-serif;font-weight:600;
   font-size:2.45cqw;line-height:1;letter-spacing:-0.04em;color:#7d7d7d}
-#clh-streak .sk-reste{position:absolute;left:14.25cqw;top:8.1cqw;font-size:2.4cqw;line-height:1}
+/* UNE SEULE LIGNE DANS L'EN-TETE (28/09/2026). Le max-width:10ch de .sk-reste
+   venait de l'ancien badge en grille : ici, a 2,4cqw, « Encore 3 séances »
+   passait sur deux lignes et la seconde traversait le bas du cadre et son
+   equerre. Sur une ligne, la phrase fait 21,7cqw, et il y a 23,65cqw entre son
+   debut et l'equerre : tout est en cqw, donc c'est vrai a 375 comme a 430. */
+#clh-streak .sk-reste{position:absolute;left:14.25cqw;top:8.1cqw;font-size:2.4cqw;line-height:1;
+  max-width:none;white-space:nowrap;letter-spacing:0}
 #clh-streak .sk-jokers{top:-1.2cqw;right:-1.2cqw}
 /* fin en-tete maquette */
 /* ══ MASSE GRASSE : LES DEUX BILANS COTE A COTE (maquette du 27/09/2026) ══
