@@ -70,6 +70,9 @@ code{background:#000;border:1px solid var(--bord);border-radius:6px;padding:2px 
   <div id="accueil" hidden>
     <img id="embleme" class="embleme" alt="" hidden>
     <p class="promesse" id="promesse"><strong><span id="mois-ami" data-nb="essai.moisParraine">1</span> mois offert</strong>, toute l'app ouverte, sans carte bancaire.</p>
+    <!-- L'OFFRE DE LANCEMENT d'un code ambassadeur « ultime_demi » : elle
+         remplace le mois d'essai en plus (un seul avantage). -->
+    <p class="promesse" id="offre-demi" hidden>Avec ce code : <strong>ton 1er mois d'Ultime à <span data-tarif="ultime_demi.premierMois">12,45&nbsp;€</span></strong>, puis <span data-tarif="ultime.mois">24,90&nbsp;€</span> par mois, sans engagement.</p>
     <a class="bouton" id="commencer" href="../app/">Commencer</a>
     <p class="petit" style="margin-top:10px">L'app s'ouvre et te propose de l'installer sur ton écran d'accueil.</p>
   </div>
@@ -149,7 +152,10 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
   if(!/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)) ref='';
   // Le coach passe devant (son invitation relie le compte), puis
   // l'ambassadeur (un seul avantage, comme dans l'app), puis l'ami.
-  var mode=(p.get('inv')||p.get('coach'))?'coach':amb?'amb':ref?'ami':'generique';
+  // LE DUEL (?duel=<id>) : « Léa te défie : 14 jours de régularité ».
+  var duel=(p.get('duel')||'').toLowerCase();
+  if(!/^d[a-z0-9]{10,24}$/.test(duel)) duel='';
+  var mode=(p.get('inv')||p.get('coach'))?'coach':amb?'amb':ref?'ami':duel?'duel':'generique';
   var q=p.toString();
   // Chemin RELATIF : la meme page sert sur repcore-sync.web.app/i/ et sur
   // repcore131.github.io/coaching/i/, ou « /app/ » ne designerait rien.
@@ -168,10 +174,12 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
   // textContent partout : un prénom ne devient jamais du HTML.
   // LE MOIS OFFERT, PAR LA PERSONNE QUI INVITE (Kevin, 28/09/2026) : on dit
   // « grâce à Julie », jamais « au lieu de ».
-  function poserNom(nom,rang){
+  function poserNom(nom,rang,demi){
     if(!nom) return;
     var t=el('titre'); if(t) t.textContent=nom+' t\u2019invite sur RepCore';
-    var offre='Grâce à '+nom+', ton premier mois est offert\u00a0: toute l\u2019app ouverte, sans carte bancaire.';
+    // L'offre de lancement (ultime_demi) remplace le mois offert.
+    var offre=demi?'Grâce à '+nom+', ton 1er mois d\u2019Ultime est à moitié prix.'
+      :'Grâce à '+nom+', ton premier mois est offert\u00a0: toute l\u2019app ouverte, sans carte bancaire.';
     var pr=el('promesse'); if(pr) pr.textContent=offre;
     var ii=el('interne-invite');
     if(ii){ ii.textContent=offre; ii.hidden=false; }
@@ -188,14 +196,43 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
         .then(function(r){ return r.ok?r.json():null; })
         .then(function(d){
           if(!d||typeof d!=='object') return;
-          if(mode==='amb'){ if(d.actif!==false) poserNom(String(d.nom||'').slice(0,80)); return; }
+          if(mode==='amb'){
+            if(d.actif===false) return;
+            // L'offre de lancement : le 1er mois d'Ultime à moitié prix, au
+            // lieu du mois d'essai en plus. Le texte du nom suit l'offre.
+            if(d.avantage==='ultime_demi'){
+              var od=el('offre-demi'); if(od) od.hidden=false;
+            }
+            poserNom(String(d.nom||'').slice(0,80),0,d.avantage==='ultime_demi');
+            if(d.avantage==='ultime_demi'){ var pr0=el('promesse'); if(pr0) pr0.hidden=true; }
+            return;
+          }
           var prenom=String(d.prenom||'').trim().slice(0,24);
           poserNom(prenom,d.rang);
           // L'app (même domaine) le reprend à l'inscription.
           try{ localStorage.setItem('rc_parrain_invite',JSON.stringify({code:ref,prenom:prenom,rang:Number(d.rang)||0,le:Date.now()})); }catch(e){}
         }).catch(function(){});
     }catch(e){}
-  } else if(mode==='generique'){
+  }
+  // LE DUEL, par-dessus l'invitation : c'est lui la raison de venir. Le
+  // prénom est gardé (rc_duel_invite) : l'app le reprend à l'inscription et
+  // propose de relever le défi.
+  if(duel&&el('accueil')){
+    var t1=el('titre'); if(t1&&mode==='duel') t1.textContent='Un ami te d\u00e9fie sur RepCore';
+    var mots={seances:'r\u00e9gularit\u00e9',serie:'r\u00e9gularit\u00e9',tonnage:'volume',progressionPct:'progression'};
+    try{
+      fetch(BASE+'duels_publics/'+duel+'.json')
+        .then(function(r){ return r.ok?r.json():null; })
+        .then(function(d){
+          if(!d||!d.prenom) return;
+          var pr=String(d.prenom).trim().slice(0,24);
+          var j=[7,14,21,28].indexOf(Number(d.duree))>=0?Number(d.duree):14;
+          var t=el('titre'); if(t) t.textContent=pr+' te d\u00e9fie : '+j+' jours de '+(mots[d.mesure]||mots.seances);
+          try{ localStorage.setItem('rc_duel_invite',JSON.stringify({id:duel,prenom:pr,mesure:String(d.mesure||''),duree:j,le:Date.now()})); }catch(e){}
+        }).catch(function(){});
+    }catch(e){}
+  }
+  if(mode==='generique'){
     var g=el('etapes-generique'), k=el('etapes-coach');
     if(g) g.hidden=false; if(k) k.hidden=true;
     var tg=el('titre'); if(tg) tg.textContent='Bienvenue sur RepCore';
@@ -227,7 +264,7 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
 
   // INVITÉ PAR UN AMI OU UN AMBASSADEUR : la page est l'accueil, on la laisse
   // lire. Le bouton « Commencer » ouvre l'app.
-  if((mode==='ami'||mode==='amb')&&el('accueil')){ el('accueil').hidden=false; return; }
+  if((mode==='ami'||mode==='amb'||mode==='duel')&&el('accueil')){ el('accueil').hidden=false; return; }
 
   document.getElementById('ok').hidden=false;
   // replace() et non href : le retour arriere doit ramener a Instagram, pas

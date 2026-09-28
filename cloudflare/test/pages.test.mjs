@@ -22,7 +22,7 @@ function reseau(fiches, o) {
     if (o && o.panne) throw new Error('réseau');
     if (url === ORIGINE + '/p/index.html') return new Response(P, { status: 200 });
     if (url === ORIGINE + '/c/index.html') return new Response(C, { status: 200 });
-    const m = /^https:\/\/base\.test\/(profils_publics|vitrines)\/([^.]+)\.json$/.exec(url);
+    const m = /^https:\/\/base\.test\/(profils_publics|vitrines|volts_publics)\/([^.]+)\.json$/.exec(url);
     if (m) return new Response(JSON.stringify((fiches[m[1]] || {})[decodeURIComponent(m[2])] ?? null), { status: 200 });
     return new Response('?', { status: 404 });
   };
@@ -113,16 +113,16 @@ test('mis en cache : la seconde demande ne relit ni la base ni l’hébergement'
   const cache = fauxCache(), c = ctx();
   await servirPagePublique(req('/@julie'), { env: { FIREBASE_DB_URL: BASE }, fetchImpl: f, cache, ctx: c });
   await Promise.all(c.p);
-  assert.equal(vus.length, 2);
+  assert.equal(vus.length, 3, 'le gabarit, la fiche, et le rang du serveur (/volts_publics)');
   assert.ok(cache.m.has('https://repcore-serveur.repcore.workers.dev/@julie'));
   const r2 = await servirPagePublique(req('/@julie?src=story'), { env: { FIREBASE_DB_URL: BASE }, fetchImpl: f, cache, ctx: ctx() });
   assert.equal(r2.headers.get('X-RepCore-Apercu'), 'cache');
-  assert.equal(vus.length, 2);
+  assert.equal(vus.length, 3);
   // Sans cache Cloudflare (*.workers.dev) : la mémoire de l'instance, 6 h.
   let t = 1000;
   const r3 = await servirPagePublique(req('/@julie'), { env: { FIREBASE_DB_URL: BASE }, fetchImpl: f, cache: null, maintenant: () => t });
   assert.equal(r3.headers.get('X-RepCore-Apercu'), 'memoire');
-  assert.equal(vus.length, 2);
+  assert.equal(vus.length, 3);
   _viderMemoire();
   await servirPagePublique(req('/@julie'), { env: { FIREBASE_DB_URL: BASE }, fetchImpl: f, cache: null, maintenant: () => t });
   t += CACHE_S * 1000 + 1;
@@ -178,4 +178,13 @@ test('firebase.json redirige /@ et /coach/ vers le Worker (et garde les réécri
   const re = new RegExp(a.regex.replace('?P<pseudo>', ''));
   assert.ok(re.test('/@julie.fit') && re.test('/@julie/') && !re.test('/@julie/x') && !re.test('/@ab'));
   assert.ok(fj.hosting.rewrites.some((x) => x.source === '/@*'));
+});
+
+test('l’aperçu prend le rang recalculé par le serveur (/volts_publics)', async () => {
+  _viderMemoire();
+  const { f } = reseau({ profils_publics: { julie: JULIE }, volts_publics: { julie: { rang: { n: 2, nom: 'IMPULSION' }, xp: 2000, de: 1800, a: 3800 } } });
+  const r = await servirPagePublique(req('/@julie'), { env: { FIREBASE_DB_URL: BASE }, fetchImpl: f, cache: null });
+  const h = await r.text();
+  assert.equal(og(h, 'og:title'), 'Julie · rang IMPULSION sur RepCore');
+  assert.equal(og(h, 'og:image'), ORIGINE + '/app/img/rangs/rang_2-og.jpg');
 });

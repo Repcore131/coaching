@@ -75,6 +75,29 @@ les pages publiques (`index.html`, `i/`, `p/`, `c/`), puis livrée : c'est ce qu
   elle doit exister (un coach ne vise que ses athlètes, un défi que son Canal). Testé sur l'émulateur :
   `node test/regles-evenements.emu.mjs` (Java et l'émulateur de la Realtime Database requis).
 
+## Les événements saisonniers (`src/saisons.js`)
+
+Des éditions limitées dans `/saisons/<id>` (`/evenements` est la file du
+Worker). Travail HORAIRE `saisons` (`heure: true` dans `planif.js`) : pour
+chaque saison suivie (du début à deux jours après la fin), la progression
+écrite par les apps (`saisons_progres`), le compteur collectif
+(`/stats/saisons/<id>`), le badge Édition de qui a bouclé
+(`/saisons_resultats`), et une annonce à la fois — lancement, mi-parcours aux
+retardataires, J-2, fin — entre 9 h et 21 h, Paris. Les push qui dépassent le
+budget de la minute sont différés dans la file. Tests : `test/saisons.test.mjs`.
+
+## Les duels (`src/duels.js`)
+
+Deux athlètes, une mesure, 7 à 28 jours (`/duels/<id>`, lu par les deux
+seulement). L'app dépose `duel_rejoint` (l'invité a relevé) et `duel_maj`
+(une séance terminée) ; le Worker démarre le duel à la première séance de
+l'invité, recopie les scores depuis la progression que chacun écrit (règle des
+défis du Canal : il ne relit jamais les séances), pousse le début, J-2 et le
+résultat, et écrit le CHAMPION dans `/defis_resultats`. `/duels_actifs` est
+l'index du travail du jour « duels » (18 h 30). Une lecture et une écriture
+par événement. Tests : `test/duels.test.mjs`, règles :
+`test/regles-evenements.emu.mjs` (émulateur).
+
 ## L'aperçu des pages publiques (`src/pages.js`)
 
 `/@<pseudo>` et `/coach/<slug>` : `firebase.json` y redirige, et le Worker

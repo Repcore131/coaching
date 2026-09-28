@@ -8,7 +8,7 @@
 // Tout compte dont consent.policyVersion differe de cette valeur revoit l'ecran
 // de consentement au demarrage — y compris les comptes crees avant l'existence
 // du champ, qui n'en portent aucun.
-const POLICY_VERSION='2026-09c';
+const POLICY_VERSION='2026-10';
 
 // ── Identité créateur & configuration PayPal ─────────────────────────────────
 // Ces constantes sont en dur et NE doivent jamais être exposées ni modifiables
@@ -1360,7 +1360,14 @@ function subPaliersDe(cle){
     detail:'soit '+prixMoisAnnuel(cle)+' / mois',
     econ:_economie(cle).texte, remise:_economie(cle).pourcent,
     planId:()=>planIdOffre(cle,true)});
-  if(mois) l.push({cle:'mensuel',titre:'Mensuel',prix:prixOffre(cle),periode:'par mois',
+  // LE DEMI-TARIF (sortie de pack, ou code ambassadeur de lancement) : le
+  // mensuel d'Ultime passe par le plan « demi » — 1er mois à moitié prix.
+  let demi=false;
+  try{ demi=cle==='ultime'&&typeof currentUser!=='undefined'&&!!currentUser&&demiPremierMoisDispo(currentUser); }catch(e){ demi=false; }
+  if(mois&&demi) l.push({cle:'mensuel',titre:'Mensuel',prix:prixOffre('ultime_demi'),periode:'le 1er mois',
+    detail:'puis '+prixOffre(cle)+' par mois',econ:'1er mois à -50 %',remise:'',
+    planId:()=>planIdOffre('ultime_demi')});
+  else if(mois) l.push({cle:'mensuel',titre:'Mensuel',prix:prixOffre(cle),periode:'par mois',
     detail:_euros(Math.round(mois*12*100)/100)+' sur un an',econ:'',remise:'',
     planId:()=>planIdOffre(cle)});
   return l;
@@ -5809,7 +5816,19 @@ function _validateAthletePkg(o){
     aNettoyer=!!(params.get('coachpkg')||params.get('athletepkg')||params.get('s')
       ||params.get('bilan')==='1'||params.get('wo')==='1'||params.get('diete')==='1'
       ||!!params.get('wrapped')||params.get('canal')==='1'||!!params.get('ref')||params.get('parrainage')==='1'
-      ||!!params.get('coach')||!!params.get('src')||!!params.get('amb')||params.get('paiements')==='1');
+      ||!!params.get('coach')||!!params.get('src')||!!params.get('amb')||params.get('paiements')==='1'
+      ||!!params.get('duel')||params.get('duels')==='1'||!!params.get('saison')||params.get('parcours')==='1'||params.get('reprise')==='1'
+      ||!!params.get('apk')||!!params.get('sante'));
+    // ?apk=<versionCode> — l'APK Android (LauncherActivity) l'ajoute à chaque
+    // ouverture. Rangé dans rc_apk : la feuille « Connecter mes données
+    // santé » sait ainsi qu'elle tourne dans l'APK (rcDansApk).
+    const _apkV=String(params.get('apk')||'');
+    if(/^\d{1,6}$/.test(_apkV)){ try{ localStorage.setItem('rc_apk',_apkV); }catch(e){} }
+    // ?sante=ok|erreur — le retour de ConnecterSanteActivity, après « Autoriser ».
+    // #sante-envoyer — la notification du matin (iPhone) : Lifestyle, et la bande.
+    try{ if(location.hash==='#sante-envoyer') window._pendingSanteEnvoyer=true; }catch(e){}
+    const _santeR=params.get('sante');
+    if(_santeR==='ok'||_santeR==='erreur') window._pendingSanteRetour=_santeR;
     // Coach invite → athlete device
     const cpkg=params.get('coachpkg');
     if(cpkg){
@@ -5897,6 +5916,21 @@ function _validateAthletePkg(o){
     if(/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(_vit)) try{ localStorage.setItem('rc_vitrine_coach',_vit); }catch(e){}
     // ?parrainage=1 — les push du parrainage (filleul inscrit, abonné).
     if(params.get('parrainage')==='1') window._pendingParrainageOpen=true;
+    // ?duel=<id> — un défi reçu (« Défie un pote ») : gardé jusqu'à ce que
+    // l'athlète, connecté, le relève. /i y a déjà mis le prénom de qui défie.
+    const _duel=String(params.get('duel')||'').toLowerCase();
+    if(/^d[a-z0-9]{10,24}$/.test(_duel)){
+      let _dv=null; try{ _dv=JSON.parse(localStorage.getItem('rc_duel_invite')||'null'); }catch(e){ _dv=null; }
+      if(!_dv||_dv.id!==_duel) try{ localStorage.setItem('rc_duel_invite',JSON.stringify({id:_duel,le:Date.now()})); }catch(e){}
+    }
+    // ?saison=<id> — les push d'un événement saisonnier.
+    if(/^[a-z0-9][a-z0-9-]{2,40}$/.test(String(params.get('saison')||''))) window._pendingSaisonOpen=true;
+    // ?parcours=1 — le rappel du 21e jour d'essai : la carte revient.
+    if(params.get('parcours')==='1') window._pendingParcoursOpen=true;
+    // ?reprise=1 — la relance du 30e jour : l'écran « Reprise en douceur ».
+    if(params.get('reprise')==='1') window._pendingRepriseOpen=true;
+    // ?duels=1 — les push des duels (début, J-2, résultat).
+    if(params.get('duels')==='1') window._pendingDuelsOpen=true;
     // ?paiements=1 — le push d'un litige PayPal, pour l'administrateur.
     if(params.get('paiements')==='1') window._pendingPaiementsOpen=true;
   }catch(e){}
@@ -5993,7 +6027,9 @@ const CHAMPS_SANTE=Object.freeze([
   'weightLog','profileWeight','weight','bilans','photosBilan','photosProgression',
   'comparaisons','bilanGoals','_evol_height','_evol_gender',
   // Sommeil, pas, energie, habitudes quotidiennes
-  'sleepLog','stepsLog','stepsDayType','stepsGoals','sleepGoal','energieLog','habitudesLog',
+  'sleepLog','stepsLog','fcReposLog','vfcLog','stepsDayType','stepsGoals','sleepGoal','energieLog','habitudesLog',
+  // Le check-in du matin : sommeil, énergie, courbatures, et la batterie tirée.
+  'checkin',
   // Cycle menstruel et ce qui l'entoure
   'cycle','currentCycle','cycleSuivi','cycleArretPropose','cycleChoixVus',
   'cycleIgnoresSuite','grossesse','statutHormonal','traitementHormonal',
@@ -6012,6 +6048,9 @@ const CHAMPS_SANTE=Object.freeze([
   // face et de dos du premier bilan, et le masque de la personne. Aucune image
   // — mais c'est le contour d'un corps, lu sur une photo corporelle : santé.
   'morphoAnat',
+  // La carte d'athlète : sa note de force est l'e1RM RAPPORTÉ AU POIDS DE
+  // CORPS. Une dérivée du poids : en cas de doute, santé.
+  'carte','carteHist',
   // Les trois mesures au mètre du chantier A12 : elles vivent dans les bilans
   // (déjà de santé), et le seraient aussi recopiées ailleurs.
   'deb-envergure','deb-pied','deb-thorax',
@@ -6097,6 +6136,19 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // athlète ; le slug et les spécialités de la vitrine d'un coach. Des
   // réglages d'affichage — la page elle-même n'accepte aucune donnée de santé.
   'pagePublique','vitrineSlug','vitrinePubliee','specialites',
+  // Les duels de l'athlète : leurs identifiants, son rôle, une date.
+  'duels',
+  // Le réglage des célébrations (complètes ou discrètes).
+  'celebrations',
+  // Le parcours de démarrage : des étapes datées, rien de santé.
+  'parcours',
+  // Le tonnage cumulé (relance du serveur léger) et le choix de la reprise
+  // en douceur (une date, oui ou non).
+  'tonnageTotal','_repriseDouce',
+  // Le détail des volts (lu et borné par le serveur) et le sous-niveau fêté.
+  'xpDetail','xpNiveau',
+  // Les éditions saisonnières : les badges reçus, la dernière valeur envoyée.
+  'saisonsReleves','saisonsVal',
   // Combien de fois la page a été proposée à un passage de rang (deux au plus).
   'pagePropose',
   // L'ambassadeur par qui le compte est arrivé : un code, un nom, une date.
@@ -7358,6 +7410,11 @@ function routeUser(){
   if(window._pendingWoOpen){window._pendingWoOpen=false;setTimeout(()=>openSessionPicker(),900);}
   // MEME DELAI ECHELONNE que ses deux voisins : le routage de démarrage doit
   // avoir posé son écran avant qu'on en pousse un autre par-dessus.
+  if(window._pendingSanteEnvoyer){ window._pendingSanteEnvoyer=false;
+    setTimeout(()=>{ try{ sanEnvoyerOuvrir(); }catch(e){} },1000);}
+  if(window._pendingSanteRetour){ const _r=window._pendingSanteRetour; window._pendingSanteRetour=false;
+    setTimeout(()=>{ try{ loadLifestyle(); _sanSyncLu=0; sanSyncTirer(true).catch(()=>{});
+      toast(_r==='ok'?'Données santé connectées':'Première synchronisation à reprendre : elle repartira à la prochaine ouverture',_r==='ok'?'var(--green)':'var(--orange)'); }catch(e){} },1000);}
   if(window._pendingDieteOpen){window._pendingDieteOpen=false;
     setTimeout(()=>{ try{ go('s-nutrition'); loadNutrition(); }catch(e){} },1000);}
   if(window._pendingWrappedOpen){ const _k=window._pendingWrappedOpen; window._pendingWrappedOpen=false;
@@ -7366,6 +7423,14 @@ function routeUser(){
     setTimeout(()=>{ try{ loadCanal(); }catch(e){} },1000);}
   if(window._pendingParrainageOpen){ window._pendingParrainageOpen=false;
     setTimeout(()=>{ try{ ouvrirParrainage(); }catch(e){} },1000);}
+  if(window._pendingSaisonOpen){ window._pendingSaisonOpen=false;
+    setTimeout(()=>{ try{ chargerSaisons(true).then(()=>renderSaisonAccueil()); }catch(e){} },1000);}
+  if(window._pendingRepriseOpen){ window._pendingRepriseOpen=false;
+    setTimeout(()=>{ try{ ouvrirRepriseDouce(); }catch(e){} },1000);}
+  if(window._pendingParcoursOpen){ window._pendingParcoursOpen=false;
+    setTimeout(()=>{ try{ parcoursRelancer(); }catch(e){} },1000);}
+  if(window._pendingDuelsOpen){ window._pendingDuelsOpen=false;
+    setTimeout(()=>{ try{ _duelsLusLe=0; _rendreDuelsAccueil(); }catch(e){} },1000);}
   if(window._pendingPaiementsOpen){ window._pendingPaiementsOpen=false;
     setTimeout(()=>{ try{ if(estAdminAmbassadeurs()) ouvrirAmbassadeurs(); }catch(e){} },1000);}
 }
@@ -7452,7 +7517,10 @@ function droitsDe(u){
     // Ultime ouvert par un programme acheté, par-dessus l'abonnement (serveur léger).
     ultimeJusqu:Number(d.ultimeJusqu)||0,abo:d.abo||null,
     // Ce qu'une fermeture à la main a remplacé, pour que « Rouvrir » le rende.
-    avantEcheance:Number(d.avantEcheance)||0,avantSource:d.avantSource||null};
+    avantEcheance:Number(d.avantEcheance)||0,avantSource:d.avantSource||null,
+    // Le demi-tarif du 1er mois d'Ultime, déjà consommé ; l'offre de lancement
+    // d'un code ambassadeur (écrite par le serveur léger).
+    demiPackUtilise:d.demiPackUtilise===true,offreAmb:d.offreAmb==='ultime_demi'?'ultime_demi':''};
 }
 // ⚠ UN NOEUD VIDE NE FERME RIEN, ET C'EST LA CORRECTION DU 24/09/2026.
 //
@@ -9549,7 +9617,8 @@ const FOUDRE_IMPACT=30;
 function _foudreScene(impact,W,o){
   o=o||{};
   const k=Number(o.echelle)>0?Number(o.echelle):1;
-  const nb=(o.eclairs===2||o.eclairs===3)?o.eclairs:(Math.random()<0.5?2:3);
+  // 1 éclair : la « petite foudre » (sous-niveau).
+  const nb=(o.eclairs===1||o.eclairs===2||o.eclairs===3)?o.eclairs:(Math.random()<0.5?2:3);
   const eclairs=[];
   for(let i=0;i<nb;i++){ const e=_foudreEclair(impact,W,[0,45,95][i]); e.epais*=k; e.echelle=k; eclairs.push(e); }
   const etincelles=_foudreEtincelles(impact,FOUDRE_IMPACT);
@@ -11136,9 +11205,11 @@ async function doRegister(){
       // LE PARRAINAGE, AVANT le code coach : un filleul peut arriver avec les
       // deux. La demande s'enregistre ; le mois en plus ne sert qu'à l'essai.
       // L'AMBASSADEUR D'ABORD (un seul avantage : ambassadeur > parrain).
-      let _bonusParrain=0;
-      try{ _bonusParrain=(await ambassadeurApresInscription(currentUser,(document.getElementById('r-parrain')||{}).value)).jours; }catch(e){ _bonusParrain=0; }
-      if(!_bonusParrain){ try{ _bonusParrain=await parrainageApresInscription(currentUser); }catch(e){ _bonusParrain=0; } }
+      let _bonusParrain=0, _amb=null;
+      try{ _amb=await ambassadeurApresInscription(currentUser,(document.getElementById('r-parrain')||{}).value); _bonusParrain=_amb.jours; }catch(e){ _bonusParrain=0; }
+      // Un code ambassadeur appliqué, même sans jour en plus (offre de
+      // lancement), ferme le parrainage : un seul avantage.
+      if(!(_amb&&_amb.type)){ try{ _bonusParrain=await parrainageApresInscription(currentUser); }catch(e){ _bonusParrain=0; } }
       if(await _appliquerCodeApresInscription()) return;
       // ⚠ PAS DE CODE : C'EST ICI QUE L'ESSAI S'OUVRE, et nulle part ailleurs.
       // Cette branche est exactement « un athlete sans code coach » — celui
@@ -18160,6 +18231,301 @@ function _dessinerRecapTeam(d,fond,format){
   o.ombre(false);
   return cv;
 }
+
+// ══ MON KIT (espace coach, 28/09/2026) ════════════════════════════════
+// Chaque lundi, trois contenus prêts à publier, 1080×1350, tirés des vraies
+// données de la semaine écoulée : le récap de la team (_dessinerRecapTeam),
+// la victoire de la semaine (_dessinerVictoireCoach — le prénom seulement
+// avec l'accord de l'athlète, vcConsentement, sinon anonyme), et le défi en
+// cours du Canal, ou un défi à lancer. Chaque légende est modifiable, porte
+// le lien de la vitrine du coach et #RepCore. « Tout télécharger » (partage
+// natif de plusieurs fichiers, sinon un par un), « Copier la légende ».
+// Et les ÉLÉMENTS DE MARQUE : logo (clair / sombre), les 3 fonds, les
+// emblèmes de rang, et trois règles d'usage.
+const KIT_FORMAT='post';
+const KIT_HASHTAGS='#RepCore #coaching #musculation';
+const KIT_VU_CLE='rc_kit_vu';
+const KIT_REGLES=Object.freeze([
+  'Le logo ne se déforme pas, ne se recolore pas et garde de l’air autour de lui.',
+  'Le rouge RepCore (#E02020) sert aux accents, jamais aux longs textes.',
+  'Pas de montage d’un emblème de rang sur un compte qui ne l’a pas gagné.'
+]);
+const KIT_FONDS=Object.freeze([{cle:'carbone',lib:'Carbone'},{cle:'rouge',lib:'Rouge'},{cle:'noir',lib:'Noir'}]);
+/** PURE. Le lundi (00 h, heure locale) de la semaine de `t`. */
+function kitLundi(maintenant){
+  const d=new Date((typeof maintenant==='number')?maintenant:Date.now());
+  d.setHours(0,0,0,0);
+  d.setDate(d.getDate()-((d.getDay()+6)%7));
+  return d;
+}
+function kitSemaineCle(maintenant){ return localISODate(kitLundi(maintenant)); }
+/** PURE. La meilleure progression de la semaine (7 jours, sinon 30), ou null. */
+function kitVictoire(athletes,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  for(const jours of [7,30]){
+    let best=null;
+    for(const u of (athletes||[]).filter(Boolean)){
+      let l=[]; try{ l=victoiresDe(u); }catch(e){ l=[]; }
+      for(const v of l){
+        if(!(v.le>t-jours*864e5&&v.le<=t)) continue;
+        if(!best||v.pct>best.v.pct) best={u,v};
+      }
+    }
+    if(best) return best;
+  }
+  return null;
+}
+/** PURE. Le défi du Canal en cours (commencé, pas fini), ou null. */
+function kitDefiEnCours(liste,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  return (liste||[]).filter(m=>m&&m.type==='defi'&&Number(m.fin)>t&&!(Number(m.debut)>t))
+    .sort((a,b)=>Number(a.fin)-Number(b.fin))[0]||null;
+}
+const _kitKg=v=>String(Math.round(Number(v)*10)/10).replace('.',',');
+/** PURE. Les trois contenus de la semaine : {type, titre, d, legende, fichier}. */
+function kitContenus(coach,athletes,defi,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const equipe=String((coach&&coach.teamName)||'').trim();
+  let lien=''; try{ lien=urlPagePerso(coach); }catch(e){ lien=''; }
+  const pied=(lien?'\n\n'+lien:'')+'\n'+KIT_HASHTAGS;
+  const out=[];
+  // 1. Le récap de la team.
+  const r=recapTeamDonnees(athletes,'semaine',t,equipe.toUpperCase());
+  const ton=r.tonnage>=1000?(String(Math.round(r.tonnage/100)/10).replace('.',',')+' t'):(r.tonnage+' kg');
+  out.push({type:'recap',titre:'Récap de la team',d:r,fichier:'repcore-team-semaine',
+    legende:'La semaine de la team'+(equipe?' '+equipe:'')+' : '+r.seances+' séance'+(r.seances>1?'s':'')+', '+r.records+' record'+(r.records>1?'s':'')
+      +', '+ton+' soulevés'+(r.equivalent?' (soit '+r.equivalent.texte+')':'')+'. Fier de vous 💪'+pied});
+  // 2. La victoire de la semaine — le prénom avec l'accord, sinon anonyme.
+  const vic=kitVictoire(athletes,t);
+  if(vic){
+    const mode=vcConsentement(vic.u)?'prenom':'anonyme';
+    const d=victoireDonnees(vic.u,vic.v,mode);
+    const qui=d.nom?('Bravo '+String(vic.u.fname||'').trim().slice(0,24)+' !'):'Bravo à toi, tu te reconnaîtras !';
+    out.push({type:'victoire',titre:'Victoire de la semaine',d,fichier:'repcore-victoire-semaine',
+      legende:'Victoire de la semaine ⚡ '+vic.v.exo+' : '+_kitKg(vic.v.avant)+' → '+_kitKg(vic.v.apres)+' kg (+'+vic.v.pct+' %)'
+        +(d.duree?' en '+d.duree.toLowerCase():'')+'. '+qui+pied});
+  }else out.push({type:'victoire',titre:'Victoire de la semaine',d:null,fichier:'',legende:''});
+  // 3. Le défi en cours, ou un défi à lancer.
+  if(defi){
+    let obj=''; try{ obj=defiTexteObjectif(defi); }catch(e){ obj=''; }
+    const fin=new Date(Number(defi.fin)).toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
+    out.push({type:'defi',titre:'Défi en cours',fichier:'repcore-defi-en-cours',
+      d:{sur:'DÉFI EN COURS',titre:String(defi.titre||'Le défi').slice(0,60),sous:obj,date:'JUSQU’AU '+fin.toUpperCase()},
+      legende:'Défi en cours : « '+String(defi.titre||'Le défi')+' »'+(obj?' — '+obj:'')+', jusqu’au '+fin+'. Qui le relève ? 🔥'+pied+' #defi'});
+  }else{
+    out.push({type:'defi',titre:'Défi à lancer',fichier:'repcore-defi-semaine',
+      d:{sur:'LE DÉFI DE LA SEMAINE',titre:'3 SÉANCES EN 7 JOURS',sous:'Tu relèves ?',date:'DU LUNDI AU DIMANCHE'},
+      legende:'Le défi de la semaine : 3 séances en 7 jours. Tu relèves ? Réponds « JE RELÈVE » en commentaire 🔥'+pied+' #defi'});
+  }
+  return out;
+}
+/** Le visuel du défi (en cours, ou à lancer). */
+function _dessinerDefiKit(d,fond,format){
+  const F=visuelFormat(format), W=F.w, H=F.h;
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const g=cv.getContext('2d');
+  const f=fond||'carbone', rouge=f==='rouge';
+  _kitPeindreFond(g,W,H,f);
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const o=_visuelOutils(g), cx=W/2, LARG=W-144;
+  g.textAlign='center'; g.textBaseline='alphabetic';
+  // L'éclair, derrière le titre.
+  g.save();
+  g.fillStyle=rouge?'rgba(255,255,255,.18)':'rgba(224,32,32,.35)';
+  g.shadowColor=rouge?'rgba(255,255,255,.4)':'rgba(224,32,32,.9)'; g.shadowBlur=60;
+  g.beginPath();
+  [[610,200],[400,620],[540,620],[450,1000],[720,480],[580,480],[690,200]].forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));
+  g.closePath(); g.fill(); g.restore();
+  o.ombre(true);
+  g.fillStyle=rouge?'#fff':'#ff3b3b'; g.font='800 38px '+MONT;
+  o.ecrireEspace(d.sur,cx,220,9,true);
+  g.fillStyle='#fff';
+  const s=o.ajuste(d.titre,'700',170,BEBAS,LARG,70);
+  g.font='700 '+s+'px '+BEBAS;
+  o.ecrire(o.coupe(d.titre,LARG),cx,640);
+  if(d.sous){ g.fillStyle='rgba(255,255,255,.9)'; const ss=o.ajuste(d.sous,'700',48,MONT,LARG,26); g.font='700 '+ss+'px '+MONT; o.ecrire(d.sous,cx,760); }
+  if(d.date){ g.fillStyle='rgba(255,255,255,.8)'; g.font='800 30px '+MONT; o.ecrireEspace(d.date,cx,840,5,true); }
+  let marque=null; try{ marque=_vcMarque(); }catch(e){ marque=null; }
+  _vcPied(g,o,H-330,W,marque,_vcNomCoach(),rouge);
+  o.ombre(false);
+  return cv;
+}
+// Les fonds du kit : ceux des visuels, et un noir uni.
+function _kitPeindreFond(g,W,H,f){
+  if(f==='noir'){ g.fillStyle='#0b0b0c'; g.fillRect(0,0,W,H); return true; }
+  return _visuelPeindreFond(g,W,H,f==='rouge'?'rouge':'carbone');
+}
+function kitDessiner(c,fond){
+  if(!c||!c.d) return null;
+  const f=fond||'carbone';
+  const vf=f==='noir'?'transparent':f;
+  let cv=null;
+  if(c.type==='defi') return _dessinerDefiKit(c.d,f,KIT_FORMAT);
+  cv=c.type==='recap'?_dessinerRecapTeam(c.d,vf,KIT_FORMAT):_dessinerVictoireCoach(c.d,vf,KIT_FORMAT);
+  if(f!=='noir') return cv;
+  // Le noir uni : le visuel transparent posé sur le fond.
+  const out=document.createElement('canvas'); out.width=cv.width; out.height=cv.height;
+  const g=out.getContext('2d'); _kitPeindreFond(g,out.width,out.height,'noir'); g.drawImage(cv,0,0);
+  return out;
+}
+// ── L'écran ────────────────────────────────────────────────────────────
+let _kit=null;   // {contenus, fond, semaine}
+function _kitLegendesGardees(sem){
+  try{ const x=JSON.parse(localStorage.getItem('rc_kit_leg')||'null'); return (x&&x.sem===sem)?(x.l||{}):{}; }catch(e){ return {}; }
+}
+function kitLegendeModifiee(i,val){
+  if(!_kit||!_kit.contenus[i]) return;
+  _kit.contenus[i].legende=String(val||'');
+  try{ const l=_kitLegendesGardees(_kit.semaine); l[i]=_kit.contenus[i].legende;
+    localStorage.setItem('rc_kit_leg',JSON.stringify({sem:_kit.semaine,l})); }catch(e){}
+}
+/** PURE. Le kit de la semaine a-t-il déjà été ouvert ? (la pastille « Nouveau ») */
+function kitNouveau(vu,maintenant){ return String(vu||'')!==kitSemaineCle(maintenant); }
+function _kitMarquerVu(){ try{ localStorage.setItem(KIT_VU_CLE,kitSemaineCle()); }catch(e){} _rendreBoutonKit(); }
+function _rendreBoutonKit(){
+  const b=document.getElementById('ch-kit-btn'); if(!b) return;
+  let vu=''; try{ vu=localStorage.getItem(KIT_VU_CLE)||''; }catch(e){ vu=''; }
+  b.classList.toggle('kit-neuf',kitNouveau(vu));
+}
+async function ouvrirKitCoach(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||u.role!=='coach') return false;
+  const ath=Object.values(DB.get('users')||{}).filter(x=>x&&x.role==='athlete'&&_estMonAthlete(x,u));
+  // Le défi en cours : le Canal du coach, s'il répond.
+  let liste=window._canalListe||null;
+  if(!liste){ try{ const cle=canalCle(u); liste=cle?canalTrier(await CLOUD.pullCanalMessages(cle)):[]; }catch(e){ liste=[]; } }
+  const sem=kitSemaineCle();
+  const contenus=kitContenus(u,ath,kitDefiEnCours(liste),Date.now());
+  const gardees=_kitLegendesGardees(sem);
+  contenus.forEach((c,i)=>{ if(typeof gardees[i]==='string'&&c.d) c.legende=gardees[i]; });
+  _kit={contenus,fond:'carbone',semaine:sem};
+  try{ _prechaufferMarqueCoach(); }catch(e){}
+  document.getElementById('kit-ecran')?.remove();
+  const z=document.createElement('div');
+  z.id='kit-ecran'; z.className='aa-ecran kit-ecran';
+  z.setAttribute('role','dialog'); z.setAttribute('aria-modal','true'); z.setAttribute('aria-label','Mon kit de la semaine');
+  z.addEventListener('keydown',e=>{ if(e.key==='Escape'){ e.preventDefault(); fermerKitCoach(); } });
+  document.body.appendChild(z);
+  _kitRendre();
+  _kitMarquerVu();
+  return true;
+}
+function fermerKitCoach(){ document.getElementById('kit-ecran')?.remove(); return true; }
+function kitFond(f){ if(!_kit||!KIT_FONDS.some(x=>x.cle===f)) return false; _kit.fond=f; _kitRendre(); return true; }
+function htmlKit(k){
+  const lundi=kitLundi(Date.parse(k.semaine+'T12:00:00')).toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
+  const prets=k.contenus.filter(c=>c.d).length;
+  let h='<div class="aa-haut"><span>Mon kit · semaine du '+escapeHtml(lundi)+'</span>'
+    +'<button type="button" class="aa-fermer" aria-label="Fermer" onclick="fermerKitCoach()">✕</button></div>'
+    +'<div class="kit-corps">'
+    +'<p class="kit-intro">Trois contenus prêts à poster (1080×1350), tirés des chiffres de ta team. Modifie la légende si tu veux, puis publie.</p>'
+    +'<div class="kit-fonds" role="group" aria-label="Fond">'+KIT_FONDS.map(f=>'<button type="button" class="kit-f'+(k.fond===f.cle?' on':'')+'" onclick="kitFond(\''+f.cle+'\')">'+f.lib+'</button>').join('')+'</div>'
+    +'<button type="button" class="btn btn-red btn-casse kit-tout" onclick="kitToutTelecharger(this)"'+(prets?'':' disabled')+'>'+icon('download',18)+' <span>Tout télécharger ('+prets+')</span></button>';
+  k.contenus.forEach((c,i)=>{
+    h+='<section class="kit-c"><div class="kit-t">'+(i+1)+' · '+escapeHtml(c.titre)+'</div>';
+    if(!c.d){ h+='<p class="kit-vide">Pas encore de progression de charge à montrer cette semaine. Elle viendra.</p></section>'; return; }
+    h+='<canvas class="kit-apercu" id="kit-cv-'+i+'" aria-label="Aperçu : '+escapeHtml(c.titre)+'"></canvas>'
+      +'<label class="kit-l" for="kit-leg-'+i+'">Légende</label>'
+      +'<textarea id="kit-leg-'+i+'" class="kit-leg" rows="5" oninput="kitLegendeModifiee('+i+',this.value)">'+escapeHtml(c.legende)+'</textarea>'
+      +'<div class="kit-b"><button type="button" class="btn btn-outline btn-sm btn-casse" onclick="kitCopierLegende('+i+',this)">Copier la légende</button>'
+      +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="kitTelecharger('+i+',this)">Télécharger</button></div></section>';
+  });
+  h+=htmlElementsMarque()+'</div>';
+  return h;
+}
+function _kitRendre(){
+  const z=document.getElementById('kit-ecran'); if(!z||!_kit) return;
+  z.innerHTML=htmlKit(_kit);
+  _kit.contenus.forEach((c,i)=>{
+    const el=document.getElementById('kit-cv-'+i); if(!el||!c.d) return;
+    try{ const v=kitDessiner(c,_kit.fond); if(!v) return; el.width=v.width; el.height=v.height; el.getContext('2d').drawImage(v,0,0); v.width=0; v.height=0; }catch(e){}
+  });
+}
+async function kitCopierLegende(i,btn){
+  const c=_kit&&_kit.contenus[i]; if(!c) return false;
+  let ok=false;
+  try{ await navigator.clipboard.writeText(c.legende); ok=true; }catch(e){ ok=false; }
+  if(btn){ const t=btn.textContent; btn.textContent=ok?'Copiée ✓':'Copie impossible'; setTimeout(()=>{ btn.textContent=t; },1800); }
+  return ok;
+}
+function _kitBlob(c){
+  return new Promise(res=>{
+    try{ const cv=kitDessiner(c,_kit.fond); if(!cv) return res(null);
+      cv.toBlob(b=>{ cv.width=0; cv.height=0; res(b); },'image/jpeg',0.9); }catch(e){ res(null); }
+  });
+}
+function _kitNom(c){ return (c.fichier||'repcore-kit')+'-'+(_kit&&_kit.semaine||'')+'.jpg'; }
+async function kitTelecharger(i){
+  const c=_kit&&_kit.contenus[i]; if(!c||!c.d) return false;
+  const b=await _kitBlob(c); if(!b) return false;
+  _kitEnregistrer(b,_kitNom(c));
+  return true;
+}
+function _kitEnregistrer(b,nom){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(b); a.download=nom;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>{ try{ URL.revokeObjectURL(a.href); }catch(e){} },4000);
+}
+// LE PARTAGE NATIF DE PLUSIEURS FICHIERS d'abord (Instagram les reçoit en
+// carrousel) ; sinon, un téléchargement par fichier.
+async function kitToutTelecharger(btn){
+  if(!_kit) return 0;
+  if(btn) btn.disabled=true;
+  const l=_kit.contenus.filter(c=>c.d);
+  const blobs=[];
+  for(const c of l){ const b=await _kitBlob(c); if(b) blobs.push({b,nom:_kitNom(c)}); }
+  let n=0;
+  try{
+    const files=blobs.map(x=>new File([x.b],x.nom,{type:'image/jpeg'}));
+    if(files.length&&navigator.canShare&&navigator.canShare({files})){
+      await navigator.share({files,title:'Mon kit RepCore'}); n=files.length;
+    }
+  }catch(e){ n=0; }
+  if(!n){ for(const x of blobs){ _kitEnregistrer(x.b,x.nom); n++; await new Promise(r=>setTimeout(r,350)); } }
+  try{ rcm('coach_kit_telecharge'); }catch(e){}
+  if(btn) btn.disabled=false;
+  return n;
+}
+// ── Les éléments de marque ─────────────────────────────────────────────
+function htmlElementsMarque(){
+  return '<section class="kit-c kit-marque"><div class="kit-t">Éléments de marque</div>'
+    +'<div class="kit-l">Logo</div><div class="kit-b">'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="kitLogo(\'sombre\')">Logo · fond sombre</button>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="kitLogo(\'clair\')">Logo · fond clair</button></div>'
+    +'<div class="kit-l">Les 3 fonds (1080×1350)</div><div class="kit-b">'
+    +KIT_FONDS.map(f=>'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="kitFondTelecharger(\''+f.cle+'\')">'+f.lib+'</button>').join('')+'</div>'
+    +'<div class="kit-l">Emblèmes de rang</div><div class="kit-emb">'
+    +RANGS.map(r=>'<a href="'+rangEmbleme(r.n,true)+'" download="repcore-rang-'+r.n+'.webp" title="'+escapeHtml(r.nom)+'"><img src="'+rangEmbleme(r.n)+'" alt="'+escapeHtml(r.nom)+'" loading="lazy" width="44" height="44"></a>').join('')+'</div>'
+    +'<div class="kit-l">Règles d’usage</div><ol class="kit-regles">'+KIT_REGLES.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')+'</ol></section>';
+}
+/** Le logo : l'icône et le mot REPCORE, blanc (fond sombre) ou noir (fond clair). */
+function kitLogoCanvas(variante,icone){
+  const cv=document.createElement('canvas'); cv.width=1200; cv.height=400;
+  const g=cv.getContext('2d');
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  if(icone){ try{ g.drawImage(icone,40,40,320,320); }catch(e){} }
+  g.fillStyle=variante==='clair'?'#0b0b0c':'#ffffff';
+  g.font='700 250px '+BEBAS; g.textBaseline='middle'; g.textAlign='left';
+  g.fillText('REPCORE',400,212);
+  return cv;
+}
+function kitLogo(variante){
+  const img=new Image();
+  const fin=()=>{ const cv=kitLogoCanvas(variante,img.naturalWidth?img:null);
+    cv.toBlob(b=>{ if(b) _kitEnregistrer(b,'repcore-logo-'+(variante==='clair'?'fond-clair':'fond-sombre')+'.png'); },'image/png'); };
+  img.onload=fin; img.onerror=fin;
+  img.src='./icons/icon-512x512.png';
+  return true;
+}
+function kitFondTelecharger(f){
+  const cv=document.createElement('canvas'); cv.width=1080; cv.height=1350;
+  _kitPeindreFond(cv.getContext('2d'),1080,1350,f);
+  cv.toBlob(b=>{ if(b) _kitEnregistrer(b,'repcore-fond-'+f+'.jpg'); },'image/jpeg',0.92);
+  return true;
+}
+
 // ── L'ÉCRAN : aperçu, réglages, fond, Télécharger / Partager ──────────────
 let _vc=null;   // {type:'victoire'|'recap', u?, victoires?, i, mode, format, periode}
 function _vcDonnees(){
@@ -18339,7 +18705,8 @@ const PAGE_MONTRER=Object.freeze([
   {cle:'seances',lib:'Mon nombre de séances',defaut:true},
   {cle:'stats',lib:'Mes chiffres : tonnes soulevées, séries, exercices, depuis quand',defaut:true},
   {cle:'photo',lib:'Ma photo de profil',defaut:false},
-  {cle:'meilleurs',lib:'Mes 3 meilleurs records, avec les charges',defaut:false}
+  {cle:'meilleurs',lib:'Mes 3 meilleurs records, avec les charges',defaut:false},
+  {cle:'carte',lib:'Ma carte d’athlète (vignette)',defaut:false}
 ]);
 // Un choix ajouté après coup (stats, photo) prend sa valeur par défaut chez
 // qui a enregistré sa page avant : absent ne veut pas dire « décoché ».
@@ -18536,6 +18903,15 @@ function pagePubliqueDonnees(u,montrer,maintenant){
   if(m.meilleurs){ const r=meilleursRecordsPublics(u,3); if(r.length) o.meilleurs=r; }
   if(m.stats){ try{ const st=statsPubliques(u); if(st.depuis||st.tonnage||st.series) o.chiffres=st; }catch(e){} }
   if(m.photo){ const ph=photoPublique(u); if(ph) o.photo=ph; }
+  // LA CARTE D'ATHLÈTE, en vignette : les notes, jamais le poids qui les fonde.
+  if(m.carte){
+    try{
+      const c=(u&&u.carte)||noteAthlete(u,t);
+      const v={g:c.globale,c:c.cadre};
+      for(const k of CARTE_NOTES) v[k]=c[k];
+      o.carte=v;
+    }catch(e){}
+  }
   const c=u&&u.parrainage&&u.parrainage.code;
   if(typeof parrainageCodeValide==='function'&&parrainageCodeValide(c)) o.ref=c;
   return o;
@@ -18689,6 +19065,7 @@ async function activerPageDepuisRang(btn){
   return true;
 }
 function _rendrePagePublique(){
+  try{ const zc=document.getElementById('atp-celebrations'); if(zc) zc.innerHTML=htmlReglageCelebrations(currentUser); }catch(e){}
   const z=document.getElementById('atp-page');
   if(!z) return;
   if(!currentUser||currentUser.role==='coach'){ z.innerHTML=''; return; }
@@ -18907,7 +19284,143 @@ function viraliteDonnees(jours,semaines,periodeJours,maintenant){
     k:actifs>0?Math.round(insPartage/actifs*1000)/1000:null,
     totaux:{partages:tot('partages'),clics:tot('clic'),inscriptions:tot('inscription'),payants:tot('payant')}};
 }
-let _viral=null;   // {jours, semaines, periode}
+// ══ LE RÉSUMÉ D'ACTIVITÉ (/activite/<compte>) — pour /stats/retention ════
+// Ce que le serveur léger agrège chaque nuit (cloudflare/src/retention.js).
+// AUCUN CONTENU : ni charge, ni mesure, ni repas, ni ressenti — des jours
+// (actif = une séance, un check-in ou un journal ce jour-là) et des oui/non.
+// Écrit par l'app une fois par jour au plus (quand il change), lu par le
+// Worker seul, effacé avec le compte. privacy.html le dit.
+const ACTIVITE_CLE='rc_activite_sig';
+/** PURE. Les jours actifs (AAAA-MM-JJ, heure locale). */
+function joursActifs(u){
+  const s=new Set();
+  for(const x of ((u&&u.sessions)||[])) if(x&&Number(x.date)>0) s.add(localISODate(new Date(Number(x.date))));
+  const ci=(u&&u.checkin)||{};
+  for(const j of Object.keys(ci)) if(/^\d{4}-\d{2}-\d{2}$/.test(j)&&checkinComplet(ci[j])) s.add(j);
+  const log=((u&&u.nutrition)||{}).log||{};
+  for(const j of Object.keys(log)) if(/^\d{4}-\d{2}-\d{2}$/.test(j)&&((log[j]&&log[j].entries)||[]).length>0) s.add(j);
+  return s;
+}
+function _actJourPlus(iso,n){ const d=new Date(iso+'T12:00:00'); d.setDate(d.getDate()+n); return localISODate(d); }
+/** PURE (horloge donnée). Le résumé, ou null (coach, compte sans date). */
+function activiteResume(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(!u||u.role==='coach') return null;
+  const ses=((u.sessions)||[]).map(x=>Number(x&&x.date)).filter(x=>x>0);
+  const cree=Math.min(Number(u.createdAt)||Infinity,Number(u.origine&&u.origine.inscritLe)||Infinity,ses.length?Math.min(...ses):Infinity);
+  if(!isFinite(cree)) return null;
+  const inscrit=localISODate(new Date(cree)), auj=localISODate(new Date(t));
+  const actifs=joursActifs(u);
+  const debut=[];
+  for(let k=0;k<=40;k++) if(actifs.has(_actJourPlus(inscrit,k))) debut.push(k);
+  let j30='';
+  for(let k=29;k>=0;k--) j30+=actifs.has(_actJourPlus(auj,-k))?'1':'0';
+  const fin30=cree+30*864e5;
+  const ciTot=Object.keys(u.checkin||{}).filter(j=>checkinComplet(u.checkin[j])&&Number(u.checkin[j].at||0)<=fin30).length;
+  const p=u.parcours||{};
+  let notif=false; try{ notif=typeof Notification!=='undefined'&&Notification.permission==='granted'&&!!_pushMemo(); }catch(e){ notif=false; }
+  const src=String((u.origine&&u.origine.src)||(u.ambassadeur?'amb':(u.parrainage&&u.parrainage.parrainCode?'parrainage':'direct'))).slice(0,20);
+  return {v:1,inscrit,sem:localISODate(_lundiDe(cree)),src,debut,jour:auj,j30,
+    seance1:ses.length>0,
+    parcours:!!(p.fini&&!p.existant),
+    finEssai:Number(u.essai&&u.essai.finit)||0,
+    payant:!!((u.origine&&u.origine.payeLe)||u.paypalSubscriptionId),
+    lev:{parcours:!!(p.fini&&!p.existant&&Number(p.fini)<=fin30),checkin:ciTot>=3,notif,
+      duel:Object.keys(u.duels||{}).length>0,
+      defi:Object.keys(u.defisReleves||{}).length>0||Object.keys(u.saisonsReleves||{}).length>0,
+      coach:!!(u.coachEmailKey||u.coachId),
+      invite:!!(u.ambassadeur||(u.parrainage&&u.parrainage.parrainCode)||src==='amb'||src==='parrainage')}};
+}
+// Une fois par jour au plus, et seulement s'il a changé.
+async function activitePublier(u){
+  if(!SERVEUR_LEGER||!u||!u.email||u.role==='coach'||!CLOUD||!CLOUD.ok()) return false;
+  const r=activiteResume(u);
+  if(!r) return false;
+  const sig=JSON.stringify(r);
+  try{ if(localStorage.getItem(ACTIVITE_CLE)===sig) return false; }catch(e){}
+  const token=await CLOUD._getToken();
+  if(!token) return false;
+  const moi=String(u.email).replace(/\./g,',');
+  const x=await fetch(CLOUD._fbUrl.replace('users.json','activite/'+moi+'.json')+'?auth='+token,
+    {method:'PUT',headers:{'Content-Type':'application/json'},body:sig}).catch(()=>null);
+  if(x&&x.ok){ try{ localStorage.setItem(ACTIVITE_CLE,sig); }catch(e){} return true; }
+  return false;
+}
+
+// ── L'écran Viralité : la rétention (/stats/retention) ─────────────────
+// Des AGRÉGATS : aucune ligne ne désigne une personne. Courbes et barres en
+// SVG écrit à la main, sans bibliothèque.
+const _vfPct=v=>v==null?'–':String(v).replace('.',',')+' %';
+/** PURE. Les courbes J1 / J7 / J30 par cohorte, en SVG. */
+function svgRetention(cohortes){
+  const l=(cohortes||[]).filter(c=>c&&c.n>0);
+  if(!l.length) return '';
+  const W=320, H=140, g=28, d=12, hy=H-24;
+  const x=i=>l.length<2?W/2:g+i*(W-g-d)/(l.length-1);
+  const y=v=>hy-(Math.max(0,Math.min(100,v))/100)*(hy-10);
+  const serie=(k,coul,tir)=>{
+    const pts=l.map((c,i)=>c[k]==null?null:[x(i),y(c[k])]);
+    let dd='', lev=true;
+    for(const p of pts){ if(!p){ lev=true; continue; } dd+=(lev?'M':'L')+p[0].toFixed(1)+' '+p[1].toFixed(1)+' '; lev=false; }
+    return (dd?'<path d="'+dd+'" fill="none" stroke="'+coul+'" stroke-width="2"'+(tir?' stroke-dasharray="4 3"':'')+'/>':'')
+      +pts.filter(Boolean).map(p=>'<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="2.5" fill="'+coul+'"/>').join('');
+  };
+  const grille=[0,25,50,75,100].map(v=>'<line x1="'+g+'" x2="'+(W-d)+'" y1="'+y(v)+'" y2="'+y(v)+'" stroke="currentColor" stroke-opacity=".12"/>'
+    +'<text x="'+(g-4)+'" y="'+(y(v)+3)+'" text-anchor="end" font-size="8" fill="currentColor" fill-opacity=".6">'+v+'</text>').join('');
+  const lab=l.map((c,i)=>(i%Math.ceil(l.length/6)===0)?'<text x="'+x(i).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle" font-size="8" fill="currentColor" fill-opacity=".6">'+c.sem.slice(5).replace('-','/')+'</text>':'').join('');
+  return '<svg class="vir-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Rétention J1, J7 et J30 par semaine d’inscription">'
+    +grille+lab+serie('j1','#ff6b6b',true)+serie('j7','#ffb020',false)+serie('j30','#E02020',false)+'</svg>'
+    +'<div class="vir-leg"><span style="--c:#ff6b6b">J1</span><span style="--c:#ffb020">J7</span><span style="--c:#E02020">J30</span></div>';
+}
+/** PURE. L'entonnoir total, en barres SVG. */
+function svgEntonnoir(total){
+  const et=[['inscrits','Inscription'],['seance1','1re séance'],['parcours','Parcours fini'],['finEssai','Fin d’essai'],['payant','Payant']];
+  const max=Math.max(1,Number(total&&total.inscrits)||0);
+  const W=320, h=22;
+  return '<svg class="vir-svg" viewBox="0 0 '+W+' '+(et.length*h+4)+'" role="img" aria-label="Entonnoir, toutes sources">'
+    +et.map((e,i)=>{ const v=Number(total&&total[e[0]])||0, w=Math.round((W-120)*v/max);
+      return '<text x="0" y="'+(i*h+15)+'" font-size="10" fill="currentColor">'+e[1]+'</text>'
+        +'<rect x="84" y="'+(i*h+4)+'" width="'+Math.max(1,w)+'" height="14" rx="3" fill="#E02020" fill-opacity="'+(1-i*0.12)+'"/>'
+        +'<text x="'+(88+w)+'" y="'+(i*h+15)+'" font-size="10" fill="currentColor">'+v+'</text>'; }).join('')+'</svg>';
+}
+/** PURE. Les sections rétention de l'écran Viralité. */
+function htmlRetention(s){
+  if(!s||!s.maj) return '<div class="vir-t">Rétention</div><p class="sub">Pas encore calculée : le serveur léger la publie chaque nuit (4 h 30).</p>';
+  const a=s.actifs||{};
+  const pct=(v,n)=>n>0?Math.round(v/n*100)+' %':'–';
+  let h='<div class="vir-t">Actifs (hier, 7 et 30 derniers jours)</div>'
+    +'<div class="vir-actifs">'+[['DAU',a.dau],['WAU',a.wau],['MAU',a.mau],['DAU/MAU',a.dauMau==null?'–':_vfPct(a.dauMau)]]
+      .map(x=>'<div class="card"><b>'+x[1]+'</b><span>'+x[0]+'</span></div>').join('')+'</div>';
+  h+='<div class="vir-t">Rétention par semaine d’inscription</div>'+svgRetention(s.cohortes)
+    +'<div class="vir-tab"><table><tr><th>Semaine</th><th>Inscrits</th><th>J1</th><th>J7</th><th>J30</th></tr>'
+    +(s.cohortes||[]).slice().reverse().map(c=>'<tr><td>'+escapeHtml(c.sem)+'</td><td>'+c.n+'</td><td>'+_vfPct(c.j1)+'</td><td>'+_vfPct(c.j7)+'</td><td>'+_vfPct(c.j30)+'</td></tr>').join('')
+    +'</table></div><p class="sub vir-note">Actif = une séance, un check-in ou un journal ce jour-là. J1 : le lendemain de l’inscription ; J7 : un jour au moins entre J7 et J13 ; J30 : entre J30 et J36. Une semaine n’a un taux qu’une fois sa fenêtre passée.</p>';
+  const e=s.entonnoir||{}, t=e.total||{};
+  h+='<div class="vir-t">Entonnoir</div>'+svgEntonnoir(t)
+    +'<div class="vir-tab"><table><tr><th>Source</th><th>Inscr.</th><th>1re séance</th><th>Parcours</th><th>Fin d’essai</th><th>Payants</th></tr>'
+    +(e.sources||[]).map(x=>'<tr><td>'+escapeHtml(x.src)+'</td><td>'+x.inscrits+'</td><td>'+x.seance1+'<small>'+pct(x.seance1,x.inscrits)+'</small></td><td>'+x.parcours+'<small>'+pct(x.parcours,x.inscrits)+'</small></td>'
+      +'<td>'+x.finEssai+'</td><td>'+x.payant+'<small>'+pct(x.payant,x.inscrits)+'</small></td></tr>').join('')
+    +'<tr class="vir-tot"><td>Total</td><td>'+(t.inscrits||0)+'</td><td>'+(t.seance1||0)+'</td><td>'+(t.parcours||0)+'</td><td>'+(t.finEssai||0)+'</td><td>'+(t.payant||0)+'</td></tr></table></div>';
+  h+='<div class="vir-t">Effet des leviers sur la rétention J30</div>'
+    +'<div class="vir-tab"><table><tr><th>Levier</th><th>Avec</th><th>Sans</th><th>Écart</th></tr>'
+    +(s.leviers||[]).map(l=>{
+      const ec=(l.avec.j30!=null&&l.sans.j30!=null)?Math.round((l.avec.j30-l.sans.j30)*10)/10:null;
+      return '<tr'+(l.alerte?' class="vir-alerte"':'')+'><td>'+escapeHtml(l.lib)+(l.alerte?'<small>⚠ groupe &lt; '+(s.seuilGroupe||30)+' : pas encore significatif</small>':'')+'</td>'
+        +'<td>'+_vfPct(l.avec.j30)+'<small>n = '+l.avec.n+'</small></td><td>'+_vfPct(l.sans.j30)+'<small>n = '+l.sans.n+'</small></td>'
+        +'<td>'+(ec==null?'–':(ec>0?'+':'')+String(ec).replace('.',',')+' pts')+'</td></tr>'; }).join('')
+    +'</table></div><p class="sub vir-note">Une corrélation, pas une preuve : ceux qui utilisent un levier sont peut-être déjà les plus motivés. Calculé le '
+    +escapeHtml(new Date(s.maj).toLocaleString('fr-FR'))+' sur '+(s.comptes||0)+' comptes, sans aucune donnée personnelle.</p>';
+  return h;
+}
+let _viral=null;   // {jours, semaines, periode, retention}
+// /stats/retention : lu par le créateur seul (règles).
+async function _lireRetention(){
+  try{
+    const token=await CLOUD._getToken(); if(!token) return null;
+    const r=await fetch(CLOUD._fbUrl.replace('users.json','stats/retention.json')+'?auth='+token);
+    return r.ok?await r.json():null;
+  }catch(e){ return null; }
+}
 async function ouvrirViralite(){
   if(!currentUser||currentUser.email!==CREATOR_EMAIL) return false;
   go('s-viralite');
@@ -18915,8 +19428,8 @@ async function ouvrirViralite(){
   if(z) z.innerHTML='<div class="sub" style="padding:32px 0;text-align:center">Chargement…</div>';
   try{
     const depuis=localISODate(new Date(Date.now()-95*864e5));
-    const [jours,semaines]=await Promise.all([CLOUD.attribLire('jours',depuis),CLOUD.attribLire('semaines',depuis)]);
-    _viral={jours:jours||{},semaines:semaines||{},periode:(_viral&&_viral.periode)||30};
+    const [jours,semaines,retention]=await Promise.all([CLOUD.attribLire('jours',depuis),CLOUD.attribLire('semaines',depuis),_lireRetention()]);
+    _viral={jours:jours||{},semaines:semaines||{},periode:(_viral&&_viral.periode)||30,retention:retention||null};
   }catch(e){ if(z) z.innerHTML='<p class="sub">Lecture impossible : '+escapeHtml(e.message||'erreur')+'</p>'; return false; }
   _viralRendre();
   return true;
@@ -18946,7 +19459,7 @@ function htmlViralite(v){
 function _viralRendre(){
   const z=document.getElementById('vir-contenu');
   if(!z||!_viral) return;
-  z.innerHTML=htmlViralite(viraliteDonnees(_viral.jours,_viral.semaines,_viral.periode,Date.now()));
+  z.innerHTML=htmlViralite(viraliteDonnees(_viral.jours,_viral.semaines,_viral.periode,Date.now()))+htmlRetention(_viral.retention);
 }
 // ══ LES AMBASSADEURS ════════════════════════════════════════════════════════
 //
@@ -19016,12 +19529,15 @@ async function ambassadeurApresInscription(u,saisi){
     const ok=await CLOUD.ambDemande(moi,{code:c.code,le:Date.now(),appareil:rcAppareilId()}).catch(()=>false);
     if(ok) deposerEvenement({type:'ambassadeur_demande'}).catch(()=>{});
     if(!ok) continue;
-    u.ambassadeur={code:c.code,nom:String(pub.nom||'').slice(0,80),le:Date.now()};
+    const demi=pub.avantage==='ultime_demi';
+    u.ambassadeur={code:c.code,nom:String(pub.nom||'').slice(0,80),le:Date.now(),avantage:demi?'ultime_demi':'essai+1mois'};
     ambOublier();
     try{ if(typeof parrainageOublierRef==='function') parrainageOublierRef(); }catch(e){}
     try{ rcm('ambassadeur_inscrit'); }catch(e){}
-    toast(pub.nom?('Grâce à '+String(pub.nom).slice(0,80)+', ton premier mois est offert ⚡'):('Code '+c.code+' appliqué : ton premier mois est offert ⚡'),'var(--green)');
-    return {jours:parrainageBonusJours(),type:'amb'};
+    // L'OFFRE DE LANCEMENT (ultime_demi) remplace le mois offert (un seul avantage).
+    toast(demi?('Code '+c.code+' appliqué : ton 1er mois d’Ultime à moitié prix ⚡')
+      :(pub.nom?('Grâce à '+String(pub.nom).slice(0,80)+', ton premier mois est offert ⚡'):('Code '+c.code+' appliqué : ton premier mois est offert ⚡')),'var(--green)');
+    return {jours:demi?0:parrainageBonusJours(),type:'amb'};
   }
   return {jours:0,type:null};
 }
@@ -19185,7 +19701,9 @@ function htmlAmbassadeurs(tous,t){
     +'<label>Palier %<input id="amb-palier" type="number" min="0" max="100" value="'+AMB_DEFAUTS.palierPct+'"></label>'
     +'<label>Au-delà de (payants)<input id="amb-seuil" type="number" min="1" value="'+AMB_DEFAUTS.palierSeuil+'"></label>'
     +'<label>Durée (mois)<input id="amb-duree" type="number" min="1" max="120" value="'+AMB_DEFAUTS.dureeMois+'"></label>'
-    +'</div><p class="sub amb-note">Ses inscrits voient leur mois d’essai présenté comme offert grâce à lui.</p>'
+    +'<label>Avantage de ses inscrits<select id="amb-avantage"><option value="essai+1mois">Mois offert grâce à lui</option>'
+      +'<option value="ultime_demi">Offre de lancement : 1er mois d’Ultime à moitié prix</option></select></label>'
+    +'</div><p class="sub amb-note">Un seul avantage par code : le mois offert (présenté comme offert grâce à lui), OU le 1er mois d’Ultime à moitié prix (plan PayPal ULTIME_DEMI, une fois par compte).</p>'
     +'<button type="button" class="btn btn-red" style="width:100%;margin:8px 0 0" onclick="creerAmbassadeur(this)">Créer l’ambassadeur</button></details>';
   if(moisDispo.size){
     const ms=[...moisDispo].sort().reverse();
@@ -19224,7 +19742,7 @@ function htmlAmbassadeurs(tous,t){
 }
 function _ambRendre(){
   const z=document.getElementById('amb-contenu');
-  if(z) z.innerHTML=htmlEvenementsKo(_ambKo)+htmlJournalPaypal(_ambJournal)+htmlAmbassadeurs(_ambTous||{},Date.now());
+  if(z) z.innerHTML=htmlEvenementsKo(_ambKo)+htmlJournalPaypal(_ambJournal)+htmlSaisonAdmin()+htmlDefiMoisAdmin(Date.now())+htmlAmbassadeurs(_ambTous||{},Date.now());
 }
 // PURE. La fiche à écrire, ou {erreur}.
 function ambFiche(f,existants,maintenant){
@@ -19234,7 +19752,7 @@ function ambFiche(f,existants,maintenant){
   const nom=String(f.nom||'').replace(/\s+/g,' ').trim().slice(0,80);
   if(!nom) return {erreur:'Donne un nom.'};
   const n=(v,d,min,max)=>{ const k=Number(v); return isFinite(k)&&k>=min&&k<=max?k:d; };
-  return {code,fiche:{nom,instagram:String(f.instagram||'').replace(/^@/,'').trim().slice(0,60),avantage:'essai+1mois',
+  return {code,fiche:{nom,instagram:String(f.instagram||'').replace(/^@/,'').trim().slice(0,60),avantage:f.avantage==='ultime_demi'?'ultime_demi':'essai+1mois',
     commissionPct:n(f.commissionPct,AMB_DEFAUTS.commissionPct,0,100),palierPct:n(f.palierPct,AMB_DEFAUTS.palierPct,0,100),
     palierSeuil:n(f.palierSeuil,AMB_DEFAUTS.palierSeuil,1,100000),dureeMois:n(f.dureeMois,AMB_DEFAUTS.dureeMois,1,120),
     actif:true,secret:f.secret||_ambSecret(),creeLe:(typeof maintenant==='number')?maintenant:Date.now()}};
@@ -19243,7 +19761,7 @@ async function creerAmbassadeur(btn){
   if(!estAdminAmbassadeurs()) return false;
   const g=id=>(document.getElementById(id)||{}).value;
   const r=ambFiche({code:g('amb-code'),nom:g('amb-nom'),instagram:g('amb-insta'),commissionPct:g('amb-pct'),
-    palierPct:g('amb-palier'),palierSeuil:g('amb-seuil'),dureeMois:g('amb-duree')},_ambTous||{});
+    palierPct:g('amb-palier'),palierSeuil:g('amb-seuil'),dureeMois:g('amb-duree'),avantage:g('amb-avantage')},_ambTous||{});
   if(r.erreur){ toast(r.erreur,'var(--orange)'); return false; }
   if(btn) btn.disabled=true;
   const f=r.fiche;
@@ -19427,7 +19945,10 @@ async function parrainInviteLire(code){
   }catch(e){ return null; }
 }
 // PURE. La ligne sous le champ du code.
-function phraseInvitationInscription(prenom,amb){
+function phraseInvitationInscription(prenom,amb,avantage){
+  // L'offre de lancement d'un code ambassadeur : pas de mois offert, le 1er
+  // mois d'Ultime à moitié prix.
+  if(amb&&avantage==='ultime_demi') return 'Grâce à '+amb+', ton 1er mois d’Ultime est à '+prixOffre('ultime_demi');
   if(amb) return 'Grâce à '+amb+', ton premier mois est offert';
   if(prenom) return 'Grâce à '+prenom+', ton premier mois est offert';
   return 'Le code d’un ami ou d’un ambassadeur t’offre ton premier mois.';
@@ -19467,10 +19988,16 @@ function parrainageChampInscription(role){
   const g=(!a&&c)?parrainInviteGarde(c):null;
   if(info) info.textContent=a?phraseInvitationInscription('',a)
     :c?phraseInvitationInscription(g?g.prenom:'un ami'):phraseInvitationInscription('');
-  // « Grâce à Léa Fit », pas « grâce à LEAFIT » : le nom de l'ambassadeur,
-  // lu sans compte (lecture publique), remplace son code dès qu'il arrive.
+  // « Grâce à Léa Fit », pas « grâce à LEAFIT » : le nom de l'ambassadeur et
+  // son offre, lus sans compte (lecture publique), remplacent son code.
   if(a&&info) Promise.resolve().then(()=>CLOUD.ambPublicGet(a)).then(p=>{
-    if(p&&p.nom&&p.actif!==false&&ambEnAttente()===a) info.textContent=phraseInvitationInscription('',String(p.nom).slice(0,80)); }).catch(()=>{});
+    if(!p||p.actif===false||ambEnAttente()!==a) return;
+    info.textContent=phraseInvitationInscription('',String(p.nom||a).slice(0,80),p.avantage); }).catch(()=>{});
+  // ARRIVÉ PAR UN DUEL : on le dit d'abord (le défi est la raison de venir).
+  try{
+    const dv=duelInviteEnAttente();
+    if(info&&dv&&dv.prenom&&role==='athlete') info.textContent=dv.prenom+' te défie : '+texteDuel(dv.mesure,dv.duree)+' · '+info.textContent;
+  }catch(e){}
   // Le prénom pas encore connu : lu, puis la ligne se complète.
   if(!a&&c&&!g) parrainInviteLire(c).then(v=>{
     const x=document.getElementById('r-parrain-info');
@@ -19651,7 +20178,9 @@ function htmlParrainage(u){
     +'<div class="pr-code" id="pr-code">'+(code?escapeHtml(code):'…')+'</div>'
     +'<div class="pr-sec-btns">'
     +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="parrainagePartager(this)"'+(code?'':' disabled')+'>Envoyer le texte</button>'
-    +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="parrainageCopier(this)"'+(code?'':' disabled')+'>Copier le lien</button></div></div>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="parrainageCopier(this)"'+(code?'':' disabled')+'>Copier le lien</button></div>'
+    // Défier plutôt qu'inviter : le lien du duel porte aussi le code.
+    +(SERVEUR_LEGER?'<button type="button" class="btn btn-outline btn-sm btn-casse pr-duel" onclick="ouvrirCreationDuel()">⚔ Défie un pote</button>':'')+'</div>'
     +'<div class="pr-tuiles">'+tuile(inscrits,inscrits>1?'inscrits':'inscrit')+tuile(payants,payants>1?'abonnés':'abonné')
       +tuile(mois,'mois gagné'+(mois>1?'s':''))+'</div>'
     +'<div class="pr-paliers">'+paliers+'</div>'
@@ -19689,6 +20218,7 @@ function parrainagePartager(btn){
   if(!c) return false;
   const l=lienPerso('parrainage');
   try{ rcm('parrainage_partage'); }catch(e){}
+  try{ parcoursInvitation(); }catch(e){}
   if(navigator.share){
     // Le lien part dans `url` : le texte ne le répète pas.
     navigator.share({title:'RepCore',text:parrainageMessage(c,l?'':undefined),url:l||undefined}).then(()=>{ try{ attribCompter('partage','parrainage'); }catch(e){} }).catch(()=>{});
@@ -19802,6 +20332,7 @@ function partagerCarteInvitation(btn,format){
   const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond);
   const nom=visuelNomFichier('repcore-invitation',fond,format);
   try{ rcm('parrainage_partage'); }catch(e){}
+  try{ parcoursInvitation(); }catch(e){}
   _storyEnCours=true;
   let ok=false;
   try{
@@ -20024,6 +20555,8 @@ function evenementCible(ev){
   if(t==='reponse_bilan'||t==='reponse_rite') return String(ev.dest||'');
   if(t==='defi_maj') return String(ev.id||'');
   if(t==='defi_publie') return String(ev.msg||'');
+  // Un duel : l'événement vise le duel (les règles vérifient qu'on en est).
+  if(t==='duel_rejoint'||t==='duel_maj') return DUEL_ID_RE.test(String(ev.id||''))?String(ev.id):'';
   return '-';
 }
 async function deposerEvenement(ev){
@@ -20404,6 +20937,796 @@ async function renderDefiAccueil(){
   }catch(e){ z.innerHTML=''; }
   return true;
 }
+// ══ LES DUELS (28/09/2026) ═══════════════════════════════════════════════
+//
+// « Défie un pote » : deux athlètes, une mesure, 7 à 28 jours. Le lien porte
+// le duel (?duel=<id>) ET le code parrain (lienPerso) : l'ami qui n'a pas
+// l'app arrive par /i, accueilli par son nom (« Léa te défie : 14 jours de
+// régularité »), s'inscrit, et relève le défi. Le duel DÉMARRE à sa première
+// séance.
+//
+// OÙ VIVENT LES DONNÉES (database.rules.json) :
+//   /duels/<id>          lu par les deux participants seulement. Le créateur
+//                        l'écrit en attente ; l'invité s'y inscrit ; chacun
+//                        écrit SA progression (progres/<lui>) ; le Worker
+//                        écrit le reste (début, fin, statut, scores, gagnant).
+//   /duels_publics/<id>  le prénom, la mesure, la durée : lu sans compte (/i).
+//   /defis_resultats     la clôture y écrit le résultat : CHAMPION au gagnant.
+// LE CALCUL EST CELUI DES DÉFIS DU CANAL (defiValeur) : l'app écrit sa
+// valeur après chaque séance, le Worker compare (cloudflare/src/duels.js).
+const DUEL_ID_RE=/^d[a-z0-9]{10,24}$/;
+const DUEL_DUREES=Object.freeze([7,14,21,28]);
+const DUEL_MESURES=Object.freeze([
+  Object.freeze({cle:'seances',lib:'Régularité',mot:'régularité',detail:'le plus de séances'}),
+  Object.freeze({cle:'tonnage',lib:'Volume',mot:'volume',detail:'le plus de kilos soulevés'}),
+  Object.freeze({cle:'progressionPct',lib:'Progression',mot:'progression',detail:'la plus forte progression, en %'})
+]);
+const DUEL_INVITE_CLE='rc_duel_invite';
+/** PURE. « 14 jours de régularité » — la même phrase que le Worker. */
+function texteDuel(mesure,duree){
+  const d=DUEL_DUREES.indexOf(Number(duree))>=0?Number(duree):14;
+  const m={seances:'régularité',serie:'régularité',tonnage:'volume',progressionPct:'progression'}[mesure]||'régularité';
+  return d+' jours de '+m;
+}
+/** PURE. Un score lisible (le Worker a le même). */
+function texteScoreDuel(mesure,v){
+  const n=Number(v)||0;
+  if(mesure==='tonnage') return n>=10000?String(Math.round(n/100)/10).replace('.',',')+' t':Math.round(n)+' kg';
+  if(mesure==='progressionPct') return String(Math.round(n*10)/10).replace('.',',')+' %';
+  if(mesure==='serie') return Math.round(n)+' sem.';
+  return Math.round(n)+' séance'+(Math.round(n)>1?'s':'');
+}
+function duelNouvelId(){
+  const a='abcdefghijklmnopqrstuvwxyz0123456789';
+  let s='d';
+  try{ const b=new Uint8Array(14); crypto.getRandomValues(b); for(const x of b) s+=a[x%36]; }
+  catch(e){ for(let i=0;i<14;i++) s+=a[Math.floor(Math.random()*36)]; }
+  return s;
+}
+const _moiCle=()=>String((currentUser&&currentUser.email)||'').replace(/\./g,',');
+/** PURE. Le lien d'un duel : le lien perso (page, ref, src=duel) et ?duel=. */
+function lienDuel(id,u){
+  const l=lienPerso('duel',u);
+  if(!l||!DUEL_ID_RE.test(String(id||''))) return '';
+  return l+(l.indexOf('?')>=0?'&':'?')+'duel='+id;
+}
+// ── Les lectures et écritures ─────────────────────────────────────────────
+async function _duelLire(id){
+  const token=await CLOUD._getToken();
+  if(!token) return null;
+  const r=await fetch(CLOUD._fbUrl.replace('users.json','duels/'+id+'.json')+'?auth='+token);
+  return r.ok?await r.json():null;
+}
+async function _duelPublic(id){
+  try{
+    const r=await fetch(CLOUD._fbUrl.replace('users.json','duels_publics/'+id+'.json'));
+    return r.ok?await r.json():null;
+  }catch(e){ return null; }
+}
+// Mes duels, dans le dossier : {id: {role, le, fini?}}. Les duels finis
+// depuis plus de 60 jours sont oubliés.
+function _mesDuels(u){
+  const x=(u&&u.duels&&typeof u.duels==='object')?u.duels:{};
+  return Object.keys(x).filter(id=>DUEL_ID_RE.test(id)&&x[id]&&typeof x[id]==='object');
+}
+// ── Créer ─────────────────────────────────────────────────────────────────
+/** Rend {ok, id?, erreur?}. */
+async function creerDuel(mesure,duree){
+  const u=currentUser;
+  if(!u||u.role==='coach') return {ok:false,erreur:'Réservé aux athlètes.'};
+  if(!CLOUD.ok()) return {ok:false,erreur:'Impossible hors connexion.'};
+  const m=DUEL_MESURES.find(x=>x.cle===mesure)?mesure:'seances';
+  const d=DUEL_DUREES.indexOf(Number(duree))>=0?Number(duree):14;
+  const id=duelNouvelId(), moi=_moiCle();
+  const prenom=String(u.fname||u.pseudo||'').trim().slice(0,24)||'Un ami';
+  const ok=await CLOUD.racinePatch({
+    ['duels/'+id]:{createur:moi,createurNom:prenom,mesure:m,duree:d,creeLe:Date.now(),statut:'attente'},
+    ['duels_publics/'+id]:{prenom,mesure:m,duree:d}}).catch(()=>false);
+  if(!ok) return {ok:false,erreur:'Création impossible pour l’instant.'};
+  u.duels=Object.assign({},u.duels||{},{[id]:{role:'createur',le:Date.now()}});
+  try{ saveUser(); }catch(e){}
+  _duelsCache[id]={createur:moi,createurNom:prenom,mesure:m,duree:d,statut:'attente',creeLe:Date.now()};
+  return {ok:true,id};
+}
+// ── Rejoindre ─────────────────────────────────────────────────────────────
+/** L'invitation en attente sur cet appareil (arrivée par ?duel=), ou null. */
+function duelInviteEnAttente(){
+  try{
+    const o=JSON.parse(localStorage.getItem(DUEL_INVITE_CLE)||'null');
+    if(o&&DUEL_ID_RE.test(o.id)&&Date.now()-Number(o.le)<30*864e5) return o;
+  }catch(e){}
+  return null;
+}
+function duelOublierInvite(){ try{ localStorage.removeItem(DUEL_INVITE_CLE); }catch(e){} }
+async function rejoindreDuel(id,btn){
+  const u=currentUser;
+  if(!u||!DUEL_ID_RE.test(String(id||''))) return false;
+  if(btn){ btn.disabled=true; }
+  const moi=_moiCle();
+  const prenom=String(u.fname||u.pseudo||'').trim().slice(0,24)||'Un ami';
+  const ok=await CLOUD.racinePatch({['duels/'+id+'/invite']:moi,['duels/'+id+'/inviteNom']:prenom}).catch(()=>false);
+  duelOublierInvite();
+  if(!ok){
+    if(btn) btn.disabled=false;
+    toast('Ce duel n’est plus ouvert (déjà relevé, ou c’est le tien).','var(--orange)');
+    _rendreDuelsAccueil();
+    return false;
+  }
+  u.duels=Object.assign({},u.duels||{},{[id]:{role:'invite',le:Date.now()}});
+  try{ saveUser(); }catch(e){}
+  deposerEvenement({type:'duel_rejoint',id}).catch(()=>{});
+  toast('Défi relevé ⚡ Il commence à ta prochaine séance.','var(--green)',4000);
+  delete _duelsCache[id];
+  _rendreDuelsAccueil();
+  return true;
+}
+// ── Après une séance : chacun écrit SA valeur ────────────────────────────
+// En cours : la valeur (defiValeur, la règle des défis du Canal) dans
+// progres/<moi>, puis l'événement. Accepté et invité : l'événement seul (c'est
+// la première séance, le Worker démarre le duel).
+async function duelsApresSeance(){
+  const u=currentUser;
+  if(!SERVEUR_LEGER||!u||u.role==='coach'||!CLOUD.ok()) return 0;
+  const moi=_moiCle();
+  let n=0;
+  for(const id of _mesDuels(u)){
+    const x=u.duels[id];
+    if(x.fini) continue;
+    let d=null; try{ d=await _duelLire(id); }catch(e){ d=null; }
+    if(!d) continue;
+    _duelsCache[id]=d;
+    if(d.statut==='termine'||d.statut==='annule'){ x.fini=true; continue; }
+    if(d.statut==='accepte'&&d.invite===moi){ await deposerEvenement({type:'duel_maj',id}).catch(()=>{}); n++; continue; }
+    if(d.statut!=='en_cours') continue;
+    const v=defiValeur(u,{mesure:d.mesure,debut:Number(d.debut),fin:Number(d.fin)});
+    const token=await CLOUD._getToken();
+    if(!token) continue;
+    const r=await fetch(CLOUD._fbUrl.replace('users.json','duels/'+id+'/progres/'+moi+'.json')+'?auth='+token,
+      {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({valeur:Math.max(0,Number(v)||0),maj:Date.now()})}).catch(()=>null);
+    if(r&&r.ok){ await deposerEvenement({type:'duel_maj',id}).catch(()=>{}); n++; }
+  }
+  try{ saveUser(); }catch(e){}
+  return n;
+}
+// ── L'accueil : l'invitation reçue, les duels en cours, « Défie un pote » ──
+const _duelsCache={};
+let _duelsLusLe=0;
+// PURE. Où en est un duel, vu par `moi` : une ligne.
+function duelLigne(d,moi,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(!d) return '';
+  const lui=d.createur===moi?(d.inviteNom||'ton pote'):(d.createurNom||'ton adversaire');
+  const txt=texteDuel(d.mesure,d.duree);
+  if(d.statut==='attente') return txt+' · en attente de ton pote';
+  if(d.statut==='accepte') return txt+' contre '+lui+' · démarre à '+(d.invite===moi?'ta':'sa')+' première séance';
+  if(d.statut==='en_cours'){
+    const s=d.scores||{};
+    const a=d.createur===moi?Number(s.createur)||0:Number(s.invite)||0, b=d.createur===moi?Number(s.invite)||0:Number(s.createur)||0;
+    const j=Math.max(0,Math.ceil((Number(d.fin)-t)/864e5));
+    return 'Contre '+lui+' · '+texteScoreDuel(d.mesure,a)+' à '+texteScoreDuel(d.mesure,b)+' · '+(j?'J-'+j:'dernier jour');
+  }
+  if(d.statut==='termine'){
+    const g=d.gagnant, role=d.createur===moi?'createur':'invite';
+    return (g==='egalite'?'Égalité':(g===role?'Gagné':'Perdu'))+' contre '+lui;
+  }
+  if(d.statut==='annule') return 'Duel annulé contre '+lui;
+  return '';
+}
+function htmlDuelsAccueil(u,duels,invite,maintenant){
+  if(!u||u.role==='coach'||!SERVEUR_LEGER) return '';
+  const moi=String((u.email||'')).replace(/\./g,',');
+  let h='<div class="du-accueil">';
+  if(invite&&invite.prenom){
+    h+='<div class="du-invite"><div class="du-invite-t">'+escapeHtml(invite.prenom)+' te défie : '+escapeHtml(texteDuel(invite.mesure,invite.duree))+'</div>'
+      +'<div class="du-btns"><button type="button" class="btn btn-red btn-sm" onclick="rejoindreDuel(\''+invite.id+'\',this)">Relever le défi</button>'
+      +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="duelOublierInvite();_rendreDuelsAccueil()">Plus tard</button></div></div>';
+  }
+  const l=Object.keys(duels||{}).map(id=>Object.assign({id},duels[id])).filter(d=>d&&d.statut)
+    .filter(d=>d.statut!=='annule'&&!(d.statut==='termine'&&Number(d.termineLe)<(maintenant||Date.now())-7*864e5))
+    .sort((a,b)=>(Number(b.creeLe)||0)-(Number(a.creeLe)||0)).slice(0,3);
+  for(const d of l){
+    h+='<button type="button" class="du-ligne" onclick="ouvrirDuel(\''+d.id+'\')"><span aria-hidden="true">⚔</span> '
+      +'<span>'+escapeHtml(duelLigne(d,moi,maintenant))+'</span><span class="du-f" aria-hidden="true">›</span></button>';
+  }
+  h+='<button type="button" class="btn btn-outline btn-sm btn-casse du-defier" onclick="ouvrirCreationDuel()">⚔ Défie un pote</button>';
+  return h+'</div>';
+}
+async function _rendreDuelsAccueil(){
+  const z=document.getElementById('clh-duels');
+  const u=currentUser;
+  if(!z) return false;
+  if(!u||u.role==='coach'||!SERVEUR_LEGER){ z.innerHTML=''; return false; }
+  const inv=duelInviteEnAttente();
+  let invite=null;
+  if(inv&&!(u.duels&&u.duels[inv.id])){
+    invite=inv.prenom?inv:null;
+    if(!invite){ const p=await _duelPublic(inv.id); if(p) invite=Object.assign({id:inv.id},p); }
+  }
+  // Une lecture par duel en cours, toutes les 10 minutes au plus.
+  if(CLOUD.ok()&&Date.now()-_duelsLusLe>10*60e3){
+    _duelsLusLe=Date.now();
+    for(const id of _mesDuels(u).slice(-6)){
+      if(u.duels[id].fini&&_duelsCache[id]) continue;
+      try{ const d=await _duelLire(id); if(d) _duelsCache[id]=d; }catch(e){}
+    }
+  }
+  z.innerHTML=htmlDuelsAccueil(u,_duelsCache,invite,Date.now());
+  return true;
+}
+// ── Créer un duel : la feuille ─────────────────────────────────────────────
+function ouvrirCreationDuel(){
+  if(!currentUser) return false;
+  document.getElementById('duel-feuille')?.remove();
+  const d=document.createElement('div');
+  d.id='duel-feuille';
+  d.setAttribute('role','dialog'); d.setAttribute('aria-modal','true'); d.setAttribute('aria-label','Défie un pote');
+  d.className='du-fond';
+  d.innerHTML='<div class="du-carte">'
+    +'<div class="du-titre">Défie un pote</div>'
+    +'<p class="du-sous">Le duel commence à sa première séance. Le gagnant décroche le badge CHAMPION.</p>'
+    +'<div class="du-lab">Sur quoi ?</div>'
+    +'<div class="du-choix" role="radiogroup">'+DUEL_MESURES.map((m,i)=>'<button type="button" role="radio" aria-checked="'+(i===0)+'" class="du-c'+(i===0?' actif':'')+'" data-mesure="'+m.cle+'" onclick="_duelChoix(this)">'
+      +m.lib+'<small>'+m.detail+'</small></button>').join('')+'</div>'
+    +'<div class="du-lab">Combien de temps ?</div>'
+    +'<div class="du-choix du-duree" role="radiogroup">'+[7,14,28].map(j=>'<button type="button" role="radio" aria-checked="'+(j===14)+'" class="du-c'+(j===14?' actif':'')+'" data-duree="'+j+'" onclick="_duelChoix(this)">'+j+' jours</button>').join('')+'</div>'
+    +'<button type="button" class="btn btn-red du-go" onclick="lancerDuel(this)">Lancer le duel</button>'
+    +'<button type="button" class="btn btn-outline btn-sm du-go" onclick="fermerDuelFeuille()">Annuler</button>'
+    +'</div>';
+  d.addEventListener('click',e=>{ if(e.target===d) fermerDuelFeuille(); });
+  document.body.appendChild(d);
+  return true;
+}
+function _duelChoix(b){
+  const g=b.parentNode;
+  g.querySelectorAll('.du-c').forEach(x=>{ x.classList.toggle('actif',x===b); x.setAttribute('aria-checked',String(x===b)); });
+  return true;
+}
+function fermerDuelFeuille(){ document.getElementById('duel-feuille')?.remove(); return true; }
+async function lancerDuel(btn){
+  const f=document.getElementById('duel-feuille');
+  const m=(f&&f.querySelector('[data-mesure].actif'))?f.querySelector('[data-mesure].actif').dataset.mesure:'seances';
+  const j=(f&&f.querySelector('[data-duree].actif'))?Number(f.querySelector('[data-duree].actif').dataset.duree):14;
+  if(btn){ btn.disabled=true; btn.textContent='Création…'; }
+  const r=await creerDuel(m,j);
+  if(!r.ok){ if(btn){ btn.disabled=false; btn.textContent='Lancer le duel'; } toast(r.erreur,'var(--orange)'); return false; }
+  // L'ENVOI EST UN NOUVEAU TOUCHER : la création a pris du temps réseau, et
+  // iOS refuserait la feuille de partage ouverte hors du geste.
+  if(f) f.querySelector('.du-carte').innerHTML='<div class="du-titre">Ton duel est prêt ⚡</div>'
+    +'<p class="du-sous">'+escapeHtml(texteDuel(m,j))+'. Envoie-le à ton pote : il commence à sa première séance.</p>'
+    +'<button type="button" class="btn btn-red du-go" onclick="envoyerDuel(\''+r.id+'\',this)">'+icon('share',16)+' <span>Envoyer le défi</span></button>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse du-go" onclick="partagerCarteDuel(\''+r.id+'\',\'lancement\',this)">Partager la carte DUEL</button>'
+    +'<button type="button" class="btn btn-outline btn-sm du-go" onclick="fermerDuelFeuille();_rendreDuelsAccueil()">Fermer</button>';
+  _rendreDuelsAccueil();
+  return true;
+}
+// SYNCHRONE jusqu'à navigator.share (iOS).
+function envoyerDuel(id,btn){
+  const u=currentUser, d=_duelsCache[id];
+  const l=lienDuel(id,u);
+  if(!l) return false;
+  const pr=String((u&&u.fname)||'').trim();
+  const txt=(pr?pr+' te défie':'Je te défie')+' sur RepCore : '+texteDuel(d&&d.mesure,d&&d.duree)+'. Tu relèves ?';
+  try{ parcoursInvitation(); }catch(e){}
+  if(navigator.share){
+    navigator.share({title:'Duel RepCore',text:txt,url:l}).then(()=>{ try{ attribCompter('partage','duel'); }catch(e){} }).catch(()=>{});
+    return true;
+  }
+  try{ navigator.clipboard.writeText(txt+' '+l).then(()=>toast('Lien du duel copié','var(--green)'),()=>toast(l)); }catch(e){ toast(l); }
+  return true;
+}
+// ── L'écran d'un duel ─────────────────────────────────────────────────────
+async function ouvrirDuel(id){
+  document.getElementById('duel-feuille')?.remove();
+  let d=_duelsCache[id];
+  try{ const x=await _duelLire(id); if(x){ d=x; _duelsCache[id]=x; } }catch(e){}
+  if(!d) return false;
+  const moi=_moiCle();
+  const f=document.createElement('div');
+  f.id='duel-feuille'; f.className='du-fond';
+  f.setAttribute('role','dialog'); f.setAttribute('aria-modal','true'); f.setAttribute('aria-label','Duel');
+  const fini=d.statut==='termine';
+  f.innerHTML='<div class="du-carte"><div class="du-titre">DUEL · '+escapeHtml(texteDuel(d.mesure,d.duree))+'</div>'
+    +'<p class="du-sous">'+escapeHtml(duelLigne(d,moi,Date.now()))+'</p>'
+    +(d.statut==='attente'?'<button type="button" class="btn btn-red du-go" onclick="envoyerDuel(\''+id+'\',this)">'+icon('share',16)+' <span>Renvoyer le défi</span></button>':'')
+    +'<button type="button" class="btn '+(fini?'btn-red':'btn-outline btn-sm btn-casse')+' du-go" onclick="partagerCarteDuel(\''+id+'\',\''+(fini?'resultat':'lancement')+'\',this)">'
+      +icon('share',14)+' <span>'+(fini?'Partager le résultat':'Partager la carte DUEL')+'</span></button>'
+    +'<button type="button" class="btn btn-outline btn-sm du-go" onclick="fermerDuelFeuille()">Fermer</button></div>';
+  f.addEventListener('click',e=>{ if(e.target===f) fermerDuelFeuille(); });
+  document.body.appendChild(f);
+  return true;
+}
+// ── Les cartes DUEL : lancement et résultat ───────────────────────────────
+// Même épure que les autres visuels (fond au choix, éclair en filigrane,
+// signature). Jamais une charge : la valeur montrée est celle du duel.
+function duelCarteDonnees(d,type,u){
+  let sig=''; try{ sig=nomSurVisuels(u); }catch(e){ sig=''; }
+  const x=d||{};
+  const moi=String((u&&u.email)||'').replace(/\./g,',');
+  const s=x.scores||{};
+  return {type:type==='resultat'?'resultat':'lancement',a:String(x.createurNom||'').toUpperCase(),b:String(x.inviteNom||'').toUpperCase(),
+    texte:texteDuel(x.mesure,x.duree).toUpperCase(),mesure:x.mesure,sa:Number(s.createur)||0,sb:Number(s.invite)||0,
+    gagnant:x.gagnant||null,moiCreateur:x.createur===moi,signature:sig};
+}
+function _dessinerCarteDuel(d,fond,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const g=cv.getContext('2d');
+  const f=fond||'transparent';
+  _visuelPeindreFond(g,W,H,f);
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const M=72, LARG=W-M*2, cx=W/2;
+  const o=_visuelOutils(g);
+  const x=d||{};
+  const rouge=f==='rouge';
+  const acc=rouge?'#fff':'#E02020';
+  g.textAlign='center'; g.textBaseline='alphabetic';
+  // En story, le bloc est centré dans la hauteur (il fait ~1 000 px).
+  let y=post?150:(x.type==='resultat'?500:560);
+  o.ombre(true);
+  g.fillStyle='#fff'; g.font='800 34px '+MONT;
+  o.ecrireEspace(x.type==='resultat'?'RÉSULTAT DU DUEL':'DUEL LANCÉ',cx,y,10,true);
+  o.ombre(false); g.fillStyle=acc; g.fillRect(cx-44,y+20,88,5);
+  // « DUEL » en très gros, l'éclair derrière.
+  y+=post?260:330;
+  _recEclairFiligrane(g,cx+220,y-300,cx-180,y+40,_recGraine('duel|'+x.a+'|'+x.b),f);
+  o.ombre(true); g.fillStyle='#fff';
+  const ds=o.ajuste('DUEL','700',post?300:360,BEBAS,LARG,160);
+  g.font='700 '+ds+'px '+BEBAS; o.ecrire('DUEL',cx,y);
+  // Les deux noms, face à face.
+  y+=post?120:160;
+  const b=x.b||'?';
+  const noms=(x.a||'MOI')+'  ⚡  '+b;
+  const ns=o.ajuste(noms,'700',post?96:120,BEBAS,LARG,44);
+  g.font='700 '+ns+'px '+BEBAS; o.ecrire(o.coupe(noms,LARG),cx,y);
+  y+=post?80:110;
+  g.fillStyle=acc;
+  const ts=o.ajusteEspace(String(x.texte||''),'800',44,MONT,6,LARG,24);
+  g.font='800 '+ts+'px '+MONT; o.ecrireEspace(o.coupeEspace(String(x.texte||''),6,LARG),cx,y,6,true);
+  if(x.type==='resultat'){
+    y+=post?150:220;
+    g.fillStyle='#fff';
+    const sc=texteScoreDuel(x.mesure,x.sa)+'  —  '+texteScoreDuel(x.mesure,x.sb);
+    const ss=o.ajuste(sc,'700',post?120:150,BEBAS,LARG,50);
+    g.font='700 '+ss+'px '+BEBAS; o.ecrire(o.coupe(sc,LARG),cx,y);
+    y+=post?90:120;
+    const vainq=x.gagnant==='egalite'?'ÉGALITÉ':('VAINQUEUR : '+(x.gagnant==='invite'?b:(x.a||'MOI')));
+    g.fillStyle=acc;
+    const vs=o.ajusteEspace(vainq,'800',54,MONT,8,LARG,26);
+    g.font='800 '+vs+'px '+MONT; o.ecrireEspace(o.coupeEspace(vainq,8,LARG),cx,y,8,true);
+  } else {
+    y+=post?110:160;
+    g.fillStyle='rgba(255,255,255,.88)';
+    const l=x.b?'Que le meilleur gagne.':'Tu relèves le défi ?';
+    g.font='700 44px '+MONT; o.ecrire(l,cx,y);
+  }
+  _recSignature(g,o,String(x.signature||''),H-(post?50:110),LARG);
+  o.ombre(false);
+  return cv;
+}
+// SYNCHRONE jusqu'au partage (iOS). La story copie le lien du duel s'il est
+// en attente (le sticker Lien l'ouvre), sinon le lien perso.
+function partagerCarteDuel(id,type,btn){
+  const u=currentUser, d=_duelsCache[id];
+  if(!u||!d||_storyEnCours) return false;
+  const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond);
+  const nom=visuelNomFichier('repcore-duel',fond);
+  _storyEnCours=true;
+  let ok=false;
+  try{
+    const des=()=>_dessinerCarteDuel(duelCarteDonnees(d,type,u),fond);
+    ok=_storySortirPartage(des(),nom,undefined,fmt)||_storySortirTelechargement(des(),nom,fmt);
+    if(d.statut==='attente'){
+      const l=lienDuel(id,u);
+      if(l&&navigator.clipboard) navigator.clipboard.writeText(l).catch(()=>{});
+    }
+  }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
+  finally{ _storyEnCours=false; }
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp&&ok){ const l=sp.textContent; sp.textContent='Carte prête ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  return ok;
+}
+
+// ══ LE DÉFI REPCORE DU MOIS (28/09/2026) ═════════════════════════════════
+// Un défi pour tous, créé par Kevin (écran admin), montré aux AUTONOMES
+// (sans coach : ceux qui ont un coach ont les défis de leur Canal). Pas de
+// classement : la jauge perso, calculée comme un défi du Canal.
+const DEFI_MOIS_CACHE='rc_defi_mois';
+/** PURE. 'AAAA-MM' d'un instant (heure de l'appareil). */
+function defiMoisCle(maintenant){
+  const d=new Date((typeof maintenant==='number')?maintenant:Date.now());
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+/** PURE. Autonome : un athlète sans coach. */
+function estAutonome(u){ return !!(u&&u.role==='athlete'&&!u.coachId&&!u.coachEmailKey); }
+async function _defiMoisLire(mois){
+  try{
+    const c=JSON.parse(localStorage.getItem(DEFI_MOIS_CACHE)||'null');
+    if(c&&c.mois===mois&&Date.now()-c.t<6*3600e3) return c.d;
+  }catch(e){}
+  const token=await CLOUD._getToken();
+  if(!token) return null;
+  const r=await fetch(CLOUD._fbUrl.replace('users.json','defi_mois/'+mois+'.json')+'?auth='+token).catch(()=>null);
+  const d=(r&&r.ok)?await r.json():null;
+  try{ localStorage.setItem(DEFI_MOIS_CACHE,JSON.stringify({mois,t:Date.now(),d})); }catch(e){}
+  return d;
+}
+// PURE.
+function htmlDefiMois(d,u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(!d||!d.titre||!estAutonome(u)||t<Number(d.debut)||t>Number(d.fin)) return '';
+  const v=defiValeur(u,{mesure:d.mesure,debut:Number(d.debut),fin:Number(d.fin)});
+  const obj=Number(d.objectif)||1;
+  const part=Math.max(0,Math.min(1,v/obj));
+  const j=Math.max(0,Math.ceil((Number(d.fin)-t)/864e5));
+  const fait=v>=obj;
+  return '<div class="dm-carte'+(fait?' dm-fait':'')+'"><div class="dm-sur">DÉFI REPCORE DU MOIS</div>'
+    +'<div class="dm-titre">'+escapeHtml(d.titre)+'</div>'
+    +(d.texte?'<p class="dm-texte">'+escapeHtml(d.texte)+'</p>':'')
+    +'<div class="rg-jauge dm-jauge" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.round(part*100)+'"><span style="width:'+Math.round(part*100)+'%"></span></div>'
+    +'<div class="dm-etat">'+(fait?'Relevé ⚡ ':'')+escapeHtml(texteScoreDuel(d.mesure,v))+' sur '+escapeHtml(texteScoreDuel(d.mesure,obj))
+      +(fait?'':' · '+(j?j+' jour'+(j>1?'s':'')+' restant'+(j>1?'s':''):'dernier jour'))+'</div></div>';
+}
+async function renderDefiMoisAccueil(){
+  const z=document.getElementById('clh-defi-mois');
+  const u=currentUser;
+  if(!z) return false;
+  if(!estAutonome(u)||!CLOUD.ok()){ z.innerHTML=''; return false; }
+  let d=null; try{ d=await _defiMoisLire(defiMoisCle()); }catch(e){ d=null; }
+  z.innerHTML=htmlDefiMois(d,u,Date.now());
+  return !!z.innerHTML;
+}
+// ── L'écran admin : créer le défi du mois ─────────────────────────────────
+// PURE. Le défi à écrire, ou {erreur}.
+function defiMoisFiche(f,maintenant){
+  const titre=String(f&&f.titre||'').replace(/\s+/g,' ').trim().slice(0,80);
+  if(titre.length<3) return {erreur:'Donne un titre (3 caractères au moins).'};
+  const mesure=['seances','tonnage','serie','progressionPct'].indexOf(f.mesure)>=0?f.mesure:null;
+  if(!mesure) return {erreur:'Choisis une mesure.'};
+  const objectif=Number(String(f.objectif||'').replace(',','.'));
+  if(!(objectif>0&&objectif<1e8)) return {erreur:'L’objectif doit être un nombre positif.'};
+  const m=/^(\d{4})-(\d{2})$/.exec(String(f.mois||''));
+  if(!m) return {erreur:'Mois : AAAA-MM.'};
+  const debut=new Date(+m[1],+m[2]-1,1,0,0,0).getTime(), fin=new Date(+m[1],+m[2],1,0,0,0).getTime()-1;
+  const o={titre,mesure,objectif,debut,fin};
+  const texte=String(f.texte||'').trim().slice(0,300);
+  if(texte) o.texte=texte;
+  return {mois:m[1]+'-'+m[2],fiche:o};
+}
+function htmlDefiMoisAdmin(maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const cur=defiMoisCle(t), d=new Date(t); d.setMonth(d.getMonth()+1,1);
+  const suiv=defiMoisCle(d.getTime());
+  return '<div class="card amb-journal" id="dm-admin"><div class="amb-t">Défi RepCore du mois</div>'
+    +'<p class="sub amb-note">Pour tous les athlètes sans coach : il s’affiche sur leur accueil, avec leur jauge.</p>'
+    +'<label class="pp-lab" for="dm-mois">Mois</label><select id="dm-mois"><option value="'+cur+'">'+cur+'</option><option value="'+suiv+'">'+suiv+'</option></select>'
+    +'<label class="pp-lab" for="dm-titre">Titre</label><input id="dm-titre" type="text" maxlength="80" placeholder="12 séances en octobre">'
+    +'<label class="pp-lab" for="dm-texte">Texte (facultatif)</label><input id="dm-texte" type="text" maxlength="300">'
+    +'<label class="pp-lab" for="dm-mesure">Mesure</label><select id="dm-mesure"><option value="seances">Séances</option><option value="serie">Semaines validées</option><option value="tonnage">Tonnage (kg)</option><option value="progressionPct">Progression (%)</option></select>'
+    +'<label class="pp-lab" for="dm-obj">Objectif</label><input id="dm-obj" type="number" min="1" inputmode="decimal" placeholder="12">'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:10px 0 0;min-height:44px" onclick="enregistrerDefiMois(this)">Publier le défi</button></div>';
+}
+async function enregistrerDefiMois(btn){
+  if(!estAdminAmbassadeurs()) return false;
+  const v=id=>(document.getElementById(id)||{}).value;
+  const r=defiMoisFiche({mois:v('dm-mois'),titre:v('dm-titre'),texte:v('dm-texte'),mesure:v('dm-mesure'),objectif:v('dm-obj')});
+  if(r.erreur){ toast(r.erreur,'var(--orange)'); return false; }
+  if(btn) btn.disabled=true;
+  const ok=await CLOUD.racinePatch({['defi_mois/'+r.mois]:r.fiche}).catch(()=>false);
+  if(btn) btn.disabled=false;
+  try{ localStorage.removeItem(DEFI_MOIS_CACHE); }catch(e){}
+  toast(ok?'Défi de '+r.mois+' publié ⚡':'Publication refusée','var('+(ok?'--green':'--orange')+')');
+  return ok;
+}
+// ══ LES ÉVÉNEMENTS SAISONNIERS (28/09/2026) ══════════════════════════════
+//
+// Une édition limitée : un nom, des dates, une mesure, un objectif perso et
+// un objectif collectif, une couleur. Créée par Kevin (écran admin, dans
+// /saisons — « /evenements » est la file du serveur léger). Pendant qu'elle
+// dure :
+//   · une BANNIÈRE sur l'accueil : compte à rebours, jauge perso, compteur
+//     collectif (/stats/saisons/<id>, recalculé chaque heure par le Worker) ;
+//   · un fond « Édition » pour tous les visuels ;
+//   · l'app écrit SA valeur après chaque séance (saisons_progres/<id>/<moi>,
+//     la règle des défis du Canal) : le Worker en tire le collectif et le
+//     badge de qui a bouclé (/saisons_resultats/<moi>/<id>) ;
+//   · les push (lancement, mi-parcours, J-2, fin) partent du Worker.
+// LA FAMILLE « ÉDITIONS » : un badge par édition bouclée, avec l'année. Une
+// édition finie qu'on n'a pas bouclée reste visible : « Plus jamais
+// disponible ».
+const SAISONS_CACHE='rc_saisons';
+const SAISON_ID_RE=/^[a-z0-9][a-z0-9-]{2,40}$/;
+let _saisons=null;                      // {id: saison}, du cache ou de la base
+function _saisonsDuCache(){
+  if(_saisons) return _saisons;
+  try{ const c=JSON.parse(localStorage.getItem(SAISONS_CACHE)||'null'); if(c&&c.l&&typeof c.l==='object') _saisons=c.l; }catch(e){}
+  return _saisons||{};
+}
+async function chargerSaisons(force){
+  try{
+    const c=JSON.parse(localStorage.getItem(SAISONS_CACHE)||'null');
+    if(!force&&c&&Date.now()-Number(c.t)<3600e3&&c.l){ _saisons=c.l; return _saisons; }
+  }catch(e){}
+  if(!CLOUD.ok()) return _saisonsDuCache();
+  const token=await CLOUD._getToken();
+  if(!token) return _saisonsDuCache();
+  const r=await fetch(CLOUD._fbUrl.replace('users.json','saisons.json')+'?auth='+token).catch(()=>null);
+  const l=(r&&r.ok)?((await r.json())||{}):null;
+  if(l){ _saisons=l; try{ localStorage.setItem(SAISONS_CACHE,JSON.stringify({t:Date.now(),l})); }catch(e){} }
+  return _saisonsDuCache();
+}
+/** PURE. Une saison exploitable. */
+function saisonValide(s){
+  return !!(s&&typeof s==='object'&&s.nom&&Number(s.debut)>0&&Number(s.fin)>Number(s.debut)
+    &&['seances','tonnage','serie','progressionPct'].indexOf(s.mesure)>=0&&Number(s.objectifPerso)>0);
+}
+/** PURE (liste donnée). La saison en cours à t : {id, …} ou null (la première qui a commencé). */
+function saisonActive(maintenant,liste){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const l=liste||_saisonsDuCache();
+  const ids=Object.keys(l||{}).filter(id=>SAISON_ID_RE.test(id)&&saisonValide(l[id])&&t>=Number(l[id].debut)&&t<=Number(l[id].fin))
+    .sort((a,b)=>Number(l[a].debut)-Number(l[b].debut));
+  return ids.length?Object.assign({id:ids[0]},l[ids[0]]):null;
+}
+/** PURE. L'année d'une édition. */
+function saisonAnnee(s){ return String(new Date(Number(s&&s.debut)||0).getFullYear()); }
+/** PURE. La couleur d'accent, sûre. */
+function saisonCouleur(s){ return /^#[0-9a-fA-F]{6}$/.test(String(s&&s.couleurAccent||''))?s.couleurAccent:'#E02020'; }
+/** PURE. « J-12 », « 5 h », « 12 min » : le temps qui reste. */
+function saisonReste(s,maintenant){
+  const ms=Number(s&&s.fin)-((typeof maintenant==='number')?maintenant:Date.now());
+  if(!(ms>0)) return 'terminé';
+  const j=Math.floor(ms/864e5), h=Math.floor(ms%864e5/3600e3), m=Math.floor(ms%3600e3/60e3);
+  if(j>=1) return 'J-'+j+(j<3?' · '+h+' h':'');
+  if(h>=1) return h+' h '+String(m).padStart(2,'0');
+  return m+' min';
+}
+function saisonValeur(u,s){ return defiValeur(u,{mesure:s.mesure,debut:Number(s.debut),fin:Number(s.fin)}); }
+// ── Écrire sa valeur (après une séance, et à l'accueil) ───────────────────
+async function saisonsPublierProgression(){
+  const u=currentUser;
+  if(!u||u.role==='coach'||!CLOUD.ok()) return 0;
+  await chargerSaisons();
+  const s=saisonActive();
+  if(!s) return 0;
+  const v=Math.max(0,Number(saisonValeur(u,s))||0);
+  const deja=(u.saisonsVal&&u.saisonsVal[s.id]);
+  if(deja===v) return 0;
+  const token=await CLOUD._getToken();
+  if(!token) return 0;
+  const moi=String(u.email||'').replace(/\./g,',');
+  const r=await fetch(CLOUD._fbUrl.replace('users.json','saisons_progres/'+s.id+'/'+moi+'.json')+'?auth='+token,
+    {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({valeur:v,maj:Date.now()})}).catch(()=>null);
+  if(!r||!r.ok) return 0;
+  u.saisonsVal=Object.assign({},u.saisonsVal||{},{[s.id]:v});
+  try{ saveUser(); }catch(e){}
+  return 1;
+}
+// ── Le compteur collectif (/stats/saisons/<id>, lecture publique) ─────────
+const _saisonStats={};
+async function _saisonStatsLire(id){
+  const c=_saisonStats[id];
+  if(c&&Date.now()-c.t<10*60e3) return c.d;
+  const r=await fetch(CLOUD._fbUrl.replace('users.json','stats/saisons/'+id+'.json')).catch(()=>null);
+  const d=(r&&r.ok)?await r.json():null;
+  _saisonStats[id]={t:Date.now(),d};
+  return d;
+}
+// ── La bannière de l'accueil ──────────────────────────────────────────────
+// PURE.
+function htmlBanniereSaison(s,u,stats,maintenant){
+  if(!s||!u||u.role==='coach') return '';
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const v=saisonValeur(u,s), obj=Number(s.objectifPerso)||1;
+  const part=Math.max(0,Math.min(1,v/obj));
+  const fait=v>=obj||!!(u.saisonsReleves&&u.saisonsReleves[s.id]);
+  const col=Number(s.objectifCollectif)||0;
+  const tot=Number(stats&&stats.total)||0;
+  const pc=col>0?Math.max(0,Math.min(1,tot/col)):0;
+  const txt=x=>texteScoreDuel(s.mesure,x);
+  return '<div class="sa-banniere" style="--sa-accent:'+saisonCouleur(s)+'" role="region" aria-label="'+escapeHtml(s.nom)+'">'
+    +'<div class="sa-tete"><span class="sa-edition">ÉDITION '+escapeHtml(saisonAnnee(s))+'</span>'
+      +'<span class="sa-reste" data-fin="'+Number(s.fin)+'">'+escapeHtml(saisonReste(s,t))+'</span></div>'
+    +'<div class="sa-nom">'+escapeHtml(s.nom)+'</div>'
+    +(s.texteAccueil?'<p class="sa-texte">'+escapeHtml(s.texteAccueil)+'</p>':'')
+    +'<div class="sa-lab">Toi</div>'
+    +'<div class="rg-jauge sa-jauge" role="progressbar" aria-label="Ta progression" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.round(part*100)+'"><span style="width:'+Math.round(part*100)+'%"></span></div>'
+    +'<div class="sa-val">'+(fait?'Bouclé ⚡ ':'')+escapeHtml(txt(v))+' sur '+escapeHtml(txt(obj))+'</div>'
+    +(col>0?'<div class="sa-lab">Tous ensemble</div>'
+      +'<div class="rg-jauge sa-jauge sa-collectif" role="progressbar" aria-label="Le compteur collectif" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.round(pc*100)+'"><span style="width:'+Math.round(pc*100)+'%"></span></div>'
+      +'<div class="sa-val">'+escapeHtml(txt(tot))+' sur '+escapeHtml(txt(col))
+        +(stats&&stats.participants?' · '+stats.participants+' participant'+(stats.participants>1?'s':''):'')+'</div>':'')
+    +(fait?'<button type="button" class="btn btn-sm sa-partager" onclick="partagerCarteSaison(\''+s.id+'\',this)">'+icon('share',14)+' <span>J’ai bouclé : partager ma carte</span></button>':'')
+    +'</div>';
+}
+let _saisonMinuteur=null;
+async function renderSaisonAccueil(){
+  const z=document.getElementById('clh-saison');
+  const u=currentUser;
+  if(!z) return false;
+  if(!u||u.role==='coach'){ z.innerHTML=''; return false; }
+  try{ await chargerSaisons(); }catch(e){}
+  const s=saisonActive();
+  if(!s){ z.innerHTML=''; return false; }
+  let st=null; try{ st=await _saisonStatsLire(s.id); }catch(e){ st=null; }
+  z.innerHTML=htmlBanniereSaison(s,u,st,Date.now());
+  // LE COMPTE À REBOURS avance tant que l'accueil est affiché.
+  if(_saisonMinuteur) clearInterval(_saisonMinuteur);
+  _saisonMinuteur=setInterval(()=>{
+    const r=document.querySelector('#clh-saison .sa-reste');
+    if(!r||!r.isConnected){ clearInterval(_saisonMinuteur); _saisonMinuteur=null; return; }
+    r.textContent=saisonReste({fin:Number(r.dataset.fin)},Date.now());
+  },60e3);
+  saisonsPublierProgression().catch(()=>{});
+  return true;
+}
+// ── La famille « Éditions » ──────────────────────────────────────────────
+// PURE (écrit dans u). Les résultats du Worker (/saisons_resultats/<moi>).
+function saisonsFusionnerResultats(u,r){
+  if(!u||!r||typeof r!=='object') return 0;
+  const m=(u.saisonsReleves&&typeof u.saisonsReleves==='object')?u.saisonsReleves:{};
+  let n=0;
+  for(const id of Object.keys(r)){
+    const x=r[id]; if(!x||m[id]||!SAISON_ID_RE.test(id)) continue;
+    m[id]={nom:String(x.nom||'').slice(0,60),annee:String(x.annee||'').slice(0,4),badgeCle:String(x.badgeCle||'').slice(0,40),
+      couleur:/^#[0-9a-fA-F]{6}$/.test(String(x.couleur||''))?x.couleur:'#E02020',termineLe:Number(x.termineLe)||0,fin:Number(x.fin)||0};
+    n++;
+  }
+  if(n) u.saisonsReleves=m;
+  return n;
+}
+// PURE. Le médaillon d'une édition : un hexagone de sa couleur, l'année dedans.
+function svgMedailleEdition(couleur,annee,obtenu){
+  const c=/^#[0-9a-fA-F]{6}$/.test(String(couleur||''))?couleur:'#E02020';
+  return '<svg class="ed-med" viewBox="0 0 100 100" aria-hidden="true">'
+    +'<polygon points="50,4 91,27 91,73 50,96 9,73 9,27" fill="'+(obtenu?'#111':'#1a1a1d')+'" stroke="'+(obtenu?c:'#3a3a40')+'" stroke-width="6"/>'
+    +'<polygon points="50,18 79,34 79,66 50,82 21,66 21,34" fill="none" stroke="'+(obtenu?c:'#2a2a2e')+'" stroke-width="2" opacity=".7"/>'
+    +'<text x="50" y="58" text-anchor="middle" font-family="Bebas Neue,Impact,sans-serif" font-size="26" fill="'+(obtenu?'#fff':'#6b6b72')+'">'+escapeHtml(String(annee||''))+'</text></svg>';
+}
+// PURE. La section « Éditions » de la collection.
+function htmlEditions(u,liste,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const m=(u&&u.saisonsReleves)||{};
+  const l=liste||{};
+  const ids=[...new Set(Object.keys(l).filter(id=>saisonValide(l[id])&&t>=Number(l[id].debut)).concat(Object.keys(m)))];
+  if(!ids.length) return '';
+  const cases=ids.map(id=>{
+    const s=l[id]||{}, r=m[id];
+    const nom=(r&&r.nom)||s.nom||id, annee=(r&&r.annee)||saisonAnnee(s);
+    const fin=Number(s.fin||(r&&r.fin))||0;
+    let sous;
+    if(r) sous=_bdgDate(r.termineLe);
+    else if(fin&&t>fin) sous='Plus jamais disponible';
+    else sous='En cours · '+saisonReste(s,t);
+    return {fin,h:'<div class="bdg-case ed-case"'+(r?'':' data-attente')+(!r&&fin&&t>fin?' data-perdu':'')+'>'
+      +svgMedailleEdition(r?r.couleur:saisonCouleur(s),annee,!!r)
+      +'<div class="bdg-nom">'+escapeHtml(String(nom).toUpperCase()+' '+annee)+'</div>'
+      +'<div class="bdg-date">'+escapeHtml(sous)+'</div></div>'};
+  }).sort((a,b)=>b.fin-a.fin).map(x=>x.h).join('');
+  return '<div class="bdg-sous">Éditions <span class="bdg-compte">'+Object.keys(m).length+'</span></div><div class="bdg-grille">'+cases+'</div>';
+}
+// ── La carte « J'ai bouclé <édition> » ────────────────────────────────────
+function saisonCarteDonnees(id,u){
+  const l=_saisonsDuCache(), s=l[id]||{}, r=(u&&u.saisonsReleves&&u.saisonsReleves[id])||null;
+  let sig=''; try{ sig=nomSurVisuels(u); }catch(e){ sig=''; }
+  const obj=Number(s.objectifPerso)||0;
+  return {nom:String((r&&r.nom)||s.nom||'').toUpperCase(),annee:(r&&r.annee)||saisonAnnee(s),couleur:(r&&r.couleur)||saisonCouleur(s),
+    objectif:obj&&s.mesure?texteScoreDuel(s.mesure,obj).toUpperCase():'',date:r?r.termineLe:Date.now(),signature:sig};
+}
+function _dessinerCarteSaison(d,fond,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const g=cv.getContext('2d');
+  const f=fond||'transparent';
+  _visuelPeindreFond(g,W,H,f);
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const M=72, LARG=W-M*2, cx=W/2;
+  const o=_visuelOutils(g);
+  const x=d||{};
+  const acc=f==='rouge'?'#fff':(x.couleur||'#E02020');
+  g.textAlign='center'; g.textBaseline='alphabetic';
+  // En story, le bloc (~1 000 px) est centré dans la hauteur.
+  let y=post?140:520;
+  o.ombre(true); g.fillStyle='#fff'; g.font='800 34px '+MONT;
+  o.ecrireEspace('J’AI BOUCLÉ',cx,y,10,true);
+  o.ombre(false); g.fillStyle=acc; g.fillRect(cx-44,y+20,88,5);
+  // LE MÉDAILLON : l'hexagone de l'édition, l'année dedans.
+  const R=post?150:190, my=y+(post?60:90)+R;
+  g.save();
+  const hex=(r)=>{ g.beginPath(); for(let k=0;k<6;k++){ const a=-Math.PI/2+k*Math.PI/3; const px=cx+r*Math.cos(a), py=my+r*Math.sin(a); if(k) g.lineTo(px,py); else g.moveTo(px,py); } g.closePath(); };
+  g.shadowColor=acc; g.shadowBlur=40;
+  hex(R); g.fillStyle='#0d0d0f'; g.fill(); g.lineWidth=14; g.strokeStyle=acc; g.stroke();
+  g.shadowBlur=0; hex(R*0.72); g.lineWidth=4; g.globalAlpha=.7; g.stroke();
+  g.restore();
+  o.ombre(true); g.fillStyle='#fff';
+  g.font='700 '+Math.round(R*0.62)+'px '+BEBAS; o.ecrire(String(x.annee||''),cx,my+R*0.22);
+  y=my+R+(post?110:150);
+  const nom=String(x.nom||'');
+  const ns=o.ajuste(nom,'700',post?120:150,BEBAS,LARG,54);
+  g.font='700 '+ns+'px '+BEBAS; o.ecrire(o.coupe(nom,LARG),cx,y);
+  y+=post?70:90;
+  g.fillStyle=acc;
+  const ed='ÉDITION '+(x.annee||'')+(x.objectif?' · '+x.objectif:'');
+  const es=o.ajusteEspace(ed,'800',40,MONT,6,LARG,22);
+  g.font='800 '+es+'px '+MONT; o.ecrireEspace(o.coupeEspace(ed,6,LARG),cx,y,6,true);
+  y+=post?60:80;
+  g.fillStyle='rgba(255,255,255,.8)'; g.font='700 30px '+MONT;
+  o.ecrireEspace(_recDate(x.date),cx,y,4,true);
+  _recSignature(g,o,String(x.signature||''),H-(post?50:110),LARG);
+  o.ombre(false);
+  return cv;
+}
+// SYNCHRONE jusqu'au partage (iOS).
+function partagerCarteSaison(id,btn){
+  const u=currentUser;
+  if(!u||_storyEnCours||!SAISON_ID_RE.test(String(id||''))) return false;
+  const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond);
+  const nom=visuelNomFichier('repcore-saison',fond);
+  _storyEnCours=true;
+  let ok=false;
+  try{
+    const des=()=>_dessinerCarteSaison(saisonCarteDonnees(id,u),fond);
+    ok=_storySortirPartage(des(),nom,undefined,fmt)||_storySortirTelechargement(des(),nom,fmt);
+  }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
+  finally{ _storyEnCours=false; }
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp&&ok){ const l=sp.textContent; sp.textContent='Carte prête ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  return ok;
+}
+// ── L'écran admin : créer une édition ─────────────────────────────────────
+/** PURE. {id, fiche} ou {erreur}. Les dates : AAAA-MM-JJ, de minuit à 23 h 59. */
+function saisonFiche(f){
+  const nom=String(f&&f.nom||'').replace(/\s+/g,' ').trim().slice(0,60);
+  if(nom.length<3) return {erreur:'Donne un nom (3 caractères au moins).'};
+  const d=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(f.debut||'')), e=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(f.fin||''));
+  if(!d||!e) return {erreur:'Dates : AAAA-MM-JJ.'};
+  const debut=new Date(+d[1],+d[2]-1,+d[3],0,0,0).getTime(), fin=new Date(+e[1],+e[2]-1,+e[3],23,59,59).getTime();
+  if(!(fin>debut)) return {erreur:'La fin doit suivre le début.'};
+  const mesure=['seances','tonnage','serie','progressionPct'].indexOf(f.mesure)>=0?f.mesure:null;
+  if(!mesure) return {erreur:'Choisis une mesure.'};
+  const n=v=>Number(String(v==null?'':v).replace(',','.'));
+  const op=n(f.objectifPerso), oc=n(f.objectifCollectif||0);
+  if(!(op>0&&op<1e8)) return {erreur:'L’objectif perso doit être un nombre positif.'};
+  if(!(oc>=0&&oc<1e12)) return {erreur:'L’objectif collectif doit être un nombre.'};
+  const slug=s=>{ let x=String(s||''); try{ x=x.normalize('NFD').replace(/[̀-ͯ]/g,''); }catch(er){} return x.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,''); };
+  const id=(slug(f.id)||(slug(nom).slice(0,34)+'-'+d[1])).slice(0,41);
+  if(!SAISON_ID_RE.test(id)) return {erreur:'Identifiant invalide.'};
+  const badgeCle=(slug(f.badgeCle)||slug(nom)).slice(0,40);
+  if(!/^[a-z0-9-]{2,40}$/.test(badgeCle)) return {erreur:'Clé de badge invalide.'};
+  const couleurAccent=/^#[0-9a-fA-F]{6}$/.test(String(f.couleurAccent||''))?f.couleurAccent:'#E02020';
+  return {id,fiche:{nom,debut,fin,mesure,objectifPerso:op,objectifCollectif:oc,badgeCle,couleurAccent,
+    texteAccueil:String(f.texteAccueil||'').trim().slice(0,200)}};
+}
+function htmlSaisonAdmin(){
+  const L=(id,lib,champ)=>'<label class="pp-lab" for="'+id+'">'+lib+'</label>'+champ;
+  return '<div class="card amb-journal" id="sa-admin"><div class="amb-t">Événement saisonnier</div>'
+    +'<p class="sub amb-note">Une édition limitée pour tous : bannière d’accueil, fond « Édition » sur les visuels, badge avec l’année (jamais réédité), push de lancement, mi-parcours, J-2 et fin.</p>'
+    +L('sa-nom','Nom','<input id="sa-nom" type="text" maxlength="60" placeholder="Hiver de fer">')
+    +L('sa-debut','Début','<input id="sa-debut" type="date">')
+    +L('sa-fin','Fin','<input id="sa-fin" type="date">')
+    +L('sa-mesure','Mesure','<select id="sa-mesure"><option value="seances">Séances</option><option value="serie">Semaines validées</option><option value="tonnage">Tonnage (kg)</option><option value="progressionPct">Progression (%)</option></select>')
+    +L('sa-op','Objectif perso','<input id="sa-op" type="number" min="1" inputmode="decimal" placeholder="10">')
+    +L('sa-oc','Objectif collectif','<input id="sa-oc" type="number" min="0" inputmode="decimal" placeholder="1000">')
+    +L('sa-badge','Clé du badge','<input id="sa-badge" type="text" maxlength="40" placeholder="hiver">')
+    +L('sa-couleur','Couleur','<input id="sa-couleur" type="color" value="#E02020">')
+    +L('sa-texte','Texte d’accueil','<input id="sa-texte" type="text" maxlength="200">')
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:10px 0 0;min-height:44px" onclick="enregistrerSaison(this)">Créer l’édition</button></div>';
+}
+async function enregistrerSaison(btn){
+  if(!estAdminAmbassadeurs()) return false;
+  const v=id=>(document.getElementById(id)||{}).value;
+  const r=saisonFiche({nom:v('sa-nom'),debut:v('sa-debut'),fin:v('sa-fin'),mesure:v('sa-mesure'),objectifPerso:v('sa-op'),
+    objectifCollectif:v('sa-oc'),badgeCle:v('sa-badge'),couleurAccent:v('sa-couleur'),texteAccueil:v('sa-texte')});
+  if(r.erreur){ toast(r.erreur,'var(--orange)'); return false; }
+  if(btn) btn.disabled=true;
+  const ok=await CLOUD.racinePatch({['saisons/'+r.id]:r.fiche}).catch(()=>false);
+  if(btn) btn.disabled=false;
+  try{ localStorage.removeItem(SAISONS_CACHE); }catch(e){}
+  _saisons=null;
+  toast(ok?'Édition « '+r.fiche.nom+' » créée ⚡':'Création refusée','var('+(ok?'--green':'--orange')+')');
+  return ok;
+}
 // ── Les résultats : CHAMPION et DÉFI RELEVÉ ────────────────────────────────
 // La clôture (Cloud Functions) écrit /defis_resultats/<moi>/<id>. On les
 // recopie dans le dossier (u.defisReleves) — c'est là que _badgesFaits lit,
@@ -20422,17 +21745,26 @@ async function majRecompensesServeur(o){
   }
   try{ localStorage.setItem('rc_defis_res_jour',j+'|'+u.email); }catch(e){}
   let r=null;
-  if(canalAccessible(u)||(u.defisReleves&&Object.keys(u.defisReleves).length))
+  if(canalAccessible(u)||(u.defisReleves&&Object.keys(u.defisReleves).length)||(u.duels&&Object.keys(u.duels).length))
     try{ r=await CLOUD.pullDefisResultats((u.email||'').replace(/\./g,',')); }catch(e){ r=null; }
   let pc=false;
   if(PARRAINAGE_ACTIF) try{ pc=await majParrainageMiroir(u); }catch(e){ pc=false; }
   const avant=Object.keys(u.defisReleves||{});
-  const n=defisFusionnerResultats(u,r)+(pc?1:0);
+  // Les badges « Éditions » : /saisons_resultats/<moi>, écrit par le Worker.
+  let ns=0;
+  if(SERVEUR_LEGER) try{
+    const tok=await CLOUD._getToken();
+    const rs=tok?await fetch(CLOUD._fbUrl.replace('users.json','saisons_resultats/'+String(u.email||'').replace(/\./g,',')+'.json')+'?auth='+tok):null;
+    ns=saisonsFusionnerResultats(u,(rs&&rs.ok)?await rs.json():null);
+    if(ns) toast('Édition bouclée ⚡ Ton badge t’attend dans ta collection.','var(--green)',4000);
+  }catch(e){ ns=0; }
+  const n=defisFusionnerResultats(u,r)+(pc?1:0)+ns;
   if(n){
     try{ saveUser(); }catch(e){}
     // CHAQUE DÉFI RELEVÉ a son écran (dans la file des badges) : « J'AI
     // RELEVÉ LE DÉFI D'OCTOBRE », et sa carte à partager.
-    try{ Object.keys(u.defisReleves||{}).filter(id=>avant.indexOf(id)<0).forEach(id=>_bdgFile.push({defi:id})); _bdgPlanifier(); }catch(e){}
+    // Un DUEL clos n'est pas un défi du Canal : il a sa carte sur l'accueil.
+    try{ Object.keys(u.defisReleves||{}).filter(id=>avant.indexOf(id)<0&&!u.defisReleves[id].duel).forEach(id=>_bdgFile.push({defi:id})); _bdgPlanifier(); }catch(e){}
     // LE SIXIÈME POINT D'APPEL DES BADGES : CHAMPION, RECRUTEUR et MENTOR
     // arrivent du serveur, jamais d'une séance ni d'un bilan.
     try{ majBadges(); }catch(e){}
@@ -20449,6 +21781,7 @@ function defisFusionnerResultats(u,r){
     const x=r[id]; if(!x||m[id]) continue;
     m[id]={titre:String(x.titre||'').slice(0,80),mesure:String(x.mesure||''),fin:Number(x.fin)||0,
       termineLe:Number(x.termineLe)||Number(x.fin)||0,champion:x.champion===true};
+    if(x.duel===true) m[id].duel=true;
     n++;
   }
   if(n) u.defisReleves=m;
@@ -20532,7 +21865,7 @@ function _defiEcran(id,reste){
     +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" onclick="bdgPlusTard()">'+(reste||_bdgRecap.length?'Suivant':'Plus tard')+'</button>'
     +'</div>',d.champion?'Champion du défi':'Défi relevé');
   try{ monterSelecteurFond('dfe-fonds',f=>_dessinerCarteDefi(d,f),null); }catch(e){}
-  try{ rcFoudre(z.querySelector('#dfe-titre'),arcReduit()?{son:false}:{eclairs:d.champion?3:2,conteneur:z}); }catch(e){}
+  try{ _bdgFoudre(z.querySelector('#dfe-titre'),arcReduit()?{son:false}:{eclairs:d.champion?3:2,conteneur:z}); }catch(e){}
   try{ arcHaptique('succes'); }catch(e){}
   try{ const p=z.querySelector('.bdg-ecran-part'); if(p) p.focus({preventScroll:true}); }catch(e){}
 }
@@ -21675,6 +23008,10 @@ function _htmlEnteteTableau(){
     +'<span>Accès profil</span><span>Suivi</span><span>État</span></div>';
 }
 function renderClientList(clients){
+  // Les volts du serveur de ses athlètes, en tâche de fond (xp_serveur).
+  try{ chargerXpServeurClients(); }catch(e){}
+  // La pastille « Nouveau » du kit : le lundi, jusqu'à la première ouverture.
+  try{ _rendreBoutonKit(); }catch(e){}
   const el=document.getElementById('ch-clients-list');
   if(!el) return;
   const tous=clients||getClients();
@@ -27594,6 +28931,7 @@ function openClientDetail(cid,_refresh,_force){
   try{ renderCoachTraitementsSection(c); }catch(e){}
   try{ renderCoachAmplitudesSection(c); }catch(e){}
   renderCoachCaffeineSection(c);
+  try{ renderBatterieCoach(c); }catch(e){}
   try{ renderSommeilCoach(c); }catch(e){}
   try{ renderPasCoach(c); }catch(e){}
   if(!_refresh) go('s-coach-client');
@@ -37136,6 +38474,9 @@ function loadClientHome(){
   // athlete atterrit. Voir _aiguillerNouvelInscrit.
   // Posé À CHAQUE rendu : c’est lui qui vient d’écrire la date.
   _jourAffiche=localISODate(new Date());
+  // La santé synchronisée (Health Connect, Raccourci iPhone) : au plus une
+  // lecture par 10 minutes, voir sanSyncTirer.
+  try{ setTimeout(()=>{ sanSyncTirer().catch(()=>{}); },4000); }catch(e){}
   // RATTRAPAGE DE L'ANNUAIRE, une fois par session. Les athlètes déjà
   // rattachés avant l'existence de ce nœud n'y figurent pas : sans cette
   // ligne, leur coach ne les découvrirait qu'après un nouveau rattachement,
@@ -37154,6 +38495,9 @@ function loadClientHome(){
   // prochaine séance — et une seule bannière récapitulative.
   // LES JOKERS AVANT LE COMPTEUR : une série sauvée s'affiche sauvée.
   try{ _streakRattrapage(); }catch(e){}
+  // LE PARCOURS « MISE SOUS TENSION » : avant le rattrapage, pour que sa fin
+  // soit fêtée en écran plein et pas noyée dans le récapitulatif.
+  try{ parcoursAvancer(); }catch(e){}
   _rattraperBadges();
   // LE WRAPPED du mois (1er-7) ou de l'année (décembre), s'il y a de quoi.
   try{ _rendreCarteWrapped(); }catch(e){}
@@ -37215,8 +38559,25 @@ function loadClientHome(){
   // Le rang et la jauge des volts, sous le prénom. majXp y tourne : c'est
   // aussi le rattrapage d'un dossier ancien à la mise à jour.
   try{ _rendreRang(u); }catch(e){}
+  // La carte d'athlète : recalculée le lundi, montrée quand la note monte.
+  try{ _rendreCarteAccueil(u); }catch(e){}
+  // Le record à portée de la séance du jour, dans la carte Entraînement.
+  try{ _rendreRecordAPortee(u); }catch(e){}
+  // Le check-in du matin (jusqu'à 14 h) ou la batterie du jour ; la reprise
+  // en douceur après 30 jours sans séance.
+  try{ _rendreCheckin(u); }catch(e){}
+  try{ _afficherRepriseDouce(u); }catch(e){}
+  // Le résumé d'activité (rétention agrégée par le serveur), une fois par jour.
+  try{ setTimeout(()=>{ activitePublier(u).catch(()=>{}); },6000); }catch(e){}
+  // Le tonnage cumulé, posé une fois pour un dossier d'avant ce champ.
+  try{ const _tt=tonnageTotalDe(u); if(u.role!=='coach'&&u.tonnageTotal!==_tt){ u.tonnageTotal=_tt; saveUser(); } }catch(e){}
   // Le rappel du défi en cours.
   try{ renderDefiAccueil(); }catch(e){}
+  // Les duels (l'invitation reçue, ceux en cours) et le défi RepCore du mois.
+  try{ _rendreDuelsAccueil(); }catch(e){}
+  try{ renderDefiMoisAccueil(); }catch(e){}
+  // L'événement saisonnier : la bannière (et la valeur de l'athlète, écrite).
+  try{ renderSaisonAccueil(); }catch(e){}
   // Une fois par jour : défis bouclés et parrainage (badges et mois gagnés).
   try{ majRecompensesServeur(); }catch(e){}
   try{ majPagePublique(); }catch(e){}
@@ -40451,6 +41812,9 @@ function woPersist(){
       // Sans eux, une séance reprise après pause perdrait sa fin de séance,
       // qui est justement ce qui reste à faire au moment de la reprise.
       deload:!!woState.deload,
+      // Le record à portée et la reprise en douceur survivent à une pause.
+      objectif:woState.objectif||null,
+      repriseDouce:!!woState.repriseDouce,
       warmup:woState.warmup||'',
       cooldown:woState.cooldown||'',
       // Les étapes déjà cochées de l'échauffement : sans elles, une séance
@@ -41222,7 +42586,9 @@ function launchWorkout(sessConfig,slotIdx){
     // dans la détection de plateau.
     // RETOUR DE SUSPENSION : proposition, decochable. Elle ne touche pas
     // sessions_config, qui appartient au coach.
-    deload:!!sessConfig.deload||semaineEstDecharge(currentUser)||repriseDeloadPropose(currentUser),
+    deload:!!sessConfig.deload||semaineEstDecharge(currentUser)||repriseDeloadPropose(currentUser)||repriseDouceActive(currentUser),
+    // LA REPRISE EN DOUCEUR acceptée : charges suggérées -10 % (voir _decote).
+    repriseDouce:repriseDouceActive(currentUser),
     // Une demande du coach vaut case cochée d'avance. Amorcée ICI et non à
     // chaque rendu : sans quoi un décochage serait réécrit à la seconde
     // suivante et l'athlète n'aurait pas la main.
@@ -41238,6 +42604,9 @@ function launchWorkout(sessConfig,slotIdx){
     // vide, pas se faire remplir par le défaut au lancement.
     warmup:String(sessConfig.warmup??currentUser._defaultWarmup??'').trim(),
     cooldown:String(sessConfig.cooldown??currentUser._defaultCooldown??'').trim()};
+  // LE RECORD À PORTÉE : calculé une fois, au lancement, sur l'historique
+  // d'avant la séance. Rien en décharge (recordAPortee le vérifie aussi).
+  try{ woState.objectif=woState.deload?null:recordAPortee(currentUser,sessConfig); }catch(e){ woState.objectif=null; }
   woState.timerInterval=setInterval(()=>{
     const el=Math.floor((Date.now()-woState.startTime)/1000);
     document.getElementById('wo-timer').textContent=fmtDureeSeance(el);
@@ -41855,7 +43224,7 @@ function nomSurVisuels(u){
 const VISUEL_FOND=Object.freeze({
   LISTE:Object.freeze(['transparent','photo','carbone']),
   CLE:'rc_visuel_fond',
-  LIB:Object.freeze({transparent:'Sans fond',photo:'Ma photo',carbone:'Carbone'}),
+  LIB:Object.freeze({transparent:'Sans fond',photo:'Ma photo',carbone:'Carbone',edition:'Édition'}),
   // La vignette : 180 × 320, le 9:16 de la story.
   VL:180, VH:320
 });
@@ -41866,15 +43235,23 @@ function _visuelPhotoPrete(){
   return !!(im&&im.complete&&im.naturalWidth>0);
 }
 /** Le dernier fond choisi sur cet appareil. localStorage peut manquer : 'transparent'. */
+// LE FOND « ÉDITION » n'existe que pendant un événement saisonnier : la
+// couleur de l'édition, son nom et son année en tête du visuel. Choisi puis
+// l'édition finie, il retombe sur le carbone.
+function visuelFondsListe(maintenant){
+  let s=null; try{ s=saisonActive(maintenant); }catch(e){ s=null; }
+  return s?VISUEL_FOND.LISTE.concat(['edition']):VISUEL_FOND.LISTE.slice();
+}
 function visuelFondChoisi(){
   let f=null;
   try{ f=localStorage.getItem(VISUEL_FOND.CLE); }catch(e){ f=null; }
   // Qui avait choisi le rouge retrouve le fond plein qui l'a remplacé.
   if(f==='rouge') f='carbone';
+  if(f==='edition') return visuelFondsListe().indexOf('edition')>=0?'edition':'carbone';
   return VISUEL_FOND.LISTE.indexOf(f)>=0?f:'transparent';
 }
 function visuelFondMemoriser(f){
-  if(VISUEL_FOND.LISTE.indexOf(f)<0) return false;
+  if(visuelFondsListe().indexOf(f)<0) return false;
   try{ localStorage.setItem(VISUEL_FOND.CLE,f); return true; }catch(e){ return false; }
 }
 /** Le fond qu'on dessine vraiment : « photo » sans photo chargée retombe sur « sans fond ». */
@@ -41967,6 +43344,30 @@ function _visuelPeindreFond(g,W,H,fond){
     g.restore();
     return true;
   }
+  if(fond==='edition'){
+    // La couleur de l'édition, sur un noir profond ; son nom et son année en
+    // tête, en petites capitales espacées (le visuel commence plus bas).
+    let sa=null; try{ sa=saisonActive(); }catch(e){ sa=null; }
+    const c=saisonCouleur(sa);
+    g.fillStyle='#050506'; g.fillRect(0,0,W,H);
+    const hal=g.createRadialGradient(W/2,H*0.35,0,W/2,H*0.35,Math.max(W,H)*0.75);
+    hal.addColorStop(0,c+'55'); hal.addColorStop(0.55,c+'14'); hal.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle=hal; g.fillRect(0,0,W,H);
+    g.save(); g.strokeStyle=c+'22'; g.lineWidth=3;
+    for(let x=-H;x<W+H;x+=48){ g.beginPath(); g.moveTo(x,0); g.lineTo(x+H*0.6,H); g.stroke(); }
+    g.restore();
+    g.fillStyle=c; g.fillRect(0,0,W,Math.max(6,Math.round(H/240)));
+    if(sa){
+      const t=('ÉDITION '+sa.nom+' · '+saisonAnnee(sa)).toUpperCase();
+      g.save(); g.textAlign='center'; g.textBaseline='alphabetic'; g.fillStyle=c;
+      const fs=Math.max(12,Math.round(W/42));
+      g.font='800 '+fs+'px Montserrat,sans-serif';
+      let s2=t; while(g.measureText(s2).width>W*0.9&&s2.length>4) s2=s2.slice(0,-2);
+      g.fillText(s2,W/2,Math.round(H/32)+fs);
+      g.restore();
+    }
+    return true;
+  }
   if(fond==='photo'&&_visuelPhotoPrete()){
     const im=_visuelPhoto.img, iw=im.naturalWidth, ih=im.naturalHeight;
     // « cover » : la photo remplit tout, centrée, rognée sur le côté qui dépasse.
@@ -42010,7 +43411,7 @@ function _htmlVisuelFonds(id){
   return _htmlVisuelFormats(id)
     +'<button type="button" class="vf-legende" onclick="voirLegende(typeDuSelecteur(\''+id+'\'))">Voir la légende</button>'
     +'<div class="vf" id="'+id+'" role="radiogroup" aria-label="Fond du visuel">'
-    +VISUEL_FOND.LISTE.map(k=>'<button type="button" class="vf-b'+(k===f?' actif':'')+'" role="radio" aria-checked="'+(k===f)+'" data-fond="'+k+'"'
+    +visuelFondsListe().map(k=>'<button type="button" class="vf-b'+(k===f?' actif':'')+'" role="radio" aria-checked="'+(k===f)+'" data-fond="'+k+'"'
       // Un libellé d'une ligne pour les trois : « changer » se dit au survol.
       +(k==='photo'?' title="Touche à nouveau pour changer de photo"':'')
       +' onclick="visuelFondChoisir(\''+id+'\',\''+k+'\')">'
@@ -42082,7 +43483,7 @@ function _visuelFondsPeindre(id){
 }
 /** Un clic sur une vignette. « Ma photo » sans photo : on ouvre le choix du fichier. */
 function visuelFondChoisir(id,fond){
-  if(VISUEL_FOND.LISTE.indexOf(fond)<0) return false;
+  if(visuelFondsListe().indexOf(fond)<0) return false;
   if(fond==='photo'&&(!_visuelPhotoPrete()||visuelFondEffectif()==='photo')){
     const inp=document.querySelector('#'+id+' .vf-f');
     if(inp){ inp.value=''; inp.click(); }
@@ -42476,6 +43877,8 @@ function _recSignature(g,o,sig,y,LARG){
     o.ecrireEspace('REPCORE',cx,y,5,true);
   }
 }
+// PURE. Le sur-titre de la carte d'un record.
+function surTitreRecord(r){ return (r&&r.objectif)?'OBJECTIF ATTEINT':'NOUVEAU RECORD'; }
 /**
  * Le visuel d'UN record.
  * @param {{nm:string,histMax:number,curMax:number,gain:number,date?:number,signature?:string}} record
@@ -42508,10 +43911,11 @@ function _dessinerCarteRecord(record,fond,format,anim){
   let y=Math.max(post?110:180,Math.round((H-HTOT)/2)-(post?30:40));
   g.textBaseline='alphabetic';
 
-  // « NOUVEAU RECORD »
+  // LE SUR-TITRE : « NOUVEAU RECORD », ou « OBJECTIF ATTEINT » quand ce
+  // record était le record à portée annoncé avant la séance.
   o.ombre(true); g.textAlign='center';
   g.fillStyle='#ffffff'; g.font='800 34px '+MONT;
-  o.ecrireEspace('NOUVEAU RECORD',cx,y+34,10,true);
+  o.ecrireEspace(surTitreRecord(r),cx,y+34,10,true);
   // Le trait rouge sous l'étiquette : la seule touche de couleur hors éclair.
   o.ombre(false);
   g.fillStyle=f==='rouge'?'rgba(255,255,255,.85)':'#E02020';
@@ -42866,6 +44270,15 @@ const _LEGENDES=Object.freeze({
     d=>'Tu cherches une app pour suivre tes séances ? '+(d.code?'Avec le code '+d.code+', ton':'Avec mon code, ton')+' premier mois est offert, sans carte.',
     d=>'On s’entraîne ensemble ? '+(d.code?'Code '+d.code+' à l’inscription : ':'Mon code à l’inscription : ')+'ton premier mois est offert.',
     d=>'Toute l’app ouverte, sans carte bancaire, et ton premier mois est offert. '+(d.code?'Ton code : '+d.code+'.':'Demande-moi mon code.')+' Tu viens ?'],
+  saison:[d=>'Édition bouclée ⚡ Tu étais de la partie ?',
+    d=>'Une édition, un badge, jamais réédité. Tu l’as eu, toi ?',
+    d=>'Objectif tenu jusqu’au bout. La prochaine, tu viens ?'],
+  duel:[d=>'Duel lancé ⚡ Qui tient le plus longtemps ? Tu relèves ?',
+    d=>'Un contre un, pas de cadeau. Et toi, tu défies qui ?',
+    d=>'Le duel est tranché. Tu veux ta revanche ?'],
+  carte:[d=>'Ma carte d’athlète'+(d.note?' : '+d.note:'')+' ⚡ Et toi, tu sortirais combien ?',
+    d=>'Force, volume, régularité, progression, endurance : tout est noté. Tu montes à combien ?',
+    d=>(d.note?d.note+' de note globale.':'Ma note monte.')+' Douze semaines de travail. Tu relèves le défi ?'],
   visuel:[d=>'Une séance de plus ⚡ Et toi, tu t’entraînes quand ?',
     d=>'La régularité, c’est tout. Tu viens ?',
     d=>'Chaque séance compte. Tu te lances ?']
@@ -42920,6 +44333,7 @@ function _legendeDonneesEcran(type){
     if(type==='rang'&&_rangCourant) d.nom=String(_rangCourant.nom||'');
     if((type==='defi'||type==='champion')&&_defiCourant) d.titre=String(_defiCourant.titre||'').slice(0,60);
     if(type==='wrapped'&&_wr&&_wr.w) d.seances=Number(_wr.w.seances)||0;
+    if(type==='carte'&&currentUser&&currentUser.carte) d.note=Number(currentUser.carte.globale)||0;
     if(type==='invitation'){ const c=invitationDonnees(currentUser).code; if(c) d.code=c; }
   }catch(e){}
   return d;
@@ -44237,8 +45651,9 @@ function renderWoEx(){
       ${(()=>{ try{ return _htmlSelecteurSalle(); }catch(e){ return ''; } })()}
       ${woState.deload?`<div style="display:flex;align-items:center;gap:10px;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:10px 14px;margin-bottom:12px">
         <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--info);flex-shrink:0">DÉCHARGE</span>
-        <span style="font-size:var(--fs-xs);color:#bbb;line-height:1.5">Semaine allégée voulue par ton coach. Elle ne comptera pas comme un recul.</span>
+        <span style="font-size:var(--fs-xs);color:#bbb;line-height:1.5">${woState.repriseDouce?'Reprise en douceur : tes charges proposées sont 10 % plus légères. Elle ne comptera pas comme un recul.':'Semaine allégée voulue par ton coach. Elle ne comptera pas comme un recul.'}</span>
       </div>`:''}
+      ${(()=>{ try{ const _ri=_rapIndexSeance(); return (_ri>=0&&(woState.currentEx===0||groupe.includes(_ri)))?htmlRecordAPortee(woState.objectif,'seance'):''; }catch(e){ return ''; } })()}
       ${woState.currentEx===0?_carteProtocole(woState.warmup,'Échauffement','var(--orange)','wo-warmup-body',true,
         (()=>{ try{ return chargeReferenceEchauffement(0); }catch(e){ return null; } })()):''}
       ${photoHtml}
@@ -44455,7 +45870,10 @@ function _blocExo(idx,estSS){
   // Reprise après coupure. Sans _refDate — ancienne signature, ou séance sans
   // date — on ne décote rien et le comportement reste l'actuel.
   const _joursRef=prev?joursDepuisRef(prev._refDate):null;
-  const _decote=_joursRef==null?1:decoteReprise(_joursRef);
+  let _decote=_joursRef==null?1:decoteReprise(_joursRef);
+  // La reprise en douceur acceptée : -10 %, sans cumuler avec la décote de
+  // reprise — la plus forte des deux.
+  if(woState.repriseDouce&&_decote!=null) _decote=Math.min(_decote,REPRISE_DOUCE_FACTEUR);
   const _abandon=!!prev&&_decote===null;
   const _rawSug=(prev&&!_abandon)?chargeSuivante(prev.weight,prev.rir,isCW,_decote):null;
   const _sugBrut=_rawSug!=null&&_rawSug>0?_rawSug:null;
@@ -45592,7 +47010,7 @@ function renderSets(ex,data,idx,opts){
           <div style="background:${cardBg};border:1px solid ${cardBorder};border-radius:var(--r-2);padding:8px 10px">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
               <div style="text-align:center;min-width:28px;flex-shrink:0">
-                <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}${_badgeRecord(idx,i)}</div>
+                <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}${_eclairObjectif(idx,i)}${_badgeRecord(idx,i)}</div>
                 <div>${repsAffiche(18)}</div>
               </div>
               ${weightInner}
@@ -45608,7 +47026,7 @@ function renderSets(ex,data,idx,opts){
     }
     return `<tr class="${rowCls}${painAlert}">
       <td style="text-align:center;padding:${_fourch?'4px 1px':'4px 6px'}">
-        <span style="display:block;font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}${_badgeRecord(idx,i)}</span>
+        <span style="display:block;font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}${_eclairObjectif(idx,i)}${_badgeRecord(idx,i)}</span>
         ${repsAffiche(20)}
       </td>
       ${weightCell}
@@ -46199,6 +47617,12 @@ function finishWorkout(incomplete=false){
   // Écrit seulement s'il y a quelque chose à écrire : une séance sans aucune
   // case cochée doit rester octet pour octet celle d'avant ce lot.
   if((woState.aFilmer||[]).length) sess.aFilmer=woState.aFilmer.slice();
+  // Le fuseau de l'appareil (minutes, comme getTimezoneOffset) : le serveur
+  // contrôle les badges secrets horaires à SON heure, lue à l'heure locale.
+  try{ sess.tz=new Date(sess.date).getTimezoneOffset(); }catch(e){}
+  // L'objectif « record à portée » que portait la séance : la carte record
+  // dira « OBJECTIF ATTEINT » s'il est battu, aujourd'hui comme à la relecture.
+  if(woState.objectif&&woState.objectif.nm) sess.objectif={nm:woState.objectif.nm,charge:woState.objectif.charge,reps:woState.objectif.reps};
   if(!currentUser.sessions) currentUser.sessions=[];
   currentUser.sessions.push(sess);
   _viderCachePlateau();
@@ -46216,9 +47640,21 @@ function finishWorkout(incomplete=false){
   try{
     if(suspensionSynchroniser(currentUser)) scheduleWoNotif();
   }catch(e){}
+  // Le tonnage cumulé, pour le serveur léger (relance J+14) : il ne relit
+  // jamais les séances.
+  try{ currentUser.tonnageTotal=tonnageTotalDe(currentUser); }catch(e){}
+  // Le rappel de séance du service worker relit ses « records à portée ».
+  try{ if(currentUser._woReminderEnabled) scheduleWoNotif(); }catch(e){}
   saveUser();
   // Les défis du Canal : ma progression, écrite par moi (serveur léger).
   try{ setTimeout(()=>{ defisPublierProgression().catch(()=>{}); },3000); }catch(e){}
+  // Les duels : chacun écrit sa valeur, ou démarre le duel (1re séance de l'invité).
+  try{ setTimeout(()=>{ duelsApresSeance().catch(()=>{}); },3500); }catch(e){}
+  // LES VOLTS DU SERVEUR : l'événement « seance_fin », après l'envoi du dossier
+  // (le serveur relève et réessaie s'il arrive avant).
+  try{ setTimeout(()=>{ deposerEvenement({type:'seance_fin'}).catch(()=>{}); },4500); }catch(e){}
+  // L'événement saisonnier : la valeur de l'athlète, pour le compteur collectif.
+  try{ setTimeout(()=>{ saisonsPublierProgression().catch(()=>{}); },4000); }catch(e){}
   // ══ LA SEANCE EST ENREGISTREE. TOUT CE QUI SUIT N'EST QUE DU RENDU ══════
   //
   // Et ce rendu est le plus charge de l'application : trois chiffres, la
@@ -46265,6 +47701,7 @@ function finishWorkout(incomplete=false){
       ? Math.max(0,(Date.now()-new Date(_derniere.date).getTime())/864e5) : 0;
     _ctxFin={
       records:(_cmp&&_cmp.records)||[],
+      objectif:sess.objectif||null,
       recordsE1rm:(()=>{ try{ return e1rmRecordsDeSeance(sess,_sess.slice(0,-1),currentUser); }catch(e){ return []; } })(),
       sets,setsPlanned,volume:vol,
       volumesPrecedents:_prec.map(x=>Number(x&&x.volume)||0),
@@ -46380,6 +47817,11 @@ function finishWorkout(incomplete=false){
   // critères lisent est donc déjà écrit. La bannière, elle, s'affiche une
   // seconde plus tard — _celebrerBadge attend que la fête de fin de séance
   // ait joué la sienne.
+  // RETOUR AU COMBAT : la 1re séance après 10 jours ou plus, dans la file
+  // des célébrations (écran plein et quête de PHÉNIX NOIR).
+  try{ const _rt=retourAuCombat(currentUser,(currentUser.sessions||[])[currentUser.sessions.length-1]); if(_rt) _celebrerRetour(_rt); }catch(e){}
+  // Le parcours d'abord : sa fin débloque le badge SOUS TENSION.
+  try{ majParcours(currentUser); parcoursEcrireJ21(currentUser).catch(()=>{}); }catch(e){}
   try{ majBadges(); }catch(e){}
   // LES VOLTS, APRÈS LES BADGES : ceux que la séance vient de débloquer
   // comptent dans le gain, et un passage de rang passe dans la file APRÈS eux.
@@ -56702,6 +58144,7 @@ function contexteSeanceRelue(sc,u){
   let e1=[]; try{ e1=e1rmRecordsDeSeance(sc,ant,u); }catch(e){ e1=[]; }
   return {
     records:rec,
+    objectif:sc.objectif||null,
     recordsE1rm:e1,
     sets,setsPlanned:prevus,volume:Number(sc.volume)||0,
     volumesPrecedents:prec.map(x=>Number(x&&x.volume)||0),
@@ -56890,7 +58333,9 @@ function _htmlRecompenses(badges,ctx){
 const _recordsAffiches={};
 function _htmlRecordsFin(ctx,date,cle){
   const rec=((ctx&&ctx.records)||[]).filter(r=>r&&r.nm&&r.curMax>0)
-    .slice().sort((a,b)=>(b.gain||0)-(a.gain||0)).slice(0,4);
+    .slice().sort((a,b)=>(b.gain||0)-(a.gain||0)).slice(0,4)
+    // L'objectif de la séance battu : la carte le dira (« OBJECTIF ATTEINT »).
+    .map(r=>objectifAtteint(ctx&&ctx.objectif,r)?Object.assign({},r,{objectif:true}):r);
   if(!rec.length) return '';
   const nb=v=>Number(v).toLocaleString('fr-FR');
   const k=(cle==='wd'||cle==='sd')?cle:'';
@@ -59007,11 +60452,14 @@ function rapLifestyle(u,debut,fin){
   // dernieres : le rapport ne doit rien contenir qui deborde de ses bornes.
   const nuits=((u&&u.sleepLog)||[]).filter(e=>e&&e.date>=jours[0]&&e.date<=jours[jours.length-1]);
   const reg=regulariteCoucher({sleepLog:nuits},nuits.length||1);
+  const cardio=_coachCardio(u,jours[0],jours[jours.length-1]);
   return {
     jours:jours.length,
     pas:{moyenne:moy(pas),renseignes:pas.length,objectif:sanObjPas(u)},
     sommeil:{moyenne:moy(som),renseignes:som.length,objectif:sanObjSommeil(u)},
-    regularite:reg
+    regularite:reg,
+    // Synchronisation santé : null sans mesure sur la période.
+    fcRepos:cardio.fcRepos,vfc:cardio.vfc
   };
 }
 // PURE. Le mois calendaire PRÉCÉDENT, borne à borne.
@@ -59625,6 +61073,8 @@ function htmlRapport(r){
         <div><div class="rap-lbl">Sommeil / nuit</div>${L.sommeil.moyenne!=null?nb(sanHM(L.sommeil.moyenne),'en moyenne'):nb('-','')}</div>
         <div><div class="rap-lbl">Nuits renseignées</div>${nb(L.sommeil.renseignes,'/ '+L.jours)}</div>
       </div>`;
+      if(L.fcRepos) h+=`<p class="rap-note">FC de repos : ${L.fcRepos.moyenne} bpm en moyenne, sur ${L.fcRepos.n} mesure${L.fcRepos.n>1?'s':''} synchronisée${L.fcRepos.n>1?'s':''}.</p>`;
+      if(L.vfc) h+=`<p class="rap-note">Variabilité cardiaque (${_libVfc(L.vfc.methode)}) : ${L.vfc.moyenne} ms en moyenne, sur ${L.vfc.n} mesure${L.vfc.n>1?'s':''} synchronisée${L.vfc.n>1?'s':''}.</p>`;
       if(L.regularite) h+=`<p class="rap-note">Couchers : ± ${L.regularite.ecart} min autour de ${_libHeure(L.regularite.moyenne)}, sur ${L.regularite.n} nuit${L.regularite.n>1?'s':''} horodatée${L.regularite.n>1?'s':''}.</p>`;
       h+=`<p class="rap-note">Objectifs en vigueur : ${sanNb(L.pas.objectif)} pas, ${sanHM(L.sommeil.objectif)} de sommeil. Les jours non renseignés ne sont pas comptés dans les moyennes.</p>`;
     }
@@ -68764,6 +70214,8 @@ function joursSansDonnees(u,jours){
 function _majPastilleLifestyle(){
   const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="lifestyle"]');
   if(!btn) return;
+  // SYNCHRONISÉ : les jours arrivent seuls, on ne les réclame plus.
+  if(typeof sanSyncActif==='function'&&sanSyncActif()){ _pastilleOnglet('lifestyle',0,c=>''); return; }
   const vides=joursSansDonnees(currentUser,7);
   const d=new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate()-1);
   const veilleVide=vides.indexOf(localISODate(d))>=0;
@@ -69947,6 +71399,8 @@ async function scheduleWoNotif(){
       hour:u._woReminderHour??18,
       days:u._woReminderDays||[],
       noms:_nomsSeancesParJour(u),
+      // « Record à portée : … », par jour : recalculé à chaque séance terminée.
+      records:(()=>{ try{ return _recordsAPorteeParJour(u); }catch(e){ return {}; } })(),
       fname:u.fname||'',
       lastNotifDate:null
     }),{headers:{'Content-Type':'application/json'}}));
@@ -70392,13 +71846,18 @@ function checkWoReminderToday(){
   // système seulement si le navigateur la propose.
   if(_appAuPremierPlan()) return;
   const _nomSeance=_nomSeanceDuJour(currentUser,todayApp)||'ta séance';
+  const _rap=texteRappelRecord(currentUser);
   if(_notifSupported()&&Notification.permission==='granted'){
     navigator.serviceWorker.ready.then(reg=>reg.showNotification('Séance du jour',{
-      body:(currentUser.fname||'')+', '+_nomSeance+' est au programme.',
+      body:(currentUser.fname||'')+', '+_nomSeance+' est au programme.'+(_rap?' '+_rap+'.':''),
       icon:'./icons/icon-192x192.png',badge:'./icons/icon-192x192.png',
       tag:'wo-reminder',requireInteraction:false,data:{url:'./?wo=1'}
     })).catch(()=>{});
   }
+}
+// Le texte « Record à portée : … » de la séance du jour, ou ''.
+function texteRappelRecord(u){
+  try{ return texteRecordAPortee(recordAPortee(u,seancePrevueDuJour(u))); }catch(e){ return ''; }
 }
 function showWoReminderBanner(){
   document.getElementById('wo-reminder-banner')?.remove();
@@ -70409,7 +71868,7 @@ function showWoReminderBanner(){
     <div style="font-size:var(--fs-2xl);flex-shrink:0">💪</div>
     <div style="flex:1;min-width:0">
       <div style="font-size:var(--fs-xs);font-weight:900;color:var(--green);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Séance du jour</div>
-      <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">C'est l'heure de t'entraîner ! Clique pour démarrer.</div>
+      <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(texteRappelRecord(currentUser)||'C\'est l\'heure de t\'entraîner ! Clique pour démarrer.')}</div>
     </div>
     <button onclick="event.stopPropagation();document.getElementById('wo-reminder-banner')?.remove()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-xl);cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1">✕</button>
   </div>`;
@@ -70566,8 +72025,8 @@ function etatInvitationNotif(u,supporte,permission){
 // locaux lisent pushPrefs avant chaque envoi. `acces` (fin d'accès) n'est
 // dans aucune case : il reste, et la carte le dit.
 const NOTIF_GROUPES=Object.freeze([
-  Object.freeze({cle:'seances',titre:'Mes séances et ma série',types:Object.freeze(['serie','badge','wrapped']),
-    detail:'un rappel avant chacune de tes séances, le jeudi à 18 h si ta série est en danger, le dimanche quand un badge est à une ou deux séances, et le 1er du mois ton mois en chiffres'}),
+  Object.freeze({cle:'seances',titre:'Mes séances et ma série',types:Object.freeze(['serie','badge','wrapped','retour','sante']),
+    detail:'un rappel avant chacune de tes séances, le jeudi à 18 h si ta série est en danger, le dimanche quand un badge est à une ou deux séances, le 1er du mois ton mois en chiffres, après une pause (7, 14 et 30 jours sans séance), et le matin si ta nuit n’est pas arrivée (synchronisation iPhone)'}),
   Object.freeze({cle:'coach',titre:'Mon coach',types:Object.freeze(['coach','bilan','defi']),
     detail:'quand ton coach répond à un bilan ou lance un défi, et le samedi si ton dernier bilan date de deux semaines'}),
   Object.freeze({cle:'invitations',titre:'Mes invitations',types:Object.freeze(['filleul']),
@@ -70732,7 +72191,9 @@ const PUSH_TYPES=Object.freeze([
   {cle:'wrapped',titre:'Ton mois en chiffres',txt:'Le 1er du mois, quand ton Wrapped est prêt.'},
   {cle:'defi',titre:'Défi dans le Canal',txt:'Quand ton coach lance un nouveau défi.'},
   {cle:'filleul',titre:'Filleul inscrit',txt:'Quand quelqu’un s’inscrit grâce à toi.'},
-  {cle:'acces',titre:'Fin de ton accès',txt:'Trois jours avant la fin de ton accès ou de ton abonnement.'}
+  {cle:'acces',titre:'Fin de ton accès',txt:'Trois jours avant la fin de ton accès ou de ton abonnement.'},
+  {cle:'retour',titre:'Après une pause',txt:'À 7, 14 et 30 jours sans séance : trois messages au plus, puis silence.'},
+  {cle:'sante',titre:'Données santé non reçues',txt:'Le matin, si la nuit n’est pas arrivée (iPhone). Deux rappels au plus, puis silence jusqu’à la prochaine réception.'}
 ]);
 // PURE. La clé base64url en octets — ce qu'attend applicationServerKey.
 function pushB64VersOctets(b64){
@@ -71341,6 +72802,14 @@ function finDePack(u,maintenant){
   if(j>0) return {etat:'bientot',jours:j,fin:fin};
   return {etat:'finie',jours:j,fin:fin};
 }
+// PURE. L'athlète est-il arrivé par un code ambassadeur qui porte l'offre de
+// lancement ? Le serveur (droits.offreAmb) d'abord ; le dossier en attendant
+// que la demande soit jugée.
+function offreAmbDemi(u){
+  if(!u||u.role==='coach') return false;
+  try{ const d=droitsDe(u); if(d.etat==='serveur'&&d.offreAmb==='ultime_demi') return true; }catch(e){}
+  return !!(u.ambassadeur&&u.ambassadeur.avantage==='ultime_demi');
+}
 // PURE. Le premier mois d'Ultime a moitie prix, apres un pack, UNE SEULE FOIS.
 //
 // ⚠ ELLE REND false TANT QUE LE PLAN PAYPAL N'EXISTE PAS. Annoncer 12,45 € et
@@ -71352,6 +72821,9 @@ function demiPremierMoisDispo(u,maintenant){
   try{ if(!planIdOffre('ultime_demi')) return false; }catch(e){ return false; }
   if(x.demiPackUtilise===true) return false;
   try{ const d=droitsDe(x); if(d.etat==='serveur'&&d.demiPackUtilise===true) return false; }catch(e){}
+  // L'OFFRE DE LANCEMENT d'un code ambassadeur « ultime_demi » : même demi-
+  // tarif, même unicité (demiPackUtilise).
+  if(offreAmbDemi(x)) return true;
   return finDePack(x,maintenant).etat!=='non';
 }
 // PURE. La phrase, selon le moment et selon ce qu'on sait encaisser.
@@ -71662,6 +73134,12 @@ const BADGES_ACQUIS=Object.freeze([
   // bouclé. « DÉFI RELEVÉ » N'EST PAS ICI : c'est un badge daté PAR DÉFI, hors
   // de la collection des cinquante (voir htmlDefisReleves).
   {id:'champion',nom:'CHAMPION',famille:'unique',palier:null,icone:'champion',condition:'Gagne un défi.',test:f=>f.champion},
+  // LE PARCOURS DE DÉMARRAGE : les sept étapes des 14 premiers jours. Seul
+  // NOM de l'app à dire « SOUS TENSION » sans « temps » devant — la clé,
+  // elle, dit parcours_ (voir PARCOURS_DEMARRAGE). Le visuel : badges-bruts/
+  // sous_tension.png, converti par scripts/badges.py (repli : FULL_SESSION).
+  {id:'parcours_sous_tension',nom:'SOUS TENSION',famille:'unique',palier:null,icone:'sous_tension',condition:'Termine le parcours Mise sous tension.',test:f=>f.parcoursFini,
+   lib:'Mise sous tension',phrase:'Toutes les étapes sont faites. Le courant passe.'},
   // ── LES SECRETS : heure et date LOCALES de l'appareil ───────────────
   {id:'aube',nom:'AUBE',famille:'secret',palier:null,icone:'aube',condition:'Lance une séance avant 6 h du matin.',indice:'Le fer est plus froid avant le lever du jour.',test:f=>f.aube},
   {id:'nuit',nom:'NUIT',famille:'secret',palier:null,icone:'nuit',condition:'Termine une séance après 23 h.',indice:'Certains s’entraînent quand la ville dort.',test:f=>f.nuit},
@@ -71669,7 +73147,7 @@ const BADGES_ACQUIS=Object.freeze([
   {id:'noel',nom:'NOËL',famille:'secret',palier:null,icone:'noel',condition:'Entraîne-toi un 25 décembre.',indice:'Un cadeau que personne d’autre ne t’offrira.',test:f=>f.noel},
   {id:'tempete',nom:'TEMPÊTE',famille:'secret',palier:null,icone:'tempete',condition:'Bats 3 records dans une même séance.',indice:'Quand ça tombe, ça tombe en rafale.',test:f=>f.tempete},
   {id:'foudre_serie',nom:'FOUDRE EN SÉRIE',famille:'secret',palier:null,icone:'foudre_serie',condition:'Bats au moins un record sur 3 séances d’affilée.',indice:'La foudre frappe parfois trois fois au même endroit.',test:f=>f.foudreSerie},
-  {id:'phenix',nom:'PHÉNIX',famille:'secret',palier:null,icone:'phenix',condition:'Reviens après 30 jours d’arrêt, puis valide 4 semaines.',indice:'Ce qui tombe peut renaître.',test:f=>f.phenix},
+  {id:'phenix',nom:'PHÉNIX NOIR',famille:'secret',palier:null,icone:'phenix',condition:'Reviens après 30 jours d’arrêt, puis valide 4 semaines.',indice:'Ce qui tombe peut renaître.',test:f=>f.phenix},
   {id:'palindrome',nom:'PALINDROME',famille:'secret',palier:null,icone:'palindrome',condition:'Soulève un tonnage de séance palindrome, 10 000 kg ou plus.',indice:'Un tonnage qui se lit dans les deux sens.',test:f=>f.palindrome},
   {id:'vendredi13',nom:'VENDREDI 13',famille:'secret',palier:null,icone:'vendredi13',condition:'Entraîne-toi un vendredi 13.',indice:'Il y a des jours où l’on ne croit pas à la chance.',test:f=>f.vendredi13},
   {id:'centurion',nom:'CENTURION',famille:'secret',palier:null,icone:'centurion',condition:'Valide 100 séries dans la même semaine.',indice:'Cent, sans compter.',test:f=>f.centurion}
@@ -71707,7 +73185,7 @@ const BADGE_REPLI=Object.freeze({
   sans_faute:'PERFECT',miroir:'PROGRESSION',cycles:'FULL_SESSION',carburant:'MONSTER',
   'premiere-seance':'NEW_LOAD','semaine-validee':'FULL_SESSION','premier-record':'NEW_RECORD',
   'premier-bilan':'PROGRESSION',fondateur:'PERSONAL_BEST',recruteur:'MULTIPLE_RECORDS',
-  mentor:'MULTIPLE_RECORDS',champion:'NO_MERCY',aube:'NEW_PERF',nuit:'NEW_PERF',
+  mentor:'MULTIPLE_RECORDS',champion:'NO_MERCY',parcours_sous_tension:'FULL_SESSION',aube:'NEW_PERF',nuit:'NEW_PERF',
   nouvel_an:'MONSTER',noel:'MONSTER',tempete:'NEW_PERF',foudre_serie:'NEW_PERF',
   phenix:'RETURN',palindrome:'NO_FAIL',vendredi13:'NO_MERCY',centurion:'HIGH_VOLUME'
 });
@@ -71755,7 +73233,7 @@ function _badgesFaits(u,maintenant){
   const f={seances:ses.map(s=>s.date),records:[],semaines:[],sansFaute:[],
     bilans:[],cycles:[],journal:[],tonnageTotal:0,serieCourante:0,
     aube:0,nuit:0,nouvelAn:0,noel:0,tempete:0,foudreSerie:0,phenix:0,
-    palindrome:0,vendredi13:0,centurion:0,fondateur:0};
+    palindrome:0,vendredi13:0,centurion:0,fondateur:0,parcoursFini:0};
   const premier=(k,v)=>{ if(!f[k]) f[k]=v; };
   // Les séances passent dans l'ordre ; on retient au passage tout ce qui se
   // lit séance par séance.
@@ -71876,6 +73354,8 @@ function _badgesFaits(u,maintenant){
   const dr=(u&&u.defisReleves&&typeof u.defisReleves==='object')?Object.keys(u.defisReleves).map(k=>u.defisReleves[k]).filter(Boolean):[];
   const dc=dr.filter(x=>x.champion).map(x=>Number(x.fin)||Number(x.termineLe)||0).filter(x=>x>0).sort((a,b)=>a-b);
   f.champion=dc[0]||0;
+  // Le parcours « Mise sous tension » : sa date de fin (jamais pour un compte existant).
+  f.parcoursFini=(u&&u.parcours&&!u.parcours.existant&&Number(u.parcours.fini)>0)?Number(u.parcours.fini):0;
   return f;
 }
 // Les exercices d'une séance, qu'elle soit écrite en `data` (nom → séries,
@@ -71938,10 +73418,10 @@ function majBadges(o){
   for(const x of nouveaux) u.badges[x.id]={at:(x.at>0?x.at:t)};
   try{ saveUser(); }catch(e){}
   const neufs=nouveaux.map(x=>x.id);
-  // LA CÉLÉBRATION : un écran par badge, trois au plus, puis un
-  // récapitulatif. Au RATTRAPAGE (mise à jour), le récapitulatif seul : un
-  // athlète ancien en reçoit parfois vingt d'un coup, et vingt écrans à la
-  // file seraient du bruit — le détail attend dans le profil.
+  // LA CÉLÉBRATION : le plus rare de la séance a l'écran plein (BDG_ECRAN_MAX),
+  // le reste va dans « Tes trophées du jour ». Au RATTRAPAGE (mise à jour),
+  // le récapitulatif seul, sans foudre : un athlète ancien en reçoit parfois
+  // vingt d'un coup — le détail attend dans le profil.
   try{ _celebrerBadges(neufs,!!(o&&o.rattrapage)); }catch(e){}
   return neufs;
 }
@@ -72024,52 +73504,216 @@ function _bdgLong(b){ return !!b&&(b.palier===4||b.famille==='secret'); }
 // vibration. Palier IV et secrets : la rotation dure plus longtemps, et des
 // arcs électriques tournent autour du médaillon pendant deux secondes.
 //
-// PLUSIEURS BADGES : un écran par badge, trois au plus, puis un récapitulatif
-// des autres. « Plus tard » passe au suivant ; chaque badge reste partageable
-// depuis sa fiche dans « Mes badges ».
+// PLUSIEURS ÉVÉNEMENTS : UN SEUL écran plein, le plus rare (bdgRarete) ; les
+// autres dans le carrousel « Tes trophées du jour » sous l'écran de fin.
+// Chaque badge reste partageable depuis sa fiche dans « Mes badges ».
 //
-// LE RATTRAPAGE (mise à jour) ne joue que le récapitulatif : vingt badges
-// d'un historique ancien ne sont pas vingt événements d'aujourd'hui.
+// LE RATTRAPAGE (mise à jour) ne joue que le récapitulatif, sans foudre :
+// vingt badges d'un historique ancien ne sont pas vingt événements d'aujourd'hui.
 //
 // ⚠ CE N'EST PLUS UN BANDEAU SANS CONSÉQUENCE : l'écran prend la main, et
 // c'est voulu. Il se ferme par « Plus tard », par Échap, et il n'arrive
 // jamais PENDANT une série : majBadges n'est appelée qu'en fin de séance, en
 // fin de bilan et à l'ouverture de l'accueil.
-const BDG_ECRAN_MAX=3;
+// ══ UN SEUL ÉCRAN PLEIN PAR SÉANCE (28/09/2026) ═══════════════════════
+// Une séance peut tout débloquer d'un coup : un palier de série, trois
+// badges, un rang, un défi. Cinq écrans à la file, cinq foudres, et plus
+// rien ne se lit. Ce qui arrive ensemble (la file _bdgFile se remplit dans
+// la même seconde : updateStreak, majBadges, majXp) est donc CLASSÉ PAR
+// RARETÉ (bdgRarete) : le plus rare a l'écran plein et la foudre ; le reste
+// part dans le carrousel « Tes trophées du jour », sous l'écran de fin
+// (vignettes, Partager, fiche au toucher), sans foudre.
+// UNE VAGUE dure deux minutes : ce qui arrive juste après le premier écran
+// (un rang calculé un peu plus tard) rejoint le carrousel au lieu d'ouvrir
+// un second écran.
+// LES RATTRAPAGES (mise à jour, badges d'un historique ancien) : un seul
+// récapitulatif, sans foudre.
+// LE RÉGLAGE « Célébrations : discrètes » : aucun écran plein, tout dans le
+// carrousel.
+const BDG_ECRAN_MAX=1;
+const BDG_VAGUE_MS=120e3;
 let _bdgFile=[], _bdgRecap=[], _bdgArcsRaf=null;
+let _bdgTrophees=[], _bdgVague={debut:0,ecrans:0}, _bdgCalme=false;
 // Point d'entrée. `ids` dans l'ordre de BADGES_ACQUIS ; `recapSeul` pour le
 // rattrapage.
 function _celebrerBadges(ids,recapSeul){
   const l=(ids||[]).filter(id=>badgeAcquisDef(id));
   if(!l.length) return;
   try{ chargerStatsBadges(); }catch(e){}
-  const p=_bdgPlan(l,recapSeul);
-  // À LA SUITE de ce qui attend déjà (un palier de série, par exemple).
-  _bdgFile=_bdgFile.concat(p.ecrans); _bdgRecap=_bdgRecap.concat(p.recap);
+  // À LA SUITE de ce qui attend déjà (un palier de série, par exemple) : le
+  // classement se fait au moment d'afficher, sur tout ce qui est arrivé.
+  if(recapSeul) _bdgRecap=_bdgRecap.concat(l); else _bdgFile=_bdgFile.concat(l);
   // Le délai laisse l'écran de fin de séance se poser : deux mouvements en
   // même temps ne se lisent ni l'un ni l'autre.
   _bdgPlanifier();
 }
-// PURE. L'enchaînement : les écrans (trois au plus), puis le récapitulatif
-// de ce qui reste. Au rattrapage, le récapitulatif seul.
-function _bdgPlan(ids,recapSeul){
-  const l=(ids||[]).slice();
-  if(recapSeul) return {ecrans:[],recap:l};
-  return {ecrans:l.slice(0,BDG_ECRAN_MAX),recap:l.slice(BDG_ECRAN_MAX)};
-}
 // L'ancien nom, gardé pour ses appelants : un badge seul.
 function _celebrerBadge(id){ _celebrerBadges([id]); }
+/** 'completes' (défaut) ou 'discretes' : le réglage du profil. */
+function celebrationsMode(u){ return (u&&u.celebrations==='discretes')?'discretes':'completes'; }
+/**
+ * PURE (stats données). LA RARETÉ d'un événement de la file, de 0 à 100.
+ * Un secret découvert, puis un rang (plus il est haut, plus il est rare), un
+ * palier IV, les longues séries, CHAMPION ; un badge dont on connaît la
+ * rareté réelle (/stats/badges) est classé par elle, dans les bornes de son
+ * palier.
+ */
+function bdgRarete(x,stats){
+  if(x&&typeof x==='object'){
+    if(x.rang) return Math.min(99,88+Number(x.rang));
+    if(x.serie){ const n=Number(x.serie); return n>=52?92:n>=26?82:n>=12?68:n>=8?56:44; }
+    // Le retour au combat passe devant les paliers : il n'arrive qu'après une absence.
+    if(x.retour) return 90;
+    if(x.sous) return 30;
+    if(x.defi){ const r=(typeof currentUser!=='undefined'&&currentUser&&currentUser.defisReleves||{})[x.defi]; return r&&r.champion?84:60; }
+    return 0;
+  }
+  const b=badgeAcquisDef(x);
+  if(!b) return 0;
+  if(b.famille==='secret') return 100;
+  // Le badge du parcours ne se gagne qu'une fois dans une vie de compte : il
+  // passe devant un palier, derrière un secret.
+  if(b.id===PARCOURS_BADGE) return 95;
+  const base=b.palier?[0,30,42,58,86][b.palier]:50;
+  const s=stats||null;
+  const p=s&&s.pct&&Number(s.total)>0?Number(s.pct[x]):NaN;
+  if(!isFinite(p)) return base;
+  // La rareté réelle ajuste, sans faire passer un palier I devant un palier IV.
+  return Math.max(base-12,Math.min(base+12,Math.round(100-p)));
+}
+/** PURE. La file triée : le plus rare d'abord, l'ordre d'arrivée à égalité. */
+function bdgPrioriser(items,stats){
+  return (items||[]).map((x,i)=>({x,i,r:bdgRarete(x,stats)})).sort((a,b)=>b.r-a.r||a.i-b.i).map(o=>o.x);
+}
+/** PURE. {ecrans, trophees} : `dejaMontres` écrans pleins déjà vus dans la vague. */
+function bdgRepartir(items,mode,dejaMontres,stats){
+  const p=bdgPrioriser(items,stats);
+  const n=mode==='discretes'?0:Math.max(0,BDG_ECRAN_MAX-(Number(dejaMontres)||0));
+  return {ecrans:p.slice(0,n),trophees:p.slice(n)};
+}
+function _bdgAfficher(x,reste){
+  if(x&&typeof x==='object'&&x.retour) _retourEcran(x.retour,reste);
+  else if(x&&typeof x==='object'&&x.serie) _serieEcran(x.serie,reste);
+  else if(x&&typeof x==='object'&&x.rang) _rangEcran(x.rang,reste);
+  else if(x&&typeof x==='object'&&x.defi) _defiEcran(x.defi,reste);
+  else _bdgEcran(x,reste);
+}
 function _bdgSuivant(){
   _bdgFermerEcran(true);
+  _bdgCalme=false;
   if(_bdgFile.length){
-    const x=_bdgFile.shift();
-    if(x&&typeof x==='object'&&x.serie) _serieEcran(x.serie,_bdgFile.length);
-    else if(x&&typeof x==='object'&&x.rang) _rangEcran(x.rang,_bdgFile.length);
-    else if(x&&typeof x==='object'&&x.defi) _defiEcran(x.defi,_bdgFile.length);
-    else _bdgEcran(x,_bdgFile.length);
-    return;
+    const t=Date.now();
+    if(t-_bdgVague.debut>BDG_VAGUE_MS) _bdgVague={debut:t,ecrans:0};
+    let st=null; try{ st=_statsBadgesLocales(); }catch(e){ st=null; }
+    const r=bdgRepartir(_bdgFile,celebrationsMode(typeof currentUser!=='undefined'?currentUser:null),_bdgVague.ecrans,st);
+    _bdgFile=[];
+    if(r.trophees.length) _bdgAjouterTrophees(r.trophees);
+    if(r.ecrans.length){ _bdgVague.ecrans++; _bdgAfficher(r.ecrans[0],0); return; }
   }
   if(_bdgRecap.length){ const r=_bdgRecap; _bdgRecap=[]; _bdgEcranRecap(r); }
+}
+// La foudre des écrans de célébration — sauf quand l'écran est rouvert
+// depuis le carrousel (la fiche : on relit, on ne refête pas).
+function _bdgFoudre(el,o){ if(_bdgCalme) return null; return rcFoudre(el,o); }
+// ── Le carrousel « Tes trophées du jour » ─────────────────────────────────
+// Sous l'écran de fin de séance (après les volts). Ailleurs (l'accueil, un
+// résultat de défi arrivé du serveur), le récapitulatif, sans foudre.
+function _bdgAjouterTrophees(items){
+  const ancre=document.getElementById('wd-volts');
+  const finVisible=!!(ancre&&ancre.isConnected&&ancre.closest('.screen.active'));
+  if(!finVisible){ _bdgRecap=_bdgRecap.concat(items); return false; }
+  _bdgTrophees=_bdgTrophees.concat(items);
+  let z=document.getElementById('wd-trophees');
+  if(!z){ z=document.createElement('div'); z.id='wd-trophees'; ancre.insertAdjacentElement('afterend',z); }
+  z.innerHTML=htmlTropheesDuJour(_bdgTrophees);
+  return true;
+}
+// PURE (sauf le dossier pour les défis). La vignette d'un trophée : {img, nom, sur}.
+function tropheeVignette(x,u){
+  if(x&&typeof x==='object'){
+    if(x.serie) return {img:'<span class="tr-chiffre">'+Number(x.serie)+'</span>',nom:Number(x.serie)+' semaines',sur:'Palier de série'};
+    if(x.retour) return {img:'<img src="'+escapeHtml(_badgeFichier('RETURN'))+'" alt="">',nom:'Retour au combat',sur:Number(x.retour.jours)+' jours d’absence'};
+    if(x.sous) return {img:'<span class="tr-sous"><img src="'+rangEmbleme(x.sous.rang)+'" alt="" decoding="async">'+htmlChevrons(x.sous.n,'tr-chev')+'</span>',nom:String(x.sous.nom||''),sur:'Nouveau sous-niveau'};
+    if(x.rang){ const r=RANGS[Math.max(0,Math.min(RANGS.length-1,Number(x.rang)-1))];
+      return {img:'<img src="'+rangEmbleme(r.n)+'" alt="" data-rang="'+r.n+'" decoding="async">',nom:r.nom,sur:'Nouveau rang'}; }
+    if(x.defi){ const res=((u&&u.defisReleves)||{})[x.defi]||{};
+      return {img:'<span class="tr-chiffre">⚡</span>',nom:String(res.titre||'Défi'),sur:res.champion?'Champion':'Défi relevé'}; }
+    return {img:'',nom:'',sur:''};
+  }
+  const b=badgeAcquisDef(x);
+  return {img:b?_htmlBadgeImg(x):'',nom:b?b.nom:'',sur:b&&b.famille==='secret'?'Badge secret':'Badge'};
+}
+function htmlTropheesDuJour(items){
+  const l=(items||[]);
+  if(!l.length) return '';
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  return '<div class="tr-carrousel"><div class="tr-t">Tes trophées du jour <span class="bdg-compte">'+l.length+'</span></div>'
+    +'<div class="tr-liste" role="list">'+l.map((x,i)=>{
+      const v=tropheeVignette(x,u);
+      return '<div class="tr-v" role="listitem">'
+        +'<button type="button" class="tr-fiche" onclick="ouvrirTrophee('+i+')" aria-label="'+escapeHtml(v.sur+' : '+v.nom)+'">'
+        +'<span class="tr-img">'+v.img+'</span><span class="tr-sur">'+escapeHtml(v.sur)+'</span><span class="tr-nom">'+escapeHtml(v.nom)+'</span></button>'
+        +'<button type="button" class="tr-part" onclick="partagerTrophee('+i+',this)">'+icon('share',12)+' <span>Partager</span></button></div>';
+    }).join('')+'</div></div>';
+}
+// LA FICHE, au toucher : celle du badge, ou l'écran du trophée SANS FOUDRE.
+function ouvrirTrophee(i){
+  const x=_bdgTrophees[i];
+  if(x==null) return false;
+  if(typeof x==='string') return ouvrirFicheBadge(x);
+  _bdgFermerEcran(true);
+  _bdgCalme=true;
+  _bdgAfficher(x,0);
+  return true;
+}
+// LE PARTAGE direct, depuis la vignette. SYNCHRONE jusqu'au partage (iOS).
+function partagerTrophee(i,btn){
+  const x=_bdgTrophees[i];
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(x==null||!u) return false;
+  if(x&&typeof x==='object'&&x.serie){ _serieCourante=serieCarteDonnees(u,x.serie); return partagerSerie(btn); }
+  if(x&&typeof x==='object'&&x.defi) return partagerDefi(x.defi,btn);
+  if(_storyEnCours) return false;
+  const v=btn&&btn.closest?btn.closest('.tr-v'):null;
+  const img=v?v.querySelector('img'):null;
+  const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond);
+  let dessin=null, nom='';
+  if(x&&typeof x==='object'&&x.rang){
+    _rangCourant=rangCarteDonnees(u,x.rang);
+    dessin=()=>_dessinerCarteRang(_rangCourant,fond,img&&img.complete&&img.naturalWidth?img:null);
+    nom=visuelNomFichier('repcore-rang',fond);
+  } else {
+    if(!img||!img.complete||!img.naturalWidth){ toast('Le visuel se charge, réessaie dans un instant.','var(--orange)'); return false; }
+    dessin=()=>_bdgCarteDe(x,fond,img);
+    nom=visuelNomFichier('repcore-badge',fond);
+  }
+  _storyEnCours=true;
+  let ok=false;
+  try{ ok=_storySortirPartage(dessin(),nom,undefined,fmt)||_storySortirTelechargement(dessin(),nom,fmt); }
+  catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
+  finally{ _storyEnCours=false; }
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp&&ok){ sp.textContent='Prêt ✓'; setTimeout(()=>{ sp.textContent='Partager'; },2000); }
+  return ok;
+}
+// ── Le réglage « Célébrations » (profil) ──────────────────────────────────
+function htmlReglageCelebrations(u){
+  if(!u||u.role==='coach') return '';
+  const m=celebrationsMode(u);
+  const b=(k,l,s)=>'<button type="button" class="cel-b'+(m===k?' actif':'')+'" role="radio" aria-checked="'+(m===k)+'" onclick="celebrationsChoisir(\''+k+'\')">'+l+'<small>'+s+'</small></button>';
+  return '<div class="card cel-carte"><div class="pp-titre">Célébrations</div>'
+    +'<div class="cel-choix" role="radiogroup" aria-label="Célébrations">'
+    +b('completes','Complètes','Un écran plein pour le plus rare')
+    +b('discretes','Discrètes','Tout dans « Tes trophées du jour »')
+    +'</div></div>';
+}
+function celebrationsChoisir(k){
+  const u=currentUser;
+  if(!u||(k!=='completes'&&k!=='discretes')) return false;
+  u.celebrations=k;
+  try{ saveUser(); }catch(e){}
+  const z=document.getElementById('atp-celebrations'); if(z) z.innerHTML=htmlReglageCelebrations(u);
+  return true;
 }
 function _bdgCouche(html,etiquette){
   const z=document.createElement('div');
@@ -72144,12 +73788,12 @@ function _bdgJouer(z,b,long){
   if(arcReduit()){
     // Rien ne tourne, rien ne frappe : le flash doux de rcFoudre et la
     // vibration, puis tout est là.
-    try{ rcFoudre(med,{son:false}); }catch(e){}
+    try{ _bdgFoudre(med,{son:false}); }catch(e){}
     return;
   }
   _animer(z,[{opacity:0},{opacity:1}],{duration:120,easing:'linear'});
   // La foudre frappe le centre ; le médaillon naît dans le flash (t≈40 ms).
-  try{ rcFoudre(med,{eclairs:long?3:2,conteneur:z}); }catch(e){}
+  try{ _bdgFoudre(med,{eclairs:long?3:2,conteneur:z}); }catch(e){}
   const tours=long?2:1, duree=long?1600:900;
   _animer(med,[
     {transform:'perspective(900px) rotateY('+(-360*tours-180)+'deg) scale(.25)',opacity:0,offset:0},
@@ -72212,18 +73856,15 @@ function _bdgEcranRecap(ids){
     '<div class="bdg-ecran-txt bdg-ecran-recap">'
     +'<div class="bdg-ecran-sur">'+(n>1?'NOUVEAUX BADGES':'NOUVEAU BADGE')+'</div>'
     +'<h2 class="bdg-ecran-nom">Tu as débloqué '+n+' badge'+(n>1?'s':'')+'</h2>'
-    +'<div class="bdg-ecran-grille">'+vus.map(id=>'<div>'+_htmlBadgeImg(id)
-      +'<span>'+escapeHtml(badgeAcquisDef(id).nom)+'</span></div>').join('')+'</div>'
+    +'<div class="bdg-ecran-grille">'+vus.map(x=>{ const v=tropheeVignette(x,currentUser);
+      return '<div>'+v.img+'<span>'+escapeHtml(v.nom)+'</span></div>'; }).join('')+'</div>'
     +(n>vus.length?'<div class="bdg-ecran-meta">et '+(n-vus.length)+' autre'+(n-vus.length>1?'s':'')+'</div>':'')
     +'<p class="bdg-ecran-cond">Retrouve-les dans ton profil, avec la date de chacun, et partage-les depuis leur fiche.</p>'
     +'<button type="button" class="btn btn-red bdg-ecran-tard" onclick="bdgPlusTard()">Voir plus tard</button>'
     +'</div>',
     'Tu as débloqué '+n+' badges');
-  if(!arcReduit()){
-    _animer(z,[{opacity:0},{opacity:1}],{duration:160,easing:'linear'});
-    try{ rcFoudre(z.querySelector('.bdg-ecran-grille'),{eclairs:2}); }catch(e){}
-  }
-  try{ arcHaptique('succes'); }catch(e){}
+  // SANS FOUDRE : un rattrapage n'est pas un événement d'aujourd'hui.
+  if(!arcReduit()) _animer(z,[{opacity:0},{opacity:1}],{duration:160,easing:'linear'});
   try{ const p=z.querySelector('.bdg-ecran-tard'); if(p) p.focus({preventScroll:true}); }catch(e){}
 }
 // Le visuel de partage d'un badge, pour un fond : ce que dessinent les
@@ -72301,6 +73942,8 @@ function htmlMesBadges(u,maintenant){
     +cases(BADGES_ACQUIS.filter(b=>b.famille==='unique'),false)+'</div>';
   h+='<div class="bdg-sous">Secrets</div><div class="bdg-grille bdg-grille-5">'
     +cases(BADGES_ACQUIS.filter(b=>b.famille==='secret'),true)+'</div>';
+  // Les éditions : bouclées, en cours, et « Plus jamais disponible ».
+  try{ h+=htmlEditions(u,_saisonsDuCache(),t); }catch(e){}
   h+=htmlDefisReleves(u);
   return h;
 }
@@ -74265,10 +75908,10 @@ function _serieEcran(n,reste){
     d.semaines+' semaines d’affilée');
   try{ monterSelecteurFond('serie-fonds',f=>_dessinerCarteSerie(_serieCourante||d,f),null); }catch(e){}
   const ch=z.querySelector('#serie-chiffre');
-  if(arcReduit()){ try{ rcFoudre(ch,{son:false}); }catch(e){} }
+  if(arcReduit()){ try{ _bdgFoudre(ch,{son:false}); }catch(e){} }
   else{
     _animer(z,[{opacity:0},{opacity:1}],{duration:120,easing:'linear'});
-    try{ rcFoudre(ch,{eclairs:n>=26?3:2,conteneur:z}); }catch(e){}
+    try{ _bdgFoudre(ch,{eclairs:n>=26?3:2,conteneur:z}); }catch(e){}
     _animer(ch,[{transform:'scale(.3)',opacity:0},{transform:'scale(1.12)',opacity:1,offset:.6},{transform:'scale(1)',opacity:1}],
       {duration:700,delay:40,easing:ARC.snap,fill:'backwards'});
     z.querySelectorAll('.serie-cal i').forEach((c,i)=>_animer(c,[{opacity:0,transform:'scale(.2)'},{opacity:1,transform:'scale(1)'}],
@@ -74385,7 +76028,8 @@ const XP_ACTIONS=Object.freeze({
   sommeil:5,           // nuit saisie
   semaine:150,         // semaine validée (le quota de séances atteint)
   badge:40,            // badge débloqué…
-  badgePalier4:200     // … sauf un palier IV
+  badgePalier4:200,    // … sauf un palier IV
+  checkin:10           // check-in du matin (dans le plafond du jour)
 });
 const XP_NUTRITION_MIN=3;
 // LE PLAFOND ANTI-TRICHE, par jour (jour local). Il porte sur tout ce qui se
@@ -74402,6 +76046,197 @@ const XP_PLAFOND_JOUR=400;
 // VOLTAGE ~1 mois, MACHINE ~2 mois, ÉLITE ~4 mois, SURTENSION ~6 mois,
 // MONSTRE ~9 mois, FOUDRE ~1 an, TITAN ~1 an et demi, LÉGENDE ~2 ans et demi.
 // Le test « Volts : la courbe tient le calendrier » rejoue cet athlète.
+// ══ LE PARCOURS DE DÉMARRAGE « MISE SOUS TENSION » (28/09/2026) ══════════
+//
+// Les premiers paliers de badges demandent dix séances ou cinq records : un
+// nouveau ne débloquait presque rien la première semaine, celle où tout se
+// joue. Sept étapes, chacune avec ses volts, à faire dans les 14 premiers
+// jours ; toutes faites, le badge unique SOUS TENSION (écran plein, carte
+// partageable).
+//
+// ⚠ « SOUS TENSION » EXISTE DÉJÀ DANS L'APP : le TEMPS SOUS TENSION d'une
+//   série (champ `tut`, TUT_MIN_S…), et le titre de la carte des charges
+//   (« Dos et jambes sous tension »). Tout ce qui appartient au parcours porte
+//   donc le préfixe PARCOURS / parcours_ (u.parcours, parcours_sous_tension,
+//   parcours_j21) et le libellé « Mise sous tension » ; seul le NOM du badge
+//   dit « SOUS TENSION ». Le test « Parcours : aucun libellé ne se mélange »
+//   le vérifie.
+//
+// LES VOLTS DU PARCOURS ne comptent pas dans le plafond du jour et ne se
+// gagnent qu'une fois : l'étape est DATÉE dans u.parcours.etapes à sa
+// première réussite, et xpCalcul les ajoute à part (cat.parcours). La 1re
+// séance et la 1re semaine validée rapportent déjà leurs volts ordinaires
+// (130 V et 150 V) : leur étape n'en ajoute pas.
+//
+// LES COMPTES EXISTANTS (créés avant PARCOURS_DEPUIS) : parcours considéré
+// comme terminé, sans carte, sans volts, sans badge — pas de rétro-célébration.
+//
+// L'ESSAI : au 21e jour de l'essai, si le parcours n'est pas fini, le serveur
+// léger envoie « encore N étapes » (push de type serie). L'app tient à jour
+// /parcours_j21/<jour J21>/<moi> = le nombre d'étapes restantes ; le Worker
+// ne lit que la liste du jour.
+const PARCOURS_DEPUIS=Date.parse('2026-09-28T00:00:00+02:00');
+const PARCOURS_JOURS=14;
+const PARCOURS_BADGE='parcours_sous_tension';
+const PARCOURS_DEMARRAGE=Object.freeze([
+  Object.freeze({cle:'premiere_seance',lib:'Termine ta 1re séance',volts:0,test:(u,f)=>f.seances.length>=1}),
+  Object.freeze({cle:'premier_record',lib:'Bats un 1er record',volts:50,test:(u,f)=>f.records.length>=1}),
+  Object.freeze({cle:'profil',lib:'Complète ton profil : une photo ou un pseudo',volts:50,
+    test:u=>!!(u&&(u.athletePhoto||String(u.pseudo||'').trim())),action:'openAthleteProfile()',bouton:'Compléter mon profil'}),
+  Object.freeze({cle:'notifications',lib:'Active les notifications',volts:50,
+    test:(u,f,env)=>!!(env&&env.notif),action:'parcoursActiverNotifs(this)',bouton:'Activer'}),
+  Object.freeze({cle:'deuxieme_seance',lib:'Fais ta 2e séance',volts:50,test:(u,f)=>f.seances.length>=2}),
+  Object.freeze({cle:'premiere_semaine',lib:'Valide ta 1re semaine',volts:0,test:(u,f)=>f.semaines.length>=1}),
+  Object.freeze({cle:'inviter',lib:'Invite un pote',volts:100,parrainage:true,
+    test:u=>!!(u&&u.parcours&&u.parcours.invite)||Number(u&&u.parrainage&&u.parrainage.inscrits)>0,
+    action:'inviterUnPote(this)',bouton:'Inviter un pote'})
+]);
+/** PURE. Les étapes : « inviter un pote » seulement si le parrainage est actif. */
+function parcoursEtapes(actif){
+  const on=(typeof actif==='boolean')?actif:PARRAINAGE_ACTIF;
+  return PARCOURS_DEMARRAGE.filter(e=>!e.parrainage||on);
+}
+// Les notifications sont-elles actives sur cet appareil ?
+function _parcoursNotifActives(u){
+  try{ return !!(u&&!u.pushRefus&&typeof Notification!=='undefined'&&Notification.permission==='granted'&&_pushMemo()); }
+  catch(e){ return false; }
+}
+/**
+ * PURE (horloge et environnement donnés, écrit dans u). Pose le parcours
+ * d'un compte qui n'en a pas (existant : terminé d'office), date les étapes
+ * réussies, et le termine. Rend {nouvelles:[cles], fini:bool (à l'instant)}.
+ */
+function majParcours(u,maintenant,env){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(!u||u.role==='coach') return {nouvelles:[],fini:false};
+  if(!u.parcours||typeof u.parcours!=='object'){
+    const ses=((u.sessions)||[]).filter(s=>s&&s.date>0).map(s=>Number(s.date));
+    const cree=Math.min(Number(u.createdAt)||Infinity,Number(u.essai&&u.essai.ouvertLe)||Infinity,ses.length?Math.min(...ses):Infinity);
+    // Aucune date : un compte qui vient de naître.
+    if(!isFinite(cree)) u.parcours={debut:t,etapes:{}};
+    else u.parcours=cree<PARCOURS_DEPUIS?{existant:true,fini:t,debut:cree}:{debut:cree,etapes:{}};
+  }
+  const p=u.parcours;
+  if(p.existant||p.fini) return {nouvelles:[],fini:false};
+  p.etapes=(p.etapes&&typeof p.etapes==='object')?p.etapes:{};
+  let f; try{ f=_badgesFaits(u,t); }catch(e){ return {nouvelles:[],fini:false}; }
+  const e=Object.assign({notif:_parcoursNotifActives(u)},env||{});
+  const nouvelles=[];
+  for(const x of parcoursEtapes()){
+    if(p.etapes[x.cle]) continue;
+    let ok=false; try{ ok=!!x.test(u,f,e); }catch(er){ ok=false; }
+    if(ok){ p.etapes[x.cle]=t; nouvelles.push(x.cle); }
+  }
+  const total=parcoursEtapes().length;
+  p.total=total;
+  const fini=parcoursEtapes().every(x=>p.etapes[x.cle]);
+  if(fini) p.fini=t;
+  return {nouvelles,fini};
+}
+/** PURE. Les volts du parcours (hors plafond, une fois) : 0 pour un compte existant. */
+function parcoursVolts(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Infinity;
+  const p=u&&u.parcours;
+  if(!p||p.existant||!p.etapes) return 0;
+  return PARCOURS_DEMARRAGE.reduce((a,x)=>a+((Number(p.etapes[x.cle])>0&&Number(p.etapes[x.cle])<=t)?x.volts:0),0);
+}
+/** PURE. Faite, sur combien : {faites, total, prochaine}. */
+function parcoursEtat(u){
+  const l=parcoursEtapes(), p=(u&&u.parcours)||{};
+  const et=p.etapes||{};
+  const faites=l.filter(x=>et[x.cle]).length;
+  return {faites,total:l.length,prochaine:l.find(x=>!et[x.cle])||null};
+}
+/** PURE. La carte se montre-t-elle ? 14 jours, ou jusqu'à la fin. */
+function parcoursVisible(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const p=u&&u.parcours;
+  if(!p||p.existant||p.fini||!u||u.role==='coach') return false;
+  // Rouverte par le rappel du 21e jour : trois jours de plus.
+  if(Number(p.relance)>0&&t-Number(p.relance)<3*864e5) return true;
+  return t-(Number(p.debut)||t)<PARCOURS_JOURS*864e5;
+}
+// PURE. La carte « Mise sous tension · 3/7 ».
+function htmlParcoursAccueil(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(!parcoursVisible(u,t)) return '';
+  const e=parcoursEtat(u), p=u.parcours, et=p.etapes||{};
+  const j=Math.max(1,Math.min(PARCOURS_JOURS,Math.floor((t-Number(p.debut))/864e5)+1));
+  const x=e.prochaine;
+  return '<div class="mst-carte" role="region" aria-label="Mise sous tension">'
+    +'<div class="mst-tete"><b>Mise sous tension · '+e.faites+'/'+e.total+'</b><span>Jour '+j+'/'+PARCOURS_JOURS+'</span></div>'
+    +'<div class="mst-points" aria-hidden="true">'+parcoursEtapes().map(y=>'<i class="'+(et[y.cle]?'on':'')+'"></i>').join('')+'</div>'
+    +(x?'<div class="mst-suite"><span>'+escapeHtml(x.lib)+(x.volts?' <em>+'+x.volts+' V</em>':'')+'</span>'
+      +(x.action?'<button type="button" class="btn btn-red btn-sm mst-b" onclick="'+x.action+'">'+escapeHtml(x.bouton||'Y aller')+'</button>':'')+'</div>':'')
+    +'<div class="mst-note">Les '+e.total+' étapes débloquent le badge SOUS TENSION.</div></div>';
+}
+function _rendreParcours(u){
+  const z=document.getElementById('clh-parcours');
+  if(!z) return false;
+  z.innerHTML=htmlParcoursAccueil(u,Date.now());
+  return !!z.innerHTML;
+}
+// Le parcours avance hors séance (profil, notifications, invitation) : on
+// le relit, et s'il vient de finir, le badge est fêté (écran plein).
+function parcoursAvancer(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u) return null;
+  const r=majParcours(u);
+  if(r.nouvelles.length){ try{ saveUser(); }catch(e){} }
+  if(r.fini){ try{ majBadges(); }catch(e){} try{ majXp(); }catch(e){} }
+  try{ _rendreParcours(u); }catch(e){}
+  parcoursEcrireJ21(u).catch(()=>{});
+  return r;
+}
+// Le push du 21e jour ouvre l'app : la carte, cachée après 14 jours, revient.
+function parcoursRelancer(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||!u.parcours||u.parcours.existant||u.parcours.fini) return false;
+  u.parcours.relance=Date.now();
+  try{ saveUser(); }catch(e){}
+  try{ _rendreParcours(u); }catch(e){}
+  return true;
+}
+async function parcoursActiverNotifs(btn){
+  if(btn) btn.disabled=true;
+  try{ await pushActiverDepuisReglages(); }catch(e){}
+  if(btn) btn.disabled=false;
+  parcoursAvancer();
+  return true;
+}
+// ── Le rappel du 21e jour de l'essai ──────────────────────────────────────
+/** PURE. Le jour J21 (AAAA-MM-JJ) de l'essai, ou ''. */
+function parcoursJourJ21(u){
+  const o=Number(u&&u.essai&&u.essai.ouvertLe);
+  if(!(o>0)) return '';
+  try{ return localISODate(new Date(o+21*864e5)); }catch(e){ return ''; }
+}
+async function parcoursEcrireJ21(u){
+  if(!SERVEUR_LEGER||!u||!u.email||!u.parcours||u.parcours.existant||!CLOUD.ok()) return false;
+  const jour=parcoursJourJ21(u);
+  if(!jour) return false;
+  const e=parcoursEtat(u);
+  const v=u.parcours.fini?null:Math.max(1,e.total-e.faites);
+  if(u.parcours.j21===v||(v===null&&u.parcours.j21==null&&u.parcours.j21Ecrit)) return false;
+  const token=await CLOUD._getToken();
+  if(!token) return false;
+  const moi=String(u.email).replace(/\./g,',');
+  const r=await fetch(CLOUD._fbUrl.replace('users.json','parcours_j21/'+jour+'/'+moi+'.json')+'?auth='+token,
+    {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(v)}).catch(()=>null);
+  if(r&&r.ok){ u.parcours.j21=v; u.parcours.j21Ecrit=true; try{ saveUser(); }catch(er){} return true; }
+  return false;
+}
+// Une invitation partie (lien de parrainage, carte, duel) : l'étape
+// « Invite un pote » est faite — on ne peut pas savoir si le message a été
+// envoyé, le partage ouvert suffit.
+function parcoursInvitation(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||!u.parcours||u.parcours.existant||u.parcours.fini||u.parcours.invite) return false;
+  u.parcours.invite=Date.now();
+  try{ parcoursAvancer(); }catch(e){}
+  return true;
+}
+
 const RANGS=Object.freeze([
   {n:1, nom:'ÉTINCELLE', seuil:0},
   {n:2, nom:'IMPULSION', seuil:1800},
@@ -74427,6 +76262,127 @@ function rangDe(xp){
   const part=suivant?Math.max(0,Math.min(1,(v-rang.seuil)/(suivant.seuil-rang.seuil))):1;
   return {rang,suivant,part,reste:suivant?Math.max(0,suivant.seuil-v):0,xp:v};
 }
+// ══ LES SOUS-NIVEAUX I / II / III (28/09/2026) ═════════════════════════
+// Après ÉLITE, six mois et plus sans rien entre deux rangs : chaque
+// intervalle de RANGS, À PARTIR DE VOLTAGE, est coupé en trois sous-niveaux
+// égaux. Le passage se fête petit — un toast et une petite foudre, jamais un
+// écran plein — et s'inscrit dans « Tes trophées du jour ». Les chevrons
+// (1, 2 ou 3) sont DESSINÉS sous l'emblème : aucune image nouvelle.
+// LÉGENDE, le dernier rang, n'a pas de borne haute : pas de sous-niveau.
+const SOUS_NIVEAU_DES=3;                  // VOLTAGE
+const SOUS_ROMAINS=Object.freeze(['I','II','III']);
+/** PURE. Le sous-niveau d'un total, ou null (avant VOLTAGE, et LÉGENDE). */
+function sousNiveauDe(xp){
+  const r=rangDe(xp);
+  if(r.rang.n<SOUS_NIVEAU_DES||!r.suivant) return null;
+  // Les bornes, arrondies au volt : ce sont ELLES qui font foi (affichées et comparées).
+  const w=(r.suivant.seuil-r.rang.seuil)/3;
+  const b=[r.rang.seuil,Math.round(r.rang.seuil+w),Math.round(r.rang.seuil+2*w),r.suivant.seuil];
+  const k=r.xp>=b[2]?2:(r.xp>=b[1]?1:0);
+  const de=b[k], a=b[k+1];
+  return {n:k+1,lib:SOUS_ROMAINS[k],de,a,part:Math.max(0,Math.min(1,(r.xp-de)/(a-de))),
+    vers:k<2?(r.rang.nom+' '+SOUS_ROMAINS[k+1]):r.suivant.nom};
+}
+/** PURE. « MONSTRE II », ou le nom du rang seul. */
+function nomRangComplet(xp){
+  const r=rangDe(xp), s=sousNiveauDe(xp);
+  return r.rang.nom+(s?' '+s.lib:'');
+}
+/** PURE. Le code d'un niveau, pour comparer : rang × 10 + sous-niveau. */
+function niveauCode(xp){
+  const r=rangDe(xp), s=sousNiveauDe(xp);
+  return r.rang.n*10+(s?s.n:0);
+}
+/** PURE. 1, 2 ou 3 chevrons rouges, en SVG. */
+function htmlChevrons(n,classe){
+  const k=Math.max(0,Math.min(3,Math.round(Number(n)||0)));
+  if(!k) return '';
+  const W=k*8+2;
+  let p='';
+  for(let i=0;i<k;i++){ const x=1+i*8; p+='<path d="M'+x+' 6 L'+(x+3.5)+' 2 L'+(x+7)+' 6"/>'; }
+  return '<svg class="'+(classe||'rg-chev')+'" viewBox="0 0 '+W+' 8" width="'+W+'" height="8" aria-hidden="true" focusable="false">'
+    +'<g fill="none" stroke="#ff2a2a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+p+'</g></svg>';
+}
+// Le passage : toast, petite foudre sur l'en-tête, trophée du jour si la fin
+// de séance est à l'écran.
+function _celebrerSousNiveau(xp){
+  const nom=nomRangComplet(xp), s=sousNiveauDe(xp);
+  if(!s) return false;
+  try{ toast('⚡ '+nom+' · nouveau sous-niveau'); }catch(e){}
+  try{ const el=document.getElementById('clh-rang'); rcFoudre(el&&el.offsetParent?el:null,{eclairs:1,son:false}); }catch(e){}
+  try{
+    const ancre=document.getElementById('wd-volts');
+    if(ancre&&ancre.isConnected&&ancre.closest('.screen.active')) _bdgAjouterTrophees([{sous:{nom,n:s.n,rang:rangDe(xp).rang.n}}]);
+  }catch(e){}
+  return true;
+}
+
+// ══ LES VOLTS D'UNE SÉANCE ════════════════════════════════════════════
+// Une séance d'une minute valait 130 V. Désormais : 100 V seulement si elle
+// dure au moins 15 min ET compte au moins 6 séries validées ; sinon 10 V par
+// série validée (100 au plus). Le bonus « complète » (+30) ne change pas.
+// MÊME RÈGLE AU SERVEUR (cloudflare/src/xp.js, voltsSeance).
+const SEANCE_VOLTS_MIN_MIN=15, SEANCE_VOLTS_MIN_SERIES=6, VOLTS_PAR_SERIE=10;
+/** PURE. Les séries validées, comptées dans les données de la séance. */
+function seriesValideesSeance(s){
+  const d=s&&s.data&&typeof s.data==='object'?s.data:null;
+  if(!d) return Math.max(0,Math.round(Number(s&&s.sets)||0));
+  let n=0;
+  for(const k of Object.keys(d)) for(const st of ((d[k]||{}).sets||[])) if(st&&st.done===true) n++;
+  return n;
+}
+/** PURE. Les volts d'une séance (hors bonus « complète » et records). */
+function voltsSeance(s){
+  const n=seriesValideesSeance(s), m=Number(s&&s.duration)||0;
+  if(m>=SEANCE_VOLTS_MIN_MIN&&n>=SEANCE_VOLTS_MIN_SERIES) return XP_ACTIONS.seance;
+  return Math.min(XP_ACTIONS.seance,n*VOLTS_PAR_SERIE);
+}
+
+// ══ LE TOTAL DU SERVEUR (/xp_serveur/<compte>) ═════════════════════════
+// Écrit par le serveur léger à chaque séance terminée (événement seance_fin,
+// cloudflare/src/xp.js) : séances recalculées, le reste borné, les badges
+// secrets horaires contrôlés à son heure. LE COACH, LES DÉFIS ET LE CANAL
+// LE LISENT (xpDe d'un autre dossier que le sien) ; la page publique lit sa
+// copie /volts_publics/<pseudo>. L'athlète, lui, voit son calcul local :
+// immédiat, et le même aux bornes près.
+const _xpServeur={};
+const XP_SERVEUR_TTL=10*60e3;
+function _cleCompte(u){ return (u&&u.email)?String(u.email).replace(/\./g,','):''; }
+async function chargerXpServeur(k,force){
+  if(!k||!SERVEUR_LEGER||!CLOUD||!CLOUD.ok()) return null;
+  const c=_xpServeur[k];
+  if(c&&!force&&Date.now()-c.lu<XP_SERVEUR_TTL) return c.v;
+  _xpServeur[k]={lu:Date.now(),v:c?c.v:null};
+  try{
+    const token=await CLOUD._getToken();
+    if(!token) return null;
+    const r=await fetch(CLOUD._fbUrl.replace('users.json','xp_serveur/'+k+'.json')+'?auth='+token);
+    const v=r.ok?await r.json():null;
+    _xpServeur[k]={lu:Date.now(),v:(v&&typeof v.total==='number')?v:null};
+    return _xpServeur[k].v;
+  }catch(e){ return null; }
+}
+// Les athlètes du coach, en tâche de fond (dix minutes de mémoire).
+function chargerXpServeurClients(){
+  try{
+    if(!currentUser||currentUser.role!=='coach') return 0;
+    const users=DB.get('users')||{};
+    const moi=_cleCompte(currentUser);
+    let n=0;
+    for(const e of Object.keys(users)){
+      const c=users[e];
+      if(!c||c.role==='coach'||(c.coachEmailKey&&c.coachEmailKey!==moi)) continue;
+      const k=_cleCompte(c);
+      if(k){ chargerXpServeur(k).catch(()=>{}); n++; }
+    }
+    return n;
+  }catch(e){ return 0; }
+}
+/** PURE (mémoire lue). Le total serveur connu d'un dossier, ou null. */
+function xpServeurDe(u){
+  const c=_xpServeur[_cleCompte(u)];
+  return (c&&c.v&&typeof c.v.total==='number')?c.v.total:null;
+}
 // PURE. Une séance complète : même règle que les semaines « à 100 % » des
 // badges — ni marquée incomplète, ni moins de séries que prévu.
 function _xpComplete(s){
@@ -74440,7 +76396,7 @@ function _xpJour(t){ try{ return localISODate(new Date(t)); }catch(e){ return ''
 // jusqu'au plafond : la séance d'abord, la nuit en dernier.
 function xpCalcul(u,maintenant){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
-  const cat={seance:0,complete:0,record:0,bilan:0,nutrition:0,sommeil:0,semaine:0,badge:0,archive:0};
+  const cat={seance:0,complete:0,record:0,bilan:0,nutrition:0,sommeil:0,checkin:0,semaine:0,badge:0,parcours:0,archive:0};
   const vide={total:0,cat,ecrete:0};
   if(!u) return vide;
   let f; try{ f=_badgesFaits(u,t); }catch(e){ return vide; }
@@ -74452,7 +76408,7 @@ function xpCalcul(u,maintenant){
   const ses=((u.sessions)||[]).filter(s=>s&&s.date>0&&s.date<=t);
   for(const s of ses){
     const j=_xpJour(s.date);
-    pose(j,'seance',XP_ACTIONS.seance);
+    pose(j,'seance',voltsSeance(s));
     if(_xpComplete(s)) pose(j,'complete',XP_ACTIONS.complete);
     if(recs[s.date]){ pose(j,'record',XP_ACTIONS.record*recs[s.date]); recs[s.date]=0; }
   }
@@ -74468,7 +76424,11 @@ function xpCalcul(u,maintenant){
       nuits.add(e.date); pose(e.date,'sommeil',XP_ACTIONS.sommeil);
     }
   }
-  const ordre=['seance','complete','record','bilan','nutrition','sommeil'];
+  // Le check-in du matin : 10 V par jour, dans le plafond.
+  for(const j of Object.keys((u.checkin&&typeof u.checkin==='object')?u.checkin:{})){
+    if(/^\d{4}-\d{2}-\d{2}$/.test(j)&&checkinComplet(u.checkin[j])&&Number(u.checkin[j].at||0)<=t) pose(j,'checkin',XP_ACTIONS.checkin);
+  }
+  const ordre=['seance','complete','record','bilan','nutrition','sommeil','checkin'];
   let ecrete=0;
   for(const j of Object.keys(jours)){
     let reste=XP_PLAFOND_JOUR;
@@ -74485,6 +76445,8 @@ function xpCalcul(u,maintenant){
     let at=0; try{ at=Number(b.test(f))||0; }catch(e){ at=0; }
     if(at>0&&at<=t) cat.badge+=(b.palier===4?XP_ACTIONS.badgePalier4:XP_ACTIONS.badge);
   }
+  // Le parcours « Mise sous tension » : chaque étape une fois, à sa date.
+  cat.parcours=parcoursVolts(u,t);
   const ar=u.xpArchive&&typeof u.xpArchive==='object'?Number(u.xpArchive.sommeil)||0:0;
   cat.archive=Math.max(0,Math.round(ar));
   const total=Object.keys(cat).reduce((a,k)=>a+cat[k],0);
@@ -74498,6 +76460,12 @@ function xpGainsSeance(u,sess,maintenant){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
   const apres=xpCalcul(u,t);
   const sans=Object.assign({},u,{sessions:(u.sessions||[]).filter(s=>s!==sess&&!(s&&s.date===sess.date))});
+  // Les étapes du parcours datées à la fin de CETTE séance comptent dans son gain.
+  if(u.parcours&&u.parcours.etapes){
+    const et={};
+    for(const k of Object.keys(u.parcours.etapes)){ const d=Number(u.parcours.etapes[k]); if(!(d>=sess.date&&d-sess.date<15*60e3)) et[k]=d; }
+    sans.parcours=Object.assign({},u.parcours,{etapes:et});
+  }
   const avant=xpCalcul(sans,t);
   const d=k=>(apres.cat[k]||0)-(avant.cat[k]||0);
   const lignes=[];
@@ -74507,6 +76475,7 @@ function xpGainsSeance(u,sess,maintenant){
   if(d('record')>0) lignes.push({lib:nRec>1?nRec+' records':'Record battu',v:d('record')});
   if(d('semaine')>0) lignes.push({lib:'Semaine validée',v:d('semaine')});
   if(d('badge')>0) lignes.push({lib:'Badge débloqué',v:d('badge')});
+  if(d('parcours')>0) lignes.push({lib:'Mise sous tension',v:d('parcours')});
   const autres=(apres.total-avant.total)-lignes.reduce((a,l)=>a+l.v,0);
   if(autres>0) lignes.push({lib:'Autres gains du jour',v:autres});
   return {total:Math.max(0,apres.total-avant.total),lignes,ecrete:apres.ecrete>avant.ecrete,
@@ -74516,6 +76485,12 @@ function xpGainsSeance(u,sess,maintenant){
 // u.xp quand elle existe, sinon le calcul.
 function xpDe(u){
   if(!u) return 0;
+  // Un autre dossier que le sien (le coach, les défis, le Canal) : le total
+  // du SERVEUR quand il est connu — celui que le client ne peut pas écrire.
+  if(typeof currentUser!=='undefined'&&currentUser&&u!==currentUser&&_cleCompte(u)!==_cleCompte(currentUser)){
+    const v=xpServeurDe(u);
+    if(v!=null) return v;
+  }
   if(typeof u.xp==='number'&&isFinite(u.xp)) return u.xp;
   try{ return xpCalcul(u).total; }catch(e){ return 0; }
 }
@@ -74532,34 +76507,53 @@ function majXp(){
   const rg=rangDe(r.total);
   let change=false;
   if(u.xp!==r.total){ u.xp=r.total; change=true; }
+  // Le détail, pour le serveur léger : il recalcule les séances et BORNE le
+  // reste avec (xp_serveur). Écrit seulement quand il change.
+  const det=Object.assign({total:r.total},r.cat);
+  if(JSON.stringify(u.xpDetail||null)!==JSON.stringify(det)){ u.xpDetail=det; change=true; }
+  let bloque=false;
+  try{ if(suspensionEtat(u).actif) bloque=true; }catch(e){}
+  try{ if(drapeauQuelconqueActif(u)) bloque=true; }catch(e){}
   const vu=Number(u.xpRang)||0;
   let fete=0;
   if(!vu){ u.xpRang=rg.rang.n; change=true; }
   else if(rg.rang.n>vu){
-    let bloque=false;
-    try{ if(suspensionEtat(u).actif) bloque=true; }catch(e){}
-    try{ if(drapeauQuelconqueActif(u)) bloque=true; }catch(e){}
     if(!bloque){ u.xpRang=rg.rang.n; fete=rg.rang.n; change=true; }
+  }
+  // LE SOUS-NIVEAU : posé sans fête au premier calcul ; fêté petit ensuite,
+  // sauf quand un rang entier vient d'être passé (son écran le dit déjà).
+  const code=niveauCode(r.total), vuN=Number(u.xpNiveau)||0;
+  let sous=0;
+  if(!vuN){ u.xpNiveau=code; change=true; }
+  else if(code>vuN&&!bloque){
+    u.xpNiveau=code; change=true;
+    if(!fete&&Math.floor(code/10)===Math.floor(vuN/10)) sous=code;
   }
   if(change) try{ saveUser(); }catch(e){}
   if(fete) try{ _celebrerRang(fete); }catch(e){}
-  return {total:r.total,rang:rg.rang.n,fete};
+  if(sous) try{ _celebrerSousNiveau(r.total); }catch(e){}
+  return {total:r.total,rang:rg.rang.n,fete,sous};
 }
 // ── L'ACCUEIL : l'emblème et le nom du rang sous le prénom, et la jauge ──
 // PURE.
 function htmlRangAccueil(xp){
   const r=rangDe(xp);
-  const txt=r.suivant
-    ?xpFormat(r.xp)+' / '+xpFormat(r.suivant.seuil)+' V vers '+r.suivant.nom
+  // À partir de VOLTAGE, la jauge va au sous-niveau suivant : « MONSTRE II ·
+  // 30 240 / 31 667 V vers MONSTRE III ».
+  const s=sousNiveauDe(xp);
+  const part=s?s.part:r.part, cible=s?s.a:(r.suivant?r.suivant.seuil:0), vers=s?s.vers:(r.suivant?r.suivant.nom:'');
+  const txt=cible
+    ?xpFormat(r.xp)+' / '+xpFormat(cible)+' V vers '+vers
     :xpFormat(r.xp)+' V · rang maximal';
-  return '<div class="rg-ligne"><img class="rg-emb" src="'+rangEmbleme(r.rang.n)+'" alt="" width="22" height="22" decoding="async">'
-    +'<span class="rg-nom">'+escapeHtml(r.rang.nom)+'</span></div>'
-    +'<div class="rg-jauge" role="progressbar" aria-label="Volts vers le rang suivant" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'
-      +Math.round(r.part*100)+'"><span style="width:'+Math.round(r.part*100)+'%"></span></div>'
+  return '<div class="rg-ligne"><span class="rg-emb-w"><img class="rg-emb" src="'+rangEmbleme(r.rang.n)+'" alt="" width="22" height="22" decoding="async">'
+    +(s?htmlChevrons(s.n):'')+'</span>'
+    +'<span class="rg-nom">'+escapeHtml(r.rang.nom+(s?' '+s.lib:''))+'</span></div>'
+    +'<div class="rg-jauge" role="progressbar" aria-label="Volts vers le '+(s?'sous-niveau':'rang')+' suivant" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'
+      +Math.round(part*100)+'"><span style="width:'+Math.round(part*100)+'%"></span></div>'
     // LA MAQUETTE DE L'EN-TETE (27/09/2026) : les chiffres en blanc, « vers »
     // plus petit et gris, le rang suivant en blanc.
-    +'<div class="rg-txt">'+(r.suivant
-      ?'<b>'+escapeHtml(xpFormat(r.xp)+' / '+xpFormat(r.suivant.seuil)+' V')+'</b> <span class="rg-vers">vers</span> '+escapeHtml(r.suivant.nom)
+    +'<div class="rg-txt">'+(cible
+      ?'<b>'+escapeHtml(xpFormat(r.xp)+' / '+xpFormat(cible)+' V')+'</b> <span class="rg-vers">vers</span> '+escapeHtml(vers)
       :escapeHtml(txt))+'</div>';
 }
 function _rendreRang(u){
@@ -74580,6 +76574,463 @@ function _rendreRang(u){
   }catch(e){}
   return true;
 }
+// ══ LA CARTE D'ATHLÈTE (28/09/2026) ═════════════════════════════════════
+//
+// Cinq notes de 1 à 99, calculées sur les 12 DERNIÈRES SEMAINES COMPLÈTES
+// (lundi à dimanche), et une note globale :
+//   FOR  la force — l'e1RM des mouvements de base (squat, développé couché,
+//        soulevé de terre, développé militaire) RAPPORTÉ AU POIDS DE CORPS,
+//        chacun comparé à son barème (homme / femme) ;
+//   VOL  le volume — les séries faites par semaine ;
+//   REG  la régularité — les semaines validées (le quota du programme) ;
+//   PRO  la progression — l'e1RM de la seconde moitié contre la première ;
+//   END  l'endurance — le temps d'entraînement par semaine.
+// LA GLOBALE PÈSE D'ABORD REG ET PRO : la carte récompense ce que l'athlète
+// maîtrise (venir, progresser) avant ce que la génétique lui a donné.
+//
+// LA COURBE EST DOUCE : note = 1 + 98 × (1 − e^(−1,6·x)), où x vaut 1 au
+// niveau « avancé » du barème. x = 1 donne 79, x = 1,5 donne 90, x = 2 donne
+// 95 : passer 90 demande une fois et demie la référence. Jamais 100.
+//
+// RECALCULÉE LE LUNDI (majCarteAthlete, à l'ouverture de l'accueil) : une
+// note par semaine, gardée dans u.carteHist. Si elle monte, la carte
+// s'affiche sur l'accueil avec son partage ; si elle change de cadre, la
+// foudre frappe.
+//
+// ⚠ LE POIDS DE CORPS ENTRE DANS FOR : la carte est classée « santé »
+//   (CHAMPS_SANTE), comme tout ce qui en dérive. La note, elle, ne dit
+//   jamais le poids.
+const CARTE_SEMAINES=12;
+const CARTE_K=1.6;
+// L'e1RM, en multiples du poids de corps, qui vaut x = 1 (niveau avancé).
+const CARTE_BAREMES=Object.freeze({
+  homme:Object.freeze({squat:1.75,couche:1.35,terre:2.1,militaire:0.85}),
+  femme:Object.freeze({squat:1.35,couche:0.85,terre:1.65,militaire:0.55})
+});
+// Le poids de corps qu'on suppose quand aucun n'est connu (la note le dit).
+const CARTE_POIDS_DEFAUT=Object.freeze({homme:78,femme:63});
+// Les mouvements de base, reconnus par leur nom normalisé (exKey + alias).
+const CARTE_MOUVEMENTS=Object.freeze([
+  {cle:'squat',lib:'Squat',re:/^(BACK )?SQUAT( BARRE| ARRIERE| BARRE ARRIERE| HIGH BAR| LOW BAR)?$/},
+  {cle:'couche',lib:'Développé couché',re:/^(DEVELOPPE COUCHE( BARRE)?|BENCH( PRESS)?)$/},
+  {cle:'terre',lib:'Soulevé de terre',re:/^(SOULEVE DE TERRE( BARRE| CONVENTIONNEL| SUMO)?|DEADLIFT)$/},
+  {cle:'militaire',lib:'Développé militaire',re:/^(DEVELOPPE MILITAIRE( BARRE)?|OVERHEAD PRESS|OHP)$/}
+]);
+// Les références des autres notes (x = 1).
+const CARTE_REF=Object.freeze({seriesSemaine:45,minutesSemaine:180,gainPro:0.04});
+// Le poids de chaque note dans la globale : REG et PRO avant FOR.
+const CARTE_POIDS=Object.freeze({REG:0.27,PRO:0.25,FOR:0.18,VOL:0.15,END:0.15});
+const CARTE_NOTES=Object.freeze(['FOR','VOL','REG','PRO','END']);
+const CARTE_LIB=Object.freeze({FOR:'Force',VOL:'Volume',REG:'Régularité',PRO:'Progression',END:'Endurance'});
+// Le cadre suit la globale.
+const CARTE_CADRES=Object.freeze([
+  Object.freeze({cle:'standard',min:1,lib:'STANDARD'}),
+  Object.freeze({cle:'elite',min:70,lib:'ÉLITE'}),
+  Object.freeze({cle:'legendaire',min:85,lib:'LÉGENDAIRE'})
+]);
+const CARTE_FORMATS=Object.freeze({carte:Object.freeze({w:1080,h:1512}),story:Object.freeze({w:1080,h:1920})});
+
+/** PURE. La courbe douce : x (1 = référence) → 1..99. */
+function carteCourbe(x){
+  const v=Math.max(0,Number(x)||0);
+  return Math.max(1,Math.min(99,Math.round(1+98*(1-Math.exp(-CARTE_K*v)))));
+}
+/** PURE. Le cadre d'une globale. */
+function carteCadre(globale){
+  const g=Number(globale)||0;
+  let c=CARTE_CADRES[0];
+  for(const x of CARTE_CADRES) if(g>=x.min) c=x;
+  return c;
+}
+/** PURE. 'homme' ou 'femme' (défaut : homme). */
+function carteSexe(u){
+  const g=String((u&&(u.gender||u.sexe))||'').toLowerCase();
+  return /^(f|femme|female|woman)/.test(g)?'femme':'homme';
+}
+/** PURE. Le dernier poids de corps connu (pesées, bilans, profil), ou null. */
+function poidsCorpsActuel(u){
+  let best=null;
+  const prendre=(d,kg)=>{ const v=parseFloat(kg); if(!(v>=30&&v<=300)) return;
+    const t=typeof d==='number'?d:Date.parse(d);
+    if(!best||(isFinite(t)&&t>best.t)) best={t:isFinite(t)?t:0,kg:v}; };
+  for(const e of ((u&&u.weightLog)||[])) if(e) prendre(e.date,e.kg);
+  for(const b of ((u&&u.bilans)||[])) if(b) prendre(b.date,getBW(b));
+  if(best) return best.kg;
+  for(const k of ['profileWeight','weight']){ const v=parseFloat(u&&u[k]); if(v>=30&&v<=300) return v; }
+  return null;
+}
+/** PURE. Le mouvement de base d'un nom d'exercice, ou null. */
+function carteMouvementDe(nom){
+  let k='';
+  try{ k=resoudreAlias(exKey(nom)); }catch(e){ k=String(nom||'').toUpperCase(); }
+  const m=CARTE_MOUVEMENTS.find(x=>x.re.test(k)||x.re.test(exKey(nom)));
+  return m?m.cle:null;
+}
+// Les séries faites d'une séance : [{nom, kg, reps, rir}].
+function _carteSeries(s){
+  const out=[];
+  const exos=(s&&s.data&&typeof s.data==='object'&&Object.keys(s.data).length)
+    ?Object.keys(s.data).map(nm=>({nom:nm,sets:((s.data[nm]||{}).sets)||[]}))
+    :((s&&s.exercises)||[]).filter(e=>e&&(e.name||e.nm)).map(e=>({nom:e.name||e.nm,sets:e.sets||[]}));
+  for(const e of exos) for(const st of (e.sets||[])){
+    if(!st||st.done===false) continue;
+    out.push({nom:e.nom,kg:parseFloat(st.weight)||0,reps:parseFloat(st.reps)||0,rir:parseFloat(st.rir)||0});
+  }
+  return out;
+}
+/**
+ * PURE (horloge donnée). La note de l'athlète sur les 12 semaines complètes
+ * qui précèdent le lundi de `maintenant`.
+ * @returns {{FOR:number,VOL:number,REG:number,PRO:number,END:number,globale:number,
+ *   cadre:string,semaine:string,x:Object,sansPoids:boolean,seances:number}}
+ */
+function noteAthlete(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const fin=_lundiDe(t).getTime();
+  const debut=_lundiDe(_datePlusJours(fin,-7*CARTE_SEMAINES).getTime()+12*3600e3).getTime();
+  const milieu=_lundiDe(_datePlusJours(fin,-7*(CARTE_SEMAINES/2)).getTime()+12*3600e3).getTime();
+  const ses=((u&&u.sessions)||[]).filter(s=>s&&s.date>=debut&&s.date<fin);
+  const sexe=carteSexe(u);
+  const pc=poidsCorpsActuel(u);
+  const poids=pc||CARTE_POIDS_DEFAUT[sexe];
+  const bar=CARTE_BAREMES[sexe];
+  // FOR et PRO : le meilleur e1RM par exercice, sur chaque moitié.
+  const meilleur={}, moitie={};
+  let series=0, minutes=0;
+  for(const s of ses){
+    const l=_carteSeries(s);
+    series+=l.length;
+    const d=Number(s.duration);
+    minutes+=(d>0&&d<600)?d:l.length*3;
+    const h=s.date<milieu?0:1;
+    for(const x of l){
+      if(!(x.kg>0)||!(x.reps>=1)||x.reps>PERF_REPS_MAX_E1RM) continue;
+      const e=e1rm(x.kg,x.reps,x.rir);
+      let k=x.nom; try{ k=resoudreAlias(exKey(x.nom)); }catch(er){}
+      if(!meilleur[k]||e>meilleur[k].e) meilleur[k]={e,nom:x.nom};
+      (moitie[k]=moitie[k]||[0,0]);
+      if(e>moitie[k][h]) moitie[k][h]=e;
+    }
+  }
+  // FOR : la moyenne des mouvements de base présents, chacun à son barème.
+  const parMvt={};
+  for(const k of Object.keys(meilleur)){
+    const m=carteMouvementDe(meilleur[k].nom);
+    if(m&&(!parMvt[m]||meilleur[k].e>parMvt[m])) parMvt[m]=meilleur[k].e;
+  }
+  const rapports=Object.keys(parMvt).map(m=>parMvt[m]/poids/bar[m]);
+  const xFOR=rapports.length?rapports.reduce((a,b)=>a+b,0)/rapports.length:0;
+  // VOL, END : par semaine.
+  const xVOL=series/CARTE_SEMAINES/CARTE_REF.seriesSemaine;
+  const xEND=minutes/CARTE_SEMAINES/CARTE_REF.minutesSemaine;
+  // REG : les semaines validées, sur 12. Toutes validées : x = 1,5 (90).
+  let quota=1; try{ quota=seancesPrevuesParSemaine(u); }catch(e){ quota=1; }
+  const cpt={};
+  for(const s of ses){ const l=_lundiDe(s.date).getTime(); cpt[l]=(cpt[l]||0)+1; }
+  const validees=Object.keys(cpt).filter(l=>cpt[l]>=quota).length;
+  const xREG=1.5*Math.min(CARTE_SEMAINES,validees)/CARTE_SEMAINES;
+  // PRO : le gain moyen des exercices travaillés dans les DEUX moitiés.
+  // Stable : x = 0,35 (43) ; +4 % sur 12 semaines : x = 1,35 (87).
+  const gains=Object.keys(moitie).filter(k=>moitie[k][0]>0&&moitie[k][1]>0).map(k=>moitie[k][1]/moitie[k][0]-1);
+  const g=gains.length?gains.reduce((a,b)=>a+b,0)/gains.length:null;
+  const xPRO=g===null?0:Math.max(0,0.35+g/CARTE_REF.gainPro);
+  const x={FOR:xFOR,VOL:xVOL,REG:xREG,PRO:xPRO,END:xEND};
+  const o={};
+  for(const k of CARTE_NOTES) o[k]=ses.length?carteCourbe(x[k]):1;
+  let gl=0;
+  for(const k of CARTE_NOTES) gl+=CARTE_POIDS[k]*o[k];
+  o.globale=Math.max(1,Math.min(99,Math.round(gl)));
+  o.cadre=carteCadre(o.globale).cle;
+  o.semaine=localISODate(new Date(fin));
+  o.x=x; o.sansPoids=!pc; o.seances=ses.length;
+  return o;
+}
+// ── Le recalcul du lundi ────────────────────────────────────────────────
+// Une fois par semaine : la note de la semaine est rangée dans l'historique
+// (52 semaines au plus). Rend {note, monte, cadreChange} quand il y a du neuf,
+// null sinon (déjà calculée cette semaine, ou pas d'athlète).
+function majCarteAthlete(u,maintenant,o){
+  if(!u||u.role==='coach') return null;
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const n=noteAthlete(u,t);
+  if(u.carte&&u.carte.semaine===n.semaine&&!(o&&o.force)) return null;
+  const prec=u.carte&&typeof u.carte==='object'?u.carte:null;
+  const h=Array.isArray(u.carteHist)?u.carteHist.filter(x=>x&&x.s!==n.semaine):[];
+  h.push({s:n.semaine,g:n.globale,FOR:n.FOR,VOL:n.VOL,REG:n.REG,PRO:n.PRO,END:n.END});
+  h.sort((a,b)=>a.s<b.s?-1:1);
+  u.carteHist=h.slice(-52);
+  const monte=!!(prec&&n.globale>(Number(prec.globale)||0));
+  const cadreChange=!!(prec&&prec.cadre!==n.cadre&&monte);
+  u.carte={FOR:n.FOR,VOL:n.VOL,REG:n.REG,PRO:n.PRO,END:n.END,globale:n.globale,cadre:n.cadre,
+    semaine:n.semaine,le:t,avant:prec?(Number(prec.globale)||null):null,
+    // La carte reste sur l'accueil tant qu'elle n'a été ni partagée ni fermée.
+    aMontrer:monte||!!(prec&&prec.aMontrer),foudre:cadreChange||!!(prec&&prec.foudre)};
+  try{ saveUser(); }catch(e){}
+  return {note:n,monte,cadreChange};
+}
+// ── Les cadres dessinés (cartes-bruts/ → app/img/cartes/<cadre>.webp) ─────
+// Posés par scripts/cartes_webp.py. Tant qu'un gabarit manque, le cadre est
+// DESSINÉ (le même esprit, sans l'image) : la carte ne dépend jamais d'un
+// fichier absent.
+const _carteCadresImg={};
+function carteCadreImage(cle){
+  if(_carteCadresImg[cle]) return _carteCadresImg[cle];
+  try{
+    const im=new Image();
+    im.decoding='async';
+    im.src='img/cartes/'+cle+'.webp';
+    _carteCadresImg[cle]=im;
+    return im;
+  }catch(e){ return null; }
+}
+function _carteCadrePret(cle){
+  const im=carteCadreImage(cle);
+  return (im&&im.complete&&im.naturalWidth>0)?im:null;
+}
+// Les couleurs du cadre dessiné.
+const CARTE_TEINTES=Object.freeze({
+  standard:{a:'#6b6b72',b:'#2a2a2e',accent:'#E02020',halo:'rgba(224,32,32,.18)'},
+  elite:{a:'#ff3b3b',b:'#7a0a0a',accent:'#ff3b3b',halo:'rgba(255,59,59,.38)'},
+  legendaire:{a:'#ffd36a',b:'#b3261e',accent:'#ffcf5a',halo:'rgba(255,190,70,.42)'}
+});
+function _carteChemin(g,x,y,w,h,r){
+  g.beginPath();
+  g.moveTo(x+r,y); g.lineTo(x+w-r,y); g.quadraticCurveTo(x+w,y,x+w,y+r);
+  g.lineTo(x+w,y+h-r); g.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  g.lineTo(x+r,y+h); g.quadraticCurveTo(x,y+h,x,y+h-r);
+  g.lineTo(x,y+r); g.quadraticCurveTo(x,y,x+r,y); g.closePath();
+}
+function _carteCadreDessine(g,x,y,w,h,cle){
+  const T=CARTE_TEINTES[cle]||CARTE_TEINTES.standard;
+  g.save();
+  // Le fond de la carte.
+  const f=g.createLinearGradient(x,y,x+w,y+h);
+  f.addColorStop(0,'#151517'); f.addColorStop(0.55,'#0b0b0c'); f.addColorStop(1,'#050505');
+  _carteChemin(g,x,y,w,h,56); g.fillStyle=f; g.fill();
+  // Le halo du haut.
+  const hal=g.createRadialGradient(x+w/2,y+h*0.28,0,x+w/2,y+h*0.28,w*0.75);
+  hal.addColorStop(0,T.halo); hal.addColorStop(1,'rgba(0,0,0,0)');
+  g.fillStyle=hal; g.fill();
+  // La bordure : deux traits, le dégradé de la teinte.
+  const b=g.createLinearGradient(x,y,x+w,y+h);
+  b.addColorStop(0,T.a); b.addColorStop(0.5,T.b); b.addColorStop(1,T.a);
+  g.shadowColor=T.accent; g.shadowBlur=cle==='standard'?10:34;
+  g.strokeStyle=b; g.lineWidth=14; _carteChemin(g,x+7,y+7,w-14,h-14,50); g.stroke();
+  g.shadowBlur=0;
+  g.strokeStyle='rgba(255,255,255,.18)'; g.lineWidth=2; _carteChemin(g,x+30,y+30,w-60,h-60,36); g.stroke();
+  g.restore();
+}
+/**
+ * La carte. `d` : {prenom, note:{FOR..END,globale,cadre}, rang (1..10),
+ * signature}. `format` : 'carte' (1080×1512) ou 'story' (1080×1920 : la
+ * carte centrée, un titre au-dessus). `o.emb` : l'emblème du rang chargé.
+ */
+function _dessinerCarteAthlete(d,format,o){
+  const F=CARTE_FORMATS[format]||CARTE_FORMATS.carte;
+  const W=F.w, H=F.h, story=format==='story';
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const g=cv.getContext('2d');
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const ou=_visuelOutils(g);
+  const x=d||{}, n=x.note||{};
+  const cle=(CARTE_CADRES.find(c=>c.cle===n.cadre)||carteCadre(n.globale)).cle;
+  const T=CARTE_TEINTES[cle];
+  g.fillStyle='#000'; g.fillRect(0,0,W,H);
+  // La carte : pleine page, ou centrée dans la story.
+  const cw=story?980:W, ch=Math.round(cw*1512/1080);
+  const cx0=(W-cw)/2, cy0=story?Math.round((H-ch)/2)+40:0;
+  if(story){
+    const hal=g.createRadialGradient(W/2,H/2,0,W/2,H/2,H*0.6);
+    hal.addColorStop(0,T.halo); hal.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle=hal; g.fillRect(0,0,W,H);
+    g.textAlign='center'; g.fillStyle='#fff'; g.font='800 34px '+MONT;
+    ou.ecrireEspace('MA CARTE D’ATHLÈTE',W/2,cy0-44,10,true);
+  }
+  const im=_carteCadrePret(cle);
+  if(im){ try{ g.drawImage(im,cx0,cy0,cw,ch); }catch(e){ _carteCadreDessine(g,cx0,cy0,cw,ch,cle); } }
+  else _carteCadreDessine(g,cx0,cy0,cw,ch,cle);
+  const k=cw/1080;                           // l'échelle du dessin dans la carte
+  const X=v=>cx0+v*k, Y=v=>cy0+v*k, S=v=>Math.round(v*k);
+  g.textBaseline='alphabetic';
+  // LA GLOBALE, en haut à gauche, et le cadre dessous.
+  ou.ombre(true);
+  g.textAlign='center'; g.fillStyle='#fff';
+  g.font='700 '+S(250)+'px '+BEBAS; ou.ecrire(String(n.globale||1),X(250),Y(330));
+  g.fillStyle=T.accent; g.font='800 '+S(34)+'px '+MONT;
+  ou.ecrireEspace(carteCadre(n.globale).lib,X(250),Y(386),8,true);
+  // L'EMBLÈME DU RANG, en haut à droite.
+  if(o&&o.emb&&o.emb.naturalWidth){ try{ g.drawImage(o.emb,X(600),Y(110),S(340),S(340)); }catch(e){} }
+  else{
+    g.save(); g.fillStyle=T.accent; g.globalAlpha=.9; g.font='700 '+S(300)+'px '+BEBAS;
+    ou.ecrire('⚡',X(770),Y(400)); g.restore();
+  }
+  // Le prénom, en grand, et un trait.
+  const nom=String(x.prenom||'ATHLÈTE').toUpperCase();
+  g.fillStyle='#fff';
+  const ns=ou.ajuste(nom,'700',S(170),BEBAS,S(900),S(70));
+  g.font='700 '+ns+'px '+BEBAS; ou.ecrire(ou.coupe(nom,S(900)),X(540),Y(640));
+  ou.ombre(false);
+  g.fillStyle=T.accent; g.fillRect(X(390),Y(680),S(300),S(6));
+  // LES CINQ NOTES : deux colonnes (3 + 2), le chiffre puis le sigle.
+  // Deux colonnes de deux, la cinquième centrée dessous : la carte est
+  // remplie jusqu'à la signature.
+  const pos=[[170,880],[170,1085],[600,880],[600,1085],[385,1290]];
+  CARTE_NOTES.forEach((c,i)=>{
+    const [bx,by]=pos[i];
+    ou.ombre(true);
+    g.textAlign='left'; g.fillStyle='#fff';
+    g.font='700 '+S(160)+'px '+BEBAS; ou.ecrire(String(n[c]||1),X(bx),Y(by));
+    g.fillStyle=T.accent; g.font='800 '+S(50)+'px '+MONT;
+    ou.ecrireEspace(c,X(bx+175),Y(by-18),6,false);
+    ou.ombre(false);
+  });
+  // LA SIGNATURE, en bas de la carte.
+  g.textAlign='center';
+  const sig=String(x.signature||'').trim();
+  const t=(sig?sig.toUpperCase()+' · ':'')+'REPCORE';
+  ou.ombre(true);
+  g.fillStyle='rgba(255,255,255,.85)';
+  const ss=ou.ajusteEspace(t,'700',S(40),BEBAS,7,S(860),S(22));
+  g.font='700 '+ss+'px '+BEBAS; ou.ecrireEspace(t,X(540),Y(1440),7,true);
+  ou.ombre(false);
+  return cv;
+}
+// PURE (sauf nomSurVisuels). Les données de la carte d'un athlète.
+function carteDonnees(u){
+  let sig=''; try{ sig=nomSurVisuels(u); }catch(e){ sig=''; }
+  let r=1; try{ r=rangDe(xpDe(u)).rang.n; }catch(e){ r=1; }
+  const c=(u&&u.carte)||noteAthlete(u);
+  return {prenom:String((u&&u.fname)||'').trim().slice(0,24),note:c,rang:r,signature:sig};
+}
+// ── Le partage ─────────────────────────────────────────────────────────
+// 1080×1512 se partage comme un POST (la légende), la story comme une story
+// (le lien). SYNCHRONE jusqu'au partage (iOS).
+function partagerCarteAthlete(btn,format){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||_storyEnCours) return false;
+  const f=format==='story'?'story':'carte';
+  const emb=document.getElementById('carte-emb-src');
+  const nom=f==='story'?'repcore-carte.jpg':'repcore-carte-post.jpg';
+  const fmt=visuelFondFormat('carbone');
+  _storyEnCours=true;
+  let ok=false;
+  try{
+    const dessin=()=>_dessinerCarteAthlete(carteDonnees(u),f,{emb});
+    ok=_storySortirPartage(dessin(),nom,undefined,fmt)||_storySortirTelechargement(dessin(),nom,fmt);
+  }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
+  finally{ _storyEnCours=false; }
+  if(ok&&u.carte&&u.carte.aMontrer){ u.carte.aMontrer=false; try{ saveUser(); }catch(e){} }
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp&&ok){ const l=sp.textContent; sp.textContent='Carte prête ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  return ok;
+}
+// ── L'accueil : la carte, quand la note monte ───────────────────────────
+// PURE.
+function htmlCarteAccueil(u){
+  const c=u&&u.carte;
+  if(!c||!c.aMontrer) return '';
+  const av=Number(c.avant)||0;
+  return '<div class="ca-accueil" role="region" aria-label="Ta carte d’athlète">'
+    +'<div class="ca-tete"><b>Ta note monte'+(av?' : '+av+' → '+c.globale:' : '+c.globale)+'</b>'
+    +'<button type="button" class="ca-fermer" aria-label="Fermer" onclick="fermerCarteAccueil()">✕</button></div>'
+    +'<canvas class="ca-vignette" id="ca-vignette" width="360" height="504" role="img" aria-label="Carte d’athlète, note '+c.globale+'"></canvas>'
+    +'<div class="ca-btns">'
+    +'<button type="button" class="btn btn-red btn-sm" onclick="partagerCarteAthlete(this,\'carte\')">'+icon('share',14)+' <span>Partager</span></button>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="partagerCarteAthlete(this,\'story\')">En story</button>'
+    +'</div></div>';
+}
+function _peindreVignetteCarte(id,u){
+  const c=document.getElementById(id);
+  if(!c||!u) return false;
+  const g=c.getContext('2d');
+  const emb=document.getElementById('carte-emb-src');
+  const cv=_dessinerCarteAthlete(carteDonnees(u),'carte',{emb});
+  g.clearRect(0,0,c.width,c.height);
+  g.drawImage(cv,0,0,c.width,c.height);
+  cv.width=0; cv.height=0;
+  return true;
+}
+// L'emblème du rang, chargé une fois (la carte le dessine).
+function _carteEmbleme(u){
+  let e=document.getElementById('carte-emb-src');
+  let n=1; try{ n=rangDe(xpDe(u)).rang.n; }catch(er){ n=1; }
+  const src=rangEmbleme(n,true);
+  if(!e){ e=new Image(); e.id='carte-emb-src'; e.hidden=true; e.alt=''; e.decoding='async'; document.body.appendChild(e); }
+  if(e.getAttribute('src')!==src) e.src=src;
+  return e;
+}
+function _rendreCarteAccueil(u){
+  if(!u||u.role==='coach') return false;
+  let r=null; try{ r=majCarteAthlete(u); }catch(e){ r=null; }
+  const t=document.querySelector('#s-client-home .clh-tete');
+  let z=document.getElementById('clh-carte');
+  const h=htmlCarteAccueil(u);
+  if(!z&&h&&t){ z=document.createElement('div'); z.id='clh-carte'; (document.getElementById('clh-filleuls')||t).insertAdjacentElement('afterend',z); }
+  if(!z) return false;
+  z.innerHTML=h; z.hidden=!h;
+  if(!h) return false;
+  const emb=_carteEmbleme(u);
+  const peindre=()=>{ try{ _peindreVignetteCarte('ca-vignette',u); }catch(e){} };
+  peindre();
+  if(emb&&!emb.complete) emb.addEventListener('load',peindre,{once:true});
+  const cadre=carteCadreImage(u.carte.cadre);
+  if(cadre&&!cadre.complete) cadre.addEventListener('load',peindre,{once:true});
+  // LE CHANGEMENT DE CADRE : la foudre frappe la carte, une fois.
+  if(u.carte.foudre){
+    u.carte.foudre=false; try{ saveUser(); }catch(e){}
+    setTimeout(()=>{ try{ rcFoudre(document.getElementById('ca-vignette'),{eclairs:3}); }catch(e){} },400);
+  }
+  return true;
+}
+function fermerCarteAccueil(){
+  const u=currentUser;
+  if(u&&u.carte){ u.carte.aMontrer=false; try{ saveUser(); }catch(e){} }
+  const z=document.getElementById('clh-carte'); if(z){ z.innerHTML=''; z.hidden=true; }
+  return true;
+}
+// ── L'onglet Évolution : la carte et la courbe de la note ─────────────────
+// PURE. La courbe de la globale, semaine par semaine (SVG). Une seule série :
+// pas de légende, le titre la nomme ; chaque point dit sa valeur au survol.
+function htmlCourbeCarte(hist){
+  const l=(Array.isArray(hist)?hist:[]).filter(x=>x&&x.s&&x.g>0).slice(-26);
+  if(l.length<2) return '<p class="ca-vide">La courbe apparaît après deux semaines de note.</p>';
+  const W=320, H=120, px=14, py=14;
+  const mn=Math.max(1,Math.min(...l.map(x=>x.g))-5), mx=Math.min(99,Math.max(...l.map(x=>x.g))+5);
+  const X=i=>px+i*(W-2*px)/(l.length-1), Y=v=>H-py-(v-mn)*(H-2*py)/Math.max(1,mx-mn);
+  const pts=l.map((x,i)=>X(i).toFixed(1)+','+Y(x.g).toFixed(1)).join(' ');
+  const der=l[l.length-1];
+  const date=s=>{ try{ return new Date(s+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }catch(e){ return s; } };
+  return '<svg class="ca-courbe" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Note globale sur '+l.length+' semaines, de '+l[0].g+' à '+der.g+'">'
+    +'<line x1="'+px+'" x2="'+(W-px)+'" y1="'+(H-py)+'" y2="'+(H-py)+'" class="ca-axe"/>'
+    +'<polyline points="'+pts+'" fill="none" class="ca-ligne"/>'
+    +l.map((x,i)=>'<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(x.g).toFixed(1)+'" r="'+(i===l.length-1?5:4)+'" class="ca-point"><title>Semaine du '+escapeHtml(date(x.s))+' : '+x.g+'</title></circle>').join('')
+    +'<text x="'+(X(l.length-1)-6).toFixed(1)+'" y="'+(Y(der.g)-10).toFixed(1)+'" text-anchor="end" class="ca-der">'+der.g+'</text>'
+    +'</svg>';
+}
+function _renderCarteProgression(){
+  const z=document.getElementById('prog-carte');
+  const u=currentUser;
+  if(!z) return false;
+  if(!u||u.role==='coach'){ z.innerHTML=''; return false; }
+  try{ majCarteAthlete(u); }catch(e){}
+  const c=u.carte||noteAthlete(u);
+  z.innerHTML='<div class="ca-evo card">'
+    +'<div class="ca-evo-t">Ta carte d’athlète</div>'
+    +'<div class="ca-evo-l"><canvas class="ca-vignette" id="ca-evo-vignette" width="240" height="336" role="img" aria-label="Carte d’athlète, note '+c.globale+'"></canvas>'
+    +'<div class="ca-evo-notes">'+CARTE_NOTES.map(k=>'<div><b>'+c[k]+'</b><span>'+CARTE_LIB[k]+'</span></div>').join('')
+    +(c.sansPoids?'<p class="ca-note">Ajoute une pesée : la force se mesure par rapport à ton poids.</p>':'')
+    +'</div></div>'
+    +'<div class="ca-evo-t2">Ta note, semaine après semaine</div>'
+    +htmlCourbeCarte(u.carteHist)
+    +'<div class="ca-btns"><button type="button" class="btn btn-outline btn-sm btn-casse" onclick="partagerCarteAthlete(this,\'carte\')">'+icon('share',14)+' <span>Partager ma carte</span></button></div>'
+    +'</div>';
+  const emb=_carteEmbleme(u);
+  const peindre=()=>{ try{ _peindreVignetteCarte('ca-evo-vignette',u); }catch(e){} };
+  peindre();
+  if(emb&&!emb.complete) emb.addEventListener('load',peindre,{once:true});
+  return true;
+}
 // ── LA FIN DE SÉANCE : « +180 ⚡ », compté par arcCompteur, et le détail ──
 // PURE.
 function htmlVoltsFin(g,xpTotal){
@@ -74591,7 +77042,6 @@ function htmlVoltsFin(g,xpTotal){
     +'<div class="vt-gain"><span id="vt-compteur" data-valeur="0">+0</span> <span class="vt-eclair" aria-hidden="true">⚡</span></div>'
     +'<div class="vt-rang">'+escapeHtml(r.rang.nom)+'</div></div>'
     +'<div class="vt-lignes">'+lignes+'</div>'
-    +(g.ecrete?'<div class="vt-plafond">Plafond du jour atteint : '+xpFormat(XP_PLAFOND_JOUR)+' V au plus par jour.</div>':'')
     +'<div class="rg-jauge vt-jauge"><span style="width:'+Math.round(r.part*100)+'%"></span></div>'
     +'<div class="rg-txt">'+escapeHtml(r.suivant?xpFormat(r.xp)+' / '+xpFormat(r.suivant.seuil)+' V vers '+r.suivant.nom:xpFormat(r.xp)+' V · rang maximal')+'</div>'
     +'</div>';
@@ -74599,6 +77049,9 @@ function htmlVoltsFin(g,xpTotal){
 function rendreVoltsFin(u,sess){
   const z=document.getElementById('wd-volts');
   if(!z) return null;
+  // Une nouvelle fin de séance : le carrousel des trophées repart vide.
+  _bdgTrophees=[];
+  const zt=document.getElementById('wd-trophees'); if(zt) zt.innerHTML='';
   let g=null; try{ g=xpGainsSeance(u,sess); }catch(e){ g=null; }
   z.innerHTML=htmlVoltsFin(g,g?g.apres:xpDe(u));
   if(!g||!(g.total>0)) return g;
@@ -74652,12 +77105,12 @@ function _rangEcran(n,reste){
   const monter=()=>{ try{ monterSelecteurFond('rg-fonds',f=>_dessinerCarteRang(_rangCourant||d,f,img),null); }catch(e){} };
   if(img&&img.complete&&img.naturalWidth) monter(); else if(img) img.addEventListener('load',monter,{once:true});
   const med=z.querySelector('.bdg-ecran-med');
-  if(arcReduit()){ try{ rcFoudre(med,{son:false}); }catch(e){} }
+  if(arcReduit()){ try{ _bdgFoudre(med,{son:false}); }catch(e){} }
   else{
     _animer(z,[{opacity:0},{opacity:1}],{duration:120,easing:'linear'});
     // L'EMBLÈME NAÎT DANS LE FLASH : la foudre frappe à t=0, il sort du blanc
     // à 40 ms, plus grand, puis se pose.
-    try{ rcFoudre(med,{eclairs:d.n>=8?3:2,conteneur:z}); }catch(e){}
+    try{ _bdgFoudre(med,{eclairs:d.n>=8?3:2,conteneur:z}); }catch(e){}
     _animer(med,[{transform:'scale(.2)',opacity:0,filter:'brightness(4)'},
       {transform:'scale(1.15)',opacity:1,filter:'brightness(2)',offset:.55},
       {transform:'scale(1)',opacity:1,filter:'brightness(1)'}],
@@ -75055,6 +77508,8 @@ function loadProgress(){
   go('s-progress');_renderEncartOsseux();renderBandeauPhase();
   // R32 — la phrase de synthese, en tete.
   try{ _renderSyntheseProgression(); }catch(e){}
+  // La carte d'athlète et la courbe de sa note.
+  try{ _renderCarteProgression(); }catch(e){}
   // R20 — L'ONGLET OU L'ATHLETE S'ETAIT ARRETE, et non plus toujours « Poids ».
   // Un nom inconnu (ancien onglet, valeur abimee) retombe sur « Poids ».
   // LE REPLI SUR DONNEES ABSENTES N'EST PAS ECRIT : « Perfs » choisi sur un
@@ -77075,6 +79530,557 @@ function recordsExercice(user,nomEx){
   const res=(mc||me)?{meilleureCharge:mc,meilleurE1rm:me}:null;
   _cachePlateau[cle]=res;
   return res;
+}
+
+// ══ LE RECORD À PORTÉE (28/09/2026) ════════════════════════════════════
+//
+// Avant la séance, UN objectif : la charge qui ferait un nouveau record
+// (record de CHARGE, celui que la fin de séance et la carte record fêtent),
+// tirée de la TENDANCE de l'e1RM sur les six dernières séances de
+// l'exercice (droite des moindres carrés, projetée d'une séance).
+//
+// PRUDENT PAR CONSTRUCTION :
+//   • la charge que la tendance permet (e1RM projeté, ramené aux répétitions
+//     visées avec le RIR habituel de l'athlète) est PLAFONNÉE à +2,5 % du
+//     record de charge, puis arrondie AU PAS (1,25 kg sous 20 kg, 2,5 kg
+//     au-delà — les paliers de _arrondirCharge) ; il n'y a objectif que si
+//     elle dépasse le record ;
+//   • RIEN quand la tendance est plate ou en baisse, pendant une décharge
+//     (cochée, planifiée dans le bloc, ou séance de retour), ou quand le
+//     cycle réduit la charge du jour (getCycleFactor < 1) ;
+//   • rien non plus sans trois séances récentes (60 jours) mesurables.
+// Le calcul d'e1RM est celui du fichier (e1rm, séries validées ≤ 12 reps).
+const RAP_SEANCES=6, RAP_MIN_POINTS=3, RAP_PLAFOND=0.025, RAP_FRAICHEUR_J=60;
+/** PURE. Le pas de charge : 1,25 kg sous 20 kg, 2,5 kg au-delà. */
+function pasDeCharge(kg){ return (Number(kg)<20)?1.25:2.5; }
+/** PURE. Arrondi au pas de charge le plus proche. */
+function arrondiAuPas(kg){
+  const v=Number(kg);
+  if(!isFinite(v)||v<=0) return 0;
+  const p=pasDeCharge(v);
+  // Le rattrapage flottant : 102,4999999 est 102,5.
+  return Math.round(Math.round(v/p*1e6)/1e6)*p;
+}
+// Les répétitions visées : le BAS de la fourchette (« 8-10 » → 8), la plus
+// lourde des charges prévues.
+function _rapReps(reps){
+  const m=String(reps==null?'':reps).match(/\d+(?:[.,]\d+)?/);
+  return m?Math.round(parseFloat(m[0].replace(',','.'))):0;
+}
+// La meilleure e1RM d'une liste de séries (validées, ≤ 12 reps), et le RIR
+// de la série qui la donne.
+function _rapE1rm(sets,user){
+  let v=0, rir=0;
+  for(const s of (sets||[])){
+    if(!s||s.done!==true) continue;
+    const w=parseFloat(s.weight), r=_perfReps(s);
+    if(!(w>0)||!(r>0)||r>PERF_REPS_MAX_E1RM) continue;
+    const i=_perfRir(s,user);
+    const x=e1rm(w,r,i);
+    if(x>v){ v=x; rir=Number(i)||0; }
+  }
+  return {v,rir};
+}
+/** PURE. Pente et projection (séance suivante) des moindres carrés. */
+function tendanceLineaire(vals){
+  const n=vals.length;
+  if(n<2) return {pente:0,projection:n?vals[0]:0};
+  const mx=(n-1)/2, my=vals.reduce((a,v)=>a+v,0)/n;
+  let num=0, den=0;
+  for(let i=0;i<n;i++){ num+=(i-mx)*(vals[i]-my); den+=(i-mx)*(i-mx); }
+  const pente=den?num/den:0;
+  return {pente,projection:my+pente*(n-mx)};
+}
+/** PURE. L'objectif d'UN exercice, ou null. */
+function recordAPorteeExo(u,nomEx,reps,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const r=Math.round(Number(reps));
+  if(!u||!nomEx||!(r>=1&&r<=PERF_REPS_MAX_E1RM)) return null;
+  const ses=((u.sessions)||[]).filter(s=>s&&Number(s.date)>0&&Number(s.date)<=t);
+  // LE RECORD DE CHARGE : la même règle que recordsDeSeance, toutes séances.
+  let recKg=0;
+  for(const s of ses){
+    const d=_dataDeSeance(s,nomEx);
+    for(const st of ((d&&d.sets)||[])){
+      if(!st||st.done!==true) continue;
+      const w=parseFloat(st.weight)||0;
+      if(w>recKg) recKg=w;
+    }
+  }
+  // LA TENDANCE : les six dernières séances mesurables, hors décharges et
+  // saisies aberrantes (_serieRecords les écarte déjà).
+  let pts=[];
+  try{ pts=_serieRecords(Object.assign({},u,{sessions:ses}),nomEx).filter(p=>!p.aberrant); }catch(e){ pts=[]; }
+  const vals=[];
+  for(const p of pts){
+    const d=p.sess&&p.sess.data&&p.sess.data[p.nom];
+    const x=_rapE1rm(d&&d.sets,u);
+    if(x.v>0) vals.push({v:x.v,rir:x.rir,date:p.date});
+  }
+  const der=vals.slice(-RAP_SEANCES);
+  if(der.length<RAP_MIN_POINTS||!(recKg>0)) return null;
+  if(t-der[der.length-1].date>RAP_FRAICHEUR_J*864e5) return null;
+  const tr=tendanceLineaire(der.map(x=>x.v));
+  if(!(tr.pente>0)) return null;
+  // L'e1RM projeté, ramené à une charge aux répétitions visées — avec le RIR
+  // médian des séances retenues : le modèle e1rm() en tient compte, la
+  // conversion inverse aussi.
+  const rirs=der.map(x=>x.rir).sort((a,b)=>a-b);
+  const rirRef=rirs[Math.floor(rirs.length/2)]||0;
+  const tendance=tr.projection*(1+rirRef*0.025)/(1+r/30);
+  const plafond=recKg*(1+RAP_PLAFOND);
+  const charge=arrondiAuPas(Math.min(tendance,plafond));
+  if(!(charge>recKg)) return null;
+  return {nm:nomEx,charge,reps:r,record:recKg,serie:0,
+    e1rm:Math.round(tr.projection*10)/10,pente:Math.round(tr.pente*100)/100,
+    gain:Math.round((charge-recKg)*100)/100};
+}
+/**
+ * PURE (horloge donnée). LE RECORD À PORTÉE de la séance prévue : un seul
+ * exercice, le plus grand gain relatif. null quand rien n'est à portée.
+ * @returns {?{nm:string,charge:number,reps:number,record:number,serie:number,e1rm:number,pente:number,gain:number}}
+ */
+function recordAPortee(u,seancePrevue,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(!u||u.role==='coach'||!seancePrevue||!Array.isArray(seancePrevue.exercises)) return null;
+  if(seancePrevue.deload) return null;
+  try{ if(semaineEstDecharge(u,new Date(t))) return null; }catch(e){}
+  try{ if(repriseDeloadPropose(u)) return null; }catch(e){}
+  try{ if(getCycleFactor(u,localISODate(new Date(t))).factor<1) return null; }catch(e){}
+  try{ if(suspensionEtat(u).actif) return null; }catch(e){}
+  let best=null;
+  for(const ex of seancePrevue.exercises){
+    if(!ex||!ex.name) continue;
+    try{ if(isCardio(ex)) continue; }catch(e){ continue; }
+    let o=null; try{ o=recordAPorteeExo(u,ex.name,_rapReps(ex.reps),t); }catch(e){ o=null; }
+    if(o&&(!best||o.gain/o.record>best.gain/best.record)) best=o;
+  }
+  return best;
+}
+const _rapKg=v=>String(Math.round(Number(v)*100)/100).replace('.',',');
+/** PURE. « Record à portée : Squat 102,5 kg × 5 ». */
+function texteRecordAPortee(o){
+  if(!o||!o.nm||!(o.charge>0)) return '';
+  return 'Record à portée : '+o.nm+' '+_rapKg(o.charge)+' kg × '+o.reps;
+}
+// La séance prévue AUJOURD'HUI : le créneau actif du jour (sessions_config
+// est indexé lundi → dimanche, comme le sélecteur de séance).
+function seancePrevueDuJour(u,maintenant){
+  const d=new Date((typeof maintenant==='number')?maintenant:Date.now());
+  const j=d.getDay()===0?6:d.getDay()-1;
+  const cfg=(u&&u.sessions_config)||[];
+  const s=cfg[j];
+  return (s&&s.active&&Array.isArray(s.exercises)&&s.exercises.length)?s:null;
+}
+// Pour le rappel du service worker : le texte par jour de rappel, avec la
+// même correspondance jour → créneau que _nomsSeancesParJour.
+function _recordsAPorteeParJour(u,maintenant){
+  const out={};
+  const jours=(u&&u._woReminderDays)||[];
+  const actifs=((u&&u.sessions_config)||[]).filter(s=>s&&s.active);
+  jours.forEach((j,k)=>{
+    const c=actifs[k%Math.max(1,actifs.length)];
+    let o=null; try{ o=c?recordAPortee(u,c,maintenant):null; }catch(e){ o=null; }
+    if(o) out[j]=texteRecordAPortee(o);
+  });
+  return out;
+}
+const _ECLAIR_SVG='<svg viewBox="0 0 24 24" aria-hidden="true" style="width:1em;height:1em;vertical-align:-2px"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor"/></svg>';
+// PURE. Le bandeau (accueil, tête de séance).
+function htmlRecordAPortee(o,lieu){
+  if(!o) return '';
+  return '<div class="rpo-carte'+(lieu==='seance'?' rpo-seance':'')+'" role="note">'
+    +'<span class="rpo-ico">'+_ECLAIR_SVG+'</span>'
+    +'<span class="rpo-txt"><span class="rpo-tag">Record à portée</span>'
+    +'<b>'+escapeHtml(o.nm)+' · '+_rapKg(o.charge)+' kg × '+o.reps+'</b>'
+    +'<span class="rpo-sous">Ton record : '+_rapKg(o.record)+' kg · ta progression le permet'+(lieu==='seance'?' — série '+(o.serie+1):'')+'</span></span></div>';
+}
+function _rendreRecordAPortee(u){
+  const z=document.getElementById('clh-record-portee');
+  if(!z) return null;
+  let o=null;
+  try{ o=recordAPortee(u,seancePrevueDuJour(u)); }catch(e){ o=null; }
+  z.innerHTML=htmlRecordAPortee(o,'accueil');
+  return o;
+}
+// En séance : l'index de l'exercice visé dans woState.
+function _rapIndexSeance(){
+  const o=woState&&woState.objectif;
+  if(!o||!Array.isArray(woState.exercises)) return -1;
+  const k=exKey(o.nm);
+  return woState.exercises.findIndex(e=>e&&(e.name===o.nm||exKey(e.name)===k));
+}
+// Le petit éclair sur la série concernée (tant qu'elle n'est pas validée).
+function _eclairObjectif(idx,i){
+  const o=woState&&woState.objectif;
+  if(!o||i!==o.serie||_rapIndexSeance()!==idx) return '';
+  const d=woState.sessionData&&woState.sessionData[idx];
+  if(d&&d.sets&&d.sets[i]&&d.sets[i].done) return '';
+  return '<span class="rpo-eclair" title="'+escapeHtml(texteRecordAPortee(o))+'">'+_ECLAIR_SVG+'</span>';
+}
+// PURE. Le record d'une séance a-t-il atteint l'objectif qu'elle portait ?
+function objectifAtteint(objectif,record){
+  if(!objectif||!record||!(Number(objectif.charge)>0)) return false;
+  const a=String(objectif.nm||''), b=String(record.nm||'');
+  const meme=a===b||(()=>{ try{ return exKey(a)===exKey(b); }catch(e){ return false; } })();
+  return meme&&Number(record.curMax)>=Number(objectif.charge);
+}
+
+// ══ LE CHECK-IN DU MATIN ET LA BATTERIE DU JOUR (28/09/2026) ═══════════
+//
+// Trois questions en trois touches (sommeil, énergie, courbatures, de 1 à 5),
+// proposées sur l'accueil jusqu'à 14 h. Enregistré dans le dossier,
+// u.checkin[AAAA-MM-JJ] (donc /users/<id>/checkin/<date>) : une donnée de
+// SANTÉ (CHAMPS_SANTE), lue par le coach dans la fiche athlète.
+//
+// LA BATTERIE (batterieDuJour) : 0..100 % et une phrase — séance à fond,
+// séance normale, baisse de 10 % conseillée, repos conseillé. Le ressenti
+// pèse d'abord ; la charge des 7 derniers jours, comparée à la semaine
+// habituelle (les 4 d'avant), l'ajuste. Un conseil, jamais une consigne :
+// rien n'est modifié dans la séance.
+//
+// +10 V par check-in (XP_ACTIONS.checkin), DANS le plafond du jour.
+const CHECKIN_HEURE_MAX=14;
+const CHECKIN_QUESTIONS=Object.freeze([
+  Object.freeze({cle:'sommeil',lib:'Sommeil',bas:'Très mauvais',haut:'Excellent'}),
+  Object.freeze({cle:'energie',lib:'Énergie',bas:'Vidé',haut:'Au top'}),
+  Object.freeze({cle:'courbatures',lib:'Courbatures',bas:'Aucune',haut:'Fortes',inverse:true})
+]);
+const BATTERIE_NIVEAUX=Object.freeze([
+  Object.freeze({min:80,cle:'fond',phrase:'Séance à fond possible'}),
+  Object.freeze({min:55,cle:'normale',phrase:'Séance normale'}),
+  Object.freeze({min:35,cle:'baisse',phrase:'Baisse de 10 % conseillée'}),
+  Object.freeze({min:0,cle:'repos',phrase:'Repos conseillé'})
+]);
+const RECHARGE_CONSEILS=Object.freeze([
+  'Couche-toi 30 minutes plus tôt ce soir.',
+  'Vise tes protéines à chaque repas aujourd’hui.',
+  'Vingt minutes de marche, sans forcer.',
+  'Cinq minutes de mobilité : hanches, épaules, chevilles.'
+]);
+const _ciNote=v=>{ const n=Math.round(Number(v)); return (n>=1&&n<=5)?n:0; };
+/** PURE. Le check-in est-il complet (trois réponses de 1 à 5) ? */
+function checkinComplet(c){ return !!(c&&_ciNote(c.sommeil)&&_ciNote(c.energie)&&_ciNote(c.courbatures)); }
+/**
+ * PURE. La charge des 7 derniers jours : {semaine, moyenne} en kg soulevés
+ * (volume des séances), la moyenne sur les 4 semaines d'avant. null sans
+ * semaine habituelle à comparer.
+ */
+function chargeSeptJours(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  let semaine=0, avant=0, nAvant=0;
+  for(const s of ((u&&u.sessions)||[])){
+    const d=Number(s&&s.date), v=Number(s&&s.volume)||0;
+    if(!(d>0)||d>t) continue;
+    if(t-d<7*864e5) semaine+=v;
+    else if(t-d<35*864e5){ avant+=v; nAvant++; }
+  }
+  if(!nAvant||!(avant>0)) return null;
+  return {semaine:Math.round(semaine),moyenne:Math.round(avant/4)};
+}
+/**
+ * PURE. LA BATTERIE DU JOUR.
+ * @param {{sommeil:number,energie:number,courbatures:number}} checkin  1..5
+ * @param {?{semaine:number,moyenne:number}} charge  chargeSeptJours
+ * @returns {?{pct:number,niveau:string,phrase:string}}
+ */
+function batterieDuJour(checkin,charge){
+  if(!checkinComplet(checkin)) return null;
+  const s=(_ciNote(checkin.sommeil)-1)/4, e=(_ciNote(checkin.energie)-1)/4, c=1-(_ciNote(checkin.courbatures)-1)/4;
+  let pct=100*(0.35*s+0.40*e+0.25*c);
+  // La charge : une semaine bien plus lourde que d'habitude vide la
+  // batterie ; une semaine très légère la recharge un peu.
+  const r=(charge&&Number(charge.moyenne)>0)?Number(charge.semaine)/Number(charge.moyenne):null;
+  if(r!=null){
+    if(r>=1.5) pct-=15;
+    else if(r>=1.25) pct-=8;
+    else if(r<0.5) pct+=5;
+  }
+  pct=Math.max(0,Math.min(100,Math.round(pct)));
+  const n=BATTERIE_NIVEAUX.find(x=>pct>=x.min);
+  return {pct,niveau:n.cle,phrase:n.phrase};
+}
+function _ciJour(t){ return localISODate(new Date((typeof t==='number')?t:Date.now())); }
+function checkinDuJour(u,maintenant){
+  const c=u&&u.checkin&&u.checkin[_ciJour(maintenant)];
+  return checkinComplet(c)?c:null;
+}
+/** PURE. La série de check-ins : jours d'affilée jusqu'à aujourd'hui (ou hier). */
+function serieCheckins(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const l=(u&&u.checkin)||{};
+  let d=new Date(t); d.setHours(12,0,0,0);
+  if(!checkinComplet(l[localISODate(d)])) d=new Date(d.getTime()-864e5);
+  let n=0;
+  while(checkinComplet(l[localISODate(d)])&&n<3650){ n++; d=new Date(d.getTime()-864e5); }
+  return n;
+}
+/** PURE. Le formulaire est-il proposé ? Un athlète, avant 14 h, pas encore fait. */
+function checkinAProposer(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(!u||u.role==='coach'||!u.email) return false;
+  if(new Date(t).getHours()>=CHECKIN_HEURE_MAX) return false;
+  return !checkinDuJour(u,t);
+}
+// Le sommeil importé de la nuit (sleepLog), s'il existe : montré, pas demandé.
+function _ciSommeilImporte(u,maintenant){
+  const j=_ciJour(maintenant);
+  const e=((u&&Array.isArray(u.sleepLog))?u.sleepLog:[]).find(x=>x&&x.date===j&&Number(x.duration)>0);
+  if(!e) return '';
+  const m=Math.round(Number(e.duration)*(Number(e.duration)<24?60:1));
+  return Math.floor(m/60)+' h '+String(m%60).padStart(2,'0');
+}
+// Le conseil du jour de repos, et le prochain record à portée en teaser.
+function _ciRecharge(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const d=new Date(t);
+  const conseil=RECHARGE_CONSEILS[(d.getDate()+d.getMonth())%RECHARGE_CONSEILS.length];
+  let teaser='';
+  try{
+    for(let k=1;k<=7&&!teaser;k++){
+      const s=seancePrevueDuJour(u,t+k*864e5);
+      const o=s?recordAPortee(u,s,t):null;
+      if(o) teaser=texteRecordAPortee(o);
+    }
+  }catch(e){ teaser=''; }
+  return {conseil,teaser};
+}
+let _ciBrouillon={};
+// PURE (sauf le brouillon passé). La carte : le formulaire, ou la batterie.
+function htmlCheckinAccueil(u,maintenant,brouillon){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(!u||u.role==='coach') return '';
+  const fait=checkinDuJour(u,t);
+  const serie=serieCheckins(u,t);
+  const serieTxt=serie>=2?'<span class="ci-serie">'+serie+' matins</span>':'';
+  if(fait){
+    const b=batterieDuJour(fait,chargeSeptJours(u,t));
+    if(!b) return '';
+    let repos=false; try{ repos=!seancePrevueDuJour(u,t); }catch(e){ repos=false; }
+    const rc=repos?_ciRecharge(u,t):null;
+    return '<div class="ci-carte ci-fait" data-niveau="'+b.niveau+'">'
+      +'<div class="ci-tete"><span class="eyebrow">Batterie du jour</span>'+serieTxt+'</div>'
+      +'<div class="ci-bat"><div class="ci-pile" aria-hidden="true"><i style="width:'+b.pct+'%"></i></div>'
+      +'<b class="ci-pct" id="ci-pct" data-cible="'+b.pct+'">'+b.pct+' %</b></div>'
+      +'<div class="ci-phrase">'+escapeHtml(repos?'Recharge : ta prochaine séance sera meilleure si…':b.phrase)+'</div>'
+      +(rc?'<div class="ci-conseil">'+escapeHtml(rc.conseil)+'</div>'+(rc.teaser?'<div class="ci-teaser">'+escapeHtml(rc.teaser)+'</div>':''):'')
+      +'</div>';
+  }
+  if(!checkinAProposer(u,t)) return '';
+  const br=brouillon||{};
+  const imp=_ciSommeilImporte(u,t);
+  return '<div class="ci-carte" role="group" aria-label="Check-in du matin">'
+    +'<div class="ci-tete"><span class="eyebrow eyebrow-act">Check-in du matin</span>'+serieTxt+'</div>'
+    +CHECKIN_QUESTIONS.map(q=>'<div class="ci-ligne"><span class="ci-lib">'+q.lib
+      +(q.cle==='sommeil'&&imp?' <em>'+imp+' cette nuit</em>':'')+'</span>'
+      +'<span class="ci-pastilles">'+[1,2,3,4,5].map(n=>'<button type="button" class="ci-p'+(Number(br[q.cle])===n?' on':'')+'" '
+        +'aria-label="'+escapeHtml(q.lib+' : '+n+' sur 5'+(n===1?' ('+q.bas+')':n===5?' ('+q.haut+')':''))+'" '
+        +'onclick="checkinRepondre(\''+q.cle+'\','+n+')">'+n+'</button>').join('')+'</span></div>').join('')
+    +'<div class="ci-note">1 = '+escapeHtml(CHECKIN_QUESTIONS[0].bas.toLowerCase())+' · 5 = '+escapeHtml(CHECKIN_QUESTIONS[0].haut.toLowerCase())
+      +' ; courbatures : 1 = aucune · +10 V</div>'
+    +'</div>';
+}
+function _rendreCheckin(u){
+  const z=document.getElementById('clh-checkin');
+  if(!z) return false;
+  z.innerHTML=htmlCheckinAccueil(u,Date.now(),_ciBrouillon);
+  try{ const p=z.querySelector('#ci-pct'); if(p&&z.dataset.anime!=='1'){ z.dataset.anime='1'; p.dataset.valeur='0';
+    arcCompteur(p,Number(p.dataset.cible)||0,{duree:700,format:x=>Math.round(x)+' %'}); } }catch(e){}
+  return !!z.innerHTML;
+}
+// Une touche : la réponse est gardée ; à la troisième, le check-in est écrit.
+function checkinRepondre(cle,n){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||!CHECKIN_QUESTIONS.some(q=>q.cle===cle)||!_ciNote(n)) return false;
+  _ciBrouillon[cle]=_ciNote(n);
+  if(checkinComplet(_ciBrouillon)){
+    const t=Date.now(), j=_ciJour(t);
+    const c={sommeil:_ciBrouillon.sommeil,energie:_ciBrouillon.energie,courbatures:_ciBrouillon.courbatures,at:t};
+    const b=batterieDuJour(c,chargeSeptJours(u,t));
+    if(b) c.batterie=b.pct;
+    u.checkin=(u.checkin&&typeof u.checkin==='object')?u.checkin:{};
+    u.checkin[j]=c;
+    _ciBrouillon={};
+    try{ saveUser(); }catch(e){}
+    try{ majXp(); _rendreRang(u); }catch(e){}
+    try{ arcHaptique('succes'); }catch(e){}
+  }
+  _rendreCheckin(u);
+  return true;
+}
+// Côté coach : la batterie du jour et la tendance 14 jours.
+function _htmlBatterieCoach(c,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const l=(c&&c.checkin)||{};
+  const jours=[];
+  for(let k=13;k>=0;k--){
+    const d=new Date(t-k*864e5), j=localISODate(d);
+    const x=l[j];
+    const b=checkinComplet(x)?(Number(x.batterie)>=0&&x.batterie!==undefined?Number(x.batterie):(batterieDuJour(x,null)||{}).pct):null;
+    jours.push({j,b:(b==null||!isFinite(b))?null:b});
+  }
+  const faits=jours.filter(x=>x.b!=null);
+  if(!faits.length) return '';
+  const auj=jours[jours.length-1].b;
+  const moy=Math.round(faits.reduce((a,x)=>a+x.b,0)/faits.length);
+  const niv=auj==null?null:BATTERIE_NIVEAUX.find(x=>auj>=x.min);
+  return '<section class="cc-sect cc-bat"><div class="cc-sect-t">Batterie du jour</div>'
+    +'<div class="ci-coach-l"><b>'+(auj==null?'Pas de check-in aujourd’hui':auj+' %')+'</b>'
+    +(niv?'<span>'+escapeHtml(niv.phrase)+'</span>':'')+'</div>'
+    +'<div class="ci-coach-barres" role="img" aria-label="Tendance 14 jours, moyenne '+moy+' %">'
+    +jours.map(x=>'<i title="'+escapeHtml(x.j+(x.b==null?' : pas de check-in':' : '+x.b+' %'))+'" style="height:'+(x.b==null?4:Math.max(6,x.b))+'%"'+(x.b==null?' class="vide"':'')+'></i>').join('')
+    +'</div><div class="ci-coach-n">14 jours · moyenne '+moy+' % · '+faits.length+' check-in'+(faits.length>1?'s':'')+'</div></section>';
+}
+function renderBatterieCoach(c){
+  const z=document.getElementById('ccd-batterie');
+  if(!z) return;
+  let h=''; try{ h=_htmlBatterieCoach(c); }catch(e){ h=''; }
+  z.innerHTML=h; z.style.display=h?'':'none';
+}
+
+// ══ LA REPRISE EN DOUCEUR (J+30) ════════════════════════════════════════
+// Un mois sans séance : l'app PROPOSE de baisser de 10 % les charges de la
+// prochaine séance. Jamais automatique : l'athlète choisit (u._repriseDouce).
+// Accepté, la prochaine séance part en DÉCHARGE (woState.deload, la logique
+// existante : bandeau, hors détection de plateau) et ses charges suggérées
+// sont décotées de 10 % — sans cumuler avec la décote de reprise existante
+// (decoteReprise) : la plus forte des deux s'applique. La séance suivante la
+// consomme (sa date dépasse celle du choix).
+const REPRISE_DOUCE_J=30, REPRISE_DOUCE_FACTEUR=0.9;
+function derniereSeanceDate(u){
+  let m=0;
+  for(const s of ((u&&u.sessions)||[])){ const d=Number(s&&s.date); if(d>m) m=d; }
+  return m;
+}
+/** PURE. Jours entiers sans séance, ou -1 sans historique. */
+function joursSansSeance(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const d=derniereSeanceDate(u);
+  if(!d) return -1;
+  const a=new Date(d); a.setHours(12,0,0,0);
+  const b=new Date(t); b.setHours(12,0,0,0);
+  return Math.round((b-a)/864e5);
+}
+/** PURE. Le tonnage cumulé de toutes les séances (kg). */
+function tonnageTotalDe(u){
+  let v=0;
+  for(const s of ((u&&u.sessions)||[])) v+=Math.max(0,Number(s&&s.volume)||0);
+  return Math.round(v);
+}
+/** PURE. Faut-il proposer la reprise en douceur ? */
+function repriseDouceAProposer(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(!u||u.role==='coach') return false;
+  if(u.suspension&&u.suspension.actif) return false;
+  try{ if(suspensionEtat(u).actif) return false; }catch(e){}
+  if(joursSansSeance(u,t)<REPRISE_DOUCE_J) return false;
+  const r=u._repriseDouce;
+  return !(r&&Number(r.depuis)>derniereSeanceDate(u));
+}
+/** PURE. La baisse acceptée attend-elle sa séance ? */
+function repriseDouceActive(u){
+  const r=u&&u._repriseDouce;
+  return !!(r&&r.accepte&&Number(r.depuis)>derniereSeanceDate(u));
+}
+function htmlRepriseDouce(u,maintenant){
+  const n=joursSansSeance(u,maintenant);
+  return '<div class="rd-carte" role="region" aria-label="Reprise en douceur">'
+    +'<div class="eyebrow eyebrow-act">Reprise en douceur</div>'
+    +'<p class="rd-txt">Ta dernière séance date de '+n+' jours. On te propose de baisser de <b>10 %</b> les charges de ta prochaine séance : '
+    +'elle comptera comme une décharge, et tu repars sur de bonnes bases. C’est toi qui décides.</p>'
+    +'<div class="rd-actions"><button type="button" class="btn btn-red btn-sm" onclick="repriseDouceChoisir(true)">Baisser de 10 %</button>'
+    +'<button type="button" class="btn btn-outline btn-sm" onclick="repriseDouceChoisir(false)">Garder mes charges</button></div></div>';
+}
+function _afficherRepriseDouce(u){
+  const z=document.getElementById('clh-reprise-douce');
+  if(!z) return false;
+  let on=false; try{ on=repriseDouceAProposer(u); }catch(e){ on=false; }
+  z.innerHTML=on?htmlRepriseDouce(u):'';
+  return on;
+}
+function repriseDouceChoisir(oui){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u) return false;
+  u._repriseDouce={depuis:Date.now(),accepte:!!oui};
+  try{ saveUser(); }catch(e){}
+  try{ _afficherRepriseDouce(u); }catch(e){}
+  try{ document.getElementById('rd-ecran')?.remove(); }catch(e){}
+  try{ toast(oui?'C’est noté : ta prochaine séance part 10 % plus légère ✓':'C’est noté : tes charges restent les mêmes ✓'); }catch(e){}
+  return true;
+}
+// L'écran ouvert par la notification du 30e jour (./?reprise=1).
+function ouvrirRepriseDouce(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||!repriseDouceAProposer(u)) return false;
+  document.getElementById('rd-ecran')?.remove();
+  const z=document.createElement('div');
+  z.id='rd-ecran'; z.className='rd-ecran';
+  z.setAttribute('role','dialog'); z.setAttribute('aria-modal','true'); z.setAttribute('aria-label','Reprise en douceur');
+  z.innerHTML='<div class="rd-boite">'+htmlRepriseDouce(u)+'</div>';
+  z.addEventListener('click',e=>{ if(e.target===z) z.remove(); });
+  document.body.appendChild(z);
+  return true;
+}
+
+// ══ RETOUR AU COMBAT (1re séance après 10 jours ou plus) ════════════════
+// Un écran plein dans la file des célébrations (le médaillon RETURN), avec
+// la quête de PHÉNIX NOIR : revenir après 30 jours d'arrêt, puis valider 4
+// semaines d'affilée à partir de la semaine du retour (_badgesFaits).
+const RETOUR_COMBAT_J=10, PHENIX_ARRET_J=30, PHENIX_SEMAINES=4;
+/** PURE. Le retour que marque la séance `sess`, ou null. */
+function retourAuCombat(u,sess){
+  const d=Number(sess&&sess.date);
+  if(!u||!(d>0)) return null;
+  let prev=0;
+  for(const s of (u.sessions||[])){ const x=Number(s&&s.date); if(x<d&&x>prev) prev=x; }
+  if(!prev) return null;
+  const a=new Date(prev); a.setHours(12,0,0,0);
+  const b=new Date(d); b.setHours(12,0,0,0);
+  const jours=Math.round((b-a)/864e5);
+  if(jours<RETOUR_COMBAT_J) return null;
+  const eligible=jours>=PHENIX_ARRET_J;
+  let faites=0;
+  if(eligible){
+    try{
+      const f=_badgesFaits(u,Math.max(d,Date.now()));
+      const l0=_lundiDe(d).getTime();
+      for(let k=0;k<PHENIX_SEMAINES;k++){
+        const lk=_lundiDe(l0+k*7*864e5+12*36e5).getTime();
+        if(f.semaines.some(v=>{ try{ return _lundiDe(v).getTime()===lk; }catch(e){ return false; } })) faites++;
+        else break;
+      }
+    }catch(e){ faites=0; }
+  }
+  return {jours,eligible,faites,reste:PHENIX_SEMAINES-faites};
+}
+/** PURE. La ligne de la quête. */
+function textePhenixNoir(r){
+  if(!r) return '';
+  if(!r.eligible) return 'PHÉNIX NOIR se gagne en revenant après '+PHENIX_ARRET_J+' jours d’arrêt, puis '+PHENIX_SEMAINES+' semaines validées d’affilée.';
+  if(r.reste<=0) return 'PHÉNIX NOIR est à toi.';
+  return 'PHÉNIX NOIR : encore '+r.reste+' semaine'+(r.reste>1?'s':'')+' à valider.';
+}
+function _retourEcran(r,reste){
+  const z=_bdgCouche(
+    '<div class="bdg-ecran-txt rc-retour">'
+    +'<div class="bdg-ecran-sur">'+r.jours+' JOURS SANS SÉANCE</div>'
+    +'<div class="bdg-ecran-img" id="rc-retour-img"><img src="'+escapeHtml(_badgeFichier('RETURN'))+'" alt=""></div>'
+    +'<div class="bdg-ecran-nom">RETOUR AU COMBAT</div>'
+    +'<p class="bdg-ecran-cond">Tu es revenu. C’est la séance la plus difficile, et elle est faite.</p>'
+    +'<div class="rc-phenix"><div class="rc-phenix-cases" aria-hidden="true">'
+      +Array.from({length:PHENIX_SEMAINES},(_,i)=>'<i'+(i<r.faites?' class="on"':'')+'></i>').join('')+'</div>'
+      +'<div class="rc-phenix-txt">'+escapeHtml(textePhenixNoir(r))+'</div></div>'
+    +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" onclick="bdgPlusTard()">'
+      +(reste||_bdgRecap.length?'Suivant':'Continuer')+'</button>'
+    +'</div>','Retour au combat');
+  try{ _bdgFoudre(z.querySelector('#rc-retour-img'),{eclairs:2,conteneur:z}); }catch(e){}
+  try{ arcHaptique('succes'); }catch(e){}
+  return z;
+}
+function _celebrerRetour(r){
+  if(!r) return;
+  _bdgFile.push({retour:r});
+  _bdgPlanifier();
 }
 
 // ── Tonnage hebdomadaire ──────────────────────────────────────────────────
@@ -101391,7 +104397,10 @@ function _joursEntre(a,b){
 
 // Même mécanique que _recordSteps : un jour n'a qu'une valeur, écrasement et
 // non ajout, ce qui permet de corriger une pesée saisie trop vite.
-function _recordWeight(dateStr,kg){
+// `marque` (facultatif) : {dataStatus:'sync'} pour une pesée synchronisée.
+// Sans elle, c'est une pesée à la main : son dataStatus le dit, et la
+// synchronisation ne l'écrasera jamais (sanFusionSync).
+function _recordWeight(dateStr,kg,marque){
   const v=parseFloat(kg);
   if(!dateStr||isNaN(v)||v<PESEE_MIN||v>PESEE_MAX) return false;
   if(!currentUser.weightLog) currentUser.weightLog=[];
@@ -101399,6 +104408,7 @@ function _recordWeight(dateStr,kg){
   const idx=currentUser.weightLog.findIndex(e=>e.date===dateStr);
   if(idx>=0) currentUser.weightLog[idx].kg=arrondi;
   else currentUser.weightLog.push({date:dateStr,kg:arrondi});
+  _sanMarquer(currentUser.weightLog.find(e=>e.date===dateStr),marque);
   const min=localISODate(new Date(Date.now()-PESEE_RETENTION_JOURS*24*3600*1000));
   currentUser.weightLog=currentUser.weightLog.filter(e=>e&&e.date>=min);
   currentUser.weightLog.sort((a,b)=>a.date<b.date?-1:1);
@@ -102760,7 +105770,126 @@ function scoreRecuperation(user){
     return {lib:'Volume au-dessus du repère',valeur:n+' muscles'};
   });
 
+  // (e) La récupération MESURÉE : FC de repos et VFC (voir recupCardio).
+  // Un point au plus. Sans journaux synchronisés, ce critère n'existe pas.
+  essai('cardio',()=>{
+    const c=recupCardio(u);
+    const f=c.fc&&c.fc.signal, v=c.vfc&&c.vfc.signal;
+    if(!f&&!v) return null;
+    return {lib:f&&v?'FC de repos haute et VFC basse':(f?'FC de repos au-dessus de ta moyenne':'VFC sous ta moyenne'),
+      valeur:[f?'+'+String(c.fc.ecart).replace('.',',')+' bpm':'',v?c.vfc.ecart+' %':''].filter(Boolean).join(', ')+' sur 28 j'};
+  });
+
   return {points:criteres.length,criteres:criteres};
+}
+// ══ LA RÉCUPÉRATION MESURÉE : FC DE REPOS ET VFC (synchronisation santé) ══
+// Deux mesures arrivent désormais sans saisie : la fréquence cardiaque de
+// repos (fcReposLog [{date,bpm}]) et la variabilité cardiaque (vfcLog
+// [{date,ms,methode}]). Elles entrent dans scoreRecuperation comme UN critère
+// de plus (« cardio », un point au plus, que la FC, la VFC ou les deux
+// sonnent) : un poids égal à celui du sommeil ou du stress, jamais davantage,
+// et le score garde son rôle — ouvrir une conversation, rien déclencher seul.
+//
+// LE CALCUL, chacun contre SA PROPRE HISTOIRE (jamais contre une norme de
+// population, qui varie trop d'une personne à l'autre) :
+//   · fenêtre : les 28 derniers jours (aujourd'hui compris) ;
+//   · « récent » : les 3 dernières mesures, prises dans les 7 derniers jours ;
+//   · « base » : les autres mesures de la fenêtre, 7 au moins (sinon rien) ;
+//   · FC de repos : signal si la moyenne récente dépasse la base d'au moins
+//     max(5 bpm, 1 écart-type). Une FC de repos qui monte de quelques
+//     battements sur plusieurs jours accompagne la fatigue accumulée ou un
+//     début d'infection (Buchheit 2014, Front Physiol 5:73 ; Bosquet et al.
+//     2008, Br J Sports Med 42:709) ; 5 bpm dépasse la variation d'un jour à
+//     l'autre d'une mesure au repos.
+//   · VFC : comparée en LOGARITHME (ln), comme le recommandent Plews et al.
+//     2012-2013 (Eur J Appl Physiol 112:3729 ; Sports Med 43:773), parce que
+//     sa distribution est asymétrique. Signal si la moyenne ln récente passe
+//     sous la base de plus d'1 écart-type. Plews retient 0,5 écart-type comme
+//     plus petit changement utile ; on prend le double, parce qu'un point du
+//     score doit être rare.
+//   · UNE MÉTHODE À LA FOIS : la base ne contient que les valeurs de la
+//     méthode de la dernière mesure. RMSSD (Health Connect) et SDNN (Apple
+//     Santé) ne mesurent pas la même chose : on ne les compare JAMAIS.
+// Sans ces journaux (ou sans base suffisante), le critère n'existe pas, et
+// le score est exactement celui d'avant (test de non-régression).
+const RECUP_FENETRE_JOURS=28, RECUP_RECENTS=3, RECUP_RECENTS_JOURS=7, RECUP_BASE_MIN=7;
+const RECUP_FC_ECART_BPM=5, RECUP_VFC_ECARTS_TYPE=1;
+function _recupMoySd(a){
+  const m=a.reduce((t,x)=>t+x,0)/a.length;
+  const sd=a.length>1?Math.sqrt(a.reduce((t,x)=>t+(x-m)*(x-m),0)/(a.length-1)):0;
+  return {m,sd};
+}
+// PURE. Les points de la fenêtre, triés : [{d, v, methode}].
+function _recupPoints(log,champ,maintenant,methode){
+  const t=Number(maintenant)||Date.now();
+  const fin=localISODate(new Date(t)), debut=localISODate(new Date(t-(RECUP_FENETRE_JOURS-1)*864e5));
+  return (Array.isArray(log)?log:[]).filter(e=>e&&e.date>=debut&&e.date<=fin&&isFinite(Number(e[champ]))&&Number(e[champ])>0
+      &&(!methode||e.methode===methode))
+    .map(e=>({d:e.date,v:Number(e[champ]),methode:e.methode||null}))
+    .sort((a,b)=>a.d<b.d?-1:(a.d>b.d?1:0));
+}
+// PURE. {fc, vfc} : chacun null, ou {recent, base, ecart, n, signal[, methode]}.
+function recupCardio(user,maintenant){
+  const u=user||{}, t=Number(maintenant)||Date.now();
+  const limRecent=localISODate(new Date(t-(RECUP_RECENTS_JOURS-1)*864e5));
+  const couper=pts=>{
+    const rec=pts.slice(-RECUP_RECENTS).filter(p=>p.d>=limRecent);
+    const base=pts.slice(0,pts.length-rec.length);
+    return (rec.length>=1&&base.length>=RECUP_BASE_MIN)?{rec,base}:null;
+  };
+  let fc=null, vfc=null;
+  const pf=couper(_recupPoints(u.fcReposLog,'bpm',t));
+  if(pf){
+    const r=_recupMoySd(pf.rec.map(p=>p.v)).m, b=_recupMoySd(pf.base.map(p=>p.v));
+    const ecart=Math.round((r-b.m)*10)/10;
+    fc={recent:Math.round(r),base:Math.round(b.m),ecart,n:pf.base.length+pf.rec.length,
+      signal:ecart>=Math.max(RECUP_FC_ECART_BPM,b.sd)};
+  }
+  const tous=_recupPoints(u.vfcLog,'ms',t);
+  const meth=tous.length?tous[tous.length-1].methode:null;
+  if(meth){
+    const pv=couper(tous.filter(p=>p.methode===meth));
+    if(pv){
+      const r=_recupMoySd(pv.rec.map(p=>Math.log(p.v))).m, b=_recupMoySd(pv.base.map(p=>Math.log(p.v)));
+      vfc={recent:Math.round(Math.exp(r)),base:Math.round(Math.exp(b.m)),methode:meth,
+        ecart:Math.round((Math.exp(r-b.m)-1)*100),n:pv.base.length+pv.rec.length,
+        signal:b.sd>0&&(r-b.m)< -RECUP_VFC_ECARTS_TYPE*b.sd};
+    }
+  }
+  return {fc,vfc};
+}
+// Les deux courbes de Lifestyle, sous la carte « Ce qui va dans le même sens » :
+// au dessin des courbes d'Évolution (_courbeMesures). La VFC ne montre que la
+// méthode de sa dernière mesure.
+function _htmlCourbesRecup(user,maintenant){
+  const u=user||{}, t=Number(maintenant)||Date.now();
+  const fc=_recupPoints(u.fcReposLog,'bpm',t);
+  const tv=_recupPoints(u.vfcLog,'ms',t);
+  const meth=tv.length?tv[tv.length-1].methode:null;
+  const vf=meth?tv.filter(p=>p.methode===meth):[];
+  const carte=(titre,trace)=>trace?`<div class="evo-carte pc-carte">
+      <div class="pc-tete"><span class="pc-ico" aria-hidden="true">${_pesIcone('barres')}</span>
+        <span class="pc-titre">${titre}</span></div>${trace}</div>`:'';
+  // La couleur de l'écart : une FC qui baisse, une VFC qui monte, c'est dans le bon sens.
+  const cFc=e=>Math.abs(e)<2?'var(--sub)':(e<0?'var(--green)':'var(--orange)');
+  const cVf=e=>Math.abs(e)<3?'var(--sub)':(e>0?'var(--green)':'var(--orange)');
+  const h=carte('FC de repos · 28 jours',fc.length>1?_courbeMesures([{label:'FC de repos',color:'#E02020',pts:fc}],{unite:'bpm',couleur:cFc}):'')
+    +carte('Variabilité cardiaque ('+(meth==='sdnn'?'SDNN':'RMSSD')+') · 28 jours',vf.length>1?_courbeMesures([{label:'VFC',color:'#60a5fa',pts:vf}],{unite:'ms',couleur:cVf}):'');
+  return h?'<div class="recup-courbes">'+h+'</div>':'';
+}
+// « 1 h 11 », « 45 min ».
+function _hMin(m){ const n=Math.round(Number(m)||0); return n<60?n+' min':Math.floor(n/60)+' h '+String(n%60).padStart(2,'0'); }
+// PURE. La ligne des phases sous la nuit, dans MON SOMMEIL : la dernière nuit
+// de la période qui en porte (synchronisation). Rien sinon.
+function _htmlPhasesNuit(u,jours){
+  const l=(u&&u.sleepLog)||[];
+  for(let i=(jours||[]).length-1;i>=0;i--){
+    const e=l.find(x=>x&&x.date===jours[i].iso);
+    const p=e&&e.phases;
+    if(p&&(p.profond>0||p.paradoxal>0))
+      return '<div class="sv-phases">'+[p.profond>0?'Profond '+_hMin(p.profond):'',p.paradoxal>0?'Paradoxal '+_hMin(p.paradoxal):''].filter(Boolean).join(' · ')+'</div>';
+  }
+  return '';
 }
 // « 5 h 20 » plutôt que « 5,3 h » : c'est ainsi qu'on parle d'une nuit.
 function _recupHeures(h){
@@ -102838,11 +105967,29 @@ function bilanDomaineCoach(u,quoi,jours){
     const dd=new Date(der+'T12:00:00');
     depuis=Math.max(0,Math.round((d.getTime()-dd.getTime())/864e5));
   }
+  // LA RÉCUPÉRATION MESURÉE (synchronisation), avec le sommeil : moyenne de
+  // la fenêtre. null quand rien n'est arrivé — le coach ne voit rien d'un
+  // athlète qui n'a pas activé la synchronisation.
+  const cardio=quoi==='sommeil'?_coachCardio(u,serie[0].iso,serie[serie.length-1].iso):{fcRepos:null,vfc:null};
   return {serie,fenetre:n,renseignes:lus.length,moyenne:moy(lus),
     semaine:m0,semaineAvant:m1,
     delta:(m0!=null&&m1!=null)?(m0-m1):null,
-    dernier:der,depuis};
+    dernier:der,depuis,fcRepos:cardio.fcRepos,vfc:cardio.vfc};
 }
+// PURE. FC de repos et VFC entre deux dates ISO : {fcRepos:{moyenne,n}|null,
+// vfc:{moyenne,n,methode}|null}. La VFC ne garde que la méthode de sa
+// dernière mesure (RMSSD et SDNN ne se moyennent pas ensemble).
+function _coachCardio(u,debut,fin){
+  const dans=e=>e&&e.date>=debut&&e.date<=fin;
+  const fc=((u&&u.fcReposLog)||[]).filter(e=>dans(e)&&Number(e.bpm)>0);
+  const v0=((u&&u.vfcLog)||[]).filter(e=>dans(e)&&Number(e.ms)>0).sort((a,b)=>a.date<b.date?-1:1);
+  const meth=v0.length?v0[v0.length-1].methode:null;
+  const v=v0.filter(e=>e.methode===meth);
+  const moy=(a,k)=>Math.round(a.reduce((t,e)=>t+Number(e[k]),0)/a.length);
+  return {fcRepos:fc.length?{moyenne:moy(fc,'bpm'),n:fc.length}:null,
+    vfc:v.length?{moyenne:moy(v,'ms'),n:v.length,methode:meth}:null};
+}
+function _libVfc(m){ return m==='sdnn'?'SDNN':'RMSSD'; }
 // ⚠ LA SPARKLINE, PUIS LA CARTE DE PERIODE ET LES LIGNES « 7 j vs 7 j », SONT
 // PARTIES : le tableau de bord de chaque domaine (_htmlDomaineCoach) porte
 // maintenant la courbe sur 7 jours, 28 jours ou 3 mois, et la tendance.
@@ -103124,6 +106271,7 @@ function _htmlDomaineCoach(c,quoi){
       +'<div class="cso-t-c"><h3>'+D.titre+'</h3><span>'+D.sous+'</span></div>'
       +'<label class="cso-per">'+CS_ICO.calendrier+'<span>'+libPer+'</span>'+CS_ICO.bas
         +'<select onchange="csPeriode(this.value,\''+q+'\')" aria-label="Période">'+opts+'</select></label>'
+      +_htmlSyncCoach(_sanSyncCoachLire(c))
     +'</section>'
     +'<div class="cso-kpis">'
       +'<div class="cso-carte cso-k cso-k-moy"><span class="cso-k-ico">'+(q==='sommeil'?CS_ICO.lit:CS_ICO.marche)+'</span><div>'
@@ -103154,6 +106302,8 @@ function _htmlDomaineCoach(c,quoi){
         +ligne(Nom+' atteignant l’objectif',s.atteints+' / 7')
         +ligne('Renseigné sur '+bil.fenetre+' jours',bil.renseignes+' / '+bil.fenetre)
         +(reg?ligne('Régularité des couchers','± '+reg.ecart+' min'):'')
+        +(bil.fcRepos?ligne('FC de repos ('+bil.fenetre+' j)',bil.fcRepos.moyenne+' bpm · '+bil.fcRepos.n+' mesure'+(bil.fcRepos.n>1?'s':'')):'')
+        +(bil.vfc?ligne('VFC '+_libVfc(bil.vfc.methode)+' ('+bil.fenetre+' j)',bil.vfc.moyenne+' ms · '+bil.vfc.n+' mesure'+(bil.vfc.n>1?'s':'')):'')
         +'<div class="cso-note">'+D.note+'</div>'
       +'</section>'
       +'<section class="cso-carte cso-attn"><div class="cso-s-t" data-ton="orange">'+CS_ICO.alerte+'<h4>Points d’attention</h4></div>'+attH+'</section>'
@@ -105386,8 +108536,8 @@ function _appliquerCaptureStats(analyse){
       ? (currentUser.sleepLog||[]).some(e=>e.date===j.date)
       : (currentUser.stepsLog||[]).some(e=>e.date===j.date);
     const pose=analyse.type==='sommeil'
-      ? _recordSleep(j.date,{duration:j.valeur})
-      : _recordSteps(j.date,j.valeur);
+      ? _recordSleep(j.date,{duration:j.valeur},{dataStatus:'capture'})
+      : _recordSteps(j.date,j.valeur,{dataStatus:'capture'});
     if(!pose) continue;
     res.ecrits++;
     if(avant) res.remplaces++;
@@ -105532,7 +108682,10 @@ async function importerCaptureStats(input){
     if(btn) arcRendre(btn,libelle);
   }
 }
-function _recordSteps(dateStr,count){
+// `marque` (facultatif) : {dataStatus:'capture'|'sync', source}. Sans elle,
+// la saisie est MANUELLE et horodatée : c'est ce qui la protège d'une
+// synchronisation reçue plus tôt (sanFusionSync).
+function _recordSteps(dateStr,count,marque){
   const n=parseInt(count,10);
   // 0 est une valeur légitime saisie à la main (« je n'ai pas marché »), d'où
   // le seuil bas à 0 et non à 1 — le champ de fin de séance, lui, resserre à
@@ -105544,6 +108697,7 @@ function _recordSteps(dateStr,count){
   // qui permet de corriger dans Lifestyle un chiffre entré en fin de séance.
   if(idx>=0) currentUser.stepsLog[idx].count=n;
   else currentUser.stepsLog.push({date:dateStr,count:n});
+  _sanMarquer(currentUser.stepsLog.find(e=>e.date===dateStr),marque);
   const cutoff=localISODate(new Date(Date.now()-STEPS_RETENTION_JOURS*24*3600*1000));
   currentUser.stepsLog=currentUser.stepsLog.filter(e=>e.date>=cutoff);
   return true;
@@ -106251,6 +109405,7 @@ function _sanGraphe(quoi,serie,obj,fmt){
 //    domaine et restent nets a toutes les tailles.
 const _SV_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">';
 const SAN_ICO={
+  synchro:_SV_SVG+'<path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3.5V8h4.5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 20.5V16h-4.5"/></svg>',
   chaussure:_SV_SVG+'<path d="M2.5 16.5h17.2a1.8 1.8 0 0 0 1.8-1.8c0-1.4-1-2.1-2.5-2.6l-4.1-1.5a3 3 0 0 1-1.3-.9L11.2 6.8a1.3 1.3 0 0 0-2-.2L7.6 8.3H2.5z"/><path d="M2.5 16.5v2h19v-2"/><path d="M9.6 10.2l1.2-1M11.4 11.6l1.2-1"/></svg>',
   lune:_SV_SVG+'<path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z"/></svg>',
   crayon:_SV_SVG+'<path d="M16.9 3.6a2.1 2.1 0 0 1 3 3L8.4 18.1l-4 1 1-4z"/><path d="M14.8 5.7l3 3"/></svg>',
@@ -106399,12 +109554,12 @@ function _svImg(nom,classe){
 }
 function _svMethodes(u,quoi){
   const nuit=(quoi==='sommeil');
-  const src=sanSource(u,quoi);
   return '<div class="san-import sv-meth">'
     +'<div class="sv-meth-tete"><span class="sv-meth-ico">'+(nuit?SAN_ICO.dormeur:SAN_ICO.histo)+'</span>'
       +'<div><h3>'+(nuit?'Ajouter mon sommeil':'Ajouter mes pas')+'</h3>'
       +'<span>Choisis la méthode qui te convient</span></div></div>'
     +'<div class="sv-meth-g">'
+      +_svTuileSync(u,quoi)
       +'<button type="button" class="sv-tuile sv-tuile-m" onclick="sanSaisir(\''+quoi+'\')">'
         +'<span class="sv-tuile-h"><span class="sv-tuile-ico">'+SAN_ICO.clavier+'</span>'
           +'<span class="sv-tuile-t">Saisie manuelle</span><span class="sv-chev">'+SAN_ICO.droite+'</span></span>'
@@ -106427,7 +109582,7 @@ function _svMethodes(u,quoi){
     +'</div>'
     +'<div class="sv-cadenas">'+SAN_ICO.cadenas+'<span>La capture est lue sur ton téléphone. Elle n\'est ni envoyée ni conservée.</span></div>'
     +'<div class="sv-pied">'
-      +'<button type="button" class="san-src" onclick="sanChangerSource(\''+quoi+'\')">Source : <strong>'+escapeHtml(src.lib)+'</strong></button>'
+      +_svPiedSource(u,quoi)
       +'<span aria-hidden="true">·</span>'
       +'<button type="button" class="san-src" onclick="sanAide(\''+quoi+'\')">Où trouver '+(nuit?'mon sommeil':'mes pas')+' ?</button>'
     +'</div>'
@@ -106443,7 +109598,7 @@ function _htmlCarteSante(u,quoi){
   // pas, #60a5fa pour le sommeil. Tout le reste en derive.
   return '<section class="san-carte sv-carte" data-quoi="'+(nuit?'sommeil':'pas')+'"'
     +' style="--sv-c:'+(nuit?'#60a5fa':'#e02020')+'">'
-    +'<div class="sv-bloc sv-g">'+_svEnTete(quoi,r,bloc,fmt)+_sanGraphe(quoi,serie,bloc.objectif,fmt)+'</div>'
+    +'<div class="sv-bloc sv-g">'+_svEnTete(quoi,r,bloc,fmt)+_sanGraphe(quoi,serie,bloc.objectif,fmt)+(nuit?_htmlPhasesNuit(u,r.jours):'')+'</div>'
     +'<div class="sv-duo">'+_svMoyenne(quoi,bloc,fmt)+_svProgression(quoi,r,bloc)+'</div>'
     +(nuit?_svDette(u):'')
     +_htmlRattraper(u,quoi)
@@ -106532,6 +109687,7 @@ function sanRendre(){
   // R22 — L'IMPORT PAR CAPTURE N'EST PLUS EN TETE D'ECRAN : chaque carte le
   // porte sous son bouton de saisie (_htmlCarteSante). Le repli de
   // loadLifestyle, s'il joue, rend donc loadSteps/loadSleep AVEC leur import.
+  try{ _rendreBandeSante(); }catch(e){}
   try{ if(zs) zs.innerHTML=_htmlCarteSante(u,'sommeil'); }catch(e){ if(zs) zs.innerHTML=''; }
   try{ if(zp) zp.innerHTML=_htmlCarteSante(u,'pas'); }catch(e){ if(zp) zp.innerHTML=''; }
   // LE MENU DE PERIODE VIT DANS L'EN-TETE DE SECTION, a droite du titre,
@@ -106543,7 +109699,7 @@ function sanRendre(){
        if(zh) zh.innerHTML=htmlHabitudes(u,{taux:true}); }catch(e){
        const zh=document.getElementById('lifestyle-habitudes'); if(zh) zh.innerHTML=''; }
   try{ const zc=document.getElementById('lifestyle-croise');
-       if(zc) zc.innerHTML=_htmlCafeLimite(u)+_htmlRecuperationLifestyle(u); }catch(e){
+       if(zc) zc.innerHTML=_htmlCafeLimite(u)+_htmlRecuperationLifestyle(u)+_htmlCourbesRecup(u); }catch(e){
        const zc=document.getElementById('lifestyle-croise'); if(zc) zc.innerHTML=''; }
 }
 // ── LA FEUILLE DU JOUR ─────────────────────────────────────────────────
@@ -106771,6 +109927,528 @@ function sanPoserSource(quoi,cle){
   try{ rcm('tracker_selected'); }catch(e){}
   sanFermer(); sanRendre();
 }
+// ══ LA SANTÉ SYNCHRONISÉE (Health Connect, Raccourci iPhone) ═════════════
+// Décision de Kevin (28/09/2026). L'APK Android lit Health Connect, le
+// Raccourci iPhone « RepCore Santé » lit Apple Santé ; les deux POSTENT au
+// serveur léger (cloudflare/src/sante.js), qui range les jours dans
+// sante_sync/<clé>. L'app les LIT ici et les FUSIONNE dans les journaux
+// habituels, par les mêmes portes que la saisie (_recordSteps, _recordSleep,
+// _recordWeight) : le reste de l'app ne sait pas d'où vient un chiffre.
+//
+// QUI GAGNE, jour par jour :
+//   · une saisie MANUELLE postérieure à la réception de ce jour ;
+//   · sinon la synchronisation, qui remplace une capture, une ancienne
+//     synchronisation ou une saisie manuelle plus ancienne ;
+//   · une pesée à la main n'est JAMAIS remplacée ;
+//   · jamais une date future, jamais au-delà de 180 jours.
+// VFC : RMSSD (Health Connect) et SDNN (Apple) ne se comparent pas ; la
+// méthode voyage avec chaque valeur.
+const SAN_SYNC_RETENTION_JOURS=180;
+const SAN_SYNC_INTERVALLE_MS=10*60*1000;
+const SAN_SYNC_URL_RECEPTION=SERVEUR_LEGER_URL+'/sante/i/';
+const SAN_SYNC_DEFAUT={android:'google',ios:'apple'};
+let _sanSyncLu=0, _sanSyncEnCours=null, _sanSyncMeta=null;
+
+// L'appel authentifié du jeton : creer (rend le jeton en clair, une fois),
+// revoquer, etat. La création exige le consentement santé.
+async function santeJeton(action){
+  if(action==='creer'&&!demanderConsentementSante('pas',()=>santeJeton('creer'))) return null;
+  const r=await CLOUD._callFn('santeJeton',{action});
+  if(action==='revoquer'){ _sanSyncMeta=null; _sanSyncLu=0; }
+  return r;
+}
+// L'adresse que l'APK ou le Raccourci appellent.
+function sanSyncAdresse(jeton){ return SAN_SYNC_URL_RECEPTION+encodeURIComponent(String(jeton||'')); }
+
+// L'instant d'une entrée manuelle (0 si elle n'en porte pas).
+function _sanInstant(e){ return Number(e&&(e.updatedAt||e.createdAt))||0; }
+// Un chiffre saisi par l'athlète APRÈS la réception de ce jour gagne.
+function _sanManuelGagne(e,recu){
+  return !!(e&&e.dataStatus==='manual'&&_sanInstant(e)>(Number(recu)||0));
+}
+function _sanMarquer(e,marque){
+  if(!e) return;
+  const m=marque||{};
+  e.dataStatus=m.dataStatus||'manual';
+  e.updatedAt=Date.now();
+  if(m.source) e.source=m.source;
+}
+// La source d'une origine reçue : une clé connue de SAN_SOURCES, sinon
+// l'écosystème de la plateforme.
+function _sanOrigine(o,plateforme){
+  const k=String(o||'').toLowerCase();
+  return SAN_SOURCES[k]&&k!=='manuel'?k:(SAN_SYNC_DEFAUT[plateforme]||'autre');
+}
+
+// PURE. Ce que la synchronisation `sync` ({meta, jours}) doit écrire dans
+// `dossier` à l'instant `maintenant`. Rend le plan, sans rien toucher :
+//   {pas:[{date,count,source}], sommeil:[{date,duration,bed,wake,phases,source}],
+//    poids:[{date,kg}], fc:[{date,bpm}], vfc:[{date,ms,methode}],
+//    origines:{pas,sommeil}, gardes:n}
+// `gardes` compte les jours où une saisie manuelle plus récente l'emporte.
+function sanFusionSync(dossier,sync,maintenant){
+  const u=dossier||{}, t=Number(maintenant)||Date.now();
+  const plan={pas:[],sommeil:[],poids:[],fc:[],vfc:[],origines:{},gardes:0};
+  const meta=(sync&&sync.meta)||{}, jours=(sync&&sync.jours)||{};
+  if(!meta.empreinte&&!meta.derniereReception) return plan;
+  const auj=localISODate(new Date(t));
+  const min=localISODate(new Date(t-SAN_SYNC_RETENTION_JOURS*864e5));
+  const orig=meta.origines||{};
+  const srcPas=_sanOrigine(orig.pas,meta.plateforme), srcSom=_sanOrigine(orig.sommeil,meta.plateforme);
+  if(orig.pas||meta.plateforme) plan.origines.pas=srcPas;
+  if(orig.sommeil||meta.plateforme) plan.origines.sommeil=srcSom;
+  const trouver=(l,d)=>(Array.isArray(l)?l:[]).find(e=>e&&e.date===d)||null;
+  for(const d of Object.keys(jours).sort()){
+    const j=jours[d];
+    if(!j||typeof j!=='object'||!/^\d{4}-\d{2}-\d{2}$/.test(d)||d>auj||d<min) continue;
+    const recu=Number(j.recu)||Number(meta.derniereReception)||0;
+    const n=Number(j.pas);
+    if(isFinite(n)&&n>=0&&n<=99999){
+      const e=trouver(u.stepsLog,d);
+      if(_sanManuelGagne(e,recu)) plan.gardes++;
+      else if(!(e&&e.dataStatus==='sync'&&Number(e.count)===Math.round(n)&&e.source===srcPas))
+        plan.pas.push({date:d,count:Math.round(n),source:srcPas});
+    }
+    const m=Number(j.sommeilMin);
+    if(isFinite(m)&&m>=30&&m<=1080){
+      const e=trouver(u.sleepLog,d);
+      const nuit={date:d,duration:Math.round(m/60*100)/100,source:srcSom};
+      if(/^\d{2}:\d{2}$/.test(j.coucher||'')) nuit.bed=j.coucher;
+      if(/^\d{2}:\d{2}$/.test(j.lever||'')) nuit.wake=j.lever;
+      if(j.phases&&typeof j.phases==='object'){
+        const p={};
+        for(const k of ['profond','leger','paradoxal','eveil']) if(isFinite(Number(j.phases[k]))) p[k]=Math.round(Number(j.phases[k]));
+        if(Object.keys(p).length) nuit.phases=p;
+      }
+      if(_sanManuelGagne(e,recu)) plan.gardes++;
+      else if(!(e&&e.dataStatus==='sync'&&e.duration===nuit.duration&&e.bed===nuit.bed&&e.wake===nuit.wake
+        &&JSON.stringify(e.phases||null)===JSON.stringify(nuit.phases||null)&&e.source===srcSom))
+        plan.sommeil.push(nuit);
+    }
+    const kg=Number(j.poids);
+    if(isFinite(kg)&&kg>=PESEE_MIN&&kg<=PESEE_MAX){
+      const e=trouver(u.weightLog,d), v=Math.round(kg*10)/10;
+      if(e&&e.dataStatus!=='sync') plan.gardes++;
+      else if(!(e&&e.kg===v)) plan.poids.push({date:d,kg:v});
+    }
+    const bpm=Number(j.fcRepos);
+    if(isFinite(bpm)&&bpm>=30&&bpm<=120){
+      const e=trouver(u.fcReposLog,d);
+      if(!(e&&e.bpm===Math.round(bpm))) plan.fc.push({date:d,bpm:Math.round(bpm)});
+    }
+    const ms=Number(j.vfc), methode=j.vfcMethode==='rmssd'||j.vfcMethode==='sdnn'?j.vfcMethode:null;
+    if(isFinite(ms)&&ms>=5&&ms<=250&&methode){
+      const e=trouver(u.vfcLog,d), v=Math.round(ms*10)/10;
+      if(!(e&&e.ms===v&&e.methode===methode)) plan.vfc.push({date:d,ms:v,methode});
+    }
+  }
+  return plan;
+}
+// Un journal {date,…} : la valeur du jour remplacée, triée, purgée à 180 jours.
+function _sanJournalPoser(liste,entree,maintenant){
+  const min=localISODate(new Date((Number(maintenant)||Date.now())-SAN_SYNC_RETENTION_JOURS*864e5));
+  const l=(Array.isArray(liste)?liste:[]).filter(e=>e&&e.date!==entree.date&&e.date>=min);
+  l.push(entree);
+  return l.sort((a,b)=>a.date<b.date?-1:1);
+}
+// Applique un plan au dossier courant, par les portes habituelles.
+// Rend le nombre de valeurs écrites.
+function sanAppliquerSync(plan){
+  const u=currentUser;
+  if(!u||!plan||!aConsentiSante(u)) return 0;
+  let n=0;
+  for(const p of plan.pas) if(_recordSteps(p.date,p.count,{dataStatus:'sync',source:p.source})) n++;
+  for(const s of plan.sommeil)
+    if(_recordSleep(s.date,{bed:s.bed,wake:s.wake,duration:s.duration,phases:s.phases},{dataStatus:'sync',source:s.source})) n++;
+  for(const p of plan.poids) if(_recordWeight(p.date,p.kg,{dataStatus:'sync'})) n++;
+  for(const f of plan.fc){ u.fcReposLog=_sanJournalPoser(u.fcReposLog,f); n++; }
+  for(const v of plan.vfc){ u.vfcLog=_sanJournalPoser(u.vfcLog,v); n++; }
+  const o=plan.origines||{};
+  for(const q of ['pas','sommeil']){
+    if(o[q]&&(!u.santeSource||u.santeSource[q]!==o[q])){
+      if(!u.santeSource) u.santeSource={};
+      u.santeSource[q]=o[q]; n++;
+    }
+  }
+  return n;
+}
+// LIRE, FUSIONNER, DIRE « CONSOMMÉ ». Au plus une lecture par 10 minutes
+// (`force` pour le bouton d'essai). Silencieux en cas d'échec : la saisie
+// manuelle et la capture restent là.
+async function sanSyncTirer(force){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||!u.email||u.role==='coach'||!SERVEUR_LEGER) return null;
+  if(_sanSyncEnCours) return _sanSyncEnCours;
+  if(!force&&Date.now()-_sanSyncLu<SAN_SYNC_INTERVALLE_MS) return null;
+  if(typeof navigator!=='undefined'&&navigator.onLine===false) return null;
+  _sanSyncLu=Date.now();
+  _sanSyncEnCours=(async()=>{
+    try{
+      const token=await CLOUD._getToken(); if(!token) return null;
+      const url=CLOUD._fbUrl.replace('users.json','sante_sync/'+String(u.email).toLowerCase().replace(/\./g,',')+'.json');
+      const r=await fetch(url+'?auth='+token);
+      if(!r.ok) return null;
+      const sync=await r.json();
+      const avant=JSON.stringify(_sanSyncMeta);
+      _sanSyncMeta=_sanMetaNorm(sync&&sync.meta);
+      if(JSON.stringify(_sanSyncMeta)!==avant){ try{ _majPastilleLifestyle(); }catch(e){} }
+      if(!sync||!sync.meta) return null;
+      const plan=sanFusionSync(currentUser,sync,Date.now());
+      const n=sanAppliquerSync(plan);
+      if(n){ saveUser(); try{ CLOUD.pushOne(currentUser.email,currentUser); }catch(e){} }
+      if(n||JSON.stringify(_sanSyncMeta)!==avant){ try{ if(document.getElementById('s-lifestyle')?.classList.contains('active')) sanRendre(); }catch(e){} }
+      try{ _rendreBandeSante(); }catch(e){}
+      if(sync.meta.derniereReception&&!(Number(sync.consomme)>=Number(sync.meta.derniereReception))){
+        try{ await fetch(url.replace('.json','/consomme.json')+'?auth='+token,{method:'PUT',body:JSON.stringify(Date.now())}); }catch(e){}
+      }
+      return {ecrits:n,gardes:plan.gardes,meta:_sanSyncMeta};
+    }catch(e){ return null; }
+    finally{ _sanSyncEnCours=null; }
+  })();
+  return _sanSyncEnCours;
+}
+try{
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden) sanSyncTirer().catch(()=>{}); });
+}catch(e){}
+// ══ LA SANTÉ SYNCHRONISÉE — L'INTERFACE ══════════════════════════════════
+// Une tuile en tête des méthodes (Lifestyle), une feuille « Connecter mes
+// données santé » calquée sur #ios-install-modal, une pastille chez le coach.
+//
+// RACCOURCI_SANTE_URL : le lien iCloud du Raccourci « RepCore Santé », que
+// Kevin publie lui-même. Vide, l'étape le dit au lieu d'ouvrir un lien mort.
+// SAN_SYNC_APK_LIEN : le lien que l'APK (TWA com.repcore.app, version 4 et
+// plus) intercepte : ConnecterSanteActivity range le jeton, fait confirmer le
+// compte, demande l'accès à Health Connect et lance la première lecture.
+// ⚠ À POSER : le lien iCloud que Kevin a publié (Raccourcis › RepCore Santé ›
+//   Partager › Copier le lien iCloud). Seule forme acceptée : RACCOURCI_SANTE_FORME.
+const RACCOURCI_SANTE_URL='';
+const RACCOURCI_SANTE_FORME=/^https:\/\/www\.icloud\.com\/shortcuts\/[0-9a-f]{32}$/;
+function raccourciSanteUrl(){ return RACCOURCI_SANTE_FORME.test(RACCOURCI_SANTE_URL)?RACCOURCI_SANTE_URL:''; }
+// Plus de 48 h sans réception sur iPhone : la tuile passe à « À relancer ».
+const SAN_SYNC_RELANCER_MS=48*3600e3;
+let _sanEnvoiAt=0;   // l'heure où « Envoyer / Tester maintenant » a été touché
+const SAN_SYNC_RACCOURCI_LANCER='shortcuts://run-shortcut?name=RepCore%20Sant%C3%A9';
+const SAN_SYNC_APK_LIEN=j=>'intent://sante/connecter?jeton='+encodeURIComponent(j)+'#Intent;scheme=repcore;package=com.repcore.app;end';
+const SAN_SYNC_APK_MIN=4;   // l'APK 3 (PWABuilder) ne sait pas lire Health Connect
+const AIDE_APK_URL='/aide-apk.html';
+const SAN_SYNC_SOURCES=Object.freeze({healthconnect:'Health Connect',raccourci:'Apple Santé'});
+const SAN_SYNC_GUET_MS=2*60*1000, SAN_SYNC_GUET_PAS_MS=10*1000;
+let _ssAdresse=null, _ssJeton=null, _ssGuet=null, _ssGuetFin=0;
+// L'APK se reconnaît à ?apk=<versionCode>, que LauncherActivity ajoute à
+// chaque ouverture (rangé dans rc_apk par importFromURL), ou au référent
+// android-app:// d'une ouverture par l'ancien APK (version 3, sans ?apk=).
+function rcDansApk(){
+  try{
+    if(String(document.referrer||'').indexOf('android-app://com.repcore.app')===0&&!localStorage.getItem('rc_apk'))
+      localStorage.setItem('rc_apk','3');
+    return /^\d{1,6}$/.test(localStorage.getItem('rc_apk')||'');
+  }catch(e){ return false; }
+}
+// La version de l'APK qui a ouvert la page (0 hors APK).
+function rcVersionApk(){ try{ return Number(localStorage.getItem('rc_apk'))||0; }catch(e){ return 0; } }
+// La méta, qu'elle vienne de la base (empreinte) ou de santeJeton('etat') (actif).
+function _sanMetaNorm(m){
+  if(!m||typeof m!=='object') return null;
+  return {actif:!!(m.empreinte||m.actif),creeLe:Number(m.creeLe)||null,derniereReception:Number(m.derniereReception)||null,
+    plateforme:m.plateforme||null,source:m.source||null,origines:m.origines||null,
+    dernierEnvoi:(m.dernierEnvoi&&typeof m.dernierEnvoi==='object')?m.dernierEnvoi:null};
+}
+function sanSyncActif(){ return !!(_sanSyncMeta&&_sanSyncMeta.actif); }
+// PURE. « à l'instant », « il y a 12 min », « il y a 3 h », « hier », « il y a 4 jours ».
+function _sanIlYa(t,maintenant){
+  const d=Math.max(0,(Number(maintenant)||Date.now())-Number(t));
+  if(d<60e3) return 'à l’instant';
+  if(d<3600e3) return 'il y a '+Math.floor(d/60e3)+' min';
+  if(d<86400e3) return 'il y a '+Math.floor(d/3600e3)+' h';
+  const j=Math.floor(d/86400e3);
+  return j===1?'hier':'il y a '+j+' jours';
+}
+// PURE. Ce que la tuile et le pied disent : {actif, recu, lib, source, quand}.
+function sanSyncEtat(meta,quoi,maintenant){
+  const m=_sanMetaNorm(meta);
+  if(!m||!m.actif) return {actif:false,recu:false,lib:'',source:'',quand:''};
+  const o=(m.origines||{})[quoi==='sommeil'?'sommeil':'pas'];
+  const source=(o&&SAN_SOURCES[o]&&o!=='manuel')?SAN_SOURCES[o]:(SAN_SYNC_SOURCES[m.source]||'');
+  if(!m.derniereReception) return {actif:true,recu:false,lib:'En attente',source,quand:'rien reçu pour l’instant'};
+  const quand=_sanIlYa(m.derniereReception,maintenant);
+  // iPhone : l'automatisation ne part pas toujours. Au-delà de 48 h, on le dit.
+  if(m.plateforme==='ios'&&(Number(maintenant)||Date.now())-m.derniereReception>SAN_SYNC_RELANCER_MS)
+    return {actif:true,recu:true,relancer:true,lib:'À relancer',source,quand};
+  return {actif:true,recu:true,lib:'Synchronisé',source,quand};
+}
+// PURE. « Données reçues : 3 jours, 2 nuits ».
+function texteDonneesRecues(d){
+  const j=Math.max(0,Math.round(Number(d&&d.jours)||0)), n=Math.max(0,Math.round(Number(d&&d.nuits)||0));
+  return 'Données reçues : '+j+' jour'+(j>1?'s':'')+', '+(n?n+' nuit'+(n>1?'s':''):'aucune nuit');
+}
+// PURE. La bande du matin (#sante-envoyer) : affichée depuis `depuis`, tant
+// qu'aucune réception n'est arrivée après, et 24 h au plus.
+function htmlBandeSante(meta,depuis,maintenant){
+  const d=Number(depuis)||0, t=Number(maintenant)||Date.now();
+  if(!d||t-d>864e5) return '';
+  const m=_sanMetaNorm(meta);
+  if(m&&m.derniereReception&&m.derniereReception>=d) return '';
+  return '<div class="san-bande" role="status">'
+    +'<div class="san-bande-t">Ta nuit n’est pas encore arrivée</div>'
+    +'<div class="san-bande-d">Lance le Raccourci RepCore Santé : tes données arrivent en quelques secondes.</div>'
+    +'<a class="btn btn-red san-bande-b" href="'+SAN_SYNC_RACCOURCI_LANCER+'" onclick="sanEnvoiLance()">Envoyer mes données</a>'
+    +'</div>';
+}
+function _sanBandeDepuis(){ try{ return Number(localStorage.getItem('rc_sante_bande'))||0; }catch(e){ return 0; } }
+function _sanBandePoser(v){ try{ if(v) localStorage.setItem('rc_sante_bande',String(v)); else localStorage.removeItem('rc_sante_bande'); }catch(e){} }
+function _rendreBandeSante(){
+  const z=document.getElementById('ls-sante-bande');
+  if(!z) return;
+  const h=htmlBandeSante(_sanSyncMeta,_sanBandeDepuis(),Date.now());
+  if(!h&&_sanBandeDepuis()) _sanBandePoser(0);
+  z.innerHTML=h; z.style.display=h?'':'none';
+}
+// La notification du matin (./#sante-envoyer) : Lifestyle, et la bande en haut.
+function sanEnvoyerOuvrir(){
+  _sanBandePoser(Date.now());
+  try{ history.replaceState(null,'',location.pathname+location.search); }catch(e){}
+  try{ loadLifestyle(); }catch(e){}
+  try{ santeJetonEtat().then(()=>_rendreBandeSante()).catch(()=>{}); }catch(e){}
+}
+try{ window.addEventListener('hashchange',()=>{ if(location.hash==='#sante-envoyer') sanEnvoyerOuvrir(); }); }catch(e){}
+// Touché : « Envoyer mes données », « Envoyer maintenant », « Tester maintenant ».
+// Le lien shortcuts:// part du GESTE lui-même (un <a href>, jamais
+// location.href dans un délai) : iOS bloque un lien d'app qui n'en vient pas.
+function sanEnvoiLance(){ _sanEnvoiAt=Date.now(); return true; }
+// Au retour au premier plan, après un envoi : relire, fusionner, le dire.
+async function sanEnvoiRetour(){
+  if(!_sanEnvoiAt||Date.now()-_sanEnvoiAt>15*60e3) return null;
+  const depuis=_sanEnvoiAt-5000;
+  for(let i=0;i<7;i++){
+    try{
+      const m=await santeJetonEtat();
+      if(m&&m.derniereReception&&m.derniereReception>=depuis){
+        _sanEnvoiAt=0;
+        toast(texteDonneesRecues(m.dernierEnvoi),'var(--green)');
+        _sanSyncLu=0; sanSyncTirer(true).catch(()=>{});
+        _rendreBandeSante();
+        return m;
+      }
+    }catch(e){}
+    await new Promise(r=>setTimeout(r,10000));
+  }
+  return null;
+}
+try{ document.addEventListener('visibilitychange',()=>{ if(!document.hidden) sanEnvoiRetour().catch(()=>{}); }); }catch(e){}
+function _svTuileSync(u,quoi){
+  const e=sanSyncEtat(_sanSyncMeta,quoi,Date.now());
+  const nuit=(quoi==='sommeil');
+  return '<button type="button" class="sv-tuile sv-tuile-s'+(e.relancer?' sv-sync-relancer':(e.actif?' sv-sync-on':''))+'" onclick="sanSyncOuvrir()">'
+    +'<span class="sv-tuile-h"><span class="sv-tuile-ico">'+SAN_ICO.synchro+'</span>'
+      +'<span class="sv-tuile-t">'+(e.actif?escapeHtml(e.lib):'Synchronisation automatique')+'</span><span class="sv-chev">'+SAN_ICO.droite+'</span></span>'
+    +(e.actif
+      ?'<span class="sv-tuile-d"><span class="sv-sync-pt" data-recu="'+e.recu+'"'+(e.relancer?' data-relancer="true"':'')+' aria-hidden="true"></span>'
+        +escapeHtml([e.source,e.quand].filter(Boolean).join(' · '))+'</span>'
+      :'<span class="sv-tuile-d">'+(nuit?'Ton sommeil arrive tout seul':'Tes pas arrivent tout seuls')
+        +' depuis ton téléphone (Health Connect, Apple Santé).</span>')
+    +'</button>';
+}
+function _svPiedSource(u,quoi){
+  const e=sanSyncEtat(_sanSyncMeta,quoi,Date.now());
+  if(e.actif) return '<button type="button" class="san-src" onclick="sanSyncOuvrir()">'+escapeHtml(e.lib)
+    +(e.source?' : <strong>'+escapeHtml(e.source)+'</strong>':'')+' · '+escapeHtml(e.quand)+'</button>';
+  return '<button type="button" class="san-src" onclick="sanChangerSource(\''+quoi+'\')">Source : <strong>'+escapeHtml(sanSource(u,quoi).lib)+'</strong></button>';
+}
+
+// ── LA FEUILLE « CONNECTER MES DONNÉES SANTÉ » ────────────────────────────
+function _ssEtape(n,titre,texte,extra){
+  return '<div class="ss-etape"><div class="ss-num">'+n+'</div><div class="ss-c">'
+    +'<div class="ss-t">'+titre+'</div>'+(texte?'<div class="ss-d">'+texte+'</div>':'')+(extra||'')+'</div></div>';
+}
+function _ssBouton(lib,action,second){
+  return '<button type="button" class="ss-btn'+(second?' ss-btn-2':'')+'" onclick="'+action+'">'+lib+'</button>';
+}
+function _ssPlateforme(){
+  try{
+    if(rcInstalliOS()) return 'ios';
+    if(/Android/i.test(navigator.userAgent||'')) return rcDansApk()&&rcVersionApk()>=SAN_SYNC_APK_MIN?'apk':'android';
+  }catch(e){}
+  return 'autre';
+}
+function _ssAdresseHtml(){
+  if(!_ssAdresse) return _ssBouton(sanSyncActif()?'Créer une nouvelle adresse':'Créer et copier mon adresse','sanSyncCreer()');
+  return '<input class="ss-adr" readonly value="'+escapeHtml(_ssAdresse)+'" onclick="this.select()" aria-label="Ton adresse personnelle">'
+    +_ssBouton('Copier','sanSyncCopier()',true)
+    +'<div class="ss-d ss-avert">Affichée une seule fois. Ne la partage pas : elle suffit pour envoyer des données à ton dossier.</div>';
+}
+function _ssGuetHtml(){
+  const m=_sanSyncMeta;
+  if(_ssGuet==='recu'||(m&&m.derniereReception&&!_ssGuet)) return '<div class="ss-etat" data-ok="true">Reçu '+escapeHtml(_sanIlYa(m.derniereReception,Date.now()))+'.</div>';
+  if(_ssGuet==='echec') return '<div class="ss-etat" data-ok="false">Rien reçu en 2 minutes. Vérifie que l’adresse est bien collée, puis relance le test.</div>';
+  if(_ssGuet) return '<div class="ss-etat">En attente de la première réception…</div>';
+  return '';
+}
+function _htmlSanSyncFeuille(){
+  const p=_ssPlateforme();
+  const m=_sanSyncMeta;
+  let corps='';
+  if(p==='ios'){
+    corps=_ssEtape(1,'Copie ton <span class="ss-r">adresse personnelle</span>','Le Raccourci l’utilise pour envoyer tes données à RepCore.',_ssAdresseHtml())
+      +_ssEtape(2,'Installe le Raccourci <span class="ss-r">RepCore Santé</span>',
+        raccourciSanteUrl()?'À l’ajout, colle ton adresse quand il la demande ; au premier lancement, autorise l’accès à Santé.':'Le lien du Raccourci arrive très bientôt.',
+        raccourciSanteUrl()?'<a class="ss-btn ss-btn-2" href="'+escapeHtml(raccourciSanteUrl())+'" target="_blank" rel="noopener">Obtenir le Raccourci</a>':'')
+      +_ssEtape(3,'Automatise-le à <span class="ss-r">9 h</span>',
+        'Raccourcis › Automatisation › + › Heure de la journée : 09:00, tous les jours, Exécuter immédiatement › RepCore Santé.')
+      +_ssEtape(4,'Teste maintenant','Lance le Raccourci une fois : RepCore guette la réception pendant 2 minutes.',
+        '<a class="ss-btn ss-btn-2" href="'+SAN_SYNC_RACCOURCI_LANCER+'" onclick="sanEnvoiLance();sanSyncGuetter()">Tester maintenant</a>')
+      +_ssEtape(5,'C’est reçu ?','',_ssGuetHtml()||'<div class="ss-etat">Le test s’affiche ici.</div>');
+  } else if(p==='apk'){
+    const src=(TRK_APPAREILS.find(a=>a.id===sanSource(currentUser,'pas').cle)||{}).app||'l’application de ta montre';
+    corps=_ssEtape(1,'Relie ta montre à <span class="ss-r">Health Connect</span>',
+        'Dans '+escapeHtml(src)+', active le partage avec Health Connect (dans ses réglages).')
+      +_ssEtape(2,'Autorise <span class="ss-r">RepCore</span>','Android te demande quelles données partager : pas, sommeil, fréquence cardiaque, poids.',
+        _ssBouton(sanSyncActif()?'Autoriser à nouveau':'Autoriser','sanSyncApk()'))
+      +_ssEtape(3,'C’est reçu ?','La première synchronisation part tout de suite.',_ssGuetHtml()||'<div class="ss-etat">La réception s’affiche ici.</div>');
+  } else if(p==='android'){
+    const maj=rcDansApk();   // l'ancien APK (version 3) : à mettre à jour
+    corps=_ssEtape(1,(maj?'Mets à jour':'Installe')+' l’application <span class="ss-r">RepCore</span> pour Android',
+        'C’est elle qui lit Health Connect : le navigateur n’y a pas accès.'+(maj?' Installe-la par-dessus l’ancienne, sans désinstaller.':''),
+        '<a class="ss-btn" href="'+AIDE_APK_URL+'" target="_blank" rel="noopener">'+(maj?'Mettre à jour':'Installer l’application')+'</a>')
+      +_ssEtape(2,'Ouvre RepCore depuis l’application','Puis reviens ici : la connexion prend une minute.');
+  } else {
+    corps=_ssEtape(1,'Ouvre RepCore sur ton <span class="ss-r">téléphone</span>','La synchronisation lit Apple Santé (iPhone) ou Health Connect (Android), qui vivent sur le téléphone.');
+  }
+  const e=sanSyncEtat(m,'pas',Date.now());
+  // iPhone déjà connecté : l'envoi à la main en tête ; À RELANCER : l'aide d'abord.
+  if(p==='ios'&&e.actif){
+    corps=(e.relancer?'<div class="ss-aide"><div class="ss-t">Rien n’est arrivé depuis '+escapeHtml(e.quand.replace(/^il y a /,''))+'</div>'
+        +'<div class="ss-d">Trois causes, presque toujours :</div><ul class="ss-causes">'
+        +'<li><b>iPhone verrouillé</b> à l’heure de l’automatisation : iOS la reporte, parfois jusqu’au lendemain.</li>'
+        +'<li><b>Automatisation désactivée</b> : Raccourcis › Automatisation › RepCore Santé, « Exécuter immédiatement » coché.</li>'
+        +'<li><b>Autorisations Santé refusées</b> au Raccourci : Réglages › Santé › Accès aux données › Raccourcis.</li></ul></div>':'')
+      +'<a class="ss-btn ss-envoi" href="'+SAN_SYNC_RACCOURCI_LANCER+'" onclick="sanEnvoiLance()">Envoyer maintenant</a>'
+      +corps;
+  }
+  return '<div class="ss-tete"><div class="ss-titre">Connecter mes données santé</div>'
+      +'<button type="button" class="ss-x" onclick="sanSyncFermer()" aria-label="Fermer">✕</button></div>'
+    +(e.actif?'<div class="ss-statut'+(e.relancer?' ss-relancer':'')+'"><span class="sv-sync-pt" data-recu="'+e.recu+'"'+(e.relancer?' data-relancer="true"':'')+' aria-hidden="true"></span><b>'+escapeHtml(e.lib)+'</b>'
+      +escapeHtml([e.source,e.quand].filter(Boolean).map(x=>' · '+x).join(''))+'</div>':'')
+    +'<div class="ss-etapes">'+corps+'</div>'
+    +'<div class="ss-note">Pas, sommeil, fréquence cardiaque au repos, variabilité, poids : rien d’autre. Une saisie à la main reste prioritaire.</div>'
+    +(e.actif?'<button type="button" class="ss-deco" onclick="sanSyncDeconnecter()">Déconnecter</button>':'');
+}
+function _ssPeindre(){
+  const z=document.getElementById('sante-sync-feuille');
+  if(z) z.innerHTML=_htmlSanSyncFeuille();
+}
+function sanSyncOuvrir(){
+  let m=document.getElementById('sante-sync-modal');
+  if(!m){
+    m=document.createElement('div');
+    m.id='sante-sync-modal'; m.className='ss-fond';
+    m.setAttribute('role','dialog'); m.setAttribute('aria-modal','true'); m.setAttribute('aria-label','Connecter mes données santé');
+    m.onclick=(ev)=>{ if(ev.target===m) sanSyncFermer(); };
+    m.innerHTML='<div class="ss-feuille" id="sante-sync-feuille"></div>';
+    document.body.appendChild(m);
+  }
+  _ssPeindre();
+  m.style.display='flex';
+  // L'état du serveur, frais : la feuille se repeint quand il arrive.
+  santeJetonEtat().then(()=>_ssPeindre()).catch(()=>{});
+}
+function sanSyncFermer(){
+  const m=document.getElementById('sante-sync-modal');
+  if(m) m.style.display='none';
+  _ssAdresse=null; _ssJeton=null;
+  try{ if(document.getElementById('s-lifestyle')?.classList.contains('active')) sanRendre(); }catch(e){}
+}
+async function santeJetonEtat(){
+  const r=await CLOUD._callFn('santeJeton',{action:'etat'});
+  _sanSyncMeta=_sanMetaNorm(r);
+  return _sanSyncMeta;
+}
+async function sanSyncCreer(pourApk){
+  if(!demanderConsentementSante('pas',()=>{ sanSyncOuvrir(); sanSyncCreer(); })) return null;
+  if(sanSyncActif()&&!confirm('Une nouvelle adresse remplace l’ancienne : le Raccourci ou l’application devront la recevoir à nouveau. Continuer ?')) return null;
+  try{
+    const r=await santeJeton('creer');
+    if(!r||!r.jeton) return null;
+    _ssAdresse=sanSyncAdresse(r.jeton); _ssJeton=r.jeton;
+    _sanSyncMeta={actif:true,creeLe:r.creeLe,derniereReception:null,plateforme:null,source:null,origines:null};
+    _ssPeindre();
+    if(!pourApk) sanSyncCopier();   // l'APK reçoit le jeton par le lien, pas par le presse-papiers
+    return _ssAdresse;
+  }catch(e){ toast(e&&e.message?e.message:'Connexion impossible','var(--orange)'); return null; }
+}
+function sanSyncCopier(){
+  if(!_ssAdresse) return;
+  try{ navigator.clipboard.writeText(_ssAdresse).then(()=>toast('Adresse copiée','var(--green)'),()=>{}); }catch(e){}
+}
+async function sanSyncApk(){
+  if(!_ssJeton) await sanSyncCreer(true);
+  if(!_ssJeton) return;
+  sanSyncGuetter();
+  try{ location.href=SAN_SYNC_APK_LIEN(_ssJeton); }catch(e){}
+}
+// GUETTER LA PREMIÈRE RÉCEPTION : santeJeton('etat') toutes les 10 s, 2 minutes au plus.
+function sanSyncGuetter(){
+  const t0=Date.now()-5000;
+  _ssGuet='attente'; _ssGuetFin=Date.now()+SAN_SYNC_GUET_MS;
+  _ssPeindre();
+  const tour=async()=>{
+    if(_ssGuet!=='attente') return;
+    try{
+      const m=await santeJetonEtat();
+      if(m&&m.derniereReception>=t0){
+        _ssGuet='recu'; _ssPeindre();
+        toast('Données reçues','var(--green)');
+        _sanSyncLu=0; sanSyncTirer(true).catch(()=>{});
+        return;
+      }
+    }catch(e){}
+    if(Date.now()>=_ssGuetFin){ _ssGuet='echec'; _ssPeindre(); return; }
+    setTimeout(tour,SAN_SYNC_GUET_PAS_MS);
+  };
+  setTimeout(tour,SAN_SYNC_GUET_PAS_MS);
+}
+async function sanSyncDeconnecter(){
+  if(!confirm('Déconnecter la synchronisation ? L’adresse ne marchera plus, et les données en attente sur le serveur sont effacées. Ce qui est déjà dans ton suivi reste.')) return;
+  try{
+    await santeJeton('revoquer');
+    _ssAdresse=null; _ssJeton=null; _ssGuet=null;
+    _ssPeindre();
+    toast('Synchronisation déconnectée','var(--green)');
+  }catch(e){ toast(e&&e.message?e.message:'Connexion impossible','var(--orange)'); }
+}
+
+// ── CHEZ LE COACH : « synchronisé » et la dernière réception ─────────────
+// Lu dans sante_sync/<athlète>/meta (règles : le coach désigné), au plus une
+// fois par 10 minutes et par athlète ; le rendu reste pur.
+const _sanSyncCoach={};
+function _sanSyncCoachLire(c){
+  const e=String((c&&c.email)||'').toLowerCase();
+  if(!e) return null;
+  const k=e.replace(/\./g,',');
+  const x=_sanSyncCoach[k];
+  if(!x||Date.now()-x.lu>SAN_SYNC_INTERVALLE_MS){
+    _sanSyncCoach[k]={lu:Date.now(),meta:x?x.meta:null};
+    (async()=>{
+      try{
+        const token=await CLOUD._getToken(); if(!token) return;
+        const r=await fetch(CLOUD._fbUrl.replace('users.json','sante_sync/'+k+'/meta.json')+'?auth='+token);
+        if(!r.ok) return;
+        const m=_sanMetaNorm(await r.json());
+        const avant=JSON.stringify(_sanSyncCoach[k].meta);
+        _sanSyncCoach[k].meta=m;
+        if(JSON.stringify(m)!==avant){ try{ _csRepeindre('pas'); _csRepeindre('sommeil'); }catch(e){} }
+      }catch(e){}
+    })();
+  }
+  return _sanSyncCoach[k].meta;
+}
+// PURE. La pastille du coach.
+function _htmlSyncCoach(meta){
+  const m=_sanMetaNorm(meta);
+  if(!m||!m.actif) return '';
+  const d=m.derniereReception?new Date(m.derniereReception).toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):null;
+  return '<div class="cso-sync-l"><span class="cso-sync"><span class="sv-sync-pt" data-recu="'+!!d+'" aria-hidden="true"></span>synchronisé</span>'
+    +'<span class="cso-sync-d">'+(d?'Dernière réception : '+escapeHtml(d):'Aucune réception pour l’instant')+'</span></div>';
+}
 function getSleepWeek(){
   const today=new Date(),dow=today.getDay();
   const mon=new Date(today);
@@ -106930,7 +110608,7 @@ function loadSleep(containerId='sleep-content',user,opts){
 // règles de conservation. bed et wake sont FACULTATIFS : une nuit venue d'une
 // capture ne porte que sa durée, l'écran de la montre n'affichant ni l'heure de
 // coucher ni celle de lever.
-function _recordSleep(dateStr,{bed,wake,duration}={}){
+function _recordSleep(dateStr,{bed,wake,duration,phases}={},marque){
   const d=Number(duration);
   // Même plafond que calcSleepDuration : au-delà de 18 h ce n'est pas une nuit.
   if(!dateStr||!Number.isFinite(d)||d<=0||d>18) return false;
@@ -106954,17 +110632,22 @@ function _recordSleep(dateStr,{bed,wake,duration}={}){
   // LES CHAMPS FOURNIS GAGNENT, LES AUTRES SURVIVENT : une saisie manuelle qui
   // porte bed et wake les met a jour, un import qui n'a que la duree ne touche
   // qu'a elle.
+  // LES PHASES (synchronisation) suivent la durée : une durée saisie sans
+  // phases retire celles d'une autre nuit mesurée, qui ne lui iraient plus.
   if(idx>=0){
     const e=currentUser.sleepLog[idx];
     e.duration=d;
     if(bed) e.bed=bed;
     if(wake) e.wake=wake;
+    if(phases) e.phases=phases; else delete e.phases;
   } else {
     const entry={date:dateStr,duration:d};
     if(bed) entry.bed=bed;
     if(wake) entry.wake=wake;
+    if(phases) entry.phases=phases;
     currentUser.sleepLog.push(entry);
   }
+  _sanMarquer(currentUser.sleepLog.find(e=>e.date===dateStr),marque);
   const cutoff=localISODate(new Date(Date.now()-180*24*3600*1000));
   // LES VOLTS DES NUITS PURGÉES sont mis de côté : xpCalcul relit le journal,
   // et une nuit qui en sort ne doit pas faire BAISSER les volts.
@@ -106997,6 +110680,7 @@ function saveSleep(){
 // deux sections sont affichees en entier, il n'y a plus rien a ouvrir.
 function loadLifestyle(){
   go('s-lifestyle');
+  try{ sanSyncTirer().catch(()=>{}); }catch(e){}
   // ⚠ LES DEUX CARTES REMPLACENT LES DEUX ANCIENS RENDUS SUR CET ECRAN, et
   // seulement sur celui-ci : les ecrans s-steps et s-sleep gardent loadSteps
   // et loadSleep tels quels, avec leur saisie. Rien n'est supprime.
@@ -112134,6 +115818,21 @@ function exportMyData(){
     toast('Export impossible : '+(e&&e.message||'erreur'),'var(--red)');
   }
 }
+// LA SANTÉ SYNCHRONISÉE, À LA SUPPRESSION DU COMPTE. Le serveur révoque le
+// jeton : il efface sante_sync/<clé> ET les entrées de sante_jetons qui
+// pointent vers ce compte (l'empreinte y porte la clé). Puis l'app efface
+// elle-même sante_sync/<clé> (les règles l'y autorisent, nœud entier) : si
+// le serveur était injoignable, le jeton meurt quand même, et l'entrée
+// orpheline est nettoyée à la prochaine révocation. Rend {revoque, efface}.
+async function _supprimerSanteSync(safeKey,fbTok){
+  const r={revoque:false,efface:false};
+  try{ await CLOUD._callFn('santeJeton',{action:'revoquer'}); r.revoque=true; }catch(e){}
+  try{
+    const x=await fetch(CLOUD._fbUrl.replace('users.json','sante_sync/'+safeKey+'.json')+(fbTok?'?auth='+fbTok:''),{method:'DELETE'});
+    r.efface=!!(x&&x.ok);
+  }catch(e){}
+  return r;
+}
 async function requestAccountDeletion(){
   // L'article 17 vaut pour TOUT LE MONDE. Le garde d'origine reservait la
   // suppression aux coachs : un athlete ne pouvait pas faire effacer son
@@ -112208,6 +115907,14 @@ async function requestAccountDeletion(){
       await fetch(CLOUD._urlSantePrivee(safeKey)+(fbTok?'?auth='+fbTok:''),
         {method:'DELETE'});
     }catch(e){}
+
+    // 1 ter. Le résumé d'activité (statistiques de rétention) : hors de users/.
+    try{
+      await fetch(CLOUD._fbUrl.replace('users.json','activite/'+safeKey+'.json')+(fbTok?'?auth='+fbTok:''),{method:'DELETE'});
+    }catch(e){}
+
+    // 1 ter. La santé synchronisée : voir _supprimerSanteSync.
+    await _supprimerSanteSync(safeKey,fbTok);
 
     // 2. Fiche programme PDF dans Storage. Chemin encode en entier : le nom
     //    d'objet contient des barres obliques qui doivent etre echappees.

@@ -123,4 +123,142 @@ await test('filleul_seance : seulement pour un compte réellement parrainé', as
   assert.equal((await deposer(TOM, { type: 'filleul_seance', cible: '-' })).statut, 200);
   assert.equal((await deposer(TOM, { type: 'filleul_seance', cible: 'x' })).statut, 401);
 });
+// ── LES DUELS ─────────────────────────────────────────────────────────────
+const TOMD = 'tom@t.fr', ZOE = 'zoe@t.fr', DID = 'dtest1234567';
+const creerDuel = (qui, id, x) => appel(qui, 'PATCH', '', {
+  ['duels/' + id]: Object.assign({ createur: K(qui), createurNom: 'Léa', mesure: 'seances', duree: 14, creeLe: Date.now(), statut: 'attente' }, x || {}),
+  ['duels_publics/' + id]: { prenom: 'Léa', mesure: 'seances', duree: 14 } });
+await test('duel : créé par son créateur, en attente, sans invité ni score ; la fiche publique se lit sans compte', async () => {
+  assert.equal((await creerDuel(LEA, DID)).statut, 200);
+  assert.equal((await creerDuel(LEA, 'dtest7654321', { statut: 'en_cours' })).statut, 401, 'statut imposé');
+  assert.equal((await creerDuel(LEA, 'dtest7654322', { scores: { createur: 9 } })).statut, 401, 'scores par le client');
+  assert.equal((await creerDuel(LEA, 'dtest7654323', { invite: K(TOMD) })).statut, 401, 'invité imposé');
+  assert.equal((await creerDuel(LEA, 'dtest7654324', { duree: 30 })).statut, 401, 'durée hors liste');
+  assert.equal((await appel(KEV, 'PATCH', '', { ['duels/dtest7654325']: { createur: K(LEA), createurNom: 'x', mesure: 'seances', duree: 14, creeLe: 1, statut: 'attente' } })).statut, 401, 'pour quelqu’un d’autre');
+  assert.equal((await creerDuel(LEA, DID)).statut, 401, 'pas deux fois');
+  const pub = await fetch(BASE + '/duels_publics/' + DID + '.json?ns=' + NS);
+  assert.equal(pub.status, 200);
+  assert.equal((await pub.json()).prenom, 'Léa');
+});
+await test('duel : lu par ses deux participants seulement', async () => {
+  assert.equal((await appel(LEA, 'GET', 'duels/' + DID)).statut, 200);
+  assert.equal((await appel(TOMD, 'GET', 'duels/' + DID)).statut, 401, 'pas encore invité');
+  assert.equal((await appel(TOMD, 'PATCH', 'duels/' + DID, { invite: K(TOMD), inviteNom: 'Tom' })).statut, 200, 'rejoindre');
+  assert.equal((await appel(TOMD, 'GET', 'duels/' + DID)).statut, 200);
+  assert.equal((await appel(ZOE, 'GET', 'duels/' + DID)).statut, 401);
+  assert.equal((await appel(ZOE, 'PATCH', 'duels/' + DID, { invite: K(ZOE) })).statut, 401, 'la place est prise');
+  assert.equal((await appel(LEA, 'PATCH', 'duels/dtest7654321', { invite: K(LEA) })).statut, 401);
+});
+await test('duel : le créateur ne se défie pas lui-même ; statut, scores et dates restent au Worker', async () => {
+  assert.equal((await creerDuel(LEA, 'dtest0000001')).statut, 200);
+  assert.equal((await appel(LEA, 'PUT', 'duels/dtest0000001/invite', K(LEA))).statut, 401);
+  for (const [c, v] of [['statut', 'termine'], ['scores', { createur: 99 }], ['debut', 1], ['gagnant', 'createur']]) {
+    assert.equal((await appel(LEA, 'PUT', 'duels/' + DID + '/' + c, v)).statut, 401, c);
+    assert.equal((await appel(TOMD, 'PUT', 'duels/' + DID + '/' + c, v)).statut, 401, c);
+  }
+});
+await test('duel : chacun écrit SA progression, seulement pendant le duel', async () => {
+  const prog = { valeur: 3, maj: Date.now() };
+  assert.equal((await appel(TOMD, 'PUT', 'duels/' + DID + '/progres/' + K(TOMD), prog)).statut, 401, 'pas encore commencé');
+  await appel('owner', 'PUT', 'duels/' + DID + '/statut', 'en_cours');
+  assert.equal((await appel(TOMD, 'PUT', 'duels/' + DID + '/progres/' + K(TOMD), prog)).statut, 200);
+  assert.equal((await appel(TOMD, 'PUT', 'duels/' + DID + '/progres/' + K(LEA), prog)).statut, 401, 'celle de l’autre');
+  assert.equal((await appel(ZOE, 'PUT', 'duels/' + DID + '/progres/' + K(ZOE), prog)).statut, 401, 'hors duel');
+  assert.equal((await appel(TOMD, 'PUT', 'duels/' + DID + '/progres/' + K(TOMD), { valeur: -1, maj: 1 })).statut, 401);
+});
+await test('duel : les événements duel_rejoint / duel_maj, par un participant seulement', async () => {
+  assert.equal((await deposer(TOMD, { type: 'duel_maj', cible: DID })).statut, 200);
+  assert.equal((await deposer(LEA, { type: 'duel_rejoint', cible: DID })).statut, 200);
+  assert.equal((await deposer(ZOE, { type: 'duel_maj', cible: DID })).statut, 401);
+  assert.equal((await deposer(LEA, { type: 'duel_maj', cible: 'dinexistant12' })).statut, 401);
+});
+await test('le défi RepCore du mois : écrit par Kevin seul, lu par tout compte connecté', async () => {
+  const d = { titre: '12 séances en octobre', mesure: 'seances', objectif: 12, debut: 1, fin: 2 };
+  assert.equal((await appel(LEA, 'PUT', 'defi_mois/2026-10', d)).statut, 401);
+  assert.equal((await appel('guellec.coachingpro@gmail.com', 'PUT', 'defi_mois/2026-10', d)).statut, 200);
+  assert.equal((await appel(LEA, 'GET', 'defi_mois/2026-10')).statut, 200);
+  assert.equal((await appel('guellec.coachingpro@gmail.com', 'PUT', 'defi_mois/2026-11', Object.assign({}, d, { fin: 0 }))).statut, 401, 'fin avant début');
+});
+// ── LES ÉVÉNEMENTS SAISONNIERS ──────────────────────────────────────────
+const KEVIN = 'guellec.coachingpro@gmail.com';
+const saison = (x) => Object.assign({ nom: 'Hiver de fer', debut: Date.now() - 864e5, fin: Date.now() + 10 * 864e5, mesure: 'seances',
+  objectifPerso: 10, objectifCollectif: 100, badgeCle: 'hiver', couleurAccent: '#3aa0ff', texteAccueil: 'Dix séances.' }, x || {});
+await test('saisons : créées par Kevin seul, champs vérifiés, lues par tout compte connecté', async () => {
+  assert.equal((await appel(LEA, 'PUT', 'saisons/hiver-2026', saison())).statut, 401);
+  assert.equal((await appel(KEVIN, 'PUT', 'saisons/hiver-2026', saison())).statut, 200);
+  for (const [c, v] of [['couleurAccent', 'rouge'], ['mesure', 'poids'], ['badgeCle', 'Hiver !'], ['objectifPerso', 0], ['fin', 1]])
+    assert.equal((await appel(KEVIN, 'PUT', 'saisons/test-' + c.toLowerCase(), saison({ [c]: v }))).statut, 401, c);
+  assert.equal((await appel(KEVIN, 'PUT', 'saisons/Majuscules', saison())).statut, 401, 'id');
+  assert.equal((await appel(LEA, 'GET', 'saisons/hiver-2026')).statut, 200);
+  assert.equal((await fetch(BASE + '/saisons.json?ns=' + NS)).status, 401, 'pas sans compte');
+});
+await test('saisons : chacun écrit SA progression, pendant la saison seulement', async () => {
+  const p = { valeur: 4, maj: Date.now() };
+  assert.equal((await appel(LEA, 'PUT', 'saisons_progres/hiver-2026/' + K(LEA), p)).statut, 200);
+  assert.equal((await appel(LEA, 'PUT', 'saisons_progres/hiver-2026/' + K(KEV), p)).statut, 401, 'celle d’un autre');
+  assert.equal((await appel(LEA, 'PUT', 'saisons_progres/inconnue/' + K(LEA), p)).statut, 401, 'saison inconnue');
+  assert.equal((await appel(LEA, 'PUT', 'saisons_progres/hiver-2026/' + K(LEA), { valeur: -1, maj: 1 })).statut, 401);
+  await appel(KEVIN, 'PUT', 'saisons/finie-2025', saison({ debut: Date.now() - 30 * 864e5, fin: Date.now() - 3 * 864e5 }));
+  assert.equal((await appel(LEA, 'PUT', 'saisons_progres/finie-2025/' + K(LEA), p)).statut, 401, 'saison finie');
+  assert.equal((await appel(LEA, 'GET', 'saisons_progres/hiver-2026')).statut, 401, 'les valeurs des autres ne se lisent pas');
+});
+await test('saisons : les résultats, lus par leur titulaire, écrits par le Worker seul ; le compteur se lit sans compte', async () => {
+  await appel('owner', 'PUT', 'saisons_resultats/' + K(LEA) + '/hiver-2026', { nom: 'Hiver de fer', annee: '2026' });
+  await appel('owner', 'PUT', 'stats/saisons/hiver-2026', { total: 4 });
+  assert.equal((await appel(LEA, 'GET', 'saisons_resultats/' + K(LEA))).statut, 200);
+  assert.equal((await appel(KEV, 'GET', 'saisons_resultats/' + K(LEA))).statut, 401);
+  assert.equal((await appel(LEA, 'PUT', 'saisons_resultats/' + K(LEA) + '/x', { nom: 'triche' })).statut, 401);
+  assert.equal((await appel(LEA, 'PUT', 'stats/saisons/hiver-2026', { total: 9999 })).statut, 401);
+  assert.equal((await fetch(BASE + '/stats/saisons/hiver-2026.json?ns=' + NS)).status, 200);
+});
+await test('parcours_j21 : chacun écrit SES étapes restantes (1 à 7) sous un jour, personne ne lit', async () => {
+  const j = 'parcours_j21/2026-10-19/';
+  assert.equal((await appel(LEA, 'PUT', j + K(LEA), 2)).statut, 200);
+  assert.equal((await appel(LEA, 'PUT', j + K(KEV), 2)).statut, 401, 'celle d’un autre');
+  for (const v of [0, 8, 2.5, 'deux']) assert.equal((await appel(LEA, 'PUT', j + K(LEA), v)).statut, 401, String(v));
+  assert.equal((await appel(LEA, 'PUT', 'parcours_j21/19-10-2026/' + K(LEA), 2)).statut, 401, 'jour mal formé');
+  assert.equal((await appel(LEA, 'PUT', j + K(LEA), null)).statut, 200, 'fini : effacé');
+  assert.equal((await appel(LEA, 'GET', j + K(LEA))).statut, 401, 'pas même le sien');
+});
+await test('retour_etat : la relance des inactifs, fermée à tout client', async () => {
+  assert.equal((await appel(LEA, 'PUT', 'retour_etat/' + K(LEA), { depuis: 1, paliers: {} })).statut, 401);
+  assert.equal((await appel(LEA, 'GET', 'retour_etat/' + K(LEA))).statut, 401);
+});
+await test('seance_fin : tout compte connecté, cible « - » seulement', async () => {
+  assert.equal((await deposer(LEA, { type: 'seance_fin', cible: '-' })).statut, 200);
+  assert.equal((await deposer(KEV, { type: 'seance_fin', cible: 'x' })).statut, 401);
+});
+await test('xp_serveur : écrit par le Worker seul, lu par l’athlète et son coach ; volts_publics lisible par tous', async () => {
+  await appel('owner', 'PUT', 'users/' + K(LEA) + '/coachEmailKey', K(KEVIN));
+  await appel('owner', 'PUT', 'xp_serveur/' + K(LEA), { total: 5000 });
+  await appel('owner', 'PUT', 'volts_publics/lea_fer', { xp: 5000 });
+  assert.equal((await appel(LEA, 'PUT', 'xp_serveur/' + K(LEA), { total: 999999 })).statut, 401, 'l’athlète n’écrit pas son total');
+  assert.equal((await appel(LEA, 'GET', 'xp_serveur/' + K(LEA))).statut, 200);
+  assert.equal((await appel(KEVIN, 'GET', 'xp_serveur/' + K(LEA))).statut, 200, 'son coach le lit');
+  assert.equal((await appel(KEV, 'GET', 'xp_serveur/' + K(LEA))).statut, 401, 'un autre, non');
+  assert.equal((await appel(LEA, 'GET', 'xp_etat/' + K(LEA))).statut, 401);
+  assert.equal((await appel(LEA, 'PUT', 'volts_publics/lea_fer', { xp: 1 })).statut, 401);
+  assert.equal((await fetch(BASE + '/volts_publics/lea_fer.json?ns=' + NS)).status, 200);
+});
+await test('offre de lancement : un code peut porter « ultime_demi » ; droits.offreAmb et demiPackUtilise écrits par le serveur seul', async () => {
+  assert.equal((await appel(KEVIN, 'PUT', 'ambassadeurs_publics/LANCE', { nom: 'Julie', avantage: 'ultime_demi', actif: true })).statut, 200);
+  assert.equal((await appel(KEVIN, 'PUT', 'ambassadeurs_publics/TRICHE', { nom: 'X', avantage: 'ultime_gratuit', actif: true })).statut, 401);
+  assert.equal((await appel(LEA, 'PATCH', 'droits/' + K(LEA), { offreAmb: 'ultime_demi' })).statut, 401, 'l’athlète ne s’offre pas le demi-tarif');
+  assert.equal((await appel(KEVIN, 'PATCH', 'droits/' + K(LEA), { offreAmb: 'ultime_demi', demiPackUtilise: true })).statut, 200);
+});
+await test('activite : chacun écrit SON résumé, personne ne le lit ; stats/retention au créateur seul, badges publics', async () => {
+  const r = { v: 1, inscrit: '2026-10-01', sem: '2026-09-28', src: 'amb', debut: [0, 1, 8], jour: '2026-10-20', j30: '0'.repeat(29) + '1',
+    seance1: true, parcours: false, finEssai: 0, payant: false, lev: { notif: true, coach: false } };
+  assert.equal((await appel(LEA, 'PUT', 'activite/' + K(LEA), r)).statut, 200);
+  assert.equal((await appel(LEA, 'PUT', 'activite/' + K(KEV), r)).statut, 401, 'celui d’un autre');
+  assert.equal((await appel(LEA, 'PUT', 'activite/' + K(LEA), Object.assign({}, r, { poids: 80 }))).statut, 401, 'aucun champ en plus');
+  assert.equal((await appel(LEA, 'PUT', 'activite/' + K(LEA), Object.assign({}, r, { lev: { humeur: true } }))).statut, 401, 'levier inconnu');
+  assert.equal((await appel(LEA, 'GET', 'activite/' + K(LEA))).statut, 401, 'pas même le sien');
+  await appel('owner', 'PUT', 'stats/retention', { comptes: 1 });
+  await appel('owner', 'PUT', 'stats/badges', { total: 1, pct: {} });
+  assert.equal((await appel(LEA, 'GET', 'stats/retention')).statut, 401);
+  assert.equal((await appel(KEVIN, 'GET', 'stats/retention')).statut, 200);
+  assert.equal((await fetch(BASE + '/stats/badges.json?ns=' + NS)).status, 200, 'les pourcentages des badges restent publics');
+  assert.equal((await fetch(BASE + '/stats/retention.json?ns=' + NS)).status, 401);
+});
 console.log(ok + ' tests passés (émulateur)');

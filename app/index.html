@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1643';
+window.RC_BUILD='1650';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-09-28';
@@ -457,7 +457,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1643.css">
+<link rel="stylesheet" href="./rc-style.1650.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -1652,6 +1652,8 @@ const COACH_PHOTO='icons/coach.jpg';
         <div id="ch-croissance" style="margin-bottom:20px"></div>
         <!-- LE RECAP D'EQUIPE : seances, records, tonnage, top 3 de regularite,
              en visuel a partager (ouvrirRecapTeam). -->
+        <!-- MON KIT : chaque lundi, trois contenus prêts à poster et les éléments de marque (ouvrirKitCoach). -->
+        <button type="button" id="ch-kit-btn" class="btn btn-red btn-sm btn-casse" onclick="ouvrirKitCoach()" style="width:100%;margin:0 0 10px;min-height:44px">Mon kit de la semaine</button>
         <button type="button" class="btn btn-outline btn-sm btn-casse" onclick="ouvrirRecapTeam()" style="width:100%;margin:0 0 20px;min-height:44px">Récap de l’équipe · à partager</button>
         <!-- ══ QUATRE BOUTONS D'ÉGALE LARGEUR, SUR TOUTE LA LIGNE ══════════
              Demande de Kevin, 19/09/2026.
@@ -2651,6 +2653,7 @@ const COACH_PHOTO='icons/coach.jpg';
            remplace le resume « Sommeil et pas » et la section « Sommeil » : son
            propre en-tete, ses quatre cartes, son graphe et ses trois colonnes.
            Rempli par renderSommeilCoach. -->
+      <div id="ccd-batterie"></div>
       <div id="ccd-sommeil"></div>
       <!-- LES PAS, EN TABLEAU DE BORD, comme le sommeil au-dessus (Kevin,
            24/09/2026 : « pareil »). Rempli par renderPasCoach. -->
@@ -3375,13 +3378,22 @@ const COACH_PHOTO='icons/coach.jpg';
            c'est le paywall qui parle, et repeter la ligne serait insister.
            Vide aussi pour un athlete a code : il n'a pas d'essai, il a un
            coach. -->
+      <div id="clh-checkin"></div>
+      <div id="clh-reprise-douce"></div>
+      <div id="clh-parcours"></div>
       <div id="clh-essai"></div>
 
       <!-- WRAPPED : « Ton mois de … est prêt » (1er-7), « Ton année … » (décembre).
            Rempli par _rendreCarteWrapped ; vide hors de ces fenêtres. -->
+      <!-- L'ÉVÉNEMENT SAISONNIER : compte à rebours, jauge perso, compteur collectif (renderSaisonAccueil). -->
+      <div id="clh-saison"></div>
       <div id="clh-wrapped"></div>
       <!-- LE DÉFI EN COURS : rappel tant qu'il est actif (renderDefiAccueil). -->
       <div id="clh-defi"></div>
+      <!-- LES DUELS : l'invitation reçue, ceux en cours, « Défie un pote » (_rendreDuelsAccueil). -->
+      <div id="clh-duels"></div>
+      <!-- LE DÉFI REPCORE DU MOIS, pour les athlètes sans coach (renderDefiMoisAccueil). -->
+      <div id="clh-defi-mois"></div>
 
       <!-- MOT DU COACH -->
       <div id="clh-annonce" style="display:none"></div>
@@ -3433,6 +3445,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="clh-hero" class="clh-in clh-in-3" style="background:linear-gradient(160deg,#1a0303,#120000 55%,#0b0000);border:1px solid #3a0000;border-left:1px solid var(--border);border-radius:14px;padding:10px 20px 20px;margin-bottom:16px;position:relative;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 30px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.05)">
         <div style="position:absolute;right:0;top:0;width:3px;height:100%;background:var(--red)"></div>
         <div class="eyebrow eyebrow-act" style="margin-bottom:8px">Entraînement</div>
+        <div id="clh-record-portee"></div>
         <!-- ⚠ LA COUPURE EST ECRITE, elle n'est pas subie. Le libelle faisait
              286 px pour 272 disponibles : il se coupait tout seul, mais la ou
              la place manquait — « DÉMARRER MA SÉANCE DU / JOUR » sur un
@@ -3813,6 +3826,8 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="atp-parrainage"></div>
       <!-- MA PAGE PUBLIQUE (/@pseudo) et le lien de la bio : _rendrePagePublique. -->
       <div id="atp-page"></div>
+      <!-- LE RÉGLAGE DES CÉLÉBRATIONS : complètes ou discrètes (htmlReglageCelebrations). -->
+      <div id="atp-celebrations"></div>
       <!-- MES BADGES. Cinq cases, toujours les cinq. Remplie par
            _rendreMesBadges, appelée depuis openAthleteProfile. Elle ne
            s'affiche que s'il y a des badges à montrer, c'est-à-dire
@@ -4554,6 +4569,8 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- R32 — LA SYNTHESE, EN UNE PHRASE, au-dessus de tout. Peinte par
            loadProgress (_renderSyntheseProgression) ; vide sous deux bilans. -->
       <div id="prog-synthese"></div>
+      <!-- LA CARTE D'ATHLÈTE (28/09/2026) : la carte et la courbe de sa note. -->
+      <div id="prog-carte"></div>
       <!-- R34 — la ligne « Prochain bilan » (R19) est repartie : le compte a
            rebours est revenu sur l'ecran « QUEL BILAN ? ». -->
       <div id="prog-reds"></div>
@@ -5430,6 +5447,8 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
+      <!-- La bande du matin (#sante-envoyer, iPhone) : _rendreBandeSante. -->
+      <div id="ls-sante-bande" style="display:none"></div>
       <!-- R22 — LA CARTE D'IMPORT EN TETE D'ECRAN EST RETIREE (Kevin,
            17/09/2026) : la saisie manuelle est le chemin principal, et
            l'import par capture devient son alternative, SOUS le bouton de
@@ -5822,5 +5841,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1643.js"></script>
+<script src="./rc-core.1650.js"></script>
 </body></html>

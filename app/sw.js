@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1643';
+const CACHE = 'repcore-v1650';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -167,7 +167,7 @@ CORPS.push('./img/complements.webp');
 // ni code ni style — c'est-a-dire rien du tout.
 // Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
 // chaque build et reecrit cette ligne comme celle d'index.html.
-const ASSETS = ['./index.html', './rc-core.1643.js', './rc-style.1643.css',
+const ASSETS = ['./index.html', './rc-core.1650.js', './rc-style.1650.css',
   './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
@@ -846,7 +846,9 @@ async function swCheckWoReminder() {
   // reste générique plutôt que d'inventer un intitulé.
   const _nom = (sched.noms && sched.noms[todayApp]) || 'ta séance';
   await self.registration.showNotification('Séance du jour', {
-    body: (sched.fname || '') + ', ' + _nom + ' est au programme.',
+    // Le record à portée du jour, posé par l'app (_recordsAPorteeParJour).
+    body: (sched.fname || '') + ', ' + _nom + ' est au programme.'
+      + ((sched.records && sched.records[todayApp]) ? ' ' + sched.records[todayApp] + '.' : ''),
     icon: './icons/icon-192x192.png',
     badge: './icons/icon-192x192.png',
     tag: 'wo-reminder',

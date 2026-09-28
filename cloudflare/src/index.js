@@ -28,9 +28,10 @@ import { repondreAppel } from './appels.js';
 import { cloudinaryDestroy, compteCloudinary } from './medias.js';
 import { creerPaypal, recevoirWebhook, jetonPaypal } from './paypal.js';
 import { servirPagePublique } from './pages.js';
+import { santeJeton, recevoirSante, compteDuJeton, rappelSanteUn } from './sante.js';
 
 // Les fonctions appelées par l'app (protocole onCall, jeton Firebase vérifié).
-const APPELS = { cloudinaryDestroy };
+const APPELS = { cloudinaryDestroy, santeJeton };
 
 // Toutes les requêtes sortantes passent ici : c'est le compteur du budget.
 function outils(env) {
@@ -46,11 +47,14 @@ function outils(env) {
   // Les clés de tous les dossiers, pour la rareté des badges (lecture en shallow).
   M.coachsEtUsers = () => db.ref('users').shallow();
   M.paypal = creerPaypal({ db, M, env, fetchImpl: fetchCompte });
+  // Le rappel du matin (iPhone) : les comptes synchronisés, un par un.
+  M.santeComptes = () => db.ref('sante_sync').shallow();
+  M.santeRappelUn = (cle, t) => rappelSanteUn(cle, t, { db, envoyerPush: M.envoyerPush });
   return { db, M, env, compteur: () => n };
 }
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Cache-Control': 'no-store' };
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-RepCore-Jeton', 'Cache-Control': 'no-store' };
 // ⚠ UN 204 OU UN 304 N'A PAS DE CORPS, pas même '' : le constructeur Response
 // lève alors « Invalid response status code 204 ». C'est ce qui cassait la
 // pré-vérification CORS (OPTIONS) de /fn/cloudinaryDestroy : l'exception
@@ -86,6 +90,18 @@ export default {
       if (url.pathname.startsWith('/fn/') && req.method === 'POST') {
         const o = outils(env);
         return await repondreAppel(req, APPELS, { db: o.db, env, projet: 'repcore-sync' });
+      }
+      // LA SANTÉ SYNCHRONISÉE (Health Connect, Raccourci iPhone) : voir sante.js.
+      // Le corps n'est jamais journalisé.
+      if (url.pathname === '/sante/qui' && req.method === 'POST') {
+        const o = outils(env);
+        const r = await compteDuJeton(req, { db: o.db });
+        return reponse(JSON.stringify(r.corps), r.statut);
+      }
+      if ((url.pathname === '/sante/i' || url.pathname.startsWith('/sante/i/')) && req.method === 'POST') {
+        const o = outils(env);
+        const r = await recevoirSante(req, { db: o.db });
+        return reponse(JSON.stringify(r.corps), r.statut);
       }
       // PAYPAL : chaque événement d'abonnement ou de paiement, signature vérifiée chez PayPal.
       if (url.pathname === '/paypal' && req.method === 'POST') {

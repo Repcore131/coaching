@@ -39,6 +39,14 @@ th{color:var(--gris);font-weight:600;font-size:12px}
 .lien button{background:var(--rouge);color:#fff;border:0;border-radius:10px;padding:0 14px;font-weight:800}
 .note{color:var(--gris);font-size:12.5px;line-height:1.55;margin-top:18px}
 .vide{text-align:center;padding:60px 10px;color:var(--gris)}
+.sem{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 8px}
+.sem div{background:var(--carte);border:1px solid var(--bord);border-radius:12px;padding:10px;text-align:center}
+.sem b{display:block;font-size:22px}.sem span{font-size:12px;color:var(--gris)}
+.legal{margin:18px 0 0;padding:12px 14px;border:1px solid #ffd23a;border-radius:12px;background:rgba(255,210,58,.08);font-size:13.5px;line-height:1.55}
+.legal b{color:#ffd23a}
+#carte{display:block;width:100%;max-width:280px;margin:8px auto 10px;border-radius:12px;background:#000}
+.btn{display:block;width:100%;background:var(--rouge);color:#fff;border:0;border-radius:10px;padding:12px;font-weight:800;font-size:15px}
+.idees{margin:0;padding-left:20px;line-height:1.55}.idees li{margin-bottom:8px}
 </style>
 </head>
 <body>
@@ -51,6 +59,21 @@ th{color:var(--gris);font-weight:600;font-size:12px}
   function esc(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
   function eur(v){ try{ return Number(v||0).toLocaleString('fr-FR',{style:'currency',currency:'EUR'}); }catch(e){ return (v||0)+' €'; } }
   function pct(a,b){ return b>0?Math.round(a/b*100)+' %':'-'; }
+  // LA CARTE : noir, l'éclair rouge, le nom, l'offre, le code et le lien.
+  function dessiner(cv,nom,code,offre,lien){
+    var g=cv.getContext('2d'), W=1080, H=1920, cx=W/2, F="Impact,'Arial Narrow Bold','Arial Narrow',sans-serif", M="-apple-system,'Segoe UI',Roboto,sans-serif";
+    var gr=g.createLinearGradient(0,0,W,H); gr.addColorStop(0,'#1b1b1d'); gr.addColorStop(1,'#050505'); g.fillStyle=gr; g.fillRect(0,0,W,H);
+    g.save(); g.fillStyle='rgba(224,32,32,.9)'; g.shadowColor='rgba(224,32,32,.9)'; g.shadowBlur=80; g.beginPath();
+    [[620,330],[440,700],[550,700],[480,1000],[720,600],[600,600],[680,330]].forEach(function(p,i){ i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]); });
+    g.closePath(); g.fill(); g.restore();
+    g.textAlign='center'; g.fillStyle='#fff'; g.shadowColor='rgba(0,0,0,.6)'; g.shadowBlur=18;
+    g.font='800 44px '+M; g.fillText('R E P C O R E',cx,220);
+    var n=nom.toUpperCase().slice(0,24), t=150; g.font=t+'px '+F; while(g.measureText(n).width>W-140&&t>70){ t-=6; g.font=t+'px '+F; }
+    g.fillText(n,cx,1220); g.font='110px '+F; g.fillText('T’INVITE',cx,1350);
+    g.fillStyle='#ff3b3b'; g.font='800 52px '+M; g.fillText(offre,cx,1480);
+    g.fillStyle='#fff'; g.font='800 64px '+M; g.fillText('CODE '+code,cx,1610);
+    g.fillStyle='rgba(255,255,255,.8)'; g.font='600 36px '+M; g.fillText(lien.slice(0,48),cx,1700);
+  }
   if(!/^[a-z0-9]{24}$/.test(s)){ z.innerHTML='<div class="vide">Lien incomplet.</div>'; return; }
   fetch(DB+'/ambassadeurs_vue/'+s+'.json').then(function(r){ return r.ok?r.json():null; }).then(function(v){
     if(!v||!v.code){ z.innerHTML='<div class="vide">Ce lien de suivi n’existe pas.</div>'; return; }
@@ -62,6 +85,9 @@ th{color:var(--gris);font-weight:600;font-size:12px}
       +'<div class="ent"><div><b>'+(v.clics|0)+'</b><span>clics</span></div><i>→ '+pct(v.inscrits,v.clics)+'</i>'
       +'<div><b>'+(v.inscrits|0)+'</b><span>inscrits</span></div><i>→ '+pct(v.payants,v.inscrits)+'</i>'
       +'<div><b>'+(v.payants|0)+'</b><span>payants</span></div></div>'
+      // LA SEMAINE : les 7 derniers jours (attribution, recalculée chaque matin).
+      +(v.semaine?'<h2>Cette semaine</h2><div class="sem"><div><b>'+(v.semaine.clics|0)+'</b><span>clics</span></div>'
+        +'<div><b>'+(v.semaine.inscrits|0)+'</b><span>inscrits</span></div><div><b>'+(v.semaine.payants|0)+'</b><span>payants</span></div></div>':'')
       +'<div class="grille"><div><span>Chiffre d’affaires</span><b>'+eur(v.ca)+'</b></div>'
       +'<div><span>Commission due</span><b class="due">'+eur(v.due)+'</b></div>'
       +'<div><span>Déjà payée</span><b>'+eur(v.payee)+'</b></div>'
@@ -69,12 +95,32 @@ th{color:var(--gris);font-weight:600;font-size:12px}
     var ms=Object.keys(v.mois||{}).sort().reverse();
     if(ms.length) h+='<h2>Par mois</h2><table><tr><th>Mois</th><th>CA</th><th>Due</th><th>Payée</th><th>Attente</th></tr>'
       +ms.map(function(m){ var x=v.mois[m]; return '<tr><td>'+esc(m)+'</td><td>'+eur(x.ca)+'</td><td>'+eur(x.due)+'</td><td>'+eur(x.payee)+'</td><td>'+eur(x.attente)+'</td></tr>'; }).join('')+'</table>';
-    h+='<p class="note">Ceux qui s’inscrivent avec ton lien ou ton code ont leur premier mois offert grâce à toi. Tu touches '+(v.commissionPct|0)+' % de ce qu’ils paient'
+    var demi=v.avantage==='ultime_demi';
+    var offre=demi?'1ER MOIS D’ULTIME À -50 %':'1ER MOIS OFFERT';
+    // LA CARTE D'INVITATION À SON NOM (1080×1920), dessinée ici.
+    h+='<h2>Ta carte d’invitation</h2><canvas id="carte" width="1080" height="1920" aria-label="Ta carte d’invitation"></canvas>'
+      +'<button type="button" class="btn" id="dl">Télécharger ma carte</button>';
+    // CINQ IDÉES DE PUBLICATIONS.
+    var idees=['Ta séance du jour en story avec le visuel RepCore, et ton code '+v.code+' en légende.',
+      'Un avant / après de tes charges sur 4 semaines : les chiffres parlent, l’app les garde.',
+      'Ton rang et ta série en story (« 12 semaines d’affilée ») : ce que la régularité donne.',
+      'Un défi lancé à ta communauté : « 3 séances cette semaine, qui relève ? », avec ton lien.',
+      'Une FAQ en story : « C’est quoi RepCore ? » — '+(demi?'1er mois d’Ultime à moitié prix avec mon code':'mon premier mois offert avec mon code')+'.'];
+    h+='<h2>5 idées de publications</h2><ol class="idees">'+idees.map(function(x){ return '<li>'+esc(x)+'</li>'; }).join('')+'</ol>';
+    // LE RAPPEL LÉGAL : loi n° 2023-451 du 9 juin 2023 (influence commerciale).
+    h+='<div class="legal"><b>Obligatoire à chaque publication :</b> affiche clairement que c’est un <b>partenariat commercial</b>, avec la mention '
+      +'« <b>Publicité</b> » ou « <b>Collaboration commerciale</b> » (loi n° 2023-451 du 9 juin 2023 sur l’influence commerciale). '
+      +'Sur Instagram, active aussi l’étiquette « Partenariat rémunéré ». Sans cette mention, la publication est illégale, même avec un simple code.</div>';
+    h+='<p class="note">Ceux qui s’inscrivent avec ton lien ou ton code ont '+(demi?'leur 1er mois d’Ultime à moitié prix':'leur premier mois offert grâce à toi')+'. Tu touches '+(v.commissionPct|0)+' % de ce qu’ils paient'
       +(v.palierPct?' ('+(v.palierPct|0)+' % au-delà de '+(v.palierSeuil|0)+' payants)':'')+', pendant '+(v.dureeMois|0)+' mois à partir de leur premier paiement. '
       +'Une commission devient due 30 jours après le paiement (délai des remboursements), et se règle chaque mois.'
       +(v.maj?'<br>Mis à jour le '+esc(new Date(v.maj).toLocaleString('fr-FR'))+'.':'')+'</p>';
     z.innerHTML=h;
     document.getElementById('cp').onclick=function(){ var b=this; try{ navigator.clipboard.writeText(lien).then(function(){ b.textContent='Copié ✓'; }); }catch(e){} };
+    var cv=document.getElementById('carte');
+    dessiner(cv,String(v.nom||v.code),v.code,offre,lien.replace(/^https?:\/\//,''));
+    document.getElementById('dl').onclick=function(){ cv.toBlob(function(b){ if(!b) return; var a=document.createElement('a');
+      a.href=URL.createObjectURL(b); a.download='repcore-invitation-'+v.code+'.jpg'; document.body.appendChild(a); a.click(); a.remove(); },'image/jpeg',0.92); };
   }).catch(function(){ z.innerHTML='<div class="vide">Page injoignable pour l’instant.</div>'; });
 })();
 </script>

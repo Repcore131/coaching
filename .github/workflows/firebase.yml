@@ -52,8 +52,12 @@ jobs:
           # p/, c/, a/ : les pages publiques /@pseudo, /coach/slug et la page
           # secrete d'un ambassadeur ; firebase.json y reecrit /@* et /coach/*.
           cp -a app blog i maj p c a _site/
-          cp -a index.html legal.html privacy.html terms.html 404.html _site/
+          cp -a index.html legal.html privacy.html terms.html 404.html aide-apk.html _site/
           cp -a logo.png og-image.png robots.txt sitemap.xml _site/
+          # well-known/ (sans point dans le depot) -> _site/.well-known/.
+          # Absent, Firebase sert un assetlinks.json VIDE (« [] ») et la TWA
+          # Android s'ouvre avec la barre d'adresse (constate le 28/09/2026).
+          mkdir -p _site/.well-known && cp -a well-known/. _site/.well-known/
           if [ -f .nojekyll ]; then cp -a .nojekyll _site/; fi
           echo "Fichiers assembles : $(find _site -type f | wc -l)"
 
@@ -70,6 +74,11 @@ jobs:
           test -f _site/c/index.html
           test -f _site/a/index.html
           test -f _site/404.html
+          test -f _site/aide-apk.html
+          test -f _site/app/apk-version.json
+          # L'APK : l'empreinte de sa cle doit etre publiee, sinon barre d'adresse.
+          grep -q '"com.repcore.app"' _site/.well-known/assetlinks.json
+          grep -q 'sha256_cert_fingerprints' _site/.well-known/assetlinks.json
           # AUCUN SERVICE WORKER A LA RACINE. Servi depuis /, il prend la
           # portee / : il intercepte la page de vente et survit a la
           # suppression du fichier. C'est arrive le 10/09/2026.

@@ -51,6 +51,16 @@
     ],
     "headers": [
       {
+        "//": "L'APK Android (MiseAJour.kt) lit ce fichier a chaque ouverture : jamais de cache, sinon la notification de mise a jour arrive des heures en retard.",
+        "source": "/app/apk-version.json",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      },
+      {
+        "//": "Android verifie ce fichier pour relier le site a l'APK (TWA sans barre d'adresse).",
+        "source": "/.well-known/assetlinks.json",
+        "headers": [{ "key": "Content-Type", "value": "application/json" }]
+      },
+      {
         "//": "MEME PIEGE QUE /i, ET IL A COUTE QUATRE LOTS. Les en-tetes suivent le chemin DEMANDE, pas le fichier servi : /app/ n'a pas d'extension, la regle **/*.html ne le voit donc pas, et cette adresse — celle du lien court, du QR et de la page de vente, donc celle que TOUT LE MONDE ouvre — heritait du max-age=3600 par defaut. Mesure le 03/09/2026 : /app/index.html rendait no-cache et /app/ rendait max-age=3600 pour le meme fichier. Consequence : chaque mise en ligne mettait jusqu'a une heure a atteindre un telephone qui avait deja ouvert l'app, PAR-DESSUS le cache du service worker.",
         "source": "/app",
         "headers": [

@@ -221,6 +221,15 @@ await test('un paiement sur un abonnement actif et courant rouvre l’accès apr
   assert.equal(w.F.lire('users/lea@t,fr/abonnement/finAccesPaypal'), null);
 });
 
+await test('le 1er mois d’Ultime à moitié prix : payé, il est marqué utilisé (une seule fois par compte)', async () => {
+  const DEMI = 'P-57P40267XP026613FNK2LZXQ';
+  assert.equal(OFFRES_PAYPAL[DEMI].demi, true);
+  const w = monde({ users: LEA({}), paypal_abonnes: { 'I-ABC12345678': 'lea@t,fr' } }, { abonnements: { 'I-ABC12345678': abo({ plan_id: DEMI }) } });
+  assert.equal((await w.envoyer(evt('PAYMENT.SALE.COMPLETED', vente('I-ABC12345678', '12.45')))).texte, 'premier_paiement');
+  assert.equal(w.F.lire('droits/lea@t,fr/demiPackUtilise'), true);
+  assert.equal(w.F.lire('droits/lea@t,fr/palier'), 'ultime');
+});
+
 await test('ancien abonnement annulé : ignoré, l’accès du nouveau reste ouvert', async () => {
   const w = monde({ users: LEA({ paypalSubscriptionId: 'I-NEW12345678' }),
     paypal_abonnes: { 'I-OLD12345678': 'lea@t,fr', 'I-NEW12345678': 'lea@t,fr' }, paypal_premiers: { 'lea@t,fr': { le: 1 } } },

@@ -28,10 +28,15 @@ import P from '../../functions/parrainage-calcul.js';
 import A from '../../functions/ambassadeurs-calcul.js';
 import ATT from '../../functions/attribution-calcul.js';
 import { envoyerA } from './push.js';
+import * as DU from './duels.js';
+import * as SA from './saisons.js';
+import * as RE from './retour.js';
+import * as XPS from './xp.js';
+import * as RT from './retention.js';
 
 export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
-export const PUSH_TYPES = ['serie', 'wrapped', 'bilan', 'badge', 'coach', 'filleul', 'defi', 'acces'];
+export const PUSH_TYPES = ['serie', 'wrapped', 'bilan', 'badge', 'coach', 'filleul', 'defi', 'acces', 'retour', 'sante'];
 const BONUS_ESSAI_JOURS = 0;   // un mois, pas deux : = TARIFS.essai_parrainage.moisEnPlus
 const PALIERS = ['aucun', 'essentielle', 'ultime', 'suivi'];
 
@@ -44,6 +49,26 @@ export function paris(t) {
   const annee = Number(p.year), mois = Number(p.month), date = Number(p.day);
   return { jour: p.year + '-' + p.month + '-' + p.day, heure: Number(p.hour) % 24, minute: Number(p.minute),
     annee, mois, date, joursem: new Date(Date.UTC(annee, mois - 1, date)).getUTCDay() };
+}
+// PURE. Le push du 21e jour d'essai, parcours « Mise sous tension » pas fini.
+export function messageParcoursJ21(n, jour) {
+  const k = Math.max(1, Math.min(7, Math.round(Number(n)) || 1));
+  return { type: 'serie', url: './?parcours=1', tag: 'parcours-j21-' + String(jour || ''),
+    title: 'Encore ' + k + ' étape' + (k > 1 ? 's' : '') + ' ⚡',
+    body: 'Ta Mise sous tension est presque bouclée : ' + (k > 1 ? 'les ' + k + ' dernières étapes débloquent' : 'la dernière étape débloque') + ' le badge SOUS TENSION.' };
+}
+// Les avantages qu'un code ambassadeur peut porter (un seul).
+export const AVANTAGES_AMB = ['essai+1mois', 'ultime_demi'];
+// PURE. La semaine d'un ambassadeur : la somme de 7 jours d'attribution.
+export function semaineAmbassadeur(jours) {
+  const o = { clics: 0, inscrits: 0, payants: 0 };
+  for (const j of jours || []) {
+    if (!j || typeof j !== 'object') continue;
+    o.clics += Math.max(0, Number(j.clic) || 0);
+    o.inscrits += Math.max(0, Number(j.inscription) || 0);
+    o.payants += Math.max(0, Number(j.payant) || 0);
+  }
+  return o;
 }
 export function heuresCalmes(t) { const h = paris(t).heure; return h >= 21 || h < 8; }
 export function lundiParis(t) {
@@ -290,6 +315,8 @@ export function creerMetier(deps) {
       const etat = serieDuJour({ streak, streakWeek: semaine, lastSession: der, suspension: susp, streakJokers: jokers,
         streakJokerLe: jokerLe, sessions_config: config }, t);
       if (etat.etat !== 'vivante' && etat.etat !== 'sauvee') return etat.etat;
+      // Pas de doublon : une relance « retour » vient de partir.
+      if (RE.retourRecent(RE.etatPeriode(await _val('retour_etat/' + uid), der), t)) return 'retour';
       const n = etat.valeur;
       await envoyerPush(uid, { type: 'serie', url: './?wo=1', tag: 'serie-' + lundi + '-jeu',
         title: 'Ta série de ' + n + ' semaine' + (n > 1 ? 's' : '') + ' est en danger',
@@ -755,7 +782,7 @@ export function creerMetier(deps) {
     const a = await _val('ambassadeurs/' + code);
     if (!a || !a.nom) return null;
     const o = {};
-    for (const k of ['nom', 'actif', 'commissionPct', 'palierPct', 'palierSeuil', 'dureeMois', 'secret'])
+    for (const k of ['nom', 'actif', 'commissionPct', 'palierPct', 'palierSeuil', 'dureeMois', 'secret', 'avantage'])
       if (a[k] !== null && a[k] !== undefined) o[k] = a[k];
     return o;
   }
@@ -764,8 +791,13 @@ export function creerMetier(deps) {
     if (!a || !/^[a-z0-9]{24}$/.test(String(a.secret || ''))) return null;
     const t = now();
     const cfg = A.config(a);
+    // LA SEMAINE : les 7 derniers jours de Paris, lus dans l'attribution
+    // (attribution/jours/<jour>/amb/<code> : clic, inscription, payant).
+    const jours = Array.from({ length: 7 }, (_, i) => ATT.jourParis(t - i * 864e5));
+    const lus = await Promise.all(jours.map((j) => _val('attribution/jours/' + j + '/amb/' + code).catch(() => null)));
     const v = Object.assign(A.resume(code, a, t), { commissionPct: cfg.commissionPct, palierPct: cfg.palierPct,
-      palierSeuil: cfg.palierSeuil, dureeMois: cfg.dureeMois, actif: cfg.actif, maj: t });
+      palierSeuil: cfg.palierSeuil, dureeMois: cfg.dureeMois, actif: cfg.actif, maj: t,
+      avantage: AVANTAGES_AMB.indexOf(a.avantage) >= 0 ? a.avantage : 'essai+1mois', semaine: semaineAmbassadeur(lus) });
     await db.ref('ambassadeurs_vue/' + a.secret).set(v);
     return v;
   }
@@ -791,7 +823,11 @@ export function creerMetier(deps) {
       [dem + '/etat']: 'accepte', [dem + '/traiteLe']: t });
     await incr('ambassadeurs/' + code + '/stats/inscrits');
     await incr('attribution/jours/' + ATT.jourParis(t) + '/amb/' + code + '/inscription');
-    await bonusEssai(uid, droits);
+    // L'OFFRE DE LANCEMENT : le code porte « ultime_demi » (1er mois d'Ultime
+    // à moitié prix) AU LIEU du mois d'essai en plus. Écrite dans droits/,
+    // que l'app lit d'abord et que le client ne peut pas écrire.
+    if (cfg.avantage === 'ultime_demi') await majDroits(uid, () => ({ offreAmb: 'ultime_demi' }));
+    else await bonusEssai(uid, droits);
     await ambMajVue(code);
     return { ok: true };
   }
@@ -932,7 +968,222 @@ export function creerMetier(deps) {
         body: 'Ton invitation a pris. Son premier paiement t’offrira 1 mois de RepCore.' });
       return 'prevenu';
     }
+    if (type === 'duel_rejoint' || type === 'duel_maj') return duelEvenement(e, t);
+    // UNE SÉANCE TERMINÉE : les volts recalculés par le serveur.
+    if (type === 'seance_fin') return xpRecalculer(String(e.par || ''), t, true);
     return 'type_inconnu';
+  }
+
+  // ══ LES DUELS (voir duels.js) ═════════════════════════════════════════
+  // Une lecture du duel, une écriture multi-chemins, et les push : quatre
+  // sous-requêtes au plus par événement (plus celles des push, comptées par
+  // pousserA). L'index /duels_actifs porte les duels à suivre chaque jour
+  // (J-2, clôture) : le travail du jour ne balaie jamais /duels.
+  async function duelEvenement(e, t) {
+    const id = String(e.cible || e.id || '');
+    if (!DU.DUEL_ID_RE.test(id)) return 'duel_invalide';
+    const d = await _val('duels/' + id);
+    if (!d) return 'duel_inconnu';
+    d.id = id;
+    const par = String(e.par || '');
+    if (par !== d.createur && par !== d.invite) return 'pas_participant';
+    if (e.type === 'duel_rejoint') {
+      if (d.statut !== 'attente' || par !== d.invite) return 'deja_' + d.statut;
+      await db.ref().update({ ['duels/' + id + '/statut']: 'accepte', ['duels/' + id + '/rejointLe']: t, ['duels/' + id + '/maj']: t,
+        ['duels_actifs/' + id]: { fin: 0, depuis: t } });
+      await pousserA([{ uid: d.createur, message: DU.pushRejoint(d) }], { attendre: false });
+      return 'accepte';
+    }
+    // duel_maj : une séance terminée (ou une progression réécrite).
+    if (d.statut === 'accepte') {
+      if (par !== d.invite) return 'pas_commence';
+      const { debut, fin } = DU.demarrage(d, t, e.at);
+      // La progression d'avant le début ne compte pas : elle est effacée.
+      await db.ref().update({ ['duels/' + id + '/statut']: 'en_cours', ['duels/' + id + '/debut']: debut,
+        ['duels/' + id + '/fin']: fin, ['duels/' + id + '/scores']: { createur: 0, invite: 0 },
+        ['duels/' + id + '/progres']: null, ['duels/' + id + '/maj']: t, ['duels_actifs/' + id]: { fin } });
+      Object.assign(d, { statut: 'en_cours', debut, fin, scores: { createur: 0, invite: 0 } });
+      await pousserA([d.createur, d.invite].map((uid) => ({ uid, message: DU.pushDebut(d, uid) })), { attendre: false });
+      return 'demarre';
+    }
+    if (d.statut !== 'en_cours') return 'clos';
+    if (t > Number(d.fin)) return duelCloturer(d, t);
+    const scores = DU.scoresDe(d);
+    await db.ref('duels/' + id).update({ scores, maj: t });
+    return 'scores';
+  }
+  async function duelCloturer(d, t) {
+    const scores = DU.scoresDe(d);
+    const gagnant = DU.gagnantDe(scores);
+    Object.assign(d, { scores });
+    const maj = { ['duels/' + d.id + '/statut']: 'termine', ['duels/' + d.id + '/scores']: scores,
+      ['duels/' + d.id + '/gagnant']: gagnant, ['duels/' + d.id + '/termineLe']: t, ['duels/' + d.id + '/maj']: t,
+      ['duels_actifs/' + d.id]: null };
+    // Les deux reçoivent leur résultat ; le gagnant, le badge CHAMPION (l'app le lit ici).
+    for (const cle of [d.createur, d.invite]) if (cle) maj['defis_resultats/' + cle + '/' + d.id] = DU.resultatPour(d, cle, gagnant, t);
+    await db.ref().update(maj);
+    await pousserA([d.createur, d.invite].filter(Boolean).map((uid) => ({ uid, message: DU.pushResultat(d, uid, gagnant) })), { attendre: false });
+    return 'termine';
+  }
+  // Le travail du jour, un duel à la fois (planif.js) : J-2, clôture, oubli.
+  async function duelQuotidienUn(id, t) {
+    const d = await _val('duels/' + id);
+    if (d) d.id = id;
+    const suite = DU.suiteDuel(d, t);
+    if (suite === 'oublier') { await db.ref('duels_actifs/' + id).remove(); return 'oublie'; }
+    if (suite === 'cloturer') return duelCloturer(d, t);
+    if (suite === 'annuler') {
+      await db.ref().update({ ['duels/' + id + '/statut']: 'annule', ['duels/' + id + '/maj']: t, ['duels_actifs/' + id]: null });
+      return 'annule';
+    }
+    if (suite === 'rappel') {
+      await db.ref('duels/' + id + '/rappel').set(true);
+      await pousserA([d.createur, d.invite].map((uid) => ({ uid, message: DU.pushRappel(d, uid) })), { attendre: false });
+      return 'rappel';
+    }
+    return 'rien';
+  }
+  const duelsActifs = () => db.ref('duels_actifs').shallow();
+
+  // ══ LES ÉVÉNEMENTS SAISONNIERS (voir saisons.js) — CHAQUE HEURE ═══════
+  // Par saison suivie : la progression écrite par les apps (1 lecture), l'état
+  // des annonces (1), une écriture multi-chemins (compteur collectif, badges
+  // des nouveaux finis, annonce faite), et, s'il y a une annonce, la liste
+  // des abonnés (1) et les push (pousserA diffère ce qui dépasse le budget).
+  // Rend false quand le budget coupe : le travail reprend au réveil suivant.
+  async function saisonsHeure(t) {
+    const toutes = (await _val('saisons')) || {};
+    const ids = Object.keys(toutes).filter((id) => SA.SAISON_ID_RE.test(id) && SA.saisonSuivie(toutes[id], t)).sort();
+    for (const id of ids) {
+      if (_reste() < 10) return false;
+      const s = toutes[id];
+      const [progres, etat] = await Promise.all([_val('saisons_progres/' + id), _val('saisons_etat/' + id)]);
+      const vals = SA.valeurs(progres);
+      const e = etat || {};
+      const maj = { ['stats/saisons/' + id]: SA.statsSaison(s, vals, t) };
+      for (const k of SA.nouveauxFinis(s, vals, e.finis)) {
+        maj['saisons_resultats/' + k + '/' + id] = SA.resultatSaison(id, s, t);
+        maj['saisons_etat/' + id + '/finis/' + k] = t;
+      }
+      // LES ANNONCES ATTENDENT LE JOUR (9 h – 21 h, Paris) : lancée à minuit,
+      // une saison est annoncée au réveil, pas pendant la nuit.
+      const h = paris(t).heure;
+      const quoi = (h >= 9 && h < 21) ? SA.annonceSaison(s, e, t) : null;
+      if (quoi) maj['saisons_etat/' + id + '/' + quoi] = t;
+      await db.ref().update(maj);
+      if (quoi) {
+        const abonnes = await db.ref('push').shallow();
+        const dest = SA.destinataires(quoi, s, abonnes, vals);
+        await pousserA(dest.map((uid) => ({ uid, message: SA.messageSaison(quoi, id, s, uid, vals) })), { attendre: false });
+      }
+    }
+    return true;
+  }
+
+  // ══ LA RÉTENTION (retention.js) — chaque nuit, par lots ════════════════
+  // Un résumé d'activité par compte, une lecture chacun ; l'accumulateur vit
+  // dans worker/jobs/retention/acc d'une minute à l'autre (planif.js), et la
+  // fin publie /stats/retention — des agrégats seulement.
+  async function retentionUn(k, t, acc) {
+    const r = await _val('activite/' + k);
+    const a = RT.accumuler(acc && acc.c ? acc : RT.accVide(), r, t);
+    for (const x of Object.keys(a)) acc[x] = a[x];
+    return RT.resumeValide(r) ? 'compte' : 'illisible';
+  }
+  const activiteComptes = () => db.ref('activite').shallow();
+  async function retentionFin(acc) {
+    const v = RT.resultat(acc, now());
+    await db.ref('stats/retention').set(v);
+    return v;
+  }
+
+  // ══ LES VOLTS RECALCULÉS PAR LE SERVEUR (xp.js) ═════════════════════════
+  // Les séances NOUVELLES seulement (xp_etat/<k>.n = l'index de la suivante),
+  // par lots de XPS.LOT_SEANCES : un historique ancien se rattrape en
+  // sous-tâches, jamais d'un bloc. Une écriture multi-chemins pose l'état, le
+  // total (/xp_serveur/<k>, lu par le coach) et, si l'athlète montre son rang
+  // sur sa page publique, /volts_publics/<pseudo>.
+  async function xpRecalculer(k, t, exigerNouvelle) {
+    if (!/^[^/.#$\[\]]{3,200}$/.test(k)) return 'cle';
+    const etat0 = (await _val('xp_etat/' + k)) || XPS.etatVide();
+    const n0 = Number(etat0.n) || 0;
+    const brut = (await db.ref('users/' + k + '/sessions').orderByKey().startAt(n0).limitToFirst(XPS.LOT_SEANCES).get()).val();
+    const nouvelles = XPS.listeSeances(brut, n0);
+    // L'événement part à la fin de la séance, le dossier juste après : s'il
+    // n'est pas encore là, on LÈVE et la file réessaie à la minute suivante
+    // (planif.js, cinq essais) — comme filleul_seance.
+    if (exigerNouvelle && !nouvelles.length) {
+      const der = Number(await _lire(k, 'lastSession')) || 0;
+      if (der > (Number(etat0.derniere) || 0) + 60e3) throw new Error('séance pas encore synchronisée');
+    }
+    const [alias, detail, badges, bilans, cree, pp] = await Promise.all([
+      nouvelles.length ? _lire(k, 'exAlias') : null, _lire(k, 'xpDetail'), _lire(k, 'badges'),
+      db.ref('users/' + k + '/bilans').shallow(), _lire(k, 'createdAt'), _lire(k, 'pagePublique')]);
+    const etat = nouvelles.length ? XPS.avancer(etat0, nouvelles, alias, t) : etat0;
+    const premiere = nouvelles.length && Number(nouvelles[0].date) > 0 ? Number(nouvelles[0].date) : 0;
+    etat.debut = Math.min(...[Number(etat0.debut) || Infinity, Number(cree) || Infinity, premiere || Infinity]);
+    if (!isFinite(etat.debut)) etat.debut = t;
+    const r = XPS.totalServeur(etat, detail, { nBilans: bilans.length, badges, debut: etat.debut }, t);
+    const rg = XPS.rangDe(r.total);
+    etat.maj = t;
+    const maj = {
+      ['xp_etat/' + k]: etat,
+      ['xp_serveur/' + k]: { total: r.total, cat: r.cat, rang: { n: rg.rang.n, nom: rg.rang.nom },
+        client: Math.round(Number(detail && detail.total) || 0), secrets: Object.keys(etat.secrets || {}),
+        nonVerifies: r.nonVerifies, seances: etat.n, maj: t },
+    };
+    // La page publique : seulement si ce pseudo est bien le sien et qu'il y montre son rang.
+    const pseudo = pp && typeof pp.pseudo === 'string' ? pp.pseudo : '';
+    if (/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/.test(pseudo)) {
+      // Le point d'un pseudo est « __ » en base (Firebase refuse le point dans une clé).
+      const pk = pseudo.replace(/\./g, '__');
+      const [proprio, rangPublic] = await Promise.all([_val('pseudos/' + pk), _val('profils_publics/' + pk + '/rang')]);
+      if (proprio === k) maj['volts_publics/' + pk] = rangPublic
+        ? Object.assign({ rang: { n: rg.rang.n, nom: rg.rang.nom }, maj: t, masquer: r.nonVerifies }, XPS.voltsPublics(r.total)) : null;
+    }
+    await db.ref().update(maj);
+    // Un lot plein : la suite en sous-tâche.
+    if (nouvelles.length >= XPS.LOT_SEANCES) { await differer([{ quoi: 'xp', cle: k }]); return 'suite'; }
+    return 'recalcule';
+  }
+
+  // ══ LA RELANCE DES INACTIFS (J+7, J+14, J+30) — 11 h, une personne à la fois ══
+  // Trois champs d'abord (la dernière séance écarte presque tout le monde),
+  // le reste seulement pour qui est au bon jour. retour_etat/<uid> retient
+  // les paliers envoyés de la période ; le Worker seul le lit et l'écrit.
+  async function retourUn(uid, t) {
+    const der = Number(await _lire(uid, 'lastSession')) || 0;
+    const palier = RE.palierDuJour(der, t);
+    if (!palier) return 'rien';
+    const [susp, etat0, logPush] = await Promise.all([_lire(uid, 'suspension'), _val('retour_etat/' + uid), _val('push_log/' + uid)]);
+    const etat = RE.etatPeriode(etat0, der);
+    const ok = RE.retourAutorise({ palier, etat, suspension: susp, logPush, t });
+    if (!ok.ok) return ok.raison;
+    const [fname, xpRang, streak, tonnageTotal] = await Promise.all(['fname', 'xpRang', 'streak', 'tonnageTotal'].map((c) => _lire(uid, c)));
+    const r = await envoyerPush(uid, RE.messageRetour(palier, { fname, xpRang, streak, tonnageTotal }, t), { attendre: false });
+    if (!r.envoye) return r.raison || 'echec';
+    etat.paliers[palier] = t;
+    await db.ref('retour_etat/' + uid).set(etat);
+    return 'envoye';
+  }
+
+  // ══ LE PARCOURS « MISE SOUS TENSION » : LE RAPPEL DU 21e JOUR D'ESSAI ══
+  // Chaque app tient /parcours_j21/<jour J21 de son essai>/<elle> = le
+  // nombre d'étapes qui lui restent (null quand le parcours est fini). Le
+  // Worker lit la liste DU JOUR seulement (une lecture), pousse « encore N
+  // étapes » (type serie : même réglage que les rappels de régularité), et
+  // efface le jour. Rend false quand le budget coupe.
+  async function parcoursJ21(t) {
+    const jour = paris(t).jour;
+    const liste = (await _val('parcours_j21/' + jour)) || {};
+    const dest = Object.keys(liste).map((uid) => ({ uid, n: Math.round(Number(liste[uid])) }))
+      .filter((x) => x.n >= 1 && x.n <= 7).sort((a, b) => (a.uid < b.uid ? -1 : 1));
+    if (dest.length && _reste() < 6) return false;
+    // Effacé AVANT les push : pousserA diffère ce qui dépasse le budget, rien
+    // ne repart donc deux fois.
+    await db.ref('parcours_j21/' + jour).remove();
+    if (dest.length) await pousserA(dest.map((x) => ({ uid: x.uid, message: messageParcoursJ21(x.n, jour) })), { attendre: false });
+    return true;
   }
 
   // ══ UNE SOUS-TÂCHE (écrite par differer, jamais par l'app : les règles
@@ -945,6 +1196,7 @@ export function creerMetier(deps) {
     }
     if (quoi === 'amb_vue') { await ambMajVue(String(e.code || '')); return 'vue'; }
     if (quoi === 'defis_coach') return defisQuotidienCoach(String(e.coach || ''), now());
+    if (quoi === 'xp') return xpRecalculer(String(e.cle || ''), now());
     return 'tache_inconnue';
   }
 
@@ -953,5 +1205,6 @@ export function creerMetier(deps) {
     ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits, majDroits, palierDroits,
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente,
-    fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, tache };
+    fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, tache,
+    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, saisonsHeure, parcoursJ21, retourUn, xpRecalculer, retentionUn, retentionFin, activiteComptes };
 }
