@@ -85,7 +85,7 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
   if(!/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/.test(pseudo)) return vide('Cette page n’existe pas.');
   var ctrl=window.AbortController?new AbortController():null;
   setTimeout(function(){ if(ctrl) ctrl.abort(); },6000);
-  fetch(DB+'/profils_publics/'+encodeURIComponent(pseudo.replace(/\./g,','))+'.json',ctrl?{signal:ctrl.signal}:{})
+  fetch(DB+'/profils_publics/'+encodeURIComponent(pseudo.replace(/\./g,'__'))+'.json',ctrl?{signal:ctrl.signal}:{})
     .then(function(r){ return r.ok?r.json():null; })
     .then(function(p){
       if(!p||!p.prenom) return vide('Cette page n’existe pas, ou son titulaire l’a rendue privée.');

@@ -18516,9 +18516,23 @@ function pagePubliqueDonnees(u,montrer,maintenant){
 function pseudoPublicNormalise(p){ return String(p||'').trim().replace(/^@/,'').toLowerCase(); }
 // LA CLÉ EN BASE. Firebase refuse le point dans une clé : « kevin.gllc »
 // faisait échouer toute la requête, affichée « déjà pris » (28/09/2026). Le
-// point devient une virgule en base, comme pour les e-mails ; l'adresse
-// publique garde le point (/@kevin.gllc).
-function pseudoPublicCle(p){ return String(p||'').replace(/\./g,','); }
+// point devient « __ » en base — des caractères que les règles acceptent
+// déjà, sans redéploiement ; l'adresse publique garde le point
+// (/@kevin.gllc). Sans ambiguïté parce qu'un NOUVEAU pseudo ne peut pas
+// enchaîner deux signes (« __ », « ._ », « .. ») : un « __ » en base vient
+// donc toujours d'un point.
+function pseudoPublicCle(p){ return String(p||'').replace(/\./g,'__'); }
+const PSEUDO_SIGNES_DOUBLES_RE=/[._]{2}/;
+// Ce que les règles du 26/09 acceptaient : si la base n'a pas encore les
+// règles du 28/09 (volts, 12 semaines, badges en images), la page part quand
+// même, avec ces champs-là seulement.
+function pagePubliqueDonneesMinimales(d){
+  if(!d) return d;
+  const o={};
+  ['prenom','rang','serie','seances','ref','maj'].forEach(k=>{ if(d[k]!=null) o[k]=d[k]; });
+  if(Array.isArray(d.badges)) o.badges=d.badges.map(b=>({id:b.id,nom:b.nom}));
+  return o;
+}
 // Publie, déplace ou éteint la page. Rend {ok, erreur?}.
 async function publierPagePublique(u,reg,o){
   if(!u||!u.email||u.role==='coach') return {ok:false,erreur:'Réservé aux athlètes.'};
@@ -18526,12 +18540,20 @@ async function publierPagePublique(u,reg,o){
   if(!PSEUDO_PUBLIC_RE.test(neu)) return {ok:false,erreur:'Pseudo : 3 à 20 caractères, lettres minuscules, chiffres, point ou tiret bas.'};
   const moi=u.email.replace(/\./g,',');
   const ancien=(u.pagePublique||{}).pseudo;
-  const patch={};
+  if(neu!==ancien&&PSEUDO_SIGNES_DOUBLES_RE.test(neu))
+    return {ok:false,erreur:'Pseudo : pas deux points ou tirets bas à la suite.'};
   const kA=pseudoPublicCle(ancien), kN=pseudoPublicCle(neu);
+  if(kN.length>20) return {ok:false,erreur:'Pseudo trop long : enlève un point ou quelques lettres.'};
+  const patch={};
   if(ancien&&ancien!==neu){ patch['pseudos/'+kA]=null; patch['profils_publics/'+kA]=null; }
   patch['pseudos/'+kN]=moi;
-  patch['profils_publics/'+kN]=reg.active?pagePubliqueDonnees(u,reg.montrer):null;
-  const st=await CLOUD.racinePatchStatut(patch).catch(()=>0);
+  const donnees=reg.active?pagePubliqueDonnees(u,reg.montrer):null;
+  patch['profils_publics/'+kN]=donnees;
+  let st=await CLOUD.racinePatchStatut(patch).catch(()=>0);
+  if((st===401||st===403)&&donnees){
+    patch['profils_publics/'+kN]=pagePubliqueDonneesMinimales(donnees);
+    st=await CLOUD.racinePatchStatut(patch).catch(()=>0);
+  }
   if(st===401||st===403) return {ok:false,erreur:'Ce pseudo est déjà pris.'};
   if(st===0) return {ok:false,erreur:'Connexion perdue : vérifie ta connexion, ou déconnecte-toi puis reconnecte-toi.'};
   if(!(st>=200&&st<300)) return {ok:false,erreur:'Enregistrement impossible (erreur '+st+'). Réessaie dans un instant.'};
