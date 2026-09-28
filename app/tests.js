@@ -3841,17 +3841,15 @@ async function testExercices(){
         gender:'Femme',_evol_gender:'Femme',exAlias:{},exMuscles:{},programs:{},
         sessions:[],bilans:[],nutrition:{}},o||{});
       try{
-        ok('Critère : aucune déclaration → écran vide et message, aucune relance',(()=>{
+        ok('Critère : aucune déclaration → rien du tout côté athlète, aucune relance',(()=>{
           const u=_mk();
           const d=dossierSante(u,false);
           if(!dossierSanteVide(d))
             return _echec(JSON.stringify({e:d.etats.length,f:d.effets.length,r:d.renvois.length}));
+          // Kevin, 28/09/2026 : la phrase « rien n'est déclaré… » est retirée
+          // du profil athlète. Un dossier vide n'affiche rien.
           const h=_htmlDossierSante(u,false);
-          if(h.indexOf(escapeHtml(DOSSIER_VIDE))<0) return _echec('message absent');
-          // Aucune relance : pas de bouton, pas d'invitation a declarer.
-          return /onclick|declare|Ajouter|Renseigne/i.test(h.replace(/DOSSIER_VIDE/,''))
-            &&!/n'affiche que ce que tu as/.test(h)
-            ?_echec('une relance est proposée'):true;})());
+          return h===''?true:_echec('le dossier vide affiche encore : '+h.slice(0,80));})());
         ok('Critère : allaitement → « objectifs de perte désactivés », cause et date',(()=>{
           const t=Date.now()-40*864e5;
           const u=_mk({grossesse:{etat:'allaitement',declareLe:t}});
@@ -7459,7 +7457,9 @@ async function testExercices(){
           if(!b) return _echec('aucun bouton de suppression');
           if(!/requestAccountDeletion\(\)/.test(b.getAttribute('onclick')||''))
             return _echec('le bouton n\'appelle pas la suppression');
-          const t=(z.innerText||z.textContent||'').replace(/\s+/g,' ');
+          // Le texte vit dans la confirmation (28/09/2026) : le profil ne
+          // garde qu'un lien discret en pied de page.
+          const t=String(requestAccountDeletion).replace(/\s+/g,' ');
           if(!/Art\. 17/.test(t)) return _echec('le fondement RGPD n\'est pas cité');
           // Ce qu'un athlete perd n'est pas « des donnees » : ce sont SES
           // donnees de sante. Les nommer est le seul moyen qu'il le sache.
@@ -24220,12 +24220,12 @@ async function testExercices(){
         d.innerHTML=htmlSelecteurComptes();
         const l=[...d.querySelectorAll('[onclick^="basculerCompte"]')];
         return l.length===1&&l[0].getAttribute('onclick').indexOf(CO)>=0;})());
-      ok('Avec un seul compte, pas de titre mais le bouton d\'ajout reste',(()=>{
+      ok('Avec un seul compte, le titre, le compte rangé sous son rôle et le bouton d\'ajout',(()=>{
         _poser();
         currentUser=(DB.get('users'))[CO];
         comptesEnregistrer(currentUser);
         const h=htmlSelecteurComptes();
-        return !/Mes comptes/.test(h)&&/Ajouter un compte/.test(h);})());
+        return /Mes comptes/.test(h)&&/Compte (athlète|coach)/.test(h)&&/Ajouter un compte/.test(h);})());
       ok('La limite des rappels est annoncée dès qu\'il y a deux comptes',(()=>{
         _poser();
         const u=DB.get('users');
@@ -58957,9 +58957,12 @@ async function testExercices(){
       const kids=pad?[...pad.children]:[];
       const iId=kids.findIndex(x=>x.querySelector&&x.querySelector('#atp-fname'));
       const iVn=kids.findIndex(x=>x.querySelector&&x.querySelector('#atp-vn-prenom'));
-      const b=kids.find(x=>x.tagName==='BUTTON'&&/Tension et analyses/i.test(x.textContent));
-      const iB=kids.indexOf(b);
-      if(!(iId===1&&iVn===2&&iB===3)) return _echec('ordre du profil : identité '+iId+', visuels '+iVn+', tension '+iB);
+      // Kevin, 28/09/2026 : la tension ouvre le menu déroulant « Mes
+      // informations médicales », juste sous les visuels.
+      const iMed=kids.findIndex(x=>x.id==='atp-med');
+      const b=pad&&pad.querySelector('#atp-med .atp-med-corps button');
+      if(!(iId===1&&iVn===2&&iMed===3)) return _echec('ordre du profil : identité '+iId+', visuels '+iVn+', médical '+iMed);
+      if(!b) return _echec('le bouton Tension n’est pas dans le menu médical');
       if(!/Tension et analyses/i.test(b.textContent)||!/Tension, analyses, constantes/.test(b.textContent))
         return _echec('libellé : « '+b.textContent.replace(/\s+/g,' ').trim()+' »');
       const m=(b.getAttribute('onclick')||'').match(/go\('([^']+)'\)/);

@@ -7241,9 +7241,13 @@ function htmlSelecteurComptes(opts){
               style="flex:0 0 auto;background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:0 4px" title="Retirer">✕</button>`}
     </div>`;
   };
+  // DEUX GROUPES, NOMMÉS (Kevin, 28/09/2026) : le compte athlète, puis le
+  // compte coach. Un groupe vide ne s'affiche pas.
+  const groupe=(titre,liste)=>liste.length?(`<div class="cpt-groupe">${titre}</div>`+liste.map(ligne).join('')):'';
   return `<div id="cpt-selecteur">
-    ${l.length>1?`<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:10px">Mes comptes</div>`:''}
-    ${l.map(ligne).join('')}
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:10px">Mes comptes</div>
+    ${groupe('Compte athlète',l.filter(c=>c.role!=='coach'))}
+    ${groupe('Compte coach',l.filter(c=>c.role==='coach'))}
     <button class="btn btn-outline btn-sm" style="width:100%;margin:2px 0 0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="ajouterCompte()">+ Ajouter un compte</button>
     ${l.length>1?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:8px">Les rappels de notification suivent le compte actif : le compte en veille n'en reçoit pas.</div>`:''}
   </div>`;
@@ -18536,11 +18540,16 @@ function htmlReglagesPagePublique(u){
   return '<div class="card pp-carte"><div class="pp-titre">Ma page publique</div>'
     +'<p class="pp-sous">Une page à mettre dans ta bio : ton rang, ta régularité, tes badges. Jamais de poids, de photos ni de données de santé.</p>'
     +'<label for="pp-pseudo" class="pp-lab">Ton pseudo</label>'
-    +'<div class="pp-url"><span>'+escapeHtml(dom)+'</span><input id="pp-pseudo" type="text" maxlength="20" autocapitalize="none" autocomplete="off" spellcheck="false" value="'+escapeHtml(p.pseudo||'')+'" placeholder="ton.pseudo"></div>'
+    // L'ADRESSE EN DEUX PARTIES (Kevin, 28/09/2026) : le début, fixe, en rouge
+    // et hors d'atteinte du doigt ; la case du pseudo, seule chose à écrire.
+    +'<div class="pp-url pp-url-2"><span class="pp-url-pre" aria-hidden="true">'+escapeHtml(dom)+'</span><input id="pp-pseudo" type="text" maxlength="20" autocapitalize="none" autocomplete="off" spellcheck="false" value="'+escapeHtml(p.pseudo||'')+'" placeholder="ton.pseudo" aria-label="Ton pseudo, après '+escapeHtml(dom)+'"></div>'
     +'<label class="pp-case pp-active"><input type="checkbox" id="pp-active"'+(p.active?' checked':'')+'> <span><b>Activer ma page</b></span></label>'
     +'<div class="pp-montrer"><div class="pp-lab">Ce qu’elle montre</div>'+cases+'</div>'
     +'<div id="pp-etat" class="pp-etat" aria-live="polite">'+(url?'En ligne : '+escapeHtml(url.replace(/^https?:\/\//,'')):(p.pseudo?'Page désactivée.':''))+'</div>'
-    +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:10px 0 8px;min-height:44px" onclick="enregistrerPagePublique(this)">Enregistrer ma page</button>'
+    // Trois gestes, du plus fort au plus léger : enregistrer (rouge), voir sa
+    // page (cadre blanc, seulement quand elle est en ligne), copier le lien.
+    +'<button type="button" class="btn btn-red btn-sm btn-casse" style="width:100%;margin:10px 0 8px;min-height:44px" onclick="enregistrerPagePublique(this)">Enregistrer ma page</button>'
+    +(url?'<a class="btn btn-sm pp-voir" href="'+escapeHtml(url)+'" target="_blank" rel="noopener">Visualiser ma page</a>':'')
     +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:0;min-height:44px" onclick="copierLienBio(this)">Copier mon lien pour ma bio Instagram</button></div>';
 }
 // ── LA PROPOSITION, À UN PASSAGE DE RANG (28/09/2026) ────────────────────
@@ -72214,9 +72223,11 @@ function htmlMesBadges(u,maintenant){
       +'<div class="bdg-nom">'+escapeHtml(nom)+'</div>'
       +'<div class="bdg-date">'+escapeHtml(sous||'')+'</div></div>';
   }).join('');
-  h+='<div class="bdg-sous">Uniques</div><div class="bdg-grille">'
+  // 4 PAR LIGNE POUR LES UNIQUES (8), 5 POUR LES SECRETS (10) : deux lignes
+  // chacun, au lieu d'une colonne qui s'étirait (Kevin, 28/09/2026).
+  h+='<div class="bdg-sous">Uniques</div><div class="bdg-grille bdg-grille-4">'
     +cases(BADGES_ACQUIS.filter(b=>b.famille==='unique'),false)+'</div>';
-  h+='<div class="bdg-sous">Secrets</div><div class="bdg-grille">'
+  h+='<div class="bdg-sous">Secrets</div><div class="bdg-grille bdg-grille-5">'
     +cases(BADGES_ACQUIS.filter(b=>b.famille==='secret'),true)+'</div>';
   h+=htmlDefisReleves(u);
   return h;
@@ -78160,6 +78171,9 @@ function _htmlDossierSante(user,pourCoach){
   let d=null;
   try{ d=dossierSante(user,pourCoach); }catch(e){ d=null; }
   if(!d) return '';
+  // CÔTÉ ATHLÈTE, UN DOSSIER VIDE NE DIT RIEN (Kevin, 28/09/2026) : la phrase
+  // « rien n'est déclaré… » occupait le menu médical pour n'annoncer que du vide.
+  if(dossierSanteVide(d)&&!pourCoach) return '';
   if(dossierSanteVide(d))
     return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.75">${escapeHtml(DOSSIER_VIDE)}</div>`;
   const titre=t=>`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin:14px 0 8px">${escapeHtml(t)}</div>`;
@@ -111536,7 +111550,10 @@ function saveAthleteProfile(){
   // sa date de naissance par inadvertance ferait disparaître son âge partout.
   currentUser.profileWeight=parseFloat(document.getElementById('atp-weight')?.value)||undefined;
   currentUser.gender=_atpGender||currentUser.gender;
-  currentUser.objective=(document.getElementById('atp-objective')?.value||'').trim()||undefined;
+  // Le champ « Objectif » a quitté le profil (28/09/2026 : il est demandé
+  // ailleurs). Sans lui, on ne touche pas à l'objectif déjà enregistré.
+  const _objEl=document.getElementById('atp-objective');
+  if(_objEl) currentUser.objective=(_objEl.value||'').trim()||undefined;
   // Les états déclarés. Une liste vide EFFACE : se retirer d'une déclaration
   // doit être aussi simple que de la faire.
   // On compare AVANT d ecrire : une sauvegarde de profil qui ne touche pas
@@ -111998,6 +112015,16 @@ function executeOffboard(coachId){
 // sous rc_photo_<date>_<champ>, précisément pour ne jamais partir en base. Un
 // export qui les oublierait rendrait un dossier amputé de ce que l'athlète
 // considère comme le plus personnel.
+// LE LIEN DU PIED DU PROFIL : on dit ce que contient le fichier, puis on
+// l'exporte. Rien ne part tant que la personne n'a pas confirmé.
+async function exporterMesDonneesConfirme(){
+  const ok=await rcConfirm('EXPORTER MES DONNÉES ?\n\n'
+    +'RGPD (Art. 20) : tu récupères l’intégralité de ton dossier dans un fichier JSON : '
+    +'bilans, séances, nutrition, mensurations et photos. Les mots de passe en sont exclus.',null,'Exporter');
+  if(!ok) return false;
+  exportMyData();
+  return true;
+}
 function exportMyData(){
   try{
     const src=(DB.get('users')||{})[currentUser.email];
@@ -112055,13 +112082,19 @@ async function requestAccountDeletion(){
       return;
     }
   }
-  const ok=await rcConfirm(
-    'SUPPRIMER DÉFINITIVEMENT MON COMPTE ?\n\n'
-    +'Cette action est irréversible.\n'
-    +'Toutes tes données personnelles (profil, programmes, codes d\'accès, messages audio)\n'
-    +'seront effacées conformément au RGPD (Art. 17).\n\n'
-    +'Les données financières sont conservées 5 ans (obligation légale).'
-  ,null,'Confirmer');
+  // L'ATHLÈTE LIT CE QU'IL PERD, données de santé comprises : le texte qui
+  // était sur le profil passe ici, au moment du geste (28/09/2026).
+  const ok=await rcConfirm(currentUser.role==='coach'
+    ?('SUPPRIMER DÉFINITIVEMENT MON COMPTE ?\n\n'
+      +'Cette action est irréversible.\n'
+      +'Toutes tes données personnelles (profil, programmes, codes d\'accès, messages audio)\n'
+      +'seront effacées conformément au RGPD (Art. 17).\n\n'
+      +'Les données financières sont conservées 5 ans (obligation légale).')
+    :('SUPPRIMER DÉFINITIVEMENT MON COMPTE ?\n\n'
+      +'Action irréversible. Conformément au RGPD (Art. 17), toutes tes données seront effacées : '
+      +'profil, séances, bilans, photos, et tes données de santé (poids, mensurations, cycle, constantes, analyses).\n\n'
+      +'Les données financières sont conservées 5 ans (obligation légale).')
+  ,null,'Supprimer');
   if(!ok) return;
   toast('Suppression en cours…','var(--sub)');
   try{
