@@ -49097,11 +49097,19 @@ async function testExercices(){
         bilans:[{date:t0,poids:80}],sleepLog:[{date:'2026-01-05',duration:7}],pseudo:'Juju'});
       // LES CHOIX PAR DÉFAUT (tout sauf les charges) : aucune charge, aucune mesure.
       const d=pagePubliqueDonnees(u,pageMontrerDefaut(),t0+9*J);
-      const permis=['prenom','rang','volts','serie','semaines','seances','badges','ref','maj'];
+      const permis=['prenom','rang','volts','serie','semaines','seances','chiffres','badges','ref','maj'];
       const trop=Object.keys(d).filter(k=>permis.indexOf(k)<0);
       if(trop.length) return _echec('champs en trop : '+trop.join());
       const txt=JSON.stringify(d);
-      if(/\b(100|105|110|82|80)\b/.test(txt.replace(/"date":\d+|"maj":\d+|"xp":\d+|"de":\d+|"a":\d+/g,''))||/photo|poids|kg/i.test(txt)) return _echec('une charge ou une mesure fuit : '+txt);
+      if(/\b(100|105|110|82|80)\b/.test(txt.replace(/"date":\d+|"maj":\d+|"xp":\d+|"de":\d+|"a":\d+|"depuis":\d+/g,''))||/photo|poids|"kg"/i.test(txt)) return _echec('une charge ou une mesure fuit : '+txt);
+      // Les chiffres : un tonnage, des séries, des exercices, une date. Pas une charge isolée.
+      if(!d.chiffres||d.chiffres.tonnage!==1575||d.chiffres.series!==3||d.chiffres.exos!==1||d.chiffres.depuis!==t0) return _echec('chiffres : '+JSON.stringify(d.chiffres));
+      // LA PHOTO : seulement cochée, et seulement l'image réduite du profil ou Cloudinary.
+      if(pagePubliqueDonnees(u,{photo:true},t0).photo) return _echec('une photo https quelconque publiée');
+      const ph='data:image/jpeg;base64,AAAA';
+      if(pagePubliqueDonnees(Object.assign({},u,{athletePhoto:ph}),{photo:true},t0).photo!==ph) return _echec('la photo cochée ne part pas');
+      if(pagePubliqueDonnees(Object.assign({},u,{athletePhoto:ph}),pageMontrerDefaut(),t0).photo) return _echec('la photo cochée par défaut');
+      if(pageMontrerComplet({seances:false}).stats!==true||pageMontrerComplet({seances:false}).seances!==false) return _echec('choix ajoutés après coup');
       if(pageMontrerDefaut().meilleurs!==false) return _echec('les charges cochées par défaut');
       // Cochée : les 3 meilleurs records, avec la charge. Le poids de corps, jamais.
       const m=pagePubliqueDonnees(u,Object.assign(pageMontrerDefaut(),{meilleurs:true}),t0+9*J);
@@ -49139,12 +49147,13 @@ async function testExercices(){
       try{ if(montrerTutoSticker()) return _echec('montré deux fois'); }
       finally{ try{ if(v==null) localStorage.removeItem(TUTO_STICKER_CLE); else localStorage.setItem(TUTO_STICKER_CLE,v); }catch(e){} fermerTutoSticker(); }
       return true;})());
-    ok('Pages : réglages du profil — désactivée par défaut, cinq choix, le lien de la bio',(()=>{
+    ok('Pages : réglages du profil — désactivée par défaut, sept choix, le lien de la bio',(()=>{
       const d=document.createElement('div'); d.innerHTML=htmlReglagesPagePublique(_PPU());
       if(d.querySelector('#pp-active').checked) return _echec('page activée par défaut');
-      if(d.querySelectorAll('[data-montrer]').length!==5) return _echec('choix');
+      if(d.querySelectorAll('[data-montrer]').length!==7) return _echec('choix');
+      if(d.querySelector('[data-montrer="photo"]').checked) return _echec('la photo cochée par défaut');
       if(d.querySelector('[data-montrer="meilleurs"]').checked) return _echec('les charges cochées par défaut');
-      if(![...d.querySelectorAll('[data-montrer]')].filter(x=>x.dataset.montrer!=='meilleurs').every(x=>x.checked)) return _echec('les autres choix décochés');
+      if(![...d.querySelectorAll('[data-montrer]')].filter(x=>x.dataset.montrer!=='meilleurs'&&x.dataset.montrer!=='photo').every(x=>x.checked)) return _echec('les autres choix décochés');
       if(!/Copier mon lien pour ma bio Instagram/.test(d.textContent)) return _echec('bouton bio');
       return d.querySelectorAll('button.btn:not(.btn-casse)').length===0?true:_echec('R31 : bouton en capitales');})());
     ok('Pages : pages publiques et réécritures présentes, lecture publique bornée',(()=>{
@@ -49153,7 +49162,8 @@ async function testExercices(){
       if(!/profils_publics/.test(p)||!/<!--og:debut-->[\s\S]*og:image[\s\S]*<!--og:fin-->/.test(p)) return _echec('p/index.html');
       if(!/\/vitrines\//.test(c)||!/Commencer avec/.test(c)) return _echec('c/index.html');
       if(/<script[^>]+src=|<link[^>]+stylesheet/.test(p+c)) return _echec('une ressource externe bloquante');
-      if(p.length>12000||c.length>12000) return _echec('pages trop lourdes');
+      // La page athlète a grandi (photo, chiffres, animations — 28/09/2026) : 20 Ko, toujours sans ressource externe.
+      if(p.length>20000||c.length>12000) return _echec('pages trop lourdes');
       if(fj&&(!/"source": "\/@\*"/.test(fj)||!/"source": "\/coach\/\*"/.test(fj))) return _echec('réécritures');
       return true;})());
     ok('Pages : réglages publics classés non-santé',
@@ -49179,12 +49189,20 @@ async function testExercices(){
         if(!/déjà pris/.test(r3.erreur||'')) return _echec('un vrai refus ne dit plus « déjà pris »');
         const r4=await publierPagePublique(u,{pseudo:'a__b',active:true,montrer:{}},{silencieux:true});
         if(r4.ok||/déjà pris/.test(r4.erreur||'')) return _echec('deux signes à la suite acceptés');
-        // Anciennes règles : un premier refus, puis la page part sans volts ni 12 semaines.
+        // Règles du 28/09 : un refus, puis la page part sans photo ni chiffres.
+        const tout={rang:true,serie:true,badges:true,seances:true,stats:true};
         let n=0; CLOUD.racinePatchStatut=async(c)=>{ vu=c; n++; return n===1?401:200; };
-        const r5=await publierPagePublique(u,{pseudo:'kevin.gllc',active:true,montrer:{rang:true,serie:true,badges:true,seances:true}},{silencieux:true});
-        const f=vu['profils_publics/kevin__gllc']||{};
+        u.sessions=[{date:5,data:{'SQUAT':{sets:[{weight:'100',reps:'5',done:true}]}}}];
+        const r5=await publierPagePublique(u,{pseudo:'kevin.gllc',active:true,montrer:tout},{silencieux:true});
+        let f=vu['profils_publics/kevin__gllc']||{};
         if(!r5.ok||n!==2) return _echec('pas de second essai : '+(r5.erreur||n));
-        return ('volts' in f||'semaines' in f)?_echec('le second essai garde des champs récents'):true;
+        if('chiffres' in f||!('volts' in f)) return _echec('second essai : '+Object.keys(f).join());
+        // Règles du 26/09 : deux refus, puis sans volts ni 12 semaines.
+        n=0; CLOUD.racinePatchStatut=async(c)=>{ vu=c; n++; return n<3?401:200; };
+        const r6=await publierPagePublique(u,{pseudo:'kevin.gllc',active:true,montrer:tout},{silencieux:true});
+        f=vu['profils_publics/kevin__gllc']||{};
+        if(!r6.ok||n!==3) return _echec('pas de troisième essai : '+(r6.erreur||n));
+        return ('volts' in f||'semaines' in f||'chiffres' in f)?_echec('le troisième essai garde des champs récents'):true;
       }finally{ CLOUD.racinePatchStatut=sv; }
     }));
     // ══ 28/09/2026 — LA PAGE PUBLIQUE : CONTENU, PROPOSITION, APERÇU ══════
@@ -49218,7 +49236,7 @@ async function testExercices(){
       const r=x.status===200?x.responseText:'';
       if(!r) return true;
       const i=r.indexOf('"profils_publics"'), j=r.indexOf('"slugs"',i), z=r.slice(i,j);
-      for(const k of ['"volts"','"semaines"','"img"','"repli"','"secret"','"meilleurs"','"kg"']) if(z.indexOf(k)<0) return _echec(k+' absent des règles');
+      for(const k of ['"volts"','"semaines"','"img"','"repli"','"secret"','"meilleurs"','"kg"','"chiffres"','"tonnage"','"photo"']) if(z.indexOf(k)<0) return _echec(k+' absent des règles');
       return /\^\[01\]\{11\}\[01e\]\$/.test(z)&&/newData\.val\(\) <= 1000/.test(z)?true:_echec('bornes');})());
     ok('Page : proposée au passage de rang — pseudo pré-rempli, un geste ; une fois de plus au rang suivant, puis jamais',(()=>{
       const u=_PPU({fname:'Élodie Martin'});
@@ -49259,8 +49277,10 @@ async function testExercices(){
       const x=new XMLHttpRequest(); x.open('GET','../p/index.html',false); x.send();
       const p=x.status===200?x.responseText:'';
       if(!p) return true;
-      for(const k of ['class="emb"','class="jauge"','class="sem"','class="bdg"','Meilleurs records','onerror']) if(p.indexOf(k)<0) return _echec(k+' absent');
-      if(/poids|photo|sommeil|kcal|mensuration/i.test(p.replace(/<!--[\s\S]*?-->/g,'').replace(/JAMAIS de poids de corps, de photo ni de santé/,''))) return _echec('une mesure dans la page');
+      for(const k of ['class="emb"','class="jauge"','class="sem','class="bdg','Meilleurs records','onerror','tonnes soulevées','class="av"']) if(p.indexOf(k)<0) return _echec(k+' absent');
+      // La photo (cochée par l'athlète, 28/09/2026) : seulement une image réduite ou Cloudinary.
+      if(p.indexOf('^data:image\\/(jpeg|webp|png);base64,')<0) return _echec('la photo n’est pas filtrée');
+      if(/poids|sommeil|kcal|mensuration/i.test(p.replace(/<!--[\s\S]*?-->/g,'').replace(/\/\*[\s\S]*?\*\//g,'').replace(/\/\/[^\n]*/g,''))) return _echec('une mesure dans la page');
       return true;})());
 
     // ── LES VISUELS DU COACH : VICTOIRE ET RÉCAP D'ÉQUIPE ───────────────

@@ -18337,8 +18337,33 @@ const PAGE_MONTRER=Object.freeze([
   {cle:'serie',lib:'Mes 12 dernières semaines',defaut:true},
   {cle:'badges',lib:'Mes badges',defaut:true},
   {cle:'seances',lib:'Mon nombre de séances',defaut:true},
+  {cle:'stats',lib:'Mes chiffres : tonnes soulevées, séries, exercices, depuis quand',defaut:true},
+  {cle:'photo',lib:'Ma photo de profil',defaut:false},
   {cle:'meilleurs',lib:'Mes 3 meilleurs records, avec les charges',defaut:false}
 ]);
+// Un choix ajouté après coup (stats, photo) prend sa valeur par défaut chez
+// qui a enregistré sa page avant : absent ne veut pas dire « décoché ».
+function pageMontrerComplet(m){ const o=pageMontrerDefaut(); Object.keys(m||{}).forEach(k=>{ o[k]=!!m[k]; }); return o; }
+// PURE. Les chiffres de la page : tonnes soulevées (kg), séries faites,
+// exercices différents, date de la première séance. Rien de corporel.
+function statsPubliques(u){
+  let kg=0, series=0, depuis=0; const exos={};
+  for(const s of ((u&&u.sessions)||[])){
+    if(!s||!(s.date>0)) continue;
+    if(!depuis||s.date<depuis) depuis=Number(s.date);
+    try{ kg+=defiTonnageSeance(s)||0; }catch(e){}
+    try{ for(const e of _dfExos(s)){ const n=e.sets.filter(x=>x&&x.done!==false).length; if(n){ series+=n; exos[e.nom]=1; } } }catch(e){}
+  }
+  return {tonnage:Math.max(0,Math.min(999999999,Math.round(kg))),series:Math.min(9999999,series),exos:Math.min(9999,Object.keys(exos).length),depuis:depuis||0};
+}
+// La photo de profil, si l'athlète l'a cochée : l'image déjà réduite à
+// 300×300 par le profil, ou une adresse Cloudinary. Rien d'autre ne passe.
+function photoPublique(u){
+  const p=String((u&&u.athletePhoto)||'');
+  if(/^data:image\/(jpeg|webp|png);base64,[A-Za-z0-9+/=]+$/.test(p)&&p.length<=80000) return p;
+  if(/^https:\/\/res\.cloudinary\.com\/[^\s"'<>]+$/.test(p)&&p.length<=500) return p;
+  return '';
+}
 function pageMontrerDefaut(){ const o={}; PAGE_MONTRER.forEach(x=>{ o[x.cle]=x.defaut; }); return o; }
 // La proposition au passage de rang n'a de sens que si l'app écrit dans la base.
 const PAGE_PUBLIQUE_PROPOSEE=true;
@@ -18509,6 +18534,8 @@ function pagePubliqueDonnees(u,montrer,maintenant){
     }catch(e){}
   }
   if(m.meilleurs){ const r=meilleursRecordsPublics(u,3); if(r.length) o.meilleurs=r; }
+  if(m.stats){ try{ const st=statsPubliques(u); if(st.depuis||st.tonnage||st.series) o.chiffres=st; }catch(e){} }
+  if(m.photo){ const ph=photoPublique(u); if(ph) o.photo=ph; }
   const c=u&&u.parrainage&&u.parrainage.code;
   if(typeof parrainageCodeValide==='function'&&parrainageCodeValide(c)) o.ref=c;
   return o;
@@ -18550,8 +18577,13 @@ async function publierPagePublique(u,reg,o){
   const donnees=reg.active?pagePubliqueDonnees(u,reg.montrer):null;
   patch['profils_publics/'+kN]=donnees;
   let st=await CLOUD.racinePatchStatut(patch).catch(()=>0);
-  if((st===401||st===403)&&donnees){
-    patch['profils_publics/'+kN]=pagePubliqueDonneesMinimales(donnees);
+  // Des règles en ligne plus anciennes que l'app refusent les champs récents :
+  // on retire d'abord photo et chiffres (règles du 28/09), puis on retombe sur
+  // celles du 26/09.
+  const replis=donnees?[Object.assign({},donnees,{photo:undefined,chiffres:undefined}),pagePubliqueDonneesMinimales(donnees)]:[];
+  for(const d of replis){
+    if(!(st===401||st===403)) break;
+    patch['profils_publics/'+kN]=JSON.parse(JSON.stringify(d));
     st=await CLOUD.racinePatchStatut(patch).catch(()=>0);
   }
   if(st===401||st===403) return {ok:false,erreur:'Ce pseudo est déjà pris.'};
@@ -18567,14 +18599,14 @@ async function majPagePublique(o){
   const u=currentUser, p=u&&u.pagePublique;
   if(!p||!p.active||!PSEUDO_PUBLIC_RE.test(p.pseudo||'')||!CLOUD.ok()) return false;
   if(!(o&&o.force)&&Date.now()-(Number(p.publieLe)||0)<6*3600e3) return false;
-  const r=await publierPagePublique(u,{pseudo:p.pseudo,active:true,montrer:p.montrer||{}},{silencieux:true});
+  const r=await publierPagePublique(u,{pseudo:p.pseudo,active:true,montrer:pageMontrerComplet(p.montrer)},{silencieux:true});
   if(r.ok) try{ saveUser(); }catch(e){}
   return r.ok;
 }
 // PURE. Le bloc des réglages, dans le profil.
 function htmlReglagesPagePublique(u){
   const p=(u&&u.pagePublique)||{};
-  const m=p.montrer||pageMontrerDefaut();
+  const m=pageMontrerComplet(p.montrer);
   const dom=_pagesSurFirebase()?String(RC_URL_VITRINE).replace(/^https?:\/\//,'').replace(/\/$/,'')+'/@':'…/p/?u=';
   const cases=PAGE_MONTRER.map(x=>'<label class="pp-case"><input type="checkbox" data-montrer="'+x.cle+'"'+(m[x.cle]?' checked':'')+'> <span>'+escapeHtml(x.lib)+'</span></label>').join('');
   const url=urlPagePerso(u);
