@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1653';
+window.RC_BUILD='1654';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-09-28';
@@ -457,7 +457,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1653.css">
+<link rel="stylesheet" href="./rc-style.1654.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -3390,8 +3390,6 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="clh-wrapped"></div>
       <!-- LE DÉFI EN COURS : rappel tant qu'il est actif (renderDefiAccueil). -->
       <div id="clh-defi"></div>
-      <!-- LES DUELS : l'invitation reçue, ceux en cours, « Défie un pote » (_rendreDuelsAccueil). -->
-      <div id="clh-duels"></div>
       <!-- LE DÉFI REPCORE DU MOIS, pour les athlètes sans coach (renderDefiMoisAccueil). -->
       <div id="clh-defi-mois"></div>
 
@@ -3439,13 +3437,15 @@ const COACH_PHOTO='icons/coach.jpg';
              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><div class="metric-val" id="clh-m3">-</div><div class="metric-label">Respect</div>
           <div class="clh-m-sub" id="clh-m3-sub">de la diète</div></div>
       </div>
+      <!-- LES DUELS : l'invitation reçue, ceux en cours, « Défie un pote » (_rendreDuelsAccueil).
+           SOUS LES TROIS CASES depuis le 28/09/2026 (Kevin), avec un espace au-dessus. -->
+      <div id="clh-duels"></div>
 
 
       <!-- DÉMARRER SÉANCE — hero card -->
       <div id="clh-hero" class="clh-in clh-in-3" style="background:linear-gradient(160deg,#1a0303,#120000 55%,#0b0000);border:1px solid #3a0000;border-left:1px solid var(--border);border-radius:14px;padding:10px 20px 20px;margin-bottom:16px;position:relative;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 30px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.05)">
         <div style="position:absolute;right:0;top:0;width:3px;height:100%;background:var(--red)"></div>
         <div class="eyebrow eyebrow-act" style="margin-bottom:8px">Entraînement</div>
-        <div id="clh-record-portee"></div>
         <!-- ⚠ LA COUPURE EST ECRITE, elle n'est pas subie. Le libelle faisait
              286 px pour 272 disponibles : il se coupait tout seul, mais la ou
              la place manquait — « DÉMARRER MA SÉANCE DU / JOUR » sur un
@@ -5839,5 +5839,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1653.js"></script>
+<script src="./rc-core.1654.js"></script>
 </body></html>

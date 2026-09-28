@@ -42658,12 +42658,12 @@ async function testExercices(){
         // Premiere seance faite : la carte retourne sous les trois chiffres.
         currentUser.sessions=[{date:t}];
         _rendreReprise(); _rendreDemarrage();
-        if(document.getElementById('clh-stats').nextElementSibling!==hero()) return _echec('la carte ne reprend pas sa place');
+        if(document.getElementById('clh-duels').nextElementSibling!==hero()) return _echec('la carte ne reprend pas sa place');
         if(!vis(hero())) return _echec('la carte est masquée après la première séance');
         // Hors « Pour démarrer » (compte ancien sans séance) : comportement d'avant.
         currentUser={id:'pd2',email:'pd2@t.fr',role:'athlete',createdAt:t-90*864e5,sessions:[]};
         _rendreReprise(); _rendreDemarrage();
-        if(document.getElementById('clh-stats').nextElementSibling!==hero()) return _echec('la carte bouge hors « Pour démarrer »');
+        if(document.getElementById('clh-duels').nextElementSibling!==hero()) return _echec('la carte bouge hors « Pour démarrer »');
         return true;
       } finally {
         currentUser=sv;
@@ -42672,6 +42672,30 @@ async function testExercices(){
         try{ document.getElementById('s-client-home').removeAttribute('data-demarrage'); }catch(e){}
         for(const id of ['clh-stats','clh-hero']){ const e=document.getElementById(id); if(e) e.style.display=''; }
       }})());
+
+    // ══ 28/09/2026 — L'ACCUEIL RETOUCHÉ (Kevin) ══════════════════════════
+    ok('Accueil : une croix sur les cartes, « Défie un pote » sous les trois cases, sans « Record à portée »',(()=>{
+      const cle='rc_acc_masque_pdj', sv=(()=>{ try{ return localStorage.getItem(cle); }catch(e){ return null; } })();
+      try{
+        // La croix du point du jour masque jusqu'au lendemain.
+        try{ localStorage.removeItem(cle); }catch(e){}
+        if(accueilMasque('pdj')) return _echec('masqué sans croix');
+        const f=document.createElement('div'); f.innerHTML='<div data-acc>'+_accX('pdj')+'</div>'; document.body.appendChild(f);
+        accueilMasquer('pdj',f.querySelector('.acc-x'));
+        const cache=!f.querySelector('[data-acc]'); f.remove();
+        if(!cache) return _echec('la carte reste affichée');
+        if(!accueilMasque('pdj')) return _echec('le masque ne tient pas');
+        if(accueilMasque('pdj',Date.now()+864e5+1)) return _echec('le point du jour reste masqué le lendemain');
+        // La relance de photo : sept jours ; le code coach : trente.
+        if(ACC_MASQUES_JOURS.photo!==7||ACC_MASQUES_JOURS.code!==30) return _echec('durées');
+        if(_htmlPointDuJour({question:'poids',titre:'Combien pèses-tu ce matin ?'}).indexOf('acc-x')<0) return _echec('pas de croix sur le point du jour');
+      } finally { try{ if(sv==null) localStorage.removeItem(cle); else localStorage.setItem(cle,sv); }catch(e){} }
+      // « Défie un pote » juste sous les trois cases, et la carte Entraînement après lui.
+      const st=document.getElementById('clh-stats');
+      if(!st||st.nextElementSibling!==document.getElementById('clh-duels')) return _echec('« Défie un pote » n’est pas sous les trois cases');
+      if(String(htmlDuelsAccueil).indexOf("icon('hache'")<0) return _echec('le bouton n’a pas sa hache');
+      if(String(loadClientHome).indexOf('_rendreRecordAPortee(')>=0) return _echec('« Record à portée » est encore peint sur l’accueil');
+      return true;})());
 
     ok('Le bouton mène au programme du coach, ou à « Gérer mes séances »',(()=>{
       const s=String(reprendreMaintenant);
@@ -50130,7 +50154,8 @@ async function testExercices(){
       const mo=RANGS[6], fo=RANGS[7], xp=mo.seuil+Math.round((fo.seuil-mo.seuil)/2);
       const d=document.createElement('div'); d.innerHTML=htmlRangAccueil(xp);
       if(d.querySelector('.rg-nom').textContent!=='MONSTRE II') return _echec('nom');
-      if(d.querySelectorAll('.rg-emb-w svg.rg-chev path').length!==2) return _echec('deux chevrons');
+      // 28/09/2026 : PLUS DE CHEVRONS SOUS L'EMBLEME DE L'EN-TETE (Kevin).
+      if(d.querySelector('.rg-emb-w svg.rg-chev')) return _echec('les chevrons sont revenus sous l’emblème');
       if(!/vers MONSTRE III/.test(d.querySelector('.rg-txt').textContent)) return _echec(d.querySelector('.rg-txt').textContent);
       d.innerHTML=htmlRangAccueil(RANGS[1].seuil+10);
       if(d.querySelector('svg')) return _echec('chevrons avant VOLTAGE');
@@ -50371,7 +50396,8 @@ async function testExercices(){
       if(h.indexOf('Record à portée')<0||h.indexOf('Squat · 102,5 kg × 5')<0||h.indexOf('100 kg')<0) return _echec(h);
       if(htmlRecordAPortee(o,'seance').indexOf('série 1')<0) return _echec('série en séance');
       if(htmlRecordAPortee(null)!=='') return _echec('vide');
-      if(!document.getElementById('clh-record-portee')) return _echec('#clh-record-portee absent');
+      // 28/09/2026 : « Record à portée » a quitté l'accueil (Kevin) ; il reste en tête de séance.
+      if(document.getElementById('clh-record-portee')) return _echec('#clh-record-portee est revenu sur l’accueil');
       // La séance du jour : sessions_config est indexé lundi → dimanche.
       const lundi=new Date(2026,9,19,9).getTime();
       const u={sessions_config:[_RP(),{active:false,exercises:[{name:'x'}]}]};

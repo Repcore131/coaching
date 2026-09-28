@@ -2676,6 +2676,8 @@ function rcInfoOuvrir(cle){
 function rcInfoFermer(tout_de_suite){ _feuilleFermer('rc-lexique',tout_de_suite); }
 // ── Système d'icônes SVG inline (style Lucide / Feather) ─────────────────────
 const ICONS={
+  // Une petite hache (« Défie un pote », 28/09/2026), dessin Lucide « axe » (licence ISC).
+  hache:'<path d="m14 12-8.5 8.5a2.12 2.12 0 1 1-3-3L11 9" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 13 9 7l4-4 6 6h3a8 8 0 0 1-7 7z" stroke-linecap="round" stroke-linejoin="round"/>',
   // Le logo Instagram, au trait (bouton « Mon avant/après », 28/09/2026).
   instagram:'<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.4" cy="6.6" r="1.1" fill="currentColor" stroke="none"/>',
   home:'<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
@@ -17984,10 +17986,10 @@ function renderEpingleAccueil(){
   //   « permet à ton coach de te reconnaître » : a un athlete sans coach, il
   //   promettait un tableau de bord qui n'existe pas. Meme regle que le canal.
   const manque=!!(u&&u.role==='athlete'&&!u.athletePhoto&&canalAccessible(u));
-  if(!manque){ el.innerHTML=''; el.style.display='none'; return; }
+  if(!manque||accueilMasque('photo')){ el.innerHTML=''; el.style.display='none'; return; }
   el.style.display='block';
-  el.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);'
-    +'border-radius:var(--r-3);padding:14px 14px;margin-bottom:16px">'
+  el.innerHTML='<div data-acc style="position:relative;background:var(--surface-1);border:1px solid var(--border);'
+    +'border-radius:var(--r-3);padding:14px 38px 14px 14px;margin-bottom:16px">'+_accX('photo')
     +'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5;margin-bottom:10px">'
     +'Ajoute ta photo de profil : c\'est ce qui permet à ton coach de te reconnaître '
     +'d\'un coup d\'œil sur son tableau de bord.</div>'
@@ -21130,7 +21132,8 @@ function htmlDuelsAccueil(u,duels,invite,maintenant){
     h+='<button type="button" class="du-ligne" onclick="ouvrirDuel(\''+d.id+'\')"><span aria-hidden="true">⚔</span> '
       +'<span>'+escapeHtml(duelLigne(d,moi,maintenant))+'</span><span class="du-f" aria-hidden="true">›</span></button>';
   }
-  h+='<button type="button" class="btn btn-outline btn-sm btn-casse du-defier" onclick="ouvrirCreationDuel()">⚔ Défie un pote</button>';
+  // SOUS LES TROIS CASES, PLUS FIN, AVEC UNE HACHE (Kevin, 28/09/2026).
+  h+='<button type="button" class="du-defier" onclick="ouvrirCreationDuel()">'+icon('hache',16)+'<span>Défie un pote</span></button>';
   return h+'</div>';
 }
 async function _rendreDuelsAccueil(){
@@ -38564,7 +38567,8 @@ function loadClientHome(){
   // La carte d'athlète : recalculée le lundi, montrée quand la note monte.
   try{ _rendreCarteAccueil(u); }catch(e){}
   // Le record à portée de la séance du jour, dans la carte Entraînement.
-  try{ _rendreRecordAPortee(u); }catch(e){}
+  // « RECORD À PORTÉE » QUITTE L'ACCUEIL (Kevin, 28/09/2026) : la carte
+  // Entraînement garde ses trois boutons. Il reste en tête de séance.
   // Le check-in du matin (jusqu'à 14 h) ou la batterie du jour ; la reprise
   // en douceur après 30 jours sans séance.
   try{ _rendreCheckin(u); }catch(e){}
@@ -38803,8 +38807,9 @@ function loadClientHome(){
     // une porte d'entrée visible pour l'athlète qui a perdu sa session, changé
     // d'appareil, ou reçu son code après s'être inscrit.
     if(!name){
+      if(accueilMasque('code')){ el.innerHTML=''; el.style.display='none'; return; }
       el.style.display='block';
-      el.innerHTML=`<div onclick="go('s-client-code')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:var(--r-md);background:#0c0c0c;border:1px dashed var(--border);cursor:pointer">
+      el.innerHTML=`<div data-acc onclick="go('s-client-code')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="position:relative;display:flex;align-items:center;gap:12px;padding:14px 40px 14px 16px;border-radius:var(--r-md);background:#0c0c0c;border:1px dashed var(--border);cursor:pointer">${_accX('code')}
         <div style="flex-shrink:0;width:38px;height:38px;border-radius:var(--r-full);background:var(--surface-3);display:flex;align-items:center;justify-content:center;color:var(--sub)">${icon('user',18)}</div>
         <div style="flex:1;min-width:0">
           <div style="font-weight:800;font-size:var(--fs-md)">Tu as un code coach&nbsp;?</div>
@@ -40999,7 +41004,8 @@ function _rendreDemarrage(){
 function _placerHeroDemarrage(monter){
   const hero=document.getElementById('clh-hero');
   const bloc=document.getElementById('clh-demarrer');
-  const stats=document.getElementById('clh-stats');
+  // Sa place normale : sous les trois cases ET sous « Défie un pote » (1654).
+  const stats=document.getElementById('clh-duels')||document.getElementById('clh-stats');
   if(!hero||!bloc||!stats) return false;
   if(monter){
     if(bloc.nextElementSibling!==hero) bloc.parentNode.insertBefore(hero,bloc.nextSibling);
@@ -73214,7 +73220,7 @@ function _htmlPointDuJour(etat){
     ? '<button type="button" class="pdj-lien" onclick="'+def.ecran+'()">'
       +escapeHtml(def.lienDit)+' →</button>'
     : '';
-  return '<div class="pdj-carte" id="pdj-carte">'
+  return '<div class="pdj-carte" id="pdj-carte" data-acc>'+_accX('pdj')
     +'<div class="pdj-tete">Ton point du jour</div>'
     +'<div class="pdj-q">'+escapeHtml(etat.titre)+'</div>'
     +controle+lien+'</div>';
@@ -73421,9 +73427,35 @@ function _poserPromesseAthlete(){
       .forEach(e=>{ e.textContent=PROMESSE_ATHLETE; });
   }catch(e){}
 }
+// ══ LES CARTES DE L'ACCUEIL SE FERMENT D'UNE CROIX (Kevin, 28/09/2026) ═════
+// « Ton point du jour » jusqu'au lendemain, la relance de photo sept jours,
+// « Tu as un code coach ? » trente jours. Le choix est local à l'appareil :
+// rien n'est écrit dans le dossier.
+const ACC_MASQUES_JOURS=Object.freeze({pdj:0,photo:7,code:30});
+function accueilMasque(cle,maintenant){
+  let v=null; try{ v=localStorage.getItem('rc_acc_masque_'+cle); }catch(e){ v=null; }
+  if(!v) return false;
+  const t=Number(maintenant)||Date.now();
+  const j=ACC_MASQUES_JOURS[cle]||0;
+  if(!j) return v===localISODate(new Date(t));
+  return (t-new Date(v+'T00:00:00').getTime())<j*864e5;
+}
+function accueilMasquer(cle,bouton){
+  try{ localStorage.setItem('rc_acc_masque_'+cle,localISODate(new Date())); }catch(e){}
+  const c=bouton&&bouton.closest?bouton.closest('[data-acc]'):null;
+  const z=c&&c.parentElement;
+  if(c) c.remove();
+  if(z&&!z.children.length&&z.id!=='clh-point-jour') z.style.display='none';
+  return true;
+}
+function _accX(cle){
+  return '<button type="button" class="acc-x" aria-label="Masquer" onclick="event.stopPropagation();accueilMasquer(\''+cle+'\',this)">'
+    +'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>';
+}
 function _rendrePointDuJour(){
   const z=document.getElementById('clh-point-jour');
   if(!z) return;
+  if(accueilMasque('pdj')){ z.innerHTML=''; return; }
   let e=null;
   try{ e=pdjEtat(currentUser,Date.now()); }catch(err){ e=null; }
   z.innerHTML=_htmlPointDuJour(e);
@@ -76996,7 +77028,10 @@ function htmlRangAccueil(xp){
     ?xpFormat(r.xp)+' / '+xpFormat(cible)+' V vers '+vers
     :xpFormat(r.xp)+' V · rang maximal';
   return '<div class="rg-ligne"><span class="rg-emb-w"><img class="rg-emb" src="'+rangEmbleme(r.rang.n)+'" alt="" width="22" height="22" decoding="async">'
-    +(s?htmlChevrons(s.n):'')+'</span>'
+    // PLUS DE CHEVRONS SOUS L'EMBLEME (Kevin, 28/09/2026 : « deux vagues sous
+    // le logo, je ne comprends pas ce qu'elles font »). Le sous-niveau reste
+    // ecrit en toutes lettres dans le nom du rang.
+    +'</span>'
     +'<span class="rg-nom">'+escapeHtml(r.rang.nom+(s?' '+s.lib:''))+'</span></div>'
     +'<div class="rg-jauge" role="progressbar" aria-label="Volts vers le '+(s?'sous-niveau':'rang')+' suivant" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'
       +Math.round(part*100)+'"><span style="width:'+Math.round(part*100)+'%"></span></div>'
