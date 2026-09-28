@@ -19186,7 +19186,143 @@ function viraliteDonnees(jours,semaines,periodeJours,maintenant){
     k:actifs>0?Math.round(insPartage/actifs*1000)/1000:null,
     totaux:{partages:tot('partages'),clics:tot('clic'),inscriptions:tot('inscription'),payants:tot('payant')}};
 }
-let _viral=null;   // {jours, semaines, periode}
+// ══ LE RÉSUMÉ D'ACTIVITÉ (/activite/<compte>) — pour /stats/retention ════
+// Ce que le serveur léger agrège chaque nuit (cloudflare/src/retention.js).
+// AUCUN CONTENU : ni charge, ni mesure, ni repas, ni ressenti — des jours
+// (actif = une séance, un check-in ou un journal ce jour-là) et des oui/non.
+// Écrit par l'app une fois par jour au plus (quand il change), lu par le
+// Worker seul, effacé avec le compte. privacy.html le dit.
+const ACTIVITE_CLE='rc_activite_sig';
+/** PURE. Les jours actifs (AAAA-MM-JJ, heure locale). */
+function joursActifs(u){
+  const s=new Set();
+  for(const x of ((u&&u.sessions)||[])) if(x&&Number(x.date)>0) s.add(localISODate(new Date(Number(x.date))));
+  const ci=(u&&u.checkin)||{};
+  for(const j of Object.keys(ci)) if(/^\d{4}-\d{2}-\d{2}$/.test(j)&&checkinComplet(ci[j])) s.add(j);
+  const log=((u&&u.nutrition)||{}).log||{};
+  for(const j of Object.keys(log)) if(/^\d{4}-\d{2}-\d{2}$/.test(j)&&((log[j]&&log[j].entries)||[]).length>0) s.add(j);
+  return s;
+}
+function _actJourPlus(iso,n){ const d=new Date(iso+'T12:00:00'); d.setDate(d.getDate()+n); return localISODate(d); }
+/** PURE (horloge donnée). Le résumé, ou null (coach, compte sans date). */
+function activiteResume(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(!u||u.role==='coach') return null;
+  const ses=((u.sessions)||[]).map(x=>Number(x&&x.date)).filter(x=>x>0);
+  const cree=Math.min(Number(u.createdAt)||Infinity,Number(u.origine&&u.origine.inscritLe)||Infinity,ses.length?Math.min(...ses):Infinity);
+  if(!isFinite(cree)) return null;
+  const inscrit=localISODate(new Date(cree)), auj=localISODate(new Date(t));
+  const actifs=joursActifs(u);
+  const debut=[];
+  for(let k=0;k<=40;k++) if(actifs.has(_actJourPlus(inscrit,k))) debut.push(k);
+  let j30='';
+  for(let k=29;k>=0;k--) j30+=actifs.has(_actJourPlus(auj,-k))?'1':'0';
+  const fin30=cree+30*864e5;
+  const ciTot=Object.keys(u.checkin||{}).filter(j=>checkinComplet(u.checkin[j])&&Number(u.checkin[j].at||0)<=fin30).length;
+  const p=u.parcours||{};
+  let notif=false; try{ notif=typeof Notification!=='undefined'&&Notification.permission==='granted'&&!!_pushMemo(); }catch(e){ notif=false; }
+  const src=String((u.origine&&u.origine.src)||(u.ambassadeur?'amb':(u.parrainage&&u.parrainage.parrainCode?'parrainage':'direct'))).slice(0,20);
+  return {v:1,inscrit,sem:localISODate(_lundiDe(cree)),src,debut,jour:auj,j30,
+    seance1:ses.length>0,
+    parcours:!!(p.fini&&!p.existant),
+    finEssai:Number(u.essai&&u.essai.finit)||0,
+    payant:!!((u.origine&&u.origine.payeLe)||u.paypalSubscriptionId),
+    lev:{parcours:!!(p.fini&&!p.existant&&Number(p.fini)<=fin30),checkin:ciTot>=3,notif,
+      duel:Object.keys(u.duels||{}).length>0,
+      defi:Object.keys(u.defisReleves||{}).length>0||Object.keys(u.saisonsReleves||{}).length>0,
+      coach:!!(u.coachEmailKey||u.coachId),
+      invite:!!(u.ambassadeur||(u.parrainage&&u.parrainage.parrainCode)||src==='amb'||src==='parrainage')}};
+}
+// Une fois par jour au plus, et seulement s'il a changé.
+async function activitePublier(u){
+  if(!SERVEUR_LEGER||!u||!u.email||u.role==='coach'||!CLOUD||!CLOUD.ok()) return false;
+  const r=activiteResume(u);
+  if(!r) return false;
+  const sig=JSON.stringify(r);
+  try{ if(localStorage.getItem(ACTIVITE_CLE)===sig) return false; }catch(e){}
+  const token=await CLOUD._getToken();
+  if(!token) return false;
+  const moi=String(u.email).replace(/\./g,',');
+  const x=await fetch(CLOUD._fbUrl.replace('users.json','activite/'+moi+'.json')+'?auth='+token,
+    {method:'PUT',headers:{'Content-Type':'application/json'},body:sig}).catch(()=>null);
+  if(x&&x.ok){ try{ localStorage.setItem(ACTIVITE_CLE,sig); }catch(e){} return true; }
+  return false;
+}
+
+// ── L'écran Viralité : la rétention (/stats/retention) ─────────────────
+// Des AGRÉGATS : aucune ligne ne désigne une personne. Courbes et barres en
+// SVG écrit à la main, sans bibliothèque.
+const _vfPct=v=>v==null?'–':String(v).replace('.',',')+' %';
+/** PURE. Les courbes J1 / J7 / J30 par cohorte, en SVG. */
+function svgRetention(cohortes){
+  const l=(cohortes||[]).filter(c=>c&&c.n>0);
+  if(!l.length) return '';
+  const W=320, H=140, g=28, d=12, hy=H-24;
+  const x=i=>l.length<2?W/2:g+i*(W-g-d)/(l.length-1);
+  const y=v=>hy-(Math.max(0,Math.min(100,v))/100)*(hy-10);
+  const serie=(k,coul,tir)=>{
+    const pts=l.map((c,i)=>c[k]==null?null:[x(i),y(c[k])]);
+    let dd='', lev=true;
+    for(const p of pts){ if(!p){ lev=true; continue; } dd+=(lev?'M':'L')+p[0].toFixed(1)+' '+p[1].toFixed(1)+' '; lev=false; }
+    return (dd?'<path d="'+dd+'" fill="none" stroke="'+coul+'" stroke-width="2"'+(tir?' stroke-dasharray="4 3"':'')+'/>':'')
+      +pts.filter(Boolean).map(p=>'<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="2.5" fill="'+coul+'"/>').join('');
+  };
+  const grille=[0,25,50,75,100].map(v=>'<line x1="'+g+'" x2="'+(W-d)+'" y1="'+y(v)+'" y2="'+y(v)+'" stroke="currentColor" stroke-opacity=".12"/>'
+    +'<text x="'+(g-4)+'" y="'+(y(v)+3)+'" text-anchor="end" font-size="8" fill="currentColor" fill-opacity=".6">'+v+'</text>').join('');
+  const lab=l.map((c,i)=>(i%Math.ceil(l.length/6)===0)?'<text x="'+x(i).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle" font-size="8" fill="currentColor" fill-opacity=".6">'+c.sem.slice(5).replace('-','/')+'</text>':'').join('');
+  return '<svg class="vir-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Rétention J1, J7 et J30 par semaine d’inscription">'
+    +grille+lab+serie('j1','#ff6b6b',true)+serie('j7','#ffb020',false)+serie('j30','#E02020',false)+'</svg>'
+    +'<div class="vir-leg"><span style="--c:#ff6b6b">J1</span><span style="--c:#ffb020">J7</span><span style="--c:#E02020">J30</span></div>';
+}
+/** PURE. L'entonnoir total, en barres SVG. */
+function svgEntonnoir(total){
+  const et=[['inscrits','Inscription'],['seance1','1re séance'],['parcours','Parcours fini'],['finEssai','Fin d’essai'],['payant','Payant']];
+  const max=Math.max(1,Number(total&&total.inscrits)||0);
+  const W=320, h=22;
+  return '<svg class="vir-svg" viewBox="0 0 '+W+' '+(et.length*h+4)+'" role="img" aria-label="Entonnoir, toutes sources">'
+    +et.map((e,i)=>{ const v=Number(total&&total[e[0]])||0, w=Math.round((W-120)*v/max);
+      return '<text x="0" y="'+(i*h+15)+'" font-size="10" fill="currentColor">'+e[1]+'</text>'
+        +'<rect x="84" y="'+(i*h+4)+'" width="'+Math.max(1,w)+'" height="14" rx="3" fill="#E02020" fill-opacity="'+(1-i*0.12)+'"/>'
+        +'<text x="'+(88+w)+'" y="'+(i*h+15)+'" font-size="10" fill="currentColor">'+v+'</text>'; }).join('')+'</svg>';
+}
+/** PURE. Les sections rétention de l'écran Viralité. */
+function htmlRetention(s){
+  if(!s||!s.maj) return '<div class="vir-t">Rétention</div><p class="sub">Pas encore calculée : le serveur léger la publie chaque nuit (4 h 30).</p>';
+  const a=s.actifs||{};
+  const pct=(v,n)=>n>0?Math.round(v/n*100)+' %':'–';
+  let h='<div class="vir-t">Actifs (hier, 7 et 30 derniers jours)</div>'
+    +'<div class="vir-actifs">'+[['DAU',a.dau],['WAU',a.wau],['MAU',a.mau],['DAU/MAU',a.dauMau==null?'–':_vfPct(a.dauMau)]]
+      .map(x=>'<div class="card"><b>'+x[1]+'</b><span>'+x[0]+'</span></div>').join('')+'</div>';
+  h+='<div class="vir-t">Rétention par semaine d’inscription</div>'+svgRetention(s.cohortes)
+    +'<div class="vir-tab"><table><tr><th>Semaine</th><th>Inscrits</th><th>J1</th><th>J7</th><th>J30</th></tr>'
+    +(s.cohortes||[]).slice().reverse().map(c=>'<tr><td>'+escapeHtml(c.sem)+'</td><td>'+c.n+'</td><td>'+_vfPct(c.j1)+'</td><td>'+_vfPct(c.j7)+'</td><td>'+_vfPct(c.j30)+'</td></tr>').join('')
+    +'</table></div><p class="sub vir-note">Actif = une séance, un check-in ou un journal ce jour-là. J1 : le lendemain de l’inscription ; J7 : un jour au moins entre J7 et J13 ; J30 : entre J30 et J36. Une semaine n’a un taux qu’une fois sa fenêtre passée.</p>';
+  const e=s.entonnoir||{}, t=e.total||{};
+  h+='<div class="vir-t">Entonnoir</div>'+svgEntonnoir(t)
+    +'<div class="vir-tab"><table><tr><th>Source</th><th>Inscr.</th><th>1re séance</th><th>Parcours</th><th>Fin d’essai</th><th>Payants</th></tr>'
+    +(e.sources||[]).map(x=>'<tr><td>'+escapeHtml(x.src)+'</td><td>'+x.inscrits+'</td><td>'+x.seance1+'<small>'+pct(x.seance1,x.inscrits)+'</small></td><td>'+x.parcours+'<small>'+pct(x.parcours,x.inscrits)+'</small></td>'
+      +'<td>'+x.finEssai+'</td><td>'+x.payant+'<small>'+pct(x.payant,x.inscrits)+'</small></td></tr>').join('')
+    +'<tr class="vir-tot"><td>Total</td><td>'+(t.inscrits||0)+'</td><td>'+(t.seance1||0)+'</td><td>'+(t.parcours||0)+'</td><td>'+(t.finEssai||0)+'</td><td>'+(t.payant||0)+'</td></tr></table></div>';
+  h+='<div class="vir-t">Effet des leviers sur la rétention J30</div>'
+    +'<div class="vir-tab"><table><tr><th>Levier</th><th>Avec</th><th>Sans</th><th>Écart</th></tr>'
+    +(s.leviers||[]).map(l=>{
+      const ec=(l.avec.j30!=null&&l.sans.j30!=null)?Math.round((l.avec.j30-l.sans.j30)*10)/10:null;
+      return '<tr'+(l.alerte?' class="vir-alerte"':'')+'><td>'+escapeHtml(l.lib)+(l.alerte?'<small>⚠ groupe &lt; '+(s.seuilGroupe||30)+' : pas encore significatif</small>':'')+'</td>'
+        +'<td>'+_vfPct(l.avec.j30)+'<small>n = '+l.avec.n+'</small></td><td>'+_vfPct(l.sans.j30)+'<small>n = '+l.sans.n+'</small></td>'
+        +'<td>'+(ec==null?'–':(ec>0?'+':'')+String(ec).replace('.',',')+' pts')+'</td></tr>'; }).join('')
+    +'</table></div><p class="sub vir-note">Une corrélation, pas une preuve : ceux qui utilisent un levier sont peut-être déjà les plus motivés. Calculé le '
+    +escapeHtml(new Date(s.maj).toLocaleString('fr-FR'))+' sur '+(s.comptes||0)+' comptes, sans aucune donnée personnelle.</p>';
+  return h;
+}
+let _viral=null;   // {jours, semaines, periode, retention}
+// /stats/retention : lu par le créateur seul (règles).
+async function _lireRetention(){
+  try{
+    const token=await CLOUD._getToken(); if(!token) return null;
+    const r=await fetch(CLOUD._fbUrl.replace('users.json','stats/retention.json')+'?auth='+token);
+    return r.ok?await r.json():null;
+  }catch(e){ return null; }
+}
 async function ouvrirViralite(){
   if(!currentUser||currentUser.email!==CREATOR_EMAIL) return false;
   go('s-viralite');
@@ -19194,8 +19330,8 @@ async function ouvrirViralite(){
   if(z) z.innerHTML='<div class="sub" style="padding:32px 0;text-align:center">Chargement…</div>';
   try{
     const depuis=localISODate(new Date(Date.now()-95*864e5));
-    const [jours,semaines]=await Promise.all([CLOUD.attribLire('jours',depuis),CLOUD.attribLire('semaines',depuis)]);
-    _viral={jours:jours||{},semaines:semaines||{},periode:(_viral&&_viral.periode)||30};
+    const [jours,semaines,retention]=await Promise.all([CLOUD.attribLire('jours',depuis),CLOUD.attribLire('semaines',depuis),_lireRetention()]);
+    _viral={jours:jours||{},semaines:semaines||{},periode:(_viral&&_viral.periode)||30,retention:retention||null};
   }catch(e){ if(z) z.innerHTML='<p class="sub">Lecture impossible : '+escapeHtml(e.message||'erreur')+'</p>'; return false; }
   _viralRendre();
   return true;
@@ -19225,7 +19361,7 @@ function htmlViralite(v){
 function _viralRendre(){
   const z=document.getElementById('vir-contenu');
   if(!z||!_viral) return;
-  z.innerHTML=htmlViralite(viraliteDonnees(_viral.jours,_viral.semaines,_viral.periode,Date.now()));
+  z.innerHTML=htmlViralite(viraliteDonnees(_viral.jours,_viral.semaines,_viral.periode,Date.now()))+htmlRetention(_viral.retention);
 }
 // ══ LES AMBASSADEURS ════════════════════════════════════════════════════════
 //
@@ -38335,6 +38471,8 @@ function loadClientHome(){
   // en douceur après 30 jours sans séance.
   try{ _rendreCheckin(u); }catch(e){}
   try{ _afficherRepriseDouce(u); }catch(e){}
+  // Le résumé d'activité (rétention agrégée par le serveur), une fois par jour.
+  try{ setTimeout(()=>{ activitePublier(u).catch(()=>{}); },6000); }catch(e){}
   // Le tonnage cumulé, posé une fois pour un dossier d'avant ce champ.
   try{ const _tt=tonnageTotalDe(u); if(u.role!=='coach'&&u.tonnageTotal!==_tt){ u.tonnageTotal=_tt; saveUser(); } }catch(e){}
   // Le rappel du défi en cours.
@@ -114883,6 +115021,11 @@ async function requestAccountDeletion(){
     try{
       await fetch(CLOUD._urlSantePrivee(safeKey)+(fbTok?'?auth='+fbTok:''),
         {method:'DELETE'});
+    }catch(e){}
+
+    // 1 ter. Le résumé d'activité (statistiques de rétention) : hors de users/.
+    try{
+      await fetch(CLOUD._fbUrl.replace('users.json','activite/'+safeKey+'.json')+(fbTok?'?auth='+fbTok:''),{method:'DELETE'});
     }catch(e){}
 
     // 2. Fiche programme PDF dans Storage. Chemin encode en entier : le nom

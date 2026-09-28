@@ -32,6 +32,7 @@ import * as DU from './duels.js';
 import * as SA from './saisons.js';
 import * as RE from './retour.js';
 import * as XPS from './xp.js';
+import * as RT from './retention.js';
 
 export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
@@ -1079,6 +1080,23 @@ export function creerMetier(deps) {
     return true;
   }
 
+  // ══ LA RÉTENTION (retention.js) — chaque nuit, par lots ════════════════
+  // Un résumé d'activité par compte, une lecture chacun ; l'accumulateur vit
+  // dans worker/jobs/retention/acc d'une minute à l'autre (planif.js), et la
+  // fin publie /stats/retention — des agrégats seulement.
+  async function retentionUn(k, t, acc) {
+    const r = await _val('activite/' + k);
+    const a = RT.accumuler(acc && acc.c ? acc : RT.accVide(), r, t);
+    for (const x of Object.keys(a)) acc[x] = a[x];
+    return RT.resumeValide(r) ? 'compte' : 'illisible';
+  }
+  const activiteComptes = () => db.ref('activite').shallow();
+  async function retentionFin(acc) {
+    const v = RT.resultat(acc, now());
+    await db.ref('stats/retention').set(v);
+    return v;
+  }
+
   // ══ LES VOLTS RECALCULÉS PAR LE SERVEUR (xp.js) ═════════════════════════
   // Les séances NOUVELLES seulement (xp_etat/<k>.n = l'index de la suivante),
   // par lots de XPS.LOT_SEANCES : un historique ancien se rattrape en
@@ -1186,5 +1204,5 @@ export function creerMetier(deps) {
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente,
     fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, tache,
-    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, saisonsHeure, parcoursJ21, retourUn, xpRecalculer };
+    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, saisonsHeure, parcoursJ21, retourUn, xpRecalculer, retentionUn, retentionFin, activiteComptes };
 }

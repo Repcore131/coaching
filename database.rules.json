@@ -1592,8 +1592,35 @@
     // figure, et l'ecran de celebration doit pouvoir les lire meme avant la
     // fin de la connexion. ECRITURE : personne, cote client.
     "stats": {
-      ".read": true,
-      ".write": false
+      ".write": false,
+      // LA RETENTION (/stats/retention, serveur leger) : des agregats, mais des
+      // chiffres d affaires en creux — le createur seul. Le reste (badges,
+      // saisons) reste public, comme avant.
+      "retention": { ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'" },
+      "$autre": { ".read": true }
+    },
+    // LE RESUME D ACTIVITE d un compte, pour la retention agregee : des jours
+    // actifs et des oui/non, aucun contenu. Ecrit par son titulaire, lu par
+    // le Worker seul (acces administrateur) ; efface avec le compte.
+    "activite": {
+      "$k": {
+        ".read": false,
+        ".write": "auth != null && $k === auth.token.email.replace('.', ',')",
+        ".validate": "newData.hasChildren(['inscrit', 'sem', 'src', 'jour', 'j30'])",
+        "v":        { ".validate": "newData.isNumber()" },
+        "inscrit":  { ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)" },
+        "sem":      { ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)" },
+        "jour":     { ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)" },
+        "src":      { ".validate": "newData.isString() && newData.val().length <= 20" },
+        "j30":      { ".validate": "newData.isString() && newData.val().matches(/^[01]{30}$/)" },
+        "debut":    { "$i": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 40" } },
+        "seance1":  { ".validate": "newData.isBoolean()" },
+        "parcours": { ".validate": "newData.isBoolean()" },
+        "finEssai": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "payant":   { ".validate": "newData.isBoolean()" },
+        "lev":      { "$l": { ".validate": "$l.matches(/^(parcours|checkin|notif|duel|defi|coach|invite)$/) && newData.isBoolean()" } },
+        "$autre":   { ".validate": false }
+      }
     },
 
     // ── L ATTRIBUTION : d ou viennent les inscrits ───────────────────────

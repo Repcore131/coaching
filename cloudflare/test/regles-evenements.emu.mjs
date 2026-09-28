@@ -246,4 +246,19 @@ await test('offre de lancement : un code peut porter « ultime_demi » ; droits.
   assert.equal((await appel(LEA, 'PATCH', 'droits/' + K(LEA), { offreAmb: 'ultime_demi' })).statut, 401, 'l’athlète ne s’offre pas le demi-tarif');
   assert.equal((await appel(KEVIN, 'PATCH', 'droits/' + K(LEA), { offreAmb: 'ultime_demi', demiPackUtilise: true })).statut, 200);
 });
+await test('activite : chacun écrit SON résumé, personne ne le lit ; stats/retention au créateur seul, badges publics', async () => {
+  const r = { v: 1, inscrit: '2026-10-01', sem: '2026-09-28', src: 'amb', debut: [0, 1, 8], jour: '2026-10-20', j30: '0'.repeat(29) + '1',
+    seance1: true, parcours: false, finEssai: 0, payant: false, lev: { notif: true, coach: false } };
+  assert.equal((await appel(LEA, 'PUT', 'activite/' + K(LEA), r)).statut, 200);
+  assert.equal((await appel(LEA, 'PUT', 'activite/' + K(KEV), r)).statut, 401, 'celui d’un autre');
+  assert.equal((await appel(LEA, 'PUT', 'activite/' + K(LEA), Object.assign({}, r, { poids: 80 }))).statut, 401, 'aucun champ en plus');
+  assert.equal((await appel(LEA, 'PUT', 'activite/' + K(LEA), Object.assign({}, r, { lev: { humeur: true } }))).statut, 401, 'levier inconnu');
+  assert.equal((await appel(LEA, 'GET', 'activite/' + K(LEA))).statut, 401, 'pas même le sien');
+  await appel('owner', 'PUT', 'stats/retention', { comptes: 1 });
+  await appel('owner', 'PUT', 'stats/badges', { total: 1, pct: {} });
+  assert.equal((await appel(LEA, 'GET', 'stats/retention')).statut, 401);
+  assert.equal((await appel(KEVIN, 'GET', 'stats/retention')).statut, 200);
+  assert.equal((await fetch(BASE + '/stats/badges.json?ns=' + NS)).status, 200, 'les pourcentages des badges restent publics');
+  assert.equal((await fetch(BASE + '/stats/retention.json?ns=' + NS)).status, 401);
+});
 console.log(ok + ' tests passés (émulateur)');

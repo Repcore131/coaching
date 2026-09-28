@@ -47737,10 +47737,13 @@ async function testExercices(){
     ok('/stats/badges : lecture publique, aucune écriture cliente',(()=>{
       const r=window._RC_RULES;
       if(!r) return true;                      // règles non servies : regles.mjs le dit
-      const m=r.match(/"stats"\s*:\s*\{([^}]*)\}/);
+      // Depuis le 28/09/2026 : /stats/retention au créateur seul, le reste
+      // (badges, saisons) public par "$autre".
+      const i=r.indexOf('"stats"'), m=i>=0?r.slice(i,i+900):'';
       if(!m) return _echec('le nœud stats manque aux règles');
-      if(!/"\.read"\s*:\s*true/.test(m[1])) return _echec('stats n’est pas en lecture publique');
-      return /"\.write"\s*:\s*false/.test(m[1])?true:_echec('stats est inscriptible');})());
+      if(!/"\$autre"\s*:\s*\{\s*"\.read"\s*:\s*true\s*\}/.test(m)) return _echec('stats n’est pas en lecture publique');
+      if(!/"retention"\s*:\s*\{\s*"\.read"\s*:\s*"auth != null && auth\.token\.email === 'guellec\.coachingpro@gmail\.com'"/.test(m)) return _echec('la rétention n’est pas réservée au créateur');
+      return /"\.write"\s*:\s*false/.test(m)?true:_echec('stats est inscriptible');})());
 
 
     // UNE SEULE BANNIERE, meme quand plusieurs badges tombent ensemble — cas
@@ -49844,6 +49847,48 @@ async function testExercices(){
         if(htmlReglageCelebrations({role:'coach'})!=='') return _echec('coach');
       }finally{ currentUser=sv.u; window.saveUser=sv.s; }
       return CHAMPS_NON_SANTE.indexOf('celebrations')>=0?true:_echec('non classé');})());
+    // ══ 28/09/2026 — RÉTENTION : RÉSUMÉ D'ACTIVITÉ, ÉCRAN VIRALITÉ ══════════
+    const _RET=new Date(2026,10,20,10).getTime();
+    const _RETJ=864e5;
+    ok('Rétention : le résumé d’activité — des jours et des oui/non, aucun contenu',(()=>{
+      const cree=new Date(2026,9,1,9).getTime();
+      const u={role:'athlete',email:'r@t.fr',fname:'Léa',createdAt:cree,origine:{src:'amb',inscritLe:cree},
+        sessions:[{date:cree+3600e3,volume:5000,data:{Squat:{sets:[{weight:'100',reps:'5',done:true}]}}},{date:cree+_RETJ+3600e3},{date:_RET-2*_RETJ}],
+        checkin:{[localISODate(new Date(cree+8*_RETJ))]:{sommeil:3,energie:3,courbatures:3,at:cree+8*_RETJ}},
+        nutrition:{log:{[localISODate(new Date(_RET))]:{entries:[{nom:'riz'}]}}},
+        parcours:{debut:cree,fini:cree+5*_RETJ,etapes:{}},coachEmailKey:'k@t,fr',duels:{d1:{}},essai:{finit:cree+30*_RETJ}};
+      const r=activiteResume(u,_RET);
+      if(!r||r.inscrit!=='2026-10-01'||r.sem!=='2026-09-28'||r.src!=='amb') return _echec(JSON.stringify(r));
+      if(r.debut.join()!=='0,1,8') return _echec('jours de début : '+r.debut);
+      if(r.j30.length!==30||r.j30.slice(-1)!=='1'||r.j30.slice(-3,-2)!=='1'||r.jour!==localISODate(new Date(_RET))) return _echec('bande : '+r.j30);
+      if(!r.seance1||!r.parcours||r.payant||r.finEssai!==cree+30*_RETJ) return _echec('entonnoir');
+      if(!r.lev.parcours||r.lev.checkin||!r.lev.coach||!r.lev.duel||!r.lev.invite) return _echec('leviers '+JSON.stringify(r.lev));
+      const txt=JSON.stringify(r);
+      if(/Léa|r@t|Squat|riz|5000|100/.test(txt.replace(/"debut":\[[^\]]*\]/,''))) return _echec('un contenu a fui : '+txt);
+      if(Object.keys(r).sort().join()!=='debut,finEssai,inscrit,j30,jour,lev,parcours,payant,seance1,sem,src,v') return _echec('champs '+Object.keys(r));
+      if(activiteResume({role:'coach',createdAt:1},_RET)!==null||activiteResume({role:'athlete'},_RET)!==null) return _echec('coach ou sans date');
+      return /activitePublier\(u\)/.test(String(loadClientHome))?true:_echec('publié depuis l’accueil');})());
+    ok('Rétention : l’écran Viralité — actifs, cohortes et courbes SVG, entonnoir, leviers avec alerte sous 30',(()=>{
+      const s={maj:_RET,comptes:120,actifs:{dau:12,wau:40,mau:90,dauMau:13.3},seuilGroupe:30,
+        cohortes:[{sem:'2026-09-28',n:40,j1:50,n1:40,j7:30,n7:40,j30:20,n30:40},{sem:'2026-10-05',n:30,j1:60,n1:30,j7:40,n7:30,j30:null,n30:0}],
+        entonnoir:{sources:[{src:'amb',inscrits:40,seance1:30,parcours:20,finEssai:25,payant:8}],total:{inscrits:40,seance1:30,parcours:20,finEssai:25,payant:8}},
+        leviers:[{cle:'parcours',lib:'Parcours fini',avec:{n:35,j30:40},sans:{n:45,j30:15},alerte:false},{cle:'duel',lib:'Duel',avec:{n:4,j30:50},sans:{n:76,j30:20},alerte:true}]};
+      const d=document.createElement('div'); d.innerHTML=htmlRetention(s);
+      const t=d.textContent;
+      for(const x of ['DAU','WAU','MAU','DAU/MAU','13,3 %']) if(t.indexOf(x)<0) return _echec('actifs : '+x);
+      if(d.querySelectorAll('svg.vir-svg').length!==2) return _echec('deux SVG');
+      if(d.querySelectorAll('svg.vir-svg path').length!==3) return _echec('trois courbes');
+      if(!/\+25 pts/.test(t)||!/groupe < 30/.test(t)) return _echec('leviers : '+t);
+      if(d.querySelectorAll('tr.vir-alerte').length!==1) return _echec('alerte');
+      if(/@|,fr/.test(d.innerHTML)) return _echec('donnée personnelle');
+      if(!/Pas encore calculée/.test(htmlRetention(null))) return _echec('vide');
+      if(!/_lireRetention\(\)/.test(String(ouvrirViralite))||!/htmlRetention\(_viral\.retention\)/.test(String(_viralRendre))) return _echec('branchement');
+      return /svg|canvas|chart/i.test(String(svgEntonnoir))&&!/Chart\(/.test(String(svgRetention))?true:_echec('SVG léger');})());
+    ok('Rétention : le résumé est effacé avec le compte, et privacy.html le dit',(()=>{
+      const lire=u=>{ try{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; }catch(e){ return ''; } };
+      const p=lire('../privacy.html');
+      if(!/résumé d'activité/.test(p)||!/supprimé avec votre compte/.test(p)) return _echec('privacy.html');
+      return /'activite\/'\+safeKey/.test(String(requestAccountDeletion))?true:_echec('suppression');})());
     // ══ 28/09/2026 — MON KIT, ÉLÉMENTS DE MARQUE, OFFRE DE LANCEMENT, PAGE AMBASSADEUR ══
     const _KT=new Date(2026,9,7,10).getTime();   // mercredi 7 octobre 2026
     const _KS=(j,kg)=>({date:_KT-j*864e5,duration:60,sets:6,setsPlanned:6,volume:kg*30,data:{'Squat':{sets:Array.from({length:6},()=>({weight:String(kg),reps:'5',done:true}))}}});
