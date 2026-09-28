@@ -47699,13 +47699,8 @@ async function testExercices(){
       if(!/_bdgArcs\(z,2000\)/.test(src)) return _echec('les arcs ne durent pas 2 s');
       for(const f of ['rcFoudre','arcGlow','arcHaptique','rotateY']) if(src.indexOf(f)<0) return _echec(f+' absent de la mise en scène');
       return true;})());
-    ok('Plusieurs badges : trois écrans au plus, puis un récapitulatif',(()=>{
-      const p5=_bdgPlan(['a','b','c','d','e']);
-      if(p5.ecrans.join()!=='a,b,c'||p5.recap.join()!=='d,e') return _echec('5 badges → '+JSON.stringify(p5));
-      const p2=_bdgPlan(['a','b']);
-      if(p2.ecrans.length!==2||p2.recap.length) return _echec('2 badges → '+JSON.stringify(p2));
-      const r=_bdgPlan(['a','b','c','d'],true);
-      return (!r.ecrans.length&&r.recap.length===4)?true:_echec('le rattrapage joue des écrans');})());
+    // (28/09/2026) « Trois écrans au plus » est devenu UN écran plein, le plus
+    // rare, et le carrousel « Tes trophées du jour » : voir « Célébrations : ».
     ok('La rareté : un pourcentage lisible, et rien sans donnée',(()=>{
       const st={total:200,pct:{aube:4.2,assidu_1:37.5,noel:0.4}};
       if(badgeRareteTexte('aube',st)!=='Possédé par 4,2 % des athlètes') return _echec(badgeRareteTexte('aube',st));
@@ -48785,8 +48780,9 @@ async function testExercices(){
       if(d.querySelectorAll('.vt-l').length!==3) return _echec('lignes');
       if(!d.querySelector('#vt-compteur')) return _echec('compteur');
       if(htmlVoltsFin({total:0,lignes:[]},0)!=='') return _echec('bloc sans gain');
+      // Le « Plafond du jour atteint » n'est plus affiché (28/09/2026).
       d.innerHTML=htmlVoltsFin({total:20,lignes:[{lib:'Séance terminée',v:20}],ecrete:true},2000);
-      return /Plafond du jour/.test(d.textContent)?true:_echec('plafond non dit');})());
+      return /Plafond du jour/.test(d.textContent)?_echec('plafond encore affiché'):true;})());
     ok('Volts : la carte de rang 1080×1920, « NOUVEAU RANG · TITAN » et la signature',(()=>{
       const P=CanvasRenderingContext2D.prototype, f=P.fillText, vus=[];
       P.fillText=function(t){ vus.push(String(t)); return f.apply(this,arguments); };
@@ -49738,6 +49734,112 @@ async function testExercices(){
       if(_legendePour('rang')!=='Ma légende à moi #RepCore') return _echec('la légende modifiée n’est pas celle qui part');
       if(_legendePour('rang')==='Ma légende à moi #RepCore') return _echec('elle ne sert qu’une fois');
       return (legendeModifiee('rang','x'.repeat(400)).length===220)?true:_echec('longueur non bornée');})());
+    // ══ 28/09/2026 — UN SEUL ÉCRAN PLEIN, LES TROPHÉES DU JOUR ═════════════
+    const _BSEC=()=>BADGES_ACQUIS.find(b=>b.famille==='secret').id;
+    const _BPAL=(n)=>BADGES_ACQUIS.find(b=>b.palier===n).id;
+    ok('Célébrations : classées par rareté — secret, rang, palier IV, longue série, puis le reste',(()=>{
+      if(BDG_ECRAN_MAX!==1) return _echec('BDG_ECRAN_MAX = '+BDG_ECRAN_MAX);
+      const sec=_BSEC(), p4=_BPAL(4), p1=_BPAL(1), p2=_BPAL(2);
+      const file=[{serie:4},p1,{rang:5},sec,p4,p2,{serie:52}];
+      const o=bdgPrioriser(file,null);
+      const nom=x=>typeof x==='string'?x:JSON.stringify(x);
+      const att=[sec,JSON.stringify({rang:5}),JSON.stringify({serie:52}),p4,JSON.stringify({serie:4}),p2,p1];
+      if(o.map(nom).join('|')!==att.join('|')) return _echec(o.map(nom).join(' | '));
+      // Un seul écran : le plus rare ; tout le reste en trophées, dans l'ordre.
+      const r=bdgRepartir(file,'completes',0,null);
+      if(r.ecrans.length!==1||r.ecrans[0]!==sec||r.trophees.length!==6) return _echec(JSON.stringify(r));
+      // Discrètes : aucun écran plein.
+      const d=bdgRepartir(file,'discretes',0,null);
+      if(d.ecrans.length||d.trophees.length!==7) return _echec('discrètes');
+      // Un écran déjà montré dans la vague : plus aucun.
+      if(bdgRepartir(file,'completes',1,null).ecrans.length) return _echec('deux écrans dans la même vague');
+      // Égalité : l'ordre d'arrivée.
+      const q=bdgPrioriser([{serie:8},{serie:8,x:1}],null);
+      if(q[0].x) return _echec('égalité');
+      return bdgRepartir([],'completes',0,null).ecrans.length===0?true:_echec('vide');})());
+    ok('Célébrations : la rareté réelle (/stats/badges) départage sans renverser les paliers',(()=>{
+      const p1=BADGES_ACQUIS.filter(b=>b.palier===1).slice(0,2).map(b=>b.id), p4=_BPAL(4);
+      const st={total:500,pct:{[p1[0]]:60,[p1[1]]:2,[p4]:40}};
+      const o=bdgPrioriser([p1[0],p1[1]],st);
+      if(o[0]!==p1[1]) return _echec('le plus rare des deux paliers I d’abord');
+      if(!(bdgRarete(p4,st)>bdgRarete(p1[1],{total:500,pct:{[p1[1]]:0}}))) return _echec('un palier I à 0 % passe devant un palier IV');
+      if(bdgRarete(_BSEC(),st)!==100) return _echec('secret');
+      return (bdgRarete({rang:10},null)===98&&bdgRarete({rang:1},null)<bdgRarete({rang:2},null))?true:_echec('rangs');})());
+    ok('Célébrations : la file — un seul écran avec la foudre, le reste dans « Tes trophées du jour », même vague',(()=>{
+      const sv={f:_bdgFile,r:_bdgRecap,t:_bdgTrophees,v:_bdgVague,a:window._bdgAfficher,j:window._bdgAjouterTrophees,u:currentUser};
+      const vus=[], tr=[];
+      try{
+        window._bdgAfficher=(x)=>{ vus.push(x); };
+        window._bdgAjouterTrophees=(l)=>{ tr.push(...l); return true; };
+        currentUser={role:'athlete',badges:{}};
+        _bdgVague={debut:0,ecrans:0}; _bdgRecap=[];
+        const p1=_BPAL(1);
+        _bdgFile=[{serie:4},p1,{rang:3}];
+        _bdgSuivant();
+        if(vus.length!==1||vus[0].rang!==3) return _echec('écran : '+JSON.stringify(vus));
+        if(tr.length!==2||tr[0].serie!==4||tr[1]!==p1) return _echec('trophées : '+JSON.stringify(tr));
+        // Un rang calculé juste après : pas un second écran.
+        _bdgFile=[{rang:4}];
+        _bdgSuivant();
+        if(vus.length!==1||tr.length!==3) return _echec('second écran dans la vague');
+        // Discrètes : rien en plein écran.
+        currentUser.celebrations='discretes'; _bdgVague={debut:0,ecrans:0};
+        _bdgFile=[{rang:5}]; _bdgSuivant();
+        if(vus.length!==1||tr.length!==4) return _echec('discrètes');
+      }finally{
+        _bdgFile=sv.f; _bdgRecap=sv.r; _bdgTrophees=sv.t; _bdgVague=sv.v; window._bdgAfficher=sv.a; window._bdgAjouterTrophees=sv.j; currentUser=sv.u;
+      }
+      return true;})());
+    ok('Célébrations : le carrousel — vignettes, Partager, fiche au toucher sans foudre',(()=>{
+      const sv={t:_bdgTrophees,f:window.rcFoudre,u:currentUser};
+      let foudres=0;
+      try{
+        currentUser={role:'athlete',badges:{},defisReleves:{dx:{titre:'12 séances',champion:true}}};
+        const p1=_BPAL(1);
+        _bdgTrophees=[{serie:12},p1,{rang:4},{defi:'dx'}];
+        const d=document.createElement('div'); d.innerHTML=htmlTropheesDuJour(_bdgTrophees);
+        if(!/Tes trophées du jour/.test(d.textContent)) return _echec('titre');
+        if(d.querySelectorAll('.tr-v').length!==4||d.querySelectorAll('.tr-part').length!==4) return _echec('vignettes');
+        if(!/ouvrirTrophee\(2\)/.test(d.innerHTML)||!/partagerTrophee\(3,this\)/.test(d.innerHTML)) return _echec('gestes');
+        const t=d.textContent;
+        if(!/Palier de série12 semaines/.test(t)||!/Nouveau rang/.test(t)||!/Champion12 séances/.test(t)) return _echec(t);
+        window.rcFoudre=()=>{ foudres++; return Promise.resolve(null); };
+        ouvrirTrophee(0);
+        const z=document.getElementById('bdg-ecran');
+        if(!z) return _echec('la fiche ne s’ouvre pas');
+        if(foudres) return _echec('la fiche refrappe la foudre');
+        _bdgFermerEcran(true); _bdgCalme=false;
+        if(htmlTropheesDuJour([])!=='') return _echec('vide');
+      }finally{ _bdgFermerEcran(true); _bdgCalme=false; _bdgTrophees=sv.t; window.rcFoudre=sv.f; currentUser=sv.u; }
+      return /_bdgTrophees=\[\]/.test(String(rendreVoltsFin))?true:_echec('le carrousel n’est pas remis à zéro à chaque séance');})());
+    ok('Célébrations : les rattrapages en un seul récapitulatif, sans foudre ; plus de « Plafond du jour »',(()=>{
+      const sv={f:_bdgFile,r:_bdgRecap};
+      try{
+        _bdgFile=[]; _bdgRecap=[];
+        _celebrerBadges([_BPAL(1),_BPAL(2)],true);
+        _celebrerBadges([_BPAL(3)],true);
+        clearTimeout(_bdgMinuterie); _bdgMinuterie=null;
+        if(_bdgFile.length||_bdgRecap.length!==3) return _echec('rattrapage : '+_bdgFile.length+' / '+_bdgRecap.length);
+      }finally{ _bdgFile=sv.f; _bdgRecap=sv.r; }
+      if(/rcFoudre|_bdgFoudre/.test(String(_bdgEcranRecap))) return _echec('foudre dans le récapitulatif');
+      for(const f of [_bdgJouer,_serieEcran,_rangEcran,_defiEcran]) if(/[^_]rcFoudre\(/.test(String(f))||!/_bdgFoudre\(/.test(String(f))) return _echec(f.name+' frappe sans passer par _bdgFoudre');
+      const d=document.createElement('div');
+      d.innerHTML=htmlVoltsFin({total:20,lignes:[{lib:'Séance terminée',v:20}],ecrete:true},2000);
+      return /Plafond du jour/.test(d.textContent)?_echec('plafond encore affiché'):true;})());
+    ok('Célébrations : le réglage « complètes / discrètes » dans le profil',(()=>{
+      const sv={u:currentUser,s:window.saveUser};
+      try{
+        window.saveUser=()=>{};
+        currentUser={role:'athlete'};
+        if(celebrationsMode(currentUser)!=='completes') return _echec('défaut');
+        const d=document.createElement('div'); d.innerHTML=htmlReglageCelebrations(currentUser);
+        if(!/Complètes/.test(d.textContent)||!/Discrètes/.test(d.textContent)||d.querySelector('.cel-b.actif').textContent.indexOf('Complètes')!==0) return _echec('rendu');
+        celebrationsChoisir('discretes');
+        if(celebrationsMode(currentUser)!=='discretes') return _echec('choix');
+        if(celebrationsChoisir('fort')) return _echec('valeur hors liste');
+        if(htmlReglageCelebrations({role:'coach'})!=='') return _echec('coach');
+      }finally{ currentUser=sv.u; window.saveUser=sv.s; }
+      return CHAMPS_NON_SANTE.indexOf('celebrations')>=0?true:_echec('non classé');})());
     // ══ 28/09/2026 — LES ÉVÉNEMENTS SAISONNIERS ════════════════════════════
     const _SAT=new Date(2026,9,15,12).getTime();
     const _SAS=(x)=>Object.assign({nom:'Hiver de fer',debut:new Date(2026,9,5).getTime(),fin:new Date(2026,9,25,23,59,59).getTime(),mesure:'seances',
