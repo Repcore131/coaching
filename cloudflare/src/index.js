@@ -28,7 +28,7 @@ import { repondreAppel } from './appels.js';
 import { cloudinaryDestroy, compteCloudinary } from './medias.js';
 import { creerPaypal, recevoirWebhook, jetonPaypal } from './paypal.js';
 import { servirPagePublique } from './pages.js';
-import { santeJeton, recevoirSante } from './sante.js';
+import { santeJeton, recevoirSante, compteDuJeton } from './sante.js';
 
 // Les fonctions appelées par l'app (protocole onCall, jeton Firebase vérifié).
 const APPELS = { cloudinaryDestroy, santeJeton };
@@ -90,6 +90,11 @@ export default {
       }
       // LA SANTÉ SYNCHRONISÉE (Health Connect, Raccourci iPhone) : voir sante.js.
       // Le corps n'est jamais journalisé.
+      if (url.pathname === '/sante/qui' && req.method === 'POST') {
+        const o = outils(env);
+        const r = await compteDuJeton(req, { db: o.db });
+        return reponse(JSON.stringify(r.corps), r.statut);
+      }
       if ((url.pathname === '/sante/i' || url.pathname.startsWith('/sante/i/')) && req.method === 'POST') {
         const o = outils(env);
         const r = await recevoirSante(req, { db: o.db });

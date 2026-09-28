@@ -1,0 +1,63 @@
+{
+  "packageId": "com.repcore.app",
+  "host": "repcore-sync.web.app",
+  "name": "RepCore",
+  "launcherName": "RepCore",
+  "display": "standalone",
+  "themeColor": "#080808",
+  "themeColorDark": "#000000",
+  "navigationColor": "#000000",
+  "navigationColorDark": "#000000",
+  "navigationDividerColor": "#000000",
+  "navigationDividerColorDark": "#000000",
+  "backgroundColor": "#080808",
+  "enableNotifications": false,
+  "startUrl": "/app/index.html",
+  "iconUrl": "https://repcore-sync.web.app/app/icons/icon-512x512.png",
+  "maskableIconUrl": "https://repcore-sync.web.app/app/icons/icon-512x512-maskable.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./repcore.keystore",
+    "alias": "repcore"
+  },
+  "appVersionName": "4",
+  "appVersionCode": 4,
+  "shortcuts": [
+    {
+      "name": "Nouvelle séance",
+      "shortName": "Séance",
+      "url": "https://repcore-sync.web.app/app/index.html?wo=1",
+      "chosenIconUrl": "https://repcore-sync.web.app/app/icons/icon-96x96.png"
+    },
+    {
+      "name": "Ma diète",
+      "shortName": "Diète",
+      "url": "https://repcore-sync.web.app/app/index.html?diete=1",
+      "chosenIconUrl": "https://repcore-sync.web.app/app/icons/icon-96x96.png"
+    }
+  ],
+  "generatorApp": "unknown",
+  "webManifestUrl": "https://repcore-sync.web.app/app/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://repcore-sync.web.app/app/",
+  "minSdkVersion": 21,
+  "orientation": "portrait",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "protocolHandlers": [],
+  "fileHandlers": [],
+  "launchHandlerClientMode": "",
+  "displayOverride": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "appVersion": "4"
+}

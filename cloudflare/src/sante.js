@@ -133,9 +133,32 @@ export function nettoyerJour(j, source) {
   return { v, ignores };
 }
 
+const refus = (statut, erreur) => ({ statut, corps: { erreur } });
+
+// ── « À QUEL COMPTE CE JETON ENVOIE-T-IL ? » ───────────────────────────────
+// POST /sante/qui, en-tête X-RepCore-Jeton → {compte:'l•••@gmail.com'}.
+// L'APK le fait confirmer avant de ranger un jeton reçu par un lien : une
+// page malveillante ne peut pas y glisser le sien sans que ça se voie.
+// Masqué : la première lettre et le domaine, rien de plus.
+export function masquer(cle) {
+  const e = String(cle || '').replace(/,/g, '.');
+  const i = e.indexOf('@');
+  if (i < 1) return '•••';
+  return e[0] + '•••' + e.slice(i);
+}
+export async function compteDuJeton(req, ctx) {
+  const jeton = String(req.headers.get('X-RepCore-Jeton') || '').trim();
+  if (!JETON_RE.test(jeton)) return refus(401, 'jeton inconnu');
+  const emp = await empreinte(jeton);
+  const lien = (await ctx.db.ref('sante_jetons/' + emp).get()).val();
+  if (!lien || !lien.cle) return refus(401, 'jeton inconnu');
+  const meta = (await ctx.db.ref('sante_sync/' + lien.cle + '/meta/empreinte').get()).val();
+  if (meta !== emp) return refus(401, 'jeton inconnu');
+  return { statut: 200, corps: { compte: masquer(lien.cle) } };
+}
+
 // ── LA RÉCEPTION ─────────────────────────────────────────────────────────
 // Rend { statut, corps } : index.js y pose les en-têtes (CORS compris).
-const refus = (statut, erreur) => ({ statut, corps: { erreur } });
 export async function recevoirSante(req, ctx) {
   const { db } = ctx;
   const maintenant = (ctx.maintenant || Date.now)();

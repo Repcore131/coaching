@@ -58,3 +58,16 @@ __pycache__/
 # le depot est publie tel quel par pages.yml, et un git clean -fd a deja
 # efface ces fichiers le 23/09/2026 quand ils etaient a la racine sans etre ignores.
 docs/offre/
+
+# ══ ANDROID (lot C) : AUCUNE CLÉ, AUCUN MOT DE PASSE DANS LE DÉPÔT ══
+*.keystore
+*.jks
+signing-key-info.txt
+local.properties
+android/.gradle/
+android/build/
+android/app/build/
+android/.kotlin/
+*.apk
+*.aab
+*.idsig

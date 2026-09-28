@@ -5817,7 +5817,16 @@ function _validateAthletePkg(o){
       ||params.get('bilan')==='1'||params.get('wo')==='1'||params.get('diete')==='1'
       ||!!params.get('wrapped')||params.get('canal')==='1'||!!params.get('ref')||params.get('parrainage')==='1'
       ||!!params.get('coach')||!!params.get('src')||!!params.get('amb')||params.get('paiements')==='1'
-      ||!!params.get('duel')||params.get('duels')==='1'||!!params.get('saison')||params.get('parcours')==='1'||params.get('reprise')==='1');
+      ||!!params.get('duel')||params.get('duels')==='1'||!!params.get('saison')||params.get('parcours')==='1'||params.get('reprise')==='1'
+      ||!!params.get('apk')||!!params.get('sante'));
+    // ?apk=<versionCode> — l'APK Android (LauncherActivity) l'ajoute à chaque
+    // ouverture. Rangé dans rc_apk : la feuille « Connecter mes données
+    // santé » sait ainsi qu'elle tourne dans l'APK (rcDansApk).
+    const _apkV=String(params.get('apk')||'');
+    if(/^\d{1,6}$/.test(_apkV)){ try{ localStorage.setItem('rc_apk',_apkV); }catch(e){} }
+    // ?sante=ok|erreur — le retour de ConnecterSanteActivity, après « Autoriser ».
+    const _santeR=params.get('sante');
+    if(_santeR==='ok'||_santeR==='erreur') window._pendingSanteRetour=_santeR;
     // Coach invite → athlete device
     const cpkg=params.get('coachpkg');
     if(cpkg){
@@ -7399,6 +7408,9 @@ function routeUser(){
   if(window._pendingWoOpen){window._pendingWoOpen=false;setTimeout(()=>openSessionPicker(),900);}
   // MEME DELAI ECHELONNE que ses deux voisins : le routage de démarrage doit
   // avoir posé son écran avant qu'on en pousse un autre par-dessus.
+  if(window._pendingSanteRetour){ const _r=window._pendingSanteRetour; window._pendingSanteRetour=false;
+    setTimeout(()=>{ try{ loadLifestyle(); _sanSyncLu=0; sanSyncTirer(true).catch(()=>{});
+      toast(_r==='ok'?'Données santé connectées':'Première synchronisation à reprendre : elle repartira à la prochaine ouverture',_r==='ok'?'var(--green)':'var(--orange)'); }catch(e){} },1000);}
   if(window._pendingDieteOpen){window._pendingDieteOpen=false;
     setTimeout(()=>{ try{ go('s-nutrition'); loadNutrition(); }catch(e){} },1000);}
   if(window._pendingWrappedOpen){ const _k=window._pendingWrappedOpen; window._pendingWrappedOpen=false;
@@ -109906,23 +109918,29 @@ try{
 //
 // RACCOURCI_SANTE_URL : le lien iCloud du Raccourci « RepCore Santé », que
 // Kevin publie lui-même. Vide, l'étape le dit au lieu d'ouvrir un lien mort.
-// SAN_SYNC_APK_LIEN : le lien que l'APK (TWA com.repcore.app) intercepte pour
-// recevoir l'adresse de réception et demander l'accès à Health Connect.
+// SAN_SYNC_APK_LIEN : le lien que l'APK (TWA com.repcore.app, version 4 et
+// plus) intercepte : ConnecterSanteActivity range le jeton, fait confirmer le
+// compte, demande l'accès à Health Connect et lance la première lecture.
 const RACCOURCI_SANTE_URL='';
 const SAN_SYNC_RACCOURCI_LANCER='shortcuts://run-shortcut?name=RepCore%20Sant%C3%A9';
-const SAN_SYNC_APK_LIEN='repcore://sante/connecter?adresse=';
+const SAN_SYNC_APK_LIEN=j=>'intent://sante/connecter?jeton='+encodeURIComponent(j)+'#Intent;scheme=repcore;package=com.repcore.app;end';
+const SAN_SYNC_APK_MIN=4;   // l'APK 3 (PWABuilder) ne sait pas lire Health Connect
+const AIDE_APK_URL='/aide-apk.html';
 const SAN_SYNC_SOURCES=Object.freeze({healthconnect:'Health Connect',raccourci:'Apple Santé'});
 const SAN_SYNC_GUET_MS=2*60*1000, SAN_SYNC_GUET_PAS_MS=10*1000;
-let _ssAdresse=null, _ssGuet=null, _ssGuetFin=0;
-// L'APK se reconnaît au référent android-app:// de sa première ouverture (ou
-// à ?apk=1) ; le drapeau rc_apk le retient pour les ouvertures suivantes.
+let _ssAdresse=null, _ssJeton=null, _ssGuet=null, _ssGuetFin=0;
+// L'APK se reconnaît à ?apk=<versionCode>, que LauncherActivity ajoute à
+// chaque ouverture (rangé dans rc_apk par importFromURL), ou au référent
+// android-app:// d'une ouverture par l'ancien APK (version 3, sans ?apk=).
 function rcDansApk(){
   try{
-    if(String(document.referrer||'').indexOf('android-app://com.repcore.app')===0||/[?&]apk=1(&|$)/.test(location.search))
-      localStorage.setItem('rc_apk','1');
-    return localStorage.getItem('rc_apk')==='1';
+    if(String(document.referrer||'').indexOf('android-app://com.repcore.app')===0&&!localStorage.getItem('rc_apk'))
+      localStorage.setItem('rc_apk','3');
+    return /^\d{1,6}$/.test(localStorage.getItem('rc_apk')||'');
   }catch(e){ return false; }
 }
+// La version de l'APK qui a ouvert la page (0 hors APK).
+function rcVersionApk(){ try{ return Number(localStorage.getItem('rc_apk'))||0; }catch(e){ return 0; } }
 // La méta, qu'elle vienne de la base (empreinte) ou de santeJeton('etat') (actif).
 function _sanMetaNorm(m){
   if(!m||typeof m!=='object') return null;
@@ -109979,7 +109997,7 @@ function _ssBouton(lib,action,second){
 function _ssPlateforme(){
   try{
     if(rcInstalliOS()) return 'ios';
-    if(/Android/i.test(navigator.userAgent||'')) return rcDansApk()?'apk':'android';
+    if(/Android/i.test(navigator.userAgent||'')) return rcDansApk()&&rcVersionApk()>=SAN_SYNC_APK_MIN?'apk':'android';
   }catch(e){}
   return 'autre';
 }
@@ -110018,9 +110036,10 @@ function _htmlSanSyncFeuille(){
         _ssBouton(sanSyncActif()?'Autoriser à nouveau':'Autoriser','sanSyncApk()'))
       +_ssEtape(3,'C’est reçu ?','La première synchronisation part tout de suite.',_ssGuetHtml()||'<div class="ss-etat">La réception s’affiche ici.</div>');
   } else if(p==='android'){
-    corps=_ssEtape(1,'Installe l’application <span class="ss-r">RepCore</span> pour Android',
-        RC_APK_URL?'C’est elle qui lit Health Connect : le navigateur n’y a pas accès.':'Elle lira Health Connect : elle arrive très bientôt. En attendant, la capture d’écran fait le travail.',
-        RC_APK_URL?'<a class="ss-btn" href="'+escapeHtml(RC_APK_URL)+'" rel="noopener">Installer l’application</a>':'')
+    const maj=rcDansApk();   // l'ancien APK (version 3) : à mettre à jour
+    corps=_ssEtape(1,(maj?'Mets à jour':'Installe')+' l’application <span class="ss-r">RepCore</span> pour Android',
+        'C’est elle qui lit Health Connect : le navigateur n’y a pas accès.'+(maj?' Installe-la par-dessus l’ancienne, sans désinstaller.':''),
+        '<a class="ss-btn" href="'+AIDE_APK_URL+'" target="_blank" rel="noopener">'+(maj?'Mettre à jour':'Installer l’application')+'</a>')
       +_ssEtape(2,'Ouvre RepCore depuis l’application','Puis reviens ici : la connexion prend une minute.');
   } else {
     corps=_ssEtape(1,'Ouvre RepCore sur ton <span class="ss-r">téléphone</span>','La synchronisation lit Apple Santé (iPhone) ou Health Connect (Android), qui vivent sur le téléphone.');
@@ -110056,7 +110075,7 @@ function sanSyncOuvrir(){
 function sanSyncFermer(){
   const m=document.getElementById('sante-sync-modal');
   if(m) m.style.display='none';
-  _ssAdresse=null;
+  _ssAdresse=null; _ssJeton=null;
   try{ if(document.getElementById('s-lifestyle')?.classList.contains('active')) sanRendre(); }catch(e){}
 }
 async function santeJetonEtat(){
@@ -110064,16 +110083,16 @@ async function santeJetonEtat(){
   _sanSyncMeta=_sanMetaNorm(r);
   return _sanSyncMeta;
 }
-async function sanSyncCreer(){
+async function sanSyncCreer(pourApk){
   if(!demanderConsentementSante('pas',()=>{ sanSyncOuvrir(); sanSyncCreer(); })) return null;
   if(sanSyncActif()&&!confirm('Une nouvelle adresse remplace l’ancienne : le Raccourci ou l’application devront la recevoir à nouveau. Continuer ?')) return null;
   try{
     const r=await santeJeton('creer');
     if(!r||!r.jeton) return null;
-    _ssAdresse=sanSyncAdresse(r.jeton);
+    _ssAdresse=sanSyncAdresse(r.jeton); _ssJeton=r.jeton;
     _sanSyncMeta={actif:true,creeLe:r.creeLe,derniereReception:null,plateforme:null,source:null,origines:null};
     _ssPeindre();
-    sanSyncCopier();
+    if(!pourApk) sanSyncCopier();   // l'APK reçoit le jeton par le lien, pas par le presse-papiers
     return _ssAdresse;
   }catch(e){ toast(e&&e.message?e.message:'Connexion impossible','var(--orange)'); return null; }
 }
@@ -110082,10 +110101,10 @@ function sanSyncCopier(){
   try{ navigator.clipboard.writeText(_ssAdresse).then(()=>toast('Adresse copiée','var(--green)'),()=>{}); }catch(e){}
 }
 async function sanSyncApk(){
-  const a=_ssAdresse||await sanSyncCreer();
-  if(!a) return;
+  if(!_ssJeton) await sanSyncCreer(true);
+  if(!_ssJeton) return;
   sanSyncGuetter();
-  try{ location.href=SAN_SYNC_APK_LIEN+encodeURIComponent(a); }catch(e){}
+  try{ location.href=SAN_SYNC_APK_LIEN(_ssJeton); }catch(e){}
 }
 // GUETTER LA PREMIÈRE RÉCEPTION : santeJeton('etat') toutes les 10 s, 2 minutes au plus.
 function sanSyncGuetter(){
@@ -110112,7 +110131,7 @@ async function sanSyncDeconnecter(){
   if(!confirm('Déconnecter la synchronisation ? L’adresse ne marchera plus, et les données en attente sur le serveur sont effacées. Ce qui est déjà dans ton suivi reste.')) return;
   try{
     await santeJeton('revoquer');
-    _ssAdresse=null; _ssGuet=null;
+    _ssAdresse=null; _ssJeton=null; _ssGuet=null;
     _ssPeindre();
     toast('Synchronisation déconnectée','var(--green)');
   }catch(e){ toast(e&&e.message?e.message:'Connexion impossible','var(--orange)'); }

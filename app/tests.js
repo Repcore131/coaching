@@ -51096,6 +51096,34 @@ async function testExercices(){
       if(d.querySelector('.cso-sync').textContent!=='synchronisé') return _echec('pastille');
       if(!/Dernière réception : 28 sept\.?,? 09:02/.test(d.querySelector('.cso-sync-d').textContent)) return _echec(d.querySelector('.cso-sync-d').textContent);
       return /_htmlSyncCoach\(_sanSyncCoachLire\(c\)\)/.test(String(_htmlDomaineCoach))?true:_echec('branchement');})());
+    ok('APK : ?apk=<versionCode> rangé dans rc_apk ; « Autoriser » seulement à partir de la version 4',(()=>{
+      const _p=window._ssPlateforme; let av=null;
+      try{ av=localStorage.getItem('rc_apk'); }catch(e){}
+      try{
+        const src=_prodSrc();
+        if(!/params\.get\('apk'\)/.test(src)||!/localStorage\.setItem\('rc_apk',_apkV\)/.test(src)) return _echec('?apk= non rangé');
+        if(!/_pendingSanteRetour/.test(src)||!/sanSyncTirer\(true\)/.test(src)) return _echec('retour ?sante=ok');
+        localStorage.setItem('rc_apk','4');
+        if(!rcDansApk()||rcVersionApk()!==4) return _echec('rc_apk=4');
+        localStorage.setItem('rc_apk','3');
+        if(!rcDansApk()||rcVersionApk()!==3) return _echec('rc_apk=3');
+        localStorage.removeItem('rc_apk');
+        if(rcDansApk()) return _echec('hors APK');
+        const l=SAN_SYNC_APK_LIEN('ABC_-9');
+        if(l!=='intent://sante/connecter?jeton=ABC_-9#Intent;scheme=repcore;package=com.repcore.app;end') return _echec('lien '+l);
+        // Android sans APK (ou APK 3) : le bouton mène à aide-apk.html.
+        window._ssPlateforme=()=>'android';
+        const d=document.createElement('div'); d.innerHTML=_htmlSanSyncFeuille();
+        const a=d.querySelector('a.ss-btn');
+        if(!a||a.getAttribute('href')!=='/aide-apk.html') return _echec('lien d’installation '+(a&&a.getAttribute('href')));
+        return true;
+      } finally { window._ssPlateforme=_p; try{ if(av==null) localStorage.removeItem('rc_apk'); else localStorage.setItem('rc_apk',av); }catch(e){} }})());
+    ok('APK : apk-version.json dit la version, et l’url mène à aide-apk.html',(()=>{
+      const lire=u=>{ try{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; }catch(e){ return ''; } };
+      let j=null; try{ j=JSON.parse(lire('apk-version.json')); }catch(e){}
+      if(!j||!(j.versionCode>=4)||!/^https:\/\/repcore-sync\.web\.app\/aide-apk\.html$/.test(j.url)||!j.notes) return _echec(JSON.stringify(j));
+      const aide=lire('../aide-apk.html');
+      return (new RegExp('RepCore-'+j.versionCode+'\\.apk').test(aide)&&/releases\/download\/apk-/.test(aide))?true:_echec('aide-apk.html pas à jour');})());
     // ══ 28/09/2026 — LA VIDÉO D'UN VISUEL ════════════════════════════════
     ok('Vidéo : MP4 quand l’enregistreur le sait (Safari iOS), sinon WebM VP9, sinon rien',(()=>{
       const que=(l)=>(t)=>l.indexOf(t)>=0;

@@ -32,80 +32,67 @@
 <div class="wrap">
 
   <h1>Installer RepCore par le fichier APK</h1>
-  <p class="sub">Cette page ne sert que si l'installation directe n'a pas marché sur ton téléphone.</p>
+  <p class="sub">L'application Android lit Health Connect : tes pas, tes nuits, ta fréquence
+  cardiaque au repos et ton poids arrivent tout seuls dans RepCore.</p>
 
-  <div class="carte avert">
-    <p style="margin:0"><b>La voie normale est plus simple.</b> Sur la page d'installation, le bouton
-    « Installer RepCore » pose l'application en un geste, sans aucun des avertissements
-    décrits ci-dessous. Le fichier APK n'est là que pour les téléphones qui refusent
-    cette voie.</p>
+  <div class="carte">
+    <p style="margin:0 0 4px"><b>Version 4</b> · fichier <code>RepCore-4.apk</code> · environ 3 Mo</p>
+    <p class="sub" style="margin:0 0 6px">Déjà installé ? Installe la nouvelle version <b>par-dessus</b>,
+    sans désinstaller : tes réglages restent.</p>
+    <a class="bouton" id="telecharger" href="https://github.com/Repcore131/coaching/releases/download/apk-4/RepCore-4.apk">TÉLÉCHARGER REPCORE-4.APK</a>
+    <p class="sub" style="margin:10px 0 0;font-size:13px">Le fichier est publié sur GitHub
+    (<a href="https://github.com/Repcore131/coaching/releases">toutes les versions</a>), avec son
+    empreinte SHA-256 dans les notes : c'est le moyen de vérifier qu'il n'a pas été modifié.</p>
   </div>
 
-  <h2>Android va t'avertir deux fois. C'est normal.</h2>
-  <p>Android traite tout fichier qui ne vient pas du Play Store comme suspect par principe : 
-  il ne sait pas d'où il vient, donc il prévient. Voici les deux écrans que tu vas voir,
-  dans l'ordre, et ce qu'ils veulent dire.</p>
-
-  <div class="ecran">
-    <p style="margin:0 0 6px"><b>1. « Pour votre sécurité, votre téléphone n'est pas autorisé à installer des applications inconnues provenant de cette source »</b></p>
-    <p class="sub" style="margin:0">Touche <b>Paramètres</b> dans la boîte, puis active
-    <b>Autoriser depuis cette source</b>. Tu autorises ton navigateur, pas RepCore, 
-    et tu peux le désactiver juste après l'installation.</p>
+  <h2>Les trois gestes</h2>
+  <div class="carte">
+    <ol>
+      <li><b>Autoriser les sources inconnues.</b> Android refuse d'abord : « Pour votre sécurité,
+          votre téléphone n'est pas autorisé à installer des applications inconnues provenant de
+          cette source ». Touche <b>Paramètres</b>, active <b>Autoriser depuis cette source</b>, puis
+          reviens. Tu autorises ton navigateur (ou Fichiers), pas RepCore, et tu peux le désactiver
+          juste après.</li>
+      <li><b>Installer.</b> Ouvre le fichier (barre de notifications, ou
+          <b>Fichiers → Téléchargements</b>) et touche <b>Installer</b>. Si Play Protect dit
+          « Application non validée », touche <b>Installer quand même</b> (parfois derrière
+          <b>Plus de détails</b>) : il ne connaît pas le fichier, il n'y a rien trouvé.</li>
+      <li><b>Ouvrir.</b> Touche <b>Ouvrir</b>, ou l'icône RepCore sur ton écran d'accueil. Pour les
+          données santé : <b>Lifestyle → Synchronisation automatique → Autoriser</b>.</li>
+    </ol>
   </div>
 
-  <div class="ecran">
-    <p style="margin:0 0 6px"><b>2. Play Protect : « Application non validée » ou « Envoyer l'application pour analyse ? »</b></p>
-    <p class="sub" style="margin:0">Touche <b>Installer quand même</b> (parfois derrière
-    <b>Plus de détails</b>). Play Protect dit qu'il ne connaît pas ce fichier, pas qu'il
-    y a trouvé quelque chose.</p>
-  </div>
-
-  <h2>Un troisième écran existe. Lui, il veut dire que le fichier est le mauvais.</h2>
+  <h2>Un écran veut dire que le fichier est le mauvais</h2>
   <div class="ecran">
     <p style="margin:0 0 6px"><b>« Cette application a été conçue pour une version plus ancienne
     d'Android et n'inclut pas les derniers dispositifs de protection de la confidentialité »</b></p>
-    <p class="sub" style="margin:0">Celui-là n'est pas un avertissement de principe : Android le
-    montre quand le fichier annonce avoir été construit pour un Android dépassé, avant
-    l'arrivée des autorisations demandées à l'usage plutôt qu'à l'installation.
-    <b>Le fichier à jour ne le déclenche pas</b> : il annonce Android 16 (API 36), la version
-    courante. Si tu vois cet écran, tu installes un <b>ancien fichier</b> : une version d'essai
-    d'avant, restée dans tes téléchargements ou renvoyée par un vieux message.</p>
+    <p class="sub" style="margin:0">Le fichier à jour ne le déclenche pas : il annonce Android 16
+    (API 36). Si tu vois cet écran, tu installes un <b>ancien fichier</b>, resté dans tes
+    téléchargements ou renvoyé par un vieux message : jette-le et reprends le lien ci-dessus.</p>
   </div>
   <div class="carte">
     <p style="margin:0 0 8px"><b>Comment savoir lequel tu as.</b></p>
     <ol style="margin:0">
-      <li>Avant d'installer : le fichier à jour pèse <b>2,5 Mo</b>. Un fichier de <b>20 Mo ou plus</b>
-          est une version d'essai abandonnée : jette-la.</li>
+      <li>Avant d'installer : le fichier à jour s'appelle <code>RepCore-4.apk</code> et pèse
+          environ <b>3 Mo</b>. Un fichier de <b>20 Mo ou plus</b> est une version d'essai abandonnée.</li>
       <li>Après installation : <b>Paramètres → Applications → RepCore</b>, tout en bas.
-          La version doit être <b>3</b> ou plus.</li>
-    </ol>
-  </div>
-
-  <h2>Les étapes</h2>
-  <div class="carte">
-    <ol>
-      <li>Récupère le fichier <code>RepCore-3.apk</code> : le numéro est celui de la version, et il évite de rouvrir un ancien fichier par erreur.</li>
-      <li>Ouvre-le depuis la barre de notifications, ou par <b>Fichiers → Téléchargements</b>.</li>
-      <li>Traverse les deux écrans ci-dessus.</li>
-      <li>RepCore apparaît sur ton écran d'accueil.</li>
+          La version doit être <b>4</b> ou plus.</li>
     </ol>
   </div>
 
   <h2>Ce que tu installes</h2>
-  <p>Le fichier pèse <b>2,5 Mo</b>. Il ne contient pas l'application : il contient une
-  fenêtre qui ouvre <code>repcore-sync.web.app</code> en plein écran. RepCore reste donc
-  <b>toujours à jour</b> (il n'y a jamais de nouvelle version de ce fichier à réinstaller)   et il continue de fonctionner hors ligne exactement comme dans le navigateur.</p>
+  <p>Une fenêtre qui ouvre <code>repcore-sync.web.app</code> en plein écran : l'application
+  elle-même reste <b>toujours à jour</b>, et fonctionne hors ligne comme dans le navigateur.
+  S'y ajoute la lecture de <b>Health Connect</b>, seulement si tu l'autorises : pas, sommeil,
+  fréquence cardiaque au repos, variabilité cardiaque, poids et masse grasse, en lecture seule.
+  Quand une nouvelle version du fichier sort, une notification « Mise à jour RepCore
+  disponible » te ramène ici.</p>
 
   <p class="sub">Éditeur : Kevin Guellec. Le fichier est signé par une clé qui m'appartient,
   et l'empreinte de cette clé est publiée sur
   <a href="/.well-known/assetlinks.json">ce domaine</a> : c'est ce qui permet à Android de
   vérifier que le site et l'application vont bien ensemble.</p>
 
-  <div class="carte avert" style="margin-top:28px">
-    <p style="margin:0"><b>Le fichier n'est pas encore en téléchargement.</b> Firebase, qui
-    héberge le site, refuse les fichiers d'application sur son offre gratuite. Un autre
-    hébergeur doit être choisi ; d'ici là, demande-moi le fichier directement.</p>
-  </div>
   <p style="text-align:center"><a href="/app/">← Revenir à l'application</a></p>
 
 </div>

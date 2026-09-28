@@ -1,7 +1,7 @@
 // La synchronisation santé : le jeton, la réception, les lignes du Raccourci.
 //   node cloudflare/test/sante.test.mjs
 import assert from 'node:assert/strict';
-import { santeJeton, recevoirSante, empreinte, nettoyerJour, CORPS_MAX } from '../src/sante.js';
+import { santeJeton, recevoirSante, empreinte, nettoyerJour, CORPS_MAX, compteDuJeton, masquer } from '../src/sante.js';
 import { lignesVersJours, etatSommeil } from '../src/lignes.js';
 import { creerBase } from '../src/base.js';
 import { fausseBase } from './fausse-base.mjs';
@@ -277,6 +277,20 @@ await test('le Worker route /sante/i/… avec CORS, sans casser /sante', async (
   const t = await worker.fetch(new Request('https://s.t/sante/i/court', { method: 'POST', body: '{}' }), { FIREBASE_DB_URL: 'https://b.t', FIREBASE_DB_SECRET: 'x' }, { waitUntil() {} });
   assert.equal(t.status, 401);
   assert.equal(t.headers.get('Access-Control-Allow-Origin'), '*');
+});
+
+await test('/sante/qui : le compte du jeton, masqué ; inconnu ou révoqué → 401', async () => {
+  const M = monde();
+  const { jeton } = await santeJeton({ auth: LEA, data: { action: 'creer' } }, M.ctx);
+  const qui = (j) => compteDuJeton(new Request('https://s.t/sante/qui', { method: 'POST', headers: { 'X-RepCore-Jeton': j } }), M.ctx);
+  const r = await qui(jeton);
+  assert.equal(r.statut, 200); assert.deepEqual(r.corps, { compte: 'l•••@t.fr' });
+  assert.equal((await qui('A'.repeat(43))).statut, 401);
+  assert.equal((await qui('court')).statut, 401);
+  await santeJeton({ auth: LEA, data: { action: 'revoquer' } }, M.ctx);
+  assert.equal((await qui(jeton)).statut, 401);
+  assert.equal(masquer('kevin,guellec@gmail,com'), 'k•••@gmail.com');
+  assert.equal(masquer('x'), '•••');
 });
 
 console.log(ok + ' tests santé passés');
