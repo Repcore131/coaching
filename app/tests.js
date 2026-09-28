@@ -63029,14 +63029,11 @@ async function testExercices(){
       if(z){
         // Sans coach : plus de mensonge.
         currentUser=_rbU([_rbB(2)],{createdAt:Date.now()-60*864e5});
-        ok('Sans coachId : « enregistré », jamais « transmis à ton coach »',(()=>{
-          const h=lire();
-          return /Bilan du .* enregistré\./.test(h)&&!/transmis à ton coach/.test(h);})());
-        ok('Sans coachId : la ligne est cliquable',/openBilanNotes\(\)/.test(lire()));
-        // Avec coach, sans réponse.
+        // LA LIGNE « BILAN DU … » EST RETIRÉE DE L'ACCUEIL (Kevin, 28/09/2026).
+        ok('Sans coachId : plus de ligne « Bilan du … » sur l’accueil',!/Bilan du /.test(lire()));
         currentUser=_rbU([_rbB(2)],{coachId:'co9',createdAt:Date.now()-60*864e5});
-        ok('Avec coach et sans réponse : « transmis à ton coach »',
-           /transmis à ton coach/.test(lire()));
+        ok('Avec coach et sans réponse : plus de « transmis à ton coach »',
+           !/transmis à ton coach/.test(lire()));
         // Avec réponse non vue : entrée EN TÊTE, et la ligne « transmis » disparaît.
         currentUser=_rbU([_rbB(2,{reponseCoach:'x',reponseDate:Date.now(),reponseVue:false})],
           {coachId:'co9',createdAt:Date.now()-60*864e5});
@@ -63051,7 +63048,15 @@ async function testExercices(){
         currentUser=_rbU([_rbB(2,{reponseCoach:'x',reponseDate:Date.now(),reponseVue:true})],
           {coachId:'co9',createdAt:Date.now()-60*864e5});
         ok('Réponse déjà vue : plus d\'entrée en tête',!/a répondu à ton bilan/.test(lire()));
-        ok('Réponse déjà vue : la ligne de transmission revient',/transmis à ton coach/.test(lire()));
+        ok('Réponse déjà vue : la ligne de transmission ne revient pas',!/transmis à ton coach/.test(lire()));
+        // Ni relance nutrition, ni cadre d'assiduité sur l'accueil.
+        ok('Accueil : ni « sans suivi alimentaire », ni « semaines d’assiduité »',(()=>{
+          const h=lire(); return !/sans suivi alimentaire/.test(h)&&!/nb-notif/.test(h); })());
+        ok('Accueil : le rappel séance n’est plus sur l’accueil, il est dans les réglages',(()=>{
+          renderWoReminderCard();
+          const r=document.getElementById('clh-wo-reminder-row');
+          if(r&&r.innerHTML) return _echec('encore sur l’accueil');
+          return /openWoReminderConfig\(\)/.test(htmlReglagesPush({role:'athlete'},'actif'))?true:_echec('absent des réglages'); })());
         z.innerHTML=garde;
       }
       currentUser=sauve;
@@ -63202,6 +63207,9 @@ async function testExercices(){
           renderNotifs();
           const l=[...z.children].map(x=>(x.textContent||'').replace(/\s+/g,' ').trim());
           const iN=l.findIndex(t=>/suivi alimentaire/.test(t));
+          // RETIRÉES DE L'ACCUEIL (Kevin, 28/09/2026) : la relance nutrition et
+          // le cadre d'assiduité ne s'affichent plus ; la séance, si.
+          if(iN<0&&!l.some(t=>/assiduité/.test(t))&&l.some(t=>/sans séance/.test(t))) return true;
           if(iN<0) return _echec('aucune entrée nutrition : '+l.join(' | '));
           if(l.filter(t=>/suivi alimentaire/.test(t)).length!==1)
             return _echec('plusieurs entrées nutrition');

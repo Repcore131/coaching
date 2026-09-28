@@ -39332,24 +39332,11 @@ function renderNotifs(){
   // seance : une seance manquee est un rendez-vous rate, un journal non tenu
   // est une trace manquante — le premier prime. Avant le badge d'assiduite :
   // un compteur ne prime sur rien, il felicite.
-  try{ const _nn=notifNutrition(currentUser); if(_nn) notifs.push(_nn); }catch(e){}
-  const _sem=streakSemaines(currentUser);
-  // Cette entree-la ne se rend pas comme les autres : elle porte le cadre du
-  // badge. On la marque au lieu de lui donner un `msg`, pour que la ligne de
-  // rendu plus bas reste lisible.
-  if(_sem>=4) notifs.push({braise:true,sem:_sem});
-  const _cb=(currentUser.bilans||[]).filter(b=>b.type!=='depart');
-  // Le dernier bilan n'a droit a cette ligne que s'il n'a PAS de reponse :
-  // sinon l'entree en tete la remplace, et l'athlete lirait deux lignes sur
-  // le meme bilan.
-  const _dern=_cb.length?_cb[_cb.length-1]:null;
-  if(_dern&&_dern.reponseVue!==false){
-    const _d=_dateBilanCourte(_dern);
-    // « transmis a ton coach » a quelqu'un qui n'a pas de coach etait un
-    // mensonge que le code produisait a chaque ouverture.
-    const _msg=currentUser.coachId?`Bilan du ${_d} transmis à ton coach`:`Bilan du ${_d} enregistré.`;
-    notifs.push({icon:icon('check-circle',16),msg:_msg,c:'var(--green)',act:'openBilanNotes()'});
-  }
+  // RETIRÉS DE L'ACCUEIL (Kevin, 28/09/2026 : « ils noient l'utilisateur ») :
+  // la relance nutrition (« 40 jours sans suivi alimentaire »), le cadre
+  // « 14 semaines d'assiduité · Continue ! » — le compte vit dans l'en-tête —
+  // et « Bilan du … transmis à ton coach ». notifNutrition et
+  // _htmlNotifAssiduite restent, sans appel ici.
   // `act` est facultatif : les entrées qui en portent une deviennent de vrais
   // boutons — curseur, rôle et clavier compris, pas seulement un onclick posé
   // sur un div muet.
@@ -72287,6 +72274,9 @@ async function habCoachRetirer(cle){
 }
 function renderWoReminderCard(){
   const el=document.getElementById('clh-wo-reminder-row');if(!el)return;
+  // Plus sur l'accueil (Kevin, 28/09/2026) : le rappel se règle dans
+  // Réglages › Notifications (htmlReglagesPush).
+  el.innerHTML=''; return;
   const u=currentUser;
   if(!u._woReminderEnabled){
     el.innerHTML=`<button onclick="openWoReminderConfig()" style="width:100%;background:transparent;border:1px dashed var(--border);border-radius:var(--r-3);padding:12px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;font-family:Montserrat,sans-serif;color:var(--sub);font-size:var(--fs-xs);font-weight:700;letter-spacing:.8px;margin-bottom:10px">
@@ -72858,7 +72848,11 @@ function htmlReglagesPush(u,etat){
     +'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:6px">Une au plus par jour, et jamais entre 21 h et 8 h.</div>'
     +'<div id="cr-push-etat" style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;font-weight:800;margin-bottom:10px">'+escapeHtml(ligneEtat)+'</div>'
     +(aide?'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">'+escapeHtml(aide)+'</div>':'')
-    +bouton+cases+'</div>';
+    +bouton+cases
+    // LE RAPPEL DE SÉANCE, descendu de l'accueil (28/09/2026).
+    +((u&&u.role!=='coach'&&(etat==='actif'||etat==='proposer'))?'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:12px 0 0;min-height:44px" onclick="openWoReminderConfig()">'
+      +(u._woReminderEnabled?'Modifier mon rappel séance':'Configurer un rappel séance')+'</button>':'')
+    +'</div>';
 }
 async function _rendreReglagesPush(){
   const z=document.getElementById('cr-push');
