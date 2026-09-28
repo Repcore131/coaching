@@ -39374,11 +39374,13 @@ function _htmlReprise(avecProgramme){
 // de seances, comme partout ailleurs. Il n'a rien publie : on ouvre le parcours
 // de premiere seance, qui pose trois questions et rend une seance a lancer.
 // Dans les deux cas, on emprunte un chemin qui existe deja.
+// SANS PROGRAMME, ON OUVRE « GÉRER MES SÉANCES » (28/09/2026) : la semaine est
+// vierge et c'est a l'athlete de la remplir, plus aucune seance generee.
 function reprendreMaintenant(){
   try{
     if(_configReelle(currentUser&&currentUser.sessions_config)){ openSessionPicker(); return; }
   }catch(e){}
-  try{ ouvrirPremiereSeance(); }
+  try{ loadSessionManager(); }
   catch(e){ try{ openSessionPicker(); }catch(_e){} }
 }
 // Le tour impur : poser le bloc, et faire taire ce qu'il remplace.
@@ -39473,12 +39475,13 @@ function _pdSeance(u){
   if(reel) return {voie:'selecteur',sous:'Ton programme t’attend'};
   if(sc.some(s=>s&&s.active&&s.exercises&&s.exercises.length))
     return {voie:'selecteur',sous:'Ton programme d’essai t’attend'};
-  return {voie:'parcours',sous:'Trois questions, et ta séance est prête'};
+  // SEMAINE VIERGE : l'athlete cree sa seance lui-meme (28/09/2026).
+  return {voie:'gerer',sous:'Crée ta séance, exercice par exercice'};
 }
 function pdLancerSeance(){
-  let v='parcours';
+  let v='gerer';
   try{ v=_pdSeance(currentUser).voie; }catch(e){}
-  if(v==='selecteur') openSessionPicker(); else ouvrirPremiereSeance();
+  if(v==='selecteur') openSessionPicker(); else loadSessionManager();
 }
 // PURE. La troisieme ligne suit la diete. En stricte ouverte, il n'y a pas de
 // journal : l'acte est de dire si le plan du jour a ete suivi. Une stricte
@@ -39571,7 +39574,14 @@ function _placerHeroDemarrage(monter){
 //   • AUCUN HISTORIQUE. Quelqu'un qui s'est deja entraine a trouve sa
 //     premiere marche tout seul : la lui proposer serait insultant.
 // Et le parcours ne se represente pas une fois traverse ou passe.
+// ⚠ RETIRE LE 28/09/2026 (Kevin) : « on laisse les pages de séance vierges ».
+//   Le parcours generait une seance toute faite ; les programmes se trouvent
+//   desormais en boutique ou au coaching, et l'athlete construit les siennes
+//   au fur et a mesure dans « Gérer mes séances ». La fonction reste (routeUser
+//   l'interroge toujours) mais ne propose plus rien.
+const PS_PARCOURS_ACTIF=false;
 function _doitProposerPremiereSeance(u,dejaVu){
+  if(!PS_PARCOURS_ACTIF) return false;
   if(!u||!u.email||u.role==='coach') return false;
   if(dejaVu) return false;
   if((u.sessions||[]).length) return false;

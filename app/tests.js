@@ -42670,17 +42670,19 @@ async function testExercices(){
         for(const id of ['clh-stats','clh-hero']){ const e=document.getElementById(id); if(e) e.style.display=''; }
       }})());
 
-    ok('Le bouton mène au programme du coach, ou au parcours de départ',(()=>{
+    ok('Le bouton mène au programme du coach, ou à « Gérer mes séances »',(()=>{
       const s=String(reprendreMaintenant);
       // LE COACH A PUBLIE : on ouvre le selecteur, comme partout ailleurs.
       // _configReelle est le predicat deja en place, celui qui distingue un
       // programme publie d'un repli generique.
       if(s.indexOf('_configReelle')<0) return _echec('il ne regarde pas si un programme existe');
       if(s.indexOf('openSessionPicker')<0) return _echec('il n’ouvre pas le selecteur de seances');
-      // IL N'A RIEN PUBLIE : on ouvre le parcours de premiere seance.
-      if(s.indexOf('ouvrirPremiereSeance')<0) return _echec('il n’ouvre pas le parcours de depart');
-      const iC=s.indexOf('_configReelle'), iP=s.indexOf('ouvrirPremiereSeance');
-      if(!(iP>iC)) return _echec('le parcours passe avant le programme du coach');
+      // IL N'A RIEN PUBLIE : semaine vierge, l'athlete construit sa seance
+      // (28/09/2026 : plus de seance generee).
+      if(s.indexOf('ouvrirPremiereSeance')>=0) return _echec('il ouvre encore le parcours qui génère une séance');
+      const iC=s.indexOf('_configReelle'), iP=s.indexOf('loadSessionManager');
+      if(iP<0) return _echec('il n’ouvre pas « Gérer mes séances »');
+      if(!(iP>iC)) return _echec('« Gérer mes séances » passe avant le programme du coach');
       // ET IL EST BRANCHE : loadClientHome rend le bloc, apres les chiffres
       // qu'il masque et avant les blocs de sante qu'il ne touche pas.
       const l=String(loadClientHome);
@@ -42689,12 +42691,12 @@ async function testExercices(){
       if(!(iM>=0&&iR>iM)) return _echec('le bloc est rendu avant les chiffres qu’il masque');
       const iD=l.indexOf('renderDouleurAthlete');
       return (iD>iR)?true:_echec('le bloc est rendu apres les blocs de sante');})());
-    ok('Le parcours ne s’ouvre que pour un compte sans programme ni historique',(()=>{
+    ok('Le parcours qui génère une séance ne s’ouvre plus pour personne (28/09/2026)',(()=>{
       const A=o=>Object.assign({email:'a@t.fr',role:'athlete',sessions:[]},o);
       const vrai=[{active:true,exercises:[{name:'DC'}]},{active:false},{active:false},
                   {active:false},{active:false},{active:false},{active:false}];
       const cas=[
-        ['compte neuf',              A({}),                      false, true],
+        ['compte neuf',              A({}),                      false, false],
         ['deja vu',                  A({}),                      true,  false],
         // Quelqu'un qui s'est deja entraine a trouve sa premiere marche tout
         // seul : la lui proposer serait insultant.
@@ -42703,7 +42705,7 @@ async function testExercices(){
         // distingue un programme publie d'un repli generique. Le reecrire
         // aurait fait diverger deux definitions du meme mot.
         ['a un vrai programme',      A({sessions_config:vrai}),  false, false],
-        ['a le repli generique',     A({sessions_config:[{active:true,exercises:[{name:'X'}],_essai:true}]}), false, true],
+        ['a le repli generique',     A({sessions_config:[{active:true,exercises:[{name:'X'}],_essai:true}]}), false, false],
         ['un coach',                 A({role:'coach'}),          false, false],
         ['sans dossier',             null,                       false, false]
       ];
@@ -53333,7 +53335,7 @@ async function testExercices(){
         const titres=[...z.querySelectorAll('.pd-titre')].map(x=>x.textContent).join('|');
         if(titres!=='1 · Complète ton questionnaire|2 · Lance ta première séance|3 · Note ton premier repas') return _echec('titres : '+titres);
         const sous=[...z.querySelectorAll('.pd-sous')].map(x=>x.textContent).join('|');
-        if(sous!=='~12 min · c’est ce qui permet à ton coach d’adapter tes charges|Trois questions, et ta séance est prête|Pour voir tes macros se remplir') return _echec('sous-titres : '+sous);
+        if(sous!=='~12 min · c’est ce qui permet à ton coach d’adapter tes charges|Crée ta séance, exercice par exercice|Pour voir tes macros se remplir') return _echec('sous-titres : '+sous);
         if(/Pour démarrer/.test(z.textContent)===false||z.querySelector('.pd-compte').textContent!=='0 sur 3') return _echec('en-tête : '+z.textContent.slice(0,40));
         // CE QUI PEUT ATTENDRE SE TAIT ; la santé et l'accès, jamais.
         for(const id of MASQUES) if(!cache(id)) return _echec('#'+id+' reste affiché pendant la mise en route');
@@ -53372,9 +53374,10 @@ async function testExercices(){
       const essai=vierge.map((s,i)=>i?s:Object.assign({},s,{active:true,exercises:[{name:'SQUAT'}]}));
       const reel=essai.map(s=>{ const c=Object.assign({},s); delete c._essai; return c; });
       const r=[vierge,essai,reel].map(sc=>{ const x=_pdSeance(_r36Ath({sessions_config:sc})); return x.voie+':'+x.sous; }).join('|');
-      if(r!=='parcours:Trois questions, et ta séance est prête|selecteur:Ton programme d’essai t’attend|selecteur:Ton programme t’attend') return _echec(r);
+      if(r!=='gerer:Crée ta séance, exercice par exercice|selecteur:Ton programme d’essai t’attend|selecteur:Ton programme t’attend') return _echec(r);
       const s=String(pdLancerSeance);
-      if(s.indexOf('openSessionPicker')<0||s.indexOf('ouvrirPremiereSeance')<0) return _echec('le routage a changé');
+      if(s.indexOf('openSessionPicker')<0||s.indexOf('loadSessionManager')<0) return _echec('le routage a changé');
+      if(s.indexOf('ouvrirPremiereSeance')>=0) return _echec('« Lance ta première séance » génère encore une séance');
       // LA RAISON : sur sept créneaux éteints, le sélecteur n'a rien à montrer.
       if(String(openSessionPicker).indexOf('if(!active.length)')<0) return _echec('le sélecteur a changé : revoir la ligne 2');
       // Ce qui ne devait pas bouger n'a pas bougé.
