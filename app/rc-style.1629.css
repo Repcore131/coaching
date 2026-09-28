@@ -9296,6 +9296,7 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .wr-resume b{display:block;font-family:var(--pile-titre);font-size:44px;line-height:1}
 .wr-resume span{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:#E02020}
 .wr-partager{width:100%;display:flex;align-items:center;justify-content:center;gap:8px}
+.wr-carrousel{margin-top:10px}
 .wr-equiv{font-size:var(--fs-md);font-weight:800;color:#fff;margin:-8px 0 20px}
 /* L'équivalent fun : sous le VOLUME de la fin de séance, et la case qui
    l'ajoute (ou non) au visuel. */
@@ -10805,6 +10806,14 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 /* Sur téléphone, le bouton passe à la ligne, à gauche : le menu s'ouvre depuis son bord gauche. */
 @media (max-width:600px){ .an-exp-m{right:auto;left:0} }
 /* Le choix du fond des visuels : trois vignettes 9:16. */
+/* Story / Post : à côté du fond, sur chaque visuel qui en a un. */
+.vfmt{display:flex;gap:8px;margin:0 0 10px}
+.vfmt-b{flex:1;min-height:40px;display:flex;align-items:center;justify-content:center;gap:6px;border-radius:12px;
+  border:2px solid var(--border,#2a2a2e);background:transparent;color:var(--sub,#a0a0a8);cursor:pointer;
+  font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.6px;text-transform:uppercase}
+.vfmt-b small{font-size:var(--fs-2xs);font-weight:600;opacity:.75;letter-spacing:0}
+.vfmt-b.actif{border-color:var(--red,#e02020);color:var(--text,#fff);box-shadow:0 0 0 3px rgba(224,32,32,.18)}
+.vfmt-b:focus-visible{outline:2px solid var(--red,#e02020);outline-offset:2px}
 .vf{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 12px}
 .vf-b{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:6px;border-radius:14px;border:2px solid var(--border,#2a2a2e);
   background:var(--surface-1,#141416);color:var(--sub,#a1a1aa);cursor:pointer;min-width:0;font:inherit}
@@ -13647,6 +13656,9 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .an-exp-m button{border:1px solid #d2d2d7;background:#e2e2e7;color:#090909}
 :root[data-theme="clair"] .an-exp-m button:hover,:root[data-theme="clair"] .an-exp-m button:focus-visible{border-color:rgba(224,32,32,.6);background:#dcdce1}
 :root[data-theme="clair"] .an-exp-m span{color:#595963}
+:root[data-theme="clair"] .vfmt-b{border:2px solid var(--border,#cfcfd3);color:var(--sub,#5b5b64)}
+:root[data-theme="clair"] .vfmt-b.actif{border-color:var(--red,#e02020);color:var(--text,#090909);box-shadow:0 0 0 3px rgba(224,32,32,.18)}
+:root[data-theme="clair"] .vfmt-b:focus-visible{outline:2px solid var(--red,#e02020)}
 :root[data-theme="clair"] .vf-b{border:2px solid var(--border,#cfcfd3);background:var(--surface-1,#e6e6e8);color:var(--sub,#595963)}
 :root[data-theme="clair"] .vf-b.actif{border-color:var(--red,#e02020);color:var(--text,#090909);box-shadow:0 0 0 3px rgba(224,32,32,.18)}
 :root[data-theme="clair"] .vf-b:focus-visible{outline:2px solid var(--red,#e02020)}
@@ -13679,8 +13691,9 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .pc-note-i{color:#cc0000;background:rgba(224,32,32,.10);border:1px solid rgba(224,32,32,.35)}
 :root[data-theme="clair"] .pc-vide{color:var(--sub)}
 :root[data-theme="clair"] .pc-b-l b{color:#090909}
-:root[data-theme="clair"] .bn-select{color:#090909;background-color:#f4f4f4}
-:root[data-theme="clair"] .bn-select option{color:#090909;background:#fff}
+:root[data-theme="clair"] .bn-select{color:#090909;border:1px solid #ff2d2d;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ff3b3b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center/18px 18px,
+    linear-gradient(180deg,rgba(224,32,32,.22),rgba(120,0,0,.3));box-shadow:0 0 0 1px rgba(255,45,45,.25),0 0 12px rgba(224,32,32,.3)}
+:root[data-theme="clair"] .bn-select option{color:#090909;background:#e8e8e8}
 :root[data-theme="clair"] .bn-tete{border:1px solid rgba(9,9,9,0.12);background:linear-gradient(115deg,rgba(242,242,242,0.96) 0%,rgba(234,234,234,0.94) 48%,rgba(90,6,6,.72) 74%,rgba(250,230,230,0.9) 86%,rgba(140,10,10,.55) 100%),#efefef}
 :root[data-theme="clair"] .bn-titre{color:#090909}
 :root[data-theme="clair"] .bn-titre em{color:#cc0000}

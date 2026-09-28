@@ -17879,7 +17879,8 @@ function renderEpingleAccueil(){
 //   = {date}, posé par l'athlète lui-même (réglages, ou son avant/après). Sans
 //   lui : anonyme, et seulement anonyme — le prénom et les initiales sont
 //   grisés, et le dessin les refuse de lui-même (vcNomAffiche).
-const VC_FORMATS=Object.freeze({story:{w:1080,h:1920,lib:'Story 9:16'},post:{w:1080,h:1350,lib:'Post 4:5'}});
+// LE FORMAT EST LE RÉGLAGE COMMUN DES VISUELS (VISUEL_FORMATS, visuelFormat) :
+// l'ancien VC_FORMATS en était une copie, avec son propre choix.
 const VC_MODES=Object.freeze([{k:'prenom',lib:'Prénom'},{k:'initiales',lib:'Initiales'},{k:'anonyme',lib:'Anonyme'}]);
 function vcConsentement(u){ const c=u&&u.consentementPartageCoach; return !!(c&&Number(c.date)>0); }
 // PURE. Le nom sur le visuel, selon le mode — et l'accord.
@@ -17965,7 +17966,7 @@ function _vcNomCoach(){
  * la marque du coach, « COACHÉ AVEC REPCORE ». `format` : 'story' | 'post'.
  */
 function _dessinerVictoireCoach(d,fond,format){
-  const F=VC_FORMATS[format]||VC_FORMATS.story, W=F.w, H=F.h;
+  const F=visuelFormat(format), W=F.w, H=F.h;
   const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
   const f=fond||'transparent', rouge=f==='rouge';
@@ -17989,12 +17990,12 @@ function _dessinerVictoireCoach(d,fond,format){
   if(d.nom){
     g.fillStyle='#fff';
     const ns=o.ajuste(d.nom,'700',110,BEBAS,LARG,48);
-    g.font='700 '+ns+'px '+BEBAS; o.ecrire(d.nom,cx,y+ns*0.82);
+    g.font='700 '+ns+'px '+BEBAS; o.ecrire(o.coupe(d.nom,LARG),cx,y+ns*0.82);
     y+=hNom;
   }
   g.fillStyle='rgba(255,255,255,.92)';
   const es=o.ajusteEspace(d.exo,'800',46,MONT,5,LARG,24);
-  g.font='800 '+es+'px '+MONT; o.ecrireEspace(d.exo,cx,y+es,5,true);
+  g.font='800 '+es+'px '+MONT; o.ecrireEspace(o.coupeEspace(d.exo,5,LARG),cx,y+es,5,true);
   y+=84;
   g.fillStyle='#fff'; g.font='700 '+cs+'px '+BEBAS; o.ecrire(ligne,cx,y+cs*0.82);
   y+=cs*0.9+40;
@@ -18006,7 +18007,7 @@ function _dessinerVictoireCoach(d,fond,format){
   if(d.duree){
     g.fillStyle='rgba(255,255,255,.88)';
     const ds=o.ajusteEspace(d.duree,'700',34,MONT,4,LARG,20);
-    g.font='700 '+ds+'px '+MONT; o.ecrireEspace(d.duree,cx,y+ds,4,true);
+    g.font='700 '+ds+'px '+MONT; o.ecrireEspace(o.coupeEspace(d.duree,4,LARG),cx,y+ds,4,true);
   }
   y+=70+40;
   _vcPied(g,o,y,W,marque,_vcNomCoach(),rouge);
@@ -18043,7 +18044,7 @@ function recapTeamDonnees(athletes,periode,maintenant,equipe){
     seances,records,tonnage:Math.round(tonnage),equivalent,top};
 }
 function _dessinerRecapTeam(d,fond,format){
-  const F=VC_FORMATS[format]||VC_FORMATS.story, W=F.w, H=F.h;
+  const F=visuelFormat(format), W=F.w, H=F.h;
   const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
   const f=fond||'transparent', rouge=f==='rouge';
@@ -18116,7 +18117,8 @@ function _vcDonnees(){
 }
 function _vcDessiner(fond){
   const d=_vcDonnees(); if(!d) return null;
-  return _vc.type==='victoire'?_dessinerVictoireCoach(d,fond,_vc.format):_dessinerRecapTeam(d,fond,_vc.format);
+  const fm=visuelFormatChoisi();
+  return _vc.type==='victoire'?_dessinerVictoireCoach(d,fond,fm):_dessinerRecapTeam(d,fond,fm);
 }
 function _vcNomFichier(fond){ return visuelNomFichier(_vc&&_vc.type==='recap'?'repcore-team':'repcore-victoire',fond); }
 function ouvrirVictoireCoach(cid){
@@ -18124,13 +18126,13 @@ function ouvrirVictoireCoach(cid){
   if(!u) return false;
   const v=victoiresDe(u);
   if(!v.length){ toast('Pas encore de progression de charge à partager.','var(--orange)'); return false; }
-  _vc={type:'victoire',u,victoires:v,i:0,mode:vcConsentement(u)?'prenom':'anonyme',format:'story'};
+  _vc={type:'victoire',u,victoires:v,i:0,mode:vcConsentement(u)?'prenom':'anonyme'};
   _vcOuvrir();
   return true;
 }
 function ouvrirRecapTeam(){
   if(!currentUser||currentUser.role!=='coach') return false;
-  _vc={type:'recap',periode:'semaine',format:'story'};
+  _vc={type:'recap',periode:'semaine'};
   _vcOuvrir();
   return true;
 }
@@ -18168,7 +18170,6 @@ function htmlReglagesVisuelCoach(vc){
     h+='<div class="vc-l">Période</div>'+seg('periode',vc.periode,[['semaine','7 derniers jours'],['mois','30 derniers jours']])
       +'<p class="vc-note">Les prénoms du top 3 n’apparaissent qu’avec l’accord de chacun ; sinon « un athlète ».</p>';
   }
-  h+='<div class="vc-l">Format</div>'+seg('format',vc.format,Object.keys(VC_FORMATS).map(k=>[k,VC_FORMATS[k].lib]));
   return h;
 }
 function _vcRendre(){
@@ -18204,7 +18205,7 @@ function vcReglage(nom,val){
   if(!_vc) return false;
   if(nom==='i') _vc.i=Math.max(0,Math.min(_vc.victoires.length-1,Number(val)||0));
   else if(nom==='mode'){ if(val!=='anonyme'&&!vcConsentement(_vc.u)) return false; _vc.mode=val; }
-  else if(nom==='format'&&VC_FORMATS[val]) _vc.format=val;
+  else if(nom==='format'&&VISUEL_FORMATS[val]) visuelFormatMemoriser(val);
   else if(nom==='periode'&&(val==='semaine'||val==='mois')) _vc.periode=val;
   _vcRendre();
   return true;
@@ -20027,49 +20028,54 @@ function defiCarteDonnees(u,m,res){
   return {titre:String((m&&m.titre)||(res&&res.titre)||'Le défi'),mois:defiMoisTexte(fin),
     champion:!!(res&&res.champion),valeur:v?_dfValeurTexte({mesure},v):'',signature:sig};
 }
-function _dessinerCarteDefi(d,fond){
+function _dessinerCarteDefi(d,fond,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
   const cv=document.createElement('canvas');
-  cv.width=STORY_L; cv.height=STORY_H;
+  cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
   const f=fond||'transparent';
-  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  _visuelPeindreFond(g,W,H,f);
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
-  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   const rouge=f==='rouge';
   g.textAlign='center'; g.textBaseline='alphabetic';
-  // L'éclair, derrière.
+  // L'éclair, derrière. En post, il se resserre (échelle 0,62 autour de son
+  // axe) et remonte : le texte garde le bas de l'image.
+  const K=post?0.62:1, Y=(v)=>post?Math.round(110+(v-300)*K):v, X=(v)=>post?Math.round(cx+(v-cx)*K):v;
   g.save();
-  const h=g.createRadialGradient(cx,690,40,cx,690,540);
+  const h=g.createRadialGradient(cx,Y(690),40,cx,Y(690),540*K);
   h.addColorStop(0,rouge?'rgba(255,255,255,.3)':'rgba(224,32,32,.45)'); h.addColorStop(1,'rgba(0,0,0,0)');
-  g.fillStyle=h; g.fillRect(0,200,STORY_L,1100);
+  g.fillStyle=h; g.fillRect(0,Y(200),W,Math.round(1100*K));
   g.fillStyle=rouge?'rgba(255,255,255,.92)':'#E02020';
   g.shadowColor=rouge?'rgba(255,255,255,.6)':'rgba(224,32,32,.9)'; g.shadowBlur=60;
   g.beginPath();
-  [[610,300],[410,720],[540,720],[455,1080],[715,580],[575,580],[680,300]].forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));
+  [[610,300],[410,720],[540,720],[455,1080],[715,580],[575,580],[680,300]].forEach((p,i)=>i?g.lineTo(X(p[0]),Y(p[1])):g.moveTo(X(p[0]),Y(p[1])));
   g.closePath(); g.fill();
   g.restore();
   o.ombre(true);
   g.fillStyle='#fff';
   if(d.champion){
     g.fillStyle=rouge?'#fff':'#E02020'; g.font='800 40px '+MONT;
-    o.ecrireEspace('DÉFI '+String(d.mois||''),cx,300,9,true);
+    o.ecrireEspace('DÉFI '+String(d.mois||''),cx,post?90:300,9,true);
     g.fillStyle='#fff';
-    const cs=o.ajuste('CHAMPION','700',300,BEBAS,LARG,120);
-    g.font='700 '+cs+'px '+BEBAS; o.ecrire('CHAMPION',cx,1380);
+    const cs=o.ajuste('CHAMPION','700',post?230:300,BEBAS,LARG,120);
+    g.font='700 '+cs+'px '+BEBAS; o.ecrire('CHAMPION',cx,post?930:1380);
   }else{
     const l1='J’AI RELEVÉ', l2='LE DÉFI '+String(d.mois||'');
-    const s1=o.ajuste(l1,'700',190,BEBAS,LARG,90), s2=o.ajuste(l2,'700',150,BEBAS,LARG,70);
-    g.font='700 '+s1+'px '+BEBAS; o.ecrire(l1,cx,1330);
+    const s1=o.ajuste(l1,'700',post?150:190,BEBAS,LARG,90), s2=o.ajuste(l2,'700',post?118:150,BEBAS,LARG,70);
+    const b1=post?860:1330;
+    g.font='700 '+s1+'px '+BEBAS; o.ecrire(l1,cx,b1);
     g.fillStyle=rouge?'#fff':'#ff3b3b';
-    g.font='700 '+s2+'px '+BEBAS; o.ecrire(l2,cx,1330+s2+10);
+    g.font='700 '+s2+'px '+BEBAS; o.ecrire(l2,cx,b1+s2+10);
   }
   g.fillStyle='rgba(255,255,255,.9)';
   const ts=o.ajuste('« '+d.titre+' »','700',46,MONT,LARG,26);
-  g.font='700 '+ts+'px '+MONT; o.ecrire('« '+d.titre+' »',cx,d.champion?1480:1560);
-  if(d.valeur){ g.font='800 40px '+MONT; o.ecrireEspace('⚡ '+d.valeur,cx,d.champion?1560:1640,4,true); }
-  _recSignature(g,o,String(d.signature||''),STORY_H-110,LARG);
+  const yt=post?(d.champion?1030:1080):(d.champion?1480:1560);
+  g.font='700 '+ts+'px '+MONT; o.ecrire('« '+d.titre+' »',cx,yt);
+  if(d.valeur){ g.font='800 40px '+MONT; o.ecrireEspace('⚡ '+d.valeur,cx,yt+(post?64:80),4,true); }
+  _recSignature(g,o,String(d.signature||''),H-(post?50:110),LARG);
   o.ombre(false);
   return cv;
 }
@@ -41410,8 +41416,37 @@ function visuelFondEffectif(){
 function visuelFondFormat(fond){
   return fond==='transparent'?{type:'image/png',ext:'png',q:null}:{type:'image/jpeg',ext:'jpg',q:0.9};
 }
-/** PURE. repcore-bilan.png ou repcore-bilan.jpg. */
-function visuelNomFichier(base,fond){ return base+'.'+visuelFondFormat(fond).ext; }
+// ══ LES FORMATS : STORY 9:16, POST 4:5 (27/09/2026) ═════════════════════
+// UN SEUL RÉGLAGE POUR TOUS LES VISUELS. L'avant/après (AA_FORMATS) et le
+// visuel du coach (VC_FORMATS) avaient chacun le leur ; les autres ne
+// savaient faire que la story, et un post Instagram recadrait la moitié du
+// visuel. Chaque dessin prend désormais un `format` et RECALCULE sa mise en
+// page pour sa hauteur ; sans `format`, c'est le dernier choisi sur cet
+// appareil (visuelFormatChoisi).
+const VISUEL_FORMATS=Object.freeze({
+  story:Object.freeze({w:1080,h:1920,lib:'Story',ratio:'9:16'}),
+  post:Object.freeze({w:1080,h:1350,lib:'Post',ratio:'4:5'})
+});
+const VISUEL_FORMAT_CLE='rc_visuel_format';
+/** Le dernier format choisi sur cet appareil ; 'story' par défaut. */
+function visuelFormatChoisi(){
+  let f=null;
+  try{ f=localStorage.getItem(VISUEL_FORMAT_CLE); }catch(e){ f=null; }
+  return VISUEL_FORMATS[f]?f:'story';
+}
+function visuelFormatMemoriser(f){
+  if(!VISUEL_FORMATS[f]) return false;
+  try{ localStorage.setItem(VISUEL_FORMAT_CLE,f); return true; }catch(e){ return false; }
+}
+/** PURE (sauf le défaut). {cle,w,h,lib,ratio} du format demandé, sinon du dernier choisi. */
+function visuelFormat(format){
+  const k=VISUEL_FORMATS[format]?format:visuelFormatChoisi();
+  return Object.assign({cle:k},VISUEL_FORMATS[k]);
+}
+/** repcore-bilan.png, repcore-bilan.jpg, repcore-bilan-post.jpg. */
+function visuelNomFichier(base,fond,format){
+  return base+(visuelFormat(format).cle==='post'?'-post':'')+'.'+visuelFondFormat(fond).ext;
+}
 /**
  * Peint le fond sur tout le canevas, AVANT le reste du visuel.
  * @param {CanvasRenderingContext2D} g @param {number} W @param {number} H
@@ -41467,10 +41502,34 @@ function _visuelPeindreFond(g,W,H,fond){
   }
   return false;                                   // transparent : rien
 }
-/** Le sélecteur : trois vignettes cliquables, et l'<input> de la photo. */
+/**
+ * Le choix « Story / Post », posé À CÔTÉ du sélecteur de fond : chaque visuel
+ * qui a le second a le premier. `id` : celui du sélecteur de fond voisin.
+ */
+function _htmlVisuelFormats(id){
+  const k0=visuelFormatChoisi();
+  return '<div class="vfmt" role="radiogroup" aria-label="Format de l’image" data-pour="'+id+'">'
+    +Object.keys(VISUEL_FORMATS).map(k=>'<button type="button" class="vfmt-b'+(k===k0?' actif':'')+'" role="radio" aria-checked="'+(k===k0)+'"'
+      +' data-format="'+k+'" onclick="visuelFormatChoisir(\''+id+'\',\''+k+'\')">'
+      +VISUEL_FORMATS[k].lib+'<small>'+VISUEL_FORMATS[k].ratio+'</small></button>').join('')
+    +'</div>';
+}
+/** Un clic sur « Story » ou « Post » : retenu, et tous les sélecteurs à l'écran repeints. */
+function visuelFormatChoisir(id,k){
+  if(!VISUEL_FORMATS[k]) return false;
+  visuelFormatMemoriser(k);
+  document.querySelectorAll('.vfmt .vfmt-b').forEach(b=>{
+    const on=b.getAttribute('data-format')===k;
+    b.classList.toggle('actif',on); b.setAttribute('aria-checked',String(on));
+  });
+  for(const x of [..._visuelFondsMontes.keys()]) _visuelFondsPeindre(x);
+  return true;
+}
+/** Le sélecteur : le format, trois vignettes cliquables, et l'<input> de la photo. */
 function _htmlVisuelFonds(id){
   const f=visuelFondEffectif();
-  return '<div class="vf" id="'+id+'" role="radiogroup" aria-label="Fond du visuel">'
+  return _htmlVisuelFormats(id)
+    +'<div class="vf" id="'+id+'" role="radiogroup" aria-label="Fond du visuel">'
     +VISUEL_FOND.LISTE.map(k=>'<button type="button" class="vf-b'+(k===f?' actif':'')+'" role="radio" aria-checked="'+(k===f)+'" data-fond="'+k+'"'
       // Un libellé d'une ligne pour les trois : « changer » se dit au survol.
       +(k==='photo'?' title="Touche à nouveau pour changer de photo"':'')
@@ -41514,8 +41573,12 @@ function _visuelFondsPeindre(id){
   // LES VIGNETTES SE DESSINENT APRÈS LA PEINTURE, une par tâche : trois
   // visuels complets d'affilée bloqueraient l'écran de fin de séance.
   const cvs=[...z.querySelectorAll('.vf-b')];
+  // LA VIGNETTE PREND LA FORME DU FORMAT : 9:16 ou 4:5.
+  const fmt=visuelFormat();
   cvs.forEach((b,i)=>setTimeout(()=>{
     const c=b.querySelector('canvas'); if(!c||!c.isConnected) return;
+    const vh=Math.round(VISUEL_FOND.VL*fmt.h/fmt.w);
+    if(c.height!==vh){ c.height=vh; c.style.aspectRatio=fmt.w+'/'+fmt.h; }
     const k=b.getAttribute('data-fond'), x=c.getContext('2d'); if(!x) return;
     x.clearRect(0,0,c.width,c.height);
     if(k==='transparent'){
@@ -41568,15 +41631,19 @@ function visuelFondPhoto(id,input){
   return true;
 }
 // `fond` (FACULTATIF) : 'transparent' (défaut, le PNG d'avant), 'photo' ou 'rouge'.
-function _dessinerBilanSeance(d,fond){
+// `format` (FACULTATIF) : 'story' (1080×1920) ou 'post' (1080×1350) ; sans
+// lui, le dernier choisi. En post, la liste garde ce qui TIENT, et le reste
+// passe dans « +N autres » : on ne rétrécit pas les lignes jusqu'à l'illisible.
+function _dessinerBilanSeance(d,fond,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
   const cv=document.createElement('canvas');
-  cv.width=STORY_L; cv.height=STORY_H;
+  cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
-  _visuelPeindreFond(g,STORY_L,STORY_H,fond||'transparent');
+  _visuelPeindreFond(g,W,H,fond||'transparent');
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
   const M=72;                                   // la marge laterale
-  const LARG=STORY_L-M*2;
+  const LARG=W-M*2;
 
   // ── L'OMBRE PORTEE, ET POURQUOI ELLE EST OBLIGATOIRE ─────────────────
   // Du blanc pur sur une photo de salle passe encore ; sur un mur clair, un
@@ -41620,26 +41687,34 @@ function _dessinerBilanSeance(d,fond){
   // laissait un rectangle noir vide, il fallait donc ancrer en haut. Ici le
   // creux est TRANSPARENT — il n'existe pas. Centrer donne une image qu'on
   // pose au milieu d'une story sans avoir a la deplacer.
-  const n=d.ex.length;
-  const LH=n<=6?86:(n<=9?76:66);                // l'interligne suit la liste
   const marque=_marqueCoachPrete();
-  const H_TITRE=154, H_DATE=56, H_REC=d.records>0?58:0;
-  const H_LISTE=34+n*LH+(d.autres?46:0);
+  const eq=(d.equivalent&&d.equivalent.texte)?d.equivalent:null;
+  const H_TITRE=post?128:154, H_DATE=56, H_REC=d.records>0?58:0;
+  const H_STATS=150+(eq?84:0);
+  const H_MARQUE=marque?(post?150:188):96;
+  const MARGE=post?64:150;
+  // CE QUI TIENT : la place entre les marges, moins tout le reste (et la ligne
+  // « +N autres »). Au-delà, les exercices du bas passent dans cette ligne.
+  let ex=d.ex, autres=Math.max(0,d.autres|0);
+  let LH=ex.length<=6?86:(ex.length<=9?76:66);   // l'interligne suit la liste
+  if(post) LH=Math.min(LH,66);
+  const place=H-2*MARGE-(H_TITRE+H_DATE+H_REC+34+H_STATS+H_MARQUE);
+  const tient=Math.max(1,Math.floor((place-46)/LH));
+  if(ex.length>tient){ autres+=ex.length-tient; ex=ex.slice(0,tient); }
+  const n=ex.length;
+  const H_LISTE=34+n*LH+(autres?46:0);
   // L'ÉQUIVALENT FUN, EN OPTION (case « Ajouter l'équivalent fun », décochée
   // par défaut) : une ligne de plus sous les quatre chiffres. Absent, la mise
   // en page est exactement celle d'avant.
-  const eq=(d.equivalent&&d.equivalent.texte)?d.equivalent:null;
-  const H_STATS=150+(eq?84:0);
-  const H_MARQUE=marque?188:96;
   const HTOT=H_TITRE+H_DATE+H_REC+H_LISTE+H_STATS+H_MARQUE;
-  let y=Math.max(150,Math.round((STORY_H-HTOT)/2));
+  let y=Math.max(MARGE,Math.round((H-HTOT)/2));
 
   ombre(true);
   g.textAlign='left'; g.textBaseline='alphabetic';
 
   // ── LE TITRE ─────────────────────────────────────────────────────────
   g.fillStyle='#ffffff';
-  const ts=ajuste(d.titre,'700',118,BEBAS,LARG,52);
+  const ts=ajuste(d.titre,'700',post?100:118,BEBAS,LARG,52);
   g.font='700 '+ts+'px '+BEBAS;
   ecrire(d.titre,M,y+ts*0.82);
   y+=H_TITRE;
@@ -41657,10 +41732,10 @@ function _dessinerBilanSeance(d,fond){
   // ── LA LISTE ─────────────────────────────────────────────────────────
   ombre(false);
   g.strokeStyle='rgba(255,255,255,.55)'; g.lineWidth=2;
-  g.beginPath(); g.moveTo(M,y-6); g.lineTo(STORY_L-M,y-6); g.stroke();
+  g.beginPath(); g.moveTo(M,y-6); g.lineTo(W-M,y-6); g.stroke();
   ombre(true);
   y+=34;
-  d.ex.forEach((e,i)=>{
+  ex.forEach((e,i)=>{
     const yy=y+i*LH;
     // LA CHARGE LA PLUS LOURDE DES SERIES, a droite, en blanc plein : c'est le
     // chiffre qu'on cherche des yeux. Le compte de series le precede, atténué.
@@ -41674,7 +41749,7 @@ function _dessinerBilanSeance(d,fond){
     const gauche=e.series+' × '+(rep||'-');
     const droite=(e.kg!=null)?(String(e.kg).replace('.',',')+' KG'):'';
     g.textAlign='right';
-    let dx=STORY_L-M;
+    let dx=W-M;
     if(droite){
       g.fillStyle='#ffffff'; g.font='700 40px '+BEBAS;
       ecrire(droite,dx,yy);
@@ -41696,9 +41771,9 @@ function _dessinerBilanSeance(d,fond){
     else ecrire(e.nom,M,yy);
   });
   y+=n*LH;
-  if(d.autres){
+  if(autres){
     g.fillStyle='rgba(255,255,255,.55)'; g.font='700 30px '+BEBAS;
-    g.fillText('+ '+d.autres+' AUTRE'+(d.autres>1?'S':''),M,y+8);
+    g.fillText('+ '+autres+' AUTRE'+(autres>1?'S':''),M,y+8);
     y+=46;
   }
 
@@ -41707,7 +41782,7 @@ function _dessinerBilanSeance(d,fond){
   // un cadre est un fond, et il n'y a plus de fond.
   ombre(false);
   g.strokeStyle='rgba(255,255,255,.55)'; g.lineWidth=2;
-  g.beginPath(); g.moveTo(M,y+14); g.lineTo(STORY_L-M,y+14); g.stroke();
+  g.beginPath(); g.moveTo(M,y+14); g.lineTo(W-M,y+14); g.stroke();
   ombre(true);
   const chiffres=[
     {v:(d.volume>=10000?bilanVolumeLib(d.volume).toUpperCase()
@@ -41731,7 +41806,7 @@ function _dessinerBilanSeance(d,fond){
     g.textAlign='center'; g.fillStyle='#ffffff';
     const es=ajuste(t,'800',34,MONT,LARG,20);
     g.font='800 '+es+'px '+MONT;
-    ecrire(t,STORY_L/2,y+192);
+    ecrire(t,W/2,y+192);
   }
   g.textAlign='left';
   y+=H_STATS;
@@ -41746,9 +41821,9 @@ function _dessinerBilanSeance(d,fond){
   // l'image precedente et il n'a pas change de raison : ce qui sort de l'app
   // circule sur Instagram, et une image qui ne dit pas d'ou elle vient ne fait
   // connaitre personne. En blanc a 30 %, il ne dispute rien au logo du coach.
-  const cxm=STORY_L/2;
+  const cxm=W/2;
   if(marque){
-    const MH=140, MW=LARG*0.62;
+    const MH=post?104:140, MW=LARG*0.62;
     const r=Math.min(MW/marque.naturalWidth,MH/marque.naturalHeight);
     const w=Math.round(marque.naturalWidth*r), h=Math.round(marque.naturalHeight*r);
     ombre(true);
@@ -41826,7 +41901,24 @@ function _visuelOutils(g){
     while(larg()>max&&s>(mini||18)) s-=1;
     return s;
   };
-  return {ombre,ecrire,ecrireEspace,ajuste,ajusteEspace};
+  // AU-DELÀ DU PLANCHER DE TAILLE, ON COUPE : un nom de 70 caractères ne tient
+  // pas à 24 px, et un texte qui sort de l'image se lit moins bien qu'un « … ».
+  // `coupe` pour le texte d'un seul tenant, `coupeEspace` pour l'espacé, à la
+  // police déjà posée.
+  const coupe=(t,max)=>{
+    let v=String(t);
+    if(g.measureText(v).width<=max) return v;
+    while(v.length>1&&g.measureText(v+'…').width>max) v=v.slice(0,-1);
+    return v.replace(/\s+$/,'')+'…';
+  };
+  const largEspace=(t,esp)=>String(t).split('').reduce((a,c)=>a+g.measureText(c).width+esp,0)-esp;
+  const coupeEspace=(t,esp,max)=>{
+    let v=String(t);
+    if(largEspace(v,esp)<=max) return v;
+    while(v.length>1&&largEspace(v+'…',esp)>max) v=v.slice(0,-1);
+    return v.replace(/\s+$/,'')+'…';
+  };
+  return {ombre,ecrire,ecrireEspace,ajuste,ajusteEspace,coupe,coupeEspace};
 }
 // PURE. « 102,5 » : la virgule française, sans zéro inutile.
 function _recKg(v){
@@ -41892,7 +41984,7 @@ function _recEclairFiligrane(g,x1,y1,x2,y2,graine,fond){
 // mot-symbole seul quand l'athlète a choisi de ne rien montrer.
 function _recSignature(g,o,sig,y,LARG){
   const B=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
-  const cx=STORY_L/2;
+  const cx=g.canvas.width/2;
   o.ombre(true);
   if(sig){
     const t=sig+' · REPCORE', esp=7;
@@ -41909,15 +42001,16 @@ function _recSignature(g,o,sig,y,LARG){
  * @param {{nm:string,histMax:number,curMax:number,gain:number,date?:number,signature?:string}} record
  * @param {'transparent'|'photo'|'rouge'} [fond]
  */
-function _dessinerCarteRecord(record,fond){
+function _dessinerCarteRecord(record,fond,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
   const cv=document.createElement('canvas');
-  cv.width=STORY_L; cv.height=STORY_H;
+  cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
   const f=fond||'transparent';
-  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  _visuelPeindreFond(g,W,H,f);
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
-  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   const r=record||{};
   const nom=String(r.nm||'').toUpperCase();
@@ -41930,7 +42023,7 @@ function _dessinerCarteRecord(record,fond){
   // d'une story sans avoir à la déplacer.
   const H_TAG=70, H_NOM=128, H_ANC=anc?86:0, H_CHIFFRE=300, H_GAIN=gainTxt?96:0, H_DATE=60;
   const HTOT=H_TAG+H_NOM+H_ANC+H_CHIFFRE+H_GAIN+H_DATE;
-  let y=Math.max(180,Math.round((STORY_H-HTOT)/2)-40);
+  let y=Math.max(post?110:180,Math.round((H-HTOT)/2)-(post?30:40));
   g.textBaseline='alphabetic';
 
   // « NOUVEAU RECORD »
@@ -41948,7 +42041,7 @@ function _dessinerCarteRecord(record,fond){
   g.fillStyle='rgba(255,255,255,.96)';
   const ns=o.ajuste(nom,'700',104,BEBAS,LARG,44);
   g.font='700 '+ns+'px '+BEBAS;
-  o.ecrire(nom,cx,y+ns*0.86);
+  o.ecrire(o.coupe(nom,LARG),cx,y+ns*0.86);
   y+=H_NOM;
 
   // L'ancienne valeur, petite et barrée : on la lit, on sait qu'elle est dépassée.
@@ -42002,7 +42095,7 @@ function _dessinerCarteRecord(record,fond){
 
   // LA SIGNATURE, EN BAS DE L'IMAGE et non sous le bloc : c'est une marque,
   // elle a sa place fixe, là où l'œil la cherche.
-  _recSignature(g,o,String(r.signature||''),STORY_H-150,LARG);
+  _recSignature(g,o,String(r.signature||''),H-(post?80:150),LARG);
   o.ombre(false);
   return cv;
 }
@@ -42012,21 +42105,24 @@ function _dessinerCarteRecord(record,fond){
  * @param {{records:Array<{nm:string,histMax:number,curMax:number,gain:number}>,date?:number,signature?:string}} d
  * @param {'transparent'|'photo'|'rouge'} [fond]
  */
-function _dessinerCarteRecords(d,fond){
+function _dessinerCarteRecords(d,fond,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
   const cv=document.createElement('canvas');
-  cv.width=STORY_L; cv.height=STORY_H;
+  cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
   const f=fond||'transparent';
-  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  _visuelPeindreFond(g,W,H,f);
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
-  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   const l=((d&&d.records)||[]).filter(r=>r&&r.nm&&r.curMax>0);
   const n=l.length;
-  const LH=n<=3?196:170;
-  const H_TITRE=250, H_DATE=70, H_LISTE=n*LH;
-  let y=Math.max(180,Math.round((STORY_H-(H_TITRE+H_DATE+H_LISTE))/2)-40);
+  // En post, le titre et les lignes se resserrent : quatre records tiennent
+  // entre le haut et la signature.
+  const LH=post?(n<=3?170:152):(n<=3?196:170);
+  const H_TITRE=post?214:250, H_DATE=post?58:70, H_LISTE=n*LH;
+  let y=Math.max(post?70:180,Math.round((H-(H_TITRE+H_DATE+H_LISTE))/2)-(post?20:40));
   g.textBaseline='alphabetic';
 
   // LE TITRE, l'éclair derrière lui cette fois : c'est lui le chiffre à lire.
@@ -42035,11 +42131,11 @@ function _dessinerCarteRecords(d,fond){
   o.ombre(true); g.textAlign='center'; g.fillStyle='#ffffff';
   const [chiffre,...reste]=titre.split(' ');
   // Le nombre en très gros, le mot en dessous : « 3 » se lit d'abord.
-  g.font='700 210px '+BEBAS;
-  o.ecrire(chiffre,cx,y+170);
+  g.font='700 '+(post?180:210)+'px '+BEBAS;
+  o.ecrire(chiffre,cx,y+(post?146:170));
   const ts=o.ajusteEspace(reste.join(' '),'800',40,MONT,9,LARG,24);
   g.font='800 '+ts+'px '+MONT;
-  o.ecrireEspace(reste.join(' '),cx,y+226,9,true);
+  o.ecrireEspace(reste.join(' '),cx,y+(post?196:226),9,true);
   y+=H_TITRE;
   g.fillStyle='rgba(255,255,255,.82)'; g.font='700 30px '+MONT;
   o.ecrireEspace(_recDate(d&&d.date),cx,y+30,4,true);
@@ -42051,7 +42147,7 @@ function _dessinerCarteRecords(d,fond){
     const yy=y+i*LH;
     o.ombre(false);
     g.strokeStyle='rgba(255,255,255,.4)'; g.lineWidth=2;
-    g.beginPath(); g.moveTo(M,yy); g.lineTo(STORY_L-M,yy); g.stroke();
+    g.beginPath(); g.moveTo(M,yy); g.lineTo(W-M,yy); g.stroke();
     o.ombre(true);
     g.textAlign='left'; g.fillStyle='rgba(255,255,255,.96)';
     const nom=String(r.nm).toUpperCase();
@@ -42061,8 +42157,8 @@ function _dessinerCarteRecords(d,fond){
     // La valeur, à droite : ancienne barrée, puis la nouvelle.
     const nouv=_recKg(r.curMax)+' KG';
     g.textAlign='right'; g.fillStyle='#ffffff'; g.font='700 96px '+BEBAS;
-    o.ecrire(nouv,STORY_L-M,yy+160);
-    let dx=STORY_L-M-g.measureText(nouv).width-28;
+    o.ecrire(nouv,W-M,yy+160);
+    let dx=W-M-g.measureText(nouv).width-28;
     if(Number(r.histMax)>0){
       const a=_recKg(r.histMax);
       g.fillStyle='rgba(255,255,255,.6)'; g.font='700 48px '+BEBAS;
@@ -42078,7 +42174,7 @@ function _dessinerCarteRecords(d,fond){
     g.textAlign='left'; g.fillStyle='rgba(255,255,255,.9)'; g.font='800 32px '+MONT;
     o.ecrireEspace('+'+_recKg(r.gain)+' KG'+(pct?(' · +'+pct+' %'):''),M,yy+150,2);
   });
-  _recSignature(g,o,String((d&&d.signature)||''),STORY_H-150,LARG);
+  _recSignature(g,o,String((d&&d.signature)||''),H-(post?64:150),LARG);
   o.ombre(false);
   return cv;
 }
@@ -71141,18 +71237,19 @@ function ouvrirFicheBadge(id){
 //
 // ⚠ UN SECRET RÉVÈLE SON INDICE, JAMAIS SA CONDITION. La story est vue par
 // des gens qui ne l'ont pas : leur donner la recette tuerait le secret.
-function _dessinerCarteBadge(b,at,img,fond,signature,rarete){
+function _dessinerCarteBadge(b,at,img,fond,signature,rarete,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
   const cv=document.createElement('canvas');
-  cv.width=STORY_L; cv.height=STORY_H;
+  cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
   const f=fond||'transparent';
-  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  _visuelPeindreFond(g,W,H,f);
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
-  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   const secret=b&&b.famille==='secret';
-  let y=250;
+  let y=post?100:250;
   g.textBaseline='alphabetic'; g.textAlign='center';
   o.ombre(true); g.fillStyle='#ffffff'; g.font='800 34px '+MONT;
   const sur=secret?'BADGE SECRET DÉCOUVERT':'BADGE DÉBLOQUÉ';
@@ -71164,7 +71261,7 @@ function _dessinerCarteBadge(b,at,img,fond,signature,rarete){
   g.fillRect(cx-44,y+20,88,5);
   y+=60;
   // LE MÉDAILLON GÉANT, 780 px, sans ombre de texte : il porte sa lueur.
-  const T=780;
+  const T=post?560:780;
   if(img&&img.complete&&img.naturalWidth){
     const r=Math.min(T/img.naturalWidth,T/img.naturalHeight);
     const w=img.naturalWidth*r, h=img.naturalHeight*r;
@@ -71174,7 +71271,7 @@ function _dessinerCarteBadge(b,at,img,fond,signature,rarete){
   o.ombre(true); g.fillStyle='#ffffff';
   // Le nom SANS son chiffre romain : le palier a sa propre ligne.
   const nom=(b.palier?b.nom.replace(/ [IV]+$/,''):b.nom);
-  const ns=o.ajuste(nom,'700',140,BEBAS,LARG,60);
+  const ns=o.ajuste(nom,'700',post?118:140,BEBAS,LARG,60);
   g.font='700 '+ns+'px '+BEBAS;
   o.ecrire(nom,cx,y+ns*0.8);
   y+=ns+10;
@@ -71201,7 +71298,7 @@ function _dessinerCarteBadge(b,at,img,fond,signature,rarete){
   }
   g.fillStyle='rgba(255,255,255,.82)'; g.font='700 30px '+MONT;
   o.ecrireEspace(_bdgDate(at),cx,y+30,4,true);
-  _recSignature(g,o,String(signature||''),STORY_H-120,LARG);
+  _recSignature(g,o,String(signature||''),H-(post?50:120),LARG);
   o.ombre(false);
   return cv;
 }
@@ -71470,71 +71567,79 @@ function wrappedSlides(w,per){
 // Fond noir, accents rouges, un éclair en filigrane : l'identité de l'écran.
 // `i` : 0..4 — la slide 4 est le RÉSUMÉ, la carte qu'on publie. Mêmes outils
 // d'écriture que les autres visuels (ombre double passe, Bebas, Montserrat).
-function _dessinerWrapped(w,per,i,signature){
+function _dessinerWrapped(w,per,i,signature,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
   const cv=document.createElement('canvas');
-  cv.width=STORY_L; cv.height=STORY_H;
+  cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
-  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   const s=wrappedSlides(w,per)[Math.max(0,Math.min(4,i|0))];
-  g.fillStyle='#000'; g.fillRect(0,0,STORY_L,STORY_H);
+  g.fillStyle='#000'; g.fillRect(0,0,W,H);
   // Les accents : une lueur rouge en haut, un trait rouge en bas.
-  const lu=g.createRadialGradient(cx,0,0,cx,0,STORY_H*0.6);
+  const lu=g.createRadialGradient(cx,0,0,cx,0,H*0.6);
   lu.addColorStop(0,'rgba(224,32,32,.35)'); lu.addColorStop(1,'rgba(224,32,32,0)');
-  g.fillStyle=lu; g.fillRect(0,0,STORY_L,STORY_H);
-  _recEclairFiligrane(g,cx+260,120,cx-200,STORY_H*0.62,_recGraine(per.cle+'|'+i),'transparent');
+  g.fillStyle=lu; g.fillRect(0,0,W,H);
+  _recEclairFiligrane(g,cx+260,post?60:120,cx-200,H*(post?0.66:0.62),_recGraine(per.cle+'|'+i),'transparent');
   g.textAlign='center'; g.textBaseline='alphabetic';
   o.ombre(true);
   g.fillStyle='#E02020'; g.font='800 36px '+MONT;
   const ss=o.ajusteEspace(s.sur,'800',36,MONT,8,LARG,22);
   g.font='800 '+ss+'px '+MONT;
-  o.ecrireEspace(s.sur,cx,300,8,true);
+  // En post, chaque bloc remonte : mêmes éléments, sur 1 350 px.
+  const P=(st,po)=>post?po:st;
+  o.ecrireEspace(s.sur,cx,P(300,110),8,true);
   if(s.k!=='profil'){
     const v=_wrNb(s.grand,s.dec);
     g.fillStyle='#fff';
-    const gs=o.ajuste(v,'700',380,BEBAS,LARG,140);
+    const gs=o.ajuste(v,'700',P(380,300),BEBAS,LARG,140);
     g.font='700 '+gs+'px '+BEBAS;
-    o.ecrire(v,cx,860);
-    g.font='800 52px '+MONT;
-    o.ecrireEspace(s.unite,cx,960,8,true);
+    o.ecrire(v,cx,P(860,560));
+    const us=o.ajusteEspace(s.unite,'800',52,MONT,8,LARG,26);
+    g.font='800 '+us+'px '+MONT;
+    o.ecrireEspace(s.unite,cx,P(960,650),8,true);
     g.fillStyle='rgba(255,255,255,.9)';
     s.lignes.forEach((l,k)=>{
       const ls=o.ajuste(l,'700',44,MONT,LARG,24);
       g.font='700 '+ls+'px '+MONT;
-      o.ecrire(l,cx,1120+k*80);
+      o.ecrire(o.coupe(l,LARG),cx,P(1120,800)+k*P(80,72));
     });
   } else {
     const p=s.profil||{nom:'-',phrase:''};
     g.fillStyle='#fff';
-    const ps=o.ajuste(p.nom.toUpperCase(),'700',170,BEBAS,LARG,70);
+    const ps=o.ajuste(p.nom.toUpperCase(),'700',P(170,140),BEBAS,LARG,70);
     g.font='700 '+ps+'px '+BEBAS;
-    o.ecrire(p.nom.toUpperCase(),cx,560);
+    o.ecrire(p.nom.toUpperCase(),cx,P(560,270));
     // La phrase, sur deux lignes au plus.
     g.fillStyle='rgba(255,255,255,.88)'; g.font='600 38px '+MONT;
     const mots=String(p.phrase).split(' '); const lignes=[]; let l='';
     for(const m of mots){ const e=l?l+' '+m:m; if(g.measureText(e).width>LARG&&l){ lignes.push(l); l=m; } else l=e; }
     if(l) lignes.push(l);
-    lignes.slice(0,3).forEach((x,k)=>o.ecrire(x,cx,660+k*54));
+    lignes.slice(0,3).forEach((x,k)=>o.ecrire(x,cx,P(660,350)+k*54));
     // Le résumé : quatre chiffres en grille 2×2.
     s.resume.forEach(([v,lib],k)=>{
-      const x=M+LARG/4+(k%2)*LARG/2, y=1000+Math.floor(k/2)*260;
-      g.fillStyle='#fff'; g.font='700 150px '+BEBAS; o.ecrire(v,x,y);
+      const x=M+LARG/4+(k%2)*LARG/2, y=P(1000,640)+Math.floor(k/2)*P(260,215);
+      g.fillStyle='#fff';
+      const vs=o.ajuste(v,'700',P(150,124),BEBAS,LARG/2-24,60);
+      g.font='700 '+vs+'px '+BEBAS; o.ecrire(v,x,y);
       g.fillStyle='#E02020'; g.font='800 32px '+MONT; o.ecrireEspace(lib.toUpperCase(),x,y+56,4,true);
     });
     if(s.equivalent){
       const t='= '+s.equivalent.texte.toUpperCase()+' '+s.equivalent.emoji;
       g.fillStyle='#fff';
       const es=o.ajuste(t,'800',44,MONT,LARG,22);
-      g.font='800 '+es+'px '+MONT; o.ecrire(t,cx,1530);
+      g.font='800 '+es+'px '+MONT; o.ecrire(t,cx,P(1530,1030));
     }
-    g.fillStyle='rgba(255,255,255,.7)'; g.font='800 30px '+MONT;
-    o.ecrireEspace(per.titre,cx,1620,6,true);
+    g.fillStyle='rgba(255,255,255,.7)';
+    const pts=o.ajusteEspace(per.titre,'800',30,MONT,6,LARG,18);
+    g.font='800 '+pts+'px '+MONT;
+    o.ecrireEspace(per.titre,cx,P(1620,1110),6,true);
   }
   o.ombre(false);
-  g.fillStyle='#E02020'; g.fillRect(cx-60,STORY_H-210,120,5);
-  _recSignature(g,o,String(signature||''),STORY_H-120,LARG);
+  g.fillStyle='#E02020'; g.fillRect(cx-60,H-(post?120:210),120,5);
+  _recSignature(g,o,String(signature||''),H-(post?50:120),LARG);
   o.ombre(false);
   return cv;
 }
@@ -71585,6 +71690,8 @@ function _wrHtmlSlide(s,k){
       +(s.equivalent?'<p class="wr-equiv">= '+escapeHtml(s.equivalent.texte)+' '+s.equivalent.emoji+'</p>':'')
       +'<button type="button" class="btn btn-red wr-partager" onclick="event.stopPropagation();partagerWrapped(4,this)">'
         +icon('share',16)+' <span>Partager mon résumé</span></button>'
+      +'<button type="button" class="btn btn-outline wr-partager wr-carrousel" onclick="event.stopPropagation();partagerCarrouselWrapped(this)">'
+        +icon('share',16)+' <span>Carrousel pour mon fil</span></button>'
       +'</section>';
   }
   return '<section class="wr-slide" data-k="'+k+'" hidden>'
@@ -71647,21 +71754,80 @@ function fermerWrapped(){
 }
 // LE PARTAGE d'une slide (0..3) ou du résumé (4). Natif, sinon téléchargement ;
 // les deux copient le lien perso. SYNCHRONE jusqu'au partage (iOS).
+// Une slide, c'est une STORY (l'écran entier, 9:16) : le carrousel du fil, en
+// 4:5, a son propre bouton (partagerCarrouselWrapped).
 function partagerWrapped(i,btn){
   if(!_wr||_storyEnCours) return false;
   let sig=''; try{ sig=nomSurVisuels(currentUser); }catch(e){ sig=''; }
   const fmt=visuelFondFormat('rouge');           // opaque : JPEG
-  const nom='repcore-wrapped'+(i===4?'':'-'+(i+1))+'.'+fmt.ext;
+  const nom=visuelNomFichier('repcore-wrapped'+(i===4?'':'-'+(i+1)),'rouge','story');
   _storyEnCours=true;
   let ok=false;
   try{
-    ok=_storySortirPartage(_dessinerWrapped(_wr.w,_wr.per,i,sig),nom,undefined,fmt)
-      ||_storySortirTelechargement(_dessinerWrapped(_wr.w,_wr.per,i,sig),nom,fmt);
+    ok=_storySortirPartage(_dessinerWrapped(_wr.w,_wr.per,i,sig,'story'),nom,undefined,fmt)
+      ||_storySortirTelechargement(_dessinerWrapped(_wr.w,_wr.per,i,sig,'story'),nom,fmt);
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
   if(sp&&ok){ const l=sp.textContent; sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
   return ok;
+}
+
+// ══ LE CARROUSEL POUR LE FIL : les cinq slides en 4:5, en une fois ═════
+// Instagram publie un carrousel de dix images au plus, en 4:5 pour occuper
+// l'écran. Les cinq slides sont redessinées en post (pas recadrées), puis
+// partagées D'UN SEUL GESTE quand le téléphone sait partager plusieurs
+// fichiers ; sinon, elles s'affichent l'une sous l'autre, chacune avec son
+// bouton, et se gardent une par une. SYNCHRONE jusqu'au partage (iOS).
+// PURE. Les noms, dans l'ordre du carrousel.
+function wrappedNomsCarrousel(){
+  return [0,1,2,3,4].map(i=>visuelNomFichier('repcore-wrapped-'+(i+1),'rouge','post'));
+}
+function partagerCarrouselWrapped(btn){
+  if(!_wr||_storyEnCours) return false;
+  let sig=''; try{ sig=nomSurVisuels(currentUser); }catch(e){ sig=''; }
+  const noms=wrappedNomsCarrousel();
+  _storyEnCours=true;
+  let ok=false, urls=[];
+  try{
+    urls=noms.map((n,i)=>{ const cv=_dessinerWrapped(_wr.w,_wr.per,i,sig,'post');
+      const u=cv.toDataURL('image/jpeg',0.9); cv.width=0; cv.height=0; return u; });
+    let fichiers=null;
+    try{ fichiers=urls.map((u,i)=>new File([_b64versBlob(u)],noms[i],{type:'image/jpeg'})); }catch(e){ fichiers=null; }
+    _storyCopierLien('wrapped');
+    if(fichiers&&navigator.canShare&&navigator.share&&navigator.canShare({files:fichiers})){
+      navigator.share({files:fichiers}).then(()=>{ try{ attribCompter('partage','wrapped'); }catch(e){} }).catch(()=>{});
+      ok=true;
+    } else {
+      _wrCarrouselUnParUn(urls,noms);
+      ok=true;
+    }
+    try{ attribCompter('telechargement','wrapped'); }catch(e){}
+  }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
+  finally{ _storyEnCours=false; }
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp&&ok){ const l=sp.textContent; sp.textContent='Carrousel prêt ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  return ok;
+}
+// Le repli : les cinq images, chacune avec son lien « Enregistrer ». Chaque
+// toucher est un geste : aucun navigateur ne bloque un téléchargement par
+// geste, alors qu'il en bloque cinq d'affilée. Sur iPhone, l'appui long.
+function _wrCarrouselUnParUn(urls,noms){
+  document.getElementById('story-apercu')?.remove();
+  const d=document.createElement('div');
+  d.id='story-apercu';
+  d.style.cssText='position:fixed;inset:0;z-index:var(--z-modal);background:var(--scrim);overflow-y:auto;'
+    +'display:flex;flex-direction:column;align-items:center;gap:14px;padding:20px';
+  d.innerHTML='<div style="font-size:var(--fs-sm);color:var(--text-strong);text-align:center;line-height:1.6;max-width:320px">'
+    +'Garde les cinq images dans l’ordre, puis publie-les en <b>carrousel</b>. '
+    +'Sur iPhone : appui <b>long</b> sur chaque image, puis <b>Ajouter aux photos</b>.</div>'
+    +urls.map((u,i)=>'<figure style="margin:0;display:flex;flex-direction:column;align-items:center;gap:8px">'
+      +'<img src="'+u+'" alt="Slide '+(i+1)+' sur 5" style="width:min(300px,80vw);aspect-ratio:4/5;border-radius:var(--r-3);box-shadow:var(--e4)">'
+      +'<a href="'+u+'" download="'+escapeHtml(noms[i])+'" type="image/jpeg" class="btn btn-outline btn-sm" style="width:auto;padding:8px 20px">'
+      +'Enregistrer '+(i+1)+'/5</a></figure>').join('')
+    +'<button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:8px 20px" onclick="fermerApercuStory()">Fermer</button>';
+  document.body.appendChild(d);
+  return true;
 }
 
 // ── LA CARTE DE L'ACCUEIL ET LA NOTIFICATION ──────────────────────────
@@ -72062,32 +72228,35 @@ function _muscCarteDe(id,fond){
  * silhouette face + dos, le titre, trois chiffres, la signature. `res` est
  * chargé (chargerSilhouettes) : le dessin est synchrone.
  */
-function _dessinerCarteMuscles(d,fond,res,signature){
+function _dessinerCarteMuscles(d,fond,res,signature,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
   const cv=document.createElement('canvas');
-  cv.width=STORY_L; cv.height=STORY_H;
+  cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
   const f=fond||'transparent';
-  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  _visuelPeindreFond(g,W,H,f);
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
-  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   g.textAlign='center'; g.textBaseline='alphabetic';
   o.ombre(true); g.fillStyle='#fff'; g.font='800 32px '+MONT;
   const sur='CARTE MUSCULAIRE'+(d.periode?' · '+String(d.periode).toUpperCase():'');
   const ss=o.ajusteEspace(sur,'800',32,MONT,8,LARG,20);
   g.font='800 '+ss+'px '+MONT;
-  o.ecrireEspace(sur,cx,190,8,true);
+  const yh=post?92:190;
+  o.ecrireEspace(sur,cx,yh,8,true);
   const titre=String(d.titre||'').toUpperCase();
-  const ts=o.ajuste(titre,'700',112,BEBAS,LARG,56);
+  const ts=o.ajuste(titre,'700',post?96:112,BEBAS,LARG,56);
   g.font='700 '+ts+'px '+BEBAS;
-  o.ecrire(titre,cx,190+30+ts*0.85);
+  o.ecrire(titre,cx,yh+30+ts*0.85);
   o.ombre(false);
   // Les deux vues, même hauteur, côte à côte.
   if(res){
-    const H=1080, y=390;
+    // En post, les silhouettes passent de 1 080 à 700 px de haut.
+    const HS=post?700:1080, y=post?245:390;
     const vs=['face','dos'].map((v,i)=>_muscPeindreVue(res[v],d.groupes,_recGraine('carte'+v)));
-    const ws=vs.map(v=>v.w*H/v.h);
+    const ws=vs.map(v=>v.w*HS/v.h);
     const gap=30, tot=ws[0]+ws[1]+gap;
     let x=cx-tot/2;
     // UN HALO CLAIR AUTOUR DES SILHOUETTES (Kevin, 27/09/2026 : « un petit
@@ -72096,21 +72265,22 @@ function _dessinerCarteMuscles(d,fond,res,signature){
     // posée avec son ombre, puis repeinte nette par _muscPoser.
     vs.forEach((v,i)=>{
       g.save(); g.shadowColor='rgba(255,255,255,.42)'; g.shadowBlur=34;
-      g.drawImage(v.base,x,y,ws[i],H); g.drawImage(v.base,x,y,ws[i],H); g.restore();
-      _muscPoser(g,v,x,y,ws[i],H,1); x+=ws[i]+gap; });
+      g.drawImage(v.base,x,y,ws[i],HS); g.drawImage(v.base,x,y,ws[i],HS); g.restore();
+      _muscPoser(g,v,x,y,ws[i],HS,1); x+=ws[i]+gap; });
   }
   // Les trois chiffres.
   const cw=LARG/3;
   (d.chiffres||[]).slice(0,3).forEach((c,i)=>{
     const x=M+cw*i+cw/2;
     o.ombre(true); g.fillStyle='#fff';
-    const vs=o.ajuste(c.v,'700',110,BEBAS,cw-20,50);
-    g.font='700 '+vs+'px '+BEBAS; o.ecrire(c.v,x,1590);
+    const vs=o.ajuste(c.v,'700',post?92:110,BEBAS,cw-20,50);
+    const yc=post?1062:1590;
+    g.font='700 '+vs+'px '+BEBAS; o.ecrire(c.v,x,yc);
     g.fillStyle=f==='rouge'?'rgba(255,255,255,.9)':'#E02020';
     const ls=o.ajusteEspace(c.l.toUpperCase(),'800',24,MONT,3,cw-16,14);
-    g.font='800 '+ls+'px '+MONT; o.ecrireEspace(c.l.toUpperCase(),x,1632,3,true);
+    g.font='800 '+ls+'px '+MONT; o.ecrireEspace(c.l.toUpperCase(),x,yc+42,3,true);
   });
-  _recSignature(g,o,String(signature||''),STORY_H-110,LARG);
+  _recSignature(g,o,String(signature||''),H-(post?50:110),LARG);
   o.ombre(false);
   return cv;
 }
@@ -72184,7 +72354,8 @@ function rendreMusclesEvolution(){
 //   partage ni n'enregistre qu'avec u.consentementPartageCoach = {date}, posé
 //   par l'athlète lui-même dans son propre avant/après.
 const AA_VUES=Object.freeze([{k:'face',lib:'Face'},{k:'back',lib:'Dos'},{k:'side',lib:'Profil'}]);
-const AA_FORMATS=Object.freeze({story:{w:1080,h:1920},post:{w:1080,h:1350}});
+// Le réglage commun : l'avant/après lit et retient le même format que les autres visuels.
+const AA_FORMATS=VISUEL_FORMATS;
 // PURE. Les bilans qui portent une photo de cette vue, dans l'ordre.
 function aaBilansAvecPhoto(u,vue){
   let bl=[]; try{ bl=bilansOrdonnes(u)||[]; }catch(e){ bl=[]; }
@@ -72238,7 +72409,7 @@ function aaDefaut(u){
   const vue=vues.indexOf('face')>=0?'face':vues[0];
   const l=aaBilansAvecPhoto(u,vue);
   return {vue,avant:Number(l[0].date),apres:Number(l[l.length-1].date),
-    flou:false,poids:false,indicateur:'aucun',fond:'noir',format:'story'};
+    flou:false,poids:false,indicateur:'aucun',fond:'noir',format:visuelFormatChoisi()};
 }
 // Le bouton, là où il sert : l'onglet Évolution (photos), l'étape photos du
 // bilan, la fiche coach. Rien tant qu'il n'y a pas deux photos du même angle.
@@ -72631,6 +72802,8 @@ function aaReglage(nom,val){
     if(l.length<2) return;
     o.vue=val; o.avant=Number(l[0].date); o.apres=Number(l[l.length-1].date);
   } else o[nom]=val;
+  // Le format est le réglage commun des visuels : retenu pour tous.
+  if(nom==='format') visuelFormatMemoriser(val);
   if(o.avant===o.apres){ toast('Choisis deux bilans différents.','var(--orange)'); }
   const ouvert=!!document.querySelector('#aa-ecran .aa-perso[open]');
   _aaRendreEcran();
@@ -72720,7 +72893,7 @@ function _aaSortir(partager,btn,confirme){
   try{ localStorage.setItem(_aaAvertiCle(),'1'); }catch(e){}
   const p=document.getElementById('aa-avert'); if(p) p.hidden=true;
   if(_storyEnCours) return false;
-  const nom='repcore-avant-apres.jpg', fmt={type:'image/jpeg',ext:'jpg',q:0.9};
+  const nom=visuelNomFichier('repcore-avant-apres','noir',_aa.o.format), fmt={type:'image/jpeg',ext:'jpg',q:0.9};
   _storyEnCours=true;
   let ok=false;
   try{
@@ -72769,15 +72942,16 @@ function riteCarteDonnees(u,cycle,now){
  * (chargerSilhouettes) — sans elles, la carte se passe de la heatmap et
  * remonte le reste.
  */
-function _dessinerCarteCycle(d,fond,resMuscles){
+function _dessinerCarteCycle(d,fond,resMuscles,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
   const cv=document.createElement('canvas');
-  cv.width=STORY_L; cv.height=STORY_H;
+  cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
   const f=fond||'transparent';
-  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  _visuelPeindreFond(g,W,H,f);
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
-  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   const rouge=f==='rouge';
   const accent=rouge?'#ffffff':'#E02020';
@@ -72785,10 +72959,10 @@ function _dessinerCarteCycle(d,fond,resMuscles){
   // CYCLE N TERMINÉ
   o.ombre(true); g.fillStyle='#fff';
   const titre='CYCLE '+d.cycle+' TERMINÉ';
-  const ts=o.ajuste(titre,'700',150,BEBAS,LARG,70);
-  g.font='700 '+ts+'px '+BEBAS; o.ecrire(titre,cx,230);
+  const ts=o.ajuste(titre,'700',post?118:150,BEBAS,LARG,70);
+  g.font='700 '+ts+'px '+BEBAS; o.ecrire(titre,cx,post?130:230);
   // Le nom, s'il dit autre chose que le numéro, et les 28 jours.
-  let y=300;
+  let y=post?190:300;
   if(d.nom&&d.nom!=='Cycle '+d.cycle){
     g.fillStyle='rgba(255,255,255,.92)';
     const ns=o.ajuste(d.nom,'700',44,MONT,LARG,22);
@@ -72799,7 +72973,8 @@ function _dessinerCarteCycle(d,fond,resMuscles){
   o.ombre(false);
   // L'ANNEAU : le taux de complétion. Sans programme, le nombre de séances
   // seul, au centre, sans arc.
-  const ry=y+250, R=175;
+  // En post, l'anneau rapetisse et remonte : la heatmap garde sa place.
+  const ry=y+(post?180:250), R=post?128:175;
   g.save();
   g.lineCap='round'; g.lineWidth=34;
   g.strokeStyle='rgba(255,255,255,.14)';
@@ -72812,11 +72987,11 @@ function _dessinerCarteCycle(d,fond,resMuscles){
   g.restore();
   o.ombre(true); g.fillStyle='#fff';
   const centre=d.taux!=null?(d.taux+' %'):String(d.faites);
-  g.font='700 130px '+BEBAS; o.ecrire(centre,cx,ry+40);
+  g.font='700 '+(post?100:130)+'px '+BEBAS; o.ecrire(centre,cx,ry+(post?30:40));
   g.fillStyle='rgba(255,255,255,.85)'; g.font='800 24px '+MONT;
-  o.ecrireEspace(d.taux!=null?'COMPLÉTION':'SÉANCES',cx,ry+86,5,true);
+  o.ecrireEspace(d.taux!=null?'COMPLÉTION':'SÉANCES',cx,ry+(post?68:86),5,true);
   // Les trois chiffres.
-  y=ry+R+120;
+  y=ry+R+(post?96:120);
   const t=_wrTonnage(d.tonnage);
   const chiffres=[
     {v:d.prevues>0?(d.faites+'/'+Math.round(d.prevues)):String(d.faites),l:'SÉANCES'},
@@ -72826,11 +73001,11 @@ function _dessinerCarteCycle(d,fond,resMuscles){
   chiffres.forEach((c,i)=>{
     const x=M+cw*i+cw/2;
     g.fillStyle='#fff';
-    const vs=o.ajuste(c.v,'700',96,BEBAS,cw-16,44);
+    const vs=o.ajuste(c.v,'700',post?80:96,BEBAS,cw-16,44);
     g.font='700 '+vs+'px '+BEBAS; o.ecrire(c.v,x,y);
     g.fillStyle=accent; g.font='800 22px '+MONT; o.ecrireEspace(c.l,x,y+40,4,true);
   });
-  y+=90;
+  y+=post?80:90;
   if(d.equivalent){
     const e='= '+d.equivalent.texte.toUpperCase()+' '+d.equivalent.emoji;
     g.fillStyle='#fff';
@@ -72839,13 +73014,13 @@ function _dessinerCarteCycle(d,fond,resMuscles){
   }
   o.ombre(false);
   // LA HEATMAP MUSCULAIRE (idée 07), si les silhouettes sont là.
-  const basTexte=STORY_H-250;
+  const basTexte=H-(post?186:250);
   if(resMuscles&&d.groupes){
-    const H=Math.max(200,basTexte-40-(y+20));
+    const HM=Math.max(200,basTexte-40-(y+20));
     const vs=['face','dos'].map(v=>_muscPeindreVue(resMuscles[v],d.groupes,_recGraine('cycle'+d.cycle+v)));
-    const ws=vs.map(v=>v.w*H/v.h), gap=24, tot=ws[0]+ws[1]+gap;
+    const ws=vs.map(v=>v.w*HM/v.h), gap=24, tot=ws[0]+ws[1]+gap;
     let x=cx-tot/2;
-    vs.forEach((v,i)=>{ _muscPoser(g,v,x,y+20,ws[i],H,1); x+=ws[i]+gap; });
+    vs.forEach((v,i)=>{ _muscPoser(g,v,x,y+20,ws[i],HM,1); x+=ws[i]+gap; });
   }
   // « Prochain chapitre : … »
   o.ombre(true);
@@ -72854,7 +73029,7 @@ function _dessinerCarteCycle(d,fond,resMuscles){
   g.fillStyle='#fff';
   const ps=o.ajuste(String(d.prochain||''),'700',64,BEBAS,LARG,30);
   g.font='700 '+ps+'px '+BEBAS; o.ecrire(String(d.prochain||''),cx,basTexte+66);
-  _recSignature(g,o,String(d.signature||''),STORY_H-90,LARG);
+  _recSignature(g,o,String(d.signature||''),H-(post?42:90),LARG);
   o.ombre(false);
   return cv;
 }
@@ -72955,30 +73130,37 @@ function _serieEcran(n,reste){
  * LA CARTE 1080×1920 : le grand chiffre, « SEMAINES D'AFFILÉE », le
  * calendrier des semaines en carrés rouges, la signature. Fond au choix.
  */
-function _dessinerCarteSerie(d,fond){
+function _dessinerCarteSerie(d,fond,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
   const cv=document.createElement('canvas');
-  cv.width=STORY_L; cv.height=STORY_H;
+  cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
   const f=fond||'transparent';
-  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  _visuelPeindreFond(g,W,H,f);
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
-  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   const rouge=f==='rouge';
   const n=Math.max(0,d.semaines|0);
+  // LE CALENDRIER MONTRE UN AN AU PLUS : 52 cases, les dernières semaines. Le
+  // grand chiffre, lui, dit tout (au-delà, les cases sortaient de l'image).
+  const nc=Math.min(n,52);
   g.textAlign='center'; g.textBaseline='alphabetic';
   // LA MISE EN PAGE SE CALCULE D'ABORD : le bloc entier est centré entre le
   // haut et la signature, quel que soit le nombre de semaines.
-  const cols=n<=4?4:(n<=8?4:(n<=12?6:13));
-  const rows=Math.max(1,Math.ceil(n/cols));
-  const gap=n>26?10:16;
-  g.font='700 560px '+BEBAS;
-  const cs=o.ajuste(String(n),'700',560,BEBAS,LARG,200);
-  const cote=Math.max(16,Math.min(n<=12?130:(n<=26?66:54),Math.floor((LARG-gap*(cols-1))/cols)));
+  const cols=nc<=4?4:(nc<=8?4:(nc<=12?6:13));
+  const rows=Math.max(1,Math.ceil(nc/cols));
+  const gap=nc>26?10:16;
+  // En post, le chiffre et les cases rapetissent : le bloc tient entre le
+  // haut et la signature, même à 52 semaines.
+  const CS=post?(n<=12?400:300):560;
+  g.font='700 '+CS+'px '+BEBAS;
+  const cs=o.ajuste(String(n),'700',CS,BEBAS,LARG,160);
+  const cote=Math.max(16,Math.min(nc<=12?(post?100:130):(nc<=26?(post?54:66):(post?46:54)),Math.floor((LARG-gap*(cols-1))/cols)));
   const hCal=rows*(cote+gap)-gap;
-  const H=60+cs*0.82+90+70+hCal+(d.jokers?70:0);
-  let y=Math.max(150,Math.round((STORY_H-200-H)/2));
+  const HB=60+cs*0.82+90+70+hCal+(d.jokers?70:0);
+  let y=Math.max(post?60:150,Math.round((H-(post?140:200)-HB)/2));
   o.ombre(true);
   g.fillStyle=rouge?'#fff':'#E02020'; g.font='800 34px '+MONT;
   o.ecrireEspace('SÉRIE EN COURS',cx,y+34,10,true);
@@ -72995,11 +73177,11 @@ function _dessinerCarteSerie(d,fond){
   y+=70;
   const larg=cols*cote+(cols-1)*gap;
   const x0=cx-larg/2;
-  for(let i=0;i<n;i++){
+  for(let i=0;i<nc;i++){
     const c=i%cols, r=Math.floor(i/cols);
     const x=x0+c*(cote+gap), yy=y+r*(cote+gap);
     g.save();
-    const dernier=i===n-1;
+    const dernier=i===nc-1;
     g.fillStyle=rouge?(dernier?'#fff':'rgba(255,255,255,.82)'):(dernier?'#ff3b3b':'#E02020');
     g.shadowColor=rouge?'rgba(255,255,255,.5)':'rgba(224,32,32,.85)'; g.shadowBlur=dernier?26:10;
     g.fillRect(x,yy,cote,cote);
@@ -73011,7 +73193,7 @@ function _dessinerCarteSerie(d,fond){
     o.ecrire('dont '+d.jokers+' sauvée'+(d.jokers>1?'s':'')+' par un joker 🛡',cx,y);
     o.ombre(false);
   }
-  _recSignature(g,o,String(d.signature||''),STORY_H-110,LARG);
+  _recSignature(g,o,String(d.signature||''),H-(post?50:110),LARG);
   o.ombre(false);
   return cv;
 }
@@ -73327,15 +73509,16 @@ function _rangEcran(n,reste){
  * la signature « <NOM> · REPCORE ». `img` : l'emblème 512 déjà chargé (sans
  * lui, la carte se dessine sans emblème plutôt que de lever).
  */
-function _dessinerCarteRang(d,fond,img){
+function _dessinerCarteRang(d,fond,img,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
   const cv=document.createElement('canvas');
-  cv.width=STORY_L; cv.height=STORY_H;
+  cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
   const f=fond||'transparent';
-  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  _visuelPeindreFond(g,W,H,f);
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
-  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   const rouge=f==='rouge';
   g.textAlign='center'; g.textBaseline='alphabetic';
@@ -73344,15 +73527,16 @@ function _dessinerCarteRang(d,fond,img){
   const sur='NOUVEAU RANG · '+String(d.nom||'');
   const ss=o.ajusteEspace(sur,'800',46,MONT,9,LARG,26);
   g.fillStyle=rouge?'#fff':'#E02020'; g.font='800 '+ss+'px '+MONT;
-  o.ecrireEspace(sur,cx,300,9,true);
+  o.ecrireEspace(sur,cx,post?110:300,9,true);
   o.ombre(false);
   // L'EMBLÈME GÉANT, avec un halo derrière.
-  const T=860, y0=400;
+  // En post, l'emblème descend à 720 px et remonte sous l'en-tête.
+  const T=post?720:860, y0=post?150:400;
   g.save();
   const h=g.createRadialGradient(cx,y0+T/2,40,cx,y0+T/2,T*0.62);
   h.addColorStop(0,rouge?'rgba(255,255,255,.28)':'rgba(224,32,32,.42)');
   h.addColorStop(1,'rgba(0,0,0,0)');
-  g.fillStyle=h; g.fillRect(0,y0-120,STORY_L,T+240);
+  g.fillStyle=h; g.fillRect(0,y0-120,W,T+240);
   g.restore();
   if(img&&img.naturalWidth){
     try{ g.drawImage(img,cx-T/2,y0,T,T); }catch(e){}
@@ -73360,11 +73544,11 @@ function _dessinerCarteRang(d,fond,img){
   // Le nom du rang, en grand, sous l'emblème.
   o.ombre(true);
   g.fillStyle='#fff';
-  const ns=o.ajuste(String(d.nom||''),'700',210,BEBAS,LARG,90);
+  const ns=o.ajuste(String(d.nom||''),'700',post?170:210,BEBAS,LARG,90);
   g.font='700 '+ns+'px '+BEBAS; o.ecrire(String(d.nom||''),cx,y0+T+ns*0.9);
   g.fillStyle='rgba(255,255,255,.88)'; g.font='800 40px '+MONT;
-  o.ecrireEspace('⚡ '+xpFormat(d.xp)+' V',cx,y0+T+ns*0.9+80,4,true);
-  _recSignature(g,o,String(d.signature||''),STORY_H-110,LARG);
+  o.ecrireEspace('⚡ '+xpFormat(d.xp)+' V',cx,y0+T+ns*0.9+(post?64:80),4,true);
+  _recSignature(g,o,String(d.signature||''),H-(post?44:110),LARG);
   o.ombre(false);
   return cv;
 }
@@ -111377,7 +111561,13 @@ async function _genAccessCode(studentName,months,type){
   if(typeof navigator!=='undefined'&&navigator.onLine===false)
     throw new Error('Tu es hors ligne : le code doit être enregistré avant '
       +'d\'être envoyé. Reconnecte-toi et réessaie : rien n\'a été créé.');
-  const url=_rcCodesUrl(code)+(fbTok?'?auth='+fbTok:'');
+  // ⚠ SANS JETON, LE SERVEUR REFUSE (27/09/2026). Constaté chez Kévin : un
+  //   code impossible à créer, et pour seul retour « Erreur sauvegarde du code
+  //   (401) : vérifie ta connexion » — alors que la connexion allait très
+  //   bien. C'est la SESSION qui manquait (jeton d'un autre compte après une
+  //   bascule ⇄, ou session expirée) : on le dit, avec le geste qui répare.
+  if(!fbTok) throw new Error(_msgSessionCode());
+  const url=_rcCodesUrl(code)+'?auth='+fbTok;
   let r;
   try{
     r=await fetch(url,{method:'PUT',headers:{'Content-Type':'application/json'},
@@ -111391,8 +111581,28 @@ async function _genAccessCode(studentName,months,type){
     throw new Error('Le code n\'a pas pu être enregistré : vérifie ta connexion. '
       +'Rien n\'a été créé, tu peux réessayer.');
   }
-  if(!r.ok) throw new Error('Erreur sauvegarde du code ('+r.status+') : vérifie ta connexion.');
+  if(!r.ok){
+    // LE MOTIF DU SERVEUR, EN CLAIR. Un 401 ou un 403, c'est un refus des
+    // règles : la session, pas le réseau.
+    let motif='';
+    try{ const j=await r.json(); motif=String((j&&j.error)||''); }catch(e){}
+    if(r.status===401||r.status===403) throw new Error(_msgSessionCode());
+    throw new Error('Le serveur n’a pas enregistré le code ('+r.status+(motif?' : '+motif:'')+'). '
+      +'Rien n’a été créé, tu peux réessayer.');
+  }
   return {token:code,payload};
+}
+// Le message quand le serveur refuse faute de session valide : il nomme le
+// compte en cause quand c'en est un autre (bascule ⇄), sinon il demande de se
+// reconnecter. Rien n'a été créé dans les deux cas.
+function _msgSessionCode(){
+  const affiche=(currentUser&&currentUser.email)||'';
+  const autre=(CLOUD&&CLOUD._jetonEtranger)||'';
+  return autre
+    ?('Code non créé : la session ouverte est celle de « '+autre+' », pas de « '+affiche
+      +' ». Déconnecte-toi (Profil) puis reconnecte-toi avec '+affiche+'.')
+    :('Code non créé : ta session a expiré. Déconnecte-toi (Profil) puis reconnecte-toi, '
+      +'et génère le code à nouveau.');
 }
 // ── Invitation coach ────────────────────────────────────────────────────────
 // L'inscription coach était libre : n'importe qui pouvait se déclarer coach et
