@@ -11297,12 +11297,12 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
    Un écusson plus sombre à gauche (les deux haches), le titre, un trait fin,
    la promesse sur deux lignes, un chevron. Le blanc est porté par le bouton
    seul : sur fond vif, le thème clair le garde blanc (theme_clair.py). */
-.du-defier{position:relative;width:100%;margin:0;min-height:52px;display:flex;align-items:center;gap:12px;
+.du-defier{position:relative;width:100%;margin:0;min-height:42px;display:flex;align-items:center;gap:12px;
   padding:0 12px 0 0;border-radius:12px;cursor:pointer;overflow:hidden;text-align:left;color:#fff;
   background:linear-gradient(180deg,#f02424 0%,#d51515 55%,#b80d0d 100%);border:1px solid #ff4a4a;
   font:800 12.5px Montserrat,var(--pile-sans);letter-spacing:1px;text-transform:uppercase;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 6px 18px rgba(224,32,32,.35)}
-.du-d-ico{align-self:stretch;flex:none;width:58px;display:flex;align-items:center;justify-content:center;padding-right:8px;
+.du-d-ico{align-self:stretch;flex:none;width:50px;display:flex;align-items:center;justify-content:center;padding-right:8px;
   background:linear-gradient(180deg,#b10d0d,#7e0606);clip-path:polygon(0 0,80% 0,100% 50%,80% 100%,0 100%)}
 .du-d-ico svg{filter:drop-shadow(0 1px 2px rgba(0,0,0,.45))}
 .du-d-t{flex:none;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.3)}

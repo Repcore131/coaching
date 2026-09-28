@@ -21138,7 +21138,7 @@ function htmlDuelsAccueil(u,duels,invite,maintenant){
   // modèle) — deux haches dans un écusson, le titre, un trait, la promesse
   // sur deux lignes, un chevron.
   h+='<button type="button" class="du-defier" onclick="ouvrirCreationDuel()">'
-    +'<span class="du-d-ico" aria-hidden="true">'+icon('haches',28)+'</span>'
+    +'<span class="du-d-ico" aria-hidden="true">'+icon('haches',23)+'</span>'
     +'<span class="du-d-t">Défie un pote</span>'
     +'<span class="du-d-s" aria-hidden="true">Comparez vos séances<br>et progressez ensemble</span>'
     +'<span class="du-d-ch" aria-hidden="true">'+icon('chevron-right',20)+'</span></button>';
