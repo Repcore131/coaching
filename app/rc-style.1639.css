@@ -8906,6 +8906,11 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .bdg-grille{display:grid;grid-template-columns:repeat(auto-fit,minmax(84px,1fr));
   gap:14px 10px}
 .bdg-case{text-align:center;min-width:0}
+/* Uniques : 4 par ligne. Secrets : 5 par ligne (28/09/2026). */
+.bdg-grille.bdg-grille-4{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 8px}
+.bdg-grille.bdg-grille-5{grid-template-columns:repeat(5,minmax(0,1fr));gap:12px 6px}
+.bdg-grille-5 .bdg-nom,.bdg-grille-4 .bdg-nom{font-size:var(--fs-2xs);overflow-wrap:anywhere}
+.bdg-grille-5 .bdg-date{font-size:var(--fs-2xs)}
 .bdg-case img{width:100%;max-width:64px;height:auto;aspect-ratio:1;
   display:block;margin:0 auto 8px}
 .bdg-case[data-attente] img{filter:grayscale(1);opacity:.26}
@@ -11178,6 +11183,34 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .pp-url{display:flex;align-items:center;background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--r-2);overflow:hidden}
 .pp-url span{padding:0 0 0 12px;color:var(--sub);font-size:var(--fs-sm);white-space:nowrap}
 .pp-url input{flex:1;min-width:0;border:0;background:transparent;padding:12px 12px 12px 2px;font-size:var(--fs-md);color:var(--text)}
+/* L'adresse en deux parties (28/09/2026) : le début fixe, rouge, intouchable. */
+.pp-url-2 .pp-url-pre{align-self:stretch;display:flex;align-items:center;padding:0 10px;background:rgba(224,32,32,.14);
+  border-right:1px solid rgba(224,32,32,.45);color:var(--red-text);font-weight:700;pointer-events:none;user-select:none;-webkit-user-select:none}
+.pp-url-2 input{padding-left:10px}
+.pp-voir{display:flex;align-items:center;justify-content:center;width:100%;margin:0 0 8px;min-height:44px;box-sizing:border-box;
+  background:none;border:1.5px solid #fff;color:#fff;text-decoration:none}
+/* Le bandeau rouge des cartes du profil : « Mes informations », « Mes informations médicales ». */
+.atp-infos,.atp-med{overflow:hidden}
+.atp-bandeau{display:block;margin:-16px -16px 14px;padding:10px 16px;background:linear-gradient(180deg,#d11a1a,#9c0c0c);
+  color:#fff;font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase}
+.atp-med-tete{list-style:none;cursor:pointer;display:block}
+.atp-med-tete::-webkit-details-marker{display:none}
+.atp-med-tete .atp-bandeau{position:relative;margin-bottom:10px;padding-right:40px}
+.atp-med-tete .atp-bandeau::after{content:"";position:absolute;right:18px;top:50%;width:8px;height:8px;margin-top:-6px;
+  border-right:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(45deg);transition:transform .2s ease}
+.atp-med[open] .atp-med-tete .atp-bandeau::after{transform:rotate(-135deg);margin-top:-2px}
+.atp-med-d{display:block;font-size:var(--fs-xs);color:var(--sub);line-height:1.5}
+.atp-med-corps{margin-top:14px}
+.atp-med-q{padding:14px 0;border-top:1px solid var(--border)}
+.atp-med-q label:has(input){text-transform:none;letter-spacing:0;font-weight:500;margin-top:0}
+.atp-med-lien{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);text-align:left;cursor:pointer;
+  font-family:Montserrat,sans-serif;color:var(--text)}
+/* Le pied du profil, comme celui d'un site : quatre liens sur une ligne. */
+.atp-pied{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:4px 8px;margin-top:16px;
+  font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.8}
+.atp-pied a,.atp-pied button{color:var(--text-faint);text-decoration:underline;background:none;border:0;padding:0;
+  font:inherit;cursor:pointer}
+.cpt-groupe{font-size:var(--fs-2xs);color:var(--text-dim);font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin:4px 0 6px}
 .pp-case{display:flex;align-items:center;gap:10px;margin:0;padding:8px 0;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:400;
   color:var(--text);font-size:var(--fs-sm)}
 .pp-case input{width:18px;height:18px;accent-color:#E02020;flex-shrink:0}
@@ -13882,6 +13915,16 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .pp-url{background:var(--surface-2);border:1.5px solid var(--border)}
 :root[data-theme="clair"] .pp-url span{color:var(--sub)}
 :root[data-theme="clair"] .pp-url input{color:var(--text)}
+:root[data-theme="clair"] .pp-url-2 .pp-url-pre{background:rgba(224,32,32,.14);border-right:1px solid rgba(224,32,32,.45);color:var(--red-text)}
+:root[data-theme="clair"] .pp-voir{border:1.5px solid #090909;color:#090909}
+:root[data-theme="clair"] .atp-bandeau{background:linear-gradient(180deg,#d11a1a,#9c0c0c);color:#fff}
+:root[data-theme="clair"] .atp-med-tete .atp-bandeau::after{border-right:2px solid #090909;border-bottom:2px solid #090909}
+:root[data-theme="clair"] .atp-med-d{color:var(--sub)}
+:root[data-theme="clair"] .atp-med-q{border-top:1px solid var(--border)}
+:root[data-theme="clair"] .atp-med-lien{background:var(--surface-1);border:1px solid var(--border);color:var(--text)}
+:root[data-theme="clair"] .atp-pied{color:var(--text-faint)}
+:root[data-theme="clair"] .atp-pied a,:root[data-theme="clair"] .atp-pied button{color:var(--text-faint)}
+:root[data-theme="clair"] .cpt-groupe{color:var(--text-dim)}
 :root[data-theme="clair"] .pp-case{color:var(--text)}
 :root[data-theme="clair"] .pp-case input{accent-color:#E02020}
 :root[data-theme="clair"] .pp-active{border-bottom:1px solid var(--border)}
