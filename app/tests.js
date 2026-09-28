@@ -33668,6 +33668,62 @@ async function testExercices(){
           return _echec('le ±20 de l’athlète est encore bloqué par le verrou');
         return true;})());
 
+      // ══ 1627 — TROIS DÉFAUTS VUS EN CAPTURANT L'ATHLÈTE EN 390 × 844 ══════
+      // 1. LE TOAST. removeProperty('bottom') effaçait le 20px INLINE d'origine :
+      //    le toast retombait à sa place statique, y = 2017 sur un écran de 844.
+      ok('1627 — LE TOAST SE VOIT SUR UN TÉLÉPHONE, AU-DESSUS DE LA BARRE D’ONGLETS',(()=>{
+        const t=document.getElementById('toast');
+        if(!t) return _echec('pas de #toast');
+        if(_toastCoachLarge()) return true;   // volet large : l'autre branche, testée par B2.12
+        const avant=t.style.cssText, txt=t.textContent, m=_toastMinuteur;
+        try{
+          t.style.opacity='0';               // pas de relais : poser() est synchrone
+          toast('1627 sonde');
+          const b=parseFloat(getComputedStyle(t).bottom);
+          const barre=parseFloat(getComputedStyle(document.body).getPropertyValue('--tabbar-eff'))||0;
+          if(!t.style.bottom) return _echec('le toast n’a plus de position basse');
+          if(!(b>=barre+12)) return _echec('bas calculé '+b+' px, barre '+barre+' px : le toast est dessous ou hors écran');
+          if(b+t.offsetHeight>innerHeight) return _echec('le toast sort par le haut');
+          return true;
+        } finally {
+          if(_toastMinuteur&&_toastMinuteur!==m){ clearTimeout(_toastMinuteur); _toastMinuteur=null; }
+          t.style.cssText=avant; t.textContent=txt;
+        }})());
+
+      // 2. LES VERDICTS DU CONTRÔLE À L'ENVOI (1573) NE SONT PAS DES PHOTOS.
+      ok('1627 — « BILAN ENREGISTRÉ » COMPTE LES PHOTOS, PAS LEURS VERDICTS',(()=>{
+        const u={bilans:[{type:'depart',date:Date.now(),'deb-weight':'60',
+          'deb-photo-face':'data:image/jpeg;base64,AA','deb-photo-face-ctl':'vert|',
+          'deb-photo-back':'data:image/jpeg;base64,AA','deb-photo-back-ctl':'orange|rot'}]};
+        const l=(restitutionBilan(u,Date.now()).lignes||[]).find(x=>x.libelle==='Photos');
+        return (l&&l.valeur==='2')?true:_echec('Photos : '+(l?l.valeur:'absent')+' pour deux photos');})());
+
+      // 3. « ENCORE 3 SÉANCES » TIENT DANS LE CADRE « SEMAINE 1 ». Le max-width
+      //    de 10ch coupait la phrase en deux, et la seconde ligne traversait le
+      //    bas du cadre. Mesuré sur une copie du badge, dans un conteneur à la
+      //    largeur de chaque téléphone : tout y est en cqw.
+      ok('1627 — LE CADRE « SEMAINE 1 » : LA PHRASE TIENT SUR UNE LIGNE, DANS LE CADRE, À 375, 390 ET 430',(()=>{
+        const src=document.getElementById('clh-streak');
+        if(!src) return _echec('pas de badge');
+        const boite=document.createElement('div');
+        boite.style.cssText='position:fixed;left:-2000px;top:0;height:200px;container-type:inline-size;visibility:hidden';
+        const cl=src.cloneNode(true);
+        boite.appendChild(cl); document.body.appendChild(boite);
+        try{
+          const ch=cl.querySelector('.sk-chiffres'), r=cl.querySelector('.sk-reste'), c=cl.querySelector('.sk-cadre');
+          ch.setAttribute('data-nul',''); cl.querySelector('.sk-lbl').textContent='SEMAINE 1';
+          r.textContent=affichageStreak(0,3,0).reste;
+          for(const w of [375,390,430]){
+            boite.style.width=w+'px';
+            const a=r.getBoundingClientRect(), k=c.getBoundingClientRect(), fs=parseFloat(getComputedStyle(r).fontSize);
+            if(a.height>fs*1.6) return _echec(w+' px : la phrase passe sur deux lignes');
+            if(a.bottom>k.bottom-1) return _echec(w+' px : la phrase déborde sous le cadre');
+            // L'équerre du bas occupe 3,5cqw depuis le bord droit.
+            if(a.right>k.right-k.width*3.5/41.4) return _echec(w+' px : la phrase touche l’équerre');
+          }
+          return true;
+        } finally { boite.remove(); }})());
+
       okA('1626 — UN CODE REFUSÉ FAUTE DE SESSION LE DIT, ET NE PARLE PAS DE CONNEXION',async()=>{
         const sU=currentUser, sT=CLOUD._getToken, sF=window.fetch, sE=CLOUD._jetonEtranger;
         try{

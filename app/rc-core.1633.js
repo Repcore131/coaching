@@ -10215,6 +10215,8 @@ function arcTirerPourRafraichir(zone,action){
 // donc disparaitre au bout de 300 ms. Courant sur toastSync, qui annonce le
 // local puis le cloud.
 let _toastMinuteur=null;
+// Ou se pose le toast en bas de l'ecran (voir toast()).
+const TOAST_BAS='calc(max(var(--tabbar-eff,0px),env(safe-area-inset-bottom,0px)) + var(--rc-ban-h,0px) + 12px)';
 // B2.12 — PURE. Sommes-nous sur un ecran coach, en affichage large ?
 //
 // LES DEUX CONDITIONS, ET PAS UNE SEULE. Le seuil de 1025 px est celui de tout
@@ -10254,7 +10256,15 @@ function toast(msg,c='var(--green)',duree){
     if(_toastCoachLarge()){
       t.style.top='72px'; t.style.bottom='auto';
     } else {
-      t.style.removeProperty('top'); t.style.removeProperty('bottom');
+      // ⚠ EN BAS, CE N'EST PAS « SANS BOTTOM ». Le 20px d'origine etait un
+      // style INLINE : removeProperty('bottom') l'effacait pour de bon, et le
+      // toast retombait a sa place statique, sous toute la page (y = 2017 sur
+      // un ecran de 844 : « Accès activé ✓ » ne s'est jamais vu sur un
+      // telephone). On le pose donc explicitement, AU-DESSUS de ce qui occupe
+      // le bas — barre d'onglets et banniere d'installation, chacune a zero
+      // quand elle est absente — et de l'encoche du bas sans barre.
+      t.style.removeProperty('top');
+      t.style.bottom=TOAST_BAS;
     }
     t.style.opacity='1';t.style.transform='translateX(-50%) translateY(0)';
     if(erreur){ _arcCourtCircuit(t); arcHaptique('moyenne'); }
@@ -75098,7 +75108,10 @@ function restitutionBilan(user,now){
       const v=getBM(der,m.k);
       if(v!=null) out.lignes.push({libelle:_libMesure(m.l,true),valeur:_synNombre(v)+' cm'});
     }
-    const photos=Object.keys(der).filter(k=>/photo/i.test(k)&&der[k]).length;
+    // LES VERDICTS NE SONT PAS DES PHOTOS. Depuis le controle a l'envoi (1573),
+    // chaque photo gardee pose a cote d'elle `<cle>-ctl` ('vert|', 'orange|…') :
+    // compter toute cle contenant « photo » rendait « Photos : 4 » pour deux.
+    const photos=Object.keys(der).filter(k=>/photo/i.test(k)&&!/-ctl$/.test(k)&&der[k]).length;
     if(photos) out.lignes.push({libelle:'Photos',valeur:String(photos)});
     return out;
   }
