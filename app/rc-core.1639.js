@@ -37990,6 +37990,8 @@ function loadClientHome(){
   try{ _rendreRang(u); }catch(e){}
   // La carte d'athlète : recalculée le lundi, montrée quand la note monte.
   try{ _rendreCarteAccueil(u); }catch(e){}
+  // Le record à portée de la séance du jour, dans la carte Entraînement.
+  try{ _rendreRecordAPortee(u); }catch(e){}
   // Le rappel du défi en cours.
   try{ renderDefiAccueil(); }catch(e){}
   // Les duels (l'invitation reçue, ceux en cours) et le défi RepCore du mois.
@@ -41985,6 +41987,9 @@ function launchWorkout(sessConfig,slotIdx){
     // vide, pas se faire remplir par le défaut au lancement.
     warmup:String(sessConfig.warmup??currentUser._defaultWarmup??'').trim(),
     cooldown:String(sessConfig.cooldown??currentUser._defaultCooldown??'').trim()};
+  // LE RECORD À PORTÉE : calculé une fois, au lancement, sur l'historique
+  // d'avant la séance. Rien en décharge (recordAPortee le vérifie aussi).
+  try{ woState.objectif=woState.deload?null:recordAPortee(currentUser,sessConfig); }catch(e){ woState.objectif=null; }
   woState.timerInterval=setInterval(()=>{
     const el=Math.floor((Date.now()-woState.startTime)/1000);
     document.getElementById('wo-timer').textContent=fmtDureeSeance(el);
@@ -43255,6 +43260,8 @@ function _recSignature(g,o,sig,y,LARG){
     o.ecrireEspace('REPCORE',cx,y,5,true);
   }
 }
+// PURE. Le sur-titre de la carte d'un record.
+function surTitreRecord(r){ return (r&&r.objectif)?'OBJECTIF ATTEINT':'NOUVEAU RECORD'; }
 /**
  * Le visuel d'UN record.
  * @param {{nm:string,histMax:number,curMax:number,gain:number,date?:number,signature?:string}} record
@@ -43287,10 +43294,11 @@ function _dessinerCarteRecord(record,fond,format,anim){
   let y=Math.max(post?110:180,Math.round((H-HTOT)/2)-(post?30:40));
   g.textBaseline='alphabetic';
 
-  // « NOUVEAU RECORD »
+  // LE SUR-TITRE : « NOUVEAU RECORD », ou « OBJECTIF ATTEINT » quand ce
+  // record était le record à portée annoncé avant la séance.
   o.ombre(true); g.textAlign='center';
   g.fillStyle='#ffffff'; g.font='800 34px '+MONT;
-  o.ecrireEspace('NOUVEAU RECORD',cx,y+34,10,true);
+  o.ecrireEspace(surTitreRecord(r),cx,y+34,10,true);
   // Le trait rouge sous l'étiquette : la seule touche de couleur hors éclair.
   o.ombre(false);
   g.fillStyle=f==='rouge'?'rgba(255,255,255,.85)':'#E02020';
@@ -45030,6 +45038,7 @@ function renderWoEx(){
         <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--info);flex-shrink:0">DÉCHARGE</span>
         <span style="font-size:var(--fs-xs);color:#bbb;line-height:1.5">Semaine allégée voulue par ton coach. Elle ne comptera pas comme un recul.</span>
       </div>`:''}
+      ${(()=>{ try{ const _ri=_rapIndexSeance(); return (_ri>=0&&(woState.currentEx===0||groupe.includes(_ri)))?htmlRecordAPortee(woState.objectif,'seance'):''; }catch(e){ return ''; } })()}
       ${woState.currentEx===0?_carteProtocole(woState.warmup,'Échauffement','var(--orange)','wo-warmup-body',true,
         (()=>{ try{ return chargeReferenceEchauffement(0); }catch(e){ return null; } })()):''}
       ${photoHtml}
@@ -46383,7 +46392,7 @@ function renderSets(ex,data,idx,opts){
           <div style="background:${cardBg};border:1px solid ${cardBorder};border-radius:var(--r-2);padding:8px 10px">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
               <div style="text-align:center;min-width:28px;flex-shrink:0">
-                <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}${_badgeRecord(idx,i)}</div>
+                <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}${_eclairObjectif(idx,i)}${_badgeRecord(idx,i)}</div>
                 <div>${repsAffiche(18)}</div>
               </div>
               ${weightInner}
@@ -46399,7 +46408,7 @@ function renderSets(ex,data,idx,opts){
     }
     return `<tr class="${rowCls}${painAlert}">
       <td style="text-align:center;padding:${_fourch?'4px 1px':'4px 6px'}">
-        <span style="display:block;font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}${_badgeRecord(idx,i)}</span>
+        <span style="display:block;font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}${_eclairObjectif(idx,i)}${_badgeRecord(idx,i)}</span>
         ${repsAffiche(20)}
       </td>
       ${weightCell}
@@ -46990,6 +46999,9 @@ function finishWorkout(incomplete=false){
   // Écrit seulement s'il y a quelque chose à écrire : une séance sans aucune
   // case cochée doit rester octet pour octet celle d'avant ce lot.
   if((woState.aFilmer||[]).length) sess.aFilmer=woState.aFilmer.slice();
+  // L'objectif « record à portée » que portait la séance : la carte record
+  // dira « OBJECTIF ATTEINT » s'il est battu, aujourd'hui comme à la relecture.
+  if(woState.objectif&&woState.objectif.nm) sess.objectif={nm:woState.objectif.nm,charge:woState.objectif.charge,reps:woState.objectif.reps};
   if(!currentUser.sessions) currentUser.sessions=[];
   currentUser.sessions.push(sess);
   _viderCachePlateau();
@@ -47007,6 +47019,8 @@ function finishWorkout(incomplete=false){
   try{
     if(suspensionSynchroniser(currentUser)) scheduleWoNotif();
   }catch(e){}
+  // Le rappel de séance du service worker relit ses « records à portée ».
+  try{ if(currentUser._woReminderEnabled) scheduleWoNotif(); }catch(e){}
   saveUser();
   // Les défis du Canal : ma progression, écrite par moi (serveur léger).
   try{ setTimeout(()=>{ defisPublierProgression().catch(()=>{}); },3000); }catch(e){}
@@ -47060,6 +47074,7 @@ function finishWorkout(incomplete=false){
       ? Math.max(0,(Date.now()-new Date(_derniere.date).getTime())/864e5) : 0;
     _ctxFin={
       records:(_cmp&&_cmp.records)||[],
+      objectif:sess.objectif||null,
       recordsE1rm:(()=>{ try{ return e1rmRecordsDeSeance(sess,_sess.slice(0,-1),currentUser); }catch(e){ return []; } })(),
       sets,setsPlanned,volume:vol,
       volumesPrecedents:_prec.map(x=>Number(x&&x.volume)||0),
@@ -57499,6 +57514,7 @@ function contexteSeanceRelue(sc,u){
   let e1=[]; try{ e1=e1rmRecordsDeSeance(sc,ant,u); }catch(e){ e1=[]; }
   return {
     records:rec,
+    objectif:sc.objectif||null,
     recordsE1rm:e1,
     sets,setsPlanned:prevus,volume:Number(sc.volume)||0,
     volumesPrecedents:prec.map(x=>Number(x&&x.volume)||0),
@@ -57687,7 +57703,9 @@ function _htmlRecompenses(badges,ctx){
 const _recordsAffiches={};
 function _htmlRecordsFin(ctx,date,cle){
   const rec=((ctx&&ctx.records)||[]).filter(r=>r&&r.nm&&r.curMax>0)
-    .slice().sort((a,b)=>(b.gain||0)-(a.gain||0)).slice(0,4);
+    .slice().sort((a,b)=>(b.gain||0)-(a.gain||0)).slice(0,4)
+    // L'objectif de la séance battu : la carte le dira (« OBJECTIF ATTEINT »).
+    .map(r=>objectifAtteint(ctx&&ctx.objectif,r)?Object.assign({},r,{objectif:true}):r);
   if(!rec.length) return '';
   const nb=v=>Number(v).toLocaleString('fr-FR');
   const k=(cle==='wd'||cle==='sd')?cle:'';
@@ -70713,6 +70731,8 @@ async function scheduleWoNotif(){
       hour:u._woReminderHour??18,
       days:u._woReminderDays||[],
       noms:_nomsSeancesParJour(u),
+      // « Record à portée : … », par jour : recalculé à chaque séance terminée.
+      records:(()=>{ try{ return _recordsAPorteeParJour(u); }catch(e){ return {}; } })(),
       fname:u.fname||'',
       lastNotifDate:null
     }),{headers:{'Content-Type':'application/json'}}));
@@ -71158,13 +71178,18 @@ function checkWoReminderToday(){
   // système seulement si le navigateur la propose.
   if(_appAuPremierPlan()) return;
   const _nomSeance=_nomSeanceDuJour(currentUser,todayApp)||'ta séance';
+  const _rap=texteRappelRecord(currentUser);
   if(_notifSupported()&&Notification.permission==='granted'){
     navigator.serviceWorker.ready.then(reg=>reg.showNotification('Séance du jour',{
-      body:(currentUser.fname||'')+', '+_nomSeance+' est au programme.',
+      body:(currentUser.fname||'')+', '+_nomSeance+' est au programme.'+(_rap?' '+_rap+'.':''),
       icon:'./icons/icon-192x192.png',badge:'./icons/icon-192x192.png',
       tag:'wo-reminder',requireInteraction:false,data:{url:'./?wo=1'}
     })).catch(()=>{});
   }
+}
+// Le texte « Record à portée : … » de la séance du jour, ou ''.
+function texteRappelRecord(u){
+  try{ return texteRecordAPortee(recordAPortee(u,seancePrevueDuJour(u))); }catch(e){ return ''; }
 }
 function showWoReminderBanner(){
   document.getElementById('wo-reminder-banner')?.remove();
@@ -71175,7 +71200,7 @@ function showWoReminderBanner(){
     <div style="font-size:var(--fs-2xl);flex-shrink:0">💪</div>
     <div style="flex:1;min-width:0">
       <div style="font-size:var(--fs-xs);font-weight:900;color:var(--green);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Séance du jour</div>
-      <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">C'est l'heure de t'entraîner ! Clique pour démarrer.</div>
+      <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(texteRappelRecord(currentUser)||'C\'est l\'heure de t\'entraîner ! Clique pour démarrer.')}</div>
     </div>
     <button onclick="event.stopPropagation();document.getElementById('wo-reminder-banner')?.remove()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-xl);cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1">✕</button>
   </div>`;
@@ -78663,6 +78688,200 @@ function recordsExercice(user,nomEx){
   const res=(mc||me)?{meilleureCharge:mc,meilleurE1rm:me}:null;
   _cachePlateau[cle]=res;
   return res;
+}
+
+// ══ LE RECORD À PORTÉE (28/09/2026) ════════════════════════════════════
+//
+// Avant la séance, UN objectif : la charge qui ferait un nouveau record
+// (record de CHARGE, celui que la fin de séance et la carte record fêtent),
+// tirée de la TENDANCE de l'e1RM sur les six dernières séances de
+// l'exercice (droite des moindres carrés, projetée d'une séance).
+//
+// PRUDENT PAR CONSTRUCTION :
+//   • la charge que la tendance permet (e1RM projeté, ramené aux répétitions
+//     visées avec le RIR habituel de l'athlète) est PLAFONNÉE à +2,5 % du
+//     record de charge, puis arrondie AU PAS (1,25 kg sous 20 kg, 2,5 kg
+//     au-delà — les paliers de _arrondirCharge) ; il n'y a objectif que si
+//     elle dépasse le record ;
+//   • RIEN quand la tendance est plate ou en baisse, pendant une décharge
+//     (cochée, planifiée dans le bloc, ou séance de retour), ou quand le
+//     cycle réduit la charge du jour (getCycleFactor < 1) ;
+//   • rien non plus sans trois séances récentes (60 jours) mesurables.
+// Le calcul d'e1RM est celui du fichier (e1rm, séries validées ≤ 12 reps).
+const RAP_SEANCES=6, RAP_MIN_POINTS=3, RAP_PLAFOND=0.025, RAP_FRAICHEUR_J=60;
+/** PURE. Le pas de charge : 1,25 kg sous 20 kg, 2,5 kg au-delà. */
+function pasDeCharge(kg){ return (Number(kg)<20)?1.25:2.5; }
+/** PURE. Arrondi au pas de charge le plus proche. */
+function arrondiAuPas(kg){
+  const v=Number(kg);
+  if(!isFinite(v)||v<=0) return 0;
+  const p=pasDeCharge(v);
+  // Le rattrapage flottant : 102,4999999 est 102,5.
+  return Math.round(Math.round(v/p*1e6)/1e6)*p;
+}
+// Les répétitions visées : le BAS de la fourchette (« 8-10 » → 8), la plus
+// lourde des charges prévues.
+function _rapReps(reps){
+  const m=String(reps==null?'':reps).match(/\d+(?:[.,]\d+)?/);
+  return m?Math.round(parseFloat(m[0].replace(',','.'))):0;
+}
+// La meilleure e1RM d'une liste de séries (validées, ≤ 12 reps), et le RIR
+// de la série qui la donne.
+function _rapE1rm(sets,user){
+  let v=0, rir=0;
+  for(const s of (sets||[])){
+    if(!s||s.done!==true) continue;
+    const w=parseFloat(s.weight), r=_perfReps(s);
+    if(!(w>0)||!(r>0)||r>PERF_REPS_MAX_E1RM) continue;
+    const i=_perfRir(s,user);
+    const x=e1rm(w,r,i);
+    if(x>v){ v=x; rir=Number(i)||0; }
+  }
+  return {v,rir};
+}
+/** PURE. Pente et projection (séance suivante) des moindres carrés. */
+function tendanceLineaire(vals){
+  const n=vals.length;
+  if(n<2) return {pente:0,projection:n?vals[0]:0};
+  const mx=(n-1)/2, my=vals.reduce((a,v)=>a+v,0)/n;
+  let num=0, den=0;
+  for(let i=0;i<n;i++){ num+=(i-mx)*(vals[i]-my); den+=(i-mx)*(i-mx); }
+  const pente=den?num/den:0;
+  return {pente,projection:my+pente*(n-mx)};
+}
+/** PURE. L'objectif d'UN exercice, ou null. */
+function recordAPorteeExo(u,nomEx,reps,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const r=Math.round(Number(reps));
+  if(!u||!nomEx||!(r>=1&&r<=PERF_REPS_MAX_E1RM)) return null;
+  const ses=((u.sessions)||[]).filter(s=>s&&Number(s.date)>0&&Number(s.date)<=t);
+  // LE RECORD DE CHARGE : la même règle que recordsDeSeance, toutes séances.
+  let recKg=0;
+  for(const s of ses){
+    const d=_dataDeSeance(s,nomEx);
+    for(const st of ((d&&d.sets)||[])){
+      if(!st||st.done!==true) continue;
+      const w=parseFloat(st.weight)||0;
+      if(w>recKg) recKg=w;
+    }
+  }
+  // LA TENDANCE : les six dernières séances mesurables, hors décharges et
+  // saisies aberrantes (_serieRecords les écarte déjà).
+  let pts=[];
+  try{ pts=_serieRecords(Object.assign({},u,{sessions:ses}),nomEx).filter(p=>!p.aberrant); }catch(e){ pts=[]; }
+  const vals=[];
+  for(const p of pts){
+    const d=p.sess&&p.sess.data&&p.sess.data[p.nom];
+    const x=_rapE1rm(d&&d.sets,u);
+    if(x.v>0) vals.push({v:x.v,rir:x.rir,date:p.date});
+  }
+  const der=vals.slice(-RAP_SEANCES);
+  if(der.length<RAP_MIN_POINTS||!(recKg>0)) return null;
+  if(t-der[der.length-1].date>RAP_FRAICHEUR_J*864e5) return null;
+  const tr=tendanceLineaire(der.map(x=>x.v));
+  if(!(tr.pente>0)) return null;
+  // L'e1RM projeté, ramené à une charge aux répétitions visées — avec le RIR
+  // médian des séances retenues : le modèle e1rm() en tient compte, la
+  // conversion inverse aussi.
+  const rirs=der.map(x=>x.rir).sort((a,b)=>a-b);
+  const rirRef=rirs[Math.floor(rirs.length/2)]||0;
+  const tendance=tr.projection*(1+rirRef*0.025)/(1+r/30);
+  const plafond=recKg*(1+RAP_PLAFOND);
+  const charge=arrondiAuPas(Math.min(tendance,plafond));
+  if(!(charge>recKg)) return null;
+  return {nm:nomEx,charge,reps:r,record:recKg,serie:0,
+    e1rm:Math.round(tr.projection*10)/10,pente:Math.round(tr.pente*100)/100,
+    gain:Math.round((charge-recKg)*100)/100};
+}
+/**
+ * PURE (horloge donnée). LE RECORD À PORTÉE de la séance prévue : un seul
+ * exercice, le plus grand gain relatif. null quand rien n'est à portée.
+ * @returns {?{nm:string,charge:number,reps:number,record:number,serie:number,e1rm:number,pente:number,gain:number}}
+ */
+function recordAPortee(u,seancePrevue,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(!u||u.role==='coach'||!seancePrevue||!Array.isArray(seancePrevue.exercises)) return null;
+  if(seancePrevue.deload) return null;
+  try{ if(semaineEstDecharge(u,new Date(t))) return null; }catch(e){}
+  try{ if(repriseDeloadPropose(u)) return null; }catch(e){}
+  try{ if(getCycleFactor(u,localISODate(new Date(t))).factor<1) return null; }catch(e){}
+  try{ if(suspensionEtat(u).actif) return null; }catch(e){}
+  let best=null;
+  for(const ex of seancePrevue.exercises){
+    if(!ex||!ex.name) continue;
+    try{ if(isCardio(ex)) continue; }catch(e){ continue; }
+    let o=null; try{ o=recordAPorteeExo(u,ex.name,_rapReps(ex.reps),t); }catch(e){ o=null; }
+    if(o&&(!best||o.gain/o.record>best.gain/best.record)) best=o;
+  }
+  return best;
+}
+const _rapKg=v=>String(Math.round(Number(v)*100)/100).replace('.',',');
+/** PURE. « Record à portée : Squat 102,5 kg × 5 ». */
+function texteRecordAPortee(o){
+  if(!o||!o.nm||!(o.charge>0)) return '';
+  return 'Record à portée : '+o.nm+' '+_rapKg(o.charge)+' kg × '+o.reps;
+}
+// La séance prévue AUJOURD'HUI : le créneau actif du jour (sessions_config
+// est indexé lundi → dimanche, comme le sélecteur de séance).
+function seancePrevueDuJour(u,maintenant){
+  const d=new Date((typeof maintenant==='number')?maintenant:Date.now());
+  const j=d.getDay()===0?6:d.getDay()-1;
+  const cfg=(u&&u.sessions_config)||[];
+  const s=cfg[j];
+  return (s&&s.active&&Array.isArray(s.exercises)&&s.exercises.length)?s:null;
+}
+// Pour le rappel du service worker : le texte par jour de rappel, avec la
+// même correspondance jour → créneau que _nomsSeancesParJour.
+function _recordsAPorteeParJour(u,maintenant){
+  const out={};
+  const jours=(u&&u._woReminderDays)||[];
+  const actifs=((u&&u.sessions_config)||[]).filter(s=>s&&s.active);
+  jours.forEach((j,k)=>{
+    const c=actifs[k%Math.max(1,actifs.length)];
+    let o=null; try{ o=c?recordAPortee(u,c,maintenant):null; }catch(e){ o=null; }
+    if(o) out[j]=texteRecordAPortee(o);
+  });
+  return out;
+}
+const _ECLAIR_SVG='<svg viewBox="0 0 24 24" aria-hidden="true" style="width:1em;height:1em;vertical-align:-2px"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor"/></svg>';
+// PURE. Le bandeau (accueil, tête de séance).
+function htmlRecordAPortee(o,lieu){
+  if(!o) return '';
+  return '<div class="rpo-carte'+(lieu==='seance'?' rpo-seance':'')+'" role="note">'
+    +'<span class="rpo-ico">'+_ECLAIR_SVG+'</span>'
+    +'<span class="rpo-txt"><span class="rpo-tag">Record à portée</span>'
+    +'<b>'+escapeHtml(o.nm)+' · '+_rapKg(o.charge)+' kg × '+o.reps+'</b>'
+    +'<span class="rpo-sous">Ton record : '+_rapKg(o.record)+' kg · ta progression le permet'+(lieu==='seance'?' — série '+(o.serie+1):'')+'</span></span></div>';
+}
+function _rendreRecordAPortee(u){
+  const z=document.getElementById('clh-record-portee');
+  if(!z) return null;
+  let o=null;
+  try{ o=recordAPortee(u,seancePrevueDuJour(u)); }catch(e){ o=null; }
+  z.innerHTML=htmlRecordAPortee(o,'accueil');
+  return o;
+}
+// En séance : l'index de l'exercice visé dans woState.
+function _rapIndexSeance(){
+  const o=woState&&woState.objectif;
+  if(!o||!Array.isArray(woState.exercises)) return -1;
+  const k=exKey(o.nm);
+  return woState.exercises.findIndex(e=>e&&(e.name===o.nm||exKey(e.name)===k));
+}
+// Le petit éclair sur la série concernée (tant qu'elle n'est pas validée).
+function _eclairObjectif(idx,i){
+  const o=woState&&woState.objectif;
+  if(!o||i!==o.serie||_rapIndexSeance()!==idx) return '';
+  const d=woState.sessionData&&woState.sessionData[idx];
+  if(d&&d.sets&&d.sets[i]&&d.sets[i].done) return '';
+  return '<span class="rpo-eclair" title="'+escapeHtml(texteRecordAPortee(o))+'">'+_ECLAIR_SVG+'</span>';
+}
+// PURE. Le record d'une séance a-t-il atteint l'objectif qu'elle portait ?
+function objectifAtteint(objectif,record){
+  if(!objectif||!record||!(Number(objectif.charge)>0)) return false;
+  const a=String(objectif.nm||''), b=String(record.nm||'');
+  const meme=a===b||(()=>{ try{ return exKey(a)===exKey(b); }catch(e){ return false; } })();
+  return meme&&Number(record.curMax)>=Number(objectif.charge);
 }
 
 // ── Tonnage hebdomadaire ──────────────────────────────────────────────────

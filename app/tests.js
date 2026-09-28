@@ -49841,6 +49841,103 @@ async function testExercices(){
         if(htmlReglageCelebrations({role:'coach'})!=='') return _echec('coach');
       }finally{ currentUser=sv.u; window.saveUser=sv.s; }
       return CHAMPS_NON_SANTE.indexOf('celebrations')>=0?true:_echec('non classé');})());
+    // ══ 28/09/2026 — LE RECORD À PORTÉE ════════════════════════════════════
+    const _RJ=864e5, _RT=new Date(2026,9,20,18).getTime();
+    let _rN=0;
+    const _RS=(j,kg,reps,nom)=>({date:_RT+j*_RJ,duration:60,
+      data:{[nom||'Squat']:{sets:[{weight:String(kg),reps:String(reps||5),repsDone:reps||5,rir:'2',done:true}]}}});
+    const _RSerie=(kgs,nom,reps)=>kgs.map((kg,i)=>_RS(-3*(kgs.length-i),kg,reps,nom));
+    const _RU=(ses,o)=>Object.assign({role:'athlete',email:'rap'+(++_rN)+'@t.fr',sessions:ses},o||{});
+    const _RP=(ex,o)=>Object.assign({active:true,name:'Jambes',exercises:ex||[{name:'Squat',series:4,reps:'5'}]},o||{});
+    ok('Record à portée : tendance en hausse → la charge du record suivant, plafonnée à +2,5 %',(()=>{
+      const u=_RU(_RSerie([90,92.5,95,97.5,100,100]));
+      const o=recordAPortee(u,_RP(),_RT);
+      if(!o) return _echec('rien à portée');
+      if(o.nm!=='Squat'||o.reps!==5||o.record!==100||o.serie!==0) return _echec(JSON.stringify(o));
+      if(o.charge!==102.5) return _echec('charge '+o.charge);
+      // Une hausse très raide reste plafonnée : 100 × 1,025 = 102,5, pas 105.
+      const v=recordAPortee(_RU(_RSerie([75,80,85,90,95,100])),_RP(),_RT);
+      if(!v||v.charge!==102.5) return _echec('plafond : '+JSON.stringify(v));
+      // Les six dernières séances seulement : un vieux creux n'écrase pas la pente.
+      const w=recordAPortee(_RU(_RSerie([40,40,40,90,92.5,95,97.5,100,100])),_RP(),_RT);
+      if(!w||w.charge!==102.5) return _echec('six dernières : '+JSON.stringify(w));
+      return texteRecordAPortee(o)==='Record à portée : Squat 102,5 kg × 5'?true:_echec(texteRecordAPortee(o));})());
+    ok('Record à portée : tendance en baisse ou plate → rien',(()=>{
+      if(recordAPortee(_RU(_RSerie([100,100,97.5,95,92.5,90])),_RP(),_RT)!==null) return _echec('baisse');
+      if(recordAPortee(_RU(_RSerie([100,100,100,100])),_RP(),_RT)!==null) return _echec('plat');
+      // Une hausse trop faible pour franchir un pas : rien non plus.
+      if(recordAPortee(_RU(_RSerie([99,99.2,99.4,99.6,99.8,100])),_RP(),_RT)!==null) return _echec('sous le pas');
+      return true;})());
+    ok('Record à portée : pas de données → rien (aucune séance, moins de trois, trop anciennes, autre exercice)',(()=>{
+      if(recordAPortee(_RU([]),_RP(),_RT)!==null) return _echec('aucune séance');
+      if(recordAPortee(_RU(_RSerie([95,100])),_RP(),_RT)!==null) return _echec('deux séances');
+      const vieux=_RSerie([90,92.5,95,97.5,100,100]).map(s=>Object.assign(s,{date:s.date-90*_RJ}));
+      if(recordAPortee(_RU(vieux),_RP(),_RT)!==null) return _echec('trop anciennes');
+      if(recordAPortee(_RU(_RSerie([90,92.5,95,97.5,100,100],'Presse')),_RP(),_RT)!==null) return _echec('autre exercice');
+      if(recordAPortee(null,_RP(),_RT)!==null||recordAPortee(_RU([]),null,_RT)!==null) return _echec('entrées vides');
+      // Plus de 12 répétitions visées : l'e1RM ne vaut plus rien.
+      if(recordAPortee(_RU(_RSerie([90,92.5,95,97.5,100,100])),_RP([{name:'Squat',reps:'15'}]),_RT)!==null) return _echec('15 reps');
+      return true;})());
+    ok('Record à portée : pas de 1,25 kg sous 20 kg, de 2,5 kg au-delà',(()=>{
+      if(pasDeCharge(19.9)!==1.25||pasDeCharge(20)!==2.5) return _echec('pas');
+      if(arrondiAuPas(16.4)!==16.25||arrondiAuPas(101.2)!==100||arrondiAuPas(101.3)!==102.5||arrondiAuPas(102.4999999)!==102.5) return _echec('arrondi');
+      const c=recordAPortee(_RU(_RSerie([14,14.5,15,15.5,16,16],'Curl',10)),_RP([{name:'Curl',reps:'10-12'}]),_RT);
+      if(!c||c.charge!==16.25||c.reps!==10) return _echec('1,25 : '+JSON.stringify(c));
+      const d=recordAPortee(_RU(_RSerie([52.5,55,56,57.5,60,60])),_RP(),_RT);
+      if(!d||d.charge!==62.5||Math.abs(d.charge/2.5-Math.round(d.charge/2.5))>1e-9) return _echec('2,5 : '+JSON.stringify(d));
+      return true;})());
+    ok('Record à portée : rien en décharge ni en phase de cycle à charge réduite ; un seul exercice, le plus grand gain',(()=>{
+      const ses=_RSerie([90,92.5,95,97.5,100,100]);
+      if(recordAPortee(_RU(ses),_RP(null,{deload:true}),_RT)!==null) return _echec('décharge cochée');
+      if(recordAPortee(_RU(ses,{currentCycle:'j1_difficile'}),_RP(),_RT)!==null) return _echec('règles difficiles');
+      if(recordAPortee(_RU(ses,{currentCycle:'j1_supportable'}),_RP(),_RT)!==null) return _echec('règles supportables (0,95)');
+      if(!recordAPortee(_RU(ses,{currentCycle:'j6_14'}),_RP(),_RT)) return _echec('phase neutre');
+      if(recordAPortee(Object.assign(_RU(ses),{role:'coach'}),_RP(),_RT)!==null) return _echec('coach');
+      // Deux exercices : le gain relatif le plus grand (Curl +1,6 % contre Squat +2,5 %).
+      const deux=_RU(ses.concat(_RSerie([14,14.5,15,15.5,16,16],'Curl',10)));
+      const o=recordAPortee(deux,_RP([{name:'Curl',reps:'10'},{name:'Tapis',reps:'10 min'},{name:'Squat',reps:'5'}]),_RT);
+      return o&&o.nm==='Squat'?true:_echec(JSON.stringify(o));})());
+    ok('Record à portée : l’accueil, la tête de séance et l’éclair sur la série concernée',(()=>{
+      const o={nm:'Squat',charge:102.5,reps:5,record:100,serie:0};
+      const h=htmlRecordAPortee(o,'accueil');
+      if(h.indexOf('Record à portée')<0||h.indexOf('Squat · 102,5 kg × 5')<0||h.indexOf('100 kg')<0) return _echec(h);
+      if(htmlRecordAPortee(o,'seance').indexOf('série 1')<0) return _echec('série en séance');
+      if(htmlRecordAPortee(null)!=='') return _echec('vide');
+      if(!document.getElementById('clh-record-portee')) return _echec('#clh-record-portee absent');
+      // La séance du jour : sessions_config est indexé lundi → dimanche.
+      const lundi=new Date(2026,9,19,9).getTime();
+      const u={sessions_config:[_RP(),{active:false,exercises:[{name:'x'}]}]};
+      if(seancePrevueDuJour(u,lundi)!==u.sessions_config[0]||seancePrevueDuJour(u,lundi+_RJ)!==null) return _echec('séance du jour');
+      const sv=woState;
+      try{
+        woState={objectif:o,exercises:[{name:'Presse'},{name:'Squat'}],sessionData:{1:{sets:[{done:false},{done:false}]}}};
+        if(_rapIndexSeance()!==1) return _echec('index');
+        if(_eclairObjectif(1,0).indexOf('rpo-eclair')<0) return _echec('pas d’éclair');
+        if(_eclairObjectif(1,1)!==''||_eclairObjectif(0,0)!=='') return _echec('éclair ailleurs');
+        woState.sessionData[1].sets[0].done=true;
+        if(_eclairObjectif(1,0)!=='') return _echec('éclair après validation');
+        woState.objectif=null;
+        if(_eclairObjectif(1,0)!=='') return _echec('sans objectif');
+      }finally{ woState=sv; }
+      return /\$\{_eclairObjectif\(idx,i\)\}\$\{_badgeRecord\(idx,i\)\}/.test(renderSets.toString())?true:_echec('renderSets ne pose pas l’éclair');})());
+    ok('Record à portée : la carte record dit « OBJECTIF ATTEINT » quand l’objectif est battu',(()=>{
+      if(surTitreRecord({})!=='NOUVEAU RECORD'||surTitreRecord({objectif:true})!=='OBJECTIF ATTEINT') return _echec('sur-titre');
+      if(_dessinerCarteRecord.toString().indexOf('surTitreRecord(r)')<0) return _echec('la carte ne lit pas le sur-titre');
+      const obj={nm:'Squat',charge:102.5,reps:5};
+      if(!objectifAtteint(obj,{nm:'Squat',curMax:102.5})||!objectifAtteint(obj,{nm:'Squat',curMax:105})) return _echec('atteint');
+      if(objectifAtteint(obj,{nm:'Squat',curMax:101.25})||objectifAtteint(obj,{nm:'Presse',curMax:200})||objectifAtteint(null,{nm:'Squat',curMax:200})) return _echec('pas atteint');
+      _htmlRecordsFin({records:[{nm:'Squat',curMax:102.5,histMax:100,gain:2.5},{nm:'Presse',curMax:150,histMax:140,gain:10}],objectif:obj},_RT,'sd');
+      const l=_recordsAffiches.sd.liste;
+      const sq=l.find(r=>r.nm==='Squat'), pr=l.find(r=>r.nm==='Presse');
+      if(!sq.objectif||pr.objectif) return _echec(JSON.stringify(l));
+      const d=_recordVisuelDonnees('sd',l.indexOf(sq));
+      return d&&d.objectif===true?true:_echec('le visuel perd l’objectif');})());
+    ok('Record à portée : le rappel de séance le dit (local et service worker)',(()=>{
+      const u=_RU(_RSerie([90,92.5,95,97.5,100,100]),{_woReminderDays:[2,4],sessions_config:[_RP(),_RP([{name:'Tirage',reps:'8'}])]});
+      const r=_recordsAPorteeParJour(u,_RT);
+      if(r[2]!=='Record à portée : Squat 102,5 kg × 5'||r[4]!==undefined) return _echec(JSON.stringify(r));
+      if(checkWoReminderToday.toString().indexOf('texteRappelRecord(currentUser)')<0) return _echec('rappel local');
+      return scheduleWoNotif.toString().indexOf('_recordsAPorteeParJour(u)')>=0?true:_echec('scheduleWoNotif');})());
     // ══ 28/09/2026 — LE PARCOURS DE DÉMARRAGE « MISE SOUS TENSION » ═══════
     const _PJ=864e5, _PT0=new Date(2026,9,5,18).getTime();   // lundi 5 octobre 2026, 18 h
     const _PS=(j,kg)=>({date:_PT0+j*_PJ,duration:60,sets:1,setsPlanned:1,data:{'Squat':{sets:[{weight:String(kg),reps:'8',done:true}]}}});
@@ -75288,6 +75385,8 @@ function _testSW(R,src){
   ok('sw.js est lisible depuis la suite',(()=>{
     return src.length>3000?true:_echec('source vide ou tronquée ('+src.length+' o)');})());
   if(!src) return;
+  ok('Le rappel de séance du service worker porte le record à portée du jour',(()=>{
+    return /sched\.records\s*&&\s*sched\.records\[todayApp\]/.test(src)?true:_echec('sched.records non lu');})());
   ok('ASSETS contient ./index.html',(()=>{
     const m=src.match(/const\s+ASSETS\s*=\s*\[([^\]]*)\]/);
     if(!m) return _echec('ASSETS introuvable');
