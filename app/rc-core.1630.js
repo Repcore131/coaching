@@ -41529,6 +41529,7 @@ function visuelFormatChoisir(id,k){
 function _htmlVisuelFonds(id){
   const f=visuelFondEffectif();
   return _htmlVisuelFormats(id)
+    +'<button type="button" class="vf-legende" onclick="voirLegende(typeDuSelecteur(\''+id+'\'))">Voir la légende</button>'
     +'<div class="vf" id="'+id+'" role="radiogroup" aria-label="Fond du visuel">'
     +VISUEL_FOND.LISTE.map(k=>'<button type="button" class="vf-b'+(k===f?' actif':'')+'" role="radio" aria-checked="'+(k===f)+'" data-fond="'+k+'"'
       // Un libellé d'une ligne pour les trois : « changer » se dit au survol.
@@ -42317,6 +42318,195 @@ function _storyCopierLien(src){
     return true;
   }catch(e){ return false; }
 }
+// ══ LA LÉGENDE D'UN POST (28/09/2026) ═══════════════════════════════════
+// Une story se partage avec le sticker Lien (le lien est copié). Un POST se
+// publie avec une légende : on l'écrit pour l'athlète, on la copie, il la
+// colle sous sa photo. Trois à cinq modèles par visuel, tutoiement (on parle
+// à qui lit), un ⚡ au plus, jamais deux fois le même de suite. Toujours
+// « #RepCore », le compte Instagram de RepCore quand il est renseigné, et
+// « Lien dans ma bio » si la page publique de la personne est en ligne.
+//
+// ⚠ À REMPLIR : le compte Instagram officiel, avec son @ (ex. '@repcore.app').
+//   Vide, il n'apparaît pas.
+const RC_COMPTE_INSTAGRAM='';
+const LEGENDE_MAX=220;
+const _LEGENDES=Object.freeze({
+  bilan:[d=>'Séance bouclée. Et toi, tu t’entraînes quand cette semaine ?',
+    d=>'Une de plus au compteur ⚡ Et toi, tu en es où cette semaine ?',
+    d=>'Pas de séance parfaite, juste une séance faite. Tu viens ?',
+    d=>'Tout est noté : les charges, les séries, les reps. Tu fais pareil ?'],
+  record:[d=>(d.exo?'Nouveau record sur '+d.exo+' ⚡':'Nouveau record ⚡')+' Tu crois que je m’arrête là ?',
+    d=>'Record battu. Le travail paie, et tu le sais.',
+    d=>'Plus lourd que la dernière fois. Et toi, ton prochain record ?',
+    d=>'Petit à petit, la barre monte. Tu suis ?'],
+  records:[d=>'Plusieurs records dans la même séance ⚡ Tu fais mieux ?',
+    d=>'Journée à records. Tu sais ce qui t’attend si tu t’y mets.',
+    d=>'Les charges montent, séance après séance. Et toi ?'],
+  serie:[d=>(d.semaines?d.semaines+' semaines d’affilée':'Série en cours')+' ⚡ Tu tiens combien, toi ?',
+    d=>'Pas une semaine ratée. La régularité bat la motivation, tu verras.',
+    d=>(d.semaines?d.semaines+' semaines':'Semaine après semaine')+' sans lâcher. Tu te lances ?',
+    d=>'La série continue. Ton tour ?'],
+  rang:[d=>'Nouveau rang'+(d.nom?' : '+d.nom:'')+' ⚡ Tu montes avec moi ?',
+    d=>'Un palier de plus. Chaque séance compte, tu le sais.',
+    d=>'Rang débloqué'+(d.nom?' : '+d.nom:'')+'. Et toi, tu en es où ?'],
+  cycle:[d=>'Cycle terminé. Le suivant commence demain, tu viens ?',
+    d=>'Quatre semaines tenues ⚡ Tu signes pour le prochain ?',
+    d=>'Un cycle de plus derrière moi. Et toi, ton prochain objectif ?'],
+  defi:[d=>'Défi relevé'+(d.titre?' : « '+d.titre+' »':'')+' ⚡ Tu relèves le prochain ?',
+    d=>'Relevé jusqu’au bout. Tu t’y mets avec nous ?',
+    d=>'Défi validé. Le prochain, tu le fais avec nous ?'],
+  champion:[d=>'Champion du défi ⚡ Tu viens me détrôner ?',
+    d=>'Premier du défi'+(d.titre?' « '+d.titre+' »':'')+'. Le prochain, tu tentes ta chance ?',
+    d=>'Défi gagné. Tu crois pouvoir faire mieux ?'],
+  badge:[d=>'Badge débloqué'+(d.nom?' : '+d.nom:'')+' ⚡ Tu l’as, toi ?',
+    d=>'Un badge de plus dans la collection. Tu commences la tienne ?',
+    d=>'Celui-là, il se mérite. Tu tentes ?'],
+  muscles:[d=>'Ma semaine, muscle par muscle ⚡ Et toi, tu as travaillé quoi ?',
+    d=>'Tout ce qui a travaillé cette semaine. Tu regardes la tienne ?',
+    d=>'Rien n’a été oublié. Tu vérifies ton équilibre ?'],
+  wrapped:[d=>(d.seances?d.seances+' séances':'Mon mois')+' en chiffres ⚡ Et toi, ton bilan ?',
+    d=>'Le résumé qui fait plaisir. Tu regardes le tien ?',
+    d=>'Un mois de travail, en cinq images. Tu te lances ?',
+    d=>'Les chiffres ne mentent pas. Ton tour ?'],
+  avant:[d=>'Avant, après. Le temps et la régularité ⚡ Tu commences quand ?',
+    d=>'Même personne, quelques mois plus tard. Tu te lances ?',
+    d=>'Pas de raccourci : des séances, et encore des séances. Et toi ?'],
+  victoire:[d=>'Victoire de la semaine ⚡ Fier de mon athlète. Et toi, ton objectif ?',
+    d=>'Le travail de mon athlète, en un chiffre. Tu veux le même suivi ?',
+    d=>'Chaque kilo se gagne. Tu viens t’entraîner avec nous ?'],
+  team:[d=>'La team a tout donné cette semaine ⚡ Tu nous rejoins ?',
+    d=>'Toute l’équipe, en chiffres. Tu veux en faire partie ?',
+    d=>'Séances, records, tonnage : la team avance. Et toi ?'],
+  visuel:[d=>'Une séance de plus ⚡ Et toi, tu t’entraînes quand ?',
+    d=>'La régularité, c’est tout. Tu viens ?',
+    d=>'Chaque séance compte. Tu te lances ?']
+});
+/**
+ * La légende d'un visuel. `donnees` : ce qui la rend précise quand on le sait
+ * ({exo}, {semaines}, {nom}, {titre}, {seances}). `o.u` : la personne (sa page
+ * publique) ; `o.indice` : le modèle voulu (tests), sinon tiré au hasard sans
+ * reprendre le dernier de ce type.
+ */
+function legendePartage(type,donnees,o){
+  const opt=o||{};
+  const k=_LEGENDES[type]?type:'visuel';
+  const l=_LEGENDES[k];
+  const cle='rc_legende_'+k;
+  let der=-1;
+  try{ const v=localStorage.getItem(cle); der=v===null?-1:Number(v); if(!isFinite(der)) der=-1; }catch(e){ der=-1; }
+  let i;
+  if(Number.isInteger(opt.indice)) i=((opt.indice%l.length)+l.length)%l.length;
+  else{
+    i=Math.floor(Math.random()*l.length);
+    if(l.length>1&&i===der) i=(i+1+Math.floor(Math.random()*(l.length-1)))%l.length;
+  }
+  try{ localStorage.setItem(cle,String(i)); }catch(e){}
+  // LES DONNÉES SONT BORNÉES AVANT D'ENTRER : un nom d'exercice de 200
+  // caractères prendrait toute la légende, et la coupe emporterait la
+  // question qui s'adresse au lecteur. 40 caractères au plus, sans ⚡.
+  const net={};
+  for(const [c,v] of Object.entries(donnees||{})){
+    if(typeof v!=='string'){ net[c]=v; continue; }
+    const x=v.replace(/⚡/g,'').replace(/\s+/g,' ').trim();
+    net[c]=x.length>40?x.slice(0,39).replace(/\s+\S*$/,'')+'…':x;
+  }
+  let corps=String(l[i](net)||'').replace(/\s+/g,' ').trim();
+  // Un ⚡ au plus : une donnée qui en apporterait un second le perd.
+  let vu=false;
+  corps=corps.replace(/⚡/g,()=>{ if(vu) return ''; vu=true; return '⚡'; }).replace(/\s+/g,' ').trim();
+  const u=opt.u!==undefined?opt.u:((typeof currentUser!=='undefined')?currentUser:null);
+  let bio=false; try{ bio=!!urlPagePerso(u); }catch(e){ bio=false; }
+  const fin=['#RepCore',String(RC_COMPTE_INSTAGRAM||'').trim()].filter(Boolean).join(' ')+(bio?' · Lien dans ma bio':'');
+  // Une donnée trop longue (un titre de défi) raccourcit le corps, jamais la fin.
+  const place=LEGENDE_MAX-1-fin.length-1;
+  if(corps.length>place) corps=corps.slice(0,place-1).replace(/\s+\S*$/,'')+'…';
+  return corps+'\n'+fin;
+}
+// Ce que l'écran en cours sait du visuel (pour une légende précise). Chaque
+// lecture est protégée : l'absence donne la légende générale.
+function _legendeDonneesEcran(type){
+  const d={};
+  try{
+    if(type==='serie'&&_serieCourante) d.semaines=Number(_serieCourante.semaines)||0;
+    if(type==='rang'&&_rangCourant) d.nom=String(_rangCourant.nom||'');
+    if((type==='defi'||type==='champion')&&_defiCourant) d.titre=String(_defiCourant.titre||'').slice(0,60);
+    if(type==='wrapped'&&_wr&&_wr.w) d.seances=Number(_wr.w.seances)||0;
+  }catch(e){}
+  return d;
+}
+// LA LÉGENDE PRÉPARÉE : « Voir la légende » la montre et la laisse modifier ;
+// la sortie suivante du même type utilise CELLE-LÀ, puis l'oublie.
+const _legendePrete={};
+function _legendePour(type){
+  const k=_LEGENDES[type]?type:'visuel';
+  if(_legendePrete[k]){ const t=_legendePrete[k]; delete _legendePrete[k]; return t; }
+  return legendePartage(k,_legendeDonneesEcran(k));
+}
+// PURE. Un fichier de post (repcore-<type>-post.jpg) ?
+function _estPost(nomFichier){ return /-post\.(jpe?g|png)$/i.test(String(nomFichier||'')); }
+// La légende dans le presse-papiers, DANS le geste (Safari refuse l'écriture
+// hors d'un geste de l'utilisateur).
+function _storyCopierLegende(texte){
+  try{
+    if(!navigator.clipboard||!navigator.clipboard.writeText) return false;
+    navigator.clipboard.writeText(String(texte)).then(()=>{
+      toast('Légende copiée · colle-la sous ta photo','var(--green)',4000);
+    }).catch(()=>{});
+    return true;
+  }catch(e){ return false; }
+}
+// En post : la légende. En story : le lien (sticker Lien), comme avant.
+function _storyCopierSelonFormat(nomFichier,legende){
+  return _estPost(nomFichier)?_storyCopierLegende(legende):_storyCopierLien(srcDuVisuel(nomFichier));
+}
+// ── « Voir la légende » : lue, modifiable, copiée avant le partage ───────
+// Le type suit le sélecteur de fond de l'écran (son id).
+const _TYPE_DU_SELECTEUR=Object.freeze({'wd-fonds':'bilan','sd-fonds':'bilan','dfe-fonds':'defi','bdg-ecran-fonds':'badge',
+  'bdg-fiche-fonds':'badge','rg-fonds':'rang','rite-fonds':'cycle','serie-fonds':'serie','vc-fonds':'victoire'});
+function typeDuSelecteur(id){
+  const s=String(id||'');
+  if(/^musc-/.test(s)) return 'muscles';
+  try{ if(s==='vc-fonds'&&_vc&&_vc.type==='recap') return 'team'; }catch(e){}
+  try{ if(s==='dfe-fonds'&&_defiCourant&&_defiCourant.champion) return 'champion'; }catch(e){}
+  return _TYPE_DU_SELECTEUR[s]||'visuel';
+}
+function voirLegende(type){
+  const t=_LEGENDES[type]?type:'visuel';
+  const texte=_legendePrete[t]||legendePartage(t,_legendeDonneesEcran(t));
+  _legendePrete[t]=texte;
+  document.getElementById('legende-ecran')?.remove();
+  const d=document.createElement('div');
+  d.id='legende-ecran';
+  d.setAttribute('role','dialog'); d.setAttribute('aria-modal','true'); d.setAttribute('aria-label','Légende du post');
+  d.style.cssText='position:fixed;inset:0;z-index:var(--z-modal);background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:20px';
+  d.innerHTML='<div style="width:min(420px,100%);background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px">'
+    +'<div style="font-weight:800;margin-bottom:6px">La légende de ton post</div>'
+    +'<div class="sub" style="font-size:var(--fs-xs);margin-bottom:10px">Modifie-la si tu veux : c’est elle qui sera copiée au partage en post.</div>'
+    +'<textarea id="legende-texte" rows="5" maxlength="'+LEGENDE_MAX+'" style="width:100%;box-sizing:border-box" oninput="legendeModifiee(\''+t+'\',this.value)">'
+    +escapeHtml(texte)+'</textarea>'
+    +'<div class="sub" id="legende-compte" style="font-size:var(--fs-2xs);text-align:right;margin:4px 0 10px">'+texte.length+' / '+LEGENDE_MAX+'</div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="copierLegende(\''+t+'\')">Copier</button>'
+    +'<button type="button" class="btn btn-outline btn-sm" style="flex:0 0 auto;width:auto;padding:0 16px;margin:0;min-height:44px" onclick="fermerLegende()">OK</button>'
+    +'</div></div>';
+  d.addEventListener('click',e=>{ if(e.target===d) fermerLegende(); });
+  document.body.appendChild(d);
+  return texte;
+}
+function legendeModifiee(type,v){
+  const t=String(v||'').slice(0,LEGENDE_MAX);
+  _legendePrete[type]=t;
+  const c=document.getElementById('legende-compte'); if(c) c.textContent=t.length+' / '+LEGENDE_MAX;
+  return t;
+}
+function copierLegende(type){
+  const x=document.getElementById('legende-texte');
+  const t=legendeModifiee(type,x?x.value:(_legendePrete[type]||''));
+  _storyCopierLegende(t);
+  return t;
+}
+function fermerLegende(){ document.getElementById('legende-ecran')?.remove(); return true; }
+
 // `fmt` FACULTATIF (visuelFondFormat) : JPEG qualité 0,9 quand le visuel a un fond, PNG sinon.
 //
 // ⚠ LE LIEN EST COPIÉ D'ABORD, DANS LE GESTE. Il ne l'était qu'après le
@@ -42329,7 +42519,8 @@ function _storySortirTelechargement(cv,nomFichier,fmt){
   cv.width=0; cv.height=0;            // 8 Mo rendus tout de suite
   const nom=_nomSelonFormat(nomFichier,jpeg?fmt:null);
   try{ attribCompter('telechargement',srcDuVisuel(nomFichier)); }catch(e){}
-  _storyCopierLien(srcDuVisuel(nomFichier));
+  // Story : le lien (sticker Lien). Post : la légende, à coller sous la photo.
+  _storyCopierSelonFormat(nomFichier,_estPost(nomFichier)?_legendePour(srcDuVisuel(nomFichier)):'');
   if(_estIOS()){ _ouvrirApercuStory(dataUrl,nom,jpeg?fmt:{type:'image/png',ext:'png'}); return true; }
   const a=document.createElement('a');
   a.href=dataUrl;                     // pas d'URL d'objet : rien a liberer,
@@ -42360,11 +42551,12 @@ function _storySortirPartage(cv,nomFichier,meta,fmt){
   try{ f=new File([blob],_nomSelonFormat(nomFichier,jpeg?fmt:null),{type:jpeg?'image/jpeg':'image/png'}); }catch(e){}
   if(f&&navigator.canShare&&navigator.canShare({files:[f]})&&navigator.share){
     let charge={files:[f]};
-    if(meta){
-      const riche=Object.assign({files:[f]},meta);
-      try{ if(navigator.canShare(riche)) charge=riche; }catch(e){}
-    }
-    _storyCopierLien(srcDuVisuel(nomFichier));
+    // LA LÉGENDE VOYAGE AUSSI DANS `text` (quand le navigateur l'accepte avec
+    // le fichier) : certaines applications la reprennent d'elles-mêmes.
+    const legende=_legendePour(srcDuVisuel(nomFichier));
+    const riche=Object.assign({files:[f]},Object.assign({text:legende},meta||{}));
+    try{ if(navigator.canShare(riche)) charge=riche; }catch(e){}
+    _storyCopierSelonFormat(nomFichier,legende);
     // UN PARTAGE RÉUSSI, c'est une feuille de partage RÉSOLUE (pas annulée).
     navigator.share(charge).then(()=>{ try{ attribCompter('partage',srcDuVisuel(nomFichier)); }catch(e){} }).catch(()=>{});
     return true;
@@ -71692,6 +71884,7 @@ function _wrHtmlSlide(s,k){
         +icon('share',16)+' <span>Partager mon résumé</span></button>'
       +'<button type="button" class="btn btn-outline wr-partager wr-carrousel" onclick="event.stopPropagation();partagerCarrouselWrapped(this)">'
         +icon('share',16)+' <span>Carrousel pour mon fil</span></button>'
+      +'<button type="button" class="vf-legende" onclick="event.stopPropagation();voirLegende(\'wrapped\')">Voir la légende</button>'
       +'</section>';
   }
   return '<section class="wr-slide" data-k="'+k+'" hidden>'
@@ -71794,9 +71987,13 @@ function partagerCarrouselWrapped(btn){
       const u=cv.toDataURL('image/jpeg',0.9); cv.width=0; cv.height=0; return u; });
     let fichiers=null;
     try{ fichiers=urls.map((u,i)=>new File([_b64versBlob(u)],noms[i],{type:'image/jpeg'})); }catch(e){ fichiers=null; }
-    _storyCopierLien('wrapped');
+    // UN CARROUSEL EST UN POST : la légende est copiée, et part aussi dans `text`.
+    const legende=_legendePour('wrapped');
+    _storyCopierLegende(legende);
     if(fichiers&&navigator.canShare&&navigator.share&&navigator.canShare({files:fichiers})){
-      navigator.share({files:fichiers}).then(()=>{ try{ attribCompter('partage','wrapped'); }catch(e){} }).catch(()=>{});
+      let charge={files:fichiers};
+      try{ if(navigator.canShare({files:fichiers,text:legende})) charge={files:fichiers,text:legende}; }catch(e){}
+      navigator.share(charge).then(()=>{ try{ attribCompter('partage','wrapped'); }catch(e){} }).catch(()=>{});
       ok=true;
     } else {
       _wrCarrouselUnParUn(urls,noms);
@@ -72773,7 +72970,8 @@ function _aaRendreEcran(){
     +(autorise
       ?('<button type="button" class="btn btn-red aa-partager" onclick="aaPartager(this)">'+icon('share',18)
           +' <span>'+(o.format==='post'?'Partager en post':'Partager en story')+'</span></button>'
-        +'<button type="button" class="btn btn-outline btn-casse aa-enregistrer" onclick="aaEnregistrer(this)">'+icon('download',16)+' <span>Enregistrer</span></button>')
+        +'<button type="button" class="btn btn-outline btn-casse aa-enregistrer" onclick="aaEnregistrer(this)">'+icon('download',16)+' <span>Enregistrer</span></button>'
+        +'<button type="button" class="vf-legende" onclick="voirLegende(\'avant\')">Voir la légende</button>')
       :'<p class="aa-refus">L’export demande l’accord de '+escapeHtml(u.fname||'l’athlète')
         +'. Il peut l’accorder depuis son propre avant/après, sous « Personnaliser ».</p>')
     +'<p class="aa-avert" id="aa-avert" hidden></p>'

@@ -49012,7 +49012,10 @@ async function testExercices(){
     ok('Pages : le partage d’un visuel copie le lien perso, avec son type (src)',(()=>{
       if(srcDuVisuel('repcore-seance.png')!=='seance'||srcDuVisuel('repcore-cycle-rouge.jpg')!=='cycle'||srcDuVisuel('x.png')!=='visuel') return _echec('src');
       const a=String(_storySortirPartage), b=String(_storySortirTelechargement);
-      if(a.indexOf('_storyCopierLien(srcDuVisuel(nomFichier))')<0||b.indexOf('_storyCopierLien(srcDuVisuel(nomFichier))')<0) return _echec('copie absente d’une sortie');
+      // Depuis la légende des posts (28/09/2026) : les deux sorties passent par
+      // _storyCopierSelonFormat, qui copie le LIEN en story et la légende en post.
+      if(a.indexOf('_storyCopierSelonFormat(nomFichier')<0||b.indexOf('_storyCopierSelonFormat(nomFichier')<0) return _echec('copie absente d’une sortie');
+      if(String(_storyCopierSelonFormat).indexOf('_storyCopierLien(srcDuVisuel(nomFichier))')<0) return _echec('la story ne copie plus le lien');
       return /Sticker > Lien > coller/.test(String(_storyCopierLien))?true:_echec('toast');})());
     ok('Pages : le tuto du sticker Lien — trois étapes, images fixes, une seule fois',(()=>{
       const d=document.createElement('div'); d.innerHTML=htmlTutoSticker();
@@ -49407,7 +49410,8 @@ async function testExercices(){
       const d=document.createElement('div'); d.innerHTML=h;
       const b=[...d.querySelectorAll('.vfmt .vfmt-b')].map(x=>x.getAttribute('data-format')+':'+x.textContent);
       if(b.join()!=='story:Story9:16,post:Post4:5') return _echec(b.join());
-      if(d.firstElementChild.className!=='vfmt'||!d.querySelector('.vfmt+.vf#x-fonds')) return _echec('pas à côté du sélecteur de fond');
+      // Le format, puis « Voir la légende », puis les fonds : un seul bloc.
+      if(d.firstElementChild.className!=='vfmt'||!d.querySelector('.vfmt~.vf#x-fonds')||d.children.length!==3) return _echec('pas à côté du sélecteur de fond');
       // Le visuel du coach n'a plus son propre choix : le commun.
       const r=htmlReglagesVisuelCoach({type:'recap',periode:'semaine'});
       if(/Format/.test(r)) return _echec('le visuel du coach garde un second choix de format');
@@ -49516,6 +49520,71 @@ async function testExercices(){
         delete navigator.canShare; delete navigator.share;
       }
       return /Carrousel pour mon fil/.test(_wrHtmlSlide(wrappedSlides(w,{titre:'S',cle:'x'})[4],4))?true:_echec('le bouton manque');})());
+    // ══ 28/09/2026 — LA LÉGENDE DES POSTS ═════════════════════════════════
+    ok('Légendes : chaque modèle de chaque visuel, données extrêmes — moins de 220 caractères, #RepCore, un ⚡ au plus, tutoiement',(()=>{
+      const ext={exo:'DÉVELOPPÉ COUCHÉ PRISE SERRÉE HALTÈRES SUR BANC INCLINÉ ⚡ À TRENTE DEGRÉS'.repeat(3),semaines:99999,
+        nom:'SURTENSION ABSOLUE ⚡ '.repeat(8),titre:'Cent séances en cent jours sans rater un seul lundi '.repeat(6),seances:123456};
+      const avecPage={role:'athlete',pagePublique:{active:true,pseudo:'maximilien_alexandre',montrer:{}}};
+      if(!urlPagePerso(avecPage)) return _echec('page publique du banc refusée');
+      let sv={}; for(const k of Object.keys(_LEGENDES)) try{ sv[k]=localStorage.getItem('rc_legende_'+k); }catch(e){}
+      try{
+        for(const k of Object.keys(_LEGENDES)){
+          const n=_LEGENDES[k].length;
+          if(n<3||n>5) return _echec(k+' : '+n+' modèles');
+          for(let i=0;i<n;i++) for(const d of [{},ext]) for(const u of [null,avecPage]){
+            const t=legendePartage(k,d,{indice:i,u});
+            if(!(t.length<220)) return _echec(k+'#'+i+' : '+t.length+' caractères');
+            if(t.indexOf('#RepCore')<0) return _echec(k+'#'+i+' sans #RepCore');
+            if((t.match(/⚡/g)||[]).length>1) return _echec(k+'#'+i+' : deux ⚡');
+            if(!/(^|[^a-zà-ÿ])(tu|toi|ton|ta|tes)([^a-zà-ÿ]|$)|t’/i.test(t)) return _echec(k+'#'+i+' ne tutoie pas : '+t);
+            if(RC_COMPTE_INSTAGRAM&&t.indexOf(RC_COMPTE_INSTAGRAM)<0) return _echec('compte Instagram absent');
+            if(/Lien dans ma bio/.test(t)!==!!u) return _echec(k+'#'+i+' : « Lien dans ma bio » '+(u?'absent':'sans page publique'));
+          }
+          // Jamais deux fois le même de suite.
+          let der=null;
+          for(let j=0;j<30;j++){ const t=legendePartage(k,{},{u:null}); if(t===der) return _echec(k+' : deux fois de suite'); der=t; }
+        }
+      }finally{ for(const k of Object.keys(sv)) try{ if(sv[k]===null) localStorage.removeItem('rc_legende_'+k); else localStorage.setItem('rc_legende_'+k,sv[k]); }catch(e){} }
+      return true;})());
+    ok('Légendes : en post, la légende est copiée (et passe dans navigator.share) ; en story, le lien reste',(()=>{
+      const sv={lien:window._storyCopierLien,leg:window._storyCopierLegende,ios:window._estIOS,t:window.toast,ac:window.attribCompter};
+      const vus=[]; let charge=null;
+      const cv=()=>{ const c=document.createElement('canvas'); c.width=4; c.height=4; return c; };
+      try{
+        window.toast=()=>{}; window.attribCompter=()=>{}; window._estIOS=()=>false;
+        window._storyCopierLien=(src)=>{ vus.push('lien:'+src); return true; };
+        window._storyCopierLegende=(t)=>{ vus.push('legende:'+t); return true; };
+        const clic=HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click=function(){};
+        try{
+          _storySortirTelechargement(cv(),'repcore-serie-post.jpg',visuelFondFormat('carbone'));
+          _storySortirTelechargement(cv(),'repcore-serie.jpg',visuelFondFormat('carbone'));
+        }finally{ HTMLAnchorElement.prototype.click=clic; }
+        if(vus.length!==2||!/^legende:.*#RepCore/s.test(vus[0])||vus[1]!=='lien:serie') return _echec('téléchargement : '+vus.join(' | '));
+        vus.length=0;
+        Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>true});
+        Object.defineProperty(navigator,'share',{configurable:true,value:(o)=>{ charge=o; return Promise.resolve(); }});
+        _storySortirPartage(cv(),'repcore-rang-post.jpg',undefined,visuelFondFormat('carbone'));
+        if(!charge||!/#RepCore/.test(charge.text||'')||charge.files.length!==1) return _echec('partage : '+JSON.stringify(charge&&charge.text));
+        if(!/^legende:/.test(vus[0]||'')||vus[0].slice(8)!==charge.text) return _echec('la légende copiée n’est pas celle partagée');
+      }finally{
+        delete navigator.canShare; delete navigator.share;
+        window._storyCopierLien=sv.lien; window._storyCopierLegende=sv.leg; window._estIOS=sv.ios; window.toast=sv.t; window.attribCompter=sv.ac;
+      }
+      return /Légende copiée · colle-la sous ta photo/.test(String(_storyCopierLegende))?true:_echec('le toast ne dit pas quoi faire');})());
+    ok('Légendes : « Voir la légende » l’affiche, la laisse modifier, et c’est elle qui part',(()=>{
+      const h=_htmlVisuelFonds('serie-fonds');
+      if(!/voirLegende\(typeDuSelecteur\('serie-fonds'\)\)[^>]*>Voir la légende/.test(h)) return _echec('le bouton manque à côté du format');
+      if(typeDuSelecteur('serie-fonds')!=='serie'||typeDuSelecteur('musc-12-fonds')!=='muscles'||typeDuSelecteur('wd-fonds')!=='bilan') return _echec('types');
+      for(const k of Object.keys(_legendePrete)) delete _legendePrete[k];
+      const t=voirLegende('rang');
+      const x=document.getElementById('legende-texte');
+      if(!x||x.value!==t) return _echec('la légende n’est pas affichée');
+      legendeModifiee('rang','Ma légende à moi #RepCore');
+      if(document.getElementById('legende-compte').textContent!=='25 / 220') return _echec('compte : '+document.getElementById('legende-compte').textContent);
+      fermerLegende();
+      if(_legendePour('rang')!=='Ma légende à moi #RepCore') return _echec('la légende modifiée n’est pas celle qui part');
+      if(_legendePour('rang')==='Ma légende à moi #RepCore') return _echec('elle ne sert qu’une fois');
+      return (legendeModifiee('rang','x'.repeat(400)).length===220)?true:_echec('longueur non bornée');})());
     ok('Ambassadeurs : le CSV mensuel ne porte que les commissions dues',(()=>{
       const r=ambCsvDues({LEA:_AMBF,ZED:{nom:'Zed',commissions:{'2026-09':{x:{commission:9,dueLe:1}}}}},'2026-10',500);
       const l=r.csv.trim().split('\n');

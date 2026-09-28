@@ -10806,6 +10806,10 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 /* Sur téléphone, le bouton passe à la ligne, à gauche : le menu s'ouvre depuis son bord gauche. */
 @media (max-width:600px){ .an-exp-m{right:auto;left:0} }
 /* Le choix du fond des visuels : trois vignettes 9:16. */
+/* « Voir la légende » : la légende du post, lue et modifiée avant le partage. */
+.vf-legende{display:block;margin:0 auto 10px;padding:6px 10px;min-height:36px;background:none;border:none;cursor:pointer;
+  color:var(--red-text,#ff4d4d);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;
+  text-decoration:underline;text-underline-offset:3px}
 /* Story / Post : à côté du fond, sur chaque visuel qui en a un. */
 .vfmt{display:flex;gap:8px;margin:0 0 10px}
 .vfmt-b{flex:1;min-height:40px;display:flex;align-items:center;justify-content:center;gap:6px;border-radius:12px;
@@ -13656,6 +13660,7 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .an-exp-m button{border:1px solid #d2d2d7;background:#e2e2e7;color:#090909}
 :root[data-theme="clair"] .an-exp-m button:hover,:root[data-theme="clair"] .an-exp-m button:focus-visible{border-color:rgba(224,32,32,.6);background:#dcdce1}
 :root[data-theme="clair"] .an-exp-m span{color:#595963}
+:root[data-theme="clair"] .vf-legende{color:var(--red-text,#cc0000)}
 :root[data-theme="clair"] .vfmt-b{border:2px solid var(--border,#cfcfd3);color:var(--sub,#5b5b64)}
 :root[data-theme="clair"] .vfmt-b.actif{border-color:var(--red,#e02020);color:var(--text,#090909);box-shadow:0 0 0 3px rgba(224,32,32,.18)}
 :root[data-theme="clair"] .vfmt-b:focus-visible{outline:2px solid var(--red,#e02020)}
