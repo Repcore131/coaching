@@ -26,6 +26,7 @@ export const VERROU_MS = 55e3;     // le bail : moins que la minute entre deux r
 export const REVEIL_MIN_MS = 30e3; // /reveil ne relance pas une file traitée il y a moins
 export const ESSAIS_MAX = 5;
 const LOT = 25;                    // événements lus d'un coup (une requête)
+const LOT_PUSH = 20;               // abonnés d'un rappel préchargés d'un coup (deux requêtes)
 const apres = (p, h, m) => p.heure * 60 + p.minute >= h * 60 + m;
 
 export function travaux(M) {
@@ -37,15 +38,17 @@ export function travaux(M) {
     // Les coachs qui ont résilié : leur palier se referme à la fin payée.
     { nom: 'fins_coachs', quand: (p) => apres(p, 6, 0), une: () => (M.paypal ? M.paypal.finsCoachs() : null) },
     // « Ton accès se termine dans N jours », une fois par échéance.
-    { nom: 'acces', quand: (p) => apres(p, 11, 0) && p.heure < 21, cles: () => M.abonnes(), un: M.planifies.acces, cout: 12, push: true },
+    // `cout` : les requêtes d'UNE clé au pire (dossier, sous-nœuds, journal,
+    // envoi, place rendue sur échec), abonnements et journal lus par lot.
+    { nom: 'acces', quand: (p) => apres(p, 11, 0) && p.heure < 21, cles: () => M.abonnes(), un: M.planifies.acces, cout: 10, push: true },
     // Pas en heures calmes : ce serait relire les messages mis de côté pour la
     // nuit et les jeter au lieu de les envoyer le lendemain à 8 h 05.
     { nom: 'attente', quand: (p) => apres(p, 8, 5) && p.heure < 21, une: M.apresHeuresCalmes },
     { nom: 'defis', quand: (p) => apres(p, 9, 0), cles: () => M.coachsAvecCanal(), un: (c, t) => M.defisQuotidienCoach(c, t), cout: 8 },
-    { nom: 'serie', quand: (p) => p.joursem === 4 && apres(p, 18, 0), cles: () => M.abonnes(), un: M.planifies.serie, cout: 12, push: true },
-    { nom: 'bilan', quand: (p) => p.joursem === 6 && apres(p, 10, 0), cles: () => M.abonnes(), un: M.planifies.bilan, cout: 12, push: true },
-    { nom: 'wrapped', quand: (p) => p.date === 1 && apres(p, 10, 0), cles: () => M.abonnes(), un: M.planifies.wrapped, cout: 10, push: true },
-    { nom: 'badge', quand: (p) => p.joursem === 0 && apres(p, 17, 0), cles: () => M.abonnes(), un: M.planifies.badge, cout: 10, push: true },
+    { nom: 'serie', quand: (p) => p.joursem === 4 && apres(p, 18, 0), cles: () => M.abonnes(), un: M.planifies.serie, cout: 7, push: true },
+    { nom: 'bilan', quand: (p) => p.joursem === 6 && apres(p, 10, 0), cles: () => M.abonnes(), un: M.planifies.bilan, cout: 7, push: true },
+    { nom: 'wrapped', quand: (p) => p.date === 1 && apres(p, 10, 0), cles: () => M.abonnes(), un: M.planifies.wrapped, cout: 5, push: true },
+    { nom: 'badge', quand: (p) => p.joursem === 0 && apres(p, 17, 0), cles: () => M.abonnes(), un: M.planifies.badge, cout: 5, push: true },
   ];
 }
 
@@ -139,11 +142,14 @@ export async function minute({ db, M, compteur, maintenant, source }) {
     // La file est « traitée » si ce réveil l'a parcourue jusqu'au bout.
     if (fini) fileLe = horloge();
 
-    // 2. LES TRAVAUX DU JOUR.
+    // 2. LES TRAVAUX DU JOUR. Leurs états sont lus d'un coup (une requête, et
+    //    non une par travail dont l'heure est passée).
+    let jobs = null;
     for (const w of travaux(M)) {
       if (!w.quand(p) || reste() < 6) continue;
       const ref = db.ref('worker/jobs/' + w.nom);
-      let etat = (await ref.get()).val();
+      if (!jobs) jobs = (await db.ref('worker/jobs').get()).val() || {};
+      let etat = jobs[w.nom] || null;
       if (!etat || etat.jour !== p.jour) etat = { jour: p.jour, curseur: 0, fini: false, acc: {} };
       if (etat.fini) continue;
       // Firebase ne garde pas un objet vide : relu, il revient null.
@@ -166,9 +172,19 @@ export async function minute({ db, M, compteur, maintenant, source }) {
       } else {
         const cles = (await w.cles()).sort();
         let i = Number(etat.curseur) || 0;
-        const assez = () => reste() >= (w.cout || 10) + 2 && (!w.push || !M.peutPousser || M.peutPousser());
-        while (i < cles.length && assez()) {
-          try { await w.un(cles[i], t, etat.acc); } catch (err) { bilan.erreur = texteErreur(err); }
+        const assez = (plus) => reste() >= (w.cout || 10) + 2 + plus && (!w.push || !M.peutPousser || M.peutPousser());
+        // Un rappel lit les abonnements et le journal du jour PAR LOT de
+        // LOT_PUSH clés (deux requêtes), plus un par un. Faute de lot (lecture
+        // en échec), chaque clé relit les siens.
+        let lot = null, finLot = i;
+        while (i < cles.length) {
+          const charger = !!(w.push && M.prechargerPush) && i >= finLot;
+          if (!assez(charger ? 2 : 0)) break;
+          if (charger) {
+            finLot = Math.min(cles.length, i + LOT_PUSH);
+            try { lot = await M.prechargerPush(cles.slice(i, finLot)); } catch (err) { lot = null; bilan.erreur = texteErreur(err); }
+          }
+          try { await w.un(cles[i], t, etat.acc, lot); } catch (err) { bilan.erreur = texteErreur(err); }
           i++;
         }
         etat.curseur = i;

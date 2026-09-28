@@ -51,31 +51,42 @@ async function simuler(n, scenario) {
   let n0 = 0, horloge = t0, cpuBase = 0;
   // Le temps passé DANS la base simulée est décompté : il n'existe pas dans
   // un Worker (là, c'est une attente réseau, qui ne compte pas).
-  const f = (u, i) => { n0++; const a = process.cpuUsage(); const r = F.fetchImpl(u, i); const d = process.cpuUsage(a); cpuBase += (d.user + d.system) / 1000; return r; };
+  const f = (u, i) => { n0++; const a = performance.now(); const r = F.fetchImpl(u, i); cpuBase += performance.now() - a; return r; };
   const db = creerBase({ url: 'https://base.test', auth: 's', fetchImpl: f });
   const M = creerMetier({ db, vapid: VAPID, fetchImpl: f, maintenant: () => horloge });
   M.coachsEtUsers = () => db.ref('users').shallow();
   const reveils = [];
+  const jourDe = (h) => new Date(h).toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' });
+  let jourCourant = jour, servisLeJour = null;
   for (let i = 0; i < 5000; i++) {
+    // Le lendemain de la série, les autres travaux sont faits aussi : seuls
+    // comptent les rappels mis de côté pour 8 h 05.
+    if (jourDe(horloge) !== jourCourant) {
+      jourCourant = jourDe(horloge);
+      if (servisLeJour === null) servisLeJour = F.recus.length;
+      for (const j of ['stats_badges', 'ambassadeurs', 'fins_coachs', 'defis', 'acces']) F.ecrire('worker/jobs/' + j, { jour: jourCourant, fini: true });
+    }
     n0 = 0; cpuBase = 0;
-    const c0 = process.cpuUsage();
+    // L'horloge fine plutôt que process.cpuUsage (15,6 ms de résolution sous
+    // Windows) : rien n'attend le réseau ici, le temps écoulé est du calcul.
+    const c0 = performance.now();
     const b = await minute({ db, M, compteur: () => n0, maintenant: () => horloge });
-    const c = process.cpuUsage(c0);
-    reveils.push({ requetes: b.requetes, chiffrements: b.chiffrements, cpu: Math.max(0, (c.user + c.system) / 1000 - cpuBase) });
+    reveils.push({ requetes: b.requetes, chiffrements: b.chiffrements, cpu: Math.max(0, performance.now() - c0 - cpuBase) });
     assert.ok(b.requetes <= 50, n + ' / ' + scenario + ' : ' + b.requetes + ' requêtes au réveil ' + i);
     assert.ok(b.chiffrements <= MAX_CHIFFREMENTS, n + ' / ' + scenario + ' : ' + b.chiffrements + ' chiffrements');
-    // Fini : la file vidée (défi), le travail du jeudi bouclé (série).
-    if (scenario === 'defi' ? !F.lire('evenements') : F.lire('worker/jobs/serie/fini')) break;
+    // Fini : la file vidée (défi) ; la série du jeudi bouclée, et ce qu'elle a
+    // mis de côté pour la nuit parti le lendemain matin.
+    const vide = !F.lire('evenements') && !F.lire('push_attente');
+    if (scenario === 'defi' ? vide : (F.lire('worker/jobs/serie/jour') === jour && F.lire('worker/jobs/serie/fini') && vide)) break;
     horloge += 60e3;
-    // La série ne vaut que le jeudi : à minuit, ce qui n'est pas parti ne partira pas.
-    if (scenario === 'serie' && new Date(horloge).toLocaleDateString('fr-CA', { timeZone: 'Europe/Paris' }) !== jour) break;
   }
   assert.equal(new Set(F.recus.map((r) => r.endpoint)).size, F.recus.length, 'jamais deux fois');
-  // Le défi passe par la file : ce qui tombe après 21 h attend 8 h 05, rien ne se perd.
-  if (scenario === 'defi') assert.equal(F.recus.length, n, 'tout le monde reçoit');
+  // Ce qui tombe après 21 h attend 8 h 05 : rien ne se perd.
+  assert.equal(F.recus.length, n, 'tout le monde reçoit');
+  const lendemain = jourDe(horloge) !== jour;
   const cpu = reveils.map((r) => r.cpu).sort((a, b) => a - b);
-  return { n, scenario, reveils: reveils.length, servis: F.recus.length,
-    finParis: new Date(horloge).toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' }), requetesMax: Math.max(...reveils.map((r) => r.requetes)),
+  return { n, scenario, reveils: reveils.length, servis: F.recus.length, servisLeJour: lendemain ? servisLeJour : null,
+    finParis: (lendemain ? 'lendemain ' : '') + new Date(horloge).toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' }), requetesMax: Math.max(...reveils.map((r) => r.requetes)),
     requetesTotal: reveils.reduce((a, r) => a + r.requetes, 0), chiffrementsMax: Math.max(...reveils.map((r) => r.chiffrements)),
     cpuMedian: cpu[Math.floor(cpu.length / 2)], cpuMax: cpu[cpu.length - 1] };
 }
@@ -99,6 +110,6 @@ console.log('| abonnés | chemin | réveils (minutes) | fini à | servis | requ�
 console.log('|---|---|---|---|---|---|---|---|---|');
 for (const l of lignes)
   console.log('| ' + l.n + ' | ' + (l.scenario === 'defi' ? 'défi publié (12 h)' : 'série (jeudi 18 h)') + ' | ' + l.reveils + ' | ' + l.finParis
-    + ' | ' + l.servis + ' | ' + l.requetesMax + ' | ' + l.requetesTotal + ' | ' + l.chiffrementsMax + ' | '
+    + ' | ' + l.servis + (l.servisLeJour !== null ? ' (' + l.servisLeJour + ' le jour même)' : '') + ' | ' + l.requetesMax + ' | ' + l.requetesTotal + ' | ' + l.chiffrementsMax + ' | '
     + l.cpuMedian.toFixed(1) + ' / ' + l.cpuMax.toFixed(1) + ' ms |');
 console.log('\n' + lignes.length + ' simulations : jamais plus de 50 requêtes ni de ' + MAX_CHIFFREMENTS + ' chiffrements par réveil, personne servi deux fois.');

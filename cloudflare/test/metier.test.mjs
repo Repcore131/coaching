@@ -114,6 +114,50 @@ await test('jeudi 18 h : la série en danger, par lots, reprise d’une minute �
   assert.equal(w.F.recus.length, avant);
 });
 
+await test('série : trois lectures du dossier, abonnements et journal par lot ; ce qui déborde sur 21 h part le vendredi, sauf semaine validée', async () => {
+  const users = {}, push = {};
+  for (let i = 0; i < 4; i++) {
+    const k = 'b' + i + '@t,fr';
+    users[k] = { streak: 2, streakWeek: '2026-09-14', fname: 'B' + i, sessions: { s1: { at: 1 } } };
+    push[k] = { a1b2c3: appareil('https://push.test/b' + i).abonnement };
+  }
+  users['b1@t,fr'].pushPrefs = { serie: false };                 // coupé : relu, rien ne part
+  users['b2@t,fr'].suspension = { actif: true };                 // suspendu : rien
+  const w = monde({ users, push, push_log: { 'b3@t,fr': { jour: '2026-10-01', at: 1, type: 'coach' } } }, PARIS('2026-10-01T18:00:00'));
+  const urls = [];
+  const db = creerBase({ url: 'https://base.test', auth: 's', fetchImpl: (u, i) => { urls.push(u); return w.F.fetchImpl(u, i); } });
+  const M = creerMetier({ db, vapid: VAPID, fetchImpl: w.F.fetchImpl, maintenant: () => w.t });
+  const cles = Object.keys(push).sort();
+  const lot = await M.prechargerPush(cles);
+  assert.equal(urls.length, 2, 'deux requêtes pour tout le lot');
+  assert.match(decodeURIComponent(urls[0]), /orderBy="\$key".*startAt="b0@t,fr".*endAt="b3@t,fr"/);
+  assert.equal(Object.keys(lot.subs).length, 4);
+  urls.length = 0;
+  await M.planifies.serie('b0@t,fr', w.t, {}, lot);
+  // À la base : streak…streakWeek (une plage de clés), la liste des clés, le
+  // prénom ; puis le journal (écriture simple). Plus l'envoi.
+  assert.equal(urls.length, 4);
+  assert.match(decodeURIComponent(urls[0]), /users\/b0@t,fr\.json.*orderBy="\$key".*startAt="streak".*endAt="streakWeek"/);
+  assert.equal(w.F.recus.length, 1);
+  for (const k of cles.slice(1)) await M.planifies.serie(k, w.t, {}, lot);
+  assert.equal(w.F.recus.length, 1, 'coupé, suspendu, déjà servi aujourd’hui : rien');
+
+  // 21 h : plus d'envoi, mais rien de perdu.
+  const w2 = monde({ users: { 'b0@t,fr': { streak: 2, streakWeek: '2026-09-14' }, 'b1@t,fr': { streak: 5, streakWeek: '2026-09-14' } },
+    push: { 'b0@t,fr': push['b0@t,fr'], 'b1@t,fr': push['b1@t,fr'] } }, PARIS('2026-10-01T21:10:00'));
+  for (const k of ['b0@t,fr', 'b1@t,fr']) await w2.M.planifies.serie(k, w2.t, {}, await w2.M.prechargerPush([k]));
+  assert.equal(w2.F.recus.length, 0);
+  assert.equal(w2.F.lire('push_attente/b0@t,fr').semaine, '2026-09-28');
+  // b1 valide sa semaine dans la soirée : son rappel ne part pas le lendemain.
+  w2.F.ecrire('users/b1@t,fr/streakWeek', '2026-09-28');
+  w2.avance(11 * 3600e3);                                        // vendredi 8 h 10
+  for (let i = 0; i < 3; i++) { await w2.minute(); w2.avance(60e3); }
+  assert.equal(w2.F.recus.length, 1);
+  assert.ok(w2.F.recus[0].endpoint.endsWith('/b0'));
+  assert.equal(w2.F.lire('push_attente'), null);
+  assert.equal(w2.F.lire('evenements'), null);
+});
+
 await test('parrainage : la demande est jugée, le filleul rattaché, le parrain prévenu', async () => {
   const P1 = 'parrain@t,fr', F1 = 'filleul@t,fr';
   const telP = appareil('https://push.test/p');

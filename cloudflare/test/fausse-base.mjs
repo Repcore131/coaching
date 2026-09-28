@@ -1,5 +1,5 @@
 // Une Realtime Database en mémoire qui parle l'API REST (GET/PUT/PATCH/DELETE,
-// shallow, orderBy "$key" + limitToLast, orderBy "<champ>" + equalTo, ETag/if-match), et un faux service
+// shallow, orderBy "$key" + limitToLast / startAt / endAt, orderBy "<champ>" + equalTo, ETag/if-match), et un faux service
 // de push qui garde ce qu'il reçoit. Branchés sur un seul `fetch`.
 import crypto from 'node:crypto';
 
@@ -39,7 +39,14 @@ export function fausseBase(initial) {
     const h = (init && init.headers) || {};
     if (m === 'GET') {
       let v = lire(p);
+      // Comme Firebase (vérifié sur la vraie base) : `true` pour CHAQUE clé,
+      // valeurs simples comprises.
       if (u.searchParams.get('shallow') === 'true' && v && typeof v === 'object') { const o = {}; for (const k of Object.keys(v)) o[k] = true; v = o; }
+      if (u.searchParams.get('orderBy') === '"$key"' && (u.searchParams.has('startAt') || u.searchParams.has('endAt')) && v && typeof v === 'object') {
+        const a = u.searchParams.has('startAt') ? JSON.parse(u.searchParams.get('startAt')) : null;
+        const b = u.searchParams.has('endAt') ? JSON.parse(u.searchParams.get('endAt')) : null;
+        const o = {}; for (const k of Object.keys(v).sort()) if ((a === null || k >= a) && (b === null || k <= b)) o[k] = v[k]; v = o;
+      }
       if (u.searchParams.get('orderBy') === '"$key"' && u.searchParams.get('limitToLast') && v && typeof v === 'object') {
         const n = Number(u.searchParams.get('limitToLast')); const o = {};
         for (const k of Object.keys(v).sort().slice(-n)) o[k] = v[k]; v = o;

@@ -122,30 +122,45 @@ les pages publiques (`index.html`, `i/`, `p/`, `c/`), puis livrée : c'est ce qu
 mémoire (`CHARGE=10,100,1000` pour choisir N ; `npm test` fait 10 et 100). À chaque réveil : au
 plus 50 requêtes, au plus 5 chiffrements, et chacun reçoit son message une fois.
 
-Mesuré le 27/09/2026 (Node 22). Un réveil par minute :
+Mesuré le 27/09/2026 (Node 22), après le passage des rappels planifiés par lots. Un réveil par
+minute :
 
 | abonnés | chemin | réveils (minutes) | fini à | servis | requêtes max / réveil | requêtes en tout | chiffrements max / réveil | calcul médian / max |
 |---|---|---|---|---|---|---|---|---|
-| 10 | défi publié (12 h) | 3 | 12:02 | 10 | 35 | 95 | 4 | 12.5 / 16.5 ms |
-| 10 | série (jeudi 18 h) | 5 | 18:04 | 10 | 38 | 186 | 2 | 5.4 / 9.3 ms |
-| 100 | défi publié (12 h) | 25 | 12:24 | 100 | 35 | 875 | 4 | 9.2 / 14.8 ms |
-| 100 | série (jeudi 18 h) | 50 | 18:49 | 100 | 38 | 1 851 | 2 | 4.3 / 8.7 ms |
-| 1 000 | défi publié (12 h) | 250 | 16:09 | 1 000 | 35 | 8 750 | 4 | 8.7 / 39.9 ms |
-| 1 000 | série (jeudi 18 h) | 360 | 00:00 | **360** | 38 | 13 321 | 2 | 3.9 / 17.2 ms |
+| 10 | défi publié (12 h) | 3 | 12:02 | 10 | 34 | 88 | 4 | 6.1 / 13.8 ms |
+| 10 | série (jeudi 18 h) | 2 | 18:01 | 10 | 36 | 71 | 5 | 8.6 / 8.6 ms |
+| 100 | défi publié (12 h) | 25 | 12:24 | 100 | 34 | 850 | 4 | 4.6 / 7.3 ms |
+| 100 | série (jeudi 18 h) | 20 | 18:19 | 100 | 36 | 701 | 5 | 6.4 / 10.3 ms |
+| 1 000 | défi publié (12 h) | 250 | 16:09 | 1 000 | 34 | 8 500 | 4 | 5.3 / 14.9 ms |
+| 1 000 | série (jeudi 18 h) | 880 | lendemain 08:39 | **1 000** (900 le jeudi) | 36 | 12 897 | 5 | 0.2 / 21.7 ms |
+
+Avant (même jour, même banc) : série à 1 000 abonnés, 2 push par réveil, **360 servis**, les 640
+autres rien ; à 100, 50 minutes au lieu de 20.
 
 Ce qu'il faut en retenir :
 
-- **Le chiffrement d'un push coûte ~1,2 ms** : 5 par réveil au plus (`MAX_CHIFFREMENTS`), soit ~6 ms,
-  sous les 10 ms. Au-delà, la suite part au réveil suivant. En pratique ce plafond ne mord pas :
-  **ce sont les 50 requêtes qui bornent** (un push en coûte 7 à 8 : préférences, journal du jour,
-  abonnements, transaction, envoi), soit 4 push par minute par la file, 2 par un rappel planifié
-  (qui relit en plus 3 à 5 champs du dossier).
-- Le « calcul » est celui de Node, hors base simulée mais avec ses réponses fabriquées : une
-  estimation haute. Les pics (premier réveil, JIT) ne se reproduisent pas dans un Worker chaud.
-- **À 1 000 abonnés, la série du jeudi ne passe pas** : 2 par minute de 18 h à 21 h, puis les heures
-  calmes ; à minuit, 640 n'ont rien reçu. Un défi publié arrive à tous, en 4 h. Les leviers, si on
-  y arrive : lire en une requête ce que les rappels planifiés lisent en cinq, commencer la série
-  plus tôt, ou passer au plan payant de Cloudflare (bien plus de requêtes par exécution).
+- **Un rappel planifié ne relit plus le dossier champ par champ.** La série lit `streak`…`streakWeek`
+  en une requête (plage de clés `startAt`/`endAt` : cinq compteurs et dates voisins), puis la liste
+  des clés du dossier (`shallow`) pour ne lire `suspension` et `pushPrefs` que s'ils existent.
+  ⚠ `shallow` ne donne pas les valeurs : Firebase rend `true` pour chaque clé, valeurs simples
+  comprises (vérifié sur la base ; la fausse base du banc fait de même). Les abonnements et le
+  journal du jour se lisent par lot de 20 clés, en deux requêtes. Le journal s'écrit sans
+  transaction (une requête au lieu de deux) : la minute tient le verrou, seul un webhook PayPal
+  pourrait passer entre la lecture et l'écriture, et au pire ce serait un second push ce jour-là.
+  Les états des travaux du jour se lisent d'un coup (`worker/jobs`), plus un par travail.
+  Un push de série coûte ainsi 5 requêtes (plage, clés, prénom, journal, envoi) au lieu de 11.
+- **Ce sont maintenant les 5 chiffrements qui bornent** (~1,1 ms chacun, soit ~5,5 ms, sous les
+  10 ms) : 5 push par minute pour un rappel planifié, avec 36 requêtes sur 50. La file (défi publié,
+  sous-tâches) reste à 4 par minute : elle n'a pas de lot, chaque événement est isolé.
+- **La série du jeudi ne perd plus personne.** À 5 par minute, 18 h à 21 h en sert 900. Ce qui
+  tombe dans les heures calmes va dans `push_attente` (au lieu d'être jeté) et part le vendredi à
+  partir de 8 h 05, **sauf si la semaine a été validée entre-temps** (le message garde `semaine`,
+  `tache()` relit `streakWeek` avant d'envoyer). Pour tout servir le jeudi à 1 000, il faudrait
+  commencer à 17 h 30 (`travaux()` dans `src/planif.js`).
+- Le « calcul » est celui de Node (`performance.now()`, hors base simulée mais avec ses réponses
+  fabriquées) : une estimation haute. Les pics (premier réveil, JIT, ramasse-miettes) ne se
+  reproduisent pas dans un Worker chaud. Le médian de 0,2 ms de la série à 1 000 : la plupart des
+  880 réveils sont ceux de la nuit, où il n'y a rien à faire.
 
 - **PayPal** (`POST /paypal`) : chaque événement est vérifié chez PayPal (signature).
   - **Une seule fois** : `paypal_evenements/<id>` passe à `en_cours` avant le traitement, à `fait`
