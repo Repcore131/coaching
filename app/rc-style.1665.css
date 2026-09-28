@@ -8571,10 +8571,10 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
    PAS par une marge négative : elle le ferait déborder sur le liseré du cadre,
    qui n'a que 14 px de rembourrage. */
 .bal-rangee{display:flex;align-items:flex-start;gap:12px}
-.clh-liens{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px}
+.clh-liens{display:flex;align-items:center;flex-wrap:wrap;justify-content:flex-start;gap:4px 16px;margin:8px 0 0}
 .clh-liens #clh-contact:empty{display:none}
 .clh-liens .cct-lien{margin-top:0}
-.clh-liens .clh-reglages{margin-top:0!important;margin-left:auto}
+.clh-liens .clh-reglages{margin-top:0!important}
 /* ══ LE BILAN EN RETARD, À LA MAQUETTE (Kevin, 28/09/2026) ══
    AUX DIMENSIONS EXACTES DE LA MAQUETTE : tout est en cqw de la carte
    (100cqw = sa largeur, 1863 px sur la maquette), si bien que la carte garde
