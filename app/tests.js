@@ -33720,8 +33720,9 @@ async function testExercices(){
             const a=r.getBoundingClientRect(), k=c.getBoundingClientRect(), fs=parseFloat(getComputedStyle(r).fontSize);
             if(a.height>fs*1.6) return _echec(w+' px : la phrase passe sur deux lignes');
             if(a.bottom>k.bottom-1) return _echec(w+' px : la phrase déborde sous le cadre');
-            // L'équerre du bas occupe 3,5cqw depuis le bord droit.
-            if(a.right>k.right-k.width*3.5/41.4) return _echec(w+' px : la phrase touche l’équerre');
+            // Plus d'équerre (seconde maquette) : le chevron, à droite.
+            const chv=cl.querySelector('.sk-chev');
+            if(chv&&a.right>chv.getBoundingClientRect().left-1) return _echec(w+' px : la phrase touche le chevron');
           }
           return true;
         } finally { boite.remove(); }})());
@@ -42360,12 +42361,13 @@ async function testExercices(){
     // LA MAQUETTE DE L'EN-TETE (Kevin, 27/09/2026) remplace le plafond --fs-xl :
     // le compteur y est dessine a 6,5 % de la largeur de l'ecran (1 cqw = 20 px
     // de la maquette de 2000 px). On verifie la PROPORTION, pas un nombre de px.
-    ok('Le compteur de streak suit la maquette de l’en-tête (6,5 % de la largeur)',(()=>{
+    ok('Le compteur de streak suit la maquette de l’en-tête (5,85 % de la largeur)',(()=>{
       const e=document.getElementById('clh-streak-val');
       if(!e) return false;
       const ecr=document.getElementById('s-client-home');
       const css=_stylesProd().map(x=>x.textContent).join('\n');
-      if(!/#clh-streak-val\{[^}]*font-size:6\.5cqw/.test(css)) return _echec('taille du compteur hors maquette');
+      // Seconde maquette (28/09/2026) : 5,85 % de la largeur.
+      if(!/#clh-streak-val\{[^}]*font-size:5\.85cqw/.test(css)) return _echec('taille du compteur hors maquette');
       return /#s-client-home\{container-type:inline-size\}/.test(css)?true:_echec('l’en-tête ne se mesure plus sur l’écran');})());
     ok('Le compteur de streak reste affiché',!!document.getElementById('clh-streak-val'));
 
