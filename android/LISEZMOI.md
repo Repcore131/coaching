@@ -10,7 +10,15 @@ puis complété par la lecture de Health Connect (lot C, 28/09/2026).
 - `sante/SyncSante.kt` : Health Connect → `POST /sante/i` (en-tête `X-RepCore-Jeton`), par 14 jours.
 - `sante/Jours.kt` : conversion pure en jours, testée par `JoursTest` (JUnit).
 
-## Compiler et publier (Kevin, dans Git Bash)
+## Publication automatique (GitHub)
+
+`.github/workflows/apk.yml` compile, signe, vérifie le certificat contre
+`well-known/assetlinks.json` et publie la release `apk-<versionCode>` à chaque
+changement d'`android/` sur main. Il lui faut, une fois, quatre secrets du dépôt :
+`RC_KEYSTORE_B64` (le .keystore en base64), `RC_KEYSTORE_PASS`, `RC_KEY_ALIAS`,
+`RC_KEY_PASS`. Pour publier une nouvelle version : augmenter `versionCode`.
+
+## Compiler et publier à la main (secours, Git Bash)
 
 Aucune clé, aucun mot de passe dans le dépôt (`.gitignore` : `*.keystore`, `*.jks`,
 `signing-key-info.txt`, `local.properties`). Les variables se posent dans le terminal :
