@@ -220,4 +220,8 @@ await test('parcours_j21 : chacun écrit SES étapes restantes (1 à 7) sous un 
   assert.equal((await appel(LEA, 'PUT', j + K(LEA), null)).statut, 200, 'fini : effacé');
   assert.equal((await appel(LEA, 'GET', j + K(LEA))).statut, 401, 'pas même le sien');
 });
+await test('retour_etat : la relance des inactifs, fermée à tout client', async () => {
+  assert.equal((await appel(LEA, 'PUT', 'retour_etat/' + K(LEA), { depuis: 1, paliers: {} })).statut, 401);
+  assert.equal((await appel(LEA, 'GET', 'retour_etat/' + K(LEA))).statut, 401);
+});
 console.log(ok + ' tests passés (émulateur)');

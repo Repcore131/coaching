@@ -48,6 +48,8 @@ export function travaux(M) {
     { nom: 'badge', quand: (p) => p.joursem === 0 && apres(p, 17, 0), cles: () => M.abonnes(), un: M.planifies.badge, cout: 10, push: true },
     // Les duels suivis (/duels_actifs) : le push de J-2, la clôture, l'oubli.
     { nom: 'duels', quand: (p) => apres(p, 18, 30), cles: () => (M.duelsActifs ? M.duelsActifs() : []), un: (id, t) => M.duelQuotidienUn(id, t), cout: 10, push: true },
+    // La relance des inactifs : J+7, J+14, J+30 après la dernière séance.
+    { nom: 'retour', quand: (p) => apres(p, 11, 0), cles: () => M.abonnes(), un: (uid, t) => (M.retourUn ? M.retourUn(uid, t) : null), cout: 12, push: true },
     // Le parcours « Mise sous tension » : le rappel du 21e jour d'essai.
     { nom: 'parcours', quand: (p) => apres(p, 18, 15), une: (t) => (M.parcoursJ21 ? M.parcoursJ21(t) : null) },
     // Les événements saisonniers : CHAQUE HEURE (heure: true), le compteur

@@ -5799,7 +5799,7 @@ function _validateAthletePkg(o){
       ||params.get('bilan')==='1'||params.get('wo')==='1'||params.get('diete')==='1'
       ||!!params.get('wrapped')||params.get('canal')==='1'||!!params.get('ref')||params.get('parrainage')==='1'
       ||!!params.get('coach')||!!params.get('src')||!!params.get('amb')||params.get('paiements')==='1'
-      ||!!params.get('duel')||params.get('duels')==='1'||!!params.get('saison')||params.get('parcours')==='1');
+      ||!!params.get('duel')||params.get('duels')==='1'||!!params.get('saison')||params.get('parcours')==='1'||params.get('reprise')==='1');
     // Coach invite → athlete device
     const cpkg=params.get('coachpkg');
     if(cpkg){
@@ -5898,6 +5898,8 @@ function _validateAthletePkg(o){
     if(/^[a-z0-9][a-z0-9-]{2,40}$/.test(String(params.get('saison')||''))) window._pendingSaisonOpen=true;
     // ?parcours=1 — le rappel du 21e jour d'essai : la carte revient.
     if(params.get('parcours')==='1') window._pendingParcoursOpen=true;
+    // ?reprise=1 — la relance du 30e jour : l'écran « Reprise en douceur ».
+    if(params.get('reprise')==='1') window._pendingRepriseOpen=true;
     // ?duels=1 — les push des duels (début, J-2, résultat).
     if(params.get('duels')==='1') window._pendingDuelsOpen=true;
     // ?paiements=1 — le push d'un litige PayPal, pour l'administrateur.
@@ -5997,6 +5999,8 @@ const CHAMPS_SANTE=Object.freeze([
   'comparaisons','bilanGoals','_evol_height','_evol_gender',
   // Sommeil, pas, energie, habitudes quotidiennes
   'sleepLog','stepsLog','stepsDayType','stepsGoals','sleepGoal','energieLog','habitudesLog',
+  // Le check-in du matin : sommeil, énergie, courbatures, et la batterie tirée.
+  'checkin',
   // Cycle menstruel et ce qui l'entoure
   'cycle','currentCycle','cycleSuivi','cycleArretPropose','cycleChoixVus',
   'cycleIgnoresSuite','grossesse','statutHormonal','traitementHormonal',
@@ -6109,6 +6113,9 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'celebrations',
   // Le parcours de démarrage : des étapes datées, rien de santé.
   'parcours',
+  // Le tonnage cumulé (relance du serveur léger) et le choix de la reprise
+  // en douceur (une date, oui ou non).
+  'tonnageTotal','_repriseDouce',
   // Les éditions saisonnières : les badges reçus, la dernière valeur envoyée.
   'saisonsReleves','saisonsVal',
   // Combien de fois la page a été proposée à un passage de rang (deux au plus).
@@ -7378,6 +7385,8 @@ function routeUser(){
     setTimeout(()=>{ try{ ouvrirParrainage(); }catch(e){} },1000);}
   if(window._pendingSaisonOpen){ window._pendingSaisonOpen=false;
     setTimeout(()=>{ try{ chargerSaisons(true).then(()=>renderSaisonAccueil()); }catch(e){} },1000);}
+  if(window._pendingRepriseOpen){ window._pendingRepriseOpen=false;
+    setTimeout(()=>{ try{ ouvrirRepriseDouce(); }catch(e){} },1000);}
   if(window._pendingParcoursOpen){ window._pendingParcoursOpen=false;
     setTimeout(()=>{ try{ parcoursRelancer(); }catch(e){} },1000);}
   if(window._pendingDuelsOpen){ window._pendingDuelsOpen=false;
@@ -28364,6 +28373,7 @@ function openClientDetail(cid,_refresh,_force){
   try{ renderCoachTraitementsSection(c); }catch(e){}
   try{ renderCoachAmplitudesSection(c); }catch(e){}
   renderCoachCaffeineSection(c);
+  try{ renderBatterieCoach(c); }catch(e){}
   try{ renderSommeilCoach(c); }catch(e){}
   try{ renderPasCoach(c); }catch(e){}
   if(!_refresh) go('s-coach-client');
@@ -37992,6 +38002,12 @@ function loadClientHome(){
   try{ _rendreCarteAccueil(u); }catch(e){}
   // Le record à portée de la séance du jour, dans la carte Entraînement.
   try{ _rendreRecordAPortee(u); }catch(e){}
+  // Le check-in du matin (jusqu'à 14 h) ou la batterie du jour ; la reprise
+  // en douceur après 30 jours sans séance.
+  try{ _rendreCheckin(u); }catch(e){}
+  try{ _afficherRepriseDouce(u); }catch(e){}
+  // Le tonnage cumulé, posé une fois pour un dossier d'avant ce champ.
+  try{ const _tt=tonnageTotalDe(u); if(u.role!=='coach'&&u.tonnageTotal!==_tt){ u.tonnageTotal=_tt; saveUser(); } }catch(e){}
   // Le rappel du défi en cours.
   try{ renderDefiAccueil(); }catch(e){}
   // Les duels (l'invitation reçue, ceux en cours) et le défi RepCore du mois.
@@ -41200,6 +41216,9 @@ function woPersist(){
       // Sans eux, une séance reprise après pause perdrait sa fin de séance,
       // qui est justement ce qui reste à faire au moment de la reprise.
       deload:!!woState.deload,
+      // Le record à portée et la reprise en douceur survivent à une pause.
+      objectif:woState.objectif||null,
+      repriseDouce:!!woState.repriseDouce,
       warmup:woState.warmup||'',
       cooldown:woState.cooldown||'',
       // Les étapes déjà cochées de l'échauffement : sans elles, une séance
@@ -41971,7 +41990,9 @@ function launchWorkout(sessConfig,slotIdx){
     // dans la détection de plateau.
     // RETOUR DE SUSPENSION : proposition, decochable. Elle ne touche pas
     // sessions_config, qui appartient au coach.
-    deload:!!sessConfig.deload||semaineEstDecharge(currentUser)||repriseDeloadPropose(currentUser),
+    deload:!!sessConfig.deload||semaineEstDecharge(currentUser)||repriseDeloadPropose(currentUser)||repriseDouceActive(currentUser),
+    // LA REPRISE EN DOUCEUR acceptée : charges suggérées -10 % (voir _decote).
+    repriseDouce:repriseDouceActive(currentUser),
     // Une demande du coach vaut case cochée d'avance. Amorcée ICI et non à
     // chaque rendu : sans quoi un décochage serait réécrit à la seconde
     // suivante et l'athlète n'aurait pas la main.
@@ -45036,7 +45057,7 @@ function renderWoEx(){
       ${(()=>{ try{ return _htmlSelecteurSalle(); }catch(e){ return ''; } })()}
       ${woState.deload?`<div style="display:flex;align-items:center;gap:10px;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:10px 14px;margin-bottom:12px">
         <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--info);flex-shrink:0">DÉCHARGE</span>
-        <span style="font-size:var(--fs-xs);color:#bbb;line-height:1.5">Semaine allégée voulue par ton coach. Elle ne comptera pas comme un recul.</span>
+        <span style="font-size:var(--fs-xs);color:#bbb;line-height:1.5">${woState.repriseDouce?'Reprise en douceur : tes charges proposées sont 10 % plus légères. Elle ne comptera pas comme un recul.':'Semaine allégée voulue par ton coach. Elle ne comptera pas comme un recul.'}</span>
       </div>`:''}
       ${(()=>{ try{ const _ri=_rapIndexSeance(); return (_ri>=0&&(woState.currentEx===0||groupe.includes(_ri)))?htmlRecordAPortee(woState.objectif,'seance'):''; }catch(e){ return ''; } })()}
       ${woState.currentEx===0?_carteProtocole(woState.warmup,'Échauffement','var(--orange)','wo-warmup-body',true,
@@ -45255,7 +45276,10 @@ function _blocExo(idx,estSS){
   // Reprise après coupure. Sans _refDate — ancienne signature, ou séance sans
   // date — on ne décote rien et le comportement reste l'actuel.
   const _joursRef=prev?joursDepuisRef(prev._refDate):null;
-  const _decote=_joursRef==null?1:decoteReprise(_joursRef);
+  let _decote=_joursRef==null?1:decoteReprise(_joursRef);
+  // La reprise en douceur acceptée : -10 %, sans cumuler avec la décote de
+  // reprise — la plus forte des deux.
+  if(woState.repriseDouce&&_decote!=null) _decote=Math.min(_decote,REPRISE_DOUCE_FACTEUR);
   const _abandon=!!prev&&_decote===null;
   const _rawSug=(prev&&!_abandon)?chargeSuivante(prev.weight,prev.rir,isCW,_decote):null;
   const _sugBrut=_rawSug!=null&&_rawSug>0?_rawSug:null;
@@ -47019,6 +47043,9 @@ function finishWorkout(incomplete=false){
   try{
     if(suspensionSynchroniser(currentUser)) scheduleWoNotif();
   }catch(e){}
+  // Le tonnage cumulé, pour le serveur léger (relance J+14) : il ne relit
+  // jamais les séances.
+  try{ currentUser.tonnageTotal=tonnageTotalDe(currentUser); }catch(e){}
   // Le rappel de séance du service worker relit ses « records à portée ».
   try{ if(currentUser._woReminderEnabled) scheduleWoNotif(); }catch(e){}
   saveUser();
@@ -47190,6 +47217,9 @@ function finishWorkout(incomplete=false){
   // critères lisent est donc déjà écrit. La bannière, elle, s'affiche une
   // seconde plus tard — _celebrerBadge attend que la fête de fin de séance
   // ait joué la sienne.
+  // RETOUR AU COMBAT : la 1re séance après 10 jours ou plus, dans la file
+  // des célébrations (écran plein et quête de PHÉNIX NOIR).
+  try{ const _rt=retourAuCombat(currentUser,(currentUser.sessions||[])[currentUser.sessions.length-1]); if(_rt) _celebrerRetour(_rt); }catch(e){}
   // Le parcours d'abord : sa fin débloque le badge SOUS TENSION.
   try{ majParcours(currentUser); parcoursEcrireJ21(currentUser).catch(()=>{}); }catch(e){}
   try{ majBadges(); }catch(e){}
@@ -71357,8 +71387,8 @@ function etatInvitationNotif(u,supporte,permission){
 // locaux lisent pushPrefs avant chaque envoi. `acces` (fin d'accès) n'est
 // dans aucune case : il reste, et la carte le dit.
 const NOTIF_GROUPES=Object.freeze([
-  Object.freeze({cle:'seances',titre:'Mes séances et ma série',types:Object.freeze(['serie','badge','wrapped']),
-    detail:'un rappel avant chacune de tes séances, le jeudi à 18 h si ta série est en danger, le dimanche quand un badge est à une ou deux séances, et le 1er du mois ton mois en chiffres'}),
+  Object.freeze({cle:'seances',titre:'Mes séances et ma série',types:Object.freeze(['serie','badge','wrapped','retour']),
+    detail:'un rappel avant chacune de tes séances, le jeudi à 18 h si ta série est en danger, le dimanche quand un badge est à une ou deux séances, le 1er du mois ton mois en chiffres, et après une pause (7, 14 et 30 jours sans séance)'}),
   Object.freeze({cle:'coach',titre:'Mon coach',types:Object.freeze(['coach','bilan','defi']),
     detail:'quand ton coach répond à un bilan ou lance un défi, et le samedi si ton dernier bilan date de deux semaines'}),
   Object.freeze({cle:'invitations',titre:'Mes invitations',types:Object.freeze(['filleul']),
@@ -71523,7 +71553,8 @@ const PUSH_TYPES=Object.freeze([
   {cle:'wrapped',titre:'Ton mois en chiffres',txt:'Le 1er du mois, quand ton Wrapped est prêt.'},
   {cle:'defi',titre:'Défi dans le Canal',txt:'Quand ton coach lance un nouveau défi.'},
   {cle:'filleul',titre:'Filleul inscrit',txt:'Quand quelqu’un s’inscrit grâce à toi.'},
-  {cle:'acces',titre:'Fin de ton accès',txt:'Trois jours avant la fin de ton accès ou de ton abonnement.'}
+  {cle:'acces',titre:'Fin de ton accès',txt:'Trois jours avant la fin de ton accès ou de ton abonnement.'},
+  {cle:'retour',titre:'Après une pause',txt:'À 7, 14 et 30 jours sans séance : trois messages au plus, puis silence.'}
 ]);
 // PURE. La clé base64url en octets — ce qu'attend applicationServerKey.
 function pushB64VersOctets(b64){
@@ -72466,7 +72497,7 @@ const BADGES_ACQUIS=Object.freeze([
   {id:'noel',nom:'NOËL',famille:'secret',palier:null,icone:'noel',condition:'Entraîne-toi un 25 décembre.',indice:'Un cadeau que personne d’autre ne t’offrira.',test:f=>f.noel},
   {id:'tempete',nom:'TEMPÊTE',famille:'secret',palier:null,icone:'tempete',condition:'Bats 3 records dans une même séance.',indice:'Quand ça tombe, ça tombe en rafale.',test:f=>f.tempete},
   {id:'foudre_serie',nom:'FOUDRE EN SÉRIE',famille:'secret',palier:null,icone:'foudre_serie',condition:'Bats au moins un record sur 3 séances d’affilée.',indice:'La foudre frappe parfois trois fois au même endroit.',test:f=>f.foudreSerie},
-  {id:'phenix',nom:'PHÉNIX',famille:'secret',palier:null,icone:'phenix',condition:'Reviens après 30 jours d’arrêt, puis valide 4 semaines.',indice:'Ce qui tombe peut renaître.',test:f=>f.phenix},
+  {id:'phenix',nom:'PHÉNIX NOIR',famille:'secret',palier:null,icone:'phenix',condition:'Reviens après 30 jours d’arrêt, puis valide 4 semaines.',indice:'Ce qui tombe peut renaître.',test:f=>f.phenix},
   {id:'palindrome',nom:'PALINDROME',famille:'secret',palier:null,icone:'palindrome',condition:'Soulève un tonnage de séance palindrome, 10 000 kg ou plus.',indice:'Un tonnage qui se lit dans les deux sens.',test:f=>f.palindrome},
   {id:'vendredi13',nom:'VENDREDI 13',famille:'secret',palier:null,icone:'vendredi13',condition:'Entraîne-toi un vendredi 13.',indice:'Il y a des jours où l’on ne croit pas à la chance.',test:f=>f.vendredi13},
   {id:'centurion',nom:'CENTURION',famille:'secret',palier:null,icone:'centurion',condition:'Valide 100 séries dans la même semaine.',indice:'Cent, sans compter.',test:f=>f.centurion}
@@ -72881,6 +72912,8 @@ function bdgRarete(x,stats){
   if(x&&typeof x==='object'){
     if(x.rang) return Math.min(99,88+Number(x.rang));
     if(x.serie){ const n=Number(x.serie); return n>=52?92:n>=26?82:n>=12?68:n>=8?56:44; }
+    // Le retour au combat passe devant les paliers : il n'arrive qu'après une absence.
+    if(x.retour) return 90;
     if(x.defi){ const r=(typeof currentUser!=='undefined'&&currentUser&&currentUser.defisReleves||{})[x.defi]; return r&&r.champion?84:60; }
     return 0;
   }
@@ -72908,7 +72941,8 @@ function bdgRepartir(items,mode,dejaMontres,stats){
   return {ecrans:p.slice(0,n),trophees:p.slice(n)};
 }
 function _bdgAfficher(x,reste){
-  if(x&&typeof x==='object'&&x.serie) _serieEcran(x.serie,reste);
+  if(x&&typeof x==='object'&&x.retour) _retourEcran(x.retour,reste);
+  else if(x&&typeof x==='object'&&x.serie) _serieEcran(x.serie,reste);
   else if(x&&typeof x==='object'&&x.rang) _rangEcran(x.rang,reste);
   else if(x&&typeof x==='object'&&x.defi) _defiEcran(x.defi,reste);
   else _bdgEcran(x,reste);
@@ -72947,6 +72981,7 @@ function _bdgAjouterTrophees(items){
 function tropheeVignette(x,u){
   if(x&&typeof x==='object'){
     if(x.serie) return {img:'<span class="tr-chiffre">'+Number(x.serie)+'</span>',nom:Number(x.serie)+' semaines',sur:'Palier de série'};
+    if(x.retour) return {img:'<img src="'+escapeHtml(_badgeFichier('RETURN'))+'" alt="">',nom:'Retour au combat',sur:Number(x.retour.jours)+' jours d’absence'};
     if(x.rang){ const r=RANGS[Math.max(0,Math.min(RANGS.length-1,Number(x.rang)-1))];
       return {img:'<img src="'+rangEmbleme(r.n)+'" alt="" data-rang="'+r.n+'" decoding="async">',nom:r.nom,sur:'Nouveau rang'}; }
     if(x.defi){ const res=((u&&u.defisReleves)||{})[x.defi]||{};
@@ -75337,7 +75372,8 @@ const XP_ACTIONS=Object.freeze({
   sommeil:5,           // nuit saisie
   semaine:150,         // semaine validée (le quota de séances atteint)
   badge:40,            // badge débloqué…
-  badgePalier4:200     // … sauf un palier IV
+  badgePalier4:200,    // … sauf un palier IV
+  checkin:10           // check-in du matin (dans le plafond du jour)
 });
 const XP_NUTRITION_MIN=3;
 // LE PLAFOND ANTI-TRICHE, par jour (jour local). Il porte sur tout ce qui se
@@ -75583,7 +75619,7 @@ function _xpJour(t){ try{ return localISODate(new Date(t)); }catch(e){ return ''
 // jusqu'au plafond : la séance d'abord, la nuit en dernier.
 function xpCalcul(u,maintenant){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
-  const cat={seance:0,complete:0,record:0,bilan:0,nutrition:0,sommeil:0,semaine:0,badge:0,parcours:0,archive:0};
+  const cat={seance:0,complete:0,record:0,bilan:0,nutrition:0,sommeil:0,checkin:0,semaine:0,badge:0,parcours:0,archive:0};
   const vide={total:0,cat,ecrete:0};
   if(!u) return vide;
   let f; try{ f=_badgesFaits(u,t); }catch(e){ return vide; }
@@ -75611,7 +75647,11 @@ function xpCalcul(u,maintenant){
       nuits.add(e.date); pose(e.date,'sommeil',XP_ACTIONS.sommeil);
     }
   }
-  const ordre=['seance','complete','record','bilan','nutrition','sommeil'];
+  // Le check-in du matin : 10 V par jour, dans le plafond.
+  for(const j of Object.keys((u.checkin&&typeof u.checkin==='object')?u.checkin:{})){
+    if(/^\d{4}-\d{2}-\d{2}$/.test(j)&&checkinComplet(u.checkin[j])&&Number(u.checkin[j].at||0)<=t) pose(j,'checkin',XP_ACTIONS.checkin);
+  }
+  const ordre=['seance','complete','record','bilan','nutrition','sommeil','checkin'];
   let ecrete=0;
   for(const j of Object.keys(jours)){
     let reste=XP_PLAFOND_JOUR;
@@ -78882,6 +78922,363 @@ function objectifAtteint(objectif,record){
   const a=String(objectif.nm||''), b=String(record.nm||'');
   const meme=a===b||(()=>{ try{ return exKey(a)===exKey(b); }catch(e){ return false; } })();
   return meme&&Number(record.curMax)>=Number(objectif.charge);
+}
+
+// ══ LE CHECK-IN DU MATIN ET LA BATTERIE DU JOUR (28/09/2026) ═══════════
+//
+// Trois questions en trois touches (sommeil, énergie, courbatures, de 1 à 5),
+// proposées sur l'accueil jusqu'à 14 h. Enregistré dans le dossier,
+// u.checkin[AAAA-MM-JJ] (donc /users/<id>/checkin/<date>) : une donnée de
+// SANTÉ (CHAMPS_SANTE), lue par le coach dans la fiche athlète.
+//
+// LA BATTERIE (batterieDuJour) : 0..100 % et une phrase — séance à fond,
+// séance normale, baisse de 10 % conseillée, repos conseillé. Le ressenti
+// pèse d'abord ; la charge des 7 derniers jours, comparée à la semaine
+// habituelle (les 4 d'avant), l'ajuste. Un conseil, jamais une consigne :
+// rien n'est modifié dans la séance.
+//
+// +10 V par check-in (XP_ACTIONS.checkin), DANS le plafond du jour.
+const CHECKIN_HEURE_MAX=14;
+const CHECKIN_QUESTIONS=Object.freeze([
+  Object.freeze({cle:'sommeil',lib:'Sommeil',bas:'Très mauvais',haut:'Excellent'}),
+  Object.freeze({cle:'energie',lib:'Énergie',bas:'Vidé',haut:'Au top'}),
+  Object.freeze({cle:'courbatures',lib:'Courbatures',bas:'Aucune',haut:'Fortes',inverse:true})
+]);
+const BATTERIE_NIVEAUX=Object.freeze([
+  Object.freeze({min:80,cle:'fond',phrase:'Séance à fond possible'}),
+  Object.freeze({min:55,cle:'normale',phrase:'Séance normale'}),
+  Object.freeze({min:35,cle:'baisse',phrase:'Baisse de 10 % conseillée'}),
+  Object.freeze({min:0,cle:'repos',phrase:'Repos conseillé'})
+]);
+const RECHARGE_CONSEILS=Object.freeze([
+  'Couche-toi 30 minutes plus tôt ce soir.',
+  'Vise tes protéines à chaque repas aujourd’hui.',
+  'Vingt minutes de marche, sans forcer.',
+  'Cinq minutes de mobilité : hanches, épaules, chevilles.'
+]);
+const _ciNote=v=>{ const n=Math.round(Number(v)); return (n>=1&&n<=5)?n:0; };
+/** PURE. Le check-in est-il complet (trois réponses de 1 à 5) ? */
+function checkinComplet(c){ return !!(c&&_ciNote(c.sommeil)&&_ciNote(c.energie)&&_ciNote(c.courbatures)); }
+/**
+ * PURE. La charge des 7 derniers jours : {semaine, moyenne} en kg soulevés
+ * (volume des séances), la moyenne sur les 4 semaines d'avant. null sans
+ * semaine habituelle à comparer.
+ */
+function chargeSeptJours(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  let semaine=0, avant=0, nAvant=0;
+  for(const s of ((u&&u.sessions)||[])){
+    const d=Number(s&&s.date), v=Number(s&&s.volume)||0;
+    if(!(d>0)||d>t) continue;
+    if(t-d<7*864e5) semaine+=v;
+    else if(t-d<35*864e5){ avant+=v; nAvant++; }
+  }
+  if(!nAvant||!(avant>0)) return null;
+  return {semaine:Math.round(semaine),moyenne:Math.round(avant/4)};
+}
+/**
+ * PURE. LA BATTERIE DU JOUR.
+ * @param {{sommeil:number,energie:number,courbatures:number}} checkin  1..5
+ * @param {?{semaine:number,moyenne:number}} charge  chargeSeptJours
+ * @returns {?{pct:number,niveau:string,phrase:string}}
+ */
+function batterieDuJour(checkin,charge){
+  if(!checkinComplet(checkin)) return null;
+  const s=(_ciNote(checkin.sommeil)-1)/4, e=(_ciNote(checkin.energie)-1)/4, c=1-(_ciNote(checkin.courbatures)-1)/4;
+  let pct=100*(0.35*s+0.40*e+0.25*c);
+  // La charge : une semaine bien plus lourde que d'habitude vide la
+  // batterie ; une semaine très légère la recharge un peu.
+  const r=(charge&&Number(charge.moyenne)>0)?Number(charge.semaine)/Number(charge.moyenne):null;
+  if(r!=null){
+    if(r>=1.5) pct-=15;
+    else if(r>=1.25) pct-=8;
+    else if(r<0.5) pct+=5;
+  }
+  pct=Math.max(0,Math.min(100,Math.round(pct)));
+  const n=BATTERIE_NIVEAUX.find(x=>pct>=x.min);
+  return {pct,niveau:n.cle,phrase:n.phrase};
+}
+function _ciJour(t){ return localISODate(new Date((typeof t==='number')?t:Date.now())); }
+function checkinDuJour(u,maintenant){
+  const c=u&&u.checkin&&u.checkin[_ciJour(maintenant)];
+  return checkinComplet(c)?c:null;
+}
+/** PURE. La série de check-ins : jours d'affilée jusqu'à aujourd'hui (ou hier). */
+function serieCheckins(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const l=(u&&u.checkin)||{};
+  let d=new Date(t); d.setHours(12,0,0,0);
+  if(!checkinComplet(l[localISODate(d)])) d=new Date(d.getTime()-864e5);
+  let n=0;
+  while(checkinComplet(l[localISODate(d)])&&n<3650){ n++; d=new Date(d.getTime()-864e5); }
+  return n;
+}
+/** PURE. Le formulaire est-il proposé ? Un athlète, avant 14 h, pas encore fait. */
+function checkinAProposer(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(!u||u.role==='coach'||!u.email) return false;
+  if(new Date(t).getHours()>=CHECKIN_HEURE_MAX) return false;
+  return !checkinDuJour(u,t);
+}
+// Le sommeil importé de la nuit (sleepLog), s'il existe : montré, pas demandé.
+function _ciSommeilImporte(u,maintenant){
+  const j=_ciJour(maintenant);
+  const e=((u&&Array.isArray(u.sleepLog))?u.sleepLog:[]).find(x=>x&&x.date===j&&Number(x.duration)>0);
+  if(!e) return '';
+  const m=Math.round(Number(e.duration)*(Number(e.duration)<24?60:1));
+  return Math.floor(m/60)+' h '+String(m%60).padStart(2,'0');
+}
+// Le conseil du jour de repos, et le prochain record à portée en teaser.
+function _ciRecharge(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const d=new Date(t);
+  const conseil=RECHARGE_CONSEILS[(d.getDate()+d.getMonth())%RECHARGE_CONSEILS.length];
+  let teaser='';
+  try{
+    for(let k=1;k<=7&&!teaser;k++){
+      const s=seancePrevueDuJour(u,t+k*864e5);
+      const o=s?recordAPortee(u,s,t):null;
+      if(o) teaser=texteRecordAPortee(o);
+    }
+  }catch(e){ teaser=''; }
+  return {conseil,teaser};
+}
+let _ciBrouillon={};
+// PURE (sauf le brouillon passé). La carte : le formulaire, ou la batterie.
+function htmlCheckinAccueil(u,maintenant,brouillon){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(!u||u.role==='coach') return '';
+  const fait=checkinDuJour(u,t);
+  const serie=serieCheckins(u,t);
+  const serieTxt=serie>=2?'<span class="ci-serie">'+serie+' matins</span>':'';
+  if(fait){
+    const b=batterieDuJour(fait,chargeSeptJours(u,t));
+    if(!b) return '';
+    let repos=false; try{ repos=!seancePrevueDuJour(u,t); }catch(e){ repos=false; }
+    const rc=repos?_ciRecharge(u,t):null;
+    return '<div class="ci-carte ci-fait" data-niveau="'+b.niveau+'">'
+      +'<div class="ci-tete"><span class="eyebrow">Batterie du jour</span>'+serieTxt+'</div>'
+      +'<div class="ci-bat"><div class="ci-pile" aria-hidden="true"><i style="width:'+b.pct+'%"></i></div>'
+      +'<b class="ci-pct" id="ci-pct" data-cible="'+b.pct+'">'+b.pct+' %</b></div>'
+      +'<div class="ci-phrase">'+escapeHtml(repos?'Recharge : ta prochaine séance sera meilleure si…':b.phrase)+'</div>'
+      +(rc?'<div class="ci-conseil">'+escapeHtml(rc.conseil)+'</div>'+(rc.teaser?'<div class="ci-teaser">'+escapeHtml(rc.teaser)+'</div>':''):'')
+      +'</div>';
+  }
+  if(!checkinAProposer(u,t)) return '';
+  const br=brouillon||{};
+  const imp=_ciSommeilImporte(u,t);
+  return '<div class="ci-carte" role="group" aria-label="Check-in du matin">'
+    +'<div class="ci-tete"><span class="eyebrow eyebrow-act">Check-in du matin</span>'+serieTxt+'</div>'
+    +CHECKIN_QUESTIONS.map(q=>'<div class="ci-ligne"><span class="ci-lib">'+q.lib
+      +(q.cle==='sommeil'&&imp?' <em>'+imp+' cette nuit</em>':'')+'</span>'
+      +'<span class="ci-pastilles">'+[1,2,3,4,5].map(n=>'<button type="button" class="ci-p'+(Number(br[q.cle])===n?' on':'')+'" '
+        +'aria-label="'+escapeHtml(q.lib+' : '+n+' sur 5'+(n===1?' ('+q.bas+')':n===5?' ('+q.haut+')':''))+'" '
+        +'onclick="checkinRepondre(\''+q.cle+'\','+n+')">'+n+'</button>').join('')+'</span></div>').join('')
+    +'<div class="ci-note">1 = '+escapeHtml(CHECKIN_QUESTIONS[0].bas.toLowerCase())+' · 5 = '+escapeHtml(CHECKIN_QUESTIONS[0].haut.toLowerCase())
+      +' ; courbatures : 1 = aucune · +10 V</div>'
+    +'</div>';
+}
+function _rendreCheckin(u){
+  const z=document.getElementById('clh-checkin');
+  if(!z) return false;
+  z.innerHTML=htmlCheckinAccueil(u,Date.now(),_ciBrouillon);
+  try{ const p=z.querySelector('#ci-pct'); if(p&&z.dataset.anime!=='1'){ z.dataset.anime='1'; p.dataset.valeur='0';
+    arcCompteur(p,Number(p.dataset.cible)||0,{duree:700,format:x=>Math.round(x)+' %'}); } }catch(e){}
+  return !!z.innerHTML;
+}
+// Une touche : la réponse est gardée ; à la troisième, le check-in est écrit.
+function checkinRepondre(cle,n){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||!CHECKIN_QUESTIONS.some(q=>q.cle===cle)||!_ciNote(n)) return false;
+  _ciBrouillon[cle]=_ciNote(n);
+  if(checkinComplet(_ciBrouillon)){
+    const t=Date.now(), j=_ciJour(t);
+    const c={sommeil:_ciBrouillon.sommeil,energie:_ciBrouillon.energie,courbatures:_ciBrouillon.courbatures,at:t};
+    const b=batterieDuJour(c,chargeSeptJours(u,t));
+    if(b) c.batterie=b.pct;
+    u.checkin=(u.checkin&&typeof u.checkin==='object')?u.checkin:{};
+    u.checkin[j]=c;
+    _ciBrouillon={};
+    try{ saveUser(); }catch(e){}
+    try{ majXp(); _rendreRang(u); }catch(e){}
+    try{ arcHaptique('succes'); }catch(e){}
+  }
+  _rendreCheckin(u);
+  return true;
+}
+// Côté coach : la batterie du jour et la tendance 14 jours.
+function _htmlBatterieCoach(c,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const l=(c&&c.checkin)||{};
+  const jours=[];
+  for(let k=13;k>=0;k--){
+    const d=new Date(t-k*864e5), j=localISODate(d);
+    const x=l[j];
+    const b=checkinComplet(x)?(Number(x.batterie)>=0&&x.batterie!==undefined?Number(x.batterie):(batterieDuJour(x,null)||{}).pct):null;
+    jours.push({j,b:(b==null||!isFinite(b))?null:b});
+  }
+  const faits=jours.filter(x=>x.b!=null);
+  if(!faits.length) return '';
+  const auj=jours[jours.length-1].b;
+  const moy=Math.round(faits.reduce((a,x)=>a+x.b,0)/faits.length);
+  const niv=auj==null?null:BATTERIE_NIVEAUX.find(x=>auj>=x.min);
+  return '<section class="cc-sect cc-bat"><div class="cc-sect-t">Batterie du jour</div>'
+    +'<div class="ci-coach-l"><b>'+(auj==null?'Pas de check-in aujourd’hui':auj+' %')+'</b>'
+    +(niv?'<span>'+escapeHtml(niv.phrase)+'</span>':'')+'</div>'
+    +'<div class="ci-coach-barres" role="img" aria-label="Tendance 14 jours, moyenne '+moy+' %">'
+    +jours.map(x=>'<i title="'+escapeHtml(x.j+(x.b==null?' : pas de check-in':' : '+x.b+' %'))+'" style="height:'+(x.b==null?4:Math.max(6,x.b))+'%"'+(x.b==null?' class="vide"':'')+'></i>').join('')
+    +'</div><div class="ci-coach-n">14 jours · moyenne '+moy+' % · '+faits.length+' check-in'+(faits.length>1?'s':'')+'</div></section>';
+}
+function renderBatterieCoach(c){
+  const z=document.getElementById('ccd-batterie');
+  if(!z) return;
+  let h=''; try{ h=_htmlBatterieCoach(c); }catch(e){ h=''; }
+  z.innerHTML=h; z.style.display=h?'':'none';
+}
+
+// ══ LA REPRISE EN DOUCEUR (J+30) ════════════════════════════════════════
+// Un mois sans séance : l'app PROPOSE de baisser de 10 % les charges de la
+// prochaine séance. Jamais automatique : l'athlète choisit (u._repriseDouce).
+// Accepté, la prochaine séance part en DÉCHARGE (woState.deload, la logique
+// existante : bandeau, hors détection de plateau) et ses charges suggérées
+// sont décotées de 10 % — sans cumuler avec la décote de reprise existante
+// (decoteReprise) : la plus forte des deux s'applique. La séance suivante la
+// consomme (sa date dépasse celle du choix).
+const REPRISE_DOUCE_J=30, REPRISE_DOUCE_FACTEUR=0.9;
+function derniereSeanceDate(u){
+  let m=0;
+  for(const s of ((u&&u.sessions)||[])){ const d=Number(s&&s.date); if(d>m) m=d; }
+  return m;
+}
+/** PURE. Jours entiers sans séance, ou -1 sans historique. */
+function joursSansSeance(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const d=derniereSeanceDate(u);
+  if(!d) return -1;
+  const a=new Date(d); a.setHours(12,0,0,0);
+  const b=new Date(t); b.setHours(12,0,0,0);
+  return Math.round((b-a)/864e5);
+}
+/** PURE. Le tonnage cumulé de toutes les séances (kg). */
+function tonnageTotalDe(u){
+  let v=0;
+  for(const s of ((u&&u.sessions)||[])) v+=Math.max(0,Number(s&&s.volume)||0);
+  return Math.round(v);
+}
+/** PURE. Faut-il proposer la reprise en douceur ? */
+function repriseDouceAProposer(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(!u||u.role==='coach') return false;
+  if(u.suspension&&u.suspension.actif) return false;
+  try{ if(suspensionEtat(u).actif) return false; }catch(e){}
+  if(joursSansSeance(u,t)<REPRISE_DOUCE_J) return false;
+  const r=u._repriseDouce;
+  return !(r&&Number(r.depuis)>derniereSeanceDate(u));
+}
+/** PURE. La baisse acceptée attend-elle sa séance ? */
+function repriseDouceActive(u){
+  const r=u&&u._repriseDouce;
+  return !!(r&&r.accepte&&Number(r.depuis)>derniereSeanceDate(u));
+}
+function htmlRepriseDouce(u,maintenant){
+  const n=joursSansSeance(u,maintenant);
+  return '<div class="rd-carte" role="region" aria-label="Reprise en douceur">'
+    +'<div class="eyebrow eyebrow-act">Reprise en douceur</div>'
+    +'<p class="rd-txt">Ta dernière séance date de '+n+' jours. On te propose de baisser de <b>10 %</b> les charges de ta prochaine séance : '
+    +'elle comptera comme une décharge, et tu repars sur de bonnes bases. C’est toi qui décides.</p>'
+    +'<div class="rd-actions"><button type="button" class="btn btn-red btn-sm" onclick="repriseDouceChoisir(true)">Baisser de 10 %</button>'
+    +'<button type="button" class="btn btn-outline btn-sm" onclick="repriseDouceChoisir(false)">Garder mes charges</button></div></div>';
+}
+function _afficherRepriseDouce(u){
+  const z=document.getElementById('clh-reprise-douce');
+  if(!z) return false;
+  let on=false; try{ on=repriseDouceAProposer(u); }catch(e){ on=false; }
+  z.innerHTML=on?htmlRepriseDouce(u):'';
+  return on;
+}
+function repriseDouceChoisir(oui){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u) return false;
+  u._repriseDouce={depuis:Date.now(),accepte:!!oui};
+  try{ saveUser(); }catch(e){}
+  try{ _afficherRepriseDouce(u); }catch(e){}
+  try{ document.getElementById('rd-ecran')?.remove(); }catch(e){}
+  try{ toast(oui?'C’est noté : ta prochaine séance part 10 % plus légère ✓':'C’est noté : tes charges restent les mêmes ✓'); }catch(e){}
+  return true;
+}
+// L'écran ouvert par la notification du 30e jour (./?reprise=1).
+function ouvrirRepriseDouce(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||!repriseDouceAProposer(u)) return false;
+  document.getElementById('rd-ecran')?.remove();
+  const z=document.createElement('div');
+  z.id='rd-ecran'; z.className='rd-ecran';
+  z.setAttribute('role','dialog'); z.setAttribute('aria-modal','true'); z.setAttribute('aria-label','Reprise en douceur');
+  z.innerHTML='<div class="rd-boite">'+htmlRepriseDouce(u)+'</div>';
+  z.addEventListener('click',e=>{ if(e.target===z) z.remove(); });
+  document.body.appendChild(z);
+  return true;
+}
+
+// ══ RETOUR AU COMBAT (1re séance après 10 jours ou plus) ════════════════
+// Un écran plein dans la file des célébrations (le médaillon RETURN), avec
+// la quête de PHÉNIX NOIR : revenir après 30 jours d'arrêt, puis valider 4
+// semaines d'affilée à partir de la semaine du retour (_badgesFaits).
+const RETOUR_COMBAT_J=10, PHENIX_ARRET_J=30, PHENIX_SEMAINES=4;
+/** PURE. Le retour que marque la séance `sess`, ou null. */
+function retourAuCombat(u,sess){
+  const d=Number(sess&&sess.date);
+  if(!u||!(d>0)) return null;
+  let prev=0;
+  for(const s of (u.sessions||[])){ const x=Number(s&&s.date); if(x<d&&x>prev) prev=x; }
+  if(!prev) return null;
+  const a=new Date(prev); a.setHours(12,0,0,0);
+  const b=new Date(d); b.setHours(12,0,0,0);
+  const jours=Math.round((b-a)/864e5);
+  if(jours<RETOUR_COMBAT_J) return null;
+  const eligible=jours>=PHENIX_ARRET_J;
+  let faites=0;
+  if(eligible){
+    try{
+      const f=_badgesFaits(u,Math.max(d,Date.now()));
+      const l0=_lundiDe(d).getTime();
+      for(let k=0;k<PHENIX_SEMAINES;k++){
+        const lk=_lundiDe(l0+k*7*864e5+12*36e5).getTime();
+        if(f.semaines.some(v=>{ try{ return _lundiDe(v).getTime()===lk; }catch(e){ return false; } })) faites++;
+        else break;
+      }
+    }catch(e){ faites=0; }
+  }
+  return {jours,eligible,faites,reste:PHENIX_SEMAINES-faites};
+}
+/** PURE. La ligne de la quête. */
+function textePhenixNoir(r){
+  if(!r) return '';
+  if(!r.eligible) return 'PHÉNIX NOIR se gagne en revenant après '+PHENIX_ARRET_J+' jours d’arrêt, puis '+PHENIX_SEMAINES+' semaines validées d’affilée.';
+  if(r.reste<=0) return 'PHÉNIX NOIR est à toi.';
+  return 'PHÉNIX NOIR : encore '+r.reste+' semaine'+(r.reste>1?'s':'')+' à valider.';
+}
+function _retourEcran(r,reste){
+  const z=_bdgCouche(
+    '<div class="bdg-ecran-txt rc-retour">'
+    +'<div class="bdg-ecran-sur">'+r.jours+' JOURS SANS SÉANCE</div>'
+    +'<div class="bdg-ecran-img" id="rc-retour-img"><img src="'+escapeHtml(_badgeFichier('RETURN'))+'" alt=""></div>'
+    +'<div class="bdg-ecran-nom">RETOUR AU COMBAT</div>'
+    +'<p class="bdg-ecran-cond">Tu es revenu. C’est la séance la plus difficile, et elle est faite.</p>'
+    +'<div class="rc-phenix"><div class="rc-phenix-cases" aria-hidden="true">'
+      +Array.from({length:PHENIX_SEMAINES},(_,i)=>'<i'+(i<r.faites?' class="on"':'')+'></i>').join('')+'</div>'
+      +'<div class="rc-phenix-txt">'+escapeHtml(textePhenixNoir(r))+'</div></div>'
+    +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" onclick="bdgPlusTard()">'
+      +(reste||_bdgRecap.length?'Suivant':'Continuer')+'</button>'
+    +'</div>','Retour au combat');
+  try{ _bdgFoudre(z.querySelector('#rc-retour-img'),{eclairs:2,conteneur:z}); }catch(e){}
+  try{ arcHaptique('succes'); }catch(e){}
+  return z;
+}
+function _celebrerRetour(r){
+  if(!r) return;
+  _bdgFile.push({retour:r});
+  _bdgPlanifier();
 }
 
 // ── Tonnage hebdomadaire ──────────────────────────────────────────────────

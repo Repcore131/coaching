@@ -48631,13 +48631,13 @@ async function testExercices(){
         basculerPushType('defi',true);
         if(!pushTypeActif(currentUser,'defi')||'defi' in currentUser.pushPrefs) return _echec('non rallumé');
         if(basculerPushType('inconnu',false)) return _echec('type inconnu accepté');
-        return PUSH_TYPES.map(t=>t.cle).sort().join()==='acces,badge,bilan,coach,defi,filleul,serie,wrapped'?true:_echec('types');
+        return PUSH_TYPES.map(t=>t.cle).sort().join()==='acces,badge,bilan,coach,defi,filleul,retour,serie,wrapped'?true:_echec('types');
       } finally { currentUser=svU; saveUser=svS; }})());
     ok('Push : l’écran de réglages — une case par type, le bouton seulement quand il sert',(()=>{
       const d=document.createElement('div');
       d.innerHTML=htmlReglagesPush({pushPrefs:{serie:false}},'proposer');
       const c=d.querySelectorAll('input[type=checkbox][data-push]');
-      if(c.length!==PUSH_TYPES.length||c.length!==8) return _echec(c.length+' cases');
+      if(c.length!==PUSH_TYPES.length||c.length!==9) return _echec(c.length+' cases');
       if(d.querySelector('[data-push=serie]').checked||!d.querySelector('[data-push=coach]').checked) return _echec('état des cases');
       const b=d.querySelector('button');
       if(!b||!b.classList.contains('btn-casse')) return _echec('bouton d’activation (R31 : btn-casse)');
@@ -49841,6 +49841,129 @@ async function testExercices(){
         if(htmlReglageCelebrations({role:'coach'})!=='') return _echec('coach');
       }finally{ currentUser=sv.u; window.saveUser=sv.s; }
       return CHAMPS_NON_SANTE.indexOf('celebrations')>=0?true:_echec('non classé');})());
+    // ══ 28/09/2026 — CHECK-IN DU MATIN, REPRISE EN DOUCEUR, RETOUR AU COMBAT ══
+    const _CJ=864e5, _CT=new Date(2026,9,20,9,30).getTime();   // mardi 20 octobre, 9 h 30
+    const _Cjour=(k)=>localISODate(new Date(_CT-k*_CJ));
+    ok('Batterie du jour : 0..100 %, quatre phrases, la charge des 7 jours l’ajuste',(()=>{
+      const b=(s,e,c,ch)=>batterieDuJour({sommeil:s,energie:e,courbatures:c},ch||null);
+      if(b(5,5,1).pct!==100||b(5,5,1).phrase!=='Séance à fond possible') return _echec('au top : '+JSON.stringify(b(5,5,1)));
+      if(b(1,1,5).pct!==0||b(1,1,5).phrase!=='Repos conseillé') return _echec('vidé : '+JSON.stringify(b(1,1,5)));
+      if(b(3,3,3).pct!==50||b(3,3,3).niveau!=='baisse'||b(3,3,3).phrase!=='Baisse de 10 % conseillée') return _echec('moyen : '+JSON.stringify(b(3,3,3)));
+      if(b(4,4,2).niveau!=='normale'||b(4,4,2).phrase!=='Séance normale') return _echec('bien : '+JSON.stringify(b(4,4,2)));
+      // Une semaine 1,6 fois plus lourde que d'habitude : -15 ; très légère : +5.
+      if(b(4,4,2,{semaine:16000,moyenne:10000}).pct!==b(4,4,2).pct-15) return _echec('surcharge');
+      if(b(4,4,2,{semaine:13000,moyenne:10000}).pct!==b(4,4,2).pct-8) return _echec('charge haute');
+      if(b(4,4,2,{semaine:3000,moyenne:10000}).pct!==b(4,4,2).pct+5) return _echec('semaine légère');
+      if(b(5,5,1,{semaine:1000,moyenne:10000}).pct!==100) return _echec('borné à 100');
+      if(batterieDuJour({sommeil:3,energie:3},null)!==null||batterieDuJour({sommeil:0,energie:3,courbatures:3})!==null) return _echec('incomplet');
+      // La charge des 7 jours, à partir des volumes des séances.
+      const u={sessions:[{date:_CT-2*_CJ,volume:8000},{date:_CT-10*_CJ,volume:4000},{date:_CT-20*_CJ,volume:4000},{date:_CT-40*_CJ,volume:99999}]};
+      const ch=chargeSeptJours(u,_CT);
+      if(!ch||ch.semaine!==8000||ch.moyenne!==2000) return _echec(JSON.stringify(ch));
+      return chargeSeptJours({sessions:[{date:_CT-_CJ,volume:500}]},_CT)===null?true:_echec('sans habitude');})());
+    ok('Check-in : proposé jusqu’à 14 h, enregistré dans checkin/<date>, la batterie affichée ensuite, la série de matins',(()=>{
+      const u={role:'athlete',email:'ci@t.fr',sessions:[]};
+      if(!checkinAProposer(u,_CT)) return _echec('9 h 30');
+      if(checkinAProposer(u,new Date(2026,9,20,14,0).getTime())) return _echec('14 h');
+      if(checkinAProposer({role:'coach',email:'c@t.fr'},_CT)) return _echec('coach');
+      const d=document.createElement('div'); d.innerHTML=htmlCheckinAccueil(u,_CT,{sommeil:4});
+      if(d.querySelectorAll('.ci-ligne').length!==3||d.querySelectorAll('.ci-p').length!==15) return _echec('trois rangées de cinq');
+      if(d.querySelectorAll('.ci-p.on').length!==1) return _echec('brouillon');
+      if(!/Sommeil/.test(d.textContent)||!/Énergie/.test(d.textContent)||!/Courbatures/.test(d.textContent)) return _echec('libellés');
+      // Le sommeil importé est montré.
+      const v=Object.assign({},u,{sleepLog:[{date:_Cjour(0),duration:7.5}]});
+      if(htmlCheckinAccueil(v,_CT,{}).indexOf('7 h 30 cette nuit')<0) return _echec('sommeil importé');
+      // Les trois réponses : écrit sous la date du jour, avec la batterie.
+      const sv={u:currentUser,s:window.saveUser,x:window.majXp,r:window._rendreRang};
+      try{
+        window.saveUser=()=>{}; window.majXp=()=>null; window._rendreRang=()=>{};
+        currentUser={role:'athlete',email:'ci2@t.fr',sessions:[]};
+        _ciBrouillon={};
+        checkinRepondre('sommeil',4); checkinRepondre('energie',5);
+        if(currentUser.checkin) return _echec('écrit avant la 3e réponse');
+        if(checkinRepondre('humeur',3)) return _echec('question inconnue');
+        checkinRepondre('courbatures',2);
+        const c=currentUser.checkin&&currentUser.checkin[localISODate(new Date())];
+        if(!c||c.sommeil!==4||c.energie!==5||c.courbatures!==2||!(c.batterie>0)||!(c.at>0)) return _echec(JSON.stringify(currentUser.checkin));
+      }finally{ currentUser=sv.u; window.saveUser=sv.s; window.majXp=sv.x; window._rendreRang=sv.r; _ciBrouillon={}; }
+      // Fait : la batterie, et plus le formulaire.
+      const w=Object.assign({},u,{checkin:{[_Cjour(0)]:{sommeil:5,energie:5,courbatures:1,at:_CT},[_Cjour(1)]:{sommeil:3,energie:3,courbatures:3,at:1},[_Cjour(2)]:{sommeil:3,energie:3,courbatures:3,at:1}}});
+      if(checkinAProposer(w,_CT)) return _echec('reproposé');
+      const e=document.createElement('div'); e.innerHTML=htmlCheckinAccueil(w,_CT);
+      if(!e.querySelector('.ci-pile i')||e.querySelector('#ci-pct').textContent!=='100 %') return _echec('batterie : '+e.innerHTML.slice(0,200));
+      if(serieCheckins(w,_CT)!==3||e.textContent.indexOf('3 matins')<0) return _echec('série '+serieCheckins(w,_CT));
+      if(serieCheckins(w,_CT+_CJ)!==3) return _echec('hier compte encore');
+      if(serieCheckins(w,_CT+2*_CJ)!==0) return _echec('série cassée');
+      // Jour sans séance prévue : « Recharge » et un conseil.
+      if(!/Recharge/.test(e.textContent)||!RECHARGE_CONSEILS.some(x=>e.textContent.indexOf(x)>=0)) return _echec('recharge');
+      return CHAMPS_SANTE.indexOf('checkin')>=0?true:_echec('checkin non classé santé');})());
+    ok('Check-in : +10 V, une fois par jour, DANS le plafond',(()=>{
+      if(XP_ACTIONS.checkin!==10) return _echec('barème');
+      const j=_Cjour(0);
+      const u={role:'athlete',email:'x@t.fr',sessions:[],checkin:{[j]:{sommeil:3,energie:3,courbatures:3,at:_CT},[_Cjour(1)]:{sommeil:3,energie:3,at:1}}};
+      const a=xpCalcul(u,_CT+3600e3);
+      if(a.cat.checkin!==10) return _echec('un check-in complet, un incomplet : '+a.cat.checkin);
+      // Une journée déjà au plafond : le check-in est écrêté.
+      const ses=[];
+      for(let i=0;i<5;i++) ses.push({date:_CT+i*60e3,duration:60,sets:1,setsPlanned:1,data:{['Ex'+i]:{sets:[{weight:'10',reps:'5',done:true}]}}});
+      const plein=xpCalcul(Object.assign({},u,{sessions:ses}),_CT+3600e3);
+      if(plein.cat.checkin!==0||!(plein.ecrete>0)) return _echec('hors plafond : '+JSON.stringify(plein.cat)+' écrêté '+plein.ecrete);
+      return true;})());
+    ok('Check-in : le coach voit la batterie du jour et la tendance 14 jours',(()=>{
+      const c={checkin:{[_Cjour(0)]:{sommeil:4,energie:4,courbatures:2,at:1,batterie:72},[_Cjour(3)]:{sommeil:2,energie:2,courbatures:4,at:1}}};
+      const d=document.createElement('div'); d.innerHTML=_htmlBatterieCoach(c,_CT);
+      if(d.textContent.indexOf('72 %')<0||d.textContent.indexOf('Séance normale')<0) return _echec(d.textContent);
+      if(d.querySelectorAll('.ci-coach-barres i').length!==14||d.querySelectorAll('.ci-coach-barres i.vide').length!==12) return _echec('barres');
+      if(!/2 check-ins/.test(d.textContent)) return _echec('compte');
+      if(_htmlBatterieCoach({},_CT)!=='') return _echec('vide');
+      return document.getElementById('ccd-batterie')&&document.getElementById('clh-checkin')?true:_echec('zones absentes');})());
+    ok('Reprise en douceur : proposée à J+30, jamais automatique ; acceptée, -10 % et décharge pour la séance suivante seulement',(()=>{
+      const u={role:'athlete',email:'rd@t.fr',sessions:[{date:_CT-31*_CJ,volume:100}]};
+      if(joursSansSeance(u,_CT)!==31) return _echec('jours '+joursSansSeance(u,_CT));
+      if(!repriseDouceAProposer(u,_CT)) return _echec('J+31');
+      if(repriseDouceAProposer({role:'athlete',sessions:[{date:_CT-29*_CJ}]},_CT)) return _echec('J+29');
+      if(repriseDouceAProposer({role:'athlete',sessions:[]},_CT)) return _echec('sans historique');
+      if(repriseDouceAProposer(Object.assign({},u,{suspension:{actif:true,cause:'drapeau',debut:1}}),_CT)) return _echec('suspension');
+      if(repriseDouceActive(u)) return _echec('automatique');
+      const h=htmlRepriseDouce(u,_CT);
+      if(h.indexOf('Reprise en douceur')<0||h.indexOf('10 %')<0||h.indexOf('repriseDouceChoisir(true)')<0||h.indexOf('repriseDouceChoisir(false)')<0) return _echec('écran');
+      const sv={u:currentUser,s:window.saveUser};
+      try{
+        window.saveUser=()=>{};
+        currentUser=u; repriseDouceChoisir(true);
+        if(!repriseDouceActive(u)||repriseDouceAProposer(u)) return _echec('acceptée');
+        const v={role:'athlete',sessions:[{date:_CT-31*_CJ}]}; currentUser=v; repriseDouceChoisir(false);
+        if(repriseDouceActive(v)||repriseDouceAProposer(v)) return _echec('refusée : ni baisse ni nouvelle question');
+      }finally{ currentUser=sv.u; window.saveUser=sv.s; }
+      // La séance suivante la consomme.
+      u.sessions.push({date:Date.now()+1000,volume:100});
+      if(repriseDouceActive(u)) return _echec('non consommée');
+      if(REPRISE_DOUCE_FACTEUR!==0.9) return _echec('facteur');
+      // Le montage de séance la lit, sans cumuler avec la décote de reprise.
+      return (/repriseDouceActive\(currentUser\)/.test(String(launchWorkout))
+        &&/_decote=Math\.min\(_decote,REPRISE_DOUCE_FACTEUR\)/.test(String(renderWoEx)+String(_blocExo)))?true:_echec('montage de séance');})());
+    ok('Retour au combat : après 10 jours ou plus, et la quête de PHÉNIX NOIR',(()=>{
+      const d=new Date(2026,9,5,18).getTime();
+      const u={sessions:[{date:d-12*_CJ},{date:d}],sessions_config:[{active:true}]};
+      const r=retourAuCombat(u,u.sessions[1]);
+      if(!r||r.jours!==12||r.eligible) return _echec(JSON.stringify(r));
+      if(retourAuCombat({sessions:[{date:d-9*_CJ},{date:d}]},{date:d})!==null) return _echec('9 jours');
+      if(retourAuCombat({sessions:[{date:d}]},{date:d})!==null) return _echec('première séance');
+      const p=retourAuCombat({sessions:[{date:d-40*_CJ},{date:d}],sessions_config:[{active:true}]},{date:d});
+      if(!p||!p.eligible||p.faites!==1||p.reste!==3) return _echec('éligible : '+JSON.stringify(p));
+      if(textePhenixNoir(p)!=='PHÉNIX NOIR : encore 3 semaines à valider.') return _echec(textePhenixNoir(p));
+      if(!/après 30 jours d’arrêt/.test(textePhenixNoir(r))) return _echec(textePhenixNoir(r));
+      if(badgeAcquisDef('phenix').nom!=='PHÉNIX NOIR') return _echec('nom du badge');
+      // Dans la file des célébrations, en écran plein, devant un palier.
+      if(bdgRarete({retour:r})!==90||bdgRepartir([{serie:8},{retour:r}],'completes',0).ecrans[0].retour!==r) return _echec('file');
+      if(tropheeVignette({retour:r}).nom!=='Retour au combat') return _echec('vignette');
+      return /_celebrerRetour\(_rt\)/.test(_prodSrc()+String(finishWorkout))?true:_echec('fin de séance');})());
+    ok('Relance : le type « retour » se règle, dans la case « Mes séances » ; le tonnage cumulé est tenu pour le serveur',(()=>{
+      if(!PUSH_TYPES.some(t=>t.cle==='retour')) return _echec('type');
+      if(NOTIF_GROUPES.find(g=>g.cle==='seances').types.indexOf('retour')<0) return _echec('case');
+      if(tonnageTotalDe({sessions:[{volume:1200.4},{volume:800},{volume:-5},{}]})!==2000) return _echec('tonnage');
+      if(CHAMPS_NON_SANTE.indexOf('tonnageTotal')<0||CHAMPS_NON_SANTE.indexOf('_repriseDouce')<0) return _echec('champs');
+      return true;})());
     // ══ 28/09/2026 — LE RECORD À PORTÉE ════════════════════════════════════
     const _RJ=864e5, _RT=new Date(2026,9,20,18).getTime();
     let _rN=0;

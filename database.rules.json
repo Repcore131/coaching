@@ -1460,6 +1460,9 @@
       "$k": { ".read": "auth != null && auth.token.email.replace('.', ',') === $k", ".write": false }
     },
     "saisons_etat": { ".read": false, ".write": false },
+    // LA RELANCE DES INACTIFS : les paliers envoyes (J+7, J+14, J+30) de la
+    // periode en cours. Le Worker seul.
+    "retour_etat": { ".read": false, ".write": false },
     // L index des duels a suivre (J-2, cloture) : le Worker seul.
     "duels_actifs": { ".read": false, ".write": false },
     // LE DEFI REPCORE DU MOIS, pour tous : ecrit par Kevin (ecran admin), lu

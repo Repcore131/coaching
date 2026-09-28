@@ -30,10 +30,11 @@ import ATT from '../../functions/attribution-calcul.js';
 import { envoyerA } from './push.js';
 import * as DU from './duels.js';
 import * as SA from './saisons.js';
+import * as RE from './retour.js';
 
 export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
-export const PUSH_TYPES = ['serie', 'wrapped', 'bilan', 'badge', 'coach', 'filleul', 'defi', 'acces'];
+export const PUSH_TYPES = ['serie', 'wrapped', 'bilan', 'badge', 'coach', 'filleul', 'defi', 'acces', 'retour'];
 const BONUS_ESSAI_JOURS = 30;
 const PALIERS = ['aucun', 'essentielle', 'ultime', 'suivi'];
 
@@ -299,6 +300,8 @@ export function creerMetier(deps) {
       const etat = serieDuJour({ streak, streakWeek: semaine, lastSession: der, suspension: susp, streakJokers: jokers,
         streakJokerLe: jokerLe, sessions_config: config }, t);
       if (etat.etat !== 'vivante' && etat.etat !== 'sauvee') return etat.etat;
+      // Pas de doublon : une relance « retour » vient de partir.
+      if (RE.retourRecent(RE.etatPeriode(await _val('retour_etat/' + uid), der), t)) return 'retour';
       const n = etat.valeur;
       await envoyerPush(uid, { type: 'serie', url: './?wo=1', tag: 'serie-' + lundi + '-jeu',
         title: 'Ta série de ' + n + ' semaine' + (n > 1 ? 's' : '') + ' est en danger',
@@ -1051,6 +1054,26 @@ export function creerMetier(deps) {
     return true;
   }
 
+  // ══ LA RELANCE DES INACTIFS (J+7, J+14, J+30) — 11 h, une personne à la fois ══
+  // Trois champs d'abord (la dernière séance écarte presque tout le monde),
+  // le reste seulement pour qui est au bon jour. retour_etat/<uid> retient
+  // les paliers envoyés de la période ; le Worker seul le lit et l'écrit.
+  async function retourUn(uid, t) {
+    const der = Number(await _lire(uid, 'lastSession')) || 0;
+    const palier = RE.palierDuJour(der, t);
+    if (!palier) return 'rien';
+    const [susp, etat0, logPush] = await Promise.all([_lire(uid, 'suspension'), _val('retour_etat/' + uid), _val('push_log/' + uid)]);
+    const etat = RE.etatPeriode(etat0, der);
+    const ok = RE.retourAutorise({ palier, etat, suspension: susp, logPush, t });
+    if (!ok.ok) return ok.raison;
+    const [fname, xpRang, streak, tonnageTotal] = await Promise.all(['fname', 'xpRang', 'streak', 'tonnageTotal'].map((c) => _lire(uid, c)));
+    const r = await envoyerPush(uid, RE.messageRetour(palier, { fname, xpRang, streak, tonnageTotal }, t), { attendre: false });
+    if (!r.envoye) return r.raison || 'echec';
+    etat.paliers[palier] = t;
+    await db.ref('retour_etat/' + uid).set(etat);
+    return 'envoye';
+  }
+
   // ══ LE PARCOURS « MISE SOUS TENSION » : LE RAPPEL DU 21e JOUR D'ESSAI ══
   // Chaque app tient /parcours_j21/<jour J21 de son essai>/<elle> = le
   // nombre d'étapes qui lui restent (null quand le parcours est fini). Le
@@ -1089,5 +1112,5 @@ export function creerMetier(deps) {
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente,
     fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, tache,
-    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, saisonsHeure, parcoursJ21 };
+    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, saisonsHeure, parcoursJ21, retourUn };
 }
