@@ -39535,7 +39535,30 @@ function _rendreDemarrage(){
   if(z) z.innerHTML=actif?_htmlDemarrage(currentUser):'';
   const ecran=document.getElementById('s-client-home');
   if(ecran) ecran.toggleAttribute('data-demarrage',actif);
+  try{ _placerHeroDemarrage(actif&&!etapesDemarrage(currentUser).seance); }catch(e){}
   return actif;
+}
+// LA CARTE ENTRAINEMENT RESTE, JUSTE SOUS « POUR DEMARRER » (Kevin, 28/09/2026).
+// Pour un compte sans seance, _rendreReprise la masquait (deux boutons vides de
+// sens pour qui n'a jamais commence), et pendant « Pour démarrer » la carte de
+// reprise est elle-meme masquee : l'athlete n'avait plus AUCUN chemin vers
+// « Gérer mes séances ». Une athlete n'a pas pu noter ses seances et a
+// abandonne. Ici, et seulement ici (bloc affiche ET aucune seance), la carte
+// reste visible et remonte sous le bloc ; la ligne « Ton suivi se termine »
+// (#clh-essai) vient ensuite. Hors de ce cas, elle reprend sa place normale,
+// sous les trois chiffres, et son affichage reste celui de _rendreReprise.
+function _placerHeroDemarrage(monter){
+  const hero=document.getElementById('clh-hero');
+  const bloc=document.getElementById('clh-demarrer');
+  const stats=document.getElementById('clh-stats');
+  if(!hero||!bloc||!stats) return false;
+  if(monter){
+    if(bloc.nextElementSibling!==hero) bloc.parentNode.insertBefore(hero,bloc.nextSibling);
+    hero.style.display='';
+    return true;
+  }
+  if(stats.nextElementSibling!==hero) stats.parentNode.insertBefore(hero,stats.nextSibling);
+  return false;
 }
 // PURE. Faut-il proposer la premiere marche a ce dossier ?
 //

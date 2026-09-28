@@ -42632,6 +42632,44 @@ async function testExercices(){
         }
       }})());
 
+    // ══ 28/09/2026 — « GÉRER MES SÉANCES » SOUS « POUR DÉMARRER » ═══════════
+    // Un compte neuf, sans seance : le bloc « Pour démarrer » masquait la carte
+    // de reprise, et la reprise masquait la carte Entraînement. Plus aucun
+    // chemin vers ses seances : une athlete a abandonne l'application.
+    ok('Compte neuf : la carte Entraînement reste, juste sous « Pour démarrer »',(()=>{
+      const sv=currentUser;
+      const hero=()=>document.getElementById('clh-hero');
+      const vis=e=>!!e&&e.style.display!=='none';
+      try{
+        const t=Date.now();
+        currentUser={id:'pd',email:'pd@t.fr',role:'athlete',createdAt:t-2*864e5,sessions:[],bilans:[],nutrition:{}};
+        _rendreReprise(); _rendreDemarrage();
+        const h=hero();
+        if(!document.getElementById('clh-demarrer').innerHTML) return _echec('« Pour démarrer » ne parait pas');
+        if(!vis(h)) return _echec('la carte Entraînement reste masquée');
+        if(document.getElementById('clh-demarrer').nextElementSibling!==h) return _echec('la carte n’est pas juste sous « Pour démarrer »');
+        if(!h.querySelector('[onclick="loadSessionManager()"]')) return _echec('« Gérer mes séances » a disparu de la carte');
+        // « Ton suivi se termine » (#clh-essai) vient APRES la carte.
+        const ess=document.getElementById('clh-essai');
+        if(ess&&!(h.compareDocumentPosition(ess)&Node.DOCUMENT_POSITION_FOLLOWING)) return _echec('la ligne du suivi passe devant la carte');
+        // Premiere seance faite : la carte retourne sous les trois chiffres.
+        currentUser.sessions=[{date:t}];
+        _rendreReprise(); _rendreDemarrage();
+        if(document.getElementById('clh-stats').nextElementSibling!==hero()) return _echec('la carte ne reprend pas sa place');
+        if(!vis(hero())) return _echec('la carte est masquée après la première séance');
+        // Hors « Pour démarrer » (compte ancien sans séance) : comportement d'avant.
+        currentUser={id:'pd2',email:'pd2@t.fr',role:'athlete',createdAt:t-90*864e5,sessions:[]};
+        _rendreReprise(); _rendreDemarrage();
+        if(document.getElementById('clh-stats').nextElementSibling!==hero()) return _echec('la carte bouge hors « Pour démarrer »');
+        return true;
+      } finally {
+        currentUser=sv;
+        try{ _placerHeroDemarrage(false); }catch(e){}
+        try{ document.getElementById('clh-reprise').innerHTML=''; document.getElementById('clh-demarrer').innerHTML=''; }catch(e){}
+        try{ document.getElementById('s-client-home').removeAttribute('data-demarrage'); }catch(e){}
+        for(const id of ['clh-stats','clh-hero']){ const e=document.getElementById(id); if(e) e.style.display=''; }
+      }})());
+
     ok('Le bouton mène au programme du coach, ou au parcours de départ',(()=>{
       const s=String(reprendreMaintenant);
       // LE COACH A PUBLIE : on ouvre le selecteur, comme partout ailleurs.
