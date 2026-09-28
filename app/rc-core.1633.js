@@ -1039,6 +1039,16 @@ function planIdOffre(cle,annuel){
 }
 // Les deux paliers, dans l'ordre d'affichage. `dispo` est ce qui décide de
 // montrer ou non une carte : il n'y a pas d'état « bientôt disponible ».
+// ══ LES TARIFS : tarifs.json, A LA RACINE DU DEPOT ════════════════════════
+// Les prix de l'app, de la page de vente et des CGV viennent de ce fichier, et
+// de lui seul. Le bloc ci-dessous en est la COPIE, posee par
+// scripts/tarifs.mjs : ne le modifie pas ici, modifie tarifs.json et relance
+// le script (scripts/verif/tarifs.mjs refuse une copie en retard).
+// Pas de fetch au demarrage : les prix doivent exister avant le premier
+// ecran, hors ligne compris.
+/* TARIFS:DEBUT */
+const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":12,"essentielle":{"mois":9.5,"an":114},"ultime":{"mois":24.9,"an":298.8},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":1},"coach":{"libre":0,"coach":19,"pro":39},"coaching":{"programme_perso":{"prix":99,"mois":3},"revision_prog":{"prix":40,"mois":1},"boutique_prog":{"prix":14.9,"mois":3},"coaching_essentiel":{"prix":150,"mois":1},"coaching_transfo":{"prix":350,"mois":3},"coaching_evolution":{"prix":600,"mois":6}}});
+/* TARIFS:FIN */
 // ══ LES OFFRES, ECRITES UNE SEULE FOIS (lot 1) ═══════════════════════════
 //
 // UNE SEULE TABLE POUR LE COACHING ET POUR LES ABONNEMENTS. Deux tables
@@ -1054,15 +1064,16 @@ function planIdOffre(cle,annuel){
 //   prixAn   le tarif annuel d'un abonnement, quand il existe
 //
 // ⚠ AUCUN MONTANT EN DUR AILLEURS. Tout ecran qui affiche un prix le lit ici,
-//   par prixOffre ou prixMoisAnnuel.
+//   par prixOffre ou prixMoisAnnuel ; et ici, chaque montant vient de TARIFS.
+const _TC=TARIFS.coaching;
 const OFFRES=Object.freeze({
   // ── Ce que le coach vend ────────────────────────────────────────────
-  programme_perso:    Object.freeze({lib:'Programme personnalisé',   prix:99,   palier:'ultime', mois:3, type:'ponctuel'}),
-  revision_prog:      Object.freeze({lib:'Révision de programme',    prix:40,   palier:'ultime', mois:1, type:'ponctuel'}),
-  boutique_prog:      Object.freeze({lib:'Programme de la boutique', prix:14.9, palier:'ultime', mois:3, type:'ponctuel'}),
-  coaching_essentiel: Object.freeze({lib:'Coaching Essentiel',       prix:150,  palier:'suivi',  mois:1, type:'coaching'}),
-  coaching_transfo:   Object.freeze({lib:'Coaching Transformation',  prix:350,  palier:'suivi',  mois:3, type:'coaching'}),
-  coaching_evolution: Object.freeze({lib:'Coaching Évolution',       prix:600,  palier:'suivi',  mois:6, type:'coaching'}),
+  programme_perso:    Object.freeze({lib:'Programme personnalisé',   prix:_TC.programme_perso.prix,    palier:'ultime', mois:_TC.programme_perso.mois,    type:'ponctuel'}),
+  revision_prog:      Object.freeze({lib:'Révision de programme',    prix:_TC.revision_prog.prix,      palier:'ultime', mois:_TC.revision_prog.mois,      type:'ponctuel'}),
+  boutique_prog:      Object.freeze({lib:'Programme de la boutique', prix:_TC.boutique_prog.prix,      palier:'ultime', mois:_TC.boutique_prog.mois,      type:'ponctuel'}),
+  coaching_essentiel: Object.freeze({lib:'Coaching Essentiel',       prix:_TC.coaching_essentiel.prix, palier:'suivi',  mois:_TC.coaching_essentiel.mois, type:'coaching'}),
+  coaching_transfo:   Object.freeze({lib:'Coaching Transformation',  prix:_TC.coaching_transfo.prix,   palier:'suivi',  mois:_TC.coaching_transfo.mois,   type:'coaching'}),
+  coaching_evolution: Object.freeze({lib:'Coaching Évolution',       prix:_TC.coaching_evolution.prix, palier:'suivi',  mois:_TC.coaching_evolution.mois, type:'coaching'}),
   // ── Ce que l'application vend, quand personne ne suit la personne ───
   // ⚠ ENGAGEMENT DOUZE MOIS, DEUX FAÇONS DE LE RÉGLER (24/09/2026, demande de
   //   Kevin). `prixAn` N'EST PLUS UN TARIF REMISÉ : c'est le même total, payé en
@@ -1072,8 +1083,8 @@ const OFFRES=Object.freeze({
   //   plus « sans engagement », et la remise (− x %) disparaît d'elle-même
   //   puisqu'elle se calcule — elle reviendra le jour où `prixAn` redescendra
   //   sous douze mensualités, sans qu'une ligne bouge.
-  essentielle:        Object.freeze({lib:'Essentielle', prix:9.50,  prixAn:114,   palier:'essentielle', mois:0, type:'abonnement'}),
-  ultime:             Object.freeze({lib:'Ultime',      prix:24.90, prixAn:298.80, palier:'ultime',      mois:0, type:'abonnement'}),
+  essentielle:        Object.freeze({lib:'Essentielle', prix:TARIFS.essentielle.mois, prixAn:TARIFS.essentielle.an, palier:'essentielle', mois:0, type:'abonnement'}),
+  ultime:             Object.freeze({lib:'Ultime',      prix:TARIFS.ultime.mois,      prixAn:TARIFS.ultime.an,      palier:'ultime',      mois:0, type:'abonnement'}),
   // ── La sortie de pack : le premier mois a moitie prix, UNE SEULE FOIS ──
   // ⚠ LE PRIX SE CALCULE, IL NE S'ECRIT PAS : la moitie d'Ultime suit Ultime
   //   le jour ou Ultime bouge. Un 12,45 ecrit en dur aurait vecu plus
@@ -1081,12 +1092,12 @@ const OFFRES=Object.freeze({
   //   Le prix se LIT sur Ultime au moment ou on le demande : un nombre
   //   recopie ici serait la moitie d'un prix d'hier.
   ultime_demi:        Object.freeze({lib:'Ultime, premier mois',
-                        get prix(){ return Math.round(OFFRES.ultime.prix*50)/100; },
+                        get prix(){ return Math.round(OFFRES.ultime.prix*TARIFS.ultime_demi.part*100)/100; },
                         palier:'ultime', mois:1, type:'abonnement'}),
   // ── Et l'essai, qui ne se paie pas ──────────────────────────────────
-  essai:              Object.freeze({lib:'Essai',       prix:0,     palier:'ultime', mois:1, type:'essai'}),
+  essai:              Object.freeze({lib:'Essai',       prix:0,     palier:'ultime', mois:TARIFS.essai.mois, type:'essai'}),
   // Le mois d'essai EN PLUS du filleul d'un parrainage (s'ajoute à `essai`).
-  essai_parrainage:   Object.freeze({lib:'Essai offert par un ami', prix:0, palier:'ultime', mois:1, type:'essai'}),
+  essai_parrainage:   Object.freeze({lib:'Essai offert par un ami', prix:0, palier:'ultime', mois:TARIFS.essai_parrainage.moisEnPlus, type:'essai'}),
 });
 // PURE. Un montant en euros, a la francaise.
 // ⚠ ESPACE INSECABLE AVANT LE SYMBOLE : la coupure « 9,95 » / « € » en fin de
@@ -1395,13 +1406,13 @@ const COACH_PLANS=Object.freeze(['libre','coach','pro']);
 const PAYPAL_PLAN_ID_COACH='P-9JD300001T4718058NK2RF5Q';   // à créer sur developer.paypal.com — 19 EUR/mois
 const PAYPAL_PLAN_ID_PRO='P-1WS20264K4576284KNK2RF5Y';     // idem — 39 EUR/mois
 const COACH_PALIERS=Object.freeze([
-  Object.freeze({cle:'libre', titre:'Libre', prix:0, quota:1,
+  Object.freeze({cle:'libre', titre:'Libre', prix:TARIFS.coach.libre, quota:1,
    periode:'', detail:'Un athlète suivi, sans carte bancaire et sans durée.',
    planId:()=>''}),
-  Object.freeze({cle:'coach', titre:'Coach', prix:19, quota:15,
+  Object.freeze({cle:'coach', titre:'Coach', prix:TARIFS.coach.coach, quota:15,
    periode:'par mois', detail:'Jusqu\'à quinze athlètes actifs.',
    planId:()=>PAYPAL_PLAN_ID_COACH}),
-  Object.freeze({cle:'pro', titre:'Pro', prix:39, quota:Infinity,
+  Object.freeze({cle:'pro', titre:'Pro', prix:TARIFS.coach.pro, quota:Infinity,
    periode:'par mois', detail:'Sans limite de nombre.',
    planId:()=>PAYPAL_PLAN_ID_PRO}),
 ]);
@@ -1605,7 +1616,7 @@ const PROMESSE_COACH='Gratuit pour votre premier client, sans limite de durée, 
 // UN MOIS COMPLET, ET COMPLET VEUT DIRE ULTIME. On ne convertit personne en
 // lui montrant une version amputee : pendant l'essai, tout ce qu'Ultime ouvre
 // est ouvert. Ce qu'un coach fait reste a un coach.
-const ESSAI_JOURS=30;
+const ESSAI_JOURS=TARIFS.essai.jours;
 // ⚠ CE QUE LE CLIENT TIENT, ET CE QU'IL NE TIENT PAS.
 //
 // Tant que les fonctions ne tournent pas (plan Spark), l'essai est garde par
@@ -5163,12 +5174,23 @@ const CLOUD={
   },
   // UN ÉVÉNEMENT POUR LE SERVEUR LÉGER : /evenements/<id>, écrit une fois
   // (règles : `par` est la clé du compte connecté). true ou false, sans lever.
-  async evenementPoser(id,ev){
+  // ⚠ AVEC SON VERROU, DANS LA MÊME REQUÊTE : evenements_attente/<par>/<type>/
+  //   <cible> = {id, at: heure du serveur}. Les règles refusent l'un sans
+  //   l'autre, et un deuxième tant que le premier attend ou date de moins de
+  //   30 s. Un refus n'est pas une panne : le serveur a déjà de quoi faire.
+  evenementPoser(id,ev){
+    return this.racinePatch({['evenements/'+id]:ev,
+      ['evenements_attente/'+ev.par+'/'+ev.type+'/'+ev.cible]:{id,at:{'.sv':'timestamp'}}});
+  },
+  // Réservé à l'administrateur (règles) : ce que le serveur léger a rangé
+  // après cinq échecs (événements, sous-tâches, travaux du jour).
+  async evenementsKo(){
     const token=await this._getToken();
-    if(!token) return false;
-    const r=await fetch(this._fbUrl.replace('users.json','evenements/'+id+'.json')+'?auth='+token,
-      {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(ev)});
-    return r.ok;
+    if(!token) throw new Error('Non connecté.');
+    const r=await fetch(this._fbUrl.replace('users.json','evenements_ko.json')+'?auth='+token
+      +'&orderBy=%22%24key%22&limitToLast=50');
+    if(!r.ok) throw new Error('Échecs : '+r.status);
+    return (await r.json())||{};
   },
   async pullDefisResultats(moi){
     const token=await this._getToken();
@@ -6064,6 +6086,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // athlète ; le slug et les spécialités de la vitrine d'un coach. Des
   // réglages d'affichage — la page elle-même n'accepte aucune donnée de santé.
   'pagePublique','vitrineSlug','vitrinePubliee','specialites',
+  // Combien de fois la page a été proposée à un passage de rang (deux au plus).
+  'pagePropose',
   // L'ambassadeur par qui le compte est arrivé : un code, un nom, une date.
   'ambassadeur',
   // L'origine du compte (attribution) : le type de lien, un code parrain ou
@@ -9293,6 +9317,31 @@ function arcCompteur(el,vers,o){
   arcChiffre(el,de,vers,o);
 }
 const _arcChiffres=new WeakMap();
+// LE COMPTEUR, EN FONCTION DU TEMPS. arcChiffre l'appelle à chaque frame avec
+// l'horloge de l'écran ; la vidéo (exporterVideoVisuel), avec le temps de la
+// vidéo. Une seule courbe pour les deux : ce qu'on publie compte comme l'app.
+/** Les 2 ou 3 valeurs du grésillement, tirées une fois ([] sans grésillement). */
+function arcBruit(de,vers,gr){
+  const nGr=gr?(2+(Math.random()<0.5?1:0)):0;
+  const bruit=[];
+  const amp=Math.max(Math.abs(vers-de)*0.6,Math.abs(vers)*0.05,2);
+  for(let k=0;k<nGr;k++) bruit.push(vers+(Math.random()*2-1)*amp);
+  return bruit;
+}
+/** PURE. La valeur affichée à la progression p (0..1). */
+function arcValeurA(de,vers,p,bruit){
+  const nGr=(bruit&&bruit.length)||0;
+  const q=Math.max(0,Math.min(1,Number(p)||0));
+  if(nGr&&q>=0.62&&q<1){
+    // [0,62 ; 1[ découpé en nGr+1 plages : nGr valeurs au hasard, puis la vraie.
+    const k=Math.floor((q-0.62)/(0.38/(nGr+1)));
+    return k<nGr?bruit[k]:vers;
+  }
+  // Sortie longue, sans rebond : un chiffre qui dépasse sa valeur puis y
+  // revient se lit comme une erreur de calcul, pas comme une animation.
+  const e=1-Math.pow(1-(nGr?Math.min(1,q/0.62):q),3);
+  return q>=1?vers:de+(vers-de)*e;
+}
 // Un champ de saisie n'affiche pas son textContent : la charge d'une série est
 // un <input>, et rcFoudre la fait compter. On écrit donc sa value.
 function _arcEcrire(el,txt){
@@ -9334,24 +9383,10 @@ function arcChiffre(el,de,vers,o){
   // le chiffre « saute » entre des valeurs voisines et tombe sur la bonne. Les
   // valeurs sont tirées une fois, à l'avance : une nouvelle par frame serait un
   // flou illisible, pas un grésillement.
-  const nGr=gr?(2+(Math.random()<0.5?1:0)):0;
-  const bruit=[];
-  const amp=Math.max(Math.abs(vers-de)*0.6,Math.abs(vers)*0.05,2);
-  for(let k=0;k<nGr;k++) bruit.push(vers+(Math.random()*2-1)*amp);
+  const bruit=arcBruit(de,vers,gr);
   const pas=(maintenant)=>{
     const p=Math.min(1,(maintenant-t0)/d);
-    let txt;
-    if(nGr&&p>=0.62&&p<1){
-      // [0,62 ; 1[ découpé en nGr+1 plages : nGr valeurs au hasard, puis la vraie.
-      const k=Math.floor((p-0.62)/(0.38/(nGr+1)));
-      txt=fmt(k<nGr?bruit[k]:vers);
-    }else{
-      // Sortie longue, sans rebond : un chiffre qui dépasse sa valeur puis y
-      // revient se lit comme une erreur de calcul, pas comme une animation.
-      const e=1-Math.pow(1-(nGr?Math.min(1,p/0.62):p),3);
-      txt=fmt(de+(vers-de)*e);
-    }
-    _arcEcrire(el,txt);
+    _arcEcrire(el,fmt(arcValeurA(de,vers,p,bruit)));
     if(p<1) _arcChiffres.set(el,requestAnimationFrame(pas));
     else _arcChiffres.delete(el);
   };
@@ -9474,42 +9509,58 @@ function _foudrePleine(impact,W,H,o){
     // téléphone laisserait sa toile collée à l'écran au retour.
     setTimeout(finir,FOUDRE_MAX);
     if(!ctx){ finir(); return; }
-    const coul=o.couleur||FOUDRE_ROUGE;
-    const nb=(o.eclairs===2||o.eclairs===3)?o.eclairs:(Math.random()<0.5?2:3);
-    const eclairs=[];
-    for(let k=0;k<nb;k++) eclairs.push(_foudreEclair(impact,W,[0,45,95][k]));
-    // L'impact tombe avec le premier éclair : le tremblement et les étincelles
-    // sont la CONSÉQUENCE de la frappe, jamais posés à côté.
-    const T_IMPACT=30;
-    const etincelles=_foudreEtincelles(impact,T_IMPACT);
-    setTimeout(()=>{ _foudreTrembler(o.conteneur); },T_IMPACT);
+    const sc=_foudreScene(impact,W,o);
+    setTimeout(()=>{ _foudreTrembler(o.conteneur); },FOUDRE_IMPACT);
     const t0=performance.now();
     const image=(now)=>{
       if(fini) return;
       const t=now-t0;
       ctx.clearRect(0,0,W,H);
-      // 1. LE FLASH, sous tout le reste : blanc sur blanc, un éclair ne se
-      //    verrait pas. Double, comme une vraie foudre : le coup, puis le
-      //    réamorçage du canal, plus faible.
-      let f=0;
-      if(t<70) f=0.85*(t<50?1:1-(t-50)/20);
-      else if(t>=160&&t<230) f=0.38*(1-(t-160)/70);
-      if(f>0){ ctx.fillStyle='rgba(255,255,255,'+f.toFixed(3)+')'; ctx.fillRect(0,0,W,H); }
-      // 2. LES ÉCLAIRS
-      let vivant=false;
-      for(const e of eclairs){
-        const a=_foudreAlpha(e,t);
-        if(a<0) continue;
-        vivant=true;
-        if(a>0) _foudreDessiner(ctx,e,a,coul);
-      }
-      // 3. LES ÉTINCELLES, par-dessus : elles jaillissent du point d'impact.
-      if(_foudreEtincellesPeindre(ctx,etincelles,t)) vivant=true;
+      const vivant=_foudrePeindre(ctx,sc,t,W,H);
       if(vivant||t<240) requestAnimationFrame(image);
       else finir();
     };
     requestAnimationFrame(image);
   });
+}
+// L'impact tombe avec le premier éclair : le tremblement et les étincelles
+// sont la CONSÉQUENCE de la frappe, jamais posés à côté.
+const FOUDRE_IMPACT=30;
+// LA FOUDRE EN DEUX TEMPS : la scène, tirée une fois (les éclairs, les
+// étincelles), puis l'image à l'instant t. L'écran avance t avec son horloge ;
+// la vidéo (exporterVideoVisuel) avec le temps de la vidéo — même dessin.
+// `o.echelle` : les traits et les étincelles grossis pour une toile en pixels
+// d'image (1080 de large) plutôt qu'en pixels CSS (360).
+function _foudreScene(impact,W,o){
+  o=o||{};
+  const k=Number(o.echelle)>0?Number(o.echelle):1;
+  const nb=(o.eclairs===2||o.eclairs===3)?o.eclairs:(Math.random()<0.5?2:3);
+  const eclairs=[];
+  for(let i=0;i<nb;i++){ const e=_foudreEclair(impact,W,[0,45,95][i]); e.epais*=k; e.echelle=k; eclairs.push(e); }
+  const etincelles=_foudreEtincelles(impact,FOUDRE_IMPACT);
+  if(k!==1) etincelles.forEach(p=>{ p.vx*=k; p.vy*=k; p.taille*=k; });
+  return {eclairs,etincelles,coul:o.couleur||FOUDRE_ROUGE,echelle:k};
+}
+/** Peint la foudre à l'instant t (ms). Rend true tant qu'il reste quelque chose à peindre. */
+function _foudrePeindre(ctx,sc,t,W,H){
+  // 1. LE FLASH, sous tout le reste : blanc sur blanc, un éclair ne se
+  //    verrait pas. Double, comme une vraie foudre : le coup, puis le
+  //    réamorçage du canal, plus faible.
+  let f=0;
+  if(t>=0&&t<70) f=0.85*(t<50?1:1-(t-50)/20);
+  else if(t>=160&&t<230) f=0.38*(1-(t-160)/70);
+  if(f>0){ ctx.save(); ctx.fillStyle='rgba(255,255,255,'+f.toFixed(3)+')'; ctx.fillRect(0,0,W,H); ctx.restore(); }
+  // 2. LES ÉCLAIRS
+  let vivant=false;
+  for(const e of sc.eclairs){
+    const a=_foudreAlpha(e,t);
+    if(a<0) continue;
+    vivant=true;
+    if(a>0) _foudreDessiner(ctx,e,a,sc.coul);
+  }
+  // 3. LES ÉTINCELLES, par-dessus : elles jaillissent du point d'impact.
+  if(_foudreEtincellesPeindre(ctx,sc.etincelles,t,1500*(sc.echelle||1))) vivant=true;
+  return vivant;
 }
 // UN ÉCLAIR : un tronc du haut de l'écran jusqu'à l'impact, et ses branches.
 // Le départ est tiré dans une bande autour de l'aplomb de la cible — un
@@ -9589,7 +9640,7 @@ function _foudreDessiner(ctx,e,a,coul){
   const passe=(pts,k)=>{
     ctx.save();
     ctx.lineJoin='round'; ctx.lineCap='round';
-    ctx.shadowColor=coul; ctx.shadowBlur=30;
+    ctx.shadowColor=coul; ctx.shadowBlur=30*(e.echelle||1);
     ctx.strokeStyle=coul; ctx.lineWidth=9*w*k;
     ctx.globalAlpha=a*k*0.45; _foudreChemin(ctx,pts); ctx.stroke();
     ctx.shadowBlur=0;
@@ -9619,8 +9670,8 @@ function _foudreEtincelles(impact,tImpact){
 }
 // Position calculée analytiquement à partir de t, pas intégrée frame à frame :
 // une frame sautée ne ralentit pas les étincelles, elles sont où elles doivent.
-function _foudreEtincellesPeindre(ctx,ps,t){
-  const G=1500;                                   // px/s²
+function _foudreEtincellesPeindre(ctx,ps,t,gravite){
+  const G=gravite||1500;                          // px/s²
   let vivant=false;
   ctx.save();
   ctx.globalCompositeOperation='lighter';
@@ -9635,7 +9686,7 @@ function _foudreEtincellesPeindre(ctx,ps,t){
     const vit=Math.hypot(vx,vy)||1;
     // UNE TRAÎNÉE ET NON UN POINT : 18 ms de trajectoire, dans l'axe de la
     // vitesse. Un point rond de 2 px ne se lit pas comme une étincelle.
-    const l=Math.min(14,vit*0.018);
+    const l=Math.min(14*(G/1500),vit*0.018);
     ctx.globalAlpha=1-(r*1000)/p.vie;
     ctx.strokeStyle=p.coul; ctx.lineWidth=p.taille;
     ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x-vx/vit*l,y-vy/vit*l); ctx.stroke();
@@ -17867,7 +17918,8 @@ function renderEpingleAccueil(){
 //   = {date}, posé par l'athlète lui-même (réglages, ou son avant/après). Sans
 //   lui : anonyme, et seulement anonyme — le prénom et les initiales sont
 //   grisés, et le dessin les refuse de lui-même (vcNomAffiche).
-const VC_FORMATS=Object.freeze({story:{w:1080,h:1920,lib:'Story 9:16'},post:{w:1080,h:1350,lib:'Post 4:5'}});
+// LE FORMAT EST LE RÉGLAGE COMMUN DES VISUELS (VISUEL_FORMATS, visuelFormat) :
+// l'ancien VC_FORMATS en était une copie, avec son propre choix.
 const VC_MODES=Object.freeze([{k:'prenom',lib:'Prénom'},{k:'initiales',lib:'Initiales'},{k:'anonyme',lib:'Anonyme'}]);
 function vcConsentement(u){ const c=u&&u.consentementPartageCoach; return !!(c&&Number(c.date)>0); }
 // PURE. Le nom sur le visuel, selon le mode — et l'accord.
@@ -17953,7 +18005,7 @@ function _vcNomCoach(){
  * la marque du coach, « COACHÉ AVEC REPCORE ». `format` : 'story' | 'post'.
  */
 function _dessinerVictoireCoach(d,fond,format){
-  const F=VC_FORMATS[format]||VC_FORMATS.story, W=F.w, H=F.h;
+  const F=visuelFormat(format), W=F.w, H=F.h;
   const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
   const f=fond||'transparent', rouge=f==='rouge';
@@ -17977,12 +18029,12 @@ function _dessinerVictoireCoach(d,fond,format){
   if(d.nom){
     g.fillStyle='#fff';
     const ns=o.ajuste(d.nom,'700',110,BEBAS,LARG,48);
-    g.font='700 '+ns+'px '+BEBAS; o.ecrire(d.nom,cx,y+ns*0.82);
+    g.font='700 '+ns+'px '+BEBAS; o.ecrire(o.coupe(d.nom,LARG),cx,y+ns*0.82);
     y+=hNom;
   }
   g.fillStyle='rgba(255,255,255,.92)';
   const es=o.ajusteEspace(d.exo,'800',46,MONT,5,LARG,24);
-  g.font='800 '+es+'px '+MONT; o.ecrireEspace(d.exo,cx,y+es,5,true);
+  g.font='800 '+es+'px '+MONT; o.ecrireEspace(o.coupeEspace(d.exo,5,LARG),cx,y+es,5,true);
   y+=84;
   g.fillStyle='#fff'; g.font='700 '+cs+'px '+BEBAS; o.ecrire(ligne,cx,y+cs*0.82);
   y+=cs*0.9+40;
@@ -17994,7 +18046,7 @@ function _dessinerVictoireCoach(d,fond,format){
   if(d.duree){
     g.fillStyle='rgba(255,255,255,.88)';
     const ds=o.ajusteEspace(d.duree,'700',34,MONT,4,LARG,20);
-    g.font='700 '+ds+'px '+MONT; o.ecrireEspace(d.duree,cx,y+ds,4,true);
+    g.font='700 '+ds+'px '+MONT; o.ecrireEspace(o.coupeEspace(d.duree,4,LARG),cx,y+ds,4,true);
   }
   y+=70+40;
   _vcPied(g,o,y,W,marque,_vcNomCoach(),rouge);
@@ -18031,7 +18083,7 @@ function recapTeamDonnees(athletes,periode,maintenant,equipe){
     seances,records,tonnage:Math.round(tonnage),equivalent,top};
 }
 function _dessinerRecapTeam(d,fond,format){
-  const F=VC_FORMATS[format]||VC_FORMATS.story, W=F.w, H=F.h;
+  const F=visuelFormat(format), W=F.w, H=F.h;
   const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
   const f=fond||'transparent', rouge=f==='rouge';
@@ -18104,7 +18156,8 @@ function _vcDonnees(){
 }
 function _vcDessiner(fond){
   const d=_vcDonnees(); if(!d) return null;
-  return _vc.type==='victoire'?_dessinerVictoireCoach(d,fond,_vc.format):_dessinerRecapTeam(d,fond,_vc.format);
+  const fm=visuelFormatChoisi();
+  return _vc.type==='victoire'?_dessinerVictoireCoach(d,fond,fm):_dessinerRecapTeam(d,fond,fm);
 }
 function _vcNomFichier(fond){ return visuelNomFichier(_vc&&_vc.type==='recap'?'repcore-team':'repcore-victoire',fond); }
 function ouvrirVictoireCoach(cid){
@@ -18112,13 +18165,13 @@ function ouvrirVictoireCoach(cid){
   if(!u) return false;
   const v=victoiresDe(u);
   if(!v.length){ toast('Pas encore de progression de charge à partager.','var(--orange)'); return false; }
-  _vc={type:'victoire',u,victoires:v,i:0,mode:vcConsentement(u)?'prenom':'anonyme',format:'story'};
+  _vc={type:'victoire',u,victoires:v,i:0,mode:vcConsentement(u)?'prenom':'anonyme'};
   _vcOuvrir();
   return true;
 }
 function ouvrirRecapTeam(){
   if(!currentUser||currentUser.role!=='coach') return false;
-  _vc={type:'recap',periode:'semaine',format:'story'};
+  _vc={type:'recap',periode:'semaine'};
   _vcOuvrir();
   return true;
 }
@@ -18156,7 +18209,6 @@ function htmlReglagesVisuelCoach(vc){
     h+='<div class="vc-l">Période</div>'+seg('periode',vc.periode,[['semaine','7 derniers jours'],['mois','30 derniers jours']])
       +'<p class="vc-note">Les prénoms du top 3 n’apparaissent qu’avec l’accord de chacun ; sinon « un athlète ».</p>';
   }
-  h+='<div class="vc-l">Format</div>'+seg('format',vc.format,Object.keys(VC_FORMATS).map(k=>[k,VC_FORMATS[k].lib]));
   return h;
 }
 function _vcRendre(){
@@ -18192,7 +18244,7 @@ function vcReglage(nom,val){
   if(!_vc) return false;
   if(nom==='i') _vc.i=Math.max(0,Math.min(_vc.victoires.length-1,Number(val)||0));
   else if(nom==='mode'){ if(val!=='anonyme'&&!vcConsentement(_vc.u)) return false; _vc.mode=val; }
-  else if(nom==='format'&&VC_FORMATS[val]) _vc.format=val;
+  else if(nom==='format'&&VISUEL_FORMATS[val]) visuelFormatMemoriser(val);
   else if(nom==='periode'&&(val==='semaine'||val==='mois')) _vc.periode=val;
   _vcRendre();
   return true;
@@ -18259,13 +18311,22 @@ function _majConsentementCoachReglages(){
 // /vitrines, lus sans connexion, en liste blanche de champs.
 const PSEUDO_PUBLIC_RE=/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/;
 const SLUG_PUBLIC_RE=/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
+// Ce que la page montre (28/09/2026) : l'emblème et la jauge de volts, les
+// 12 dernières semaines, les badges en images (un secret n'y paraît qu'une
+// fois découvert : seuls les badges OBTENUS partent), le nombre de séances.
+// LES CHARGES seulement si l'athlète coche « Mes 3 meilleurs records » —
+// décochée par défaut. Jamais de poids de corps, de photo ni de santé :
+// aucun champ n'existe pour les recevoir (database.rules.json).
 const PAGE_MONTRER=Object.freeze([
-  {cle:'rang',lib:'Mon emblème de rang'},
-  {cle:'serie',lib:'Ma série de semaines'},
-  {cle:'badges',lib:'Mes badges'},
-  {cle:'records',lib:'Mes derniers records (jamais les charges)'},
-  {cle:'seances',lib:'Mon nombre de séances'}
+  {cle:'rang',lib:'Mon emblème et mes volts',defaut:true},
+  {cle:'serie',lib:'Mes 12 dernières semaines',defaut:true},
+  {cle:'badges',lib:'Mes badges',defaut:true},
+  {cle:'seances',lib:'Mon nombre de séances',defaut:true},
+  {cle:'meilleurs',lib:'Mes 3 meilleurs records, avec les charges',defaut:false}
 ]);
+function pageMontrerDefaut(){ const o={}; PAGE_MONTRER.forEach(x=>{ o[x.cle]=x.defaut; }); return o; }
+// La proposition au passage de rang n'a de sens que si l'app écrit dans la base.
+const PAGE_PUBLIQUE_PROPOSEE=true;
 function _pagesSurFirebase(){ return /\/i$/.test(String(RC_LIEN_COURT||'')); }
 // PURE. L'adresse de la page de quelqu'un, ou '' s'il n'en a pas (encore).
 function urlPagePerso(u){
@@ -18353,23 +18414,86 @@ function recordsRecentsPublics(u,n){
   }
   return out;
 }
+// PURE. Les 3 meilleurs records : la plus lourde charge de chaque exercice
+// (séries faites), les trois plus lourdes, avec la date où elle a été
+// soulevée. Publiés SEULEMENT si l'athlète l'a choisi (montrer.meilleurs).
+function meilleursRecordsPublics(u,n){
+  const best={};
+  const cle=nm=>{ try{ return resoudreAlias(exKey(nm)); }catch(e){ return String(nm); } };
+  for(const s of ((u&&u.sessions)||[])){
+    if(!s||!(s.date>0)) continue;
+    const exos=(s.data&&typeof s.data==='object'&&Object.keys(s.data).length)
+      ?Object.keys(s.data).map(nm=>({nom:nm,sets:((s.data[nm]||{}).sets)||[]}))
+      :((s.exercises)||[]).filter(e=>e&&(e.name||e.nm)).map(e=>({nom:e.name||e.nm,sets:e.sets||[]}));
+    for(const e of exos){
+      for(const st of e.sets){
+        if(!st||st.done===false) continue;
+        const w=parseFloat(st.weight)||0;
+        if(!(w>0)||w>1000) continue;
+        const k=cle(e.nom);
+        if(!best[k]||w>best[k].kg||(w===best[k].kg&&s.date<best[k].date))
+          best[k]={exo:String(e.nom).trim().slice(0,60),kg:Math.round(w*100)/100,date:Number(s.date)};
+      }
+    }
+  }
+  return Object.values(best).sort((a,b)=>b.kg-a.kg||a.date-b.date).slice(0,n||3);
+}
+// PURE. Les 12 dernières semaines calendaires, de la plus ancienne à celle en
+// cours : '1' validée (le quota du programme atteint), '0' manquée, 'e' la
+// semaine en cours pas encore validée (elle n'est pas perdue).
+function semainesPubliques(u,maintenant,n){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const N=n||12;
+  let quota=1; try{ quota=seancesPrevuesParSemaine(u); }catch(e){ quota=1; }
+  const l0=_lundiDe(t).getTime();
+  const cpt={};
+  for(const s of ((u&&u.sessions)||[])){
+    if(!s||!(s.date>0)||s.date>t) continue;
+    const l=_lundiDe(s.date).getTime();
+    cpt[l]=(cpt[l]||0)+1;
+  }
+  let out='';
+  for(let i=N-1;i>=0;i--){
+    const l=_lundiDe(_datePlusJours(l0,-7*i).getTime()).getTime();
+    const ok=(cpt[l]||0)>=quota;
+    out+=ok?'1':(i===0?'e':'0');
+  }
+  return out;
+}
+// PURE. Les volts : le total, le seuil du rang atteint et celui du suivant
+// (0 au rang maximal) — la jauge de la page.
+function voltsPublics(u){
+  const r=rangDe(xpDe(u));
+  return {xp:Math.max(0,Math.round(r.xp)),de:Math.max(0,Math.round(Number(r.rang.seuil)||0)),a:r.suivant?Math.round(Number(r.suivant.seuil)||0):0};
+}
 // PURE. Ce que la page montre — et RIEN d'autre : la liste blanche des règles
 // n'accepte que ces champs-là.
 function pagePubliqueDonnees(u,montrer,maintenant){
   const m=montrer||{}, t=(typeof maintenant==='number')?maintenant:Date.now();
   const pp=(u&&u.pagePublique)||{};
   const o={prenom:String((u&&u.fname)||pp.pseudo||'').replace(/\s+/g,' ').trim().slice(0,24),maj:t};
-  if(m.rang){ try{ const r=rangDe(xpDe(u)); o.rang={n:r.rang.n,nom:r.rang.nom}; }catch(e){} }
-  if(m.serie){ try{ o.serie=Math.max(0,Math.min(999,streakSemaines(u)||0)); }catch(e){} }
+  if(m.rang){ try{ const r=rangDe(xpDe(u)); o.rang={n:r.rang.n,nom:r.rang.nom}; o.volts=voltsPublics(u); }catch(e){} }
+  if(m.serie){
+    try{ o.serie=Math.max(0,Math.min(999,streakSemaines(u)||0)); }catch(e){}
+    try{ o.semaines=semainesPubliques(u,t,12); }catch(e){}
+  }
   if(m.seances) o.seances=Math.min(99999,((u&&u.sessions)||[]).filter(s=>s&&s.date>0).length);
+  // LES BADGES EN IMAGES : le visuel dessiné, et le médaillon de repli (qui
+  // existe toujours) — la page tente l'un puis l'autre, comme l'app.
   if(m.badges){
     try{
-      const b=badgesObtenus(u).sort((a,x)=>x.at-a.at).slice(0,8)
-        .map(x=>{ const d=badgeAcquisDef(x.id); return d?{id:String(d.id).slice(0,40),nom:String(d.nom).slice(0,40)}:null; }).filter(Boolean);
+      const b=badgesObtenus(u).sort((a,x)=>x.at-a.at).slice(0,12)
+        .map(x=>{ const d=badgeAcquisDef(x.id); if(!d) return null;
+          const o2={id:String(d.id).slice(0,40),nom:String(d.nom).slice(0,40)};
+          const img=String(badgeVisuel(d.id,false)||''), rp=String(badgeAcquisFichier(d.id)||'');
+          if(/^img\/badges\/[a-z0-9_-]+\.(webp|png)$/.test(img)) o2.img=img;
+          if(/^img\/badges\/[a-z0-9_-]+\.(webp|png)$/.test(rp)) o2.repli=rp;
+          if(d.famille==='secret') o2.secret=true;
+          return o2; }).filter(Boolean);
       if(b.length) o.badges=b;
     }catch(e){}
   }
-  if(m.records){ const r=recordsRecentsPublics(u,5); if(r.length) o.records=r; }
+  if(m.meilleurs){ const r=meilleursRecordsPublics(u,3); if(r.length) o.meilleurs=r; }
   const c=u&&u.parrainage&&u.parrainage.code;
   if(typeof parrainageCodeValide==='function'&&parrainageCodeValide(c)) o.ref=c;
   return o;
@@ -18405,7 +18529,7 @@ async function majPagePublique(o){
 // PURE. Le bloc des réglages, dans le profil.
 function htmlReglagesPagePublique(u){
   const p=(u&&u.pagePublique)||{};
-  const m=p.montrer||{rang:true,serie:true,badges:true,seances:true};
+  const m=p.montrer||pageMontrerDefaut();
   const dom=_pagesSurFirebase()?String(RC_URL_VITRINE).replace(/^https?:\/\//,'').replace(/\/$/,'')+'/@':'…/p/?u=';
   const cases=PAGE_MONTRER.map(x=>'<label class="pp-case"><input type="checkbox" data-montrer="'+x.cle+'"'+(m[x.cle]?' checked':'')+'> <span>'+escapeHtml(x.lib)+'</span></label>').join('');
   const url=urlPagePerso(u);
@@ -18418,6 +18542,69 @@ function htmlReglagesPagePublique(u){
     +'<div id="pp-etat" class="pp-etat" aria-live="polite">'+(url?'En ligne : '+escapeHtml(url.replace(/^https?:\/\//,'')):(p.pseudo?'Page désactivée.':''))+'</div>'
     +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:10px 0 8px;min-height:44px" onclick="enregistrerPagePublique(this)">Enregistrer ma page</button>'
     +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:0;min-height:44px" onclick="copierLienBio(this)">Copier mon lien pour ma bio Instagram</button></div>';
+}
+// ── LA PROPOSITION, À UN PASSAGE DE RANG (28/09/2026) ────────────────────
+// Le moment où l'athlète a quelque chose à montrer : l'écran du nouveau rang
+// propose la page, pseudo pré-rempli, en UN geste. Ignorée, elle revient une
+// fois, au rang suivant ; puis plus jamais (le profil garde le réglage).
+// PURE.
+function pagePropositionDue(u,rang){
+  if(!u||u.role==='coach'||!u.email) return false;
+  if(u.pagePublique&&u.pagePublique.active) return false;
+  const pr=(u.pagePropose&&typeof u.pagePropose==='object')?u.pagePropose:{};
+  const fois=Number(pr.fois)||0;
+  if(fois>=2) return false;
+  if(fois===1&&!(Number(rang)>(Number(pr.rang)||0))) return false;
+  return true;
+}
+// PURE. Le pseudo proposé : celui déjà choisi, sinon le prénom, sans accent.
+function pseudoSuggere(u){
+  const deja=pseudoPublicNormalise(u&&u.pagePublique&&u.pagePublique.pseudo);
+  if(PSEUDO_PUBLIC_RE.test(deja)) return deja;
+  let x=String((u&&(u.fname||u.pseudo))||'');
+  try{ x=x.normalize('NFD').replace(/[\u0300-\u036f]/g,''); }catch(e){}
+  x=x.toLowerCase().replace(/\s+/g,'.').replace(/[^a-z0-9._]/g,'').replace(/^[._]+|[._]+$/g,'').slice(0,20).replace(/[._]+$/,'');
+  if(x.length<3) x=(x+'.repcore').replace(/^[._]+/,'').slice(0,20);
+  return PSEUDO_PUBLIC_RE.test(x)?x:'athlete.repcore';
+}
+function htmlPropositionPage(u){
+  const dom=_pagesSurFirebase()?String(RC_URL_VITRINE).replace(/^https?:\/\//,'').replace(/\/$/,'')+'/@':'…/p/?u=';
+  return '<div class="pp-prop" id="pp-prop">'
+    +'<div class="pp-prop-t">Ta page, pour ta bio</div>'
+    +'<p class="pp-prop-s">Ton emblème, tes volts, tes semaines et tes badges. Jamais de poids, de photo ni de santé.</p>'
+    +'<div class="pp-url"><span>'+escapeHtml(dom)+'</span><input id="pp-prop-pseudo" type="text" maxlength="20" autocapitalize="none" autocomplete="off" spellcheck="false" value="'+escapeHtml(pseudoSuggere(u))+'" aria-label="Ton pseudo"></div>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse pp-prop-b" onclick="activerPageDepuisRang(this)">Mettre ma page en ligne</button>'
+    +'</div>';
+}
+// Le passage est noté À L'AFFICHAGE : c'est « proposée », pas « acceptée ».
+function _noterPropositionPage(u,rang){
+  u.pagePropose={fois:(Number(u.pagePropose&&u.pagePropose.fois)||0)+1,rang:Number(rang)||0,le:Date.now()};
+  try{ saveUser(); }catch(e){}
+}
+// UN GESTE : le pseudo du champ, les choix par défaut (charges exclues). Pris
+// par quelqu'un d'autre : deux chiffres ajoutés, trois essais.
+async function activerPageDepuisRang(btn){
+  const u=currentUser; if(!u) return false;
+  if(!CLOUD.ok()){ toast('Impossible hors connexion','var(--orange)'); return false; }
+  const champ=document.getElementById('pp-prop-pseudo');
+  const voulu=pseudoPublicNormalise(champ?champ.value:pseudoSuggere(u));
+  if(btn){ btn.disabled=true; btn.textContent='Mise en ligne…'; }
+  let r=null, ps=voulu;
+  for(let i=0;i<4;i++){
+    ps=i?(voulu.slice(0,17)+'.'+String(10+Math.floor(Math.random()*90))):voulu;
+    r=await publierPagePublique(u,{pseudo:ps,active:true,montrer:pageMontrerDefaut()});
+    if(r.ok||!/déjà pris/.test(r.erreur||'')) break;
+  }
+  const z=document.getElementById('pp-prop');
+  if(!r||!r.ok){
+    if(btn){ btn.disabled=false; btn.textContent='Mettre ma page en ligne'; }
+    toast((r&&r.erreur)||'Mise en ligne impossible','var(--orange)');
+    return false;
+  }
+  if(z) z.innerHTML='<div class="pp-prop-t">Ta page est en ligne ⚡</div>'
+    +'<p class="pp-prop-s">'+escapeHtml(urlPagePerso(u).replace(/^https?:\/\//,''))+'</p>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse pp-prop-b" onclick="copierLienBio(this)">Copier mon lien pour ma bio Instagram</button>';
+  return true;
 }
 function _rendrePagePublique(){
   const z=document.getElementById('atp-page');
@@ -18831,10 +19018,51 @@ async function ouvrirAmbassadeurs(){
   // LE JOURNAL NE BLOQUE PAS L'ÉCRAN : illisible (règles pas encore
   // déployées), la carte le dit et les ambassadeurs s'affichent quand même.
   try{ _ambJournal=await CLOUD.journalPaypal(); }catch(e){ _ambJournal=null; }
+  try{ _ambKo=await CLOUD.evenementsKo(); }catch(e){ _ambKo=null; }
   _ambRendre();
   return true;
 }
-let _ambJournal=null;
+let _ambJournal=null, _ambKo=null;
+const _KO_QUOI={reponse_bilan:'Notification « réponse à ton bilan »',reponse_rite:'Notification « réponse au bilan de cycle »',
+  defi_publie:'Notification « nouveau défi »',defi_maj:'Recalcul d’un défi',parrainage_demande:'Demande de parrainage',
+  ambassadeur_demande:'Code ambassadeur',abonnement:'Abonnement PayPal à relier au compte',
+  push:'Notification différée',amb_vue:'Page de suivi d’un ambassadeur',defis_coach:'Défis du matin d’un coach',
+  fin_paypal:'Fin d’abonnement PayPal'};
+const _koCompte=k=>String(k||'').replace(/,/g,'.');
+// PURE. Ce que le serveur léger a abandonné après cinq échecs : quoi, pour
+// qui, pourquoi. Rien à montrer : rien du tout. null : illisible.
+function htmlEvenementsKo(ko){
+  if(ko===null) return '<div class="card amb-journal" id="amb-ko"><div class="amb-t">Serveur : tâches en échec</div>'
+    +'<p class="sub amb-note">Liste illisible pour l’instant.</p></div>';
+  const ids=Object.keys(ko||{}).filter(k=>ko[k]&&typeof ko[k]==='object').sort().reverse();
+  if(!ids.length) return '';
+  let h='<div class="card amb-journal" id="amb-ko"><div class="amb-t">Serveur : tâches en échec</div>'
+    +'<p class="sub amb-note">Abandonnées après '+ids.map(k=>Number(ko[k].essais)||0).reduce((a,b)=>Math.max(a,b),0)
+    +' essais. Les suivantes sont passées : rien n’est bloqué.</p>';
+  for(const id of ids){
+    const x=ko[id];
+    const quoi=x.type==='travail'?'Travail du jour « '+String(x.nom||'?')+' »'
+      :(_KO_QUOI[x.type==='tache'?x.quoi:x.type]||String(x.type==='tache'?x.quoi:x.type||'?'));
+    const qui=x.type==='tache'?(x.uid||x.cle||x.code||x.coach):(x.dest||x.par);
+    const d=Number(x.le)?new Date(Number(x.le)).toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+    h+='<div class="amb-jl amb-jl-alerte">'
+      +'<div class="amb-jl-tete"><b>'+escapeHtml(quoi)+'</b><span class="sub">'+escapeHtml(d)+'</span></div>'
+      +(qui?'<div class="sub">'+escapeHtml(_koCompte(qui))+(x.par&&x.par!=='worker'&&x.dest?' · par '+escapeHtml(_koCompte(x.par)):'')+'</div>':'')
+      +(x.erreur?'<div class="sub">Motif : '+escapeHtml(x.erreur)+'</div>':'')
+      +'<button type="button" class="dfi-lien" onclick="effacerEvenementKo(\''+escapeHtml(id)+'\',this)">Vu, effacer</button>'
+      +'</div>';
+  }
+  return h+'</div>';
+}
+async function effacerEvenementKo(id,btn){
+  if(!estAdminAmbassadeurs()||!/^[A-Za-z0-9_-]{1,40}$/.test(String(id))) return false;
+  if(btn) btn.disabled=true;
+  const ok=await CLOUD.racinePatch({['evenements_ko/'+id]:null}).catch(()=>false);
+  if(!ok){ if(btn) btn.disabled=false; toast('Non effacé','var(--orange)'); return false; }
+  if(_ambKo) delete _ambKo[id];
+  _ambRendre();
+  return true;
+}
 const _JOURNAL_QUOI={remboursement:'Remboursement total',remboursement_partiel:'Remboursement partiel',
   remboursement_inconnu:'Remboursement (transaction inconnue)',retrofacturation:'Rétrofacturation',
   retrofacturation_partielle:'Rétrofacturation partielle',retrofacturation_inconnue:'Rétrofacturation (transaction inconnue)',
@@ -18913,7 +19141,7 @@ function htmlAmbassadeurs(tous,t){
 }
 function _ambRendre(){
   const z=document.getElementById('amb-contenu');
-  if(z) z.innerHTML=htmlJournalPaypal(_ambJournal)+htmlAmbassadeurs(_ambTous||{},Date.now());
+  if(z) z.innerHTML=htmlEvenementsKo(_ambKo)+htmlJournalPaypal(_ambJournal)+htmlAmbassadeurs(_ambTous||{},Date.now());
 }
 // PURE. La fiche à écrire, ou {erreur}.
 function ambFiche(f,existants,maintenant){
@@ -19051,10 +19279,18 @@ function rcAppareilId(){
   }catch(e){ return 'sansstockage0000'; }
 }
 // ── Le lien : lienPerso(), plus haut (pages publiques) ────────────────────
-// PURE. Le message prêt à partager.
+// PURE. Le message prêt à partager. La durée vient de TARIFS (tarifs.json),
+// comme la page de vente : « 2 mois au lieu d'un » ne peut plus mentir le
+// jour où l'essai change.
+// `lien` : ajouté à la fin ; '' (chaîne vide) quand le lien voyage à part
+// (navigator.share le porte dans `url` : l'écrire aussi dans le texte le
+// faisait apparaître deux fois) ; absent : on dit où saisir le code.
 function parrainageMessage(code,lien){
-  return 'Je m’entraîne avec RepCore Avec mon code '+code+', tu as 2 mois pour essayer au lieu d’un. '
-    +(lien?lien:'Le code se saisit à l’inscription.');
+  const base=TARIFS.essai.mois, total=base+TARIFS.essai_parrainage.moisEnPlus;
+  const auLieu=base===1?'au lieu d’un':'au lieu de '+base;
+  return 'Je m’entraîne avec RepCore. Avec mon code '+code+', tu as '+total+' mois d’essai '+auLieu
+    +', toute l’app ouverte, sans carte bancaire.'
+    +(lien?' '+lien:(lien===''?'':' Le code se saisit à l’inscription.'));
 }
 // ── L'arrivée par un lien ?ref= ────────────────────────────────────────────
 // Gardé sur l'appareil (localStorage ET sessionStorage) jusqu'à l'inscription.
@@ -19087,6 +19323,58 @@ function parrainageOublierRef(){
   window._refCode='';
 }
 // Le champ de l'inscription, pré-rempli. Athlète seulement.
+// ── LE PRÉNOM DU PARRAIN, pour l'accueillir par son nom ────────────────────
+// La page /i l'a lu dans /parrainage/codesPublics et gardé (même domaine) ;
+// sinon on le lit ici — code par code, sans compte (règles). null : inconnu.
+function parrainInviteGarde(code){
+  try{
+    const g=JSON.parse(localStorage.getItem('rc_parrain_invite')||'null');
+    return (g&&g.code===code&&g.prenom)?{prenom:String(g.prenom).slice(0,24),rang:Number(g.rang)||0}:null;
+  }catch(e){ return null; }
+}
+async function parrainInviteLire(code){
+  if(!parrainageCodeValide(code)) return null;
+  const g=parrainInviteGarde(code);
+  if(g) return g;
+  try{
+    const r=await fetch(CLOUD._fbUrl.replace('users.json','parrainage/codesPublics/'+code+'.json'));
+    const d=r.ok?await r.json():null;
+    if(!d||!d.prenom) return null;
+    const v={prenom:String(d.prenom).slice(0,24),rang:Number(d.rang)||0};
+    try{ localStorage.setItem('rc_parrain_invite',JSON.stringify(Object.assign({code,le:Date.now()},v))); }catch(e){}
+    return v;
+  }catch(e){ return null; }
+}
+// PURE. La ligne sous le champ du code.
+function phraseInvitationInscription(prenom,amb){
+  const n=TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus;
+  if(amb) return 'Invité par '+amb+' · '+n+' mois pour essayer';
+  if(prenom) return 'Invité par '+prenom+' · '+n+' mois pour essayer';
+  return 'Le code d’un ami ou d’un ambassadeur t’offre '+TARIFS.essai_parrainage.moisEnPlus+' mois de plus pour essayer.';
+}
+// PURE. Faut-il le bouton « Quelqu'un t'a invité ? » en haut de l'inscription ?
+// L'app installée sur iPhone, un athlète, et aucun code arrivé par le lien.
+function parrainageDemanderCode(role,installeeIOS,code){
+  return role==='athlete'&&!!installeeIOS&&!code;
+}
+function parrainageAllerAuChamp(){
+  const i=document.getElementById('r-parrain');
+  if(!i) return false;
+  try{ i.scrollIntoView({block:'center',behavior:'smooth'}); }catch(e){}
+  try{ i.focus(); }catch(e){}
+  return true;
+}
+// Un code tapé à la main (l'app installée sur iPhone a perdu le lien) :
+// dès qu'il a la bonne forme, on dit de qui il vient — la preuve qu'il est bon.
+function parrainageCodeSaisi(v){
+  const c=parrainageCodeNormalise(v);
+  const x=document.getElementById('r-parrain-info');
+  if(!x||!parrainageCodeValide(c)) return false;
+  parrainInviteLire(c).then(g=>{
+    if(g&&parrainageCodeNormalise((document.getElementById('r-parrain')||{}).value)===c) x.textContent=phraseInvitationInscription(g.prenom);
+  }).catch(()=>{});
+  return true;
+}
 function parrainageChampInscription(role){
   const z=document.getElementById('r-parrain-z');
   if(!z) return;
@@ -19096,8 +19384,17 @@ function parrainageChampInscription(role){
   const a=ambEnAttente(), c=a||parrainageRefEnAttente();
   if(i&&c&&!i.value) i.value=c;
   const info=document.getElementById('r-parrain-info');
-  if(info) info.textContent=a?'Invité par '+a+' : 2 mois pour essayer au lieu d’un.'
-    :c?'Invité par un ami : 2 mois pour essayer au lieu d’un.':'Le code d’un ami ou d’un ambassadeur t’offre 1 mois de plus pour essayer.';
+  const g=(!a&&c)?parrainInviteGarde(c):null;
+  if(info) info.textContent=a?phraseInvitationInscription('',a)
+    :c?phraseInvitationInscription(g?g.prenom:'un ami'):phraseInvitationInscription('');
+  // Le prénom pas encore connu : lu, puis la ligne se complète.
+  if(!a&&c&&!g) parrainInviteLire(c).then(v=>{
+    const x=document.getElementById('r-parrain-info');
+    if(v&&x&&(document.getElementById('r-parrain')||{}).value===c) x.textContent=phraseInvitationInscription(v.prenom);
+  }).catch(()=>{});
+  const appel=document.getElementById('r-parrain-appel');
+  let ios=false; try{ ios=rcInstalliOS()&&rcInstallAutonome(); }catch(e){}
+  if(appel) appel.style.display=parrainageDemanderCode(role,ios,c)?'':'none';
   // ARRIVÉ PAR LA VITRINE D'UN COACH (/coach/<slug> → ?coach=) : on le dit, et
   // on dit la suite — c'est le coach qui donne le code d'accès qui relie.
   try{ _infoVitrineInscription(role); }catch(e){}
@@ -19155,7 +19452,7 @@ async function parrainageAssurerCode(u){
   try{ c=await CLOUD.parrainageGet('comptes/'+moi+'/code'); }catch(e){ c=null; }
   for(let i=0;!c&&i<6;i++){
     const essai=parrainageCodeDe(u.fname||u.pseudo||u.email.split('@')[0]);
-    const ok=await CLOUD.parrainagePatch({['codes/'+essai]:moi,['codesPublics/'+essai]:{prenom:String(u.fname||'').slice(0,24)},
+    const ok=await CLOUD.parrainagePatch({['codes/'+essai]:moi,['codesPublics/'+essai]:{prenom:String(u.fname||'').slice(0,24),rang:rangPublic(u)},
       ['comptes/'+moi+'/code']:essai}).catch(()=>false);
     if(ok) c=essai;
   }
@@ -19180,12 +19477,63 @@ function parrainageFusionnerCompte(u,compte){
   p.inscrits=l.length; p.payants=payantsLe.length; p.payantsLe=payantsLe;
   p.moisGagnes=Math.max(0,Number(compte.moisGagnes)||0);
   p.prenoms=l.sort((a,b)=>(Number(b.date)||0)-(Number(a.date)||0)).slice(0,20)
-    .map(x=>({prenom:String(x.prenom||'').slice(0,24),statut:x.statut==='payant'?'payant':'inscrit',date:Number(x.date)||0}));
+    .map(x=>({prenom:String(x.prenom||'').slice(0,24),statut:filleulStatut(x),date:Number(x.date)||0}));
   u.parrainage=p;
   return payantsLe.length!==avant;
 }
+// PURE. Où en est un filleul : 'payant' (abonné), 'seance' (sa première
+// séance est faite : le Worker l'a notée, événement filleul_seance) ou
+// 'inscrit'. Les trois marches de l'écran parrainage.
+function filleulStatut(x){
+  if(!x||typeof x!=='object') return 'inscrit';
+  if(x.statut==='payant') return 'payant';
+  if(x.statut==='seance'||Number(x.premiereSeance)>0) return 'seance';
+  return 'inscrit';
+}
+const FILLEUL_ETAPES=Object.freeze([['inscrit','Inscrit'],['seance','1re séance'],['payant','Abonné']]);
+// PURE. La ligne d'un filleul : son prénom, et ses trois marches.
+function htmlFilleul(x){
+  const st=filleulStatut(x);
+  const k=FILLEUL_ETAPES.findIndex(e=>e[0]===st);
+  const lib=FILLEUL_ETAPES[k][1]+(st==='payant'?' ✓':'');
+  return '<div class="pr-f" data-statut="'+st+'"><span class="pr-f-nom">'+escapeHtml(x&&x.prenom||'Un ami')+'</span>'
+    +'<span class="pr-f-etapes" aria-hidden="true">'+FILLEUL_ETAPES.map((e,i)=>'<i class="'+(i<=k?'on':'')+'" title="'+e[1]+'"></i>').join('')+'</span>'
+    +'<b>'+escapeHtml(lib)+'</b></div>';
+}
+// PURE. La ligne de l'accueil, sous le rang, dès le premier filleul (rien avant).
+function htmlLigneFilleuls(u){
+  const p=(u&&u.parrainage)||{};
+  const n=Number(p.inscrits)||0;
+  if(!PARRAINAGE_ACTIF||!(n>0)) return '';
+  const l=Array.isArray(p.prenoms)?p.prenoms:[];
+  const seance=l.filter(x=>filleulStatut(x)==='seance').length, pay=Number(p.payants)||0, mois=Number(p.moisGagnes)||0;
+  const bouts=[n+' filleul'+(n>1?'s':'')];
+  if(seance) bouts.push(seance+' en route');
+  if(pay) bouts.push(pay+' abonné'+(pay>1?'s':''));
+  if(mois) bouts.push(mois+' mois gagné'+(mois>1?'s':''));
+  return '<button type="button" class="clh-filleuls-b" onclick="ouvrirParrainage()"><span aria-hidden="true">⚡</span> '
+    +escapeHtml(bouts.join(' · '))+'<span class="clh-filleuls-f" aria-hidden="true">›</span></button>';
+}
+// PURE. Le rang montré à qui reçoit le lien (1 à 10) : celui de l'accueil.
+function rangPublic(u){
+  let n=1; try{ n=rangDe(xpDe(u)).rang.n; }catch(e){ n=1; }
+  return Math.max(1,Math.min(10,Math.round(Number(n)||1)));
+}
+// LE RANG DE /codesPublics SUIT CELUI DU PARRAIN : écrit quand il change
+// (u.parrainage.rangPublie retient le dernier écrit). Les règles n'acceptent
+// que le propriétaire du code, et un entier de 1 à 10.
+async function parrainagePublierRang(u){
+  const p=u&&u.parrainage;
+  if(!p||!parrainageCodeValide(p.code)||!CLOUD.ok()) return false;
+  const n=rangPublic(u);
+  if(Number(p.rangPublie)===n) return false;
+  const ok=await CLOUD.parrainagePut('codesPublics/'+p.code+'/rang',n).catch(()=>false);
+  if(ok){ u.parrainage=Object.assign({},u.parrainage,{rangPublie:n}); try{ saveUser(); }catch(e){} }
+  return !!ok;
+}
 async function majParrainageMiroir(u){
   if(!u||!u.email||!CLOUD.ok()) return false;
+  parrainagePublierRang(u).catch(()=>{});
   const c=await CLOUD.parrainageGet('comptes/'+u.email.replace(/\./g,','));
   if(!c) return false;
   return parrainageFusionnerCompte(u,c);
@@ -19204,14 +19552,23 @@ function htmlParrainage(u){
       +'<div class="dfi-barre"><span style="width:'+Math.round(part*100)+'%"></span></div>'
       +'<div class="pr-pal-g">'+escapeHtml(x.gain)+'</div></div>';
   }).join('');
-  const liste=(Array.isArray(p.prenoms)?p.prenoms:[]).map(x=>'<div class="pr-f"><span>'+escapeHtml(x.prenom||'Un ami')+'</span><b>'
-    +(x.statut==='payant'?'Abonné ✓':'Inscrit')+'</b></div>').join('');
+  const liste=(Array.isArray(p.prenoms)?p.prenoms:[]).map(htmlFilleul).join('');
+  const plus=TARIFS.essai_parrainage.moisEnPlus;
+  // LA CARTE D'ABORD (28/09/2026) : une image se partage en story, un texte
+  // se perd dans une conversation. Le texte et le lien restent, en second.
   return '<div class="pr-hero"><div class="pr-titre">Fais découvrir RepCore</div>'
-    +'<p>Ton ami a <b>1 mois d’essai en plus</b>. Toi, <b>1 mois offert</b> à son premier paiement.</p></div>'
-    +'<div class="pr-code-carte"><div class="pr-code-lib">Ton code</div>'
+    +'<p>Ton ami a <b>'+plus+' mois d’essai en plus</b>. Toi, <b>1 mois offert</b> à son premier paiement.</p></div>'
+    +'<div class="pr-carte-inv">'
+    +'<button type="button" class="btn btn-red pr-carte-b" onclick="partagerCarteInvitation(this)"'+(code?'':' disabled')+'>'
+      +icon('share',16)+' <span>Partager ma carte d’invitation</span></button>'
+    +'<div class="pr-carte-note">Story : ton lien est copié, colle-le avec le sticker Lien. Post : la légende avec ton code est copiée.</div>'
+    +_htmlVisuelFonds('pr-fonds')
+    +'</div>'
+    +'<div class="pr-code-carte pr-secondaire"><div class="pr-code-lib">Ton code</div>'
     +'<div class="pr-code" id="pr-code">'+(code?escapeHtml(code):'…')+'</div>'
-    +'<button type="button" class="btn btn-red" style="width:100%;margin:12px 0 8px;min-height:48px" onclick="parrainagePartager(this)"'+(code?'':' disabled')+'>Partager mon code</button>'
-    +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:0;min-height:42px" onclick="parrainageCopier(this)"'+(code?'':' disabled')+'>Copier le lien</button></div>'
+    +'<div class="pr-sec-btns">'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="parrainagePartager(this)"'+(code?'':' disabled')+'>Envoyer le texte</button>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="parrainageCopier(this)"'+(code?'':' disabled')+'>Copier le lien</button></div></div>'
     +'<div class="pr-tuiles">'+tuile(inscrits,inscrits>1?'inscrits':'inscrit')+tuile(payants,payants>1?'abonnés':'abonné')
       +tuile(mois,'mois gagné'+(mois>1?'s':''))+'</div>'
     +'<div class="pr-paliers">'+paliers+'</div>'
@@ -19222,11 +19579,13 @@ async function ouvrirParrainage(){
   if(!PARRAINAGE_ACTIF||!currentUser) return false;
   go('s-parrainage');
   const z=document.getElementById('pr-contenu');
-  if(z) z.innerHTML=htmlParrainage(currentUser);
+  const poser=()=>{ if(!z) return; z.innerHTML=htmlParrainage(currentUser);
+    try{ monterSelecteurFond('pr-fonds',f=>_dessinerCarteInvitation(invitationDonnees(currentUser),f),null); }catch(e){} };
+  poser();
   try{ await parrainageAssurerCode(currentUser); }catch(e){}
   // Les compteurs, relus au serveur, et les badges s'ils ont bougé.
   try{ await majRecompensesServeur({force:true}); }catch(e){}
-  if(z&&document.getElementById('s-parrainage')?.classList.contains('active')) z.innerHTML=htmlParrainage(currentUser);
+  if(z&&document.getElementById('s-parrainage')?.classList.contains('active')) poser();
   return true;
 }
 function parrainageCopier(btn){
@@ -19246,13 +19605,149 @@ function parrainagePartager(btn){
   const c=currentUser&&currentUser.parrainage&&currentUser.parrainage.code;
   if(!c) return false;
   const l=lienPerso('parrainage');
-  const texte=parrainageMessage(c,l);
   try{ rcm('parrainage_partage'); }catch(e){}
   if(navigator.share){
-    navigator.share({title:'RepCore',text:texte,url:l||undefined}).then(()=>{ try{ attribCompter('partage','parrainage'); }catch(e){} }).catch(()=>{});
+    // Le lien part dans `url` : le texte ne le répète pas.
+    navigator.share({title:'RepCore',text:parrainageMessage(c,l?'':undefined),url:l||undefined}).then(()=>{ try{ attribCompter('partage','parrainage'); }catch(e){} }).catch(()=>{});
     return true;
   }
   return parrainageCopier(btn);
+}
+// ══ LA CARTE D'INVITATION (28/09/2026) ═════════════════════════════════
+// Même épure que les autres visuels : fond au choix, Bebas et Montserrat,
+// l'éclair en filigrane, la signature en bas. « PRÉNOM T'INVITE », les mois
+// d'essai en très gros (TARIFS : jamais un chiffre en dur), le code dans un
+// cadre. Story 1080×1920 ou post 1080×1350 (visuelFormat).
+// Au partage : en story, le LIEN avec ?ref= est copié (sticker Lien) ; en
+// post, la LÉGENDE qui porte le code (_LEGENDES.invitation).
+// PURE (sauf nomSurVisuels). Les données de la carte.
+function invitationDonnees(u){
+  const p=(u&&u.parrainage)||{};
+  let sig=''; try{ sig=nomSurVisuels(u); }catch(e){ sig=''; }
+  let n=1; try{ n=rangPublic(u); }catch(e){ n=1; }
+  return {prenom:String((u&&u.fname)||'').trim().slice(0,24),code:parrainageCodeValide(p.code)?parrainageCodeNormalise(p.code):'',
+    mois:TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus,base:TARIFS.essai.mois,rang:n,signature:sig};
+}
+function _dessinerCarteInvitation(d,fond,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
+  const cv=document.createElement('canvas');
+  cv.width=W; cv.height=H;
+  const g=cv.getContext('2d');
+  const f=fond||'transparent';
+  _visuelPeindreFond(g,W,H,f);
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const M=72, LARG=W-M*2, cx=W/2;
+  const o=_visuelOutils(g);
+  const rouge=f==='rouge';
+  const x=d||{};
+  const qui=(x.prenom?String(x.prenom).toUpperCase()+' T’INVITE':'TU ES INVITÉ');
+  const grand=String(x.mois||2)+' MOIS';
+  const sous='D’ESSAI OFFERTS';
+  const detail=(x.base&&x.mois>x.base?(x.base===1?'au lieu d’un':'au lieu de '+x.base)+' · ':'')+'toute l’app · sans carte bancaire';
+  const code=String(x.code||'');
+  // LA MISE EN PAGE SE CALCULE D'ABORD, puis le bloc est centré entre le
+  // haut et la signature.
+  const H_TAG=70, H_QUI=post?120:150, CS=post?300:380, H_SOUS=90, H_DET=70, H_CODE=code?(post?210:250):0;
+  const HB=H_TAG+H_QUI+CS*0.86+H_SOUS+H_DET+H_CODE;
+  let y=Math.max(post?60:150,Math.round((H-(post?120:200)-HB)/2));
+  g.textAlign='center'; g.textBaseline='alphabetic';
+  o.ombre(true);
+  g.fillStyle='#fff'; g.font='800 34px '+MONT;
+  o.ecrireEspace('INVITATION',cx,y+34,10,true);
+  o.ombre(false);
+  g.fillStyle=rouge?'rgba(255,255,255,.85)':'#E02020';
+  g.fillRect(cx-44,y+54,88,5);
+  y+=H_TAG;
+  o.ombre(true);
+  g.fillStyle='rgba(255,255,255,.96)';
+  const qs=o.ajuste(qui,'700',post?96:112,BEBAS,LARG,44);
+  g.font='700 '+qs+'px '+BEBAS;
+  o.ecrire(o.coupe(qui,LARG),cx,y+qs*0.86);
+  y+=H_QUI;
+  // LE CHIFFRE, l'éclair derrière.
+  const base=y+CS*0.86;
+  _recEclairFiligrane(g,cx+210,y-10,cx-170,base+30,_recGraine('invitation|'+code),f);
+  o.ombre(true);
+  g.fillStyle='#fff';
+  const gs=o.ajuste(grand,'700',CS,BEBAS,LARG,140);
+  g.font='700 '+gs+'px '+BEBAS;
+  o.ecrire(grand,cx,base);
+  y=base;
+  const ss=o.ajusteEspace(sous,'800',54,MONT,8,LARG,26);
+  g.font='800 '+ss+'px '+MONT;
+  o.ecrireEspace(sous,cx,y+74,8,true);
+  y+=H_SOUS;
+  g.fillStyle='rgba(255,255,255,.85)';
+  const ds=o.ajuste(detail,'700',34,MONT,LARG,20);
+  g.font='700 '+ds+'px '+MONT;
+  o.ecrire(o.coupe(detail,LARG),cx,y+44);
+  y+=H_DET;
+  // LE CODE, dans un cadre : c'est lui qu'on recopie.
+  if(code){
+    const hc=post?170:200, lc=Math.min(LARG,760), yc=y+(post?20:30);
+    o.ombre(false);
+    g.save();
+    g.strokeStyle=rouge?'rgba(255,255,255,.9)':'#E02020'; g.lineWidth=5;
+    g.fillStyle=f==='transparent'?'rgba(0,0,0,.35)':'rgba(0,0,0,.28)';
+    const r=24, x0=cx-lc/2;
+    g.beginPath();
+    g.moveTo(x0+r,yc); g.lineTo(x0+lc-r,yc); g.quadraticCurveTo(x0+lc,yc,x0+lc,yc+r);
+    g.lineTo(x0+lc,yc+hc-r); g.quadraticCurveTo(x0+lc,yc+hc,x0+lc-r,yc+hc);
+    g.lineTo(x0+r,yc+hc); g.quadraticCurveTo(x0,yc+hc,x0,yc+hc-r);
+    g.lineTo(x0,yc+r); g.quadraticCurveTo(x0,yc,x0+r,yc); g.closePath();
+    g.fill(); g.stroke();
+    g.restore();
+    o.ombre(true);
+    g.fillStyle='rgba(255,255,255,.8)'; g.font='800 28px '+MONT;
+    o.ecrireEspace('MON CODE',cx,yc+50,8,true);
+    g.fillStyle='#fff';
+    const cs=o.ajusteEspace(code,'700',post?104:120,BEBAS,10,lc-60,50);
+    g.font='700 '+cs+'px '+BEBAS;
+    o.ecrireEspace(code,cx,yc+hc-(post?30:36),10,true);
+  }
+  _recSignature(g,o,String(x.signature||''),H-(post?50:110),LARG);
+  o.ombre(false);
+  return cv;
+}
+// LE GESTE, SYNCHRONE jusqu'au partage (iOS). Le partage natif, sinon le
+// téléchargement ; les deux copient le lien (story) ou la légende (post).
+function partagerCarteInvitation(btn,format){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  const d=invitationDonnees(u);
+  if(!d.code||_storyEnCours) return false;
+  const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond);
+  const nom=visuelNomFichier('repcore-invitation',fond,format);
+  try{ rcm('parrainage_partage'); }catch(e){}
+  _storyEnCours=true;
+  let ok=false;
+  try{
+    ok=_storySortirPartage(_dessinerCarteInvitation(d,fond,format),nom,undefined,fmt)
+      ||_storySortirTelechargement(_dessinerCarteInvitation(d,fond,format),nom,fmt);
+  }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
+  finally{ _storyEnCours=false; }
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp&&ok){ const l=sp.textContent; sp.textContent='Carte prête ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  return ok;
+}
+// « INVITER UN POTE », le bouton secondaire des grands moments (rang,
+// palier de série, fin du Wrapped). Le code existe : la carte part tout de
+// suite. Pas encore de code (jamais ouvert l'écran) : l'écran parrainage,
+// qui le crée.
+function htmlBoutonInviter(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!PARRAINAGE_ACTIF||!u||u.role==='coach') return '';
+  return '<button type="button" class="btn btn-outline btn-sm rc-inviter" onclick="event.stopPropagation();inviterUnPote(this)">'
+    +icon('share',14)+' <span>Inviter un pote</span></button>';
+}
+function inviterUnPote(btn){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u) return false;
+  if(invitationDonnees(u).code) return partagerCarteInvitation(btn);
+  try{ _bdgFermerEcran(true); }catch(e){}
+  try{ if(document.getElementById('s-wrapped')?.classList.contains('active')) _wrFermer(); }catch(e){}
+  ouvrirParrainage();
+  return true;
 }
 // L'entrée, dans le profil.
 function _rendreEntreeParrainage(){
@@ -19439,12 +19934,23 @@ function abonnementSignaler(id,force){
   try{ if(!force&&localStorage.getItem(cle)===abo) return; }catch(e){}
   deposerEvenement({type:'abonnement',abo}).then((ok)=>{ if(ok){ try{ localStorage.setItem(cle,abo); }catch(e){} } }).catch(()=>{});
 }
+// PURE. Ce que l'événement vise, pour son verrou (voir evenementPoser) : les
+// règles exigent exactement cette valeur, type par type.
+function evenementCible(ev){
+  const t=ev&&ev.type;
+  if(t==='reponse_bilan'||t==='reponse_rite') return String(ev.dest||'');
+  if(t==='defi_maj') return String(ev.id||'');
+  if(t==='defi_publie') return String(ev.msg||'');
+  return '-';
+}
 async function deposerEvenement(ev){
   if(!SERVEUR_LEGER||!currentUser||!currentUser.email||!CLOUD||!CLOUD.ok()) return false;
   const par=currentUser.email.replace(/\./g,',');
   const id='e'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+  const cible=evenementCible(ev);
+  if(!cible) return false;
   let ok=false;
-  try{ ok=await CLOUD.evenementPoser(id,Object.assign({},ev,{par,at:Date.now()})); }catch(e){ ok=false; }
+  try{ ok=await CLOUD.evenementPoser(id,Object.assign({},ev,{par,at:Date.now(),cible})); }catch(e){ ok=false; }
   if(ok){ try{ fetch(SERVEUR_LEGER_URL+'/reveil',{method:'POST',keepalive:true}).catch(()=>{}); }catch(e){} }
   return ok;
 }
@@ -19876,49 +20382,54 @@ function defiCarteDonnees(u,m,res){
   return {titre:String((m&&m.titre)||(res&&res.titre)||'Le défi'),mois:defiMoisTexte(fin),
     champion:!!(res&&res.champion),valeur:v?_dfValeurTexte({mesure},v):'',signature:sig};
 }
-function _dessinerCarteDefi(d,fond){
+function _dessinerCarteDefi(d,fond,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
   const cv=document.createElement('canvas');
-  cv.width=STORY_L; cv.height=STORY_H;
+  cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
   const f=fond||'transparent';
-  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  _visuelPeindreFond(g,W,H,f);
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
-  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   const rouge=f==='rouge';
   g.textAlign='center'; g.textBaseline='alphabetic';
-  // L'éclair, derrière.
+  // L'éclair, derrière. En post, il se resserre (échelle 0,62 autour de son
+  // axe) et remonte : le texte garde le bas de l'image.
+  const K=post?0.62:1, Y=(v)=>post?Math.round(110+(v-300)*K):v, X=(v)=>post?Math.round(cx+(v-cx)*K):v;
   g.save();
-  const h=g.createRadialGradient(cx,690,40,cx,690,540);
+  const h=g.createRadialGradient(cx,Y(690),40,cx,Y(690),540*K);
   h.addColorStop(0,rouge?'rgba(255,255,255,.3)':'rgba(224,32,32,.45)'); h.addColorStop(1,'rgba(0,0,0,0)');
-  g.fillStyle=h; g.fillRect(0,200,STORY_L,1100);
+  g.fillStyle=h; g.fillRect(0,Y(200),W,Math.round(1100*K));
   g.fillStyle=rouge?'rgba(255,255,255,.92)':'#E02020';
   g.shadowColor=rouge?'rgba(255,255,255,.6)':'rgba(224,32,32,.9)'; g.shadowBlur=60;
   g.beginPath();
-  [[610,300],[410,720],[540,720],[455,1080],[715,580],[575,580],[680,300]].forEach((p,i)=>i?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]));
+  [[610,300],[410,720],[540,720],[455,1080],[715,580],[575,580],[680,300]].forEach((p,i)=>i?g.lineTo(X(p[0]),Y(p[1])):g.moveTo(X(p[0]),Y(p[1])));
   g.closePath(); g.fill();
   g.restore();
   o.ombre(true);
   g.fillStyle='#fff';
   if(d.champion){
     g.fillStyle=rouge?'#fff':'#E02020'; g.font='800 40px '+MONT;
-    o.ecrireEspace('DÉFI '+String(d.mois||''),cx,300,9,true);
+    o.ecrireEspace('DÉFI '+String(d.mois||''),cx,post?90:300,9,true);
     g.fillStyle='#fff';
-    const cs=o.ajuste('CHAMPION','700',300,BEBAS,LARG,120);
-    g.font='700 '+cs+'px '+BEBAS; o.ecrire('CHAMPION',cx,1380);
+    const cs=o.ajuste('CHAMPION','700',post?230:300,BEBAS,LARG,120);
+    g.font='700 '+cs+'px '+BEBAS; o.ecrire('CHAMPION',cx,post?930:1380);
   }else{
     const l1='J’AI RELEVÉ', l2='LE DÉFI '+String(d.mois||'');
-    const s1=o.ajuste(l1,'700',190,BEBAS,LARG,90), s2=o.ajuste(l2,'700',150,BEBAS,LARG,70);
-    g.font='700 '+s1+'px '+BEBAS; o.ecrire(l1,cx,1330);
+    const s1=o.ajuste(l1,'700',post?150:190,BEBAS,LARG,90), s2=o.ajuste(l2,'700',post?118:150,BEBAS,LARG,70);
+    const b1=post?860:1330;
+    g.font='700 '+s1+'px '+BEBAS; o.ecrire(l1,cx,b1);
     g.fillStyle=rouge?'#fff':'#ff3b3b';
-    g.font='700 '+s2+'px '+BEBAS; o.ecrire(l2,cx,1330+s2+10);
+    g.font='700 '+s2+'px '+BEBAS; o.ecrire(l2,cx,b1+s2+10);
   }
   g.fillStyle='rgba(255,255,255,.9)';
   const ts=o.ajuste('« '+d.titre+' »','700',46,MONT,LARG,26);
-  g.font='700 '+ts+'px '+MONT; o.ecrire('« '+d.titre+' »',cx,d.champion?1480:1560);
-  if(d.valeur){ g.font='800 40px '+MONT; o.ecrireEspace('⚡ '+d.valeur,cx,d.champion?1560:1640,4,true); }
-  _recSignature(g,o,String(d.signature||''),STORY_H-110,LARG);
+  const yt=post?(d.champion?1030:1080):(d.champion?1480:1560);
+  g.font='700 '+ts+'px '+MONT; o.ecrire('« '+d.titre+' »',cx,yt);
+  if(d.valeur){ g.font='800 40px '+MONT; o.ecrireEspace('⚡ '+d.valeur,cx,yt+(post?64:80),4,true); }
+  _recSignature(g,o,String(d.signature||''),H-(post?50:110),LARG);
   o.ombre(false);
   return cv;
 }
@@ -38980,6 +39491,15 @@ function _pdRepas(u){
     ?{titre:'Note ta première journée',sous:'Dis chaque jour si tu as suivi ton plan'}
     :{titre:'Note ton premier repas',sous:'Pour voir tes macros se remplir'};
 }
+// PURE. « Julie sera prévenue… » : seulement pour un filleul qui n'a pas encore
+// fait de séance. La promesse est tenue par le serveur léger (événement
+// filleul_seance, déposé à la fin de la première séance).
+function phraseParrainPremiereSeance(u){
+  const p=u&&u.parrainage;
+  const nom=p&&p.parrainCode&&String(p.parrainPrenom||'').trim();
+  if(!nom||(u.sessions||[]).length) return '';
+  return nom+' sera prévenu quand tu feras ta première séance.';
+}
 // PURE. Le bloc.
 function _htmlDemarrage(u){
   const e=etapesDemarrage(u);
@@ -39002,6 +39522,8 @@ function _htmlDemarrage(u){
         :'<button type="button" class="pd-ligne" onclick="'+l.action+'">'+corps
           +'<span class="pd-go" aria-hidden="true">›</span></button>';
     }).join('')
+    +(phraseParrainPremiereSeance(u)?'<div class="pd-parrain" style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:10px">'
+      +escapeHtml(phraseParrainPremiereSeance(u))+'</div>':'')
     +'</div>';
 }
 // Le tour impur : poser le bloc, et marquer l'ecran pour que la feuille taise
@@ -41248,8 +41770,46 @@ function visuelFondEffectif(){
 function visuelFondFormat(fond){
   return fond==='transparent'?{type:'image/png',ext:'png',q:null}:{type:'image/jpeg',ext:'jpg',q:0.9};
 }
-/** PURE. repcore-bilan.png ou repcore-bilan.jpg. */
-function visuelNomFichier(base,fond){ return base+'.'+visuelFondFormat(fond).ext; }
+// ══ LES FORMATS : STORY 9:16, POST 4:5 (27/09/2026) ═════════════════════
+// UN SEUL RÉGLAGE POUR TOUS LES VISUELS. L'avant/après (AA_FORMATS) et le
+// visuel du coach (VC_FORMATS) avaient chacun le leur ; les autres ne
+// savaient faire que la story, et un post Instagram recadrait la moitié du
+// visuel. Chaque dessin prend désormais un `format` et RECALCULE sa mise en
+// page pour sa hauteur ; sans `format`, c'est le dernier choisi sur cet
+// appareil (visuelFormatChoisi).
+const VISUEL_FORMATS=Object.freeze({
+  story:Object.freeze({w:1080,h:1920,lib:'Story',ratio:'9:16'}),
+  post:Object.freeze({w:1080,h:1350,lib:'Post',ratio:'4:5'})
+});
+const VISUEL_FORMAT_CLE='rc_visuel_format';
+// LA TOILE D'UN VISUEL. Neuve pour une image ; pour la vidéo (anim.cv), la
+// même à chaque frame, effacée : trente toiles de 8 Mo par seconde, c'est le
+// ramasse-miettes qui ferait sauter des images.
+function _visuelToile(anim,W,H){
+  const cv=(anim&&anim.cv)||document.createElement('canvas');
+  if(cv.width!==W||cv.height!==H){ cv.width=W; cv.height=H; }
+  else if(anim&&anim.cv){ const g=cv.getContext('2d'); g.setTransform(1,0,0,1,0,0); g.globalAlpha=1; g.globalCompositeOperation='source-over'; g.clearRect(0,0,W,H); }
+  return cv;
+}
+/** Le dernier format choisi sur cet appareil ; 'story' par défaut. */
+function visuelFormatChoisi(){
+  let f=null;
+  try{ f=localStorage.getItem(VISUEL_FORMAT_CLE); }catch(e){ f=null; }
+  return VISUEL_FORMATS[f]?f:'story';
+}
+function visuelFormatMemoriser(f){
+  if(!VISUEL_FORMATS[f]) return false;
+  try{ localStorage.setItem(VISUEL_FORMAT_CLE,f); return true; }catch(e){ return false; }
+}
+/** PURE (sauf le défaut). {cle,w,h,lib,ratio} du format demandé, sinon du dernier choisi. */
+function visuelFormat(format){
+  const k=VISUEL_FORMATS[format]?format:visuelFormatChoisi();
+  return Object.assign({cle:k},VISUEL_FORMATS[k]);
+}
+/** repcore-bilan.png, repcore-bilan.jpg, repcore-bilan-post.jpg. */
+function visuelNomFichier(base,fond,format){
+  return base+(visuelFormat(format).cle==='post'?'-post':'')+'.'+visuelFondFormat(fond).ext;
+}
 /**
  * Peint le fond sur tout le canevas, AVANT le reste du visuel.
  * @param {CanvasRenderingContext2D} g @param {number} W @param {number} H
@@ -41305,10 +41865,35 @@ function _visuelPeindreFond(g,W,H,fond){
   }
   return false;                                   // transparent : rien
 }
-/** Le sélecteur : trois vignettes cliquables, et l'<input> de la photo. */
+/**
+ * Le choix « Story / Post », posé À CÔTÉ du sélecteur de fond : chaque visuel
+ * qui a le second a le premier. `id` : celui du sélecteur de fond voisin.
+ */
+function _htmlVisuelFormats(id){
+  const k0=visuelFormatChoisi();
+  return '<div class="vfmt" role="radiogroup" aria-label="Format de l’image" data-pour="'+id+'">'
+    +Object.keys(VISUEL_FORMATS).map(k=>'<button type="button" class="vfmt-b'+(k===k0?' actif':'')+'" role="radio" aria-checked="'+(k===k0)+'"'
+      +' data-format="'+k+'" onclick="visuelFormatChoisir(\''+id+'\',\''+k+'\')">'
+      +VISUEL_FORMATS[k].lib+'<small>'+VISUEL_FORMATS[k].ratio+'</small></button>').join('')
+    +'</div>';
+}
+/** Un clic sur « Story » ou « Post » : retenu, et tous les sélecteurs à l'écran repeints. */
+function visuelFormatChoisir(id,k){
+  if(!VISUEL_FORMATS[k]) return false;
+  visuelFormatMemoriser(k);
+  document.querySelectorAll('.vfmt .vfmt-b').forEach(b=>{
+    const on=b.getAttribute('data-format')===k;
+    b.classList.toggle('actif',on); b.setAttribute('aria-checked',String(on));
+  });
+  for(const x of [..._visuelFondsMontes.keys()]) _visuelFondsPeindre(x);
+  return true;
+}
+/** Le sélecteur : le format, trois vignettes cliquables, et l'<input> de la photo. */
 function _htmlVisuelFonds(id){
   const f=visuelFondEffectif();
-  return '<div class="vf" id="'+id+'" role="radiogroup" aria-label="Fond du visuel">'
+  return _htmlVisuelFormats(id)
+    +'<button type="button" class="vf-legende" onclick="voirLegende(typeDuSelecteur(\''+id+'\'))">Voir la légende</button>'
+    +'<div class="vf" id="'+id+'" role="radiogroup" aria-label="Fond du visuel">'
     +VISUEL_FOND.LISTE.map(k=>'<button type="button" class="vf-b'+(k===f?' actif':'')+'" role="radio" aria-checked="'+(k===f)+'" data-fond="'+k+'"'
       // Un libellé d'une ligne pour les trois : « changer » se dit au survol.
       +(k==='photo'?' title="Touche à nouveau pour changer de photo"':'')
@@ -41352,8 +41937,12 @@ function _visuelFondsPeindre(id){
   // LES VIGNETTES SE DESSINENT APRÈS LA PEINTURE, une par tâche : trois
   // visuels complets d'affilée bloqueraient l'écran de fin de séance.
   const cvs=[...z.querySelectorAll('.vf-b')];
+  // LA VIGNETTE PREND LA FORME DU FORMAT : 9:16 ou 4:5.
+  const fmt=visuelFormat();
   cvs.forEach((b,i)=>setTimeout(()=>{
     const c=b.querySelector('canvas'); if(!c||!c.isConnected) return;
+    const vh=Math.round(VISUEL_FOND.VL*fmt.h/fmt.w);
+    if(c.height!==vh){ c.height=vh; c.style.aspectRatio=fmt.w+'/'+fmt.h; }
     const k=b.getAttribute('data-fond'), x=c.getContext('2d'); if(!x) return;
     x.clearRect(0,0,c.width,c.height);
     if(k==='transparent'){
@@ -41406,15 +41995,19 @@ function visuelFondPhoto(id,input){
   return true;
 }
 // `fond` (FACULTATIF) : 'transparent' (défaut, le PNG d'avant), 'photo' ou 'rouge'.
-function _dessinerBilanSeance(d,fond){
+// `format` (FACULTATIF) : 'story' (1080×1920) ou 'post' (1080×1350) ; sans
+// lui, le dernier choisi. En post, la liste garde ce qui TIENT, et le reste
+// passe dans « +N autres » : on ne rétrécit pas les lignes jusqu'à l'illisible.
+function _dessinerBilanSeance(d,fond,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
   const cv=document.createElement('canvas');
-  cv.width=STORY_L; cv.height=STORY_H;
+  cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
-  _visuelPeindreFond(g,STORY_L,STORY_H,fond||'transparent');
+  _visuelPeindreFond(g,W,H,fond||'transparent');
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
   const M=72;                                   // la marge laterale
-  const LARG=STORY_L-M*2;
+  const LARG=W-M*2;
 
   // ── L'OMBRE PORTEE, ET POURQUOI ELLE EST OBLIGATOIRE ─────────────────
   // Du blanc pur sur une photo de salle passe encore ; sur un mur clair, un
@@ -41458,26 +42051,34 @@ function _dessinerBilanSeance(d,fond){
   // laissait un rectangle noir vide, il fallait donc ancrer en haut. Ici le
   // creux est TRANSPARENT — il n'existe pas. Centrer donne une image qu'on
   // pose au milieu d'une story sans avoir a la deplacer.
-  const n=d.ex.length;
-  const LH=n<=6?86:(n<=9?76:66);                // l'interligne suit la liste
   const marque=_marqueCoachPrete();
-  const H_TITRE=154, H_DATE=56, H_REC=d.records>0?58:0;
-  const H_LISTE=34+n*LH+(d.autres?46:0);
+  const eq=(d.equivalent&&d.equivalent.texte)?d.equivalent:null;
+  const H_TITRE=post?128:154, H_DATE=56, H_REC=d.records>0?58:0;
+  const H_STATS=150+(eq?84:0);
+  const H_MARQUE=marque?(post?150:188):96;
+  const MARGE=post?64:150;
+  // CE QUI TIENT : la place entre les marges, moins tout le reste (et la ligne
+  // « +N autres »). Au-delà, les exercices du bas passent dans cette ligne.
+  let ex=d.ex, autres=Math.max(0,d.autres|0);
+  let LH=ex.length<=6?86:(ex.length<=9?76:66);   // l'interligne suit la liste
+  if(post) LH=Math.min(LH,66);
+  const place=H-2*MARGE-(H_TITRE+H_DATE+H_REC+34+H_STATS+H_MARQUE);
+  const tient=Math.max(1,Math.floor((place-46)/LH));
+  if(ex.length>tient){ autres+=ex.length-tient; ex=ex.slice(0,tient); }
+  const n=ex.length;
+  const H_LISTE=34+n*LH+(autres?46:0);
   // L'ÉQUIVALENT FUN, EN OPTION (case « Ajouter l'équivalent fun », décochée
   // par défaut) : une ligne de plus sous les quatre chiffres. Absent, la mise
   // en page est exactement celle d'avant.
-  const eq=(d.equivalent&&d.equivalent.texte)?d.equivalent:null;
-  const H_STATS=150+(eq?84:0);
-  const H_MARQUE=marque?188:96;
   const HTOT=H_TITRE+H_DATE+H_REC+H_LISTE+H_STATS+H_MARQUE;
-  let y=Math.max(150,Math.round((STORY_H-HTOT)/2));
+  let y=Math.max(MARGE,Math.round((H-HTOT)/2));
 
   ombre(true);
   g.textAlign='left'; g.textBaseline='alphabetic';
 
   // ── LE TITRE ─────────────────────────────────────────────────────────
   g.fillStyle='#ffffff';
-  const ts=ajuste(d.titre,'700',118,BEBAS,LARG,52);
+  const ts=ajuste(d.titre,'700',post?100:118,BEBAS,LARG,52);
   g.font='700 '+ts+'px '+BEBAS;
   ecrire(d.titre,M,y+ts*0.82);
   y+=H_TITRE;
@@ -41495,10 +42096,10 @@ function _dessinerBilanSeance(d,fond){
   // ── LA LISTE ─────────────────────────────────────────────────────────
   ombre(false);
   g.strokeStyle='rgba(255,255,255,.55)'; g.lineWidth=2;
-  g.beginPath(); g.moveTo(M,y-6); g.lineTo(STORY_L-M,y-6); g.stroke();
+  g.beginPath(); g.moveTo(M,y-6); g.lineTo(W-M,y-6); g.stroke();
   ombre(true);
   y+=34;
-  d.ex.forEach((e,i)=>{
+  ex.forEach((e,i)=>{
     const yy=y+i*LH;
     // LA CHARGE LA PLUS LOURDE DES SERIES, a droite, en blanc plein : c'est le
     // chiffre qu'on cherche des yeux. Le compte de series le precede, atténué.
@@ -41512,7 +42113,7 @@ function _dessinerBilanSeance(d,fond){
     const gauche=e.series+' × '+(rep||'-');
     const droite=(e.kg!=null)?(String(e.kg).replace('.',',')+' KG'):'';
     g.textAlign='right';
-    let dx=STORY_L-M;
+    let dx=W-M;
     if(droite){
       g.fillStyle='#ffffff'; g.font='700 40px '+BEBAS;
       ecrire(droite,dx,yy);
@@ -41534,9 +42135,9 @@ function _dessinerBilanSeance(d,fond){
     else ecrire(e.nom,M,yy);
   });
   y+=n*LH;
-  if(d.autres){
+  if(autres){
     g.fillStyle='rgba(255,255,255,.55)'; g.font='700 30px '+BEBAS;
-    g.fillText('+ '+d.autres+' AUTRE'+(d.autres>1?'S':''),M,y+8);
+    g.fillText('+ '+autres+' AUTRE'+(autres>1?'S':''),M,y+8);
     y+=46;
   }
 
@@ -41545,7 +42146,7 @@ function _dessinerBilanSeance(d,fond){
   // un cadre est un fond, et il n'y a plus de fond.
   ombre(false);
   g.strokeStyle='rgba(255,255,255,.55)'; g.lineWidth=2;
-  g.beginPath(); g.moveTo(M,y+14); g.lineTo(STORY_L-M,y+14); g.stroke();
+  g.beginPath(); g.moveTo(M,y+14); g.lineTo(W-M,y+14); g.stroke();
   ombre(true);
   const chiffres=[
     {v:(d.volume>=10000?bilanVolumeLib(d.volume).toUpperCase()
@@ -41569,7 +42170,7 @@ function _dessinerBilanSeance(d,fond){
     g.textAlign='center'; g.fillStyle='#ffffff';
     const es=ajuste(t,'800',34,MONT,LARG,20);
     g.font='800 '+es+'px '+MONT;
-    ecrire(t,STORY_L/2,y+192);
+    ecrire(t,W/2,y+192);
   }
   g.textAlign='left';
   y+=H_STATS;
@@ -41584,9 +42185,9 @@ function _dessinerBilanSeance(d,fond){
   // l'image precedente et il n'a pas change de raison : ce qui sort de l'app
   // circule sur Instagram, et une image qui ne dit pas d'ou elle vient ne fait
   // connaitre personne. En blanc a 30 %, il ne dispute rien au logo du coach.
-  const cxm=STORY_L/2;
+  const cxm=W/2;
   if(marque){
-    const MH=140, MW=LARG*0.62;
+    const MH=post?104:140, MW=LARG*0.62;
     const r=Math.min(MW/marque.naturalWidth,MH/marque.naturalHeight);
     const w=Math.round(marque.naturalWidth*r), h=Math.round(marque.naturalHeight*r);
     ombre(true);
@@ -41664,7 +42265,24 @@ function _visuelOutils(g){
     while(larg()>max&&s>(mini||18)) s-=1;
     return s;
   };
-  return {ombre,ecrire,ecrireEspace,ajuste,ajusteEspace};
+  // AU-DELÀ DU PLANCHER DE TAILLE, ON COUPE : un nom de 70 caractères ne tient
+  // pas à 24 px, et un texte qui sort de l'image se lit moins bien qu'un « … ».
+  // `coupe` pour le texte d'un seul tenant, `coupeEspace` pour l'espacé, à la
+  // police déjà posée.
+  const coupe=(t,max)=>{
+    let v=String(t);
+    if(g.measureText(v).width<=max) return v;
+    while(v.length>1&&g.measureText(v+'…').width>max) v=v.slice(0,-1);
+    return v.replace(/\s+$/,'')+'…';
+  };
+  const largEspace=(t,esp)=>String(t).split('').reduce((a,c)=>a+g.measureText(c).width+esp,0)-esp;
+  const coupeEspace=(t,esp,max)=>{
+    let v=String(t);
+    if(largEspace(v,esp)<=max) return v;
+    while(v.length>1&&largEspace(v+'…',esp)>max) v=v.slice(0,-1);
+    return v.replace(/\s+$/,'')+'…';
+  };
+  return {ombre,ecrire,ecrireEspace,ajuste,ajusteEspace,coupe,coupeEspace};
 }
 // PURE. « 102,5 » : la virgule française, sans zéro inutile.
 function _recKg(v){
@@ -41730,7 +42348,7 @@ function _recEclairFiligrane(g,x1,y1,x2,y2,graine,fond){
 // mot-symbole seul quand l'athlète a choisi de ne rien montrer.
 function _recSignature(g,o,sig,y,LARG){
   const B=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
-  const cx=STORY_L/2;
+  const cx=g.canvas.width/2;
   o.ombre(true);
   if(sig){
     const t=sig+' · REPCORE', esp=7;
@@ -41747,19 +42365,22 @@ function _recSignature(g,o,sig,y,LARG){
  * @param {{nm:string,histMax:number,curMax:number,gain:number,date?:number,signature?:string}} record
  * @param {'transparent'|'photo'|'rouge'} [fond]
  */
-function _dessinerCarteRecord(record,fond){
-  const cv=document.createElement('canvas');
-  cv.width=STORY_L; cv.height=STORY_H;
+function _dessinerCarteRecord(record,fond,format,anim){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
+  const cv=_visuelToile(anim,W,H);
   const g=cv.getContext('2d');
   const f=fond||'transparent';
-  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  if(!(anim&&anim.sansFond)) _visuelPeindreFond(g,W,H,f);
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
-  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   const r=record||{};
   const nom=String(r.nm||'').toUpperCase();
-  const nouv=_recKg(r.curMax), anc=(Number(r.histMax)>0)?_recKg(r.histMax):'';
+  // `anim.valeur` : le chiffre en train de compter (la vidéo). La taille, le
+  // filigrane et tout le reste suivent la VRAIE valeur : rien ne saute.
+  const vrai=_recKg(r.curMax), anc=(Number(r.histMax)>0)?_recKg(r.histMax):'';
+  const nouv=(anim&&anim.valeur!=null)?String(anim.valeur):vrai;
   const pct=_recPct(r);
   const gainTxt=(Number(r.gain)>0?('+'+_recKg(r.gain)+' KG'):'')+(pct?('  ·  +'+pct+' %'):'');
 
@@ -41768,7 +42389,7 @@ function _dessinerCarteRecord(record,fond){
   // d'une story sans avoir à la déplacer.
   const H_TAG=70, H_NOM=128, H_ANC=anc?86:0, H_CHIFFRE=300, H_GAIN=gainTxt?96:0, H_DATE=60;
   const HTOT=H_TAG+H_NOM+H_ANC+H_CHIFFRE+H_GAIN+H_DATE;
-  let y=Math.max(180,Math.round((STORY_H-HTOT)/2)-40);
+  let y=Math.max(post?110:180,Math.round((H-HTOT)/2)-(post?30:40));
   g.textBaseline='alphabetic';
 
   // « NOUVEAU RECORD »
@@ -41786,7 +42407,7 @@ function _dessinerCarteRecord(record,fond){
   g.fillStyle='rgba(255,255,255,.96)';
   const ns=o.ajuste(nom,'700',104,BEBAS,LARG,44);
   g.font='700 '+ns+'px '+BEBAS;
-  o.ecrire(nom,cx,y+ns*0.86);
+  o.ecrire(o.coupe(nom,LARG),cx,y+ns*0.86);
   y+=H_NOM;
 
   // L'ancienne valeur, petite et barrée : on la lit, on sait qu'elle est dépassée.
@@ -41806,14 +42427,16 @@ function _dessinerCarteRecord(record,fond){
   // traverse la zone du chiffre de haut en bas, un peu en biais — et elle
   // seule : sur le nom ou l'ancienne valeur, il les rayerait.
   const base=y+H_CHIFFRE-24;
-  _recEclairFiligrane(g,cx+190,y+8,cx-150,base+30,_recGraine(nom+'|'+nouv),f);
+  _recEclairFiligrane(g,cx+190,y+8,cx-150,base+30,_recGraine(nom+'|'+vrai),f);
   // Le nombre et « KG » mesurés ensemble, puis réduits ensemble s'ils
   // débordent : « 227,5 » à 300 px ne tient pas avec son unité.
   let cs=300;
-  const mesure=()=>{ g.font='700 '+cs+'px '+BEBAS; const a=g.measureText(nouv).width;
+  const mesure=(v)=>{ g.font='700 '+cs+'px '+BEBAS; const a=g.measureText(v).width;
     g.font='700 '+Math.round(cs*0.3)+'px '+BEBAS; return a+14+g.measureText('KG').width; };
-  while(mesure()>LARG&&cs>120) cs-=4;
-  const total=mesure();
+  while(mesure(vrai)>LARG&&cs>120) cs-=4;
+  while(mesure(nouv)>LARG&&cs>120) cs-=4;
+  const total=mesure(nouv);
+  if(anim) anim.geo={x:cx,y:base-cs*0.38,taille:cs};
   g.font='700 '+cs+'px '+BEBAS;
   const wN=g.measureText(nouv).width;
   const x0=cx-total/2;
@@ -41840,7 +42463,7 @@ function _dessinerCarteRecord(record,fond){
 
   // LA SIGNATURE, EN BAS DE L'IMAGE et non sous le bloc : c'est une marque,
   // elle a sa place fixe, là où l'œil la cherche.
-  _recSignature(g,o,String(r.signature||''),STORY_H-150,LARG);
+  _recSignature(g,o,String(r.signature||''),H-(post?80:150),LARG);
   o.ombre(false);
   return cv;
 }
@@ -41850,21 +42473,24 @@ function _dessinerCarteRecord(record,fond){
  * @param {{records:Array<{nm:string,histMax:number,curMax:number,gain:number}>,date?:number,signature?:string}} d
  * @param {'transparent'|'photo'|'rouge'} [fond]
  */
-function _dessinerCarteRecords(d,fond){
+function _dessinerCarteRecords(d,fond,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
   const cv=document.createElement('canvas');
-  cv.width=STORY_L; cv.height=STORY_H;
+  cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
   const f=fond||'transparent';
-  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  _visuelPeindreFond(g,W,H,f);
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
-  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   const l=((d&&d.records)||[]).filter(r=>r&&r.nm&&r.curMax>0);
   const n=l.length;
-  const LH=n<=3?196:170;
-  const H_TITRE=250, H_DATE=70, H_LISTE=n*LH;
-  let y=Math.max(180,Math.round((STORY_H-(H_TITRE+H_DATE+H_LISTE))/2)-40);
+  // En post, le titre et les lignes se resserrent : quatre records tiennent
+  // entre le haut et la signature.
+  const LH=post?(n<=3?170:152):(n<=3?196:170);
+  const H_TITRE=post?214:250, H_DATE=post?58:70, H_LISTE=n*LH;
+  let y=Math.max(post?70:180,Math.round((H-(H_TITRE+H_DATE+H_LISTE))/2)-(post?20:40));
   g.textBaseline='alphabetic';
 
   // LE TITRE, l'éclair derrière lui cette fois : c'est lui le chiffre à lire.
@@ -41873,11 +42499,11 @@ function _dessinerCarteRecords(d,fond){
   o.ombre(true); g.textAlign='center'; g.fillStyle='#ffffff';
   const [chiffre,...reste]=titre.split(' ');
   // Le nombre en très gros, le mot en dessous : « 3 » se lit d'abord.
-  g.font='700 210px '+BEBAS;
-  o.ecrire(chiffre,cx,y+170);
+  g.font='700 '+(post?180:210)+'px '+BEBAS;
+  o.ecrire(chiffre,cx,y+(post?146:170));
   const ts=o.ajusteEspace(reste.join(' '),'800',40,MONT,9,LARG,24);
   g.font='800 '+ts+'px '+MONT;
-  o.ecrireEspace(reste.join(' '),cx,y+226,9,true);
+  o.ecrireEspace(reste.join(' '),cx,y+(post?196:226),9,true);
   y+=H_TITRE;
   g.fillStyle='rgba(255,255,255,.82)'; g.font='700 30px '+MONT;
   o.ecrireEspace(_recDate(d&&d.date),cx,y+30,4,true);
@@ -41889,7 +42515,7 @@ function _dessinerCarteRecords(d,fond){
     const yy=y+i*LH;
     o.ombre(false);
     g.strokeStyle='rgba(255,255,255,.4)'; g.lineWidth=2;
-    g.beginPath(); g.moveTo(M,yy); g.lineTo(STORY_L-M,yy); g.stroke();
+    g.beginPath(); g.moveTo(M,yy); g.lineTo(W-M,yy); g.stroke();
     o.ombre(true);
     g.textAlign='left'; g.fillStyle='rgba(255,255,255,.96)';
     const nom=String(r.nm).toUpperCase();
@@ -41899,8 +42525,8 @@ function _dessinerCarteRecords(d,fond){
     // La valeur, à droite : ancienne barrée, puis la nouvelle.
     const nouv=_recKg(r.curMax)+' KG';
     g.textAlign='right'; g.fillStyle='#ffffff'; g.font='700 96px '+BEBAS;
-    o.ecrire(nouv,STORY_L-M,yy+160);
-    let dx=STORY_L-M-g.measureText(nouv).width-28;
+    o.ecrire(nouv,W-M,yy+160);
+    let dx=W-M-g.measureText(nouv).width-28;
     if(Number(r.histMax)>0){
       const a=_recKg(r.histMax);
       g.fillStyle='rgba(255,255,255,.6)'; g.font='700 48px '+BEBAS;
@@ -41916,7 +42542,7 @@ function _dessinerCarteRecords(d,fond){
     g.textAlign='left'; g.fillStyle='rgba(255,255,255,.9)'; g.font='800 32px '+MONT;
     o.ecrireEspace('+'+_recKg(r.gain)+' KG'+(pct?(' · +'+pct+' %'):''),M,yy+150,2);
   });
-  _recSignature(g,o,String((d&&d.signature)||''),STORY_H-150,LARG);
+  _recSignature(g,o,String((d&&d.signature)||''),H-(post?64:150),LARG);
   o.ombre(false);
   return cv;
 }
@@ -41960,30 +42586,45 @@ function _texteCoupe(g,t,x,y,max){
 // n a aucune transparence a preserver. Le PNG bloquait l application treize
 // secondes, et faisait donc expirer le geste utilisateur qu on cherche
 // justement a preserver.
+// Le type est LU dans l'en-tête de la dataURL : un JPEG déclaré PNG part
+// avec le mauvais type, et certaines applications le refusent.
 function _b64versBlob(dataUrl){
   const i=dataUrl.indexOf(',');
+  const m=/^data:([^;,]+)/.exec(dataUrl.slice(0,i));
   const bin=atob(dataUrl.slice(i+1));
   const n=bin.length;
   const u=new Uint8Array(n);
   for(let k=0;k<n;k++) u[k]=bin.charCodeAt(k);
-  return new Blob([u],{type:'image/png'});
+  return new Blob([u],{type:m?m[1]:'image/png'});
+}
+// PURE. Le nom de fichier accordé au format RÉELLEMENT produit : un appelant
+// qui passe « repcore-seance.png » avec un format JPEG (visuelFondFormat)
+// obtient « repcore-seance.jpg ». Sans format, PNG — ce que toDataURL rend.
+function _nomSelonFormat(nom,fmt){
+  const ext=(fmt&&fmt.ext)||'png';
+  const base=String(nom||'repcore').replace(/\.(png|jpe?g|webp)$/i,'');
+  return base+'.'+ext;
 }
 // L ecran de secours, et le seul geste qui marche sur TOUS les telephones :
 // l appui long sur une image affichee. iOS propose « Ajouter aux photos »,
 // Android « Telecharger l image ». On le dit, parce que personne ne devine
 // qu il faut appuyer longtemps.
-function _ouvrirApercuStory(url){
+// `nomFichier` et `fmt` : le nom et le type RÉELS (visuelNomFichier,
+// visuelFondFormat) — le lien « Télécharger » nommait « repcore-seance.png »
+// un bilan, un record ou un JPEG.
+function _ouvrirApercuStory(url,nomFichier,fmt){
   document.getElementById('story-apercu')?.remove();
+  const nom=_nomSelonFormat(nomFichier||'repcore-visuel',fmt);
   const d=document.createElement('div');
   d.id='story-apercu';
   d.style.cssText='position:fixed;inset:0;z-index:var(--z-modal);background:var(--scrim);display:flex;'
     +'flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px';
-  d.innerHTML='<img src="'+url+'" alt="Ta séance du jour" '
+  d.innerHTML='<img src="'+url+'" alt="Ton visuel RepCore" '
     +'style="max-width:100%;max-height:64vh;border-radius:var(--r-3);box-shadow:var(--e4)">'
     +'<div style="font-size:var(--fs-sm);color:var(--text-strong);text-align:center;line-height:1.6;max-width:320px">'
     +'Appuie <b>longuement</b> sur l’image, puis choisis <b>Ajouter aux photos</b> '
     +'(iPhone) ou <b>Télécharger l’image</b> (Android).</div>'
-    +'<a href="'+url+'" download="repcore-seance.png" class="btn btn-outline btn-sm" '
+    +'<a href="'+url+'" download="'+escapeHtml(nom)+'" type="'+escapeHtml((fmt&&fmt.type)||'image/png')+'" class="btn btn-outline btn-sm" '
     +'style="width:auto;padding:8px 20px">Télécharger</a>'
     +'<button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:8px 20px" '
     +'onclick="fermerApercuStory()">Fermer</button>';
@@ -42044,20 +42685,226 @@ function _storyCopierLien(src){
     return true;
   }catch(e){ return false; }
 }
+// ══ LA LÉGENDE D'UN POST (28/09/2026) ═══════════════════════════════════
+// Une story se partage avec le sticker Lien (le lien est copié). Un POST se
+// publie avec une légende : on l'écrit pour l'athlète, on la copie, il la
+// colle sous sa photo. Trois à cinq modèles par visuel, tutoiement (on parle
+// à qui lit), un ⚡ au plus, jamais deux fois le même de suite. Toujours
+// « #RepCore », le compte Instagram de RepCore quand il est renseigné, et
+// « Lien dans ma bio » si la page publique de la personne est en ligne.
+//
+// ⚠ À REMPLIR : le compte Instagram officiel, avec son @ (ex. '@repcore.app').
+//   Vide, il n'apparaît pas.
+const RC_COMPTE_INSTAGRAM='';
+// Les mois d'essai d'un invité, lus dans TARIFS au moment d'écrire.
+function _legMois(){ return TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus; }
+const LEGENDE_MAX=220;
+const _LEGENDES=Object.freeze({
+  bilan:[d=>'Séance bouclée. Et toi, tu t’entraînes quand cette semaine ?',
+    d=>'Une de plus au compteur ⚡ Et toi, tu en es où cette semaine ?',
+    d=>'Pas de séance parfaite, juste une séance faite. Tu viens ?',
+    d=>'Tout est noté : les charges, les séries, les reps. Tu fais pareil ?'],
+  record:[d=>(d.exo?'Nouveau record sur '+d.exo+' ⚡':'Nouveau record ⚡')+' Tu crois que je m’arrête là ?',
+    d=>'Record battu. Le travail paie, et tu le sais.',
+    d=>'Plus lourd que la dernière fois. Et toi, ton prochain record ?',
+    d=>'Petit à petit, la barre monte. Tu suis ?'],
+  records:[d=>'Plusieurs records dans la même séance ⚡ Tu fais mieux ?',
+    d=>'Journée à records. Tu sais ce qui t’attend si tu t’y mets.',
+    d=>'Les charges montent, séance après séance. Et toi ?'],
+  serie:[d=>(d.semaines?d.semaines+' semaines d’affilée':'Série en cours')+' ⚡ Tu tiens combien, toi ?',
+    d=>'Pas une semaine ratée. La régularité bat la motivation, tu verras.',
+    d=>(d.semaines?d.semaines+' semaines':'Semaine après semaine')+' sans lâcher. Tu te lances ?',
+    d=>'La série continue. Ton tour ?'],
+  rang:[d=>'Nouveau rang'+(d.nom?' : '+d.nom:'')+' ⚡ Tu montes avec moi ?',
+    d=>'Un palier de plus. Chaque séance compte, tu le sais.',
+    d=>'Rang débloqué'+(d.nom?' : '+d.nom:'')+'. Et toi, tu en es où ?'],
+  cycle:[d=>'Cycle terminé. Le suivant commence demain, tu viens ?',
+    d=>'Quatre semaines tenues ⚡ Tu signes pour le prochain ?',
+    d=>'Un cycle de plus derrière moi. Et toi, ton prochain objectif ?'],
+  defi:[d=>'Défi relevé'+(d.titre?' : « '+d.titre+' »':'')+' ⚡ Tu relèves le prochain ?',
+    d=>'Relevé jusqu’au bout. Tu t’y mets avec nous ?',
+    d=>'Défi validé. Le prochain, tu le fais avec nous ?'],
+  champion:[d=>'Champion du défi ⚡ Tu viens me détrôner ?',
+    d=>'Premier du défi'+(d.titre?' « '+d.titre+' »':'')+'. Le prochain, tu tentes ta chance ?',
+    d=>'Défi gagné. Tu crois pouvoir faire mieux ?'],
+  badge:[d=>'Badge débloqué'+(d.nom?' : '+d.nom:'')+' ⚡ Tu l’as, toi ?',
+    d=>'Un badge de plus dans la collection. Tu commences la tienne ?',
+    d=>'Celui-là, il se mérite. Tu tentes ?'],
+  muscles:[d=>'Ma semaine, muscle par muscle ⚡ Et toi, tu as travaillé quoi ?',
+    d=>'Tout ce qui a travaillé cette semaine. Tu regardes la tienne ?',
+    d=>'Rien n’a été oublié. Tu vérifies ton équilibre ?'],
+  wrapped:[d=>(d.seances?d.seances+' séances':'Mon mois')+' en chiffres ⚡ Et toi, ton bilan ?',
+    d=>'Le résumé qui fait plaisir. Tu regardes le tien ?',
+    d=>'Un mois de travail, en cinq images. Tu te lances ?',
+    d=>'Les chiffres ne mentent pas. Ton tour ?'],
+  avant:[d=>'Avant, après. Le temps et la régularité ⚡ Tu commences quand ?',
+    d=>'Même personne, quelques mois plus tard. Tu te lances ?',
+    d=>'Pas de raccourci : des séances, et encore des séances. Et toi ?'],
+  victoire:[d=>'Victoire de la semaine ⚡ Fier de mon athlète. Et toi, ton objectif ?',
+    d=>'Le travail de mon athlète, en un chiffre. Tu veux le même suivi ?',
+    d=>'Chaque kilo se gagne. Tu viens t’entraîner avec nous ?'],
+  team:[d=>'La team a tout donné cette semaine ⚡ Tu nous rejoins ?',
+    d=>'Toute l’équipe, en chiffres. Tu veux en faire partie ?',
+    d=>'Séances, records, tonnage : la team avance. Et toi ?'],
+  // Le CODE est dans chaque modèle (celui qui lit le post ne peut pas
+  // cliquer : il recopie). Sans code connu, on dit de le demander.
+  invitation:[d=>'Je t’offre '+_legMois()+' mois d’essai sur RepCore ⚡ '+(d.code?'Mon code : '+d.code+'.':'Demande-moi mon code.')+' Tu t’y mets ?',
+    d=>'Tu cherches une app pour suivre tes séances ? '+(d.code?'Avec le code '+d.code+', tu':'Avec mon code, tu')+' as '+_legMois()+' mois pour essayer, sans carte.',
+    d=>'On s’entraîne ensemble ? '+(d.code?'Code '+d.code+' à l’inscription : ':'Mon code à l’inscription : ')+_legMois()+' mois d’essai pour toi.',
+    d=>'Toute l’app ouverte, '+_legMois()+' mois, sans carte bancaire. '+(d.code?'Ton code : '+d.code+'.':'Demande-moi mon code.')+' Tu viens ?'],
+  visuel:[d=>'Une séance de plus ⚡ Et toi, tu t’entraînes quand ?',
+    d=>'La régularité, c’est tout. Tu viens ?',
+    d=>'Chaque séance compte. Tu te lances ?']
+});
+/**
+ * La légende d'un visuel. `donnees` : ce qui la rend précise quand on le sait
+ * ({exo}, {semaines}, {nom}, {titre}, {seances}). `o.u` : la personne (sa page
+ * publique) ; `o.indice` : le modèle voulu (tests), sinon tiré au hasard sans
+ * reprendre le dernier de ce type.
+ */
+function legendePartage(type,donnees,o){
+  const opt=o||{};
+  const k=_LEGENDES[type]?type:'visuel';
+  const l=_LEGENDES[k];
+  const cle='rc_legende_'+k;
+  let der=-1;
+  try{ const v=localStorage.getItem(cle); der=v===null?-1:Number(v); if(!isFinite(der)) der=-1; }catch(e){ der=-1; }
+  let i;
+  if(Number.isInteger(opt.indice)) i=((opt.indice%l.length)+l.length)%l.length;
+  else{
+    i=Math.floor(Math.random()*l.length);
+    if(l.length>1&&i===der) i=(i+1+Math.floor(Math.random()*(l.length-1)))%l.length;
+  }
+  try{ localStorage.setItem(cle,String(i)); }catch(e){}
+  // LES DONNÉES SONT BORNÉES AVANT D'ENTRER : un nom d'exercice de 200
+  // caractères prendrait toute la légende, et la coupe emporterait la
+  // question qui s'adresse au lecteur. 40 caractères au plus, sans ⚡.
+  const net={};
+  for(const [c,v] of Object.entries(donnees||{})){
+    if(typeof v!=='string'){ net[c]=v; continue; }
+    const x=v.replace(/⚡/g,'').replace(/\s+/g,' ').trim();
+    net[c]=x.length>40?x.slice(0,39).replace(/\s+\S*$/,'')+'…':x;
+  }
+  let corps=String(l[i](net)||'').replace(/\s+/g,' ').trim();
+  // Un ⚡ au plus : une donnée qui en apporterait un second le perd.
+  let vu=false;
+  corps=corps.replace(/⚡/g,()=>{ if(vu) return ''; vu=true; return '⚡'; }).replace(/\s+/g,' ').trim();
+  const u=opt.u!==undefined?opt.u:((typeof currentUser!=='undefined')?currentUser:null);
+  let bio=false; try{ bio=!!urlPagePerso(u); }catch(e){ bio=false; }
+  const fin=['#RepCore',String(RC_COMPTE_INSTAGRAM||'').trim()].filter(Boolean).join(' ')+(bio?' · Lien dans ma bio':'');
+  // Une donnée trop longue (un titre de défi) raccourcit le corps, jamais la fin.
+  const place=LEGENDE_MAX-1-fin.length-1;
+  if(corps.length>place) corps=corps.slice(0,place-1).replace(/\s+\S*$/,'')+'…';
+  return corps+'\n'+fin;
+}
+// Ce que l'écran en cours sait du visuel (pour une légende précise). Chaque
+// lecture est protégée : l'absence donne la légende générale.
+function _legendeDonneesEcran(type){
+  const d={};
+  try{
+    if(type==='serie'&&_serieCourante) d.semaines=Number(_serieCourante.semaines)||0;
+    if(type==='rang'&&_rangCourant) d.nom=String(_rangCourant.nom||'');
+    if((type==='defi'||type==='champion')&&_defiCourant) d.titre=String(_defiCourant.titre||'').slice(0,60);
+    if(type==='wrapped'&&_wr&&_wr.w) d.seances=Number(_wr.w.seances)||0;
+    if(type==='invitation'){ const c=invitationDonnees(currentUser).code; if(c) d.code=c; }
+  }catch(e){}
+  return d;
+}
+// LA LÉGENDE PRÉPARÉE : « Voir la légende » la montre et la laisse modifier ;
+// la sortie suivante du même type utilise CELLE-LÀ, puis l'oublie.
+const _legendePrete={};
+function _legendePour(type){
+  const k=_LEGENDES[type]?type:'visuel';
+  if(_legendePrete[k]){ const t=_legendePrete[k]; delete _legendePrete[k]; return t; }
+  return legendePartage(k,_legendeDonneesEcran(k));
+}
+// PURE. Un fichier de post (repcore-<type>-post.jpg) ?
+function _estPost(nomFichier){ return /-post\.(jpe?g|png)$/i.test(String(nomFichier||'')); }
+// La légende dans le presse-papiers, DANS le geste (Safari refuse l'écriture
+// hors d'un geste de l'utilisateur).
+function _storyCopierLegende(texte){
+  try{
+    if(!navigator.clipboard||!navigator.clipboard.writeText) return false;
+    navigator.clipboard.writeText(String(texte)).then(()=>{
+      toast('Légende copiée · colle-la sous ta photo','var(--green)',4000);
+    }).catch(()=>{});
+    return true;
+  }catch(e){ return false; }
+}
+// En post : la légende. En story : le lien (sticker Lien), comme avant.
+function _storyCopierSelonFormat(nomFichier,legende){
+  return _estPost(nomFichier)?_storyCopierLegende(legende):_storyCopierLien(srcDuVisuel(nomFichier));
+}
+// ── « Voir la légende » : lue, modifiable, copiée avant le partage ───────
+// Le type suit le sélecteur de fond de l'écran (son id).
+const _TYPE_DU_SELECTEUR=Object.freeze({'wd-fonds':'bilan','sd-fonds':'bilan','dfe-fonds':'defi','bdg-ecran-fonds':'badge',
+  'bdg-fiche-fonds':'badge','rg-fonds':'rang','rite-fonds':'cycle','serie-fonds':'serie','vc-fonds':'victoire','pr-fonds':'invitation'});
+function typeDuSelecteur(id){
+  const s=String(id||'');
+  if(/^musc-/.test(s)) return 'muscles';
+  try{ if(s==='vc-fonds'&&_vc&&_vc.type==='recap') return 'team'; }catch(e){}
+  try{ if(s==='dfe-fonds'&&_defiCourant&&_defiCourant.champion) return 'champion'; }catch(e){}
+  return _TYPE_DU_SELECTEUR[s]||'visuel';
+}
+function voirLegende(type){
+  const t=_LEGENDES[type]?type:'visuel';
+  const texte=_legendePrete[t]||legendePartage(t,_legendeDonneesEcran(t));
+  _legendePrete[t]=texte;
+  document.getElementById('legende-ecran')?.remove();
+  const d=document.createElement('div');
+  d.id='legende-ecran';
+  d.setAttribute('role','dialog'); d.setAttribute('aria-modal','true'); d.setAttribute('aria-label','Légende du post');
+  d.style.cssText='position:fixed;inset:0;z-index:var(--z-modal);background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:20px';
+  d.innerHTML='<div style="width:min(420px,100%);background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px">'
+    +'<div style="font-weight:800;margin-bottom:6px">La légende de ton post</div>'
+    +'<div class="sub" style="font-size:var(--fs-xs);margin-bottom:10px">Modifie-la si tu veux : c’est elle qui sera copiée au partage en post.</div>'
+    +'<textarea id="legende-texte" rows="5" maxlength="'+LEGENDE_MAX+'" style="width:100%;box-sizing:border-box" oninput="legendeModifiee(\''+t+'\',this.value)">'
+    +escapeHtml(texte)+'</textarea>'
+    +'<div class="sub" id="legende-compte" style="font-size:var(--fs-2xs);text-align:right;margin:4px 0 10px">'+texte.length+' / '+LEGENDE_MAX+'</div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="copierLegende(\''+t+'\')">Copier</button>'
+    +'<button type="button" class="btn btn-outline btn-sm" style="flex:0 0 auto;width:auto;padding:0 16px;margin:0;min-height:44px" onclick="fermerLegende()">OK</button>'
+    +'</div></div>';
+  d.addEventListener('click',e=>{ if(e.target===d) fermerLegende(); });
+  document.body.appendChild(d);
+  return texte;
+}
+function legendeModifiee(type,v){
+  const t=String(v||'').slice(0,LEGENDE_MAX);
+  _legendePrete[type]=t;
+  const c=document.getElementById('legende-compte'); if(c) c.textContent=t.length+' / '+LEGENDE_MAX;
+  return t;
+}
+function copierLegende(type){
+  const x=document.getElementById('legende-texte');
+  const t=legendeModifiee(type,x?x.value:(_legendePrete[type]||''));
+  _storyCopierLegende(t);
+  return t;
+}
+function fermerLegende(){ document.getElementById('legende-ecran')?.remove(); return true; }
+
 // `fmt` FACULTATIF (visuelFondFormat) : JPEG qualité 0,9 quand le visuel a un fond, PNG sinon.
+//
+// ⚠ LE LIEN EST COPIÉ D'ABORD, DANS LE GESTE. Il ne l'était qu'après le
+//   téléchargement, et jamais sur iPhone (la branche de l'aperçu rendait la
+//   main avant) : or c'est là que la story se publie, et le presse-papiers
+//   refuse une écriture hors du geste de l'utilisateur.
 function _storySortirTelechargement(cv,nomFichier,fmt){
-  const dataUrl=(fmt&&fmt.type==='image/jpeg')?cv.toDataURL('image/jpeg',fmt.q||0.9):cv.toDataURL('image/png');
+  const jpeg=!!(fmt&&fmt.type==='image/jpeg');
+  const dataUrl=jpeg?cv.toDataURL('image/jpeg',fmt.q||0.9):cv.toDataURL('image/png');
   cv.width=0; cv.height=0;            // 8 Mo rendus tout de suite
+  const nom=_nomSelonFormat(nomFichier,jpeg?fmt:null);
   try{ attribCompter('telechargement',srcDuVisuel(nomFichier)); }catch(e){}
-  if(_estIOS()){ _ouvrirApercuStory(dataUrl); return true; }
+  // Story : le lien (sticker Lien). Post : la légende, à coller sous la photo.
+  _storyCopierSelonFormat(nomFichier,_estPost(nomFichier)?_legendePour(srcDuVisuel(nomFichier)):'');
+  if(_estIOS()){ _ouvrirApercuStory(dataUrl,nom,jpeg?fmt:{type:'image/png',ext:'png'}); return true; }
   const a=document.createElement('a');
   a.href=dataUrl;                     // pas d'URL d'objet : rien a liberer,
-  a.download=nomFichier;              // et rien qui puisse expirer trop tot
+  a.download=nom;                     // et rien qui puisse expirer trop tot
   document.body.appendChild(a);
   a.click();
   a.remove();
   toast('Image téléchargée','var(--green)');
-  _storyCopierLien(srcDuVisuel(nomFichier));
   return true;
 }
 // Rend false quand le partage natif n'existe pas : l'appelant retombe alors
@@ -42077,19 +42924,438 @@ function _storySortirPartage(cv,nomFichier,meta,fmt){
   cv.width=0; cv.height=0;
   const blob=_b64versBlob(dataUrl);
   let f=null;
-  try{ f=new File([blob],nomFichier,{type:jpeg?'image/jpeg':'image/png'}); }catch(e){}
+  try{ f=new File([blob],_nomSelonFormat(nomFichier,jpeg?fmt:null),{type:jpeg?'image/jpeg':'image/png'}); }catch(e){}
   if(f&&navigator.canShare&&navigator.canShare({files:[f]})&&navigator.share){
     let charge={files:[f]};
-    if(meta){
-      const riche=Object.assign({files:[f]},meta);
-      try{ if(navigator.canShare(riche)) charge=riche; }catch(e){}
-    }
-    _storyCopierLien(srcDuVisuel(nomFichier));
+    // LA LÉGENDE VOYAGE AUSSI DANS `text` (quand le navigateur l'accepte avec
+    // le fichier) : certaines applications la reprennent d'elles-mêmes.
+    const legende=_legendePour(srcDuVisuel(nomFichier));
+    const riche=Object.assign({files:[f]},Object.assign({text:legende},meta||{}));
+    try{ if(navigator.canShare(riche)) charge=riche; }catch(e){}
+    _storyCopierSelonFormat(nomFichier,legende);
     // UN PARTAGE RÉUSSI, c'est une feuille de partage RÉSOLUE (pas annulée).
     navigator.share(charge).then(()=>{ try{ attribCompter('partage',srcDuVisuel(nomFichier)); }catch(e){} }).catch(()=>{});
     return true;
   }
   return false;
+}
+// ══ LA VIDÉO D'UN VISUEL : record, rang, Wrapped (28/09/2026) ═══════════
+// Une story ou un Reel qui BOUGE se regarde jusqu'au bout ; une image fixe se
+// saute. La vidéo reprend l'animation de l'app — la foudre qui frappe, le
+// chiffre qui compte — et la fige une seconde à la fin, sur la carte qu'on
+// aurait partagée en image.
+//
+// COMMENT. Une toile 1080×1920 redessinée image par image ; le TEMPS DE LA
+// VIDÉO pilote tout (foudre : _foudreScene/_foudrePeindre ; compteur :
+// arcValeurA) — une image sautée par un téléphone lent ne décale rien, la
+// suivante est là où elle doit être. canvas.captureStream(30) alimente un
+// MediaRecorder : MP4 quand il sait l'écrire (Safari iOS 14.5+), sinon WebM
+// VP9 (Chrome, Android), VP8 en dernier recours. 4 Mbit/s, moins si la durée
+// ferait dépasser 8 Mo (marge de 15 %) : Wrapped, 8,5 s, pèse ~4,3 Mo.
+//
+// L'ENREGISTREMENT EST EN TEMPS RÉEL (c'est le principe de MediaRecorder) :
+// une barre de progression le montre. Il finit HORS DU GESTE de l'athlète :
+// iOS refuserait la feuille de partage ouverte à ce moment-là. La vidéo prête,
+// on la montre, et c'est un NOUVEAU toucher (« Partager ») qui la partage.
+//
+// SANS MediaRecorder ni captureStream (vieux navigateurs), la bascule
+// « Image / Vidéo » n'est pas posée du tout : on n'offre pas un bouton qui
+// échouerait.
+//
+// TEST MANUEL : docs/video-partage.md (iPhone installé, Android, story, Reel).
+const VIDEO_FORMAT=Object.freeze({w:1080,h:1920});
+const VIDEO_IPS=30;
+const VIDEO_DEBIT=4e6;                       // bit/s
+const VIDEO_MAX_OCTETS=8*1024*1024;          // 8 Mo
+const VIDEO_FIN_FIGEE=1000;                  // la dernière image, tenue 1 s
+const VIDEO_WRAPPED_SLIDE=1500;              // 5 slides × 1,5 s
+const VIDEO_ECHELLE=2.4;                     // traits de la foudre : 1080 px d'image ≈ 450 px d'écran
+// MP4 d'abord : c'est ce qu'Instagram et la pellicule iPhone lisent partout.
+const VIDEO_TYPES=Object.freeze(['video/mp4;codecs=avc1.42E01E','video/mp4;codecs=avc1','video/mp4',
+  'video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm']);
+/**
+ * PURE quand `estSupporte` est donné (les tests). Le premier type que
+ * l'enregistreur sait écrire : {mime, type, ext}, ou null.
+ */
+function videoTypeChoisi(estSupporte){
+  let f=estSupporte;
+  if(typeof f!=='function'){
+    try{
+      const MR=(typeof window!=='undefined')?window.MediaRecorder:undefined;
+      f=(MR&&typeof MR.isTypeSupported==='function')?(t=>MR.isTypeSupported(t)):null;
+    }catch(e){ f=null; }
+  }
+  if(!f) return null;
+  for(const t of VIDEO_TYPES){
+    let ok=false; try{ ok=!!f(t); }catch(e){ ok=false; }
+    if(ok) return {mime:t,type:t.split(';')[0],ext:/mp4/.test(t)?'mp4':'webm'};
+  }
+  return null;
+}
+/** Le navigateur sait-il fabriquer la vidéo ? Sinon, pas de bascule du tout. */
+function videoExportPossible(){
+  try{
+    if(typeof window==='undefined'||typeof window.MediaRecorder!=='function') return false;
+    if(typeof HTMLCanvasElement==='undefined'||typeof HTMLCanvasElement.prototype.captureStream!=='function') return false;
+    return !!videoTypeChoisi();
+  }catch(e){ return false; }
+}
+/** PURE. Le débit : 4 Mbit/s, abaissé si la durée ferait passer le fichier au-dessus de 8 Mo. */
+function videoDebit(dureeMs){
+  const s=Math.max(1,Number(dureeMs)||0)/1000;
+  return Math.max(5e5,Math.min(VIDEO_DEBIT,Math.floor(VIDEO_MAX_OCTETS*8*0.85/s)));
+}
+// ── La bascule « Image / Vidéo » ──────────────────────────────────────
+const VISUEL_MEDIA_CLE='rc_visuel_media';
+/** 'video' seulement si c'est le choix retenu ET que le navigateur sait la faire. */
+function visuelMediaChoisi(){
+  let m=null;
+  try{ m=localStorage.getItem(VISUEL_MEDIA_CLE); }catch(e){ m=null; }
+  return (m==='video'&&videoExportPossible())?'video':'image';
+}
+function visuelMediaChoisir(k){
+  if(k!=='image'&&k!=='video') return false;
+  try{ localStorage.setItem(VISUEL_MEDIA_CLE,k); }catch(e){}
+  document.querySelectorAll('.vmed .vmed-b').forEach(b=>{
+    const on=b.getAttribute('data-media')===k;
+    b.classList.toggle('actif',on); b.setAttribute('aria-checked',String(on));
+  });
+  return true;
+}
+/** La bascule, ou RIEN quand la vidéo est impossible ici. */
+function _htmlVisuelMedia(){
+  if(!videoExportPossible()) return '';
+  const m=visuelMediaChoisi();
+  // stopPropagation : dans Wrapped, un toucher sur la slide la ferait avancer.
+  return '<div class="vmed" role="radiogroup" aria-label="Partager une image ou une vidéo">'
+    +[['image','Image','fixe'],['video','Vidéo','9:16 animée']].map(([k,l,p])=>
+      '<button type="button" class="vmed-b'+(k===m?' actif':'')+'" role="radio" aria-checked="'+(k===m)+'" data-media="'+k+'"'
+      +' onclick="event.stopPropagation();visuelMediaChoisir(\''+k+'\')">'+l+'<small>'+p+'</small></button>').join('')
+    +'</div>';
+}
+// ── Les scènes : ce qu'on peint à l'instant t (ms de vidéo) ────────────
+// Une scène : {type, nom, anim (ms d'animation), preparer(W,H) → état,
+// peindre(g,t,état,W,H)}. La fin figée s'ajoute après `anim`.
+// Une vidéo n'a pas de transparence : « sans fond » devient le carbone.
+function _videoFond(fond){ return (!fond||fond==='transparent')?'carbone':fond; }
+function _videoToile(W,H){ const c=document.createElement('canvas'); c.width=W; c.height=H; return c; }
+function _videoFondToile(fond,W,H){
+  const c=_videoToile(W,H);
+  const g=c.getContext('2d');
+  g.fillStyle='#000'; g.fillRect(0,0,W,H);
+  _visuelPeindreFond(g,W,H,fond);
+  return c;
+}
+// Le tremblement de l'impact, tiré une fois : ±6 px d'écran amortis en 280 ms.
+function _videoSecousse(){
+  const kf=[], N=9;
+  for(let k=0;k<=N;k++){
+    const a=(1-k/N)*6*VIDEO_ECHELLE;
+    kf.push(k===N?[0,0]:[(Math.random()*2-1)*a,(Math.random()*2-1)*a]);
+  }
+  return (t)=>{
+    if(!(t>=0&&t<280)) return [0,0];
+    const x=t/280*N, i=Math.floor(x), r=x-i;
+    const A=kf[i], B=kf[Math.min(N,i+1)];
+    return [A[0]+(B[0]-A[0])*r,A[1]+(B[1]-A[1])*r];
+  };
+}
+// Le halo rouge qui pulse deux fois derrière le chiffre frappé.
+function _videoHalo(g,geo,t){
+  if(!geo||t<0||t>1000) return false;
+  const puls=Math.abs(Math.sin(Math.PI*(t/500)));
+  const r=geo.taille*(1.1+puls*0.35);
+  const h=g.createRadialGradient(geo.x,geo.y,0,geo.x,geo.y,r);
+  h.addColorStop(0,'rgba(224,32,32,'+(0.5*puls).toFixed(3)+')'); h.addColorStop(1,'rgba(224,32,32,0)');
+  g.save(); g.fillStyle=h; g.fillRect(geo.x-r,geo.y-r,r*2,r*2); g.restore();
+  return true;
+}
+// La carte (déjà dessinée sur son calque), posée avec son fondu et sa secousse.
+function _videoPoser(g,calque,alpha,dxy){
+  g.save();
+  g.globalAlpha=Math.max(0,Math.min(1,alpha));
+  g.drawImage(calque,dxy[0],dxy[1]);
+  g.restore();
+}
+// LE RECORD : la carte apparaît avec l'ANCIENNE valeur, la foudre frappe le
+// chiffre à 350 ms, il compte jusqu'au nouveau record en grésillant (600 ms),
+// le halo pulse deux fois. Plusieurs records : la carte récapitulative,
+// frappée en son centre.
+function _videoSceneRecord(d,fond){
+  const r=d||{};
+  const multi=Array.isArray(r.records);
+  const f=_videoFond(fond);
+  const T_IMPACT=350, T_COMPTE=600;
+  const vers=Number(r.curMax)||0;
+  const de=(Number(r.histMax)>0&&Number(r.histMax)<vers)?Number(r.histMax):vers;
+  return {type:multi?'records':'record',nom:multi?'repcore-records':'repcore-record',anim:2600,
+    preparer(W,H){
+      const e={fond:_videoFondToile(f,W,H),secousse:_videoSecousse(),bruit:arcBruit(de,vers,true),foudre:null};
+      if(multi){ e.calque=_dessinerCarteRecords(r,'transparent','story'); e.geo={x:W/2,y:H*0.42,taille:300}; }
+      else{ e.calque=_videoToile(W,H); e.anim={cv:e.calque,sansFond:true}; }
+      return e;
+    },
+    peindre(g,t,e,W,H){
+      g.drawImage(e.fond,0,0);
+      if(!multi){
+        const v=t<T_IMPACT?de:arcValeurA(de,vers,(t-T_IMPACT)/T_COMPTE,e.bruit);
+        // Les valeurs de passage tombent au demi-kilo, la dernière est la vraie.
+        e.anim.valeur=Math.abs(v-vers)<1e-9?null:_recKg(Math.max(0,Math.round(v*2)/2));
+        _dessinerCarteRecord(r,f,'story',e.anim);
+        e.geo=e.anim.geo;
+      }
+      if(!e.foudre&&e.geo) e.foudre=_foudreScene(e.geo,W,{eclairs:3,echelle:VIDEO_ECHELLE});
+      _videoHalo(g,e.geo,t-T_IMPACT-FOUDRE_IMPACT);
+      _videoPoser(g,e.calque,t/250,e.secousse(t-T_IMPACT-FOUDRE_IMPACT));
+      if(e.foudre&&t>=T_IMPACT) _foudrePeindre(g,e.foudre,t-T_IMPACT,W,H);
+    }};
+}
+// LE RANG : la foudre frappe dans le noir, l'emblème sort du flash (petit,
+// blanc, trop grand, puis posé), le texte arrive, les volts comptent depuis
+// le seuil du rang. Comme l'écran de l'app.
+function _videoSceneRang(d,img,fond){
+  const x=d||{};
+  const f=_videoFond(fond);
+  const T0=250;
+  const rg=(typeof RANGS!=='undefined'&&RANGS[(Number(x.n)||1)-1])||null;
+  const xp=Number(x.xp)||0, xp0=Math.min(xp,rg?Number(rg.seuil)||0:0);
+  // Ease « snap » approché : sortie rapide, arrivée douce.
+  const snap=p=>1-Math.pow(1-Math.max(0,Math.min(1,p)),3);
+  return {type:'rang',nom:'repcore-rang',anim:2700,
+    preparer(W,H){
+      const e={fond:_videoFondToile(f,W,H),calque:_videoToile(W,H),secousse:_videoSecousse(),foudre:null};
+      e.anim={cv:e.calque,sansFond:true};
+      return e;
+    },
+    peindre(g,t,e,W,H){
+      g.drawImage(e.fond,0,0);
+      const u=t-T0-40;
+      let ech;
+      if(u<0) ech=0;
+      else if(u<495) ech=0.2+(1.15-0.2)*snap(u/495);
+      else ech=1.15-0.15*snap((u-495)/405);
+      e.anim.echelle=ech;
+      e.anim.eclat=u<0?0:Math.max(0,1-u/900);
+      e.anim.texte=(u-620)/360;
+      e.anim.xp=Math.round(arcValeurA(xp0,xp,(u-700)/800,null));
+      _dessinerCarteRang(x,f,img,'story',e.anim);
+      if(!e.foudre&&e.anim.geo) e.foudre=_foudreScene(e.anim.geo,W,{eclairs:(Number(x.n)||0)>=8?3:2,echelle:VIDEO_ECHELLE});
+      _videoPoser(g,e.calque,1,e.secousse(t-T0-FOUDRE_IMPACT));
+      if(e.foudre&&t>=T0) _foudrePeindre(g,e.foudre,t-T0,W,H);
+    }};
+}
+// WRAPPED : les cinq slides, 1,5 s chacune. Le grand chiffre monte à chaque
+// arrivée, les barres du haut avancent comme dans l'app, et le profil est
+// révélé par la foudre. La dernière image — le résumé — reste 1 s.
+function _videoSceneWrapped(w,per,signature){
+  const sl=wrappedSlides(w,per);
+  const D=VIDEO_WRAPPED_SLIDE;
+  return {type:'wrapped',nom:'repcore-wrapped',anim:sl.length*D,
+    preparer(W,H){ return {calque:_videoToile(W,H),foudre:null,secousse:_videoSecousse()}; },
+    peindre(g,t,e,W,H){
+      const i=Math.max(0,Math.min(sl.length-1,Math.floor(t/D)));
+      const tl=t-i*D, s=sl[i];
+      const a={cv:e.calque};
+      if(s.k!=='profil') a.grand=arcValeurA(0,Number(s.grand)||0,tl/900,null);
+      _dessinerWrapped(w,per,i,signature,'story',a);
+      const dxy=s.k==='profil'?e.secousse(tl-FOUDRE_IMPACT):[0,0];
+      _videoPoser(g,e.calque,1,dxy);
+      // L'arrivée d'une slide : un fondu depuis le noir, 120 ms.
+      if(i>0&&tl<120){ g.save(); g.fillStyle='rgba(0,0,0,'+(1-tl/120).toFixed(3)+')'; g.fillRect(0,0,W,H); g.restore(); }
+      if(s.k==='profil'){
+        if(!e.foudre) e.foudre=_foudreScene(a.geo||{x:W/2,y:H*0.28},W,{eclairs:3,echelle:VIDEO_ECHELLE});
+        _foudrePeindre(g,e.foudre,tl,W,H);
+      }
+      // Les barres : pleines avant, la courante se remplit.
+      const n=sl.length, m=48, esp=12, lb=(W-m*2-esp*(n-1))/n;
+      g.save();
+      for(let k=0;k<n;k++){
+        const x0=m+k*(lb+esp);
+        g.fillStyle='rgba(255,255,255,.28)'; g.fillRect(x0,44,lb,8);
+        const p=k<i?1:(k===i?Math.min(1,tl/D):0);
+        if(p>0){ g.fillStyle='#fff'; g.fillRect(x0,44,lb*p,8); }
+      }
+      g.restore();
+    }};
+}
+/**
+ * La scène d'un visuel. type : 'record' ({donnees, fond}), 'rang' ({donnees,
+ * img, fond}), 'wrapped' ({w, per, signature}).
+ */
+function videoScene(type,o){
+  const x=o||{};
+  if(type==='record'||type==='records') return _videoSceneRecord(x.donnees,x.fond);
+  if(type==='rang') return _videoSceneRang(x.donnees,x.img,x.fond);
+  if(type==='wrapped') return _videoSceneWrapped(x.w,x.per,x.signature);
+  return null;
+}
+/** PURE. La durée totale d'une scène : l'animation, puis la fin figée. */
+function videoDuree(scene){ return (Number(scene&&scene.anim)||0)+VIDEO_FIN_FIGEE; }
+/**
+ * FABRIQUE LA VIDÉO. `scene` : une scène (videoScene) ou {type, …} ;
+ * `dureeMs` (facultatif) : la durée totale voulue — l'animation est alors
+ * accélérée ou ralentie pour tenir, la fin figée garde 1 s (30 % au plus).
+ * `o.progression(p)` : 0..1 ; `o.annule()` : true pour tout arrêter.
+ * Rend Promise<{blob, type, ext, nom, taille, duree}>.
+ */
+function exporterVideoVisuel(scene,dureeMs,o){
+  o=o||{};
+  return new Promise((res,rej)=>{
+    try{
+      const sc=(scene&&typeof scene.peindre==='function')?scene:videoScene(scene&&scene.type,scene);
+      if(!sc) throw new Error('scène inconnue');
+      const ty=videoTypeChoisi();
+      if(!ty||!videoExportPossible()) throw new Error('ce navigateur ne sait pas enregistrer de vidéo');
+      const W=VIDEO_FORMAT.w, H=VIDEO_FORMAT.h;
+      const total=Number(dureeMs)>0?Number(dureeMs):videoDuree(sc);
+      const figee=Math.min(VIDEO_FIN_FIGEE,total*0.3);
+      const cv=_videoToile(W,H);
+      const g=cv.getContext('2d');
+      const etat=sc.preparer(W,H);
+      let fige=null;
+      const peindre=(t)=>{
+        const ta=Math.min(sc.anim,t*sc.anim/Math.max(1,total-figee));
+        if(ta>=sc.anim&&fige){ g.drawImage(fige,0,0); return; }
+        g.setTransform(1,0,0,1,0,0); g.globalAlpha=1; g.globalCompositeOperation='source-over';
+        g.fillStyle='#000'; g.fillRect(0,0,W,H);
+        sc.peindre(g,ta,etat,W,H);
+        // LA FIN FIGÉE : peinte une fois, recopiée ensuite (et rien ne tremble plus).
+        if(ta>=sc.anim){ fige=_videoToile(W,H); fige.getContext('2d').drawImage(cv,0,0); }
+      };
+      peindre(0);
+      const flux=cv.captureStream(VIDEO_IPS);
+      const rec=new MediaRecorder(flux,{mimeType:ty.mime,videoBitsPerSecond:videoDebit(total)});
+      const morceaux=[];
+      let fini=false, annule=false;
+      const liberer=()=>{
+        try{ flux.getTracks().forEach(p=>p.stop()); }catch(e){}
+        for(const c of [cv,fige,etat&&etat.calque,etat&&etat.fond]) if(c){ c.width=0; c.height=0; }
+      };
+      rec.ondataavailable=ev=>{ if(ev.data&&ev.data.size) morceaux.push(ev.data); };
+      rec.onerror=ev=>{ fini=true; liberer(); rej((ev&&ev.error)||new Error('enregistrement interrompu')); };
+      rec.onstop=()=>{
+        liberer();
+        if(annule){ rej(new Error('annulé')); return; }
+        const blob=new Blob(morceaux,{type:ty.type});
+        res({blob,type:ty.type,ext:ty.ext,nom:sc.nom+'.'+ty.ext,taille:blob.size,duree:total});
+      };
+      rec.start(250);
+      const t0=performance.now();
+      // requestAnimationFrame ne tourne pas sur une page cachée : un minuteur
+      // prend le relais, pour que la vidéo se termine quand même.
+      const suite=()=>{ if(typeof document!=='undefined'&&document.hidden) setTimeout(image,1000/VIDEO_IPS); else requestAnimationFrame(image); };
+      const image=()=>{
+        if(fini) return;
+        const t=performance.now()-t0;
+        if(o.annule&&o.annule()){ annule=true; fini=true; try{ rec.stop(); }catch(e){} return; }
+        try{ peindre(Math.min(t,total)); }catch(e){}
+        if(o.progression){ try{ o.progression(Math.min(1,t/total)); }catch(e){} }
+        if(t>=total){
+          fini=true;
+          // Une dernière frame capturée, puis l'arrêt.
+          setTimeout(()=>{ try{ rec.stop(); }catch(e){} },1000/VIDEO_IPS*2);
+          return;
+        }
+        suite();
+      };
+      suite();
+    }catch(e){ rej(e); }
+  });
+}
+// ── L'écran : la barre de progression, puis la vidéo et ses deux sorties ──
+let _videoEnCours=null;              // {annule} pendant l'enregistrement
+let _videoPrete=null;                // {blob, type, nom, url, src} une fois prête
+function partagerVideo(scene){
+  if(_videoEnCours||!scene) return false;
+  if(!videoExportPossible()){ toast('Ton navigateur ne sait pas créer de vidéo : partage l’image.','var(--orange)'); return false; }
+  const suivi={annule:false};
+  _videoEnCours=suivi;
+  _videoEcran(videoDuree(scene));
+  exporterVideoVisuel(scene,undefined,{progression:_videoProgression,annule:()=>suivi.annule})
+    .then(r=>{ _videoEnCours=null; if(suivi.annule) return; _videoEcranPret(r,scene); })
+    .catch(e=>{
+      _videoEnCours=null;
+      if(suivi.annule) return;
+      fermerVideo();
+      toast('Vidéo impossible : '+((e&&e.message)||'erreur'),'var(--orange)');
+    });
+  return true;
+}
+function _videoEcran(duree){
+  fermerVideo();
+  const d=document.createElement('div');
+  d.id='video-export';
+  d.setAttribute('role','dialog'); d.setAttribute('aria-modal','true'); d.setAttribute('aria-label','Ta vidéo');
+  d.style.cssText='position:fixed;inset:0;z-index:var(--z-modal);background:var(--scrim);display:flex;'
+    +'flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px';
+  d.innerHTML='<div class="vid-carte">'
+    +'<div class="vid-titre">Ta vidéo se prépare…</div>'
+    +'<div class="vid-sous">Elle s’enregistre en temps réel ('+Math.round(duree/100)/10+' s) : garde l’app ouverte.</div>'
+    +'<div class="vid-barre" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="vid-barre-i"></i></div>'
+    +'<button type="button" class="btn btn-outline btn-sm vid-btn" onclick="annulerVideo()">Annuler</button>'
+    +'</div>';
+  document.body.appendChild(d);
+  return d;
+}
+function _videoProgression(p){
+  const i=document.getElementById('vid-barre-i');
+  if(!i) return;
+  const v=Math.round(Math.max(0,Math.min(1,p))*100);
+  i.style.width=v+'%';
+  const b=i.parentNode; if(b&&b.setAttribute) b.setAttribute('aria-valuenow',String(v));
+}
+function _videoEcranPret(r,scene){
+  const d=document.getElementById('video-export');
+  if(!d) return false;
+  let url='';
+  try{ url=URL.createObjectURL(r.blob); }catch(e){ url=''; }
+  _videoPrete={blob:r.blob,type:r.type,nom:r.nom,url,src:(scene&&scene.type)||'visuel'};
+  let f=null; try{ f=new File([r.blob],r.nom,{type:r.type}); }catch(e){ f=null; }
+  const partage=!!(f&&navigator.canShare&&navigator.share&&(()=>{ try{ return navigator.canShare({files:[f]}); }catch(e){ return false; } })());
+  const lourde=r.taille>VIDEO_MAX_OCTETS;
+  d.innerHTML='<div class="vid-carte">'
+    +'<video class="vid-apercu" src="'+url+'" autoplay muted loop playsinline aria-label="Aperçu de ta vidéo"></video>'
+    +'<div class="vid-sous">'+(Math.round(r.taille/1e5)/10).toLocaleString('fr-FR')+' Mo · '+r.ext.toUpperCase()
+      +(lourde?' · lourde : Instagram peut la recompresser':'')+'</div>'
+    +(partage?'<button type="button" class="btn btn-red vid-btn" onclick="partagerVideoPrete()">'+icon('share',16)+' <span>Partager la vidéo</span></button>':'')
+    +'<a class="btn btn-outline vid-btn" href="'+url+'" download="'+escapeHtml(r.nom)+'" onclick="telechargerVideoPrete()">'
+      +icon('download',16)+' <span>Télécharger</span></a>'
+    +'<button type="button" class="btn btn-outline btn-sm vid-btn" onclick="fermerVideo()">Fermer</button>'
+    +'</div>';
+  return true;
+}
+// SYNCHRONE : c'est un toucher neuf, iOS accepte la feuille de partage.
+// Le lien est copié (sticker Lien de la story) ; la légende part dans `text`
+// quand le navigateur l'accepte avec le fichier (un Reel la reprend).
+function partagerVideoPrete(){
+  const v=_videoPrete; if(!v) return false;
+  let f=null; try{ f=new File([v.blob],v.nom,{type:v.type}); }catch(e){ f=null; }
+  if(!f||!navigator.share) return telechargerVideoPrete();
+  const legende=_legendePour(v.src);
+  let charge={files:[f]};
+  try{ if(navigator.canShare({files:[f],text:legende})) charge={files:[f],text:legende}; }catch(e){}
+  _storyCopierLien(v.src);
+  navigator.share(charge).then(()=>{ try{ attribCompter('partage',v.src); }catch(e){} }).catch(()=>{});
+  return true;
+}
+// Le lien <a download> fait le travail ; on compte et on copie le lien.
+function telechargerVideoPrete(){
+  const v=_videoPrete; if(!v) return false;
+  try{ attribCompter('telechargement',v.src); }catch(e){}
+  _storyCopierLien(v.src);
+  return true;
+}
+function annulerVideo(){
+  if(_videoEnCours) _videoEnCours.annule=true;
+  return fermerVideo();
+}
+function fermerVideo(){
+  const d=document.getElementById('video-export');
+  if(d) d.remove();
+  const u=_videoPrete&&_videoPrete.url;
+  _videoPrete=null;
+  if(u) setTimeout(()=>{ try{ URL.revokeObjectURL(u); }catch(e){} },1000);
+  return !!d;
 }
 let _storyEnCours=false;
 // TELECHARGER. Rien d autre. La feuille de partage native n existe pas
@@ -44974,7 +46240,12 @@ function finishWorkout(incomplete=false){
   // La séance est déjà dans l'historique à ce stade : la toute première y est
   // donc seule. Même raisonnement que first_workout_started — c'est la donnée
   // qui décide, pas un drapeau d'appareil.
-  if((currentUser.sessions||[]).length===1) rcm('first_workout_completed');
+  if((currentUser.sessions||[]).length===1){
+    rcm('first_workout_completed');
+    // LE PARRAIN EST PRÉVENU (serveur léger, push « filleul ») : la promesse
+    // de l'accueil. Le serveur relit le lien et la séance avant d'envoyer.
+    try{ if(currentUser.parrainage&&currentUser.parrainage.parrainCode) deposerEvenement({type:'filleul_seance'}).catch(()=>{}); }catch(e){}
+  }
   // La séance vient d'être enregistrée : si le bilan de départ manque toujours,
   // c'est ici qu'on le propose. Même prédicat que la carte de l'accueil — les
   // deux relances doivent apparaître et disparaître ensemble.
@@ -55510,19 +56781,25 @@ function _htmlRecordsFin(ctx,date,cle){
   const nb=v=>Number(v).toLocaleString('fr-FR');
   const k=(cle==='wd'||cle==='sd')?cle:'';
   if(k) _recordsAffiches[k]={liste:rec,date:date||Date.now()};
-  const bouton=(i,lib)=>k?('<button type="button" class="rcf-rk-p" '
+  const bouton=(i,lib,cls,aria)=>k?('<button type="button" class="'+cls+'" '
+    +(aria?'aria-label="'+escapeHtml(aria)+'" ':'')
     +'onclick="partagerRecord(\''+k+'\','+i+',this)">'+icon('share',14)
     +'<span>'+lib+'</span></button>'):'';
+  // LE BOUTON EST AU-DESSUS DE LA LISTE, ET C'EST UN BOUTON. « Partager ce
+  // record » était un lien rouge en petites capitales sous chaque ligne, que
+  // personne ne prenait pour un geste. Un record : ce bouton le partage.
+  // Plusieurs : il les réunit sur un visuel, et chaque ligne garde sa pastille
+  // « Partager » — on peut vouloir publier le plus beau des trois.
+  const plusieurs=rec.length>1;
   return '<div class="rcf-rk"><div class="rcf-rk-t">Mes records</div>'
+    +(k?_htmlVisuelMedia():'')
+    +(k?('<div class="rcf-rk-tous">'+bouton(plusieurs?-1:0,plusieurs?'Partager mes '+rec.length+' records':'Partager ce record','rcf-rk-p rcf-rk-p-tous')+'</div>'):'')
     +rec.map((r,i)=>'<div class="rcf-rk-l">'
       +'<span class="rcf-rk-ex">'+escapeHtml(String(r.nm))+'</span>'
       +'<span class="rcf-rk-v"><span class="rcf-rk-a">'+nb(r.histMax)+' → </span>'
         +nb(r.curMax)+' kg<span class="rcf-rk-g">+'+nb(r.gain)+'</span></span>'
-      +bouton(i,'Partager ce record')
+      +(plusieurs?bouton(i,'Partager','rcf-rk-p rcf-rk-p-ligne','Partager le record '+String(r.nm)):'')
       +'</div>').join('')
-    // PLUSIEURS RECORDS : un visuel de plus, qui les réunit. Il ne remplace
-    // pas les cartes seules — on peut vouloir publier le plus beau des trois.
-    +(rec.length>1?('<div class="rcf-rk-tous">'+bouton(-1,'Partager mes '+rec.length+' records')+'</div>'):'')
     +'</div>';
 }
 // Les données d'un visuel de record, lues dans la liste AFFICHÉE. `i` = -1 :
@@ -55548,6 +56825,8 @@ function partagerRecord(cle,i,btn){
   if(_storyEnCours) return false;
   const d=_recordVisuelDonnees(cle,Number(i));
   if(!d){ toast('Aucun record à partager.','var(--orange)'); return false; }
+  // « Vidéo » choisi : la foudre et le compteur, enregistrés (exporterVideoVisuel).
+  if(visuelMediaChoisi()==='video') return partagerVideo(videoScene('record',{donnees:d,fond:visuelFondEffectif()}));
   _storyEnCours=true;
   const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond);
   const nom=visuelNomFichier(i<0?'repcore-records':'repcore-record',fond);
@@ -69134,10 +70413,62 @@ function etatInvitationNotif(u,supporte,permission){
   if(permission==='granted'||permission==='denied') return 'rien';
   return 'demander';
 }
+// ── CE QUE L'ATHLETE ACCEPTE, EN TROIS CASES (27/09/2026) ─────────────────
+// « Oui, préviens-moi » ouvrait TOUS les types d'un coup, sous une phrase qui
+// promettait « un rappel, ces jours-là, et rien d'autre ». Chaque case
+// regroupe des types de PUSH_TYPES ; ce qui est décoché est écrit dans
+// u.pushPrefs (false) AVANT l'abonnement, et le serveur comme les rappels
+// locaux lisent pushPrefs avant chaque envoi. `acces` (fin d'accès) n'est
+// dans aucune case : il reste, et la carte le dit.
+const NOTIF_GROUPES=Object.freeze([
+  Object.freeze({cle:'seances',titre:'Mes séances et ma série',types:Object.freeze(['serie','badge','wrapped']),
+    detail:'un rappel avant chacune de tes séances, le jeudi à 18 h si ta série est en danger, le dimanche quand un badge est à une ou deux séances, et le 1er du mois ton mois en chiffres'}),
+  Object.freeze({cle:'coach',titre:'Mon coach',types:Object.freeze(['coach','bilan','defi']),
+    detail:'quand ton coach répond à un bilan ou lance un défi, et le samedi si ton dernier bilan date de deux semaines'}),
+  Object.freeze({cle:'invitations',titre:'Mes invitations',types:Object.freeze(['filleul']),
+    detail:'quand quelqu’un s’inscrit avec ton lien'})
+]);
+// PURE. Les cases cochées d'office, selon le profil : les séances toujours ;
+// le coach s'il y en a un ; les invitations si l'athlète a déjà un code à
+// partager. Une case qui ne concerne personne ne se coche pas toute seule.
+function notifGroupesDefaut(u){
+  const x=u||{};
+  return {seances:true,
+    coach:!!x.coachEmailKey,
+    invitations:!!(x.parrainage&&x.parrainage.code)};
+}
+// PURE. u.pushPrefs après le choix : un type décoché passe à false, un type
+// coché redevient permis (la clé disparaît). Les types hors cases ne bougent pas.
+function pushPrefsDepuisChoix(prefs,choix){
+  const p=(prefs&&typeof prefs==='object')?Object.assign({},prefs):{};
+  for(const g of NOTIF_GROUPES) for(const t of g.types){ if(choix&&choix[g.cle]) delete p[t]; else p[t]=false; }
+  return p;
+}
+// PURE. EXACTEMENT ce qui sera envoyé, pour les cases cochées.
+function texteInvitationNotif(choix){
+  const l=NOTIF_GROUPES.filter(g=>choix&&choix[g.cle]).map(g=>g.detail);
+  if(!l.length) return 'Aucune case cochée : rien ne te sera envoyé.';
+  const t=l.length===1?l[0]:l.slice(0,-1).join(' ; ')+' ; et '+l[l.length-1];
+  return 'Tu recevras '+t+'. Et, trois jours avant la fin de ton accès, un rappel. '
+    +'Une notification par jour au plus, jamais entre 21 h et 8 h.';
+}
+function _invNotifChoixLus(){
+  const c={};
+  for(const g of NOTIF_GROUPES){ const e=document.getElementById('inv-notif-g-'+g.cle); c[g.cle]=!!(e&&e.checked); }
+  return c;
+}
+function invNotifMaj(){
+  const c=_invNotifChoixLus();
+  const d=document.getElementById('inv-notif-detail');
+  if(d) d.textContent=texteInvitationNotif(c);
+  const b=document.getElementById('inv-notif-oui');
+  if(b) b.disabled=!Object.keys(c).some(k=>c[k]);
+}
 // PURE. La carte. Deux boutons, jamais trois, et « Non merci » a le meme
 // poids visuel qu'un refus doit avoir : lisible, pas honteux, pas cache.
-function _htmlInvitationNotif(etat,phrase){
+function _htmlInvitationNotif(etat,phrase,choix){
   if(etat==='rien') return '';
+  const ch=choix||{seances:true,coach:false,invitations:false};
   const cadre=(titre,corps,actions)=>
     '<div style="background:var(--info-bg);border:1px solid var(--info-border);'
     +'border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px">'
@@ -69149,14 +70480,22 @@ function _htmlInvitationNotif(etat,phrase){
   const promesse=phrase
     ? 'Ta prochaine séance est <strong style="color:var(--text)">'+escapeHtml(phrase)+'</strong>. Je te préviens ?'
     : 'Je peux te prévenir avant chacune de tes séances. On essaie ?';
+  const cases=NOTIF_GROUPES.map(g=>'<label for="inv-notif-g-'+g.cle+'" style="display:flex;align-items:center;gap:10px;'
+      +'margin:0;padding:8px 0;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:700;'
+      +'font-size:var(--fs-sm);color:var(--text)">'
+      +'<input type="checkbox" id="inv-notif-g-'+g.cle+'" data-groupe="'+g.cle+'"'+(ch[g.cle]?' checked':'')
+      +' onchange="invNotifMaj()" style="width:20px;height:20px;accent-color:#E02020;flex-shrink:0;margin:0;cursor:pointer">'
+      +escapeHtml(g.titre)+'</label>').join('');
+  const aucune=!NOTIF_GROUPES.some(g=>ch[g.cle]);
   return cadre('Et la prochaine ?',
     '<div style="font-size:var(--fs-md);color:var(--text-strong);line-height:1.5;margin-bottom:4px">'
       +promesse+'</div>'
-    +'<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-bottom:12px">'
-      +'Un rappel, ces jours-là, et rien d’autre.</div>',
+    +'<div style="margin:4px 0 6px">'+cases+'</div>'
+    +'<div id="inv-notif-detail" style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-bottom:12px">'
+      +escapeHtml(texteInvitationNotif(ch))+'</div>',
     '<div style="display:flex;gap:8px">'
-    +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px;letter-spacing:.5px" '
-    +'onclick="invNotifOui()">Oui, préviens-moi</button>'
+    +'<button type="button" id="inv-notif-oui" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px;letter-spacing:.5px" '
+    +(aucune?'disabled ':'')+'onclick="invNotifOui()">Oui, préviens-moi</button>'
     +'<button type="button" class="btn btn-outline btn-sm" style="flex:0 0 auto;width:auto;padding:0 16px;margin:0;'
     +'min-height:44px;letter-spacing:.5px" onclick="invNotifNon()">Non merci</button>'
     +'</div>');
@@ -69178,15 +70517,25 @@ function _rendreInvitationNotif(){
   if(etat==='rien'){ z.innerHTML=''; return; }
   let phrase='';
   try{ phrase=texteProchainCreneau(prochainCreneau(currentUser,Date.now())); }catch(e){}
-  z.innerHTML=_htmlInvitationNotif(etat,phrase);
+  z.innerHTML=_htmlInvitationNotif(etat,phrase,notifGroupesDefaut(currentUser));
   try{ currentUser._notifDemandeeLe=Date.now(); saveUser(); }catch(e){}
 }
 // ⚠ LA PERMISSION N'EST DEMANDEE QUE SUR ACCEPTATION. C'est tout l'interet de
 // cette carte : le navigateur n'ouvre sa boite qu'a quelqu'un qui vient de dire
 // oui, donc il ne la refuse presque jamais — et un refus navigateur est
 // definitif, il n'y a pas de seconde chance a gaspiller.
+//
+// ⚠ LE CHOIX EST ECRIT AVANT TOUT AWAIT : dans u.pushPrefs, que le serveur lit
+// avant chaque envoi — l'abonnement ne part qu'ensuite. Et la demande de
+// permission reste le PREMIER await : Safari la refuse hors du geste.
 async function invNotifOui(){
   const z=document.getElementById('wd-notif-invite');
+  const choix=_invNotifChoixLus();
+  if(!NOTIF_GROUPES.some(g=>choix[g.cle])) return invNotifNon();
+  try{
+    currentUser.pushPrefs=pushPrefsDepuisChoix(currentUser.pushPrefs,choix);
+    saveUser();
+  }catch(e){}
   try{
     if(!_notifSupported()){ toast(_NOTIF_INDISPO,'var(--orange)'); if(z) z.innerHTML=''; return; }
     const p=await Notification.requestPermission();
@@ -69194,12 +70543,13 @@ async function invNotifOui(){
       // TROISIEME POINT D'ACCORD — voir les deux autres, dans les rappels de
       // bilan et de seance. Les trois comptent le meme evenement.
       try{ rcm('notif_granted'); }catch(e){}
-      await scheduleWoNotif();
+      // Le rappel avant chaque séance appartient à la case « Mes séances ».
+      if(choix.seances) await scheduleWoNotif();
       // LE PUSH SERVEUR, DANS LE MEME GESTE : c'est le seul moment où iOS
       // l'accepte sans redemander. Sans attente : l'enregistrement part en
       // arrière-plan, le toast ne dépend pas du réseau.
       try{ pushAbonner({geste:true}); }catch(e){}
-      toast('C’est note : je te préviens avant ta prochaine séance ✓');
+      toast(choix.seances?'C’est noté : je te préviens avant ta prochaine séance ✓':'C’est noté ✓');
     } else {
       // AUCUNE INSISTANCE. Le refus est accepte sans un mot de plus : le
       // reprocher, c'est se faire desinstaller.
@@ -69339,7 +70689,7 @@ async function pushAbonner(o){
       endpoint:j.endpoint,keys:{p256dh:j.keys.p256dh,auth:j.keys.auth},
       cree:Date.now(),plateforme:env.ios?'ios':(/android/i.test(navigator.userAgent||'')?'android':'web'),
       vapid:pushEmpreinte(VAPID_PUBLIQUE)});
-    if(ok) _pushMemo({id,email:currentUser.email,vapid:pushEmpreinte(VAPID_PUBLIQUE),le:Date.now()});
+    if(ok){ _pushMemo({id,email:currentUser.email,vapid:pushEmpreinte(VAPID_PUBLIQUE),le:Date.now()}); _swPushServeur(true); }
     return ok;
   }catch(e){ return false; }
 }
@@ -69374,7 +70724,20 @@ async function pushDesabonner(){
   }catch(e){}
   if(memo&&memo.id&&currentUser) try{ await CLOUD.supprimerPush(currentUser.email,memo.id); }catch(e){}
   _pushMemo(null);
+  _swPushServeur(false);
   return true;
+}
+// LE PLAFOND COMMUN : le service worker lit '/push-serveur' pour savoir si le
+// serveur porte déjà série, bilan et Wrapped sur cet appareil (sw.js,
+// swPushServeurActif) — sinon ses rappels locaux doublaient ceux du serveur.
+function _swPushServeur(actif){
+  try{
+    if(typeof caches==='undefined') return false;
+    caches.open('repcore-sw-data').then(c=>actif
+      ?c.put('/push-serveur',new Response(JSON.stringify({actif:true,le:Date.now()}),{headers:{'Content-Type':'application/json'}}))
+      :c.delete('/push-serveur')).catch(()=>{});
+    return true;
+  }catch(e){ return false; }
 }
 // ── L'ÉCRAN DE RÉGLAGES : une case par type, et l'état de l'appareil ──────
 // PURE. Le bloc. etat : pushEtat(...).
@@ -70863,18 +72226,19 @@ function ouvrirFicheBadge(id){
 //
 // ⚠ UN SECRET RÉVÈLE SON INDICE, JAMAIS SA CONDITION. La story est vue par
 // des gens qui ne l'ont pas : leur donner la recette tuerait le secret.
-function _dessinerCarteBadge(b,at,img,fond,signature,rarete){
+function _dessinerCarteBadge(b,at,img,fond,signature,rarete,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
   const cv=document.createElement('canvas');
-  cv.width=STORY_L; cv.height=STORY_H;
+  cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
   const f=fond||'transparent';
-  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  _visuelPeindreFond(g,W,H,f);
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
-  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   const secret=b&&b.famille==='secret';
-  let y=250;
+  let y=post?100:250;
   g.textBaseline='alphabetic'; g.textAlign='center';
   o.ombre(true); g.fillStyle='#ffffff'; g.font='800 34px '+MONT;
   const sur=secret?'BADGE SECRET DÉCOUVERT':'BADGE DÉBLOQUÉ';
@@ -70886,7 +72250,7 @@ function _dessinerCarteBadge(b,at,img,fond,signature,rarete){
   g.fillRect(cx-44,y+20,88,5);
   y+=60;
   // LE MÉDAILLON GÉANT, 780 px, sans ombre de texte : il porte sa lueur.
-  const T=780;
+  const T=post?560:780;
   if(img&&img.complete&&img.naturalWidth){
     const r=Math.min(T/img.naturalWidth,T/img.naturalHeight);
     const w=img.naturalWidth*r, h=img.naturalHeight*r;
@@ -70896,7 +72260,7 @@ function _dessinerCarteBadge(b,at,img,fond,signature,rarete){
   o.ombre(true); g.fillStyle='#ffffff';
   // Le nom SANS son chiffre romain : le palier a sa propre ligne.
   const nom=(b.palier?b.nom.replace(/ [IV]+$/,''):b.nom);
-  const ns=o.ajuste(nom,'700',140,BEBAS,LARG,60);
+  const ns=o.ajuste(nom,'700',post?118:140,BEBAS,LARG,60);
   g.font='700 '+ns+'px '+BEBAS;
   o.ecrire(nom,cx,y+ns*0.8);
   y+=ns+10;
@@ -70923,7 +72287,7 @@ function _dessinerCarteBadge(b,at,img,fond,signature,rarete){
   }
   g.fillStyle='rgba(255,255,255,.82)'; g.font='700 30px '+MONT;
   o.ecrireEspace(_bdgDate(at),cx,y+30,4,true);
-  _recSignature(g,o,String(signature||''),STORY_H-120,LARG);
+  _recSignature(g,o,String(signature||''),H-(post?50:120),LARG);
   o.ombre(false);
   return cv;
 }
@@ -71192,71 +72556,81 @@ function wrappedSlides(w,per){
 // Fond noir, accents rouges, un éclair en filigrane : l'identité de l'écran.
 // `i` : 0..4 — la slide 4 est le RÉSUMÉ, la carte qu'on publie. Mêmes outils
 // d'écriture que les autres visuels (ombre double passe, Bebas, Montserrat).
-function _dessinerWrapped(w,per,i,signature){
-  const cv=document.createElement('canvas');
-  cv.width=STORY_L; cv.height=STORY_H;
+// `anim.grand` (la vidéo) : le grand chiffre en train de monter.
+function _dessinerWrapped(w,per,i,signature,format,anim){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
+  const cv=_visuelToile(anim,W,H);
   const g=cv.getContext('2d');
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
-  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   const s=wrappedSlides(w,per)[Math.max(0,Math.min(4,i|0))];
-  g.fillStyle='#000'; g.fillRect(0,0,STORY_L,STORY_H);
+  g.fillStyle='#000'; g.fillRect(0,0,W,H);
   // Les accents : une lueur rouge en haut, un trait rouge en bas.
-  const lu=g.createRadialGradient(cx,0,0,cx,0,STORY_H*0.6);
+  const lu=g.createRadialGradient(cx,0,0,cx,0,H*0.6);
   lu.addColorStop(0,'rgba(224,32,32,.35)'); lu.addColorStop(1,'rgba(224,32,32,0)');
-  g.fillStyle=lu; g.fillRect(0,0,STORY_L,STORY_H);
-  _recEclairFiligrane(g,cx+260,120,cx-200,STORY_H*0.62,_recGraine(per.cle+'|'+i),'transparent');
+  g.fillStyle=lu; g.fillRect(0,0,W,H);
+  _recEclairFiligrane(g,cx+260,post?60:120,cx-200,H*(post?0.66:0.62),_recGraine(per.cle+'|'+i),'transparent');
   g.textAlign='center'; g.textBaseline='alphabetic';
   o.ombre(true);
   g.fillStyle='#E02020'; g.font='800 36px '+MONT;
   const ss=o.ajusteEspace(s.sur,'800',36,MONT,8,LARG,22);
   g.font='800 '+ss+'px '+MONT;
-  o.ecrireEspace(s.sur,cx,300,8,true);
+  // En post, chaque bloc remonte : mêmes éléments, sur 1 350 px.
+  const P=(st,po)=>post?po:st;
+  o.ecrireEspace(s.sur,cx,P(300,110),8,true);
   if(s.k!=='profil'){
-    const v=_wrNb(s.grand,s.dec);
+    const v=_wrNb(anim&&anim.grand!=null?anim.grand:s.grand,s.dec);
     g.fillStyle='#fff';
-    const gs=o.ajuste(v,'700',380,BEBAS,LARG,140);
+    // La taille suit la valeur FINALE : un chiffre qui monte ne rétrécit pas en route.
+    const gs=o.ajuste(_wrNb(s.grand,s.dec),'700',P(380,300),BEBAS,LARG,140);
     g.font='700 '+gs+'px '+BEBAS;
-    o.ecrire(v,cx,860);
-    g.font='800 52px '+MONT;
-    o.ecrireEspace(s.unite,cx,960,8,true);
+    o.ecrire(v,cx,P(860,560));
+    const us=o.ajusteEspace(s.unite,'800',52,MONT,8,LARG,26);
+    g.font='800 '+us+'px '+MONT;
+    o.ecrireEspace(s.unite,cx,P(960,650),8,true);
     g.fillStyle='rgba(255,255,255,.9)';
     s.lignes.forEach((l,k)=>{
       const ls=o.ajuste(l,'700',44,MONT,LARG,24);
       g.font='700 '+ls+'px '+MONT;
-      o.ecrire(l,cx,1120+k*80);
+      o.ecrire(o.coupe(l,LARG),cx,P(1120,800)+k*P(80,72));
     });
   } else {
     const p=s.profil||{nom:'-',phrase:''};
     g.fillStyle='#fff';
-    const ps=o.ajuste(p.nom.toUpperCase(),'700',170,BEBAS,LARG,70);
+    const ps=o.ajuste(p.nom.toUpperCase(),'700',P(170,140),BEBAS,LARG,70);
+    if(anim) anim.geo={x:cx,y:P(560,270)-ps*0.38,taille:ps};
     g.font='700 '+ps+'px '+BEBAS;
-    o.ecrire(p.nom.toUpperCase(),cx,560);
+    o.ecrire(p.nom.toUpperCase(),cx,P(560,270));
     // La phrase, sur deux lignes au plus.
     g.fillStyle='rgba(255,255,255,.88)'; g.font='600 38px '+MONT;
     const mots=String(p.phrase).split(' '); const lignes=[]; let l='';
     for(const m of mots){ const e=l?l+' '+m:m; if(g.measureText(e).width>LARG&&l){ lignes.push(l); l=m; } else l=e; }
     if(l) lignes.push(l);
-    lignes.slice(0,3).forEach((x,k)=>o.ecrire(x,cx,660+k*54));
+    lignes.slice(0,3).forEach((x,k)=>o.ecrire(x,cx,P(660,350)+k*54));
     // Le résumé : quatre chiffres en grille 2×2.
     s.resume.forEach(([v,lib],k)=>{
-      const x=M+LARG/4+(k%2)*LARG/2, y=1000+Math.floor(k/2)*260;
-      g.fillStyle='#fff'; g.font='700 150px '+BEBAS; o.ecrire(v,x,y);
+      const x=M+LARG/4+(k%2)*LARG/2, y=P(1000,640)+Math.floor(k/2)*P(260,215);
+      g.fillStyle='#fff';
+      const vs=o.ajuste(v,'700',P(150,124),BEBAS,LARG/2-24,60);
+      g.font='700 '+vs+'px '+BEBAS; o.ecrire(v,x,y);
       g.fillStyle='#E02020'; g.font='800 32px '+MONT; o.ecrireEspace(lib.toUpperCase(),x,y+56,4,true);
     });
     if(s.equivalent){
       const t='= '+s.equivalent.texte.toUpperCase()+' '+s.equivalent.emoji;
       g.fillStyle='#fff';
       const es=o.ajuste(t,'800',44,MONT,LARG,22);
-      g.font='800 '+es+'px '+MONT; o.ecrire(t,cx,1530);
+      g.font='800 '+es+'px '+MONT; o.ecrire(t,cx,P(1530,1030));
     }
-    g.fillStyle='rgba(255,255,255,.7)'; g.font='800 30px '+MONT;
-    o.ecrireEspace(per.titre,cx,1620,6,true);
+    g.fillStyle='rgba(255,255,255,.7)';
+    const pts=o.ajusteEspace(per.titre,'800',30,MONT,6,LARG,18);
+    g.font='800 '+pts+'px '+MONT;
+    o.ecrireEspace(per.titre,cx,P(1620,1110),6,true);
   }
   o.ombre(false);
-  g.fillStyle='#E02020'; g.fillRect(cx-60,STORY_H-210,120,5);
-  _recSignature(g,o,String(signature||''),STORY_H-120,LARG);
+  g.fillStyle='#E02020'; g.fillRect(cx-60,H-(post?120:210),120,5);
+  _recSignature(g,o,String(signature||''),H-(post?50:120),LARG);
   o.ombre(false);
   return cv;
 }
@@ -71305,8 +72679,13 @@ function _wrHtmlSlide(s,k){
       +'<p class="wr-phrase">'+escapeHtml(p.phrase)+'</p>'
       +'<div class="wr-resume">'+s.resume.map(([v,l])=>'<div><b>'+escapeHtml(v)+'</b><span>'+escapeHtml(l)+'</span></div>').join('')+'</div>'
       +(s.equivalent?'<p class="wr-equiv">= '+escapeHtml(s.equivalent.texte)+' '+s.equivalent.emoji+'</p>':'')
+      +_htmlVisuelMedia()
       +'<button type="button" class="btn btn-red wr-partager" onclick="event.stopPropagation();partagerWrapped(4,this)">'
         +icon('share',16)+' <span>Partager mon résumé</span></button>'
+      +'<button type="button" class="btn btn-outline wr-partager wr-carrousel" onclick="event.stopPropagation();partagerCarrouselWrapped(this)">'
+        +icon('share',16)+' <span>Carrousel pour mon fil</span></button>'
+      +'<button type="button" class="vf-legende" onclick="event.stopPropagation();voirLegende(\'wrapped\')">Voir la légende</button>'
+      +htmlBoutonInviter()
       +'</section>';
   }
   return '<section class="wr-slide" data-k="'+k+'" hidden>'
@@ -71369,21 +72748,86 @@ function fermerWrapped(){
 }
 // LE PARTAGE d'une slide (0..3) ou du résumé (4). Natif, sinon téléchargement ;
 // les deux copient le lien perso. SYNCHRONE jusqu'au partage (iOS).
+// Une slide, c'est une STORY (l'écran entier, 9:16) : le carrousel du fil, en
+// 4:5, a son propre bouton (partagerCarrouselWrapped).
 function partagerWrapped(i,btn){
   if(!_wr||_storyEnCours) return false;
   let sig=''; try{ sig=nomSurVisuels(currentUser); }catch(e){ sig=''; }
+  // En vidéo, c'est TOUT le Wrapped : cinq slides, 1,5 s chacune.
+  if(visuelMediaChoisi()==='video') return partagerVideo(videoScene('wrapped',{w:_wr.w,per:_wr.per,signature:sig}));
   const fmt=visuelFondFormat('rouge');           // opaque : JPEG
-  const nom='repcore-wrapped'+(i===4?'':'-'+(i+1))+'.'+fmt.ext;
+  const nom=visuelNomFichier('repcore-wrapped'+(i===4?'':'-'+(i+1)),'rouge','story');
   _storyEnCours=true;
   let ok=false;
   try{
-    ok=_storySortirPartage(_dessinerWrapped(_wr.w,_wr.per,i,sig),nom,undefined,fmt)
-      ||_storySortirTelechargement(_dessinerWrapped(_wr.w,_wr.per,i,sig),nom,fmt);
+    ok=_storySortirPartage(_dessinerWrapped(_wr.w,_wr.per,i,sig,'story'),nom,undefined,fmt)
+      ||_storySortirTelechargement(_dessinerWrapped(_wr.w,_wr.per,i,sig,'story'),nom,fmt);
   }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
   finally{ _storyEnCours=false; }
   const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
   if(sp&&ok){ const l=sp.textContent; sp.textContent='Visuel prêt ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
   return ok;
+}
+
+// ══ LE CARROUSEL POUR LE FIL : les cinq slides en 4:5, en une fois ═════
+// Instagram publie un carrousel de dix images au plus, en 4:5 pour occuper
+// l'écran. Les cinq slides sont redessinées en post (pas recadrées), puis
+// partagées D'UN SEUL GESTE quand le téléphone sait partager plusieurs
+// fichiers ; sinon, elles s'affichent l'une sous l'autre, chacune avec son
+// bouton, et se gardent une par une. SYNCHRONE jusqu'au partage (iOS).
+// PURE. Les noms, dans l'ordre du carrousel.
+function wrappedNomsCarrousel(){
+  return [0,1,2,3,4].map(i=>visuelNomFichier('repcore-wrapped-'+(i+1),'rouge','post'));
+}
+function partagerCarrouselWrapped(btn){
+  if(!_wr||_storyEnCours) return false;
+  let sig=''; try{ sig=nomSurVisuels(currentUser); }catch(e){ sig=''; }
+  const noms=wrappedNomsCarrousel();
+  _storyEnCours=true;
+  let ok=false, urls=[];
+  try{
+    urls=noms.map((n,i)=>{ const cv=_dessinerWrapped(_wr.w,_wr.per,i,sig,'post');
+      const u=cv.toDataURL('image/jpeg',0.9); cv.width=0; cv.height=0; return u; });
+    let fichiers=null;
+    try{ fichiers=urls.map((u,i)=>new File([_b64versBlob(u)],noms[i],{type:'image/jpeg'})); }catch(e){ fichiers=null; }
+    // UN CARROUSEL EST UN POST : la légende est copiée, et part aussi dans `text`.
+    const legende=_legendePour('wrapped');
+    _storyCopierLegende(legende);
+    if(fichiers&&navigator.canShare&&navigator.share&&navigator.canShare({files:fichiers})){
+      let charge={files:fichiers};
+      try{ if(navigator.canShare({files:fichiers,text:legende})) charge={files:fichiers,text:legende}; }catch(e){}
+      navigator.share(charge).then(()=>{ try{ attribCompter('partage','wrapped'); }catch(e){} }).catch(()=>{});
+      ok=true;
+    } else {
+      _wrCarrouselUnParUn(urls,noms);
+      ok=true;
+    }
+    try{ attribCompter('telechargement','wrapped'); }catch(e){}
+  }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
+  finally{ _storyEnCours=false; }
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp&&ok){ const l=sp.textContent; sp.textContent='Carrousel prêt ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  return ok;
+}
+// Le repli : les cinq images, chacune avec son lien « Enregistrer ». Chaque
+// toucher est un geste : aucun navigateur ne bloque un téléchargement par
+// geste, alors qu'il en bloque cinq d'affilée. Sur iPhone, l'appui long.
+function _wrCarrouselUnParUn(urls,noms){
+  document.getElementById('story-apercu')?.remove();
+  const d=document.createElement('div');
+  d.id='story-apercu';
+  d.style.cssText='position:fixed;inset:0;z-index:var(--z-modal);background:var(--scrim);overflow-y:auto;'
+    +'display:flex;flex-direction:column;align-items:center;gap:14px;padding:20px';
+  d.innerHTML='<div style="font-size:var(--fs-sm);color:var(--text-strong);text-align:center;line-height:1.6;max-width:320px">'
+    +'Garde les cinq images dans l’ordre, puis publie-les en <b>carrousel</b>. '
+    +'Sur iPhone : appui <b>long</b> sur chaque image, puis <b>Ajouter aux photos</b>.</div>'
+    +urls.map((u,i)=>'<figure style="margin:0;display:flex;flex-direction:column;align-items:center;gap:8px">'
+      +'<img src="'+u+'" alt="Slide '+(i+1)+' sur 5" style="width:min(300px,80vw);aspect-ratio:4/5;border-radius:var(--r-3);box-shadow:var(--e4)">'
+      +'<a href="'+u+'" download="'+escapeHtml(noms[i])+'" type="image/jpeg" class="btn btn-outline btn-sm" style="width:auto;padding:8px 20px">'
+      +'Enregistrer '+(i+1)+'/5</a></figure>').join('')
+    +'<button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:8px 20px" onclick="fermerApercuStory()">Fermer</button>';
+  document.body.appendChild(d);
+  return true;
 }
 
 // ── LA CARTE DE L'ACCUEIL ET LA NOTIFICATION ──────────────────────────
@@ -71784,32 +73228,35 @@ function _muscCarteDe(id,fond){
  * silhouette face + dos, le titre, trois chiffres, la signature. `res` est
  * chargé (chargerSilhouettes) : le dessin est synchrone.
  */
-function _dessinerCarteMuscles(d,fond,res,signature){
+function _dessinerCarteMuscles(d,fond,res,signature,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
   const cv=document.createElement('canvas');
-  cv.width=STORY_L; cv.height=STORY_H;
+  cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
   const f=fond||'transparent';
-  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  _visuelPeindreFond(g,W,H,f);
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
-  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   g.textAlign='center'; g.textBaseline='alphabetic';
   o.ombre(true); g.fillStyle='#fff'; g.font='800 32px '+MONT;
   const sur='CARTE MUSCULAIRE'+(d.periode?' · '+String(d.periode).toUpperCase():'');
   const ss=o.ajusteEspace(sur,'800',32,MONT,8,LARG,20);
   g.font='800 '+ss+'px '+MONT;
-  o.ecrireEspace(sur,cx,190,8,true);
+  const yh=post?92:190;
+  o.ecrireEspace(sur,cx,yh,8,true);
   const titre=String(d.titre||'').toUpperCase();
-  const ts=o.ajuste(titre,'700',112,BEBAS,LARG,56);
+  const ts=o.ajuste(titre,'700',post?96:112,BEBAS,LARG,56);
   g.font='700 '+ts+'px '+BEBAS;
-  o.ecrire(titre,cx,190+30+ts*0.85);
+  o.ecrire(titre,cx,yh+30+ts*0.85);
   o.ombre(false);
   // Les deux vues, même hauteur, côte à côte.
   if(res){
-    const H=1080, y=390;
+    // En post, les silhouettes passent de 1 080 à 700 px de haut.
+    const HS=post?700:1080, y=post?245:390;
     const vs=['face','dos'].map((v,i)=>_muscPeindreVue(res[v],d.groupes,_recGraine('carte'+v)));
-    const ws=vs.map(v=>v.w*H/v.h);
+    const ws=vs.map(v=>v.w*HS/v.h);
     const gap=30, tot=ws[0]+ws[1]+gap;
     let x=cx-tot/2;
     // UN HALO CLAIR AUTOUR DES SILHOUETTES (Kevin, 27/09/2026 : « un petit
@@ -71818,21 +73265,22 @@ function _dessinerCarteMuscles(d,fond,res,signature){
     // posée avec son ombre, puis repeinte nette par _muscPoser.
     vs.forEach((v,i)=>{
       g.save(); g.shadowColor='rgba(255,255,255,.42)'; g.shadowBlur=34;
-      g.drawImage(v.base,x,y,ws[i],H); g.drawImage(v.base,x,y,ws[i],H); g.restore();
-      _muscPoser(g,v,x,y,ws[i],H,1); x+=ws[i]+gap; });
+      g.drawImage(v.base,x,y,ws[i],HS); g.drawImage(v.base,x,y,ws[i],HS); g.restore();
+      _muscPoser(g,v,x,y,ws[i],HS,1); x+=ws[i]+gap; });
   }
   // Les trois chiffres.
   const cw=LARG/3;
   (d.chiffres||[]).slice(0,3).forEach((c,i)=>{
     const x=M+cw*i+cw/2;
     o.ombre(true); g.fillStyle='#fff';
-    const vs=o.ajuste(c.v,'700',110,BEBAS,cw-20,50);
-    g.font='700 '+vs+'px '+BEBAS; o.ecrire(c.v,x,1590);
+    const vs=o.ajuste(c.v,'700',post?92:110,BEBAS,cw-20,50);
+    const yc=post?1062:1590;
+    g.font='700 '+vs+'px '+BEBAS; o.ecrire(c.v,x,yc);
     g.fillStyle=f==='rouge'?'rgba(255,255,255,.9)':'#E02020';
     const ls=o.ajusteEspace(c.l.toUpperCase(),'800',24,MONT,3,cw-16,14);
-    g.font='800 '+ls+'px '+MONT; o.ecrireEspace(c.l.toUpperCase(),x,1632,3,true);
+    g.font='800 '+ls+'px '+MONT; o.ecrireEspace(c.l.toUpperCase(),x,yc+42,3,true);
   });
-  _recSignature(g,o,String(signature||''),STORY_H-110,LARG);
+  _recSignature(g,o,String(signature||''),H-(post?50:110),LARG);
   o.ombre(false);
   return cv;
 }
@@ -71906,7 +73354,8 @@ function rendreMusclesEvolution(){
 //   partage ni n'enregistre qu'avec u.consentementPartageCoach = {date}, posé
 //   par l'athlète lui-même dans son propre avant/après.
 const AA_VUES=Object.freeze([{k:'face',lib:'Face'},{k:'back',lib:'Dos'},{k:'side',lib:'Profil'}]);
-const AA_FORMATS=Object.freeze({story:{w:1080,h:1920},post:{w:1080,h:1350}});
+// Le réglage commun : l'avant/après lit et retient le même format que les autres visuels.
+const AA_FORMATS=VISUEL_FORMATS;
 // PURE. Les bilans qui portent une photo de cette vue, dans l'ordre.
 function aaBilansAvecPhoto(u,vue){
   let bl=[]; try{ bl=bilansOrdonnes(u)||[]; }catch(e){ bl=[]; }
@@ -71960,7 +73409,7 @@ function aaDefaut(u){
   const vue=vues.indexOf('face')>=0?'face':vues[0];
   const l=aaBilansAvecPhoto(u,vue);
   return {vue,avant:Number(l[0].date),apres:Number(l[l.length-1].date),
-    flou:false,poids:false,indicateur:'aucun',fond:'noir',format:'story'};
+    flou:false,poids:false,indicateur:'aucun',fond:'noir',format:visuelFormatChoisi()};
 }
 // Le bouton, là où il sert : l'onglet Évolution (photos), l'étape photos du
 // bilan, la fiche coach. Rien tant qu'il n'y a pas deux photos du même angle.
@@ -72324,7 +73773,8 @@ function _aaRendreEcran(){
     +(autorise
       ?('<button type="button" class="btn btn-red aa-partager" onclick="aaPartager(this)">'+icon('share',18)
           +' <span>'+(o.format==='post'?'Partager en post':'Partager en story')+'</span></button>'
-        +'<button type="button" class="btn btn-outline btn-casse aa-enregistrer" onclick="aaEnregistrer(this)">'+icon('download',16)+' <span>Enregistrer</span></button>')
+        +'<button type="button" class="btn btn-outline btn-casse aa-enregistrer" onclick="aaEnregistrer(this)">'+icon('download',16)+' <span>Enregistrer</span></button>'
+        +'<button type="button" class="vf-legende" onclick="voirLegende(\'avant\')">Voir la légende</button>')
       :'<p class="aa-refus">L’export demande l’accord de '+escapeHtml(u.fname||'l’athlète')
         +'. Il peut l’accorder depuis son propre avant/après, sous « Personnaliser ».</p>')
     +'<p class="aa-avert" id="aa-avert" hidden></p>'
@@ -72353,6 +73803,8 @@ function aaReglage(nom,val){
     if(l.length<2) return;
     o.vue=val; o.avant=Number(l[0].date); o.apres=Number(l[l.length-1].date);
   } else o[nom]=val;
+  // Le format est le réglage commun des visuels : retenu pour tous.
+  if(nom==='format') visuelFormatMemoriser(val);
   if(o.avant===o.apres){ toast('Choisis deux bilans différents.','var(--orange)'); }
   const ouvert=!!document.querySelector('#aa-ecran .aa-perso[open]');
   _aaRendreEcran();
@@ -72442,7 +73894,7 @@ function _aaSortir(partager,btn,confirme){
   try{ localStorage.setItem(_aaAvertiCle(),'1'); }catch(e){}
   const p=document.getElementById('aa-avert'); if(p) p.hidden=true;
   if(_storyEnCours) return false;
-  const nom='repcore-avant-apres.jpg', fmt={type:'image/jpeg',ext:'jpg',q:0.9};
+  const nom=visuelNomFichier('repcore-avant-apres','noir',_aa.o.format), fmt={type:'image/jpeg',ext:'jpg',q:0.9};
   _storyEnCours=true;
   let ok=false;
   try{
@@ -72491,15 +73943,16 @@ function riteCarteDonnees(u,cycle,now){
  * (chargerSilhouettes) — sans elles, la carte se passe de la heatmap et
  * remonte le reste.
  */
-function _dessinerCarteCycle(d,fond,resMuscles){
+function _dessinerCarteCycle(d,fond,resMuscles,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
   const cv=document.createElement('canvas');
-  cv.width=STORY_L; cv.height=STORY_H;
+  cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
   const f=fond||'transparent';
-  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  _visuelPeindreFond(g,W,H,f);
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
-  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   const rouge=f==='rouge';
   const accent=rouge?'#ffffff':'#E02020';
@@ -72507,10 +73960,10 @@ function _dessinerCarteCycle(d,fond,resMuscles){
   // CYCLE N TERMINÉ
   o.ombre(true); g.fillStyle='#fff';
   const titre='CYCLE '+d.cycle+' TERMINÉ';
-  const ts=o.ajuste(titre,'700',150,BEBAS,LARG,70);
-  g.font='700 '+ts+'px '+BEBAS; o.ecrire(titre,cx,230);
+  const ts=o.ajuste(titre,'700',post?118:150,BEBAS,LARG,70);
+  g.font='700 '+ts+'px '+BEBAS; o.ecrire(titre,cx,post?130:230);
   // Le nom, s'il dit autre chose que le numéro, et les 28 jours.
-  let y=300;
+  let y=post?190:300;
   if(d.nom&&d.nom!=='Cycle '+d.cycle){
     g.fillStyle='rgba(255,255,255,.92)';
     const ns=o.ajuste(d.nom,'700',44,MONT,LARG,22);
@@ -72521,7 +73974,8 @@ function _dessinerCarteCycle(d,fond,resMuscles){
   o.ombre(false);
   // L'ANNEAU : le taux de complétion. Sans programme, le nombre de séances
   // seul, au centre, sans arc.
-  const ry=y+250, R=175;
+  // En post, l'anneau rapetisse et remonte : la heatmap garde sa place.
+  const ry=y+(post?180:250), R=post?128:175;
   g.save();
   g.lineCap='round'; g.lineWidth=34;
   g.strokeStyle='rgba(255,255,255,.14)';
@@ -72534,11 +73988,11 @@ function _dessinerCarteCycle(d,fond,resMuscles){
   g.restore();
   o.ombre(true); g.fillStyle='#fff';
   const centre=d.taux!=null?(d.taux+' %'):String(d.faites);
-  g.font='700 130px '+BEBAS; o.ecrire(centre,cx,ry+40);
+  g.font='700 '+(post?100:130)+'px '+BEBAS; o.ecrire(centre,cx,ry+(post?30:40));
   g.fillStyle='rgba(255,255,255,.85)'; g.font='800 24px '+MONT;
-  o.ecrireEspace(d.taux!=null?'COMPLÉTION':'SÉANCES',cx,ry+86,5,true);
+  o.ecrireEspace(d.taux!=null?'COMPLÉTION':'SÉANCES',cx,ry+(post?68:86),5,true);
   // Les trois chiffres.
-  y=ry+R+120;
+  y=ry+R+(post?96:120);
   const t=_wrTonnage(d.tonnage);
   const chiffres=[
     {v:d.prevues>0?(d.faites+'/'+Math.round(d.prevues)):String(d.faites),l:'SÉANCES'},
@@ -72548,11 +74002,11 @@ function _dessinerCarteCycle(d,fond,resMuscles){
   chiffres.forEach((c,i)=>{
     const x=M+cw*i+cw/2;
     g.fillStyle='#fff';
-    const vs=o.ajuste(c.v,'700',96,BEBAS,cw-16,44);
+    const vs=o.ajuste(c.v,'700',post?80:96,BEBAS,cw-16,44);
     g.font='700 '+vs+'px '+BEBAS; o.ecrire(c.v,x,y);
     g.fillStyle=accent; g.font='800 22px '+MONT; o.ecrireEspace(c.l,x,y+40,4,true);
   });
-  y+=90;
+  y+=post?80:90;
   if(d.equivalent){
     const e='= '+d.equivalent.texte.toUpperCase()+' '+d.equivalent.emoji;
     g.fillStyle='#fff';
@@ -72561,13 +74015,13 @@ function _dessinerCarteCycle(d,fond,resMuscles){
   }
   o.ombre(false);
   // LA HEATMAP MUSCULAIRE (idée 07), si les silhouettes sont là.
-  const basTexte=STORY_H-250;
+  const basTexte=H-(post?186:250);
   if(resMuscles&&d.groupes){
-    const H=Math.max(200,basTexte-40-(y+20));
+    const HM=Math.max(200,basTexte-40-(y+20));
     const vs=['face','dos'].map(v=>_muscPeindreVue(resMuscles[v],d.groupes,_recGraine('cycle'+d.cycle+v)));
-    const ws=vs.map(v=>v.w*H/v.h), gap=24, tot=ws[0]+ws[1]+gap;
+    const ws=vs.map(v=>v.w*HM/v.h), gap=24, tot=ws[0]+ws[1]+gap;
     let x=cx-tot/2;
-    vs.forEach((v,i)=>{ _muscPoser(g,v,x,y+20,ws[i],H,1); x+=ws[i]+gap; });
+    vs.forEach((v,i)=>{ _muscPoser(g,v,x,y+20,ws[i],HM,1); x+=ws[i]+gap; });
   }
   // « Prochain chapitre : … »
   o.ombre(true);
@@ -72576,7 +74030,7 @@ function _dessinerCarteCycle(d,fond,resMuscles){
   g.fillStyle='#fff';
   const ps=o.ajuste(String(d.prochain||''),'700',64,BEBAS,LARG,30);
   g.font='700 '+ps+'px '+BEBAS; o.ecrire(String(d.prochain||''),cx,basTexte+66);
-  _recSignature(g,o,String(d.signature||''),STORY_H-90,LARG);
+  _recSignature(g,o,String(d.signature||''),H-(post?42:90),LARG);
   o.ombre(false);
   return cv;
 }
@@ -72655,6 +74109,7 @@ function _serieEcran(n,reste){
     +(d.jokers?'<p class="bdg-ecran-cond">Dont '+d.jokers+' semaine'+(d.jokers>1?'s':'')+' sauvée'+(d.jokers>1?'s':'')+' par un joker</p>':'')
     +_htmlVisuelFonds('serie-fonds')
     +'<button type="button" class="btn btn-red bdg-ecran-part" onclick="partagerSerie(this)">'+icon('share',16)+' <span>Partager</span></button>'
+    +htmlBoutonInviter()
     +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" onclick="bdgPlusTard()">'
       +(reste||_bdgRecap.length?'Suivant':'Plus tard')+'</button>'
     +'</div>',
@@ -72677,30 +74132,37 @@ function _serieEcran(n,reste){
  * LA CARTE 1080×1920 : le grand chiffre, « SEMAINES D'AFFILÉE », le
  * calendrier des semaines en carrés rouges, la signature. Fond au choix.
  */
-function _dessinerCarteSerie(d,fond){
+function _dessinerCarteSerie(d,fond,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
   const cv=document.createElement('canvas');
-  cv.width=STORY_L; cv.height=STORY_H;
+  cv.width=W; cv.height=H;
   const g=cv.getContext('2d');
   const f=fond||'transparent';
-  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  _visuelPeindreFond(g,W,H,f);
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
-  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   const rouge=f==='rouge';
   const n=Math.max(0,d.semaines|0);
+  // LE CALENDRIER MONTRE UN AN AU PLUS : 52 cases, les dernières semaines. Le
+  // grand chiffre, lui, dit tout (au-delà, les cases sortaient de l'image).
+  const nc=Math.min(n,52);
   g.textAlign='center'; g.textBaseline='alphabetic';
   // LA MISE EN PAGE SE CALCULE D'ABORD : le bloc entier est centré entre le
   // haut et la signature, quel que soit le nombre de semaines.
-  const cols=n<=4?4:(n<=8?4:(n<=12?6:13));
-  const rows=Math.max(1,Math.ceil(n/cols));
-  const gap=n>26?10:16;
-  g.font='700 560px '+BEBAS;
-  const cs=o.ajuste(String(n),'700',560,BEBAS,LARG,200);
-  const cote=Math.max(16,Math.min(n<=12?130:(n<=26?66:54),Math.floor((LARG-gap*(cols-1))/cols)));
+  const cols=nc<=4?4:(nc<=8?4:(nc<=12?6:13));
+  const rows=Math.max(1,Math.ceil(nc/cols));
+  const gap=nc>26?10:16;
+  // En post, le chiffre et les cases rapetissent : le bloc tient entre le
+  // haut et la signature, même à 52 semaines.
+  const CS=post?(n<=12?400:300):560;
+  g.font='700 '+CS+'px '+BEBAS;
+  const cs=o.ajuste(String(n),'700',CS,BEBAS,LARG,160);
+  const cote=Math.max(16,Math.min(nc<=12?(post?100:130):(nc<=26?(post?54:66):(post?46:54)),Math.floor((LARG-gap*(cols-1))/cols)));
   const hCal=rows*(cote+gap)-gap;
-  const H=60+cs*0.82+90+70+hCal+(d.jokers?70:0);
-  let y=Math.max(150,Math.round((STORY_H-200-H)/2));
+  const HB=60+cs*0.82+90+70+hCal+(d.jokers?70:0);
+  let y=Math.max(post?60:150,Math.round((H-(post?140:200)-HB)/2));
   o.ombre(true);
   g.fillStyle=rouge?'#fff':'#E02020'; g.font='800 34px '+MONT;
   o.ecrireEspace('SÉRIE EN COURS',cx,y+34,10,true);
@@ -72717,11 +74179,11 @@ function _dessinerCarteSerie(d,fond){
   y+=70;
   const larg=cols*cote+(cols-1)*gap;
   const x0=cx-larg/2;
-  for(let i=0;i<n;i++){
+  for(let i=0;i<nc;i++){
     const c=i%cols, r=Math.floor(i/cols);
     const x=x0+c*(cote+gap), yy=y+r*(cote+gap);
     g.save();
-    const dernier=i===n-1;
+    const dernier=i===nc-1;
     g.fillStyle=rouge?(dernier?'#fff':'rgba(255,255,255,.82)'):(dernier?'#ff3b3b':'#E02020');
     g.shadowColor=rouge?'rgba(255,255,255,.5)':'rgba(224,32,32,.85)'; g.shadowBlur=dernier?26:10;
     g.fillRect(x,yy,cote,cote);
@@ -72733,7 +74195,7 @@ function _dessinerCarteSerie(d,fond){
     o.ecrire('dont '+d.jokers+' sauvée'+(d.jokers>1?'s':'')+' par un joker 🛡',cx,y);
     o.ombre(false);
   }
-  _recSignature(g,o,String(d.signature||''),STORY_H-110,LARG);
+  _recSignature(g,o,String(d.signature||''),H-(post?50:110),LARG);
   o.ombre(false);
   return cv;
 }
@@ -72958,6 +74420,15 @@ function _rendreRang(u){
   let m=null; try{ m=majXp(); }catch(e){ m=null; }
   z.hidden=false;
   z.innerHTML=htmlRangAccueil(m?m.total:xpDe(u));
+  // LA LIGNE DES FILLEULS, sous l'en-tête (la bande a une hauteur fixe) :
+  // rien avant le premier filleul.
+  try{
+    const t=z.closest('.clh-tete');
+    let l=document.getElementById('clh-filleuls');
+    const h=htmlLigneFilleuls(u);
+    if(!l&&h&&t){ l=document.createElement('div'); l.id='clh-filleuls'; t.insertAdjacentElement('afterend',l); }
+    if(l){ l.innerHTML=h; l.hidden=!h; }
+  }catch(e){}
   return true;
 }
 // ── LA FIN DE SÉANCE : « +180 ⚡ », compté par arcCompteur, et le détail ──
@@ -73009,6 +74480,7 @@ function _rangEcran(n,reste){
   const d=rangCarteDonnees(u,n);
   _rangCourant=d;
   const suiv=RANGS[d.n]||null;
+  let propose=false; try{ propose=PAGE_PUBLIQUE_PROPOSEE&&pagePropositionDue(u,d.n); }catch(e){ propose=false; }
   const z=_bdgCouche(
     '<div class="bdg-ecran-scene"><div class="bdg-ecran-med rg-ecran-med">'
       +'<img id="rg-ecran-img" src="'+rangEmbleme(d.n,true)+'" alt="" width="512" height="512" decoding="async"></div></div>'
@@ -73017,12 +74489,16 @@ function _rangEcran(n,reste){
     +'<h2 class="bdg-ecran-nom">'+escapeHtml(d.nom)+'</h2>'
     +'<div class="bdg-ecran-meta">⚡ '+escapeHtml(xpFormat(d.xp))+' V</div>'
     +'<p class="bdg-ecran-cond">'+escapeHtml(suiv?'Prochain rang : '+suiv.nom+', à '+xpFormat(suiv.seuil)+' V.':'Le rang le plus haut. Il n’y a rien au-dessus.')+'</p>'
-    +_htmlVisuelFonds('rg-fonds')
+    +_htmlVisuelFonds('rg-fonds')+_htmlVisuelMedia()
     +'<button type="button" class="btn btn-red bdg-ecran-part" onclick="partagerRang(this)">'+icon('share',16)+' <span>Partager</span></button>'
+    +htmlBoutonInviter()
+    // LA PAGE PUBLIQUE, proposée à la fin : ce qu'on vient de gagner se montre.
+    +(propose?htmlPropositionPage(u):'')
     +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" onclick="bdgPlusTard()">'
       +(reste||_bdgRecap.length?'Suivant':'Plus tard')+'</button>'
     +'</div>',
     'Nouveau rang : '+d.nom);
+  if(propose) _noterPropositionPage(u,d.n);
   const img=z.querySelector('#rg-ecran-img');
   const monter=()=>{ try{ monterSelecteurFond('rg-fonds',f=>_dessinerCarteRang(_rangCourant||d,f,img),null); }catch(e){} };
   if(img&&img.complete&&img.naturalWidth) monter(); else if(img) img.addEventListener('load',monter,{once:true});
@@ -73049,50 +74525,71 @@ function _rangEcran(n,reste){
  * la signature « <NOM> · REPCORE ». `img` : l'emblème 512 déjà chargé (sans
  * lui, la carte se dessine sans emblème plutôt que de lever).
  */
-function _dessinerCarteRang(d,fond,img){
-  const cv=document.createElement('canvas');
-  cv.width=STORY_L; cv.height=STORY_H;
+// `anim` (la vidéo) : {echelle, eclat, texte, xp} — l'emblème qui naît, le
+// blanc qui le quitte, le texte qui arrive, les volts qui comptent.
+function _dessinerCarteRang(d,fond,img,format,anim){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
+  const cv=_visuelToile(anim,W,H);
   const g=cv.getContext('2d');
   const f=fond||'transparent';
-  _visuelPeindreFond(g,STORY_L,STORY_H,f);
+  if(!(anim&&anim.sansFond)) _visuelPeindreFond(g,W,H,f);
+  const A=anim||{};
+  const aTexte=A.texte==null?1:Math.max(0,Math.min(1,A.texte));
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
-  const M=72, LARG=STORY_L-M*2, cx=STORY_L/2;
+  const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   const rouge=f==='rouge';
   g.textAlign='center'; g.textBaseline='alphabetic';
   // L'en-tête.
   o.ombre(true);
+  g.globalAlpha=aTexte;
   const sur='NOUVEAU RANG · '+String(d.nom||'');
   const ss=o.ajusteEspace(sur,'800',46,MONT,9,LARG,26);
   g.fillStyle=rouge?'#fff':'#E02020'; g.font='800 '+ss+'px '+MONT;
-  o.ecrireEspace(sur,cx,300,9,true);
+  o.ecrireEspace(sur,cx,post?110:300,9,true);
   o.ombre(false);
   // L'EMBLÈME GÉANT, avec un halo derrière.
-  const T=860, y0=400;
+  // En post, l'emblème descend à 720 px et remonte sous l'en-tête.
+  const T=post?720:860, y0=post?150:400;
+  if(anim) anim.geo={x:cx,y:y0+T/2,taille:T};
+  g.globalAlpha=1;
+  const ech=A.echelle==null?1:Math.max(0,A.echelle);
   g.save();
+  if(ech!==1){ g.translate(cx,y0+T/2); g.scale(ech,ech); g.translate(-cx,-(y0+T/2)); g.globalAlpha=Math.min(1,ech/0.6); }
   const h=g.createRadialGradient(cx,y0+T/2,40,cx,y0+T/2,T*0.62);
   h.addColorStop(0,rouge?'rgba(255,255,255,.28)':'rgba(224,32,32,.42)');
   h.addColorStop(1,'rgba(0,0,0,0)');
-  g.fillStyle=h; g.fillRect(0,y0-120,STORY_L,T+240);
+  g.fillStyle=h; g.fillRect(0,y0-120,W,T+240);
   g.restore();
   if(img&&img.naturalWidth){
+    g.save();
+    if(ech!==1){ g.translate(cx,y0+T/2); g.scale(ech,ech); g.translate(-cx,-(y0+T/2)); g.globalAlpha=Math.min(1,ech/0.6); }
     try{ g.drawImage(img,cx-T/2,y0,T,T); }catch(e){}
+    // L'ÉCLAT : l'emblème sort du flash, blanc, puis prend ses couleurs.
+    if(A.eclat>0){
+      g.globalCompositeOperation='lighter'; g.globalAlpha=Math.min(1,A.eclat);
+      try{ g.drawImage(img,cx-T/2,y0,T,T); g.drawImage(img,cx-T/2,y0,T,T); }catch(e){}
+    }
+    g.restore();
   }
   // Le nom du rang, en grand, sous l'emblème.
   o.ombre(true);
+  g.globalAlpha=aTexte;
   g.fillStyle='#fff';
-  const ns=o.ajuste(String(d.nom||''),'700',210,BEBAS,LARG,90);
+  const ns=o.ajuste(String(d.nom||''),'700',post?170:210,BEBAS,LARG,90);
   g.font='700 '+ns+'px '+BEBAS; o.ecrire(String(d.nom||''),cx,y0+T+ns*0.9);
   g.fillStyle='rgba(255,255,255,.88)'; g.font='800 40px '+MONT;
-  o.ecrireEspace('⚡ '+xpFormat(d.xp)+' V',cx,y0+T+ns*0.9+80,4,true);
-  _recSignature(g,o,String(d.signature||''),STORY_H-110,LARG);
+  o.ecrireEspace('⚡ '+xpFormat(A.xp==null?d.xp:A.xp)+' V',cx,y0+T+ns*0.9+(post?64:80),4,true);
+  _recSignature(g,o,String(d.signature||''),H-(post?44:110),LARG);
   o.ombre(false);
+  g.globalAlpha=1;
   return cv;
 }
 function partagerRang(btn){
   const d=_rangCourant; if(!d||_storyEnCours) return false;
   const img=document.getElementById('rg-ecran-img');
+  if(visuelMediaChoisi()==='video') return partagerVideo(videoScene('rang',{donnees:d,img,fond:visuelFondEffectif()}));
   const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond);
   const nom=visuelNomFichier('repcore-rang',fond);
   _storyEnCours=true;
@@ -110120,8 +111617,8 @@ function messageRelanceAcces(c,etat){
     :('Ton accès à RepCore se termine'+(d?(' le '+d):' bientôt')+'.');
   return (p?('Salut '+p+' ! '):'Salut ! ')+quand
     +' Pour continuer, ouvre l\'app et prends l\'abonnement à '+PRIX_ATHLETE_MOIS
-    +' par mois : '+lienAbonnement()
-    +' : dis-moi si tu as le moindre souci, je m\'en occupe.';
+    +' par mois (engagement '+TARIFS.engagementMois+' mois) : '+lienAbonnement()
+    +'. Dis-moi si tu as le moindre souci, je m\'en occupe.';
 }
 // Ouvre WhatsApp avec le message pre-rempli. ⚠ REPCORE N'ENVOIE RIEN : il
 // ouvre la conversation, c'est le coach qui appuie sur envoyer. Meme regle que
@@ -111639,23 +113136,22 @@ function _texteInvitationAthlete(c){
     '1️⃣ Ouvre ce lien 👇',
     lien,
     '',
-    '',
     'Dans Safari (iPhone) ou Chrome (Android), PAS dans Instagram.',
     'Si un écran te dit "ouvre dans ton navigateur", clique dessus,',
     'c\'est normal.',
     '',
     '2️⃣ Installe l\'app, le bouton te le propose direct.',
     '',
-    '3️⃣ Une fois l\'app installée. Il va te demander un code, colle celui-là :',
+    '3️⃣ Une fois l\'app installée, elle te demande un code : colle celui-ci.',
     // ⚠ LE CODE EST NU, SANS PARENTHESES. Il est colle tel quel dans le champ
     // de l'athlete, et _lierCoach ne retire que les ESPACES : « (RC-XXXX) »
     // serait cherche avec ses parentheses et rendrait « code introuvable » —
     // la panne exacte que ce message existe pour eviter.
     String((c&&c.token)||''),
     '',
-    'Le code est obligatoire, sans lui tu n\'as pas d\'accès et je ne te vois pas apparaître de mon côté.',
+    'Le code est obligatoire : sans lui, tu n\'as pas d\'accès et je ne te vois pas apparaître de mon côté.',
     '',
-    'Si t\'es bloqué, le lien : '+lien
+    'Si tu es bloqué, reprends le lien : '+lien
   ].join('\n');
 }
 function _copierInvitationAthlete(i){
@@ -112040,7 +113536,7 @@ function renderPaypalButton(planId,coachId){
            //   ⚠ POUR L'ATHLETE SEULEMENT : les formules coach se facturent au
            //     mois, sans duree, et un terme ecrit dans leur dossier
            //     promettrait un engagement que personne n'a pris.
-           engagementJusqu:(_estCoach?undefined:moisApres(Date.now(),12))});
+           engagementJusqu:(_estCoach?undefined:moisApres(Date.now(),TARIFS.engagementMois))});
         rcm('subscription_activated');
         // LE SERVEUR APPREND QUEL ABONNEMENT EST À QUI : les avis de PayPal
         // (paiement, résiliation) ne portent que son identifiant.

@@ -84,13 +84,27 @@ export async function jetonVapid(endpoint, publique, privee, contact, maintenant
   return tete + '.' + corps + '.' + octetsVersB64u(sig);   // WebCrypto rend r || s : c'est la forme JWS
 }
 
+// LE JETON VAPID EST GARDÉ, par service de push (son origine), onze heures
+// sur les douze de sa validité : une signature ES256 de moins par message.
+// Il ne dit rien du message ni de l'appareil, seulement « c'est RepCore ».
+const _jetonsVapid = new Map();     // aud|publique -> { jeton, expire }
+export function oublierJetonsVapid() { _jetonsVapid.clear(); }
+async function jetonVapidGarde(endpoint, publique, privee, contact) {
+  const k = new URL(endpoint).origin + '|' + publique;
+  const g = _jetonsVapid.get(k), t = Date.now();
+  if (g && g.expire > t) return g.jeton;
+  const jeton = await jetonVapid(endpoint, publique, privee, contact, t);
+  _jetonsVapid.set(k, { jeton, expire: t + 11 * 3600e3 });
+  return jeton;
+}
+
 /**
  * Envoie UN message à UN abonnement. Rend {statut} — 201 : parti ; 404/410 :
  * l'abonnement n'existe plus (à supprimer) ; autre : échec.
  */
 export async function envoyerA(abonnement, charge, { publique, privee, contact, ttl, fetchImpl }) {
   const corps = await chiffrer(charge, abonnement.keys.p256dh, abonnement.keys.auth);
-  const jeton = await jetonVapid(abonnement.endpoint, publique, privee, contact);
+  const jeton = await jetonVapidGarde(abonnement.endpoint, publique, privee, contact);
   const r = await (fetchImpl || fetch)(abonnement.endpoint, {
     method: 'POST',
     headers: {

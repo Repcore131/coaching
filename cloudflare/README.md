@@ -23,9 +23,9 @@ Règles d'envoi : **une notification par jour et par personne au plus**, rien en
 
 Cloudflare Workers Free : 100 000 appels par jour, 10 ms de calcul et 50 requêtes par exécution,
 5 tâches programmées. RepCore en utilise **une** (chaque minute), soit 1 440 réveils par jour, plus
-les appels de l'app. Les rappels planifiés avancent par lots d'une minute à l'autre ; au-delà de
-quelques centaines d'abonnés, un rappel de 18 h peut finir vers 18 h 30. Rien ne se facture : au
-pire, un jour de dépassement, les appels suivants sont refusés jusqu'à minuit (UTC).
+les appels de l'app. Les rappels planifiés avancent par lots d'une minute à l'autre (mesures plus
+bas, « Charge »). Rien ne se facture : au pire, un jour de dépassement, les appels suivants sont
+refusés jusqu'à minuit (UTC).
 
 ## Installer (une seule fois)
 
@@ -68,6 +68,92 @@ les pages publiques (`index.html`, `i/`, `p/`, `c/`), puis livrée : c'est ce qu
 - **Le Worker n'écrit jamais dans `droits/`** : dans l'app, un nœud `droits/` non vide prime sur le
   dossier, et y écrire aurait coupé l'essai d'un filleul ou rétrogradé un parrain abonné.
 - État de travail (curseurs des lots) : `/worker/jobs/<nom>`, fermé à tous les clients.
+- **Un événement à la fois par type, par compte et par cible** : l'app écrit l'événement ET son
+  verrou `evenements_attente/<compte>/<type>/<cible>` (`{id, at}`, `at` à l'heure du serveur) dans la
+  même requête. Les règles refusent l'un sans l'autre, et un deuxième tant que le premier est dans la
+  file ou date de moins de 30 s. La cible est l'athlète (`reponse_*`), le défi (`defi_*`) ou `-`, et
+  elle doit exister (un coach ne vise que ses athlètes, un défi que son Canal). Testé sur l'émulateur :
+  `node test/regles-evenements.emu.mjs` (Java et l'émulateur de la Realtime Database requis).
+
+## L'aperçu des pages publiques (`src/pages.js`)
+
+`/@<pseudo>` et `/coach/<slug>` : `firebase.json` y redirige, et le Worker
+sert la page avec l'aperçu de la personne (WhatsApp, DM Instagram), mis en
+cache 6 h. Deux sous-requêtes au plus par page non cachée. Mise en ligne et
+vérification à la main : `docs/apercu-liens.md`.
+
+## Tenir dans le plan gratuit (`src/planif.js`)
+
+- **Budget dans les boucles internes aussi.** Un réveil s'arrête à 38 requêtes (plafond : 50) et à
+  5 chiffrements de push (~1,3 ms chacun, plafond de calcul : 10 ms). Envoyer un défi à tous les
+  athlètes, le rappel des 48 h, les messages de la nuit (8 h 05), les vues des ambassadeurs, les fins
+  PayPal des coachs : chaque boucle regarde le budget **avant** chaque tour. Quand il ne suffit plus,
+  elle écrit la suite en **sous-tâches** (type `tache`, une par athlète, compte ou ambassadeur) au bout
+  de `/evenements`, en une seule écriture, et rend la main. Les règles refusent ce type à l'app.
+- **Un échec ne bloque rien.** Un événement ou une sous-tâche qui lève repart **en fin de file** avec
+  `essais` + 1 et l'erreur. Au 5e échec, il est rangé dans `evenements_ko/` et retiré de la file. Un
+  travail du jour qui lève cinq réveils de suite y va aussi, et ne tourne plus ce jour-là.
+  `evenements_ko` s'affiche en tête de l'écran Ambassadeurs (quoi, pour qui, pourquoi), avec un
+  bouton « Vu, effacer ».
+- **Verrou.** `worker/verrou` = `{jusqua, id, fileLe}`, pris en transaction pour 55 s. Deux exécutions
+  (la minute et un `/reveil`) ne traitent jamais la file ensemble ; un bail laissé par une exécution
+  morte expire seul.
+- **`/reveil`** ne fait rien si la file a été parcourue il y a moins de 30 s (`fileLe`).
+- **Purge** : le 1er du mois, 4 h 10, `paypal_evenements` de plus de 90 jours (PayPal ne renvoie
+  plus rien après trois jours), par lots de 200, les plus anciens d'abord (`.indexOn: ["at"]`).
+
+## Limites
+
+- **`/sante?cles=1`** interroge PayPal et Cloudinary : il est réservé à l'administrateur. Poser le
+  secret une fois (un long mot de passe au hasard, gardé dans `RepCore-secrets`) :
+  ```
+  npx wrangler@4 secret put ADMIN_SECRET
+  ```
+  puis, pour vérifier les clés (PowerShell) :
+  ```
+  $s = Get-Content C:\Users\kevin\RepCore-secrets\admin-secret.txt
+  Invoke-RestMethod https://repcore-serveur.repcore.workers.dev/sante?cles=1 -Headers @{Authorization="Bearer $s"}
+  ```
+  Sans le secret (ou sans en-tête), la réponse est 401. `/sante` tout court reste public.
+- **`/arrivee` et `/amb-clic`** : 30 appels par minute et par adresse IP, au-delà `429`. C'est la
+  **limitation de débit des Workers** (`[[ratelimits]]` dans `wrangler.toml`, binding
+  `LIMITE_ARRIVEES`), gratuite, sans rien à régler dans le tableau de bord. Les **règles de limitation
+  du pare-feu** (WAF, *Security → WAF → Rate limiting rules*, une règle gratuite) ne s'appliquent
+  qu'à un **domaine à soi** relié à Cloudflare, pas à `*.workers.dev`. Si le serveur passe un jour
+  sur un tel domaine, ajouter en plus : *URI Path* `equals` `/arrivee` ou `/amb-clic`, *Characteristics*
+  = IP, 5 requêtes par 10 secondes (la seule période du plan gratuit), action *Block*.
+
+## Charge
+
+`node test/charge.test.mjs` simule un coach et N athlètes abonnés aux notifications, sur la base en
+mémoire (`CHARGE=10,100,1000` pour choisir N ; `npm test` fait 10 et 100). À chaque réveil : au
+plus 50 requêtes, au plus 5 chiffrements, et chacun reçoit son message une fois.
+
+Mesuré le 27/09/2026 (Node 22). Un réveil par minute :
+
+| abonnés | chemin | réveils (minutes) | fini à | servis | requêtes max / réveil | requêtes en tout | chiffrements max / réveil | calcul médian / max |
+|---|---|---|---|---|---|---|---|---|
+| 10 | défi publié (12 h) | 3 | 12:02 | 10 | 35 | 95 | 4 | 12.5 / 16.5 ms |
+| 10 | série (jeudi 18 h) | 5 | 18:04 | 10 | 38 | 186 | 2 | 5.4 / 9.3 ms |
+| 100 | défi publié (12 h) | 25 | 12:24 | 100 | 35 | 875 | 4 | 9.2 / 14.8 ms |
+| 100 | série (jeudi 18 h) | 50 | 18:49 | 100 | 38 | 1 851 | 2 | 4.3 / 8.7 ms |
+| 1 000 | défi publié (12 h) | 250 | 16:09 | 1 000 | 35 | 8 750 | 4 | 8.7 / 39.9 ms |
+| 1 000 | série (jeudi 18 h) | 360 | 00:00 | **360** | 38 | 13 321 | 2 | 3.9 / 17.2 ms |
+
+Ce qu'il faut en retenir :
+
+- **Le chiffrement d'un push coûte ~1,2 ms** : 5 par réveil au plus (`MAX_CHIFFREMENTS`), soit ~6 ms,
+  sous les 10 ms. Au-delà, la suite part au réveil suivant. En pratique ce plafond ne mord pas :
+  **ce sont les 50 requêtes qui bornent** (un push en coûte 7 à 8 : préférences, journal du jour,
+  abonnements, transaction, envoi), soit 4 push par minute par la file, 2 par un rappel planifié
+  (qui relit en plus 3 à 5 champs du dossier).
+- Le « calcul » est celui de Node, hors base simulée mais avec ses réponses fabriquées : une
+  estimation haute. Les pics (premier réveil, JIT) ne se reproduisent pas dans un Worker chaud.
+- **À 1 000 abonnés, la série du jeudi ne passe pas** : 2 par minute de 18 h à 21 h, puis les heures
+  calmes ; à minuit, 640 n'ont rien reçu. Un défi publié arrive à tous, en 4 h. Les leviers, si on
+  y arrive : lire en une requête ce que les rappels planifiés lisent en cinq, commencer la série
+  plus tôt, ou passer au plan payant de Cloudflare (bien plus de requêtes par exécution).
+
 - **PayPal** (`POST /paypal`) : chaque événement est vérifié chez PayPal (signature).
   - **Une seule fois** : `paypal_evenements/<id>` passe à `en_cours` avant le traitement, à `fait`
     après son succès seulement. Un renvoi d'un événement `fait` : 200. Pendant un `en_cours` de moins
@@ -204,6 +290,8 @@ propre processus, l'un après l'autre, et le tout échoue si un seul échoue. Au
 | `remboursements.test.mjs` | remboursement total d'un premier paiement, mois consommé (dette puis soldée), mois retiré d'un accès, rétrofacturation, remboursement partiel puis solde, litige ouvert puis gagné (push à Kevin), litige perdu puis rétrofacturation, litige perdu en partie, paiement suivant remboursé, paiement d'avant le registre, programme remboursé |
 | `paypal.test.mjs` | les webhooks PayPal : signature, double envoi, erreur puis renvoi, `en_cours` repris, orphelin rejoué, liaison par `custom_id`, paiement après annulation, suspension + annulation avec mois en réserve, ancien abonnement annulé, coach qui repaie, montants contre `OFFRES_PAYPAL`, achat de programme, jeton en cache |
 | `push.test.mjs` | chiffrement RFC 8291 et jeton VAPID, vérifiés côté appareil |
+| `planif.test.mjs` | la file sous contrainte : échec en fin de file puis `evenements_ko` au 5e, erreur puis réussite, verrou (deux exécutions, bail échu), `/reveil` à moins de 30 s, défi à 30 athlètes et rappel des 48 h en sous-tâches, ambassadeurs et fins de coachs différés, purge des 90 jours, `/sante?cles=1` protégé, limite par IP |
+| `charge.test.mjs` | charge simulée (10 et 100 abonnés ; 1 000 avec `CHARGE=10,100,1000`) : requêtes, chiffrements et calcul par réveil |
 
 Un fichier seul : `node test/index.test.mjs` (depuis `cloudflare/`).
 

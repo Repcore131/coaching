@@ -75,7 +75,15 @@
    "name": "Puis-je annuler ?",
    "acceptedAnswer": {
     "@type": "Answer",
-    "text": "Oui, à tout moment et sans justification. L'abonnement est sans engagement : la résiliation se fait depuis ton compte PayPal, en une manipulation, et prend effet à la fin de la période déjà payée."
+    "text": "Oui, quand tu veux et sans justification, depuis l'app (Réglages, Mon abonnement, Résilier). L'abonnement engage pour 12 mois : ta résiliation prend effet au bout de ces 12 mois, ton accès reste ouvert jusque-là, et rien n'est reconduit. Si tu ne résilies pas, il continue ensuite mois par mois et s'arrête quand tu veux, à la fin du mois en cours."
+   }
+  },
+  {
+   "@type": "Question",
+   "name": "Un ami m'a invité : qu'est-ce que ça change ?",
+   "acceptedAnswer": {
+    "@type": "Answer",
+    "text": "Son lien t'ouvre 2 mois d'essai au lieu d'un, toute l'app comprise, toujours sans carte bancaire. Et le jour de ton premier paiement, ton ami gagne un mois."
    }
   },
   {
@@ -426,8 +434,17 @@ ul.coches li::before{content:'';position:absolute;left:0;top:4px;width:17px;heig
 .offre ul.coches{flex:1;margin:22px 0 24px}
 .offre ul.coches li{font-size:14px}
 .offre .cta{width:100%}
-.essai{margin-top:26px;text-align:center;font-size:14px;color:#bdbdbd}
+.essai{margin-top:26px;text-align:center;font-size:14px;color:#bdbdbd;max-width:640px;margin-left:auto;margin-right:auto;line-height:1.6}
 .essai strong{color:#fff}
+/* Les deux promesses de l'essai : ce qui fait passer le pas, donc en tête. */
+.cadeaux{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin:22px auto 4px;max-width:640px}
+.cadeau{flex:1 1 240px;background:#121212;border:1px solid #262626;border-radius:14px;padding:14px 18px;text-align:left}
+.cadeau b{display:block;font-family:'Bebas Neue',var(--pile-titre);font-weight:400;font-size:26px;letter-spacing:1px;color:#fff;line-height:1.05}
+.cadeau>span{font-size:13px;color:#bdbdbd}
+.cadeau.ami{border-color:var(--red)}
+.promesse{margin-top:14px;font-size:13px;color:#bdbdbd}
+.promesse b{color:#fff}
+.invite .promesse b.ami,.invite .cadeau.ami b{color:var(--red)}
 /* ---------- coaching humain ---------- */
 .ancre{display:grid;grid-template-columns:1.2fr .8fr;gap:30px;align-items:center;
   background:linear-gradient(120deg,#170909,#0f0f0f 60%);border:1px solid rgba(224,32,32,.35);border-radius:20px;padding:40px}
@@ -533,6 +550,7 @@ footer a{color:var(--dim);margin:0 8px}
           <a class="cta" href="app/#install">Essayer gratuitement 1&nbsp;mois</a>
           <a class="cta ghost" href="#tarifs">Voir les tarifs</a>
         </div>
+        <p class="promesse"><b><span data-nb="essai.mois">1</span>&nbsp;mois d'essai</b>, toute l'app ouverte, sans carte · <b class="ami"><span data-nb="essai.moisParraine">2</span>&nbsp;mois</b> si un ami t'invite</p>
         <a class="auteur" href="#coaching"><img src="app/img/vente/kevin-96.webp" width="48" height="48" alt="">
           <span>Créée par <b>Kevin Guellec</b>, coach diplômé d'État</span></a>
       </div>
@@ -705,7 +723,7 @@ footer a{color:var(--dim);margin:0 8px}
     </div>
     <div class="center" style="margin-top:44px">
       <a class="cta" href="app/#install">Essayer gratuitement 1&nbsp;mois</a>
-      <p class="note" style="margin-top:12px;font-size:12.5px;color:#9a9a9a">Tout Ultime ouvert pendant l'essai. Sans carte bancaire.</p>
+      <p class="note" style="margin-top:12px;font-size:12.5px;color:#9a9a9a">Toute l'app ouverte pendant l'essai, sans carte bancaire. <span data-nb="essai.moisParraine">2</span>&nbsp;mois si un ami t'invite.</p>
     </div>
   </div>
 </section>
@@ -714,31 +732,35 @@ footer a{color:var(--dim);margin:0 8px}
   <div class="wrap center">
     <p class="eyebrow">Tarifs</p>
     <h2>Commence gratuitement.<br><em>Choisis après.</em></h2>
-    <p class="lead">Pendant un mois, tout est ouvert : Ultime complet, sans carte bancaire. À la fin, tu gardes la formule qui te va, ou tu t'arrêtes. Rien n'est prélevé sans ton accord.</p>
-    <div class="bascule" role="group" aria-label="Période de facturation">
-      <button type="button" data-periode="mois" aria-pressed="true">Mensuel</button>
-      <button type="button" data-periode="an" aria-pressed="false">Annuel<span class="eco">−2 mois</span></button>
+    <div class="cadeaux">
+      <div class="cadeau"><b><span data-nb="essai.mois">1</span>&nbsp;mois d'essai</b><span>Toute l'app ouverte, Ultime compris. Sans carte bancaire.</span></div>
+      <div class="cadeau ami"><b><span data-nb="essai.moisParraine">2</span>&nbsp;mois si un ami t'invite</b><span>Son lien double ton essai. Toujours sans carte.</span></div>
+    </div>
+    <p class="lead">À la fin de l'essai, tu choisis ta formule, ou tu t'arrêtes. Rien n'est prélevé sans ton accord.</p>
+    <div class="bascule" role="group" aria-label="Façon de régler">
+      <button type="button" data-periode="mois" aria-pressed="true">Chaque mois</button>
+      <button type="button" data-periode="an" aria-pressed="false">En une fois</button>
     </div>
     <div class="prix">
       <div class="offre">
         <h3>Essentielle</h3>
         <p class="pour">Tu t'entraînes seul et tu veux un carnet sérieux.</p>
-        <div class="montant" data-m="9,95&nbsp;€" data-a="8,25&nbsp;€">9,95&nbsp;€<small> /mois</small></div>
-        <p class="facture" data-m="sans engagement" data-a="99&nbsp;€ facturés une fois par an">sans engagement</p>
+        <div class="montant" data-tarif-m="essentielle.mois" data-m="9,50&nbsp;€" data-tarif-a="essentielle.an" data-a="114&nbsp;€"><span data-tarif="essentielle.mois">9,50&nbsp;€</span><small> /mois</small></div>
+        <p class="facture" data-m="engagement 12&nbsp;mois">engagement 12&nbsp;mois</p>
         <ul class="coches" style="text-align:left">
           <li>Tu composes tes séances et tu les enchaînes</li>
           <li>Charges proposées, séries, minuteur</li>
           <li>Historique, bilans, poids, nutrition</li>
           <li>Sommeil, pas et suivi du cycle</li>
         </ul>
-        <a class="cta ghost" href="app/#install">Essayer 1 mois gratuit</a>
+        <a class="cta ghost" href="app/#install">Essayer 1&nbsp;mois gratuit</a>
       </div>
       <div class="offre vedette">
         <span class="ruban">Tout inclus</span>
         <h3>Ultime</h3>
         <p class="pour">Tu veux tout ce qu'un coach utilise, sans le coach.</p>
-        <div class="montant" data-m="24,90&nbsp;€" data-a="20,75&nbsp;€">24,90&nbsp;€<small> /mois</small></div>
-        <p class="facture" data-m="sans engagement" data-a="249&nbsp;€ facturés une fois par an">sans engagement</p>
+        <div class="montant" data-tarif-m="ultime.mois" data-m="24,90&nbsp;€" data-tarif-a="ultime.an" data-a="298,80&nbsp;€"><span data-tarif="ultime.mois">24,90&nbsp;€</span><small> /mois</small></div>
+        <p class="facture" data-m="engagement 12&nbsp;mois">engagement 12&nbsp;mois</p>
         <ul class="coches" style="text-align:left">
           <li><strong>Tout Essentielle</strong>, plus&nbsp;:</li>
           <li>Plus de 400 exercices filmés, avec les erreurs à éviter</li>
@@ -746,10 +768,10 @@ footer a{color:var(--dim);margin:0 8px}
           <li>Méthodes d'intensification et échauffements tout faits</li>
           <li>Planification de tes blocs et diète calculée</li>
         </ul>
-        <a class="cta" href="app/#install">Essayer 1 mois gratuit</a>
+        <a class="cta" href="app/#install">Essayer 1&nbsp;mois gratuit</a>
       </div>
     </div>
-    <p class="essai"><strong>Paiement sécurisé par PayPal.</strong> Résiliation depuis ton compte PayPal, effective à la fin de la période payée.</p>
+    <p class="essai"><strong>Engagement de <span data-nb="engagementMois">12</span>&nbsp;mois</strong>&nbsp;: tu règles chaque mois ou en une fois, pour le même total, et si tu résilies en cours de route, ton accès reste ouvert jusqu'au bout des <span data-nb="engagementMois">12</span>&nbsp;mois, sans reconduction pour une nouvelle année.<br>Paiement sécurisé par PayPal.</p>
   </div>
 </section>
 
@@ -765,9 +787,9 @@ footer a{color:var(--dim);margin:0 8px}
         </div>
         <p class="lead">Coach diplômé d'État, créateur de RepCore. Un programme construit pour toi, des bilans lus et commentés, la correction vidéo de tes mouvements. L'application est incluse dans chaque formule.</p>
         <div class="compare" aria-label="Comparaison de prix" style="margin-top:22px">
-          <div class="ligne"><span>Coach en salle, 2 séances par semaine</span><b>400 à 640&nbsp;€/mois</b></div>
-          <div class="ligne"><span>Programme personnalisé + 3 mois d'app</span><b>99&nbsp;€</b></div>
-          <div class="ligne moi"><span>Coaching suivi, sur 6 mois</span><b>100&nbsp;€/mois</b></div>
+          <div class="ligne"><span>Coach en salle, 2 séances par semaine</span><b data-hors-tarif>400 à 640&nbsp;€/mois</b></div>
+          <div class="ligne"><span>Programme personnalisé + <span data-nb="coaching.programme_perso.mois">3</span> mois d'app</span><b><span data-tarif="coaching.programme_perso.prix">99&nbsp;€</span></b></div>
+          <div class="ligne moi"><span>Coaching suivi, sur <span data-nb="coaching.coaching_evolution.mois">6</span> mois</span><b><span data-tarif="coaching.coaching_evolution.parMois">100&nbsp;€</span>/mois</b></div>
         </div>
         <p style="margin-top:22px"><a class="cta" href="https://beacons.ai/kevin.gllc" rel="noopener" target="_blank">Voir les formules de coaching</a></p>
       </div>
@@ -811,9 +833,15 @@ footer a{color:var(--dim);margin:0 8px}
       diète calculée. L'essai ouvre Ultime : tu vois la différence avant de choisir.</p></details>
 
     <details><summary>Puis-je annuler&nbsp;?</summary>
-      <p>Oui, à tout moment et sans justification. L'abonnement est sans
-      engagement&nbsp;: la résiliation se fait depuis ton compte PayPal, en une manipulation,
-      et prend effet à la fin de la période déjà payée.</p></details>
+      <p>Oui, quand tu veux et sans justification, depuis l'app (Réglages, Mon abonnement,
+      Résilier). L'abonnement engage pour <span data-nb="engagementMois">12</span>&nbsp;mois&nbsp;: ta résiliation prend
+      effet au bout de ces <span data-nb="engagementMois">12</span>&nbsp;mois, ton accès reste ouvert jusque-là, et rien n'est
+      reconduit. Si tu ne résilies pas, il continue ensuite mois par mois et s'arrête quand tu
+      veux, à la fin du mois en cours.</p></details>
+
+    <details><summary>Un ami m'a invité&nbsp;: qu'est-ce que ça change&nbsp;?</summary>
+      <p>Son lien t'ouvre <span data-nb="essai.moisParraine">2</span>&nbsp;mois d'essai au lieu d'un, toute l'app comprise, toujours
+      sans carte bancaire. Et le jour de ton premier paiement, ton ami gagne un mois.</p></details>
 
     <details><summary>Faut-il installer quelque chose&nbsp;?</summary>
       <p>Non. RepCore s'ouvre dans le navigateur. Tu peux ensuite l'ajouter à ton écran
@@ -843,7 +871,7 @@ footer a{color:var(--dim);margin:0 8px}
 <section class="final">
   <div class="wrap center">
     <h2>Programme, charges, diète, bilans.<br><em>Dans une seule application.</em></h2>
-    <p class="lead">Un mois complet, offert. Installe l'application en un geste.</p>
+    <p class="lead">Un mois complet, offert, sans carte. Deux si un ami t'invite. Installe l'application en un geste.</p>
     <div class="ctas">
       <a class="cta" href="app/#install">Essayer gratuitement 1&nbsp;mois</a>
       <a class="cta ghost" href="app/">Ouvrir dans le navigateur</a>
@@ -867,18 +895,20 @@ footer a{color:var(--dim);margin:0 8px}
 </div>
 
 <script>
-/* Bascule mensuel / annuel. Les deux prix sont ECRITS dans la page (data-m,
-   data-a) : sans script, le visiteur voit le mensuel, qui est vrai. */
+/* Bascule « chaque mois » / « en une fois ». Les deux prix sont ECRITS dans la
+   page (data-m, data-a, recopies de tarifs.json par scripts/tarifs.mjs) : sans
+   script, le visiteur voit le mensuel, qui est vrai. Il n'y a pas de remise :
+   en une fois, c'est le meme total, et la page ne dit pas autre chose. */
 (function(){
   try{
     var bs=document.querySelectorAll('.bascule button');
     function poser(p){
       bs.forEach(function(b){ b.setAttribute('aria-pressed', b.getAttribute('data-periode')===p?'true':'false'); });
       document.querySelectorAll('.montant[data-m]').forEach(function(e){
-        e.innerHTML=(p==='an'?e.getAttribute('data-a'):e.getAttribute('data-m'))+'<small> /mois</small>';
+        e.innerHTML=(p==='an'?e.getAttribute('data-a'):e.getAttribute('data-m'))+(p==='an'?'<small> pour 12&nbsp;mois</small>':'<small> /mois</small>');
       });
       document.querySelectorAll('.facture[data-m]').forEach(function(e){
-        e.innerHTML=p==='an'?e.getAttribute('data-a'):e.getAttribute('data-m');
+        e.innerHTML=p==='an'?'réglé en une fois, le même total que 12 mensualités':e.getAttribute('data-m');
       });
     }
     bs.forEach(function(b){ b.addEventListener('click',function(){ poser(b.getAttribute('data-periode')); }); });
@@ -932,6 +962,9 @@ footer a{color:var(--dim);margin:0 8px}
   try{
     var p=new URLSearchParams(location.search), g=new URLSearchParams();
     ['amb','ref','src','coach'].forEach(function(k){ var v=p.get(k); if(v) g.set(k,v.slice(0,40)); });
+    // Arrivé par un ami (ref) ou un ambassadeur (amb) : son essai est doublé,
+    // la page le met en avant.
+    if(g.get('ref')||g.get('amb')) document.body.classList.add('invite');
     var q=g.toString(); if(!q) return;
     document.querySelectorAll('a[href^="app/"]').forEach(function(a){
       var h=a.getAttribute('href'), i=h.indexOf('#');

@@ -355,14 +355,19 @@ await test('la table OFFRES du serveur suit les plans et les prix de l’app', a
   const plans = [...code.matchAll(/const (PAYPAL_PLAN_ID\w*)='(P-[A-Z0-9]+)'/g)];
   assert.ok(plans.length >= 7, plans.length + ' plans lus dans l’app');
   for (const [, nom, id] of plans) assert.ok(OFFRES_PAYPAL[id], nom + ' (' + id + ') absent de OFFRES_PAYPAL');
-  const prix = (cle, champ) => Number(code.match(new RegExp('\\b' + cle + ':\\s*Object\\.freeze\\(\\{[^}]*?\\b' + champ + ':\\s*([0-9.]+)'))[1]);
+  // Les prix de l'app viennent de tarifs.json, recopié dans rc-core (bloc TARIFS).
+  const tarifs = JSON.parse(readFileSync(new URL('../../tarifs.json', import.meta.url), 'utf8'));
+  assert.ok(code.includes('/* TARIFS:DEBUT */\nconst TARIFS=') && code.includes('prix:TARIFS.essentielle.mois'), 'l’app lit tarifs.json');
+  const prix = (cle, champ) => tarifs[cle][champ === 'prixAn' ? 'an' : 'mois'];
   const a = (id) => OFFRES_PAYPAL[id].montants.map(Number);
   const id = (nom) => plans.find((p) => p[1] === nom)[2];
   assert.ok(a(id('PAYPAL_PLAN_ID')).includes(prix('essentielle', 'prix')), 'Essentielle mensuel');
   assert.ok(a(id('PAYPAL_PLAN_ID_ANNUEL')).includes(prix('essentielle', 'prixAn')), 'Essentielle annuel');
   assert.ok(a(id('PAYPAL_PLAN_ID_ULTIME')).includes(prix('ultime', 'prix')), 'Ultime mensuel');
   assert.ok(a(id('PAYPAL_PLAN_ID_ULTIME_ANNUEL')).includes(prix('ultime', 'prixAn')), 'Ultime annuel');
-  assert.ok(a(id('PAYPAL_PLAN_ID_ULTIME_DEMI')).includes(Math.round(prix('ultime', 'prix') * 50) / 100), 'Ultime demi');
+  assert.ok(a(id('PAYPAL_PLAN_ID_ULTIME_DEMI')).includes(tarifs.ultime_demi.premierMois), 'Ultime demi');
+  assert.ok(a(id('PAYPAL_PLAN_ID_COACH')).includes(tarifs.coach.coach), 'Coach');
+  assert.ok(a(id('PAYPAL_PLAN_ID_PRO')).includes(tarifs.coach.pro), 'Pro');
   // L'app crée bien abonnements et commandes avec le compte dans custom_id.
   assert.match(code, /subscription\.create\(\{'plan_id':planId,'custom_id':_cleComptePaypal\(\)\}\)/);
   assert.equal((code.match(/custom_id:_cleComptePaypal\(\)\+'\|'\+p\.id/g) || []).length, 2);

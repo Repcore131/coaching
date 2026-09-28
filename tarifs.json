@@ -1,0 +1,19 @@
+{
+  "_lisezmoi": "LES PRIX DE REPCORE, ÉCRITS UNE SEULE FOIS, en euros TTC. Après modification : python3 scripts/tarifs.py (recopie dans l'app, index.html et terms.html), puis node scripts/verif/tarifs.mjs. Un prix PayPal se change à part : node scripts/paypal_plans.mjs --tarifs.",
+  "devise": "EUR",
+  "engagementMois": 12,
+  "essentielle": { "mois": 9.5, "an": 114 },
+  "ultime": { "mois": 24.9, "an": 298.8 },
+  "ultime_demi": { "part": 0.5, "premierMois": 12.45 },
+  "essai": { "mois": 1, "jours": 30, "carte": false },
+  "essai_parrainage": { "moisEnPlus": 1 },
+  "coach": { "libre": 0, "coach": 19, "pro": 39 },
+  "coaching": {
+    "programme_perso": { "prix": 99, "mois": 3 },
+    "revision_prog": { "prix": 40, "mois": 1 },
+    "boutique_prog": { "prix": 14.9, "mois": 3 },
+    "coaching_essentiel": { "prix": 150, "mois": 1 },
+    "coaching_transfo": { "prix": 350, "mois": 3 },
+    "coaching_evolution": { "prix": 600, "mois": 6 }
+  }
+}

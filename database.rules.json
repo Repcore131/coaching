@@ -1198,12 +1198,35 @@
           "nom": { ".validate": "newData.isString() && newData.val().length <= 20" },
           "$autre": { ".validate": false }
         },
+        // La jauge de volts : le total, le seuil du rang atteint, celui du suivant (0 au maximum).
+        "volts": {
+          "xp": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000000" },
+          "de": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000000" },
+          "a":  { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000000" },
+          "$autre": { ".validate": false }
+        },
         "serie":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 1000" },
+        // Les 12 dernieres semaines : 1 validee, 0 manquee, e la semaine en cours.
+        "semaines": { ".validate": "newData.isString() && newData.val().matches(/^[01]{11}[01e]$/)" },
         "seances": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000" },
         "badges": {
           "$i": {
             "id":  { ".validate": "newData.isString() && newData.val().length <= 40" },
             "nom": { ".validate": "newData.isString() && newData.val().length <= 40" },
+            // Des chemins d'images de l'app, rien d'autre (pas d'adresse externe).
+            "img":   { ".validate": "newData.isString() && newData.val().matches(/^img\\/badges\\/[a-z0-9_-]+\\.(webp|png)$/)" },
+            "repli": { ".validate": "newData.isString() && newData.val().matches(/^img\\/badges\\/[a-z0-9_-]+\\.(webp|png)$/)" },
+            "secret": { ".validate": "newData.isBoolean()" },
+            "$autre": { ".validate": false }
+          }
+        },
+        // LES CHARGES, seulement si l'athlete a coche « Mes 3 meilleurs records ».
+        "meilleurs": {
+          "$i": {
+            ".validate": "$i.matches(/^[0-2]$/)",
+            "exo":  { ".validate": "newData.isString() && newData.val().length <= 60" },
+            "kg":   { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 1000" },
+            "date": { ".validate": "newData.isNumber()" },
             "$autre": { ".validate": false }
           }
         },
@@ -1269,11 +1292,19 @@
           ".validate": "$code.matches(/^[A-Z]{4,6}[A-Z2-9]{3}$/) && newData.isString()"
         }
       },
+      // LISIBLE SANS COMPTE, CODE PAR CODE (la page /i accueille le filleul par
+      // le prenom de son parrain avant toute inscription). Jamais la liste :
+      // pas de .read sur codesPublics lui-meme. Rien d autre que le prenom
+      // affiche et le rang (1 a 10), que le parrain tient a jour.
       "codesPublics": {
         "$code": {
-          ".read": "auth != null",
+          ".read": true,
           ".write": "auth != null && !data.exists() && newData.parent().parent().child('codes').child($code).val() === auth.token.email.replace('.', ',')",
           "prenom": { ".validate": "newData.isString() && newData.val().length <= 24" },
+          "rang": {
+            ".write": "auth != null && root.child('parrainage').child('codes').child($code).val() === auth.token.email.replace('.', ',')",
+            ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10 && newData.val() % 1 === 0"
+          },
           "$autre": { ".validate": false }
         }
       },
@@ -1324,12 +1355,20 @@
     // L app depose, le Worker releve chaque minute et supprime. Ecrit UNE fois
     // par le compte connecte (par = sa cle), jamais relu par un client. Le
     // Worker ne croit rien sur parole : il relit la base avant d agir.
+    //
+    // UN SEUL EN ATTENTE PAR TYPE, PAR COMPTE ET PAR CIBLE, ET PAS PLUS D UN
+    // TOUTES LES 30 s : l evenement s ecrit DANS LA MEME requete que son
+    // verrou evenements_attente/<par>/<type>/<cible> (voir plus bas), qui
+    // refuse tant que le precedent est dans la file. La cible est ce que
+    // l evenement vise : l athlete (reponse_*), le defi (defi_*), '-' sinon —
+    // et elle doit exister : un coach ne vise que ses athletes, un defi que
+    // son Canal. Une file inondee par un compte, c est fini.
     "evenements": {
       ".read": false,
       "$id": {
-        ".write": "auth != null && !data.exists() && newData.exists() && newData.child('par').val() === auth.token.email.replace('.', ',')",
-        ".validate": "$id.matches(/^e[a-z0-9]{8,24}$/) && newData.hasChildren(['type', 'par', 'at'])",
-        "type":  { ".validate": "newData.isString() && newData.val().matches(/^(reponse_bilan|reponse_rite|defi_publie|defi_maj|parrainage_demande|ambassadeur_demande|abonnement)$/)" },
+        ".write": "auth != null && !data.exists() && newData.exists() && newData.child('par').val() === auth.token.email.replace('.', ',') && newData.parent().parent().child('evenements_attente').child(newData.child('par').val()).child(newData.child('type').val()).child(newData.child('cible').val()).child('id').val() === $id",
+        ".validate": "$id.matches(/^e[a-z0-9]{8,24}$/) && newData.hasChildren(['type', 'par', 'at', 'cible'])",
+        "type":  { ".validate": "newData.isString() && newData.val().matches(/^(reponse_bilan|reponse_rite|defi_publie|defi_maj|parrainage_demande|ambassadeur_demande|abonnement|filleul_seance)$/)" },
         "par":   { ".validate": "newData.isString() && newData.val().length <= 200" },
         "at":    { ".validate": "newData.isNumber() && newData.val() > 0" },
         "dest":  { ".validate": "newData.isString() && newData.val().length <= 200" },
@@ -1338,8 +1377,35 @@
         "id":    { ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,60}$/)" },
         "coach": { ".validate": "newData.isString() && newData.val().length <= 200" },
         "abo":   { ".validate": "newData.isString() && newData.val().matches(/^I-[A-Z0-9]{6,30}$/)" },
+        "cible": { ".validate": "newData.isString() && (((newData.parent().child('type').val() === 'reponse_bilan' || newData.parent().child('type').val() === 'reponse_rite') && newData.val() === newData.parent().child('dest').val() && root.child('users').child(newData.val()).child('coachEmailKey').val() === auth.token.email.replace('.', ',')) || (newData.parent().child('type').val() === 'defi_maj' && newData.val() === newData.parent().child('id').val() && root.child('canaux').child(newData.parent().child('coach').val()).child('messages').child(newData.val()).child('type').val() === 'defi') || (newData.parent().child('type').val() === 'defi_publie' && newData.val() === newData.parent().child('msg').val() && root.child('canaux').child(auth.token.email.replace('.', ',')).child('messages').child(newData.val()).child('type').val() === 'defi') || ((newData.parent().child('type').val() === 'parrainage_demande' || newData.parent().child('type').val() === 'ambassadeur_demande' || newData.parent().child('type').val() === 'abonnement') && newData.val() === '-') || (newData.parent().child('type').val() === 'filleul_seance' && newData.val() === '-' && root.child('parrainage').child('liens').child(auth.token.email.replace('.', ',')).exists()))" },
         "$autre": { ".validate": false }
       }
+    },
+    // LE VERROU DE CHAQUE EVENEMENT EN ATTENTE : { id, at }. at est l heure
+    // du SERVEUR (l app envoie {".sv": "timestamp"}) : une horloge de
+    // telephone ne raccourcit pas l intervalle. Reecrit seulement quand
+    // l evenement precedent a quitte la file ET qu il date de 30 s au moins.
+    // Le Worker y reporte le nouvel id quand il remet un evenement en fin de file.
+    "evenements_attente": {
+      ".read": false,
+      "$par": {
+        "$type": {
+          "$cible": {
+            ".write": "auth != null && auth.token.email.replace('.', ',') === $par && newData.exists() && (!data.exists() || (!root.child('evenements').child(data.child('id').val()).exists() && now - data.child('at').val() >= 30000))",
+            ".validate": "newData.hasChildren(['id', 'at']) && newData.parent().parent().parent().parent().child('evenements').child(newData.child('id').val()).child('par').val() === $par && newData.parent().parent().parent().parent().child('evenements').child(newData.child('id').val()).child('type').val() === $type && newData.parent().parent().parent().parent().child('evenements').child(newData.child('id').val()).child('cible').val() === $cible",
+            "id": { ".validate": "newData.isString() && newData.val().matches(/^e[a-z0-9]{8,24}$/)" },
+            "at": { ".validate": "newData.val() === now" },
+            "$autre": { ".validate": false }
+          }
+        }
+      }
+    },
+    // CE QUI A ECHOUE CINQ FOIS (evenements, sous-taches, travaux du jour) :
+    // range par le Worker, lu par l administrateur (ecran Ambassadeurs), qui
+    // peut effacer une ligne une fois vue.
+    "evenements_ko": {
+      ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
+      "$id": { ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com' && !newData.exists()" }
     },
     // L etat de travail du Worker (curseurs, comptes en cours) : lui seul.
     "worker": { ".read": false, ".write": false },
@@ -1348,7 +1414,7 @@
     // PayPal cote serveur leger : abonnement -> compte, evenements deja
     // traites, premiers paiements, fins de palier coach. Lui seul.
     "paypal_abonnes":    { ".read": false, ".write": false },
-    "paypal_evenements": { ".read": false, ".write": false },
+    "paypal_evenements": { ".read": false, ".write": false, ".indexOn": ["at"] },
     "paypal_premiers":   { ".read": false, ".write": false },
     "paypal_fins":       { ".read": false, ".write": false },
     // Les evenements PayPal arrives avant que leur abonnement soit relie a un

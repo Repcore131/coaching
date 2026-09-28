@@ -85,8 +85,10 @@ export function creerBase({ url, auth, jeton, fetchImpl }) {
       child: (sous) => ref((c ? c + '/' : '') + sous),
       async get() {
         const rq = requete || {};
-        if (rq.limitToLast && rq.orderBy === '$key') {
-          const v = await lireJson(await appel('GET', c, undefined, { orderBy: '"$key"', limitToLast: String(rq.limitToLast) }), c);
+        if ((rq.limitToLast || rq.limitToFirst) && rq.orderBy === '$key') {
+          const v = await lireJson(await appel('GET', c, undefined, { orderBy: '"$key"',
+            limitToLast: rq.limitToLast ? String(rq.limitToLast) : undefined,
+            limitToFirst: rq.limitToFirst ? String(rq.limitToFirst) : undefined }), c);
           return instantane(cle, v);
         }
         let v = await lireJson(await appel('GET', c), c);
@@ -102,6 +104,13 @@ export function creerBase({ url, auth, jeton, fetchImpl }) {
       async parChamp(champ, valeur, limite) {
         const v = await lireJson(await appel('GET', c, undefined, { orderBy: JSON.stringify(champ),
           equalTo: JSON.stringify(valeur), limitToFirst: limite ? String(limite) : undefined }), c);
+        return v && typeof v === 'object' ? v : {};
+      },
+      // LES PLUS ANCIENS d'abord : `champ` <= `fin`, `limite` au plus, triés
+      // par le serveur (".indexOn" requis). Rend { clé: valeur }.
+      async jusqua(champ, fin, limite) {
+        const v = await lireJson(await appel('GET', c, undefined, { orderBy: JSON.stringify(champ),
+          endAt: JSON.stringify(fin), limitToFirst: limite ? String(limite) : undefined }), c);
         return v && typeof v === 'object' ? v : {};
       },
       async shallow() {
@@ -137,6 +146,7 @@ export function creerBase({ url, auth, jeton, fetchImpl }) {
       orderByChild: (enfant) => ref(c, Object.assign({}, requete, { orderBy: enfant })),
       equalTo: (v) => ref(c, Object.assign({}, requete, { equalTo: v })),
       limitToLast: (n) => ref(c, Object.assign({}, requete, { limitToLast: n })),
+      limitToFirst: (n) => ref(c, Object.assign({}, requete, { limitToFirst: n })),
     };
     return R;
   }

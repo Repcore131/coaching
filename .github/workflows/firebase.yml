@@ -139,6 +139,13 @@ jobs:
       - name: Verifier les regles de la base
         run: node scripts/verif/regles.mjs
 
+      # LES PRIX. tarifs.json est la seule source : l'app en porte une copie,
+      # la page de vente et les CGV lient chaque montant a une de ses cles. Un
+      # prix faux ou ecrit en dur arrete la livraison — la page annoncait
+      # 9,95 EUR « sans engagement » pendant que PayPal encaissait 9,50 sur 12 mois.
+      - name: Verifier les prix
+        run: node scripts/verif/tarifs.mjs
+
       - name: Deployer
         env:
           CLE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

@@ -35,6 +35,7 @@ declare function segMaxMs(): number;
 
 // ── La donnée : lecture, validation, écriture ───────────────────────────────
 declare const DB: { get(cle: string): any; set(cle: string, valeur: any): boolean };
+declare const CLOUD: { pushOne(cle: string, dossier: any): any; [k: string]: any };
 declare let currentUser: any;
 declare function saveUser(): any;
 declare function segmentsVideo(v: any): any[];

@@ -22,7 +22,19 @@
       "**/.*",
       "!.well-known/**"
     ],
-    "//pages": "LES PAGES PUBLIQUES (lien perso). /@<pseudo> sert p/index.html, /coach/<slug> sert c/index.html : deux pages AUTONOMES qui lisent /profils_publics et /vitrines (lecture publique). Leur apercu Open Graph est celui par defaut. LE JOUR DU PLAN BLAZE, remplacer les deux « destination » par « \"function\": {\"functionId\": \"pagePublique\", \"region\": \"europe-west1\"} » : la fonction sert la MEME page avec l'apercu de la personne (nom, rang, photo). Pas avant : une reecriture vers une fonction absente fait echouer le deploiement de l'hebergement.",
+    "//pages": "LES PAGES PUBLIQUES (lien perso). /@<pseudo> et /coach/<slug> sont REDIRIGES (302) vers le Worker Cloudflare (cloudflare/src/pages.js), qui sert la MEME page (p/index.html, c/index.html, relues ici) avec l'apercu Open Graph de la personne : prenom, rang, emblème (rang_<n>-og.jpg), ou nom, phrase et photo du coach. Mis en cache 6 h. Le lien partage garde l'adresse de RepCore ; WhatsApp et Instagram suivent la redirection. Une redirection passe AVANT les reecritures : celles-ci restent en secours (Worker retire, il suffit d'enlever les deux redirections). Le Worker en panne renvoie lui-meme vers p/?u= ou c/?s=, qui marchent sans apercu. La fonction pagePublique (plan Blaze) fait le meme travail : ne l'utiliser qu'a la place du Worker, jamais avec.",
+    "redirects": [
+      {
+        "regex": "^/@(?P<pseudo>[A-Za-z0-9._]{3,20})/?$",
+        "destination": "https://repcore-serveur.repcore.workers.dev/@:pseudo",
+        "type": 302
+      },
+      {
+        "regex": "^/coach/(?P<slug>[A-Za-z0-9-]{3,40})/?$",
+        "destination": "https://repcore-serveur.repcore.workers.dev/coach/:slug",
+        "type": 302
+      }
+    ],
     "rewrites": [
       {
         "source": "/i",

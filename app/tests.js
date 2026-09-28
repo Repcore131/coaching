@@ -16644,7 +16644,9 @@ async function testExercices(){
             const bloc=src.slice(i,i+9000);
             if(bloc.indexOf('REPCORE')<0) return _echec('la signature a disparu');
             // ET ELLE OCCUPE TOUTE L'IMAGE : un fond, pas un autocollant.
-            if(!/cv\.width=STORY_L;\s*cv\.height=STORY_H/.test(bloc))
+            // Story (1080×1920) ou post (1080×1350) : les dimensions viennent du
+            // format choisi (visuelFormat, 27/09/2026), l'image les occupe toutes.
+            if(!/cv\.width=(?:STORY_L|W);\s*cv\.height=(?:STORY_H|H)/.test(bloc)||(bloc.indexOf('STORY_L')<0&&bloc.indexOf('visuelFormat(format)')<0))
               return _echec('l’image ne fait plus le format story');
             if(bloc.indexOf('fillRect(0,0,STORY_L,STORY_H)')<0)
               return _echec('le fond a disparu : l’image redevient transparente');
@@ -49014,7 +49016,8 @@ async function testExercices(){
       if(!/JULIE7K2/.test(t)||!/2 \/ 3 filleuls abonnés/.test(t)||!/2 \/ 10 filleuls abonnés/.test(t)||!/1 mois d’Ultime offert/.test(t)) return _echec(t.slice(0,300));
       if(d.querySelectorAll('.pr-tuile').length!==3||!/5inscrits/.test(d.querySelector('.pr-tuiles').textContent.replace(/\s/g,''))) return _echec('compteurs');
       const b=[...d.querySelectorAll('button.btn')];
-      return (b.length===2&&b.filter(x=>!x.classList.contains('btn-casse')).length===1)?true:_echec('boutons (R31)');})());
+      // La carte d'invitation en tête (rouge), le texte et le lien en second (R31 : un seul bouton en capitales).
+      return (b.length===3&&b.filter(x=>!x.classList.contains('btn-casse')).length===1)?true:_echec('boutons (R31)');})());
     ok('Parrainage : le rappel doux — après un record ou un palier, une fois par semaine',(()=>{
       const u={role:'athlete'}, t=Date.now();
       const c=[
@@ -49052,13 +49055,20 @@ async function testExercices(){
       const S=(j,w)=>({date:t0+j*J,data:{'SQUAT':{sets:[{weight:String(w),reps:'5',done:true}]}}});
       const u=_PPU({sessions:[S(0,100),S(2,105),S(4,110)],weightLog:[{kg:82}],athletePhoto:'https://x/p.jpg',
         bilans:[{date:t0,poids:80}],sleepLog:[{date:'2026-01-05',duration:7}],pseudo:'Juju'});
-      const d=pagePubliqueDonnees(u,{rang:true,serie:true,badges:true,records:true,seances:true},t0+9*J);
-      const permis=['prenom','rang','serie','seances','badges','records','ref','maj'];
+      // LES CHOIX PAR DÉFAUT (tout sauf les charges) : aucune charge, aucune mesure.
+      const d=pagePubliqueDonnees(u,pageMontrerDefaut(),t0+9*J);
+      const permis=['prenom','rang','volts','serie','semaines','seances','badges','ref','maj'];
       const trop=Object.keys(d).filter(k=>permis.indexOf(k)<0);
       if(trop.length) return _echec('champs en trop : '+trop.join());
       const txt=JSON.stringify(d);
-      if(/\b(100|105|110|82|80)\b/.test(txt.replace(/"date":\d+|"maj":\d+/g,''))||/photo|poids|kg/i.test(txt)) return _echec('une charge ou une mesure fuit : '+txt);
-      if(!d.records||d.records.length!==1||d.records[0].exo!=='SQUAT'||Object.keys(d.records[0]).join()!=='exo,date') return _echec('records : '+JSON.stringify(d.records));
+      if(/\b(100|105|110|82|80)\b/.test(txt.replace(/"date":\d+|"maj":\d+|"xp":\d+|"de":\d+|"a":\d+/g,''))||/photo|poids|kg/i.test(txt)) return _echec('une charge ou une mesure fuit : '+txt);
+      if(pageMontrerDefaut().meilleurs!==false) return _echec('les charges cochées par défaut');
+      // Cochée : les 3 meilleurs records, avec la charge. Le poids de corps, jamais.
+      const m=pagePubliqueDonnees(u,Object.assign(pageMontrerDefaut(),{meilleurs:true}),t0+9*J);
+      if(!m.meilleurs||m.meilleurs.length!==1||m.meilleurs[0].exo!=='SQUAT'||m.meilleurs[0].kg!==110||Object.keys(m.meilleurs[0]).join()!=='exo,kg,date') return _echec('meilleurs : '+JSON.stringify(m.meilleurs));
+      if(/\b(82|80)\b|photo|poids/i.test(JSON.stringify(m).replace(/"date":\d+|"maj":\d+/g,''))) return _echec('une mesure fuit avec les charges');
+      // L'ancien choix « records » ne publie plus rien.
+      if(pagePubliqueDonnees(u,{records:true},t0).records) return _echec('ancien choix records');
       const rien=pagePubliqueDonnees(u,{},t0);
       return (Object.keys(rien).sort().join()==='maj,prenom,ref')?true:_echec('sans choix : '+Object.keys(rien).join());})());
     ok('Pages : la vitrine publique — sans base64, sans coordonnées, en https seulement',(()=>{
@@ -49076,7 +49086,10 @@ async function testExercices(){
     ok('Pages : le partage d’un visuel copie le lien perso, avec son type (src)',(()=>{
       if(srcDuVisuel('repcore-seance.png')!=='seance'||srcDuVisuel('repcore-cycle-rouge.jpg')!=='cycle'||srcDuVisuel('x.png')!=='visuel') return _echec('src');
       const a=String(_storySortirPartage), b=String(_storySortirTelechargement);
-      if(a.indexOf('_storyCopierLien(srcDuVisuel(nomFichier))')<0||b.indexOf('_storyCopierLien(srcDuVisuel(nomFichier))')<0) return _echec('copie absente d’une sortie');
+      // Depuis la légende des posts (28/09/2026) : les deux sorties passent par
+      // _storyCopierSelonFormat, qui copie le LIEN en story et la légende en post.
+      if(a.indexOf('_storyCopierSelonFormat(nomFichier')<0||b.indexOf('_storyCopierSelonFormat(nomFichier')<0) return _echec('copie absente d’une sortie');
+      if(String(_storyCopierSelonFormat).indexOf('_storyCopierLien(srcDuVisuel(nomFichier))')<0) return _echec('la story ne copie plus le lien');
       return /Sticker > Lien > coller/.test(String(_storyCopierLien))?true:_echec('toast');})());
     ok('Pages : le tuto du sticker Lien — trois étapes, images fixes, une seule fois',(()=>{
       const d=document.createElement('div'); d.innerHTML=htmlTutoSticker();
@@ -49090,6 +49103,8 @@ async function testExercices(){
       const d=document.createElement('div'); d.innerHTML=htmlReglagesPagePublique(_PPU());
       if(d.querySelector('#pp-active').checked) return _echec('page activée par défaut');
       if(d.querySelectorAll('[data-montrer]').length!==5) return _echec('choix');
+      if(d.querySelector('[data-montrer="meilleurs"]').checked) return _echec('les charges cochées par défaut');
+      if(![...d.querySelectorAll('[data-montrer]')].filter(x=>x.dataset.montrer!=='meilleurs').every(x=>x.checked)) return _echec('les autres choix décochés');
       if(!/Copier mon lien pour ma bio Instagram/.test(d.textContent)) return _echec('bouton bio');
       return d.querySelectorAll('button.btn:not(.btn-casse)').length===0?true:_echec('R31 : bouton en capitales');})());
     ok('Pages : pages publiques et réécritures présentes, lecture publique bornée',(()=>{
@@ -49102,7 +49117,82 @@ async function testExercices(){
       if(fj&&(!/"source": "\/@\*"/.test(fj)||!/"source": "\/coach\/\*"/.test(fj))) return _echec('réécritures');
       return true;})());
     ok('Pages : réglages publics classés non-santé',
-      ['pagePublique','vitrineSlug','vitrinePubliee','specialites'].every(k=>CHAMPS_NON_SANTE.indexOf(k)>=0));
+      ['pagePublique','vitrineSlug','vitrinePubliee','specialites','pagePropose'].every(k=>CHAMPS_NON_SANTE.indexOf(k)>=0));
+    // ══ 28/09/2026 — LA PAGE PUBLIQUE : CONTENU, PROPOSITION, APERÇU ══════
+    ok('Page : les 12 dernières semaines — 1 validée, 0 manquée, e la semaine en cours',(()=>{
+      const t=Date.parse('2026-09-30T12:00:00+02:00');     // un mercredi
+      const l0=_lundiDe(t).getTime();
+      const S=(sem,j)=>({date:_datePlusJours(l0,-7*sem+j).getTime()+10*3600e3});
+      // Quota 1 (aucun programme) : semaines -11, -9, -1 validées ; la semaine en cours pas encore.
+      const u={sessions:[S(11,0),S(9,2),S(1,4)]};
+      const w=semainesPubliques(u,t,12);
+      if(w!=='101000000010'.slice(0,11)+'e') return _echec(w);
+      if(semainesPubliques({sessions:[S(0,0)]},t,12)!=='00000000000'+'1') return _echec('semaine en cours validée');
+      return /^[01]{11}[01e]$/.test(semainesPubliques({},t))?true:_echec('vide');})());
+    ok('Page : la jauge de volts et les badges en images (un secret seulement découvert)',(()=>{
+      const u=_PPU({xp:4100});
+      const v=voltsPublics({xp:4100,sessions:[]});
+      const r=rangDe(xpDe({xp:4100,sessions:[]}));
+      if(v.xp!==Math.round(r.xp)||v.de!==r.rang.seuil||v.a!==(r.suivant?r.suivant.seuil:0)) return _echec(JSON.stringify(v));
+      const sec=BADGES_ACQUIS.find(b=>b.famille==='secret'), nor=BADGES_ACQUIS.find(b=>b.famille!=='secret');
+      if(!sec||!nor) return _echec('badges de test');
+      const d=pagePubliqueDonnees(Object.assign(u,{badges:{[nor.id]:{at:5},[sec.id]:{at:6}}}),{badges:true},10);
+      const b=d.badges||[];
+      const bs=b.find(x=>x.id===sec.id), bn=b.find(x=>x.id===nor.id);
+      if(!bs||!bs.secret||!bn||bn.secret) return _echec(JSON.stringify(b));
+      if(!b.every(x=>/^img\/badges\/[a-z0-9_-]+\.(webp|png)$/.test(x.img||x.repli||''))) return _echec('images : '+JSON.stringify(b));
+      // Non découvert : absent.
+      const d2=pagePubliqueDonnees(_PPU({badges:{[nor.id]:{at:5}}}),{badges:true},10);
+      return !(d2.badges||[]).some(x=>x.secret)?true:_echec('un secret non découvert publié');})());
+    ok('Page : les règles acceptent volts, semaines, badges en images et meilleurs — et rien d’autre',(()=>{
+      const x=new XMLHttpRequest(); x.open('GET','../database.rules.json',false); x.send();
+      const r=x.status===200?x.responseText:'';
+      if(!r) return true;
+      const i=r.indexOf('"profils_publics"'), j=r.indexOf('"slugs"',i), z=r.slice(i,j);
+      for(const k of ['"volts"','"semaines"','"img"','"repli"','"secret"','"meilleurs"','"kg"']) if(z.indexOf(k)<0) return _echec(k+' absent des règles');
+      return /\^\[01\]\{11\}\[01e\]\$/.test(z)&&/newData\.val\(\) <= 1000/.test(z)?true:_echec('bornes');})());
+    ok('Page : proposée au passage de rang — pseudo pré-rempli, un geste ; une fois de plus au rang suivant, puis jamais',(()=>{
+      const u=_PPU({fname:'Élodie Martin'});
+      if(pseudoSuggere(u)!=='elodie.martin') return _echec(pseudoSuggere(u));
+      if(!PSEUDO_PUBLIC_RE.test(pseudoSuggere({fname:'É'}))||!PSEUDO_PUBLIC_RE.test(pseudoSuggere({}))) return _echec('pseudo court');
+      if(!pagePropositionDue(u,3)) return _echec('pas proposée');
+      const sv={s:window.saveUser,u:currentUser};
+      try{
+        window.saveUser=()=>{};
+        _noterPropositionPage(u,3);
+        if(pagePropositionDue(u,3)) return _echec('reproposée au même rang');
+        if(!pagePropositionDue(u,4)) return _echec('pas reproposée au rang suivant');
+        _noterPropositionPage(u,4);
+        if(pagePropositionDue(u,5)) return _echec('proposée une troisième fois');
+        if(pagePropositionDue(_PPU({pagePublique:{pseudo:'x.y',active:true}}),2)) return _echec('proposée à une page active');
+        if(pagePropositionDue({role:'coach',email:'c@t.fr'},2)) return _echec('proposée à un coach');
+        // L'écran de rang la porte, et note le passage.
+        currentUser=_PPU({fname:'Julie'});
+        const h=htmlPropositionPage(currentUser);
+        const d=document.createElement('div'); d.innerHTML=h;
+        const i=d.querySelector('#pp-prop-pseudo'), b=d.querySelector('button');
+        if(!i||i.value!=='julie'||!b||!/activerPageDepuisRang\(this\)/.test(b.getAttribute('onclick'))) return _echec('carte');
+        if(d.querySelectorAll('button').length!==1) return _echec('plus d’un geste');
+        if(!/Jamais de poids, de photo ni de santé/.test(d.textContent)) return _echec('la promesse manque');
+        _rangEcran(3,0);
+        const z=document.getElementById('bdg-ecran');
+        const ok1=!!(z&&z.querySelector('#pp-prop'));
+        _bdgFermerEcran(true);
+        if(!ok1) return _echec('absente de l’écran de rang');
+        if(!(currentUser.pagePropose&&currentUser.pagePropose.fois===1&&currentUser.pagePropose.rang===3)) return _echec('passage non noté');
+        _rangEcran(3,0);
+        const ok2=!document.querySelector('#bdg-ecran #pp-prop');
+        _bdgFermerEcran(true);
+        if(!ok2) return _echec('reproposée au même rang');
+      }finally{ window.saveUser=sv.s; currentUser=sv.u; }
+      return true;})());
+    ok('Page : p/index.html montre l’emblème, la jauge, les 12 semaines, les badges en images, les meilleurs records — jamais une mesure',(()=>{
+      const x=new XMLHttpRequest(); x.open('GET','../p/index.html',false); x.send();
+      const p=x.status===200?x.responseText:'';
+      if(!p) return true;
+      for(const k of ['class="emb"','class="jauge"','class="sem"','class="bdg"','Meilleurs records','onerror']) if(p.indexOf(k)<0) return _echec(k+' absent');
+      if(/poids|photo|sommeil|kcal|mensuration/i.test(p.replace(/<!--[\s\S]*?-->/g,'').replace(/JAMAIS de poids de corps, de photo ni de santé/,''))) return _echec('une mesure dans la page');
+      return true;})());
 
     // ── LES VISUELS DU COACH : VICTOIRE ET RÉCAP D'ÉQUIPE ───────────────
     const _VCJ=864e5, _VCT0=Date.parse('2026-06-01T17:00:00Z');
@@ -49193,6 +49283,697 @@ async function testExercices(){
       if(!/amb-jl-alerte/.test(h)) return _echec('un litige ouvert ne se distingue pas');
       if(!/Aucun remboursement/.test(htmlJournalPaypal({}))) return _echec('journal vide');
       return /illisible/.test(htmlJournalPaypal(null))?true:_echec('journal illisible');})());
+    ok('Serveur léger : l’événement part AVEC son verrou, et la cible que les règles attendent',(()=>{
+      const c=[['reponse_bilan',{dest:'lea@t,fr'},'lea@t,fr'],['reponse_rite',{dest:'lea@t,fr'},'lea@t,fr'],['defi_maj',{coach:'k',id:'d1'},'d1'],
+        ['defi_publie',{msg:'m9'},'m9'],['parrainage_demande',{},'-'],['ambassadeur_demande',{},'-'],['abonnement',{abo:'I-X'},'-']];
+      for(const [type,ev,attendu] of c){ const v=evenementCible(Object.assign({type},ev)); if(v!==attendu) return _echec(type+' → '+v); }
+      if(evenementCible({type:'reponse_bilan'})!=='') return _echec('sans destinataire, rien ne doit partir');
+      const src=String(CLOUD.evenementPoser);
+      if(!/evenements_attente\/'\+ev\.par\+'\/'\+ev\.type\+'\/'\+ev\.cible/.test(src)) return _echec('le verrou n’est pas écrit');
+      if(!/racinePatch/.test(src)||!/'\.sv':'timestamp'/.test(src)) return _echec('pas dans la même requête, ou pas à l’heure du serveur');
+      return true;})());
+    ok('Serveur léger : les tâches abandonnées se lisent dans l’écran admin (quoi, qui, pourquoi)',(()=>{
+      const h=htmlEvenementsKo({e2:{type:'defi_publie',par:'kev@t,fr',msg:'m1',cible:'m1',essais:5,erreur:'base 500 <x>',le:2},
+        e1:{type:'tache',quoi:'push',uid:'lea@t,fr',essais:5,erreur:'x',le:1},
+        e3:{type:'travail',nom:'purge_paypal',essais:5,erreur:'Index not defined',le:3}});
+      if(!/Notification « nouveau défi »/.test(h)||!/Notification différée/.test(h)||!/Travail du jour « purge_paypal »/.test(h)) return _echec('les libellés');
+      if(!/kev@t\.fr/.test(h)||!/lea@t\.fr/.test(h)) return _echec('qui');
+      if(/<x>/.test(h)||!/Motif : base 500 &lt;x&gt;/.test(h)) return _echec('le motif n’est pas échappé');
+      if(h.indexOf('purge_paypal')>h.indexOf('nouveau défi')) return _echec('le plus récent d’abord');
+      if(!/effacerEvenementKo\('e1'/.test(h)) return _echec('pas de bouton pour effacer');
+      if(htmlEvenementsKo({})!=='') return _echec('rien à montrer : la carte doit disparaître');
+      return /illisible/.test(htmlEvenementsKo(null))?true:_echec('liste illisible');})());
+    // ══ 27/09/2026 — NOTIFICATIONS CHOISIES, PLAFOND COMMUN, VISUELS ══════
+    ok('Notifications : trois cases, cochées selon le profil, et le texte dit exactement ce qui partira',(()=>{
+      const d0=notifGroupesDefaut({});
+      if(!d0.seances||d0.coach||d0.invitations) return _echec('sans coach ni code : '+JSON.stringify(d0));
+      const d1=notifGroupesDefaut({coachEmailKey:'kev@t,fr',parrainage:{code:'JULIE7K2'}});
+      if(!d1.seances||!d1.coach||!d1.invitations) return _echec('avec coach et code : '+JSON.stringify(d1));
+      // Chaque type réglable est dans une case, sauf la fin d'accès, qui reste.
+      const dans=NOTIF_GROUPES.reduce((a,g)=>a.concat(g.types),[]);
+      const hors=PUSH_TYPES.map(t=>t.cle).filter(k=>dans.indexOf(k)<0);
+      if(hors.join()!=='acces') return _echec('types hors cases : '+hors.join());
+      const h=_htmlInvitationNotif('demander','demain à 18 h',{seances:true,coach:false,invitations:true});
+      for(const g of NOTIF_GROUPES) if(h.indexOf('id="inv-notif-g-'+g.cle+'"')<0) return _echec('case '+g.cle+' absente');
+      if(!/id="inv-notif-g-seances"[^>]*checked/.test(h)||/id="inv-notif-g-coach"[^>]*checked/.test(h)||!/id="inv-notif-g-invitations"[^>]*checked/.test(h))
+        return _echec('les cases ne suivent pas le choix');
+      for(const t of ['Mes séances et ma série','Mon coach','Mes invitations']) if(h.indexOf(t)<0) return _echec('libellé « '+t+' » absent');
+      if(/rien d’autre/.test(h)) return _echec('la carte promet encore « rien d’autre »');
+      const tx=texteInvitationNotif({seances:true,coach:false,invitations:true});
+      if(tx.indexOf('série est en danger')<0||tx.indexOf('s’inscrit avec ton lien')<0) return _echec('ce qui est coché n’est pas dit : '+tx);
+      if(tx.indexOf('ton coach')>=0) return _echec('ce qui est décoché est promis : '+tx);
+      if(!/fin de ton accès/.test(tx)||!/une par jour au plus|par jour au plus/.test(tx)) return _echec('fin d’accès ou plafond non dits');
+      if(!/Aucune case/.test(texteInvitationNotif({}))) return _echec('aucune case');
+      if(!/inv-notif-oui[^>]*disabled/.test(_htmlInvitationNotif('demander','',{}))) return _echec('« Oui » actif sans case cochée');
+      // pushPrefs : décoché → false, coché → permis, hors cases → intact.
+      const p=pushPrefsDepuisChoix({acces:false,coach:false,filleul:false},{seances:true,coach:true,invitations:false});
+      // Case « Mon coach » cochée : coach, bilan et défi permis (clés retirées) ; « invitations » décochée : filleul coupé.
+      if(p.acces!==false||('coach' in p)||('bilan' in p)||('defi' in p)||p.filleul!==false||('serie' in p)) return _echec(JSON.stringify(p));
+      const q=pushPrefsDepuisChoix({},{seances:false,coach:true,invitations:true});
+      if(q.serie!==false||q.badge!==false||q.wrapped!==false||('coach' in q)) return _echec('séances décochées : '+JSON.stringify(q));
+      return true;})());
+    ok('Notifications : le choix est écrit dans u.pushPrefs AVANT la demande de permission',(()=>{
+      const svU=currentUser, svSave=window.saveUser, svN=Object.getOwnPropertyDescriptor(window,'Notification');
+      const z=document.createElement('div'); z.id='wd-notif-invite'; document.body.appendChild(z);
+      let vu=null, demande=0;
+      try{
+        currentUser={email:'lea@t.fr',role:'athlete',coachEmailKey:'k',pushPrefs:{acces:false}};
+        window.saveUser=()=>true;
+        Object.defineProperty(window,'Notification',{configurable:true,writable:true,value:{permission:'default',
+          requestPermission(){ demande++; vu=JSON.parse(JSON.stringify(currentUser.pushPrefs)); return new Promise(()=>{}); }}});
+        z.innerHTML=_htmlInvitationNotif('demander','',{seances:true,coach:true,invitations:true});
+        document.getElementById('inv-notif-g-coach').checked=false;
+        invNotifOui();                          // la suite attend une permission qui ne vient jamais
+        if(demande!==1) return _echec('la permission n’est pas demandée dans le geste');
+        if(!vu||vu.coach!==false||vu.bilan!==false||vu.defi!==false||('serie' in vu)||('filleul' in vu)||vu.acces!==false)
+          return _echec('pushPrefs au moment de la demande : '+JSON.stringify(vu));
+      }finally{
+        z.remove(); currentUser=svU; window.saveUser=svSave;
+        if(svN) Object.defineProperty(window,'Notification',svN); else delete window.Notification;
+      }
+      return true;})());
+    okA('Notifications : sw.js se tait quand le push serveur est actif, sinon une par jour au plus, jamais la nuit',async()=>{
+      let src='';
+      try{ src=(await (await fetch('./sw.js',{cache:'no-store'})).text()).replace(/\r\n/g,'\n'); }catch(e){ return _echec('sw.js illisible'); }
+      const fn=(nom)=>{ const i=src.indexOf('function '+nom+'('); if(i<0) throw new Error(nom+' absente');
+        const d=src.lastIndexOf('\n',i)+1, j=src.indexOf('\n}\n',i); return src.slice(d,j+2); };
+      let corps;
+      try{ corps=['_jourLocal','swPushServeurActif','swPeutNotifier','swNoterNotif','swCheckSerie','swCheckWrapped','swCheckAndNotify'].map(fn).join('\n'); }
+      catch(e){ return _echec(e.message); }
+      const monde=(iso,donnees)=>{
+        const NOW=new Date(iso).getTime(), RD=Date;
+        const D=class extends RD{ constructor(...a){ if(a.length) super(...a); else super(NOW); } static now(){ return NOW; } };
+        const m=Object.assign({},donnees), vus=[];
+        const self={registration:{showNotification:async(t)=>{ vus.push(t); }}};
+        const f=new Function('Date','self','swGet','swSet',"const NOTIF_JOUR='/notif-jour';\n"+corps
+          +'\nreturn {serie:swCheckSerie,wrapped:swCheckWrapped,bilan:swCheckAndNotify};');
+        const api=f(D,self,async k=>(k in m?JSON.parse(JSON.stringify(m[k])):null),async(k,v)=>{ m[k]=v; });
+        return {api,m,vus};
+      };
+      const serie={'/serie':{actif:true,streak:4,streakWeek:'2026-09-21',fname:'Léa'}};
+      // Jeudi 1er octobre 2026, 18 h 30, heure locale.
+      let w=monde('2026-10-01T18:30:00',serie);
+      await w.api.serie();
+      if(w.vus.length!==1) return _echec('série seule : '+w.vus.length+' notification(s)');
+      if(w.m['/notif-jour']!=='2026-10-01') return _echec('le jour n’est pas noté');
+      w=monde('2026-10-01T18:30:00',Object.assign({'/push-serveur':{actif:true}},serie));
+      await w.api.serie(); await w.api.bilan(); await w.api.wrapped();
+      if(w.vus.length) return _echec('push serveur actif : le local double');
+      w=monde('2026-10-01T18:30:00',Object.assign({'/notif-jour':'2026-10-01'},serie));
+      await w.api.serie();
+      if(w.vus.length) return _echec('déjà une notification aujourd’hui : une deuxième est partie');
+      if((w.m['/serie-notifs']||[]).length) return _echec('le créneau est consommé sans rien envoyer');
+      w=monde('2026-10-01T21:30:00',serie);
+      await w.api.serie();
+      if(w.vus.length) return _echec('partie à 21 h 30');
+      // Un Wrapped et une série le même jour : un seul des deux.
+      w=monde('2026-10-01T18:30:00',Object.assign({'/wrapped':{derniereSeance:new Date('2026-09-20').getTime()}},serie));
+      await w.api.wrapped(); await w.api.serie();
+      if(w.vus.length!==1) return _echec('Wrapped + série le même jour : '+w.vus.length);
+      // Un push reçu compte dans la journée ; la page pose et retire le témoin.
+      if(!/addEventListener\('push'[\s\S]{0,700}swNoterNotif\(\)/.test(src)) return _echec('un push reçu ne compte pas dans la journée');
+      if(!/_swPushServeur\(true\)/.test(String(pushAbonner))) return _echec('l’abonnement ne pose pas /push-serveur');
+      if(!/_swPushServeur\(false\)/.test(String(pushDesabonner))) return _echec('le désabonnement ne retire pas /push-serveur');
+      return true;
+    });
+    ok('Visuels : le lien est copié AVANT la branche iPhone, et l’aperçu porte le vrai nom et le vrai type',(()=>{
+      if(_nomSelonFormat('repcore-seance.png',{ext:'jpg'})!=='repcore-seance.jpg') return _echec('extension non accordée');
+      if(_nomSelonFormat('repcore-bilan.jpg',null)!=='repcore-bilan.png') return _echec('sans format : png');
+      if(_b64versBlob('data:image/jpeg;base64,AAAA').type!=='image/jpeg') return _echec('le blob d’un JPEG se dit PNG');
+      const sv={ios:window._estIOS,cop:window._storyCopierLien,ap:window._ouvrirApercuStory,t:window.toast,ac:window.attribCompter};
+      const ordre=[]; let args=null;
+      const cv=()=>{ const c=document.createElement('canvas'); c.width=4; c.height=4; return c; };
+      try{
+        window.toast=()=>{}; window.attribCompter=()=>{};
+        window._storyCopierLien=(src)=>{ ordre.push('lien:'+src); return true; };
+        window._ouvrirApercuStory=(u,n,f)=>{ ordre.push('apercu'); args=[n,f&&f.type]; };
+        window._estIOS=()=>true;
+        _storySortirTelechargement(cv(),visuelNomFichier('repcore-bilan','carbone'),visuelFondFormat('carbone'));
+        if(ordre.join()!=='lien:bilan,apercu') return _echec('iPhone : '+ordre.join());
+        if(!args||args[0]!=='repcore-bilan.jpg'||args[1]!=='image/jpeg') return _echec('aperçu : '+JSON.stringify(args));
+        ordre.length=0; args=null;
+        _storySortirTelechargement(cv(),'repcore-seance.png');
+        if(!args||args[0]!=='repcore-seance.png'||args[1]!=='image/png') return _echec('aperçu PNG : '+JSON.stringify(args));
+        // Ailleurs : le lien aussi, et le fichier au bon nom.
+        window._estIOS=()=>false; ordre.length=0;
+        const clic=HTMLAnchorElement.prototype.click; let nom='';
+        HTMLAnchorElement.prototype.click=function(){ nom=this.download; };
+        try{ _storySortirTelechargement(cv(),'repcore-record.png',visuelFondFormat('photo')); }
+        finally{ HTMLAnchorElement.prototype.click=clic; }
+        if(ordre.join()!=='lien:record') return _echec('ordinateur : '+ordre.join());
+        if(nom!=='repcore-record.jpg') return _echec('fichier : '+nom);
+      }finally{
+        window._estIOS=sv.ios; window._storyCopierLien=sv.cop; window._ouvrirApercuStory=sv.ap; window.toast=sv.t; window.attribCompter=sv.ac;
+      }
+      // L'aperçu lui-même : le lien « Télécharger » porte le nom et le type réels.
+      _ouvrirApercuStory('data:image/jpeg;base64,AAAA','repcore-wrapped.jpg',{type:'image/jpeg',ext:'jpg'});
+      const a=document.querySelector('#story-apercu a[download]');
+      const bon=a&&a.getAttribute('download')==='repcore-wrapped.jpg'&&a.getAttribute('type')==='image/jpeg';
+      fermerApercuStory();
+      return bon?true:_echec('lien de l’aperçu : '+(a?a.outerHTML:'absent'));})());
+    ok('Partage : le message de parrainage se lit, et le lien n’apparaît pas deux fois',(()=>{
+      const m=parrainageMessage('JULIE7K2','https://x/?ref=JULIE7K2');
+      if(m.indexOf('Je m’entraîne avec RepCore. Avec mon code JULIE7K2, tu as 2 mois d’essai au lieu d’un')!==0) return _echec(m);
+      if(!/https:\/\/x\/\?ref=JULIE7K2$/.test(m)) return _echec('le lien manque à la fin');
+      if(/https?:/.test(parrainageMessage('JULIE7K2',''))) return _echec('lien vide : il ne doit rien ajouter');
+      if(!/Le code se saisit/.test(parrainageMessage('JULIE7K2'))) return _echec('sans lien : où saisir le code');
+      if(!/text:parrainageMessage\(c,l\?'':undefined\),url:l/.test(String(parrainagePartager))) return _echec('le partage répète le lien dans le texte');
+      const r=messageRelanceAcces({fname:'Léa',accessExpiry:Date.now()+3*864e5},{cle:'bientot'});
+      if(/ : [^ ]+ : /.test(r)||!/engagement 12 mois/.test(r)) return _echec(r);
+      return true;})());
+    ok('Records : un vrai bouton « Partager » au-dessus de la liste, une pastille par ligne s’il y en a plusieurs',(()=>{
+      const rec=(n)=>({records:Array.from({length:n},(_,i)=>({nm:'SQUAT '+i,curMax:100+i,histMax:90,gain:10+i}))});
+      const h3=_htmlRecordsFin(rec(3),Date.now(),'wd');
+      const iTous=h3.indexOf('Partager mes 3 records'), iLigne=h3.indexOf('rcf-rk-l');
+      if(iTous<0||iLigne<0||iTous>iLigne) return _echec('le bouton n’est pas au-dessus de la liste');
+      if(!/<button type="button" class="rcf-rk-p rcf-rk-p-tous"/.test(h3)) return _echec('pas un vrai bouton');
+      if((h3.match(/rcf-rk-p-ligne/g)||[]).length!==3) return _echec('une pastille par ligne attendue');
+      const h1=_htmlRecordsFin(rec(1),Date.now(),'wd');
+      if(h1.indexOf('Partager ce record')<0||h1.indexOf('Partager ce record')>h1.indexOf('rcf-rk-l')||/rcf-rk-p-ligne/.test(h1)) return _echec('un seul record : un bouton, en haut');
+      if(/<button/.test(_htmlRecordsFin(rec(2),Date.now()))) return _echec('sans clé d’écran, pas de bouton');
+      return true;})());
+    // ══ 27/09/2026 — L'ACCUEIL NOMINATIF DU FILLEUL ══════════════════════
+    okA('Accueil /i : « Julie t’invite », son rang et 2 mois ; l’ambassadeur par son nom ; le coach inchangé ; sans rien, pas de code coach',async()=>{
+      let h=''; try{ const x=new XMLHttpRequest(); x.open('GET','../i/index.html',false); x.send(); h=x.responseText; }catch(e){ return _echec('lecture de /i'); }
+      const m=/<script>\s*(\(function\(\)\{[\s\S]*?\}\)\(\);)\s*<\/script>/.exec(h);
+      if(!m) return _echec('script de /i introuvable');
+      const bloc=(id)=>{ const r=new RegExp('id="'+id+'"'); return r.test(h); };
+      for(const id of ['accueil','commencer','embleme','titre','interne-invite','etapes-generique','etapes-coach'])
+        if(!bloc(id)) return _echec('élément #'+id+' absent de la page');
+      const moisAmi=(/id="mois-ami"[^>]*>(\d+)</.exec(h)||[])[1];
+      if(moisAmi!==String(TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus)) return _echec('durée de l’essai parrainé : '+moisAmi);
+      const run=async(search,ua,reponse)=>{
+        const ids=['go','quand-meme','lien','interne','copier','ok','accueil','commencer','embleme','titre','interne-invite','etapes-generique','etapes-coach','mois-ami'];
+        const el={}; ids.forEach(k=>el[k]={hidden:k!=='titre'&&k!=='etapes-coach'&&k!=='mois-ami',textContent:k==='mois-ami'?moisAmi:'',addEventListener(){}});
+        const loc={search,hash:'',href:'https://repcore-sync.web.app/i/'+search,replace(){ el._parti=true; }};
+        const stock={}, lus=[];
+        const fetchF=async(u)=>{ lus.push(String(u)); return {ok:!!reponse,json:async()=>reponse}; };
+        const ls={setItem:(k,v)=>{ stock[k]=v; },getItem:k=>stock[k]||null};
+        new Function('location','document','navigator','setTimeout','fetch','localStorage',m[1])(loc,{getElementById:k=>el[k]},{userAgent:ua},(f)=>f(),fetchF,ls);
+        await new Promise(r=>setTimeout(r,0)); await new Promise(r=>setTimeout(r,0));
+        return {el,lus,stock,parti:!!el._parti};
+      };
+      const SF='Mozilla/5.0 (iPhone) Safari', IG='Mozilla/5.0 (iPhone) Instagram 300.0';
+      let r=await run('?ref=JULIE7K2',SF,{prenom:'Julie',rang:4});
+      if(!/parrainage\/codesPublics\/JULIE7K2\.json$/.test(r.lus[0]||'')) return _echec('lecture : '+r.lus.join());
+      if(r.el.titre.textContent!=='Julie t’invite sur RepCore') return _echec('titre : '+r.el.titre.textContent);
+      if(r.el.accueil.hidden||!r.el.ok.hidden||r.parti) return _echec('l’accueil doit se lire, sans ouvrir l’app tout seul');
+      if(r.el.embleme.hidden||!/rang_4-512\.webp$/.test(r.el.embleme.src)) return _echec('emblème : '+r.el.embleme.src);
+      if(!/^\.\.\/app\/\?ref=JULIE7K2/.test(r.el.commencer.href)) return _echec('Commencer : '+r.el.commencer.href);
+      if(JSON.parse(r.stock.rc_parrain_invite||'{}').prenom!=='Julie') return _echec('le prénom n’est pas gardé pour l’app');
+      // Un prénom piégé reste du texte.
+      r=await run('?ref=JULIE7K2',SF,{prenom:'<img src=x onerror=1>',rang:99});
+      if(!r.el.embleme.hidden) return _echec('un rang hors bornes affiche un emblème');
+      r=await run('?ref=JULIE7K2',IG,{prenom:'Julie',rang:2});
+      if(r.el.interne.hidden||r.el.titre.textContent!=='Julie t’invite sur RepCore'||r.el['interne-invite'].hidden
+        ||r.el['interne-invite'].textContent.indexOf(moisAmi+' mois pour essayer')!==0)
+        return _echec('Instagram : '+r.el.titre.textContent+' / '+r.el['interne-invite'].textContent);
+      if(!/\/app\/\?ref=JULIE7K2/.test(r.el.lien.textContent||'')) return _echec('Instagram : l’échappement est perdu');
+      r=await run('?amb=LEAFIT',SF,{nom:'Léa Fit',actif:true});
+      if(!/ambassadeurs_publics\/LEAFIT\.json$/.test(r.lus[0]||'')||r.el.titre.textContent!=='Léa Fit t’invite sur RepCore'||r.el.accueil.hidden) return _echec('ambassadeur : '+r.el.titre.textContent);
+      r=await run('?inv=RC-AAAA-BBBB',SF,null);
+      if(r.lus.length||!r.el.accueil.hidden||r.el.ok.hidden||r.el['etapes-coach'].hidden||!r.parti) return _echec('invitation de coach : le texte de toujours');
+      r=await run('',SF,null);
+      if(r.el.titre.textContent!=='Bienvenue sur RepCore'||r.el['etapes-generique'].hidden||!r.el['etapes-coach'].hidden) return _echec('sans rien : texte général');
+      const gen=(/<div class="carte" id="etapes-generique"[\s\S]*?<\/div>/.exec(h)||[''])[0];
+      if(/code/i.test(gen)) return _echec('le texte général parle d’un code');
+      return true;
+    });
+    ok('Inscription : « Invité par Julie · 2 mois pour essayer », et le code demandé en haut sur iPhone installé',(()=>{
+      const n=TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus;
+      if(phraseInvitationInscription('Julie')!=='Invité par Julie · '+n+' mois pour essayer') return _echec(phraseInvitationInscription('Julie'));
+      if(phraseInvitationInscription('','LEAFIT')!=='Invité par LEAFIT · '+n+' mois pour essayer') return _echec('ambassadeur');
+      if(!/1 mois de plus/.test(phraseInvitationInscription(''))) return _echec('sans code');
+      if(!parrainageDemanderCode('athlete',true,'')) return _echec('iPhone installé, code perdu : rien ne le demande');
+      if(parrainageDemanderCode('athlete',true,'JULIE7K2')||parrainageDemanderCode('athlete',false,'')||parrainageDemanderCode('coach',true,''))
+        return _echec('demandé à tort');
+      const b=document.getElementById('r-parrain-appel');
+      if(!b||!/Quelqu’un t’a invité \? Entre son code/.test(b.textContent)) return _echec('le bouton du haut manque');
+      const reg=document.getElementById('s-register');
+      const form=reg&&reg.querySelector('.scroll-area');
+      if(form&&form.querySelector('#r-parrain-appel')!==form.querySelector('button,input,label')) return _echec('le bouton n’est pas en haut du formulaire');
+      if(!/oninput="parrainageCodeSaisi/.test((document.getElementById('r-parrain')||{}).outerHTML||'')) return _echec('un code tapé ne dit pas de qui il vient');
+      // Le prénom gardé par /i est repris.
+      let sv=null; try{ sv=localStorage.getItem('rc_parrain_invite'); localStorage.setItem('rc_parrain_invite',JSON.stringify({code:'JULIE7K2',prenom:'Julie',rang:3})); }catch(e){}
+      const g=parrainInviteGarde('JULIE7K2'), g2=parrainInviteGarde('TOMMY2K9');
+      try{ if(sv===null) localStorage.removeItem('rc_parrain_invite'); else localStorage.setItem('rc_parrain_invite',sv); }catch(e){}
+      if(!g||g.prenom!=='Julie'||g2) return _echec('prénom gardé : '+JSON.stringify(g)+' / '+JSON.stringify(g2));
+      return true;})());
+    ok('Premier écran : « Julie sera prévenu… », et l’événement part à la première séance',(()=>{
+      const u={role:'athlete',sessions:[],parrainage:{parrainCode:'JULIE7K2',parrainPrenom:'Julie'}};
+      if(phraseParrainPremiereSeance(u)!=='Julie sera prévenu quand tu feras ta première séance.') return _echec(phraseParrainPremiereSeance(u));
+      if(phraseParrainPremiereSeance(Object.assign({},u,{sessions:[{date:1}]}))) return _echec('après la séance, la phrase reste');
+      if(phraseParrainPremiereSeance({sessions:[]})) return _echec('sans parrain');
+      let h=''; try{ h=_htmlDemarrage(u); }catch(e){ return _echec('_htmlDemarrage : '+e.message); }
+      if(h.indexOf('Julie sera prévenu')<0) return _echec('la phrase n’est pas sur l’écran de démarrage');
+      if(_htmlDemarrage(Object.assign({},u,{parrainage:{parrainCode:'X',parrainPrenom:'<b>x'}})).indexOf('<b>x')>=0) return _echec('prénom non échappé');
+      if(!/deposerEvenement\(\{type:'filleul_seance'\}\)/.test(_prodSrc())) return _echec('rien ne prévient le parrain');
+      const r=rangPublic({xp:15000});
+      if(!(r>=1&&r<=10)||rangPublic({})!==1) return _echec('rang public : '+r);
+      return true;})());
+    // ══ 27/09/2026 — STORY / POST : UN RÉGLAGE COMMUN, UNE MISE EN PAGE PAR FORMAT ══
+    ok('Formats : VISUEL_FORMATS commun, dernier format retenu (et sans stockage : la story), noms repcore-<type>-post.jpg',(()=>{
+      if(VISUEL_FORMATS.story.h!==1920||VISUEL_FORMATS.post.h!==1350||VISUEL_FORMATS.post.w!==1080) return _echec('table');
+      if(AA_FORMATS!==VISUEL_FORMATS) return _echec('l’avant/après garde sa propre table');
+      let sv=null; try{ sv=localStorage.getItem(VISUEL_FORMAT_CLE); }catch(e){}
+      const gi=Storage.prototype.getItem;
+      try{
+        try{ localStorage.removeItem(VISUEL_FORMAT_CLE); }catch(e){}
+        if(visuelFormatChoisi()!=='story') return _echec('défaut');
+        visuelFormatMemoriser('post');
+        if(visuelFormatChoisi()!=='post'||visuelFormat().h!==1350) return _echec('non retenu');
+        if(visuelNomFichier('repcore-bilan','carbone')!=='repcore-bilan-post.jpg') return _echec(visuelNomFichier('repcore-bilan','carbone'));
+        if(visuelNomFichier('repcore-bilan','transparent','story')!=='repcore-bilan.png') return _echec('story sans fond');
+        // Sans format donné, chaque dessin prend le dernier choisi.
+        const c=_dessinerCarteSerie({semaines:5,jokers:0,signature:'LÉA'},'carbone');
+        if(c.height!==1350) return _echec('dessin sans format : '+c.height);
+        if(visuelFormatMemoriser('carre')) return _echec('un format inconnu est retenu');
+        Storage.prototype.getItem=function(){ throw new Error('stockage bloqué'); };
+        if(visuelFormatChoisi()!=='story') return _echec('stockage bloqué : la story attendue');
+      }finally{
+        Storage.prototype.getItem=gi;
+        try{ if(sv===null) localStorage.removeItem(VISUEL_FORMAT_CLE); else localStorage.setItem(VISUEL_FORMAT_CLE,sv); }catch(e){}
+      }
+      if(wrappedNomsCarrousel().join()!==[1,2,3,4,5].map(i=>'repcore-wrapped-'+i+'-post.jpg').join()) return _echec('carrousel : '+wrappedNomsCarrousel());
+      return true;})());
+    ok('Formats : « Story / Post » est posé à côté du fond, partout où il y a un fond',(()=>{
+      const h=_htmlVisuelFonds('x-fonds');
+      const d=document.createElement('div'); d.innerHTML=h;
+      const b=[...d.querySelectorAll('.vfmt .vfmt-b')].map(x=>x.getAttribute('data-format')+':'+x.textContent);
+      if(b.join()!=='story:Story9:16,post:Post4:5') return _echec(b.join());
+      // Le format, puis « Voir la légende », puis les fonds : un seul bloc.
+      if(d.firstElementChild.className!=='vfmt'||!d.querySelector('.vfmt~.vf#x-fonds')||d.children.length!==3) return _echec('pas à côté du sélecteur de fond');
+      // Le visuel du coach n'a plus son propre choix : le commun.
+      const r=htmlReglagesVisuelCoach({type:'recap',periode:'semaine'});
+      if(/Format/.test(r)) return _echec('le visuel du coach garde un second choix de format');
+      return true;})());
+    ok('Formats : chaque visuel, en story ET en post, avec des données extrêmes — rien ne déborde',(()=>{
+      // Mesure ce qu'un dessin pose hors du canevas. Rend {w,h,hors:[...]}.
+      const _sondeVisuel=function(dessiner){
+        const P=CanvasRenderingContext2D.prototype, ft=P.fillText, fr=P.fillRect, hors=[];
+        let cv=null, fond=0;
+        // Le fond (trame de carbone, photo) déborde par construction : ignoré.
+        const pf=window._visuelPeindreFond;
+        window._visuelPeindreFond=function(){ fond++; try{ return pf.apply(this,arguments); } finally{ fond--; } };
+        P.fillText=function(t,x,y){
+          const W=this.canvas.width, H=this.canvas.height;
+          if(W>=1000){
+            const m=this.measureText(String(t)), al=this.textAlign;
+            const x0=al==='center'?x-m.width/2:(al==='right'||al==='end')?x-m.width:x;
+            const x1=x0+m.width, y0=y-(m.actualBoundingBoxAscent||0), y1=y+(m.actualBoundingBoxDescent||0);
+            if(String(t).trim()&&(x0<-1||x1>W+1||y0<-1||y1>H+1)) hors.push(JSON.stringify(String(t).slice(0,40))+' ['+[x0,y0,x1,y1].map(Math.round)+'] dans '+W+'x'+H);
+          }
+          return ft.apply(this,arguments);
+        };
+        P.fillRect=function(x,y,w,h){
+          const W=this.canvas.width, H=this.canvas.height;
+          if(!fond&&W>=1000&&!(w>=W-2&&h>=H-2)&&w>0&&h>0&&w<W&&(x<-1||y<-1||x+w>W+1||y+h>H+1)) hors.push('rect ['+[x,y,x+w,y+h].map(Math.round)+'] dans '+W+'x'+H);
+          return fr.apply(this,arguments);
+        };
+        try{ cv=dessiner(); } finally { P.fillText=ft; P.fillRect=fr; window._visuelPeindreFond=pf; }
+        return {w:cv&&cv.width,h:cv&&cv.height,hors};
+      };
+  const L='MAXIMILIEN-ALEXANDRE DE LA TOUR D’AUVERGNE';
+  const long='DÉVELOPPÉ COUCHÉ PRISE SERRÉE HALTÈRES SUR BANC INCLINÉ À TRENTE DEGRÉS';
+  const img=document.createElement('canvas'); img.width=600; img.height=800; img.getContext('2d').fillRect(0,0,600,800);
+  img.naturalWidth=600; img.naturalHeight=800; img.complete=true;
+  const rec=(i)=>({nm:long+' '+i,histMax:987.5,curMax:1234.75,gain:247.25,date:Date.now(),signature:L});
+  const w={seances:9999,dureeTotale:99999*60000,tonnage:98765432,records:999,serieMax:52,badgesGagnes:Array(88).fill('x'),
+    meilleurRecord:{nom:long,avant:987.5,apres:1234.75},jourPrefere:{lib:'mercredi soir après le travail'},heureMoyenne:{lib:'18 h 45 environ'},
+    muscleTop:{lib:'Ischio-jambiers et fessiers profonds',series:9999},profil:{nom:'LE MÉTRONOME INFATIGABLE DE LA SALLE',phrase:'Tu reviens chaque semaine à la même heure, comme une horloge suisse, et rien ne t’arrête : ni la pluie, ni le froid, ni les lundis.'}};
+  const per={titre:'TON ANNÉE 2026 COMPLÈTE DE JANVIER À DÉCEMBRE',cle:'a-2026'};
+  const V={
+    bilan:(fo,f)=>_dessinerBilanSeance({titre:'PUSH PULL LEGS ÉPAULES BRAS ET ABDOMINAUX',dateCourte:'27/09/2026',dureeLib:'2 H 45 MIN',records:14,
+      ex:Array.from({length:25},(_,i)=>({nom:long+i,series:12,reps:1000,kg:1234.5,rmin:8,rmax:12})),autres:0,volume:12345678,nbEx:25,series:188,reps:99999,
+      equivalent:{texte:'un éléphant d’Afrique adulte et son petit',emoji:'🐘'},signature:L},fo,f),
+    record:(fo,f)=>_dessinerCarteRecord(rec(1),fo,f),
+    records:(fo,f)=>_dessinerCarteRecords({records:[rec(1),rec(2),rec(3),rec(4)],date:Date.now(),signature:L},fo,f),
+    serie52:(fo,f)=>_dessinerCarteSerie({semaines:52,jokers:2,signature:L},fo,f),
+    serie3:(fo,f)=>_dessinerCarteSerie({semaines:3,jokers:0,signature:L},fo,f),
+    serie999:(fo,f)=>_dessinerCarteSerie({semaines:999,jokers:9,signature:L},fo,f),
+    rang:(fo,f)=>_dessinerCarteRang({nom:'SURTENSION ABSOLUE',xp:98765432,signature:L},fo,img,f),
+    cycle:(fo,f)=>_dessinerCarteCycle({cycle:99,nom:'Hypertrophie des membres supérieurs et du tronc',jours:28,taux:100,faites:99,prevues:99,tonnage:98765432,records:999,
+      equivalent:{texte:'une baleine bleue adulte et deux orques',emoji:'🐋'},groupes:null,prochain:'FORCE MAXIMALE ET PUISSANCE EXPLOSIVE DU BAS DU CORPS',signature:L},fo,null,f),
+    defi:(fo,f)=>_dessinerCarteDefi({titre:'Cent séances en cent jours sans jamais rater un seul lundi matin',mois:'DE SEPTEMBRE 2026',champion:false,valeur:'100 SÉANCES SUR 100 PRÉVUES',signature:L},fo,f),
+    champion:(fo,f)=>_dessinerCarteDefi({titre:'Cent séances en cent jours sans jamais rater un seul lundi matin',mois:'DE SEPTEMBRE 2026',champion:true,valeur:'100 SÉANCES SUR 100 PRÉVUES',signature:L},fo,f),
+    badge:(fo,f)=>_dessinerCarteBadge(Object.assign({},badgeAcquisDef('aube')||{},{nom:'LÈVE-TÔT DU PETIT MATIN AVANT LE SOLEIL IV',palier:4,indice:'Une séance avant sept heures, cinq jours de suite, en plein hiver'}),Date.now(),img,fo,L,'Possédé par 0,1 % des athlètes du monde entier',f),
+    muscles:(fo,f)=>_dessinerCarteMuscles({titre:'TOUT LE CORPS SOUS TENSION MAXIMALE CETTE SEMAINE',periode:'les douze dernières semaines',
+      chiffres:[{v:'98 765',l:'séries effectives au total'},{v:'123 456 KG',l:'tonnage cumulé'},{v:'999',l:'séances enregistrées'}]},fo,null,L,f),
+    victoire:(fo,f)=>_dessinerVictoireCoach({exo:long,avant:987.5,apres:1234.75,pct:999,duree:'152 SEMAINES DE SUIVI SANS INTERRUPTION',nom:L},fo,f),
+    recap:(fo,f)=>_dessinerRecapTeam({titre:'LA TEAM DU MOIS DE SEPTEMBRE',equipe:'TEAM GUELLEC COACHING PERFORMANCE',seances:99999,tonnage:98765432,records:9999,
+      equivalent:{texte:'une baleine bleue adulte',emoji:'🐋'},top:[{nom:L,n:999},{nom:L,n:998},{nom:L,n:997}]},fo,f)
+  };
+  for(let i=0;i<5;i++) V['wrapped'+i]=(fo,f)=>_dessinerWrapped(w,per,i,L,f);
+      const pb=[];
+      let sv=null; try{ sv=localStorage.getItem(VISUEL_FORMAT_CLE); }catch(e){}
+      try{
+        for(const k of Object.keys(V)) for(const f of ['story','post']) for(const fo of ['transparent','carbone']){
+          let r; try{ r=_sondeVisuel(()=>V[k](fo,f)); }catch(e){ pb.push(k+'/'+f+' : '+e.message); continue; }
+          if(r.w!==1080||r.h!==(f==='post'?1350:1920)) pb.push(k+'/'+f+' : '+r.w+'x'+r.h);
+          else if(r.hors.length) pb.push(k+'/'+f+'/'+fo+' : '+r.hors[0]);
+        }
+      }finally{ try{ if(sv===null) localStorage.removeItem(VISUEL_FORMAT_CLE); else localStorage.setItem(VISUEL_FORMAT_CLE,sv); }catch(e){} }
+      return pb.length?_echec(pb.slice(0,4).join(' ; ')+(pb.length>4?' (+'+(pb.length-4)+')':'')):true;})());
+    ok('Formats : un long bilan en post garde ce qui tient, et le reste devient « +N autres »',(()=>{
+      const ex=Array.from({length:18},(_,i)=>({nom:'EXO '+i,series:4,reps:10,kg:50}));
+      const vus=[], P=CanvasRenderingContext2D.prototype, ft=P.fillText;
+      P.fillText=function(t){ vus.push(String(t)); return ft.apply(this,arguments); };
+      try{ _dessinerBilanSeance({titre:'PUSH',dateCourte:'27/09/2026',dureeLib:'1 H',records:0,ex,autres:2,volume:9000,nbEx:20,series:72,reps:720,signature:'LÉA'},'carbone','post'); }
+      finally{ P.fillText=ft; }
+      const montres=ex.filter(e=>vus.indexOf(e.nom)>=0).length;
+      const autres=vus.find(t=>/^\+ \d+ AUTRES$/.test(t));
+      if(!(montres>=5&&montres<18)) return _echec(montres+' exercices montrés en post');
+      if(autres!=='+ '+(20-montres)+' AUTRES') return _echec('ligne : '+autres+' pour '+montres+' montrés sur 20');
+      return true;})());
+    ok('Wrapped : « Carrousel pour mon fil » partage les 5 slides en 4:5 d’un coup, sinon une par une',(()=>{
+      const sv={wr:_wr,cs:navigator.canShare,sh:navigator.share,cop:window._storyCopierLien,ac:window.attribCompter};
+      let recu=null;
+      const w={seances:12,dureeTotale:600*60000,tonnage:42000,records:3,serieMax:4,badgesGagnes:[],meilleurRecord:null,
+        jourPrefere:null,heureMoyenne:null,muscleTop:null,profil:{nom:'RÉGULIER',phrase:'Tu tiens.'}};
+      try{
+        window._storyCopierLien=()=>true; window.attribCompter=()=>{};
+        _wr={w,per:{titre:'SEPTEMBRE',cle:'m-2026-09'},i:4};
+        Object.defineProperty(navigator,'canShare',{configurable:true,value:(o)=>!!(o&&o.files&&o.files.length===5)});
+        Object.defineProperty(navigator,'share',{configurable:true,value:(o)=>{ recu=o; return Promise.resolve(); }});
+        if(!partagerCarrouselWrapped(null)) return _echec('rien n’est parti');
+        if(!recu||recu.files.length!==5) return _echec('pas un seul partage de cinq fichiers');
+        if(recu.files.map(f=>f.name).join()!==wrappedNomsCarrousel().join()||recu.files.some(f=>f.type!=='image/jpeg')) return _echec('fichiers : '+recu.files.map(f=>f.name+' '+f.type));
+        // Sans partage de plusieurs fichiers : les cinq, une par une, chacune son bouton.
+        Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>false});
+        recu=null;
+        partagerCarrouselWrapped(null);
+        const a=[...document.querySelectorAll('#story-apercu a[download]')].map(x=>x.getAttribute('download'));
+        fermerApercuStory();
+        if(recu||a.join()!==wrappedNomsCarrousel().join()) return _echec('une par une : '+a.join());
+      }finally{
+        _wr=sv.wr; window._storyCopierLien=sv.cop; window.attribCompter=sv.ac;
+        // Les bouchons sont des propriétés PROPRES : les retirer rend celles du prototype.
+        delete navigator.canShare; delete navigator.share;
+      }
+      return /Carrousel pour mon fil/.test(_wrHtmlSlide(wrappedSlides(w,{titre:'S',cle:'x'})[4],4))?true:_echec('le bouton manque');})());
+    // ══ 28/09/2026 — LA LÉGENDE DES POSTS ═════════════════════════════════
+    ok('Légendes : chaque modèle de chaque visuel, données extrêmes — moins de 220 caractères, #RepCore, un ⚡ au plus, tutoiement',(()=>{
+      const ext={exo:'DÉVELOPPÉ COUCHÉ PRISE SERRÉE HALTÈRES SUR BANC INCLINÉ ⚡ À TRENTE DEGRÉS'.repeat(3),semaines:99999,
+        nom:'SURTENSION ABSOLUE ⚡ '.repeat(8),titre:'Cent séances en cent jours sans rater un seul lundi '.repeat(6),seances:123456};
+      const avecPage={role:'athlete',pagePublique:{active:true,pseudo:'maximilien_alexandre',montrer:{}}};
+      if(!urlPagePerso(avecPage)) return _echec('page publique du banc refusée');
+      let sv={}; for(const k of Object.keys(_LEGENDES)) try{ sv[k]=localStorage.getItem('rc_legende_'+k); }catch(e){}
+      try{
+        for(const k of Object.keys(_LEGENDES)){
+          const n=_LEGENDES[k].length;
+          if(n<3||n>5) return _echec(k+' : '+n+' modèles');
+          for(let i=0;i<n;i++) for(const d of [{},ext]) for(const u of [null,avecPage]){
+            const t=legendePartage(k,d,{indice:i,u});
+            if(!(t.length<220)) return _echec(k+'#'+i+' : '+t.length+' caractères');
+            if(t.indexOf('#RepCore')<0) return _echec(k+'#'+i+' sans #RepCore');
+            if((t.match(/⚡/g)||[]).length>1) return _echec(k+'#'+i+' : deux ⚡');
+            if(!/(^|[^a-zà-ÿ])(tu|toi|ton|ta|tes)([^a-zà-ÿ]|$)|t’/i.test(t)) return _echec(k+'#'+i+' ne tutoie pas : '+t);
+            if(RC_COMPTE_INSTAGRAM&&t.indexOf(RC_COMPTE_INSTAGRAM)<0) return _echec('compte Instagram absent');
+            if(/Lien dans ma bio/.test(t)!==!!u) return _echec(k+'#'+i+' : « Lien dans ma bio » '+(u?'absent':'sans page publique'));
+          }
+          // Jamais deux fois le même de suite.
+          let der=null;
+          for(let j=0;j<30;j++){ const t=legendePartage(k,{},{u:null}); if(t===der) return _echec(k+' : deux fois de suite'); der=t; }
+        }
+      }finally{ for(const k of Object.keys(sv)) try{ if(sv[k]===null) localStorage.removeItem('rc_legende_'+k); else localStorage.setItem('rc_legende_'+k,sv[k]); }catch(e){} }
+      return true;})());
+    ok('Légendes : en post, la légende est copiée (et passe dans navigator.share) ; en story, le lien reste',(()=>{
+      const sv={lien:window._storyCopierLien,leg:window._storyCopierLegende,ios:window._estIOS,t:window.toast,ac:window.attribCompter};
+      const vus=[]; let charge=null;
+      const cv=()=>{ const c=document.createElement('canvas'); c.width=4; c.height=4; return c; };
+      try{
+        window.toast=()=>{}; window.attribCompter=()=>{}; window._estIOS=()=>false;
+        window._storyCopierLien=(src)=>{ vus.push('lien:'+src); return true; };
+        window._storyCopierLegende=(t)=>{ vus.push('legende:'+t); return true; };
+        const clic=HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click=function(){};
+        try{
+          _storySortirTelechargement(cv(),'repcore-serie-post.jpg',visuelFondFormat('carbone'));
+          _storySortirTelechargement(cv(),'repcore-serie.jpg',visuelFondFormat('carbone'));
+        }finally{ HTMLAnchorElement.prototype.click=clic; }
+        if(vus.length!==2||!/^legende:.*#RepCore/s.test(vus[0])||vus[1]!=='lien:serie') return _echec('téléchargement : '+vus.join(' | '));
+        vus.length=0;
+        Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>true});
+        Object.defineProperty(navigator,'share',{configurable:true,value:(o)=>{ charge=o; return Promise.resolve(); }});
+        _storySortirPartage(cv(),'repcore-rang-post.jpg',undefined,visuelFondFormat('carbone'));
+        if(!charge||!/#RepCore/.test(charge.text||'')||charge.files.length!==1) return _echec('partage : '+JSON.stringify(charge&&charge.text));
+        if(!/^legende:/.test(vus[0]||'')||vus[0].slice(8)!==charge.text) return _echec('la légende copiée n’est pas celle partagée');
+      }finally{
+        delete navigator.canShare; delete navigator.share;
+        window._storyCopierLien=sv.lien; window._storyCopierLegende=sv.leg; window._estIOS=sv.ios; window.toast=sv.t; window.attribCompter=sv.ac;
+      }
+      return /Légende copiée · colle-la sous ta photo/.test(String(_storyCopierLegende))?true:_echec('le toast ne dit pas quoi faire');})());
+    ok('Légendes : « Voir la légende » l’affiche, la laisse modifier, et c’est elle qui part',(()=>{
+      const h=_htmlVisuelFonds('serie-fonds');
+      if(!/voirLegende\(typeDuSelecteur\('serie-fonds'\)\)[^>]*>Voir la légende/.test(h)) return _echec('le bouton manque à côté du format');
+      if(typeDuSelecteur('serie-fonds')!=='serie'||typeDuSelecteur('musc-12-fonds')!=='muscles'||typeDuSelecteur('wd-fonds')!=='bilan') return _echec('types');
+      for(const k of Object.keys(_legendePrete)) delete _legendePrete[k];
+      const t=voirLegende('rang');
+      const x=document.getElementById('legende-texte');
+      if(!x||x.value!==t) return _echec('la légende n’est pas affichée');
+      legendeModifiee('rang','Ma légende à moi #RepCore');
+      if(document.getElementById('legende-compte').textContent!=='25 / 220') return _echec('compte : '+document.getElementById('legende-compte').textContent);
+      fermerLegende();
+      if(_legendePour('rang')!=='Ma légende à moi #RepCore') return _echec('la légende modifiée n’est pas celle qui part');
+      if(_legendePour('rang')==='Ma légende à moi #RepCore') return _echec('elle ne sert qu’une fois');
+      return (legendeModifiee('rang','x'.repeat(400)).length===220)?true:_echec('longueur non bornée');})());
+    // ══ 28/09/2026 — LA CARTE D'INVITATION ═══════════════════════════════
+    ok('Invitation : la carte, story et post, données extrêmes — rien ne déborde, le code est dans son cadre',(()=>{
+      const cas=[{prenom:'Maximilien-Alexandre',code:'MAXIMI7K2',mois:2,base:1,signature:'MAXIMILIEN-ALEXANDRE DE LA TOUR'},
+        {prenom:'',code:'',mois:12,base:12,signature:''},{prenom:'Lou',code:'LOUX2K9',mois:2,base:1,signature:'LOU'}];
+      for(const d of cas) for(const fmt of ['story','post']) for(const f of ['transparent','carbone','rouge']){
+        const cv=_dessinerCarteInvitation(d,f,fmt);
+        if(cv.width!==1080||cv.height!==(fmt==='post'?1350:1920)) return _echec('taille '+cv.width+'×'+cv.height);
+        // Les bords de l'image restent vides de texte : 20 px de marge, sur les quatre côtés.
+        const g=cv.getContext('2d');
+        const bande=(x,y,w,h)=>{ const p=g.getImageData(x,y,w,h).data; let n=0; for(let i=3;i<p.length;i+=4) if(f==='transparent'&&p[i]>40) n++; return n; };
+        if(f==='transparent'&&(bande(0,0,20,cv.height)||bande(cv.width-20,0,20,cv.height)||bande(0,cv.height-12,cv.width,12))) return _echec('débord '+fmt+' '+JSON.stringify(d.prenom));
+      }
+      const d=invitationDonnees({fname:'Julie',parrainage:{code:'julie7k2'}});
+      return (d.code==='JULIE7K2'&&d.mois===TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus&&invitationDonnees({}).code==='')?true:_echec(JSON.stringify(d));})());
+    ok('Invitation : au partage, en story le lien avec ?ref= ; en post la légende avec le code',(()=>{
+      const sv={u:currentUser,lien:window._storyCopierLien,leg:window._storyCopierLegende,t:window.toast,ac:window.attribCompter,ios:window._estIOS,f:window.visuelFormatChoisi};
+      const vus=[]; let charge=null;
+      try{
+        currentUser={fname:'Julie',role:'athlete',parrainage:{code:'JULIE7K2'}};
+        window.toast=()=>{}; window.attribCompter=()=>{}; window._estIOS=()=>false;
+        window._storyCopierLien=(src)=>{ vus.push('lien:'+lienPerso(src)); return true; };
+        window._storyCopierLegende=(t)=>{ vus.push('legende:'+t); return true; };
+        Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>true});
+        Object.defineProperty(navigator,'share',{configurable:true,value:(o)=>{ charge=o; return Promise.resolve(); }});
+        partagerCarteInvitation(null,'story');
+        if(!/^lien:.*ref=JULIE7K2/.test(vus[0]||'')||charge.files[0].name.indexOf('repcore-invitation')!==0) return _echec('story : '+vus.join(' | '));
+        vus.length=0;
+        partagerCarteInvitation(null,'post');
+        if(!/^legende:.*JULIE7K2.*#RepCore/s.test(vus[0]||'')||!/-post\./.test(charge.files[0].name)) return _echec('post : '+vus.join(' | '));
+        // Chaque modèle de légende d'invitation porte le code.
+        for(let i=0;i<_LEGENDES.invitation.length;i++) if(legendePartage('invitation',{code:'JULIE7K2'},{indice:i,u:null}).indexOf('JULIE7K2')<0) return _echec('modèle '+i+' sans code');
+        if(typeDuSelecteur('pr-fonds')!=='invitation') return _echec('sélecteur');
+        // Sans code : rien ne part.
+        currentUser={fname:'X',role:'athlete'};
+        if(partagerCarteInvitation(null,'story')!==false) return _echec('partagé sans code');
+      }finally{
+        delete navigator.canShare; delete navigator.share;
+        currentUser=sv.u; window._storyCopierLien=sv.lien; window._storyCopierLegende=sv.leg; window.toast=sv.t; window.attribCompter=sv.ac; window._estIOS=sv.ios;
+      }
+      return true;})());
+    ok('Invitation : l’écran parrainage — la carte en tête, le texte et le lien en second',(()=>{
+      const d=document.createElement('div');
+      d.innerHTML=htmlParrainage({parrainage:{code:'JULIE7K2',inscrits:1,payants:0,prenoms:[]}});
+      const kids=[...d.children].map(x=>x.className);
+      const iCarte=kids.indexOf('pr-carte-inv'), iCode=kids.findIndex(c=>/pr-code-carte/.test(c));
+      if(iCarte<0||iCode<0||iCarte>iCode) return _echec('ordre : '+kids.join());
+      const rouge=d.querySelector('button.btn-red');
+      if(!rouge||!/Partager ma carte d’invitation/.test(rouge.textContent)||!/partagerCarteInvitation/.test(rouge.getAttribute('onclick'))) return _echec('bouton principal');
+      if(!d.querySelector('.pr-carte-inv .vfmt')||!d.querySelector('.pr-carte-inv #pr-fonds')) return _echec('formats et fonds absents');
+      const sec=[...d.querySelectorAll('.pr-secondaire button')].map(b=>b.textContent);
+      return (sec.join('|')==='Envoyer le texte|Copier le lien')?true:_echec(sec.join('|'));})());
+    ok('Invitation : « Inviter un pote » sur le rang, le palier de série et la dernière slide du Wrapped',(()=>{
+      const sv=currentUser;
+      try{
+        currentUser={fname:'Julie',role:'athlete',parrainage:{code:'JULIE7K2'}};
+        const h=htmlBoutonInviter();
+        if(!/Inviter un pote/.test(h)||!/btn-outline/.test(h)||/btn-red/.test(h)) return _echec('pas un bouton secondaire : '+h);
+        const wr=_wrHtmlSlide({k:'profil',sur:'TON PROFIL',profil:{nom:'X',phrase:'Y'},resume:[],equivalent:null},4);
+        if(!/Inviter un pote/.test(wr)) return _echec('Wrapped');
+        if(/Inviter un pote/.test(_wrHtmlSlide({k:'seances',sur:'S',grand:1,unite:'U',lignes:[]},0))) return _echec('sur une slide du milieu');
+        for(const f of [_rangEcran,_serieEcran]) if(!/htmlBoutonInviter\(\)/.test(String(f))) return _echec(f.name);
+        currentUser={role:'coach'};
+        if(htmlBoutonInviter()!=='') return _echec('proposé à un coach');
+      }finally{ currentUser=sv; }
+      return /_rangEcran\(x\.rang|_celebrerRang/.test(String(_bdgSuivant)+String(_celebrerRang))?true:_echec('le rang ne passe plus par _rangEcran');})());
+    ok('Invitation : l’accueil — une ligne sous le rang dès le premier filleul, rien avant',(()=>{
+      if(htmlLigneFilleuls({parrainage:{inscrits:0}})!==''||htmlLigneFilleuls({})!=='') return _echec('ligne sans filleul');
+      if(!PARRAINAGE_ACTIF) return true;
+      const h=htmlLigneFilleuls({parrainage:{inscrits:3,payants:1,moisGagnes:1,prenoms:[{prenom:'A',statut:'payant'},{prenom:'B',statut:'seance'},{prenom:'C',statut:'inscrit'}]}});
+      const t=h.replace(/<[^>]+>/g,'');
+      if(!/3 filleuls · 1 en route · 1 abonné · 1 mois gagné/.test(t)||!/ouvrirParrainage\(\)/.test(h)) return _echec(t);
+      return /1 filleul(?!s)/.test(htmlLigneFilleuls({parrainage:{inscrits:1,prenoms:[{prenom:'A',statut:'inscrit'}]}}).replace(/<[^>]+>/g,''))?true:_echec('singulier');})());
+    ok('Invitation : chaque filleul par son prénom — inscrit, 1re séance, abonné',(()=>{
+      const u={};
+      parrainageFusionnerCompte(u,{code:'JULIE7K2',filleuls:{a:{prenom:'Tom',statut:'payant',payeLe:5,date:3},b:{prenom:'Lou',date:2,premiereSeance:10},c:{prenom:'Zoé',date:1}}});
+      const st=u.parrainage.prenoms.map(x=>x.prenom+':'+x.statut).join();
+      if(st!=='Tom:payant,Lou:seance,Zoé:inscrit') return _echec(st);
+      const d=document.createElement('div');
+      d.innerHTML=htmlParrainage(u);
+      const l=[...d.querySelectorAll('.pr-f')].map(x=>x.querySelector('.pr-f-nom').textContent+'='+x.querySelector('b').textContent+'/'+x.querySelectorAll('.pr-f-etapes i.on').length);
+      if(l.join()!=='Tom=Abonné ✓/3,Lou=1re séance/2,Zoé=Inscrit/1') return _echec(l.join());
+      // Un miroir déjà écrit avec « seance » se relit tel quel.
+      return (filleulStatut({statut:'seance'})==='seance'&&filleulStatut(null)==='inscrit')?true:_echec('relecture');})());
+    // ══ 28/09/2026 — LA VIDÉO D'UN VISUEL ════════════════════════════════
+    ok('Vidéo : MP4 quand l’enregistreur le sait (Safari iOS), sinon WebM VP9, sinon rien',(()=>{
+      const que=(l)=>(t)=>l.indexOf(t)>=0;
+      const a=videoTypeChoisi(que(['video/mp4','video/webm;codecs=vp9']));
+      if(!a||a.type!=='video/mp4'||a.ext!=='mp4') return _echec('iOS : '+JSON.stringify(a));
+      const b=videoTypeChoisi(que(['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm']));
+      if(!b||b.mime!=='video/webm;codecs=vp9'||b.type!=='video/webm'||b.ext!=='webm') return _echec('Chrome : '+JSON.stringify(b));
+      if(videoTypeChoisi(()=>false)!==null) return _echec('aucun type : pas null');
+      return videoTypeChoisi(()=>{ throw new Error('x'); })===null?true:_echec('une exception passe');})());
+    ok('Vidéo : ~4 Mbit/s, et aucune scène ne peut dépasser 8 Mo',(()=>{
+      if(videoDebit(3600)!==4e6||videoDebit(8500)!==4e6) return _echec('débit : '+videoDebit(3600)+' / '+videoDebit(8500));
+      for(const ms of [1000,3600,8500,15000,30000,60000]){
+        const o=videoDebit(ms)*ms/1000/8;
+        if(!(o<VIDEO_MAX_OCTETS)) return _echec(ms+' ms → '+Math.round(o)+' octets');
+      }
+      return videoDebit(60000)<4e6?true:_echec('60 s : débit non abaissé');})());
+    ok('Vidéo : les durées — record et rang ~2,5 s + 1 s figée, Wrapped 5 × 1,5 s + 1 s figée',(()=>{
+      const w={seances:12,dureeTotale:600*60000,tonnage:42000,records:3,serieMax:4,badgesGagnes:[],meilleurRecord:null,
+        jourPrefere:null,heureMoyenne:null,muscleTop:null,profil:{nom:'RÉGULIER',phrase:'Tu tiens.'}};
+      const wr=videoScene('wrapped',{w,per:{titre:'SEPTEMBRE',cle:'m-2026-09'},signature:'X'});
+      if(wr.anim!==5*1500||videoDuree(wr)!==8500) return _echec('Wrapped : '+videoDuree(wr));
+      const r=videoScene('record',{donnees:{nm:'SQUAT',histMax:100,curMax:105,gain:5},fond:'transparent'});
+      const g=videoScene('rang',{donnees:{n:3,nom:'VOLTAGE',xp:4000},img:null,fond:'carbone'});
+      for(const s of [r,g]) if(!(s.anim>=2000&&s.anim<=3000)||videoDuree(s)!==s.anim+VIDEO_FIN_FIGEE) return _echec(s.type+' : '+s.anim);
+      if(VIDEO_FIN_FIGEE!==1000) return _echec('fin figée');
+      return (videoScene('records',{donnees:{records:[{nm:'A',curMax:1,histMax:0,gain:1}]}}).type==='records'&&videoScene('inconnu')===null)?true:_echec('dispatch');})());
+    ok('Vidéo : le compteur suit le temps (arcValeurA) — part de l’ancienne valeur, finit sur la vraie, sans dépasser',(()=>{
+      let prec=-Infinity;
+      for(let p=0;p<=1.0001;p+=0.05){ const v=arcValeurA(100,142.5,p,null); if(v<prec-1e-9||v>142.5+1e-9) return _echec('p='+p+' → '+v); prec=v; }
+      if(arcValeurA(100,142.5,0,null)!==100||arcValeurA(100,142.5,1,null)!==142.5||arcValeurA(100,142.5,7,null)!==142.5) return _echec('bornes');
+      const b=arcBruit(100,142.5,true);
+      if(b.length<2||b.length>3) return _echec('grésillement : '+b.length+' valeurs');
+      if(arcValeurA(100,142.5,0.7,b)!==b[0]||arcValeurA(100,142.5,1,b)!==142.5) return _echec('grésillement mal placé');
+      return arcBruit(1,2,false).length===0?true:_echec('bruit sans grésillement');})());
+    ok('Vidéo : chaque scène se peint image par image, 1080×1920, données extrêmes, sans lever — foudre comprise',(()=>{
+      const W=1080,H=1920;
+      const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+      const g=cv.getContext('2d');
+      const long='DÉVELOPPÉ COUCHÉ PRISE SERRÉE HALTÈRES SUR BANC INCLINÉ '.repeat(3);
+      const w={seances:123456,dureeTotale:99999*60000,tonnage:987654321,records:9999,serieMax:520,badgesGagnes:[],meilleurRecord:{nom:long,avant:1,apres:999.5},
+        jourPrefere:{lib:'mercredi'},heureMoyenne:{lib:'23 h 59'},muscleTop:{lib:long,series:9999},profil:{nom:'SURTENSION ABSOLUE',phrase:long}};
+      const scenes=[
+        videoScene('record',{donnees:{nm:long,histMax:227.5,curMax:1002.5,gain:775,date:Date.now(),signature:'MAXIMILIEN-ALEXANDRE'},fond:'transparent'}),
+        videoScene('record',{donnees:{nm:'SQUAT',histMax:0,curMax:60,gain:0},fond:'rouge'}),
+        videoScene('records',{donnees:{records:[{nm:long,histMax:1,curMax:2,gain:1},{nm:'B',histMax:3,curMax:4,gain:1}],signature:'X'},fond:'carbone'}),
+        videoScene('rang',{donnees:{n:12,nom:'SURTENSION ABSOLUE ÉTERNELLE',xp:99999999,signature:'X'},img:null,fond:'carbone'}),
+        videoScene('wrapped',{w,per:{titre:'SEPTEMBRE 2026',cle:'m-2026-09'},signature:'MAXIMILIEN-ALEXANDRE'})];
+      for(const s of scenes){
+        const e=s.preparer(W,H);
+        let clair=0;
+        for(let t=0;t<=s.anim;t+=50){
+          try{ g.setTransform(1,0,0,1,0,0); g.fillStyle='#000'; g.fillRect(0,0,W,H); s.peindre(g,t,e,W,H); }
+          catch(x){ return _echec(s.type+' à '+t+' ms : '+x.message); }
+          if(g.getTransform().a!==1) return _echec(s.type+' laisse une transformation');
+          // LA FOUDRE EST PEINTE : un flash blanc passe sur l'image.
+          const px=g.getImageData(8,H-8,1,1).data;
+          if(px[0]>200&&px[1]>200&&px[2]>200) clair++;
+        }
+        if(!clair) return _echec(s.type+' : pas de flash de foudre');
+      }
+      return true;})());
+    ok('Vidéo : la bascule « Image / Vidéo » — absente sans MediaRecorder, posée sur les écrans record, rang et Wrapped',(()=>{
+      const sv=Object.getOwnPropertyDescriptor(window,'MediaRecorder');
+      let avant=null; try{ avant=localStorage.getItem(VISUEL_MEDIA_CLE); }catch(e){}
+      try{
+        localStorage.setItem(VISUEL_MEDIA_CLE,'video');
+        Object.defineProperty(window,'MediaRecorder',{configurable:true,writable:true,value:undefined});
+        if(videoExportPossible()) return _echec('possible sans MediaRecorder');
+        if(_htmlVisuelMedia()!=='') return _echec('bascule posée sans MediaRecorder');
+        if(visuelMediaChoisi()!=='image') return _echec('« vidéo » retenu mais impossible : doit retomber sur l’image');
+        function Faux(){}
+        Faux.isTypeSupported=(t)=>t==='video/webm;codecs=vp9';
+        window.MediaRecorder=Faux;
+        if(!videoExportPossible()) return _echec('impossible avec un MediaRecorder');
+        const h=_htmlVisuelMedia();
+        if((h.match(/class="vmed-b/g)||[]).length!==2||!/data-media="video"[^>]*>Vidéo/.test(h)||!/aria-checked="true" data-media="video"/.test(h)) return _echec(h);
+        if(!/event\.stopPropagation\(\);visuelMediaChoisir/.test(h)) return _echec('un toucher dans Wrapped ferait avancer la slide');
+        visuelMediaChoisir('image');
+        if(visuelMediaChoisi()!=='image') return _echec('choix non retenu');
+        // Les trois écrans.
+        const rec=_htmlRecordsFin({records:[{nm:'SQUAT',histMax:100,curMax:105,gain:5}]},Date.now(),'wd');
+        if(rec.indexOf('class="vmed"')<0) return _echec('écran record');
+        const wr=_wrHtmlSlide({k:'profil',sur:'TON PROFIL',profil:{nom:'X',phrase:'Y'},resume:[],equivalent:null},4);
+        if(wr.indexOf('class="vmed"')<0) return _echec('écran Wrapped');
+        if(!/_htmlVisuelFonds\('rg-fonds'\)\+_htmlVisuelMedia\(\)/.test(String(_rangEcran))) return _echec('écran rang');
+      }finally{
+        if(sv) Object.defineProperty(window,'MediaRecorder',sv); else delete window.MediaRecorder;
+        try{ if(avant===null) localStorage.removeItem(VISUEL_MEDIA_CLE); else localStorage.setItem(VISUEL_MEDIA_CLE,avant); }catch(e){}
+      }
+      return true;})());
+    ok('Vidéo : « Vidéo » choisi, les trois partages passent par la vidéo ; « Image », par l’image',(()=>{
+      const sv={pv:window.partagerVideo,mc:window.visuelMediaChoisi,sp:window._storySortirPartage,wr:_wr,rc:_rangCourant};
+      const vus=[];
+      try{
+        window.partagerVideo=(s)=>{ vus.push(s&&s.type); return true; };
+        window._storySortirPartage=()=>{ vus.push('image'); return true; };
+        window.visuelMediaChoisi=()=>'video';
+        _recordsAffiches.test={liste:[{nm:'SQUAT',histMax:100,curMax:105,gain:5}],date:Date.now()};
+        partagerRecord('test',0,null);
+        _rangCourant={n:3,nom:'VOLTAGE',xp:4000,signature:''};
+        partagerRang(null);
+        _wr={w:{seances:1,dureeTotale:1,tonnage:1,records:0,serieMax:1,badgesGagnes:[],profil:{nom:'X',phrase:''}},per:{titre:'S',cle:'m-2026-09'},i:4};
+        partagerWrapped(4,null);
+        if(vus.join()!=='record,rang,wrapped') return _echec('vidéo : '+vus.join());
+        vus.length=0;
+        window.visuelMediaChoisi=()=>'image';
+        partagerRecord('test',0,null); partagerRang(null); partagerWrapped(4,null);
+        if(vus.join()!=='image,image,image') return _echec('image : '+vus.join());
+      }finally{
+        window.partagerVideo=sv.pv; window.visuelMediaChoisi=sv.mc; window._storySortirPartage=sv.sp; _wr=sv.wr; _rangCourant=sv.rc;
+        delete _recordsAffiches.test;
+      }
+      return true;})());
+    ok('Vidéo : l’écran — barre de progression pendant l’enregistrement, puis aperçu, Partager et Télécharger',(()=>{
+      const sv={fichier:window.File};
+      try{
+        _videoEcran(3600);
+        const b=document.querySelector('#video-export [role="progressbar"]');
+        if(!b||!/3,6|3\.6/.test(document.getElementById('video-export').textContent)) return _echec('pas de barre ou pas de durée');
+        _videoProgression(0.5);
+        if(document.getElementById('vid-barre-i').style.width!=='50%'||b.getAttribute('aria-valuenow')!=='50') return _echec('progression');
+        Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>true});
+        Object.defineProperty(navigator,'share',{configurable:true,value:()=>Promise.resolve()});
+        const blob=new Blob([new Uint8Array(1234)],{type:'video/webm'});
+        _videoEcranPret({blob,type:'video/webm',ext:'webm',nom:'repcore-record.webm',taille:blob.size,duree:3600},{type:'record'});
+        const d=document.getElementById('video-export');
+        const a=d&&d.querySelector('a[download]');
+        if(!d.querySelector('video[playsinline][muted],video[playsinline]')) return _echec('pas d’aperçu');
+        if(!a||a.getAttribute('download')!=='repcore-record.webm'||!/^blob:/.test(a.getAttribute('href'))) return _echec('téléchargement');
+        if(!/partagerVideoPrete\(\)/.test(d.innerHTML)) return _echec('pas de bouton Partager');
+        fermerVideo();
+        if(document.getElementById('video-export')) return _echec('ne se ferme pas');
+        // SANS partage de fichiers : Télécharger seul.
+        Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>false});
+        _videoEcran(1000);
+        _videoEcranPret({blob,type:'video/webm',ext:'webm',nom:'repcore-rang.webm',taille:blob.size,duree:1000},{type:'rang'});
+        const ok2=!/partagerVideoPrete\(\)/.test(document.getElementById('video-export').innerHTML);
+        fermerVideo();
+        if(!ok2) return _echec('un bouton Partager qui échouerait');
+      }finally{ delete navigator.canShare; delete navigator.share; fermerVideo(); }
+      // Le partage part d'un toucher NEUF : jamais d'await avant navigator.share.
+      return !/await/.test(String(partagerVideoPrete))?true:_echec('await avant le partage');})());
+    okA('Vidéo : une vraie vidéo s’enregistre (MediaRecorder de ce navigateur), la progression va jusqu’au bout',(async()=>{
+      if(!videoExportPossible()) return true;       // navigateur sans MediaRecorder : rien à enregistrer
+      const pr=[];
+      const r=await exporterVideoVisuel(videoScene('record',{donnees:{nm:'SQUAT',histMax:100,curMax:105,gain:5,signature:'X'},fond:'carbone'}),900,{progression:p=>pr.push(p)});
+      if(!r||!(r.blob instanceof Blob)||!(r.taille>1000)) return _echec('fichier : '+(r&&r.taille));
+      if(!/^video\/(mp4|webm)$/.test(r.type)||r.nom!=='repcore-record.'+r.ext) return _echec(r.type+' '+r.nom);
+      if(!(r.taille<VIDEO_MAX_OCTETS)) return _echec('plus de 8 Mo');
+      if(!pr.length||pr[pr.length-1]!==1) return _echec('progression : '+pr.slice(-3));
+      // Annulée en route : elle rejette, sans rien rendre.
+      let n=0;
+      try{ await exporterVideoVisuel(videoScene('wrapped',{w:{seances:1,dureeTotale:1,tonnage:1,records:0,serieMax:1,badgesGagnes:[],profil:{nom:'X',phrase:''}},per:{titre:'S',cle:'m'},signature:''}),2000,{annule:()=>++n>3}); return _echec('non annulée'); }
+      catch(e){ if(!/annul/.test(e.message)) return _echec('rejet : '+e.message); }
+      return true;}));
     ok('Ambassadeurs : le CSV mensuel ne porte que les commissions dues',(()=>{
       const r=ambCsvDues({LEA:_AMBF,ZED:{nom:'Zed',commissions:{'2026-09':{x:{commission:9,dueLe:1}}}}},'2026-10',500);
       const l=r.csv.trim().split('\n');

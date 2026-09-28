@@ -5,7 +5,8 @@
 //   · les travaux à heure fixe (série en danger, bilan, Wrapped, défis, rareté
 //     des badges, résumé des ambassadeurs) ;
 //   · le jugement des parrainages et des codes ambassadeur ;
-//   · le comptage des arrivées par un lien (/arrivee).
+//   · le comptage des arrivées par un lien (/arrivee) ;
+//   · l'aperçu des pages publiques dans WhatsApp et Instagram (/@…, /coach/…).
 //
 // SECRETS (posés par Kevin, jamais dans le dépôt) :
 //   FIREBASE_SERVICE_ACCOUNT  le JSON d'un compte de service Google (accès à la
@@ -13,6 +14,10 @@
 //   FIREBASE_DB_SECRET   l'ANCIEN code secret de la base : lu seulement tant
 //                        que le compte de service n'est pas posé. À supprimer.
 //   VAPID_PRIVATE_KEY    la clé privée VAPID (base64url, 43 caractères)
+//   ADMIN_SECRET         ce que /sante?cles=1 exige (Authorization: Bearer …).
+//                        Absent : /sante?cles=1 est fermé.
+// LIMITES (wrangler.toml, [[ratelimits]]) : LIMITE_ARRIVEES, par adresse IP,
+// pour /arrivee et /amb-clic. Absente (tests, ancien déploiement) : rien n'est limité.
 // VARIABLES (wrangler.toml) : FIREBASE_DB_URL, VAPID_PUBLIC_KEY.
 
 import { creerBase } from './base.js';
@@ -22,6 +27,7 @@ import { minute } from './planif.js';
 import { repondreAppel } from './appels.js';
 import { cloudinaryDestroy, compteCloudinary } from './medias.js';
 import { creerPaypal, recevoirWebhook, jetonPaypal } from './paypal.js';
+import { servirPagePublique } from './pages.js';
 
 // Les fonctions appelées par l'app (protocole onCall, jeton Firebase vérifié).
 const APPELS = { cloudinaryDestroy };
@@ -51,6 +57,17 @@ const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods
 // sortait sans en-têtes CORS, le navigateur y voyait « Impossible de joindre
 // le serveur », et l'app coupait les suppressions (_cldIndispo).
 const SANS_CORPS = new Set([101, 204, 205, 304]);
+// Comparaison en temps constant : la durée ne dit pas combien de caractères
+// sont justes.
+function egalSecret(a, b) {
+  const x = String(a || ''), y = String(b || '');
+  if (!x || !y) return false;
+  let d = x.length ^ y.length;
+  for (let i = 0; i < Math.max(x.length, y.length); i++) d |= (x.charCodeAt(i % x.length) || 0) ^ (y.charCodeAt(i % y.length) || 0);
+  return d === 0;
+}
+// L'adresse IP de l'appelant, telle que Cloudflare la donne.
+const ipDe = (req) => (req.headers && req.headers.get('CF-Connecting-IP')) || 'inconnue';
 const reponse = (corps, statut, type) => {
   const st = statut || 200;
   const vide = SANS_CORPS.has(st);
@@ -77,13 +94,22 @@ export default {
       }
       // L'app vient de déposer un événement : on le traite tout de suite,
       // sans attendre le réveil de la minute. Aucune donnée n'est lue ici.
+      // SANS EFFET si la file a été parcourue il y a moins de 30 s, ou si une
+      // autre exécution la tient (verrou : planif.js).
       if (url.pathname === '/reveil') {
         const o = outils(env);
-        ctx.waitUntil(minute(o).catch(() => {}));
+        ctx.waitUntil(minute(Object.assign({ source: 'reveil' }, o)).catch(() => {}));
         return reponse('', 202);
       }
       // L'arrivée par un lien (/i, la page d'accueil, les pages publiques).
+      // Limitée par adresse IP (LIMITE_ARRIVEES) : un script qui boucle ne
+      // gonfle ni les clics d'un ambassadeur, ni les compteurs « Viralité ».
       if (url.pathname === '/arrivee' || url.pathname === '/amb-clic') {
+        // Une panne du limiteur laisse passer : un clic compté de trop vaut
+        // mieux qu'une page publique qui renvoie 500.
+        let limite = null;
+        try { if (env.LIMITE_ARRIVEES && typeof env.LIMITE_ARRIVEES.limit === 'function') limite = await env.LIMITE_ARRIVEES.limit({ key: ipDe(req) }); } catch (e) { limite = null; }
+        if (limite && limite.success === false) return reponse('', 429, 'text/plain');
         const q = Object.fromEntries(url.searchParams);
         if (url.pathname === '/amb-clic' && q.c) q.amb = q.c;
         const o = outils(env);
@@ -93,7 +119,12 @@ export default {
       // LES CLÉS SONT-ELLES JUSTES, et pas seulement posées ? Un jeton PayPal
       // demandé, un ping Cloudinary authentifié. Rien d'autre ne sort que oui/non
       // et le code HTTP, jamais une clé.
+      // RÉSERVÉ À L'ADMINISTRATEUR : chaque appel demande un jeton PayPal et
+      // interroge Cloudinary — ouvert à tous, c'était une porte pour épuiser
+      // les quotas. Authorization: Bearer <ADMIN_SECRET>.
       if (url.pathname === '/sante' && url.searchParams.get('cles') === '1') {
+        const donne = String(req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
+        if (!egalSecret(donne, String(env.ADMIN_SECRET || '').trim())) return reponse(JSON.stringify({ erreur: 'réservé' }), 401);
         const r = {};
         try {
           const jeton = await jetonPaypal(env); r.paypal = 'ok';
@@ -111,6 +142,12 @@ export default {
           }
         } catch (e) { r.cloudinary = 'injoignable'; }
         return reponse(JSON.stringify(r));
+      }
+      // LES PAGES PUBLIQUES, AVEC LEUR APERÇU (/@<pseudo>, /coach/<slug>) :
+      // firebase.json y redirige ; voir pages.js. Mises en cache 6 h.
+      if ((req.method === 'GET' || req.method === 'HEAD') && (url.pathname.startsWith('/@') || url.pathname.startsWith('/coach/'))) {
+        const r = await servirPagePublique(req, { env, ctx });
+        if (r) return r;
       }
       if (url.pathname === '/sante') {
         // `acces` : « compte_service » est l'état voulu ; « secret_historique »

@@ -64,6 +64,70 @@ function prolonger(echeanceActuelle, ms, t) {
 }
 export const emailKey = (e) => String(e || '').toLowerCase().trim().replace(/\./g, ',');
 
+// ── LA SÉRIE, RECALCULÉE À LA DATE DU JOUR ────────────────────────────────
+// PORTÉ DE L'APP (rc-core : ecartNormalJours, _streakPerime, streakJokersBilan)
+// et gardé identique : le compteur stocké ne bouge qu'à la fin d'une séance,
+// et un push « ta série de 9 semaines est en danger » à quelqu'un dont l'app
+// affiche 0 depuis trois semaines était faux.
+//   · périmée : l'absence dépasse d'une semaine pleine l'écart normal
+//     (7 / créneaux actifs, arrondi au-dessus, + 1 jour), à compter de la
+//     dernière séance, d'une suspension levée ou d'un joker ;
+//   · sauvée : les jokers couvrent les semaines terminées sans validation
+//     (au moins une) — l'app les consommera à la prochaine ouverture ;
+//   · cassée : sinon.
+// ⚠ UNE DIFFÉRENCE, ASSUMÉE : l'app retire aussi des semaines manquées celles
+//   qu'un historique de suspensions a couvertes (_tcSuspensions). Le serveur
+//   ne lit pas cet historique ; il n'en tient compte que pour la dernière
+//   suspension levée (depart). Au pire, il juge cassée une série que les
+//   jokers sauveraient : il se tait, il ne ment pas.
+export const SERIE_MAX_JOURS = 14;
+const JOUR_MS = 864e5;
+const lundiDeCle = (cle) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(cle || ''));
+  return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : null;
+};
+export function serieDuJour(u, t) {
+  const s = Math.max(0, Number(u && u.streak) || 0);
+  const out = { valeur: 0, etat: 'aucune', semaines: s };
+  if (!s) return out;
+  if (u.suspension && u.suspension.actif) return Object.assign(out, { valeur: s, etat: 'gel' });
+  const der = Number(u.lastSession) || 0;
+  if (!der || t - der > SERIE_MAX_JOURS * JOUR_MS) return Object.assign(out, { etat: 'ancienne' });
+  const creneaux = (Array.isArray(u.sessions_config) ? u.sessions_config : Object.values(u.sessions_config || {}))
+    .filter((x) => x && x.active).length;
+  const ecart = Math.ceil(7 / Math.max(1, creneaux)) + 1;
+  const finSusp = (u.suspension && !u.suspension.actif && Number(u.suspension.fin) > 0) ? Number(u.suspension.fin) : 0;
+  const depart = Math.max(der, finSusp, Number(u.streakJokerLe) || 0);
+  if (Math.floor((t - depart) / JOUR_MS) <= ecart + 7) return Object.assign(out, { valeur: s, etat: 'vivante' });
+  // Périmée : les jokers la sauvent-ils ?
+  const l0 = lundiDeCle(u.streakWeek);
+  const jokers = Math.max(0, Math.min(2, Number(u.streakJokers) || 0));
+  if (l0 === null) return Object.assign(out, { etat: 'cassee' });
+  const lc = lundiDeCle(lundiParis(t));
+  let manquees = 0;
+  for (let k = 1; k < 600 && l0 + 7 * k * JOUR_MS < lc; k++) manquees++;
+  if (jokers >= Math.max(1, manquees)) return Object.assign(out, { valeur: s, etat: 'sauvee' });
+  return Object.assign(out, { etat: 'cassee' });
+}
+
+// ── LE BUDGET D'UNE EXÉCUTION (plan gratuit : 50 sous-requêtes, 10 ms de calcul)
+// Un push coûte ~7 requêtes (préférences, journal, abonnements, transaction,
+// l'envoi) et ~1,5 ms de chiffrement par appareil (mesuré : test/charge.test.mjs).
+// Cinq chiffrements par exécution tiennent sous les 10 ms avec la marge du
+// reste (lecture, JSON) ; au-delà, la suite part en sous-tâches.
+export const COUT_PUSH = 8;
+export const MAX_CHIFFREMENTS = 5;
+const MARGE = 2;
+
+// UN IDENTIFIANT EN FIN DE FILE /evenements : après tout ce qui y est déjà
+// (horodaté, trié comme ceux de l'app), au format que les règles acceptent.
+let _nFile = 0;
+export function idFile(t, marque) {
+  const a = new Uint8Array(4); crypto.getRandomValues(a);
+  return 'e' + Number(t).toString(36) + (marque || 'r') + (_nFile++ % 46656).toString(36).padStart(3, '0')
+    + Array.from(a, (b) => (b % 36).toString(36)).join('');
+}
+
 /**
  * @param {{db:any, vapid:{publique:string, privee:string}, fetchImpl?:Function, maintenant?:()=>number}} deps
  */
@@ -72,6 +136,44 @@ export function creerMetier(deps) {
   const now = deps.maintenant || (() => Date.now());
   const _val = async (c) => (await db.ref(c).get()).val();
   const _lire = (uid, champ) => _val('users/' + uid + '/' + champ);
+
+  // ══ LE BUDGET, ET CE QUI NE TIENT PAS DEDANS ═══════════════════════════
+  // planif.js fixe `reste` (les requêtes encore permises) à chaque réveil.
+  // Les boucles internes — un défi à tous les athlètes, le rappel des 48 h,
+  // les messages de la nuit, les ambassadeurs, les fins PayPal — le consultent
+  // AVANT chaque tour. Quand il ne suffit plus, elles écrivent la suite en
+  // SOUS-TÂCHES (une par athlète) au bout de /evenements, en une seule
+  // écriture, et rendent la main : le réveil suivant les reprend.
+  // Hors d'un réveil (webhook PayPal), rien n'est fixé : pas de limite ici.
+  let _reste = () => Infinity;
+  let _chiffres = 0;
+  function fixerBudget(fn) { _reste = typeof fn === 'function' ? fn : () => Infinity; _chiffres = 0; }
+  const reste = () => _reste();
+  const peutPousser = () => _reste() >= COUT_PUSH + MARGE && _chiffres < MAX_CHIFFREMENTS;
+  const chiffrements = () => _chiffres;
+  // `maj` : d'autres écritures à faire DANS LA MÊME requête (le passage de
+  // relais est atomique : rien n'est retiré sans que sa suite soit écrite).
+  async function differer(taches, maj0) {
+    const t = now();
+    const maj = Object.assign({}, maj0 || {});
+    for (const x of taches) maj['evenements/' + idFile(t, 't')] = Object.assign({ type: 'tache', par: 'worker', at: t }, x);
+    if (Object.keys(maj).length) await db.ref().update(maj);
+    return taches.length;
+  }
+  const tachePush = (uid, message, o) => Object.assign({ quoi: 'push', uid, message }, o && o.attendre === false ? { attendre: false } : {});
+  // [{uid, message}] : envoyés tant que le budget le permet, le reste différé.
+  async function pousserA(liste, o) {
+    let envoyes = 0;
+    for (let i = 0; i < liste.length; i++) {
+      if (!peutPousser()) {
+        await differer(liste.slice(i).map((x) => tachePush(x.uid, x.message, o)));
+        return { envoyes, differes: liste.length - i };
+      }
+      const r = await envoyerPush(liste[i].uid, liste[i].message, o);
+      if (r.envoye) envoyes++;
+    }
+    return { envoyes, differes: 0 };
+  }
 
   // ── LES DROITS (palier, échéance) — écrits par le serveur seul ──────────
   async function lireDroits(cle) { return _val('droits/' + cle); }
@@ -158,6 +260,7 @@ export function creerMetier(deps) {
     await Promise.all(ids.map(async (id) => {
       const s = subs[id];
       if (!s || !s.endpoint || !s.keys) return;
+      _chiffres++;
       try {
         const r = await envoyerA(s, charge, { publique: deps.vapid.publique, privee: deps.vapid.privee,
           contact: 'mailto:' + CREATOR_EMAIL, fetchImpl: deps.fetchImpl });
@@ -174,12 +277,20 @@ export function creerMetier(deps) {
   // Chacun rend la même chose : il traite UNE clé. Le découpage en lots et le
   // curseur sont dans planif.js.
   const planifies = {
-    // Série en danger : jeudi 18 h.
+    // Série en danger : jeudi 18 h. LA SÉRIE EST RECALCULÉE À LA DATE DU JOUR
+    // (serieDuJour, la règle de l'app) : rien si elle est cassée, gelée, ou
+    // si la dernière séance date de plus de 14 jours. Deux temps : trois
+    // champs d'abord, qui écartent la plupart des dossiers ; le reste ensuite.
     async serie(uid, t) {
       const lundi = lundiParis(t);
-      const [streak, semaine, susp, fname, jokers] = await Promise.all(['streak', 'streakWeek', 'suspension', 'fname', 'streakJokers'].map((c) => _lire(uid, c)));
-      if (!(Number(streak) > 0) || semaine === lundi || (susp && susp.actif)) return;
-      const n = Number(streak);
+      const [streak, semaine, der] = await Promise.all(['streak', 'streakWeek', 'lastSession'].map((c) => _lire(uid, c)));
+      if (!(Number(streak) > 0) || semaine === lundi) return 'rien';
+      if (!(Number(der) > 0) || t - Number(der) > SERIE_MAX_JOURS * JOUR_MS) return 'ancienne';
+      const [susp, fname, jokers, jokerLe, config] = await Promise.all(['suspension', 'fname', 'streakJokers', 'streakJokerLe', 'sessions_config'].map((c) => _lire(uid, c)));
+      const etat = serieDuJour({ streak, streakWeek: semaine, lastSession: der, suspension: susp, streakJokers: jokers,
+        streakJokerLe: jokerLe, sessions_config: config }, t);
+      if (etat.etat !== 'vivante' && etat.etat !== 'sauvee') return etat.etat;
+      const n = etat.valeur;
       await envoyerPush(uid, { type: 'serie', url: './?wo=1', tag: 'serie-' + lundi + '-jeu',
         title: 'Ta série de ' + n + ' semaine' + (n > 1 ? 's' : '') + ' est en danger',
         body: (fname ? fname + ', il' : 'Il') + ' te reste jusqu’à dimanche pour valider ta semaine.'
@@ -198,11 +309,16 @@ export function creerMetier(deps) {
         title: 'Ton mois de ' + nom + ' est prêt', body: 'Tes chiffres, tes records et ton profil t’attendent.' });
     },
     // Rappel de bilan : samedi 10 h, dernier bilan vieux de 13 jours ou plus.
+    // SEULEMENT POUR QUI A UN COACH ET A DÉJÀ FAIT UN BILAN : le bilan est
+    // ce que le coach lit ; sans coach, ou avant le premier, ce rappel
+    // demandait un geste que personne n'attendait.
     async bilan(uid, t) {
-      if ((await _lire(uid, 'role')) === 'coach') return;
+      const [role, coach] = await Promise.all([_lire(uid, 'role'), _lire(uid, 'coachEmailKey')]);
+      if (role === 'coach' || !coach) return 'sans_coach';
       const s = await db.ref('users/' + uid + '/bilans').orderByKey().limitToLast(1).get();
       let der = 0; s.forEach((c) => { der = Number((c.val() || {}).date) || 0; });
-      if (der && t - der < 13 * 864e5) return;
+      if (!der) return 'aucun_bilan';
+      if (t - der < 13 * 864e5) return 'recent';
       const fname = await _lire(uid, 'fname');
       await envoyerPush(uid, { type: 'bilan', url: './?bilan=1', tag: 'bilan-' + paris(t).jour,
         title: 'C’est l’heure de ton bilan', body: (fname ? fname + ', 10' : '10') + ' minutes quand tu as le temps ce week-end.' });
@@ -239,15 +355,21 @@ export function creerMetier(deps) {
         body: 'Le badge est à portée de main cette semaine.' });
     },
   };
-  // Les messages mis de côté pendant la nuit : 8 h 05.
+  // Les messages mis de côté pendant la nuit : 8 h 05. TOUS passent en
+  // sous-tâches, dans la même écriture qui les retire de push_attente : un
+  // par athlète, envoyés au rythme du budget, et rien ne se perd en route.
   async function apresHeuresCalmes() {
     const tout = (await _val('push_attente')) || {};
+    const maj = {}, taches = [];
     for (const uid of Object.keys(tout)) {
       const m = tout[uid];
-      await db.ref('push_attente/' + uid).remove();
+      maj['push_attente/' + uid] = null;
       if (!m || now() - (Number(m.at) || 0) > 12 * 3600e3) continue;
-      await envoyerPush(uid, m, { attendre: false });
+      const message = Object.assign({}, m); delete message.at;
+      taches.push(tachePush(uid, message, { attendre: false }));
     }
+    if (Object.keys(maj).length) await differer(taches, maj);
+    return taches.length;
   }
 
   // ── LA RARETÉ DES BADGES (la nuit), dossier par dossier ────────────────
@@ -337,9 +459,15 @@ export function creerMetier(deps) {
     await db.ref().update(maj);
   }
   // Tous les matins, 9 h : rappel des 48 h, annonces en attente, clôture.
+  // Un défi coûte ~5 requêtes (~8 à la clôture) : si le budget ne suffit plus
+  // pour le suivant, le coach entier est repris en sous-tâche. Tout y est
+  // idempotent (rappel48, dernierSysteme, clos) ; le premier défi passe
+  // toujours, pour que chaque reprise avance.
   async function defisQuotidienCoach(coach, t) {
     const jour = paris(t).jour;
+    let n = 0;
     for (const defi of await defisDuCoach(coach)) {
+      if (n++ > 0 && _reste() < 10) { await differer([{ quoi: 'defis_coach', coach }]); return 'differe'; }
       const etat = (await _val(defiChemin(coach, defi.id, 'etat'))) || {};
       if (etat.clos || t < Number(defi.debut)) continue;
       if (t > Number(defi.fin)) {
@@ -348,11 +476,12 @@ export function creerMetier(deps) {
       }
       if (Number(defi.fin) - t <= 48 * 3600e3 && !etat.rappel48) {
         const parts = await participants(coach, defi);
-        for (const p of parts.filter((x) => !x.termine))
-          await envoyerPush(p.cle, { type: 'defi', url: './?canal=1', tag: 'defi-48h-' + defi.id,
-            title: 'Plus que 48 h : ' + String(defi.titre || 'ton défi').slice(0, 60),
-            body: 'Objectif : ' + D.texteObjectif(defi) + '. Tu en es à ' + String(p.valeur).replace('.', ',') + '.' }, { attendre: false });
+        // Noté AVANT les envois : ceux qui ne tiennent pas dans le budget sont
+        // déjà écrits en sous-tâches quand pousserA rend la main.
         await db.ref(defiChemin(coach, defi.id, 'etat/rappel48')).set(true);
+        await pousserA(parts.filter((x) => !x.termine).map((p) => ({ uid: p.cle, message: { type: 'defi', url: './?canal=1', tag: 'defi-48h-' + defi.id,
+          title: 'Plus que 48 h : ' + String(defi.titre || 'ton défi').slice(0, 60),
+          body: 'Objectif : ' + D.texteObjectif(defi) + '. Tu en es à ' + String(p.valeur).replace('.', ',') + '.' } })), { attendre: false });
       }
       await recalculerDefi(coach, defi, t);
     }
@@ -721,9 +850,14 @@ export function creerMetier(deps) {
     for (const c of ATT.cheminsEvenement('payant', o, t)) await incr(c);
     return origine;
   }
+  // Une vue coûte 2 requêtes : au-delà du budget, un ambassadeur par sous-tâche.
   async function ambassadeursQuotidien() {
-    const tous = (await _val('ambassadeurs_publics')) || {};
-    for (const code of Object.keys(tous)) { try { await ambMajVue(code); } catch (e) { /* le suivant */ } }
+    const codes = Object.keys((await _val('ambassadeurs_publics')) || {});
+    for (let i = 0; i < codes.length; i++) {
+      if (i > 0 && _reste() < 6) { await differer(codes.slice(i).map((code) => ({ quoi: 'amb_vue', code }))); return 'differe'; }
+      try { await ambMajVue(codes[i]); } catch (e) { /* le suivant */ }
+    }
+    return codes.length;
   }
 
   // ══ L'ATTRIBUTION : l'arrivée par un lien ══════════════════════════════
@@ -763,11 +897,11 @@ export function creerMetier(deps) {
       const obj = D.texteObjectif(m);
       const fin = Number(m.fin) ? new Date(Number(m.fin)).toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', day: 'numeric', month: 'long' }) : '';
       const annuaire = await db.ref('annuaire_coach/' + coach).shallow();
-      for (const uid of annuaire)
-        await envoyerPush(uid, { type: 'defi', url: './?canal=1', tag: 'defi-' + msg,
-          title: 'Nouveau défi : ' + String(m.titre || 'ton coach te lance un défi').slice(0, 60),
-          body: (m.collectif ? 'En équipe : ' : 'Objectif : ') + obj + (fin ? ' d’ici le ' + fin : '') + '. Tu le relèves ?' });
-      return 'envoye';
+      const message = { type: 'defi', url: './?canal=1', tag: 'defi-' + msg,
+        title: 'Nouveau défi : ' + String(m.titre || 'ton coach te lance un défi').slice(0, 60),
+        body: (m.collectif ? 'En équipe : ' : 'Objectif : ') + obj + (fin ? ' d’ici le ' + fin : '') + '. Tu le relèves ?' };
+      const r = await pousserA(annuaire.map((uid) => ({ uid, message })));
+      return r.differes ? 'differe' : 'envoye';
     }
     if (type === 'defi_maj') {
       const coach = String(e.coach || ''), id = String(e.id || '').replace(/[^A-Za-z0-9_-]/g, '');
@@ -778,12 +912,46 @@ export function creerMetier(deps) {
       await recalculerDefi(coach, Object.assign({}, m, { id }), t);
       return 'recalcule';
     }
+    // LA PREMIÈRE SÉANCE D'UN FILLEUL : son parrain est prévenu, une fois.
+    // L'événement ne dit rien que le Worker croie : le lien de parrainage et
+    // la séance sont relus. La séance pas encore synchronisée (le dossier
+    // part juste après l'événement) : on LÈVE, et la file réessaie à la
+    // minute suivante (planif.js, cinq essais).
+    if (type === 'filleul_seance') {
+      const par = String(e.par || '');
+      const lien = await _val('parrainage/liens/' + par);
+      if (!lien || !lien.parrain || !lien.id) return 'sans_parrain';
+      const [der, prenom] = await Promise.all([_lire(par, 'lastSession'), _lire(par, 'fname')]);
+      if (!(Number(der) > 0)) throw new Error('première séance pas encore synchronisée');
+      const fait = await db.ref('parrainage/comptes/' + lien.parrain + '/filleuls/' + lien.id + '/premiereSeance')
+        .transaction((v) => (v ? undefined : t));
+      if (!fait.committed) return 'deja_prevenu';
+      const nom = String(prenom || '').trim().slice(0, 24);
+      await envoyerPush(lien.parrain, { type: 'filleul', url: './?parrainage=1', tag: 'filleul-seance-' + lien.id,
+        title: (nom || 'Ton filleul') + ' a fait sa première séance',
+        body: 'Ton invitation a pris. Son premier paiement t’offrira 1 mois de RepCore.' });
+      return 'prevenu';
+    }
     return 'type_inconnu';
+  }
+
+  // ══ UNE SOUS-TÂCHE (écrite par differer, jamais par l'app : les règles
+  // refusent le type « tache » à un client) ══════════════════════════════
+  async function tache(e) {
+    const quoi = String((e && e.quoi) || '');
+    if (quoi === 'push') {
+      const r = await envoyerPush(String(e.uid || ''), e.message || {}, e.attendre === false ? { attendre: false } : undefined);
+      return r.envoye ? 'envoye' : (r.raison || 'rien');
+    }
+    if (quoi === 'amb_vue') { await ambMajVue(String(e.code || '')); return 'vue'; }
+    if (quoi === 'defis_coach') return defisQuotidienCoach(String(e.coach || ''), now());
+    return 'tache_inconnue';
   }
 
   return { envoyerPush, abonnes, planifies, apresHeuresCalmes, statsBadgesUn, statsBadgesFin,
     defisQuotidienCoach, coachsAvecCanal, recalculerDefi, parrainageDemande, parrainagePaiement,
     ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits, majDroits, palierDroits,
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
-    retirerMoisOffert, annulerAttribution, commissionVente };
+    retirerMoisOffert, annulerAttribution, commissionVente,
+    fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, tache };
 }

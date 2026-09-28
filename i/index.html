@@ -22,6 +22,18 @@
   LE CAS QUI CASSE TOUT : le navigateur interne d'Instagram. Il n'installe
   aucune PWA et ne garde rien. On ne redirige donc PAS depuis ce navigateur :
   on explique, et on donne le lien a copier.
+
+  L'ACCUEIL NOMINATIF (27/09/2026). Quatre arrivees, quatre pages :
+    ?ref=<CODE>  un ami : « <Prenom> t'invite sur RepCore », l'embleme de son
+                 rang, la duree de l'essai, un bouton « Commencer ». Le prenom
+                 et le rang sont lus dans /parrainage/codesPublics/<CODE>, qui
+                 ne porte rien d'autre et se lit code par code, sans compte ;
+    ?amb=<CODE>  un ambassadeur : son nom (/ambassadeurs_publics/<CODE>) ;
+    ?inv=, ?c=, ?coach=  l'invitation d'un coach : le texte de toujours ;
+    rien         un texte general, sans « code coach ».
+  Ami et ambassadeur n'ouvrent pas l'app d'eux-memes : la page EST l'accueil,
+  on la laisse lire. Le prenom lu est garde (rc_parrain_invite) : l'app, sur
+  le meme domaine, le reprend a l'inscription.
 -->
 <style>
 :root{--fond:#080808;--carte:#141414;--bord:#2a2a2a;--txt:#f2f2f2;--gris:#a8a8a8;--vif:#c9f24d}
@@ -42,19 +54,39 @@ ol{margin:0;padding-left:20px}li{margin:8px 0}
 code{background:#000;border:1px solid var(--bord);border-radius:6px;padding:2px 6px;
   font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;word-break:break-all}
 .petit{font-size:13px;color:var(--gris);text-align:center;margin-top:18px}
+.embleme{width:112px;height:112px;display:block;margin:4px auto 10px;filter:drop-shadow(0 6px 22px rgba(224,32,32,.35))}
+.promesse{text-align:center;color:var(--txt);font-size:17px;margin:4px 0 18px}
+.promesse strong{color:var(--vif)}
+.invite-nom{color:var(--txt);font-weight:700;text-align:center;margin:0 0 12px}
 [hidden]{display:none!important}
 </style>
 </head>
 <body>
 <div class="boite">
   <img class="logo" src="../app/icons/icon-192x192.png" alt="RepCore">
-  <h1>Ton accès RepCore</h1>
+  <h1 id="titre">Ton accès RepCore</h1>
+
+  <!-- Invité par un ami ou un ambassadeur : l'accueil, par son nom. -->
+  <div id="accueil" hidden>
+    <img id="embleme" class="embleme" alt="" hidden>
+    <p class="promesse"><strong><span id="mois-ami" data-nb="essai.moisParraine">2</span> mois pour essayer</strong>, toute l'app ouverte, sans carte bancaire.</p>
+    <a class="bouton" id="commencer" href="../app/">Commencer</a>
+    <p class="petit" style="margin-top:10px">L'app s'ouvre et te propose de l'installer sur ton écran d'accueil.</p>
+  </div>
 
   <!-- Navigateur normal : on ouvre l'app. -->
   <div id="ok" hidden>
     <p style="text-align:center">Ouverture de l'application…</p>
     <a class="bouton" id="go" href="../app/">Ouvrir RepCore</a>
-    <div class="carte">
+    <!-- Sans invitation : rien sur un code de coach que la personne n'a pas. -->
+    <div class="carte" id="etapes-generique" hidden>
+      <ol>
+        <li>L'app s'ouvre, un bouton te propose de <strong>l'installer</strong> sur ton écran d'accueil.</li>
+        <li>Crée ton compte : <strong><span data-nb="essai.mois">1</span> mois d'essai</strong>, toute l'app ouverte, sans carte bancaire.</li>
+      </ol>
+      <p style="margin:12px 0 0;font-size:14px">Sur iPhone, si aucun bouton n'apparaît : <strong>Partager</strong> puis <strong>Sur l'écran d'accueil</strong>.</p>
+    </div>
+    <div class="carte" id="etapes-coach">
       <ol>
         <li>L'app s'ouvre, un bouton te propose de <strong>l'installer</strong> sur ton écran d'accueil.</li>
         <li>Elle te demande ensuite ton <strong>code d'invitation</strong> (format <code>RC-XXXX-XXXX</code>), celui que ton coach t'a envoyé.</li>
@@ -65,6 +97,7 @@ code{background:#000;border:1px solid var(--bord);border-radius:6px;padding:2px 
 
   <!-- Navigateur interne d'une application (Instagram, Messenger, TikTok…). -->
   <div id="interne" hidden>
+    <p class="invite-nom" id="interne-invite" hidden></p>
     <div class="carte">
       <p style="color:var(--txt);margin-bottom:10px"><strong>Tu es dans le navigateur d'Instagram.</strong>
       L'application ne peut pas s'installer depuis ici.</p>
@@ -99,6 +132,9 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
 <script>
 (function(){
   var p=new URLSearchParams(location.search);
+  // Les éléments de l'accueil nominatif peuvent manquer (un banc qui rejoue ce
+  // script n'en fournit que six) : chaque accès passe par el(), sans lever.
+  function el(id){ try{ return document.getElementById(id)||null; }catch(e){ return null; } }
   // « c » et « code » sont les raccourcis qu'on peut ecrire a la main dans un
   // message ; l'app, elle, ne lit que « inv ». On traduit ici plutot que de
   // demander a l'athlete de comprendre la difference.
@@ -108,6 +144,12 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
   // L'AMBASSADEUR : le code voyage jusqu'a /app/ avec le reste (?amb=).
   var amb=(p.get('amb')||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
   if(amb) p.set('amb',amb);
+  // LE PARRAIN : même forme que PARRAINAGE_CODE_RE dans l'app.
+  var ref=(p.get('ref')||'').trim().toUpperCase();
+  if(!/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)) ref='';
+  // Le coach passe devant (son invitation relie le compte), puis
+  // l'ambassadeur (un seul avantage, comme dans l'app), puis l'ami.
+  var mode=(p.get('inv')||p.get('coach'))?'coach':amb?'amb':ref?'ami':'generique';
   var q=p.toString();
   // Chemin RELATIF : la meme page sert sur repcore-sync.web.app/i/ et sur
   // repcore131.github.io/coaching/i/, ou « /app/ » ne designerait rien.
@@ -120,6 +162,42 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
 
   document.getElementById('go').href=cible;
   document.getElementById('quand-meme').href=cible;
+  var commencer=el('commencer'); if(commencer) commencer.href=cible;
+
+  // ── L'ACCUEIL PAR LE NOM ────────────────────────────────────────────────
+  // textContent partout : un prénom ne devient jamais du HTML.
+  var mois=(el('mois-ami')&&el('mois-ami').textContent)||'2';
+  function poserNom(nom,rang){
+    if(!nom) return;
+    var t=el('titre'); if(t) t.textContent=nom+' t\u2019invite sur RepCore';
+    var ii=el('interne-invite');
+    // Le titre porte déjà le prénom : sous lui, l'offre seule.
+    if(ii){ ii.textContent=mois+' mois pour essayer, toute l\u2019app ouverte, sans carte bancaire.'; ii.hidden=false; }
+    var n=Math.round(Number(rang));
+    var e=el('embleme');
+    if(e&&n>=1&&n<=10){ e.src='../app/img/rangs/rang_'+n+'-512.webp'; e.alt='Rang '+n; e.hidden=false; }
+  }
+  var BASE='https://repcore-sync-default-rtdb.firebaseio.com/';
+  if((mode==='ami'||mode==='amb')&&el('accueil')){
+    var t0=el('titre');
+    if(t0) t0.textContent=mode==='ami'?'Un ami t\u2019invite sur RepCore':'On t\u2019invite sur RepCore';
+    try{
+      fetch(BASE+(mode==='ami'?'parrainage/codesPublics/'+ref:'ambassadeurs_publics/'+amb)+'.json')
+        .then(function(r){ return r.ok?r.json():null; })
+        .then(function(d){
+          if(!d||typeof d!=='object') return;
+          if(mode==='amb'){ if(d.actif!==false) poserNom(String(d.nom||'').slice(0,80)); return; }
+          var prenom=String(d.prenom||'').trim().slice(0,24);
+          poserNom(prenom,d.rang);
+          // L'app (même domaine) le reprend à l'inscription.
+          try{ localStorage.setItem('rc_parrain_invite',JSON.stringify({code:ref,prenom:prenom,rang:Number(d.rang)||0,le:Date.now()})); }catch(e){}
+        }).catch(function(){});
+    }catch(e){}
+  } else if(mode==='generique'){
+    var g=el('etapes-generique'), k=el('etapes-coach');
+    if(g) g.hidden=false; if(k) k.hidden=true;
+    var tg=el('titre'); if(tg) tg.textContent='Bienvenue sur RepCore';
+  }
 
   if(interne){
     var abs=new URL(cible,location.href).href;
@@ -144,6 +222,10 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
     });
     return;
   }
+
+  // INVITÉ PAR UN AMI OU UN AMBASSADEUR : la page est l'accueil, on la laisse
+  // lire. Le bouton « Commencer » ouvre l'app.
+  if((mode==='ami'||mode==='amb')&&el('accueil')){ el('accueil').hidden=false; return; }
 
   document.getElementById('ok').hidden=false;
   // replace() et non href : le retour arriere doit ramener a Instagram, pas
