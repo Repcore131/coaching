@@ -3345,6 +3345,8 @@ body.with-tabbar #rc-ban-install{padding-bottom:10px}
 /* SEPT CARTES DU MODULE NUTRITION declaraient la meme chose a quelques octets
    pres — meme degrade, meme bordure, meme ombre, meme rembourrage. Une seule
    definition, et la prochaine retouche ne peut plus les faire diverger. */
+/* L'objectif actuel, sous la carte Nutrition de l'accueil (28/09/2026). */
+#clh-bandeau-phase:not(:empty){margin-top:12px}
 .card-nut{background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);
   border-radius:var(--r-lg);box-shadow:var(--elev-2);padding:16px;position:relative;overflow:hidden}
 /* == LA CARTE NUTRITION ====================================================
