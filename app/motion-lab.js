@@ -10153,10 +10153,10 @@ function mlExerciceVideo(nom){
 function mlMesureBas(pose){
   const sp=mlAnglesSerie(pose), g=sp.ang.genou||[];
   let k=-1, m=Infinity;
-  for(let i=0;i<g.length;i++) if(g[i]!=null&&g[i]<m){ m=g[i]; k=i; }
+  for(let i=0;i<g.length;i++){ const gi=g[i]; if(gi!=null&&gi<m){ m=gi; k=i; } }
   if(k<0) return null;
   const vw=pose.vw, vh=pose.vh;
-  const X=sp.X[k].map((/** @type {number} */ v)=>v*vw), Y=sp.Y[k].map((/** @type {number} */ v)=>v*vh);
+  const X=(sp.X[k]||[]).map((/** @type {number} */ v)=>v*vw), Y=(sp.Y[k]||[]).map((/** @type {number} */ v)=>v*vh);
   const r=sp.theta?mlRedresser(X,Y,sp.theta,vw/2,vh/2):{X,Y};
   /** @param {string} n */
   const P=n=>{ const i=mlRangPose(n,sp.cote); return (i<0||!(sp.V[k][i]>=ML_POSE_VIS_MIN)||!isFinite(r.X[i]))?null:{x:r.X[i],y:r.Y[i]}; };
@@ -12500,8 +12500,9 @@ function mlMorphoRapports(p,w,h){
  *            bras:number,avantbras:number,tronc:number,cotes:number}|null}
  */
 function mlMorphoPixels(p,w,h){
-  const vu=i=>!!p[i]&&(p[i].visibility||0)>=ML_MORPHO_VIS;
+  const vu=(/** @type {number} */ i)=>!!p[i]&&(p[i].visibility||0)>=ML_MORPHO_VIS;
   /** Moyenne des deux cotes, ou null si l'un manque ou s'ils divergent. */
+  /** @param {number} aG @param {number} bG @param {number} aD @param {number} bD */
   const paire=(aG,bG,aD,bD)=>{
     if(!vu(aG)||!vu(bG)||!vu(aD)||!vu(bD)) return null;
     const g=_mlmDist(p[aG],p[bG],w,h), d=_mlmDist(p[aD],p[bD],w,h);
@@ -12529,7 +12530,7 @@ function mlMorphoPixels(p,w,h){
     const d=_mlmDist(ep,ha,w,h);
     return (d>0)?{v:d,ec:0}:null;
   })();
-  const r=x=>x?Math.round(x.v*10)/10:0;
+  const r=(/** @type {{v:number}|null} */ x)=>x?Math.round(x.v*10)/10:0;
   return {genou:r(genou),yeux:r(yeux),cuisse:r(cuisse),jambe:r(jambe),
     bras:r(bras),avantbras:r(avantbras),tronc:r(tronc),
     cotes:Math.round(genou.ec*1000)/1000};
@@ -12538,7 +12539,7 @@ function mlMorphoPixels(p,w,h){
  * Lit une photo et rend ce qu'elle dit — après le contrôle de prise de vue,
  * jamais avant.
  * @param {string} src  l'image, telle que le bilan la porte
- * @returns {Promise<{ok:boolean, code?:string, prise?:any, rapports?:any[], px?:{w:number,h:number}}>}
+ * @returns {Promise<{ok:boolean, code?:string, prise?:any, rapports?:any[], pixels?:any, px?:{w:number,h:number}}>}
  */
 async function mlMorphoPhoto(src){
   if(!src||typeof src!=='string') return {ok:false,code:'image'};
@@ -12620,7 +12621,7 @@ function _mlAnatRle(bits){
  * @param {string} src
  * @param {{filtre?:string, cadre?:{x0:number,y0:number,x1:number,y1:number}|null}} [o]
  * @returns {Promise<{ok:boolean, code?:string, w?:number, h?:number,
- *   pts?:number[][], masque?:{w:number,h:number,rle:string}|null}>}
+ *   pts?:number[][], masque?:{w:number,h:number,rle:string}|null, z?:(number|null)[], lum?:any}>}
  */
 async function mlAnatPhoto(src,o){
   if(!src||typeof src!=='string') return {ok:false,code:'image'};
