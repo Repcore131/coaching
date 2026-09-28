@@ -48999,13 +48999,20 @@ async function testExercices(){
       const S=(j,w)=>({date:t0+j*J,data:{'SQUAT':{sets:[{weight:String(w),reps:'5',done:true}]}}});
       const u=_PPU({sessions:[S(0,100),S(2,105),S(4,110)],weightLog:[{kg:82}],athletePhoto:'https://x/p.jpg',
         bilans:[{date:t0,poids:80}],sleepLog:[{date:'2026-01-05',duration:7}],pseudo:'Juju'});
-      const d=pagePubliqueDonnees(u,{rang:true,serie:true,badges:true,records:true,seances:true},t0+9*J);
-      const permis=['prenom','rang','serie','seances','badges','records','ref','maj'];
+      // LES CHOIX PAR DÉFAUT (tout sauf les charges) : aucune charge, aucune mesure.
+      const d=pagePubliqueDonnees(u,pageMontrerDefaut(),t0+9*J);
+      const permis=['prenom','rang','volts','serie','semaines','seances','badges','ref','maj'];
       const trop=Object.keys(d).filter(k=>permis.indexOf(k)<0);
       if(trop.length) return _echec('champs en trop : '+trop.join());
       const txt=JSON.stringify(d);
-      if(/\b(100|105|110|82|80)\b/.test(txt.replace(/"date":\d+|"maj":\d+/g,''))||/photo|poids|kg/i.test(txt)) return _echec('une charge ou une mesure fuit : '+txt);
-      if(!d.records||d.records.length!==1||d.records[0].exo!=='SQUAT'||Object.keys(d.records[0]).join()!=='exo,date') return _echec('records : '+JSON.stringify(d.records));
+      if(/\b(100|105|110|82|80)\b/.test(txt.replace(/"date":\d+|"maj":\d+|"xp":\d+|"de":\d+|"a":\d+/g,''))||/photo|poids|kg/i.test(txt)) return _echec('une charge ou une mesure fuit : '+txt);
+      if(pageMontrerDefaut().meilleurs!==false) return _echec('les charges cochées par défaut');
+      // Cochée : les 3 meilleurs records, avec la charge. Le poids de corps, jamais.
+      const m=pagePubliqueDonnees(u,Object.assign(pageMontrerDefaut(),{meilleurs:true}),t0+9*J);
+      if(!m.meilleurs||m.meilleurs.length!==1||m.meilleurs[0].exo!=='SQUAT'||m.meilleurs[0].kg!==110||Object.keys(m.meilleurs[0]).join()!=='exo,kg,date') return _echec('meilleurs : '+JSON.stringify(m.meilleurs));
+      if(/\b(82|80)\b|photo|poids/i.test(JSON.stringify(m).replace(/"date":\d+|"maj":\d+/g,''))) return _echec('une mesure fuit avec les charges');
+      // L'ancien choix « records » ne publie plus rien.
+      if(pagePubliqueDonnees(u,{records:true},t0).records) return _echec('ancien choix records');
       const rien=pagePubliqueDonnees(u,{},t0);
       return (Object.keys(rien).sort().join()==='maj,prenom,ref')?true:_echec('sans choix : '+Object.keys(rien).join());})());
     ok('Pages : la vitrine publique — sans base64, sans coordonnées, en https seulement',(()=>{
@@ -49040,6 +49047,8 @@ async function testExercices(){
       const d=document.createElement('div'); d.innerHTML=htmlReglagesPagePublique(_PPU());
       if(d.querySelector('#pp-active').checked) return _echec('page activée par défaut');
       if(d.querySelectorAll('[data-montrer]').length!==5) return _echec('choix');
+      if(d.querySelector('[data-montrer="meilleurs"]').checked) return _echec('les charges cochées par défaut');
+      if(![...d.querySelectorAll('[data-montrer]')].filter(x=>x.dataset.montrer!=='meilleurs').every(x=>x.checked)) return _echec('les autres choix décochés');
       if(!/Copier mon lien pour ma bio Instagram/.test(d.textContent)) return _echec('bouton bio');
       return d.querySelectorAll('button.btn:not(.btn-casse)').length===0?true:_echec('R31 : bouton en capitales');})());
     ok('Pages : pages publiques et réécritures présentes, lecture publique bornée',(()=>{
@@ -49052,7 +49061,82 @@ async function testExercices(){
       if(fj&&(!/"source": "\/@\*"/.test(fj)||!/"source": "\/coach\/\*"/.test(fj))) return _echec('réécritures');
       return true;})());
     ok('Pages : réglages publics classés non-santé',
-      ['pagePublique','vitrineSlug','vitrinePubliee','specialites'].every(k=>CHAMPS_NON_SANTE.indexOf(k)>=0));
+      ['pagePublique','vitrineSlug','vitrinePubliee','specialites','pagePropose'].every(k=>CHAMPS_NON_SANTE.indexOf(k)>=0));
+    // ══ 28/09/2026 — LA PAGE PUBLIQUE : CONTENU, PROPOSITION, APERÇU ══════
+    ok('Page : les 12 dernières semaines — 1 validée, 0 manquée, e la semaine en cours',(()=>{
+      const t=Date.parse('2026-09-30T12:00:00+02:00');     // un mercredi
+      const l0=_lundiDe(t).getTime();
+      const S=(sem,j)=>({date:_datePlusJours(l0,-7*sem+j).getTime()+10*3600e3});
+      // Quota 1 (aucun programme) : semaines -11, -9, -1 validées ; la semaine en cours pas encore.
+      const u={sessions:[S(11,0),S(9,2),S(1,4)]};
+      const w=semainesPubliques(u,t,12);
+      if(w!=='101000000010'.slice(0,11)+'e') return _echec(w);
+      if(semainesPubliques({sessions:[S(0,0)]},t,12)!=='00000000000'+'1') return _echec('semaine en cours validée');
+      return /^[01]{11}[01e]$/.test(semainesPubliques({},t))?true:_echec('vide');})());
+    ok('Page : la jauge de volts et les badges en images (un secret seulement découvert)',(()=>{
+      const u=_PPU({xp:4100});
+      const v=voltsPublics({xp:4100,sessions:[]});
+      const r=rangDe(xpDe({xp:4100,sessions:[]}));
+      if(v.xp!==Math.round(r.xp)||v.de!==r.rang.seuil||v.a!==(r.suivant?r.suivant.seuil:0)) return _echec(JSON.stringify(v));
+      const sec=BADGES_ACQUIS.find(b=>b.famille==='secret'), nor=BADGES_ACQUIS.find(b=>b.famille!=='secret');
+      if(!sec||!nor) return _echec('badges de test');
+      const d=pagePubliqueDonnees(Object.assign(u,{badges:{[nor.id]:{at:5},[sec.id]:{at:6}}}),{badges:true},10);
+      const b=d.badges||[];
+      const bs=b.find(x=>x.id===sec.id), bn=b.find(x=>x.id===nor.id);
+      if(!bs||!bs.secret||!bn||bn.secret) return _echec(JSON.stringify(b));
+      if(!b.every(x=>/^img\/badges\/[a-z0-9_-]+\.(webp|png)$/.test(x.img||x.repli||''))) return _echec('images : '+JSON.stringify(b));
+      // Non découvert : absent.
+      const d2=pagePubliqueDonnees(_PPU({badges:{[nor.id]:{at:5}}}),{badges:true},10);
+      return !(d2.badges||[]).some(x=>x.secret)?true:_echec('un secret non découvert publié');})());
+    ok('Page : les règles acceptent volts, semaines, badges en images et meilleurs — et rien d’autre',(()=>{
+      const x=new XMLHttpRequest(); x.open('GET','../database.rules.json',false); x.send();
+      const r=x.status===200?x.responseText:'';
+      if(!r) return true;
+      const i=r.indexOf('"profils_publics"'), j=r.indexOf('"slugs"',i), z=r.slice(i,j);
+      for(const k of ['"volts"','"semaines"','"img"','"repli"','"secret"','"meilleurs"','"kg"']) if(z.indexOf(k)<0) return _echec(k+' absent des règles');
+      return /\^\[01\]\{11\}\[01e\]\$/.test(z)&&/newData\.val\(\) <= 1000/.test(z)?true:_echec('bornes');})());
+    ok('Page : proposée au passage de rang — pseudo pré-rempli, un geste ; une fois de plus au rang suivant, puis jamais',(()=>{
+      const u=_PPU({fname:'Élodie Martin'});
+      if(pseudoSuggere(u)!=='elodie.martin') return _echec(pseudoSuggere(u));
+      if(!PSEUDO_PUBLIC_RE.test(pseudoSuggere({fname:'É'}))||!PSEUDO_PUBLIC_RE.test(pseudoSuggere({}))) return _echec('pseudo court');
+      if(!pagePropositionDue(u,3)) return _echec('pas proposée');
+      const sv={s:window.saveUser,u:currentUser};
+      try{
+        window.saveUser=()=>{};
+        _noterPropositionPage(u,3);
+        if(pagePropositionDue(u,3)) return _echec('reproposée au même rang');
+        if(!pagePropositionDue(u,4)) return _echec('pas reproposée au rang suivant');
+        _noterPropositionPage(u,4);
+        if(pagePropositionDue(u,5)) return _echec('proposée une troisième fois');
+        if(pagePropositionDue(_PPU({pagePublique:{pseudo:'x.y',active:true}}),2)) return _echec('proposée à une page active');
+        if(pagePropositionDue({role:'coach',email:'c@t.fr'},2)) return _echec('proposée à un coach');
+        // L'écran de rang la porte, et note le passage.
+        currentUser=_PPU({fname:'Julie'});
+        const h=htmlPropositionPage(currentUser);
+        const d=document.createElement('div'); d.innerHTML=h;
+        const i=d.querySelector('#pp-prop-pseudo'), b=d.querySelector('button');
+        if(!i||i.value!=='julie'||!b||!/activerPageDepuisRang\(this\)/.test(b.getAttribute('onclick'))) return _echec('carte');
+        if(d.querySelectorAll('button').length!==1) return _echec('plus d’un geste');
+        if(!/Jamais de poids, de photo ni de santé/.test(d.textContent)) return _echec('la promesse manque');
+        _rangEcran(3,0);
+        const z=document.getElementById('bdg-ecran');
+        const ok1=!!(z&&z.querySelector('#pp-prop'));
+        _bdgFermerEcran(true);
+        if(!ok1) return _echec('absente de l’écran de rang');
+        if(!(currentUser.pagePropose&&currentUser.pagePropose.fois===1&&currentUser.pagePropose.rang===3)) return _echec('passage non noté');
+        _rangEcran(3,0);
+        const ok2=!document.querySelector('#bdg-ecran #pp-prop');
+        _bdgFermerEcran(true);
+        if(!ok2) return _echec('reproposée au même rang');
+      }finally{ window.saveUser=sv.s; currentUser=sv.u; }
+      return true;})());
+    ok('Page : p/index.html montre l’emblème, la jauge, les 12 semaines, les badges en images, les meilleurs records — jamais une mesure',(()=>{
+      const x=new XMLHttpRequest(); x.open('GET','../p/index.html',false); x.send();
+      const p=x.status===200?x.responseText:'';
+      if(!p) return true;
+      for(const k of ['class="emb"','class="jauge"','class="sem"','class="bdg"','Meilleurs records','onerror']) if(p.indexOf(k)<0) return _echec(k+' absent');
+      if(/poids|photo|sommeil|kcal|mensuration/i.test(p.replace(/<!--[\s\S]*?-->/g,'').replace(/JAMAIS de poids de corps, de photo ni de santé/,''))) return _echec('une mesure dans la page');
+      return true;})());
 
     // ── LES VISUELS DU COACH : VICTOIRE ET RÉCAP D'ÉQUIPE ───────────────
     const _VCJ=864e5, _VCT0=Date.parse('2026-06-01T17:00:00Z');

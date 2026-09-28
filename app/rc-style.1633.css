@@ -11143,6 +11143,11 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 
 /* ══ LES PAGES PUBLIQUES : réglages du profil ═════════════════════════════ */
 .pp-carte{margin:0 0 20px;padding:14px 16px}
+.pp-prop{margin:12px 0 0;padding:12px;border:1px solid var(--border,#2a2a2e);border-radius:14px;background:rgba(255,255,255,.03);text-align:left}
+.pp-prop-t{font-weight:800;font-size:var(--fs-sm);letter-spacing:.5px;margin-bottom:4px}
+.pp-prop-s{font-size:var(--fs-xs);color:var(--sub,#a0a0a8);line-height:1.5;margin:0 0 10px;overflow-wrap:anywhere}
+.pp-prop .pp-url{margin-bottom:8px}
+.pp-prop-b{width:100%;margin:0;min-height:44px}
 .pp-titre{font-size:var(--fs-sm);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px}
 .pp-sous{font-size:var(--fs-xs);color:var(--sub);line-height:1.55;margin:0 0 10px}
 .pp-lab{font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;text-transform:uppercase;font-weight:800;margin:10px 0 6px;display:block}
@@ -13831,6 +13836,8 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .clh-filleuls-f{color:var(--sub,#5b5b64)}
 :root[data-theme="clair"] .pr-note{color:var(--sub)}
 :root[data-theme="clair"] .pr-rappel{color:#cc0000}
+:root[data-theme="clair"] .pp-prop{border:1px solid var(--border,#cfcfd3);background:rgba(9,9,9,0.03)}
+:root[data-theme="clair"] .pp-prop-s{color:var(--sub,#5b5b64)}
 :root[data-theme="clair"] .pp-sous{color:var(--sub)}
 :root[data-theme="clair"] .pp-lab{color:var(--sub)}
 :root[data-theme="clair"] .pp-url{background:var(--surface-2);border:1.5px solid var(--border)}

@@ -6086,6 +6086,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // athlète ; le slug et les spécialités de la vitrine d'un coach. Des
   // réglages d'affichage — la page elle-même n'accepte aucune donnée de santé.
   'pagePublique','vitrineSlug','vitrinePubliee','specialites',
+  // Combien de fois la page a été proposée à un passage de rang (deux au plus).
+  'pagePropose',
   // L'ambassadeur par qui le compte est arrivé : un code, un nom, une date.
   'ambassadeur',
   // L'origine du compte (attribution) : le type de lien, un code parrain ou
@@ -18299,13 +18301,22 @@ function _majConsentementCoachReglages(){
 // /vitrines, lus sans connexion, en liste blanche de champs.
 const PSEUDO_PUBLIC_RE=/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/;
 const SLUG_PUBLIC_RE=/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
+// Ce que la page montre (28/09/2026) : l'emblème et la jauge de volts, les
+// 12 dernières semaines, les badges en images (un secret n'y paraît qu'une
+// fois découvert : seuls les badges OBTENUS partent), le nombre de séances.
+// LES CHARGES seulement si l'athlète coche « Mes 3 meilleurs records » —
+// décochée par défaut. Jamais de poids de corps, de photo ni de santé :
+// aucun champ n'existe pour les recevoir (database.rules.json).
 const PAGE_MONTRER=Object.freeze([
-  {cle:'rang',lib:'Mon emblème de rang'},
-  {cle:'serie',lib:'Ma série de semaines'},
-  {cle:'badges',lib:'Mes badges'},
-  {cle:'records',lib:'Mes derniers records (jamais les charges)'},
-  {cle:'seances',lib:'Mon nombre de séances'}
+  {cle:'rang',lib:'Mon emblème et mes volts',defaut:true},
+  {cle:'serie',lib:'Mes 12 dernières semaines',defaut:true},
+  {cle:'badges',lib:'Mes badges',defaut:true},
+  {cle:'seances',lib:'Mon nombre de séances',defaut:true},
+  {cle:'meilleurs',lib:'Mes 3 meilleurs records, avec les charges',defaut:false}
 ]);
+function pageMontrerDefaut(){ const o={}; PAGE_MONTRER.forEach(x=>{ o[x.cle]=x.defaut; }); return o; }
+// La proposition au passage de rang n'a de sens que si l'app écrit dans la base.
+const PAGE_PUBLIQUE_PROPOSEE=true;
 function _pagesSurFirebase(){ return /\/i$/.test(String(RC_LIEN_COURT||'')); }
 // PURE. L'adresse de la page de quelqu'un, ou '' s'il n'en a pas (encore).
 function urlPagePerso(u){
@@ -18393,23 +18404,86 @@ function recordsRecentsPublics(u,n){
   }
   return out;
 }
+// PURE. Les 3 meilleurs records : la plus lourde charge de chaque exercice
+// (séries faites), les trois plus lourdes, avec la date où elle a été
+// soulevée. Publiés SEULEMENT si l'athlète l'a choisi (montrer.meilleurs).
+function meilleursRecordsPublics(u,n){
+  const best={};
+  const cle=nm=>{ try{ return resoudreAlias(exKey(nm)); }catch(e){ return String(nm); } };
+  for(const s of ((u&&u.sessions)||[])){
+    if(!s||!(s.date>0)) continue;
+    const exos=(s.data&&typeof s.data==='object'&&Object.keys(s.data).length)
+      ?Object.keys(s.data).map(nm=>({nom:nm,sets:((s.data[nm]||{}).sets)||[]}))
+      :((s.exercises)||[]).filter(e=>e&&(e.name||e.nm)).map(e=>({nom:e.name||e.nm,sets:e.sets||[]}));
+    for(const e of exos){
+      for(const st of e.sets){
+        if(!st||st.done===false) continue;
+        const w=parseFloat(st.weight)||0;
+        if(!(w>0)||w>1000) continue;
+        const k=cle(e.nom);
+        if(!best[k]||w>best[k].kg||(w===best[k].kg&&s.date<best[k].date))
+          best[k]={exo:String(e.nom).trim().slice(0,60),kg:Math.round(w*100)/100,date:Number(s.date)};
+      }
+    }
+  }
+  return Object.values(best).sort((a,b)=>b.kg-a.kg||a.date-b.date).slice(0,n||3);
+}
+// PURE. Les 12 dernières semaines calendaires, de la plus ancienne à celle en
+// cours : '1' validée (le quota du programme atteint), '0' manquée, 'e' la
+// semaine en cours pas encore validée (elle n'est pas perdue).
+function semainesPubliques(u,maintenant,n){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const N=n||12;
+  let quota=1; try{ quota=seancesPrevuesParSemaine(u); }catch(e){ quota=1; }
+  const l0=_lundiDe(t).getTime();
+  const cpt={};
+  for(const s of ((u&&u.sessions)||[])){
+    if(!s||!(s.date>0)||s.date>t) continue;
+    const l=_lundiDe(s.date).getTime();
+    cpt[l]=(cpt[l]||0)+1;
+  }
+  let out='';
+  for(let i=N-1;i>=0;i--){
+    const l=_lundiDe(_datePlusJours(l0,-7*i).getTime()).getTime();
+    const ok=(cpt[l]||0)>=quota;
+    out+=ok?'1':(i===0?'e':'0');
+  }
+  return out;
+}
+// PURE. Les volts : le total, le seuil du rang atteint et celui du suivant
+// (0 au rang maximal) — la jauge de la page.
+function voltsPublics(u){
+  const r=rangDe(xpDe(u));
+  return {xp:Math.max(0,Math.round(r.xp)),de:Math.max(0,Math.round(Number(r.rang.seuil)||0)),a:r.suivant?Math.round(Number(r.suivant.seuil)||0):0};
+}
 // PURE. Ce que la page montre — et RIEN d'autre : la liste blanche des règles
 // n'accepte que ces champs-là.
 function pagePubliqueDonnees(u,montrer,maintenant){
   const m=montrer||{}, t=(typeof maintenant==='number')?maintenant:Date.now();
   const pp=(u&&u.pagePublique)||{};
   const o={prenom:String((u&&u.fname)||pp.pseudo||'').replace(/\s+/g,' ').trim().slice(0,24),maj:t};
-  if(m.rang){ try{ const r=rangDe(xpDe(u)); o.rang={n:r.rang.n,nom:r.rang.nom}; }catch(e){} }
-  if(m.serie){ try{ o.serie=Math.max(0,Math.min(999,streakSemaines(u)||0)); }catch(e){} }
+  if(m.rang){ try{ const r=rangDe(xpDe(u)); o.rang={n:r.rang.n,nom:r.rang.nom}; o.volts=voltsPublics(u); }catch(e){} }
+  if(m.serie){
+    try{ o.serie=Math.max(0,Math.min(999,streakSemaines(u)||0)); }catch(e){}
+    try{ o.semaines=semainesPubliques(u,t,12); }catch(e){}
+  }
   if(m.seances) o.seances=Math.min(99999,((u&&u.sessions)||[]).filter(s=>s&&s.date>0).length);
+  // LES BADGES EN IMAGES : le visuel dessiné, et le médaillon de repli (qui
+  // existe toujours) — la page tente l'un puis l'autre, comme l'app.
   if(m.badges){
     try{
-      const b=badgesObtenus(u).sort((a,x)=>x.at-a.at).slice(0,8)
-        .map(x=>{ const d=badgeAcquisDef(x.id); return d?{id:String(d.id).slice(0,40),nom:String(d.nom).slice(0,40)}:null; }).filter(Boolean);
+      const b=badgesObtenus(u).sort((a,x)=>x.at-a.at).slice(0,12)
+        .map(x=>{ const d=badgeAcquisDef(x.id); if(!d) return null;
+          const o2={id:String(d.id).slice(0,40),nom:String(d.nom).slice(0,40)};
+          const img=String(badgeVisuel(d.id,false)||''), rp=String(badgeAcquisFichier(d.id)||'');
+          if(/^img\/badges\/[a-z0-9_-]+\.(webp|png)$/.test(img)) o2.img=img;
+          if(/^img\/badges\/[a-z0-9_-]+\.(webp|png)$/.test(rp)) o2.repli=rp;
+          if(d.famille==='secret') o2.secret=true;
+          return o2; }).filter(Boolean);
       if(b.length) o.badges=b;
     }catch(e){}
   }
-  if(m.records){ const r=recordsRecentsPublics(u,5); if(r.length) o.records=r; }
+  if(m.meilleurs){ const r=meilleursRecordsPublics(u,3); if(r.length) o.meilleurs=r; }
   const c=u&&u.parrainage&&u.parrainage.code;
   if(typeof parrainageCodeValide==='function'&&parrainageCodeValide(c)) o.ref=c;
   return o;
@@ -18445,7 +18519,7 @@ async function majPagePublique(o){
 // PURE. Le bloc des réglages, dans le profil.
 function htmlReglagesPagePublique(u){
   const p=(u&&u.pagePublique)||{};
-  const m=p.montrer||{rang:true,serie:true,badges:true,seances:true};
+  const m=p.montrer||pageMontrerDefaut();
   const dom=_pagesSurFirebase()?String(RC_URL_VITRINE).replace(/^https?:\/\//,'').replace(/\/$/,'')+'/@':'…/p/?u=';
   const cases=PAGE_MONTRER.map(x=>'<label class="pp-case"><input type="checkbox" data-montrer="'+x.cle+'"'+(m[x.cle]?' checked':'')+'> <span>'+escapeHtml(x.lib)+'</span></label>').join('');
   const url=urlPagePerso(u);
@@ -18458,6 +18532,69 @@ function htmlReglagesPagePublique(u){
     +'<div id="pp-etat" class="pp-etat" aria-live="polite">'+(url?'En ligne : '+escapeHtml(url.replace(/^https?:\/\//,'')):(p.pseudo?'Page désactivée.':''))+'</div>'
     +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:10px 0 8px;min-height:44px" onclick="enregistrerPagePublique(this)">Enregistrer ma page</button>'
     +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:0;min-height:44px" onclick="copierLienBio(this)">Copier mon lien pour ma bio Instagram</button></div>';
+}
+// ── LA PROPOSITION, À UN PASSAGE DE RANG (28/09/2026) ────────────────────
+// Le moment où l'athlète a quelque chose à montrer : l'écran du nouveau rang
+// propose la page, pseudo pré-rempli, en UN geste. Ignorée, elle revient une
+// fois, au rang suivant ; puis plus jamais (le profil garde le réglage).
+// PURE.
+function pagePropositionDue(u,rang){
+  if(!u||u.role==='coach'||!u.email) return false;
+  if(u.pagePublique&&u.pagePublique.active) return false;
+  const pr=(u.pagePropose&&typeof u.pagePropose==='object')?u.pagePropose:{};
+  const fois=Number(pr.fois)||0;
+  if(fois>=2) return false;
+  if(fois===1&&!(Number(rang)>(Number(pr.rang)||0))) return false;
+  return true;
+}
+// PURE. Le pseudo proposé : celui déjà choisi, sinon le prénom, sans accent.
+function pseudoSuggere(u){
+  const deja=pseudoPublicNormalise(u&&u.pagePublique&&u.pagePublique.pseudo);
+  if(PSEUDO_PUBLIC_RE.test(deja)) return deja;
+  let x=String((u&&(u.fname||u.pseudo))||'');
+  try{ x=x.normalize('NFD').replace(/[\u0300-\u036f]/g,''); }catch(e){}
+  x=x.toLowerCase().replace(/\s+/g,'.').replace(/[^a-z0-9._]/g,'').replace(/^[._]+|[._]+$/g,'').slice(0,20).replace(/[._]+$/,'');
+  if(x.length<3) x=(x+'.repcore').replace(/^[._]+/,'').slice(0,20);
+  return PSEUDO_PUBLIC_RE.test(x)?x:'athlete.repcore';
+}
+function htmlPropositionPage(u){
+  const dom=_pagesSurFirebase()?String(RC_URL_VITRINE).replace(/^https?:\/\//,'').replace(/\/$/,'')+'/@':'…/p/?u=';
+  return '<div class="pp-prop" id="pp-prop">'
+    +'<div class="pp-prop-t">Ta page, pour ta bio</div>'
+    +'<p class="pp-prop-s">Ton emblème, tes volts, tes semaines et tes badges. Jamais de poids, de photo ni de santé.</p>'
+    +'<div class="pp-url"><span>'+escapeHtml(dom)+'</span><input id="pp-prop-pseudo" type="text" maxlength="20" autocapitalize="none" autocomplete="off" spellcheck="false" value="'+escapeHtml(pseudoSuggere(u))+'" aria-label="Ton pseudo"></div>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse pp-prop-b" onclick="activerPageDepuisRang(this)">Mettre ma page en ligne</button>'
+    +'</div>';
+}
+// Le passage est noté À L'AFFICHAGE : c'est « proposée », pas « acceptée ».
+function _noterPropositionPage(u,rang){
+  u.pagePropose={fois:(Number(u.pagePropose&&u.pagePropose.fois)||0)+1,rang:Number(rang)||0,le:Date.now()};
+  try{ saveUser(); }catch(e){}
+}
+// UN GESTE : le pseudo du champ, les choix par défaut (charges exclues). Pris
+// par quelqu'un d'autre : deux chiffres ajoutés, trois essais.
+async function activerPageDepuisRang(btn){
+  const u=currentUser; if(!u) return false;
+  if(!CLOUD.ok()){ toast('Impossible hors connexion','var(--orange)'); return false; }
+  const champ=document.getElementById('pp-prop-pseudo');
+  const voulu=pseudoPublicNormalise(champ?champ.value:pseudoSuggere(u));
+  if(btn){ btn.disabled=true; btn.textContent='Mise en ligne…'; }
+  let r=null, ps=voulu;
+  for(let i=0;i<4;i++){
+    ps=i?(voulu.slice(0,17)+'.'+String(10+Math.floor(Math.random()*90))):voulu;
+    r=await publierPagePublique(u,{pseudo:ps,active:true,montrer:pageMontrerDefaut()});
+    if(r.ok||!/déjà pris/.test(r.erreur||'')) break;
+  }
+  const z=document.getElementById('pp-prop');
+  if(!r||!r.ok){
+    if(btn){ btn.disabled=false; btn.textContent='Mettre ma page en ligne'; }
+    toast((r&&r.erreur)||'Mise en ligne impossible','var(--orange)');
+    return false;
+  }
+  if(z) z.innerHTML='<div class="pp-prop-t">Ta page est en ligne ⚡</div>'
+    +'<p class="pp-prop-s">'+escapeHtml(urlPagePerso(u).replace(/^https?:\/\//,''))+'</p>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse pp-prop-b" onclick="copierLienBio(this)">Copier mon lien pour ma bio Instagram</button>';
+  return true;
 }
 function _rendrePagePublique(){
   const z=document.getElementById('atp-page');
@@ -74333,6 +74470,7 @@ function _rangEcran(n,reste){
   const d=rangCarteDonnees(u,n);
   _rangCourant=d;
   const suiv=RANGS[d.n]||null;
+  let propose=false; try{ propose=PAGE_PUBLIQUE_PROPOSEE&&pagePropositionDue(u,d.n); }catch(e){ propose=false; }
   const z=_bdgCouche(
     '<div class="bdg-ecran-scene"><div class="bdg-ecran-med rg-ecran-med">'
       +'<img id="rg-ecran-img" src="'+rangEmbleme(d.n,true)+'" alt="" width="512" height="512" decoding="async"></div></div>'
@@ -74344,10 +74482,13 @@ function _rangEcran(n,reste){
     +_htmlVisuelFonds('rg-fonds')+_htmlVisuelMedia()
     +'<button type="button" class="btn btn-red bdg-ecran-part" onclick="partagerRang(this)">'+icon('share',16)+' <span>Partager</span></button>'
     +htmlBoutonInviter()
+    // LA PAGE PUBLIQUE, proposée à la fin : ce qu'on vient de gagner se montre.
+    +(propose?htmlPropositionPage(u):'')
     +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" onclick="bdgPlusTard()">'
       +(reste||_bdgRecap.length?'Suivant':'Plus tard')+'</button>'
     +'</div>',
     'Nouveau rang : '+d.nom);
+  if(propose) _noterPropositionPage(u,d.n);
   const img=z.querySelector('#rg-ecran-img');
   const monter=()=>{ try{ monterSelecteurFond('rg-fonds',f=>_dessinerCarteRang(_rangCourant||d,f,img),null); }catch(e){} };
   if(img&&img.complete&&img.naturalWidth) monter(); else if(img) img.addEventListener('load',monter,{once:true});

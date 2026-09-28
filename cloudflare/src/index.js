@@ -5,7 +5,8 @@
 //   · les travaux à heure fixe (série en danger, bilan, Wrapped, défis, rareté
 //     des badges, résumé des ambassadeurs) ;
 //   · le jugement des parrainages et des codes ambassadeur ;
-//   · le comptage des arrivées par un lien (/arrivee).
+//   · le comptage des arrivées par un lien (/arrivee) ;
+//   · l'aperçu des pages publiques dans WhatsApp et Instagram (/@…, /coach/…).
 //
 // SECRETS (posés par Kevin, jamais dans le dépôt) :
 //   FIREBASE_SERVICE_ACCOUNT  le JSON d'un compte de service Google (accès à la
@@ -26,6 +27,7 @@ import { minute } from './planif.js';
 import { repondreAppel } from './appels.js';
 import { cloudinaryDestroy, compteCloudinary } from './medias.js';
 import { creerPaypal, recevoirWebhook, jetonPaypal } from './paypal.js';
+import { servirPagePublique } from './pages.js';
 
 // Les fonctions appelées par l'app (protocole onCall, jeton Firebase vérifié).
 const APPELS = { cloudinaryDestroy };
@@ -140,6 +142,12 @@ export default {
           }
         } catch (e) { r.cloudinary = 'injoignable'; }
         return reponse(JSON.stringify(r));
+      }
+      // LES PAGES PUBLIQUES, AVEC LEUR APERÇU (/@<pseudo>, /coach/<slug>) :
+      // firebase.json y redirige ; voir pages.js. Mises en cache 6 h.
+      if ((req.method === 'GET' || req.method === 'HEAD') && (url.pathname.startsWith('/@') || url.pathname.startsWith('/coach/'))) {
+        const r = await servirPagePublique(req, { env, ctx });
+        if (r) return r;
       }
       if (url.pathname === '/sante') {
         // `acces` : « compte_service » est l'état voulu ; « secret_historique »

@@ -23,6 +23,8 @@ if (mode === 'prep') {
     push: { [A1]: { a1b2c3: { endpoint: 'http://127.0.0.1:' + port + '/service-push/lea', cree: t,
       keys: { p256dh: ua.getPublicKey().toString('base64url'), auth: auth.toString('base64url') } } } },
     evenements: { e1: { type: 'reponse_bilan', par: C1, dest: A1, i: '0', cible: A1, at: t } },
+    // La page publique d'une athlète : son aperçu (/@julie) est demandé par essai-workerd.sh.
+    profils_publics: { julie: { prenom: 'Julie', rang: { n: 3, nom: 'VOLTAGE' }, seances: 42, serie: 6, maj: t } },
   };
   fs.writeFileSync(path.join(dossier, 'scenario.json'), JSON.stringify(base));
   fs.writeFileSync(path.join(dossier, '.dev.vars'), 'FIREBASE_DB_SECRET=essai\nVAPID_PRIVATE_KEY=' + vp.getPrivateKey().toString('base64url') + '\n');

@@ -1198,12 +1198,35 @@
           "nom": { ".validate": "newData.isString() && newData.val().length <= 20" },
           "$autre": { ".validate": false }
         },
+        // La jauge de volts : le total, le seuil du rang atteint, celui du suivant (0 au maximum).
+        "volts": {
+          "xp": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000000" },
+          "de": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000000" },
+          "a":  { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000000" },
+          "$autre": { ".validate": false }
+        },
         "serie":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 1000" },
+        // Les 12 dernieres semaines : 1 validee, 0 manquee, e la semaine en cours.
+        "semaines": { ".validate": "newData.isString() && newData.val().matches(/^[01]{11}[01e]$/)" },
         "seances": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000" },
         "badges": {
           "$i": {
             "id":  { ".validate": "newData.isString() && newData.val().length <= 40" },
             "nom": { ".validate": "newData.isString() && newData.val().length <= 40" },
+            // Des chemins d'images de l'app, rien d'autre (pas d'adresse externe).
+            "img":   { ".validate": "newData.isString() && newData.val().matches(/^img\\/badges\\/[a-z0-9_-]+\\.(webp|png)$/)" },
+            "repli": { ".validate": "newData.isString() && newData.val().matches(/^img\\/badges\\/[a-z0-9_-]+\\.(webp|png)$/)" },
+            "secret": { ".validate": "newData.isBoolean()" },
+            "$autre": { ".validate": false }
+          }
+        },
+        // LES CHARGES, seulement si l'athlete a coche « Mes 3 meilleurs records ».
+        "meilleurs": {
+          "$i": {
+            ".validate": "$i.matches(/^[0-2]$/)",
+            "exo":  { ".validate": "newData.isString() && newData.val().length <= 60" },
+            "kg":   { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 1000" },
+            "date": { ".validate": "newData.isNumber()" },
             "$autre": { ".validate": false }
           }
         },

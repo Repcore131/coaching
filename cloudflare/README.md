@@ -75,6 +75,13 @@ les pages publiques (`index.html`, `i/`, `p/`, `c/`), puis livrée : c'est ce qu
   elle doit exister (un coach ne vise que ses athlètes, un défi que son Canal). Testé sur l'émulateur :
   `node test/regles-evenements.emu.mjs` (Java et l'émulateur de la Realtime Database requis).
 
+## L'aperçu des pages publiques (`src/pages.js`)
+
+`/@<pseudo>` et `/coach/<slug>` : `firebase.json` y redirige, et le Worker
+sert la page avec l'aperçu de la personne (WhatsApp, DM Instagram), mis en
+cache 6 h. Deux sous-requêtes au plus par page non cachée. Mise en ligne et
+vérification à la main : `docs/apercu-liens.md`.
+
 ## Tenir dans le plan gratuit (`src/planif.js`)
 
 - **Budget dans les boucles internes aussi.** Un réveil s'arrête à 38 requêtes (plafond : 50) et à
