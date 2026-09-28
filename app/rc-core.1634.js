@@ -6001,6 +6001,9 @@ const CHAMPS_SANTE=Object.freeze([
   // face et de dos du premier bilan, et le masque de la personne. Aucune image
   // — mais c'est le contour d'un corps, lu sur une photo corporelle : santé.
   'morphoAnat',
+  // La carte d'athlète : sa note de force est l'e1RM RAPPORTÉ AU POIDS DE
+  // CORPS. Une dérivée du poids : en cas de doute, santé.
+  'carte','carteHist',
   // Les trois mesures au mètre du chantier A12 : elles vivent dans les bilans
   // (déjà de santé), et le seraient aussi recopiées ailleurs.
   'deb-envergure','deb-pied','deb-thorax',
@@ -18322,7 +18325,8 @@ const PAGE_MONTRER=Object.freeze([
   {cle:'serie',lib:'Mes 12 dernières semaines',defaut:true},
   {cle:'badges',lib:'Mes badges',defaut:true},
   {cle:'seances',lib:'Mon nombre de séances',defaut:true},
-  {cle:'meilleurs',lib:'Mes 3 meilleurs records, avec les charges',defaut:false}
+  {cle:'meilleurs',lib:'Mes 3 meilleurs records, avec les charges',defaut:false},
+  {cle:'carte',lib:'Ma carte d’athlète (vignette)',defaut:false}
 ]);
 function pageMontrerDefaut(){ const o={}; PAGE_MONTRER.forEach(x=>{ o[x.cle]=x.defaut; }); return o; }
 // La proposition au passage de rang n'a de sens que si l'app écrit dans la base.
@@ -18494,6 +18498,15 @@ function pagePubliqueDonnees(u,montrer,maintenant){
     }catch(e){}
   }
   if(m.meilleurs){ const r=meilleursRecordsPublics(u,3); if(r.length) o.meilleurs=r; }
+  // LA CARTE D'ATHLÈTE, en vignette : les notes, jamais le poids qui les fonde.
+  if(m.carte){
+    try{
+      const c=(u&&u.carte)||noteAthlete(u,t);
+      const v={g:c.globale,c:c.cadre};
+      for(const k of CARTE_NOTES) v[k]=c[k];
+      o.carte=v;
+    }catch(e){}
+  }
   const c=u&&u.parrainage&&u.parrainage.code;
   if(typeof parrainageCodeValide==='function'&&parrainageCodeValide(c)) o.ref=c;
   return o;
@@ -37132,6 +37145,8 @@ function loadClientHome(){
   // Le rang et la jauge des volts, sous le prénom. majXp y tourne : c'est
   // aussi le rattrapage d'un dossier ancien à la mise à jour.
   try{ _rendreRang(u); }catch(e){}
+  // La carte d'athlète : recalculée le lundi, montrée quand la note monte.
+  try{ _rendreCarteAccueil(u); }catch(e){}
   // Le rappel du défi en cours.
   try{ renderDefiAccueil(); }catch(e){}
   // Une fois par jour : défis bouclés et parrainage (badges et mois gagnés).
@@ -42752,6 +42767,9 @@ const _LEGENDES=Object.freeze({
     d=>'Tu cherches une app pour suivre tes séances ? '+(d.code?'Avec le code '+d.code+', tu':'Avec mon code, tu')+' as '+_legMois()+' mois pour essayer, sans carte.',
     d=>'On s’entraîne ensemble ? '+(d.code?'Code '+d.code+' à l’inscription : ':'Mon code à l’inscription : ')+_legMois()+' mois d’essai pour toi.',
     d=>'Toute l’app ouverte, '+_legMois()+' mois, sans carte bancaire. '+(d.code?'Ton code : '+d.code+'.':'Demande-moi mon code.')+' Tu viens ?'],
+  carte:[d=>'Ma carte d’athlète'+(d.note?' : '+d.note:'')+' ⚡ Et toi, tu sortirais combien ?',
+    d=>'Force, volume, régularité, progression, endurance : tout est noté. Tu montes à combien ?',
+    d=>(d.note?d.note+' de note globale.':'Ma note monte.')+' Douze semaines de travail. Tu relèves le défi ?'],
   visuel:[d=>'Une séance de plus ⚡ Et toi, tu t’entraînes quand ?',
     d=>'La régularité, c’est tout. Tu viens ?',
     d=>'Chaque séance compte. Tu te lances ?']
@@ -42806,6 +42824,7 @@ function _legendeDonneesEcran(type){
     if(type==='rang'&&_rangCourant) d.nom=String(_rangCourant.nom||'');
     if((type==='defi'||type==='champion')&&_defiCourant) d.titre=String(_defiCourant.titre||'').slice(0,60);
     if(type==='wrapped'&&_wr&&_wr.w) d.seances=Number(_wr.w.seances)||0;
+    if(type==='carte'&&currentUser&&currentUser.carte) d.note=Number(currentUser.carte.globale)||0;
     if(type==='invitation'){ const c=invitationDonnees(currentUser).code; if(c) d.code=c; }
   }catch(e){}
   return d;
@@ -74431,6 +74450,463 @@ function _rendreRang(u){
   }catch(e){}
   return true;
 }
+// ══ LA CARTE D'ATHLÈTE (28/09/2026) ═════════════════════════════════════
+//
+// Cinq notes de 1 à 99, calculées sur les 12 DERNIÈRES SEMAINES COMPLÈTES
+// (lundi à dimanche), et une note globale :
+//   FOR  la force — l'e1RM des mouvements de base (squat, développé couché,
+//        soulevé de terre, développé militaire) RAPPORTÉ AU POIDS DE CORPS,
+//        chacun comparé à son barème (homme / femme) ;
+//   VOL  le volume — les séries faites par semaine ;
+//   REG  la régularité — les semaines validées (le quota du programme) ;
+//   PRO  la progression — l'e1RM de la seconde moitié contre la première ;
+//   END  l'endurance — le temps d'entraînement par semaine.
+// LA GLOBALE PÈSE D'ABORD REG ET PRO : la carte récompense ce que l'athlète
+// maîtrise (venir, progresser) avant ce que la génétique lui a donné.
+//
+// LA COURBE EST DOUCE : note = 1 + 98 × (1 − e^(−1,6·x)), où x vaut 1 au
+// niveau « avancé » du barème. x = 1 donne 79, x = 1,5 donne 90, x = 2 donne
+// 95 : passer 90 demande une fois et demie la référence. Jamais 100.
+//
+// RECALCULÉE LE LUNDI (majCarteAthlete, à l'ouverture de l'accueil) : une
+// note par semaine, gardée dans u.carteHist. Si elle monte, la carte
+// s'affiche sur l'accueil avec son partage ; si elle change de cadre, la
+// foudre frappe.
+//
+// ⚠ LE POIDS DE CORPS ENTRE DANS FOR : la carte est classée « santé »
+//   (CHAMPS_SANTE), comme tout ce qui en dérive. La note, elle, ne dit
+//   jamais le poids.
+const CARTE_SEMAINES=12;
+const CARTE_K=1.6;
+// L'e1RM, en multiples du poids de corps, qui vaut x = 1 (niveau avancé).
+const CARTE_BAREMES=Object.freeze({
+  homme:Object.freeze({squat:1.75,couche:1.35,terre:2.1,militaire:0.85}),
+  femme:Object.freeze({squat:1.35,couche:0.85,terre:1.65,militaire:0.55})
+});
+// Le poids de corps qu'on suppose quand aucun n'est connu (la note le dit).
+const CARTE_POIDS_DEFAUT=Object.freeze({homme:78,femme:63});
+// Les mouvements de base, reconnus par leur nom normalisé (exKey + alias).
+const CARTE_MOUVEMENTS=Object.freeze([
+  {cle:'squat',lib:'Squat',re:/^(BACK )?SQUAT( BARRE| ARRIERE| BARRE ARRIERE| HIGH BAR| LOW BAR)?$/},
+  {cle:'couche',lib:'Développé couché',re:/^(DEVELOPPE COUCHE( BARRE)?|BENCH( PRESS)?)$/},
+  {cle:'terre',lib:'Soulevé de terre',re:/^(SOULEVE DE TERRE( BARRE| CONVENTIONNEL| SUMO)?|DEADLIFT)$/},
+  {cle:'militaire',lib:'Développé militaire',re:/^(DEVELOPPE MILITAIRE( BARRE)?|OVERHEAD PRESS|OHP)$/}
+]);
+// Les références des autres notes (x = 1).
+const CARTE_REF=Object.freeze({seriesSemaine:45,minutesSemaine:180,gainPro:0.04});
+// Le poids de chaque note dans la globale : REG et PRO avant FOR.
+const CARTE_POIDS=Object.freeze({REG:0.27,PRO:0.25,FOR:0.18,VOL:0.15,END:0.15});
+const CARTE_NOTES=Object.freeze(['FOR','VOL','REG','PRO','END']);
+const CARTE_LIB=Object.freeze({FOR:'Force',VOL:'Volume',REG:'Régularité',PRO:'Progression',END:'Endurance'});
+// Le cadre suit la globale.
+const CARTE_CADRES=Object.freeze([
+  Object.freeze({cle:'standard',min:1,lib:'STANDARD'}),
+  Object.freeze({cle:'elite',min:70,lib:'ÉLITE'}),
+  Object.freeze({cle:'legendaire',min:85,lib:'LÉGENDAIRE'})
+]);
+const CARTE_FORMATS=Object.freeze({carte:Object.freeze({w:1080,h:1512}),story:Object.freeze({w:1080,h:1920})});
+
+/** PURE. La courbe douce : x (1 = référence) → 1..99. */
+function carteCourbe(x){
+  const v=Math.max(0,Number(x)||0);
+  return Math.max(1,Math.min(99,Math.round(1+98*(1-Math.exp(-CARTE_K*v)))));
+}
+/** PURE. Le cadre d'une globale. */
+function carteCadre(globale){
+  const g=Number(globale)||0;
+  let c=CARTE_CADRES[0];
+  for(const x of CARTE_CADRES) if(g>=x.min) c=x;
+  return c;
+}
+/** PURE. 'homme' ou 'femme' (défaut : homme). */
+function carteSexe(u){
+  const g=String((u&&(u.gender||u.sexe))||'').toLowerCase();
+  return /^(f|femme|female|woman)/.test(g)?'femme':'homme';
+}
+/** PURE. Le dernier poids de corps connu (pesées, bilans, profil), ou null. */
+function poidsCorpsActuel(u){
+  let best=null;
+  const prendre=(d,kg)=>{ const v=parseFloat(kg); if(!(v>=30&&v<=300)) return;
+    const t=typeof d==='number'?d:Date.parse(d);
+    if(!best||(isFinite(t)&&t>best.t)) best={t:isFinite(t)?t:0,kg:v}; };
+  for(const e of ((u&&u.weightLog)||[])) if(e) prendre(e.date,e.kg);
+  for(const b of ((u&&u.bilans)||[])) if(b) prendre(b.date,getBW(b));
+  if(best) return best.kg;
+  for(const k of ['profileWeight','weight']){ const v=parseFloat(u&&u[k]); if(v>=30&&v<=300) return v; }
+  return null;
+}
+/** PURE. Le mouvement de base d'un nom d'exercice, ou null. */
+function carteMouvementDe(nom){
+  let k='';
+  try{ k=resoudreAlias(exKey(nom)); }catch(e){ k=String(nom||'').toUpperCase(); }
+  const m=CARTE_MOUVEMENTS.find(x=>x.re.test(k)||x.re.test(exKey(nom)));
+  return m?m.cle:null;
+}
+// Les séries faites d'une séance : [{nom, kg, reps, rir}].
+function _carteSeries(s){
+  const out=[];
+  const exos=(s&&s.data&&typeof s.data==='object'&&Object.keys(s.data).length)
+    ?Object.keys(s.data).map(nm=>({nom:nm,sets:((s.data[nm]||{}).sets)||[]}))
+    :((s&&s.exercises)||[]).filter(e=>e&&(e.name||e.nm)).map(e=>({nom:e.name||e.nm,sets:e.sets||[]}));
+  for(const e of exos) for(const st of (e.sets||[])){
+    if(!st||st.done===false) continue;
+    out.push({nom:e.nom,kg:parseFloat(st.weight)||0,reps:parseFloat(st.reps)||0,rir:parseFloat(st.rir)||0});
+  }
+  return out;
+}
+/**
+ * PURE (horloge donnée). La note de l'athlète sur les 12 semaines complètes
+ * qui précèdent le lundi de `maintenant`.
+ * @returns {{FOR:number,VOL:number,REG:number,PRO:number,END:number,globale:number,
+ *   cadre:string,semaine:string,x:Object,sansPoids:boolean,seances:number}}
+ */
+function noteAthlete(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const fin=_lundiDe(t).getTime();
+  const debut=_lundiDe(_datePlusJours(fin,-7*CARTE_SEMAINES).getTime()+12*3600e3).getTime();
+  const milieu=_lundiDe(_datePlusJours(fin,-7*(CARTE_SEMAINES/2)).getTime()+12*3600e3).getTime();
+  const ses=((u&&u.sessions)||[]).filter(s=>s&&s.date>=debut&&s.date<fin);
+  const sexe=carteSexe(u);
+  const pc=poidsCorpsActuel(u);
+  const poids=pc||CARTE_POIDS_DEFAUT[sexe];
+  const bar=CARTE_BAREMES[sexe];
+  // FOR et PRO : le meilleur e1RM par exercice, sur chaque moitié.
+  const meilleur={}, moitie={};
+  let series=0, minutes=0;
+  for(const s of ses){
+    const l=_carteSeries(s);
+    series+=l.length;
+    const d=Number(s.duration);
+    minutes+=(d>0&&d<600)?d:l.length*3;
+    const h=s.date<milieu?0:1;
+    for(const x of l){
+      if(!(x.kg>0)||!(x.reps>=1)||x.reps>PERF_REPS_MAX_E1RM) continue;
+      const e=e1rm(x.kg,x.reps,x.rir);
+      let k=x.nom; try{ k=resoudreAlias(exKey(x.nom)); }catch(er){}
+      if(!meilleur[k]||e>meilleur[k].e) meilleur[k]={e,nom:x.nom};
+      (moitie[k]=moitie[k]||[0,0]);
+      if(e>moitie[k][h]) moitie[k][h]=e;
+    }
+  }
+  // FOR : la moyenne des mouvements de base présents, chacun à son barème.
+  const parMvt={};
+  for(const k of Object.keys(meilleur)){
+    const m=carteMouvementDe(meilleur[k].nom);
+    if(m&&(!parMvt[m]||meilleur[k].e>parMvt[m])) parMvt[m]=meilleur[k].e;
+  }
+  const rapports=Object.keys(parMvt).map(m=>parMvt[m]/poids/bar[m]);
+  const xFOR=rapports.length?rapports.reduce((a,b)=>a+b,0)/rapports.length:0;
+  // VOL, END : par semaine.
+  const xVOL=series/CARTE_SEMAINES/CARTE_REF.seriesSemaine;
+  const xEND=minutes/CARTE_SEMAINES/CARTE_REF.minutesSemaine;
+  // REG : les semaines validées, sur 12. Toutes validées : x = 1,5 (90).
+  let quota=1; try{ quota=seancesPrevuesParSemaine(u); }catch(e){ quota=1; }
+  const cpt={};
+  for(const s of ses){ const l=_lundiDe(s.date).getTime(); cpt[l]=(cpt[l]||0)+1; }
+  const validees=Object.keys(cpt).filter(l=>cpt[l]>=quota).length;
+  const xREG=1.5*Math.min(CARTE_SEMAINES,validees)/CARTE_SEMAINES;
+  // PRO : le gain moyen des exercices travaillés dans les DEUX moitiés.
+  // Stable : x = 0,35 (43) ; +4 % sur 12 semaines : x = 1,35 (87).
+  const gains=Object.keys(moitie).filter(k=>moitie[k][0]>0&&moitie[k][1]>0).map(k=>moitie[k][1]/moitie[k][0]-1);
+  const g=gains.length?gains.reduce((a,b)=>a+b,0)/gains.length:null;
+  const xPRO=g===null?0:Math.max(0,0.35+g/CARTE_REF.gainPro);
+  const x={FOR:xFOR,VOL:xVOL,REG:xREG,PRO:xPRO,END:xEND};
+  const o={};
+  for(const k of CARTE_NOTES) o[k]=ses.length?carteCourbe(x[k]):1;
+  let gl=0;
+  for(const k of CARTE_NOTES) gl+=CARTE_POIDS[k]*o[k];
+  o.globale=Math.max(1,Math.min(99,Math.round(gl)));
+  o.cadre=carteCadre(o.globale).cle;
+  o.semaine=localISODate(new Date(fin));
+  o.x=x; o.sansPoids=!pc; o.seances=ses.length;
+  return o;
+}
+// ── Le recalcul du lundi ────────────────────────────────────────────────
+// Une fois par semaine : la note de la semaine est rangée dans l'historique
+// (52 semaines au plus). Rend {note, monte, cadreChange} quand il y a du neuf,
+// null sinon (déjà calculée cette semaine, ou pas d'athlète).
+function majCarteAthlete(u,maintenant,o){
+  if(!u||u.role==='coach') return null;
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const n=noteAthlete(u,t);
+  if(u.carte&&u.carte.semaine===n.semaine&&!(o&&o.force)) return null;
+  const prec=u.carte&&typeof u.carte==='object'?u.carte:null;
+  const h=Array.isArray(u.carteHist)?u.carteHist.filter(x=>x&&x.s!==n.semaine):[];
+  h.push({s:n.semaine,g:n.globale,FOR:n.FOR,VOL:n.VOL,REG:n.REG,PRO:n.PRO,END:n.END});
+  h.sort((a,b)=>a.s<b.s?-1:1);
+  u.carteHist=h.slice(-52);
+  const monte=!!(prec&&n.globale>(Number(prec.globale)||0));
+  const cadreChange=!!(prec&&prec.cadre!==n.cadre&&monte);
+  u.carte={FOR:n.FOR,VOL:n.VOL,REG:n.REG,PRO:n.PRO,END:n.END,globale:n.globale,cadre:n.cadre,
+    semaine:n.semaine,le:t,avant:prec?(Number(prec.globale)||null):null,
+    // La carte reste sur l'accueil tant qu'elle n'a été ni partagée ni fermée.
+    aMontrer:monte||!!(prec&&prec.aMontrer),foudre:cadreChange||!!(prec&&prec.foudre)};
+  try{ saveUser(); }catch(e){}
+  return {note:n,monte,cadreChange};
+}
+// ── Les cadres dessinés (cartes-bruts/ → app/img/cartes/<cadre>.webp) ─────
+// Posés par scripts/cartes_webp.py. Tant qu'un gabarit manque, le cadre est
+// DESSINÉ (le même esprit, sans l'image) : la carte ne dépend jamais d'un
+// fichier absent.
+const _carteCadresImg={};
+function carteCadreImage(cle){
+  if(_carteCadresImg[cle]) return _carteCadresImg[cle];
+  try{
+    const im=new Image();
+    im.decoding='async';
+    im.src='img/cartes/'+cle+'.webp';
+    _carteCadresImg[cle]=im;
+    return im;
+  }catch(e){ return null; }
+}
+function _carteCadrePret(cle){
+  const im=carteCadreImage(cle);
+  return (im&&im.complete&&im.naturalWidth>0)?im:null;
+}
+// Les couleurs du cadre dessiné.
+const CARTE_TEINTES=Object.freeze({
+  standard:{a:'#6b6b72',b:'#2a2a2e',accent:'#E02020',halo:'rgba(224,32,32,.18)'},
+  elite:{a:'#ff3b3b',b:'#7a0a0a',accent:'#ff3b3b',halo:'rgba(255,59,59,.38)'},
+  legendaire:{a:'#ffd36a',b:'#b3261e',accent:'#ffcf5a',halo:'rgba(255,190,70,.42)'}
+});
+function _carteChemin(g,x,y,w,h,r){
+  g.beginPath();
+  g.moveTo(x+r,y); g.lineTo(x+w-r,y); g.quadraticCurveTo(x+w,y,x+w,y+r);
+  g.lineTo(x+w,y+h-r); g.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  g.lineTo(x+r,y+h); g.quadraticCurveTo(x,y+h,x,y+h-r);
+  g.lineTo(x,y+r); g.quadraticCurveTo(x,y,x+r,y); g.closePath();
+}
+function _carteCadreDessine(g,x,y,w,h,cle){
+  const T=CARTE_TEINTES[cle]||CARTE_TEINTES.standard;
+  g.save();
+  // Le fond de la carte.
+  const f=g.createLinearGradient(x,y,x+w,y+h);
+  f.addColorStop(0,'#151517'); f.addColorStop(0.55,'#0b0b0c'); f.addColorStop(1,'#050505');
+  _carteChemin(g,x,y,w,h,56); g.fillStyle=f; g.fill();
+  // Le halo du haut.
+  const hal=g.createRadialGradient(x+w/2,y+h*0.28,0,x+w/2,y+h*0.28,w*0.75);
+  hal.addColorStop(0,T.halo); hal.addColorStop(1,'rgba(0,0,0,0)');
+  g.fillStyle=hal; g.fill();
+  // La bordure : deux traits, le dégradé de la teinte.
+  const b=g.createLinearGradient(x,y,x+w,y+h);
+  b.addColorStop(0,T.a); b.addColorStop(0.5,T.b); b.addColorStop(1,T.a);
+  g.shadowColor=T.accent; g.shadowBlur=cle==='standard'?10:34;
+  g.strokeStyle=b; g.lineWidth=14; _carteChemin(g,x+7,y+7,w-14,h-14,50); g.stroke();
+  g.shadowBlur=0;
+  g.strokeStyle='rgba(255,255,255,.18)'; g.lineWidth=2; _carteChemin(g,x+30,y+30,w-60,h-60,36); g.stroke();
+  g.restore();
+}
+/**
+ * La carte. `d` : {prenom, note:{FOR..END,globale,cadre}, rang (1..10),
+ * signature}. `format` : 'carte' (1080×1512) ou 'story' (1080×1920 : la
+ * carte centrée, un titre au-dessus). `o.emb` : l'emblème du rang chargé.
+ */
+function _dessinerCarteAthlete(d,format,o){
+  const F=CARTE_FORMATS[format]||CARTE_FORMATS.carte;
+  const W=F.w, H=F.h, story=format==='story';
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const g=cv.getContext('2d');
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const ou=_visuelOutils(g);
+  const x=d||{}, n=x.note||{};
+  const cle=(CARTE_CADRES.find(c=>c.cle===n.cadre)||carteCadre(n.globale)).cle;
+  const T=CARTE_TEINTES[cle];
+  g.fillStyle='#000'; g.fillRect(0,0,W,H);
+  // La carte : pleine page, ou centrée dans la story.
+  const cw=story?980:W, ch=Math.round(cw*1512/1080);
+  const cx0=(W-cw)/2, cy0=story?Math.round((H-ch)/2)+40:0;
+  if(story){
+    const hal=g.createRadialGradient(W/2,H/2,0,W/2,H/2,H*0.6);
+    hal.addColorStop(0,T.halo); hal.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle=hal; g.fillRect(0,0,W,H);
+    g.textAlign='center'; g.fillStyle='#fff'; g.font='800 34px '+MONT;
+    ou.ecrireEspace('MA CARTE D’ATHLÈTE',W/2,cy0-44,10,true);
+  }
+  const im=_carteCadrePret(cle);
+  if(im){ try{ g.drawImage(im,cx0,cy0,cw,ch); }catch(e){ _carteCadreDessine(g,cx0,cy0,cw,ch,cle); } }
+  else _carteCadreDessine(g,cx0,cy0,cw,ch,cle);
+  const k=cw/1080;                           // l'échelle du dessin dans la carte
+  const X=v=>cx0+v*k, Y=v=>cy0+v*k, S=v=>Math.round(v*k);
+  g.textBaseline='alphabetic';
+  // LA GLOBALE, en haut à gauche, et le cadre dessous.
+  ou.ombre(true);
+  g.textAlign='center'; g.fillStyle='#fff';
+  g.font='700 '+S(250)+'px '+BEBAS; ou.ecrire(String(n.globale||1),X(250),Y(330));
+  g.fillStyle=T.accent; g.font='800 '+S(34)+'px '+MONT;
+  ou.ecrireEspace(carteCadre(n.globale).lib,X(250),Y(386),8,true);
+  // L'EMBLÈME DU RANG, en haut à droite.
+  if(o&&o.emb&&o.emb.naturalWidth){ try{ g.drawImage(o.emb,X(600),Y(110),S(340),S(340)); }catch(e){} }
+  else{
+    g.save(); g.fillStyle=T.accent; g.globalAlpha=.9; g.font='700 '+S(300)+'px '+BEBAS;
+    ou.ecrire('⚡',X(770),Y(400)); g.restore();
+  }
+  // Le prénom, en grand, et un trait.
+  const nom=String(x.prenom||'ATHLÈTE').toUpperCase();
+  g.fillStyle='#fff';
+  const ns=ou.ajuste(nom,'700',S(170),BEBAS,S(900),S(70));
+  g.font='700 '+ns+'px '+BEBAS; ou.ecrire(ou.coupe(nom,S(900)),X(540),Y(640));
+  ou.ombre(false);
+  g.fillStyle=T.accent; g.fillRect(X(390),Y(680),S(300),S(6));
+  // LES CINQ NOTES : deux colonnes (3 + 2), le chiffre puis le sigle.
+  // Deux colonnes de deux, la cinquième centrée dessous : la carte est
+  // remplie jusqu'à la signature.
+  const pos=[[170,880],[170,1085],[600,880],[600,1085],[385,1290]];
+  CARTE_NOTES.forEach((c,i)=>{
+    const [bx,by]=pos[i];
+    ou.ombre(true);
+    g.textAlign='left'; g.fillStyle='#fff';
+    g.font='700 '+S(160)+'px '+BEBAS; ou.ecrire(String(n[c]||1),X(bx),Y(by));
+    g.fillStyle=T.accent; g.font='800 '+S(50)+'px '+MONT;
+    ou.ecrireEspace(c,X(bx+175),Y(by-18),6,false);
+    ou.ombre(false);
+  });
+  // LA SIGNATURE, en bas de la carte.
+  g.textAlign='center';
+  const sig=String(x.signature||'').trim();
+  const t=(sig?sig.toUpperCase()+' · ':'')+'REPCORE';
+  ou.ombre(true);
+  g.fillStyle='rgba(255,255,255,.85)';
+  const ss=ou.ajusteEspace(t,'700',S(40),BEBAS,7,S(860),S(22));
+  g.font='700 '+ss+'px '+BEBAS; ou.ecrireEspace(t,X(540),Y(1440),7,true);
+  ou.ombre(false);
+  return cv;
+}
+// PURE (sauf nomSurVisuels). Les données de la carte d'un athlète.
+function carteDonnees(u){
+  let sig=''; try{ sig=nomSurVisuels(u); }catch(e){ sig=''; }
+  let r=1; try{ r=rangDe(xpDe(u)).rang.n; }catch(e){ r=1; }
+  const c=(u&&u.carte)||noteAthlete(u);
+  return {prenom:String((u&&u.fname)||'').trim().slice(0,24),note:c,rang:r,signature:sig};
+}
+// ── Le partage ─────────────────────────────────────────────────────────
+// 1080×1512 se partage comme un POST (la légende), la story comme une story
+// (le lien). SYNCHRONE jusqu'au partage (iOS).
+function partagerCarteAthlete(btn,format){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||_storyEnCours) return false;
+  const f=format==='story'?'story':'carte';
+  const emb=document.getElementById('carte-emb-src');
+  const nom=f==='story'?'repcore-carte.jpg':'repcore-carte-post.jpg';
+  const fmt=visuelFondFormat('carbone');
+  _storyEnCours=true;
+  let ok=false;
+  try{
+    const dessin=()=>_dessinerCarteAthlete(carteDonnees(u),f,{emb});
+    ok=_storySortirPartage(dessin(),nom,undefined,fmt)||_storySortirTelechargement(dessin(),nom,fmt);
+  }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
+  finally{ _storyEnCours=false; }
+  if(ok&&u.carte&&u.carte.aMontrer){ u.carte.aMontrer=false; try{ saveUser(); }catch(e){} }
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp&&ok){ const l=sp.textContent; sp.textContent='Carte prête ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  return ok;
+}
+// ── L'accueil : la carte, quand la note monte ───────────────────────────
+// PURE.
+function htmlCarteAccueil(u){
+  const c=u&&u.carte;
+  if(!c||!c.aMontrer) return '';
+  const av=Number(c.avant)||0;
+  return '<div class="ca-accueil" role="region" aria-label="Ta carte d’athlète">'
+    +'<div class="ca-tete"><b>Ta note monte'+(av?' : '+av+' → '+c.globale:' : '+c.globale)+'</b>'
+    +'<button type="button" class="ca-fermer" aria-label="Fermer" onclick="fermerCarteAccueil()">✕</button></div>'
+    +'<canvas class="ca-vignette" id="ca-vignette" width="360" height="504" role="img" aria-label="Carte d’athlète, note '+c.globale+'"></canvas>'
+    +'<div class="ca-btns">'
+    +'<button type="button" class="btn btn-red btn-sm" onclick="partagerCarteAthlete(this,\'carte\')">'+icon('share',14)+' <span>Partager</span></button>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="partagerCarteAthlete(this,\'story\')">En story</button>'
+    +'</div></div>';
+}
+function _peindreVignetteCarte(id,u){
+  const c=document.getElementById(id);
+  if(!c||!u) return false;
+  const g=c.getContext('2d');
+  const emb=document.getElementById('carte-emb-src');
+  const cv=_dessinerCarteAthlete(carteDonnees(u),'carte',{emb});
+  g.clearRect(0,0,c.width,c.height);
+  g.drawImage(cv,0,0,c.width,c.height);
+  cv.width=0; cv.height=0;
+  return true;
+}
+// L'emblème du rang, chargé une fois (la carte le dessine).
+function _carteEmbleme(u){
+  let e=document.getElementById('carte-emb-src');
+  let n=1; try{ n=rangDe(xpDe(u)).rang.n; }catch(er){ n=1; }
+  const src=rangEmbleme(n,true);
+  if(!e){ e=new Image(); e.id='carte-emb-src'; e.hidden=true; e.alt=''; e.decoding='async'; document.body.appendChild(e); }
+  if(e.getAttribute('src')!==src) e.src=src;
+  return e;
+}
+function _rendreCarteAccueil(u){
+  if(!u||u.role==='coach') return false;
+  let r=null; try{ r=majCarteAthlete(u); }catch(e){ r=null; }
+  const t=document.querySelector('#s-client-home .clh-tete');
+  let z=document.getElementById('clh-carte');
+  const h=htmlCarteAccueil(u);
+  if(!z&&h&&t){ z=document.createElement('div'); z.id='clh-carte'; (document.getElementById('clh-filleuls')||t).insertAdjacentElement('afterend',z); }
+  if(!z) return false;
+  z.innerHTML=h; z.hidden=!h;
+  if(!h) return false;
+  const emb=_carteEmbleme(u);
+  const peindre=()=>{ try{ _peindreVignetteCarte('ca-vignette',u); }catch(e){} };
+  peindre();
+  if(emb&&!emb.complete) emb.addEventListener('load',peindre,{once:true});
+  const cadre=carteCadreImage(u.carte.cadre);
+  if(cadre&&!cadre.complete) cadre.addEventListener('load',peindre,{once:true});
+  // LE CHANGEMENT DE CADRE : la foudre frappe la carte, une fois.
+  if(u.carte.foudre){
+    u.carte.foudre=false; try{ saveUser(); }catch(e){}
+    setTimeout(()=>{ try{ rcFoudre(document.getElementById('ca-vignette'),{eclairs:3}); }catch(e){} },400);
+  }
+  return true;
+}
+function fermerCarteAccueil(){
+  const u=currentUser;
+  if(u&&u.carte){ u.carte.aMontrer=false; try{ saveUser(); }catch(e){} }
+  const z=document.getElementById('clh-carte'); if(z){ z.innerHTML=''; z.hidden=true; }
+  return true;
+}
+// ── L'onglet Évolution : la carte et la courbe de la note ─────────────────
+// PURE. La courbe de la globale, semaine par semaine (SVG). Une seule série :
+// pas de légende, le titre la nomme ; chaque point dit sa valeur au survol.
+function htmlCourbeCarte(hist){
+  const l=(Array.isArray(hist)?hist:[]).filter(x=>x&&x.s&&x.g>0).slice(-26);
+  if(l.length<2) return '<p class="ca-vide">La courbe apparaît après deux semaines de note.</p>';
+  const W=320, H=120, px=14, py=14;
+  const mn=Math.max(1,Math.min(...l.map(x=>x.g))-5), mx=Math.min(99,Math.max(...l.map(x=>x.g))+5);
+  const X=i=>px+i*(W-2*px)/(l.length-1), Y=v=>H-py-(v-mn)*(H-2*py)/Math.max(1,mx-mn);
+  const pts=l.map((x,i)=>X(i).toFixed(1)+','+Y(x.g).toFixed(1)).join(' ');
+  const der=l[l.length-1];
+  const date=s=>{ try{ return new Date(s+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'short'}); }catch(e){ return s; } };
+  return '<svg class="ca-courbe" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Note globale sur '+l.length+' semaines, de '+l[0].g+' à '+der.g+'">'
+    +'<line x1="'+px+'" x2="'+(W-px)+'" y1="'+(H-py)+'" y2="'+(H-py)+'" class="ca-axe"/>'
+    +'<polyline points="'+pts+'" fill="none" class="ca-ligne"/>'
+    +l.map((x,i)=>'<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(x.g).toFixed(1)+'" r="'+(i===l.length-1?5:4)+'" class="ca-point"><title>Semaine du '+escapeHtml(date(x.s))+' : '+x.g+'</title></circle>').join('')
+    +'<text x="'+(X(l.length-1)-6).toFixed(1)+'" y="'+(Y(der.g)-10).toFixed(1)+'" text-anchor="end" class="ca-der">'+der.g+'</text>'
+    +'</svg>';
+}
+function _renderCarteProgression(){
+  const z=document.getElementById('prog-carte');
+  const u=currentUser;
+  if(!z) return false;
+  if(!u||u.role==='coach'){ z.innerHTML=''; return false; }
+  try{ majCarteAthlete(u); }catch(e){}
+  const c=u.carte||noteAthlete(u);
+  z.innerHTML='<div class="ca-evo card">'
+    +'<div class="ca-evo-t">Ta carte d’athlète</div>'
+    +'<div class="ca-evo-l"><canvas class="ca-vignette" id="ca-evo-vignette" width="240" height="336" role="img" aria-label="Carte d’athlète, note '+c.globale+'"></canvas>'
+    +'<div class="ca-evo-notes">'+CARTE_NOTES.map(k=>'<div><b>'+c[k]+'</b><span>'+CARTE_LIB[k]+'</span></div>').join('')
+    +(c.sansPoids?'<p class="ca-note">Ajoute une pesée : la force se mesure par rapport à ton poids.</p>':'')
+    +'</div></div>'
+    +'<div class="ca-evo-t2">Ta note, semaine après semaine</div>'
+    +htmlCourbeCarte(u.carteHist)
+    +'<div class="ca-btns"><button type="button" class="btn btn-outline btn-sm btn-casse" onclick="partagerCarteAthlete(this,\'carte\')">'+icon('share',14)+' <span>Partager ma carte</span></button></div>'
+    +'</div>';
+  const emb=_carteEmbleme(u);
+  const peindre=()=>{ try{ _peindreVignetteCarte('ca-evo-vignette',u); }catch(e){} };
+  peindre();
+  if(emb&&!emb.complete) emb.addEventListener('load',peindre,{once:true});
+  return true;
+}
 // ── LA FIN DE SÉANCE : « +180 ⚡ », compté par arcCompteur, et le détail ──
 // PURE.
 function htmlVoltsFin(g,xpTotal){
@@ -74906,6 +75382,8 @@ function loadProgress(){
   go('s-progress');_renderEncartOsseux();renderBandeauPhase();
   // R32 — la phrase de synthese, en tete.
   try{ _renderSyntheseProgression(); }catch(e){}
+  // La carte d'athlète et la courbe de sa note.
+  try{ _renderCarteProgression(); }catch(e){}
   // R20 — L'ONGLET OU L'ATHLETE S'ETAIT ARRETE, et non plus toujours « Poids ».
   // Un nom inconnu (ancien onglet, valeur abimee) retombe sur « Poids ».
   // LE REPLI SUR DONNEES ABSENTES N'EST PAS ECRIT : « Perfs » choisi sur un

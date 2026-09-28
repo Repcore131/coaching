@@ -1220,6 +1220,17 @@
             "$autre": { ".validate": false }
           }
         },
+        // La carte d'athlete, en vignette : des notes de 1 a 99 et le cadre.
+        "carte": {
+          "g":   { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 99" },
+          "c":   { ".validate": "newData.isString() && newData.val().matches(/^(standard|elite|legendaire)$/)" },
+          "FOR": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 99" },
+          "VOL": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 99" },
+          "REG": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 99" },
+          "PRO": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 99" },
+          "END": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 99" },
+          "$autre": { ".validate": false }
+        },
         // LES CHARGES, seulement si l'athlete a coche « Mes 3 meilleurs records ».
         "meilleurs": {
           "$i": {

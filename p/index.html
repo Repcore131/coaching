@@ -40,6 +40,14 @@ main{max-width:480px;margin:0 auto;padding:28px 18px calc(28px + env(safe-area-i
 .bdg figure{margin:0;text-align:center;font-size:11px;color:var(--gris);line-height:1.2}
 .bdg img{display:block;width:100%;aspect-ratio:1;object-fit:contain}
 .bdg .s{color:#ff6b6b}
+.carte{display:flex;align-items:center;gap:14px;margin:18px auto 0;max-width:340px;padding:14px;border-radius:18px;background:linear-gradient(160deg,#151517,#050505);border:3px solid #4a4a50}
+.carte.elite{border-color:#ff3b3b;box-shadow:0 0 18px rgba(255,59,59,.45)}
+.carte.legendaire{border-color:#ffcf5a;box-shadow:0 0 22px rgba(255,190,70,.5)}
+.carte .g{font-size:54px;font-weight:900;line-height:1;text-align:center;min-width:76px}
+.carte .g small{display:block;font-size:11px;letter-spacing:2px;color:#ff6b6b;margin-top:4px}
+.carte.legendaire .g small{color:#ffcf5a}
+.carte ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;font-size:14px}
+.carte li b{display:inline-block;min-width:26px}
 .pseudo{text-align:center;color:var(--gris);font-size:14px;letter-spacing:.5px}
 h1{text-align:center;font-size:34px;line-height:1.1;margin:4px 0 2px;letter-spacing:.5px}
 .rang{text-align:center;color:#ff3b3b;font-weight:800;letter-spacing:3px;font-size:13px;text-transform:uppercase}
@@ -105,6 +113,12 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
         var part=v.a>v.de?Math.max(0,Math.min(1,(v.xp-v.de)/(v.a-v.de))):1;
         h+='<div class="jauge" role="progressbar" aria-label="Volts" aria-valuenow="'+Math.round(part*100)+'" aria-valuemin="0" aria-valuemax="100"><i style="width:'+Math.round(part*100)+'%"></i></div>'
           +'<div class="volts">⚡ '+nb(v.xp)+' V'+(v.a>v.de?' · '+nb(v.a)+' V pour le rang suivant':' · rang maximal')+'</div>';
+      }
+      var ca=p.carte;
+      if(ca&&ca.g){
+        var cad={standard:'STANDARD',elite:'ÉLITE',legendaire:'LÉGENDAIRE'}[ca.c]||'STANDARD';
+        h+='<div class="carte '+(/^(elite|legendaire)$/.test(ca.c)?ca.c:'')+'" aria-label="Carte d’athlète, note '+(ca.g|0)+'"><div class="g">'+(ca.g|0)+'<small>'+cad+'</small></div><ul>'
+          +['FOR','VOL','REG','PRO','END'].map(function(k){return '<li><b>'+(ca[k]|0)+'</b> '+k+'</li>';}).join('')+'</ul></div>';
       }
       var ch='';
       if(p.seances!=null) ch+='<div><b>'+nb(p.seances|0)+'</b><span>séances</span></div>';

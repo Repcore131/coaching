@@ -49099,12 +49099,13 @@ async function testExercices(){
       try{ if(montrerTutoSticker()) return _echec('montré deux fois'); }
       finally{ try{ if(v==null) localStorage.removeItem(TUTO_STICKER_CLE); else localStorage.setItem(TUTO_STICKER_CLE,v); }catch(e){} fermerTutoSticker(); }
       return true;})());
-    ok('Pages : réglages du profil — désactivée par défaut, cinq choix, le lien de la bio',(()=>{
+    ok('Pages : réglages du profil — désactivée par défaut, six choix, le lien de la bio',(()=>{
       const d=document.createElement('div'); d.innerHTML=htmlReglagesPagePublique(_PPU());
       if(d.querySelector('#pp-active').checked) return _echec('page activée par défaut');
-      if(d.querySelectorAll('[data-montrer]').length!==5) return _echec('choix');
+      if(d.querySelectorAll('[data-montrer]').length!==6) return _echec('choix');
       if(d.querySelector('[data-montrer="meilleurs"]').checked) return _echec('les charges cochées par défaut');
-      if(![...d.querySelectorAll('[data-montrer]')].filter(x=>x.dataset.montrer!=='meilleurs').every(x=>x.checked)) return _echec('les autres choix décochés');
+      if(d.querySelector('[data-montrer="carte"]').checked) return _echec('la carte cochée par défaut');
+      if(![...d.querySelectorAll('[data-montrer]')].filter(x=>['meilleurs','carte'].indexOf(x.dataset.montrer)<0).every(x=>x.checked)) return _echec('les autres choix décochés');
       if(!/Copier mon lien pour ma bio Instagram/.test(d.textContent)) return _echec('bouton bio');
       return d.querySelectorAll('button.btn:not(.btn-casse)').length===0?true:_echec('R31 : bouton en capitales');})());
     ok('Pages : pages publiques et réécritures présentes, lecture publique bornée',(()=>{
@@ -49736,6 +49737,159 @@ async function testExercices(){
       if(_legendePour('rang')!=='Ma légende à moi #RepCore') return _echec('la légende modifiée n’est pas celle qui part');
       if(_legendePour('rang')==='Ma légende à moi #RepCore') return _echec('elle ne sert qu’une fois');
       return (legendeModifiee('rang','x'.repeat(400)).length===220)?true:_echec('longueur non bornée');})());
+    // ══ 28/09/2026 — LA CARTE D'ATHLÈTE ══════════════════════════════════
+    // Un lundi fixe : la fenêtre est 06/07 → 27/09/2026 (12 semaines complètes).
+    const _CAT=Date.parse('2026-09-28T12:00:00+02:00');
+    const _CAL=_lundiDe(_CAT).getTime();
+    // Une séance la semaine `sem` avant le lundi (1 = la semaine dernière).
+    const _CAS=(sem,exos,dur)=>{ const d=_datePlusJours(_CAL,-7*sem+1).getTime()+18*3600e3;
+      const data={}; for(const [nm,kg,reps] of exos) data[nm]={sets:[{weight:String(kg),reps:String(reps),done:true}]};
+      return {date:d,duration:dur==null?60:dur,data}; };
+    // Une charge dont l'e1RM (1 rép, RIR 0) vaut exactement `e`.
+    const _CAK=e=>Math.round(e*30/31*1000)/1000;
+    ok('Carte : la courbe douce — 1 à 99, 79 à la référence, 90 à une fois et demie, jamais 100',(()=>{
+      if(carteCourbe(0)!==1||carteCourbe(-3)!==1) return _echec('zéro');
+      if(carteCourbe(1)!==79||carteCourbe(1.5)!==90||carteCourbe(2)!==95) return _echec(carteCourbe(1)+' '+carteCourbe(1.5)+' '+carteCourbe(2));
+      if(carteCourbe(50)!==99||carteCourbe(Infinity)!==99) return _echec('plafond');
+      let p=0; for(let x=0;x<=4;x+=0.05){ const v=carteCourbe(x); if(v<p) return _echec('pas monotone à '+x); p=v; }
+      // Dur de dépasser 90 : il faut au moins 1,5 fois la référence.
+      for(let x=0;x<1.49;x+=0.01) if(carteCourbe(x)>90) return _echec('90 dépassé à x='+x.toFixed(2));
+      return true;})());
+    ok('Carte : les barèmes de force — e1RM rapporté au poids de corps, homme et femme',(()=>{
+      if(!(CARTE_BAREMES.homme.squat>CARTE_BAREMES.femme.squat&&CARTE_BAREMES.homme.couche>CARTE_BAREMES.femme.couche
+        &&CARTE_BAREMES.homme.terre>CARTE_BAREMES.femme.terre&&CARTE_BAREMES.homme.militaire>CARTE_BAREMES.femme.militaire)) return _echec('barème femme ≥ homme');
+      for(const sexe of ['homme','femme']) for(const bw of [60,80,110]){
+        const B=CARTE_BAREMES[sexe];
+        // Les quatre mouvements pile au barème : x = 1, FOR = 79.
+        const noms={squat:'SQUAT',couche:'DÉVELOPPÉ COUCHÉ',terre:'SOULEVÉ DE TERRE',militaire:'DÉVELOPPÉ MILITAIRE'};
+        const exos=Object.keys(noms).map(k=>[noms[k],_CAK(B[k]*bw),1]);
+        const u={gender:sexe,weightLog:[{date:'2026-09-20',kg:bw}],sessions:[_CAS(3,exos)]};
+        const n=noteAthlete(u,_CAT);
+        if(n.FOR!==79) return _echec(sexe+' '+bw+' kg : FOR '+n.FOR);
+        // Deux fois plus lourd, la même charge : la force relative baisse.
+        const lourd=noteAthlete(Object.assign({},u,{weightLog:[{date:'2026-09-20',kg:bw*2}]}),_CAT);
+        if(!(lourd.FOR<n.FOR)) return _echec('le poids de corps ne compte pas');
+      }
+      // La même charge vaut plus chez une femme.
+      const ex=[['SQUAT',_CAK(100),1]];
+      const h=noteAthlete({gender:'homme',weightLog:[{date:'2026-09-20',kg:70}],sessions:[_CAS(2,ex)]},_CAT);
+      const f=noteAthlete({gender:'femme',weightLog:[{date:'2026-09-20',kg:70}],sessions:[_CAS(2,ex)]},_CAT);
+      if(!(f.FOR>h.FOR)) return _echec('femme '+f.FOR+' / homme '+h.FOR);
+      // Sans pesée : le poids par défaut, et la note le dit.
+      const sp=noteAthlete({gender:'homme',sessions:[_CAS(2,ex)]},_CAT);
+      if(!sp.sansPoids||h.sansPoids) return _echec('sansPoids');
+      // Un exercice qui n'est pas un mouvement de base ne compte pas en force.
+      const iso=noteAthlete({gender:'homme',weightLog:[{date:'2026-09-20',kg:70}],sessions:[_CAS(2,[['CURL BARRE',_CAK(300),1]])]},_CAT);
+      return iso.FOR===1?true:_echec('un curl compte en force : '+iso.FOR);})());
+    ok('Carte : les mouvements de base reconnus (et pas leurs variantes)',(()=>{
+      const bons={'SQUAT':'squat','Squat barre':'squat','DÉVELOPPÉ COUCHÉ':'couche','Développé couché barre':'couche','Bench press':'couche',
+        'SOULEVÉ DE TERRE':'terre','Soulevé de terre sumo':'terre','Deadlift':'terre','DÉVELOPPÉ MILITAIRE':'militaire','Développé militaire barre':'militaire'};
+      for(const [n,k] of Object.entries(bons)) if(carteMouvementDe(n)!==k) return _echec(n+' → '+carteMouvementDe(n));
+      for(const n of ['Squat bulgare','Développé couché haltère','Soulevé de terre roumain','Développé militaire haltères','Leg press'])
+        if(carteMouvementDe(n)!==null) return _echec(n+' reconnu');
+      return true;})());
+    ok('Carte : REG et PRO pèsent plus que FOR — la régularité et le progrès avant la génétique',(()=>{
+      if(!(CARTE_POIDS.REG>CARTE_POIDS.FOR&&CARTE_POIDS.PRO>CARTE_POIDS.FOR)) return _echec(JSON.stringify(CARTE_POIDS));
+      const somme=Object.values(CARTE_POIDS).reduce((a,b)=>a+b,0);
+      if(Math.abs(somme-1)>1e-9) return _echec('les poids ne font pas 1 : '+somme);
+      // Le fort irrégulier et stagnant contre le moyen, régulier, qui progresse.
+      const bw=80, fort={gender:'homme',weightLog:[{date:'2026-09-20',kg:bw}],sessions:[_CAS(11,[['SQUAT',_CAK(2.6*bw),1]]),_CAS(2,[['SQUAT',_CAK(2.6*bw),1]])]};
+      const reg={gender:'homme',weightLog:[{date:'2026-09-20',kg:bw}],sessions:[]};
+      for(let s=1;s<=12;s++) reg.sessions.push(_CAS(s,[['SQUAT',_CAK((1.1+(12-s)*0.01)*bw),1]]));
+      const a=noteAthlete(fort,_CAT), b=noteAthlete(reg,_CAT);
+      if(!(a.FOR>b.FOR)) return _echec('scénario : le fort doit l’être');
+      return b.globale>a.globale?true:_echec('régulier '+b.globale+' ≤ fort '+a.globale);})());
+    ok('Carte : les 12 dernières semaines complètes, ni plus, ni la semaine en cours',(()=>{
+      const bw=80, ex=[['SQUAT',_CAK(1.75*bw),1]];
+      const base={gender:'homme',weightLog:[{date:'2026-09-20',kg:bw}]};
+      const dedans=noteAthlete(Object.assign({},base,{sessions:[_CAS(12,ex)]}),_CAT);
+      const avant=noteAthlete(Object.assign({},base,{sessions:[_CAS(13,ex)]}),_CAT);
+      const courante=noteAthlete(Object.assign({},base,{sessions:[_CAS(0,ex)]}),_CAT);
+      if(dedans.seances!==1||avant.seances!==0||courante.seances!==0) return _echec(dedans.seances+'/'+avant.seances+'/'+courante.seances);
+      if(avant.globale!==1||avant.FOR!==1) return _echec('rien dans la fenêtre : '+avant.globale);
+      if(dedans.semaine!=='2026-09-28') return _echec('semaine '+dedans.semaine);
+      // Régularité parfaite (quota 1, 12 semaines) : 90, pas plus.
+      const r={...base,sessions:[]}; for(let s=1;s<=12;s++) r.sessions.push(_CAS(s,ex));
+      const n=noteAthlete(r,_CAT);
+      if(n.REG!==90) return _echec('REG parfaite '+n.REG);
+      // Stable sur 12 semaines : PRO 43 ; +4 % : 87.
+      if(n.PRO!==carteCourbe(0.35)) return _echec('PRO stable '+n.PRO);
+      const p={...base,sessions:[]}; for(let s=1;s<=12;s++) p.sessions.push(_CAS(s,[['SQUAT',_CAK(1.75*bw*(s<=6?1.04:1)),1]]));
+      const np=noteAthlete(p,_CAT);
+      if(np.PRO!==carteCourbe(1.35)) return _echec('PRO +4 % '+np.PRO);
+      // Des données énormes : tout reste dans 1..99.
+      const e={gender:'femme',weightLog:[{date:'2026-09-20',kg:40}],sessions:[]};
+      for(let s=1;s<=12;s++) for(let j=0;j<7;j++) e.sessions.push(_CAS(s,[['SQUAT',_CAK(900),1],['DÉVELOPPÉ COUCHÉ',_CAK(900),1]],590));
+      const ne=noteAthlete(e,_CAT);
+      return CARTE_NOTES.concat(['globale']).every(k=>ne[k]>=1&&ne[k]<=99)?true:_echec(JSON.stringify(ne));})());
+    ok('Carte : le cadre suit la note — standard, élite dès 70, légendaire dès 85',(()=>{
+      const c=v=>carteCadre(v).cle;
+      return (c(1)==='standard'&&c(69)==='standard'&&c(70)==='elite'&&c(84)==='elite'&&c(85)==='legendaire'&&c(99)==='legendaire')?true:_echec('seuils');})());
+    ok('Carte : recalculée le lundi — une fois par semaine, l’historique, montrée quand la note monte, foudre au changement de cadre',(()=>{
+      const sv=window.saveUser;
+      try{
+        window.saveUser=()=>{};
+        const bw=80, u={role:'athlete',gender:'homme',weightLog:[{date:'2026-09-20',kg:bw}],sessions:[]};
+        for(let s=1;s<=12;s++) u.sessions.push(_CAS(s,[['SQUAT',_CAK(1.2*bw),1]]));
+        const r1=majCarteAthlete(u,_CAT);
+        if(!r1||r1.monte||u.carte.aMontrer) return _echec('la première note n’est pas une montée');
+        if(majCarteAthlete(u,_CAT+3*864e5)!==null) return _echec('recalculée deux fois la même semaine');
+        if(!u.carteHist||u.carteHist.length!==1||u.carteHist[0].s!=='2026-09-28') return _echec('historique');
+        // La semaine suivante, beaucoup plus : la note monte.
+        const t2=_CAT+7*864e5;
+        u.sessions.push(_CAS(0,[['SQUAT',_CAK(2.4*bw),1],['DÉVELOPPÉ COUCHÉ',_CAK(1.8*bw),1]],300));
+        u.carte.cadre='standard'; u.carte.globale=10;
+        const r2=majCarteAthlete(u,t2);
+        if(!r2||!r2.monte||!u.carte.aMontrer||u.carte.avant!==10) return _echec('montée : '+JSON.stringify(r2&&{m:r2.monte,a:u.carte.aMontrer}));
+        if(u.carteHist.length!==2) return _echec('historique 2');
+        if(u.carte.cadre!=='standard'&&!u.carte.foudre) return _echec('pas de foudre au changement de cadre');
+        if(u.carte.cadre==='standard'&&u.carte.foudre) return _echec('foudre sans changement');
+        // La carte de l'accueil : présente tant qu'elle n'est ni partagée ni fermée.
+        if(!/Ta note monte : 10 → /.test(htmlCarteAccueil(u))) return _echec('accueil');
+        u.carte.aMontrer=false;
+        if(htmlCarteAccueil(u)!=='') return _echec('fermée, encore là');
+        if(majCarteAthlete({role:'coach'},_CAT)!==null) return _echec('un coach a une carte');
+      }finally{ window.saveUser=sv; }
+      return ['carte','carteHist'].every(k=>CHAMPS_SANTE.indexOf(k)>=0)?true:_echec('carte non classée santé (elle dérive du poids)');})());
+    ok('Carte : le dessin — 1080×1512 et story 1080×1920, cadre dessiné sans gabarit, données extrêmes',(()=>{
+      for(const g of [1,69,70,85,99]) for(const f of ['carte','story']){
+        const n={FOR:99,VOL:1,REG:88,PRO:7,END:50,globale:g,cadre:carteCadre(g).cle};
+        const cv=_dessinerCarteAthlete({prenom:'Maximilien-Alexandre de la Tour',note:n,signature:'MAXIMILIEN-ALEXANDRE DE LA TOUR'},f);
+        if(cv.width!==1080||cv.height!==(f==='story'?1920:1512)) return _echec(f+' '+cv.width+'×'+cv.height);
+        // Le bord est la bordure du cadre : pas du noir (le cadre est bien peint).
+        const px=cv.getContext('2d').getImageData(540,f==='story'?Math.round((1920-1372)/2)+40+4:4,1,1).data;
+        if(px[0]+px[1]+px[2]<30) return _echec('cadre absent ('+f+', '+g+')');
+      }
+      if(CARTE_FORMATS.carte.w!==1080||CARTE_FORMATS.carte.h!==1512) return _echec('format');
+      return /img\/cartes\//.test(String(carteCadreImage))?true:_echec('gabarits');})());
+    ok('Carte : l’onglet Évolution — la carte et la courbe de la note',(()=>{
+      if(!/deux semaines/.test(htmlCourbeCarte([{s:'2026-09-21',g:50}]))) return _echec('une seule semaine');
+      const h=htmlCourbeCarte([{s:'2026-09-14',g:50},{s:'2026-09-21',g:55},{s:'2026-09-28',g:61}]);
+      const d=document.createElement('div'); d.innerHTML=h;
+      if(d.querySelectorAll('circle').length!==3||!d.querySelector('polyline')) return _echec('points');
+      if(!/Semaine du .* : 61/.test(d.querySelectorAll('circle')[2].textContent)) return _echec('survol');
+      if(d.querySelector('.ca-der').textContent!=='61') return _echec('dernière valeur');
+      if(!/50 à 61/.test(d.querySelector('svg').getAttribute('aria-label'))) return _echec('aria');
+      const x=new XMLHttpRequest(); x.open('GET','index.html',false); x.send();
+      return (x.status!==200||/id="prog-carte"/.test(x.responseText))?true:_echec('prog-carte absent d’Évolution');})());
+    ok('Carte : la page publique — vignette seulement si activée, des notes et jamais le poids',(()=>{
+      if(pageMontrerDefaut().carte!==false) return _echec('activée par défaut');
+      const u={fname:'Julie',gender:'femme',weightLog:[{date:'2026-09-20',kg:61}],sessions:[_CAS(2,[['SQUAT',_CAK(80),1]])],
+        carte:{FOR:60,VOL:20,REG:30,PRO:40,END:25,globale:37,cadre:'standard'}};
+      if(pagePubliqueDonnees(u,pageMontrerDefaut(),_CAT).carte) return _echec('publiée sans être cochée');
+      const d=pagePubliqueDonnees(u,{carte:true},_CAT);
+      if(!d.carte||Object.keys(d.carte).sort().join()!=='END,FOR,PRO,REG,VOL,c,g'||d.carte.g!==37) return _echec(JSON.stringify(d.carte));
+      if(/61|80|kg/.test(JSON.stringify(d.carte))) return _echec('un poids fuit');
+      const x=new XMLHttpRequest(); x.open('GET','../p/index.html',false); x.send();
+      if(x.status===200&&!/class="carte /.test(x.responseText)) return _echec('p/index.html ne dessine pas la vignette');
+      const y=new XMLHttpRequest(); y.open('GET','../database.rules.json',false); y.send();
+      return (y.status!==200||/"carte": \{[\s\S]*?standard\|elite\|legendaire/.test(y.responseText))?true:_echec('règles');})());
+    ok('Carte : la légende du partage (post) porte la note',(()=>{
+      for(let i=0;i<_LEGENDES.carte.length;i++){
+        const t=legendePartage('carte',{note:87},{indice:i,u:null});
+        if(!/#RepCore/.test(t)||t.length>=220) return _echec('modèle '+i);
+      }
+      return /87/.test(legendePartage('carte',{note:87},{indice:0,u:null}))?true:_echec('note absente');})());
     // ══ 28/09/2026 — LA CARTE D'INVITATION ═══════════════════════════════
     ok('Invitation : la carte, story et post, données extrêmes — rien ne déborde, le code est dans son cadre',(()=>{
       const cas=[{prenom:'Maximilien-Alexandre',code:'MAXIMI7K2',mois:2,base:1,signature:'MAXIMILIEN-ALEXANDRE DE LA TOUR'},
