@@ -11581,18 +11581,19 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   border-bottom:1px solid rgba(255,255,255,.14);overflow:hidden}
 .clh-tete>.clh-profil{position:static;display:block}
 .clh-tete>.clh-profil>div:not(#clh-athlete-avatar){position:static}
-#clh-athlete-avatar{position:absolute!important;left:3.1cqw;top:calc(var(--st) + 1.9cqw);
-  width:15.8cqw!important;height:15.8cqw!important;border:.32cqw solid #e02020!important;
+#clh-athlete-avatar{position:absolute!important;left:2.7cqw;top:calc(var(--st) + 1.6cqw);
+  width:16.6cqw!important;height:16.6cqw!important;border:.32cqw solid #e02020!important;
   background:#141414!important;box-shadow:0 0 1.4cqw rgba(224,32,32,.55),0 0 .4cqw rgba(255,60,60,.5)}
 #clh-athlete-avatar>svg{width:45%!important;height:45%!important}
-.clh-tete .eyebrow{position:absolute;left:22cqw;top:calc(var(--st) + 2.75cqw);margin:0!important;
-  font-family:Montserrat,sans-serif;font-weight:800;font-size:1.9cqw;line-height:1;
-  letter-spacing:0.17em;color:#e14140;white-space:nowrap}
-#clh-name{position:absolute;left:22cqw;top:calc(var(--st) + 4.95cqw);
-  font-family:var(--pile-titre)!important;font-size:4.95cqw!important;line-height:1!important;
-  letter-spacing:0.11em!important;color:#fff;-webkit-text-stroke:0.12cqw #fff;white-space:nowrap;max-width:37cqw;overflow:hidden;text-overflow:ellipsis}
+.clh-tete .eyebrow{position:absolute;left:22cqw;top:calc(var(--st) + 1.75cqw);margin:0!important;
+  font-family:Montserrat,sans-serif;font-weight:800;font-size:3.1cqw;line-height:1;
+  letter-spacing:0.08em;color:#e14140;white-space:nowrap}
+#clh-name{position:absolute;left:22cqw;top:calc(var(--st) + 5.35cqw);
+  font-family:var(--pile-titre)!important;font-size:6.45cqw!important;line-height:1!important;
+  letter-spacing:0.08em!important;color:#fff;-webkit-text-stroke:0.14cqw #fff;white-space:nowrap;max-width:38.5cqw;overflow:hidden;text-overflow:ellipsis}
 .clh-tete .rg-accueil{position:static;margin:0;max-width:none}
-.clh-tete .rg-txt{position:absolute;left:22cqw;top:calc(var(--st) + 9.85cqw);margin:0;
+/* « 11 560 / 11 833 V vers … » retiré de l'en-tête (Kevin, 28/09/2026) : le nom prend sa place. */
+.clh-tete .rg-txt{display:none!important;position:absolute;left:22cqw;top:calc(var(--st) + 9.85cqw);margin:0;
   font-family:Montserrat,sans-serif;font-weight:500;font-size:1.65cqw;line-height:1;
   letter-spacing:0;color:#e6e6e6;max-width:none;overflow:visible;transform:scaleX(0.815);transform-origin:0 50%}
 .clh-tete .rg-txt b{font-weight:500;color:#ececec}
@@ -11600,10 +11601,10 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .clh-tete .rg-ligne{position:static;display:block}
 .clh-tete .rg-emb{position:absolute;left:20.55cqw;top:calc(var(--st) + 12.15cqw);
   width:5.9cqw;height:5.9cqw}
-.clh-tete .rg-nom{position:absolute;left:26.85cqw;top:calc(var(--st) + 13.15cqw);
+.clh-tete .rg-nom{position:absolute;left:27.5cqw;top:calc(var(--st) + 13cqw);
   font-size:2.43cqw;line-height:1;letter-spacing:0.15em;color:#e32424}
-.clh-tete .rg-jauge{position:absolute;left:26.5cqw;top:calc(var(--st) + 15.65cqw);
-  width:70.15cqw;height:1.15cqw;margin:0;border-radius:1cqw;background:#262626}
+.clh-tete .rg-jauge{position:absolute;left:27.25cqw;top:calc(var(--st) + 15.8cqw);
+  width:69.25cqw;height:1.2cqw;margin:0;border-radius:1cqw;background:#262626}
 .clh-tete .rg-jauge span{border-radius:1cqw;background:linear-gradient(90deg,#c10b0b,#e32424 55%,#ff6a5c)}
 #clh-streak{position:absolute;left:61.6cqw;top:calc(var(--st) + 2.9cqw);width:35.65cqw;height:9.9cqw;margin:0}
 #clh-streak .sk-flammes{display:none}
@@ -14320,7 +14321,7 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .clh-tete{background:#f3f3f3;border-bottom:1px solid rgba(9,9,9,0.14)}
 :root[data-theme="clair"] #clh-athlete-avatar{border:.32cqw solid #e02020!important;background:#e8e8e8!important;box-shadow:0 0 1.4cqw rgba(224,32,32,.55),0 0 .4cqw rgba(255,60,60,.5)}
 :root[data-theme="clair"] .clh-tete .eyebrow{color:#b01d1c}
-:root[data-theme="clair"] #clh-name{color:#090909;-webkit-text-stroke:0.12cqw #090909}
+:root[data-theme="clair"] #clh-name{color:#090909;-webkit-text-stroke:0.14cqw #090909}
 :root[data-theme="clair"] .clh-tete .rg-txt{color:#212121}
 :root[data-theme="clair"] .clh-tete .rg-txt b{color:#1b1b1b}
 :root[data-theme="clair"] .clh-tete .rg-vers{color:#606060}
