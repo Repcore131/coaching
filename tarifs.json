@@ -6,7 +6,7 @@
   "ultime": { "mois": 24.9, "an": 298.8 },
   "ultime_demi": { "part": 0.5, "premierMois": 12.45 },
   "essai": { "mois": 1, "jours": 30, "carte": false },
-  "essai_parrainage": { "moisEnPlus": 1 },
+  "essai_parrainage": { "moisEnPlus": 0 },
   "coach": { "libre": 0, "coach": 19, "pro": 39 },
   "coaching": {
     "programme_perso": { "prix": 99, "mois": 3 },

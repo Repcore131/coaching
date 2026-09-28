@@ -37,7 +37,7 @@ import * as RT from './retention.js';
 export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 export const PUSH_TYPES = ['serie', 'wrapped', 'bilan', 'badge', 'coach', 'filleul', 'defi', 'acces', 'retour'];
-const BONUS_ESSAI_JOURS = 30;
+const BONUS_ESSAI_JOURS = 0;   // un mois, pas deux : = TARIFS.essai_parrainage.moisEnPlus
 const PALIERS = ['aucun', 'essentielle', 'ultime', 'suivi'];
 
 // ── LE TEMPS, À PARIS ─────────────────────────────────────────────────────
@@ -1135,8 +1135,8 @@ export function creerMetier(deps) {
     // La page publique : seulement si ce pseudo est bien le sien et qu'il y montre son rang.
     const pseudo = pp && typeof pp.pseudo === 'string' ? pp.pseudo : '';
     if (/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/.test(pseudo)) {
-      // Le point d'un pseudo est une virgule en base (Firebase refuse le point dans une clé).
-      const pk = pseudo.replace(/\./g, ',');
+      // Le point d'un pseudo est « __ » en base (Firebase refuse le point dans une clé).
+      const pk = pseudo.replace(/\./g, '__');
       const [proprio, rangPublic] = await Promise.all([_val('pseudos/' + pk), _val('profils_publics/' + pk + '/rang')]);
       if (proprio === k) maj['volts_publics/' + pk] = rangPublic
         ? Object.assign({ rang: { n: rg.rang.n, nom: rg.rang.nom }, maj: t, masquer: r.nonVerifies }, XPS.voltsPublics(r.total)) : null;

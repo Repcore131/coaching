@@ -69,7 +69,7 @@ code{background:#000;border:1px solid var(--bord);border-radius:6px;padding:2px 
   <!-- Invité par un ami ou un ambassadeur : l'accueil, par son nom. -->
   <div id="accueil" hidden>
     <img id="embleme" class="embleme" alt="" hidden>
-    <p class="promesse"><strong><span id="mois-ami" data-nb="essai.moisParraine">2</span> mois pour essayer</strong>, toute l'app ouverte, sans carte bancaire.</p>
+    <p class="promesse" id="promesse"><strong><span id="mois-ami" data-nb="essai.moisParraine">1</span> mois offert</strong>, toute l'app ouverte, sans carte bancaire.</p>
     <!-- L'OFFRE DE LANCEMENT d'un code ambassadeur « ultime_demi » : elle
          remplace le mois d'essai en plus (un seul avantage). -->
     <p class="promesse" id="offre-demi" hidden>Avec ce code : <strong>ton 1er mois d'Ultime à <span data-tarif="ultime_demi.premierMois">12,45&nbsp;€</span></strong>, puis <span data-tarif="ultime.mois">24,90&nbsp;€</span> par mois, sans engagement.</p>
@@ -172,13 +172,17 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
 
   // ── L'ACCUEIL PAR LE NOM ────────────────────────────────────────────────
   // textContent partout : un prénom ne devient jamais du HTML.
-  var mois=(el('mois-ami')&&el('mois-ami').textContent)||'2';
-  function poserNom(nom,rang){
+  // LE MOIS OFFERT, PAR LA PERSONNE QUI INVITE (Kevin, 28/09/2026) : on dit
+  // « grâce à Julie », jamais « au lieu de ».
+  function poserNom(nom,rang,demi){
     if(!nom) return;
     var t=el('titre'); if(t) t.textContent=nom+' t\u2019invite sur RepCore';
+    // L'offre de lancement (ultime_demi) remplace le mois offert.
+    var offre=demi?'Grâce à '+nom+', ton 1er mois d\u2019Ultime est à moitié prix.'
+      :'Grâce à '+nom+', ton premier mois est offert\u00a0: toute l\u2019app ouverte, sans carte bancaire.';
+    var pr=el('promesse'); if(pr) pr.textContent=offre;
     var ii=el('interne-invite');
-    // Le titre porte déjà le prénom : sous lui, l'offre seule.
-    if(ii){ ii.textContent=mois+' mois pour essayer, toute l\u2019app ouverte, sans carte bancaire.'; ii.hidden=false; }
+    if(ii){ ii.textContent=offre; ii.hidden=false; }
     var n=Math.round(Number(rang));
     var e=el('embleme');
     if(e&&n>=1&&n<=10){ e.src='../app/img/rangs/rang_'+n+'-512.webp'; e.alt='Rang '+n; e.hidden=false; }
@@ -197,11 +201,10 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
             // L'offre de lancement : le 1er mois d'Ultime à moitié prix, au
             // lieu du mois d'essai en plus. Le texte du nom suit l'offre.
             if(d.avantage==='ultime_demi'){
-              var n1=document.querySelector('[data-nb="essai.mois"]'); mois=(n1&&n1.textContent)||'1';
-              var ma=el('mois-ami'); if(ma) ma.textContent=mois;
               var od=el('offre-demi'); if(od) od.hidden=false;
             }
-            poserNom(String(d.nom||'').slice(0,80));
+            poserNom(String(d.nom||'').slice(0,80),0,d.avantage==='ultime_demi');
+            if(d.avantage==='ultime_demi'){ var pr0=el('promesse'); if(pr0) pr0.hidden=true; }
             return;
           }
           var prenom=String(d.prenom||'').trim().slice(0,24);

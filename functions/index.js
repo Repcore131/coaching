@@ -1548,7 +1548,9 @@ exports.defisQuotidien = onSchedule(Object.assign({ schedule: "0 9 * * *" }, _op
 // Le filleul reçoit son mois d'essai en plus dès que sa demande est acceptée ;
 // le PARRAIN ne reçoit rien tant que le filleul n'a pas payé (anti-fraude).
 const P = require("./parrainage-calcul");
-const BONUS_ESSAI_JOURS = 30;   // = OFFRES.essai_parrainage (1 mois) côté client
+// Un mois, pas deux (Kevin, 28/09/2026) : le mois d'essai de tout le monde,
+// présenté comme offert par la personne qui invite. = TARIFS.essai_parrainage.moisEnPlus.
+const BONUS_ESSAI_JOURS = 0;
 
 async function _val(chemin) { return (await db.ref(chemin).get()).val(); }
 
@@ -1677,7 +1679,7 @@ exports.pagePublique = onRequest({ cors: false, memory: "256MiB" }, async (req, 
   catch (e) { res.redirect(302, OG.ORIGINE + "/i"); return; }
   let o = null;
   try {
-    if (c && c.type === "athlete") o = OG.ogAthlete(c.cle, await _val("profils_publics/" + c.cle.replace(/\./g, ",")));
+    if (c && c.type === "athlete") o = OG.ogAthlete(c.cle, await _val("profils_publics/" + c.cle.replace(/\./g, "__")));
     else if (c && c.type === "coach") o = OG.ogCoach(c.cle, await _val("vitrines/" + c.cle));
   } catch (e) { o = null; }
   res.set("Cache-Control", "public, max-age=300, s-maxage=600");

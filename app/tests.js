@@ -35297,9 +35297,10 @@ async function testExercices(){
           //   C'est LE test qui empeche un tarif de bouger en silence : les
           //   chiffres y sont ecrits a la main, et c'est voulu.
           essentielle:[9.50,'essentielle',0], ultime:[24.90,'ultime',0], essai:[0,'ultime',1],
-          // PARRAINAGE (26/09/2026) : le mois en plus du filleul, qui s'ajoute
-          // a l'essai. Gratuit, Ultime, un mois — ni plus, ni moins.
-          essai_parrainage:[0,'ultime',1],
+          // PARRAINAGE : plus de mois en plus (Kevin, 28/09/2026). Le filleul a
+          // le mois d'essai de tout le monde, presente comme offert par son
+          // parrain : zero mois ajoute, ni plus, ni moins.
+          essai_parrainage:[0,'ultime',0],
           // LOT 10 : le premier mois apres un pack. Son prix se LIT sur
           // Ultime, il n'est pas recopie : la moitie de 24,90 fait 12,45, et
           // elle suivra le jour ou Ultime bougera.
@@ -48970,7 +48971,7 @@ async function testExercices(){
       if(l!==RC_LIEN_COURT+(RC_LIEN_COURT.indexOf('?')>=0?'&':'?')+'ref=JULIE7K2') return _echec(l);
       if(lienPerso('',{})!==RC_LIEN_COURT) return _echec('lien sans code : '+lienPerso('',{}));
       const m=parrainageMessage('JULIE7K2',l);
-      return (m.indexOf('JULIE7K2')>=0&&m.indexOf(l)>=0&&/2 mois/.test(m))?true:_echec(m);})());
+      return (m.indexOf('JULIE7K2')>=0&&m.indexOf(l)>=0&&/premier mois est offert/.test(m)&&!/2 mois|au lieu/.test(m))?true:_echec(m);})());
     ok('Parrainage : /i/ garde ?ref= jusqu’à /app/, y compris dans Instagram',(()=>{
       let h=''; try{ const x=new XMLHttpRequest(); x.open('GET','../i/index.html',false); x.send(); h=x.responseText; }catch(e){ return _echec('lecture de /i'); }
       const m=/<script>\s*(\(function\(\)\{[\s\S]*?\}\)\(\);)\s*<\/script>/.exec(h);
@@ -49009,7 +49010,7 @@ async function testExercices(){
         parrainageChampInscription('coach'); if(z.style.display!=='none') return _echec('visible pour un coach');
         parrainageChampInscription('athlete'); return z.style.display===''?true:_echec('masqué pour un athlète');
       } finally { z.style.display=sv; }})());
-    ok('Parrainage : le filleul a un mois d’essai en plus (OFFRES.essai_parrainage)',(()=>{
+    ok('Parrainage : un mois, pas deux — le filleul a le même essai, présenté comme offert (OFFRES.essai_parrainage)',(()=>{
     ok('Notifications activées par défaut, sans écran, retirables dans les réglages',(()=>{
       const u={email:'a@t.fr',role:'client'};
       if(!pushDemandeAuto(u,'proposer')) return _echec('pas demandées au départ');
@@ -49028,7 +49029,7 @@ async function testExercices(){
       const t=Date.now();
       essaiOuvrir(u,parrainageBonusJours()); essaiOuvrir(v,0);
       const d=Math.round((u.essai.finit-v.essai.finit)/864e5);
-      if(OFFRES.essai_parrainage.mois!==1||OFFRES.essai_parrainage.type!=='essai'||d!==30) return _echec('écart '+d);
+      if(OFFRES.essai_parrainage.mois!==0||OFFRES.essai_parrainage.type!=='essai'||d!==0) return _echec('écart '+d);
       const w={role:'athlete'}; essaiOuvrir(w,999);
       return (Math.round((w.essai.finit-t)/864e5)<=ESSAI_JOURS+60)?true:_echec('bonus non borné');})());
     ok('Parrainage : le miroir compte inscrits et abonnés, et date RECRUTEUR au 3e abonné',(()=>{
@@ -49101,11 +49102,19 @@ async function testExercices(){
         bilans:[{date:t0,poids:80}],sleepLog:[{date:'2026-01-05',duration:7}],pseudo:'Juju'});
       // LES CHOIX PAR DÉFAUT (tout sauf les charges) : aucune charge, aucune mesure.
       const d=pagePubliqueDonnees(u,pageMontrerDefaut(),t0+9*J);
-      const permis=['prenom','rang','volts','serie','semaines','seances','badges','ref','maj'];
+      const permis=['prenom','rang','volts','serie','semaines','seances','chiffres','badges','ref','maj'];
       const trop=Object.keys(d).filter(k=>permis.indexOf(k)<0);
       if(trop.length) return _echec('champs en trop : '+trop.join());
       const txt=JSON.stringify(d);
-      if(/\b(100|105|110|82|80)\b/.test(txt.replace(/"date":\d+|"maj":\d+|"xp":\d+|"de":\d+|"a":\d+/g,''))||/photo|poids|kg/i.test(txt)) return _echec('une charge ou une mesure fuit : '+txt);
+      if(/\b(100|105|110|82|80)\b/.test(txt.replace(/"date":\d+|"maj":\d+|"xp":\d+|"de":\d+|"a":\d+|"depuis":\d+/g,''))||/photo|poids|"kg"/i.test(txt)) return _echec('une charge ou une mesure fuit : '+txt);
+      // Les chiffres : un tonnage, des séries, des exercices, une date. Pas une charge isolée.
+      if(!d.chiffres||d.chiffres.tonnage!==1575||d.chiffres.series!==3||d.chiffres.exos!==1||d.chiffres.depuis!==t0) return _echec('chiffres : '+JSON.stringify(d.chiffres));
+      // LA PHOTO : seulement cochée, et seulement l'image réduite du profil ou Cloudinary.
+      if(pagePubliqueDonnees(u,{photo:true},t0).photo) return _echec('une photo https quelconque publiée');
+      const ph='data:image/jpeg;base64,AAAA';
+      if(pagePubliqueDonnees(Object.assign({},u,{athletePhoto:ph}),{photo:true},t0).photo!==ph) return _echec('la photo cochée ne part pas');
+      if(pagePubliqueDonnees(Object.assign({},u,{athletePhoto:ph}),pageMontrerDefaut(),t0).photo) return _echec('la photo cochée par défaut');
+      if(pageMontrerComplet({seances:false}).stats!==true||pageMontrerComplet({seances:false}).seances!==false) return _echec('choix ajoutés après coup');
       if(pageMontrerDefaut().meilleurs!==false) return _echec('les charges cochées par défaut');
       // Cochée : les 3 meilleurs records, avec la charge. Le poids de corps, jamais.
       const m=pagePubliqueDonnees(u,Object.assign(pageMontrerDefaut(),{meilleurs:true}),t0+9*J);
@@ -49143,13 +49152,12 @@ async function testExercices(){
       try{ if(montrerTutoSticker()) return _echec('montré deux fois'); }
       finally{ try{ if(v==null) localStorage.removeItem(TUTO_STICKER_CLE); else localStorage.setItem(TUTO_STICKER_CLE,v); }catch(e){} fermerTutoSticker(); }
       return true;})());
-    ok('Pages : réglages du profil — désactivée par défaut, six choix, le lien de la bio',(()=>{
+    ok('Pages : réglages du profil — désactivée par défaut, huit choix, le lien de la bio',(()=>{
       const d=document.createElement('div'); d.innerHTML=htmlReglagesPagePublique(_PPU());
       if(d.querySelector('#pp-active').checked) return _echec('page activée par défaut');
-      if(d.querySelectorAll('[data-montrer]').length!==6) return _echec('choix');
-      if(d.querySelector('[data-montrer="meilleurs"]').checked) return _echec('les charges cochées par défaut');
-      if(d.querySelector('[data-montrer="carte"]').checked) return _echec('la carte cochée par défaut');
-      if(![...d.querySelectorAll('[data-montrer]')].filter(x=>['meilleurs','carte'].indexOf(x.dataset.montrer)<0).every(x=>x.checked)) return _echec('les autres choix décochés');
+      if(d.querySelectorAll('[data-montrer]').length!==8) return _echec('choix');
+      for(const k of ['photo','meilleurs','carte']) if(d.querySelector('[data-montrer="'+k+'"]').checked) return _echec(k+' coché par défaut');
+      if(![...d.querySelectorAll('[data-montrer]')].filter(x=>['photo','meilleurs','carte'].indexOf(x.dataset.montrer)<0).every(x=>x.checked)) return _echec('les autres choix décochés');
       if(!/Copier mon lien pour ma bio Instagram/.test(d.textContent)) return _echec('bouton bio');
       return d.querySelectorAll('button.btn:not(.btn-casse)').length===0?true:_echec('R31 : bouton en capitales');})());
     ok('Pages : pages publiques et réécritures présentes, lecture publique bornée',(()=>{
@@ -49158,14 +49166,15 @@ async function testExercices(){
       if(!/profils_publics/.test(p)||!/<!--og:debut-->[\s\S]*og:image[\s\S]*<!--og:fin-->/.test(p)) return _echec('p/index.html');
       if(!/\/vitrines\//.test(c)||!/Commencer avec/.test(c)) return _echec('c/index.html');
       if(/<script[^>]+src=|<link[^>]+stylesheet/.test(p+c)) return _echec('une ressource externe bloquante');
-      if(p.length>12000||c.length>12000) return _echec('pages trop lourdes');
+      // La page athlète a grandi (photo, chiffres, animations — 28/09/2026) : 20 Ko, toujours sans ressource externe.
+      if(p.length>20000||c.length>12000) return _echec('pages trop lourdes');
       if(fj&&(!/"source": "\/@\*"/.test(fj)||!/"source": "\/coach\/\*"/.test(fj))) return _echec('réécritures');
       return true;})());
     ok('Pages : réglages publics classés non-santé',
       ['pagePublique','vitrineSlug','vitrinePubliee','specialites','pagePropose'].every(k=>CHAMPS_NON_SANTE.indexOf(k)>=0));
     // 28/09/2026 : « kevin.gllc » rendait « déjà pris » — Firebase refuse le
     // point dans une clé, et tout échec était lu comme un refus.
-    okA('Pages : un pseudo avec un point part en base avec une virgule, et seul un refus dit « déjà pris »',(async()=>{
+    okA('Pages : un pseudo avec un point part en base en « __ », et seul un refus dit « déjà pris »',(async()=>{
       const sv=CLOUD.racinePatchStatut; let vu=null, st=200;
       CLOUD.racinePatchStatut=async(c)=>{ vu=c; return st; };
       try{
@@ -49174,12 +49183,30 @@ async function testExercices(){
         if(!r.ok) return _echec(r.erreur);
         const k=Object.keys(vu);
         if(k.some(x=>/\./.test(x))) return _echec('un point dans une clé : '+k.join(' '));
-        if(vu['pseudos/kevin,gllc']!=='k,g@t,fr'||vu['pseudos/vieux,nom']!==null) return _echec(JSON.stringify(vu).slice(0,200));
+        if(vu['pseudos/kevin__gllc']!=='k,g@t,fr'||vu['pseudos/vieux__nom']!==null) return _echec(JSON.stringify(vu).slice(0,200));
+        // Les règles en ligne n'acceptent pas la virgule : la clé doit passer l'ancienne expression.
+        if(!/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/.test('kevin__gllc')) return _echec('clé refusée par les règles');
         if(u.pagePublique.pseudo!=='kevin.gllc') return _echec('le pseudo affiché perd son point');
         st=400; const r2=await publierPagePublique(u,{pseudo:'autre.nom',active:true,montrer:{}},{silencieux:true});
         if(/déjà pris/.test(r2.erreur||'')) return _echec('une requête refusée pour une autre raison dit « déjà pris »');
         st=401; const r3=await publierPagePublique(u,{pseudo:'autre.nom',active:true,montrer:{}},{silencieux:true});
-        return /déjà pris/.test(r3.erreur||'')?true:_echec('un vrai refus ne dit plus « déjà pris »');
+        if(!/déjà pris/.test(r3.erreur||'')) return _echec('un vrai refus ne dit plus « déjà pris »');
+        const r4=await publierPagePublique(u,{pseudo:'a__b',active:true,montrer:{}},{silencieux:true});
+        if(r4.ok||/déjà pris/.test(r4.erreur||'')) return _echec('deux signes à la suite acceptés');
+        // Règles du 28/09 : un refus, puis la page part sans photo ni chiffres.
+        const tout={rang:true,serie:true,badges:true,seances:true,stats:true};
+        let n=0; CLOUD.racinePatchStatut=async(c)=>{ vu=c; n++; return n===1?401:200; };
+        u.sessions=[{date:5,data:{'SQUAT':{sets:[{weight:'100',reps:'5',done:true}]}}}];
+        const r5=await publierPagePublique(u,{pseudo:'kevin.gllc',active:true,montrer:tout},{silencieux:true});
+        let f=vu['profils_publics/kevin__gllc']||{};
+        if(!r5.ok||n!==2) return _echec('pas de second essai : '+(r5.erreur||n));
+        if('chiffres' in f||!('volts' in f)) return _echec('second essai : '+Object.keys(f).join());
+        // Règles du 26/09 : deux refus, puis sans volts ni 12 semaines.
+        n=0; CLOUD.racinePatchStatut=async(c)=>{ vu=c; n++; return n<3?401:200; };
+        const r6=await publierPagePublique(u,{pseudo:'kevin.gllc',active:true,montrer:tout},{silencieux:true});
+        f=vu['profils_publics/kevin__gllc']||{};
+        if(!r6.ok||n!==3) return _echec('pas de troisième essai : '+(r6.erreur||n));
+        return ('volts' in f||'semaines' in f||'chiffres' in f)?_echec('le troisième essai garde des champs récents'):true;
       }finally{ CLOUD.racinePatchStatut=sv; }
     }));
     // ══ 28/09/2026 — LA PAGE PUBLIQUE : CONTENU, PROPOSITION, APERÇU ══════
@@ -49213,7 +49240,7 @@ async function testExercices(){
       const r=x.status===200?x.responseText:'';
       if(!r) return true;
       const i=r.indexOf('"profils_publics"'), j=r.indexOf('"slugs"',i), z=r.slice(i,j);
-      for(const k of ['"volts"','"semaines"','"img"','"repli"','"secret"','"meilleurs"','"kg"']) if(z.indexOf(k)<0) return _echec(k+' absent des règles');
+      for(const k of ['"volts"','"semaines"','"img"','"repli"','"secret"','"meilleurs"','"kg"','"chiffres"','"tonnage"','"photo"']) if(z.indexOf(k)<0) return _echec(k+' absent des règles');
       return /\^\[01\]\{11\}\[01e\]\$/.test(z)&&/newData\.val\(\) <= 1000/.test(z)?true:_echec('bornes');})());
     ok('Page : proposée au passage de rang — pseudo pré-rempli, un geste ; une fois de plus au rang suivant, puis jamais',(()=>{
       const u=_PPU({fname:'Élodie Martin'});
@@ -49254,8 +49281,10 @@ async function testExercices(){
       const x=new XMLHttpRequest(); x.open('GET','../p/index.html',false); x.send();
       const p=x.status===200?x.responseText:'';
       if(!p) return true;
-      for(const k of ['class="emb"','class="jauge"','class="sem"','class="bdg"','Meilleurs records','onerror']) if(p.indexOf(k)<0) return _echec(k+' absent');
-      if(/poids|photo|sommeil|kcal|mensuration/i.test(p.replace(/<!--[\s\S]*?-->/g,'').replace(/JAMAIS de poids de corps, de photo ni de santé/,''))) return _echec('une mesure dans la page');
+      for(const k of ['class="emb"','class="jauge"','class="sem','class="bdg','Meilleurs records','onerror','tonnes soulevées','class="av"']) if(p.indexOf(k)<0) return _echec(k+' absent');
+      // La photo (cochée par l'athlète, 28/09/2026) : seulement une image réduite ou Cloudinary.
+      if(p.indexOf('^data:image\\/(jpeg|webp|png);base64,')<0) return _echec('la photo n’est pas filtrée');
+      if(/poids|sommeil|kcal|mensuration/i.test(p.replace(/<!--[\s\S]*?-->/g,'').replace(/\/\*[\s\S]*?\*\//g,'').replace(/\/\/[^\n]*/g,''))) return _echec('une mesure dans la page');
       return true;})());
 
     // ── LES VISUELS DU COACH : VICTOIRE ET RÉCAP D'ÉQUIPE ───────────────
@@ -49497,7 +49526,7 @@ async function testExercices(){
       return bon?true:_echec('lien de l’aperçu : '+(a?a.outerHTML:'absent'));})());
     ok('Partage : le message de parrainage se lit, et le lien n’apparaît pas deux fois',(()=>{
       const m=parrainageMessage('JULIE7K2','https://x/?ref=JULIE7K2');
-      if(m.indexOf('Je m’entraîne avec RepCore. Avec mon code JULIE7K2, tu as 2 mois d’essai au lieu d’un')!==0) return _echec(m);
+      if(m.indexOf('Je m’entraîne avec RepCore. Avec mon code JULIE7K2, ton premier mois est offert')!==0) return _echec(m);
       if(!/https:\/\/x\/\?ref=JULIE7K2$/.test(m)) return _echec('le lien manque à la fin');
       if(/https?:/.test(parrainageMessage('JULIE7K2',''))) return _echec('lien vide : il ne doit rien ajouter');
       if(!/Le code se saisit/.test(parrainageMessage('JULIE7K2'))) return _echec('sans lien : où saisir le code');
@@ -49531,7 +49560,7 @@ async function testExercices(){
       if(/musc-actions|Télécharger|Partager/.test(sans)) return _echec('la carte de fin de séance garde son partage');
       return /sansPartage:true/.test(String(rendreMusclesFinSeance))?true:_echec('la fin de séance ne demande pas la carte sans partage');})());
     // ══ 27/09/2026 — L'ACCUEIL NOMINATIF DU FILLEUL ══════════════════════
-    okA('Accueil /i : « Julie t’invite », son rang et 2 mois ; l’ambassadeur par son nom ; le coach inchangé ; sans rien, pas de code coach',async()=>{
+    okA('Accueil /i : « Julie t’invite », son rang et « grâce à Julie, ton premier mois est offert » ; l’ambassadeur par son nom ; le coach inchangé ; sans rien, pas de code coach',async()=>{
       let h=''; try{ const x=new XMLHttpRequest(); x.open('GET','../i/index.html',false); x.send(); h=x.responseText; }catch(e){ return _echec('lecture de /i'); }
       const m=/<script>\s*(\(function\(\)\{[\s\S]*?\}\)\(\);)\s*<\/script>/.exec(h);
       if(!m) return _echec('script de /i introuvable');
@@ -49564,7 +49593,7 @@ async function testExercices(){
       if(!r.el.embleme.hidden) return _echec('un rang hors bornes affiche un emblème');
       r=await run('?ref=JULIE7K2',IG,{prenom:'Julie',rang:2});
       if(r.el.interne.hidden||r.el.titre.textContent!=='Julie t’invite sur RepCore'||r.el['interne-invite'].hidden
-        ||r.el['interne-invite'].textContent.indexOf(moisAmi+' mois pour essayer')!==0)
+        ||r.el['interne-invite'].textContent.indexOf('Grâce à Julie, ton premier mois est offert')!==0)
         return _echec('Instagram : '+r.el.titre.textContent+' / '+r.el['interne-invite'].textContent);
       if(!/\/app\/\?ref=JULIE7K2/.test(r.el.lien.textContent||'')) return _echec('Instagram : l’échappement est perdu');
       r=await run('?amb=LEAFIT',SF,{nom:'Léa Fit',actif:true});
@@ -49577,11 +49606,10 @@ async function testExercices(){
       if(/code/i.test(gen)) return _echec('le texte général parle d’un code');
       return true;
     });
-    ok('Inscription : « Invité par Julie · 2 mois pour essayer », et le code demandé en haut sur iPhone installé',(()=>{
-      const n=TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus;
-      if(phraseInvitationInscription('Julie')!=='Invité par Julie · '+n+' mois pour essayer') return _echec(phraseInvitationInscription('Julie'));
-      if(phraseInvitationInscription('','LEAFIT')!=='Invité par LEAFIT · '+n+' mois pour essayer') return _echec('ambassadeur');
-      if(!/1 mois de plus/.test(phraseInvitationInscription(''))) return _echec('sans code');
+    ok('Inscription : « Grâce à Julie, ton premier mois est offert », et le code demandé en haut sur iPhone installé',(()=>{
+      if(phraseInvitationInscription('Julie')!=='Grâce à Julie, ton premier mois est offert') return _echec(phraseInvitationInscription('Julie'));
+      if(phraseInvitationInscription('','Léa Fit')!=='Grâce à Léa Fit, ton premier mois est offert') return _echec('ambassadeur');
+      if(!/t’offre ton premier mois/.test(phraseInvitationInscription(''))) return _echec('sans code');
       if(!parrainageDemanderCode('athlete',true,'')) return _echec('iPhone installé, code perdu : rien ne le demande');
       if(parrainageDemanderCode('athlete',true,'JULIE7K2')||parrainageDemanderCode('athlete',false,'')||parrainageDemanderCode('coach',true,''))
         return _echec('demandé à tort');
@@ -50025,8 +50053,8 @@ async function testExercices(){
         if(subPaliersDe('ultime').find(p=>p.cle==='mensuel').planId()!==PAYPAL_PLAN_ID_ULTIME) return _echec('sans offre');
       }finally{ currentUser=sv; }
       const ph=phraseInvitationInscription('','Julie Fit','ultime_demi');
-      if(!/Invité par Julie Fit/.test(ph)||!/Ultime à/.test(ph)||ph.indexOf(prixOffre('ultime_demi'))<0) return _echec(ph);
-      if(!/2 mois pour essayer/.test(phraseInvitationInscription('','Julie Fit'))) return _echec('phrase classique');
+      if(!/Grâce à Julie Fit/.test(ph)||!/Ultime est à/.test(ph)||ph.indexOf(prixOffre('ultime_demi'))<0) return _echec(ph);
+      if(!/Grâce à Julie Fit, ton premier mois est offert/.test(phraseInvitationInscription('','Julie Fit'))) return _echec('phrase classique');
       if(ambFiche({code:'LANCE',nom:'L',avantage:'ultime_demi'},{}).fiche.avantage!=='ultime_demi') return _echec('création');
       if(ambFiche({code:'JULIE',nom:'J',avantage:'nimporte'},{}).fiche.avantage!=='essai+1mois') return _echec('valeur hors liste');
       return /ultime_demi/.test(String(ambassadeurApresInscription))&&/jours:demi\?0:/.test(String(ambassadeurApresInscription))?true:_echec('inscription');})());

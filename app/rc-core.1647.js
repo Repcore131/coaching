@@ -1047,7 +1047,7 @@ function planIdOffre(cle,annuel){
 // Pas de fetch au demarrage : les prix doivent exister avant le premier
 // ecran, hors ligne compris.
 /* TARIFS:DEBUT */
-const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":12,"essentielle":{"mois":9.5,"an":114},"ultime":{"mois":24.9,"an":298.8},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":1},"coach":{"libre":0,"coach":19,"pro":39},"coaching":{"programme_perso":{"prix":99,"mois":3},"revision_prog":{"prix":40,"mois":1},"boutique_prog":{"prix":14.9,"mois":3},"coaching_essentiel":{"prix":150,"mois":1},"coaching_transfo":{"prix":350,"mois":3},"coaching_evolution":{"prix":600,"mois":6}}});
+const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":12,"essentielle":{"mois":9.5,"an":114},"ultime":{"mois":24.9,"an":298.8},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":0},"coach":{"libre":0,"coach":19,"pro":39},"coaching":{"programme_perso":{"prix":99,"mois":3},"revision_prog":{"prix":40,"mois":1},"boutique_prog":{"prix":14.9,"mois":3},"coaching_essentiel":{"prix":150,"mois":1},"coaching_transfo":{"prix":350,"mois":3},"coaching_evolution":{"prix":600,"mois":6}}});
 /* TARIFS:FIN */
 // ══ LES OFFRES, ECRITES UNE SEULE FOIS (lot 1) ═══════════════════════════
 //
@@ -18699,9 +18699,34 @@ const PAGE_MONTRER=Object.freeze([
   {cle:'serie',lib:'Mes 12 dernières semaines',defaut:true},
   {cle:'badges',lib:'Mes badges',defaut:true},
   {cle:'seances',lib:'Mon nombre de séances',defaut:true},
+  {cle:'stats',lib:'Mes chiffres : tonnes soulevées, séries, exercices, depuis quand',defaut:true},
+  {cle:'photo',lib:'Ma photo de profil',defaut:false},
   {cle:'meilleurs',lib:'Mes 3 meilleurs records, avec les charges',defaut:false},
   {cle:'carte',lib:'Ma carte d’athlète (vignette)',defaut:false}
 ]);
+// Un choix ajouté après coup (stats, photo) prend sa valeur par défaut chez
+// qui a enregistré sa page avant : absent ne veut pas dire « décoché ».
+function pageMontrerComplet(m){ const o=pageMontrerDefaut(); Object.keys(m||{}).forEach(k=>{ o[k]=!!m[k]; }); return o; }
+// PURE. Les chiffres de la page : tonnes soulevées (kg), séries faites,
+// exercices différents, date de la première séance. Rien de corporel.
+function statsPubliques(u){
+  let kg=0, series=0, depuis=0; const exos={};
+  for(const s of ((u&&u.sessions)||[])){
+    if(!s||!(s.date>0)) continue;
+    if(!depuis||s.date<depuis) depuis=Number(s.date);
+    try{ kg+=defiTonnageSeance(s)||0; }catch(e){}
+    try{ for(const e of _dfExos(s)){ const n=e.sets.filter(x=>x&&x.done!==false).length; if(n){ series+=n; exos[e.nom]=1; } } }catch(e){}
+  }
+  return {tonnage:Math.max(0,Math.min(999999999,Math.round(kg))),series:Math.min(9999999,series),exos:Math.min(9999,Object.keys(exos).length),depuis:depuis||0};
+}
+// La photo de profil, si l'athlète l'a cochée : l'image déjà réduite à
+// 300×300 par le profil, ou une adresse Cloudinary. Rien d'autre ne passe.
+function photoPublique(u){
+  const p=String((u&&u.athletePhoto)||'');
+  if(/^data:image\/(jpeg|webp|png);base64,[A-Za-z0-9+/=]+$/.test(p)&&p.length<=80000) return p;
+  if(/^https:\/\/res\.cloudinary\.com\/[^\s"'<>]+$/.test(p)&&p.length<=500) return p;
+  return '';
+}
 function pageMontrerDefaut(){ const o={}; PAGE_MONTRER.forEach(x=>{ o[x.cle]=x.defaut; }); return o; }
 // La proposition au passage de rang n'a de sens que si l'app écrit dans la base.
 const PAGE_PUBLIQUE_PROPOSEE=true;
@@ -18872,6 +18897,8 @@ function pagePubliqueDonnees(u,montrer,maintenant){
     }catch(e){}
   }
   if(m.meilleurs){ const r=meilleursRecordsPublics(u,3); if(r.length) o.meilleurs=r; }
+  if(m.stats){ try{ const st=statsPubliques(u); if(st.depuis||st.tonnage||st.series) o.chiffres=st; }catch(e){} }
+  if(m.photo){ const ph=photoPublique(u); if(ph) o.photo=ph; }
   // LA CARTE D'ATHLÈTE, en vignette : les notes, jamais le poids qui les fonde.
   if(m.carte){
     try{
@@ -18888,9 +18915,23 @@ function pagePubliqueDonnees(u,montrer,maintenant){
 function pseudoPublicNormalise(p){ return String(p||'').trim().replace(/^@/,'').toLowerCase(); }
 // LA CLÉ EN BASE. Firebase refuse le point dans une clé : « kevin.gllc »
 // faisait échouer toute la requête, affichée « déjà pris » (28/09/2026). Le
-// point devient une virgule en base, comme pour les e-mails ; l'adresse
-// publique garde le point (/@kevin.gllc).
-function pseudoPublicCle(p){ return String(p||'').replace(/\./g,','); }
+// point devient « __ » en base — des caractères que les règles acceptent
+// déjà, sans redéploiement ; l'adresse publique garde le point
+// (/@kevin.gllc). Sans ambiguïté parce qu'un NOUVEAU pseudo ne peut pas
+// enchaîner deux signes (« __ », « ._ », « .. ») : un « __ » en base vient
+// donc toujours d'un point.
+function pseudoPublicCle(p){ return String(p||'').replace(/\./g,'__'); }
+const PSEUDO_SIGNES_DOUBLES_RE=/[._]{2}/;
+// Ce que les règles du 26/09 acceptaient : si la base n'a pas encore les
+// règles du 28/09 (volts, 12 semaines, badges en images), la page part quand
+// même, avec ces champs-là seulement.
+function pagePubliqueDonneesMinimales(d){
+  if(!d) return d;
+  const o={};
+  ['prenom','rang','serie','seances','ref','maj'].forEach(k=>{ if(d[k]!=null) o[k]=d[k]; });
+  if(Array.isArray(d.badges)) o.badges=d.badges.map(b=>({id:b.id,nom:b.nom}));
+  return o;
+}
 // Publie, déplace ou éteint la page. Rend {ok, erreur?}.
 async function publierPagePublique(u,reg,o){
   if(!u||!u.email||u.role==='coach') return {ok:false,erreur:'Réservé aux athlètes.'};
@@ -18898,12 +18939,25 @@ async function publierPagePublique(u,reg,o){
   if(!PSEUDO_PUBLIC_RE.test(neu)) return {ok:false,erreur:'Pseudo : 3 à 20 caractères, lettres minuscules, chiffres, point ou tiret bas.'};
   const moi=u.email.replace(/\./g,',');
   const ancien=(u.pagePublique||{}).pseudo;
-  const patch={};
+  if(neu!==ancien&&PSEUDO_SIGNES_DOUBLES_RE.test(neu))
+    return {ok:false,erreur:'Pseudo : pas deux points ou tirets bas à la suite.'};
   const kA=pseudoPublicCle(ancien), kN=pseudoPublicCle(neu);
+  if(kN.length>20) return {ok:false,erreur:'Pseudo trop long : enlève un point ou quelques lettres.'};
+  const patch={};
   if(ancien&&ancien!==neu){ patch['pseudos/'+kA]=null; patch['profils_publics/'+kA]=null; }
   patch['pseudos/'+kN]=moi;
-  patch['profils_publics/'+kN]=reg.active?pagePubliqueDonnees(u,reg.montrer):null;
-  const st=await CLOUD.racinePatchStatut(patch).catch(()=>0);
+  const donnees=reg.active?pagePubliqueDonnees(u,reg.montrer):null;
+  patch['profils_publics/'+kN]=donnees;
+  let st=await CLOUD.racinePatchStatut(patch).catch(()=>0);
+  // Des règles en ligne plus anciennes que l'app refusent les champs récents :
+  // on retire d'abord photo et chiffres (règles du 28/09), puis on retombe sur
+  // celles du 26/09.
+  const replis=donnees?[Object.assign({},donnees,{photo:undefined,chiffres:undefined}),pagePubliqueDonneesMinimales(donnees)]:[];
+  for(const d of replis){
+    if(!(st===401||st===403)) break;
+    patch['profils_publics/'+kN]=JSON.parse(JSON.stringify(d));
+    st=await CLOUD.racinePatchStatut(patch).catch(()=>0);
+  }
   if(st===401||st===403) return {ok:false,erreur:'Ce pseudo est déjà pris.'};
   if(st===0) return {ok:false,erreur:'Connexion perdue : vérifie ta connexion, ou déconnecte-toi puis reconnecte-toi.'};
   if(!(st>=200&&st<300)) return {ok:false,erreur:'Enregistrement impossible (erreur '+st+'). Réessaie dans un instant.'};
@@ -18917,14 +18971,14 @@ async function majPagePublique(o){
   const u=currentUser, p=u&&u.pagePublique;
   if(!p||!p.active||!PSEUDO_PUBLIC_RE.test(p.pseudo||'')||!CLOUD.ok()) return false;
   if(!(o&&o.force)&&Date.now()-(Number(p.publieLe)||0)<6*3600e3) return false;
-  const r=await publierPagePublique(u,{pseudo:p.pseudo,active:true,montrer:p.montrer||{}},{silencieux:true});
+  const r=await publierPagePublique(u,{pseudo:p.pseudo,active:true,montrer:pageMontrerComplet(p.montrer)},{silencieux:true});
   if(r.ok) try{ saveUser(); }catch(e){}
   return r.ok;
 }
 // PURE. Le bloc des réglages, dans le profil.
 function htmlReglagesPagePublique(u){
   const p=(u&&u.pagePublique)||{};
-  const m=p.montrer||pageMontrerDefaut();
+  const m=pageMontrerComplet(p.montrer);
   const dom=_pagesSurFirebase()?String(RC_URL_VITRINE).replace(/^https?:\/\//,'').replace(/\/$/,'')+'/@':'…/p/?u=';
   const cases=PAGE_MONTRER.map(x=>'<label class="pp-case"><input type="checkbox" data-montrer="'+x.cle+'"'+(m[x.cle]?' checked':'')+'> <span>'+escapeHtml(x.lib)+'</span></label>').join('');
   const url=urlPagePerso(u);
@@ -19406,8 +19460,9 @@ function _viralRendre(){
 // ══ LES AMBASSADEURS ════════════════════════════════════════════════════════
 //
 // Un code (/ambassadeurs/<CODE>) donné à un créateur de contenu : ceux qui
-// arrivent par lui ont 1 mois de plus pour essayer (avantage 'essai+1mois',
-// le même que le parrainage), et il touche une commission sur ce qu'ils
+// arrivent par lui voient leur mois d'essai présenté comme offert grâce à
+// lui (Kevin, 28/09/2026 : un mois, pas deux — le même que le parrainage,
+// TARIFS.essai_parrainage.moisEnPlus = 0), et il touche une commission sur ce qu'ils
 // paient — commissionPct (20 %), palierPct (25 %) au-delà de palierSeuil (50)
 // payants — pendant dureeMois (12) à partir de leur premier paiement. Une
 // commission n'est DUE que 30 jours après le paiement (remboursements).
@@ -19475,8 +19530,9 @@ async function ambassadeurApresInscription(u,saisi){
     ambOublier();
     try{ if(typeof parrainageOublierRef==='function') parrainageOublierRef(); }catch(e){}
     try{ rcm('ambassadeur_inscrit'); }catch(e){}
-    // L'OFFRE DE LANCEMENT remplace le mois d'essai en plus (un seul avantage).
-    toast('Code '+c.code+' appliqué : '+(demi?'ton 1er mois d’Ultime à moitié prix ⚡':'1 mois de plus pour essayer ⚡'),'var(--green)');
+    // L'OFFRE DE LANCEMENT (ultime_demi) remplace le mois offert (un seul avantage).
+    toast(demi?('Code '+c.code+' appliqué : ton 1er mois d’Ultime à moitié prix ⚡')
+      :(pub.nom?('Grâce à '+String(pub.nom).slice(0,80)+', ton premier mois est offert ⚡'):('Code '+c.code+' appliqué : ton premier mois est offert ⚡')),'var(--green)');
     return {jours:demi?0:parrainageBonusJours(),type:'amb'};
   }
   return {jours:0,type:null};
@@ -19641,9 +19697,9 @@ function htmlAmbassadeurs(tous,t){
     +'<label>Palier %<input id="amb-palier" type="number" min="0" max="100" value="'+AMB_DEFAUTS.palierPct+'"></label>'
     +'<label>Au-delà de (payants)<input id="amb-seuil" type="number" min="1" value="'+AMB_DEFAUTS.palierSeuil+'"></label>'
     +'<label>Durée (mois)<input id="amb-duree" type="number" min="1" max="120" value="'+AMB_DEFAUTS.dureeMois+'"></label>'
-    +'<label>Avantage de ses inscrits<select id="amb-avantage"><option value="essai+1mois">1 mois de plus pour essayer</option>'
+    +'<label>Avantage de ses inscrits<select id="amb-avantage"><option value="essai+1mois">Mois offert grâce à lui</option>'
       +'<option value="ultime_demi">Offre de lancement : 1er mois d’Ultime à moitié prix</option></select></label>'
-    +'</div><p class="sub amb-note">Un seul avantage par code : le mois d’essai en plus, OU le 1er mois d’Ultime à moitié prix (plan PayPal ULTIME_DEMI, une fois par compte).</p>'
+    +'</div><p class="sub amb-note">Un seul avantage par code : le mois offert (présenté comme offert grâce à lui), OU le 1er mois d’Ultime à moitié prix (plan PayPal ULTIME_DEMI, une fois par compte).</p>'
     +'<button type="button" class="btn btn-red" style="width:100%;margin:8px 0 0" onclick="creerAmbassadeur(this)">Créer l’ambassadeur</button></details>';
   if(moisDispo.size){
     const ms=[...moisDispo].sort().reverse();
@@ -19762,7 +19818,8 @@ function ambCopier(l,btn){
 }
 // ══ LE PARRAINAGE ══════════════════════════════════════════════════════════
 //
-// LA RÉCOMPENSE : le filleul a 1 mois d'essai en plus (OFFRES.essai_parrainage) ;
+// LA RÉCOMPENSE : le filleul a son mois d'essai, présenté comme offert par
+// son parrain (un mois, pas deux : OFFRES.essai_parrainage vaut 0) ;
 // le parrain gagne 1 mois offert — ses droits prolongés — au PREMIER paiement
 // du filleul, et rien avant (anti-fraude). Au 10e filleul payant, 1 mois
 // d'Ultime en plus (droits.bonusUltimeFin, lu par palierDe).
@@ -19820,17 +19877,14 @@ function rcAppareilId(){
   }catch(e){ return 'sansstockage0000'; }
 }
 // ── Le lien : lienPerso(), plus haut (pages publiques) ────────────────────
-// PURE. Le message prêt à partager. La durée vient de TARIFS (tarifs.json),
-// comme la page de vente : « 2 mois au lieu d'un » ne peut plus mentir le
-// jour où l'essai change.
+// PURE. Le message prêt à partager. LE MOIS OFFERT GRÂCE À TOI (Kevin,
+// 28/09/2026) : jamais « au lieu de », jamais « 2 mois ».
 // `lien` : ajouté à la fin ; '' (chaîne vide) quand le lien voyage à part
 // (navigator.share le porte dans `url` : l'écrire aussi dans le texte le
 // faisait apparaître deux fois) ; absent : on dit où saisir le code.
 function parrainageMessage(code,lien){
-  const base=TARIFS.essai.mois, total=base+TARIFS.essai_parrainage.moisEnPlus;
-  const auLieu=base===1?'au lieu d’un':'au lieu de '+base;
-  return 'Je m’entraîne avec RepCore. Avec mon code '+code+', tu as '+total+' mois d’essai '+auLieu
-    +', toute l’app ouverte, sans carte bancaire.'
+  return 'Je m’entraîne avec RepCore. Avec mon code '+code+', ton premier mois est offert'
+    +' : toute l’app ouverte, sans carte bancaire.'
     +(lien?' '+lien:(lien===''?'':' Le code se saisit à l’inscription.'));
 }
 // ── L'arrivée par un lien ?ref= ────────────────────────────────────────────
@@ -19888,13 +19942,12 @@ async function parrainInviteLire(code){
 }
 // PURE. La ligne sous le champ du code.
 function phraseInvitationInscription(prenom,amb,avantage){
-  const n=TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus;
-  // L'offre de lancement d'un code ambassadeur : pas de mois en plus, le 1er
+  // L'offre de lancement d'un code ambassadeur : pas de mois offert, le 1er
   // mois d'Ultime à moitié prix.
-  if(amb&&avantage==='ultime_demi') return 'Invité par '+amb+' · '+TARIFS.essai.mois+' mois pour essayer, puis ton 1er mois d’Ultime à '+prixOffre('ultime_demi');
-  if(amb) return 'Invité par '+amb+' · '+n+' mois pour essayer';
-  if(prenom) return 'Invité par '+prenom+' · '+n+' mois pour essayer';
-  return 'Le code d’un ami ou d’un ambassadeur t’offre '+TARIFS.essai_parrainage.moisEnPlus+' mois de plus pour essayer.';
+  if(amb&&avantage==='ultime_demi') return 'Grâce à '+amb+', ton 1er mois d’Ultime est à '+prixOffre('ultime_demi');
+  if(amb) return 'Grâce à '+amb+', ton premier mois est offert';
+  if(prenom) return 'Grâce à '+prenom+', ton premier mois est offert';
+  return 'Le code d’un ami ou d’un ambassadeur t’offre ton premier mois.';
 }
 // PURE. Faut-il le bouton « Quelqu'un t'a invité ? » en haut de l'inscription ?
 // L'app installée sur iPhone, un athlète, et aucun code arrivé par le lien.
@@ -19931,14 +19984,11 @@ function parrainageChampInscription(role){
   const g=(!a&&c)?parrainInviteGarde(c):null;
   if(info) info.textContent=a?phraseInvitationInscription('',a)
     :c?phraseInvitationInscription(g?g.prenom:'un ami'):phraseInvitationInscription('');
-  // L'ambassadeur : son nom et son offre, lus dans sa fiche publique.
-  if(a&&info){
-    try{ CLOUD.ambPublicGet(a).then(p=>{
-      if(!p||p.actif===false) return;
-      if(ambEnAttente()!==a) return;
-      info.textContent=phraseInvitationInscription('',String(p.nom||a).slice(0,80),p.avantage);
-    }).catch(()=>{}); }catch(e){}
-  }
+  // « Grâce à Léa Fit », pas « grâce à LEAFIT » : le nom de l'ambassadeur et
+  // son offre, lus sans compte (lecture publique), remplacent son code.
+  if(a&&info) Promise.resolve().then(()=>CLOUD.ambPublicGet(a)).then(p=>{
+    if(!p||p.actif===false||ambEnAttente()!==a) return;
+    info.textContent=phraseInvitationInscription('',String(p.nom||a).slice(0,80),p.avantage); }).catch(()=>{});
   // ARRIVÉ PAR UN DUEL : on le dit d'abord (le défi est la raison de venir).
   try{
     const dv=duelInviteEnAttente();
@@ -19984,7 +20034,7 @@ async function parrainageApresInscription(u){
   const moi=(u.email||'').replace(/\./g,',');
   let pub=null;
   try{ pub=await CLOUD.parrainageGet('codesPublics/'+saisi); }catch(e){ pub=null; }
-  if(!pub){ toast('Code ami inconnu : ton compte est créé, sans le mois en plus.','var(--orange)'); return 0; }
+  if(!pub){ toast('Code ami inconnu : ton compte est bien créé.','var(--orange)'); return 0; }
   if(u.parrainage&&u.parrainage.code===saisi){ toast('C’est ton propre code.','var(--orange)'); return 0; }
   const ok=await CLOUD.parrainagePut('demandes/'+moi,{code:saisi,le:Date.now(),appareil:rcAppareilId()}).catch(()=>false);
   if(!ok){ toast('Ce code ne peut pas être utilisé ici (déjà parrainé, ou appareil de ton parrain).','var(--orange)'); return 0; }
@@ -19992,7 +20042,7 @@ async function parrainageApresInscription(u){
   u.parrainage=Object.assign({},u.parrainage||{},{parrainCode:saisi,parrainPrenom:String(pub.prenom||'').slice(0,24),parraineLe:Date.now()});
   parrainageOublierRef();
   try{ rcm('parrainage_filleul'); }catch(e){}
-  toast('Code de '+(pub.prenom||'ton ami')+' appliqué : 1 mois d’essai en plus ⚡','var(--green)');
+  toast(pub.prenom?('Grâce à '+pub.prenom+', ton premier mois est offert ⚡'):'Code appliqué : ton premier mois est offert ⚡','var(--green)');
   return parrainageBonusJours();
 }
 // ── Le code du parrain : créé UNE fois ─────────────────────────────────────
@@ -20110,11 +20160,10 @@ function htmlParrainage(u){
       +'<div class="pr-pal-g">'+escapeHtml(x.gain)+'</div></div>';
   }).join('');
   const liste=(Array.isArray(p.prenoms)?p.prenoms:[]).map(htmlFilleul).join('');
-  const plus=TARIFS.essai_parrainage.moisEnPlus;
   // LA CARTE D'ABORD (28/09/2026) : une image se partage en story, un texte
   // se perd dans une conversation. Le texte et le lien restent, en second.
   return '<div class="pr-hero"><div class="pr-titre">Fais découvrir RepCore</div>'
-    +'<p>Ton ami a <b>'+plus+' mois d’essai en plus</b>. Toi, <b>1 mois offert</b> à son premier paiement.</p></div>'
+    +'<p>Grâce à toi, <b>le premier mois de ton ami est offert</b>. Toi, tu gagnes <b>1 mois offert</b> à son premier paiement.</p></div>'
     +'<div class="pr-carte-inv">'
     +'<button type="button" class="btn btn-red pr-carte-b" onclick="partagerCarteInvitation(this)"'+(code?'':' disabled')+'>'
       +icon('share',16)+' <span>Partager ma carte d’invitation</span></button>'
@@ -20202,9 +20251,9 @@ function _dessinerCarteInvitation(d,fond,format){
   const rouge=f==='rouge';
   const x=d||{};
   const qui=(x.prenom?String(x.prenom).toUpperCase()+' T’INVITE':'TU ES INVITÉ');
-  const grand=String(x.mois||2)+' MOIS';
-  const sous='D’ESSAI OFFERTS';
-  const detail=(x.base&&x.mois>x.base?(x.base===1?'au lieu d’un':'au lieu de '+x.base)+' · ':'')+'toute l’app · sans carte bancaire';
+  const grand=String(x.mois||1)+' MOIS';
+  const sous=(x.mois||1)>1?'OFFERTS':'OFFERT';
+  const detail='toute l’app · sans carte bancaire';
   const code=String(x.code||'');
   // LA MISE EN PAGE SE CALCULE D'ABORD, puis le bloc est centré entre le
   // haut et la signature.
@@ -44163,8 +44212,6 @@ function _storyCopierLien(src){
 // ⚠ À REMPLIR : le compte Instagram officiel, avec son @ (ex. '@repcore.app').
 //   Vide, il n'apparaît pas.
 const RC_COMPTE_INSTAGRAM='';
-// Les mois d'essai d'un invité, lus dans TARIFS au moment d'écrire.
-function _legMois(){ return TARIFS.essai.mois+TARIFS.essai_parrainage.moisEnPlus; }
 const LEGENDE_MAX=220;
 const _LEGENDES=Object.freeze({
   bilan:[d=>'Séance bouclée. Et toi, tu t’entraînes quand cette semaine ?',
@@ -44215,10 +44262,10 @@ const _LEGENDES=Object.freeze({
     d=>'Séances, records, tonnage : la team avance. Et toi ?'],
   // Le CODE est dans chaque modèle (celui qui lit le post ne peut pas
   // cliquer : il recopie). Sans code connu, on dit de le demander.
-  invitation:[d=>'Je t’offre '+_legMois()+' mois d’essai sur RepCore ⚡ '+(d.code?'Mon code : '+d.code+'.':'Demande-moi mon code.')+' Tu t’y mets ?',
-    d=>'Tu cherches une app pour suivre tes séances ? '+(d.code?'Avec le code '+d.code+', tu':'Avec mon code, tu')+' as '+_legMois()+' mois pour essayer, sans carte.',
-    d=>'On s’entraîne ensemble ? '+(d.code?'Code '+d.code+' à l’inscription : ':'Mon code à l’inscription : ')+_legMois()+' mois d’essai pour toi.',
-    d=>'Toute l’app ouverte, '+_legMois()+' mois, sans carte bancaire. '+(d.code?'Ton code : '+d.code+'.':'Demande-moi mon code.')+' Tu viens ?'],
+  invitation:[d=>'Je t’offre ton premier mois sur RepCore ⚡ '+(d.code?'Mon code : '+d.code+'.':'Demande-moi mon code.')+' Tu t’y mets ?',
+    d=>'Tu cherches une app pour suivre tes séances ? '+(d.code?'Avec le code '+d.code+', ton':'Avec mon code, ton')+' premier mois est offert, sans carte.',
+    d=>'On s’entraîne ensemble ? '+(d.code?'Code '+d.code+' à l’inscription : ':'Mon code à l’inscription : ')+'ton premier mois est offert.',
+    d=>'Toute l’app ouverte, sans carte bancaire, et ton premier mois est offert. '+(d.code?'Ton code : '+d.code+'.':'Demande-moi mon code.')+' Tu viens ?'],
   saison:[d=>'Édition bouclée ⚡ Tu étais de la partie ?',
     d=>'Une édition, un badge, jamais réédité. Tu l’as eu, toi ?',
     d=>'Objectif tenu jusqu’au bout. La prochaine, tu viens ?'],

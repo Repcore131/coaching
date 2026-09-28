@@ -1212,7 +1212,7 @@
     "pseudos": {
       "$p": {
         ".write": "auth != null && ((!data.exists() && newData.val() === auth.token.email.replace('.', ',')) || (data.val() === auth.token.email.replace('.', ',') && (!newData.exists() || newData.val() === auth.token.email.replace('.', ','))))",
-        ".validate": "$p.matches(/^[a-z0-9][a-z0-9,_]{1,18}[a-z0-9]$/) && newData.isString()"
+        ".validate": "$p.matches(/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/) && newData.isString()"
       }
     },
     "profils_publics": {
@@ -1275,6 +1275,16 @@
             "$autre": { ".validate": false }
           }
         },
+        // Les chiffres (tonnage en kg, séries, exercices, première séance) et la
+        // photo de profil 300×300, seulement si l'athlète l'a cochée.
+        "chiffres": {
+          "tonnage": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 1000000000" },
+          "series": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 10000000" },
+          "exos":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 10000" },
+          "depuis": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+          "$autre": { ".validate": false }
+        },
+        "photo":   { ".validate": "newData.isString() && newData.val().length <= 80000 && (newData.val().beginsWith('data:image/jpeg;base64,') || newData.val().beginsWith('data:image/webp;base64,') || newData.val().beginsWith('data:image/png;base64,') || newData.val().beginsWith('https://res.cloudinary.com/'))" },
         "ref":     { ".validate": "newData.isString() && newData.val().matches(/^[A-Z]{4,6}[A-Z2-9]{3}$/)" },
         "maj":     { ".validate": "newData.isNumber()" },
         "$autre":  { ".validate": false }
