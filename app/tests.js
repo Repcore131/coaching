@@ -51039,6 +51039,63 @@ async function testExercices(){
       if(CHAMPS_SANTE.indexOf('fcReposLog')<0||CHAMPS_SANTE.indexOf('vfcLog')<0) return _echec('CHAMPS_SANTE');
       if(sanSyncAdresse('abc')!=='https://repcore-serveur.repcore.workers.dev/sante/i/abc') return _echec('adresse');
       return /'sante_sync\/'\+safeKey/.test(_prodSrc())?true:_echec('suppression du compte');})());
+    ok('Sync santé (interface) : l’état dit synchronisé, la source et le temps écoulé',(()=>{
+      const t=Date.now();
+      if(sanSyncEtat(null,'pas',t).actif||sanSyncEtat({empreinte:null},'pas',t).actif) return _echec('inactif');
+      const a=sanSyncEtat({empreinte:'e',creeLe:1},'pas',t);
+      if(!a.actif||a.recu||a.lib!=='En attente') return _echec('en attente '+JSON.stringify(a));
+      const b=sanSyncEtat({actif:true,derniereReception:t-2*3600e3,source:'healthconnect',origines:{pas:'samsung'}},'pas',t);
+      if(b.lib!=='Synchronisé'||b.source!=='Samsung Health'||b.quand!=='il y a 2 h') return _echec('pas '+JSON.stringify(b));
+      const c=sanSyncEtat({actif:true,derniereReception:t-30e3,source:'raccourci',origines:{pas:'samsung'}},'sommeil',t);
+      if(c.source!=='Apple Santé'||c.quand!=='à l’instant') return _echec('sommeil '+JSON.stringify(c));
+      return (_sanIlYa(t-864e5-1,t)==='hier'&&_sanIlYa(t-3*864e5-1,t)==='il y a 3 jours'&&_sanIlYa(t-5*60e3,t)==='il y a 5 min')?true:_echec('il y a');})());
+    ok('Sync santé (interface) : trois tuiles, la synchronisation d’abord ; « Synchronisé » dans la tuile et le pied',(()=>{
+      const _m=_sanSyncMeta;
+      try{
+        const u={santeSource:{pas:'garmin'}};
+        _sanSyncMeta=null;
+        const d=document.createElement('div'); d.innerHTML=_svMethodes(u,'pas');
+        const t=[...d.querySelectorAll('.sv-tuile .sv-tuile-t')].map(x=>x.textContent);
+        if(t.join('|')!=='Synchronisation automatique|Saisie manuelle|Depuis une capture d’écran') return _echec('tuiles '+t.join('|'));
+        if(!/Source : Garmin Connect/.test(d.querySelector('.sv-pied').textContent)) return _echec('pied inactif');
+        _sanSyncMeta=_sanMetaNorm({empreinte:'e',derniereReception:Date.now()-600e3,source:'healthconnect',origines:{pas:'samsung'}});
+        d.innerHTML=_svMethodes(u,'pas');
+        const s=d.querySelector('.sv-tuile-s');
+        if(!s.classList.contains('sv-sync-on')||!/Synchronisé/.test(s.textContent)||!/Samsung Health · il y a 10 min/.test(s.textContent)) return _echec('tuile '+s.textContent);
+        if(!/Synchronisé : Samsung Health · il y a 10 min/.test(d.querySelector('.sv-pied').textContent)) return _echec('pied '+d.querySelector('.sv-pied').textContent);
+        return /sanSyncActif\(\)/.test(String(_majPastilleLifestyle))?true:_echec('pastille');
+      } finally { _sanSyncMeta=_m; }})());
+    ok('Sync santé (interface) : la feuille — iPhone en 5 étapes, APK avec « Autoriser », Android sans APK, Déconnecter discret',(()=>{
+      const _p=window._ssPlateforme, _m=_sanSyncMeta;
+      try{
+        const d=document.createElement('div');
+        window._ssPlateforme=()=>'ios'; _sanSyncMeta=null;
+        d.innerHTML=_htmlSanSyncFeuille();
+        if(d.querySelectorAll('.ss-etape').length!==5||d.querySelectorAll('.ss-num').length!==5) return _echec('iOS : 5 étapes');
+        if(!d.querySelector('a[href="shortcuts://run-shortcut?name=RepCore%20Sant%C3%A9"]')) return _echec('lancer le Raccourci');
+        if(!/09:00/.test(d.textContent)||d.querySelector('.ss-deco')) return _echec('automatisation / déconnecter');
+        if(d.querySelector('.ss-titre').textContent!=='Connecter mes données santé') return _echec('titre');
+        window._ssPlateforme=()=>'apk';
+        d.innerHTML=_htmlSanSyncFeuille();
+        if(!/Autoriser/.test(d.textContent)||!/Health Connect/.test(d.textContent)) return _echec('APK');
+        window._ssPlateforme=()=>'android';
+        d.innerHTML=_htmlSanSyncFeuille();
+        if(!/Installe l’application/.test(d.textContent)) return _echec('Android sans APK');
+        _sanSyncMeta=_sanMetaNorm({empreinte:'e',derniereReception:Date.now()});
+        window._ssPlateforme=()=>'ios';
+        d.innerHTML=_htmlSanSyncFeuille();
+        if(!d.querySelector('.ss-deco')||!d.querySelector('.ss-statut')) return _echec('actif : statut et déconnecter');
+        const lire=u=>{ try{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; }catch(e){ return ''; } };
+        const css=lire('rc-style.'+window.RC_BUILD+'.css');
+        return /\.ss-num\{width:28px;height:28px;background:#1a0000;border:1px solid #3a0000/.test(css)?true:_echec('carrés rouges');
+      } finally { window._ssPlateforme=_p; _sanSyncMeta=_m; }})());
+    ok('Sync santé (interface) : chez le coach, la pastille « synchronisé » et la dernière réception',(()=>{
+      if(_htmlSyncCoach(null)!==''||_htmlSyncCoach({actif:false})!=='') return _echec('inactif');
+      const d=document.createElement('div');
+      d.innerHTML=_htmlSyncCoach({empreinte:'e',derniereReception:new Date(2026,8,28,9,2).getTime()});
+      if(d.querySelector('.cso-sync').textContent!=='synchronisé') return _echec('pastille');
+      if(!/Dernière réception : 28 sept\.?,? 09:02/.test(d.querySelector('.cso-sync-d').textContent)) return _echec(d.querySelector('.cso-sync-d').textContent);
+      return /_htmlSyncCoach\(_sanSyncCoachLire\(c\)\)/.test(String(_htmlDomaineCoach))?true:_echec('branchement');})());
     // ══ 28/09/2026 — LA VIDÉO D'UN VISUEL ════════════════════════════════
     ok('Vidéo : MP4 quand l’enregistreur le sait (Safari iOS), sinon WebM VP9, sinon rien',(()=>{
       const que=(l)=>(t)=>l.indexOf(t)>=0;

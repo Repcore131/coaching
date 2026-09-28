@@ -2553,6 +2553,54 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .san-src{min-height:32px;padding:4px 6px;border:0;background:transparent;color:var(--text-faint);cursor:pointer;
   font-family:inherit;font-size:var(--fs-2xs);text-decoration:underline;text-underline-offset:3px}
 .san-src strong{color:var(--text-dim);font-weight:700}
+/* ══ SANTÉ SYNCHRONISÉE : la tuile en tête, pleine largeur, sans téléphone. */
+.sv-tuile-s{grid-column:1/-1;min-height:0;padding:12px 12px 12px;
+  border-color:color-mix(in srgb,var(--sv-c) 35%,#2e2e34)}
+.sv-tuile-s .sv-tuile-ico{color:var(--sv-c);background:color-mix(in srgb,var(--sv-c) 14%,transparent)}
+.sv-tuile-s.sv-sync-on{border-color:color-mix(in srgb,#22c55e 55%,transparent);
+  background:linear-gradient(170deg,color-mix(in srgb,#22c55e 12%,#0d0d10),#0d0d10 70%)}
+.sv-tuile-s.sv-sync-on .sv-tuile-ico{color:#22c55e;background:color-mix(in srgb,#22c55e 16%,transparent)}
+.sv-tuile-s .sv-tuile-d{display:flex;align-items:center;gap:6px;font-size:var(--fs-xs)}
+.sv-sync-pt{display:inline-block;width:8px;height:8px;flex-shrink:0;border-radius:50%;background:#f59e0b}
+.sv-sync-pt[data-recu="true"]{background:#22c55e;box-shadow:0 0 0 3px color-mix(in srgb,#22c55e 25%,transparent)}
+/* La feuille « Connecter mes données santé », calquée sur #ios-install-modal. */
+.ss-fond{display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);align-items:flex-end;justify-content:center}
+.ss-feuille{background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px calc(32px + env(safe-area-inset-bottom,0px));
+  width:100%;max-width:480px;max-height:92vh;overflow-y:auto;box-sizing:border-box;animation:slideUp var(--t-3) var(--c-out)}
+.ss-tete{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.ss-titre{font-size:var(--fs-lg);font-weight:800;letter-spacing:.3px}
+.ss-x{background:none;border:none;color:var(--text-dim);font-size:var(--fs-xl);cursor:pointer;line-height:1;min-width:44px;min-height:44px}
+.ss-statut{display:flex;align-items:center;gap:8px;margin:0 0 16px;padding:10px 12px;border-radius:var(--r-3);
+  background:#0f1a12;border:1px solid #1d3a24;font-size:var(--fs-sm);color:var(--text-dim)}
+.ss-statut b{color:var(--text)}
+.ss-etapes{display:flex;flex-direction:column;gap:14px;margin-bottom:20px}
+.ss-etape{display:flex;align-items:flex-start;gap:12px}
+.ss-num{width:28px;height:28px;background:#1a0000;border:1px solid #3a0000;border-radius:var(--r-2);display:flex;align-items:center;
+  justify-content:center;font-size:var(--fs-xs);font-weight:800;color:var(--red-text);flex-shrink:0}
+.ss-c{flex:1;min-width:0}
+.ss-t{font-size:var(--fs-md);font-weight:700;margin-bottom:2px}
+.ss-r{color:var(--red-text)}
+.ss-d{font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5}
+.ss-avert{margin-top:6px}
+.ss-btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin-top:8px;padding:10px 16px;border:none;
+  border-radius:var(--r-3);background:var(--red);color:#fff;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;
+  letter-spacing:1px;text-transform:uppercase;text-decoration:none;cursor:pointer;box-sizing:border-box}
+.ss-btn-2{background:transparent;border:1px solid #3a0000;color:var(--red-text)}
+.ss-adr{display:block;width:100%;box-sizing:border-box;margin-top:8px;padding:10px 12px;border-radius:var(--r-2);border:1px solid var(--border);
+  background:var(--surface);color:var(--text);font-family:ui-monospace,Menlo,monospace;font-size:12px;overflow:hidden;text-overflow:ellipsis}
+.ss-etat{margin-top:6px;padding:8px 10px;border-radius:var(--r-2);background:var(--surface);font-size:var(--fs-xs);color:var(--text-dim)}
+.ss-etat[data-ok="true"]{color:#22c55e;background:#0f1a12}
+.ss-etat[data-ok="false"]{color:#f59e0b}
+.ss-note{font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;text-align:center}
+.ss-deco{display:block;margin:14px auto 0;min-height:44px;padding:6px 12px;border:0;background:transparent;color:var(--text-faint);
+  font-family:inherit;font-size:var(--fs-2xs);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+/* Chez le coach : « synchronisé » et la dernière réception, sur leur ligne. */
+.cso-tete:has(.cso-sync-l){flex-wrap:wrap}
+.cso-sync-l{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding-top:10px;border-top:1px solid #26262b}
+.cso-sync{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:var(--r-1,4px);
+  background:#0f1a12;border:1px solid #1d3a24;color:#22c55e;font-size:var(--fs-2xs);font-weight:800;line-height:1.5}
+.cso-sync-d{font-size:var(--fs-2xs);color:#b4b4bb}
+.cso-sync .sv-sync-pt{width:7px;height:7px}
 /* Sous 360 px, les deux tuiles s'empilent : un telephone dessine dans 150 px
    ne se lit plus. */
 @media (max-width:360px){ .sv-meth-g{grid-template-columns:1fr} .sv-duo{grid-template-columns:1fr} }
@@ -11924,6 +11972,31 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .sv-pied{color:var(--text-faint)}
 :root[data-theme="clair"] .san-src{color:var(--text-faint)}
 :root[data-theme="clair"] .san-src strong{color:var(--text-dim)}
+:root[data-theme="clair"] .sv-tuile-s{border-color:color-mix(in srgb,var(--sv-c) 35%,#cacad0)}
+:root[data-theme="clair"] .sv-tuile-s .sv-tuile-ico{color:var(--sv-c);background:color-mix(in srgb,var(--sv-c) 14%,transparent)}
+:root[data-theme="clair"] .sv-tuile-s.sv-sync-on{border-color:color-mix(in srgb,#22c55e 55%,transparent);background:linear-gradient(170deg,color-mix(in srgb,#22c55e 12%,#ececef),#ececef 70%)}
+:root[data-theme="clair"] .sv-tuile-s.sv-sync-on .sv-tuile-ico{color:#22c55e;background:color-mix(in srgb,#22c55e 16%,transparent)}
+:root[data-theme="clair"] .sv-sync-pt{background:#f59e0b}
+:root[data-theme="clair"] .sv-sync-pt[data-recu="true"]{background:#22c55e;box-shadow:0 0 0 3px color-mix(in srgb,#22c55e 25%,transparent)}
+:root[data-theme="clair"] .ss-fond{background:var(--scrim)}
+:root[data-theme="clair"] .ss-feuille{background:var(--surface-2)}
+:root[data-theme="clair"] .ss-x{color:var(--text-dim)}
+:root[data-theme="clair"] .ss-statut{background:#e1eee5;border:1px solid #1d3a24;color:var(--text-dim)}
+:root[data-theme="clair"] .ss-statut b{color:var(--text)}
+:root[data-theme="clair"] .ss-num{background:#ffdfdf;border:1px solid #ffc0c0;color:var(--red-text)}
+:root[data-theme="clair"] .ss-r{color:var(--red-text)}
+:root[data-theme="clair"] .ss-d{color:var(--text-dim)}
+:root[data-theme="clair"] .ss-btn{background:var(--red);color:#fff}
+:root[data-theme="clair"] .ss-btn-2{border:1px solid #ffc0c0;color:var(--red-text)}
+:root[data-theme="clair"] .ss-adr{border:1px solid var(--border);background:var(--surface);color:var(--text)}
+:root[data-theme="clair"] .ss-etat{background:var(--surface);color:var(--text-dim)}
+:root[data-theme="clair"] .ss-etat[data-ok="true"]{color:#1eae53;background:#e1eee5}
+:root[data-theme="clair"] .ss-etat[data-ok="false"]{color:#c47e08}
+:root[data-theme="clair"] .ss-note{color:var(--text-faint)}
+:root[data-theme="clair"] .ss-deco{color:var(--text-faint)}
+:root[data-theme="clair"] .cso-sync-l{border-top:1px solid #d2d2d7}
+:root[data-theme="clair"] .cso-sync{background:#e1eee5;border:1px solid #1d3a24;color:#1eae53}
+:root[data-theme="clair"] .cso-sync-d{color:#494951}
 :root[data-theme="clair"] .ccdx{border:1px solid #d2d2d7;background:linear-gradient(180deg,#e6e6e9,#efeff1)}
 :root[data-theme="clair"] .ccdx-tete-i{color:#cc0000;background:linear-gradient(160deg,#5a0b0b,#fad4d4)}
 :root[data-theme="clair"] .ccdx-tete-c h4{color:#090909}

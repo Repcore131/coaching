@@ -70146,6 +70146,8 @@ function joursSansDonnees(u,jours){
 function _majPastilleLifestyle(){
   const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="lifestyle"]');
   if(!btn) return;
+  // SYNCHRONISÉ : les jours arrivent seuls, on ne les réclame plus.
+  if(typeof sanSyncActif==='function'&&sanSyncActif()){ _pastilleOnglet('lifestyle',0,c=>''); return; }
   const vides=joursSansDonnees(currentUser,7);
   const d=new Date(); d.setHours(12,0,0,0); d.setDate(d.getDate()-1);
   const veilleVide=vides.indexOf(localISODate(d))>=0;
@@ -106063,6 +106065,7 @@ function _htmlDomaineCoach(c,quoi){
       +'<div class="cso-t-c"><h3>'+D.titre+'</h3><span>'+D.sous+'</span></div>'
       +'<label class="cso-per">'+CS_ICO.calendrier+'<span>'+libPer+'</span>'+CS_ICO.bas
         +'<select onchange="csPeriode(this.value,\''+q+'\')" aria-label="Période">'+opts+'</select></label>'
+      +_htmlSyncCoach(_sanSyncCoachLire(c))
     +'</section>'
     +'<div class="cso-kpis">'
       +'<div class="cso-carte cso-k cso-k-moy"><span class="cso-k-ico">'+(q==='sommeil'?CS_ICO.lit:CS_ICO.marche)+'</span><div>'
@@ -109194,6 +109197,7 @@ function _sanGraphe(quoi,serie,obj,fmt){
 //    domaine et restent nets a toutes les tailles.
 const _SV_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">';
 const SAN_ICO={
+  synchro:_SV_SVG+'<path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3.5V8h4.5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 20.5V16h-4.5"/></svg>',
   chaussure:_SV_SVG+'<path d="M2.5 16.5h17.2a1.8 1.8 0 0 0 1.8-1.8c0-1.4-1-2.1-2.5-2.6l-4.1-1.5a3 3 0 0 1-1.3-.9L11.2 6.8a1.3 1.3 0 0 0-2-.2L7.6 8.3H2.5z"/><path d="M2.5 16.5v2h19v-2"/><path d="M9.6 10.2l1.2-1M11.4 11.6l1.2-1"/></svg>',
   lune:_SV_SVG+'<path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z"/></svg>',
   crayon:_SV_SVG+'<path d="M16.9 3.6a2.1 2.1 0 0 1 3 3L8.4 18.1l-4 1 1-4z"/><path d="M14.8 5.7l3 3"/></svg>',
@@ -109342,12 +109346,12 @@ function _svImg(nom,classe){
 }
 function _svMethodes(u,quoi){
   const nuit=(quoi==='sommeil');
-  const src=sanSource(u,quoi);
   return '<div class="san-import sv-meth">'
     +'<div class="sv-meth-tete"><span class="sv-meth-ico">'+(nuit?SAN_ICO.dormeur:SAN_ICO.histo)+'</span>'
       +'<div><h3>'+(nuit?'Ajouter mon sommeil':'Ajouter mes pas')+'</h3>'
       +'<span>Choisis la méthode qui te convient</span></div></div>'
     +'<div class="sv-meth-g">'
+      +_svTuileSync(u,quoi)
       +'<button type="button" class="sv-tuile sv-tuile-m" onclick="sanSaisir(\''+quoi+'\')">'
         +'<span class="sv-tuile-h"><span class="sv-tuile-ico">'+SAN_ICO.clavier+'</span>'
           +'<span class="sv-tuile-t">Saisie manuelle</span><span class="sv-chev">'+SAN_ICO.droite+'</span></span>'
@@ -109370,7 +109374,7 @@ function _svMethodes(u,quoi){
     +'</div>'
     +'<div class="sv-cadenas">'+SAN_ICO.cadenas+'<span>La capture est lue sur ton téléphone. Elle n\'est ni envoyée ni conservée.</span></div>'
     +'<div class="sv-pied">'
-      +'<button type="button" class="san-src" onclick="sanChangerSource(\''+quoi+'\')">Source : <strong>'+escapeHtml(src.lib)+'</strong></button>'
+      +_svPiedSource(u,quoi)
       +'<span aria-hidden="true">·</span>'
       +'<button type="button" class="san-src" onclick="sanAide(\''+quoi+'\')">Où trouver '+(nuit?'mon sommeil':'mes pas')+' ?</button>'
     +'</div>'
@@ -109876,11 +109880,14 @@ async function sanSyncTirer(force){
       const r=await fetch(url+'?auth='+token);
       if(!r.ok) return null;
       const sync=await r.json();
-      _sanSyncMeta=(sync&&sync.meta)||null;
+      const avant=JSON.stringify(_sanSyncMeta);
+      _sanSyncMeta=_sanMetaNorm(sync&&sync.meta);
+      if(JSON.stringify(_sanSyncMeta)!==avant){ try{ _majPastilleLifestyle(); }catch(e){} }
       if(!sync||!sync.meta) return null;
       const plan=sanFusionSync(currentUser,sync,Date.now());
       const n=sanAppliquerSync(plan);
-      if(n){ saveUser(); try{ CLOUD.pushOne(currentUser.email,currentUser); }catch(e){} try{ if(document.getElementById('s-lifestyle')?.classList.contains('active')) sanRendre(); }catch(e){} }
+      if(n){ saveUser(); try{ CLOUD.pushOne(currentUser.email,currentUser); }catch(e){} }
+      if(n||JSON.stringify(_sanSyncMeta)!==avant){ try{ if(document.getElementById('s-lifestyle')?.classList.contains('active')) sanRendre(); }catch(e){} }
       if(sync.meta.derniereReception&&!(Number(sync.consomme)>=Number(sync.meta.derniereReception))){
         try{ await fetch(url.replace('.json','/consomme.json')+'?auth='+token,{method:'PUT',body:JSON.stringify(Date.now())}); }catch(e){}
       }
@@ -109893,6 +109900,257 @@ async function sanSyncTirer(force){
 try{
   document.addEventListener('visibilitychange',()=>{ if(!document.hidden) sanSyncTirer().catch(()=>{}); });
 }catch(e){}
+// ══ LA SANTÉ SYNCHRONISÉE — L'INTERFACE ══════════════════════════════════
+// Une tuile en tête des méthodes (Lifestyle), une feuille « Connecter mes
+// données santé » calquée sur #ios-install-modal, une pastille chez le coach.
+//
+// RACCOURCI_SANTE_URL : le lien iCloud du Raccourci « RepCore Santé », que
+// Kevin publie lui-même. Vide, l'étape le dit au lieu d'ouvrir un lien mort.
+// SAN_SYNC_APK_LIEN : le lien que l'APK (TWA com.repcore.app) intercepte pour
+// recevoir l'adresse de réception et demander l'accès à Health Connect.
+const RACCOURCI_SANTE_URL='';
+const SAN_SYNC_RACCOURCI_LANCER='shortcuts://run-shortcut?name=RepCore%20Sant%C3%A9';
+const SAN_SYNC_APK_LIEN='repcore://sante/connecter?adresse=';
+const SAN_SYNC_SOURCES=Object.freeze({healthconnect:'Health Connect',raccourci:'Apple Santé'});
+const SAN_SYNC_GUET_MS=2*60*1000, SAN_SYNC_GUET_PAS_MS=10*1000;
+let _ssAdresse=null, _ssGuet=null, _ssGuetFin=0;
+// L'APK se reconnaît au référent android-app:// de sa première ouverture (ou
+// à ?apk=1) ; le drapeau rc_apk le retient pour les ouvertures suivantes.
+function rcDansApk(){
+  try{
+    if(String(document.referrer||'').indexOf('android-app://com.repcore.app')===0||/[?&]apk=1(&|$)/.test(location.search))
+      localStorage.setItem('rc_apk','1');
+    return localStorage.getItem('rc_apk')==='1';
+  }catch(e){ return false; }
+}
+// La méta, qu'elle vienne de la base (empreinte) ou de santeJeton('etat') (actif).
+function _sanMetaNorm(m){
+  if(!m||typeof m!=='object') return null;
+  return {actif:!!(m.empreinte||m.actif),creeLe:Number(m.creeLe)||null,derniereReception:Number(m.derniereReception)||null,
+    plateforme:m.plateforme||null,source:m.source||null,origines:m.origines||null};
+}
+function sanSyncActif(){ return !!(_sanSyncMeta&&_sanSyncMeta.actif); }
+// PURE. « à l'instant », « il y a 12 min », « il y a 3 h », « hier », « il y a 4 jours ».
+function _sanIlYa(t,maintenant){
+  const d=Math.max(0,(Number(maintenant)||Date.now())-Number(t));
+  if(d<60e3) return 'à l’instant';
+  if(d<3600e3) return 'il y a '+Math.floor(d/60e3)+' min';
+  if(d<86400e3) return 'il y a '+Math.floor(d/3600e3)+' h';
+  const j=Math.floor(d/86400e3);
+  return j===1?'hier':'il y a '+j+' jours';
+}
+// PURE. Ce que la tuile et le pied disent : {actif, recu, lib, source, quand}.
+function sanSyncEtat(meta,quoi,maintenant){
+  const m=_sanMetaNorm(meta);
+  if(!m||!m.actif) return {actif:false,recu:false,lib:'',source:'',quand:''};
+  const o=(m.origines||{})[quoi==='sommeil'?'sommeil':'pas'];
+  const source=(o&&SAN_SOURCES[o]&&o!=='manuel')?SAN_SOURCES[o]:(SAN_SYNC_SOURCES[m.source]||'');
+  if(!m.derniereReception) return {actif:true,recu:false,lib:'En attente',source,quand:'rien reçu pour l’instant'};
+  return {actif:true,recu:true,lib:'Synchronisé',source,quand:_sanIlYa(m.derniereReception,maintenant)};
+}
+function _svTuileSync(u,quoi){
+  const e=sanSyncEtat(_sanSyncMeta,quoi,Date.now());
+  const nuit=(quoi==='sommeil');
+  return '<button type="button" class="sv-tuile sv-tuile-s'+(e.actif?' sv-sync-on':'')+'" onclick="sanSyncOuvrir()">'
+    +'<span class="sv-tuile-h"><span class="sv-tuile-ico">'+SAN_ICO.synchro+'</span>'
+      +'<span class="sv-tuile-t">'+(e.actif?escapeHtml(e.lib):'Synchronisation automatique')+'</span><span class="sv-chev">'+SAN_ICO.droite+'</span></span>'
+    +(e.actif
+      ?'<span class="sv-tuile-d"><span class="sv-sync-pt" data-recu="'+e.recu+'" aria-hidden="true"></span>'
+        +escapeHtml([e.source,e.quand].filter(Boolean).join(' · '))+'</span>'
+      :'<span class="sv-tuile-d">'+(nuit?'Ton sommeil arrive tout seul':'Tes pas arrivent tout seuls')
+        +' depuis ton téléphone (Health Connect, Apple Santé).</span>')
+    +'</button>';
+}
+function _svPiedSource(u,quoi){
+  const e=sanSyncEtat(_sanSyncMeta,quoi,Date.now());
+  if(e.actif) return '<button type="button" class="san-src" onclick="sanSyncOuvrir()">'+escapeHtml(e.lib)
+    +(e.source?' : <strong>'+escapeHtml(e.source)+'</strong>':'')+' · '+escapeHtml(e.quand)+'</button>';
+  return '<button type="button" class="san-src" onclick="sanChangerSource(\''+quoi+'\')">Source : <strong>'+escapeHtml(sanSource(u,quoi).lib)+'</strong></button>';
+}
+
+// ── LA FEUILLE « CONNECTER MES DONNÉES SANTÉ » ────────────────────────────
+function _ssEtape(n,titre,texte,extra){
+  return '<div class="ss-etape"><div class="ss-num">'+n+'</div><div class="ss-c">'
+    +'<div class="ss-t">'+titre+'</div>'+(texte?'<div class="ss-d">'+texte+'</div>':'')+(extra||'')+'</div></div>';
+}
+function _ssBouton(lib,action,second){
+  return '<button type="button" class="ss-btn'+(second?' ss-btn-2':'')+'" onclick="'+action+'">'+lib+'</button>';
+}
+function _ssPlateforme(){
+  try{
+    if(rcInstalliOS()) return 'ios';
+    if(/Android/i.test(navigator.userAgent||'')) return rcDansApk()?'apk':'android';
+  }catch(e){}
+  return 'autre';
+}
+function _ssAdresseHtml(){
+  if(!_ssAdresse) return _ssBouton(sanSyncActif()?'Créer une nouvelle adresse':'Créer et copier mon adresse','sanSyncCreer()');
+  return '<input class="ss-adr" readonly value="'+escapeHtml(_ssAdresse)+'" onclick="this.select()" aria-label="Ton adresse personnelle">'
+    +_ssBouton('Copier','sanSyncCopier()',true)
+    +'<div class="ss-d ss-avert">Affichée une seule fois. Ne la partage pas : elle suffit pour envoyer des données à ton dossier.</div>';
+}
+function _ssGuetHtml(){
+  const m=_sanSyncMeta;
+  if(_ssGuet==='recu'||(m&&m.derniereReception&&!_ssGuet)) return '<div class="ss-etat" data-ok="true">Reçu '+escapeHtml(_sanIlYa(m.derniereReception,Date.now()))+'.</div>';
+  if(_ssGuet==='echec') return '<div class="ss-etat" data-ok="false">Rien reçu en 2 minutes. Vérifie que l’adresse est bien collée, puis relance le test.</div>';
+  if(_ssGuet) return '<div class="ss-etat">En attente de la première réception…</div>';
+  return '';
+}
+function _htmlSanSyncFeuille(){
+  const p=_ssPlateforme();
+  const m=_sanSyncMeta;
+  let corps='';
+  if(p==='ios'){
+    corps=_ssEtape(1,'Copie ton <span class="ss-r">adresse personnelle</span>','Le Raccourci l’utilise pour envoyer tes données à RepCore.',_ssAdresseHtml())
+      +_ssEtape(2,'Installe le Raccourci <span class="ss-r">RepCore Santé</span>',
+        RACCOURCI_SANTE_URL?'Au premier lancement, colle ton adresse et autorise l’accès à Santé.':'Le lien du Raccourci arrive très bientôt.',
+        RACCOURCI_SANTE_URL?'<a class="ss-btn ss-btn-2" href="'+escapeHtml(RACCOURCI_SANTE_URL)+'" target="_blank" rel="noopener">Obtenir le Raccourci</a>':'')
+      +_ssEtape(3,'Automatise-le à <span class="ss-r">9 h</span>',
+        'Raccourcis › Automatisation › + › Heure de la journée : 09:00, tous les jours, Exécuter immédiatement › RepCore Santé.')
+      +_ssEtape(4,'Teste maintenant','Lance le Raccourci une fois : RepCore guette la réception pendant 2 minutes.',
+        '<a class="ss-btn ss-btn-2" href="'+SAN_SYNC_RACCOURCI_LANCER+'" onclick="sanSyncGuetter()">Lancer RepCore Santé</a>')
+      +_ssEtape(5,'C’est reçu ?','',_ssGuetHtml()||'<div class="ss-etat">Le test s’affiche ici.</div>');
+  } else if(p==='apk'){
+    const src=(TRK_APPAREILS.find(a=>a.id===sanSource(currentUser,'pas').cle)||{}).app||'l’application de ta montre';
+    corps=_ssEtape(1,'Relie ta montre à <span class="ss-r">Health Connect</span>',
+        'Dans '+escapeHtml(src)+', active le partage avec Health Connect (dans ses réglages).')
+      +_ssEtape(2,'Autorise <span class="ss-r">RepCore</span>','Android te demande quelles données partager : pas, sommeil, fréquence cardiaque, poids.',
+        _ssBouton(sanSyncActif()?'Autoriser à nouveau':'Autoriser','sanSyncApk()'))
+      +_ssEtape(3,'C’est reçu ?','La première synchronisation part tout de suite.',_ssGuetHtml()||'<div class="ss-etat">La réception s’affiche ici.</div>');
+  } else if(p==='android'){
+    corps=_ssEtape(1,'Installe l’application <span class="ss-r">RepCore</span> pour Android',
+        RC_APK_URL?'C’est elle qui lit Health Connect : le navigateur n’y a pas accès.':'Elle lira Health Connect : elle arrive très bientôt. En attendant, la capture d’écran fait le travail.',
+        RC_APK_URL?'<a class="ss-btn" href="'+escapeHtml(RC_APK_URL)+'" rel="noopener">Installer l’application</a>':'')
+      +_ssEtape(2,'Ouvre RepCore depuis l’application','Puis reviens ici : la connexion prend une minute.');
+  } else {
+    corps=_ssEtape(1,'Ouvre RepCore sur ton <span class="ss-r">téléphone</span>','La synchronisation lit Apple Santé (iPhone) ou Health Connect (Android), qui vivent sur le téléphone.');
+  }
+  const e=sanSyncEtat(m,'pas',Date.now());
+  return '<div class="ss-tete"><div class="ss-titre">Connecter mes données santé</div>'
+      +'<button type="button" class="ss-x" onclick="sanSyncFermer()" aria-label="Fermer">✕</button></div>'
+    +(e.actif?'<div class="ss-statut"><span class="sv-sync-pt" data-recu="'+e.recu+'" aria-hidden="true"></span><b>'+escapeHtml(e.lib)+'</b>'
+      +escapeHtml([e.source,e.quand].filter(Boolean).map(x=>' · '+x).join(''))+'</div>':'')
+    +'<div class="ss-etapes">'+corps+'</div>'
+    +'<div class="ss-note">Pas, sommeil, fréquence cardiaque au repos, variabilité, poids : rien d’autre. Une saisie à la main reste prioritaire.</div>'
+    +(e.actif?'<button type="button" class="ss-deco" onclick="sanSyncDeconnecter()">Déconnecter</button>':'');
+}
+function _ssPeindre(){
+  const z=document.getElementById('sante-sync-feuille');
+  if(z) z.innerHTML=_htmlSanSyncFeuille();
+}
+function sanSyncOuvrir(){
+  let m=document.getElementById('sante-sync-modal');
+  if(!m){
+    m=document.createElement('div');
+    m.id='sante-sync-modal'; m.className='ss-fond';
+    m.setAttribute('role','dialog'); m.setAttribute('aria-modal','true'); m.setAttribute('aria-label','Connecter mes données santé');
+    m.onclick=(ev)=>{ if(ev.target===m) sanSyncFermer(); };
+    m.innerHTML='<div class="ss-feuille" id="sante-sync-feuille"></div>';
+    document.body.appendChild(m);
+  }
+  _ssPeindre();
+  m.style.display='flex';
+  // L'état du serveur, frais : la feuille se repeint quand il arrive.
+  santeJetonEtat().then(()=>_ssPeindre()).catch(()=>{});
+}
+function sanSyncFermer(){
+  const m=document.getElementById('sante-sync-modal');
+  if(m) m.style.display='none';
+  _ssAdresse=null;
+  try{ if(document.getElementById('s-lifestyle')?.classList.contains('active')) sanRendre(); }catch(e){}
+}
+async function santeJetonEtat(){
+  const r=await CLOUD._callFn('santeJeton',{action:'etat'});
+  _sanSyncMeta=_sanMetaNorm(r);
+  return _sanSyncMeta;
+}
+async function sanSyncCreer(){
+  if(!demanderConsentementSante('pas',()=>{ sanSyncOuvrir(); sanSyncCreer(); })) return null;
+  if(sanSyncActif()&&!confirm('Une nouvelle adresse remplace l’ancienne : le Raccourci ou l’application devront la recevoir à nouveau. Continuer ?')) return null;
+  try{
+    const r=await santeJeton('creer');
+    if(!r||!r.jeton) return null;
+    _ssAdresse=sanSyncAdresse(r.jeton);
+    _sanSyncMeta={actif:true,creeLe:r.creeLe,derniereReception:null,plateforme:null,source:null,origines:null};
+    _ssPeindre();
+    sanSyncCopier();
+    return _ssAdresse;
+  }catch(e){ toast(e&&e.message?e.message:'Connexion impossible','var(--orange)'); return null; }
+}
+function sanSyncCopier(){
+  if(!_ssAdresse) return;
+  try{ navigator.clipboard.writeText(_ssAdresse).then(()=>toast('Adresse copiée','var(--green)'),()=>{}); }catch(e){}
+}
+async function sanSyncApk(){
+  const a=_ssAdresse||await sanSyncCreer();
+  if(!a) return;
+  sanSyncGuetter();
+  try{ location.href=SAN_SYNC_APK_LIEN+encodeURIComponent(a); }catch(e){}
+}
+// GUETTER LA PREMIÈRE RÉCEPTION : santeJeton('etat') toutes les 10 s, 2 minutes au plus.
+function sanSyncGuetter(){
+  const t0=Date.now()-5000;
+  _ssGuet='attente'; _ssGuetFin=Date.now()+SAN_SYNC_GUET_MS;
+  _ssPeindre();
+  const tour=async()=>{
+    if(_ssGuet!=='attente') return;
+    try{
+      const m=await santeJetonEtat();
+      if(m&&m.derniereReception>=t0){
+        _ssGuet='recu'; _ssPeindre();
+        toast('Données reçues','var(--green)');
+        _sanSyncLu=0; sanSyncTirer(true).catch(()=>{});
+        return;
+      }
+    }catch(e){}
+    if(Date.now()>=_ssGuetFin){ _ssGuet='echec'; _ssPeindre(); return; }
+    setTimeout(tour,SAN_SYNC_GUET_PAS_MS);
+  };
+  setTimeout(tour,SAN_SYNC_GUET_PAS_MS);
+}
+async function sanSyncDeconnecter(){
+  if(!confirm('Déconnecter la synchronisation ? L’adresse ne marchera plus, et les données en attente sur le serveur sont effacées. Ce qui est déjà dans ton suivi reste.')) return;
+  try{
+    await santeJeton('revoquer');
+    _ssAdresse=null; _ssGuet=null;
+    _ssPeindre();
+    toast('Synchronisation déconnectée','var(--green)');
+  }catch(e){ toast(e&&e.message?e.message:'Connexion impossible','var(--orange)'); }
+}
+
+// ── CHEZ LE COACH : « synchronisé » et la dernière réception ─────────────
+// Lu dans sante_sync/<athlète>/meta (règles : le coach désigné), au plus une
+// fois par 10 minutes et par athlète ; le rendu reste pur.
+const _sanSyncCoach={};
+function _sanSyncCoachLire(c){
+  const e=String((c&&c.email)||'').toLowerCase();
+  if(!e) return null;
+  const k=e.replace(/\./g,',');
+  const x=_sanSyncCoach[k];
+  if(!x||Date.now()-x.lu>SAN_SYNC_INTERVALLE_MS){
+    _sanSyncCoach[k]={lu:Date.now(),meta:x?x.meta:null};
+    (async()=>{
+      try{
+        const token=await CLOUD._getToken(); if(!token) return;
+        const r=await fetch(CLOUD._fbUrl.replace('users.json','sante_sync/'+k+'/meta.json')+'?auth='+token);
+        if(!r.ok) return;
+        const m=_sanMetaNorm(await r.json());
+        const avant=JSON.stringify(_sanSyncCoach[k].meta);
+        _sanSyncCoach[k].meta=m;
+        if(JSON.stringify(m)!==avant){ try{ _csRepeindre('pas'); _csRepeindre('sommeil'); }catch(e){} }
+      }catch(e){}
+    })();
+  }
+  return _sanSyncCoach[k].meta;
+}
+// PURE. La pastille du coach.
+function _htmlSyncCoach(meta){
+  const m=_sanMetaNorm(meta);
+  if(!m||!m.actif) return '';
+  const d=m.derniereReception?new Date(m.derniereReception).toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):null;
+  return '<div class="cso-sync-l"><span class="cso-sync"><span class="sv-sync-pt" data-recu="'+!!d+'" aria-hidden="true"></span>synchronisé</span>'
+    +'<span class="cso-sync-d">'+(d?'Dernière réception : '+escapeHtml(d):'Aucune réception pour l’instant')+'</span></div>';
+}
 function getSleepWeek(){
   const today=new Date(),dow=today.getDay();
   const mon=new Date(today);
