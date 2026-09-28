@@ -5111,6 +5111,17 @@ const CLOUD={
     const r=await fetch(this._fbUrl.replace('users.json','.json')+'?auth='+token,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(chemins)});
     return r.ok;
   },
+  // Comme racinePatch, mais rend le statut HTTP (0 : pas de jeton, pas de
+  // réseau) : un refus des règles (401/403) ne se confond plus avec une
+  // requête mal formée (400) ni avec une session tombée.
+  async racinePatchStatut(chemins){
+    const token=await this._getToken().catch(()=>null);
+    if(!token) return 0;
+    try{
+      const r=await fetch(this._fbUrl.replace('users.json','.json')+'?auth='+token,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(chemins)});
+      return r.status;
+    }catch(e){ return 0; }
+  },
   // ── Le parrainage : /parrainage/<sous>. get rend null sur un refus (les
   // règles cachent /codes) ; put/patch rendent true ou false, sans lever.
   _urlParrainage(sous){ return this._fbUrl.replace('users.json','parrainage'+(sous?'/'+sous:'')+'.json'); },
@@ -18503,6 +18514,11 @@ function pagePubliqueDonnees(u,montrer,maintenant){
   return o;
 }
 function pseudoPublicNormalise(p){ return String(p||'').trim().replace(/^@/,'').toLowerCase(); }
+// LA CLÉ EN BASE. Firebase refuse le point dans une clé : « kevin.gllc »
+// faisait échouer toute la requête, affichée « déjà pris » (28/09/2026). Le
+// point devient une virgule en base, comme pour les e-mails ; l'adresse
+// publique garde le point (/@kevin.gllc).
+function pseudoPublicCle(p){ return String(p||'').replace(/\./g,','); }
 // Publie, déplace ou éteint la page. Rend {ok, erreur?}.
 async function publierPagePublique(u,reg,o){
   if(!u||!u.email||u.role==='coach') return {ok:false,erreur:'Réservé aux athlètes.'};
@@ -18511,11 +18527,14 @@ async function publierPagePublique(u,reg,o){
   const moi=u.email.replace(/\./g,',');
   const ancien=(u.pagePublique||{}).pseudo;
   const patch={};
-  if(ancien&&ancien!==neu){ patch['pseudos/'+ancien]=null; patch['profils_publics/'+ancien]=null; }
-  patch['pseudos/'+neu]=moi;
-  patch['profils_publics/'+neu]=reg.active?pagePubliqueDonnees(u,reg.montrer):null;
-  const ok=await CLOUD.racinePatch(patch).catch(()=>false);
-  if(!ok) return {ok:false,erreur:'Ce pseudo est déjà pris.'};
+  const kA=pseudoPublicCle(ancien), kN=pseudoPublicCle(neu);
+  if(ancien&&ancien!==neu){ patch['pseudos/'+kA]=null; patch['profils_publics/'+kA]=null; }
+  patch['pseudos/'+kN]=moi;
+  patch['profils_publics/'+kN]=reg.active?pagePubliqueDonnees(u,reg.montrer):null;
+  const st=await CLOUD.racinePatchStatut(patch).catch(()=>0);
+  if(st===401||st===403) return {ok:false,erreur:'Ce pseudo est déjà pris.'};
+  if(st===0) return {ok:false,erreur:'Connexion perdue : vérifie ta connexion, ou déconnecte-toi puis reconnecte-toi.'};
+  if(!(st>=200&&st<300)) return {ok:false,erreur:'Enregistrement impossible (erreur '+st+'). Réessaie dans un instant.'};
   u.pagePublique={pseudo:neu,active:!!reg.active,montrer:Object.assign({},reg.montrer||{}),publieLe:Date.now()};
   if(!(o&&o.silencieux)) try{ saveUser(); }catch(e){}
   return {ok:true};

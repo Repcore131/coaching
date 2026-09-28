@@ -49158,6 +49158,25 @@ async function testExercices(){
       return true;})());
     ok('Pages : réglages publics classés non-santé',
       ['pagePublique','vitrineSlug','vitrinePubliee','specialites','pagePropose'].every(k=>CHAMPS_NON_SANTE.indexOf(k)>=0));
+    // 28/09/2026 : « kevin.gllc » rendait « déjà pris » — Firebase refuse le
+    // point dans une clé, et tout échec était lu comme un refus.
+    okA('Pages : un pseudo avec un point part en base avec une virgule, et seul un refus dit « déjà pris »',(async()=>{
+      const sv=CLOUD.racinePatchStatut; let vu=null, st=200;
+      CLOUD.racinePatchStatut=async(c)=>{ vu=c; return st; };
+      try{
+        const u={email:'k.g@t.fr',role:'athlete',fname:'Kevin',pagePublique:{pseudo:'vieux.nom'}};
+        const r=await publierPagePublique(u,{pseudo:'Kevin.gllc',active:true,montrer:{}},{silencieux:true});
+        if(!r.ok) return _echec(r.erreur);
+        const k=Object.keys(vu);
+        if(k.some(x=>/\./.test(x))) return _echec('un point dans une clé : '+k.join(' '));
+        if(vu['pseudos/kevin,gllc']!=='k,g@t,fr'||vu['pseudos/vieux,nom']!==null) return _echec(JSON.stringify(vu).slice(0,200));
+        if(u.pagePublique.pseudo!=='kevin.gllc') return _echec('le pseudo affiché perd son point');
+        st=400; const r2=await publierPagePublique(u,{pseudo:'autre.nom',active:true,montrer:{}},{silencieux:true});
+        if(/déjà pris/.test(r2.erreur||'')) return _echec('une requête refusée pour une autre raison dit « déjà pris »');
+        st=401; const r3=await publierPagePublique(u,{pseudo:'autre.nom',active:true,montrer:{}},{silencieux:true});
+        return /déjà pris/.test(r3.erreur||'')?true:_echec('un vrai refus ne dit plus « déjà pris »');
+      }finally{ CLOUD.racinePatchStatut=sv; }
+    }));
     // ══ 28/09/2026 — LA PAGE PUBLIQUE : CONTENU, PROPOSITION, APERÇU ══════
     ok('Page : les 12 dernières semaines — 1 validée, 0 manquée, e la semaine en cours',(()=>{
       const t=Date.parse('2026-09-30T12:00:00+02:00');     // un mercredi
