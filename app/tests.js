@@ -49491,6 +49491,15 @@ async function testExercices(){
       }
       const h1=_htmlRecordsFin({records:[{nm:'Développé',curMax:140,histMax:132.5,gain:7.5}]},Date.now(),'wd');
       return /140 kg, soit 7,5 kg de plus que ton meilleur jusqu’ici \(132,5 kg\)/.test(h1)?true:_echec(h1);})());
+    ok('Fin de séance (28/09/2026) : le bus dessiné passe sous « = 1 bus », l’emoji pour les autres ; la barre du record part de l’ancienne charge',(()=>{
+      const h=_htmlStatsFin(331,24,28,13300,0);
+      if(!/class="rcf-route"/.test(h)||!/rcf-vehicule rcf-bus"><svg/.test(h)) return _echec('pas de bus dessiné sous le volume');
+      const e=_htmlStatsFin(60,10,10,6500,0);
+      if(!/rcf-vehicule">🐘/.test(e)) return _echec('l’éléphant ne passe pas');
+      if(/rcf-route/.test(_htmlStatsFin(1,1,1,1,0))) return _echec('une route sans équivalent');
+      const r=_htmlRecordsFin({records:[{nm:'Développé',curMax:140,histMax:132.5,gain:7.5}]},Date.now(),'wd');
+      if(!/class="rcf-rk-barre" aria-hidden="true" style="--avant:95%"/.test(r)) return _echec('la barre du record : '+r);
+      return /<button/.test(r)?_echec('un bouton est revenu dans les records'):true;})());
     ok('Fin de séance (28/09/2026) : la carte musculaire se lit, sans rien à télécharger',(()=>{
       const d={titre:'T',periode:'cette séance',chiffres:[],groupes:{},series:{}};
       const avec=htmlCarteMuscles('t1',d,{}), sans=htmlCarteMuscles('t2',d,{sansPartage:true});
