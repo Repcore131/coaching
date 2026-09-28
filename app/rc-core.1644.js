@@ -6016,7 +6016,7 @@ const CHAMPS_SANTE=Object.freeze([
   'weightLog','profileWeight','weight','bilans','photosBilan','photosProgression',
   'comparaisons','bilanGoals','_evol_height','_evol_gender',
   // Sommeil, pas, energie, habitudes quotidiennes
-  'sleepLog','stepsLog','stepsDayType','stepsGoals','sleepGoal','energieLog','habitudesLog',
+  'sleepLog','stepsLog','fcReposLog','vfcLog','stepsDayType','stepsGoals','sleepGoal','energieLog','habitudesLog',
   // Le check-in du matin : sommeil, énergie, courbatures, et la batterie tirée.
   'checkin',
   // Cycle menstruel et ce qui l'entoure
@@ -38409,6 +38409,9 @@ function loadClientHome(){
   // athlete atterrit. Voir _aiguillerNouvelInscrit.
   // Posé À CHAQUE rendu : c’est lui qui vient d’écrire la date.
   _jourAffiche=localISODate(new Date());
+  // La santé synchronisée (Health Connect, Raccourci iPhone) : au plus une
+  // lecture par 10 minutes, voir sanSyncTirer.
+  try{ setTimeout(()=>{ sanSyncTirer().catch(()=>{}); },4000); }catch(e){}
   // RATTRAPAGE DE L'ANNUAIRE, une fois par session. Les athlètes déjà
   // rattachés avant l'existence de ce nœud n'y figurent pas : sans cette
   // ligne, leur coach ne les découvrirait qu'après un nouveau rattachement,
@@ -104323,7 +104326,10 @@ function _joursEntre(a,b){
 
 // Même mécanique que _recordSteps : un jour n'a qu'une valeur, écrasement et
 // non ajout, ce qui permet de corriger une pesée saisie trop vite.
-function _recordWeight(dateStr,kg){
+// `marque` (facultatif) : {dataStatus:'sync'} pour une pesée synchronisée.
+// Sans elle, c'est une pesée à la main : son dataStatus le dit, et la
+// synchronisation ne l'écrasera jamais (sanFusionSync).
+function _recordWeight(dateStr,kg,marque){
   const v=parseFloat(kg);
   if(!dateStr||isNaN(v)||v<PESEE_MIN||v>PESEE_MAX) return false;
   if(!currentUser.weightLog) currentUser.weightLog=[];
@@ -104331,6 +104337,7 @@ function _recordWeight(dateStr,kg){
   const idx=currentUser.weightLog.findIndex(e=>e.date===dateStr);
   if(idx>=0) currentUser.weightLog[idx].kg=arrondi;
   else currentUser.weightLog.push({date:dateStr,kg:arrondi});
+  _sanMarquer(currentUser.weightLog.find(e=>e.date===dateStr),marque);
   const min=localISODate(new Date(Date.now()-PESEE_RETENTION_JOURS*24*3600*1000));
   currentUser.weightLog=currentUser.weightLog.filter(e=>e&&e.date>=min);
   currentUser.weightLog.sort((a,b)=>a.date<b.date?-1:1);
@@ -108318,8 +108325,8 @@ function _appliquerCaptureStats(analyse){
       ? (currentUser.sleepLog||[]).some(e=>e.date===j.date)
       : (currentUser.stepsLog||[]).some(e=>e.date===j.date);
     const pose=analyse.type==='sommeil'
-      ? _recordSleep(j.date,{duration:j.valeur})
-      : _recordSteps(j.date,j.valeur);
+      ? _recordSleep(j.date,{duration:j.valeur},{dataStatus:'capture'})
+      : _recordSteps(j.date,j.valeur,{dataStatus:'capture'});
     if(!pose) continue;
     res.ecrits++;
     if(avant) res.remplaces++;
@@ -108464,7 +108471,10 @@ async function importerCaptureStats(input){
     if(btn) arcRendre(btn,libelle);
   }
 }
-function _recordSteps(dateStr,count){
+// `marque` (facultatif) : {dataStatus:'capture'|'sync', source}. Sans elle,
+// la saisie est MANUELLE et horodatée : c'est ce qui la protège d'une
+// synchronisation reçue plus tôt (sanFusionSync).
+function _recordSteps(dateStr,count,marque){
   const n=parseInt(count,10);
   // 0 est une valeur légitime saisie à la main (« je n'ai pas marché »), d'où
   // le seuil bas à 0 et non à 1 — le champ de fin de séance, lui, resserre à
@@ -108476,6 +108486,7 @@ function _recordSteps(dateStr,count){
   // qui permet de corriger dans Lifestyle un chiffre entré en fin de séance.
   if(idx>=0) currentUser.stepsLog[idx].count=n;
   else currentUser.stepsLog.push({date:dateStr,count:n});
+  _sanMarquer(currentUser.stepsLog.find(e=>e.date===dateStr),marque);
   const cutoff=localISODate(new Date(Date.now()-STEPS_RETENTION_JOURS*24*3600*1000));
   currentUser.stepsLog=currentUser.stepsLog.filter(e=>e.date>=cutoff);
   return true;
@@ -109703,6 +109714,185 @@ function sanPoserSource(quoi,cle){
   try{ rcm('tracker_selected'); }catch(e){}
   sanFermer(); sanRendre();
 }
+// ══ LA SANTÉ SYNCHRONISÉE (Health Connect, Raccourci iPhone) ═════════════
+// Décision de Kevin (28/09/2026). L'APK Android lit Health Connect, le
+// Raccourci iPhone « RepCore Santé » lit Apple Santé ; les deux POSTENT au
+// serveur léger (cloudflare/src/sante.js), qui range les jours dans
+// sante_sync/<clé>. L'app les LIT ici et les FUSIONNE dans les journaux
+// habituels, par les mêmes portes que la saisie (_recordSteps, _recordSleep,
+// _recordWeight) : le reste de l'app ne sait pas d'où vient un chiffre.
+//
+// QUI GAGNE, jour par jour :
+//   · une saisie MANUELLE postérieure à la réception de ce jour ;
+//   · sinon la synchronisation, qui remplace une capture, une ancienne
+//     synchronisation ou une saisie manuelle plus ancienne ;
+//   · une pesée à la main n'est JAMAIS remplacée ;
+//   · jamais une date future, jamais au-delà de 180 jours.
+// VFC : RMSSD (Health Connect) et SDNN (Apple) ne se comparent pas ; la
+// méthode voyage avec chaque valeur.
+const SAN_SYNC_RETENTION_JOURS=180;
+const SAN_SYNC_INTERVALLE_MS=10*60*1000;
+const SAN_SYNC_URL_RECEPTION=SERVEUR_LEGER_URL+'/sante/i/';
+const SAN_SYNC_DEFAUT={android:'google',ios:'apple'};
+let _sanSyncLu=0, _sanSyncEnCours=null, _sanSyncMeta=null;
+
+// L'appel authentifié du jeton : creer (rend le jeton en clair, une fois),
+// revoquer, etat. La création exige le consentement santé.
+async function santeJeton(action){
+  if(action==='creer'&&!demanderConsentementSante('pas',()=>santeJeton('creer'))) return null;
+  const r=await CLOUD._callFn('santeJeton',{action});
+  if(action==='revoquer'){ _sanSyncMeta=null; _sanSyncLu=0; }
+  return r;
+}
+// L'adresse que l'APK ou le Raccourci appellent.
+function sanSyncAdresse(jeton){ return SAN_SYNC_URL_RECEPTION+encodeURIComponent(String(jeton||'')); }
+
+// L'instant d'une entrée manuelle (0 si elle n'en porte pas).
+function _sanInstant(e){ return Number(e&&(e.updatedAt||e.createdAt))||0; }
+// Un chiffre saisi par l'athlète APRÈS la réception de ce jour gagne.
+function _sanManuelGagne(e,recu){
+  return !!(e&&e.dataStatus==='manual'&&_sanInstant(e)>(Number(recu)||0));
+}
+function _sanMarquer(e,marque){
+  if(!e) return;
+  const m=marque||{};
+  e.dataStatus=m.dataStatus||'manual';
+  e.updatedAt=Date.now();
+  if(m.source) e.source=m.source;
+}
+// La source d'une origine reçue : une clé connue de SAN_SOURCES, sinon
+// l'écosystème de la plateforme.
+function _sanOrigine(o,plateforme){
+  const k=String(o||'').toLowerCase();
+  return SAN_SOURCES[k]&&k!=='manuel'?k:(SAN_SYNC_DEFAUT[plateforme]||'autre');
+}
+
+// PURE. Ce que la synchronisation `sync` ({meta, jours}) doit écrire dans
+// `dossier` à l'instant `maintenant`. Rend le plan, sans rien toucher :
+//   {pas:[{date,count,source}], sommeil:[{date,duration,bed,wake,phases,source}],
+//    poids:[{date,kg}], fc:[{date,bpm}], vfc:[{date,ms,methode}],
+//    origines:{pas,sommeil}, gardes:n}
+// `gardes` compte les jours où une saisie manuelle plus récente l'emporte.
+function sanFusionSync(dossier,sync,maintenant){
+  const u=dossier||{}, t=Number(maintenant)||Date.now();
+  const plan={pas:[],sommeil:[],poids:[],fc:[],vfc:[],origines:{},gardes:0};
+  const meta=(sync&&sync.meta)||{}, jours=(sync&&sync.jours)||{};
+  if(!meta.empreinte&&!meta.derniereReception) return plan;
+  const auj=localISODate(new Date(t));
+  const min=localISODate(new Date(t-SAN_SYNC_RETENTION_JOURS*864e5));
+  const orig=meta.origines||{};
+  const srcPas=_sanOrigine(orig.pas,meta.plateforme), srcSom=_sanOrigine(orig.sommeil,meta.plateforme);
+  if(orig.pas||meta.plateforme) plan.origines.pas=srcPas;
+  if(orig.sommeil||meta.plateforme) plan.origines.sommeil=srcSom;
+  const trouver=(l,d)=>(Array.isArray(l)?l:[]).find(e=>e&&e.date===d)||null;
+  for(const d of Object.keys(jours).sort()){
+    const j=jours[d];
+    if(!j||typeof j!=='object'||!/^\d{4}-\d{2}-\d{2}$/.test(d)||d>auj||d<min) continue;
+    const recu=Number(j.recu)||Number(meta.derniereReception)||0;
+    const n=Number(j.pas);
+    if(isFinite(n)&&n>=0&&n<=99999){
+      const e=trouver(u.stepsLog,d);
+      if(_sanManuelGagne(e,recu)) plan.gardes++;
+      else if(!(e&&e.dataStatus==='sync'&&Number(e.count)===Math.round(n)&&e.source===srcPas))
+        plan.pas.push({date:d,count:Math.round(n),source:srcPas});
+    }
+    const m=Number(j.sommeilMin);
+    if(isFinite(m)&&m>=30&&m<=1080){
+      const e=trouver(u.sleepLog,d);
+      const nuit={date:d,duration:Math.round(m/60*100)/100,source:srcSom};
+      if(/^\d{2}:\d{2}$/.test(j.coucher||'')) nuit.bed=j.coucher;
+      if(/^\d{2}:\d{2}$/.test(j.lever||'')) nuit.wake=j.lever;
+      if(j.phases&&typeof j.phases==='object'){
+        const p={};
+        for(const k of ['profond','leger','paradoxal','eveil']) if(isFinite(Number(j.phases[k]))) p[k]=Math.round(Number(j.phases[k]));
+        if(Object.keys(p).length) nuit.phases=p;
+      }
+      if(_sanManuelGagne(e,recu)) plan.gardes++;
+      else if(!(e&&e.dataStatus==='sync'&&e.duration===nuit.duration&&e.bed===nuit.bed&&e.wake===nuit.wake
+        &&JSON.stringify(e.phases||null)===JSON.stringify(nuit.phases||null)&&e.source===srcSom))
+        plan.sommeil.push(nuit);
+    }
+    const kg=Number(j.poids);
+    if(isFinite(kg)&&kg>=PESEE_MIN&&kg<=PESEE_MAX){
+      const e=trouver(u.weightLog,d), v=Math.round(kg*10)/10;
+      if(e&&e.dataStatus!=='sync') plan.gardes++;
+      else if(!(e&&e.kg===v)) plan.poids.push({date:d,kg:v});
+    }
+    const bpm=Number(j.fcRepos);
+    if(isFinite(bpm)&&bpm>=30&&bpm<=120){
+      const e=trouver(u.fcReposLog,d);
+      if(!(e&&e.bpm===Math.round(bpm))) plan.fc.push({date:d,bpm:Math.round(bpm)});
+    }
+    const ms=Number(j.vfc), methode=j.vfcMethode==='rmssd'||j.vfcMethode==='sdnn'?j.vfcMethode:null;
+    if(isFinite(ms)&&ms>=5&&ms<=250&&methode){
+      const e=trouver(u.vfcLog,d), v=Math.round(ms*10)/10;
+      if(!(e&&e.ms===v&&e.methode===methode)) plan.vfc.push({date:d,ms:v,methode});
+    }
+  }
+  return plan;
+}
+// Un journal {date,…} : la valeur du jour remplacée, triée, purgée à 180 jours.
+function _sanJournalPoser(liste,entree,maintenant){
+  const min=localISODate(new Date((Number(maintenant)||Date.now())-SAN_SYNC_RETENTION_JOURS*864e5));
+  const l=(Array.isArray(liste)?liste:[]).filter(e=>e&&e.date!==entree.date&&e.date>=min);
+  l.push(entree);
+  return l.sort((a,b)=>a.date<b.date?-1:1);
+}
+// Applique un plan au dossier courant, par les portes habituelles.
+// Rend le nombre de valeurs écrites.
+function sanAppliquerSync(plan){
+  const u=currentUser;
+  if(!u||!plan||!aConsentiSante(u)) return 0;
+  let n=0;
+  for(const p of plan.pas) if(_recordSteps(p.date,p.count,{dataStatus:'sync',source:p.source})) n++;
+  for(const s of plan.sommeil)
+    if(_recordSleep(s.date,{bed:s.bed,wake:s.wake,duration:s.duration,phases:s.phases},{dataStatus:'sync',source:s.source})) n++;
+  for(const p of plan.poids) if(_recordWeight(p.date,p.kg,{dataStatus:'sync'})) n++;
+  for(const f of plan.fc){ u.fcReposLog=_sanJournalPoser(u.fcReposLog,f); n++; }
+  for(const v of plan.vfc){ u.vfcLog=_sanJournalPoser(u.vfcLog,v); n++; }
+  const o=plan.origines||{};
+  for(const q of ['pas','sommeil']){
+    if(o[q]&&(!u.santeSource||u.santeSource[q]!==o[q])){
+      if(!u.santeSource) u.santeSource={};
+      u.santeSource[q]=o[q]; n++;
+    }
+  }
+  return n;
+}
+// LIRE, FUSIONNER, DIRE « CONSOMMÉ ». Au plus une lecture par 10 minutes
+// (`force` pour le bouton d'essai). Silencieux en cas d'échec : la saisie
+// manuelle et la capture restent là.
+async function sanSyncTirer(force){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||!u.email||u.role==='coach'||!SERVEUR_LEGER) return null;
+  if(_sanSyncEnCours) return _sanSyncEnCours;
+  if(!force&&Date.now()-_sanSyncLu<SAN_SYNC_INTERVALLE_MS) return null;
+  if(typeof navigator!=='undefined'&&navigator.onLine===false) return null;
+  _sanSyncLu=Date.now();
+  _sanSyncEnCours=(async()=>{
+    try{
+      const token=await CLOUD._getToken(); if(!token) return null;
+      const url=CLOUD._fbUrl.replace('users.json','sante_sync/'+String(u.email).toLowerCase().replace(/\./g,',')+'.json');
+      const r=await fetch(url+'?auth='+token);
+      if(!r.ok) return null;
+      const sync=await r.json();
+      _sanSyncMeta=(sync&&sync.meta)||null;
+      if(!sync||!sync.meta) return null;
+      const plan=sanFusionSync(currentUser,sync,Date.now());
+      const n=sanAppliquerSync(plan);
+      if(n){ saveUser(); try{ CLOUD.pushOne(currentUser.email,currentUser); }catch(e){} try{ if(document.getElementById('s-lifestyle')?.classList.contains('active')) sanRendre(); }catch(e){} }
+      if(sync.meta.derniereReception&&!(Number(sync.consomme)>=Number(sync.meta.derniereReception))){
+        try{ await fetch(url.replace('.json','/consomme.json')+'?auth='+token,{method:'PUT',body:JSON.stringify(Date.now())}); }catch(e){}
+      }
+      return {ecrits:n,gardes:plan.gardes,meta:_sanSyncMeta};
+    }catch(e){ return null; }
+    finally{ _sanSyncEnCours=null; }
+  })();
+  return _sanSyncEnCours;
+}
+try{
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden) sanSyncTirer().catch(()=>{}); });
+}catch(e){}
 function getSleepWeek(){
   const today=new Date(),dow=today.getDay();
   const mon=new Date(today);
@@ -109862,7 +110052,7 @@ function loadSleep(containerId='sleep-content',user,opts){
 // règles de conservation. bed et wake sont FACULTATIFS : une nuit venue d'une
 // capture ne porte que sa durée, l'écran de la montre n'affichant ni l'heure de
 // coucher ni celle de lever.
-function _recordSleep(dateStr,{bed,wake,duration}={}){
+function _recordSleep(dateStr,{bed,wake,duration,phases}={},marque){
   const d=Number(duration);
   // Même plafond que calcSleepDuration : au-delà de 18 h ce n'est pas une nuit.
   if(!dateStr||!Number.isFinite(d)||d<=0||d>18) return false;
@@ -109886,17 +110076,22 @@ function _recordSleep(dateStr,{bed,wake,duration}={}){
   // LES CHAMPS FOURNIS GAGNENT, LES AUTRES SURVIVENT : une saisie manuelle qui
   // porte bed et wake les met a jour, un import qui n'a que la duree ne touche
   // qu'a elle.
+  // LES PHASES (synchronisation) suivent la durée : une durée saisie sans
+  // phases retire celles d'une autre nuit mesurée, qui ne lui iraient plus.
   if(idx>=0){
     const e=currentUser.sleepLog[idx];
     e.duration=d;
     if(bed) e.bed=bed;
     if(wake) e.wake=wake;
+    if(phases) e.phases=phases; else delete e.phases;
   } else {
     const entry={date:dateStr,duration:d};
     if(bed) entry.bed=bed;
     if(wake) entry.wake=wake;
+    if(phases) entry.phases=phases;
     currentUser.sleepLog.push(entry);
   }
+  _sanMarquer(currentUser.sleepLog.find(e=>e.date===dateStr),marque);
   const cutoff=localISODate(new Date(Date.now()-180*24*3600*1000));
   // LES VOLTS DES NUITS PURGÉES sont mis de côté : xpCalcul relit le journal,
   // et une nuit qui en sort ne doit pas faire BAISSER les volts.
@@ -109929,6 +110124,7 @@ function saveSleep(){
 // deux sections sont affichees en entier, il n'y a plus rien a ouvrir.
 function loadLifestyle(){
   go('s-lifestyle');
+  try{ sanSyncTirer().catch(()=>{}); }catch(e){}
   // ⚠ LES DEUX CARTES REMPLACENT LES DEUX ANCIENS RENDUS SUR CET ECRAN, et
   // seulement sur celui-ci : les ecrans s-steps et s-sleep gardent loadSteps
   // et loadSleep tels quels, avec leur saisie. Rien n'est supprime.
@@ -115144,6 +115340,14 @@ async function requestAccountDeletion(){
     // 1 ter. Le résumé d'activité (statistiques de rétention) : hors de users/.
     try{
       await fetch(CLOUD._fbUrl.replace('users.json','activite/'+safeKey+'.json')+(fbTok?'?auth='+fbTok:''),{method:'DELETE'});
+    }catch(e){}
+
+    // 1 ter. La santé synchronisée : le serveur révoque le jeton (son
+    //    empreinte porte la clé du compte) et efface sante_sync. À défaut,
+    //    l'app efface le nœud elle-même — ce qui suffit à tuer le jeton.
+    try{ await CLOUD._callFn('santeJeton',{action:'revoquer'}); }catch(e){}
+    try{
+      await fetch(CLOUD._fbUrl.replace('users.json','sante_sync/'+safeKey+'.json')+(fbTok?'?auth='+fbTok:''),{method:'DELETE'});
     }catch(e){}
 
     // 2. Fiche programme PDF dans Storage. Chemin encode en entier : le nom

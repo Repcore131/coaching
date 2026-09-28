@@ -50975,6 +50975,70 @@ async function testExercices(){
       if(l.join()!=='Tom=Abonné ✓/3,Lou=1re séance/2,Zoé=Inscrit/1') return _echec(l.join());
       // Un miroir déjà écrit avec « seance » se relit tel quel.
       return (filleulStatut({statut:'seance'})==='seance'&&filleulStatut(null)==='inscrit')?true:_echec('relecture');})());
+    // ══ 28/09/2026 — LA SANTÉ SYNCHRONISÉE (Health Connect, Raccourci iPhone) ══
+    const _SYT=new Date(2026,9,15,10).getTime();
+    const _syJ=n=>localISODate(new Date(_SYT-n*864e5));
+    const _syRecu=_SYT-3600e3;
+    const _sySync=(jours,meta)=>({meta:Object.assign({empreinte:'e',creeLe:1,derniereReception:_syRecu,plateforme:'android',source:'healthconnect',origines:{pas:'samsung',sommeil:'garmin'}},meta||{}),jours});
+    ok('Sync santé : la fusion — capture et vieux manuel remplacés, manuel récent gardé, jamais le futur ni au-delà de 180 jours',(()=>{
+      const u={stepsLog:[{date:_syJ(1),count:100,dataStatus:'capture'},{date:_syJ(2),count:200,dataStatus:'manual',updatedAt:_SYT-2*3600e3},
+        {date:_syJ(3),count:300,dataStatus:'manual',updatedAt:_SYT-60e3},{date:_syJ(4),count:400}]};
+      const p=sanFusionSync(u,_sySync({[_syJ(1)]:{pas:1000,recu:_syRecu},[_syJ(2)]:{pas:2000,recu:_syRecu},[_syJ(3)]:{pas:3000,recu:_syRecu},
+        [_syJ(4)]:{pas:4000},[_syJ(-1)]:{pas:9},[_syJ(181)]:{pas:9}}),_SYT);
+      const d=p.pas.map(x=>x.date+'='+x.count).join();
+      if(d!==[_syJ(4)+'=4000',_syJ(2)+'=2000',_syJ(1)+'=1000'].sort().join()) return _echec('pas : '+d);
+      if(p.gardes!==1) return _echec('gardes '+p.gardes);
+      if(p.pas[0].source!=='samsung'||p.origines.pas!=='samsung'||p.origines.sommeil!=='garmin') return _echec('origines '+JSON.stringify(p.origines));
+      if(sanFusionSync(u,null,_SYT).pas.length||sanFusionSync(u,{meta:{},jours:{[_syJ(1)]:{pas:5}}},_SYT).pas.length) return _echec('sans jeton');
+      // Une origine inconnue retombe sur l'écosystème de la plateforme.
+      const q=sanFusionSync({},_sySync({[_syJ(1)]:{pas:5}},{plateforme:'ios',origines:{pas:'montre-x'}}),_SYT);
+      return q.pas[0].source==='apple'?true:_echec('origine inconnue : '+q.pas[0].source);})());
+    ok('Sync santé : sommeil avec phases, poids jamais sur une pesée à la main, FC et VFC avec leur méthode',(()=>{
+      const u={weightLog:[{date:_syJ(1),kg:80}],sleepLog:[]};
+      const p=sanFusionSync(u,_sySync({
+        [_syJ(1)]:{sommeilMin:450,coucher:'23:10',lever:'06:52',phases:{profond:80,leger:260,paradoxal:90,eveil:20},poids:79.46,fcRepos:54,vfc:48.26,vfcMethode:'rmssd'},
+        [_syJ(2)]:{poids:78.44,vfc:40,vfcMethode:'sdnn'},[_syJ(3)]:{vfc:40}}),_SYT);
+      const s=p.sommeil[0];
+      if(!s||s.duration!==7.5||s.bed!=='23:10'||s.wake!=='06:52'||s.phases.profond!==80||s.source!=='garmin') return _echec('sommeil '+JSON.stringify(s));
+      if(p.poids.length!==1||p.poids[0].date!==_syJ(2)||p.poids[0].kg!==78.4) return _echec('poids '+JSON.stringify(p.poids));
+      if(p.fc.length!==1||p.fc[0].bpm!==54) return _echec('fc');
+      const v=p.vfc.map(x=>x.ms+x.methode).join();
+      return v==='40sdnn,48.3rmssd'?true:_echec('vfc (sans méthode : écartée) '+v);})());
+    ok('Sync santé : appliquée par les portes habituelles, marquée « sync », idempotente',(()=>{
+      const _sv=currentUser;
+      const _syJ=n=>localISODate(new Date(Date.now()-n*864e5));
+      try{
+        currentUser={email:'sy@t.fr',role:'athlete',consent:{health:true,policyVersion:POLICY_VERSION},
+          stepsLog:[{date:_syJ(1),count:100,dataStatus:'capture'}],sleepLog:[{date:_syJ(1),duration:6,bed:'00:30'}],weightLog:[]};
+        const sync=_sySync({[_syJ(1)]:{pas:8000,sommeilMin:420,coucher:'23:00',lever:'06:00',phases:{profond:60,leger:300,paradoxal:60},poids:70,fcRepos:50,vfc:60,vfcMethode:'rmssd'}},{derniereReception:Date.now()-3600e3});
+        const n=sanAppliquerSync(sanFusionSync(currentUser,sync,Date.now()));
+        const e=currentUser.stepsLog[0], s=currentUser.sleepLog[0], w=currentUser.weightLog[0];
+        if(n<5) return _echec('écrits '+n);
+        if(e.count!==8000||e.dataStatus!=='sync'||e.source!=='samsung') return _echec('pas '+JSON.stringify(e));
+        if(s.duration!==7||s.bed!=='23:00'||s.dataStatus!=='sync'||!s.phases||s.phases.leger!==300) return _echec('nuit '+JSON.stringify(s));
+        if(!w||w.kg!==70||w.dataStatus!=='sync') return _echec('poids '+JSON.stringify(w));
+        if(currentUser.fcReposLog[0].bpm!==50||currentUser.vfcLog[0].methode!=='rmssd') return _echec('fc/vfc');
+        if(currentUser.santeSource.pas!=='samsung'||currentUser.santeSource.sommeil!=='garmin') return _echec('santeSource');
+        // Rejouée : rien ne change.
+        const p2=sanFusionSync(currentUser,sync,Date.now());
+        if(p2.pas.length||p2.sommeil.length||p2.poids.length||p2.fc.length||p2.vfc.length||sanAppliquerSync(p2)) return _echec('pas idempotent');
+        // Une saisie à la main APRÈS la réception gagne ensuite.
+        _recordSteps(_syJ(1),5000);
+        if(currentUser.stepsLog[0].dataStatus!=='manual'||!currentUser.stepsLog[0].updatedAt) return _echec('saisie non marquée');
+        if(sanFusionSync(currentUser,sync,Date.now()).pas.length) return _echec('la sync écrase une saisie plus récente');
+        // Sans consentement : rien.
+        currentUser.consent={};
+        return sanAppliquerSync({pas:[{date:_syJ(2),count:1}],sommeil:[],poids:[],fc:[],vfc:[],origines:{}})===0?true:_echec('sans consentement');
+      } finally { currentUser=_sv; }})());
+    ok('Sync santé : la capture est marquée, le jeton passe par le serveur, lecture limitée, suppression du compte',(()=>{
+      if(!/_recordSleep\(j\.date,\{duration:j\.valeur\},\{dataStatus:'capture'\}\)/.test(String(_appliquerCaptureStats))) return _echec('capture');
+      if(!/_callFn\('santeJeton'/.test(String(santeJeton))||!/demanderConsentementSante/.test(String(santeJeton))) return _echec('santeJeton');
+      if(!/SAN_SYNC_INTERVALLE_MS/.test(String(sanSyncTirer))||SAN_SYNC_INTERVALLE_MS!==600000) return _echec('10 minutes');
+      if(!/consomme/.test(String(sanSyncTirer))) return _echec('consomme');
+      if(!/sanSyncTirer\(/.test(String(loadLifestyle))||!/sanSyncTirer\(/.test(String(loadClientHome))) return _echec('déclencheurs');
+      if(CHAMPS_SANTE.indexOf('fcReposLog')<0||CHAMPS_SANTE.indexOf('vfcLog')<0) return _echec('CHAMPS_SANTE');
+      if(sanSyncAdresse('abc')!=='https://repcore-serveur.repcore.workers.dev/sante/i/abc') return _echec('adresse');
+      return /'sante_sync\/'\+safeKey/.test(_prodSrc())?true:_echec('suppression du compte');})());
     // ══ 28/09/2026 — LA VIDÉO D'UN VISUEL ════════════════════════════════
     ok('Vidéo : MP4 quand l’enregistreur le sait (Safari iOS), sinon WebM VP9, sinon rien',(()=>{
       const que=(l)=>(t)=>l.indexOf(t)>=0;

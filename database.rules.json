@@ -827,6 +827,29 @@
       ".write": false
     },
 
+    // LA SANTE SYNCHRONISEE (Health Connect, Raccourci iPhone) : voir
+    // cloudflare/src/sante.js. Le serveur leger ecrit, avec son compte de
+    // service. sante_jetons ne garde que des EMPREINTES SHA-256 : ferme a tous.
+    "sante_jetons": {
+      ".read": false,
+      ".write": false
+    },
+    // Lu par le proprietaire et par le coach que son dossier designe (meme
+    // condition que users/). Ecrit par personne, sauf :
+    //   · `consomme`, l heure a laquelle l app a fusionne ce qu elle a lu ;
+    //   · l effacement du noeud ENTIER par le proprietaire, qui vaut
+    //     revocation (le serveur exige meta.empreinte pour recevoir).
+    "sante_sync": {
+      "$emailKey": {
+        ".read": "auth != null && (\n  auth.token.email.replace('.', ',') === $emailKey ||\n  (root.child('users').child($emailKey).child('coachEmailKey').exists() &&\n   auth.token.email.replace('.', ',') === root.child('users').child($emailKey).child('coachEmailKey').val())\n)",
+        ".write": "auth != null && auth.token.email.replace('.', ',') === $emailKey && !newData.exists()",
+        "consomme": {
+          ".write": "auth != null && auth.token.email.replace('.', ',') === $emailKey",
+          ".validate": "newData.isNumber() && newData.val() <= now + 60000"
+        }
+      }
+    },
+
     // Lecture ouverte sur UN code precis, jamais sur la collection : l'athlete
     // doit pouvoir verifier son code avant de creer un compte et de consentir au
     // traitement de ses donnees de sante, or il n'a pas encore d'identite
