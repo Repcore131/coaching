@@ -10818,6 +10818,20 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .vfmt-b small{font-size:var(--fs-2xs);font-weight:600;opacity:.75;letter-spacing:0}
 .vfmt-b.actif{border-color:var(--red,#e02020);color:var(--text,#fff);box-shadow:0 0 0 3px rgba(224,32,32,.18)}
 .vfmt-b:focus-visible{outline:2px solid var(--red,#e02020);outline-offset:2px}
+.vmed{display:flex;gap:8px;margin:0 0 10px}
+.vmed-b{flex:1;min-height:40px;display:flex;align-items:center;justify-content:center;gap:6px;border-radius:12px;
+  border:2px solid var(--border,#2a2a2e);background:transparent;color:var(--sub,#a0a0a8);cursor:pointer;
+  font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.6px;text-transform:uppercase}
+.vmed-b small{font-size:var(--fs-2xs);font-weight:600;opacity:.75;letter-spacing:0;text-transform:none}
+.vmed-b.actif{border-color:var(--red,#e02020);color:var(--text,#fff);box-shadow:0 0 0 3px rgba(224,32,32,.18)}
+.vmed-b:focus-visible{outline:2px solid var(--red,#e02020);outline-offset:2px}
+.vid-carte{width:min(360px,100%);display:flex;flex-direction:column;align-items:stretch;gap:12px;text-align:center}
+.vid-titre{font-weight:800;font-size:var(--fs-md);color:var(--text-strong)}
+.vid-sous{font-size:var(--fs-xs);color:var(--text-strong);opacity:.8;line-height:1.5}
+.vid-barre{height:8px;border-radius:4px;background:rgba(255,255,255,.18);overflow:hidden}
+.vid-barre i{display:block;height:100%;width:0;background:var(--red,#e02020);transition:width .1s linear}
+.vid-apercu{width:100%;max-height:56vh;aspect-ratio:9/16;object-fit:contain;background:#000;border-radius:var(--r-3)}
+.vid-btn{width:100%;margin:0;min-height:44px;display:flex;align-items:center;justify-content:center;gap:8px}
 .vf{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 12px}
 .vf-b{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:6px;border-radius:14px;border:2px solid var(--border,#2a2a2e);
   background:var(--surface-1,#141416);color:var(--sub,#a1a1aa);cursor:pointer;min-width:0;font:inherit}
@@ -13664,6 +13678,14 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .vfmt-b{border:2px solid var(--border,#cfcfd3);color:var(--sub,#5b5b64)}
 :root[data-theme="clair"] .vfmt-b.actif{border-color:var(--red,#e02020);color:var(--text,#090909);box-shadow:0 0 0 3px rgba(224,32,32,.18)}
 :root[data-theme="clair"] .vfmt-b:focus-visible{outline:2px solid var(--red,#e02020)}
+:root[data-theme="clair"] .vmed-b{border:2px solid var(--border,#cfcfd3);color:var(--sub,#5b5b64)}
+:root[data-theme="clair"] .vmed-b.actif{border-color:var(--red,#e02020);color:var(--text,#090909);box-shadow:0 0 0 3px rgba(224,32,32,.18)}
+:root[data-theme="clair"] .vmed-b:focus-visible{outline:2px solid var(--red,#e02020)}
+:root[data-theme="clair"] .vid-titre{color:var(--text-strong)}
+:root[data-theme="clair"] .vid-sous{color:var(--text-strong)}
+:root[data-theme="clair"] .vid-barre{background:rgba(9,9,9,0.18)}
+:root[data-theme="clair"] .vid-barre i{background:var(--red,#e02020)}
+:root[data-theme="clair"] .vid-apercu{background:#fbfbfb}
 :root[data-theme="clair"] .vf-b{border:2px solid var(--border,#cfcfd3);background:var(--surface-1,#e6e6e8);color:var(--sub,#595963)}
 :root[data-theme="clair"] .vf-b.actif{border-color:var(--red,#e02020);color:var(--text,#090909);box-shadow:0 0 0 3px rgba(224,32,32,.18)}
 :root[data-theme="clair"] .vf-b:focus-visible{outline:2px solid var(--red,#e02020)}

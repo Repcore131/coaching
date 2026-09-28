@@ -9315,6 +9315,31 @@ function arcCompteur(el,vers,o){
   arcChiffre(el,de,vers,o);
 }
 const _arcChiffres=new WeakMap();
+// LE COMPTEUR, EN FONCTION DU TEMPS. arcChiffre l'appelle à chaque frame avec
+// l'horloge de l'écran ; la vidéo (exporterVideoVisuel), avec le temps de la
+// vidéo. Une seule courbe pour les deux : ce qu'on publie compte comme l'app.
+/** Les 2 ou 3 valeurs du grésillement, tirées une fois ([] sans grésillement). */
+function arcBruit(de,vers,gr){
+  const nGr=gr?(2+(Math.random()<0.5?1:0)):0;
+  const bruit=[];
+  const amp=Math.max(Math.abs(vers-de)*0.6,Math.abs(vers)*0.05,2);
+  for(let k=0;k<nGr;k++) bruit.push(vers+(Math.random()*2-1)*amp);
+  return bruit;
+}
+/** PURE. La valeur affichée à la progression p (0..1). */
+function arcValeurA(de,vers,p,bruit){
+  const nGr=(bruit&&bruit.length)||0;
+  const q=Math.max(0,Math.min(1,Number(p)||0));
+  if(nGr&&q>=0.62&&q<1){
+    // [0,62 ; 1[ découpé en nGr+1 plages : nGr valeurs au hasard, puis la vraie.
+    const k=Math.floor((q-0.62)/(0.38/(nGr+1)));
+    return k<nGr?bruit[k]:vers;
+  }
+  // Sortie longue, sans rebond : un chiffre qui dépasse sa valeur puis y
+  // revient se lit comme une erreur de calcul, pas comme une animation.
+  const e=1-Math.pow(1-(nGr?Math.min(1,q/0.62):q),3);
+  return q>=1?vers:de+(vers-de)*e;
+}
 // Un champ de saisie n'affiche pas son textContent : la charge d'une série est
 // un <input>, et rcFoudre la fait compter. On écrit donc sa value.
 function _arcEcrire(el,txt){
@@ -9356,24 +9381,10 @@ function arcChiffre(el,de,vers,o){
   // le chiffre « saute » entre des valeurs voisines et tombe sur la bonne. Les
   // valeurs sont tirées une fois, à l'avance : une nouvelle par frame serait un
   // flou illisible, pas un grésillement.
-  const nGr=gr?(2+(Math.random()<0.5?1:0)):0;
-  const bruit=[];
-  const amp=Math.max(Math.abs(vers-de)*0.6,Math.abs(vers)*0.05,2);
-  for(let k=0;k<nGr;k++) bruit.push(vers+(Math.random()*2-1)*amp);
+  const bruit=arcBruit(de,vers,gr);
   const pas=(maintenant)=>{
     const p=Math.min(1,(maintenant-t0)/d);
-    let txt;
-    if(nGr&&p>=0.62&&p<1){
-      // [0,62 ; 1[ découpé en nGr+1 plages : nGr valeurs au hasard, puis la vraie.
-      const k=Math.floor((p-0.62)/(0.38/(nGr+1)));
-      txt=fmt(k<nGr?bruit[k]:vers);
-    }else{
-      // Sortie longue, sans rebond : un chiffre qui dépasse sa valeur puis y
-      // revient se lit comme une erreur de calcul, pas comme une animation.
-      const e=1-Math.pow(1-(nGr?Math.min(1,p/0.62):p),3);
-      txt=fmt(de+(vers-de)*e);
-    }
-    _arcEcrire(el,txt);
+    _arcEcrire(el,fmt(arcValeurA(de,vers,p,bruit)));
     if(p<1) _arcChiffres.set(el,requestAnimationFrame(pas));
     else _arcChiffres.delete(el);
   };
@@ -9496,42 +9507,58 @@ function _foudrePleine(impact,W,H,o){
     // téléphone laisserait sa toile collée à l'écran au retour.
     setTimeout(finir,FOUDRE_MAX);
     if(!ctx){ finir(); return; }
-    const coul=o.couleur||FOUDRE_ROUGE;
-    const nb=(o.eclairs===2||o.eclairs===3)?o.eclairs:(Math.random()<0.5?2:3);
-    const eclairs=[];
-    for(let k=0;k<nb;k++) eclairs.push(_foudreEclair(impact,W,[0,45,95][k]));
-    // L'impact tombe avec le premier éclair : le tremblement et les étincelles
-    // sont la CONSÉQUENCE de la frappe, jamais posés à côté.
-    const T_IMPACT=30;
-    const etincelles=_foudreEtincelles(impact,T_IMPACT);
-    setTimeout(()=>{ _foudreTrembler(o.conteneur); },T_IMPACT);
+    const sc=_foudreScene(impact,W,o);
+    setTimeout(()=>{ _foudreTrembler(o.conteneur); },FOUDRE_IMPACT);
     const t0=performance.now();
     const image=(now)=>{
       if(fini) return;
       const t=now-t0;
       ctx.clearRect(0,0,W,H);
-      // 1. LE FLASH, sous tout le reste : blanc sur blanc, un éclair ne se
-      //    verrait pas. Double, comme une vraie foudre : le coup, puis le
-      //    réamorçage du canal, plus faible.
-      let f=0;
-      if(t<70) f=0.85*(t<50?1:1-(t-50)/20);
-      else if(t>=160&&t<230) f=0.38*(1-(t-160)/70);
-      if(f>0){ ctx.fillStyle='rgba(255,255,255,'+f.toFixed(3)+')'; ctx.fillRect(0,0,W,H); }
-      // 2. LES ÉCLAIRS
-      let vivant=false;
-      for(const e of eclairs){
-        const a=_foudreAlpha(e,t);
-        if(a<0) continue;
-        vivant=true;
-        if(a>0) _foudreDessiner(ctx,e,a,coul);
-      }
-      // 3. LES ÉTINCELLES, par-dessus : elles jaillissent du point d'impact.
-      if(_foudreEtincellesPeindre(ctx,etincelles,t)) vivant=true;
+      const vivant=_foudrePeindre(ctx,sc,t,W,H);
       if(vivant||t<240) requestAnimationFrame(image);
       else finir();
     };
     requestAnimationFrame(image);
   });
+}
+// L'impact tombe avec le premier éclair : le tremblement et les étincelles
+// sont la CONSÉQUENCE de la frappe, jamais posés à côté.
+const FOUDRE_IMPACT=30;
+// LA FOUDRE EN DEUX TEMPS : la scène, tirée une fois (les éclairs, les
+// étincelles), puis l'image à l'instant t. L'écran avance t avec son horloge ;
+// la vidéo (exporterVideoVisuel) avec le temps de la vidéo — même dessin.
+// `o.echelle` : les traits et les étincelles grossis pour une toile en pixels
+// d'image (1080 de large) plutôt qu'en pixels CSS (360).
+function _foudreScene(impact,W,o){
+  o=o||{};
+  const k=Number(o.echelle)>0?Number(o.echelle):1;
+  const nb=(o.eclairs===2||o.eclairs===3)?o.eclairs:(Math.random()<0.5?2:3);
+  const eclairs=[];
+  for(let i=0;i<nb;i++){ const e=_foudreEclair(impact,W,[0,45,95][i]); e.epais*=k; e.echelle=k; eclairs.push(e); }
+  const etincelles=_foudreEtincelles(impact,FOUDRE_IMPACT);
+  if(k!==1) etincelles.forEach(p=>{ p.vx*=k; p.vy*=k; p.taille*=k; });
+  return {eclairs,etincelles,coul:o.couleur||FOUDRE_ROUGE,echelle:k};
+}
+/** Peint la foudre à l'instant t (ms). Rend true tant qu'il reste quelque chose à peindre. */
+function _foudrePeindre(ctx,sc,t,W,H){
+  // 1. LE FLASH, sous tout le reste : blanc sur blanc, un éclair ne se
+  //    verrait pas. Double, comme une vraie foudre : le coup, puis le
+  //    réamorçage du canal, plus faible.
+  let f=0;
+  if(t>=0&&t<70) f=0.85*(t<50?1:1-(t-50)/20);
+  else if(t>=160&&t<230) f=0.38*(1-(t-160)/70);
+  if(f>0){ ctx.save(); ctx.fillStyle='rgba(255,255,255,'+f.toFixed(3)+')'; ctx.fillRect(0,0,W,H); ctx.restore(); }
+  // 2. LES ÉCLAIRS
+  let vivant=false;
+  for(const e of sc.eclairs){
+    const a=_foudreAlpha(e,t);
+    if(a<0) continue;
+    vivant=true;
+    if(a>0) _foudreDessiner(ctx,e,a,sc.coul);
+  }
+  // 3. LES ÉTINCELLES, par-dessus : elles jaillissent du point d'impact.
+  if(_foudreEtincellesPeindre(ctx,sc.etincelles,t,1500*(sc.echelle||1))) vivant=true;
+  return vivant;
 }
 // UN ÉCLAIR : un tronc du haut de l'écran jusqu'à l'impact, et ses branches.
 // Le départ est tiré dans une bande autour de l'aplomb de la cible — un
@@ -9611,7 +9638,7 @@ function _foudreDessiner(ctx,e,a,coul){
   const passe=(pts,k)=>{
     ctx.save();
     ctx.lineJoin='round'; ctx.lineCap='round';
-    ctx.shadowColor=coul; ctx.shadowBlur=30;
+    ctx.shadowColor=coul; ctx.shadowBlur=30*(e.echelle||1);
     ctx.strokeStyle=coul; ctx.lineWidth=9*w*k;
     ctx.globalAlpha=a*k*0.45; _foudreChemin(ctx,pts); ctx.stroke();
     ctx.shadowBlur=0;
@@ -9641,8 +9668,8 @@ function _foudreEtincelles(impact,tImpact){
 }
 // Position calculée analytiquement à partir de t, pas intégrée frame à frame :
 // une frame sautée ne ralentit pas les étincelles, elles sont où elles doivent.
-function _foudreEtincellesPeindre(ctx,ps,t){
-  const G=1500;                                   // px/s²
+function _foudreEtincellesPeindre(ctx,ps,t,gravite){
+  const G=gravite||1500;                          // px/s²
   let vivant=false;
   ctx.save();
   ctx.globalCompositeOperation='lighter';
@@ -9657,7 +9684,7 @@ function _foudreEtincellesPeindre(ctx,ps,t){
     const vit=Math.hypot(vx,vy)||1;
     // UNE TRAÎNÉE ET NON UN POINT : 18 ms de trajectoire, dans l'axe de la
     // vitesse. Un point rond de 2 px ne se lit pas comme une étincelle.
-    const l=Math.min(14,vit*0.018);
+    const l=Math.min(14*(G/1500),vit*0.018);
     ctx.globalAlpha=1-(r*1000)/p.vie;
     ctx.strokeStyle=p.coul; ctx.lineWidth=p.taille;
     ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x-vx/vit*l,y-vy/vit*l); ctx.stroke();
@@ -41428,6 +41455,15 @@ const VISUEL_FORMATS=Object.freeze({
   post:Object.freeze({w:1080,h:1350,lib:'Post',ratio:'4:5'})
 });
 const VISUEL_FORMAT_CLE='rc_visuel_format';
+// LA TOILE D'UN VISUEL. Neuve pour une image ; pour la vidéo (anim.cv), la
+// même à chaque frame, effacée : trente toiles de 8 Mo par seconde, c'est le
+// ramasse-miettes qui ferait sauter des images.
+function _visuelToile(anim,W,H){
+  const cv=(anim&&anim.cv)||document.createElement('canvas');
+  if(cv.width!==W||cv.height!==H){ cv.width=W; cv.height=H; }
+  else if(anim&&anim.cv){ const g=cv.getContext('2d'); g.setTransform(1,0,0,1,0,0); g.globalAlpha=1; g.globalCompositeOperation='source-over'; g.clearRect(0,0,W,H); }
+  return cv;
+}
 /** Le dernier format choisi sur cet appareil ; 'story' par défaut. */
 function visuelFormatChoisi(){
   let f=null;
@@ -42002,20 +42038,22 @@ function _recSignature(g,o,sig,y,LARG){
  * @param {{nm:string,histMax:number,curMax:number,gain:number,date?:number,signature?:string}} record
  * @param {'transparent'|'photo'|'rouge'} [fond]
  */
-function _dessinerCarteRecord(record,fond,format){
+function _dessinerCarteRecord(record,fond,format,anim){
   const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
-  const cv=document.createElement('canvas');
-  cv.width=W; cv.height=H;
+  const cv=_visuelToile(anim,W,H);
   const g=cv.getContext('2d');
   const f=fond||'transparent';
-  _visuelPeindreFond(g,W,H,f);
+  if(!(anim&&anim.sansFond)) _visuelPeindreFond(g,W,H,f);
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
   const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   const r=record||{};
   const nom=String(r.nm||'').toUpperCase();
-  const nouv=_recKg(r.curMax), anc=(Number(r.histMax)>0)?_recKg(r.histMax):'';
+  // `anim.valeur` : le chiffre en train de compter (la vidéo). La taille, le
+  // filigrane et tout le reste suivent la VRAIE valeur : rien ne saute.
+  const vrai=_recKg(r.curMax), anc=(Number(r.histMax)>0)?_recKg(r.histMax):'';
+  const nouv=(anim&&anim.valeur!=null)?String(anim.valeur):vrai;
   const pct=_recPct(r);
   const gainTxt=(Number(r.gain)>0?('+'+_recKg(r.gain)+' KG'):'')+(pct?('  ·  +'+pct+' %'):'');
 
@@ -42062,14 +42100,16 @@ function _dessinerCarteRecord(record,fond,format){
   // traverse la zone du chiffre de haut en bas, un peu en biais — et elle
   // seule : sur le nom ou l'ancienne valeur, il les rayerait.
   const base=y+H_CHIFFRE-24;
-  _recEclairFiligrane(g,cx+190,y+8,cx-150,base+30,_recGraine(nom+'|'+nouv),f);
+  _recEclairFiligrane(g,cx+190,y+8,cx-150,base+30,_recGraine(nom+'|'+vrai),f);
   // Le nombre et « KG » mesurés ensemble, puis réduits ensemble s'ils
   // débordent : « 227,5 » à 300 px ne tient pas avec son unité.
   let cs=300;
-  const mesure=()=>{ g.font='700 '+cs+'px '+BEBAS; const a=g.measureText(nouv).width;
+  const mesure=(v)=>{ g.font='700 '+cs+'px '+BEBAS; const a=g.measureText(v).width;
     g.font='700 '+Math.round(cs*0.3)+'px '+BEBAS; return a+14+g.measureText('KG').width; };
-  while(mesure()>LARG&&cs>120) cs-=4;
-  const total=mesure();
+  while(mesure(vrai)>LARG&&cs>120) cs-=4;
+  while(mesure(nouv)>LARG&&cs>120) cs-=4;
+  const total=mesure(nouv);
+  if(anim) anim.geo={x:cx,y:base-cs*0.38,taille:cs};
   g.font='700 '+cs+'px '+BEBAS;
   const wN=g.measureText(nouv).width;
   const x0=cx-total/2;
@@ -42562,6 +42602,424 @@ function _storySortirPartage(cv,nomFichier,meta,fmt){
     return true;
   }
   return false;
+}
+// ══ LA VIDÉO D'UN VISUEL : record, rang, Wrapped (28/09/2026) ═══════════
+// Une story ou un Reel qui BOUGE se regarde jusqu'au bout ; une image fixe se
+// saute. La vidéo reprend l'animation de l'app — la foudre qui frappe, le
+// chiffre qui compte — et la fige une seconde à la fin, sur la carte qu'on
+// aurait partagée en image.
+//
+// COMMENT. Une toile 1080×1920 redessinée image par image ; le TEMPS DE LA
+// VIDÉO pilote tout (foudre : _foudreScene/_foudrePeindre ; compteur :
+// arcValeurA) — une image sautée par un téléphone lent ne décale rien, la
+// suivante est là où elle doit être. canvas.captureStream(30) alimente un
+// MediaRecorder : MP4 quand il sait l'écrire (Safari iOS 14.5+), sinon WebM
+// VP9 (Chrome, Android), VP8 en dernier recours. 4 Mbit/s, moins si la durée
+// ferait dépasser 8 Mo (marge de 15 %) : Wrapped, 8,5 s, pèse ~4,3 Mo.
+//
+// L'ENREGISTREMENT EST EN TEMPS RÉEL (c'est le principe de MediaRecorder) :
+// une barre de progression le montre. Il finit HORS DU GESTE de l'athlète :
+// iOS refuserait la feuille de partage ouverte à ce moment-là. La vidéo prête,
+// on la montre, et c'est un NOUVEAU toucher (« Partager ») qui la partage.
+//
+// SANS MediaRecorder ni captureStream (vieux navigateurs), la bascule
+// « Image / Vidéo » n'est pas posée du tout : on n'offre pas un bouton qui
+// échouerait.
+//
+// TEST MANUEL : docs/video-partage.md (iPhone installé, Android, story, Reel).
+const VIDEO_FORMAT=Object.freeze({w:1080,h:1920});
+const VIDEO_IPS=30;
+const VIDEO_DEBIT=4e6;                       // bit/s
+const VIDEO_MAX_OCTETS=8*1024*1024;          // 8 Mo
+const VIDEO_FIN_FIGEE=1000;                  // la dernière image, tenue 1 s
+const VIDEO_WRAPPED_SLIDE=1500;              // 5 slides × 1,5 s
+const VIDEO_ECHELLE=2.4;                     // traits de la foudre : 1080 px d'image ≈ 450 px d'écran
+// MP4 d'abord : c'est ce qu'Instagram et la pellicule iPhone lisent partout.
+const VIDEO_TYPES=Object.freeze(['video/mp4;codecs=avc1.42E01E','video/mp4;codecs=avc1','video/mp4',
+  'video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm']);
+/**
+ * PURE quand `estSupporte` est donné (les tests). Le premier type que
+ * l'enregistreur sait écrire : {mime, type, ext}, ou null.
+ */
+function videoTypeChoisi(estSupporte){
+  let f=estSupporte;
+  if(typeof f!=='function'){
+    try{
+      const MR=(typeof window!=='undefined')?window.MediaRecorder:undefined;
+      f=(MR&&typeof MR.isTypeSupported==='function')?(t=>MR.isTypeSupported(t)):null;
+    }catch(e){ f=null; }
+  }
+  if(!f) return null;
+  for(const t of VIDEO_TYPES){
+    let ok=false; try{ ok=!!f(t); }catch(e){ ok=false; }
+    if(ok) return {mime:t,type:t.split(';')[0],ext:/mp4/.test(t)?'mp4':'webm'};
+  }
+  return null;
+}
+/** Le navigateur sait-il fabriquer la vidéo ? Sinon, pas de bascule du tout. */
+function videoExportPossible(){
+  try{
+    if(typeof window==='undefined'||typeof window.MediaRecorder!=='function') return false;
+    if(typeof HTMLCanvasElement==='undefined'||typeof HTMLCanvasElement.prototype.captureStream!=='function') return false;
+    return !!videoTypeChoisi();
+  }catch(e){ return false; }
+}
+/** PURE. Le débit : 4 Mbit/s, abaissé si la durée ferait passer le fichier au-dessus de 8 Mo. */
+function videoDebit(dureeMs){
+  const s=Math.max(1,Number(dureeMs)||0)/1000;
+  return Math.max(5e5,Math.min(VIDEO_DEBIT,Math.floor(VIDEO_MAX_OCTETS*8*0.85/s)));
+}
+// ── La bascule « Image / Vidéo » ──────────────────────────────────────
+const VISUEL_MEDIA_CLE='rc_visuel_media';
+/** 'video' seulement si c'est le choix retenu ET que le navigateur sait la faire. */
+function visuelMediaChoisi(){
+  let m=null;
+  try{ m=localStorage.getItem(VISUEL_MEDIA_CLE); }catch(e){ m=null; }
+  return (m==='video'&&videoExportPossible())?'video':'image';
+}
+function visuelMediaChoisir(k){
+  if(k!=='image'&&k!=='video') return false;
+  try{ localStorage.setItem(VISUEL_MEDIA_CLE,k); }catch(e){}
+  document.querySelectorAll('.vmed .vmed-b').forEach(b=>{
+    const on=b.getAttribute('data-media')===k;
+    b.classList.toggle('actif',on); b.setAttribute('aria-checked',String(on));
+  });
+  return true;
+}
+/** La bascule, ou RIEN quand la vidéo est impossible ici. */
+function _htmlVisuelMedia(){
+  if(!videoExportPossible()) return '';
+  const m=visuelMediaChoisi();
+  // stopPropagation : dans Wrapped, un toucher sur la slide la ferait avancer.
+  return '<div class="vmed" role="radiogroup" aria-label="Partager une image ou une vidéo">'
+    +[['image','Image','fixe'],['video','Vidéo','9:16 animée']].map(([k,l,p])=>
+      '<button type="button" class="vmed-b'+(k===m?' actif':'')+'" role="radio" aria-checked="'+(k===m)+'" data-media="'+k+'"'
+      +' onclick="event.stopPropagation();visuelMediaChoisir(\''+k+'\')">'+l+'<small>'+p+'</small></button>').join('')
+    +'</div>';
+}
+// ── Les scènes : ce qu'on peint à l'instant t (ms de vidéo) ────────────
+// Une scène : {type, nom, anim (ms d'animation), preparer(W,H) → état,
+// peindre(g,t,état,W,H)}. La fin figée s'ajoute après `anim`.
+// Une vidéo n'a pas de transparence : « sans fond » devient le carbone.
+function _videoFond(fond){ return (!fond||fond==='transparent')?'carbone':fond; }
+function _videoToile(W,H){ const c=document.createElement('canvas'); c.width=W; c.height=H; return c; }
+function _videoFondToile(fond,W,H){
+  const c=_videoToile(W,H);
+  const g=c.getContext('2d');
+  g.fillStyle='#000'; g.fillRect(0,0,W,H);
+  _visuelPeindreFond(g,W,H,fond);
+  return c;
+}
+// Le tremblement de l'impact, tiré une fois : ±6 px d'écran amortis en 280 ms.
+function _videoSecousse(){
+  const kf=[], N=9;
+  for(let k=0;k<=N;k++){
+    const a=(1-k/N)*6*VIDEO_ECHELLE;
+    kf.push(k===N?[0,0]:[(Math.random()*2-1)*a,(Math.random()*2-1)*a]);
+  }
+  return (t)=>{
+    if(!(t>=0&&t<280)) return [0,0];
+    const x=t/280*N, i=Math.floor(x), r=x-i;
+    const A=kf[i], B=kf[Math.min(N,i+1)];
+    return [A[0]+(B[0]-A[0])*r,A[1]+(B[1]-A[1])*r];
+  };
+}
+// Le halo rouge qui pulse deux fois derrière le chiffre frappé.
+function _videoHalo(g,geo,t){
+  if(!geo||t<0||t>1000) return false;
+  const puls=Math.abs(Math.sin(Math.PI*(t/500)));
+  const r=geo.taille*(1.1+puls*0.35);
+  const h=g.createRadialGradient(geo.x,geo.y,0,geo.x,geo.y,r);
+  h.addColorStop(0,'rgba(224,32,32,'+(0.5*puls).toFixed(3)+')'); h.addColorStop(1,'rgba(224,32,32,0)');
+  g.save(); g.fillStyle=h; g.fillRect(geo.x-r,geo.y-r,r*2,r*2); g.restore();
+  return true;
+}
+// La carte (déjà dessinée sur son calque), posée avec son fondu et sa secousse.
+function _videoPoser(g,calque,alpha,dxy){
+  g.save();
+  g.globalAlpha=Math.max(0,Math.min(1,alpha));
+  g.drawImage(calque,dxy[0],dxy[1]);
+  g.restore();
+}
+// LE RECORD : la carte apparaît avec l'ANCIENNE valeur, la foudre frappe le
+// chiffre à 350 ms, il compte jusqu'au nouveau record en grésillant (600 ms),
+// le halo pulse deux fois. Plusieurs records : la carte récapitulative,
+// frappée en son centre.
+function _videoSceneRecord(d,fond){
+  const r=d||{};
+  const multi=Array.isArray(r.records);
+  const f=_videoFond(fond);
+  const T_IMPACT=350, T_COMPTE=600;
+  const vers=Number(r.curMax)||0;
+  const de=(Number(r.histMax)>0&&Number(r.histMax)<vers)?Number(r.histMax):vers;
+  return {type:multi?'records':'record',nom:multi?'repcore-records':'repcore-record',anim:2600,
+    preparer(W,H){
+      const e={fond:_videoFondToile(f,W,H),secousse:_videoSecousse(),bruit:arcBruit(de,vers,true),foudre:null};
+      if(multi){ e.calque=_dessinerCarteRecords(r,'transparent','story'); e.geo={x:W/2,y:H*0.42,taille:300}; }
+      else{ e.calque=_videoToile(W,H); e.anim={cv:e.calque,sansFond:true}; }
+      return e;
+    },
+    peindre(g,t,e,W,H){
+      g.drawImage(e.fond,0,0);
+      if(!multi){
+        const v=t<T_IMPACT?de:arcValeurA(de,vers,(t-T_IMPACT)/T_COMPTE,e.bruit);
+        // Les valeurs de passage tombent au demi-kilo, la dernière est la vraie.
+        e.anim.valeur=Math.abs(v-vers)<1e-9?null:_recKg(Math.max(0,Math.round(v*2)/2));
+        _dessinerCarteRecord(r,f,'story',e.anim);
+        e.geo=e.anim.geo;
+      }
+      if(!e.foudre&&e.geo) e.foudre=_foudreScene(e.geo,W,{eclairs:3,echelle:VIDEO_ECHELLE});
+      _videoHalo(g,e.geo,t-T_IMPACT-FOUDRE_IMPACT);
+      _videoPoser(g,e.calque,t/250,e.secousse(t-T_IMPACT-FOUDRE_IMPACT));
+      if(e.foudre&&t>=T_IMPACT) _foudrePeindre(g,e.foudre,t-T_IMPACT,W,H);
+    }};
+}
+// LE RANG : la foudre frappe dans le noir, l'emblème sort du flash (petit,
+// blanc, trop grand, puis posé), le texte arrive, les volts comptent depuis
+// le seuil du rang. Comme l'écran de l'app.
+function _videoSceneRang(d,img,fond){
+  const x=d||{};
+  const f=_videoFond(fond);
+  const T0=250;
+  const rg=(typeof RANGS!=='undefined'&&RANGS[(Number(x.n)||1)-1])||null;
+  const xp=Number(x.xp)||0, xp0=Math.min(xp,rg?Number(rg.seuil)||0:0);
+  // Ease « snap » approché : sortie rapide, arrivée douce.
+  const snap=p=>1-Math.pow(1-Math.max(0,Math.min(1,p)),3);
+  return {type:'rang',nom:'repcore-rang',anim:2700,
+    preparer(W,H){
+      const e={fond:_videoFondToile(f,W,H),calque:_videoToile(W,H),secousse:_videoSecousse(),foudre:null};
+      e.anim={cv:e.calque,sansFond:true};
+      return e;
+    },
+    peindre(g,t,e,W,H){
+      g.drawImage(e.fond,0,0);
+      const u=t-T0-40;
+      let ech;
+      if(u<0) ech=0;
+      else if(u<495) ech=0.2+(1.15-0.2)*snap(u/495);
+      else ech=1.15-0.15*snap((u-495)/405);
+      e.anim.echelle=ech;
+      e.anim.eclat=u<0?0:Math.max(0,1-u/900);
+      e.anim.texte=(u-620)/360;
+      e.anim.xp=Math.round(arcValeurA(xp0,xp,(u-700)/800,null));
+      _dessinerCarteRang(x,f,img,'story',e.anim);
+      if(!e.foudre&&e.anim.geo) e.foudre=_foudreScene(e.anim.geo,W,{eclairs:(Number(x.n)||0)>=8?3:2,echelle:VIDEO_ECHELLE});
+      _videoPoser(g,e.calque,1,e.secousse(t-T0-FOUDRE_IMPACT));
+      if(e.foudre&&t>=T0) _foudrePeindre(g,e.foudre,t-T0,W,H);
+    }};
+}
+// WRAPPED : les cinq slides, 1,5 s chacune. Le grand chiffre monte à chaque
+// arrivée, les barres du haut avancent comme dans l'app, et le profil est
+// révélé par la foudre. La dernière image — le résumé — reste 1 s.
+function _videoSceneWrapped(w,per,signature){
+  const sl=wrappedSlides(w,per);
+  const D=VIDEO_WRAPPED_SLIDE;
+  return {type:'wrapped',nom:'repcore-wrapped',anim:sl.length*D,
+    preparer(W,H){ return {calque:_videoToile(W,H),foudre:null,secousse:_videoSecousse()}; },
+    peindre(g,t,e,W,H){
+      const i=Math.max(0,Math.min(sl.length-1,Math.floor(t/D)));
+      const tl=t-i*D, s=sl[i];
+      const a={cv:e.calque};
+      if(s.k!=='profil') a.grand=arcValeurA(0,Number(s.grand)||0,tl/900,null);
+      _dessinerWrapped(w,per,i,signature,'story',a);
+      const dxy=s.k==='profil'?e.secousse(tl-FOUDRE_IMPACT):[0,0];
+      _videoPoser(g,e.calque,1,dxy);
+      // L'arrivée d'une slide : un fondu depuis le noir, 120 ms.
+      if(i>0&&tl<120){ g.save(); g.fillStyle='rgba(0,0,0,'+(1-tl/120).toFixed(3)+')'; g.fillRect(0,0,W,H); g.restore(); }
+      if(s.k==='profil'){
+        if(!e.foudre) e.foudre=_foudreScene(a.geo||{x:W/2,y:H*0.28},W,{eclairs:3,echelle:VIDEO_ECHELLE});
+        _foudrePeindre(g,e.foudre,tl,W,H);
+      }
+      // Les barres : pleines avant, la courante se remplit.
+      const n=sl.length, m=48, esp=12, lb=(W-m*2-esp*(n-1))/n;
+      g.save();
+      for(let k=0;k<n;k++){
+        const x0=m+k*(lb+esp);
+        g.fillStyle='rgba(255,255,255,.28)'; g.fillRect(x0,44,lb,8);
+        const p=k<i?1:(k===i?Math.min(1,tl/D):0);
+        if(p>0){ g.fillStyle='#fff'; g.fillRect(x0,44,lb*p,8); }
+      }
+      g.restore();
+    }};
+}
+/**
+ * La scène d'un visuel. type : 'record' ({donnees, fond}), 'rang' ({donnees,
+ * img, fond}), 'wrapped' ({w, per, signature}).
+ */
+function videoScene(type,o){
+  const x=o||{};
+  if(type==='record'||type==='records') return _videoSceneRecord(x.donnees,x.fond);
+  if(type==='rang') return _videoSceneRang(x.donnees,x.img,x.fond);
+  if(type==='wrapped') return _videoSceneWrapped(x.w,x.per,x.signature);
+  return null;
+}
+/** PURE. La durée totale d'une scène : l'animation, puis la fin figée. */
+function videoDuree(scene){ return (Number(scene&&scene.anim)||0)+VIDEO_FIN_FIGEE; }
+/**
+ * FABRIQUE LA VIDÉO. `scene` : une scène (videoScene) ou {type, …} ;
+ * `dureeMs` (facultatif) : la durée totale voulue — l'animation est alors
+ * accélérée ou ralentie pour tenir, la fin figée garde 1 s (30 % au plus).
+ * `o.progression(p)` : 0..1 ; `o.annule()` : true pour tout arrêter.
+ * Rend Promise<{blob, type, ext, nom, taille, duree}>.
+ */
+function exporterVideoVisuel(scene,dureeMs,o){
+  o=o||{};
+  return new Promise((res,rej)=>{
+    try{
+      const sc=(scene&&typeof scene.peindre==='function')?scene:videoScene(scene&&scene.type,scene);
+      if(!sc) throw new Error('scène inconnue');
+      const ty=videoTypeChoisi();
+      if(!ty||!videoExportPossible()) throw new Error('ce navigateur ne sait pas enregistrer de vidéo');
+      const W=VIDEO_FORMAT.w, H=VIDEO_FORMAT.h;
+      const total=Number(dureeMs)>0?Number(dureeMs):videoDuree(sc);
+      const figee=Math.min(VIDEO_FIN_FIGEE,total*0.3);
+      const cv=_videoToile(W,H);
+      const g=cv.getContext('2d');
+      const etat=sc.preparer(W,H);
+      let fige=null;
+      const peindre=(t)=>{
+        const ta=Math.min(sc.anim,t*sc.anim/Math.max(1,total-figee));
+        if(ta>=sc.anim&&fige){ g.drawImage(fige,0,0); return; }
+        g.setTransform(1,0,0,1,0,0); g.globalAlpha=1; g.globalCompositeOperation='source-over';
+        g.fillStyle='#000'; g.fillRect(0,0,W,H);
+        sc.peindre(g,ta,etat,W,H);
+        // LA FIN FIGÉE : peinte une fois, recopiée ensuite (et rien ne tremble plus).
+        if(ta>=sc.anim){ fige=_videoToile(W,H); fige.getContext('2d').drawImage(cv,0,0); }
+      };
+      peindre(0);
+      const flux=cv.captureStream(VIDEO_IPS);
+      const rec=new MediaRecorder(flux,{mimeType:ty.mime,videoBitsPerSecond:videoDebit(total)});
+      const morceaux=[];
+      let fini=false, annule=false;
+      const liberer=()=>{
+        try{ flux.getTracks().forEach(p=>p.stop()); }catch(e){}
+        for(const c of [cv,fige,etat&&etat.calque,etat&&etat.fond]) if(c){ c.width=0; c.height=0; }
+      };
+      rec.ondataavailable=ev=>{ if(ev.data&&ev.data.size) morceaux.push(ev.data); };
+      rec.onerror=ev=>{ fini=true; liberer(); rej((ev&&ev.error)||new Error('enregistrement interrompu')); };
+      rec.onstop=()=>{
+        liberer();
+        if(annule){ rej(new Error('annulé')); return; }
+        const blob=new Blob(morceaux,{type:ty.type});
+        res({blob,type:ty.type,ext:ty.ext,nom:sc.nom+'.'+ty.ext,taille:blob.size,duree:total});
+      };
+      rec.start(250);
+      const t0=performance.now();
+      // requestAnimationFrame ne tourne pas sur une page cachée : un minuteur
+      // prend le relais, pour que la vidéo se termine quand même.
+      const suite=()=>{ if(typeof document!=='undefined'&&document.hidden) setTimeout(image,1000/VIDEO_IPS); else requestAnimationFrame(image); };
+      const image=()=>{
+        if(fini) return;
+        const t=performance.now()-t0;
+        if(o.annule&&o.annule()){ annule=true; fini=true; try{ rec.stop(); }catch(e){} return; }
+        try{ peindre(Math.min(t,total)); }catch(e){}
+        if(o.progression){ try{ o.progression(Math.min(1,t/total)); }catch(e){} }
+        if(t>=total){
+          fini=true;
+          // Une dernière frame capturée, puis l'arrêt.
+          setTimeout(()=>{ try{ rec.stop(); }catch(e){} },1000/VIDEO_IPS*2);
+          return;
+        }
+        suite();
+      };
+      suite();
+    }catch(e){ rej(e); }
+  });
+}
+// ── L'écran : la barre de progression, puis la vidéo et ses deux sorties ──
+let _videoEnCours=null;              // {annule} pendant l'enregistrement
+let _videoPrete=null;                // {blob, type, nom, url, src} une fois prête
+function partagerVideo(scene){
+  if(_videoEnCours||!scene) return false;
+  if(!videoExportPossible()){ toast('Ton navigateur ne sait pas créer de vidéo : partage l’image.','var(--orange)'); return false; }
+  const suivi={annule:false};
+  _videoEnCours=suivi;
+  _videoEcran(videoDuree(scene));
+  exporterVideoVisuel(scene,undefined,{progression:_videoProgression,annule:()=>suivi.annule})
+    .then(r=>{ _videoEnCours=null; if(suivi.annule) return; _videoEcranPret(r,scene); })
+    .catch(e=>{
+      _videoEnCours=null;
+      if(suivi.annule) return;
+      fermerVideo();
+      toast('Vidéo impossible : '+((e&&e.message)||'erreur'),'var(--orange)');
+    });
+  return true;
+}
+function _videoEcran(duree){
+  fermerVideo();
+  const d=document.createElement('div');
+  d.id='video-export';
+  d.setAttribute('role','dialog'); d.setAttribute('aria-modal','true'); d.setAttribute('aria-label','Ta vidéo');
+  d.style.cssText='position:fixed;inset:0;z-index:var(--z-modal);background:var(--scrim);display:flex;'
+    +'flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:20px';
+  d.innerHTML='<div class="vid-carte">'
+    +'<div class="vid-titre">Ta vidéo se prépare…</div>'
+    +'<div class="vid-sous">Elle s’enregistre en temps réel ('+Math.round(duree/100)/10+' s) : garde l’app ouverte.</div>'
+    +'<div class="vid-barre" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="vid-barre-i"></i></div>'
+    +'<button type="button" class="btn btn-outline btn-sm vid-btn" onclick="annulerVideo()">Annuler</button>'
+    +'</div>';
+  document.body.appendChild(d);
+  return d;
+}
+function _videoProgression(p){
+  const i=document.getElementById('vid-barre-i');
+  if(!i) return;
+  const v=Math.round(Math.max(0,Math.min(1,p))*100);
+  i.style.width=v+'%';
+  const b=i.parentNode; if(b&&b.setAttribute) b.setAttribute('aria-valuenow',String(v));
+}
+function _videoEcranPret(r,scene){
+  const d=document.getElementById('video-export');
+  if(!d) return false;
+  let url='';
+  try{ url=URL.createObjectURL(r.blob); }catch(e){ url=''; }
+  _videoPrete={blob:r.blob,type:r.type,nom:r.nom,url,src:(scene&&scene.type)||'visuel'};
+  let f=null; try{ f=new File([r.blob],r.nom,{type:r.type}); }catch(e){ f=null; }
+  const partage=!!(f&&navigator.canShare&&navigator.share&&(()=>{ try{ return navigator.canShare({files:[f]}); }catch(e){ return false; } })());
+  const lourde=r.taille>VIDEO_MAX_OCTETS;
+  d.innerHTML='<div class="vid-carte">'
+    +'<video class="vid-apercu" src="'+url+'" autoplay muted loop playsinline aria-label="Aperçu de ta vidéo"></video>'
+    +'<div class="vid-sous">'+(Math.round(r.taille/1e5)/10).toLocaleString('fr-FR')+' Mo · '+r.ext.toUpperCase()
+      +(lourde?' · lourde : Instagram peut la recompresser':'')+'</div>'
+    +(partage?'<button type="button" class="btn btn-red vid-btn" onclick="partagerVideoPrete()">'+icon('share',16)+' <span>Partager la vidéo</span></button>':'')
+    +'<a class="btn btn-outline vid-btn" href="'+url+'" download="'+escapeHtml(r.nom)+'" onclick="telechargerVideoPrete()">'
+      +icon('download',16)+' <span>Télécharger</span></a>'
+    +'<button type="button" class="btn btn-outline btn-sm vid-btn" onclick="fermerVideo()">Fermer</button>'
+    +'</div>';
+  return true;
+}
+// SYNCHRONE : c'est un toucher neuf, iOS accepte la feuille de partage.
+// Le lien est copié (sticker Lien de la story) ; la légende part dans `text`
+// quand le navigateur l'accepte avec le fichier (un Reel la reprend).
+function partagerVideoPrete(){
+  const v=_videoPrete; if(!v) return false;
+  let f=null; try{ f=new File([v.blob],v.nom,{type:v.type}); }catch(e){ f=null; }
+  if(!f||!navigator.share) return telechargerVideoPrete();
+  const legende=_legendePour(v.src);
+  let charge={files:[f]};
+  try{ if(navigator.canShare({files:[f],text:legende})) charge={files:[f],text:legende}; }catch(e){}
+  _storyCopierLien(v.src);
+  navigator.share(charge).then(()=>{ try{ attribCompter('partage',v.src); }catch(e){} }).catch(()=>{});
+  return true;
+}
+// Le lien <a download> fait le travail ; on compte et on copie le lien.
+function telechargerVideoPrete(){
+  const v=_videoPrete; if(!v) return false;
+  try{ attribCompter('telechargement',v.src); }catch(e){}
+  _storyCopierLien(v.src);
+  return true;
+}
+function annulerVideo(){
+  if(_videoEnCours) _videoEnCours.annule=true;
+  return fermerVideo();
+}
+function fermerVideo(){
+  const d=document.getElementById('video-export');
+  if(d) d.remove();
+  const u=_videoPrete&&_videoPrete.url;
+  _videoPrete=null;
+  if(u) setTimeout(()=>{ try{ URL.revokeObjectURL(u); }catch(e){} },1000);
+  return !!d;
 }
 let _storyEnCours=false;
 // TELECHARGER. Rien d autre. La feuille de partage native n existe pas
@@ -55998,6 +56456,7 @@ function _htmlRecordsFin(ctx,date,cle){
   // « Partager » — on peut vouloir publier le plus beau des trois.
   const plusieurs=rec.length>1;
   return '<div class="rcf-rk"><div class="rcf-rk-t">Mes records</div>'
+    +(k?_htmlVisuelMedia():'')
     +(k?('<div class="rcf-rk-tous">'+bouton(plusieurs?-1:0,plusieurs?'Partager mes '+rec.length+' records':'Partager ce record','rcf-rk-p rcf-rk-p-tous')+'</div>'):'')
     +rec.map((r,i)=>'<div class="rcf-rk-l">'
       +'<span class="rcf-rk-ex">'+escapeHtml(String(r.nm))+'</span>'
@@ -56030,6 +56489,8 @@ function partagerRecord(cle,i,btn){
   if(_storyEnCours) return false;
   const d=_recordVisuelDonnees(cle,Number(i));
   if(!d){ toast('Aucun record à partager.','var(--orange)'); return false; }
+  // « Vidéo » choisi : la foudre et le compteur, enregistrés (exporterVideoVisuel).
+  if(visuelMediaChoisi()==='video') return partagerVideo(videoScene('record',{donnees:d,fond:visuelFondEffectif()}));
   _storyEnCours=true;
   const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond);
   const nom=visuelNomFichier(i<0?'repcore-records':'repcore-record',fond);
@@ -71759,10 +72220,10 @@ function wrappedSlides(w,per){
 // Fond noir, accents rouges, un éclair en filigrane : l'identité de l'écran.
 // `i` : 0..4 — la slide 4 est le RÉSUMÉ, la carte qu'on publie. Mêmes outils
 // d'écriture que les autres visuels (ombre double passe, Bebas, Montserrat).
-function _dessinerWrapped(w,per,i,signature,format){
+// `anim.grand` (la vidéo) : le grand chiffre en train de monter.
+function _dessinerWrapped(w,per,i,signature,format,anim){
   const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
-  const cv=document.createElement('canvas');
-  cv.width=W; cv.height=H;
+  const cv=_visuelToile(anim,W,H);
   const g=cv.getContext('2d');
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
@@ -71784,9 +72245,10 @@ function _dessinerWrapped(w,per,i,signature,format){
   const P=(st,po)=>post?po:st;
   o.ecrireEspace(s.sur,cx,P(300,110),8,true);
   if(s.k!=='profil'){
-    const v=_wrNb(s.grand,s.dec);
+    const v=_wrNb(anim&&anim.grand!=null?anim.grand:s.grand,s.dec);
     g.fillStyle='#fff';
-    const gs=o.ajuste(v,'700',P(380,300),BEBAS,LARG,140);
+    // La taille suit la valeur FINALE : un chiffre qui monte ne rétrécit pas en route.
+    const gs=o.ajuste(_wrNb(s.grand,s.dec),'700',P(380,300),BEBAS,LARG,140);
     g.font='700 '+gs+'px '+BEBAS;
     o.ecrire(v,cx,P(860,560));
     const us=o.ajusteEspace(s.unite,'800',52,MONT,8,LARG,26);
@@ -71802,6 +72264,7 @@ function _dessinerWrapped(w,per,i,signature,format){
     const p=s.profil||{nom:'-',phrase:''};
     g.fillStyle='#fff';
     const ps=o.ajuste(p.nom.toUpperCase(),'700',P(170,140),BEBAS,LARG,70);
+    if(anim) anim.geo={x:cx,y:P(560,270)-ps*0.38,taille:ps};
     g.font='700 '+ps+'px '+BEBAS;
     o.ecrire(p.nom.toUpperCase(),cx,P(560,270));
     // La phrase, sur deux lignes au plus.
@@ -71880,6 +72343,7 @@ function _wrHtmlSlide(s,k){
       +'<p class="wr-phrase">'+escapeHtml(p.phrase)+'</p>'
       +'<div class="wr-resume">'+s.resume.map(([v,l])=>'<div><b>'+escapeHtml(v)+'</b><span>'+escapeHtml(l)+'</span></div>').join('')+'</div>'
       +(s.equivalent?'<p class="wr-equiv">= '+escapeHtml(s.equivalent.texte)+' '+s.equivalent.emoji+'</p>':'')
+      +_htmlVisuelMedia()
       +'<button type="button" class="btn btn-red wr-partager" onclick="event.stopPropagation();partagerWrapped(4,this)">'
         +icon('share',16)+' <span>Partager mon résumé</span></button>'
       +'<button type="button" class="btn btn-outline wr-partager wr-carrousel" onclick="event.stopPropagation();partagerCarrouselWrapped(this)">'
@@ -71952,6 +72416,8 @@ function fermerWrapped(){
 function partagerWrapped(i,btn){
   if(!_wr||_storyEnCours) return false;
   let sig=''; try{ sig=nomSurVisuels(currentUser); }catch(e){ sig=''; }
+  // En vidéo, c'est TOUT le Wrapped : cinq slides, 1,5 s chacune.
+  if(visuelMediaChoisi()==='video') return partagerVideo(videoScene('wrapped',{w:_wr.w,per:_wr.per,signature:sig}));
   const fmt=visuelFondFormat('rouge');           // opaque : JPEG
   const nom=visuelNomFichier('repcore-wrapped'+(i===4?'':'-'+(i+1)),'rouge','story');
   _storyEnCours=true;
@@ -73675,7 +74141,7 @@ function _rangEcran(n,reste){
     +'<h2 class="bdg-ecran-nom">'+escapeHtml(d.nom)+'</h2>'
     +'<div class="bdg-ecran-meta">⚡ '+escapeHtml(xpFormat(d.xp))+' V</div>'
     +'<p class="bdg-ecran-cond">'+escapeHtml(suiv?'Prochain rang : '+suiv.nom+', à '+xpFormat(suiv.seuil)+' V.':'Le rang le plus haut. Il n’y a rien au-dessus.')+'</p>'
-    +_htmlVisuelFonds('rg-fonds')
+    +_htmlVisuelFonds('rg-fonds')+_htmlVisuelMedia()
     +'<button type="button" class="btn btn-red bdg-ecran-part" onclick="partagerRang(this)">'+icon('share',16)+' <span>Partager</span></button>'
     +'<button type="button" class="btn btn-outline btn-sm bdg-ecran-tard" onclick="bdgPlusTard()">'
       +(reste||_bdgRecap.length?'Suivant':'Plus tard')+'</button>'
@@ -73707,13 +74173,16 @@ function _rangEcran(n,reste){
  * la signature « <NOM> · REPCORE ». `img` : l'emblème 512 déjà chargé (sans
  * lui, la carte se dessine sans emblème plutôt que de lever).
  */
-function _dessinerCarteRang(d,fond,img,format){
+// `anim` (la vidéo) : {echelle, eclat, texte, xp} — l'emblème qui naît, le
+// blanc qui le quitte, le texte qui arrive, les volts qui comptent.
+function _dessinerCarteRang(d,fond,img,format,anim){
   const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
-  const cv=document.createElement('canvas');
-  cv.width=W; cv.height=H;
+  const cv=_visuelToile(anim,W,H);
   const g=cv.getContext('2d');
   const f=fond||'transparent';
-  _visuelPeindreFond(g,W,H,f);
+  if(!(anim&&anim.sansFond)) _visuelPeindreFond(g,W,H,f);
+  const A=anim||{};
+  const aTexte=A.texte==null?1:Math.max(0,Math.min(1,A.texte));
   const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
   const MONT="Montserrat,'Segoe UI',sans-serif";
   const M=72, LARG=W-M*2, cx=W/2;
@@ -73722,6 +74191,7 @@ function _dessinerCarteRang(d,fond,img,format){
   g.textAlign='center'; g.textBaseline='alphabetic';
   // L'en-tête.
   o.ombre(true);
+  g.globalAlpha=aTexte;
   const sur='NOUVEAU RANG · '+String(d.nom||'');
   const ss=o.ajusteEspace(sur,'800',46,MONT,9,LARG,26);
   g.fillStyle=rouge?'#fff':'#E02020'; g.font='800 '+ss+'px '+MONT;
@@ -73730,29 +74200,44 @@ function _dessinerCarteRang(d,fond,img,format){
   // L'EMBLÈME GÉANT, avec un halo derrière.
   // En post, l'emblème descend à 720 px et remonte sous l'en-tête.
   const T=post?720:860, y0=post?150:400;
+  if(anim) anim.geo={x:cx,y:y0+T/2,taille:T};
+  g.globalAlpha=1;
+  const ech=A.echelle==null?1:Math.max(0,A.echelle);
   g.save();
+  if(ech!==1){ g.translate(cx,y0+T/2); g.scale(ech,ech); g.translate(-cx,-(y0+T/2)); g.globalAlpha=Math.min(1,ech/0.6); }
   const h=g.createRadialGradient(cx,y0+T/2,40,cx,y0+T/2,T*0.62);
   h.addColorStop(0,rouge?'rgba(255,255,255,.28)':'rgba(224,32,32,.42)');
   h.addColorStop(1,'rgba(0,0,0,0)');
   g.fillStyle=h; g.fillRect(0,y0-120,W,T+240);
   g.restore();
   if(img&&img.naturalWidth){
+    g.save();
+    if(ech!==1){ g.translate(cx,y0+T/2); g.scale(ech,ech); g.translate(-cx,-(y0+T/2)); g.globalAlpha=Math.min(1,ech/0.6); }
     try{ g.drawImage(img,cx-T/2,y0,T,T); }catch(e){}
+    // L'ÉCLAT : l'emblème sort du flash, blanc, puis prend ses couleurs.
+    if(A.eclat>0){
+      g.globalCompositeOperation='lighter'; g.globalAlpha=Math.min(1,A.eclat);
+      try{ g.drawImage(img,cx-T/2,y0,T,T); g.drawImage(img,cx-T/2,y0,T,T); }catch(e){}
+    }
+    g.restore();
   }
   // Le nom du rang, en grand, sous l'emblème.
   o.ombre(true);
+  g.globalAlpha=aTexte;
   g.fillStyle='#fff';
   const ns=o.ajuste(String(d.nom||''),'700',post?170:210,BEBAS,LARG,90);
   g.font='700 '+ns+'px '+BEBAS; o.ecrire(String(d.nom||''),cx,y0+T+ns*0.9);
   g.fillStyle='rgba(255,255,255,.88)'; g.font='800 40px '+MONT;
-  o.ecrireEspace('⚡ '+xpFormat(d.xp)+' V',cx,y0+T+ns*0.9+(post?64:80),4,true);
+  o.ecrireEspace('⚡ '+xpFormat(A.xp==null?d.xp:A.xp)+' V',cx,y0+T+ns*0.9+(post?64:80),4,true);
   _recSignature(g,o,String(d.signature||''),H-(post?44:110),LARG);
   o.ombre(false);
+  g.globalAlpha=1;
   return cv;
 }
 function partagerRang(btn){
   const d=_rangCourant; if(!d||_storyEnCours) return false;
   const img=document.getElementById('rg-ecran-img');
+  if(visuelMediaChoisi()==='video') return partagerVideo(videoScene('rang',{donnees:d,img,fond:visuelFondEffectif()}));
   const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond);
   const nom=visuelNomFichier('repcore-rang',fond);
   _storyEnCours=true;

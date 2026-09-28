@@ -49595,6 +49595,161 @@ async function testExercices(){
       if(_legendePour('rang')!=='Ma légende à moi #RepCore') return _echec('la légende modifiée n’est pas celle qui part');
       if(_legendePour('rang')==='Ma légende à moi #RepCore') return _echec('elle ne sert qu’une fois');
       return (legendeModifiee('rang','x'.repeat(400)).length===220)?true:_echec('longueur non bornée');})());
+    // ══ 28/09/2026 — LA VIDÉO D'UN VISUEL ════════════════════════════════
+    ok('Vidéo : MP4 quand l’enregistreur le sait (Safari iOS), sinon WebM VP9, sinon rien',(()=>{
+      const que=(l)=>(t)=>l.indexOf(t)>=0;
+      const a=videoTypeChoisi(que(['video/mp4','video/webm;codecs=vp9']));
+      if(!a||a.type!=='video/mp4'||a.ext!=='mp4') return _echec('iOS : '+JSON.stringify(a));
+      const b=videoTypeChoisi(que(['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm']));
+      if(!b||b.mime!=='video/webm;codecs=vp9'||b.type!=='video/webm'||b.ext!=='webm') return _echec('Chrome : '+JSON.stringify(b));
+      if(videoTypeChoisi(()=>false)!==null) return _echec('aucun type : pas null');
+      return videoTypeChoisi(()=>{ throw new Error('x'); })===null?true:_echec('une exception passe');})());
+    ok('Vidéo : ~4 Mbit/s, et aucune scène ne peut dépasser 8 Mo',(()=>{
+      if(videoDebit(3600)!==4e6||videoDebit(8500)!==4e6) return _echec('débit : '+videoDebit(3600)+' / '+videoDebit(8500));
+      for(const ms of [1000,3600,8500,15000,30000,60000]){
+        const o=videoDebit(ms)*ms/1000/8;
+        if(!(o<VIDEO_MAX_OCTETS)) return _echec(ms+' ms → '+Math.round(o)+' octets');
+      }
+      return videoDebit(60000)<4e6?true:_echec('60 s : débit non abaissé');})());
+    ok('Vidéo : les durées — record et rang ~2,5 s + 1 s figée, Wrapped 5 × 1,5 s + 1 s figée',(()=>{
+      const w={seances:12,dureeTotale:600*60000,tonnage:42000,records:3,serieMax:4,badgesGagnes:[],meilleurRecord:null,
+        jourPrefere:null,heureMoyenne:null,muscleTop:null,profil:{nom:'RÉGULIER',phrase:'Tu tiens.'}};
+      const wr=videoScene('wrapped',{w,per:{titre:'SEPTEMBRE',cle:'m-2026-09'},signature:'X'});
+      if(wr.anim!==5*1500||videoDuree(wr)!==8500) return _echec('Wrapped : '+videoDuree(wr));
+      const r=videoScene('record',{donnees:{nm:'SQUAT',histMax:100,curMax:105,gain:5},fond:'transparent'});
+      const g=videoScene('rang',{donnees:{n:3,nom:'VOLTAGE',xp:4000},img:null,fond:'carbone'});
+      for(const s of [r,g]) if(!(s.anim>=2000&&s.anim<=3000)||videoDuree(s)!==s.anim+VIDEO_FIN_FIGEE) return _echec(s.type+' : '+s.anim);
+      if(VIDEO_FIN_FIGEE!==1000) return _echec('fin figée');
+      return (videoScene('records',{donnees:{records:[{nm:'A',curMax:1,histMax:0,gain:1}]}}).type==='records'&&videoScene('inconnu')===null)?true:_echec('dispatch');})());
+    ok('Vidéo : le compteur suit le temps (arcValeurA) — part de l’ancienne valeur, finit sur la vraie, sans dépasser',(()=>{
+      let prec=-Infinity;
+      for(let p=0;p<=1.0001;p+=0.05){ const v=arcValeurA(100,142.5,p,null); if(v<prec-1e-9||v>142.5+1e-9) return _echec('p='+p+' → '+v); prec=v; }
+      if(arcValeurA(100,142.5,0,null)!==100||arcValeurA(100,142.5,1,null)!==142.5||arcValeurA(100,142.5,7,null)!==142.5) return _echec('bornes');
+      const b=arcBruit(100,142.5,true);
+      if(b.length<2||b.length>3) return _echec('grésillement : '+b.length+' valeurs');
+      if(arcValeurA(100,142.5,0.7,b)!==b[0]||arcValeurA(100,142.5,1,b)!==142.5) return _echec('grésillement mal placé');
+      return arcBruit(1,2,false).length===0?true:_echec('bruit sans grésillement');})());
+    ok('Vidéo : chaque scène se peint image par image, 1080×1920, données extrêmes, sans lever — foudre comprise',(()=>{
+      const W=1080,H=1920;
+      const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+      const g=cv.getContext('2d');
+      const long='DÉVELOPPÉ COUCHÉ PRISE SERRÉE HALTÈRES SUR BANC INCLINÉ '.repeat(3);
+      const w={seances:123456,dureeTotale:99999*60000,tonnage:987654321,records:9999,serieMax:520,badgesGagnes:[],meilleurRecord:{nom:long,avant:1,apres:999.5},
+        jourPrefere:{lib:'mercredi'},heureMoyenne:{lib:'23 h 59'},muscleTop:{lib:long,series:9999},profil:{nom:'SURTENSION ABSOLUE',phrase:long}};
+      const scenes=[
+        videoScene('record',{donnees:{nm:long,histMax:227.5,curMax:1002.5,gain:775,date:Date.now(),signature:'MAXIMILIEN-ALEXANDRE'},fond:'transparent'}),
+        videoScene('record',{donnees:{nm:'SQUAT',histMax:0,curMax:60,gain:0},fond:'rouge'}),
+        videoScene('records',{donnees:{records:[{nm:long,histMax:1,curMax:2,gain:1},{nm:'B',histMax:3,curMax:4,gain:1}],signature:'X'},fond:'carbone'}),
+        videoScene('rang',{donnees:{n:12,nom:'SURTENSION ABSOLUE ÉTERNELLE',xp:99999999,signature:'X'},img:null,fond:'carbone'}),
+        videoScene('wrapped',{w,per:{titre:'SEPTEMBRE 2026',cle:'m-2026-09'},signature:'MAXIMILIEN-ALEXANDRE'})];
+      for(const s of scenes){
+        const e=s.preparer(W,H);
+        let clair=0;
+        for(let t=0;t<=s.anim;t+=50){
+          try{ g.setTransform(1,0,0,1,0,0); g.fillStyle='#000'; g.fillRect(0,0,W,H); s.peindre(g,t,e,W,H); }
+          catch(x){ return _echec(s.type+' à '+t+' ms : '+x.message); }
+          if(g.getTransform().a!==1) return _echec(s.type+' laisse une transformation');
+          // LA FOUDRE EST PEINTE : un flash blanc passe sur l'image.
+          const px=g.getImageData(8,H-8,1,1).data;
+          if(px[0]>200&&px[1]>200&&px[2]>200) clair++;
+        }
+        if(!clair) return _echec(s.type+' : pas de flash de foudre');
+      }
+      return true;})());
+    ok('Vidéo : la bascule « Image / Vidéo » — absente sans MediaRecorder, posée sur les écrans record, rang et Wrapped',(()=>{
+      const sv=Object.getOwnPropertyDescriptor(window,'MediaRecorder');
+      let avant=null; try{ avant=localStorage.getItem(VISUEL_MEDIA_CLE); }catch(e){}
+      try{
+        localStorage.setItem(VISUEL_MEDIA_CLE,'video');
+        Object.defineProperty(window,'MediaRecorder',{configurable:true,writable:true,value:undefined});
+        if(videoExportPossible()) return _echec('possible sans MediaRecorder');
+        if(_htmlVisuelMedia()!=='') return _echec('bascule posée sans MediaRecorder');
+        if(visuelMediaChoisi()!=='image') return _echec('« vidéo » retenu mais impossible : doit retomber sur l’image');
+        function Faux(){}
+        Faux.isTypeSupported=(t)=>t==='video/webm;codecs=vp9';
+        window.MediaRecorder=Faux;
+        if(!videoExportPossible()) return _echec('impossible avec un MediaRecorder');
+        const h=_htmlVisuelMedia();
+        if((h.match(/class="vmed-b/g)||[]).length!==2||!/data-media="video"[^>]*>Vidéo/.test(h)||!/aria-checked="true" data-media="video"/.test(h)) return _echec(h);
+        if(!/event\.stopPropagation\(\);visuelMediaChoisir/.test(h)) return _echec('un toucher dans Wrapped ferait avancer la slide');
+        visuelMediaChoisir('image');
+        if(visuelMediaChoisi()!=='image') return _echec('choix non retenu');
+        // Les trois écrans.
+        const rec=_htmlRecordsFin({records:[{nm:'SQUAT',histMax:100,curMax:105,gain:5}]},Date.now(),'wd');
+        if(rec.indexOf('class="vmed"')<0) return _echec('écran record');
+        const wr=_wrHtmlSlide({k:'profil',sur:'TON PROFIL',profil:{nom:'X',phrase:'Y'},resume:[],equivalent:null},4);
+        if(wr.indexOf('class="vmed"')<0) return _echec('écran Wrapped');
+        if(!/_htmlVisuelFonds\('rg-fonds'\)\+_htmlVisuelMedia\(\)/.test(String(_rangEcran))) return _echec('écran rang');
+      }finally{
+        if(sv) Object.defineProperty(window,'MediaRecorder',sv); else delete window.MediaRecorder;
+        try{ if(avant===null) localStorage.removeItem(VISUEL_MEDIA_CLE); else localStorage.setItem(VISUEL_MEDIA_CLE,avant); }catch(e){}
+      }
+      return true;})());
+    ok('Vidéo : « Vidéo » choisi, les trois partages passent par la vidéo ; « Image », par l’image',(()=>{
+      const sv={pv:window.partagerVideo,mc:window.visuelMediaChoisi,sp:window._storySortirPartage,wr:_wr,rc:_rangCourant};
+      const vus=[];
+      try{
+        window.partagerVideo=(s)=>{ vus.push(s&&s.type); return true; };
+        window._storySortirPartage=()=>{ vus.push('image'); return true; };
+        window.visuelMediaChoisi=()=>'video';
+        _recordsAffiches.test={liste:[{nm:'SQUAT',histMax:100,curMax:105,gain:5}],date:Date.now()};
+        partagerRecord('test',0,null);
+        _rangCourant={n:3,nom:'VOLTAGE',xp:4000,signature:''};
+        partagerRang(null);
+        _wr={w:{seances:1,dureeTotale:1,tonnage:1,records:0,serieMax:1,badgesGagnes:[],profil:{nom:'X',phrase:''}},per:{titre:'S',cle:'m-2026-09'},i:4};
+        partagerWrapped(4,null);
+        if(vus.join()!=='record,rang,wrapped') return _echec('vidéo : '+vus.join());
+        vus.length=0;
+        window.visuelMediaChoisi=()=>'image';
+        partagerRecord('test',0,null); partagerRang(null); partagerWrapped(4,null);
+        if(vus.join()!=='image,image,image') return _echec('image : '+vus.join());
+      }finally{
+        window.partagerVideo=sv.pv; window.visuelMediaChoisi=sv.mc; window._storySortirPartage=sv.sp; _wr=sv.wr; _rangCourant=sv.rc;
+        delete _recordsAffiches.test;
+      }
+      return true;})());
+    ok('Vidéo : l’écran — barre de progression pendant l’enregistrement, puis aperçu, Partager et Télécharger',(()=>{
+      const sv={fichier:window.File};
+      try{
+        _videoEcran(3600);
+        const b=document.querySelector('#video-export [role="progressbar"]');
+        if(!b||!/3,6|3\.6/.test(document.getElementById('video-export').textContent)) return _echec('pas de barre ou pas de durée');
+        _videoProgression(0.5);
+        if(document.getElementById('vid-barre-i').style.width!=='50%'||b.getAttribute('aria-valuenow')!=='50') return _echec('progression');
+        Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>true});
+        Object.defineProperty(navigator,'share',{configurable:true,value:()=>Promise.resolve()});
+        const blob=new Blob([new Uint8Array(1234)],{type:'video/webm'});
+        _videoEcranPret({blob,type:'video/webm',ext:'webm',nom:'repcore-record.webm',taille:blob.size,duree:3600},{type:'record'});
+        const d=document.getElementById('video-export');
+        const a=d&&d.querySelector('a[download]');
+        if(!d.querySelector('video[playsinline][muted],video[playsinline]')) return _echec('pas d’aperçu');
+        if(!a||a.getAttribute('download')!=='repcore-record.webm'||!/^blob:/.test(a.getAttribute('href'))) return _echec('téléchargement');
+        if(!/partagerVideoPrete\(\)/.test(d.innerHTML)) return _echec('pas de bouton Partager');
+        fermerVideo();
+        if(document.getElementById('video-export')) return _echec('ne se ferme pas');
+        // SANS partage de fichiers : Télécharger seul.
+        Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>false});
+        _videoEcran(1000);
+        _videoEcranPret({blob,type:'video/webm',ext:'webm',nom:'repcore-rang.webm',taille:blob.size,duree:1000},{type:'rang'});
+        const ok2=!/partagerVideoPrete\(\)/.test(document.getElementById('video-export').innerHTML);
+        fermerVideo();
+        if(!ok2) return _echec('un bouton Partager qui échouerait');
+      }finally{ delete navigator.canShare; delete navigator.share; fermerVideo(); }
+      // Le partage part d'un toucher NEUF : jamais d'await avant navigator.share.
+      return !/await/.test(String(partagerVideoPrete))?true:_echec('await avant le partage');})());
+    okA('Vidéo : une vraie vidéo s’enregistre (MediaRecorder de ce navigateur), la progression va jusqu’au bout',(async()=>{
+      if(!videoExportPossible()) return true;       // navigateur sans MediaRecorder : rien à enregistrer
+      const pr=[];
+      const r=await exporterVideoVisuel(videoScene('record',{donnees:{nm:'SQUAT',histMax:100,curMax:105,gain:5,signature:'X'},fond:'carbone'}),900,{progression:p=>pr.push(p)});
+      if(!r||!(r.blob instanceof Blob)||!(r.taille>1000)) return _echec('fichier : '+(r&&r.taille));
+      if(!/^video\/(mp4|webm)$/.test(r.type)||r.nom!=='repcore-record.'+r.ext) return _echec(r.type+' '+r.nom);
+      if(!(r.taille<VIDEO_MAX_OCTETS)) return _echec('plus de 8 Mo');
+      if(!pr.length||pr[pr.length-1]!==1) return _echec('progression : '+pr.slice(-3));
+      // Annulée en route : elle rejette, sans rien rendre.
+      let n=0;
+      try{ await exporterVideoVisuel(videoScene('wrapped',{w:{seances:1,dureeTotale:1,tonnage:1,records:0,serieMax:1,badgesGagnes:[],profil:{nom:'X',phrase:''}},per:{titre:'S',cle:'m'},signature:''}),2000,{annule:()=>++n>3}); return _echec('non annulée'); }
+      catch(e){ if(!/annul/.test(e.message)) return _echec('rejet : '+e.message); }
+      return true;}));
     ok('Ambassadeurs : le CSV mensuel ne porte que les commissions dues',(()=>{
       const r=ambCsvDues({LEA:_AMBF,ZED:{nom:'Zed',commissions:{'2026-09':{x:{commission:9,dueLe:1}}}}},'2026-10',500);
       const l=r.csv.trim().split('\n');
