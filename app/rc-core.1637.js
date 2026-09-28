@@ -56834,6 +56834,11 @@ function _htmlRecordsFin(ctx,date,cle){
       +'<span class="rcf-rk-ex">'+escapeHtml(String(r.nm))+'</span>'
       +'<span class="rcf-rk-v"><span class="rcf-rk-a">'+nb(r.histMax)+' → </span>'
         +nb(r.curMax)+' kg<span class="rcf-rk-g">+'+nb(r.gain)+'</span></span>'
+      // LA PETITE ANIMATION DU RECORD : une barre qui part de l'ancienne
+      // charge (en gris) et monte jusqu'à la nouvelle (en rouge), une fois.
+      +'<div class="rcf-rk-barre" aria-hidden="true" style="--avant:'
+        +Math.max(5,Math.min(98,Math.round(Number(r.histMax)/Number(r.curMax)*100)))+'%">'
+        +'<i class="rcf-rk-ancien"></i><i class="rcf-rk-nouveau"></i></div>'
       +'<div class="rcf-rk-x">Nouvelle meilleure charge sur cet exercice : '+nb(r.curMax)
         +' kg, soit '+nb(r.gain)+' kg de plus que ton meilleur jusqu’ici ('+nb(r.histMax)+' kg).</div>'
       +'</div>').join('')
@@ -56907,7 +56912,8 @@ function _htmlStatsFin(mins,sets,setsPlanned,vol,delta){
     +'<div class="rcf-st-l">'+l+'</div>'+(apres||'')+'</div>';
   // « = 2 éléphants 🐘 », sous le VOLUME. Rien sous 2 kg.
   let _eq=null; try{ _eq=equivalentTonnage(vol); }catch(e){ _eq=null; }
-  const _eqHtml=_eq?('<div class="rcf-st-eq">= '+escapeHtml(_eq.texte)+' <span aria-hidden="true">'+_eq.emoji+'</span></div>'):'';
+  const _eqHtml=_eq?('<div class="rcf-st-eq">= '+escapeHtml(_eq.texte)+' <span aria-hidden="true">'+_eq.emoji+'</span></div>'
+    +_htmlRouteEquivalent(_eq)):'';
   // La duree ne se compte PAS : « 3 h 25 » n'a pas de trajectoire depuis zero,
   // et la faire defiler en « 0 h 01, 0 h 02 » serait absurde. Les deux autres,
   // si — ce sont des quantites, et les voir monter est la recompense.
@@ -56922,6 +56928,27 @@ function _htmlStatsFin(mins,sets,setsPlanned,vol,delta){
     +'</div>'
     +(d>0?'<div class="rcf-delta"><span class="rcf-delta-v">+'+nb(d)+' kg</span>'
       +'<span class="rcf-delta-l">vs dernière séance</span></div>':'');
+}
+
+// ── LE PETIT BUS QUI PASSE (Kevin, 28/09/2026) ─────────────────────────
+// Sous « = 1,1 bus », une route en pointillés et le véhicule qui la traverse,
+// en boucle. Le bus est DESSINÉ, au trait, dans la palette de l'écran (blanc,
+// vitres rouges) : un emoji qui glisse ferait jouet. Les autres équivalents
+// (éléphant, T-Rex…) font passer leur emoji, plus petit. Immobile, garé au
+// milieu, quand le téléphone demande moins d'animations.
+function _htmlBusSvg(){
+  return '<svg viewBox="0 0 34 16" width="34" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round">'
+    +'<path d="M2 12V4.5C2 3.1 3.1 2 4.5 2H27c2.2 0 3.6 1.3 4.3 3.4L32 8.5V12H2Z"/>'
+    +'<path class="rcf-bus-vitres" stroke="none" d="M5 4.5h4.2v3.4H5zM10.6 4.5h4.2v3.4h-4.2zM16.2 4.5h4.2v3.4h-4.2zM21.8 4.5h4.4v3.4h-4.4zM27.5 4.5h1.6l1.3 3.4h-2.9z"/>'
+    +'<path d="M2 9.6h30" stroke-width="1"/>'
+    +'<circle cx="8.5" cy="12.6" r="2" fill="#0b0b0c"/><circle cx="25.5" cy="12.6" r="2" fill="#0b0b0c"/>'
+    +'</svg>';
+}
+function _htmlRouteEquivalent(eq){
+  if(!eq) return '';
+  const bus=eq.emoji==='🚌';
+  return '<div class="rcf-route" aria-hidden="true"><span class="rcf-vehicule'+(bus?' rcf-bus':'')+'">'
+    +(bus?_htmlBusSvg():eq.emoji)+'</span></div>';
 }
 
 // ── TON PROCHAIN OBJECTIF : UNE ASCENSION ──────────────────────────────
