@@ -11143,6 +11143,23 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 
 /* ══ LES PAGES PUBLIQUES : réglages du profil ═════════════════════════════ */
 .pp-carte{margin:0 0 20px;padding:14px 16px}
+.sa-banniere{--sa-accent:#E02020;margin:12px 0 0;padding:14px;border-radius:16px;border:2px solid var(--sa-accent);
+  background:radial-gradient(120% 80% at 50% 0%,color-mix(in srgb,var(--sa-accent) 22%,transparent),transparent 70%),var(--surface-1,#111);
+  box-shadow:0 0 18px color-mix(in srgb,var(--sa-accent) 30%,transparent)}
+.sa-tete{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sa-edition{font-size:var(--fs-2xs);letter-spacing:2px;font-weight:800;color:var(--sa-accent)}
+.sa-reste{font-family:var(--pile-titre);font-size:22px;line-height:1;font-variant-numeric:tabular-nums}
+.sa-nom{font-family:var(--pile-titre);font-size:30px;line-height:1.05;margin:6px 0 2px;letter-spacing:.5px}
+.sa-texte{font-size:var(--fs-xs);color:var(--sub,#a0a0a8);margin:0 0 8px;line-height:1.5}
+.sa-lab{font-size:var(--fs-2xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--sub,#a0a0a8);font-weight:800;margin:10px 0 4px}
+.sa-jauge span{background:var(--sa-accent)!important}
+.sa-collectif span{opacity:.8}
+.sa-val{font-size:var(--fs-xs);color:var(--text-dim,#c8c8cc);margin-top:4px}
+.sa-partager{width:100%;margin:12px 0 0;min-height:44px;display:flex;align-items:center;justify-content:center;gap:6px;
+  background:var(--sa-accent);color:#fff;border:0}
+.ed-med{display:block;width:64px;height:64px;margin:0 auto 6px}
+.ed-case[data-perdu] .bdg-date{color:var(--sub,#a0a0a8);font-style:italic}
+.vf:has(.vf-b:nth-of-type(4)){grid-template-columns:repeat(4,minmax(0,1fr))}
 .du-accueil{margin:12px 0 0;display:flex;flex-direction:column;gap:8px}
 .du-invite{padding:12px;border:1px solid var(--red,#e02020);border-radius:14px;background:rgba(224,32,32,.08)}
 .du-invite-t{font-weight:800;font-size:var(--fs-sm);margin-bottom:10px;line-height:1.4}
@@ -13894,6 +13911,14 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .clh-filleuls-f{color:var(--sub,#5b5b64)}
 :root[data-theme="clair"] .pr-note{color:var(--sub)}
 :root[data-theme="clair"] .pr-rappel{color:#cc0000}
+:root[data-theme="clair"] .sa-banniere{--sa-accent:#E02020;border:2px solid var(--sa-accent);background:radial-gradient(120% 80% at 50% 0%,color-mix(in srgb,var(--sa-accent) 22%,transparent),transparent 70%),var(--surface-1,#ebebeb);box-shadow:0 0 18px color-mix(in srgb,var(--sa-accent) 30%,transparent)}
+:root[data-theme="clair"] .sa-edition{color:var(--sa-accent)}
+:root[data-theme="clair"] .sa-texte{color:var(--sub,#5b5b64)}
+:root[data-theme="clair"] .sa-lab{color:var(--sub,#5b5b64)}
+:root[data-theme="clair"] .sa-jauge span{background:var(--sa-accent)!important}
+:root[data-theme="clair"] .sa-val{color:var(--text-dim,#39393e)}
+:root[data-theme="clair"] .sa-partager{background:var(--sa-accent);color:#090909}
+:root[data-theme="clair"] .ed-case[data-perdu] .bdg-date{color:var(--sub,#5b5b64)}
 :root[data-theme="clair"] .du-invite{border:1px solid var(--red,#e02020);background:rgba(224,32,32,.08)}
 :root[data-theme="clair"] .du-ligne{border:1px solid var(--border,#cfcfd3);background:var(--surface-1,#ebebeb);color:var(--text,#090909)}
 :root[data-theme="clair"] .du-f{color:var(--sub,#5b5b64)}

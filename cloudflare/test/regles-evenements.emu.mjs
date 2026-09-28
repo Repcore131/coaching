@@ -179,4 +179,36 @@ await test('le défi RepCore du mois : écrit par Kevin seul, lu par tout compte
   assert.equal((await appel(LEA, 'GET', 'defi_mois/2026-10')).statut, 200);
   assert.equal((await appel('guellec.coachingpro@gmail.com', 'PUT', 'defi_mois/2026-11', Object.assign({}, d, { fin: 0 }))).statut, 401, 'fin avant début');
 });
+// ── LES ÉVÉNEMENTS SAISONNIERS ──────────────────────────────────────────
+const KEVIN = 'guellec.coachingpro@gmail.com';
+const saison = (x) => Object.assign({ nom: 'Hiver de fer', debut: Date.now() - 864e5, fin: Date.now() + 10 * 864e5, mesure: 'seances',
+  objectifPerso: 10, objectifCollectif: 100, badgeCle: 'hiver', couleurAccent: '#3aa0ff', texteAccueil: 'Dix séances.' }, x || {});
+await test('saisons : créées par Kevin seul, champs vérifiés, lues par tout compte connecté', async () => {
+  assert.equal((await appel(LEA, 'PUT', 'saisons/hiver-2026', saison())).statut, 401);
+  assert.equal((await appel(KEVIN, 'PUT', 'saisons/hiver-2026', saison())).statut, 200);
+  for (const [c, v] of [['couleurAccent', 'rouge'], ['mesure', 'poids'], ['badgeCle', 'Hiver !'], ['objectifPerso', 0], ['fin', 1]])
+    assert.equal((await appel(KEVIN, 'PUT', 'saisons/test-' + c.toLowerCase(), saison({ [c]: v }))).statut, 401, c);
+  assert.equal((await appel(KEVIN, 'PUT', 'saisons/Majuscules', saison())).statut, 401, 'id');
+  assert.equal((await appel(LEA, 'GET', 'saisons/hiver-2026')).statut, 200);
+  assert.equal((await fetch(BASE + '/saisons.json?ns=' + NS)).status, 401, 'pas sans compte');
+});
+await test('saisons : chacun écrit SA progression, pendant la saison seulement', async () => {
+  const p = { valeur: 4, maj: Date.now() };
+  assert.equal((await appel(LEA, 'PUT', 'saisons_progres/hiver-2026/' + K(LEA), p)).statut, 200);
+  assert.equal((await appel(LEA, 'PUT', 'saisons_progres/hiver-2026/' + K(KEV), p)).statut, 401, 'celle d’un autre');
+  assert.equal((await appel(LEA, 'PUT', 'saisons_progres/inconnue/' + K(LEA), p)).statut, 401, 'saison inconnue');
+  assert.equal((await appel(LEA, 'PUT', 'saisons_progres/hiver-2026/' + K(LEA), { valeur: -1, maj: 1 })).statut, 401);
+  await appel(KEVIN, 'PUT', 'saisons/finie-2025', saison({ debut: Date.now() - 30 * 864e5, fin: Date.now() - 3 * 864e5 }));
+  assert.equal((await appel(LEA, 'PUT', 'saisons_progres/finie-2025/' + K(LEA), p)).statut, 401, 'saison finie');
+  assert.equal((await appel(LEA, 'GET', 'saisons_progres/hiver-2026')).statut, 401, 'les valeurs des autres ne se lisent pas');
+});
+await test('saisons : les résultats, lus par leur titulaire, écrits par le Worker seul ; le compteur se lit sans compte', async () => {
+  await appel('owner', 'PUT', 'saisons_resultats/' + K(LEA) + '/hiver-2026', { nom: 'Hiver de fer', annee: '2026' });
+  await appel('owner', 'PUT', 'stats/saisons/hiver-2026', { total: 4 });
+  assert.equal((await appel(LEA, 'GET', 'saisons_resultats/' + K(LEA))).statut, 200);
+  assert.equal((await appel(KEV, 'GET', 'saisons_resultats/' + K(LEA))).statut, 401);
+  assert.equal((await appel(LEA, 'PUT', 'saisons_resultats/' + K(LEA) + '/x', { nom: 'triche' })).statut, 401);
+  assert.equal((await appel(LEA, 'PUT', 'stats/saisons/hiver-2026', { total: 9999 })).statut, 401);
+  assert.equal((await fetch(BASE + '/stats/saisons/hiver-2026.json?ns=' + NS)).status, 200);
+});
 console.log(ok + ' tests passés (émulateur)');

@@ -29,6 +29,7 @@ import A from '../../functions/ambassadeurs-calcul.js';
 import ATT from '../../functions/attribution-calcul.js';
 import { envoyerA } from './push.js';
 import * as DU from './duels.js';
+import * as SA from './saisons.js';
 
 export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
@@ -1008,6 +1009,41 @@ export function creerMetier(deps) {
   }
   const duelsActifs = () => db.ref('duels_actifs').shallow();
 
+  // ══ LES ÉVÉNEMENTS SAISONNIERS (voir saisons.js) — CHAQUE HEURE ═══════
+  // Par saison suivie : la progression écrite par les apps (1 lecture), l'état
+  // des annonces (1), une écriture multi-chemins (compteur collectif, badges
+  // des nouveaux finis, annonce faite), et, s'il y a une annonce, la liste
+  // des abonnés (1) et les push (pousserA diffère ce qui dépasse le budget).
+  // Rend false quand le budget coupe : le travail reprend au réveil suivant.
+  async function saisonsHeure(t) {
+    const toutes = (await _val('saisons')) || {};
+    const ids = Object.keys(toutes).filter((id) => SA.SAISON_ID_RE.test(id) && SA.saisonSuivie(toutes[id], t)).sort();
+    for (const id of ids) {
+      if (_reste() < 10) return false;
+      const s = toutes[id];
+      const [progres, etat] = await Promise.all([_val('saisons_progres/' + id), _val('saisons_etat/' + id)]);
+      const vals = SA.valeurs(progres);
+      const e = etat || {};
+      const maj = { ['stats/saisons/' + id]: SA.statsSaison(s, vals, t) };
+      for (const k of SA.nouveauxFinis(s, vals, e.finis)) {
+        maj['saisons_resultats/' + k + '/' + id] = SA.resultatSaison(id, s, t);
+        maj['saisons_etat/' + id + '/finis/' + k] = t;
+      }
+      // LES ANNONCES ATTENDENT LE JOUR (9 h – 21 h, Paris) : lancée à minuit,
+      // une saison est annoncée au réveil, pas pendant la nuit.
+      const h = paris(t).heure;
+      const quoi = (h >= 9 && h < 21) ? SA.annonceSaison(s, e, t) : null;
+      if (quoi) maj['saisons_etat/' + id + '/' + quoi] = t;
+      await db.ref().update(maj);
+      if (quoi) {
+        const abonnes = await db.ref('push').shallow();
+        const dest = SA.destinataires(quoi, s, abonnes, vals);
+        await pousserA(dest.map((uid) => ({ uid, message: SA.messageSaison(quoi, id, s, uid, vals) })), { attendre: false });
+      }
+    }
+    return true;
+  }
+
   // ══ UNE SOUS-TÂCHE (écrite par differer, jamais par l'app : les règles
   // refusent le type « tache » à un client) ══════════════════════════════
   async function tache(e) {
@@ -1027,5 +1063,5 @@ export function creerMetier(deps) {
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente,
     fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, tache,
-    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs };
+    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, saisonsHeure };
 }

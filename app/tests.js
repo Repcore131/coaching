@@ -49738,6 +49738,121 @@ async function testExercices(){
       if(_legendePour('rang')!=='Ma légende à moi #RepCore') return _echec('la légende modifiée n’est pas celle qui part');
       if(_legendePour('rang')==='Ma légende à moi #RepCore') return _echec('elle ne sert qu’une fois');
       return (legendeModifiee('rang','x'.repeat(400)).length===220)?true:_echec('longueur non bornée');})());
+    // ══ 28/09/2026 — LES ÉVÉNEMENTS SAISONNIERS ════════════════════════════
+    const _SAT=new Date(2026,9,15,12).getTime();
+    const _SAS=(x)=>Object.assign({nom:'Hiver de fer',debut:new Date(2026,9,5).getTime(),fin:new Date(2026,9,25,23,59,59).getTime(),mesure:'seances',
+      objectifPerso:10,objectifCollectif:100,badgeCle:'hiver',couleurAccent:'#3aa0ff',texteAccueil:'Dix séances avant la Toussaint.'},x||{});
+    ok('Saisons : la saison active — dans ses dates, valide, la première commencée',(()=>{
+      const l={'hiver-2026':_SAS(),'noel-2026':_SAS({nom:'Noël',debut:new Date(2026,11,1).getTime(),fin:new Date(2026,11,24).getTime()}),
+        'cassee':_SAS({mesure:'poids'}),'Majuscule':_SAS()};
+      const a=saisonActive(_SAT,l);
+      if(!a||a.id!=='hiver-2026') return _echec(JSON.stringify(a));
+      if(saisonActive(new Date(2026,10,10).getTime(),l)!==null) return _echec('hors de toute saison');
+      if(saisonActive(new Date(2026,11,10).getTime(),l).id!=='noel-2026') return _echec('Noël');
+      if(saisonReste(_SAS(),_SAT)!=='J-10') return _echec(saisonReste(_SAS(),_SAT));
+      if(!/^J-1 · \d+ h$/.test(saisonReste({fin:_SAT+30*3600e3},_SAT))||saisonReste({fin:_SAT+90*60e3},_SAT)!=='1 h 30'||saisonReste({fin:_SAT-1},_SAT)!=='terminé') return _echec('rebours');
+      return (saisonAnnee(_SAS())==='2026'&&saisonCouleur({couleurAccent:'bleu'})==='#E02020')?true:_echec('année, couleur');})());
+    ok('Saisons : la bannière — compte à rebours, jauge perso, compteur collectif, « J’ai bouclé »',(()=>{
+      const s=Object.assign({id:'hiver-2026'},_SAS());
+      const S=j=>({date:_SAT-j*864e5,data:{SQUAT:{sets:[{weight:'100',reps:'5',done:true}]}}});
+      const u={role:'athlete',sessions:[S(1),S(2),S(3),S(40)]};
+      const d=document.createElement('div');
+      d.innerHTML=htmlBanniereSaison(s,u,{total:37,participants:12},_SAT);
+      const t=d.textContent;
+      if(!/ÉDITION 2026/.test(t)||!/J-10/.test(t)||!/Hiver de fer/.test(t)||!/Dix séances avant la Toussaint/.test(t)) return _echec(t);
+      if(!/3 séances sur 10 séances/.test(t)) return _echec('jauge perso : '+t);
+      if(!/37 séances sur 100 séances · 12 participants/.test(t)) return _echec('collectif : '+t);
+      const j=d.querySelectorAll('[role="progressbar"]');
+      if(j.length!==2||j[0].getAttribute('aria-valuenow')!=='30'||j[1].getAttribute('aria-valuenow')!=='37') return _echec('jauges');
+      if(!/--sa-accent:#3aa0ff/.test(d.innerHTML)) return _echec('couleur');
+      if(/partagerCarteSaison/.test(d.innerHTML)) return _echec('partage avant d’avoir bouclé');
+      for(let k=4;k<12;k++) u.sessions.push(S(k));
+      const b=htmlBanniereSaison(s,u,null,_SAT);
+      if(!/Bouclé ⚡/.test(b)||!/partagerCarteSaison\('hiver-2026'/.test(b)) return _echec('bouclé');
+      return htmlBanniereSaison(s,{role:'coach'},null,_SAT)===''?true:_echec('coach');})());
+    okA('Saisons : l’athlète écrit SA valeur (une fois par valeur), pour le compteur collectif',async()=>{
+      const sv={u:currentUser,ok:CLOUD.ok,tk:CLOUD._getToken,f:window.fetch,su:window.saveUser,sa:_saisons};
+      const puts=[];
+      try{
+        CLOUD.ok=()=>true; CLOUD._getToken=async()=>'jeton'; window.saveUser=()=>{};
+        const now=Date.now();
+        _saisons={'test-saison':_SAS({debut:now-5*864e5,fin:now+5*864e5})};
+        try{ localStorage.setItem(SAISONS_CACHE,JSON.stringify({t:now,l:_saisons})); }catch(e){}
+        window.fetch=async(u,o)=>{ puts.push({u:String(u),o}); return {ok:true,json:async()=>null}; };
+        currentUser={role:'athlete',email:'lea@t.fr',sessions:[{date:now-864e5,data:{SQUAT:{sets:[{weight:'100',reps:'5',done:true}]}}}]};
+        if(await saisonsPublierProgression()!==1) return _echec('rien d’écrit');
+        const p=puts.find(x=>/saisons_progres\/test-saison\/lea@t,fr\.json/.test(x.u));
+        if(!p||p.o.method!=='PUT'||JSON.parse(p.o.body).valeur!==1) return _echec(JSON.stringify(puts.map(x=>x.u)));
+        if(await saisonsPublierProgression()!==0) return _echec('réécrit la même valeur');
+        currentUser.role='coach';
+        if(await saisonsPublierProgression()!==0) return _echec('un coach écrit');
+      }finally{
+        currentUser=sv.u; CLOUD.ok=sv.ok; CLOUD._getToken=sv.tk; window.fetch=sv.f; window.saveUser=sv.su; _saisons=sv.sa;
+        try{ localStorage.removeItem(SAISONS_CACHE); }catch(e){}
+      }
+      return true;});
+    ok('Saisons : la famille « Éditions » — l’année, et « Plus jamais disponible » après la fin',(()=>{
+      const u={};
+      const n=saisonsFusionnerResultats(u,{'hiver-2026':{nom:'Hiver de fer',annee:'2026',badgeCle:'hiver',couleur:'#3aa0ff',termineLe:_SAT,fin:1},'<x>':{nom:'x'}});
+      if(n!==1||u.saisonsReleves['hiver-2026'].annee!=='2026') return _echec(JSON.stringify(u.saisonsReleves));
+      const l={'hiver-2026':_SAS(),'ete-2026':_SAS({nom:'Été brûlant',debut:new Date(2026,6,1).getTime(),fin:new Date(2026,6,31).getTime()}),
+        'noel-2026':_SAS({nom:'Noël',debut:_SAT-864e5,fin:_SAT+9*864e5}),'futur-2027':_SAS({nom:'Futur',debut:_SAT+90*864e5,fin:_SAT+99*864e5})};
+      const d=document.createElement('div'); d.innerHTML=htmlEditions(u,l,_SAT);
+      const t=d.textContent;
+      if(!/Éditions 1/.test(t)) return _echec('compte');
+      if(!/HIVER DE FER 2026/.test(t)||!/ÉTÉ BRÛLANT 2026Plus jamais disponible/.test(t)||!/NOËL 2026En cours · J-9/.test(t)) return _echec(t);
+      if(/FUTUR/.test(t)) return _echec('une édition pas encore commencée est montrée');
+      if(d.querySelectorAll('svg.ed-med').length!==3||!/2026<\/text>/.test(d.innerHTML)) return _echec('médaillons');
+      return /htmlEditions\(u,_saisonsDuCache\(\),t\)/.test(String(htmlMesBadges))?true:_echec('absente de la collection');})());
+    ok('Saisons : le fond « Édition » pour tous les visuels, pendant l’événement seulement',(()=>{
+      const sv=_saisons;
+      let avant=null; try{ avant=localStorage.getItem(VISUEL_FOND.CLE); }catch(e){}
+      try{
+        const now=Date.now();
+        _saisons={};
+        if(visuelFondsListe().indexOf('edition')>=0) return _echec('proposé sans événement');
+        try{ localStorage.setItem(VISUEL_FOND.CLE,'edition'); }catch(e){}
+        if(visuelFondChoisi()!=='carbone') return _echec('retombe sur carbone : '+visuelFondChoisi());
+        _saisons={'test-saison':_SAS({debut:now-864e5,fin:now+864e5})};
+        if(visuelFondsListe().join()!=='transparent,photo,carbone,edition') return _echec(visuelFondsListe().join());
+        if(visuelFondChoisi()!=='edition'||visuelFondFormat('edition').type!=='image/jpeg') return _echec('choisi');
+        if(!/data-fond="edition"[\s\S]*Édition/.test(_htmlVisuelFonds('test-fonds'))) return _echec('vignette');
+        // Peint : opaque, la couleur de l'édition en haut ; et un vrai visuel dessus.
+        const c=document.createElement('canvas'); c.width=1080; c.height=1920;
+        const g=c.getContext('2d');
+        if(!_visuelPeindreFond(g,1080,1920,'edition')) return _echec('non peint');
+        const px=g.getImageData(540,2,1,1).data;
+        if(!(px[2]>200&&px[0]<100)) return _echec('bandeau : '+Array.from(px));
+        if(g.getImageData(10,1900,1,1).data[3]!==255) return _echec('pas opaque');
+        const cv=_dessinerCarteRang({n:3,nom:'VOLTAGE',xp:4000,signature:'X'},'edition',null,'story');
+        if(cv.width!==1080) return _echec('visuel');
+      }finally{
+        _saisons=sv;
+        try{ if(avant===null) localStorage.removeItem(VISUEL_FOND.CLE); else localStorage.setItem(VISUEL_FOND.CLE,avant); }catch(e){}
+      }
+      return true;})());
+    ok('Saisons : la carte « J’ai bouclé », story et post, noms extrêmes',(()=>{
+      for(const f of ['story','post']) for(const fond of ['transparent','carbone','rouge']){
+        const cv=_dessinerCarteSaison({nom:'LE GRAND HIVER DE FER DES CHAMPIONS INVINCIBLES',annee:'2026',couleur:'#3aa0ff',objectif:'100 000 KG',date:_SAT,signature:'MAXIMILIEN-ALEXANDRE DE LA TOUR'},fond,f);
+        if(cv.width!==1080||cv.height!==(f==='post'?1350:1920)) return _echec(f);
+        if(fond==='transparent'){
+          const p=cv.getContext('2d').getImageData(0,0,16,cv.height).data;
+          for(let i=3;i<p.length;i+=4) if(p[i]>40) return _echec('débord '+f);
+        }
+      }
+      if(srcDuVisuel('repcore-saison.jpg')!=='saison'||!_LEGENDES.saison) return _echec('légende');
+      return true;})());
+    ok('Saisons : la fiche de Kevin — dates, mesure, objectifs, couleur, identifiant',(()=>{
+      const b={nom:'Hiver de fer',debut:'2026-10-05',fin:'2026-10-25',mesure:'seances',objectifPerso:'10',objectifCollectif:'1 000'.replace(' ',''),badgeCle:'',couleurAccent:'#3aa0ff',texteAccueil:' Dix. '};
+      const r=saisonFiche(b);
+      if(r.erreur) return _echec(r.erreur);
+      if(r.id!=='hiver-de-fer-2026'||r.fiche.badgeCle!=='hiver-de-fer'||r.fiche.objectifCollectif!==1000||r.fiche.texteAccueil!=='Dix.') return _echec(JSON.stringify(r));
+      if(new Date(r.fiche.debut).getHours()!==0||new Date(r.fiche.fin).getHours()!==23) return _echec('bornes');
+      if(Object.keys(r.fiche).sort().join()!=='badgeCle,couleurAccent,debut,fin,mesure,nom,objectifCollectif,objectifPerso,texteAccueil') return _echec('champs (règles)');
+      for(const [k,v] of [['nom','x'],['fin','2026-10-01'],['mesure','poids'],['objectifPerso','0'],['debut','hier']])
+        if(!saisonFiche(Object.assign({},b,{[k]:v})).erreur) return _echec(k);
+      if(saisonFiche(Object.assign({},b,{couleurAccent:'rouge'})).fiche.couleurAccent!=='#E02020') return _echec('couleur');
+      return /Événement saisonnier/.test(htmlSaisonAdmin())&&/htmlSaisonAdmin\(\)/.test(String(_ambRendre))?true:_echec('écran admin');})());
     // ══ 28/09/2026 — LES DUELS ET LE DÉFI DU MOIS ═══════════════════════════
     ok('Duels : « 14 jours de régularité » — la même phrase que le Worker',(()=>{
       const att={seances:'régularité',serie:'régularité',tonnage:'volume',progressionPct:'progression'};

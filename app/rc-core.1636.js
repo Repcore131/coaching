@@ -5799,7 +5799,7 @@ function _validateAthletePkg(o){
       ||params.get('bilan')==='1'||params.get('wo')==='1'||params.get('diete')==='1'
       ||!!params.get('wrapped')||params.get('canal')==='1'||!!params.get('ref')||params.get('parrainage')==='1'
       ||!!params.get('coach')||!!params.get('src')||!!params.get('amb')||params.get('paiements')==='1'
-      ||!!params.get('duel')||params.get('duels')==='1');
+      ||!!params.get('duel')||params.get('duels')==='1'||!!params.get('saison'));
     // Coach invite → athlete device
     const cpkg=params.get('coachpkg');
     if(cpkg){
@@ -5894,6 +5894,8 @@ function _validateAthletePkg(o){
       let _dv=null; try{ _dv=JSON.parse(localStorage.getItem('rc_duel_invite')||'null'); }catch(e){ _dv=null; }
       if(!_dv||_dv.id!==_duel) try{ localStorage.setItem('rc_duel_invite',JSON.stringify({id:_duel,le:Date.now()})); }catch(e){}
     }
+    // ?saison=<id> — les push d'un événement saisonnier.
+    if(/^[a-z0-9][a-z0-9-]{2,40}$/.test(String(params.get('saison')||''))) window._pendingSaisonOpen=true;
     // ?duels=1 — les push des duels (début, J-2, résultat).
     if(params.get('duels')==='1') window._pendingDuelsOpen=true;
     // ?paiements=1 — le push d'un litige PayPal, pour l'administrateur.
@@ -6101,6 +6103,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'pagePublique','vitrineSlug','vitrinePubliee','specialites',
   // Les duels de l'athlète : leurs identifiants, son rôle, une date.
   'duels',
+  // Les éditions saisonnières : les badges reçus, la dernière valeur envoyée.
+  'saisonsReleves','saisonsVal',
   // Combien de fois la page a été proposée à un passage de rang (deux au plus).
   'pagePropose',
   // L'ambassadeur par qui le compte est arrivé : un code, un nom, une date.
@@ -7366,6 +7370,8 @@ function routeUser(){
     setTimeout(()=>{ try{ loadCanal(); }catch(e){} },1000);}
   if(window._pendingParrainageOpen){ window._pendingParrainageOpen=false;
     setTimeout(()=>{ try{ ouvrirParrainage(); }catch(e){} },1000);}
+  if(window._pendingSaisonOpen){ window._pendingSaisonOpen=false;
+    setTimeout(()=>{ try{ chargerSaisons(true).then(()=>renderSaisonAccueil()); }catch(e){} },1000);}
   if(window._pendingDuelsOpen){ window._pendingDuelsOpen=false;
     setTimeout(()=>{ try{ _duelsLusLe=0; _rendreDuelsAccueil(); }catch(e){} },1000);}
   if(window._pendingPaiementsOpen){ window._pendingPaiementsOpen=false;
@@ -19168,7 +19174,7 @@ function htmlAmbassadeurs(tous,t){
 }
 function _ambRendre(){
   const z=document.getElementById('amb-contenu');
-  if(z) z.innerHTML=htmlEvenementsKo(_ambKo)+htmlJournalPaypal(_ambJournal)+htmlDefiMoisAdmin(Date.now())+htmlAmbassadeurs(_ambTous||{},Date.now());
+  if(z) z.innerHTML=htmlEvenementsKo(_ambKo)+htmlJournalPaypal(_ambJournal)+htmlSaisonAdmin()+htmlDefiMoisAdmin(Date.now())+htmlAmbassadeurs(_ambTous||{},Date.now());
 }
 // PURE. La fiche à écrire, ou {erreur}.
 function ambFiche(f,existants,maintenant){
@@ -20837,6 +20843,315 @@ async function enregistrerDefiMois(btn){
   toast(ok?'Défi de '+r.mois+' publié ⚡':'Publication refusée','var('+(ok?'--green':'--orange')+')');
   return ok;
 }
+// ══ LES ÉVÉNEMENTS SAISONNIERS (28/09/2026) ══════════════════════════════
+//
+// Une édition limitée : un nom, des dates, une mesure, un objectif perso et
+// un objectif collectif, une couleur. Créée par Kevin (écran admin, dans
+// /saisons — « /evenements » est la file du serveur léger). Pendant qu'elle
+// dure :
+//   · une BANNIÈRE sur l'accueil : compte à rebours, jauge perso, compteur
+//     collectif (/stats/saisons/<id>, recalculé chaque heure par le Worker) ;
+//   · un fond « Édition » pour tous les visuels ;
+//   · l'app écrit SA valeur après chaque séance (saisons_progres/<id>/<moi>,
+//     la règle des défis du Canal) : le Worker en tire le collectif et le
+//     badge de qui a bouclé (/saisons_resultats/<moi>/<id>) ;
+//   · les push (lancement, mi-parcours, J-2, fin) partent du Worker.
+// LA FAMILLE « ÉDITIONS » : un badge par édition bouclée, avec l'année. Une
+// édition finie qu'on n'a pas bouclée reste visible : « Plus jamais
+// disponible ».
+const SAISONS_CACHE='rc_saisons';
+const SAISON_ID_RE=/^[a-z0-9][a-z0-9-]{2,40}$/;
+let _saisons=null;                      // {id: saison}, du cache ou de la base
+function _saisonsDuCache(){
+  if(_saisons) return _saisons;
+  try{ const c=JSON.parse(localStorage.getItem(SAISONS_CACHE)||'null'); if(c&&c.l&&typeof c.l==='object') _saisons=c.l; }catch(e){}
+  return _saisons||{};
+}
+async function chargerSaisons(force){
+  try{
+    const c=JSON.parse(localStorage.getItem(SAISONS_CACHE)||'null');
+    if(!force&&c&&Date.now()-Number(c.t)<3600e3&&c.l){ _saisons=c.l; return _saisons; }
+  }catch(e){}
+  if(!CLOUD.ok()) return _saisonsDuCache();
+  const token=await CLOUD._getToken();
+  if(!token) return _saisonsDuCache();
+  const r=await fetch(CLOUD._fbUrl.replace('users.json','saisons.json')+'?auth='+token).catch(()=>null);
+  const l=(r&&r.ok)?((await r.json())||{}):null;
+  if(l){ _saisons=l; try{ localStorage.setItem(SAISONS_CACHE,JSON.stringify({t:Date.now(),l})); }catch(e){} }
+  return _saisonsDuCache();
+}
+/** PURE. Une saison exploitable. */
+function saisonValide(s){
+  return !!(s&&typeof s==='object'&&s.nom&&Number(s.debut)>0&&Number(s.fin)>Number(s.debut)
+    &&['seances','tonnage','serie','progressionPct'].indexOf(s.mesure)>=0&&Number(s.objectifPerso)>0);
+}
+/** PURE (liste donnée). La saison en cours à t : {id, …} ou null (la première qui a commencé). */
+function saisonActive(maintenant,liste){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const l=liste||_saisonsDuCache();
+  const ids=Object.keys(l||{}).filter(id=>SAISON_ID_RE.test(id)&&saisonValide(l[id])&&t>=Number(l[id].debut)&&t<=Number(l[id].fin))
+    .sort((a,b)=>Number(l[a].debut)-Number(l[b].debut));
+  return ids.length?Object.assign({id:ids[0]},l[ids[0]]):null;
+}
+/** PURE. L'année d'une édition. */
+function saisonAnnee(s){ return String(new Date(Number(s&&s.debut)||0).getFullYear()); }
+/** PURE. La couleur d'accent, sûre. */
+function saisonCouleur(s){ return /^#[0-9a-fA-F]{6}$/.test(String(s&&s.couleurAccent||''))?s.couleurAccent:'#E02020'; }
+/** PURE. « J-12 », « 5 h », « 12 min » : le temps qui reste. */
+function saisonReste(s,maintenant){
+  const ms=Number(s&&s.fin)-((typeof maintenant==='number')?maintenant:Date.now());
+  if(!(ms>0)) return 'terminé';
+  const j=Math.floor(ms/864e5), h=Math.floor(ms%864e5/3600e3), m=Math.floor(ms%3600e3/60e3);
+  if(j>=1) return 'J-'+j+(j<3?' · '+h+' h':'');
+  if(h>=1) return h+' h '+String(m).padStart(2,'0');
+  return m+' min';
+}
+function saisonValeur(u,s){ return defiValeur(u,{mesure:s.mesure,debut:Number(s.debut),fin:Number(s.fin)}); }
+// ── Écrire sa valeur (après une séance, et à l'accueil) ───────────────────
+async function saisonsPublierProgression(){
+  const u=currentUser;
+  if(!u||u.role==='coach'||!CLOUD.ok()) return 0;
+  await chargerSaisons();
+  const s=saisonActive();
+  if(!s) return 0;
+  const v=Math.max(0,Number(saisonValeur(u,s))||0);
+  const deja=(u.saisonsVal&&u.saisonsVal[s.id]);
+  if(deja===v) return 0;
+  const token=await CLOUD._getToken();
+  if(!token) return 0;
+  const moi=String(u.email||'').replace(/\./g,',');
+  const r=await fetch(CLOUD._fbUrl.replace('users.json','saisons_progres/'+s.id+'/'+moi+'.json')+'?auth='+token,
+    {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({valeur:v,maj:Date.now()})}).catch(()=>null);
+  if(!r||!r.ok) return 0;
+  u.saisonsVal=Object.assign({},u.saisonsVal||{},{[s.id]:v});
+  try{ saveUser(); }catch(e){}
+  return 1;
+}
+// ── Le compteur collectif (/stats/saisons/<id>, lecture publique) ─────────
+const _saisonStats={};
+async function _saisonStatsLire(id){
+  const c=_saisonStats[id];
+  if(c&&Date.now()-c.t<10*60e3) return c.d;
+  const r=await fetch(CLOUD._fbUrl.replace('users.json','stats/saisons/'+id+'.json')).catch(()=>null);
+  const d=(r&&r.ok)?await r.json():null;
+  _saisonStats[id]={t:Date.now(),d};
+  return d;
+}
+// ── La bannière de l'accueil ──────────────────────────────────────────────
+// PURE.
+function htmlBanniereSaison(s,u,stats,maintenant){
+  if(!s||!u||u.role==='coach') return '';
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const v=saisonValeur(u,s), obj=Number(s.objectifPerso)||1;
+  const part=Math.max(0,Math.min(1,v/obj));
+  const fait=v>=obj||!!(u.saisonsReleves&&u.saisonsReleves[s.id]);
+  const col=Number(s.objectifCollectif)||0;
+  const tot=Number(stats&&stats.total)||0;
+  const pc=col>0?Math.max(0,Math.min(1,tot/col)):0;
+  const txt=x=>texteScoreDuel(s.mesure,x);
+  return '<div class="sa-banniere" style="--sa-accent:'+saisonCouleur(s)+'" role="region" aria-label="'+escapeHtml(s.nom)+'">'
+    +'<div class="sa-tete"><span class="sa-edition">ÉDITION '+escapeHtml(saisonAnnee(s))+'</span>'
+      +'<span class="sa-reste" data-fin="'+Number(s.fin)+'">'+escapeHtml(saisonReste(s,t))+'</span></div>'
+    +'<div class="sa-nom">'+escapeHtml(s.nom)+'</div>'
+    +(s.texteAccueil?'<p class="sa-texte">'+escapeHtml(s.texteAccueil)+'</p>':'')
+    +'<div class="sa-lab">Toi</div>'
+    +'<div class="rg-jauge sa-jauge" role="progressbar" aria-label="Ta progression" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.round(part*100)+'"><span style="width:'+Math.round(part*100)+'%"></span></div>'
+    +'<div class="sa-val">'+(fait?'Bouclé ⚡ ':'')+escapeHtml(txt(v))+' sur '+escapeHtml(txt(obj))+'</div>'
+    +(col>0?'<div class="sa-lab">Tous ensemble</div>'
+      +'<div class="rg-jauge sa-jauge sa-collectif" role="progressbar" aria-label="Le compteur collectif" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+Math.round(pc*100)+'"><span style="width:'+Math.round(pc*100)+'%"></span></div>'
+      +'<div class="sa-val">'+escapeHtml(txt(tot))+' sur '+escapeHtml(txt(col))
+        +(stats&&stats.participants?' · '+stats.participants+' participant'+(stats.participants>1?'s':''):'')+'</div>':'')
+    +(fait?'<button type="button" class="btn btn-sm sa-partager" onclick="partagerCarteSaison(\''+s.id+'\',this)">'+icon('share',14)+' <span>J’ai bouclé : partager ma carte</span></button>':'')
+    +'</div>';
+}
+let _saisonMinuteur=null;
+async function renderSaisonAccueil(){
+  const z=document.getElementById('clh-saison');
+  const u=currentUser;
+  if(!z) return false;
+  if(!u||u.role==='coach'){ z.innerHTML=''; return false; }
+  try{ await chargerSaisons(); }catch(e){}
+  const s=saisonActive();
+  if(!s){ z.innerHTML=''; return false; }
+  let st=null; try{ st=await _saisonStatsLire(s.id); }catch(e){ st=null; }
+  z.innerHTML=htmlBanniereSaison(s,u,st,Date.now());
+  // LE COMPTE À REBOURS avance tant que l'accueil est affiché.
+  if(_saisonMinuteur) clearInterval(_saisonMinuteur);
+  _saisonMinuteur=setInterval(()=>{
+    const r=document.querySelector('#clh-saison .sa-reste');
+    if(!r||!r.isConnected){ clearInterval(_saisonMinuteur); _saisonMinuteur=null; return; }
+    r.textContent=saisonReste({fin:Number(r.dataset.fin)},Date.now());
+  },60e3);
+  saisonsPublierProgression().catch(()=>{});
+  return true;
+}
+// ── La famille « Éditions » ──────────────────────────────────────────────
+// PURE (écrit dans u). Les résultats du Worker (/saisons_resultats/<moi>).
+function saisonsFusionnerResultats(u,r){
+  if(!u||!r||typeof r!=='object') return 0;
+  const m=(u.saisonsReleves&&typeof u.saisonsReleves==='object')?u.saisonsReleves:{};
+  let n=0;
+  for(const id of Object.keys(r)){
+    const x=r[id]; if(!x||m[id]||!SAISON_ID_RE.test(id)) continue;
+    m[id]={nom:String(x.nom||'').slice(0,60),annee:String(x.annee||'').slice(0,4),badgeCle:String(x.badgeCle||'').slice(0,40),
+      couleur:/^#[0-9a-fA-F]{6}$/.test(String(x.couleur||''))?x.couleur:'#E02020',termineLe:Number(x.termineLe)||0,fin:Number(x.fin)||0};
+    n++;
+  }
+  if(n) u.saisonsReleves=m;
+  return n;
+}
+// PURE. Le médaillon d'une édition : un hexagone de sa couleur, l'année dedans.
+function svgMedailleEdition(couleur,annee,obtenu){
+  const c=/^#[0-9a-fA-F]{6}$/.test(String(couleur||''))?couleur:'#E02020';
+  return '<svg class="ed-med" viewBox="0 0 100 100" aria-hidden="true">'
+    +'<polygon points="50,4 91,27 91,73 50,96 9,73 9,27" fill="'+(obtenu?'#111':'#1a1a1d')+'" stroke="'+(obtenu?c:'#3a3a40')+'" stroke-width="6"/>'
+    +'<polygon points="50,18 79,34 79,66 50,82 21,66 21,34" fill="none" stroke="'+(obtenu?c:'#2a2a2e')+'" stroke-width="2" opacity=".7"/>'
+    +'<text x="50" y="58" text-anchor="middle" font-family="Bebas Neue,Impact,sans-serif" font-size="26" fill="'+(obtenu?'#fff':'#6b6b72')+'">'+escapeHtml(String(annee||''))+'</text></svg>';
+}
+// PURE. La section « Éditions » de la collection.
+function htmlEditions(u,liste,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const m=(u&&u.saisonsReleves)||{};
+  const l=liste||{};
+  const ids=[...new Set(Object.keys(l).filter(id=>saisonValide(l[id])&&t>=Number(l[id].debut)).concat(Object.keys(m)))];
+  if(!ids.length) return '';
+  const cases=ids.map(id=>{
+    const s=l[id]||{}, r=m[id];
+    const nom=(r&&r.nom)||s.nom||id, annee=(r&&r.annee)||saisonAnnee(s);
+    const fin=Number(s.fin||(r&&r.fin))||0;
+    let sous;
+    if(r) sous=_bdgDate(r.termineLe);
+    else if(fin&&t>fin) sous='Plus jamais disponible';
+    else sous='En cours · '+saisonReste(s,t);
+    return {fin,h:'<div class="bdg-case ed-case"'+(r?'':' data-attente')+(!r&&fin&&t>fin?' data-perdu':'')+'>'
+      +svgMedailleEdition(r?r.couleur:saisonCouleur(s),annee,!!r)
+      +'<div class="bdg-nom">'+escapeHtml(String(nom).toUpperCase()+' '+annee)+'</div>'
+      +'<div class="bdg-date">'+escapeHtml(sous)+'</div></div>'};
+  }).sort((a,b)=>b.fin-a.fin).map(x=>x.h).join('');
+  return '<div class="bdg-sous">Éditions <span class="bdg-compte">'+Object.keys(m).length+'</span></div><div class="bdg-grille">'+cases+'</div>';
+}
+// ── La carte « J'ai bouclé <édition> » ────────────────────────────────────
+function saisonCarteDonnees(id,u){
+  const l=_saisonsDuCache(), s=l[id]||{}, r=(u&&u.saisonsReleves&&u.saisonsReleves[id])||null;
+  let sig=''; try{ sig=nomSurVisuels(u); }catch(e){ sig=''; }
+  const obj=Number(s.objectifPerso)||0;
+  return {nom:String((r&&r.nom)||s.nom||'').toUpperCase(),annee:(r&&r.annee)||saisonAnnee(s),couleur:(r&&r.couleur)||saisonCouleur(s),
+    objectif:obj&&s.mesure?texteScoreDuel(s.mesure,obj).toUpperCase():'',date:r?r.termineLe:Date.now(),signature:sig};
+}
+function _dessinerCarteSaison(d,fond,format){
+  const F=visuelFormat(format), W=F.w, H=F.h, post=F.cle==='post';
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const g=cv.getContext('2d');
+  const f=fond||'transparent';
+  _visuelPeindreFond(g,W,H,f);
+  const BEBAS=_tok('--pile-titre',"'Bebas Neue','Arial Narrow',Impact,sans-serif");
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  const M=72, LARG=W-M*2, cx=W/2;
+  const o=_visuelOutils(g);
+  const x=d||{};
+  const acc=f==='rouge'?'#fff':(x.couleur||'#E02020');
+  g.textAlign='center'; g.textBaseline='alphabetic';
+  // En story, le bloc (~1 000 px) est centré dans la hauteur.
+  let y=post?140:520;
+  o.ombre(true); g.fillStyle='#fff'; g.font='800 34px '+MONT;
+  o.ecrireEspace('J’AI BOUCLÉ',cx,y,10,true);
+  o.ombre(false); g.fillStyle=acc; g.fillRect(cx-44,y+20,88,5);
+  // LE MÉDAILLON : l'hexagone de l'édition, l'année dedans.
+  const R=post?150:190, my=y+(post?60:90)+R;
+  g.save();
+  const hex=(r)=>{ g.beginPath(); for(let k=0;k<6;k++){ const a=-Math.PI/2+k*Math.PI/3; const px=cx+r*Math.cos(a), py=my+r*Math.sin(a); if(k) g.lineTo(px,py); else g.moveTo(px,py); } g.closePath(); };
+  g.shadowColor=acc; g.shadowBlur=40;
+  hex(R); g.fillStyle='#0d0d0f'; g.fill(); g.lineWidth=14; g.strokeStyle=acc; g.stroke();
+  g.shadowBlur=0; hex(R*0.72); g.lineWidth=4; g.globalAlpha=.7; g.stroke();
+  g.restore();
+  o.ombre(true); g.fillStyle='#fff';
+  g.font='700 '+Math.round(R*0.62)+'px '+BEBAS; o.ecrire(String(x.annee||''),cx,my+R*0.22);
+  y=my+R+(post?110:150);
+  const nom=String(x.nom||'');
+  const ns=o.ajuste(nom,'700',post?120:150,BEBAS,LARG,54);
+  g.font='700 '+ns+'px '+BEBAS; o.ecrire(o.coupe(nom,LARG),cx,y);
+  y+=post?70:90;
+  g.fillStyle=acc;
+  const ed='ÉDITION '+(x.annee||'')+(x.objectif?' · '+x.objectif:'');
+  const es=o.ajusteEspace(ed,'800',40,MONT,6,LARG,22);
+  g.font='800 '+es+'px '+MONT; o.ecrireEspace(o.coupeEspace(ed,6,LARG),cx,y,6,true);
+  y+=post?60:80;
+  g.fillStyle='rgba(255,255,255,.8)'; g.font='700 30px '+MONT;
+  o.ecrireEspace(_recDate(x.date),cx,y,4,true);
+  _recSignature(g,o,String(x.signature||''),H-(post?50:110),LARG);
+  o.ombre(false);
+  return cv;
+}
+// SYNCHRONE jusqu'au partage (iOS).
+function partagerCarteSaison(id,btn){
+  const u=currentUser;
+  if(!u||_storyEnCours||!SAISON_ID_RE.test(String(id||''))) return false;
+  const fond=visuelFondEffectif(), fmt=visuelFondFormat(fond);
+  const nom=visuelNomFichier('repcore-saison',fond);
+  _storyEnCours=true;
+  let ok=false;
+  try{
+    const des=()=>_dessinerCarteSaison(saisonCarteDonnees(id,u),fond);
+    ok=_storySortirPartage(des(),nom,undefined,fmt)||_storySortirTelechargement(des(),nom,fmt);
+  }catch(e){ toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)'); ok=false; }
+  finally{ _storyEnCours=false; }
+  const sp=btn&&btn.querySelector?btn.querySelector('span'):null;
+  if(sp&&ok){ const l=sp.textContent; sp.textContent='Carte prête ✓'; setTimeout(()=>{ sp.textContent=l; },2000); }
+  return ok;
+}
+// ── L'écran admin : créer une édition ─────────────────────────────────────
+/** PURE. {id, fiche} ou {erreur}. Les dates : AAAA-MM-JJ, de minuit à 23 h 59. */
+function saisonFiche(f){
+  const nom=String(f&&f.nom||'').replace(/\s+/g,' ').trim().slice(0,60);
+  if(nom.length<3) return {erreur:'Donne un nom (3 caractères au moins).'};
+  const d=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(f.debut||'')), e=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(f.fin||''));
+  if(!d||!e) return {erreur:'Dates : AAAA-MM-JJ.'};
+  const debut=new Date(+d[1],+d[2]-1,+d[3],0,0,0).getTime(), fin=new Date(+e[1],+e[2]-1,+e[3],23,59,59).getTime();
+  if(!(fin>debut)) return {erreur:'La fin doit suivre le début.'};
+  const mesure=['seances','tonnage','serie','progressionPct'].indexOf(f.mesure)>=0?f.mesure:null;
+  if(!mesure) return {erreur:'Choisis une mesure.'};
+  const n=v=>Number(String(v==null?'':v).replace(',','.'));
+  const op=n(f.objectifPerso), oc=n(f.objectifCollectif||0);
+  if(!(op>0&&op<1e8)) return {erreur:'L’objectif perso doit être un nombre positif.'};
+  if(!(oc>=0&&oc<1e12)) return {erreur:'L’objectif collectif doit être un nombre.'};
+  const slug=s=>{ let x=String(s||''); try{ x=x.normalize('NFD').replace(/[̀-ͯ]/g,''); }catch(er){} return x.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,''); };
+  const id=(slug(f.id)||(slug(nom).slice(0,34)+'-'+d[1])).slice(0,41);
+  if(!SAISON_ID_RE.test(id)) return {erreur:'Identifiant invalide.'};
+  const badgeCle=(slug(f.badgeCle)||slug(nom)).slice(0,40);
+  if(!/^[a-z0-9-]{2,40}$/.test(badgeCle)) return {erreur:'Clé de badge invalide.'};
+  const couleurAccent=/^#[0-9a-fA-F]{6}$/.test(String(f.couleurAccent||''))?f.couleurAccent:'#E02020';
+  return {id,fiche:{nom,debut,fin,mesure,objectifPerso:op,objectifCollectif:oc,badgeCle,couleurAccent,
+    texteAccueil:String(f.texteAccueil||'').trim().slice(0,200)}};
+}
+function htmlSaisonAdmin(){
+  const L=(id,lib,champ)=>'<label class="pp-lab" for="'+id+'">'+lib+'</label>'+champ;
+  return '<div class="card amb-journal" id="sa-admin"><div class="amb-t">Événement saisonnier</div>'
+    +'<p class="sub amb-note">Une édition limitée pour tous : bannière d’accueil, fond « Édition » sur les visuels, badge avec l’année (jamais réédité), push de lancement, mi-parcours, J-2 et fin.</p>'
+    +L('sa-nom','Nom','<input id="sa-nom" type="text" maxlength="60" placeholder="Hiver de fer">')
+    +L('sa-debut','Début','<input id="sa-debut" type="date">')
+    +L('sa-fin','Fin','<input id="sa-fin" type="date">')
+    +L('sa-mesure','Mesure','<select id="sa-mesure"><option value="seances">Séances</option><option value="serie">Semaines validées</option><option value="tonnage">Tonnage (kg)</option><option value="progressionPct">Progression (%)</option></select>')
+    +L('sa-op','Objectif perso','<input id="sa-op" type="number" min="1" inputmode="decimal" placeholder="10">')
+    +L('sa-oc','Objectif collectif','<input id="sa-oc" type="number" min="0" inputmode="decimal" placeholder="1000">')
+    +L('sa-badge','Clé du badge','<input id="sa-badge" type="text" maxlength="40" placeholder="hiver">')
+    +L('sa-couleur','Couleur','<input id="sa-couleur" type="color" value="#E02020">')
+    +L('sa-texte','Texte d’accueil','<input id="sa-texte" type="text" maxlength="200">')
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:10px 0 0;min-height:44px" onclick="enregistrerSaison(this)">Créer l’édition</button></div>';
+}
+async function enregistrerSaison(btn){
+  if(!estAdminAmbassadeurs()) return false;
+  const v=id=>(document.getElementById(id)||{}).value;
+  const r=saisonFiche({nom:v('sa-nom'),debut:v('sa-debut'),fin:v('sa-fin'),mesure:v('sa-mesure'),objectifPerso:v('sa-op'),
+    objectifCollectif:v('sa-oc'),badgeCle:v('sa-badge'),couleurAccent:v('sa-couleur'),texteAccueil:v('sa-texte')});
+  if(r.erreur){ toast(r.erreur,'var(--orange)'); return false; }
+  if(btn) btn.disabled=true;
+  const ok=await CLOUD.racinePatch({['saisons/'+r.id]:r.fiche}).catch(()=>false);
+  if(btn) btn.disabled=false;
+  try{ localStorage.removeItem(SAISONS_CACHE); }catch(e){}
+  _saisons=null;
+  toast(ok?'Édition « '+r.fiche.nom+' » créée ⚡':'Création refusée','var('+(ok?'--green':'--orange')+')');
+  return ok;
+}
 // ── Les résultats : CHAMPION et DÉFI RELEVÉ ────────────────────────────────
 // La clôture (Cloud Functions) écrit /defis_resultats/<moi>/<id>. On les
 // recopie dans le dossier (u.defisReleves) — c'est là que _badgesFaits lit,
@@ -20860,7 +21175,15 @@ async function majRecompensesServeur(o){
   let pc=false;
   if(PARRAINAGE_ACTIF) try{ pc=await majParrainageMiroir(u); }catch(e){ pc=false; }
   const avant=Object.keys(u.defisReleves||{});
-  const n=defisFusionnerResultats(u,r)+(pc?1:0);
+  // Les badges « Éditions » : /saisons_resultats/<moi>, écrit par le Worker.
+  let ns=0;
+  if(SERVEUR_LEGER) try{
+    const tok=await CLOUD._getToken();
+    const rs=tok?await fetch(CLOUD._fbUrl.replace('users.json','saisons_resultats/'+String(u.email||'').replace(/\./g,',')+'.json')+'?auth='+tok):null;
+    ns=saisonsFusionnerResultats(u,(rs&&rs.ok)?await rs.json():null);
+    if(ns) toast('Édition bouclée ⚡ Ton badge t’attend dans ta collection.','var(--green)',4000);
+  }catch(e){ ns=0; }
+  const n=defisFusionnerResultats(u,r)+(pc?1:0)+ns;
   if(n){
     try{ saveUser(); }catch(e){}
     // CHAQUE DÉFI RELEVÉ a son écran (dans la file des badges) : « J'AI
@@ -37657,6 +37980,8 @@ function loadClientHome(){
   // Les duels (l'invitation reçue, ceux en cours) et le défi RepCore du mois.
   try{ _rendreDuelsAccueil(); }catch(e){}
   try{ renderDefiMoisAccueil(); }catch(e){}
+  // L'événement saisonnier : la bannière (et la valeur de l'athlète, écrite).
+  try{ renderSaisonAccueil(); }catch(e){}
   // Une fois par jour : défis bouclés et parrainage (badges et mois gagnés).
   try{ majRecompensesServeur(); }catch(e){}
   try{ majPagePublique(); }catch(e){}
@@ -42262,7 +42587,7 @@ function nomSurVisuels(u){
 const VISUEL_FOND=Object.freeze({
   LISTE:Object.freeze(['transparent','photo','carbone']),
   CLE:'rc_visuel_fond',
-  LIB:Object.freeze({transparent:'Sans fond',photo:'Ma photo',carbone:'Carbone'}),
+  LIB:Object.freeze({transparent:'Sans fond',photo:'Ma photo',carbone:'Carbone',edition:'Édition'}),
   // La vignette : 180 × 320, le 9:16 de la story.
   VL:180, VH:320
 });
@@ -42273,15 +42598,23 @@ function _visuelPhotoPrete(){
   return !!(im&&im.complete&&im.naturalWidth>0);
 }
 /** Le dernier fond choisi sur cet appareil. localStorage peut manquer : 'transparent'. */
+// LE FOND « ÉDITION » n'existe que pendant un événement saisonnier : la
+// couleur de l'édition, son nom et son année en tête du visuel. Choisi puis
+// l'édition finie, il retombe sur le carbone.
+function visuelFondsListe(maintenant){
+  let s=null; try{ s=saisonActive(maintenant); }catch(e){ s=null; }
+  return s?VISUEL_FOND.LISTE.concat(['edition']):VISUEL_FOND.LISTE.slice();
+}
 function visuelFondChoisi(){
   let f=null;
   try{ f=localStorage.getItem(VISUEL_FOND.CLE); }catch(e){ f=null; }
   // Qui avait choisi le rouge retrouve le fond plein qui l'a remplacé.
   if(f==='rouge') f='carbone';
+  if(f==='edition') return visuelFondsListe().indexOf('edition')>=0?'edition':'carbone';
   return VISUEL_FOND.LISTE.indexOf(f)>=0?f:'transparent';
 }
 function visuelFondMemoriser(f){
-  if(VISUEL_FOND.LISTE.indexOf(f)<0) return false;
+  if(visuelFondsListe().indexOf(f)<0) return false;
   try{ localStorage.setItem(VISUEL_FOND.CLE,f); return true; }catch(e){ return false; }
 }
 /** Le fond qu'on dessine vraiment : « photo » sans photo chargée retombe sur « sans fond ». */
@@ -42374,6 +42707,30 @@ function _visuelPeindreFond(g,W,H,fond){
     g.restore();
     return true;
   }
+  if(fond==='edition'){
+    // La couleur de l'édition, sur un noir profond ; son nom et son année en
+    // tête, en petites capitales espacées (le visuel commence plus bas).
+    let sa=null; try{ sa=saisonActive(); }catch(e){ sa=null; }
+    const c=saisonCouleur(sa);
+    g.fillStyle='#050506'; g.fillRect(0,0,W,H);
+    const hal=g.createRadialGradient(W/2,H*0.35,0,W/2,H*0.35,Math.max(W,H)*0.75);
+    hal.addColorStop(0,c+'55'); hal.addColorStop(0.55,c+'14'); hal.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle=hal; g.fillRect(0,0,W,H);
+    g.save(); g.strokeStyle=c+'22'; g.lineWidth=3;
+    for(let x=-H;x<W+H;x+=48){ g.beginPath(); g.moveTo(x,0); g.lineTo(x+H*0.6,H); g.stroke(); }
+    g.restore();
+    g.fillStyle=c; g.fillRect(0,0,W,Math.max(6,Math.round(H/240)));
+    if(sa){
+      const t=('ÉDITION '+sa.nom+' · '+saisonAnnee(sa)).toUpperCase();
+      g.save(); g.textAlign='center'; g.textBaseline='alphabetic'; g.fillStyle=c;
+      const fs=Math.max(12,Math.round(W/42));
+      g.font='800 '+fs+'px Montserrat,sans-serif';
+      let s2=t; while(g.measureText(s2).width>W*0.9&&s2.length>4) s2=s2.slice(0,-2);
+      g.fillText(s2,W/2,Math.round(H/32)+fs);
+      g.restore();
+    }
+    return true;
+  }
   if(fond==='photo'&&_visuelPhotoPrete()){
     const im=_visuelPhoto.img, iw=im.naturalWidth, ih=im.naturalHeight;
     // « cover » : la photo remplit tout, centrée, rognée sur le côté qui dépasse.
@@ -42417,7 +42774,7 @@ function _htmlVisuelFonds(id){
   return _htmlVisuelFormats(id)
     +'<button type="button" class="vf-legende" onclick="voirLegende(typeDuSelecteur(\''+id+'\'))">Voir la légende</button>'
     +'<div class="vf" id="'+id+'" role="radiogroup" aria-label="Fond du visuel">'
-    +VISUEL_FOND.LISTE.map(k=>'<button type="button" class="vf-b'+(k===f?' actif':'')+'" role="radio" aria-checked="'+(k===f)+'" data-fond="'+k+'"'
+    +visuelFondsListe().map(k=>'<button type="button" class="vf-b'+(k===f?' actif':'')+'" role="radio" aria-checked="'+(k===f)+'" data-fond="'+k+'"'
       // Un libellé d'une ligne pour les trois : « changer » se dit au survol.
       +(k==='photo'?' title="Touche à nouveau pour changer de photo"':'')
       +' onclick="visuelFondChoisir(\''+id+'\',\''+k+'\')">'
@@ -42489,7 +42846,7 @@ function _visuelFondsPeindre(id){
 }
 /** Un clic sur une vignette. « Ma photo » sans photo : on ouvre le choix du fichier. */
 function visuelFondChoisir(id,fond){
-  if(VISUEL_FOND.LISTE.indexOf(fond)<0) return false;
+  if(visuelFondsListe().indexOf(fond)<0) return false;
   if(fond==='photo'&&(!_visuelPhotoPrete()||visuelFondEffectif()==='photo')){
     const inp=document.querySelector('#'+id+' .vf-f');
     if(inp){ inp.value=''; inp.click(); }
@@ -43275,6 +43632,9 @@ const _LEGENDES=Object.freeze({
     d=>'Tu cherches une app pour suivre tes séances ? '+(d.code?'Avec le code '+d.code+', tu':'Avec mon code, tu')+' as '+_legMois()+' mois pour essayer, sans carte.',
     d=>'On s’entraîne ensemble ? '+(d.code?'Code '+d.code+' à l’inscription : ':'Mon code à l’inscription : ')+_legMois()+' mois d’essai pour toi.',
     d=>'Toute l’app ouverte, '+_legMois()+' mois, sans carte bancaire. '+(d.code?'Ton code : '+d.code+'.':'Demande-moi mon code.')+' Tu viens ?'],
+  saison:[d=>'Édition bouclée ⚡ Tu étais de la partie ?',
+    d=>'Une édition, un badge, jamais réédité. Tu l’as eu, toi ?',
+    d=>'Objectif tenu jusqu’au bout. La prochaine, tu viens ?'],
   duel:[d=>'Duel lancé ⚡ Qui tient le plus longtemps ? Tu relèves ?',
     d=>'Un contre un, pas de cadeau. Et toi, tu défies qui ?',
     d=>'Le duel est tranché. Tu veux ta revanche ?'],
@@ -46637,6 +46997,8 @@ function finishWorkout(incomplete=false){
   try{ setTimeout(()=>{ defisPublierProgression().catch(()=>{}); },3000); }catch(e){}
   // Les duels : chacun écrit sa valeur, ou démarre le duel (1re séance de l'invité).
   try{ setTimeout(()=>{ duelsApresSeance().catch(()=>{}); },3500); }catch(e){}
+  // L'événement saisonnier : la valeur de l'athlète, pour le compteur collectif.
+  try{ setTimeout(()=>{ saisonsPublierProgression().catch(()=>{}); },4000); }catch(e){}
   // ══ LA SEANCE EST ENREGISTREE. TOUT CE QUI SUIT N'EST QUE DU RENDU ══════
   //
   // Et ce rendu est le plus charge de l'application : trois chiffres, la
@@ -72686,6 +73048,8 @@ function htmlMesBadges(u,maintenant){
     +cases(BADGES_ACQUIS.filter(b=>b.famille==='unique'),false)+'</div>';
   h+='<div class="bdg-sous">Secrets</div><div class="bdg-grille">'
     +cases(BADGES_ACQUIS.filter(b=>b.famille==='secret'),true)+'</div>';
+  // Les éditions : bouclées, en cours, et « Plus jamais disponible ».
+  try{ h+=htmlEditions(u,_saisonsDuCache(),t); }catch(e){}
   h+=htmlDefisReleves(u);
   return h;
 }

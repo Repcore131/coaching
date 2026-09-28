@@ -48,6 +48,9 @@ export function travaux(M) {
     { nom: 'badge', quand: (p) => p.joursem === 0 && apres(p, 17, 0), cles: () => M.abonnes(), un: M.planifies.badge, cout: 10, push: true },
     // Les duels suivis (/duels_actifs) : le push de J-2, la clôture, l'oubli.
     { nom: 'duels', quand: (p) => apres(p, 18, 30), cles: () => (M.duelsActifs ? M.duelsActifs() : []), un: (id, t) => M.duelQuotidienUn(id, t), cout: 10, push: true },
+    // Les événements saisonniers : CHAQUE HEURE (heure: true), le compteur
+    // collectif, les badges Édition, les annonces (lancement, mi-parcours, J-2, fin).
+    { nom: 'saisons', heure: true, quand: () => true, une: (t) => (M.saisonsHeure ? M.saisonsHeure(t) : null) },
   ];
 }
 
@@ -146,7 +149,9 @@ export async function minute({ db, M, compteur, maintenant, source }) {
       if (!w.quand(p) || reste() < 6) continue;
       const ref = db.ref('worker/jobs/' + w.nom);
       let etat = (await ref.get()).val();
-      if (!etat || etat.jour !== p.jour) etat = { jour: p.jour, curseur: 0, fini: false, acc: {} };
+      // Un travail HORAIRE (heure: true) repart à chaque heure de Paris.
+      const periode = w.heure ? p.jour + 'h' + p.heure : p.jour;
+      if (!etat || etat.jour !== periode) etat = { jour: periode, curseur: 0, fini: false, acc: {} };
       if (etat.fini) continue;
       // Firebase ne garde pas un objet vide : relu, il revient null.
       if (!etat.acc || typeof etat.acc !== 'object') etat.acc = {};
