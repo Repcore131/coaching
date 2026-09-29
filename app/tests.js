@@ -39520,6 +39520,8 @@ async function testExercices(){
         's-coach-relances',
         // LES CONTACTS DE LA PAGE (lot C6).
         's-coach-prospects',
+        // LA VUE DU LUNDI MATIN (lot T8).
+        's-coach-lundi',
         // L'ECRAN « Acces », 24/09/2026 : ouvrir et fermer un acces a la
         // main, au bout du rapport payeur du 1er du mois.
         's-coach-acces',
@@ -50374,6 +50376,52 @@ async function testExercices(){
       // 100 × 7 à RIR 2 vaut 130 : au-dessus des 126,7 de 100 × 8 à l'échec. L'ancienne formule
       // lisait 117,5, soit 92,7 % du maximum, et criait à la régression.
       return (e&&e.etat!=='regression')?true:_echec('état : '+(e&&e.etat));})());
+
+    // ══ LOT T8 — LA VUE DU LUNDI MATIN (29/09/2026) ═════════════════════════
+    ok('T8 — l’ordre : drapeau, douleur, décharge proposée, régression, plateau, absence, rien',(()=>{
+      const t=Date.now(), J=864e5;
+      const L=(id,sg,o)=>lundiLigne({id,fname:id},sg,Object.assign({maintenant:t},o||{}));
+      const l=[
+        L('Rien',{}),
+        L('Absent',{decrochage:true}),
+        L('Plateau',{plateauMuscle:true,details:{plateauMuscle:{regression:false,joursRecord:30}}}),
+        L('Regres',{plateauMuscle:true,details:{plateauMuscle:{regression:true,joursRecord:20}}}),
+        L('Fatigue',{},{proposition:{creeLe:t-2*J}}),
+        L('Douleur',{douleur:true,details:{douleur:{dates:[t-5*J,t-3*J]}}}),
+        L('Drapeau',{},{drapeau:{date:t-J}})];
+      const o=lundiTrier(l).map(x=>x.prenom).join();
+      if(o!=='Drapeau,Douleur,Fatigue,Regres,Plateau,Absent,Rien') return _echec(o);
+      const dl=l.find(x=>x.prenom==='Douleur');
+      if(dl.depuis!==t-5*J||dl.signal!=='Douleur répétée') return _echec('douleur : depuis la première séance douloureuse');
+      if(l.find(x=>x.prenom==='Plateau').depuis!==t-30*J) return _echec('plateau : depuis le dernier record');
+      // Trois mots au plus.
+      return l.every(x=>x.signal.split(' ').length<=3)?true:_echec('un signal de plus de trois mots');})());
+    ok('T8 — à égalité, le plus ancien signal d’abord ; sans date, après ; un athlète sans données : « Rien à signaler »',(()=>{
+      const t=Date.now(), J=864e5;
+      const d=(id,j)=>lundiLigne({id,fname:id},{douleur:true,details:{douleur:{dates:j==null?[]:[t-j*J]}}});
+      const o=lundiTrier([d('Recent',2),d('SansDate',null),d('Ancien',9)]).map(x=>x.prenom).join();
+      if(o!=='Ancien,Recent,SansDate') return _echec(o);
+      const v=lundiLigne({id:'v'},null);
+      if(v.cat!=='rien'||v.signal!=='Rien à signaler'||v.prenom!=='Athlète') return _echec(JSON.stringify(v));
+      if(lundiDepuis(null)!=='en ce moment') return _echec('sans date');
+      const h=_htmlLundiLigne(v);
+      return (/Rien à signaler/.test(h)&&!/vide|aucune donnée/i.test(h))?true:_echec(h);})());
+    ok('T8 — la vue ne recalcule rien : cache chaud, zéro calcul complet',(()=>{
+      const J=864e5, t0=Date.now()-40*J;
+      const S=(j,w)=>({id:'t8s'+j,date:t0+j*J,duration:60,sets:3,setsPlanned:3,data:{'SQUAT':{sets:[{done:true,weight:String(w),reps:'5',rir:'2'}]}}});
+      const ath=[0,1,2,3,4].map(k=>({id:'t8a'+k,email:'t8-'+k+'@t.fr',fname:'A'+k,role:'athlete',sessions:[S(1,100),S(8,102.5),S(15,105),S(22,105),S(29,105)]}));
+      // La liste d'athlètes est passée avant : le cache est chaud.
+      ath.forEach(c=>signauxEntrainement(c));
+      const avant=_signauxCalculs;
+      const l=ath.map(_lundiLire);
+      if(_signauxCalculs!==avant) return _echec((_signauxCalculs-avant)+' calcul(s) complet(s) pour une lecture');
+      // Et un dossier jamais vu, lui, se calcule une fois, pas plus.
+      const neuf=Object.assign({},ath[0],{id:'t8neuf',email:'t8-neuf@t.fr'});
+      _lundiLire(neuf); _lundiLire(neuf);
+      if(_signauxCalculs!==avant+1) return _echec('un dossier neuf : '+(_signauxCalculs-avant)+' calculs');
+      // Aucun score ni classement dans ce qui est affiché.
+      const h=l.map(_htmlLundiLigne).join('');
+      return /score|note|rang|\/10|%/i.test(h.replace(/<[^>]+>/g,' '))?_echec('un score affiché'):true;})());
 
     ok('Volts : dix rangs, dans l’ordre, seuils croissants à partir de 0',(()=>{
       const n=RANGS.map(r=>r.nom).join();

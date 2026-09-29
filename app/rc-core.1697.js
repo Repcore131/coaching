@@ -12808,6 +12808,9 @@ function santeBlocsPrives(user){
   return out;
 }
 const _cacheSignaux=new Map();
+// LOT T8 : le nombre de calculs COMPLETS (hors cache). La vue du lundi le lit en
+// test : lire les signaux ne doit jamais en déclencher un de plus.
+let _signauxCalculs=0;
 function _viderCacheSignaux(){ _cacheSignaux.clear(); }
 const SIGNAUX_VIDES=Object.freeze({douleur:false,douleurDiffuse:false,decrochage:false,chuteAssiduite:false,
   plateauMuscle:false,sousMEV:false,volumeHaut:false,formeBasse:false,
@@ -12843,6 +12846,7 @@ function signauxEntrainement(c,opts){
     if(!m) return ''; return String((m.on&&m.on.kcal)||'')+'/'+String((m.off&&m.off.kcal)||''); })();
   const cle=c.id+'|'+ss.length+'|'+(ss.length?tri[tri.length-1].date:0)+'|'+emp+'|'+_ph+'|'+_mk+(_complet?'|C':'');
   if(_cacheSignaux.has(cle)) return _cacheSignaux.get(cle);
+  _signauxCalculs++;
   const r={douleur:false,douleurDiffuse:false,decrochage:false,chuteAssiduite:false,
     plateauMuscle:false,sousMEV:false,volumeHaut:false,formeBasse:false,
     restrictionLongue:false,calibrageDu:false,blocPrioriteFini:false,
@@ -12949,7 +12953,10 @@ function signauxEntrainement(c,opts){
       r.details.plateauMuscle={muscle:x.m,
         lib:(MUSCLES[x.m]||{}).lib||x.m,
         bloques:x.exercices.filter(e=>e.etat==='plateau'||e.etat==='regression').length,
-        semaines:Math.max(0,Math.floor(Math.max(...x.exercices.map(e=>e.joursDepuisRecord||0))/7))};
+        semaines:Math.max(0,Math.floor(Math.max(...x.exercices.map(e=>e.joursDepuisRecord||0))/7)),
+        // LOT T8 : régression ou plateau, et depuis quand (le dernier record).
+        regression:x.exercices.some(e=>e.etat==='regression'),
+        joursRecord:Math.max(0,...x.exercices.map(e=>e.joursDepuisRecord||0))};
     }
   }catch(e){}
 
@@ -26110,6 +26117,120 @@ function relanceVue(at){
   try{ localStorage.setItem(RELANCE_VUE_CLE,String(Number(at)||Date.now())); }catch(e){}
   const z=document.getElementById('clh-relance');
   if(z) z.innerHTML='';
+  return true;
+}
+// ══ LOT T8 : LA VUE DU LUNDI MATIN (29/09/2026) ═══════════════════════════
+//
+// Un athlète par ligne, rangé par ce qui appelle une action : le prénom, le
+// signal en trois mots, depuis quand. Un clic ouvre la fiche À L'ENDROIT du
+// signal.
+//
+// ⚠ ELLE NE RECALCULE RIEN. Elle LIT signauxEntrainement, avec la même
+//   variante que la liste d'athlètes (urgencyScore) : le cache est déjà chaud
+//   quand la liste a été affichée. Mesuré sur vingt dossiers (banc) : froid,
+//   7 à 43 ms selon l'historique, 64 ms au pire en processeur bridé ; chaud,
+//   moins d'une milliseconde. Froid, la liste se remplit par paquets plutôt
+//   que de faire attendre. Un compteur (_signauxCalculs) le vérifie en test.
+// ⚠ AUCUN SCORE, AUCUN CLASSEMENT DES ATHLÈTES ENTRE EUX. Le rang est celui du
+//   SIGNAL (santé avant intendance) ; à signal égal, le plus ancien d'abord.
+// ⚠ « DEPUIS QUAND » N'EST JAMAIS INVENTÉ : la date de la première séance ou
+//   semaine qui a levé le signal quand elle existe, sinon « en ce moment ».
+
+const LUNDI_RANGS=Object.freeze(['drapeau','douleur','fatigue','regression','plateau','absence','rien']);
+const LUNDI_CIBLE=Object.freeze({drapeau:'ccd-securite',douleur:'ccd-douleur',fatigue:'ccd-volume',
+  regression:'ccd-plateaux',plateau:'ccd-plateaux',absence:'ccd-sessions-recap',rien:null});
+const LUNDI_PAQUET=4;
+
+// PURE. La ligne d'un athlète, depuis ce qui est DÉJÀ calculé.
+//   sg : signauxEntrainement(c) ; o : {drapeau, proposition, maintenant}
+function lundiLigne(c,sg,o){
+  const x=o||{}, s=sg||{}, d=s.details||{};
+  const prenom=String((c&&c.fname)||'').trim()||String((c&&c.email)||'Athlète').split('@')[0];
+  const base={id:c&&c.id,prenom};
+  const le=v=>(Number(v)>0?Number(v):null);
+  if(x.drapeau) return Object.assign(base,{cat:'drapeau',signal:'Drapeau rouge santé',depuis:le(x.drapeau.date)});
+  if(s.douleur){
+    const dates=((d.douleur&&d.douleur.dates)||[]).map(Number).filter(n=>n>0);
+    return Object.assign(base,{cat:'douleur',signal:'Douleur répétée',depuis:dates.length?Math.min(...dates):null});
+  }
+  if(s.douleurDiffuse) return Object.assign(base,{cat:'douleur',signal:'Douleurs diffuses',depuis:null});
+  if(x.proposition) return Object.assign(base,{cat:'fatigue',signal:'Décharge proposée',depuis:le(x.proposition.creeLe)});
+  if(s.plateauMuscle){
+    const p=d.plateauMuscle||{};
+    const t=Number(x.maintenant)||Date.now();
+    const depuis=Number(p.joursRecord)>0?t-Number(p.joursRecord)*864e5:null;
+    return Object.assign(base,p.regression?{cat:'regression',signal:'Charges en baisse',depuis}:{cat:'plateau',signal:'Progression bloquée',depuis});
+  }
+  if(s.decrochage) return Object.assign(base,{cat:'absence',signal:'Séances écourtées',depuis:null});
+  if(s.chuteAssiduite) return Object.assign(base,{cat:'absence',signal:'Assiduité en baisse',depuis:null});
+  return Object.assign(base,{cat:'rien',signal:'Rien à signaler',depuis:null});
+}
+// PURE. L'ordre : le rang du signal, puis le plus ancien d'abord, puis ceux
+// sans date. Jamais un score.
+function lundiTrier(lignes){
+  const r=l=>LUNDI_RANGS.indexOf(l.cat);
+  return (lignes||[]).slice().sort((a,b)=>(r(a)-r(b))
+    ||((a.depuis==null)-(b.depuis==null))||((a.depuis||0)-(b.depuis||0))
+    ||String(a.prenom).localeCompare(String(b.prenom)));
+}
+function lundiDepuis(t){
+  if(!(Number(t)>0)) return 'en ce moment';
+  try{ return 'depuis le '+new Date(Number(t)).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}); }catch(e){ return 'en ce moment'; }
+}
+// La ligne d'un athlète, lue sur son dossier : les signaux (cache), le
+// drapeau et la proposition de décharge (des champs déjà écrits).
+function _lundiLire(c){
+  let sg=null; try{ sg=signauxEntrainement(c); }catch(e){ sg=null; }
+  let dr=null; try{ dr=drapeauQuelconqueActif(c)||null; }catch(e){ dr=null; }
+  let pr=null; try{ pr=propositionDechargeOuverte(c); }catch(e){ pr=null; }
+  return lundiLigne(c,sg,{drapeau:dr,proposition:pr});
+}
+function _htmlLundiLigne(l){
+  const E=escapeHtml, id=E(String(l.id||''));
+  return '<button type="button" class="ld-l ld-'+l.cat+'" onclick="lundiOuvrir(\''+id+'\',\''+l.cat+'\')">'
+    +'<b>'+E(l.prenom)+'</b><span class="ld-s">'+E(l.signal)+'</span>'
+    +'<span class="ld-d">'+(l.cat==='rien'?'':E(lundiDepuis(l.depuis)))+'</span></button>';
+}
+let _lundiJeton=0;
+function renderLundi(){
+  const z=document.getElementById('ld-corps');
+  if(!z) return false;
+  let clients=[]; try{ clients=getClients().filter(c=>c&&!c._fromCode); }catch(e){ clients=[]; }
+  if(!clients.length){ z.innerHTML='<div class="ld-vide">Aucun athlète suivi pour l’instant. Ils apparaissent ici dès qu’un athlète a rejoint ton équipe avec ton code.</div>'; return true; }
+  const jeton=++_lundiJeton, lignes=[];
+  const peindre=fini=>{
+    if(jeton!==_lundiJeton) return;
+    const l=lundiTrier(lignes);
+    z.innerHTML=l.map(_htmlLundiLigne).join('')
+      +(fini?'':'<div class="ld-attente">'+(clients.length-lignes.length)+' à lire…</div>');
+  };
+  let i=0;
+  const paquet=()=>{
+    if(jeton!==_lundiJeton) return;
+    for(let k=0;k<LUNDI_PAQUET&&i<clients.length;k++,i++) lignes.push(_lundiLire(clients[i]));
+    peindre(i>=clients.length);
+    if(i<clients.length) setTimeout(paquet,0);
+  };
+  paquet();
+  return true;
+}
+function ouvrirLundi(){ go('s-coach-lundi'); renderLundi(); }
+// Le clic : la fiche, puis l'onglet qui porte le bloc du signal, et le bloc.
+function lundiOuvrir(id,cat){
+  if(!id) return false;
+  try{ openClientDetail(id,false,true); }catch(e){ return false; }
+  const cible=LUNDI_CIBLE[cat];
+  if(!cible) return true;
+  setTimeout(()=>{
+    try{
+      let el=document.getElementById(cible);
+      for(const v of CCD_VUES){
+        if(el&&el.offsetParent!==null) break;
+        ccdVue(v); el=document.getElementById(cible);
+      }
+      if(el) (el.closest('section')||el).scrollIntoView({behavior:'smooth',block:'start'});
+    }catch(e){}
+  },350);
   return true;
 }
 function renderTodoBlock(clients){

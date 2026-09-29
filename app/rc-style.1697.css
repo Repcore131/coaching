@@ -15470,3 +15470,14 @@ html[data-theme="clair"]{background:#f8f8f8}
 .pc-recu b{color:var(--green)}
 .pc-en_attente b{color:var(--orange)}
 .pc-rembourse b,.pc-annule b{color:var(--sub)}
+/* LOT T8 : la vue du lundi matin */
+.ld-l{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;width:100%;text-align:left;padding:12px 14px;margin-bottom:8px;background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--border);border-radius:var(--r-3);color:var(--text);font:inherit;cursor:pointer;min-height:56px}
+.ld-l b{font-size:var(--fs-md);font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ld-s{grid-column:1;font-size:var(--fs-sm);color:var(--text)}
+.ld-d{grid-column:2;grid-row:1 / span 2;align-self:center;font-size:var(--fs-xs);color:var(--sub);text-align:right;white-space:nowrap}
+.ld-drapeau,.ld-douleur{border-left-color:var(--red)}
+.ld-fatigue,.ld-regression{border-left-color:var(--orange)}
+.ld-plateau,.ld-absence{border-left-color:var(--sub)}
+.ld-rien{opacity:.7}
+.ld-rien .ld-s{color:var(--sub)}
+.ld-attente,.ld-vide{font-size:var(--fs-sm);color:var(--sub);line-height:1.6;padding:10px 2px}
