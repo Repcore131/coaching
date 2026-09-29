@@ -54,6 +54,8 @@ jobs:
           cp -a app blog i maj p c a _site/
           cp -a index.html legal.html privacy.html terms.html 404.html aide-apk.html _site/
           cp -a logo.png og-image.png robots.txt sitemap.xml _site/
+          # LOT C6 : le tableau des offres, que la vitrine d'un coach lit pour ses formules.
+          cp -a tarifs.json _site/
           # well-known/ (sans point dans le depot) -> _site/.well-known/.
           # Absent, Firebase sert un assetlinks.json VIDE (« [] ») et la TWA
           # Android s'ouvre avec la barre d'adresse (constate le 28/09/2026).

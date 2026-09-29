@@ -1319,6 +1319,10 @@
             "$autre":    { ".validate": false }
           }
         },
+        // LOT C6 : les formules proposees (des CLES du tableau des offres, jamais
+        // un prix) et le message d accueil montre apres « Ca m interesse ».
+        "formules":    { "$i": { ".validate": "newData.isString() && newData.val().matches(/^(programme_perso|revision_prog|coaching_essentiel|coaching_transfo|coaching_evolution)$/)" } },
+        "accueil":     { ".validate": "newData.isString() && newData.val().length <= 600" },
         "maj":         { ".validate": "newData.isNumber()" },
         "$autre":      { ".validate": false }
       }
@@ -1526,6 +1530,34 @@
     // LES MESSAGES PROGRAMMES DU CANAL (lot C5) : ecrits par le coach, publies
     // par le Worker a l heure dite puis effaces. Le coach seul les lit et les
     // ecrit : tant qu un message est ici, aucun athlete ne le voit.
+    // LES PROSPECTS (lot C6) : ecrits par le Worker (le « Ca m interesse » de
+    // la vitrine), lus et suivis par le coach seul. Le coach ne change que le
+    // statut et ses dates ; il peut aussi effacer une fiche.
+    "prospects": {
+      "$coachKey": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
+        "$id": {
+          ".write": "auth != null && auth.token.email.replace('.', ',') === $coachKey && (!newData.exists() || data.exists())",
+          "at":        { ".validate": "newData.isNumber() && newData.val() === data.val()" },
+          "prenom":    { ".validate": "newData.isString() && newData.val() === data.val()" },
+          "contact":   { ".validate": "newData.isString() && newData.val() === data.val()" },
+          "canal":     { ".validate": "newData.isString() && newData.val() === data.val()" },
+          "formule":   { ".validate": "newData.isString() && newData.val() === data.val()" },
+          "statut":    { ".validate": "newData.isString() && newData.val().matches(/^(nouveau|repondu|athlete|sans_suite)$/)" },
+          "relanceLe": { ".validate": "newData.isNumber()" },
+          "reponduLe": { ".validate": "newData.isNumber()" },
+          "finLe":     { ".validate": "newData.isNumber()" },
+          "$autre":    { ".validate": false }
+        }
+      }
+    },
+    // Les visites de la vitrine, par jour : ecrites par le Worker, lues par le
+    // coach proprietaire du slug.
+    "vitrines_stats": {
+      "$s": {
+        ".read": "auth != null && root.child('slugs').child($s).val() === auth.token.email.replace('.', ',')"
+      }
+    },
     "canal_programmes": {
       "$coachKey": {
         ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey",

@@ -1050,7 +1050,7 @@ function planIdOffre(cle,annuel){
 // Pas de fetch au demarrage : les prix doivent exister avant le premier
 // ecran, hors ligne compris.
 /* TARIFS:DEBUT */
-const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":12,"essentielle":{"mois":9.5,"an":114},"ultime":{"mois":24.9,"an":298.8},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":1},"coach":{"libre":0,"coach":19,"pro":39},"coaching":{"programme_perso":{"prix":99,"mois":3},"revision_prog":{"prix":40,"mois":1},"boutique_prog":{"prix":14.9,"mois":3},"coaching_essentiel":{"prix":150,"mois":1},"coaching_transfo":{"prix":350,"mois":3},"coaching_evolution":{"prix":600,"mois":6}}});
+const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":12,"essentielle":{"mois":9.5,"an":114},"ultime":{"mois":24.9,"an":298.8},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":1},"coach":{"libre":0,"coach":19,"pro":39},"coaching":{"programme_perso":{"prix":99,"mois":3,"lib":"Programme personnalisé","comprend":"Un programme construit pour toi, avec 3 mois d'app inclus. Sans suivi."},"revision_prog":{"prix":40,"mois":1,"lib":"Révision de programme","comprend":"Ton programme ajusté quand tu en as besoin, sans échéance."},"boutique_prog":{"prix":14.9,"mois":3},"coaching_essentiel":{"prix":150,"mois":1,"lib":"Coaching Essentiel","comprend":"Programme sur mesure, suivi dans l'app, bilans et réponses de ton coach."},"coaching_transfo":{"prix":350,"mois":3,"lib":"Coaching Transformation","comprend":"Le suivi complet sur trois mois : programme ajusté bloc après bloc, bilans et réponses de ton coach."},"coaching_evolution":{"prix":600,"mois":6,"lib":"Coaching Évolution","comprend":"Le suivi complet sur six mois, le temps d'une vraie transformation."}}});
 /* TARIFS:FIN */
 // ══ LES OFFRES, ECRITES UNE SEULE FOIS (lot 1) ═══════════════════════════
 //
@@ -5846,7 +5846,7 @@ function _validateAthletePkg(o){
       ||!!params.get('wrapped')||params.get('canal')==='1'||!!params.get('ref')||params.get('parrainage')==='1'
       ||!!params.get('coach')||!!params.get('src')||!!params.get('amb')||params.get('paiements')==='1'
       ||!!params.get('duel')||params.get('duels')==='1'||!!params.get('saison')||params.get('parcours')==='1'||params.get('reprise')==='1'
-      ||!!params.get('apk')||!!params.get('sante'));
+      ||!!params.get('apk')||!!params.get('sante')||params.get('prospects')==='1');
     // ?apk=<versionCode> — l'APK Android (LauncherActivity) l'ajoute à chaque
     // ouverture. Rangé dans rc_apk : la feuille « Connecter mes données
     // santé » sait ainsi qu'elle tourne dans l'APK (rcDansApk).
@@ -5910,6 +5910,8 @@ function _validateAthletePkg(o){
     if(_wrDeep&&/^(m-\d{4}-\d{2}|a-\d{4}|1)$/.test(_wrDeep)) window._pendingWrappedOpen=_wrDeep;
     // ?canal=1 — les push des défis (nouveau défi, plus que 48 h).
     if(params.get('canal')==='1') window._pendingCanalOpen=true;
+    // ?prospects=1 — les notifications au coach d'un nouveau contact (C6).
+    if(params.get('prospects')==='1') window._pendingProspectsOpen=true;
     // ?ref=<CODE> — le lien de parrainage. Gardé jusqu'à l'inscription.
     // ⚠ ÉCRIT ICI, EN CLAIR, ET NON PAR parrainageMemoriserRef : ce bloc tourne
     //   pendant le chargement du script, AVANT que les constantes du module
@@ -6200,6 +6202,9 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // lien et une image. Du commerce, pas de la sante — mais il DOIT etre classe,
   // sinon il n'est protege par rien.
   'vitrineProgrammes',
+  // Les formules proposées sur la vitrine (des clés du tableau des offres) et
+  // le message d'accueil des prospects (lot C6).
+  'vitrineFormules','prospectAccueil',
   'catchphrase','phone','diplomes','promoBanners','seenBilans','bio','dispo',
   'contact','vision','level','salles','rapPreset','blocPriorite','lastCoachVisit',
   'demandesVideo',
@@ -7453,6 +7458,8 @@ function routeUser(){
     setTimeout(()=>{ try{ ouvrirWrapped(_k==='1'?null:_k); }catch(e){} },1000);}
   if(window._pendingCanalOpen){ window._pendingCanalOpen=false;
     setTimeout(()=>{ try{ loadCanal(); }catch(e){} },1000);}
+  if(window._pendingProspectsOpen&&currentUser&&currentUser.role==='coach'){ window._pendingProspectsOpen=false;
+    setTimeout(()=>{ try{ ouvrirProspects(); }catch(e){} },1000);}
   if(window._pendingParrainageOpen){ window._pendingParrainageOpen=false;
     setTimeout(()=>{ try{ ouvrirParrainage(); }catch(e){} },1000);}
   if(window._pendingSaisonOpen){ window._pendingSaisonOpen=false;
@@ -19288,6 +19295,179 @@ function copierLienBio(btn){
   toast(l);
   return false;
 }
+// ══ LOT C6 : LE PARCOURS DU PROSPECT (29/09/2026) ═════════════════════════
+//
+// La vitrine publique (/coach/<slug>, c/index.html) porte les formules que le
+// coach coche ici, avec pour chacune « Ça m'intéresse » : un prénom et un
+// moyen de contact, et le serveur léger crée le prospect chez le coach
+// (prospects/<coach>, cloudflare/src/prospects.js). La personne lit aussitôt
+// le message d'accueil du coach. Sans réponse sous 48 h, c'est le COACH que
+// le serveur relance.
+//
+// ⚠ LES PRIX NE SONT JAMAIS RECOPIÉS. La vitrine publie des CLÉS de formules ;
+//   la page lit le prix, la durée et ce que la formule comprend dans
+//   tarifs.json, le tableau des offres (OFFRES ici en est la copie).
+// ⚠ AUCUN PAIEMENT. Répondre, fixer le premier échange, encaisser : c'est le
+//   coach, hors de l'app. Rien de ça ne s'automatise.
+// ⚠ TROIS CHIFFRES, pas un tableau de bord : les visites de la page, les
+//   « ça m'intéresse », ceux qui sont devenus athlètes. Sur trente jours.
+
+const VITRINE_FORMULES=Object.freeze(['programme_perso','revision_prog','coaching_essentiel','coaching_transfo','coaching_evolution']);
+const PROSPECT_ACCUEIL_MAX=600;
+const PROSPECT_ACCUEIL_DEFAUT='Merci {prénom} ! J’ai bien reçu ta demande. Je te réponds sous 48 h, par le moyen que tu m’as laissé, pour qu’on fixe un premier échange. Rien n’est à payer d’ici là.';
+const PROSPECT_STATUT_LIB=Object.freeze({nouveau:'Attend ta réponse',repondu:'Tu as répondu',athlete:'Devenu athlète',sans_suite:'Sans suite'});
+const PROSPECT_FENETRE_J=30;
+
+// PURE. Les formules cochées par le coach, dans l'ordre du tableau.
+function vitrineFormulesDe(u){
+  const l=Array.isArray(u&&u.vitrineFormules)?u.vitrineFormules:[];
+  return VITRINE_FORMULES.filter(k=>l.indexOf(k)>=0&&OFFRES[k]);
+}
+// PURE. Le message d'accueil, borné ; le défaut si le coach n'a rien écrit.
+function prospectAccueilDe(u){
+  const s=String((u&&u.prospectAccueil)||'').replace(/\s+\n/g,'\n').trim().slice(0,PROSPECT_ACCUEIL_MAX);
+  return s||PROSPECT_ACCUEIL_DEFAUT;
+}
+// PURE. La durée d'une formule, comme la page publique l'écrit.
+function formuleDuree(k){
+  const o=OFFRES[k]; if(!o) return '';
+  if(k==='revision_prog') return 'à la demande';
+  if(k==='programme_perso') return 'une fois, '+o.mois+' mois d’app inclus';
+  return o.mois+' mois de suivi';
+}
+// PURE. Les trois chiffres, sur trente jours glissants.
+//   prospects : prospects/<coach> (brut) ; stats : vitrines_stats/<slug> {AAAA-MM-JJ: n}
+function prospectsMesure(prospects,stats,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const debut=t-PROSPECT_FENETRE_J*864e5;
+  const jour0=localISODate(new Date(debut));
+  let vues=0;
+  const s=(stats&&typeof stats==='object')?stats:{};
+  for(const j of Object.keys(s)) if(/^\d{4}-\d{2}-\d{2}$/.test(j)&&j>=jour0) vues+=Math.max(0,Math.round(Number(s[j])||0));
+  const l=prospectsListe(prospects).filter(p=>Number(p.at)>=debut);
+  return {vues,interesses:l.length,athletes:l.filter(p=>p.statut==='athlete').length,
+    enAttente:prospectsListe(prospects).filter(p=>(p.statut||'nouveau')==='nouveau').length};
+}
+// PURE. La liste, récente d'abord.
+function prospectsListe(brut){
+  const o=(brut&&typeof brut==='object')?brut:{};
+  return Object.keys(o).map(id=>Object.assign({id},o[id])).filter(p=>p&&Number(p.at)>0).sort((a,b)=>Number(b.at)-Number(a.at));
+}
+// PURE. Le lien pour répondre : WhatsApp pour un numéro, un e-mail sinon. Le
+// texte est un début, le coach le finit dans son application.
+function prospectLienReponse(p,coach){
+  const pr=String((p&&p.prenom)||'').trim();
+  const moi=String((coach&&coach.fname)||'').trim();
+  const lib=(OFFRES[p&&p.formule]||{}).lib||'ma formule';
+  const txt='Salut '+pr+', c’est '+(moi||'ton coach')+' ! Merci pour ton intérêt pour '+lib+'. Quand es-tu disponible pour qu’on en parle quelques minutes ?';
+  if(p&&p.canal==='tel') return 'https://wa.me/'+String(p.contact||'').replace(/[^0-9]/g,'')+'?text='+encodeURIComponent(txt);
+  if(p&&p.canal==='email') return 'mailto:'+encodeURIComponent(String(p.contact||''))+'?subject='+encodeURIComponent('Ton coaching avec '+(moi||'moi'))+'&body='+encodeURIComponent(txt);
+  return '';
+}
+
+// ── Les réglages, dans l'identité de la team ──────────────────────────────
+function htmlReglagesProspects(u){
+  const f=vitrineFormulesDe(u), E=escapeHtml;
+  return '<div class="pr-reg"><div class="pp-lab">Mes formules sur ma page</div>'
+    +'<p class="sub pr-p">Coche celles que tu proposes. Le prix, la durée et ce qu’elles comprennent viennent du tableau des offres : tu n’as rien à recopier. Aucun paiement sur la page, la personne te laisse juste son contact.</p>'
+    +VITRINE_FORMULES.map(k=>{ const o=OFFRES[k]; return '<label class="pr-f"><input type="checkbox" data-formule="'+k+'"'+(f.indexOf(k)>=0?' checked':'')+'>'
+      +'<span><b>'+E(o.lib)+'</b> '+E(prixOffre(k))+' · '+E(formuleDuree(k))+'</span></label>'; }).join('')
+    +'<label class="pr-lab" for="coach-prospect-accueil">Le message qu’on lit après « Ça m’intéresse »</label>'
+    +'<textarea id="coach-prospect-accueil" rows="4" maxlength="'+PROSPECT_ACCUEIL_MAX+'" placeholder="'+E(PROSPECT_ACCUEIL_DEFAUT)+'">'+E(String((u&&u.prospectAccueil)||''))+'</textarea>'
+    +'<div class="sub pr-p">Dis ce qui se passe ensuite, et sous quel délai. {prénom} est remplacé par le prénom de la personne. Laissé vide, c’est le message proposé qui s’affiche.</div></div>';
+}
+function _rendreReglagesProspects(){
+  const z=document.getElementById('coach-formules');
+  if(!z||!currentUser||currentUser.role!=='coach') return false;
+  if(z.dataset.dirty) return false;
+  z.innerHTML=htmlReglagesProspects(currentUser);
+  z.addEventListener('input',()=>{ z.dataset.dirty='1'; },{once:true});
+  return true;
+}
+// Lu par saveCoachIdentity, comme les autres champs de l'identité.
+function _lireReglagesProspects(){
+  const z=document.getElementById('coach-formules');
+  if(!z||!z.querySelector('[data-formule]')) return false;
+  currentUser.vitrineFormules=[...z.querySelectorAll('[data-formule]')].filter(c=>c.checked).map(c=>c.dataset.formule).filter(k=>VITRINE_FORMULES.indexOf(k)>=0);
+  const a=document.getElementById('coach-prospect-accueil');
+  if(a) currentUser.prospectAccueil=String(a.value||'').trim().slice(0,PROSPECT_ACCUEIL_MAX);
+  delete z.dataset.dirty;
+  return true;
+}
+
+// ── L'entrée sur l'accueil du coach, et l'écran ───────────────────────────
+let _prBrut=null, _prStats=null, _prLu=0;
+async function _prCharger(force){
+  if(!force&&_prBrut&&Date.now()-_prLu<3*60e3) return;
+  const moi=String((currentUser&&currentUser.email)||'').replace(/\./g,',');
+  if(!moi) return;
+  const slug=currentUser.vitrineSlug;
+  const [a,b]=await Promise.all([_fbJson('prospects/'+moi),slug?_fbJson('vitrines_stats/'+slug):Promise.resolve({ok:true,v:null})]);
+  if(a.ok) _prBrut=a.v||{};
+  if(b.ok) _prStats=b.v||{};
+  _prLu=Date.now();
+}
+function renderEntreeProspects(){
+  const z=document.getElementById('ch-prospects');
+  if(!z||!currentUser||currentUser.role!=='coach') return false;
+  if(!vitrineFormulesDe(currentUser).length&&!_prBrut){ z.innerHTML=''; if(!_prLu) _prCharger().then(()=>{ if(_prBrut&&Object.keys(_prBrut).length) renderEntreeProspects(); }).catch(()=>{}); return false; }
+  const m=prospectsMesure(_prBrut,_prStats);
+  z.innerHTML='<button type="button" class="rel-entree pr-entree" onclick="ouvrirProspects()">'
+    +'<span class="rel-entree-t">Ma page</span>'
+    +'<span class="rel-entree-e">'+m.vues+' visite'+(m.vues>1?'s':'')+' · '+m.interesses+' intéressé'+(m.interesses>1?'s':'')+' · '+m.athletes+' athlète'+(m.athletes>1?'s':'')
+    +(m.enAttente?' · <b>'+m.enAttente+' attend'+(m.enAttente>1?'ent':'')+' ta réponse</b>':'')+'</span></button>';
+  if(!_prLu) _prCharger().then(()=>renderEntreeProspects()).catch(()=>{});
+  return true;
+}
+function ouvrirProspects(){
+  go('s-coach-prospects');
+  renderProspects();
+  _prCharger(true).then(()=>{ renderProspects(); renderEntreeProspects(); }).catch(()=>{});
+}
+function _prJour(t){ try{ return new Date(t).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}); }catch(e){ return ''; } }
+function renderProspects(){
+  const z=document.getElementById('pr-corps');
+  if(!z||!currentUser) return false;
+  const E=escapeHtml;
+  const m=prospectsMesure(_prBrut,_prStats);
+  let h='<div class="pr-chiffres">'
+    +'<div><b>'+m.vues+'</b><span>visite'+(m.vues>1?'s':'')+'</span></div>'
+    +'<div><b>'+m.interesses+'</b><span>intéressé'+(m.interesses>1?'s':'')+'</span></div>'
+    +'<div><b>'+m.athletes+'</b><span>devenu'+(m.athletes>1?'s':'')+' athlète'+(m.athletes>1?'s':'')+'</span></div></div>'
+    +'<p class="sub pr-p">Sur les trente derniers jours. C’est ce qui dit si ta page travaille.</p>';
+  if(!vitrineFormulesDe(currentUser).length)
+    h+='<div class="pr-vide">Ta page ne propose encore aucune formule. Coche-les dans ton profil, rubrique « Mes formules sur ma page » : le bouton « Ça m’intéresse » apparaît sous chacune.</div>';
+  const l=prospectsListe(_prBrut);
+  if(!_prBrut) h+='<div class="sub pr-p">Lecture…</div>';
+  else if(!l.length) h+='<div class="pr-vide">Personne n’a encore laissé son contact. Partage le lien de ta page dans ta bio : chaque « Ça m’intéresse » arrive ici, et tu es prévenu.</div>';
+  else h+=l.map(p=>{
+    const st=p.statut||'nouveau', lien=prospectLienReponse(p,currentUser), id=E(p.id);
+    return '<div class="pr-l pr-'+st+'"><div class="pr-l-h"><b>'+E(p.prenom||'')+'</b><span>'+E(PROSPECT_STATUT_LIB[st]||st)+'</span></div>'
+      +'<div class="pr-l-d">'+E((OFFRES[p.formule]||{}).lib||'')+' · '+E(_prJour(Number(p.at)))+' · '+E(p.contact||'')+'</div>'
+      +'<div class="pr-l-b">'
+      +(lien?'<a class="btn btn-outline btn-sm" href="'+safeUrl(lien)+'" target="_blank" rel="noopener" onclick="prospectStatut(\''+id+'\',\'repondu\',true)">Répondre</a>':'')
+      +(st==='nouveau'?'<button type="button" class="cp-lien" onclick="prospectStatut(\''+id+'\',\'repondu\')">J’ai répondu</button>':'')
+      +(st!=='athlete'?'<button type="button" class="cp-lien" onclick="prospectStatut(\''+id+'\',\'athlete\')">Devenu athlète</button>':'')
+      +(st!=='sans_suite'&&st!=='athlete'?'<button type="button" class="cp-lien" onclick="prospectStatut(\''+id+'\',\'sans_suite\')">Sans suite</button>':'')
+      +'</div></div>';
+  }).join('');
+  z.innerHTML=h;
+  return true;
+}
+// Le coach suit son contact : un statut et sa date, rien d'autre ne change.
+async function prospectStatut(id,statut,silencieux){
+  const p=(_prBrut||{})[id]; if(!p) return false;
+  if(statut==='repondu'&&p.statut&&p.statut!=='nouveau') return true;
+  const moi=String((currentUser&&currentUser.email)||'').replace(/\./g,',');
+  const maj={statut};
+  if(statut==='repondu') maj.reponduLe=Date.now(); else maj.finLe=Date.now();
+  const r=await _fbJson('prospects/'+moi+'/'+id,'PATCH',maj);
+  if(!r.ok){ if(!silencieux) toast('Non enregistré : réessaie une fois en ligne.','var(--orange)'); return false; }
+  Object.assign(p,maj);
+  renderProspects(); renderEntreeProspects();
+  return true;
+}
+
 // ── La vitrine d'un coach ──────────────────────────────────────────────────
 // PURE. « Kévin Guellec » → « kevin-guellec ».
 function slugDe(prenom,nom){
@@ -19319,6 +19499,11 @@ function vitrinePubliqueDonnees(u,maintenant){
     return x;
   }).filter(x=>x.name);
   if(pr.length) o.programmes=pr;
+  // C6 : les CLÉS des formules proposées (le prix se lit dans tarifs.json) et
+  // le message d'accueil qu'on lit après « Ça m'intéresse ».
+  const fo=vitrineFormulesDe(u);
+  if(fo.length) o.formules=fo;
+  o.accueil=prospectAccueilDe(u);
   return o;
 }
 // Publiée à chaque enregistrement du profil coach (pushProfilCoach). Le slug
@@ -25730,6 +25915,7 @@ function relanceVue(at){
 function renderTodoBlock(clients){
   _renderPremiersPas(clients);
   try{ renderEntreeRelances(); }catch(e){}
+  try{ renderEntreeProspects(); }catch(e){}
   const el=document.getElementById('ch-todo');if(!el) return;
   const now=Date.now(),SOON=14*864e5;
   const lt=c=>(c.bilans||[]).reduce((m,b)=>Math.max(m,b.date),0);
@@ -119105,6 +119291,8 @@ function saveCoachIdentity(){
 
   const _dip=_lireDiplomes();
   if(_dip!==null) currentUser.diplomes=_dip;
+  // C6 : les formules de la vitrine et le message d'accueil des prospects.
+  try{ _lireReglagesProspects(); }catch(e){}
   const _envoi=CLOUD.pushProfilCoach(currentUser);
   const ok=saveUser();
   // Push immédiat non-debounced pour que les athlètes voient les données immédiatement
@@ -119908,6 +120096,7 @@ function loadMonetisationTab(){
   });
   Object.keys(_IMG_VITRINE).forEach(id=>_apercuVitrine(id,u[_IMG_VITRINE[id][0]]||''));
   try{ _rendreLienVitrineCoach(); }catch(e){}
+  try{ _rendreReglagesProspects(); }catch(e){}
   const _dz=document.getElementById('coach-diplomes-liste');
   if(_dz){ _dz.innerHTML=''; (u.diplomes||[]).forEach(d=>ajouterDiplomeRow(d&&d.titre,d&&d.image)); }
   _chargerDispoCoach(u);

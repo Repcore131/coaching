@@ -51,6 +51,24 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
 .pied{text-align:center;margin-top:30px;font-size:12px;color:#6b6b72}
 .pied a{color:#6b6b72}
 .vide{text-align:center;padding:60px 10px;color:var(--gris)}
+/* LOT C6 : les formules du coach, lues dans tarifs.json, et « Ça m'intéresse ». */
+.frm{background:var(--carte);border:1px solid var(--bord);border-radius:14px;padding:14px;margin-bottom:10px}
+.frm b{display:block;font-size:16px}
+.frm p{margin:4px 0 10px;color:#d4d4d8;font-size:14px}
+.frm .ligne{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.frm .prix{font-weight:800;font-size:17px}
+.frm .duree{color:var(--gris);font-size:13px;font-weight:600}
+.frm button,.frm .env{color:#fff;background:#2a0707;border:1px solid #5a0a0a;border-radius:10px;padding:10px 14px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;min-height:44px}
+.frm form{display:none;margin-top:12px;gap:8px;flex-direction:column}
+.frm.ouvert form{display:flex}
+.frm.ouvert .interesse{display:none}
+.frm input{width:100%;min-height:46px;padding:10px 12px;border-radius:10px;border:1px solid var(--bord);background:#0f0f11;color:#fff;font:inherit;font-size:16px}
+.frm .piege{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+.frm .note{color:var(--gris);font-size:12px;line-height:1.5;margin:0}
+.frm .err{color:#ff8a8a;font-size:13px;margin:0;min-height:0}
+.frm .env{background:var(--rouge);border-color:var(--rouge)}
+.merci{background:#140606;border:1px solid #4a0c0c;border-radius:12px;padding:14px;margin-top:12px;white-space:pre-line;color:#fff}
+.merci small{display:block;color:var(--gris);margin-top:8px}
 .sq{background:linear-gradient(90deg,#161619,#1f1f23,#161619);background-size:200% 100%;animation:s 1.2s infinite;border-radius:10px}
 @keyframes s{to{background-position:-200% 0}}
 @media (prefers-reduced-motion:reduce){.sq{animation:none}}
@@ -72,13 +90,55 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
   var z=document.getElementById('m');
   function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
   function https(u){ u=String(u||''); return /^https:\/\//.test(u)?esc(u):''; }
+  var SERVEUR='https://repcore-serveur.repcore.workers.dev';
+  function euros(n){ var x=Number(n)||0; var s=(Math.round(x*100)%100===0)?String(Math.round(x)):x.toFixed(2).replace('.',','); return s+'\u00a0'+String.fromCharCode(8364); }
+  function duree(k,f){
+    if(k==='revision_prog') return 'à la demande';
+    if(k==='programme_perso') return 'une fois, '+f.mois+' mois d’app inclus';
+    return f.mois+' mois de suivi';
+  }
+  var MSG={prenom:'Écris ton prénom.',contact:'Laisse un téléphone ou un e-mail valable.',formule:'Cette formule n’est plus proposée.',
+    plafond:'Beaucoup de demandes aujourd’hui : réessaie demain.',trop:'Trop d’essais d’un coup : réessaie dans une minute.',page:'Cette page n’est plus en ligne.'};
+  function brancherFormules(v,prenom){
+    var accueil=String(v.accueil||'Merci {prénom} ! J’ai bien reçu ta demande. Je te réponds sous 48 h, par le moyen que tu m’as laissé, pour qu’on fixe un premier échange.');
+    [].forEach.call(z.querySelectorAll('.frm'),function(c){
+      c.querySelector('.interesse').addEventListener('click',function(){ c.classList.add('ouvert'); var i=c.querySelector('input'); if(i) i.focus(); });
+      var f=c.querySelector('form');
+      f.addEventListener('submit',function(e){
+        e.preventDefault();
+        var err=f.querySelector('.err'), bt=f.querySelector('.env');
+        var d={slug:slug,formule:c.getAttribute('data-f'),prenom:f.prenom.value,contact:f.contact.value,site:f.site.value};
+        if(!String(d.prenom).trim()){ err.textContent=MSG.prenom; return; }
+        if(!String(d.contact).trim()){ err.textContent=MSG.contact; return; }
+        bt.disabled=true; bt.textContent='Envoi…'; err.textContent='';
+        fetch(SERVEUR+'/prospect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)})
+          .then(function(r){ return r.json().catch(function(){ return {ok:false}; }); })
+          .then(function(r){
+            if(!r||!r.ok){ err.textContent=MSG[r&&r.raison]||'Envoi impossible pour l’instant. Réessaie dans un moment.'; bt.disabled=false; bt.textContent='Envoyer à '+prenom; return; }
+            var p=String(d.prenom).trim().split(' ')[0];
+            f.outerHTML='<div class="merci">'+esc(accueil.replace(/\{pr[ée]nom\}/gi,p))+'<small>'+prenom+(r.deja?' · ta demande était déjà arrivée.':'')+'</small></div>';
+          })
+          .catch(function(){ err.textContent='Envoi impossible pour l’instant. Réessaie dans un moment.'; bt.disabled=false; bt.textContent='Envoyer à '+prenom; });
+      });
+    });
+    // LA VISITE : une par appareil et par jour, pour que le coach sache si sa
+    // page travaille. Ni cookie, ni identifiant.
+    try{ var kv='rc_vv_'+slug+'_'+new Date().toISOString().slice(0,10);
+      if(!localStorage.getItem(kv)){ localStorage.setItem(kv,'1'); fetch(SERVEUR+'/vitrine-vue?s='+encodeURIComponent(slug),{mode:'no-cors',keepalive:true}).catch(function(){}); } }catch(e){}
+  }
   function vide(t){z.removeAttribute('aria-busy');z.innerHTML='<div class="vide"><p>'+esc(t)+'</p><a class="cta" href="'+racine+'i/">Découvrir RepCore</a></div>';}
   if(!/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(slug)) return vide('Cette page n’existe pas.');
   var ctrl=window.AbortController?new AbortController():null;
   setTimeout(function(){ if(ctrl) ctrl.abort(); },6000);
+  // LES PRIX SONT LUS DANS tarifs.json, le tableau des offres, JAMAIS RECOPIES
+  // dans la vitrine : la vitrine ne porte que les CLES des formules choisies par
+  // le coach. Tableau illisible : les formules ne s'affichent pas, plutot qu'un
+  // prix faux.
+  var tarifs=fetch(racine+'tarifs.json').then(function(r){ return r.ok?r.json():null; }).catch(function(){ return null; });
   fetch(DB+'/vitrines/'+encodeURIComponent(slug)+'.json',ctrl?{signal:ctrl.signal}:{})
     .then(function(r){ return r.ok?r.json():null; })
-    .then(function(v){
+    .then(function(v){ return tarifs.then(function(T){ return {v:v,T:T}; }); })
+    .then(function(x){ var v=x.v, T=x.T;
       if(!v||!v.nom) return vide('Cette page n’existe pas, ou ce coach ne la publie plus.');
       var nom=esc(v.nom), prenom=esc(String(v.nom).split(' ')[0]);
       document.title=v.nom+' : coaching sur RepCore';
@@ -98,12 +158,30 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
           +'<div class="ligne"><span class="prix">'+esc(p.prix||'')+'</span>'
           +(https(p.lienAchat)?'<a href="'+https(p.lienAchat)+'" target="_blank" rel="noopener noreferrer">Voir le programme</a>':'')
           +'</div></div></div>';}).join('');
+      var fk=v.formules?Object.keys(v.formules).map(function(k){return v.formules[k];}):[];
+      var C=(T&&T.coaching)||{};
+      fk=fk.filter(function(k){ return C[k]&&typeof C[k].prix==='number'&&C[k].lib; });
+      if(fk.length){
+        h+='<h2>Mes formules</h2>'+fk.map(function(k){
+          var f=C[k];
+          return '<div class="frm" data-f="'+esc(k)+'"><b>'+esc(f.lib)+'</b>'+(f.comprend?'<p>'+esc(f.comprend)+'</p>':'')
+            +'<div class="ligne"><span><span class="prix">'+euros(f.prix)+'</span> <span class="duree">'+esc(duree(k,f))+'</span></span>'
+            +'<button type="button" class="interesse">Ça m’intéresse</button></div>'
+            +'<form novalidate><input name="prenom" autocomplete="given-name" maxlength="30" placeholder="Ton prénom" aria-label="Ton prénom">'
+            +'<input name="contact" autocomplete="tel" maxlength="120" placeholder="Ton téléphone ou ton e-mail" aria-label="Ton téléphone ou ton e-mail">'
+            +'<input name="site" class="piege" tabindex="-1" autocomplete="off" aria-hidden="true">'
+            +'<p class="err" aria-live="polite"></p>'
+            +'<button type="submit" class="env">Envoyer à '+prenom+'</button>'
+            +'<p class="note">Aucun paiement ici. '+prenom+' te répond, vous faites connaissance, et tu décides ensuite. Ton prénom et ton contact ne servent qu’à ça.</p></form></div>';
+        }).join('');
+      }
       var src=(q.get('src')||'vitrine').replace(/[^a-z0-9_-]/gi,'').slice(0,20);
       var ref=(q.get('ref')||'').toUpperCase();
       h+='<a class="cta" href="'+racine+'i/?coach='+encodeURIComponent(slug)+'&src='+src
         +(/^[A-Z]{4,6}[A-Z2-9]{3}$/.test(ref)?'&ref='+ref:'')+'">Commencer avec '+prenom+'</a>';
       h+='<div class="pied"><a href="'+racine+'">RepCore</a> · le coaching, séance après séance.</div>';
       z.removeAttribute('aria-busy'); z.innerHTML=h;
+      brancherFormules(v,prenom);
     })
     .catch(function(){ vide('Page injoignable pour l’instant. Réessaie dans un moment.'); });
 })();

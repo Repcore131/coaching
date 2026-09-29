@@ -15417,3 +15417,28 @@ html[data-theme="clair"]{background:#f8f8f8}
 .cp-progl{display:flex;flex-direction:column;gap:4px;min-width:0}
 .cp-progl input,.cp-progl select{width:100%;min-width:0}
 .cp-progs{grid-column:1 / -1;font-size:var(--fs-xs);line-height:1.5}
+/* LOT C6 : les formules de la vitrine, et les contacts arrivés par la page */
+.pr-reg{display:flex;flex-direction:column;gap:8px}
+.pr-p{font-size:var(--fs-xs);line-height:1.6;margin:0}
+.pr-f{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--border);cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;margin:0;font-size:var(--fs-sm);line-height:1.45;color:var(--text)}
+.pr-f input{flex:none;width:20px;height:20px;margin:1px 0 0;accent-color:var(--red)}
+.pr-f b{font-weight:800}
+.pr-lab{font-size:var(--fs-xs);color:var(--sub);margin-top:8px;text-transform:none;letter-spacing:0}
+.pr-reg textarea{width:100%;box-sizing:border-box;resize:vertical}
+.pr-entree b{color:var(--orange);font-weight:800}
+.pr-chiffres{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px}
+.pr-chiffres div{display:flex;flex-direction:column;gap:2px;padding:12px 10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);min-width:0}
+.pr-chiffres b{font-size:var(--fs-2xl);font-weight:900;line-height:1;color:var(--text)}
+.pr-chiffres span{font-size:var(--fs-2xs);color:var(--sub);line-height:1.35}
+.pr-vide{font-size:var(--fs-sm);line-height:1.6;color:var(--text);padding:14px;margin:12px 0;background:var(--surface-1);border:1px dashed var(--border);border-radius:var(--r-3)}
+.pr-l{display:flex;flex-direction:column;gap:4px;padding:12px 14px;margin-top:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3)}
+.pr-nouveau{border-left:3px solid var(--orange)}
+.pr-athlete{border-left:3px solid var(--green)}
+.pr-sans_suite{opacity:.62}
+.pr-l-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.pr-l-h b{font-size:var(--fs-md);font-weight:800}
+.pr-l-h span{font-size:var(--fs-2xs);color:var(--sub);font-weight:700;text-align:right}
+.pr-nouveau .pr-l-h span{color:var(--orange)}
+.pr-l-d{font-size:var(--fs-xs);color:var(--sub);line-height:1.5;word-break:break-word}
+.pr-l-b{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:6px}
+.pr-l-b .btn{margin:0}

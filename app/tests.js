@@ -39520,6 +39520,8 @@ async function testExercices(){
         's-coach-tunnel',
         // LES RELANCES AUTOMATIQUES (lot C3, 29/09/2026).
         's-coach-relances',
+        // LES CONTACTS DE LA PAGE (lot C6).
+        's-coach-prospects',
         // L'ECRAN « Acces », 24/09/2026 : ouvrir et fermer un acces a la
         // main, au bout du rapport payeur du 1er du mois.
         's-coach-acces',
@@ -50174,6 +50176,64 @@ async function testExercices(){
         return _cpSemaineClose(Date.now()+8*864e5)?_echec('close la semaine suivante'):true;
       } finally { if(av==null) localStorage.removeItem(CPROP_CLE); else localStorage.setItem(CPROP_CLE,av); }})());
 
+    // ══ LOT C6 — LE PARCOURS DU PROSPECT (29/09/2026) ═══════════════════════
+    ok('C6 — la vitrine publie les CLÉS des formules cochées, jamais un prix ; le prix se lit dans le tableau des offres',(()=>{
+      const u={role:'coach',email:'c6@t.fr',fname:'Kévin',lname:'Guellec',vitrineFormules:['coaching_evolution','boutique_prog','inconnue','coaching_essentiel']};
+      const v=vitrinePubliqueDonnees(u,1);
+      if(JSON.stringify(v.formules)!==JSON.stringify(['coaching_essentiel','coaching_evolution'])) return _echec('formules : '+JSON.stringify(v.formules));
+      if(/prix|€|\b150\b|\b600\b/.test(JSON.stringify(v))) return _echec('un prix recopié dans la vitrine : '+JSON.stringify(v));
+      if(v.accueil!==PROSPECT_ACCUEIL_DEFAUT) return _echec('accueil par défaut');
+      if(vitrinePubliqueDonnees({role:'coach',fname:'K',prospectAccueil:'  Merci {prénom}, je te réponds demain.  '},1).accueil!=='Merci {prénom}, je te réponds demain.') return _echec('accueil du coach');
+      if('formules' in vitrinePubliqueDonnees({role:'coach',fname:'K'},1)) return _echec('des formules sans rien cocher');
+      // Les réglages montrent le prix du tableau, et la durée.
+      const d=document.createElement('div'); d.innerHTML=htmlReglagesProspects(u);
+      if(d.querySelectorAll('[data-formule]').length!==5||d.querySelectorAll('[data-formule]:checked').length!==2) return _echec('cases');
+      const t=d.textContent;
+      for(const k of VITRINE_FORMULES) if(t.indexOf(prixOffre(k))<0) return _echec('prix de '+k+' absent : '+prixOffre(k));
+      if(!/6 mois de suivi/.test(t)||!/à la demande/.test(t)||!/une fois, 3 mois d’app inclus/.test(t)) return _echec('durées : '+t);
+      // Tarifs.json porte ce que chaque formule comprend : c'est lui que la page lit.
+      return VITRINE_FORMULES.every(k=>TARIFS.coaching[k]&&TARIFS.coaching[k].lib&&TARIFS.coaching[k].comprend&&typeof TARIFS.coaching[k].prix==='number')
+        ?true:_echec('tarifs.json ne décrit pas toutes les formules');})());
+    ok('C6 — les trois chiffres sur trente jours : visites, intéressés, devenus athlètes',(()=>{
+      const t=Date.now(), j=n=>localISODate(new Date(t-n*864e5));
+      const stats={[j(0)]:3,[j(10)]:5,[j(40)]:100,'x':9};
+      const pr={a:{at:t-864e5,prenom:'Léa',statut:'nouveau'},b:{at:t-5*864e5,prenom:'Tom',statut:'athlete'},
+        c:{at:t-12*864e5,prenom:'Inès',statut:'repondu'},d:{at:t-45*864e5,prenom:'Nora',statut:'athlete'}};
+      const m=prospectsMesure(pr,stats,t);
+      if(m.vues!==8||m.interesses!==3||m.athletes!==1||m.enAttente!==1) return _echec(JSON.stringify(m));
+      const v=prospectsMesure(null,null,t);
+      return (v.vues===0&&v.interesses===0&&v.athletes===0)?true:_echec('vide');})());
+    ok('C6 — répondre reste au coach : un lien WhatsApp ou e-mail pré-écrit, sans prix ni paiement',(()=>{
+      const c={fname:'Kévin'};
+      const w=prospectLienReponse({prenom:'Léa',contact:'+33612345678',canal:'tel',formule:'coaching_essentiel'},c);
+      if(!/^https:\/\/wa\.me\/33612345678\?text=/.test(w)) return _echec(w);
+      const txt=decodeURIComponent(w.split('text=')[1]);
+      if(!/^Salut Léa, c’est Kévin/.test(txt)||!/Coaching Essentiel/.test(txt)) return _echec(txt);
+      if(/€|payer|paiement|\d{2,}/.test(txt)) return _echec('prix ou paiement dans le message : '+txt);
+      const m=prospectLienReponse({prenom:'Tom',contact:'tom@exemple.fr',canal:'email',formule:'programme_perso'},c);
+      if(!/^mailto:tom%40exemple\.fr\?subject=/.test(m)) return _echec(m);
+      // Aucune fonction du parcours ne touche au paiement.
+      const src=String(prospectStatut)+String(renderProspects)+String(prospectLienReponse)+String(htmlReglagesProspects);
+      return /paypal|planIdOffre|abonnement|lienAchat/i.test(src)?_echec('le parcours parle de paiement'):true;})());
+    ok('C6 — l’écran des contacts : vide, il dit quoi faire ; plein, un contact par ligne avec ses gestes',(()=>{
+      const svU=currentUser, svB=_prBrut, svS=_prStats;
+      const z=document.getElementById('pr-corps'); const av=z?z.innerHTML:null;
+      try{
+        if(!z) return _echec('pas de #pr-corps');
+        currentUser={role:'coach',email:'c6b@t.fr',fname:'Kévin',vitrineFormules:[]};
+        _prBrut={}; _prStats={};
+        renderProspects();
+        if(!/aucune formule/.test(z.textContent)||!/Personne n’a encore laissé son contact/.test(z.textContent)) return _echec('vide : '+z.textContent);
+        currentUser.vitrineFormules=['coaching_essentiel'];
+        _prBrut={a:{at:Date.now()-3600e3,prenom:'Léa',contact:'+33612345678',canal:'tel',formule:'coaching_essentiel',statut:'nouveau'},
+          b:{at:Date.now()-5*864e5,prenom:'Tom',contact:'tom@exemple.fr',canal:'email',formule:'coaching_essentiel',statut:'athlete'}};
+        renderProspects();
+        const l=z.querySelectorAll('.pr-l');
+        if(l.length!==2||!/Attend ta réponse/.test(l[0].textContent)||!/Devenu athlète/.test(l[1].textContent)) return _echec('lignes : '+z.textContent);
+        if(!l[0].querySelector('a[href^="https://wa.me/"]')||!/J’ai répondu/.test(l[0].textContent)) return _echec('gestes');
+        return z.querySelector('.pr-chiffres')?true:_echec('chiffres');
+      } finally { currentUser=svU; _prBrut=svB; _prStats=svS; if(z) z.innerHTML=av; }})());
+
     ok('Volts : dix rangs, dans l’ordre, seuils croissants à partir de 0',(()=>{
       const n=RANGS.map(r=>r.nom).join();
       if(n!=='ÉTINCELLE,IMPULSION,VOLTAGE,MACHINE,ÉLITE,SURTENSION,MONSTRE,FOUDRE,TITAN,LÉGENDE') return _echec(n);
@@ -50601,7 +50661,9 @@ async function testExercices(){
         specialites:'Force, perte de poids ; prépa',contact:{mode:'whatsapp'},canalEpingle:{texte:'privé'},
         coachPrograms:[]};
       const v=vitrinePubliqueDonnees(c,5);
-      const permis=['nom','equipe','phrase','bio','vision','photo','specialites','programmes','maj'];
+      // LOT C6 (29/09/2026) : deux champs publics de plus, bornés par les règles :
+      // les CLÉS des formules proposées (jamais un prix) et le message d'accueil.
+      const permis=['nom','equipe','phrase','bio','vision','photo','specialites','programmes','formules','accueil','maj'];
       const trop=Object.keys(v).filter(k=>permis.indexOf(k)<0);
       if(trop.length) return _echec('champs en trop : '+trop.join());
       if(v.photo!=='https://res.cloudinary.com/k.jpg'||/base64|0600|privé/.test(JSON.stringify(v))) return _echec(JSON.stringify(v));
@@ -50638,7 +50700,9 @@ async function testExercices(){
       if(!/\/vitrines\//.test(c)||!/Commencer avec/.test(c)) return _echec('c/index.html');
       if(/<script[^>]+src=|<link[^>]+stylesheet/.test(p+c)) return _echec('une ressource externe bloquante');
       // La page athlète a grandi (photo, chiffres, animations — 28/09/2026) : 20 Ko, toujours sans ressource externe.
-      if(p.length>20000||c.length>12000) return _echec('pages trop lourdes');
+      // La vitrine a grandi (formules et « Ça m'intéresse », lot C6, 29/09/2026) : 16 Ko,
+      // toujours sans ressource externe ; le tableau des offres (tarifs.json) se lit en parallèle.
+      if(p.length>20000||c.length>16000) return _echec('pages trop lourdes');
       if(fj&&(!/"source": "\/@\*"/.test(fj)||!/"source": "\/coach\/\*"/.test(fj))) return _echec('réécritures');
       return true;})());
     ok('Pages : réglages publics classés non-santé',

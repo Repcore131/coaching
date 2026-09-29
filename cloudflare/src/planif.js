@@ -76,6 +76,8 @@ export function travaux(M) {
     // collectif, les badges Édition, les annonces (lancement, mi-parcours, J-2, fin).
     // Les messages programmés du canal (lot C5) : CHAQUE HEURE, une lecture.
     { nom: 'canal_programmes', heure: true, quand: () => true, une: (t) => (M.canalProgrammesHeure ? M.canalProgrammesHeure(t) : null) },
+    // Les prospects sans réponse depuis 48 h (lot C6) : CHAQUE HEURE, au coach.
+    { nom: 'prospects', heure: true, quand: (p) => p.heure >= 8 && p.heure < 21, une: (t) => (M.prospectsRelanceHeure ? M.prospectsRelanceHeure(t) : null) },
     { nom: 'saisons', heure: true, quand: () => true, une: (t) => (M.saisonsHeure ? M.saisonsHeure(t) : null) },
   ];
 }

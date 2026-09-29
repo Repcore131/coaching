@@ -56,6 +56,11 @@
         "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
       },
       {
+        "//": "LOT C6 : le tableau des offres, lu par la vitrine d'un coach (c/index.html) servie par le Worker, donc d'une autre origine. Lecture seule, rien de secret.",
+        "source": "/tarifs.json",
+        "headers": [{ "key": "Access-Control-Allow-Origin", "value": "*" }, { "key": "Cache-Control", "value": "max-age=600" }]
+      },
+      {
         "//": "Android verifie ce fichier pour relier le site a l'APK (TWA sans barre d'adresse).",
         "source": "/.well-known/assetlinks.json",
         "headers": [{ "key": "Content-Type", "value": "application/json" }]

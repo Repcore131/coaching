@@ -132,6 +132,24 @@ export default {
         ctx.waitUntil(o.M.arrivee(q).catch(() => {}));
         return reponse('', 204);
       }
+      // LE PROSPECT (lot C6) : le « Ça m'intéresse » de la vitrine d'un coach.
+      // Sans compte, donc limité par adresse IP comme /arrivee, et borné par
+      // coach et par jour dans prospects.js. Aucun paiement ici.
+      if ((url.pathname === '/prospect' && req.method === 'POST') || url.pathname === '/vitrine-vue') {
+        let limite = null;
+        try { if (env.LIMITE_ARRIVEES && typeof env.LIMITE_ARRIVEES.limit === 'function') limite = await env.LIMITE_ARRIVEES.limit({ key: ipDe(req) }); } catch (e) { limite = null; }
+        if (limite && limite.success === false) return reponse(JSON.stringify({ ok: false, raison: 'trop' }), 429);
+        const o = outils(env);
+        if (url.pathname === '/vitrine-vue') {
+          ctx.waitUntil(o.M.vitrineVue(url.searchParams.get('s'), Date.now()).catch(() => {}));
+          return reponse(null, 204);
+        }
+        let corps = null;
+        try { corps = await req.json(); } catch (e) { corps = null; }
+        if (!corps || typeof corps !== 'object') return reponse(JSON.stringify({ ok: false, raison: 'corps' }), 400);
+        const r = await o.M.prospectRecevoir(corps, Date.now());
+        return reponse(JSON.stringify(r), r.ok ? 200 : 400);
+      }
       // LES CLÉS SONT-ELLES JUSTES, et pas seulement posées ? Un jeton PayPal
       // demandé, un ping Cloudinary authentifié. Rien d'autre ne sort que oui/non
       // et le code HTTP, jamais une clé.

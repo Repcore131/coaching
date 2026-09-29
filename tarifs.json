@@ -9,11 +9,11 @@
   "essai_parrainage": { "moisEnPlus": 1 },
   "coach": { "libre": 0, "coach": 19, "pro": 39 },
   "coaching": {
-    "programme_perso": { "prix": 99, "mois": 3 },
-    "revision_prog": { "prix": 40, "mois": 1 },
+    "programme_perso": { "prix": 99, "mois": 3, "lib": "Programme personnalisé", "comprend": "Un programme construit pour toi, avec 3 mois d'app inclus. Sans suivi." },
+    "revision_prog": { "prix": 40, "mois": 1, "lib": "Révision de programme", "comprend": "Ton programme ajusté quand tu en as besoin, sans échéance." },
     "boutique_prog": { "prix": 14.9, "mois": 3 },
-    "coaching_essentiel": { "prix": 150, "mois": 1 },
-    "coaching_transfo": { "prix": 350, "mois": 3 },
-    "coaching_evolution": { "prix": 600, "mois": 6 }
+    "coaching_essentiel": { "prix": 150, "mois": 1, "lib": "Coaching Essentiel", "comprend": "Programme sur mesure, suivi dans l'app, bilans et réponses de ton coach." },
+    "coaching_transfo": { "prix": 350, "mois": 3, "lib": "Coaching Transformation", "comprend": "Le suivi complet sur trois mois : programme ajusté bloc après bloc, bilans et réponses de ton coach." },
+    "coaching_evolution": { "prix": 600, "mois": 6, "lib": "Coaching Évolution", "comprend": "Le suivi complet sur six mois, le temps d'une vraie transformation." }
   }
 }

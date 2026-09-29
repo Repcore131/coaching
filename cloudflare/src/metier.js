@@ -32,12 +32,13 @@ import * as DU from './duels.js';
 import * as SA from './saisons.js';
 import * as RE from './retour.js';
 import * as RL from './relances.js';
+import * as PR from './prospects.js';
 import * as XPS from './xp.js';
 import * as RT from './retention.js';
 
 export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
-export const PUSH_TYPES = ['serie', 'wrapped', 'bilan', 'badge', 'coach', 'filleul', 'defi', 'acces', 'retour', 'sante', 'relance'];
+export const PUSH_TYPES = ['serie', 'wrapped', 'bilan', 'badge', 'coach', 'filleul', 'defi', 'acces', 'retour', 'sante', 'relance', 'prospect'];
 const BONUS_ESSAI_JOURS = 30;  // le mois offert par l'ami : = TARIFS.essai_parrainage.moisEnPlus × 30 (l'app l'ouvre, essaiOuvrir)
 const PALIERS = ['aucun', 'essentielle', 'ultime', 'suivi'];
 
@@ -1304,6 +1305,55 @@ export function creerMetier(deps) {
     return 'envoye';
   }
 
+  // ══ LE PARCOURS DU PROSPECT (lot C6) ═══════════════════════════════════
+  // POST /prospect depuis la vitrine publique (sans compte). Le slug désigne le
+  // coach (slugs/<slug>) ; la vitrine dit quelles formules il propose. Deux
+  // lectures, une écriture, une notification au coach.
+  const LIB_FORMULES = { programme_perso: 'le Programme personnalisé', revision_prog: 'la Révision de programme',
+    coaching_essentiel: 'le Coaching Essentiel', coaching_transfo: 'le Coaching Transformation', coaching_evolution: 'le Coaching Évolution' };
+  const SLUG_RE = /^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/;
+  async function prospectRecevoir(corps, t) {
+    const slug = String((corps && corps.slug) || '').toLowerCase();
+    if (!SLUG_RE.test(slug)) return { ok: false, raison: 'page' };
+    const [coach, vitrine] = await Promise.all([_val('slugs/' + slug), _val('vitrines/' + slug)]);
+    if (!coach || !vitrine) return { ok: false, raison: 'page' };
+    const existants = await _val('prospects/' + coach);
+    const r = PR.prospectDepuisFormulaire(corps, vitrine, existants, t);
+    // Un doublon n'est pas une erreur pour la personne : sa demande est bien arrivée.
+    if (!r.ok) return r.raison === 'doublon' ? { ok: true, deja: true } : r;
+    await db.ref('prospects/' + coach + '/' + idFile(t, 'p')).set(r.prospect);
+    try { await envoyerPush(coach, PR.messageNouveauProspect(r.prospect, LIB_FORMULES[r.prospect.formule]), { attendre: true }); } catch (e) { /* le prospect est enregistré, c'est l'essentiel */ }
+    return { ok: true };
+  }
+  // GET /vitrine-vue?s=<slug> : une visite par appareil et par jour (la page
+  // s'en souvient), comptée par jour. Aucun identifiant, aucune adresse.
+  async function vitrineVue(slug, t) {
+    const s = String(slug || '').toLowerCase();
+    if (!SLUG_RE.test(s)) return false;
+    if (!(await _val('slugs/' + s))) return false;
+    await db.ref('vitrines_stats/' + s + '/' + paris(t).jour).transaction((v) => (Number(v) || 0) + 1);
+    return true;
+  }
+  // CHAQUE HEURE : les prospects sans réponse depuis 48 h. UNE notification par
+  // coach (elle compte ses prospects en attente), et chacun n'est relancé
+  // qu'une fois (relanceLe).
+  async function prospectsRelanceHeure(t) {
+    const tout = (await _val('prospects')) || {};
+    for (const coach of Object.keys(tout).sort()) {
+      const l = PR.prospectsARelancer(tout[coach], t);
+      if (!l.length) continue;
+      if (_reste() < 16) return false;
+      const r = await envoyerPush(coach, PR.messageRelanceCoach(l), { attendre: true });
+      // Heures calmes : envoyerPush l'a mise de côté pour 8 h 05, elle part donc.
+      // Plafond du jour pris, ou pas d'appareil : on réessaie à l'heure suivante.
+      if (!r.envoye && r.raison !== 'calme') continue;
+      const maj = {};
+      for (const p of l) maj['prospects/' + coach + '/' + p.id + '/relanceLe'] = t;
+      await db.ref().update(maj);
+    }
+    return true;
+  }
+
   // ══ LES MESSAGES PROGRAMMÉS DU CANAL (lot C5) ══════════════════════════
   // canal_programmes/<coach>/<id> = {quand, titre, texte, lien?}, écrit par le
   // coach. Chaque heure, UNE lecture de tout le nœud, et UNE écriture pour tout
@@ -1463,5 +1513,5 @@ export function creerMetier(deps) {
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente,
     fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, tache,
-    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, reactionEvenement, reactionsAttente, reactionsPushUn, saisonsHeure, parcoursJ21, retourUn, relancesCoachUn, canalProgrammesHeure, relanceAthlete, xpRecalculer, retentionUn, retentionFin, activiteComptes };
+    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, reactionEvenement, reactionsAttente, reactionsPushUn, saisonsHeure, parcoursJ21, retourUn, relancesCoachUn, canalProgrammesHeure, prospectRecevoir, vitrineVue, prospectsRelanceHeure, relanceAthlete, xpRecalculer, retentionUn, retentionFin, activiteComptes };
 }
