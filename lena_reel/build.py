@@ -75,7 +75,7 @@ def etalonne(img, look):
 
 
 class Grain:
-    def __init__(self, n=8, force=11):
+    def __init__(self, n=8, force=6):
         rng = np.random.default_rng(7)
         self.tuiles = []
         for _ in range(n):
@@ -84,7 +84,7 @@ class Grain:
             self.tuiles.append(g[..., None])
 
     def applique(self, img, i):
-        a = np.asarray(img, dtype=np.float32) + self.tuiles[i % len(self.tuiles)]
+        a = np.asarray(img, dtype=np.float32) + self.tuiles[(i // 3) % len(self.tuiles)]
         return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8))
 
 
@@ -105,17 +105,13 @@ class PlanPhoto:
         self.rapide, self.sens, self.lent, self.cadre = rapide, sens, lent, cadre
 
     def image(self, p):
-        if self.rapide:            # coupes rythmées : recul nerveux au début du plan
-            z = 1.0 + 0.11 * (1 - p) ** 3
-        elif self.lent:
-            z = 1.0 + 0.10 * adoucit(p)
-        else:
-            z = 1.0 + 0.07 * adoucit(p)
+        # mouvements doux : pas de secousse, le rythme vient des coupes
+        z = 1.0 + (0.04 if self.rapide else 0.06 if self.lent else 0.05) * adoucit(p)
         fx, fy, z0 = self.cadre
         iw, ih = self.img.size
         k = min(iw / W, ih / H) / (z * z0)               # plus grand cadre 9:16 dans la photo, puis zoom
         bw, bh = W * k, H * k
-        glisse = (iw - bw) * 0.35 * self.sens * (adoucit(p) - 0.5)
+        glisse = (iw - bw) * 0.12 * self.sens * (adoucit(p) - 0.5)
         cx = min(max(iw * fx + glisse, bw / 2), iw - bw / 2)
         cy = min(max(ih * fy, bh / 2), ih - bh / 2)
         return self.img.transform((W, H), Image.EXTENT,
