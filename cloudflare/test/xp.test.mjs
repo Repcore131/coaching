@@ -155,10 +155,13 @@ test('la page publique lit /volts_publics/<pseudo> — seulement le sien, seulem
   w.F.ecrire('volts_publics/lea_fer', { xp: 1 });
   await w.seanceFin('tom@t,fr');
   assert.equal(w.F.lire('volts_publics/lea_fer').xp, 1);
-  // Le rang retiré de la page : la jauge serveur s'efface.
+  // Le rang retiré de la page : la jauge serveur s'efface ; restent les
+  // volts de la semaine, pour le classement entre amis (lot D).
   w.F.ecrire('profils_publics/lea_fer/rang', null);
   await w.seanceFin(LEA);
-  assert.equal(w.F.lire('volts_publics/lea_fer'), null);
+  const v2 = w.F.lire('volts_publics/lea_fer');
+  assert.equal(v2.rang, undefined); assert.equal(v2.xp, undefined);
+  assert.ok(v2.sem && Object.keys(v2.sem).length === 1);
 });
 
 test('la page publique : le rang du serveur prime, les secrets non prouvés disparaissent', async () => {
@@ -265,4 +268,51 @@ test('parrainage : inscrit depuis le téléphone du parrain, le filleul ne créd
   for (let k = 0; k < 4; k++) await w.faire();
   assert.equal(w.F.lire('parrainage/comptes/' + KEV), null);
   assert.equal(w.F.lire('droits/' + KEV), null);
+});
+
+// ══ LES VOLTS DE LA SEMAINE (lot D) ══
+test('la semaine : lundi en dates, changements d’heure compris', () => {
+  assert.equal(X.lundiDuJour('2026-10-05'), '2026-10-05', 'un lundi');
+  assert.equal(X.lundiDuJour('2026-10-04'), '2026-09-28', 'un dimanche');
+  assert.equal(X.lundiDuJour('2026-10-25'), '2026-10-19', 'le dimanche de 25 heures');
+  assert.equal(X.lundiDuJour('2026-10-26'), '2026-10-26');
+  assert.equal(X.lundiDuJour('2027-03-28'), '2027-03-22', 'le dimanche de 23 heures');
+  assert.equal(X.lundiDuJour('2027-01-01'), '2026-12-28', 'à cheval sur deux années');
+});
+test('la semaine : incrémentée à chaque séance, jamais deux fois pour un événement rejoué, treize semaines gardées', async () => {
+  const ses = [S(T - J)];
+  const w = monde({ users: { [LEA]: { sessions: ses, pagePublique: { pseudo: 'lea_fer' } } }, pseudos: { lea_fer: LEA },
+    profils_publics: { lea_fer: { prenom: 'Léa' } } }, T);
+  await w.seanceFin(LEA);
+  const lu = X.lundiDuJour(X.heureLocale(T - J, -120).jour);
+  assert.deepEqual(w.F.lire('volts_publics/lea_fer/sem/' + lu), { v: 130, n: 1 });
+  // Rejoué : rien de plus.
+  await w.seanceFin(LEA);
+  assert.deepEqual(w.F.lire('volts_publics/lea_fer/sem/' + lu), { v: 130, n: 1 });
+  // Une séance vide compte zéro volt et zéro séance.
+  w.F.ecrire('users/' + LEA + '/sessions/1', { date: w.t - 60e3, duration: 1, sets: 0, data: {}, tz: -120 });
+  await w.seanceFin(LEA);
+  assert.equal(w.F.lire('volts_publics/lea_fer/sem/' + lu).n, 1);
+  const e = X.avancer({ n: 0, sem: Object.fromEntries(Array.from({ length: 20 }, (_, i) => [X.lundiDuJour(new Date(T - (i + 3) * 7 * J).toISOString().slice(0, 10)), { v: 1, n: 1 }])) }, [S(T - J)], null, T);
+  assert.equal(Object.keys(e.sem).length, 13);
+  assert.ok(e.sem[lu]);
+});
+test('réactions : l’événement note sans pousser ; le soir, UNE poussée groupée, puis plus rien', async () => {
+  const { appareil } = await import('./fausse-base.mjs');
+  const tel = appareil('https://push.test/tom');
+  const TOM = 'tom@t,fr';
+  const w = monde({ users: { [LEA]: { pagePublique: { pseudo: 'lea_fer' } }, 'max@t,fr': { pagePublique: { pseudo: 'max' } }, [TOM]: {} },
+    pseudos: { tom__fit: TOM, lea_fer: LEA, max: 'max@t,fr' }, push: { [TOM]: { a: tel.abonnement } },
+    profils_publics: { lea_fer: { prenom: 'Léa' }, max: { prenom: 'Max' } },
+    reactions: { tom__fit: { '2026-10-05': { lea_fer: '🔥', max: '💪' } } } }, T);
+  assert.equal(await w.M.reactionEvenement({ par: LEA, cible: 'tom__fit', jour: '2026-10-05' }, w.t), 'note');
+  assert.equal(await w.M.reactionEvenement({ par: 'max@t,fr', cible: 'tom__fit', jour: '2026-10-05' }, w.t), 'note');
+  assert.equal(w.F.recus.length, 0, 'jamais une poussée par réaction');
+  assert.equal(await w.M.reactionEvenement({ par: LEA, cible: 'tom__fit', jour: '2026-10-04' }, w.t), 'sans_reaction');
+  assert.equal(await w.M.reactionsPushUn(TOM, w.t), 'envoye');
+  assert.equal(w.F.recus.length, 1);
+  const m = tel.lire(w.F.recus[0].init.body);
+  assert.match(m.title, /^(Léa|Max) et 1 autre ont réagi à ta séance$/);
+  assert.doesNotMatch(m.title + m.body, /kg|squat|série/i, 'rien de ce qu’il y avait dans la séance');
+  assert.equal(await w.M.reactionsPushUn(TOM, w.t), 'rien', 'une fois');
 });

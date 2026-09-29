@@ -20607,6 +20607,8 @@ function evenementCible(ev){
   if(t==='defi_publie') return String(ev.msg||'');
   // Un duel : l'événement vise le duel (les règles vérifient qu'on en est).
   if(t==='duel_rejoint'||t==='duel_maj'||t==='duel_cree') return DUEL_ID_RE.test(String(ev.id||''))?String(ev.id):'';
+  // Une réaction : l'événement vise le pseudo (les règles : un ami que je suis).
+  if(t==='reaction') return /^[a-z0-9_]{3,40}$/.test(String(ev.cible||''))&&/^\d{4}-\d{2}-\d{2}$/.test(String(ev.jour||''))?String(ev.cible):'';
   return '-';
 }
 async function deposerEvenement(ev){
@@ -21308,7 +21310,9 @@ function _profilAmiNettoye(p,v){
     rang:rang&&rang.nom?{n:Math.max(1,Math.min(10,Number(rang.n)||1)),nom:String(rang.nom).slice(0,20)}:null,
     volts:vx?Math.max(0,Math.round(Number(vx.xp)||0)):null,
     badges:bdg.filter(b=>b&&b.nom).slice(0,8).map(b=>String(b.nom).slice(0,40)),
-    sem:(v&&v.sem&&typeof v.sem==='object')?v.sem:null};
+    sem:(v&&v.sem&&typeof v.sem==='object')?v.sem:null,
+    // Le JOUR de sa dernière séance (les réactions s'y accrochent) : une date, rien de ce qu'elle contenait.
+    der:(v&&/^\d{4}-\d{2}-\d{2}$/.test(String(v.derJour||'')))?String(v.derJour):null};
 }
 async function _profilAmi(cle,force){
   const c=_amisProfils[cle];
@@ -21408,14 +21412,149 @@ function amisTries(liste,t){
     ||(regulariteDe(b.prof,t)-regulariteDe(a.prof,t))
     ||String(a.prenom||'').localeCompare(String(b.prenom||''),'fr'));
 }
+// ══ LE JEU ENTRE AMIS (lot D, 29/09/2026) ═════════════════════════════════
+// Rien ne relit un historique : les volts de la semaine sont une somme tenue
+// par le Worker à chaque séance (volts_publics/<pseudo>.sem, treize semaines),
+// et tout le reste se calcule ici sur ce que la liste a déjà lu.
+//
+// PURE. La série partagée : les semaines d'affilée où CHACUN a fait au moins
+// une séance. La semaine en cours ne coupe rien tant qu'elle n'est pas finie.
+function serieCommune(mes,ses,t){
+  const a=mes||{}, b=ses||{}, l0=_lundiDe(typeof t==='number'?t:Date.now());
+  const deux=(k)=>Number(a[k]&&a[k].n)>0&&Number(b[k]&&b[k].n)>0;
+  let n=0, i=0;
+  if(deux(localISODate(l0))) n=1;
+  for(i=1;i<60;i++){ if(!deux(localISODate(_datePlusJours(l0,-7*i)))) break; n++; }
+  return n;
+}
+// PURE. Le classement de la semaine : les amis ET moi, par volts de la
+// semaine, puis le plus régulier. Chaque ligne porte son rang et son écart
+// avec le premier.
+function classementSemaine(moi,liste,t){
+  const tous=(moi?[Object.assign({moi:true},moi)]:[]).concat(liste||[]);
+  const tri=amisTries(tous,t);
+  const v0=tri.length?voltsSemaineDe(tri[0].prof,t):0;
+  return tri.map((x,i)=>Object.assign({},x,{rg:i+1,vs:voltsSemaineDe(x.prof,t),ecart:v0-voltsSemaineDe(x.prof,t)}));
+}
+// PURE. Le classement en une phrase, premier comme dernier. Le dernier n'est
+// jamais nommé ainsi : il voit l'écart avec celui juste devant.
+function phraseClassement(tri){
+  const i=(tri||[]).findIndex(x=>x.moi);
+  const fin=' La semaine repart lundi.';
+  if(i<0||tri.length<2) return 'Suis un pote pour lancer le classement de la semaine.'+fin;
+  const me=tri[i];
+  if(tri.every(x=>!x.vs)) return 'Personne n’a encore de volts cette semaine : ta prochaine séance prend la tête.'+fin;
+  if(i===0){
+    const s=tri[1];
+    return (me.vs===s.vs?'Tu mènes la semaine à égalité avec '+s.prenom+', devant à la régularité.'
+      :'Tu mènes la semaine avec '+me.vs+' V, '+s.prenom+' suit à '+s.vs+' V.')+fin;
+  }
+  const d=tri[i-1], e=d.vs-me.vs;
+  return (e>0?'Tu es à '+e+' V de '+d.prenom+'. Une séance peut suffire.'
+    :'À égalité avec '+d.prenom+' : la régularité vous départage.')+fin;
+}
+// PURE. La meilleure série partagée à dire, et la relance de fin de semaine
+// (samedi et dimanche) à celui qui manque, jamais à celui qui mène : il faut
+// une série en cours, l'ami qui a fait sa séance cette semaine, et moi pas.
+function serieAmisLigne(monSem,liste,t){
+  const l0=localISODate(_lundiDe(t)), js=new Date(t).getDay();
+  let best=null, rappel=null;
+  for(const x of (liste||[])){
+    const ses=x.prof&&x.prof.sem; if(!ses) continue;
+    const n=serieCommune(monSem,ses,t);
+    if(n>=2&&(!best||n>best.n)) best={n,prenom:x.prenom};
+    const moiFait=Number(monSem&&monSem[l0]&&monSem[l0].n)>0, luiFait=Number(ses[l0]&&ses[l0].n)>0;
+    if((js===6||js===0)&&n>=1&&!moiFait&&luiFait&&(!rappel||n>rappel.n)) rappel={n,prenom:x.prenom};
+  }
+  return {serie:best?best.prenom+' et toi tenez à deux depuis '+best.n+' semaines.':'',
+    rappel:rappel?rappel.prenom+' a fait sa séance cette semaine. Une séance d’ici dimanche soir et votre série de '+rappel.n+' semaine'+(rappel.n>1?'s':'')+' continue.':''};
+}
+// La relance de fin de semaine, UNE fois : le jour où elle s'affiche la
+// première fois, et ce jour-là seulement.
+function _serieRappelUneFois(t){
+  const k='rc_serie_rappel_'+localISODate(_lundiDe(t)), j=localISODate(new Date(t));
+  let v=null; try{ v=localStorage.getItem(k); }catch(e){}
+  if(v&&v!==j) return false;
+  if(!v) try{ localStorage.setItem(k,j); }catch(e){}
+  return true;
+}
+// LES RÉACTIONS : cinq emojis FIXES sur la dernière séance d'un ami. Jamais
+// de texte, jamais ce qu'il y avait dans la séance.
+const REACTIONS_AMIS=Object.freeze(['💪','🔥','👏','😮','⚡']);
+function _reacCle(){ return 'rc_reac_'+_moiCle(); }
+function reactionsLocales(){ try{ return JSON.parse(localStorage.getItem(_reacCle())||'{}')||{}; }catch(e){ return {}; } }
+// PURE. Une réaction par ami et par jour de séance, remplaçable : la carte
+// {<pseudo>|<jour>: emoji}, gardée sur quatorze jours.
+function reactionPoserLocal(m,cle,jour,emoji,t){
+  const o=Object.assign({},m||{});
+  if(REACTIONS_AMIS.indexOf(emoji)<0||!/^\d{4}-\d{2}-\d{2}$/.test(jour)) return o;
+  o[cle+'|'+jour]=emoji;
+  const lim=localISODate(_datePlusJours(t||Date.now(),-14));
+  for(const k of Object.keys(o)) if(k.split('|')[1]<lim) delete o[k];
+  return o;
+}
+// PURE. Peut-on réagir à la dernière séance de cet ami ? Dans les sept jours.
+function reactionPossible(prof,t){
+  const j=prof&&prof.der; if(!j) return false;
+  return j>=localISODate(_datePlusJours(t,-7))&&j<=localISODate(new Date(t));
+}
+async function amiReagir(pseudo,emoji,btn){
+  const u=currentUser; if(!u) return false;
+  const p=amiPseudoNormalise(pseudo), cle=pseudoPublicCle(p), mp=_monPseudo(u);
+  const prof=(_amisProfils[cle]||{}).v;
+  if(!mp){ toast('Choisis ton nom dans Mon profil pour réagir aux séances de tes potes.','var(--orange)',4000); return false; }
+  if(REACTIONS_AMIS.indexOf(emoji)<0||!reactionPossible(prof,Date.now())) return false;
+  const r=await _fbJson('reactions/'+cle+'/'+prof.der+'/'+pseudoPublicCle(mp),'PUT',emoji);
+  if(!r.ok){ toast(r.st===401||r.st===403?'Suis '+(prof.prenom||p)+' pour réagir à ses séances.':'Réaction non envoyée : réessaie une fois connecté.','var(--orange)'); return false; }
+  try{ localStorage.setItem(_reacCle(),JSON.stringify(reactionPoserLocal(reactionsLocales(),cle,prof.der,emoji,Date.now()))); }catch(e){}
+  deposerEvenement({type:'reaction',cible:cle,jour:prof.der}).catch(()=>{});
+  const z=btn&&btn.closest('.am-reac');
+  if(z) z.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.textContent===emoji));
+  return true;
+}
+// PURE. La rangée des cinq emojis d'un ami (celui que j'ai choisi, allumé).
+function htmlReactionsAmi(x,t,loc){
+  if(!x||!reactionPossible(x.prof,t)) return '';
+  const mien=(loc||{})[x.cle+'|'+x.prof.der]||'';
+  return '<div class="am-reac" role="group" aria-label="Réagir à la séance de '+escapeHtml(x.prenom||x.p)+'">'
+    +REACTIONS_AMIS.map(e=>'<button type="button" class="'+(e===mien?'on':'')+'" onclick="amiReagir(\''+escapeHtml(x.p)+'\',\''+e+'\',this)">'+e+'</button>').join('')+'</div>';
+}
+// PURE. Le palmarès des duels contre un ami : gagnés, perdus, égalités, et la
+// date du dernier. Ce que l'app a déjà (les duels suivis) : de l'affichage.
+function bilanDuelsContre(cache,cleAmi,moi){
+  const o={g:0,p:0,e:0,dernier:0};
+  for(const id of Object.keys(cache||{})){
+    const d=cache[id];
+    if(!d||d.statut!=='termine'||(d.invitePseudo!==cleAmi&&d.createurPseudo!==cleAmi)) continue;
+    const role=d.createur===moi?'createur':'invite';
+    if(d.gagnant==='egalite') o.e++; else if(d.gagnant===role) o.g++; else if(d.gagnant) o.p++;
+    o.dernier=Math.max(o.dernier,Number(d.termineLe)||0);
+  }
+  return o;
+}
+function texteBilanDuels(b){
+  if(!b||!(b.g+b.p+b.e)) return '';
+  const m=[];
+  if(b.g) m.push(b.g+' gagné'+(b.g>1?'s':''));
+  if(b.p) m.push(b.p+' perdu'+(b.p>1?'s':''));
+  if(b.e) m.push(b.e+' égalité'+(b.e>1?'s':''));
+  return 'Vos duels : '+m.join(', ')+(b.dernier?' · dernier le '+new Date(b.dernier).toLocaleDateString('fr-FR',{day:'numeric',month:'short'}):'');
+}
 function _amiInitiales(p){ const m=String(p||'?').trim().split(/\s+/); return ((m[0]||'?')[0]+(m[1]?m[1][0]:'')).toUpperCase(); }
 // PURE. Une ligne d'ami : avatar (initiales), prénom, rang, volts de la
 // semaine, « Défier ». Aucune donnée corporelle : il n'y en a nulle part.
 function htmlLigneAmi(x,t,o){
   const pr=x.prof||null, vs=voltsSemaineDe(pr,t);
   const rang=pr&&pr.rang?pr.rang.nom:'';
+  const rg=x.rg?'<span class="am-rg" aria-label="'+x.rg+'e">'+x.rg+'</span>':'';
+  if(x.moi){
+    return '<div class="am-ligne am-moi">'+rg
+      +'<span class="am-av" aria-hidden="true">'+escapeHtml(_amiInitiales(x.prenom))+'</span>'
+      +'<span class="am-id"><span class="am-nom"><b>Toi</b></span><small>'+escapeHtml(x.ecart>0?'à '+x.ecart+' V du premier':x.rg===1?'en tête':'')+'</small></span>'
+      +'<span class="am-v"><b>'+vs+'</b><small>V cette semaine</small></span></div>';
+  }
   const mut=amiEstMutuel(x.cle,o);
-  return '<div class="am-ligne">'
+  return '<div class="am-ligne">'+rg
     +'<span class="am-av" aria-hidden="true">'+escapeHtml(_amiInitiales(x.prenom))+'</span>'
     +'<span class="am-id"><span class="am-nom"><b>'+escapeHtml(x.prenom||x.p)+'</b>'+(mut?'<i class="am-mut">ami</i>':'')+'</span>'
       +'<small>'+escapeHtml(rang?rang.charAt(0)+rang.slice(1).toLowerCase():'@'+x.p)+'</small></span>'
@@ -21425,7 +21564,7 @@ function htmlLigneAmi(x,t,o){
     +'</div>';
 }
 // PURE. La carte de l'accueil. Vide, elle dit quoi faire, et qui agit.
-function htmlAmisAccueil(liste,t,o,monPseudo){
+function htmlAmisAccueil(liste,t,o,monPseudo,moi){
   const tete='<div class="am-tete"><span class="am-titre">Mes amis</span>'
     +'<button type="button" class="am-tout" onclick="ouvrirAmis()">'+(liste.length?'Tout voir':'Chercher')+'</button></div>';
   if(!liste.length){
@@ -21436,7 +21575,23 @@ function htmlAmisAccueil(liste,t,o,monPseudo){
       +(monPseudo?'':'<p class="am-note">Choisis ton nom pour que tes potes te trouvent : <a href="#" onclick="amisVersPseudo();return false">Mon profil</a>.</p>')
       +'</div>';
   }
-  return '<div class="am-carte">'+tete+amisTries(liste,t).slice(0,5).map(x=>htmlLigneAmi(x,t,o)).join('')+'</div>';
+  return '<div class="am-carte">'+tete+htmlClassementSemaine(liste,t,o,moi||null)+'</div>';
+}
+// PURE. Le classement de la semaine, la phrase qui le lit, la série partagée
+// et, le samedi et le dimanche, la relance à celui qui manque (une fois).
+// `moi` : mon profil public ({cle, prenom, prof}), ou null sans pseudo.
+function htmlClassementSemaine(liste,t,o,moi){
+  const tri=classementSemaine(moi,liste,t);
+  const phrase=moi?phraseClassement(tri):'Choisis ton nom dans Mon profil pour entrer dans le classement de la semaine. La semaine repart lundi.';
+  const s=moi?serieAmisLigne(moi.prof&&moi.prof.sem,liste,t):{serie:'',rappel:''};
+  const rappel=s.rappel&&_serieRappelUneFois(t)?s.rappel:'';
+  const n=tri.length, i=tri.findIndex(x=>x.moi);
+  // Les cinq premiers, et moi si je suis plus loin.
+  const vus=tri.filter((x,k)=>k<5||k===i);
+  return '<p class="am-phrase">'+escapeHtml(phrase)+'</p>'
+    +(rappel?'<p class="am-serie am-rappel">'+escapeHtml(rappel)+'</p>':s.serie?'<p class="am-serie">'+escapeHtml(s.serie)+'</p>':'')
+    +vus.map(x=>htmlLigneAmi(x,t,o)).join('')
+    +(n>vus.length?'<button type="button" class="am-plus" onclick="ouvrirAmis()">Voir les '+n+'</button>':'');
 }
 // PURE. La fiche trouvée par la recherche.
 function htmlFicheAmi(r,suivi){
@@ -21471,9 +21626,16 @@ async function renderAmisAccueil(){
   // D'abord ce que l'appareil sait (hors ligne), puis les profils.
   z.innerHTML=htmlAmisAccueil(amisListe(),Date.now(),amisLocal(),_monPseudo(u));
   try{ await amisSynchroniser(); }catch(e){}
-  const l=await _amisAvecProfils();
-  z.innerHTML=htmlAmisAccueil(l,Date.now(),amisLocal(),_monPseudo(u));
+  const [l,moi]=await Promise.all([_amisAvecProfils(),_moiClassement(u)]);
+  z.innerHTML=htmlAmisAccueil(l,Date.now(),amisLocal(),_monPseudo(u),moi);
   return true;
+}
+// Mon profil public, pour me placer dans le classement : null sans pseudo.
+async function _moiClassement(u){
+  const mp=_monPseudo(u); if(!mp) return null;
+  const cle=pseudoPublicCle(mp);
+  let prof=null; try{ prof=await _profilAmi(cle); }catch(e){ prof=null; }
+  return {cle,p:mp,prenom:(prof&&prof.prenom)||String(u.fname||'Moi'),prof:prof||{sem:null}};
 }
 function ouvrirAmis(){
   fermerDuelFeuille();
@@ -21492,18 +21654,43 @@ async function renderEcranAmis(){
     +'<div id="am-res"></div>'
     +(mp?'<p class="am-note">Tes potes te trouvent sous <b>@'+escapeHtml(mp)+'</b>.</p>'
         :'<p class="am-note">Choisis ton nom pour que tes potes te trouvent : <a href="#" onclick="amisVersPseudo();return false">Mon profil</a>. Tu peux suivre sans être trouvable.</p>')
+    +'<div id="am-recues"></div>'
+    +'<div class="am-lab">La semaine</div><div id="am-classement"></div>'
     +'<div class="am-lab">Ceux que tu suis</div><div id="am-liste"></div>';
   _rendreListeEcranAmis(amisListe());
   try{ await amisSynchroniser(true); }catch(e){}
-  _rendreListeEcranAmis(await _amisAvecProfils());
+  const [l,moi]=await Promise.all([_amisAvecProfils(),_moiClassement(u)]);
+  _rendreListeEcranAmis(l,moi);
+  // Ce que mes amis ont dit de ma dernière séance : une lecture.
+  if(moi&&moi.prof&&moi.prof.der){
+    const r=await _fbJson('reactions/'+moi.cle+'/'+moi.prof.der);
+    const pr={}; for(const x of l) pr[x.cle]=x.prenom;
+    const zr=document.getElementById('am-recues');
+    if(zr&&r.ok) zr.innerHTML=htmlReactionsRecues(r.v,pr);
+  }
   return true;
 }
-function _rendreListeEcranAmis(l){
+function _rendreListeEcranAmis(l,moi){
   const z=document.getElementById('am-liste'); if(!z) return;
   if(!l.length){ z.innerHTML='<p class="am-vide">Personne pour l’instant : cherche un pseudo ci-dessus, ou envoie ton lien.</p>'; return; }
-  const o=amisLocal(), t=Date.now();
-  z.innerHTML=amisTries(l,t).map(x=>'<div class="am-ligne-w">'+htmlLigneAmi(x,t,o)
-    +'<button type="button" class="am-retirer" onclick="amiRetirer(\''+escapeHtml(x.p)+'\')">Ne plus suivre</button></div>').join('');
+  const o=amisLocal(), t=Date.now(), loc=reactionsLocales();
+  const mk=String((currentUser&&currentUser.email)||'').replace(/\./g,',');
+  const cl=document.getElementById('am-classement');
+  if(cl) cl.innerHTML=htmlClassementSemaine(l,t,o,moi||null);
+  z.innerHTML=amisTries(l,t).map(x=>{
+    const bd=texteBilanDuels(bilanDuelsContre(_duelsCache,x.cle,mk));
+    return '<div class="am-ligne-w">'+htmlLigneAmi(x,t,o)
+      +(bd?'<p class="am-duels">'+escapeHtml(bd)+'</p>':'')
+      +htmlReactionsAmi(x,t,loc)
+      +'<button type="button" class="am-retirer" onclick="amiRetirer(\''+escapeHtml(x.p)+'\')">Ne plus suivre</button></div>';
+  }).join('');
+}
+// PURE. Les réactions reçues sur ma dernière séance : « 🔥 Léa · 💪 Max ».
+function htmlReactionsRecues(r,prenoms){
+  const k=Object.keys(r||{}).filter(x=>REACTIONS_AMIS.indexOf(r[x])>=0);
+  if(!k.length) return '';
+  return '<div class="am-recues"><span class="am-lab">Sur ta dernière séance</span><p>'
+    +k.slice(0,12).map(x=>escapeHtml(r[x])+' '+escapeHtml((prenoms&&prenoms[x])||x.replace(/__/g,'.'))).join(' · ')+'</p></div>';
 }
 async function amiLancerRecherche(){
   const q=document.getElementById('am-q'), z=document.getElementById('am-res');

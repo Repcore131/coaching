@@ -1030,6 +1030,7 @@ export function creerMetier(deps) {
       return 'prevenu';
     }
     if (type === 'duel_rejoint' || type === 'duel_maj' || type === 'duel_cree') return duelEvenement(e, t);
+    if (type === 'reaction') return reactionEvenement(e, t);
     // UNE SÉANCE TERMINÉE : les volts recalculés par le serveur.
     if (type === 'seance_fin') return xpRecalculer(String(e.par || ''), t, true);
     return 'type_inconnu';
@@ -1129,6 +1130,40 @@ export function creerMetier(deps) {
   }
   const duelsActifs = () => db.ref('duels_actifs').shallow();
 
+  // ══ LES RÉACTIONS ENTRE AMIS (lot D) ═════════════════════════════════════
+  // /reactions/<pseudo>/<jour>/<pseudo de l'envoyeur> = un des cinq emojis,
+  // écrit par l'envoyeur (les règles : il suit le destinataire). L'événement
+  // ne pousse RIEN : il note seulement qu'il y a quelque chose à dire
+  // (/reactions_push/<compte>), et le travail de 19 h le dit, UNE poussée
+  // groupée par jour au plus. Jamais une poussée par réaction.
+  const REACTIONS = ['💪', '🔥', '👏', '😮', '⚡'];
+  async function reactionEvenement(e, t) {
+    const pk = String(e.cible || ''), jour = String(e.jour || '');
+    if (!/^[a-z0-9_]{3,40}$/.test(pk) || !/^\d{4}-\d{2}-\d{2}$/.test(jour)) return 'invalide';
+    const [uid, pp] = await Promise.all([_val('pseudos/' + pk), _lire(String(e.par || ''), 'pagePublique')]);
+    const moi = pp && typeof pp.pseudo === 'string' ? pp.pseudo.replace(/\./g, '__') : '';
+    if (!uid || !moi || uid === e.par) return 'sans_destinataire';
+    const r = await _val('reactions/' + pk + '/' + jour + '/' + moi);
+    if (REACTIONS.indexOf(r) < 0) return 'sans_reaction';
+    await db.ref('reactions_push/' + uid).set({ pk, jour, le: t });
+    return 'note';
+  }
+  const reactionsAttente = () => db.ref('reactions_push').shallow();
+  async function reactionsPushUn(uid, t) {
+    const a = await _val('reactions_push/' + uid);
+    await db.ref('reactions_push/' + uid).remove();
+    if (!a || !a.pk || !a.jour) return 'rien';
+    const r = (await _val('reactions/' + a.pk + '/' + a.jour)) || {};
+    const qui = Object.keys(r).filter((k) => REACTIONS.indexOf(r[k]) >= 0);
+    if (!qui.length) return 'rien';
+    const p1 = (await _val('profils_publics/' + qui[0] + '/prenom')) || 'Un ami';
+    const nom = String(p1).trim().slice(0, 24) || 'Un ami';
+    const n = qui.length - 1;
+    const title = n ? nom + ' et ' + n + ' autre' + (n > 1 ? 's' : '') + ' ont réagi à ta séance' : nom + ' a réagi à ta séance';
+    const res = await envoyerPush(uid, { type: 'defi', url: './?duels=1', tag: 'reactions-' + a.jour, title, body: qui.map((k) => r[k]).join(' ') });
+    return res && res.envoye ? 'envoye' : ((res && res.raison) || 'echec');
+  }
+
   // ══ LES ÉVÉNEMENTS SAISONNIERS (voir saisons.js) — CHAQUE HEURE ═══════
   // Par saison suivie : la progression écrite par les apps (1 lecture), l'état
   // des annonces (1), une écriture multi-chemins (compteur collectif, badges
@@ -1222,8 +1257,16 @@ export function creerMetier(deps) {
       // Le point d'un pseudo est « __ » en base (Firebase refuse le point dans une clé).
       const pk = pseudo.replace(/\./g, '__');
       const [proprio, rangPublic] = await Promise.all([_val('pseudos/' + pk), _val('profils_publics/' + pk + '/rang')]);
+      // Les volts de la semaine (sem : {lundi: {v, n}}, treize semaines) y
+      // sont toujours, pour le classement entre amis ; le rang et la jauge,
+      // seulement s'il les montre.
+      // derJour : le JOUR de la dernière séance, rien de ce qu'elle contenait
+      // (les réactions de ses amis s'y accrochent).
+      const sem = etat.sem && Object.keys(etat.sem).length ? etat.sem : null;
+      const derJour = Number(etat.derniere) > 0 ? XPS.heureLocale(Number(etat.derniere), null).jour : null;
       if (proprio === k) maj['volts_publics/' + pk] = rangPublic
-        ? Object.assign({ rang: { n: rg.rang.n, nom: rg.rang.nom }, maj: t, masquer: r.nonVerifies }, XPS.voltsPublics(r.total)) : null;
+        ? Object.assign({ rang: { n: rg.rang.n, nom: rg.rang.nom }, maj: t, masquer: r.nonVerifies, sem, derJour }, XPS.voltsPublics(r.total))
+        : (sem ? { sem, derJour, maj: t } : null);
     }
     await db.ref().update(maj);
     // LES QUATRE PREMIÈRES SÉANCES D'UN FILLEUL : le mois de son parrain.
@@ -1298,5 +1341,5 @@ export function creerMetier(deps) {
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente,
     fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, tache,
-    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, saisonsHeure, parcoursJ21, retourUn, xpRecalculer, retentionUn, retentionFin, activiteComptes };
+    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, reactionEvenement, reactionsAttente, reactionsPushUn, saisonsHeure, parcoursJ21, retourUn, xpRecalculer, retentionUn, retentionFin, activiteComptes };
 }

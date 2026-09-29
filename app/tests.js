@@ -50847,7 +50847,78 @@ async function testExercices(){
       const h=htmlAmisAccueil([{cle:'marc',p:'marc',prenom:'Marc',prof}],Date.now(),{amis:{marc:{prenom:'Marc',le:1}},att:{},abonnes:{}},'moi')
         +htmlFicheAmi(Object.assign({trouve:true,pseudo:'marc'},prof),true);
       if(/\b82\b|kg|poids|mensuration|taille|https?:|data:image|SQUAT|140/i.test(h)) return _echec('fuite : '+h.slice(0,200));
-      return Object.keys(prof).sort().join()==='badges,prenom,rang,sem,volts'?true:_echec(Object.keys(prof).join());})());
+      return Object.keys(prof).sort().join()==='badges,der,prenom,rang,sem,volts'?true:_echec(Object.keys(prof).join());})());
+    // ══ LOT D (29/09/2026) — LE JEU ENTRE AMIS ══
+    ok('Jeu entre amis : la semaine commence lundi, changements d’heure de mars et d’octobre compris',(()=>{
+      const c=[['2026-10-25T23:30:00','2026-10-19'],['2026-10-26T00:30:00','2026-10-26'],['2027-03-28T12:00:00','2027-03-22'],['2027-03-29T01:00:00','2027-03-29'],['2027-01-01T10:00:00','2026-12-28']];
+      for(const [iso,l] of c) if(lundiISO(Date.parse(iso))!==l) return _echec(iso+' → '+lundiISO(Date.parse(iso)));
+      // Sept jours avant le lundi d'après le passage à l'heure d'hiver : bien le lundi d'avant.
+      return localISODate(_datePlusJours(_lundiDe(Date.parse('2026-10-28T12:00:00')),-7))==='2026-10-19'?true:_echec('recul d’une semaine');})());
+    ok('Jeu entre amis : la série partagée, coupée par une semaine trouée, pas par la semaine en cours',(()=>{
+      const t=Date.parse('2026-10-28T12:00:00'), L=(i)=>localISODate(_datePlusJours(_lundiDe(t),-7*i));
+      const S=(ks)=>Object.fromEntries(ks.map(i=>[L(i),{v:100,n:1}]));
+      if(serieCommune(S([0,1,2,3]),S([0,1,2,3]),t)!==4) return _echec('4 : '+serieCommune(S([0,1,2,3]),S([0,1,2,3]),t));
+      if(serieCommune(S([1,2,3]),S([0,1,2,3]),t)!==3) return _echec('la semaine en cours ne coupe pas');
+      if(serieCommune(S([0,1,3,4]),S([0,1,2,3,4]),t)!==2) return _echec('une semaine trouée coupe : '+serieCommune(S([0,1,3,4]),S([0,1,2,3,4]),t));
+      return serieCommune(null,S([0]),t)===0?true:_echec('sans rien');})());
+    ok('Jeu entre amis : le classement se lit seul, premier, et dernier sans jamais le dire',(()=>{
+      const t=Date.parse('2026-10-28T12:00:00'), l0=lundiISO(t);
+      const P=(v,n)=>({prenom:'x',sem:{[l0]:{v,n:n==null?1:n}}});
+      const moi=(v)=>({cle:'moi',p:'moi',prenom:'Kévin',prof:P(v)});
+      const seul=phraseClassement(classementSemaine(moi(100),[],t));
+      if(!/Suis un pote/.test(seul)||!/La semaine repart lundi\./.test(seul)) return _echec('seul : '+seul);
+      const amis=[{cle:'marc',p:'marc',prenom:'Marc',prof:P(300)},{cle:'lea',p:'lea',prenom:'Léa',prof:P(150)}];
+      const prem=phraseClassement(classementSemaine(moi(400),amis,t));
+      if(prem!=='Tu mènes la semaine avec 400 V, Marc suit à 300 V. La semaine repart lundi.') return _echec('premier : '+prem);
+      const tri=classementSemaine(moi(100),amis,t), der=phraseClassement(tri);
+      if(der!=='Tu es à 50 V de Léa. Une séance peut suffire. La semaine repart lundi.') return _echec('dernier : '+der);
+      if(tri[2].rg!==3||tri[2].ecart!==200) return _echec('écart avec le premier');
+      const d=document.createElement('div'); d.innerHTML=htmlClassementSemaine(amis,t,{amis:{},att:{},abonnes:{}},moi(100));
+      const txt=d.textContent;
+      if(/dernier/i.test(txt)) return _echec('« dernier »');
+      if(/[\u2014\u2013]/.test(d.innerHTML)) return _echec('tiret cadratin');
+      if(!/à 200 V du premier/.test(txt)) return _echec('mon écart : '+txt);
+      // À égalité de volts, le plus régulier devant.
+      const eg=classementSemaine(null,[{prenom:'A',prof:{sem:{[l0]:{v:80,n:1}}}},{prenom:'B',prof:{sem:{[l0]:{v:80,n:1},[localISODate(_datePlusJours(_lundiDe(t),-7))]:{v:10,n:1}}}}],t);
+      return eg[0].prenom==='B'?true:_echec('égalité : '+eg.map(x=>x.prenom));})());
+    ok('Jeu entre amis : la relance de fin de semaine vise celui qui manque, jamais celui qui mène',(()=>{
+      const sam=Date.parse('2026-10-31T12:00:00'), mer=Date.parse('2026-10-28T12:00:00');
+      const L=(t,i)=>localISODate(_datePlusJours(_lundiDe(t),-7*i));
+      const sem=(t,ks)=>Object.fromEntries(ks.map(i=>[L(t,i),{v:50,n:1}]));
+      const ami=(t)=>[{prenom:'Marc',prof:{sem:sem(t,[0,1,2])}}];
+      const r=serieAmisLigne(sem(sam,[1,2]),ami(sam),sam);
+      if(!/Marc a fait sa séance cette semaine\. Une séance d’ici dimanche soir et votre série de 2 semaines continue\./.test(r.rappel)) return _echec('rappel : '+r.rappel);
+      if(serieAmisLigne(sem(sam,[0,1,2]),ami(sam),sam).rappel) return _echec('à qui a déjà fait sa séance');
+      if(serieAmisLigne(sem(mer,[1,2]),ami(mer),mer).rappel) return _echec('en milieu de semaine');
+      return /Marc et toi tenez à deux depuis 3 semaines\./.test(serieAmisLigne(sem(mer,[0,1,2]),ami(mer),mer).serie)?true:_echec('la série');})());
+    ok('Jeu entre amis : une réaction par ami et par jour, remplaçable, cinq emojis fixes, jamais de texte',(()=>{
+      const t=Date.parse('2026-10-28T12:00:00');
+      let m=reactionPoserLocal({},'marc','2026-10-27','💪',t);
+      m=reactionPoserLocal(m,'marc','2026-10-27','🔥',t);
+      if(Object.keys(m).length!==1||m['marc|2026-10-27']!=='🔥') return _echec(JSON.stringify(m));
+      if(Object.keys(reactionPoserLocal(m,'marc','2026-10-27','bravo',t)).length!==1||reactionPoserLocal(m,'marc','2026-10-27','bravo',t)['marc|2026-10-27']!=='🔥') return _echec('texte accepté');
+      m=reactionPoserLocal(m,'marc','2026-10-01','💪',t);
+      if(m['marc|2026-10-01']) return _echec('trop ancien gardé');
+      const x={cle:'marc',p:'marc',prenom:'Marc',prof:{der:'2026-10-27'}};
+      const d=document.createElement('div'); d.innerHTML=htmlReactionsAmi(x,t,{'marc|2026-10-27':'🔥'});
+      if([...d.querySelectorAll('button')].map(b=>b.textContent).join('')!=='💪🔥👏😮⚡') return _echec('les cinq');
+      if(!d.querySelector('button.on')||d.querySelector('button.on').textContent!=='🔥') return _echec('le mien allumé');
+      if(htmlReactionsAmi({cle:'marc',p:'marc',prof:{der:'2026-10-10'}},t,{})!=='') return _echec('séance trop ancienne');
+      if(d.querySelector('input,textarea')) return _echec('un champ de texte');
+      return evenementCible({type:'reaction',cible:'marc',jour:'2026-10-27'})==='marc'&&evenementCible({type:'reaction',cible:'Marc!',jour:'x'})===''?true:_echec('cible');})());
+    ok('Jeu entre amis : le palmarès des duels contre un ami, et les réactions reçues sans donnée de santé',(()=>{
+      const c={a:{statut:'termine',createur:'moi',createurPseudo:'moi',invitePseudo:'marc',gagnant:'createur',termineLe:Date.parse('2026-09-12T12:00:00')},
+        b:{statut:'termine',createur:'marc@t,fr',createurPseudo:'marc',invitePseudo:'moi',gagnant:'createur',termineLe:1},
+        c:{statut:'termine',createur:'moi',invitePseudo:'marc',gagnant:'createur',termineLe:2},
+        d:{statut:'en_cours',createur:'moi',invitePseudo:'marc'},e:{statut:'termine',createur:'moi',invitePseudo:'zoe',gagnant:'createur'}};
+      const b=bilanDuelsContre(c,'marc','moi');
+      if(b.g!==2||b.p!==1||b.e!==0) return _echec(JSON.stringify(b));
+      if(!/^Vos duels : 2 gagnés, 1 perdu · dernier le 12 sept/.test(texteBilanDuels(b))) return _echec(texteBilanDuels(b));
+      if(texteBilanDuels(bilanDuelsContre(c,'tom','moi'))!=='') return _echec('sans duel');
+      const h=htmlReactionsRecues({marc:'🔥',lea:'💪',x:'coucou'},{marc:'Marc'});
+      if(/coucou/.test(h)) return _echec('texte libre affiché');
+      if(/kg|poids|sommeil|mensuration|SQUAT/i.test(h)) return _echec('santé');
+      return /🔥 Marc/.test(h)&&/💪 lea/.test(h)?true:_echec(h);})());
     ok('Amis : les règles — carnet au titulaire seul, abonnés lus par le seul suivi ; 300 au plus, tenu par l’app',(()=>{
       const x=new XMLHttpRequest(); x.open('GET','../database.rules.json',false); x.send();
       const r=x.status===200?x.responseText:''; if(!r) return true;
