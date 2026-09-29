@@ -21174,12 +21174,13 @@ function htmlDuelsHub(u,duels,invite,maintenant){
   return h;
 }
 let _duelsInvite=null;
-// Le toucher du bandeau : sans défi reçu ni en cours, la création directe ;
-// sinon la feuille qui les liste, avec « Nouveau défi ».
+// Le toucher du bandeau : la feuille « Mes défis », toujours. Elle porte le
+// défi reçu, ceux en cours, le carnet d'amis (on défie un pote d'ici, pas de
+// l'accueil) et « Nouveau défi ».
 function ouvrirDuelsHub(){
   const u=currentUser; if(!u) return false;
+  if(u.role==='coach') return ouvrirCreationDuel();
   const corps=htmlDuelsHub(u,_duelsCache,_duelsInvite,Date.now());
-  if(!corps) return ouvrirCreationDuel();
   document.getElementById('duel-feuille')?.remove();
   const d=document.createElement('div');
   d.id='duel-feuille'; d.className='du-fond';
@@ -21188,8 +21189,9 @@ function ouvrirDuelsHub(){
     +'<button type="button" class="du-x" aria-label="Fermer" onclick="fermerDuelFeuille()">'+icon('x',18)+'</button>'
     +'<div class="du-ecu">'+DUEL_ECUSSON+'</div>'
     +'<div class="du-titre"><span>Mes</span> défis</div>'
-    +'<p class="du-sous">Tes défis en cours, ou un nouveau défi à lancer.</p>'
+    +'<p class="du-sous">Tes défis, tes amis, ou un nouveau défi à lancer.</p>'
     +corps
+    +'<div id="clh-amis" class="du-amis"></div>'
     +'<button type="button" class="btn btn-red du-go du-lancer" onclick="ouvrirCreationDuel()">'
       +'<span class="du-l-ico" aria-hidden="true">'+icon('haches',26)+'</span><span class="du-l-t">Nouveau défi</span>'
       +'<span class="du-l-ch" aria-hidden="true">'+icon('chevron-right',22)+'</span></button>'
@@ -21197,6 +21199,7 @@ function ouvrirDuelsHub(){
     +'</div>';
   d.addEventListener('click',e=>{ if(e.target===d) fermerDuelFeuille(); });
   document.body.appendChild(d);
+  try{ renderAmisAccueil(); }catch(e){}
   return true;
 }
 // ══ LES AMIS : LE CARNET (lot A, 29/09/2026) ══════════════════════════════
@@ -21431,6 +21434,7 @@ async function renderAmisAccueil(){
   return true;
 }
 function ouvrirAmis(){
+  fermerDuelFeuille();
   go('s-client-amis');
   renderEcranAmis();
   return true;
@@ -39070,8 +39074,8 @@ function loadClientHome(){
   try{ renderDefiAccueil(); }catch(e){}
   // Les duels (l'invitation reçue, ceux en cours) et le défi RepCore du mois.
   try{ _rendreDuelsAccueil(); }catch(e){}
-  // Le carnet d'amis, sous les duels (lot A).
-  try{ renderAmisAccueil(); }catch(e){}
+  // Le carnet d'amis n'est plus sur l'accueil : il vit dans la feuille
+  // « Mes défis » (ouvrirDuelsHub), là où l'on cherche à défier un pote.
   try{ renderDefiMoisAccueil(); }catch(e){}
   // L'événement saisonnier : la bannière (et la valeur de l'athlète, écrite).
   try{ renderSaisonAccueil(); }catch(e){}
