@@ -50234,6 +50234,57 @@ async function testExercices(){
         return z.querySelector('.pr-chiffres')?true:_echec('chiffres');
       } finally { currentUser=svU; _prBrut=svB; _prStats=svS; if(z) z.innerHTML=av; }})());
 
+    // ══ LOT C7 — LES GESTES DU COACH, COMPTÉS (29/09/2026) ══════════════════
+    ok('C7 — six compteurs, déclarés dans RCM_EVENEMENTS ET acceptés par les règles de /metrics',(()=>{
+      if(RCM_COACH.length!==6) return _echec(RCM_COACH.length+' compteurs');
+      const manque=RCM_COACH.filter(k=>RCM_EVENEMENTS.indexOf(k)<0);
+      if(manque.length) return _echec('non déclarés : '+manque.join());
+      const x=new XMLHttpRequest(); x.open('GET','../database.rules.json',false); x.send();
+      const m=/\$evenement\.matches\(\/\^\(([^)]*)\)\$\/\)/.exec(x.status===200?x.responseText:'');
+      if(!m) return _echec('liste blanche de /metrics illisible');
+      const acc=m[1].split('|');
+      const refuses=RCM_COACH.filter(k=>acc.indexOf(k)<0);
+      return refuses.length?_echec('refusés en silence par la base : '+refuses.join()):true;})());
+    ok('C7 — aucun compteur de coach ne s’écrit depuis un compte athlète',(()=>{
+      const svU=currentUser;
+      try{
+        for(const u of [null,{role:'athlete',email:'a@t.fr'},{email:'sans-role@t.fr'}]){
+          currentUser=u;
+          for(const k of RCM_COACH) if(rcmCoach(k)!==false) return _echec(k+' compté pour '+JSON.stringify(u));
+        }
+        currentUser={role:'coach',email:'c7@t.fr'};
+        if(rcmCoach('coach_fiche_ouverte')!==true) return _echec('refusé pour un coach');
+        if(rcmCoach('landing_view')!==false||rcmCoach('coach_inconnu')!==false) return _echec('un autre nom passe par le garde');
+      } finally { currentUser=svU; }
+      // Et nulle part un compteur coach_* n'est écrit sans le garde.
+      const src=_prodSrc();
+      // (Seuls les six : rcm('coach_kit_telecharge') existe depuis avant ce lot, sans être déclaré.)
+      if(new RegExp('\\brcm\\(\\s*\\\\?[\'"]('+RCM_COACH.join('|')+')').test(src)) return _echec('un rcm(\'coach_…\') direct');
+      const appels=[...src.matchAll(/rcmCoach\(\s*\\?['"](coach_[a-z_]+)/g)].map(m=>m[1]);
+      const inconnus=appels.filter(k=>RCM_COACH.indexOf(k)<0);
+      if(inconnus.length) return _echec('noms inconnus : '+inconnus.join());
+      // Les cinq gestes de l'app sont branchés (la relance automatique est comptée par le serveur).
+      const branches=new Set(appels);
+      const absents=RCM_COACH.filter(k=>k!=='coach_relance_auto'&&!branches.has(k));
+      return absents.length?_echec('jamais comptés : '+absents.join()):true;})());
+    ok('C7 — des comptes, pas des journaux : rien qui désigne un athlète ni un message',(()=>{
+      // rcm n'envoie qu'un nom et le jour : ni jeton, ni argument de contenu.
+      const s=String(rcmCoach)+String(rcm);
+      if(/\bauth=|_getToken|\.email|\.id\b|texte|contenu/.test(s)) return _echec('un identifiant ou un contenu dans l’envoi');
+      return rcmCoach.length===1?true:_echec('rcmCoach prend plus que le nom');})());
+    ok('C7 — la ligne de l’écran de mesure : les six chiffres du mois, le mois précédent à côté',(()=>{
+      const t=new Date(2026,9,6,12).getTime();
+      const s=rcmSommesCoach({'2026-10-01':{coach_fiche_ouverte:4,coach_bilan_repondu:2,landing_view:90},'2026-10-05':{coach_fiche_ouverte:3},
+        '2026-09-12':{coach_fiche_ouverte:10,coach_relance_auto:1},'2026-08-30':{coach_fiche_ouverte:99}},t);
+      if(s.mois.coach_fiche_ouverte!==7||s.mois.coach_bilan_repondu!==2||s.precedent.coach_fiche_ouverte!==10||s.precedent.coach_relance_auto!==1)
+        return _echec(JSON.stringify(s));
+      if(Object.keys(s.mois).length!==6||'landing_view' in s.mois) return _echec('autre chose que les six');
+      const d=document.createElement('div'); d.innerHTML=htmlGestesCoach(s,t);
+      if(d.querySelectorAll('.gc-c').length!==6) return _echec('six cases');
+      if(!/octobre/.test(d.textContent)||!/septembre/.test(d.textContent)) return _echec('les mois : '+d.textContent);
+      // Janvier : le mois précédent est décembre de l'année d'avant.
+      return rcmMoisCoach(new Date(2027,0,15).getTime()).precedent==='2026-12'?true:_echec('janvier');})());
+
     ok('Volts : dix rangs, dans l’ordre, seuils croissants à partir de 0',(()=>{
       const n=RANGS.map(r=>r.nom).join();
       if(n!=='ÉTINCELLE,IMPULSION,VOLTAGE,MACHINE,ÉLITE,SURTENSION,MONSTRE,FOUDRE,TITAN,LÉGENDE') return _echec(n);

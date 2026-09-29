@@ -532,7 +532,15 @@ const RCM_EVENEMENTS=['landing_view','welcome_view','role_selected_coach','role_
   'vitrine_vue','programme_vu','programme_clic_achat','story_partagee',
   // LOT N3 : combien de gestes d'ajout pour compléter une journée de journal
   // (90 % des calories visées), par tranche. Aussi dans database.rules.json.
-  'nut_jour_g1_3','nut_jour_g4_6','nut_jour_g7_10','nut_jour_g11'];
+  'nut_jour_g1_3','nut_jour_g4_6','nut_jour_g7_10','nut_jour_g11',
+  // ── LOT C7 : LES GESTES DU COACH, COMPTÉS ───────────────────────────
+  // Six chiffres, pas vingt. Des COMPTES, pas des journaux : « +1 aujourd'hui »,
+  // sans jeton, sans identifiant d'athlète, sans contenu. Ils ne partent QUE
+  // par rcmCoach, qui refuse tout compte qui n'est pas un coach.
+  // coach_relance_auto est compté par le serveur léger, qui l'envoie
+  // (cloudflare/src/metier.js) : il est ici pour être déclaré au même endroit.
+  'coach_message_envoye','coach_programme_assigne','coach_fiche_ouverte','coach_bilan_repondu',
+  'coach_canal_publie','coach_relance_auto'];
 // ══════════ SONDE DE QUOTA : UNE PENTE, PAS UNE VÉRITÉ ══════════
 // Le plan Spark plafonne à 10 Go téléchargés par mois, et le dépassement est
 // SILENCIEUX : l'application cesse simplement de répondre. Cette sonde ne
@@ -821,6 +829,18 @@ async function etatCapaciteGlobale(){
   }catch(e){ return {erreur:String(e&&e.message||e)}; }
 }
 
+// LOT C7 : les gestes du coach. JAMAIS depuis un compte athlète : le garde est
+// ici, et nulle part ailleurs ne s'écrit un compteur coach_*.
+const RCM_COACH=Object.freeze(['coach_message_envoye','coach_programme_assigne','coach_fiche_ouverte',
+  'coach_bilan_repondu','coach_canal_publie','coach_relance_auto']);
+function rcmCoach(nom){
+  try{
+    if(RCM_COACH.indexOf(nom)<0) return false;
+    if(!currentUser||currentUser.role!=='coach') return false;
+    rcm(nom);
+    return true;
+  }catch(e){ return false; }
+}
 // Étapes « vue d'écran » : comptées une seule fois par session de navigation.
 // Sans ce garde, un aller-retour entre l'accueil et l'inscription — le
 // comportement normal de quelqu'un qui hésite — gonflerait l'étape et ferait
@@ -17681,7 +17701,7 @@ function _waBoutonTodo(r,idx){
     const titre=tel?'Écrire à '+(c.fname||'')+' sur WhatsApp'
       :'Ouvrir WhatsApp avec le message pré-rempli ('+(c.fname||'cet athlète')+' n\'a pas de numéro enregistré)';
     return `<a href="${safeUrl(waLink(tel,_waTexteTodo(r.type,c)))}" target="_blank" rel="noopener"
-      onclick="event.stopPropagation()" title="${escapeHtml(titre)}" aria-label="${escapeHtml(titre)}"
+      onclick="event.stopPropagation();rcmCoach('coach_message_envoye')" title="${escapeHtml(titre)}" aria-label="${escapeHtml(titre)}"
       style="${style}${tel?'':';opacity:.55'}">${icon('message-circle',16)}</a>`;
   }
   return `<button onclick="event.stopPropagation();openWaGroupe(${idx})"
@@ -19445,7 +19465,7 @@ function renderProspects(){
     return '<div class="pr-l pr-'+st+'"><div class="pr-l-h"><b>'+E(p.prenom||'')+'</b><span>'+E(PROSPECT_STATUT_LIB[st]||st)+'</span></div>'
       +'<div class="pr-l-d">'+E((OFFRES[p.formule]||{}).lib||'')+' · '+E(_prJour(Number(p.at)))+' · '+E(p.contact||'')+'</div>'
       +'<div class="pr-l-b">'
-      +(lien?'<a class="btn btn-outline btn-sm" href="'+safeUrl(lien)+'" target="_blank" rel="noopener" onclick="prospectStatut(\''+id+'\',\'repondu\',true)">Répondre</a>':'')
+      +(lien?'<a class="btn btn-outline btn-sm" href="'+safeUrl(lien)+'" target="_blank" rel="noopener" onclick="rcmCoach(\'coach_message_envoye\');prospectStatut(\''+id+'\',\'repondu\',true)">Répondre</a>':'')
       +(st==='nouveau'?'<button type="button" class="cp-lien" onclick="prospectStatut(\''+id+'\',\'repondu\')">J’ai répondu</button>':'')
       +(st!=='athlete'?'<button type="button" class="cp-lien" onclick="prospectStatut(\''+id+'\',\'athlete\')">Devenu athlète</button>':'')
       +(st!=='sans_suite'&&st!=='athlete'?'<button type="button" class="cp-lien" onclick="prospectStatut(\''+id+'\',\'sans_suite\')">Sans suite</button>':'')
@@ -21127,6 +21147,7 @@ async function enregistrerDefiCanal(){
   closeModal();
   // UN NOUVEAU DÉFI prévient les athlètes (une modification, non).
   if(nouveau) deposerEvenement({type:'defi_publie',msg:id}).catch(()=>{});
+  if(nouveau) rcmCoach('coach_canal_publie');
   toast(window._defiEdite?'Défi modifié':'Défi lancé ⚡');
   window._defiEdite='';
   _canalChargerCoach(id);
@@ -23195,6 +23216,7 @@ async function programmerMessageCanal(){
   if(!_cpProgrammes) _cpProgrammes={};
   _cpProgrammes[id]=m;
   if(o.prop) _cpClore(o.prop,'programme');
+  if(!o.progId) rcmCoach('coach_canal_publie');
   window._cpOuverture=null;
   closeModal();
   renderProgrammesCanal(); renderPropositionsCanal();
@@ -23449,6 +23471,7 @@ async function enregistrerMessageCanal(){
     saveUser();
     await CLOUD.pushProfilCoach(currentUser);
     closeModal();
+    if(!window._canalEdite) rcmCoach('coach_canal_publie');
     toast(window._canalEdite?'Message modifié':'Message publié');
     // C5 : une proposition publiée clôt la semaine ; un programmé publié tout
     // de suite ne doit plus partir à son heure.
@@ -23635,7 +23658,7 @@ function _wagPreparer(){
   zone.innerHTML=`<div class="sub" style="font-size:var(--fs-xs);margin-bottom:8px">Touche chaque nom pour ouvrir WhatsApp : ${sel.length} conversation${sel.length>1?'s':''} à ouvrir${sansTel?`, dont ${sansTel} sans numéro utilisable (contact à choisir)`:''}.</div>`
     +sel.map(s=>`<a href="${safeUrl(waLink(s.tel,pour(s)))}" target="_blank" rel="noopener"
       style="display:flex;align-items:center;gap:8px;min-height:44px;padding:0 12px;margin-bottom:6px;background:#0a1a0a;border:1px solid #1e3a1e;border-radius:var(--r-2);color:var(--green);text-decoration:none;font-size:var(--fs-md);font-weight:700"
-      onclick="this.style.opacity='.5';this.style.borderColor='var(--border)'">${escapeHtml(s.nom||'Athlète')}${s.tel?'':' <span style="color:var(--orange);font-weight:400;font-size:var(--fs-xs)">(contact à choisir)</span>'}</a>`).join('');
+      onclick="rcmCoach('coach_message_envoye');this.style.opacity='.5';this.style.borderColor='var(--border)'">${escapeHtml(s.nom||'Athlète')}${s.tel?'':' <span style="color:var(--orange);font-weight:400;font-size:var(--fs-xs)">(contact à choisir)</span>'}</a>`).join('');
 }
 
 // Rendu de la liste d'athletes. La recherche et le filtre sont lus dans le
@@ -30236,6 +30259,7 @@ function openClientDetail(cid,_refresh,_force){
   // B2.F4 — ON RETIENT OU L'ON ETAIT AVANT DE QUITTER LA LISTE. Pas au
   // rafraichissement : celui-la ne quitte pas l'ecran.
   if(!_refresh) _retenirPositionAccueil(cid);
+  if(!_refresh) rcmCoach('coach_fiche_ouverte');
   setTimeout(_ccdArmerAncres,0);
   // N3.6 — la ligne de fraicheur est repeinte a chaque ouverture, et a
   // chaque passage de la boucle de synchro : « il y a 4 min » doit vieillir.
@@ -35132,6 +35156,7 @@ function _assignerModele(a,prog,genre){
   a.assignedProgramGenre=g;
   a.assignedProgramVersion=Number(prog.majAt)||Number(prog.createdAt)||0;
   a.updatedAt=Date.now();
+  rcmCoach('coach_programme_assigne');
 }
 
 // ══ LOT C4 : LE MODÈLE POSÉ SUR PLUSIEURS, ET LA PROPAGATION (29/09/2026) ═
@@ -73105,6 +73130,7 @@ function saveReponseBilan(email,bilanId,taId){
   // locale, qui est ce qui rend la reponse reelle.
   try{ rbOublierBrouillon(email,bilanId); }catch(e){}
   const envoi=CLOUD.pushOne(email,c);
+  if(_premiere) rcmCoach('coach_bilan_repondu');
   // LA NOTIFICATION, À LA PREMIÈRE RÉPONSE SEULEMENT, et APRÈS l'envoi : le
   // serveur relit la réponse dans la base avant de prévenir l'athlète.
   if(_premiere) Promise.resolve(envoi).then(r=>{ if(r!==false) deposerEvenement({type:'reponse_bilan',dest:email.replace(/\./g,','),i:String(_indice)}); }).catch(()=>{});
@@ -118270,6 +118296,53 @@ const RCM_TUNNEL=[
   // ses etapes — et ce n'est certainement pas une fuite.
   {cles:['story_partagee'],lib:'Carte de séance partagée',horsTunnel:true,neutre:true}
 ];
+// ══ LOT C7 : LA LIGNE DES GESTES DU COACH, DANS L'ÉCRAN DE MESURE ═════════
+// Six chiffres du mois, et le mois précédent à côté. Rien d'autre : pas de
+// courbe, pas de détail par jour. UNE lecture, bornée par orderBy="$key" (le
+// créateur lit tout le nœud, comme pour la carte « Capacité »).
+const RCM_COACH_LIB=Object.freeze({coach_message_envoye:'Messages envoyés',coach_programme_assigne:'Programmes assignés',
+  coach_fiche_ouverte:'Fiches ouvertes',coach_bilan_repondu:'Bilans répondus',coach_canal_publie:'Publications au canal',
+  coach_relance_auto:'Relances automatiques'});
+// PURE. Les deux mois ('AAAA-MM'), celui de `t` et le précédent.
+function rcmMoisCoach(maintenant){
+  const d=new Date((typeof maintenant==='number')?maintenant:Date.now());
+  const m=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  const p=new Date(d.getFullYear(),d.getMonth()-1,1);
+  return {mois:m,precedent:p.getFullYear()+'-'+String(p.getMonth()+1).padStart(2,'0')};
+}
+// PURE. Les six sommes pour chaque mois, depuis /metrics lu par jour.
+function rcmSommesCoach(parJour,maintenant){
+  const {mois,precedent}=rcmMoisCoach(maintenant);
+  const out={mois:{},precedent:{}};
+  for(const k of RCM_COACH){ out.mois[k]=0; out.precedent[k]=0; }
+  const o=(parJour&&typeof parJour==='object')?parJour:{};
+  for(const j of Object.keys(o)){
+    const cote=j.slice(0,7)===mois?'mois':(j.slice(0,7)===precedent?'precedent':null);
+    if(!cote||!o[j]||typeof o[j]!=='object') continue;
+    for(const k of RCM_COACH) out[cote][k]+=Math.max(0,parseInt(o[j][k],10)||0);
+  }
+  return out;
+}
+function htmlGestesCoach(s,maintenant){
+  const {mois,precedent}=rcmMoisCoach(maintenant);
+  const nomMois=m=>{ try{ return new Date(+m.slice(0,4),+m.slice(5,7)-1,1).toLocaleDateString('fr-FR',{month:'long'}); }catch(e){ return m; } };
+  return '<div class="gc"><div class="gc-t">Les gestes des coachs · '+escapeHtml(nomMois(mois))+' <span>('+escapeHtml(nomMois(precedent))+')</span></div>'
+    +'<div class="gc-l">'+RCM_COACH.map(k=>'<div class="gc-c"><b>'+(s.mois[k]||0)+'</b><span class="gc-p">'+(s.precedent[k]||0)+'</span><span class="gc-n">'+escapeHtml(RCM_COACH_LIB[k])+'</span></div>').join('')+'</div></div>';
+}
+async function _rendreGestesCoach(corps){
+  try{
+    if(!corps||!currentUser||currentUser.email!==CREATOR_EMAIL) return false;
+    const jeton=await CLOUD._getToken();
+    if(!jeton) return false;
+    const {mois,precedent}=rcmMoisCoach();
+    const r=await fetch(RCM_BASE+'.json?orderBy="$key"&startAt="'+precedent+'-01"&endAt="'+mois+'-31"&auth='+encodeURIComponent(jeton));
+    if(!r.ok) return false;
+    const z=document.createElement('div');
+    z.innerHTML=htmlGestesCoach(rcmSommesCoach(await r.json()));
+    corps.insertBefore(z.firstChild,corps.firstChild);
+    return true;
+  }catch(e){ return false; }
+}
 async function loadMetrics(){
   // Même garde que la génération de codes gratuits : ce sont les chiffres du
   // produit, pas ceux d'un coach. Contrôle d'affichage ET d'entrée.
@@ -118402,6 +118475,8 @@ async function loadMetrics(){
   corps.innerHTML=totalTout===0
     ? '<div class="sub" style="font-size:var(--fs-sm);line-height:1.6">Aucune mesure sur les 7 derniers jours.<br><br>C\'est normal tant que les règles de la base n\'ont pas été redéployées, ou tant que personne n\'a ouvert l\'application depuis la mise en ligne.</div>'
     : html+tbl;
+  // LOT C7 : la ligne des gestes du coach, en tête.
+  _rendreGestesCoach(corps);
   // UN ENTONNOIR SE LIT DE HAUT EN BAS : chaque etage se remplit apres le
   // precedent, c'est la forme meme de la donnee. Ecran rare, ecran
   // administrateur, aucune action bloquee — c'est le bon endroit pour etre

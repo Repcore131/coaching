@@ -1470,6 +1470,8 @@ export function creerMetier(deps) {
     if (!(statut === 'non_parti' && deja)) maj['relances_auto/' + coach + '/' + uid + '/' + idFile(t, 'r')] =
       Object.assign({ at: t, signal: choix.signal, depuis: choix.depuis, moyen: choix.moyen, texte, statut }, raison ? { raison } : {});
     if (Object.keys(maj).length) await db.ref().update(maj);
+    // LOT C7 : le compte anonyme du jour, comme les compteurs de l'app (metrics/<jour>/coach_relance_auto).
+    if (statut === 'parti') { try { await db.ref('metrics/' + paris(t).jour + '/coach_relance_auto').transaction((v) => (Number(v) || 0) + 1); } catch (e) { /* un compte manqué ne bloque rien */ } }
     return statut === 'parti' ? 'envoye' : raison;
   }
 

@@ -15442,3 +15442,14 @@ html[data-theme="clair"]{background:#f8f8f8}
 .pr-l-d{font-size:var(--fs-xs);color:var(--sub);line-height:1.5;word-break:break-word}
 .pr-l-b{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:6px}
 .pr-l-b .btn{margin:0}
+/* LOT C7 : la ligne des gestes du coach (écran de mesure) */
+.gc{background:var(--surface-2);border-radius:var(--r-2);padding:12px 14px;margin-bottom:20px}
+.gc-t{font-size:var(--fs-2xs);color:var(--sub);letter-spacing:.08em;text-transform:uppercase;font-weight:700;margin-bottom:8px}
+.gc-t span{text-transform:none;letter-spacing:0;font-weight:600}
+.gc-l{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 8px}
+.gc-c{display:flex;flex-direction:column;min-width:0}
+.gc-c b{font-size:var(--fs-xl);font-weight:900;color:var(--text-strong);font-variant-numeric:tabular-nums;line-height:1.1}
+.gc-p{font-size:var(--fs-2xs);color:var(--sub);font-variant-numeric:tabular-nums}
+.gc-p::before{content:"("}.gc-p::after{content:")"}
+.gc-n{font-size:var(--fs-2xs);color:var(--sub);line-height:1.35;margin-top:2px}
+@media (min-width:640px){.gc-l{grid-template-columns:repeat(6,1fr)}}

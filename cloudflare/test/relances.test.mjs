@@ -153,12 +153,15 @@ test('le travail du jour : une notification, une ligne au journal, et la semaine
   assert.equal(msg.type, 'relance');
   assert.equal(msg.body, lea[0].texte);
   assert.equal(j['tom@t,fr'], undefined, 'Tom n’a aucun signal');
+  // LOT C7 : la relance partie se compte, anonyme, au jour de Paris.
+  assert.equal(w.F.lire('metrics/2026-10-06/coach_relance_auto'), 1);
   assert.equal(j['ailleurs@t,fr'], undefined, 'un athlète passé chez un autre coach');
   // Le lendemain, même signal : rien (la semaine est prise).
   w.avance(J);
   for (let i = 0; i < 6; i++) { await w.minute(); w.avance(60e3); }
   assert.equal(RL.journalListe(w.F.lire('relances_auto/' + COACH + '/lea@t,fr')).length, 1);
   assert.equal(w.F.recus.length, 1);
+  assert.equal(w.F.lire('metrics/2026-10-06/coach_relance_auto'), 1, 'rien ne part, rien ne se compte');
 });
 
 test('« je reprends la main » coupe aussi les relances déjà en file', async () => {
