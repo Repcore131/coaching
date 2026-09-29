@@ -26240,11 +26240,13 @@ function renderTodoBlock(clients){
   const el=document.getElementById('ch-todo');if(!el) return;
   const now=Date.now(),SOON=14*864e5;
   const lt=c=>(c.bilans||[]).reduce((m,b)=>Math.max(m,b.date),0);
-  const newBil=clients.filter(c=>hasNewBilan(c)&&!isAlertSnoozed('bilan',c.id,lt(c)));
+  // LOT C1 : pendant l'accueil d'un athlète coaché, deux moments seulement.
+  const _acc=accueilLignesCoach(clients,now);
+  const newBil=clients.filter(c=>hasNewBilan(c)&&!_acc.silence.has(c.id)&&!isAlertSnoozed('bilan',c.id,lt(c)));
   const overdue=clients.filter(c=>!c._fromCode&&needsAlert(c)&&!isAlertSnoozed('overdue',c.id));
   const expiring=clients.filter(c=>!c._fromCode&&c.status==='COACHING_SUIVI'&&c.accessExpiry&&(c.accessExpiry-now)>0&&(c.accessExpiry-now)<SOON&&!isAlertSnoozed('expiring',c.id));
-  const noProg=clients.filter(c=>!c._fromCode&&!hasProgram(c)&&(c.bilans||[]).some(b=>b.type==='depart')&&!isAlertSnoozed('noprog',c.id));
-  const noStart=clients.filter(c=>neverStarted(c)&&!isAlertSnoozed('nostart',c.id));
+  const noProg=clients.filter(c=>!c._fromCode&&!_acc.silence.has(c.id)&&!hasProgram(c)&&(c.bilans||[]).some(b=>b.type==='depart')&&!isAlertSnoozed('noprog',c.id));
+  const noStart=clients.filter(c=>neverStarted(c)&&!_acc.silence.has(c.id)&&!isAlertSnoozed('nostart',c.id));
   // Drapeau rouge d'abord : c'est le seul signal que le coach ne peut pas
   // reporter d'un clic. Une ligne par athlete, avec les signes declares.
   //
@@ -26266,6 +26268,9 @@ function renderTodoBlock(clients){
   // Puis les signaux d'entrainement : la sante avant l'intendance.
   rows.push.apply(rows,_lignesEntrainement(clients));
   // En tête des lignes administratives : relancer un inscrit qui n'a jamais démarré prime sur tout le reste.
+  const _accProg=_acc.prog.filter(c=>!isAlertSnoozed('accueil_prog',c.id)), _accRet=_acc.retour.filter(c=>!isAlertSnoozed('accueil_retour',c.id));
+  if(_accProg.length) rows.push({type:'accueil_prog',icon:icon('clipboard',16),color:'var(--orange)',label:'Programme à écrire',list:_accProg});
+  if(_accRet.length) rows.push({type:'accueil_retour',icon:icon('message-circle',16),color:'var(--orange)',label:'Premier point de l’accueil',list:_accRet});
   if(noStart.length) rows.push({type:'nostart',icon:icon('user-plus',16),color:'var(--red)',label:'Inscrit, n\'a jamais commencé',list:noStart});
   if(newBil.length) rows.push({type:'bilan',icon:icon('download',16),color:'var(--orange)',label:'Nouveau'+(newBil.length>1?'x bilans à lire':' bilan à lire'),list:newBil});
   if(overdue.length) rows.push({type:'overdue',icon:icon('alert-triangle',16),color:'var(--red)',label:'Bilan'+(overdue.length>1?'s':'')+' en retard',list:overdue});
@@ -26403,6 +26408,8 @@ function renderTodoBlock(clients){
         // elle n'ouvre pas une fiche que le coach devrait ensuite fouiller.
         :r.type==='videos'?`_entrerFileVideos()`
         :r.type==='rite'?`_ouvrirRiteClient('${r.list[0].id}')`
+        // LOT C1 : le bilan de départ, ouvert à l'endroit où l'on écrit le programme.
+        :r.type==='accueil_prog'?`accueilOuvrirBilanDepart('${r.list[0].id}')`
         :`openClientDetail('${r.list[0].id}')`,
       style:'cursor:pointer;transition:background var(--t-1);'};
     },{pad:'9px 11px',gap:9,border:'#180000',hover:'#140000'})
@@ -30630,6 +30637,7 @@ function openClientDetail(cid,_refresh,_force){
   try{ renderAsymetrieCoach(c); }catch(e){}
   try{ renderMotCoachFiche(c); }catch(e){}
   try{ renderRelanceFiche(c); }catch(e){}
+  try{ renderAccueilFiche(c); }catch(e){}
   try{ renderPaiementsFiche(c); }catch(e){}
   try{ renderDouleurCoach(c); }catch(e){}
   try{ renderLeveeCoach(c); }catch(e){}
@@ -36483,6 +36491,8 @@ function saveCoachSessions(){
     stocke.programmePerso={le:Date.now(),par:String((currentUser&&currentUser.id)||'')};
   c.updatedAt=stocke.updatedAt;
   users[emailKey]=stocke;
+  // LOT C1 : publié pendant l'accueil et pas encore lu : la relance « programme » part à son jour.
+  try{ accueilRelanceProgramme(stocke).catch(()=>{}); }catch(e){}
   // Publié : le brouillon n'a plus de raison d'être, et le garder ferait
   // proposer une reprise vers un état identique à la prochaine ouverture.
   if(oublierBrouillon(c.id)) try{ saveUser(); }catch(e){}
@@ -43960,6 +43970,8 @@ function openSessionExercises(idx){
 // les jours laisserait des trous dans la cadence.
 let _spRang=0;
 function openSessionPicker(){
+  // LOT C1 : ouvrir son programme, c'est l'étape « lis-le » de l'accueil.
+  try{ accueilProgrammeLu(); }catch(e){}
   const cfg=currentUser.sessions_config||initSessionsConfig();
   const active=cfg.filter(s=>s.active);
   if(!active.length){toast('Aucune séance configurée. Va dans "Gérer mes séances".','var(--orange)');return;}
@@ -79750,8 +79762,178 @@ const PARCOURS_DEMARRAGE=Object.freeze([
     test:u=>!!(u&&u.parcours&&u.parcours.invite)||Number(u&&u.parrainage&&u.parrainage.inscrits)>0,
     action:'inviterUnPote(this)',bouton:'Inviter un pote'})
 ]);
-/** PURE. Les étapes : « inviter un pote » seulement si le parrainage est actif. */
-function parcoursEtapes(actif){
+// ══ LOT C1 : L'ACCUEIL D'UN ATHLÈTE COACHÉ (29/09/2026) ═══════════════════
+//
+// Un second jeu d'étapes, SUR LE MÊME MOTEUR que « Mise sous tension »
+// (majParcours, parcoursEtat, parcoursVolts, la carte de l'accueil) : les
+// étapes se datent une fois, leurs volts sont hors plafond et comptés une fois.
+// Le jeu est choisi à la naissance du parcours (u.parcours.jeu = 'coache')
+// quand l'athlète a déjà un coach, et seulement pour un parcours né après la
+// mise en ligne : qui a commencé « Mise sous tension » le garde.
+//
+// ⚠ AUCUNE ÉTAPE NE DÉPEND DU COACH SANS LE DIRE. « Ton programme est prêt »
+//   n'est une case que quand le programme existe (hasProgram) ; avant, la
+//   carte dit « Ton coach prépare ton programme », sans bouton ni volts.
+// ⚠ LES RELANCES (bilan à J2, programme non lu à J5, première séance à J6)
+//   partent du serveur (travail « accueil » de planif.js), au plafond commun
+//   d'UNE poussée par jour et par athlète, et une seule fois par étape
+//   (accueil_trace). Le bilan et la séance sont déposés par l'app de
+//   l'athlète ; le programme, par le coach qui le publie, parce que lui seul
+//   sait qu'il existe.
+// ⚠ LE COACH N'EST SOLLICITÉ QUE DEUX FOIS pendant les dix jours : « Programme
+//   à écrire » dès le bilan de départ (le bilan s'ouvre au bon endroit), puis
+//   « Premier point » à J7. « Nouveau bilan à lire » et « Jamais démarré » se
+//   taisent pour lui pendant l'accueil.
+
+const ACCUEIL_DEPUIS=Date.parse('2026-09-29T00:00:00+02:00');
+const ACCUEIL_JOURS=10;
+const ACCUEIL_RELANCES=Object.freeze([{etape:'bilan',jour:2},{etape:'programme',jour:5},{etape:'seance',jour:6}]);
+const PARCOURS_COACHE=Object.freeze([
+  Object.freeze({cle:'bilan_depart',lib:'Remplis ton bilan de départ : c’est lui qui permet à ton coach d’écrire ton programme',volts:100,
+    test:u=>((u&&u.bilans)||[]).some(b=>b&&b.type==='depart'),action:'openBilan(\'depart\')',bouton:'Remplir mon bilan'}),
+  Object.freeze({cle:'installation',lib:'Installe l’app sur ton téléphone',volts:50,
+    test:(u,f,env)=>!!(env&&env.installe),action:'invInstallInviter()',bouton:'Installer'}),
+  Object.freeze({cle:'creneaux',lib:'Choisis tes créneaux d’entraînement',volts:50,
+    test:u=>((u&&u._woReminderDays)||[]).length>0,action:'_ouvrirJoursEntrainement()',bouton:'Choisir mes jours'}),
+  Object.freeze({cle:'programme_lu',lib:'Ton programme est prêt : lis-le',volts:50,
+    attente:'Ton coach prépare ton programme',
+    test:u=>{ let h=false; try{ h=hasProgram(u); }catch(e){ h=false; } return h&&Number(u&&u.parcours&&u.parcours.programmeLu)>0; },
+    pret:u=>{ try{ return hasProgram(u); }catch(e){ return false; } },
+    action:'openSessionPicker()',bouton:'Voir mon programme'}),
+  Object.freeze({cle:'premiere_seance',lib:'Fais ta première séance',volts:0,test:(u,f)=>f.seances.length>=1}),
+  Object.freeze({cle:'premier_retour',lib:'Envoie ton premier retour à ton coach : un check-in, ou ton ressenti après une séance',volts:50,
+    test:u=>((u&&u.sessions)||[]).some(s=>s&&s.metrics&&String(s.metrics.fatigue==null?'':s.metrics.fatigue).trim()!=='')
+      ||Object.keys((u&&u.checkin)||{}).some(j=>{ try{ return checkinComplet(u.checkin[j]); }catch(e){ return false; } })})
+]);
+// PURE. Un parcours d'accueil coaché, et encore dans ses dix jours ?
+function accueilCoacheActif(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const p=u&&u.parcours;
+  return !!(p&&p.jeu==='coache'&&!p.existant&&t-(Number(p.debut)||t)<ACCUEIL_JOURS*864e5);
+}
+// PURE. Le jour d'accueil (1 à 10) d'un instant.
+function accueilJour(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  return Math.max(1,Math.floor((t-(Number(u&&u.parcours&&u.parcours.debut)||t))/864e5)+1);
+}
+// PURE. Les relances à déposer par l'app de l'athlète : les étapes pas encore
+// faites, à leur jour. Un athlète qui a tout fait le premier jour n'en dépose
+// aucune. (Le programme, c'est le coach qui le dépose.)
+function accueilRelancesAthlete(u){
+  const p=u&&u.parcours;
+  if(!p||p.jeu!=='coache'||p.existant||p.fini) return [];
+  const et=p.etapes||{}, out=[];
+  const debut=Number(p.debut)||0;
+  for(const r of ACCUEIL_RELANCES){
+    if(r.etape==='programme') continue;
+    if(r.etape==='bilan'&&et.bilan_depart) continue;
+    if(r.etape==='seance'&&et.premiere_seance) continue;
+    out.push({etape:r.etape,jour:localISODate(new Date(debut+r.jour*864e5))});
+  }
+  return out;
+}
+// PURE. Le jour de la relance « programme non lu », déposée par le coach à la
+// publication : J5, ou deux jours après la publication si elle est plus tardive.
+function accueilJourProgramme(u,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const d=Number(u&&u.parcours&&u.parcours.debut)||t;
+  return localISODate(new Date(Math.max(d+5*864e5,t+2*864e5)));
+}
+async function _accueilDeposer(cle,jour,etape){
+  const r=await _fbJson('parcours_relances/'+jour+'/'+cle+'/'+etape,'PUT',true);
+  return !!(r&&r.ok);
+}
+// L'app de l'athlète : une fois, à la naissance de l'accueil.
+async function accueilEcrireRelances(u){
+  if(!SERVEUR_LEGER||!u||!u.email||!u.parcours||u.parcours.jeu!=='coache'||u.parcours.relancesEcrites||!CLOUD.ok()) return false;
+  const moi=String(u.email).replace(/\./g,',');
+  const l=accueilRelancesAthlete(u);
+  let ok=true;
+  for(const x of l) ok=(await _accueilDeposer(moi,x.jour,x.etape))&&ok;
+  if(ok){ u.parcours.relancesEcrites=Date.now(); try{ saveUser(); }catch(e){} }
+  return ok;
+}
+// Le coach publie : si l'athlète est dans son accueil et n'a pas lu son
+// programme, la relance « programme » part à son jour.
+async function accueilRelanceProgramme(a){
+  if(!SERVEUR_LEGER||!a||!a.email||!accueilCoacheActif(a)||(a.parcours.etapes||{}).programme_lu) return false;
+  const cle=String(a.email).replace(/\./g,',');
+  return _accueilDeposer(cle,accueilJourProgramme(a),'programme');
+}
+// « Ton programme est prêt : lis-le » : l'ouverture du programme le marque.
+function accueilProgrammeLu(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||!u.parcours||u.parcours.jeu!=='coache'||u.parcours.programmeLu) return false;
+  let h=false; try{ h=hasProgram(u); }catch(e){ h=false; }
+  if(!h) return false;
+  u.parcours.programmeLu=Date.now();
+  try{ parcoursAvancer(); }catch(e){}
+  return true;
+}
+
+// ── Les deux moments du coach, dans « À traiter » ─────────────────────────
+// PURE. Les lignes d'accueil, et les athlètes dont on tait « Nouveau bilan à
+// lire » et « Jamais démarré » pendant l'accueil.
+function accueilLignesCoach(clients,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const prog=[], retour=[], silence=new Set();
+  for(const c of (clients||[])){
+    if(!c||c._fromCode||!accueilCoacheActif(c,t)) continue;
+    silence.add(c.id);
+    const depart=(c.bilans||[]).some(b=>b&&b.type==='depart');
+    let h=false; try{ h=hasProgram(c); }catch(e){ h=false; }
+    if(depart&&!h) prog.push(c);
+    if(accueilJour(c,t)>=7) retour.push(c);
+  }
+  return {prog,retour,silence};
+}
+function accueilOuvrirBilanDepart(id){
+  if(!id) return false;
+  currentClientId=id;
+  const c=(()=>{ try{ return getOwnedClient(id); }catch(e){ return null; } })();
+  if(!c) return false;
+  try{ viewClientBilans(); }catch(e){ return false; }
+  const b=(c.bilans||[]).find(x=>x&&x.type==='depart');
+  setTimeout(()=>{ try{ evoTab('reponses'); if(b) _bnVoir(_idBilan(b)); }catch(e){} },60);
+  return true;
+}
+
+// ── La trace, sur la fiche ────────────────────────────────────────────────
+const ACCUEIL_LIB_RELANCE=Object.freeze({bilan:'le bilan de départ',programme:'le programme à lire',seance:'la première séance'});
+// PURE. La phrase de la fiche : où en est l'accueil, et ce qui est parti tout seul.
+function htmlAccueilFiche(c,trace,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const p=c&&c.parcours;
+  if(!p||p.jeu!=='coache'||p.existant) return '';
+  const E=escapeHtml;
+  let e={faites:0,total:PARCOURS_COACHE.length,prochaine:null}; try{ e=parcoursEtat(c); }catch(er){}
+  const j=Math.min(accueilJour(c,t),99);
+  const tr=(trace&&typeof trace==='object')?trace:{};
+  const envois=Object.keys(tr).filter(k=>ACCUEIL_LIB_RELANCE[k]&&Number(tr[k])>0).sort((a,b)=>tr[a]-tr[b])
+    .map(k=>'le '+new Date(Number(tr[k])).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})+' pour '+ACCUEIL_LIB_RELANCE[k]);
+  const suite=e.prochaine?(e.prochaine.cle==='programme_lu'&&!(e.prochaine.pret&&e.prochaine.pret(c))?'Il attend son programme.':'Prochaine étape : '+e.prochaine.lib.split(' : ')[0].toLowerCase()+'.'):'Accueil bouclé.';
+  return '<div class="acf">'
+    +'<div class="acf-t">'+E(p.fini?'Accueil bouclé':'Accueil · jour '+Math.min(j,ACCUEIL_JOURS)+'/'+ACCUEIL_JOURS)+' · '+e.faites+'/'+e.total+' étapes</div>'
+    +'<div class="acf-l">'+E(suite)+'</div>'
+    +'<div class="acf-l">'+(envois.length?'L’app l’a relancé tout seul '+E(envois.join(', puis '))+'.':'Aucune relance automatique ne lui est partie.')+'</div></div>';
+}
+function renderAccueilFiche(c){
+  const z=document.getElementById('ccd-accueil');
+  if(!z) return false;
+  const s=z.closest('section');
+  const vide=!c||!c.parcours||c.parcours.jeu!=='coache';
+  if(s) s.style.display=vide?'none':'';
+  if(vide){ z.innerHTML=''; return false; }
+  z.innerHTML=htmlAccueilFiche(c,null);
+  const cle=String(c.email||'').replace(/\./g,',');
+  _fbJson('accueil_trace/'+cle).then(r=>{ if(r&&r.ok) z.innerHTML=htmlAccueilFiche(c,r.v||{}); }).catch(()=>{});
+  return true;
+}
+
+/** PURE. Les étapes : « inviter un pote » seulement si le parrainage est actif.
+ *  jeu 'coache' (lot C1) : l'accueil d'un athlète coaché. */
+function parcoursEtapes(actif,jeu){
+  if(jeu==='coache') return PARCOURS_COACHE;
   const on=(typeof actif==='boolean')?actif:PARRAINAGE_ACTIF;
   return PARCOURS_DEMARRAGE.filter(e=>!e.parrainage||on);
 }
@@ -79774,21 +79956,25 @@ function majParcours(u,maintenant,env){
     // Aucune date : un compte qui vient de naître.
     if(!isFinite(cree)) u.parcours={debut:t,etapes:{}};
     else u.parcours=cree<PARCOURS_DEPUIS?{existant:true,fini:t,debut:cree}:{debut:cree,etapes:{}};
+    // LOT C1 : né avec un coach, après la mise en ligne, c'est l'accueil coaché.
+    if(!u.parcours.existant&&(u.coachEmailKey||u.coachId)&&t>=ACCUEIL_DEPUIS){ u.parcours.jeu='coache'; u.parcours.debut=Math.max(Number(u.parcours.debut)||t,ACCUEIL_DEPUIS); }
   }
   const p=u.parcours;
   if(p.existant||p.fini) return {nouvelles:[],fini:false};
   p.etapes=(p.etapes&&typeof p.etapes==='object')?p.etapes:{};
+  // Inscrit d'abord, relié à son coach ensuite : tant qu'aucune étape n'est faite, l'accueil coaché prend la place.
+  if(!p.jeu&&(u.coachEmailKey||u.coachId)&&!Object.keys(p.etapes).length&&Number(p.debut)>=ACCUEIL_DEPUIS-864e5&&t>=ACCUEIL_DEPUIS){ p.jeu='coache'; p.debut=Math.max(Number(p.debut)||t,ACCUEIL_DEPUIS); }
   let f; try{ f=_badgesFaits(u,t); }catch(e){ return {nouvelles:[],fini:false}; }
-  const e=Object.assign({notif:_parcoursNotifActives(u)},env||{});
+  const e=Object.assign({notif:_parcoursNotifActives(u),installe:(()=>{ try{ return rcInstallAutonome(); }catch(er){ return false; } })()},env||{});
   const nouvelles=[];
-  for(const x of parcoursEtapes()){
+  for(const x of parcoursEtapes(undefined,p.jeu)){
     if(p.etapes[x.cle]) continue;
     let ok=false; try{ ok=!!x.test(u,f,e); }catch(er){ ok=false; }
     if(ok){ p.etapes[x.cle]=t; nouvelles.push(x.cle); }
   }
-  const total=parcoursEtapes().length;
+  const total=parcoursEtapes(undefined,p.jeu).length;
   p.total=total;
-  const fini=parcoursEtapes().every(x=>p.etapes[x.cle]);
+  const fini=parcoursEtapes(undefined,p.jeu).every(x=>p.etapes[x.cle]);
   if(fini) p.fini=t;
   return {nouvelles,fini};
 }
@@ -79797,11 +79983,11 @@ function parcoursVolts(u,maintenant){
   const t=(typeof maintenant==='number')?maintenant:Infinity;
   const p=u&&u.parcours;
   if(!p||p.existant||!p.etapes) return 0;
-  return PARCOURS_DEMARRAGE.reduce((a,x)=>a+((Number(p.etapes[x.cle])>0&&Number(p.etapes[x.cle])<=t)?x.volts:0),0);
+  return (p.jeu==='coache'?PARCOURS_COACHE:PARCOURS_DEMARRAGE).reduce((a,x)=>a+((Number(p.etapes[x.cle])>0&&Number(p.etapes[x.cle])<=t)?x.volts:0),0);
 }
 /** PURE. Faite, sur combien : {faites, total, prochaine}. */
 function parcoursEtat(u){
-  const l=parcoursEtapes(), p=(u&&u.parcours)||{};
+  const p=(u&&u.parcours)||{}, l=parcoursEtapes(undefined,p.jeu);
   const et=p.etapes||{};
   const faites=l.filter(x=>et[x.cle]).length;
   return {faites,total:l.length,prochaine:l.find(x=>!et[x.cle])||null};
@@ -79820,12 +80006,18 @@ function htmlParcoursAccueil(u,maintenant){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
   if(!parcoursVisible(u,t)) return '';
   const e=parcoursEtat(u), p=u.parcours, et=p.etapes||{};
-  const j=Math.max(1,Math.min(PARCOURS_JOURS,Math.floor((t-Number(p.debut))/864e5)+1));
+  const coache=p.jeu==='coache', J=coache?ACCUEIL_JOURS:PARCOURS_JOURS;
+  const j=Math.max(1,Math.min(J,Math.floor((t-Number(p.debut))/864e5)+1));
   const x=e.prochaine;
-  return '<div class="mst-carte" role="region" aria-label="Mise sous tension">'
-    +'<div class="mst-tete"><b>Mise sous tension · '+e.faites+'/'+e.total+'</b><span>Jour '+j+'/'+PARCOURS_JOURS+'</span></div>'
-    +'<div class="mst-points" aria-hidden="true">'+parcoursEtapes().map(y=>'<i class="'+(et[y.cle]?'on':'')+'"></i>').join('')+'</div>'
-    +(x?'<div class="mst-suite"><span>'+escapeHtml(x.lib)+(x.volts?' <em>+'+x.volts+' V</em>':'')+'</span>'
+  // L'ÉTAPE QUI DÉPEND DU COACH le dit : tant que le programme n'existe pas, ni
+  // case, ni bouton, ni volts. « Ton coach prépare ton programme. »
+  const attend=!!(x&&x.attente&&x.pret&&!x.pret(u));
+  const titre=coache?'Ton accueil':'Mise sous tension';
+  return '<div class="mst-carte" role="region" aria-label="'+titre+'">'
+    +'<div class="mst-tete"><b>'+titre+' · '+e.faites+'/'+e.total+'</b><span>Jour '+j+'/'+J+'</span></div>'
+    +'<div class="mst-points" aria-hidden="true">'+parcoursEtapes(undefined,p.jeu).map(y=>'<i class="'+(et[y.cle]?'on':'')+'"></i>').join('')+'</div>'
+    +(x&&attend?'<div class="mst-suite"><span>'+escapeHtml(x.attente)+'</span></div>'
+      :x?'<div class="mst-suite"><span>'+escapeHtml(x.lib)+(x.volts?' <em>+'+x.volts+' V</em>':'')+'</span>'
       +(x.action?'<button type="button" class="btn btn-red btn-sm mst-b" onclick="'+x.action+'">'+escapeHtml(x.bouton||'Y aller')+'</button>':'')+'</div>':'')
     +'<div class="mst-note">Les '+e.total+' étapes débloquent le badge SOUS TENSION.</div></div>';
 }
@@ -79845,6 +80037,7 @@ function parcoursAvancer(){
   if(r.fini){ try{ majBadges(); }catch(e){} try{ majXp(); }catch(e){} }
   try{ _rendreParcours(u); }catch(e){}
   parcoursEcrireJ21(u).catch(()=>{});
+  accueilEcrireRelances(u).catch(()=>{});
   return r;
 }
 // Le push du 21e jour ouvre l'app : la carte, cachée après 14 jours, revient.

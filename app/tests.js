@@ -52320,6 +52320,74 @@ async function testExercices(){
       if(bdgRepartir(['assidu_1',PARCOURS_BADGE],'completes',0).ecrans[0]!==PARCOURS_BADGE) return _echec('pas en écran plein');
       if(!badgeAcquisFichier(PARCOURS_BADGE)) return _echec('pas de repli');
       return badgeVisuel(PARCOURS_BADGE,true).indexOf('sous_tension-512.webp')>=0?true:_echec('visuel');})());
+    // ── LOT C1 : l'accueil d'un athlète coaché, sur le même moteur ──
+    const _CU=o=>_PU(Object.assign({coachEmailKey:'coach@t,fr'},o||{}));
+    const _CPROG=[{active:true,exercises:[{name:'Squat'}]}];
+    ok('Accueil coaché : six étapes dans l’ordre, 300 V, figées ; seule l’étape du coach dit qu’elle attend',(()=>{
+      const c=PARCOURS_COACHE.map(e=>e.cle).join();
+      if(c!=='bilan_depart,installation,creneaux,programme_lu,premiere_seance,premier_retour') return _echec(c);
+      if(!Object.isFrozen(PARCOURS_COACHE)||!Object.isFrozen(PARCOURS_COACHE[3])) return _echec('pas figé');
+      const v=PARCOURS_COACHE.reduce((a,x)=>a+x.volts,0);
+      if(v!==300) return _echec(v+' V');
+      if(PARCOURS_COACHE.map(e=>e.volts).join()!=='100,50,50,50,0,50') return _echec('volts par étape');
+      const att=PARCOURS_COACHE.filter(e=>e.attente).map(e=>e.cle).join();
+      if(att!=='programme_lu') return _echec('attente : '+att);
+      return parcoursEtapes(true,'coache')===PARCOURS_COACHE?true:_echec('jeu');})());
+    ok('Accueil coaché : un athlète SANS coach garde « Mise sous tension », intact',(()=>{
+      const u=_PU();
+      majParcours(u,_PT0,{notif:false});
+      if(u.parcours.jeu) return _echec('jeu posé : '+u.parcours.jeu);
+      if(parcoursEtat(u).total!==parcoursEtapes().length) return _echec('total');
+      if(!/Mise sous tension/.test(htmlParcoursAccueil(u,_PT0))) return _echec('carte');
+      const v=_CU();
+      majParcours(v,_PT0,{notif:false});
+      if(v.parcours.jeu!=='coache') return _echec('coaché : '+JSON.stringify(v.parcours));
+      const w=_CU({createdAt:PARCOURS_DEPUIS+3600e3});
+      majParcours(w,ACCUEIL_DEPUIS-864e5+7200e3,{notif:false});
+      return !w.parcours.jeu?true:_echec('parcours né avant la mise en ligne : '+w.parcours.jeu);})());
+    ok('Accueil coaché : tout fait le premier jour, aucune relance à déposer ; 300 V comptés une fois',(()=>{
+      const u=_CU();
+      majParcours(u,_PT0,{notif:false,installe:false});
+      if(accueilRelancesAthlete(u).map(x=>x.etape).join()!=='bilan,seance') return _echec('départ : '+JSON.stringify(accueilRelancesAthlete(u)));
+      u.bilans=[{type:'depart',date:_PT0+60e3}];
+      u._woReminderDays=[1,3,5];
+      u.sessions_config=_CPROG;
+      u.parcours.programmeLu=_PT0+90e3;
+      u.sessions=[Object.assign(_PS(0,100),{metrics:{fatigue:'3'}})];
+      const r=majParcours(u,_PT0+120e3,{notif:false,installe:true});
+      if(!r.fini) return _echec('pas fini : '+r.nouvelles);
+      if(accueilRelancesAthlete(u).length) return _echec('relances : '+JSON.stringify(accueilRelancesAthlete(u)));
+      majParcours(u,_PT0+3*_PJ,{notif:false,installe:true});
+      return parcoursVolts(u)===300?true:_echec(parcoursVolts(u)+' V');})());
+    ok('Accueil coaché : le coach n’écrit jamais le programme ; J3 dit « Ton coach prépare », sans bouton ; « Programme à écrire » reste',(()=>{
+      const u=_CU({id:'c1a',bilans:[{type:'depart',date:_PT0+60e3}],_woReminderDays:[2]});
+      majParcours(u,_PT0+120e3,{notif:false,installe:true});
+      const t=_PT0+2*_PJ+3600e3;
+      majParcours(u,t,{notif:false,installe:true});
+      const e=parcoursEtat(u);
+      if(!e.prochaine||e.prochaine.cle!=='programme_lu') return _echec('prochaine : '+(e.prochaine&&e.prochaine.cle));
+      const h=htmlParcoursAccueil(u,t);
+      if(!/Ton coach prépare ton programme/.test(h)) return _echec('attente absente');
+      if(/mst-b/.test(h)||/\+50 V/.test(h)) return _echec('bouton ou volts affichés');
+      if(!/Ton accueil · 3\/6/.test(h)||!/Jour 3\/10/.test(h)) return _echec('tête : '+h.slice(0,220));
+      const l=accueilLignesCoach([u],t);
+      if(l.prog.length!==1||!l.silence.has('c1a')) return _echec('ligne coach');
+      if(l.retour.length) return _echec('premier point trop tôt');
+      const l7=accueilLignesCoach([u],_PT0+6*_PJ+3600e3);
+      if(l7.retour.length!==1||l7.prog.length!==1) return _echec('J7 : '+l7.retour.length+'/'+l7.prog.length);
+      if(accueilLignesCoach([u],_PT0+11*_PJ).silence.size) return _echec('silence après dix jours');
+      const f=htmlAccueilFiche(u,{bilan:_PT0+_PJ},t);
+      if(!/Il attend son programme/.test(f)||!/relancé tout seul/.test(f)) return _echec('fiche : '+f);
+      u.sessions_config=_CPROG;
+      const h2=htmlParcoursAccueil(u,t);
+      return /Voir mon programme/.test(h2)&&!accueilLignesCoach([u],t).prog.length?true:_echec('programme posé : '+h2.slice(0,260));})());
+    ok('Accueil coaché : la relance « programme » tombe à J5, ou deux jours après une publication tardive',(()=>{
+      const u=_CU();
+      majParcours(u,_PT0,{notif:false});
+      const j5=accueilJourProgramme(u,_PT0+_PJ), j9=accueilJourProgramme(u,_PT0+7*_PJ);
+      if(j5!==localISODate(new Date(_PT0+5*_PJ))) return _echec('J5 : '+j5);
+      return j9===localISODate(new Date(_PT0+9*_PJ))?true:_echec('tardive : '+j9);})());
+
     ok('Parcours : aucun libellé ne se mélange avec le temps sous tension',(()=>{
       const n=BADGES_ACQUIS.filter(b=>/TENSION/i.test(b.nom));
       if(n.length!==1||n[0].id!==PARCOURS_BADGE) return _echec('noms : '+n.map(b=>b.id));

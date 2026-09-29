@@ -15495,3 +15495,7 @@ html[data-theme="clair"]{background:#f8f8f8}
 .mlc-t tr.mlc-e td{padding:0 0 8px;color:var(--sub);border-bottom:1px solid var(--border)}
 .mlc-t tr.mlc-e.mlc-ecart td{color:var(--text)}
 .mlc-t tr.mlc-e.mlc-refuse td{color:var(--orange)}
+/* LOT C1 : l'accueil d'un athlète coaché, sur la fiche */
+.acf{display:flex;flex-direction:column;gap:4px;font-size:var(--fs-xs);line-height:1.6;color:var(--text)}
+.acf-t{font-weight:800;font-size:var(--fs-sm)}
+.acf-l{color:var(--sub)}

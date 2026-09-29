@@ -1475,6 +1475,51 @@ export function creerMetier(deps) {
     return statut === 'parti' ? 'envoye' : raison;
   }
 
+  // ══ LOT C1 : LES RELANCES DE L'ACCUEIL D'UN ATHLÈTE COACHÉ ═════════════
+  // /parcours_relances/<jour>/<compte>/<étape> = true, déposé par l'app de
+  // l'athlète (bilan à J2, séance à J6) ou par son coach à la publication
+  // (programme non lu). Le Worker lit la liste du JOUR (une lecture), relit la
+  // seule chose qui dit si l'étape est faite, et pousse au plafond commun
+  // (une poussée par jour et par compte). UNE FOIS PAR ÉTAPE : la trace
+  // accueil_trace/<compte>/<étape> = la date de l'envoi, que la fiche du coach
+  // lit aussi. Plafond du jour déjà pris : l'étape repart au lendemain, une fois.
+  const ACCUEIL_MSG = {
+    bilan: { type: 'bilan', url: './?bilan=1', title: 'Ton bilan de départ t’attend',
+      body: 'Cinq minutes, et ton coach a de quoi écrire ton programme.' },
+    programme: { type: 'serie', url: './', title: 'Ton programme est prêt',
+      body: 'Ton coach l’a écrit pour toi : jette un œil avant ta première séance.' },
+    seance: { type: 'serie', url: './?wo=1', title: 'Ta première séance t’attend',
+      body: 'Ton programme est là : une séance, et ton accueil est presque bouclé.' },
+  };
+  async function accueilFaite(k, etape) {
+    if (etape === 'bilan') return ((await db.ref('users/' + k + '/bilans').shallow()) || []).length > 0;
+    if (etape === 'seance') return Number(await _lire(k, 'lastSession')) > 0;
+    if (etape === 'programme') return Number(await _val('users/' + k + '/parcours/programmeLu')) > 0;
+    return true;
+  }
+  async function accueilRelances(t) {
+    const jour = paris(t).jour;
+    const liste = (await _val('parcours_relances/' + jour)) || {};
+    const demain = paris(t + 864e5).jour;
+    const maj = { ['parcours_relances/' + jour]: null };
+    let n = 0;
+    for (const k of Object.keys(liste).sort()) {
+      const et = liste[k] || {};
+      for (const etape of Object.keys(et)) {
+        if (!ACCUEIL_MSG[etape]) continue;
+        if (_reste() < 16) { maj['parcours_relances/' + demain + '/' + k + '/' + etape] = true; continue; }
+        if (await _val('accueil_trace/' + k + '/' + etape)) continue;
+        if (await accueilFaite(k, etape)) continue;
+        const m = ACCUEIL_MSG[etape];
+        const r = await envoyerPush(k, Object.assign({ tag: 'accueil-' + etape }, m), { attendre: false });
+        if (r.envoye) { maj['accueil_trace/' + k + '/' + etape] = t; n++; }
+        else if (r.raison === 'plafond' && et[etape] !== 'repris') maj['parcours_relances/' + demain + '/' + k + '/' + etape] = 'repris';
+      }
+    }
+    await db.ref().update(maj);
+    return n;
+  }
+
   // ══ LE PARCOURS « MISE SOUS TENSION » : LE RAPPEL DU 21e JOUR D'ESSAI ══
   // Chaque app tient /parcours_j21/<jour J21 de son essai>/<elle> = le
   // nombre d'étapes qui lui restent (null quand le parcours est fini). Le
@@ -1515,5 +1560,5 @@ export function creerMetier(deps) {
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente,
     fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, tache,
-    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, reactionEvenement, reactionsAttente, reactionsPushUn, saisonsHeure, parcoursJ21, retourUn, relancesCoachUn, canalProgrammesHeure, prospectRecevoir, vitrineVue, prospectsRelanceHeure, relanceAthlete, xpRecalculer, retentionUn, retentionFin, activiteComptes };
+    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, reactionEvenement, reactionsAttente, reactionsPushUn, saisonsHeure, parcoursJ21, accueilRelances, retourUn, relancesCoachUn, canalProgrammesHeure, prospectRecevoir, vitrineVue, prospectsRelanceHeure, relanceAthlete, xpRecalculer, retentionUn, retentionFin, activiteComptes };
 }

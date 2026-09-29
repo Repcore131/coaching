@@ -70,6 +70,8 @@ export function travaux(M) {
     // La santé synchronisée : « Ta nuit n'est pas encore arrivée » (iPhone), vers 10 h.
     { nom: 'sante_rappel', quand: (p) => apres(p, 10, 0) && p.heure < 21, cles: () => (M.santeComptes ? M.santeComptes() : []),
       un: (k, t) => (M.santeRappelUn ? M.santeRappelUn(k, t) : null), cout: 8, push: true },
+    // L'accueil d'un athlète coaché (lot C1) : bilan, programme, première séance.
+    { nom: 'accueil', quand: (p) => apres(p, 17, 30) && p.heure < 21, une: (t) => (M.accueilRelances ? M.accueilRelances(t) : null) },
     // Le parcours « Mise sous tension » : le rappel du 21e jour d'essai.
     { nom: 'parcours', quand: (p) => apres(p, 18, 15), une: (t) => (M.parcoursJ21 ? M.parcoursJ21(t) : null) },
     // Les événements saisonniers : CHAQUE HEURE (heure: true), le compteur

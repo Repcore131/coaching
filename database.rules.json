@@ -1538,6 +1538,24 @@
     // LE PAIEMENT DIRECT AU COACH : la liaison de son compte PayPal, ses
     // paiements recus. Ecrits par le Worker seul (Admin), lus par le coach
     // concerne seulement. L index capture -> commande n est lu par personne.
+    // L ACCUEIL D UN ATHLETE COACHE (lot C1) : les relances du jour, deposees
+    // par l athlete lui-meme (bilan, seance) ou par SON coach (programme), et
+    // lues par le Worker seul. La trace de ce qui est parti : ecrite par le
+    // Worker, lue par l athlete et son coach.
+    "parcours_relances": {
+      "$jour": {
+        ".validate": "$jour.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+        "$compte": {
+          ".write": "auth != null && (auth.token.email.replace('.', ',') === $compte || root.child('users').child($compte).child('coachEmailKey').val() === auth.token.email.replace('.', ','))",
+          "$etape": { ".validate": "$etape.matches(/^(bilan|programme|seance)$/) && (newData.val() === true || newData.val() === 'repris')" }
+        }
+      }
+    },
+    "accueil_trace": {
+      "$compte": {
+        ".read": "auth != null && (auth.token.email.replace('.', ',') === $compte || root.child('users').child($compte).child('coachEmailKey').val() === auth.token.email.replace('.', ','))"
+      }
+    },
     "coach_paiement": {
       "$coachKey": { ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey" }
     },
