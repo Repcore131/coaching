@@ -1304,6 +1304,41 @@ export function creerMetier(deps) {
     return 'envoye';
   }
 
+  // ══ LES MESSAGES PROGRAMMÉS DU CANAL (lot C5) ══════════════════════════
+  // canal_programmes/<coach>/<id> = {quand, titre, texte, lien?}, écrit par le
+  // coach. Chaque heure, UNE lecture de tout le nœud, et UNE écriture pour tout
+  // ce qui est dû : le message entre dans canaux/<coach>/messages sous le même
+  // identifiant, la sonde canalDernier suit, l'entrée programmée disparaît.
+  // ⚠ Un message en retard de plus d'une journée (serveur arrêté) ne part pas
+  //   tout seul : il est marqué « manque », et le coach décide.
+  const CANAL_RETARD_MAX = 24 * 3600e3;
+  const lienSur = (l) => (/^https:\/\/[^\s]+$/i.test(String(l || '')) ? String(l).slice(0, 500) : '');
+  async function canalProgrammesHeure(t) {
+    const tout = (await _val('canal_programmes')) || {};
+    const maj = {};
+    let n = 0;
+    for (const coach of Object.keys(tout)) {
+      const l = tout[coach] || {};
+      let dernier = 0;
+      for (const id of Object.keys(l)) {
+        const m = l[id];
+        if (!m || !(Number(m.quand) > 0) || Number(m.quand) > t || m.manque) continue;
+        if (t - Number(m.quand) > CANAL_RETARD_MAX) { maj['canal_programmes/' + coach + '/' + id + '/manque'] = true; continue; }
+        const titre = String(m.titre || '').slice(0, 80), texte = String(m.texte || '').slice(0, 1000);
+        maj['canal_programmes/' + coach + '/' + id] = null;
+        if (!titre && !texte) continue;
+        const msg = { at: t, titre, texte, epingle: false };
+        const lien = lienSur(m.lien);
+        if (lien) msg.lien = lien;
+        maj['canaux/' + coach + '/messages/' + id] = msg;
+        dernier = t; n++;
+      }
+      if (dernier) maj['coach_public/' + coach + '/canalDernier'] = dernier;
+    }
+    if (Object.keys(maj).length) await db.ref().update(maj);
+    return n;
+  }
+
   // ══ LES RELANCES AUTOMATIQUES DU COACH (lot C3) ════════════════════════
   // Le travail « relances » (planif.js, 10 h 30) lit les règles de chaque
   // coach : une lecture. Coupées, en pause ou absentes : rien d'autre. Sinon
@@ -1428,5 +1463,5 @@ export function creerMetier(deps) {
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente,
     fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, tache,
-    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, reactionEvenement, reactionsAttente, reactionsPushUn, saisonsHeure, parcoursJ21, retourUn, relancesCoachUn, relanceAthlete, xpRecalculer, retentionUn, retentionFin, activiteComptes };
+    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, reactionEvenement, reactionsAttente, reactionsPushUn, saisonsHeure, parcoursJ21, retourUn, relancesCoachUn, canalProgrammesHeure, relanceAthlete, xpRecalculer, retentionUn, retentionFin, activiteComptes };
 }

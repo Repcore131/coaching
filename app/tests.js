@@ -50101,6 +50101,79 @@ async function testExercices(){
       const src=String(reporterPropagation)+String(appliquerPropagation);
       return /\.sessions\s*=|\.sessions\.(splice|push|pop|length\s*=)/.test(src)?_echec('le report écrit dans l’historique'):true;})());
 
+    // ══ LOT C5 — LE CALENDRIER DU CANAL (29/09/2026) ═══════════════════════
+    const _C5T=Date.now();
+    const _C5S=j=>({id:'c5s'+j,date:_C5T-j*864e5-3600e3,duration:60,sets:4,setsPlanned:4,
+      data:{'SQUAT':{sets:[1,2,3,4].map(()=>({weight:'100',reps:'8',rir:'2',done:true}))}}});
+    let _c5n=0;
+    const _C5A=(fname,o)=>Object.assign({id:'c5a'+(++_c5n),email:'c5-'+_c5n+'@t.fr',role:'athlete',fname,lname:'Durand',
+      sessions:[_C5S(1),_C5S(3)],bilans:[{id:'b'+_c5n,date:_C5T-5*864e5,type:'suivi','bil-weight':'71.4','bil-sleep-quality':'Mal, j\'ai du mal à me reposer'}],
+      weightLog:[{date:localISODate(new Date(_C5T-864e5)),kg:71.2}]},o||{});
+    const _C5DEFI=(debut,fin)=>({id:'d1',type:'defi',titre:'100 séances d’octobre',mesure:'seances',objectif:100,collectif:true,debut,fin});
+    const _C5SAISON=(debut,fin)=>({id:'automne-2026',nom:'Édition Automne',debut,fin,mesure:'seances',objectifPerso:12});
+    ok('C5 — propositionsCanal : sans événement, un défi qui démarre, une saison qui finit, des bilans en retard',(()=>{
+      if(propositionsCanal({},[],{},_C5T).length) return _echec('rien à dire : une proposition inventée');
+      const ath=[_C5A('Léa'),_C5A('Tom')];
+      // Aucun événement : le fait collectif de la semaine seulement.
+      const p0=propositionsCanal({},ath,{},_C5T);
+      if(p0.length!==1||p0[0].cle!=='semaine'||!/vous avez fait 4 séances/.test(p0[0].texte)) return _echec('semaine : '+JSON.stringify(p0));
+      const p1=propositionsCanal({},ath,{defis:[_C5DEFI(_C5T-3600e3,_C5T+20*864e5)]},_C5T);
+      if(p1[0].cle!=='defi_debut:d1'||!/« 100 séances d’octobre » est lancé/.test(p1[0].texte)) return _echec('défi : '+JSON.stringify(p1[0]));
+      const p2=propositionsCanal({},ath,{saison:_C5SAISON(_C5T-20*864e5,_C5T+3*864e5)},_C5T);
+      if(p2[0].cle!=='saison_fin:automne-2026'||!/Plus que 3 jours/.test(p2[0].texte)) return _echec('saison : '+JSON.stringify(p2[0]));
+      // Des bilans en retard chez deux athlètes : un rappel pour tous.
+      const vieux={bilans:[{id:'v',date:_C5T-20*864e5,type:'suivi'}]};
+      const p3=propositionsCanal({},[_C5A('Léa',vieux),_C5A('Tom',vieux)],{},_C5T);
+      if(p3[0].cle!=='bilans') return _echec('bilans : '+JSON.stringify(p3.map(x=>x.cle)));
+      // Un seul en retard : pas de rappel collectif.
+      return propositionsCanal({},[_C5A('Léa',vieux),_C5A('Tom')],{},_C5T).some(x=>x.cle==='bilans')?_echec('rappel pour un seul'):true;})());
+    ok('C5 — l’ordre (à-propos d’abord) et le plafond de trois',(()=>{
+      const vieux={bilans:[{id:'v',date:_C5T-20*864e5,type:'suivi'}]};
+      const ath=[_C5A('Léa',vieux),_C5A('Tom',vieux),_C5A('Inès')];
+      const p=propositionsCanal({},ath,{defis:[_C5DEFI(_C5T-10*864e5,_C5T+2*864e5)],saison:_C5SAISON(_C5T-20*864e5,_C5T+5*864e5)},_C5T);
+      if(p.length!==3) return _echec(p.length+' propositions');
+      if(p.map(x=>x.cle.split(':')[0]).join()!=='defi_fin,saison_fin,bilans') return _echec('ordre : '+p.map(x=>x.cle).join());
+      for(let i=1;i<p.length;i++) if(p[i].score>p[i-1].score) return _echec('non trié');
+      // La saison compte le groupe : trois athlètes, deux séances chacun dans l'édition.
+      return /vous en êtes à 6 séances/.test(p[1].texte)?true:_echec('groupe : '+p[1].texte);})());
+    ok('C5 — aucun prénom d’athlète ni donnée de santé dans les textes proposés',(()=>{
+      const noms=['Léa','Tom','Inès','Durand','Karim'];
+      const vieux={bilans:[{id:'v',date:_C5T-20*864e5,type:'suivi','bil-weight':'80','deb-health':'genou'}]};
+      const cas=[
+        [[_C5A('Léa'),_C5A('Tom')],{}],
+        [[_C5A('Léa',vieux),_C5A('Tom',vieux),_C5A('Inès',vieux)],{defis:[_C5DEFI(_C5T-3600e3,_C5T+9*864e5)]}],
+        [[_C5A('Karim'),_C5A('Inès')],{defis:[_C5DEFI(_C5T-9*864e5,_C5T+864e5)],saison:_C5SAISON(_C5T-864e5,_C5T+30*864e5)}],
+        [[_C5A('Léa'),_C5A('Tom')],{saison:Object.assign(_C5SAISON(_C5T-30*864e5,_C5T+20*864e5),{mesure:'tonnage'})}],
+      ];
+      const sante=/poids|pes[ée]|kg de|douleur|bless|sommeil|stress|calor|kcal|imc|masse grasse|r[èe]gles|cycle|fr[ée]quence|bpm|tension|genou|71[,.]4|80 kg|m[ée]dic|sant[ée]/i;
+      let n=0;
+      for(const [ath,ev] of cas){
+        for(const p of propositionsCanal({fname:'Kevin'},ath,ev,_C5T)){
+          n++;
+          const t=p.titre+' '+p.texte;
+          for(const x of noms) if(new RegExp('(^|[^\\p{L}])'+x+'(?![\\p{L}])','u').test(t)) return _echec('« '+x+' » dans '+t);
+          const m=t.match(sante); if(m) return _echec('« '+m[0]+' » dans '+t);
+          if(/[—–]/.test(t)) return _echec('tiret long : '+t);
+        }
+      }
+      return n>=6?true:_echec('trop peu de textes lus : '+n);})());
+    ok('C5 — programmer : l’heure choisie, la liste dans l’ordre, et une semaine close après une proposition',(()=>{
+      const q=canalQuand('2026-10-05',8);
+      const d=new Date(q);
+      if(d.getHours()!==8||d.getMinutes()!==0||d.getDate()!==5) return _echec('quand : '+d);
+      if(canalQuand('2026-13-40',8)!==null||canalQuand('2026-02-31',8)!==null) return _echec('date invalide acceptée');
+      if(canalQuand('lundi',8)!==null||canalQuand('2026-10-05',25)!==null) return _echec('saisie invalide acceptée');
+      const l=canalProgrammesListe({b:{quand:300,texte:'b'},a:{quand:100,texte:'a'},z:{texte:'sans date'}});
+      if(l.map(x=>x.id).join()!=='a,b') return _echec(l.map(x=>x.id).join());
+      const av=localStorage.getItem(CPROP_CLE);
+      try{
+        localStorage.removeItem(CPROP_CLE);
+        if(_cpSemaineClose(Date.now())) return _echec('close sans rien');
+        _cpClore('semaine','publie');
+        if(!_cpSemaineClose(Date.now())) return _echec('pas close après publication');
+        return _cpSemaineClose(Date.now()+8*864e5)?_echec('close la semaine suivante'):true;
+      } finally { if(av==null) localStorage.removeItem(CPROP_CLE); else localStorage.setItem(CPROP_CLE,av); }})());
+
     ok('Volts : dix rangs, dans l’ordre, seuils croissants à partir de 0',(()=>{
       const n=RANGS.map(r=>r.nom).join();
       if(n!=='ÉTINCELLE,IMPULSION,VOLTAGE,MACHINE,ÉLITE,SURTENSION,MONSTRE,FOUDRE,TITAN,LÉGENDE') return _echec(n);

@@ -15393,3 +15393,27 @@ html[data-theme="clair"]{background:#f8f8f8}
 .c4-op em{display:block;font-style:normal;color:var(--orange)}
 .c4-op-off{opacity:.55;cursor:default}
 .c4-vide{font-size:var(--fs-xs)}
+/* LOT C5 : la proposition de la semaine et les messages programmés du canal */
+.cp,.cp-prog{display:flex;flex-direction:column;gap:10px;margin:0 0 16px;padding:12px 14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3)}
+.cp{border-left:3px solid var(--red)}
+.cp-h{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:var(--sub)}
+.cp-carte{display:flex;flex-direction:column;gap:6px}
+.cp-carte-2{padding-top:10px;border-top:1px solid var(--border)}
+.cp-t{font-size:var(--fs-sm);font-weight:800;color:var(--text)}
+.cp-x{font-size:var(--fs-sm);line-height:1.55;color:var(--text)}
+.cp-b{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.cp-b .btn{margin:0}
+.cp-lien{background:none;border:0;padding:6px 0;min-height:32px;color:var(--text-strong);font:inherit;font-size:var(--fs-xs);font-weight:700;text-decoration:underline;text-underline-offset:3px;cursor:pointer;letter-spacing:0;text-transform:none}
+.cp-autres summary{cursor:pointer;font-size:var(--fs-xs);font-weight:700;color:var(--sub);min-height:32px;display:flex;align-items:center}
+.cp-autres[open] summary{margin-bottom:6px}
+.cp-close{font-size:var(--fs-xs);line-height:1.5;margin:0 0 14px}
+.cp-pl{display:flex;flex-direction:column;gap:3px;padding-top:8px;border-top:1px solid var(--border)}
+.cp-pl:first-of-type{border-top:0;padding-top:0}
+.cp-pd{font-size:var(--fs-xs);font-weight:700;color:var(--text)}
+.cp-pd b{color:var(--orange)}
+.cp-px{font-size:var(--fs-xs);line-height:1.5;color:var(--sub)}
+.cp-progbloc{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+.cp-progbloc[hidden]{display:none}
+.cp-progl{display:flex;flex-direction:column;gap:4px;min-width:0}
+.cp-progl input,.cp-progl select{width:100%;min-width:0}
+.cp-progs{grid-column:1 / -1;font-size:var(--fs-xs);line-height:1.5}

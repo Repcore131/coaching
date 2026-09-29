@@ -74,6 +74,8 @@ export function travaux(M) {
     { nom: 'parcours', quand: (p) => apres(p, 18, 15), une: (t) => (M.parcoursJ21 ? M.parcoursJ21(t) : null) },
     // Les événements saisonniers : CHAQUE HEURE (heure: true), le compteur
     // collectif, les badges Édition, les annonces (lancement, mi-parcours, J-2, fin).
+    // Les messages programmés du canal (lot C5) : CHAQUE HEURE, une lecture.
+    { nom: 'canal_programmes', heure: true, quand: () => true, une: (t) => (M.canalProgrammesHeure ? M.canalProgrammesHeure(t) : null) },
     { nom: 'saisons', heure: true, quand: () => true, une: (t) => (M.saisonsHeure ? M.saisonsHeure(t) : null) },
   ];
 }

@@ -22786,9 +22786,242 @@ function partagerDefi(id,btn){
   return ok;
 }
 // ══ CANAL — CÔTÉ COACH ══════════════════════════════════════════════════════
+// ══ LOT C5 : LE CALENDRIER DU CANAL (29/09/2026) ═════════════════════════
+//
+// En tête de « Mon canal » : ce que le coach peut publier cette semaine, déjà
+// écrit et modifiable. Publier maintenant, ou programmer un jour et une
+// heure : le serveur léger publie (travail horaire « canal_programmes » de
+// planif.js), et le message reste modifiable et annulable jusqu'à son départ.
+//
+// ⚠ LE FIL EST LU PAR TOUT LE GROUPE. Aucune proposition ne nomme un athlète :
+//   les faits sont collectifs et anonymes (recapTeamDonnees, sans son `top`).
+//   Un record se compte, il ne se raconte pas. Si le coach veut nommer
+//   quelqu'un, c'est lui qui l'écrit, dans le champ, d'un geste explicite.
+// ⚠ AUCUNE DONNÉE DE SANTÉ : ni poids, ni douleur, ni sommeil. Le canal n'est
+//   pas chiffré. Le test lit tous les textes produits.
+// ⚠ LE RYTHME : UNE proposition mise en avant par semaine. Les autres restent
+//   repliées ; publiée, programmée ou passée, la semaine est close.
+//
+// LES SOURCES. Le défi du mois de RepCore (defi_mois) ne s'adresse qu'aux
+// autonomes : chez un coach, « le défi » est celui de son canal (messages de
+// type defi). La saison (saisons) est commune à tous ; « où en est le groupe »
+// se compte sur SES athlètes, par saisonValeur, pour les mesures qui
+// s'additionnent (séances, tonnage) et seulement elles.
+
+const CPROP_MAX=3;
+const CPROP_CLE='rc_canal_prop';
+const CPROP_HEURES=Object.freeze([7,8,9,12,17,18,19,20]);
+const _cpJ=864e5;
+function _cpJour(t){ try{ return new Date(t).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}); }catch(e){ return ''; } }
+function _cpNb(n){ return String(n).replace(/\B(?=(\d{3})+(?!\d))/g,' '); }
+function _cpTonnage(kg){ const v=Math.round(Number(kg)||0); return v>=1000?String(Math.round(v/100)/10).replace('.',',')+' t':_cpNb(v)+' kg'; }
+
+/**
+ * PURE. Au plus trois propositions, de la plus à propos à la moins :
+ * [{cle, score, titre, texte}].
+ *   evenements = { defis:[messages de type defi], saison: {id, nom, debut, fin, mesure} | null }
+ */
+function propositionsCanal(coach,athletes,evenements,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const ev=evenements||{}, ath=(athletes||[]).filter(Boolean);
+  const out=[];
+  // ── LE DÉFI DU CANAL qui commence ou se termine.
+  for(const d of (Array.isArray(ev.defis)?ev.defis:[])){
+    if(!d||d.type!=='defi'||!d.titre) continue;
+    const debut=Number(d.debut), fin=Number(d.fin);
+    if(!(fin>debut)) continue;
+    const nom=String(d.titre).slice(0,60);
+    if(fin>t&&fin-t<=3*_cpJ&&debut<t)
+      out.push({cle:'defi_fin:'+(d.id||nom),score:90,titre:'Dernière ligne droite',
+        texte:'Le défi « '+nom+' » se termine '+_cpJour(fin)+'. Chaque séance d’ici là compte encore : on le finit ensemble.'});
+    else if(debut<=t+2*_cpJ&&debut>=t-2*_cpJ&&fin>t)
+      out.push({cle:'defi_debut:'+(d.id||nom),score:85,titre:'C’est parti',
+        texte:'Le défi « '+nom+' » '+(debut>t?'commence '+_cpJour(debut):'est lancé')+', jusqu’au '+_cpJour(fin).replace(/^\S+ /,'')+'. Qui le relève ?'});
+  }
+  // ── LA SAISON en cours, et où en est le groupe.
+  const s=ev.saison;
+  if(s&&s.nom&&Number(s.fin)>t&&Number(s.debut)<=t){
+    let tot=null;
+    if(s.mesure==='seances'||s.mesure==='tonnage'){
+      tot=0; for(const u of ath){ try{ tot+=Number(saisonValeur(u,s))||0; }catch(e){} }
+    }
+    const fig=(tot&&tot>0)?(s.mesure==='seances'?_cpNb(Math.round(tot))+' séance'+(tot>=2?'s':''):_cpTonnage(tot)+' soulevés'):'';
+    const reste=Math.ceil((Number(s.fin)-t)/_cpJ);
+    const nom=String(s.nom).slice(0,60);
+    if(reste<=7) out.push({cle:'saison_fin:'+(s.id||nom),score:75,titre:'La fin de l’édition',
+      texte:'Plus que '+reste+' jour'+(reste>1?'s':'')+' pour l’édition « '+nom+' ».'+(fig?' À vous tous, vous en êtes à '+fig+'.':'')+' On termine fort.'});
+    else if(t-Number(s.debut)<=3*_cpJ) out.push({cle:'saison_debut:'+(s.id||nom),score:70,titre:'Une édition commence',
+      texte:'L’édition « '+nom+' » a commencé, jusqu’au '+_cpJour(Number(s.fin)).replace(/^\S+ /,'')+'. Vous la voyez sur votre accueil : chaque séance y compte.'});
+    else if(fig) out.push({cle:'saison_point:'+(s.id||nom),score:45,titre:'Où en est le groupe',
+      texte:'Édition « '+nom+' » : à vous tous, vous en êtes à '+fig+'. Encore '+reste+' jours pour aller plus loin.'});
+  }
+  // ── LES BILANS en retard (plusieurs) : un rappel pour tous, sans personne.
+  const retard=ath.filter(u=>{ try{ return !u._fromCode&&(u.bilans||[]).length&&needsAlert(u); }catch(e){ return false; } }).length;
+  if(retard>=2) out.push({cle:'bilans',score:60+Math.min(retard,10),titre:'Le rappel des bilans',
+    texte:'Petit rappel pour tout le monde : si ton dernier bilan date de plus de deux semaines, cinq minutes dans l’app suffisent. C’est lui qui me permet d’ajuster ton programme.'});
+  // ── LA DÉCHARGE, si plusieurs athlètes en ont une cette semaine.
+  const dech=ath.filter(u=>{ try{ const p=programmeDe(u); const i=indexSemaineBloc(u,t); return !!(p&&i!=null&&p.decharges.indexOf(i)>=0); }catch(e){ return false; } }).length;
+  if(dech>=2) out.push({cle:'decharge',score:55,titre:'La semaine de décharge',
+    texte:'Pour une partie d’entre vous, c’est la semaine de décharge : on lève le pied, c’est prévu. C’est là que le corps encaisse le travail des semaines passées.'});
+  // ── UN FAIT COLLECTIF DE LA SEMAINE, anonyme.
+  let r=null; try{ r=recapTeamDonnees(ath,'semaine',t,''); }catch(e){ r=null; }
+  if(r&&r.seances>=2) out.push({cle:'semaine',score:40,titre:'Votre semaine',
+    texte:'Ces sept derniers jours, vous avez fait '+_cpNb(r.seances)+' séances'
+      +(r.records?' et battu '+r.records+' record'+(r.records>1?'s':'')+' personnel'+(r.records>1?'s':''):'')
+      +(r.tonnage>=1000?', pour '+_cpTonnage(r.tonnage)+' soulevés':'')+'. Beau travail, on continue.'});
+  return out.sort((a,b)=>b.score-a.score).slice(0,CPROP_MAX);
+}
+
+// ── LE RYTHME : une proposition par semaine ───────────────────────────────
+function _cpEtat(){ try{ return JSON.parse(localStorage.getItem(CPROP_CLE)||'null')||{}; }catch(e){ return {}; } }
+function _cpSemaineClose(t){ const e=_cpEtat(); return !!(e&&e.semaine===kitSemaineCle(t)); }
+function _cpClore(cle,comment){ try{ localStorage.setItem(CPROP_CLE,JSON.stringify({semaine:kitSemaineCle(Date.now()),cle:String(cle||''),comment})); }catch(e){} }
+let _cpListe=[];
+function renderPropositionsCanal(){
+  const z=document.getElementById('canal-propositions');
+  if(!z||!currentUser||currentUser.role!=='coach') return false;
+  const t=Date.now();
+  if(_cpSemaineClose(t)){
+    const e=_cpEtat();
+    z.innerHTML='<div class="cp-close sub">'+(e.comment==='passe'?'Pas de proposition cette semaine, c’est noté.':'Ta proposition de la semaine est faite.')+' Les suivantes arrivent lundi.</div>';
+    return true;
+  }
+  const defis=Object.keys(window._canalMsgsCoach||{}).map(id=>Object.assign({id},window._canalMsgsCoach[id])).filter(m=>m.type==='defi');
+  let saison=null; try{ saison=saisonActive(t); }catch(e){ saison=null; }
+  let ath=[]; try{ ath=getClients().filter(c=>c&&!c._fromCode); }catch(e){ ath=[]; }
+  _cpListe=propositionsCanal(currentUser,ath,{defis,saison},t);
+  if(!_cpListe.length){ z.innerHTML=''; return false; }
+  const E=escapeHtml, p=_cpListe[0];
+  const carte=(x,i)=>'<div class="cp-carte'+(i?' cp-carte-2':'')+'"><div class="cp-t">'+E(x.titre)+'</div>'
+    +'<div class="cp-x">'+E(x.texte)+'</div><div class="cp-b">'
+    +'<button type="button" class="btn btn-outline btn-sm" onclick="utiliserProposition('+i+')">Modifier et publier</button>'
+    +'<button type="button" class="cp-lien" onclick="utiliserProposition('+i+',true)">Programmer</button></div></div>';
+  z.innerHTML='<div class="cp"><div class="cp-h"><span>Cette semaine, tu peux publier…</span>'
+    +'<button type="button" class="cp-lien" onclick="passerPropositions()">Passer</button></div>'
+    +carte(p,0)
+    +(_cpListe.length>1?'<details class="cp-autres"><summary>'+(_cpListe.length-1)+' autre'+(_cpListe.length>2?'s':'')+' idée'+(_cpListe.length>2?'s':'')+'</summary>'
+      +_cpListe.slice(1).map((x,k)=>carte(x,k+1)).join('')+'</details>':'')+'</div>';
+  return true;
+}
+function passerPropositions(){ _cpClore('','passe'); renderPropositionsCanal(); return true; }
+function utiliserProposition(i,programmer){
+  const x=_cpListe[i]; if(!x) return false;
+  window._cpPre={titre:x.titre,texte:x.texte,prop:x.cle,programmer:!!programmer};
+  openMessageCanal('');
+  return true;
+}
+
+// ── PROGRAMMER : canal_programmes/<coach>/<id> ─────────────────────────────
+// Écrit par le coach, publié par le serveur à l'heure dite (au plus une minute
+// après), puis effacé. Modifier ou annuler, c'est réécrire ou effacer ce nœud :
+// tant qu'il existe, rien n'est parti.
+let _cpProgrammes=null;
+async function _cpChargerProgrammes(){
+  const cle=canalCle(currentUser);
+  if(!cle) return {};
+  const r=await _fbJson('canal_programmes/'+cle);
+  _cpProgrammes=r.ok?(r.v||{}):(_cpProgrammes||{});
+  return _cpProgrammes;
+}
+// PURE. Les programmés, du plus proche au plus lointain.
+function canalProgrammesListe(brut){
+  const o=(brut&&typeof brut==='object')?brut:{};
+  return Object.keys(o).map(id=>Object.assign({id},o[id])).filter(m=>m&&Number(m.quand)>0).sort((a,b)=>Number(a.quand)-Number(b.quand));
+}
+function renderProgrammesCanal(){
+  const z=document.getElementById('canal-programmes');
+  if(!z) return false;
+  const l=canalProgrammesListe(_cpProgrammes);
+  if(!l.length){ z.innerHTML=''; return false; }
+  const E=escapeHtml;
+  z.innerHTML='<div class="cp-prog"><div class="cp-h"><span>Programmés</span></div>'
+    +l.map(m=>{ const id=E(m.id); return '<div class="cp-pl"><div class="cp-pd">'+E(_cpJour(Number(m.quand)))+', '+new Date(Number(m.quand)).getHours()+' h'
+      +(m.manque?' <b>· pas parti à l’heure prévue</b>':'')+'</div>'
+      +'<div class="cp-px">'+E(m.titre?m.titre+' : ':'')+E(String(m.texte||'').slice(0,140))+(String(m.texte||'').length>140?'…':'')+'</div>'
+      +'<div class="cp-b"><button type="button" class="cp-lien" onclick="modifierProgramme(\''+id+'\')">Modifier</button>'
+      +'<button type="button" class="cp-lien" onclick="annulerProgramme(\''+id+'\')">Annuler</button></div></div>'; }).join('')+'</div>';
+  return true;
+}
+function modifierProgramme(id){
+  const m=(_cpProgrammes||{})[id]; if(!m) return false;
+  window._cpPre={titre:m.titre||'',texte:m.texte||'',lien:m.lien||'',programmer:true,quand:Number(m.quand),progId:id};
+  openMessageCanal('');
+  return true;
+}
+async function annulerProgramme(id){
+  const cle=canalCle(currentUser); if(!cle) return false;
+  if(!await rcConfirm('Annuler ce message programmé ? Il ne partira pas.',null,'Annuler le message','Garder')) return false;
+  const r=await _fbJson('canal_programmes/'+cle+'/'+id,'DELETE');
+  if(!r.ok){ toast('Annulation impossible hors connexion.','var(--orange)'); return false; }
+  delete (_cpProgrammes||{})[id];
+  renderProgrammesCanal();
+  toast('Message annulé');
+  return true;
+}
+// PURE. L'instant programmé à partir d'un jour (AAAA-MM-JJ) et d'une heure.
+function canalQuand(jourISO,heure){
+  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(jourISO||''));
+  const h=Math.round(Number(heure));
+  if(!m||!(h>=0&&h<=23)) return null;
+  const d=new Date(+m[1],+m[2]-1,+m[3],h,0,0,0);
+  // Le 31 février ne devient pas le 3 mars.
+  if(d.getMonth()!==+m[2]-1||d.getDate()!==+m[3]) return null;
+  return d.getTime();
+}
+function _cpBlocProgrammer(o){
+  const q=Number(o&&o.quand)||0;
+  const d=new Date(q||Date.now()+_cpJ);
+  const jour=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  const hh=q?d.getHours():8;
+  return `<div id="cm-prog" class="cp-progbloc"${o&&o.programmer?'':' hidden'}>
+      <div class="cp-progl"><label for="cm-jour">Jour</label><input id="cm-jour" type="date" value="${jour}"></div>
+      <div class="cp-progl"><label for="cm-heure">Heure</label><select id="cm-heure">${Array.from({length:24},(_,h)=>`<option value="${h}"${h===hh?' selected':''}>${h} h</option>`).join('')}</select></div>
+      <div class="sub cp-progs">Le serveur publie à l’heure dite. D’ici là, tu le modifies ou l’annules depuis « Programmés ».</div>
+    </div>`;
+}
+// Un message programmé ne s'épingle pas : la case disparaît quand on programme.
+function _cpSansEpingle(){
+  const e=document.getElementById('cm-epingle');
+  if(!e) return;
+  e.checked=false;
+  const l=e.closest('label'); if(l) l.hidden=true;
+}
+function _cpBoutonProgrammer(){
+  const z=document.getElementById('cm-prog'), b=document.getElementById('cm-btn-prog');
+  if(z&&z.hidden){ z.hidden=false; if(b) b.textContent='Programmer ce jour-là'; _cpSansEpingle(); return false; }
+  return programmerMessageCanal();
+}
+async function programmerMessageCanal(){
+  const o=window._cpOuverture||{};
+  const titre=(document.getElementById('cm-titre')?.value||'').trim().slice(0,CANAL_TITRE_MAX);
+  const texte=(document.getElementById('cm-texte')?.value||'').trim().slice(0,CANAL_TEXTE_MAX);
+  const lien=(document.getElementById('cm-lien')?.value||'').trim().slice(0,CANAL_LIEN_MAX);
+  if(!titre&&!texte){ toast('Écris au moins un titre ou un message','var(--orange)'); return false; }
+  if(lien&&safeUrlRaw(lien)==='#'){ toast('Le lien doit commencer par https://','var(--orange)'); return false; }
+  const quand=canalQuand(document.getElementById('cm-jour')?.value,document.getElementById('cm-heure')?.value);
+  if(!quand||quand<=Date.now()){ toast('Choisis un jour et une heure à venir.','var(--orange)'); return false; }
+  const cle=canalCle(currentUser);
+  if(!cle||!CLOUD.ok()){ toast('Programmation impossible hors connexion','var(--orange)'); return false; }
+  const id=o.progId||('p'+Date.now()+'-'+Math.random().toString(36).slice(2,7));
+  const m={quand,titre,texte,cree:Date.now()};
+  if(lien) m.lien=lien;
+  const r=await _fbJson('canal_programmes/'+cle+'/'+id,'PUT',m);
+  if(!r.ok){ toast('Non programmé : réessaie une fois en ligne.','var(--orange)'); return false; }
+  if(!_cpProgrammes) _cpProgrammes={};
+  _cpProgrammes[id]=m;
+  if(o.prop) _cpClore(o.prop,'programme');
+  window._cpOuverture=null;
+  closeModal();
+  renderProgrammesCanal(); renderPropositionsCanal();
+  toast('Programmé pour '+_cpJour(quand)+', '+new Date(quand).getHours()+' h');
+  return true;
+}
 function loadCanalCoach(){
   if(currentUser?.role!=='coach') return;
   go('s-coach-canal');
+  // C5 : les programmés et les propositions de la semaine (la saison d'abord).
+  _cpChargerProgrammes().then(()=>renderProgrammesCanal()).catch(()=>{});
+  try{ Promise.resolve(chargerSaisons()).catch(()=>{}).then(()=>{ try{ renderPropositionsCanal(); }catch(e){} }); }catch(e){}
   const fil=document.getElementById('canal-coach-fil');
   _canalSquelette(fil);
   _canalChargerCoach();
@@ -22823,6 +23056,7 @@ async function _canalChargerCoach(idNeuf){
     return;
   }
   window._canalMsgsCoach=msgs||{};
+  try{ renderPropositionsCanal(); }catch(e){}
   const liste=canalTrier(msgs);
   // LES MESSAGES SYSTÈME (paliers, podium) rallument la pastille côté serveur,
   // dans coach_public.canalDernier. Le profil que ce coach renvoie ensuite ne
@@ -22931,9 +23165,15 @@ async function resyncCompteursCanal(msgId){
 //   Depuis le 19/09/2026 cette relance part en WhatsApp ou en mail : la cause
 //   a disparu, l'avertissement avec elle. On ne garde pas un garde-fou pour
 //   un chemin qui n'existe plus — il ferait croire que le chemin existe.
+// C5 : un message neuf peut arriver pré-rempli (une proposition collective,
+// un programmé à modifier) par window._cpPre, lu UNE fois ici puis effacé. La
+// signature reste à un paramètre : voir le test « Aucun brouillon nominatif ».
 function openMessageCanal(msgId){
   document.getElementById('modal-overlay')?.remove();
-  const m=(msgId&&(window._canalMsgsCoach||{})[msgId])||{};
+  const _p=(!msgId&&window._cpPre&&typeof window._cpPre==='object')?window._cpPre:{};
+  window._cpPre=null;
+  window._cpOuverture=msgId?null:_p;
+  const m=(msgId&&(window._canalMsgsCoach||{})[msgId])||{titre:_p.titre||'',texte:_p.texte||'',lien:_p.lien||''};
   // Un défi se modifie dans SA feuille : celle-ci réécrirait le message sans
   // sa mesure ni ses dates.
   if(m.type==='defi') return openDefiCanal(msgId);
@@ -22954,11 +23194,14 @@ function openMessageCanal(msgId){
       <input id="cm-epingle" type="checkbox" ${m.epingle?'checked':''} style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <span style="font-size:var(--fs-sm);line-height:1.5">Épingler à l'accueil<br><span class="sub" style="font-size:var(--fs-xs)">Un seul message à la fois : celui-ci remplacera l'épinglé actuel.</span></span>
     </label>
-    <div style="display:flex;gap:8px;margin-top:16px">
+    ${msgId?'':_cpBlocProgrammer(_p)}
+    <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
       <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="closeModal()">Annuler</button>
-      <button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="enregistrerMessageCanal()">${msgId?'Enregistrer':'Publier'}</button>
+      ${msgId?'':`<button class="btn btn-outline btn-sm" id="cm-btn-prog" style="flex:1;margin:0;min-height:44px" onclick="_cpBoutonProgrammer()">${_p.programmer?'Programmer ce jour-là':'Programmer…'}</button>`}
+      <button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="enregistrerMessageCanal()">${msgId?'Enregistrer':(_p.progId?'Publier maintenant':'Publier')}</button>
     </div>
   </div></div>`);
+  if(_p.programmer) _cpSansEpingle();
 }
 
 async function enregistrerMessageCanal(){
@@ -23022,6 +23265,12 @@ async function enregistrerMessageCanal(){
     await CLOUD.pushProfilCoach(currentUser);
     closeModal();
     toast(window._canalEdite?'Message modifié':'Message publié');
+    // C5 : une proposition publiée clôt la semaine ; un programmé publié tout
+    // de suite ne doit plus partir à son heure.
+    try{ const o=window._cpOuverture||{}; window._cpOuverture=null;
+      if(o.prop) _cpClore(o.prop,'publie');
+      if(o.progId){ await _fbJson('canal_programmes/'+cle+'/'+o.progId,'DELETE'); if(_cpProgrammes) delete _cpProgrammes[o.progId]; renderProgrammesCanal(); }
+      renderPropositionsCanal(); }catch(e){}
   }catch(e){
     if(_b){
       _b.disabled=false;
