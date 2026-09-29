@@ -50897,6 +50897,10 @@ async function testExercices(){
       if(!/rejoindreDuel\('dinvit123456'/.test(h)) return _echec('bouton relever');
       if(!/Contre Tom · 4 séances à 2 séances · J-3/.test(d.textContent)) return _echec('ligne : '+d.textContent);
       if(htmlDuelsHub(u,{},null,t)!=='') return _echec('feuille vide : la création directe');
+      // Le carnet d'amis vit dans la feuille « Mes défis », plus sur l'accueil (29/09/2026).
+      if(!/id="clh-amis"/.test(String(ouvrirDuelsHub))||!/renderAmisAccueil\(\)/.test(String(ouvrirDuelsHub))) return _echec('les amis absents de la feuille');
+      if(/renderAmisAccueil\(\)/.test(String(loadClientHome))) return _echec('les amis encore sur l’accueil');
+      if(document.querySelector('#s-client-home #clh-amis')) return _echec('la zone amis encore dans l’accueil');
       if(htmlDuelsAccueil({role:'coach'},{},null,t)!=='') return _echec('coach');
       // Les lignes selon l'état.
       const L=(x)=>duelLigne(Object.assign({createur:'lea@t,fr',createurNom:'Léa',inviteNom:'Tom',mesure:'seances',duree:14},x),'lea@t,fr',t);

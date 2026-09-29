@@ -11370,6 +11370,7 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 /* ══ LES AMIS (lot A, 29/09/2026) ══ */
 #clh-amis:empty{display:none}
 .am-carte{margin:12px 0 16px;padding:14px;border-radius:14px;background:var(--surface-1,#111);border:1px solid var(--border,#2a2a2e)}
+.du-amis .am-carte{margin:4px 0 14px;text-align:left}
 .am-tete{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .am-titre{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--red-text,#ff4d4d)}
 .am-tout{background:none;border:0;padding:4px 0;color:var(--sub,#a0a0a8);font:700 var(--fs-xs) Montserrat,sans-serif;cursor:pointer}
