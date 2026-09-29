@@ -6,7 +6,7 @@
 
 Il faut ffmpeg dans le PATH, et Pillow et numpy (pip install Pillow numpy).
 Si video/09_final.mp4 existe, elle sert de scène finale ; sinon l'image
-08_miroir_abdos.jpg est montrée avec un zoom lent de 5 s.
+08_miroir_abdos.jpg est montrée seule.
 """
 import argparse
 import math
@@ -43,11 +43,11 @@ SCENES = [
     dict(nom="04_piscine", debut=7.4, fin=9.9, src="04_piscine.jpg", look="apres",
          texte="2 ans plus tard.", texte_y=1520),
     dict(nom="05_salle_large", debut=9.9, fin=11.25, src="05_souleve_de_terre.jpg", look="apres",
-         rapide=True, cadre=(0.50, 0.50, 1.0)),
+         cadre=(0.50, 0.50, 1.0)),
     dict(nom="06_salle_buste", debut=11.25, fin=12.6, src="05_souleve_de_terre.jpg", look="apres",
-         rapide=True, cadre=(0.45, 0.36, 1.45)),
+         cadre=(0.45, 0.36, 1.45)),
     dict(nom="07_salle_visage", debut=12.6, fin=13.9, src="05_souleve_de_terre.jpg", look="apres",
-         rapide=True, cadre=(0.33, 0.24, 1.8)),
+         cadre=(0.33, 0.24, 1.8)),
     dict(nom="09_final", debut=13.9, fin=19.0, src="08_miroir_abdos.jpg", video="09_final.mp4",
          look="apres", texte="Qui rigole maintenant ?", texte_debut=15.0, texte_y=340),
 ]
@@ -95,24 +95,25 @@ def adoucit(p):
 
 
 class PlanPhoto:
-    """Photo recadrée pour remplir le 9:16, avec un Ken Burns."""
+    """Photo recadrée pour remplir le 9:16, avec un léger dézoom centré au début du plan."""
     MARGE = 1.14
+    DEZOOM = 0.06          # part de 6 % plus serré…
+    DEZOOM_DUREE = 0.7     # …et revient au cadre en 0,7 s, puis l'image reste fixe
 
-    def __init__(self, chemin, look, rapide=False, sens=1, lent=False, cadre=(0.5, 0.5, 1.0)):
+    def __init__(self, chemin, look, duree, cadre=(0.5, 0.5, 1.0)):
         src = Image.open(chemin).convert("RGB")
         e = max(W * self.MARGE / src.width, H * self.MARGE / src.height)
         self.img = etalonne(src.resize((round(src.width * e), round(src.height * e)), Image.LANCZOS), look)
-        self.rapide, self.sens, self.lent, self.cadre = rapide, sens, lent, cadre
+        self.duree, self.cadre = duree, cadre
 
     def image(self, p):
-        # mouvements doux : pas de secousse, le rythme vient des coupes
-        z = 1.0 + (0.04 if self.rapide else 0.06 if self.lent else 0.05) * adoucit(p)
+        e = min(1.0, p * self.duree / self.DEZOOM_DUREE)
+        z = 1.0 + self.DEZOOM * (1 - e) ** 3
         fx, fy, z0 = self.cadre
         iw, ih = self.img.size
         k = min(iw / W, ih / H) / (z * z0)               # plus grand cadre 9:16 dans la photo, puis zoom
         bw, bh = W * k, H * k
-        glisse = (iw - bw) * 0.12 * self.sens * (adoucit(p) - 0.5)
-        cx = min(max(iw * fx + glisse, bw / 2), iw - bw / 2)
+        cx = min(max(iw * fx, bw / 2), iw - bw / 2)
         cy = min(max(ih * fy, bh / 2), ih - bh / 2)
         return self.img.transform((W, H), Image.EXTENT,
                                   (cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2), Image.BICUBIC)
@@ -275,7 +276,6 @@ class Montage:
         self.perso = Perso()
         self.plans, self.textes = {}, {}
         video = os.path.join(dossier, "video", "09_final.mp4")
-        sens = 1
         for sc in SCENES:
             if "src" not in sc:
                 continue
@@ -288,11 +288,9 @@ class Montage:
                 if not os.path.exists(chemin):
                     sys.exit(f"Image manquante : {chemin}")
                 if sc.get("video"):
-                    print(f"  {sc['nom']} : pas de video/09_final.mp4, zoom lent sur {sc['src']}")
-                self.plans[sc["nom"]] = PlanPhoto(chemin, sc["look"], sc.get("rapide", False), sens,
-                                                  lent=bool(sc.get("video")),
+                    print(f"  {sc['nom']} : pas de video/09_final.mp4, photo {sc['src']}")
+                self.plans[sc["nom"]] = PlanPhoto(chemin, sc["look"], sc["fin"] - sc["debut"],
                                                   cadre=sc.get("cadre", (0.5, 0.5, 1.0)))
-                sens = -sens
             if sc.get("texte"):
                 self.textes[sc["nom"]] = calque_texte(sc["texte"])
 
