@@ -15374,3 +15374,22 @@ html[data-theme="clair"]{background:#f8f8f8}
 .rel-carte-t{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:var(--sub)}
 .rel-carte-l{font-size:var(--fs-sm);line-height:1.55;color:var(--text)}
 .rel-carte .btn{align-self:flex-start;margin:0}
+/* LOT C4 : le récapitulatif d'assignation et le report d'une correction */
+.c4-encours{font-size:var(--fs-2xs);color:var(--orange);margin-top:2px;line-height:1.4}
+.c4-l{display:flex;gap:10px;align-items:flex-start;padding:12px 0;border-top:1px solid var(--border);cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;margin:0}
+.c4-l input{flex:none;width:20px;height:20px;margin:2px 0 0;accent-color:var(--red)}
+.c4-l-c{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.c4-l-n{font-size:var(--fs-sm);font-weight:800;color:var(--text)}
+.c4-l-n span{font-weight:600;font-size:var(--fs-2xs);color:var(--sub);margin-left:4px}
+.c4-l-r{font-size:var(--fs-xs);color:var(--sub);line-height:1.5}
+.c4-perdu{font-size:var(--fs-xs);line-height:1.55;color:var(--text);background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:var(--r-2);padding:8px 10px}
+.c4-morpho{font-size:var(--fs-xs);line-height:1.55;color:var(--text);background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--orange);border-radius:var(--r-2);padding:8px 10px}
+.c4-entree{display:flex;flex-direction:column;gap:8px;margin:0 0 14px;padding:10px 12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);font-size:var(--fs-xs);line-height:1.5}
+.c4-entree .btn{margin:0;align-self:flex-start}
+.c4-ath{padding:12px 0;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
+.c4-op{display:flex;gap:10px;align-items:flex-start;font-size:var(--fs-xs);line-height:1.5;color:var(--text);cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400;margin:0}
+.c4-op input{flex:none;width:18px;height:18px;margin:1px 0 0;accent-color:var(--red)}
+.c4-op-s{color:var(--sub);font-weight:700}
+.c4-op em{display:block;font-style:normal;color:var(--orange)}
+.c4-op-off{opacity:.55;cursor:default}
+.c4-vide{font-size:var(--fs-xs)}

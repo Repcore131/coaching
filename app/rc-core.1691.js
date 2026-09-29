@@ -15376,7 +15376,8 @@ function htmlRevueMorpho(etat){
 // La fiche du coach : les profils de l'athlète, la source de chacun (le dernier
 // axe de sa signature, avec sa date et sa tolérance), et ce qui attend un
 // repère. « athletes » : ceux du coach, pour compter les mesurés.
-function _etatRevueMorpho(c,cal,athletes){
+// `programme` (C4) : les séances d'un modèle, lues avec SES profils à lui.
+function _etatRevueMorpho(c,cal,athletes,programme){
   let axes=[], res={profils:[]};
   try{ axes=morphoAxes(c,{calibrage:cal||null}); res=morphoProfils(axes); }catch(e){ return {lignes:[],bloques:[],profilsSortis:false}; }
   const par={}; axes.forEach(a=>{ if(a&&a.cle) par[a.cle]=a; });
@@ -15386,7 +15387,7 @@ function _etatRevueMorpho(c,cal,athletes){
     return Object.assign({},p,{source:a0?_morphoAttribut(a0.source,a0.dateISO,a0.tolerance):''});
   });
   let tests=[]; try{ tests=testsMorpho(c); }catch(e){ tests=[]; }
-  const lignes=revueMorpho((c&&c.sessions_config)||[],profils,tests,{user:c});
+  const lignes=revueMorpho((Array.isArray(programme)?programme:(c&&c.sessions_config))||[],profils,tests,{user:c});
   const l=Array.isArray(athletes)?athletes:[];
   const bloques=axes.filter(a=>a&&a.manque==='repere-a-calibrer').map(a=>({court:a.court,
     n:l.filter(u=>{ try{ const r=_morphoBrut(u,a.cle); return !!(r&&r.valeur!=null&&isFinite(r.valeur)); }catch(e){ return false; } }).length}));
@@ -33350,6 +33351,7 @@ function editCoachProgTemplate(idx,genre){
   _editProgTemplateIdx=idx;
   _editProgTemplateGender=g;
   const p=currentUser.coachPrograms[idx];
+  _c4Avant=_c4Snapshot(p);
   const inp=document.getElementById('cpt-name');
   if(inp) inp.value=p.name||'';
   go('s-coach-prog-template');
@@ -33365,7 +33367,9 @@ function saveCoachProgTemplateName(){
 function saveCoachProgTemplate(){
   saveCoachProgTemplateName();
   const p=(currentUser.coachPrograms||[])[_editProgTemplateIdx];
+  try{ if(modeleVersionner(p,_c4Avant)) _c4Avant=_c4Snapshot(p); }catch(e){}
   const local=saveUser();
+  try{ renderPropagationEntree(); }catch(e){}
   // LA BOUTIQUE SUIT LE MODELE. Un programme en vente se livrait tel qu'il
   // etait le jour de sa publication : le coach corrigeait une seance, et
   // l'acheteur suivant recevait l'ancienne. On pousse les SEANCES, et elles
@@ -33849,6 +33853,7 @@ function loadProgTemplateSlots(gender){
   // N4.4 — LE REPORT D UN GENRE VERS L AUTRE, en tete de la liste. Le libelle
   // nomme les deux onglets : « reporter » sans dire dans quel sens obligerait
   // a essayer pour savoir.
+  try{ renderPropagationEntree(); }catch(e){}
   const zr=document.getElementById('cpt-report');
   if(zr) zr.innerHTML=`<button class="btn btn-outline btn-sm" onclick="cptReporterGenre()" style="width:100%;margin:0 0 14px;letter-spacing:1px;font-size:var(--fs-2xs)">Reporter ${gender==='H'?'HOMME → FEMME':'FEMME → HOMME'}</button>`;
   const container=document.getElementById('cpt-session-slots');if(!container)return;
@@ -34583,9 +34588,10 @@ function loadAssignAthletes(){
     return `
     <div style="display:flex;align-items:center;gap:12px;border-bottom:1px solid #242424;padding:12px 10px;border-left:3px solid ${ETAT_FILET[etatAthlete(a)]||'#666666'};border-radius:0 8px 8px 0;background:linear-gradient(168deg,#141414,#0d0d0d);margin-bottom:6px">
       <div class="avatar" style="width:32px;height:32px;font-size:12px;flex-shrink:0">${escapeHtml(ini(a.fname,a.lname))}</div>
-      <input type="checkbox" id="cpa-cb-${a.id}" value="${a.id}" data-gender="${defG}" style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
+      <input type="checkbox" id="cpa-cb-${a.id}" value="${a.id}" data-gender="${defG}"${cpaCocheDefaut(a)?'':' data-encours="1"'} style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <label for="cpa-cb-${a.id}" style="flex:1;cursor:pointer">
         <div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml((a.fname||'')+' '+(a.lname||''))}</div>
+        ${(()=>{ const x=programmeRemplace(a); return x?`<div class="c4-encours">Programme en cours${x.nom?' : '+escapeHtml(x.nom):''}${x.bloc?', semaine '+x.bloc.semaine+' sur '+x.bloc.semaines:''}</div>`:''; })()}
       </label>
       <div style="display:flex;gap:6px;flex-shrink:0">
         <button onclick="cpaSwitchGender('${a.id}','H')" id="cpa-g-H-${a.id}" style="padding:4px 10px;border-radius:var(--r-1);border:none;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;background:${defG==='H'?'var(--red)':'#222'};color:${defG==='H'?'var(--text)':'var(--sub)'}">H</button>
@@ -34604,7 +34610,8 @@ function cpaSwitchGender(id,g){
   if(cb) cb.dataset.gender=g;
 }
 
-function cpaSelectAll(v){document.querySelectorAll('#cpa-athletes input[type=checkbox]').forEach(cb=>cb.checked=v);}
+// « Tout cocher » laisse de côté qui a un programme en cours (C4) : celui-là se coche un par un.
+function cpaSelectAll(v){document.querySelectorAll('#cpa-athletes input[type=checkbox]').forEach(cb=>{ if(v&&cb.dataset.encours) return; cb.checked=v; });}
 
 // LIMITE CONNUE : chaque athlète n'a qu'un seul sessions_config actif à la fois.
 // Un système multi-programmes (ex : programme A le lundi, programme B en décharge)
@@ -34630,29 +34637,12 @@ async function confirmAssignProgram(){
     return {emailKey,a,gender:cb.dataset.gender,name:((a.fname||'')+(a.lname?' '+a.lname:'')).trim()||a.email};
   }).filter(Boolean);
   if(!targets.length){toast('Aucun athlète trouvé','var(--orange)');return;}
-  // Même définition que l'alerte « Sans programme » : un athlète servi par PDF ou
-  // par l'ancien c.program a bien déjà un programme, et les séances qu'on assigne
-  // vont le masquer (cascade de _renderProgExercisesInto). En revanche l'historique
-  // ne photographie que sessions_config — la phrase de rollback reste donc liée à lui.
-  const hasSessions=targets.some(t=>t.a.sessions_config);
-  const msg=`Assigner "${prog.name||'Ce programme'}" à ${targets.length} athlète${targets.length>1?'s':''} ?\n\n`
-    +targets.map(t=>t.name+(hasProgram(t.a)?' (programme existant remplacé)':'')).join('\n')
-    +(hasSessions?'\n\nL\'ancien programme sera sauvegardé dans l\'historique (rollback possible).':'');
-  if(!await rcConfirm(msg,null,'Confirmer')) return;
-  const pushes=[];
-  targets.forEach(({emailKey,a,gender})=>{
-    _assignerModele(a,prog,gender);
-    users[emailKey]=a;
-    pushes.push(CLOUD.pushOne(emailKey,a));
-  });
-  const ok=DB.set('users',users);
-  if(ok) toast('Enregistrement…');
-  go('s-coach-programs');loadCoachProgramsList();
-  // Promise.all rejette au premier échec : un seul athlète non synchronisé
-  // suffit à invalider l'annonce, ce qui est le comportement voulu.
-  toastSync(ok,Promise.all(pushes),
-    ` Programme assigné à ${targets.length} athlète${targets.length>1?'s':''} !`,
-    'le programme est');
+  // C4 : LE RÉCAPITULATIF AVANT D'ÉCRIRE, à la place de la question. Qui
+  // reçoit quoi, qui perd un programme en cours (et ce qu'il perd), et ce
+  // que la revue morpho voit dans CE modèle pour chacun. Rien n'est écrit
+  // avant « Assigner » dans le récapitulatif.
+  const recap=assignationRecap(targets,prog,{morpho:_c4Morpho,brouillon:a=>!!_brouillonSessionsDe(a)});
+  ouvrirRecapAssignation(recap,prog);
 }
 
 // Renseigner le numéro d'un athlète depuis sa fiche. Écrit dans le nœud de
@@ -34701,7 +34691,414 @@ function _assignerModele(a,prog,genre){
   a.sessions_config=_marquerCommePublie(JSON.parse(JSON.stringify(base)));
   a.assignedProgramName=prog.name||'Programme';
   a.assignedProgramAt=Date.now();
+  // C4 : le lien sûr (l'identifiant), la version servie et la version du
+  // modèle. Sans eux, « qui utilise ce modèle » ne se lirait que par le nom.
+  a.assignedProgramId=prog.id||null;
+  a.assignedProgramGenre=g;
+  a.assignedProgramVersion=Number(prog.majAt)||Number(prog.createdAt)||0;
   a.updatedAt=Date.now();
+}
+
+// ══ LOT C4 : LE MODÈLE POSÉ SUR PLUSIEURS, ET LA PROPAGATION (29/09/2026) ═
+//
+// Trois gestes autour d'un modèle de coachPrograms :
+//   1. l'ASSIGNER à plusieurs athlètes, avec un récapitulatif AVANT d'écrire ;
+//   2. REPORTER une correction du modèle chez ceux qui l'utilisent, athlète
+//      par athlète, ce que le coach coche ;
+//   3. SIGNALER, à l'assignation, ce que la revue morpho (T4) voit dans ce
+//      modèle pour chaque athlète.
+//
+// ⚠ UN PROGRAMME EN COURS NE S'ÉCRASE PAS SANS LE DIRE. Décoché par défaut
+//   dans la liste, et le récapitulatif dit ce qui est remplacé.
+// ⚠ LA PROPAGATION NE TOUCHE QUE LE PRESCRIT (sessions_config). Jamais
+//   `sessions` (l'historique), jamais les champs propres à l'athlète
+//   (MOD_PROTEGES : sa charge, son réglage morpho, la justification d'une
+//   contrainte). Ce qui a été ajusté chez lui est montré, et décoché.
+// ⚠ AUCUN EXERCICE N'EST RETIRÉ PAR L'APP. La revue morpho signale, le coach
+//   décide ; un retrait ne vient que d'une correction du modèle, cochée.
+//
+// LE LIEN ATHLÈTE → MODÈLE. Avant ce lot, seul le nom existait
+// (assignedProgramName). _assignerModele écrit désormais l'identifiant, la
+// version servie (H ou F) et la version du modèle (assignedProgramVersion =
+// majAt du modèle à ce moment-là). Un athlète assigné avant ce lot est
+// reconnu par le nom, et comparé directement (tout décoché).
+//
+// LES VERSIONS DU MODÈLE. À chaque enregistrement qui change le contenu, la
+// version précédente est gardée, allégée (MOD_VERSIONS_MAX au plus) : le nom
+// des séances et des exercices, les champs prescrits, et une empreinte de la
+// consigne (description, vidéos). Sans elle, on ne saurait pas distinguer ce
+// que le coach a corrigé dans le modèle de ce qu'il a ajusté chez l'athlète.
+
+const MOD_CHAMPS=Object.freeze(['series','reps','repos','tempo','rir','rirCible','methode','methodeSeries','ss','materiel']);
+const MOD_CONSIGNE=Object.freeze(['description','videoUrl','videoUrl2','technique']);
+const MOD_PROTEGES=Object.freeze(['charge','poids','reglageCoach','justificationContrainte','methodeForcee']);
+const MOD_VERSIONS_MAX=3;
+const MOD_LIB_CHAMP=Object.freeze({series:'séries',reps:'répétitions',repos:'repos',tempo:'tempo',rir:'RIR',rirCible:'RIR visé',
+  methode:'méthode',methodeSeries:'séries de la méthode',ss:'superset',materiel:'matériel',consigne:'consigne'});
+
+function _modVal(v){ return v==null?'':(typeof v==='object'?JSON.stringify(v):String(v)); }
+function _modCle(nom){ try{ return exKey(nom); }catch(e){ return String(nom||'').trim().toUpperCase(); } }
+// PURE. Une empreinte courte de la consigne : la comparer suffit, la garder
+// en entier doublerait le poids du modèle à chaque version.
+function _modEmpreinte(ex){
+  const s=MOD_CONSIGNE.map(k=>_modVal(ex&&ex[k])).join('|');
+  let h=5381; for(let i=0;i<s.length;i++) h=((h*33)^s.charCodeAt(i))>>>0;
+  return h.toString(36);
+}
+// PURE. Les séances allégées : ce que la comparaison lit, rien d'autre.
+function modSlim(sessions){
+  return (Array.isArray(sessions)?sessions:[]).map(s=>({day:s&&s.day,name:String((s&&s.name)||''),active:!!(s&&s.active),
+    exercises:((s&&Array.isArray(s.exercises))?s.exercises:[]).filter(e=>e&&e.name).map(e=>{
+      const o={name:String(e.name)};
+      for(const k of MOD_CHAMPS) if(e[k]!=null&&e[k]!=='') o[k]=e[k];
+      o.h=e.h!=null?e.h:_modEmpreinte(e);
+      return o;
+    })}));
+}
+function _modPleine(s){ return !!(s&&s.active&&Array.isArray(s.exercises)&&s.exercises.some(e=>e&&e.name)); }
+
+/**
+ * PURE. Ce que la correction change, séance par séance : une liste
+ * d'opérations {id, type, jour, ...}. `avant` et `apres` : des séances
+ * (entières ou allégées, sept créneaux, rangés par jour).
+ *   seance_ajout / seance_retrait / seance_nom
+ *   ex_ajout {nom, pos} / ex_retrait {nom} / ex_modif {nom, champs:[{champ,de,a}]}
+ */
+function diffModele(avant,apres){
+  const A=modSlim(avant), B=modSlim(apres), ops=[];
+  const n=Math.max(A.length,B.length);
+  for(let j=0;j<n;j++){
+    const a=A[j]||{exercises:[]}, b=B[j]||{exercises:[]};
+    const pa=_modPleine(a), pb=_modPleine(b);
+    if(!pa&&pb){ ops.push({id:'s'+j+':ajout',type:'seance_ajout',jour:j,seance:b.name}); continue; }
+    if(pa&&!pb){ ops.push({id:'s'+j+':retrait',type:'seance_retrait',jour:j,seance:a.name}); continue; }
+    if(!pa&&!pb) continue;
+    if(a.name!==b.name) ops.push({id:'s'+j+':nom',type:'seance_nom',jour:j,de:a.name,a:b.name,seance:b.name});
+    const pris=new Set();
+    b.exercises.forEach((eb,pos)=>{
+      const k=_modCle(eb.name);
+      const ia=a.exercises.findIndex((ea,i)=>!pris.has(i)&&_modCle(ea.name)===k);
+      if(ia<0){ ops.push({id:'s'+j+':+'+k,type:'ex_ajout',jour:j,nom:eb.name,pos,seance:b.name}); return; }
+      pris.add(ia);
+      const ea=a.exercises[ia], champs=[];
+      for(const c of MOD_CHAMPS) if(_modVal(ea[c])!==_modVal(eb[c])) champs.push({champ:c,de:ea[c]==null?'':ea[c],a:eb[c]==null?'':eb[c]});
+      if(ea.h!==eb.h) champs.push({champ:'consigne',de:ea.h,a:eb.h});
+      if(champs.length) ops.push({id:'s'+j+':~'+k,type:'ex_modif',jour:j,nom:eb.name,champs,seance:b.name});
+    });
+    a.exercises.forEach((ea,i)=>{ if(!pris.has(i)) ops.push({id:'s'+j+':-'+_modCle(ea.name),type:'ex_retrait',jour:j,nom:ea.name,seance:b.name}); });
+  }
+  return ops;
+}
+
+/**
+ * PURE. Chez UN athlète, ce que chaque opération ferait : {op, etat, coche, detail}.
+ *   etat : 'applicable' (coché), 'ajuste' (il a été réglé chez lui : décoché,
+ *          et on dit sa valeur), 'deja' (déjà comme le modèle), 'impossible'
+ *          (rien sur quoi l'appliquer : pas d'exercice, jour occupé).
+ * `direct` : la version reçue n'est plus connue, la comparaison se fait
+ * contre son programme tel qu'il est : tout arrive décoché.
+ */
+function propagationAthlete(config,ops,direct){
+  const C=modSlim(config);
+  return (ops||[]).map(op=>{
+    const s=C[op.jour]||{exercises:[]};
+    const r={op,etat:'applicable',coche:true,detail:''};
+    const trouve=nom=>s.exercises.find(e=>_modCle(e.name)===_modCle(nom));
+    if(op.type==='seance_ajout'){
+      if(_modPleine(s)){ r.etat=_modVal(s.name)===_modVal(op.seance)?'deja':'impossible'; r.detail=r.etat==='impossible'?'il a déjà « '+(s.name||'une séance')+' » ce jour-là':''; }
+    } else if(op.type==='seance_retrait'){
+      if(!_modPleine(s)) r.etat='deja';
+    } else if(op.type==='seance_nom'){
+      if(!_modPleine(s)) r.etat='impossible';
+      else if(s.name===op.a) r.etat='deja';
+      else if(s.name!==op.de){ r.etat='ajuste'; r.detail='chez lui : « '+s.name+' »'; }
+    } else if(!_modPleine(s)){ r.etat='impossible'; r.detail='pas de séance ce jour-là chez lui'; }
+    else if(op.type==='ex_ajout'){ if(trouve(op.nom)) r.etat='deja'; }
+    else if(op.type==='ex_retrait'){ if(!trouve(op.nom)) r.etat='deja'; }
+    else if(op.type==='ex_modif'){
+      const e=trouve(op.nom);
+      if(!e){ r.etat='impossible'; r.detail='cet exercice n’est pas dans sa séance'; }
+      else {
+        const lu=c=>c.champ==='consigne'?e.h:e[c.champ];
+        const restants=op.champs.filter(c=>_modVal(lu(c))!==_modVal(c.a));
+        if(!restants.length) r.etat='deja';
+        else {
+          const ajustes=restants.filter(c=>_modVal(lu(c))!==_modVal(c.de));
+          if(ajustes.length){ r.etat='ajuste';
+            r.detail='chez lui : '+ajustes.map(c=>c.champ==='consigne'?'consigne réécrite':(MOD_LIB_CHAMP[c.champ]||c.champ)+' '+_modVal(lu(c))).join(', '); }
+        }
+      }
+    }
+    if(r.etat!=='applicable') r.coche=false;
+    if(direct&&r.etat==='applicable'){ r.coche=false; }
+    return r;
+  });
+}
+
+/**
+ * PURE. Le prescrit après report des opérations cochées (ids). Rend une
+ * COPIE : ni `config` ni rien d'autre du dossier n'est touché. `apres` : les
+ * séances ENTIÈRES du modèle (un exercice ajouté arrive avec sa consigne).
+ */
+function appliquerPropagation(config,ops,ids,apres){
+  const out=JSON.parse(JSON.stringify(Array.isArray(config)?config:[]));
+  const B=Array.isArray(apres)?apres:[];
+  const choix=new Set(ids||[]);
+  const exDe=(j,nom)=>(((B[j]||{}).exercises)||[]).find(e=>e&&_modCle(e.name)===_modCle(nom));
+  for(const op of (ops||[])){
+    if(!choix.has(op.id)) continue;
+    const j=op.jour;
+    while(out.length<=j) out.push({day:DAYS[out.length]||'',name:'',active:false,exercises:[]});
+    const s=out[j];
+    if(op.type==='seance_ajout'){ const src=JSON.parse(JSON.stringify(B[j]||{})); delete src._essai; delete src._foundation; out[j]=Object.assign(src,{day:s.day||src.day}); continue; }
+    if(op.type==='seance_retrait'){ s.active=false; continue; }
+    if(op.type==='seance_nom'){ s.name=op.a; continue; }
+    if(!Array.isArray(s.exercises)) s.exercises=[];
+    const i=s.exercises.findIndex(e=>e&&_modCle(e.name)===_modCle(op.nom));
+    if(op.type==='ex_ajout'){ if(i<0){ const e=exDe(j,op.nom); if(e) s.exercises.splice(Math.min(op.pos,s.exercises.length),0,JSON.parse(JSON.stringify(e))); } continue; }
+    if(op.type==='ex_retrait'){ if(i>=0) s.exercises.splice(i,1); continue; }
+    if(op.type==='ex_modif'&&i>=0){
+      const e=s.exercises[i], src=exDe(j,op.nom)||{};
+      for(const c of op.champs){
+        const cles=c.champ==='consigne'?MOD_CONSIGNE:[c.champ];
+        for(const k of cles){
+          if(MOD_PROTEGES.indexOf(k)>=0) continue;
+          if(src[k]==null||src[k]==='') delete e[k]; else e[k]=JSON.parse(JSON.stringify(src[k]));
+        }
+      }
+    }
+  }
+  return out;
+}
+
+// PURE. Qui utilise ce modèle : par l'identifiant (lien sûr), ou par le nom
+// pour un athlète assigné avant ce lot (lien « par le nom »).
+function utilisateursModele(athletes,prog){
+  if(!prog) return [];
+  const nom=String(prog.name||'').trim().toLowerCase();
+  return (athletes||[]).filter(a=>a&&a.sessions_config).map(a=>{
+    if(a.assignedProgramId) return a.assignedProgramId===prog.id?{a,lien:'id'}:null;
+    const n=String(a.assignedProgramName||'').trim().toLowerCase();
+    return (nom&&n===nom)?{a,lien:'nom'}:null;
+  }).filter(Boolean);
+}
+// PURE. La version du modèle reçue par cet athlète, ou null (comparaison directe).
+function versionRecue(prog,a){
+  if(!prog||!a||!a.assignedProgramId||a.assignedProgramId!==prog.id) return null;
+  const v=Number(a.assignedProgramVersion)||0;
+  if(v===(Number(prog.majAt)||Number(prog.createdAt)||0)) return 'courante';
+  const x=(prog.versions||[]).find(z=>z&&Number(z.at)===v);
+  return x||null;
+}
+// PURE. Les opérations à reporter chez un athlète : {ops, direct, aJour}.
+function opsPourAthlete(prog,a,genreParDefaut){
+  const g=(a&&a.assignedProgramGenre)||progGenreServi(prog,genreParDefaut||'H');
+  const apres=(g==='F'?prog.sessions_F:prog.sessions_H)||[];
+  const v=versionRecue(prog,a);
+  if(v==='courante') return {ops:[],direct:false,aJour:true,genre:g,apres};
+  if(v) return {ops:diffModele(g==='F'?v.F:v.H,apres),direct:false,aJour:false,genre:g,apres};
+  return {ops:diffModele((a&&a.sessions_config)||[],apres),direct:true,aJour:false,genre:g,apres};
+}
+
+// ── L'ASSIGNATION : LE RÉCAPITULATIF, AVANT D'ÉCRIRE ─────────────────────
+// PURE. Coché par défaut dans la liste : oui, sauf s'il a déjà un programme.
+function cpaCocheDefaut(a){ try{ return !hasProgram(a); }catch(e){ return true; } }
+// PURE. Ce qu'il a aujourd'hui et que l'assignation remplace.
+function programmeRemplace(a){
+  let has=false; try{ has=hasProgram(a); }catch(e){ has=false; }
+  if(!has) return null;
+  const l=((a&&a.sessions_config)||[]).filter(_modPleine);
+  let bloc=null; try{ bloc=programmeDe(a); }catch(e){ bloc=null; }
+  const sem=bloc?Math.floor((Date.now()-bloc.debut)/(7*864e5))+1:0;
+  return {nom:String((a&&a.assignedProgramName)||'').trim(),seances:l.length,
+    exercices:l.reduce((n,s)=>n+s.exercises.filter(e=>e&&e.name).length,0),
+    pdf:!!(a&&(a.programPdfStorageUrl||a.programPdfLink||a.programPdf)),
+    bloc:(bloc&&sem>=1&&sem<=bloc.semaines)?{semaine:sem,semaines:bloc.semaines}:null};
+}
+/**
+ * PURE. Le récapitulatif : une ligne par athlète visé.
+ *   cibles : [{a, genre}] ; opts.morpho(a, seances) → lignes de revueMorpho ;
+ *   opts.brouillon(a) → vrai si le coach a un brouillon de ses séances.
+ */
+function assignationRecap(cibles,prog,opts){
+  const o=opts||{};
+  return (cibles||[]).filter(x=>x&&x.a).map(({a,genre})=>{
+    const g=progGenreServi(prog,genre||'H');
+    const seances=((g==='F'?prog.sessions_F:prog.sessions_H)||[]);
+    const rempl=programmeRemplace(a);
+    let morpho=[]; try{ morpho=typeof o.morpho==='function'?(o.morpho(a,seances)||[]):[]; }catch(e){ morpho=[]; }
+    let bro=false; try{ bro=typeof o.brouillon==='function'&&!!o.brouillon(a); }catch(e){ bro=false; }
+    return {a,id:a.id,nom:((a.fname||'')+' '+(a.lname||'')).trim()||a.email||'Athlète',genre:g,
+      recoit:{seances:seances.filter(_modPleine).length,exercices:seances.filter(_modPleine).reduce((n,s)=>n+s.exercises.filter(e=>e&&e.name).length,0)},
+      remplace:rempl,brouillon:bro,morpho,coche:true};
+  });
+}
+function _c4Prenom(a){ return String((a&&a.fname)||'').trim()||'Cet athlète'; }
+// Les lignes morpho, avec le programme du MODÈLE au lieu du sien.
+function _c4Morpho(a,seances){
+  try{
+    const e=_etatRevueMorpho(a,_morphoCalCache(),_morphoAthletesDuCoach(),seances);
+    return _revueGrouper(e.lignes||[]).slice(0,REVUE_MORPHO_MAX);
+  }catch(e){ return []; }
+}
+function _htmlRecapLigne(r,i){
+  const E=escapeHtml;
+  let h='<label class="c4-l'+(r.remplace?' c4-l-rempl':'')+'"><input type="checkbox" data-c4="'+i+'"'+(r.coche?' checked':'')+'>'
+    +'<div class="c4-l-c"><div class="c4-l-n">'+E(r.nom)+' <span>version '+r.genre+'</span></div>'
+    +'<div class="c4-l-r">Reçoit '+r.recoit.seances+' séance'+(r.recoit.seances>1?'s':'')+', '+r.recoit.exercices+' exercice'+(r.recoit.exercices>1?'s':'')+'.</div>';
+  if(r.remplace){
+    const x=r.remplace;
+    h+='<div class="c4-perdu"><b>Remplace son programme'+(x.nom?' « '+E(x.nom)+' »':'')+'</b> : '
+      +(x.seances?x.seances+' séance'+(x.seances>1?'s':'')+' et '+x.exercices+' exercice'+(x.exercices>1?'s':'')+' prescrits':'un programme en PDF')
+      +(x.bloc?', en semaine '+x.bloc.semaine+' sur '+x.bloc.semaines+' de son bloc':'')
+      +'. Les réglages que tu lui avais faits exercice par exercice partent avec. Son historique, ses charges et ses records restent, et l’ancien programme reste récupérable dans l’historique.</div>';
+  }
+  if(r.brouillon) h+='<div class="c4-perdu">Tu as un brouillon de ses séances : il ne sera pas appliqué.</div>';
+  for(const m of (r.morpho||[]))
+    h+='<div class="c4-morpho">'+E(_c4Prenom(r.a))+' : '+E((m.source&&m.source.lib)||'profil morpho')+'. Ce modèle contient '
+      +E(m.exercices.join(', '))+'. À envisager : '+E(m.quoi)+', '+E(m.reglage)+'</div>';
+  return h+'</div></label>';
+}
+let _c4Recap=null;
+function ouvrirRecapAssignation(recap,prog){
+  _c4Recap={recap,prog};
+  const n=recap.length, morpho=recap.filter(r=>r.morpho&&r.morpho.length).length;
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:520px;max-height:88vh;overflow-y:auto">
+    <h2 style="margin-bottom:4px">Avant d’assigner</h2>
+    <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:12px">« ${escapeHtml(prog.name||'Ce programme')} » à ${n} athlète${n>1?'s':''}. Rien n’est écrit tant que tu n’as pas confirmé.${morpho?' La revue morpho signale des réglages chez '+morpho+' d’entre eux : aucun exercice n’est retiré, tu ajustes si tu veux.':''}</p>
+    <div id="c4-recap">${recap.map(_htmlRecapLigne).join('')}</div>
+    <button class="btn btn-red" style="margin-top:14px;width:100%" onclick="assignerDepuisRecap()">Assigner</button>
+    <button class="btn btn-outline" style="margin-top:8px;width:100%" onclick="closeModal()">Annuler</button>
+  </div></div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+async function assignerDepuisRecap(){
+  const x=_c4Recap; if(!x) return false;
+  const coches=[...document.querySelectorAll('#c4-recap input[data-c4]')].filter(cb=>cb.checked).map(cb=>x.recap[Number(cb.dataset.c4)]).filter(Boolean);
+  if(!coches.length){ toast('Aucun athlète coché.','var(--orange)'); return false; }
+  const users=DB.get('users')||{};
+  const pushes=[];
+  for(const r of coches){
+    const k=Object.keys(users).find(kk=>users[kk]&&users[kk].id===r.id);
+    if(!k) continue;
+    _assignerModele(users[k],x.prog,r.genre);
+    pushes.push(CLOUD.pushOne(k,users[k]));
+  }
+  const ok=DB.set('users',users);
+  closeModal();
+  _c4Recap=null;
+  go('s-coach-programs'); loadCoachProgramsList();
+  toastSync(ok,Promise.all(pushes),' Programme assigné à '+pushes.length+' athlète'+(pushes.length>1?'s':'')+' !','le programme est');
+  return true;
+}
+
+// ── LA PROPAGATION ────────────────────────────────────────────────────────
+let _c4Avant=null;   // les séances du modèle à l'ouverture de l'éditeur
+function _c4Snapshot(p){ return p?{id:p.id,H:modSlim(p.sessions_H),F:modSlim(p.sessions_F)}:null; }
+// Appelé à l'enregistrement : si le contenu a changé, la version d'avant est
+// gardée et le modèle date sa nouvelle version.
+function modeleVersionner(p,avant,t){
+  if(!p||!avant||avant.id!==p.id) return false;
+  const now=_c4Snapshot(p);
+  if(JSON.stringify([now.H,now.F])===JSON.stringify([avant.H,avant.F])) return false;
+  const at=Number(p.majAt)||Number(p.createdAt)||0;
+  const v=(Array.isArray(p.versions)?p.versions:[]).filter(z=>z&&Number(z.at)!==at);
+  v.unshift({at,H:avant.H,F:avant.F});
+  p.versions=v.slice(0,MOD_VERSIONS_MAX);
+  p.majAt=Number(t)||Date.now();
+  return true;
+}
+function _c4Athletes(){
+  const users=DB.get('users')||{};
+  return Object.values(users).filter(u=>{ try{ return _estMonAthlete(u,currentUser); }catch(e){ return false; } });
+}
+function renderPropagationEntree(){
+  const z=document.getElementById('cpt-propag');
+  if(!z) return false;
+  const p=((currentUser&&currentUser.coachPrograms)||[])[_editProgTemplateIdx];
+  if(!p){ z.innerHTML=''; return false; }
+  const us=utilisateursModele(_c4Athletes(),p);
+  if(!us.length){ z.innerHTML='<div class="c4-entree sub">Personne n’utilise ce modèle pour l’instant.</div>'; return true; }
+  const aReporter=us.filter(x=>{ const o=opsPourAthlete(p,x.a); return !o.aJour&&o.ops.length; }).length;
+  z.innerHTML='<div class="c4-entree"><span>'+us.length+' athlète'+(us.length>1?'s':'')+' l’utilise'+(us.length>1?'nt':'')
+    +(aReporter?', '+aReporter+' n’'+(aReporter>1?'ont':'a')+' pas la dernière version':', tous à jour')+'.</span>'
+    +(aReporter?'<button type="button" class="btn btn-outline btn-sm" onclick="ouvrirPropagation()">Reporter chez les athlètes qui l’utilisent</button>':'')+'</div>';
+  return true;
+}
+function _c4LibOp(op){
+  const E=escapeHtml;
+  if(op.type==='seance_ajout') return 'Nouvelle séance « '+E(op.seance||'')+' »';
+  if(op.type==='seance_retrait') return 'Séance « '+E(op.seance||'')+' » retirée';
+  if(op.type==='seance_nom') return 'Séance renommée « '+E(op.a)+' »';
+  if(op.type==='ex_ajout') return E(op.nom)+' ajouté';
+  if(op.type==='ex_retrait') return E(op.nom)+' retiré';
+  return E(op.nom)+' : '+op.champs.map(c=>c.champ==='consigne'?'consigne modifiée':E(MOD_LIB_CHAMP[c.champ]||c.champ)+' '+E(_modVal(c.de)||'vide')+' → '+E(_modVal(c.a)||'vide')).join(', ');
+}
+let _c4Prop=null;
+function ouvrirPropagation(){
+  const p=((currentUser&&currentUser.coachPrograms)||[])[_editProgTemplateIdx];
+  if(!p) return false;
+  const lignes=utilisateursModele(_c4Athletes(),p).map(x=>{
+    const o=opsPourAthlete(p,x.a);
+    let bro=false; try{ bro=!!_brouillonSessionsDe(x.a); }catch(e){ bro=false; }
+    return {a:x.a,lien:x.lien,o,res:propagationAthlete(x.a.sessions_config,o.ops,o.direct),brouillon:bro};
+  }).filter(l=>!l.o.aJour&&l.o.ops.length);
+  if(!lignes.length){ toast('Tous tes athlètes ont déjà la dernière version.','var(--sub)'); return false; }
+  _c4Prop={p,lignes};
+  const E=escapeHtml;
+  const corps=lignes.map((l,i)=>{
+    const vis=l.res.filter(r=>r.etat!=='deja');
+    return '<div class="c4-ath"><div class="c4-l-n">'+E(((l.a.fname||'')+' '+(l.a.lname||'')).trim()||l.a.email)+' <span>version '+E(l.o.genre)+'</span></div>'
+      +(l.o.direct?'<div class="c4-perdu">'+(l.lien==='nom'?'Assigné avant le suivi des versions':'Sa version n’est plus gardée')+' : comparé à son programme tel qu’il est. Tout est décoché, coche ce qui manque vraiment.</div>':'')
+      +(l.brouillon?'<div class="c4-perdu">Tu as un brouillon de ses séances : la correction va dans son programme publié, pas dans le brouillon.</div>':'')
+      +(vis.length?vis.map(r=>{
+        const k=l.res.indexOf(r);
+        const off=r.etat==='impossible';
+        return '<label class="c4-op'+(off?' c4-op-off':'')+'"><input type="checkbox" data-a="'+i+'" data-o="'+k+'"'+(r.coche?' checked':'')+(off?' disabled':'')+'>'
+          +'<span><span class="c4-op-s">'+E(r.op.seance||DAYS[r.op.jour]||'')+'</span> '+_c4LibOp(r.op)
+          +(r.detail?'<em>'+E(r.detail)+'</em>':'')+'</span></label>';
+      }).join(''):'<div class="sub c4-vide">Déjà comme le modèle.</div>')+'</div>';
+  }).join('');
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:520px;max-height:88vh;overflow-y:auto">
+    <h2 style="margin-bottom:4px">Reporter la correction</h2>
+    <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:12px">Seul le prescrit à venir change. Les séances faites, les charges saisies et ses réglages personnels ne bougent pas. Ce qui a été ajusté chez lui arrive décoché.</p>
+    <div id="c4-prop">${corps}</div>
+    <button class="btn btn-red" style="margin-top:14px;width:100%" onclick="reporterPropagation()">Reporter</button>
+    <button class="btn btn-outline" style="margin-top:8px;width:100%" onclick="closeModal()">Annuler</button>
+  </div></div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+  return true;
+}
+function reporterPropagation(){
+  const x=_c4Prop; if(!x) return false;
+  const choix={};
+  document.querySelectorAll('#c4-prop input[data-a]').forEach(cb=>{ if(cb.checked&&!cb.disabled) (choix[cb.dataset.a]=choix[cb.dataset.a]||[]).push(Number(cb.dataset.o)); });
+  const users=DB.get('users')||{};
+  const pushes=[];
+  x.lignes.forEach((l,i)=>{
+    const k=Object.keys(users).find(kk=>users[kk]&&users[kk].id===l.a.id);
+    if(!k) return;
+    const a=users[k];
+    const ids=(choix[i]||[]).map(n=>l.res[n]&&l.res[n].op.id).filter(Boolean);
+    if(ids.length){
+      _pushSessionsHistory(a);
+      a.sessions_config=appliquerPropagation(a.sessions_config,l.o.ops,ids,l.o.apres);
+    }
+    // Le lien est posé, même sans rien cocher : le coach a vu cette version.
+    a.assignedProgramId=x.p.id;
+    a.assignedProgramGenre=l.o.genre;
+    a.assignedProgramVersion=Number(x.p.majAt)||Number(x.p.createdAt)||0;
+    a.updatedAt=Date.now();
+    pushes.push(CLOUD.pushOne(k,a));
+  });
+  const ok=DB.set('users',users);
+  closeModal();
+  _c4Prop=null;
+  try{ renderPropagationEntree(); }catch(e){}
+  toastSync(ok,Promise.all(pushes),' Correction reportée chez '+pushes.length+' athlète'+(pushes.length>1?'s':''),'la correction est');
+  return true;
 }
 
 // ── Appliquer un modèle depuis la fiche de l'athlète ────────────────────────
@@ -35061,7 +35458,7 @@ async function saveCoachSessionsAsTemplate(){
 // On ne remplace plus l’objet : on relit le dossier stocké et on y REPORTE
 // ces champs-là. Tout le reste appartient à l’athlète.
 const COACH_CHAMPS_SEANCES=['sessions_config','sessions_config_history',
-  'assignedProgramName','assignedProgramAt'];
+  'assignedProgramName','assignedProgramAt','assignedProgramId','assignedProgramGenre','assignedProgramVersion'];
 // `in` et non un test de vérité : assignedProgramAt peut valoir 0 ou null,
 // et un `if(edite[champ])` laisserait ces valeurs-là derrière lui.
 function _reporterSeances(stocke,edite){
@@ -39402,6 +39799,7 @@ function _saveProgramInterne(){
       s.warmup=_f('prog-warmup');s.cooldown=_f('prog-cooldown');
       _progEditorCtx={mode:'clientProgram'};
       _majCtxEditeur();
+      try{ if(modeleVersionner(p,_c4Avant)) _c4Avant=_c4Snapshot(p); }catch(e){}
       toastEcriture(saveUser(),' Séance sauvegardée !','la séance est');
       go('s-coach-prog-template');loadProgTemplateSlots(_ctx.gender);return;
     }

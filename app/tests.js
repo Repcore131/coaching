@@ -49990,6 +49990,117 @@ async function testExercices(){
         return relanceAMontrer({},0,t)===null?true:_echec('vide');
       } finally { currentUser=svU; }})());
 
+    // ══ LOT C4 — LE MODÈLE POSÉ SUR PLUSIEURS, ET LA PROPAGATION (29/09/2026) ═
+    const _C4EX=(name,o)=>Object.assign({name,series:4,reps:'8-10',repos:'2 min',description:'Consigne de '+name},o||{});
+    const _C4P=()=>({id:'m-c4',name:'Force C4',createdAt:1000,
+      sessions_H:DAYS.map((day,i)=>i===0?{day,name:'BAS',active:true,exercises:[_C4EX('SQUAT'),_C4EX('LEG CURL'),_C4EX('MOLLETS DEBOUT')]}
+        :i===2?{day,name:'HAUT',active:true,exercises:[_C4EX('DÉVELOPPÉ COUCHÉ'),_C4EX('TIRAGE HORIZONTAL')]}:{day,name:'',active:false,exercises:[]}),
+      sessions_F:DAYS.map(day=>({day,name:'',active:false,exercises:[]}))});
+    let _c4n=0;
+    const _C4A=o=>Object.assign({id:'c4a'+(++_c4n),email:'c4-'+_c4n+'@t.fr',fname:'A'+_c4n,role:'athlete',sessions:[]},o||{});
+    ok('C4 — l’assignation à trois athlètes : celui qui a un programme en cours est décoché, et le récapitulatif dit ce qu’il perd',(()=>{
+      const P=_C4P();
+      const A=_C4A(), C=_C4A();
+      const B=_C4A({fname:'Léa',assignedProgramName:'Ancien',sessions_config:[{day:'Lundi',name:'X',active:true,exercises:[{name:'PRESSE'},{name:'FENTES'}]}]});
+      if(!cpaCocheDefaut(A)||cpaCocheDefaut(B)||!cpaCocheDefaut(C)) return _echec('coché par défaut');
+      const r=assignationRecap([{a:A,genre:'H'},{a:B,genre:'H'},{a:C,genre:'H'}],P,{morpho:()=>[]});
+      if(r.length!==3||r.some(x=>x.recoit.seances!==2||x.recoit.exercices!==5)) return _echec('reçoit : '+JSON.stringify(r.map(x=>x.recoit)));
+      if(r[0].remplace||r[2].remplace) return _echec('un remplacement inventé');
+      if(!r[1].remplace||r[1].remplace.seances!==1||r[1].remplace.exercices!==2||r[1].remplace.nom!=='Ancien') return _echec('remplacé : '+JSON.stringify(r[1].remplace));
+      const h=_htmlRecapLigne(r[1],1).replace(/<[^>]+>/g,' ');
+      if(!/Remplace son programme « Ancien »/.test(h)||!/1 séance et 2 exercices/.test(h)||!/historique, ses charges et ses records restent/.test(h)) return _echec(h);
+      // Rien n'est écrit par le récapitulatif lui-même.
+      if(B.sessions_config[0].name!=='X'||A.sessions_config) return _echec('le récapitulatif a écrit');
+      // L'assignation pose le lien sûr et ne retire rien.
+      _assignerModele(A,P,'H');
+      if(A.assignedProgramId!=='m-c4'||A.assignedProgramGenre!=='H'||A.assignedProgramVersion!==1000) return _echec('lien : '+[A.assignedProgramId,A.assignedProgramGenre,A.assignedProgramVersion]);
+      const n=A.sessions_config.reduce((k,s)=>k+(s.exercises||[]).length,0);
+      return n===5?true:_echec(n+' exercices assignés');})());
+    ok('C4 — la revue morpho signale à l’assignation, et aucun exercice n’est retiré',(()=>{
+      const P=_C4P();
+      const prof=[{cle:'femur_long',lib:'Fémurs longs',nature:'osseux',amenager:[{schema:'squat',quoi:'Squat pieds serrés profond',reglage:'écarter les pieds et surélever les talons'}]}];
+      const lignes=_revueGrouper(revueMorpho(P.sessions_H,prof,[],{schemaDe:ex=>/SQUAT/.test(ex.name)?'squat':null}));
+      if(lignes.length!==1) return _echec(lignes.length+' lignes');
+      const r=assignationRecap([{a:_C4A({fname:'Léa'}),genre:'H'}],P,{morpho:()=>lignes});
+      const h=_htmlRecapLigne(r[0],0).replace(/<[^>]+>/g,' ');
+      if(!/Léa : Fémurs longs\. Ce modèle contient SQUAT\. À envisager : Squat pieds serrés profond/.test(h)) return _echec(h);
+      if(r[0].recoit.exercices!==5) return _echec('un exercice retiré');
+      // L'état de la revue lit le programme passé, pas le sien.
+      return /Array\.isArray\(programme\)/.test(String(_etatRevueMorpho))?true:_echec('_etatRevueMorpho ignore le programme du modèle');})());
+    ok('C4 — le diff d’une correction : série modifiée, exercice ajouté, exercice retiré, séance renommée',(()=>{
+      const P=_C4P(), avant=JSON.parse(JSON.stringify(P.sessions_H));
+      P.sessions_H[0].exercises[0].series=5;
+      P.sessions_H[0].exercises.splice(1,1);                       // LEG CURL retiré
+      P.sessions_H[2].exercises.push(_C4EX('FACE PULL',{series:3}));
+      P.sessions_H[2].name='HAUT DU CORPS';
+      P.sessions_H[0].exercises[1].description='Nouvelle consigne';  // MOLLETS
+      const ops=diffModele(avant,P.sessions_H);
+      const t=ops.map(o=>o.type+':'+(o.nom||o.a||'')).sort().join(' | ');
+      const attendu=['ex_ajout:FACE PULL','ex_modif:MOLLETS DEBOUT','ex_modif:SQUAT','ex_retrait:LEG CURL','seance_nom:HAUT DU CORPS'].join(' | ');
+      if(t!==attendu) return _echec(t);
+      const sq=ops.find(o=>o.nom==='SQUAT');
+      if(sq.champs.length!==1||sq.champs[0].champ!=='series'||sq.champs[0].de!==4||sq.champs[0].a!==5) return _echec(JSON.stringify(sq.champs));
+      if(ops.find(o=>o.nom==='MOLLETS DEBOUT').champs[0].champ!=='consigne') return _echec('consigne');
+      if(diffModele(avant,avant).length) return _echec('un diff sans changement');
+      // La version d'avant est gardée, allégée ; le modèle date la nouvelle.
+      const Q=_C4P(), snap=_c4Snapshot(Q);
+      if(modeleVersionner(Q,snap,5000)) return _echec('versionné sans changement');
+      Q.sessions_H[0].exercises[0].series=6;
+      if(!modeleVersionner(Q,snap,5000)||Q.majAt!==5000||Q.versions.length!==1||Q.versions[0].at!==1000) return _echec('version : '+JSON.stringify({majAt:Q.majAt,v:(Q.versions||[]).map(v=>v.at)}));
+      return JSON.stringify(Q.versions[0]).indexOf('Consigne de')<0?true:_echec('la version garde les consignes en entier');})());
+    ok('C4 — chez chaque athlète : ce qui a été ajusté chez lui arrive décoché, et un modèle utilisé par personne ne propose rien',(()=>{
+      const P=_C4P();
+      const A=_C4A(); _assignerModele(A,P,'H');
+      A.sessions_config[0].exercises[0].series=6;                  // ajusté chez lui
+      const snap=_c4Snapshot(P);
+      P.sessions_H[0].exercises[0].series=5;
+      P.sessions_H[0].exercises[1].reps='12';
+      P.sessions_H[2].exercises.push(_C4EX('FACE PULL'));
+      modeleVersionner(P,snap,9000);
+      const o=opsPourAthlete(P,A);
+      if(o.direct||o.aJour||o.ops.length!==3) return _echec('ops : '+JSON.stringify(o.ops.map(x=>x.id)));
+      const res=propagationAthlete(A.sessions_config,o.ops,o.direct);
+      const sq=res.find(r=>r.op.nom==='SQUAT'), lc=res.find(r=>r.op.nom==='LEG CURL'), fp=res.find(r=>r.op.nom==='FACE PULL');
+      if(sq.etat!=='ajuste'||sq.coche||!/séries 6/.test(sq.detail)) return _echec('ajusté : '+JSON.stringify(sq));
+      if(lc.etat!=='applicable'||!lc.coche||fp.etat!=='applicable'||!fp.coche) return _echec('applicables');
+      // Personne, ou un autre modèle : rien.
+      if(utilisateursModele([],P).length) return _echec('vide');
+      const B=_C4A(); _assignerModele(B,Object.assign(_C4P(),{id:'autre',name:'Autre'}),'H');
+      if(utilisateursModele([B],P).length) return _echec('un autre modèle compté');
+      // Assigné avant le lot : reconnu par le nom, comparé directement, tout décoché.
+      const L=_C4A({assignedProgramName:'Force C4',sessions_config:JSON.parse(JSON.stringify(_C4P().sessions_H))});
+      const u=utilisateursModele([A,B,L],P);
+      if(u.length!==2||u.find(x=>x.a===L).lien!=='nom') return _echec('utilisateurs : '+u.map(x=>x.lien));
+      const oL=opsPourAthlete(P,L,'H');
+      if(!oL.direct||propagationAthlete(L.sessions_config,oL.ops,true).some(r=>r.coche)) return _echec('comparaison directe cochée');
+      return opsPourAthlete(P,Object.assign({},A,{assignedProgramVersion:9000})).aJour?true:_echec('à jour');})());
+    ok('C4 — une propagation ne touche à aucune séance passée, ni aux charges, ni à son réglage',(()=>{
+      const P=_C4P();
+      const A=_C4A({sessions:[{id:'s1',date:Date.now()-5*864e5,data:{'SQUAT':{sets:[{weight:'100',reps:'8',done:true}]}}},
+        {id:'s2',date:Date.now()-2*864e5,data:{'LEG CURL':{sets:[{weight:'40',reps:'12',done:true}]}}}]});
+      _assignerModele(A,P,'H');
+      A.sessions_config[0].exercises[0].charge='102,5';
+      A.sessions_config[0].exercises[0].reglageCoach='Cale sous les talons';
+      const histo=JSON.stringify(A.sessions), cfg=JSON.stringify(A.sessions_config);
+      const snap=_c4Snapshot(P);
+      P.sessions_H[0].exercises[0].series=5;
+      P.sessions_H[0].exercises[0].description='Autre consigne';
+      P.sessions_H[0].exercises.splice(1,1);
+      modeleVersionner(P,snap,9000);
+      const o=opsPourAthlete(P,A);
+      const nv=appliquerPropagation(A.sessions_config,o.ops,o.ops.map(x=>x.id),o.apres);
+      if(JSON.stringify(A.sessions)!==histo) return _echec('historique modifié');
+      if(JSON.stringify(A.sessions_config)!==cfg) return _echec('le prescrit d’origine modifié (la fonction doit rendre une copie)');
+      const sq=nv[0].exercises.find(e=>e.name==='SQUAT');
+      if(sq.series!==5||sq.description!=='Autre consigne') return _echec('correction non reportée');
+      if(sq.charge!=='102,5'||sq.reglageCoach!=='Cale sous les talons') return _echec('sa charge ou son réglage écrasés');
+      if(nv[0].exercises.some(e=>e.name==='LEG CURL')) return _echec('retrait coché non appliqué');
+      // Rien ne s'applique sans être coché.
+      if(JSON.stringify(appliquerPropagation(A.sessions_config,o.ops,[],o.apres))!==cfg) return _echec('appliqué sans être coché');
+      // Et l'écriture n'assigne que sessions_config.
+      const src=String(reporterPropagation)+String(appliquerPropagation);
+      return /\.sessions\s*=|\.sessions\.(splice|push|pop|length\s*=)/.test(src)?_echec('le report écrit dans l’historique'):true;})());
+
     ok('Volts : dix rangs, dans l’ordre, seuils croissants à partir de 0',(()=>{
       const n=RANGS.map(r=>r.nom).join();
       if(n!=='ÉTINCELLE,IMPULSION,VOLTAGE,MACHINE,ÉLITE,SURTENSION,MONSTRE,FOUDRE,TITAN,LÉGENDE') return _echec(n);
