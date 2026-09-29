@@ -19,7 +19,6 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 W, H, FPS = 1080, 1920, 30
-DUREE = 19.0
 
 # Zone sûre TikTok : rien dans les 150 px du haut, les 250 du bas, les 120 de droite.
 SUR_HAUT, SUR_BAS, SUR_DROITE = 150, 250, 120
@@ -33,26 +32,22 @@ EMOJI = os.path.join(ICI, "assets", "emoji_rire.png")
 
 NBSP = " "
 # Cinq photos : 03_fastfood, 05_epaules, 06_banc et 07_hipthrust manquent. Le flash reste
-# à 7,0 s (le drop du son) et les trois coupes rythmées sont trois cadrages de la même photo.
-# cadre = (centre x, centre y en fraction de la photo, zoom de départ)
+# à 7,0 s (le drop du son). cadre = (centre x, centre y en fraction de la photo, zoom de départ)
 SCENES = [
     dict(nom="01_bar", debut=0.0, fin=3.5, src="01_bar.jpg", look="avant",
          texte=f"Ils m'appelaient «{NBSP}la{NBSP}grosse{NBSP}»", texte_y=1480),
     dict(nom="02_resto", debut=3.5, fin=7.0, src="02_resto.jpg", look="avant", perso=True),
     dict(nom="flash", debut=7.0, fin=7.4),
-    dict(nom="04_piscine", debut=7.4, fin=9.9, src="04_piscine.jpg", look="apres",
+    dict(nom="04_piscine", debut=7.4, fin=9.4, src="04_piscine.jpg", look="apres",
          texte="2 ans plus tard.", texte_y=1520),
-    dict(nom="05_salle_large", debut=9.9, fin=11.25, src="05_souleve_de_terre.jpg", look="apres",
-         cadre=(0.50, 0.50, 1.0)),
-    dict(nom="06_salle_buste", debut=11.25, fin=12.6, src="05_souleve_de_terre.jpg", look="apres",
-         cadre=(0.45, 0.36, 1.45)),
-    dict(nom="07_salle_visage", debut=12.6, fin=13.9, src="05_souleve_de_terre.jpg", look="apres",
-         cadre=(0.33, 0.24, 1.8)),
-    dict(nom="09_final", debut=13.9, fin=19.0, src="08_miroir_abdos.jpg", video="09_final.mp4",
-         look="apres", texte="Qui rigole maintenant ?", texte_debut=15.0, texte_y=340),
+    dict(nom="05_salle", debut=9.4, fin=10.9, src="05_souleve_de_terre.jpg", look="apres"),
+    dict(nom="09_final", debut=10.9, fin=14.4, src="08_miroir_abdos.jpg", video="09_final.mp4",
+         look="apres", texte="Qui rigole maintenant ?", texte_debut=11.5, texte_y=340),
 ]
+DUREE = SCENES[-1]["fin"]
+
 # Instant de la capture d'aperçu, quand il ne tombe pas au milieu de la scène.
-APERCU_T = {"02_resto": 6.0, "flash": 7.2, "09_final": 16.5}
+APERCU_T = {"02_resto": 6.0, "flash": 7.2, "09_final": 13.0}
 
 
 # ---------- Étalonnage ----------
@@ -98,7 +93,7 @@ class PlanPhoto:
     """Photo recadrée pour remplir le 9:16, avec un léger dézoom centré au début du plan."""
     MARGE = 1.14
     DEZOOM = 0.06          # part de 6 % plus serré…
-    DEZOOM_DUREE = 0.7     # …et revient au cadre en 0,7 s, puis l'image reste fixe
+    DEZOOM_DUREE = 0.45    # …et revient au cadre en 0,45 s, puis l'image reste fixe
 
     def __init__(self, chemin, look, duree, cadre=(0.5, 0.5, 1.0)):
         src = Image.open(chemin).convert("RGB")
@@ -352,7 +347,8 @@ def apercus(m, sortie):
         ImageDraw.Draw(v).text((10, 604), f"{sc['nom']}  {t:.1f} s", font=police(22), fill="yellow",
                                stroke_width=2, stroke_fill="black")
         vignettes.append(v)
-    planche = Image.new("RGB", (3 * 360 + 40, 3 * 640 + 40), (30, 30, 30))
+    lignes = (len(vignettes) + 2) // 3
+    planche = Image.new("RGB", (3 * 360 + 40, lignes * 650 + 10), (30, 30, 30))
     for k, v in enumerate(vignettes):
         planche.paste(v, (10 + (k % 3) * 370, 10 + (k // 3) * 650))
     planche.save(os.path.join(dos, "planche.jpg"), quality=88)
