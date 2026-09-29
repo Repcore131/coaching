@@ -45122,7 +45122,7 @@ function voirLegende(type){
     +'<div class="sub" id="legende-compte" style="font-size:var(--fs-2xs);text-align:right;margin:4px 0 10px">'+texte.length+' / '+LEGENDE_MAX+'</div>'
     +'<div style="display:flex;gap:8px">'
     +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="copierLegende(\''+t+'\')">Copier</button>'
-    +'<button type="button" class="btn btn-outline btn-sm" style="flex:0 0 auto;width:auto;padding:0 16px;margin:0;min-height:44px" onclick="fermerLegende()">OK</button>'
+    +'<button type="button" class="btn btn-outline btn-sm" style="flex:0 0 auto;width:auto;padding:0 16px;margin:0;min-height:44px" onclick="fermerLegende()">Fermer</button>'
     +'</div></div>';
   d.addEventListener('click',e=>{ if(e.target===d) fermerLegende(); });
   document.body.appendChild(d);
@@ -45496,6 +45496,10 @@ function exporterVideoVisuel(scene,dureeMs,o){
         liberer();
         if(annule){ rej(new Error('annulé')); return; }
         const blob=new Blob(morceaux,{type:ty.type});
+        // UN FICHIER VIDE N'EST PAS UNE VIDEO (29/09/2026). Sur une machine
+        // saturee, l'encodeur peut s'arreter sans avoir rendu un seul octet :
+        // on proposait alors de partager « 0 Mo ». C'est un echec, et il se dit.
+        if(!blob.size){ rej(new Error('rien n’a pu être enregistré, réessaie')); return; }
         res({blob,type:ty.type,ext:ty.ext,nom:sc.nom+'.'+ty.ext,taille:blob.size,duree:total});
       };
       rec.start(250);
@@ -55480,7 +55484,7 @@ async function anatSuivrePosture(email){
   d.morphoAnat.suivi=(Array.isArray(d.morphoAnat.suivi)?d.morphoAnat.suivi:[]).filter(x=>!deja.has(Number(x.bilan))).concat(lus);
   d.updatedAt=Date.now(); users[email]=d;
   DB.set('users',users);
-  try{ CLOUD.pushOne(email,d); }catch(e){}
+  CLOUD.pushOne(email,d);
   try{ const cc=getOwnedClient(currentClientId); if(cc&&cc.email===email) renderAnatCoach(cc); }catch(e){}
   return true;
 }
@@ -55528,7 +55532,7 @@ async function anatSuivreSilhouettes(email){
   d.updatedAt=Date.now();
   users[email]=d;
   DB.set('users',users);
-  try{ CLOUD.pushOne(email,d); }catch(e){}
+  CLOUD.pushOne(email,d);
   try{ const cc=getOwnedClient(currentClientId); if(cc&&cc.email===email) renderAnatCoach(cc); }catch(e){}
   return true;
 }
@@ -55669,7 +55673,7 @@ function anatReglerPhoto(vue,patch,rendre){
   users[c.email]=d;
   DB.set('users',users);
   clearTimeout(_anatSauveMinuteur);
-  _anatSauveMinuteur=setTimeout(()=>{ try{ CLOUD.pushOne(c.email,d); }catch(e){} },800);
+  _anatSauveMinuteur=setTimeout(()=>{ CLOUD.pushOne(c.email,d); },800);
   if(rendre){ const cc=getOwnedClient(currentClientId); if(cc) renderAnatCoach(cc); }
 }
 /** Le curseur bouge : on applique tout de suite, on écrit au relâché. */
@@ -56313,7 +56317,7 @@ function anatSupprimerSauvegarde(id){
   d.updatedAt=Date.now();
   users[c.email]=d;
   DB.set('users',users);
-  try{ CLOUD.pushOne(c.email,d); }catch(e){}
+  CLOUD.pushOne(c.email,d);
   renderAnatCoach(getOwnedClient(currentClientId)||c);
 }
 
@@ -56665,7 +56669,7 @@ async function anatAnalyser(email,force){
     d.updatedAt=Date.now();
     frais[email]=d;
     DB.set('users',frais);
-    try{ CLOUD.pushOne(email,d); }catch(e){}
+    CLOUD.pushOne(email,d);
   }
   try{ const cc=getOwnedClient(currentClientId); if(cc&&cc.email===email) renderAnatCoach(cc); }catch(e){}
   return !!res;
@@ -56858,7 +56862,7 @@ function anatEnregistrerPoints(silencieux){
   const ok=DB.set('users',users);
   _anatEdit=null;
   try{ const cc=getOwnedClient(currentClientId); if(cc) renderAnatCoach(cc); }catch(x){}
-  if(silencieux){ try{ CLOUD.pushOne(e.email,c); }catch(x){} return; }
+  if(silencieux){ CLOUD.pushOne(e.email,c); return; }
   toastSync(ok,CLOUD.pushOne(e.email,c),'Analyse refaite avec tes points ✓','l’analyse est');
 }
 function _anatBouge(a,b){
@@ -83936,7 +83940,7 @@ function _athEcrireCibles(){
   currentUser.nutrition.macros=Object.assign({},m,{on:Object.assign({},m.on,bloc),
     off:Object.assign({},m.off,bloc),origine:'athlete'});
   saveUser();
-  try{ CLOUD.pushOne(currentUser.email,currentUser); }catch(e){}
+  CLOUD.pushOne(currentUser.email,currentUser);
   return true;
 }
 // LE GARDE DES TROIS BOUTONS, EN TETE ET NON AU MOMENT D'ECRIRE LES CIBLES.
@@ -83995,7 +83999,7 @@ function athDelta(sens){
     return;
   }
   saveUser();
-  try{ CLOUD.pushOne(currentUser.email,currentUser); }catch(e){}
+  CLOUD.pushOne(currentUser.email,currentUser);
   loadNutrition();
 }
 /**
@@ -84076,7 +84080,7 @@ function _athEcrireGrille(){
     //   touche — depuis le 20/09/2026 au soir, cette origine ferme la carte.
     nut.macros={on:j.on,off:cyc?j.off:j.on,origine:'athlete',origineDate:Date.now()};
     saveUser();
-    try{ CLOUD.pushOne(currentUser.email,currentUser); }catch(e){}
+    CLOUD.pushOne(currentUser.email,currentUser);
     return true;
   }
   // LE CAS ORDINAIRE : on garde le kcal de chaque journee et on redistribue.
@@ -84094,7 +84098,7 @@ function _athEcrireGrille(){
   currentUser.nutrition=nut;
   nut.macros=Object.assign({},m,{on:refaire(m.on),off:refaire(m.off||m.on)});
   saveUser();
-  try{ CLOUD.pushOne(currentUser.email,currentUser); }catch(e){}
+  CLOUD.pushOne(currentUser.email,currentUser);
   return true;
 }
 function _htmlCiblesAthlete(u){
@@ -110566,7 +110570,7 @@ function _trkEnvoyerSignal(){
   u.santeSignal.push({marque:m,modele:mo,app:ap,at:Date.now()});
   u.santeSignal=u.santeSignal.slice(-10);
   saveUser();
-  try{ CLOUD.pushOne(u.email,u); }catch(e){}
+  CLOUD.pushOne(u.email,u);
   try{ rcm('tracker_feedback_submitted'); }catch(e){}
   sanFermer();
   toast('Merci. Nous pourrons ajouter cette montre à RepCore.','var(--green)');
@@ -111335,7 +111339,7 @@ function sanEnregistrer(quoi){
     try{ rcm('manual_steps_added'); }catch(e){}
   }
   saveUser();
-  try{ CLOUD.pushOne(u.email,u); }catch(e){}
+  CLOUD.pushOne(u.email,u);
   sanFermer(); sanRendre();
   toast('Enregistré','var(--green)');
 }
@@ -111345,7 +111349,7 @@ function sanSupprimer(quoi,iso){
   const cle=quoi==='sommeil'?'sleepLog':'stepsLog';
   u[cle]=(u[cle]||[]).filter(x=>!(x&&x.date===iso));
   saveUser();
-  try{ CLOUD.pushOne(u.email,u); }catch(e){}
+  CLOUD.pushOne(u.email,u);
   sanFermer(); sanRendre();
   toast('Supprimé','var(--green)');
 }
@@ -111420,7 +111424,7 @@ function sanPoserSource(quoi,cle){
   if(!u.santeSource) u.santeSource={};
   u.santeSource[quoi]=cle;
   saveUser();
-  try{ CLOUD.pushOne(u.email,u); }catch(e){}
+  CLOUD.pushOne(u.email,u);
   try{ rcm('tracker_selected'); }catch(e){}
   sanFermer(); sanRendre();
 }
@@ -111592,7 +111596,7 @@ async function sanSyncTirer(force){
       if(!sync||!sync.meta) return null;
       const plan=sanFusionSync(currentUser,sync,Date.now());
       const n=sanAppliquerSync(plan);
-      if(n){ saveUser(); try{ CLOUD.pushOne(currentUser.email,currentUser); }catch(e){} }
+      if(n){ saveUser(); CLOUD.pushOne(currentUser.email,currentUser); }
       if(n||JSON.stringify(_sanSyncMeta)!==avant){ try{ if(document.getElementById('s-lifestyle')?.classList.contains('active')) sanRendre(); }catch(e){} }
       try{ _rendreBandeSante(); }catch(e){}
       if(sync.meta.derniereReception&&!(Number(sync.consomme)>=Number(sync.meta.derniereReception))){
