@@ -1403,7 +1403,13 @@
     "duels": {
       "$id": {
         ".read": "auth != null && (data.child('createur').val() === auth.token.email.replace('.', ',') || data.child('invite').val() === auth.token.email.replace('.', ','))",
-        ".write": "auth != null && !data.exists() && newData.child('createur').val() === auth.token.email.replace('.', ',') && newData.child('statut').val() === 'attente' && !newData.child('invite').exists() && !newData.child('scores').exists() && !newData.child('debut').exists()",
+        // LA REVANCHE (lot B, 29/09/2026) : un duel peut naitre « accepte » avec
+        // le pseudo de l invite SI ET SEULEMENT SI cet invite suit deja le
+        // createur (/amis/<sa cle>/<pseudo du createur>), et si le pseudo du
+        // createur est bien le sien. Un inconnu ne m impose donc rien : le
+        // consentement est le suivi, et il se retire en retirant l ami. Le
+        // Worker y pose ensuite la cle de l invite (evenement duel_cree).
+        ".write": "auth != null && !data.exists() && newData.child('createur').val() === auth.token.email.replace('.', ',') && !newData.child('invite').exists() && !newData.child('scores').exists() && !newData.child('debut').exists() && (newData.child('statut').val() === 'attente' || (newData.child('statut').val() === 'accepte' && newData.child('createurPseudo').isString() && newData.child('invitePseudo').isString() && root.child('pseudos').child(newData.child('createurPseudo').val()).val() === auth.token.email.replace('.', ',') && root.child('amis').child(root.child('pseudos').child(newData.child('invitePseudo').val()).val()).child(newData.child('createurPseudo').val()).exists()))",
         ".validate": "$id.matches(/^d[a-z0-9]{10,24}$/) && newData.hasChildren(['createur', 'createurNom', 'mesure', 'duree', 'creeLe', 'statut'])",
         "createur":    { ".validate": "newData.isString() && newData.val().length <= 200" },
         "createurNom": { ".validate": "newData.isString() && newData.val().length <= 24" },
@@ -1427,7 +1433,7 @@
         },
         "invitePseudo": {
           ".write": "auth != null && !data.exists() && newData.parent().child('invite').val() === auth.token.email.replace('.', ',')",
-          ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/) && root.child('pseudos').child(newData.val()).val() === auth.token.email.replace('.', ',')"
+          ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/) && (root.child('pseudos').child(newData.val()).val() === auth.token.email.replace('.', ',') || (newData.parent().child('statut').val() === 'accepte' && newData.parent().child('createur').val() === auth.token.email.replace('.', ',') && root.child('pseudos').child(newData.val()).exists()))"
         },
         "progres": {
           "$k": {
@@ -1527,14 +1533,16 @@
     // LE CARNET D AMIS (lot A, 29/09/2026). A SENS UNIQUE : suivre ne demande
     // rien et ne notifie rien. /amis/<cle>/<pseudo> = {le, prenom}, rien
     // d autre : rang, volts et badges se lisent dans le profil public. Lu et
-    // ecrit par le titulaire SEUL. 300 au plus. (Le pseudo est la cle en
-    // base : un point y devient « __ ».)
+    // ecrit par le titulaire SEUL. (Le pseudo est la cle en base : un point
+    // y devient « __ ».) ⚠ LE PLAFOND DE 300 EST TENU PAR L APP : les regles
+    // de la Realtime Database ne savent pas compter des enfants (numChildren
+    // n existe pas, et l ecrire fait refuser le fichier ENTIER au deploiement).
     "amis": {
       "$cle": {
         ".read": "auth != null && auth.token.email.replace('.', ',') === $cle",
         ".write": "auth != null && auth.token.email.replace('.', ',') === $cle",
         "$pseudo": {
-          ".validate": "$pseudo.matches(/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/) && newData.hasChildren(['le', 'prenom']) && newData.parent().numChildren() <= 300",
+          ".validate": "$pseudo.matches(/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/) && newData.hasChildren(['le', 'prenom'])",
           "le":     { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= now + 60000" },
           "prenom": { ".validate": "newData.isString() && newData.val().length <= 24" },
           "$autre": { ".validate": false }
@@ -1558,6 +1566,8 @@
     },
     // L index des duels a suivre (J-2, cloture) : le Worker seul.
     "duels_actifs": { ".read": false, ".write": false },
+    // Les revanches recues : le Worker les y range, l invite seul les lit.
+    "duels_recus": { "$cle": { ".read": "auth != null && auth.token.email.replace('.', ',') === $cle", ".write": false } },
     // LE DEFI REPCORE DU MOIS, pour tous : ecrit par Kevin (ecran admin), lu
     // par tout compte connecte.
     "defi_mois": {
@@ -1599,7 +1609,7 @@
       "$id": {
         ".write": "auth != null && !data.exists() && newData.exists() && newData.child('par').val() === auth.token.email.replace('.', ',') && newData.parent().parent().child('evenements_attente').child(newData.child('par').val()).child(newData.child('type').val()).child(newData.child('cible').val()).child('id').val() === $id",
         ".validate": "$id.matches(/^e[a-z0-9]{8,24}$/) && newData.hasChildren(['type', 'par', 'at', 'cible'])",
-        "type":  { ".validate": "newData.isString() && newData.val().matches(/^(reponse_bilan|reponse_rite|defi_publie|defi_maj|parrainage_demande|ambassadeur_demande|abonnement|filleul_seance|duel_rejoint|duel_maj|seance_fin)$/)" },
+        "type":  { ".validate": "newData.isString() && newData.val().matches(/^(reponse_bilan|reponse_rite|defi_publie|defi_maj|parrainage_demande|ambassadeur_demande|abonnement|filleul_seance|duel_rejoint|duel_maj|duel_cree|seance_fin)$/)" },
         "par":   { ".validate": "newData.isString() && newData.val().length <= 200" },
         "at":    { ".validate": "newData.isNumber() && newData.val() > 0" },
         "dest":  { ".validate": "newData.isString() && newData.val().length <= 200" },
@@ -1608,7 +1618,7 @@
         "id":    { ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,60}$/)" },
         "coach": { ".validate": "newData.isString() && newData.val().length <= 200" },
         "abo":   { ".validate": "newData.isString() && newData.val().matches(/^I-[A-Z0-9]{6,30}$/)" },
-        "cible": { ".validate": "newData.isString() && (((newData.parent().child('type').val() === 'reponse_bilan' || newData.parent().child('type').val() === 'reponse_rite') && newData.val() === newData.parent().child('dest').val() && root.child('users').child(newData.val()).child('coachEmailKey').val() === auth.token.email.replace('.', ',')) || (newData.parent().child('type').val() === 'defi_maj' && newData.val() === newData.parent().child('id').val() && root.child('canaux').child(newData.parent().child('coach').val()).child('messages').child(newData.val()).child('type').val() === 'defi') || (newData.parent().child('type').val() === 'defi_publie' && newData.val() === newData.parent().child('msg').val() && root.child('canaux').child(auth.token.email.replace('.', ',')).child('messages').child(newData.val()).child('type').val() === 'defi') || ((newData.parent().child('type').val() === 'parrainage_demande' || newData.parent().child('type').val() === 'ambassadeur_demande' || newData.parent().child('type').val() === 'abonnement') && newData.val() === '-') || (newData.parent().child('type').val() === 'filleul_seance' && newData.val() === '-' && root.child('parrainage').child('liens').child(auth.token.email.replace('.', ',')).exists()) || (newData.parent().child('type').val() === 'seance_fin' && newData.val() === '-') || ((newData.parent().child('type').val() === 'duel_rejoint' || newData.parent().child('type').val() === 'duel_maj') && newData.val().matches(/^d[a-z0-9]{10,24}$/) && (root.child('duels').child(newData.val()).child('createur').val() === auth.token.email.replace('.', ',') || root.child('duels').child(newData.val()).child('invite').val() === auth.token.email.replace('.', ','))))" },
+        "cible": { ".validate": "newData.isString() && (((newData.parent().child('type').val() === 'reponse_bilan' || newData.parent().child('type').val() === 'reponse_rite') && newData.val() === newData.parent().child('dest').val() && root.child('users').child(newData.val()).child('coachEmailKey').val() === auth.token.email.replace('.', ',')) || (newData.parent().child('type').val() === 'defi_maj' && newData.val() === newData.parent().child('id').val() && root.child('canaux').child(newData.parent().child('coach').val()).child('messages').child(newData.val()).child('type').val() === 'defi') || (newData.parent().child('type').val() === 'defi_publie' && newData.val() === newData.parent().child('msg').val() && root.child('canaux').child(auth.token.email.replace('.', ',')).child('messages').child(newData.val()).child('type').val() === 'defi') || ((newData.parent().child('type').val() === 'parrainage_demande' || newData.parent().child('type').val() === 'ambassadeur_demande' || newData.parent().child('type').val() === 'abonnement') && newData.val() === '-') || (newData.parent().child('type').val() === 'filleul_seance' && newData.val() === '-' && root.child('parrainage').child('liens').child(auth.token.email.replace('.', ',')).exists()) || (newData.parent().child('type').val() === 'seance_fin' && newData.val() === '-') || ((newData.parent().child('type').val() === 'duel_rejoint' || newData.parent().child('type').val() === 'duel_maj') && newData.val().matches(/^d[a-z0-9]{10,24}$/) && (root.child('duels').child(newData.val()).child('createur').val() === auth.token.email.replace('.', ',') || root.child('duels').child(newData.val()).child('invite').val() === auth.token.email.replace('.', ','))) || (newData.parent().child('type').val() === 'duel_cree' && newData.val().matches(/^d[a-z0-9]{10,24}$/) && root.child('duels').child(newData.val()).child('createur').val() === auth.token.email.replace('.', ',') && root.child('duels').child(newData.val()).child('statut').val() === 'accepte'))" },
         "$autre": { ".validate": false }
       }
     },

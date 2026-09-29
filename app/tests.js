@@ -50832,19 +50832,52 @@ async function testExercices(){
         +htmlFicheAmi(Object.assign({trouve:true,pseudo:'marc'},prof),true);
       if(/\b82\b|kg|poids|mensuration|taille|https?:|data:image|SQUAT|140/i.test(h)) return _echec('fuite : '+h.slice(0,200));
       return Object.keys(prof).sort().join()==='badges,prenom,rang,sem,volts'?true:_echec(Object.keys(prof).join());})());
-    ok('Amis : les règles — carnet au titulaire seul, 300 au plus, abonnés lus par le seul suivi',(()=>{
+    ok('Amis : les règles — carnet au titulaire seul, abonnés lus par le seul suivi ; 300 au plus, tenu par l’app',(()=>{
       const x=new XMLHttpRequest(); x.open('GET','../database.rules.json',false); x.send();
       const r=x.status===200?x.responseText:''; if(!r) return true;
       const i=r.indexOf('"amis"'), j=r.indexOf('"abonnes"'), k=r.indexOf('"defi_mois"');
       if(i<0||j<0) return _echec('nœuds absents');
       const a=r.slice(i,j), b=r.slice(j,k>j?k:j+1500);
-      if(!/numChildren\(\) <= 300/.test(a)||!/"\$autre": \{ ".validate": false \}/.test(a)) return _echec('carnet : plafond ou liste blanche');
+      // Le plafond de 300 est tenu par l'app : les règles ne savent pas compter
+      // (numChildren n'existe pas, et l'écrire fait refuser le fichier entier).
+      if(/\.numChildren\(/.test(r)) return _echec('numChildren : les règles seraient refusées au déploiement');
+      if(!/"\$autre": \{ ".validate": false \}/.test(a)) return _echec('carnet : liste blanche');
+      if(!/amisPlein\(o\)/.test(String(amiSuivre))) return _echec('le plafond n’est pas tenu par l’app');
       if(!/\.read": "auth != null && auth\.token\.email\.replace\('\.', ','\) === \$cle"/.test(a)) return _echec('lecture du carnet');
       return /child\(\$cible\)\.val\(\) === auth/.test(b)?true:_echec('lecture des abonnés');})());
     ok('Amis : un duel fini propose « Ajouter à mes amis » quand le pseudo de l’adversaire est connu',(()=>{
       const d={createur:'a,b',invite:'c,d',createurPseudo:'lea__fit',invitePseudo:'tom'};
       if(duelAdversairePseudo(d,'c,d')!=='lea__fit'||duelAdversairePseudo(d,'a,b')!=='tom') return _echec('adversaire');
       return duelAdversairePseudo({createur:'a,b',invite:'c,d'},'a,b')===''?true:_echec('sans pseudo');})());
+
+    // ══ LOT B — LA REVANCHE (29/09/2026) ══════════════════════════════════
+    ok('Revanche : elle reprend la mesure et la durée du duel précédent, en un geste',(()=>{
+      const d={statut:'termine',mesure:'tonnage',duree:7,createurPseudo:'lea',invitePseudo:'tom__fit',termineLe:5};
+      const r=revancheParams(d);
+      if(r.mesure!=='tonnage'||r.duree!==7) return _echec(JSON.stringify(r));
+      if(dernierDuelContre({a:d,b:Object.assign({},d,{mesure:'seances',termineLe:2})},'tom__fit').mesure!=='tonnage') return _echec('le plus récent');
+      if(dernierDuelContre({a:d},'zoe')!==null) return _echec('un autre ami');
+      const rp=revancheParams({mesure:'n_importe',duree:99});
+      if(rp.mesure!=='seances'||rp.duree!==14) return _echec('défauts');
+      const f=String(ouvrirDuel);
+      return /amiRevanche\(/.test(f)&&/revancheParams\(d\)/.test(f)&&/Changer la mesure ou la durée/.test(f)?true:_echec('écran de fin : Revanche et Changer');})());
+    ok('Revanche : au plus 3 duels en cours avec la même personne, 10 en tout, dit en une phrase',(()=>{
+      const D=(s,cp,ip)=>({statut:s,createurPseudo:cp,invitePseudo:ip});
+      const trois=[D('en_cours','lea','tom'),D('accepte','tom','lea'),D('attente','lea','tom')];
+      const g=duelsGardeFou(trois,'tom','Tom');
+      if(!/3 duels en cours avec Tom/.test(g)||/\n/.test(g)) return _echec(g);
+      if(duelsGardeFou(trois.slice(0,2),'tom','Tom')!=='') return _echec('deux : on peut');
+      const dix=Array.from({length:10},(x,i)=>D('en_cours','lea','x'+i));
+      if(!/10 duels en cours/.test(duelsGardeFou(dix,'tom','Tom'))) return _echec('dix');
+      if(!/— /.test(g)) return true; return _echec('tiret cadratin');})());
+    ok('Revanche : un duel né « accepte » s’affiche chez les deux',(()=>{
+      const d={createur:'lea,t',createurNom:'Léa',invite:'tom,t',inviteNom:'Tom',createurPseudo:'lea',invitePseudo:'tom',mesure:'seances',duree:14,statut:'accepte'};
+      const chezTom=duelLigne(d,'tom,t',Date.now()), chezLea=duelLigne(d,'lea,t',Date.now());
+      if(chezTom!=='Léa te défie : 14 jours de régularité · ta prochaine séance lance le compte') return _echec('invité : '+chezTom);
+      if(!/contre Tom · démarre à sa première séance/.test(chezLea)) return _echec('créateur : '+chezLea);
+      // Et il rejoint les duels de l'invité (duels_recus), avant la lecture.
+      return /duelsRecusRattacher\(u\)/.test(String(_rendreDuelsAccueil))&&evenementCible({type:'duel_cree',id:'dabc123def456'})==='dabc123def456'
+        ?true:_echec('rattachement ou événement');})());
 
     ok('Duels : l’accueil — l’invitation par son prénom, les duels en cours, « Défie un pote »',(()=>{
       if(!SERVEUR_LEGER) return true;

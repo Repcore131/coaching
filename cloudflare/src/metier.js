@@ -968,7 +968,7 @@ export function creerMetier(deps) {
         body: 'Ton invitation a pris. Son premier paiement t’offrira 1 mois de RepCore.' });
       return 'prevenu';
     }
-    if (type === 'duel_rejoint' || type === 'duel_maj') return duelEvenement(e, t);
+    if (type === 'duel_rejoint' || type === 'duel_maj' || type === 'duel_cree') return duelEvenement(e, t);
     // UNE SÉANCE TERMINÉE : les volts recalculés par le serveur.
     if (type === 'seance_fin') return xpRecalculer(String(e.par || ''), t, true);
     return 'type_inconnu';
@@ -986,6 +986,29 @@ export function creerMetier(deps) {
     if (!d) return 'duel_inconnu';
     d.id = id;
     const par = String(e.par || '');
+    // LA REVANCHE (lot B) : le créateur a nommé un ami par son pseudo (les
+    // règles ont vérifié que cet ami le suit). Le Worker y met la clé de
+    // l'invité, le range dans ses duels reçus, et le prévient. Rien à
+    // accepter : sa première séance lance le compte.
+    if (e.type === 'duel_cree') {
+      const v = DU.revancheValide(d, par);
+      if (v !== 'ok') return v;
+      const invite = await _val('pseudos/' + d.invitePseudo);
+      const suit = invite ? await _val('amis/' + invite + '/' + d.createurPseudo) : null;
+      if (!invite || !suit || invite === d.createur) {
+        await db.ref().update({ ['duels/' + id + '/statut']: 'annule', ['duels/' + id + '/maj']: t });
+        return 'revanche_refusee';
+      }
+      const [pp, fn] = await Promise.all([_val('profils_publics/' + d.invitePseudo + '/prenom'), _lire(invite, 'fname')]);
+      const nom = String(pp || fn || '').trim().slice(0, 24) || null;
+      await db.ref().update({ ['duels/' + id + '/invite']: invite, ['duels/' + id + '/inviteNom']: nom,
+        ['duels/' + id + '/rejointLe']: t, ['duels/' + id + '/maj']: t,
+        ['duels_actifs/' + id]: { fin: 0, depuis: t },
+        ['duels_recus/' + invite + '/' + id]: { le: t, de: String(d.createurNom || '').slice(0, 24) || null } });
+      Object.assign(d, { invite, inviteNom: nom });
+      await pousserA([{ uid: invite, message: DU.pushRevanche(d) }], { attendre: false });
+      return 'revanche';
+    }
     if (par !== d.createur && par !== d.invite) return 'pas_participant';
     if (e.type === 'duel_rejoint') {
       if (d.statut !== 'attente' || par !== d.invite) return 'deja_' + d.statut;

@@ -83,6 +83,24 @@ export function pushRejoint(d) {
     title: String(d.inviteNom || 'Ton pote').slice(0, 24) + ' relève ton duel ⚡',
     body: texteDuel(d.mesure, d.duree) + '. Le duel commence à sa première séance.' };
 }
+// LA REVANCHE (lot B, 29/09/2026) : un duel né « accepte » entre amis. Rien à
+// accepter : la première séance de l'invité lance le compte.
+export function pushRevanche(d) {
+  return { type: 'defi', url: './?duels=1', tag: 'duel-revanche-' + d.id,
+    title: String(d.createurNom || 'Ton pote').slice(0, 24) + ' te défie en revanche ⚡',
+    body: texteDuel(d.mesure, d.duree) + '. Ta prochaine séance lance le compte.' };
+}
+// PURE. Un duel créé entre amis, prêt à être rattaché à son invité ?
+//   'ok' | une raison de refus.
+export function revancheValide(d, par) {
+  if (!d) return 'duel_inconnu';
+  if (par !== d.createur) return 'pas_createur';
+  if (d.statut !== 'accepte') return 'deja_' + d.statut;
+  if (d.invite) return 'deja_rattache';
+  const re = /^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/;
+  if (!re.test(String(d.invitePseudo || '')) || !re.test(String(d.createurPseudo || ''))) return 'sans_pseudo';
+  return 'ok';
+}
 export function pushDebut(d, cle) {
   return { type: 'defi', url: './?duels=1', tag: 'duel-debut-' + d.id,
     title: 'Le duel commence ⚡',

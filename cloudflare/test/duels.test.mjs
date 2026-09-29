@@ -172,3 +172,65 @@ test('le budget : un événement de duel coûte peu, et le travail du jour a son
   const job = travaux(w.M).find((x) => x.nom === 'duels');
   assert.ok(job && job.push && job.cout >= 8, 'travail « duels » déclaré avec son coût');
 });
+
+// ══ LA REVANCHE (lot B, 29/09/2026) : un duel né « accepte » entre amis ══
+const revanche = (x) => duel(Object.assign({ statut: 'accepte', createurPseudo: 'lea', invitePseudo: 'tom__fit' }, x));
+const amisDeTom = { pseudos: { lea: LEA, tom__fit: TOM }, amis: { [TOM]: { lea: { le: 1, prenom: 'Léa' } } },
+  profils_publics: { tom__fit: { prenom: 'Tom' } } };
+
+test('revanche : le Worker rattache l’invité, le prévient une fois, et le duel suit le cycle habituel', async () => {
+  const t = PARIS('2026-09-29T12:00:00');
+  const w = monde(Object.assign({ push: pushs, duels: { [ID]: revanche() }, evenements: ev('duel_cree', LEA, t) }, amisDeTom), t);
+  await w.minute();
+  const x = w.F.lire('duels/' + ID);
+  assert.equal(x.invite, TOM);
+  assert.equal(x.inviteNom, 'Tom');
+  assert.equal(x.statut, 'accepte');
+  assert.equal(x.rejointLe, t);
+  assert.deepEqual(w.F.lire('duels_actifs/' + ID), { fin: 0, depuis: t });
+  assert.equal(w.F.lire('duels_recus/' + TOM + '/' + ID + '/de'), 'Léa');
+  assert.deepEqual(titres(w), ['Léa te défie en revanche ⚡']);
+  // Rejoué : rien de plus (l'invité est déjà rattaché).
+  w.F.ecrire('evenements', ev('duel_cree', LEA, t)); w.avance(60e3);
+  await w.minute();
+  assert.equal(w.F.recus.length, 1);
+  // La première séance de l'invité lance le compte, comme un duel relevé par lien.
+  w.F.ecrire('evenements', ev('duel_maj', TOM, w.t)); w.avance(60e3);
+  await w.minute();
+  const y = w.F.lire('duels/' + ID);
+  assert.equal(y.statut, 'en_cours');
+  assert.equal(y.fin, y.debut + 14 * J);
+  assert.deepEqual(y.scores, { createur: 0, invite: 0 });
+  // La clôture : le gagnant et le CHAMPION.
+  w.F.ecrire('duels/' + ID + '/progres/' + LEA, { valeur: 2, maj: w.t });
+  w.F.ecrire('duels/' + ID + '/progres/' + TOM, { valeur: 5, maj: w.t });
+  w.avance(15 * J);
+  w.F.ecrire('evenements', ev('duel_maj', LEA, w.t));
+  await w.minute();
+  assert.equal(w.F.lire('duels/' + ID + '/statut'), 'termine');
+  assert.equal(w.F.lire('duels/' + ID + '/gagnant'), 'invite');
+  assert.equal(w.F.lire('defis_resultats/' + TOM + '/' + ID + '/champion'), true);
+});
+
+test('revanche : sans suivi de l’invité, le duel est annulé et personne n’est prévenu', async () => {
+  const t = PARIS('2026-09-29T12:00:00');
+  const w = monde({ push: pushs, pseudos: { lea: LEA, tom__fit: TOM }, amis: {}, duels: { [ID]: revanche() },
+    evenements: ev('duel_cree', LEA, t) }, t);
+  await w.minute();
+  assert.equal(w.F.lire('duels/' + ID + '/statut'), 'annule');
+  assert.equal(w.F.lire('duels/' + ID + '/invite'), null);
+  assert.equal(w.F.lire('duels_recus/' + TOM), null);
+  assert.equal(w.F.recus.length, 0);
+  // Seul le créateur peut déclencher le rattachement.
+  const w2 = monde(Object.assign({ push: pushs, duels: { [ID]: revanche() }, evenements: ev('duel_cree', TOM, t) }, amisDeTom), t);
+  await w2.minute();
+  assert.equal(w2.F.lire('duels/' + ID + '/invite'), null);
+});
+
+test('revanche : jamais commencée, elle s’annule après 30 jours comme les autres', async () => {
+  const t = PARIS('2026-10-07T18:40:00');
+  const d = revanche({ invite: TOM, inviteNom: 'Tom', rejointLe: t - 31 * J });
+  const w = monde({ push: pushs, duels: { [ID]: d }, duels_actifs: { [ID]: { fin: 0 } } }, t);
+  for (let i = 0; i < 6; i++) { const b = await w.minute(); if (b.travaux.duels === 'fini') break; w.avance(60e3); }
+  assert.equal(w.F.lire('duels/' + ID + '/statut'), 'annule');
+});
