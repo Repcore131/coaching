@@ -529,7 +529,10 @@ const RCM_EVENEMENTS=['landing_view','welcome_view','role_selected_coach','role_
   // « programme_clic_achat » COMPTE UN DEPART, PAS UNE VENTE. Le paiement se
   // fait sur la page du coach, hors de RepCore : nous ne savons pas — et nous
   // n'avons pas a savoir — si la personne a paye.
-  'vitrine_vue','programme_vu','programme_clic_achat','story_partagee'];
+  'vitrine_vue','programme_vu','programme_clic_achat','story_partagee',
+  // LOT N3 : combien de gestes d'ajout pour compléter une journée de journal
+  // (90 % des calories visées), par tranche. Aussi dans database.rules.json.
+  'nut_jour_g1_3','nut_jour_g4_6','nut_jour_g7_10','nut_jour_g11'];
 // ══════════ SONDE DE QUOTA : UNE PENTE, PAS UNE VÉRITÉ ══════════
 // Le plan Spark plafonne à 10 Go téléchargés par mois, et le dépassement est
 // SILENCIEUX : l'application cesse simplement de répondre. Cette sonde ne
@@ -89156,9 +89159,213 @@ function _fjAjouter(copies,dateCible,quoi){
   currentUser.nutrition.log[dateCible].entries.push(...copies);
   _fjDernierAjout={date:dateCible,ids:copies.map(c=>c.id),quoi};
   saveUser();
+  try{ _nutGeste(dateCible); }catch(e){}
   _renderFjDaySummary(dateCible);
   return true;
 }
+// ══ LOT N3 : LA SAISIE EN MOINS D'UNE MINUTE (29/09/2026) ══════════════════
+//
+// Trois raccourcis, et une mesure :
+//   · LES RÉCENTS : les 12 derniers aliments DISTINCTS, avec leur quantité de
+//     la dernière fois, en tête de la recherche vide. Un geste, un aliment.
+//     Rangés dans le dossier (nutrition.recentsSaisie) : ils suivent
+//     l'athlète d'un téléphone à l'autre. recentFoods (ids Ciqual, sans
+//     quantité) reste tenu comme avant, pour ce qui le lit encore.
+//   · « COMME HIER » : sur un repas vide, recopier le même repas du dernier
+//     jour où il existait (7 jours en arrière au plus), quantités comprises.
+//     Jamais en silence : les aliments arrivent dans le repas, visibles, et
+//     l'ajout s'annule comme les autres.
+//   · LES REPAS TYPE : « Enregistrer ce repas » (10 au plus, dans le dossier),
+//     ajoutés ensuite en un geste.
+//   · LA MESURE : combien de gestes d'ajout pour compléter une journée
+//     (90 % des calories visées), en quatre tranches, compteur anonyme (rcm).
+const FJ_RECENTS_MAX=12;
+const FJ_REPAS_TYPES_MAX=10;
+const FJ_COMME_HIER_JOURS=7;
+const FJ_JOUR_COMPLET=0.9;
+// Ce qu'on garde d'une entrée pour la rejouer : tout, sauf ce qui la situe.
+function _fjGabarit(e){
+  const g=Object.assign({},e);
+  delete g.id; delete g.repas; delete g.periSeance;
+  return g;
+}
+// PURE. La clé d'un aliment : le produit scanné, l'aliment de la table ou le
+// perso par son identifiant, sinon son nom.
+function cleRecent(e){
+  if(!e) return '';
+  if(e.alim_source==='off'&&e.ean) return 'off:'+e.ean;
+  if(e.alim_id!=null&&e.alim_id!=='') return 'id:'+e.alim_id;
+  return 'nom:'+String(e.nom||'').trim().toLowerCase();
+}
+// PURE. La liste des récents après un ajout : l'aliment en tête (avec SA
+// quantité), ses doublons retirés, douze au plus, le plus ancien sort.
+function majRecents(liste,entree){
+  const k=cleRecent(entree);
+  const l=(Array.isArray(liste)?liste:[]).filter(r=>r&&r.cle&&r.cle!==k);
+  if(!k||!entree||!entree.nom) return l.slice(0,FJ_RECENTS_MAX);
+  return [{cle:k,e:_fjGabarit(entree)}].concat(l).slice(0,FJ_RECENTS_MAX);
+}
+// PURE. Le repas à recopier : le même repas, au dernier jour où il existait,
+// sept jours en arrière au plus. null quand il n'y a rien.
+function sourceCommeHier(log,jour,repas){
+  const L=log||{};
+  for(let k=1;k<=FJ_COMME_HIER_JOURS;k++){
+    const d=_jourPlus(jour,-k);
+    const e=((L[d]&&L[d].entries)||[]).filter(x=>x&&(x.repas||'dejeuner')===repas);
+    if(e.length) return {date:d,entries:e};
+  }
+  return null;
+}
+// PURE. Les entrées d'un repas type, prêtes à entrer dans un repas : des
+// identifiants neufs à chaque fois, les quantités d'origine.
+function entreesRepasType(rt,repas,ids){
+  const l=(rt&&Array.isArray(rt.entries))?rt.entries:[];
+  return l.map((g,i)=>Object.assign({},g,{id:ids[i],repas,periSeance:false}));
+}
+// PURE. La tranche de gestes d'une journée complétée.
+function trancheGestes(n){
+  const k=Number(n)||0;
+  if(k<=3) return 'nut_jour_g1_3';
+  if(k<=6) return 'nut_jour_g4_6';
+  if(k<=10) return 'nut_jour_g7_10';
+  return 'nut_jour_g11';
+}
+// LA MESURE. Un geste = un ajout (un aliment, un récent, un repas recopié ou
+// type). Compté sur l'appareil, par jour ; envoyé UNE fois, anonyme, quand la
+// journée atteint 90 % de ses calories. Rien d'autre ne sort.
+function _nutGeste(date){
+  try{
+    const k='rc_nut_g_'+date, n=(Number(localStorage.getItem(k))||0)+1;
+    localStorage.setItem(k,String(n));
+    // Le ménage : seuls les trois derniers jours restent.
+    for(let i=localStorage.length-1;i>=0;i--){
+      const c=localStorage.key(i)||'';
+      const m=c.match(/^rc_nut_g_(?:ok_)?(\d{4}-\d{2}-\d{2})$/);
+      if(m&&_joursEntre(m[1],date)>3) localStorage.removeItem(c);
+    }
+    if(localStorage.getItem('rc_nut_g_ok_'+date)) return n;
+    const u=currentUser, nut=(u&&u.nutrition)||{};
+    const c=_getEffectiveMacros(nut,nutIsOnDay(date,u),date,u);
+    const tot=journalTotalJour(nut.log||{},date);
+    if(c&&Number(c.kcal)>0&&tot.kcal>=Number(c.kcal)*FJ_JOUR_COMPLET){
+      try{ localStorage.setItem('rc_nut_g_ok_'+date,'1'); }catch(e){}
+      rcm(trancheGestes(n));
+    }
+    return n;
+  }catch(e){ return 0; }
+}
+// ── Les récents, sur la recherche vide ─────────────────────────────────────
+function _fjRecentsSaisie(){
+  const l=(currentUser&&currentUser.nutrition&&currentUser.nutrition.recentsSaisie)||[];
+  return Array.isArray(l)?l.filter(r=>r&&r.cle&&r.e&&r.e.nom):[];
+}
+function _htmlRecentsSaisie(){
+  const l=_fjRecentsSaisie();
+  if(!l.length) return '';
+  return l.map((r,i)=>{
+    const e=r.e, q=e.unite||((e.qty!=null?e.qty:'')+' g');
+    return '<button type="button" class="fj-rec" onclick="ajouterRecent('+i+')">'
+      +'<span class="fj-rec-n">'+escapeHtml(e.nom)+'</span>'
+      +'<span class="fj-rec-q">'+escapeHtml(String(q))+(e.kcal!=null?' · '+escapeHtml(String(e.kcal))+' kcal':'')+'</span>'
+      +'<span class="fj-rec-plus" aria-hidden="true">+</span></button>';
+  }).join('');
+}
+function ajouterRecent(i){
+  const r=_fjRecentsSaisie()[i];
+  if(!r) return false;
+  const date=_fjDate||localISODate(new Date());
+  const repas=(typeof _fjRepas!=='undefined'&&_fjRepas)?_fjRepas:'dejeuner';
+  const e=Object.assign({},r.e,{repas,periSeance:false});
+  const ok=_fjAjouter(_fjCopier([e],date,repas),date,escapeHtml(r.e.nom)+' ajouté');
+  if(ok){
+    try{ currentUser.nutrition.recentsSaisie=majRecents(currentUser.nutrition.recentsSaisie,e); saveUser(); }catch(err){}
+    _fjRepasChoisi=true;
+    toast(r.e.nom+' ajouté','var(--green)');
+    try{ _renderFjRecent(); }catch(err){}
+  }
+  return ok;
+}
+// ── Les repas type ─────────────────────────────────────────────────────────
+function _fjRepasTypes(){
+  const l=(currentUser&&currentUser.nutrition&&currentUser.nutrition.repasTypes)||[];
+  return Array.isArray(l)?l.filter(r=>r&&r.id&&Array.isArray(r.entries)&&r.entries.length):[];
+}
+function _htmlRepasTypes(){
+  const l=_fjRepasTypes();
+  if(!l.length) return '';
+  return l.map(r=>{
+    const kcal=r.entries.reduce((a,e)=>a+(Number(e.kcal)||0),0);
+    return '<div class="fj-rt"><button type="button" class="fj-rec" onclick="ajouterRepasType(\''+escapeHtml(r.id)+'\')">'
+      +'<span class="fj-rec-n">'+escapeHtml(r.nom)+'</span>'
+      +'<span class="fj-rec-q">'+r.entries.length+' aliment'+(r.entries.length>1?'s':'')+' · '+Math.round(kcal)+' kcal</span>'
+      +'<span class="fj-rec-plus" aria-hidden="true">+</span></button>'
+      +'<button type="button" class="fj-rt-x" aria-label="Retirer ce repas enregistré" onclick="retirerRepasType(\''+escapeHtml(r.id)+'\')">×</button></div>';
+  }).join('');
+}
+function ajouterRepasType(id){
+  const rt=_fjRepasTypes().find(r=>r.id===id);
+  if(!rt) return false;
+  const date=_fjDate||localISODate(new Date());
+  const repas=(typeof _fjRepas!=='undefined'&&_fjRepas)?_fjRepas:'dejeuner';
+  const copies=entreesRepasType(rt,repas,_fjIdsNeufs(date,rt.entries.length));
+  const ok=_fjAjouter(copies,date,escapeHtml(rt.nom)+' ajouté');
+  if(ok){ _fjRepasChoisi=true; toast(rt.nom+' ajouté','var(--green)'); }
+  return ok;
+}
+function retirerRepasType(id){
+  const n=currentUser&&currentUser.nutrition; if(!n) return false;
+  n.repasTypes=_fjRepasTypes().filter(r=>r.id!==id);
+  saveUser(); try{ _renderFjRecent(); }catch(e){}
+  return true;
+}
+// Le formulaire de nom, dans le repas lui-même : pas de fenêtre qui s'ouvre.
+let _fjNommer=null;
+function ouvrirEnregistrerRepas(date,repas){ _fjNommer={date,repas}; _renderFjDaySummary(date);
+  setTimeout(()=>{ const i=document.getElementById('fj-rt-nom'); if(i) i.focus(); },50); }
+function fermerEnregistrerRepas(){ const d=_fjNommer&&_fjNommer.date; _fjNommer=null; if(d) _renderFjDaySummary(d); }
+function enregistrerRepasType(date,repas,nom){
+  const n=String(nom||'').trim().slice(0,40);
+  if(!n){ toast('Donne un nom à ce repas','var(--orange)'); return false; }
+  const src=_fjEntrees(date).filter(e=>e&&(e.repas||'dejeuner')===repas);
+  if(!src.length) return false;
+  if(!currentUser.nutrition) currentUser.nutrition={};
+  const l=_fjRepasTypes().filter(r=>r.nom.toLowerCase()!==n.toLowerCase());
+  if(l.length>=FJ_REPAS_TYPES_MAX){ toast(FJ_REPAS_TYPES_MAX+' repas enregistrés au plus : retire-en un dans la recherche d’aliments.','var(--orange)'); return false; }
+  l.push({id:'rt'+Date.now().toString(36),nom:n,entries:src.map(_fjGabarit)});
+  currentUser.nutrition.repasTypes=l;
+  _fjNommer=null;
+  const ok=saveUser();
+  toastEcriture(ok,'« '+n+' » enregistré','ce repas est');
+  _renderFjDaySummary(date);
+  return true;
+}
+function _htmlNommerRepas(date,repas){
+  if(!_fjNommer||_fjNommer.date!==date||_fjNommer.repas!==repas) return '';
+  return '<div class="fj-nommer"><input id="fj-rt-nom" maxlength="40" placeholder="Petit-déj semaine" '
+    +'onkeydown="if(event.key===\'Enter\')enregistrerRepasType(\''+date+'\',\''+repas+'\',this.value)">'
+    +'<button type="button" class="btn btn-red btn-sm" onclick="enregistrerRepasType(\''+date+'\',\''+repas+'\',document.getElementById(\'fj-rt-nom\').value)">Enregistrer</button>'
+    +'<button type="button" class="fj-nommer-x" aria-label="Annuler" onclick="fermerEnregistrerRepas()">×</button></div>';
+}
+// ── « Comme hier » ─────────────────────────────────────────────────────────
+function commeHier(date,repas){
+  const s=sourceCommeHier(((currentUser.nutrition||{}).log)||{},date,repas);
+  if(!s) return false;
+  const lib=(FJ_REPAS_LIB[repas]||repas).toLowerCase();
+  return _fjAjouter(_fjCopier(s.entries,date,repas),date,s.entries.length+' aliment'
+    +(s.entries.length>1?'s':'')+' repris au '+lib);
+}
+// La ligne d'un repas VIDE : rien du tout s'il n'y a rien à recopier (pas de
+// bouton mort), sinon le nom du repas et un bouton discret.
+function _htmlRepasVide(date,repas,libelle){
+  const s=sourceCommeHier(((currentUser.nutrition||{}).log)||{},date,repas);
+  if(!s) return '';
+  const hier=s.date===_jourPlus(date,-1);
+  const quand=hier?'Comme hier':'Comme le '+new Date(s.date+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long'});
+  return '<div class="fj-vide"><span>'+escapeHtml(libelle)+'</span>'
+    +'<button type="button" class="fj-comme" onclick="commeHier(\''+date+'\',\''+repas+'\')">'+escapeHtml(quand)
+    +' <small>('+s.entries.length+' aliment'+(s.entries.length>1?'s':'')+')</small></button></div>';
+}
+
 
 // ══════════════ ÉQUIVALENCES À MACRO CONSTANTE ════════════════════════════
 // Pour un aliment journalisé, trois à cinq substituts DU MÊME GROUPE dont la
@@ -89614,13 +89821,18 @@ function _renderFjRecent(){
   const blocPerso=perso.length
     ?titre('Mes aliments')+perso.map(a=>_htmlPersoResult(a)).join('')+sep
     :'';
+  // LOT N3 : EN TETE, les repas enregistres puis les recents a un geste (avec
+  // la quantite de la derniere fois). Tant qu'ils sont la, l'ancienne liste de
+  // recents (sans quantite) ne se repete pas en dessous.
+  const _rt=_htmlRepasTypes(), _recS=_htmlRecentsSaisie();
+  const blocNeuf=(_rt?titre('Mes repas')+_rt+sep:'')+(_recS?titre('Récents')+_recS+sep:'');
   if(!ids.length){
-    el.innerHTML=blocPerso+blocFav+blocFreq+'<div style="padding:20px 16px;font-size:var(--fs-sm);color:var(--text-dim);text-align:center">Commence à saisir pour rechercher un aliment</div>';
+    el.innerHTML=blocNeuf+blocPerso+blocFav+blocFreq+(blocNeuf?'':'<div style="padding:20px 16px;font-size:var(--fs-sm);color:var(--text-dim);text-align:center">Commence à saisir pour rechercher un aliment</div>');
     return;
   }
   const foods=ids.map(id=>_ciqualDB.find(f=>f.id===id)).filter(Boolean);
-  el.innerHTML=blocPerso+blocFav+blocFreq+titre('Récents')+
-    foods.map(f=>_fjResultHtml(f,true)).join('')+sep;
+  el.innerHTML=blocNeuf+blocPerso+blocFav+blocFreq+(_recS?'':titre('Récents')+
+    foods.map(f=>_fjResultHtml(f,true)).join('')+sep);
 }
 
 // Le titre de section etait ecrit deux fois, ici et dans _renderFjRecent.
@@ -91670,6 +91882,10 @@ async function saveFoodEntry(){
   if(!currentUser.nutrition.log) currentUser.nutrition.log={};
   if(!currentUser.nutrition.log[_fjDate]) currentUser.nutrition.log[_fjDate]={entries:[]};
   currentUser.nutrition.log[_fjDate].entries.push(entry);
+  // LOT N3 : les récents à un geste (12, distincts, avec la quantité), dans le
+  // dossier. Relevés AVANT, pour que « Annuler » les rende tels quels.
+  const _avantRecS=Array.isArray(currentUser.nutrition.recentsSaisie)?currentUser.nutrition.recentsSaisie.slice():undefined;
+  try{ currentUser.nutrition.recentsSaisie=majRecents(currentUser.nutrition.recentsSaisie,entry); }catch(e){}
   // R27 — CE QUE L'AJOUT VA CHANGER A COTE DE L'ENTREE, releve AVANT : les
   // recents et le compteur d'usage de cet aliment. « Annuler » les rend tels
   // quels ; sans ca, un aliment ajoute par erreur resterait en tete des
@@ -91710,6 +91926,7 @@ async function saveFoodEntry(){
   // R27 — LE BANDEAU DIT « AJOUTÉ ✓ » : le toast de succes le repeterait. Le
   // toast d'ECHEC d'ecriture, lui, reste — c'est la seule chose qu'il dise.
   if(!saveUser()) toastEcriture(false,'','cet aliment est');
+  try{ _nutGeste(_fjDate); }catch(e){}
   // R27 — ON ENCHAINE SUR L'ALIMENT SUIVANT. Un repas, c'est trois ou quatre
   // aliments : revenir a la nutrition apres chacun obligeait a redescendre
   // jusqu'au journal et a rouvrir la recherche. « Terminer », dans le bandeau,
@@ -91718,6 +91935,7 @@ async function saveFoodEntry(){
   const _n=currentUser.nutrition;
   _fjSaisieAjout={date:_fjDate,id:entry.id,entree:entry,nom:entry.nom,qty:entry.qty,repas:entry.repas,
     annule:false,cleUsage:String(f.id),avantRecents:_avantRecents,avantUsage:_avantUsage,
+    avantRecS:_avantRecS,apresRecS:Array.isArray(_n.recentsSaisie)?_n.recentsSaisie.slice():undefined,
     apresRecents:Array.isArray(_n.recentFoods)?_n.recentFoods.slice():undefined,
     apresUsage:(_n.usageFoods&&_n.usageFoods[String(f.id)])?Object.assign({},_n.usageFoods[String(f.id)]):undefined};
   _fjRetourRecherche();
@@ -91793,6 +92011,9 @@ function annulerAjoutAliment(){
   const j=v=>JSON.stringify(v===undefined?null:v);
   if(j(n.recentFoods)===j(s.apresRecents)){
     if(s.avantRecents===undefined) delete n.recentFoods; else n.recentFoods=s.avantRecents.slice();
+  }
+  if(j(n.recentsSaisie)===j(s.apresRecS)){
+    if(s.avantRecS===undefined) delete n.recentsSaisie; else n.recentsSaisie=s.avantRecS.slice();
   }
   if(n.usageFoods&&j(n.usageFoods[s.cleUsage])===j(s.apresUsage)){
     if(s.avantUsage===undefined) delete n.usageFoods[s.cleUsage];
@@ -91927,12 +92148,14 @@ function _renderFjDaySummary(date){
          partage avec l ecran de progression et la fiche coach. -->
     ${isToday?`<button onclick="copierHier()" style="width:100%;margin-bottom:24px;padding:10px 0;background:none;border:1px dashed var(--border);border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;cursor:pointer">Copier la journée d'hier</button>`:''}
     ${_htmlHydratationNut(currentUser)}
-    ${repasOrder.filter(r=>grouped[r]).map(r=>`
+    ${repasOrder.map(r=>!grouped[r]?(date<=todayStr?_htmlRepasVide(date,r,repasLabels[r]):''):`
       <div style="margin-bottom:14px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
           <div style="flex:1;min-width:0;font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase">${repasLabels[r]}</div>
           ${!isToday?`<button onclick="refaireRepas('${date}','${r}')" style="flex-shrink:0;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:.5px;padding:6px 10px;cursor:pointer">Refaire aujourd'hui</button>`:''}
+          <button type="button" class="fj-enr" onclick="ouvrirEnregistrerRepas('${date}','${r}')" aria-label="Enregistrer ce repas">Enregistrer</button>
         </div>
+        ${_htmlNommerRepas(date,r)}
         ${grouped[r].map(e=>`<div class="fj-entry${e.id===_fjIdNeuf?' fj-neuf':''}">
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(e.nom)}</div>

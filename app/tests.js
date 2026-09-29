@@ -49139,6 +49139,69 @@ async function testExercices(){
       return b.cat.cible===120?true:_echec('borne : '+b.cat.cible);
     });
 
+    // ══ LOT N3 — LA SAISIE EN MOINS D'UNE MINUTE (29/09/2026) ══════════════
+    const _N3E=(nom,qty,o)=>Object.assign({id:Date.now()+Math.random(),alim_id:nom.length,nom,qty,repas:'matin',kcal:qty,p:1,c:1,l:1,fi:0,sel:0,periSeance:false},o||{});
+    ok('N3 — les récents : doublons fusionnés, plafond de 12, le plus récent en tête avec SA quantité',(()=>{
+      let l=[];
+      l=majRecents(l,_N3E('Avoine',60)); l=majRecents(l,_N3E('Skyr',150)); l=majRecents(l,_N3E('Avoine',80));
+      if(l.length!==2) return _echec('doublon : '+l.length+' récents');
+      if(l[0].e.nom!=='Avoine'||l[0].e.qty!==80) return _echec('la dernière quantité n’est pas gardée : '+JSON.stringify(l[0]));
+      if(l[0].e.id!==undefined||l[0].e.repas!==undefined) return _echec('le récent garde l’identifiant ou le repas de l’entrée');
+      for(let i=0;i<14;i++) l=majRecents(l,_N3E('Aliment '+i,100,{alim_id:1000+i}));
+      if(l.length!==12) return _echec('plafond : '+l.length);
+      if(l[0].e.nom!=='Aliment 13'||l.some(r=>r.e.nom==='Skyr')) return _echec('ordre ou sortie du plus ancien');
+      // Un produit scanné et un aliment sans identifiant ont leur propre clé.
+      if(cleRecent({alim_source:'off',ean:'123',alim_id:5})!=='off:123'||cleRecent({nom:' Pomme '})!=='nom:pomme') return _echec('clés');
+      return true;})());
+    ok('N3 — « comme hier » : le même repas du dernier jour où il existait, sept jours au plus, quantités comprises',(()=>{
+      const j='2026-09-29';
+      if(sourceCommeHier({},j,'matin')!==null) return _echec('jour sans journal');
+      const log={'2026-09-28':{entries:[_N3E('Riz',200,{repas:'dejeuner'})]}};
+      if(sourceCommeHier(log,j,'matin')!==null) return _echec('repas absent : il recopie un autre repas');
+      const s=sourceCommeHier(log,j,'dejeuner');
+      if(!s||s.date!=='2026-09-28'||s.entries[0].qty!==200) return _echec('hier : '+JSON.stringify(s));
+      const trou={'2026-09-26':{entries:[_N3E('Avoine',60),_N3E('Lait',250)]}};
+      const t=sourceCommeHier(trou,j,'matin');
+      if(!t||t.date!=='2026-09-26'||t.entries.length!==2) return _echec('trois jours avant : '+JSON.stringify(t));
+      if(sourceCommeHier({'2026-09-21':{entries:[_N3E('Avoine',60)]}},j,'matin')!==null) return _echec('plus de sept jours en arrière');
+      // Les copies gardent les quantités et prennent des identifiants neufs.
+      const c=_fjCopier(t.entries,j,'matin');
+      if(c[0].qty!==60||c[1].qty!==250||c[0].id===t.entries[0].id) return _echec('copie');
+      return true;})());
+    ok('N3 — un repas type appliqué deux fois : deux fois les mêmes quantités, jamais les mêmes identifiants',(()=>{
+      const rt={id:'rt1',nom:'Petit-déj semaine',entries:[_fjGabarit(_N3E('Avoine',60)),_fjGabarit(_N3E('Skyr',150))]};
+      const a=entreesRepasType(rt,'matin',[1,2]), b=entreesRepasType(rt,'matin',[3,4]);
+      if(a.length!==2||b.length!==2) return _echec('taille');
+      if(a[0].qty!==60||b[1].qty!==150) return _echec('quantités');
+      if(new Set(a.concat(b).map(e=>e.id)).size!==4) return _echec('identifiants répétés');
+      if(a.some(e=>e.repas!=='matin')||b.some(e=>e.periSeance!==false)) return _echec('repas ou marqueur');
+      if(entreesRepasType(null,'matin',[]).length!==0) return _echec('repas type absent');
+      if(FJ_REPAS_TYPES_MAX!==10||FJ_RECENTS_MAX!==12) return _echec('plafonds');
+      return true;})());
+    ok('N3 — l’écran : la recherche vide montre les récents ; un repas vide sans rien à recopier n’a pas de bouton',(()=>{
+      const sv=currentUser, svDb=(typeof _ciqualDB!=='undefined')?_ciqualDB:null;
+      const z=document.getElementById('fj-recent-section');
+      const svZ=z?z.innerHTML:'';
+      try{
+        currentUser={email:'n3@t.fr',role:'athlete',nutrition:{recentsSaisie:majRecents([],_N3E('Blanc de poulet',150)),log:{}}};
+        if(z){
+          try{ if(!_ciqualDB) _ciqualDB=[]; }catch(e){}
+          _renderFjRecent();
+          const h=z.innerHTML;
+          if(h.indexOf('Blanc de poulet')<0||h.indexOf('ajouterRecent(0)')<0) return _echec('les récents ne sont pas en tête de la recherche vide');
+          if(h.indexOf('150 g')<0) return _echec('la quantité de la dernière fois manque');
+        }
+        const j=localISODate(new Date());
+        if(_htmlRepasVide(j,'matin','Petit-déjeuner')!=='') return _echec('un bouton « comme hier » sans rien à recopier');
+        currentUser.nutrition.log[_jourPlus(j,-1)]={entries:[_N3E('Avoine',60)]};
+        const v=_htmlRepasVide(j,'matin','Petit-déjeuner');
+        if(v.indexOf('Comme hier')<0||v.indexOf("commeHier('"+j+"','matin')")<0) return _echec('« comme hier » : '+v);
+        // La mesure : quatre tranches, déclarées dans la liste des compteurs.
+        const t=[trancheGestes(1),trancheGestes(4),trancheGestes(10),trancheGestes(11)].join();
+        if(t!=='nut_jour_g1_3,nut_jour_g4_6,nut_jour_g7_10,nut_jour_g11') return _echec('tranches : '+t);
+        return ['nut_jour_g1_3','nut_jour_g4_6','nut_jour_g7_10','nut_jour_g11'].every(n=>RCM_EVENEMENTS.indexOf(n)>=0)?true:_echec('compteurs absents de RCM_EVENEMENTS');
+      } finally { currentUser=sv; try{ _ciqualDB=svDb; }catch(e){} if(z) z.innerHTML=svZ; }})());
+
     ok('Volts : dix rangs, dans l’ordre, seuils croissants à partir de 0',(()=>{
       const n=RANGS.map(r=>r.nom).join();
       if(n!=='ÉTINCELLE,IMPULSION,VOLTAGE,MACHINE,ÉLITE,SURTENSION,MONSTRE,FOUDRE,TITAN,LÉGENDE') return _echec(n);
