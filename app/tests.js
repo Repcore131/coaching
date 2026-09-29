@@ -49489,6 +49489,96 @@ async function testExercices(){
         return true;
       } finally { try{ if(sv==null) localStorage.removeItem('rc_prot_phrase'); else localStorage.setItem('rc_prot_phrase',sv); }catch(e){} }})());
 
+    // ══ LOT N7 — L'ASSIETTE SUIT LA SÉANCE RÉELLE (29/09/2026) ═══════════
+    // Lundi seul au calendrier ; une séance validée, ou pas.
+    const _N7CFG=Array.from({length:7},(_,i)=>({day:'J'+i,active:i===0,exercises:i===0?[{name:'Squat'}]:[]}));
+    const _N7S=(dateMs,o)=>Object.assign({id:'s'+dateMs,date:dateMs,duration:50,sets:6,setsPlanned:6,complete:true,
+      data:{Squat:{sets:[{weight:'100',reps:'5',done:true}]}}},o||{});
+    const _N7MAC={on:{kcal:2600,p:160,l:70,g:330},off:{kcal:2100,p:160,l:70,g:205}};
+    ok('N7 — jourOnReel : jour ON sans séance, jour OFF avec séance, deux séances, séance annulée',(()=>{
+      const lun='2026-09-28', mar='2026-09-29';
+      const midi=j=>{ const [a,m,d]=j.split('-').map(Number); return new Date(a,m-1,d,12).getTime(); };
+      const u=ses=>({sessions_config:_N7CFG,sessions:ses||[]});
+      if(!jourOnReel(u(),lun)) return _echec('lundi au calendrier, sans séance : OFF');
+      if(jourOnReel(u(),mar)) return _echec('mardi sans séance : ON');
+      if(!jourOnReel(u([_N7S(midi(mar))]),mar)) return _echec('mardi avec une séance : OFF');
+      if(!jourOnReel(u([_N7S(midi(mar)),_N7S(midi(mar)+3*3600e3)]),mar)) return _echec('deux séances le même jour');
+      // Une séance annulée, ou abandonnée sans aucune série validée, n'est pas un entraînement.
+      if(jourOnReel(u([_N7S(midi(mar),{annulee:true})]),mar)) return _echec('séance annulée comptée');
+      if(jourOnReel(u([_N7S(midi(mar),{sets:0,complete:false,data:{Squat:{sets:[{weight:'100',reps:'5',done:false}]}}})]),mar)) return _echec('séance sans série validée comptée');
+      // Une séance de la veille au soir ne fait pas le lendemain.
+      const veille=new Date(2026,8,28,23,30).getTime();
+      if(jourOnReel(u([_N7S(veille)]),mar)) return _echec('la veille au soir compte pour le lendemain');
+      // Deux séances le même jour : une seule marque, rien de doublé.
+      const w={sessions_config:_N7CFG,sessions:[],nutrition:{}};
+      marquerJourSeance(w,_N7S(midi(mar))); marquerJourSeance(w,_N7S(midi(mar)+3600e3));
+      if(Object.keys(w.nutrition.joursSeance).join()!==mar) return _echec('marques : '+JSON.stringify(w.nutrition.joursSeance));
+      if(marquerJourSeance(w,_N7S(midi(mar),{annulee:true}))!==false) return _echec('une séance annulée marque le jour');
+      return true;})());
+    ok('N7 — les cibles d’un jour passé ne changent jamais : l’historique rejoué, séances ajoutées ou effacées après coup',(()=>{
+      const auj=localISODate(new Date());
+      const midi=j=>{ const [a,m,d]=j.split('-').map(Number); return new Date(a,m-1,d,12).getTime(); };
+      const log={}; const jours=[];
+      for(let i=1;i<=10;i++){ const j=_jourPlus(auj,-i); jours.push(j); log[j]={entries:[{id:i,nom:'x',repas:'diner',kcal:1800,p:120,c:200,l:60}]}; }
+      const u={role:'athlete',email:'n7@t.fr',sessions_config:_N7CFG,sessions:[],
+        nutrition:{dietType:'flexible',macros:JSON.parse(JSON.stringify(_N7MAC)),log}};
+      const cibles=()=>jours.map(j=>_getEffectiveMacros(u.nutrition,nutIsOnDay(j,u),j,u).kcal).join();
+      const journal=JSON.stringify(log);
+      const avant=cibles();
+      // Des séances saisies APRÈS COUP pour ces dix jours : rien ne bouge.
+      for(const j of jours) u.sessions.push(_N7S(midi(j)));
+      if(cibles()!==avant) return _echec('des séances ajoutées après coup changent un jour clos : '+avant+' → '+cibles());
+      // Un jour marqué le jour même reste ON, même si la séance est effacée ensuite.
+      const d=jours.find(j=>!nutIsOnDayCalendrier(j,u));
+      u.nutrition.joursSeance={[d]:true};
+      const marque=cibles();
+      if(_getEffectiveMacros(u.nutrition,nutIsOnDay(d,u),d,u).kcal!==2600) return _echec('le jour marqué n’est pas ON');
+      u.sessions=[];
+      if(cibles()!==marque) return _echec('une séance effacée change un jour clos');
+      // Aujourd'hui suit la réalité : un jour OFF avec séance passe ON. Le journal reste tel quel.
+      const offAuj=!nutIsOnDayCalendrier(auj,u);
+      u.sessions.push(_N7S(Date.now()));
+      if(offAuj&&_getEffectiveMacros(u.nutrition,nutIsOnDay(auj,u),auj,u).kcal!==2600) return _echec('aujourd’hui ne suit pas la séance');
+      if(JSON.stringify(log)!==journal) return _echec('le journal a bougé');
+      // La ligne de l'écran, sans jargon, seulement quand la séance a changé quelque chose.
+      if(offAuj&&ligneJourSeance(u,auj)!=='Tu t’es entraîné aujourd’hui : cibles du jour d’entraînement.') return _echec('ligne : '+ligneJourSeance(u,auj));
+      if(ligneJourSeance(Object.assign({},u,{nutrition:Object.assign({},u.nutrition,{cycle:false})}),auj)!=='') return _echec('une ligne sur une diète non cyclée');
+      return true;})());
+    ok('N7 — le rappel d’avant-séance : coupé par défaut, jamais deux fois, seulement dans les 3 heures et sous 30 % des glucides',(()=>{
+      const t=new Date(2026,8,29,15,0).getTime(), j='2026-09-29';          // mardi 15 h
+      const U=(o,n)=>Object.assign({role:'athlete',email:'n7r@t.fr',sessions_config:_N7CFG,sessions:[],
+        _woReminderDays:[1],_woReminderHour:17,_woReminderMin:0,
+        nutrition:Object.assign({dietType:'flexible',macros:JSON.parse(JSON.stringify(_N7MAC)),rappelAvantSeance:true,
+          log:{[j]:{entries:[{id:1,nom:'x',repas:'matin',kcal:400,p:20,c:50,l:10}]}}},n||{})},o||{});
+      const e=(u,m)=>rappelAvantSeanceEtat(u,m===undefined?t:m);
+      if(!e(U()).envoyer) return _echec('le cas nominal : '+e(U()).raison);
+      if(e(U({},{rappelAvantSeance:undefined})).raison!=='coupe') return _echec('pas coupé par défaut');
+      if(e(U({},{rappelAvantSeance:false})).envoyer) return _echec('réglage coupé');
+      if(e(U({},{rappelAvantSeanceLe:j})).raison!=='deja') return _echec('deux fois le même jour');
+      if(e(U({_woReminderHour:19})).envoyer) return _echec('à quatre heures de la séance');
+      if(e(U({_woReminderHour:14})).envoyer) return _echec('séance déjà passée');
+      if(e(U({_woReminderDays:[2]})).envoyer) return _echec('pas de séance ce jour');
+      const assez=U(); assez.nutrition.log[j].entries[0].c=110;           // 110 g : au-dessus de 30 % de la cible du jour
+      if(e(assez).envoyer) return _echec('glucides déjà là');
+      if(e(U({sessions:[_N7S(new Date(2026,8,29,9).getTime())]})).envoyer) return _echec('séance déjà faite');
+      if(e(U({tcaRisque:true})).envoyer) return _echec('sous aTCA');
+      // Par l'écran : deux vérifications de suite, une seule bannière, et la date posée.
+      const now=new Date();
+      if(now.getHours()>=21) return true;
+      const sv={u:currentUser,s:window.saveUser,p:window._appAuPremierPlan};
+      try{
+        window.saveUser=()=>true; window._appAuPremierPlan=()=>true;
+        const auj=localISODate(now);
+        currentUser=U({_woReminderDays:[(now.getDay()+6)%7],_woReminderHour:now.getHours()+2,_woReminderMin:0},
+          {log:{[auj]:{entries:[]}}});
+        const a=verifierRappelAvantSeance(), b=verifierRappelAvantSeance();
+        const n=document.querySelectorAll('#rappel-gluc-banniere').length;
+        document.querySelectorAll('#rappel-gluc-banniere').forEach(x=>x.remove());
+        if(!a||b||n!==1) return _echec('premier '+a+', second '+b+', bannières '+n);
+        if(currentUser.nutrition.rappelAvantSeanceLe!==auj) return _echec('date non posée');
+        return true;
+      } finally { currentUser=sv.u; window.saveUser=sv.s; window._appAuPremierPlan=sv.p; }})());
+
     ok('Volts : dix rangs, dans l’ordre, seuils croissants à partir de 0',(()=>{
       const n=RANGS.map(r=>r.nom).join();
       if(n!=='ÉTINCELLE,IMPULSION,VOLTAGE,MACHINE,ÉLITE,SURTENSION,MONSTRE,FOUDRE,TITAN,LÉGENDE') return _echec(n);

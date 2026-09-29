@@ -39289,6 +39289,7 @@ function loadClientHome(){
     }
   }catch(e){}
   setTimeout(checkWoReminderToday, 1100);
+  setTimeout(()=>{ try{ verifierRappelAvantSeance(); }catch(e){} }, 1300);
   // Rite de fin de cycle : il s AFFICHE, il ne notifie pas, et il ne bloque
   // jamais l acces. riteAAfficher decide seule.
   setTimeout(()=>{ try{ riteAfficherSiBesoin(); }catch(e){} },1400);
@@ -48369,6 +48370,9 @@ function finishWorkout(incomplete=false){
   if(woState.objectif&&woState.objectif.nm) sess.objectif={nm:woState.objectif.nm,charge:woState.objectif.charge,reps:woState.objectif.reps};
   if(!currentUser.sessions) currentUser.sessions=[];
   currentUser.sessions.push(sess);
+  // LOT N7 : le jour devient un jour d'entraînement pour l'assiette, et le
+  // reste une fois clos (nutrition.joursSeance).
+  try{ marquerJourSeance(currentUser,sess); }catch(e){}
   _viderCachePlateau();
   _viderCacheSignaux();
   _viderCacheVolume();
@@ -73116,6 +73120,8 @@ function openWoReminderConfig(){
     </div>
     <label style="font-size:var(--fs-xs);display:block;margin-bottom:6px">Jours d'entraînement</label>
     <div style="display:flex;gap:6px;margin-bottom:24px">${dayBtns}</div>
+    <label class="rg-reglage"><input type="checkbox" ${(u.nutrition&&u.nutrition.rappelAvantSeance===true)?'checked':''} onchange="basculerRappelAvantSeance(this.checked)">
+      <span>Avant la séance, me prévenir s’il me reste l’essentiel de mes glucides <em>(3 h avant, une fois par jour au plus)</em></span></label>
     <button class="btn btn-red" onclick="saveWoReminderConfig()" style="margin-bottom:10px;letter-spacing:1.5px">Activer le rappel</button>
     ${u._woReminderEnabled?`<button class="btn btn-outline" onclick="disableWoReminder()" style="font-size:var(--fs-xs);color:var(--sub)">Désactiver les rappels</button>`:''}
   </div></div>`);
@@ -83252,17 +83258,145 @@ function basculerPeriSeance(dateStr,id){
 // travaillent sur un client. Sans lui, les jours ON/OFF lus étaient ceux du
 // COACH — ou tous OFF, puisqu’un coach n’a le plus souvent pas de
 // sessions_config.
+//
+// LOT N7 : le calendrier d'abord ; puis, pour un jour CLOS, la marque posée à
+// la fin d'une séance ce jour-là (jamais les séances relues après coup) ; et
+// pour AUJOURD'HUI, la réalité (jourOnReel), en direct.
 function nutIsOnDay(dateStr,porteur){
-  // Détermine si c'est un jour d'entraînement selon sessions_config
+  const _u=porteur||currentUser;
+  if(nutIsOnDayCalendrier(dateStr,_u)) return true;
+  const n=_u&&_u.nutrition;
+  if(n&&n.joursSeance&&n.joursSeance[dateStr]===true) return true;
+  if(dateStr===localISODate(new Date())) return jourOnReel(_u,dateStr);
+  return false;
+}
+// ══ LOT N7 : L'ASSIETTE SUIT LA SÉANCE RÉELLE (29/09/2026) ═══════════════
+// Un jour OFF au calendrier où l'on s'est entraîné devient un jour ON : les
+// cibles du jour d'entraînement s'appliquent. L'inverse n'existe pas (un jour
+// ON sans séance reste ON : la séance peut encore venir).
+//
+// ⚠ CE QUI EST DÉJÀ MANGÉ NE BOUGE PAS : seules les cibles changent, le
+//   journal reste tel quel.
+// ⚠ JAMAIS RÉTROACTIF SUR UN JOUR CLOS. Aujourd'hui suit la réalité en
+//   direct ; un jour passé ne relit PAS les séances. Il garde le calendrier,
+//   sauf la marque posée À LA FIN d'une séance (nutrition.joursSeance), le jour
+//   même. Une séance saisie après coup pour hier, ou effacée ensuite, ne change
+//   donc rien aux cibles d'hier, ni aux volts ou aux séries qui en découlent.
+const JOURS_SEANCE_GARDES=120;
+const RAPPEL_GLUC_AVANT_MIN=180;      // la séance est dans les 3 heures
+const RAPPEL_GLUC_PART=0.3;           // glucides du jour sous 30 % de la cible
+const RAPPEL_GLUC_TEXTE='Ta séance est bientôt, il te reste l’essentiel de tes glucides.';
+// Une séance compte comme faite quand au moins une série a été validée. Une
+// séance quittée sans enregistrer ne laisse aucune trace ; une séance
+// abandonnée sans série (ou marquée annulée) n'est pas un entraînement.
+function _seanceFaite(s){
+  if(!s||!(Number(s.date)>0)||s.annulee) return false;
+  return seriesValideesSeance(s)>0;
+}
+/** PURE. Le jour est-il un jour d'entraînement au calendrier (sessions_config) ? */
+function nutIsOnDayCalendrier(dateStr,porteur){
   const _u=porteur||currentUser;
   const cfg=_u&&_u.sessions_config;
   if(!cfg) return false;
-  const [_y,_m,_day]=dateStr.split('-').map(Number);
+  const [_y,_m,_day]=String(dateStr).split('-').map(Number);
   const d=new Date(_y,_m-1,_day);
-  // getDay() : 0=dim, 1=lun... → sessions_config index 0=lun
   const idx=(d.getDay()+6)%7; // lundi=0
   return cfg[idx]?.active===true;
 }
+/**
+ * PURE. Le jour ON réel : true si une séance a été TERMINÉE ce jour-là (jour
+ * local), sinon la valeur du calendrier.
+ */
+function jourOnReel(user,dateISO){
+  const ses=(user&&Array.isArray(user.sessions))?user.sessions:[];
+  if(ses.some(s=>_seanceFaite(s)&&localISODate(new Date(Number(s.date)))===dateISO)) return true;
+  return nutIsOnDayCalendrier(dateISO,user);
+}
+// La marque, posée par la fin de séance, le jour même, et nulle part ailleurs.
+function marquerJourSeance(u,sess){
+  if(!u||!_seanceFaite(sess)) return false;
+  if(!u.nutrition) u.nutrition={};
+  const n=u.nutrition, j=localISODate(new Date(Number(sess.date)));
+  const m=(n.joursSeance&&typeof n.joursSeance==='object')?n.joursSeance:{};
+  m[j]=true;
+  // Le ménage : les 120 derniers jours suffisent à tout ce qui relit les cibles
+  // d'un jour passé ; au-delà, le calendrier fait foi, comme avant ce lot.
+  const lim=_jourPlus(j,-JOURS_SEANCE_GARDES);
+  for(const k of Object.keys(m)) if(k<lim) delete m[k];
+  n.joursSeance=m;
+  return true;
+}
+// PURE. Le rappel d'avant-séance part-il maintenant ? {envoyer, raison}.
+// Réglage coupé par défaut ; un par jour au plus ; jamais sous aTCA ni sous
+// suspension ; seulement si le créneau du jour est dans les 3 heures, qu'aucune
+// séance n'est déjà faite, et que les glucides sont sous 30 % de la cible.
+function rappelAvantSeanceEtat(u,maintenant){
+  const non=r=>({envoyer:false,raison:r});
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  if(!u||u.role==='coach') return non('coach');
+  const n=u.nutrition||{};
+  if(n.rappelAvantSeance!==true) return non('coupe');
+  try{ if(aTCA(u)) return non('atca'); }catch(e){}
+  try{ if(suspensionEtat(u).actif) return non('suspension'); }catch(e){}
+  const j=localISODate(new Date(t));
+  if(n.rappelAvantSeanceLe===j) return non('deja');
+  if(((u.sessions)||[]).some(s=>_seanceFaite(s)&&localISODate(new Date(Number(s.date)))===j)) return non('faite');
+  let c=null; try{ c=prochainCreneau(u,t); }catch(e){ c=null; }
+  if(!c||c.dansJours!==0) return non('pas_de_seance');
+  const d=new Date(t), dans=(c.h*60+c.m)-(d.getHours()*60+d.getMinutes());
+  if(!(dans>0&&dans<=RAPPEL_GLUC_AVANT_MIN)) return non('trop_tot');
+  let m=null; try{ m=_getEffectiveMacros(n,nutIsOnDay(j,u),j,u); }catch(e){ m=null; }
+  const g=Number(m&&m.g);
+  if(!(g>0)) return non('sans_cible');
+  const tot=journalTotalJour(n.log||{},j);
+  if(tot.c>=g*RAPPEL_GLUC_PART) return non('assez');
+  return {envoyer:true,raison:'ok'};
+}
+// À l'ouverture de l'application : la bannière, et la notification système si
+// l'application n'est pas au premier plan. La date est posée d'abord : un
+// deuxième appel le même jour ne renvoie rien.
+function verifierRappelAvantSeance(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  const e=rappelAvantSeanceEtat(u,Date.now());
+  if(!e.envoyer) return false;
+  u.nutrition.rappelAvantSeanceLe=localISODate(new Date());
+  try{ saveUser(); }catch(err){}
+  try{
+    document.getElementById('rappel-gluc-banniere')?.remove();
+    const b=document.createElement('div');
+    b.id='rappel-gluc-banniere'; b.className='rg-banniere'; b.setAttribute('role','status');
+    b.innerHTML='<span>'+escapeHtml(RAPPEL_GLUC_TEXTE)+'</span><button type="button" aria-label="Fermer" onclick="this.parentNode.remove()">✕</button>';
+    document.body.appendChild(b);
+    setTimeout(()=>{ try{ b.remove(); }catch(err){} },30000);
+  }catch(err){}
+  try{
+    if(!_appAuPremierPlan()&&_notifSupported()&&Notification.permission==='granted')
+      navigator.serviceWorker.ready.then(reg=>reg.showNotification('Avant ta séance',{
+        body:RAPPEL_GLUC_TEXTE,icon:'./icons/icon-192x192.png',badge:'./icons/icon-192x192.png',
+        tag:'rappel-glucides',data:{url:'./'}})).catch(()=>{});
+  }catch(err){}
+  return true;
+}
+function basculerRappelAvantSeance(on){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u) return false;
+  if(!u.nutrition) u.nutrition={};
+  u.nutrition.rappelAvantSeance=!!on;
+  toastEcriture(saveUser(),on?'Rappel avant la séance activé':'Rappel avant la séance coupé','ton réglage est');
+  return true;
+}
+// La ligne de l'écran nutrition : dite seulement quand la séance a changé les
+// cibles (jour OFF au calendrier, diète cyclée).
+function ligneJourSeance(u,jour){
+  try{
+    if(!dieteCyclee(u)) return '';
+    if(nutIsOnDayCalendrier(jour,u)||!nutIsOnDay(jour,u)) return '';
+  }catch(e){ return ''; }
+  const auj=jour===localISODate(new Date());
+  return auj?'Tu t’es entraîné aujourd’hui : cibles du jour d’entraînement.'
+    :'Tu t’es entraîné ce jour-là : cibles du jour d’entraînement.';
+}
+
 function setNutriDietType(type){
   // Deuxième garde, au MOMENT de l'écriture : désactiver l'option de la liste
   // ne protège que la souris. Le champ reste atteignable au clavier et depuis
@@ -85724,6 +85858,7 @@ function _renderStrictMacroRings(nut,jourAff){
       <span style="display:inline-flex;align-items:center;gap:6px;margin-left:auto">${badgePhase(currentUser)}${dayBadge}</span>
       ${estAuj?'':`<div style="flex-basis:100%;margin-top:2px;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--red-text)">${_libelleJourNut(today)}</div>`}
     </div>
+    ${(()=>{ const l=ligneJourSeance(currentUser,today); return l?'<div class="nut-jour-seance">'+escapeHtml(l)+'</div>':''; })()}
     ${htmlAnneauxMacros(tot,m,'16px')}
     ${(()=>{ try{ return htmlRepartitionProt(currentUser,entries,today); }catch(e){ return ''; } })()}
     ${htmlLigneCalories(tot,m)}

@@ -11972,6 +11972,17 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .rp-g{flex:none;width:40px;text-align:right;font-size:var(--fs-xs);font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
 .rp-leg{margin-top:8px;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5}
 .rp-phrase{margin-top:8px;font-size:var(--fs-sm);color:var(--text);line-height:1.55}
+/* ══ LOT N7 : L'ASSIETTE SUIT LA SÉANCE RÉELLE (29/09/2026) ═════════════ */
+.nut-jour-seance{margin:2px 0 10px;font-size:var(--fs-sm);line-height:1.5;color:var(--text)}
+.rg-reglage{display:flex;align-items:flex-start;gap:10px;margin:0 0 18px;font-size:var(--fs-sm);line-height:1.45;color:var(--text);cursor:pointer;
+  text-transform:none;letter-spacing:normal;font-weight:500}
+.rg-reglage input{flex:none;width:20px;height:20px;margin:1px 0 0;accent-color:#E02020}
+.rg-reglage em{font-style:normal;color:var(--sub);font-size:var(--fs-xs)}
+.rg-banniere{position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:var(--z-bar);
+  display:flex;align-items:center;gap:12px;padding:14px 16px 14px 20px;background:var(--surface-2);border-bottom:1px solid var(--border);
+  font-size:var(--fs-sm);line-height:1.45;color:var(--text);box-sizing:border-box;animation:slideDown var(--t-3) var(--c-out)}
+.rg-banniere span{flex:1;min-width:0}
+.rg-banniere button{flex:none;background:none;border:0;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:0 4px}
 /* ═══ THEME CLAIR — GENERE PAR scripts/theme_clair.py, NE PAS MODIFIER A LA MAIN ═══ */
 :root[data-theme="clair"] [style*="--halo-c"]{--halo-1:0 0 8px var(--halo-c,rgba(255,255,255,.45));--halo-2:0 0 14px var(--halo-c,rgba(255,255,255,.60)),0 0 30px var(--halo-c,rgba(255,255,255,.25));--halo-3:0 0 20px var(--halo-c,rgba(255,255,255,.85)),0 0 44px var(--halo-c,rgba(255,255,255,.40))}
 html[data-theme="clair"]{background:#f8f8f8}
@@ -14733,6 +14744,12 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .rp-g{color:var(--text)}
 :root[data-theme="clair"] .rp-leg{color:var(--text-dim)}
 :root[data-theme="clair"] .rp-phrase{color:var(--text)}
+:root[data-theme="clair"] .nut-jour-seance{color:var(--text)}
+:root[data-theme="clair"] .rg-reglage{color:var(--text)}
+:root[data-theme="clair"] .rg-reglage input{accent-color:#E02020}
+:root[data-theme="clair"] .rg-reglage em{color:var(--sub)}
+:root[data-theme="clair"] .rg-banniere{background:var(--surface-2);border-bottom:1px solid var(--border);color:var(--text)}
+:root[data-theme="clair"] .rg-banniere button{color:var(--text-dim)}
 :root[data-theme="clair"] [style^="background:#000"],:root[data-theme="clair"] [style*=";background:#000"],:root[data-theme="clair"] [style*="; background:#000"],:root[data-theme="clair"] [style*=" background:#000"],:root[data-theme="clair"] [style^="background: #000"],:root[data-theme="clair"] [style*=";background: #000"],:root[data-theme="clair"] [style*="; background: #000"],:root[data-theme="clair"] [style*=" background: #000"],:root[data-theme="clair"] [style^="background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=";background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*="; background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=" background: rgb(0, 0, 0)"]{background-color:#fbfbfb!important}
 :root[data-theme="clair"] [style^="background:#000b"],:root[data-theme="clair"] [style*=";background:#000b"],:root[data-theme="clair"] [style*="; background:#000b"],:root[data-theme="clair"] [style*=" background:#000b"],:root[data-theme="clair"] [style^="background: #000b"],:root[data-theme="clair"] [style*=";background: #000b"],:root[data-theme="clair"] [style*="; background: #000b"],:root[data-theme="clair"] [style*=" background: #000b"],:root[data-theme="clair"] [style^="background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=";background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*="; background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=" background: rgba(0, 0, 0, 0.733)"]{background-color:rgba(251,251,251,0.733)!important}
 :root[data-theme="clair"] [style^="background:#040404"],:root[data-theme="clair"] [style*=";background:#040404"],:root[data-theme="clair"] [style*="; background:#040404"],:root[data-theme="clair"] [style*=" background:#040404"],:root[data-theme="clair"] [style^="background: #040404"],:root[data-theme="clair"] [style*=";background: #040404"],:root[data-theme="clair"] [style*="; background: #040404"],:root[data-theme="clair"] [style*=" background: #040404"],:root[data-theme="clair"] [style^="background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*=";background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*="; background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*=" background: rgb(4, 4, 4)"]{background-color:#f7f7f7!important}
