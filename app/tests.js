@@ -47889,7 +47889,8 @@ async function testExercices(){
       }
       const ids=BADGES_ACQUIS.map(b=>b.id);
       if(new Set(ids).size!==ids.length) return _echec('deux badges portent le meme identifiant');
-      if(ids.length!==51) return _echec(ids.length+' badges au lieu de cinquante et un');
+      if(par('assiette')!==5) return _echec(par('assiette')+' badges de l’assiette');
+      if(ids.length!==56) return _echec(ids.length+' badges au lieu de cinquante-six');
       // Chacun dit ce qu'il RECOMPENSE et ce qu'il FAUT FAIRE : la vitrine du
       // profil montre les cinq, obtenus et a obtenir, et sans `attendu` la
       // moitie de la carte serait vide.
@@ -48175,13 +48176,16 @@ async function testExercices(){
       const h=htmlMesBadges({badges:{'premiere-seance':{at:new Date(2026,8,1,10).getTime()}},
         sessions:[],bilans:[],sessions_config:[{active:true}]},new Date(2026,8,2).getTime());
       const d=document.createElement('div'); d.innerHTML=h;
-      if(h.indexOf('1/51')<0) return _echec('le compteur global ne dit pas 1/51');
+      // 56 depuis le lot N4 (29/09/2026) : les cinq badges de l'assiette.
+      if(h.indexOf('1/56')<0) return _echec('le compteur global ne dit pas 1/56');
       const fams=d.querySelectorAll('.bdg-fam');
       if(fams.length!==8) return _echec(fams.length+' familles au lieu de huit');
       if(h.indexOf('Encore 10 séances pour ASSIDU I')<0) return _echec('la barre ne dit pas ce qui reste');
       if(d.querySelectorAll('.bdg-barre').length!==8) return _echec('une famille sans barre');
       const cases=d.querySelectorAll('.bdg-case');
-      if(cases.length!==19) return _echec(cases.length+' cases au lieu de 9 uniques + 10 secrets');
+      // + 5 depuis le lot N4 (29/09/2026) : la ligne de l'assiette, entre les uniques et les secrets.
+      if(cases.length!==24) return _echec(cases.length+' cases au lieu de 9 uniques + 5 de l’assiette + 10 secrets');
+      if(d.querySelectorAll('.bdg-grille-assiette .bdg-case').length!==5) return _echec('la ligne de l’assiette');
       if(h.indexOf('01/09/2026')<0) return _echec('la date d’obtention n’est pas montrée');
       // LES SECRETS NE SE DÉVOILENT PAS : ??? et l'indice, jamais la condition.
       const sec=d.querySelectorAll('.bdg-case[data-secret]');
@@ -48193,10 +48197,11 @@ async function testExercices(){
       if((h.match(/>\?\?\?</g)||[]).length!==10) return _echec('les secrets ne s’affichent pas en ???');
       if(h.indexOf('verrouille.webp')<0) return _echec('le visuel verrouillé n’est pas utilisé');
       // TOUCHER UN BADGE OUVRE SA FICHE.
-      if(d.querySelectorAll('[onclick^="ouvrirFicheBadge("]').length!==27) return _echec('un badge ne s’ouvre pas');
+      // 8 familles + 24 cases (les 5 de l'assiette depuis le lot N4).
+      if(d.querySelectorAll('[onclick^="ouvrirFicheBadge("]').length!==32) return _echec('un badge ne s’ouvre pas');
       // Un dossier vierge ne casse pas la carte.
       const v=htmlMesBadges({});
-      return v.indexOf('0/51')>=0?true:_echec('le dossier vierge ne dit pas 0/51');})());
+      return v.indexOf('0/56')>=0?true:_echec('le dossier vierge ne dit pas 0/56');})());
     ok('La fiche d’un badge : grand visuel, date, condition, Partager si obtenu',(()=>{
       const sv=currentUser;
       try{
@@ -49202,6 +49207,128 @@ async function testExercices(){
         return ['nut_jour_g1_3','nut_jour_g4_6','nut_jour_g7_10','nut_jour_g11'].every(n=>RCM_EVENEMENTS.indexOf(n)>=0)?true:_echec('compteurs absents de RCM_EVENEMENTS');
       } finally { currentUser=sv; try{ _ciqualDB=svDb; }catch(e){} if(z) z.innerHTML=svZ; }})());
 
+    // ══ LOT N4 — LA SÉRIE ET LES BADGES DE L'ASSIETTE (29/09/2026) ═══════
+    const _N4C={kcal:2000,p:150};
+    const _N4T={entries:[{kcal:1000,p:75},{kcal:1000,p:75}]}, _N4X={entries:[{kcal:1000,p:75}]};
+    // Un journal : `tenus` et `rates` sont des jours ISO.
+    const _N4L=(tenus,rates)=>{ const l={}; for(const j of tenus||[]) l[j]=_N4T; for(const j of rates||[]) l[j]=_N4X; return l; };
+    const _N4R=(a,b)=>{ const o=[]; for(let j=a;j<=b;j=_jourPlus(j,1)) o.push(j); return o; };
+    const _N4M=new Date(2026,8,29,12).getTime();   // mardi 29/09/2026, midi
+    ok('N4 — la série : un jour manqué la met en pause, deux la rompent, hier est la limite',(()=>{
+      const dix=_N4R('2026-09-19','2026-09-28');
+      if(serieAssiette(_N4L(dix),_N4C,_N4M)!==10) return _echec('dix jours tenus jusqu’à hier : '+serieAssiette(_N4L(dix),_N4C,_N4M));
+      // UN jour manqué : pause, pas rupture.
+      const sans24=dix.filter(j=>j!=='2026-09-24');
+      if(serieAssiette(_N4L(sans24,['2026-09-24']),_N4C,_N4M)!==9) return _echec('un jour raté casse la série : '+serieAssiette(_N4L(sans24,['2026-09-24']),_N4C,_N4M));
+      if(serieAssiette(_N4L(sans24),_N4C,_N4M)!==9) return _echec('un jour sans journal casse la série');
+      // DEUX jours manqués dans la même semaine : rupture, la série repart d'après le premier.
+      const deux=dix.filter(j=>j!=='2026-09-24'&&j!=='2026-09-26');
+      if(serieAssiette(_N4L(deux),_N4C,_N4M)!==3) return _echec('deux jours ratés en trois jours : '+serieAssiette(_N4L(deux),_N4C,_N4M));
+      // Deux jours manqués à sept jours d'écart : deux pauses, aucune rupture.
+      const sept=dix.filter(j=>j!=='2026-09-20'&&j!=='2026-09-27');
+      if(serieAssiette(_N4L(sept),_N4C,_N4M)!==8) return _echec('deux écarts à une semaine : '+serieAssiette(_N4L(sept),_N4C,_N4M));
+      // Hier manqué, aujourd'hui pas encore tenu : la série tient, en pause.
+      const d=serieAssietteDetail(_N4L(_N4R('2026-09-19','2026-09-27')),_N4C,_N4M);
+      if(d.n!==9||!d.pause) return _echec('hier manqué : '+JSON.stringify(d));
+      // Hier ET avant-hier manqués : rompue.
+      if(serieAssiette(_N4L(_N4R('2026-09-19','2026-09-26')),_N4C,_N4M)!==0) return _echec('deux jours de suite manqués');
+      // Pas de journal du tout, pas de cible : zéro, sans erreur.
+      if(serieAssiette({},_N4C,_N4M)!==0||serieAssiette(_N4L(dix),null,_N4M)!==0) return _echec('journal vide ou cible absente');
+      return true;})());
+    ok('N4 — la série : la journée en cours ne compte que tenue ; les changements d’heure ne mangent aucun jour',(()=>{
+      const l=_N4L(_N4R('2026-09-19','2026-09-28'));
+      l['2026-09-29']=_N4X;                      // aujourd'hui, à moitié saisi
+      const a=serieAssietteDetail(l,_N4C,_N4M);
+      if(a.n!==10||a.aujourdhui||a.pause) return _echec('journée en cours non tenue : '+JSON.stringify(a));
+      l['2026-09-29']=_N4T;
+      const b=serieAssietteDetail(l,_N4C,_N4M);
+      if(b.n!==11||!b.aujourdhui) return _echec('journée en cours tenue : '+JSON.stringify(b));
+      // Heure d'hiver (25/10/2026) et heure d'été (29/03/2026), le soir.
+      const h=serieAssiette(_N4L(_N4R('2026-10-20','2026-10-27')),_N4C,new Date(2026,9,28,22).getTime());
+      if(h!==8) return _echec('passage à l’heure d’hiver : '+h);
+      const e=serieAssiette(_N4L(_N4R('2026-03-25','2026-03-30')),_N4C,new Date(2026,2,31,0,30).getTime());
+      if(e!==6) return _echec('passage à l’heure d’été : '+e);
+      // Une cible par jour (jour ON, jour OFF) : la fonction est acceptée.
+      const f=serieAssiette(_N4L(_N4R('2026-09-26','2026-09-28')),j=>j==='2026-09-27'?{kcal:3000,p:150}:_N4C,_N4M);
+      return f===2?true:_echec('cible par jour : '+f);})());
+    ok('N4 — aucun badge de l’assiette ne parle d’un poids, d’une perte ou d’une balance',(()=>{
+      const l=BADGES_ACQUIS.filter(b=>b.famille==='assiette');
+      if(l.length!==5) return _echec(l.length+' badges dans la famille');
+      for(const b of l){
+        const t=[b.nom,b.condition,b.phrase,b.lib,b.attendu,b.indice||''].join(' ').toLowerCase();
+        const m=t.match(/kilo|poids|perdu|gras/);
+        if(m) return _echec(b.id+' dit « '+m[0]+' »');
+      }
+      // Et leur calcul ne lit pas le poids : les pesées n'y changent rien.
+      const log=_N4L(_N4R('2026-08-01','2026-09-28'));
+      const u=o=>Object.assign({email:'n4@t.fr',role:'athlete',nutrition:{dietType:'flexible',
+        macros:{on:{kcal:2000,p:150,l:70,g:250},off:{kcal:2000,p:150,l:70,g:250}},log}},o||{});
+      const f=x=>JSON.stringify(badgesMeritesDates(x,_N4M).filter(b=>/^assiette_/.test(b.id)));
+      const avec=u({weightLog:_N4R('2026-08-01','2026-09-28').map((j,i)=>({date:j,weight:90-i*0.2}))});
+      if(f(u())!==f(avec)) return _echec('les pesées changent les badges de l’assiette');
+      return true;})());
+    ok('N4 — les badges de l’assiette : datés du bon jour, une pause ne retarde rien, les protéines comptées à part',(()=>{
+      const M=o=>({email:'n4b@t.fr',role:'athlete',nutrition:{dietType:'flexible',
+        macros:{on:{kcal:2000,p:150,l:70,g:250},off:{kcal:2000,p:150,l:70,g:250}},log:o}});
+      const jours=_N4R('2026-09-01','2026-09-28').filter(j=>j!=='2026-09-05');
+      const log=_N4L(jours,['2026-09-05']);
+      const d=Object.fromEntries(badgesMeritesDates(M(log),_N4M).map(x=>[x.id,x.at]));
+      const le=j=>{ const [a,m,x]=j.split('-').map(Number); return new Date(a,m-1,x,20).getTime(); };
+      if(d.assiette_premier_jour!==le('2026-09-01')) return _echec('PREMIER JOUR '+d.assiette_premier_jour);
+      // Le 5 est une pause : le 7e jour tenu est le 8.
+      if(d.assiette_7!==le('2026-09-08')) return _echec('SEPT JOURS '+new Date(d.assiette_7));
+      if(d.assiette_21!==le('2026-09-22')) return _echec('VINGT ET UN '+new Date(d.assiette_21));
+      if(d.assiette_100||d.assiette_proteines) return _echec('CENT JOURS ou PROTÉINES trop tôt');
+      // Trente jours de protéines, calories à côté : PROTÉINES, et aucun autre.
+      const p={}; for(const j of _N4R('2026-08-01','2026-08-30')) p[j]={entries:[{kcal:3000,p:160}]};
+      const e=badgesMeritesDates(M(p),_N4M).map(x=>x.id).filter(x=>/^assiette_/.test(x));
+      if(e.join()!=='assiette_proteines') return _echec('protéines seules : '+e.join());
+      // Cent jours dans l'année.
+      const c=_N4L(_N4R('2026-01-01','2026-09-28').filter((j,i)=>i%2===0));
+      const cc=badgesMeritesDates(M(c),_N4M).find(x=>x.id==='assiette_100');
+      if(!cc) return _echec('CENT JOURS absent après 136 jours tenus');
+      return true;})());
+    ok('N4 — la semaine d’assiette : 5 jours tenus du lundi au dimanche, 75 V, bornée par le serveur ; rien sous aTCA',(()=>{
+      if(XP_ACTIONS.semaineAssiette!==75||XP_ACTIONS.semaine!==150) return _echec('barème');
+      const M=(log,o)=>Object.assign({email:'n4c@t.fr',role:'athlete',nutrition:{dietType:'flexible',
+        macros:{on:{kcal:2000,p:150,l:70,g:250},off:{kcal:2000,p:150,l:70,g:250}},log}},o||{});
+      // Semaine du lundi 14/09 : cinq jours tenus. Semaine du 21/09 : quatre.
+      const log=_N4L(['2026-09-14','2026-09-15','2026-09-16','2026-09-18','2026-09-20',
+        '2026-09-21','2026-09-22','2026-09-24','2026-09-26'],['2026-09-17','2026-09-23']);
+      const r=xpCalcul(M(log),_N4M);
+      if(r.cat.semaineAssiette!==75) return _echec('semaines : '+r.cat.semaineAssiette);
+      if(r.cat.cible!==9*XP_ACTIONS.cible) return _echec('la cible relue dans les faits : '+r.cat.cible);
+      // Sous aTCA : ni série, ni badge, ni semaine. La cible du lot N2 ne bouge pas.
+      const t=M(log,{tcaRisque:true});
+      const rt=xpCalcul(t,_N4M);
+      if(rt.cat.semaineAssiette!==0||rt.cat.cible!==r.cat.cible) return _echec('aTCA : '+JSON.stringify(rt.cat));
+      if(badgesMeritesDates(t,_N4M).some(x=>/^assiette_/.test(x.id))) return _echec('un badge de l’assiette sous aTCA');
+      if(serieAssietteDe(t,_N4M).n!==0) return _echec('une série sous aTCA');
+      return true;})());
+    ok('N4 — le cadre de l’accueil : même forme que les semaines, absent sans cible',(()=>{
+      const a=affichageSerieAssiette({n:12,pause:false}), b=affichageSerieAssiette({n:1,pause:true}), c=affichageSerieAssiette({n:0});
+      if(a.valeur!==12||a.libelle!=='JOURS'||a.sous!=='Dans ta cible') return _echec(JSON.stringify(a));
+      if(b.libelle!=='JOUR'||b.sous!=='En pause') return _echec(JSON.stringify(b));
+      if(!c.nul||c.valeur!==null||c.libelle!=='JOUR 1') return _echec(JSON.stringify(c));
+      const tete=document.querySelector('#s-client-home .clh-tete');
+      if(!tete) return true;
+      const svA=tete.hasAttribute('data-assiette'), el0=document.getElementById('clh-assiette'), svH=el0?el0.hidden:null;
+      try{
+        _rendreSerieAssiette({role:'athlete',nutrition:{log:{}}});
+        const el=document.getElementById('clh-assiette');
+        if(tete.hasAttribute('data-assiette')||(el&&!el.hidden)) return _echec('un cadre sans cible');
+        _rendreSerieAssiette({role:'athlete',nutrition:{macros:{on:_N4C,off:_N4C},log:{}}});
+        const e2=document.getElementById('clh-assiette');
+        if(!e2||e2.hidden||!e2.classList.contains('sk-badge')) return _echec('pas de cadre avec une cible');
+        if(!e2.querySelector('.sk-dial svg')||!e2.querySelector('.sk-chev')) return _echec('pas la forme du cadre des semaines');
+        if(e2.previousElementSibling&&e2.previousElementSibling.id!=='clh-streak') return _echec('pas sous le cadre des semaines');
+        return true;
+      } finally {
+        if(svA) tete.setAttribute('data-assiette',''); else tete.removeAttribute('data-assiette');
+        const e3=document.getElementById('clh-assiette');
+        if(e3){ if(el0) e3.hidden=svH; else e3.remove(); }
+      }})());
+
     ok('Volts : dix rangs, dans l’ordre, seuils croissants à partir de 0',(()=>{
       const n=RANGS.map(r=>r.nom).join();
       if(n!=='ÉTINCELLE,IMPULSION,VOLTAGE,MACHINE,ÉLITE,SURTENSION,MONSTRE,FOUDRE,TITAN,LÉGENDE') return _echec(n);
@@ -49428,7 +49555,7 @@ async function testExercices(){
       if(n!==1||defisFusionnerResultats(u,{m1:{titre:'x'}})!==0) return _echec('fusion');
       const c=badgesMeritesDates(u,_DFIN+864e5).find(x=>x.id==='champion');
       if(!c||c.at!==_DFIN) return _echec('CHAMPION '+JSON.stringify(c));
-      if(BADGES_ACQUIS.length!==51) return _echec('la collection n’est plus de cinquante et un');
+      if(BADGES_ACQUIS.length!==56) return _echec('la collection n’est plus de cinquante-six');
       const d=document.createElement('div'); d.innerHTML=htmlDefisReleves(u);
       return (/Défis relevés/.test(d.textContent)&&/CHAMPION · OCTOBRE/.test(d.textContent)&&/20\/10\/2026/.test(d.textContent))?true:_echec(d.textContent);})());
     ok('Défis : la carte 1080×1920 — « J’AI RELEVÉ » / « LE DÉFI D’OCTOBRE », ou « CHAMPION »',(()=>{
@@ -52358,7 +52485,11 @@ async function testExercices(){
       // SEPTIEME (28/09/2026) : la fin du parcours « Mise sous tension »
       // (parcoursAvancer), et SEULEMENT quand il vient de finir — le badge
       // SOUS TENSION est fete en ecran plein, hors seance.
-      if(n!==7) return _echec(n+' occurrences de majBadges( au lieu de sept');
+      // HUITIEME (lot N4, 29/09/2026) : APRES UN AJOUT AU JOURNAL (_nutGeste),
+      // jamais a un rendu : c'est l'ajout qui fait tenir la journee et gagner un
+      // badge de l'assiette.
+      if(n!==8) return _echec(n+' occurrences de majBadges( au lieu de huit');
+      if(!/function _nutGeste\(date\)\{[\s\S]{0,300}?setTimeout\(\(\)=>\{ try\{ majBadges\(\); \}/.test(s)) return _echec('l’appel du journal n’est plus garde par l’ajout');
       if(!/if\(r\.fini\)\{ try\{ majBadges\(\); \}/.test(s)) return _echec('l’appel du parcours n’est plus garde par sa fin');
       if(!/defisFusionnerResultats\(u,r\)[^;]*;\s*if\(n\)\{[\s\S]{0,500}?majBadges\(\)/.test(s))
         return _echec('l’appel des resultats serveur n’est plus garde par « du nouveau »');

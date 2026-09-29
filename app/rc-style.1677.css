@@ -11899,6 +11899,47 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .fj-nommer input{flex:1;min-width:0;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:var(--r-2);padding:8px 10px;font:inherit}
 .fj-nommer .btn{margin:0;flex:none}
 .fj-nommer-x{flex:none;width:36px;height:36px;background:none;border:0;color:var(--text-dim);font-size:18px;cursor:pointer}
+/* ══ LOT N4 : LA SÉRIE DE L'ASSIETTE, JUMELLE DES SEMAINES (29/09/2026) ═══
+   Sous le cadre des semaines, même forme, même taille (mêmes mesures en cqw).
+   La bande passe de 19,8 à 26,9 cqw, seulement quand le cadre est là
+   (data-assiette) ; le bloc de gauche descend de moitié pour rester centré, et
+   la jauge du rang s'arrête avant la colonne des deux cadres. */
+.clh-tete[data-assiette]{height:calc(26.9cqw + var(--st))}
+.clh-tete[data-assiette] #clh-athlete-avatar{top:calc(var(--st) + 5.15cqw)}
+.clh-tete[data-assiette] .eyebrow{top:calc(var(--st) + 5.3cqw)}
+.clh-tete[data-assiette] #clh-name{top:calc(var(--st) + 8.9cqw)}
+.clh-tete[data-assiette] .rg-emb{top:calc(var(--st) + 15.7cqw)}
+.clh-tete[data-assiette] .rg-nom{top:calc(var(--st) + 16.55cqw)}
+.clh-tete[data-assiette] .rg-jauge{top:calc(var(--st) + 19.35cqw);width:31.6cqw}
+#clh-assiette{position:absolute;left:61.6cqw;top:calc(var(--st) + 14.1cqw);width:35.65cqw;height:9.9cqw;margin:0;
+  cursor:pointer;-webkit-tap-highlight-color:transparent}
+#clh-assiette[hidden]{display:none}
+#clh-assiette:focus-visible{outline:2px solid var(--red);outline-offset:3px}
+#clh-assiette .sk-cadre{position:absolute;inset:0;display:block;padding:0;border-radius:1.8cqw;
+  border:.22cqw solid #ff2a2a;background:#070303;
+  box-shadow:0 0 1.2cqw rgba(255,40,40,.75),0 0 3cqw rgba(224,32,32,.35),inset 0 0 1cqw rgba(224,32,32,.15)}
+#clh-assiette .sk-cadre::before{top:1.5cqw;left:10.75cqw;width:.12cqw;min-width:1px;height:6.9cqw;
+  border:0;border-radius:0;background:rgba(255,70,70,.45)}
+#clh-assiette .sk-cadre::after{display:none}
+#clh-assiette .sk-dial{position:absolute;left:1.5cqw;top:1.05cqw;width:7.8cqw;height:7.8cqw}
+#clh-assiette .sk-chiffres{position:static;display:block}
+#clh-assiette-val{position:absolute;left:12.65cqw;top:1.45cqw;font-family:var(--pile-titre);font-size:5.85cqw!important;
+  line-height:1!important;letter-spacing:0;color:var(--text);font-variant-numeric:tabular-nums;
+  text-shadow:0 0 10px rgba(255,255,255,.3)}
+#clh-assiette .sk-chiffres[data-nul] #clh-assiette-val{display:none}
+#clh-assiette .sk-lbl{position:absolute;left:18.95cqw;top:3.15cqw;font-family:Montserrat,sans-serif;font-weight:800;
+  font-size:2.45cqw;line-height:1;letter-spacing:0;color:#fff;transform:scaleX(0.82);transform-origin:0 50%}
+#clh-assiette .sk-chiffres[data-nul] .sk-lbl{left:12.65cqw;top:2.6cqw}
+#clh-assiette .sk-date{position:absolute;left:12.4cqw;top:6.25cqw;font-family:Montserrat,sans-serif;font-weight:600;
+  font-size:1.87cqw;line-height:1;letter-spacing:-0.04em;color:#7d7d7d;white-space:nowrap}
+#clh-assiette .sk-reste{position:absolute;left:12.75cqw;top:6.4cqw;font-size:1.95cqw;line-height:1;
+  max-width:none;white-space:nowrap;letter-spacing:0}
+#clh-assiette .sk-chev{position:absolute;left:32.2cqw;top:3.3cqw;width:2.6cqw;height:3.3cqw;color:#ff2a2a;
+  filter:drop-shadow(0 0 .5cqw rgba(255,42,42,.7))}
+#clh-assiette .sk-chev svg{display:block;width:100%;height:100%}
+/* La vitrine : la famille de l'assiette, cinq cases sur une ligne. */
+/* « PROTÉINES » tient dans sa case à 360 px sans se couper, au plancher de 10 px. */
+.bdg-grille-assiette .bdg-nom{letter-spacing:0}
 /* ═══ THEME CLAIR — GENERE PAR scripts/theme_clair.py, NE PAS MODIFIER A LA MAIN ═══ */
 :root[data-theme="clair"] [style*="--halo-c"]{--halo-1:0 0 8px var(--halo-c,rgba(255,255,255,.45));--halo-2:0 0 14px var(--halo-c,rgba(255,255,255,.60)),0 0 30px var(--halo-c,rgba(255,255,255,.25));--halo-3:0 0 20px var(--halo-c,rgba(255,255,255,.85)),0 0 44px var(--halo-c,rgba(255,255,255,.40))}
 html[data-theme="clair"]{background:#f8f8f8}
@@ -14637,6 +14678,13 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .fj-enr{border:1px solid var(--border);color:var(--sub)}
 :root[data-theme="clair"] .fj-nommer input{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
 :root[data-theme="clair"] .fj-nommer-x{color:var(--text-dim)}
+:root[data-theme="clair"] #clh-assiette:focus-visible{outline:2px solid var(--red)}
+:root[data-theme="clair"] #clh-assiette .sk-cadre{border:.22cqw solid #ff2a2a;background:#faf3f3;box-shadow:0 0 1.2cqw rgba(255,40,40,.75),0 0 3cqw rgba(224,32,32,.35),inset 0 0 1cqw rgba(224,32,32,.15)}
+:root[data-theme="clair"] #clh-assiette .sk-cadre::before{background:rgba(255,70,70,.45)}
+:root[data-theme="clair"] #clh-assiette-val{color:var(--text);text-shadow:0 0 10px rgba(255,255,255,.3)}
+:root[data-theme="clair"] #clh-assiette .sk-lbl{color:#090909}
+:root[data-theme="clair"] #clh-assiette .sk-date{color:#848484}
+:root[data-theme="clair"] #clh-assiette .sk-chev{color:#cc0000;filter:drop-shadow(0 0 .5cqw rgba(255,42,42,.7))}
 :root[data-theme="clair"] [style^="background:#000"],:root[data-theme="clair"] [style*=";background:#000"],:root[data-theme="clair"] [style*="; background:#000"],:root[data-theme="clair"] [style*=" background:#000"],:root[data-theme="clair"] [style^="background: #000"],:root[data-theme="clair"] [style*=";background: #000"],:root[data-theme="clair"] [style*="; background: #000"],:root[data-theme="clair"] [style*=" background: #000"],:root[data-theme="clair"] [style^="background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=";background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*="; background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=" background: rgb(0, 0, 0)"]{background-color:#fbfbfb!important}
 :root[data-theme="clair"] [style^="background:#000b"],:root[data-theme="clair"] [style*=";background:#000b"],:root[data-theme="clair"] [style*="; background:#000b"],:root[data-theme="clair"] [style*=" background:#000b"],:root[data-theme="clair"] [style^="background: #000b"],:root[data-theme="clair"] [style*=";background: #000b"],:root[data-theme="clair"] [style*="; background: #000b"],:root[data-theme="clair"] [style*=" background: #000b"],:root[data-theme="clair"] [style^="background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=";background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*="; background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=" background: rgba(0, 0, 0, 0.733)"]{background-color:rgba(251,251,251,0.733)!important}
 :root[data-theme="clair"] [style^="background:#040404"],:root[data-theme="clair"] [style*=";background:#040404"],:root[data-theme="clair"] [style*="; background:#040404"],:root[data-theme="clair"] [style*=" background:#040404"],:root[data-theme="clair"] [style^="background: #040404"],:root[data-theme="clair"] [style*=";background: #040404"],:root[data-theme="clair"] [style*="; background: #040404"],:root[data-theme="clair"] [style*=" background: #040404"],:root[data-theme="clair"] [style^="background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*=";background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*="; background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*=" background: rgb(4, 4, 4)"]{background-color:#f7f7f7!important}

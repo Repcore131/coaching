@@ -2588,6 +2588,11 @@ const RC_LEXIQUE=Object.freeze({
   assiduite:Object.freeze({
     t:'Semaines d\'assiduité',
     d:'Le nombre de semaines d\'affilée où tu as fait toutes les séances prévues à ton programme.'}),
+  // LOT N4 : le cadre de l'assiette, sous celui des semaines.
+  assiette:Object.freeze({
+    t:'Jours dans ta cible',
+    d:'Les jours d\'affilée où ton journal tient ta cible : calories à 7 % près, protéines atteintes.',
+    p:'Un seul jour hors cible dans la semaine ne casse pas la série : il la met en pause. Deux, si. La journée en cours compte dès qu\'elle est tenue.'}),
   score_diete:Object.freeze({
     t:'Diète respectée',
     d:'La part des jours tenus : selon ta réponse du jour, ou ton journal comparé à tes cibles.',
@@ -39325,6 +39330,7 @@ function loadClientHome(){
   // Le compteur de l'en-tete subsiste, reduit. La case « Semaines » a quitte
   // les metriques : elle reste consultable dans l'onglet Perfs.
   _rendreStreak(u,s);
+  try{ _rendreSerieAssiette(u); }catch(e){}
   document.getElementById('clh-greeting').textContent=salutation()+' '+u.fname+'.';
   // textContent et non innerHTML : ces phrases n'ont aucune raison de
   // traverser l'analyseur HTML.
@@ -74381,6 +74387,17 @@ const BADGES_ACQUIS=Object.freeze([
   // sous_tension.png, converti par scripts/badges.py (repli : FULL_SESSION).
   {id:'parcours_sous_tension',nom:'SOUS TENSION',famille:'unique',palier:null,icone:'sous_tension',condition:'Termine le parcours Mise sous tension.',test:f=>f.parcoursFini,
    lib:'Mise sous tension',phrase:'Toutes les étapes sont faites. Le courant passe.'},
+  // ── L'ASSIETTE (lot N4) : des journées TENUES, jamais un résultat ────
+  // ⚠ Aucun badge sur un déficit, une perte ou un chiffre de balance : un test
+  //   relit ces lignes et tombe au premier mot qui en parle.
+  {id:'assiette_premier_jour',nom:'PREMIER JOUR',famille:'assiette',palier:null,icone:'assiette_premier_jour',condition:'Tiens ta cible une journée.',test:f=>_bdgNieme(f.assiette.jours,1),
+   phrase:'Une journée entière dans ta cible. La première.'},
+  {id:'assiette_7',nom:'SEPT JOURS',famille:'assiette',palier:null,icone:'assiette_7',condition:'Tiens ta cible 7 jours d’affilée.',test:f=>_bdgNieme(f.assiette.serie,7),
+   phrase:'Sept jours d’affilée dans ta cible. Un écart par semaine ne casse rien.'},
+  {id:'assiette_21',nom:'VINGT ET UN',famille:'assiette',palier:null,icone:'assiette_21',condition:'Tiens ta cible 21 jours d’affilée.',test:f=>_bdgNieme(f.assiette.serie,21),
+   phrase:'Vingt et un jours : c’est là que ça devient une habitude.'},
+  {id:'assiette_100',nom:'CENT JOURS',famille:'assiette',palier:null,icone:'assiette_100',condition:'100 jours dans ta cible en un an.',test:f=>f.assiette.annee100},
+  {id:'assiette_proteines',nom:'PROTÉINES',famille:'assiette',palier:null,icone:'assiette_proteines',condition:'Atteins tes protéines 30 jours.',test:f=>_bdgNieme(f.assiette.prot,30)},
   // ── LES SECRETS : heure et date LOCALES de l'appareil ───────────────
   {id:'aube',nom:'AUBE',famille:'secret',palier:null,icone:'aube',condition:'Lance une séance avant 6 h du matin.',indice:'Le fer est plus froid avant le lever du jour.',test:f=>f.aube},
   {id:'nuit',nom:'NUIT',famille:'secret',palier:null,icone:'nuit',condition:'Termine une séance après 23 h.',indice:'Certains s’entraînent quand la ville dort.',test:f=>f.nuit},
@@ -74428,7 +74445,9 @@ const BADGE_REPLI=Object.freeze({
   'premier-bilan':'PROGRESSION',fondateur:'PERSONAL_BEST',recruteur:'MULTIPLE_RECORDS',
   mentor:'MULTIPLE_RECORDS',champion:'NO_MERCY',parcours_sous_tension:'FULL_SESSION',aube:'NEW_PERF',nuit:'NEW_PERF',
   nouvel_an:'MONSTER',noel:'MONSTER',tempete:'NEW_PERF',foudre_serie:'NEW_PERF',
-  phenix:'RETURN',palindrome:'NO_FAIL',vendredi13:'NO_MERCY',centurion:'HIGH_VOLUME'
+  phenix:'RETURN',palindrome:'NO_FAIL',vendredi13:'NO_MERCY',centurion:'HIGH_VOLUME',
+  assiette:'FULL_SESSION',assiette_premier_jour:'FULL_SESSION',assiette_7:'STREAK',assiette_21:'DISCIPLINE',
+  assiette_100:'PERFECT',assiette_proteines:'NO_FAIL'
 });
 // L'ancien nom de la table : les cinq d'origine gardent leur médaillon.
 const BADGE_ACQUIS_IMG=Object.freeze({
@@ -74598,6 +74617,8 @@ function _badgesFaits(u,maintenant){
   f.champion=dc[0]||0;
   // Le parcours « Mise sous tension » : sa date de fin (jamais pour un compte existant).
   f.parcoursFini=(u&&u.parcours&&!u.parcours.existant&&Number(u.parcours.fini)>0)?Number(u.parcours.fini):0;
+  // L'assiette (lot N4) : jours tenus, protéines, série, semaines.
+  try{ f.assiette=_assietteFaits(u,t); }catch(e){ f.assiette={jours:[],prot:[],serie:[],annee100:0,semaines:[],tenus:{}}; }
   return f;
 }
 // Les exercices d'une séance, qu'elle soit écrite en `data` (nom → séries,
@@ -75182,6 +75203,9 @@ function htmlMesBadges(u,maintenant){
   // chacun, au lieu d'une colonne qui s'étirait (Kevin, 28/09/2026).
   h+='<div class="bdg-sous">Uniques</div><div class="bdg-grille bdg-grille-4">'
     +cases(BADGES_ACQUIS.filter(b=>b.famille==='unique'),false)+'</div>';
+  // L'ASSIETTE (lot N4) : cinq cases, une ligne.
+  h+='<div class="bdg-sous">Assiette</div><div class="bdg-grille bdg-grille-5 bdg-grille-assiette">'
+    +cases(BADGES_ACQUIS.filter(b=>b.famille==='assiette'),false)+'</div>';
   h+='<div class="bdg-sous">Secrets</div><div class="bdg-grille bdg-grille-5">'
     +cases(BADGES_ACQUIS.filter(b=>b.famille==='secret'),true)+'</div>';
   // Les éditions : bouclées, en cours, et « Plus jamais disponible ».
@@ -77278,7 +77302,13 @@ const XP_ACTIONS=Object.freeze({
   // LOT N2 (29/09/2026) : la journée DANS SA CIBLE (kcal à ±7 %, protéines à
   // 95 % au moins), une fois par jour, dans le plafond. La saisie seule reste
   // à 15 (nutrition) : c'est la cible tenue qui vaut davantage.
-  cible:40
+  cible:40,
+  // LOT N4 : la SEMAINE D'ASSIETTE (5 jours tenus du lundi au dimanche), un
+  // jalon hors plafond comme la semaine d'entraînement, mais à MOITIÉ : les
+  // cinq jours ont déjà rapporté 5 × 40 V, et l'application reste d'abord un
+  // outil d'entraînement (une semaine d'assiette parfaite : 5 × 40 + 75 = 275 V,
+  // une semaine de trois séances complètes : 3 × 130 + 150 = 540 V).
+  semaineAssiette:75
 });
 const XP_NUTRITION_MIN=3;
 // ══ LOT N2 : LA CIBLE TENUE ═══════════════════════════════════════════════
@@ -77311,6 +77341,186 @@ function cibleTenueJour(u,j){
   if(!tot.n||!nut.macros) return {kcal:false,prot:false,tenue:false};
   let c=null; try{ c=_getEffectiveMacros(nut,nutIsOnDay(j,u),j,u); }catch(e){ c=null; }
   return cibleTenue(tot,c);
+}
+// ══ LOT N4 : LA SÉRIE ET LES BADGES DE L'ASSIETTE (29/09/2026) ═════════════
+// Un jour « tenu » est celui du lot N2 (cibleTenue : kcal à ±7 %, protéines à
+// 95 % au moins). La série compte les jours tenus d'affilée.
+//
+// ⚠ UN JOUR NON TENU N'EST PAS UNE RUPTURE. Un seul par semaine glissante met
+//   la série en PAUSE (il ne compte pas, il ne casse rien) : un repas de
+//   famille ne doit pas remettre un mois à zéro. Deux jours non tenus à moins
+//   de sept jours l'un de l'autre la rompent. Un jour sans journal est un jour
+//   non tenu.
+// ⚠ LE JOUR EN COURS ne compte que s'il est DÉJÀ tenu : sinon la série
+//   s'arrête à hier, et la journée d'aujourd'hui peut encore la prolonger.
+// ⚠ AUCUN BADGE NI AUCUN VOLT SUR UN RÉSULTAT CORPOREL. On récompense une
+//   journée tenue, jamais un déficit ni un chiffre de balance. Sous aTCA, ni
+//   série, ni badge, ni semaine d'assiette (même garde que le point du lot N1).
+const ASSIETTE_PAUSE_JOURS=7;
+const ASSIETTE_SEMAINE_JOURS=5;
+// PURE. Les jours du journal jusqu'à « jusqua » (inclus) : {jour: {tenue, prot}}.
+// « cibles » : la cible {kcal, p}, ou une fonction jour → cible (jour ON ou OFF).
+function joursAssiette(log,cibles,jusqua){
+  const out={}, L=log||{};
+  for(const j of Object.keys(L)){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(j)||(jusqua&&j>jusqua)) continue;
+    const tot=journalTotalJour(L,j);
+    if(!tot.n) continue;
+    let c=null; try{ c=(typeof cibles==='function')?cibles(j):cibles; }catch(e){ c=null; }
+    const r=cibleTenue(tot,c);
+    out[j]={tenue:r.tenue,prot:r.prot};
+  }
+  return out;
+}
+// PURE. La série au soir de chaque jour, du premier jour tenu jusqu'à « fin » :
+// [[jour, série], …]. Les jours comptés en jours de CALENDRIER (_jourPlus,
+// _joursEntre) : un changement d'heure ne crée ni ne mange aucun jour.
+// Entre deux jours non tenus, tout est tenu : quand le second rompt la série,
+// elle repart donc des jours tenus qui les séparent.
+function _assietteSeries(tenus,fin){
+  const t=tenus||{}, ok=j=>!!(t[j]&&t[j].tenue);
+  const premiers=Object.keys(t).filter(j=>ok(j)&&(!fin||j<=fin)).sort();
+  const out=[];
+  if(!premiers.length) return out;
+  // Avant le premier jour tenu, rien n'est tenu : la veille est un écart, et
+  // l'avant-veille aussi, la série part donc de zéro.
+  let j=premiers[0], n=0, ecart=_jourPlus(j,-1);
+  for(let i=0;i<5000&&j<=fin;i++){
+    if(ok(j)) n++;
+    else{
+      const d=_joursEntre(ecart,j);
+      if(d<ASSIETTE_PAUSE_JOURS) n=Math.max(0,d-1);
+      ecart=j;
+    }
+    out.push([j,n]);
+    j=_jourPlus(j,1);
+  }
+  return out;
+}
+// PURE. LA SÉRIE DE L'ASSIETTE : les jours tenus d'affilée, jusqu'à hier, ou
+// jusqu'à aujourd'hui si aujourd'hui est déjà tenu.
+function serieAssiette(log,cibles,maintenant){
+  return serieAssietteDetail(log,cibles,maintenant).n;
+}
+// PURE. La même, avec ce que l'affichage dit : « pause », le dernier jour
+// compté (hier) n'était pas tenu mais la série tient.
+function serieAssietteDetail(log,cibles,maintenant){
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const auj=localISODate(new Date(t));
+  const tenus=joursAssiette(log,cibles,auj);
+  const dep=(tenus[auj]&&tenus[auj].tenue)?auj:_jourPlus(auj,-1);
+  const l=_assietteSeries(tenus,dep);
+  const der=l.length?l[l.length-1]:null;
+  const n=(der&&der[0]===dep)?der[1]:0;
+  return {n,pause:n>0&&!(tenus[dep]&&tenus[dep].tenue),aujourdhui:dep===auj};
+}
+// La cible d'un jour pour un dossier : jour ON ou OFF, cycle compris (le
+// chemin de cibleTenueJour).
+function _assietteCibles(u){
+  const nut=(u&&u.nutrition)||{};
+  return j=>_getEffectiveMacros(nut,nutIsOnDay(j,u),j,u);
+}
+// La série d'un dossier, maintenant. Zéro sans cible, et sous aTCA.
+function serieAssietteDe(u,maintenant){
+  const nut=(u&&u.nutrition)||{};
+  if(!u||!nut.macros) return {n:0,pause:false,aujourdhui:false};
+  try{ if(aTCA(u)) return {n:0,pause:false,aujourdhui:false}; }catch(e){}
+  return serieAssietteDetail(nut.log||{},_assietteCibles(u),maintenant);
+}
+// PURE (dossier donné). LES FAITS DE L'ASSIETTE pour _badgesFaits, chaque
+// liste datée comme le journal (20 h du jour, jamais après « t ») :
+//   jours    : les jours tenus, dans l'ordre ;
+//   prot     : les jours aux protéines atteintes ;
+//   serie    : serie[n-1] = le jour où la série a atteint n pour la première fois ;
+//   annee100 : le 100e jour tenu d'une même année civile ;
+//   semaines : les semaines (lundi à dimanche) à 5 jours tenus, datées du 5e ;
+//   tenus    : la table jour → {tenue, prot}, que xpCalcul relit pour la cible.
+function _assietteFaits(u,t){
+  const r={jours:[],prot:[],serie:[],annee100:0,semaines:[],tenus:{}};
+  const nut=(u&&u.nutrition)||{};
+  if(!u||!nut.macros) return r;
+  const auj=localISODate(new Date(t));
+  let tenus={}; try{ tenus=joursAssiette(nut.log||{},_assietteCibles(u),auj); }catch(e){ tenus={}; }
+  r.tenus=tenus;
+  let tca=false; try{ tca=aTCA(u); }catch(e){ tca=false; }
+  if(tca) return r;
+  const at=j=>{ const [a,m,d]=j.split('-').map(Number); return Math.min(new Date(a,m-1,d,20).getTime(),t); };
+  const parAn={}, parSem={};
+  for(const j of Object.keys(tenus).sort()){
+    if(tenus[j].prot) r.prot.push(at(j));
+    if(!tenus[j].tenue) continue;
+    r.jours.push(at(j));
+    const a=j.slice(0,4); parAn[a]=(parAn[a]||0)+1;
+    if(parAn[a]===100&&!r.annee100) r.annee100=at(j);
+    const [y,m,d]=j.split('-').map(Number);
+    let l=''; try{ l=localISODate(_lundiDe(new Date(y,m-1,d,12))); }catch(e){ l=''; }
+    if(!l) continue;
+    parSem[l]=(parSem[l]||0)+1;
+    if(parSem[l]===ASSIETTE_SEMAINE_JOURS) r.semaines.push(at(j));
+  }
+  r.semaines.sort((a,b)=>a-b);
+  let max=0;
+  for(const [j,n] of _assietteSeries(tenus,auj)) while(n>max){ max++; r.serie.push(at(j)); }
+  return r;
+}
+// ── LE CADRE DE L'ACCUEIL, JUMEAU DE CELUI DES SEMAINES ────────────────
+// PURE. Ce que le cadre affiche : le compte, son libellé, la ligne du dessous.
+function affichageSerieAssiette(d){
+  const n=Math.max(0,Math.round(Number(d&&d.n)||0));
+  if(n>0) return {valeur:n,libelle:n>1?'JOURS':'JOUR',sous:(d&&d.pause)?'En pause':'Dans ta cible',nul:false};
+  return {valeur:null,libelle:'JOUR 1',sous:'Vise ta cible',nul:true};
+}
+// Sous le cadre des semaines, même forme, même taille. Seulement avec une
+// cible alimentaire, jamais pour un coach, jamais sous aTCA : sans cible, il
+// n'y a rien à tenir, et la bande garde sa hauteur d'origine.
+function _rendreSerieAssiette(u){
+  const tete=document.querySelector('#s-client-home .clh-tete');
+  if(!tete) return;
+  let el=document.getElementById('clh-assiette');
+  const nut=(u&&u.nutrition)||{};
+  let montrer=!!(u&&u.role!=='coach'&&nut.macros);
+  try{ if(montrer&&aTCA(u)) montrer=false; }catch(e){}
+  if(!montrer){ if(el) el.hidden=true; tete.removeAttribute('data-assiette'); return; }
+  if(!el){
+    const dial=document.querySelector('#clh-streak .sk-dial');
+    el=document.createElement('div');
+    el.id='clh-assiette'; el.className='sk-badge';
+    el.setAttribute('role','button'); el.tabIndex=0; el.setAttribute('aria-haspopup','dialog');
+    el.setAttribute('onclick',"rcInfoOuvrir('assiette')");
+    el.setAttribute('onkeydown',"if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}");
+    el.innerHTML='<div class="sk-cadre"><div class="sk-dial"></div>'
+      +'<div class="sk-chiffres"><span id="clh-assiette-val"></span><span class="sk-lbl"></span>'
+      +'<span class="sk-reste" id="clh-assiette-reste"></span><span class="sk-date" id="clh-assiette-sous"></span></div>'
+      +'<span class="sk-chev" aria-hidden="true"><svg viewBox="0 0 16 24"><polyline points="4 4 12 12 4 20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>';
+    const zd=el.querySelector('.sk-dial');
+    if(dial) zd.innerHTML=dial.innerHTML;
+    // L'ASSIETTE ET LES COUVERTS à la place de la flamme, même trait.
+    const ico=zd.querySelector('.sk-ico');
+    const ic='<svg class="sk-ico" viewBox="0 0 32 32" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">'
+      +'<circle cx="16" cy="17" r="7.5"/><circle cx="16" cy="17" r="4"/><path d="M4.5 6v5.5a2 2 0 0 0 2 2M8.5 6v5.5a2 2 0 0 1-2 2M6.5 6v22"/><path d="M27.5 28V6c-2.2 1.2-3.2 4-3.2 7.5 0 1.6.9 2.5 3.2 2.5"/></g></svg>';
+    if(ico) ico.outerHTML=ic; else zd.insertAdjacentHTML('beforeend',ic);
+    const st=document.getElementById('clh-streak');
+    if(st&&st.parentNode===tete) st.after(el); else tete.appendChild(el);
+  }
+  el.hidden=false;
+  tete.setAttribute('data-assiette','');
+  let a;
+  try{ a=affichageSerieAssiette(serieAssietteDe(u)); }catch(e){ a=affichageSerieAssiette(null); }
+  const val=document.getElementById('clh-assiette-val');
+  const lbl=el.querySelector('.sk-lbl');
+  const res=document.getElementById('clh-assiette-reste');
+  const sous=document.getElementById('clh-assiette-sous');
+  const zone=el.querySelector('.sk-chiffres');
+  if(lbl) lbl.textContent=a.libelle;
+  if(res) res.textContent=a.nul?a.sous:'';
+  if(sous) sous.textContent=a.nul?'':a.sous;
+  if(zone) zone.toggleAttribute('data-nul',a.nul);
+  el.setAttribute('aria-label',(a.valeur!==null?a.valeur+' jour'+(a.valeur>1?'s':'')+' dans ta cible'
+    +(a.sous==='En pause'?', en pause':''):'Jour 1, vise ta cible')+'. Voir ce qui est compté');
+  if(val){
+    if(a.valeur===null){ val.textContent=''; try{ delete val.dataset.valeur; }catch(e){} }
+    else{ try{ arcCompteur(val,a.valeur,{duree:ARC.release}); }catch(e){ val.textContent=String(a.valeur); } }
+  }
 }
 // LE PLAFOND ANTI-TRICHE, par jour (jour local). Il porte sur tout ce qui se
 // répète à volonté — séances, records, bilans, journal, sommeil. Une grosse
@@ -77676,7 +77886,7 @@ function _xpJour(t){ try{ return localISODate(new Date(t)); }catch(e){ return ''
 // jusqu'au plafond : la séance d'abord, la nuit en dernier.
 function xpCalcul(u,maintenant){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
-  const cat={seance:0,complete:0,record:0,bilan:0,nutrition:0,sommeil:0,checkin:0,cible:0,semaine:0,badge:0,parcours:0,archive:0};
+  const cat={seance:0,complete:0,record:0,bilan:0,nutrition:0,sommeil:0,checkin:0,cible:0,semaine:0,semaineAssiette:0,badge:0,parcours:0,archive:0};
   const vide={total:0,cat,ecrete:0};
   if(!u) return vide;
   let f; try{ f=_badgesFaits(u,t); }catch(e){ return vide; }
@@ -77698,7 +77908,9 @@ function xpCalcul(u,maintenant){
     if(!/^\d{4}-\d{2}-\d{2}$/.test(j)) continue;
     if(((log[j]&&log[j].entries)||[]).length>=XP_NUTRITION_MIN) pose(j,'nutrition',XP_ACTIONS.nutrition);
     // LOT N2 : la cible tenue, une fois par jour, jamais un jour futur.
-    let _ct=null; try{ _ct=(j<=_xpJour(t))?cibleTenueJour(u,j):null; }catch(e){ _ct=null; }
+    // LOT N4 : la table des jours tenus est calculée une fois par _badgesFaits
+    // (même chemin que cibleTenueJour), et relue ici.
+    let _ct=null; try{ _ct=(j<=_xpJour(t))?((f.assiette&&f.assiette.tenus)?f.assiette.tenus[j]:cibleTenueJour(u,j)):null; }catch(e){ _ct=null; }
     if(_ct&&_ct.tenue) pose(j,'cible',XP_ACTIONS.cible);
   }
   const nuits=new Set();
@@ -77727,6 +77939,7 @@ function xpCalcul(u,maintenant){
   }
   // Les jalons, hors plafond.
   cat.semaine=f.semaines.filter(d=>d<=t).length*XP_ACTIONS.semaine;
+  cat.semaineAssiette=((f.assiette&&f.assiette.semaines)||[]).filter(d=>d<=t).length*XP_ACTIONS.semaineAssiette;
   for(const b of BADGES_ACQUIS){
     if(_bdgInactif(b)) continue;
     let at=0; try{ at=Number(b.test(f))||0; }catch(e){ at=0; }
@@ -89234,6 +89447,9 @@ function trancheGestes(n){
 // type). Compté sur l'appareil, par jour ; envoyé UNE fois, anonyme, quand la
 // journée atteint 90 % de ses calories. Rien d'autre ne sort.
 function _nutGeste(date){
+  // LOT N4 : un ajout peut faire tenir la journée. Hors du geste, pour que
+  // l'ajout s'affiche d'abord.
+  try{ setTimeout(()=>{ try{ majBadges(); }catch(e){} try{ _rendreSerieAssiette(currentUser); }catch(e){} },0); }catch(e){}
   try{
     const k='rc_nut_g_'+date, n=(Number(localStorage.getItem(k))||0)+1;
     localStorage.setItem(k,String(n));
