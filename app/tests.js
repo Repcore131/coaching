@@ -4820,7 +4820,10 @@ async function testExercices(){
           // nombre en dur decrivait l'ancienne source, pas l'attendu.
           const _pr=poidsNutritionnel(u);
           if(_pr.source!=='pesee') return _echec('la source du poids est « '+_pr.source+' »');
-          const attendu=(mm!=null)?mbKatch(mm):mbMifflin(_pr.kg,178,32,'Homme');
+          // 29/09/2026 — mbEstime ET NON mbMifflin : depuis le 07/09/2026 la
+          // formule sans tours de mesure est Harris-Benedict (MB_FORMULE, decision
+          // de Kevin). Le nombre attendu suit la formule retenue, pas l'ancienne.
+          const attendu=(mm!=null)?mbKatch(mm):mbEstime(_pr.kg,178,32,'Homme');
           if(b.mb!==attendu) return _echec(b.mb+' au lieu de '+attendu);
           return !b.hypotheses.some(h=>/métabolisme corrigé/.test(h))
             ?true:_echec('une hypothèse de correction est annoncée');})());
@@ -24980,10 +24983,21 @@ async function testExercices(){
           poser({nutrition:{manuel:false}});
           if(/Proposer un point de départ/.test(z.innerHTML))
             return _echec('le bouton subsiste alors qu\'il n\'a plus d\'objet');
-          const v=document.getElementById('ccd-on-kcal');
-          if(!v) return _echec('les champs ont disparu');
-          return Number(v.value)>0?true
-            :_echec('le champ ne porte aucune cible calculee : « '+v.value+' »');})());
+          // 29/09/2026 — EN AUTOMATIQUE, PLUS AUCUN CHAMP. Depuis le 08/09/2026
+          // le tableau « Macronutriments » ECRIT le calcul en texte, et les
+          // champs n'apparaissent qu'en saisie manuelle (voir « EN AUTOMATIQUE,
+          // LE CALCUL EST ECRIT ET NE SE TAPE PAS »). La proposition se lit donc
+          // dans les valeurs ecrites, qui doivent etre CELLES du calcul.
+          if(document.getElementById('ccd-on-kcal'))
+            return _echec('un champ de saisie est rendu en automatique');
+          const ca=getOwnedClient(currentClientId);
+          const t=cibleTableur(ca,_tbOptsDe(ca));
+          if(!t||!(t.p>0)) return _echec('aucune cible calculee');
+          const cel=z.querySelector('.tbk-mac td[data-m="p"] .tbk-mv');
+          if(!cel) return _echec('les protéines calculées ne sont pas écrites');
+          const lu=Number(String(cel.textContent).replace(/\D/g,''));
+          return lu===Math.round(t.p)?true
+            :_echec('le tableau écrit « '+cel.textContent+' », le calcul donne '+t.p+' g');})());
         ok('Critère 1 : aucun bouton quand la taille manque',(()=>{
           const c=poser({_evol_height:null,height:null,
             bilans:[{type:'suivi',date:Date.now()-2*864e5,
@@ -24993,7 +25007,10 @@ async function testExercices(){
           const z=document.getElementById('ccd-nutrition');
           return !!z&&!/Proposer un point de départ/.test(z.innerHTML);})());
         ok('Critère 6 : « Proposer » remplit les champs et n\'écrit RIEN en base',(()=>{
-          poser();
+          // 29/09/2026 — EN SAISIE MANUELLE : c'est le seul mode ou le bouton et
+          // les dix champs existent encore (08/09/2026). Un dossier vierge
+          // demarre en automatique, sans champ a remplir.
+          poser({nutrition:{manuel:true}});
           const avant=JSON.stringify((DB.get('users')||{})['nbc@t.fr'].nutrition);
           try{ proposerPointDepart(); }catch(e){ return _echec('exception: '+e.message); }
           const apres=JSON.stringify((DB.get('users')||{})['nbc@t.fr'].nutrition);
@@ -25004,7 +25021,8 @@ async function testExercices(){
           if(avant!==apres) return _echec('la base a bougé : '+apres);
           return remplis;})());
         ok('Les champs remplis sont bien ceux du calcul',(()=>{
-          const c=poser();
+          // 29/09/2026 — en saisie manuelle, pour la meme raison que ci-dessus.
+          const c=poser({nutrition:{manuel:true}});
           const b=besoinsProposes(c,{cycle:_propCycle,
             protGparKg:(typeof _propProt==='number')?_propProt:undefined});
           proposerPointDepart();
@@ -25012,12 +25030,22 @@ async function testExercices(){
           return g('ccd-on-kcal')===b.on.kcal&&g('ccd-off-g')===b.off.g
             &&g('ccd-on-p')===b.on.p&&g('ccd-on-f')===b.on.f;})());
         ok('La formule et les hypothèses sont écrites sous le tableau',(()=>{
-          poser();
-          const h=(document.getElementById('ccd-nutrition')||{}).innerHTML||'';
-          // « facteur » est devenu « NEAT × » : le mot seul ne disait pas ce
-          // que le facteur couvre, et c'est tout le sujet du lot.
-          return /Katch-McArdle|Mifflin-St Jeor/.test(h)&&/dépense estimée/.test(h)
-            &&/NEAT ×/.test(h);})());
+          // 29/09/2026 — LE PARAGRAPHE D'HYPOTHESES EST PARTI LE 08/09/2026
+          // (_htmlDepartHypotheses, retiree a la demande de Kevin) : le tableau
+          // « Besoins caloriques » dit la meme chose ligne par ligne, chacune avec
+          // sa source. Ce qui doit rester vrai : la formule est NOMMEE (celle qui
+          // a calcule), et le facteur d'activite hors sport est chiffre.
+          const c=poser();
+          const z=document.getElementById('ccd-nutrition');
+          const txt=(z&&z.textContent)||'';
+          const t=cibleTableur(c,_tbOptsDe(c));
+          if(!t||!t.mbSource) return _echec('aucun calcul');
+          const nom=t.mbSource==='katch'?'Katch-McArdle'
+            :(t.mbSource==='harris'?'Harris-Benedict':'Mifflin-St Jeor');
+          if(txt.indexOf('Estimation basée sur la méthode '+nom)<0)
+            return _echec('la formule '+nom+' n\'est pas nommée');
+          const naf='base × '+String(t.naf.f).replace('.',',');
+          return txt.indexOf(naf)>=0?true:_echec('le facteur « '+naf+' » n\'est pas écrit');})());
         ok('Enregistrer APRÈS avoir proposé écrit bien les valeurs',(()=>{
           poser();
           proposerPointDepart();
@@ -28466,8 +28494,13 @@ async function testExercices(){
           // 25 % : -0,75 %/sem demande 511 kcal, le plafond en autorise 455.
           // Le curseur ne peut donc rien creuser de plus, et c'est la règle 3
           // qui parle. On vérifie les DEUX faces.
+          // 29/09/2026 — LE MILIEU EST DEMANDE EXPLICITEMENT. Depuis le
+          // 07/09/2026, sans vitesse, besoinsProposes part du COEFFICIENT
+          // d'objectif, que les plafonds ne brident pas (decision de Kevin) :
+          // `{}` ne mesurait plus le curseur. La vitesse reste acceptee, et c'est
+          // elle que ce critere eprouve.
           const u=seche();
-          const milieu=besoinsProposes(u,{});
+          const milieu=besoinsProposes(u,{vitesse:cibleVitesseMilieu('seche')});
           const creux=besoinsProposes(u,{vitesse:-1.0});
           const mini=Math.round(milieu.depense*(1-DEFICIT_MAX_PART));
           if(milieu.depense+milieu.delta!==mini)
@@ -41398,7 +41431,17 @@ async function testExercices(){
           // mais present aurait continue de fournir une valeur invisible.
           if(a.off!==0) return _echec('non cyclee : '+a.off+' champ(s) OFF subsistent');
           if(a.on!==5) return _echec('non cyclee : '+a.on+' champ(s) au lieu de 5');
-          if(z.textContent.indexOf('TOUS LES JOURS')<0) return _echec('l\'en-tete ne dit pas « tous les jours »');
+          // 29/09/2026 — L'EN-TETE « TOUS LES JOURS » EST PARTI AVEC L'ANCIENNE
+          // GRILLE. Le tableau « Macronutriments » n'a d'en-tete que quand il a
+          // DEUX colonnes (Jour ON / Jour OFF) ; sans cyclage, c'est le choix du
+          // cyclage, dans « Journées », qui dit « mêmes valeurs tous les jours »
+          // (Kevin, 27/09/2026 : on ne montre des journées que si elles diffèrent).
+          if(/Jour OFF/.test(((z.querySelector('.tbk-mac thead'))||{}).textContent||''))
+            return _echec('l\'en-tete annonce encore un jour OFF');
+          const sel=z.querySelector('#tbk-cycle');
+          const opt=sel&&sel.options[sel.selectedIndex];
+          if(!opt||!/tous les jours/i.test(opt.textContent))
+            return _echec('le choix du cyclage ne dit pas « tous les jours »');
           return true;})());
 
         ok('NON CYCLEE : OFF RECOIT LES MEMES VALEURS QUE ON',(()=>{
@@ -70744,6 +70787,11 @@ async function testExercices(){
         if(phase) u.phase={type:phase,debut:Date.now()-30*864e5};
         return u;
       };
+      // 29/09/2026 — LA VITESSE EST PASSEE EXPLICITEMENT. Depuis le 07/09/2026
+      // (decision de Kevin), besoinsProposes sans vitesse part du coefficient
+      // d'objectif ; la vitesse reste acceptee et c'est elle que cette section
+      // eprouve. Sans cette option, ces tests mesuraient le coefficient.
+      const _vm=(ph)=>({vitesse:cibleVitesseMilieu(ph)});
       try{
         // ── Les deux fonctions pures ──────────────────────────────────────
         ok('cibleVitesseMilieu lit PHASES et rend le milieu',(()=>{
@@ -70800,16 +70848,27 @@ async function testExercices(){
           // inatteignable. On rend donc à la fixture une dépense comparable par
           // un métier reconnu — sans quoi le test ne mesurerait plus la vitesse
           // visée mais le plafond de déficit.
+          // 29/09/2026 — DEUX CHANGEMENTS VOULUS DU 07/09/2026 rendaient ce test
+          // caduc : (1) sans vitesse, le point de depart suit le COEFFICIENT
+          // d'objectif (0,85 en seche), plus la vitesse — on la passe donc
+          // explicitement, puisque c'est elle que cette section eprouve ;
+          // (2) Harris-Benedict remplace Mifflin et le metier « Infirmier » vaut
+          // desormais × 1,5 : la depense montait a 2324. « Enseignant » (× 1,4)
+          // la ramene a une valeur comparable aux 2114 de la spec, et le plafond
+          // de 25 % ne mord pas : c'est bien la vitesse visee qu'on mesure.
           const u=_ath(62,'seche');
-          u.bilans[0]['deb-job']='Infirmier';
-          const b=besoinsProposes(u);
+          u.bilans[0]['deb-job']='Enseignant';
+          const b=besoinsProposes(u,_vm('seche'));
+          if(b.delta!==deltaKcalJour(cibleVitesseMilieu('seche'),62))
+            return _echec('le plafond mord : fixture à revoir ('+b.delta+')');
           const moy=Math.round((b.on.kcal+b.off.kcal)/2);
           return moy>=1550&&moy<=1700?true:_echec('moyenne '+moy+' pour '+b.depense);})());
         ok('Sans métier reconnu, c\'est le plafond de déficit qui décide',(()=>{
           // Le pendant honnête du test ci-dessus : à 1837 de dépense, viser
           // −0,75 % par semaine demanderait 28 % de déficit. Le plafond de 25 %
           // mord, et c'est LUI qu'on éprouve ici.
-          const b=besoinsProposes(_ath(62,'seche'));
+          // 29/09/2026 — vitesse explicite : voir le test ci-dessus.
+          const b=besoinsProposes(_ath(62,'seche'),_vm('seche'));
           const plancher=Math.round(b.depense*(1-DEFICIT_MAX_PART));
           const moy=Math.round((b.on.kcal+b.off.kcal)/2);
           return moy>=plancher-2
@@ -70824,7 +70883,9 @@ async function testExercices(){
         // était inatteignable ; on vérifie la cohérence avec la formule, qui est
         // la règle réellement écrite, et non un intervalle qui la contredit.
         ok('En masse à 80 kg, le surplus vaut ce que dit la formule',(()=>{
-          const b=besoinsProposes(_ath(80,'masse','H',180,29));
+          // 29/09/2026 — vitesse explicite : sans elle, c'est le coefficient
+          // d'objectif (1,10) qui decide depuis le 07/09/2026, pas la formule.
+          const b=besoinsProposes(_ath(80,'masse','H',180,29),_vm('masse'));
           const moy=(b.on.kcal+b.off.kcal)/2;
           const sur=Math.round(moy-b.depense);
           const attendu=deltaKcalJour(cibleVitesseMilieu('masse'),80);
@@ -70835,7 +70896,8 @@ async function testExercices(){
                      _ath(120,'seche','H',195,35)];
           const fautifs=[];
           for(const u of cas){
-            const b=besoinsProposes(u);
+            // 29/09/2026 — par la vitesse : le coefficient ne passe pas les plafonds.
+            const b=besoinsProposes(u,_vm('seche'));
             const moy=(b.on.kcal+b.off.kcal)/2;
             if(moy<b.depense*(1-DEFICIT_MAX_PART)-8)
               fautifs.push(Math.round(moy)+'/'+b.depense);
@@ -70853,8 +70915,10 @@ async function testExercices(){
           return u;
         };
         ok('Le plafond de surplus MORD sur un gabarit lourd et peu actif',(()=>{
+          // 29/09/2026 — vitesse explicite : les plafonds ne s'appliquent plus
+          // au coefficient d'objectif (07/09/2026), seulement a la vitesse.
           const u=_athCreneaux(120,'masse','H',195,35,1);
-          const b=besoinsProposes(u);
+          const b=besoinsProposes(u,_vm('masse'));
           const brut=deltaKcalJour(cibleVitesseMilieu('masse'),120);
           const plaf=Math.round(b.depense*SURPLUS_MAX_PART);
           if(!(brut>plaf)) return _echec('fixture inutile : delta brut '+brut+' sous le plafond '+plaf);
@@ -70866,7 +70930,7 @@ async function testExercices(){
                      _athCreneaux(95,'masse','H',185,40,1)];
           const fautifs=[];
           for(const u of cas){
-            const b=besoinsProposes(u);
+            const b=besoinsProposes(u,_vm('masse'));
             const moy=(b.on.kcal+b.off.kcal)/2;
             if(moy>b.depense*(1+SURPLUS_MAX_PART)+8) fautifs.push(Math.round(moy)+'/'+b.depense);
           }
