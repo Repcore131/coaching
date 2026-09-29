@@ -20564,7 +20564,7 @@ function evenementCible(ev){
   if(t==='defi_maj') return String(ev.id||'');
   if(t==='defi_publie') return String(ev.msg||'');
   // Un duel : l'événement vise le duel (les règles vérifient qu'on en est).
-  if(t==='duel_rejoint'||t==='duel_maj') return DUEL_ID_RE.test(String(ev.id||''))?String(ev.id):'';
+  if(t==='duel_rejoint'||t==='duel_maj'||t==='duel_cree') return DUEL_ID_RE.test(String(ev.id||''))?String(ev.id):'';
   return '-';
 }
 async function deposerEvenement(ev){
@@ -21122,6 +21122,7 @@ function duelLigne(d,moi,maintenant){
   const lui=d.createur===moi?(d.inviteNom||'ton pote'):(d.createurNom||'ton adversaire');
   const txt=texteDuel(d.mesure,d.duree);
   if(d.statut==='attente') return txt+' · en attente de ton pote';
+  if(d.statut==='accepte'&&d.invite===moi&&d.createurPseudo) return (d.createurNom||'Ton pote')+' te défie : '+txt+' · ta prochaine séance lance le compte';
   if(d.statut==='accepte') return txt+' contre '+lui+' · démarre à '+(d.invite===moi?'ta':'sa')+' première séance';
   if(d.statut==='en_cours'){
     const s=d.scores||{};
@@ -21374,7 +21375,8 @@ function htmlLigneAmi(x,t,o){
     +'<span class="am-id"><span class="am-nom"><b>'+escapeHtml(x.prenom||x.p)+'</b>'+(mut?'<i class="am-mut">ami</i>':'')+'</span>'
       +'<small>'+escapeHtml(rang?rang.charAt(0)+rang.slice(1).toLowerCase():'@'+x.p)+'</small></span>'
     +'<span class="am-v"><b>'+vs+'</b><small>V cette semaine</small></span>'
-    +'<button type="button" class="am-defi" onclick="event.stopPropagation();amiDefier(\''+escapeHtml(x.p)+'\')">Défier</button>'
+    +(x.rev?'<button type="button" class="am-defi" onclick="event.stopPropagation();amiRevanche(\''+escapeHtml(x.p)+'\',\''+x.rev.mesure+'\','+x.rev.duree+',this)">Revanche</button>'
+      :'<button type="button" class="am-defi" onclick="event.stopPropagation();amiDefier(\''+escapeHtml(x.p)+'\')">Défier</button>')
     +'</div>';
 }
 // PURE. La carte de l'accueil. Vide, elle dit quoi faire, et qui agit.
@@ -21413,6 +21415,7 @@ function htmlAmiIntrouvable(p,invalide){
 async function _amisAvecProfils(){
   const l=amisListe();
   await Promise.all(l.map(async x=>{ try{ x.prof=await _profilAmi(x.cle); }catch(e){ x.prof=null; } }));
+  for(const x of l){ const d=dernierDuelContre(_duelsCache,x.cle); if(d) x.rev=revancheParams(d); }
   return l;
 }
 async function renderAmisAccueil(){
@@ -21504,6 +21507,86 @@ function duelAdversairePseudo(d,moi){
   const p=d.createur===moi?d.invitePseudo:d.createurPseudo;
   return PSEUDO_PUBLIC_RE.test(p||'')?p:'';
 }
+// ══ LA REVANCHE (lot B, 29/09/2026) : défier un ami SANS lien ══════════════
+// Un duel né « accepte », l'ami nommé par son pseudo. Les règles l'acceptent
+// si et seulement si cet ami me suit déjà ; le Worker (événement duel_cree)
+// y pose sa clé, le range dans ses duels reçus et le prévient. Rien à
+// accepter : sa première séance lance le compte.
+const DUELS_MAX_EN_COURS=10, DUELS_MAX_MEME_AMI=3;
+function _duelsEnCours(cache){
+  const c=cache||_duelsCache;
+  return Object.keys(c).map(id=>Object.assign({id},c[id])).filter(d=>d&&['attente','accepte','en_cours'].indexOf(d.statut)>=0);
+}
+// PURE. Les garde-fous, dits en une phrase ; '' quand on peut lancer.
+function duelsGardeFou(enCours,cleAmi,prenom){
+  const l=enCours||[];
+  if(l.length>=DUELS_MAX_EN_COURS) return 'Tu as déjà '+DUELS_MAX_EN_COURS+' duels en cours : termine-en un avant d’en lancer un autre.';
+  const n=l.filter(d=>d.invitePseudo===cleAmi||d.createurPseudo===cleAmi).length;
+  if(cleAmi&&n>=DUELS_MAX_MEME_AMI) return 'Vous avez déjà '+DUELS_MAX_MEME_AMI+' duels en cours'+(prenom?' avec '+prenom:' ensemble')+' : attends la fin de l’un d’eux.';
+  return '';
+}
+// PURE. Ce que « Revanche » reprend du duel précédent : la mesure et la durée.
+function revancheParams(d){
+  const m=d&&DUEL_MESURES.some(x=>x.cle===d.mesure)?d.mesure:'seances';
+  const j=d&&DUEL_DUREES.indexOf(Number(d.duree))>=0?Number(d.duree):14;
+  return {mesure:m,duree:j};
+}
+// PURE. Le dernier duel terminé contre cet ami (sa clé-pseudo), ou null.
+function dernierDuelContre(cache,cleAmi){
+  const l=Object.keys(cache||{}).map(id=>Object.assign({id},cache[id]))
+    .filter(d=>d&&d.statut==='termine'&&(d.invitePseudo===cleAmi||d.createurPseudo===cleAmi))
+    .sort((a,b)=>(Number(b.termineLe)||0)-(Number(a.termineLe)||0));
+  return l[0]||null;
+}
+async function creerDuelAvecAmi(pseudo,mesure,duree){
+  const u=currentUser;
+  if(!u||u.role==='coach') return {ok:false,erreur:'Réservé aux athlètes.'};
+  if(!CLOUD.ok()) return {ok:false,erreur:'Impossible hors connexion : réessaie une fois connecté.'};
+  const p=amiPseudoNormalise(pseudo), cle=pseudoPublicCle(p);
+  const e=amisLocal().amis[cle], prenom=(e&&e.prenom)||p;
+  const mp=_monPseudo(u);
+  if(!mp) return {ok:false,lien:true,erreur:'Pour défier '+prenom+' sans lien, choisis d’abord ton nom dans Mon profil. En attendant, envoie-lui le lien du duel.'};
+  const garde=duelsGardeFou(_duelsEnCours(),cle,prenom);
+  if(garde) return {ok:false,erreur:garde};
+  const r=revancheParams({mesure,duree});
+  const id=duelNouvelId(), moi=_moiCle();
+  const nom=String(u.fname||u.pseudo||'').trim().slice(0,24)||'Un ami';
+  const duel={createur:moi,createurNom:nom,mesure:r.mesure,duree:r.duree,creeLe:Date.now(),statut:'accepte',
+    createurPseudo:pseudoPublicCle(mp),invitePseudo:cle};
+  const ok=await CLOUD.racinePatch({['duels/'+id]:duel,['duels_publics/'+id]:{prenom:nom,mesure:r.mesure,duree:r.duree}}).catch(()=>false);
+  if(!ok) return {ok:false,lien:true,erreur:prenom+' ne te suit pas encore : un duel direct demande qu’il te suive. Envoie-lui le lien du duel à la place.'};
+  u.duels=Object.assign({},u.duels||{},{[id]:{role:'createur',le:Date.now()}});
+  try{ saveUser(); }catch(e){}
+  _duelsCache[id]=duel;
+  deposerEvenement({type:'duel_cree',id}).catch(()=>{});
+  return {ok:true,id,prenom};
+}
+// Un seul geste : la mesure et la durée du duel précédent, aucun écran.
+async function amiRevanche(pseudo,mesure,duree,btn){
+  if(btn) btn.disabled=true;
+  const r=await creerDuelAvecAmi(pseudo,mesure,duree);
+  if(btn) btn.disabled=false;
+  if(!r.ok){
+    toast(r.erreur,'var(--orange)',5000);
+    if(r.lien){ const p=amiPseudoNormalise(pseudo), e=amisLocal().amis[pseudoPublicCle(p)]; ouvrirCreationDuel({p,prenom:(e&&e.prenom)||p}); }
+    return false;
+  }
+  fermerDuelFeuille();
+  toast('Revanche lancée contre '+r.prenom+' ⚡ Sa prochaine séance lance le compte.','var(--green)',4500);
+  _rendreDuelsAccueil(); _rendreAmisPartout();
+  return true;
+}
+// Les revanches reçues (/duels_recus, rangées par le Worker) rejoignent mes duels.
+async function duelsRecusRattacher(u){
+  if(!u||u.role==='coach'||!CLOUD.ok()) return 0;
+  const r=await _fbJson('duels_recus/'+_moiCle());
+  if(!r.ok||!r.v||typeof r.v!=='object') return 0;
+  let n=0;
+  const x=Object.assign({},u.duels||{});
+  for(const id of Object.keys(r.v)) if(DUEL_ID_RE.test(id)&&!x[id]){ x[id]={role:'invite',le:Number(r.v[id].le)||Date.now()}; n++; }
+  if(n){ u.duels=x; try{ saveUser(); }catch(e){} }
+  return n;
+}
 async function _rendreDuelsAccueil(){
   const z=document.getElementById('clh-duels');
   const u=currentUser;
@@ -21518,6 +21601,7 @@ async function _rendreDuelsAccueil(){
   // Une lecture par duel en cours, toutes les 10 minutes au plus.
   if(CLOUD.ok()&&Date.now()-_duelsLusLe>10*60e3){
     _duelsLusLe=Date.now();
+    try{ await duelsRecusRattacher(u); }catch(e){}
     for(const id of _mesDuels(u).slice(-6)){
       if(u.duels[id].fini&&_duelsCache[id]) continue;
       try{ const d=await _duelLire(id); if(d) _duelsCache[id]=d; }catch(e){}
@@ -21574,6 +21658,19 @@ async function lancerDuel(btn){
   const j=(f&&f.querySelector('[data-duree].actif'))?Number(f.querySelector('[data-duree].actif').dataset.duree):14;
   const lib=btn&&(btn.querySelector('.du-l-t')||btn);
   if(btn){ btn.disabled=true; lib.textContent='Création…'; }
+  // L'AMI VISÉ : le duel part directement, sans lien ni feuille de partage.
+  if(_duelCible){
+    const ra=await creerDuelAvecAmi(_duelCible.p,m,j);
+    if(ra.ok){
+      if(f) f.querySelector('.du-carte').innerHTML='<div class="du-titre">Défi lancé contre '+escapeHtml(ra.prenom)+' ⚡</div>'
+        +'<p class="du-sous">'+escapeHtml(texteDuel(m,j))+'. Il n’a rien à accepter : sa prochaine séance lance le compte.</p>'
+        +'<button type="button" class="btn btn-outline btn-sm du-go" onclick="fermerDuelFeuille();_rendreDuelsAccueil()">Fermer</button>';
+      _rendreDuelsAccueil();
+      return true;
+    }
+    toast(ra.erreur,'var(--orange)',5000);
+    if(!ra.lien){ if(btn){ btn.disabled=false; lib.textContent='Lancer le duel'; } return false; }
+  }
   const r=await creerDuel(m,j);
   if(!r.ok){ if(btn){ btn.disabled=false; lib.textContent='Lancer le duel'; } toast(r.erreur,'var(--orange)'); return false; }
   // L'ENVOI EST UN NOUVEAU TOUCHER : la création a pris du temps réseau, et
@@ -21619,6 +21716,12 @@ async function ouvrirDuel(id){
       if(!ap||amisLocal().amis[dk]) return '';
       const nom=escapeHtml(d.createur===moi?(d.inviteNom||ap):(d.createurNom||ap));
       return '<button type="button" class="btn btn-outline btn-sm btn-casse du-go" onclick="amiSuivre(\''+escapeHtml(amiPseudoDeCle(ap))+'\',\''+nom+'\');this.remove()">Ajouter '+nom+' à mes amis</button>'; })()
+    // LA REVANCHE : un geste, la mesure et la durée de ce duel ; « Changer »,
+    // discret, rouvre la feuille pour cet ami.
+    +(()=>{ const ap=fini?duelAdversairePseudo(d,moi):''; if(!ap) return '';
+      const p=escapeHtml(amiPseudoDeCle(ap)), rp=revancheParams(d), nom=escapeHtml(d.createur===moi?(d.inviteNom||ap):(d.createurNom||ap));
+      return '<button type="button" class="btn btn-red du-go" onclick="amiRevanche(\''+p+'\',\''+rp.mesure+'\','+rp.duree+',this)">Revanche</button>'
+        +'<button type="button" class="du-changer" onclick="fermerDuelFeuille();ouvrirCreationDuel({p:\''+p+'\',prenom:\''+nom+'\'})">Changer la mesure ou la durée</button>'; })()
     +'<button type="button" class="btn '+(fini?'btn-red':'btn-outline btn-sm btn-casse')+' du-go" onclick="partagerCarteDuel(\''+id+'\',\''+(fini?'resultat':'lancement')+'\',this)">'
       +icon('share',14)+' <span>'+(fini?'Partager le résultat':'Partager la carte DUEL')+'</span></button>'
     +'<button type="button" class="btn btn-outline btn-sm du-go" onclick="fermerDuelFeuille()">Fermer</button></div>';

@@ -11366,6 +11366,7 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .du-d-n{flex:none;min-width:18px;height:18px;padding:0 4px;box-sizing:border-box;border-radius:9px;background:#fff;color:#c10b0b;
   font:800 11px/18px Montserrat,sans-serif;text-align:center;letter-spacing:0}
 .du-liste{display:flex;flex-direction:column;gap:8px}
+.du-changer{display:block;width:100%;margin:8px 0 0;padding:8px;background:none;border:0;color:var(--sub,#a0a0a8);font:600 var(--fs-xs) Montserrat,sans-serif;cursor:pointer}
 /* ══ LES AMIS (lot A, 29/09/2026) ══ */
 #clh-amis:empty{display:none}
 .am-carte{margin:12px 0 16px;padding:14px;border-radius:14px;background:var(--surface-1,#111);border:1px solid var(--border,#2a2a2e)}
@@ -14329,6 +14330,7 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .du-d-ico svg{filter:drop-shadow(0 1px 2px rgba(0,0,0,0.158))}
 :root[data-theme="clair"] .du-d-t{text-shadow:0 1px 2px rgba(0,0,0,0.105)}
 :root[data-theme="clair"] .du-d-n{background:#090909;color:#c10b0b}
+:root[data-theme="clair"] .du-changer{color:var(--sub,#5b5b64)}
 :root[data-theme="clair"] .am-carte{background:var(--surface-1,#ebebeb);border:1px solid var(--border,#cfcfd3)}
 :root[data-theme="clair"] .am-titre{color:var(--red-text,#cc0000)}
 :root[data-theme="clair"] .am-tout{color:var(--sub,#5b5b64)}
