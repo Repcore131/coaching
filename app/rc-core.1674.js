@@ -22937,7 +22937,7 @@ function ouvrirCrmCoach(){
     String((a.fname||'')+(a.lname||'')).localeCompare(String((b.fname||'')+(b.lname||''))));
   const adresses=_crmAdresses(l);
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div class="mdl-large" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:4px;font-size:var(--fs-lg)">CARNET D'ADRESSES</h2>
     <div class="sub" style="font-size:var(--fs-xs);margin-bottom:12px">${l.length} athlète${l.length>1?'s':''}. Un tap ouvre ton mail, ton téléphone ou WhatsApp : RepCore n'envoie rien à ta place.</div>
     ${adresses?`<button class="btn btn-outline btn-sm" style="width:100%;margin:0 0 12px" onclick="_crmCopierAdresses()">Copier toutes les adresses</button>`:''}
@@ -40736,7 +40736,7 @@ function ouvrirMerciAchat(id){
   const mois=(offre('boutique_prog')||{}).mois||3;
   const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
     +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-    +'<div class="mdl-large" onclick="event.stopPropagation()" style="background:var(--surface-2);'
+    +'<div onclick="event.stopPropagation()" style="background:var(--surface-2);'
     +'border-radius:var(--r-4) var(--r-4) 0 0;padding:20px 20px 24px;width:100%;max-width:480px;'
     +'max-height:90vh;overflow-y:auto">'
     +'<h2 style="margin-bottom:6px;font-size:var(--fs-lg)">« '+escapeHtml(p.nom||'Programme')+' » est à toi.</h2>'
@@ -40899,7 +40899,7 @@ function ouvrirMesExercices(){
       +'Dès qu\'un exercice y est posé, sa fiche apparaît ici.</p>';
   const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
     +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-    +'<div class="mdl-large" onclick="event.stopPropagation()" style="background:var(--surface-2);'
+    +'<div onclick="event.stopPropagation()" style="background:var(--surface-2);'
     +'border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;'
     +'max-height:90vh;overflow-y:auto">'
     +'<h2 style="margin-bottom:4px;font-size:var(--fs-lg)">Mes exercices</h2>'
@@ -40930,7 +40930,7 @@ function ouvrirFicheMonExercice(i,rejoue){
   let pastilles=''; try{ pastilles=htmlVideosExo(ex)||''; }catch(e){ pastilles=''; }
   const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
     +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-    +'<div class="mdl-large" id="me-fiche" onclick="event.stopPropagation()" style="background:var(--surface-2);'
+    +'<div id="me-fiche" onclick="event.stopPropagation()" style="background:var(--surface-2);'
     +'border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;'
     +'max-height:90vh;overflow-y:auto">'
     +'<h2 style="margin-bottom:10px;font-size:var(--fs-lg)">'+escapeHtml(nom)+'</h2>'
@@ -41031,7 +41031,7 @@ function ouvrirMerciRevision(){
   const n=revisionsPayees(currentUser).length;
   const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
     +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
-    +'<div class="mdl-large" onclick="event.stopPropagation()" style="background:var(--surface-2);'
+    +'<div onclick="event.stopPropagation()" style="background:var(--surface-2);'
     +'border-radius:var(--r-4) var(--r-4) 0 0;padding:20px 20px 24px;width:100%;max-width:480px;'
     +'max-height:90vh;overflow-y:auto">'
     +'<h2 style="margin-bottom:6px;font-size:var(--fs-lg)">Révision demandée.</h2>'
