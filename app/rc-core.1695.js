@@ -5866,7 +5866,7 @@ function _validateAthletePkg(o){
       ||!!params.get('wrapped')||params.get('canal')==='1'||!!params.get('ref')||params.get('parrainage')==='1'
       ||!!params.get('coach')||!!params.get('src')||!!params.get('amb')||params.get('paiements')==='1'
       ||!!params.get('duel')||params.get('duels')==='1'||!!params.get('saison')||params.get('parcours')==='1'||params.get('reprise')==='1'
-      ||!!params.get('apk')||!!params.get('sante')||params.get('prospects')==='1');
+      ||!!params.get('apk')||!!params.get('sante')||params.get('prospects')==='1'||!!params.get('payer')||!!params.get('paiement_coach'));
     // ?apk=<versionCode> — l'APK Android (LauncherActivity) l'ajoute à chaque
     // ouverture. Rangé dans rc_apk : la feuille « Connecter mes données
     // santé » sait ainsi qu'elle tourne dans l'APK (rcDansApk).
@@ -5932,6 +5932,10 @@ function _validateAthletePkg(o){
     if(params.get('canal')==='1') window._pendingCanalOpen=true;
     // ?prospects=1 — les notifications au coach d'un nouveau contact (C6).
     if(params.get('prospects')==='1') window._pendingProspectsOpen=true;
+    // ?payer=<slug>~<formule> (la vitrine d'un coach relié) : gardé BRUT, une heure,
+    // jusqu'à la connexion. ?paiement_coach=retour|annule&token=<commande> : le retour de PayPal.
+    if(params.get('payer')){ try{ localStorage.setItem('rc_payer',JSON.stringify({brut:String(params.get('payer')).slice(0,90),at:Date.now()})); }catch(e){} }
+    if(params.get('paiement_coach')) window._pendingPaiementCoach={etat:String(params.get('paiement_coach')),commande:String(params.get('token')||'')};
     // ?ref=<CODE> — le lien de parrainage. Gardé jusqu'à l'inscription.
     // ⚠ ÉCRIT ICI, EN CLAIR, ET NON PAR parrainageMemoriserRef : ce bloc tourne
     //   pendant le chargement du script, AVANT que les constantes du module
@@ -6225,6 +6229,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // Les formules proposées sur la vitrine (des clés du tableau des offres) et
   // le message d'accueil des prospects (lot C6).
   'vitrineFormules','prospectAccueil',
+  // Le miroir de la liaison PayPal du coach (le serveur fait foi : coach_paiement).
+  'paiementCoach',
   'catchphrase','phone','diplomes','promoBanners','seenBilans','bio','dispo',
   'contact','vision','level','salles','rapPreset','blocPriorite','lastCoachVisit',
   'demandesVideo',
@@ -7438,7 +7444,10 @@ function routeUser(){
   // s'interposer. Meme delai, pour laisser l'ecran d'arrivee se peindre.
   setTimeout(_proposerReconsentement,600);
   if(window._pendingAthletePkg) setTimeout(_proposerImportAthlete,700);
-  if(currentUser.role==='coach'){loadCoachHome();return;}
+  if(currentUser.role==='coach'){loadCoachHome();
+    // ?prospects=1 : la notification d'un nouveau contact (C6). Ici, dans la branche coach.
+    if(window._pendingProspectsOpen){ window._pendingProspectsOpen=false; setTimeout(()=>{ try{ ouvrirProspects(); }catch(e){} },1000); }
+    return;}
   // Athlète : vérifier l'accès
   const s=currentUser.status||'FREE';
   // Athlète FREE = inscrit mais pas encore activé. Ce n'est pas un compte
@@ -7478,8 +7487,10 @@ function routeUser(){
     setTimeout(()=>{ try{ ouvrirWrapped(_k==='1'?null:_k); }catch(e){} },1000);}
   if(window._pendingCanalOpen){ window._pendingCanalOpen=false;
     setTimeout(()=>{ try{ loadCanal(); }catch(e){} },1000);}
-  if(window._pendingProspectsOpen&&currentUser&&currentUser.role==='coach'){ window._pendingProspectsOpen=false;
-    setTimeout(()=>{ try{ ouvrirProspects(); }catch(e){} },1000);}
+  // Le paiement d'une formule de coach : le retour de PayPal, ou la proposition de payer.
+  if(window._pendingPaiementCoach){ const _pc=window._pendingPaiementCoach; window._pendingPaiementCoach=false;
+    setTimeout(()=>{ try{ pcRetourPaypal(_pc.etat,_pc.commande); }catch(e){} },1100);}
+  else setTimeout(()=>{ try{ pcProposerPaiement(); }catch(e){} },1300);
   if(window._pendingParrainageOpen){ window._pendingParrainageOpen=false;
     setTimeout(()=>{ try{ ouvrirParrainage(); }catch(e){} },1000);}
   if(window._pendingSaisonOpen){ window._pendingSaisonOpen=false;
@@ -7575,6 +7586,8 @@ function droitsDe(u){
     bonusUltimeFin:Number(d.bonusUltimeFin)||0,
     // Ultime ouvert par un programme acheté, par-dessus l'abonnement (serveur léger).
     ultimeJusqu:Number(d.ultimeJusqu)||0,abo:d.abo||null,
+    // Le suivi payé à un coach, par-dessus le palier (serveur léger, paiements-coach.js).
+    suiviJusqu:Number(d.suiviJusqu)||0,
     // Ce qu'une fermeture à la main a remplacé, pour que « Rouvrir » le rende.
     avantEcheance:Number(d.avantEcheance)||0,avantSource:d.avantSource||null,
     // Le demi-tarif du 1er mois d'Ultime, déjà consommé ; l'offre de lancement
@@ -7615,7 +7628,9 @@ function palierDe(u){
     // le remplacer : un renouvellement Essentielle pendant ce mois ne le
     // referme pas, et il retombe seul à sa date.
     // UN PROGRAMME ACHETÉ, de même (ultimeJusqu, posé par le serveur léger).
-    const p2=(Math.max(Number(d.bonusUltimeFin)||0,Number(d.ultimeJusqu)||0)>Date.now()&&PALIERS_ORDRE.indexOf(p)<PALIERS_ORDRE.indexOf('ultime'))?'ultime':p;
+    const p1=(Math.max(Number(d.bonusUltimeFin)||0,Number(d.ultimeJusqu)||0)>Date.now()&&PALIERS_ORDRE.indexOf(p)<PALIERS_ORDRE.indexOf('ultime'))?'ultime':p;
+    // UNE FORMULE PAYÉE À UN COACH ouvre le suivi jusqu'à sa date, sans toucher au palier payé.
+    const p2=(Number(d.suiviJusqu)||0)>Date.now()?'suivi':p1;
     // LE SUIVI D'UN COACH NE PASSE PAS PAR PayPal : un ancien abonné, suivi
     // depuis, garde son suivi même si droits/ ne porte que l'abonnement. Pas
     // quand droits/ a été posé À LA MAIN : une fermeture du créateur tient.
@@ -19394,14 +19409,16 @@ function htmlReglagesProspects(u){
       +'<span><b>'+E(o.lib)+'</b> '+E(prixOffre(k))+' · '+E(formuleDuree(k))+'</span></label>'; }).join('')
     +'<label class="pr-lab" for="coach-prospect-accueil">Le message qu’on lit après « Ça m’intéresse »</label>'
     +'<textarea id="coach-prospect-accueil" rows="4" maxlength="'+PROSPECT_ACCUEIL_MAX+'" placeholder="'+E(PROSPECT_ACCUEIL_DEFAUT)+'">'+E(String((u&&u.prospectAccueil)||''))+'</textarea>'
-    +'<div class="sub pr-p">Dis ce qui se passe ensuite, et sous quel délai. {prénom} est remplacé par le prénom de la personne. Laissé vide, c’est le message proposé qui s’affiche.</div></div>';
+    +'<div class="sub pr-p">Dis ce qui se passe ensuite, et sous quel délai. {prénom} est remplacé par le prénom de la personne. Laissé vide, c’est le message proposé qui s’affiche.</div>'
+    +'<div id="coach-paiement">'+htmlReglagePaiementCoach(u)+'</div></div>';
 }
 function _rendreReglagesProspects(){
   const z=document.getElementById('coach-formules');
   if(!z||!currentUser||currentUser.role!=='coach') return false;
   if(z.dataset.dirty) return false;
   z.innerHTML=htmlReglagesProspects(currentUser);
-  z.addEventListener('input',()=>{ z.dataset.dirty='1'; },{once:true});
+  z.addEventListener('input',e=>{ if(e.target&&e.target.id!=='coach-marchand') z.dataset.dirty='1'; });
+  if(pcPalierOk(currentUser)) _pcChargerEtat().catch(()=>{});
   return true;
 }
 // Lu par saveCoachIdentity, comme les autres champs de l'identité.
@@ -19466,6 +19483,7 @@ function renderProspects(){
       +'<div class="pr-l-d">'+E((OFFRES[p.formule]||{}).lib||'')+' · '+E(_prJour(Number(p.at)))+' · '+E(p.contact||'')+'</div>'
       +'<div class="pr-l-b">'
       +(lien?'<a class="btn btn-outline btn-sm" href="'+safeUrl(lien)+'" target="_blank" rel="noopener" onclick="rcmCoach(\'coach_message_envoye\');prospectStatut(\''+id+'\',\'repondu\',true)">Répondre</a>':'')
+      +(pcRelie(currentUser)&&pcLienPayer(currentUser.vitrineSlug,p.formule)&&st!=='athlete'?'<button type="button" class="cp-lien" onclick="pcCopierLienPayer(\''+p.formule+'\',this)">Lien de paiement</button>':'')
       +(st==='nouveau'?'<button type="button" class="cp-lien" onclick="prospectStatut(\''+id+'\',\'repondu\')">J’ai répondu</button>':'')
       +(st!=='athlete'?'<button type="button" class="cp-lien" onclick="prospectStatut(\''+id+'\',\'athlete\')">Devenu athlète</button>':'')
       +(st!=='sans_suite'&&st!=='athlete'?'<button type="button" class="cp-lien" onclick="prospectStatut(\''+id+'\',\'sans_suite\')">Sans suite</button>':'')
@@ -19486,6 +19504,160 @@ async function prospectStatut(id,statut,silencieux){
   Object.assign(p,maj);
   renderProspects(); renderEntreeProspects();
   return true;
+}
+
+// ══ LE PAIEMENT DIRECT AU COACH (29/09/2026) ══════════════════════════════
+//
+// Un coach relié (palier Coach ou Pro) encaisse SES formules sur SON compte
+// PayPal : RepCore crée la commande, PayPal verse au coach. Le serveur léger
+// (cloudflare/src/paiements-coach.js) relie le compte, crée la commande avec
+// le coach pour bénéficiaire, capture au retour, et ouvre le suivi de
+// l'athlète (droits/<athlète>.suiviJusqu, PROLONGÉ, jamais écrasé).
+//
+// ⚠ REPCORE N'ENCAISSE RIEN POUR UN COACH (NOTE-DECISION-MODELE-ECONOMIQUE §2).
+// ⚠ LE BOUTON « PAYER » N'EXISTE QUE POUR UN COACH RELIÉ. Sans liaison, la
+//   page et le parcours prospect restent ceux d'avant, mot pour mot.
+// ⚠ FERMÉ TANT QUE LE SERVEUR NE L'OUVRE PAS (env.PAIEMENTS_COACH) : l'écran
+//   le dit, et « Relier » répond que ce n'est pas encore ouvert.
+
+const PC_PALIERS=Object.freeze(['coach','pro']);
+const PC_PAYER_CLE='rc_payer';
+const PC_STATUT_LIB=Object.freeze({en_attente:'En attente',recu:'Reçu',rembourse:'Remboursé',annule:'Annulé'});
+// L'adresse de l'app, celle d'où l'on vient (Firebase ou GitHub Pages) : le lien
+// de paiement ramène au même endroit, et aucun domaine n'est écrit ici.
+const PC_APP=(()=>{ try{ return new URL('./',location.href).href.split('?')[0]; }catch(e){ return './'; } })();
+// PURE. Ce coach peut-il encaisser dans l'app ?
+function pcPalierOk(u){ return !!u&&(u.email===CREATOR_EMAIL||(u.role==='coach'&&PC_PALIERS.indexOf(String(u.coachPlan))>=0)); }
+// PURE. Relié, d'après le miroir posé par la réponse du serveur.
+function pcRelie(u){ return !!(u&&u.paiementCoach&&u.paiementCoach.statut==='relie'); }
+// PURE. Le lien qu'on donne à quelqu'un pour payer une formule de ce coach.
+function pcLienPayer(slug,formule){
+  if(!/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(String(slug||''))||VITRINE_FORMULES.indexOf(formule)<0) return '';
+  return PC_APP+'?payer='+encodeURIComponent(slug+'~'+formule);
+}
+// PURE. ?payer=<slug>~<formule> → {slug, formule} ou null.
+function pcLirePayer(v){
+  const m=/^([a-z0-9][a-z0-9-]{1,38}[a-z0-9])~([a-z_]{3,40})$/.exec(String(v||''));
+  return (m&&VITRINE_FORMULES.indexOf(m[2])>=0)?{slug:m[1],formule:m[2]}:null;
+}
+
+// ── Le réglage, dans « Mes formules sur ma page » ─────────────────────────
+let _pcEtat=null;
+function htmlReglagePaiementCoach(u){
+  const E=escapeHtml;
+  let h='<div class="pc-reg"><div class="pp-lab">Encaisser dans l’app</div>';
+  if(!pcPalierOk(u))
+    return h+'<p class="sub pr-p">Réservé aux paliers Coach et Pro. Sans, tes formules restent sur ta page avec « Ça m’intéresse », et tu encaisses comme aujourd’hui.</p></div>';
+  const e=_pcEtat;
+  if(e&&e.ouvert===false)
+    return h+'<p class="sub pr-p">Le paiement direct sur ton compte PayPal n’est pas encore ouvert. En attendant, « Ça m’intéresse » t’amène les contacts, et tu encaisses comme aujourd’hui.</p></div>';
+  const relie=e?e.statut==='relie':pcRelie(u);
+  h+='<p class="sub pr-p">L’argent arrive directement sur TON compte PayPal : RepCore ne prend rien et ne touche à rien. Tes athlètes paient depuis ta page, et leur suivi s’ouvre tout seul pour la durée de la formule.</p>'
+    +'<div class="pc-etat pc-'+(relie?'ok':'non')+'">'+(relie?'Relié'+(e&&e.marchand?' ('+E(e.marchand)+')':''):'Non relié')
+    +(e&&e.statut==='refuse'?' · PayPal a refusé ce compte'+(e.raison?' ('+E(String(e.raison).toLowerCase().replace(/_/g,' '))+')':''):'')+'</div>'
+    +'<label class="pr-lab" for="coach-marchand">Mon identifiant marchand PayPal (ou l’e-mail de mon compte PayPal Business)</label>'
+    +'<div class="pc-ligne"><input id="coach-marchand" autocomplete="off" maxlength="120" placeholder="ex. ABCD1234EFGH5">'
+    +'<button type="button" class="btn btn-outline btn-sm" onclick="relierPaiementCoach(this)">'+(relie?'Changer':'Relier')+'</button></div></div>';
+  return h;
+}
+async function _pcChargerEtat(){
+  try{ _pcEtat=await CLOUD._callFn('paiementCoach',{action:'etat'}); }catch(e){ _pcEtat=null; }
+  if(_pcEtat&&currentUser){
+    const avant=pcRelie(currentUser);
+    currentUser.paiementCoach={statut:_pcEtat.statut,le:Date.now()};
+    if(avant!==(_pcEtat.statut==='relie')){ try{ saveUser(); publierVitrinePublique(currentUser); }catch(e){} }
+  }
+  const z=document.getElementById('coach-paiement'); if(z) z.innerHTML=htmlReglagePaiementCoach(currentUser);
+  return _pcEtat;
+}
+async function relierPaiementCoach(btn){
+  const v=String((document.getElementById('coach-marchand')||{}).value||'').trim();
+  if(!v){ toast('Colle ton identifiant marchand PayPal.','var(--orange)'); return false; }
+  if(btn){ btn.disabled=true; btn.textContent='Vérification…'; }
+  let r=null;
+  try{ r=await CLOUD._callFn('paiementCoach',{action:'relier',marchand:v}); }
+  catch(e){ toast(e.message||'Vérification impossible.','var(--orange)'); }
+  if(btn){ btn.disabled=false; btn.textContent='Relier'; }
+  if(r) toast(r.relie?'Compte PayPal relié ✓':'PayPal ne reconnaît pas ce compte : vérifie l’identifiant.',r.relie?'var(--green)':'var(--orange)');
+  await _pcChargerEtat();
+  return !!(r&&r.relie);
+}
+
+// ── Payer, côté athlète : ?payer=<slug>~<formule> puis le retour de PayPal ─
+// Le lien est MÉMORISÉ AU CHARGEMENT (brut, sans rien lire du module : ce bloc-là
+// tourne avant les constantes) et lu ici, une heure au plus, après la connexion.
+function _pcPayerEnAttente(){
+  try{ const o=JSON.parse(localStorage.getItem(PC_PAYER_CLE)||'null'); const p=o&&pcLirePayer(o.brut);
+    if(p&&Date.now()-Number(o.at)<3600e3) return p; }catch(e){}
+  return null;
+}
+async function pcProposerPaiement(){
+  const p=_pcPayerEnAttente();
+  if(!p||!currentUser||currentUser.role==='coach') return false;
+  try{ localStorage.removeItem(PC_PAYER_CLE); }catch(e){}
+  const o=OFFRES[p.formule]; if(!o) return false;
+  if(!await rcConfirm('Payer '+o.lib+' ('+prixOffre(p.formule)+') ?\n\nLe paiement se fait sur PayPal et va directement sur le compte de ton coach. Ton suivi s’ouvre dès que PayPal confirme.',null,'Payer sur PayPal','Plus tard')) return false;
+  let r=null;
+  try{ r=await CLOUD._callFn('paiementCoach',{coach:p.slug,formuleId:p.formule}); }
+  catch(e){ toast(e.message||'Paiement impossible pour l’instant.','var(--orange)'); return false; }
+  if(r&&r.lien){ location.href=r.lien; return true; }
+  toast('PayPal n’a pas renvoyé de lien de paiement : réessaie.','var(--orange)');
+  return false;
+}
+async function pcRetourPaypal(etat,commande){
+  if(etat==='annule'){ toast('Paiement annulé : rien n’a été prélevé.','var(--sub)'); return false; }
+  if(etat!=='retour'||!/^[A-Z0-9]{8,40}$/.test(String(commande||''))) return false;
+  let r=null;
+  try{ r=await CLOUD._callFn('paiementCoach',{action:'capturer',commande}); }
+  catch(e){ toast(e.message||'Le paiement n’a pas pu être confirmé.','var(--orange)'); return false; }
+  if(r&&(r.statut==='recu'||r.statut==='deja')){
+    toast('Paiement reçu ✓ Ton suivi est ouvert.','var(--green)',5000);
+    try{ rafraichirDroits(currentUser,true); }catch(e){}
+    return true;
+  }
+  toast('PayPal n’a pas encore confirmé le paiement : ton suivi s’ouvrira dès qu’il le fera.','var(--orange)',5000);
+  return false;
+}
+
+// ── Côté coach : les paiements sur la fiche de l'athlète ──────────────────
+let _pcPaiements=null, _pcLu=0;
+async function _pcChargerPaiements(force){
+  if(!force&&_pcPaiements&&Date.now()-_pcLu<3*60e3) return _pcPaiements;
+  const moi=String((currentUser&&currentUser.email)||'').replace(/\./g,',');
+  if(!moi) return {};
+  const r=await _fbJson('paiements_coach/'+moi);
+  if(r.ok){ _pcPaiements=r.v||{}; _pcLu=Date.now(); }
+  return _pcPaiements||{};
+}
+// PURE. Les paiements d'un athlète, récents d'abord.
+function pcPaiementsDe(brut,cleAthlete){
+  const o=(brut&&typeof brut==='object')?brut:{};
+  return Object.keys(o).map(id=>Object.assign({id},o[id])).filter(p=>p&&p.athlete===cleAthlete&&Number(p.date)>0)
+    .sort((a,b)=>Number(b.date)-Number(a.date));
+}
+function htmlPaiementsFiche(l){
+  const E=escapeHtml;
+  if(!l.length) return '';
+  return '<div class="pc-liste">'+l.map(p=>'<div class="pc-p pc-'+E(p.statut||'')+'"><span>'+E((OFFRES[p.formule]||{}).lib||p.formule||'')+'</span>'
+    +'<span>'+E(_euros((Number(p.montant)||0)/100))+'</span><span>'+E(new Date(Number(p.date)).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'}))+'</span>'
+    +'<b>'+E(PC_STATUT_LIB[p.statut]||p.statut||'')+'</b></div>').join('')+'</div>';
+}
+function renderPaiementsFiche(c){
+  const z=document.getElementById('ccd-paiements');
+  if(!z||!c||!currentUser||currentUser.role!=='coach') return false;
+  const cle=String(c.email||'').replace(/\./g,',');
+  const peindre=()=>{ const h=htmlPaiementsFiche(pcPaiementsDe(_pcPaiements,cle)); z.innerHTML=h; const s=z.closest('section'); if(s) s.style.display=h?'':'none'; };
+  peindre();
+  if(pcRelie(currentUser)||_pcPaiements===null) _pcChargerPaiements().then(peindre).catch(()=>{});
+  return true;
+}
+// Le lien de paiement d'un contact (écran « Ma page ») : copié, le coach l'envoie.
+function pcCopierLienPayer(formule,btn){
+  const l=pcLienPayer(currentUser&&currentUser.vitrineSlug,formule);
+  if(!l) return false;
+  const fait=()=>{ toast('Lien de paiement copié : envoie-le à ton contact.','var(--green)'); if(btn){ btn.textContent='Lien copié ✓'; } };
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(l).then(fait,()=>toast(l)); return true; } }catch(e){}
+  toast(l); return true;
 }
 
 // ── La vitrine d'un coach ──────────────────────────────────────────────────
@@ -19524,6 +19696,7 @@ function vitrinePubliqueDonnees(u,maintenant){
   const fo=vitrineFormulesDe(u);
   if(fo.length) o.formules=fo;
   o.accueil=prospectAccueilDe(u);
+  if(pcRelie(u)&&pcPalierOk(u)) o.paiement=true;
   return o;
 }
 // Publiée à chaque enregistrement du profil coach (pushProfilCoach). Le slug
@@ -30332,6 +30505,7 @@ function openClientDetail(cid,_refresh,_force){
   try{ renderAsymetrieCoach(c); }catch(e){}
   try{ renderMotCoachFiche(c); }catch(e){}
   try{ renderRelanceFiche(c); }catch(e){}
+  try{ renderPaiementsFiche(c); }catch(e){}
   try{ renderDouleurCoach(c); }catch(e){}
   try{ renderLeveeCoach(c); }catch(e){}
   // BILAN DE SECURITE : une ligne, sans le detail des reponses — le coach

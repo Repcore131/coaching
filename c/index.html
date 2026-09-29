@@ -67,6 +67,9 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
 .frm .note{color:var(--gris);font-size:12px;line-height:1.5;margin:0}
 .frm .err{color:#ff8a8a;font-size:13px;margin:0;min-height:0}
 .frm .env{background:var(--rouge);border-color:var(--rouge)}
+.frm .gestes{display:flex;gap:8px;flex-wrap:wrap}
+.frm .payer{color:#fff;background:var(--rouge);border:1px solid var(--rouge);border-radius:10px;padding:10px 14px;font-weight:800;font-size:14px;text-decoration:none;min-height:44px;display:inline-flex;align-items:center}
+.frm.ouvert .gestes{display:none}
 .merci{background:#140606;border:1px solid #4a0c0c;border-radius:12px;padding:14px;margin-top:12px;white-space:pre-line;color:#fff}
 .merci small{display:block;color:var(--gris);margin-top:8px}
 .sq{background:linear-gradient(90deg,#161619,#1f1f23,#161619);background-size:200% 100%;animation:s 1.2s infinite;border-radius:10px}
@@ -166,7 +169,8 @@ h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gris);
           var f=C[k];
           return '<div class="frm" data-f="'+esc(k)+'"><b>'+esc(f.lib)+'</b>'+(f.comprend?'<p>'+esc(f.comprend)+'</p>':'')
             +'<div class="ligne"><span><span class="prix">'+euros(f.prix)+'</span> <span class="duree">'+esc(duree(k,f))+'</span></span>'
-            +'<button type="button" class="interesse">Ça m’intéresse</button></div>'
+            +'<span class="gestes">'+(v.paiement===true?'<a class="payer" href="'+racine+'app/?payer='+encodeURIComponent(slug+'~'+k)+'">Payer</a>':'')
+            +'<button type="button" class="interesse">Ça m’intéresse</button></span></div>'
             +'<form novalidate><input name="prenom" autocomplete="given-name" maxlength="30" placeholder="Ton prénom" aria-label="Ton prénom">'
             +'<input name="contact" autocomplete="tel" maxlength="120" placeholder="Ton téléphone ou ton e-mail" aria-label="Ton téléphone ou ton e-mail">'
             +'<input name="site" class="piege" tabindex="-1" autocomplete="off" aria-hidden="true">'

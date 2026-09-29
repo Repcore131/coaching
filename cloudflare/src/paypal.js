@@ -28,6 +28,8 @@
 //
 // SECRETS : PAYPAL_CLIENT_SECRET, PAYPAL_WEBHOOK_ID. VARIABLE : PAYPAL_CLIENT_ID.
 
+import { creerPaiementsCoach, lireCustomId } from './paiements-coach.js';
+
 const API = 'https://api-m.paypal.com';
 const MOIS_MS = 30 * 864e5;
 const EN_COURS_MAX_MS = 10 * 60 * 1000;
@@ -139,6 +141,9 @@ export function creerPaypal(ctx) {
   const now = ctx.maintenant || (() => Date.now());
   const lire = async (c) => (await db.ref(c).get()).val();
   const abonnement = (id) => lireAbonnement(id, env, ctx.fetchImpl);
+  // LE PAIEMENT DIRECT AU COACH : ses commandes portent un custom_id à TROIS
+  // segments (« <coach>|<athlète>|<formule> ») et suivent leur propre chemin.
+  const PC = creerPaiementsCoach(ctx);
 
   // ── À QUI EST CET ABONNEMENT ? ─────────────────────────────────────────
   // L'index paypal_abonnes d'abord. Sinon, l'abonnement lui-même, lu chez
@@ -294,6 +299,7 @@ export function creerPaypal(ctx) {
     const idCommande = String((rel && rel.order_id) || '');
     const commande = idCommande ? await lireCommande(idCommande, env, ctx.fetchImpl) : null;
     const pu = commande && Array.isArray(commande.purchase_units) ? commande.purchase_units[0] : null;
+    if (pu && lireCustomId(pu.custom_id)) return PC.evenementCapture(evt, commande);
     const [cle, prog] = String((pu && pu.custom_id) || '').split('|');
     if (!pu || !cle || /[.#$\[\]\/]/.test(cle) || (await lire('users/' + cle + '/role')) === null) {
       await ranger('commande_' + (net(idCommande) || 'inconnue'), evt);
@@ -478,6 +484,8 @@ export function creerPaypal(ctx) {
       const up = ress.links.find((l) => l && l.rel === 'up');
       if (up && up.href) id = String(up.href).split('/').pop();
     }
+    // Une capture payée à un coach : c'est son paiement qui se rembourse.
+    if (capture) { const rc = await PC.remboursement(id); if (rc) return rc; }
     const rec = await origine(id, capture ? 'capture' : 'vente');
     const montant = centimes(ress.amount && (ress.amount.total || ress.amount.value));
     const pourquoi = ress.note_to_payer || ress.reason || ress.description || '';

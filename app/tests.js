@@ -50285,6 +50285,55 @@ async function testExercices(){
       // Janvier : le mois précédent est décembre de l'année d'avant.
       return rcmMoisCoach(new Date(2027,0,15).getTime()).precedent==='2026-12'?true:_echec('janvier');})());
 
+    // ══ LE PAIEMENT DIRECT AU COACH (29/09/2026) ════════════════════════════
+    ok('Paiement coach — sans liaison, aucun bouton « Payer » : ni sur la vitrine, ni sur les contacts',(()=>{
+      const base={role:'coach',email:'pc@t.fr',fname:'Kévin',lname:'G',coachPlan:'pro',vitrineSlug:'kevin-g',vitrineFormules:['coaching_essentiel']};
+      if('paiement' in vitrinePubliqueDonnees(base,1)) return _echec('drapeau paiement sans liaison');
+      if('paiement' in vitrinePubliqueDonnees(Object.assign({},base,{paiementCoach:{statut:'refuse'}}),1)) return _echec('liaison refusée publiée');
+      if('paiement' in vitrinePubliqueDonnees(Object.assign({},base,{coachPlan:'libre',paiementCoach:{statut:'relie'}}),1)) return _echec('palier Libre publié');
+      if(vitrinePubliqueDonnees(Object.assign({},base,{paiementCoach:{statut:'relie'}}),1).paiement!==true) return _echec('relié non publié');
+      // La page publique ne montre « Payer » que si la vitrine le dit.
+      const x=new XMLHttpRequest(); x.open('GET','../c/index.html',false); x.send();
+      const page=x.status===200?x.responseText:'';
+      if(!/v\.paiement===true\?'<a class="payer"/.test(page)) return _echec('la vitrine ne garde pas le bouton derrière v.paiement');
+      // Les contacts : « Lien de paiement » seulement relié.
+      const svU=currentUser, svB=_prBrut, z=document.getElementById('pr-corps'), av=z?z.innerHTML:null;
+      try{
+        if(!z) return _echec('pas de #pr-corps');
+        _prBrut={a:{at:Date.now(),prenom:'Léa',contact:'+33612345678',canal:'tel',formule:'coaching_essentiel',statut:'nouveau'}};
+        currentUser=Object.assign({},base); renderProspects();
+        if(/Lien de paiement/.test(z.textContent)) return _echec('lien de paiement sans liaison');
+        currentUser=Object.assign({},base,{paiementCoach:{statut:'relie'}}); renderProspects();
+        if(!/Lien de paiement/.test(z.textContent)) return _echec('lien absent une fois relié');
+      } finally { currentUser=svU; _prBrut=svB; if(z) z.innerHTML=av; }
+      return true;})());
+    ok('Paiement coach — le réglage : réservé à Coach et Pro, et il dit que l’argent va au coach',(()=>{
+      const sv=_pcEtat;
+      try{
+        _pcEtat=null;
+        if(!/Réservé aux paliers Coach et Pro/.test(htmlReglagePaiementCoach({role:'coach',coachPlan:'libre',email:'x@t.fr'}))) return _echec('palier Libre');
+        const h=htmlReglagePaiementCoach({role:'coach',coachPlan:'coach',email:'x@t.fr'});
+        if(!/directement sur TON compte PayPal/.test(h)||!/RepCore ne prend rien/.test(h)||!/Non relié/.test(h)||!/id="coach-marchand"/.test(h)) return _echec(h);
+        _pcEtat={ouvert:true,statut:'relie',marchand:'AB…45'};
+        if(!/Relié \(AB…45\)/.test(htmlReglagePaiementCoach({role:'coach',coachPlan:'pro',email:'x@t.fr'}))) return _echec('relié');
+        _pcEtat={ouvert:false,statut:'non_relie'};
+        return /pas encore ouvert/.test(htmlReglagePaiementCoach({role:'coach',coachPlan:'pro',email:'x@t.fr'}))?true:_echec('fermé');
+      } finally { _pcEtat=sv; }})());
+    ok('Paiement coach — le lien de paiement, et le suivi payé qui s’ajoute au palier sans l’écraser',(()=>{
+      if(pcLienPayer('kevin-g','coaching_essentiel')!==PC_APP+'?payer=kevin-g~coaching_essentiel') return _echec(pcLienPayer('kevin-g','coaching_essentiel'));
+      if(pcLienPayer('kevin-g','boutique_prog')||pcLienPayer('../x','coaching_essentiel')) return _echec('lien invalide accepté');
+      const p=pcLirePayer('kevin-g~coaching_transfo');
+      if(!p||p.slug!=='kevin-g'||p.formule!=='coaching_transfo'||pcLirePayer('kevin-g~inconnue')||pcLirePayer('x')) return _echec('lecture du lien');
+      // droits : un suiviJusqu à venir donne le suivi ; passé, le palier payé reprend.
+      const src=String(palierDe);
+      if(!/suiviJusqu/.test(src)||!/suiviJusqu/.test(String(droitsDe))) return _echec('suiviJusqu ignoré par palierDe ou droitsDe');
+      // Les paiements d'un athlète, et rien de ceux des autres.
+      const l=pcPaiementsDe({a:{athlete:'lea@t,fr',formule:'coaching_essentiel',montant:15000,statut:'recu',date:2},
+        b:{athlete:'tom@t,fr',formule:'coaching_transfo',montant:35000,statut:'recu',date:3},c:{athlete:'lea@t,fr',formule:'coaching_transfo',montant:35000,statut:'rembourse',date:5}},'lea@t,fr');
+      if(l.map(x=>x.id).join()!=='c,a') return _echec(l.map(x=>x.id).join());
+      const d=document.createElement('div'); d.innerHTML=htmlPaiementsFiche(l);
+      return (/Remboursé/.test(d.textContent)&&/Reçu/.test(d.textContent)&&/150/.test(d.textContent))?true:_echec(d.textContent);})());
+
     ok('Volts : dix rangs, dans l’ordre, seuils croissants à partir de 0',(()=>{
       const n=RANGS.map(r=>r.nom).join();
       if(n!=='ÉTINCELLE,IMPULSION,VOLTAGE,MACHINE,ÉLITE,SURTENSION,MONSTRE,FOUDRE,TITAN,LÉGENDE') return _echec(n);

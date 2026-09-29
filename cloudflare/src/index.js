@@ -29,9 +29,12 @@ import { cloudinaryDestroy, compteCloudinary } from './medias.js';
 import { creerPaypal, recevoirWebhook, jetonPaypal } from './paypal.js';
 import { servirPagePublique } from './pages.js';
 import { santeJeton, recevoirSante, compteDuJeton, rappelSanteUn } from './sante.js';
+import { creerPaiementsCoach } from './paiements-coach.js';
 
 // Les fonctions appelées par l'app (protocole onCall, jeton Firebase vérifié).
-const APPELS = { cloudinaryDestroy, santeJeton };
+// paiementCoach : relier son compte PayPal (coach), commander et capturer (athlète).
+const paiementCoach = (req, ctx) => creerPaiementsCoach(ctx).appel(req);
+const APPELS = { cloudinaryDestroy, santeJeton, paiementCoach };
 
 // Toutes les requêtes sortantes passent ici : c'est le compteur du budget.
 function outils(env) {
@@ -89,7 +92,7 @@ export default {
       // LES FONCTIONS DE L'APP : /fn/<nom>, comme les Cloud Functions.
       if (url.pathname.startsWith('/fn/') && req.method === 'POST') {
         const o = outils(env);
-        return await repondreAppel(req, APPELS, { db: o.db, env, projet: 'repcore-sync' });
+        return await repondreAppel(req, APPELS, { db: o.db, M: o.M, env, projet: 'repcore-sync' });
       }
       // LA SANTÉ SYNCHRONISÉE (Health Connect, Raccourci iPhone) : voir sante.js.
       // Le corps n'est jamais journalisé.

@@ -15453,3 +15453,20 @@ html[data-theme="clair"]{background:#f8f8f8}
 .gc-p::before{content:"("}.gc-p::after{content:")"}
 .gc-n{font-size:var(--fs-2xs);color:var(--sub);line-height:1.35;margin-top:2px}
 @media (min-width:640px){.gc-l{grid-template-columns:repeat(6,1fr)}}
+/* Le paiement direct au coach : le réglage, et les paiements sur la fiche */
+.pc-reg{display:flex;flex-direction:column;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
+.pc-etat{font-size:var(--fs-xs);font-weight:800}
+.pc-ok{color:var(--green)}
+.pc-non{color:var(--sub)}
+.pc-ligne{display:flex;gap:8px;align-items:center}
+.pc-ligne input{flex:1;min-width:0}
+.pc-ligne .btn{margin:0;flex:none}
+.pc-liste{display:flex;flex-direction:column}
+.pc-p{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:8px 0;border-top:1px solid var(--border);font-size:var(--fs-xs);line-height:1.45}
+.pc-p:first-child{border-top:0}
+.pc-p span:first-child{font-weight:700;color:var(--text)}
+.pc-p span{color:var(--sub)}
+.pc-p b{grid-column:2;grid-row:1;text-align:right}
+.pc-recu b{color:var(--green)}
+.pc-en_attente b{color:var(--orange)}
+.pc-rembourse b,.pc-annule b{color:var(--sub)}

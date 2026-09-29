@@ -1323,6 +1323,8 @@
         // un prix) et le message d accueil montre apres « Ca m interesse ».
         "formules":    { "$i": { ".validate": "newData.isString() && newData.val().matches(/^(programme_perso|revision_prog|coaching_essentiel|coaching_transfo|coaching_evolution)$/)" } },
         "accueil":     { ".validate": "newData.isString() && newData.val().length <= 600" },
+        // Le coach encaisse dans l app (bouton « Payer ») : un simple drapeau, verifie cote serveur a la commande.
+        "paiement":    { ".validate": "newData.isBoolean()" },
         "maj":         { ".validate": "newData.isNumber()" },
         "$autre":      { ".validate": false }
       }
@@ -1533,6 +1535,16 @@
     // LES PROSPECTS (lot C6) : ecrits par le Worker (le « Ca m interesse » de
     // la vitrine), lus et suivis par le coach seul. Le coach ne change que le
     // statut et ses dates ; il peut aussi effacer une fiche.
+    // LE PAIEMENT DIRECT AU COACH : la liaison de son compte PayPal, ses
+    // paiements recus. Ecrits par le Worker seul (Admin), lus par le coach
+    // concerne seulement. L index capture -> commande n est lu par personne.
+    "coach_paiement": {
+      "$coachKey": { ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey" }
+    },
+    "paiements_coach": {
+      "$coachKey": { ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey" }
+    },
+    "paiements_coach_captures": { ".read": false, ".write": false },
     "prospects": {
       "$coachKey": {
         ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey",

@@ -248,6 +248,34 @@ Le **nom du compte Cloudinary** vient du worker, jamais de l'app : secret facult
 - réponses : 400 (identifiant invalide) et 403 (pas le tien) sont définitives, l'app sort le média de
   sa file ; 409 (propriétaire pas encore indexé) et 503 le laissent en file.
 
+## Paiement direct au coach (`paiements-coach.js`) : FERMÉ tant que la sandbox ne l'a pas prouvé
+
+Un coach relié (palier Coach ou Pro) encaisse ses formules sur **son** compte PayPal : la commande
+Orders v2 porte `payee` = le coach, **aucun** `platform_fees`, rien ne passe par le compte RepCore
+(NOTE-DECISION-MODELE-ECONOMIQUE.md §2). Tout le parcours refuse de s'ouvrir tant que la variable
+`PAIEMENTS_COACH` ne vaut pas `oui`. Elle n'est pas posée : c'est voulu.
+
+Ce que la documentation PayPal ne dit pas, et que la sandbox doit trancher avant d'ouvrir :
+1. une commande créée avec les identifiants de RepCore et `payee` = un autre compte est-elle acceptée
+   sans accord de partenaire ? (sinon PayPal répond `PAYEE_NOT_CONSENTED` ou `NOT_AUTHORIZED`) ;
+2. le webhook `PAYMENT.CAPTURE.COMPLETED` d'une telle commande arrive-t-il chez nous ? (la capture au
+   retour de l'athlète ouvre déjà l'accès : le webhook n'est qu'un filet) ;
+3. un remboursement fait depuis le compte du coach nous est-il signalé (`PAYMENT.CAPTURE.REFUNDED`) ?
+
+La marche à suivre (developer.paypal.com, onglet Sandbox) :
+1. créer deux comptes sandbox Business (RepCore et un coach) et un compte Personal (l'athlète) ;
+2. une application sandbox rattachée au compte RepCore : noter son Client ID et son secret ;
+3. un Worker de test : `npx wrangler deploy --env sandbox`, avec un bloc `[env.sandbox]` dans
+   wrangler.toml (`name = "repcore-serveur-sandbox"`, vars `PAYPAL_API_BASE = "https://api-m.sandbox.paypal.com"`,
+   `PAIEMENTS_COACH = "oui"`, `PAYPAL_CLIENT_ID` = celui de sandbox) et le secret posé par
+   `npx wrangler secret put PAYPAL_CLIENT_SECRET --env sandbox` ;
+4. relier le merchant id du coach sandbox, payer une formule avec le compte Personal, vérifier dans le
+   tableau de bord sandbox que l'argent est **chez le coach**, et que RepCore n'a rien reçu ;
+5. rembourser depuis le compte du coach et regarder si `paiements_coach/<coach>/<commande>` passe à
+   `rembourse`. Sinon, le dire : le remboursement ne serait alors connu que du coach.
+
+Ensuite seulement : `PAIEMENTS_COACH = "oui"` dans `[vars]`, puis `npx wrangler deploy`.
+
 ## Pas encore branché
 
 - **Le mois de mentorat** de l'Ultime (il vivait dans `droits/`, que le Worker n'écrit pas).

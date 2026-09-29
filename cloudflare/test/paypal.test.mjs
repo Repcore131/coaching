@@ -382,4 +382,27 @@ await test('la table OFFRES du serveur suit les plans et les prix de l’app', a
   assert.equal((code.match(/custom_id:_cleComptePaypal\(\)\+'\|'\+p\.id/g) || []).length, 2);
 });
 
+// ── LE PAIEMENT DIRECT AU COACH, PAR LE WEBHOOK (paiements-coach.js) ─────────
+await test('une capture à trois segments va au coach, une capture à deux reste un achat de programme', async () => {
+  const cmdCoach = { id: 'ORDCOACH01', purchase_units: [{ custom_id: 'kev@t,fr|lea@t,fr|coaching_essentiel', payee: { merchant_id: 'ABCDEFGH12345' },
+    amount: { currency_code: 'EUR', value: '150.00' } }] };
+  const cmdProg = { id: 'ORDPROG001', purchase_units: [{ custom_id: 'lea@t,fr|prog1', amount: { currency_code: 'EUR', value: '14.90' } }] };
+  const w = monde({ users: Object.assign(LEA(), { 'kev@t,fr': { role: 'coach', coachPlan: 'pro' } }), boutique: { prog1: { prixCts: 1490 } },
+    coach_paiement: { 'kev@t,fr': { marchand: 'ABCDEFGH12345', type: 'merchant_id', statut: 'relie', le: 1 } } },
+    { commandes: { ORDCOACH01: cmdCoach, ORDPROG001: cmdProg } });
+  const cap = (id, value, ord) => evt('PAYMENT.CAPTURE.COMPLETED', { id, status: 'COMPLETED', amount: { currency_code: 'EUR', value },
+    supplementary_data: { related_ids: { order_id: ord } } });
+  assert.deepEqual(await w.envoyer(cap('CAPC0001', '150.00', 'ORDCOACH01')), { status: 200, texte: 'paiement_coach' });
+  assert.equal(w.F.lire('paiements_coach/kev@t,fr/ORDCOACH01/statut'), 'recu');
+  assert.equal(w.F.lire('droits/lea@t,fr/suiviJusqu'), T0 + MOIS);
+  // Le compte RepCore n'a RIEN encaissé : aucune transaction à son registre pour ce paiement.
+  assert.equal(w.F.lire('paypal_transactions/CAPC0001'), null);
+  assert.equal(w.F.lire('paypal_premiers/lea@t,fr'), null);
+  // L'achat d'un programme, lui, suit toujours son chemin.
+  const r = await w.envoyer(cap('CAPP0001', '14.90', 'ORDPROG001'));
+  assert.equal(r.status, 200);
+  assert.notEqual(r.texte, 'paiement_coach');
+  assert.equal(w.F.lire('paiements_coach/kev@t,fr/ORDPROG001'), null);
+});
+
 console.log(ok + ' tests passés');

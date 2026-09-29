@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1694';
+window.RC_BUILD='1695';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-09-29';
@@ -457,7 +457,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1694.css">
+<link rel="stylesheet" href="./rc-style.1695.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -2473,6 +2473,11 @@ const COACH_PHOTO='icons/coach.jpg';
         <section class="cc-sect" style="--cc-accent:var(--border)">
           <div class="cc-sect-t"><span>Relances automatiques</span></div>
           <div class="cc-sect-c" id="ccd-relance"></div>
+        </section>
+        <!-- Le paiement direct au coach : les paiements de cet athlete (renderPaiementsFiche). -->
+        <section class="cc-sect" style="--cc-accent:var(--border);display:none">
+          <div class="cc-sect-t"><span>Paiements</span></div>
+          <div class="cc-sect-c" id="ccd-paiements"></div>
         </section>
         <!-- Sans ce bouton, la fonctionnalité ne servirait qu'aux comptes créés
              après ce commit : aucun athlète existant n'a de numéro. PAS DE
@@ -5911,5 +5916,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1694.js"></script>
+<script src="./rc-core.1695.js"></script>
 </body></html>
