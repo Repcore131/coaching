@@ -248,9 +248,18 @@ async function testExercices(){
     ok('Vidéo trouvée malgré accents et casse',
        videosPour('developpe  couche–haltere')[0]?.id==='eRglSFbnRro',
        videosPour('developpe  couche–haltere')[0]?.id||'aucune');
+    // 29/09/2026 : MONTEE DE CORDE N'EST PLUS L'EXEMPLE. Depuis le 07/09/2026
+    // (voir EX_VARIANTES), une ligne du guide a videos ETIQUETEES est eclatee :
+    // « sans les jambes » est devenu un exercice a part, avec SA video, et la
+    // base garde la sienne SANS etiquette. Le libelle reste la regle pour les
+    // lignes qui n'ont pas ete eclatees : SLEDGE porte encore « Pull » et « Push ».
     ok('Variantes conservées avec leur libellé',
-       videosPour('MONTEE DE CORDE').map(v=>v.lbl).join('/')==='avec les jambes/sans les jambes',
-       videosPour('MONTEE DE CORDE').map(v=>v.lbl).join('/'));
+       videosPour('SLEDGE').map(v=>v.lbl).join('/')==='Pull/Push'
+       &&videosPour('MONTEE DE CORDE').map(v=>v.id+'|'+v.lbl).join('/')==='Pa4QUC9AvuA|'
+       &&videosPour('MONTEE DE CORDE SANS LES JAMBES').map(v=>v.id).join('/')==='784mHikopwc',
+       'sledge : '+videosPour('SLEDGE').map(v=>v.lbl).join('/')
+       +' · corde : '+videosPour('MONTEE DE CORDE').map(v=>v.id+'|'+v.lbl).join('/')
+       +' · sans les jambes : '+videosPour('MONTEE DE CORDE SANS LES JAMBES').map(v=>v.id).join('/'));
     ok('Exercice sans vidéo : liste vide',videosPour('MACHINE INCONNUE DU FOND').length===0);
     ok('Nom vide : liste vide',videosPour('').length===0);
     // CETTE ASSERTION EPINGLAIT UNE POSITION, PAS UNE RECONSTRUCTION. Elle
@@ -1097,11 +1106,17 @@ async function testExercices(){
     })();
 
     ok('CURL BARRE porte bien ses trois versions du guide',(()=>{
+      // 29/09/2026 : LES TROIS VERSIONS NE SONT PLUS TROIS VIDEOS D'UNE FICHE.
+      // Depuis le 07/09/2026 (EX_VARIANTES), serree et large sont des exercices
+      // a part, chacun avec SA video ; CURL BARRE garde la clef d'origine — et
+      // l'historique de charge — avec la version « normale ». On verifie donc
+      // les trois, chacune a sa place.
       const v=videosPour('CURL BARRE');
-      if(v.length!==3) return _echec(v.length+' vidéo(s) au lieu de 3');
-      const ids=v.map(x=>x.id);
-      return ids.indexOf('iz4IwoFnKHA')>=0?true
-        :_echec('la version « normale » a disparu : '+ids.join(','));})());
+      if(v.length!==1||v[0].id!=='iz4IwoFnKHA')
+        return _echec('la version « normale » a disparu : '+v.map(x=>x.id).join(','));
+      const manque=['CURL BARRE PRISE SERREE','CURL BARRE PRISE LARGE']
+        .filter(n=>!EX_VARIANTES[n]||EX_VARIANTES[n].base!=='CURL BARRE'||videosPour(n).length!==1);
+      return manque.length?_echec('variante sans sa vidéo : '+manque.join(', ')):true;})());
 
     // ── LES PECTORAUX DU GUIDE DU 26/08/2026 ─────────────────────────────
     // Kevin a refilme et reillustre toute la section des pectoraux, et le
@@ -13226,12 +13241,20 @@ async function testExercices(){
           const envers=_cat.slice().reverse();
           const r=rechercherBanque('squat',null,envers,{});
           if(!r[0]||r[0].slug!=='squat') return _echec('en tête : '+(r[0]&&r[0].slug));
-          // Second critère, à défaut d'égalité exacte : le nom le plus court
-          // d'abord. « MON SQUAT » avant « SQUAT BULGARE HALTERE ».
+          // 29/09/2026 : LE BAREME DE PERTINENCE (BQ_SCORE) a remplace le tri
+          // par longueur. « SQUAT BULGARE HALTERE » COMMENCE par la requete
+          // (+10) et passe donc devant « MON SQUAT », plus court : c'est voulu.
           const noms=r.map(f=>f.nom);
-          const iCourt=noms.indexOf('MON SQUAT'), iLong=noms.indexOf('SQUAT BULGARE HALTERE');
-          return (iCourt>=0&&iLong>=0&&iCourt<iLong)
-            ?true:_echec('ordre des variantes : '+noms.join(' / '));})());
+          const iMon=noms.indexOf('MON SQUAT'), iBulg=noms.indexOf('SQUAT BULGARE HALTERE');
+          if(!(iMon>=0&&iBulg>=0&&iBulg<iMon))
+            return _echec('ordre des variantes : '+noms.join(' / '));
+          // Le nom le plus court reste le critère À SCORE ÉGAL : deux fiches
+          // qui commencent toutes deux par « squat », présentées à l'envers.
+          const egal=rechercherBanque('squat',null,[
+            {slug:'squat-bulgare-haltere',nom:'SQUAT BULGARE HALTERE'},
+            {slug:'squat-sumo',nom:'SQUAT SUMO'}],{}).map(f=>f.nom);
+          return egal.join(' / ')==='SQUAT SUMO / SQUAT BULGARE HALTERE'
+            ?true:_echec('à score égal : '+egal.join(' / '));})());
         ok('Les filtres se CUMULENT en ET',(()=>{
           const f=(o)=>rechercherBanque('',o,_cat,{}).map(x=>x.slug);
           if(f({muscle:'QUADRICEPS'}).length!==4) return _echec('muscle : '+f({muscle:'QUADRICEPS'}));
@@ -16620,7 +16643,11 @@ async function testExercices(){
             const sd=_prodSrc();
             const k=sd.indexOf('function _dessinerBilanSeance');
             const dess=sd.slice(k,k+9000);
-            if(!/e\.kg!=null[\s\S]{0,200}série/.test(dess))
+            // 29/09/2026 : LA LIGNE A CHANGE DE FORME. Le compte « N × reps »
+            // s'ecrit toujours, a gauche ; la charge ne s'ajoute a droite QUE si
+            // elle existe. Sans charge, la colonne reste vide — jamais « 0 KG ».
+            if(!/\(e\.kg!=null\)\?[^;]*KG'\):''/.test(dess)||!/if\(droite\)/.test(dess)
+               ||!/e\.series\+' × '/.test(dess))
               return _echec('le dessin n’a plus de branche « sans charge »');
             // LA SÉRIE LA PLUS LOURDE représente l'exercice, et à charge égale
             // celle qui a le plus de répétitions.
@@ -16651,10 +16678,24 @@ async function testExercices(){
             // format choisi (visuelFormat, 27/09/2026), l'image les occupe toutes.
             if(!/cv\.width=(?:STORY_L|W);\s*cv\.height=(?:STORY_H|H)/.test(bloc)||(bloc.indexOf('STORY_L')<0&&bloc.indexOf('visuelFormat(format)')<0))
               return _echec('l’image ne fait plus le format story');
-            if(bloc.indexOf('fillRect(0,0,STORY_L,STORY_H)')<0)
-              return _echec('le fond a disparu : l’image redevient transparente');
+            // 29/09/2026 : LE FOND EST DEVENU UN CHOIX. Le bilan sort d'abord en
+            // PNG transparent, à poser sur sa photo (voir l'ombre portée du
+            // dessin : « sans remettre un fond ») ; carbone, rouge, édition ou
+            // photo se choisissent à côté et _visuelPeindreFond les étale. On
+            // garde l'appel, et qu'un fond choisi couvre TOUT le format.
+            if(!/_visuelPeindreFond\(g,W,H,/.test(bloc))
+              return _echec('le fond a disparu : le dessin ne peint plus le fond choisi');
+            {
+              const d=bilanSeanceDonnees(SESS(),null);
+              for(const fd of ['carbone','rouge']) for(const fm of ['story','post']){
+                const cv=_dessinerBilanSeance(d,fd,fm), g=cv.getContext('2d');
+                const a=[[0,0],[cv.width-1,cv.height-1]].map(([x,y])=>g.getImageData(x,y,1,1).data[3]);
+                if(a.some(v=>v!==255))
+                  return _echec('le fond « '+fd+' » ne couvre pas tout le format '+fm);
+              }
+            }
             // ⚠ ET LA CARTE DU PROGRAMME N'A PAS BOUGÉ. Elle est délibérément
-            // SANS fond et SANS signature — « juste le carré rouge », pour
+            // SANS fond — « juste le carré rouge », pour
             // qu'on la POSE sur l'arrière-plan d'une story. Deux objets, deux
             // décisions : les fusionner ferait perdre l'un ou l'autre.
             // ⚠ LA BORNE DE DECOUPE EST LE BLOC SUIVANT, PAS _texteEspace :
@@ -16665,8 +16706,16 @@ async function testExercices(){
             const fin=src.indexOf('LE BILAN DE SEANCE, EN IMAGE',j);
             if(j<0||fin<0||fin<j) return _echec('les deux dessins ont bougé');
             const carte=src.slice(j,fin);
-            if(carte.indexOf('REPCORE')>=0)
-              return _echec('une signature a été ajoutée à la carte de programme');
+            // 29/09/2026 : LA CARTE EST SIGNEE, DANS SON PIED. Décision écrite
+            // dans _dessinerStorySeance (« LA CARTE EST SIGNEE ») : nom du coach,
+            // QR et « ENTRAÎNEMENT SUIVI SUR REPCORE », à l'intérieur du carré
+            // rouge. Ce qui reste interdit : un FOND autour d'elle, et la
+            // signature du bilan (« · REPCORE ») recopiée dessus.
+            if(/_visuelPeindreFond|fillRect\(0,0,/.test(carte)
+               ||!/cv\.width=CW;\s*cv\.height=CH/.test(carte))
+              return _echec('un fond a été ajouté autour de la carte de programme');
+            if(/· REPCORE|'REPCORE'/.test(carte))
+              return _echec('la signature du bilan a été ajoutée à la carte de programme');
             return /const CW=STORY_L-144/.test(carte)
               ?true:_echec('la carte de programme a changé de taille');})());
 
@@ -42112,13 +42161,22 @@ async function testExercices(){
     // unilateral et trois ecartes de poulie. Le compte est ecrit en toutes
     // lettres pour que l'ajout d'un exercice soit un GESTE — sans quoi une
     // ligne perdue au catalogue passerait inapercue.
+    // 29/09/2026 : LES VARIANTES ECLATEES S'Y AJOUTENT. Depuis le 07/09/2026,
+    // chaque version etiquetee d'une ligne du guide est un exercice a part
+    // (EX_VARIANTES), range dans la signature de sa base : 412 lignes du guide
+    // plus ces variantes — hors cardio, qui n'est pas dans ces deux listes.
+    // Le 412 reste ecrit en toutes lettres : perdre une ligne se voit encore.
+    const _guideAttendu=()=>{
+      const cardio=new Set(EX_GUIDE_CARDIO.split('~'));
+      return 412+Object.keys(EX_VARIANTES).filter(k=>!cardio.has(k)).length;};
     ok('Les 412 exercices du guide ont un schéma',(()=>{
       const noms=_guideNoms();
       const sans=[...noms].filter(n=>!schemaDe({name:n}));
-      return noms.size===412&&sans.length===0;})(),
+      return noms.size===_guideAttendu()&&sans.length===0;})(),
       (()=>{const n=_guideNoms();
         const sans=[...n].filter(x=>!schemaDe({name:x}));
-        return n.size+' noms'+(sans.length?', sans schéma : '+sans.slice(0,3).join(' | '):'');})());
+        return n.size+' noms pour '+_guideAttendu()+' attendus'
+          +(sans.length?', sans schéma : '+sans.slice(0,3).join(' | '):'');})());
     ok('Dix-sept schémas notables',Object.keys(SCHEMAS_META).length===17);
     ok('Chaque schéma porte son libellé, son effectif et ses exemples',
        Object.values(SCHEMAS_META).every(m=>m.lib&&m.nb>0&&Array.isArray(m.ex)&&Array.isArray(m.hors)));
@@ -66703,8 +66761,12 @@ async function testExercices(){
         // Mon premier script de correction a failli l'emporter : la dernière
         // entrée du guide n'a pas de virgule, et la recherche de fin de valeur
         // sautait jusqu'ici. Ces huit noms sont donc épinglés.
+        // 29/09/2026 : DIX DEPUIS LE 07/09/2026. Les deux versions du tapis
+        // sont des exercices à part (EX_VARIANTES, base TAPIS DE COURSE), et
+        // restent du cardio comme leur base.
         const att=['BATTLE ROPE','CORDE A SAUTER','ESCALIERS','LE SKIERG','RAMEUR',
-          'TAPIS DE COURSE','VELO D INTERIEUR','VELO ELLIPTIQUE'];
+          'TAPIS DE COURSE','TAPIS DE COURSE COURIR','TAPIS DE COURSE MARCHE AVEC PENTE',
+          'VELO D INTERIEUR','VELO ELLIPTIQUE'];
         const v=EX_GUIDE_CARDIO.split('~');
         return v.join('~')===att.join('~')?true:_echec(v.join('~'));})());
       ok('Aucun nom du guide n\'apparaît dans deux signatures',(()=>{
@@ -75508,10 +75570,13 @@ vendredi 78 6h 44m
     // ruines visibles : une planche absente, un muscle disparu, un contour
     // réduit à un trait, une coordonnée qui sort de la vignette.
     (()=>{
-      const VUES={face:['TRAPEZES','DELT_ANT','DELT_LAT','PECTORAUX','DORSAUX',
+      // 29/09/2026 : TRAP_SUP ET NON PLUS TRAPEZES. Le muscle s'est dedouble le
+      // 08/09/2026 (voir migrerTrapezes) ; la table porte le contour sous la
+      // clef que le classement produit, sans quoi un shrug n'allumerait rien.
+      const VUES={face:['TRAP_SUP','DELT_ANT','DELT_LAT','PECTORAUX','DORSAUX',
                         'ABDOS','BICEPS','TRICEPS','AVANT_BRAS','QUADRICEPS',
                         'ABDUCTEURS','ADDUCTEURS','MOLLETS'],
-                  dos :['TRAPEZES','DELT_POST','DELT_LAT','DORSAUX','LOMBAIRES',
+                  dos :['TRAP_SUP','DELT_POST','DELT_LAT','DORSAUX','LOMBAIRES',
                         'TRICEPS','BICEPS','AVANT_BRAS','FESSIERS','ISCHIOS',
                         'ABDUCTEURS','ADDUCTEURS','MOLLETS']};
       const parcours=(f)=>{ const faux=[];
