@@ -112,7 +112,7 @@ export function secretsDeSeance(s) {
   if (b.joursem === 5 && b.date === 13) out.push('vendredi13');
   return out;
 }
-export function etatVide() { return { n: 0, meilleurs: {}, jours: {}, s: { seance: 0, complete: 0, record: 0 }, secrets: {} }; }
+export function etatVide() { return { n: 0, faites: 0, meilleurs: {}, jours: {}, s: { seance: 0, complete: 0, record: 0 }, secrets: {} }; }
 /**
  * Fait avancer l'état sur des séances NOUVELLES (dans l'ordre de leur index).
  * `tRecu` : l'heure du serveur à la réception de l'événement.
@@ -121,12 +121,17 @@ export function avancer(etat0, seances, alias, tRecu) {
   const e = JSON.parse(JSON.stringify(etat0 || etatVide()));
   e.meilleurs = e.meilleurs || {}; e.jours = e.jours || {}; e.secrets = e.secrets || {};
   e.s = Object.assign({ seance: 0, complete: 0, record: 0 }, e.s || {});
+  // LES SÉANCES FAITES (au moins une série validée), pour le mois du parrain
+  // (quatre séances d'un filleul). Un état d'avant ce compteur part du
+  // nombre de séances déjà relues : au plus quelques vides comptées en trop.
+  if (!Number.isFinite(Number(e.faites)) || e.faites == null) e.faites = Number(e.n) || 0;
   for (const s of seances) {
     e.n = (Number(e.n) || 0) + 1;
     const d = Number(s && s.date);
     if (!s || !(d > 0)) continue;
     // Une date dans le futur du serveur n'est pas une séance faite : ignorée.
     if (d > tRecu + 10 * 60e3) continue;
+    if (seriesValidees(s) > 0) e.faites++;
     if (d > (Number(e.derniere) || 0)) e.derniere = d;
     const j = heureLocale(d, s.tz).jour;
     let nRec = 0;

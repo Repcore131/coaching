@@ -201,3 +201,68 @@ test('les constantes du serveur sont celles de l’app (rc-core)', async () => {
     assert.match(src, new RegExp('\\b' + k + ':' + v + '[,\\s]'), k);
   assert.equal(X.XP.seance, 100);
 });
+
+// ══ LE MOIS DU PARRAIN : LES QUATRE PREMIÈRES SÉANCES DU FILLEUL (lot C) ══
+const KEV = 'kev@t,fr';
+function mondeFilleul(extra) {
+  const base = { users: { [LEA]: { fname: 'Léa', createdAt: T - 2 * J }, [KEV]: { fname: 'Kev' } },
+    parrainage: { liens: { [LEA]: { parrain: KEV, id: 'f1' } }, comptes: { [KEV]: { filleuls: { f1: { statut: 'inscrit', date: T - 2 * J } } } } } };
+  const w = monde(Object.assign(base, extra ? extra(base) : {}), T);
+  let i = 0;
+  w.faire = async (o) => {
+    w.F.ecrire('users/' + LEA + '/sessions/' + (i++), S(w.t - 60e3, o));
+    w.F.ecrire('users/' + LEA + '/lastSession', w.t - 60e3);
+    await w.seanceFin(LEA); w.avance(J);
+  };
+  return w;
+}
+test('parrainage : quatre séances faites donnent un mois au parrain, une fois ; trois, ou des séances vides, rien', async () => {
+  const w = mondeFilleul();
+  for (let k = 0; k < 3; k++) await w.faire();
+  await w.faire({ n: 0 });               // une séance sans série validée ne compte pas
+  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), null, 'trois séances : rien');
+  assert.equal(w.F.lire('droits/' + KEV), null);
+  await w.faire();
+  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), 1);
+  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/filleuls/f1/creditE'), true);
+  assert.equal(w.F.lire('droits/' + KEV + '/palier'), 'essentielle', 'le mois s’applique');
+  assert.equal(w.F.lire('parrainage/credits_seances/' + LEA).mode, 'mois_ouvert');
+  // Rejoué, et même sans la marque du compteur : la marque creditE tient.
+  await w.faire();
+  w.F.ecrire('xp_etat/' + LEA + '/parr', null);
+  await w.faire();
+  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), 1, 'jamais deux fois');
+  // Son premier paiement ensuite : pas de second mois.
+  const r = await w.M.parrainagePaiement(LEA, 'test');
+  assert.equal(r.credit, false);
+  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), 1);
+  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/filleuls/f1/statut'), 'payant');
+  assert.equal(w.F.lire('parrainage/credits/' + LEA), null, 'rien à reprendre au remboursement');
+});
+test('parrainage : payé avant ses quatre séances, le filleul a donné son mois au paiement ; les séances n’en redonnent pas', async () => {
+  const w = mondeFilleul();
+  await w.faire();
+  assert.equal((await w.M.parrainagePaiement(LEA, 'test')).credit, true);
+  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), 1);
+  for (let k = 0; k < 4; k++) await w.faire();
+  assert.equal(w.F.lire('parrainage/comptes/' + KEV + '/moisGagnes'), 1);
+});
+test('parrainage : un parrain encore à l’essai voit sa fin d’essai reculer d’un mois', async () => {
+  const fin = T + 25 * J;
+  const w = mondeFilleul((b) => ({ users: Object.assign(b.users, { [KEV]: { fname: 'Kev', essai: { ouvertLe: T - 5 * J, finit: fin } } }) }));
+  for (let k = 0; k < 4; k++) await w.faire();
+  const d = w.F.lire('droits/' + KEV);
+  assert.equal(d.palier, 'ultime');
+  assert.equal(d.source, 'essai');
+  assert.equal(d.essaiFinit, fin + 30 * J);
+  assert.equal(d.echeance, fin + 30 * J);
+  assert.equal(w.F.lire('users/' + KEV + '/essai/finit'), fin + 30 * J);
+});
+test('parrainage : inscrit depuis le téléphone du parrain, le filleul ne crédite jamais', async () => {
+  const w = mondeFilleul((b) => ({ parrainage: { codes: { KEVIN7X9: KEV }, appareils: { abc123: KEV },
+    demandes: { [LEA]: { code: 'KEVIN7X9', le: T, appareil: 'abc123' } } } }));
+  assert.equal((await w.M.parrainageDemande(LEA, { code: 'KEVIN7X9', appareil: 'abc123' })).raison, 'meme_appareil');
+  for (let k = 0; k < 4; k++) await w.faire();
+  assert.equal(w.F.lire('parrainage/comptes/' + KEV), null);
+  assert.equal(w.F.lire('droits/' + KEV), null);
+});

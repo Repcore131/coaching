@@ -1047,7 +1047,7 @@ function planIdOffre(cle,annuel){
 // Pas de fetch au demarrage : les prix doivent exister avant le premier
 // ecran, hors ligne compris.
 /* TARIFS:DEBUT */
-const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":12,"essentielle":{"mois":9.5,"an":114},"ultime":{"mois":24.9,"an":298.8},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":0},"coach":{"libre":0,"coach":19,"pro":39},"coaching":{"programme_perso":{"prix":99,"mois":3},"revision_prog":{"prix":40,"mois":1},"boutique_prog":{"prix":14.9,"mois":3},"coaching_essentiel":{"prix":150,"mois":1},"coaching_transfo":{"prix":350,"mois":3},"coaching_evolution":{"prix":600,"mois":6}}});
+const TARIFS=(function geler(o){ Object.values(o).forEach(v=>{ if(v&&typeof v==='object') geler(v); }); return Object.freeze(o); })({"devise":"EUR","engagementMois":12,"essentielle":{"mois":9.5,"an":114},"ultime":{"mois":24.9,"an":298.8},"ultime_demi":{"part":0.5,"premierMois":12.45},"essai":{"mois":1,"jours":30,"carte":false},"essai_parrainage":{"moisEnPlus":1},"coach":{"libre":0,"coach":19,"pro":39},"coaching":{"programme_perso":{"prix":99,"mois":3},"revision_prog":{"prix":40,"mois":1},"boutique_prog":{"prix":14.9,"mois":3},"coaching_essentiel":{"prix":150,"mois":1},"coaching_transfo":{"prix":350,"mois":3},"coaching_evolution":{"prix":600,"mois":6}}});
 /* TARIFS:FIN */
 // ══ LES OFFRES, ECRITES UNE SEULE FOIS (lot 1) ═══════════════════════════
 //
@@ -1689,11 +1689,21 @@ function essaiJoursRestants(u){
   if(!f) return null;
   return Math.max(0,Math.ceil((f-Date.now())/86400000));
 }
-// PURE. Le numero du jour en cours dans le mois : 1 le premier jour.
+// PURE. La duree REELLE de cet essai, en jours : 30 pour tout le monde, 60
+// pour un filleul (le mois offert par son ami), 60 aussi pour un parrain a
+// l'essai dont le filleul a fait ses quatre seances (le Worker recule sa fin).
+function essaiDuree(u){
+  const f=essaiFin(u);
+  let o=Number(u&&u.essai&&u.essai.ouvertLe)||0;
+  try{ const d=droitsDe(u); if(d.etat==='serveur'&&d.essaiOuvertLe>0) o=d.essaiOuvertLe; }catch(e){}
+  if(!f||!o||f<=o) return ESSAI_JOURS;
+  return Math.max(ESSAI_JOURS,Math.round((f-o)/86400000));
+}
+// PURE. Le numero du jour en cours dans l'essai : 1 le premier jour.
 function essaiJour(u){
   const f=essaiFin(u);
   if(!f) return 0;
-  return Math.max(1,ESSAI_JOURS-(essaiJoursRestants(u)||0)+1);
+  return Math.max(1,essaiDuree(u)-(essaiJoursRestants(u)||0)+1);
 }
 function essaiActif(u){
   const f=essaiFin(u);
@@ -1790,11 +1800,13 @@ function texteEssaiRestant(u){
   // sequence ecrite par Kevin (jour 1, jour 21, jour 27), et « il te reste 9
   // jours » au vingt-et-unieme se lit 30 moins 21. Les deux comptes different
   // d'une unite, et c'est le sien qui s'affiche.
-  const j=essaiJour(u);
-  const n=Math.max(0,ESSAI_JOURS-j);
-  if(j<=1) return 'Tout est ouvert pendant un mois. Compose ta première séance.';
-  if(j<21) return '';
-  if(j<27) return 'Il te reste '+n+' jour'+(n>1?'s':'')+' d’accès complet.';
+  // Sur un essai plus long (60 jours d'un filleul), les memes paliers se
+  // comptent depuis la fin : neuf jours avant, puis trois.
+  const D=essaiDuree(u), j=essaiJour(u);
+  const n=Math.max(0,D-j);
+  if(j<=1) return 'Tout est ouvert pendant '+(D>=55?'deux mois':'un mois')+'. Compose ta première séance.';
+  if(j<D-9) return '';
+  if(j<D-3) return 'Il te reste '+n+' jour'+(n>1?'s':'')+' d’accès complet.';
   const quoi=essaiBilanPhrase(u);
   const prix='tu les gardes avec Ultime à '+prixOffre('ultime')
     +', ou '+prixMoisAnnuel('ultime')+' par mois en annuel.';
@@ -19958,7 +19970,8 @@ function phraseInvitationInscription(prenom,amb,avantage){
   // mois d'Ultime à moitié prix.
   if(amb&&avantage==='ultime_demi') return 'Grâce à '+amb+', ton 1er mois d’Ultime est à '+prixOffre('ultime_demi');
   if(amb) return 'Grâce à '+amb+', ton premier mois est offert';
-  if(prenom) return 'Grâce à '+prenom+', ton premier mois est offert';
+  // Le mois offert PAR QUELQU'UN (lot C) : c'est ce « par quelqu'un » qui compte.
+  if(prenom) return prenom+' t’offre ton premier mois';
   return 'Le code d’un ami ou d’un ambassadeur t’offre ton premier mois.';
 }
 // PURE. Faut-il le bouton « Quelqu'un t'a invité ? » en haut de l'inscription ?
@@ -19980,9 +19993,26 @@ function parrainageCodeSaisi(v){
   const x=document.getElementById('r-parrain-info');
   if(!x||!parrainageCodeValide(c)) return false;
   parrainInviteLire(c).then(g=>{
-    if(g&&parrainageCodeNormalise((document.getElementById('r-parrain')||{}).value)===c) x.textContent=phraseInvitationInscription(g.prenom);
+    if(g&&parrainageCodeNormalise((document.getElementById('r-parrain')||{}).value)===c) poserCadeauInscription(phraseInvitationInscription(g.prenom),true);
   }).catch(()=>{});
   return true;
+}
+// PURE. La ligne du haut de l'inscription : le défi d'abord (la raison de
+// venir), le cadeau ensuite.
+function ligneCadeauInscription(cadeau,dv){
+  const d=(dv&&dv.prenom)?dv.prenom+' te défie : '+texteDuel(dv.mesure,dv.duree)+'.':'';
+  return [d,cadeau?cadeau+(/[.⚡]$/.test(cadeau)?'':'.'):''].filter(Boolean).join(' ');
+}
+// La ligne sous le champ du code ET le bandeau du haut, ensemble. Le bandeau
+// ne parle que s'il y a un code (ou un défi) : sinon, rien à offrir.
+function poserCadeauInscription(cadeau,avecCode){
+  let dv=null; try{ dv=duelInviteEnAttente(); }catch(e){ dv=null; }
+  const info=document.getElementById('r-parrain-info');
+  if(info) info.textContent=cadeau;
+  const z=document.getElementById('r-cadeau');
+  if(!z) return;
+  const l=ligneCadeauInscription(avecCode?cadeau:'',dv&&dv.prenom?dv:null);
+  z.textContent=l; z.style.display=l?'':'none';
 }
 function parrainageChampInscription(role){
   const z=document.getElementById('r-parrain-z');
@@ -19994,22 +20024,19 @@ function parrainageChampInscription(role){
   if(i&&c&&!i.value) i.value=c;
   const info=document.getElementById('r-parrain-info');
   const g=(!a&&c)?parrainInviteGarde(c):null;
-  if(info) info.textContent=a?phraseInvitationInscription('',a)
-    :c?phraseInvitationInscription(g?g.prenom:'un ami'):phraseInvitationInscription('');
+  poserCadeauInscription(a?phraseInvitationInscription('',a)
+    :c?phraseInvitationInscription(g?g.prenom:'Un ami'):phraseInvitationInscription(''),!!(role==='athlete'&&c));
   // « Grâce à Léa Fit », pas « grâce à LEAFIT » : le nom de l'ambassadeur et
   // son offre, lus sans compte (lecture publique), remplacent son code.
   if(a&&info) Promise.resolve().then(()=>CLOUD.ambPublicGet(a)).then(p=>{
     if(!p||p.actif===false||ambEnAttente()!==a) return;
-    info.textContent=phraseInvitationInscription('',String(p.nom||a).slice(0,80),p.avantage); }).catch(()=>{});
-  // ARRIVÉ PAR UN DUEL : on le dit d'abord (le défi est la raison de venir).
-  try{
-    const dv=duelInviteEnAttente();
-    if(info&&dv&&dv.prenom&&role==='athlete') info.textContent=dv.prenom+' te défie : '+texteDuel(dv.mesure,dv.duree)+' · '+info.textContent;
-  }catch(e){}
+    poserCadeauInscription(phraseInvitationInscription('',String(p.nom||a).slice(0,80),p.avantage),role==='athlete'); }).catch(()=>{});
+  // ARRIVÉ PAR UN DUEL : le bandeau du haut le dit d'abord (poserCadeauInscription).
+  if(role!=='athlete'){ const z=document.getElementById('r-cadeau'); if(z) z.style.display='none'; }
   // Le prénom pas encore connu : lu, puis la ligne se complète.
   if(!a&&c&&!g) parrainInviteLire(c).then(v=>{
     const x=document.getElementById('r-parrain-info');
-    if(v&&x&&(document.getElementById('r-parrain')||{}).value===c) x.textContent=phraseInvitationInscription(v.prenom);
+    if(v&&x&&(document.getElementById('r-parrain')||{}).value===c) poserCadeauInscription(phraseInvitationInscription(v.prenom),role==='athlete');
   }).catch(()=>{});
   const appel=document.getElementById('r-parrain-appel');
   let ios=false; try{ ios=rcInstalliOS()&&rcInstallAutonome(); }catch(e){}
@@ -20054,7 +20081,7 @@ async function parrainageApresInscription(u){
   u.parrainage=Object.assign({},u.parrainage||{},{parrainCode:saisi,parrainPrenom:String(pub.prenom||'').slice(0,24),parraineLe:Date.now()});
   parrainageOublierRef();
   try{ rcm('parrainage_filleul'); }catch(e){}
-  toast(pub.prenom?('Grâce à '+pub.prenom+', ton premier mois est offert ⚡'):'Code appliqué : ton premier mois est offert ⚡','var(--green)');
+  toast(pub.prenom?(pub.prenom+' t’offre ton premier mois ⚡'):'Code appliqué : ton premier mois est offert ⚡','var(--green)');
   return parrainageBonusJours();
 }
 // ── Le code du parrain : créé UNE fois ─────────────────────────────────────
@@ -20094,22 +20121,31 @@ function parrainageFusionnerCompte(u,compte){
   if(parrainageCodeValide(compte.code)) p.code=compte.code;
   if(compte.parrain&&parrainageCodeValide(compte.parrain.code)) p.parrainCode=compte.parrain.code;
   p.inscrits=l.length; p.payants=payantsLe.length; p.payantsLe=payantsLe;
+  // LES FILLEULS « AU TRAVAIL » (lot C) : quatre séances faites (creditE,
+  // posée par le Worker) ou abonnés. Ce sont eux qui comptent pour RECRUTEUR
+  // et MENTOR, datés du jour où ils ont compté.
+  const actifsLe=l.filter(x=>x.creditE===true||x.statut==='payant')
+    .map(x=>Number(x.actifLe)||Number(x.creditLe)||Number(x.payeLe)||Number(x.date)||0).filter(x=>x>0).sort((a,b)=>a-b);
+  const avantA=(u.parrainage&&Array.isArray(u.parrainage.actifsLe))?u.parrainage.actifsLe.length:0;
+  p.actifs=actifsLe.length; p.actifsLe=actifsLe;
   p.moisGagnes=Math.max(0,Number(compte.moisGagnes)||0);
   p.prenoms=l.sort((a,b)=>(Number(b.date)||0)-(Number(a.date)||0)).slice(0,20)
     .map(x=>({prenom:String(x.prenom||'').slice(0,24),statut:filleulStatut(x),date:Number(x.date)||0}));
   u.parrainage=p;
-  return payantsLe.length!==avant;
+  return payantsLe.length!==avant||actifsLe.length!==avantA;
 }
-// PURE. Où en est un filleul : 'payant' (abonné), 'seance' (sa première
+// PURE. Où en est un filleul : 'payant' (abonné), 'actif' (ses quatre
+// premières séances : le mois du parrain est tombé), 'seance' (sa première
 // séance est faite : le Worker l'a notée, événement filleul_seance) ou
-// 'inscrit'. Les trois marches de l'écran parrainage.
+// 'inscrit'. Les marches de l'écran parrainage.
 function filleulStatut(x){
   if(!x||typeof x!=='object') return 'inscrit';
   if(x.statut==='payant') return 'payant';
+  if(x.statut==='actif'||x.creditE===true) return 'actif';
   if(x.statut==='seance'||Number(x.premiereSeance)>0) return 'seance';
   return 'inscrit';
 }
-const FILLEUL_ETAPES=Object.freeze([['inscrit','Inscrit'],['seance','1re séance'],['payant','Abonné']]);
+const FILLEUL_ETAPES=Object.freeze([['inscrit','Inscrit'],['seance','1re séance'],['actif','4 séances ✓'],['payant','Abonné']]);
 // PURE. La ligne d'un filleul : son prénom, et ses trois marches.
 function htmlFilleul(x){
   const st=filleulStatut(x);
@@ -20126,8 +20162,10 @@ function htmlLigneFilleuls(u){
   if(!PARRAINAGE_ACTIF||!(n>0)) return '';
   const l=Array.isArray(p.prenoms)?p.prenoms:[];
   const seance=l.filter(x=>filleulStatut(x)==='seance').length, pay=Number(p.payants)||0, mois=Number(p.moisGagnes)||0;
+  const actifs=l.filter(x=>filleulStatut(x)==='actif').length;
   const bouts=[n+' filleul'+(n>1?'s':'')];
   if(seance) bouts.push(seance+' en route');
+  if(actifs) bouts.push(actifs+' au travail');
   if(pay) bouts.push(pay+' abonné'+(pay>1?'s':''));
   if(mois) bouts.push(mois+' mois gagné'+(mois>1?'s':''));
   return '<button type="button" class="clh-filleuls-b" onclick="ouvrirParrainage()"><span aria-hidden="true">⚡</span> '
@@ -20162,12 +20200,15 @@ async function majParrainageMiroir(u){
 function htmlParrainage(u){
   const p=(u&&u.parrainage)||{};
   const code=p.code||'';
-  const payants=Number(p.payants)||0, inscrits=Number(p.inscrits)||0, mois=Number(p.moisGagnes)||0;
+  const inscrits=Number(p.inscrits)||0, mois=Number(p.moisGagnes)||0;
+  // Les paliers comptent les filleuls AU TRAVAIL (quatre séances, ou abonnés).
+  const actifs=Math.max(Number(p.actifs)||0,Number(p.payants)||0);
   const tuile=(v,l)=>'<div class="pr-tuile"><b>'+escapeHtml(String(v))+'</b><span>'+escapeHtml(l)+'</span></div>';
   const paliers=PARRAINAGE_PALIERS.map(x=>{
-    const part=Math.min(1,payants/x.n);
-    return '<div class="pr-palier'+(payants>=x.n?' pr-atteint':'')+'"><div class="pr-pal-l"><b>'+escapeHtml(x.nom)+'</b><span>'
-      +escapeHtml(payants>=x.n?'Atteint ✓':payants+' / '+x.n+' filleuls abonnés')+'</span></div>'
+    const part=Math.min(1,actifs/x.n);
+    const reste=x.n-actifs;
+    return '<div class="pr-palier'+(actifs>=x.n?' pr-atteint':'')+'"><div class="pr-pal-l"><b>'+escapeHtml(x.nom)+'</b><span>'
+      +escapeHtml(actifs>=x.n?'Atteint ✓':actifs+' / '+x.n+' · encore '+reste+' ami'+(reste>1?'s':'')+' à quatre séances')+'</span></div>'
       +'<div class="dfi-barre"><span style="width:'+Math.round(part*100)+'%"></span></div>'
       +'<div class="pr-pal-g">'+escapeHtml(x.gain)+'</div></div>';
   }).join('');
@@ -20175,7 +20216,8 @@ function htmlParrainage(u){
   // LA CARTE D'ABORD (28/09/2026) : une image se partage en story, un texte
   // se perd dans une conversation. Le texte et le lien restent, en second.
   return '<div class="pr-hero"><div class="pr-titre">Fais découvrir RepCore</div>'
-    +'<p>Grâce à toi, <b>le premier mois de ton ami est offert</b>. Toi, tu gagnes <b>1 mois offert</b> à son premier paiement.</p></div>'
+    +'<p>Tu offres <b>son premier mois</b> à ton ami. Toi, tu gagnes <b>1 mois</b> quand il s’y met vraiment.</p>'
+    +'<p class="pr-regle">Ton mois arrive quand ton pote a fait ses quatre premières séances.</p></div>'
     +'<div class="pr-carte-inv">'
     +'<button type="button" class="btn btn-red pr-carte-b" onclick="partagerCarteInvitation(this)"'+(code?'':' disabled')+'>'
       +icon('share',16)+' <span>Partager ma carte d’invitation</span></button>'
@@ -20189,11 +20231,11 @@ function htmlParrainage(u){
     +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="parrainageCopier(this)"'+(code?'':' disabled')+'>Copier le lien</button></div>'
     // Défier plutôt qu'inviter : le lien du duel porte aussi le code.
     +(SERVEUR_LEGER?'<button type="button" class="btn btn-outline btn-sm btn-casse pr-duel" onclick="ouvrirCreationDuel()">⚔ Défie un pote</button>':'')+'</div>'
-    +'<div class="pr-tuiles">'+tuile(inscrits,inscrits>1?'inscrits':'inscrit')+tuile(payants,payants>1?'abonnés':'abonné')
+    +'<div class="pr-tuiles">'+tuile(inscrits,inscrits>1?'inscrits':'inscrit')+tuile(actifs,'à 4 séances')
       +tuile(mois,'mois gagné'+(mois>1?'s':''))+'</div>'
     +'<div class="pr-paliers">'+paliers+'</div>'
     +(liste?'<div class="pr-liste"><div class="pr-sous">Tes filleuls</div>'+liste+'</div>':'')
-    +'<p class="pr-note">Le mois offert s’ajoute à la fin de ta période en cours : ton abonnement n’est pas modifié, ton accès est prolongé. Rien n’est crédité tant que ton ami n’a pas payé.</p>';
+    +'<p class="pr-note">Le mois offert s’ajoute à la fin de ta période en cours : à l’essai, ton essai dure un mois de plus ; abonné, ton abonnement n’est pas modifié et le mois t’attend en réserve. Un seul mois par ami.</p>';
 }
 async function ouvrirParrainage(){
   if(!PARRAINAGE_ACTIF||!currentUser) return false;
@@ -74122,11 +74164,12 @@ const BADGES_ACQUIS=Object.freeze([
   // lit pas depuis un dossier : on compare la date d'inscription à celle du
   // 500e, FONDATEUR_LIMITE. Tant qu'elle n'est pas posée, le badge dort.
   {id:'fondateur',nom:'FONDATEUR',famille:'unique',palier:null,icone:'fondateur',condition:'Fais partie des 500 premiers inscrits.',test:f=>f.fondateur,inactif:()=>!(FONDATEUR_LIMITE>0)},
-  // LE PARRAINAGE : des filleuls ABONNÉS (un inscrit ne compte pas —
-  // anti-fraude), datés au paiement du 3e et du 10e (u.parrainage.payantsLe,
-  // recopié de /parrainage/comptes). Fermés tant que PARRAINAGE_ACTIF l'est.
-  {id:'recruteur',nom:'RECRUTEUR',famille:'unique',palier:null,icone:'recruteur',condition:'Parraine 3 personnes abonnées.',test:f=>_bdgNieme(f.parrainages,3),inactif:()=>!PARRAINAGE_ACTIF},
-  {id:'mentor',nom:'MENTOR',famille:'unique',palier:null,icone:'mentor',condition:'Parraine 10 personnes abonnées.',test:f=>_bdgNieme(f.parrainages,10),inactif:()=>!PARRAINAGE_ACTIF},
+  // LE PARRAINAGE : des filleuls AU TRAVAIL (quatre séances faites, ou
+  // abonnés : un inscrit ne compte pas, anti-fraude), datés du 3e et du 10e
+  // (u.parrainage.actifsLe, recopié de /parrainage/comptes, où seul le Worker
+  // écrit). Fermés tant que PARRAINAGE_ACTIF l'est.
+  {id:'recruteur',nom:'RECRUTEUR',famille:'unique',palier:null,icone:'recruteur',condition:'Parraine 3 personnes qui font leurs quatre premières séances.',test:f=>_bdgNieme(f.parrainages,3),inactif:()=>!PARRAINAGE_ACTIF},
+  {id:'mentor',nom:'MENTOR',famille:'unique',palier:null,icone:'mentor',condition:'Parraine 10 personnes qui font leurs quatre premières séances.',test:f=>_bdgNieme(f.parrainages,10),inactif:()=>!PARRAINAGE_ACTIF},
   // LES DÉFIS DU CANAL : CHAMPION est daté par la clôture du défi
   // (defis_resultats → u.defisReleves) — le premier du classement d'un défi
   // bouclé. « DÉFI RELEVÉ » N'EST PAS ICI : c'est un badge daté PAR DÉFI, hors
@@ -74345,8 +74388,9 @@ function _badgesFaits(u,maintenant){
     .sort().map(j=>{ const [a,m,dd]=j.split('-').map(Number); return new Date(a,m-1,dd,20).getTime(); });
   const cree=Number(u&&u.createdAt)||0;
   if(FONDATEUR_LIMITE>0&&cree>0&&cree<=FONDATEUR_LIMITE) f.fondateur=cree;
-  // Les filleuls abonnés, datés (RECRUTEUR, MENTOR).
-  f.parrainages=((u&&u.parrainage&&Array.isArray(u.parrainage.payantsLe))?u.parrainage.payantsLe:[])
+  // Les filleuls au travail, datés (RECRUTEUR, MENTOR) ; les abonnés d'un miroir d'avant.
+  const _pr=(u&&u.parrainage)||{};
+  f.parrainages=(Array.isArray(_pr.actifsLe)?_pr.actifsLe:Array.isArray(_pr.payantsLe)?_pr.payantsLe:[])
     .map(Number).filter(x=>x>0).sort((a,b)=>a-b);
   // Le premier défi gagné (CHAMPION).
   const dr=(u&&u.defisReleves&&typeof u.defisReleves==='object')?Object.keys(u.defisReleves).map(k=>u.defisReleves[k]).filter(Boolean):[];

@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1669';
+window.RC_BUILD='1670';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-09-29';
@@ -457,7 +457,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1669.css">
+<link rel="stylesheet" href="./rc-style.1670.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -1248,6 +1248,9 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- L'APP INSTALLEE SUR iPHONE NE VOIT PAS LE STOCKAGE DE SAFARI : le
          ?ref= du lien d'un ami s'y perd. On le demande donc en haut, et le
          bouton mene au champ du code (parrainageChampInscription). -->
+    <!-- LE CADEAU DE L'AMI (et son defi), DIT AVANT LE FORMULAIRE, jamais
+         apres (lot C) : rempli par parrainageChampInscription. -->
+    <div id="r-cadeau" class="r-cadeau" style="display:none"></div>
     <button type="button" id="r-parrain-appel" class="btn btn-outline btn-sm" style="display:none;margin:0;min-height:44px"
       onclick="parrainageAllerAuChamp()">Quelqu’un t’a invité ? Entre son code</button>
     <!-- ══ LA PHOTO EST DEMANDEE A L'INSCRIPTION ══════════════════════════
@@ -5856,5 +5859,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1669.js"></script>
+<script src="./rc-core.1670.js"></script>
 </body></html>
