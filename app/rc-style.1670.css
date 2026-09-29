@@ -11257,6 +11257,7 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .pr-hero{margin-bottom:14px}
 .pr-titre{font-family:var(--pile-titre);font-size:var(--fs-2xl);letter-spacing:1px;line-height:1.05;margin-bottom:6px}
 .pr-hero p{font-size:var(--fs-sm);color:var(--text-dim);line-height:1.55;margin:0}
+.pr-hero .pr-regle{margin-top:8px;color:var(--txt,#fff);font-weight:700}
 .pr-code-carte{background:linear-gradient(160deg,#1a0303,#120000 60%,#0b0000);border:1px solid #3a0000;border-radius:14px;padding:16px;margin-bottom:14px;text-align:center}
 .pr-code-lib{font-size:var(--fs-2xs);letter-spacing:2px;text-transform:uppercase;color:var(--sub);font-weight:800}
 .pr-code{font-family:var(--pile-titre);font-size:44px;letter-spacing:6px;color:#fff;margin-top:6px;text-shadow:0 0 18px rgba(224,32,32,.7);
@@ -11371,6 +11372,7 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 #clh-amis:empty{display:none}
 .am-carte{margin:12px 0 16px;padding:14px;border-radius:14px;background:var(--surface-1,#111);border:1px solid var(--border,#2a2a2e)}
 .du-amis .am-carte{margin:4px 0 14px;text-align:left}
+.r-cadeau{padding:12px 14px;border-radius:12px;border:1px solid rgba(255,42,42,.45);background:rgba(255,42,42,.08);color:var(--txt,#fff);font-weight:700;font-size:var(--fs-sm);line-height:1.45}
 .am-tete{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .am-titre{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--red-text,#ff4d4d)}
 .am-tout{background:none;border:0;padding:4px 0;color:var(--sub,#a0a0a8);font:700 var(--fs-xs) Montserrat,sans-serif;cursor:pointer}
@@ -14285,6 +14287,7 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .dfr-ico{filter:drop-shadow(0 0 6px rgba(224,32,32,.6))}
 :root[data-theme="clair"] .dfr-c span{color:var(--sub)}
 :root[data-theme="clair"] .pr-hero p{color:var(--text-dim)}
+:root[data-theme="clair"] .pr-hero .pr-regle{color:var(--txt,#090909)}
 :root[data-theme="clair"] .pr-code-carte{background:linear-gradient(160deg,#fbdfdf,#ffe6e6 60%,#ffeded);border:1px solid #ffc0c0}
 :root[data-theme="clair"] .pr-code-lib{color:var(--sub)}
 :root[data-theme="clair"] .pr-code{color:#090909;text-shadow:0 0 18px rgba(224,32,32,.7)}
@@ -14333,6 +14336,7 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .du-d-n{background:#090909;color:#c10b0b}
 :root[data-theme="clair"] .du-changer{color:var(--sub,#5b5b64)}
 :root[data-theme="clair"] .am-carte{background:var(--surface-1,#ebebeb);border:1px solid var(--border,#cfcfd3)}
+:root[data-theme="clair"] .r-cadeau{border:1px solid rgba(255,42,42,.45);background:rgba(255,42,42,.08);color:var(--txt,#090909)}
 :root[data-theme="clair"] .am-titre{color:var(--red-text,#cc0000)}
 :root[data-theme="clair"] .am-tout{color:var(--sub,#5b5b64)}
 :root[data-theme="clair"] .am-vide{color:var(--text-dim,#484848)}

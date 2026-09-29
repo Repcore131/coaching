@@ -68,27 +68,73 @@ function deciderRattachement(d, ctx) {
 // filleul, au premier paiement, jamais aux renouvellements).
 //   compte   /parrainage/comptes/<parrain> tel qu'il est
 //   id       l'identifiant du filleul chez son parrain
+//
+// ⚠ UN SEUL MOIS PAR FILLEUL, QUEL QUE SOIT LE CHEMIN (29/09/2026). Le mois
+// du parrain arrive quand le filleul a fait SES QUATRE PREMIÈRES SÉANCES
+// (seuilSeances) ; un premier paiement qui arrive AVANT les quatre séances le
+// donne aussi. La marque `creditE` sur le filleul garantit qu'il ne le
+// donnera jamais deux fois, même si les événements sont rejoués ou arrivent
+// dans le désordre.
+function _valides(filleuls) { return Object.keys(filleuls).filter((k) => filleuls[k] && (filleuls[k].creditE || filleuls[k].statut === "payant")).length; }
 function premierPaiement(compte, id, maintenant) {
   const f = compte && compte.filleuls && compte.filleuls[id];
   if (!f || f.statut === "payant") return null;
-  const filleuls = Object.assign({}, compte.filleuls, { [id]: Object.assign({}, f, { statut: "payant", payeLe: maintenant }) });
+  const credit = !f.creditE;
+  const maj = { statut: "payant", payeLe: maintenant };
+  if (credit) { maj.creditE = true; maj.creditLe = maintenant; }
+  const filleuls = Object.assign({}, compte.filleuls, { [id]: Object.assign({}, f, maj) });
   const payants = Object.keys(filleuls).filter((k) => filleuls[k] && filleuls[k].statut === "payant").length;
-  const mentor = payants >= PALIER_MENTOR && !(compte && compte.mentorLe);
+  const actifs = _valides(filleuls);
+  const mentor = credit && actifs >= PALIER_MENTOR && !(compte && compte.mentorLe);
   return {
-    filleul: { statut: "payant", payeLe: maintenant },
-    moisGagnes: (Number(compte && compte.moisGagnes) || 0) + 1,
+    filleul: maj,
+    moisGagnes: (Number(compte && compte.moisGagnes) || 0) + (credit ? 1 : 0),
     payants,
+    actifs,
+    credit,
     mentor,
     prenom: String(f.prenom || "").trim() || "Ton filleul"
   };
 }
 
+// LES QUATRE PREMIÈRES SÉANCES D'UN FILLEUL : le mois du parrain, une fois.
+// Rend ce qu'il faut écrire, ou null quand il n'y a rien à faire (pas ce
+// filleul, ou déjà crédité : par ses séances, ou par un premier paiement).
+const SEUIL_SEANCES = 4;
+function seuilSeances(compte, id, maintenant) {
+  const f = compte && compte.filleuls && compte.filleuls[id];
+  if (!f || f.creditE) return null;
+  const deja = f.statut === "payant";   // crédité au paiement, avant la règle des séances
+  const maj = { creditE: true, actifLe: maintenant };
+  if (!deja) maj.creditLe = maintenant;
+  const filleuls = Object.assign({}, compte.filleuls, { [id]: Object.assign({}, f, maj) });
+  const actifs = _valides(filleuls);
+  const credit = !deja;
+  return {
+    filleul: maj,
+    moisGagnes: (Number(compte && compte.moisGagnes) || 0) + (credit ? 1 : 0),
+    actifs,
+    credit,
+    mentor: credit && actifs >= PALIER_MENTOR && !(compte && compte.mentorLe),
+    prenom: String(f.prenom || "").trim() || "Ton filleul"
+  };
+}
+// Le texte du push au parrain quand son filleul passe les quatre séances.
+function texteSeuil(p, mode) {
+  const quand = mode === "reserve" ? "Il t’attend en réserve : il s’ajoutera à la fin de ton abonnement."
+    : "Ton accès est prolongé d’un mois.";
+  return p.mentor
+    ? { title: "10 filleuls au travail : 1 mois d’Ultime offert", body: p.prenom + " a fait ses quatre premières séances. " + quand }
+    : { title: p.prenom + " s’est mis au travail : ton mois est offert", body: quand };
+}
+
 // Le texte du push au parrain.
 function textePaiement(p) {
+  if (p.credit === false) return { title: p.prenom + " vient de s’abonner", body: "Merci de faire découvrir RepCore." };
   return p.mentor
     ? { title: "10 filleuls abonnés : 1 mois d’Ultime offert", body: p.prenom + " vient de s’abonner. Tu gagnes aussi 1 mois offert." }
     : { title: p.prenom + " vient de s’abonner : 1 mois offert", body: "Merci de faire découvrir RepCore. Ton accès est prolongé d’un mois." };
 }
 
 module.exports = { CODE_RE, PALIER_MENTOR, DELAI_RATTACHEMENT_MS, emailNormalise, cleNormalisee, cleVersEmail,
-  idFilleul, deciderRattachement, premierPaiement, textePaiement };
+  idFilleul, deciderRattachement, premierPaiement, textePaiement, SEUIL_SEANCES, seuilSeances, texteSeuil };

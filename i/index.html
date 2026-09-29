@@ -69,7 +69,7 @@ code{background:#000;border:1px solid var(--bord);border-radius:6px;padding:2px 
   <!-- Invité par un ami ou un ambassadeur : l'accueil, par son nom. -->
   <div id="accueil" hidden>
     <img id="embleme" class="embleme" alt="" hidden>
-    <p class="promesse" id="promesse"><strong><span id="mois-ami" data-nb="essai.moisParraine">1</span> mois offert</strong>, toute l'app ouverte, sans carte bancaire.</p>
+    <p class="promesse" id="promesse"><strong><span id="mois-ami" data-nb="essai.moisParraine">2</span> mois d'accès complet</strong>, dont un offert par ton ami, sans carte bancaire.</p>
     <!-- L'OFFRE DE LANCEMENT d'un code ambassadeur « ultime_demi » : elle
          remplace le mois d'essai en plus (un seul avantage). -->
     <p class="promesse" id="offre-demi" hidden>Avec ce code : <strong>ton 1er mois d'Ultime à <span data-tarif="ultime_demi.premierMois">12,45&nbsp;€</span></strong>, puis <span data-tarif="ultime.mois">24,90&nbsp;€</span> par mois, sans engagement.</p>
@@ -174,11 +174,15 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
   // textContent partout : un prénom ne devient jamais du HTML.
   // LE MOIS OFFERT, PAR LA PERSONNE QUI INVITE (Kevin, 28/09/2026) : on dit
   // « grâce à Julie », jamais « au lieu de ».
-  function poserNom(nom,rang,demi){
+  // L'AMI (lot C, 29/09/2026) : « Julie t'offre ton premier mois », avant le
+  // bouton. Arrivé par un duel, le défi reste le titre (la raison de venir) et
+  // le cadeau vient dessous.
+  function poserNom(nom,rang,demi,ami){
     if(!nom) return;
-    var t=el('titre'); if(t) t.textContent=nom+' t\u2019invite sur RepCore';
+    var t=el('titre'); if(t&&!duel) t.textContent=nom+' t\u2019invite sur RepCore';
     // L'offre de lancement (ultime_demi) remplace le mois offert.
     var offre=demi?'Grâce à '+nom+', ton 1er mois d\u2019Ultime est à moitié prix.'
+      :ami?nom+' t\u2019offre ton premier mois\u00a0: toute l\u2019app ouverte, sans carte bancaire.'
       :'Grâce à '+nom+', ton premier mois est offert\u00a0: toute l\u2019app ouverte, sans carte bancaire.';
     var pr=el('promesse'); if(pr) pr.textContent=offre;
     var ii=el('interne-invite');
@@ -190,7 +194,7 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
   var BASE='https://repcore-sync-default-rtdb.firebaseio.com/';
   if((mode==='ami'||mode==='amb')&&el('accueil')){
     var t0=el('titre');
-    if(t0) t0.textContent=mode==='ami'?'Un ami t\u2019invite sur RepCore':'On t\u2019invite sur RepCore';
+    if(t0&&!duel) t0.textContent=mode==='ami'?'Un ami t\u2019invite sur RepCore':'On t\u2019invite sur RepCore';
     try{
       fetch(BASE+(mode==='ami'?'parrainage/codesPublics/'+ref:'ambassadeurs_publics/'+amb)+'.json')
         .then(function(r){ return r.ok?r.json():null; })
@@ -208,7 +212,7 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
             return;
           }
           var prenom=String(d.prenom||'').trim().slice(0,24);
-          poserNom(prenom,d.rang);
+          poserNom(prenom,d.rang,false,true);
           // L'app (même domaine) le reprend à l'inscription.
           try{ localStorage.setItem('rc_parrain_invite',JSON.stringify({code:ref,prenom:prenom,rang:Number(d.rang)||0,le:Date.now()})); }catch(e){}
         }).catch(function(){});
@@ -218,7 +222,7 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
   // prénom est gardé (rc_duel_invite) : l'app le reprend à l'inscription et
   // propose de relever le défi.
   if(duel&&el('accueil')){
-    var t1=el('titre'); if(t1&&mode==='duel') t1.textContent='Un ami te d\u00e9fie sur RepCore';
+    var t1=el('titre'); if(t1&&(mode==='duel'||mode==='ami')) t1.textContent='Un ami te d\u00e9fie sur RepCore';
     var mots={seances:'r\u00e9gularit\u00e9',serie:'r\u00e9gularit\u00e9',tonnage:'volume',progressionPct:'progression'};
     try{
       fetch(BASE+'duels_publics/'+duel+'.json')

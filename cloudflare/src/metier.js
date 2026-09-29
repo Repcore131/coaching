@@ -37,7 +37,7 @@ import * as RT from './retention.js';
 export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 export const PUSH_TYPES = ['serie', 'wrapped', 'bilan', 'badge', 'coach', 'filleul', 'defi', 'acces', 'retour', 'sante'];
-const BONUS_ESSAI_JOURS = 0;   // un mois, pas deux : = TARIFS.essai_parrainage.moisEnPlus
+const BONUS_ESSAI_JOURS = 30;  // le mois offert par l'ami : = TARIFS.essai_parrainage.moisEnPlus × 30 (l'app l'ouvre, essaiOuvrir)
 const PALIERS = ['aucun', 'essentielle', 'ultime', 'suivi'];
 
 // ── LE TEMPS, À PARIS ─────────────────────────────────────────────────────
@@ -545,7 +545,7 @@ export function creerMetier(deps) {
     // Le parrain est prévenu (ex-déclencheur pushFilleulInscrit).
     await envoyerPush(parrain, { type: 'filleul', url: './?parrainage=1', tag: 'filleul-' + id,
       title: (nom ? nom + ' vient' : 'Ton filleul vient') + ' de s’inscrire avec ton code',
-      body: 'Son premier paiement t’offrira 1 mois de RepCore.' });
+      body: 'Ses quatre premières séances t’offriront 1 mois de RepCore.' });
     return { ok: true };
   }
   // ⚠ L'ESSAI DU FILLEUL NE PASSE PAS PAR droits/. La version Cloud Functions
@@ -555,7 +555,8 @@ export function creerMetier(deps) {
   //   échéance, voir majDroits) ; l'essai, c'est l'app qui le donne à
   //   l'inscription (essaiOuvrir, bonusJours). Rien à faire ici.
   async function bonusEssai() { return null; }
-  // LE PREMIER PAIEMENT D'UN FILLEUL : 1 mois au parrain. Idempotent.
+  // LE PREMIER PAIEMENT D'UN FILLEUL : 1 mois au parrain, s'il ne l'a pas
+  // déjà eu par les quatre séances du filleul (P.premierPaiement). Idempotent.
   async function parrainagePaiement(cle, source) {
     const lien = await _val('parrainage/liens/' + cle);
     if (!lien || !lien.parrain || !lien.id) return null;
@@ -569,13 +570,20 @@ export function creerMetier(deps) {
       res = p;
       const f = Object.assign({}, (c.filleuls || {})[lien.id], p.filleul);
       if (prenom && !f.prenom) f.prenom = String(prenom).slice(0, 24);
-      const out = Object.assign({}, c, { moisGagnes: p.moisGagnes, payants: p.payants,
+      const out = Object.assign({}, c, { moisGagnes: p.moisGagnes, payants: p.payants, actifs: p.actifs,
         filleuls: Object.assign({}, c.filleuls, { [lien.id]: f }) });
       if (p.mentor) out.mentorLe = t;
       return out;
     });
     if (!tx.committed || !res) return null;
     if (prenom) res.prenom = String(prenom).trim().slice(0, 24) || res.prenom;
+    // Le mois est déjà venu des quatre séances : un merci, rien de plus.
+    if (!res.credit) {
+      await db.ref('parrainage/evenements/' + lien.parrain).push().set({ type: 'abonne', at: t, prenom: res.prenom, mois: 0, source: String(source || '') });
+      const txt = P.textePaiement(res);
+      await envoyerPush(lien.parrain, { type: 'filleul', url: './?parrainage=1', tag: 'filleul-paie-' + lien.id, title: txt.title, body: txt.body });
+      return res;
+    }
     // LE MOIS OFFERT, CRÉDITÉ DANS LE DOSSIER (jamais dans droits/, voir
     // bonusEssai), et SANS JAMAIS RIEN RETIRER :
     //   · abonné qui a résilié (fin PayPal posée, pas encore atteinte) : sa fin recule d'un mois ;
@@ -594,6 +602,40 @@ export function creerMetier(deps) {
     const txt = P.textePaiement(res);
     await envoyerPush(lien.parrain, { type: 'filleul', url: './?parrainage=1', tag: 'filleul-paie-' + lien.id, title: txt.title, body: txt.body });
     return res;
+  }
+
+  // LES QUATRE PREMIÈRES SÉANCES D'UN FILLEUL : 1 mois au parrain, une fois
+  // (la marque creditE, posée dans la même transaction). Un filleul payé
+  // avant ses quatre séances a déjà donné son mois : rien de plus.
+  // ⚠ Ce mois-là ne se reprend pas au remboursement d'un paiement : il ne
+  //   vient pas d'un paiement (pas de trace dans parrainage/credits/).
+  async function parrainageSeuil(k, t) {
+    const lien = await _val('parrainage/liens/' + k);
+    if (!lien || !lien.parrain || !lien.id) return 'sans_parrain';
+    const prenom = await _lire(k, 'fname');
+    let res = null;
+    const tx = await db.ref('parrainage/comptes/' + lien.parrain).transaction((compte) => {
+      const c = compte || {};
+      const p = P.seuilSeances(c, lien.id, t);
+      if (!p) return undefined;
+      res = p;
+      const f = Object.assign({}, (c.filleuls || {})[lien.id], p.filleul);
+      if (prenom && !f.prenom) f.prenom = String(prenom).slice(0, 24);
+      const out = Object.assign({}, c, { moisGagnes: p.moisGagnes, actifs: p.actifs,
+        filleuls: Object.assign({}, c.filleuls, { [lien.id]: f }) });
+      if (p.mentor) out.mentorLe = t;
+      return out;
+    });
+    if (!tx.committed || !res) return 'deja';
+    if (!res.credit) return 'deja_paye';
+    if (prenom) res.prenom = String(prenom).trim().slice(0, 24) || res.prenom;
+    const mode = await crediterMoisOffert(lien.parrain, t);
+    await db.ref('parrainage/credits_seances/' + k).set({ parrain: lien.parrain, id: lien.id, mode, le: t });
+    await db.ref('parrainage/evenements/' + lien.parrain).push().set({
+      type: res.mentor ? 'mentor' : 'seances', at: t, prenom: res.prenom, mois: 1 });
+    const txt = P.texteSeuil(res, mode);
+    await envoyerPush(lien.parrain, { type: 'filleul', url: './?parrainage=1', tag: 'filleul-seuil-' + lien.id, title: txt.title, body: txt.body });
+    return 'credite';
   }
 
   async function crediterMoisOffert(parrain, t) {
@@ -620,6 +662,20 @@ export function creerMetier(deps) {
     const pd = palierDroits(d, t);
     const de = Number(d && d.echeance) || 0;
     const manuel = !!(d && SOURCES_MAIN.indexOf(String(d.source)) >= 0);
+    // ── ENCORE À L'ESSAI (rien de payé, pas d'athlète suivi) : la fin
+    //    d'essai recule d'un mois, dans droits/ (ce que l'app lit d'abord,
+    //    essaiFin) et dans le dossier (les versions d'avant). Tout reste ouvert.
+    const essai = await _lire(parrain, 'essai');
+    const finEssai = Math.max(Number(essai && essai.finit) || 0, Number(d && d.essaiFinit) || 0);
+    const payeOuSuivi = statut === 'COACHING_SUIVI' || (statut === 'AUTONOMIE_PREMIUM' && paiementSt === 'active')
+      || (pd && pd !== 'aucun' && String(d.source) !== 'essai');
+    if (finEssai > t && !payeOuSuivi && !manuel) {
+      const fin = finEssai + MONTH_MS;
+      await majDroits(parrain, (x) => ({ palier: 'ultime', echeance: fin, source: 'essai', essaiFinit: fin,
+        essaiOuvertLe: Number(x && x.essaiOuvertLe) || Number(essai && essai.ouvertLe) || null }));
+      if (essai && typeof essai === 'object') await db.ref().update({ [b + 'essai/finit']: fin, [b + 'updatedAt']: t });
+      return 'essai_recule';
+    }
     if (pd && pd !== 'aucun') {
       if (de > t && !manuel) {
         const fin = Math.max(de, e, fp) + MONTH_MS;
@@ -696,7 +752,12 @@ export function creerMetier(deps) {
         if (Number(ech) > 0) maj[b + 'accessExpiry'] = Number(ech) - MONTH_MS;
         if (Number(fp) > 0) maj[b + 'abonnement/finAccesPaypal'] = Number(fp) - MONTH_MS;
         await db.ref().update(maj);
-        if (Number(dr && dr.echeance) > 0) await majDroits(parrain, (x) => ({ echeance: Number(x.echeance) - MONTH_MS }));
+        if (Number(dr && dr.echeance) > 0) await majDroits(parrain, (x) => ({ echeance: Number(x.echeance) - MONTH_MS,
+          essaiFinit: Number(x.essaiFinit) > 0 ? Number(x.essaiFinit) - MONTH_MS : null }));
+        if (c.mode === 'essai_recule') {
+          const es = await _lire(parrain, 'essai');
+          if (es && Number(es.finit) > 0) await db.ref(b + 'essai/finit').set(Number(es.finit) - MONTH_MS);
+        }
         await db.ref('paypal_fins/' + parrain).transaction((f) => (f ? Object.assign({}, f, { fin: Number(f.fin) - MONTH_MS,
           moisRecules: Math.max(0, (Number(f.moisRecules) || 0) - 1) }) : undefined));
         resultat = 'mois_retire';
@@ -965,7 +1026,7 @@ export function creerMetier(deps) {
       const nom = String(prenom || '').trim().slice(0, 24);
       await envoyerPush(lien.parrain, { type: 'filleul', url: './?parrainage=1', tag: 'filleul-seance-' + lien.id,
         title: (nom || 'Ton filleul') + ' a fait sa première séance',
-        body: 'Ton invitation a pris. Son premier paiement t’offrira 1 mois de RepCore.' });
+        body: 'Ton invitation a pris. Ses quatre premières séances t’offriront 1 mois de RepCore.' });
       return 'prevenu';
     }
     if (type === 'duel_rejoint' || type === 'duel_maj' || type === 'duel_cree') return duelEvenement(e, t);
@@ -1165,6 +1226,14 @@ export function creerMetier(deps) {
         ? Object.assign({ rang: { n: rg.rang.n, nom: rg.rang.nom }, maj: t, masquer: r.nonVerifies }, XPS.voltsPublics(r.total)) : null;
     }
     await db.ref().update(maj);
+    // LES QUATRE PREMIÈRES SÉANCES D'UN FILLEUL : le mois de son parrain.
+    // Relu une fois le seuil passé, jusqu'à ce que ce soit réglé (etat.parr) ;
+    // sans parrain et trop vieux pour en avoir un, réglé aussi.
+    if ((Number(etat.faites) || 0) >= P.SEUIL_SEANCES && !etat0.parr) {
+      const r = await parrainageSeuil(k, t);
+      if (r !== 'sans_parrain' || !(Number(cree) > 0) || t - Number(cree) > P.DELAI_RATTACHEMENT_MS)
+        await db.ref('xp_etat/' + k + '/parr').set(t);
+    }
     // Un lot plein : la suite en sous-tâche.
     if (nouvelles.length >= XPS.LOT_SEANCES) { await differer([{ quoi: 'xp', cle: k }]); return 'suite'; }
     return 'recalcule';
@@ -1224,7 +1293,7 @@ export function creerMetier(deps) {
   }
 
   return { envoyerPush, abonnes, planifies, apresHeuresCalmes, statsBadgesUn, statsBadgesFin,
-    defisQuotidienCoach, coachsAvecCanal, recalculerDefi, parrainageDemande, parrainagePaiement,
+    defisQuotidienCoach, coachsAvecCanal, recalculerDefi, parrainageDemande, parrainagePaiement, parrainageSeuil,
     ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits, majDroits, palierDroits,
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente,
