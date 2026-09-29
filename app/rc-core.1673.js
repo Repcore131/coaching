@@ -21195,7 +21195,7 @@ function htmlDuelsAccueil(u,duels,invite,maintenant){
   return '<div class="du-accueil"><button type="button" class="du-defier" onclick="ouvrirDuelsHub()">'
     +'<span class="du-d-ico" aria-hidden="true">'+icon('haches',23)+'</span>'
     +'<span class="du-d-t">Défie un pote</span>'
-    +'<span class="du-d-s" aria-hidden="true">Comparez vos séances<br>et progressez ensemble</span>'
+    +'<span class="du-d-s" aria-hidden="true">Comparez-vous<br>et progressez</span>'
     +(n?'<span class="du-d-n" aria-label="'+n+' défi'+(n>1?'s':'')+'">'+n+'</span>':'')
     +'<span class="du-d-ch" aria-hidden="true">'+icon('chevron-right',20)+'</span></button></div>';
 }
