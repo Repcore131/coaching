@@ -85725,6 +85725,7 @@ function _renderStrictMacroRings(nut,jourAff){
       ${estAuj?'':`<div style="flex-basis:100%;margin-top:2px;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--red-text)">${_libelleJourNut(today)}</div>`}
     </div>
     ${htmlAnneauxMacros(tot,m,'16px')}
+    ${(()=>{ try{ return htmlRepartitionProt(currentUser,entries,today); }catch(e){ return ''; } })()}
     ${htmlLigneCalories(tot,m)}
     <!-- LE SEL ET LES FIBRES, SOUS LA BARRE DES CALORIES. Ce sont les deux
          seules macros que les anneaux ne portent pas ; elles etaient dans le
@@ -90137,6 +90138,108 @@ function annulerDernierAjout(){
   _renderFjDaySummary(a.date);
   toast('Ajout annulé');
   return true;
+}
+// ══ LOT N6 : LA RÉPARTITION DES PROTÉINES DANS LA JOURNÉE (29/09/2026) ═══
+// Ce qui a VRAIMENT été mangé, repas par repas : une LECTURE, pas une consigne.
+//
+// ⚠ AUCUNE CIBLE PAR REPAS N'EST CRÉÉE. repartitionPrises (plus haut) partage
+//   la CIBLE en parts égales, et Kevin en a retiré l'affichage le 08/09/2026 :
+//   ce module-ci ne la rappelle pas. On montre, on explique une fois, on laisse
+//   faire.
+// ⚠ JAMAIS D'ALERTE, JAMAIS DE ROUGE, JAMAIS TOUS LES JOURS : les barres sont
+//   neutres (pleines ou en creux), et la phrase ne revient qu'une fois par
+//   semaine au plus (rc_prot_phrase, sur l'appareil : un confort de lecture,
+//   pas une donnée du dossier).
+// Le seuil de 0,4 g/kg par prise est le repère qui sature la synthèse
+// musculaire ; sans poids connu, il n'y a ni seuil, ni phrase.
+const PROT_PRISE_G_KG=0.4;
+const PROT_CONCENTRE_PART=0.55;
+const PROT_PHRASE_JOURS=7;
+const PROT_REPAS_ORDRE=Object.freeze(['matin','dejeuner','diner','collation','coucher']);
+// « au dîner », « en collation » : la préposition de chaque repas.
+const PROT_REPAS_A=Object.freeze({matin:'au petit-déjeuner',dejeuner:'au midi',diner:'au dîner',
+  collation:'en collation',coucher:'avant de te coucher'});
+/**
+ * PURE. La répartition des protéines d'une journée.
+ * @param entrees  les entrées du journal du jour ({repas, p, …})
+ * @param poidsKg  le poids de référence, ou rien
+ * @returns {{total:number, seuil:?number, repas:[{repas,g,part,prise}], concentre:boolean, dominant:?string}}
+ * « repas » suit l'ordre de la journée et ne garde que les repas qui ont reçu
+ * des protéines. « concentre » : un repas porte plus de 55 % du total, sur une
+ * journée d'au moins deux repas (un seul repas saisi, c'est souvent un
+ * journal en cours, on ne commente pas), et seulement avec un poids connu.
+ */
+function repartitionProt(entrees,poidsKg){
+  const kg=Number(poidsKg);
+  const seuil=(kg>=30&&kg<=300)?Math.round(PROT_PRISE_G_KG*kg*10)/10:null;
+  const par={};
+  for(const e of (Array.isArray(entrees)?entrees:[])){
+    const p=Number(e&&e.p);
+    if(!(p>0)) continue;
+    const r=(e&&PROT_REPAS_ORDRE.indexOf(e.repas)>=0)?e.repas:'collation';
+    par[r]=(par[r]||0)+p;
+  }
+  const total=Math.round(Object.keys(par).reduce((a,k)=>a+par[k],0)*10)/10;
+  const repas=PROT_REPAS_ORDRE.filter(r=>par[r]>0).map(r=>{
+    const g=Math.round(par[r]*10)/10;
+    return {repas:r,g,part:total>0?Math.round(g/total*1000)/1000:0,prise:seuil!=null&&g>=seuil};
+  });
+  let dominant=null;
+  for(const x of repas) if(!dominant||x.g>dominant.g) dominant=x;
+  const concentre=!!(seuil!=null&&repas.length>=2&&dominant&&dominant.part>PROT_CONCENTRE_PART);
+  return {total,seuil,repas,concentre,dominant:concentre?dominant.repas:null};
+}
+// PURE. La phrase, quand la journée est concentrée. Elle nomme le repas qui
+// porte tout, et celui des trois principaux qui en porte le moins.
+function phraseRepartitionProt(r){
+  if(!r||!r.concentre||!r.dominant) return '';
+  const d=r.repas.find(x=>x.repas===r.dominant);
+  const qui=(d&&d.part>=0.7)?'L’essentiel de tes protéines tombe ':'Plus de la moitié de tes protéines tombent ';
+  const g=r2=>{ const x=r.repas.find(y=>y.repas===r2); return x?x.g:0; };
+  const vers=['matin','dejeuner','diner'].filter(x=>x!==r.dominant).sort((a,b)=>g(a)-g(b)||(a==='dejeuner'?-1:b==='dejeuner'?1:0))[0];
+  return qui+PROT_REPAS_A[r.dominant]+'. En étaler une partie '+PROT_REPAS_A[vers]
+    +' te ferait mieux profiter de chaque prise.';
+}
+// PURE. La phrase se montre-t-elle ce jour-là ? Jamais vue, déjà montrée ce
+// même jour (un nouveau rendu ne la retire pas), ou vue il y a 7 jours au moins.
+function phraseProtAMontrer(dernierVu,jour){
+  if(!dernierVu||!/^\d{4}-\d{2}-\d{2}$/.test(String(dernierVu))) return true;
+  if(dernierVu===jour) return true;
+  return _joursEntre(dernierVu,jour)>=PROT_PHRASE_JOURS;
+}
+// La phrase, une fois par semaine au plus : la date où elle a été montrée
+// reste sur l'appareil.
+function _phraseProtSemaine(r,jour){
+  const ph=phraseRepartitionProt(r);
+  if(!ph) return '';
+  let vu=null; try{ vu=localStorage.getItem('rc_prot_phrase'); }catch(e){ vu=null; }
+  if(!phraseProtAMontrer(vu,jour)) return '';
+  try{ localStorage.setItem('rc_prot_phrase',jour); }catch(e){}
+  return ph;
+}
+// Sous les anneaux : une barre par repas, à l'échelle, pleine quand la prise
+// atteint le seuil, en creux sinon. Neutre, jamais rouge.
+function htmlRepartitionProt(u,entrees,jour){
+  let kg=null; try{ kg=poidsReference(u); }catch(e){ kg=null; }
+  const r=repartitionProt(entrees,kg);
+  if(!r.repas.length) return '';
+  const max=Math.max(r.seuil||0,...r.repas.map(x=>x.g));
+  const pc=v=>Math.max(2,Math.round(v/max*1000)/10);
+  const lib={matin:'Petit-déj.',dejeuner:'Déjeuner',diner:'Dîner',collation:'Collation',coucher:'Coucher'};
+  // La phrase ne parle que du jour en cours : relire une journée passée ne
+  // consomme pas le rendez-vous de la semaine.
+  const ph=(jour===localISODate(new Date()))?_phraseProtSemaine(r,jour):'';
+  // « Répartition des protéines » et non « … par repas » : les REPÈRES par
+  // repas (une consigne) ont été retirés de cette carte par Kevin le
+  // 24/08/2026, et un test y veille. Ceci est une lecture, pas un repère.
+  return '<div class="rp-bloc"><div class="nut-cap">Répartition des protéines</div>'
+    +'<div class="rp-barres">'+r.repas.map(x=>'<div class="rp-l"><span class="rp-n">'+escapeHtml(lib[x.repas])+'</span>'
+      +'<span class="rp-piste">'+(r.seuil!=null?'<i class="rp-seuil" style="left:'+pc(r.seuil)+'%"></i>':'')
+      +'<b class="rp-b'+(x.prise?' rp-plein':'')+'" style="width:'+pc(x.g)+'%"></b></span>'
+      +'<span class="rp-g">'+escapeHtml(String(Math.round(x.g)))+' g</span></div>').join('')+'</div>'
+    +(r.seuil!=null?'<div class="rp-leg">Plein : une prise d’au moins '+escapeHtml(String(Math.round(r.seuil)))+' g (0,4 g par kilo), le repère qui profite le mieux au muscle.</div>':'')
+    +(ph?'<div class="rp-phrase">'+escapeHtml(ph)+'</div>':'')
+    +'</div>';
 }
 const FJ_REPAS_LIB=Object.freeze({matin:'Petit-déjeuner',dejeuner:'Déjeuner',
   diner:'Dîner',collation:'Collation',coucher:'Avant de se coucher'});

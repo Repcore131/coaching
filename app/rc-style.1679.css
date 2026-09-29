@@ -11958,6 +11958,20 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .ci-coach-mini i.vide{background:var(--surface-3);opacity:1}
 .ci-coach-fat{margin-top:10px;font-size:var(--fs-sm);line-height:1.5;color:var(--text);
   border-left:3px solid #E02020;padding:4px 0 4px 10px}
+/* ══ LOT N6 : LES PROTÉINES PAR REPAS (29/09/2026) ═══════════════════════
+   Neutre : aucune couleur d'alerte. Plein = la prise atteint 0,4 g/kg, creux
+   sinon ; un trait fin marque le repère. */
+.rp-bloc{margin-top:14px}
+.rp-barres{display:flex;flex-direction:column;gap:7px;margin-top:8px}
+.rp-l{display:flex;align-items:center;gap:10px}
+.rp-n{flex:none;width:74px;font-size:var(--fs-xs);font-weight:700;color:var(--sub)}
+.rp-piste{position:relative;flex:1;min-width:0;height:12px}
+.rp-b{position:absolute;left:0;top:0;bottom:0;border-radius:3px;border:1.5px solid rgba(255,255,255,.55);background:transparent;box-sizing:border-box}
+.rp-b.rp-plein{background:rgba(255,255,255,.82);border-color:rgba(255,255,255,.82)}
+.rp-seuil{position:absolute;top:-3px;bottom:-3px;width:0;border-left:1px dashed rgba(255,255,255,.4)}
+.rp-g{flex:none;width:40px;text-align:right;font-size:var(--fs-xs);font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+.rp-leg{margin-top:8px;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5}
+.rp-phrase{margin-top:8px;font-size:var(--fs-sm);color:var(--text);line-height:1.55}
 /* ═══ THEME CLAIR — GENERE PAR scripts/theme_clair.py, NE PAS MODIFIER A LA MAIN ═══ */
 :root[data-theme="clair"] [style*="--halo-c"]{--halo-1:0 0 8px var(--halo-c,rgba(255,255,255,.45));--halo-2:0 0 14px var(--halo-c,rgba(255,255,255,.60)),0 0 30px var(--halo-c,rgba(255,255,255,.25));--halo-3:0 0 20px var(--halo-c,rgba(255,255,255,.85)),0 0 44px var(--halo-c,rgba(255,255,255,.40))}
 html[data-theme="clair"]{background:#f8f8f8}
@@ -14712,6 +14726,13 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .ci-coach-mini i{background:#E02020}
 :root[data-theme="clair"] .ci-coach-mini i.vide{background:var(--surface-3)}
 :root[data-theme="clair"] .ci-coach-fat{color:var(--text);border-left:3px solid #E02020}
+:root[data-theme="clair"] .rp-n{color:var(--sub)}
+:root[data-theme="clair"] .rp-b{border:1.5px solid rgba(9,9,9,0.55)}
+:root[data-theme="clair"] .rp-b.rp-plein{background:rgba(9,9,9,0.82);border-color:rgba(9,9,9,0.82)}
+:root[data-theme="clair"] .rp-seuil{border-left:1px dashed rgba(9,9,9,0.4)}
+:root[data-theme="clair"] .rp-g{color:var(--text)}
+:root[data-theme="clair"] .rp-leg{color:var(--text-dim)}
+:root[data-theme="clair"] .rp-phrase{color:var(--text)}
 :root[data-theme="clair"] [style^="background:#000"],:root[data-theme="clair"] [style*=";background:#000"],:root[data-theme="clair"] [style*="; background:#000"],:root[data-theme="clair"] [style*=" background:#000"],:root[data-theme="clair"] [style^="background: #000"],:root[data-theme="clair"] [style*=";background: #000"],:root[data-theme="clair"] [style*="; background: #000"],:root[data-theme="clair"] [style*=" background: #000"],:root[data-theme="clair"] [style^="background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=";background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*="; background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=" background: rgb(0, 0, 0)"]{background-color:#fbfbfb!important}
 :root[data-theme="clair"] [style^="background:#000b"],:root[data-theme="clair"] [style*=";background:#000b"],:root[data-theme="clair"] [style*="; background:#000b"],:root[data-theme="clair"] [style*=" background:#000b"],:root[data-theme="clair"] [style^="background: #000b"],:root[data-theme="clair"] [style*=";background: #000b"],:root[data-theme="clair"] [style*="; background: #000b"],:root[data-theme="clair"] [style*=" background: #000b"],:root[data-theme="clair"] [style^="background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=";background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*="; background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=" background: rgba(0, 0, 0, 0.733)"]{background-color:rgba(251,251,251,0.733)!important}
 :root[data-theme="clair"] [style^="background:#040404"],:root[data-theme="clair"] [style*=";background:#040404"],:root[data-theme="clair"] [style*="; background:#040404"],:root[data-theme="clair"] [style*=" background:#040404"],:root[data-theme="clair"] [style^="background: #040404"],:root[data-theme="clair"] [style*=";background: #040404"],:root[data-theme="clair"] [style*="; background: #040404"],:root[data-theme="clair"] [style*=" background: #040404"],:root[data-theme="clair"] [style^="background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*=";background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*="; background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*=" background: rgb(4, 4, 4)"]{background-color:#f7f7f7!important}

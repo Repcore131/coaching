@@ -49429,6 +49429,66 @@ async function testExercices(){
       const m=document.createElement('div'); m.innerHTML=_htmlCheckinCoachDetail(Object.assign({},c,{phase:{type:'masse',debut:1}}),t);
       return /pause/.test(m.textContent)?_echec('un signal hors sèche'):true;})());
 
+    // ══ LOT N6 — LES PROTÉINES PAR REPAS (29/09/2026) ═════════════════════
+    const _N6E=(repas,p)=>({repas,p,kcal:p*4,c:0,l:0,qty:100,nom:'x'});
+    ok('N6 — repartitionProt : trois prises égales, tout au dîner, un seul repas, un poids absent',(()=>{
+      // 75 kg : le repère est à 30 g.
+      const a=repartitionProt([_N6E('matin',35),_N6E('dejeuner',35),_N6E('diner',35)],75);
+      if(a.seuil!==30||a.total!==105||a.repas.length!==3) return _echec('égales : '+JSON.stringify(a));
+      if(!a.repas.every(x=>x.prise&&Math.abs(x.part-1/3)<0.01)||a.concentre) return _echec('trois prises au repère, rien de concentré');
+      if(phraseRepartitionProt(a)!=='') return _echec('une phrase sur une journée équilibrée');
+      // Tout au dîner (ou presque).
+      const b=repartitionProt([_N6E('matin',10),_N6E('dejeuner',15),_N6E('diner',60),_N6E('diner',20)],75);
+      const d=b.repas.find(x=>x.repas==='diner');
+      if(d.g!==80||!d.prise||b.repas.find(x=>x.repas==='matin').prise) return _echec('au dîner : '+JSON.stringify(b.repas));
+      if(!b.concentre||b.dominant!=='diner') return _echec('concentré au dîner');
+      const ph=phraseRepartitionProt(b);
+      if(!/au dîner/.test(ph)||!/au petit-déjeuner/.test(ph)||!/profiter de chaque prise/.test(ph)) return _echec('phrase : '+ph);
+      // Juste au-dessus et juste en dessous de 55 %.
+      if(!repartitionProt([_N6E('diner',56),_N6E('matin',44)],75).concentre) return _echec('56 % non concentré');
+      if(repartitionProt([_N6E('diner',55),_N6E('matin',45)],75).concentre) return _echec('55 % concentré');
+      // Une journée à un seul repas : pas de commentaire (souvent un journal en cours).
+      const c=repartitionProt([_N6E('diner',90)],75);
+      if(c.repas.length!==1||c.repas[0].part!==1||c.concentre||!c.repas[0].prise) return _echec('un seul repas : '+JSON.stringify(c));
+      // Un poids absent : aucun seuil, aucune prise, aucune phrase.
+      for(const kg of [null,undefined,0,'',NaN,12]){
+        const e=repartitionProt([_N6E('matin',10),_N6E('diner',80)],kg);
+        if(e.seuil!==null||e.repas.some(x=>x.prise)||e.concentre||phraseRepartitionProt(e)!=='') return _echec('poids '+kg+' : '+JSON.stringify(e));
+      }
+      // Rien sans protéines ; une entrée sans repas va en collation.
+      if(repartitionProt([],75).repas.length||repartitionProt(null,75).total!==0) return _echec('journal vide');
+      return repartitionProt([{p:20}],75).repas[0].repas==='collation'?true:_echec('entrée sans repas');})());
+    ok('N6 — la phrase une fois par semaine, même cinq jours concentrés de suite ; aucune cible par repas',(()=>{
+      // Le rendez-vous : cinq jours de suite, la phrase le premier seulement.
+      let vu=null; const vus=[];
+      for(let i=0;i<5;i++){ const j=_jourPlus('2026-09-21',i); const m=phraseProtAMontrer(vu,j); vus.push(m); if(m&&vu!==j) vu=j; }
+      if(vus.join()!=='true,false,false,false,false') return _echec('cinq jours : '+vus.join());
+      if(!phraseProtAMontrer('2026-09-21','2026-09-21')) return _echec('le même jour, un nouveau rendu la retire');
+      if(phraseProtAMontrer('2026-09-21','2026-09-27')||!phraseProtAMontrer('2026-09-21','2026-09-28')) return _echec('sept jours');
+      // Par l'écran : cinq rendus concentrés, une phrase.
+      const sv=(()=>{ try{ return localStorage.getItem('rc_prot_phrase'); }catch(e){ return null; } })();
+      try{
+        try{ localStorage.removeItem('rc_prot_phrase'); }catch(e){}
+        const j=localISODate(new Date()), u={weightLog:[{date:j,kg:75}]};
+        const ent=[_N6E('matin',10),_N6E('diner',80)];
+        const h1=htmlRepartitionProt(u,ent,j);
+        if(h1.indexOf('rp-phrase')<0) return _echec('première fois sans phrase');
+        // Le lendemain et les jours suivants (même semaine) : rien.
+        try{ localStorage.setItem('rc_prot_phrase',_jourPlus(j,-1)); }catch(e){}
+        if(htmlRepartitionProt(u,ent,j).indexOf('rp-phrase')>=0) return _echec('la phrase revient le lendemain');
+        // Une journée passée relue ne consomme pas le rendez-vous.
+        try{ localStorage.removeItem('rc_prot_phrase'); }catch(e){}
+        if(htmlRepartitionProt(u,ent,_jourPlus(j,-3)).indexOf('rp-phrase')>=0) return _echec('phrase sur un jour passé');
+        if((()=>{ try{ return localStorage.getItem('rc_prot_phrase'); }catch(e){ return null; } })()) return _echec('un jour passé a consommé la semaine');
+        // Neutre : jamais de rouge, jamais de mot d'alerte, aucune cible par repas écrite.
+        const h=htmlRepartitionProt(u,ent,j);
+        if(/red|#e02020|#ff2d2d|alerte|attention|insuffisant/i.test(h)) return _echec('un signal d’alerte');
+        if(/cible|objectif/i.test(h)) return _echec('une cible par repas');
+        const d=document.createElement('div'); d.innerHTML=h;
+        if(d.querySelectorAll('.rp-b').length!==2||d.querySelectorAll('.rp-b.rp-plein').length!==1) return _echec('barres pleines et en creux');
+        return true;
+      } finally { try{ if(sv==null) localStorage.removeItem('rc_prot_phrase'); else localStorage.setItem('rc_prot_phrase',sv); }catch(e){} }})());
+
     ok('Volts : dix rangs, dans l’ordre, seuils croissants à partir de 0',(()=>{
       const n=RANGS.map(r=>r.nom).join();
       if(n!=='ÉTINCELLE,IMPULSION,VOLTAGE,MACHINE,ÉLITE,SURTENSION,MONSTRE,FOUDRE,TITAN,LÉGENDE') return _echec(n);
