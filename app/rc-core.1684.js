@@ -15261,6 +15261,146 @@ function _morphoAthletesDuCoach(){
 function morphoCalibrageCoach(){
   try{ return morphoCalibrage(_morphoAthletesDuCoach()); }catch(e){ return {}; }
 }
+// ══ LOT T4 : LA REVUE MORPHO DU PROGRAMME (29/09/2026) ═══════════════════
+// Le programme de l'athlète, passé au crible des aménagements de SES profils
+// (morphoProfils) : quels exercices ont un réglage à envisager, lequel, et
+// d'où il vient.
+//
+// ⚠ L'APPARIEMENT SE FAIT SUR LE MOUVEMENT, PAS SUR LE NOM : l'exercice passe
+//   par schemaDe (la table des schémas moteurs du catalogue, alias compris),
+//   et se compare au « schema » de chaque aménagement. « Squat », « squat à la
+//   smith » et « hack squat » relèvent du même schéma.
+// ⚠ AUCUN EXERCICE N'EST À RETIRER, AUCUN N'EST EN ROUGE : chaque ligne porte
+//   un réglage, et le texte vient du champ « amenager » des fiches (G1).
+// ⚠ L'ORDRE DE LECTURE EST IMPOSÉ : acquis, puis fonctionnel, puis osseux.
+//   Et avant le premier levier, ce qui manque aux amplitudes est DIT : sans
+//   ça, on attribuerait à la morphologie ce qui relève de la mobilité.
+const REVUE_MORPHO_MAX=5;
+// PURE. De combien les mots de l'aménagement (« Squat barre haute profond »)
+// se retrouvent dans le nom de l'exercice. Sert à garder, quand deux profils
+// visent le même schéma, l'aménagement le plus SPÉCIFIQUE.
+function _revueSpecificite(quoi,nom){
+  let q=[], n='';
+  try{ q=exKey(quoi).split(' ').filter(w=>w.length>=4); n=' '+exKey(nom)+' '; }catch(e){ return 0; }
+  return q.filter(w=>n.indexOf(' '+w+' ')>=0).length;
+}
+/**
+ * PURE. La revue : une ligne par exercice concerné, dans l'ordre de lecture.
+ * @param programme  sessions_config (les séances et leurs exercices)
+ * @param profils    morphoProfils(...).profils, éventuellement portant « source »
+ * @param amplitudes testsMorpho(...) : les tests manquants ou périmés sont
+ *                   notés sur les lignes OSSEUSES (amplitudesManquantes)
+ * @param opts       {schemaDe: ex → schéma} pour les tests ; schemaDe sinon
+ * @returns {{exercice,seance,profil,quoi,reglage,schema,source,nature,suspendu,amplitudesManquantes}[]}
+ */
+function revueMorpho(programme,profils,amplitudes,opts){
+  const o=opts||{};
+  const sch=(typeof o.schemaDe==='function')?o.schemaDe:(ex=>schemaDe(ex,o.user));
+  const P=Array.isArray(profils)?profils.filter(p=>p&&Array.isArray(p.amenager)):[];
+  const manquent=(Array.isArray(amplitudes)?amplitudes:[]).filter(t=>t&&(!t.date||t.perime)).map(t=>t.lib);
+  if(!P.length) return [];
+  const out=[];
+  (Array.isArray(programme)?programme:[]).forEach((s,is)=>{
+    if(!s||s.active===false) return;
+    for(const ex of (Array.isArray(s.exercises)?s.exercises:[])){
+      const nom=String((ex&&ex.name)||'').trim();
+      if(!nom) continue;
+      let k=null; try{ k=sch(ex); }catch(e){ k=null; }
+      if(!k) continue;
+      let m=null;
+      P.forEach((p,ip)=>{ for(const am of p.amenager){
+        if(!am||am.schema!==k) continue;
+        const sc=_revueSpecificite(am.quoi,nom);
+        if(!m||sc>m.sc||(sc===m.sc&&ip<m.ip)) m={sc,ip,p,am};
+      }});
+      if(!m) continue;
+      out.push({exercice:nom,seance:String(s.name||s.day||('Séance '+(is+1))),profil:m.p.cle,
+        quoi:m.am.quoi,reglage:m.am.reglage,schema:k,
+        source:{lib:m.p.lib,attribut:m.p.source||''},nature:m.p.nature||'osseux',suspendu:!!m.p.suspendu,
+        amplitudesManquantes:(m.p.nature==='osseux')?manquent.slice():[],_o:MORPHO_ORDRE[m.p.nature]||0,_sc:m.sc,_ip:m.ip});
+    }
+  });
+  out.sort((a,b)=>(a._o-b._o)||(b._sc-a._sc)||(a._ip-b._ip));
+  return out.map(x=>{ const y=Object.assign({},x); delete y._o; delete y._sc; delete y._ip; return y; });
+}
+// PURE. Les lignes regroupées : un même aménagement d'un même profil ne se
+// répète pas exercice par exercice, il nomme les exercices qu'il concerne.
+function _revueGrouper(lignes){
+  const g=[], vu={};
+  for(const l of (lignes||[])){
+    const k=l.profil+'|'+l.quoi;
+    if(vu[k]){
+      if(vu[k].exercices.indexOf(l.exercice)<0) vu[k].exercices.push(l.exercice);
+      if(vu[k].seances.indexOf(l.seance)<0) vu[k].seances.push(l.seance);
+      continue;
+    }
+    vu[k]=Object.assign({},l,{exercices:[l.exercice],seances:[l.seance]});
+    g.push(vu[k]);
+  }
+  return g;
+}
+/**
+ * PURE. La section de la fiche. « etat » : {lignes, bloques:[{court,n}], profilsSortis}.
+ * Rend '' seulement quand il n'y a RIEN de morpho à dire (aucun profil, rien
+ * en attente de calibrage) : sinon elle dit ce qu'elle voit, ou ce qui manque.
+ */
+function htmlRevueMorpho(etat){
+  const e=etat||{}, E=escapeHtml;
+  const g=_revueGrouper(e.lignes||[]).slice(0,REVUE_MORPHO_MAX);
+  const bloques=Array.isArray(e.bloques)?e.bloques:[];
+  if(!g.length&&!bloques.length&&!e.profilsSortis) return '';
+  let h='<div class="rvm"><div class="rvm-t">À aménager dans son programme</div>'
+    +'<div class="rvm-s">Des réglages à envisager sur ses exercices, jamais un exercice à retirer. Dans l’ordre de lecture : le carnet, les amplitudes, puis les leviers.</div>';
+  let noteFaite=false;
+  for(const l of g){
+    if(l.nature==='osseux'&&!noteFaite&&l.amplitudesManquantes&&l.amplitudesManquantes.length){
+      noteFaite=true;
+      h+='<div class="rvm-avant">Avant de lire les leviers : '+E(l.amplitudesManquantes.join(', ').toLowerCase())
+        +(l.amplitudesManquantes.length>1?' ne sont pas testés':' n’est pas testé')
+        +' (ou le test a plus de trois mois). Un manque de mobilité se prend vite pour une affaire de proportions.</div>';
+    }
+    h+='<div class="rvm-l"><div class="rvm-ex">'+E(l.exercices.join(', '))
+      +' <span>· '+E(l.seances.join(', '))+'</span></div>'
+      +'<div class="rvm-r"><b>'+E(l.quoi)+' :</b> '+E(l.reglage)+'</div>'
+      +'<div class="rvm-src">'+E(l.source&&l.source.lib||'')+(l.source&&l.source.attribut?' '+E(l.source.attribut):'')
+      +(l.suspendu?' · test à refaire':'')+'</div></div>';
+  }
+  if(!g.length&&e.profilsSortis)
+    h+='<div class="rvm-vide">Aucun exercice de son programme ne relève des aménagements de ses profils.</div>';
+  if(bloques.length)
+    h+='<div class="rvm-manque">Une partie de la lecture des leviers attend un repère calibré sur tes athlètes : '
+      +bloques.map(b=>E(b.court)+', '+b.n+' athlète'+(b.n>1?'s':'')+' mesuré'+(b.n>1?'s':'')+' sur '+MORPHO_CALIB_MIN
+        +' (il en reste '+Math.max(0,MORPHO_CALIB_MIN-b.n)+')').join(' ; ')+'.</div>';
+  return h+'</div>';
+}
+// La fiche du coach : les profils de l'athlète, la source de chacun (le dernier
+// axe de sa signature, avec sa date et sa tolérance), et ce qui attend un
+// repère. « athletes » : ceux du coach, pour compter les mesurés.
+function _etatRevueMorpho(c,cal,athletes){
+  let axes=[], res={profils:[]};
+  try{ axes=morphoAxes(c,{calibrage:cal||null}); res=morphoProfils(axes); }catch(e){ return {lignes:[],bloques:[],profilsSortis:false}; }
+  const par={}; axes.forEach(a=>{ if(a&&a.cle) par[a.cle]=a; });
+  const profils=(res.profils||[]).map(p=>{
+    const ax=(p.axes||[]).map(k=>par[k]).filter(a=>a&&a.position!=null).sort((x,y)=>String(y.dateISO||'').localeCompare(String(x.dateISO||'')));
+    const a0=ax[0];
+    return Object.assign({},p,{source:a0?_morphoAttribut(a0.source,a0.dateISO,a0.tolerance):''});
+  });
+  let tests=[]; try{ tests=testsMorpho(c); }catch(e){ tests=[]; }
+  const lignes=revueMorpho((c&&c.sessions_config)||[],profils,tests,{user:c});
+  const l=Array.isArray(athletes)?athletes:[];
+  const bloques=axes.filter(a=>a&&a.manque==='repere-a-calibrer').map(a=>({court:a.court,
+    n:l.filter(u=>{ try{ const r=_morphoBrut(u,a.cle); return !!(r&&r.valeur!=null&&isFinite(r.valeur)); }catch(e){ return false; } }).length}));
+  return {lignes,bloques,profilsSortis:profils.length>0};
+}
+function renderRevueMorphoCoach(c){
+  const z=document.getElementById('ccd-revue-morpho');
+  if(!z) return false;
+  if(!currentUser||currentUser.role!=='coach'){ z.innerHTML=''; return false; }
+  let h='';
+  try{ h=htmlRevueMorpho(_etatRevueMorpho(c,_morphoCalCache(),_morphoAthletesDuCoach())); }catch(e){ h=''; }
+  z.innerHTML=h;
+  return !!h;
+}
 
 
 // ══════════════ MORPHO — LOT M5 : QUATRE ENTRÉES ══════════════
@@ -29428,6 +29568,7 @@ function openClientDetail(cid,_refresh,_force){
   try{ renderSignauxCoach(c); }catch(e){}
   try{ renderMensCoach(c); }catch(e){}
   try{ renderMethodesCoach(c); }catch(e){}
+  try{ renderRevueMorphoCoach(c); }catch(e){}
   try{ renderAsymetrieCoach(c); }catch(e){}
   try{ renderMotCoachFiche(c); }catch(e){}
   try{ renderDouleurCoach(c); }catch(e){}

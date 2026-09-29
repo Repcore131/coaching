@@ -68837,6 +68837,63 @@ async function testExercices(){
         return /ne prédit aucun plafond/.test(p8.piege)
           ?true:_echec('le piège de P8 ne réfute rien');})());
 
+      // ══ LOT T4 — LA REVUE MORPHO DU PROGRAMME (29/09/2026) ══════════════
+      const _T4P=(cle,nature,quoi,schema)=>({cle,lib:'Profil '+cle,nature,amenager:[{quoi,reglage:'réglage de '+cle+' pour « '+quoi+' »',schema}]});
+      const _T4PROG=ex=>[{day:'Lundi',name:'Bas du corps',active:true,exercises:ex.map(n=>({name:n}))},{day:'Mardi',active:false,exercises:[{name:'Squat'}]}];
+      ok('T4 — l’appariement sur le MOUVEMENT : trois noms, un schéma, et le catalogue qui les relie',(()=>{
+        for(const n of ['SQUAT','SQUAT SMITH MACHINE','HACKSQUAT'])
+          if(schemaDe({name:n})!=='squat') return _echec(n+' → '+schemaDe({name:n}));
+        const l=revueMorpho(_T4PROG(['Squat','Squat smith machine','Hacksquat']),[_T4P('P5','osseux','Squat barre haute profond','squat')],[]);
+        if(l.length!==3||l.some(x=>x.profil!=='P5'||x.schema!=='squat'||x.seance!=='Bas du corps')) return _echec(JSON.stringify(l));
+        const x=l[0];
+        for(const k of ['exercice','seance','profil','quoi','reglage','schema','source'])
+          if(!(k in x)) return _echec('champ '+k+' absent');
+        // Une séance inactive ne compte pas.
+        return l.every(y=>y.seance!=='Mardi')?true:_echec('séance inactive lue');})());
+      ok('T4 — revueMorpho : rien de concerné, deux profils sur un exercice (le plus spécifique), aucun profil',(()=>{
+        const S=()=>'squat';
+        if(revueMorpho(_T4PROG(['Curl biceps']),[_T4P('P5','osseux','Squat','squat')],[],{schemaDe:()=>'isolation-coude'}).length!==0) return _echec('un exercice non concerné');
+        const deux=[_T4P('P3','osseux','Squat pieds serrés profond','squat'),_T4P('P5','osseux','Squat barre haute profond','squat')];
+        const l=revueMorpho(_T4PROG(['Squat barre haute']),deux,[],{schemaDe:S});
+        if(l.length!==1||l[0].profil!=='P5') return _echec('le plus spécifique : '+JSON.stringify(l));
+        // À spécificité égale, l'ordre des profils (celui de la lecture) départage.
+        const eg=revueMorpho(_T4PROG(['Presse à cuisses']),deux,[],{schemaDe:S});
+        if(eg.length!==1||eg[0].profil!=='P3') return _echec('à égalité : '+JSON.stringify(eg));
+        if(revueMorpho(_T4PROG(['Squat']),[],[],{schemaDe:S}).length!==0||revueMorpho(_T4PROG(['Squat']),null,[],{schemaDe:S}).length!==0) return _echec('sans profil');
+        // L'ordre de lecture : acquis, fonctionnel, osseux ; et l'amplitude manquante notée sur l'osseux.
+        const o=revueMorpho(_T4PROG(['Squat','Leg curl']),[_T4P('P1','osseux','Squat','squat'),_T4P('P13','acquis','Rien à retirer','isolation-genou')],
+          [{lib:'Cheville, genou au mur',date:null},{lib:'Hanche',date:1,perime:false}],{schemaDe:ex=>/curl/i.test(ex.name)?'isolation-genou':'squat'});
+        if(o.map(x=>x.nature).join()!=='acquis,osseux') return _echec('ordre : '+o.map(x=>x.nature).join());
+        if(o[0].amplitudesManquantes.length||o[1].amplitudesManquantes.join()!=='Cheville, genou au mur') return _echec('amplitudes : '+JSON.stringify(o.map(x=>x.amplitudesManquantes)));
+        return true;})());
+      ok('T4 — la section : cinq lignes au plus, l’amplitude AVANT les leviers, ni rouge ni interdit',(()=>{
+        const ex=['Squat','Hacksquat','Leg curl','Fentes','Développé couché','Soulevé de terre','Rowing'];
+        const pr=['P13','P1','P2','P3','P4','P9','P10'].map((k,i)=>_T4P(k,i?'osseux':'acquis','Mouvement '+i,'s'+i));
+        const l=revueMorpho(_T4PROG(ex),pr,[{lib:'Cheville, genou au mur',date:null}],{schemaDe:e=>'s'+ex.indexOf(e.name)});
+        const h=htmlRevueMorpho({lignes:l,bloques:[],profilsSortis:true});
+        const d=document.createElement('div'); d.innerHTML=h;
+        if(d.querySelectorAll('.rvm-l').length!==5) return _echec(d.querySelectorAll('.rvm-l').length+' lignes');
+        const t=d.textContent;
+        if(t.indexOf('Avant de lire les leviers')<0||t.indexOf('Avant de lire les leviers')>t.indexOf('Hacksquat')) return _echec('l’amplitude n’est pas dite avant les leviers');
+        if(t.indexOf('Squat')>t.indexOf('Avant de lire les leviers')) return _echec('l’acquis n’est pas lu en premier');
+        if(/éviter|eviter|interdit|ne pas faire|proscrit/i.test(t)) return _echec('un mot interdit : '+t);
+        if(/red|#e02020|#ff2|orange/i.test(h)) return _echec('une couleur de jugement');
+        if(t.indexOf('Profil P13')<0) return _echec('la source n’est pas dite');
+        return true;})());
+      ok('T4 — axes non calibrés : la section dit ce qui manque et combien d’athlètes il reste à mesurer',(()=>{
+        const u=_m2(_M2BASE);
+        const e=_etatRevueMorpho(u,null,_m2Pop().slice(0,5));
+        if(!e.bloques.length) return _echec('aucun axe en attente de calibrage : '+JSON.stringify(e));
+        const b=e.bloques[0];
+        if(b.n!==5) return _echec('mesurés : '+b.n);
+        const h=htmlRevueMorpho(e);
+        if(!/5 athlètes mesurés sur 8 \(il en reste 3\)/.test(h)) return _echec('le compte : '+h);
+        // Avec le repère posé, plus rien n'attend.
+        const c=_etatRevueMorpho(u,_m2Cal(),_m2Pop());
+        if(c.bloques.some(x=>x.court===b.court)) return _echec('un axe calibré reste en attente');
+        // Rien de morpho du tout : pas de cadre.
+        return htmlRevueMorpho({lignes:[],bloques:[],profilsSortis:false})===''?true:_echec('un cadre vide');})());
+
       ok('M5 — la prise se donne en INTERVALLE, et pas sans la mesure qu’elle multiplie',(()=>{
         // Bras longs : entrejambe court pour que A1 ne sorte pas, bras long
         // pour que A3 sorte.

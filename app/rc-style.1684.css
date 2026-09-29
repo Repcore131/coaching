@@ -12002,6 +12002,19 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .obs-leg i.obs-vide{border:1px dashed rgba(255,255,255,.3);box-sizing:border-box}
 .obs-detail{min-height:1.4em;margin-top:6px;font-size:var(--fs-xs);color:var(--text)}
 .obs-phrase{margin:6px 0 0;font-size:var(--fs-sm);line-height:1.5;color:var(--text)}
+/* ══ LOT T4 : LA REVUE MORPHO DU PROGRAMME (29/09/2026) ══════════════════
+   Aucune couleur de jugement : pas de rouge, pas d'orange, un filet neutre. */
+.rvm{margin:0 0 16px;padding:14px;border:1px solid var(--border);border-radius:var(--r-3);background:var(--dark)}
+.rvm-t{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--sub)}
+.rvm-s{margin:4px 0 10px;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5}
+.rvm-avant{margin:0 0 10px;font-size:var(--fs-sm);color:var(--text);line-height:1.55;border-left:2px solid var(--border);padding-left:10px}
+.rvm-l{padding:8px 0;border-top:1px solid var(--border)}
+.rvm-ex{font-size:var(--fs-sm);font-weight:800;color:var(--text-strong);line-height:1.4}
+.rvm-ex span{font-weight:500;color:var(--sub)}
+.rvm-r{margin-top:3px;font-size:var(--fs-sm);color:var(--text);line-height:1.55}
+.rvm-r b{font-weight:700;color:var(--text-strong)}
+.rvm-src{margin-top:3px;font-size:var(--fs-xs);color:var(--text-faint);line-height:1.45}
+.rvm-vide,.rvm-manque{margin-top:8px;font-size:var(--fs-sm);color:var(--text-dim);line-height:1.55}
 /* ═══ THEME CLAIR — GENERE PAR scripts/theme_clair.py, NE PAS MODIFIER A LA MAIN ═══ */
 :root[data-theme="clair"] [style*="--halo-c"]{--halo-1:0 0 8px var(--halo-c,rgba(255,255,255,.45));--halo-2:0 0 14px var(--halo-c,rgba(255,255,255,.60)),0 0 30px var(--halo-c,rgba(255,255,255,.25));--halo-3:0 0 20px var(--halo-c,rgba(255,255,255,.85)),0 0 44px var(--halo-c,rgba(255,255,255,.40))}
 html[data-theme="clair"]{background:#f8f8f8}
@@ -14781,6 +14794,17 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .obs-leg i.obs-vide{border:1px dashed rgba(9,9,9,0.3)}
 :root[data-theme="clair"] .obs-detail{color:var(--text)}
 :root[data-theme="clair"] .obs-phrase{color:var(--text)}
+:root[data-theme="clair"] .rvm{border:1px solid var(--border);background:var(--dark)}
+:root[data-theme="clair"] .rvm-t{color:var(--sub)}
+:root[data-theme="clair"] .rvm-s{color:var(--text-dim)}
+:root[data-theme="clair"] .rvm-avant{color:var(--text);border-left:2px solid var(--border)}
+:root[data-theme="clair"] .rvm-l{border-top:1px solid var(--border)}
+:root[data-theme="clair"] .rvm-ex{color:var(--text-strong)}
+:root[data-theme="clair"] .rvm-ex span{color:var(--sub)}
+:root[data-theme="clair"] .rvm-r{color:var(--text)}
+:root[data-theme="clair"] .rvm-r b{color:var(--text-strong)}
+:root[data-theme="clair"] .rvm-src{color:var(--text-faint)}
+:root[data-theme="clair"] .rvm-vide,:root[data-theme="clair"] .rvm-manque{color:var(--text-dim)}
 :root[data-theme="clair"] [style^="background:#000"],:root[data-theme="clair"] [style*=";background:#000"],:root[data-theme="clair"] [style*="; background:#000"],:root[data-theme="clair"] [style*=" background:#000"],:root[data-theme="clair"] [style^="background: #000"],:root[data-theme="clair"] [style*=";background: #000"],:root[data-theme="clair"] [style*="; background: #000"],:root[data-theme="clair"] [style*=" background: #000"],:root[data-theme="clair"] [style^="background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=";background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*="; background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=" background: rgb(0, 0, 0)"]{background-color:#fbfbfb!important}
 :root[data-theme="clair"] [style^="background:#000b"],:root[data-theme="clair"] [style*=";background:#000b"],:root[data-theme="clair"] [style*="; background:#000b"],:root[data-theme="clair"] [style*=" background:#000b"],:root[data-theme="clair"] [style^="background: #000b"],:root[data-theme="clair"] [style*=";background: #000b"],:root[data-theme="clair"] [style*="; background: #000b"],:root[data-theme="clair"] [style*=" background: #000b"],:root[data-theme="clair"] [style^="background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=";background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*="; background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=" background: rgba(0, 0, 0, 0.733)"]{background-color:rgba(251,251,251,0.733)!important}
 :root[data-theme="clair"] [style^="background:#040404"],:root[data-theme="clair"] [style*=";background:#040404"],:root[data-theme="clair"] [style*="; background:#040404"],:root[data-theme="clair"] [style*=" background:#040404"],:root[data-theme="clair"] [style^="background: #040404"],:root[data-theme="clair"] [style*=";background: #040404"],:root[data-theme="clair"] [style*="; background: #040404"],:root[data-theme="clair"] [style*=" background: #040404"],:root[data-theme="clair"] [style^="background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*=";background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*="; background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*=" background: rgb(4, 4, 4)"]{background-color:#f7f7f7!important}
