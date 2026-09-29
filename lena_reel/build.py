@@ -25,6 +25,7 @@ DUREE = 19.0
 SUR_HAUT, SUR_BAS, SUR_DROITE = 150, 250, 120
 TEXTE_LARGEUR_MAX = 2 * (W // 2 - SUR_DROITE) - 40   # centré sur l'écran, sans toucher la marge droite
 TEXTE_Y = 1180                                       # centre vertical des textes
+MENTION_IA = False                                   # « Personnage virtuel IA · Image virtuelle » en haut à gauche
 
 ICI = os.path.dirname(os.path.abspath(__file__))
 POLICE = os.path.join(ICI, "assets", "Montserrat-Bold.otf")
@@ -326,7 +327,8 @@ class Montage:
                 if age >= 0:
                     c, a = pop(self.textes[sc["nom"]], age)
                     colle(im, c, W / 2, sc.get("texte_y", TEXTE_Y), a)
-        im.alpha_composite(self.mention)
+        if MENTION_IA:
+            im.alpha_composite(self.mention)
         sans = im
         if avec_perso and sc.get("perso"):
             im = im.copy()
