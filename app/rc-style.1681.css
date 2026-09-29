@@ -11983,6 +11983,25 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   font-size:var(--fs-sm);line-height:1.45;color:var(--text);box-sizing:border-box;animation:slideDown var(--t-3) var(--c-out)}
 .rg-banniere span{flex:1;min-width:0}
 .rg-banniere button{flex:none;background:none;border:0;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:0 4px}
+/* ══ LOT N8 : LA BANDE D'OBSERVANCE (29/09/2026) ═══════════════════════════
+   Trois états, trois matières : plein (tenu), bordé (écart), vide (sans
+   saisie). Pas de rouge d'alerte : on lit un motif, on ne sanctionne pas. */
+.obs{margin:14px 0 4px;padding:14px;border:1px solid var(--border);border-radius:var(--r-3);background:var(--surface-1)}
+.obs-tete{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--sub);margin-bottom:10px}
+.obs-bande{display:grid;grid-template-columns:repeat(14,minmax(0,1fr));gap:4px}
+.obs-j{height:28px;padding:0;border-radius:4px;cursor:pointer;border:1.5px solid transparent;background:none}
+.obs-j.obs-tenu{background:rgba(255,255,255,.82)}
+.obs-j.obs-ecart{border-color:rgba(255,255,255,.7);background:repeating-linear-gradient(135deg,rgba(255,255,255,.18) 0 3px,transparent 3px 6px)}
+.obs-j.obs-vide{border:1px dashed rgba(255,255,255,.22)}
+.obs-j.obs-choisi{outline:2px solid #E02020;outline-offset:2px}
+.obs-leg{display:flex;gap:14px;margin-top:8px;font-size:var(--fs-2xs);color:var(--sub)}
+.obs-leg span{display:inline-flex;align-items:center;gap:5px}
+.obs-leg i{display:inline-block;width:12px;height:12px;border-radius:3px}
+.obs-leg i.obs-tenu{background:rgba(255,255,255,.82)}
+.obs-leg i.obs-ecart{border:1.5px solid rgba(255,255,255,.7);box-sizing:border-box;background:repeating-linear-gradient(135deg,rgba(255,255,255,.18) 0 2px,transparent 2px 4px)}
+.obs-leg i.obs-vide{border:1px dashed rgba(255,255,255,.3);box-sizing:border-box}
+.obs-detail{min-height:1.4em;margin-top:6px;font-size:var(--fs-xs);color:var(--text)}
+.obs-phrase{margin:6px 0 0;font-size:var(--fs-sm);line-height:1.5;color:var(--text)}
 /* ═══ THEME CLAIR — GENERE PAR scripts/theme_clair.py, NE PAS MODIFIER A LA MAIN ═══ */
 :root[data-theme="clair"] [style*="--halo-c"]{--halo-1:0 0 8px var(--halo-c,rgba(255,255,255,.45));--halo-2:0 0 14px var(--halo-c,rgba(255,255,255,.60)),0 0 30px var(--halo-c,rgba(255,255,255,.25));--halo-3:0 0 20px var(--halo-c,rgba(255,255,255,.85)),0 0 44px var(--halo-c,rgba(255,255,255,.40))}
 html[data-theme="clair"]{background:#f8f8f8}
@@ -14750,6 +14769,18 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .rg-reglage em{color:var(--sub)}
 :root[data-theme="clair"] .rg-banniere{background:var(--surface-2);border-bottom:1px solid var(--border);color:var(--text)}
 :root[data-theme="clair"] .rg-banniere button{color:var(--text-dim)}
+:root[data-theme="clair"] .obs{border:1px solid var(--border);background:var(--surface-1)}
+:root[data-theme="clair"] .obs-tete{color:var(--sub)}
+:root[data-theme="clair"] .obs-j.obs-tenu{background:rgba(9,9,9,0.82)}
+:root[data-theme="clair"] .obs-j.obs-ecart{border-color:rgba(9,9,9,0.7);background:repeating-linear-gradient(135deg,rgba(9,9,9,0.18) 0 3px,transparent 3px 6px)}
+:root[data-theme="clair"] .obs-j.obs-vide{border:1px dashed rgba(9,9,9,0.22)}
+:root[data-theme="clair"] .obs-j.obs-choisi{outline:2px solid #E02020}
+:root[data-theme="clair"] .obs-leg{color:var(--sub)}
+:root[data-theme="clair"] .obs-leg i.obs-tenu{background:rgba(9,9,9,0.82)}
+:root[data-theme="clair"] .obs-leg i.obs-ecart{border:1.5px solid rgba(9,9,9,0.7);background:repeating-linear-gradient(135deg,rgba(9,9,9,0.18) 0 2px,transparent 2px 4px)}
+:root[data-theme="clair"] .obs-leg i.obs-vide{border:1px dashed rgba(9,9,9,0.3)}
+:root[data-theme="clair"] .obs-detail{color:var(--text)}
+:root[data-theme="clair"] .obs-phrase{color:var(--text)}
 :root[data-theme="clair"] [style^="background:#000"],:root[data-theme="clair"] [style*=";background:#000"],:root[data-theme="clair"] [style*="; background:#000"],:root[data-theme="clair"] [style*=" background:#000"],:root[data-theme="clair"] [style^="background: #000"],:root[data-theme="clair"] [style*=";background: #000"],:root[data-theme="clair"] [style*="; background: #000"],:root[data-theme="clair"] [style*=" background: #000"],:root[data-theme="clair"] [style^="background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=";background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*="; background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=" background: rgb(0, 0, 0)"]{background-color:#fbfbfb!important}
 :root[data-theme="clair"] [style^="background:#000b"],:root[data-theme="clair"] [style*=";background:#000b"],:root[data-theme="clair"] [style*="; background:#000b"],:root[data-theme="clair"] [style*=" background:#000b"],:root[data-theme="clair"] [style^="background: #000b"],:root[data-theme="clair"] [style*=";background: #000b"],:root[data-theme="clair"] [style*="; background: #000b"],:root[data-theme="clair"] [style*=" background: #000b"],:root[data-theme="clair"] [style^="background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=";background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*="; background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=" background: rgba(0, 0, 0, 0.733)"]{background-color:rgba(251,251,251,0.733)!important}
 :root[data-theme="clair"] [style^="background:#040404"],:root[data-theme="clair"] [style*=";background:#040404"],:root[data-theme="clair"] [style*="; background:#040404"],:root[data-theme="clair"] [style*=" background:#040404"],:root[data-theme="clair"] [style^="background: #040404"],:root[data-theme="clair"] [style*=";background: #040404"],:root[data-theme="clair"] [style*="; background: #040404"],:root[data-theme="clair"] [style*=" background: #040404"],:root[data-theme="clair"] [style^="background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*=";background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*="; background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*=" background: rgb(4, 4, 4)"]{background-color:#f7f7f7!important}

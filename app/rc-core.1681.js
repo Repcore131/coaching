@@ -12663,11 +12663,19 @@ function _csvSeances(u){
   return _csv(l);
 }
 function _csvJournalAlimentaire(u){
-  const l=[['jour','repas','aliment','quantite','kcal','proteines_g','glucides_g','lipides_g','sel_g','fibres_g']];
-  const log=(((u&&u.nutrition)||{}).log)||{};
+  const l=[['jour','repas','aliment','quantite','kcal','proteines_g','glucides_g','lipides_g','sel_g','fibres_g','tenu']];
+  const nut=((u&&u.nutrition)||{}), log=nut.log||{};
   for(const jour of Object.keys(log).sort()){
+    // LOT N8 : le jour tenu (cibleTenue), répété sur chaque ligne du jour.
+    let tenu='';
+    try{
+      const m=nut.macros?(_getEffectiveMacros(nut,nutIsOnDay(jour,u),jour,u)||{}):{};
+      const ck=Number(m.kcal)>0?Number(m.kcal):_dieteKcal(m), cp=Number(m.p)||0;
+      if(ck>0&&cp>0) tenu=cibleTenue(journalTotalJour(log,jour),{kcal:ck,p:cp}).tenue?1:0;
+    }catch(e){ tenu=''; }
     for(const e of ((log[jour]&&log[jour].entries)||[]))
-      l.push([jour,e&&e.repas,e&&e.nom,e&&e.qte,e&&e.kcal,e&&e.p,e&&e.c,e&&e.l,e&&e.sel,e&&e.fibres]);
+      l.push([jour,e&&e.repas,e&&e.nom,e&&(e.qty!=null?e.qty:e.qte),e&&e.kcal,e&&e.p,e&&e.c,e&&e.l,e&&e.sel,
+        e&&(e.fi!=null?e.fi:e.fibres),tenu]);
   }
   return _csv(l);
 }
@@ -97617,8 +97625,116 @@ function renderDieteRespectCoach(c){
   const z=document.getElementById('ccd-diete-respect');
   if(!z) return false;
   let h=''; try{ h=_htmlDieteRespect(c); }catch(e){ h=''; }
-  z.innerHTML=h;
-  return !!h;
+  // LOT N8 : la bande des quatorze derniers jours, juste sous le constat.
+  let o=''; try{ o=htmlObservanceCoach(c); }catch(e){ o=''; }
+  z.innerHTML=h+o;
+  return !!(h||o);
+}
+// ══ LOT N8 : LA BANDE D'OBSERVANCE SUR LA FICHE ATHLÈTE (29/09/2026) ══════
+// Quatorze jours, une case par jour, la plus récente à droite, et UNE phrase
+// qui cherche le motif (les week-ends, la fin de semaine) : c'est ce que le
+// coach vient lire.
+//
+// ⚠ ELLE NE NOTE PERSONNE : pas de score, pas de pourcentage, pas de
+//   classement. Des jours tenus, des écarts, des jours sans saisie.
+// ⚠ AUCUNE DONNÉE DE SANTÉ : des calories et des protéines, rien d'autre (ni
+//   poids, ni photo).
+// ⚠ UN JOUR SANS CIBLE EST VIDE, JAMAIS UN ÉCART : on ne sait pas à quoi le
+//   comparer. Un jour sans saisie aussi.
+// Le jour « tenu » est celui du lot N2 (cibleTenue : kcal à ±7 %, protéines à
+// 95 % au moins), le même que les volts et la série de l'assiette.
+const OBS_JOURS=14;
+const OBS_MIN_SAISIS=3;
+const OBS_JOURS_NOMS=Object.freeze(['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi']);
+/**
+ * PURE. La bande : 14 entrées {date, etat, ecartKcal, ecartProt}, de la plus
+ * ancienne à la plus récente (finISO), et les moyennes des jours SAISIS.
+ * @param log     nutrition.log
+ * @param cibles  {kcal, p}, ou une fonction jour → {kcal, p}
+ * @param finISO  le dernier jour de la bande
+ */
+function observance14(log,cibles,finISO){
+  const L=log||{}, jours=[];
+  let n=0, sk=0, sp=0, nc=0, sek=0, sep=0, tenus=0, ecarts=0;
+  for(let i=OBS_JOURS-1;i>=0;i--){
+    const date=_jourPlus(finISO,-i);
+    const tot=journalTotalJour(L,date);
+    if(!tot.n){ jours.push({date,etat:'vide',ecartKcal:null,ecartProt:null}); continue; }
+    n++; sk+=tot.kcal; sp+=tot.p;
+    let c=null; try{ c=(typeof cibles==='function')?cibles(date):cibles; }catch(e){ c=null; }
+    const ck=Number(c&&c.kcal), cp=Number(c&&c.p);
+    if(!(ck>0&&cp>0)){ jours.push({date,etat:'vide',ecartKcal:null,ecartProt:null,saisi:true}); continue; }
+    const r=cibleTenue(tot,{kcal:ck,p:cp});
+    const ek=Math.round(tot.kcal-ck), ep=Math.round(tot.p-cp);
+    nc++; sek+=ek; sep+=ep;
+    if(r.tenue) tenus++; else ecarts++;
+    jours.push({date,etat:r.tenue?'tenu':'ecart',ecartKcal:ek,ecartProt:ep});
+  }
+  return {jours,saisis:n,tenus,ecarts,
+    moyennes:n?{kcal:Math.round(sk/n),p:Math.round(sp/n),
+      ecartKcal:nc?Math.round(sek/nc):null,ecartProt:nc?Math.round(sep/nc):null}:null};
+}
+// PURE. Le motif des écarts, par jour de la semaine.
+function motifEcarts(o){
+  const l=((o&&o.jours)||[]).filter(j=>j.etat==='ecart');
+  if(!l.length) return '';
+  const jd=j=>{ const [a,m,d]=j.date.split('-').map(Number); return new Date(a,m-1,d,12).getDay(); };
+  const par={}; for(const j of l){ const d=jd(j); par[d]=(par[d]||0)+1; }
+  const ds=Object.keys(par).map(Number);
+  const nom=d=>OBS_JOURS_NOMS[d];
+  if(l.length>=2&&ds.every(d=>d===6||d===0))
+    return ds.length===2?'les écarts sont le samedi et le dimanche':'les écarts sont le '+nom(ds[0]);
+  if(l.length>=2&&ds.every(d=>d===5||d===6||d===0)) return 'les écarts tombent en fin de semaine, du vendredi au dimanche';
+  const top=ds.sort((a,b)=>par[b]-par[a])[0];
+  if(par[top]>=2&&par[top]*2>=l.length) return 'les écarts reviennent surtout le '+nom(top);
+  if(l.length===1) return 'un seul écart, le '+nom(jd(l[0]));
+  return 'les écarts sont répartis sur la semaine';
+}
+// PURE. La phrase de synthèse, une seule.
+function phraseObservance(o){
+  if(!o) return '';
+  const vides=o.jours.filter(j=>j.etat==='vide').length;
+  const base=o.tenus+' jour'+(o.tenus>1?'s':'')+' tenu'+(o.tenus>1?'s':'')+' sur '+OBS_JOURS
+    +(vides?' ('+vides+' sans saisie ou sans cible)':'');
+  const m=motifEcarts(o);
+  return base+(m?', '+m:', aucun écart')+'.';
+}
+// Ce que dit un jour survolé (ou touché) : sa date, et ses écarts.
+function _obsTexteJour(j){
+  let d=j.date;
+  try{ const [a,m,x]=j.date.split('-').map(Number); d=new Date(a,m-1,x,12).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'}); }catch(e){}
+  if(j.etat==='vide') return d+' : '+(j.saisi?'pas de cible ce jour-là':'pas de saisie');
+  const s=v=>(v>0?'+':'')+v;
+  return d+' : '+s(j.ecartKcal)+' kcal et '+s(j.ecartProt)+' g de protéines par rapport à sa cible'+(j.etat==='tenu'?' (tenu)':'');
+}
+// La fiche : la bande, ou ce qu'il faut demander à l'athlète.
+function htmlObservanceCoach(c,finISO){
+  const nut=(c&&c.nutrition)||{};
+  try{ if(typeDiete(nut)!=='flexible') return ''; }catch(e){}
+  if(!nut.macros) return '';
+  const fin=finISO||localISODate(new Date());
+  const cib=j=>{ const m=_getEffectiveMacros(nut,nutIsOnDay(j,c),j,c)||{};
+    return {kcal:Number(m.kcal)>0?Number(m.kcal):_dieteKcal(m),p:Number(m.p)||0}; };
+  const o=observance14(nut.log||{},cib,fin);
+  const tete='<div class="obs-tete">Ses 14 derniers jours</div>';
+  if(o.saisis<OBS_MIN_SAISIS)
+    return '<div class="obs">'+tete+'<p class="obs-phrase">'
+      +(o.saisis?'Seulement '+o.saisis+' jour'+(o.saisis>1?'s':'')+' saisi'+(o.saisis>1?'s':'')+' sur 14 : ':'Aucun jour saisi sur 14 : ')
+      +'demande-lui de noter ses repas trois jours de suite, même approximativement, dont un jour de week-end. C’est assez pour voir un motif se dessiner.</p></div>';
+  const cases=o.jours.map(j=>{
+    const t=escapeHtml(_obsTexteJour(j));
+    return '<button type="button" class="obs-j obs-'+j.etat+'" title="'+t+'" aria-label="'+t+'" data-t="'+t+'" onclick="obsMontrer(this)"></button>';
+  }).join('');
+  return '<div class="obs">'+tete
+    +'<div class="obs-bande" role="group" aria-label="14 jours, du plus ancien au plus récent">'+cases+'</div>'
+    +'<div class="obs-leg"><span><i class="obs-tenu"></i>tenu</span><span><i class="obs-ecart"></i>écart</span><span><i class="obs-vide"></i>sans saisie</span></div>'
+    +'<div class="obs-detail" aria-live="polite"></div>'
+    +'<p class="obs-phrase">'+escapeHtml(phraseObservance(o))+'</p></div>';
+}
+function obsMontrer(b){
+  const z=b&&b.closest('.obs'); const d=z&&z.querySelector('.obs-detail');
+  if(d) d.textContent=b.getAttribute('data-t')||'';
+  if(z) z.querySelectorAll('.obs-j').forEach(x=>x.classList.toggle('obs-choisi',x===b));
 }
 
 function saveClientNutriDiet(type){

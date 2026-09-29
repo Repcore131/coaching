@@ -49579,6 +49579,69 @@ async function testExercices(){
         return true;
       } finally { currentUser=sv.u; window.saveUser=sv.s; window._appAuPremierPlan=sv.p; }})());
 
+    // ══ LOT N8 — LA BANDE D'OBSERVANCE (29/09/2026) ════════════════════════
+    const _N8C={kcal:2000,p:150};
+    const _N8J=(k,p)=>({entries:[{id:1,nom:'x',repas:'diner',kcal:k,p,c:0,l:0}]});
+    const _N8FIN='2026-09-27';                                   // un dimanche
+    ok('N8 — observance14 : 14 jours pleins, des trous, un jour sans cible, les moyennes des jours saisis seulement',(()=>{
+      const plein={}; for(let i=0;i<14;i++) plein[_jourPlus(_N8FIN,-i)]=_N8J(2000,150);
+      const a=observance14(plein,_N8C,_N8FIN);
+      if(a.jours.length!==14||a.jours[0].date!=='2026-09-14'||a.jours[13].date!==_N8FIN) return _echec('ordre : '+a.jours[0].date+' → '+a.jours[13].date);
+      if(a.tenus!==14||a.saisis!==14||!a.jours.every(j=>j.etat==='tenu'&&j.ecartKcal===0&&j.ecartProt===0)) return _echec('quatorze tenus');
+      // Des trous : trois jours saisis, onze vides. La moyenne porte sur les trois.
+      const t={[_N8FIN]:_N8J(2400,150),[_jourPlus(_N8FIN,-3)]:_N8J(2000,150),[_jourPlus(_N8FIN,-8)]:_N8J(1600,120)};
+      const b=observance14(t,_N8C,_N8FIN);
+      if(b.saisis!==3||b.jours.filter(j=>j.etat==='vide').length!==11) return _echec('trous : '+JSON.stringify(b.jours.map(j=>j.etat)));
+      if(b.moyennes.kcal!==2000||b.moyennes.p!==140) return _echec('moyennes sur les jours saisis : '+JSON.stringify(b.moyennes));
+      if(b.moyennes.ecartKcal!==0||b.moyennes.ecartProt!==-10) return _echec('écarts moyens : '+JSON.stringify(b.moyennes));
+      const d=b.jours[13];
+      if(d.etat!=='ecart'||d.ecartKcal!==400||d.ecartProt!==0) return _echec('le dernier jour : '+JSON.stringify(d));
+      // Un jour sans cible : vide, jamais un écart, même très loin de tout.
+      const c=observance14({[_N8FIN]:_N8J(5000,10)},j=>j===_N8FIN?null:_N8C,_N8FIN);
+      if(c.jours[13].etat!=='vide'||c.ecarts!==0) return _echec('jour sans cible : '+JSON.stringify(c.jours[13]));
+      if(observance14({},_N8C,_N8FIN).moyennes!==null) return _echec('aucun jour saisi : une moyenne');
+      return true;})());
+    ok('N8 — la phrase : une seule, qui dit le motif (les week-ends)',(()=>{
+      const l={}; for(let i=0;i<14;i++){ const j=_jourPlus(_N8FIN,-i); const d=new Date(j+'T12:00:00').getDay();
+        l[j]=(d===6||d===0)?_N8J(2700,150):_N8J(2000,150); }
+      const o=observance14(l,_N8C,_N8FIN);
+      const ph=phraseObservance(o);
+      if(ph!=='10 jours tenus sur 14, les écarts sont le samedi et le dimanche.') return _echec(ph);
+      // Fin de semaine, un jour qui revient, rien du tout.
+      const f={}; for(let i=0;i<14;i++){ const j=_jourPlus(_N8FIN,-i); const d=new Date(j+'T12:00:00').getDay(); f[j]=(d===5||d===6||d===0)?_N8J(2700,150):_N8J(2000,150); }
+      if(!/fin de semaine/.test(phraseObservance(observance14(f,_N8C,_N8FIN)))) return _echec('fin de semaine');
+      const m={}; for(let i=0;i<14;i++){ const j=_jourPlus(_N8FIN,-i); const d=new Date(j+'T12:00:00').getDay(); m[j]=d===1?_N8J(2700,150):_N8J(2000,150); }
+      if(!/surtout le lundi/.test(phraseObservance(observance14(m,_N8C,_N8FIN)))) return _echec('le lundi : '+phraseObservance(observance14(m,_N8C,_N8FIN)));
+      const r={}; for(let i=0;i<14;i++) r[_jourPlus(_N8FIN,-i)]=_N8J(2000,150);
+      return phraseObservance(observance14(r,_N8C,_N8FIN))==='14 jours tenus sur 14, aucun écart.'?true:_echec(phraseObservance(observance14(r,_N8C,_N8FIN)));})());
+    ok('N8 — la fiche : la bande à partir de 3 jours saisis, sinon ce qu’il faut demander ; ni note, ni pourcentage, ni poids',(()=>{
+      const fin=localISODate(new Date());
+      const c=log=>({email:'n8@t.fr',role:'athlete',sessions_config:[],weightLog:[{date:fin,kg:80}],
+        nutrition:{dietType:'flexible',macros:{on:{kcal:2000,p:150,l:60,g:230},off:{kcal:2000,p:150,l:60,g:230}},log}});
+      const deux={[fin]:_N8J(2000,150),[_jourPlus(fin,-1)]:_N8J(2000,150)};
+      const h2=htmlObservanceCoach(c(deux),fin);
+      if(h2.indexOf('obs-bande')>=0||!/demande-lui/.test(h2)) return _echec('deux jours : '+h2);
+      const trois=Object.assign({[_jourPlus(fin,-2)]:_N8J(2600,150)},deux);
+      const d=document.createElement('div'); d.innerHTML=htmlObservanceCoach(c(trois),fin);
+      if(d.querySelectorAll('.obs-j').length!==14) return _echec('quatorze cases');
+      const der=d.querySelectorAll('.obs-j')[13];
+      if(!der.classList.contains('obs-tenu')||!/^.+ : \+?0 kcal/.test(der.title)) return _echec('la plus récente à droite, avec sa date et ses écarts : '+der.title);
+      const t=d.textContent+d.innerHTML;
+      if(/%|score|note\b|classement|\bkg\b|poids|photo/i.test(d.textContent)) return _echec('une note, un pourcentage ou une donnée de santé : '+d.textContent);
+      // Diète stricte : pas de journal, pas de bande.
+      const s=c(trois); s.nutrition.dietType='strict';
+      return htmlObservanceCoach(s,fin)===''?true:_echec('bande en diète stricte');})());
+    ok('N8 — l’export du journal porte la colonne « tenu » (1, 0, vide sans cible), et rien d’autre de neuf',(()=>{
+      const u={nutrition:{dietType:'flexible',macros:{on:{kcal:2000,p:150,l:60,g:230},off:{kcal:2000,p:150,l:60,g:230}},
+        log:{'2026-09-26':{entries:[{repas:'diner',nom:'Riz',qty:200,kcal:1000,p:75,c:200,l:5,sel:0.1,fi:2},{repas:'midi',nom:'Poulet',qty:250,kcal:1000,p:75,c:0,l:10,sel:0.5,fi:0}]},
+             '2026-09-27':{entries:[{repas:'diner',nom:'Pâtes',qty:300,kcal:2800,p:90,c:500,l:20,sel:1,fi:6}]}}}};
+      const lignes=_csvJournalAlimentaire(u).replace(/^\ufeff/,'').split('\r\n').map(x=>x.split(';'));
+      if(lignes[0].join()!=='jour,repas,aliment,quantite,kcal,proteines_g,glucides_g,lipides_g,sel_g,fibres_g,tenu') return _echec('entête : '+lignes[0].join());
+      if(lignes[1][10]!=='1'||lignes[2][10]!=='1'||lignes[3][10]!=='0') return _echec('tenu : '+lignes.slice(1).map(l=>l[10]).join());
+      if(lignes[1][3]!=='200'||lignes[1][9]!=='2') return _echec('quantité et fibres vides');
+      const sans=_csvJournalAlimentaire({nutrition:{log:{'2026-09-27':{entries:[{nom:'x',kcal:100,p:5}]}}}}).split('\r\n')[1].split(';');
+      return sans[10]===''?true:_echec('sans cible : '+sans[10]);})());
+
     ok('Volts : dix rangs, dans l’ordre, seuils croissants à partir de 0',(()=>{
       const n=RANGS.map(r=>r.nom).join();
       if(n!=='ÉTINCELLE,IMPULSION,VOLTAGE,MACHINE,ÉLITE,SURTENSION,MONSTRE,FOUDRE,TITAN,LÉGENDE') return _echec(n);
