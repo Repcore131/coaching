@@ -682,7 +682,7 @@ const ML_I16_TROU=-32768;
  * @param {{debutMs:number, finMs:number}} seg
  * @param {{serie:Serie, m:Metriques, ph:[string,number,number][], pas:number}} res
  * @param {{disqueM:number, sens:string, vw:number, vh:number, rayonPx:number, fps:number, alertes:string[],
- *   mpp?:number, theta?:number, etalon?:{cm:number, px:number, type:string}|null}} p
+ *   mpp?:number, theta?:number, aplombEstime?:boolean, etalon?:{cm:number, px:number, type:string}|null}} p
  * @returns {Object}
  */
 function mlCompacterBarre(seg,res,p){
@@ -722,7 +722,7 @@ function mlCompacterBarre(seg,res,p){
     c[k]=Math.round(255*Math.max(0,Math.min(1,Math.min(S.conf[i]||0,S.conf[j]||0))));
   }
   return {v:1,debutMs:seg.debutMs,finMs:seg.finMs,disqueM:p.disqueM,sens:p.sens,vw:p.vw,vh:p.vh,
-    theta:Math.round(theta*10)/10,...(p.etalon?{etalon:p.etalon}:{}),
+    theta:Math.round(theta*10)/10,...(p.aplombEstime?{ae:1}:{}),...(p.etalon?{etalon:p.etalon}:{}),
     rayonPx:Math.round(p.rayonPx*10)/10,fps:Math.round(p.fps*100)/100,n,
     t0Ms:Math.round(S.t[0]),pasMs:Math.round(pasMs*1000)/1000,
     xy:mlB64(new Uint8Array(xy.buffer)),c:mlB64(c),vy:mlB64(new Uint8Array(vy.buffer)),
@@ -9779,7 +9779,9 @@ async function mlAnalyser(relance){
   if(points.filter(p=>p.etat==='doute'||p.conf<ML_CONF_DOUTE).length>0.1*n) alertes.push('doutes');
   const px=_mlEtalonPx();
   const compacte=mlCompacterBarre(seg,calc,{disqueM,sens,vw,vh,rayonPx,fps:fpsEstime,alertes,
-    mpp,theta:_ml.theta,etalon:px>0?{cm:_ml.etalon.cm,px,type:_ml.etalon.type}:_mlEchelleEtalon()});
+    // LOT T5 : l'aplomb a-t-il été ESTIMÉ (détecté, ou corrigé à la main) ? Un tilt
+    // stocké à 0 disait aussi bien « droit » que « jamais regardé ».
+    mpp,theta:_ml.theta,aplombEstime:!!(_ml.thetaMain||_ml.thetaAuto),etalon:px>0?{cm:_ml.etalon.cm,px,type:_ml.etalon.type}:_mlEchelleEtalon()});
   const valide=segBarreValide(compacte,seg.debutMs,seg.finMs);
   if(!valide){ _ml.mode='lecture'; toast('La trajectoire calculée est illisible : réessaie.','var(--orange)'); _mlMajTrajectoire(); return false; }
   _ml.segments=_ml.segments.map(s=>s.id===seg.id?{...s,barre:valide}:s);
@@ -12796,4 +12798,235 @@ function _mlAnatMasque(m,w,h,z){
   // Moins de 2 % du cadre lu : ce n'est pas une personne entière.
   if(n<rw*rh*0.02) return null;
   return {w:mw,h:mh,rle:_mlAnatRle(bits)};
+}
+
+// ══ LOT T5 : DEUX DATES, UN MOUVEMENT (29/09/2026) ═════════════════════════
+//
+// Deux analyses du même exercice, choisies par le coach : les trajectoires
+// normalisées superposées, et un tableau de trois à cinq lignes. Chaque ligne
+// porte l'écart ET la tolérance ; sous la tolérance, « stable ». Jamais un
+// progrès, jamais une régression, jamais un score.
+//
+// ⚠ CE QUI SE COMPARE SOUS N'IMPORTE QUEL ANGLE : les DURÉES et les RAPPORTS
+//   (tempo, part de la phase lente, point dur en % de la course).
+// ⚠ CE QUI NE SE COMPARE EN CENTIMÈTRES QUE SI LES QUATRE CONDITIONS TIENNENT
+//   (décision de Kevin, 29/09/2026) :
+//   1. hors-plan de 15° au plus sur les deux (inconnu : refus) ;
+//   2. une échelle mesurée sur chacune (disque bien lu, ou longueur posée) ;
+//   3. un aplomb connu sur les deux, pour ce qui se découpe en vertical ;
+//   4. le même côté filmé, pour ce qui a un sens (les dérives horizontales :
+//      elles ne sont pas dans ce tableau, la condition est dite quand même).
+//   Sinon la ligne dit POURQUOI elle ne compare pas, et ne montre aucun chiffre.
+
+const MLC_HP_MAX=15;
+const MLC_TOL_AMPL_M=0.015, MLC_TOL_AMPL_PART=0.03, MLC_TOL_V=0.05, MLC_TOL_PD=3;
+const _mlcMed=(l)=>{ const v=l.filter((x)=>isFinite(x)).slice().sort((a,b)=>a-b); if(!v.length) return null; const k=Math.floor(v.length/2); return v.length%2?v[k]:(v[k-1]+v[k])/2; };
+
+/**
+ * PURE. Une trajectoire ramenée à la même échelle : origine au point le plus
+ * bas et le plus en arrière, le plus grand des deux côtés du cadre vaut 1.
+ * Deux trajectoires de même forme filmées de près ou de loin donnent la même.
+ * @param {number[]} X @param {number[]} Y
+ * @returns {{x:number[], y:number[]}}
+ */
+function mlcNormaliser(X,Y){
+  const xs=(X||[]).filter(isFinite), ys=(Y||[]).filter(isFinite);
+  if(xs.length<2||ys.length<2) return {x:[],y:[]};
+  const x0=Math.min(...xs), y0=Math.min(...ys);
+  const e=Math.max(Math.max(...xs)-x0,Math.max(...ys)-y0)||1;
+  return {x:X.map((v)=>isFinite(v)?Math.round((v-x0)/e*1000)/1000:NaN),
+    y:Y.map((v)=>isFinite(v)?Math.round((v-y0)/e*1000)/1000:NaN)};
+}
+/**
+ * PURE. Le point dur en % de la course concentrique : 0 au bas, 100 au haut.
+ * @param {number[]} Y  la hauteur (vertical) ou la projection sur l'axe
+ * @param {number} i  l'indice du creux de vitesse
+ * @returns {number|null}
+ */
+function mlcPointDurPct(Y,i){
+  if(!Array.isArray(Y)||!(i>=0)||i>=Y.length||!isFinite(Y[i])) return null;
+  let lo=Infinity, hi=-Infinity;
+  for(let k=0;k<Y.length;k++) if(isFinite(Y[k])){ if(Y[k]<lo) lo=Y[k]; if(Y[k]>hi) hi=Y[k]; }
+  if(!(hi>lo)) return null;
+  return Math.round((Y[i]-lo)/(hi-lo)*100);
+}
+/**
+ * PURE. Le résumé d'une analyse (une vidéo et ses répétitions) : ce que la
+ * comparaison lit, et les quatre conditions.
+ * @param {any} v  une vidéo du dossier
+ */
+function mlcResume(v){
+  const segs=(typeof segmentsVideo==='function')?segmentsVideo(v):[];
+  const lignes=mlTableauSerie(segs);
+  const exc=[], con=[], pau=[], pd=[], amp=[], hp=[], fps=[], trace=[];
+  let echelleOk=true, aplombOk=true, sens='', mode='vertical', n=0;
+  segs.forEach((s,k)=>{
+    const l=lignes[k], b=s.barre;
+    if(!l||!l.analysee||!b) return;
+    n++;
+    fps.push(Number(b.fps)||0);
+    if(l.tempo&&l.tempo.complet){ exc.push(l.tempo.excMs); con.push(l.tempo.conMs); pau.push(l.tempo.pauseMs||0); }
+    if(l.amplitude!=null) amp.push(l.amplitude);
+    const av=Array.isArray(b.av)?b.av:[];
+    if(!b.etalon&&(av.indexOf('disque_petit')>=0||av.indexOf('disque_bord')>=0)) echelleOk=false;
+    if(b.ae!==1) aplombOk=false;
+    if(b.sens) sens=sens&&sens!==b.sens?'mixte':b.sens;
+    hp.push(s.pose&&s.pose.hp!=null?Number(s.pose.hp):NaN);
+    const r=mlSerieRelue(b);
+    if(r){
+      if(r.mode!=='vertical') mode='chemin';
+      let iPic=-1, mx=-Infinity;
+      r.v.forEach((x,i)=>{ if(isFinite(x)&&x>mx){ mx=x; iPic=i; } });
+      const z=mlZoneFaiblesse(r.v,iPic);
+      const H=r.mode==='vertical'?r.Y:r.X.map((x,i)=>(r.axe?x*r.axe.ux+r.Y[i]*r.axe.uy:NaN));
+      if(z) pd.push(mlcPointDurPct(H,z.i));
+      if(!trace.length) trace.push(mlcNormaliser(r.X,r.Y));
+    }
+  });
+  const e=_mlcMed(exc), c=_mlcMed(con);
+  const hps=hp.filter(isFinite);
+  const a=_mlcMed(amp);
+  return {date:Number(v&&v.date)||0,id:v&&v.id,reps:n,excMs:e,conMs:c,pauseMs:_mlcMed(pau),
+    partLente:(e!=null&&c!=null&&e+c>0)?Math.round(e/(e+c)*1000)/10:null,
+    pointDurPct:_mlcMed(pd),amplitudeM:a,
+    vConMoy:(a!=null&&c>0)?Math.round(a/(c/1000)*1000)/1000:null,
+    fpsMin:fps.length?Math.min(...fps.filter((x)=>x>0)):0,
+    horsPlan:hps.length===hp.length&&hps.length?Math.max(...hps):null,
+    echelleOk,aplombOk,sens,mode,trace:trace[0]||{x:[],y:[]}};
+}
+/**
+ * PURE. Les centimètres se comparent-ils ? {cm, raisons[]}
+ * @param {any} a @param {any} b  deux résumés (mlcResume)
+ */
+function mlcComparabilite(a,b){
+  const r=[];
+  const jour=(x)=>{ try{ return new Date(x.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}); }catch(e){ return ''; } };
+  for(const x of [a,b]){
+    if(x.horsPlan==null) r.push('le hors-plan de la vidéo du '+jour(x)+' n’est pas connu (articulations non analysées)');
+    else if(x.horsPlan>MLC_HP_MAX) r.push('hors-plan de '+Math.round(x.horsPlan)+'° sur la vidéo du '+jour(x)+' (15° au plus)');
+    if(!x.echelleOk) r.push('l’échelle de la vidéo du '+jour(x)+' est douteuse (disque trop petit ou au bord)');
+    if(x.mode==='vertical'&&!x.aplombOk) r.push('l’aplomb de la vidéo du '+jour(x)+' n’a pas été estimé');
+  }
+  const cotes=a.sens&&b.sens&&a.sens!==b.sens&&a.sens!=='mixte'&&b.sens!=='mixte';
+  return {cm:r.length===0,raisons:r,memeCote:!cotes};
+}
+function _mlcEcart(avant,apres,tol,fmt,unite){
+  if(avant==null||apres==null) return {avant,apres,ecart:null,tol,etat:'absent',texte:'mesure absente sur l’une des deux'};
+  const d=apres-avant;
+  const stable=Math.abs(d)<=tol;
+  return {avant,apres,ecart:d,tol,etat:stable?'stable':'ecart',
+    texte:stable?'stable (écart dans la tolérance de ±'+fmt(tol)+unite+')':(d>0?'+':'−')+fmt(Math.abs(d))+unite+' (tolérance ±'+fmt(tol)+unite+')'};
+}
+/**
+ * PURE. Le tableau : trois à cinq lignes, chacune avec son écart et sa
+ * tolérance, ou le refus motivé. a = la plus ancienne, b = la plus récente.
+ */
+function mlcComparer(a,b){
+  const cmp=mlcComparabilite(a,b);
+  const fps=Math.min(a.fpsMin||30,b.fpsMin||30)||30;
+  const tolMs=Math.round(2*1000/fps);
+  const s=(x)=>(Math.round(x/100)/10).toLocaleString('fr-FR')+' s';
+  const f1=(x)=>(Math.round(x*10)/10).toLocaleString('fr-FR');
+  const lignes=[];
+  lignes.push(Object.assign({cle:'tempo',lib:'Tempo : descente, remontée',
+    valeurs:[a,b].map((x)=>(x.excMs!=null&&x.conMs!=null)?s(x.excMs)+' puis '+s(x.conMs):'non mesuré')},
+    _mlcEcart(a.excMs!=null&&a.conMs!=null?a.excMs+a.conMs:null,b.excMs!=null&&b.conMs!=null?b.excMs+b.conMs:null,tolMs,(x)=>f1(x/1000),' s')));
+  const tut=Math.max(1,((a.excMs||0)+(a.conMs||0)+(b.excMs||0)+(b.conMs||0))/2);
+  lignes.push(Object.assign({cle:'lente',lib:'Part de la phase lente',valeurs:[a,b].map((x)=>x.partLente!=null?f1(x.partLente)+' %':'non mesurée')},
+    _mlcEcart(a.partLente,b.partLente,Math.max(1,Math.round(tolMs/tut*1000)/10),f1,' %')));
+  lignes.push(Object.assign({cle:'pointdur',lib:'Point dur, en % de la course',valeurs:[a,b].map((x)=>x.pointDurPct!=null?x.pointDurPct+' %':'aucun')},
+    _mlcEcart(a.pointDurPct,b.pointDurPct,MLC_TOL_PD,(x)=>String(Math.round(x)),' %')));
+  if(cmp.cm){
+    const tA=Math.max(MLC_TOL_AMPL_M,MLC_TOL_AMPL_PART*Math.max(a.amplitudeM||0,b.amplitudeM||0));
+    lignes.push(Object.assign({cle:'amplitude',lib:'Amplitude',valeurs:[a,b].map((x)=>x.amplitudeM!=null?f1(x.amplitudeM*100)+' cm':'non mesurée')},
+      _mlcEcart(a.amplitudeM!=null?a.amplitudeM*100:null,b.amplitudeM!=null?b.amplitudeM*100:null,tA*100,f1,' cm')));
+    lignes.push(Object.assign({cle:'vitesse',lib:'Vitesse moyenne de la remontée',valeurs:[a,b].map((x)=>x.vConMoy!=null?(Math.round(x.vConMoy*100)/100).toLocaleString('fr-FR')+' m/s':'non mesurée')},
+      _mlcEcart(a.vConMoy,b.vConMoy,MLC_TOL_V,(x)=>(Math.round(x*100)/100).toLocaleString('fr-FR'),' m/s')));
+  } else {
+    lignes.push({cle:'centimetres',lib:'Amplitude et vitesse',valeurs:['non comparées','non comparées'],avant:null,apres:null,ecart:null,tol:null,
+      etat:'refuse',texte:'Pas comparées en centimètres : '+cmp.raisons.join(' ; ')+'.'});
+  }
+  return {lignes,comparabilite:cmp};
+}
+
+// ── L'ÉCRAN ────────────────────────────────────────────────────────────────
+let _mlcEtat=null;
+function _mlcAnalysesDe(c,cle){
+  return ((c&&c.videos)||[]).filter((v)=>v&&v.lien&&v.lien.exerciceCle===cle
+    &&segmentsVideo(v).some((s)=>s.barre)).sort((a,b)=>Number(a.date)-Number(b.date));
+}
+function _mlcSvg(a,b){
+  const W=320,H=220,M=14;
+  // Centré dans le cadre : une trajectoire presque verticale ne colle pas au bord gauche.
+  const mx=Math.max(0,...a.trace.x.filter(isFinite),...b.trace.x.filter(isFinite)), dx=(1-mx)/2*(H-2*M);
+  const pts=(t)=>t.x.map((x,i)=>(isFinite(x)&&isFinite(t.y[i]))?((W-(H-2*M))/2+dx+x*(H-2*M)).toFixed(1)+','+(H-M-t.y[i]*(H-2*M)).toFixed(1):null).filter(Boolean).join(' ');
+  return '<svg class="mlc-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Les deux trajectoires, à la même échelle">'
+    +'<rect x="0" y="0" width="'+W+'" height="'+H+'" rx="10" fill="#101012"/>'
+    +'<polyline points="'+pts(a.trace)+'" fill="none" stroke="#8a8a8a" stroke-width="3" stroke-linejoin="round"/>'
+    +'<polyline points="'+pts(b.trace)+'" fill="none" stroke="#E02020" stroke-width="3" stroke-linejoin="round"/></svg>';
+}
+function _mlcRendre(){
+  const z=document.getElementById('mlc-corps');
+  if(!z||!_mlcEtat) return;
+  const E=escapeHtml;
+  const liste=_mlcEtat.liste, a=liste.find((v)=>v.id===_mlcEtat.autre), b=liste.find((v)=>v.id===_mlcEtat.id);
+  if(!a||!b){ z.innerHTML='<p class="mlc-p">Choisis une autre analyse de cet exercice.</p>'; return; }
+  const [ancien,recent]=Number(a.date)<=Number(b.date)?[a,b]:[b,a];
+  const ra=mlcResume(ancien), rb=mlcResume(recent), r=mlcComparer(ra,rb);
+  _mlcEtat.dernier={ra,rb,r};
+  const jour=(v)=>new Date(Number(v.date)).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+  z.innerHTML='<div class="mlc-leg"><span class="mlc-a">'+E(jour(ancien))+'</span><span class="mlc-b">'+E(jour(recent))+'</span></div>'
+    +_mlcSvg(ra,rb)
+    +'<table class="mlc-t"><tr><th></th><th>'+E(jour(ancien))+'</th><th>'+E(jour(recent))+'</th></tr>'
+    +r.lignes.map((l)=>'<tr class="mlc-'+l.etat+'"><td>'+E(l.lib)+'</td><td>'+E(l.valeurs[0])+'</td><td>'+E(l.valeurs[1])+'</td></tr>'
+      +'<tr class="mlc-e mlc-'+l.etat+'"><td colspan="3">'+E(l.texte)+'</td></tr>').join('')+'</table>'
+    +'<p class="mlc-p">Deux mesures et leur écart, rien d’autre : ni note, ni verdict.'+(r.comparabilite.memeCote?'':' Les deux vidéos ne sont pas filmées du même côté.')+'</p>';
+}
+function mlOuvrirComparaison(email,videoId){
+  const users=(DB.get('users')||{});
+  const c=users[email];
+  const v=c&&(c.videos||[]).find((x)=>x&&x.id===videoId);
+  if(!v||!v.lien||!v.lien.exerciceCle){ toast('Cette vidéo n’est rattachée à aucun exercice.','var(--orange)'); return false; }
+  const liste=_mlcAnalysesDe(c,v.lien.exerciceCle);
+  const autres=liste.filter((x)=>x.id!==videoId);
+  if(!autres.length){ toast('Aucune autre analyse de cet exercice à comparer.','var(--orange)'); return false; }
+  _mlcEtat={email,id:videoId,autre:autres[0].id,liste};
+  const E=escapeHtml;
+  document.getElementById('modal-overlay')?.remove();
+  document.body.insertAdjacentHTML('beforeend','<div id="modal-overlay" onclick="mlFermerComparaison()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto">'
+    +'<h2 style="margin-bottom:4px">Comparer deux analyses</h2>'
+    +'<p class="mlc-p">'+E(v.lien.exerciceNom||'')+' · la plus ancienne est proposée d’abord.</p>'
+    +'<label class="mlc-l" for="mlc-choix">Comparer avec</label><select id="mlc-choix" onchange="mlChoisirComparaison(this.value)">'
+    +autres.map((x)=>'<option value="'+E(x.id)+'">'+E(new Date(Number(x.date)).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}))+' · '+E(x.name||'')+'</option>').join('')+'</select>'
+    +'<div id="mlc-corps"></div>'
+    +'<div style="display:flex;gap:8px;margin-top:14px"><button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="mlFermerComparaison()">Fermer</button>'
+    +'<button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="mlExporterComparaison()">Exporter l’image</button></div></div></div>');
+  _mlcRendre();
+  return true;
+}
+function mlChoisirComparaison(id){ if(_mlcEtat){ _mlcEtat.autre=id; _mlcRendre(); } }
+function mlFermerComparaison(){ document.getElementById('modal-overlay')?.remove(); _mlcEtat=null; }
+// L'IMAGE : les deux tracés et le tableau, dessinés sur un canevas, à joindre à
+// la correction vidéo. Rien n'est envoyé : le fichier se télécharge.
+function mlExporterComparaison(){
+  const d=_mlcEtat&&_mlcEtat.dernier; if(!d) return false;
+  const W=1080, H=1350, cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const g=cv.getContext('2d'); if(!g) return false;
+  g.fillStyle='#0b0b0c'; g.fillRect(0,0,W,H);
+  g.fillStyle='#ffffff'; g.font='800 44px Montserrat,sans-serif'; g.fillText('Deux dates, un mouvement',60,100);
+  const trace=(t,coul)=>{ g.strokeStyle=coul; g.lineWidth=8; g.lineJoin='round'; g.beginPath(); let p=false;
+    t.x.forEach((x,i)=>{ if(!isFinite(x)||!isFinite(t.y[i])){ p=false; return; } const X=90+x*900, Y=720-t.y[i]*560; if(p) g.lineTo(X,Y); else { g.moveTo(X,Y); p=true; } }); g.stroke(); };
+  g.fillStyle='#161618'; g.fillRect(60,130,960,620);
+  trace(d.ra.trace,'#8a8a8a'); trace(d.rb.trace,'#E02020');
+  let y=820; g.font='600 30px Montserrat,sans-serif';
+  for(const l of d.r.lignes){
+    g.fillStyle='#ffffff'; g.fillText(l.lib,60,y);
+    g.fillStyle='#a1a1aa'; g.fillText(String(l.valeurs[0])+'  →  '+String(l.valeurs[1]),60,y+40);
+    g.fillStyle=l.etat==='ecart'?'#ffffff':'#a1a1aa'; g.font='500 24px Montserrat,sans-serif'; g.fillText(String(l.texte).slice(0,78),60,y+76);
+    g.font='600 30px Montserrat,sans-serif'; y+=120;
+  }
+  try{ cv.toBlob((bl)=>{ if(!bl) return; const u=URL.createObjectURL(bl), a=document.createElement('a'); a.href=u; a.download='repcore-comparaison.png'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),4000); },'image/png'); }catch(e){ return false; }
+  toast('Image de la comparaison téléchargée : joins-la à ta correction.','var(--green)');
+  return true;
 }

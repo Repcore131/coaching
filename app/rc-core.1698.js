@@ -30868,6 +30868,7 @@ function openClientDetail(cid,_refresh,_force){
         <div class="cvv-d">${new Date(v.date).toLocaleDateString('fr-FR')}${videoNonCorrigee(v)?' · <span class="cvv-att-l">en attente de ta correction</span>':' · corrigée'}</div>
       </div>
       <button class="btn ${videoNonCorrigee(v)?'btn-red':'btn-outline'} btn-sm cvv-b" onclick="openVideoCorrection('${c.email}','${v.id}')">${videoNonCorrigee(v)?'Corriger':'Modifier'}</button>
+      ${analysesComparables(c,v).length?`<button class="btn btn-outline btn-sm cvv-b" onclick="comparerAnalyses('${escapeHtml(c.email)}','${escapeHtml(String(v.id))}')">Comparer avec…</button>`:''}
     </div>`).join('')}`);
 
   _majDemandesVideo();
@@ -107665,6 +107666,8 @@ function segBarreValide(b,debutMs,finMs){
     ?{cm:Math.round(etCm*10)/10,px:Math.round(etPx*10)/10,
       type:String(et.type==null?'':et.type).slice(0,24)}:null;
   return {v:1,debutMs,finMs,disqueM,sens:(b.sens==='gauche'||b.sens==='droite')?b.sens:'',
+    // LOT T5 : l'aplomb a été estimé (sinon, un tilt à 0 ne dit rien).
+    ...(b.ae===1?{ae:1}:{}),
     theta:thB===null?0:Math.round(thB*10)/10,...(etalon?{etalon}:{}),...(act?{act}:{}),
     vw:Math.round(vw),vh:Math.round(vh),rayonPx:Math.round(rayonPx*10)/10,fps:Math.round(fps*100)/100,
     n,t0Ms:Math.round(t0Ms),pasMs:Math.round(pasMs*1000)/1000,xy:b.xy,c:b.c,vy:b.vy,m,ph,av};
@@ -108201,6 +108204,23 @@ function repondreCorrectionMotion(){
 // télécharge pas. `?v=` porte le build — le service worker sert ses assets
 // cache d'abord, et une adresse neuve à chaque version garantit le bon fichier.
 let _mlChargement=null;
+// LOT T5 : les autres analyses du MÊME exercice (le lien posé à l'envoi de la
+// vidéo depuis une série), la plus ancienne d'abord. Une vidéo sans ce lien
+// n'est rien proposé : on ne devine pas l'exercice sur un nom.
+function analysesComparables(c,v,lire){
+  const lecteur=typeof lire==='function'?lire:segmentsVideo;
+  const cle=v&&v.lien&&v.lien.exerciceCle;
+  if(!cle) return [];
+  const a=x=>{ try{ return lecteur(x).some(s=>s&&s.barre); }catch(e){ return false; } };
+  if(!a(v)) return [];
+  return ((c&&c.videos)||[]).filter(x=>x&&x!==v&&x.id!==v.id&&x.lien&&x.lien.exerciceCle===cle&&a(x))
+    .sort((p,q)=>Number(p.date)-Number(q.date));
+}
+function comparerAnalyses(email,videoId){
+  chargerMotionLab().then(()=>mlOuvrirComparaison(email,videoId))
+    .catch(e=>toast((e&&e.message)||'Motion Lab n’a pas pu se charger.','var(--orange)'));
+  return true;
+}
 function chargerMotionLab(){
   if(typeof window.mlOuvrir==='function') return Promise.resolve(true);
   if(_mlChargement) return _mlChargement;

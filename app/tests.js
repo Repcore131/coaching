@@ -50423,6 +50423,71 @@ async function testExercices(){
       const h=l.map(_htmlLundiLigne).join('');
       return /score|note|rang|\/10|%/i.test(h.replace(/<[^>]+>/g,' '))?_echec('un score affiché'):true;})());
 
+    // ══ LOT T5 — DEUX DATES, UN MOUVEMENT (29/09/2026) ══════════════════════
+    const _T5R=(o)=>Object.assign({date:Date.parse('2026-03-03T10:00:00Z'),reps:4,excMs:2000,conMs:1000,pauseMs:0,partLente:66.7,
+      pointDurPct:40,amplitudeM:0.62,vConMoy:0.62,fpsMin:30,horsPlan:8,echelleOk:true,aplombOk:true,sens:'droite',mode:'vertical',trace:{x:[],y:[]}},o||{});
+    okA('T5 — la normalisation : même forme à deux échelles, même trajectoire ; le point dur en % de la course',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const X=[0,0.02,0.05,0.03,0.01], Y=[0,0.2,0.5,0.8,0.6];
+      const a=mlcNormaliser(X,Y), b=mlcNormaliser(X.map((v)=>v*2.5+3),Y.map((v)=>v*2.5-1));
+      if(JSON.stringify(a)!==JSON.stringify(b)) return _echec('deux échelles, deux tracés : '+JSON.stringify(a)+' / '+JSON.stringify(b));
+      if(Math.max(...a.y)!==1||Math.min(...a.x)!==0) return _echec('bornes');
+      if(mlcPointDurPct([0,0.1,0.4,0.8,1],2)!==40) return _echec('point dur : '+mlcPointDurPct([0,0.1,0.4,0.8,1],2));
+      return (mlcPointDurPct([1,1,1],1)===null&&mlcPointDurPct([0,1],5)===null)?true:_echec('point dur sans course');
+    });
+    okA('T5 — l’écart de tempo et sa tolérance : sous la tolérance, « stable », jamais un progrès',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const a=_T5R(), b=_T5R({date:a.date+60*864e5,excMs:2040,conMs:1010});
+      const t=mlcComparer(a,b).lignes.find((l)=>l.cle==='tempo');
+      if(t.etat!=='stable'||t.tol!==67||!/stable/.test(t.texte)) return _echec(JSON.stringify(t));
+      const c=_T5R({date:a.date+60*864e5,excMs:3000,conMs:1000});
+      const t2=mlcComparer(a,c).lignes.find((l)=>l.cle==='tempo');
+      if(t2.etat!=='ecart'||!/^\+1 s \(tolérance ±0,1 s\)$/.test(t2.texte)) return _echec(JSON.stringify(t2));
+      const tout=JSON.stringify(mlcComparer(a,c));
+      if(/progr|régress|mieux|moins bien|score|note/i.test(tout)) return _echec('un verdict dans le tableau');
+      const n=mlcComparer(a,c).lignes.length;
+      return (n>=3&&n<=5)?true:_echec(n+' lignes');
+    });
+    okA('T5 — deux analyses non comparables : refus explicite et motivé, et aucun centimètre comparé',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const a=_T5R();
+      const cas=[
+        [_T5R({horsPlan:22}),/hors-plan de 22°/],
+        [_T5R({horsPlan:null}),/hors-plan .* n’est pas connu/],
+        [_T5R({echelleOk:false}),/échelle .* douteuse/],
+        [_T5R({aplombOk:false}),/aplomb .* n’a pas été estimé/]];
+      for(const [b,motif] of cas){
+        const r=mlcComparer(a,Object.assign(b,{date:a.date+864e5}));
+        if(r.comparabilite.cm) return _echec('déclarées comparables : '+JSON.stringify(b));
+        const ref=r.lignes.find((l)=>l.etat==='refuse');
+        if(!ref||!motif.test(ref.texte)) return _echec('refus non motivé : '+(ref&&ref.texte));
+        if(r.lignes.some((l)=>l.cle==='amplitude'||l.cle==='vitesse')) return _echec('une ligne en centimètres malgré le refus');
+        if(/\d\s?cm|m\/s/.test(JSON.stringify(r.lignes.map((l)=>[l.valeurs,l.texte==null?'':l.texte.replace(/15°/,'')])))) return _echec('un chiffre en cm ou m/s affiché');
+      }
+      // Les quatre conditions tenues : les centimètres se comparent.
+      const ok=mlcComparer(a,_T5R({date:a.date+864e5,amplitudeM:0.66}));
+      if(!ok.comparabilite.cm||!ok.lignes.some((l)=>l.cle==='amplitude'&&l.etat==='ecart')) return _echec('comparables mais pas comparés');
+      // Une vue d'un autre côté est dite.
+      return mlcComparabilite(a,_T5R({sens:'gauche'})).memeCote===false?true:_echec('côté filmé');
+    });
+    ok('T5 — l’aplomb estimé est gardé avec la trajectoire ; un ancien tilt à 0 ne le prétend pas',(()=>{
+      const b={v:1,debutMs:0,finMs:2000,n:2,xy:'AAAAAAAAAAA=',c:'AAA=',vy:'AAAAAA==',disqueM:0.45,vw:720,vh:1280,rayonPx:40,fps:30,pasMs:33,t0Ms:0,theta:0};
+      const sans=segBarreValide(b,0,2000), avec=segBarreValide(Object.assign({},b,{ae:1}),0,2000);
+      if(!sans||!avec) return _echec('fixture illisible');
+      if('ae' in sans) return _echec('un tilt à 0 passe pour estimé');
+      return avec.ae===1?true:_echec('l’aplomb estimé est perdu à la relecture');})());
+    ok('T5 — « comparer avec… » seulement s’il existe une autre analyse du même exercice',(()=>{
+      const seg={id:'s1',debutMs:0,finMs:2000,barre:{v:1}};
+      const V=(id,cle,date,avec)=>({id,date,name:'v'+id,lien:{exerciceCle:cle,exerciceNom:cle},segments:avec?[seg]:[]});
+      const c={videos:[V('a','SQUAT',1,true),V('b','SQUAT',2,true),V('c','SOULEVE',3,true),V('d','SQUAT',4,false)]};
+      // Le lecteur de segments est passé : ces fixtures n'ont pas une vraie trajectoire.
+      const f=(id)=>analysesComparables(c,c.videos.find((v)=>v.id===id),(v)=>v.segments||[]).map((v)=>v.id).join();
+      if(f('a')!=='b'||f('b')!=='a') return _echec('même exercice : '+f('a')+' / '+f('b'));
+      if(f('c')!=='') return _echec('un autre exercice proposé');
+      if(f('d')!=='') return _echec('une vidéo sans analyse compare');
+      const sansLien={id:'e',date:5,segments:[seg]};
+      return analysesComparables({videos:[sansLien,c.videos[0]]},sansLien,(v)=>v.segments||[]).length===0?true:_echec('une vidéo sans exercice');})());
+
     ok('Volts : dix rangs, dans l’ordre, seuils croissants à partir de 0',(()=>{
       const n=RANGS.map(r=>r.nom).join();
       if(n!=='ÉTINCELLE,IMPULSION,VOLTAGE,MACHINE,ÉLITE,SURTENSION,MONSTRE,FOUDRE,TITAN,LÉGENDE') return _echec(n);

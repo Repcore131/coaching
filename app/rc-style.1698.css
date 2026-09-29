@@ -15481,3 +15481,17 @@ html[data-theme="clair"]{background:#f8f8f8}
 .ld-rien{opacity:.7}
 .ld-rien .ld-s{color:var(--sub)}
 .ld-attente,.ld-vide{font-size:var(--fs-sm);color:var(--sub);line-height:1.6;padding:10px 2px}
+/* LOT T5 : deux dates, un mouvement */
+.mlc-p{font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin:6px 0 10px}
+.mlc-l{font-size:var(--fs-xs);color:var(--sub);text-transform:none;letter-spacing:0}
+#mlc-choix{width:100%;margin-bottom:12px}
+.mlc-leg{display:flex;gap:16px;font-size:var(--fs-xs);font-weight:700;margin-bottom:6px}
+.mlc-leg span::before{content:"";display:inline-block;width:18px;height:4px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.mlc-a::before{background:#8a8a8a}.mlc-b::before{background:#E02020}
+.mlc-svg{display:block;width:100%;height:auto;margin-bottom:12px}
+.mlc-t{width:100%;border-collapse:collapse;font-size:var(--fs-xs)}
+.mlc-t th{text-align:left;color:var(--sub);font-weight:700;padding:4px 6px 4px 0}
+.mlc-t td{padding:6px 6px 2px 0;color:var(--text);vertical-align:top}
+.mlc-t tr.mlc-e td{padding:0 0 8px;color:var(--sub);border-bottom:1px solid var(--border)}
+.mlc-t tr.mlc-e.mlc-ecart td{color:var(--text)}
+.mlc-t tr.mlc-e.mlc-refuse td{color:var(--orange)}
