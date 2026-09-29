@@ -1,0 +1,3 @@
+output/*
+!output/description_tiktok.txt
+__pycache__/
