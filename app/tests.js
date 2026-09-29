@@ -7990,17 +7990,19 @@ async function testExercices(){
           // la panne exacte que ce message existe pour eviter.
           if(/[(\[]\s*RC-ZGW7-5WBE|RC-ZGW7-5WBE\s*[)\]]/.test(t))
             return _echec('le code est entoure de parentheses : il sera colle avec');
-          // Le code est SEUL SUR SA LIGNE : une ligne de prose autour, et le
-          // double-clic de l'athlete emporte le mot d'a cote.
-          if(t.split('\n').indexOf('RC-ZGW7-5WBE')<0)
-            return _echec('le code n\'est pas seul sur sa ligne');
+          // Le code FINIT SA LIGNE (texte de Kevin, 29/09/2026) : rien apres
+          // lui que l'athlete emporterait en le copiant.
+          if(!t.split('\n').some(l=>/ : RC-ZGW7-5WBE$/.test(l)))
+            return _echec('le code ne finit pas sa ligne');
           // LE LIEN EST DEDUIT, JAMAIS ECRIT EN DUR — meme regle que le QR.
           // Un lien fige renverrait vers repcore-sync depuis n'importe quel
           // hebergement, y compris un apercu local.
           if(/repcore-sync\.web\.app/.test(String(_texteInvitationAthlete)))
             return _echec('le lien est code en dur dans la fonction');
           const n=t.split(RC_LIEN_COURT).length-1;
-          if(n!==2) return _echec('le lien court apparait '+n+' fois au lieu de 2');
+          if(n!==1) return _echec('le lien court apparait '+n+' fois au lieu de 1');
+          if(t.indexOf('https://youtu.be/wX0qTHqMMZY')<0) return _echec('la video d\'installation manque');
+          if(t.indexOf('BILAN FAIT')<0) return _echec('la consigne « BILAN FAIT » manque');
           // Les trois etapes, dans l'ordre : c'est ce qui en fait un mode
           // d'emploi plutot qu'un code accompagne de texte.
           const i1=t.indexOf('1️⃣'), i2=t.indexOf('2️⃣'), i3=t.indexOf('3️⃣');
@@ -8012,10 +8014,9 @@ async function testExercices(){
           return /Instagram/.test(t)?true:_echec('l\'avertissement navigateur a disparu');})());
         ok('Sans nom saisi, la phrase se referme au lieu de trainer une virgule',(()=>{
           const t=_texteInvitationAthlete({studentName:'',token:'RC-0000-0000'});
-          if(/prêt,\s*\./.test(t)||/prêt,\s*$/m.test(t))
-            return _echec('une virgule vide subsiste : '+t.split('\n')[0]);
+          if(/team\s{2,}/.test(t)) return _echec('un espace double subsiste : '+t.split('\n')[0]);
           if(t.indexOf('RC-0000-0000')<0) return _echec('le code manque');
-          return t.split('\n')[0]==='Ton accès RepCore est enfin prêt.'
+          return t.split('\n')[0]==='Bienvenue dans la team 💪'
             ?true:_echec('premiere ligne : « '+t.split('\n')[0]+' »');})());
         ok('Le message part en TEXTE BRUT, jamais echappe en HTML',(()=>{
           // Il va dans un presse-papier, pas dans une page : escapeHtml y
