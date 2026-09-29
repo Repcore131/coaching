@@ -6194,7 +6194,7 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'echeance','alertStatus','supprimes','_export',
   'coachId','coachName','coachEmailKey','coachCode','coachPhoto','code','clients',
   'coachPlan','coachSubActive','coachPlanSince','coachPrograms','coachNotes',
-  'studentCodes','msgTemplates','quickComments','protocolesPerso','canalEpingle',
+  'studentCodes','msgTemplates','reponseFormules','quickComments','protocolesPerso','canalEpingle',
   'canalDernier','journalGroupe','cloudinaryName','cloudinaryPreset','teamName',
   // Les programmes qu'un coach met en vente : un nom, un pitch, un prix, un
   // lien et une image. Du commerce, pas de la sante — mais il DOIT etre classe,
@@ -72039,7 +72039,9 @@ function rbNoterBrouillon(email,bilanId,txt){
     const o=_rbBrouillons();
     const k=_rbCle(email,bilanId);
     const t=String(txt||'');
-    if(!t.trim()) delete o[k];
+    // Un champ VIDÉ n'est pas un champ sans brouillon : le coach a effacé le
+    // texte pré-écrit (C2), il ne doit pas revenir au prochain rendu.
+    if(!t.trim()) o[k]={t:'',ts:Date.now(),zero:1};
     else o[k]={t:t.slice(0,2000),ts:Date.now()};
     // Purge des perimes a chaque ecriture : ce stockage ne doit pas grossir
     // indefiniment, et c'est le seul moment ou on le tient deja en main.
@@ -72062,6 +72064,243 @@ function rbOublierBrouillon(email,bilanId){
     delete o[_rbCle(email,bilanId)];
     localStorage.setItem(RB_BROUILLON_CLE,JSON.stringify(o));
   }catch(e){}
+  return true;
+}
+// ══ LOT C2 : LE BROUILLON DE RÉPONSE AU BILAN (29/09/2026) ═══════════════
+//
+// Le champ de réponse d'un bilan arrive DÉJÀ ÉCRIT : ce qui a bougé, ce qui
+// accroche, une question. Le coach relit, corrige, envoie. Rien ne part sans
+// lui : le texte n'est qu'une valeur de départ dans le champ, et l'envoi reste
+// le bouton « Envoyer ma réponse », inchangé.
+//
+// ⚠ IL NE DONNE AUCUN CONSEIL. Même règle que _waTexteTodo : des faits et une
+//   question, jamais « baisse la charge » ni « prends un jour ». Décider de la
+//   suite est le travail du coach, pas celui d'un texte pré-écrit.
+// ⚠ IL NE NOMME JAMAIS UNE DOULEUR NI UNE DONNÉE DE SANTÉ. Le signal douleur
+//   devient « j'aimerais qu'on fasse un point avant ta prochaine séance » :
+//   le coach sait pourquoi, le texte ne le dit pas. Le sommeil, le stress et
+//   les réponses du questionnaire ne sont pas repris.
+// ⚠ PROFIL TCA : aucun chiffre de poids ni de calories (l'application les lui
+//   masque déjà), et le signal de restriction ne sort pas.
+// ⚠ SEUL LE DERNIER BILAN reçoit un brouillon : les signaux décrivent
+//   maintenant, pas le mois où un vieux bilan a été rempli.
+
+// Les signaux, dans l'ordre où ils passent devant. Au plus deux dans le texte.
+// Ni calibrageDu ni blocPrioriteFini : ce sont des tâches du coach, pas des
+// choses qui accrochent chez l'athlète.
+const BROUILLON_SIGNAUX=Object.freeze(['douleur','douleurDiffuse','decrochage','chuteAssiduite',
+  'formeBasse','volumeHaut','sautDeCharge','plateauMuscle','sousMEV','restrictionLongue','habitudesBasses']);
+const BROUILLON_MAX_SIGNAUX=2;
+const BROUILLON_FORMULES_DEFAUT=Object.freeze({ouverture:'Salut {prénom},',cloture:'À très vite'});
+const BROUILLON_FORMULE_MAX=80;
+
+function _brKg(v){ return (Math.round(v*10)/10).toLocaleString('fr-FR',{minimumFractionDigits:1,maximumFractionDigits:1}); }
+function _brJour(t){ try{ return new Date(t).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}); }catch(e){ return ''; } }
+// L'article devant un muscle : « les pectoraux », « le deltoïde latéral »,
+// « l'avant-bras ». _brDe donne la forme après « de » (des, du, de l').
+function _brArt(lib){ const l=String(lib||''); if(/[sx]$/.test(l)) return 'les '+l; if(/^[aeiouyhàâéèêîôû]/i.test(l)) return 'l\''+l; return 'le '+l; }
+function _brDe(lib){ const a=_brArt(lib); return a.indexOf('les ')===0?'des '+a.slice(4):a.indexOf('le ')===0?'du '+a.slice(3):'de '+a; }
+function _brListe(l){ return l.length<2?(l[0]||''):l.slice(0,-1).join(', ')+' et '+l[l.length-1]; }
+
+// Ce qui accroche, en mots simples. Chaque entrée : {fait, question}.
+// Le muscle vient des détails du signal (lib) ; rien d'autre n'en sort.
+function _brSignal(k,d){
+  const lib=(d&&d.muscle)?_bbMuscle(d.muscle):'';
+  switch(k){
+    case 'douleur': case 'douleurDiffuse':
+      return {fait:'J\'aimerais qu\'on fasse un point ensemble avant ta prochaine séance.',
+        question:'Quand est-ce que tu es dispo pour qu\'on en parle ?'};
+    case 'decrochage':
+      return {fait:'Tes dernières séances n\'ont pas été terminées'+(d&&d.prevus?' ('+d.faits+' séries sur '+d.prevus+' prévues)':'')+'.',
+        question:'Qu\'est-ce qui t\'a empêché de les finir : le temps, la fatigue, un exercice en particulier ?'};
+    case 'chuteAssiduite':
+      return {fait:'Tu t\'entraînes moins souvent que les semaines d\'avant.',
+        question:'Qu\'est-ce qui a changé dans ton emploi du temps ces dernières semaines ?'};
+    case 'formeBasse':
+      return {fait:'Tes notes d\'avant séance sont plus basses que d\'habitude.',
+        question:'Comment tu te sens en arrivant à la salle en ce moment ?'};
+    case 'volumeHaut':
+      return {fait:(lib?'Le volume '+_brDe(lib):'Le volume d\'un muscle')+' est au-dessus du haut de sa fourchette deux semaines de suite.',
+        question:'Comment tu récupères d\'une séance à l\'autre en ce moment ?'};
+    case 'sautDeCharge':
+      return {fait:'Tes deux dernières semaines ont été nettement plus chargées que le mois d\'avant.',
+        question:'Comment tu encaisses ces semaines plus chargées ?'};
+    case 'plateauMuscle':
+      return {fait:'Tes charges sur '+(lib?_brArt(lib):'un groupe musculaire')+' ne bougent plus'+(d&&d.semaines?' depuis '+d.semaines+' semaine'+(d.semaines>1?'s':''):'')+'.',
+        question:'Comment tu sens tes exercices '+(lib?'pour '+_brArt(lib)+' ':'')+'en ce moment ?'};
+    case 'sousMEV':
+      return {fait:(lib?'Le volume '+_brDe(lib):'Le volume d\'un muscle')+' est resté sous son minimum deux semaines de suite.',
+        question:'Est-ce qu\'il y a des séries '+(lib?'pour '+_brArt(lib)+' ':'')+'que tu as dû sauter ?'};
+    case 'restrictionLongue':
+      return {fait:'Ça fait '+((d&&d.semaines)||'plusieurs')+' semaines qu\'on est en phase de diète.',
+        question:'Comment tu vis la diète au quotidien en ce moment ?'};
+    case 'habitudesBasses':
+      return {fait:'Tes habitudes sont moins régulières ces derniers jours.',
+        question:'Laquelle de tes habitudes est la plus dure à tenir en ce moment ?'};
+  }
+  return null;
+}
+
+/**
+ * PURE (les caches de volume mis à part). Le brouillon de réponse à un bilan.
+ * @param athlete le dossier
+ * @param bilan   le bilan auquel on répond
+ * @param signaux le résultat de signauxEntrainement (complet de préférence)
+ * @param opts    {formules:{ouverture,cloture}, maintenant}
+ * @return {texte, bouge:[], accroche:[], question, signaux:[clés retenues]}
+ */
+function brouillonBilan(athlete,bilan,signaux,opts){
+  const o=opts||{}, u=athlete||{}, b=bilan||{};
+  const t=Number(b.date)||Number(o.maintenant)||Date.now();
+  const tca=(()=>{ try{ return aTCA(u); }catch(e){ return false; } })();
+  const bilans=(u.bilans||[]).filter(x=>x&&x.date&&Number(x.date)<t).sort((x,y)=>x.date-y.date);
+  const prec=bilans.length?bilans[bilans.length-1]:null;
+  const bouge=[];
+
+  // ── LE POIDS. La moyenne sur 7 jours quand il y en a une aux deux dates,
+  // sinon les pesées des deux bilans. Pas de bilan pesé avant : on le dit.
+  if(!tca){
+    let serie=[]; try{ serie=serieWeight(u); }catch(e){}
+    const jour=_jourISO(t);
+    const mmNow=mm7(serie,jour), mmAvant=prec?mm7(serie,_jourISO(prec.date)):null;
+    const kg=getBW(b);
+    const kgAvant=(()=>{ for(let i=bilans.length-1;i>=0;i--){ const v=getBW(bilans[i]); if(v!=null) return {v,date:bilans[i].date}; } return null; })();
+    if(mmNow!=null&&mmAvant!=null){
+      const d=mmNow-mmAvant;
+      bouge.push('Ton poids moyen sur 7 jours est passé de '+_brKg(mmAvant)+' à '+_brKg(mmNow)+' kg depuis ton dernier bilan'
+        +(Math.abs(d)<0.1?', stable.':' ('+(d>0?'+':'−')+_brKg(Math.abs(d))+' kg).'));
+    } else if(kg!=null&&kgAvant){
+      const d=kg-kgAvant.v;
+      bouge.push('Tu pèses '+_brKg(kg)+' kg, contre '+_brKg(kgAvant.v)+' kg au bilan du '+_brJour(kgAvant.date)
+        +(Math.abs(d)<0.1?' : stable.':' ('+(d>0?'+':'−')+_brKg(Math.abs(d))+' kg).'));
+    } else if(kg!=null||mmNow!=null){
+      bouge.push('Ton poids : '+_brKg(kg!=null?kg:mmNow)+' kg. C\'est notre premier point de repère pour la suite.');
+    }
+  }
+
+  // ── LES SÉANCES depuis le bilan précédent (quatre semaines sans lui).
+  const debut=prec?Number(prec.date):t-28*864e5;
+  const faites=(u.sessions||[]).filter(s=>s&&Number(s.date)>debut&&Number(s.date)<=t).length;
+  let parSem=0; try{ parSem=_creneauxPrevus(u); }catch(e){}
+  const semaines=Math.max(1,Math.round((t-debut)/(7*864e5)));
+  const depuis=prec?'depuis ton dernier bilan':'sur les quatre dernières semaines';
+  if(!faites) bouge.push('Aucune séance enregistrée '+depuis+'.');
+  else bouge.push(faites+' séance'+(faites>1?'s':'')+' faite'+(faites>1?'s':'')
+    +(parSem?' sur '+(parSem*semaines)+' prévue'+(parSem*semaines>1?'s':''):'')+' '+depuis+'.');
+
+  // ── LE VOLUME de la dernière semaine terminée, lu contre les repères.
+  try{
+    const lundi=_lundiDe(new Date(t));
+    const cle=semaineISO(new Date(lundi.getTime()-864e5));
+    const v=volumeSemaine(u,cle)||{};
+    const dans=[], sous=[], dessus=[];
+    for(const m of Object.keys(v)){
+      if(!(v[m]>0)) continue;
+      const rep=reperesEffectifs(u,m);
+      if(!rep) continue;
+      if(v[m]<rep.mev) sous.push(_bbMuscle(m));
+      else if(v[m]>rep.mrv) dessus.push(_bbMuscle(m));
+      else dans.push(_bbMuscle(m));
+    }
+    if(dans.length||sous.length||dessus.length){
+      const lundiSem=new Date(lundi); lundiSem.setDate(lundiSem.getDate()-7);
+      const p=[];
+      if(dans.length) p.push(dans.length+' muscle'+(dans.length>1?'s':'')+' dans leur fourchette');
+      const noms=l=>_brListe(l.slice(0,3).map(_brArt).concat(l.length>3?[(l.length-3)+' autre'+(l.length>4?'s':'')]:[]));
+      if(sous.length) p.push(noms(sous)+' sous leur minimum');
+      if(dessus.length) p.push(noms(dessus)+' au-dessus du haut de leur fourchette');
+      bouge.push('Volume de la semaine du '+_brJour(lundiSem)+' : '+p.join(', ')+'.');
+    }
+  }catch(e){}
+
+  // ── CE QUI ACCROCHE : deux signaux au plus, douleur et diffuse comptent pour un.
+  const s=signaux||{}, det=s.details||{};
+  const retenus=[], accroche=[];
+  let question='';
+  for(const k of BROUILLON_SIGNAUX){
+    if(retenus.length>=BROUILLON_MAX_SIGNAUX) break;
+    if(!s[k]) continue;
+    if(k==='restrictionLongue'&&tca) continue;
+    if(k==='douleurDiffuse'&&retenus.indexOf('douleur')>=0) continue;
+    const x=_brSignal(k,det[k]);
+    if(!x) continue;
+    retenus.push(k); accroche.push(x.fait);
+    if(!question) question=x.question;
+  }
+  if(!question) question='Qu\'est-ce qui t\'a paru le plus facile, et le plus dur, depuis '+(prec?'ton dernier bilan':'le début')+' ?';
+
+  // ── LE CADRE : la formule du coach, réglée une fois.
+  const f=o.formules||{};
+  const ctx={prenom:u.fname||''};
+  const ouv=templateResoudre(String(f.ouverture!=null?f.ouverture:BROUILLON_FORMULES_DEFAUT.ouverture),ctx).texte.trim();
+  const clo=templateResoudre(String(f.cloture!=null?f.cloture:BROUILLON_FORMULES_DEFAUT.cloture),ctx).texte.trim();
+  const blocs=[bouge.join(' '),accroche.join(' '),question].filter(Boolean);
+  const texte=[ouv].concat(blocs,[clo]).filter(Boolean).join('\n\n');
+  return {texte,bouge,accroche,question,signaux:retenus};
+}
+
+// La formule du coach : son réglage, sinon celle par défaut.
+function formulesReponse(coach){
+  const f=(coach&&coach.reponseFormules)||{};
+  return {ouverture:typeof f.ouverture==='string'?f.ouverture:BROUILLON_FORMULES_DEFAUT.ouverture,
+    cloture:typeof f.cloture==='string'?f.cloture:BROUILLON_FORMULES_DEFAUT.cloture};
+}
+// Le brouillon du champ, ou '' quand ce bilan n'en reçoit pas : pas le dernier
+// bilan, déjà répondu, ou le coach a choisi de repartir de zéro.
+function _brouillonPourChamp(b,c){
+  if(!b||!c||b.reponseCoach) return '';
+  const derniers=(c.bilans||[]).filter(x=>x&&x.date).sort((x,y)=>y.date-x.date);
+  if(!derniers.length||_idBilan(derniers[0])!==_idBilan(b)) return '';
+  if(rbRepartiDeZero(c.email,_idBilan(b))) return '';
+  let sig=null; try{ sig=signauxEntrainement(c,{complet:true}); }catch(e){ sig=null; }
+  try{ return brouillonBilan(c,b,sig,{formules:formulesReponse(currentUser)}).texte; }catch(e){ return ''; }
+}
+// « Repartir de zéro » : le champ se vide, et il le RESTE au prochain rendu
+// (le brouillon ne revient pas tout seul). Local, comme le brouillon tapé.
+function rbRepartiDeZero(email,bilanId){
+  try{
+    const d=_rbBrouillons()[_rbCle(email,bilanId)];
+    return !!(d&&d.zero&&d.ts>Date.now()-RB_BROUILLON_JOURS*864e5);
+  }catch(e){ return false; }
+}
+function rbRepartirDeZero(email,bilanId,taId){
+  rbNoterBrouillon(email,bilanId,'');
+  const ta=document.getElementById(taId);
+  if(ta){ ta.value=''; delete ta.dataset.brouillon; ta.focus(); }
+  const l=document.getElementById('rb-zero_'+bilanId);
+  if(l) l.style.display='none';
+  return true;
+}
+// Curseur à la fin, au PREMIER focus d'un champ pré-écrit : le coach arrive
+// pour compléter, pas pour réécrire le début.
+function _rbCurseurFin(ta){
+  if(!ta||ta.dataset.brouillon!=='1') return;
+  delete ta.dataset.brouillon;
+  setTimeout(()=>{ try{ const n=ta.value.length; ta.setSelectionRange(n,n); ta.scrollTop=ta.scrollHeight; }catch(e){} },0);
+}
+// Le réglage, une fois : une ouverture et une clôture, {prénom} reconnu.
+function ouvrirFormulesReponse(){
+  const f=formulesReponse(currentUser);
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
+    <h2 style="margin-bottom:2px">Ma formule</h2>
+    <p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px;line-height:1.6">Elle encadre chaque brouillon de réponse aux bilans. {prénom} est remplacé par le prénom de l'athlète.</p>
+    <label class="sub" for="rbf-ouv" style="display:block;font-size:var(--fs-xs);margin-bottom:4px;text-transform:none">Ouverture</label>
+    <input id="rbf-ouv" maxlength="${BROUILLON_FORMULE_MAX}" value="${escapeHtml(f.ouverture)}" autocomplete="off" style="width:100%;box-sizing:border-box;margin-bottom:10px">
+    <label class="sub" for="rbf-clo" style="display:block;font-size:var(--fs-xs);margin-bottom:4px;text-transform:none">Clôture</label>
+    <input id="rbf-clo" maxlength="${BROUILLON_FORMULE_MAX}" value="${escapeHtml(f.cloture)}" autocomplete="off" style="width:100%;box-sizing:border-box">
+    <button class="btn btn-red" style="margin-top:14px;width:100%" onclick="enregistrerFormulesReponse()">Enregistrer</button>
+    <button class="btn btn-outline" style="margin-top:8px;width:100%" onclick="closeModal()">Fermer</button>
+  </div></div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+function enregistrerFormulesReponse(){
+  if(!currentUser) return false;
+  const lire=id=>String(((document.getElementById(id)||{}).value)||'').replace(/\s+/g,' ').trim().slice(0,BROUILLON_FORMULE_MAX);
+  currentUser.reponseFormules={ouverture:lire('rbf-ouv'),cloture:lire('rbf-clo')};
+  try{ saveUser(); }catch(e){}
+  closeModal();
+  toast('Formule enregistrée ✓','var(--green)');
   return true;
 }
 function _qcIdBilan(id){ return 'qc-chips-bilan_'+id; }
@@ -72087,10 +72326,22 @@ function blocReponseBilan(b,c){
       // corrige. Sans brouillon, rien ne change — la reponse envoyee revient,
       // comme avant.
       const bro=rbBrouillon(c.email,id);
-      const val=bro||(b.reponseCoach||'');
-      return `<textarea id="${_taIdBilan(id)}" rows="3" oninput="rbNoterBrouillon('${escapeHtml(c.email||'')}','${escapeHtml(id)}',this.value)" placeholder="Ce que tu retiens de ce bilan, et ce qu'on ajuste." style="width:100%;box-sizing:border-box">${escapeHtml(val)}</textarea>`
+      // C2 : sans brouillon tapé ni réponse envoyée, le dernier bilan arrive
+      // pré-écrit (brouillonBilan). Il n'est enregistré nulle part tant que le
+      // coach n'y touche pas, et rien ne part sans son geste.
+      const pre=(!bro&&!b.reponseCoach)?_brouillonPourChamp(b,c):'';
+      const val=bro||(b.reponseCoach||'')||pre;
+      const em=escapeHtml(c.email||''), ide=escapeHtml(id);
+      return `<textarea id="${_taIdBilan(id)}" rows="${pre?9:3}"${pre?' data-brouillon="1" onfocus="_rbCurseurFin(this)"':''} oninput="rbNoterBrouillon('${em}','${ide}',this.value)" placeholder="Ce que tu retiens de ce bilan, et ce qu'on ajuste." style="width:100%;box-sizing:border-box">${escapeHtml(val)}</textarea>`
         +(bro&&bro!==(b.reponseCoach||'')
           ?`<div class="sub" style="font-size:var(--fs-2xs);line-height:1.5;margin-top:4px">Brouillon non envoyé, retrouvé tel que tu l’avais laissé.</div>`
+          :'')
+        +(pre
+          ?`<div class="rb-pre" style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-top:4px;font-size:var(--fs-2xs);line-height:1.5">
+              <span class="sub">Brouillon pré-écrit : relis-le avant d’envoyer.</span>
+              <button type="button" id="rb-zero_${ide}" class="rb-lien" onclick="rbRepartirDeZero('${em}','${ide}','${_taIdBilan(id)}')">Repartir de zéro</button>
+              <button type="button" class="rb-lien" onclick="ouvrirFormulesReponse()">Ma formule</button>
+            </div>`
           :'');
     })()}
     <button class="btn btn-red btn-sm" onclick="saveReponseBilan('${escapeHtml(c.email||'')}','${escapeHtml(id)}','${_taIdBilan(id)}')"

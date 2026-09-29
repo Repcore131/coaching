@@ -15334,3 +15334,4 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] #s-coach-client .ccd-sig-1{border-color:rgba(224,32,32,.6);background:rgba(224,32,32,.05)}
 :root[data-theme="clair"] #s-coach-client #ccd-et-detail>.cc-sect>.cc-sect-t{background:rgba(9,9,9,.04)}
 :root[data-theme="clair"] #s-coach-client #ccd-et-detail>.cc-sect>.cc-sect-t>span{color:var(--text)}
+.rb-lien{background:none;border:0;padding:6px 0;min-height:32px;color:var(--text-strong);font:inherit;font-weight:700;text-decoration:underline;text-underline-offset:3px;cursor:pointer}

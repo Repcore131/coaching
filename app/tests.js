@@ -49798,6 +49798,111 @@ async function testExercices(){
       const pc=(t.match(/\d+ %[^.]{0,14}/g)||[]).filter(x=>!/d’assiduité/.test(x));
       return pc.length?_echec('un pourcentage : '+pc.join(' | ')):true;})());
 
+    // ══ LOT C2 — LE BROUILLON DE RÉPONSE AU BILAN (29/09/2026) ═════════════
+    const _C2B=(j,kg,o)=>Object.assign({id:'c2b'+j,date:new Date(2026,8,j,12).getTime(),type:'suivi'},kg!=null?{'bil-weight':String(kg)}:{},o||{});
+    const _C2S=j=>({id:'c2s'+j,date:new Date(2026,8,j,18).getTime(),duration:60,sets:4,setsPlanned:4,
+      data:{'SQUAT':{sets:[1,2,3,4].map(()=>({weight:'100',reps:'8',rir:'2',done:true}))}}});
+    let _c2n=0;
+    const _C2U=o=>Object.assign({email:'c2-'+(++_c2n)+'@t.fr',role:'athlete',fname:'Léa',bilans:[],sessions:[],
+      sessions_config:[{active:true},{active:false},{active:true},{active:false},{active:true},{active:false},{active:false}]},o||{});
+    // Tous les signaux levés, avec les détails que signauxEntrainement pose.
+    const _C2TOUS=()=>({douleur:true,douleurDiffuse:true,decrochage:true,chuteAssiduite:true,formeBasse:true,volumeHaut:true,
+      sautDeCharge:true,plateauMuscle:true,sousMEV:true,restrictionLongue:true,habitudesBasses:true,calibrageDu:true,blocPrioriteFini:true,
+      details:{douleur:{exercice:'SQUAT',max:7},decrochage:{faits:10,prevus:16},plateauMuscle:{muscle:'quadriceps',lib:'Quadriceps',semaines:4},
+        sousMEV:{muscle:'mollets',lib:'Mollets'},volumeHaut:{muscle:'pectoraux',lib:'Pectoraux'},restrictionLongue:{semaines:14}}});
+    ok('C2 — brouillonBilan : sans poids antérieur, sans séance, sans signal, le brouillon dit ce qui a bougé et pose une question',(()=>{
+      const u=_C2U({bilans:[_C2B(28,72.4)]});
+      const r=brouillonBilan(u,u.bilans[0],SIGNAUX_VIDES,{formules:{ouverture:'Salut {prénom}',cloture:'À lundi, Kévin'}});
+      if(!/premier point de repère/.test(r.texte)||!/72,4 kg/.test(r.texte)) return _echec('sans poids antérieur : '+r.texte);
+      if(!/Aucune séance enregistrée sur les quatre dernières semaines/.test(r.texte)) return _echec('sans séance : '+r.texte);
+      if(r.accroche.length||r.signaux.length) return _echec('un signal inventé : '+JSON.stringify(r.accroche));
+      if(!/\?$/.test(r.question)) return _echec('pas de question : '+r.question);
+      const l=r.texte.split('\n\n');
+      if(l[0]!=='Salut Léa'||l[l.length-1]!=='À lundi, Kévin') return _echec('formule : '+JSON.stringify(l));
+      if(l.length!==4) return _echec('trois blocs attendus entre les formules (bouge, question) : '+JSON.stringify(l));
+      // Sans signaux du tout (null), rien ne casse.
+      return brouillonBilan(u,u.bilans[0],null).texte.indexOf('Salut Léa,')===0?true:_echec('formule par défaut');})());
+    ok('C2 — brouillonBilan : le poids d’un bilan à l’autre, et les séances faites sur prévues depuis le dernier',(()=>{
+      const ses=[7,9,11,13,16,18,21,23,25].map(_C2S);
+      const u=_C2U({bilans:[_C2B(14,74),_C2B(28,73.2)],sessions:ses});
+      const r=brouillonBilan(u,u.bilans[1],SIGNAUX_VIDES);
+      if(!/73,2 kg, contre 74,0 kg au bilan du 14 septembre \(−0,8 kg\)/.test(r.texte)) return _echec('poids : '+r.texte);
+      // Séances du 16 au 25 : 5 ; deux semaines à trois créneaux : 6 prévues.
+      if(!/5 séances faites sur 6 prévues depuis ton dernier bilan/.test(r.texte)) return _echec('séances : '+r.texte);
+      // La moyenne sur 7 jours prime quand elle existe aux deux dates.
+      const wl=[]; for(let j=8;j<=28;j++) wl.push({date:'2026-09-'+String(j).padStart(2,'0'),kg:j<=14?74:73});
+      const u2=_C2U({bilans:[_C2B(14,74),_C2B(28,73.2)],weightLog:wl});
+      const r2=brouillonBilan(u2,u2.bilans[1],SIGNAUX_VIDES);
+      return /moyen sur 7 jours est passé de 74,0 à 73,0 kg/.test(r2.texte)?true:_echec('tendance : '+r2.texte);})());
+    ok('C2 — brouillonBilan : tous les signaux à la fois, deux au plus dans le texte, la question vient du premier',(()=>{
+      const u=_C2U({bilans:[_C2B(28,72)]});
+      const r=brouillonBilan(u,u.bilans[0],_C2TOUS());
+      if(r.accroche.length!==2||r.signaux.join()!=='douleur,decrochage') return _echec('retenus : '+r.signaux.join());
+      if(!/point ensemble avant ta prochaine séance/.test(r.texte)) return _echec('douleur : '+r.texte);
+      if(!/Quand est-ce que tu es dispo/.test(r.question)) return _echec('question : '+r.question);
+      // Le muscle, avec son article : « des mollets », « du deltoïde latéral ».
+      const r3=brouillonBilan(u,u.bilans[0],{sousMEV:true,plateauMuscle:true,details:{sousMEV:{muscle:'MOLLETS'},plateauMuscle:{muscle:'DELT_LAT',semaines:3}}});
+      if(!/Le volume des mollets est resté sous son minimum/.test(r3.texte)||!/Tes charges sur le deltoïde latéral ne bougent plus depuis 3 semaines/.test(r3.texte)) return _echec('articles : '+r3.texte);
+      if(!/tes exercices pour le deltoïde latéral en ce moment \?/.test(r3.texte)) return _echec('question : '+r3.question);
+      // Les tâches du coach ne sortent jamais seules.
+      const r2=brouillonBilan(u,u.bilans[0],{calibrageDu:true,blocPrioriteFini:true,details:{}});
+      return r2.accroche.length?_echec('une tâche du coach dans le message'):true;})());
+    ok('C2 — brouillonBilan : vingt cas, aucun conseil, ni douleur ni santé nommée, et aucun chiffre de poids pour un profil TCA',(()=>{
+      const ks=BROUILLON_SIGNAUX, T=_C2TOUS();
+      const imperatif=/(^|[^\p{L}])(baisse|augmente|arrête|arrete|prends|réduis|ajoute|diminue|mange|dors|repose-toi|évite|essaie|pense à)(?![\p{L}])/iu;
+      const sante=/douleur|douloureu|blessure|\bmal\b|sommeil|stress|médic|traitement|règles/iu;
+      for(let i=0;i<20;i++){
+        const s={details:T.details};
+        // Deux signaux par cas, en parcourant toute la liste (plus le cas vide et le cas complet).
+        if(i<ks.length) s[ks[i]]=true, s[ks[(i+3)%ks.length]]=true;
+        else if(i===ks.length) Object.assign(s,T);
+        else if(i>ks.length+1) s[ks[i%ks.length]]=true;
+        const tca=i%4===1;
+        const u=_C2U({tcaRisque:tca,bilans:i%3?[_C2B(14,70+i/10),_C2B(28,71)]:[_C2B(28,71)],sessions:i%2?[16,18,21].map(_C2S):[]});
+        const r=brouillonBilan(u,u.bilans[u.bilans.length-1],s);
+        let m=r.texte.match(imperatif); if(m) return _echec('cas '+i+' : un conseil « '+m[2]+' » dans '+r.texte);
+        m=r.texte.match(sante); if(m) return _echec('cas '+i+' : « '+m[0]+' » dans '+r.texte);
+        if(/[—–]/.test(r.texte)) return _echec('cas '+i+' : un tiret long');
+        if(r.accroche.length>2) return _echec('cas '+i+' : plus de deux signaux');
+        if(tca&&(/kg|kcal|calorie|pèses|poids/i.test(r.texte)||r.signaux.indexOf('restrictionLongue')>=0)) return _echec('cas '+i+' : poids chez un profil TCA : '+r.texte);
+      }
+      // PURE : aucune écriture.
+      const src=String(brouillonBilan);
+      return /saveUser|DB\.set|CLOUD\.|localStorage|document\./.test(src)?_echec('brouillonBilan écrit ou lit le DOM'):true;})());
+    ok('C2 — le champ du DERNIER bilan arrive pré-écrit, curseur à la fin ; « repartir de zéro » le vide pour de bon',(()=>{
+      const av=localStorage.getItem(RB_BROUILLON_CLE);
+      try{
+        const u=_C2U({bilans:[_C2B(14,74),_C2B(28,73)]});
+        const h=blocReponseBilan(u.bilans[1],u);
+        if(h.indexOf('data-brouillon="1"')<0||h.indexOf('Salut Léa,')<0) return _echec('le dernier bilan n’est pas pré-écrit');
+        if(h.indexOf('Repartir de zéro')<0) return _echec('aucun lien pour repartir de zéro');
+        if(/Générer/i.test(h)) return _echec('un bouton « générer »');
+        if(blocReponseBilan(u.bilans[0],u).indexOf('data-brouillon')>=0) return _echec('un vieux bilan pré-écrit');
+        // Déjà répondu : la réponse envoyée, pas un brouillon.
+        const b3=Object.assign({},u.bilans[1],{reponseCoach:'Envoyée'});
+        if(blocReponseBilan(b3,Object.assign({},u,{bilans:[u.bilans[0],b3]})).indexOf('data-brouillon')>=0) return _echec('pré-écrit par-dessus une réponse');
+        // Le brouillon n'est stocké nulle part tant qu'on n'y touche pas.
+        if(rbBrouillon(u.email,_idBilan(u.bilans[1]))!=='') return _echec('le brouillon est stocké sans geste');
+        rbNoterBrouillon(u.email,_idBilan(u.bilans[1]),'');
+        if(blocReponseBilan(u.bilans[1],u).indexOf('data-brouillon')>=0) return _echec('le brouillon revient après « repartir de zéro »');
+        // Le curseur va à la fin au premier focus, et seulement au premier.
+        const ta=document.createElement('textarea'); ta.value='abc'; ta.dataset.brouillon='1';
+        _rbCurseurFin(ta);
+        if(ta.dataset.brouillon) return _echec('le curseur est replacé à chaque focus');
+        // L'envoi reste le geste du coach : saveReponseBilan n'est appelé que par le bouton.
+        return /onfocus="_rbCurseurFin\(this\)"/.test(h)&&!/saveReponseBilan/.test(String(_brouillonPourChamp))?true:_echec('envoi hors du bouton');
+      } finally { if(av==null) localStorage.removeItem(RB_BROUILLON_CLE); else localStorage.setItem(RB_BROUILLON_CLE,av); }})());
+    ok('C2 — la formule du coach : réglée une fois, classée dans le dossier, bornée',(()=>{
+      const f=formulesReponse({reponseFormules:{ouverture:'Hello {prénom} !',cloture:'À lundi, Kévin'}});
+      if(f.ouverture!=='Hello {prénom} !'||f.cloture!=='À lundi, Kévin') return _echec(JSON.stringify(f));
+      const d=formulesReponse(null);
+      if(d.ouverture!==BROUILLON_FORMULES_DEFAUT.ouverture) return _echec('défaut');
+      // Clôture vide : le coach n'en veut pas, le brouillon s'arrête à la question.
+      const u=_C2U({bilans:[_C2B(28,72)]});
+      const r=brouillonBilan(u,u.bilans[0],SIGNAUX_VIDES,{formules:{ouverture:'',cloture:''}});
+      if(r.texte.indexOf('Salut')>=0||!/\?$/.test(r.texte)) return _echec('formules vides : '+r.texte);
+      return true;})());
+
     ok('Volts : dix rangs, dans l’ordre, seuils croissants à partir de 0',(()=>{
       const n=RANGS.map(r=>r.nom).join();
       if(n!=='ÉTINCELLE,IMPULSION,VOLTAGE,MACHINE,ÉLITE,SURTENSION,MONSTRE,FOUDRE,TITAN,LÉGENDE') return _echec(n);
