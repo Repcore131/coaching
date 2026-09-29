@@ -21133,28 +21133,64 @@ function duelLigne(d,moi,maintenant){
 function htmlDuelsAccueil(u,duels,invite,maintenant){
   if(!u||u.role==='coach'||!SERVEUR_LEGER) return '';
   const moi=String((u.email||'')).replace(/\./g,',');
-  let h='<div class="du-accueil">';
-  if(invite&&invite.prenom){
-    h+='<div class="du-invite"><div class="du-invite-t">'+escapeHtml(invite.prenom)+' te défie : '+escapeHtml(texteDuel(invite.mesure,invite.duree))+'</div>'
-      +'<div class="du-btns"><button type="button" class="btn btn-red btn-sm" onclick="rejoindreDuel(\''+invite.id+'\',this)">Relever le défi</button>'
-      +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="duelOublierInvite();_rendreDuelsAccueil()">Plus tard</button></div></div>';
-  }
-  const l=Object.keys(duels||{}).map(id=>Object.assign({id},duels[id])).filter(d=>d&&d.statut)
-    .filter(d=>d.statut!=='annule'&&!(d.statut==='termine'&&Number(d.termineLe)<(maintenant||Date.now())-7*864e5))
-    .sort((a,b)=>(Number(b.creeLe)||0)-(Number(a.creeLe)||0)).slice(0,3);
-  for(const d of l){
-    h+='<button type="button" class="du-ligne" onclick="ouvrirDuel(\''+d.id+'\')"><span aria-hidden="true">⚔</span> '
-      +'<span>'+escapeHtml(duelLigne(d,moi,maintenant))+'</span><span class="du-f" aria-hidden="true">›</span></button>';
-  }
-  // SOUS LES TROIS CASES : LE BANDEAU ROUGE (Kevin, 28/09/2026, sur son
-  // modèle) — deux haches dans un écusson, le titre, un trait, la promesse
-  // sur deux lignes, un chevron.
-  h+='<button type="button" class="du-defier" onclick="ouvrirCreationDuel()">'
+  // L'ACCUEIL NE PORTE PLUS QUE LE BANDEAU (Kevin, 29/09/2026) : l'invitation
+  // reçue et les duels en cours s'ouvrent au toucher (ouvrirDuelsHub), avec
+  // « Nouveau défi ». Une pastille dit combien il y en a.
+  const n=(invite&&invite.prenom?1:0)+_duelsListe(duels,maintenant).length;
+  return '<div class="du-accueil"><button type="button" class="du-defier" onclick="ouvrirDuelsHub()">'
     +'<span class="du-d-ico" aria-hidden="true">'+icon('haches',23)+'</span>'
     +'<span class="du-d-t">Défie un pote</span>'
     +'<span class="du-d-s" aria-hidden="true">Comparez vos séances<br>et progressez ensemble</span>'
-    +'<span class="du-d-ch" aria-hidden="true">'+icon('chevron-right',20)+'</span></button>';
-  return h+'</div>';
+    +(n?'<span class="du-d-n" aria-label="'+n+' défi'+(n>1?'s':'')+'">'+n+'</span>':'')
+    +'<span class="du-d-ch" aria-hidden="true">'+icon('chevron-right',20)+'</span></button></div>';
+}
+function _duelsListe(duels,maintenant){
+  return Object.keys(duels||{}).map(id=>Object.assign({id},duels[id])).filter(d=>d&&d.statut)
+    .filter(d=>d.statut!=='annule'&&!(d.statut==='termine'&&Number(d.termineLe)<(maintenant||Date.now())-7*864e5))
+    .sort((a,b)=>(Number(b.creeLe)||0)-(Number(a.creeLe)||0)).slice(0,6);
+}
+// PURE. Le contenu de la feuille : le défi reçu, les défis en cours, et
+// « Nouveau défi ».
+function htmlDuelsHub(u,duels,invite,maintenant){
+  if(!u||u.role==='coach') return '';
+  const moi=String((u.email||'')).replace(/\./g,',');
+  let h='';
+  if(invite&&invite.prenom){
+    h+='<div class="du-invite"><div class="du-invite-t">'+escapeHtml(invite.prenom)+' te défie : '+escapeHtml(texteDuel(invite.mesure,invite.duree))+'</div>'
+      +'<div class="du-btns"><button type="button" class="btn btn-red btn-sm" onclick="rejoindreDuel(\''+invite.id+'\',this)">Relever le défi</button>'
+      +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="duelOublierInvite();fermerDuelFeuille();_rendreDuelsAccueil()">Plus tard</button></div></div>';
+  }
+  const l=_duelsListe(duels,maintenant);
+  if(l.length) h+='<div class="du-lab">Défis en cours</div><div class="du-liste">'+l.map(d=>
+    '<button type="button" class="du-ligne" onclick="fermerDuelFeuille();ouvrirDuel(\''+d.id+'\')"><span aria-hidden="true">⚔</span> '
+      +'<span>'+escapeHtml(duelLigne(d,moi,maintenant))+'</span><span class="du-f" aria-hidden="true">›</span></button>').join('')+'</div>';
+  return h;
+}
+let _duelsInvite=null;
+// Le toucher du bandeau : sans défi reçu ni en cours, la création directe ;
+// sinon la feuille qui les liste, avec « Nouveau défi ».
+function ouvrirDuelsHub(){
+  const u=currentUser; if(!u) return false;
+  const corps=htmlDuelsHub(u,_duelsCache,_duelsInvite,Date.now());
+  if(!corps) return ouvrirCreationDuel();
+  document.getElementById('duel-feuille')?.remove();
+  const d=document.createElement('div');
+  d.id='duel-feuille'; d.className='du-fond';
+  d.setAttribute('role','dialog'); d.setAttribute('aria-modal','true'); d.setAttribute('aria-label','Mes défis');
+  d.innerHTML='<div class="du-carte du-v2">'
+    +'<button type="button" class="du-x" aria-label="Fermer" onclick="fermerDuelFeuille()">'+icon('x',18)+'</button>'
+    +'<div class="du-ecu">'+DUEL_ECUSSON+'</div>'
+    +'<div class="du-titre"><span>Mes</span> défis</div>'
+    +'<p class="du-sous">Tes défis en cours, ou un nouveau défi à lancer.</p>'
+    +corps
+    +'<button type="button" class="btn btn-red du-go du-lancer" onclick="ouvrirCreationDuel()">'
+      +'<span class="du-l-ico" aria-hidden="true">'+icon('haches',26)+'</span><span class="du-l-t">Nouveau défi</span>'
+      +'<span class="du-l-ch" aria-hidden="true">'+icon('chevron-right',22)+'</span></button>'
+    +'<button type="button" class="btn btn-outline btn-sm du-go du-annuler" onclick="fermerDuelFeuille()">Fermer</button>'
+    +'</div>';
+  d.addEventListener('click',e=>{ if(e.target===d) fermerDuelFeuille(); });
+  document.body.appendChild(d);
+  return true;
 }
 async function _rendreDuelsAccueil(){
   const z=document.getElementById('clh-duels');
@@ -21175,6 +21211,7 @@ async function _rendreDuelsAccueil(){
       try{ const d=await _duelLire(id); if(d) _duelsCache[id]=d; }catch(e){}
     }
   }
+  _duelsInvite=invite;
   z.innerHTML=htmlDuelsAccueil(u,_duelsCache,invite,Date.now());
   return true;
 }
@@ -72136,8 +72173,8 @@ function habAppui(cle){
 function renderHabitudes(){
   const z=document.getElementById('clh-habitudes');
   if(!z) return;
-  let h=''; try{ h=htmlHabitudes(currentUser); }catch(e){ h=''; }
-  z.innerHTML=h;
+  let h=''; try{ h=accueilMasque('hab')?'':htmlHabitudes(currentUser); }catch(e){ h=''; }
+  z.innerHTML=h?'<div class="acc-boite" data-acc>'+_accX('hab')+h+'</div>':'';
 }
 
 // ── Côté coach : la sélection, et le pourcentage ───────────────────────────
@@ -73482,7 +73519,9 @@ function _poserPromesseAthlete(){
 // « Ton point du jour » jusqu'au lendemain, la relance de photo sept jours,
 // « Tu as un code coach ? » trente jours. Le choix est local à l'appareil :
 // rien n'est écrit dans le dossier.
-const ACC_MASQUES_JOURS=Object.freeze({pdj:0,photo:7,code:30});
+// + le check-in / la batterie du jour et les habitudes du jour (29/09/2026) :
+// une croix, et la carte revient le lendemain.
+const ACC_MASQUES_JOURS=Object.freeze({pdj:0,photo:7,code:30,ci:0,hab:0});
 function accueilMasque(cle,maintenant){
   let v=null; try{ v=localStorage.getItem('rc_acc_masque_'+cle); }catch(e){ v=null; }
   if(!v) return false;
@@ -80353,7 +80392,7 @@ function htmlCheckinAccueil(u,maintenant,brouillon){
     if(!b) return '';
     let repos=false; try{ repos=!seancePrevueDuJour(u,t); }catch(e){ repos=false; }
     const rc=repos?_ciRecharge(u,t):null;
-    return '<div class="ci-carte ci-fait" data-niveau="'+b.niveau+'">'
+    return '<div class="ci-carte ci-fait" data-acc data-niveau="'+b.niveau+'">'+_accX('ci')
       +'<div class="ci-tete"><span class="eyebrow">Batterie du jour</span>'+serieTxt+'</div>'
       +'<div class="ci-bat"><div class="ci-pile" aria-hidden="true"><i style="width:'+b.pct+'%"></i></div>'
       +'<b class="ci-pct" id="ci-pct" data-cible="'+b.pct+'">'+b.pct+' %</b></div>'
@@ -80364,7 +80403,7 @@ function htmlCheckinAccueil(u,maintenant,brouillon){
   if(!checkinAProposer(u,t)) return '';
   const br=brouillon||{};
   const imp=_ciSommeilImporte(u,t);
-  return '<div class="ci-carte" role="group" aria-label="Check-in du matin">'
+  return '<div class="ci-carte" data-acc role="group" aria-label="Check-in du matin">'+_accX('ci')
     +'<div class="ci-tete"><span class="eyebrow eyebrow-act">Check-in du matin</span>'+serieTxt+'</div>'
     +CHECKIN_QUESTIONS.map(q=>'<div class="ci-ligne"><span class="ci-lib">'+q.lib
       +(q.cle==='sommeil'&&imp?' <em>'+imp+' cette nuit</em>':'')+'</span>'
@@ -80378,6 +80417,7 @@ function htmlCheckinAccueil(u,maintenant,brouillon){
 function _rendreCheckin(u){
   const z=document.getElementById('clh-checkin');
   if(!z) return false;
+  if(accueilMasque('ci')){ z.innerHTML=''; return false; }
   z.innerHTML=htmlCheckinAccueil(u,Date.now(),_ciBrouillon);
   try{ const p=z.querySelector('#ci-pct'); if(p&&z.dataset.anime!=='1'){ z.dataset.anime='1'; p.dataset.valeur='0';
     arcCompteur(p,Number(p.dataset.cible)||0,{duree:700,format:x=>Math.round(x)+' %'}); } }catch(e){}
