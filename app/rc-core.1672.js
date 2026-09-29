@@ -6047,7 +6047,9 @@ const CHAMPS_SANTE=Object.freeze([
   'weightLog','profileWeight','weight','bilans','photosBilan','photosProgression',
   'comparaisons','bilanGoals','_evol_height','_evol_gender',
   // Sommeil, pas, energie, habitudes quotidiennes
-  'sleepLog','stepsLog','fcReposLog','vfcLog','stepsDayType','stepsGoals','sleepGoal','energieLog','habitudesLog',
+  'sleepLog','stepsLog','fcReposLog','vfcLog',
+  // Le point de la semaine (lot N1) : la vitesse du poids, semaine par semaine.
+  'pointsSemaine','stepsDayType','stepsGoals','sleepGoal','energieLog','habitudesLog',
   // Le check-in du matin : sommeil, énergie, courbatures, et la batterie tirée.
   'checkin',
   // Cycle menstruel et ce qui l'entoure
@@ -6104,6 +6106,8 @@ const CHAMPS_SANTE=Object.freeze([
 const CHAMPS_NON_SANTE=Object.freeze([
   'id','email','fname','lname','role','createdAt','updatedAt','consent','rgpd',
   'status','accessExpiry','paymentStatus','paypalSubscriptionId','abonnement',
+  // Le jour du point de la semaine (lot N1) : un rendez-vous, pas une mesure.
+  'pointJour',
   // `essai` compte des seances pour decider d'un paywall : c'est de la
   // facturation, pas de la sante. Il ne porte ni mesure, ni ressenti, ni
   // date de naissance — seulement un horodatage d'ouverture et un nombre de
@@ -39353,6 +39357,8 @@ function loadClientHome(){
   // ET APRES _rendreReprise, dont il depend : pdjEtat se tait quand le bloc de
   // reprise occupe le haut de l'ecran.
   _rendrePointDuJour();
+  // LOT N1 : le point de la semaine, le jour du rendez-vous seulement.
+  try{ _rendrePointSemaine(); }catch(e){}
   _rendreEssai();
   renderCartePesee();
   renderContraintesAthlete();
@@ -95714,6 +95720,7 @@ function renderCoachNutriSection(c){
            CE QUI RESTE ICI est ce qui n'existe nulle part ailleurs : les
            violations, l'ajustement propose, la ligne d'origine quand elle
            alerte, et la remise au point de depart. -->
+      ${(()=>{ try{ return htmlPointsSemaineCoach(c); }catch(e){ return ''; } })()}
       ${_htmlViolationsCoach(c)}
       ${_htmlAjustement(c,true)}
       <!-- ⚠ _htmlDepartHypotheses N'EST PLUS RENDUE ICI le 08/09/2026. C'etait
@@ -106146,9 +106153,15 @@ function _ajustJournaliser(a,decision){
   // deux cas l'athlète a répondu, on ne le relance pas avant quatorze jours.
   n.dernierAjustement=Date.now();
 }
-function appliquerAjustement(){
+// Où revenir après la décision : l'écran Nutrition (par défaut), ou l'accueil
+// quand elle vient du point de la semaine (lot N1).
+function _ajustRetour(r){
+  if(r==='accueil'){ try{ _rendrePointSemaine(); }catch(e){} return; }
+  loadNutrition();
+}
+function appliquerAjustement(retour){
   const a=ajustementPropose(currentUser);
-  if(!a){ toast('Cette proposition n\'est plus d\'actualité','var(--orange)'); loadNutrition(); return; }
+  if(!a){ toast('Cette proposition n\'est plus d\'actualité','var(--orange)'); _ajustRetour(retour); return; }
   const n=currentUser.nutrition;
   const cible=n.macros[a.jour]||{};
   // Seuls les glucides et le total bougent. Protéines et lipides sont recopiés
@@ -106161,16 +106174,249 @@ function appliquerAjustement(){
   _ajustJournaliser(a,'applique');
   const ok=saveUser();
   toastEcriture(ok,'Objectifs ajustés ✓','l\'ajustement est');
-  loadNutrition();
+  _ajustRetour(retour);
 }
-function refuserAjustement(){
+function refuserAjustement(retour){
   const a=ajustementPropose(currentUser);
-  if(!a){ loadNutrition(); return; }
+  if(!a){ _ajustRetour(retour); return; }
   _ajustJournaliser(a,'refuse');
   const ok=saveUser();
   toastEcriture(ok,'C\'est noté, on garde comme ça','ton choix est');
-  loadNutrition();
+  _ajustRetour(retour);
 }
+// ══ LOT N1 : LE POINT DE LA SEMAINE (29/09/2026) ═══════════════════════════
+//
+// Un rendez-vous, un jour fixe choisi par l'athlète (lundi par défaut), et une
+// carte sur l'accueil CE JOUR-LÀ SEULEMENT : un rendez-vous qui traîne toute la
+// semaine n'en est plus un. Elle lit la TENDANCE (moyenne des pesées des sept
+// derniers jours), jamais la balance du matin, la compare à la fourchette de la
+// phase, et dit en une phrase quoi faire.
+//
+// ⚠ ELLE NE RÉÉCRIT RIEN DE L'AJUSTEMENT. La proposition est ajustementPropose,
+//   avec son pas (AJUST_PAS), son verrou (AJUST_VERROU_JOURS, qui part de la
+//   DÉCISION, acceptée ou refusée) et toutes ses gardes : plancher, vigilance,
+//   déficit, grossesse, pause, peak week, drapeau, écart au journal.
+// ⚠ SOUS aTCA, PAS DE CARTE DU TOUT : même doctrine que la pesée du jour, qui
+//   n'apparaît pas en mode neutre. Inviter chaque semaine à monter sur la
+//   balance est précisément ce qu'on ne fait pas à quelqu'un qui a déclaré un
+//   antécédent. Sous drapeau rouge, la carte reste INFORMATIVE : les chiffres,
+//   aucun bouton, aucune proposition.
+// ⚠ EN SÈCHE, LA HAUSSE RESTE : une sèche qui perd trop vite reçoit toujours la
+//   proposition de remonter (c'est une protection). Les BAISSES, elles, restent
+//   bridées par le plancher et la vigilance, comme partout.
+const PTS_SEMAINE_MAX=52;
+const PTS_JOURS=Object.freeze(['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi']);
+// Le jour du rendez-vous, 0 = dimanche … 6 = samedi. Lundi par défaut.
+function pointJourDe(u){
+  const j=Number(u&&u.pointJour);
+  return (Number.isInteger(j)&&j>=0&&j<=6)?j:1;
+}
+// PURE. Le rendez-vous est-il aujourd'hui ?
+function estJourDuPoint(u,maintenant){
+  return new Date(Number(maintenant)||Date.now()).getDay()===pointJourDe(u);
+}
+// PURE. Assez de pesées pour lire une semaine : deux au moins, la première et
+// la dernière espacées de sept jours (AJUST_ECART_RELEVES).
+function peseesSuffisantes(serie){
+  const s=(serie||[]).filter(e=>e&&e.date);
+  if(s.length<2) return false;
+  return _joursEntre(s[0].date,s[s.length-1].date)>=AJUST_ECART_RELEVES;
+}
+// PURE. La moyenne d'une fenêtre de pesées, et sa date moyenne (en jours).
+function _ptsFenetre(serie,debut,fin){
+  const d=serie.filter(e=>e.date>=debut&&e.date<=fin);
+  if(!d.length) return null;
+  const kg=d.reduce((a,e)=>a+e.kg,0)/d.length;
+  const ref=d[0].date;
+  const jour=d.reduce((a,e)=>a+_joursEntre(ref,e.date),0)/d.length;
+  return {kg,ref,jour,n:d.length};
+}
+/**
+ * PURE. La vitesse de la semaine, en % par semaine : la moyenne des pesées des
+ * sept derniers jours contre celle des sept jours d'avant. S'il n'y a rien
+ * dans la semaine d'avant (un trou), on remonte jusqu'à la dernière semaine
+ * pesée, sans dépasser PESEE_COUPURE_JOURS, et on ramène l'écart à sept
+ * jours : un trou de trois semaines ne triple pas la vitesse.
+ * Les dates sont des jours ISO : un changement d'heure ne décale rien.
+ * @returns {{tendance:number,precedente:number,pct:number,kgSem:number,jours:number}|null}
+ */
+function vitesseSemaine(serie,jourISO){
+  const s=(serie||[]).filter(e=>e&&e.date&&e.date<=jourISO&&e.kg>=PESEE_MIN&&e.kg<=PESEE_MAX)
+    .slice().sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
+  if(s.length<2) return null;
+  const fin=jourISO;
+  const cur=_ptsFenetre(s,_jourPlus(fin,-(PESEE_FENETRE_MM-1)),fin);
+  if(!cur) return null;
+  let prec=null;
+  for(let k=1;k*7<=PESEE_COUPURE_JOURS&&!prec;k++)
+    prec=_ptsFenetre(s,_jourPlus(fin,-(PESEE_FENETRE_MM-1)-7*k),_jourPlus(fin,-7*k));
+  if(!prec) return null;
+  // L'écart réel entre les deux dates moyennes, en jours.
+  const dj=_joursEntre(prec.ref,cur.ref)+cur.jour-prec.jour;
+  if(!(dj>=3)) return null;
+  const kgSem=(cur.kg-prec.kg)*7/dj;
+  return {tendance:Math.round(cur.kg*10)/10,precedente:Math.round(prec.kg*10)/10,
+    pct:Math.round(kgSem/prec.kg*100*100)/100,kgSem:Math.round(kgSem*100)/100,jours:Math.round(dj)};
+}
+/**
+ * L'état de la carte, ou null quand elle ne parle pas. IMPURE : horloge, et
+ * ajustementPropose lit l'horloge aussi.
+ */
+function etatPointSemaine(u,maintenant){
+  if(!u||u.role==='coach') return null;
+  const t=Number(maintenant)||Date.now();
+  if(!estJourDuPoint(u,t)) return null;
+  try{ if(aTCA(u)) return null; }catch(e){}
+  const aujd=localISODate(new Date(t));
+  const serie=serieVitesse(u);
+  if(!peseesSuffisantes(serie)){
+    const n=serie.length;
+    return {manque:true,phrase:n
+      ?'Il faut deux pesées à au moins sept jours d’écart pour lire ta semaine : pèse-toi ce matin, on fait le point la semaine prochaine.'
+      :'Pas encore de pesée : pèse-toi ce matin, et on fait ton premier point la semaine prochaine.'};
+  }
+  const s=vitesseSemaine(serie,aujd);
+  if(!s) return {manque:true,phrase:'Pas de pesée ces sept derniers jours : pèse-toi ce matin pour faire le point.'};
+  // La vitesse de la proposition quand elle existe (même mesure que ce qui sera
+  // proposé), sinon celle de la semaine.
+  let fine=null; try{ fine=_vitesseAuJour(u,aujd); }catch(e){ fine=null; }
+  const pct=(fine&&fine.pctSem!=null)?Math.round(fine.pctSem*100)/100:s.pct;
+  const c=cibleVitesse(u);
+  const cible=(c&&c.min!=null&&c.max!=null)?{min:Math.min(c.min,c.max),max:Math.max(c.min,c.max),lib:c.lib||''}:null;
+  let drapeau=false; try{ drapeau=drapeauQuelconqueActif(u); }catch(e){}
+  let a=null; try{ a=drapeau?null:ajustementPropose(u); }catch(e){ a=null; }
+  const der=Number(((u.nutrition)||{}).dernierAjustement)||0;
+  const verrouJ=der?Math.max(0,Math.ceil((der+AJUST_VERROU_JOURS*864e5-t)/864e5)):0;
+  const cote=cible?(pct>cible.max?'haut':(pct<cible.min?'bas':'dedans')):null;
+  const phrase=phrasePointSemaine({cote,a,drapeau,verrouJ,phase:(phaseCourante(u)||{}).type,
+    plancher:(()=>{ try{ return !!_ajustPlancherAtteint(u); }catch(e){ return false; } })()});
+  return {tendance:s.tendance,pct,cible,cote,a,drapeau,phrase,jour:aujd};
+}
+// PURE. UNE phrase, qui dit quoi faire. Jamais un tableau à interpréter.
+function phrasePointSemaine(o){
+  const seche=o.phase==='seche';
+  if(!o.cote) return 'Choisis ta phase (sèche, masse ou maintien) : c’est elle qui dit si ce rythme te va.';
+  if(o.drapeau) return o.cote==='dedans'
+    ?'Tu es dans ta fourchette. Rien à changer cette semaine ; on reparle des objectifs avec ton coach.'
+    :'On ne touche pas à tes objectifs en ce moment : parles-en d’abord à ton coach.';
+  if(o.cote==='dedans') return 'Tu es dans ta fourchette : on ne change rien, continue comme ça.';
+  if(o.a){
+    const jours=o.a.jour==='off'?'les jours de repos':'les jours d’entraînement';
+    return (o.a.sens==='baisse'?'Ça avance plus lentement que visé':'Ça va plus vite que visé')
+      +' : je te propose '+_fmtPct(o.a.kcalDelta)+' kcal '+jours+'.';
+  }
+  if(o.cote==='haut'&&seche&&o.plancher)
+    return 'Ça avance plus lentement que visé, mais baisser te ferait passer sous ton plancher : ajoute plutôt des pas chaque jour.';
+  if(o.verrouJ>0) return 'Pas dans la fourchette cette semaine, mais on a ajusté il y a peu : on attend encore '
+    +o.verrouJ+' jour'+(o.verrouJ>1?'s':'')+' avant de revoir, garde le cap.';
+  return 'Pas dans la fourchette cette semaine : on attend une deuxième semaine pour confirmer avant de toucher à quoi que ce soit.';
+}
+// PURE. La jauge : la fourchette en bande, la vitesse en point.
+function htmlJaugePointSemaine(pct,cible){
+  const lo=Math.min(-1.2,pct-0.3,cible?cible.min-0.3:0), hi=Math.max(1.2,pct+0.3,cible?cible.max+0.3:0);
+  const X=v=>Math.round((v-lo)/(hi-lo)*1000)/10;
+  const dedans=cible&&pct>=cible.min&&pct<=cible.max;
+  return '<div class="ps-jauge" role="img" aria-label="Vitesse '+escapeHtml(_fmtPct(pct))+' % par semaine'
+      +(cible?(', fourchette visée '+escapeHtml(_fmtPct(cible.min))+' à '+escapeHtml(_fmtPct(cible.max))+' %'):'')+'">'
+    +'<div class="ps-rail"></div>'
+    +(cible?'<div class="ps-bande" style="left:'+X(cible.min)+'%;width:'+(X(cible.max)-X(cible.min))+'%"></div>':'')
+    +'<div class="ps-zero" style="left:'+X(0)+'%"></div>'
+    +'<div class="ps-point'+(dedans?' ps-dedans':'')+'" style="left:'+X(pct)+'%"><span>'+escapeHtml(_fmtPct(pct))+' %</span></div>'
+    +'</div>'
+    +(cible?'<div class="ps-leg"><span>Visé : '+escapeHtml(_fmtPct(cible.min))+' à '+escapeHtml(_fmtPct(cible.max))+' % par semaine</span></div>':'');
+}
+// PURE. « Ce que j'ai vraiment tenu » : la vitesse de chaque point, et la
+// fourchette de chaque semaine derrière. Rien sous deux points.
+function htmlCourbeTenue(points,classe){
+  const l=(points||[]).filter(p=>p&&isFinite(p.pct)).slice(-12);
+  if(l.length<2) return '';
+  const vals=l.flatMap(p=>[p.pct].concat(p.min!=null?[p.min,p.max]:[]));
+  const lo=Math.min(...vals,0)-0.2, hi=Math.max(...vals,0)+0.2;
+  const W=300,H=70, x=i=>6+i*(W-12)/(l.length-1), y=v=>4+(1-(v-lo)/(hi-lo))*(H-8);
+  let bandes='';
+  l.forEach((p,i)=>{ if(p.min==null) return;
+    const x0=i?(x(i-1)+x(i))/2:0, x1=i<l.length-1?(x(i)+x(i+1))/2:W;
+    bandes+='<rect x="'+x0.toFixed(1)+'" y="'+y(p.max).toFixed(1)+'" width="'+(x1-x0).toFixed(1)+'" height="'+Math.max(1,y(p.min)-y(p.max)).toFixed(1)+'" class="ps-t-bande"/>'; });
+  const pts=l.map((p,i)=>x(i).toFixed(1)+','+y(p.pct).toFixed(1)).join(' ');
+  const dans=l.filter(p=>p.min!=null&&p.pct>=p.min&&p.pct<=p.max).length;
+  return '<div class="'+(classe||'ps-tenue')+'"><div class="ps-t-t">Ce que tu as vraiment tenu</div>'
+    +'<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" role="img" aria-label="'+l.length+' semaines, dans la fourchette '+dans+' fois">'
+    +bandes+'<line x1="0" x2="'+W+'" y1="'+y(0).toFixed(1)+'" y2="'+y(0).toFixed(1)+'" class="ps-t-zero"/>'
+    +'<polyline points="'+pts+'" class="ps-t-l"/>'
+    +l.map((p,i)=>'<circle cx="'+x(i).toFixed(1)+'" cy="'+y(p.pct).toFixed(1)+'" r="3" class="ps-t-p'+(p.min!=null&&p.pct>=p.min&&p.pct<=p.max?' ps-t-in':'')+'"/>').join('')
+    +'</svg><div class="ps-t-s">'+l.length+' semaines · dans la fourchette '+dans+' fois</div></div>';
+}
+// La mémoire : un point par rendez-vous, au plus 52. Réécrire la décision du
+// même jour, jamais dupliquer le point.
+function enregistrerPointSemaine(u,e,decision){
+  if(!u||!e||e.manque) return false;
+  if(!Array.isArray(u.pointsSemaine)) u.pointsSemaine=[];
+  const l=u.pointsSemaine;
+  let p=l.find(x=>x&&x.date===e.jour);
+  const nouveau=!p;
+  if(!p){ p={date:e.jour,pct:e.pct,tendance:e.tendance,min:e.cible?e.cible.min:null,max:e.cible?e.cible.max:null,decision:'vu'}; l.push(p); }
+  if(decision&&p.decision!==decision){ p.decision=decision; if(e.a) p.proposition={sens:e.a.sens,kcal:e.a.kcalDelta,jour:e.a.jour}; }
+  else if(!nouveau) return false;
+  if(l.length>PTS_SEMAINE_MAX) u.pointsSemaine=l.slice(-PTS_SEMAINE_MAX);
+  return true;
+}
+function htmlPointSemaine(e,u){
+  if(!e) return '';
+  const jour=pointJourDe(u);
+  const choixJour='<label class="ps-rdv">Mon point : <select onchange="pointJourChoisir(this.value)" aria-label="Jour du point de la semaine">'
+    +PTS_JOURS.map((n,i)=>'<option value="'+i+'"'+(i===jour?' selected':'')+'>'+n+'</option>').join('')+'</select></label>';
+  if(e.manque) return '<div class="ps-carte" id="ps-carte"><div class="ps-tete">Ton point de la semaine</div>'
+    +'<p class="ps-phrase">'+escapeHtml(e.phrase)+'</p>'
+    +'<button type="button" class="btn btn-red btn-sm ps-btn" onclick="ouvrirPeseeAccueil()">Me peser</button>'+choixJour+'</div>';
+  const boutons=(e.a&&!e.drapeau)
+    ?'<div class="ps-btns"><button type="button" class="btn btn-red btn-sm" onclick="pointSemaineDecider(\'applique\')">J’applique</button>'
+      +'<button type="button" class="btn btn-outline btn-sm" onclick="pointSemaineDecider(\'garde\')">Je garde comme ça</button></div>':'';
+  return '<div class="ps-carte" id="ps-carte"><div class="ps-tete">Ton point de la semaine</div>'
+    +'<div class="ps-tendance"><b>'+escapeHtml(String(e.tendance).replace('.',','))+' kg</b><span>ta tendance sur sept jours</span></div>'
+    +'<div class="ps-note">On lit la tendance, pas la balance du matin.</div>'
+    +htmlJaugePointSemaine(e.pct,e.cible)
+    +'<p class="ps-phrase">'+escapeHtml(e.phrase)+'</p>'+boutons
+    +htmlCourbeTenue((u&&u.pointsSemaine)||[])+choixJour+'</div>';
+}
+function _rendrePointSemaine(){
+  const z=document.getElementById('clh-point-semaine');
+  if(!z) return null;
+  const u=currentUser;
+  let e=null; try{ e=etatPointSemaine(u,Date.now()); }catch(err){ e=null; }
+  if(e&&!e.manque){ try{ if(enregistrerPointSemaine(u,e,null)) saveUser(); }catch(err){} }
+  z.innerHTML=htmlPointSemaine(e,u);
+  return e;
+}
+// Les deux boutons : l'ajustement EXISTANT, et la décision gardée dans le point.
+function pointSemaineDecider(d){
+  const u=currentUser;
+  let e=null; try{ e=etatPointSemaine(u,Date.now()); }catch(err){ e=null; }
+  if(e) enregistrerPointSemaine(u,e,d==='applique'?'applique':'garde');
+  if(d==='applique') appliquerAjustement('accueil'); else refuserAjustement('accueil');
+}
+function pointJourChoisir(v){
+  const j=Number(v);
+  if(!(Number.isInteger(j)&&j>=0&&j<=6)||!currentUser) return false;
+  currentUser.pointJour=j;
+  const ok=saveUser();
+  toastEcriture(ok,'Ton point de la semaine : le '+PTS_JOURS[j],'le jour est');
+  _rendrePointSemaine();
+  return true;
+}
+// Côté coach, EN PREMIER sur la fiche nutrition : ce que l'athlète a vraiment
+// tenu, et ce qu'il a fait du dernier point.
+function htmlPointsSemaineCoach(c){
+  const l=((c&&c.pointsSemaine)||[]).filter(Boolean);
+  if(!l.length) return '';
+  const der=l[l.length-1];
+  const dec={applique:'a appliqué la proposition',garde:'a gardé ses objectifs',vu:'a lu son point'}[der.decision]||'a lu son point';
+  const d=new Date(der.date+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
+  return '<div class="ps-coach"><div class="ps-tete">Ses points de la semaine</div>'
+    +'<div class="ps-c-der">Le '+escapeHtml(d)+' : '+escapeHtml(_fmtPct(der.pct))+' % par semaine'
+    +(der.min!=null?' (visé '+escapeHtml(_fmtPct(der.min))+' à '+escapeHtml(_fmtPct(der.max))+')':'')+', il '+escapeHtml(dec)+'.</div>'
+    +htmlCourbeTenue(l,'ps-tenue ps-tenue-c').replace('Ce que tu as vraiment tenu','Ce qu’il a vraiment tenu')+'</div>';
+}
+
 // Vitesse telle qu'elle était à une date donnée : on tronque la série et on
 // rejoue la MÊME régression. Aucun relevé n'est stocké, rien à migrer, et les
 // garde-fous PESEE_VIT_MIN_PTS et PESEE_MM_MIN s'appliquent tels quels

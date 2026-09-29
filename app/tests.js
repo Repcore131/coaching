@@ -42703,6 +42703,98 @@ async function testExercices(){
       if(String(loadClientHome).indexOf('_rendreRecordAPortee(')>=0) return _echec('« Record à portée » est encore peint sur l’accueil');
       return true;})());
 
+    // ══ LOT N1 — LE POINT DE LA SEMAINE (29/09/2026) ══════════════════════
+    // Une série de pesées quotidiennes, sur des jours ISO (le changement
+    // d'heure n'y existe pas), à partir d'un jour et d'une pente en kg/jour.
+    const _N1S=(debut,n,kg0,pente,sauf)=>{ const l=[]; for(let i=0;i<n;i++){ if(sauf&&sauf.indexOf(i)>=0) continue;
+      l.push({date:_jourPlus(debut,i),kg:Math.round((kg0+pente*i)*100)/100}); } return l; };
+    ok('N1 — vitesseSemaine : la tendance sur sept jours, en % par semaine, sur les cas qui piègent',(()=>{
+      // Régulier : −0,1 kg par jour, soit −0,7 kg par semaine.
+      const reg=_N1S('2026-09-01',15,80,-0.1);
+      const v=vitesseSemaine(reg,'2026-09-15');
+      if(!v||Math.abs(v.kgSem+0.7)>0.01) return _echec('régulier : '+JSON.stringify(v));
+      if(Math.abs(v.pct-(-0.7/v.precedente*100))>0.02) return _echec('pourcentage : '+v.pct);
+      // Une pesée manquante : la tendance reste juste.
+      const trou1=_N1S('2026-09-01',15,80,-0.1,[10]);
+      const v1=vitesseSemaine(trou1,'2026-09-15');
+      if(!v1||Math.abs(v1.kgSem+0.7)>0.05) return _echec('pesée manquante : '+JSON.stringify(v1));
+      // Deux pesées le même jour : pas de plantage, un chiffre fini et juste.
+      const deux=reg.concat([{date:'2026-09-15',kg:78.6}]);
+      const v2=vitesseSemaine(deux,'2026-09-15');
+      if(!v2||!isFinite(v2.pct)||Math.abs(v2.kgSem+0.7)>0.1) return _echec('même jour : '+JSON.stringify(v2));
+      // Un trou de trois semaines : la vitesse est ramenée à sept jours.
+      const a=_N1S('2026-08-01',7,80,0), z=_N1S('2026-08-29',7,78,0);
+      const v3=vitesseSemaine(a.concat(z),'2026-09-04');
+      if(!v3||Math.abs(v3.kgSem+0.5)>0.02) return _echec('trou de trois semaines : '+JSON.stringify(v3));
+      // À cheval sur le passage à l'heure d'hiver (25/10/2026) : la même pente.
+      const h=_N1S('2026-10-18',15,80,-0.1);
+      const v4=vitesseSemaine(h,'2026-11-01');
+      if(!v4||Math.abs(v4.kgSem+0.7)>0.01) return _echec('changement d’heure : '+JSON.stringify(v4));
+      // Pas assez : une seule pesée, ou rien dans la semaine.
+      if(vitesseSemaine([{date:'2026-09-15',kg:80}],'2026-09-15')!==null) return _echec('une seule pesée');
+      if(vitesseSemaine(_N1S('2026-08-01',5,80,0),'2026-09-15')!==null) return _echec('rien dans la semaine');
+      if(!peseesSuffisantes([{date:'2026-09-01',kg:80},{date:'2026-09-08',kg:79.5}])) return _echec('deux pesées à sept jours');
+      if(peseesSuffisantes([{date:'2026-09-01',kg:80},{date:'2026-09-06',kg:79.5}])) return _echec('deux pesées à cinq jours');
+      return true;})());
+    ok('N1 — la carte ne parle que le jour du rendez-vous, et seulement avec assez de pesées',(()=>{
+      const J=864e5, t=Date.now(), d=new Date(t);
+      const lundi=t-((d.getDay()+6)%7)*J, mardi=lundi+J;
+      const fin=localISODate(new Date(lundi));
+      const u={email:'n1@t.fr',role:'athlete',weightLog:_N1S(_jourPlus(fin,-20),21,80,-0.05)};
+      if(pointJourDe(u)!==1) return _echec('lundi par défaut');
+      const e=etatPointSemaine(u,lundi);
+      if(!e||e.manque||!(e.tendance>0)) return _echec('le lundi : '+JSON.stringify(e));
+      if(etatPointSemaine(u,mardi)!==null) return _echec('la carte parle le mardi');
+      // Le rendez-vous se déplace.
+      if(etatPointSemaine(Object.assign({},u,{pointJour:2}),mardi)===null) return _echec('le rendez-vous déplacé au mardi ne parle pas');
+      // Pas assez de pesées : elle dit ce qui manque, avec le bouton pour se peser.
+      const peu=Object.assign({},u,{weightLog:[{date:fin,kg:80}]});
+      const m=etatPointSemaine(peu,lundi);
+      if(!m||!m.manque) return _echec('une seule pesée : '+JSON.stringify(m));
+      if(htmlPointSemaine(m,peu).indexOf('ouvrirPeseeAccueil()')<0) return _echec('pas de bouton pour se peser');
+      // Une seule phrase, qui dit quoi faire.
+      if(!/fourchette|phase/.test(e.phrase)) return _echec('phrase : '+e.phrase);
+      if(htmlPointSemaine(e,u).indexOf('On lit la tendance, pas la balance du matin.')<0) return _echec('la ligne sur la tendance manque');
+      return true;})());
+    ok('N1 — sous aTCA : aucune carte et aucune proposition, jamais ; sous drapeau, aucun bouton',(()=>{
+      const J=864e5, t=Date.now(), d=new Date(t);
+      const lundi=t-((d.getDay()+6)%7)*J, fin=localISODate(new Date(lundi));
+      const u={email:'n1b@t.fr',role:'athlete',tcaRisque:true,phase:{type:'seche',debut:t-60*J},
+        nutrition:{macros:{on:{kcal:2200,p:150,l:70,g:250},off:{kcal:2000,p:150,l:70,g:200}}},
+        weightLog:_N1S(_jourPlus(fin,-40),41,80,0)};
+      if(ajustementPropose(u)!==null) return _echec('une proposition sort sous aTCA');
+      if(etatPointSemaine(u,lundi)!==null) return _echec('la carte sort sous aTCA');
+      // Drapeau rouge : informative, sans bouton, même avec une proposition dans l'état.
+      const e={tendance:80,pct:-0.1,cible:{min:-1,max:-0.5},cote:'haut',drapeau:true,
+        a:{sens:'baisse',kcalDelta:-200,jour:'off'},phrase:'x',jour:fin};
+      if(htmlPointSemaine(e,{}).indexOf('pointSemaineDecider')>=0) return _echec('des boutons sous drapeau');
+      return true;})());
+    ok('N1 — le verrou de quatorze jours tient, même si la carte est rouverte dix fois',(()=>{
+      const J=864e5, t=Date.now(), d=new Date(t);
+      const lundi=t-((d.getDay()+6)%7)*J, fin=localISODate(new Date(lundi));
+      const der=t-3*J;
+      const u={email:'n1c@t.fr',role:'athlete',phase:{type:'seche',debut:t-60*J},
+        nutrition:{dernierAjustement:der,macros:{on:{kcal:2200,p:150,l:70,g:250},off:{kcal:2000,p:150,l:70,g:200}}},
+        weightLog:_N1S(_jourPlus(fin,-40),41,80,0)};
+      for(let i=0;i<10;i++){
+        const e=etatPointSemaine(u,lundi);
+        if(e&&e.a) return _echec('une proposition sort pendant le verrou ('+i+')');
+        if(e) enregistrerPointSemaine(u,e,null);
+      }
+      if(u.nutrition.dernierAjustement!==der) return _echec('rouvrir la carte a touché au verrou');
+      if(ajustementPropose(u)!==null) return _echec('ajustementPropose sort pendant le verrou');
+      // La mémoire : un seul point pour ce jour-là, quelle que soit la répétition.
+      if((u.pointsSemaine||[]).filter(p=>p.date===fin).length>1) return _echec('le point est dupliqué');
+      // Au plus 52 points.
+      const w={pointsSemaine:Array.from({length:60},(_,i)=>({date:'2025-01-'+String(i%28+1).padStart(2,'0')+'x'+i,pct:0}))};
+      enregistrerPointSemaine(w,{jour:'2026-09-28',pct:-0.3,tendance:80,cible:null},'garde');
+      if(w.pointsSemaine.length!==52) return _echec(w.pointsSemaine.length+' points gardés');
+      if(w.pointsSemaine[51].decision!=='garde') return _echec('la décision n’est pas gardée');
+      // Les deux boutons passent par l'ajustement EXISTANT.
+      const s=String(pointSemaineDecider);
+      if(s.indexOf("appliquerAjustement('accueil')")<0||s.indexOf("refuserAjustement('accueil')")<0) return _echec('les boutons ne passent pas par l’ajustement existant');
+      return CHAMPS_SANTE.indexOf('pointsSemaine')>=0?true:_echec('pointsSemaine n’est pas classé en donnée de santé');})());
+
     ok('Le bouton mène au programme du coach, ou à « Gérer mes séances »',(()=>{
       const s=String(reprendreMaintenant);
       // LE COACH A PUBLIE : on ouvre le selecteur, comme partout ailleurs.
