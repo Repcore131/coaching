@@ -248,9 +248,18 @@ async function testExercices(){
     ok('Vidéo trouvée malgré accents et casse',
        videosPour('developpe  couche–haltere')[0]?.id==='eRglSFbnRro',
        videosPour('developpe  couche–haltere')[0]?.id||'aucune');
+    // 29/09/2026 : MONTEE DE CORDE N'EST PLUS L'EXEMPLE. Depuis le 07/09/2026
+    // (voir EX_VARIANTES), une ligne du guide a videos ETIQUETEES est eclatee :
+    // « sans les jambes » est devenu un exercice a part, avec SA video, et la
+    // base garde la sienne SANS etiquette. Le libelle reste la regle pour les
+    // lignes qui n'ont pas ete eclatees : SLEDGE porte encore « Pull » et « Push ».
     ok('Variantes conservées avec leur libellé',
-       videosPour('MONTEE DE CORDE').map(v=>v.lbl).join('/')==='avec les jambes/sans les jambes',
-       videosPour('MONTEE DE CORDE').map(v=>v.lbl).join('/'));
+       videosPour('SLEDGE').map(v=>v.lbl).join('/')==='Pull/Push'
+       &&videosPour('MONTEE DE CORDE').map(v=>v.id+'|'+v.lbl).join('/')==='Pa4QUC9AvuA|'
+       &&videosPour('MONTEE DE CORDE SANS LES JAMBES').map(v=>v.id).join('/')==='784mHikopwc',
+       'sledge : '+videosPour('SLEDGE').map(v=>v.lbl).join('/')
+       +' · corde : '+videosPour('MONTEE DE CORDE').map(v=>v.id+'|'+v.lbl).join('/')
+       +' · sans les jambes : '+videosPour('MONTEE DE CORDE SANS LES JAMBES').map(v=>v.id).join('/'));
     ok('Exercice sans vidéo : liste vide',videosPour('MACHINE INCONNUE DU FOND').length===0);
     ok('Nom vide : liste vide',videosPour('').length===0);
     // CETTE ASSERTION EPINGLAIT UNE POSITION, PAS UNE RECONSTRUCTION. Elle
@@ -1097,11 +1106,17 @@ async function testExercices(){
     })();
 
     ok('CURL BARRE porte bien ses trois versions du guide',(()=>{
+      // 29/09/2026 : LES TROIS VERSIONS NE SONT PLUS TROIS VIDEOS D'UNE FICHE.
+      // Depuis le 07/09/2026 (EX_VARIANTES), serree et large sont des exercices
+      // a part, chacun avec SA video ; CURL BARRE garde la clef d'origine — et
+      // l'historique de charge — avec la version « normale ». On verifie donc
+      // les trois, chacune a sa place.
       const v=videosPour('CURL BARRE');
-      if(v.length!==3) return _echec(v.length+' vidéo(s) au lieu de 3');
-      const ids=v.map(x=>x.id);
-      return ids.indexOf('iz4IwoFnKHA')>=0?true
-        :_echec('la version « normale » a disparu : '+ids.join(','));})());
+      if(v.length!==1||v[0].id!=='iz4IwoFnKHA')
+        return _echec('la version « normale » a disparu : '+v.map(x=>x.id).join(','));
+      const manque=['CURL BARRE PRISE SERREE','CURL BARRE PRISE LARGE']
+        .filter(n=>!EX_VARIANTES[n]||EX_VARIANTES[n].base!=='CURL BARRE'||videosPour(n).length!==1);
+      return manque.length?_echec('variante sans sa vidéo : '+manque.join(', ')):true;})());
 
     // ── LES PECTORAUX DU GUIDE DU 26/08/2026 ─────────────────────────────
     // Kevin a refilme et reillustre toute la section des pectoraux, et le
@@ -4820,7 +4835,10 @@ async function testExercices(){
           // nombre en dur decrivait l'ancienne source, pas l'attendu.
           const _pr=poidsNutritionnel(u);
           if(_pr.source!=='pesee') return _echec('la source du poids est « '+_pr.source+' »');
-          const attendu=(mm!=null)?mbKatch(mm):mbMifflin(_pr.kg,178,32,'Homme');
+          // 29/09/2026 — mbEstime ET NON mbMifflin : depuis le 07/09/2026 la
+          // formule sans tours de mesure est Harris-Benedict (MB_FORMULE, decision
+          // de Kevin). Le nombre attendu suit la formule retenue, pas l'ancienne.
+          const attendu=(mm!=null)?mbKatch(mm):mbEstime(_pr.kg,178,32,'Homme');
           if(b.mb!==attendu) return _echec(b.mb+' au lieu de '+attendu);
           return !b.hypotheses.some(h=>/métabolisme corrigé/.test(h))
             ?true:_echec('une hypothèse de correction est annoncée');})());
@@ -10187,7 +10205,11 @@ async function testExercices(){
               const s=_prodSrc();
               const i=s.indexOf("addEventListener('rc-install-fait'");
               if(i<0) return _echec('l’écouteur d’installation a disparu');
-              const bloc=s.slice(i,i+1400);
+              // 29/09/2026 : LES COMMENTAIRES NE COMPTENT PLUS DANS LA FENETRE.
+              // Le bloc a gagne l'explication du compteur pwa_installed (15/09) et
+              // le toast est sorti des 1400 caracteres sans que rien ne change.
+              // On mesure donc le code seul, sur une fenetre un peu plus large.
+              const bloc=s.slice(i,i+4000).replace(/^\s*\/\/.*$/gm,'').slice(0,1400);
               // ' DANS LA SOURCE, C'EST DEUX CARACTERES — la contre-oblique et
               // l'apostrophe. Un point n'en couvre qu'un, et la sonde tombait
               // sur un message pourtant intact.
@@ -13223,12 +13245,20 @@ async function testExercices(){
           const envers=_cat.slice().reverse();
           const r=rechercherBanque('squat',null,envers,{});
           if(!r[0]||r[0].slug!=='squat') return _echec('en tête : '+(r[0]&&r[0].slug));
-          // Second critère, à défaut d'égalité exacte : le nom le plus court
-          // d'abord. « MON SQUAT » avant « SQUAT BULGARE HALTERE ».
+          // 29/09/2026 : LE BAREME DE PERTINENCE (BQ_SCORE) a remplace le tri
+          // par longueur. « SQUAT BULGARE HALTERE » COMMENCE par la requete
+          // (+10) et passe donc devant « MON SQUAT », plus court : c'est voulu.
           const noms=r.map(f=>f.nom);
-          const iCourt=noms.indexOf('MON SQUAT'), iLong=noms.indexOf('SQUAT BULGARE HALTERE');
-          return (iCourt>=0&&iLong>=0&&iCourt<iLong)
-            ?true:_echec('ordre des variantes : '+noms.join(' / '));})());
+          const iMon=noms.indexOf('MON SQUAT'), iBulg=noms.indexOf('SQUAT BULGARE HALTERE');
+          if(!(iMon>=0&&iBulg>=0&&iBulg<iMon))
+            return _echec('ordre des variantes : '+noms.join(' / '));
+          // Le nom le plus court reste le critère À SCORE ÉGAL : deux fiches
+          // qui commencent toutes deux par « squat », présentées à l'envers.
+          const egal=rechercherBanque('squat',null,[
+            {slug:'squat-bulgare-haltere',nom:'SQUAT BULGARE HALTERE'},
+            {slug:'squat-sumo',nom:'SQUAT SUMO'}],{}).map(f=>f.nom);
+          return egal.join(' / ')==='SQUAT SUMO / SQUAT BULGARE HALTERE'
+            ?true:_echec('à score égal : '+egal.join(' / '));})());
         ok('Les filtres se CUMULENT en ET',(()=>{
           const f=(o)=>rechercherBanque('',o,_cat,{}).map(x=>x.slug);
           if(f({muscle:'QUADRICEPS'}).length!==4) return _echec('muscle : '+f({muscle:'QUADRICEPS'}));
@@ -16617,7 +16647,11 @@ async function testExercices(){
             const sd=_prodSrc();
             const k=sd.indexOf('function _dessinerBilanSeance');
             const dess=sd.slice(k,k+9000);
-            if(!/e\.kg!=null[\s\S]{0,200}série/.test(dess))
+            // 29/09/2026 : LA LIGNE A CHANGE DE FORME. Le compte « N × reps »
+            // s'ecrit toujours, a gauche ; la charge ne s'ajoute a droite QUE si
+            // elle existe. Sans charge, la colonne reste vide — jamais « 0 KG ».
+            if(!/\(e\.kg!=null\)\?[^;]*KG'\):''/.test(dess)||!/if\(droite\)/.test(dess)
+               ||!/e\.series\+' × '/.test(dess))
               return _echec('le dessin n’a plus de branche « sans charge »');
             // LA SÉRIE LA PLUS LOURDE représente l'exercice, et à charge égale
             // celle qui a le plus de répétitions.
@@ -16648,10 +16682,24 @@ async function testExercices(){
             // format choisi (visuelFormat, 27/09/2026), l'image les occupe toutes.
             if(!/cv\.width=(?:STORY_L|W);\s*cv\.height=(?:STORY_H|H)/.test(bloc)||(bloc.indexOf('STORY_L')<0&&bloc.indexOf('visuelFormat(format)')<0))
               return _echec('l’image ne fait plus le format story');
-            if(bloc.indexOf('fillRect(0,0,STORY_L,STORY_H)')<0)
-              return _echec('le fond a disparu : l’image redevient transparente');
+            // 29/09/2026 : LE FOND EST DEVENU UN CHOIX. Le bilan sort d'abord en
+            // PNG transparent, à poser sur sa photo (voir l'ombre portée du
+            // dessin : « sans remettre un fond ») ; carbone, rouge, édition ou
+            // photo se choisissent à côté et _visuelPeindreFond les étale. On
+            // garde l'appel, et qu'un fond choisi couvre TOUT le format.
+            if(!/_visuelPeindreFond\(g,W,H,/.test(bloc))
+              return _echec('le fond a disparu : le dessin ne peint plus le fond choisi');
+            {
+              const d=bilanSeanceDonnees(SESS(),null);
+              for(const fd of ['carbone','rouge']) for(const fm of ['story','post']){
+                const cv=_dessinerBilanSeance(d,fd,fm), g=cv.getContext('2d');
+                const a=[[0,0],[cv.width-1,cv.height-1]].map(([x,y])=>g.getImageData(x,y,1,1).data[3]);
+                if(a.some(v=>v!==255))
+                  return _echec('le fond « '+fd+' » ne couvre pas tout le format '+fm);
+              }
+            }
             // ⚠ ET LA CARTE DU PROGRAMME N'A PAS BOUGÉ. Elle est délibérément
-            // SANS fond et SANS signature — « juste le carré rouge », pour
+            // SANS fond — « juste le carré rouge », pour
             // qu'on la POSE sur l'arrière-plan d'une story. Deux objets, deux
             // décisions : les fusionner ferait perdre l'un ou l'autre.
             // ⚠ LA BORNE DE DECOUPE EST LE BLOC SUIVANT, PAS _texteEspace :
@@ -16662,8 +16710,16 @@ async function testExercices(){
             const fin=src.indexOf('LE BILAN DE SEANCE, EN IMAGE',j);
             if(j<0||fin<0||fin<j) return _echec('les deux dessins ont bougé');
             const carte=src.slice(j,fin);
-            if(carte.indexOf('REPCORE')>=0)
-              return _echec('une signature a été ajoutée à la carte de programme');
+            // 29/09/2026 : LA CARTE EST SIGNEE, DANS SON PIED. Décision écrite
+            // dans _dessinerStorySeance (« LA CARTE EST SIGNEE ») : nom du coach,
+            // QR et « ENTRAÎNEMENT SUIVI SUR REPCORE », à l'intérieur du carré
+            // rouge. Ce qui reste interdit : un FOND autour d'elle, et la
+            // signature du bilan (« · REPCORE ») recopiée dessus.
+            if(/_visuelPeindreFond|fillRect\(0,0,/.test(carte)
+               ||!/cv\.width=CW;\s*cv\.height=CH/.test(carte))
+              return _echec('un fond a été ajouté autour de la carte de programme');
+            if(/· REPCORE|'REPCORE'/.test(carte))
+              return _echec('la signature du bilan a été ajoutée à la carte de programme');
             return /const CW=STORY_L-144/.test(carte)
               ?true:_echec('la carte de programme a changé de taille');})());
 
@@ -24980,10 +25036,21 @@ async function testExercices(){
           poser({nutrition:{manuel:false}});
           if(/Proposer un point de départ/.test(z.innerHTML))
             return _echec('le bouton subsiste alors qu\'il n\'a plus d\'objet');
-          const v=document.getElementById('ccd-on-kcal');
-          if(!v) return _echec('les champs ont disparu');
-          return Number(v.value)>0?true
-            :_echec('le champ ne porte aucune cible calculee : « '+v.value+' »');})());
+          // 29/09/2026 — EN AUTOMATIQUE, PLUS AUCUN CHAMP. Depuis le 08/09/2026
+          // le tableau « Macronutriments » ECRIT le calcul en texte, et les
+          // champs n'apparaissent qu'en saisie manuelle (voir « EN AUTOMATIQUE,
+          // LE CALCUL EST ECRIT ET NE SE TAPE PAS »). La proposition se lit donc
+          // dans les valeurs ecrites, qui doivent etre CELLES du calcul.
+          if(document.getElementById('ccd-on-kcal'))
+            return _echec('un champ de saisie est rendu en automatique');
+          const ca=getOwnedClient(currentClientId);
+          const t=cibleTableur(ca,_tbOptsDe(ca));
+          if(!t||!(t.p>0)) return _echec('aucune cible calculee');
+          const cel=z.querySelector('.tbk-mac td[data-m="p"] .tbk-mv');
+          if(!cel) return _echec('les protéines calculées ne sont pas écrites');
+          const lu=Number(String(cel.textContent).replace(/\D/g,''));
+          return lu===Math.round(t.p)?true
+            :_echec('le tableau écrit « '+cel.textContent+' », le calcul donne '+t.p+' g');})());
         ok('Critère 1 : aucun bouton quand la taille manque',(()=>{
           const c=poser({_evol_height:null,height:null,
             bilans:[{type:'suivi',date:Date.now()-2*864e5,
@@ -24993,7 +25060,10 @@ async function testExercices(){
           const z=document.getElementById('ccd-nutrition');
           return !!z&&!/Proposer un point de départ/.test(z.innerHTML);})());
         ok('Critère 6 : « Proposer » remplit les champs et n\'écrit RIEN en base',(()=>{
-          poser();
+          // 29/09/2026 — EN SAISIE MANUELLE : c'est le seul mode ou le bouton et
+          // les dix champs existent encore (08/09/2026). Un dossier vierge
+          // demarre en automatique, sans champ a remplir.
+          poser({nutrition:{manuel:true}});
           const avant=JSON.stringify((DB.get('users')||{})['nbc@t.fr'].nutrition);
           try{ proposerPointDepart(); }catch(e){ return _echec('exception: '+e.message); }
           const apres=JSON.stringify((DB.get('users')||{})['nbc@t.fr'].nutrition);
@@ -25004,7 +25074,8 @@ async function testExercices(){
           if(avant!==apres) return _echec('la base a bougé : '+apres);
           return remplis;})());
         ok('Les champs remplis sont bien ceux du calcul',(()=>{
-          const c=poser();
+          // 29/09/2026 — en saisie manuelle, pour la meme raison que ci-dessus.
+          const c=poser({nutrition:{manuel:true}});
           const b=besoinsProposes(c,{cycle:_propCycle,
             protGparKg:(typeof _propProt==='number')?_propProt:undefined});
           proposerPointDepart();
@@ -25012,12 +25083,22 @@ async function testExercices(){
           return g('ccd-on-kcal')===b.on.kcal&&g('ccd-off-g')===b.off.g
             &&g('ccd-on-p')===b.on.p&&g('ccd-on-f')===b.on.f;})());
         ok('La formule et les hypothèses sont écrites sous le tableau',(()=>{
-          poser();
-          const h=(document.getElementById('ccd-nutrition')||{}).innerHTML||'';
-          // « facteur » est devenu « NEAT × » : le mot seul ne disait pas ce
-          // que le facteur couvre, et c'est tout le sujet du lot.
-          return /Katch-McArdle|Mifflin-St Jeor/.test(h)&&/dépense estimée/.test(h)
-            &&/NEAT ×/.test(h);})());
+          // 29/09/2026 — LE PARAGRAPHE D'HYPOTHESES EST PARTI LE 08/09/2026
+          // (_htmlDepartHypotheses, retiree a la demande de Kevin) : le tableau
+          // « Besoins caloriques » dit la meme chose ligne par ligne, chacune avec
+          // sa source. Ce qui doit rester vrai : la formule est NOMMEE (celle qui
+          // a calcule), et le facteur d'activite hors sport est chiffre.
+          const c=poser();
+          const z=document.getElementById('ccd-nutrition');
+          const txt=(z&&z.textContent)||'';
+          const t=cibleTableur(c,_tbOptsDe(c));
+          if(!t||!t.mbSource) return _echec('aucun calcul');
+          const nom=t.mbSource==='katch'?'Katch-McArdle'
+            :(t.mbSource==='harris'?'Harris-Benedict':'Mifflin-St Jeor');
+          if(txt.indexOf('Estimation basée sur la méthode '+nom)<0)
+            return _echec('la formule '+nom+' n\'est pas nommée');
+          const naf='base × '+String(t.naf.f).replace('.',',');
+          return txt.indexOf(naf)>=0?true:_echec('le facteur « '+naf+' » n\'est pas écrit');})());
         ok('Enregistrer APRÈS avoir proposé écrit bien les valeurs',(()=>{
           poser();
           proposerPointDepart();
@@ -28466,8 +28547,13 @@ async function testExercices(){
           // 25 % : -0,75 %/sem demande 511 kcal, le plafond en autorise 455.
           // Le curseur ne peut donc rien creuser de plus, et c'est la règle 3
           // qui parle. On vérifie les DEUX faces.
+          // 29/09/2026 — LE MILIEU EST DEMANDE EXPLICITEMENT. Depuis le
+          // 07/09/2026, sans vitesse, besoinsProposes part du COEFFICIENT
+          // d'objectif, que les plafonds ne brident pas (decision de Kevin) :
+          // `{}` ne mesurait plus le curseur. La vitesse reste acceptee, et c'est
+          // elle que ce critere eprouve.
           const u=seche();
-          const milieu=besoinsProposes(u,{});
+          const milieu=besoinsProposes(u,{vitesse:cibleVitesseMilieu('seche')});
           const creux=besoinsProposes(u,{vitesse:-1.0});
           const mini=Math.round(milieu.depense*(1-DEFICIT_MAX_PART));
           if(milieu.depense+milieu.delta!==mini)
@@ -30870,6 +30956,14 @@ async function testExercices(){
             ?true:_echec('un onglet inconnu ne retombe pas sur entrainement');})());
 
         ok('CHAQUE SECTION EST DANS L\'ONGLET DE SON DOMAINE',(()=>{
+          // ⚠ LES SIX BLOCS DE CCD_BLOCS_ENTRAINEMENT VOYAGENT (29/09/2026).
+          //   Depuis le 24/09/2026 (Kevin : « remets cette page comme elle
+          //   etait hier matin »), _ccdPlacerBlocs les pose dans Entrainement
+          //   quand cet onglet est ouvert, et les rend a leur etage de Donnees
+          //   sinon. Le test precedent laisse Entrainement ouvert : on lisait
+          //   donc leur place de passage, pas leur domaine. On ouvre Donnees
+          //   pour la carte ci-dessous, puis on verifie le voyage a part.
+          ccdVue('donnees');
           const ou=id=>{ const z=document.getElementById(id);
             if(!z) return 'ABSENT';
             const v=z.closest('.ccd-vue'); return v?v.dataset.vue:'hors'; };
@@ -30887,7 +30981,11 @@ async function testExercices(){
             'ccd-volume':'donnees','ccd-plateaux':'donnees',
             'ccd-forme':'donnees','ccd-douleur':'donnees',
             'ccd-asymetrie':'donnees','ccd-corps':'donnees',
-            'ccd-sessions-recap':'entrainement','ccc-pdf-content':'entrainement',
+            // ⚠ ccc-pdf-content N'EST PLUS ATTENDU (29/09/2026) : le cadre
+            // « Programme PDF » a ete RETIRE le 08/09/2026, a la demande de
+            // Kevin (voir le commentaire dans l'onglet Entrainement). On
+            // verifie plus bas qu'il n'est pas revenu.
+            'ccd-sessions-recap':'entrainement',
             'ccd-nutrition':'nutrition','ccd-supplements':'nutrition',
             'ccd-caffeine':'nutrition',
             'ccd-sommeil':'lifestyle','ccd-pas':'lifestyle',
@@ -30902,15 +31000,29 @@ async function testExercices(){
             // le sommeil et les pas.
             'ccd-micro':'nutrition',
             'ccd-journal':'donnees','ccd-bilans':'donnees','ccd-poids':'donnees',
-            // LA REPARTITION PROTEIQUE EST PASSEE EN NUTRITION le 26/08/2026 :
-            // elle derive du bloc Nutrition, sous lequel elle est posee.
-            'ccd-prises':'nutrition',
+            // ⚠ ccd-prises N'EST PLUS ATTENDU (29/09/2026) : la repartition
+            // proteique, passee en Nutrition le 26/08/2026, a ete RETIREE le
+            // 08/09/2026 a la demande de Kevin (« c'est inintéressant,
+            // dégage-le ») — voir index.html. On verifie plus bas qu'elle
+            // n'est pas revenue.
             'ccd-dossier':'donnees','ccd-reds':'donnees',
             'ccd-securite':'donnees','ccd-suspension':'donnees'};
           for(const id in attendu)
             if(ou(id)!==attendu[id])
               return _echec(id+' est dans « '+ou(id)+' » au lieu de « '+attendu[id]+' »');
-          return true;})());
+          for(const id of ['ccc-pdf-content','ccd-prises'])
+            if(ou(id)!=='ABSENT') return _echec(id+' est revenu, alors qu\'il a ete retire');
+          // ET LE VOYAGE : Entrainement ouvert, les six y sont — une seule fois.
+          ccdVue('entrainement');
+          for(const id of CCD_BLOCS_ENTRAINEMENT){
+            if(ou(id)!=='entrainement')
+              return _echec(id+' reste dans « '+ou(id)+' » quand Entrainement est ouvert');
+            if(document.querySelectorAll('#'+id).length!==1)
+              return _echec(id+' est rendu plus d\'une fois');
+          }
+          ccdVue('donnees');
+          return CCD_BLOCS_ENTRAINEMENT.every(id=>ou(id)==='donnees')
+            ?true:_echec('les blocs ne reviennent pas dans Donnees');})());
 
         ok('LES CONTRE-INDICATIONS RESTENT HORS DES ONGLETS',(()=>{
           // Enterrer une contre-indication derriere un onglet reviendrait a
@@ -32962,6 +33074,16 @@ async function testExercices(){
       // L'ACQUIS DE N4.6 EST CE QU'ON EPINGLE ICI, et il est intact : meme
       // onglet, sections VOISINES, et coachSetPhase rappelle le rendu des
       // cibles. C'etait la proximite qui comptait, pas le rang.
+      //
+      // ⚠ LE RANG A ETE TRANCHE A NOUVEAU LE 08/09/2026, par Kevin : « quand
+      //   j'arrive en haut de la page, que je sache l'eleve, il est mis en
+      //   quoi ». L'onglet suit l'ordre de la decision (voir le commentaire de
+      //   .ccd-vue[data-vue="nutrition"] dans index.html) : diete, PHASE, taux
+      //   de respect, puis les calculs. La phase n'est plus un reglage glisse
+      //   avant la lecture, c'est l'IDENTITE du suivi — et elle sort de
+      //   .cc-sect, parce qu'elle ne se replie pas. Le test lisait encore
+      //   l'ordre de B1.9 ; il epingle celui-ci depuis le 29/09/2026. Le nom
+      //   reste, pour l'historique des passes.
       ok('N4.6 + B1.9 — LA PHASE EST VOISINE DES CIBLES, ET SOUS ELLES',(()=>{
         const p=document.getElementById('ccd-phase');
         if(!p) return _echec('le bloc Phase a disparu');
@@ -32970,15 +33092,23 @@ async function testExercices(){
           return _echec('la phase est dans « '+(v?v.dataset.vue:'hors onglet')+' »');
         const n=document.getElementById('ccd-nutrition');
         if(!n) return _echec('le bloc Nutrition a disparu');
-        // LA LECTURE D'ABORD : les cibles precedent la phase.
-        if(!(n.compareDocumentPosition(p)&Node.DOCUMENT_POSITION_FOLLOWING))
-          return _echec('le reglage est repasse devant la lecture');
-        // ET VOISINES, sans quoi le rapprochement de N4.6 serait perdu : les
-        // deux sections se suivent immediatement.
-        const sN=n.closest('.cc-sect'), sP=p.closest('.cc-sect');
-        if(!sN||!sP) return _echec('les deux blocs ne sont plus des sections');
-        if(sN.nextElementSibling!==sP)
-          return _echec('une section s\'est glissee entre les cibles et la phase');
+        // L'IDENTITE D'ABORD (08/09/2026) : la diete, puis la phase, puis ce
+        // qu'elles produisent.
+        if(!(p.compareDocumentPosition(n)&Node.DOCUMENT_POSITION_FOLLOWING))
+          return _echec('la phase est repassee sous les calculs');
+        const dc=document.getElementById('ccd-diete-choix');
+        if(!dc||dc.nextElementSibling!==p)
+          return _echec('la phase ne suit plus immediatement le type de diete');
+        // HORS .cc-sect : elle ne se replie pas.
+        if(p.closest('.cc-sect')) return _echec('la phase est rentree dans une section repliable');
+        // ET VOISINES, sans quoi le rapprochement de N4.6 serait perdu : entre
+        // la phase et la section des calculs, seul le taux de respect.
+        const sN=n.closest('.cc-sect');
+        if(!sN) return _echec('les calculs ne sont plus une section');
+        const entre=[];
+        for(let e=p.nextElementSibling;e&&e!==sN;e=e.nextElementSibling) entre.push(e.id||e.className||e.tagName);
+        if(entre.join(',')!=='ccd-diete-respect')
+          return _echec('entre la phase et les cibles : '+(entre.join(', ')||'(rien, ou la section n\'est plus soeur)'));
         // RENDUE UNE SEULE FOIS : un déplacement qui duplique serait pire.
         if(document.querySelectorAll('#ccd-phase').length!==1)
           return _echec('le bloc Phase est rendu deux fois');
@@ -40307,18 +40437,50 @@ async function testExercices(){
       ok('LE MEGABLOC NUTRITION EST DECOUPE EN SECTIONS REPLIABLES',(()=>{
         // Trois des vingt-cinq sections concentraient la moitie du volume
         // rendu, parce que #ccd-nutrition empilait quatorze sous-blocs.
+        //
+        // ⚠ DEUX DE CES SECTIONS ONT QUITTE LE MEGABLOC LE 08/09/2026, sur
+        //   demande de Kevin (voir le commentaire de renderCoachNutriSection) :
+        //   • « Cibles en cours » (ccd-nut-cibles) est RETIREE — elle redisait
+        //     en pourcentages les grammages du tableau Macronutriments ;
+        //   • le journal (ccd-nut-journal) est DESCENDU tout au fond de
+        //     l'onglet, en calendrier : #ccd-cal, dans sa propre section
+        //     #ccd-cal-sect, rempli par renderJournalNutriCoach ;
+        //   • et le constat qui ouvrait le megabloc — le taux de diete
+        //     respectee — est REMONTE au-dessus, dans #ccd-diete-respect.
+        //   Le test cherchait encore ces deux identifiants dans le megabloc.
+        //   Il epingle depuis le 29/09/2026 ce que la decision a laisse : le
+        //   decoupage de ce qui reste, et la place de ce qui en est sorti.
         const src=String(renderCoachNutriSection);
-        for(const id of ['ccd-nut-journal','ccd-nut-cibles','ccd-nut-reglages','ccd-nut-strict'])
+        for(const id of ['ccd-nut-reglages','ccd-nut-strict'])
           if(src.indexOf(id)<0) return _echec('section manquante : '+id);
-        // L'ETAT CONSTATE AVANT LES REGLAGES : le coach vient d'abord lire ce
-        // que son athlete a mange.
-        if(!(src.indexOf('ccd-nut-journal')<src.indexOf('ccd-nut-reglages')))
-          return _echec('les reglages passent avant le journal');
+        // CE QUI EST SORTI N'Y EST PAS REVENU — sinon, deux rendus du meme bloc.
+        for(const id of ['ccd-nut-journal','ccd-nut-cibles'])
+          if(new RegExp("['\"]"+id+"['\"]").test(src))
+            return _echec(id+' est revenu dans le megabloc');
+        // LE JOURNAL A SA SECTION, AU FOND DE L'ONGLET, et son rendu propre.
+        const cal=document.getElementById('ccd-cal');
+        const sCal=document.getElementById('ccd-cal-sect');
+        const vN=document.querySelector('#s-coach-client .ccd-vue[data-vue="nutrition"]');
+        if(!cal||!sCal||!sCal.contains(cal)) return _echec('le journal n\'a plus sa section');
+        if(!vN||sCal.parentElement!==vN||vN.lastElementChild!==sCal)
+          return _echec('le journal n\'est plus au fond de l\'onglet Nutrition');
+        if(String(renderJournalNutriCoach).indexOf("'ccd-cal'")<0)
+          return _echec('renderJournalNutriCoach ne remplit plus #ccd-cal');
+        // L'ETAT CONSTATE AVANT LES REGLAGES : le taux de respect precede les
+        // calculs, qui precedent les reglages.
+        const r=document.getElementById('ccd-diete-respect');
+        const n=document.getElementById('ccd-nutrition');
+        if(!r||!n||!(r.compareDocumentPosition(n)&Node.DOCUMENT_POSITION_FOLLOWING))
+          return _echec('le constat ne precede plus les calculs');
+        if(!(src.indexOf('_htmlTableauxTableur(c)')<src.indexOf('ccd-nut-reglages')))
+          return _echec('les reglages passent avant les calculs');
         // Les identifiants de champ n'ont pas bouge : saveClientNutriMacros
-        // les lit par leur id.
+        // les lit par leur id. Ils sont emis par _htmlTableauxTableur, que le
+        // megabloc appelle depuis le passage aux tableaux.
+        const tab=String(_htmlTableauxTableur);
         for(const k of ['kcal','p','g','l','f'])
-          if(src.indexOf("'ccd-on-'+f.k")<0&&src.indexOf('ccd-on-'+k)<0)
-            return _echec('les champs ON ne sont plus emis');
+          if(tab.indexOf("'ccd-on-"+k+"'")<0)
+            return _echec('le champ ccd-on-'+k+' n\'est plus emis');
         return true;})());
     })();
     // ── LE DOSSIER EN DEUX COLONNES, SUR LARGE ECRAN ─────────────────────
@@ -40357,16 +40519,31 @@ async function testExercices(){
         if(!pad) return _echec('la regle de .pad a disparu');
         if(pad.style.display!=='block')
           return _echec('.pad est encore en « '+pad.style.display+' » : l\'onglet entier retombe dans une colonne');
+        // ⚠ PLUS DE DEUX COLONNES DEPUIS LE 07/09/2026. Kevin, capture a
+        //   l'appui : « ca gache la lecture » — une fiche se lit de haut en
+        //   bas, et deux colonnes la faisaient lire en zigzag (voir le
+        //   commentaire « PLUS DE DEUX COLONNES » de la feuille). La regle
+        //   `.ccd-vue.actif{display:grid;1fr 1fr}` a ete retiree ce jour-la ;
+        //   ce test la reclamait encore. Il epingle depuis le 29/09/2026 la
+        //   decision : .pad reste une simple colonne, et l'onglet actif n'est
+        //   plus mis en grille — ni ici, ni dans aucune autre regle.
         const vue=_regle(m,/\.ccd-vue\.actif$/);
-        if(!vue) return _echec('aucune regle ne met l\'onglet actif en colonnes');
-        if(vue.style.display!=='grid')
-          return _echec('l\'onglet actif n\'est pas une grille : '+vue.style.display);
-        if(!/1fr\s+1fr/.test(vue.style.gridTemplateColumns||''))
-          return _echec('ce ne sont pas deux colonnes : '+vue.style.gridTemplateColumns);
-        // SANS align-items:start, chaque section s'etirerait a la hauteur de la
-        // plus haute de sa rangee et le dossier serait un damier de vides.
-        return vue.style.alignItems==='start'
-          ?true:_echec('align-items vaut « '+vue.style.alignItems+' » : les sections vont s\'etirer');})());
+        if(vue&&vue.style.display==='grid')
+          return _echec('l\'onglet actif est repasse en grille : '+vue.style.gridTemplateColumns);
+        for(const f of document.styleSheets){
+          let regles=null;
+          try{ regles=f.cssRules; }catch(e){ continue; }
+          for(const r of regles){
+            const sous=r.type===CSSRule.MEDIA_RULE?[...r.cssRules]:[r];
+            for(const x of sous)
+              // L'ONGLET LUI-MEME, pas ce qu'il contient : un bloc interne
+              // a le droit d'etre une grille.
+              if(x.selectorText&&/grid/.test(x.style.display||'')
+                &&x.selectorText.split(',').some(t=>/\.ccd-vue(?:\.actif|\[[^\]]*\])*$/.test(t.trim())))
+                return _echec('un onglet est mis en grille : '+x.selectorText);
+          }
+        }
+        return true;})());
 
       ok('SOUS 1025 PX, RIEN NE CHANGE : les regles larges sont dans la requete',(()=>{
         // La consigne est explicite : la fiche etroite doit rester identique.
@@ -41398,7 +41575,17 @@ async function testExercices(){
           // mais present aurait continue de fournir une valeur invisible.
           if(a.off!==0) return _echec('non cyclee : '+a.off+' champ(s) OFF subsistent');
           if(a.on!==5) return _echec('non cyclee : '+a.on+' champ(s) au lieu de 5');
-          if(z.textContent.indexOf('TOUS LES JOURS')<0) return _echec('l\'en-tete ne dit pas « tous les jours »');
+          // 29/09/2026 — L'EN-TETE « TOUS LES JOURS » EST PARTI AVEC L'ANCIENNE
+          // GRILLE. Le tableau « Macronutriments » n'a d'en-tete que quand il a
+          // DEUX colonnes (Jour ON / Jour OFF) ; sans cyclage, c'est le choix du
+          // cyclage, dans « Journées », qui dit « mêmes valeurs tous les jours »
+          // (Kevin, 27/09/2026 : on ne montre des journées que si elles diffèrent).
+          if(/Jour OFF/.test(((z.querySelector('.tbk-mac thead'))||{}).textContent||''))
+            return _echec('l\'en-tete annonce encore un jour OFF');
+          const sel=z.querySelector('#tbk-cycle');
+          const opt=sel&&sel.options[sel.selectedIndex];
+          if(!opt||!/tous les jours/i.test(opt.textContent))
+            return _echec('le choix du cyclage ne dit pas « tous les jours »');
           return true;})());
 
         ok('NON CYCLEE : OFF RECOIT LES MEMES VALEURS QUE ON',(()=>{
@@ -41978,13 +42165,22 @@ async function testExercices(){
     // unilateral et trois ecartes de poulie. Le compte est ecrit en toutes
     // lettres pour que l'ajout d'un exercice soit un GESTE — sans quoi une
     // ligne perdue au catalogue passerait inapercue.
+    // 29/09/2026 : LES VARIANTES ECLATEES S'Y AJOUTENT. Depuis le 07/09/2026,
+    // chaque version etiquetee d'une ligne du guide est un exercice a part
+    // (EX_VARIANTES), range dans la signature de sa base : 412 lignes du guide
+    // plus ces variantes — hors cardio, qui n'est pas dans ces deux listes.
+    // Le 412 reste ecrit en toutes lettres : perdre une ligne se voit encore.
+    const _guideAttendu=()=>{
+      const cardio=new Set(EX_GUIDE_CARDIO.split('~'));
+      return 412+Object.keys(EX_VARIANTES).filter(k=>!cardio.has(k)).length;};
     ok('Les 412 exercices du guide ont un schéma',(()=>{
       const noms=_guideNoms();
       const sans=[...noms].filter(n=>!schemaDe({name:n}));
-      return noms.size===412&&sans.length===0;})(),
+      return noms.size===_guideAttendu()&&sans.length===0;})(),
       (()=>{const n=_guideNoms();
         const sans=[...n].filter(x=>!schemaDe({name:x}));
-        return n.size+' noms'+(sans.length?', sans schéma : '+sans.slice(0,3).join(' | '):'');})());
+        return n.size+' noms pour '+_guideAttendu()+' attendus'
+          +(sans.length?', sans schéma : '+sans.slice(0,3).join(' | '):'');})());
     ok('Dix-sept schémas notables',Object.keys(SCHEMAS_META).length===17);
     ok('Chaque schéma porte son libellé, son effectif et ses exemples',
        Object.values(SCHEMAS_META).every(m=>m.lib&&m.nb>0&&Array.isArray(m.ex)&&Array.isArray(m.hors)));
@@ -51865,16 +52061,31 @@ async function testExercices(){
       return !/await/.test(String(partagerVideoPrete))?true:_echec('await avant le partage');})());
     okA('Vidéo : une vraie vidéo s’enregistre (MediaRecorder de ce navigateur), la progression va jusqu’au bout',(async()=>{
       if(!videoExportPossible()) return true;       // navigateur sans MediaRecorder : rien à enregistrer
-      const pr=[];
-      const r=await exporterVideoVisuel(videoScene('record',{donnees:{nm:'SQUAT',histMax:100,curMax:105,gain:5,signature:'X'},fond:'carbone'}),900,{progression:p=>pr.push(p)});
-      if(!r||!(r.blob instanceof Blob)||!(r.taille>1000)) return _echec('fichier : '+(r&&r.taille));
-      if(!/^video\/(mp4|webm)$/.test(r.type)||r.nom!=='repcore-record.'+r.ext) return _echec(r.type+' '+r.nom);
-      if(!(r.taille<VIDEO_MAX_OCTETS)) return _echec('plus de 8 Mo');
+      // 29/09/2026 : L'ENCODEUR DE CE NAVIGATEUR PEUT NE RIEN RENDRE. Chromium
+      // sans tete, sur une machine chargee (plusieurs suites en parallele),
+      // encode en logiciel du 1080x1920 et s'arrete parfois sans un octet :
+      // reproduit, 2 fois sur 6 sous charge, jamais au calme. Le produit le
+      // dit desormais (rejet « rien n'a pu être enregistré ») au lieu de
+      // proposer un fichier de 0 Mo. Ici : deux essais ; si les deux sont
+      // vides, on verifie ce rejet et on le signale, sans taire le reste.
+      const pr=[]; let r=null, vide='';
+      for(let essai=0;essai<2&&!r;essai++){
+        pr.length=0;
+        try{ r=await exporterVideoVisuel(videoScene('record',{donnees:{nm:'SQUAT',histMax:100,curMax:105,gain:5,signature:'X'},fond:'carbone'}),900,{progression:p=>pr.push(p)}); }
+        catch(e){ vide=(e&&e.message)||''; if(!/rien n’a pu être enregistré/.test(vide)) return _echec('rejet : '+vide); }
+      }
       if(!pr.length||pr[pr.length-1]!==1) return _echec('progression : '+pr.slice(-3));
+      if(r){
+        if(!(r.blob instanceof Blob)||!(r.taille>1000)) return _echec('fichier : '+r.taille);
+        if(!/^video\/(mp4|webm)$/.test(r.type)||r.nom!=='repcore-record.'+r.ext) return _echec(r.type+' '+r.nom);
+        if(!(r.taille<VIDEO_MAX_OCTETS)) return _echec('plus de 8 Mo');
+      }
       // Annulée en route : elle rejette, sans rien rendre.
       let n=0;
       try{ await exporterVideoVisuel(videoScene('wrapped',{w:{seances:1,dureeTotale:1,tonnage:1,records:0,serieMax:1,badgesGagnes:[],profil:{nom:'X',phrase:''}},per:{titre:'S',cle:'m'},signature:''}),2000,{annule:()=>++n>3}); return _echec('non annulée'); }
       catch(e){ if(!/annul/.test(e.message)) return _echec('rejet : '+e.message); }
+      // Vert, mais le rapport dit que le fichier n'a pas pu etre mesure ici.
+      if(!r){ _echec('encodeur de ce navigateur muet (machine chargée) : seul le rejet d’un fichier vide est vérifié'); return true; }
       return true;}));
     ok('Ambassadeurs : le CSV mensuel ne porte que les commissions dues',(()=>{
       const r=ambCsvDues({LEA:_AMBF,ZED:{nom:'Zed',commissions:{'2026-09':{x:{commission:9,dueLe:1}}}}},'2026-10',500);
@@ -53957,8 +54168,25 @@ async function testExercices(){
       const lignes=[...src.querySelectorAll('.rc-micro')].map(m=>m.textContent);
       d.innerHTML=lignes.map(t=>'<div class="rc-micro" style="width:max-content">'+escapeHtml(t)+'</div>').join('');
       document.body.insertBefore(d,document.body.firstChild);
-      try{ return [...d.children].map((m,i)=>({t:lignes[i],w:Math.ceil(m.getBoundingClientRect().width),
-        h:Math.round(m.getBoundingClientRect().height),tient:m.getBoundingClientRect().width<=largeur})); }
+      // ⚠ LA LARGEUR EST LUE A DIX FOIS LA TAILLE, PUIS DIVISEE (29/09/2026).
+      //   A 10 px, le Chromium sans tete de Linux ARRONDIT l'avance de chaque
+      //   glyphe au pixel entier (pas de positionnement sous-pixel) : la
+      //   phrase des sports y mesurait 324 px, contre 315,9 px de largeur
+      //   typographique — celle que rendent les telephones, et celle que la
+      //   feuille cite (« 316 px pour 317 »). Soixante-cinq arrondis en
+      //   excedent faisaient echouer le banc sur la machine qui le lance, sans
+      //   que le produit ait bouge. A 100 px l'arrondi pese dix fois moins ;
+      //   la hauteur, elle, reste lue a la taille reelle.
+      const _large=m=>{
+        const x=m.cloneNode(true);
+        x.style.fontSize=(parseFloat(getComputedStyle(m).fontSize)*10)+'px';
+        x.style.lineHeight='normal';
+        d.appendChild(x);
+        try{ return x.getBoundingClientRect().width/10; } finally{ x.remove(); }
+      };
+      try{ return [...d.children].map((m,i)=>{ const w=_large(m);
+        return {t:lignes[i],w:Math.ceil(w),
+          h:Math.round(m.getBoundingClientRect().height),tient:w<=largeur}; }); }
       finally{ d.remove(); }
     };
 
@@ -61484,8 +61712,14 @@ async function testExercices(){
           return _echec(k+' : vouvoiement dans « '+e.d+' »');
         if(e.p!==undefined&&!String(e.p).trim()) return _echec(k+' : ligne « en pratique » vide');
         if(e.e!==undefined){
-          if(!Array.isArray(e.e)||e.e.length<2||e.e.length>4)
-            return _echec(k+' : une échelle fait 2 à 4 lignes, pas '+(e.e||[]).length);
+          // 29/09/2026 : LA FICHE zones_volume (build 1610, maquette de Kevin)
+          // legende la barre de volume, qui a CINQ zones de couleur. Elle a une
+          // ligne par zone, ni plus ni moins ; les autres echelles restent a 4.
+          const max=k==='zones_volume'?VOL_ZONES.length:4;
+          if(!Array.isArray(e.e)||e.e.length<2||e.e.length>max)
+            return _echec(k+' : une échelle fait 2 à '+max+' lignes, pas '+(e.e||[]).length);
+          if(k==='zones_volume'&&e.e.length!==VOL_ZONES.length)
+            return _echec(k+' : '+e.e.length+' lignes pour '+VOL_ZONES.length+' zones de couleur');
           for(const l of e.e)
             if(!Array.isArray(l)||l.length!==2||!l[0]||!l[1])
               return _echec(k+' : une ligne d’échelle n’est pas [libellé, explication]');
@@ -62685,8 +62919,22 @@ async function testExercices(){
       // de sortie, qui est ce dont finishWorkout a besoin.
       const src=String(buildSessionComparison);
       return /return\s*\{html,records,delta/.test(src);})());
-    ok('finishWorkout appelle bien le message spécifique',
-       /_messageFinSeance\(/.test(String(finishWorkout)));
+    // 29/09/2026 : L'ECRAN DE FIN SUIT LA MAQUETTE DE KEVIN. La phrase de
+    // _messageFinSeance a laisse la place au titre « Séance terminée », et ce
+    // qu'elle disait est reparti dans les blocs : le record dans « Mes
+    // records », le gain de volume et le « 5 / 12 » d'une seance ecourtee
+    // dans la bande de chiffres. C'est ce trio qui rend la fin specifique.
+    ok('finishWorkout appelle bien le message spécifique',(()=>{
+      const f=String(finishWorkout);
+      for(const fn of ['_htmlHeroFin','_htmlRecordsFin','_htmlStatsFin'])
+        if(f.indexOf(fn+'(')<0) return _echec('finishWorkout n’appelle plus '+fn);
+      // Le delta de volume passe bien a la bande, et il y est dit.
+      if(!/_htmlStatsFin\([^)]*_cmp[^)]*delta/.test(f)) return _echec('le gain de volume n’arrive plus à la bande');
+      const h=_htmlStatsFin(40,5,12,3000,250);
+      if(h.indexOf('5 / 12')<0) return _echec('une séance écourtée passe pour complète');
+      if(!/\+250 kg/.test(h)) return _echec('le gain de volume n’est pas dit');
+      const r=_htmlRecordsFin({records:[{nm:'SQUAT',curMax:140,gain:5}]});
+      return /SQUAT/.test(r)&&/140/.test(r)?true:_echec('le record n’est pas nommé');})());
 
     // ── Sélecteur de créneau ──
     (function(){
@@ -63691,10 +63939,17 @@ async function testExercices(){
       // interrompant chaque fin de séance juste après l'enregistrement.
       ok("finishWorkout va jusqu'au bout sans lever",!window._errFin,window._errFin||'');
       ok('La séance a bien été enregistrée',(currentUser.sessions||[]).length===1);
+      // 29/09/2026 : #wd-time N'EXISTE PLUS. Les trois tuiles sont devenues
+      // une bande (maquette de Kevin), rendue dans #wd-stats par _htmlStatsFin.
+      // On y lit la duree ; et le titre ne doit pas etre le message de repli.
       ok("L'écran de fin est renseigné",(()=>{
         const m=document.getElementById('wd-msg');
-        const t=document.getElementById('wd-time');
-        return !!(m&&m.textContent&&t&&t.textContent);})(),
+        const t=document.getElementById('wd-stats');
+        if(!(m&&/Séance terminée/.test(m.textContent))) return false;
+        const st=t?[...t.querySelectorAll('.rcf-st')]:[];
+        const duree=st.find(x=>/Durée/.test(x.textContent));
+        const v=duree&&duree.querySelector('.rcf-st-v');
+        return !!(v&&/\d/.test(v.textContent)&&st.length===3);})(),
         (document.getElementById('wd-msg')||{}).textContent||'vide');
       ok("L'écran de fin est bien affiché",
          !!document.getElementById('s-workout-done')&&
@@ -66552,8 +66807,12 @@ async function testExercices(){
         // Mon premier script de correction a failli l'emporter : la dernière
         // entrée du guide n'a pas de virgule, et la recherche de fin de valeur
         // sautait jusqu'ici. Ces huit noms sont donc épinglés.
+        // 29/09/2026 : DIX DEPUIS LE 07/09/2026. Les deux versions du tapis
+        // sont des exercices à part (EX_VARIANTES, base TAPIS DE COURSE), et
+        // restent du cardio comme leur base.
         const att=['BATTLE ROPE','CORDE A SAUTER','ESCALIERS','LE SKIERG','RAMEUR',
-          'TAPIS DE COURSE','VELO D INTERIEUR','VELO ELLIPTIQUE'];
+          'TAPIS DE COURSE','TAPIS DE COURSE COURIR','TAPIS DE COURSE MARCHE AVEC PENTE',
+          'VELO D INTERIEUR','VELO ELLIPTIQUE'];
         const v=EX_GUIDE_CARDIO.split('~');
         return v.join('~')===att.join('~')?true:_echec(v.join('~'));})());
       ok('Aucun nom du guide n\'apparaît dans deux signatures',(()=>{
@@ -70744,6 +71003,11 @@ async function testExercices(){
         if(phase) u.phase={type:phase,debut:Date.now()-30*864e5};
         return u;
       };
+      // 29/09/2026 — LA VITESSE EST PASSEE EXPLICITEMENT. Depuis le 07/09/2026
+      // (decision de Kevin), besoinsProposes sans vitesse part du coefficient
+      // d'objectif ; la vitesse reste acceptee et c'est elle que cette section
+      // eprouve. Sans cette option, ces tests mesuraient le coefficient.
+      const _vm=(ph)=>({vitesse:cibleVitesseMilieu(ph)});
       try{
         // ── Les deux fonctions pures ──────────────────────────────────────
         ok('cibleVitesseMilieu lit PHASES et rend le milieu',(()=>{
@@ -70800,16 +71064,27 @@ async function testExercices(){
           // inatteignable. On rend donc à la fixture une dépense comparable par
           // un métier reconnu — sans quoi le test ne mesurerait plus la vitesse
           // visée mais le plafond de déficit.
+          // 29/09/2026 — DEUX CHANGEMENTS VOULUS DU 07/09/2026 rendaient ce test
+          // caduc : (1) sans vitesse, le point de depart suit le COEFFICIENT
+          // d'objectif (0,85 en seche), plus la vitesse — on la passe donc
+          // explicitement, puisque c'est elle que cette section eprouve ;
+          // (2) Harris-Benedict remplace Mifflin et le metier « Infirmier » vaut
+          // desormais × 1,5 : la depense montait a 2324. « Enseignant » (× 1,4)
+          // la ramene a une valeur comparable aux 2114 de la spec, et le plafond
+          // de 25 % ne mord pas : c'est bien la vitesse visee qu'on mesure.
           const u=_ath(62,'seche');
-          u.bilans[0]['deb-job']='Infirmier';
-          const b=besoinsProposes(u);
+          u.bilans[0]['deb-job']='Enseignant';
+          const b=besoinsProposes(u,_vm('seche'));
+          if(b.delta!==deltaKcalJour(cibleVitesseMilieu('seche'),62))
+            return _echec('le plafond mord : fixture à revoir ('+b.delta+')');
           const moy=Math.round((b.on.kcal+b.off.kcal)/2);
           return moy>=1550&&moy<=1700?true:_echec('moyenne '+moy+' pour '+b.depense);})());
         ok('Sans métier reconnu, c\'est le plafond de déficit qui décide',(()=>{
           // Le pendant honnête du test ci-dessus : à 1837 de dépense, viser
           // −0,75 % par semaine demanderait 28 % de déficit. Le plafond de 25 %
           // mord, et c'est LUI qu'on éprouve ici.
-          const b=besoinsProposes(_ath(62,'seche'));
+          // 29/09/2026 — vitesse explicite : voir le test ci-dessus.
+          const b=besoinsProposes(_ath(62,'seche'),_vm('seche'));
           const plancher=Math.round(b.depense*(1-DEFICIT_MAX_PART));
           const moy=Math.round((b.on.kcal+b.off.kcal)/2);
           return moy>=plancher-2
@@ -70824,7 +71099,9 @@ async function testExercices(){
         // était inatteignable ; on vérifie la cohérence avec la formule, qui est
         // la règle réellement écrite, et non un intervalle qui la contredit.
         ok('En masse à 80 kg, le surplus vaut ce que dit la formule',(()=>{
-          const b=besoinsProposes(_ath(80,'masse','H',180,29));
+          // 29/09/2026 — vitesse explicite : sans elle, c'est le coefficient
+          // d'objectif (1,10) qui decide depuis le 07/09/2026, pas la formule.
+          const b=besoinsProposes(_ath(80,'masse','H',180,29),_vm('masse'));
           const moy=(b.on.kcal+b.off.kcal)/2;
           const sur=Math.round(moy-b.depense);
           const attendu=deltaKcalJour(cibleVitesseMilieu('masse'),80);
@@ -70835,7 +71112,8 @@ async function testExercices(){
                      _ath(120,'seche','H',195,35)];
           const fautifs=[];
           for(const u of cas){
-            const b=besoinsProposes(u);
+            // 29/09/2026 — par la vitesse : le coefficient ne passe pas les plafonds.
+            const b=besoinsProposes(u,_vm('seche'));
             const moy=(b.on.kcal+b.off.kcal)/2;
             if(moy<b.depense*(1-DEFICIT_MAX_PART)-8)
               fautifs.push(Math.round(moy)+'/'+b.depense);
@@ -70853,8 +71131,10 @@ async function testExercices(){
           return u;
         };
         ok('Le plafond de surplus MORD sur un gabarit lourd et peu actif',(()=>{
+          // 29/09/2026 — vitesse explicite : les plafonds ne s'appliquent plus
+          // au coefficient d'objectif (07/09/2026), seulement a la vitesse.
           const u=_athCreneaux(120,'masse','H',195,35,1);
-          const b=besoinsProposes(u);
+          const b=besoinsProposes(u,_vm('masse'));
           const brut=deltaKcalJour(cibleVitesseMilieu('masse'),120);
           const plaf=Math.round(b.depense*SURPLUS_MAX_PART);
           if(!(brut>plaf)) return _echec('fixture inutile : delta brut '+brut+' sous le plafond '+plaf);
@@ -70866,7 +71146,7 @@ async function testExercices(){
                      _athCreneaux(95,'masse','H',185,40,1)];
           const fautifs=[];
           for(const u of cas){
-            const b=besoinsProposes(u);
+            const b=besoinsProposes(u,_vm('masse'));
             const moy=(b.on.kcal+b.off.kcal)/2;
             if(moy>b.depense*(1+SURPLUS_MAX_PART)+8) fautifs.push(Math.round(moy)+'/'+b.depense);
           }
@@ -74182,16 +74462,27 @@ vendredi 78 6h 44m
     // decoupait la regle voisine — la sonde tombait alors que le CSS etait bon.
     const _cssNu=_stylesProd()
       .map(s=>s.textContent).join('\n').replace(/\/\*[\s\S]*?\*\//g,'');
+    // ⚠ LE PREMIER BLOC N'EST PLUS LE BON (29/09/2026). La feuille porte
+    //   plusieurs @media(min-width:1025px) : les modales larges de N4.14,
+    //   posees JUSTE AU-DESSUS, les tableaux .tbk-duo, plus bas. La sonde
+    //   prenait le premier venu et jugeait donc les trois regles de N4.14
+    //   (#modal-overlay>.mdl-large…) comme si elles etaient la disposition
+    //   coach. Ces modales ne sont pas des ecrans ; ce qui les borne au coach,
+    //   c'est la classe, et N4.14 en compte les porteurs. On retient donc LE
+    //   bloc de la disposition coach : celui qui elargit .ecran-coach.active.
     const _cssLarge=(()=>{
       const css=_cssNu;
-      const i=css.indexOf('@media(min-width:1025px)');
-      if(i<0) return null;
-      // Decoupage par comptage d'accolades : le bloc en contient lui-meme.
-      const j=css.indexOf('{',i);
-      let p=0;
-      for(let k=j;k<css.length;k++){
-        if(css[k]==='{') p++;
-        else if(css[k]==='}'){ p--; if(!p) return css.slice(j+1,k); }
+      let i=css.indexOf('@media(min-width:1025px)');
+      while(i>=0){
+        // Decoupage par comptage d'accolades : le bloc en contient lui-meme.
+        const j=css.indexOf('{',i);
+        let p=0, bloc=null;
+        for(let k=j;k<css.length;k++){
+          if(css[k]==='{') p++;
+          else if(css[k]==='}'){ p--; if(!p){ bloc=css.slice(j+1,k); break; } }
+        }
+        if(bloc&&/body:has\(\.ecran-coach\.active\)/.test(bloc)) return bloc;
+        i=css.indexOf('@media(min-width:1025px)',i+1);
       }
       return null;
     })();
@@ -74213,8 +74504,16 @@ vendredi 78 6h 44m
     // les deux, et l'ecran de l'athlete changerait de largeur.
     const _qualifie=s=>/#s-coach-program\b[^ ,>+~]*\[data-ctx="coach"\]/.test(s);
     const _idsNus=s=>_idsDe(s).filter(id=>!(id==='s-coach-program'&&_qualifie(s)));
+    // ⚠ LA CLASSE .ecran-coach PORTE UN ECRAN COACH (29/09/2026). Depuis
+    //   B1.1 + B1.4, le bloc ne recopie plus la liste des ecrans : trois
+    //   selecteurs `body:has(.ecran-coach.active)` remplacent les soixante-six
+    //   qu'il fallait tenir a la main (voir le commentaire de la feuille). La
+    //   classe est posee par l'ecran lui-meme, et le test « LA LISTE DES
+    //   ECRANS COACH EST PORTEE PAR LES ECRANS » verifie qu'aucun ecran
+    //   athlete ne la porte. Cette sonde ne reconnaissait que les identifiants.
     ok('100 % des selecteurs sont portes par un ecran coach',(()=>{
       const hors=_selLarge.filter(s=>!_qualifie(s)
+        &&!/\.ecran-coach\b/.test(s)
         &&!_idsDe(s).some(id=>ECRANS_LARGE.includes(id)));
       return hors.length
         ?_echec(hors.length+' hors contexte coach : '+hors.join(' | ')):true;})());
@@ -75317,10 +75616,13 @@ vendredi 78 6h 44m
     // ruines visibles : une planche absente, un muscle disparu, un contour
     // réduit à un trait, une coordonnée qui sort de la vignette.
     (()=>{
-      const VUES={face:['TRAPEZES','DELT_ANT','DELT_LAT','PECTORAUX','DORSAUX',
+      // 29/09/2026 : TRAP_SUP ET NON PLUS TRAPEZES. Le muscle s'est dedouble le
+      // 08/09/2026 (voir migrerTrapezes) ; la table porte le contour sous la
+      // clef que le classement produit, sans quoi un shrug n'allumerait rien.
+      const VUES={face:['TRAP_SUP','DELT_ANT','DELT_LAT','PECTORAUX','DORSAUX',
                         'ABDOS','BICEPS','TRICEPS','AVANT_BRAS','QUADRICEPS',
                         'ABDUCTEURS','ADDUCTEURS','MOLLETS'],
-                  dos :['TRAPEZES','DELT_POST','DELT_LAT','DORSAUX','LOMBAIRES',
+                  dos :['TRAP_SUP','DELT_POST','DELT_LAT','DORSAUX','LOMBAIRES',
                         'TRICEPS','BICEPS','AVANT_BRAS','FESSIERS','ISCHIOS',
                         'ABDUCTEURS','ADDUCTEURS','MOLLETS']};
       const parcours=(f)=>{ const faux=[];

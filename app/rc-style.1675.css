@@ -210,7 +210,14 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
    l'ecrivent dans l'attribut style de leur feuille, et une regle sans
    !important ne peut pas le reprendre. Les corriger a la source aurait demande
    d'aller modifier trois fonctions de rendu pour une question de largeur.
-   SOUS 1025 PX, RIEN NE BOUGE : la classe ne vaut que dans cette requete. */
+   SOUS 1025 PX, RIEN NE BOUGE : la classe ne vaut que dans cette requete.
+   ⚠ LA CLASSE S'ETAIT PROPAGEE PAR COPIER-COLLER (constate le 29/09/2026) :
+   le carnet d'adresses du coach et quatre feuilles de l'ATHLETE (merci
+   d'achat, mes exercices, fiche d'exercice, merci de revision) avaient repris
+   le gabarit d'une feuille elargie, classe comprise. Sur grand ecran, une
+   feuille de 960 px s'ouvrait par-dessus une application de 480 : la regle
+   « ecrans athlete : rien ne change » etait rompue sans que personne l'ait
+   decide. Elle leur a ete retiree ; ne la poser que sur les trois ci-dessus. */
 @media(min-width:1025px){
   #modal-overlay>.mdl-large{max-width:960px!important}
   /* La place gagnee va au LECTEUR, pas aux marges : c'est lui qu'on regarde. */
