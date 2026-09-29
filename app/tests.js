@@ -50782,13 +50782,21 @@ async function testExercices(){
     ok('Duels : l’accueil — l’invitation par son prénom, les duels en cours, « Défie un pote »',(()=>{
       if(!SERVEUR_LEGER) return true;
       const u={role:'athlete',email:'lea@t.fr'}, t=Date.now();
-      const h=htmlDuelsAccueil(u,{d1:{createur:'lea@t,fr',inviteNom:'Tom',statut:'en_cours',mesure:'seances',duree:14,fin:t+3*864e5-1000,scores:{createur:4,invite:2},creeLe:2}},
-        {id:'dinvit123456',prenom:'Zoé',mesure:'tonnage',duree:7},t);
+      const _D={d1:{createur:'lea@t,fr',inviteNom:'Tom',statut:'en_cours',mesure:'seances',duree:14,fin:t+3*864e5-1000,scores:{createur:4,invite:2},creeLe:2}};
+      const _I={id:'dinvit123456',prenom:'Zoé',mesure:'tonnage',duree:7};
+      // L'accueil ne porte que le bandeau, avec le nombre de défis (29/09/2026)…
+      const a=document.createElement('div'); a.innerHTML=htmlDuelsAccueil(u,_D,_I,t);
+      if(!/Défie un pote/.test(a.textContent)) return _echec('bouton défier');
+      if(/Zoé|Tom/.test(a.textContent)) return _echec('l’accueil détaille encore les défis');
+      if(!a.querySelector('.du-d-n')||a.querySelector('.du-d-n').textContent!=='2') return _echec('pastille du nombre');
+      if(!/ouvrirDuelsHub\(\)/.test(a.innerHTML)) return _echec('le bandeau n’ouvre pas la feuille');
+      // …et la feuille, le défi reçu et les défis en cours.
+      const h=htmlDuelsHub(u,_D,_I,t);
       const d=document.createElement('div'); d.innerHTML=h;
       if(!/Zoé te défie : 7 jours de volume/.test(d.textContent)) return _echec('invitation');
       if(!/rejoindreDuel\('dinvit123456'/.test(h)) return _echec('bouton relever');
       if(!/Contre Tom · 4 séances à 2 séances · J-3/.test(d.textContent)) return _echec('ligne : '+d.textContent);
-      if(!/Défie un pote/.test(d.textContent)) return _echec('bouton défier');
+      if(htmlDuelsHub(u,{},null,t)!=='') return _echec('feuille vide : la création directe');
       if(htmlDuelsAccueil({role:'coach'},{},null,t)!=='') return _echec('coach');
       // Les lignes selon l'état.
       const L=(x)=>duelLigne(Object.assign({createur:'lea@t,fr',createurNom:'Léa',inviteNom:'Tom',mesure:'seances',duree:14},x),'lea@t,fr',t);
