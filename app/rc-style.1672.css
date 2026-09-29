@@ -11830,6 +11830,41 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 :root[data-theme="clair"] .vc{background:linear-gradient(100deg,#f4f4f4,#fafafa)}
 :root[data-theme="clair"] .vb-piste{background:#e6e6e6;box-shadow:inset 0 1px 2px rgba(0,0,0,.15)}
 :root[data-theme="clair"] .vb-repere{background:#222;box-shadow:none}
+/* ══ LE POINT DE LA SEMAINE (lot N1, 29/09/2026) ═════════════════════════ */
+.ps-carte,.ps-coach{position:relative;background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--red);
+  border-radius:var(--r-3);padding:14px 16px;margin-bottom:16px}
+.ps-tete{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--red-text);margin-bottom:8px}
+.ps-tendance{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.ps-tendance b{font-family:var(--pile-titre);font-size:var(--fs-2xl);font-weight:400;letter-spacing:1px;color:var(--text)}
+.ps-tendance span{font-size:var(--fs-xs);color:var(--sub)}
+.ps-note{font-size:var(--fs-2xs);color:var(--text-faint);margin:2px 0 12px}
+.ps-jauge{position:relative;height:34px;margin:6px 4px 0}
+.ps-rail{position:absolute;left:0;right:0;top:15px;height:4px;border-radius:2px;background:var(--surface-3)}
+.ps-bande{position:absolute;top:9px;height:16px;border-radius:5px;background:rgba(34,197,94,.22);border:1px solid rgba(34,197,94,.55)}
+.ps-zero{position:absolute;top:8px;width:1px;height:18px;background:var(--text-faint)}
+.ps-point{position:absolute;top:10px;width:14px;height:14px;margin-left:-7px;border-radius:50%;background:var(--orange);
+  box-shadow:0 0 0 3px rgba(0,0,0,.4),0 0 10px var(--orange)}
+.ps-point.ps-dedans{background:var(--green);box-shadow:0 0 0 3px rgba(0,0,0,.4),0 0 10px var(--green)}
+.ps-point span{position:absolute;bottom:17px;left:50%;transform:translateX(-50%);font-size:var(--fs-2xs);font-weight:800;color:var(--text);white-space:nowrap}
+.ps-leg{font-size:var(--fs-2xs);color:var(--sub);margin:2px 0 0}
+.ps-phrase{margin:12px 0 0;font-size:var(--fs-sm);font-weight:700;line-height:1.55;color:var(--text)}
+.ps-btns{display:flex;gap:8px;margin-top:12px}
+.ps-btns .btn{flex:1;margin:0}
+.ps-btn{width:100%;margin:12px 0 0}
+.ps-tenue{margin-top:14px}
+.ps-t-t{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);margin-bottom:6px}
+.ps-tenue svg{display:block;width:100%;height:70px}
+.ps-t-bande{fill:rgba(34,197,94,.14)}
+.ps-t-zero{stroke:var(--text-faint);stroke-width:1;stroke-dasharray:3 3;vector-effect:non-scaling-stroke}
+.ps-t-l{fill:none;stroke:var(--text);stroke-width:1.6;vector-effect:non-scaling-stroke}
+.ps-t-p{fill:var(--orange);stroke:#0b0b0b;stroke-width:1;vector-effect:non-scaling-stroke}
+.ps-t-p.ps-t-in{fill:var(--green)}
+.ps-t-s{font-size:var(--fs-2xs);color:var(--sub);margin-top:4px}
+.ps-carte .ps-rdv{display:flex;align-items:center;gap:6px;margin:12px 0 0;font-size:var(--fs-2xs);color:var(--sub);
+  text-transform:none;letter-spacing:0;font-weight:600}
+.ps-carte .ps-rdv select{width:auto;min-height:0;background:var(--surface-2);color:var(--text);border:1px solid var(--border);
+  border-radius:6px;padding:3px 8px;font:inherit;font-weight:700}
+.ps-c-der{font-size:var(--fs-sm);color:var(--text);line-height:1.6}
 /* ═══ THEME CLAIR — GENERE PAR scripts/theme_clair.py, NE PAS MODIFIER A LA MAIN ═══ */
 :root[data-theme="clair"] [style*="--halo-c"]{--halo-1:0 0 8px var(--halo-c,rgba(255,255,255,.45));--halo-2:0 0 14px var(--halo-c,rgba(255,255,255,.60)),0 0 30px var(--halo-c,rgba(255,255,255,.25));--halo-3:0 0 20px var(--halo-c,rgba(255,255,255,.85)),0 0 44px var(--halo-c,rgba(255,255,255,.40))}
 html[data-theme="clair"]{background:#f8f8f8}
@@ -14531,6 +14566,29 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"][data-theme="clair"] .vc{background:linear-gradient(100deg,#131313,#0e0e0e)}
 :root[data-theme="clair"][data-theme="clair"] .vb-piste{background:#212121;box-shadow:inset 0 1px 2px rgba(0,0,0,0.052)}
 :root[data-theme="clair"][data-theme="clair"] .vb-repere{background:#dbdbdb}
+:root[data-theme="clair"] .ps-carte,:root[data-theme="clair"] .ps-coach{background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--red)}
+:root[data-theme="clair"] .ps-tete{color:var(--red-text)}
+:root[data-theme="clair"] .ps-tendance b{color:var(--text)}
+:root[data-theme="clair"] .ps-tendance span{color:var(--sub)}
+:root[data-theme="clair"] .ps-note{color:var(--text-faint)}
+:root[data-theme="clair"] .ps-rail{background:var(--surface-3)}
+:root[data-theme="clair"] .ps-bande{background:rgba(34,197,94,.22);border:1px solid rgba(34,197,94,.55)}
+:root[data-theme="clair"] .ps-zero{background:var(--text-faint)}
+:root[data-theme="clair"] .ps-point{background:var(--orange);box-shadow:0 0 0 3px rgba(0,0,0,0.14),0 0 10px var(--orange)}
+:root[data-theme="clair"] .ps-point.ps-dedans{background:var(--green);box-shadow:0 0 0 3px rgba(0,0,0,0.14),0 0 10px var(--green)}
+:root[data-theme="clair"] .ps-point span{color:var(--text)}
+:root[data-theme="clair"] .ps-leg{color:var(--sub)}
+:root[data-theme="clair"] .ps-phrase{color:var(--text)}
+:root[data-theme="clair"] .ps-t-t{color:var(--sub)}
+:root[data-theme="clair"] .ps-t-bande{fill:rgba(30,174,83,0.14)}
+:root[data-theme="clair"] .ps-t-zero{stroke:var(--text-faint)}
+:root[data-theme="clair"] .ps-t-l{stroke:var(--text)}
+:root[data-theme="clair"] .ps-t-p{fill:var(--orange);stroke:#f1f1f1}
+:root[data-theme="clair"] .ps-t-p.ps-t-in{fill:var(--green)}
+:root[data-theme="clair"] .ps-t-s{color:var(--sub)}
+:root[data-theme="clair"] .ps-carte .ps-rdv{color:var(--sub)}
+:root[data-theme="clair"] .ps-carte .ps-rdv select{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
+:root[data-theme="clair"] .ps-c-der{color:var(--text)}
 :root[data-theme="clair"] [style^="background:#000"],:root[data-theme="clair"] [style*=";background:#000"],:root[data-theme="clair"] [style*="; background:#000"],:root[data-theme="clair"] [style*=" background:#000"],:root[data-theme="clair"] [style^="background: #000"],:root[data-theme="clair"] [style*=";background: #000"],:root[data-theme="clair"] [style*="; background: #000"],:root[data-theme="clair"] [style*=" background: #000"],:root[data-theme="clair"] [style^="background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=";background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*="; background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=" background: rgb(0, 0, 0)"]{background-color:#fbfbfb!important}
 :root[data-theme="clair"] [style^="background:#000b"],:root[data-theme="clair"] [style*=";background:#000b"],:root[data-theme="clair"] [style*="; background:#000b"],:root[data-theme="clair"] [style*=" background:#000b"],:root[data-theme="clair"] [style^="background: #000b"],:root[data-theme="clair"] [style*=";background: #000b"],:root[data-theme="clair"] [style*="; background: #000b"],:root[data-theme="clair"] [style*=" background: #000b"],:root[data-theme="clair"] [style^="background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=";background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*="; background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=" background: rgba(0, 0, 0, 0.733)"]{background-color:rgba(251,251,251,0.733)!important}
 :root[data-theme="clair"] [style^="background:#040404"],:root[data-theme="clair"] [style*=";background:#040404"],:root[data-theme="clair"] [style*="; background:#040404"],:root[data-theme="clair"] [style*=" background:#040404"],:root[data-theme="clair"] [style^="background: #040404"],:root[data-theme="clair"] [style*=";background: #040404"],:root[data-theme="clair"] [style*="; background: #040404"],:root[data-theme="clair"] [style*=" background: #040404"],:root[data-theme="clair"] [style^="background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*=";background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*="; background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*=" background: rgb(4, 4, 4)"]{background-color:#f7f7f7!important}
