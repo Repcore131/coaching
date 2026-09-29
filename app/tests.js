@@ -10187,7 +10187,11 @@ async function testExercices(){
               const s=_prodSrc();
               const i=s.indexOf("addEventListener('rc-install-fait'");
               if(i<0) return _echec('l’écouteur d’installation a disparu');
-              const bloc=s.slice(i,i+1400);
+              // 29/09/2026 : LES COMMENTAIRES NE COMPTENT PLUS DANS LA FENETRE.
+              // Le bloc a gagne l'explication du compteur pwa_installed (15/09) et
+              // le toast est sorti des 1400 caracteres sans que rien ne change.
+              // On mesure donc le code seul, sur une fenetre un peu plus large.
+              const bloc=s.slice(i,i+4000).replace(/^\s*\/\/.*$/gm,'').slice(0,1400);
               // ' DANS LA SOURCE, C'EST DEUX CARACTERES — la contre-oblique et
               // l'apostrophe. Un point n'en couvre qu'un, et la sonde tombait
               // sur un message pourtant intact.
@@ -51796,16 +51800,31 @@ async function testExercices(){
       return !/await/.test(String(partagerVideoPrete))?true:_echec('await avant le partage');})());
     okA('Vidéo : une vraie vidéo s’enregistre (MediaRecorder de ce navigateur), la progression va jusqu’au bout',(async()=>{
       if(!videoExportPossible()) return true;       // navigateur sans MediaRecorder : rien à enregistrer
-      const pr=[];
-      const r=await exporterVideoVisuel(videoScene('record',{donnees:{nm:'SQUAT',histMax:100,curMax:105,gain:5,signature:'X'},fond:'carbone'}),900,{progression:p=>pr.push(p)});
-      if(!r||!(r.blob instanceof Blob)||!(r.taille>1000)) return _echec('fichier : '+(r&&r.taille));
-      if(!/^video\/(mp4|webm)$/.test(r.type)||r.nom!=='repcore-record.'+r.ext) return _echec(r.type+' '+r.nom);
-      if(!(r.taille<VIDEO_MAX_OCTETS)) return _echec('plus de 8 Mo');
+      // 29/09/2026 : L'ENCODEUR DE CE NAVIGATEUR PEUT NE RIEN RENDRE. Chromium
+      // sans tete, sur une machine chargee (plusieurs suites en parallele),
+      // encode en logiciel du 1080x1920 et s'arrete parfois sans un octet :
+      // reproduit, 2 fois sur 6 sous charge, jamais au calme. Le produit le
+      // dit desormais (rejet « rien n'a pu être enregistré ») au lieu de
+      // proposer un fichier de 0 Mo. Ici : deux essais ; si les deux sont
+      // vides, on verifie ce rejet et on le signale, sans taire le reste.
+      const pr=[]; let r=null, vide='';
+      for(let essai=0;essai<2&&!r;essai++){
+        pr.length=0;
+        try{ r=await exporterVideoVisuel(videoScene('record',{donnees:{nm:'SQUAT',histMax:100,curMax:105,gain:5,signature:'X'},fond:'carbone'}),900,{progression:p=>pr.push(p)}); }
+        catch(e){ vide=(e&&e.message)||''; if(!/rien n’a pu être enregistré/.test(vide)) return _echec('rejet : '+vide); }
+      }
       if(!pr.length||pr[pr.length-1]!==1) return _echec('progression : '+pr.slice(-3));
+      if(r){
+        if(!(r.blob instanceof Blob)||!(r.taille>1000)) return _echec('fichier : '+r.taille);
+        if(!/^video\/(mp4|webm)$/.test(r.type)||r.nom!=='repcore-record.'+r.ext) return _echec(r.type+' '+r.nom);
+        if(!(r.taille<VIDEO_MAX_OCTETS)) return _echec('plus de 8 Mo');
+      }
       // Annulée en route : elle rejette, sans rien rendre.
       let n=0;
       try{ await exporterVideoVisuel(videoScene('wrapped',{w:{seances:1,dureeTotale:1,tonnage:1,records:0,serieMax:1,badgesGagnes:[],profil:{nom:'X',phrase:''}},per:{titre:'S',cle:'m'},signature:''}),2000,{annule:()=>++n>3}); return _echec('non annulée'); }
       catch(e){ if(!/annul/.test(e.message)) return _echec('rejet : '+e.message); }
+      // Vert, mais le rapport dit que le fichier n'a pas pu etre mesure ici.
+      if(!r){ _echec('encodeur de ce navigateur muet (machine chargée) : seul le rejet d’un fichier vide est vérifié'); return true; }
       return true;}));
     ok('Ambassadeurs : le CSV mensuel ne porte que les commissions dues',(()=>{
       const r=ambCsvDues({LEA:_AMBF,ZED:{nom:'Zed',commissions:{'2026-09':{x:{commission:9,dueLe:1}}}}},'2026-10',500);
@@ -61415,8 +61434,14 @@ async function testExercices(){
           return _echec(k+' : vouvoiement dans « '+e.d+' »');
         if(e.p!==undefined&&!String(e.p).trim()) return _echec(k+' : ligne « en pratique » vide');
         if(e.e!==undefined){
-          if(!Array.isArray(e.e)||e.e.length<2||e.e.length>4)
-            return _echec(k+' : une échelle fait 2 à 4 lignes, pas '+(e.e||[]).length);
+          // 29/09/2026 : LA FICHE zones_volume (build 1610, maquette de Kevin)
+          // legende la barre de volume, qui a CINQ zones de couleur. Elle a une
+          // ligne par zone, ni plus ni moins ; les autres echelles restent a 4.
+          const max=k==='zones_volume'?VOL_ZONES.length:4;
+          if(!Array.isArray(e.e)||e.e.length<2||e.e.length>max)
+            return _echec(k+' : une échelle fait 2 à '+max+' lignes, pas '+(e.e||[]).length);
+          if(k==='zones_volume'&&e.e.length!==VOL_ZONES.length)
+            return _echec(k+' : '+e.e.length+' lignes pour '+VOL_ZONES.length+' zones de couleur');
           for(const l of e.e)
             if(!Array.isArray(l)||l.length!==2||!l[0]||!l[1])
               return _echec(k+' : une ligne d’échelle n’est pas [libellé, explication]');
@@ -62616,8 +62641,22 @@ async function testExercices(){
       // de sortie, qui est ce dont finishWorkout a besoin.
       const src=String(buildSessionComparison);
       return /return\s*\{html,records,delta/.test(src);})());
-    ok('finishWorkout appelle bien le message spécifique',
-       /_messageFinSeance\(/.test(String(finishWorkout)));
+    // 29/09/2026 : L'ECRAN DE FIN SUIT LA MAQUETTE DE KEVIN. La phrase de
+    // _messageFinSeance a laisse la place au titre « Séance terminée », et ce
+    // qu'elle disait est reparti dans les blocs : le record dans « Mes
+    // records », le gain de volume et le « 5 / 12 » d'une seance ecourtee
+    // dans la bande de chiffres. C'est ce trio qui rend la fin specifique.
+    ok('finishWorkout appelle bien le message spécifique',(()=>{
+      const f=String(finishWorkout);
+      for(const fn of ['_htmlHeroFin','_htmlRecordsFin','_htmlStatsFin'])
+        if(f.indexOf(fn+'(')<0) return _echec('finishWorkout n’appelle plus '+fn);
+      // Le delta de volume passe bien a la bande, et il y est dit.
+      if(!/_htmlStatsFin\([^)]*_cmp[^)]*delta/.test(f)) return _echec('le gain de volume n’arrive plus à la bande');
+      const h=_htmlStatsFin(40,5,12,3000,250);
+      if(h.indexOf('5 / 12')<0) return _echec('une séance écourtée passe pour complète');
+      if(!/\+250 kg/.test(h)) return _echec('le gain de volume n’est pas dit');
+      const r=_htmlRecordsFin({records:[{nm:'SQUAT',curMax:140,gain:5}]});
+      return /SQUAT/.test(r)&&/140/.test(r)?true:_echec('le record n’est pas nommé');})());
 
     // ── Sélecteur de créneau ──
     (function(){
@@ -63622,10 +63661,17 @@ async function testExercices(){
       // interrompant chaque fin de séance juste après l'enregistrement.
       ok("finishWorkout va jusqu'au bout sans lever",!window._errFin,window._errFin||'');
       ok('La séance a bien été enregistrée',(currentUser.sessions||[]).length===1);
+      // 29/09/2026 : #wd-time N'EXISTE PLUS. Les trois tuiles sont devenues
+      // une bande (maquette de Kevin), rendue dans #wd-stats par _htmlStatsFin.
+      // On y lit la duree ; et le titre ne doit pas etre le message de repli.
       ok("L'écran de fin est renseigné",(()=>{
         const m=document.getElementById('wd-msg');
-        const t=document.getElementById('wd-time');
-        return !!(m&&m.textContent&&t&&t.textContent);})(),
+        const t=document.getElementById('wd-stats');
+        if(!(m&&/Séance terminée/.test(m.textContent))) return false;
+        const st=t?[...t.querySelectorAll('.rcf-st')]:[];
+        const duree=st.find(x=>/Durée/.test(x.textContent));
+        const v=duree&&duree.querySelector('.rcf-st-v');
+        return !!(v&&/\d/.test(v.textContent)&&st.length===3);})(),
         (document.getElementById('wd-msg')||{}).textContent||'vide');
       ok("L'écran de fin est bien affiché",
          !!document.getElementById('s-workout-done')&&
