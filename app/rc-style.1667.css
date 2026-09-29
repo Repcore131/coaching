@@ -11366,6 +11366,45 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .du-d-n{flex:none;min-width:18px;height:18px;padding:0 4px;box-sizing:border-box;border-radius:9px;background:#fff;color:#c10b0b;
   font:800 11px/18px Montserrat,sans-serif;text-align:center;letter-spacing:0}
 .du-liste{display:flex;flex-direction:column;gap:8px}
+/* ══ LES AMIS (lot A, 29/09/2026) ══ */
+#clh-amis:empty{display:none}
+.am-carte{margin:12px 0 16px;padding:14px;border-radius:14px;background:var(--surface-1,#111);border:1px solid var(--border,#2a2a2e)}
+.am-tete{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.am-titre{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--red-text,#ff4d4d)}
+.am-tout{background:none;border:0;padding:4px 0;color:var(--sub,#a0a0a8);font:700 var(--fs-xs) Montserrat,sans-serif;cursor:pointer}
+.am-vide{font-size:var(--fs-sm);color:var(--text-dim,#bdbdbd);line-height:1.5;margin:0 0 10px}
+.am-note{font-size:var(--fs-xs);color:var(--sub,#a0a0a8);line-height:1.5;margin:10px 0 0}
+.am-note a{color:var(--red-text,#ff4d4d)}
+.am-btns{display:flex;gap:8px}
+.am-btns .btn{flex:1;margin:0;min-height:44px}
+.am-ligne{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border,#2a2a2e)}
+.am-carte .am-ligne:first-of-type{border-top:0}
+.am-av{flex:none;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:#1c1c1f;border:1.5px solid rgba(224,32,32,.6);font:800 12px Montserrat,sans-serif;color:#fff}
+.am-av-g{width:52px;height:52px;font-size:16px}
+.am-id{flex:1;min-width:0;display:flex;flex-direction:column}
+.am-id b{font-size:var(--fs-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.am-id small,.am-v small{font-size:var(--fs-2xs);color:var(--sub,#a0a0a8)}
+.am-nom{display:flex;align-items:baseline;gap:6px;min-width:0}
+.am-mut{flex:none;font-style:normal;font-size:9px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#22c55e}
+.am-v{flex:none;text-align:right;display:flex;flex-direction:column}
+.am-v b{font-size:var(--fs-md);font-weight:800}
+.am-defi{flex:none;min-height:36px;padding:0 12px;border-radius:10px;border:1px solid rgba(224,32,32,.7);background:transparent;
+  color:#fff;font:700 var(--fs-xs) Montserrat,sans-serif;cursor:pointer}
+.am-cherche{display:flex;gap:8px;margin-bottom:12px}
+.am-cherche input{flex:1;min-width:0;min-height:44px;margin:0}
+.am-cherche .btn{margin:0;min-height:44px;width:auto;padding:0 16px}
+.am-fiche{display:flex;align-items:center;gap:12px;padding:14px;margin-bottom:12px;border-radius:14px;background:var(--surface-1,#111);border:1px solid var(--border,#2a2a2e)}
+.am-fiche-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.am-fiche-t small,.am-fiche-b{font-size:var(--fs-2xs);color:var(--sub,#a0a0a8)}
+.am-fiche-r{font-size:var(--fs-xs);font-weight:700}
+.am-suivre{width:auto;margin:0;min-height:40px;padding:0 14px}
+.am-rien{flex-direction:column;align-items:stretch}
+.am-rien p{margin:0;font-size:var(--fs-sm);line-height:1.5;color:var(--text-dim,#bdbdbd)}
+.am-lab{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--sub,#a0a0a8);margin:20px 0 6px}
+.am-ligne-w{border-top:1px solid var(--border,#2a2a2e)}
+.am-ligne-w .am-ligne{border-top:0}
+.am-retirer{background:none;border:0;padding:0 0 8px 48px;color:var(--sub,#a0a0a8);font:600 var(--fs-2xs) Montserrat,sans-serif;cursor:pointer}
 .du-v2 .du-ligne{min-height:48px;background:#101010;border:1.5px solid #2c2c2c}
 .du-v2 .du-invite{margin-bottom:8px}
 @media (max-width:350px){.du-d-s{display:none}}
@@ -14290,6 +14329,23 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .du-d-ico svg{filter:drop-shadow(0 1px 2px rgba(0,0,0,0.158))}
 :root[data-theme="clair"] .du-d-t{text-shadow:0 1px 2px rgba(0,0,0,0.105)}
 :root[data-theme="clair"] .du-d-n{background:#090909;color:#c10b0b}
+:root[data-theme="clair"] .am-carte{background:var(--surface-1,#ebebeb);border:1px solid var(--border,#cfcfd3)}
+:root[data-theme="clair"] .am-titre{color:var(--red-text,#cc0000)}
+:root[data-theme="clair"] .am-tout{color:var(--sub,#5b5b64)}
+:root[data-theme="clair"] .am-vide{color:var(--text-dim,#484848)}
+:root[data-theme="clair"] .am-note{color:var(--sub,#5b5b64)}
+:root[data-theme="clair"] .am-note a{color:var(--red-text,#cc0000)}
+:root[data-theme="clair"] .am-ligne{border-top:1px solid var(--border,#cfcfd3)}
+:root[data-theme="clair"] .am-av{background:#dedee1;border:1.5px solid rgba(224,32,32,.6);color:#090909}
+:root[data-theme="clair"] .am-id small,:root[data-theme="clair"] .am-v small{color:var(--sub,#5b5b64)}
+:root[data-theme="clair"] .am-mut{color:#1eae53}
+:root[data-theme="clair"] .am-defi{border:1px solid rgba(224,32,32,.7);color:#090909}
+:root[data-theme="clair"] .am-fiche{background:var(--surface-1,#ebebeb);border:1px solid var(--border,#cfcfd3)}
+:root[data-theme="clair"] .am-fiche-t small,:root[data-theme="clair"] .am-fiche-b{color:var(--sub,#5b5b64)}
+:root[data-theme="clair"] .am-rien p{color:var(--text-dim,#484848)}
+:root[data-theme="clair"] .am-lab{color:var(--sub,#5b5b64)}
+:root[data-theme="clair"] .am-ligne-w{border-top:1px solid var(--border,#cfcfd3)}
+:root[data-theme="clair"] .am-retirer{color:var(--sub,#5b5b64)}
 :root[data-theme="clair"] .du-v2 .du-ligne{background:#ececec;border:1.5px solid #d1d1d1}
 :root[data-theme="clair"] .acc-x{background:rgba(9,9,9,0.06);color:#484848}
 :root[data-theme="clair"] .acc-x:hover{background:rgba(9,9,9,0.12);color:#090909}

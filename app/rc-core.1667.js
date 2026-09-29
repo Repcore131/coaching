@@ -21037,9 +21037,12 @@ async function creerDuel(mesure,duree){
   const d=DUEL_DUREES.indexOf(Number(duree))>=0?Number(duree):14;
   const id=duelNouvelId(), moi=_moiCle();
   const prenom=String(u.fname||u.pseudo||'').trim().slice(0,24)||'Un ami';
-  const ok=await CLOUD.racinePatch({
-    ['duels/'+id]:{createur:moi,createurNom:prenom,mesure:m,duree:d,creeLe:Date.now(),statut:'attente'},
-    ['duels_publics/'+id]:{prenom,mesure:m,duree:d}}).catch(()=>false);
+  const mp=_monPseudo(u), duel={createur:moi,createurNom:prenom,mesure:m,duree:d,creeLe:Date.now(),statut:'attente'};
+  if(mp) duel.createurPseudo=pseudoPublicCle(mp);
+  let ok=await CLOUD.racinePatch({['duels/'+id]:duel,['duels_publics/'+id]:{prenom,mesure:m,duree:d}}).catch(()=>false);
+  // Des règles d'avant le pseudo dans les duels : sans lui.
+  if(!ok&&duel.createurPseudo){ delete duel.createurPseudo;
+    ok=await CLOUD.racinePatch({['duels/'+id]:duel,['duels_publics/'+id]:{prenom,mesure:m,duree:d}}).catch(()=>false); }
   if(!ok) return {ok:false,erreur:'Création impossible pour l’instant.'};
   u.duels=Object.assign({},u.duels||{},{[id]:{role:'createur',le:Date.now()}});
   try{ saveUser(); }catch(e){}
@@ -21063,6 +21066,9 @@ async function rejoindreDuel(id,btn){
   const moi=_moiCle();
   const prenom=String(u.fname||u.pseudo||'').trim().slice(0,24)||'Un ami';
   const ok=await CLOUD.racinePatch({['duels/'+id+'/invite']:moi,['duels/'+id+'/inviteNom']:prenom}).catch(()=>false);
+  // Mon pseudo, à part : des règles d'avant ne le refusent pas avec le reste.
+  const mp=_monPseudo(u);
+  if(ok&&mp) CLOUD.racinePatch({['duels/'+id+'/invitePseudo']:pseudoPublicCle(mp)}).catch(()=>false);
   duelOublierInvite();
   if(!ok){
     if(btn) btn.disabled=false;
@@ -21192,6 +21198,312 @@ function ouvrirDuelsHub(){
   document.body.appendChild(d);
   return true;
 }
+// ══ LES AMIS : LE CARNET (lot A, 29/09/2026) ══════════════════════════════
+// Un carnet À SENS UNIQUE : /amis/<ma clé>/<pseudo> = {le, prenom}. Suivre
+// ne demande rien et ne notifie rien. « Ami » = les deux se suivent, et ça se
+// CONSTATE dans /abonnes/<mon pseudo>/<son pseudo> (écrit par qui suit, lu par
+// le seul titulaire du pseudo suivi) : la clé d'un autre compte est son
+// e-mail, et /pseudos n'est lisible par personne.
+// Le prénom est la SEULE copie, pour que la liste s'affiche hors ligne ;
+// rang, volts et badges se lisent dans le profil public, qui ne ment pas.
+// Le carnet vit AUSSI sur l'appareil : une écriture que la base refuse (hors
+// ligne, ou règles pas encore déployées) part à la synchronisation suivante.
+// ⚠ JAMAIS DE RECHERCHE PAR ADRESSE : savoir si un e-mail a un compte est une
+//   fuite, et on peut tester une liste entière.
+const AMIS_MAX=300;
+const AMIS_CACHE_MS=10*60e3;
+// PURE. « @Marc.Fit », « marc fit » → « marc.fit », « marcfit ».
+function amiPseudoNormalise(p){ return String(p==null?'':p).trim().replace(/^@+/,'').replace(/\s+/g,'').toLowerCase(); }
+function amiPseudoValide(p){ return PSEUDO_PUBLIC_RE.test(String(p||'')); }
+// La clé en base → le pseudo affiché (« __ » redevient un point).
+function amiPseudoDeCle(k){ return String(k||'').replace(/__/g,'.'); }
+function _monPseudo(u){
+  const x=u||currentUser, p=x&&x.pagePublique&&x.pagePublique.pseudo;
+  return PSEUDO_PUBLIC_RE.test(p||'')?p:'';
+}
+function _amisCle(){ return 'rc_amis_'+(_moiCle()||'-'); }
+function amisLocal(){
+  try{ const o=JSON.parse(localStorage.getItem(_amisCle())||'null');
+    if(o&&typeof o==='object') return {amis:(o.amis&&typeof o.amis==='object')?o.amis:{},att:(o.att&&typeof o.att==='object')?o.att:{},abonnes:(o.abonnes&&typeof o.abonnes==='object')?o.abonnes:{}}; }catch(e){}
+  return {amis:{},att:{},abonnes:{}};
+}
+function _amisGarder(o){ try{ localStorage.setItem(_amisCle(),JSON.stringify(o)); }catch(e){} }
+// PURE. Le carnet en liste : [{cle, p, prenom, le}].
+function amisListe(o){
+  const x=o||amisLocal();
+  return Object.keys(x.amis).map(k=>Object.assign({cle:k,p:amiPseudoDeCle(k)},x.amis[k]));
+}
+// PURE. Le plafond : 300 dans le carnet, et une écriture de plus refusée.
+function amisPlein(o){ return Object.keys(((o||amisLocal()).amis)||{}).length>=AMIS_MAX; }
+// PURE. « Ami » : je le suis, ET il me suit (constaté dans mes abonnés).
+function amiEstMutuel(cle,o){ const x=o||amisLocal(); return !!(x.amis[cle]&&x.abonnes[cle]); }
+async function _fbJson(chemin,methode,corps,sansCompte){
+  let url=CLOUD._fbUrl.replace('users.json',chemin+'.json');
+  if(!sansCompte){
+    let tok=null; try{ tok=await CLOUD._getToken(); }catch(e){ tok=null; }
+    if(!tok) return {ok:false,st:0,v:null};
+    url+='?auth='+tok;
+  }
+  try{
+    const r=await fetch(url,methode?{method:methode,headers:{'Content-Type':'application/json'},body:corps===undefined?undefined:JSON.stringify(corps)}:{});
+    return {ok:r.ok,st:r.status,v:r.ok?await r.json():null};
+  }catch(e){ return {ok:false,st:0,v:null}; }
+}
+// Le profil public d'un pseudo (profils_publics, et le rang recalculé par le
+// serveur dans volts_publics) : dix minutes de mémoire. RIEN d'autre n'est
+// gardé que ce qui s'affiche : prénom, rang, volts, badges, semaines.
+const _amisProfils={};
+function _profilAmiNettoye(p,v){
+  if(!p||typeof p!=='object'||!p.prenom) return null;
+  const vx=(v&&typeof v==='object'&&v.xp!=null)?v:((p.volts&&typeof p.volts==='object')?p.volts:null);
+  const rang=(v&&v.rang)||p.rang||null;
+  const bdg=Array.isArray(p.badges)?p.badges:(p.badges&&typeof p.badges==='object'?Object.values(p.badges):[]);
+  return {prenom:String(p.prenom).slice(0,24),
+    rang:rang&&rang.nom?{n:Math.max(1,Math.min(10,Number(rang.n)||1)),nom:String(rang.nom).slice(0,20)}:null,
+    volts:vx?Math.max(0,Math.round(Number(vx.xp)||0)):null,
+    badges:bdg.filter(b=>b&&b.nom).slice(0,8).map(b=>String(b.nom).slice(0,40)),
+    sem:(v&&v.sem&&typeof v.sem==='object')?v.sem:null};
+}
+async function _profilAmi(cle,force){
+  const c=_amisProfils[cle];
+  if(c&&!force&&Date.now()-c.lu<AMIS_CACHE_MS) return c.v;
+  const [p,v]=await Promise.all([_fbJson('profils_publics/'+cle,null,undefined,true),_fbJson('volts_publics/'+cle,null,undefined,true)]);
+  if(!p.ok&&c) return c.v;
+  const val=_profilAmiNettoye(p.v,v.v);
+  _amisProfils[cle]={lu:Date.now(),v:val};
+  return val;
+}
+// LA RECHERCHE : un pseudo, jamais une adresse. Rend {trouve, pseudo, prenom,
+// rang, volts, badges} ou {trouve:false, pseudo}. Aucune lecture de users/.
+async function amiChercher(pseudo){
+  const p=amiPseudoNormalise(pseudo);
+  if(!amiPseudoValide(p)) return {trouve:false,pseudo:p,invalide:true};
+  const v=await _profilAmi(pseudoPublicCle(p),true);
+  if(!v) return {trouve:false,pseudo:p};
+  return Object.assign({trouve:true,pseudo:p},v);
+}
+async function amiSuivre(pseudo,prenom){
+  const u=currentUser; if(!u) return false;
+  const p=amiPseudoNormalise(pseudo), cle=pseudoPublicCle(p);
+  if(!amiPseudoValide(p)){ toast('Ce nom ne ressemble pas à un pseudo RepCore.','var(--orange)'); return false; }
+  if(p===_monPseudo(u)){ toast('C’est ton propre nom : tes potes, eux, peuvent te suivre.','var(--orange)'); return false; }
+  const o=amisLocal();
+  if(!o.amis[cle]&&amisPlein(o)){ toast('Ton carnet est plein (300). Retire quelqu’un pour suivre '+(prenom||p)+'.','var(--orange)',4500); return false; }
+  const nom=String(prenom||'').trim().slice(0,24)||p;
+  o.amis[cle]={prenom:nom,le:Date.now()}; o.att[cle]='+';
+  _amisGarder(o);
+  toast('Tu suis '+nom+' : ses volts de la semaine s’affichent sur ton accueil.','var(--green)',4000);
+  _rendreAmisPartout();
+  amisSynchroniser().catch(()=>{});
+  return true;
+}
+async function amiRetirer(pseudo){
+  const p=amiPseudoNormalise(pseudo), cle=pseudoPublicCle(p);
+  const o=amisLocal();
+  const nom=(o.amis[cle]&&o.amis[cle].prenom)||p;
+  delete o.amis[cle]; o.att[cle]='-';
+  _amisGarder(o);
+  toast('Tu ne suis plus '+nom+'. Il n’en est pas prévenu.','var(--green)');
+  _rendreAmisPartout();
+  amisSynchroniser().catch(()=>{});
+  return true;
+}
+// LA SYNCHRONISATION : ce qui attend part, puis le carnet et mes abonnés sont
+// relus (un autre appareil a pu suivre quelqu'un). Silencieuse.
+let _amisSyncLe=0;
+async function amisSynchroniser(force){
+  const u=currentUser;
+  if(!u||u.role==='coach'||!CLOUD||!CLOUD.ok()) return false;
+  const moi=_moiCle(), mp=_monPseudo(u), mk=mp?pseudoPublicCle(mp):'';
+  const o=amisLocal();
+  for(const cle of Object.keys(o.att)){
+    const plus=o.att[cle]==='+', e=o.amis[cle];
+    let ok=false;
+    if(plus&&e){
+      ok=(await _fbJson('amis/'+moi+'/'+cle,'PUT',{le:Number(e.le)||Date.now(),prenom:String(e.prenom||'').slice(0,24)})).ok;
+      if(ok&&mk) await _fbJson('abonnes/'+cle+'/'+mk,'PUT',{le:Number(e.le)||Date.now()});
+    }else if(!plus){
+      ok=(await _fbJson('amis/'+moi+'/'+cle,'DELETE')).ok;
+      if(ok&&mk) await _fbJson('abonnes/'+cle+'/'+mk,'DELETE');
+    }else ok=true;
+    if(ok) delete o.att[cle];
+  }
+  if(force||Date.now()-_amisSyncLe>AMIS_CACHE_MS){
+    _amisSyncLe=Date.now();
+    const r=await _fbJson('amis/'+moi);
+    if(r.ok&&r.v&&typeof r.v==='object'){
+      for(const k of Object.keys(r.v)) if(!o.att[k]&&!o.amis[k]&&r.v[k]&&r.v[k].prenom) o.amis[k]={prenom:String(r.v[k].prenom).slice(0,24),le:Number(r.v[k].le)||0};
+      for(const k of Object.keys(o.amis)) if(!o.att[k]&&!r.v[k]) delete o.amis[k];
+    }
+    if(mk){ const a=await _fbJson('abonnes/'+mk); if(a.ok) o.abonnes=(a.v&&typeof a.v==='object')?Object.fromEntries(Object.keys(a.v).map(k=>[k,1])):{}; }
+  }
+  _amisGarder(o);
+  return true;
+}
+// PURE. Le lundi (AAAA-MM-JJ) de la semaine d'un instant : celui de
+// _lundiDe, en date locale — la même borne que le Worker (heure de Paris).
+function lundiISO(t){ return localISODate(_lundiDe(typeof t==='number'?t:Date.now())); }
+// PURE. Les volts de la semaine en cours d'un profil ami (volts_publics.sem).
+function voltsSemaineDe(prof,t){
+  const s=prof&&prof.sem; if(!s) return 0;
+  const x=s[lundiISO(t)];
+  return Math.max(0,Math.round(Number(x&&x.v)||0));
+}
+// PURE. La régularité : les semaines actives parmi les quatre dernières.
+function regulariteDe(prof,t){
+  const s=prof&&prof.sem; if(!s) return 0;
+  let n=0;
+  for(let i=0;i<4;i++){ const x=s[localISODate(_datePlusJours(_lundiDe(t),-7*i))]; if(x&&Number(x.n)>0) n++; }
+  return n;
+}
+// PURE. Le tri : volts de la semaine, puis le plus régulier, puis le prénom.
+function amisTries(liste,t){
+  return (liste||[]).slice().sort((a,b)=>(voltsSemaineDe(b.prof,t)-voltsSemaineDe(a.prof,t))
+    ||(regulariteDe(b.prof,t)-regulariteDe(a.prof,t))
+    ||String(a.prenom||'').localeCompare(String(b.prenom||''),'fr'));
+}
+function _amiInitiales(p){ const m=String(p||'?').trim().split(/\s+/); return ((m[0]||'?')[0]+(m[1]?m[1][0]:'')).toUpperCase(); }
+// PURE. Une ligne d'ami : avatar (initiales), prénom, rang, volts de la
+// semaine, « Défier ». Aucune donnée corporelle : il n'y en a nulle part.
+function htmlLigneAmi(x,t,o){
+  const pr=x.prof||null, vs=voltsSemaineDe(pr,t);
+  const rang=pr&&pr.rang?pr.rang.nom:'';
+  const mut=amiEstMutuel(x.cle,o);
+  return '<div class="am-ligne">'
+    +'<span class="am-av" aria-hidden="true">'+escapeHtml(_amiInitiales(x.prenom))+'</span>'
+    +'<span class="am-id"><span class="am-nom"><b>'+escapeHtml(x.prenom||x.p)+'</b>'+(mut?'<i class="am-mut">ami</i>':'')+'</span>'
+      +'<small>'+escapeHtml(rang?rang.charAt(0)+rang.slice(1).toLowerCase():'@'+x.p)+'</small></span>'
+    +'<span class="am-v"><b>'+vs+'</b><small>V cette semaine</small></span>'
+    +'<button type="button" class="am-defi" onclick="event.stopPropagation();amiDefier(\''+escapeHtml(x.p)+'\')">Défier</button>'
+    +'</div>';
+}
+// PURE. La carte de l'accueil. Vide, elle dit quoi faire, et qui agit.
+function htmlAmisAccueil(liste,t,o,monPseudo){
+  const tete='<div class="am-tete"><span class="am-titre">Mes amis</span>'
+    +'<button type="button" class="am-tout" onclick="ouvrirAmis()">'+(liste.length?'Tout voir':'Chercher')+'</button></div>';
+  if(!liste.length){
+    return '<div class="am-carte">'+tete
+      +'<p class="am-vide">Suis tes potes pour voir leurs volts de la semaine et les défier en un geste. Cherche leur pseudo, ou envoie-leur ton lien.</p>'
+      +'<div class="am-btns"><button type="button" class="btn btn-outline btn-sm btn-casse" onclick="ouvrirAmis()">Chercher un pseudo</button>'
+      +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="amiEnvoyerLien(this)">Envoyer mon lien</button></div>'
+      +(monPseudo?'':'<p class="am-note">Choisis ton nom pour que tes potes te trouvent : <a href="#" onclick="amisVersPseudo();return false">Mon profil</a>.</p>')
+      +'</div>';
+  }
+  return '<div class="am-carte">'+tete+amisTries(liste,t).slice(0,5).map(x=>htmlLigneAmi(x,t,o)).join('')+'</div>';
+}
+// PURE. La fiche trouvée par la recherche.
+function htmlFicheAmi(r,suivi){
+  if(!r||!r.trouve) return htmlAmiIntrouvable(r&&r.pseudo,r&&r.invalide);
+  return '<div class="am-fiche">'
+    +'<span class="am-av am-av-g" aria-hidden="true">'+escapeHtml(_amiInitiales(r.prenom))+'</span>'
+    +'<div class="am-fiche-t"><b>'+escapeHtml(r.prenom)+'</b><small>@'+escapeHtml(r.pseudo)+'</small>'
+      +'<span class="am-fiche-r">'+(r.rang?escapeHtml(r.rang.nom):'Rang non affiché')+(r.volts!=null?' · '+Number(r.volts).toLocaleString('fr-FR')+' V':'')+'</span>'
+      +(r.badges&&r.badges.length?'<span class="am-fiche-b">'+r.badges.map(escapeHtml).join(' · ')+'</span>':'')+'</div>'
+    +'<button type="button" id="am-suivre" class="btn '+(suivi?'btn-outline':'btn-red')+' btn-sm btn-casse am-suivre" data-p="'+escapeHtml(r.pseudo)+'" data-n="'+escapeHtml(r.prenom)+'" onclick="amiBasculerSuivi(this)">'+(suivi?'Suivi ✓':'Suivre')+'</button>'
+    +'</div>';
+}
+// PURE. Personne à ce nom : on ne dit pas « n'existe pas » sèchement, on
+// propose le lien.
+function htmlAmiIntrouvable(p,invalide){
+  return '<div class="am-fiche am-rien"><p>'+(invalide
+      ?'Un pseudo RepCore fait de 3 à 20 caractères : lettres, chiffres, point ou tiret bas.'
+      :'On ne trouve personne à ce nom'+(p?' (@'+escapeHtml(p)+')':'')+'. Ton pote n’a peut-être pas encore choisi le sien : envoie-lui ton lien, il te trouvera en un geste.')+'</p>'
+    +'<button type="button" class="btn btn-outline btn-sm btn-casse" onclick="amiEnvoyerLien(this)">Envoyer mon lien</button></div>';
+}
+async function _amisAvecProfils(){
+  const l=amisListe();
+  await Promise.all(l.map(async x=>{ try{ x.prof=await _profilAmi(x.cle); }catch(e){ x.prof=null; } }));
+  return l;
+}
+async function renderAmisAccueil(){
+  const z=document.getElementById('clh-amis');
+  const u=currentUser;
+  if(!z) return false;
+  if(!u||u.role==='coach'){ z.innerHTML=''; return false; }
+  // D'abord ce que l'appareil sait (hors ligne), puis les profils.
+  z.innerHTML=htmlAmisAccueil(amisListe(),Date.now(),amisLocal(),_monPseudo(u));
+  try{ await amisSynchroniser(); }catch(e){}
+  const l=await _amisAvecProfils();
+  z.innerHTML=htmlAmisAccueil(l,Date.now(),amisLocal(),_monPseudo(u));
+  return true;
+}
+function ouvrirAmis(){
+  go('s-client-amis');
+  renderEcranAmis();
+  return true;
+}
+async function renderEcranAmis(){
+  const z=document.getElementById('am-corps');
+  const u=currentUser;
+  if(!z||!u) return false;
+  const mp=_monPseudo(u);
+  z.innerHTML='<form class="am-cherche" onsubmit="event.preventDefault();amiLancerRecherche()">'
+      +'<input id="am-q" type="search" inputmode="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Son pseudo, ex. marc.fit" aria-label="Pseudo à chercher">'
+      +'<button type="submit" class="btn btn-red btn-sm btn-casse">Chercher</button></form>'
+    +'<div id="am-res"></div>'
+    +(mp?'<p class="am-note">Tes potes te trouvent sous <b>@'+escapeHtml(mp)+'</b>.</p>'
+        :'<p class="am-note">Choisis ton nom pour que tes potes te trouvent : <a href="#" onclick="amisVersPseudo();return false">Mon profil</a>. Tu peux suivre sans être trouvable.</p>')
+    +'<div class="am-lab">Ceux que tu suis</div><div id="am-liste"></div>';
+  _rendreListeEcranAmis(amisListe());
+  try{ await amisSynchroniser(true); }catch(e){}
+  _rendreListeEcranAmis(await _amisAvecProfils());
+  return true;
+}
+function _rendreListeEcranAmis(l){
+  const z=document.getElementById('am-liste'); if(!z) return;
+  if(!l.length){ z.innerHTML='<p class="am-vide">Personne pour l’instant : cherche un pseudo ci-dessus, ou envoie ton lien.</p>'; return; }
+  const o=amisLocal(), t=Date.now();
+  z.innerHTML=amisTries(l,t).map(x=>'<div class="am-ligne-w">'+htmlLigneAmi(x,t,o)
+    +'<button type="button" class="am-retirer" onclick="amiRetirer(\''+escapeHtml(x.p)+'\')">Ne plus suivre</button></div>').join('');
+}
+async function amiLancerRecherche(){
+  const q=document.getElementById('am-q'), z=document.getElementById('am-res');
+  if(!q||!z) return false;
+  z.innerHTML='<p class="am-note">Recherche…</p>';
+  const r=await amiChercher(q.value);
+  const o=amisLocal();
+  z.innerHTML=htmlFicheAmi(r,!!(r.trouve&&o.amis[pseudoPublicCle(r.pseudo)]));
+  return r.trouve;
+}
+// « Suivre » devient « Suivi », sans rechargement (et l'inverse).
+async function amiBasculerSuivi(b){
+  if(!b) return false;
+  const p=b.dataset.p, n=b.dataset.n;
+  const suivi=!!amisLocal().amis[pseudoPublicCle(p)];
+  const ok=suivi?await amiRetirer(p):await amiSuivre(p,n);
+  if(ok){ const s=!suivi; b.textContent=s?'Suivi ✓':'Suivre'; b.classList.toggle('btn-red',!s); b.classList.toggle('btn-outline',s); }
+  return ok;
+}
+function _rendreAmisPartout(){
+  try{ renderAmisAccueil(); }catch(e){}
+  try{ if(document.getElementById('s-client-amis')?.classList.contains('active')) _rendreListeEcranAmis(amisListe()); }catch(e){}
+}
+function amisVersPseudo(){
+  try{ openAthleteProfile(); }catch(e){ go('s-athlete-profile'); }
+  setTimeout(()=>{ try{ document.getElementById('atp-page')?.scrollIntoView({block:'start',behavior:'smooth'}); }catch(e){} },300);
+  return true;
+}
+// SYNCHRONE jusqu'à navigator.share (iOS).
+function amiEnvoyerLien(btn){
+  const l=lienPerso('amis');
+  if(!l) return false;
+  const pr=String((currentUser&&currentUser.fname)||'').trim();
+  const txt=(pr?pr+' t’invite':'Je t’invite')+' sur RepCore : on se suit et on se défie ⚡';
+  if(navigator.share){ navigator.share({title:'RepCore',text:txt,url:l}).then(()=>{ try{ attribCompter('partage','amis'); }catch(e){} }).catch(()=>{}); return true; }
+  try{ navigator.clipboard.writeText(txt+' '+l).then(()=>{ toast('Lien copié','var(--green)'); if(btn) btn.textContent='Lien copié ✓'; },()=>toast(l)); }catch(e){ toast(l); }
+  return true;
+}
+// « Défier » : la feuille de duel existante, préparée pour cet ami.
+function amiDefier(pseudo){
+  const p=amiPseudoNormalise(pseudo), e=amisLocal().amis[pseudoPublicCle(p)];
+  return ouvrirCreationDuel({p,prenom:(e&&e.prenom)||p});
+}
+// Après un duel : son pseudo, s'il l'a posé (createurPseudo / invitePseudo).
+function duelAdversairePseudo(d,moi){
+  if(!d) return '';
+  const p=d.createur===moi?d.invitePseudo:d.createurPseudo;
+  return PSEUDO_PUBLIC_RE.test(p||'')?p:'';
+}
 async function _rendreDuelsAccueil(){
   const z=document.getElementById('clh-duels');
   const u=currentUser;
@@ -21216,8 +21528,12 @@ async function _rendreDuelsAccueil(){
   return true;
 }
 // ── Créer un duel : la feuille ─────────────────────────────────────────────
-function ouvrirCreationDuel(){
+let _duelCible=null;
+function ouvrirCreationDuel(cible){
   if(!currentUser) return false;
+  // L'AMI VISÉ (carnet, « Défier ») : la feuille ne change pas d'apparence,
+  // elle prépare seulement l'envoi.
+  _duelCible=(cible&&typeof cible==='object'&&PSEUDO_PUBLIC_RE.test(cible.p||''))?{p:cible.p,prenom:String(cible.prenom||cible.p).slice(0,24)}:null;
   document.getElementById('duel-feuille')?.remove();
   const d=document.createElement('div');
   d.id='duel-feuille';
@@ -21276,7 +21592,7 @@ function envoyerDuel(id,btn){
   const l=lienDuel(id,u);
   if(!l) return false;
   const pr=String((u&&u.fname)||'').trim();
-  const txt=(pr?pr+' te défie':'Je te défie')+' sur RepCore : '+texteDuel(d&&d.mesure,d&&d.duree)+'. Tu relèves ?';
+  const txt=(_duelCible?_duelCible.prenom+', ':'')+(pr?pr+' te défie':'Je te défie')+' sur RepCore : '+texteDuel(d&&d.mesure,d&&d.duree)+'. Tu relèves ?';
   try{ parcoursInvitation(); }catch(e){}
   if(navigator.share){
     navigator.share({title:'Duel RepCore',text:txt,url:l}).then(()=>{ try{ attribCompter('partage','duel'); }catch(e){} }).catch(()=>{});
@@ -21299,6 +21615,10 @@ async function ouvrirDuel(id){
   f.innerHTML='<div class="du-carte"><div class="du-titre">DUEL · '+escapeHtml(texteDuel(d.mesure,d.duree))+'</div>'
     +'<p class="du-sous">'+escapeHtml(duelLigne(d,moi,Date.now()))+'</p>'
     +(d.statut==='attente'?'<button type="button" class="btn btn-red du-go" onclick="envoyerDuel(\''+id+'\',this)">'+icon('share',16)+' <span>Renvoyer le défi</span></button>':'')
+    +(()=>{ const ap=fini?duelAdversairePseudo(d,moi):'', dk=ap?pseudoPublicCle(ap):'';
+      if(!ap||amisLocal().amis[dk]) return '';
+      const nom=escapeHtml(d.createur===moi?(d.inviteNom||ap):(d.createurNom||ap));
+      return '<button type="button" class="btn btn-outline btn-sm btn-casse du-go" onclick="amiSuivre(\''+escapeHtml(amiPseudoDeCle(ap))+'\',\''+nom+'\');this.remove()">Ajouter '+nom+' à mes amis</button>'; })()
     +'<button type="button" class="btn '+(fini?'btn-red':'btn-outline btn-sm btn-casse')+' du-go" onclick="partagerCarteDuel(\''+id+'\',\''+(fini?'resultat':'lancement')+'\',this)">'
       +icon('share',14)+' <span>'+(fini?'Partager le résultat':'Partager la carte DUEL')+'</span></button>'
     +'<button type="button" class="btn btn-outline btn-sm du-go" onclick="fermerDuelFeuille()">Fermer</button></div>';
@@ -38647,6 +38967,8 @@ function loadClientHome(){
   try{ renderDefiAccueil(); }catch(e){}
   // Les duels (l'invitation reçue, ceux en cours) et le défi RepCore du mois.
   try{ _rendreDuelsAccueil(); }catch(e){}
+  // Le carnet d'amis, sous les duels (lot A).
+  try{ renderAmisAccueil(); }catch(e){}
   try{ renderDefiMoisAccueil(); }catch(e){}
   // L'événement saisonnier : la bannière (et la valeur de l'athlète, écrite).
   try{ renderSaisonAccueil(); }catch(e){}
@@ -45720,7 +46042,7 @@ function renderWoEx(){
         <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--info);flex-shrink:0">DÉCHARGE</span>
         <span style="font-size:var(--fs-xs);color:#bbb;line-height:1.5">${woState.repriseDouce?'Reprise en douceur : tes charges proposées sont 10 % plus légères. Elle ne comptera pas comme un recul.':'Semaine allégée voulue par ton coach. Elle ne comptera pas comme un recul.'}</span>
       </div>`:''}
-      ${(()=>{ try{ const _ri=_rapIndexSeance(); return (_ri>=0&&(woState.currentEx===0||groupe.includes(_ri)))?htmlRecordAPortee(woState.objectif,'seance'):''; }catch(e){ return ''; } })()}
+      ${''/* « RECORD À PORTÉE » RETIRÉ DE LA TÊTE DE SÉANCE (Kevin, 29/09/2026) : l'éclair sur la série et le rappel restent. */}
       ${woState.currentEx===0?_carteProtocole(woState.warmup,'Échauffement','var(--orange)','wo-warmup-body',true,
         (()=>{ try{ return chargeReferenceEchauffement(0); }catch(e){ return null; } })()):''}
       ${photoHtml}
