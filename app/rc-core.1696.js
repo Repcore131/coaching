@@ -24121,7 +24121,11 @@ function _riteRecords(u,debut,fin){
         if(!set||set.done===false) continue;
         const w=parseFloat(set.weight)||0, r=parseFloat(set.repsDone!=null?set.repsDone:set.reps)||0;
         if(!(w>0&&r>0)) continue;
-        let v=0; try{ v=e1rm(w,r,(set.rir==='echec')?0:(parseInt(set.rir)||0)); }catch(err){ v=w; }
+        // LOT T1 : la même borne que partout ailleurs. Une série de vingt ne fait
+        // plus un record de cycle gonflé par un modèle qu'elle dépasse.
+        const _i=(set.rir==='echec')?0:(parseInt(set.rir)||0);
+        if(!e1rmFiable(r,_i)) continue;
+        let v=0; try{ v=e1rm(w,r,_i); }catch(err){ v=w; }
         if(!(cible[nom]>v)) cible[nom]=v;
       }
     }
@@ -34717,7 +34721,7 @@ function bilanBloc(u,opts){
       for(const st of ((d[nom]&&d[nom].sets)||[])){
         if(!st||st.done!==true) continue;
         const w=parseFloat(st.weight)||0, r=_perfReps(st);
-        if(!(w>0)||!(r>0)||r>PERF_REPS_MAX_E1RM) continue;
+        if(!(w>0)||!(r>0)||!e1rmFiable(r,_perfRir(st,u))) continue;
         let x=0; try{ x=e1rm(w,r,_perfRir(st,u)); }catch(e){ x=0; }
         if(x>best) best=x;
       }
@@ -48359,7 +48363,7 @@ function _blocExo(idx,estSS){
   // reprise — la plus forte des deux.
   if(woState.repriseDouce&&_decote!=null) _decote=Math.min(_decote,REPRISE_DOUCE_FACTEUR);
   const _abandon=!!prev&&_decote===null;
-  const _rawSug=(prev&&!_abandon)?chargeSuivante(prev.weight,prev.rir,isCW,_decote):null;
+  const _rawSug=(prev&&!_abandon)?chargeSuivante(prev.weight,prev.rir,isCW,_decote,ex.name):null;
   const _sugBrut=_rawSug!=null&&_rawSug>0?_rawSug:null;
   // isFemale ne garde plus l'ajustement ni le bandeau : currentCycle ne vaut
   // autre chose que 'ignore' QUE si l'athlète a répondu au modal de phase, et
@@ -49276,7 +49280,7 @@ function renderSets(ex,data,idx,opts){
     // le RPE qui est demande, pas le RIR qui est saisi.
     if(s.rpeCible) continue;
     if(w>0 && s.rir!==''&&s.rir!==undefined&&s.rir!==null){
-      const nextW=chargeSuivante(w,s.rir,_isCW);
+      const nextW=chargeSuivante(w,s.rir,_isCW,1,ex.name);
       if(!data.sets[i+1].done&&!data.sets[i+1].userEdited){
         data.sets[i+1].weight=nextW;
         data.sets[i+1].isAuto=true;
@@ -50777,18 +50781,32 @@ function calEnregistrer(idx){
   return true;
 }
 
-// Une seule définition de l'e1RM dans le fichier. Elle vivait dans calcSug,
-// qui n'avait plus aucun appelant ; calcSug l'utilise désormais aussi, ce qui
-// évite d'en avoir deux versions qui divergeraient.
+// Une seule définition de l'e1RM dans le fichier.
+//
+// LOT T1 (29/09/2026) : LE RIR S'AJOUTE AUX RÉPÉTITIONS. L'ancienne forme
+// divisait par (1 + RIR × 0,025) : déclarer PLUS de réserve faisait BAISSER
+// l'e1RM, l'inverse de ce qu'elle mesure. 100 kg × 8 : RIR 0 → 126,7 (inchangé),
+// RIR 2 → 133,3 (au lieu de 120,6), RIR 4 → 140,0 (au lieu de 115,2).
+// C'est Epley appliqué aux répétitions qu'on AURAIT pu faire : reps + RIR.
+// Aucune valeur d'e1RM n'est stockée nulle part : tout l'historique se relit
+// avec la même formule, d'un coup, sans migration.
 // Attention : le calculateur « Calculer ma charge » (openCalc) utilise, lui, une table
 // de pourcentages, un autre modèle. C'est pourquoi aucune valeur en kg n'est
 // affichée par la détection de plateau : elle contredirait ce calculateur.
 function e1rm(poids,reps,rir){
   const w=parseFloat(poids)||0, r=parseFloat(reps)||0, i=parseFloat(rir)||0;
   if(w<=0) return 0;
-  return w*(1+r/30)/(1+i*0.025);
+  return w*(1+(r+Math.max(0,i))/30);
 }
 const PERF_REPS_MAX_E1RM=12;  // au-delà, l'e1RM n'est plus fiable
+// LA BORNE, UNE SEULE FOIS : répétitions + RIR ≤ 12. Elle était comparée à la
+// main, sur les seules répétitions, dans une douzaine de fonctions (et deux ne
+// la comparaient pas du tout). Une série de 10 à RIR 3 vaut 13 répétitions
+// possibles : au-delà du domaine où le modèle tient.
+function e1rmFiable(reps,rir){
+  const r=Number(reps)||0, i=Math.max(0,Number(rir)||0);
+  return r+i<=PERF_REPS_MAX_E1RM;
+}
 
 // `user` EST FACULTATIF, ET SON ABSENCE VAUT « PAS DE CORRECTION ». C'est la
 // valeur par defaut la plus sure : tout appelant qui n'a pas explicitement
@@ -50796,9 +50814,10 @@ const PERF_REPS_MAX_E1RM=12;  // au-delà, l'e1RM n'est plus fiable
 // auditer les appelants pour savoir lesquels corrigeaient par accident — il
 // n'y en a aucun, par construction.
 function _perfRir(s,user){
-  // '' et absent donnent 0, donc « à l'échec » : c'est ce qui SURESTIME l'e1RM
-  // et justifie d'écarter du maximum les séances où le RIR est majoritairement
-  // vide, sans quoi une séance mal renseignée deviendrait un record imbattable.
+  // '' et absent donnent 0, donc « à l'échec ». Avec la formule du lot T1, c'est
+  // l'estimation la PLUS BASSE (une réserve inconnue ne s'ajoute pas). Écarter
+  // du maximum les séances où le RIR est majoritairement vide reste utile : ces
+  // séances-là ne disent pas où l'athlète en était.
   const brut=(s&&s.rir==='echec')?0:(parseInt(s&&s.rir)||0);
   return (user===undefined||user===null)?brut:rirCorrige(user,brut);
 }
@@ -50820,7 +50839,7 @@ function perfExercice(sess,exNom,user){
     retenues++;
     if(s.rir===''||s.rir==null) sansRir++;
     const r=_perfReps(s);
-    const m=r<=PERF_REPS_MAX_E1RM?'e1RM':'volume-serie';
+    const m=e1rmFiable(r,_perfRir(s,user))?'e1RM':'volume-serie';
     vus[m]=true;
     const v=m==='e1RM'?e1rm(w,r,_perfRir(s,user)):w*r;
     if(v>score){ score=v; metrique=m; }
@@ -61051,7 +61070,7 @@ function e1rmRecordsDeSeance(sc,anterieures,user){
     for(const st of (sets||[])){
       if(!st||st.done!==true) continue;
       const w=parseFloat(st.weight)||0, r=_perfReps(st);
-      if(!(w>0)||!(r>0)||r>PERF_REPS_MAX_E1RM) continue;
+      if(!(w>0)||!(r>0)||!e1rmFiable(r,_perfRir(st,user))) continue;
       let x=0; try{ x=e1rm(w,r,_perfRir(st,user)); }catch(e){ x=0; }
       if(x>v) v=x;
     }
@@ -63528,8 +63547,11 @@ function rapProgression(u,debut,fin){
         const w=parseFloat(st.weight)||0;
         const r=parseFloat(st.repsDone!=null?st.repsDone:st.reps)||0;
         if(!(w>0&&r>0)) continue;
+        // LOT T1 : la même borne que partout ailleurs (répétitions + RIR ≤ 12).
+        const _i=(st.rir==='echec')?0:(parseInt(st.rir)||0);
+        if(!e1rmFiable(r,_i)) continue;
         let v=0;
-        try{ v=e1rm(w,r,(st.rir==='echec')?0:(parseInt(st.rir)||0)); }catch(e){ v=w; }
+        try{ v=e1rm(w,r,_i); }catch(e){ v=w; }
         if(v>best) best=v;
       }
       if(!(best>0)) continue;
@@ -65707,15 +65729,8 @@ function isCounterweightEx(name){
   const n=name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   return /(dips?|traction[s]?)\s+(assiste[es]?|guide[es]?)/i.test(n);
 }
-function calcSug(pw,pr,prr,tr,trir){
-  const pW=parseFloat(pw),pR=parseFloat(pr),pRIR=parseFloat(prr),tR=parseFloat(tr)||pR,tRIR=parseFloat(trir)||0;
-  if(!pW||pW<=0) return null;
-  // Meme definition que partout ailleurs : voir e1rm(). Elle vivait ici et
-  // nulle part ailleurs, dans une fonction qui n avait plus d appelant.
-  const e1rm=window.e1rm?window.e1rm(pW,pR,pRIR):pW*(1+pR/30)/(1+pRIR*0.025);
-  const sug=e1rm*(1+tR/30)/(1+(tRIR*0.025+0.33));
-  return roundWeight(sug);
-}
+// calcSug a été SUPPRIMÉE (lot T1) : aucun appelant, et une seconde façon de
+// proposer une charge, qui divergeait de chargeSuivante.
 // Même rattachement au créneau que getLastZeroRIRWeight : voir _memeCreneau.
 // ── Progression de charge : la formule du coach ─────────────────────────────
 // Multiplicateur appliqué à la charge de la dernière série, selon son RIR :
@@ -65879,7 +65894,20 @@ function joursDepuisRef(refDate,aujourdhui){
   const j=_joursEntre(refDate,auj);
   return isFinite(j)?Math.max(0,j):null;
 }
-function chargeSuivante(charge,rir,contrepoids,decote){
+// LOT T1 : LE PLAFOND DU PAS. Le multiplicateur suit la charge, donc le pas
+// grossit avec elle : 180 kg au squat à RIR 5 proposaient +22,5 kg d'un coup.
+// Plafond sur la HAUSSE seulement, par schéma moteur (schemaDe : la
+// classification du catalogue, pas une seconde liste) ; jamais sur une baisse,
+// jamais sur un contrepoids. Les isolations, mollets, gainage, port de charge et
+// pliométrie n'en ont pas : leurs charges ne l'atteignent pas.
+const PAS_PLAFOND_KG=Object.freeze({'squat':10,'charniere-hanche':10,'fente':10,
+  'poussee-horizontale':5,'poussee-verticale':5,'tirage-horizontal':5,'tirage-vertical':5,'halterophilie':5});
+function plafondPas(exNom){
+  if(!exNom) return null;
+  let k=null; try{ k=schemaDe(exNom,currentUser); }catch(e){ k=null; }
+  return (k&&PAS_PLAFOND_KG[k])||null;
+}
+function chargeSuivante(charge,rir,contrepoids,decote,exNom){
   const w=parseFloat(charge)||0;
   if(!(w>0)) return null;
   const m=multiplicateurRir(rir);
@@ -65896,7 +65924,9 @@ function chargeSuivante(charge,rir,contrepoids,decote){
   // le sens fait que la compensation baisse vraiment.
   // Le DÉPART de l'arrondi reste la charge réellement faite : la cible décotée
   // ne doit jamais être dépassée, sinon « on repart 10 % en dessous » est faux.
-  return arrondiCharge125(contrepoids?w/(m*d):w*m*d,w);
+  const res=arrondiCharge125(contrepoids?w/(m*d):w*m*d,w);
+  const cap=contrepoids?null:plafondPas(exNom);
+  return (cap&&res!=null&&res-w>cap)?Math.round((w+cap)*100)/100:res;
 }
 
 function getPrevPerf(name,slot,progName){
@@ -66679,7 +66709,7 @@ function maxE1rmObserve(user,nomEx,maintenant){
       const r=_perfReps(se);
       // Au-dela de douze repetitions l'e1RM n'est plus fiable : la meme borne
       // que partout ailleurs dans ce fichier, et pour la meme raison.
-      if(!(r>0)||r>PERF_REPS_MAX_E1RM) continue;
+      if(!(r>0)||!e1rmFiable(r,_perfRir(se,user))) continue;
       const v=e1rm(w,r,_perfRir(se,user));
       if(v>haut) haut=v;
     }
@@ -67891,7 +67921,7 @@ function _rendPoints(user,nom,maintenant){
       for(const s of (((sess.data[n2]||{}).sets)||[])){
         if(!s||s.done!==true) continue;
         const w=parseFloat(s.weight), r=_perfReps(s);
-        if(!(w>0)||!(r>0)||r>PERF_REPS_MAX_E1RM) continue;
+        if(!(w>0)||!(r>0)||!e1rmFiable(r,_perfRir(s,u))) continue;
         const v=e1rm(w,r,_perfRir(s,u));
         if(v>best) best=v;
       }
@@ -69516,7 +69546,7 @@ function _perfMuscleSemaine(user,muscle,cle){
         if(!s||s.done!==true) continue;
         const w=parseFloat(s.weight);
         const r=_perfReps(s);
-        if(!(w>0)||!(r>0)||r>PERF_REPS_MAX_E1RM) continue;
+        if(!(w>0)||!(r>0)||!e1rmFiable(r,_perfRir(s,u))) continue;
         // LE RIR CORRIGE : c'est une lecture de DECISION. Voir rirCorrige —
         // la perception se mesure, et deux athletes qui declarent « RIR 2 »
         // ne sont pas au meme endroit.
@@ -80224,7 +80254,7 @@ function noteAthlete(u,maintenant){
     minutes+=(d>0&&d<600)?d:l.length*3;
     const h=s.date<milieu?0:1;
     for(const x of l){
-      if(!(x.kg>0)||!(x.reps>=1)||x.reps>PERF_REPS_MAX_E1RM) continue;
+      if(!(x.kg>0)||!(x.reps>=1)||!e1rmFiable(x.reps,x.rir)) continue;
       const e=e1rm(x.kg,x.reps,x.rir);
       let k=x.nom; try{ k=resoudreAlias(exKey(x.nom)); }catch(er){}
       if(!meilleur[k]||e>meilleur[k].e) meilleur[k]={e,nom:x.nom};
@@ -83011,7 +83041,7 @@ function recordsExercice(user,nomEx){
       // où le modèle vaut quelque chose. Au-delà de PERF_REPS_MAX_E1RM,
       // perfExercice bascule déjà sur le tonnage-série — même règle ici.
       if(pt.sansRirDominant) continue;
-      if(!(r>0)||r>PERF_REPS_MAX_E1RM) continue;
+      if(!(r>0)||!e1rmFiable(r,_perfRir(s,user))) continue;
       const v=e1rm(w,r,_perfRir(s,user));
       if(v>0&&(!me||v>me.valeur)) me={valeur:Math.round(v*10)/10,date:pt.date};
     }
@@ -83063,7 +83093,7 @@ function _rapE1rm(sets,user){
   for(const s of (sets||[])){
     if(!s||s.done!==true) continue;
     const w=parseFloat(s.weight), r=_perfReps(s);
-    if(!(w>0)||!(r>0)||r>PERF_REPS_MAX_E1RM) continue;
+    if(!(w>0)||!(r>0)||!e1rmFiable(r,_perfRir(s,user))) continue;
     const i=_perfRir(s,user);
     const x=e1rm(w,r,i);
     if(x>v){ v=x; rir=Number(i)||0; }
@@ -83116,7 +83146,8 @@ function recordAPorteeExo(u,nomEx,reps,maintenant){
   // conversion inverse aussi.
   const rirs=der.map(x=>x.rir).sort((a,b)=>a-b);
   const rirRef=rirs[Math.floor(rirs.length/2)]||0;
-  const tendance=tr.projection*(1+rirRef*0.025)/(1+r/30);
+  // La réciproque exacte de e1rm() : charge = e1RM / (1 + (reps + RIR)/30).
+  const tendance=tr.projection/(1+(r+rirRef)/30);
   const plafond=recKg*(1+RAP_PLAFOND);
   const charge=arrondiAuPas(Math.min(tendance,plafond));
   if(!(charge>recKg)) return null;
@@ -83911,7 +83942,7 @@ function estNouveauRecord(user,nomEx,serie){
   if(!rec) return true;                    // premier record de cet exercice
   const mc=rec.meilleureCharge, me=rec.meilleurE1rm;
   if(mc&&w>mc.kg) return true;
-  if(r>0&&r<=PERF_REPS_MAX_E1RM){
+  if(r>0&&e1rmFiable(r,_perfRir(serie,user))){
     const v=e1rm(w,r,_perfRir(serie,user));
     if(v>0&&(!me||v>me.valeur)) return true;
   }
@@ -122809,7 +122840,7 @@ function chargeReferenceEchauffement(idx){
     const prev=getPrevPerf(ex.name,woState.slot,woState.progName);
     if(prev&&prev.weight){
       const isCW=isCounterweightEx(ex.name);
-      const s=chargeSuivante(prev.weight,prev.rir,isCW);
+      const s=chargeSuivante(prev.weight,prev.rir,isCW,1,ex.name);
       if(s>0) return s;
     }
   }catch(e){}

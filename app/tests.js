@@ -20858,8 +20858,8 @@ async function testExercices(){
     // ── perfExercice : les deux régimes et leur bascule ──
     const _pf=(w,reps,rir)=>perfExercice(
       {data:{'X':{sets:[{done:true,weight:String(w),reps:String(reps),rir}]}}},'X');
-    ok('Critère 4 : 60 kg × 10 reps RIR 1 → 78,05 en e1RM',
-       Math.abs(_pf(60,10,'1').score-60*(1+10/30)/(1+0.025))<1e-9
+    ok('Critère 4 : 60 kg × 10 reps RIR 1 → 82 en e1RM (T1 : le RIR s’ajoute aux répétitions)',
+       Math.abs(_pf(60,10,'1').score-60*(1+11/30))<1e-9
        &&_pf(60,10,'1').metrique==='e1RM',
        _pf(60,10,'1').score+' / '+_pf(60,10,'1').metrique);
     ok('Critère 5 : 40 kg × 20 reps → 800 en volume-serie',
@@ -20871,12 +20871,12 @@ async function testExercices(){
     ok('r=1 reste en e1RM',_pf(100,1,'0').metrique==='e1RM');
     ok('r=0 reste en e1RM et vaut la charge',
        _pf(100,0,'0').metrique==='e1RM'&&Math.abs(_pf(100,0,'0').score-100)<1e-9);
-    // RIR : 'echec' vaut 0, une valeur vide aussi (ce qui SURESTIME l'e1RM)
+    // RIR : 'echec' vaut 0, une valeur vide aussi (l'estimation la plus basse depuis T1)
     ok('RIR « echec » compte comme 0',_pf(60,10,'echec').score===_pf(60,10,'0').score);
     ok('RIR vide compte comme 0',_pf(60,10,'').score===_pf(60,10,'0').score);
-    ok('RIR 3 abaisse le score',_pf(60,10,'3').score<_pf(60,10,'0').score);
-    ok('RIR 3 : diviseur 1,075',
-       Math.abs(_pf(60,10,'3').score-60*(1+10/30)/(1+3*0.025))<1e-9);
+    ok('T1 — RIR 2 élève l’e1RM (il abaissait avec l’ancienne formule)',_pf(60,10,'2').score>_pf(60,10,'0').score&&_pf(60,10,'2').metrique==='e1RM');
+    ok('T1 — RIR 2 : 60 × (1 + 12/30)',Math.abs(_pf(60,10,'2').score-60*(1+12/30))<1e-9);
+    ok('T1 — reps + RIR au-delà de 12 : volume-serie',_pf(60,10,'3').metrique==='volume-serie'&&_pf(60,10,'3').score===600);
     // Séries non éligibles
     ok('Série non validée : ignorée',_pf(60,10,'1')&&
        perfExercice({data:{'X':{sets:[{done:false,weight:'60',reps:'10',rir:'1'}]}}},'X')===null);
@@ -20896,13 +20896,11 @@ async function testExercices(){
       {done:true,weight:'40',reps:'20',rir:'0'}]}}},'X');
     ok('Régimes mélangés : signalés',_pfMix.mixte===true);
 
-    // ── Cohérence STRICTE avec calcSug ──
-    // calcSug appelle désormais e1rm : les deux doivent être rigoureusement
-    // identiques, pas seulement proches.
-    ok('e1rm identique à celui de calcSug',
-       [[60,10,1],[100,5,0],[42.5,8,3],[80,1,2]].every(([w,r,i])=>{
-         const attendu=w*(1+r/30)/(1+i*0.025);
-         return Math.abs(e1rm(w,r,i)-attendu)===0;}));
+    // ── LOT T1 : la formule, et calcSug supprimée ──
+    ok('T1 — 100 kg × 8 : RIR 0 → 126,7 ; RIR 2 → 133,3 ; RIR 4 → 140,0',
+       [[0,126.67],[2,133.33],[4,140]].every(([i,v])=>Math.abs(e1rm(100,8,i)-v)<0.01));
+    ok('T1 — calcSug n’existe plus : chargeSuivante est le seul moteur des charges proposées',typeof calcSug==='undefined');
+    ok('T1 — la borne : répétitions + RIR ≤ 12',e1rmFiable(12,0)&&e1rmFiable(10,2)&&!e1rmFiable(10,3)&&!e1rmFiable(13,0)&&e1rmFiable(8,'')&&e1rmFiable(0,0));
     ok('e1rm sur charge nulle ou négative rend 0',e1rm(0,10,1)===0&&e1rm(-5,10,1)===0);
 
     // ── etatExercice : les cinq sorties ──
@@ -50334,6 +50332,49 @@ async function testExercices(){
       const d=document.createElement('div'); d.innerHTML=htmlPaiementsFiche(l);
       return (/Remboursé/.test(d.textContent)&&/Reçu/.test(d.textContent)&&/150/.test(d.textContent))?true:_echec(d.textContent);})());
 
+    // ══ LOT T1 — L'e1RM CORRIGÉE, LE PLAFOND DU PAS (29/09/2026) ═════════════
+    ok('T1 — le plafond du pas : +10 kg en bas du corps, +5 kg en haut, rien sur une isolation ni sur une baisse',(()=>{
+      const nom=(sch,mot)=>SCHEMAS_BRUT[sch].split('~').find(n=>!mot||n.indexOf(mot)>=0)||SCHEMAS_BRUT[sch].split('~')[0];
+      const sq=nom('squat','SQUAT'), dc=nom('poussee-horizontale','COUCHE'), tir=nom('tirage-vertical'), iso=nom('isolation-coude');
+      if(schemaDe(sq)!=='squat'||schemaDe(dc)!=='poussee-horizontale') return _echec('noms de test : '+sq+' / '+dc);
+      // Sans plafond, 180 × 1,125 = 202,5 : +22,5 kg. Avec : +10.
+      if(chargeSuivante(180,5,false,1)!==202.5) return _echec('sans nom, le multiplicateur seul : '+chargeSuivante(180,5,false,1));
+      if(chargeSuivante(180,5,false,1,sq)!==190) return _echec('squat : '+chargeSuivante(180,5,false,1,sq));
+      if(chargeSuivante(100,5,false,1,dc)!==105) return _echec('développé couché : '+chargeSuivante(100,5,false,1,dc));
+      if(chargeSuivante(100,5,false,1,tir)!==105) return _echec('tirage vertical : '+chargeSuivante(100,5,false,1,tir));
+      // Le plafond ne mord que sur les grosses charges : 40 kg à RIR 5 = +5, pile.
+      if(chargeSuivante(40,5,false,1,dc)!==45) return _echec('40 kg : '+chargeSuivante(40,5,false,1,dc));
+      // Isolation : pas de plafond.
+      if(chargeSuivante(100,5,false,1,iso)!==112.5) return _echec('isolation : '+chargeSuivante(100,5,false,1,iso));
+      // Une baisse (échec) n'est jamais plafonnée, un contrepoids non plus.
+      if(chargeSuivante(180,'echec',false,1,sq)!==chargeSuivante(180,'echec',false,1)) return _echec('baisse plafonnée');
+      if(chargeSuivante(40,5,true,1,dc)!==chargeSuivante(40,5,true,1)) return _echec('contrepoids plafonné');
+      // Les trois appelants passent le nom de l'exercice.
+      const src=_prodSrc();
+      return (src.match(/chargeSuivante\([^)]*ex\.name\)/g)||[]).length===3?true:_echec('appelants sans nom d’exercice');})());
+    ok('T1 — records du rite et rapport de progression : la même borne que le reste de l’app',(()=>{
+      const t0=Date.parse('2026-06-01T12:00:00Z'), J=864e5;
+      const S=(j,w,reps,rir)=>({date:t0+j*J,data:{'SQUAT':{sets:[{done:true,weight:String(w),reps:String(reps),rir:String(rir)}]}}});
+      // Avant : 100 × 5 à l'échec. Pendant : 60 × 20, qui vaudrait 100 kg d'e1RM sans borne.
+      const u={email:'t1-rite@t.fr',sessions:[S(0,100,5,0),S(40,60,20,0)]};
+      const r=_riteRecords(u,t0+30*J,t0+50*J);
+      if(r.length) return _echec('une série de 20 fait un record du rite : '+JSON.stringify(r));
+      const u2={email:'t1-rite2@t.fr',sessions:[S(0,100,5,0),S(40,105,5,0)]};
+      if(_riteRecords(u2,t0+30*J,t0+50*J).length!==1) return _echec('un vrai record disparaît');
+      // La réciproque du record à portée : charge = e1RM / (1 + (reps + RIR)/30).
+      return /tr\.projection\/\(1\+\(r\+rirRef\)\/30\)/.test(String(recordAPorteeExo))?true:_echec('conversion inverse');})());
+    ok('T1 — le scénario : 3 semaines à 100 × 8 à l’échec, puis 3 à 100 × 7 à RIR 2 : plus de fausse régression',(()=>{
+      const t0=Date.parse('2026-06-01T18:00:00Z'), J=864e5;
+      const S=(j,reps,rir)=>({id:'t1s'+j,date:t0+j*J,slot:0,name:'P',data:{'EX':{sets:[{done:true,weight:'100',reps:String(reps),rir:String(rir)}]}}});
+      const ses=[];
+      for(let j=0;j<21;j+=3.5) ses.push(S(j,8,0));
+      for(let j=21;j<42;j+=3.5) ses.push(S(j,7,2));
+      _viderCachePlateau();
+      const e=etatExercice({email:'t1-scen@t.fr',exAlias:{},exMuscles:{},sessions:ses},'EX',0,'P');
+      // 100 × 7 à RIR 2 vaut 130 : au-dessus des 126,7 de 100 × 8 à l'échec. L'ancienne formule
+      // lisait 117,5, soit 92,7 % du maximum, et criait à la régression.
+      return (e&&e.etat!=='regression')?true:_echec('état : '+(e&&e.etat));})());
+
     ok('Volts : dix rangs, dans l’ordre, seuils croissants à partir de 0',(()=>{
       const n=RANGS.map(r=>r.nom).join();
       if(n!=='ÉTINCELLE,IMPULSION,VOLTAGE,MACHINE,ÉLITE,SURTENSION,MONSTRE,FOUDRE,TITAN,LÉGENDE') return _echec(n);
@@ -57043,7 +57084,8 @@ async function testExercices(){
       // Le bilan de départ est hors fenêtre : la comparaison part du bilan de J-55.
       if(r.periode!=='8 semaines') return _echec('période : '+r.periode);
       const t=r.elements.map(e=>e.type+':'+e.libelle+' '+e.delta).join(' | ');
-      if(t!=='poids:poids +2,1 kg | mesure:tour de biceps droit +0,9 cm | exercice:developpe couche +9 kg d\'e1RM') return _echec('éléments : '+t);
+      // LOT T1 : 80 → 87,5 kg × 8 à RIR 2 vaut +10 kg d'e1RM (106,7 → 116,7) ; l'ancienne formule disait +9.
+      if(t!=='poids:poids +2,1 kg | mesure:tour de biceps droit +0,9 cm | exercice:developpe couche +10 kg d\'e1RM') return _echec('éléments : '+t);
       if(!/Sur 8 semaines/.test(_htmlSyntheseProgression(u))||_htmlSyntheseProgression(u).indexOf("rcInfoOuvrir('e1rm')")<0) return _echec('la phrase ou son ⓘ manque');
       // Une mesure absente de l'un des deux bilans n'entre pas ; sous le bruit, « stable ».
       const v=_r32Base({bilans:[_r32Bilan(30,{'bil-weight':'70.0','bil-waist':'80','bil-neck':'38'}),_r32Bilan(2,{'bil-weight':'70.2','bil-waist':'80.4','bil-thigh-r':'55'})]});
@@ -68499,7 +68541,8 @@ async function testExercices(){
         ok('La décote n\'est appliquée qu\'une fois dans le rendu',(()=>{
           // Un seul appel décoté, et le facteur de cycle reste distinct.
           const src=String(_blocExo);
-          const n=src.split('chargeSuivante(prev.weight,prev.rir,isCW,_decote)').length-1;
+          // (LOT T1 : l'appel passe aussi le nom de l'exercice, pour le plafond du pas.)
+          const n=src.split('chargeSuivante(prev.weight,prev.rir,isCW,_decote,ex.name)').length-1;
           if(n!==1) return _echec(n+' appels décotés');
           // _decote ne doit pas entrer dans le calcul du facteur de cycle.
           const i=src.indexOf('_facteurCycle=');
