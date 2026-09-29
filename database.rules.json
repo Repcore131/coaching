@@ -1419,6 +1419,16 @@
           ".write": "auth != null && !data.exists() && newData.parent().child('invite').val() === auth.token.email.replace('.', ',')",
           ".validate": "newData.isString() && newData.val().length <= 24"
         },
+        // LES PSEUDOS DES DEUX (lot A, 29/09/2026) : pour « Ajouter a mes amis »
+        // a la fin d un duel, sans recherche. Chacun ne pose QUE le sien : le
+        // pseudo doit lui appartenir dans /pseudos.
+        "createurPseudo": {
+          ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/) && root.child('pseudos').child(newData.val()).val() === auth.token.email.replace('.', ',')"
+        },
+        "invitePseudo": {
+          ".write": "auth != null && !data.exists() && newData.parent().child('invite').val() === auth.token.email.replace('.', ',')",
+          ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/) && root.child('pseudos').child(newData.val()).val() === auth.token.email.replace('.', ',')"
+        },
         "progres": {
           "$k": {
             ".write": "auth != null && $k === auth.token.email.replace('.', ',') && ($k === root.child('duels').child($id).child('createur').val() || $k === root.child('duels').child($id).child('invite').val()) && root.child('duels').child($id).child('statut').val() === 'en_cours'",
@@ -1514,6 +1524,38 @@
     },
     "xp_etat": { ".read": false, ".write": false },
     "volts_publics": { "$p": { ".read": true, ".write": false } },
+    // LE CARNET D AMIS (lot A, 29/09/2026). A SENS UNIQUE : suivre ne demande
+    // rien et ne notifie rien. /amis/<cle>/<pseudo> = {le, prenom}, rien
+    // d autre : rang, volts et badges se lisent dans le profil public. Lu et
+    // ecrit par le titulaire SEUL. 300 au plus. (Le pseudo est la cle en
+    // base : un point y devient « __ ».)
+    "amis": {
+      "$cle": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') === $cle",
+        ".write": "auth != null && auth.token.email.replace('.', ',') === $cle",
+        "$pseudo": {
+          ".validate": "$pseudo.matches(/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/) && newData.hasChildren(['le', 'prenom']) && newData.parent().numChildren() <= 300",
+          "le":     { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= now + 60000" },
+          "prenom": { ".validate": "newData.isString() && newData.val().length <= 24" },
+          "$autre": { ".validate": false }
+        }
+      }
+    },
+    // QUI ME SUIT, pour CONSTATER qu on est amis (les deux se suivent) sans
+    // jamais lire le carnet d un autre : /abonnes/<pseudo suivi>/<pseudo qui
+    // suit>. Ecrit ou efface par le titulaire du pseudo qui suit ; lu par le
+    // titulaire du pseudo suivi, et par personne d autre.
+    "abonnes": {
+      "$cible": {
+        ".read": "auth != null && root.child('pseudos').child($cible).val() === auth.token.email.replace('.', ',')",
+        "$suiveur": {
+          ".write": "auth != null && root.child('pseudos').child($suiveur).val() === auth.token.email.replace('.', ',')",
+          ".validate": "$cible.matches(/^[a-z0-9][a-z0-9._]{1,18}[a-z0-9]$/) && newData.hasChildren(['le'])",
+          "le":     { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= now + 60000" },
+          "$autre": { ".validate": false }
+        }
+      }
+    },
     // L index des duels a suivre (J-2, cloture) : le Worker seul.
     "duels_actifs": { ".read": false, ".write": false },
     // LE DEFI REPCORE DU MOIS, pour tous : ecrit par Kevin (ecran admin), lu

@@ -50403,6 +50403,8 @@ async function testExercices(){
       if(htmlRecordAPortee(null)!=='') return _echec('vide');
       // 28/09/2026 : « Record à portée » a quitté l'accueil (Kevin) ; il reste en tête de séance.
       if(document.getElementById('clh-record-portee')) return _echec('#clh-record-portee est revenu sur l’accueil');
+      // 29/09/2026 : il quitte aussi la tête de séance (Kevin) ; l'éclair sur la série reste.
+      if(String(renderWoEx).indexOf("htmlRecordAPortee(woState.objectif")>=0) return _echec('la carte « Record à portée » est encore en tête de séance');
       // La séance du jour : sessions_config est indexé lundi → dimanche.
       const lundi=new Date(2026,9,19,9).getTime();
       const u={sessions_config:[_RP(),{active:false,exercises:[{name:'x'}]}]};
@@ -50779,6 +50781,71 @@ async function testExercices(){
         currentUser=sv.u; CLOUD.ok=sv.ok; CLOUD._getToken=sv.tk; window.fetch=sv.f; window._duelLire=sv.dl; window.deposerEvenement=sv.de; window.saveUser=sv.su;
       }
       return true;});
+    // ══ LOT A — LE CARNET D'AMIS (29/09/2026) ═════════════════════════════
+    ok('Amis : un pseudo se normalise (espaces, majuscules, arobase collée) et suit le motif',(()=>{
+      const cas=[[' @Marc.Fit ','marc.fit'],['MARC fit','marcfit'],['@@zoe_12','zoe_12'],['',''],[null,'']];
+      for(const [e,a] of cas) if(amiPseudoNormalise(e)!==a) return _echec(JSON.stringify(e)+' → '+amiPseudoNormalise(e));
+      if(!amiPseudoValide('marc.fit')||amiPseudoValide('ab')||amiPseudoValide('.marc')||amiPseudoValide('marc@fit.fr')) return _echec('motif');
+      return amiPseudoDeCle(pseudoPublicCle('marc.fit'))==='marc.fit'?true:_echec('clé aller-retour');})());
+    ok('Amis : le plafond de 300, et « ami » veut dire les deux se suivent',(()=>{
+      const o={amis:{},att:{},abonnes:{}};
+      for(let i=0;i<299;i++) o.amis['a'+String(i).padStart(3,'0')]={prenom:'X',le:1};
+      if(amisPlein(o)) return _echec('plein à 299');
+      o.amis.zzz={prenom:'Z',le:1};
+      if(!amisPlein(o)) return _echec('pas plein à 300');
+      const m={amis:{marc:{prenom:'Marc',le:1},zoe:{prenom:'Zoé',le:1}},att:{},abonnes:{marc:1,tom:1}};
+      if(!amiEstMutuel('marc',m)) return _echec('marc se suit des deux côtés');
+      if(amiEstMutuel('zoe',m)) return _echec('zoé ne me suit pas');
+      return !amiEstMutuel('tom',m)?true:_echec('tom : je ne le suis pas');})());
+    ok('Amis : le tri par volts de la semaine, puis le plus régulier',(()=>{
+      const t=Date.parse('2026-09-30T12:00:00'), l0=lundiISO(t), l1=localISODate(_datePlusJours(_lundiDe(t),-7));
+      const P=(v,n1)=>({prenom:'x',sem:{[l0]:{v,n:v?1:0},[l1]:{v:10,n:n1}}});
+      const l=amisTries([{prenom:'Léa',prof:P(80,0)},{prenom:'Marc',prof:P(120,1)},{prenom:'Tom',prof:P(80,1)},{prenom:'Zoé',prof:null}],t).map(x=>x.prenom).join(',');
+      return l==='Marc,Tom,Léa,Zoé'?true:_echec(l);})());
+    ok('Amis : la carte vide dit quoi faire, jamais « aucun »',(()=>{
+      const h=htmlAmisAccueil([],Date.now(),{amis:{},att:{},abonnes:{}},'');
+      const d=document.createElement('div'); d.innerHTML=h;
+      if(/aucun/i.test(d.textContent)) return _echec('« aucun »');
+      if(!/ouvrirAmis\(\)/.test(h)||!/amiEnvoyerLien/.test(h)) return _echec('chercher / lien');
+      return /Choisis ton nom pour que tes potes te trouvent/.test(d.textContent)?true:_echec('sans pseudo : la ligne qui le propose');})());
+    okA('Amis : la fiche trouvée porte le rang et les volts ; « Suivre » devient « Suivi » sans rechargement',async()=>{
+      const r={trouve:true,pseudo:'marc.fit',prenom:'Marc',rang:{n:5,nom:'SURTENSION'},volts:4200,badges:['Régulier']};
+      const d=document.createElement('div'); d.innerHTML=htmlFicheAmi(r,false);
+      if(!/SURTENSION/.test(d.textContent)||!/4\s?200 V/.test(d.textContent)) return _echec(d.textContent);
+      const b=d.querySelector('#am-suivre');
+      if(!b||b.textContent!=='Suivre') return _echec('bouton');
+      const sv={s:window.amiSuivre}; let appel=null;
+      try{ window.amiSuivre=async(p,n)=>{ appel=[p,n]; return true; }; }catch(e){}
+      let ok=false; try{ ok=await amiBasculerSuivi(b); } finally { try{ window.amiSuivre=sv.s; }catch(e){} }
+      if(!ok||!appel||appel[0]!=='marc.fit') return _echec('suivre non appelé');
+      return b.textContent==='Suivi ✓'?true:_echec('libellé : '+b.textContent);
+    });
+    ok('Amis : un pseudo introuvable propose le lien, sans « n’existe pas »',(()=>{
+      const h=htmlFicheAmi({trouve:false,pseudo:'fantome'},false);
+      const d=document.createElement('div'); d.innerHTML=h;
+      if(/n.existe pas/i.test(d.textContent)) return _echec('sec');
+      return /amiEnvoyerLien/.test(h)&&/On ne trouve personne/.test(d.textContent)?true:_echec(d.textContent);})());
+    ok('Amis : la liste ne porte AUCUNE donnée de santé, même si le profil en contenait',(()=>{
+      const prof=_profilAmiNettoye({prenom:'Marc',rang:{n:3,nom:'VOLTAGE'},poids:82,mensurations:{taille:80},photo:'https://x/p.jpg',
+        badges:[{id:'a',nom:'Régulier'}],meilleurs:[{exo:'SQUAT',kg:140}]},{xp:3000,rang:{n:3,nom:'VOLTAGE'}});
+      const h=htmlAmisAccueil([{cle:'marc',p:'marc',prenom:'Marc',prof}],Date.now(),{amis:{marc:{prenom:'Marc',le:1}},att:{},abonnes:{}},'moi')
+        +htmlFicheAmi(Object.assign({trouve:true,pseudo:'marc'},prof),true);
+      if(/\b82\b|kg|poids|mensuration|taille|https?:|data:image|SQUAT|140/i.test(h)) return _echec('fuite : '+h.slice(0,200));
+      return Object.keys(prof).sort().join()==='badges,prenom,rang,sem,volts'?true:_echec(Object.keys(prof).join());})());
+    ok('Amis : les règles — carnet au titulaire seul, 300 au plus, abonnés lus par le seul suivi',(()=>{
+      const x=new XMLHttpRequest(); x.open('GET','../database.rules.json',false); x.send();
+      const r=x.status===200?x.responseText:''; if(!r) return true;
+      const i=r.indexOf('"amis"'), j=r.indexOf('"abonnes"'), k=r.indexOf('"defi_mois"');
+      if(i<0||j<0) return _echec('nœuds absents');
+      const a=r.slice(i,j), b=r.slice(j,k>j?k:j+1500);
+      if(!/numChildren\(\) <= 300/.test(a)||!/"\$autre": \{ ".validate": false \}/.test(a)) return _echec('carnet : plafond ou liste blanche');
+      if(!/\.read": "auth != null && auth\.token\.email\.replace\('\.', ','\) === \$cle"/.test(a)) return _echec('lecture du carnet');
+      return /child\(\$cible\)\.val\(\) === auth/.test(b)?true:_echec('lecture des abonnés');})());
+    ok('Amis : un duel fini propose « Ajouter à mes amis » quand le pseudo de l’adversaire est connu',(()=>{
+      const d={createur:'a,b',invite:'c,d',createurPseudo:'lea__fit',invitePseudo:'tom'};
+      if(duelAdversairePseudo(d,'c,d')!=='lea__fit'||duelAdversairePseudo(d,'a,b')!=='tom') return _echec('adversaire');
+      return duelAdversairePseudo({createur:'a,b',invite:'c,d'},'a,b')===''?true:_echec('sans pseudo');})());
+
     ok('Duels : l’accueil — l’invitation par son prénom, les duels en cours, « Défie un pote »',(()=>{
       if(!SERVEUR_LEGER) return true;
       const u={role:'athlete',email:'lea@t.fr'}, t=Date.now();
