@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1687';
+window.RC_BUILD='1688';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-09-29';
@@ -457,7 +457,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1687.css">
+<link rel="stylesheet" href="./rc-style.1688.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -2713,7 +2713,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </section>
       <section class="cc-etage" id="ccd-et-detail" data-et="detail">
         <div class="ccd-et-h"><h3 class="ccd-et-t">Le détail</h3><span class="ccd-et-s">tout le reste, rangé</span></div>
-        <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:12px" onclick="ouvrirRapport(getOwnedClient(currentClientId))">Rapport de la période</button>
+        <button type="button" class="ccd-rapport" onclick="ouvrirRapport(getOwnedClient(currentClientId))"><span class="ccd-rapport-i" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="3" height="9" rx=".6"/><rect x="10.5" y="6" width="3" height="14" rx=".6"/><rect x="17" y="9" width="3" height="11" rx=".6"/></svg></span><span class="ccd-rapport-t">Rapport de la période</span><svg class="ccd-sig-ch" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <!-- LE SEUL ETAGE QUI S'OUVRE REPLIE. Son contenu n'est pas cache,
              il est range : le coach presse ne le voit pas, celui qui creuse
              le deplie d'un geste. 'ccd-detail' est dans CCD_REPLI_DEFAUT. -->
@@ -5865,5 +5865,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1687.js"></script>
+<script src="./rc-core.1688.js"></script>
 </body></html>

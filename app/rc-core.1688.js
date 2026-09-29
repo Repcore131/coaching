@@ -52292,20 +52292,27 @@ function _htmlDemandeMesureAthlete(u){
 //   et ses tableaux. Une ligne qui resume sans donner acces a ce qu'elle
 //   resume, c'est une information de moins, pas une de plus.
 const CCD_SIG_BLOQUE=7;   // au-dessus, ca bloque un entrainement
+// LA COULEUR DE LA PASTILLE (Kevin, 29/09/2026, sa maquette) : la FAMILLE du
+// signal, pas sa note. r = rouge, un geste du coach est attendu ; o = orange,
+// a surveiller ; g = gris, a lire. Ce qui bloque une seance est toujours rouge.
 const CCD_SIG_BLOCS=Object.freeze([
-  {re:/^Douleur/,ancre:'ccd-douleur',
+  {re:/^Douleur/,ancre:'ccd-douleur',ton:'r',
    geste:'Ne rien forcer dessus, et structurer la gêne.'},
-  {re:/^Plateau/,ancre:'ccd-plateaux',
+  {re:/^Plateau/,ancre:'ccd-plateaux',ton:'r',
    geste:'Le détail dit quel muscle plafonne, et depuis quand.'},
-  {re:/^Volume/,ancre:'ccd-volume',
+  {re:/^Volume/,ancre:'ccd-volume',ton:'o',
    geste:'Le détail donne le prescrit et le réalisé, muscle par muscle.'},
-  {re:/^Forme/,ancre:'ccd-forme',
+  {re:/^Forme/,ancre:'ccd-forme',ton:'o',
    geste:'Le détail trace ce qu’il a déclaré, séance après séance.'},
-  {re:/^Asymétrie/,ancre:'ccd-asymetrie',geste:''},
-  {re:/^Décharge/,ancre:'ccd-bloc',geste:'La proposition attend sa réponse.'},
-  {re:/^Drapeau/,ancre:'ccd-securite',geste:'À traiter avant toute séance.'},
-  {re:/^Restriction/,ancre:'ccd-reds',geste:''},
-  {re:/^Séances écourtées/,ancre:'ccd-plateaux',geste:''}
+  {re:/^Asymétrie/,ancre:'ccd-asymetrie',ton:'o',geste:''},
+  {re:/^Décharge/,ancre:'ccd-bloc',ton:'r',geste:'La proposition attend sa réponse.'},
+  {re:/^Drapeau/,ancre:'ccd-securite',ton:'r',geste:'À traiter avant toute séance.'},
+  {re:/^Restriction/,ancre:'ccd-reds',ton:'o',geste:''},
+  {re:/^Séances écourtées/,ancre:'ccd-plateaux',ton:'o',geste:''},
+  // Les bilans menent au calendrier des bilans, range dans le detail.
+  {re:/^Bilan sans réponse/,ancre:'ccd-bilans',ton:'g',geste:''},
+  {re:/^Bilan en retard/,ancre:'ccd-bilans',ton:'r',geste:''},
+  {re:/^Accès/,ancre:'',ton:'o',geste:''}
 ]);
 /**
  * PURE. Les signaux de la fiche, dans l'ordre d'expliquerUrgence, chacun avec
@@ -52318,24 +52325,33 @@ function ccdSignaux(c){
   try{ l=expliquerUrgence(c)||[]; }catch(e){ return []; }
   return l.map(x=>{
     const b=CCD_SIG_BLOCS.find(y=>y.re.test(String(x.motif||'')))||{};
+    const bloque=(Number(x.gravite)||0)>=CCD_SIG_BLOQUE;
     return {motif:String(x.motif||''),gravite:Number(x.gravite)||0,
       date:x.date||null,geste:b.geste||'',ancre:b.ancre||'',
-      bloque:(Number(x.gravite)||0)>=CCD_SIG_BLOQUE};
+      bloque,ton:bloque?'r':(b.ton||'g')};
   });
 }
 // Une ligne : la pastille de gravite, le motif, sa date, son geste, et le
 // chemin vers son bloc.
-function _htmlCcdSignal(s){
-  return '<li class="ccd-sig'+(s.bloque?' ccd-sig-b':'')+'">'
-    +'<span class="ccd-sig-p" aria-hidden="true"></span>'
+// La maquette de Kevin (29/09/2026) : la premiere ligne de la liste (la plus
+// grave, l'ordre est celui d'expliquerUrgence) est cerclee de rouge ; toute
+// ligne qui mene a un bloc se touche en entier et finit par un chevron.
+const _CCD_CHEVRON='<svg class="ccd-sig-ch" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function _htmlCcdSignal(s,premier){
+  const va=s.ancre?(' onclick="ccdVoirDetail(\''+s.ancre+'\')"'):'';
+  return '<li class="ccd-sig ccd-sig-'+(s.ton||'g')+(s.bloque?' ccd-sig-b':'')
+    +(premier?' ccd-sig-1':'')+(s.ancre?' ccd-sig-a':'')+'"'+va+'>'
+    +'<span class="ccd-sig-p" aria-hidden="true"><i></i></span>'
     +'<span class="ccd-sig-c">'
     +'<span class="ccd-sig-m">'+escapeHtml(s.motif)
     +(s.date?('<span class="ccd-sig-d"> · '+escapeHtml(_ccdJour(s.date))+'</span>'):'')
     +'</span>'
     +(s.geste?('<span class="ccd-sig-g">'+escapeHtml(s.geste)+'</span>'):'')
     +'</span>'
-    +(s.ancre?('<button type="button" class="ccd-out-r" onclick="ccdVoirDetail(\''
-      +s.ancre+'\')">Voir le détail</button>'):'')
+    +(s.ancre?('<button type="button" class="ccd-out-r ccd-sig-v"'
+      +(s.geste?'':' aria-label="Voir le détail"')
+      +' onclick="event.stopPropagation();ccdVoirDetail(\''+s.ancre+'\')">'
+      +(s.geste?'<span>Voir le détail</span>':'')+_CCD_CHEVRON+'</button>'):'')
     +'</li>';
 }
 function _htmlCcdSignaux(c){
@@ -52346,7 +52362,7 @@ function _htmlCcdSignaux(c){
   //   case vide avec un titre, et la mission le refuse explicitement.
   const groupe=(titre,items)=>items.length
     ?('<div class="ccd-sig-gr"><h4 class="ccd-sig-t">'+escapeHtml(titre)+'</h4>'
-      +'<ul class="ccd-sig-l">'+items.map(_htmlCcdSignal).join('')+'</ul></div>')
+      +'<ul class="ccd-sig-l">'+items.map(x=>_htmlCcdSignal(x,x===l[0])).join('')+'</ul></div>')
     :'';
   return groupe('Ce qui bloque une séance',bloc)
     +groupe('Ce qui mérite un œil',oeil);
