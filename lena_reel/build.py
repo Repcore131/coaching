@@ -31,22 +31,27 @@ POLICE = os.path.join(ICI, "assets", "Montserrat-Bold.otf")
 EMOJI = os.path.join(ICI, "assets", "emoji_rire.png")
 
 NBSP = " "
+# Cinq photos : 03_fastfood, 05_epaules, 06_banc et 07_hipthrust manquent. Le flash reste
+# à 7,0 s (le drop du son) et les trois coupes rythmées sont trois cadrages de la même photo.
+# cadre = (centre x, centre y en fraction de la photo, zoom de départ)
 SCENES = [
-    dict(nom="01_bar", debut=0.0, fin=2.5, src="01_bar.jpg", look="avant",
-         texte=f"Ils m'appelaient «{NBSP}la{NBSP}grosse{NBSP}»"),
-    dict(nom="02_resto", debut=2.5, fin=5.0, src="02_resto.jpg", look="avant", perso=True),
-    dict(nom="03_fastfood", debut=5.0, fin=7.0, src="03_fastfood.jpg", look="avant"),
+    dict(nom="01_bar", debut=0.0, fin=3.5, src="01_bar.jpg", look="avant",
+         texte=f"Ils m'appelaient «{NBSP}la{NBSP}grosse{NBSP}»", texte_y=1480),
+    dict(nom="02_resto", debut=3.5, fin=7.0, src="02_resto.jpg", look="avant", perso=True),
     dict(nom="flash", debut=7.0, fin=7.4),
-    dict(nom="04_piscine", debut=7.4, fin=9.4, src="04_piscine.jpg", look="apres",
-         texte="2 ans plus tard."),
-    dict(nom="05_epaules", debut=9.4, fin=10.9, src="05_epaules.jpg", look="apres", rapide=True),
-    dict(nom="07_hipthrust", debut=10.9, fin=12.4, src="07_hipthrust.jpg", look="apres", rapide=True),
-    dict(nom="06_banc", debut=12.4, fin=13.9, src="06_banc.jpg", look="apres", rapide=True),
+    dict(nom="04_piscine", debut=7.4, fin=9.9, src="04_piscine.jpg", look="apres",
+         texte="2 ans plus tard.", texte_y=1520),
+    dict(nom="05_salle_large", debut=9.9, fin=11.25, src="05_souleve_de_terre.jpg", look="apres",
+         rapide=True, cadre=(0.50, 0.50, 1.0)),
+    dict(nom="06_salle_buste", debut=11.25, fin=12.6, src="05_souleve_de_terre.jpg", look="apres",
+         rapide=True, cadre=(0.45, 0.36, 1.45)),
+    dict(nom="07_salle_visage", debut=12.6, fin=13.9, src="05_souleve_de_terre.jpg", look="apres",
+         rapide=True, cadre=(0.33, 0.24, 1.8)),
     dict(nom="09_final", debut=13.9, fin=19.0, src="08_miroir_abdos.jpg", video="09_final.mp4",
-         look="apres", texte="Qui rigole maintenant ?", texte_debut=15.0),
+         look="apres", texte="Qui rigole maintenant ?", texte_debut=15.0, texte_y=340),
 ]
 # Instant de la capture d'aperçu, quand il ne tombe pas au milieu de la scène.
-APERCU_T = {"02_resto": 4.2, "flash": 7.2, "09_final": 16.5}
+APERCU_T = {"02_resto": 6.0, "flash": 7.2, "09_final": 16.5}
 
 
 # ---------- Étalonnage ----------
@@ -92,11 +97,11 @@ class PlanPhoto:
     """Photo recadrée pour remplir le 9:16, avec un Ken Burns."""
     MARGE = 1.14
 
-    def __init__(self, chemin, look, rapide=False, sens=1, lent=False):
+    def __init__(self, chemin, look, rapide=False, sens=1, lent=False, cadre=(0.5, 0.5, 1.0)):
         src = Image.open(chemin).convert("RGB")
         e = max(W * self.MARGE / src.width, H * self.MARGE / src.height)
         self.img = etalonne(src.resize((round(src.width * e), round(src.height * e)), Image.LANCZOS), look)
-        self.rapide, self.sens, self.lent = rapide, sens, lent
+        self.rapide, self.sens, self.lent, self.cadre = rapide, sens, lent, cadre
 
     def image(self, p):
         if self.rapide:            # coupes rythmées : recul nerveux au début du plan
@@ -105,12 +110,13 @@ class PlanPhoto:
             z = 1.0 + 0.10 * adoucit(p)
         else:
             z = 1.0 + 0.07 * adoucit(p)
+        fx, fy, z0 = self.cadre
         iw, ih = self.img.size
-        k = min(iw / W, ih / H) / z                      # plus grand cadre 9:16 dans la photo, puis zoom
+        k = min(iw / W, ih / H) / (z * z0)               # plus grand cadre 9:16 dans la photo, puis zoom
         bw, bh = W * k, H * k
         glisse = (iw - bw) * 0.35 * self.sens * (adoucit(p) - 0.5)
-        cx = min(max(iw / 2 + glisse, bw / 2), iw - bw / 2)
-        cy = ih / 2
+        cx = min(max(iw * fx + glisse, bw / 2), iw - bw / 2)
+        cy = min(max(ih * fy, bh / 2), ih - bh / 2)
         return self.img.transform((W, H), Image.EXTENT,
                                   (cx - bw / 2, cy - bh / 2, cx + bw / 2, cy + bh / 2), Image.BICUBIC)
 
@@ -287,7 +293,8 @@ class Montage:
                 if sc.get("video"):
                     print(f"  {sc['nom']} : pas de video/09_final.mp4, zoom lent sur {sc['src']}")
                 self.plans[sc["nom"]] = PlanPhoto(chemin, sc["look"], sc.get("rapide", False), sens,
-                                                  lent=bool(sc.get("video")))
+                                                  lent=bool(sc.get("video")),
+                                                  cadre=sc.get("cadre", (0.5, 0.5, 1.0)))
                 sens = -sens
             if sc.get("texte"):
                 self.textes[sc["nom"]] = calque_texte(sc["texte"])
@@ -308,7 +315,7 @@ class Montage:
         if sc["nom"] == "flash":          # fondu vers le blanc, puis du blanc vers la piscine
             mi = (sc["debut"] + sc["fin"]) / 2
             if t < mi:
-                im, a = self.fond(self.scene("03_fastfood"), sc["debut"], i), (t - sc["debut"]) / (mi - sc["debut"])
+                im, a = self.fond(self.scene("02_resto"), sc["debut"], i), (t - sc["debut"]) / (mi - sc["debut"])
             else:
                 im, a = self.fond(self.scene("04_piscine"), sc["fin"], i), 1 - (t - mi) / (sc["fin"] - mi)
             im = Image.blend(im, Image.new("RGBA", (W, H), "white"), min(1.0, a * 1.15))
@@ -318,7 +325,7 @@ class Montage:
                 age = t - sc.get("texte_debut", sc["debut"])
                 if age >= 0:
                     c, a = pop(self.textes[sc["nom"]], age)
-                    colle(im, c, W / 2, TEXTE_Y, a)
+                    colle(im, c, W / 2, sc.get("texte_y", TEXTE_Y), a)
         im.alpha_composite(self.mention)
         sans = im
         if avec_perso and sc.get("perso"):
