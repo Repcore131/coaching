@@ -55630,7 +55630,9 @@ async function testExercices(){
       const libs=new Set(_r31Libelles());
       const familles={
         'accuser réception':[/^J'ai compris$/,/^COMPRIS/,/^J'ai lu$/,/^OK$/],
-        'démarrer une séance':[/^▶? ?Démarrer( |$)/i,/^(LANCER|Lancer) /,/^(COMMENCER|Commencer)/,/^C'est parti$/],
+        // L'ACTE EST DE DÉMARRER UNE SÉANCE : « Lancer le duel » ou « Commencer le
+        // mois offert » ne sont pas des séances et ne comptent plus (29/09/2026).
+        'démarrer une séance':[/^▶? ?Démarrer( |$)/i,/^(LANCER|Lancer) (la |ma |une |l'|mon )?(séance|entra[iî]nement)/i,/^(COMMENCER|Commencer) (la |ma |une |l'|mon )?(séance|entra[iî]nement)/i,/^C'est parti$/],
         'fermer':[/^Fermer$/,/^×$/,/^Close$/i],
         'remettre à plus tard':[/^Plus tard$/,/^Pas maintenant$/,/^Une autre fois$/],
         'refuser':[/^Refuser$/,/^Non merci$/,/^Ignorer$/],
@@ -55661,7 +55663,9 @@ async function testExercices(){
       const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;
       const pause=ms=>new Promise(r=>setTimeout(r,ms));
       const iso=k=>localISODate(new Date(Date.now()-k*864e5));
-      const NAV=/\b(sb-lien|tab-btn|pf-chip|ch-nav-large|hv-code|back-btn|rep-btn|jen-min|fj-repas-btn|gene-choix|rir-choix|san-nav-b|pil-compteur)\b/;
+      // du-defier : le bandeau « Défie un pote » de l'accueil, dessiné sur la
+      // maquette de Kevin (29/09/2026) : une carte rouge, pas un bouton d'action.
+      const NAV=/\b(sb-lien|tab-btn|pf-chip|ch-nav-large|hv-code|back-btn|rep-btn|jen-min|fj-repas-btn|gene-choix|rir-choix|san-nav-b|pil-compteur|du-defier)\b/;
       const enCapitales=()=>{
         const scr=document.querySelector('.screen.active'); if(!scr) return [];
         return [...scr.querySelectorAll('button')].filter(b=>{
@@ -73577,7 +73581,10 @@ vendredi 78 6h 44m
         if(document.getElementById('ccd-sante')) return _echec('le resume « Sommeil et pas » survit');
         const z=document.getElementById('ccd-sommeil');
         if(!z||z.closest('.ccd-vue')!==v) return _echec('le tableau de bord a quitte l’onglet');
-        return v.firstElementChild===z
+        // La batterie du jour (le check-in du matin, build 1640) passe devant :
+        // c'est une ligne, et le tableau de bord du sommeil la suit aussitôt.
+        const f=v.firstElementChild;
+        return (f===z||(f&&f.id==='ccd-batterie'&&f.nextElementSibling===z))
           ?true:_echec('il n’est pas en tete');})());
       ok('Le tableau de bord du sommeil dit ce qu’il lit',(()=>{
         const j=Date.now(), iso=d=>localISODate(new Date(d));
