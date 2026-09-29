@@ -85,4 +85,26 @@ await test('l’événement duel_cree : le créateur seul, sur une revanche', as
   assert.equal((await deposer(LEA, { type: 'duel_cree', cible: ID + 'f' })).statut, 401, 'pas sur un duel par lien');
 });
 
+// ══ LES RÉACTIONS (lot D) ══
+await test('réactions : un des cinq emojis, par qui suit, sous son propre pseudo ; lues par le destinataire et ceux qui le suivent', async () => {
+  await appel('owner', 'PUT', 'amis/' + K(LEA), { tom__fit: { le: 1, prenom: 'Tom' } });
+  await appel('owner', 'DELETE', 'amis/' + K(ZOE));
+  const ch = 'reactions/tom__fit/2026-09-28/';
+  assert.equal((await appel(LEA, 'PUT', ch + 'lea', '💪')).statut, 200);
+  assert.equal((await appel(LEA, 'PUT', ch + 'lea', '🔥')).statut, 200, 'remplaçable');
+  assert.equal((await appel(LEA, 'PUT', ch + 'lea', 'bravo')).statut, 401, 'jamais de texte');
+  assert.equal((await appel(LEA, 'PUT', ch + 'lea', '😡')).statut, 401, 'cinq emojis fixes');
+  assert.equal((await appel(LEA, 'PUT', ch + 'zoe', '💪')).statut, 401, 'pas au nom d’un autre');
+  assert.equal((await appel(ZOE, 'PUT', ch + 'zoe', '💪')).statut, 401, 'pas sans le suivre');
+  assert.equal((await appel(LEA, 'PUT', 'reactions/tom__fit/hier/lea', '💪')).statut, 401, 'un jour AAAA-MM-JJ');
+  assert.equal((await appel(TOM, 'GET', 'reactions/tom__fit')).statut, 200, 'le destinataire');
+  assert.equal((await appel(LEA, 'GET', 'reactions/tom__fit')).statut, 200, 'qui le suit');
+  assert.equal((await appel(ZOE, 'GET', 'reactions/tom__fit')).statut, 401);
+  assert.equal((await appel(TOM, 'GET', 'reactions_push')).statut, 401);
+});
+await test('réactions : l’événement vise un pseudo que l’on suit', async () => {
+  assert.equal((await deposer(LEA, { type: 'reaction', cible: 'tom__fit', jour: '2026-09-28' })).statut, 200);
+  assert.equal((await deposer(ZOE, { type: 'reaction', cible: 'tom__fit', jour: '2026-09-28' })).statut, 401);
+});
+
 console.log(ok + ' tests passés (émulateur)');

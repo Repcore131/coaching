@@ -48,6 +48,9 @@ export function travaux(M) {
     { nom: 'badge', quand: (p) => p.joursem === 0 && apres(p, 17, 0), cles: () => M.abonnes(), un: M.planifies.badge, cout: 10, push: true },
     // Les duels suivis (/duels_actifs) : le push de J-2, la clôture, l'oubli.
     { nom: 'duels', quand: (p) => apres(p, 18, 30), cles: () => (M.duelsActifs ? M.duelsActifs() : []), un: (id, t) => M.duelQuotidienUn(id, t), cout: 10, push: true },
+    // Les réactions des amis du jour : une poussée groupée par personne, 19 h.
+    { nom: 'reactions', quand: (p) => apres(p, 19, 0) && p.heure < 21, cles: () => (M.reactionsAttente ? M.reactionsAttente() : []),
+      un: (uid, t) => M.reactionsPushUn(uid, t), cout: 8, push: true },
     // La rétention (/stats/retention) : un résumé d'activité par compte, par lots,
     // la nuit (l'accumulateur est gardé entre deux minutes).
     { nom: 'retention', quand: (p) => apres(p, 4, 30), cles: () => (M.activiteComptes ? M.activiteComptes() : []), un: (k, t, acc) => M.retentionUn(k, t, acc),

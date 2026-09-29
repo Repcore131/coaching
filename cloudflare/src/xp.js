@@ -112,6 +112,15 @@ export function secretsDeSeance(s) {
   if (b.joursem === 5 && b.date === 13) out.push('vendredi13');
   return out;
 }
+// LE LUNDI (AAAA-MM-JJ) d'un jour AAAA-MM-JJ : en dates UTC, donc sans
+// changement d'heure (la semaine de l'app, _lundiDe, est la même borne).
+export function lundiDuJour(j) {
+  const [a, m, d] = String(j).split('-').map(Number);
+  const t = Date.UTC(a, m - 1, d);
+  const dow = (new Date(t).getUTCDay() + 6) % 7;
+  return new Date(t - dow * 864e5).toISOString().slice(0, 10);
+}
+export const SEMAINES_GARDEES = 13;
 export function etatVide() { return { n: 0, faites: 0, meilleurs: {}, jours: {}, s: { seance: 0, complete: 0, record: 0 }, secrets: {} }; }
 /**
  * Fait avancer l'état sur des séances NOUVELLES (dans l'ordre de leur index).
@@ -150,10 +159,17 @@ export function avancer(etat0, seances, alias, tRecu) {
       if (cur > h) e.meilleurs[k] = cur;
     }
     let reste = XP_PLAFOND_JOUR - (Number(e.jours[j]) || 0);
+    let gagnes = 0;
     for (const [c, v] of [['seance', voltsSeance(s)], ['complete', seanceComplete(s) ? XP.complete : 0], ['record', nRec * XP.record]]) {
       const pris = Math.max(0, Math.min(v, reste));
-      e.s[c] += pris; reste -= pris;
+      e.s[c] += pris; reste -= pris; gagnes += pris;
     }
+    // LA SEMAINE (lot D, le classement entre amis) : un INCRÉMENT, jamais un
+    // recalcul. Rejouer un événement ne relit aucune séance déjà comptée
+    // (e.n avance avec elles), donc n'ajoute rien.
+    e.sem = e.sem || {};
+    const lu = lundiDuJour(j), w = e.sem[lu] || { v: 0, n: 0 };
+    e.sem[lu] = { v: (Number(w.v) || 0) + gagnes, n: (Number(w.n) || 0) + (seriesValidees(s) > 0 ? 1 : 0) };
     e.jours[j] = XP_PLAFOND_JOUR - reste;
     // LES SECRETS HORAIRES : prouvés seulement par une séance reçue à l'heure.
     if (Math.abs(d - tRecu) <= RECU_TOLERANCE) for (const id of secretsDeSeance(s)) if (!e.secrets[id]) e.secrets[id] = d;
@@ -161,6 +177,7 @@ export function avancer(etat0, seances, alias, tRecu) {
   // Les jours anciens ne servent plus au plafond.
   const derniers = Object.keys(e.jours).sort().slice(-4);
   e.jours = Object.fromEntries(derniers.map((k) => [k, e.jours[k]]));
+  if (e.sem) e.sem = Object.fromEntries(Object.keys(e.sem).sort().slice(-SEMAINES_GARDEES).map((k) => [k, e.sem[k]]));
   return e;
 }
 // Les séances lues par /users/<k>/sessions?orderBy="$key"&startAt=... : un

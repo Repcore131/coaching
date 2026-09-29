@@ -11372,6 +11372,22 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 #clh-amis:empty{display:none}
 .am-carte{margin:12px 0 16px;padding:14px;border-radius:14px;background:var(--surface-1,#111);border:1px solid var(--border,#2a2a2e)}
 .du-amis .am-carte{margin:4px 0 14px;text-align:left}
+.am-phrase{margin:4px 0 8px;font-size:var(--fs-sm);line-height:1.45;color:var(--txt,#fff);font-weight:600}
+.am-serie{margin:0 0 8px;font-size:var(--fs-xs);color:var(--sub,#a0a0a8);line-height:1.45}
+.am-rappel{color:#ff6b6b;font-weight:700}
+.am-rg{flex:none;width:22px;text-align:center;font-weight:800;color:var(--sub,#a0a0a8);font-size:var(--fs-sm)}
+.am-moi .am-nom b{color:#ff2a2a}
+.du-amis .am-v small{display:none}
+.du-amis .am-v b::after{content:' V';font-size:.7em;font-weight:700}
+.du-amis .am-ligne{gap:8px}
+.du-amis .am-defi{padding:0 10px}
+.am-plus{display:block;width:100%;margin-top:6px;min-height:40px;background:transparent;border:0;color:var(--sub,#a0a0a8);font-weight:700}
+.am-reac{display:flex;gap:6px;margin:2px 0 6px 32px}
+.am-reac button{min-width:40px;min-height:36px;border-radius:10px;border:1px solid var(--border,#2a2a2e);background:transparent;font-size:18px;line-height:1;opacity:.75}
+.am-reac button.on{border-color:#ff2a2a;background:rgba(255,42,42,.12);opacity:1}
+.am-duels{margin:0 0 4px 32px;font-size:var(--fs-xs);color:var(--sub,#a0a0a8)}
+.am-recues{margin:6px 0 10px;padding:10px 12px;border-radius:12px;border:1px solid var(--border,#2a2a2e)}
+.am-recues p{margin:4px 0 0;font-size:var(--fs-sm);line-height:1.5}
 .r-cadeau{padding:12px 14px;border-radius:12px;border:1px solid rgba(255,42,42,.45);background:rgba(255,42,42,.08);color:var(--txt,#fff);font-weight:700;font-size:var(--fs-sm);line-height:1.45}
 .am-tete{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .am-titre{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--red-text,#ff4d4d)}
@@ -14336,6 +14352,16 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .du-d-n{background:#090909;color:#c10b0b}
 :root[data-theme="clair"] .du-changer{color:var(--sub,#5b5b64)}
 :root[data-theme="clair"] .am-carte{background:var(--surface-1,#ebebeb);border:1px solid var(--border,#cfcfd3)}
+:root[data-theme="clair"] .am-phrase{color:var(--txt,#090909)}
+:root[data-theme="clair"] .am-serie{color:var(--sub,#5b5b64)}
+:root[data-theme="clair"] .am-rappel{color:#cc0000}
+:root[data-theme="clair"] .am-rg{color:var(--sub,#5b5b64)}
+:root[data-theme="clair"] .am-moi .am-nom b{color:#cc0000}
+:root[data-theme="clair"] .am-plus{color:var(--sub,#5b5b64)}
+:root[data-theme="clair"] .am-reac button{border:1px solid var(--border,#cfcfd3)}
+:root[data-theme="clair"] .am-reac button.on{border-color:#ff2a2a;background:rgba(255,42,42,.12)}
+:root[data-theme="clair"] .am-duels{color:var(--sub,#5b5b64)}
+:root[data-theme="clair"] .am-recues{border:1px solid var(--border,#cfcfd3)}
 :root[data-theme="clair"] .r-cadeau{border:1px solid rgba(255,42,42,.45);background:rgba(255,42,42,.08);color:var(--txt,#090909)}
 :root[data-theme="clair"] .am-titre{color:var(--red-text,#cc0000)}
 :root[data-theme="clair"] .am-tout{color:var(--sub,#5b5b64)}
