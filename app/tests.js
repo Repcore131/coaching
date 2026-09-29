@@ -49694,6 +49694,57 @@ async function testExercices(){
       const q=mlPhrases({tempo:{excMs:1200,pauseMs:0,conMs:600,tutMs:1800,complet:true}}).find(x=>x.cle==='tempo');
       return /Tempo mesuré/.test(q.texte)?true:_echec('sans prescrit, la phrase d’avant a changé : '+q.texte);});
 
+    // ══ LOT T6 — LES AMPLITUDES RESSORTENT (29/09/2026) ═══════════════════
+    const _T6J=864e5, _T6N=new Date(2026,8,29,12).getTime();
+    ok('T6 — les mobilisations : test bas et mouvement présent, mouvement absent, test haut, jamais fait',(()=>{
+      const t={cheville:{cm:6,date:_T6N-10*_T6J}};
+      const a=mobilisationsDuJour(t,[{name:'SQUAT'},{name:'LEG CURL ASSIS'}],{maintenant:_T6N});
+      if(!a||a.test!=='cheville'||a.mobilisations.length<2||a.mobilisations.length>3) return _echec('bas + squat : '+JSON.stringify(a));
+      if(mobilisationsDuJour(t,[{name:'CURL A LA POULIE BASSE EN UNILATERAL'}],{maintenant:_T6N})!==null) return _echec('mouvement absent');
+      if(mobilisationsDuJour({cheville:{cm:14,date:_T6N-10*_T6J}},[{name:'SQUAT'}],{maintenant:_T6N})!==null) return _echec('test au-dessus du repère');
+      if(mobilisationsDuJour({},[{name:'SQUAT'}],{maintenant:_T6N})!==null) return _echec('test jamais fait');
+      if(mobilisationsDuJour({cheville:{cm:6,date:_T6N-100*_T6J}},[{name:'SQUAT'}],{maintenant:_T6N})!==null) return _echec('test périmé');
+      // Le lien test → mouvement vient des fiches : la hanche en butée nette et une charnière.
+      const h=mobilisationsDuJour({hanche:{deg:95,butee:'nette',date:_T6N}},[{name:'X'}],{maintenant:_T6N,schemaDe:()=>'charniere-hanche'});
+      if(!h||h.test!=='hanche') return _echec('hanche : '+JSON.stringify(h));
+      if(ampSchemas('epaule').indexOf('poussee-verticale')<0||ampSchemas('cheville').indexOf('squat')<0) return _echec('schémas tirés des fiches');
+      return ampSousRepere('posterieur',{niveau:'milieu'})===false&&ampSousRepere('hanche',{deg:90})===null?true:_echec('repères');})());
+    ok('T6 — la courbe : une seule mesure, un trou de six mois, rien d’inventé entre deux relevés',(()=>{
+      const un={cheville:{cm:8,date:_T6N}};
+      const p1=ampPoints(un,'cheville');
+      if(p1.length!==1||p1[0].v!==8) return _echec('une mesure : '+JSON.stringify(p1));
+      if(_dbCarteAmplitudes({morphoTests:un},300).indexOf('Un seul relevé')<0) return _echec('la carte d’un seul relevé');
+      const trou={cheville:{cm:11,date:_T6N,histo:[{cm:8,date:_T6N-182*_T6J}]}};
+      const p2=ampPoints(trou,'cheville');
+      if(p2.length!==2||p2[0].x!==_T6N-182*_T6J||p2[1].x!==_T6N||p2[0].v!==8||p2[1].v!==11) return _echec('six mois : '+JSON.stringify(p2));
+      const d=document.createElement('div'); d.innerHTML=_dbCarteAmplitudes({morphoTests:trou},300);
+      if(d.querySelectorAll('circle').length!==2) return _echec(d.querySelectorAll('circle').length+' points dessinés pour deux relevés');
+      // L'épaule : la moyenne des deux côtés ; la chaîne postérieure : un niveau.
+      if(ampValeur('epaule',{g:10,d:14})!==12||ampValeur('posterieur',{niveau:'haut'})!==3) return _echec('valeurs');
+      return _dbCarteAmplitudes({},300)===''?true:_echec('une carte sans relevé');})());
+    ok('T6 — la fiche : le dernier relevé, le rappel après douze semaines, et la relance d’un test jamais fait',(()=>{
+      if(ampDernierReleve({},_T6N)!==null) return _echec('sans relevé');
+      const a=ampDernierReleve({cheville:{cm:9,date:_T6N-30*_T6J},hanche:{deg:100,date:_T6N-100*_T6J}},_T6N);
+      if(!a||a.jours!==30||a.rappel) return _echec('trente jours : '+JSON.stringify(a));
+      if(!ampDernierReleve({cheville:{cm:9,date:_T6N-85*_T6J}},_T6N).rappel) return _echec('pas de rappel à 85 jours');
+      const r=relanceAmplitudes({cheville:{cm:9,date:_T6N}});
+      if(!/Tests jamais faits/.test(r)||!/hanche/.test(r)||/cheville/.test(r.split('.')[0])) return _echec('relance : '+r);
+      const tout={};
+      for(const d of MORPHO_TESTS) tout[d.cle]={date:_T6N};
+      return relanceAmplitudes(tout)===''?true:_echec('relance alors que tout est fait');})());
+    ok('T6 — aucun propos médical : ni raideur, ni blessure, ni pathologie, ni posture à corriger',(()=>{
+      const u={role:'athlete',email:'t6@t.fr',morphoTests:{cheville:{cm:6,date:Date.now()}},
+        sessions_config:Array.from({length:7},()=>({active:true,exercises:[{name:'SQUAT'}]}))};
+      let h=''; try{ h=_htmlMobilisationAccueil(u,Date.now()); }catch(e){ h=''; }
+      if(!h&&!accueilMasque('mob')) return _echec('la ligne de l’accueil ne sort pas');
+      // La relance, pour CHAQUE combinaison de tests faits et manquants : un
+      // nom de fiche cité seulement quand un test précis manque passerait sinon.
+      const rel=[];
+      for(let k=0;k<16;k++){ const o={}; MORPHO_TESTS.forEach((d,i)=>{ if(k&(1<<i)) o[d.cle]={date:1}; }); rel.push(relanceAmplitudes(o)); }
+      const textes=[h,JSON.stringify(AMP_MOBILISATIONS),rel.join(' '),String(voirMobilisations),String(_htmlMobilisationAccueil)].join(' ');
+      const m=textes.match(/raideur|raide|blessure|pathologi|corriger ta posture|posture|douleur|lésion|anomalie/i);
+      return m?_echec('« '+m[0]+' »'):true;})());
+
     ok('Volts : dix rangs, dans l’ordre, seuils croissants à partir de 0',(()=>{
       const n=RANGS.map(r=>r.nom).join();
       if(n!=='ÉTINCELLE,IMPULSION,VOLTAGE,MACHINE,ÉLITE,SURTENSION,MONSTRE,FOUDRE,TITAN,LÉGENDE') return _echec(n);

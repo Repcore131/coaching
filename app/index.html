@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1684';
+window.RC_BUILD='1685';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-09-29';
@@ -457,7 +457,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1684.css">
+<link rel="stylesheet" href="./rc-style.1685.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -3391,6 +3391,8 @@ const COACH_PHOTO='icons/coach.jpg';
            Vide aussi pour un athlete a code : il n'a pas d'essai, il a un
            coach. -->
       <div id="clh-checkin"></div>
+      <!-- LOT T6 : les mobilisations proposées avant la séance du jour (_rendreMobilisation). -->
+      <div id="clh-mobilisation"></div>
       <div id="clh-reprise-douce"></div>
       <div id="clh-parcours"></div>
       <div id="clh-essai"></div>
@@ -5863,5 +5865,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1684.js"></script>
+<script src="./rc-core.1685.js"></script>
 </body></html>

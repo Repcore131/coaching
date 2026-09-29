@@ -15625,6 +15625,10 @@ function _htmlMorphoLecture(user,cal){
   const titre=(t)=>'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.2px;'
     +'font-weight:800;text-transform:uppercase;margin:14px 0 6px">'+E(t)+'</div>';
   let h='';
+  // LOT T6 : UN TEST JAMAIS FAIT, DIT UNE FOIS, ici, en tête de la lecture :
+  // c'est là qu'il bloque quelque chose.
+  const _rel=(function(){ try{ return relanceAmplitudes(user&&user.morphoTests); }catch(e){ return ''; } })();
+  if(_rel) h+='<div class="amp-relance">'+E(_rel)+'</div>';
 
   // LES PROFILS, dans l'ordre de lecture. Chacun porte sa phrase de renvoi
   // avant sa propre matière : « regarde la cheville avant de conclure ».
@@ -15686,7 +15690,7 @@ function _htmlMorphoLecture(user,cal){
     if(res.aMesurer.length>1)
       h+='<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;'
         +'margin-top:4px">Celle-ci d’abord : '+(res.aMesurer.length-1)+' autre'
-        +(res.aMesurer.length>2?'s':'')+' suivra'+(res.aMesurer.length>2?'ont':'')
+        +(res.aMesurer.length>2?'s':'')+' suivr'+(res.aMesurer.length>2?'ont':'a')
         +', une à la fois.</div>';
   }
   const inst=morphoInstrument(res.profils);
@@ -16435,8 +16439,14 @@ function enregistrerAmplitudes(){
     // LA DATE NE BOUGE QUE SI LA MESURE BOUGE : rouvrir l'écran et le
     // réenregistrer ne doit pas rajeunir un test qui n'a pas été refait.
     const vieux=avant[d.cle]||{};
-    const sansDate=Object.assign({},vieux); delete sansDate.date;
+    const sansDate=Object.assign({},vieux); delete sansDate.date; delete sansDate.histo;
     o.date=(JSON.stringify(sansDate)===JSON.stringify(o)&&vieux.date)?vieux.date:Date.now();
+    // LOT T6 : LES RELEVÉS D'AVANT restent, pour la courbe. Un relevé qui ne
+    // bouge pas ne s'ajoute pas ; un nouveau relevé pousse l'ancien, date
+    // comprise, dans « histo » (AMP_HISTO_MAX au plus).
+    const _h=Array.isArray(vieux.histo)?vieux.histo.slice():[];
+    if(vieux.date&&o.date!==vieux.date){ const prec=Object.assign({},vieux); delete prec.histo; _h.push(prec); }
+    if(_h.length) o.histo=_h.slice(-AMP_HISTO_MAX);
     out[d.cle]=o;
   }
   if(Object.keys(out).length) c.morphoTests=out; else delete c.morphoTests;
@@ -39497,6 +39507,7 @@ function loadClientHome(){
   // Le check-in du matin (jusqu'à 14 h) ou la batterie du jour ; la reprise
   // en douceur après 30 jours sans séance.
   try{ _rendreCheckin(u); }catch(e){}
+  try{ _rendreMobilisation(u); }catch(e){}
   try{ _afficherRepriseDouce(u); }catch(e){}
   // Le résumé d'activité (rétention agrégée par le serveur), une fois par jour.
   try{ setTimeout(()=>{ activitePublier(u).catch(()=>{}); },6000); }catch(e){}
@@ -53114,12 +53125,15 @@ function _htmlCcdTableau(c,largeur){
   const r1=_dbCartePoids(u,w1,neutre)+_dbCarteMasses(u,w1,neutre);
   const r2=_dbCarteMens(u,w2)+_dbCarteSeries(u,w2,v)+_dbCarteRepartition(v);
   const r3=_dbCarteZones(u,v)+_dbCarteRapports(u,neutre);
+  // LOT T6 : les amplitudes, dans la même forme, seulement quand un test existe.
+  let r4=''; try{ r4=_dbCarteAmplitudes(u,w1); }catch(e){ r4=''; }
   // LA TROISIEME RANGEE A COTE A COTE SEULEMENT QUAND ELLE Y TIENT : cinq zones
   // et six rapports dans deux demi-cartes de 470 px coupaient leurs chiffres.
   return '<div class="db" data-cols="'+cols+'"'+(L>=1150?' data-large="1"':'')+'>'
     +'<div class="db-rang db-r1">'+r1+'</div>'
     +'<div class="db-rang db-r2">'+r2+'</div>'
-    +'<div class="db-rang db-r3">'+r3+'</div></div>';
+    +'<div class="db-rang db-r3">'+r3+'</div>'
+    +(r4?'<div class="db-rang db-r4">'+r4+'</div>':'')+'</div>';
 }
 
 function renderCourbesCoach(c){
@@ -74394,7 +74408,7 @@ function _poserPromesseAthlete(){
 // rien n'est écrit dans le dossier.
 // + le check-in / la batterie du jour et les habitudes du jour (29/09/2026) :
 // une croix, et la carte revient le lendemain.
-const ACC_MASQUES_JOURS=Object.freeze({pdj:0,photo:7,code:30,ci:0,hab:0});
+const ACC_MASQUES_JOURS=Object.freeze({pdj:0,photo:7,code:30,ci:0,hab:0,mob:0});
 function accueilMasque(cle,maintenant){
   let v=null; try{ v=localStorage.getItem('rc_acc_masque_'+cle); }catch(e){ v=null; }
   if(!v) return false;
@@ -100481,6 +100495,186 @@ function renderCoachEvictionsSection(c){
  * l'entrée vers l'écran de relevé. C'est ici qu'un test se saisit — le bloc
  * « Proportions » des Signaux faibles, lui, ne fait que lire.
  */
+// ══ LOT T6 : LES AMPLITUDES RESSORTENT (29/09/2026) ══════════════════════
+// Trois usages des quatre tests : un échauffement ciblé proposé à l'athlète,
+// une courbe dans le temps sur la fiche du coach, et la relance d'un test
+// jamais fait là où la morpho se lit.
+//
+// ⚠ AUCUN PROPOS MÉDICAL. Le test dit qu'il manque de l'amplitude, pas
+//   pourquoi : ni cause, ni raideur, ni blessure, ni posture à corriger. Une
+//   mobilisation est une PRÉPARATION à la séance du jour, proposée, jamais
+//   imposée, et l'athlète la passe d'un geste.
+// ⚠ LES SEUILS SONT CEUX DE LA LECTURE MORPHO (morphoAxes), pas de nouveaux :
+//   cheville sous 10 cm au mur, hanche en butée nette, bras qui ne touchent
+//   pas le mur sans décoller les lombaires, dos qui s'enroule par le bas.
+// ⚠ LE LIEN TEST → MOUVEMENT n'est pas une table de plus : ce sont les schémas
+//   des aménagements des fiches qui portent ce test dans leur signature (P9 la
+//   cheville, P10 la hanche, P11 l'épaule, P12 la chaîne postérieure).
+const AMP_RAPPEL_J=84;               // douze semaines : le rappel sur la fiche
+const AMP_HISTO_MAX=12;              // relevés gardés par test, en plus du dernier
+const AMP_MOBILISATIONS=Object.freeze({
+  cheville:Object.freeze(['Mobilité de cheville en fente, genou vers le mur, 2×10 par côté',
+    'Goblet squat avec pause en bas, talons au sol, 2×8',
+    'Montées sur pointes lentes, 2×12']),
+  hanche:Object.freeze(['90/90 hanches, 2×8',
+    'Genou vers la poitrine allongé, 2×10 par côté',
+    'Fente basse, buste droit, 2×30 s par côté']),
+  epaule:Object.freeze(['Glissés au mur, bras en W puis en Y, 2×10',
+    'Bâton tenu large, bras tendus au-dessus de la tête, 2×10',
+    'Écartés à l’élastique, 2×15']),
+  posterieur:Object.freeze(['Cat-cow, 10',
+    'Charnière de hanche au bâton, 2×10',
+    'Soulevé de terre roumain barre à vide, 2×10'])
+});
+const AMP_ZONE=Object.freeze({cheville:'la cheville',hanche:'la hanche',epaule:'l’épaule',posterieur:'l’arrière des jambes'});
+// PURE. Le test est-il sous son repère ? true, false, ou null (pas fait, ou
+// rien qui se compare). Les mêmes seuils que morphoAxes.
+function ampSousRepere(cle,v){
+  if(!v||typeof v!=='object') return null;
+  if(cle==='cheville'){ const q=parseFloat(v.cm); return isFinite(q)?q<10:null; }
+  if(cle==='hanche') return (v.butee==='nette')?true:((v.butee==='elastique')?false:null);
+  if(cle==='epaule') return (v.mur==='non')?true:((v.mur==='oui')?false:null);
+  if(cle==='posterieur') return v.niveau?(v.niveau==='bas'):null;
+  return null;
+}
+// PURE. Les schémas qu'un test concerne, tirés des fiches.
+function ampSchemas(cle){
+  const s=new Set();
+  for(const p of MORPHO_PROFILS){
+    const vise=(p.signature||[]).some(c=>(cle==='cheville'&&c.axe==='A7')||(c.axe==='A8'&&c.facette===cle));
+    if(vise) (p.amenager||[]).forEach(a=>{ if(a&&a.schema) s.add(a.schema); });
+  }
+  return [...s];
+}
+/**
+ * PURE. Les mobilisations du jour, ou null. Un test fait, non périmé, sous
+ * son repère, ET un mouvement de la séance qui le demande. Le premier test
+ * qui répond, dans l'ordre des tests ; ses trois mobilisations.
+ * @param morphoTests  u.morphoTests
+ * @param exercices    les exercices de la séance du jour
+ * @param opts {maintenant, schemaDe}
+ */
+function mobilisationsDuJour(morphoTests,exercices,opts){
+  const o=opts||{}, now=Number(o.maintenant)||Date.now();
+  const sch=(typeof o.schemaDe==='function')?o.schemaDe:(ex=>schemaDe(ex));
+  const t=(morphoTests&&typeof morphoTests==='object')?morphoTests:{};
+  const presents=new Set();
+  for(const ex of (Array.isArray(exercices)?exercices:[])){ let k=null; try{ k=sch(ex); }catch(e){ k=null; } if(k) presents.add(k); }
+  if(!presents.size) return null;
+  for(const d of MORPHO_TESTS){
+    const v=t[d.cle];
+    const date=v&&Number(v.date)>0?Number(v.date):0;
+    if(!date||(now-date)>MORPHO_PEREMPTION_J*864e5) continue;
+    if(ampSousRepere(d.cle,v)!==true) continue;
+    if(!ampSchemas(d.cle).some(s=>presents.has(s))) continue;
+    return {test:d.cle,zone:AMP_ZONE[d.cle],mobilisations:AMP_MOBILISATIONS[d.cle].slice(0,3)};
+  }
+  return null;
+}
+// L'accueil : une ligne, « Voir », et la croix (masquée pour la journée).
+function _htmlMobilisationAccueil(u,maintenant){
+  if(!u||u.role==='coach') return '';
+  if(accueilMasque('mob')) return '';
+  let s=null; try{ s=seancePrevueDuJour(u,maintenant); }catch(e){ s=null; }
+  if(!s) return '';
+  const m=mobilisationsDuJour(u.morphoTests,s.exercises||[],{maintenant});
+  if(!m) return '';
+  return '<div class="mob-carte" data-acc>'+_accX('mob')
+    +'<div class="mob-l">Ta séance du jour demande de l’amplitude à '+escapeHtml(m.zone)
+    +' : '+m.mobilisations.length+' mobilisations pour t’y préparer, cinq minutes.</div>'
+    +'<button type="button" class="btn btn-outline btn-sm mob-voir" onclick="voirMobilisations()">Voir</button></div>';
+}
+function _rendreMobilisation(u){
+  const z=document.getElementById('clh-mobilisation');
+  if(!z) return false;
+  let h=''; try{ h=_htmlMobilisationAccueil(u,Date.now()); }catch(e){ h=''; }
+  z.innerHTML=h;
+  z.style.display=h?'':'none';
+  return !!h;
+}
+function voirMobilisations(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  let s=null; try{ s=seancePrevueDuJour(u); }catch(e){ s=null; }
+  const m=s?mobilisationsDuJour(u.morphoTests,s.exercises||[]):null;
+  if(!m) return false;
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',
+    '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Avant ta séance" class="mob-feuille">'
+    +'<h2>Avant ta séance</h2><p class="mob-s">Trois mouvements pour préparer '+escapeHtml(m.zone)+'. Une préparation, pas une obligation : fais-les avant ta première série, ou passe directement à la séance.</p>'
+    +'<ol class="mob-liste">'+m.mobilisations.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')+'</ol>'
+    +'<button type="button" class="btn btn-outline btn-sm" onclick="closeModal()">Fermer</button></div></div>');
+  return true;
+}
+// ── LA COURBE ─────────────────────────────────────────────────────────────
+// PURE. La valeur tracée d'un relevé : les cm au mur, les degrés, la moyenne
+// des deux côtés à l'épaule, et le niveau d'enroulement (1 bas, 2 milieu,
+// 3 haut du dos) pour la chaîne postérieure. null si rien ne se trace.
+function ampValeur(cle,v){
+  if(!v||typeof v!=='object') return null;
+  const n=x=>{ const q=parseFloat(String(x==null?'':x).replace(',','.')); return isFinite(q)?q:null; };
+  if(cle==='cheville') return n(v.cm);
+  if(cle==='hanche') return n(v.deg);
+  if(cle==='epaule'){ const g=n(v.g), d=n(v.d); return (g==null&&d==null)?null:(g!=null&&d!=null?(g+d)/2:(g!=null?g:d)); }
+  if(cle==='posterieur') return ({bas:1,milieu:2,haut:3})[v.niveau]||null;
+  return null;
+}
+/**
+ * PURE. Les points d'un test dans le temps : les relevés d'avant (histo) et le
+ * dernier, triés par date. Seulement des MESURES : aucun point n'est ajouté
+ * entre deux relevés, même six mois plus tard.
+ */
+function ampPoints(morphoTests,cle){
+  const t=(morphoTests&&typeof morphoTests==='object')?morphoTests[cle]:null;
+  if(!t) return [];
+  const l=(Array.isArray(t.histo)?t.histo:[]).concat([t]);
+  const vus=new Set();
+  return l.map(x=>({x:Number(x&&x.date)||0,v:ampValeur(cle,x)}))
+    .filter(p=>p.x>0&&p.v!=null&&!vus.has(p.x)&&vus.add(p.x))
+    .sort((a,b)=>a.x-b.x);
+}
+// La carte du tableau « Ses courbes » : même forme que les mensurations.
+function _dbCarteAmplitudes(u,W){
+  const mt=u&&u.morphoTests;
+  const unites={cheville:' cm',hanche:'°',epaule:' cm'};
+  const tr=MORPHO_TESTS.map(d=>({d,pts:ampPoints(mt,d.cle)})).filter(x=>x.pts.length);
+  if(!tr.length) return '';
+  const info=_dbInfo('am','Les quatre tests d’amplitude, relevés par le coach. Chaque point est un relevé ; rien n’est tracé entre deux relevés qui n’ait été mesuré. Épaule : moyenne des deux côtés.');
+  const corps=tr.map(x=>{
+    const lib=x.d.lib;
+    if(x.pts.length<2) return '<div class="db-am"><b>'+escapeHtml(lib)+'</b>'+_dbVide('Un seul relevé, le '+new Date(x.pts[0].x).toLocaleDateString('fr-FR')+' : il en faut deux pour tracer une courbe.')+'</div>';
+    const fmt=x.d.cle==='posterieur'?(v=>({1:'bas du dos',2:'milieu du dos',3:'haut du dos'})[Math.round(v)]||''):(v=>_dbNb(v,0)+(unites[x.d.cle]||''));
+    return '<div class="db-am"><b>'+escapeHtml(lib)+'</b>'
+      +_dbCourbe({id:'db-am-'+x.d.cle,titre:lib,W,H:110,series:[{lib,couleur:'#e02020',points:x.pts,aire:false,fmt}],fmtG:fmt})+'</div>';
+  }).join('');
+  return _dbCarte('db-c-am','Amplitudes',info,'',corps);
+}
+// ── LA FICHE : le dernier relevé, le rappel, la relance ──────────────────
+// PURE. Le dernier relevé, tous tests confondus, et le rappel à douze semaines.
+function ampDernierReleve(morphoTests,maintenant){
+  const now=Number(maintenant)||Date.now();
+  const t=(morphoTests&&typeof morphoTests==='object')?morphoTests:{};
+  let der=0;
+  for(const d of MORPHO_TESTS){ const x=Number(t[d.cle]&&t[d.cle].date)||0; if(x>der) der=x; }
+  if(!der) return null;
+  const jours=Math.floor((now-der)/864e5);
+  return {date:der,jours,rappel:jours>AMP_RAPPEL_J,semaines:Math.floor(jours/7)};
+}
+// PURE. Ce qu'un test jamais fait empêche de lire, en une phrase, ou ''.
+function relanceAmplitudes(morphoTests){
+  const t=(morphoTests&&typeof morphoTests==='object')?morphoTests:{};
+  const jamais=MORPHO_TESTS.filter(d=>!(t[d.cle]&&Number(t[d.cle].date)>0));
+  if(!jamais.length) return '';
+  const libs=jamais.map(d=>d.lib.split(/[,:]/)[0].trim().toLowerCase());
+  // LE NOMBRE DE FICHES, PAS LEURS NOMS : un nom de fiche est écrit pour le
+  // coach qui la lit en entier (« … raide : le faux mauvais tireur »), pas pour
+  // une phrase de relance, qui doit rester sans aucun mot de ce registre.
+  const n=MORPHO_PROFILS.filter(p=>(p.signature||[]).some(c=>jamais.some(d=>(d.cle==='cheville'&&c.axe==='A7')||(c.axe==='A8'&&c.facette===d.cle)))).length;
+  return (jamais.length>1?'Tests jamais faits : ':'Test jamais fait : ')+libs.join(', ')
+    +'. Sans '+(jamais.length>1?'eux':'lui')+', la lecture fonctionnelle reste incomplète'
+    +(n?' ('+n+' fiche'+(n>1?'s':'')+' ne peu'+(n>1?'vent':'t')+' pas sortir)':'')
+    +', et les leviers se lisent sans savoir si l’amplitude suit.';
+}
 function renderCoachAmplitudesSection(c){
   const el=document.getElementById('ccd-amplitudes');
   if(!el) return;
@@ -100498,9 +100692,12 @@ function renderCoachAmplitudesSection(c){
   const manque=(function(){ try{
     return morphoProfils(morphoAxes(c,{calibrage:_morphoCalCache()})).aMesurer;
   }catch(e){ return []; } })();
+  const _der=(function(){ try{ return ampDernierReleve(c&&c.morphoTests); }catch(e){ return null; } })();
   el.innerHTML=`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">`
     +`Quatre tests d’amplitude, chacun avec son protocole. Un relevé vaut ${MORPHO_PEREMPTION_J} jours`
     +` : une amplitude se travaille et se perd.</div>`
+    +(_der?`<div class="amp-der${_der.rappel?' amp-rappel':''}">Dernier relevé le ${escapeHtml(new Date(_der.date).toLocaleDateString('fr-FR'))}`
+      +(_der.rappel?` : il y a ${_der.semaines} semaines, c’est le moment de refaire les tests.`:'.')+`</div>`:'')
     +(faits.length?faits.map(ligne).join(''):`<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6;padding:4px 0 10px">Aucun test relevé pour l’instant.</div>`)
     +`<button type="button" class="btn btn-outline" style="width:100%;margin:6px 0 0" onclick="ouvrirAmplitudes('${escapeHtml(email)}')">Relever les amplitudes</button>`
     // ⚠ UNE SEULE LIGNE, ET NON LA LISTE (lot 6). La premiere de la liste
@@ -100509,7 +100706,7 @@ function renderCoachAmplitudesSection(c){
     +(manque.length?`<div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">`
       +`<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Il manque, pour aller plus loin</div>`
       +`<div style="font-size:var(--fs-sm);color:var(--text-dim);line-height:1.6">${escapeHtml(manque[0])}</div>`
-      +(manque.length>1?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:4px">Celle-ci d’abord : ${manque.length-1} autre${manque.length>2?'s':''} suivra${manque.length>2?'ont':''}, une à la fois.</div>`:'')
+      +(manque.length>1?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:4px">Celle-ci d’abord : ${manque.length-1} autre${manque.length>2?'s':''} suivr${manque.length>2?'ont':'a'}, une à la fois.</div>`:'')
       +`</div>`:'');
 }
 function renderCoachTraitementsSection(c){  const el=document.getElementById('ccd-traitements');
