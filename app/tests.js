@@ -39518,6 +39518,8 @@ async function testExercices(){
         // qu'un ecran coach neuf doit se declarer : la classe seule ne suffit
         // pas, et l'assertion l'a dit avant que quiconque ne l'ouvre.
         's-coach-tunnel',
+        // LES RELANCES AUTOMATIQUES (lot C3, 29/09/2026).
+        's-coach-relances',
         // L'ECRAN « Acces », 24/09/2026 : ouvrir et fermer un acces a la
         // main, au bout du rapport payeur du 1er du mois.
         's-coach-acces',
@@ -49047,13 +49049,13 @@ async function testExercices(){
         basculerPushType('defi',true);
         if(!pushTypeActif(currentUser,'defi')||'defi' in currentUser.pushPrefs) return _echec('non rallumé');
         if(basculerPushType('inconnu',false)) return _echec('type inconnu accepté');
-        return PUSH_TYPES.map(t=>t.cle).sort().join()==='acces,badge,bilan,coach,defi,filleul,retour,sante,serie,wrapped'?true:_echec('types');
+        return PUSH_TYPES.map(t=>t.cle).sort().join()==='acces,badge,bilan,coach,defi,filleul,relance,retour,sante,serie,wrapped'?true:_echec('types');
       } finally { currentUser=svU; saveUser=svS; }})());
     ok('Push : l’écran de réglages — une case par type, le bouton seulement quand il sert',(()=>{
       const d=document.createElement('div');
       d.innerHTML=htmlReglagesPush({pushPrefs:{serie:false}},'proposer');
       const c=d.querySelectorAll('input[type=checkbox][data-push]');
-      if(c.length!==PUSH_TYPES.length||c.length!==10) return _echec(c.length+' cases');
+      if(c.length!==PUSH_TYPES.length||c.length!==11) return _echec(c.length+' cases');
       if(d.querySelector('[data-push=serie]').checked||!d.querySelector('[data-push=coach]').checked) return _echec('état des cases');
       const b=d.querySelector('button');
       if(!b||!b.classList.contains('btn-casse')) return _echec('bouton d’activation (R31 : btn-casse)');
@@ -49902,6 +49904,91 @@ async function testExercices(){
       const r=brouillonBilan(u,u.bilans[0],SIGNAUX_VIDES,{formules:{ouverture:'',cloture:''}});
       if(r.texte.indexOf('Salut')>=0||!/\?$/.test(r.texte)) return _echec('formules vides : '+r.texte);
       return true;})());
+
+    // ══ LOT C3 — LES RÈGLES DE RELANCE (29/09/2026) ════════════════════════
+    ok('C3 — seize lignes, celles de « À traiter » ; cinq automatisables, et la douleur, le décrochage, la progression grisés avec leur raison',(()=>{
+      if(RELANCE_LIGNES.length!==16) return _echec(RELANCE_LIGNES.length+' lignes');
+      const auto=RELANCE_LIGNES.filter(l=>l.auto).map(l=>l.type).sort().join();
+      if(auto!==RELANCE_SIGNAUX.slice().sort().join()) return _echec('automatisables : '+auto);
+      for(const t of ['douleur','douleurdiff','decrochage','entrainement']){
+        const l=RELANCE_LIGNES.find(x=>x.type===t);
+        if(!l||l.auto||l.raison!==RELANCE_ECHANGE) return _echec(t);
+      }
+      // Chaque type sans texte de relance est grisé ; chaque type automatisable en a un.
+      for(const l of RELANCE_LIGNES) if(!!l.auto!==!!_waCorpsGroupe(l.type)) return _echec('texte de '+l.type);
+      return RELANCE_LIGNES.every(l=>l.auto||String(l.raison||'').length>10)?true:_echec('une ligne grisée sans raison');})());
+    ok('C3 — coupées par défaut ; la douleur ne s’allume pas, même appelée à la main',(()=>{
+      const svU=currentUser, svS=saveUser;
+      try{
+        saveUser=()=>{};
+        currentUser={email:'c3.coach@t.fr',role:'coach'};
+        const r0=relancesRegles(currentUser);
+        if(RELANCE_SIGNAUX.some(s=>r0[s].actif)||relancesAllumees(currentUser)) return _echec('une règle allumée par défaut');
+        // Des données anciennes ou fabriquées : « true » en texte, 1, une clé douleur.
+        currentUser.relancesAuto={regles:{overdue:{actif:'true'},bilan:{actif:1},douleur:{actif:true,delai:0,moyen:'push'}}};
+        if(relancesAllumees(currentUser)) return _echec('actif non booléen accepté');
+        for(const s of ['douleur','douleurdiff','decrochage','entrainement','drapeau','inconnu'])
+          if(relancesRegler(s,'actif',true)!==false) return _echec(s+' accepté');
+        if(relancesRegler('overdue','actif',true)!==true) return _echec('overdue refusé');
+        const cfg=currentUser.relancesAuto;
+        if(Object.keys(cfg.regles).sort().join()!==RELANCE_SIGNAUX.slice().sort().join()) return _echec('clés écrites : '+Object.keys(cfg.regles).join());
+        if(!cfg.regles.overdue.actif||cfg.regles.bilan.actif) return _echec(JSON.stringify(cfg.regles));
+        relancesRegler('overdue','delai',99); relancesRegler('overdue','moyen','whatsapp');
+        if(currentUser.relancesAuto.regles.overdue.delai!==14||currentUser.relancesAuto.regles.overdue.moyen!=='push') return _echec('délai ou moyen : '+JSON.stringify(currentUser.relancesAuto.regles.overdue));
+        if(relancesRegler('overdue','moyen','canal')!==true||currentUser.relancesAuto.regles.overdue.moyen!=='canal') return _echec('moyen canal');
+        return relancesAllumees(currentUser)?true:_echec('allumée');
+      } finally { currentUser=svU; saveUser=svS; }})());
+    ok('C3 — « je reprends la main » coupe tout, et un athlète s’exclut d’un geste',(()=>{
+      const svU=currentUser, svS=saveUser, svT=toast;
+      try{
+        saveUser=()=>{}; toast=()=>{};
+        currentUser={email:'c3.coach2@t.fr',role:'coach',relancesAuto:{regles:{overdue:{actif:true,delai:2,moyen:'push'}}}};
+        relancesReprendreLaMain(true);
+        if(relancesAllumees(currentUser)||!relancesEnPause(currentUser)) return _echec('pause');
+        if(!relancesRegles(currentUser).overdue.actif) return _echec('la pause a effacé les règles');
+        relancesReprendreLaMain(false);
+        if(!relancesAllumees(currentUser)) return _echec('reprise');
+        relanceExclure('lea.m@t.fr',true);
+        if(!relanceExclu(currentUser,{email:'lea.m@t.fr'})||!currentUser.relancesAuto.exclus['lea,m@t,fr']) return _echec('exclusion : '+JSON.stringify(currentUser.relancesAuto.exclus));
+        if(relanceExclu(currentUser,{email:'tom@t.fr'})) return _echec('un autre exclu');
+        relanceExclure('lea.m@t.fr',false);
+        return relanceExclu(currentUser,{email:'lea.m@t.fr'})?_echec('réintégration'):true;
+      } finally { currentUser=svU; saveUser=svS; toast=svT; }})());
+    ok('C3 — l’écran : une ligne par signal, les grisées sans interrupteur, et ce qui est parti cette semaine',(()=>{
+      const svU=currentUser, svJ=_relJournal;
+      const z=document.getElementById('rel-corps'); const av=z?z.innerHTML:null;
+      try{
+        if(!z) return _echec('pas de #rel-corps');
+        currentUser={email:'c3.coach3@t.fr',role:'coach',relancesAuto:{regles:{overdue:{actif:true,delai:2,moyen:'push'}}}};
+        const t=Date.now();
+        _relJournal=relJournalAplati({'lea@t,fr':{a:{at:t-864e5,signal:'overdue',moyen:'push',statut:'parti',texte:'x'},
+          b:{at:t-10*864e5,signal:'bilan',moyen:'canal',statut:'parti'}},'tom@t,fr':{c:{at:t-2*864e5,signal:'nostart',moyen:'push',statut:'non_parti',raison:'aucun_abonnement'}}});
+        renderRelancesCoach();
+        if(z.querySelectorAll('.rel-l').length!==16||z.querySelectorAll('.rel-l-off').length!==11) return _echec('lignes');
+        if([...z.querySelectorAll('.rel-l-off')].some(l=>l.querySelector('input,select'))) return _echec('une ligne grisée réglable');
+        if(z.querySelectorAll('.rel-l-on').length!==1) return _echec('ligne allumée');
+        // Cette semaine : deux entrées sur sept jours, une partie, une pas partie (avec sa raison).
+        if(z.querySelectorAll('.rel-j').length!==2||!/1 message parti, 1 pas parti/.test(z.textContent)) return _echec('semaine : '+z.textContent.slice(0,200));
+        if(!/notifications jamais activées/.test(z.textContent)) return _echec('raison du refus');
+        if(!z.querySelector('.rel-frein input[type=checkbox]')) return _echec('pas d’interrupteur général');
+        return /whatsapp/i.test(z.querySelector('.rel-l-on').innerHTML)?_echec('WhatsApp proposé'):true;
+      } finally { currentUser=svU; _relJournal=svJ; if(z) z.innerHTML=av; }})());
+    ok('C3 — la fiche dit la dernière relance ; l’athlète ne voit que les messages privés de la semaine',(()=>{
+      const svU=currentUser;
+      try{
+        const t=Date.now();
+        currentUser={email:'c3.coach4@t.fr',role:'coach',relancesAuto:{regles:{overdue:{actif:true}}}};
+        const h=_relHtmlFiche({email:'lea@t.fr'},[{at:t-864e5,signal:'overdue',moyen:'push',statut:'parti'}]);
+        if(!/Dernière relance automatique le .+ : bilan en retard, notification\./.test(h.replace(/<[^>]+>/g,''))) return _echec(h);
+        if(!/L’exclure des relances automatiques/.test(h)) return _echec('bouton d’exclusion');
+        if(!/Aucune relance automatique/.test(_relHtmlFiche({email:'x@t.fr'},[]))) return _echec('fiche vide');
+        const j={a:{at:t-3600e3,moyen:'canal',statut:'parti',texte:'Salut Léa, …'},b:{at:t-1800e3,moyen:'push',statut:'parti',texte:'push'},
+          c:{at:t-8*864e5,moyen:'canal',statut:'parti',texte:'vieux'},d:{at:t-60e3,moyen:'canal',statut:'non_parti',texte:'refus'}};
+        const m=relanceAMontrer(j,0,t);
+        if(!m||m.texte!=='Salut Léa, …') return _echec('message : '+JSON.stringify(m));
+        if(relanceAMontrer(j,t-3600e3,t)!==null) return _echec('un message fermé revient');
+        return relanceAMontrer({},0,t)===null?true:_echec('vide');
+      } finally { currentUser=svU; }})());
 
     ok('Volts : dix rangs, dans l’ordre, seuils croissants à partir de 0',(()=>{
       const n=RANGS.map(r=>r.nom).join();

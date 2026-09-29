@@ -31,12 +31,13 @@ import { envoyerA } from './push.js';
 import * as DU from './duels.js';
 import * as SA from './saisons.js';
 import * as RE from './retour.js';
+import * as RL from './relances.js';
 import * as XPS from './xp.js';
 import * as RT from './retention.js';
 
 export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
-export const PUSH_TYPES = ['serie', 'wrapped', 'bilan', 'badge', 'coach', 'filleul', 'defi', 'acces', 'retour', 'sante'];
+export const PUSH_TYPES = ['serie', 'wrapped', 'bilan', 'badge', 'coach', 'filleul', 'defi', 'acces', 'retour', 'sante', 'relance'];
 const BONUS_ESSAI_JOURS = 30;  // le mois offert par l'ami : = TARIFS.essai_parrainage.moisEnPlus × 30 (l'app l'ouvre, essaiOuvrir)
 const PALIERS = ['aucun', 'essentielle', 'ultime', 'suivi'];
 
@@ -514,6 +515,7 @@ export function creerMetier(deps) {
     }
   }
   const coachsAvecCanal = () => db.ref('canaux').shallow();
+  const coachsAvecAthletes = () => db.ref('annuaire_coach').shallow();
 
   // ══ LE PARRAINAGE ══════════════════════════════════════════════════════
   async function parrainageDemande(uid, d) {
@@ -1302,6 +1304,90 @@ export function creerMetier(deps) {
     return 'envoye';
   }
 
+  // ══ LES RELANCES AUTOMATIQUES DU COACH (lot C3) ════════════════════════
+  // Le travail « relances » (planif.js, 10 h 30) lit les règles de chaque
+  // coach : une lecture. Coupées, en pause ou absentes : rien d'autre. Sinon
+  // l'annuaire du coach, et UNE SOUS-TÂCHE PAR ATHLÈTE (quoi: 'relance'),
+  // traitée dans la file au rythme du budget.
+  // ⚠ LA SOUS-TÂCHE RELIT LES RÈGLES : « je reprends la main » et
+  //   l'exclusion d'un athlète valent pour les sous-tâches déjà en file.
+  // Le journal, relances_auto/<coach>/<athlète>/<id>, est écrit par le
+  // Worker seul ; le coach le lit en entier, l'athlète sa propre branche
+  // (le moyen « canal » s'y lit : c'est un message privé dans l'app, JAMAIS
+  // le canal collectif du coach, que tous ses athlètes lisent).
+  const RELANCE_REPORTS = { nostart: 'nostart', overdue: 'overdue', expiring: 'expiring', noprog: 'noprog', bilan: 'bilan' };
+  async function relancesCoachUn(coach, t) {
+    const cfg = await _lire(coach, 'relancesAuto');
+    if (!RL.relancesAllumees(cfg)) return 'coupe';
+    const [annuaire, alertes] = await Promise.all([db.ref('annuaire_coach/' + coach).shallow(), _lire(coach, 'alertStatus')]);
+    const exclus = (cfg.exclus && typeof cfg.exclus === 'object') ? cfg.exclus : {};
+    const a = (alertes && typeof alertes === 'object') ? alertes : {};
+    // Les reports du coach (alertStatus) sont par identifiant d'athlète : on
+    // garde ceux des cinq types, encore en cours, et la sous-tâche retient le sien.
+    const reports = {};
+    for (const k of Object.keys(a)) {
+      const m = /^(nostart|overdue|expiring|noprog|bilan)-(.+)$/.exec(k);
+      if (!m || !a[k] || typeof a[k] !== 'object') continue;
+      if (Number(a[k].until) && t >= Number(a[k].until)) continue;
+      (reports[m[2]] = reports[m[2]] || {})[RELANCE_REPORTS[m[1]]] = { until: Number(a[k].until) || 0, seenUpTo: Number(a[k].seenUpTo) || 0 };
+    }
+    const taches = [];
+    for (const uid of (annuaire || []).slice().sort()) {
+      if (exclus[uid]) continue;
+      taches.push({ quoi: 'relance', coach, uid, reports });
+    }
+    if (taches.length) await differer(taches);
+    return taches.length;
+  }
+  // Le programme existe-t-il ? (hasProgram de l'app ; les séances d'exemple
+  // ne comptent pas). Lu seulement si la règle « sans programme » est allumée.
+  async function aUnProgramme(uid) {
+    const [cfg, pdfU, pdfL, pdf, prog] = await Promise.all([_lire(uid, 'sessions_config'), _lire(uid, 'programPdfStorageUrl'),
+      _lire(uid, 'programPdfLink'), _lire(uid, 'programPdf'), db.ref('users/' + uid + '/program').shallow()]);
+    const l = Array.isArray(cfg) ? cfg : Object.values(cfg || {});
+    return !!(l.some((s) => s && s.active && s.exercises && Object.keys(s.exercises).length && !s._essai && !s._foundation)
+      || pdfU || pdfL || pdf || (prog && prog.length));
+  }
+  async function relanceAthlete(e) {
+    const t = now();
+    const coach = String(e.coach || ''), uid = String(e.uid || '');
+    if (!coach || !uid) return 'vide';
+    const [cfg, journal, sonCoach] = await Promise.all([_lire(coach, 'relancesAuto'), _val('relances_auto/' + coach + '/' + uid), _lire(uid, 'coachEmailKey')]);
+    if (sonCoach !== coach) return 'pas_son_coach';
+    const regles = RL.reglesNormalisees(cfg && cfg.regles);
+    // Rien à lire si le choix est déjà fermé (pause, exclu, semaine prise).
+    const avant = RL.choisirRelance({ cfg, cleAthlete: uid, signaux: {}, journal, t });
+    if (avant.raison !== 'aucun_signal') return avant.raison;
+    const [bilans, createdAt, fname, id] = await Promise.all(['bilans', 'createdAt', 'fname', 'id'].map((c) => _lire(uid, c)));
+    const d = { bilans, createdAt };
+    if (regles.expiring.actif) {
+      const [status, accessExpiry, droits] = await Promise.all([_lire(uid, 'status'), _lire(uid, 'accessExpiry'), lireDroits(uid)]);
+      d.status = status;
+      d.echeance = (droits && Number(droits.echeance) > 0) ? Number(droits.echeance) : Number(accessExpiry) || 0;
+    }
+    if (regles.noprog.actif) d.programme = await aUnProgramme(uid);
+    const reports = (e.reports && id != null && e.reports[String(id)]) || {};
+    const choix = RL.choisirRelance({ cfg, cleAthlete: uid, signaux: RL.signauxRelance(d, t), journal, reports, t });
+    if (!choix.signal) return choix.raison;
+    const texte = RL.texteRelance(choix.signal, fname);
+    let statut = 'parti', raison = null;
+    if (choix.moyen === 'push') {
+      const r = await envoyerPush(uid, { type: 'relance', url: './', tag: 'relance-' + choix.signal,
+        title: 'Un mot de ton coach', body: texte }, { attendre: false });
+      if (!r.envoye) { statut = 'non_parti'; raison = r.raison || 'echec'; }
+    }
+    // Un refus n'est noté qu'une fois par épisode et par raison : sans ça, un
+    // athlète sans notification ajouterait une ligne au journal chaque jour.
+    const deja = RL.journalListe(journal).some((x) => x.statut === 'non_parti' && x.signal === choix.signal
+      && Number(x.depuis) === choix.depuis && x.raison === raison);
+    const maj = {};
+    for (const vieux of RL.journalAPurger(journal, t)) maj['relances_auto/' + coach + '/' + uid + '/' + vieux] = null;
+    if (!(statut === 'non_parti' && deja)) maj['relances_auto/' + coach + '/' + uid + '/' + idFile(t, 'r')] =
+      Object.assign({ at: t, signal: choix.signal, depuis: choix.depuis, moyen: choix.moyen, texte, statut }, raison ? { raison } : {});
+    if (Object.keys(maj).length) await db.ref().update(maj);
+    return statut === 'parti' ? 'envoye' : raison;
+  }
+
   // ══ LE PARCOURS « MISE SOUS TENSION » : LE RAPPEL DU 21e JOUR D'ESSAI ══
   // Chaque app tient /parcours_j21/<jour J21 de son essai>/<elle> = le
   // nombre d'étapes qui lui restent (null quand le parcours est fini). Le
@@ -1332,14 +1418,15 @@ export function creerMetier(deps) {
     if (quoi === 'amb_vue') { await ambMajVue(String(e.code || '')); return 'vue'; }
     if (quoi === 'defis_coach') return defisQuotidienCoach(String(e.coach || ''), now());
     if (quoi === 'xp') return xpRecalculer(String(e.cle || ''), now());
+    if (quoi === 'relance') return relanceAthlete(e);
     return 'tache_inconnue';
   }
 
   return { envoyerPush, abonnes, planifies, apresHeuresCalmes, statsBadgesUn, statsBadgesFin,
-    defisQuotidienCoach, coachsAvecCanal, recalculerDefi, parrainageDemande, parrainagePaiement, parrainageSeuil,
+    defisQuotidienCoach, coachsAvecCanal, coachsAvecAthletes, recalculerDefi, parrainageDemande, parrainagePaiement, parrainageSeuil,
     ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits, majDroits, palierDroits,
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente,
     fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, tache,
-    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, reactionEvenement, reactionsAttente, reactionsPushUn, saisonsHeure, parcoursJ21, retourUn, xpRecalculer, retentionUn, retentionFin, activiteComptes };
+    duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, reactionEvenement, reactionsAttente, reactionsPushUn, saisonsHeure, parcoursJ21, retourUn, relancesCoachUn, relanceAthlete, xpRecalculer, retentionUn, retentionFin, activiteComptes };
 }

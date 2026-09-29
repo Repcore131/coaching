@@ -15335,3 +15335,42 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] #s-coach-client #ccd-et-detail>.cc-sect>.cc-sect-t{background:rgba(9,9,9,.04)}
 :root[data-theme="clair"] #s-coach-client #ccd-et-detail>.cc-sect>.cc-sect-t>span{color:var(--text)}
 .rb-lien{background:none;border:0;padding:6px 0;min-height:32px;color:var(--text-strong);font:inherit;font-weight:700;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+/* LOT C3 : les relances automatiques (écran, entrée, fiche, carte athlète) */
+.rel-entree{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:44px;margin:-8px 0 20px;padding:10px 14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);color:var(--text);font:inherit;cursor:pointer;text-align:left}
+.rel-entree-t{font-size:var(--fs-sm);font-weight:800}
+.rel-entree-e{font-size:var(--fs-xs);color:var(--sub);text-align:right}
+.rel-frein{display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:18px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3)}
+.rel-frein-on{border-color:var(--orange)}
+.rel-frein-l{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:var(--fs-sm);line-height:1.5}
+.rel-frein-l span{font-size:var(--fs-xs);color:var(--sub)}
+.rel-switch{position:relative;flex:none;width:46px;height:28px;cursor:pointer}
+.rel-switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.rel-switch span{position:absolute;inset:0;background:var(--surface-3);border:1px solid var(--border);border-radius:14px;transition:background .15s}
+.rel-switch span::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--sub);transition:transform .15s,background .15s}
+.rel-switch input:checked+span{background:var(--red)}
+.rel-switch input:checked+span::after{transform:translateX(18px);background:var(--text)}
+.rel-switch input:focus-visible+span{outline:2px solid var(--text);outline-offset:2px}
+.rel-h{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:var(--sub);margin:18px 0 8px}
+.rel-p{font-size:var(--fs-xs);line-height:1.6;margin-bottom:12px}
+.rel-vide{font-size:var(--fs-sm);line-height:1.6}
+.rel-sem-n{font-size:var(--fs-sm);font-weight:800;margin-bottom:8px}
+.rel-j{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;padding:8px 0;border-top:1px solid var(--border);font-size:var(--fs-sm);line-height:1.45}
+.rel-j-d{color:var(--sub);font-size:var(--fs-xs);white-space:nowrap}
+.rel-j-n{font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rel-j-s{grid-column:2;color:var(--sub);font-size:var(--fs-xs)}
+.rel-j-ko .rel-j-s{color:var(--orange)}
+.rel-l{padding:12px 14px;margin-bottom:8px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3)}
+.rel-l-on{border-color:var(--red)}
+.rel-l-off{background:none;opacity:.62}
+.rel-l-h{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.rel-l-t{font-size:var(--fs-sm);font-weight:800;line-height:1.4}
+.rel-l-r{font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:3px}
+.rel-l-c{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.rel-l-c label{display:flex;flex-direction:column;gap:4px;min-width:0;font-size:var(--fs-2xs);color:var(--sub);text-transform:none;letter-spacing:0;font-weight:600}
+.rel-l-c select{width:100%;min-width:0;min-height:40px;font-size:var(--fs-sm)}
+.rel-fiche{display:flex;flex-direction:column;gap:6px;font-size:var(--fs-xs);line-height:1.6;color:var(--text)}
+.rel-lien{align-self:flex-start;background:none;border:0;padding:6px 0;min-height:32px;color:var(--text-strong);font:inherit;font-weight:700;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.rel-carte{display:flex;flex-direction:column;gap:8px;margin:0 0 16px;padding:12px 14px;background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--red);border-radius:var(--r-3)}
+.rel-carte-t{font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:var(--sub)}
+.rel-carte-l{font-size:var(--fs-sm);line-height:1.55;color:var(--text)}
+.rel-carte .btn{align-self:flex-start;margin:0}

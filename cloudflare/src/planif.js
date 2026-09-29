@@ -27,6 +27,11 @@ export const REVEIL_MIN_MS = 30e3; // /reveil ne relance pas une file traitée i
 export const ESSAIS_MAX = 5;
 const LOT = 25;                    // événements lus d'un coup (une requête)
 const apres = (p, h, m) => p.heure * 60 + p.minute >= h * 60 + m;
+// Les coachs qui ont des athlètes : les clés de l'annuaire (une lecture).
+const db_coachs = (M) => (M.coachsAvecAthletes ? M.coachsAvecAthletes() : []);
+// Une relance lit une vingtaine de champs au pire : elle attend le réveil
+// suivant plutôt que de dépasser le plafond de Cloudflare.
+const COUT_RELANCE = 24;
 
 export function travaux(M) {
   return [
@@ -56,6 +61,11 @@ export function travaux(M) {
     { nom: 'retention', quand: (p) => apres(p, 4, 30), cles: () => (M.activiteComptes ? M.activiteComptes() : []), un: (k, t, acc) => M.retentionUn(k, t, acc),
       fin: (acc) => M.retentionFin(acc), cout: 3 },
     // La relance des inactifs : J+7, J+14, J+30 après la dernière séance.
+    // Les relances automatiques des coachs (lot C3) : une lecture par coach,
+    // puis une sous-tâche par athlète dans la file. Avant 11 h : le plafond
+    // d'une notification par jour n'est pas encore pris par l'accès ou le retour.
+    { nom: 'relances', quand: (p) => apres(p, 10, 30) && p.heure < 21, cles: () => (M.relancesCoachUn ? db_coachs(M) : []),
+      un: (coach, t) => M.relancesCoachUn(coach, t), cout: 6 },
     { nom: 'retour', quand: (p) => apres(p, 11, 0), cles: () => M.abonnes(), un: (uid, t) => (M.retourUn ? M.retourUn(uid, t) : null), cout: 12, push: true },
     // La santé synchronisée : « Ta nuit n'est pas encore arrivée » (iPhone), vers 10 h.
     { nom: 'sante_rappel', quand: (p) => apres(p, 10, 0) && p.heure < 21, cles: () => (M.santeComptes ? M.santeComptes() : []),
@@ -143,8 +153,9 @@ export async function minute({ db, M, compteur, maintenant, source }) {
     const ids = Object.keys(lot).sort();
     let fini = true;
     for (const id of ids) {
-      if (reste() < 12) { fini = false; break; }
       const e = lot[id];
+      const cout = (e && e.type === 'tache' && e.quoi === 'relance') ? COUT_RELANCE : 12;
+      if (reste() < cout) { fini = false; break; }
       let ok = true;
       try { await traiter(db, M, e); } catch (err) {
         ok = false;

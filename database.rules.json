@@ -1518,6 +1518,20 @@
     // LA RELANCE DES INACTIFS : les paliers envoyes (J+7, J+14, J+30) de la
     // periode en cours. Le Worker seul.
     "retour_etat": { ".read": false, ".write": false },
+    // LES RELANCES AUTOMATIQUES DU COACH (lot C3) : le journal de ce qui est
+    // parti, quand, a qui, quel signal, quel texte. Ecrit par le Worker seul.
+    // Le coach lit toute sa branche (l ecran « cette semaine », la derniere
+    // relance sur la fiche) ; l athlete lit la sienne, et rien d autre : le
+    // moyen « canal » y est un message PRIVE, jamais le canal collectif.
+    "relances_auto": {
+      ".write": false,
+      "$coachKey": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
+        "$athleteKey": {
+          ".read": "auth != null && auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey"
+        }
+      }
+    },
     // LES VOLTS RECALCULES PAR LE SERVEUR : ecrits par le Worker seul, a
     // chaque seance terminee (evenement seance_fin). Lus par l athlete et son
     // coach ; xp_etat (l etat du calcul) par personne ; volts_publics (la

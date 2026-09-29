@@ -6194,7 +6194,7 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'echeance','alertStatus','supprimes','_export',
   'coachId','coachName','coachEmailKey','coachCode','coachPhoto','code','clients',
   'coachPlan','coachSubActive','coachPlanSince','coachPrograms','coachNotes',
-  'studentCodes','msgTemplates','reponseFormules','quickComments','protocolesPerso','canalEpingle',
+  'studentCodes','msgTemplates','reponseFormules','relancesAuto','quickComments','protocolesPerso','canalEpingle',
   'canalDernier','journalGroupe','cloudinaryName','cloudinaryPreset','teamName',
   // Les programmes qu'un coach met en vente : un nom, un pitch, un prix, un
   // lien et une image. Du commerce, pas de la sante — mais il DOIT etre classe,
@@ -25188,8 +25188,298 @@ function _proposerBilanSuivant(restants){
   try{ z.scrollIntoView({block:'nearest'}); }catch(e){}
   return true;
 }
+// ══ LOT C3 : LES RÈGLES DE RELANCE (29/09/2026) ═══════════════════════════
+//
+// Le coach règle, une fois, ce qui peut partir sans lui : une ligne par
+// signal de « À traiter », COUPÉE par défaut. Le serveur léger (cloudflare/
+// src/relances.js, travail « relances » de planif.js, 10 h 30) lit ces
+// règles chaque jour et envoie AU PLUS UN message par athlète sur sept jours.
+//
+// ⚠ CINQ SIGNAUX SEULEMENT, ceux qui ont un texte dans _waCorpsGroupe. Les
+//   onze autres ont leur ligne, grisée, avec la raison : la douleur, le
+//   décrochage et la progression bloquée appellent un échange, pas un message
+//   type ; les autres sont du travail de coach, sans rien à dire à l'athlète.
+//   RELANCE_SIGNAUX est la MÊME liste que celle du serveur, dans le même
+//   ordre (l'ordre dit lequel part quand deux signaux tombent le même jour).
+// ⚠ JAMAIS WHATSAPP. Deux moyens : la notification, ou le message privé dans
+//   l'app (« canal » dans les données). Pas le canal collectif : tous les
+//   athlètes du coach le lisent, et « ton bilan est en retard » y serait lu
+//   par tout le monde.
+// ⚠ LA TRACE : le serveur écrit chaque envoi dans relances_auto/<coach>/
+//   <athlète>. Le coach la lit (écran « cette semaine », fiche de l'athlète),
+//   l'athlète lit sa branche (la carte « Un mot de ton coach »).
+
+const RELANCE_SIGNAUX=Object.freeze(['nostart','overdue','expiring','noprog','bilan']);
+const RELANCE_MOYENS=Object.freeze({push:'Notification',canal:'Dans l’app'});
+const RELANCE_DELAIS=Object.freeze([0,1,2,3,5,7]);
+const RELANCE_DELAI_DEFAUT=2;
+const RELANCE_FENETRE_J=7;
+const RELANCE_ECHANGE='Ça appelle un échange, pas un message type.';
+const RELANCE_TRAVAIL='C’est ton travail, il n’y a rien à dire à l’athlète.';
+// Les seize lignes, dans l'ordre de « À traiter ». auto:true pour les cinq.
+const RELANCE_LIGNES=Object.freeze([
+  {type:'drapeau',lib:'Drapeau rouge santé',raison:'Un drapeau rouge se traite de vive voix, jamais par un message type.'},
+  {type:'douleur',lib:'Douleur répétée',raison:RELANCE_ECHANGE},
+  {type:'douleurdiff',lib:'Douleurs diffuses',raison:RELANCE_ECHANGE},
+  {type:'decrochage',lib:'Séances écourtées',raison:RELANCE_ECHANGE},
+  {type:'saut_charge',lib:'Charge en hausse marquée',raison:'Une charge qui s’emballe se regarde avec l’athlète, pas par un rappel.'},
+  {type:'entrainement',lib:'Progression bloquée',raison:RELANCE_ECHANGE},
+  {type:'calibrage',lib:'Calibrage de la perception',raison:RELANCE_TRAVAIL},
+  {type:'blocfini',lib:'Bloc de priorité terminé',raison:RELANCE_TRAVAIL},
+  {type:'nostart',lib:'Inscrit, n’a jamais commencé',auto:true,quand:'trois jours après l’inscription sans bilan'},
+  {type:'bilan',lib:'Nouveau bilan à lire',auto:true,quand:'le jour où le bilan arrive, tant que tu n’as pas répondu'},
+  {type:'overdue',lib:'Bilan en retard',auto:true,quand:'quatorze jours après le dernier bilan'},
+  {type:'videos',lib:'Vidéo à corriger',raison:RELANCE_TRAVAIL},
+  {type:'notes',lib:'Note à revoir',raison:RELANCE_TRAVAIL},
+  {type:'expiring',lib:'Accès qui se termine',auto:true,quand:'quatorze jours avant la fin de l’accès'},
+  {type:'rite',lib:'Bilan de 4 semaines à lire',raison:RELANCE_TRAVAIL},
+  {type:'noprog',lib:'Sans programme',auto:true,quand:'dès le bilan de départ, tant qu’aucun programme n’est posé'}
+]);
+const RELANCE_LIB=Object.freeze(Object.fromEntries(RELANCE_LIGNES.map(l=>[l.type,l.lib])));
+
+// PURE. Les règles du coach, nettoyées comme le serveur les lit : les cinq
+// clés, actif strictement true, délai borné, moyen connu.
+function relancesRegles(coach){
+  const src=(coach&&coach.relancesAuto&&coach.relancesAuto.regles)||{};
+  const out={};
+  for(const s of RELANCE_SIGNAUX){
+    const r=(src[s]&&typeof src[s]==='object')?src[s]:{};
+    const d=Math.round(Number(r.delai));
+    out[s]={actif:r.actif===true,
+      delai:Number.isFinite(d)?Math.max(0,Math.min(14,d)):RELANCE_DELAI_DEFAUT,
+      moyen:RELANCE_MOYENS[r.moyen]?r.moyen:'push'};
+  }
+  return out;
+}
+function relancesEnPause(coach){ return !!(coach&&coach.relancesAuto&&coach.relancesAuto.pause===true); }
+function relancesAllumees(coach){
+  if(relancesEnPause(coach)) return false;
+  const r=relancesRegles(coach);
+  return RELANCE_SIGNAUX.some(s=>r[s].actif);
+}
+// La clé d'un compte, comme l'annuaire et coachEmailKey l'écrivent.
+function _relCle(c){ return String((c&&c.email)||'').trim().replace(/\./g,','); }
+function relanceExclu(coach,c){
+  const x=coach&&coach.relancesAuto&&coach.relancesAuto.exclus;
+  return !!(x&&typeof x==='object'&&x[_relCle(c)]);
+}
+// Écrit le bloc entier, nettoyé : rien d'autre que ce que le serveur lit.
+function _relEcrire(coach,maj){
+  const cfg=(coach.relancesAuto&&typeof coach.relancesAuto==='object')?coach.relancesAuto:{};
+  const regles=relancesRegles(coach);
+  const exclus=Object.assign({},(cfg.exclus&&typeof cfg.exclus==='object')?cfg.exclus:{});
+  const n={regles,exclus,pause:cfg.pause===true};
+  maj(n);
+  n.maj=Date.now();
+  coach.relancesAuto=n;
+  try{ saveUser(); }catch(e){}
+  return true;
+}
+// Régler une ligne. REFUSÉ pour tout signal hors des cinq : la douleur ne
+// s'allume pas, même appelée à la main depuis la console.
+function relancesRegler(signal,champ,valeur){
+  if(!currentUser||RELANCE_SIGNAUX.indexOf(signal)<0) return false;
+  if(['actif','delai','moyen'].indexOf(champ)<0) return false;
+  _relEcrire(currentUser,n=>{
+    const r=n.regles[signal];
+    if(champ==='actif') r.actif=valeur===true;
+    if(champ==='delai'){ const d=Math.round(Number(valeur)); if(Number.isFinite(d)) r.delai=Math.max(0,Math.min(14,d)); }
+    if(champ==='moyen'&&RELANCE_MOYENS[valeur]) r.moyen=valeur;
+  });
+  try{ renderRelancesCoach(); }catch(e){}
+  try{ renderEntreeRelances(); }catch(e){}
+  return true;
+}
+// « Je reprends la main » : tout s'arrête, y compris ce qui était déjà en
+// file côté serveur (chaque envoi relit ce drapeau juste avant de partir).
+function relancesReprendreLaMain(on){
+  if(!currentUser) return false;
+  _relEcrire(currentUser,n=>{ n.pause=on===true; });
+  toast(on?'Relances automatiques coupées ✓':'Relances automatiques reprises ✓',on?'var(--orange)':'var(--green)');
+  try{ renderRelancesCoach(); }catch(e){}
+  try{ renderEntreeRelances(); }catch(e){}
+  return true;
+}
+function relanceExclure(email,oui){
+  if(!currentUser) return false;
+  const k=_relCle({email});
+  if(!k) return false;
+  _relEcrire(currentUser,n=>{ if(oui) n.exclus[k]=Date.now(); else delete n.exclus[k]; });
+  const c=(()=>{ try{ return getClients().find(x=>x&&_relCle(x)===k); }catch(e){ return null; } })();
+  try{ if(c) renderRelanceFiche(c); }catch(e){}
+  return true;
+}
+
+// ── LE JOURNAL (écrit par le serveur, lu ici) ─────────────────────────────
+let _relJournal=null, _relJournalLu=0;
+// PURE. Le journal d'un coach, à plat : [{cle, at, signal, moyen, texte, statut, raison}], récent d'abord.
+function relJournalAplati(brut){
+  const out=[];
+  const o=(brut&&typeof brut==='object')?brut:{};
+  for(const cle of Object.keys(o)){
+    const b=o[cle]||{};
+    for(const id of Object.keys(b)){
+      const e=b[id];
+      if(e&&Number(e.at)>0) out.push(Object.assign({cle,id},e));
+    }
+  }
+  return out.sort((a,b)=>Number(b.at)-Number(a.at));
+}
+// PURE. Ce qui est parti sur les sept derniers jours.
+function relCetteSemaine(liste,t){
+  const n=Number(t)||Date.now();
+  return (liste||[]).filter(e=>n-Number(e.at)<RELANCE_FENETRE_J*864e5);
+}
+async function _relChargerJournal(force){
+  if(!force&&_relJournal&&Date.now()-_relJournalLu<5*60e3) return _relJournal;
+  const moi=_relCle(currentUser);
+  if(!moi) return [];
+  const r=await _fbJson('relances_auto/'+moi);
+  if(r.ok){ _relJournal=relJournalAplati(r.v); _relJournalLu=Date.now(); }
+  return _relJournal||[];
+}
+function _relJour(t){ try{ return new Date(t).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'}); }catch(e){ return ''; } }
+const RELANCE_RAISONS=Object.freeze({aucun_abonnement:'notifications jamais activées',coupe:'notifications coupées par l’athlète',
+  plafond:'une autre notification est partie ce jour-là',calme:'heures calmes',echec:'appareil injoignable'});
+function _relLigneJournal(e,nom){
+  const ok=e.statut==='parti';
+  return '<div class="rel-j'+(ok?'':' rel-j-ko')+'"><span class="rel-j-d">'+escapeHtml(_relJour(e.at))+'</span>'
+    +'<span class="rel-j-n">'+escapeHtml(nom||'Athlète')+'</span>'
+    +'<span class="rel-j-s">'+escapeHtml(RELANCE_LIB[e.signal]||e.signal||'')+' · '+escapeHtml(RELANCE_MOYENS[e.moyen]||'')
+    +(ok?'':' · pas parti ('+escapeHtml(RELANCE_RAISONS[e.raison]||e.raison||'')+')')+'</span></div>';
+}
+function _relNom(cle){
+  try{ const c=getClients().find(x=>x&&_relCle(x)===cle); return c?((c.fname||'')+' '+(c.lname||'')).trim()||c.email:''; }catch(e){ return ''; }
+}
+
+// ── L'ENTRÉE, SOUS « MES NOTIFICATIONS » ──────────────────────────────────
+function renderEntreeRelances(){
+  const z=document.getElementById('ch-relances');
+  if(!z||!currentUser) return false;
+  const r=relancesRegles(currentUser);
+  const n=RELANCE_SIGNAUX.filter(s=>r[s].actif).length;
+  const etat=relancesEnPause(currentUser)?'en pause':(n?n+' règle'+(n>1?'s':'')+' allumée'+(n>1?'s':''):'coupées');
+  const parties=_relJournal?relCetteSemaine(_relJournal).filter(e=>e.statut==='parti').length:null;
+  z.innerHTML='<button type="button" class="rel-entree" onclick="ouvrirRelances()">'
+    +'<span class="rel-entree-t">Relances automatiques</span>'
+    +'<span class="rel-entree-e">'+escapeHtml(etat)+(parties?' · '+parties+' partie'+(parties>1?'s':'')+' cette semaine':'')+'</span></button>';
+  if(!_relJournal&&n) _relChargerJournal().then(()=>{ try{ renderEntreeRelances(); }catch(e){} });
+  return true;
+}
+function ouvrirRelances(){
+  go('s-coach-relances');
+  renderRelancesCoach();
+  _relChargerJournal(true).then(()=>{ try{ renderRelancesCoach(); }catch(e){} });
+}
+
+// ── L'ÉCRAN ───────────────────────────────────────────────────────────────
+function renderRelancesCoach(){
+  const z=document.getElementById('rel-corps');
+  if(!z||!currentUser) return false;
+  const pause=relancesEnPause(currentUser);
+  const r=relancesRegles(currentUser);
+  const sem=_relJournal?relCetteSemaine(_relJournal):null;
+  const partis=sem?sem.filter(e=>e.statut==='parti'):[];
+  let h='<div class="rel-frein'+(pause?' rel-frein-on':'')+'">'
+    +'<div class="rel-frein-l"><b>Je reprends la main</b><span>'
+    +(pause?'Rien ne part. Tes règles sont gardées telles quelles.':'Coupe tout, tout de suite, y compris ce qui allait partir aujourd’hui.')+'</span></div>'
+    +'<label class="rel-switch"><input type="checkbox"'+(pause?' checked':'')+' onchange="relancesReprendreLaMain(this.checked)" aria-label="Je reprends la main"><span></span></label></div>';
+  // CE QUI EST PARTI CETTE SEMAINE : lisible en dix secondes.
+  h+='<h2 class="rel-h">Cette semaine</h2>';
+  if(!sem) h+='<div class="sub rel-vide">Lecture du journal…</div>';
+  else if(!sem.length) h+='<div class="sub rel-vide">Rien n’est parti ces sept derniers jours.</div>';
+  else h+='<div class="rel-sem-n">'+partis.length+' message'+(partis.length>1?'s':'')+' parti'+(partis.length>1?'s':'')
+    +(sem.length>partis.length?', '+(sem.length-partis.length)+' pas parti'+(sem.length-partis.length>1?'s':''):'')+'</div>'
+    +sem.map(e=>_relLigneJournal(e,_relNom(e.cle))).join('');
+  // LES RÈGLES : une ligne par signal, dans l'ordre de « À traiter ».
+  h+='<h2 class="rel-h">Les règles</h2>'
+    +'<p class="sub rel-p">Un message par athlète sur sept jours au plus, tous signaux confondus. Le texte est celui de tes relances WhatsApp, précédé du prénom. Une ligne que tu reportes dans « Mes notifications » ne part pas.</p>';
+  // Les cinq réglables d'abord, puis les onze qui ne le seront jamais : le
+  // coach règle en haut, et lit en bas pourquoi le reste n'y est pas.
+  const lignes=RELANCE_LIGNES.filter(l=>l.auto).concat(RELANCE_LIGNES.filter(l=>!l.auto));
+  for(const l of lignes){
+    if(!l.auto){
+      if(l===lignes.find(x=>!x.auto)) h+='<h2 class="rel-h">Jamais automatiques</h2>';
+      h+='<div class="rel-l rel-l-off"><div class="rel-l-t">'+escapeHtml(l.lib)+'</div>'
+        +'<div class="rel-l-r">'+escapeHtml(l.raison)+'</div></div>';
+      continue;
+    }
+    const x=r[l.type];
+    h+='<div class="rel-l'+(x.actif?' rel-l-on':'')+'">'
+      +'<div class="rel-l-h"><div class="rel-l-t">'+escapeHtml(l.lib)+'</div>'
+      +'<label class="rel-switch"><input type="checkbox"'+(x.actif?' checked':'')+' onchange="relancesRegler(\''+l.type+'\',\'actif\',this.checked)" aria-label="'+escapeHtml(l.lib)+'"><span></span></label></div>'
+      +'<div class="rel-l-r">Le signal se lève '+escapeHtml(l.quand)+'.</div>'
+      +'<div class="rel-l-c"><label>Après <select onchange="relancesRegler(\''+l.type+'\',\'delai\',this.value)">'
+      +RELANCE_DELAIS.map(d=>'<option value="'+d+'"'+(d===x.delai?' selected':'')+'>'+(d?d+' jour'+(d>1?'s':''):'le jour même')+'</option>').join('')
+      +'</select></label><label>Par <select onchange="relancesRegler(\''+l.type+'\',\'moyen\',this.value)">'
+      +Object.keys(RELANCE_MOYENS).map(m=>'<option value="'+m+'"'+(m===x.moyen?' selected':'')+'>'+escapeHtml(RELANCE_MOYENS[m])+'</option>').join('')
+      +'</select></label></div></div>';
+  }
+  z.innerHTML=h;
+  return true;
+}
+
+// ── LA FICHE DE L'ATHLÈTE : la dernière relance, et l'exclusion ───────────
+function _relHtmlFiche(c,liste){
+  const exclu=relanceExclu(currentUser,c);
+  const der=(liste||[]).find(e=>e.statut==='parti');
+  const em=escapeHtml(c.email||'');
+  return '<div class="rel-fiche">'
+    +'<div class="rel-fiche-l">'+(der
+      ?'Dernière relance automatique le '+escapeHtml(new Date(der.at).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}))+' : '+escapeHtml((RELANCE_LIB[der.signal]||'').toLowerCase())
+        +', '+escapeHtml((RELANCE_MOYENS[der.moyen]||'').toLowerCase())+'.'
+      :'Aucune relance automatique ne lui est partie.')
+    +(exclu?' <b>Exclu des relances automatiques.</b>':(relancesAllumees(currentUser)?'':' Tes relances sont coupées.'))+'</div>'
+    +'<button type="button" class="rel-lien" onclick="relanceExclure(\''+em+'\','+(exclu?'false':'true')+')">'
+    +(exclu?'Le réintégrer aux relances':'L’exclure des relances automatiques')+'</button></div>';
+}
+function renderRelanceFiche(c){
+  const z=document.getElementById('ccd-relance');
+  if(!z||!c) return false;
+  const k=_relCle(c);
+  const liste=_relJournal?_relJournal.filter(e=>e.cle===k):[];
+  z.innerHTML=_relHtmlFiche(c,liste);
+  if(!_relJournal) _relChargerJournal().then(l=>{ if(_relJournal) z.innerHTML=_relHtmlFiche(c,l.filter(e=>e.cle===k)); });
+  return true;
+}
+
+// ── CÔTÉ ATHLÈTE : le message privé (moyen « canal ») ─────────────────────
+const RELANCE_VUE_CLE='rc_relance_vue';
+// PURE. Le message à montrer : le dernier parti par l'app, de moins de sept
+// jours, pas encore fermé.
+function relanceAMontrer(journal,vueJusqua,t){
+  const n=Number(t)||Date.now();
+  const l=Object.keys((journal&&typeof journal==='object')?journal:{}).map(id=>journal[id])
+    .filter(e=>e&&e.statut==='parti'&&e.moyen==='canal'&&n-Number(e.at)<RELANCE_FENETRE_J*864e5&&Number(e.at)>(Number(vueJusqua)||0))
+    .sort((a,b)=>Number(b.at)-Number(a.at));
+  return l[0]||null;
+}
+let _relAthCache=null;
+async function _rendreRelanceAthlete(u){
+  const z=document.getElementById('clh-relance');
+  if(!z) return false;
+  const coach=u&&u.coachEmailKey, moi=_relCle(u);
+  if(!coach||!moi){ z.innerHTML=''; return false; }
+  const cle=coach+'/'+moi;
+  let r=_relAthCache&&_relAthCache.cle===cle&&Date.now()-_relAthCache.lu<10*60e3?_relAthCache.r:null;
+  if(!r){ r=await _fbJson('relances_auto/'+cle); if(r.ok) _relAthCache={cle,lu:Date.now(),r}; }
+  let vue=0; try{ vue=Number(localStorage.getItem(RELANCE_VUE_CLE))||0; }catch(e){}
+  const m=r.ok?relanceAMontrer(r.v,vue,Date.now()):null;
+  if(!m){ z.innerHTML=''; return false; }
+  z.innerHTML='<div class="rel-carte"><div class="rel-carte-t">Un mot de ton coach</div>'
+    +'<div class="rel-carte-l">'+escapeHtml(m.texte||'')+'</div>'
+    +'<button type="button" class="btn btn-outline btn-sm" onclick="relanceVue('+Number(m.at)+')">Compris</button></div>';
+  return true;
+}
+function relanceVue(at){
+  try{ localStorage.setItem(RELANCE_VUE_CLE,String(Number(at)||Date.now())); }catch(e){}
+  const z=document.getElementById('clh-relance');
+  if(z) z.innerHTML='';
+  return true;
+}
 function renderTodoBlock(clients){
   _renderPremiersPas(clients);
+  try{ renderEntreeRelances(); }catch(e){}
   const el=document.getElementById('ch-todo');if(!el) return;
   const now=Date.now(),SOON=14*864e5;
   const lt=c=>(c.bilans||[]).reduce((m,b)=>Math.max(m,b.date),0);
@@ -29581,6 +29871,7 @@ function openClientDetail(cid,_refresh,_force){
   try{ renderRevueMorphoCoach(c); }catch(e){}
   try{ renderAsymetrieCoach(c); }catch(e){}
   try{ renderMotCoachFiche(c); }catch(e){}
+  try{ renderRelanceFiche(c); }catch(e){}
   try{ renderDouleurCoach(c); }catch(e){}
   try{ renderLeveeCoach(c); }catch(e){}
   // BILAN DE SECURITE : une ligne, sans le detail des reponses — le coach
@@ -39722,6 +40013,7 @@ function loadClientHome(){
   // en douceur après 30 jours sans séance.
   try{ _rendreCheckin(u); }catch(e){}
   try{ _rendreMobilisation(u); }catch(e){}
+  try{ _rendreRelanceAthlete(u).catch(()=>{}); }catch(e){}
   try{ _afficherRepriseDouce(u); }catch(e){}
   // Le résumé d'activité (rétention agrégée par le serveur), une fois par jour.
   try{ setTimeout(()=>{ activitePublier(u).catch(()=>{}); },6000); }catch(e){}
@@ -73932,8 +74224,8 @@ function etatInvitationNotif(u,supporte,permission){
 const NOTIF_GROUPES=Object.freeze([
   Object.freeze({cle:'seances',titre:'Mes séances et ma série',types:Object.freeze(['serie','badge','wrapped','retour','sante']),
     detail:'un rappel avant chacune de tes séances, le jeudi à 18 h si ta série est en danger, le dimanche quand un badge est à une ou deux séances, le 1er du mois ton mois en chiffres, après une pause (7, 14 et 30 jours sans séance), et le matin si ta nuit n’est pas arrivée (synchronisation iPhone)'}),
-  Object.freeze({cle:'coach',titre:'Mon coach',types:Object.freeze(['coach','bilan','defi']),
-    detail:'quand ton coach répond à un bilan ou lance un défi, et le samedi si ton dernier bilan date de deux semaines'}),
+  Object.freeze({cle:'coach',titre:'Mon coach',types:Object.freeze(['coach','bilan','defi','relance']),
+    detail:'quand ton coach répond à un bilan ou lance un défi, le samedi si ton dernier bilan date de deux semaines, et les rappels que ton coach a programmés (un par semaine au plus)'}),
   Object.freeze({cle:'invitations',titre:'Mes invitations',types:Object.freeze(['filleul']),
     detail:'quand quelqu’un s’inscrit avec ton lien'})
 ]);
@@ -74098,6 +74390,7 @@ const PUSH_TYPES=Object.freeze([
   {cle:'filleul',titre:'Filleul inscrit',txt:'Quand quelqu’un s’inscrit grâce à toi.'},
   {cle:'acces',titre:'Fin de ton accès',txt:'Trois jours avant la fin de ton accès ou de ton abonnement.'},
   {cle:'retour',titre:'Après une pause',txt:'À 7, 14 et 30 jours sans séance : trois messages au plus, puis silence.'},
+  {cle:'relance',titre:'Rappel de ton coach',txt:'Un bilan en retard, un programme en préparation, un accès qui se termine : un message par semaine au plus, seulement si ton coach les a allumés.'},
   {cle:'sante',titre:'Données santé non reçues',txt:'Le matin, si la nuit n’est pas arrivée (iPhone). Deux rappels au plus, puis silence jusqu’à la prochaine réception.'}
 ]);
 // PURE. La clé base64url en octets — ce qu'attend applicationServerKey.
