@@ -30870,6 +30870,14 @@ async function testExercices(){
             ?true:_echec('un onglet inconnu ne retombe pas sur entrainement');})());
 
         ok('CHAQUE SECTION EST DANS L\'ONGLET DE SON DOMAINE',(()=>{
+          // ⚠ LES SIX BLOCS DE CCD_BLOCS_ENTRAINEMENT VOYAGENT (29/09/2026).
+          //   Depuis le 24/09/2026 (Kevin : « remets cette page comme elle
+          //   etait hier matin »), _ccdPlacerBlocs les pose dans Entrainement
+          //   quand cet onglet est ouvert, et les rend a leur etage de Donnees
+          //   sinon. Le test precedent laisse Entrainement ouvert : on lisait
+          //   donc leur place de passage, pas leur domaine. On ouvre Donnees
+          //   pour la carte ci-dessous, puis on verifie le voyage a part.
+          ccdVue('donnees');
           const ou=id=>{ const z=document.getElementById(id);
             if(!z) return 'ABSENT';
             const v=z.closest('.ccd-vue'); return v?v.dataset.vue:'hors'; };
@@ -30887,7 +30895,11 @@ async function testExercices(){
             'ccd-volume':'donnees','ccd-plateaux':'donnees',
             'ccd-forme':'donnees','ccd-douleur':'donnees',
             'ccd-asymetrie':'donnees','ccd-corps':'donnees',
-            'ccd-sessions-recap':'entrainement','ccc-pdf-content':'entrainement',
+            // ⚠ ccc-pdf-content N'EST PLUS ATTENDU (29/09/2026) : le cadre
+            // « Programme PDF » a ete RETIRE le 08/09/2026, a la demande de
+            // Kevin (voir le commentaire dans l'onglet Entrainement). On
+            // verifie plus bas qu'il n'est pas revenu.
+            'ccd-sessions-recap':'entrainement',
             'ccd-nutrition':'nutrition','ccd-supplements':'nutrition',
             'ccd-caffeine':'nutrition',
             'ccd-sommeil':'lifestyle','ccd-pas':'lifestyle',
@@ -30902,15 +30914,29 @@ async function testExercices(){
             // le sommeil et les pas.
             'ccd-micro':'nutrition',
             'ccd-journal':'donnees','ccd-bilans':'donnees','ccd-poids':'donnees',
-            // LA REPARTITION PROTEIQUE EST PASSEE EN NUTRITION le 26/08/2026 :
-            // elle derive du bloc Nutrition, sous lequel elle est posee.
-            'ccd-prises':'nutrition',
+            // ⚠ ccd-prises N'EST PLUS ATTENDU (29/09/2026) : la repartition
+            // proteique, passee en Nutrition le 26/08/2026, a ete RETIREE le
+            // 08/09/2026 a la demande de Kevin (« c'est inintéressant,
+            // dégage-le ») — voir index.html. On verifie plus bas qu'elle
+            // n'est pas revenue.
             'ccd-dossier':'donnees','ccd-reds':'donnees',
             'ccd-securite':'donnees','ccd-suspension':'donnees'};
           for(const id in attendu)
             if(ou(id)!==attendu[id])
               return _echec(id+' est dans « '+ou(id)+' » au lieu de « '+attendu[id]+' »');
-          return true;})());
+          for(const id of ['ccc-pdf-content','ccd-prises'])
+            if(ou(id)!=='ABSENT') return _echec(id+' est revenu, alors qu\'il a ete retire');
+          // ET LE VOYAGE : Entrainement ouvert, les six y sont — une seule fois.
+          ccdVue('entrainement');
+          for(const id of CCD_BLOCS_ENTRAINEMENT){
+            if(ou(id)!=='entrainement')
+              return _echec(id+' reste dans « '+ou(id)+' » quand Entrainement est ouvert');
+            if(document.querySelectorAll('#'+id).length!==1)
+              return _echec(id+' est rendu plus d\'une fois');
+          }
+          ccdVue('donnees');
+          return CCD_BLOCS_ENTRAINEMENT.every(id=>ou(id)==='donnees')
+            ?true:_echec('les blocs ne reviennent pas dans Donnees');})());
 
         ok('LES CONTRE-INDICATIONS RESTENT HORS DES ONGLETS',(()=>{
           // Enterrer une contre-indication derriere un onglet reviendrait a
@@ -32962,6 +32988,16 @@ async function testExercices(){
       // L'ACQUIS DE N4.6 EST CE QU'ON EPINGLE ICI, et il est intact : meme
       // onglet, sections VOISINES, et coachSetPhase rappelle le rendu des
       // cibles. C'etait la proximite qui comptait, pas le rang.
+      //
+      // ⚠ LE RANG A ETE TRANCHE A NOUVEAU LE 08/09/2026, par Kevin : « quand
+      //   j'arrive en haut de la page, que je sache l'eleve, il est mis en
+      //   quoi ». L'onglet suit l'ordre de la decision (voir le commentaire de
+      //   .ccd-vue[data-vue="nutrition"] dans index.html) : diete, PHASE, taux
+      //   de respect, puis les calculs. La phase n'est plus un reglage glisse
+      //   avant la lecture, c'est l'IDENTITE du suivi — et elle sort de
+      //   .cc-sect, parce qu'elle ne se replie pas. Le test lisait encore
+      //   l'ordre de B1.9 ; il epingle celui-ci depuis le 29/09/2026. Le nom
+      //   reste, pour l'historique des passes.
       ok('N4.6 + B1.9 — LA PHASE EST VOISINE DES CIBLES, ET SOUS ELLES',(()=>{
         const p=document.getElementById('ccd-phase');
         if(!p) return _echec('le bloc Phase a disparu');
@@ -32970,15 +33006,23 @@ async function testExercices(){
           return _echec('la phase est dans « '+(v?v.dataset.vue:'hors onglet')+' »');
         const n=document.getElementById('ccd-nutrition');
         if(!n) return _echec('le bloc Nutrition a disparu');
-        // LA LECTURE D'ABORD : les cibles precedent la phase.
-        if(!(n.compareDocumentPosition(p)&Node.DOCUMENT_POSITION_FOLLOWING))
-          return _echec('le reglage est repasse devant la lecture');
-        // ET VOISINES, sans quoi le rapprochement de N4.6 serait perdu : les
-        // deux sections se suivent immediatement.
-        const sN=n.closest('.cc-sect'), sP=p.closest('.cc-sect');
-        if(!sN||!sP) return _echec('les deux blocs ne sont plus des sections');
-        if(sN.nextElementSibling!==sP)
-          return _echec('une section s\'est glissee entre les cibles et la phase');
+        // L'IDENTITE D'ABORD (08/09/2026) : la diete, puis la phase, puis ce
+        // qu'elles produisent.
+        if(!(p.compareDocumentPosition(n)&Node.DOCUMENT_POSITION_FOLLOWING))
+          return _echec('la phase est repassee sous les calculs');
+        const dc=document.getElementById('ccd-diete-choix');
+        if(!dc||dc.nextElementSibling!==p)
+          return _echec('la phase ne suit plus immediatement le type de diete');
+        // HORS .cc-sect : elle ne se replie pas.
+        if(p.closest('.cc-sect')) return _echec('la phase est rentree dans une section repliable');
+        // ET VOISINES, sans quoi le rapprochement de N4.6 serait perdu : entre
+        // la phase et la section des calculs, seul le taux de respect.
+        const sN=n.closest('.cc-sect');
+        if(!sN) return _echec('les calculs ne sont plus une section');
+        const entre=[];
+        for(let e=p.nextElementSibling;e&&e!==sN;e=e.nextElementSibling) entre.push(e.id||e.className||e.tagName);
+        if(entre.join(',')!=='ccd-diete-respect')
+          return _echec('entre la phase et les cibles : '+(entre.join(', ')||'(rien, ou la section n\'est plus soeur)'));
         // RENDUE UNE SEULE FOIS : un déplacement qui duplique serait pire.
         if(document.querySelectorAll('#ccd-phase').length!==1)
           return _echec('le bloc Phase est rendu deux fois');
@@ -40307,18 +40351,50 @@ async function testExercices(){
       ok('LE MEGABLOC NUTRITION EST DECOUPE EN SECTIONS REPLIABLES',(()=>{
         // Trois des vingt-cinq sections concentraient la moitie du volume
         // rendu, parce que #ccd-nutrition empilait quatorze sous-blocs.
+        //
+        // ⚠ DEUX DE CES SECTIONS ONT QUITTE LE MEGABLOC LE 08/09/2026, sur
+        //   demande de Kevin (voir le commentaire de renderCoachNutriSection) :
+        //   • « Cibles en cours » (ccd-nut-cibles) est RETIREE — elle redisait
+        //     en pourcentages les grammages du tableau Macronutriments ;
+        //   • le journal (ccd-nut-journal) est DESCENDU tout au fond de
+        //     l'onglet, en calendrier : #ccd-cal, dans sa propre section
+        //     #ccd-cal-sect, rempli par renderJournalNutriCoach ;
+        //   • et le constat qui ouvrait le megabloc — le taux de diete
+        //     respectee — est REMONTE au-dessus, dans #ccd-diete-respect.
+        //   Le test cherchait encore ces deux identifiants dans le megabloc.
+        //   Il epingle depuis le 29/09/2026 ce que la decision a laisse : le
+        //   decoupage de ce qui reste, et la place de ce qui en est sorti.
         const src=String(renderCoachNutriSection);
-        for(const id of ['ccd-nut-journal','ccd-nut-cibles','ccd-nut-reglages','ccd-nut-strict'])
+        for(const id of ['ccd-nut-reglages','ccd-nut-strict'])
           if(src.indexOf(id)<0) return _echec('section manquante : '+id);
-        // L'ETAT CONSTATE AVANT LES REGLAGES : le coach vient d'abord lire ce
-        // que son athlete a mange.
-        if(!(src.indexOf('ccd-nut-journal')<src.indexOf('ccd-nut-reglages')))
-          return _echec('les reglages passent avant le journal');
+        // CE QUI EST SORTI N'Y EST PAS REVENU — sinon, deux rendus du meme bloc.
+        for(const id of ['ccd-nut-journal','ccd-nut-cibles'])
+          if(new RegExp("['\"]"+id+"['\"]").test(src))
+            return _echec(id+' est revenu dans le megabloc');
+        // LE JOURNAL A SA SECTION, AU FOND DE L'ONGLET, et son rendu propre.
+        const cal=document.getElementById('ccd-cal');
+        const sCal=document.getElementById('ccd-cal-sect');
+        const vN=document.querySelector('#s-coach-client .ccd-vue[data-vue="nutrition"]');
+        if(!cal||!sCal||!sCal.contains(cal)) return _echec('le journal n\'a plus sa section');
+        if(!vN||sCal.parentElement!==vN||vN.lastElementChild!==sCal)
+          return _echec('le journal n\'est plus au fond de l\'onglet Nutrition');
+        if(String(renderJournalNutriCoach).indexOf("'ccd-cal'")<0)
+          return _echec('renderJournalNutriCoach ne remplit plus #ccd-cal');
+        // L'ETAT CONSTATE AVANT LES REGLAGES : le taux de respect precede les
+        // calculs, qui precedent les reglages.
+        const r=document.getElementById('ccd-diete-respect');
+        const n=document.getElementById('ccd-nutrition');
+        if(!r||!n||!(r.compareDocumentPosition(n)&Node.DOCUMENT_POSITION_FOLLOWING))
+          return _echec('le constat ne precede plus les calculs');
+        if(!(src.indexOf('_htmlTableauxTableur(c)')<src.indexOf('ccd-nut-reglages')))
+          return _echec('les reglages passent avant les calculs');
         // Les identifiants de champ n'ont pas bouge : saveClientNutriMacros
-        // les lit par leur id.
+        // les lit par leur id. Ils sont emis par _htmlTableauxTableur, que le
+        // megabloc appelle depuis le passage aux tableaux.
+        const tab=String(_htmlTableauxTableur);
         for(const k of ['kcal','p','g','l','f'])
-          if(src.indexOf("'ccd-on-'+f.k")<0&&src.indexOf('ccd-on-'+k)<0)
-            return _echec('les champs ON ne sont plus emis');
+          if(tab.indexOf("'ccd-on-"+k+"'")<0)
+            return _echec('le champ ccd-on-'+k+' n\'est plus emis');
         return true;})());
     })();
     // ── LE DOSSIER EN DEUX COLONNES, SUR LARGE ECRAN ─────────────────────
@@ -40357,16 +40433,31 @@ async function testExercices(){
         if(!pad) return _echec('la regle de .pad a disparu');
         if(pad.style.display!=='block')
           return _echec('.pad est encore en « '+pad.style.display+' » : l\'onglet entier retombe dans une colonne');
+        // ⚠ PLUS DE DEUX COLONNES DEPUIS LE 07/09/2026. Kevin, capture a
+        //   l'appui : « ca gache la lecture » — une fiche se lit de haut en
+        //   bas, et deux colonnes la faisaient lire en zigzag (voir le
+        //   commentaire « PLUS DE DEUX COLONNES » de la feuille). La regle
+        //   `.ccd-vue.actif{display:grid;1fr 1fr}` a ete retiree ce jour-la ;
+        //   ce test la reclamait encore. Il epingle depuis le 29/09/2026 la
+        //   decision : .pad reste une simple colonne, et l'onglet actif n'est
+        //   plus mis en grille — ni ici, ni dans aucune autre regle.
         const vue=_regle(m,/\.ccd-vue\.actif$/);
-        if(!vue) return _echec('aucune regle ne met l\'onglet actif en colonnes');
-        if(vue.style.display!=='grid')
-          return _echec('l\'onglet actif n\'est pas une grille : '+vue.style.display);
-        if(!/1fr\s+1fr/.test(vue.style.gridTemplateColumns||''))
-          return _echec('ce ne sont pas deux colonnes : '+vue.style.gridTemplateColumns);
-        // SANS align-items:start, chaque section s'etirerait a la hauteur de la
-        // plus haute de sa rangee et le dossier serait un damier de vides.
-        return vue.style.alignItems==='start'
-          ?true:_echec('align-items vaut « '+vue.style.alignItems+' » : les sections vont s\'etirer');})());
+        if(vue&&vue.style.display==='grid')
+          return _echec('l\'onglet actif est repasse en grille : '+vue.style.gridTemplateColumns);
+        for(const f of document.styleSheets){
+          let regles=null;
+          try{ regles=f.cssRules; }catch(e){ continue; }
+          for(const r of regles){
+            const sous=r.type===CSSRule.MEDIA_RULE?[...r.cssRules]:[r];
+            for(const x of sous)
+              // L'ONGLET LUI-MEME, pas ce qu'il contient : un bloc interne
+              // a le droit d'etre une grille.
+              if(x.selectorText&&/grid/.test(x.style.display||'')
+                &&x.selectorText.split(',').some(t=>/\.ccd-vue(?:\.actif|\[[^\]]*\])*$/.test(t.trim())))
+                return _echec('un onglet est mis en grille : '+x.selectorText);
+          }
+        }
+        return true;})());
 
       ok('SOUS 1025 PX, RIEN NE CHANGE : les regles larges sont dans la requete',(()=>{
         // La consigne est explicite : la fiche etroite doit rester identique.
@@ -53888,8 +53979,25 @@ async function testExercices(){
       const lignes=[...src.querySelectorAll('.rc-micro')].map(m=>m.textContent);
       d.innerHTML=lignes.map(t=>'<div class="rc-micro" style="width:max-content">'+escapeHtml(t)+'</div>').join('');
       document.body.insertBefore(d,document.body.firstChild);
-      try{ return [...d.children].map((m,i)=>({t:lignes[i],w:Math.ceil(m.getBoundingClientRect().width),
-        h:Math.round(m.getBoundingClientRect().height),tient:m.getBoundingClientRect().width<=largeur})); }
+      // ⚠ LA LARGEUR EST LUE A DIX FOIS LA TAILLE, PUIS DIVISEE (29/09/2026).
+      //   A 10 px, le Chromium sans tete de Linux ARRONDIT l'avance de chaque
+      //   glyphe au pixel entier (pas de positionnement sous-pixel) : la
+      //   phrase des sports y mesurait 324 px, contre 315,9 px de largeur
+      //   typographique — celle que rendent les telephones, et celle que la
+      //   feuille cite (« 316 px pour 317 »). Soixante-cinq arrondis en
+      //   excedent faisaient echouer le banc sur la machine qui le lance, sans
+      //   que le produit ait bouge. A 100 px l'arrondi pese dix fois moins ;
+      //   la hauteur, elle, reste lue a la taille reelle.
+      const _large=m=>{
+        const x=m.cloneNode(true);
+        x.style.fontSize=(parseFloat(getComputedStyle(m).fontSize)*10)+'px';
+        x.style.lineHeight='normal';
+        d.appendChild(x);
+        try{ return x.getBoundingClientRect().width/10; } finally{ x.remove(); }
+      };
+      try{ return [...d.children].map((m,i)=>{ const w=_large(m);
+        return {t:lignes[i],w:Math.ceil(w),
+          h:Math.round(m.getBoundingClientRect().height),tient:w<=largeur}; }); }
       finally{ d.remove(); }
     };
 
@@ -74113,16 +74221,27 @@ vendredi 78 6h 44m
     // decoupait la regle voisine — la sonde tombait alors que le CSS etait bon.
     const _cssNu=_stylesProd()
       .map(s=>s.textContent).join('\n').replace(/\/\*[\s\S]*?\*\//g,'');
+    // ⚠ LE PREMIER BLOC N'EST PLUS LE BON (29/09/2026). La feuille porte
+    //   plusieurs @media(min-width:1025px) : les modales larges de N4.14,
+    //   posees JUSTE AU-DESSUS, les tableaux .tbk-duo, plus bas. La sonde
+    //   prenait le premier venu et jugeait donc les trois regles de N4.14
+    //   (#modal-overlay>.mdl-large…) comme si elles etaient la disposition
+    //   coach. Ces modales ne sont pas des ecrans ; ce qui les borne au coach,
+    //   c'est la classe, et N4.14 en compte les porteurs. On retient donc LE
+    //   bloc de la disposition coach : celui qui elargit .ecran-coach.active.
     const _cssLarge=(()=>{
       const css=_cssNu;
-      const i=css.indexOf('@media(min-width:1025px)');
-      if(i<0) return null;
-      // Decoupage par comptage d'accolades : le bloc en contient lui-meme.
-      const j=css.indexOf('{',i);
-      let p=0;
-      for(let k=j;k<css.length;k++){
-        if(css[k]==='{') p++;
-        else if(css[k]==='}'){ p--; if(!p) return css.slice(j+1,k); }
+      let i=css.indexOf('@media(min-width:1025px)');
+      while(i>=0){
+        // Decoupage par comptage d'accolades : le bloc en contient lui-meme.
+        const j=css.indexOf('{',i);
+        let p=0, bloc=null;
+        for(let k=j;k<css.length;k++){
+          if(css[k]==='{') p++;
+          else if(css[k]==='}'){ p--; if(!p){ bloc=css.slice(j+1,k); break; } }
+        }
+        if(bloc&&/body:has\(\.ecran-coach\.active\)/.test(bloc)) return bloc;
+        i=css.indexOf('@media(min-width:1025px)',i+1);
       }
       return null;
     })();
@@ -74144,8 +74263,16 @@ vendredi 78 6h 44m
     // les deux, et l'ecran de l'athlete changerait de largeur.
     const _qualifie=s=>/#s-coach-program\b[^ ,>+~]*\[data-ctx="coach"\]/.test(s);
     const _idsNus=s=>_idsDe(s).filter(id=>!(id==='s-coach-program'&&_qualifie(s)));
+    // ⚠ LA CLASSE .ecran-coach PORTE UN ECRAN COACH (29/09/2026). Depuis
+    //   B1.1 + B1.4, le bloc ne recopie plus la liste des ecrans : trois
+    //   selecteurs `body:has(.ecran-coach.active)` remplacent les soixante-six
+    //   qu'il fallait tenir a la main (voir le commentaire de la feuille). La
+    //   classe est posee par l'ecran lui-meme, et le test « LA LISTE DES
+    //   ECRANS COACH EST PORTEE PAR LES ECRANS » verifie qu'aucun ecran
+    //   athlete ne la porte. Cette sonde ne reconnaissait que les identifiants.
     ok('100 % des selecteurs sont portes par un ecran coach',(()=>{
       const hors=_selLarge.filter(s=>!_qualifie(s)
+        &&!/\.ecran-coach\b/.test(s)
         &&!_idsDe(s).some(id=>ECRANS_LARGE.includes(id)));
       return hors.length
         ?_echec(hors.length+' hors contexte coach : '+hors.join(' | ')):true;})());
