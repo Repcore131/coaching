@@ -49329,6 +49329,106 @@ async function testExercices(){
         if(e3){ if(el0) e3.hidden=svH; else e3.remove(); }
       }})());
 
+    // ══ LOT N5 — LA FAIM DANS LE CHECK-IN (29/09/2026) ═════════════════════
+    const _N5M=new Date(2026,8,29,12).getTime();
+    // n check-ins, les n derniers jours jusqu'à _N5M (ou `decale` jours avant).
+    const _N5C=(n,faim,energie,decale)=>{ const o={}; for(let i=0;i<n;i++){ const j=_jourPlus('2026-09-29',-i-(decale||0));
+      o[j]={sommeil:3,energie,courbatures:2,at:1}; if(faim!=null) o[j].faim=faim; } return o; };
+    ok('N5 — fatigueDiete : faim haute et énergie basse 3, faim haute seule 2, moins de 7 check-ins 0, hors sèche toujours 0',(()=>{
+      const f=(c,ph)=>fatigueDiete(c,ph===undefined?'seche':ph,_N5M);
+      if(f(_N5C(10,5,2))!==3) return _echec('faim haute et énergie basse : '+f(_N5C(10,5,2)));
+      if(f(_N5C(10,4,2))!==3) return _echec('aux seuils (4 et 2,5 compris)');
+      if(f(_N5C(10,5,4))!==2) return _echec('faim haute seule : '+f(_N5C(10,5,4)));
+      if(f(_N5C(10,2,2))!==1) return _echec('énergie basse seule : '+f(_N5C(10,2,2)));
+      if(f(_N5C(10,3,4))!==0) return _echec('rien à signaler');
+      if(f(_N5C(6,5,1))!==0) return _echec('six check-ins suffisent');
+      if(f(_N5C(7,5,1))!==3) return _echec('sept check-ins ne suffisent pas');
+      // Des check-ins SANS la faim ne comptent pas : elle est facultative.
+      if(f(_N5C(10,null,1))!==0) return _echec('sans faim, un niveau');
+      // Hors de la fenêtre de 14 jours : rien.
+      if(f(_N5C(10,5,1,15))!==0) return _echec('des check-ins d’il y a trois semaines comptent');
+      for(const ph of ['masse','maintien','peak',null,{type:'masse'}])
+        if(f(_N5C(14,5,1),ph)!==0) return _echec('hors sèche : '+JSON.stringify(ph));
+      if(f(_N5C(10,5,1),{type:'seche',debut:1})!==3) return _echec('l’objet phase');
+      return true;})());
+    ok('N5 — checkinComplet reste vrai sans la faim : sinon les volts de milliers de journées passées tomberaient',(()=>{
+      if(!checkinComplet({sommeil:3,energie:3,courbatures:3})) return _echec('trois réponses : incomplet');
+      if(!checkinComplet({sommeil:3,energie:3,courbatures:3,faim:9})) return _echec('une faim hors échelle rend incomplet');
+      if(checkinComplet({sommeil:3,energie:3,faim:4})) return _echec('la faim remplace les courbatures');
+      const q=CHECKIN_QUESTIONS.find(x=>x.cle==='faim');
+      if(!q||!q.facultatif||CHECKIN_QUESTIONS.length!==4) return _echec('la quatrième question');
+      // Le libellé est neutre : il ne suggère ni de résister, ni de craquer.
+      if(q.lib!=='Ta faim, hier ?'||/résist|craqu|tenu|écart|bien|mal/i.test(q.lib+q.bas+q.haut)) return _echec('libellé : '+q.lib);
+      const u={role:'athlete',email:'n5@t.fr',sessions:[],checkin:{'2026-09-29':{sommeil:3,energie:3,courbatures:3,at:_N5M}}};
+      return xpCalcul(u,_N5M+3600e3).cat.checkin===10?true:_echec('les volts d’un check-in à trois réponses');})());
+    ok('N5 — la faim s’écrit avec le check-in, ou s’y ajoute après sans rien recalculer',(()=>{
+      const sv={u:currentUser,s:window.saveUser,x:window.majXp,r:window._rendreRang};
+      try{
+        window.saveUser=()=>{}; window.majXp=()=>null; window._rendreRang=()=>{};
+        const j=localISODate(new Date());
+        currentUser={role:'athlete',email:'n5a@t.fr',sessions:[]}; _ciBrouillon={};
+        checkinRepondre('faim',4); checkinRepondre('sommeil',3); checkinRepondre('energie',3);
+        if(currentUser.checkin) return _echec('écrit avant la troisième réponse obligatoire');
+        checkinRepondre('courbatures',2);
+        const c=currentUser.checkin&&currentUser.checkin[j];
+        if(!c||c.faim!==4) return _echec('la faim donnée avant : '+JSON.stringify(c));
+        currentUser={role:'athlete',email:'n5b@t.fr',sessions:[]}; _ciBrouillon={};
+        checkinRepondre('sommeil',3); checkinRepondre('energie',3); checkinRepondre('courbatures',2);
+        const d=currentUser.checkin[j], bat=d.batterie;
+        if(d.faim!==undefined) return _echec('une faim inventée');
+        // La carte de la batterie la propose encore, puis plus.
+        const h=document.createElement('div'); h.innerHTML=htmlCheckinAccueil(currentUser,Date.now());
+        if(!h.querySelector('.ci-faim')||h.querySelectorAll('.ci-faim .ci-p').length!==5) return _echec('la faim n’est plus proposée après');
+        checkinRepondre('faim',2);
+        if(currentUser.checkin[j].faim!==2||currentUser.checkin[j].batterie!==bat) return _echec('ajout après : '+JSON.stringify(currentUser.checkin[j]));
+        h.innerHTML=htmlCheckinAccueil(currentUser,Date.now());
+        return h.querySelector('.ci-faim')?_echec('encore proposée une fois donnée'):true;
+      }finally{ currentUser=sv.u; window.saveUser=sv.s; window.majXp=sv.x; window._rendreRang=sv.r; _ciBrouillon={}; }})());
+    ok('N5 — la proposition ne descend jamais les calories, quel que soit le niveau de fatigue',(()=>{
+      const m={on:{kcal:2200,p:160,l:70,g:310},off:{kcal:1900,p:160,l:70,g:235}};
+      const baisse={sens:'baisse',kcalDelta:-150,jour:'off'}, hausse={sens:'hausse',kcalDelta:150,jour:'on'};
+      // Niveau 0 : pas de signal, la proposition passe telle quelle (la fatigue n'y ajoute rien).
+      const z=propositionFatigue(0,baisse,m,2500);
+      if(!z||z.type!=='ajustement'||z.a!==baisse) return _echec('niveau 0');
+      for(const n of [1,2,3]) for(const dep of [0,1500,2000,2100,2500,3200,NaN]){
+        for(const a of [baisse,hausse,null]){
+          const r=propositionFatigue(n,a,m,dep);
+          if(r&&r.type==='ajustement'&&r.a.sens==='baisse') return _echec('baisse au niveau '+n);
+          if(r&&r.type==='pause'){
+            if(r.macros.on.kcal<m.on.kcal||r.macros.off.kcal<m.off.kcal) return _echec('pause en dessous : niveau '+n+', dépense '+dep+' '+JSON.stringify(r.macros));
+            if(r.macros.on.p!==160||r.macros.on.l!==70||r.macros.off.p!==160) return _echec('protéines ou lipides modifiés');
+            if(n<3) return _echec('pause avant le niveau 3');
+          }
+        }
+      }
+      // Niveau 3 au-dessus du maintien : on stabilise, on ne descend pas au maintien.
+      const s=propositionFatigue(3,baisse,m,1500);
+      if(!s||s.type!=='garde') return _echec('niveau 3, déjà au-dessus du maintien : '+JSON.stringify(s));
+      const p=propositionFatigue(3,null,m,2500);
+      if(!p||p.type!=='pause'||p.macros.on.kcal!==2500||p.macros.off.kcal!==2500||p.jours<7||p.jours>14) return _echec('pause au maintien : '+JSON.stringify(p));
+      // Une hausse reste possible aux niveaux 1 et 2.
+      return propositionFatigue(2,hausse,m,2500).type==='ajustement'?true:_echec('la hausse est retenue');})());
+    ok('N5 — la carte de la pause dit ce qu’elle fait et ce qu’elle ne fait pas, de 7 à 14 jours',(()=>{
+      const e={pause:{type:'pause',jours:10,macros:{on:{kcal:2500,p:160,l:70},off:{kcal:2500,p:160,l:70}}}};
+      const d=document.createElement('div'); d.innerHTML=htmlPauseFatigue(e);
+      const t=d.textContent;
+      if(t.indexOf('Ce que ça fait')<0||t.indexOf('Ce que ça ne fait pas')<0) return _echec('les deux rubriques');
+      if(t.indexOf('Tu ne perds pas ce que tu as gagné, tu récupères de la marge')<0) return _echec('la phrase de la demande');
+      const o=[...d.querySelectorAll('#ps-pause-j option')].map(x=>+x.value);
+      if(o.join()!=='7,10,14'||+d.querySelector('#ps-pause-j').value!==10) return _echec('durées : '+o.join());
+      if(!/appliquerPauseFatigue/.test(d.innerHTML)) return _echec('bouton');
+      return htmlPauseFatigue({})===''?true:_echec('sans pause');})());
+    ok('N5 — le coach voit la faim avec les trois autres, même courbe, et le niveau en sèche (sous aTCA aussi)',(()=>{
+      const t=_N5M, ci=_N5C(10,5,1);
+      const c={checkin:ci,phase:{type:'seche',debut:1},tcaRisque:true};
+      const d=document.createElement('div'); d.innerHTML=_htmlCheckinCoachDetail(c,t);
+      const l=[...d.querySelectorAll('.ci-coach-ql')].map(x=>x.childNodes[0].textContent);
+      if(l.join()!=='Sommeil,Énergie,Courbatures,Faim') return _echec('lignes : '+l.join());
+      if(d.querySelectorAll('.ci-coach-mini').length!==4||d.querySelectorAll('.ci-coach-mini i').length!==56) return _echec('même courbe pour chacune');
+      if(!/pause diététique/.test(d.textContent)) return _echec('le niveau 3 n’est pas dit au coach');
+      const m=document.createElement('div'); m.innerHTML=_htmlCheckinCoachDetail(Object.assign({},c,{phase:{type:'masse',debut:1}}),t);
+      return /pause/.test(m.textContent)?_echec('un signal hors sèche'):true;})());
+
     ok('Volts : dix rangs, dans l’ordre, seuils croissants à partir de 0',(()=>{
       const n=RANGS.map(r=>r.nom).join();
       if(n!=='ÉTINCELLE,IMPULSION,VOLTAGE,MACHINE,ÉLITE,SURTENSION,MONSTRE,FOUDRE,TITAN,LÉGENDE') return _echec(n);
@@ -50805,7 +50905,8 @@ async function testExercices(){
       if(checkinAProposer(u,new Date(2026,9,20,14,0).getTime())) return _echec('14 h');
       if(checkinAProposer({role:'coach',email:'c@t.fr'},_CT)) return _echec('coach');
       const d=document.createElement('div'); d.innerHTML=htmlCheckinAccueil(u,_CT,{sommeil:4});
-      if(d.querySelectorAll('.ci-ligne').length!==3||d.querySelectorAll('.ci-p').length!==15) return _echec('trois rangées de cinq');
+      // Quatre rangées depuis le lot N5 : la faim, facultative, en dernier.
+      if(d.querySelectorAll('.ci-ligne').length!==4||d.querySelectorAll('.ci-p').length!==20) return _echec('quatre rangées de cinq');
       if(d.querySelectorAll('.ci-p.on').length!==1) return _echec('brouillon');
       if(!/Sommeil/.test(d.textContent)||!/Énergie/.test(d.textContent)||!/Courbatures/.test(d.textContent)) return _echec('libellés');
       // Le sommeil importé est montré.

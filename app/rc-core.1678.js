@@ -81216,7 +81216,10 @@ const CHECKIN_HEURE_MAX=14;
 const CHECKIN_QUESTIONS=Object.freeze([
   Object.freeze({cle:'sommeil',lib:'Sommeil',bas:'Très mauvais',haut:'Excellent'}),
   Object.freeze({cle:'energie',lib:'Énergie',bas:'Vidé',haut:'Au top'}),
-  Object.freeze({cle:'courbatures',lib:'Courbatures',bas:'Aucune',haut:'Fortes',inverse:true})
+  Object.freeze({cle:'courbatures',lib:'Courbatures',bas:'Aucune',haut:'Fortes',inverse:true}),
+  // LOT N5 : la faim, FACULTATIVE (checkinComplet ne la demande pas). Libellé
+  // neutre : il ne suggère rien, ni « résister », ni « craquer ».
+  Object.freeze({cle:'faim',lib:'Ta faim, hier ?',bas:'Faible',haut:'Très forte',inverse:true,facultatif:true})
 ]);
 const BATTERIE_NIVEAUX=Object.freeze([
   Object.freeze({min:80,cle:'fond',phrase:'Séance à fond possible'}),
@@ -81336,6 +81339,7 @@ function htmlCheckinAccueil(u,maintenant,brouillon){
       +'<b class="ci-pct" id="ci-pct" data-cible="'+b.pct+'">'+b.pct+' %</b></div>'
       +'<div class="ci-phrase">'+escapeHtml(repos?'Recharge : ta prochaine séance sera meilleure si…':b.phrase)+'</div>'
       +(rc?'<div class="ci-conseil">'+escapeHtml(rc.conseil)+'</div>'+(rc.teaser?'<div class="ci-teaser">'+escapeHtml(rc.teaser)+'</div>':''):'')
+      +_htmlCiFaimApres(fait)
       +'</div>';
   }
   if(!checkinAProposer(u,t)) return '';
@@ -81349,7 +81353,7 @@ function htmlCheckinAccueil(u,maintenant,brouillon){
         +'aria-label="'+escapeHtml(q.lib+' : '+n+' sur 5'+(n===1?' ('+q.bas+')':n===5?' ('+q.haut+')':''))+'" '
         +'onclick="checkinRepondre(\''+q.cle+'\','+n+')">'+n+'</button>').join('')+'</span></div>').join('')
     +'<div class="ci-note">1 = '+escapeHtml(CHECKIN_QUESTIONS[0].bas.toLowerCase())+' · 5 = '+escapeHtml(CHECKIN_QUESTIONS[0].haut.toLowerCase())
-      +' ; courbatures : 1 = aucune · +10 V</div>'
+      +' ; courbatures : 1 = aucune ; faim : 1 = faible, facultatif · +10 V</div>'
     +'</div>';
 }
 function _rendreCheckin(u){
@@ -81365,10 +81369,20 @@ function _rendreCheckin(u){
 function checkinRepondre(cle,n){
   const u=(typeof currentUser!=='undefined')?currentUser:null;
   if(!u||!CHECKIN_QUESTIONS.some(q=>q.cle===cle)||!_ciNote(n)) return false;
+  // LOT N5 : la faim donnée APRÈS le check-in (la carte de la batterie la
+  // propose encore) s'ajoute à celui du jour, sans rien recalculer.
+  const _fait=checkinDuJour(u,Date.now());
+  if(cle==='faim'&&_fait){
+    _fait.faim=_ciNote(n);
+    try{ saveUser(); }catch(e){}
+    _rendreCheckin(u);
+    return true;
+  }
   _ciBrouillon[cle]=_ciNote(n);
   if(checkinComplet(_ciBrouillon)){
     const t=Date.now(), j=_ciJour(t);
     const c={sommeil:_ciBrouillon.sommeil,energie:_ciBrouillon.energie,courbatures:_ciBrouillon.courbatures,at:t};
+    if(_ciNote(_ciBrouillon.faim)) c.faim=_ciNote(_ciBrouillon.faim);
     const b=batterieDuJour(c,chargeSeptJours(u,t));
     if(b) c.batterie=b.pct;
     u.checkin=(u.checkin&&typeof u.checkin==='object')?u.checkin:{};
@@ -81402,8 +81416,188 @@ function _htmlBatterieCoach(c,maintenant){
     +(niv?'<span>'+escapeHtml(niv.phrase)+'</span>':'')+'</div>'
     +'<div class="ci-coach-barres" role="img" aria-label="Tendance 14 jours, moyenne '+moy+' %">'
     +jours.map(x=>'<i title="'+escapeHtml(x.j+(x.b==null?' : pas de check-in':' : '+x.b+' %'))+'" style="height:'+(x.b==null?4:Math.max(6,x.b))+'%"'+(x.b==null?' class="vide"':'')+'></i>').join('')
-    +'</div><div class="ci-coach-n">14 jours · moyenne '+moy+' % · '+faits.length+' check-in'+(faits.length>1?'s':'')+'</div></section>';
+    +'</div><div class="ci-coach-n">14 jours · moyenne '+moy+' % · '+faits.length+' check-in'+(faits.length>1?'s':'')+'</div>'
+    +_htmlCheckinCoachDetail(c,t)+'</section>';
 }
+// La faim, proposée encore sur la carte de la batterie tant qu'elle n'est pas
+// donnée ce jour-là : la troisième touche écrit le check-in, la quatrième
+// question ne doit pas disparaître avec le formulaire.
+function _htmlCiFaimApres(fait){
+  if(!fait||_ciNote(fait.faim)) return '';
+  const q=CHECKIN_QUESTIONS.find(x=>x.cle==='faim');
+  if(!q) return '';
+  return '<div class="ci-ligne ci-faim"><span class="ci-lib">'+escapeHtml(q.lib)+'</span>'
+    +'<span class="ci-pastilles">'+[1,2,3,4,5].map(n=>'<button type="button" class="ci-p" '
+      +'aria-label="'+escapeHtml('Faim : '+n+' sur 5'+(n===1?' ('+q.bas+')':n===5?' ('+q.haut+')':''))+'" '
+      +'onclick="checkinRepondre(\'faim\','+n+')">'+n+'</button>').join('')+'</span></div>';
+}
+// ══ LOT N5 : LA FAIM DANS LE CHECK-IN, ET CE QU'ELLE DÉCLENCHE (29/09/2026) ══
+// La faim est la quatrième question du check-in, FACULTATIVE : checkinComplet
+// ne la demande pas (un check-in à trois réponses reste complet, et les volts
+// des journées passées ne bougent pas).
+//
+// fatigueDiete lit la faim et l'énergie sur quatorze jours, en sèche
+// seulement, et rend un niveau de 0 à 3. Au niveau 3, la carte du point de la
+// semaine propose une PAUSE au maintien, de 7 à 14 jours.
+//
+// ⚠ UN SIGNAL DE FATIGUE NE FAIT JAMAIS DESCENDRE. Dès le niveau 1, une baisse
+//   proposée par l'ajustement est retenue (on stabilise) ; au niveau 3, la
+//   pause remonte au maintien, jamais en dessous des objectifs actuels, jour
+//   par jour. propositionFatigue le porte, et un test le verrouille.
+// ⚠ SOUS aTCA, la question reste, le déclenchement ne s'affiche pas : la carte
+//   du point n'existe pas dans ce mode (lot N1), et c'est au coach, qui voit la
+//   faim et le niveau sur sa fiche, d'en parler.
+// ⚠ SOUS DRAPEAU, rien n'est proposé : la carte reste informative (lot N1).
+const FATIGUE_FENETRE_JOURS=14;
+const FATIGUE_MIN_CHECKINS=7;        // check-ins AVEC la faim, dans la fenêtre
+const FATIGUE_FAIM_HAUTE=4;          // moyenne sur 5
+const FATIGUE_FAIM_MOYENNE=3.5;
+const FATIGUE_ENERGIE_BASSE=2.5;     // moyenne sur 5
+const PAUSE_FATIGUE_JOURS=Object.freeze([7,10,14]);
+const PAUSE_FATIGUE_DEFAUT=10;
+const PAUSE_FATIGUE_FAIT='Pendant la pause, tu manges à ton maintien : la faim redescend, l’énergie revient, et ta sèche repart mieux ensuite.';
+const PAUSE_FATIGUE_NE_FAIT_PAS='Tu ne perds pas ce que tu as gagné, tu récupères de la marge. Un peu plus sur la balance les premiers jours, c’est de l’eau et des réserves, pas un recul.';
+/**
+ * PURE. Le niveau de fatigue de la diète, de 0 à 3.
+ * @param checkins  u.checkin : {AAAA-MM-JJ: {sommeil, energie, courbatures, faim?}}
+ * @param phase     le type de phase ('seche'…) ou l'objet phase
+ * @param maintenant  ms ; la fenêtre est les 14 jours qui finissent ce jour-là
+ * 0 : hors sèche, moins de 7 check-ins avec la faim, ou rien à signaler.
+ * 1 : faim plutôt haute (≥ 3,5) OU énergie basse (≤ 2,5).
+ * 2 : faim haute (≥ 4) seule, ou faim plutôt haute ET énergie basse.
+ * 3 : faim haute ET énergie basse.
+ */
+function fatigueDiete(checkins,phase,maintenant){
+  const type=(phase&&typeof phase==='object')?phase.type:phase;
+  if(type!=='seche') return 0;
+  const t=(typeof maintenant==='number')?maintenant:Date.now();
+  const l=(checkins&&typeof checkins==='object')?checkins:{};
+  const fin=localISODate(new Date(t));
+  let n=0, sf=0, se=0;
+  for(let i=0;i<FATIGUE_FENETRE_JOURS;i++){
+    const c=l[_jourPlus(fin,-i)];
+    if(!checkinComplet(c)||!_ciNote(c.faim)) continue;
+    n++; sf+=_ciNote(c.faim); se+=_ciNote(c.energie);
+  }
+  if(n<FATIGUE_MIN_CHECKINS) return 0;
+  const faim=sf/n, energie=se/n;
+  const haute=faim>=FATIGUE_FAIM_HAUTE, moyenne=faim>=FATIGUE_FAIM_MOYENNE, basse=energie<=FATIGUE_ENERGIE_BASSE;
+  if(haute&&basse) return 3;
+  if(haute||(moyenne&&basse)) return 2;
+  if(moyenne||basse) return 1;
+  return 0;
+}
+/**
+ * PURE. Ce que la fatigue fait de la proposition de la semaine.
+ * @param niveau    fatigueDiete
+ * @param a         ajustementPropose (ou null)
+ * @param macros    nutrition.macros ({on, off})
+ * @param depense   la dépense estimée (le maintien), kcal
+ * @returns {{type:'pause',jours,macros:{on,off}}|{type:'garde',retenue:boolean}|{type:'ajustement',a}|null}
+ * Niveau 0 : la proposition telle quelle. Dès 1 : une BAISSE est retenue.
+ * Au 3 : la pause, chaque jour au plus haut de son objectif actuel et du
+ * maintien ; si elle ne change rien (déjà au maintien ou au-dessus), on garde.
+ */
+function propositionFatigue(niveau,a,macros,depense){
+  const n=Number(niveau)||0;
+  if(n>=3){
+    const m=macros||{}, dep=Math.round(Number(depense)||0);
+    const un=j=>{
+      const b=m[j];
+      if(!b||!(Number(b.kcal)>0)) return null;
+      const k=Math.max(Number(b.kcal),dep);
+      if(k===Number(b.kcal)) return Object.assign({},b);
+      const p=Number(b.p)||0, l=Number(b.l)||0;
+      return {kcal:k,p:b.p,l:b.l,g:Math.max(0,Math.round((k-4*p-9*l)/4)),f:Math.round(FIBRES_PAR_1000*k/1000)};
+    };
+    const on=un('on'), off=un('off');
+    if(on&&off&&(on.kcal>Number(m.on.kcal)||off.kcal>Number(m.off.kcal)))
+      return {type:'pause',jours:PAUSE_FATIGUE_DEFAUT,macros:{on,off}};
+    return {type:'garde',retenue:!!(a&&a.sens==='baisse')};
+  }
+  if(a&&a.sens==='baisse'&&n>=1) return {type:'garde',retenue:true};
+  return a?{type:'ajustement',a}:null;
+}
+// La pause lancée par l'athlète depuis son point (origine 'fatigue') : même
+// objet que celle du coach (u.phase.pause), que cibleVitesse, ajustementPropose
+// et la fiche coach lisent déjà. kcalAvant est la seule trace de la reprise.
+function appliquerPauseFatigue(jours){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||!u.phase) return false;
+  let e=null; try{ e=etatPointSemaine(u,Date.now()); }catch(err){ e=null; }
+  if(!e||!e.pause){ toast('Cette proposition n’est plus d’actualité','var(--orange)'); return false; }
+  const j=PAUSE_FATIGUE_JOURS.indexOf(Number(jours))>=0?Number(jours):PAUSE_FATIGUE_DEFAUT;
+  const n=u.nutrition, m=n.macros;
+  const avant=JSON.parse(JSON.stringify({on:m.on||{},off:m.off||{}}));
+  u.phase.pause={debut:Date.now(),jours:j,kcalAvant:avant,origine:'fatigue'};
+  n.macros=Object.assign({},m,{on:e.pause.macros.on,off:e.pause.macros.off,origine:'pause',origineDate:Date.now()});
+  _pauseJournaliser(u,'pause_debut',{jours:j,motif:'fatigue'});
+  enregistrerPointSemaine(u,e,'pause');
+  const ok=saveUser();
+  toastEcriture(ok,'Pause de '+j+' jours au maintien','ta pause est');
+  try{ _viderCachePlateau(); _viderCacheSignaux(); }catch(err){}
+  _rendrePointSemaine();
+  return true;
+}
+// Fin de SA pause : reprendre la sèche (les objectifs d'avant), ou une semaine
+// de plus au maintien. Jamais d'elle-même : une pause dépassée reste active.
+function finPauseFatigue(choix){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  const p=u&&pauseActive(u);
+  if(!p||p.origine!=='fatigue') return false;
+  if(choix==='reprendre'){
+    const av=p.kcalAvant;
+    if(!av||!av.on||!av.off){ toast('Les objectifs d’avant la pause sont introuvables','var(--orange)'); return false; }
+    u.nutrition.macros=Object.assign({},u.nutrition.macros,{on:av.on,off:av.off,origine:'pause_fin',origineDate:Date.now()});
+    delete u.phase.pause;
+    _pauseJournaliser(u,'pause_fin_reprise',{motif:'fatigue'});
+    toastEcriture(saveUser(),'Sèche reprise','la reprise est');
+  } else {
+    p.jours=Math.min(PAUSE_JOURS_MAX,Number(p.jours)+7);
+    _pauseJournaliser(u,'pause_prolongee',{jours:p.jours,motif:'fatigue'});
+    toastEcriture(saveUser(),'Une semaine de plus au maintien','ta pause est');
+  }
+  try{ _viderCachePlateau(); _viderCacheSignaux(); }catch(err){}
+  _rendrePointSemaine();
+  return true;
+}
+// PURE. Le bloc de la pause sur la carte du point : ce que ça fait, ce que ça
+// ne fait pas, la durée, et deux boutons.
+function htmlPauseFatigue(e){
+  if(!e||!e.pause) return '';
+  const k=e.pause.macros, lib=v=>escapeHtml(Math.round(Number(v)).toLocaleString('fr-FR'))+' kcal';
+  return '<div class="ps-pause">'
+    +'<div class="ps-pause-l"><b>Ce que ça fait</b> '+escapeHtml(PAUSE_FATIGUE_FAIT)+'</div>'
+    +'<div class="ps-pause-l"><b>Ce que ça ne fait pas</b> '+escapeHtml(PAUSE_FATIGUE_NE_FAIT_PAS)+'</div>'
+    +'<div class="ps-pause-k">Au maintien : '+lib(k.on.kcal)+' les jours d’entraînement, '+lib(k.off.kcal)+' les jours de repos. Protéines et lipides ne changent pas.</div>'
+    +'<label class="ps-rdv">Durée : <select id="ps-pause-j" aria-label="Durée de la pause">'
+      +PAUSE_FATIGUE_JOURS.map(j=>'<option value="'+j+'"'+(j===PAUSE_FATIGUE_DEFAUT?' selected':'')+'>'+j+' jours</option>').join('')+'</select></label>'
+    +'<div class="ps-btns"><button type="button" class="btn btn-red btn-sm" onclick="appliquerPauseFatigue(document.getElementById(\'ps-pause-j\').value)">Je fais la pause</button>'
+    +'<button type="button" class="btn btn-outline btn-sm" onclick="pointSemaineDecider(\'garde\')">Pas maintenant</button></div>'
+    +'</div>';
+}
+// Côté coach : les quatre réponses sur 14 jours, même courbe pour chacune, et
+// le niveau de fatigue quand il parle (sous aTCA aussi : c'est à lui).
+function _htmlCheckinCoachDetail(c,t){
+  const l=(c&&c.checkin)||{};
+  const fin=localISODate(new Date(t));
+  const rangs=CHECKIN_QUESTIONS.map(q=>{
+    const v=[];
+    for(let k=13;k>=0;k--){ const j=_jourPlus(fin,-k), x=l[j]; v.push({j,n:(checkinComplet(x)&&_ciNote(x[q.cle]))?_ciNote(x[q.cle]):null}); }
+    const faits=v.filter(x=>x.n!=null);
+    const moy=faits.length?Math.round(faits.reduce((a,x)=>a+x.n,0)/faits.length*10)/10:null;
+    return '<div class="ci-coach-q"><span class="ci-coach-ql">'+escapeHtml(q.cle==='faim'?'Faim':q.lib)
+      +'<em>'+(moy==null?'-':String(moy).replace('.',',')+'/5')+'</em></span>'
+      +'<span class="ci-coach-mini" role="img" aria-label="'+escapeHtml((q.cle==='faim'?'Faim':q.lib)+' sur 14 jours'+(moy==null?'':', moyenne '+moy+' sur 5'))+'">'
+      +v.map(x=>'<i title="'+escapeHtml(x.j+(x.n==null?' : pas de réponse':' : '+x.n+'/5'))+'" style="height:'+(x.n==null?4:x.n*20)+'%"'+(x.n==null?' class="vide"':'')+'></i>').join('')
+      +'</span></div>';
+  }).join('');
+  let niv=0; try{ niv=fatigueDiete(l,phaseCourante(c),t); }catch(e){ niv=0; }
+  const fat=niv>=3?'Faim haute et énergie basse sur 14 jours, en sèche : une pause diététique au maintien est à envisager.'
+    :niv===2?'Faim haute sur 14 jours, en sèche : à regarder avant de baisser quoi que ce soit.':'';
+  return '<div class="ci-coach-detail">'+rangs+'</div>'+(fat?'<div class="ci-coach-fat">'+escapeHtml(fat)+'</div>':'');
+}
+
 function renderBatterieCoach(c){
   const z=document.getElementById('ccd-batterie');
   if(!z) return;
@@ -106767,6 +106961,14 @@ function etatPointSemaine(u,maintenant){
   if(!estJourDuPoint(u,t)) return null;
   try{ if(aTCA(u)) return null; }catch(e){}
   const aujd=localISODate(new Date(t));
+  // LOT N5 : SA pause (lancée depuis ce point) est terminée : on le demande,
+  // elle ne s'arrête jamais d'elle-même.
+  try{
+    const _p=pauseActive(u);
+    if(_p&&_p.origine==='fatigue'&&pauseTerminee(u,new Date(t))&&!drapeauQuelconqueActif(u))
+      return {finPause:true,prolongeable:Number(_p.jours)+7<=PAUSE_JOURS_MAX,
+        phrase:'Ta pause de '+_p.jours+' jours est terminée. On reprend ta sèche, ou une semaine de plus au maintien ?'};
+  }catch(e){}
   const serie=serieVitesse(u);
   if(!peseesSuffisantes(serie)){
     const n=serie.length;
@@ -106784,12 +106986,28 @@ function etatPointSemaine(u,maintenant){
   const cible=(c&&c.min!=null&&c.max!=null)?{min:Math.min(c.min,c.max),max:Math.max(c.min,c.max),lib:c.lib||''}:null;
   let drapeau=false; try{ drapeau=drapeauQuelconqueActif(u); }catch(e){}
   let a=null; try{ a=drapeau?null:ajustementPropose(u); }catch(e){ a=null; }
+  // LOT N5 : la faim et l'énergie des quatorze derniers jours, en sèche. Un
+  // signal de fatigue ne mène qu'à stabiliser ou à remonter.
+  let fatigue=0, pause=null, retenue=false, stable=false;
+  try{ fatigue=fatigueDiete(u.checkin,phaseCourante(u),t); }catch(e){ fatigue=0; }
+  if(fatigue>0&&!drapeau&&!pauseActive(u)){
+    let dep=null; try{ const b=besoinsProposes(u); dep=b&&b.depense; }catch(e){ dep=null; }
+    const pf=propositionFatigue(fatigue,a,(u.nutrition||{}).macros,dep);
+    if(pf&&pf.type==='pause'){ pause=pf; a=null; }
+    else if(pf&&pf.type==='garde'){ retenue=pf.retenue; stable=fatigue>=3; a=null; }
+  }
   const der=Number(((u.nutrition)||{}).dernierAjustement)||0;
   const verrouJ=der?Math.max(0,Math.ceil((der+AJUST_VERROU_JOURS*864e5-t)/864e5)):0;
   const cote=cible?(pct>cible.max?'haut':(pct<cible.min?'bas':'dedans')):null;
-  const phrase=phrasePointSemaine({cote,a,drapeau,verrouJ,phase:(phaseCourante(u)||{}).type,
+  const phrase=pause
+    ?'Ta faim est haute et ton énergie basse depuis deux semaines : je te propose une pause au maintien, de 7 à 14 jours.'
+    :stable
+    ?'Ta faim est haute et ton énergie basse depuis deux semaines, et tes objectifs sont déjà à ton maintien : on ne baisse rien. Regarde d’abord ton sommeil et tes protéines.'
+    :retenue
+    ?'Ça avance plus lentement que visé, mais ta faim et ton énergie disent que tu tires déjà : on ne baisse pas cette semaine.'
+    :phrasePointSemaine({cote,a,drapeau,verrouJ,phase:(phaseCourante(u)||{}).type,
     plancher:(()=>{ try{ return !!_ajustPlancherAtteint(u); }catch(e){ return false; } })()});
-  return {tendance:s.tendance,pct,cible,cote,a,drapeau,phrase,jour:aujd};
+  return {tendance:s.tendance,pct,cible,cote,a,drapeau,phrase,jour:aujd,fatigue,pause};
 }
 // PURE. UNE phrase, qui dit quoi faire. Jamais un tableau à interpréter.
 function phrasePointSemaine(o){
@@ -106864,6 +107082,11 @@ function htmlPointSemaine(e,u){
   const jour=pointJourDe(u);
   const choixJour='<label class="ps-rdv">Mon point : <select onchange="pointJourChoisir(this.value)" aria-label="Jour du point de la semaine">'
     +PTS_JOURS.map((n,i)=>'<option value="'+i+'"'+(i===jour?' selected':'')+'>'+n+'</option>').join('')+'</select></label>';
+  if(e.finPause) return '<div class="ps-carte" id="ps-carte"><div class="ps-tete">Ton point de la semaine</div>'
+    +'<p class="ps-phrase">'+escapeHtml(e.phrase)+'</p>'
+    +'<div class="ps-btns"><button type="button" class="btn btn-red btn-sm" onclick="finPauseFatigue(\'reprendre\')">Je reprends ma sèche</button>'
+    +(e.prolongeable?'<button type="button" class="btn btn-outline btn-sm" onclick="finPauseFatigue(\'prolonger\')">Une semaine de plus</button>':'')+'</div>'
+    +choixJour+'</div>';
   if(e.manque) return '<div class="ps-carte" id="ps-carte"><div class="ps-tete">Ton point de la semaine</div>'
     +'<p class="ps-phrase">'+escapeHtml(e.phrase)+'</p>'
     +'<button type="button" class="btn btn-red btn-sm ps-btn" onclick="ouvrirPeseeAccueil()">Me peser</button>'+choixJour+'</div>';
@@ -106874,7 +107097,7 @@ function htmlPointSemaine(e,u){
     +'<div class="ps-tendance"><b>'+escapeHtml(String(e.tendance).replace('.',','))+' kg</b><span>ta tendance sur sept jours</span></div>'
     +'<div class="ps-note">On lit la tendance, pas la balance du matin.</div>'
     +htmlJaugePointSemaine(e.pct,e.cible)
-    +'<p class="ps-phrase">'+escapeHtml(e.phrase)+'</p>'+boutons
+    +'<p class="ps-phrase">'+escapeHtml(e.phrase)+'</p>'+(e.pause&&!e.drapeau?htmlPauseFatigue(e):boutons)
     +htmlCourbeTenue((u&&u.pointsSemaine)||[])+choixJour+'</div>';
 }
 function _rendrePointSemaine(){
@@ -106891,6 +107114,11 @@ function pointSemaineDecider(d){
   const u=currentUser;
   let e=null; try{ e=etatPointSemaine(u,Date.now()); }catch(err){ e=null; }
   if(e) enregistrerPointSemaine(u,e,d==='applique'?'applique':'garde');
+  if(e&&(e.pause||(!e.a&&d!=='applique'))){
+    toastEcriture(saveUser(),'C’est noté, on garde comme ça','ton choix est');
+    _rendrePointSemaine();
+    return;
+  }
   if(d==='applique') appliquerAjustement('accueil'); else refuserAjustement('accueil');
 }
 function pointJourChoisir(v){
@@ -106908,7 +107136,8 @@ function htmlPointsSemaineCoach(c){
   const l=((c&&c.pointsSemaine)||[]).filter(Boolean);
   if(!l.length) return '';
   const der=l[l.length-1];
-  const dec={applique:'a appliqué la proposition',garde:'a gardé ses objectifs',vu:'a lu son point'}[der.decision]||'a lu son point';
+  const dec={applique:'a appliqué la proposition',garde:'a gardé ses objectifs',vu:'a lu son point',
+    pause:'a lancé une pause au maintien (faim haute, énergie basse)'}[der.decision]||'a lu son point';
   const d=new Date(der.date+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
   return '<div class="ps-coach"><div class="ps-tete">Ses points de la semaine</div>'
     +'<div class="ps-c-der">Le '+escapeHtml(d)+' : '+escapeHtml(_fmtPct(der.pct))+' % par semaine'

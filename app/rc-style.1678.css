@@ -11940,6 +11940,24 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 /* La vitrine : la famille de l'assiette, cinq cases sur une ligne. */
 /* « PROTÉINES » tient dans sa case à 360 px sans se couper, au plancher de 10 px. */
 .bdg-grille-assiette .bdg-nom{letter-spacing:0}
+/* ══ LOT N5 : LA FAIM DANS LE CHECK-IN (29/09/2026) ═══════════════════════ */
+/* La faim sous la batterie, tant qu'elle n'est pas donnée. */
+.ci-faim{margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+/* La pause proposée sur la carte du point. */
+.ps-pause{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.ps-pause-l{font-size:var(--fs-sm);line-height:1.55;color:var(--text)}
+.ps-pause-l b{display:block;font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--sub);margin-bottom:2px}
+.ps-pause-k{font-size:var(--fs-xs);color:var(--sub);line-height:1.5}
+/* Côté coach : les quatre réponses, une ligne chacune, même courbe. */
+.ci-coach-detail{margin-top:12px;display:flex;flex-direction:column;gap:6px}
+.ci-coach-q{display:flex;align-items:flex-end;gap:10px}
+.ci-coach-ql{flex:none;width:96px;font-size:var(--fs-xs);font-weight:700;color:var(--text);display:flex;flex-direction:column;line-height:1.25}
+.ci-coach-ql em{font-style:normal;font-weight:500;color:var(--sub)}
+.ci-coach-mini{flex:1;min-width:0;height:28px;display:flex;align-items:flex-end;gap:3px}
+.ci-coach-mini i{flex:1;background:#E02020;border-radius:2px 2px 0 0;opacity:.85}
+.ci-coach-mini i.vide{background:var(--surface-3);opacity:1}
+.ci-coach-fat{margin-top:10px;font-size:var(--fs-sm);line-height:1.5;color:var(--text);
+  border-left:3px solid #E02020;padding:4px 0 4px 10px}
 /* ═══ THEME CLAIR — GENERE PAR scripts/theme_clair.py, NE PAS MODIFIER A LA MAIN ═══ */
 :root[data-theme="clair"] [style*="--halo-c"]{--halo-1:0 0 8px var(--halo-c,rgba(255,255,255,.45));--halo-2:0 0 14px var(--halo-c,rgba(255,255,255,.60)),0 0 30px var(--halo-c,rgba(255,255,255,.25));--halo-3:0 0 20px var(--halo-c,rgba(255,255,255,.85)),0 0 44px var(--halo-c,rgba(255,255,255,.40))}
 html[data-theme="clair"]{background:#f8f8f8}
@@ -14685,6 +14703,15 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] #clh-assiette .sk-lbl{color:#090909}
 :root[data-theme="clair"] #clh-assiette .sk-date{color:#848484}
 :root[data-theme="clair"] #clh-assiette .sk-chev{color:#cc0000;filter:drop-shadow(0 0 .5cqw rgba(255,42,42,.7))}
+:root[data-theme="clair"] .ci-faim{border-top:1px solid var(--border)}
+:root[data-theme="clair"] .ps-pause-l{color:var(--text)}
+:root[data-theme="clair"] .ps-pause-l b{color:var(--sub)}
+:root[data-theme="clair"] .ps-pause-k{color:var(--sub)}
+:root[data-theme="clair"] .ci-coach-ql{color:var(--text)}
+:root[data-theme="clair"] .ci-coach-ql em{color:var(--sub)}
+:root[data-theme="clair"] .ci-coach-mini i{background:#E02020}
+:root[data-theme="clair"] .ci-coach-mini i.vide{background:var(--surface-3)}
+:root[data-theme="clair"] .ci-coach-fat{color:var(--text);border-left:3px solid #E02020}
 :root[data-theme="clair"] [style^="background:#000"],:root[data-theme="clair"] [style*=";background:#000"],:root[data-theme="clair"] [style*="; background:#000"],:root[data-theme="clair"] [style*=" background:#000"],:root[data-theme="clair"] [style^="background: #000"],:root[data-theme="clair"] [style*=";background: #000"],:root[data-theme="clair"] [style*="; background: #000"],:root[data-theme="clair"] [style*=" background: #000"],:root[data-theme="clair"] [style^="background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=";background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*="; background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=" background: rgb(0, 0, 0)"]{background-color:#fbfbfb!important}
 :root[data-theme="clair"] [style^="background:#000b"],:root[data-theme="clair"] [style*=";background:#000b"],:root[data-theme="clair"] [style*="; background:#000b"],:root[data-theme="clair"] [style*=" background:#000b"],:root[data-theme="clair"] [style^="background: #000b"],:root[data-theme="clair"] [style*=";background: #000b"],:root[data-theme="clair"] [style*="; background: #000b"],:root[data-theme="clair"] [style*=" background: #000b"],:root[data-theme="clair"] [style^="background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=";background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*="; background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=" background: rgba(0, 0, 0, 0.733)"]{background-color:rgba(251,251,251,0.733)!important}
 :root[data-theme="clair"] [style^="background:#040404"],:root[data-theme="clair"] [style*=";background:#040404"],:root[data-theme="clair"] [style*="; background:#040404"],:root[data-theme="clair"] [style*=" background:#040404"],:root[data-theme="clair"] [style^="background: #040404"],:root[data-theme="clair"] [style*=";background: #040404"],:root[data-theme="clair"] [style*="; background: #040404"],:root[data-theme="clair"] [style*=" background: #040404"],:root[data-theme="clair"] [style^="background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*=";background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*="; background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*=" background: rgb(4, 4, 4)"]{background-color:#f7f7f7!important}
