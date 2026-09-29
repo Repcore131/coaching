@@ -49746,6 +49746,58 @@ async function testExercices(){
       const m=textes.match(/raideur|raide|blessure|pathologi|corriger ta posture|posture|douleur|lésion|anomalie/i);
       return m?_echec('« '+m[0]+' »'):true;})());
 
+    // ══ LOT T7 — LE BILAN DE FIN DE BLOC (29/09/2026) ═══════════════════════
+    const _T7D=new Date(2026,7,3).getTime();                  // lundi 3 août 2026
+    const _T7S=(jour,kg,o)=>Object.assign({id:'s'+jour,date:new Date(2026,7,3+jour,18).getTime(),duration:60,sets:4,setsPlanned:4,
+      data:{'SQUAT':{sets:[1,2,3,4].map(()=>({weight:String(kg),reps:'8',rir:'2',done:true}))}}},o||{});
+    // UN COURRIEL PAR CAS : le compteur de volume met en cache par compte et par
+    // semaine, et deux dossiers au même courriel se liraient l'un l'autre.
+    let _t7n=0;
+    const _T7U=ses=>({email:'t7-'+(++_t7n)+'@t.fr',role:'athlete',assignedProgramName:'Force A',sessions:ses,
+      sessions_config:[{active:true,exercises:[{name:'SQUAT'}]},{active:false},{active:false},{active:true,exercises:[{name:'SQUAT'}]},{active:false},{active:false},{active:false}]});
+    ok('T7 — un bloc complet : le cadre, les muscles situés, l’e1RM des exercices vus trois fois, la phrase',(()=>{
+      const ses=[];
+      for(let w=0;w<4;w++){ ses.push(_T7S(w*7,100+w*5)); ses.push(_T7S(w*7+3,100+w*5)); }
+      // Un curl fait DEUX fois seulement : écarté du tableau d'e1RM.
+      ses[0].data['CURL A LA POULIE BASSE EN UNILATERAL']={sets:[{weight:'12',reps:'10',rir:'1',done:true}]};
+      ses[1].data['CURL A LA POULIE BASSE EN UNILATERAL']={sets:[{weight:'12',reps:'10',rir:'1',done:true}]};
+      const b=bilanBloc(_T7U(ses),{bloc:{debut:_T7D,semaines:4},maintenant:new Date(2026,8,29,12).getTime()});
+      if(!b||b.cadre.interrompu||b.cadre.ecoulees!==4||b.cadre.seances!==8||b.cadre.prevues!==8||b.cadre.assiduite!==100) return _echec('cadre : '+JSON.stringify(b&&b.cadre));
+      if(b.cadre.nom!=='Force A') return _echec('nom');
+      if(!b.muscles.length||b.muscles.some(m=>m.moyenne==null||m.derniere==null)) return _echec('muscles : '+JSON.stringify(b.muscles));
+      const sq=b.exercices.find(x=>x.nom==='SQUAT');
+      if(!sq||sq.seances!==8||!(sq.fin>sq.debut)||Math.abs(sq.ecart-(sq.fin-sq.debut))>0.11) return _echec('squat : '+JSON.stringify(sq));
+      if(b.exercices.some(x=>/CURL/.test(x.nom))) return _echec('un exercice vu deux fois est dans le tableau');
+      if(!/^4 semaines, 100 % d’assiduité/.test(b.phrase)) return _echec('phrase : '+b.phrase);
+      return true;})());
+    ok('T7 — un bloc interrompu, un bloc sans aucune séance, et les douleurs au seuil dur existant',(()=>{
+      const ses=[_T7S(0,100),_T7S(3,100,{data:{'SQUAT':{sets:[{weight:'100',reps:'8',rir:'2',done:true,pain:'5'},{weight:'100',reps:'8',rir:'2',done:true,pain:'3'}]}}}),_T7S(7,105),_T7S(10,105),_T7S(14,110)];
+      const i=bilanBloc(_T7U(ses),{bloc:{debut:_T7D,semaines:6},maintenant:new Date(2026,7,20,12).getTime()});
+      if(!i.cadre.interrompu||i.cadre.ecoulees!==3||i.cadre.seances!==5) return _echec('interrompu : '+JSON.stringify(i.cadre));
+      // La semaine entamée n'entre ni dans l'assiduité ni dans les séries : deux semaines terminées,
+      // quatre séances sur quatre prévues, et une séance « en cours ».
+      if(i.cadre.completes!==2||i.cadre.seancesCompletes!==4||i.cadre.enCours!==1||i.cadre.prevues!==4||i.cadre.assiduite!==100) return _echec('semaines terminées : '+JSON.stringify(i.cadre));
+      if(!/^3 semaines sur 6 prévues/.test(i.phrase)) return _echec('phrase : '+i.phrase);
+      // Une seule série à 5 (seuil 4) ; celle à 3 ne compte pas.
+      if(i.douleurs.length!==1||i.douleurs[0].series!==1||i.douleurs[0].max!==5||i.seuilDouleur!==SIG_PAIN_SEUIL) return _echec('douleurs : '+JSON.stringify(i.douleurs));
+      const v=bilanBloc(_T7U([]),{bloc:{debut:_T7D,semaines:4},maintenant:new Date(2026,8,29).getTime()});
+      if(v.cadre.seances!==0||v.exercices.length||v.muscles.length||v.douleurs.length) return _echec('sans séance : '+JSON.stringify(v));
+      if(!/aucune séance enregistrée/.test(v.phrase)) return _echec('phrase vide : '+v.phrase);
+      if(bilanBloc(_T7U([]),{})!==null) return _echec('sans bloc');
+      return htmlBilanBloc(null).indexOf('Aucun bloc défini')>=0?true:_echec('page sans bloc');})());
+    ok('T7 — la page ne note pas le bloc : ni note, ni score, ni pourcentage de réussite',(()=>{
+      const ses=[];
+      for(let w=0;w<4;w++){ ses.push(_T7S(w*7,100+w*5)); ses.push(_T7S(w*7+3,100+w*5)); }
+      const b=bilanBloc(_T7U(ses),{bloc:{debut:_T7D,semaines:4},maintenant:new Date(2026,8,29,12).getTime()});
+      const d=document.createElement('div'); d.innerHTML=htmlBilanBloc(b);
+      // La seule phrase qui dit « note » est celle qui dit que la page ne note pas.
+      const t=(d.textContent+' '+bilanBlocExportHtml({fname:'Léa'},b).replace(/<[^>]+>/g,' ')).replace('Il ne le note pas.','');
+      const m=t.match(/\bnote\b|score|réussi|réussite|\/10|\/20|bon bloc|mauvais|excellent|bravo|bloc suivant|prochain bloc/i);
+      if(m) return _echec('« '+m[0]+' »');
+      // Le seul pourcentage est celui de l'assiduité.
+      const pc=(t.match(/\d+ %[^.]{0,14}/g)||[]).filter(x=>!/d’assiduité/.test(x));
+      return pc.length?_echec('un pourcentage : '+pc.join(' | ')):true;})());
+
     ok('Volts : dix rangs, dans l’ordre, seuils croissants à partir de 0',(()=>{
       const n=RANGS.map(r=>r.nom).join();
       if(n!=='ÉTINCELLE,IMPULSION,VOLTAGE,MACHINE,ÉLITE,SURTENSION,MONSTRE,FOUDRE,TITAN,LÉGENDE') return _echec(n);

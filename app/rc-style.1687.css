@@ -12029,6 +12029,21 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .amp-der{margin:0 0 12px;font-size:var(--fs-sm);color:var(--text);line-height:1.5}
 .amp-der.amp-rappel{border-left:2px solid var(--border);padding-left:10px}
 .amp-relance{margin:4px 0 10px;font-size:var(--fs-sm);color:var(--text);line-height:1.55;border-left:2px solid var(--border);padding-left:10px}
+/* ══ LOT T7 : LE BILAN DE FIN DE BLOC (29/09/2026) ═══════════════════════ */
+.bb-feuille{background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px 16px 30px;width:100%;max-width:560px;max-height:88vh;overflow:auto}
+.bb-t{margin:0 0 8px;font-size:var(--fs-lg)}
+.bb h2{margin:16px 0 6px;font-size:var(--fs-xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);font-family:Montserrat,sans-serif;font-weight:800}
+.bb-phrase{margin:0 0 6px;font-size:var(--fs-md);font-weight:700;color:var(--text-strong);line-height:1.45}
+.bb table{width:100%;border-collapse:collapse;font-size:var(--fs-xs)}
+.bb th,.bb td{text-align:left;vertical-align:top;padding:5px 6px;border-bottom:1px solid var(--border)}
+.bb thead th{font-size:var(--fs-2xs);color:var(--sub);text-transform:uppercase;letter-spacing:.5px}
+.bb tbody th{color:var(--sub);font-weight:700;width:30%}
+.bb td{color:var(--text)}
+.bb td.v{font-weight:800;white-space:nowrap}
+.bb td small{display:block;color:var(--text-faint);font-size:var(--fs-2xs)}
+.bb-vide,.bb-s{font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5;margin:4px 0}
+.bb-btns{display:flex;gap:8px;margin-top:16px}
+.bb-btns .btn{flex:1;margin:0}
 /* ═══ THEME CLAIR — GENERE PAR scripts/theme_clair.py, NE PAS MODIFIER A LA MAIN ═══ */
 :root[data-theme="clair"] [style*="--halo-c"]{--halo-1:0 0 8px var(--halo-c,rgba(255,255,255,.45));--halo-2:0 0 14px var(--halo-c,rgba(255,255,255,.60)),0 0 30px var(--halo-c,rgba(255,255,255,.25));--halo-3:0 0 20px var(--halo-c,rgba(255,255,255,.85)),0 0 44px var(--halo-c,rgba(255,255,255,.40))}
 html[data-theme="clair"]{background:#f8f8f8}
@@ -14828,6 +14843,15 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .amp-der{color:var(--text)}
 :root[data-theme="clair"] .amp-der.amp-rappel{border-left:2px solid var(--border)}
 :root[data-theme="clair"] .amp-relance{color:var(--text);border-left:2px solid var(--border)}
+:root[data-theme="clair"] .bb-feuille{background:var(--surface-2)}
+:root[data-theme="clair"] .bb h2{color:var(--sub)}
+:root[data-theme="clair"] .bb-phrase{color:var(--text-strong)}
+:root[data-theme="clair"] .bb th,:root[data-theme="clair"] .bb td{border-bottom:1px solid var(--border)}
+:root[data-theme="clair"] .bb thead th{color:var(--sub)}
+:root[data-theme="clair"] .bb tbody th{color:var(--sub)}
+:root[data-theme="clair"] .bb td{color:var(--text)}
+:root[data-theme="clair"] .bb td small{color:var(--text-faint)}
+:root[data-theme="clair"] .bb-vide,:root[data-theme="clair"] .bb-s{color:var(--text-dim)}
 :root[data-theme="clair"] [style^="background:#000"],:root[data-theme="clair"] [style*=";background:#000"],:root[data-theme="clair"] [style*="; background:#000"],:root[data-theme="clair"] [style*=" background:#000"],:root[data-theme="clair"] [style^="background: #000"],:root[data-theme="clair"] [style*=";background: #000"],:root[data-theme="clair"] [style*="; background: #000"],:root[data-theme="clair"] [style*=" background: #000"],:root[data-theme="clair"] [style^="background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=";background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*="; background: rgb(0, 0, 0)"],:root[data-theme="clair"] [style*=" background: rgb(0, 0, 0)"]{background-color:#fbfbfb!important}
 :root[data-theme="clair"] [style^="background:#000b"],:root[data-theme="clair"] [style*=";background:#000b"],:root[data-theme="clair"] [style*="; background:#000b"],:root[data-theme="clair"] [style*=" background:#000b"],:root[data-theme="clair"] [style^="background: #000b"],:root[data-theme="clair"] [style*=";background: #000b"],:root[data-theme="clair"] [style*="; background: #000b"],:root[data-theme="clair"] [style*=" background: #000b"],:root[data-theme="clair"] [style^="background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=";background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*="; background: rgba(0, 0, 0, 0.733)"],:root[data-theme="clair"] [style*=" background: rgba(0, 0, 0, 0.733)"]{background-color:rgba(251,251,251,0.733)!important}
 :root[data-theme="clair"] [style^="background:#040404"],:root[data-theme="clair"] [style*=";background:#040404"],:root[data-theme="clair"] [style*="; background:#040404"],:root[data-theme="clair"] [style*=" background:#040404"],:root[data-theme="clair"] [style^="background: #040404"],:root[data-theme="clair"] [style*=";background: #040404"],:root[data-theme="clair"] [style*="; background: #040404"],:root[data-theme="clair"] [style*=" background: #040404"],:root[data-theme="clair"] [style^="background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*=";background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*="; background: rgb(4, 4, 4)"],:root[data-theme="clair"] [style*=" background: rgb(4, 4, 4)"]{background-color:#f7f7f7!important}

@@ -33707,6 +33707,217 @@ function _poserBrouillonSessions(dest,cfg){
 // RIEN N'ATTEINT L'ATHLETE SANS PUBLIER — comme tout ce qui se regle sur cet
 // ecran. Le bloc est ecrit dans le dossier par le meme chemin que le reste,
 // horodate, et pousse.
+// ══ LOT T7 : LE BILAN DE FIN DE BLOC (29/09/2026) ════════════════════════
+// Ce qui s'est passé pendant un bloc (user.programme, N4.1), sur une page :
+// le cadre, les séries dures par muscle situées sur MEV / MAV / MRV, l'e1RM
+// des exercices vus au moins trois fois, les douleurs au-delà du seuil dur
+// existant (SIG_PAIN_SEUIL), et une phrase.
+//
+// ⚠ ELLE NE NOTE PAS LE BLOC. Ni note, ni score, ni « réussite » : elle montre
+//   ce qui s'est passé, le jugement appartient au coach. Elle ne propose pas
+//   non plus le bloc suivant.
+// ⚠ AUCUN CHIFFRE NOUVEAU : volumeSemaine (les séries dures d'une semaine),
+//   reperesEffectifs (MEV, MAV, MRV), e1rm et _perfRir (comme les records),
+//   _seriesDouloureuses et SIG_PAIN_SEUIL (comme les signaux).
+// ⚠ UN BLOC EN COURS OU RETIRÉ AVANT SA FIN est lu jusqu'à maintenant : les
+//   semaines comptées sont celles déjà commencées, et la page le dit.
+const BILAN_BLOC_MIN_SEANCES_EXO=3;
+// Le libellé de MUSCLES, abréviations écrites en entier (« Deltoïde lat. »
+// devient « deltoïde latéral ») : c'est une phrase, pas une légende de graphique.
+function _bbMuscle(m){
+  const l=(typeof MUSCLES!=='undefined'&&MUSCLES[m]&&MUSCLES[m].lib)||String(m||'').replace(/_/g,' ');
+  return String(l).replace(/ ant\.$/,' antérieur').replace(/ lat\.$/,' latéral').replace(/ post\.$/,' postérieur').toLowerCase();
+}
+function _bbJour(t){ try{ return new Date(t).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}); }catch(e){ return ''; } }
+/**
+ * PURE (horloge donnée). Le bilan d'un bloc.
+ * @param u  le dossier
+ * @param opts {bloc:{debut,semaines,decharges}, maintenant, nom}
+ *   bloc : celui du dossier (programmeDe) par défaut.
+ */
+function bilanBloc(u,opts){
+  const o=opts||{};
+  const t=Number(o.maintenant)||Date.now();
+  const p=o.bloc||(()=>{ try{ return programmeDe(u); }catch(e){ return null; } })();
+  if(!p||!(Number(p.debut)>0)||!(Number(p.semaines)>0)) return null;
+  const debut=Number(p.debut), prevues=Math.round(Number(p.semaines));
+  const finPrevue=_datePlusJours(debut,prevues*7).getTime();
+  const interrompu=t<finPrevue;
+  const finLue=Math.min(t,finPrevue);
+  const ecoulees=Math.max(0,Math.min(prevues,Math.ceil((finLue-debut)/(7*864e5))));
+  const ses=((u&&u.sessions)||[]).filter(s=>s&&Number(s.date)>=debut&&Number(s.date)<finLue).sort((a,b)=>a.date-b.date);
+  let parSem=0; try{ parSem=((u&&u.sessions_config)||[]).some(s=>s&&s.active)?seancesPrevuesParSemaine(u):0; }catch(e){ parSem=0; }
+  // LES SEMAINES TERMINÉES. Un bloc lu en cours de route a une semaine
+  // entamée : elle tirerait moyennes et assiduité vers le bas (tout le monde
+  // serait sous le MEV un lundi matin). Même règle que les signaux : les
+  // séries par muscle et l'assiduité portent sur les semaines révolues ; les
+  // séances de la semaine en cours sont dites à part.
+  const completes=interrompu?Math.max(0,Math.min(prevues,Math.floor((finLue-debut)/(7*864e5)))):ecoulees;
+  const finCompletes=_datePlusJours(debut,completes*7).getTime();
+  const sesC=ses.filter(s=>Number(s.date)<finCompletes).length;
+  const cadre={nom:o.nom||(u&&u.assignedProgramName)||'',debut,finPrevue,semaines:prevues,ecoulees,completes,interrompu,
+    seances:ses.length,seancesCompletes:sesC,enCours:ses.length-sesC,prevues:parSem?parSem*completes:null,
+    assiduite:(parSem&&completes)?Math.round(sesC/(parSem*completes)*100):null};
+  // ── PAR MUSCLE : chaque semaine terminée, lue comme le compteur de volume.
+  const semaines=[];
+  for(let i=0;i<completes;i++){
+    let v={}; try{ v=volumeSemaine(u,semaineISO(_datePlusJours(debut,i*7)))||{}; }catch(e){ v={}; }
+    semaines.push(v);
+  }
+  const vus=new Set(); semaines.forEach(v=>Object.keys(v).forEach(m=>{ if(v[m]>0) vus.add(m); }));
+  const muscles=[];
+  for(const m of vus){
+    let rep=null; try{ rep=reperesEffectifs(u,m); }catch(e){ rep=null; }
+    const vals=semaines.map(v=>Number(v[m])||0);
+    const moy=Math.round(vals.reduce((a,b)=>a+b,0)/Math.max(1,vals.length)*10)/10;
+    const der=Math.round((vals[vals.length-1]||0)*10)/10;
+    const zone=x=>!rep?null:(x<rep.mev?'sous':(x<rep.mavMin?'mev':(x<=rep.mavMax?'mav':(x<=rep.mrv?'haut':'dessus'))));
+    muscles.push({muscle:m,lib:_bbMuscle(m),moyenne:moy,derniere:der,
+      mev:rep?rep.mev:null,mavMin:rep?rep.mavMin:null,mavMax:rep?rep.mavMax:null,mrv:rep?rep.mrv:null,
+      zone:zone(moy),sousMev:rep?vals.filter(x=>x<rep.mev).length:null,dessusMrv:rep?vals.filter(x=>x>rep.mrv).length:null});
+  }
+  muscles.sort((a,b)=>b.moyenne-a.moyenne);
+  // ── PAR EXERCICE : l'e1RM de la première et de la dernière séance, décharges
+  //    exclues, séries dans les bornes de fiabilité, trois séances au moins.
+  const parEx={};
+  for(const s of ses){
+    if(s.deload) continue;
+    const d=(s&&s.data)||{};
+    for(const nom of Object.keys(d)){
+      let best=0;
+      for(const st of ((d[nom]&&d[nom].sets)||[])){
+        if(!st||st.done!==true) continue;
+        const w=parseFloat(st.weight)||0, r=_perfReps(st);
+        if(!(w>0)||!(r>0)||r>PERF_REPS_MAX_E1RM) continue;
+        let x=0; try{ x=e1rm(w,r,_perfRir(st,u)); }catch(e){ x=0; }
+        if(x>best) best=x;
+      }
+      if(!(best>0)) continue;
+      (parEx[nom]=parEx[nom]||[]).push({date:s.date,v:best});
+    }
+  }
+  const exercices=Object.keys(parEx).filter(n=>parEx[n].length>=BILAN_BLOC_MIN_SEANCES_EXO).map(n=>{
+    const l=parEx[n].sort((a,b)=>a.date-b.date);
+    const d0=Math.round(l[0].v*10)/10, d1=Math.round(l[l.length-1].v*10)/10;
+    return {nom:n,seances:l.length,debut:d0,fin:d1,ecart:Math.round((d1-d0)*10)/10};
+  }).sort((a,b)=>b.seances-a.seances||a.nom.localeCompare(b.nom));
+  // ── CE QUI A FAIT MAL : le seuil dur existant, par exercice.
+  const dl={};
+  for(const s of ses){
+    for(const x of _seriesDouloureuses(s)){
+      const e=dl[x.nom]=dl[x.nom]||{nom:x.nom,series:0,max:0,dates:[]};
+      e.series++; e.max=Math.max(e.max,x.pain);
+      const j=localISODate(new Date(s.date)); if(e.dates.indexOf(j)<0) e.dates.push(j);
+    }
+  }
+  const douleurs=Object.values(dl).sort((a,b)=>b.max-a.max||b.series-a.series);
+  return {cadre,muscles,exercices,douleurs,seuilDouleur:SIG_PAIN_SEUIL,phrase:phraseBilanBloc({cadre,muscles})};
+}
+// PURE. LA phrase : les semaines, l'assiduité, et le muscle le plus souvent
+// hors de ses repères. Un constat, jamais un verdict.
+function phraseBilanBloc(b){
+  const c=b&&b.cadre;
+  if(!c) return '';
+  const nb=['zéro','une','deux','trois','quatre','cinq','six','sept','huit','neuf','dix','onze','douze'];
+  const mot=n=>n<nb.length?nb[n]:String(n);
+  const sem=c.ecoulees+' semaine'+(c.ecoulees>1?'s':'')+(c.interrompu?' sur '+c.semaines+' prévues':'');
+  if(!c.seances) return sem+', aucune séance enregistrée pendant le bloc.';
+  const ass=c.assiduite!=null?', '+c.assiduite+' % d’assiduité':', '+c.seances+' séance'+(c.seances>1?'s':'');
+  const l=(b.muscles||[]).filter(m=>m.sousMev!=null);
+  const sous=l.filter(m=>m.sousMev>0).sort((a,b)=>b.sousMev-a.sousMev||a.moyenne-b.moyenne)[0];
+  const dessus=l.filter(m=>m.dessusMrv>0).sort((a,b)=>b.dessusMrv-a.dessusMrv)[0];
+  let fin='';
+  const n=c.completes!=null?c.completes:c.ecoulees;
+  if(sous&&(!dessus||sous.sousMev>=dessus.dessusMrv)) fin=', '+sous.lib+' sous le MEV '+mot(sous.sousMev)+' semaine'+(sous.sousMev>1?'s':'')+' sur '+mot(n);
+  else if(dessus) fin=', '+dessus.lib+' au-dessus du MRV '+mot(dessus.dessusMrv)+' semaine'+(dessus.dessusMrv>1?'s':'')+' sur '+mot(n);
+  else if(l.length) fin=', tous les muscles travaillés entre leur MEV et leur MRV';
+  return sem+ass+fin+'.';
+}
+// La page (app et export) : le même contenu, deux habillages.
+function _htmlBilanBlocCorps(b){
+  const E=escapeHtml, c=b.cadre, nb=v=>String(v).replace('.',',');
+  const zones={sous:'sous le MEV',mev:'entre MEV et MAV',mav:'dans le MAV',haut:'entre MAV et MRV',dessus:'au-dessus du MRV'};
+  let h='<p class="bb-phrase">'+E(b.phrase)+'</p>';
+  h+='<h2>Le cadre</h2><table><tbody>'
+    +(c.nom?'<tr><th>Programme</th><td>'+E(c.nom)+'</td></tr>':'')
+    +'<tr><th>Dates</th><td>du '+E(_bbJour(c.debut))+' au '+E(_bbJour(_datePlusJours(c.finPrevue,-1)))+(c.interrompu?' (lu jusqu’à aujourd’hui)':'')+'</td></tr>'
+    +'<tr><th>Semaines</th><td>'+c.ecoulees+(c.interrompu?' sur '+c.semaines+' prévues':'')+'</td></tr>'
+    +'<tr><th>Séances</th><td>'+c.seancesCompletes+(c.prevues!=null?' faites sur '+c.prevues+' prévues (projection du programme actuel)':' faites')
+      +(c.enCours?', et '+c.enCours+' cette semaine, en cours':'')+'</td></tr>'
+    +(c.interrompu&&c.completes<c.ecoulees?'<tr><th>Lecture</th><td>séries et assiduité sur les '+c.completes+' semaine'+(c.completes>1?'s':'')+' terminée'+(c.completes>1?'s':'')+'</td></tr>':'')
+    +'</tbody></table>';
+  if(b.muscles.length){
+    h+='<h2>Séries dures par muscle</h2><table><thead><tr><th>Muscle</th><th>Moyenne / sem.</th><th>Dernière sem.</th><th>MEV · MAV · MRV</th><th>Où</th></tr></thead><tbody>'
+      +b.muscles.map(m=>'<tr><td>'+E(m.lib)+'</td><td class="v">'+nb(m.moyenne)+'</td><td>'+nb(m.derniere)+'</td>'
+        +'<td>'+(m.mev!=null?m.mev+' · '+m.mavMin+' à '+m.mavMax+' · '+m.mrv:'-')+'</td>'
+        +'<td>'+E(m.zone?zones[m.zone]:'-')+(m.sousMev?'<small>'+m.sousMev+' sem. sous le MEV</small>':'')+'</td></tr>').join('')
+      +'</tbody></table>';
+  }
+  h+='<h2>e1RM par exercice</h2>';
+  h+=b.exercices.length
+    ?'<table><thead><tr><th>Exercice</th><th>Séances</th><th>Début</th><th>Fin</th><th>Écart</th></tr></thead><tbody>'
+      +b.exercices.map(x=>'<tr><td>'+E(x.nom)+'</td><td>'+x.seances+'</td><td>'+nb(x.debut)+' kg</td><td>'+nb(x.fin)+' kg</td>'
+        +'<td class="v">'+(x.ecart>0?'+':'')+nb(x.ecart)+' kg</td></tr>').join('')+'</tbody></table>'
+    :'<p class="bb-vide">Aucun exercice fait au moins '+BILAN_BLOC_MIN_SEANCES_EXO+' fois pendant le bloc : en dessous, l’écart ne vaut rien.</p>';
+  h+='<h2>Ce qui a fait mal</h2>';
+  h+=b.douleurs.length
+    ?'<table><thead><tr><th>Exercice</th><th>Séries</th><th>Maximum</th><th>Jours</th></tr></thead><tbody>'
+      +b.douleurs.map(x=>'<tr><td>'+E(x.nom)+'</td><td>'+x.series+'</td><td>'+x.max+'</td><td>'+x.dates.length+'</td></tr>').join('')
+      +'</tbody></table><p class="bb-s">Séries déclarées à '+b.seuilDouleur+' ou plus. '+E(DISCLAIMER_DOULEUR)+'</p>'
+    :'<p class="bb-vide">Aucune série déclarée à '+b.seuilDouleur+' ou plus pendant le bloc.</p>';
+  return h;
+}
+function htmlBilanBloc(b){
+  if(!b) return '<p class="bb-vide">Aucun bloc défini : le bilan se lit sur un bloc de plusieurs semaines.</p>';
+  return '<div class="bb">'+_htmlBilanBlocCorps(b)+'</div>';
+}
+function bilanBlocExportHtml(c,b){
+  const nom=[c&&c.fname,c&&c.lname].filter(Boolean).join(' ');
+  return '<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Bilan de bloc</title><style>'+_anatExportCss()
+    +'.bb-phrase{font-size:12pt;font-weight:700;margin:6px 0 4px}.bb-vide,.bb-s{font-size:8.5pt;color:#52525b}td small{display:block;font-size:7.5pt;color:#71717a}'
+    +'</style></head><body><div class="ex-t"><div><h1>Bilan <span>de bloc</span></h1><p>'+escapeHtml(nom)+'</p></div>'
+    +'<div class="ex-m">Édité le '+escapeHtml(_bbJour(Date.now()))+'</div></div>'+_htmlBilanBlocCorps(b)
+    +'<p class="ex-n">Ce document montre ce qui s’est passé pendant le bloc. Il ne le note pas.</p></body></html>';
+}
+// La feuille, depuis le bloc de la fiche coach : lire, puis exporter.
+function ouvrirBilanBloc(){
+  const c=getOwnedClient(currentClientId);
+  if(!c) return false;
+  let b=null; try{ b=bilanBloc(c); }catch(e){ b=null; }
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',
+    '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Bilan du bloc" class="bb-feuille">'
+    +'<h2 class="bb-t">Bilan du bloc</h2>'+htmlBilanBloc(b)
+    +'<div class="bb-btns">'+(b?'<button type="button" class="btn btn-red btn-sm" onclick="bilanBlocExporter()">Exporter</button>':'')
+    +'<button type="button" class="btn btn-outline btn-sm" onclick="closeModal()">Fermer</button></div></div></div>');
+  return true;
+}
+// L'EXPORT : le même chemin que les exports morpho (iframe srcdoc, polices du
+// dépôt par chemin relatif, impression par le navigateur, rien ne quitte
+// l'appareil).
+async function bilanBlocExporter(o){
+  const opt=o||{};
+  const c=getOwnedClient(currentClientId);
+  let b=null; try{ b=bilanBloc(c); }catch(e){ b=null; }
+  if(!c||!b){ toast('Aucun bloc à exporter.','var(--orange)'); return null; }
+  document.getElementById('bb-export')?.remove();
+  const f=document.createElement('iframe');
+  f.id='bb-export'; f.setAttribute('aria-hidden','true'); f.tabIndex=-1;
+  f.style.cssText='position:fixed;right:0;bottom:0;width:210mm;height:297mm;border:0;opacity:0;pointer-events:none;z-index:-1';
+  const pret=new Promise(r=>{ f.onload=()=>r(); });
+  f.srcdoc=bilanBlocExportHtml(c,b);
+  document.body.appendChild(f);
+  await Promise.race([pret,new Promise(r=>setTimeout(r,4000))]);
+  try{ const d=f.contentDocument; await Promise.race([d.fonts?d.fonts.ready:Promise.resolve(),new Promise(r=>setTimeout(r,8000))]); }catch(e){}
+  if(opt.imprimer===false) return f;
+  const w=f.contentWindow;
+  const retirer=()=>{ setTimeout(()=>{ try{ f.remove(); }catch(e){} },500); };
+  try{ w.addEventListener('afterprint',retirer,{once:true}); }catch(e){}
+  setTimeout(retirer,120000);
+  try{ w.focus(); w.print(); }catch(e){ toast('Impression impossible sur ce navigateur.','var(--orange)'); retirer(); }
+  return f;
+}
 function _progBlocLundiProchain(){
   const d=_lundiDe(new Date());
   // Le lundi de la semaine EN COURS, pas le suivant : un bloc qui commence
@@ -33746,6 +33957,9 @@ function htmlBlocProgramme(c){
     +'onclick="reglerBlocProgramme()">Modifier le bloc</button>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" '
     +'onclick="retirerBlocProgramme()">Retirer</button>'
+    // LOT T7 : le bilan, en cours de bloc comme à sa fin (lu jusqu'à aujourd'hui).
+    +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" '
+    +'onclick="ouvrirBilanBloc()">Bilan du bloc</button>'
     +'</div></div>';
 }
 async function reglerBlocProgramme(){
