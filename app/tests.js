@@ -50603,6 +50603,52 @@ async function testExercices(){
       if(/code/i.test(gen)) return _echec('le texte général parle d’un code');
       return true;
     });
+    // ══ 29/09/2026 — LE TUTO VIDÉO SUR /i, POUR L'INVITÉ D'UN COACH ════════
+    okA('Accueil /i : le tuto vidéo à la première visite d’un invité de coach, sans ouverture automatique ; ensuite l’app s’ouvre comme avant ; jamais pour un ami',async()=>{
+      let h=''; try{ const x=new XMLHttpRequest(); x.open('GET','../i/index.html',false); x.send(); h=x.responseText; }catch(e){ return _echec('lecture de /i'); }
+      const m=/<script>\s*(\(function\(\)\{[\s\S]*?\}\)\(\);)\s*<\/script>/.exec(h);
+      if(!m) return _echec('script de /i introuvable');
+      const v=(/<video[^>]*id="tuto-video"[^>]*>/.exec(h)||[''])[0];
+      if(!/preload="none"/.test(v)||!/playsinline/.test(v)||!/poster="tuto-poster\.jpg"/.test(v)) return _echec('la vidéo : '+v);
+      if(!/<source src="tuto\.mp4" type="video\/mp4">/.test(h)) return _echec('la source tuto.mp4');
+      if(h.indexOf('Avant de commencer : 2 minutes pour tout faire')<0) return _echec('le titre du tuto');
+      if(!(h.indexOf('id="tuto"')>0&&h.indexOf('id="tuto"')<h.indexOf('id="go"'))) return _echec('le tuto n’est pas au-dessus du bouton');
+      for(const f of ['tuto.mp4','tuto-poster.jpg']){
+        try{ const x=new XMLHttpRequest(); x.open('HEAD','../i/'+f,false); x.send(); if(x.status!==200) return _echec(f+' : '+x.status); }catch(e){ return _echec(f+' illisible'); }
+      }
+      const run=async(search,ua,vu)=>{
+        const ids=['go','quand-meme','lien','interne','copier','ok','accueil','commencer','embleme','titre','interne-invite','etapes-generique','etapes-coach','mois-ami','promesse','tuto','tuto-video','chapitres','ouverture'];
+        const el={}; ids.forEach(k=>el[k]={hidden:k!=='titre'&&k!=='etapes-coach'&&k!=='mois-ami'&&k!=='ouverture'&&k!=='tuto-video'&&k!=='chapitres',
+          textContent:'',_ev:{},addEventListener(t,f){ this._ev[t]=f; },load(){},play(){ return Promise.resolve(); }});
+        const loc={search,hash:'',href:'https://repcore-sync.web.app/i/'+search,replace(){ el._parti=true; }};
+        const stock=vu?{rc_tuto_vu:'1'}:{};
+        const ls={setItem:(k,v)=>{ stock[k]=v; },getItem:k=>stock[k]||null};
+        new Function('location','document','navigator','setTimeout','fetch','localStorage',m[1])(loc,{getElementById:k=>el[k]},{userAgent:ua},(f)=>f(),async()=>({ok:false,json:async()=>null}),ls);
+        await new Promise(r=>setTimeout(r,0));
+        return {el,stock,parti:!!el._parti};
+      };
+      const SF='Mozilla/5.0 (iPhone) Safari', IG='Mozilla/5.0 (iPhone) Instagram 300.0';
+      let r=await run('?inv=RC-AAAA-BBBB',SF,false);
+      if(r.el.tuto.hidden||r.el.ok.hidden||!r.el.ouverture.hidden||r.parti) return _echec('1re visite : le tuto, le bouton, et pas d’ouverture automatique');
+      if(r.stock.rc_tuto_vu) return _echec('marquée vue sans avoir été lancée');
+      if(typeof r.el['tuto-video']._ev.play!=='function') return _echec('lancer la vidéo ne la marque pas vue');
+      r.el['tuto-video']._ev.play(); if(r.stock.rc_tuto_vu!=='1') return _echec('lancée, elle n’est pas marquée vue');
+      r=await run('?c=RC-AAAA-BBBB',SF,false);
+      if(r.el.tuto.hidden||r.parti) return _echec('?c= : pas de tuto');
+      if(typeof r.el.go._ev.click!=='function') return _echec('passer par le bouton ne la marque pas vue');
+      r.el.go._ev.click(); if(r.stock.rc_tuto_vu!=='1') return _echec('bouton touché, elle revient');
+      r=await run('?inv=RC-AAAA-BBBB',SF,true);
+      if(!r.el.tuto.hidden||!r.parti||r.el.ok.hidden) return _echec('déjà vue : l’app doit s’ouvrir comme avant');
+      r=await run('?inv=RC-AAAA-BBBB',IG,false);
+      if(r.el.tuto.hidden||r.el.interne.hidden||r.parti) return _echec('Instagram : le tuto au-dessus des explications');
+      r=await run('?ref=JULIE7K2',SF,false);
+      if(!r.el.tuto.hidden) return _echec('un ami voit le tuto du coach');
+      r=await run('?amb=LEAFIT',SF,false);
+      if(!r.el.tuto.hidden) return _echec('un ambassadeur voit le tuto du coach');
+      r=await run('',SF,false);
+      if(!r.el.tuto.hidden||!r.parti) return _echec('sans invitation : pas de tuto, l’app s’ouvre');
+      return true;
+    });
     ok('Inscription : « Julie t’offre ton premier mois » en haut, avant le formulaire, et le code demandé en haut sur iPhone installé',(()=>{
       if(phraseInvitationInscription('Julie')!=='Julie t’offre ton premier mois') return _echec(phraseInvitationInscription('Julie'));
       if(ligneCadeauInscription('Julie t’offre ton premier mois',{prenom:'Julie',mesure:'seances',duree:14})!=='Julie te défie : 14 jours de régularité. Julie t’offre ton premier mois.')

@@ -58,6 +58,12 @@ code{background:#000;border:1px solid var(--bord);border-radius:6px;padding:2px 
 .promesse{text-align:center;color:var(--txt);font-size:17px;margin:4px 0 18px}
 .promesse strong{color:var(--vif)}
 .invite-nom{color:var(--txt);font-weight:700;text-align:center;margin:0 0 12px}
+.tuto h2{font-size:17px;margin:0 0 10px;text-align:center;text-wrap:balance}
+.tuto video{display:block;width:100%;aspect-ratio:16/9;border-radius:12px;background:#000;border:1px solid var(--bord)}
+.chapitres{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:10px 0 0}
+.chapitres button{background:transparent;color:var(--txt);border:1px solid var(--bord);border-radius:999px;
+  padding:6px 11px;font:600 13px/1.2 inherit;font-family:inherit;cursor:pointer}
+.chapitres button span{color:var(--gris);font-weight:400;margin-left:4px}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -65,6 +71,25 @@ code{background:#000;border:1px solid var(--bord);border-radius:6px;padding:2px 
 <div class="boite">
   <img class="logo" src="../app/icons/icon-192x192.png" alt="RepCore">
   <h1 id="titre">Ton accès RepCore</h1>
+
+  <!-- LE TUTO DE KEVIN (29/09/2026) : installer, le compte, le bilan, le
+       prevenir. Seulement pour l'invitation d'un coach (ni ami, ni
+       ambassadeur, ni duel). preload="none" : rien n'est telecharge tant que
+       la personne ne lance pas la video ; les sous-titres sont incrustes, elle
+       se comprend sans le son. -->
+  <div class="tuto" id="tuto" hidden>
+    <h2>Avant de commencer : 2 minutes pour tout faire</h2>
+    <video id="tuto-video" controls playsinline preload="none" poster="tuto-poster.jpg">
+      <source src="tuto.mp4" type="video/mp4">
+    </video>
+    <div class="chapitres" id="chapitres">
+      <button type="button" data-t="13">Installer<span>0:13</span></button>
+      <button type="button" data-t="40">Ton compte<span>0:40</span></button>
+      <button type="button" data-t="50">Ton bilan<span>0:50</span></button>
+      <button type="button" data-t="82">Les photos<span>1:22</span></button>
+      <button type="button" data-t="91">Me prévenir<span>1:31</span></button>
+    </div>
+  </div>
 
   <!-- Invité par un ami ou un ambassadeur : l'accueil, par son nom. -->
   <div id="accueil" hidden>
@@ -79,7 +104,7 @@ code{background:#000;border:1px solid var(--bord);border-radius:6px;padding:2px 
 
   <!-- Navigateur normal : on ouvre l'app. -->
   <div id="ok" hidden>
-    <p style="text-align:center">Ouverture de l'application…</p>
+    <p style="text-align:center" id="ouverture">Ouverture de l'application…</p>
     <a class="bouton" id="go" href="../app/">Ouvrir RepCore</a>
     <!-- Sans invitation : rien sur un code de coach que la personne n'a pas. -->
     <div class="carte" id="etapes-generique" hidden>
@@ -242,6 +267,35 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
     var tg=el('titre'); if(tg) tg.textContent='Bienvenue sur RepCore';
   }
 
+  // LE TUTO, A LA PREMIERE VISITE D'UN INVITE DE COACH. La page s'arrete sur
+  // la video et le bouton « Ouvrir RepCore » : pas d'ouverture automatique,
+  // sinon personne ne la verrait. Vue (lancee) ou passee (le bouton touche),
+  // elle ne revient plus : les visites suivantes ouvrent l'app comme avant.
+  // Dans le navigateur d'Instagram, elle reste au-dessus des explications :
+  // c'est justement la que la personne a besoin d'aide.
+  var TUTO_VU='rc_tuto_vu', tutoArret=false;
+  if(mode==='coach'){
+    var vu=false; try{ vu=!!localStorage.getItem(TUTO_VU); }catch(e){}
+    var tb=el('tuto'), tv=el('tuto-video');
+    if(tb&&(!vu||interne)){
+      tb.hidden=false; tutoArret=!vu;
+      var marquer=function(){ try{ localStorage.setItem(TUTO_VU,'1'); }catch(e){} };
+      if(tv&&tv.addEventListener) tv.addEventListener('play',marquer);
+      var go0=el('go'); if(go0&&go0.addEventListener) go0.addEventListener('click',marquer);
+      var ch=el('chapitres');
+      if(ch&&ch.addEventListener&&tv) ch.addEventListener('click',function(e){
+        var b=e.target&&e.target.closest?e.target.closest('button[data-t]'):null;
+        if(!b) return;
+        var aller=function(){ try{ tv.currentTime=Number(b.getAttribute('data-t'))||0; }catch(x){} };
+        // preload="none" : sans metadonnees, le saut serait ignore ; on les
+        // charge d'abord (load()), puis on saute.
+        if(tv.readyState>=1) aller();
+        else{ tv.addEventListener('loadedmetadata',aller,{once:true}); tv.load(); }
+        var pr=tv.play&&tv.play(); if(pr&&pr.catch) pr.catch(function(){});
+      });
+    }
+  }
+
   if(interne){
     var abs=new URL(cible,location.href).href;
     document.getElementById('lien').textContent=abs;
@@ -271,6 +325,7 @@ fetch('https://repcore-serveur.repcore.workers.dev/arrivee?src='+encodeURICompon
   if((mode==='ami'||mode==='amb'||mode==='duel')&&el('accueil')){ el('accueil').hidden=false; return; }
 
   document.getElementById('ok').hidden=false;
+  if(tutoArret){ var ov=el('ouverture'); if(ov) ov.hidden=true; return; }
   // replace() et non href : le retour arriere doit ramener a Instagram, pas
   // rejouer cette page en boucle.
   setTimeout(function(){location.replace(cible);},900);
