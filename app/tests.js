@@ -48874,6 +48874,75 @@ async function testExercices(){
       const ok1=a.seance===100&&a.complete===30&&a.record===50&&a.bilan===80&&a.nutrition===15
         &&a.sommeil===5&&a.semaine===150&&a.badge===40&&a.badgePalier4===200;
       return ok1&&XP_PLAFOND_JOUR>=380?true:_echec(JSON.stringify(a)+' plafond '+XP_PLAFOND_JOUR);})());
+    // ══ LOT N2 — LES VOLTS DE LA CIBLE TENUE (29/09/2026) ═════════════════
+    ok('N2 — cibleTenue : ±7 % aux bornes exactes, 95 % de protéines à l’arrondi, rien sans cible',(()=>{
+      const c={kcal:2000,p:150};
+      const t=(k,p)=>cibleTenue({kcal:k,p},c);
+      if(!t(1860,150).kcal||!t(2140,150).kcal) return _echec('les bornes à ±7 % sont exclues');
+      if(t(1859.9,150).kcal||t(2140.1,150).kcal) return _echec('hors ±7 % accepté');
+      // Des décimales additionnées ne font pas rater une borne exacte.
+      if(!cibleTenue({kcal:0.1+0.2+1859.7,p:150},c).kcal) return _echec('0,1 + 0,2 fait rater la borne');
+      if(!t(2000,142.5).prot) return _echec('142,5 g sur 150 (95 %) refusé');
+      if(t(2000,142.4).prot) return _echec('142,4 g sur 150 accepté');
+      if(!t(2000,150).tenue||t(2000,140).tenue||t(2200,150).tenue) return _echec('tenue = les deux');
+      // Journée sans cible : aucun volt, aucune erreur.
+      for(const x of [null,{},{kcal:0,p:0},{kcal:'',p:150}])
+        if(cibleTenue({kcal:2000,p:150},x).tenue) return _echec('tenue sans cible : '+JSON.stringify(x));
+      if(cibleTenue(null,c).tenue) return _echec('tenue sans totaux');
+      return true;})());
+    ok('N2 — Une journée à 60 % des calories ne donne PAS la prime (en dessous compte comme un écart)',(()=>{
+      const r=cibleTenue({kcal:1320,p:200},{kcal:2200,p:150});
+      if(r.kcal||r.tenue) return _echec('60 % des calories récompensé : '+JSON.stringify(r));
+      // Et une journée à 1 200 pour 2 200, protéines comprises.
+      return cibleTenue({kcal:1200,p:150},{kcal:2200,p:150}).tenue?_echec('1 200 sur 2 200 récompensé'):true;})());
+    ok('N2 — le jour OFF est jugé sur ses propres cibles, et la prime entre dans xpCalcul une fois par jour',(()=>{
+      const J=864e5, t=Date.now();
+      // Lundi actif, le reste au repos.
+      const sc=[{active:true,exercises:[{name:'Squat'}]}].concat(Array.from({length:6},()=>({active:false})));
+      const lundi=new Date(t); lundi.setHours(12,0,0,0); lundi.setDate(lundi.getDate()-((lundi.getDay()+6)%7)-7);
+      const L=localISODate(lundi), M=_jourPlus(L,1);
+      const E=(k,p)=>({entries:[{kcal:k/2,p:p/2},{kcal:k/4,p:p/4},{kcal:k/4,p:p/4}]});
+      const u={email:'n2@t.fr',role:'athlete',sessions_config:sc,
+        nutrition:{dietType:'flexible',macros:{on:{kcal:2400,p:160,l:80,g:300},off:{kcal:2000,p:160,l:80,g:200}},
+          log:{[L]:E(2000,160),[M]:E(2000,160)}}};
+      if(!nutIsOnDay(L,u)||nutIsOnDay(M,u)) return _echec('fixture : lundi ON, mardi OFF');
+      if(cibleTenueJour(u,L).tenue) return _echec('2 000 kcal un jour ON (cible 2 400) récompensé');
+      if(!cibleTenueJour(u,M).tenue) return _echec('2 000 kcal un jour OFF (cible 2 000) refusé');
+      const r=xpCalcul(u,t);
+      if(r.cat.cible!==XP_ACTIONS.cible) return _echec('cible : '+r.cat.cible);
+      if(XP_ACTIONS.cible!==40||XP_ACTIONS.nutrition!==15||XP_PLAFOND_JOUR!==400) return _echec('barème');
+      // Rien sur l'écran quand la journée n'est pas tenue ; la forme de la fin de séance quand elle l'est.
+      if(htmlVoltsCible(u,L)!=='') return _echec('un message sur une journée non tenue');
+      const h=htmlVoltsCible(u,M);
+      if(h.indexOf('vt-gain')<0||h.indexOf('+40')<0) return _echec('la mention des volts : '+h);
+      return true;})());
+    okA('N2 — le recalcul serveur donne le même total que l’app sur dix journées jouées',async()=>{
+      const x=new XMLHttpRequest(); x.open('GET','../cloudflare/src/xp.js',false); x.send();
+      if(x.status!==200) return true;
+      const url=URL.createObjectURL(new Blob([x.responseText],{type:'text/javascript'}));
+      const X=await import(url);
+      if(X.XP.cible!==XP_ACTIONS.cible||X.XP.nutrition!==XP_ACTIONS.nutrition||X.XP_PLAFOND_JOUR!==XP_PLAFOND_JOUR) return _echec('barèmes désaccordés');
+      const J=864e5, t=Date.now();
+      const debut=new Date(t-10*J); debut.setHours(12,0,0,0);
+      const log={};
+      // Dix journées : tenues, à 60 %, au-dessus, trop peu de protéines, vides.
+      const jours=[[2000,160],[1200,160],[2000,160],[2300,160],[2000,100],[2050,155],[0,0],[1980,170],[2000,160],[2140,152]];
+      jours.forEach(([k,p],i)=>{ if(!k) return; log[_jourPlus(localISODate(debut),i)]={entries:[{kcal:k/2,p:p/2},{kcal:k/4,p:p/4},{kcal:k/4,p:p/4}]}; });
+      const u={email:'n2b@t.fr',role:'athlete',createdAt:debut.getTime(),
+        nutrition:{dietType:'flexible',macros:{on:{kcal:2000,p:160,l:70,g:250},off:{kcal:2000,p:160,l:70,g:250}},log}};
+      const r=xpCalcul(u,t);
+      if(r.cat.cible!==6*XP_ACTIONS.cible) return _echec('journées tenues : '+r.cat.cible/XP_ACTIONS.cible+' au lieu de 6');
+      // Les badges que l'app calcule, tels que le dossier les porte : le serveur
+      // les borne par eux (valeurBadges), jamais par le journal.
+      const bdg={}; const f=_badgesFaits(u,t);
+      for(const b of BADGES_ACQUIS){ if(_bdgInactif(b)) continue; let at=0; try{ at=Number(b.test(f))||0; }catch(e){ at=0; } if(at>0&&at<=t) bdg[b.id]={at}; }
+      const srv=X.totalServeur(X.etatVide(),Object.assign({total:r.total},r.cat),{nBilans:0,badges:bdg,debut:debut.getTime()},t);
+      if(srv.total!==r.total) return _echec('serveur '+srv.total+' contre app '+r.total+' : '+JSON.stringify(srv.cat));
+      // Et le serveur borne : une app qui annonce 400 V de cible sur trois jours n'en reçoit que 120.
+      const b=X.totalServeur(X.etatVide(),{cible:400},{nBilans:0,badges:{},debut:t-2*J},t);
+      return b.cat.cible===120?true:_echec('borne : '+b.cat.cible);
+    });
+
     ok('Volts : dix rangs, dans l’ordre, seuils croissants à partir de 0',(()=>{
       const n=RANGS.map(r=>r.nom).join();
       if(n!=='ÉTINCELLE,IMPULSION,VOLTAGE,MACHINE,ÉLITE,SURTENSION,MONSTRE,FOUDRE,TITAN,LÉGENDE') return _echec(n);

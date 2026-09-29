@@ -11178,6 +11178,11 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .vt-gain{font-family:var(--pile-titre);font-size:34px;line-height:1;color:#fff;font-variant-numeric:tabular-nums;
   text-shadow:0 0 14px rgba(224,32,32,.8);flex:1;min-width:0}
 .vt-eclair{color:#ffd23a;text-shadow:0 0 12px rgba(255,190,40,.8)}
+/* LOT N2 : la cible tenue, sur l'écran nutrition, dans la forme de la fin de séance. */
+.vt-cible{display:flex;align-items:center;justify-content:flex-start;text-align:left;gap:12px;margin-top:14px;padding:10px 14px;border-radius:var(--r-3);
+  background:linear-gradient(135deg,rgba(224,32,32,.14),rgba(255,190,40,.06));border:1px solid rgba(255,190,40,.35)}
+.vt-cible .vt-gain{font-size:26px;flex:none}
+.vt-cible-t{font-size:var(--fs-sm);font-weight:800;color:var(--text)}
 .vt-rang{font-family:var(--pile-titre);font-size:var(--fs-md);letter-spacing:1.5px;color:#ff3b3b}
 .vt-l{display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:4px 0;color:var(--text-dim)}
 .vt-l b{color:var(--text);font-variant-numeric:tabular-nums}
@@ -14299,6 +14304,8 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .vt-emb{filter:drop-shadow(0 0 8px rgba(224,32,32,.6))}
 :root[data-theme="clair"] .vt-gain{color:#090909;text-shadow:0 0 14px rgba(224,32,32,.8)}
 :root[data-theme="clair"] .vt-eclair{color:#cc9d00;text-shadow:0 0 12px rgba(255,190,40,.8)}
+:root[data-theme="clair"] .vt-cible{background:linear-gradient(135deg,rgba(224,32,32,.14),rgba(255,190,40,.06));border:1px solid rgba(255,190,40,.35)}
+:root[data-theme="clair"] .vt-cible-t{color:var(--text)}
 :root[data-theme="clair"] .vt-rang{color:#cc0000}
 :root[data-theme="clair"] .vt-l{color:var(--text-dim)}
 :root[data-theme="clair"] .vt-l b{color:var(--text)}

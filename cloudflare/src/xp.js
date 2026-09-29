@@ -22,8 +22,11 @@
 // Les constantes sont celles de l'app (rc-core : XP_ACTIONS, XP_PLAFOND_JOUR,
 // RANGS, EX_RENOMMAGES) — à tenir en phase, un test le rappelle.
 
+// cible : la journée dans sa cible alimentaire (lot N2), 40 V par jour au plus.
+// Le Worker ne relit pas le journal : il BORNE la valeur de l'app, comme pour
+// le journal lui-même (jours × barème).
 export const XP = { seance: 100, complete: 30, record: 50, bilan: 80, badge: 40, badgePalier4: 200,
-  nutrition: 15, sommeil: 5, checkin: 10, semaine: 150, parcours: 300 };
+  nutrition: 15, sommeil: 5, checkin: 10, cible: 40, semaine: 150, parcours: 300 };
 export const XP_PLAFOND_JOUR = 400;
 export const SEANCE_MIN_MIN = 15, SEANCE_MIN_SERIES = 6, VOLTS_PAR_SERIE = 10;
 export const RANGS = [
@@ -213,6 +216,7 @@ export function totalServeur(etat, client, dossier, t) {
     bilan: borne('bilan', (Number(d.nBilans) || 0) * XP.bilan),
     badge: borne('badge', b.v),
     nutrition: borne('nutrition', jours * XP.nutrition),
+    cible: borne('cible', jours * XP.cible),
     sommeil: borne('sommeil', jours * XP.sommeil),
     checkin: borne('checkin', jours * XP.checkin),
     semaine: borne('semaine', (Math.floor(jours / 7) + 1) * XP.semaine),

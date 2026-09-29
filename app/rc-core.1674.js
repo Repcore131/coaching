@@ -77267,9 +77267,44 @@ const XP_ACTIONS=Object.freeze({
   semaine:150,         // semaine validée (le quota de séances atteint)
   badge:40,            // badge débloqué…
   badgePalier4:200,    // … sauf un palier IV
-  checkin:10           // check-in du matin (dans le plafond du jour)
+  checkin:10,          // check-in du matin (dans le plafond du jour)
+  // LOT N2 (29/09/2026) : la journée DANS SA CIBLE (kcal à ±7 %, protéines à
+  // 95 % au moins), une fois par jour, dans le plafond. La saisie seule reste
+  // à 15 (nutrition) : c'est la cible tenue qui vaut davantage.
+  cible:40
 });
 const XP_NUTRITION_MIN=3;
+// ══ LOT N2 : LA CIBLE TENUE ═══════════════════════════════════════════════
+// ⚠ EN DESSOUS COMPTE COMME UN ÉCART. Une journée à 1 200 kcal pour une cible
+//   de 2 200 n'est pas une réussite : c'est le début d'une spirale, et une
+//   application qui la récompense fabrique un trouble. Même doctrine que le
+//   plancher calorique. La fourchette est donc SYMÉTRIQUE : ni au-dessus, ni
+//   en dessous.
+const CIBLE_KCAL_TOLERANCE=0.07;
+const CIBLE_PROT_MIN=0.95;
+// PURE. `totaux` : {kcal, p} de la journée ; `cibles` : {kcal, p} du jour.
+// Les bornes sont INCLUSES, comparées au dixième (les totaux additionnent des
+// décimales : 0,1 + 0,2 ne doit pas faire rater une borne exacte).
+function cibleTenue(totaux,cibles){
+  const non={kcal:false,prot:false,tenue:false};
+  const c=cibles||{}, t=totaux||{};
+  const ck=Number(c.kcal), cp=Number(c.p), tk=Number(t.kcal), tp=Number(t.p);
+  if(!(ck>0)||!isFinite(tk)) return non;
+  const d=v=>Math.round(v*10)/10;
+  const kcal=d(Math.abs(tk-ck))<=d(ck*CIBLE_KCAL_TOLERANCE);
+  const prot=(cp>0&&isFinite(tp))?d(tp)>=d(cp*CIBLE_PROT_MIN):false;
+  return {kcal,prot,tenue:kcal&&prot};
+}
+// La journée d'un dossier : ses totaux au journal, et SA cible du jour (jour ON
+// ou OFF selon ses séances prévues, cycle compris), par le même chemin que
+// l'écart au journal (adherence). Rien au journal : rien de tenu.
+function cibleTenueJour(u,j){
+  const nut=(u&&u.nutrition)||{};
+  const tot=journalTotalJour(nut.log||{},j);
+  if(!tot.n||!nut.macros) return {kcal:false,prot:false,tenue:false};
+  let c=null; try{ c=_getEffectiveMacros(nut,nutIsOnDay(j,u),j,u); }catch(e){ c=null; }
+  return cibleTenue(tot,c);
+}
 // LE PLAFOND ANTI-TRICHE, par jour (jour local). Il porte sur tout ce qui se
 // répète à volonté — séances, records, bilans, journal, sommeil. Une grosse
 // vraie journée y tient (séance complète à trois records + bilan + journal +
@@ -77634,7 +77669,7 @@ function _xpJour(t){ try{ return localISODate(new Date(t)); }catch(e){ return ''
 // jusqu'au plafond : la séance d'abord, la nuit en dernier.
 function xpCalcul(u,maintenant){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
-  const cat={seance:0,complete:0,record:0,bilan:0,nutrition:0,sommeil:0,checkin:0,semaine:0,badge:0,parcours:0,archive:0};
+  const cat={seance:0,complete:0,record:0,bilan:0,nutrition:0,sommeil:0,checkin:0,cible:0,semaine:0,badge:0,parcours:0,archive:0};
   const vide={total:0,cat,ecrete:0};
   if(!u) return vide;
   let f; try{ f=_badgesFaits(u,t); }catch(e){ return vide; }
@@ -77655,6 +77690,9 @@ function xpCalcul(u,maintenant){
   for(const j of Object.keys(log)){
     if(!/^\d{4}-\d{2}-\d{2}$/.test(j)) continue;
     if(((log[j]&&log[j].entries)||[]).length>=XP_NUTRITION_MIN) pose(j,'nutrition',XP_ACTIONS.nutrition);
+    // LOT N2 : la cible tenue, une fois par jour, jamais un jour futur.
+    let _ct=null; try{ _ct=(j<=_xpJour(t))?cibleTenueJour(u,j):null; }catch(e){ _ct=null; }
+    if(_ct&&_ct.tenue) pose(j,'cible',XP_ACTIONS.cible);
   }
   const nuits=new Set();
   for(const e of (Array.isArray(u.sleepLog)?u.sleepLog:[])){
@@ -77666,7 +77704,11 @@ function xpCalcul(u,maintenant){
   for(const j of Object.keys((u.checkin&&typeof u.checkin==='object')?u.checkin:{})){
     if(/^\d{4}-\d{2}-\d{2}$/.test(j)&&checkinComplet(u.checkin[j])&&Number(u.checkin[j].at||0)<=t) pose(j,'checkin',XP_ACTIONS.checkin);
   }
-  const ordre=['seance','complete','record','bilan','nutrition','sommeil','checkin'];
+  // LA CIBLE PASSE EN DERNIER sous le plafond : sur la journée de référence
+  // (séance complète à trois records + bilan + journal + nuit = 380), elle ne
+  // prend que les 20 V qui restent, et la nuit comme le check-in gardent leur
+  // place.
+  const ordre=['seance','complete','record','bilan','nutrition','sommeil','checkin','cible'];
   let ecrete=0;
   for(const j of Object.keys(jours)){
     let reste=XP_PLAFOND_JOUR;
@@ -78247,6 +78289,16 @@ function htmlVoltsFin(g,xpTotal){
     +'<div class="rg-jauge vt-jauge"><span style="width:'+Math.round(r.part*100)+'%"></span></div>'
     +'<div class="rg-txt">'+escapeHtml(r.suivant?xpFormat(r.xp)+' / '+xpFormat(r.suivant.seuil)+' V vers '+r.suivant.nom:xpFormat(r.xp)+' V · rang maximal')+'</div>'
     +'</div>';
+}
+// LOT N2. « +40 ⚡ Journée dans ta cible » : la même forme que la fin de
+// séance (vt-gain, vt-eclair), sans modale ni badge. '' quand la journée
+// n'est pas tenue : aucun message d'échec, jamais.
+function htmlVoltsCible(u,j){
+  if(!u||u.role==='coach') return '';
+  let c=null; try{ c=cibleTenueJour(u,j); }catch(e){ c=null; }
+  if(!c||!c.tenue) return '';
+  return '<div class="vt-cible" role="status"><span class="vt-gain">+'+xpFormat(XP_ACTIONS.cible)
+    +' <span class="vt-eclair" aria-hidden="true">⚡</span></span><span class="vt-cible-t">Journée dans ta cible</span></div>';
 }
 function rendreVoltsFin(u,sess){
   const z=document.getElementById('wd-volts');
@@ -85286,6 +85338,10 @@ function _renderStrictMacroRings(nut,jourAff){
          d'un template literal, ou le premier backtick venu ferme la chaine et
          emporte le fichier entier. -->
     ${(()=>{ try{ return _htmlSignalMicro(currentUser,today); }catch(e){ return ''; } })()}
+    <!-- LOT N2 : LES VOLTS DE LA CIBLE TENUE, dans la forme de la fin de
+         seance. Rien du tout quand la journee ne l est pas : on ne dit jamais
+         a quelqu un qu il a rate sa journee alimentaire. -->
+    ${(()=>{ try{ return htmlVoltsCible(currentUser,today); }catch(e){ return ''; } })()}
     <!-- LES SIX CIBLES, EN TUILES. Elles ne repetent pas les anneaux : les
          anneaux disent OU EN EST la journee, les tuiles disent CE QU IL FAUT
          ATTEINDRE, et elles portent les deux cibles que les anneaux ne

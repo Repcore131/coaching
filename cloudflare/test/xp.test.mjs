@@ -203,6 +203,9 @@ test('les constantes du serveur sont celles de l’app (rc-core)', async () => {
   for (const [k, v] of Object.entries({ seance: 100, complete: 30, record: 50, bilan: 80, badge: 40, badgePalier4: 200, checkin: 10 }))
     assert.match(src, new RegExp('\\b' + k + ':' + v + '[,\\s]'), k);
   assert.equal(X.XP.seance, 100);
+  // Lot N2 : la cible tenue, 40 V par jour, bornée par le nombre de jours.
+  assert.equal(X.XP.cible, 40);
+  assert.equal(X.totalServeur(X.etatVide(), { cible: 400 }, { debut: Date.now() - 2 * 864e5 }, Date.now()).cat.cible, 120);
 });
 
 // ══ LE MOIS DU PARRAIN : LES QUATRE PREMIÈRES SÉANCES DU FILLEUL (lot C) ══
