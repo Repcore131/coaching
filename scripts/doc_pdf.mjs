@@ -107,7 +107,7 @@ code { font-family: Consolas, "Courier New", monospace; font-size: 9pt; backgrou
   padding: .3mm 1mm; border-radius: 1mm; color: #a01018; }
 pre { font-family: Consolas, "Courier New", monospace; font-size: 8.5pt; background: #f7f7f7;
   border-left: 2.5mm solid #e02020; padding: 3mm 4mm; margin: 0 0 4mm; white-space: pre-wrap;
-  line-height: 1.45; break-inside: avoid; }
+  line-height: 1.45; }
 pre code { background: none; padding: 0; color: #1a1a1a; }
 table { width: 100%; border-collapse: collapse; margin: 0 0 4mm; font-size: 9pt; break-inside: avoid; }
 th { background: #1a1a1a; color: #fff; text-align: left; padding: 2mm 2.5mm; font-weight: 700;
@@ -118,7 +118,10 @@ blockquote { margin: 0 0 4mm; padding: 2.5mm 4mm; background: #fff6f6; border-le
   color: #4a1a1a; break-inside: avoid; }
 hr { border: none; border-top: .5px solid #ddd; margin: 6mm 0; }
 a { color: #b4121a; text-decoration: none; }
-h2, h3, h4, table, pre, blockquote { page-break-inside: avoid; }
+/* ⚠ PAS DE pre ICI. Un bloc de code plus long qu'une page, a qui on interdit
+   de se couper, deborde en silence : la fin ne s'imprime nulle part. Les
+   tableaux et les citations, eux, sont courts par nature. */
+h2, h3, h4, table, blockquote { page-break-inside: avoid; }
 `;
 
 const HTML = '<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">'
