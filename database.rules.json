@@ -1556,6 +1556,70 @@
         ".read": "auth != null && (auth.token.email.replace('.', ',') === $compte || root.child('users').child($compte).child('coachEmailKey').val() === auth.token.email.replace('.', ','))"
       }
     },
+    // LES RECETTES (lot R1) : la bibliotheque du coach, lue par ses athletes
+    // (coachEmailKey), et les recettes perso d'un athlete, lues par lui et son
+    // coach. Les macros ne sont JAMAIS stockees dans la recette : elles se
+    // calculent a la lecture (recetteMacros). Chaque ingredient garde un
+    // instantane pour 100 g (m), pour survivre a un produit OFF disparu.
+    // 50 ingredients au plus : l'indice 50 n'existe pas.
+    "recettes": {
+      "$coachKey": {
+        ".read": "auth != null && (auth.token.email.replace('.', ',') === $coachKey || root.child('users').child(auth.token.email.replace('.', ',')).child('coachEmailKey').val() === $coachKey)",
+        "$id": {
+          ".write": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
+          ".validate": "$id.matches(/^r[0-9]{10,14}-[a-z0-9]{1,8}$/) && newData.hasChildren(['nom', 'portions', 'ingredients', 'creeLe']) && !newData.child('ingredients').child('50').exists()",
+          "nom":      { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 80" },
+          "portions": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 100" },
+          "etapes":   { ".validate": "newData.isString() && newData.val().length <= 4000" },
+          "creeLe":   { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "modifieLe": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "tags": { "$t": { ".validate": "$t.matches(/^[0-9]$/) && newData.isString() && newData.val().length <= 30" } },
+          "ingredients": {
+            "$i": {
+              ".validate": "$i.matches(/^([0-9]|[1-4][0-9])$/) && newData.hasChildren(['src', 'ref', 'grammes'])",
+              "src":     { ".validate": "newData.isString() && newData.val().matches(/^(ciqual|off)$/)" },
+              "ref":     { ".validate": "(newData.isString() && newData.val().length <= 40) || newData.isNumber()" },
+              "grammes": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 2000" },
+              "nom":     { ".validate": "newData.isString() && newData.val().length <= 120" },
+              "m": {
+                "$x": { ".validate": "$x.matches(/^(k|p|c|l)$/) && newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000" }
+              },
+              "$autre": { ".validate": false }
+            }
+          },
+          "$autre": { ".validate": false }
+        }
+      }
+    },
+    "recettes_perso": {
+      "$athleteKey": {
+        ".read": "auth != null && (auth.token.email.replace('.', ',') === $athleteKey || root.child('users').child($athleteKey).child('coachEmailKey').val() === auth.token.email.replace('.', ','))",
+        "$id": {
+          ".write": "auth != null && auth.token.email.replace('.', ',') === $athleteKey",
+          ".validate": "$id.matches(/^r[0-9]{10,14}-[a-z0-9]{1,8}$/) && newData.hasChildren(['nom', 'portions', 'ingredients', 'creeLe']) && !newData.child('ingredients').child('50').exists()",
+          "nom":      { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 80" },
+          "portions": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 100" },
+          "etapes":   { ".validate": "newData.isString() && newData.val().length <= 4000" },
+          "creeLe":   { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "modifieLe": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "tags": { "$t": { ".validate": "$t.matches(/^[0-9]$/) && newData.isString() && newData.val().length <= 30" } },
+          "ingredients": {
+            "$i": {
+              ".validate": "$i.matches(/^([0-9]|[1-4][0-9])$/) && newData.hasChildren(['src', 'ref', 'grammes'])",
+              "src":     { ".validate": "newData.isString() && newData.val().matches(/^(ciqual|off)$/)" },
+              "ref":     { ".validate": "(newData.isString() && newData.val().length <= 40) || newData.isNumber()" },
+              "grammes": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 2000" },
+              "nom":     { ".validate": "newData.isString() && newData.val().length <= 120" },
+              "m": {
+                "$x": { ".validate": "$x.matches(/^(k|p|c|l)$/) && newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000" }
+              },
+              "$autre": { ".validate": false }
+            }
+          },
+          "$autre": { ".validate": false }
+        }
+      }
+    },
     "coach_paiement": {
       "$coachKey": { ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey" }
     },

@@ -49180,6 +49180,140 @@ async function testExercices(){
       const c=_fjCopier(t.entries,j,'matin');
       if(c[0].qty!==60||c[1].qty!==250||c[0].id===t.entries[0].id) return _echec('copie');
       return true;})());
+    // ── LOT R1 : LES RECETTES ──
+    const _R1rec=()=>({id:'r1790000000000-abc',nom:'Porridge protéiné',portions:2,creeLe:1,
+      ingredients:[{src:'off',ref:'3017620422003',grammes:80,nom:'Flocons X',m:{k:370,p:13,c:60,l:7}},
+                   {src:'ciqual',ref:999999,grammes:250,nom:'Lait demi-écrémé',m:{k:45,p:3.2,c:4.8,l:0.96}}]});
+    const _R1rien=()=>null;
+    // Le stockage local des recettes, et les écritures du journal, isolés le temps d'un test.
+    const _R1bac=(fn)=>{
+      const cles=['rc_recettes_moi','rc_recettes_coach'], sv={};
+      for(const k of cles) sv[k]=localStorage.getItem(k);
+      const svU=currentUser, svSave=saveUser, svFetch=window.fetch;
+      let appels=0;
+      window.fetch=function(){ appels++; return Promise.reject(new Error('réseau coupé (test)')); };
+      saveUser=()=>true;
+      const fin=()=>{ for(const k of cles){ if(sv[k]==null) localStorage.removeItem(k); else localStorage.setItem(k,sv[k]); }
+        currentUser=svU; saveUser=svSave; window.fetch=svFetch; };
+      try{ const r=fn(()=>appels); if(r&&typeof r.then==='function') return r.finally(fin); fin(); return r; }
+      catch(e){ fin(); throw e; }
+    };
+    ok('Recettes : recetteMacros fait la somme exacte, arrondit une fois, accepte 0,5 portion',(()=>{
+      const r=_R1rec();
+      const t=recetteMacros(r,2,_R1rien);
+      // 370×0,8 + 45×2,5 = 408,5 kcal ; P 10,4+8 ; G 48+12 ; L 5,6+2,4.
+      if(t.kcal!==409||t.p!==18.4||t.c!==60||t.l!==8||t.g!==330) return _echec('recette entière : '+JSON.stringify(t));
+      if(JSON.stringify(t.total)!==JSON.stringify({kcal:409,p:18.4,c:60,l:8,g:330})) return _echec('total');
+      const u=recetteMacros(r,1,_R1rien);
+      if(u.kcal!==204||u.p!==9.2||u.c!==30||u.l!==4||u.g!==165) return _echec('une portion : '+JSON.stringify(u));
+      const d=recetteMacros(r,'0,5',_R1rien);
+      if(d.kcal!==102||d.p!==4.6||d.c!==15||d.l!==2||d.g!==83||d.portions!==0.5) return _echec('demi-portion : '+JSON.stringify(d));
+      // L'arrondi vient des valeurs exactes, pas d'une portion déjà arrondie : 1,5 portion = 306,375 kcal.
+      if(recetteMacros(r,1.5,_R1rien).kcal!==306) return _echec('1,5 portion');
+      if(recetteMacros(Object.assign(r,{portions:0}),1,_R1rien).kcal!==0) return _echec('portions nulles');
+      return recettePortionsTxt(0.5)==='0,5 portion'&&recettePortionsTxt(2)==='2 portions'?true:_echec('libellé des portions');})());
+    ok('Recettes : un ingrédient garde son instantané pour 100 g ; OFF disparu, la recette se chiffre encore',(()=>{
+      const a={id:'off:5410188031072',n:'Skyr nature',k:63,p:11,c:4,l:0.2,_off:{ean:'5410188031072'}};
+      const i=recetteIngredient('off',a,150);
+      if(!i||i.src!=='off'||i.ref!=='5410188031072'||i.grammes!==150) return _echec('ingrédient : '+JSON.stringify(i));
+      if(JSON.stringify(i.m)!==JSON.stringify({k:63,p:11,c:4,l:0.2})) return _echec('instantané : '+JSON.stringify(i.m));
+      a.k=999; if(i.m.k!==63) return _echec('l’instantané suit le produit');
+      const r={nom:'Bol',portions:1,ingredients:[i]};
+      const m=recetteMacros(r,1,_R1rien);
+      if(m.kcal!==95||m.p!==16.5||m.manquants.length) return _echec('OFF disparu : '+JSON.stringify(m));
+      // Ciqual : la table d'abord quand elle répond, l'instantané sinon.
+      const c={src:'ciqual',ref:42,grammes:100,nom:'Riz',m:{k:100,p:1,c:20,l:1}};
+      if(recetteMacros({portions:1,ingredients:[c]},1,id=>id===42?{id:42,k:130,p:2.5,c:28,l:0.3}:null).kcal!==130) return _echec('Ciqual vif');
+      if(recetteMacros({portions:1,ingredients:[c]},1,_R1rien).kcal!==100) return _echec('Ciqual instantané');
+      const sans=recetteMacros({portions:1,ingredients:[{src:'off',ref:'1',grammes:50,nom:'Mystère'}]},1,_R1rien);
+      if(sans.kcal!==0||sans.manquants.join()!=='Mystère'||sans.g!==50) return _echec('ingrédient sans valeurs : '+JSON.stringify(sans));
+      return recetteIngredient('off',{id:'off:',n:'x'},10)===null?true:_echec('OFF sans code accepté');})());
+    ok('Recettes : les bornes des règles (50 ingrédients, nom de 80, 1 à 2000 g), dites en français',(()=>{
+      const r=_R1rec();
+      if(!recetteValide(r).ok) return _echec('valide refusée : '+recetteValide(r).raison);
+      if(!recetteValide(Object.assign(_R1rec(),{portions:0.5})).ok) return _echec('0,5 portion refusée');
+      const ko=[Object.assign(_R1rec(),{nom:'x'.repeat(81)}),Object.assign(_R1rec(),{nom:'  '}),Object.assign(_R1rec(),{portions:0}),
+        Object.assign(_R1rec(),{ingredients:[]}),Object.assign(_R1rec(),{ingredients:Array.from({length:51},()=>_R1rec().ingredients[0])})];
+      for(const x of ko) if(recetteValide(x).ok) return _echec('acceptée : '+JSON.stringify(x).slice(0,80));
+      for(const g of [0,2001]){ const x=_R1rec(); x.ingredients[0].grammes=g; if(recetteValide(x).ok) return _echec(g+' g accepté'); }
+      const n=recetteNettoyer(Object.assign(_R1rec(),{tags:'rapide, , petit-déj',etapes:' ',kcal:500}),5);
+      if('kcal' in n||'etapes' in n||n.tags.join()!=='rapide,petit-déj'||n.modifieLe!==5||n.creeLe!==1) return _echec('nettoyage : '+JSON.stringify(n));
+      if(Object.keys(n).some(k=>['nom','portions','ingredients','creeLe','modifieLe','tags','etapes'].indexOf(k)<0)) return _echec('champ hors règles');
+      const d=recetteDupliquer(_R1rec(),7);
+      if(d.id===_R1rec().id||d.nom!=='Porridge protéiné (copie)'||d.creeLe!==7||d.ingredients.length!==2) return _echec('copie : '+JSON.stringify(d).slice(0,120));
+      return /^r[0-9]{10,14}-[a-z0-9]{1,8}$/.test(recetteId())?true:_echec('identifiant hors règles');})());
+    ok('Recettes : le journal garde ses valeurs ; une recette supprimée se journalise encore depuis le plan',(()=>{
+      const r=_R1rec();
+      const e=recetteEntree(r,0.5,'matin',11,_R1rien,'coach');
+      if(e.nom!=='Porridge protéiné'||e.kcal!==102||e.p!==4.6||e.qty!==83||e.unite!=='0,5 portion'||e.repas!=='matin') return _echec('entrée : '+JSON.stringify(e));
+      if(!e.recette||e.recette.id!==r.id||e.recette.portions!==0.5) return _echec('trace de la recette');
+      const fige=JSON.stringify(e); r.ingredients=[]; r.nom='Autre';
+      if(JSON.stringify(e)!==fige) return _echec('l’entrée suit la recette');
+      // La ligne du plan : ses macros PAR PORTION, comptées par le moteur du plan.
+      const l=planLigneRecette(_R1rec(),'petit_dej',1.5,'L1',_R1rien);
+      if(l.u!=='portion'||l.q!==1.5||l.p!==9.2||l.c!==30||l.l!==4) return _echec('ligne : '+JSON.stringify(l));
+      const pm=planMacrosItem(l);
+      if(Math.abs(pm.p-13.8)>1e-9||Math.abs(pm.c-45)>1e-9) return _echec('moteur du plan : '+JSON.stringify(pm));
+      if(planNomItem(l)!=='Porridge protéiné') return _echec('nom de la ligne : '+planNomItem(l));
+      const sansRecette=entreeLignePlanRecette(l,null,12);
+      if(sansRecette.nom!=='Porridge protéiné'||sansRecette.repas!=='matin'||sansRecette.unite!=='1,5 portion'||sansRecette.kcal!==Math.round(pm.kcal)) return _echec('recette supprimée : '+JSON.stringify(sansRecette));
+      const plan={squelette:[l]};
+      const neuve=Object.assign(_R1rec(),{id:'r1790000000009-zzz',nom:'Porridge du dimanche'});
+      if(planRecettesActualiser(plan,[neuve],_R1rien)!==0||l.recetteNom!=='Porridge protéiné') return _echec('identifiant différent mis à jour');
+      neuve.id=l.recette; neuve.ingredients[0].grammes=160;
+      if(planRecettesActualiser(plan,[neuve],_R1rien)!==1||l.recetteNom!=='Porridge du dimanche'||l.c!==54) return _echec('actualisation : '+JSON.stringify(l));
+      return planRecettesActualiser(plan,[],_R1rien)===0&&l.c===54?true:_echec('recette disparue : la ligne a perdu ses valeurs');})());
+    ok('Recettes : celles du coach et les miennes apparaissent dans la recherche, badge « recette »',(()=>_R1bac(()=>{
+      currentUser={email:'r1@t.fr',role:'athlete',coachEmailKey:'coach@t,fr',nutrition:{log:{}}};
+      localStorage.setItem('rc_recettes_coach',JSON.stringify({key:'coach@t,fr',t:Date.now(),d:{[_R1rec().id]:_R1rec()}}));
+      localStorage.setItem('rc_recettes_moi',JSON.stringify({key:'r1@t,fr',t:Date.now(),d:{'r1790000000001-moi':{nom:'Porridge du soir',portions:1,creeLe:1,ingredients:[_R1rec().ingredients[0]]}},attente:{}}));
+      const h=htmlRecettesRecherche(['porridge']);
+      if(h.indexOf('Porridge protéiné')<0||h.indexOf('Porridge du soir')<0) return _echec('recettes absentes : '+h.slice(0,200));
+      if((h.match(/rct-b">recette</g)||[]).length!==2) return _echec('badge « recette »');
+      if(h.indexOf('ouvrirPortionRecette(&quot;coach&quot;')<0||h.indexOf('ouvrirPortionRecette(&quot;perso&quot;')<0) return _echec('le tap n’ouvre pas les portions');
+      if(h.indexOf('Porridge du soir')>h.indexOf('Porridge protéiné')) return _echec('les miennes d’abord');
+      if(htmlRecettesRecherche(['lasagnes'])!=='') return _echec('recette sans rapport');
+      // Un autre coach sur l'appareil : sa bibliothèque ne se montre pas.
+      currentUser.coachEmailKey='autre@t,fr';
+      if(recettesDuCoach().length) return _echec('bibliothèque d’un autre coach');
+      currentUser.coachEmailKey='coach@t,fr';
+      const el=document.getElementById('fj-results-list');
+      if(el){
+        const svDb=(typeof _ciqualDB!=='undefined')?_ciqualDB:null, svH=el.innerHTML;
+        try{ if(!_ciqualDB) _ciqualDB=[]; onFjSearch('porridge');
+          if(el.innerHTML.indexOf('Porridge protéiné')<0) return _echec('onFjSearch ne montre pas la recette'); }
+        finally{ try{ _ciqualDB=svDb; }catch(e){} el.innerHTML=svH; }
+      }
+      return true;}))());
+    okA('Recettes : hors ligne après la première synchro ; la recette du plan se journalise en un geste',async()=>_R1bac(async(appels)=>{
+      const svOn=Object.getOwnPropertyDescriptor(navigator,'onLine');
+      Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>false});
+      const svDate=_fjDate; const j=localISODate(new Date()); _fjDate=j;
+      const cleG='rc_nut_g_'+j, svG=localStorage.getItem(cleG);
+      try{
+        const ligne=planLigneRecette(_R1rec(),'petit_dej',1,'LR1',_R1rien);
+        currentUser={email:'r1@t.fr',role:'athlete',coachEmailKey:'coach@t,fr',
+          nutrition:{log:{},plan:{squelette:[ligne],sources:{proteines:[],glucides:[]}}}};
+        localStorage.setItem('rc_recettes_coach',JSON.stringify({key:'coach@t,fr',t:1,d:{[_R1rec().id]:_R1rec()}}));
+        if(await recettesSynchroniser(true)!==false) return _echec('synchro tentée hors ligne');
+        if(appels()!==0) return _echec(appels()+' appel(s) réseau hors ligne');
+        if(recettesDuCoach().length!==1) return _echec('le cache ne répond pas hors ligne');
+        const puces=_htmlRecettesSaisie();
+        if(puces.indexOf('ajouterRecettePlan(&quot;LR1&quot;)')<0||puces.indexOf('Porridge protéiné')<0) return _echec('la puce du plan manque : '+puces.slice(0,200));
+        if(!ajouterRecettePlan('LR1')) return _echec('un geste n’a pas suffi');
+        const l=currentUser.nutrition.log[j].entries;
+        if(l.length!==1||l[0].nom!=='Porridge protéiné'||l[0].repas!=='matin'||l[0].kcal!==204||l[0].unite!=='1 portion') return _echec('entrée : '+JSON.stringify(l));
+        // Une recette écrite hors ligne attend le réseau, sans se perdre.
+        const res=recetteEnregistrer(Object.assign(_R1rec(),{id:null,nom:'Porridge hors ligne'}));
+        if(!res.ok) return _echec('enregistrement : '+res.raison);
+        const b=JSON.parse(localStorage.getItem('rc_recettes_moi'));
+        if(!b.d[res.id]||b.attente[res.id]!==true) return _echec('recette hors ligne non gardée');
+        await new Promise(r=>setTimeout(r,0));
+        return appels()===0?true:_echec('écriture tentée hors ligne');
+      } finally {
+        if(svOn) Object.defineProperty(navigator,'onLine',svOn); else delete navigator.onLine;
+        _fjDate=svDate; if(svG==null) localStorage.removeItem(cleG); else localStorage.setItem(cleG,svG);
+      }}));
     ok('N3 — un repas type appliqué deux fois : deux fois les mêmes quantités, jamais les mêmes identifiants',(()=>{
       const rt={id:'rt1',nom:'Petit-déj semaine',entries:[_fjGabarit(_N3E('Avoine',60)),_fjGabarit(_N3E('Skyr',150))]};
       const a=entreesRepasType(rt,'matin',[1,2]), b=entreesRepasType(rt,'matin',[3,4]);

@@ -15499,3 +15499,35 @@ html[data-theme="clair"]{background:#f8f8f8}
 .acf{display:flex;flex-direction:column;gap:4px;font-size:var(--fs-xs);line-height:1.6;color:var(--text)}
 .acf-t{font-weight:800;font-size:var(--fs-sm)}
 .acf-l{color:var(--sub)}
+/* LOT R1 : les recettes */
+.rct-intro{font-size:var(--fs-xs);line-height:1.6;margin-bottom:14px}
+.rct-sec{font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin:20px 0 8px}
+.rct-carte{background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:10px}
+.rct-n{font-size:var(--fs-md);font-weight:700;line-height:1.35;color:var(--text)}
+.rct-m{font-size:var(--fs-xs);color:var(--sub);line-height:1.55;margin-top:4px}
+.rct-b{display:inline-block;vertical-align:middle;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--red-text);border:1px solid var(--border);border-radius:var(--r-1);padding:1px 6px;margin-left:4px}
+.rct-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.rct-tags span{font-size:var(--fs-2xs);color:var(--sub);background:var(--surface-2);border-radius:var(--r-1);padding:2px 8px}
+.rct-acts{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:10px}
+.rct-lien{background:none;border:none;padding:6px 0;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.rct-sup{color:var(--sub)}
+.rct-vide{padding:14px 0;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6}
+.rct-actions{padding:4px 16px 8px}
+.rct-lab{display:block;font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin:14px 0 6px}
+.rct-champ{width:100%;box-sizing:border-box;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md)}
+textarea.rct-champ{resize:vertical;line-height:1.5}
+#rct-cherche{margin-top:10px}
+.rct-ing{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--surface-2)}
+.rct-ing-n{flex:1;min-width:0;font-size:var(--fs-sm);font-weight:700;line-height:1.35}
+.rct-ing input{width:72px;padding:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);text-align:center}
+.rct-x{background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:4px;min-width:32px;min-height:32px}
+.rct-total{background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-top:14px;font-size:var(--fs-sm);line-height:1.6}
+.rct-feuille{background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:18px 20px 22px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-sizing:border-box}
+.rct-pas{display:flex;align-items:center;justify-content:center;gap:18px;margin:16px 0 8px}
+.rct-pas button{width:48px;height:48px;background:var(--surface-3,var(--dark));border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-size:var(--fs-xl);cursor:pointer}
+.rct-pas b{min-width:120px;text-align:center;font-size:var(--fs-lg);font-weight:800}
+.rct-tot{text-align:center;font-size:var(--fs-sm);font-weight:700;color:var(--text)}
+.rct-plan .fj-rec{width:100%}
+.rct-nw{white-space:nowrap}
+.rct-pl{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left}
+.rct-pl .fj-rec-n{flex:none;max-width:100%;white-space:normal}

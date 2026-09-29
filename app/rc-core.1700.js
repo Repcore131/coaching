@@ -89535,6 +89535,8 @@ function planNomItem(item,chercher){
   if(item.fruit) return 'Une portion de fruit au choix';
   if(item.src) return item.src==='p'
     ?'Une source de protéines au choix':'Une source de glucides au choix';
+  // LOT R1 : une recette de la bibliothèque, en portions.
+  if(item.recette) return String(item.recetteNom||'Recette');
   if(item.libre) return String(item.libre);
   if(item.portion&&PLAN_PORTIONS[item.portion]) return PLAN_PORTIONS[item.portion].lib;
   if(item.ciqual!=null){
@@ -90121,6 +90123,8 @@ function fermerRecherchePlan(){
 function onPlanSearch(val){
   const el=document.getElementById('cpl-search-list');
   if(!el) return;
+  // LOT R1 : la même surcouche choisit une recette de la bibliothèque.
+  if(_cplCible&&_cplCible.mode==='recette'){ _cplRecettesRendre(val); return; }
   const q=(val||'').trim();
   if(q.length<2){ el.innerHTML=''; return; }
   if(!_ciqualDB){
@@ -90711,7 +90715,7 @@ function _cplHtmlLigne(item){
   const champNom=item.libre!=null
     ? `<input value="${escapeHtml(item.libre)}" placeholder="Nom de la ligne" oninput="cplSetChamp('${item.id}','libre',this.value)"
         style="width:100%;padding:6px 8px;background:#111;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;box-sizing:border-box">`
-    : `<div style="font-size:var(--fs-sm);font-weight:700;line-height:1.35">${escapeHtml(nom)}</div>`;
+    : `<div style="font-size:var(--fs-sm);font-weight:700;line-height:1.35">${escapeHtml(nom)}${item.recette?' <span class="rct-b">recette</span>':''}</div>`;
   const macrosMain=item.libre!=null
     ? `<div style="display:flex;gap:6px;align-items:center;margin-top:6px">
         <span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:.5px">pour ${planParUnite(planUniteItem(item))?'1 '+escapeHtml(planUniteItem(item)):'100 g'} :</span>
@@ -90849,6 +90853,7 @@ function renderPlanCoach(){
         ${lignes.map(_cplHtmlLigne).join('')}
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
           <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:var(--fs-2xs);letter-spacing:.5px" onclick="ouvrirRecherchePlan({mode:'squelette',repas:'${cle}'})">+ Aliment Ciqual</button>
+          <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:var(--fs-2xs);letter-spacing:.5px" onclick="cplChoisirRecette('${cle}')">+ Recette</button>
           <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:var(--fs-2xs);letter-spacing:.5px" onclick="cplAjouterLibre('${cle}')">+ Ligne libre</button>
           <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:var(--fs-2xs);letter-spacing:.5px" onclick="cplAjouterMarqueur('${cle}','p')">+ Source protéines au choix</button>
           <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:var(--fs-2xs);letter-spacing:.5px" onclick="cplAjouterMarqueur('${cle}','c')">+ Source glucides au choix</button>
@@ -90954,6 +90959,8 @@ function savePlanCoach(){
   if(!c||!_cplPlan) return;
   if(!c.nutrition) c.nutrition={};
   const p=_cplCopie(_cplPlan);
+  // LOT R1 : les lignes recette reprennent les valeurs de la bibliothèque.
+  try{ planRecettesActualiser(p,recettesMiennes()); }catch(e){}
   p.majAt=Date.now();
   p.majPar=currentUser&&currentUser.id;
   c.nutrition.plan=p;
@@ -91889,6 +91896,603 @@ function _fjCopier(entrees,dateCible,repas){
   const ids=_fjIdsNeufs(dateCible,entrees.length);
   return entrees.map((e,i)=>Object.assign({},e,{id:ids[i]},repas?{repas}:{}));
 }
+// ══ LOT R1 : LES RECETTES (29/09/2026) ═════════════════════════════════════
+//
+// Une bibliothèque de recettes que le coach partage à ses athlètes, et des
+// recettes perso que l'athlète écrit pour lui. Elles servent à deux endroits :
+// le plan alimentaire (une ligne « recette » dans un repas, en portions) et le
+// journal (la recherche, et une rangée à un geste en tête).
+//
+// ⚠ LES MACROS NE SONT JAMAIS STOCKÉES DANS LA RECETTE. recetteMacros les
+//   calcule à la lecture, à partir des ingrédients. Chaque ingrédient garde
+//   en revanche un INSTANTANÉ de ses valeurs pour 100 g (m) : un produit Open
+//   Food Facts peut disparaître, et une recette qui le contient doit encore
+//   se chiffrer. Un ingrédient Ciqual se relit dans la table quand elle est
+//   chargée, et retombe sur son instantané sinon (hors ligne, premier écran).
+// ⚠ LE JOURNAL GARDE SES VALEURS. Une entrée issue d'une recette porte ses
+//   calories et ses macros absolues, comme n'importe quel aliment : supprimer
+//   la recette ne change rien à ce qui a été mangé.
+// ⚠ LA LIGNE DU PLAN porte, elle aussi, ses macros par portion (p, c, l, en
+//   unité « portion ») : c'est une ligne « à la main » que tout le moteur du
+//   plan sait déjà compter. Elles se remettent à jour depuis la bibliothèque
+//   quand le coach enregistre le plan.
+// ⚠ HORS LIGNE : les deux listes vivent dans le stockage local (DB) après la
+//   première synchro ; ce qui s'écrit sans réseau part au retour du réseau.
+//
+// Firebase : recettes/<coach>/<id> (lu par ses athlètes),
+//            recettes_perso/<athlète>/<id> (lu par lui et son coach).
+
+const RECETTE_ING_MAX=50, RECETTE_NOM_MAX=80, RECETTE_G_MIN=1, RECETTE_G_MAX=2000;
+const RECETTE_PORTIONS_MAX=100, RECETTE_TAGS_MAX=10;
+const RECETTES_TTL=3600000;   // 1 h, comme les aliments du coach
+function _recNb(v){
+  if(v==null||v==='') return null;
+  const n=typeof v==='number'?v:parseFloat(String(v).replace(',','.'));
+  return isFinite(n)?n:null;
+}
+function _recArr(v){ return Math.round(v*10)/10; }
+function recetteId(t){ return 'r'+(Number(t)||Date.now())+'-'+Math.random().toString(36).slice(2,8); }
+// « 0,5 portion », « 1 portion », « 2 portions ».
+// Un nombre à la française : 26,1 et non 26.1.
+function _recF(v){ return String(v==null?'-':v).replace('.',','); }
+// Les macros d'une portion, sans qu'une valeur se coupe en fin de ligne.
+function _recMacrosHtml(m,suffixe){
+  const nw=t=>'<span class="rct-nw">'+t+'</span>';
+  return nw('<b>'+m.kcal+' kcal</b>'+(suffixe||''))+' · '+nw('P '+_recF(m.p)+' g')+' · '+nw('G '+_recF(m.c)+' g')+' · '+nw('L '+_recF(m.l)+' g');
+}
+function recettePortionsTxt(n){
+  const v=_recNb(n)||0;
+  return String(_recArr(v)).replace('.',',')+' portion'+(v>=2?'s':'');
+}
+
+// PURE. Un ingrédient à partir d'un aliment Ciqual ou Open Food Facts, avec
+// l'instantané de ses valeurs pour 100 g.
+function recetteIngredient(src,a,grammes){
+  if(!a) return null;
+  const off=src==='off';
+  const ref=off?String((a._off&&a._off.ean)||String(a.id||'').replace(/^off:/,'')):Number(a.id);
+  if(off?!ref:!isFinite(ref)) return null;
+  const m={};
+  for(const k of ['k','p','c','l']){ const v=_recNb(a[k]); if(v!=null&&v>=0) m[k]=Math.round(v*100)/100; }
+  const g=Math.round(Math.min(RECETTE_G_MAX,Math.max(RECETTE_G_MIN,_recNb(grammes)||100)));
+  return {src:off?'off':'ciqual',ref,grammes:g,nom:String(a.n||'').slice(0,120),m};
+}
+// PURE. Les valeurs pour 100 g d'un ingrédient : la table si elle le connaît
+// encore, sinon l'instantané. null si ni l'une ni l'autre ne répond.
+function recetteParCent(ing,chercher){
+  if(!ing) return null;
+  if(ing.src==='ciqual'){
+    let f=null; try{ f=_planResolveur(chercher)(Number(ing.ref)); }catch(e){ f=null; }
+    if(f&&(f.k!=null||f.p!=null||f.c!=null||f.l!=null))
+      return {k:_recNb(f.k),p:_recNb(f.p)||0,c:_recNb(f.c)||0,l:_recNb(f.l)||0,vif:true};
+  }
+  const m=ing.m||{};
+  if(['k','p','c','l'].some(k=>_recNb(m[k])!=null))
+    return {k:_recNb(m.k),p:_recNb(m.p)||0,c:_recNb(m.c)||0,l:_recNb(m.l)||0,vif:false};
+  return null;
+}
+// PURE. Les macros de `portions` portions (1 par défaut ; 0,5 accepté).
+// La somme se fait sur les valeurs exactes ; l'arrondi vient à la fin, une
+// fois : kcal et grammes à l'unité, macros au dixième.
+function recetteMacros(recette,portions,chercher){
+  const r=recette||{};
+  const n=_recNb(r.portions);
+  const nP=portions==null?1:_recNb(portions);
+  const tot={k:0,p:0,c:0,l:0,g:0};
+  const manquants=[];
+  for(const ing of (Array.isArray(r.ingredients)?r.ingredients:[])){
+    const g=_recNb(ing&&ing.grammes);
+    if(!(g>0)) continue;
+    tot.g+=g;
+    const per=recetteParCent(ing,chercher);
+    if(!per){ manquants.push(String((ing&&ing.nom)||'?')); continue; }
+    const k=per.k!=null?per.k:kcalDesMacros(per.p,per.c,per.l);
+    tot.k+=k*g/100; tot.p+=per.p*g/100; tot.c+=per.c*g/100; tot.l+=per.l*g/100;
+  }
+  const f=(n>0&&nP>0)?nP/n:0;
+  return {kcal:Math.round(tot.k*f),p:_recArr(tot.p*f),c:_recArr(tot.c*f),l:_recArr(tot.l*f),g:Math.round(tot.g*f),
+    portions:nP>0?nP:0,
+    total:{kcal:Math.round(tot.k),p:_recArr(tot.p),c:_recArr(tot.c),l:_recArr(tot.l),g:Math.round(tot.g)},
+    manquants};
+}
+// PURE. Les mêmes bornes que les règles de la base, dites en français.
+function recetteValide(r){
+  if(!r||typeof r!=='object') return {ok:false,raison:'Recette vide.'};
+  const nom=String(r.nom||'').trim();
+  if(!nom) return {ok:false,raison:'Donne un nom à ta recette.'};
+  if(nom.length>RECETTE_NOM_MAX) return {ok:false,raison:'Le nom tient en '+RECETTE_NOM_MAX+' caractères.'};
+  const n=_recNb(r.portions);
+  if(!(n>0)||n>RECETTE_PORTIONS_MAX) return {ok:false,raison:'Indique pour combien de portions (de 0,5 à '+RECETTE_PORTIONS_MAX+').'};
+  const l=Array.isArray(r.ingredients)?r.ingredients:[];
+  if(!l.length) return {ok:false,raison:'Ajoute au moins un ingrédient.'};
+  if(l.length>RECETTE_ING_MAX) return {ok:false,raison:RECETTE_ING_MAX+' ingrédients au plus.'};
+  for(const i of l){
+    const g=_recNb(i&&i.grammes);
+    if(!(g>=RECETTE_G_MIN&&g<=RECETTE_G_MAX)) return {ok:false,raison:'Quantité de '+String((i&&i.nom)||'un ingrédient')+' : de '+RECETTE_G_MIN+' à '+RECETTE_G_MAX+' g.'};
+    if(!i||(i.src!=='ciqual'&&i.src!=='off')) return {ok:false,raison:'Ingrédient sans origine.'};
+  }
+  return {ok:true,raison:null};
+}
+// PURE. Ce qui s'écrit dans la base : les champs des règles, rien d'autre.
+function recetteNettoyer(r,t){
+  const now=Number(t)||Date.now();
+  const o={nom:String(r.nom||'').trim().slice(0,RECETTE_NOM_MAX),
+    portions:_recArr(_recNb(r.portions)||1),
+    ingredients:(r.ingredients||[]).slice(0,RECETTE_ING_MAX).map(i=>{
+      const x={src:i.src==='off'?'off':'ciqual',ref:i.src==='off'?String(i.ref).slice(0,40):Number(i.ref),
+        grammes:Math.round(Math.min(RECETTE_G_MAX,Math.max(RECETTE_G_MIN,_recNb(i.grammes)||RECETTE_G_MIN)))};
+      if(i.nom) x.nom=String(i.nom).slice(0,120);
+      const m={}; for(const k of ['k','p','c','l']){ const v=_recNb(i.m&&i.m[k]); if(v!=null&&v>=0&&v<=1000) m[k]=v; }
+      if(Object.keys(m).length) x.m=m;
+      return x;
+    }),
+    creeLe:Number(r.creeLe)||now, modifieLe:now};
+  const et=String(r.etapes||'').trim().slice(0,4000);
+  if(et) o.etapes=et;
+  const tags=(Array.isArray(r.tags)?r.tags:String(r.tags||'').split(','))
+    .map(x=>String(x||'').trim().slice(0,30)).filter(Boolean).slice(0,RECETTE_TAGS_MAX);
+  if(tags.length) o.tags=tags;
+  return o;
+}
+// PURE. Une copie, sous un nouvel identifiant, qui dit qu'elle en est une.
+function recetteDupliquer(r,t){
+  const now=Number(t)||Date.now();
+  const nom=String((r&&r.nom)||'Recette');
+  const suffixe=' (copie)';
+  return Object.assign(JSON.parse(JSON.stringify(r||{})),
+    {id:recetteId(now),nom:nom.slice(0,RECETTE_NOM_MAX-suffixe.length)+suffixe,creeLe:now,modifieLe:now});
+}
+// PURE. L'entrée du journal : des valeurs ABSOLUES, comme un aliment. La
+// recette peut disparaître ensuite, l'entrée ne bouge pas.
+function recetteEntree(recette,portions,repas,id,chercher,de){
+  const m=recetteMacros(recette,portions,chercher);
+  return {id:Number(id)||Date.now(),nom:String((recette&&recette.nom)||'Recette'),groupe:'Recette',
+    qty:m.g,unite:recettePortionsTxt(m.portions),repas:repas||'matin',
+    kcal:m.kcal,p:m.p,c:m.c,l:m.l,periSeance:false,
+    recette:{id:String((recette&&recette.id)||''),de:de==='perso'?'perso':'coach',portions:m.portions}};
+}
+// PURE. Les recettes dont le nom contient tous les mots cherchés.
+function recettesTrouvees(liste,words){
+  const w=(words||[]).filter(Boolean);
+  if(!w.length) return [];
+  return (liste||[]).filter(r=>r&&r.nom&&_fjContientTous(_fjNorm(r.nom),w))
+    .sort((a,b)=>String(a.nom).localeCompare(String(b.nom),'fr'));
+}
+// Plan → journal : le repas du plan, dans le vocabulaire du journal.
+const RECETTE_REPAS_JOURNAL=Object.freeze({petit_dej:'matin',midi:'dejeuner',soir:'diner',coucher:'coucher'});
+function recetteRepasJournal(cle){ return RECETTE_REPAS_JOURNAL[cle]||'collation'; }
+
+// ── Le stockage local, et la synchro ────────────────────────────────────
+// 'recettes_moi'  : MA bibliothèque (le coach) ou MES recettes perso (l'athlète),
+//                   {key, t, d:{id:recette}, attente:{id:true|'suppr'}}.
+// 'recettes_coach': la bibliothèque de mon coach, lue seulement, {key, t, d}.
+function _recCle(u){ return String((u&&u.email)||'').replace(/\./g,','); }
+function _recNoeud(u){ return (u&&u.role==='coach')?'recettes':'recettes_perso'; }
+function _recMoi(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  const k=_recCle(u);
+  const b=DB.get('recettes_moi');
+  return (b&&b.key===k&&b.d&&typeof b.d==='object')?b:{key:k,t:0,d:{},attente:{}};
+}
+function _recListe(d){
+  return Object.keys(d||{}).map(id=>Object.assign({},d[id],{id}))
+    .filter(r=>r&&r.nom).sort((a,b)=>String(a.nom).localeCompare(String(b.nom),'fr'));
+}
+// Les miennes : la bibliothèque du coach, ou les recettes perso de l'athlète.
+function recettesMiennes(){ return _recListe(_recMoi().d); }
+// Celles du coach, vues par son athlète (vide pour un coach).
+function recettesDuCoach(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||u.role==='coach') return [];
+  const k=cleCoachDe(u);
+  const b=DB.get('recettes_coach');
+  return (k&&b&&b.key===k)?_recListe(b.d):[];
+}
+// Une recette par son origine : 'coach' (celle du coach, ou la mienne si je
+// suis le coach) ou 'perso'.
+function recetteTrouver(de,id){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  const l=(de==='perso'||(u&&u.role==='coach'))?recettesMiennes():recettesDuCoach();
+  return l.find(r=>r.id===id)||null;
+}
+function _recEnLigne(){ return !(typeof navigator!=='undefined'&&navigator.onLine===false); }
+let _recSyncEnCours=false;
+// Rapatrie les deux listes (TTL d'une heure, sauf `force`) et pousse ce qui
+// attend. Hors ligne : rien, et le stockage local répond.
+async function recettesSynchroniser(force){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||!u.email||_recSyncEnCours||!_recEnLigne()) return false;
+  if(!CLOUD||!CLOUD.ok||!CLOUD.ok()) return false;
+  _recSyncEnCours=true;
+  try{
+    await _recPousser();
+    const moi=_recMoi();
+    if(force||!moi.t||Date.now()-moi.t>=RECETTES_TTL){
+      const r=await _fbJson(_recNoeud(u)+'/'+moi.key);
+      if(r&&r.ok){
+        const d=Object.assign({},(r.v&&typeof r.v==='object')?r.v:{});
+        // Ce qui n'est pas encore parti garde sa version locale.
+        for(const id of Object.keys(moi.attente||{})){
+          if(moi.attente[id]==='suppr') delete d[id]; else if(moi.d[id]) d[id]=moi.d[id];
+        }
+        DB.set('recettes_moi',{key:moi.key,t:Date.now(),d,attente:moi.attente||{}});
+      }
+    }
+    if(u.role!=='coach'){
+      const k=cleCoachDe(u);
+      const b=DB.get('recettes_coach');
+      if(k&&(force||!(b&&b.key===k&&b.t&&Date.now()-b.t<RECETTES_TTL))){
+        const r=await _fbJson('recettes/'+k);
+        if(r&&r.ok) DB.set('recettes_coach',{key:k,t:Date.now(),d:(r.v&&typeof r.v==='object')?r.v:{}});
+      }
+    }
+    return true;
+  }catch(e){ return false; }
+  finally{ _recSyncEnCours=false; }
+}
+async function _recPousser(){
+  const u=currentUser, moi=_recMoi(), att=Object.assign({},moi.attente||{});
+  const ids=Object.keys(att);
+  if(!ids.length) return 0;
+  let n=0;
+  for(const id of ids){
+    const chemin=_recNoeud(u)+'/'+moi.key+'/'+id;
+    const r=att[id]==='suppr'?await _fbJson(chemin,'DELETE'):(moi.d[id]?await _fbJson(chemin,'PUT',moi.d[id]):{ok:true});
+    if(r&&r.ok){ delete att[id]; n++; }
+  }
+  const b=_recMoi(); b.attente=att; DB.set('recettes_moi',b);
+  return n;
+}
+// Écrit localement d'abord (la recette est là, même sans réseau), puis pousse.
+function recetteEnregistrer(r){
+  const v=recetteValide(r);
+  if(!v.ok) return {ok:false,raison:v.raison};
+  const id=r.id||recetteId();
+  const b=_recMoi();
+  b.d=Object.assign({},b.d,{[id]:recetteNettoyer(r)});
+  b.attente=Object.assign({},b.attente,{[id]:true});
+  DB.set('recettes_moi',b);
+  recettesSynchroniser().catch(()=>{});
+  return {ok:true,id};
+}
+function recetteSupprimerLocal(id){
+  const b=_recMoi();
+  if(!b.d[id]) return false;
+  const d=Object.assign({},b.d); delete d[id];
+  b.d=d; b.attente=Object.assign({},b.attente,{[id]:'suppr'});
+  DB.set('recettes_moi',b);
+  recettesSynchroniser().catch(()=>{});
+  return true;
+}
+
+// ── Le plan du coach ─────────────────────────────────────────────────────
+// PURE. La ligne « recette » d'un repas : ses macros PAR PORTION, en unité
+// « portion », que planMacrosItem compte comme une ligne à la main.
+function planLigneRecette(recette,repas,portions,id,chercher){
+  const m=recetteMacros(recette,1,chercher);
+  return {id,repas,recette:String(recette.id),recetteNom:String(recette.nom),
+    q:_recNb(portions)>0?_recNb(portions):1,u:'portion',p:m.p,c:m.c,l:m.l};
+}
+// PURE (écrit dans plan). Remet les lignes recette à jour depuis la
+// bibliothèque ; une recette disparue garde ses dernières valeurs.
+function planRecettesActualiser(plan,liste,chercher){
+  let n=0;
+  for(const it of planSquelette(plan)){
+    if(!it.recette) continue;
+    const r=(liste||[]).find(x=>x&&x.id===it.recette);
+    if(!r) continue;
+    const m=recetteMacros(r,1,chercher);
+    if(it.p!==m.p||it.c!==m.c||it.l!==m.l||it.recetteNom!==r.nom){ it.p=m.p; it.c=m.c; it.l=m.l; it.recetteNom=String(r.nom); n++; }
+  }
+  return n;
+}
+function _cplRecettesRendre(q){
+  const el=document.getElementById('cpl-search-list');
+  if(!el) return;
+  const words=_fjNorm(String(q||'')).split(/\s+/).filter(w=>w.length>1);
+  const tout=recettesMiennes();
+  const l=words.length?recettesTrouvees(tout,words):tout;
+  if(!tout.length){
+    el.innerHTML='<div class="rct-vide">Ta bibliothèque de recettes est vide.<br><button type="button" class="btn btn-outline btn-sm" style="margin-top:10px" onclick="fermerRecherchePlan();ouvrirRecettes()">Créer une recette</button></div>';
+    return;
+  }
+  el.innerHTML=l.map(r=>{
+    const m=recetteMacros(r,1);
+    return '<div class="fj-result" role="button" tabindex="0" onclick="planCoachChoisirRecette('+_attrArg(r.id)+')"'
+      +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}">'
+      +'<div class="rct-n">'+escapeHtml(r.nom)+' <span class="rct-b">recette</span></div>'
+      +'<div class="rct-m">'+_recMacrosHtml(m,' par portion')+'</div></div>';
+  }).join('')||'<div class="rct-vide">Aucune recette pour « '+escapeHtml(q)+' ».</div>';
+}
+function cplChoisirRecette(repas){
+  ouvrirRecherchePlan({mode:'recette',repas});
+  const ti=document.getElementById('cpl-search-title');
+  if(ti) ti.textContent='Recette · '+planLibRepas(repas);
+  _cplRecettesRendre('');
+  recettesSynchroniser().then(ok=>{ if(ok&&_cplCible&&_cplCible.mode==='recette'){ const i=document.getElementById('cpl-search-input'); _cplRecettesRendre(i?i.value:''); } }).catch(()=>{});
+}
+function planCoachChoisirRecette(id){
+  if(!_cplPlan||!_cplCible){ fermerRecherchePlan(); return false; }
+  const r=recettesMiennes().find(x=>x.id===id);
+  if(!r) return false;
+  _cplPlan.squelette.push(planLigneRecette(r,_cplCible.repas,1,_cplId()));
+  fermerRecherchePlan();
+  renderPlanCoach();
+  return true;
+}
+
+// ── Le journal de l'athlète ──────────────────────────────────────────────
+// Les lignes recette de SON plan : un geste, la portion et le repas du plan.
+function _recLignesPlan(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||u.role==='coach'||!planActif(u)) return [];
+  return planSquelette(planDe(u)).filter(it=>it&&it.recette);
+}
+// PURE. L'entrée d'une ligne recette du plan : la recette vivante si elle est
+// là, sinon les valeurs par portion que porte la ligne (hors ligne, recette
+// supprimée).
+function entreeLignePlanRecette(it,recette,id,chercher){
+  const q=_recNb(it.q)>0?_recNb(it.q):1;
+  const repas=recetteRepasJournal(it.repas);
+  if(recette) return recetteEntree(recette,q,repas,id,chercher,'coach');
+  const m=planMacrosItem(it)||{p:0,c:0,l:0,kcal:0};
+  return {id:Number(id)||Date.now(),nom:String(it.recetteNom||'Recette'),groupe:'Recette',qty:null,
+    unite:recettePortionsTxt(q),repas,kcal:Math.round(m.kcal),p:_recArr(m.p),c:_recArr(m.c),l:_recArr(m.l),
+    periSeance:false,recette:{id:String(it.recette),de:'coach',portions:q}};
+}
+function ajouterRecettePlan(lid){
+  const it=_recLignesPlan().find(x=>x.id===lid);
+  if(!it) return false;
+  const date=_fjDate||localISODate(new Date());
+  const r=recettesDuCoach().find(x=>x.id===it.recette)||null;
+  const e=entreeLignePlanRecette(it,r,_fjIdsNeufs(date,1)[0]);
+  const ok=_fjAjouter([e],date,escapeHtml(e.nom)+' ajouté');
+  if(ok){
+    try{ currentUser.nutrition.recentsSaisie=majRecents(currentUser.nutrition.recentsSaisie,e); saveUser(); }catch(er){}
+    toast(e.nom+' ajouté','var(--green)');
+    try{ _renderFjRecent(); }catch(er){}
+  }
+  return ok;
+}
+function _htmlRecettesSaisie(){
+  const lp=_recLignesPlan();
+  const cache=recettesDuCoach();
+  const puces=lp.map(it=>{
+    const r=cache.find(x=>x.id===it.recette);
+    const e=entreeLignePlanRecette(it,r,1);
+    return '<button type="button" class="fj-rec" onclick="ajouterRecettePlan('+_attrArg(it.id)+')">'
+      +'<span class="rct-pl"><span class="fj-rec-n">'+escapeHtml(e.nom)+'</span>'
+      +'<span class="fj-rec-q">'+escapeHtml(e.unite)+' · '+e.kcal+' kcal · '+escapeHtml(planLibRepas(it.repas))+'</span></span>'
+      +'<span class="fj-rec-plus" aria-hidden="true">+</span></button>';
+  }).join('');
+  return (puces?'<div class="rct-plan">'+puces+'</div>':'')
+    +'<div class="rct-actions"><button type="button" class="rct-lien" onclick="ouvrirRecettes()">'
+    +((recettesMiennes().length||cache.length)?'Mes recettes':'+ Créer une recette')+'</button></div>';
+}
+function _htmlRecetteResultat(r,de){
+  const m=recetteMacros(r,1);
+  return '<div class="fj-result" role="button" tabindex="0" onclick="ouvrirPortionRecette('+_attrArg(de)+','+_attrArg(r.id)+')"'
+    +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}">'
+    +'<div class="rct-n">'+escapeHtml(r.nom)+' <span class="rct-b">recette</span></div>'
+    +'<div class="rct-m">'+_recMacrosHtml(m,' / portion')+(de==='coach'?' · <span class="rct-nw">de ton coach</span>':'')+'</div></div>';
+}
+// La section « Recettes » de la recherche : les miennes, puis celles du coach.
+function htmlRecettesRecherche(words){
+  const a=recettesTrouvees(recettesMiennes(),words).map(r=>_htmlRecetteResultat(r,'perso'));
+  const b=recettesTrouvees(recettesDuCoach(),words).map(r=>_htmlRecetteResultat(r,'coach'));
+  const l=a.concat(b);
+  return l.length?_fjTitreSection('Recettes')+l.join(''):'';
+}
+// La saisie en portions : 0,5 par 0,5, le repas, et c'est tout.
+let _recPortion=null;
+function ouvrirPortionRecette(de,id){
+  const r=recetteTrouver(de,id);
+  if(!r) return false;
+  _recPortion={de,id,n:1,repas:(typeof _fjRepas!=='undefined'&&_fjRepas)?_fjRepas:'matin'};
+  document.getElementById('modal-overlay')?.remove();
+  document.body.insertAdjacentHTML('beforeend','<div id="modal-overlay" onclick="fermerPortionRecette()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Portions" class="rct-feuille"><div id="rct-portion"></div></div></div>');
+  _rendrePortionRecette();
+  return true;
+}
+function fermerPortionRecette(){ document.getElementById('modal-overlay')?.remove(); _recPortion=null; }
+function portionRecettePas(d){ if(!_recPortion) return; _recPortion.n=Math.max(0.5,Math.min(20,Math.round((_recPortion.n+d)*2)/2)); _rendrePortionRecette(); }
+function portionRecetteRepas(k){ if(!_recPortion) return; _recPortion.repas=k; _rendrePortionRecette(); }
+function _rendrePortionRecette(){
+  const z=document.getElementById('rct-portion');
+  if(!z||!_recPortion) return;
+  const r=recetteTrouver(_recPortion.de,_recPortion.id);
+  if(!r){ fermerPortionRecette(); return; }
+  const m=recetteMacros(r,_recPortion.n);
+  const btn=(k,lib)=>'<button type="button" class="fj-repas-btn'+(_recPortion.repas===k?' active':'')+'" onclick="portionRecetteRepas('+_attrArg(k)+')">'+lib+'</button>';
+  z.innerHTML='<div class="rct-n" style="font-size:var(--fs-lg)">'+escapeHtml(r.nom)+'</div>'
+    +'<div class="rct-m">Recette pour '+escapeHtml(recettePortionsTxt(r.portions))+(r.etapes?' · '+escapeHtml(String(r.etapes).slice(0,80))+(String(r.etapes).length>80?'…':''):'')+'</div>'
+    +'<div class="rct-pas"><button type="button" onclick="portionRecettePas(-0.5)" aria-label="Moins une demi-portion">−</button>'
+    +'<b>'+escapeHtml(recettePortionsTxt(_recPortion.n))+'</b>'
+    +'<button type="button" onclick="portionRecettePas(0.5)" aria-label="Plus une demi-portion">+</button></div>'
+    +'<div class="rct-tot">'+_recMacrosHtml(m)+'</div>'
+    +(m.manquants.length?'<div class="rct-m" style="color:var(--orange)">Sans valeurs : '+escapeHtml(m.manquants.join(', '))+'</div>':'')
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0">'+btn('matin','Matin')+btn('dejeuner','Déjeuner')+btn('diner','Dîner')+btn('collation','Collation')+btn('coucher','Nuit')+'</div>'
+    +'<button type="button" class="btn btn-red" onclick="validerPortionRecette()">Ajouter au journal</button>';
+}
+function validerPortionRecette(){
+  const s=_recPortion;
+  if(!s) return false;
+  const r=recetteTrouver(s.de,s.id);
+  if(!r) return false;
+  const date=_fjDate||localISODate(new Date());
+  const e=recetteEntree(r,s.n,s.repas,_fjIdsNeufs(date,1)[0],undefined,s.de);
+  const ok=_fjAjouter([e],date,escapeHtml(e.nom)+' ajouté');
+  if(ok){
+    try{ currentUser.nutrition.recentsSaisie=majRecents(currentUser.nutrition.recentsSaisie,e); saveUser(); }catch(er){}
+    _fjRepas=s.repas; _fjRepasChoisi=true;
+    toast(e.nom+' ajouté','var(--green)');
+  }
+  fermerPortionRecette();
+  return ok;
+}
+
+// ── L'écran « Recettes », commun au coach et à l'athlète ─────────────────
+let _recEd=null;          // la recette en cours d'édition (copie), ou null : la liste
+let _recEdCherche='';
+let _recOff=null;         // résultats Open Food Facts de la recherche d'ingrédient
+function ouvrirRecettes(){
+  _recEd=null;
+  // D'où l'on vient (la recherche d'aliments, l'accueil du coach, le plan) : la flèche y ramène.
+  goAvecRetour('s-recettes');
+  renderRecettes();
+  recettesSynchroniser(true).then(ok=>{ if(ok&&!_recEd) renderRecettes(); }).catch(()=>{});
+  if(!_ciqualDB) _loadCiqual().then(()=>{ if(!_recEd) renderRecettes(); }).catch(()=>{});
+}
+function _htmlRecetteCarte(r,de,miennes){
+  const m=recetteMacros(r,1);
+  const id=_attrArg(r.id);
+  const tags=(r.tags||[]).length?'<div class="rct-tags">'+r.tags.map(t=>'<span>'+escapeHtml(t)+'</span>').join('')+'</div>':'';
+  const actions=miennes
+    ?'<button type="button" class="rct-lien" onclick="modifierRecette('+id+')">Modifier</button>'
+      +'<button type="button" class="rct-lien" onclick="dupliquerRecette('+_attrArg(de)+','+id+')">Dupliquer</button>'
+      +'<button type="button" class="rct-lien rct-sup" onclick="supprimerRecette('+id+')">Supprimer</button>'
+    :'<button type="button" class="rct-lien" onclick="dupliquerRecette('+_attrArg(de)+','+id+')">Copier dans mes recettes</button>';
+  return '<div class="rct-carte"><div class="rct-n">'+escapeHtml(r.nom)+'</div>'
+    +'<div class="rct-m">'+escapeHtml(recettePortionsTxt(r.portions))+' · '+(r.ingredients||[]).length+' ingrédient'+((r.ingredients||[]).length>1?'s':'')
+    +'</div><div class="rct-m">'+_recMacrosHtml(m,' par portion')+'</div>'
+    +(m.manquants.length?'<div class="rct-m" style="color:var(--orange)">Sans valeurs : '+escapeHtml(m.manquants.join(', '))+'</div>':'')
+    +tags+'<div class="rct-acts">'+actions+'</div></div>';
+}
+function renderRecettes(){
+  const z=document.getElementById('rct-corps');
+  if(!z) return;
+  if(_recEd){ _rendreEditeurRecette(z); return; }
+  const coach=currentUser&&currentUser.role==='coach';
+  const mes=recettesMiennes(), duCoach=recettesDuCoach();
+  const t=document.getElementById('rct-titre'); if(t) t.textContent='Recettes';
+  z.innerHTML='<p class="sub rct-intro">'+(coach
+      ?'Tes recettes, partagées à tous tes athlètes. Ajoute-les à un repas du plan, ou laisse-les dans leur recherche d’aliments.'
+      :'Tes recettes, et celles de ton coach : elles s’ajoutent au journal en portions, même sans réseau.')+'</p>'
+    +'<button type="button" class="btn btn-red" onclick="nouvelleRecette()">Nouvelle recette</button>'
+    +'<div class="rct-sec">'+(coach?'Ma bibliothèque':'Mes recettes')+'</div>'
+    +(mes.length?mes.map(r=>_htmlRecetteCarte(r,'perso',true)).join(''):'<div class="rct-vide">Aucune recette pour l’instant.</div>')
+    +(coach?'':(duCoach.length?'<div class="rct-sec">De ton coach</div>'+duCoach.map(r=>_htmlRecetteCarte(r,'coach',false)).join(''):''));
+}
+function nouvelleRecette(){
+  _recEd={id:null,nom:'',portions:1,ingredients:[],etapes:'',tags:''};
+  _recEdCherche=''; _recOff=null;
+  renderRecettes();
+}
+function modifierRecette(id){
+  const r=recettesMiennes().find(x=>x.id===id);
+  if(!r) return false;
+  _recEd=JSON.parse(JSON.stringify(r));
+  _recEd.tags=(r.tags||[]).join(', ');
+  _recEdCherche=''; _recOff=null;
+  renderRecettes();
+  return true;
+}
+function dupliquerRecette(de,id){
+  const r=recetteTrouver(de,id);
+  if(!r) return false;
+  const c=recetteDupliquer(r);
+  const res=recetteEnregistrer(c);
+  if(!res.ok){ toast(res.raison,'var(--orange)'); return false; }
+  toast('Copie créée','var(--green)');
+  modifierRecette(res.id);
+  return true;
+}
+async function supprimerRecette(id){
+  const r=recettesMiennes().find(x=>x.id===id);
+  if(!r) return false;
+  if(!await rcConfirm('Supprimer « '+r.nom+' » ?','Ce qui est déjà dans un journal reste tel quel. Une ligne de plan garde ses dernières valeurs.','Supprimer')) return false;
+  recetteSupprimerLocal(id);
+  renderRecettes();
+  return true;
+}
+function annulerRecette(){ _recEd=null; renderRecettes(); }
+function recetteChamp(cle,v){ if(!_recEd) return; _recEd[cle]=v; _rendreTotalRecette(); }
+function recetteIngGrammes(i,v){ const x=_recEd&&_recEd.ingredients[i]; if(!x) return; x.grammes=_recNb(v); _rendreTotalRecette(); }
+function recetteIngRetirer(i){ if(!_recEd) return; _recEd.ingredients.splice(i,1); renderRecettes(); }
+function _rendreTotalRecette(){
+  const z=document.getElementById('rct-total');
+  if(!z||!_recEd) return;
+  const m=recetteMacros(_recEd,1);
+  z.innerHTML=(_recNb(_recEd.portions)>0&&_recEd.ingredients.length)
+    ?'<div class="rct-lab" style="margin:0 0 4px">Par portion</div>'+_recMacrosHtml(m)
+      +'<div class="rct-m">Recette entière : '+m.total.kcal+' kcal · '+m.total.g+' g</div>'
+    :'<span class="rct-m">Ajoute des ingrédients et le nombre de portions.</span>';
+}
+function _rendreEditeurRecette(z){
+  const e=_recEd;
+  const t=document.getElementById('rct-titre'); if(t) t.textContent=e.id?'Modifier la recette':'Nouvelle recette';
+  const ing=e.ingredients.map((x,i)=>'<div class="rct-ing"><div class="rct-ing-n">'+escapeHtml(x.nom||'?')
+      +(x.src==='off'?' <span class="rct-b">marque</span>':'')+'</div>'
+      +'<input type="number" inputmode="numeric" min="1" max="2000" value="'+escapeHtml(String(x.grammes==null?'':x.grammes))+'" aria-label="Grammes" oninput="recetteIngGrammes('+i+',this.value)"><span class="rct-m">g</span>'
+      +'<button type="button" class="rct-x" aria-label="Retirer" onclick="recetteIngRetirer('+i+')">×</button></div>').join('');
+  z.innerHTML='<label class="rct-lab" for="rct-nom">Nom</label>'
+    +'<input id="rct-nom" class="rct-champ" maxlength="80" value="'+escapeHtml(e.nom||'')+'" placeholder="Ex : porridge protéiné" oninput="recetteChamp(\'nom\',this.value)">'
+    +'<label class="rct-lab" for="rct-portions">Portions</label>'
+    +'<input id="rct-portions" class="rct-champ" inputmode="decimal" value="'+escapeHtml(String(e.portions==null?'':e.portions).replace('.',','))+'" oninput="recetteChamp(\'portions\',this.value)">'
+    +'<div class="rct-sec">Ingrédients ('+e.ingredients.length+'/'+RECETTE_ING_MAX+')</div>'+(ing||'<div class="rct-vide">Aucun ingrédient.</div>')
+    +(e.ingredients.length<RECETTE_ING_MAX
+      ?'<input id="rct-cherche" class="rct-champ" type="search" autocomplete="off" placeholder="Ajouter un ingrédient" value="'+escapeHtml(_recEdCherche)+'" oninput="recetteChercher(this.value)">'
+        +'<div id="rct-resultats"></div>':'')
+    +'<div id="rct-total" class="rct-total"></div>'
+    +'<label class="rct-lab" for="rct-etapes">Étapes (facultatif)</label>'
+    +'<textarea id="rct-etapes" class="rct-champ" rows="4" maxlength="4000" oninput="recetteChamp(\'etapes\',this.value)">'+escapeHtml(e.etapes||'')+'</textarea>'
+    +'<label class="rct-lab" for="rct-tags">Étiquettes, séparées par des virgules (facultatif)</label>'
+    +'<input id="rct-tags" class="rct-champ" value="'+escapeHtml(e.tags||'')+'" placeholder="Ex : petit-déjeuner, rapide" oninput="recetteChamp(\'tags\',this.value)">'
+    +'<div style="display:flex;gap:8px;margin-top:16px"><button type="button" class="btn btn-outline" style="flex:1" onclick="annulerRecette()">Annuler</button>'
+    +'<button type="button" class="btn btn-red" style="flex:1" onclick="validerRecette()">Enregistrer</button></div>';
+  _rendreTotalRecette();
+  _rendreResultatsIngredient();
+}
+function recetteChercher(v){ _recEdCherche=String(v||''); _recOff=null; _rendreResultatsIngredient(); }
+function _rendreResultatsIngredient(){
+  const z=document.getElementById('rct-resultats');
+  if(!z) return;
+  const q=_recEdCherche.trim();
+  if(q.length<2){ z.innerHTML=''; return; }
+  if(!_ciqualDB){ z.innerHTML='<div class="rct-vide">Chargement de la table…</div>'; _loadCiqual().then(_rendreResultatsIngredient).catch(()=>{}); return; }
+  const normQ=_fjNorm(q), words=normQ.split(/\s+/).filter(w=>w.length>1);
+  const res=_classerAliments(_ciqualDB.filter(f=>_fjContientTous(f.s,words)),normQ,words).slice(0,12).map(x=>x.f);
+  const ligne=(src,a,cle)=>'<div class="fj-result" role="button" tabindex="0" onclick="recetteAjouterIngredient('+_attrArg(src)+','+_attrArg(cle)+')"'
+    +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}">'
+    +'<div class="rct-n" style="font-size:var(--fs-sm)">'+escapeHtml(a.n)+(src==='off'?' <span class="rct-b">marque</span>':'')+'</div>'
+    +'<div class="rct-m">'+(a.k!=null?_recF(a.k)+' kcal/100 g':'énergie non renseignée')+' · P '+_recF(a.p)+' · G '+_recF(a.c)+' · L '+_recF(a.l)+'</div></div>';
+  let h=res.map(f=>ligne('ciqual',f,f.id)).join('');
+  if(_recOff&&_recOff.liste) h+=_fjTitreSection('Produits de marque (Open Food Facts)')+_recOff.liste.slice(0,10).map(a=>ligne('off',a,a.id)).join('');
+  else if(_recOff&&_recOff.raison) h+='<div class="rct-vide">'+escapeHtml(_recOff.raison)+'</div>';
+  else if(_recEnLigne()) h+='<div class="rct-actions"><button type="button" class="rct-lien" onclick="recetteChercherOff()">Chercher « '+escapeHtml(q)+' » parmi les produits de marque</button></div>';
+  z.innerHTML=h||'<div class="rct-vide">Aucun résultat.</div>';
+}
+async function recetteChercherOff(){
+  const q=_recEdCherche.trim();
+  if(q.length<2) return;
+  _recOff={raison:'Recherche en cours…'}; _rendreResultatsIngredient();
+  const r=await offRecherche(q);
+  _recOff=(r&&r.ok)?{liste:r.liste||[]}:{raison:(r&&r.raison)||'Recherche impossible.'};
+  _rendreResultatsIngredient();
+}
+function recetteAjouterIngredient(src,cle){
+  if(!_recEd||_recEd.ingredients.length>=RECETTE_ING_MAX) return false;
+  let a=null;
+  if(src==='off') a=((_recOff&&_recOff.liste)||[]).find(x=>x&&x.id===cle)||null;
+  else a=_planCiqual(Number(cle));
+  const i=recetteIngredient(src,a,100);
+  if(!i) return false;
+  _recEd.ingredients.push(i);
+  _recEdCherche=''; _recOff=null;
+  renderRecettes();
+  return true;
+}
+function validerRecette(){
+  if(!_recEd) return false;
+  const res=recetteEnregistrer(_recEd);
+  if(!res.ok){ toast(res.raison,'var(--orange)'); return false; }
+  toast(_recEnLigne()?'Recette enregistrée':'Recette enregistrée, elle partira au retour du réseau','var(--green)');
+  _recEd=null;
+  renderRecettes();
+  return true;
+}
+
 // ══ MEAL PREP ET RECETTE ═══════════════════════════════════════════════
 // Le journal sait compter un aliment a la fois. Il ne sait pas repondre a la
 // seule question que pose quelqu'un qui cuisine a l'avance : « j'ai fait deux
@@ -92047,8 +92651,9 @@ function prepJournaliser(){
   // UNE SEULE ENTREE, avec des valeurs ABSOLUES : c'est exactement ce que le
   // journal additionne deja. Rien de neuf dans le modele de donnees.
   const date=(typeof _fjJour==='function')?_fjJour():localISODate(new Date());
-  const e={n:prepNom(_prepEtat),kcal:r.portion.kcal,p:r.portion.p,c:r.portion.c,l:r.portion.l};
-  const ok=_fjAjouter(_fjCopier([e],date,null),date,prepNom(_prepEtat));
+  // `nom`, comme toute entrée : `n` laissait la ligne sans nom et hors des récents.
+  const e={nom:prepNom(_prepEtat),kcal:r.portion.kcal,p:r.portion.p,c:r.portion.c,l:r.portion.l};
+  const ok=_fjAjouter(_fjCopier([e],date,(typeof _fjRepas!=='undefined'&&_fjRepas)||'matin'),date,prepNom(_prepEtat));
   if(ok){ toast('Ajouté à ton journal','var(--green)'); loadNutrition(); }
 }
 function _fjAjouter(copies,dateCible,quoi){
@@ -92758,6 +93363,8 @@ function openFoodSearch(date){
   // Les aliments du coach, au plus une fois par heure. Rien ne bloque :
   // la recherche Ciqual fonctionne pendant ce temps.
   try{ _rafraichirAlimentsCoach(); }catch(e){}
+  // LOT R1 : les recettes, au plus une fois par heure ; le cache répond hors ligne.
+  try{ recettesSynchroniser().then(ok=>{ if(!ok) return; const i=document.getElementById('fj-search-input'); if(i&&i.value) onFjSearch(i.value); else _renderFjRecent(); }).catch(()=>{}); }catch(e){}
   document.getElementById('fj-results-list').innerHTML='';
   if(!_ciqualDB){
     _loadCiqual().then(()=>{_renderFjRecent();});
@@ -92791,7 +93398,9 @@ function _renderFjActions(){
     +'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirAlimentPerso()">+ Nouvel aliment</button>'+scan+'</div>'
     +'<div style="display:flex;gap:8px">'
     +'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirPrep(\'prep\')">Meal prep</button>'
-    +'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirPrep(\'recette\')">Recette</button></div>';
+    // LOT R1 : « Recettes » ouvre la bibliothèque. Le calcul d'une part d'un
+    // tout reste dans l'onglet « Recette » de l'écran Meal prep.
+    +'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirRecettes()">Recettes</button></div>';
 }
 function _renderFjRecent(){
   const el=document.getElementById('fj-recent-section');
@@ -92830,7 +93439,9 @@ function _renderFjRecent(){
   // la quantite de la derniere fois). Tant qu'ils sont la, l'ancienne liste de
   // recents (sans quantite) ne se repete pas en dessous.
   const _rt=_htmlRepasTypes(), _recS=_htmlRecentsSaisie();
-  const blocNeuf=(_rt?titre('Mes repas')+_rt+sep:'')+(_recS?titre('Récents')+_recS+sep:'');
+  // LOT R1 : les recettes de son plan, en un geste, avant tout le reste.
+  const _rcP=_recLignesPlan().length?_htmlRecettesSaisie():'';
+  const blocNeuf=(_rcP?titre('Recettes du plan')+_rcP+sep:'')+(_rt?titre('Mes repas')+_rt+sep:'')+(_recS?titre('Récents')+_recS+sep:'');
   if(!ids.length){
     el.innerHTML=blocNeuf+blocPerso+blocFav+blocFreq+(blocNeuf?'':'<div style="padding:20px 16px;font-size:var(--fs-sm);color:var(--text-dim);text-align:center">Commence à saisir pour rechercher un aliment</div>');
     return;
@@ -93852,7 +94463,7 @@ async function offRecherche(terme){
       const a=offNormalise(b);
       if(!a) continue;
       const v=offValide(a);
-      if(!v.ok){ impossibles.push({nom:a.n,raison:v.raison}); continue; }
+      if(!v.ok){ rejets.push({nom:a.n,raison:v.raison}); continue; }
       l.push(a);
     }
     return {ok:true,liste:offDedoublonner(l),rejetes:rejets.length};
@@ -93979,7 +94590,9 @@ function onFjSearch(val){
   // que l'aliment n'est pas dans la table.
   const res=_ciqualDB.filter(f=>_fjContientTous(f.s,words));
   document.getElementById('fj-recent-section').innerHTML='';
-  if(!res.length){el.innerHTML='<div style="padding:20px;text-align:center;color:var(--sub);font-size:var(--fs-sm)">Aucun résultat pour "'+escapeHtml(q)+'"</div>'+_offBoutonHtml(q);return;}
+  // LOT R1 : les recettes (les miennes, puis celles du coach) passent devant tout.
+  const _rcH=htmlRecettesRecherche(words);
+  if(!res.length){el.innerHTML=(_rcH||'<div style="padding:20px;text-align:center;color:var(--sub);font-size:var(--fs-sm)">Aucun résultat pour "'+escapeHtml(q)+'"</div>')+_offBoutonHtml(q);return;}
   const scored=_classerAliments(res,normQ,words);
   // Les aliments perso passent DEVANT : l athlete les a crees precisement
   // parce que la table ne repondait pas. Ils sont classes entre eux par la
@@ -94002,9 +94615,9 @@ function onFjSearch(val){
   // LES RELEGUES EN FIN DE LISTE, une seule fois, tous ensemble. Les eparpiller
   // au bas de chaque section les rendrait invisibles.
   const _releg=_trP.releguees.concat(_trC.releguees,_trT.releguees);
-  el.innerHTML=(_trP.liste.length?_fjTitreSection('Mes aliments')+_trP.liste.map(f=>_htmlPersoResult(f)).join(''):'')
+  el.innerHTML=_rcH+(_trP.liste.length?_fjTitreSection('Mes aliments')+_trP.liste.map(f=>_htmlPersoResult(f)).join(''):'')
     +(_trC.liste.length?_fjTitreSection('Aliments de ton coach')+_trC.liste.map(f=>_htmlCoachResult(f)).join(''):'')
-    +((_trP.liste.length||_trC.liste.length)&&_trT.liste.length?_fjTitreSection('Table Ciqual'):'')
+    +((_rcH||_trP.liste.length||_trC.liste.length)&&_trT.liste.length?_fjTitreSection('Table Ciqual'):'')
     +_trT.liste.map(f=>_fjResultHtml(f)).join('')
     +_htmlRelegues(_releg)
     +_offBoutonHtml(q);
@@ -95164,7 +95777,7 @@ function _renderFjDaySummary(date){
         ${grouped[r].map(e=>`<div class="fj-entry${e.id===_fjIdNeuf?' fj-neuf':''}">
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(e.nom)}</div>
-            <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${[e.qty+'g',_fragmentSiValeur('P ',e.p,'g'),_fragmentSiValeur('G ',e.c,'g'),_fragmentSiValeur('L ',e.l,'g')].filter(x=>x).join(' · ')}</div>
+            <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${[(e.recette&&e.unite)?escapeHtml(e.unite):e.qty+'g',_fragmentSiValeur('P ',e.p,'g'),_fragmentSiValeur('G ',e.c,'g'),_fragmentSiValeur('L ',e.l,'g')].filter(x=>x).join(' · ')}</div>
           </div>
           <div style="flex-shrink:0;margin-left:8px;text-align:right">
             ${e.kcal!=null?`<div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-weight:400;font-size:17px;letter-spacing:.5px;color:var(--red-text)">${e.kcal}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400"> kcal</span></div>`:`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--amber);background:#1a0e00;border:1px solid #3a1e00;border-radius:var(--r-1);padding:1px 6px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`}
