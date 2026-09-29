@@ -1594,6 +1594,59 @@ function mlTempo(serie,seuil){
   return {excMs:Math.round(exc),pauseMs:Math.round(pau),conMs:Math.round(con),
     tutMs:Math.round(exc+pau+con),complet};
 }
+// ══ LOT T3 : LE TEMPO PRESCRIT, COMPARÉ AU TEMPO MESURÉ (29/09/2026) ═════
+// Une phrase, sans note ni couleur : « Prescrit : 3 s de descente. Mesuré sur
+// cette série : 1,2 s. » On mesure, on montre, le coach décide.
+// ⚠ RIEN QUAND LA MESURE N'EST PAS FIABLE : seules les répétitions complètes,
+//   d'au moins ML_TEMPO_FIABLE_MS sous tension et d'une confiance d'au moins
+//   ML_CONF_DOUTE, entrent dans la moyenne ; sans aucune, pas de phrase.
+// La pause mesurée est UNE pause (mlTempo ne sépare pas le bas du haut) : elle
+// se compare à la somme des deux pauses prescrites. Un « X » ne se compare pas.
+const ML_TEMPO_FIABLE_MS=600;
+/**
+ * PURE. La phrase de comparaison, ou ''.
+ * @param {string} prescrit  le tempo prescrit (« 3-0-X-0 »…)
+ * @param {any[]} lignes  mlTableauSerie
+ * @returns {string}
+ */
+function mlTempoComparaison(prescrit,lignes){
+  const lu=(typeof tempoLu==='function')?tempoLu(prescrit):null;
+  if(!lu) return '';
+  const ok=(lignes||[]).filter((/** @type {any} */ l)=>l&&l.tempo&&l.tempo.complet
+    &&Number(l.tempo.tutMs)>=ML_TEMPO_FIABLE_MS&&(l.conf==null||Number(l.conf)>=ML_CONF_DOUTE*100));
+  if(!ok.length) return '';
+  const moy=(/** @type {string} */ k)=>ok.reduce((/** @type {number} */ a,/** @type {any} */ l)=>a+Number(l.tempo[k]||0),0)/ok.length;
+  const s=(/** @type {number} */ ms)=>(Math.round(ms/100)/10).toFixed(1).replace('.',',');
+  /** @type {{p:string,m:string,lib:string}[]} */
+  const it=[];
+  if(lu.exc>0) it.push({p:lu.exc+' s de descente',m:s(moy('excMs'))+' s',lib:'de descente'});
+  const pause=(Number(lu.bas)||0)+(Number(lu.haut)||0);
+  if(pause>0) it.push({p:pause+' s de pause',m:s(moy('pauseMs'))+' s',lib:'de pause'});
+  if(!lu.conX&&lu.con>0) it.push({p:lu.con+' s de remontée',m:s(moy('conMs'))+' s',lib:'de remontée'});
+  if(!it.length) return '';
+  return 'Prescrit : '+it.map(x=>x.p).join(', ')+'. Mesuré sur cette série : '
+    +(it.length===1?it[0].m:it.map(x=>x.m+' '+x.lib).join(', '))+'.';
+}
+/**
+ * Le tempo prescrit de la vidéo ouverte : celui gardé par le lien de la série
+ * (le tempo d'alors), sinon celui du même exercice sur le même créneau.
+ * @returns {string}
+ */
+function _mlTempoPrescrit(){
+  try{
+    if(!_ml) return '';
+    const users=DB.get('users')||{}, c=users[_ml.email];
+    const v=((c&&c.videos)||[]).find((/** @type {any} */ x)=>x&&x.id===_ml.videoId);
+    const lien=v&&v.lien;
+    if(!lien||!lien.exerciceCle) return '';
+    if(lien.tempo) return String(lien.tempo);
+    const cfg=(c&&c.sessions_config)||[];
+    const s=(lien.slot!=null)?cfg[lien.slot]:null;
+    for(const e of ((s&&s.exercises)||[]))
+      if(e&&e.tempo&&exKey(e.name||'')===lien.exerciceCle) return String(e.tempo);
+  }catch(e){}
+  return '';
+}
 /**
  * PURE. « 1,2 – 0,0 – 0,9 » : un tempo tel qu'il s'écrit et se compare.
  * @param {any} x @returns {string}
@@ -2316,7 +2369,7 @@ const ML_CONVENTION='Les angles sont des FLEXIONS : genou tendu 0°, plié à an
  * raison précise pour laquelle il manque et le geste qui le débloquerait.
  *
  * @param {{profil?:any, synthese?:any[], articulation?:string, tempo?:any,
- *   prescrit?:string, pertes?:any, couple?:{kg:number|null, nm:number|null},
+ *   prescrit?:string, comparaisonTempo?:string, pertes?:any, couple?:{kg:number|null, nm:number|null},
  *   serie?:any, zone?:any, angleZone?:any}} ctx
  * @returns {{cle:string, texte:string, tMs:number|null, mesurable:boolean}[]}
  */
@@ -2350,8 +2403,11 @@ function mlPhrases(ctx){
           +'même répétition. Lance l’analyse des articulations après celle de la barre.'});
   }
 
-  // ── 2. LE TEMPO.
-  if(c.tempo&&c.tempo.complet){
+  // ── 2. LE TEMPO. Avec un tempo prescrit et une mesure fiable, la
+  // comparaison (lot T3) ; sinon le tempo mesuré, comme avant.
+  if(c.comparaisonTempo){
+    out.push({cle:'tempo',mesurable:true,tMs:null,texte:String(c.comparaisonTempo)});
+  } else if(c.tempo&&c.tempo.complet){
     out.push({cle:'tempo',mesurable:true,tMs:null,
       texte:'Tempo mesuré '+mlTempoTexte(c.tempo)
         +(c.prescrit?' pour un '+c.prescrit+' prescrit':'')
@@ -9305,7 +9361,8 @@ function _mlMajLecture(){
     catch(e){ return /** @type {any[]} */([]); } })();
   const pertes=(function(){ try{ return mlPertesSerie(lignes); }catch(e){ return null; } })();
   const phrases=mlPhrases({profil:L&&L.profil,angleZone:L&&L.angleZone,couple:L&&L.couple,
-    tempo:L&&L.tempo,pertes,articulation:_mlArtLue});
+    tempo:L&&L.tempo,pertes,articulation:_mlArtLue,
+    comparaisonTempo:(function(){ try{ return mlTempoComparaison(_mlTempoPrescrit(),lignes); }catch(e){ return ''; } })()});
   const enCorrection=!!(_ml.dureeMs&&!_ml.rec);
   let h='<div class="ml-traj"><div class="ml-traj-tete"><span class="ml-lab">Ce que dit cette répétition</span></div>';
   h+='<div class="ml-phrases">'+phrases.map((/** @type {any} */ p,/** @type {number} */ i)=>
@@ -9398,7 +9455,8 @@ function mlPhraseCarte(i){
   const lignes=(function(){ try{ return mlTableauSerie(_ml.segments||[],
     {articulation:_mlArtLue}); }catch(e){ return /** @type {any[]} */([]); } })();
   const p=mlPhrases({profil:L&&L.profil,angleZone:L&&L.angleZone,couple:L&&L.couple,
-    tempo:L&&L.tempo,pertes:mlPertesSerie(lignes),articulation:_mlArtLue})[i];
+    tempo:L&&L.tempo,pertes:mlPertesSerie(lignes),articulation:_mlArtLue,
+    comparaisonTempo:(function(){ try{ return mlTempoComparaison(_mlTempoPrescrit(),lignes); }catch(e){ return ''; } })()})[i];
   if(!p||!p.mesurable) return false;
   return mlCarteTexte(p.texte);
 }

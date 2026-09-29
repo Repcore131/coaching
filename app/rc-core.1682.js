@@ -37164,26 +37164,60 @@ const TEMPO_S_MAX=15;              // 15 s sur une phase : c'est une faute de sa
 // PURE. Rend la forme canonique « 3-1-1-0 », ou null si ce n'est pas un tempo
 // normalise. null n'est pas une erreur : c'est un texte libre, et il a le
 // droit d'exister.
+//
+// LOT T3 (29/09/2026) : « X » est accepté sur la MONTÉE (troisième temps),
+// pour « le plus vite possible » : « 3-0-X-0 », « 30X0 », minuscule ou
+// majuscule. Nulle part ailleurs : une descente ou une pause « aussi vite que
+// possible » ne veut rien dire. La borne reste TEMPO_S_MAX (15 s) et non 10 :
+// un tempo déjà prescrit à 12 s ne doit pas perdre son guide à la mise à jour.
 function tempoNormalise(txt){
-  const t=String(txt==null?'':txt).trim();
+  const t=String(txt==null?'':txt).trim().toUpperCase();
   if(!t) return null;
   let n=null;
-  // FORME COMPACTE : quatre chiffres colles, un par phase. Elle ne peut pas
+  // FORME COMPACTE : quatre signes colles, un par phase. Elle ne peut pas
   // porter de valeur a deux chiffres — « 1010 » est 1-0-1-0, jamais 10-10.
-  if(/^[0-9]{4}$/.test(t)) n=t.split('').map(Number);
-  // FORME SEPAREE : n'importe quel separateur non chiffre, valeurs libres.
-  else if(/^[0-9]+([^0-9]+[0-9]+){3}$/.test(t))
-    n=t.split(/[^0-9]+/).filter(x=>x!=='').map(Number);
+  if(/^[0-9]{2}[0-9X][0-9]$/.test(t)) n=t.split('');
+  // FORME SEPAREE : n'importe quel separateur, valeurs libres.
+  else if(/^[0-9]+([^0-9X]+([0-9]+|X)){3}$/.test(t))
+    n=t.split(/[^0-9X]+/).filter(x=>x!=='');
   if(!n||n.length!==4) return null;
-  if(n.some(x=>!isFinite(x)||x<0||x>TEMPO_S_MAX)) return null;
+  if(n.some((x,i)=>x==='X'&&i!==2)) return null;
+  const v=n.map(x=>x==='X'?'X':Number(x));
+  if(v.some(x=>x!=='X'&&(!isFinite(x)||x<0||x>TEMPO_S_MAX))) return null;
   // Un tempo entierement a zero ne prescrit rien : ce n'est pas une consigne.
-  if(n.every(x=>x===0)) return null;
-  return n.join('-');
+  if(v.every(x=>x===0)) return null;
+  return v.join('-');
+}
+// Le guide cadence le « X » sur une seconde : c'est le rythme d'une montée
+// explosive, et il lui faut une durée pour avancer son point.
+const TEMPO_X_S=1;
+// PURE. Le tempo LU : les quatre termes (null pour le « X »), le drapeau du
+// « X », la forme canonique. null pour un texte libre.
+function tempoLu(txt){
+  const c=tempoNormalise(txt);
+  if(!c) return null;
+  const p=c.split('-'), n=x=>x==='X'?null:Number(x);
+  return {exc:n(p[0]),bas:n(p[1]),con:n(p[2]),haut:n(p[3]),conX:p[2]==='X',canon:c};
 }
 // PURE. Les quatre durees en secondes, ou null. C'est ce que lit le guide.
 function tempoSecondes(txt){
-  const c=tempoNormalise(txt);
-  return c?c.split('-').map(Number):null;
+  const l=tempoLu(txt);
+  return l?[l.exc,l.bas,l.conX?TEMPO_X_S:l.con,l.haut]:null;
+}
+// PURE. LE TEMPO EN UNE PHRASE, pour l'athlète : « Descends en 3 secondes,
+// pas de pause, remonte vite. » Jamais « 3-0-X-0 » seul, qui ne dit rien à la
+// moitié des gens. '' pour un texte libre : il s'affiche tel qu'il est écrit.
+function tempoPhrase(txt){
+  const l=tempoLu(txt);
+  if(!l) return '';
+  const sec=n=>n+' seconde'+(n>1?'s':'');
+  const p=[l.exc>0?'Descends en '+sec(l.exc):'Descends sans freiner'];
+  if(!l.bas&&!l.haut) p.push('pas de pause');
+  else if(l.bas) p.push('marque '+sec(l.bas)+' en bas');
+  else p.push('pas de pause en bas');
+  p.push((l.conX||!(l.con>0))?'remonte vite':'remonte en '+sec(l.con));
+  if(l.haut) p.push('tiens '+sec(l.haut)+' en haut');
+  return p.join(', ')+'.';
 }
 // PURE. Duree d'une repetition complete, en secondes.
 function tempoDureeRep(txt){
@@ -37319,10 +37353,17 @@ function blocTempo(ex){
   // texte sur ses chiffres, si bien que « 2 series a 3 s, 1 min de pause »
   // ressortait en « 2 s pour descendre, 3 s en bas… ». Elle prêtait au coach
   // une consigne qu'il n'avait pas ecrite.
-  const n=tempoSecondes(t);
-  const expl=n
-    ? n[0]+' s pour descendre, '+n[1]+' s en bas, '+n[2]+' s pour monter, '+n[3]+' s en haut.'
-    : 'Consigne de ton coach.';
+  // LOT T3 : la phrase (« Descends en 3 secondes, pas de pause, remonte
+  // vite. ») au lieu de l'énumération chiffrée.
+  const expl=tempoPhrase(t)||'Consigne de ton coach.';
+  // LA PHRASE D'ABORD quand le tempo se lit : c'est elle qui dit quoi faire ;
+  // le code, dessous, reste pour qui le connaît. Un texte libre garde sa place
+  // en tête, tel que le coach l'a écrit.
+  const ph=tempoPhrase(t);
+  if(ph) return `<div style="margin-bottom:8px">
+    <span style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${escapeHtml(ph)}</span>
+    <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:2px">Tempo ${escapeHtml(t)}</div>
+  </div>`;
   return `<div style="margin-bottom:8px">
     <span style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">Tempo ${escapeHtml(t)}</span>
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:2px">${escapeHtml(expl)}</div>
@@ -43222,7 +43263,7 @@ function _apLigne(ex,i){
       ${l('Séries',ex.series)}
       ${l('Répétitions',ex.reps)}
       ${l('Repos',ex.repos)}
-      ${l('Tempo',ex.tempo)}
+      ${l('Tempo',ex.tempo?((tempoPhrase(ex.tempo)?ex.tempo+' : '+tempoPhrase(ex.tempo):ex.tempo)):'')}
       ${l('Technique',_libTechniqueSeries(ex))}
       ${l('Matériel',ex.materiel)}
       ${l('Charge cible',_chargePrescrite(ex))}
@@ -103479,7 +103520,7 @@ function lienVideoSerie(ex,set,options){
   let rir=null;
   if(s.rir==='echec') rir=0;
   else if(s.rir!==''&&s.rir!=null&&isFinite(Number(s.rir))) rir=Number(s.rir);
-  return {exerciceCle:cle,exerciceNom:nom,
+  const out={exerciceCle:cle,exerciceNom:nom,
     seance:String(o.seance||''),
     slot:(o.slot!=null&&isFinite(Number(o.slot)))?Number(o.slot):null,
     serieIdx:(typeof o.serieIdx==='number'&&o.serieIdx>=0)?o.serieIdx:null,
@@ -103487,6 +103528,11 @@ function lienVideoSerie(ex,set,options){
     reps:(isFinite(r)&&r>0)?r:null,
     rir:rir,
     date:Number(o.date)||Date.now()};
+  // LOT T3 : le tempo PRESCRIT à cette série, sous sa forme canonique, pour que
+  // Motion Lab compare au tempo d'alors et non à celui d'aujourd'hui. Absent
+  // quand il n'y en a pas (ou en texte libre) : rien ne change pour les autres.
+  try{ const tl=(ex&&typeof ex==='object')?tempoLu(ex.tempo):null; if(tl) out.tempo=tl.canon; }catch(e){}
+  return out;
 }
 // PURE. Le libelle de surimpression : la premiere chose que le coach doit
 // lire. Rend '' quand rien n'est connu — un cartouche vide vaut mieux qu'un

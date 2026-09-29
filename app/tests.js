@@ -41837,10 +41837,12 @@ async function testExercices(){
     //    facultatif à côté. blocTempo, lui, n'a pas bougé de rôle : il
     //    AFFICHE. Le chronomètre et le métronome vivent dans _majBandeTempo,
     //    hors de ce bloc — c'est ce que garde l'assertion « jamais décompté ».
+    // LOT T3 (29/09/2026) : l'explication est une PHRASE, et non plus
+    // l'énumération « 3 s pour descendre, 1 s en bas, 1 s pour monter, 0 s en
+    // haut », qui disait quatre chiffres sans dire quoi faire.
     ok('Critère 8 : le tempo est expliqué',(()=>{
       const h=blocTempo({tempo:'3-1-1-0'});
-      return /Tempo 3-1-1-0/.test(h)&&/3 s pour descendre/.test(h)&&/1 s en bas/.test(h)
-        &&/1 s pour monter/.test(h)&&/0 s en haut/.test(h);})());
+      return /Tempo 3-1-1-0/.test(h)&&h.indexOf('Descends en 3 secondes, marque 1 seconde en bas, remonte en 1 seconde.')>=0;})());
     ok('Critère 8 : aucun champ de saisie de tempo en séance',
        !/<input|<select|onchange/.test(blocTempo({tempo:'3-1-1-0'})));
     ok('Sans tempo, aucun bloc',blocTempo({})===''&&blocTempo({tempo:'   '})==='');
@@ -49641,6 +49643,56 @@ async function testExercices(){
       if(lignes[1][3]!=='200'||lignes[1][9]!=='2') return _echec('quantité et fibres vides');
       const sans=_csvJournalAlimentaire({nutrition:{log:{'2026-09-27':{entries:[{nom:'x',kcal:100,p:5}]}}}}).split('\r\n')[1].split(';');
       return sans[10]===''?true:_echec('sans cible : '+sans[10]);})());
+
+    // ══ LOT T3 — LE TEMPO PRESCRIT, ET VÉRIFIÉ PAR LA VIDÉO (29/09/2026) ═══
+    ok('T3 — le format : « X » sur la montée seulement, les écritures d’avant intactes',(()=>{
+      for(const t of ['3-0-X-0','30X0','30x0','3 0 X 0','3/0/x/0'])
+        if(tempoNormalise(t)!=='3-0-X-0') return _echec(t+' → '+tempoNormalise(t));
+      for(const t of ['X-0-1-0','3-X-1-0','3-0-X-X','XXXX','X000','3-0-XX-0'])
+        if(tempoNormalise(t)!==null) return _echec('« '+t+' » accepté');
+      if(tempoNormalise('3110')!=='3-1-1-0'||tempoNormalise('10-0-2-0')!=='10-0-2-0') return _echec('les formes d’avant');
+      const l=tempoLu('3-0-X-0');
+      if(!l||!l.conX||l.con!==null||l.exc!==3||l.canon!=='3-0-X-0') return _echec('lecture : '+JSON.stringify(l));
+      if(tempoSecondes('3-0-X-0').join()!=='3,0,1,0') return _echec('le guide cadence le X : '+tempoSecondes('3-0-X-0'));
+      return tempoLu('explosif')===null&&tempoLu('')===null?true:_echec('texte libre lu');})());
+    ok('T3 — la phrase : les quatre termes, le X, les pauses nulles ; jamais le code seul',(()=>{
+      const cas=[['3-0-X-0','Descends en 3 secondes, pas de pause, remonte vite.'],
+        ['3-1-1-0','Descends en 3 secondes, marque 1 seconde en bas, remonte en 1 seconde.'],
+        ['4-0-2-2','Descends en 4 secondes, pas de pause en bas, remonte en 2 secondes, tiens 2 secondes en haut.'],
+        ['2-2-X-1','Descends en 2 secondes, marque 2 secondes en bas, remonte vite, tiens 1 seconde en haut.'],
+        ['0-0-1-0','Descends sans freiner, pas de pause, remonte en 1 seconde.']];
+      for(const [t,att] of cas) if(tempoPhrase(t)!==att) return _echec(t+' → '+tempoPhrase(t));
+      if(tempoPhrase('lent')!==''||tempoPhrase('')!=='') return _echec('texte libre transformé en phrase');
+      const h=blocTempo({tempo:'3-0-X-0'});
+      if(h.indexOf('Descends en 3 secondes, pas de pause, remonte vite.')<0) return _echec('la séance n’a pas la phrase');
+      return /\d-\d-X-\d/.test(tempoPhrase('3-0-X-0'))?_echec('le code dans la phrase'):true;})());
+    ok('T3 — un exercice sans tempo : rien ne change, ni la consigne, ni le lien de la vidéo',(()=>{
+      if(blocTempo({})!==''||tempoSecondes(undefined)!==null||tempoPhrase(undefined)!=='') return _echec('sans tempo');
+      const sans=lienVideoSerie({name:'Squat'},{weight:'100',reps:'5',rir:'2'},{seance:'A',slot:0,serieIdx:1});
+      if('tempo' in sans) return _echec('un tempo dans le lien d’un exercice qui n’en a pas');
+      if('tempo' in lienVideoSerie({name:'Squat',tempo:'lent'},{weight:'100',reps:'5'})) return _echec('un texte libre dans le lien');
+      const avec=lienVideoSerie({name:'Squat',tempo:'30x0'},{weight:'100',reps:'5'});
+      return avec.tempo==='3-0-X-0'?true:_echec('le tempo prescrit n’est pas gardé : '+JSON.stringify(avec));})());
+    okA('T3 — prescrit contre mesuré : l’écart dit en une phrase, rien sur une mesure douteuse, rien sans tempo',async()=>{
+      try{ await chargerMotionLab(); }catch(e){ return _echec('chargement : '+e.message); }
+      const L=(exc,pau,con,o)=>Object.assign({tempo:{excMs:exc,pauseMs:pau,conMs:con,tutMs:exc+pau+con,complet:true},conf:80},o||{});
+      const a=mlTempoComparaison('3-0-X-0',[L(1200,0,600)]);
+      if(a!=='Prescrit : 3 s de descente. Mesuré sur cette série : 1,2 s.') return _echec(a);
+      // La moyenne des répétitions fiables de la série.
+      const b=mlTempoComparaison('3-1-2-0',[L(1000,200,500),L(1400,0,700)]);
+      if(b!=='Prescrit : 3 s de descente, 1 s de pause, 2 s de remontée. Mesuré sur cette série : 1,2 s de descente, 0,1 s de pause, 0,6 s de remontée.') return _echec(b);
+      // Mesure non fiable : rien du tout.
+      for(const l of [L(1200,0,600,{tempo:{excMs:1200,pauseMs:0,conMs:600,tutMs:1800,complet:false}}),L(200,0,200),L(1200,0,600,{conf:30})])
+        if(mlTempoComparaison('3-0-X-0',[l])!=='') return _echec('une mesure douteuse est annoncée : '+JSON.stringify(l));
+      if(mlTempoComparaison('3-0-X-0',[])!=='') return _echec('sans répétition');
+      // Pas de tempo prescrit, ou un texte libre : rien.
+      if(mlTempoComparaison('',[L(1200,0,600)])!==''||mlTempoComparaison('lent',[L(1200,0,600)])!=='') return _echec('sans tempo prescrit');
+      // Dans les phrases de tête : la comparaison, sans note ni couleur.
+      const p=mlPhrases({tempo:{excMs:1200,pauseMs:0,conMs:600,tutMs:1800,complet:true},comparaisonTempo:a}).find(x=>x.cle==='tempo');
+      if(!p||p.texte!==a||!p.mesurable) return _echec('la phrase de tête : '+JSON.stringify(p));
+      if(/%|\/10|note|score|rouge|vert|trop|bien|mal/i.test(a)) return _echec('un jugement : '+a);
+      const q=mlPhrases({tempo:{excMs:1200,pauseMs:0,conMs:600,tutMs:1800,complet:true}}).find(x=>x.cle==='tempo');
+      return /Tempo mesuré/.test(q.texte)?true:_echec('sans prescrit, la phrase d’avant a changé : '+q.texte);});
 
     ok('Volts : dix rangs, dans l’ordre, seuils croissants à partir de 0',(()=>{
       const n=RANGS.map(r=>r.nom).join();
