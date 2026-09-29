@@ -119685,7 +119685,10 @@ async function generateStudentCode(){
 }
 function copyStudentCode(){
   if(!lastGeneratedCode) return;
-  _rcCopierOuMontrer(lastGeneratedCode,'Code copié. Envoie-le à l\'élève par WhatsApp/SMS','Copie ce code et envoie-le à l\'élève :');
+  // LE MESSAGE ENTIER, PAS LE CODE NU : c'est ce que le coach envoie a son
+  // athlete (demande de Kevin, 29/09/2026). Le code seul si l'entree manque.
+  const c=((currentUser&&currentUser.studentCodes)||[]).find(x=>x&&x.token===lastGeneratedCode);
+  _rcCopierOuMontrer(c?_texteInvitationAthlete(c):lastGeneratedCode,'Message copié : colle-le dans WhatsApp','Copie ce message et envoie-le à l\'élève :');
 }
 function loadStudentCodes(){
   const isCreator=currentUser.email===CREATOR_EMAIL;
@@ -119905,6 +119908,8 @@ async function extendStudentCode(i){
 //
 // TEXTE BRUT, JAMAIS escapeHtml : ceci part dans un presse-papier, pas dans
 // une page. Un prenom avec une apostrophe y deviendrait « M&#39;Bala ».
+// La video qui montre l'installation et le premier bilan, citee dans l'invitation.
+const RC_VIDEO_INSTALLATION='https://youtu.be/wX0qTHqMMZY';
 function _texteInvitationAthlete(c){
   // Le prenom se prend comme partout ailleurs dans cet ecran : le premier mot
   // du nom saisi par le coach. Sans nom, la phrase se referme proprement
@@ -119915,28 +119920,23 @@ function _texteInvitationAthlete(c){
   // rend l'adresse longue : un lien mort dans une invitation ne se rattrape
   // pas, l'athlete est deja parti.
   const lien=RC_LIEN_COURT;
+  // LE TEXTE DE KEVIN, MOT POUR MOT (29/09/2026). Seuls le prenom, le code et
+  // le lien court sont remplis ici.
   return [
-    'Ton accès RepCore est enfin prêt'+(prenom?', '+prenom:'')+'.',
-    '',
+    'Bienvenue dans la team'+(prenom?' '+prenom:'')+' 💪',
+    'Ton accès RepCore est prêt : ton programme, ta nutrition et ton suivi avec moi, tout au même endroit.',
+    'Tout est expliqué en 2 minutes ici (installation + premier bilan) : '+RC_VIDEO_INSTALLATION,
     '1️⃣ Ouvre ce lien 👇',
     lien,
+    '(Ouvre-le dans Safari (iPhone) ou Chrome (Android), PAS dans Instagram.)',
+    '2️⃣ Installe l\'app : le bouton te la propose direct (sur iPhone : Partager, puis "Sur l\'écran d\'accueil").',
+    // ⚠ LE CODE EST NU, SANS PARENTHESES, ET EN FIN DE LIGNE. Il est colle tel
+    // quel dans le champ de l'athlete, et _lierCoach ne retire que les
+    // ESPACES : « (RC-XXXX) » serait cherche avec ses parentheses et rendrait
+    // « code introuvable ».
+    '3️⃣ L\'app te demande ton code : '+String((c&&c.token)||''),
     '',
-    'Dans Safari (iPhone) ou Chrome (Android), PAS dans Instagram.',
-    'Si un écran te dit "ouvre dans ton navigateur", clique dessus,',
-    'c\'est normal.',
-    '',
-    '2️⃣ Installe l\'app, le bouton te le propose direct.',
-    '',
-    '3️⃣ Une fois l\'app installée, elle te demande un code : colle celui-ci.',
-    // ⚠ LE CODE EST NU, SANS PARENTHESES. Il est colle tel quel dans le champ
-    // de l'athlete, et _lierCoach ne retire que les ESPACES : « (RC-XXXX) »
-    // serait cherche avec ses parentheses et rendrait « code introuvable » —
-    // la panne exacte que ce message existe pour eviter.
-    String((c&&c.token)||''),
-    '',
-    'Le code est obligatoire : sans lui, tu n\'as pas d\'accès et je ne te vois pas apparaître de mon côté.',
-    '',
-    'Si tu es bloqué, reprends le lien : '+lien
+    'Le code est obligatoire, ensuite, remplis ton bilan de départ (une dizaine de minutes) et écris moi "BILAN FAIT" : ton programme sera prêt sous 24 h'
   ].join('\n');
 }
 function _copierInvitationAthlete(i){
