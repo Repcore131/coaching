@@ -5866,7 +5866,8 @@ function _validateAthletePkg(o){
       ||!!params.get('wrapped')||params.get('canal')==='1'||!!params.get('ref')||params.get('parrainage')==='1'
       ||!!params.get('coach')||!!params.get('src')||!!params.get('amb')||params.get('paiements')==='1'
       ||!!params.get('duel')||params.get('duels')==='1'||!!params.get('saison')||params.get('parcours')==='1'||params.get('reprise')==='1'
-      ||!!params.get('apk')||!!params.get('sante')||params.get('prospects')==='1'||!!params.get('payer')||!!params.get('paiement_coach'));
+      ||!!params.get('apk')||!!params.get('sante')||params.get('prospects')==='1'||!!params.get('payer')||!!params.get('paiement_coach')
+      ||!!params.get('garmin'));
     // ?apk=<versionCode> — l'APK Android (LauncherActivity) l'ajoute à chaque
     // ouverture. Rangé dans rc_apk : la feuille « Connecter mes données
     // santé » sait ainsi qu'elle tourne dans l'APK (rcDansApk).
@@ -5981,6 +5982,8 @@ function _validateAthletePkg(o){
     if(/^[a-z0-9][a-z0-9-]{2,40}$/.test(String(params.get('saison')||''))) window._pendingSaisonOpen=true;
     // ?parcours=1 — le rappel du 21e jour d'essai : la carte revient.
     if(params.get('parcours')==='1') window._pendingParcoursOpen=true;
+    // ?garmin=ok|refus|expire|erreur|ferme — le retour de la liaison Garmin (lot G1).
+    if(/^[a-z]{2,8}$/.test(String(params.get('garmin')||''))) window._pendingGarmin=String(params.get('garmin'));
     // ?reprise=1 — la relance du 30e jour : l'écran « Reprise en douceur ».
     if(params.get('reprise')==='1') window._pendingRepriseOpen=true;
     // ?duels=1 — les push des duels (début, J-2, résultat).
@@ -7499,6 +7502,8 @@ function routeUser(){
     setTimeout(()=>{ try{ ouvrirRepriseDouce(); }catch(e){} },1000);}
   if(window._pendingParcoursOpen){ window._pendingParcoursOpen=false;
     setTimeout(()=>{ try{ parcoursRelancer(); }catch(e){} },1000);}
+  if(window._pendingGarmin){ const _g=window._pendingGarmin; window._pendingGarmin=null;
+    setTimeout(()=>{ try{ garminRetour(_g); }catch(e){} },1000);}
   if(window._pendingDuelsOpen){ window._pendingDuelsOpen=false;
     setTimeout(()=>{ try{ _duelsLusLe=0; _rendreDuelsAccueil(); }catch(e){} },1000);}
   if(window._pendingPaiementsOpen){ window._pendingPaiementsOpen=false;
@@ -114657,6 +114662,19 @@ function _trkFiche(id){
   const t=trackParId(id);
   if(!t) return;
   try{ rcm('tracker_selected'); }catch(e){}
+  // LOT G1 : Garmin se relie, ses instructions cèdent la place au bouton.
+  if(t.id==='garmin'){
+    const g=htmlGarminFiche(_garminEtat,Date.now());
+    if(g){
+      _sanFeuille(t.marque,g+'<div class="san-f-actions">'
+        +'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" onclick="sanFermer();sanSaisir(\''+_trkQuoi+'\')">Saisir à la main</button>'
+        +'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" onclick="_trkEtape1()">Retour</button></div>');
+      return;
+    }
+    // L'état n'est pas encore connu : la fiche se repeint s'il ouvre la connexion.
+    if(_garminEtat==null) garminEtatLire().then(e=>{ const z=document.getElementById('san-feuille');
+      if(e&&e.dispo&&z&&z.style.display!=='none'&&/aria-label="Garmin"/.test(z.innerHTML)) _trkFiche('garmin'); }).catch(()=>{});
+  }
   const bloc=_trkQuoi==='pas'?t.pas:t.sommeil;
   const quoiLib=_trkQuoi==='pas'?'tes pas':'ton sommeil';
   let corps='';
@@ -115619,6 +115637,84 @@ function sanPoserSource(quoi,cle){
   try{ rcm('tracker_selected'); }catch(e){}
   sanFermer(); sanRendre();
 }
+// ══ GARMIN : LA MONTRE ENVOIE SEULE (lot G1, 30/09/2026) ═══════════════════
+// La Health API de Garmin pousse les journées au serveur léger
+// (cloudflare/src/garmin.js), qui les range dans sante_sync/<clé> comme
+// celles de Health Connect : sanSyncTirer les lit et les fusionne sans rien
+// savoir de plus, sauf l'origine d'un jour (jours/<d>/origines = 'garmin').
+//
+// L'ÉTAT vient de /fn/garmin {action:'etat'} : {dispo, lie, lieLe,
+// derniereReception}. dispo:false tant que les secrets GARMIN_* ne sont pas
+// posés côté serveur : la fiche Garmin garde alors ses instructions.
+// Dispo et non relié : un bouton « Connecter Garmin » REMPLACE les
+// instructions. Relié : l'état, et la révocation dans les réglages santé.
+let _garminEtat=null;
+function _garminNorm(r){
+  if(!r||typeof r!=='object') return null;
+  return {dispo:!!r.dispo,lie:!!r.lie,lieLe:Number(r.lieLe)||null,derniereReception:Number(r.derniereReception)||null};
+}
+async function garminEtatLire(){
+  if(!SERVEUR_LEGER||typeof navigator!=='undefined'&&navigator.onLine===false) return _garminEtat;
+  try{ _garminEtat=_garminNorm(await CLOUD._callFn('garmin',{action:'etat'})); }catch(e){}
+  return _garminEtat;
+}
+// PURE. Ce que la fiche Garmin montre À LA PLACE des instructions ; '' quand
+// la connexion n'est pas ouverte (les instructions restent).
+function htmlGarminFiche(etat,maintenant){
+  const e=_garminNorm(etat);
+  if(!e||!e.dispo) return '';
+  const quoi='Tes pas, ton sommeil, ta fréquence cardiaque au repos et ta variabilité';
+  if(e.lie) return '<div class="gar-etat"><span class="sv-sync-pt" data-recu="'+!!e.derniereReception+'" aria-hidden="true"></span><b>Garmin est connecté</b></div>'
+    +'<div class="san-aide">'+(e.derniereReception?'Dernière réception '+escapeHtml(_sanIlYa(e.derniereReception,maintenant))+'.'
+      :'Rien reçu pour l’instant : Garmin envoie après la prochaine synchronisation de ta montre.')+'</div>'
+    +'<div class="san-aide">'+quoi+' arrivent seuls, sans rien recopier.</div>'
+    +'<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:12px 0 0" onclick="sanFermer();sanSyncOuvrir()">Gérer la connexion</button>';
+  return '<div class="san-aide" style="margin-bottom:12px">Relie ton compte Garmin Connect : '+quoi.charAt(0).toLowerCase()+quoi.slice(1)+' arrivent seuls, même quand ton téléphone dort.</div>'
+    +'<button type="button" class="btn btn-red" style="width:100%;margin:0" onclick="garminConnecter()">Connecter Garmin</button>'
+    +'<div class="san-aide" style="margin-top:10px">Garmin te demande ton accord, puis te ramène ici.</div>';
+}
+// PURE. Le bloc Garmin des réglages santé ; '' quand la connexion n'est pas ouverte.
+function htmlGarminReglages(etat,maintenant){
+  const e=_garminNorm(etat);
+  if(!e||!e.dispo) return '';
+  if(e.lie) return '<div class="ss-garmin"><div class="ss-garmin-t"><span class="sv-sync-pt" data-recu="'+!!e.derniereReception+'" aria-hidden="true"></span><b>Garmin Connect</b> · connecté</div>'
+    +'<div class="ss-d">'+(e.derniereReception?'Dernière réception '+escapeHtml(_sanIlYa(e.derniereReception,maintenant)):'Rien reçu pour l’instant')+'</div>'
+    +'<button type="button" class="ss-deco" onclick="garminDeconnecter()">Déconnecter Garmin</button></div>';
+  return '<div class="ss-garmin"><div class="ss-garmin-t"><b>Tu as une montre Garmin ?</b></div>'
+    +'<div class="ss-d">Relie Garmin Connect : ta montre envoie seule, sans le téléphone.</div>'
+    +'<button type="button" class="ss-btn" onclick="garminConnecter()">Connecter Garmin</button></div>';
+}
+async function garminConnecter(){
+  if(!demanderConsentementSante('pas',()=>garminConnecter())) return null;
+  try{
+    const r=await CLOUD._callFn('garmin',{action:'lier'});
+    if(r&&r.url){ location.href=r.url; return r.url; }
+  }catch(e){ toast(e&&e.message?e.message:'Connexion impossible','var(--orange)'); }
+  return null;
+}
+async function garminDeconnecter(){
+  if(!confirm('Déconnecter Garmin ? Ta montre n’enverra plus rien à RepCore. Ce qui est déjà dans ton suivi reste.')) return false;
+  try{
+    await CLOUD._callFn('garmin',{action:'revoquer'});
+    _garminEtat=Object.assign({},_garminEtat||{dispo:true},{lie:false,lieLe:null,derniereReception:null});
+    try{ _ssPeindre(); }catch(e){}
+    toast('Garmin déconnecté','var(--green)');
+    return true;
+  }catch(e){ toast(e&&e.message?e.message:'Connexion impossible','var(--orange)'); return false; }
+}
+// Le retour de Garmin : ?garmin=ok|refus|expire|erreur|ferme.
+const GARMIN_RETOURS=Object.freeze({ok:['Garmin est connecté','var(--green)'],
+  refus:['Connexion Garmin annulée','var(--orange)'],expire:['Le lien a expiré : recommence depuis les réglages santé','var(--orange)'],
+  erreur:['Garmin n’a pas répondu : réessaie dans un instant','var(--orange)'],ferme:['La connexion Garmin n’est pas encore ouverte','var(--orange)']});
+function garminRetour(code){
+  const r=GARMIN_RETOURS[code];
+  if(!r) return false;
+  toast(r[0],r[1]);
+  garminEtatLire().then(()=>{ try{ sanSyncOuvrir(); }catch(e){} }).catch(()=>{});
+  if(code==='ok'){ _sanSyncLu=0; sanSyncTirer(true).catch(()=>{}); }
+  return true;
+}
+
 // ══ LA SANTÉ SYNCHRONISÉE (Health Connect, Raccourci iPhone) ═════════════
 // Décision de Kevin (28/09/2026). L'APK Android lit Health Connect, le
 // Raccourci iPhone « RepCore Santé » lit Apple Santé ; les deux POSTENT au
@@ -115694,17 +115790,22 @@ function sanFusionSync(dossier,sync,maintenant){
     const j=jours[d];
     if(!j||typeof j!=='object'||!/^\d{4}-\d{2}-\d{2}$/.test(d)||d>auj||d<min) continue;
     const recu=Number(j.recu)||Number(meta.derniereReception)||0;
+    // LOT G1 : un jour écrit par Garmin le dit (jours/<d>/origines) ; sinon l'origine du compte.
+    const oj=(j.origines&&typeof j.origines==='object')?j.origines:{};
+    const sp=oj.pas==='garmin'?'garmin':srcPas, ss=oj.sommeil==='garmin'?'garmin':srcSom;
+    if(oj.pas==='garmin'&&!plan.origines.pas) plan.origines.pas='garmin';
+    if(oj.sommeil==='garmin'&&!plan.origines.sommeil) plan.origines.sommeil='garmin';
     const n=Number(j.pas);
     if(isFinite(n)&&n>=0&&n<=99999){
       const e=trouver(u.stepsLog,d);
       if(_sanManuelGagne(e,recu)) plan.gardes++;
-      else if(!(e&&e.dataStatus==='sync'&&Number(e.count)===Math.round(n)&&e.source===srcPas))
-        plan.pas.push({date:d,count:Math.round(n),source:srcPas});
+      else if(!(e&&e.dataStatus==='sync'&&Number(e.count)===Math.round(n)&&e.source===sp))
+        plan.pas.push({date:d,count:Math.round(n),source:sp});
     }
     const m=Number(j.sommeilMin);
     if(isFinite(m)&&m>=30&&m<=1080){
       const e=trouver(u.sleepLog,d);
-      const nuit={date:d,duration:Math.round(m/60*100)/100,source:srcSom};
+      const nuit={date:d,duration:Math.round(m/60*100)/100,source:ss};
       if(/^\d{2}:\d{2}$/.test(j.coucher||'')) nuit.bed=j.coucher;
       if(/^\d{2}:\d{2}$/.test(j.lever||'')) nuit.wake=j.lever;
       if(j.phases&&typeof j.phases==='object'){
@@ -115714,7 +115815,7 @@ function sanFusionSync(dossier,sync,maintenant){
       }
       if(_sanManuelGagne(e,recu)) plan.gardes++;
       else if(!(e&&e.dataStatus==='sync'&&e.duration===nuit.duration&&e.bed===nuit.bed&&e.wake===nuit.wake
-        &&JSON.stringify(e.phases||null)===JSON.stringify(nuit.phases||null)&&e.source===srcSom))
+        &&JSON.stringify(e.phases||null)===JSON.stringify(nuit.phases||null)&&e.source===ss))
         plan.sommeil.push(nuit);
     }
     const kg=Number(j.poids);
@@ -115823,7 +115924,7 @@ const SAN_SYNC_RACCOURCI_LANCER='shortcuts://run-shortcut?name=RepCore%20Sant%C3
 const SAN_SYNC_APK_LIEN=j=>'intent://sante/connecter?jeton='+encodeURIComponent(j)+'#Intent;scheme=repcore;package=com.repcore.app;end';
 const SAN_SYNC_APK_MIN=4;   // l'APK 3 (PWABuilder) ne sait pas lire Health Connect
 const AIDE_APK_URL='/aide-apk.html';
-const SAN_SYNC_SOURCES=Object.freeze({healthconnect:'Health Connect',raccourci:'Apple Santé'});
+const SAN_SYNC_SOURCES=Object.freeze({healthconnect:'Health Connect',raccourci:'Apple Santé',garmin:'Garmin Connect'});
 const SAN_SYNC_GUET_MS=2*60*1000, SAN_SYNC_GUET_PAS_MS=10*1000;
 let _ssAdresse=null, _ssJeton=null, _ssGuet=null, _ssGuetFin=0;
 // L'APK se reconnaît à ?apk=<versionCode>, que LauncherActivity ajoute à
@@ -115843,7 +115944,9 @@ function _sanMetaNorm(m){
   if(!m||typeof m!=='object') return null;
   return {actif:!!(m.empreinte||m.actif),creeLe:Number(m.creeLe)||null,derniereReception:Number(m.derniereReception)||null,
     plateforme:m.plateforme||null,source:m.source||null,origines:m.origines||null,
-    dernierEnvoi:(m.dernierEnvoi&&typeof m.dernierEnvoi==='object')?m.dernierEnvoi:null};
+    dernierEnvoi:(m.dernierEnvoi&&typeof m.dernierEnvoi==='object')?m.dernierEnvoi:null,
+    // LOT G1 : relié à Garmin (sans jeton). `actif` reste celui du jeton Health Connect.
+    garmin:(m.garmin&&typeof m.garmin==='object')?m.garmin:null};
 }
 function sanSyncActif(){ return !!(_sanSyncMeta&&_sanSyncMeta.actif); }
 // PURE. « à l'instant », « il y a 12 min », « il y a 3 h », « hier », « il y a 4 jours ».
@@ -115858,9 +115961,9 @@ function _sanIlYa(t,maintenant){
 // PURE. Ce que la tuile et le pied disent : {actif, recu, lib, source, quand}.
 function sanSyncEtat(meta,quoi,maintenant){
   const m=_sanMetaNorm(meta);
-  if(!m||!m.actif) return {actif:false,recu:false,lib:'',source:'',quand:''};
+  if(!m||!(m.actif||m.garmin)) return {actif:false,recu:false,lib:'',source:'',quand:''};
   const o=(m.origines||{})[quoi==='sommeil'?'sommeil':'pas'];
-  const source=(o&&SAN_SOURCES[o]&&o!=='manuel')?SAN_SOURCES[o]:(SAN_SYNC_SOURCES[m.source]||'');
+  const source=(o&&SAN_SOURCES[o]&&o!=='manuel')?SAN_SOURCES[o]:(SAN_SYNC_SOURCES[m.source]||(m.garmin?SAN_SOURCES.garmin:''));
   if(!m.derniereReception) return {actif:true,recu:false,lib:'En attente',source,quand:'rien reçu pour l’instant'};
   const quand=_sanIlYa(m.derniereReception,maintenant);
   // iPhone : l'automatisation ne part pas toujours. Au-delà de 48 h, on le dit.
@@ -116020,9 +116123,13 @@ function _htmlSanSyncFeuille(){
       +'<button type="button" class="ss-x" onclick="sanSyncFermer()" aria-label="Fermer">✕</button></div>'
     +(e.actif?'<div class="ss-statut'+(e.relancer?' ss-relancer':'')+'"><span class="sv-sync-pt" data-recu="'+e.recu+'"'+(e.relancer?' data-relancer="true"':'')+' aria-hidden="true"></span><b>'+escapeHtml(e.lib)+'</b>'
       +escapeHtml([e.source,e.quand].filter(Boolean).map(x=>' · '+x).join(''))+'</div>':'')
+    // LOT G1 : Garmin, qui envoie sans le téléphone. Relié, il passe devant les étapes du téléphone.
+    +((_garminEtat&&_garminEtat.lie)?htmlGarminReglages(_garminEtat,Date.now()).replace('class="ss-garmin"','class="ss-garmin ss-garmin-tete"'):'')
     +'<div class="ss-etapes">'+corps+'</div>'
+    +((_garminEtat&&_garminEtat.lie)?'':htmlGarminReglages(_garminEtat,Date.now()))
     +'<div class="ss-note">Pas, sommeil, fréquence cardiaque au repos, variabilité, poids : rien d’autre. Une saisie à la main reste prioritaire.</div>'
-    +(e.actif?'<button type="button" class="ss-deco" onclick="sanSyncDeconnecter()">Déconnecter</button>':'');
+    // Le jeton Health Connect seulement : un compte relié à Garmin seul n'en a pas.
+    +(sanSyncActif()?'<button type="button" class="ss-deco" onclick="sanSyncDeconnecter()">Déconnecter</button>':'');
 }
 function _ssPeindre(){
   const z=document.getElementById('sante-sync-feuille');
@@ -116042,6 +116149,7 @@ function sanSyncOuvrir(){
   m.style.display='flex';
   // L'état du serveur, frais : la feuille se repeint quand il arrive.
   santeJetonEtat().then(()=>_ssPeindre()).catch(()=>{});
+  garminEtatLire().then(()=>_ssPeindre()).catch(()=>{});
 }
 function sanSyncFermer(){
   const m=document.getElementById('sante-sync-modal');
@@ -116136,7 +116244,7 @@ function _sanSyncCoachLire(c){
 // PURE. La pastille du coach.
 function _htmlSyncCoach(meta){
   const m=_sanMetaNorm(meta);
-  if(!m||!m.actif) return '';
+  if(!m||!(m.actif||m.garmin)) return '';
   const d=m.derniereReception?new Date(m.derniereReception).toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):null;
   return '<div class="cso-sync-l"><span class="cso-sync"><span class="sv-sync-pt" data-recu="'+!!d+'" aria-hidden="true"></span>synchronisé</span>'
     +'<span class="cso-sync-d">'+(d?'Dernière réception : '+escapeHtml(d):'Aucune réception pour l’instant')+'</span></div>';

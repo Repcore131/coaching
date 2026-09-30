@@ -276,6 +276,33 @@ La marche à suivre (developer.paypal.com, onglet Sandbox) :
 
 Ensuite seulement : `PAIEMENTS_COACH = "oui"` dans `[vars]`, puis `npx wrangler deploy`.
 
+## Garmin (`garmin.js`) : FERMÉ tant que les quatre secrets ne sont pas posés
+
+La montre envoie seule : Garmin pousse les journées (`dailies`), les nuits
+(`sleeps`) et la variabilité (`hrv`) au Worker, qui les écrit comme Health
+Connect. Sans les secrets, `/garmin/push` répond 404 et l'app garde les
+instructions du guide Garmin.
+
+1. Demander l'accès au **Garmin Connect Developer Program** (Health API),
+   https://developer.garmin.com/gc-developer-program/ ; créer l'application
+   (OAuth 2.0 PKCE). Garmin fournit un *consumer key* et un *consumer secret*.
+2. Redirect URI de l'application : `https://repcore-serveur.repcore.workers.dev/garmin/retour`.
+3. Tirer un secret d'envoi et une clé de chiffrement :
+   `node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"` (secret d'envoi) ;
+   `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` (clé).
+4. Les poser : `npx wrangler secret put GARMIN_CLIENT_ID`, `GARMIN_CLIENT_SECRET`,
+   `GARMIN_PUSH_SECRET`, `GARMIN_CLE`.
+5. Dans l'outil « Endpoint Configuration » du portail Garmin, déclarer en **push**
+   (pas en ping) pour Dailies, Sleeps, HRV, Deregistrations et User Permissions :
+   `https://repcore-serveur.repcore.workers.dev/garmin/push/<GARMIN_PUSH_SECRET>`.
+6. Vérifier : `/sante` dit `"garmin": true`, puis relier un compte de test depuis
+   l'app (Lifestyle › Connecter mes données santé › Connecter Garmin) et
+   synchroniser la montre : la journée arrive dans `sante_sync/<clé>/jours`.
+
+⚠ Garmin ne signe pas ses envois : c'est le secret de l'adresse (et l'en-tête
+`garmin-client-id` quand il est présent) qui les authentifie. Changer
+`GARMIN_PUSH_SECRET` impose de redéclarer l'adresse au portail.
+
 ## Pas encore branché
 
 - **Le mois de mentorat** de l'Ultime (il vivait dans `droits/`, que le Worker n'écrit pas).

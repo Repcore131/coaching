@@ -49180,6 +49180,74 @@ async function testExercices(){
       const c=_fjCopier(t.entries,j,'matin');
       if(c[0].qty!==60||c[1].qty!==250||c[0].id===t.entries[0].id) return _echec('copie');
       return true;})());
+    // ── LOT G1 : GARMIN ──
+    ok('Garmin : la fiche remplace les instructions par « Connecter Garmin » quand la connexion est ouverte',(()=>{
+      if(htmlGarminFiche(null)!==''||htmlGarminFiche({dispo:false,lie:false})!=='') return _echec('fermé : les instructions doivent rester');
+      const a=htmlGarminFiche({dispo:true,lie:false});
+      if(a.indexOf('garminConnecter()')<0||a.indexOf('Connecter Garmin')<0) return _echec('bouton absent : '+a.slice(0,160));
+      const b=htmlGarminFiche({dispo:true,lie:true,derniereReception:Date.now()-3*3600e3},Date.now());
+      if(b.indexOf('Garmin est connecté')<0||b.indexOf('il y a 3 h')<0||b.indexOf('garminConnecter()')>=0) return _echec('relié : '+b.slice(0,200));
+      if(htmlGarminFiche({dispo:true,lie:true}).indexOf('Rien reçu pour l’instant')<0) return _echec('relié sans réception');
+      // L'écran : la fiche Garmin du guide, selon l'état.
+      const sv=_garminEtat, svLire=garminEtatLire, svQ=_trkQuoi;
+      garminEtatLire=async()=>_garminEtat;
+      try{
+        _trkQuoi='sommeil';
+        _garminEtat={dispo:true,lie:false};
+        _trkFiche('garmin');
+        let z=document.getElementById('san-feuille'), h=z?z.innerHTML:'';
+        if(h.indexOf('Connecter Garmin')<0||h.indexOf('trk-chemin')>=0) return _echec('ouverte, non reliée : '+h.slice(0,200));
+        _garminEtat={dispo:false,lie:false};
+        _trkFiche('garmin');
+        h=document.getElementById('san-feuille').innerHTML;
+        if(h.indexOf('trk-chemin')<0||h.indexOf('Connecter Garmin')>=0) return _echec('fermée : les instructions ont disparu');
+        _garminEtat={dispo:true,lie:true,derniereReception:Date.now()};
+        _trkFiche('garmin');
+        h=document.getElementById('san-feuille').innerHTML;
+        if(h.indexOf('Garmin est connecté')<0) return _echec('reliée : '+h.slice(0,200));
+        // Une autre marque n'est jamais touchée.
+        _garminEtat={dispo:true,lie:false};
+        _trkFiche('apple');
+        h=document.getElementById('san-feuille').innerHTML;
+        return h.indexOf('Connecter Garmin')<0?true:_echec('le bouton Garmin sur la fiche Apple');
+      } finally { _garminEtat=sv; garminEtatLire=svLire; _trkQuoi=svQ; try{ sanFermer(); }catch(e){} }})());
+    ok('Garmin : les réglages santé disent l’état et proposent la révocation',(()=>{
+      if(htmlGarminReglages({dispo:false})!=='') return _echec('fermé');
+      const a=htmlGarminReglages({dispo:true,lie:false});
+      if(a.indexOf('garminConnecter()')<0) return _echec('non relié : '+a);
+      const b=htmlGarminReglages({dispo:true,lie:true,derniereReception:Date.now()-60e3},Date.now());
+      if(b.indexOf('garminDeconnecter()')<0||b.indexOf('connecté')<0||b.indexOf('garminConnecter()')>=0) return _echec('relié : '+b);
+      const sv=_sanSyncMeta, svG=_garminEtat;
+      try{
+        _sanSyncMeta=null; _garminEtat={dispo:true,lie:true,derniereReception:Date.now()};
+        const h=_htmlSanSyncFeuille();
+        if(h.indexOf('garminDeconnecter()')<0) return _echec('le bloc Garmin manque aux réglages');
+        if(h.indexOf('sanSyncDeconnecter()')>=0) return _echec('« Déconnecter » Health Connect sans jeton');
+        return true;
+      } finally { _sanSyncMeta=sv; _garminEtat=svG; }})());
+    ok('Garmin : un compte relié à Garmin seul est « synchronisé », et ses jours portent la source Garmin',(()=>{
+      const T=Date.now(), d=localISODate(new Date(T-864e5));
+      const meta={derniereReception:T-3600e3,garmin:{lieLe:T-864e5}};
+      const m=_sanMetaNorm(meta);
+      if(!m||m.actif||!m.garmin) return _echec('méta : '+JSON.stringify(m));
+      const e=sanSyncEtat(meta,'pas',T);
+      if(!e.actif||e.lib!=='Synchronisé'||e.source!=='Garmin Connect') return _echec('état : '+JSON.stringify(e));
+      if(_htmlSyncCoach(meta).indexOf('synchronisé')<0) return _echec('la pastille du coach');
+      const plan=sanFusionSync({stepsLog:[],sleepLog:[]},{meta,jours:{[d]:{pas:8421,sommeilMin:450,coucher:'23:10',lever:'07:05',recu:T-3600e3,origines:{pas:'garmin',sommeil:'garmin'}}}},T);
+      if(plan.pas.length!==1||plan.pas[0].source!=='garmin'||plan.pas[0].count!==8421) return _echec('pas : '+JSON.stringify(plan.pas));
+      if(plan.sommeil.length!==1||plan.sommeil[0].source!=='garmin'||plan.sommeil[0].bed!=='23:10') return _echec('nuit : '+JSON.stringify(plan.sommeil));
+      // Le même compte relayé par Health Connect (Samsung) : un jour sans marque garde Samsung.
+      const hc={empreinte:'e',derniereReception:T,plateforme:'android',source:'healthconnect',origines:{pas:'samsung'},garmin:{lieLe:1}};
+      const p2=sanFusionSync({stepsLog:[],sleepLog:[]},{meta:hc,jours:{[d]:{pas:5000,recu:T}}},T);
+      if(p2.pas[0].source!=='samsung') return _echec('jour Health Connect : '+p2.pas[0].source);
+      const p3=sanFusionSync({stepsLog:[],sleepLog:[]},{meta:hc,jours:{[d]:{pas:5000,recu:T,origines:{pas:'garmin'}}}},T);
+      return p3.pas[0].source==='garmin'?true:_echec('jour Garmin chez un compte Health Connect : '+p3.pas[0].source);})());
+    ok('Garmin : le retour de Garmin (?garmin=) est reconnu, nettoyé de l’adresse, et dit ce qui s’est passé',(()=>{
+      const src=_prodSrc();
+      if(src.indexOf("!!params.get('garmin')")<0) return _echec('?garmin= ne sort pas de l’adresse');
+      if(src.indexOf('window._pendingGarmin')<0) return _echec('retour non traité');
+      for(const k of ['ok','refus','expire','erreur','ferme']) if(!GARMIN_RETOURS[k]) return _echec('retour sans message : '+k);
+      return garminRetour('inconnu')===false?true:_echec('un code inconnu produit un message');})());
     // ── LOT R1 : LES RECETTES ──
     const _R1rec=()=>({id:'r1790000000000-abc',nom:'Porridge protéiné',portions:2,creeLe:1,
       ingredients:[{src:'off',ref:'3017620422003',grammes:80,nom:'Flocons X',m:{k:370,p:13,c:60,l:7}},

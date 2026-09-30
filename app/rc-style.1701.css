@@ -15531,3 +15531,9 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .rct-nw{white-space:nowrap}
 .rct-pl{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left}
 .rct-pl .fj-rec-n{flex:none;max-width:100%;white-space:normal}
+/* LOT G1 : Garmin */
+.gar-etat{display:flex;align-items:center;gap:8px;font-size:var(--fs-md);margin-bottom:6px}
+.ss-garmin{border-top:1px solid var(--border);margin-top:14px;padding-top:14px}
+.ss-garmin-t{display:flex;align-items:center;gap:8px;font-size:var(--fs-sm);margin-bottom:4px}
+.ss-garmin .ss-btn{margin-top:10px}
+.ss-garmin-tete{border-top:0;margin:0 0 14px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r-3)}

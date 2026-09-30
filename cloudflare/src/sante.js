@@ -30,8 +30,13 @@ export const CORPS_MAX = 128 * 1024;
 export const ENVOIS_PAR_HEURE = 20;
 export const JOURS_MAX = 14;
 const JOUR_MS = 864e5;
-const PLATEFORMES = { android: 'healthconnect', ios: 'raccourci' };
-const METHODE_DEFAUT = { healthconnect: 'rmssd', raccourci: 'sdnn' };
+// Ce qui ne s'accepte pas d'un envoi par jeton : la source 'garmin' ne vient
+// que du Worker (garmin.js), jamais d'un téléphone.
+const PAR_JETON = new Set(['android', 'ios']);
+// 'garmin' : la Health API de Garmin, qui POUSSE elle-même (garmin.js). Elle
+// n'entre jamais par /sante/i : sa source n'a pas de jeton de synchronisation.
+export const PLATEFORMES = { android: 'healthconnect', ios: 'raccourci', garmin: 'garmin' };
+export const METHODE_DEFAUT = { healthconnect: 'rmssd', raccourci: 'sdnn', garmin: 'rmssd' };
 const JETON_RE = /^[A-Za-z0-9_-]{43}$/;
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 // Les bornes, celles de l'app (PESEE_MIN / PESEE_MAX pour le poids).
@@ -61,7 +66,7 @@ export async function santeJeton({ auth, data }, ctx) {
     const m = meta || {};
     return { actif: !!m.empreinte, creeLe: m.creeLe || null, derniereReception: m.derniereReception || null,
       plateforme: m.plateforme || null, source: m.source || null, origines: m.origines || null,
-      dernierEnvoi: m.dernierEnvoi || null };
+      dernierEnvoi: m.dernierEnvoi || null, garmin: m.garmin || null };
   }
   if (action === 'revoquer') {
     const maj = { ['sante_sync/' + cle]: null };
@@ -142,6 +147,55 @@ export function nettoyerJour(j, source) {
   return { v, ignores };
 }
 
+
+// ── L'ÉCRITURE DES JOURS, COMMUNE À TOUTES LES SOURCES ───────────────────
+// Health Connect, le Raccourci iPhone et Garmin passent par ici : mêmes
+// fenêtres (30 jours en arrière, 1 en avant, 14 au plus), mêmes bornes
+// (nettoyerJour), mêmes rejets comptés dans `ignores`, même rétention.
+// Rend {maj, jours, nuits, ignores} : les chemins à écrire, SANS les écrire.
+//
+// DEUX SOURCES LE MÊME JOUR : la plus récente gagne, champ par champ (c'est
+// l'ordre des écritures). Chaque champ garde son origine dans
+// jours/<d>/origines/<famille> : 'garmin' quand Garmin l'a écrit, effacée
+// quand une autre source le réécrit.
+const FAMILLE = { pas: 'pas', sommeilMin: 'sommeil', coucher: 'sommeil', lever: 'sommeil', phases: 'sommeil',
+  fcRepos: 'fcRepos', vfc: 'vfc', vfcMethode: 'vfc', poids: 'poids', masseGrasse: 'masseGrasse' };
+export function ecrireJours(cle, brut, source, maintenant) {
+  const maj = {};
+  let ignores = 0;
+  brut = brut && typeof brut === 'object' ? brut : {};
+  const aujourdhui = paris(maintenant).jour;
+  const max = decaler(aujourdhui, 1), min = decaler(aujourdhui, -30);
+  let dates = Object.keys(brut).filter((d) => {
+    const bon = jourValide(d) && d <= max && d >= min;
+    if (!bon) ignores++;
+    return bon;
+  }).sort();
+  if (dates.length > JOURS_MAX) { ignores += dates.length - JOURS_MAX; dates = dates.slice(-JOURS_MAX); }
+  let jours = 0, nuits = 0;
+  for (const d of dates) {
+    const { v, ignores: n } = nettoyerJour(brut[d], source);
+    ignores += n;
+    const cles = Object.keys(v);
+    if (!cles.length) { ignores++; continue; }
+    jours++;
+    if (v.sommeilMin) nuits++;
+    // Champ par champ : un envoi des pas seuls n'efface pas le sommeil reçu.
+    const p = 'sante_sync/' + cle + '/jours/' + d + '/';
+    for (const k of cles) maj[p + k] = v[k];
+    maj[p + 'recu'] = maintenant;
+    const familles = new Set(cles.map((k) => FAMILLE[k]).filter(Boolean));
+    for (const f of familles) maj[p + 'origines/' + f] = source === 'garmin' ? 'garmin' : null;
+    // Une nuit Garmin remplace la nuit entière : pas d'heure de coucher ni de
+    // phases d'une autre source mêlées à sa durée.
+    if (source === 'garmin' && v.sommeilMin) for (const k of ['coucher', 'lever', 'phases']) if (v[k] === undefined) maj[p + k] = null;
+  }
+  // LA RÉTENTION : 30 jours. Chaque envoi efface les jours de 31 à 45 jours
+  // en arrière, sans rien lire (un envoi par quinzaine suffit à tout purger).
+  for (let i = 31; i <= 45; i++) maj['sante_sync/' + cle + '/jours/' + decaler(aujourdhui, -i)] = null;
+  return { maj, jours, nuits, ignores };
+}
+
 const refus = (statut, erreur) => ({ statut, corps: { erreur } });
 
 // ── « À QUEL COMPTE CE JETON ENVOIE-T-IL ? » ───────────────────────────────
@@ -195,7 +249,7 @@ export async function recevoirSante(req, ctx) {
   // 4. LE FORMAT.
   let corps = null;
   try { corps = JSON.parse(texte); } catch (e) { corps = null; }
-  const source = corps && PLATEFORMES[corps.plateforme];
+  const source = corps && PAR_JETON.has(corps.plateforme) && PLATEFORMES[corps.plateforme];
   // v : 1, ou « 1 » quand le Dictionnaire du Raccourci l'a typé Texte.
   if (!corps || typeof corps !== 'object' || String(corps.v) !== '1' || !source || corps.source !== source) {
     await db.ref('').update(maj);
@@ -208,30 +262,10 @@ export async function recevoirSante(req, ctx) {
     brut = Object.assign({}, brut, l.jours);
     ignores += l.ignores;
   }
-  const aujourdhui = paris(maintenant).jour;
-  const max = decaler(aujourdhui, 1), min = decaler(aujourdhui, -30);
-  let dates = Object.keys(brut).filter((d) => {
-    const bon = jourValide(d) && d <= max && d >= min;
-    if (!bon) ignores++;
-    return bon;
-  }).sort();
-  if (dates.length > JOURS_MAX) { ignores += dates.length - JOURS_MAX; dates = dates.slice(-JOURS_MAX); }
-  let jours = 0, nuits = 0;
-  for (const d of dates) {
-    const { v, ignores: n } = nettoyerJour(brut[d], source);
-    ignores += n;
-    const cles = Object.keys(v);
-    if (!cles.length) { ignores++; continue; }
-    jours++;
-    if (v.sommeilMin) nuits++;
-    // Champ par champ : un envoi des pas seuls n'efface pas le sommeil reçu.
-    const p = 'sante_sync/' + cle + '/jours/' + d + '/';
-    for (const k of cles) maj[p + k] = v[k];
-    maj[p + 'recu'] = maintenant;
-  }
-  // LA RÉTENTION : 30 jours. Chaque envoi efface les jours de 31 à 45 jours
-  // en arrière, sans rien lire (un envoi par quinzaine suffit à tout purger).
-  for (let i = 31; i <= 45; i++) maj['sante_sync/' + cle + '/jours/' + decaler(aujourdhui, -i)] = null;
+  const e = ecrireJours(cle, brut, source, maintenant);
+  Object.assign(maj, e.maj);
+  ignores += e.ignores;
+  const { jours, nuits } = e;
   const origines = {};
   if (corps.origines && typeof corps.origines === 'object') {
     for (const k of ['pas', 'sommeil']) {

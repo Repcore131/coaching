@@ -15,6 +15,8 @@
 //                        que le compte de service n'est pas posé. À supprimer.
 //   VAPID_PRIVATE_KEY    la clé privée VAPID (base64url, 43 caractères)
 //   ADMIN_SECRET         ce que /sante?cles=1 exige (Authorization: Bearer …).
+//   GARMIN_CLIENT_ID, GARMIN_CLIENT_SECRET, GARMIN_PUSH_SECRET, GARMIN_CLE
+//                        la Health API de Garmin (garmin.js). Un seul absent : fermé.
 //                        Absent : /sante?cles=1 est fermé.
 // LIMITES (wrangler.toml, [[ratelimits]]) : LIMITE_ARRIVEES, par adresse IP,
 // pour /arrivee et /amb-clic. Absente (tests, ancien déploiement) : rien n'est limité.
@@ -30,11 +32,14 @@ import { creerPaypal, recevoirWebhook, jetonPaypal } from './paypal.js';
 import { servirPagePublique } from './pages.js';
 import { santeJeton, recevoirSante, compteDuJeton, rappelSanteUn } from './sante.js';
 import { creerPaiementsCoach } from './paiements-coach.js';
+import { creerGarmin, garminOuvert } from './garmin.js';
 
 // Les fonctions appelées par l'app (protocole onCall, jeton Firebase vérifié).
 // paiementCoach : relier son compte PayPal (coach), commander et capturer (athlète).
 const paiementCoach = (req, ctx) => creerPaiementsCoach(ctx).appel(req);
-const APPELS = { cloudinaryDestroy, santeJeton, paiementCoach };
+// garmin : relier sa montre Garmin (OAuth), l'état, la révocation (garmin.js).
+const garmin = (req, ctx) => creerGarmin(ctx).appel(req, ctx.requete);
+const APPELS = { cloudinaryDestroy, santeJeton, paiementCoach, garmin };
 
 // Toutes les requêtes sortantes passent ici : c'est le compteur du budget.
 function outils(env) {
@@ -53,7 +58,7 @@ function outils(env) {
   // Le rappel du matin (iPhone) : les comptes synchronisés, un par un.
   M.santeComptes = () => db.ref('sante_sync').shallow();
   M.santeRappelUn = (cle, t) => rappelSanteUn(cle, t, { db, envoyerPush: M.envoyerPush });
-  return { db, M, env, compteur: () => n };
+  return { db, M, env, fetchCompte, compteur: () => n };
 }
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -92,7 +97,7 @@ export default {
       // LES FONCTIONS DE L'APP : /fn/<nom>, comme les Cloud Functions.
       if (url.pathname.startsWith('/fn/') && req.method === 'POST') {
         const o = outils(env);
-        return await repondreAppel(req, APPELS, { db: o.db, M: o.M, env, projet: 'repcore-sync' });
+        return await repondreAppel(req, APPELS, { db: o.db, M: o.M, env, projet: 'repcore-sync', fetchImpl: o.fetchCompte, requete: req });
       }
       // LA SANTÉ SYNCHRONISÉE (Health Connect, Raccourci iPhone) : voir sante.js.
       // Le corps n'est jamais journalisé.
@@ -104,6 +109,21 @@ export default {
       if ((url.pathname === '/sante/i' || url.pathname.startsWith('/sante/i/')) && req.method === 'POST') {
         const o = outils(env);
         const r = await recevoirSante(req, { db: o.db });
+        return reponse(JSON.stringify(r.corps), r.statut);
+      }
+      // GARMIN (garmin.js) : la liaison OAuth, puis ce que Garmin pousse.
+      // Fermé (404 ou retour « ferme ») tant que les secrets GARMIN_* manquent.
+      if (url.pathname === '/garmin/lier' && req.method === 'GET') {
+        const o = outils(env);
+        return await creerGarmin({ db: o.db, env, fetchImpl: o.fetchCompte }).lier(req);
+      }
+      if (url.pathname === '/garmin/retour' && req.method === 'GET') {
+        const o = outils(env);
+        return await creerGarmin({ db: o.db, env, fetchImpl: o.fetchCompte }).retour(req);
+      }
+      if (url.pathname.startsWith('/garmin/push') && req.method === 'POST') {
+        const o = outils(env);
+        const r = await creerGarmin({ db: o.db, env, fetchImpl: o.fetchCompte }).recevoir(req);
         return reponse(JSON.stringify(r.corps), r.statut);
       }
       // PAYPAL : chaque événement d'abonnement ou de paiement, signature vérifiée chez PayPal.
@@ -194,7 +214,7 @@ export default {
           acces: cs ? 'compte_service' : (env.FIREBASE_DB_SECRET ? 'secret_historique' : 'aucun'),
           vapid: !!(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY),
           paypal: !!(env.PAYPAL_CLIENT_ID && env.PAYPAL_CLIENT_SECRET && env.PAYPAL_WEBHOOK_ID),
-          cloudinary: !!(env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET) }));
+          cloudinary: !!(env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET), garmin: garminOuvert(env) }));
       }
       return reponse(JSON.stringify({ repcore: 'serveur léger' }), 404);
     } catch (e) {

@@ -1620,6 +1620,12 @@
         }
       }
     },
+    // GARMIN (garmin.js) : la liaison OAuth, ses jetons CHIFFRES, et la table
+    // qui route un envoi de Garmin vers un compte. Le Worker seul (compte de
+    // service) ; l app n y lit ni n y ecrit rien, elle passe par /fn/garmin.
+    "garmin_liens": { ".read": false, ".write": false },
+    "garmin_uid": { ".read": false, ".write": false },
+    "garmin_etats": { ".read": false, ".write": false },
     "coach_paiement": {
       "$coachKey": { ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey" }
     },
