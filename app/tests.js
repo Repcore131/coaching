@@ -20939,6 +20939,51 @@ async function testExercices(){
     ok('T1 — calcSug n’existe plus : chargeSuivante est le seul moteur des charges proposées',typeof calcSug==='undefined');
     ok('T1 — la borne : répétitions + RIR ≤ 12',e1rmFiable(12,0)&&e1rmFiable(10,2)&&!e1rmFiable(10,3)&&!e1rmFiable(13,0)&&e1rmFiable(8,'')&&e1rmFiable(0,0));
     ok('e1rm sur charge nulle ou négative rend 0',e1rm(0,10,1)===0&&e1rm(-5,10,1)===0);
+    // ── LE POIDS DE RÉFÉRENCE DES MACROS, ET CE QUI EST DIT À L'ÉCRAN ──
+    const _PMa=(sexe,kg,cm,o)=>Object.assign({id:'pmA',email:'pma@t.fr',role:'athlete',gender:sexe,_evol_gender:sexe,
+      _evol_height:String(cm),'init-age':30,sessions_config:[],
+      bilans:[{type:'debut',date:Date.now()-60*864e5,'deb-weight':String(kg),'deb-height':String(cm),'deb-age':'30','deb-gender':sexe==='F'?'Femme':'Homme'}],
+      weightLog:[{date:localISODate(new Date()),kg}],phase:{type:'seche',debut:Date.now()-7*864e5},
+      nutrition:{cycle:false,tableur:{protGkg:2.4}}},o||{});
+    ok('Poids de référence : H 120 kg / 175 cm, sèche à 2,4 → 170 ≤ p ≤ 230 g ; H 80 kg (IMC 24,7) → 192 g, inchangé',(()=>{
+      const gros=_PMa('H',120,175);
+      const pm=poidsMacros(gros);
+      if(pm.type!=='ajuste') return _echec('type : '+pm.type);
+      const t=cibleTableur(gros,{appliquerPlancher:false});
+      if(!(t.p>=170&&t.p<=230)) return _echec('120 kg : p = '+t.p+' (réf. '+t.poidsRef+' kg)');
+      if(t.p>Math.round(2.4*t.poidsRef)+1) return _echec('au-dessus de 2,4 g/kg de référence');
+      const b=besoinsProposes(gros,{appliquerPlancher:false});
+      if(!b.hypotheses.some(h=>/protéines et lipides calculés sur \d+ kg de poids ajusté/.test(h))) return _echec('hypothèse : '+b.hypotheses.join(' | '));
+      const mince=_PMa('H',80,180);
+      if(poidsMacros(mince).type!=='total') return _echec('80 kg : '+poidsMacros(mince).type);
+      const t2=cibleTableur(mince,{appliquerPlancher:false});
+      if(t2.p!==192) return _echec('80 kg : p = '+t2.p);
+      // Masse maigre connue et % de gras élevé : masse maigre × 1,15.
+      if(Math.round(_repartition(2000,100,2,1,80).p)!==160) return _echec('_repartition sur le poids de référence');
+      return true;})());
+    ok('F 50 kg, lipides 1,5, coefficient 0,70 : le total dépassé et les glucides bas sont DITS (tableau du coach et carte de l’athlète)',(()=>{
+      const u=_PMa('F',50,160,{nutrition:{cycle:false,tableur:{protGkg:2.4,lipGkg:1.5,coef:0.70}}});
+      // Côté coach (sans plancher) : protéines et lipides dépassent la cible.
+      const t=cibleTableur(u,{appliquerPlancher:false});
+      const r=_repartition(t.kcal,t.poids,t.protGkg,t.lipGkg,t.poidsRef);
+      if(!(r.depasse>0)) return _echec('dépassement : '+JSON.stringify(r)+' pour '+t.kcal+' kcal');
+      if(!(t.depasse>0)||!t.glucidesBas) return _echec('drapeaux de cibleTableur : '+t.depasse+' / '+t.glucidesBas);
+      const d=document.createElement('div');
+      const sv=currentUser;
+      try{
+        currentUser={id:'pmC',email:'pmc@t.fr',role:'coach'};
+        d.innerHTML=_htmlTableauxTableur(u);
+      } finally { currentUser=sv; }
+      if(!/dépassent la cible de \d+ kcal/.test(d.textContent)) return _echec('le tableau du coach ne dit pas le dépassement');
+      if(!/Glucides très bas : performance en séance compromise/.test(d.textContent)) return _echec('le tableau du coach ne dit pas les glucides bas');
+      // Côté athlète : le plancher remonte le total, les glucides restent très bas, et la carte le dit.
+      const h=_htmlCiblesAthlete(Object.assign({},u,{nutrition:Object.assign({},u.nutrition,{macros:{origine:'athlete'}})}));
+      if(!/Glucides très bas : performance en séance compromise/.test(h)) return _echec('la carte de l’athlète ne dit rien : '+h.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').slice(0,200));
+      const c=ciblesAthlete(u);
+      // La somme des grammes affichés tient le plancher, et le menu des lipides montre 1,5.
+      if(_bloc(c.p,c.l,c.g).kcal<plancherAthlete(u)) return _echec('grammes sous le plancher : '+_bloc(c.p,c.l,c.g).kcal);
+      if(!/value="1.5" selected/.test(h)) return _echec('le menu des lipides ne montre pas 1,5');
+      return (c.glucidesBas&&typeof c.depasse==='number')?true:_echec('ciblesAthlete : '+JSON.stringify({g:c.g,bas:c.glucidesBas,dep:c.depasse}));})());
     // ── LA FORMULE DU MÉTABOLISME, CHOISIE PAR DOSSIER ──
     const _MBa=(kg,cm,o)=>Object.assign({id:'mbA',email:'mba@t.fr',role:'athlete',gender:'H',_evol_gender:'H',
       _evol_height:String(cm),'init-age':40,sessions_config:[],

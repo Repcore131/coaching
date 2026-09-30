@@ -15733,3 +15733,7 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .cr-unite label{display:block;font-weight:800;font-size:var(--fs-md);margin:0 0 8px;text-transform:none;letter-spacing:0;color:var(--text)}
 .cr-unite select{width:100%;min-height:44px}
 .cr-unite-d{font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:8px}
+/* Macros : poids de référence et alertes (glucides bas, total dépassé) */
+.mac-alertes{display:flex;flex-direction:column;gap:6px;margin:10px 0}
+.mac-ref{font-size:var(--fs-xs);color:var(--sub);line-height:1.5}
+.mac-alerte{font-size:var(--fs-xs);font-weight:700;color:var(--orange);background:color-mix(in srgb,var(--orange) 10%,transparent);border:1px solid color-mix(in srgb,var(--orange) 35%,transparent);border-radius:var(--r-2);padding:8px 10px;line-height:1.5}

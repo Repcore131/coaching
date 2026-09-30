@@ -89277,8 +89277,16 @@ function ciblesAthlete(u){
   const p=Math.round(t.p),l=Math.round(t.l);
   // Les glucides absorbent l'ecart. Jamais negatifs : un total impossible se
   // lit a zero glucide, pas en chiffre rouge invente.
-  const g=Math.max(0,Math.round((kcal-p*4-l*9)/4));
+  let g=Math.max(0,Math.round((kcal-p*4-l*9)/4));
+  // L'arrondi des glucides peut rendre une somme d'une à deux kcal SOUS le
+  // plancher (1 199 pour 1 200) : les grammes affichés doivent le tenir.
+  { let _pl=0; try{ _pl=plancherAthlete(u); }catch(e){ _pl=0; }
+    for(let i=0;i<3&&4*p+9*l+4*g<_pl;i++) g++; }
+  const _ref=Number(t.poidsRef)>0?Number(t.poidsRef):Number(t.poids)||0;
   return {kcal,p,l,g,protGkg:t.protGkg,lipGkg:t.lipGkg,
+          poidsRef:t.poidsRef,poidsRefObj:t.poidsRefObj,
+          depasse:Math.max(0,Math.round(p*4+l*9-kcal)),
+          glucidesBas:g<GLUC_MIN_G_KG*_ref||g<GLUC_MIN_G_JOUR,
           // LE COEFFICIENT ET L'OBJECTIF REELLEMENT APPLIQUES (ceux du calcul) :
           // une phase posee par le coach l'emporte sur le choix de l'athlete.
           coef:t.coef,objectif:t.phase,objectifChoisi:per.objectif,
@@ -89480,9 +89488,10 @@ function _athEcrireGrille(){
   const refaire=(bloc)=>{
     const kcal=Math.round(Number(bloc&&bloc.kcal)||0);
     if(!(kcal>0)) return bloc;
+    const _ref=poidsMacros(currentUser).kg||poids;
     const r=_repartition(kcal,poids,
-      isFinite(pk)&&pk>0?pk:(Number(bloc.p)/poids),
-      isFinite(lk)&&lk>0?lk:undefined);
+      isFinite(pk)&&pk>0?pk:(Number(bloc.p)/_ref),
+      isFinite(lk)&&lk>0?lk:undefined,_ref);
     // Le kcal EST celui d'avant, pas celui que _bloc recalculerait a partir
     // des grammes : arrondir trois macros puis re-multiplier les ferait
     // deriver de quelques calories a chaque passage.
@@ -89590,7 +89599,8 @@ function _htmlCiblesAthlete(u){
   const bouton=(o)=>'<button type="button" class="rc-obj-b'+(c.objectif===o.k?' actif':'')
     +'" aria-pressed="'+(c.objectif===o.k?'true':'false')
     +'" onclick="athObjectif(\''+o.k+'\')">'+o.lib+'</button>';
-  const ech=(v,haut)=>{ const o=[];for(let x=v;x<=haut;x+=0.1) o.push(Math.round(x*10)/10); return o; };
+  // +1e-9 : 0,6 + 9 × 0,1 vaut 1,5000000000000002, et la borne 1,5 sautait.
+  const ech=(v,haut)=>{ const o=[];for(let x=v;x<=haut+1e-9;x+=0.1) o.push(Math.round(x*10)/10); return o; };
   const sel=(quoi,val,bas,haut)=>'<select onchange="athGkg(\''+quoi+'\',this.value)" onclick="event.stopPropagation()" '
     +'style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);'
     +'font-size:var(--fs-2xs);padding:4px 6px">'
@@ -89614,10 +89624,14 @@ function _htmlCiblesAthlete(u){
     +'</div>'
     +(libelleAjustKcal(u,'athlete')?'<div class="rc-obj-ajust">Mis à jour : '+libelleAjustKcal(u,'athlete')+'</div>':'')
     +'<div class="rc-obj-macros">'
-      +ligne('Protéines',c.p,' g',sel('prot',Number(c.protGkg)||1.8,1.2,2.6))
-      +ligne('Lipides',c.l,' g',sel('lip',Number(c.lipGkg)||0.9,0.6,1.4))
+      // La plage s'élargit jusqu'à la valeur en vigueur : un menu qui n'a pas
+      // l'option affiche la première, et ment sur le réglage (1,5 lu « 0,6 »).
+      +ligne('Protéines',c.p,' g',sel('prot',Number(c.protGkg)||1.8,1.2,Math.max(2.6,Number(c.protGkg)||0)))
+      +ligne('Lipides',c.l,' g',sel('lip',Number(c.lipGkg)||0.9,0.6,Math.max(1.4,Number(c.lipGkg)||0)))
       +ligne('Glucides',c.g,' g','<span class="rc-obj-reste">le reste</span>')
     +'</div>'
+    // Le poids de référence, les glucides très bas, le total dépassé : dits, jamais tus.
+    +_htmlAlertesMacros(c,'athlete')
     +'<div class="rc-obj-note">Ton coach voit ces cibles : elles remplacent celles de sa grille.</div>'
     +'</div>';
 }
@@ -99237,18 +99251,78 @@ function deltaKcalJour(pctSemaine,poids){
 
 // lipGparKg ABSENT = comportement d'avant ce lot, au gramme près. Le plancher
 // de lipides reste le dernier mot : un réglage ne descend pas sous lui.
-function _repartition(kcal,poids,gParKg,lipGparKg){
-  const p=Math.round(gParKg*poids);
+// `ref` (30/09/2026) : le POIDS DE REFERENCE des proteines et des lipides
+// (poidsMacros). Absent, c'est le poids total, comme avant.
+function _repartition(kcal,poids,gParKg,lipGparKg,ref){
+  const r0=(Number(ref)>0)?Number(ref):poids;
+  const p=Math.round(gParKg*r0);
   const lkg=(typeof lipGparKg==='number'&&isFinite(lipGparKg))
     ?Math.max(LIP_PLANCHER_G_KG,lipGparKg):LIP_G_PAR_KG;
-  const l=Math.round(lkg*poids);
+  const l=Math.round(lkg*r0);
   const reste=kcal-4*p-9*l;
-  // Des glucides négatifs n'existent pas. Conséquence assumée et inchangée :
-  // quand protéines et lipides dépassent déjà la cible, le total du jour la
-  // dépasse aussi. Ce n'était qu'atteignable en théorie à 0,8 g/kg ; à 1,5
-  // c'est un cas réel, et un test le nomme.
+  // Des glucides négatifs n'existent pas : quand protéines et lipides
+  // dépassent déjà la cible, le total du jour la dépasse aussi. CE N'EST PLUS
+  // SILENCIEUX (30/09/2026) : `depasse` dit de combien, et l'écran l'affiche.
   const g=Math.max(0,Math.round(reste/4));
-  return {p,l,g};
+  const depasse=reste<0?Math.round(4*p+9*l-kcal):0;
+  // Glucides très bas : moins de 2 g/kg de poids de référence, ou moins de
+  // 100 g par jour. La séance en paie le prix.
+  const glucidesBas=g<GLUC_MIN_G_KG*r0||g<GLUC_MIN_G_JOUR;
+  return {p,l,g,depasse,glucidesBas,ref:r0};
+}
+const GLUC_MIN_G_KG=2, GLUC_MIN_G_JOUR=100;
+// ══ LE POIDS DE REFERENCE DES MACROS (30/09/2026) ═══════════════════════
+// 2,4 g/kg de POIDS TOTAL chez un homme de 120 kg et 175 cm, c'est 288 g de
+// proteines : le gras ne demande pas de proteines. D'ou, dans l'ordre :
+//   1. masse maigre connue et % de gras au-dela de 25 % (H) / 32 % (F) :
+//      la masse maigre × 1,15 (l'equivalent d'un poids « sec ») ;
+//   2. sinon IMC >= 30 : poids ajuste = poids ideal (IMC 25) + 25 % de l'exces ;
+//   3. sinon le poids total.
+const POIDS_REF_GRAS_HAUT=Object.freeze({H:25,F:32});
+const POIDS_REF_MM_FACTEUR=1.15, POIDS_REF_IMC=30, POIDS_REF_IMC_IDEAL=25, POIDS_REF_EXCES=0.25;
+function poidsMacros(u){
+  let poids=null; try{ poids=poidsNutritionnel(u).kg; }catch(e){ poids=null; }
+  if(!(poids>0)) return {kg:poids,type:'total',lib:''};
+  const bl=((u&&u.bilans)||[]).filter(b=>b&&b.date).slice().sort((x,y)=>x.date-y.date);
+  const b=bl[bl.length-1]||{};
+  const taille=parseFloat((u&&(u._evol_height||u['init-height']))||b['deb-height']||(u&&u.height)||0)||null;
+  const sexe=(u&&(u._evol_gender||u.gender))||b['deb-gender']||'';
+  let mm=null; try{ mm=masseMaigreDuBilan(u); }catch(e){ mm=null; }
+  if(mm>0){
+    const w=getBW(b);
+    const gras=(w>0)?(w-mm)/w*100:null;
+    const seuil=isFemale(sexe)?POIDS_REF_GRAS_HAUT.F:POIDS_REF_GRAS_HAUT.H;
+    if(gras!=null&&gras>seuil){
+      const kg=Math.round(mm*POIDS_REF_MM_FACTEUR*10)/10;
+      return {kg,type:'maigre',lib:'masse maigre × 1,15'};
+    }
+  }
+  if(taille>0){
+    const imc=poids/Math.pow(taille/100,2);
+    if(imc>=POIDS_REF_IMC){
+      const ideal=POIDS_REF_IMC_IDEAL*Math.pow(taille/100,2);
+      const kg=Math.round((ideal+POIDS_REF_EXCES*(poids-ideal))*10)/10;
+      return {kg,type:'ajuste',lib:'poids ajusté'};
+    }
+  }
+  return {kg:poids,type:'total',lib:''};
+}
+// La phrase : « protéines sur 87 kg de poids ajusté », vide au poids total.
+function libPoidsMacros(pm){
+  if(!pm||pm.type==='total'||!(pm.kg>0)) return '';
+  return 'protéines et lipides calculés sur '+String(Math.round(pm.kg)).replace('.',',')+' kg de '
+    +(pm.type==='maigre'?'poids sec (masse maigre × 1,15)':'poids ajusté');
+}
+// Les deux alertes, dites à l'écran (coach et athlète).
+function _htmlAlertesMacros(x,vu){
+  if(!x) return '';
+  const l=[];
+  const ref=libPoidsMacros(x.poidsRefObj);
+  if(ref) l.push('<div class="mac-ref">'+escapeHtml(ref.charAt(0).toUpperCase()+ref.slice(1))+'.</div>');
+  if(x.depasse>0) l.push('<div class="mac-alerte">Protéines et lipides dépassent la cible de '+x.depasse
+    +' kcal : '+(vu==='athlete'?'ton total servi est plus haut que prévu.':'le total servi est plus haut que la cible.')+'</div>');
+  if(x.glucidesBas) l.push('<div class="mac-alerte">Glucides très bas : performance en séance compromise.</div>');
+  return l.length?'<div class="mac-alertes">'+l.join('')+'</div>':'';
 }
 function _bloc(p,l,g){
   const kcal=Math.round(4*p+9*l+4*g);
@@ -99654,7 +99728,9 @@ function cibleTableur(user,opts){
   //   changeaient plus rien a l'ecran. Le plancher reste calcule et dit
   //   (`plancher`, `sousPlancher`), il ne corrige plus.
   const kcal=appliquer?Math.max(ajuste,pl):ajuste;
-  const rep=_repartition(kcal,poids,protGkg,lipGkg);
+  // Proteines et lipides sur le POIDS DE REFERENCE (poidsMacros).
+  const _pm=poidsMacros(u);
+  const rep=_repartition(kcal,poids,protGkg,lipGkg,_pm.kg);
   const bloc=_bloc(rep.p,rep.l,rep.g);
 
   return {
@@ -99673,7 +99749,8 @@ function cibleTableur(user,opts){
     // (_tbJournees) suivent la meme decision.
     appliquePlancher:appliquer, releve:appliquer&&pl>0&&ajuste<pl,
     kcal, p:bloc.p, l:bloc.l, g:bloc.g, f:bloc.f,
-    protGkg, lipGkg, manque:[]
+    protGkg, lipGkg, manque:[],
+    poidsRef:_pm.kg, poidsRefObj:_pm, glucidesBas:rep.glucidesBas, depasse:rep.depasse
   };
 }
 function besoinsProposes(user,opts){
@@ -99881,7 +99958,12 @@ function besoinsProposes(user,opts){
     cible=Math.min(cible,Math.round(depense*(1+SURPLUS_MAX_PART)));
   }
   const deltaRetenu=cible-depense;
-  const r=_repartition(cible,poids,gParKg,lipKg);
+  // Le poids de reference des proteines et des lipides, et il est DIT.
+  const _pm=poidsMacros(user);
+  const r=_repartition(cible,poids,gParKg,lipKg,_pm.kg);
+  { const _lr=libPoidsMacros(_pm); if(_lr) hypotheses.push(_lr); }
+  if(r.depasse>0) hypotheses.push('protéines et lipides dépassent la cible de '+r.depasse+' kcal');
+  if(r.glucidesBas) hypotheses.push('glucides très bas : performance en séance compromise');
   const cycle=o.cycle!==false;
   // Les journées sont calculées AVANT d'annoncer quoi que ce soit : le
   // plancher peut les relever, et c'est le total servi qui décide de la
@@ -99937,7 +100019,7 @@ function besoinsProposes(user,opts){
   // l'athlète pose un déficit d'un clic, et le garde-fou TCA s'y adosse.
   // Le remplacer par deltaServi ouvrirait ce chemin dès que le plancher
   // ramène la journée au niveau de la dépense.
-  return {source,on,off,act,depense,mb,gParKg,modele,cycle,delta:deltaRetenu,
+  return {poidsRef:_pm.kg,poidsRefObj:_pm,glucidesBas:r.glucidesBas,depasse:r.depasse,source,on,off,act,depense,mb,gParKg,modele,cycle,delta:deltaRetenu,
     poids,deltaServi,hypotheses};
 }
 // ── Réglages de la proposition, côté coach ─────────────────────────────────
@@ -101851,6 +101933,8 @@ function _htmlTableauxTableur(c){
         })()),
         true,_in('ccd-off-kcal',_mOff.kcal),'kcal',totK,'zap')
     +'</tbody></table>','tbk-mac-c');
+  // Le poids de référence, les glucides très bas, le total dépassé (30/09/2026).
+  h+=_htmlAlertesMacros(t,'coach');
   // LE BOUTON D'ENREGISTREMENT N'EXISTE QU'EN MANUEL. En automatique, ce sont
   // « Appliquer à l'athlète » et « Enregistrer les réglages », plus bas, qui
   // font le travail ; un troisieme bouton qui ecrirait la meme chose par un
