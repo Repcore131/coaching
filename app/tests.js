@@ -64397,6 +64397,69 @@ async function testExercices(){
       } finally { _r25Ranger(sU,sW,sSnap,svSave,svToast); }
     });
 
+    // ══ 30/09/2026 — LA VIRGULE DÉCIMALE DES CHARGES ═════════════════════
+    // En Chromium fr-FR, « 82,5 » tapé dans un type="number" devenait 825.
+    ok('lireCharge accepte 82,5 / 82.5 / 82, refuse le reste, arrondit au quart, borne à 500',(()=>{
+      const cas=[['82,5',82.5],['82.5',82.5],['82',82],['8a',null],['-5',null],['22,3',22.25],
+        ['',null],['1,2,3',null],['500',500],['500,5',null],[' 60 ',60],['0',0]];
+      for(const [e,att] of cas){ const v=lireCharge(e); if(v!==att) return _echec('lireCharge('+JSON.stringify(e)+') = '+v+' au lieu de '+att); }
+      return true;})());
+    okA('Charges de séance : champs texte, « 82,5 » stocké 82.5, charge aberrante confirmée (P1 et P2)',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;
+      const svConf=window.rcConfirm, svRec=window.recordsExercice;
+      const toasts=[]; let questions=[], reponse=false;
+      try{
+        window.saveUser=()=>true; window.toast=m=>toasts.push(m);
+        window.rcConfirm=(t)=>{ questions.push(t); return Promise.resolve(reponse); };
+        window.recordsExercice=()=>({meilleureCharge:{kg:80,reps:8}});
+        _r25Monter([{name:'SQUAT',series:2,reps:'8 PUIS 8',repos:'2 min'}]);
+        const tb=document.getElementById('sets-body-0'), d=woState.sessionData[0];
+        // PLUS AUCUN type="number" SUR LES CHARGES, ni en tableau ni en cartes.
+        const charges=[...tb.querySelectorAll('input[data-champ="weight"],input[data-champ="weight2"]')];
+        if(charges.length!==4) return _echec(charges.length+' champs de charge au lieu de 4');
+        for(const c of charges){
+          if(c.type!=='text'||c.getAttribute('inputmode')!=='decimal'||c.getAttribute('autocomplete')!=='off'||c.getAttribute('pattern')!=='[0-9]*[.,]?[0-9]*')
+            return _echec('champ de charge : '+c.outerHTML.slice(0,160));
+          if(!c.getAttribute('data-serie')||!c.getAttribute('enterkeyhint')) return _echec('data-serie ou enterkeyhint perdu');
+        }
+        if(/<input[^>]*type="number"[^>]*data-champ="weight/.test(tb.innerHTML)) return _echec('un type="number" reste sur une charge');
+        // « 82,5 » EST 82,5.
+        const c0=_r25Champ(0,0); c0.value='82,5';
+        const r1=_woChargeSaisie(0,0,'weight',c0);
+        if(r1&&r1.then) await r1;
+        if(d.sets[0].weight!=='82.5') return _echec('« 82,5 » stocké « '+d.sets[0].weight+' »');
+        if(questions.length) return _echec('82,5 face à un record de 80 ne devait rien demander');
+        // ILLISIBLE : la valeur d'avant revient, un toast le dit.
+        const c0b=_r25Champ(0,0); c0b.value='8a'; _woChargeSaisie(0,0,'weight',c0b);
+        if(d.sets[0].weight!=='82.5'||_r25Champ(0,0).value!=='82.5') return _echec('« 8a » a changé la charge : '+d.sets[0].weight);
+        if(!toasts.some(m=>/illisible/.test(m))) return _echec('pas de toast pour « 8a »');
+        // AU-DELÀ DE 500 : refusé, sans question. « 825 » pour « 82,5 » n'arrive plus au dossier.
+        const c1z=_r25Champ(0,1); c1z.value='825'; _woChargeSaisie(0,1,'weight',c1z);
+        if(d.sets[1].weight==='825'||questions.length) return _echec('825 accepté ou questionné');
+        if(!toasts.some(m=>/hors limites/.test(m))) return _echec('pas de toast au-delà de 500');
+        // 325 (> 1,5 × 80 et > 20 kg) : on demande. Refusé → rien n'est écrit.
+        reponse=false;
+        const c1=_r25Champ(0,1); c1.value='325';
+        await _woChargeSaisie(0,1,'weight',c1);
+        if(questions[0]!=='325 kg ?') return _echec('question : '+questions[0]);
+        if(d.sets[1].weight==='325') return _echec('325 écrit malgré le refus');
+        // Accepté → écrit.
+        reponse=true;
+        const c1b=_r25Champ(0,1); c1b.value='325';
+        await _woChargeSaisie(0,1,'weight',c1b);
+        if(d.sets[1].weight!=='325') return _echec('325 confirmé mais non écrit');
+        // LA MÊME VÉRIFICATION SUR P2 (dégressive).
+        reponse=false; questions=[];
+        const p2=_r25Champ(0,0,'weight2'); p2.value='300';
+        await _woChargeSaisie(0,0,'weight2',p2);
+        if(questions.length!==1||d.sets[0].weight2==='300') return _echec('P2 aberrant non vérifié');
+        const p2b=_r25Champ(0,0,'weight2'); p2b.value='40,5';
+        const r2=_woChargeSaisie(0,0,'weight2',p2b); if(r2&&r2.then) await r2;
+        if(d.sets[0].weight2!=='40.5') return _echec('P2 « 40,5 » stocké « '+d.sets[0].weight2+' »');
+        return true;
+      } finally { window.rcConfirm=svConf; window.recordsExercice=svRec; _r25Ranger(sU,sW,sSnap,svSave,svToast); }
+    });
+
     // ══ 17/09/2026 — R24 : « QUELLE CHARGE POUR QUEL OBJECTIF ? » ══════════
 
     ok('R24 — le calculateur dit ce qu’il fait, sans promettre « optimale », et ses calculs sont ceux de e1rm()',(()=>{
