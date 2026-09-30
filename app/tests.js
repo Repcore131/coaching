@@ -20939,6 +20939,102 @@ async function testExercices(){
     ok('T1 — calcSug n’existe plus : chargeSuivante est le seul moteur des charges proposées',typeof calcSug==='undefined');
     ok('T1 — la borne : répétitions + RIR ≤ 12',e1rmFiable(12,0)&&e1rmFiable(10,2)&&!e1rmFiable(10,3)&&!e1rmFiable(13,0)&&e1rmFiable(8,'')&&e1rmFiable(0,0));
     ok('e1rm sur charge nulle ou négative rend 0',e1rm(0,10,1)===0&&e1rm(-5,10,1)===0);
+    // ── LE PLANCHER CALORIQUE, APPLIQUÉ CÔTÉ ATHLÈTE ──
+    const _PLa=(o)=>Object.assign({id:'plA',email:'pla@t.fr',role:'athlete',gender:'F',_evol_gender:'F',
+      _evol_height:'155','init-age':25,sessions_config:[],
+      bilans:[{type:'debut',date:Date.now()-60*864e5,'deb-weight':'50','deb-height':'155','deb-age':'25','deb-gender':'Femme'}],
+      weightLog:[{date:localISODate(new Date()),kg:50}],
+      phase:{type:'seche',debut:Date.now()-7*864e5},
+      nutrition:{cycle:false,tableur:{coef:0.70}}},o||{});
+    // Le harnais : l'appareil de l'athlète, sans écriture réelle.
+    const _PLavec=(u,fn)=>{
+      const sv={u:currentUser,s:saveUser,p:CLOUD.pushOne,l:window.loadNutrition,t:toast,c:window.rcConfirm};
+      const toasts=[];
+      try{
+        currentUser=u; saveUser=()=>true; CLOUD.pushOne=()=>Promise.resolve(true);
+        window.loadNutrition=()=>{}; toast=(m)=>{ toasts.push(String(m)); };
+        return fn(toasts);
+      } finally { currentUser=sv.u; saveUser=sv.s; CLOUD.pushOne=sv.p; window.loadNutrition=sv.l; toast=sv.t; window.rcConfirm=sv.c; }
+    };
+    ok('Plancher : 50 kg, 155 cm, 25 ans, sans sport, coefficient 0,70 → ciblesAthlete ≥ 1 200 kcal (et au plancher)',(()=>{
+      const u=_PLa();
+      const brut=cibleTableur(u,{appliquerPlancher:false});
+      if(!brut||brut.manque&&brut.manque.length) return _echec('fixture : '+JSON.stringify(brut&&brut.manque));
+      if(!(brut.ajuste<1200)) return _echec('la fixture ne descend pas sous 1 200 : '+brut.ajuste);
+      const c=ciblesAthlete(u);
+      if(!c||!(c.kcal>=1200)) return _echec('ciblesAthlete : '+(c&&c.kcal));
+      if(!(c.kcal>=plancherKcal(u))) return _echec('sous plancherKcal : '+c.kcal+' < '+plancherKcal(u));
+      // Les journées cyclées aussi : la basse remontée par les glucides, l'écart gardé.
+      const t=cibleTableur(u,{appliquerPlancher:true});
+      const j=_tbJournees(u,Object.assign({},t,{g:t.g}),true);
+      if(!(j.off.kcal>=plancherAthlete(u))||!(j.on.kcal>j.off.kcal)) return _echec('journées : '+j.on.kcal+' / '+j.off.kcal);
+      // Sans plancher lisible (poids inconnu) : l'absolu, 1 200 pour une femme, 1 500 pour un homme.
+      if(plancherAthlete({gender:'F'})!==1200||plancherAthlete({gender:'H'})!==1500) return _echec('absolu');
+      // Côté coach (appareil du coach), rien n'est remonté.
+      return cibleTableur(u,{appliquerPlancher:false}).kcal===brut.ajuste?true:_echec('coach');})());
+    ok('Plancher : 60 clics athDelta(−1) ne descendent jamais sous plancherKcal',(()=>_PLavec(
+      _PLa({nutrition:{cycle:false,tableur:{coef:0.85}},phase:{type:'seche',debut:Date.now()-7*864e5}}),(toasts)=>{
+        const u=currentUser, pl=plancherKcal(u);
+        _athEcrireCibles();
+        for(let i=0;i<60;i++){
+          athDelta(-1);
+          const m=(u.nutrition&&u.nutrition.macros)||{};
+          const on=Number((m.on||{}).kcal)||0, off=Number((m.off||{}).kcal)||0;
+          if(on&&on<pl||off&&off<pl) return _echec('clic '+(i+1)+' : '+on+' / '+off+' sous '+pl);
+          const t=cibleTableur(u,{appliquerPlancher:false});
+          if(t.ajuste<pl) return _echec('clic '+(i+1)+' : le total visé passe à '+t.ajuste);
+        }
+        return toasts.some(x=>/plancher/.test(x))?true:_echec('aucun refus annoncé');})));
+    okA('Plancher : antécédent alimentaire (aTCA) → athDelta(−1) et athObjectif(seche) n’écrivent rien',async()=>{
+      const u=_PLa({tcaRisque:true,nutrition:{cycle:false,tableur:{coef:1.00}}});
+      const sv={u:currentUser,s:saveUser,p:CLOUD.pushOne,l:window.loadNutrition,t:toast,c:window.rcConfirm};
+      const toasts=[]; let demandes=0;
+      try{
+        currentUser=u; saveUser=()=>true; CLOUD.pushOne=()=>Promise.resolve(true);
+        window.loadNutrition=()=>{}; toast=(m)=>{ toasts.push(String(m)); }; window.rcConfirm=async()=>{ demandes++; return true; };
+        const avant=JSON.stringify(u.nutrition);
+        athDelta(-1);
+        if(JSON.stringify(u.nutrition)!==avant) return _echec('athDelta a écrit');
+        await athObjectif('seche');
+        if(JSON.stringify(u.nutrition)!==avant) return _echec('athObjectif a écrit : '+JSON.stringify(u.nutrition));
+        if(demandes) return _echec('une confirmation a été demandée');
+        if(!toasts.some(x=>x===ATH_REFUS_DEFICIT_TCA)) return _echec('refus : '+toasts.join(' | '));
+        // Grossesse : même refus, avec le texte de la grossesse.
+        u.tcaRisque=false; u.grossesse={etat:'enceinte',date:Date.now()};
+        if(grossesseSuspend(u)){ await athObjectif('seche'); if(JSON.stringify(u.nutrition)!==avant) return _echec('grossesse : écrit'); }
+        // Sans risque : la sèche demande une confirmation qui annonce le déficit.
+        delete u.grossesse; let texte='';
+        window.rcConfirm=async(m)=>{ demandes++; texte=String(m); return false; };
+        await athObjectif('seche');
+        if(!demandes||!/déficit d’environ \d+ kcal par jour/.test(texte)) return _echec('confirmation : '+texte);
+        return JSON.stringify(u.nutrition)===avant?true:_echec('refus de confirmer : écrit quand même');
+      } finally { currentUser=sv.u; saveUser=sv.s; CLOUD.pushOne=sv.p; window.loadNutrition=sv.l; toast=sv.t; window.rcConfirm=sv.c; }});
+    ok('Plancher : une cible de l’athlète restée dessous (d’avant ce build) remonte quand elle change son g/kg ; celle du coach, non',(()=>_PLavec(
+      _PLa({nutrition:{cycle:false,tableur:{coef:0.70,protGkg:2},macros:{on:{kcal:1000,p:100,l:40,g:30},off:{kcal:1000,p:100,l:40,g:30},origine:'athlete'}}}),()=>{
+        const u=currentUser, pl=plancherAthlete(u);
+        _athEcrireGrille();
+        if(!(u.nutrition.macros.on.kcal>=pl)) return _echec('athlète : '+u.nutrition.macros.on.kcal+' < '+pl);
+        u.nutrition.macros={on:{kcal:1000,p:100,l:40,g:30},off:{kcal:1000,p:100,l:40,g:30},origine:'tableur'};
+        _athEcrireGrille();
+        return u.nutrition.macros.on.kcal===1000?true:_echec('la cible du coach a été remontée : '+u.nutrition.macros.on.kcal);})));
+    ok('Plancher côté coach (_plConfirme sur les mêmes chiffres) : la valeur sous plancher est acceptée, et signalée',(()=>{
+      const sv={u:currentUser,pc:_plConfirme};
+      try{
+        currentUser={id:'plC',email:'plc@t.fr',role:'coach'};
+        const c=_PLa({nutrition:{cycle:false,tableur:{coef:0.70}}});
+        const t=cibleTableur(c,{});
+        if(t.appliquePlancher) return _echec('le plancher est appliqué sur l’appareil du coach');
+        const saisie={on:{kcal:t.kcal,p:t.p,g:t.g,l:t.l,f:t.f},off:{kcal:t.kcal,p:t.p,g:t.g,l:t.l,f:t.f}};
+        _plSetConfirme(true,c.email,saisie);
+        if(!_plConfirmeValide(c.email,saisie)) return _echec('confirmation');
+        if(!(t.kcal<plancherKcal(c))) return _echec('la fixture n’est pas sous le plancher');
+        let r=null;
+        for(let i=0;i<5;i++) r=appliquerDeltaKcal(c,-1,'tableur');
+        if(!r||!r.bouge||r.refus) return _echec('le coach est bloqué : '+JSON.stringify(r));
+        if(!r.sousPlancher) return _echec('pas d’avertissement');
+        if(!(Number(c.nutrition.macros.on.kcal)<plancherKcal(c))) return _echec('la valeur a été remontée');
+        return String(tbkDelta).indexOf('r.sousPlancher')>=0?true:_echec('tbkDelta n’affiche pas l’avertissement');
+      } finally { currentUser=sv.u; _plConfirme=sv.pc; }})());
     // ── LE CYCLE NE TOUCHE LA CHARGE QUE SI ELLE L'A DIT ; LE VOLUME DE MAINTIEN ──
     ok('Cycle : phase menstruelle calculée, rien déclaré → charge inchangée (1) ; ajusterAuto → 0,95 ; j1_difficile → 0,80',(()=>{
       const jour=n=>localISODate(new Date(Date.now()-n*864e5)), AUJ=localISODate(new Date());

@@ -89064,6 +89064,15 @@ function appliquerDeltaKcal(u,sens,origineSiAbsente){
   try{ _ajustMigrer(u); }catch(e){}
   const nut=u.nutrition;
   const par=(origineSiAbsente==='athlete')?'athlete':'coach';
+  // ⚠ COTE ATHLETE, UNE BAISSE PEUT ETRE REFUSEE (30/09/2026) : jamais avec un
+  //   antecedent alimentaire declare (aTCA), jamais sous le plancher. Rien
+  //   n'est ecrit dans ces deux cas. Cote coach, rien ne change : il est averti
+  //   (sousPlancher), il decide.
+  if(par==='athlete'&&sens<0){
+    let tca=false; try{ tca=aTCA(u); }catch(e){ tca=false; }
+    if(tca) return {delta:deltaKcalPartage(u),bouge:false,refus:'tca'};
+  }
+  const _tbAvant=nut.tableur, _macrosAvant=nut.macros;
   const avant=deltaKcalPartage(u);
   const pas=(sens<0?-ATH_DELTA_PAS:ATH_DELTA_PAS);
   const tb=Object.assign({},nut.tableur||{});
@@ -89091,12 +89100,24 @@ function appliquerDeltaKcal(u,sens,origineSiAbsente){
       return o;
     };
     nut.macros=Object.assign({},m,{on:dec(m.on),off:dec(m.off||m.on)});
+    const _pl=plancherAthlete(u);
+    const _min=Math.min(Number((nut.macros.on||{}).kcal)||0,Number((nut.macros.off||{}).kcal)||0);
+    if(par==='athlete'&&sens<0&&_min<_pl){
+      nut.tableur=_tbAvant; nut.macros=_macrosAvant;
+      return {delta:avant,bouge:false,refus:'plancher',plancher:_pl};
+    }
     try{ _histoNoter(u,origineSiAbsente==='athlete'?'athlete':'coach'); }catch(e){}
-    return {delta:n,bouge:true,manuel:true,kcal:(nut.macros.on||{}).kcal};
+    return {delta:n,bouge:true,manuel:true,kcal:(nut.macros.on||{}).kcal,sousPlancher:_min<_pl};
   }
-  let t=null; try{ t=cibleTableur(u,{}); }catch(e){ t=null; }
+  let t=null; try{ t=cibleTableur(u,{appliquerPlancher:par==='athlete'}); }catch(e){ t=null; }
   if(!t||(t.manque&&t.manque.length))
     return {delta:n,bouge:true,manque:(t&&t.manque)||['calcul impossible']};
+  // L'athlete ne descend pas sous son plancher : le total VISE (avant la
+  // remontee) passerait dessous, la baisse est refusee et rien ne change.
+  if(par==='athlete'&&sens<0&&t.sousPlancher){
+    nut.tableur=_tbAvant;
+    return {delta:avant,bouge:false,refus:'plancher',plancher:t.plancher};
+  }
   const cyc=(function(){ try{ return dieteCyclee(u); }catch(e){ return false; } })();
   let j=null; try{ j=_tbJournees(u,t,cyc); }catch(e){ j=null; }
   if(!j||!j.on) return {delta:n,bouge:true,manque:['calcul impossible']};
@@ -89244,6 +89265,8 @@ function ciblesAthlete(u){
   //   lit maintenant le foyer commun — et garde `reglages` en dernier recours
   //   pour les dossiers d'avant ce lot, ce qui rend cette surcharge inutile en
   //   plus d'etre nuisible.
+  // LES CIBLES DE L'ATHLETE NE PASSENT JAMAIS SOUS SON PLANCHER (30/09/2026).
+  opts.appliquerPlancher=true;
   let t=null;
   try{ t=cibleTableur(u,opts); }catch(e){ return null; }
   if(!t||(t.manque&&t.manque.length)) return t?{manque:t.manque||[]}:null;
@@ -89296,9 +89319,27 @@ function _athVerrouille(){
   try{ loadNutrition(); }catch(e){}
   return true;
 }
-function athObjectif(k){
+// Le refus du déficit en un clic : le MÊME texte que utiliserBesoinsProposes.
+const ATH_REFUS_DEFICIT_TCA='Vu ce que tu as déclaré, RepCore ne pose pas de déficit tout seul. Passe par ton coach.';
+async function athObjectif(k){
   if(_athVerrouille()) return;
   if(!ATH_OBJECTIFS.some(o=>o.k===k)) return;
+  // UNE SÈCHE NE S'ÉCRIT PAS D'UN CLIC (30/09/2026). Refusée avec un
+  // antécédent alimentaire déclaré ou pendant une grossesse ; sinon, le
+  // déficit est annoncé en kcal par jour et doit être confirmé.
+  if(k==='seche'){
+    let tca=false, gro=false;
+    try{ tca=aTCA(currentUser); }catch(e){}
+    try{ gro=grossesseSuspend(currentUser); }catch(e){}
+    if(tca){ toast(ATH_REFUS_DEFICIT_TCA,'var(--orange)'); return; }
+    if(gro){ toast(GROSSESSE_REFUS_SECHE,'var(--orange)'); return; }
+    let t=null; try{ t=cibleTableur(currentUser,{coef:objCoefDefaut('seche'),appliquerPlancher:true}); }catch(e){ t=null; }
+    const deficit=(t&&!(t.manque&&t.manque.length))?Math.round((t.avecSport||0)-(t.kcal||0)):0;
+    if(deficit>0&&!await rcConfirm('La sèche pose un déficit d’environ '+deficit
+      +' kcal par jour, sous ta dépense estimée de '+Math.round(t.avecSport)+' kcal.'
+      +String.fromCharCode(10)+String.fromCharCode(10)
+      +'Tu peux revenir en arrière à tout moment. Continuer ?',null,'Confirmer')) return;
+  }
   if(!currentUser.nutrition) currentUser.nutrition={};
   const p=currentUser.nutrition.perso||{};
   p.objectif=k; currentUser.nutrition.perso=p;
@@ -89325,6 +89366,14 @@ function athDelta(sens){
   if(!currentUser) return;
   const r=appliquerDeltaKcal(currentUser,sens,'athlete');
   if(!r) return;
+  if(r.refus==='tca'){
+    toast(ATH_REFUS_DEFICIT_TCA,'var(--orange)');
+    return;
+  }
+  if(r.refus==='plancher'){
+    toast('Tu es à ton plancher de '+r.plancher+' kcal : en dessous, ton corps n’a plus de quoi fonctionner et récupérer. Pour aller plus bas, passe par ton coach.','var(--orange)');
+    return;
+  }
   if(r.manque&&r.manque.length){
     toast('Cibles impossibles à recalculer : il manque '+r.manque.join(', '),'var(--orange)');
     return;
@@ -89422,6 +89471,7 @@ function _athEcrireGrille(){
     return true;
   }
   // LE CAS ORDINAIRE : on garde le kcal de chaque journee et on redistribue.
+  const _parCoach=(function(){ try{ return ciblesPoseesParCoach(currentUser); }catch(e){ return true; } })();
   const refaire=(bloc)=>{
     const kcal=Math.round(Number(bloc&&bloc.kcal)||0);
     if(!(kcal>0)) return bloc;
@@ -89431,6 +89481,10 @@ function _athEcrireGrille(){
     // Le kcal EST celui d'avant, pas celui que _bloc recalculerait a partir
     // des grammes : arrondir trois macros puis re-multiplier les ferait
     // deriver de quelques calories a chaque passage.
+    // SAUF SOUS LE PLANCHER, quand les cibles sont les siennes (30/09/2026) :
+    // un total d'avant ce build, reste dessous, remonte par les glucides.
+    if(!_parCoach&&kcal<plancherAthlete(currentUser))
+      return Object.assign({},bloc,_relevePlancher(_bloc(r.p,r.l,r.g),currentUser,true));
     return Object.assign({},bloc,{p:r.p,l:r.l,g:r.g,kcal});
   };
   currentUser.nutrition=nut;
@@ -99208,9 +99262,34 @@ function _bloc(p,l,g){
 //   LA FONCTION RESTE, VIDE, PLUTOT QUE D'ETRE RETIREE DE SES SIX APPELS : le
 //   jour ou le plancher doit revenir, il revient ici, en une ligne, et non a
 //   six endroits qu'il faudrait retrouver.
-function _relevePlancher(j,user){
-  return j;
+//
+// ⚠ ELLE RELEVE A NOUVEAU, COTE ATHLETE SEULEMENT (30/09/2026). `appliquer`
+//   est decide par l'appelant : vrai sur les chemins de l'athlete (ses propres
+//   cibles, le calcul automatique), faux cote coach, qui garde la main et voit
+//   l'avertissement. La journee est remontee PAR LES GLUCIDES jusqu'au plancher
+//   (plancherAthlete) ; proteines et lipides ne bougent pas.
+function _relevePlancher(j,user,appliquer){
+  if(!appliquer||!j) return j;
+  const pl=plancherAthlete(user);
+  if(!(pl>0)||!(Number(j.kcal)<pl)) return j;
+  let g=Math.max(0,Number(j.g)||0)+Math.ceil((pl-Number(j.kcal))/4);
+  let r=_bloc(j.p,j.l,g);
+  for(let i=0;i<3&&r.kcal<pl;i++){ g++; r=_bloc(j.p,j.l,g); }
+  return r;
 }
+// Le plancher qui borne les cibles de l'athlete : plancherKcal, et sans
+// plancher lisible, l'absolu (1 200 kcal pour une femme, 1 500 pour un homme).
+function plancherAthlete(user){
+  let p=null; try{ p=plancherKcal(user); }catch(e){ p=null; }
+  if(p>0) return p;
+  const u=user||{};
+  const bl=(u.bilans||[]).filter(b=>b&&b.date).slice().sort((a,b)=>a.date-b.date);
+  const sexe=u._evol_gender||u.gender||((bl[bl.length-1]||{})['deb-gender'])||'';
+  return isFemale(sexe)?KCAL_PLANCHER_ABS.F:KCAL_PLANCHER_ABS.H;
+}
+// Sur quel appareil sommes-nous ? Celui du coach ne borne jamais les cibles
+// d'un athlete : il les voit, il est averti, il decide.
+function _appareilAthlete(){ return !(currentUser&&currentUser.role==='coach'); }
 
 // opts : { protGparKg, lipGparKg, cycle }  — cycle à false donne le MÊME total
 // jours, ce que demandent les athlètes qui ne veulent pas gérer deux colonnes.
@@ -99506,7 +99585,13 @@ function cibleTableur(user,opts){
   // ⚠ LE PLANCHER CALORIQUE GARDE LE DERNIER MOT, comme sur le chemin
   // automatique. Un coefficient de 0,70 sur une petite depense peut descendre
   // sous ce qu'un adulte doit manger ; le tableur, lui, ne le savait pas.
-  let pl=0; try{ pl=plancherKcal(u)||0; }catch(e){ pl=0; }
+  let pl=0; try{ pl=plancherAthlete(u)||0; }catch(e){ pl=0; }
+  // LE PLANCHER EST APPLIQUE COTE ATHLETE (30/09/2026). opts.appliquerPlancher
+  // decide ; sans lui, vrai sur l'appareil de l'athlete tant que ses cibles ne
+  // sont pas posees par le coach (dont la derogation confirmee reste la sienne),
+  // faux sur l'appareil du coach.
+  const appliquer=(o.appliquerPlancher!==undefined)?!!o.appliquerPlancher
+    :(_appareilAthlete()&&!(function(){ try{ return ciblesPoseesParCoach(u); }catch(e){ return false; } })());
   // ⚠ LE ±20 PARTAGE S'APPLIQUE ICI, et nulle part ailleurs (build 1412) : le
   //   tableau du coach, les journees ON/OFF et la carte de l'athlete sortent
   //   tous de ce calcul, donc tous les trois le portent du meme coup. AVANT le
@@ -99521,7 +99606,7 @@ function cibleTableur(user,opts){
   //   chez l'athlete : une fois sous le plancher, vingt calories de moins ne
   //   changeaient plus rien a l'ecran. Le plancher reste calcule et dit
   //   (`plancher`, `sousPlancher`), il ne corrige plus.
-  const kcal=ajuste;
+  const kcal=appliquer?Math.max(ajuste,pl):ajuste;
   const rep=_repartition(kcal,poids,protGkg,lipGkg);
   const bloc=_bloc(rep.p,rep.l,rep.g);
 
@@ -99537,12 +99622,17 @@ function cibleTableur(user,opts){
     // qu'ils avaient ete remontes. Meme nom, sens inverse, et c'est celui-la
     // que l'ecran doit annoncer.
     coef, phase, brut, delta:deltaKcal, ajuste, plancher:pl, sousPlancher:(pl>0&&ajuste<pl),
+    // Le plancher a-t-il ete applique, et a-t-il releve le total ? Les journees
+    // (_tbJournees) suivent la meme decision.
+    appliquePlancher:appliquer, releve:appliquer&&pl>0&&ajuste<pl,
     kcal, p:bloc.p, l:bloc.l, g:bloc.g, f:bloc.f,
     protGkg, lipGkg, manque:[]
   };
 }
 function besoinsProposes(user,opts){
   const o=opts||{};
+  // Le chemin AUTOMATIQUE borne au plancher sur l'appareil de l'athlete (30/09/2026).
+  const _appl=(o.appliquerPlancher!==undefined)?!!o.appliquerPlancher:_appareilAthlete();
   const hypotheses=[];
   const bl=((user&&user.bilans)||[]).filter(b=>b&&b.date).slice().sort((a,b)=>a.date-b.date);
   const b=bl[bl.length-1]||{};
@@ -99751,7 +99841,7 @@ function besoinsProposes(user,opts){
   // vitesse réelle.
   let on,off;
   if(!cycle){
-    const j=_relevePlancher(_bloc(r.p,r.l,r.g),user);
+    const j=_relevePlancher(_bloc(r.p,r.l,r.g),user,_appl);
     on=j; off=Object.assign({},j);
   } else {
     // LE PLANCHER ÉCRASAIT LE CYCLE. Signalé par Kevin le 25/08/2026 : « pas
@@ -99769,10 +99859,10 @@ function besoinsProposes(user,opts){
     // mais c'est déjà ce que la ligne « kcal servies » annonce, et le
     // commentaire de deltaServi juste en dessous le dit depuis toujours.
     const gOn=Math.round(r.g*(1+CYCLE_GLUC)), gOff=Math.round(r.g*(1-CYCLE_GLUC));
-    const offRel=_relevePlancher(_bloc(r.p,r.l,gOff),user);
+    const offRel=_relevePlancher(_bloc(r.p,r.l,gOff),user,_appl);
     const lift=offRel.g-gOff;                 // 0 quand le plancher ne mord pas
     off=offRel;
-    on=_relevePlancher(_bloc(r.p,r.l,gOn+lift),user);
+    on=_relevePlancher(_bloc(r.p,r.l,gOn+lift),user,_appl);
   }
   // La vitesse ANNONCÉE est celle que produit le total RÉELLEMENT servi — pas
   // celle visée, pas même celle retenue après plafond. Quand le plancher relève
@@ -100876,6 +100966,8 @@ function tbkDelta(sens){
   _tbAvis(ok,CLOUD.pushOne(c.email,c),
     'Ton athlète est sur '+_tbNb(r.kcal)+' kcal'
     +(r.delta?(' ('+(r.delta>0?'+':'')+r.delta+' d’ajustement)'):''));
+  // Sous le plancher : le coach peut, mais il le voit.
+  if(r.sousPlancher){ try{ toast('Attention : ce total passe sous le plancher de '+_tbNb(plancherAthlete(c))+' kcal de ton athlète.','var(--red)'); }catch(e){} }
   try{ renderCoachNutriSection(c); }catch(e){}
   return true;
 }
@@ -101189,15 +101281,17 @@ const _tbDec=v=>(v==null||!isFinite(v))?'-':String(Math.round(v*100)/100).replac
 // aucune journee ne passe sous le plancher, et le supplement est le meme des
 // deux cotes. Une seconde facon de cycler finirait par donner deux repartitions
 // pour le meme athlete selon le bouton presse.
-function _tbJournees(user,t,cyclee){
+function _tbJournees(user,t,cyclee,appliquer){
+  // Le plancher suit la decision prise pour le total (t.appliquePlancher).
+  const ap=(appliquer!==undefined)?!!appliquer:!!(t&&t.appliquePlancher);
   if(!cyclee){
-    const j=_relevePlancher(_bloc(t.p,t.l,t.g),user);
+    const j=_relevePlancher(_bloc(t.p,t.l,t.g),user,ap);
     return {on:j,off:j};
   }
   const gOn=Math.round(t.g*(1+CYCLE_GLUC)), gOff=Math.round(t.g*(1-CYCLE_GLUC));
-  const offRel=_relevePlancher(_bloc(t.p,t.l,gOff),user);
+  const offRel=_relevePlancher(_bloc(t.p,t.l,gOff),user,ap);
   const lift=offRel.g-gOff;
-  return {off:offRel,on:_relevePlancher(_bloc(t.p,t.l,gOn+lift),user)};
+  return {off:offRel,on:_relevePlancher(_bloc(t.p,t.l,gOn+lift),user,ap)};
 }
 
 // ⚠ SANS CE BOUTON, LES TABLEAUX NE SONT QU'UN AFFICHAGE. Ils annoncaient
