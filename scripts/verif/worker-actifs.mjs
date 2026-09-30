@@ -71,7 +71,9 @@ function scene({avecDocument}) {
       ['./rc-style.' + VIEUX + '.css', 590000], ['./icons/icon-192x192.png', 4000],
       ['./exercices/squat.webp', 40000]]);
     await semer('repcore-v' + PRECEDENT, [['./rc-core.' + PRECEDENT + '.js', 5500000],
-      ['./rc-style.' + PRECEDENT + '.css', 590000], ['./data/ciqual.json', 672000]]);
+      ['./rc-style.' + PRECEDENT + '.css', 590000], ['./data/ciqual.json', 672000],
+      // La base porte sa version (sw.js, CIQUAL_VERSION) : c'est elle qui l'autorise a passer.
+      ['./data/ciqual.version', 10, ((SW.match(/const CIQUAL_VERSION = '([^']+)'/) || [])[1]) || '']]);
     const neuf = [['./rc-core.' + BUILD + '.js', 5500000], ['./rc-style.' + BUILD + '.css', 590000],
       ['./rc-core.' + POLLUANT + '.js', 5500000]];               // la pollution
     if (avecDocument) neuf.push(['./index.html', 440000, "window.RC_BUILD='" + BUILD + "';"]);

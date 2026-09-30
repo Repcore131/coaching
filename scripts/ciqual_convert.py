@@ -1,8 +1,29 @@
 """
 Ciqual 2025 → ciqual.json
 Converts the Anses Ciqual 2025 xlsx to a lightweight JSON for RepCore.
-Usage: python scripts/ciqual_convert.py
-Output: data/ciqual.json (~850 KB)
+Usage : python scripts/ciqual_convert.py                (depuis le xlsx de l'Anses)
+        python scripts/ciqual_convert.py --depuis-json  (complète app/data/ciqual.json
+                                                         sans le xlsx : énergie calculée
+                                                         et aliments génériques)
+Output: app/data/ciqual.json (~850 KB)
+
+ÉNERGIE ABSENTE, MACROS PRÉSENTES (30/09/2026)
+143 aliments n'ont pas d'énergie dans la table ; 62 d'entre eux ont pourtant
+protéines, glucides et lipides. Sans énergie, l'app les comptait 0 kcal au
+journal. On calcule alors k = 4 p + 4 c + 9 l + 2 f (f = fibres, 0 si absentes),
+coefficients d'Atwater et 2 kcal/g pour les fibres (règlement UE 1169/2011,
+annexe XIV), arrondi au dixième, et on pose "k_calc": true pour que l'app
+dise « kcal estimées ». Un aliment à qui il manque une des trois macros reste
+sans énergie : on n'invente pas.
+
+LES ALIMENTS « REPCORE GÉNÉRIQUES » (ids NÉGATIFS)
+La table de l'Anses ne connaît ni la whey, ni la caséine, ni le gel
+énergétique : l'athlète ne les trouvait pas hors ligne. Onze aliments de
+sportifs sont ajoutés, ids -1 à -11, groupe « produits pour sportifs ». Ce ne
+sont PAS des données Ciqual : ce sont des valeurs moyennes d'étiquettes du
+commerce pour 100 g, arrondies (voir GENERIQUES). Les ids négatifs ne peuvent
+pas rencontrer un code Ciqual, et les 3 484 aliments de l'Anses restent
+comptables à part (id > 0).
 
 Source : Anses. Table de composition nutritionnelle des aliments Ciqual.
 Fichier utilisé : « Table Ciqual 2025_FR_2025_11_03.xlsx », version du 3 novembre
@@ -26,7 +47,6 @@ base, pas un défaut du calcul. L'application affiche cette part et n'en tire
 aucune conclusion quand elle est trop faible.
 """
 import json, re, os, sys
-import pandas as pd
 
 SRC = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'Downloads',
                    'Table Ciqual 2025_FR_2025_11_03.xlsx')
@@ -109,6 +129,82 @@ def normalize(text):
         text = text.replace(a, b)
     return text
 
+# ── Énergie calculée, et aliments génériques ─────────────────────────────
+def kcal_calculee(e):
+    """k = 4p + 4c + 9l + 2f quand l'énergie manque et que p, c, l sont là."""
+    if e.get('k') is not None:
+        return None
+    if any(e.get(x) is None for x in ('p', 'c', 'l')):
+        return None
+    return round(4*e['p'] + 4*e['c'] + 9*e['l'] + 2*(e.get('f') or 0), 1)
+
+# Valeurs moyennes pour 100 g, relevées sur les étiquettes de produits
+# courants du commerce (plusieurs marques, 2025-2026) et arrondies. Elles
+# ne viennent PAS de Ciqual : chaque ligne dit ce qu'elle représente.
+GROUPE_SPORT = 'produits pour sportifs'
+GENERIQUES = [
+    # Whey concentrée (~80 % de protéines) : étiquettes de whey « standard ».
+    (-1,  'Whey concentrée (protéine de lactosérum), poudre',        390, 76,  8,   6,   0,   0.5),
+    # Whey isolat (~90 %) : quasi sans lactose ni graisse.
+    (-2,  'Whey isolat, poudre',                                     370, 88,  2,   1,   0,   0.5),
+    # Caséine micellaire : protéine lente du lait.
+    (-3,  'Caséine micellaire, poudre',                              355, 78,  6,   1.5, 0,   0.6),
+    # Protéine végétale (mélange pois et riz).
+    (-4,  'Protéine végétale (pois et riz), poudre',                 380, 75,  5,   7,   3,   1.5),
+    # Clear whey : isolat hydrolysé, se boit comme un jus.
+    (-5,  'Clear whey (isolat hydrolysé), poudre',                   360, 85,  3,   0.5, 0,   0.3),
+    # Skyr nature 0 % : valeurs d'étiquettes des skyrs du rayon frais.
+    (-6,  'Skyr nature',                                             63,  11,  4,   0.2, 0,   0.1),
+    # Gel énergétique : sachets de 30 à 40 g, ramenés à 100 g.
+    (-7,  'Gel énergétique',                                         270, 0,   67,  0,   0,   0.2),
+    # Boisson isotonique prête à boire (100 ml ≈ 100 g).
+    (-8,  'Boisson isotonique, prête à boire',                       25,  0,   6,   0,   0,   0.1),
+    # Barre protéinée : moyenne de barres à ~30 % de protéines.
+    (-9,  'Barre protéinée',                                         360, 33,  35,  11,  5,   0.6),
+    # Maltodextrine : glucide pur en poudre.
+    (-10, 'Maltodextrine, poudre',                                   380, 0,   95,  0,   0,   0),
+    # Crème de riz : farine de riz précuite.
+    (-11, 'Crème de riz, poudre',                                    360, 7,   80,  1,   1,   0),
+]
+
+def generiques():
+    out = []
+    for (i, nom, k, p, c, l, f, e) in GENERIQUES:
+        out.append({'id': i, 'n': nom, 'g': GROUPE_SPORT, 's': normalize(nom),
+                    'k': float(k), 'p': float(p), 'c': float(c), 'l': float(l),
+                    'f': float(f), 'e': float(e), 'src': 'repcore'})
+    return out
+
+def completer(out):
+    """Énergie calculée là où elle manque, puis le bloc générique (remplacé
+    s'il existait déjà : le script peut repasser sans rien dupliquer)."""
+    base = [e for e in out if not (isinstance(e.get('id'), int) and e['id'] < 0)]
+    n = 0
+    for e in base:
+        k = kcal_calculee(e)
+        if k is not None:
+            e['k'] = k
+            e['k_calc'] = True
+            n += 1
+    print(f'  Énergie calculée (4p + 4c + 9l + 2f) : {n} aliments')
+    g = generiques()
+    print(f'  Aliments génériques RepCore : {len(g)}')
+    return base + g
+
+def ecrire(out):
+    os.makedirs(os.path.dirname(DST), exist_ok=True)
+    with open(DST, 'w', encoding='utf-8') as fp:
+        json.dump(out, fp, ensure_ascii=False, separators=(',', ':'))
+    print(f'  Écrit : {DST} ({os.path.getsize(DST)/1024:.0f} KB)')
+
+if '--depuis-json' in sys.argv:
+    with open(DST, encoding='utf-8') as fp:
+        existant = json.load(fp)
+    print(f'Complète {DST} ({len(existant)} entrées) ...')
+    ecrire(completer(existant))
+    sys.exit(0)
+
+import pandas as pd
 print(f'Reading {SRC} ...')
 df = pd.read_excel(SRC, dtype=str)
 print(f'  {len(df)} rows, {len(df.columns)} columns')
@@ -196,13 +292,8 @@ for cle in COLS_MICRO:
     n = couverture.get(cle, 0)
     print(f'    {cle:4} {n:5} / {len(out)}  ({100*n/max(1,len(out)):5.1f} %)')
 
-os.makedirs(os.path.dirname(DST), exist_ok=True)
-with open(DST, 'w', encoding='utf-8') as fp:
-    json.dump(out, fp, ensure_ascii=False, separators=(',', ':'))
-
-size_kb = os.path.getsize(DST) / 1024
-print(f'  Écrit : {DST}')
-print(f'  Taille : {size_kb:.0f} KB')
+out = completer(out)
+ecrire(out)
 print('Done.')
 print()
 print('Source : Anses. 2025. Table de composition nutritionnelle des aliments Ciqual')

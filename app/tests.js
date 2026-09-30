@@ -11720,7 +11720,8 @@ async function testExercices(){
           const m=t.match(/([0-9][0-9  ]{2,})\s*aliments/);
           if(!m) return _echec('l\'argument sur les aliments a disparu');
           const annonce=parseInt(m[1].replace(/[^0-9]/g,''),10);
-          const reel=(_ciqualDB||[]).length;
+          // Les aliments de l'ANSES seuls (id > 0) : les génériques RepCore (ids négatifs) n'en sont pas.
+          const reel=(_ciqualDB||[]).filter(f=>f&&f.id>0).length;
           if(!reel) return _echec('base non chargée : appeler _loadCiqual() avant la suite');
           return annonce===reel
             ?true:_echec('annoncé '+annonce+', réel '+reel);})());
@@ -20939,6 +20940,73 @@ async function testExercices(){
     ok('T1 — calcSug n’existe plus : chargeSuivante est le seul moteur des charges proposées',typeof calcSug==='undefined');
     ok('T1 — la borne : répétitions + RIR ≤ 12',e1rmFiable(12,0)&&e1rmFiable(10,2)&&!e1rmFiable(10,3)&&!e1rmFiable(13,0)&&e1rmFiable(8,'')&&e1rmFiable(0,0));
     ok('e1rm sur charge nulle ou négative rend 0',e1rm(0,10,1)===0&&e1rm(-5,10,1)===0);
+    // ── CIQUAL : L'ÉNERGIE ESTIMÉE, LES ALIMENTS DE SPORTIFS, LE RECHARGEMENT ──
+    ok('Énergie estimée : {k:null, p:14,3, c:20, l:18,4, f:1} à 200 g → kcal > 0 et kcalEstimee',(()=>{
+      const f={id:999001,n:'Essai sans énergie',g:'',k:null,p:14.3,c:20,l:18.4,f:1};
+      const e=_eqConstruireEntree(f,200,'dejeuner',1);
+      if(!(e.kcal>0)||e.kcalEstimee!==true) return _echec(JSON.stringify({kcal:e.kcal,est:e.kcalEstimee}));
+      if(e.kcal!==Math.round((4*14.3+4*20+9*18.4+2*1)*2)) return _echec('valeur : '+e.kcal);
+      // Une énergie connue n'est ni recalculée ni marquée.
+      const g=_eqConstruireEntree({id:1,n:'x',k:100,p:1,c:1,l:1},100,'dejeuner',2);
+      if(g.kcal!==100||g.kcalEstimee) return _echec('énergie connue');
+      // Une macro manquante : on n'invente rien.
+      if(_eqConstruireEntree({id:2,n:'y',k:null,p:1,c:null,l:1},100,'dejeuner',3).kcal!==null) return _echec('macro manquante');
+      // saveFoodEntry et l'aperçu passent par le même calcul ; la ligne du journal le dit.
+      const src=_prodSrc();
+      if(String(saveFoodEntry).indexOf('kcalPortion(f,r)')<0||String(updateFjaCalc).indexOf('kcalPortion(f,r)')<0) return _echec('saveFoodEntry ou l’aperçu');
+      if(src.indexOf("kcal${e.kcalEstimee?' estimées':''}")<0) return _echec('la ligne du journal ne dit pas « estimées »');
+      // Les entrées déjà enregistrées à 0 kcal, macros connues, sont migrées.
+      const u={nutrition:{log:{'2026-09-29':{entries:[{id:1,kcal:null,p:10,c:10,l:10,fi:2},{id:2,kcal:null,p:5,c:null,l:1}]}}}};
+      if(!migrerKcalEstimees(u)) return _echec('rien migré');
+      const es=u.nutrition.log['2026-09-29'].entries;
+      if(es[0].kcal!==174||!es[0].kcalEstimee||es[1].kcal!==null) return _echec('migration : '+JSON.stringify(es));
+      return migrerKcalEstimees(u)===false?true:_echec('migration rejouée');})());
+    okA('Base locale : « whey » trouve au moins un aliment ; les énergies calculées portent k_calc',async()=>{
+      await _loadCiqual();
+      const b=Array.isArray(_ciqualDB)?_ciqualDB:[];
+      if(!b.length) return _echec('base non chargée');
+      const w=b.filter(f=>_fjContientTous(f.s,['whey']));
+      if(!w.length) return _echec('aucune whey');
+      const gen=b.filter(f=>f.id<0);
+      if(gen.length!==11||gen.some(f=>f.g!=='produits pour sportifs'||!(f.k>0))) return _echec('génériques : '+gen.length);
+      for(const n of ['caseine','skyr','maltodextrine','creme de riz','gel energetique','isotonique','barre proteinee','clear whey','proteine vegetale'])
+        if(!b.some(f=>f.id<0&&f.s.indexOf(n)>=0)) return _echec('générique absent : '+n);
+      const kc=b.filter(f=>f.k_calc);
+      if(!kc.length||kc.some(f=>Math.abs(f.k-Math.round((4*f.p+4*f.c+9*f.l+2*(f.f||0))*10)/10)>0.05)) return _echec('k_calc : '+kc.length);
+      // Aucune entrée n'a plus p, c et l sans énergie.
+      return b.some(f=>f.k==null&&f.p!=null&&f.c!=null&&f.l!=null)?_echec('une énergie manque encore'):true;});
+    okA('_loadCiqual : un échec ne se mémorise plus ; 30 s plus tard, le second appel renvoie la base',async()=>{
+      const sv={db:_ciqualDB,ech:_ciqualEchec,f:window.fetch,now:Date.now};
+      try{
+        _ciqualDB=null; _ciqualEchec=0;
+        window.fetch=()=>Promise.reject(new Error('hors ligne'));
+        const a=await _loadCiqual();
+        if(!Array.isArray(a)||a.length) return _echec('premier appel : '+(a&&a.length));
+        if(!ciqualIndisponible()) return _echec('l’indisponibilité n’est pas dite');
+        // Moins de 30 s : pas de nouvelle tentative.
+        let appels=0;
+        window.fetch=()=>{ appels++; return Promise.resolve({ok:true,json:async()=>[{id:1,n:'Pomme',s:'pomme',k:52}]}); };
+        await _loadCiqual();
+        if(appels) return _echec('nouvelle tentative avant 30 s');
+        // Après 30 s : la base revient.
+        const t0=Date.now(); Date.now=()=>t0+31e3;
+        const b=await _loadCiqual();
+        if(appels!==1||!b||b.length!==1||ciqualIndisponible()) return _echec('second appel : '+JSON.stringify(b));
+        return true;
+      } finally { window.fetch=sv.f; Date.now=sv.now; _ciqualDB=sv.db; _ciqualEchec=sv.ech; }});
+    ok('Recherche hors ligne : « base d’aliments indisponible » plutôt qu’une liste vide ; sw.js garde l’URL et versionne la base',(()=>{
+      const el=document.getElementById('fj-results-list');
+      if(!el) return _echec('pas de liste de résultats');
+      const sv={db:_ciqualDB,ech:_ciqualEchec,av:el.innerHTML};
+      try{
+        _ciqualDB=[]; _ciqualEchec=Date.now();
+        onFjSearch('whey');
+        if(el.textContent.indexOf('Base d’aliments indisponible hors ligne')<0) return _echec(el.textContent.slice(0,80));
+      } finally { _ciqualDB=sv.db; _ciqualEchec=sv.ech; el.innerHTML=sv.av; }
+      const x=new XMLHttpRequest(); x.open('GET','sw.js',false); x.send();
+      const sw=x.responseText||'';
+      if(sw.indexOf("const CIQUAL_URL = './data/ciqual.json';")<0) return _echec('l’URL de la base a changé');
+      return /CIQUAL_VERSION = '/.test(sw)&&/_ciqualAJour\(vieux\)/.test(sw)?true:_echec('la base n’est pas versionnée dans sw.js');})());
     // ── LE POIDS DE RÉFÉRENCE DES MACROS, ET CE QUI EST DIT À L'ÉCRAN ──
     const _PMa=(sexe,kg,cm,o)=>Object.assign({id:'pmA',email:'pma@t.fr',role:'athlete',gender:sexe,_evol_gender:sexe,
       _evol_height:String(cm),'init-age':30,sessions_config:[],

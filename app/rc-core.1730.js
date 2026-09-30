@@ -7802,6 +7802,8 @@ function routeUser(){
   // les deux portions, une fois, au demarrage. Elle ne sauve QUE si elle a
   // change quelque chose — un dossier deja migre ne declenche aucune poussee.
   try{ if(migrerTrapezes(currentUser)) saveUser(); }catch(e){}
+  // Les entrées du journal comptées 0 kcal alors que leurs macros sont connues.
+  try{ if(migrerKcalEstimees(currentUser)) saveUser(); }catch(e){}
   // Une seule fois par chargement, et après que l'écran d'arrivée soit peint.
   setTimeout(_pastilleServiParCache,900);
   if(!currentUser) return go('s-welcome');
@@ -92662,6 +92664,7 @@ function onPlanSearch(val){
     _loadCiqual().then(()=>onPlanSearch(val));
     return;
   }
+  if(ciqualIndisponible()){ el.innerHTML=_htmlCiqualIndispo(); _loadCiqual().then(()=>{ if(!ciqualIndisponible()) onPlanSearch(val); }); return; }
   const normQ=_fjNorm(q);
   const words=normQ.split(/\s+/).filter(w=>w.length>1);
   if(!words.length){ el.innerHTML=''; return; }
@@ -94079,13 +94082,59 @@ function _classerAliments(res,normQ,words){
   }).sort((a,b)=>b.sc-a.sc);
 }
 
+// ⚠ UN ECHEC N'EST PLUS DEFINITIF (30/09/2026). La base retombait a [] pour
+//   toute la session au premier echec — hors ligne une fois, vide jusqu'au
+//   rechargement. On garde `[]` (les rendus qui ne rechargent que si
+//   !_ciqualDB ne bouclent pas), l'heure de l'echec, et on RETENTE au premier
+//   appel qui suit 30 secondes. ciqualIndisponible() le dit a l'ecran.
+let _ciqualEchec=0;
+const CIQUAL_REESSAI_MS=30e3;
+function ciqualIndisponible(){ return _ciqualEchec>0&&!(Array.isArray(_ciqualDB)&&_ciqualDB.length); }
 async function _loadCiqual(){
-  if(_ciqualDB) return _ciqualDB;
+  if(Array.isArray(_ciqualDB)&&_ciqualDB.length) return _ciqualDB;
+  if(_ciqualEchec&&Date.now()-_ciqualEchec<CIQUAL_REESSAI_MS) return _ciqualDB||[];
   try{
     const r=await fetch('./data/ciqual.json');
-    _ciqualDB=await r.json();
-  }catch(e){_ciqualDB=[];}
+    if(!r||!r.ok) throw new Error('ciqual '+(r&&r.status));
+    const d=await r.json();
+    if(!Array.isArray(d)||!d.length) throw new Error('ciqual vide');
+    _ciqualDB=d; _ciqualEchec=0;
+  }catch(e){
+    _ciqualEchec=Date.now();
+    if(!Array.isArray(_ciqualDB)) _ciqualDB=[];
+  }
   return _ciqualDB;
+}
+const CIQUAL_MSG_INDISPO='Base d’aliments indisponible hors ligne. Réessaie une fois connecté.';
+function _htmlCiqualIndispo(){
+  return '<div style="padding:20px;text-align:center;color:var(--orange);font-size:var(--fs-sm)">'+CIQUAL_MSG_INDISPO+'</div>';
+}
+
+// ── L'ÉNERGIE D'UNE ENTRÉE, QUAND LA TABLE N'EN DONNE PAS (30/09/2026) ─────
+// Défense en profondeur : le script de conversion la calcule déjà (k_calc),
+// mais un aliment venu d'ailleurs (scan, OFF, aliment perso, ancienne base en
+// cache) peut arriver sans. 4 p + 4 c + 9 l + 2 f, par portion.
+// PURE. {kcal, estimee} pour la portion r (quantité / 100).
+function kcalPortion(f,r){
+  if(!f) return {kcal:null,estimee:false};
+  if(f.k!=null) return {kcal:Math.round(f.k*r),estimee:f.k_calc===true};
+  if(f.p!=null&&f.c!=null&&f.l!=null)
+    return {kcal:Math.round((4*f.p+4*f.c+9*f.l+2*(Number(f.f)||0))*r),estimee:true};
+  return {kcal:null,estimee:false};
+}
+// Les entrées déjà enregistrées sans énergie, macros connues : estimées une
+// fois, et marquées. Rend true si quelque chose a changé.
+function migrerKcalEstimees(user){
+  const log=(user&&user.nutrition&&user.nutrition.log)||{};
+  let bouge=false;
+  for(const d of Object.keys(log)){
+    for(const e of ((log[d]||{}).entries||[])){
+      if(!e||e.kcal!=null||e.p==null||e.c==null||e.l==null) continue;
+      e.kcal=Math.round(4*Number(e.p)+4*Number(e.c)+9*Number(e.l)+2*(Number(e.fi)||0));
+      e.kcalEstimee=true; bouge=true;
+    }
+  }
+  return bouge;
 }
 
 // ── Repas proposé : le dernier choisi, sinon l'heure ───────────────────────
@@ -95544,9 +95593,10 @@ function equivalenceDescriptive(user){
 // entrée : c'est ce qui empêche les deux chemins de diverger.
 function _eqConstruireEntree(f,qty,repas,id){
   const r=qty/100;
+  const _k=kcalPortion(f,r);
   const e={
     id:id||Date.now(),alim_id:f.id,nom:f.n,groupe:f.g||'',qty,repas:repas||'dejeuner',
-    kcal:f.k!=null?Math.round(f.k*r):null,
+    kcal:_k.kcal,
     p:f.p!=null?parseFloat((f.p*r).toFixed(1)):null,
     c:f.c!=null?parseFloat((f.c*r).toFixed(1)):null,
     l:f.l!=null?parseFloat((f.l*r).toFixed(1)):null,
@@ -95554,6 +95604,7 @@ function _eqConstruireEntree(f,qty,repas,id){
     sel:f.e!=null?parseFloat((f.e*r).toFixed(2)):null,
     periSeance:false
   };
+  if(_k.estimee) e.kcalEstimee=true;
   _poserMicros(e,f,r);
   return e;
 }
@@ -97106,6 +97157,7 @@ function onFjSearch(val){
     _loadCiqual().then(()=>onFjSearch(val));
     return;
   }
+  if(ciqualIndisponible()){ el.innerHTML=_htmlCiqualIndispo(); _loadCiqual().then(()=>{ if(!ciqualIndisponible()) onFjSearch(val); }); return; }
   const normQ=_fjNorm(q);
   const words=normQ.split(/\s+/).filter(w=>w.length>1);
   if(!words.length){el.innerHTML='';return;}
@@ -97246,7 +97298,7 @@ function updateFjaCalc(){
   if(!el) return;
   if(qty<=0||qty>9999){el.innerHTML='';return;}
   const r=qty/100;
-  const kcal=f.k!=null?Math.round(f.k*r):null;
+  const kcal=kcalPortion(f,r).kcal;
   const p=f.p!=null?parseFloat((f.p*r).toFixed(1)):null;
   const c=f.c!=null?parseFloat((f.c*r).toFixed(1)):null;
   const l=f.l!=null?parseFloat((f.l*r).toFixed(1)):null;
@@ -97999,7 +98051,8 @@ async function saveFoodEntry(){
   const r=qty/100;
   const entry={
     id:Date.now(),alim_id:f.id,nom:f.n,groupe:f.g||'',qty,repas:_fjRepas,
-    kcal:f.k!=null?Math.round(f.k*r):null,
+    // L'énergie estimée quand la table n'en donne pas (kcalPortion), et marquée.
+    kcal:kcalPortion(f,r).kcal,
     p:f.p!=null?parseFloat((f.p*r).toFixed(1)):null,
     c:f.c!=null?parseFloat((f.c*r).toFixed(1)):null,
     l:f.l!=null?parseFloat((f.l*r).toFixed(1)):null,
@@ -98012,6 +98065,7 @@ async function saveFoodEntry(){
     // false et non undefined, pour que basculerPeriSeance ait toujours
     // une valeur a inverser.
     periSeance:false,
+    ...(kcalPortion(f,r).estimee?{kcalEstimee:true}:{}),
   };
   // Micronutriments : meme prorata que les macros ci-dessus, et il n'existe
   // qu'un seul endroit ou il est ecrit.
@@ -98308,7 +98362,7 @@ function _renderFjDaySummary(date){
             <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${[(e.recette&&e.unite)?escapeHtml(e.unite):e.qty+'g',_fragmentSiValeur('P ',e.p,'g'),_fragmentSiValeur('G ',e.c,'g'),_fragmentSiValeur('L ',e.l,'g')].filter(x=>x).join(' · ')}</div>
           </div>
           <div style="flex-shrink:0;margin-left:8px;text-align:right">
-            ${e.kcal!=null?`<div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-weight:400;font-size:17px;letter-spacing:.5px;color:var(--red-text)">${e.kcal}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400"> kcal</span></div>`:`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--amber);background:#1a0e00;border:1px solid #3a1e00;border-radius:var(--r-1);padding:1px 6px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`}
+            ${e.kcal!=null?`<div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-weight:400;font-size:17px;letter-spacing:.5px;color:var(--red-text)">${e.kcal}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400"> kcal${e.kcalEstimee?' estimées':''}</span></div>`:`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--amber);background:#1a0e00;border:1px solid #3a1e00;border-radius:var(--r-1);padding:1px 6px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`}
             <button class="hit44" onclick="ouvrirEquivalents('${date}',${e.id})" title="Équivalences" aria-label="Voir des équivalences"
               style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:4px">⇄</button>
             <button class="hit44" onclick="deleteFoodEntry('${date}',${e.id})" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:4px">✕</button>

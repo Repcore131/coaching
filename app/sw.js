@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1729';
+const CACHE = 'repcore-v1730';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -167,7 +167,7 @@ CORPS.push('./img/complements.webp');
 // ni code ni style — c'est-a-dire rien du tout.
 // Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
 // chaque build et reecrit cette ligne comme celle d'index.html.
-const ASSETS = ['./index.html', './rc-core.1729.js', './rc-style.1729.css',
+const ASSETS = ['./index.html', './rc-core.1730.js', './rc-style.1730.css',
   './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
@@ -233,6 +233,18 @@ self.addEventListener('install', e => {
 // la recherche d'aliment fonctionne alors hors-ligne aux visites suivantes,
 // sans peser sur le tout premier chargement de l'app.
 const CIQUAL_URL = './data/ciqual.json';
+// LA VERSION DE LA BASE, À CHANGER À CHAQUE RÉGÉNÉRATION DE ciqual.json
+// (30/09/2026). L'URL ne change pas, et la base est REPORTÉE d'un cache à
+// l'autre à chaque mise à jour : sans version, un athlète déjà installé
+// gardait l'ancienne pour toujours (ni whey, ni énergie calculée). Le marqueur
+// vit à côté, sous CIQUAL_VERSION_URL ; une base d'une autre version n'est
+// plus reportée, et le préchargement la retélécharge.
+const CIQUAL_VERSION = '2026-09-30';
+const CIQUAL_VERSION_URL = './data/ciqual.version';
+async function _ciqualAJour(c) {
+  try { const r = await c.match(CIQUAL_VERSION_URL); return !!(r && (await r.text()) === CIQUAL_VERSION); }
+  catch (err) { return false; }
+}
 let _ciqualPrefetch = null;
 self.addEventListener('message', e => {
   // Séance en cours : on retient la bascule. À la fin, si CE worker attendait,
@@ -261,8 +273,10 @@ self.addEventListener('message', e => {
   if (_ciqualPrefetch) return;            // une seule tentative par cycle de vie du SW
   _ciqualPrefetch = caches.open(CACHE)
     .then(async c => {
-      if (await c.match(CIQUAL_URL)) return;   // déjà en cache : rien à faire
-      await c.add(CIQUAL_URL);
+      if ((await c.match(CIQUAL_URL)) && (await _ciqualAJour(c))) return;   // à jour : rien à faire
+      // cache:'reload' : pas la copie du cache HTTP, celle du serveur.
+      await c.add(new Request(CIQUAL_URL, { cache: 'reload' }));
+      await c.put(CIQUAL_VERSION_URL, new Response(CIQUAL_VERSION));
     })
     .catch(() => { _ciqualPrefetch = null; }); // échec (hors ligne) : réessayable
 });
@@ -359,10 +373,13 @@ self.addEventListener('activate', e => {
       }
       const _gardees = [..._versionsVues].sort((a, b) => b - a).slice(0, 2);
       const _actifGarde = u => { const v = _versionActif(u); return v === null || _gardees.indexOf(v) >= 0; };
+      // data/ciqual.* : la base alimentaire a son propre report, gardé par sa
+      // version (plus bas) ; la boucle générique la ramènerait telle quelle.
       const _exclu = u => !_actifGarde(u)
         || /\/index\.html$/.test(u) || /\/tests\.js$/.test(u)
         || /\/sw\.js$/.test(u) || /\/database\.rules\.json$/.test(u)
         || /\/motion-lab\.js(\?|$)/.test(u)
+        || /\/data\/ciqual\.(json|version)$/.test(u)
         || (PURGE_EXERCICES === CACHE && /\/exercices\//.test(u));
       // LA BASE ALIMENTAIRE D'ABORD, ET HORS BUDGET. Elle n'entre dans le
       // cache que par un prefetch explicite, et le report ne la connaissait
@@ -382,8 +399,10 @@ self.addEventListener('activate', e => {
           try {
             const vieux = await caches.open(anciens[i]);
             const r = await vieux.match(CIQUAL_URL);
-            if (r) {
+            // Une base d'une AUTRE version ne se reporte pas : elle se retélécharge.
+            if (r && (await _ciqualAJour(vieux))) {
               await neuf.put(CIQUAL_URL, r.clone());
+              await neuf.put(CIQUAL_VERSION_URL, new Response(CIQUAL_VERSION));
               _ciqual = true; _reportes++;
               const _n = _taille(r);
               if (_n) _octets += _n; else _inconnus++;
