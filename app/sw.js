@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1746';
+const CACHE = 'repcore-v1747';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -167,7 +167,7 @@ CORPS.push('./img/complements.webp');
 // ni code ni style — c'est-a-dire rien du tout.
 // Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
 // chaque build et reecrit cette ligne comme celle d'index.html.
-const ASSETS = ['./index.html', './rc-core.1746.js', './rc-style.1746.css',
+const ASSETS = ['./index.html', './rc-core.1747.js', './rc-style.1747.css',
   './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
@@ -660,6 +660,18 @@ async function swSet(key, val) {
 }
 
 // ─── Periodic background sync — fires even when app is closed (Chrome/Android) ─
+// ─── BACKGROUND SYNC : LA FILE D'ENVOI (30/09/2026) ────────────────────────
+// La page enregistre 'rc-sync' quand sa file n'est pas vide ; le navigateur
+// nous reveille au retour du reseau. On NE PEUT PAS envoyer d'ici : le jeton
+// Firebase et la fusion a trois voies vivent dans la page. On demande donc aux
+// pages ouvertes de vider leur file ; sans page ouverte, la file attend le
+// prochain demarrage, qui la vide.
+self.addEventListener('sync', e => {
+  if (e.tag !== 'rc-sync') return;
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    .then(cs => { cs.forEach(c => { try { c.postMessage({ rc: 'vider-file' }); } catch (x) {} }); }));
+});
+
 self.addEventListener('periodicsync', e => {
   if (e.tag === 'bilan-reminder') e.waitUntil(swCheckAndNotify());
   if (e.tag === 'wo-reminder') e.waitUntil(swCheckWoReminder());
