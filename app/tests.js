@@ -2572,11 +2572,13 @@ async function testExercices(){
             ?_echec('le libellé subsiste'):true;})());
         ok('CE QUI NE DEVAIT PAS PARTIR : charge, e1RM, phases, contraception',(()=>{
           // Les quatre garde-fous du prompt, chacun vérifié directement.
+          // ajusterAuto : depuis le 30/09/2026, la phase calculée ne pèse sur la
+          // charge que si l'athlète l'a demandé (sinon 1, testé plus bas).
           const dur=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28,
-            intensiteRegles:'difficile'},{currentCycle:'ignore'});
+            intensiteRegles:'difficile',ajusterAuto:true},{currentCycle:'ignore'});
           if(getCycleFactor(dur,AUJ).factor!==0.80)
             return _echec('multiplicateur difficile : '+getCycleFactor(dur,AUJ).factor);
-          const doux=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28},
+          const doux=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28,ajusterAuto:true},
             {currentCycle:'ignore'});
           if(getCycleFactor(doux,AUJ).factor!==0.95)
             return _echec('multiplicateur supportable : '+getCycleFactor(doux,AUJ).factor);
@@ -2610,10 +2612,12 @@ async function testExercices(){
           const f=getCycleFactor(u,AUJ);
           return f.seriesReduce===0?true:_echec(JSON.stringify(f));})());
         ok('Règles « supportables » → 0,95 ; « difficiles » → 0,80',(()=>{
-          const doux=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28},
+          const doux=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28,ajusterAuto:true},
             {currentCycle:'ignore'});
+          // ajusterAuto : depuis le 30/09/2026, la phase calculée ne pèse sur la
+          // charge que si l'athlète l'a demandé (sinon 1, testé plus bas).
           const dur=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28,
-            intensiteRegles:'difficile'},{currentCycle:'ignore'});
+            intensiteRegles:'difficile',ajusterAuto:true},{currentCycle:'ignore'});
           if(phaseCycle(doux,AUJ)!=='menstrual') return _echec('fixture muette');
           const a=getCycleFactor(doux,AUJ), b=getCycleFactor(dur,AUJ);
           return a.factor===0.95&&b.factor===0.80
@@ -2953,7 +2957,7 @@ async function testExercices(){
               return _echec(k+' : '+JSON.stringify(f));
           }
           const m=getCycleFactor(_ath({enabled:true,lastPeriodDate:_jour(2),
-            cycleLength:28,intensiteRegles:'difficile'}),AUJ);
+            cycleLength:28,intensiteRegles:'difficile',ajusterAuto:true}),AUJ);
           if(m.factor!==0.80) return _echec('menstruel difficile : '+m.factor);
           const l=getCycleFactor(_ath({enabled:true,lastPeriodDate:_jour(25),
             cycleLength:28,sensibilitePms:true}),AUJ);
@@ -6530,7 +6534,8 @@ async function testExercices(){
           // Aucune entrée n'a gagné de clé liée à l'âge.
           for(const m of Object.keys(REPERES_VOLUME)){
             const cles=Object.keys(REPERES_VOLUME[m]).sort().join(',');
-            if(cles!=='mavMax,mavMin,mev,mrv') return _echec(m+' : '+cles);
+            // mv (volume de maintien, 30/09/2026) : dérivé du MEV, pas de l'âge.
+            if(cles!=='mavMax,mavMin,mev,mrv,mv') return _echec(m+' : '+cles);
           }
           return true;})());
         ok('La phrase affichée nomme l\'âge parmi les facteurs',(()=>{
@@ -18638,18 +18643,18 @@ async function testExercices(){
               } finally { window.getOwnedClient=_g; window.toast=_t; window._blocEcrire=_be; }
               return ecrit?_echec('les séries sont appliquées malgré le plafond'):true;});})());
 
-          ok('Un muscle en maintien ne descend jamais sous son MEV',(()=>{
-            // LE MAINTIEN N'EST PAS L'ABANDON : sous le MEV on perd du tissu
-            // pendant le bloc, et on paierait la priorité d'un muscle par la
-            // fonte d'un autre.
+          ok('Un muscle en maintien vise son volume de maintien, jamais en dessous',(()=>{
+            // LE MAINTIEN N'EST PAS L'ABANDON : sous le volume de maintien on perd
+            // du tissu pendant le bloc. Depuis le 30/09/2026, la cible est rep.mv
+            // (la moitié du MEV), plus le MEV.
             return avecVolume({QUADRICEPS:20,DELT_LAT:10},()=>{
               const u=avecBloc(['DELT_LAT'],['QUADRICEPS'],6,0);
               const a=blocArbitrage(u,Date.now());
               const q=a.lignes.find(l=>l.muscle==='QUADRICEPS');
               if(!q) return _echec('le muscle en maintien a disparu de l’arbitrage');
               if(q.role!=='bas') return _echec('rôle '+q.role);
-              if(q.cible!==q.rep.mev) return _echec('cible '+q.cible+' au lieu du MEV '+q.rep.mev);
-              return q.cible<q.rep.mev?_echec('la cible passe sous le MEV'):true;});})());
+              if(q.cible!==q.rep.mv) return _echec('cible '+q.cible+' au lieu du maintien '+q.rep.mv);
+              return q.cible<q.rep.mv?_echec('la cible passe sous le maintien'):true;});})());
 
           ok('La cible d\'un muscle prioritaire garde une série sous le MRV',(()=>{
             // LA DERNIÈRE SÉRIE AVANT LE MRV coûte le plus et rend le moins :
@@ -20934,6 +20939,36 @@ async function testExercices(){
     ok('T1 — calcSug n’existe plus : chargeSuivante est le seul moteur des charges proposées',typeof calcSug==='undefined');
     ok('T1 — la borne : répétitions + RIR ≤ 12',e1rmFiable(12,0)&&e1rmFiable(10,2)&&!e1rmFiable(10,3)&&!e1rmFiable(13,0)&&e1rmFiable(8,'')&&e1rmFiable(0,0));
     ok('e1rm sur charge nulle ou négative rend 0',e1rm(0,10,1)===0&&e1rm(-5,10,1)===0);
+    // ── LE CYCLE NE TOUCHE LA CHARGE QUE SI ELLE L'A DIT ; LE VOLUME DE MAINTIEN ──
+    ok('Cycle : phase menstruelle calculée, rien déclaré → charge inchangée (1) ; ajusterAuto → 0,95 ; j1_difficile → 0,80',(()=>{
+      const jour=n=>localISODate(new Date(Date.now()-n*864e5)), AUJ=localISODate(new Date());
+      const ath=(cycle,extra)=>Object.assign({id:'cy',email:'cy@t',role:'athlete',gender:'F',exAlias:{},exMuscles:{},sessions:[],bilans:[],cycle},extra||{});
+      const base={enabled:true,lastPeriodDate:jour(2),cycleLength:28};
+      if(phaseCycle(ath(base),AUJ)!=='menstrual') return _echec('la fixture n’est pas en phase menstruelle : '+phaseCycle(ath(base),AUJ));
+      const a=getCycleFactor(ath(base),AUJ);
+      if(a.factor!==1||a.seriesReduce!==0) return _echec('rien déclaré : '+JSON.stringify(a));
+      if(getCycleFactor(ath(base,{currentCycle:'ignore'}),AUJ).factor!==1) return _echec('« ignore »');
+      if(getCycleFactor(ath(Object.assign({},base,{ajusterAuto:true})),AUJ).factor!==0.95) return _echec('ajusterAuto');
+      if(getCycleFactor(ath(Object.assign({},base,{ajusterAuto:true,intensiteRegles:'difficile'})),AUJ).factor!==0.80) return _echec('ajusterAuto, règles difficiles');
+      if(getCycleFactor(ath(Object.assign({},base,{ajusterAuto:'true'})),AUJ).factor!==1) return _echec('ajusterAuto non booléen accepté');
+      if(getCycleFactor(ath(base,{currentCycle:'j1_difficile'}),AUJ).factor!==0.80) return _echec('j1_difficile');
+      if(getCycleFactor(ath(base,{currentCycle:'j1_supportable'}),AUJ).factor!==0.95) return _echec('j1_supportable');
+      if(confCycle(ath(base)).ajusterAuto!==false) return _echec('défaut');
+      if(String(_renderCycleNutSettings).indexOf('id="cycle-ajuster"')<0||String(saveCycleNutSettings).indexOf("g('cycle-ajuster')")<0) return _echec('le réglage');
+      return assertNoCycleRuleAltersSeries().ok?true:_echec('assertNoCycleRuleAltersSeries');})());
+    ok('Volume de maintien : mv = moitié du MEV (PECTORAUX 4), surchargeable ; un muscle en bas vise mv',(()=>{
+      const r=reperesEffectifs({},'PECTORAUX');
+      if(!r||r.mv!==4) return _echec('PECTORAUX : '+JSON.stringify(r));
+      if(REPERES_VOLUME.PECTORAUX.mv!==4||REPERES_VOLUME.DELT_ANT.mv!==0||REPERES_VOLUME.DORSAUX.mv!==5) return _echec('table');
+      if(reperesEffectifs({reperesVolume:{PECTORAUX:{mev:12}}},'PECTORAUX').mv!==6) return _echec('MEV surchargé');
+      if(reperesEffectifs({reperesVolume:{PECTORAUX:{mv:3}}},'PECTORAUX').mv!==3) return _echec('mv surchargé');
+      if(String(blocArbitrage).indexOf("role='bas'; cible=rep.mv;")<0) return _echec('blocArbitrage vise encore le MEV');
+      if(/sous le MEV on perd du tissu/.test(_prodSrc())) return _echec('commentaire');
+      // L'arbitrage réel, quand un bloc se monte : PECTORAUX en bas → cible 4.
+      let a=null;
+      try{ a=blocArbitrage({email:'mv@t',exAlias:{},exMuscles:{},sessions:[],blocPriorite:{hauts:['DELT_LAT'],bas:['PECTORAUX'],semaines:6,debut:Date.now()}},Date.now()); }catch(e){ a=null; }
+      const l=a&&(a.lignes||[]).find(x=>x.muscle==='PECTORAUX');
+      return (!l||l.cible===4)?true:_echec('cible : '+(l&&l.cible));})());
     // ── UNE SEULE FONCTION D'ARRONDI, ET L'UNITÉ ──
     ok('arrondiCharge : le pas du matériel (haltères 2, machine 5, barre 2,5 ou 1,25 sous 20), dans le sens voulu',(()=>{
       if(arrondiCharge(63.75,{ex:{name:'DEVELOPPE COUCHE HALTERE'},sens:'haut'})!==64) return _echec('haltère : '+arrondiCharge(63.75,{ex:{name:'DEVELOPPE COUCHE HALTERE'},sens:'haut'}));

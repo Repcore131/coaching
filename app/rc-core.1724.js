@@ -33918,7 +33918,11 @@ function migrerTrapezes(user){
   }
   return bouge;
 }
-const REPERES_VOLUME=Object.freeze({
+// mv, LE VOLUME DE MAINTIEN (30/09/2026) : max(0, arrondi(MEV / 2)) par
+// défaut, ajouté à chaque ligne ci-dessous (_avecMaintien) et recalculé par
+// reperesEffectifs sur le MEV effectif. C'est la cible d'un muscle mis « en
+// bas » par l'arbitrage d'un bloc : on garde, on ne développe pas.
+const _REPERES_VOLUME_BRUT=Object.freeze({
   PECTORAUX :{mev:8,  mavMin:12, mavMax:20, mrv:22},
   DORSAUX   :{mev:10, mavMin:14, mavMax:22, mrv:25},
   // ⚠ AUCUNE SOURCE NE PUBLIE CES DEUX-LA SEPAREMENT, et il faut le dire :
@@ -33950,6 +33954,12 @@ const REPERES_VOLUME=Object.freeze({
   ABDUCTEURS:{mev:0,  mavMin:6,  mavMax:12, mrv:16},
   ADDUCTEURS:{mev:0,  mavMin:6,  mavMax:12, mrv:16}
 });
+function _avecMaintien(t){
+  const out={};
+  for(const k of Object.keys(t)) out[k]=Object.freeze(Object.assign({},t[k],{mv:Math.max(0,Math.round(t[k].mev/2))}));
+  return Object.freeze(out);
+}
+const REPERES_VOLUME=_avecMaintien(_REPERES_VOLUME_BRUT);
 // Zones d'un repère, dans l'ordre croissant. Le libellé est celui montré à
 // l'athlète : il décrit une position, il ne prescrit rien.
 const VOL_ZONES=Object.freeze([
@@ -46157,14 +46167,18 @@ function getCycleFactor(user,dateISO){
   // amputait le volume, mais aussi une déclaration de ressenti. Les deux
   // tombent. L'option reste, purement informative.
   if(p==='j22_28') return{factor:1.00,seriesReduce:0};
-  // Rien de déclaré : la phase calculée prend le relais, avec EXACTEMENT les
-  // valeurs ci-dessus. Sans cycle configuré, phaseCycle rend null et on
-  // retombe au neutre — le comportement d'avant ce lot.
+  // Rien de déclaré : la phase calculée NE TOUCHE PLUS LA CHARGE (30/09/2026),
+  // sauf si l'athlète l'a demandé (confCycle(u).ajusterAuto === true, dans le
+  // paramétrage du cycle). Un calendrier décrit, il ne décide pas : c'est ce
+  // qu'elle déclare du jour (j1_difficile, j1_supportable) qui pèse sur la
+  // barre. Le libellé de phase, lui, reste affiché. Sans cycle configuré,
+  // phaseCycle rend null et on retombe au neutre.
   const phase=phaseCycle(u,dateISO||localISODate(new Date()));
   // Périmé, irrégulier, ou rien du tout : on ne dérive RIEN. Un calendrier
   // qu'on sait faux ne doit pas peser sur une barre.
   if(!phaseAgissante(phase)) return{factor:1.00,seriesReduce:0};
   const conf=confCycle(u);
+  if(conf.ajusterAuto!==true) return{factor:1.00,seriesReduce:0};
   if(phase==='menstrual')
     return conf.intensiteRegles==='difficile'
       ?{factor:0.80,seriesReduce:0}:{factor:0.95,seriesReduce:0};
@@ -69648,6 +69662,10 @@ function reperesEffectifs(user,muscle){
   if(!d&&!a&&!o) return null;
   const r=Object.assign({},d||{},a||{},o||{});
   for(const b of ['mev','mavMin','mavMax','mrv']) if(typeof r[b]!=='number') return null;
+  // LE VOLUME DE MAINTIEN (mv) : posé par le coach ou la boucle s'il l'a été,
+  // sinon la moitié du MEV EFFECTIF — un MEV surchargé déplace le maintien.
+  const mvPose=[o,a].find(x=>x&&typeof x.mv==='number');
+  r.mv=mvPose?Math.max(0,mvPose.mv):Math.max(0,Math.round(r.mev/2));
   // Un etage superieur qui ne fait que RECOPIER la valeur du dessous ne change
   // rien : l'annoncer « ajuste » ferait lire une mesure la ou il n'y en a pas.
   const bouge=(src)=>!!src&&['mev','mavMin','mavMax','mrv']
@@ -71082,8 +71100,9 @@ function blocCibleHaut(rep,s,n,actuel){
 // PURE. L'arbitrage complet, muscle par muscle. AUCUNE ECRITURE.
 //
 // LE MAINTIEN N'EST PAS L'ABANDON : un muscle en bas descend exactement a son
-// MEV, jamais en dessous — sous le MEV on perd du tissu pendant le bloc, et on
-// paierait la priorite d'un muscle par la fonte d'un autre.
+// volume de maintien (rep.mv), jamais en dessous — sous le volume de maintien
+// on perd du tissu pendant le bloc, et on paierait la priorite d'un muscle par
+// la fonte d'un autre.
 function blocArbitrage(user,maintenant){
   const u=_dossier(user);
   const b=blocPriorite(u);
@@ -71103,7 +71122,8 @@ function blocArbitrage(user,maintenant){
     const actuel=Number(vol[m])||0;
     let role='normal', cible=actuel;
     if(b.hauts.indexOf(m)>=0){ role='haut'; cible=blocCibleHaut(rep,av?av.semaine:1,b.semaines,actuel); }
-    else if(b.bas.indexOf(m)>=0){ role='bas'; cible=rep.mev; }
+    // En bas : le volume de MAINTIEN (rep.mv), pas le MEV.
+    else if(b.bas.indexOf(m)>=0){ role='bas'; cible=rep.mv; }
     lignes.push({muscle:m,role:role,actuel:Math.round(actuel*10)/10,
       cible:cible,ecart:Math.round((cible-actuel)*10)/10,rep:rep});
   }
@@ -88223,6 +88243,9 @@ function confCycle(user){
     cycleLength:pris(c.cycleLength,a.cycleLength)||28,
     intensiteRegles:pris(c.intensiteRegles,a.intensite_regles)||'supportable',
     sensibilitePms:!!pris(c.sensibilitePms,a.sensibilite_pms),
+    // La phase calculée ajuste-t-elle la charge ? NON par défaut (30/09/2026) :
+    // seule une réponse déclarée du jour la modifie. true strict.
+    ajusterAuto:pris(c.ajusterAuto,a.ajusterAuto)===true,
     // PAS de !! ici, et c'est capital : « pas déclaré » doit rester distinct
     // de « déclaré irrégulier ». Avec la coercition, tout dossier n'ayant
     // jamais rien dit lisait regulier === false, donc cycleIrregulier vrai,
@@ -89796,6 +89819,18 @@ function _renderCycleNutSettings(nut){
         </span>
       </label>
     </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)">
+      <div>
+        <div style="font-size:var(--fs-sm);font-weight:700;color:var(--text)">Ajuster la charge d'après la phase</div>
+        <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">Coupé : seule ta réponse du jour (« règles, c'est dur », « ça va ») modifie la charge proposée.</div>
+      </div>
+      <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px;cursor:pointer">
+        <input type="checkbox" id="cycle-ajuster" ${conf.ajusterAuto?'checked':''} onchange="saveCycleNutSettings()" aria-label="Ajuster la charge d'après la phase" style="opacity:0;width:0;height:0;position:absolute">
+        <span style="position:absolute;inset:0;background:${conf.ajusterAuto?'var(--red)':'var(--border)'};border-radius:var(--r-3);transition:background var(--t-2);pointer-events:none">
+          <span style="position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:var(--r-full);transition:transform var(--t-2);transform:translateX(${conf.ajusterAuto?'20px':'0px'})"></span>
+        </span>
+      </label>
+    </div>
     <div style="border-top:1px solid var(--border);padding-top:10px">
       <!-- Aucun nom de produit, aucun dosage, aucune date de début : la seule
            chose dont le calcul a besoin est de savoir si un calendrier veut
@@ -89902,6 +89937,7 @@ function saveCycleNutSettings(field,value){
     const g=id=>document.getElementById(id);
     if(g('cycle-enabled')) conf.enabled=g('cycle-enabled').checked;
     if(g('cycle-pms')) conf.sensibilitePms=g('cycle-pms').checked;
+    if(g('cycle-ajuster')){ if(g('cycle-ajuster').checked) conf.ajusterAuto=true; else delete conf.ajusterAuto; }
     if(g('cycle-contra-partage')) conf.contraceptionPartagee=g('cycle-contra-partage').checked;
     if(g('cycle-last-period')&&g('cycle-last-period').value) conf.lastPeriodDate=g('cycle-last-period').value;
     // Ne clamper qu'une valeur COMPLÈTE. Un champ vidé ne doit rien écrire :
