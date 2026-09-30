@@ -8723,7 +8723,7 @@ async function testExercices(){
             const vus=[], puts=[];
             window.toast=m=>vus.push(String(m));
             CLOUD.canWrite=()=>true; CLOUD._getToken=async()=>'jeton-test';
-            CLOUD.pullUser=async()=>null;
+            CLOUD.pullUser=async()=>({doc:null,etag:'null_etag'});
             window.fetch=async(url,o)=>{
               if(o&&o.method==='PUT'&&/\/users\/quota@t,fr\.json/.test(String(url))) puts.push(JSON.parse(o.body));
               return new Response(o&&o.body?o.body:'null',{status:200,headers:{'Content-Type':'application/json'}});
@@ -8752,6 +8752,130 @@ async function testExercices(){
             // Et la séance est toujours en mémoire.
             return currentUser.sessions.some(x=>x.id==='s_nouvelle')?true:_echec('la séance a quitté currentUser');
           } finally { _qRanger(sv); }
+        });
+        // ══ 30/09/2026 — LE PUT CONDITIONNEL (ETag / if-match) ═══════════════
+        // Un faux serveur Firebase en mémoire : ETag = numéro de version, PUT
+        // refusé en 412 (avec l'ETag et la valeur courants) si if-match ne
+        // correspond pas.
+        const _fauxRTDB=(initial)=>{
+          const S={val:initial?JSON.parse(JSON.stringify(initial)):null,v:0,puts:[],gets:0,ifm:[],hook:null};
+          S.etag=()=>S.val==null?'null_etag':'E'+S.v;
+          S.fetch=async(url,o)=>{
+            const u=String(url);
+            // Seul le dossier du test : un envoi différé laissé par un autre test ne compte pas.
+            if(!/\/users\/etag@t,fr\.json/.test(u)) return new Response('null',{status:200});
+            const m=(o&&o.method)||'GET';
+            if(m==='GET'){
+              S.gets++;
+              if(S.hook&&S.hook.get) await S.hook.get(S.gets);
+              return new Response(JSON.stringify(S.val),{status:200,headers:{'ETag':S.etag(),'Content-Type':'application/json'}});
+            }
+            const h=(o&&o.headers)||{};
+            const ifm=h['if-match']||h['If-Match']||null;
+            S.ifm.push(ifm);
+            const corps=JSON.parse(o.body);
+            if(S.hook&&S.hook.put) await S.hook.put(corps,S);
+            if(ifm!==S.etag()) return new Response(JSON.stringify(S.val),{status:412,headers:{'ETag':S.etag(),'Content-Type':'application/json'}});
+            S.val=corps; S.v++; S.puts.push(corps);
+            return new Response(o.body,{status:200,headers:{'ETag':S.etag(),'Content-Type':'application/json'}});
+          };
+          return S;
+        };
+        const _eMonter=()=>{
+          const sv={f:window.fetch,gt:CLOUD._getToken,cu:currentUser,t:window.toast,u:localStorage.getItem('rc_users'),
+            se:localStorage.getItem('rc_session'),b:localStorage.getItem(CLOUD._cleBase('etag@t.fr')),q:localStorage.getItem(CLOUD._QUEUE_KEY)};
+          CLOUD._getToken=async()=>'jeton-test'; window.toast=()=>{};
+          clearTimeout(CLOUD._pushTimer); try{ CLOUD._annulerRetry(); }catch(e){}
+          return sv;
+        };
+        const _eRanger=(sv)=>{
+          window.fetch=sv.f; CLOUD._getToken=sv.gt; currentUser=sv.cu; window.toast=sv.t;
+          for(const [k,v] of [['rc_users',sv.u],['rc_session',sv.se],[CLOUD._cleBase('etag@t.fr'),sv.b],[CLOUD._QUEUE_KEY,sv.q]])
+            if(v==null) localStorage.removeItem(k); else localStorage.setItem(k,v);
+          try{ CLOUD._annulerRetry(); }catch(e){}
+          try{ delete CLOUD._histBases['etag@t.fr']; }catch(e){}
+        };
+        const _eDoc=(ids,maj)=>({id:'etag',email:'etag@t.fr',role:'athlete',fname:'E',updatedAt:maj||1000,
+          consent:{health:true,policyVersion:POLICY_VERSION},sessions:ids.map((id,i)=>({id,date:1000+i,name:'Push',data:{}}))});
+        const _eIds=d=>((d&&d.sessions)||[]).map(x=>x&&x.id).sort().join(',');
+        okA('ETag (a) : 412 sur if-match E1 → le second PUT porte la séance S2 du serveur ET la modification locale',async()=>{
+          const sv=_eMonter();
+          try{
+            const d0=_eDoc(['S1']);
+            const srv=_fauxRTDB(d0); srv.v=1;          // le serveur est en E1
+            window.fetch=srv.fetch;
+            // Un autre appareil écrit S2 ENTRE notre lecture et notre PUT.
+            srv.hook={put:async(corps,S)=>{ if(S.ifm.length===1){ S.val=_eDoc(['S1','S2'],1500); S.v++; } }};
+            currentUser={email:'autre@t.fr',role:'coach'};
+            localStorage.setItem('rc_users',JSON.stringify({'etag@t.fr':d0}));
+            CLOUD._poserBase('etag@t.fr',d0);
+            const local=_eDoc(['S1','S3'],2000);   // la modification locale : S3
+            await CLOUD._doPushOne('etag@t.fr',local,false,{base:CLOUD._baseDe('etag@t.fr',local)});
+            if(srv.ifm[0]!=='E1') return _echec('premier PUT : if-match '+srv.ifm[0]+' au lieu de E1');
+            if(srv.ifm.length!==2) return _echec(srv.ifm.length+' PUT au lieu de 2');
+            if(srv.ifm[1]!=='E2') return _echec('second PUT : if-match '+srv.ifm[1]+' au lieu du nouvel ETag E2');
+            const fin=srv.puts[srv.puts.length-1];
+            if(_eIds(fin)!=='S1,S2,S3') return _echec('second PUT : '+_eIds(fin));
+            if(!(fin.updatedAt>1500)) return _echec('updatedAt '+fin.updatedAt+' ne dépasse pas celui du serveur');
+            return srv.ifm.every(x=>x)?true:_echec('un PUT sans if-match');
+          } finally { _eRanger(sv); }
+        });
+        okA('ETag (b) : trois 412 de suite → erreur rejouable, clé enfilée dans rc_sync_queue',async()=>{
+          const sv=_eMonter();
+          try{
+            const d0=_eDoc(['S1']);
+            const srv=_fauxRTDB(d0);
+            window.fetch=srv.fetch;
+            // Le serveur change à CHAQUE tentative : if-match ne tombe jamais juste.
+            srv.hook={put:async(corps,S)=>{ S.val=_eDoc(['S1','X'+S.ifm.length],1000+S.ifm.length); S.v++; }};
+            currentUser={email:'autre@t.fr',role:'coach'};
+            localStorage.setItem('rc_users',JSON.stringify({'etag@t.fr':d0}));
+            localStorage.removeItem(CLOUD._QUEUE_KEY);
+            CLOUD._poserBase('etag@t.fr',d0);
+            const local=_eDoc(['S1','S3'],2000);
+            let err=null;
+            try{ await CLOUD._doPushOne('etag@t.fr',local,false,{base:CLOUD._baseDe('etag@t.fr',local)}); }catch(e){ err=e; }
+            if(!err) return _echec('aucune erreur après trois 412');
+            if(err._nonRejouable) return _echec('erreur marquée non rejouable');
+            if(srv.ifm.length!==3) return _echec(srv.ifm.length+' PUT au lieu de 3');
+            if(srv.puts.length) return _echec('un PUT est passé');
+            return CLOUD._lireFile().indexOf('etag@t.fr')>=0?true:_echec('la clé n’est pas dans rc_sync_queue');
+          } finally { _eRanger(sv); }
+        });
+        okA('ETag (c) : deux appareils, GET-A, GET-B, PUT-A, PUT-B — aucune séance perdue',async()=>{
+          const sv=_eMonter();
+          try{
+            const d0=_eDoc(['S0']);
+            const srv=_fauxRTDB(d0);
+            window.fetch=srv.fetch;
+            // L'ENTRELACEMENT : aucun PUT avant que les deux GET soient faits ;
+            // le PUT de B attend que celui de A soit passé.
+            let lus, aPasse;
+            const deuxLus=new Promise(res=>{ lus=res; });
+            const aFait=new Promise(res=>{ aPasse=res; });
+            const ordre=[];
+            srv.hook={
+              get:async(n)=>{ ordre.push('GET'); if(n>=2) lus(); },
+              put:async(corps,S)=>{
+                await deuxLus;
+                const deB=(corps.sessions||[]).some(x=>x.id==='SB');
+                if(deB&&!(S.puts.length)) await aFait;
+                ordre.push(deB?'PUT-B':'PUT-A');
+                if(!deB) setTimeout(aPasse,0);
+              }};
+            currentUser={email:'autre@t.fr',role:'coach'};
+            localStorage.setItem('rc_users',JSON.stringify({'etag@t.fr':d0}));
+            CLOUD._poserBase('etag@t.fr',d0);
+            const base=CLOUD._lireBase('etag@t.fr');
+            const A=_eDoc(['S0','SA'],2000), B=_eDoc(['S0','SB'],2100);
+            // Deux instances, chacune avec SA base : c'est ce que ferait chaque appareil.
+            const pA=CLOUD._doPushOne('etag@t.fr',A,false,{base});
+            const pB=CLOUD._doPushOne('etag@t.fr',B,false,{base});
+            await Promise.all([pA,pB]);
+            if(ordre.slice(0,2).join(',')!=='GET,GET') return _echec('entrelacement : '+ordre.join(','));
+            if(_eIds(srv.val)!=='S0,SA,SB') return _echec('serveur final : '+_eIds(srv.val)+' · ordre '+ordre.join(','));
+            return srv.ifm.every(x=>x)?true:_echec('un PUT sans if-match');
+          } finally { _eRanger(sv); }
         });
         okA('Quota plein : syncUser ne retire pas de currentUser la séance qui n’existe qu’en mémoire',async()=>{
           const sv=_qMonter();
@@ -19811,8 +19935,11 @@ async function testExercices(){
         // tous les autres ont cede.
         ok('La garde de fraîcheur existe, et refuse AVANT d\'envoyer',(()=>{
           const src=String(CLOUD._doPushOne);
-          const iPull=src.indexOf('await this.pullUser(email)');
-          const iPut=src.indexOf("method:'PUT'");
+          // 30/09/2026 : la relecture demande aussi l'ETag ({etag:true}).
+          const iPull=src.indexOf('await this.pullUser(email');
+          // Le PUT DU DOSSIER (conditionnel). Celui de sante_privee part avant
+          // la lecture, depuis le 30/09/2026, et n'est pas visé ici.
+          const iPut=src.indexOf("const opts={method:'PUT'");
           if(iPull<0) return _echec('le dossier distant n\'est plus relu avant l\'envoi');
           if(iPut>=0&&!(iPull<iPut)) return _echec('la relecture suit l\'envoi');
           const bloc=src.slice(iPull,iPut>0?iPut:src.length);

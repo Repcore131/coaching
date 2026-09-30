@@ -4414,7 +4414,53 @@ const CLOUD={
       // réinscription mal rattrapée, effacerait sinon tout l'historique. Le
       // surcoût est une lecture par envoi ; à ce prix, une perte de données
       // devient impossible même si un autre garde-fou cède.
-      const distant=await this.pullUser(email);
+      // ── Santé privée : écrire d'abord, supprimer ensuite ─────────────
+      // L'ORDRE EST CRITIQUE et non négociable. Si la connexion tombe entre
+      // les deux, la donnée existe en double — désagréable, réparable au
+      // prochain envoi. Dans l'autre sens elle n'existe plus nulle part.
+      //
+      // AVANT LA LECTURE DU DOSSIER (30/09/2026), et non plus entre elle et le
+      // PUT : il allongeait d'un aller-retour la fenetre lecture → ecriture que
+      // le PUT conditionnel protege. Pas APRES le PUT non plus : l'ordre
+      // « ecrire le prive, puis retirer de users/ » doit tenir.
+      // Cet envoi est indépendant de celui du dossier : son échec ne doit pas
+      // empêcher le reste de partir, et un dossier sans bloc masqué n'écrit
+      // rien du tout plutôt que d'écraser le nœud par un objet vide.
+      try{
+        const prives=santeBlocsPrives(user);
+        if(Object.keys(prives).length){
+          prives.maj=Date.now();
+          // Horodatage de migration : il DOIT figurer en liste blanche des
+          // règles, sinon l'écriture entière est rejetée. Une clef de trop
+          // suffit — c'est le piège qui a rendu constantes inécrivables.
+          prives.migre=Date.now();
+          const _cp=JSON.stringify(prives);
+          try{ _quotaCompter('out',_cp.length); }catch(e){}
+          await fetch(this._urlSantePrivee(safeKey)+'?auth='+token,
+            {method:'PUT',headers:{'Content-Type':'application/json'},
+             body:_cp});
+        }
+      }catch(e){ console.error('[RepCore] sante_privee push:',e); }
+      // ⚠ AVEC SON ETAG (30/09/2026) : le PUT qui suit est CONDITIONNEL
+      //   (if-match). Entre cette lecture et l'ecriture, un autre appareil a pu
+      //   ecrire ; sans condition, son ecriture etait ecrasee par une fusion
+      //   faite sur une version qu'il avait deja depassee. Avec, le serveur
+      //   repond 412 et l'on refusionne sur la version qu'il porte vraiment.
+      const _lu=await this.pullUser(email,{etag:true});
+      // Un remplacant qui rend le dossier seul (ancienne forme) : pas d'etag.
+      const _luN=(_lu&&typeof _lu==='object'&&('etag' in _lu)&&('doc' in _lu))?_lu:{doc:_lu||null,etag:null};
+      const distant=_luN.doc;
+      let _etag=_luN.etag;
+      // LA COPIE D'AVANT FUSION : un 412 oblige a refusionner, et une fusion ne
+      // se refait proprement que depuis ce que l'appareil voulait ecrire, pas
+      // depuis le resultat d'une fusion precedente.
+      const _safeAvantFusion=JSON.parse(JSON.stringify(safe));
+      const _base=_tour.base;
+      // Integre une version du serveur dans le dossier qui part : les
+      // traitements d'un autre, puis la fusion a trois voies. Rejouee telle
+      // quelle a chaque 412.
+      const _integrer=(d)=>{
+        safe=JSON.parse(JSON.stringify(_safeAvantFusion));
       // ⚠ LES TRAITEMENTS D'UN AUTRE NE SE REECRIVENT PAS DEPUIS UNE COPIE
       // MASQUEE. Meme patron que coachNotes vingt lignes plus haut : on regarde
       // si le document pousse est celui de l'emetteur. Ici, le distant vient
@@ -4425,14 +4471,24 @@ const CLOUD={
         try{
           if(!safe.sante||typeof safe.sante!=='object') safe.sante={};
           else safe.sante={...safe.sante};
-          const _dt=((distant||{}).sante||{}).traitements;
+          const _dt=((d||{}).sante||{}).traitements;
           const _f=_fusionnerTraitementsPoussee(_dt,safe.sante.traitements);
           if(_f.length) safe.sante.traitements=_f;
           else delete safe.sante.traitements;
-          const _dp=((distant||{}).sante||{}).prises;
+          const _dp=((d||{}).sante||{}).prises;
           if(_dp!=null) safe.sante.prises=_dp; else delete safe.sante.prises;
         }catch(e){}
       }
+        if(d&&_base){
+          const _avant=Number(safe.updatedAt)||0;
+          safe=syncFusion(_base.h,safe,d);
+          _retirerPrives();
+          // UN HORODATAGE STRICTEMENT SUPERIEUR A CELUI DU SERVEUR. Un appareil
+          // dont l'horloge retarde aurait sinon pose une date anterieure, et
+          // l'autre appareil aurait conclu qu'il n'y avait rien de neuf.
+          safe.updatedAt=Math.max(_avant,(Number(d.updatedAt)||0)+1);
+        }
+      };
       // ⚠ LA FUSION A TROIS VOIES, AVANT D'ECRIRE QUOI QUE CE SOIT. C'est le
       //   coeur du correctif du 21/09/2026 : sans elle, ce PUT ecrasait le
       //   document entier, et l'appareil qui envoyait en dernier effacait ce
@@ -4442,7 +4498,6 @@ const CLOUD={
       //   SANS BASE, RIEN NE CHANGE : syncFusion rend alors la version locale,
       //   comme avant. La base s'etablit a la premiere descente, c'est-a-dire
       //   a l'ouverture de l'app.
-      const _base=_tour.base;
       // ⚠ PAS D'ENVOI A L'AVEUGLE. Un dossier dont on tient une base existe
       //   sur le serveur : si la lecture ne rend rien, c'est le reseau qui a
       //   cede, pas le dossier qui manque. Le PUT partait quand meme, avec la
@@ -4453,15 +4508,12 @@ const CLOUD={
       //   lecture.
       if(!distant&&_base) throw new Error('Serveur illisible ('+((this._lectures||{})[email]||'?')
         +') : envoi remis à plus tard pour ne rien écraser.');
-      if(distant&&_base){
-        const _avant=Number(safe.updatedAt)||0;
-        safe=syncFusion(_base.h,safe,distant);
-        _retirerPrives();
-        // UN HORODATAGE STRICTEMENT SUPERIEUR A CELUI DU SERVEUR. Un appareil
-        // dont l'horloge retarde aurait sinon pose une date anterieure, et
-        // l'autre appareil aurait conclu qu'il n'y avait rien de neuf.
-        safe.updatedAt=Math.max(_avant,(Number(distant.updatedAt)||0)+1);
-      }
+      // SANS ETAG, PAS DE PUT : il ne pourrait pas etre conditionnel. Un nœud
+      // absent en porte un (« null_etag ») : l'absence veut dire une lecture
+      // ratee. Rejouable, comme une coupure.
+      if(!_etag) throw new Error('Serveur illisible (pas d’ETag, '+((this._lectures||{})[email]||'?')
+        +') : envoi remis à plus tard pour ne rien écraser.');
+      _integrer(distant);
       if(distant&&(distant.updatedAt||0)>(safe.updatedAt||0)){
         const volume=o=>(((o&&o.sessions)||[]).length)+(((o&&o.bilans)||[]).length);
         // LE PROGRAMME ETAIT LE SEUL CHAMP DISPUTE QUE LA DEFENSE NE REGARDAIT
@@ -4542,32 +4594,19 @@ const CLOUD={
           throw refus;
         }
       }
-      // ── Santé privée : écrire d'abord, supprimer ensuite ─────────────
-      // L'ORDRE EST CRITIQUE et non négociable. Si la connexion tombe entre
-      // les deux, la donnée existe en double — désagréable, réparable au
-      // prochain envoi. Dans l'autre sens elle n'existe plus nulle part.
-      //
-      // Cet envoi est indépendant de celui du dossier : son échec ne doit pas
-      // empêcher le reste de partir, et un dossier sans bloc masqué n'écrit
-      // rien du tout plutôt que d'écraser le nœud par un objet vide.
-      try{
-        const prives=santeBlocsPrives(user);
-        if(Object.keys(prives).length){
-          prives.maj=Date.now();
-          // Horodatage de migration : il DOIT figurer en liste blanche des
-          // règles, sinon l'écriture entière est rejetée. Une clef de trop
-          // suffit — c'est le piège qui a rendu constantes inécrivables.
-          prives.migre=Date.now();
-          const _cp=JSON.stringify(prives);
-          try{ _quotaCompter('out',_cp.length); }catch(e){}
-          await fetch(this._urlSantePrivee(safeKey)+'?auth='+token,
-            {method:'PUT',headers:{'Content-Type':'application/json'},
-             body:_cp});
-        }
-      }catch(e){ console.error('[RepCore] sante_privee push:',e); }
       const url=this._fbUrl.replace('users.json','users/'+safeKey+'.json');
-      const corps=JSON.stringify(safe);
-      const opts={method:'PUT',headers:{'Content-Type':'application/json'},body:corps};
+      // ══ LE PUT CONDITIONNEL (if-match), ET SA REPRISE SUR 412 ════════════
+      // 412 : un autre appareil a ecrit depuis notre lecture. La reponse porte
+      // l'ETag courant (en-tete) et la valeur courante (corps) : on refusionne
+      // depuis la copie d'avant fusion, avec la MEME base, et on repart avec le
+      // nouvel etag. Trois 412 de suite : erreur REJOUABLE (file de relance) —
+      // un dossier qui bouge a ce point sera repris un peu plus tard.
+      let r, _conflits=0, corps='';
+      for(;;){
+      corps=JSON.stringify(safe);
+      // keepalive accepte les en-tetes : la requete etait deja « pre-verifiee »
+      // (Content-Type JSON), et le serveur y admet if-match.
+      const opts={method:'PUT',headers:{'Content-Type':'application/json','if-match':_etag},body:corps};
       // Onglet déjà masqué : le navigateur peut détruire la page avant la
       // réponse, et une requête normale serait annulée en vol. `keepalive` la
       // laisse aller au bout — c'est l'équivalent de sendBeacon, mais qui
@@ -4587,7 +4626,6 @@ const CLOUD={
       const _arret=new AbortController();
       const _minuteur=setTimeout(()=>{ try{ _arret.abort(); }catch(e){} },this._DELAI_ENVOI);
       opts.signal=_arret.signal;
-      let r;
       try{ r=await fetch(url+'?auth='+token,opts); }
       finally{ clearTimeout(_minuteur); }
       // Sortant : le corps envoyé. Entrant : la réponse de Firebase, qui
@@ -4595,6 +4633,19 @@ const CLOUD={
       try{ _quotaCompter('out',corps.length);
         const cl=Number(r.headers.get('content-length'));
         if(cl>0) _quotaCompter('in',cl); }catch(e){}
+      if(r.status!==412) break;
+      _conflits++;
+      if(_conflits>=CLOUD_CONFLITS_MAX){
+        throw new Error('Conflit d’écriture répété ('+_conflits+' fois) : envoi remis à plus tard.');
+      }
+      let _nd=null, _ne=null;
+      try{ _ne=r.headers.get('ETag'); const _t=await r.text(); _nd=_t?JSON.parse(_t):null; }catch(e){ _ne=null; }
+      // L'en-tete absent (proxy, navigateur) : on relit, avec son etag.
+      if(!_ne){ const _re=await this.pullUser(email,{etag:true}); _nd=_re&&_re.doc||null; _ne=_re&&_re.etag||null; }
+      if(!_ne) throw new Error('Serveur illisible après un conflit : envoi remis à plus tard.');
+      _etag=_ne;
+      _integrer(_nd);
+      }
       this._setSyncStatus(r.ok);
       if(!r.ok){
         // ⚠ UN 401 NE DIT PAS CE QU'IL REFUSE, et c'est ce qui rend la panne
@@ -5029,14 +5080,19 @@ const CLOUD={
       return {ok:true};
     }catch(e){ return {ok:false,raison:'reseau'}; }
   },
-  async pullUser(email){
+  // `opts.etag` (30/09/2026) : demande l'ETag du nœud (en-tête
+  // X-Firebase-ETag) et rend {doc, etag} — doc null pour un nœud vide, etag
+  // null si la lecture a échoué. Sans l'option, la forme de toujours : le
+  // dossier, ou null. _doPushOne s'en sert pour un PUT conditionnel (if-match).
+  async pullUser(email,opts){
+    const avecEtag=!!(opts&&opts.etag);
     const key=email.replace(/\./g,',');
     const base=this._fbUrl.replace('users.json','users/'+key+'.json');
     const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),6000);
     try{
       const token=await this._getToken();
       const url=token?base+'?auth='+token:base;
-      const r=await fetch(url,{signal:ctrl.signal});
+      const r=await fetch(url,avecEtag?{signal:ctrl.signal,headers:{'X-Firebase-ETag':'true'}}:{signal:ctrl.signal});
       this._lectures[email]=r.status;
       if(r.ok){
         // .text() puis JSON.parse plutôt que .json() : c'est le seul moyen
@@ -5045,10 +5101,11 @@ const CLOUD={
         const t=await r.text();
         try{ _quotaCompter('in',t.length); }catch(e){}
         const d=t?JSON.parse(t):null;
+        if(avecEtag) return {doc:d||null,etag:(r.headers&&r.headers.get('ETag'))||null};
         if(d) return d;
       }
     }catch{ this._lectures[email]='réseau'; }
-    return null;
+    return avecEtag?{doc:null,etag:null}:null;
   },
   // ── Profil coach visible par ses athlètes ────────────────────────────────
   // La règle de /users ne va que dans un sens : un coach lit ses athlètes,
@@ -6096,6 +6153,8 @@ function reinjecterSeancesSession(dossier,session){
   if(n) dossier.sessions.sort((a,b)=>(Number(a&&a.date)||0)-(Number(b&&b.date)||0));
   return n;
 }
+// Trois 412 de suite sur le meme dossier : l'envoi repart par la file de relance.
+const CLOUD_CONFLITS_MAX=3;
 const DB={
   // N3.4 — LES DEUX CLEFS QUI PORTENT DES DOSSIERS SONT REMISES A PLAT ICI.
   // `users` est la carte de tous les dossiers, `session` est le dossier
