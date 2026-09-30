@@ -50555,10 +50555,23 @@ function _htmlConsigneExo(ex){
 // elle, ne lisait que ex.videoUrl, et un exercice du guide sans lien recopie
 // n'y avait plus de video.
 // R23 — sortie de _blocExo : elle vit dans « Comment l'exécuter ».
+// LA VIDEO GARDEE POUR CETTE SERIE (30/09/2026) : filmee pendant la seance,
+// elle attend dans la file du telephone et part a la fin. Le badge dit
+// qu'elle existe ; il ne dit pas qu'elle est partie.
+function _badgeVideoSerie(s){
+  return (s&&s.video)?'<span class="wo-vid-badge" role="img" aria-label="Une vidéo gardée pour cette série, envoi à la fin de la séance">🎥 1</span>':'';
+}
 function _htmlVideoTechniqueExo(ex){
   let u='';
   try{ const v=videosExo(ex).find(x=>x&&!x.methode); u=v?normaliserUrlVideo(v.url):''; }catch(e){ u=''; }
-  return u?`<a href="${safeUrl(u)}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:12px;background:#08081a;border:1px solid #2a2a5a;border-radius:var(--r-3);padding:12px 14px;margin-bottom:12px;text-decoration:none;color:#7799ff">
+  if(!u) return '';
+  let cle=''; try{ cle=exKey((ex&&ex.name)||'')||''; }catch(e){ cle=''; }
+  if(cle) _demoExos[cle]=ex;
+  // ⚠ PLUS DE target="_blank" (30/09/2026) : en pleine seance, la video
+  //   ouvrait un onglet ou l'application YouTube, et l'athlete perdait son
+  //   ecran de seance. Elle s'ouvre dans une feuille basse de l'app ; le href
+  //   reste, pour le clic milieu et les lecteurs d'ecran.
+  return u?`<a href="${safeUrl(u)}" data-demo="${escapeHtml(cle)}" onclick="return _videoDemoOuvrir(this,event)" style="display:flex;align-items:center;gap:12px;background:#08081a;border:1px solid #2a2a5a;border-radius:var(--r-3);padding:12px 14px;margin-bottom:12px;text-decoration:none;color:#7799ff">
         <div style="width:32px;height:32px;background:#1a1a3a;border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;font-size:var(--fs-md);flex-shrink:0">▶</div>
         <div style="flex:1">
           <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;color:#99aaff">VIDÉO TECHNIQUE</div>
@@ -50567,6 +50580,76 @@ function _htmlVideoTechniqueExo(ex){
         <span style="font-size:var(--fs-md);color:var(--link)">→</span>
       </a>`:'';
 }
+// ══ LA VIDEO DE DEMONSTRATION, DANS L'APP (30/09/2026) ═════════════════
+// Une feuille basse, par-dessus la seance : on regarde, on ferme, on est
+// toujours sur sa serie. YouTube passe par youtube-nocookie.com (aucun cookie
+// tant que la lecture n'a pas commence) avec playsinline=1 : sur iPhone, sans
+// lui, la lecture bascule en plein ecran natif.
+//
+// HORS LIGNE, l'iframe resterait un rectangle noir : on le dit, et on garde
+// l'illustration de l'exercice, qui, elle, est en cache.
+const _demoExos={};
+/** PURE. L'identifiant YouTube d'une adresse, ou ''. */
+function idYoutube(url){
+  const m=String(url||'').match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  return m?m[1]:'';
+}
+/** PURE. Le contenu de la feuille : lecteur, ou message hors connexion. */
+function htmlFeuilleDemo(url,ex,enLigne){
+  const titre=escapeHtml(String((ex&&ex.name)||'Vidéo technique'));
+  let corps;
+  if(enLigne===false){
+    let ill=''; try{ ill=ex?_htmlVignetteExo(ex):''; }catch(e){ ill=''; }
+    corps='<div class="demo-horsligne">Vidéo indisponible hors connexion</div>'
+      +(ill?'<div class="demo-ill">'+ill+'</div>':'');
+  } else {
+    const id=idYoutube(url);
+    corps=id
+      ?'<div class="demo-cadre"><iframe src="https://www.youtube-nocookie.com/embed/'+id+'?playsinline=1" title="'+titre+'"'
+        +' allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>'
+      :'<video class="demo-video" src="'+escapeHtml(safeUrl(url))+'" controls playsinline webkit-playsinline preload="metadata"></video>';
+  }
+  return '<div class="demo-poignee" aria-hidden="true"></div>'
+    +'<div class="demo-tete"><div class="demo-titre">'+titre+'</div>'
+    +'<button type="button" class="demo-fermer" onclick="_videoDemoFermer()" aria-label="Fermer la vidéo">✕</button></div>'
+    +corps;
+}
+function _videoDemoOuvrir(a,e){
+  const url=a&&a.getAttribute('href');
+  if(!url) return true;
+  // Ni YouTube, ni fichier video : rien a mettre dans un lecteur. On ouvre
+  // l'adresse a part plutot que de quitter la seance.
+  if(!idYoutube(url)&&!/\.(mp4|mov|webm|m4v)(\?|$)/i.test(url)){
+    try{ window.open(url,'_blank','noopener'); }catch(x){}
+    if(e) e.preventDefault(); return false;
+  }
+  if(e) e.preventDefault();
+  _videoDemoFermer();
+  const ex=_demoExos[(a.getAttribute('data-demo')||'')]||null;
+  const voile=document.createElement('div');
+  voile.id='rc-demo-voile'; voile.className='demo-voile';
+  voile.onclick=_videoDemoFermer;
+  const f=document.createElement('div');
+  f.id='rc-demo'; f.className='demo-feuille';
+  f.setAttribute('role','dialog'); f.setAttribute('aria-modal','true');
+  f.setAttribute('aria-label',(ex&&ex.name)?'Vidéo technique : '+ex.name:'Vidéo technique');
+  f.innerHTML=htmlFeuilleDemo(url,ex,navigator.onLine!==false);
+  document.body.appendChild(voile);
+  document.body.appendChild(f);
+  _demoRetour=a;
+  try{ f.querySelector('.demo-fermer').focus(); }catch(x){}
+  return false;
+}
+let _demoRetour=null;
+function _videoDemoFermer(){
+  const f=document.getElementById('rc-demo'), v=document.getElementById('rc-demo-voile');
+  // L'iframe part avec la feuille : la lecture s'arrete, le son aussi.
+  if(f) f.remove(); if(v) v.remove();
+  const r=_demoRetour; _demoRetour=null;
+  if(r&&r.isConnected&&f) try{ r.focus({preventScroll:true}); }catch(x){}
+  return true;
+}
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&document.getElementById('rc-demo')){ e.preventDefault(); _videoDemoFermer(); } });
 // ══ R23 — « COMMENT L'EXECUTER » EST-IL OUVERT ? ═══════════════════════
 // PURE. Ouvert tant que l'athlete n'a JAMAIS valide de serie sur cet
 // exercice : ni dans l'historique que la carte lit deja (getPrevPerf rend null
@@ -51897,7 +51980,7 @@ function renderSets(ex,data,idx,opts){
           <div style="background:${cardBg};border:1px solid ${cardBorder};border-radius:var(--r-2);padding:8px 10px">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
               <div style="text-align:center;min-width:28px;flex-shrink:0">
-                <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}${_eclairObjectif(idx,i)}${_badgeRecord(idx,i)}</div>
+                <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}${_eclairObjectif(idx,i)}${_badgeRecord(idx,i)}${_badgeVideoSerie(s)}</div>
                 <div>${repsAffiche(18)}</div>
                 ${_precHtml(s,i)}
               </div>
@@ -51914,7 +51997,7 @@ function renderSets(ex,data,idx,opts){
     }
     return `<tr class="${rowCls}${painAlert}">
       <td style="text-align:center;padding:${_fourch?'4px 1px':'4px 6px'}">
-        <span style="display:block;font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}${_eclairObjectif(idx,i)}${_badgeRecord(idx,i)}</span>
+        <span style="display:block;font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}${_eclairObjectif(idx,i)}${_badgeRecord(idx,i)}${_badgeVideoSerie(s)}</span>
         ${repsAffiche(20)}
         ${_precHtml(s,i)}
       </td>
@@ -108394,6 +108477,7 @@ function _videoEmbed(url,vidId='vc-video'){
 // Vidéos EXISTANT, avec le nom de l'exercice déjà écrit dans le champ. Il n'y
 // a donc qu'un seul endroit dans l'app où l'on dépose une vidéo.
 function renderCarteAFilmer(sess){
+  try{ renderVideosAEnvoyer(); }catch(e){}
   const z=document.getElementById('wd-afilmer');
   if(!z) return;
   const noms=((sess&&sess.aFilmer)||[]).filter(Boolean);
@@ -109934,7 +110018,10 @@ async function uploadVideoFile(input,options){
     // jusqu'au prochain envoi.
     const _nomEl=document.getElementById('vid-name-input'); if(_nomEl) _nomEl.value='';
     input.value='';
-    loadVideos();
+    // resterIci : envoye depuis la seance ou l'ecran de fin, on ne change pas
+    // d'ecran. La liste des videos se repeint seulement si elle est affichee.
+    if(!_opt.resterIci) loadVideos();
+    else{ try{ const _sv=document.getElementById('s-videos'); if(_sv&&_sv.classList.contains('active')) _renderVideosListe(); }catch(e){} }
     // ══ ON N'ANNONCE RIEN AVANT QUE LE COACH PUISSE LA VOIR ══════════════════
     //
     // Le fichier est sur Cloudinary, l'entrée est écrite en local — mais tant
@@ -110076,13 +110163,14 @@ function _videoSerieVisee(data){
 // RIR deja rattaches. AUCUNE QUESTION N'EST POSEE : ni le nom de l'exercice,
 // ni la charge, ni un titre. Toute question ajoutee ici est un geste de plus,
 // et le module se rapproche de sa mort.
-let _videoLienEnAttente=null;
+let _videoLienEnAttente=null, _videoSerieEnAttente=null;
 function filmerSerie(idx){
   const ex=woState&&woState.exercises&&woState.exercises[idx];
   const data=woState&&woState.sessionData&&woState.sessionData[idx];
   if(!ex||!data) return false;
   const i=_videoSerieVisee(data);
   if(i<0) return false;
+  _videoSerieEnAttente={idx,i};
   _videoLienEnAttente=lienVideoSerie(ex,data.sets[i],
     // LE CRENEAU, NOMME COMME PARTOUT AILLEURS : progName et slot. Ni
     // `sessionName` ni `name` n'existent sur woState — c'est ce couple-la que
@@ -110100,13 +110188,87 @@ function filmerSerie(idx){
 // d'envoi, une seule gestion d'erreur, une seule configuration Cloudinary — et
 // se contente de POSER LE LIEN qui sera rattache a l'entree.
 async function _videoSerieEnvoyer(input){
-  const lien=_videoLienEnAttente;
-  _videoLienEnAttente=null;
+  const lien=_videoLienEnAttente, vise=_videoSerieEnAttente;
+  _videoLienEnAttente=null; _videoSerieEnAttente=null;
   if(!input||!input.files||!input.files[0]) return false;
   // Le nom de l'exercice sert de titre : sans lui l'entree s'appellerait
   // « VID_20260903 », et le coach devrait ouvrir chaque video pour savoir de
   // quoi elle parle. Ce n'est PAS une question posee a l'athlete.
-  await uploadVideoFile(input,{lien:lien,nom:(lien&&lien.exerciceNom)||''});
+  const nom=(lien&&lien.exerciceNom)||'';
+  // ══ EN SEANCE, ON GARDE ; ON N'ENVOIE PAS (30/09/2026) ══════════════════
+  // L'envoi prenait l'ecran : panneau d'allegement, puis loadVideos(), qui
+  // faisait go('s-videos') — l'athlete sortait de sa seance au milieu du
+  // repos, et un envoi de 20 Mo en 4G se jouait pendant la serie suivante.
+  // La video va dans la file du telephone ; la carte de fin de seance la
+  // propose, d'un geste. Aucune question n'est posee.
+  if(woState&&!woState.termine){
+    const file=input.files[0];
+    let id='';
+    try{ id=await fileEnvoiPoser({blob:file,nom:nom||file.name||'video',
+      emailCible:(currentUser&&currentUser.email)||'',octetsOrigine:file.size||0,
+      voieCompression:'aucune',lien:lien}); }catch(e){ id=''; }
+    try{ input.value=''; }catch(e){}
+    if(id){
+      toast('Vidéo gardée, envoi à la fin de la séance','var(--green)');
+      const d=vise&&woState.sessionData&&woState.sessionData[vise.idx];
+      const s=d&&d.sets&&d.sets[vise.i];
+      if(s){
+        s.video=true;
+        try{ woPersist(); }catch(e){}
+        try{ _woMajLignes(woState.exercises[vise.idx],d,vise.idx); }catch(e){}
+      }
+      return true;
+    }
+    // LA FILE N'EST PAS DISPONIBLE (navigation privee, vieux navigateur) : on
+    // ne perd pas la video, on l'envoie — sans quitter l'ecran de seance.
+    await uploadVideoFile({files:[file],value:''},{lien:lien,nom:nom,resterIci:true});
+    return true;
+  }
+  await uploadVideoFile(input,{lien:lien,nom:nom});
+  return true;
+}
+
+// ══ LES VIDEOS GARDEES, A LA FIN DE LA SEANCE ═══════════════════════════
+// PURE. « Wi-Fi recommandé » seulement quand le navigateur dit quelque chose
+// de la connexion, et qu'elle n'est pas deja du Wi-Fi. Sans l'API (Safari),
+// on ne devine pas.
+function indicationReseauEnvoi(conn){
+  if(!conn) return '';
+  const t=String(conn.type||''), e=String(conn.effectiveType||'');
+  if(t==='wifi'||t==='ethernet') return '';
+  return (t||e)?'Wi-Fi recommandé':'';
+}
+async function renderVideosAEnvoyer(){
+  const z=document.getElementById('wd-aenvoyer');
+  if(!z||!currentUser) return false;
+  let l=[];
+  try{ l=(await fileEnvoiLister()).filter(e=>e.emailCible===currentUser.email); }catch(e){ l=[]; }
+  if(!l.length){ z.innerHTML=''; return false; }
+  const res=indicationReseauEnvoi(navigator.connection||navigator.mozConnection||navigator.webkitConnection);
+  z.innerHTML='<div class="wd-env">'
+    +'<div class="wd-env-t">Vidéos à envoyer</div>'
+    +(res?'<div class="wd-env-res">'+escapeHtml(res)+' · '+_mo(l.reduce((a,e)=>a+((e.blob&&e.blob.size)||0),0))+'</div>':'')
+    +l.map(e=>'<div class="wd-env-l"><span class="wd-env-n">'+escapeHtml(e.nom||'Vidéo')
+      +' <span class="sub">· '+_mo((e.blob&&e.blob.size)||0)+'</span></span>'
+      +'<button type="button" class="btn btn-red btn-sm wd-env-b" data-id="'+escapeHtml(e.id)+'">Envoyer maintenant</button></div>').join('')
+    +'</div>';
+  z.querySelectorAll('.wd-env-b').forEach(b=>{ b.onclick=()=>envoyerVideoGardee(b.getAttribute('data-id'),b); });
+  return true;
+}
+// L'ENVOI D'UNE VIDEO GARDEE : le chemin unique, uploadVideoFile, avec
+// l'identifiant de file (retiree a la confirmation) et resterIci — on reste
+// sur l'ecran de fin.
+async function envoyerVideoGardee(id,btn){
+  let l=[];
+  try{ l=await fileEnvoiLister(); }catch(e){ l=[]; }
+  const e=l.find(x=>x.id===id);
+  if(!e){ toast('Cette vidéo n’est plus disponible.','var(--orange)'); renderVideosAEnvoyer(); return false; }
+  if(btn){ btn.disabled=true; btn.textContent='Envoi…'; }
+  const f=new File([e.blob],(e.nom||'video')+'.mp4',{type:e.blob.type||'video/mp4'});
+  try{
+    await uploadVideoFile({files:[f],value:''},{nom:e.nom,lien:e.lien||null,fileId:e.id,
+      octetsOrigine:e.octetsOrigine,voieCompression:e.voieCompression,resterIci:true});
+  }finally{ try{ await renderVideosAEnvoyer(); }catch(x){} }
   return true;
 }
 

@@ -19868,6 +19868,7 @@ async function testExercices(){
             'ocr.space',             // l. 233 — hors service, la ligne le dit
             'paypal.com',            // l. 239 — abonnement
             'wa.me',                 // l. 227 — WhatsApp Ireland
+            'youtube-nocookie.com',  // la vidéo technique lue dans l'app (30/09/2026)
             'youtube.com','youtu.be',// l. 251 — vidéos d'exercices. youtu.be est
                                      // la forme que l'app CONSTRUIT elle-même :
                                      // elle manquait à la politique jusqu'au
@@ -64458,6 +64459,123 @@ async function testExercices(){
         if(d.sets[0].weight2!=='40.5') return _echec('P2 « 40,5 » stocké « '+d.sets[0].weight2+' »');
         return true;
       } finally { window.rcConfirm=svConf; window.recordsExercice=svRec; _r25Ranger(sU,sW,sSnap,svSave,svToast); }
+    });
+
+    // ══ 30/09/2026 — LA VIDÉO FILMÉE EN SÉANCE NE FAIT PLUS QUITTER LA SÉANCE ══
+    okA('Vidéo de série en séance : gardée dans la file, badge 🎥 1, aucun changement d’écran',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;
+      const svPoser=window.fileEnvoiPoser, svGo=window.go, svUp=window.uploadVideoFile;
+      const poses=[], gos=[], toasts=[]; let envois=0;
+      try{
+        window.saveUser=()=>true; window.toast=m=>toasts.push(m);
+        _r25Monter([{name:'SQUAT',series:3,reps:'8',repos:'2 min'}]);
+        const ecran=(document.querySelector('.screen.active')||{}).id;
+        window.fileEnvoiPoser=async e=>{ poses.push(e); return 'e_test'; };
+        window.go=id=>{ gos.push(id); };
+        window.uploadVideoFile=async()=>{ envois++; };
+        const d=woState.sessionData[0];
+        d.sets[0].weight='100'; d.sets[0].done=true;
+        _videoLienEnAttente=lienVideoSerie(woState.exercises[0],d.sets[0],{serieIdx:0,date:Date.now()});
+        _videoSerieEnAttente={idx:0,i:0};
+        const f=new File(['x'],'v.mp4',{type:'video/mp4'});
+        const ok_=await _videoSerieEnvoyer({files:[f],value:''});
+        if(!ok_) return _echec('_videoSerieEnvoyer rend faux');
+        if(poses.length!==1) return _echec(poses.length+' appel(s) à fileEnvoiPoser');
+        const e=poses[0];
+        if(e.blob!==f||e.nom!=='SQUAT'||e.emailCible!=='r25@t.fr'||!e.lien||e.lien.exerciceNom!=='SQUAT')
+          return _echec('file : '+JSON.stringify({nom:e.nom,email:e.emailCible,lien:e.lien&&e.lien.exerciceNom}));
+        if(gos.length) return _echec('go appelé : '+gos.join(','));
+        if(envois) return _echec('l’envoi est parti pendant la séance');
+        if(toasts.indexOf('Vidéo gardée, envoi à la fin de la séance')<0) return _echec('toast : '+toasts.join(' | '));
+        if(d.sets[0].video!==true) return _echec('s.video n’est pas posé');
+        if(!/🎥 1/.test(document.getElementById('sets-body-0').textContent)) return _echec('pas de badge 🎥 1 sur la série');
+        if((document.querySelector('.screen.active')||{}).id!==ecran) return _echec('l’écran a changé');
+        return true;
+      } finally {
+        window.fileEnvoiPoser=svPoser; window.go=svGo; window.uploadVideoFile=svUp;
+        _videoLienEnAttente=null; _videoSerieEnAttente=null;
+        _r25Ranger(sU,sW,sSnap,svSave,svToast);
+      }
+    });
+    okA('uploadVideoFile avec resterIci ne change pas l’écran actif (et sans, il ouvre les vidéos)',async()=>{
+      const sU=currentUser, svSave=window.saveUser, svToast=window.toast, svXhr=window._envoiXhr, svDur=window._videoDureeS;
+      const svQ=window.quotaDegrade, svPoser=window.fileEnvoiPoser, svRet=window.fileEnvoiRetirer, svGo=window.go;
+      const svRCV=window.RepCoreVideo, svCan=CLOUD.canWrite, svPan=window._envoiPanneau;
+      const gos=[]; const ecran0=(document.querySelector('.screen.active')||{}).id;
+      try{
+        currentUser={id:'rv',email:'rv@t.fr',fname:'A',lname:'B',role:'athlete',videos:[],sessions:[]};
+        window.saveUser=()=>true; window.toast=()=>{};
+        window._envoiXhr=async()=>JSON.stringify({secure_url:'https://res.cloudinary.com/x/video/upload/v.mp4',bytes:10});
+        window._videoDureeS=async()=>5; window.quotaDegrade=()=>false;
+        window.fileEnvoiPoser=async()=>'e_x'; window.fileEnvoiRetirer=async()=>true;
+        window.RepCoreVideo=undefined; CLOUD.canWrite=()=>false;
+        const panneau={maj(){},annuler(){},attente(){},note(){},fini(){},rate(){},phase(){},fermer(){}};
+        window._envoiPanneau=()=>new Proxy(panneau,{get:(t,k)=>t[k]||(()=>{})});
+        const origGo=svGo; window.go=id=>{ gos.push(id); return origGo(id); };
+        origGo('s-workout');
+        const avant=(document.querySelector('.screen.active')||{}).id;
+        const f=()=>new File(['x'],'v.mp4',{type:'video/mp4'});
+        await uploadVideoFile({files:[f()],value:''},{nom:'SQUAT',resterIci:true});
+        if((currentUser.videos||[]).length!==1) return _echec('la vidéo n’a pas été enregistrée ('+(currentUser.videos||[]).length+')');
+        if(gos.length) return _echec('go appelé avec resterIci : '+gos.join(','));
+        if((document.querySelector('.screen.active')||{}).id!==avant) return _echec('l’écran actif a changé');
+        await uploadVideoFile({files:[f()],value:''},{nom:'SQUAT'});
+        if(gos.indexOf('s-videos')<0) return _echec('sans resterIci, l’écran des vidéos ne s’ouvre plus');
+        return true;
+      } finally {
+        window.saveUser=svSave; window.toast=svToast; window._envoiXhr=svXhr; window._videoDureeS=svDur;
+        window.quotaDegrade=svQ; window.fileEnvoiPoser=svPoser; window.fileEnvoiRetirer=svRet; window.go=svGo;
+        window.RepCoreVideo=svRCV; CLOUD.canWrite=svCan; window._envoiPanneau=svPan;
+        try{ document.querySelectorAll('.rc-envoi').forEach(x=>x.remove()); }catch(e){}
+        currentUser=sU;
+        try{ if(ecran0) go(ecran0); }catch(e){}
+      }
+    });
+    ok('La vidéo de démonstration s’ouvre dans l’app : plus de target="_blank", youtube-nocookie, hors ligne dit',(()=>{
+      const ex={name:'SQUAT',videoUrl:'https://youtu.be/dQw4w9WgXcQ'};
+      const h=_htmlVideoTechniqueExo(ex);
+      if(!h) return _echec('aucun lien rendu');
+      if(/target="_blank"/.test(h)) return _echec('target="_blank" encore présent');
+      if(!/_videoDemoOuvrir\(this,event\)/.test(h)) return _echec('le lien n’ouvre pas la feuille');
+      if(idYoutube('https://youtu.be/dQw4w9WgXcQ')!=='dQw4w9WgXcQ') return _echec('idYoutube');
+      const en=htmlFeuilleDemo('https://youtu.be/dQw4w9WgXcQ',ex,true);
+      if(en.indexOf('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?playsinline=1')<0) return _echec('iframe : '+en.slice(0,200));
+      const hors=htmlFeuilleDemo('https://youtu.be/dQw4w9WgXcQ',ex,false);
+      if(!/Vidéo indisponible hors connexion/.test(hors)||/<iframe/.test(hors)) return _echec('hors ligne : '+hors.slice(0,200));
+      // LA FEUILLE S'OUVRE ET SE FERME, SANS QUITTER LA PAGE.
+      const z=document.createElement('div'); z.innerHTML=h; document.body.appendChild(z);
+      try{
+        const a=z.querySelector('a'); const ev=new MouseEvent('click',{bubbles:true,cancelable:true});
+        a.dispatchEvent(ev);
+        if(!ev.defaultPrevented) return _echec('le clic suit encore le lien');
+        const f=document.getElementById('rc-demo');
+        if(!f||!f.querySelector('iframe[src*="youtube-nocookie.com/embed/dQw4w9WgXcQ"]')) return _echec('la feuille n’a pas son lecteur');
+        _videoDemoFermer();
+        if(document.getElementById('rc-demo')||document.getElementById('rc-demo-voile')) return _echec('la feuille ne se ferme pas');
+      } finally { z.remove(); _videoDemoFermer(); }
+      return true;})());
+    ok('Fin de séance : « Wi-Fi recommandé » seulement quand la connexion est connue et n’est pas du Wi-Fi',(()=>{
+      const c=[[null,''],[{},''],[{type:'cellular'},'Wi-Fi recommandé'],[{effectiveType:'4g'},'Wi-Fi recommandé'],
+        [{type:'wifi',effectiveType:'4g'},'']];
+      for(const [x,att] of c){ const v=indicationReseauEnvoi(x); if(v!==att) return _echec(JSON.stringify(x)+' → « '+v+' »'); }
+      return !!document.getElementById('wd-aenvoyer')||_echec('#wd-aenvoyer absent de l’écran de fin');})());
+    okA('Fin de séance : les vidéos gardées sont listées, « Envoyer maintenant » passe par uploadVideoFile avec fileId et resterIci',async()=>{
+      const sU=currentUser, svLister=window.fileEnvoiLister, svUp=window.uploadVideoFile;
+      const appels=[]; let file=[{id:'e_1',cree:Date.now(),blob:new Blob(['x'],{type:'video/mp4'}),nom:'SQUAT',emailCible:'fin@t.fr',lien:null}];
+      const z=document.getElementById('wd-aenvoyer'), sv=z&&z.innerHTML;
+      try{
+        currentUser={email:'fin@t.fr'};
+        window.fileEnvoiLister=async()=>file.slice();
+        window.uploadVideoFile=async(inp,o)=>{ appels.push(o); file=[]; };
+        await renderVideosAEnvoyer();
+        if(!/Vidéos à envoyer/.test(z.innerHTML)||!/SQUAT/.test(z.innerHTML)) return _echec('carte : '+z.innerHTML.slice(0,160));
+        const b=z.querySelector('.wd-env-b');
+        if(!b||b.textContent!=='Envoyer maintenant') return _echec('pas de bouton « Envoyer maintenant »');
+        await envoyerVideoGardee('e_1',b);
+        if(appels.length!==1||appels[0].fileId!=='e_1'||appels[0].resterIci!==true) return _echec('appel : '+JSON.stringify(appels));
+        if(z.innerHTML!=='') return _echec('la carte reste après l’envoi');
+        return true;
+      } finally { window.fileEnvoiLister=svLister; window.uploadVideoFile=svUp; currentUser=sU; if(z) z.innerHTML=sv||''; }
     });
 
     // ══ 17/09/2026 — R24 : « QUELLE CHARGE POUR QUEL OBJECTIF ? » ══════════

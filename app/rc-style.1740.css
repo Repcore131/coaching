@@ -5675,6 +5675,28 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 #s-client-home[data-demarrage] #clh-phrase,
 #s-client-home[data-demarrage] #clh-first-bilan-card,
 #s-client-home[data-demarrage] #clh-reprise{display:none!important}
+/* LA VIDEO DE DEMONSTRATION, EN FEUILLE BASSE (30/09/2026). */
+.demo-voile{position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal)}
+.demo-feuille{position:fixed;left:0;right:0;bottom:0;z-index:calc(var(--z-modal) + 1);max-width:560px;margin:0 auto;
+  background:var(--surface-2);border-radius:16px 16px 0 0;padding:8px 14px calc(14px + env(safe-area-inset-bottom,0px));
+  box-shadow:0 -10px 30px rgba(0,0,0,.6)}
+.demo-poignee{width:40px;height:4px;border-radius:2px;background:#3a3a3a;margin:0 auto 8px}
+.demo-tete{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.demo-titre{flex:1;min-width:0;font-weight:800;font-size:var(--fs-sm);letter-spacing:.5px;text-transform:uppercase}
+.demo-fermer{width:44px;height:44px;border:0;border-radius:50%;background:var(--surface-3);color:var(--text);font-size:var(--fs-md);cursor:pointer}
+.demo-cadre{position:relative;width:100%;aspect-ratio:16/9;border-radius:var(--r-2);overflow:hidden;background:#000}
+.demo-cadre iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.demo-video{width:100%;max-height:60vh;border-radius:var(--r-2);background:#000;display:block}
+.demo-horsligne{padding:14px;border:1px dashed var(--border);border-radius:var(--r-2);text-align:center;font-weight:800;font-size:var(--fs-sm);color:var(--sub)}
+.demo-ill{display:flex;justify-content:center;margin-top:12px}
+/* LA VIDEO GARDEE POUR UNE SERIE, ET LA CARTE DE FIN QUI L'ENVOIE. */
+.wo-vid-badge{display:block;margin-top:3px;font-size:var(--fs-2xs);font-weight:700;color:var(--sub);white-space:nowrap}
+.wd-env{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:16px}
+.wd-env-t{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:6px}
+.wd-env-res{font-size:var(--fs-xs);color:var(--orange);margin-bottom:8px}
+.wd-env-l{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--border)}
+.wd-env-n{flex:1;min-width:0;font-size:var(--fs-sm);font-weight:700;overflow:hidden;text-overflow:ellipsis}
+.wd-env-b{margin:0;min-height:44px;white-space:nowrap}
 /* LES BANNIERES DU COACH EN CARROUSEL (Kevin, 30/09/2026) : une a la fois,
    toutes dans la meme case, en fondu ; les points en dessous. */
 .promo-pile{display:grid}
@@ -13158,6 +13180,18 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .pd-fait .pd-case{background:var(--green);border-color:var(--green)}
 :root[data-theme="clair"] .pd-fait .pd-titre{color:var(--sub)}
 :root[data-theme="clair"] .pd-etat{color:var(--green)}
+:root[data-theme="clair"] .demo-voile{background:var(--scrim)}
+:root[data-theme="clair"] .demo-feuille{background:var(--surface-2);box-shadow:0 -10px 30px rgba(0,0,0,0.21)}
+:root[data-theme="clair"] .demo-poignee{background:#c4c4c4}
+:root[data-theme="clair"] .demo-fermer{background:var(--surface-3);color:var(--text)}
+:root[data-theme="clair"] .demo-cadre{background:#fbfbfb}
+:root[data-theme="clair"] .demo-video{background:#fbfbfb}
+:root[data-theme="clair"] .demo-horsligne{border:1px dashed var(--border);color:var(--sub)}
+:root[data-theme="clair"] .wo-vid-badge{color:var(--sub)}
+:root[data-theme="clair"] .wd-env{background:var(--surface-1);border:1px solid var(--border)}
+:root[data-theme="clair"] .wd-env-t{color:var(--sub)}
+:root[data-theme="clair"] .wd-env-res{color:var(--orange)}
+:root[data-theme="clair"] .wd-env-l{border-top:1px solid var(--border)}
 :root[data-theme="clair"] .promo-pt::before{background:#c4c4c4}
 :root[data-theme="clair"] .promo-pt[aria-current="true"]::before{background:var(--red)}
 :root[data-theme="clair"] #clh-streak:focus-visible,:root[data-theme="clair"] .clh-m-clic:focus-visible{outline:2px solid var(--red)}
