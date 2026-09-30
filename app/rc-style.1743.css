@@ -5675,6 +5675,12 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 #s-client-home[data-demarrage] #clh-phrase,
 #s-client-home[data-demarrage] #clh-first-bilan-card,
 #s-client-home[data-demarrage] #clh-reprise{display:none!important}
+/* LES REMPLAÇANTS AUTORISES (30/09/2026) : pastilles cote coach, boutons cote athlete. */
+.alt-l{display:flex;flex-wrap:wrap;gap:6px}
+.alt-p{display:inline-flex;align-items:center;gap:4px;padding:4px 4px 4px 10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);font-size:var(--fs-xs);font-weight:700}
+.alt-x{width:28px;height:28px;border:0;background:none;color:var(--sub);font-size:var(--fs-md);cursor:pointer;line-height:1}
+.rempl-alts{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.rempl-alt{display:block;width:100%;text-align:left;min-height:44px;background:var(--surface-1);border:1px solid var(--red);border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-sm);font-weight:700;color:var(--text-strong);cursor:pointer}
 /* L'HISTORIQUE D'UN EXERCICE, LA NOTE EPINGLEE, LE MOT DE SEANCE (30/09/2026). */
 .histo-rec{display:flex;gap:10px;margin:10px 0 4px}
 .histo-rec>div{flex:1;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:8px 10px}
@@ -13201,6 +13207,9 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .pd-fait .pd-case{background:var(--green);border-color:var(--green)}
 :root[data-theme="clair"] .pd-fait .pd-titre{color:var(--sub)}
 :root[data-theme="clair"] .pd-etat{color:var(--green)}
+:root[data-theme="clair"] .alt-p{background:var(--surface-1);border:1px solid var(--border)}
+:root[data-theme="clair"] .alt-x{color:var(--sub)}
+:root[data-theme="clair"] .rempl-alt{background:var(--surface-1);border:1px solid var(--red);color:var(--text-strong)}
 :root[data-theme="clair"] .histo-rec>div{background:var(--surface-1);border:1px solid var(--border)}
 :root[data-theme="clair"] .histo-rec span{color:var(--sub)}
 :root[data-theme="clair"] .histo-l li{border-top:1px solid var(--border)}

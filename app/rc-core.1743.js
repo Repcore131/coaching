@@ -36340,6 +36340,36 @@ async function enregistrerVenteProgramme(){
 // il valide par SAUVEGARDER, puis par PUBLIER. Rend le nombre d'entrées
 // réparées — 0 quand il n'y avait rien à faire, et dans ce cas la séance
 // n'est pas touchée du tout.
+// ══ LES REMPLAÇANTS AUTORISES D'UN EXERCICE (30/09/2026) ═══════════════
+// ex.alternatives : de 0 a 3 noms, choisis par le COACH dans la banque. C'est
+// la seule facon dont un athlete voit des noms de la banque au moment de
+// remplacer : ils ont ete prescrits, il ne les a pas cherches (la garde de
+// candidatsRemplacement ne bouge pas).
+const ALTERNATIVES_MAX=3;
+/** PURE. La forme seule : des chaines non vides, sans doublon, sans le nom de
+ *  l'exercice lui-meme, trois au plus. Un tableau revenu de Firebase en objet
+ *  a cles numeriques est remis en tableau. La BANQUE n'est pas verifiee ici :
+ *  un nom renomme dans le guide ne doit pas disparaitre en silence d'un
+ *  programme. Elle l'est a la saisie du coach (_altAjouter). */
+function normaliserAlternatives(v,nomEx){
+  let l=Array.isArray(v)?v:(v&&typeof v==='object'?Object.keys(v).sort((a,b)=>a-b).map(k=>v[k]):[]);
+  const vus=new Set(); let k0=''; try{ k0=exKey(nomEx||''); }catch(e){ k0=''; }
+  const out=[];
+  for(const x of l){
+    const n=String(x==null?'':x).replace(/\s+/g,' ').trim().slice(0,80);
+    let k=''; try{ k=exKey(n); }catch(e){ k=''; }
+    if(!n||!k||k===k0||vus.has(k)) continue;
+    vus.add(k); out.push(n);
+    if(out.length>=ALTERNATIVES_MAX) break;
+  }
+  return out;
+}
+/** PURE. Le nom tel qu'il est ecrit dans la banque, ou '' s'il n'y est pas. */
+function nomDeBanque(nom){
+  let k=''; try{ k=exKey(nom); }catch(e){ k=''; }
+  if(!k) return '';
+  return _nomsRemplacement().find(n=>exKey(n)===k)||'';
+}
 function _assainirExercices(seance){
   if(!seance||typeof seance!=='object') return 0;
   if(!Array.isArray(seance.exercises)){ seance.exercises=[]; return 0; }
@@ -36353,6 +36383,12 @@ function _assainirExercices(seance){
     if(('reps' in ex)&&typeof ex.reps!=='string'){
       ex.reps=(ex.reps==null)?'':String(ex.reps);
       repares++;
+    }
+    // LES REMPLAÇANTS SONT GARDES, remis en forme seulement s'il le faut.
+    if('alternatives' in ex){
+      const a=normaliserAlternatives(ex.alternatives,ex.name);
+      if(!a.length){ delete ex.alternatives; repares++; }
+      else if(JSON.stringify(a)!==JSON.stringify(ex.alternatives)){ ex.alternatives=a; repares++; }
     }
     propres.push(ex);
   }
@@ -37480,12 +37516,12 @@ function _assignerModele(a,prog,genre){
 // consigne (description, vidéos). Sans elle, on ne saurait pas distinguer ce
 // que le coach a corrigé dans le modèle de ce qu'il a ajusté chez l'athlète.
 
-const MOD_CHAMPS=Object.freeze(['series','reps','repos','tempo','rir','rirCible','methode','methodeSeries','ss','materiel']);
+const MOD_CHAMPS=Object.freeze(['series','reps','repos','tempo','rir','rirCible','methode','methodeSeries','ss','materiel','alternatives']);
 const MOD_CONSIGNE=Object.freeze(['description','videoUrl','videoUrl2','technique']);
 const MOD_PROTEGES=Object.freeze(['charge','poids','reglageCoach','justificationContrainte','methodeForcee']);
 const MOD_VERSIONS_MAX=3;
 const MOD_LIB_CHAMP=Object.freeze({series:'séries',reps:'répétitions',repos:'repos',tempo:'tempo',rir:'RIR',rirCible:'RIR visé',
-  methode:'méthode',methodeSeries:'séries de la méthode',ss:'superset',materiel:'matériel',consigne:'consigne'});
+  methode:'méthode',methodeSeries:'séries de la méthode',ss:'superset',materiel:'matériel',alternatives:'remplaçants',consigne:'consigne'});
 
 function _modVal(v){ return v==null?'':(typeof v==='object'?JSON.stringify(v):String(v)); }
 function _modCle(nom){ try{ return exKey(nom); }catch(e){ return String(nom||'').trim().toUpperCase(); } }
@@ -42101,6 +42137,7 @@ function renderProgEx(){
              description. -->
         ${_selecteurTechnique(ex,i)}
         ${_bqDispo?_htmlBoutonProgEx(ex,i):''}
+        ${_bqDispo?_htmlAlternativesEx(ex,i):''}
         <div class="px-grp">EXÉCUTION</div>
         <!-- B2.3, TEMPO ET MATERIEL SE LISENT ENSEMBLE, donc ils se posent
              ensemble des qu'il y a la place. Le conteneur ne fait RIEN sous
@@ -42245,6 +42282,66 @@ function _majEtatEnregistrement(){
   }catch(e){}
 }
 
+// LA SECTION « REMPLAÇANTS AUTORISES » DE LA CARTE D'EXERCICE, COTE COACH.
+// Des pastilles retirables, un champ qui n'accepte QUE des noms de la banque
+// (liste proposee), et « Suggerer » qui preremplit depuis substitutsSalle
+// sur le dossier et la salle de l'athlete edite. Tout reste modifiable.
+function _htmlAlternativesEx(ex,i){
+  const l=normaliserAlternatives(ex&&ex.alternatives,ex&&ex.name);
+  _altDatalist();
+  return `<div class="px-grp">Remplaçants autorisés</div>
+    <div class="alt-zone" style="margin-bottom:8px">
+      <div class="sub" style="font-size:var(--fs-2xs);line-height:1.5;margin-bottom:6px">Jusqu’à ${ALTERNATIVES_MAX} mouvements que l’athlète pourra choisir d’un geste s’il doit remplacer celui-ci en séance.</div>
+      <div class="alt-l">${l.map((n,k)=>`<span class="alt-p">${escapeHtml(n)}<button type="button" class="alt-x" aria-label="Retirer ${escapeHtml(n)}" onclick="_altRetirer(${i},${k})">×</button></span>`).join('')}</div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        ${l.length<ALTERNATIVES_MAX?`<input list="rc-banque-noms" class="f-sm" style="flex:1;min-width:0" placeholder="Ajouter un mouvement de la banque" onchange="_altAjouter(${i},this)">`:''}
+        <button type="button" class="btn btn-outline btn-sm" style="margin:0;min-height:38px;letter-spacing:1px;font-size:var(--fs-2xs);white-space:nowrap" onclick="_altSuggerer(${i})">Suggérer</button>
+      </div>
+    </div>`;
+}
+// UNE SEULE LISTE DE NOMS DANS LA PAGE, construite a la premiere carte.
+function _altDatalist(){
+  try{
+    if(document.getElementById('rc-banque-noms')) return;
+    const d=document.createElement('datalist'); d.id='rc-banque-noms';
+    d.innerHTML=_nomsRemplacement().map(n=>'<option value="'+escapeHtml(n)+'"></option>').join('');
+    document.body.appendChild(d);
+  }catch(e){}
+}
+function _altEcrire(i,l){
+  if(!Array.isArray(progEx)||!progEx[i]) return false;
+  const a=normaliserAlternatives(l,progEx[i].name);
+  if(a.length) progEx[i].alternatives=a; else delete progEx[i].alternatives;
+  _progExDirty=true;
+  renderProgEx();
+  return true;
+}
+function _altAjouter(i,el){
+  if(!Array.isArray(progEx)||!progEx[i]||!el) return false;
+  const n=nomDeBanque(el.value);
+  if(!n){ toast('Choisis un mouvement de la banque.','var(--orange)'); el.value=''; return false; }
+  if(exKey(n)===exKey(progEx[i].name||'')){ toast('C’est déjà l’exercice prescrit.','var(--orange)'); el.value=''; return false; }
+  return _altEcrire(i,(progEx[i].alternatives||[]).concat([n]));
+}
+function _altRetirer(i,k){
+  if(!Array.isArray(progEx)||!progEx[i]) return false;
+  const l=normaliserAlternatives(progEx[i].alternatives,progEx[i].name);
+  l.splice(k,1);
+  return _altEcrire(i,l);
+}
+// LE DOSSIER DE L'ATHLETE EDITE, et sa salle : ce sont SES appareils qui
+// comptent. Sans athlete (un modele), celui du coach.
+function _altSuggerer(i){
+  if(!Array.isArray(progEx)||!progEx[i]) return false;
+  const cl=(()=>{ try{ return currentClientId?getOwnedClient(currentClientId):null; }catch(e){ return null; } })()||currentUser;
+  // La salle A PART : sans salle connue, on suggere quand meme, sans filtre de materiel.
+  let salle=null; try{ salle=salleActive(cl); }catch(e){ salle=null; }
+  let r=null; try{ r=substitutsSalle(cl,progEx[i].name,salle); }catch(e){ r=null; }
+  const noms=((r&&r.liste)||[]).map(x=>nomDeBanque(x.nom)).filter(Boolean);
+  if(!noms.length){ toast((r&&r.raison)||'Aucun équivalent trouvé pour cet exercice.','var(--orange)'); return false; }
+  // Les choix deja poses restent en tete : « Suggerer » complete, il n'efface pas.
+  return _altEcrire(i,normaliserAlternatives(progEx[i].alternatives,progEx[i].name).concat(noms));
+}
 // ══════ LA PROGRAMMATION D'UN EXERCICE, COTE COACH ═════════════════════
 //
 // RESERVE AU COACH, comme le remplacement depuis la banque : c'est lui qui
@@ -76235,6 +76332,8 @@ function ouvrirRemplacement(idx){
     toast('Rien n\'est proposé tant que le drapeau est levé.','var(--orange)'); return false; }
   _remplIdx=idx;
   const _estCoach=!!(currentUser&&currentUser.role==='coach');
+  // LES REMPLAÇANTS PRESCRITS PAR LE COACH, en boutons au-dessus du champ libre.
+  const _alts=normaliserAlternatives(ex.alternatives,ex.name);
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
     `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
@@ -76248,8 +76347,11 @@ function ouvrirRemplacement(idx){
         <div id="rempl-liste" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch"></div>`
         :`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">
           Ton programme n\'est pas modifié, et ton coach verra l\'échange.
-          <b style="color:var(--text-strong)">Écris le nom du mouvement que tu as fait à la place.</b>
+          <b style="color:var(--text-strong)">${_alts.length?'Choisis un remplaçant prévu par ton coach, ou écris le mouvement que tu as fait.':'Écris le nom du mouvement que tu as fait à la place.'}</b>
         </div>
+        ${_alts.length?`<div class="rempl-alts">${_alts.map(n=>`<button type="button" class="hit44 rempl-alt" data-nom="${escapeHtml(n)}"
+          onclick="_appliquerSubstitut(${idx},this.getAttribute('data-nom'));_demanderMotifEcart(${idx})">${escapeHtml(n.toLowerCase())}</button>`).join('')}</div>
+        <label for="rempl-manuel" style="margin:6px 0 4px">Autre…</label>`:''}
         <input id="rempl-manuel" type="text" maxlength="60" autocomplete="off"
           placeholder="Ex : développé incliné haltères"
           onkeydown="if(event.key===&quot;Enter&quot;){event.preventDefault();validerRemplacementManuel()}"
@@ -76262,7 +76364,9 @@ function ouvrirRemplacement(idx){
         </div>`}
       </div></div>`);
   if(_estCoach) _rendreListeRemplacement();
-  else setTimeout(()=>{ const i=document.getElementById('rempl-manuel'); if(i) i.focus(); },120);
+  // Avec des remplaçants prévus, le clavier ne s'ouvre pas d'office : le geste
+  // attendu est un tap sur l'un d'eux, pas une saisie.
+  else if(!_alts.length) setTimeout(()=>{ const i=document.getElementById('rempl-manuel'); if(i) i.focus(); },120);
   return true;
 }
 // LE MOTIF, EN UN GESTE ET APRES COUP. Quatre boutons, aucun champ libre :
@@ -76370,15 +76474,6 @@ function _appliquerSubstitut(idx,nom,motif){
   // n'est pas un incident, c'est un programme a corriger.
   try{ journaliserEcart(currentUser,{seance:(woState&&woState.progName)||'',
     exoPrevu:ex.name,exoFait:nom,motif:motif||'autre'}); }catch(e){}
-  // LA CHARGE NE SE TRANSPOSE PAS. On ne pre-remplit QUE si l'athlete a deja
-  // fait CE mouvement : deduire une charge d'un autre exercice par un ratio
-  // serait une invention, et elle serait prise pour une mesure.
-  try{
-    const h=historiqueExercice(currentUser,nom);
-    const d=(woState.sessionData||{})[idx];
-    if(d&&Array.isArray(d.sets)&&h.charge>0)
-      for(const s of d.sets) if(!s.weight) s.weight=String(h.charge);
-  }catch(e){}
   // MÉMORISÉ AVANT L'AFFECTATION : woState.aFilmer contient des NOMS, et
   // celui-ci est sur le point de disparaître.
   const _ancienNom=ex.name;
@@ -76426,6 +76521,18 @@ function _appliquerSubstitut(idx,nom,motif){
       reps:pr.type==='degressive'?pr.p1:ex.reps,rir:'',pain:'',done:false,
       degressive:pr.type==='degressive',p2reps:pr.p2}));
   }
+  // LA CHARGE NE SE TRANSPOSE PAS. On ne pre-remplit QUE si l'athlete a deja
+  // fait CE mouvement : deduire une charge d'un autre exercice par un ratio
+  // serait une invention, et elle serait prise pour une mesure.
+  // ⚠ APRES LA RECONSTRUCTION DES SERIES (30/09/2026). Pose avant, le
+  //   preremplissage etait efface deux blocs plus bas par les series neuves :
+  //   la charge d'un mouvement deja fait n'arrivait jamais a l'ecran.
+  try{
+    const h=historiqueExercice(currentUser,nom);
+    const d=(woState.sessionData||{})[idx];
+    if(d&&Array.isArray(d.sets)&&h.charge>0)
+      for(const s of d.sets) if(!s.weight) s.weight=String(h.charge);
+  }catch(e){}
   // LES RECORDS DE L'ANCIEN MOUVEMENT S'EN VONT AVEC LUI. Le Set est indexé
   // par position : sans cette purge, « RECORD » se recollerait sur les séries
   // vides qu’on vient de reconstruire. Avant renderWoEx, qui les relit.
