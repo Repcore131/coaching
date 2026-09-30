@@ -219,3 +219,10 @@ test('le texte de l’app dit la même règle', () => {
   assert.ok(src.indexOf("quand:'le lendemain de l’échéance fixée'") > 0);
   assert.ok(src.indexOf('quatorze jours après le dernier bilan') < 0);
 });
+
+test('réponse vocale : un bilan répondu de vive voix ne lève plus le signal « bilan »', () => {
+  const d = RL.signauxRelance({ bilans: [{ date: T - 2 * J, reponseAudio: { url: 'https://res.cloudinary.com/x/a.webm', duree: 40, at: T - J } }] }, T);
+  assert.equal(d.bilan, undefined);
+  assert.ok(RL.signauxRelance({ bilans: [{ date: T - 2 * J, reponseAudio: {} }] }, T).bilan, 'un objet sans adresse ne répond pas');
+  assert.equal(RL.signauxRelance({ bilans: [{ date: T - 2 * J, reponseCoach: 'ok' }] }, T).bilan, undefined);
+});

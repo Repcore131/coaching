@@ -985,11 +985,15 @@ export function creerMetier(deps) {
       const i = String(e.i || '').replace(/[^A-Za-z0-9_-]/g, '');
       if (!dest || !i) return 'incomplet';
       if ((await _lire(dest, 'coachEmailKey')) !== e.par) return 'pas_son_coach';
-      const rep = await _val('users/' + dest + '/' + (type === 'reponse_bilan' ? 'bilans' : 'rites') + '/' + i + '/reponseCoach');
-      if (!rep) return 'sans_reponse';
+      const base = 'users/' + dest + '/' + (type === 'reponse_bilan' ? 'bilans' : 'rites') + '/' + i;
+      const rep = await _val(base + '/reponseCoach');
+      // Une réponse VOCALE vaut une réponse (bilans seulement) : relue elle aussi.
+      const audio = (!rep && type === 'reponse_bilan') ? await _val(base + '/reponseAudio') : null;
+      if (!rep && !(audio && audio.url)) return 'sans_reponse';
+      const dureeTxt = (s) => { const n = Math.max(0, Math.round(Number(s) || 0)); return Math.floor(n / 60) + ':' + String(n % 60).padStart(2, '0'); };
       await envoyerPush(dest, { type: 'coach', url: './', tag: 'coach-' + (type === 'reponse_bilan' ? 'bilan' : 'rite') + '-' + i,
         title: type === 'reponse_bilan' ? 'Ton coach a répondu à ton bilan' : 'Ton coach a répondu à ton bilan de cycle',
-        body: String(rep).slice(0, 120) });
+        body: rep ? String(rep).slice(0, 120) : 'Une réponse vocale (' + dureeTxt(audio.duree) + ') t’attend dans l’app.' });
       return 'envoye';
     }
     // LA MESSAGERIE (lot M2) : un message privé coach ↔ athlète. Comme une

@@ -28959,7 +28959,8 @@ function dernierBilan(c){
 function hasNewBilan(c){
   if(!c.bilans?.length||c._fromCode) return false;
   const der=dernierBilan(c);
-  return !!der&&!der.reponseCoach;
+  // Répondu par écrit OU de vive voix (bilanRepondu).
+  return !!der&&!bilanRepondu(der);
 }
 // Athlète rattaché depuis plus de 3 jours qui n'a jamais rempli le moindre bilan.
 // Utilisé à deux endroits (la ligne « À traiter » et urgencyScore) : un seul
@@ -45913,6 +45914,8 @@ function quitterSeanceSansEnregistrer(){
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden&&woState?.exercises?.length) woPersist();
   if(document.hidden&&typeof _audioMediaRecorder!=='undefined'&&_audioMediaRecorder&&_audioMediaRecorder.state==='recording') cancelAudioAnnotation();
+  // La réponse vocale au bilan : arrêtée et GARDÉE (le coach l'écoute au retour).
+  if(document.hidden&&typeof _rv!=='undefined'&&_rv&&_rv.ctrl&&_rv.etat==='rec') _rv.ctrl.arreter();
   // CLOUD.push() attend 2 s avant d'envoyer (débounce). Masquer l'onglet dans
   // cette fenêtre — le réflexe normal après « Enregistrer » — gelait le timer :
   // l'envoi ne partait qu'au retour au premier plan, ou jamais si l'onglet
@@ -74507,7 +74510,7 @@ function openBilanNotes(id){
 // n'est plus « pas encore ouvert » : ouvrir ne suffit plus à éteindre le
 // signal, il faut répondre.
 function bilansSansReponse(c){
-  return ((c&&c.bilans)||[]).filter(b=>b&&!b.reponseCoach).length;
+  return ((c&&c.bilans)||[]).filter(b=>b&&!bilanRepondu(b)).length;
 }
 // PURE. Une vidéo attend-elle encore la correction du coach ?
 //
@@ -74837,7 +74840,7 @@ function formulesReponse(coach){
 // Le brouillon du champ, ou '' quand ce bilan n'en reçoit pas : pas le dernier
 // bilan, déjà répondu, ou le coach a choisi de repartir de zéro.
 function _brouillonPourChamp(b,c){
-  if(!b||!c||b.reponseCoach) return '';
+  if(!b||!c||bilanRepondu(b)) return '';
   const derniers=(c.bilans||[]).filter(x=>x&&x.date).sort((x,y)=>y.date-x.date);
   if(!derniers.length||_idBilan(derniers[0])!==_idBilan(b)) return '';
   if(rbRepartiDeZero(c.email,_idBilan(b))) return '';
@@ -74918,7 +74921,7 @@ function blocReponseBilan(b,c){
       // C2 : sans brouillon tapé ni réponse envoyée, le dernier bilan arrive
       // pré-écrit (brouillonBilan). Il n'est enregistré nulle part tant que le
       // coach n'y touche pas, et rien ne part sans son geste.
-      const pre=(!bro&&!b.reponseCoach)?_brouillonPourChamp(b,c):'';
+      const pre=(!bro&&!bilanRepondu(b))?_brouillonPourChamp(b,c):'';
       const val=bro||(b.reponseCoach||'')||pre;
       const em=escapeHtml(c.email||''), ide=escapeHtml(id);
       return `<textarea id="${_taIdBilan(id)}" rows="${pre?9:3}"${pre?' data-brouillon="1" onfocus="_rbCurseurFin(this)"':''} oninput="rbNoterBrouillon('${em}','${ide}',this.value)" placeholder="Ce que tu retiens de ce bilan, et ce qu'on ajuste." style="width:100%;box-sizing:border-box">${escapeHtml(val)}</textarea>`
@@ -74935,6 +74938,7 @@ function blocReponseBilan(b,c){
     })()}
     <button class="btn btn-red btn-sm" onclick="saveReponseBilan('${escapeHtml(c.email||'')}','${escapeHtml(id)}','${_taIdBilan(id)}')"
       style="margin-top:8px;letter-spacing:1px">Envoyer ma réponse</button>
+    ${_rvHtml(b,c)}
   </div>`;
 }
 
@@ -75042,7 +75046,7 @@ function renderReponsesBilans(bilans,client){
     // ⚠ UNE CARTE SANS TEXTE PEUT PORTER UNE REPONSE (QA du 27/09/2026) : elle
     //   reste des qu'il y a une reponse du coach a lire, ou a ecrire — un bilan
     //   de SUIVI ; un questionnaire de depart vide n'appelle rien.
-    const _aLire=!client&&!!b.reponseCoach;
+    const _aLire=!client&&bilanRepondu(b);
     const _aEcrire=!!client&&!depart;
     if(!rep.size&&!_aLire&&!_aEcrire) return;
     // Les rubriques : celles de la maquette, puis les mesures du corps et ce
@@ -75090,7 +75094,7 @@ function renderReponsesBilans(bilans,client){
     const id=_idBilan(b);
     // « BILAN D'INSCRIPTION » (Kevin, 27/09/2026), le mot qu'il emploie.
     const nom=depart?'Bilan d’inscription':'Bilan '+_rang.get(b);
-    vus.push({id,nom,depart,attend:!!client&&!depart&&!b.reponseCoach,
+    vus.push({id,nom,depart,attend:!!client&&!depart&&!bilanRepondu(b),
       html:`<div id="bil-${escapeHtml(id)}" class="bn-bilan" data-bn="${escapeHtml(id)}">
         <div class="bn-tete${depart?' bn-tete-dep':''}">
           <div class="bn-tete-g">
@@ -75100,9 +75104,10 @@ function renderReponsesBilans(bilans,client){
           ${w?`<div class="bn-poids"><span>Poids</span><b>${String(w).replace('.',',')} kg</b></div>`:''}
         </div>
         ${sections||`<section class="bn-rub"><div class="bn-vide">Aucune réponse écrite dans ce bilan : mesures et photos seulement.</div></section>`}
-        ${(!client&&b.reponseCoach)?`<div class="bn-reponse">
+        ${(!client&&bilanRepondu(b))?`<div class="bn-reponse">
           <div class="bn-reponse-t">Réponse de ton coach</div>
-          <div class="bn-reponse-v">${escapeHtml(b.reponseCoach)}</div>
+          ${b.reponseCoach?`<div class="bn-reponse-v">${escapeHtml(b.reponseCoach)}</div>`:''}
+          ${(b.reponseAudio&&b.reponseAudio.url)?`<audio class="bn-audio" controls preload="none" src="${escapeHtml(b.reponseAudio.url)}"></audio><div class="bn-reponse-d">Réponse vocale · ${escapeHtml(dureeAudioTxt(b.reponseAudio.duree))}</div>`:''}
         </div>`:''}
         ${client?`<div class="bn-rub bn-rub-coach">${blocReponseBilan(b,client)}</div>`:''}
       </div>`});
@@ -86038,7 +86043,7 @@ function showProgressTab(tab,btn,sansMemo){
     //   bel et bien, et la pastille restait allumee pour toujours.
     try{
       let _lu=false;
-      for(const b of bl) if(b&&b.reponseCoach&&b.reponseVue===false){ b.reponseVue=true; _lu=true; }
+      for(const b of bl) if(b&&bilanRepondu(b)&&b.reponseVue===false){ b.reponseVue=true; _lu=true; }
       if(_lu){ saveUser(); _majPastilleBilan(); }
     }catch(e){}
   }
@@ -110193,8 +110198,211 @@ function _vcRouvrirApresMotionLab(email,videoId){
   return true;
 }
 
+// ══ LA RÉPONSE VOCALE AU BILAN (30/09/2026) ════════════════════════════════
+//
+// Le coach répond à un bilan en parlant : trois minutes au plus, écoute, puis
+// « Envoyer » ou « Recommencer ». Le texte pré-écrit (brouillonBilan) reste
+// au-dessus, comme aide-mémoire. Le bilan reçoit
+//   b.reponseAudio = {url, duree (s), at}
+// et reponseCoach devient facultatif : un bilan est RÉPONDU par l'un OU
+// l'autre (bilanRepondu), partout : hasNewBilan, bilansSansReponse, le
+// brouillon, la carte de l'athlète, et le Worker (relances, notification).
+//
+// ⚠ L'HÉBERGEMENT EST CLOUDINARY, PAS FIREBASE STORAGE. Le bucket du projet
+//   (repcore-sync.firebasestorage.app) n'existe pas : l'API répond « 404 Not
+//   Found » (un bucket fermé répondrait 403), et le plan Spark n'en crée plus.
+//   Cloudinary est ce qui porte déjà les vidéos, leurs annotations audio et
+//   les photos. Chemin : repcore/audio/<athlète>/bilan_<id>_<ts>.
+// ⚠ UN SEUL ENREGISTREUR (enregistreurAudio) : la correction vidéo s'en sert
+//   aussi, par ses mêmes noms publics (startAudioRec, stopAudioRec,
+//   _audioMediaRecorder…), qui en sont devenus des adaptateurs.
+// ⚠ HORS LIGNE : l'envoi est refusé, l'enregistrement reste en mémoire et
+//   s'envoie au retour du réseau. Micro refusé : un toast qui dit où l'ouvrir.
+//   Passage en arrière-plan : l'enregistrement s'arrête et se garde.
+const AUDIO_BILAN_MAX_S=180;
+const MICRO_REFUSE='Micro non autorisé : active l’accès au microphone dans les réglages du navigateur';
+// PURE. Un bilan est-il répondu ? Par écrit, ou de vive voix.
+function bilanRepondu(b){
+  return !!(b&&(b.reponseCoach||(b.reponseAudio&&b.reponseAudio.url)));
+}
+// PURE. « 1:05 ».
+function dureeAudioTxt(s){
+  const n=Math.max(0,Math.round(Number(s)||0));
+  return Math.floor(n/60)+':'+String(n%60).padStart(2,'0');
+}
+// PURE. Le format d'enregistrement, dans l'ordre de préférence : Opus en WebM
+// (Chrome, Firefox), en Ogg, puis MP4 (Safari iOS ne sait que lui).
+function mimeAudioPrefere(estSupporte){
+  const ok=estSupporte||(t=>{ try{ return typeof MediaRecorder!=='undefined'&&!!MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t); }catch(e){ return false; } });
+  for(const m of ['audio/webm;codecs=opus','audio/ogg;codecs=opus','audio/mp4','audio/aac']) if(ok(m)) return m;
+  return '';
+}
+// PURE. L'extension qui va avec.
+function extensionAudio(mime){
+  const m=String(mime||'').toLowerCase();
+  if(m.indexOf('ogg')>=0) return '.ogg';
+  if(m.indexOf('mp4')>=0||m.indexOf('aac')>=0||m.indexOf('m4a')>=0) return '.mp4';
+  return '.webm';
+}
+/**
+ * L'enregistreur, commun à la correction vidéo et au bilan. Rend un contrôleur
+ * {recorder, arreter(), annuler(), secondes} ou null (micro refusé, navigateur
+ * sans MediaRecorder). Arrêt automatique à maxSec. onFin(blob, duree) n'est
+ * pas appelé après annuler().
+ */
+let _enregistreurCourant=null;
+async function enregistreurAudio(o){
+  const opt=o||{};
+  const maxSec=Number(opt.maxSec)>0?Number(opt.maxSec):AUDIO_BILAN_MAX_S;
+  const erreur=e=>{ try{ if(opt.onErreur) opt.onErreur(e); else toast(MICRO_REFUSE,'var(--orange)'); }catch(x){} return null; };
+  if(typeof MediaRecorder==='undefined'||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) return erreur(new Error('indisponible'));
+  let stream;
+  try{ stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false}); }catch(e){ return erreur(e); }
+  const mime=mimeAudioPrefere();
+  let rec;
+  try{ rec=new MediaRecorder(stream,mime?{mimeType:mime}:{}); }
+  catch(e){ try{ stream.getTracks().forEach(t=>t.stop()); }catch(x){} return erreur(e); }
+  const morceaux=[], t0=Date.now();
+  let minut=null, annule=false;
+  const ctrl={recorder:rec,maxSec,secondes:0,mime:rec.mimeType||mime,
+    arreter(){ clearInterval(minut); try{ if(rec.state!=='inactive') rec.stop(); }catch(e){} },
+    annuler(){ annule=true; ctrl.arreter(); }};
+  rec.ondataavailable=e=>{ if(e.data&&e.data.size>0) morceaux.push(e.data); };
+  rec.onstop=()=>{
+    clearInterval(minut);
+    try{ stream.getTracks().forEach(t=>t.stop()); }catch(e){}
+    if(_enregistreurCourant===ctrl) _enregistreurCourant=null;
+    if(annule) return;
+    const blob=new Blob(morceaux,{type:rec.mimeType||mime||'audio/webm'});
+    const duree=Math.min(maxSec,Math.max(1,Math.round((Date.now()-t0)/1000)));
+    try{ if(opt.onFin) opt.onFin(blob,duree); }catch(e){}
+  };
+  try{ rec.start(100); }catch(e){ try{ stream.getTracks().forEach(t=>t.stop()); }catch(x){} return erreur(e); }
+  _enregistreurCourant=ctrl;
+  minut=setInterval(()=>{
+    ctrl.secondes++;
+    try{ if(opt.onTic) opt.onTic(ctrl.secondes,maxSec); }catch(e){}
+    if(ctrl.secondes>=maxSec) ctrl.arreter();
+  },1000);
+  return ctrl;
+}
+
+// ── La réponse vocale, dans le bloc de réponse du bilan ─────────────────
+let _rv=null;                 // {email, id, etat:'rec'|'ecoute'|'envoi', ctrl, blob, duree, url}
+function _rvId(id){ return 'rv_'+id; }
+function _rvHtml(b,c){
+  const id=_idBilan(b);
+  const a=b&&b.reponseAudio;
+  const lu=b&&b.reponseVue===true;
+  const deja=(a&&a.url)?'<div class="rv-envoyee"><div class="rv-t">Ta réponse vocale · '+escapeHtml(dureeAudioTxt(a.duree))+(lu?' · lue':' · non lue')+'</div>'
+    +'<audio controls preload="none" src="'+escapeHtml(a.url)+'"></audio></div>':'';
+  return deja+'<div id="'+escapeHtml(_rvId(id))+'" class="rv">'+_rvCorps(c&&c.email,id,!!(a&&a.url))+'</div>';
+}
+function _rvCorps(email,id,deja){
+  const s=_rv&&_rv.email===email&&_rv.id===id?_rv:null;
+  const em=_attrArg(String(email||'')), ide=_attrArg(String(id||''));
+  if(!s) return '<button type="button" class="btn btn-outline btn-sm rv-b" onclick="rvDemarrer('+em+','+ide+')">'+icon('mic',14)+' '+(deja?'Nouvelle réponse vocale':'Répondre en vocal')+'</button>';
+  if(s.etat==='rec') return '<div class="rv-rec" role="status"><span class="rv-point" aria-hidden="true"></span><span id="rv-temps">'+dureeAudioTxt(s.ctrl?s.ctrl.secondes:0)+' / '+dureeAudioTxt(AUDIO_BILAN_MAX_S)+'</span>'
+    +'<button type="button" class="btn btn-red btn-sm rv-b2" onclick="rvArreter()">Arrêter</button></div>';
+  if(s.etat==='envoi') return '<div class="rv-rec" role="status">Envoi de ta réponse vocale…</div>';
+  return '<div class="rv-ecoute"><audio controls src="'+escapeHtml(s.url||'')+'"></audio>'
+    +'<div class="rv-l">'+(s.blob&&!s.blob.size?'Enregistrement vide : vérifie ton micro et recommence.':escapeHtml(dureeAudioTxt(s.duree))+(s.enAttente?' · en attente du réseau':''))+'</div>'
+    +'<div class="rv-bs"><button type="button" class="btn btn-outline btn-sm rv-b2" onclick="rvRecommencer()">Recommencer</button>'
+    +'<button type="button" class="btn btn-red btn-sm rv-b2" onclick="rvEnvoyer()">Envoyer</button></div>'
+    +'<button type="button" class="rv-lien" onclick="rvAnnuler()">Annuler</button></div>';
+}
+function _rvRepeindre(){
+  if(!_rv) return;
+  const z=document.getElementById(_rvId(_rv.id));
+  if(z) z.innerHTML=_rvCorps(_rv.email,_rv.id,false);
+}
+async function rvDemarrer(email,id){
+  if(_rv&&_rv.etat==='rec') return false;
+  if(_rv&&_rv.url) try{ URL.revokeObjectURL(_rv.url); }catch(e){}
+  _rv={email,id,etat:'rec',ctrl:null,blob:null,duree:0,url:null};
+  _rvRepeindre();
+  const s=_rv;
+  const ctrl=await enregistreurAudio({maxSec:AUDIO_BILAN_MAX_S,
+    onTic:(sec)=>{ const t=document.getElementById('rv-temps'); if(t) t.textContent=dureeAudioTxt(sec)+' / '+dureeAudioTxt(AUDIO_BILAN_MAX_S); },
+    onFin:(blob,duree)=>{ if(_rv!==s) return; s.blob=blob; s.duree=duree; s.url=URL.createObjectURL(blob); s.etat='ecoute'; s.ctrl=null; _rvRepeindre(); }});
+  if(!ctrl){ if(_rv===s){ _rv=null; } const z=document.getElementById(_rvId(id)); if(z) z.innerHTML=_rvCorps(email,id,false); return false; }
+  s.ctrl=ctrl;
+  _rvRepeindre();
+  return true;
+}
+function rvArreter(){ if(_rv&&_rv.ctrl) _rv.ctrl.arreter(); }
+function rvRecommencer(){ const s=_rv; if(!s) return false; return rvDemarrer(s.email,s.id); }
+function rvAnnuler(){
+  const s=_rv; if(!s) return false;
+  if(s.ctrl) s.ctrl.annuler();
+  if(s.url) try{ URL.revokeObjectURL(s.url); }catch(e){}
+  _rv=null;
+  const z=document.getElementById(_rvId(s.id)); if(z) z.innerHTML=_rvCorps(s.email,s.id,false);
+  return true;
+}
+// L'envoi vers Cloudinary : repcore/audio/<athlète>/bilan_<id>_<ts>.
+async function _audioBilanUpload(blob,athleteCle,bilanId){
+  const ts=Date.now();
+  const nom='bilan_'+String(bilanId).replace(/[^A-Za-z0-9_-]/g,'')+'_'+ts;
+  const file=new File([blob],nom+extensionAudio(blob.type),{type:blob.type||'audio/webm'});
+  if(!/^audio\//.test(file.type)||file.size>AUDIO_MAX_OCTETS) throw new Error('Enregistrement invalide ou trop lourd (maximum '+_mo(AUDIO_MAX_OCTETS)+').');
+  const fd=new FormData();
+  fd.append('file',file);
+  fd.append('upload_preset',currentUser.cloudinaryPreset||'repcore_videos');
+  fd.append('folder','repcore/audio/'+String(athleteCle).replace(/[^A-Za-z0-9_@,.-]/g,'_'));
+  fd.append('public_id',nom);
+  const res=await fetch('https://api.cloudinary.com/v1_1/'+(currentUser.cloudinaryName||'dntu57ml')+'/video/upload',{method:'POST',body:fd});
+  if(!res.ok) throw new Error('Erreur serveur '+res.status);
+  const d=await res.json();
+  if(d.error) throw new Error(d.error.message);
+  try{ rcq('cld_envois',1); rcqOctets('cld_ko',file.size||Number(d.bytes)||0); }catch(e){}
+  return d.secure_url;
+}
+async function rvEnvoyer(){
+  const s=_rv;
+  if(!s||!s.blob) return false;
+  // Un micro coupé ou muet rend un enregistrement VIDE : il ne part pas.
+  if(!s.blob.size){ toast('Rien n’a été enregistré : vérifie ton micro et recommence.','var(--orange)'); return false; }
+  if(typeof navigator!=='undefined'&&navigator.onLine===false){
+    s.enAttente=true; _rvRepeindre();
+    toast('Pas de réseau : ta réponse vocale est gardée ici, envoie-la une fois connecté.','var(--orange)');
+    return false;
+  }
+  const users=DB.get('users')||{};
+  const c=users[s.email];
+  if(!c||!_estMonAthlete(c,currentUser)){ toast('Élève introuvable ou non autorisé','var(--orange)'); return false; }
+  const b=(c.bilans||[]).find(x=>_idBilan(x)===s.id);
+  if(!b){ toast('Bilan introuvable','var(--red)'); return false; }
+  s.etat='envoi'; _rvRepeindre();
+  let url;
+  try{ url=await _audioBilanUpload(s.blob,String(s.email).replace(/\./g,','),s.id); }
+  catch(e){ s.etat='ecoute'; _rvRepeindre(); toast(_cloudinaryUserMsg(e,'audio'),'var(--orange)'); return false; }
+  // Le dossier est relu APRÈS l'envoi : une synchro a pu l'avancer entre-temps.
+  const users2=DB.get('users')||{}, c2=users2[s.email];
+  const b2=c2&&(c2.bilans||[]).find(x=>_idBilan(x)===s.id);
+  if(!b2){ s.etat='ecoute'; _rvRepeindre(); toast('Bilan introuvable','var(--red)'); return false; }
+  const _premiere=!bilanRepondu(b2), _indice=c2.bilans.indexOf(b2);
+  b2.reponseAudio={url,duree:s.duree,at:Date.now()};
+  b2.reponseDate=Date.now();
+  b2.reponseVue=false;
+  users2[s.email]=c2;
+  const ok=DB.set('users',users2);
+  const envoi=CLOUD.pushOne(s.email,c2);
+  if(_premiere) try{ rcmCoach('coach_bilan_repondu'); }catch(e){}
+  // La même notification que la réponse écrite : le serveur relit le bilan.
+  if(_premiere) Promise.resolve(envoi).then(r=>{ if(r!==false) deposerEvenement({type:'reponse_bilan',dest:String(s.email).replace(/\./g,','),i:String(_indice)}); }).catch(()=>{});
+  try{ URL.revokeObjectURL(s.url); }catch(e){}
+  _rv=null;
+  toastSync(ok,envoi,'Réponse vocale envoyée. '+(c2.fname||'Ton athlète')+' l’écoutera à sa prochaine ouverture.','la réponse est');
+  // L'enchaînement, comme la réponse écrite.
+  try{ if(_proposerBilanSuivant(_fileBilansSuivants(c2.id))) return true; }catch(e){}
+  try{ openClientDetail(c2.id,true); }catch(e){}
+  return true;
+}
+
 // ======= AUDIO RECORDING =======
-let _audioMediaRecorder=null,_audioChunks=[],_audioBlob=null,_audioPreviewUrl=null,_audioTimerInterval=null;
+// ADAPTATEURS : la correction vidéo garde ses noms, l'enregistrement passe par enregistreurAudio.
+let _audioMediaRecorder=null,_audioChunks=[],_audioBlob=null,_audioPreviewUrl=null,_audioTimerInterval=null,_audioCtrl=null;
 function toggleAudioRec(){
   if(_audioMediaRecorder&&_audioMediaRecorder.state==='recording') stopAudioRec();
   else startAudioRec();
@@ -110212,16 +110420,15 @@ async function startAudioRec(){
     const t=v?Number(v.currentTime):NaN;
     if(champ&&!String(champ.value||'').trim()&&isFinite(t)&&t>0) champ.value=secsToTs(t);
   }catch(e){}
-  try{
-    const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
-    _audioChunks=[];_audioBlob=null;
-    const mime=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':
-               MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')?'audio/ogg;codecs=opus':'';
-    _audioMediaRecorder=new MediaRecorder(stream,mime?{mimeType:mime}:{});
-    _audioMediaRecorder.ondataavailable=e=>{if(e.data.size>0)_audioChunks.push(e.data);};
-    _audioMediaRecorder.onstop=()=>{
-      stream.getTracks().forEach(t=>t.stop());
-      _audioBlob=new Blob(_audioChunks,{type:_audioMediaRecorder.mimeType||'audio/webm'});
+  _audioChunks=[];_audioBlob=null;
+  // Le plafond de la correction vidéo reste deux minutes.
+  const ctrl=await enregistreurAudio({maxSec:120,
+    onTic:(secs)=>{
+      const st=document.getElementById('vc-audio-status');
+      if(st)st.textContent='Enregistrement… '+Math.floor(secs/60)+':'+(secs%60<10?'0':'')+secs%60;
+    },
+    onFin:(blob)=>{
+      _audioBlob=blob;
       if(_audioPreviewUrl) URL.revokeObjectURL(_audioPreviewUrl);
       _audioPreviewUrl=URL.createObjectURL(_audioBlob);
       const player=document.getElementById('vc-audio-player');
@@ -110230,22 +110437,13 @@ async function startAudioRec(){
       const btn=document.getElementById('vc-audio-btn');if(btn){btn.innerHTML=icon('mic',14)+' Démarrer l\'enregistrement';btn.style.color='';}
       const status=document.getElementById('vc-audio-status');if(status)status.textContent='Écoute et ajoute si c\'est bon.';
       clearInterval(_audioTimerInterval);
-    };
-    _audioMediaRecorder.start(100);
-    let secs=0;
-    clearInterval(_audioTimerInterval);
-    _audioTimerInterval=setInterval(()=>{
-      secs++;
-      const s=document.getElementById('vc-audio-status');
-      if(s)s.textContent='Enregistrement… '+Math.floor(secs/60)+':'+(secs%60<10?'0':'')+secs%60;
-      if(secs>=120)stopAudioRec();
-    },1000);
-    const btn=document.getElementById('vc-audio-btn');if(btn){btn.textContent='Arrêter';btn.style.color='var(--red)';}
-    const preview=document.getElementById('vc-audio-preview');if(preview)preview.style.display='none';
-    const status=document.getElementById('vc-audio-status');if(status)status.textContent='Enregistrement… 0:00';
-  }catch(e){
-    toast('Micro non autorisé : active l\'accès au microphone dans les réglages du navigateur','var(--orange)');
-  }
+    }});
+  if(!ctrl){ _audioCtrl=null; _audioMediaRecorder=null; return; }
+  _audioCtrl=ctrl; _audioMediaRecorder=ctrl.recorder;
+  clearInterval(_audioTimerInterval);
+  const btn=document.getElementById('vc-audio-btn');if(btn){btn.textContent='Arrêter';btn.style.color='var(--red)';}
+  const preview=document.getElementById('vc-audio-preview');if(preview)preview.style.display='none';
+  const status=document.getElementById('vc-audio-status');if(status)status.textContent='Enregistrement… 0:00';
 }
 function stopAudioRec(){
   if(_audioMediaRecorder&&_audioMediaRecorder.state!=='inactive')_audioMediaRecorder.stop();
@@ -110320,7 +110518,9 @@ async function uploadAudioFile(input){
 function cancelAudioAnnotation(){
   if(_audioPreviewUrl){URL.revokeObjectURL(_audioPreviewUrl);_audioPreviewUrl=null;}
   _audioBlob=null;_audioChunks=[];
-  if(_audioMediaRecorder&&_audioMediaRecorder.state!=='inactive')_audioMediaRecorder.stop();
+  // Annuler, c'est jeter : le son en cours ne revient pas en aperçu.
+  if(_audioCtrl){ _audioCtrl.annuler(); _audioCtrl=null; }
+  else if(_audioMediaRecorder&&_audioMediaRecorder.state!=='inactive')_audioMediaRecorder.stop();
   clearInterval(_audioTimerInterval);
   const preview=document.getElementById('vc-audio-preview');if(preview)preview.style.display='none';
   const btn=document.getElementById('vc-audio-btn');if(btn){btn.innerHTML=icon('mic',14)+' Démarrer l\'enregistrement';btn.style.color='';}

@@ -43,6 +43,22 @@ await test('réponse du coach : le push part, chiffré, avec le bon texte', asyn
   assert.equal(w.F.lire('push_log/' + A1).jour, '2026-09-28');
 });
 
+await test('réponse VOCALE seule : relue en base, le même push, qui dit sa durée', async () => {
+  const w = monde({ users: { [A1]: { coachEmailKey: C1, fname: 'Léa', bilans: [{ date: 1, reponseAudio: { url: 'https://res.cloudinary.com/x/a.webm', duree: 83, at: 2 } }] } },
+    push: { [A1]: { a1b2c3: tel.abonnement } },
+    evenements: { e1: { type: 'reponse_bilan', par: C1, dest: A1, i: '0', at: 1 } } }, PARIS('2026-09-28T12:00:00'));
+  await w.minute();
+  assert.equal(w.F.recus.length, 1);
+  const m = tel.lire(w.F.recus[0].init.body);
+  assert.equal(m.title, 'Ton coach a répondu à ton bilan');
+  assert.equal(m.body, 'Une réponse vocale (1:23) t’attend dans l’app.');
+  // Sans texte ni voix : rien ne part.
+  const w2 = monde({ users: { [A1]: { coachEmailKey: C1, bilans: [{ date: 1, reponseAudio: {} }] } }, push: { [A1]: { a1b2c3: tel.abonnement } },
+    evenements: { e1: { type: 'reponse_bilan', par: C1, dest: A1, i: '0', at: 1 } } }, PARIS('2026-09-28T12:00:00'));
+  await w2.minute();
+  assert.equal(w2.F.recus.length, 0);
+});
+
 await test('un événement déposé par quelqu’un qui n’est pas le coach n’envoie rien', async () => {
   const w = monde({ users: { [A1]: { coachEmailKey: C1, bilans: [{ reponseCoach: 'x' }] } }, push: { [A1]: { a1b2c3: tel.abonnement } },
     evenements: { e1: { type: 'reponse_bilan', par: 'autre@t,fr', dest: A1, i: '0', at: 1 } } }, PARIS('2026-09-28T12:00:00'));

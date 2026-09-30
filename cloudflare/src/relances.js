@@ -126,7 +126,8 @@ export function signauxRelance(d, t) {
     // sinon la fréquence de l'athlète et le samedi, en retard dès le lendemain.
     const rt = retardBilan(dd, x.cadence, x.freq, t);
     if (rt) out.overdue = { depuis: rt.depuis };
-    if (!der.reponseCoach) out.bilan = { depuis: dd, bilan: dd };
+    // Répondu par écrit OU de vive voix (bilanRepondu de l'app).
+    if (!der.reponseCoach && !(der.reponseAudio && der.reponseAudio.url)) out.bilan = { depuis: dd, bilan: dd };
     const dep = bilans.filter((b) => b.type === 'depart').sort((a, b) => Number(a.date) - Number(b.date))[0];
     if (dep && x.programme === false) out.noprog = { depuis: Number(dep.date) };
   }

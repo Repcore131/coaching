@@ -49190,6 +49190,97 @@ async function testExercices(){
       const c=_fjCopier(t.entries,j,'matin');
       if(c[0].qty!==60||c[1].qty!==250||c[0].id===t.entries[0].id) return _echec('copie');
       return true;})());
+    // ── LA RÉPONSE VOCALE AU BILAN ──
+    // Un faux micro : getUserMedia et MediaRecorder bouchonnés le temps d'un test.
+    const _RV=async(fn,o)=>{
+      const svG=navigator.mediaDevices&&navigator.mediaDevices.getUserMedia, svMR=window.MediaRecorder, svT=window.toast;
+      const svMD=Object.getOwnPropertyDescriptor(navigator,'mediaDevices');
+      const toasts=[];
+      class FauxMR{
+        constructor(s,opt){ this.state='inactive'; this.mimeType=(opt&&opt.mimeType)||'audio/webm'; }
+        static isTypeSupported(t){ return (o&&o.mimes)?o.mimes.indexOf(t)>=0:t==='audio/webm;codecs=opus'; }
+        start(){ this.state='recording'; setTimeout(()=>{ if(this.ondataavailable) this.ondataavailable({data:new Blob(['x'],{type:this.mimeType})}); },5); }
+        stop(){ if(this.state==='inactive') return; this.state='inactive'; setTimeout(()=>{ if(this.onstop) this.onstop(); },10); }
+      }
+      const md={getUserMedia:async()=>{ if(o&&o.refus) throw new Error('NotAllowedError'); return {getTracks:()=>[{stop(){}}]}; }};
+      Object.defineProperty(navigator,'mediaDevices',{configurable:true,get:()=>md});
+      window.MediaRecorder=FauxMR; window.toast=(m)=>{ toasts.push(m); };
+      try{ return await fn(toasts); }
+      finally{
+        if(svMD) Object.defineProperty(navigator,'mediaDevices',svMD); else delete navigator.mediaDevices;
+        window.MediaRecorder=svMR; window.toast=svT;
+        try{ if(_enregistreurCourant) _enregistreurCourant.annuler(); }catch(e){}
+        _rv=null;
+      }
+    };
+    const _pause=ms=>new Promise(r=>setTimeout(r,ms));
+    ok('Réponse vocale : seule, elle suffit à répondre (hasNewBilan, bilansSansReponse, brouillon)',(()=>{
+      const a={url:'https://res.cloudinary.com/x/audio/bilan.webm',duree:42,at:1};
+      const c={id:'rv1',email:'rv@t.fr',bilans:[{date:1,type:'suivi',id:'b1',reponseAudio:a}]};
+      if(hasNewBilan(c)) return _echec('hasNewBilan vrai avec une réponse vocale');
+      if(bilansSansReponse(c)!==0) return _echec('bilansSansReponse : '+bilansSansReponse(c));
+      if(!bilanRepondu(c.bilans[0])||bilanRepondu({reponseAudio:{}})||bilanRepondu({})) return _echec('bilanRepondu');
+      if(!hasNewBilan({id:'x',bilans:[{date:1}]})||bilansSansReponse({bilans:[{date:1},{date:2,reponseCoach:'ok'}]})!==1) return _echec('sans réponse');
+      if(_brouillonPourChamp(c.bilans[0],c)!=='') return _echec('brouillon proposé sur un bilan déjà répondu');
+      return dureeAudioTxt(65)==='1:05'&&dureeAudioTxt(0)==='0:00'?true:_echec('durée');})());
+    ok('Réponse vocale : le format suit le navigateur (Opus, Ogg, puis MP4 pour Safari iOS)',(()=>{
+      if(mimeAudioPrefere(t=>true)!=='audio/webm;codecs=opus') return _echec('webm d’abord');
+      if(mimeAudioPrefere(t=>t==='audio/ogg;codecs=opus')!=='audio/ogg;codecs=opus') return _echec('ogg');
+      if(mimeAudioPrefere(t=>t==='audio/mp4')!=='audio/mp4') return _echec('mp4 (Safari)');
+      if(mimeAudioPrefere(()=>false)!=='') return _echec('rien de connu');
+      const e=[extensionAudio('audio/webm;codecs=opus'),extensionAudio('audio/ogg;codecs=opus'),extensionAudio('audio/mp4'),extensionAudio('audio/aac')].join();
+      return e==='.webm,.ogg,.mp4,.mp4'?true:_echec(e);})());
+    ok('Réponse vocale : le bloc de réponse propose le vocal, la réponse envoyée s’écoute, chez le coach comme chez l’athlète',(()=>{
+      const b={date:Date.now(),type:'suivi',id:'bv1',reponseAudio:{url:'https://res.cloudinary.com/x/v.webm',duree:75,at:1},reponseVue:false};
+      const c={id:'rv2',email:'rv2@t.fr',fname:'Léa',bilans:[b]};
+      const h=blocReponseBilan({date:1,type:'suivi',id:'bv0'},c);
+      if(h.indexOf('Répondre en vocal')<0||h.indexOf('rvDemarrer(')<0) return _echec('pas de bouton vocal');
+      const h2=blocReponseBilan(b,c);
+      if(h2.indexOf('<audio controls')<0||h2.indexOf('1:15')<0||h2.indexOf('non lue')<0) return _echec('réponse vocale côté coach');
+      const ath=renderReponsesBilans([b]);
+      if(ath.indexOf('Réponse de ton coach')<0||ath.indexOf('<audio')<0||ath.indexOf('res.cloudinary.com/x/v.webm')<0) return _echec('côté athlète : '+ath.slice(0,160));
+      return true;})());
+    okA('Réponse vocale : enregistreurAudio s’arrête seul au plafond et rend le son',async()=>_RV(async()=>{
+      let fin=null;
+      const ctrl=await enregistreurAudio({maxSec:1,onFin:(blob,duree)=>{ fin={blob,duree}; }});
+      if(!ctrl||ctrl.recorder.state!=='recording') return _echec('pas démarré');
+      for(let i=0;i<40&&!fin;i++) await _pause(50);
+      if(!fin) return _echec('pas d’arrêt automatique');
+      if(!(fin.blob instanceof Blob)||fin.duree<1) return _echec('son : '+JSON.stringify(fin));
+      // Annulé : onFin n'est pas appelé.
+      let rien=true;
+      const c2=await enregistreurAudio({maxSec:60,onFin:()=>{ rien=false; }});
+      c2.annuler(); await _pause(60);
+      return rien&&_enregistreurCourant===null?true:_echec('annulé : fin appelée');}));
+    okA('Réponse vocale : micro refusé, un toast clair et rien ne démarre',async()=>_RV(async(toasts)=>{
+      const r=await enregistreurAudio({maxSec:10});
+      if(r!==null) return _echec('démarré sans micro');
+      return toasts.some(t=>/Micro non autorisé/.test(t))?true:_echec('toast : '+toasts.join(' | '));
+    },{refus:true}));
+    okA('Réponse vocale : la correction vidéo garde ses fonctions (startAudioRec, stopAudioRec, _audioMediaRecorder)',async()=>_RV(async()=>{
+      for(const f of ['toggleAudioRec','startAudioRec','stopAudioRec','confirmAudioAnnotation','cancelAudioAnnotation','uploadAudioFile'])
+        if(typeof window[f]!=='function') return _echec(f+' a disparu');
+      await startAudioRec();
+      if(!_audioMediaRecorder||_audioMediaRecorder.state!=='recording') return _echec('startAudioRec : pas d’enregistrement');
+      stopAudioRec();
+      for(let i=0;i<20&&!_audioBlob;i++) await _pause(20);
+      if(!(_audioBlob instanceof Blob)) return _echec('stopAudioRec : pas de son');
+      await startAudioRec(); cancelAudioAnnotation(); await _pause(60);
+      return _audioBlob===null?true:_echec('cancelAudioAnnotation : le son est resté');}));
+    okA('Réponse vocale : hors ligne, l’envoi est refusé et l’enregistrement reste en mémoire',async()=>_RV(async(toasts)=>{
+      const svOn=Object.getOwnPropertyDescriptor(navigator,'onLine'), svF=window.fetch;
+      let appels=0; window.fetch=()=>{ appels++; return Promise.reject(new Error('non')); };
+      Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>false});
+      try{
+        // Un enregistrement vide ne part jamais, réseau ou pas.
+        _rv={email:'rv@t.fr',id:'b1',etat:'ecoute',blob:new Blob([],{type:'audio/webm'}),duree:3,url:'blob:x'};
+        if(await rvEnvoyer()!==false||!toasts.some(t=>/Rien n’a été enregistré/.test(t))) return _echec('un son vide est parti');
+        _rv={email:'rv@t.fr',id:'b1',etat:'ecoute',blob:new Blob(['x'],{type:'audio/webm'}),duree:12,url:'blob:x'};
+        const r=await rvEnvoyer();
+        if(r!==false||appels) return _echec('envoi tenté hors ligne');
+        if(!_rv||!_rv.blob||!_rv.enAttente) return _echec('enregistrement perdu');
+        return toasts.some(t=>/Pas de réseau/.test(t))?true:_echec('toast : '+toasts.join(' | '));
+      } finally { window.fetch=svF; if(svOn) Object.defineProperty(navigator,'onLine',svOn); else delete navigator.onLine; }}));
     // ── LA CADENCE DES BILANS : UNE SEULE DÉFINITION DU RETARD ──
     ok('Cadence : hebdomadaire, dernier bilan à J-10, needsAlert est vrai ; bimensuelle, faux',(()=>{
       const J=864e5, now=Date.now();
