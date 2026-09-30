@@ -26749,16 +26749,24 @@ async function testExercices(){
         return n(19.99)===1&&n(20)===2&&n(49.99)===2&&n(50)===3
             &&n(100)===3&&n(100.01)===4;})());
 
-      // ── Les répétitions sont celles PRESCRITES, à l'identique ──
-      ok('Chaque palier reprend les répétitions prescrites',(()=>{
-        const t=seriesApproche(80,'5');
-        return t.length===3&&t.every(p=>p.reps==='5');})());
-      ok('Une fourchette est reprise telle quelle',(()=>{
-        const t=seriesApproche(120,'8-12');
-        return t.length===4&&t.every(p=>p.reps==='8-12');})());
-      ok('Les répétitions ne dépendent plus du palier',(()=>{
-        const t=seriesApproche(180,'3');
-        return new Set(t.map(p=>p.reps)).size===1;})());
+      // ── Les répétitions DESCENDENT avec la charge (30/09/2026) ──
+      // ≤ 50 % : min(R, 10) · ≤ 65 % : min(R, 6) · ≤ 80 % : min(R, 4) · au-delà : min(R, 2).
+      ok('Chaque palier porte ses répétitions : 120 kg × 12 → 10, 6, 4, 2',(()=>{
+        const t=seriesApproche(120,'12',{name:'SQUAT',reps:'12'});
+        return t.map(p=>p.reps).join()==='10,6,4,2'?true:_echec(t.map(p=>p.pct+':'+p.reps).join(' '));})());
+      ok('À 100 kg, trois paliers (50, 70, 85 %) : 10, 4, 2',(()=>{
+        const t=seriesApproche(100,'12',{name:'SQUAT',reps:'12'});
+        return t.map(p=>p.reps).join()==='10,4,2'?true:_echec(t.map(p=>p.pct+':'+p.reps).join(' '));})());
+      ok('Une charge légère : un palier, et pas plus de répétitions que prescrites (15 × 8 → 8)',(()=>{
+        const t=seriesApproche(15,'8',{name:'CURL BARRE',reps:'8'});
+        return (t.length===1&&t[0].reps===8)?true:_echec(JSON.stringify(t));})());
+      ok('Jamais plus que R, jamais zéro ; une fourchette part de son bas',(()=>{
+        if(seriesApproche(80,'5').map(p=>p.reps).join()!=='5,4,2') return _echec('80 × 5 : '+seriesApproche(80,'5').map(p=>p.reps).join());
+        if(seriesApproche(120,'8-12').map(p=>p.reps).join()!=='8,6,4,2') return _echec('fourchette');
+        if(seriesApproche(180,'3').map(p=>p.reps).join()!=='3,3,3,2') return _echec('180 × 3');
+        if(seriesApproche(150,'1').map(p=>p.reps).join()!=='1,1,1,1') return _echec('single');
+        if(seriesApproche(90,'10 par jambe').map(p=>p.reps).join()!=='10,4,2') return _echec('unilatéral');
+        return seriesApproche(80,'0').length===0?true:_echec('R = 0');})());
 
       // ── Les charges ──
       ok('Les paliers sont des multiples de 1,25',
@@ -26816,16 +26824,16 @@ async function testExercices(){
         sessions:[],bilans:[],programs:{},videos:[]};
       ok('La ligne affichée cite les paliers, en français',(()=>{
         const h=_htmlMonteeCharge(80,{name:'SQUAT',reps:'5'},0);
-        // La forme a changé : l'unité et les répétitions, identiques pour tous
-        // les paliers, sont sorties du groupe pour tenir sur une ligne.
-        return /Échauffement/.test(h)&&/40 · 55 · 67,5 kg × 5/.test(h);})());
+        // Depuis le 30/09/2026, chaque palier dit ses répétitions (forme longue).
+        return /Échauffement/.test(h)&&/40 kg × 5 · 55 kg × 4 · 67,5 kg × 2/.test(h);})());
       ok('Une charge légère n\'affiche qu\'un seul palier',(()=>{
         const h=_htmlMonteeCharge(15,{name:'CURL HALTERE',reps:'12'},0);
         // 8 et non 7,5 depuis le 30/09/2026 : aux haltères, le pas est de 2 kg (arrondiCharge).
-        return /Échauffement/.test(h)&&/8 kg × 12/.test(h)&&h.split('·').length===1;})());
+        // Un seul palier, à 50 % : min(12, 10) = 10 répétitions.
+        return /Échauffement/.test(h)&&/8 kg × 10/.test(h)&&h.split('·').length===1;})());
       ok('Une charge lourde en affiche quatre',(()=>{
         const h=_htmlMonteeCharge(140,{name:'SOULEVE DE TERRE',reps:'3'},0);
-        return /55 · 83,75 · 105 · 125 kg × 3/.test(h);})());
+        return /55 kg × 3 · 83,75 kg × 3 · 105 kg × 3 · 125 kg × 2/.test(h);})());
       ok('Aucun bouton de validation, aucune case, aucune ligne de tableau',(()=>{
         const h=_htmlMonteeCharge(80,{name:'SQUAT',reps:'5'},0);
         return !/<input/i.test(h)&&!/<td/i.test(h)&&!/<tr/i.test(h)
@@ -26850,7 +26858,7 @@ async function testExercices(){
         currentUser.monteeChargeMasquee=true;
         const h=_htmlMonteeCharge(80,{name:'SQUAT',reps:'5'},0);
         currentUser.monteeChargeMasquee=false;
-        return /▸/.test(h)&&/display:none/.test(h)&&/40 · 55 · 67,5 kg × 5/.test(h);})());
+        return /▸/.test(h)&&/display:none/.test(h)&&/40 kg × 5 · 55 kg × 4 · 67,5 kg × 2/.test(h);})());
       ok('La préférence est GLOBALE : deux exercices différents suivent le même état',(()=>{
         currentUser.monteeChargeMasquee=true;
         const a=_htmlMonteeCharge(80,{name:'SQUAT',reps:'5'},0);

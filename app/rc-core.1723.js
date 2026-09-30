@@ -68215,6 +68215,13 @@ function arrondiCharge125(cible,depart){
 
 // ── Montée en charge : les séries d'approche, affichage seul ────────────────
 // Ce que le pratiquant met sur la barre AVANT sa première série de travail.
+//
+// LES RÉPÉTITIONS DESCENDENT QUAND LA CHARGE MONTE (30/09/2026). Chaque
+// palier porte les siennes, tirées de la répétition prescrite R (bas de la
+// fourchette, sinon le premier nombre) : jusqu'à 50 % de la charge, R dans la
+// limite de 10 ; jusqu'à 65 %, 6 ; jusqu'à 80 %, 4 ; au-delà, 2. Jamais plus
+// que R, jamais zéro. L'échauffement prépare sans fatiguer : dix répétitions
+// à 90 % d'une série de douze useraient la série de travail.
 // Rien de tout ceci n'existe en donnée : aucune ligne dans le tableau, aucune
 // case à valider, rien dans woState.sessionData, donc rien dans le tonnage, le
 // volume ou l'historique. C'est un pense-bête, pas une série.
@@ -68249,25 +68256,37 @@ function seriesApproche(chargeTravail,repsPrescrites,ex){
   // une charge PLUS BASSE veut dire un exercice PLUS DUR — une rampe
   // descendante y serait exactement à l'envers.
   if(ex&&(isCardio(ex)||techniqueDe(ex)==='isometrie'||isCounterweightEx(ex.name))) return [];
-  // Les répétitions des paliers sont celles PRESCRITES, à l'identique : on
-  // répète le geste de la série de travail, allégé. Seule la charge change.
   // Sans prescription chiffrée (« max », « AMRAP », champ vide) il n'y a rien
   // à écrire en face de chaque palier.
-  const reps=(repsPrescrites==null?'':String(repsPrescrites)).trim();
-  if(!/\d/.test(reps)) return [];
+  const R=repsApprocheBase(repsPrescrites);
+  if(!R) return [];
   const pcts=MONTEE_POURCENTS[_nbSeriesApproche(w)]||MONTEE_POURCENTS[3];
-  return pcts.map(pct=>({pct,charge:arrondiCharge125(w*pct,w),reps}));
+  return pcts.map(pct=>({pct,charge:arrondiCharge125(w*pct,w),reps:repsApproche(pct,R)}));
+}
+// PURE. La répétition prescrite de référence : le bas d'une fourchette
+// (fourchetteReps), sinon le premier nombre (« 10 par jambe » → 10). 0 si rien.
+function repsApprocheBase(reps){
+  const f=fourchetteReps(reps);
+  if(f) return f.min;
+  const m=String(reps==null?'':reps).match(/\d+/);
+  const n=m?parseInt(m[0],10):0;
+  return n>0?n:0;
+}
+// PURE. Les répétitions d'un palier à `pct` de la charge de travail.
+function repsApproche(pct,R){
+  const r=Math.max(1,Math.round(Number(R))||0);
+  const plafond=pct<=0.5?10:(pct<=0.65?6:(pct<=0.8?4:2));
+  return Math.max(1,Math.min(r,plafond));
 }
 function _fmtChargeMontee(v){ return String(v).replace('.',','); }
 function _htmlMonteeCharge(chargeTravail,ex,idx){
   const paliers=seriesApproche(chargeTravail,ex&&ex.reps,ex);
   if(!paliers.length) return '';
   const masque=!!(currentUser&&currentUser.monteeChargeMasquee);
-  // L'UNITÉ ET LES RÉPÉTITIONS SORTENT DU GROUPE. Elles sont les mêmes pour
-  // tous les paliers — seriesApproche donne à chacun les répétitions
-  // prescrites, à l'identique — et les répéter quatre fois faisait déborder la
-  // ligne. On ne factorise QUE si c'est vrai : le jour où elles différeraient,
-  // la forme longue reprend la main plutôt que d'écrire un mensonge court.
+  // L'UNITÉ ET LES RÉPÉTITIONS SORTENT DU GROUPE quand elles sont les mêmes
+  // pour tous les paliers (un seul palier, ou R petit). Depuis que les
+  // répétitions descendent avec la charge, c'est la forme longue le plus
+  // souvent : chaque palier dit ses répétitions.
   const memesReps=paliers.every(p=>String(p.reps)===String(paliers[0].reps));
   const txt=memesReps
     ? paliers.map(p=>_fmtChargeMontee(chargeSuggereeAffichee(p.charge,{ex,user:currentUser,sens:'proche'}))).join(' · ')+' '+_unite()+' × '+paliers[0].reps
