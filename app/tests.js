@@ -20940,6 +20940,65 @@ async function testExercices(){
     ok('T1 — calcSug n’existe plus : chargeSuivante est le seul moteur des charges proposées',typeof calcSug==='undefined');
     ok('T1 — la borne : répétitions + RIR ≤ 12',e1rmFiable(12,0)&&e1rmFiable(10,2)&&!e1rmFiable(10,3)&&!e1rmFiable(13,0)&&e1rmFiable(8,'')&&e1rmFiable(0,0));
     ok('e1rm sur charge nulle ou négative rend 0',e1rm(0,10,1)===0&&e1rm(-5,10,1)===0);
+    // ── L'EAU : UN REPÈRE PLAUSIBLE POUR TOUS LES GABARITS, ET CE QUE L'ATHLÈTE BOIT ──
+    const _eauU=(kg,cm,x)=>Object.assign({id:'EAU'+kg,email:'eau'+kg+'@t.fr',role:'athlete',gender:'H',_evol_gender:'H',
+      _evol_height:cm?String(cm):undefined,weightLog:[{date:localISODate(new Date()),kg}],nutrition:{}},x||{});
+    ok('besoinEau : 120 kg / 175 cm un jour OFF ≤ 4,0 L (poids ajusté), 60 kg ≈ 2,1 L',(()=>{
+      const gros=besoinEau(_eauU(120,175),false);
+      if(!(gros<=4.0)) return _echec('120 kg : '+gros);
+      // Poids ajusté : 25 × 1,75² + 0,25 × (120 − 76,6) = 87,4 kg → 35 × 87,4 = 3,1 L.
+      if(gros!==3.1) return _echec('120 kg : '+gros+' au lieu de 3,1');
+      const v60=besoinEau(_eauU(60,175),false);
+      if(Math.abs(v60-2.1)>0.05) return _echec('60 kg : '+v60);
+      // Le jour ON ajoute 0,5 L.
+      return besoinEau(_eauU(60,175),true)===2.6?true:_echec('60 kg ON : '+besoinEau(_eauU(60,175),true));})());
+    ok('besoinEau : plancher 1,5 L, plafond 4,0 L (+0,5 L les jours ON)',(()=>{
+      const petit=besoinEau(_eauU(35,150),false);
+      if(petit!==1.5) return _echec('35 kg : '+petit);
+      // Sans taille, pas de poids ajusté : 140 kg × 35 = 4,9 L, ramené à 4,0 L.
+      const lourd=besoinEau(_eauU(140,null),false), lourdOn=besoinEau(_eauU(140,null),true);
+      if(lourd!==4.0||lourdOn!==4.5) return _echec('140 kg : '+lourd+' / '+lourdOn);
+      if(besoinEau({nutrition:{}},false)!==null) return _echec('sans poids');
+      // Pour chaque gabarit de 40 à 180 kg et de 150 à 200 cm : entre 1,5 et 4,5 L.
+      for(let kg=40;kg<=180;kg+=10) for(let cm=150;cm<=200;cm+=10) for(const on of [false,true]){
+        const v=besoinEau(_eauU(kg,cm),on);
+        if(!(v>=1.5&&v<=(on?4.5:4.0))) return _echec(kg+' kg / '+cm+' cm : '+v);
+      }
+      return /poidsMacros\(/.test(String(besoinEau))?true:_echec('le poids ne passe pas par poidsMacros');})());
+    ok('Eau bue : deux ajouts de 250 ml puis une annulation → nutrition.eau[aujourd’hui] === 250',(()=>{
+      const sv={u:currentUser,s:saveUser,a:_eauAjouts.slice()};
+      try{
+        currentUser=_eauU(70,178); saveUser=()=>true; _eauAjouts.length=0;
+        const d=localISODate(new Date());
+        ajouterEau(250); ajouterEau(250);
+        if(currentUser.nutrition.eau[d]!==500) return _echec('après deux ajouts : '+currentUser.nutrition.eau[d]);
+        annulerEau();
+        if(currentUser.nutrition.eau[d]!==250) return _echec('après l’annulation : '+currentUser.nutrition.eau[d]);
+        annulerEau();
+        if(currentUser.nutrition.eau[d]!==undefined) return _echec('zéro doit effacer le jour');
+        if(annulerEau()!==false) return _echec('annuler sans ajout');
+        // Borné à 10 000 ml, comme la règle de la base.
+        for(let i=0;i<25;i++) ajouterEau(500);
+        if(currentUser.nutrition.eau[d]!==10000) return _echec('borne : '+currentUser.nutrition.eau[d]);
+        // Le rendu : la barre, les deux boutons et l'annulation.
+        const h=_htmlEauSuivi(currentUser,false);
+        if(!/progressbar/.test(h)||!/ajouterEau\(250\)/.test(h)||!/ajouterEau\(500\)/.test(h)||!/annulerEau\(\)/.test(h)) return _echec('rendu');
+        return /id="eau-suivi"/.test(_htmlHydratationNut(currentUser))?true:_echec('absent de l’écran nutrition');
+      } finally { currentUser=sv.u; saveUser=sv.s; _eauAjouts.length=0; sv.a.forEach(x=>_eauAjouts.push(x)); }})());
+    ok('Coach : moyenne des jours notés sur les 7 derniers, et un jour sans saisie n’est pas zéro',(()=>{
+      const d=localISODate(new Date());
+      const c=_eauU(80,180,{nutrition:{eau:{[d]:2000,[_jourPlus(d,-1)]:3000,[_jourPlus(d,-8)]:9000}}});
+      const m=eauMoyenne7j(c);
+      if(!m||m.ml!==2500||m.nJours!==2) return _echec(JSON.stringify(m));
+      if(eauMoyenne7j(_eauU(80,180))!==null) return _echec('sans saisie');
+      const t=_htmlHydratationCoach(c).replace(/<[^>]*>/g,' ');
+      return /Eau notée : 2,5 L par jour en moyenne sur les 7 derniers jours \(2 jours notés\)/.test(t)?true:_echec(t.slice(0,200));})());
+    ok('La règle de la base déclare nutrition/eau/$date, nombre de 0 à 10 000',(()=>{
+      const x=new XMLHttpRequest(); x.open('GET','../database.rules.json',false); x.send();
+      const r=x.responseText||'';
+      if(!r) return true;   // le fichier n'est pas servi par ce banc : regles.mjs le vérifie
+      return /"eau": \{\s*"\$date": \{ "\.validate": "\$date\.matches\(\/\^\[0-9\]\{4\}-\[0-9\]\{2\}-\[0-9\]\{2\}\$\/\) && newData\.isNumber\(\) && newData\.val\(\) >= 0 && newData\.val\(\) <= 10000"/.test(r)
+        ?true:_echec('règle absente');})());
     // ── LA DÉPENSE SPORTIVE EN MET NETS, ET LA SEMAINE QUI GARDE LA CIBLE ──
     ok('MET nets : kcalHeureSport(Musculation, modérée, 55 kg) < (…, 100 kg), et (MET − 1) × poids',(()=>{
       const a=kcalHeureSport('Musculation','moderee',55), b=kcalHeureSport('Musculation','moderee',100);
@@ -71920,8 +71979,10 @@ async function testExercices(){
           const u=_u([]);
           return besoinEau(u,true)===null&&phraseBesoinEau(u,true)===''
             ?true:_echec('un repère sort sans poids');})());
-        ok('Le poids passe par _poidsPourPlancher, pas par une lecture parallèle',(()=>{
-          return /_poidsPourPlancher\(/.test(String(besoinEau))
+        // 30/09/2026 : le repère passe par le poids de RÉFÉRENCE (poidsMacros), qui lit
+        // lui-même poidsNutritionnel, la lecture commune : toujours pas de lecture parallèle.
+        ok('Le poids passe par poidsMacros, pas par une lecture parallèle',(()=>{
+          return /poidsMacros\(/.test(String(besoinEau))
             ?true:_echec('lecture parallèle du poids');})());
         ok('La phrase de repère dit que ce n\'est PAS une mesure',(()=>{
           const t=phraseBesoinEau(_u80(),true);

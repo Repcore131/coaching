@@ -64,6 +64,14 @@
           "jour": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 6 && newData.val() % 1 === 0" },
           "$autre": { ".validate": false }
         },
+        // L EAU BUE, notee par l athlete : un nombre de millilitres par jour,
+        // de 0 a 10 000. L app borne avant d ecrire : une valeur hors bornes
+        // ferait rejeter l ecriture du dossier entier.
+        "nutrition": {
+          "eau": {
+            "$date": { ".validate": "$date.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) && newData.isNumber() && newData.val() >= 0 && newData.val() <= 10000" }
+          }
+        },
         "questionsCoach": {
           "$i": { ".validate": "$i.matches(/^[0-2]$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 120" }
         },

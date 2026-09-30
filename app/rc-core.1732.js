@@ -17173,7 +17173,14 @@ function _htmlHydratationNut(user){
   const u=user||currentUser;
   // `u` et non currentUser : cette fonction reçoit un dossier, et il faut la
   // croire sur parole.
-  try{ return _htmlHydratation(u,nutIsOnDay(localISODate(new Date()),u)); }
+  // Le suivi de l'eau bue vit DANS le cadre Hydratation, sous le repère.
+  try{
+    const on=nutIsOnDay(localISODate(new Date()),u);
+    const h=_htmlHydratation(u,on), suivi=_htmlEauSuivi(u,on);
+    if(!h) return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:0">Hydratation</div>${suivi}</div>`;
+    return h.replace(/<\/div>\s*$/,suivi+'</div>');
+  }
   catch(e){ return ''; }
 }
 // Meme rendu que cote athlete, mais le jour ON est celui de l'ATHLETE : sur la
@@ -17186,7 +17193,14 @@ function _htmlHydratationCoach(c){
     const d=new Date();
     on=!!(cfg[(d.getDay()+6)%7]&&cfg[(d.getDay()+6)%7].active===true);
   }
-  return _htmlHydratation(c,on);
+  const h=_htmlHydratation(c,on);
+  // L'eau NOTÉE par l'athlète : moyenne des jours notés sur 7.
+  const m=eauMoyenne7j(c);
+  if(!m) return h;
+  const ligne=`<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6;margin-top:6px">Eau notée : ${_eauL(m.ml)} L par jour en moyenne sur les 7 derniers jours (${m.nJours} jour${m.nJours>1?'s':''} noté${m.nJours>1?'s':''}).</div>`;
+  if(!h) return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Hydratation</div>${ligne}</div>`;
+  return h.replace(/<\/div>\s*$/,ligne+'</div>');
 }
 function urgencyScore(c){
   const lt=(c.bilans||[]).reduce((m,b)=>Math.max(m,b.date),0);
@@ -64198,13 +64212,101 @@ function hydratationMoyenne(user,jours){
 // ses urines, et le texte le dit.
 const EAU_ML_PAR_KG=35;
 const EAU_ML_PAR_SEANCE=500;
-// PURE. Le poids passe par _poidsPourPlancher : une seconde lecture divergerait
-// à la première évolution, exactement comme pour le plancher calorique.
+// ⚠ LE POIDS DE RÉFÉRENCE, ET DES BORNES (30/09/2026). 35 ml × le poids total
+//   donnait 4,2 L à 120 kg un jour de repos, 4,7 L un jour d'entraînement :
+//   la masse grasse ne boit pas comme le muscle. Le poids est désormais celui
+//   des macros (poidsMacros : masse maigre × 1,15 si très gras, sinon poids
+//   ajusté si IMC ≥ 30, sinon poids total), le même pour tout le dossier.
+//   Le repère de base est borné de 1,5 à 4,0 L ; le jour ON ajoute 0,5 L
+//   par-dessus (4,5 L au plus).
+const EAU_MIN_L=1.5, EAU_MAX_L=4.0;
+// PURE. En litres, au dixième ; null sans poids.
 function besoinEau(user,jourEstOn){
-  const poids=_poidsPourPlancher(user);
+  let poids=null;
+  try{ poids=poidsMacros(user).kg; }catch(e){ poids=null; }
   if(!(poids>0)) return null;
-  const ml=EAU_ML_PAR_KG*poids+(jourEstOn?EAU_ML_PAR_SEANCE:0);
+  const base=Math.min(EAU_MAX_L*1000,Math.max(EAU_MIN_L*1000,EAU_ML_PAR_KG*poids));
+  const ml=base+(jourEstOn?EAU_ML_PAR_SEANCE:0);
   return Math.round(ml/100)/10;
+}
+
+// ── CE QUE L'ATHLÈTE BOIT : nutrition.eau[dateISO] = millilitres ─────────
+// Un nombre par jour, de 0 à 10 000 (la règle de la base refuse au-delà : une
+// valeur fausse ferait rejeter tout le dossier, donc l'app borne AVANT).
+// 120 jours gardés, comme joursSeance. Un jour sans saisie n'est PAS zéro :
+// il est absent, et la moyenne du coach ne le compte pas.
+const EAU_SAISIE_MAX_ML=10000, EAU_JOURS_GARDES=120, EAU_MOY_JOURS=7;
+function eauDuJour(u,d){
+  const e=u&&u.nutrition&&u.nutrition.eau;
+  const v=(e&&typeof e==='object')?Number(e[d]):0;
+  return (v>0&&isFinite(v))?v:0;
+}
+// Les ajouts de la session, pour « Annuler » : chacun retire ce qu'il a ajouté.
+let _eauAjouts=[];
+function _eauEcrire(u,d,ml){
+  if(!u.nutrition) u.nutrition={};
+  const m=(u.nutrition.eau&&typeof u.nutrition.eau==='object')?u.nutrition.eau:{};
+  const v=Math.max(0,Math.min(EAU_SAISIE_MAX_ML,Math.round(ml)));
+  if(v>0) m[d]=v; else delete m[d];
+  const lim=_jourPlus(d,-EAU_JOURS_GARDES);
+  for(const k of Object.keys(m)) if(k<lim) delete m[k];
+  u.nutrition.eau=m;
+}
+function ajouterEau(ml){
+  const u=currentUser;
+  if(!u||!(ml>0)) return false;
+  const d=localISODate(new Date());
+  const avant=eauDuJour(u,d);
+  const apres=Math.min(EAU_SAISIE_MAX_ML,avant+ml);
+  if(apres===avant){ try{ toast('10 L notés aujourd’hui : c’est le maximum.','var(--orange)'); }catch(e){} return false; }
+  _eauEcrire(u,d,apres);
+  _eauAjouts.push({d,ml:apres-avant});
+  if(!saveUser()) try{ toastEcriture(false,'','ce verre est'); }catch(e){}
+  _repeindreEau();
+  return true;
+}
+function annulerEau(){
+  const u=currentUser, x=_eauAjouts.pop();
+  if(!u||!x) return false;
+  _eauEcrire(u,x.d,eauDuJour(u,x.d)-x.ml);
+  if(!saveUser()) try{ toastEcriture(false,'','l’annulation est'); }catch(e){}
+  _repeindreEau();
+  return true;
+}
+// PURE. Moyenne des jours NOTÉS parmi les 7 derniers (aujourd'hui compris).
+function eauMoyenne7j(u,dRef){
+  const fin=dRef||localISODate(new Date());
+  const vals=[];
+  for(let i=0;i<EAU_MOY_JOURS;i++){ const v=eauDuJour(u,_jourPlus(fin,-i)); if(v>0) vals.push(v); }
+  if(!vals.length) return null;
+  return {ml:Math.round(vals.reduce((a,b)=>a+b,0)/vals.length),nJours:vals.length};
+}
+const _eauL=ml=>String(Math.round(ml/100)/10).replace('.',',');
+// Le suivi du jour, sous le repère : barre, +250, +500, annuler.
+function _htmlEauSuivi(u,jourEstOn){
+  const ml=eauDuJour(u,localISODate(new Date()));
+  const bes=besoinEau(u,!!jourEstOn);
+  const pct=bes?Math.min(100,Math.round(ml/(bes*1000)*100)):0;
+  const btn='flex:1;min-width:0;padding:10px 0;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer';
+  return `<div id="eau-suivi" style="margin-top:12px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px">
+      <span style="font-size:var(--fs-sm);color:var(--text-strong);font-weight:700">${_eauL(ml)} L bus aujourd’hui</span>
+      <span style="font-size:var(--fs-xs);color:var(--text-dim)">${bes?'repère '+String(bes).replace('.',',')+' L':'sans repère'}</span>
+    </div>
+    ${bes?`<div role="progressbar" aria-label="Eau bue" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" style="height:8px;background:var(--surface-2);border-radius:var(--r-2);overflow:hidden;margin-bottom:10px">
+      <div style="height:100%;width:${pct}%;background:var(--success);border-radius:var(--r-2)"></div></div>`:''}
+    <div style="display:flex;gap:8px">
+      <button type="button" class="hit44" style="${btn}" onclick="ajouterEau(250)">+250 ml</button>
+      <button type="button" class="hit44" style="${btn}" onclick="ajouterEau(500)">+500 ml</button>
+      <button type="button" class="hit44" style="${btn};color:var(--sub)${_eauAjouts.length?'':';opacity:.45'}" onclick="annulerEau()"${_eauAjouts.length?'':' disabled'}>Annuler</button>
+    </div>
+  </div>`;
+}
+function _repeindreEau(){
+  const z=document.getElementById('eau-suivi');
+  if(!z||!currentUser) return;
+  let on=false; try{ on=nutIsOnDay(localISODate(new Date()),currentUser); }catch(e){ on=false; }
+  z.outerHTML=_htmlEauSuivi(currentUser,on);
 }
 // DEUX PHRASES, ET NON UNE COUPEE PAR UN TIRET. « pas une mesure — la couleur
 // des urines » se lisait comme si la couleur des urines etait ce qui n est pas
