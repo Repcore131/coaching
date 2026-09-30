@@ -20983,7 +20983,10 @@ async function testExercices(){
       // La somme des grammes affichés tient le plancher, et le menu des lipides montre 1,5.
       if(_bloc(c.p,c.l,c.g).kcal<plancherAthlete(u)) return _echec('grammes sous le plancher : '+_bloc(c.p,c.l,c.g).kcal);
       if(!/value="1.5" selected/.test(h)) return _echec('le menu des lipides ne montre pas 1,5');
-      return (c.glucidesBas&&typeof c.depasse==='number')?true:_echec('ciblesAthlete : '+JSON.stringify({g:c.g,bas:c.glucidesBas,dep:c.depasse}));})());
+      // Le dépassement, mesuré contre la cible calculée (avant plancher), est rendu sur la carte.
+      if(!(c.depasse>0)) return _echec('ciblesAthlete.depasse : '+c.depasse);
+      if(!/Protéines et lipides dépassent la cible de \d+ kcal/.test(h)) return _echec('la carte ne dit pas le dépassement');
+      return c.glucidesBas?true:_echec('ciblesAthlete : '+JSON.stringify({g:c.g,bas:c.glucidesBas,dep:c.depasse}));})());
     // ── LA FORMULE DU MÉTABOLISME, CHOISIE PAR DOSSIER ──
     const _MBa=(kg,cm,o)=>Object.assign({id:'mbA',email:'mba@t.fr',role:'athlete',gender:'H',_evol_gender:'H',
       _evol_height:String(cm),'init-age':40,sessions_config:[],

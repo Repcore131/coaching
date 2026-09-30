@@ -89285,7 +89285,11 @@ function ciblesAthlete(u){
   const _ref=Number(t.poidsRef)>0?Number(t.poidsRef):Number(t.poids)||0;
   return {kcal,p,l,g,protGkg:t.protGkg,lipGkg:t.lipGkg,
           poidsRef:t.poidsRef,poidsRefObj:t.poidsRefObj,
-          depasse:Math.max(0,Math.round(p*4+l*9-kcal)),
+          // LE DEPASSEMENT SE MESURE CONTRE LA CIBLE CALCULEE (t.ajuste), avant la
+          // remontee au plancher : c'est elle que proteines et lipides ont deja
+          // mangee. Mesure contre le total remonte, il ne se voyait jamais chez
+          // l'athlete — le plancher l'absorbait, en silence.
+          depasse:Math.max(0,Math.round(p*4+l*9-(Number(t.ajuste)>0?Number(t.ajuste):kcal))),
           glucidesBas:g<GLUC_MIN_G_KG*_ref||g<GLUC_MIN_G_JOUR,
           // LE COEFFICIENT ET L'OBJECTIF REELLEMENT APPLIQUES (ceux du calcul) :
           // une phase posee par le coach l'emporte sur le choix de l'athlete.
