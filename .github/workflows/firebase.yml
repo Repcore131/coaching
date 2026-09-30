@@ -159,6 +159,14 @@ jobs:
       - name: Verifier les prix
         run: node scripts/verif/tarifs.mjs
 
+      # LA SYNCHRONISATION A DEUX APPAREILS. Le banc lit les fonctions de fusion
+      # dans rc-core, rejoue 2000 entrelacements d'envois et de descentes sur
+      # deux appareils et une fausse base, et exige qu'aucune seance, aucun
+      # bilan, aucune pesee ne se perde. Il rougit si _doPushOne cesse de
+      # fusionner avant d'ecrire. Moins de 5 s.
+      - name: Verifier la synchronisation (banc a deux appareils)
+        run: node scripts/verif/banc-sync.mjs
+
       - name: Deployer
         env:
           CLE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
@@ -197,3 +205,32 @@ jobs:
             echo "::warning::Fonctions NON deployees (plan Blaze requis). droits/ reste vide et l application retombe sur l ancien modele."
           fi
           rm -f "$RUNNER_TEMP/cle.json"
+
+  # LA SUITE NAVIGATEUR (app/tests.js, ~6 000 assertions) dans le Chrome du
+  # runner. UN JOB A PART, qui ne retient PAS le deploiement : elle dure
+  # plusieurs minutes, et le site ne doit pas attendre. Rouge, elle se voit
+  # dans l'onglet Actions ; la corriger reste la priorite.
+  suite-navigateur:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Banc de synchronisation
+        run: node scripts/verif/banc-sync.mjs
+      - name: Suite navigateur (Chrome headless)
+        run: |
+          set -e
+          CHROME=$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)
+          if [ -z "$CHROME" ]; then
+            echo "::warning::Pas de Chrome sur ce runner : suite navigateur non jouee."
+            exit 0
+          fi
+          # La RACINE du depot, et non app/ : la suite lit ../database.rules.json.
+          python3 -m http.server 8000 --bind 127.0.0.1 >/dev/null 2>&1 &
+          "$CHROME" --headless=new --no-sandbox --disable-gpu --no-first-run \
+            --user-data-dir="$RUNNER_TEMP/chrome" --remote-debugging-port=9223 about:blank >/dev/null 2>&1 &
+          for i in $(seq 1 30); do curl -s http://127.0.0.1:9223/json/version >/dev/null && break; sleep 1; done
+          VW=1280 VH=2000 timeout 1800 node scripts/verif/suite.mjs http://127.0.0.1:8000/app/index.html 9223

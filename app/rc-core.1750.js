@@ -4893,10 +4893,25 @@ const CLOUD={
       try{
         const _us=DB.get('users')||{};
         const _b=_us[email]?this._baseDe(email,_us[email]):null;
-        if(_b&&_us[email]){
+        // ⚠ ET SANS BASE AUSSI (30/09/2026, trouve par scripts/verif/banc-sync.mjs).
+        //   Un appareil neuf, ou dont la base a ete purgee, envoie l'UNION de
+        //   sa copie et du serveur — puis posait cette union comme base sans
+        //   l'avoir integree chez lui. A la descente suivante, les seances du
+        //   serveur figuraient dans la base et manquaient a la copie : la fusion
+        //   les lisait comme supprimees ICI, et l'envoi d'apres les effacait du
+        //   serveur. La base de cette integration-la est ce que l'appareil a
+        //   envoye avant la fusion : ce qu'il a change depuis reste a lui, ce
+        //   que l'union a pris au serveur entre chez lui.
+        //   ⚠ LA COPIE LA PLUS FRAICHE, alors : quota plein, rc_users est en
+        //   retard sur la memoire, et la seance qui n'existe qu'en memoire,
+        //   presente dans ce qui est parti, passerait pour retiree ici.
+        if(!_b&&_us[email]&&typeof currentUser==='object'&&currentUser&&currentUser.email===email)
+          _us[email]=this._dossierCourantAPousser(_us);
+        const _bh=_b?_b.h:(_us[email]?syncEmpreintes(_safeAvantFusion):null);
+        if(_bh&&_us[email]){
           const _clesAvant=Object.keys(_us[email]);
           const _hAvant=_repeintUtile(email)?syncEmpreintes(_us[email])['']:null;
-          _us[email]=syncFusion(_b.h,_us[email],safe);
+          _us[email]=syncFusion(_bh,_us[email],safe);
           _us[email]._syncMaj=Number(safe.updatedAt)||0;
           DB.setLocal('users',_us,true);
           if(typeof currentUser==='object'&&currentUser&&currentUser.email===email){
