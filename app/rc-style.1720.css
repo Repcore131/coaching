@@ -15721,3 +15721,6 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .pr-inv-msg{white-space:pre-wrap;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-sm);line-height:1.5;max-height:40vh;overflow-y:auto}
 .pr-inv-sans{margin-top:12px;font-size:var(--fs-xs);line-height:1.5}
 .pr-discret{color:var(--sub)}
+/* Calculatrice : au-delà de 12 répétitions potentielles, grisé. Haltères : « /main ». */
+.calc-peu-fiable{color:var(--text-faint);opacity:.55}
+.par-main{font-size:.62em;font-weight:700;color:var(--sub);letter-spacing:0}

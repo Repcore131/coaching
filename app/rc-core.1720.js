@@ -42170,7 +42170,7 @@ function _htmlRappelRecord(nom){
   if(!r) return '';
   const mc=r.meilleureCharge, me=r.meilleurE1rm;
   const bouts=[];
-  if(mc&&mc.kg>0) bouts.push('record '+mc.kg+' kg'+(mc.reps?(' × '+mc.reps):''));
+  if(mc&&mc.kg>0) bouts.push('record '+mc.kg+(chargeParMain({name:nom})?' kg/main':' kg')+(mc.reps?(' × '+mc.reps):''));
   if(me&&me.valeur>0) bouts.push('max estimé '+me.valeur+' kg');
   if(!bouts.length) return '';
   return `<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">
@@ -48430,11 +48430,12 @@ function _dessinerCarteRecord(record,fond,format,anim){
   const nom=String(r.nm||'').toUpperCase();
   // `anim.valeur` : le chiffre en train de compter (la vidéo). La taille, le
   // filigrane et tout le reste suivent la VRAIE valeur : rien ne saute.
-  const vrai=_recKg(r.curMax), anc=(Number(r.histMax)>0)?_recKg(r.histMax):'';
+  const vrai=_recKg(r.curMax), anc=(r.type!=='reps'&&Number(r.histMax)>0)?_recKg(r.histMax):'';
   const nouv=(anim&&anim.valeur!=null)?String(anim.valeur):vrai;
   const pct=_recPct(r);
   // Un record d'assistance est une assistance RETIRÉE : pas de « + », pas de %.
-  const gainTxt=r.assiste?(Number(r.gain)>0?('−'+_recKg(r.gain)+' KG D’ASSISTANCE'):'')
+  const gainTxt=r.type==='reps'?('+'+(r.reps-r.repsAvant)+' REP'+(r.reps-r.repsAvant>1?'S':'')+' · '+r.reps+' × '+_recKg(r.curMax)+' KG')
+    :r.assiste?(Number(r.gain)>0?('−'+_recKg(r.gain)+' KG D’ASSISTANCE'):'')
     :(Number(r.gain)>0?('+'+_recKg(r.gain)+' KG'):'')+(pct?('  ·  +'+pct+' %'):'');
 
   // ── LA MISE EN PAGE, CENTRÉE COMME CELLE DU BILAN ────────────────────
@@ -48581,7 +48582,7 @@ function _dessinerCarteRecords(d,fond,format){
     g.textAlign='right'; g.fillStyle='#ffffff'; g.font='700 96px '+BEBAS;
     o.ecrire(nouv,W-M,yy+160);
     let dx=W-M-g.measureText(nouv).width-28;
-    if(Number(r.histMax)>0){
+    if(r.type!=='reps'&&Number(r.histMax)>0){
       const a=_recKg(r.histMax);
       g.fillStyle='rgba(255,255,255,.6)'; g.font='700 48px '+BEBAS;
       o.ecrire(a,dx,yy+150);
@@ -48594,7 +48595,7 @@ function _dessinerCarteRecords(d,fond,format){
     // Le gain à gauche, sous le nom.
     const pct=_recPct(r);
     g.textAlign='left'; g.fillStyle='rgba(255,255,255,.9)'; g.font='800 32px '+MONT;
-    o.ecrireEspace(r.assiste?('−'+_recKg(r.gain)+' KG D’ASSISTANCE'):('+'+_recKg(r.gain)+' KG'+(pct?(' · +'+pct+' %'):'')),M,yy+150,2);
+    o.ecrireEspace(r.type==='reps'?('+'+(r.reps-r.repsAvant)+' REP · '+r.reps+' × '+_recKg(r.curMax)+' KG'):r.assiste?('−'+_recKg(r.gain)+' KG D’ASSISTANCE'):('+'+_recKg(r.gain)+' KG'+(pct?(' · +'+pct+' %'):'')),M,yy+150,2);
   });
   _recSignature(g,o,String((d&&d.signature)||''),H-(post?64:150),LARG);
   o.ombre(false);
@@ -50493,7 +50494,7 @@ function _blocExo(idx,estSS){
       </div>`
       :sug?`<div class="suggest-box">
         <div style="display:flex;gap:20px;align-items:flex-end;margin:2px 0 6px">
-          <div><div style="font-size:var(--fs-2xl);font-weight:900;line-height:1">${sug}kg</div><div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance : progresser = réduire':'Charge pour la première série'}</div></div>
+          <div><div style="font-size:var(--fs-2xl);font-weight:900;line-height:1">${sug}kg${chargeParMain(ex)?'<span class="par-main">/main</span>':''}</div><div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance : progresser = réduire':'Charge pour la première série'}</div></div>
         </div>
         <div class="s-note">${isCW?'Contrepoids : un RIR élevé fait diminuer la charge. ':''}${prev?'Basée sur '+escapeHtml(creneauRef)+' ('+prev.weight+'kg'+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):', RIR non noté')+')':'Première séance'}</div>
         ${_decote<1?`<div class="s-note" style="margin-top:6px">Ta dernière séance de ${escapeHtml(ex.name)} date du ${_libDateRef(prev._refDate)}. On repart ${Math.round((1-_decote)*100)} % en dessous, le temps de te retrouver.<div style="color:var(--text-dim);margin-top:4px">${SUG_NOTE_REPERE}</div></div>`:''}
@@ -50545,7 +50546,7 @@ function _blocExo(idx,estSS){
       :`<div id="wo-sets-scroll-${idx}"${!isWide?' style="overflow-x:auto"':''}>
       <table class="series-table series-table-wo" style="width:100%${!isWide?';min-width:260px':''}">
         <thead><tr style="background:var(--red)">
-          ${_enteteSeries(isWide,pr.type==='degressive',!_woTeteDeGroupe(idx))}
+          ${_enteteSeries(isWide,pr.type==='degressive',!_woTeteDeGroupe(idx),chargeParMain(ex))}
         </tr></thead>
         <tbody id="sets-body-${idx}"></tbody>
       </table>
@@ -51265,7 +51266,7 @@ function _woGeneChoisir(idx,i,v){ return _woChoixEcrire('gene',idx,i,v); }
 //
 // R10 — `sansInfo` : le second bloc d'un superset ne repete pas les ⓘ. Deux
 // tableaux a l'ecran, c'etait quatre ⓘ de bande, au-dela du plafond de trois.
-function _enteteSeries(large,degressive,sansInfo){
+function _enteteSeries(large,degressive,sansInfo,parMain){
   const i=k=>sansInfo?'':rcInfo(k);
   if(large){
     return `<th style="color:var(--text);text-align:left;padding-left:10px;font-size:var(--fs-xs);letter-spacing:.5px">`
@@ -51276,8 +51277,8 @@ function _enteteSeries(large,degressive,sansInfo){
       +`</div></th>`;
   }
   return sansInfo
-    ?`<th style="color:var(--text)">Reps</th><th style="color:var(--text)">Charge</th><th style="color:var(--text)">RIR</th><th style="font-size:var(--fs-xs);color:var(--text)">Gêne</th><th style="color:var(--text);font-size:var(--fs-xs)">Validé</th>`
-    :`<th style="color:var(--text)">Reps</th><th style="color:var(--text)">Charge</th><th style="color:var(--text)">RIR${rcInfo('rir')}</th><th style="font-size:var(--fs-xs);color:var(--text)">Gêne${rcInfo('douleur')}</th><th style="color:var(--text);font-size:var(--fs-xs)">Validé</th>`;
+    ?`<th style="color:var(--text)">Reps</th><th style="color:var(--text)">Charge${parMain?'<span class="par-main"> /main</span>':''}</th><th style="color:var(--text)">RIR</th><th style="font-size:var(--fs-xs);color:var(--text)">Gêne</th><th style="color:var(--text);font-size:var(--fs-xs)">Validé</th>`
+    :`<th style="color:var(--text)">Reps</th><th style="color:var(--text)">Charge${parMain?'<span class="par-main"> /main</span>':''}</th><th style="color:var(--text)">RIR${rcInfo('rir')}</th><th style="font-size:var(--fs-xs);color:var(--text)">Gêne${rcInfo('douleur')}</th><th style="color:var(--text);font-size:var(--fs-xs)">Validé</th>`;
 }
 // ══ R10 — LE PLAFOND DE TROIS ⓘ SUR L'ECRAN DE SEANCE ══════════════════
 // Un superset rend DEUX tableaux sur le meme ecran. Les ⓘ ne se posent que
@@ -51325,6 +51326,7 @@ function renderSets(ex,data,idx,opts){
   const enCartes=isDeg||_seriesEnCartes(data);
 
   const _isCW=isCounterweightEx(ex.name);
+  const _parMain=chargeParMain(ex);
 
   // ── Auto-fill série suivante par paliers fixes ────────────────────
   // RIR 0 → même charge (exacte, sans arrondi) · échec → -1 palier ·
@@ -51411,12 +51413,12 @@ function renderSets(ex,data,idx,opts){
     const isWide=enCartes;
     const weightInner=isDeg
       ?`<input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} value="${s.weight||''}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight2')} value="${s.weight2||''}" placeholder="P2" style="border-color:#78350f;margin-left:4px" onchange="${onChW2}" ${dis}>`
-      :`<div><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} style="${weightBorder}" value="${s.weight||''}" onchange="${onChW}" ${dis}>${autoLabel}</div>`;
+      :`<div><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} style="${weightBorder}" value="${s.weight||''}"${_parMain?' placeholder="kg/main" aria-label="Charge par main (kg)"':''} onchange="${onChW}" ${dis}>${autoLabel}</div>`;
 
     // Simple-mode: <td> wrappers for classic table layout
     const weightCell=isDeg
       ?`<td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} value="${s.weight||''}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}></td><td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight2')} value="${s.weight2||''}" placeholder="P2" style="border-color:#78350f" onchange="${onChW2}" ${dis}></td>`
-      :`<td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} style="${weightBorder}" value="${s.weight||''}" onchange="${onChW}" ${dis}>${autoLabel}</td>`;
+      :`<td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} style="${weightBorder}" value="${s.weight||''}"${_parMain?' placeholder="kg/main" aria-label="Charge par main (kg)"':''} onchange="${onChW}" ${dis}>${autoLabel}</td>`;
 
     // Cycle cell
 
@@ -52850,9 +52852,10 @@ function calEnregistrer(idx){
 // C'est Epley appliqué aux répétitions qu'on AURAIT pu faire : reps + RIR.
 // Aucune valeur d'e1RM n'est stockée nulle part : tout l'historique se relit
 // avec la même formule, d'un coup, sans migration.
-// Attention : le calculateur « Calculer ma charge » (openCalc) utilise, lui, une table
-// de pourcentages, un autre modèle. C'est pourquoi aucune valeur en kg n'est
-// affichée par la détection de plateau : elle contredirait ce calculateur.
+// LE MÊME MODÈLE PARTOUT (30/09/2026) : la calculatrice « Calculer ma charge »
+// (updateCalcTable) passe par e1rm() et chargePourReps(), elle n'a plus sa
+// table de pourcentages à elle. Au-delà de PERF_REPS_MAX_E1RM répétitions
+// potentielles, l'estimation est dite « peu fiable ».
 // ET DEUX BORNES (30/09/2026) : une série à 0 répétition n'est pas une mesure
 // (0, et non plus w × (1 + RIR/30)) ; un single (reps + RIR ≤ 1) vaut sa
 // charge, sans les 3,3 % qu'Epley lui ajoute.
@@ -62031,7 +62034,8 @@ function _messageFinSeance(sets,setsPlanned,duration,records,delta,jour,incomple
     :(n+' séries sur '+p+', '+m+' min. ');
   if(records&&records.length){
     const b=records.slice().sort((a,x)=>x.gain-a.gain)[0];
-    return tete+'Record : '+b.nm+(b.assiste?', assistance ramenée à '+b.curMax+' kg.':' à '+b.curMax+' kg.');
+    const _pm=chargeParMain({name:b.nm})?' kg/main':' kg';
+    return tete+'Record : '+b.nm+(b.type==='reps'?', '+b.reps+' répétitions à '+b.curMax+_pm+'.':b.assiste?', assistance ramenée à '+b.curMax+' kg.':' à '+b.curMax+_pm+'.');
   }
   if(Number(delta)>0) return tete+'+'+Math.round(delta)+' kg de volume sur ta séance du '+(jour||'dernière fois')+'.';
   if(p>0&&n===p) return tete+'Séance complète.';
@@ -63121,7 +63125,7 @@ function recordsDeSeance(sc,anterieures){
       const cur=minA(sets); if(!cur) continue;
       let hist=0;
       for(const p of (anterieures||[])){ let d=null; try{ d=_dataDeSeance(p,nm); }catch(e){ d=null; } const v=minA(d&&d.sets); if(v&&(!hist||v<hist)) hist=v; }
-      if(hist>0&&cur<hist) out.push({nm,curMax:cur,histMax:hist,gain:hist-cur,assiste:true});
+      if(hist>0&&cur<hist) out.push({nm,curMax:cur,histMax:hist,gain:hist-cur,assiste:true,type:'charge'});
       continue;
     }
     let cur=0;
@@ -63141,10 +63145,54 @@ function recordsDeSeance(sc,anterieures){
         if(w>hist) hist=w;
       }
     }
-    if(hist>0&&cur>hist) out.push({nm,curMax:cur,histMax:hist,gain:cur-hist});
+    if(hist>0&&cur>hist){ out.push({nm,curMax:cur,histMax:hist,gain:cur-hist,type:'charge'}); continue; }
+    // LE RECORD DE RÉPÉTITIONS : à une charge déjà soulevée, plus de
+    // répétitions que jamais à cette charge ou plus lourd (80 × 10, puis 80 × 11).
+    if(hist>0){ const rr=_recordRepsSeance(sets,nm,anterieures); if(rr) out.push(rr); }
   }
   out.sort((a,b)=>b.gain-a.gain);
   return out;
+}
+// Le meilleur record de répétitions d'une séance, ou null.
+function _recordRepsSeance(sets,nm,anterieures){
+  const histo=[];
+  for(const p of (anterieures||[])){
+    let d=null; try{ d=_dataDeSeance(p,nm); }catch(e){ d=null; }
+    for(const st of ((d&&d.sets)||[])){ if(!st||st.done!==true) continue; const w=parseFloat(st.weight)||0, r=_perfReps(st); if(w>0&&r>0) histo.push([w,r]); }
+  }
+  let best=null;
+  for(const st of (sets||[])){
+    if(!st||st.done!==true) continue;
+    const w=parseFloat(st.weight)||0, r=_perfReps(st);
+    if(!(w>0)||!(r>0)) continue;
+    const avant=histo.filter(h=>h[0]>=w);
+    if(!avant.length) continue;
+    const ra=Math.max(...avant.map(h=>h[1]));
+    if(r>ra&&(!best||w>best.curMax||(w===best.curMax&&r>best.reps))) best={nm,curMax:w,histMax:w,gain:0,type:'reps',reps:r,repsAvant:ra};
+  }
+  return best;
+}
+/**
+ * PURE. Le meilleur poids pour 1, 3, 5, 8, 10 et 12 répétitions (au moins),
+ * séries faites, hors décharges et saisies aberrantes. {n: {kg, reps, date}}.
+ * null pour un exercice assisté (la charge y est une assistance).
+ */
+const RECORDS_REPS=Object.freeze([1,3,5,8,10,12]);
+function recordsParReps(user,nomEx){
+  if(!user||!nomEx) return null;
+  if(typeCharge(_exPourCharge(nomEx,user))==='assiste') return null;
+  const out={};
+  for(const pt of _serieRecords(user,nomEx)){
+    if(pt.aberrant) continue;
+    const d=pt.sess.data[pt.nom];
+    for(const s of ((d&&d.sets)||[])){
+      if(!s||s.done!==true) continue;
+      const w=parseFloat(s.weight)||0, r=_perfReps(s);
+      if(!(w>0)||!(r>0)) continue;
+      for(const n of RECORDS_REPS) if(r>=n&&(!out[n]||w>out[n].kg)) out[n]={kg:w,reps:r,date:pt.date};
+    }
+  }
+  return Object.keys(out).length?out:null;
 }
 // PURE. Les records d'e1RM de la séance : pour chaque exercice, la meilleure
 // 1RM estimée (e1rm, séries validées dans les bornes de PERF_REPS_MAX_E1RM)
@@ -63175,7 +63223,7 @@ function e1rmRecordsDeSeance(sc,anterieures,user){
       let d=null; try{ d=_dataDeSeance(p,nm); }catch(e){ d=null; }
       const v=best(d&&d.sets,_ex); if(v>hist) hist=v;
     }
-    if(hist>0&&cur>hist) out.push({nm,avant:Math.round(hist*10)/10,apres:Math.round(cur*10)/10});
+    if(hist>0&&cur>hist) out.push({nm,avant:Math.round(hist*10)/10,apres:Math.round(cur*10)/10,type:'e1rm'});
   }
   out.sort((a,b)=>(b.apres-b.avant)-(a.apres-a.avant));
   return out;
@@ -63417,15 +63465,20 @@ function _htmlRecordsFin(ctx,date,cle){
   return '<div class="rcf-rk"><div class="rcf-rk-t">Mes records</div>'
     +rec.map((r,i)=>'<div class="rcf-rk-l">'
       +'<span class="rcf-rk-ex">'+escapeHtml(String(r.nm))+'</span>'
-      +'<span class="rcf-rk-v"><span class="rcf-rk-a">'+nb(r.histMax)+' → </span>'
-        +nb(r.curMax)+' kg<span class="rcf-rk-g">+'+nb(r.gain)+'</span></span>'
+      +(r.type==='reps'
+        ?'<span class="rcf-rk-v"><span class="rcf-rk-a">'+nb(r.repsAvant)+' → </span>'+nb(r.reps)+' reps<span class="rcf-rk-g">'+nb(r.curMax)+(chargeParMain({name:r.nm})?' kg/main':' kg')+'</span></span>'
+        :'<span class="rcf-rk-v"><span class="rcf-rk-a">'+nb(r.histMax)+' → </span>'
+        +nb(r.curMax)+(chargeParMain({name:r.nm})?' kg/main':' kg')+'<span class="rcf-rk-g">'+(r.assiste?'−':'+')+nb(r.gain)+'</span></span>')
       // LA PETITE ANIMATION DU RECORD : une barre qui part de l'ancienne
       // charge (en gris) et monte jusqu'à la nouvelle (en rouge), une fois.
       +'<div class="rcf-rk-barre" aria-hidden="true" style="--avant:'
-        +Math.max(5,Math.min(98,Math.round(Number(r.histMax)/Number(r.curMax)*100)))+'%">'
+        +Math.max(5,Math.min(98,Math.round((r.type==='reps'?Number(r.repsAvant)/Number(r.reps):r.assiste?Number(r.curMax)/Number(r.histMax):Number(r.histMax)/Number(r.curMax))*100)))+'%">'
         +'<i class="rcf-rk-ancien"></i><i class="rcf-rk-nouveau"></i></div>'
-      +'<div class="rcf-rk-x">Nouvelle meilleure charge sur cet exercice : '+nb(r.curMax)
-        +' kg, soit '+nb(r.gain)+' kg de plus que ton meilleur jusqu’ici ('+nb(r.histMax)+' kg).</div>'
+      +'<div class="rcf-rk-x">'+(r.type==='reps'
+        ?'Record de répétitions : '+nb(r.reps)+' à '+nb(r.curMax)+' kg, '+nb(r.reps-r.repsAvant)+' de plus que ton meilleur à cette charge ('+nb(r.repsAvant)+').'
+        :r.assiste?'Moins d’assistance que jamais : '+nb(r.curMax)+' kg, soit '+nb(r.gain)+' kg de moins qu’avant ('+nb(r.histMax)+' kg).'
+        :'Nouvelle meilleure charge sur cet exercice : '+nb(r.curMax)
+        +' kg, soit '+nb(r.gain)+' kg de plus que ton meilleur jusqu’ici ('+nb(r.histMax)+' kg).')+'</div>'
       +'</div>').join('')
     +'</div>';
 }
@@ -67889,6 +67942,12 @@ function _exPourCharge(nom,user){
   }catch(e){}
   return ex;
 }
+// LA CONVENTION DES HALTÈRES (30/09/2026) : la charge notée est celle d'UNE
+// main. ex.chargeParMain la pose ; sans lui, les haltères du nom (materielExercice).
+function chargeParMain(ex){
+  if(ex&&typeof ex.chargeParMain==='boolean') return ex.chargeParMain;
+  try{ return materielExercice(ex&&ex.name).indexOf('HALTERES')>=0; }catch(e){ return false; }
+}
 // Détecte les exercices à contrepoids (DIPS/TRACTIONS assistés ou guidés).
 // Sur ces machines : progression = MOINS de charge (moins d'assistance).
 function isCounterweightEx(name){
@@ -68785,7 +68844,11 @@ const RPE_PCT=Object.freeze({
   '7.5':[90.7,87.8,85.0,82.4,79.9,77.4,75.1,72.3,69.4,66.7,64.0,61.3],
   '7'  :[89.2,86.3,83.7,81.1,78.6,76.2,73.9,70.7,68.0,65.3,62.6,59.9],
   '6.5':[87.8,85.0,82.4,79.9,77.4,75.1,72.3,69.4,66.7,64.0,61.3,58.6],
-  '6'  :[86.5,83.7,81.0,78.5,75.9,73.6,70.7,67.8,65.0,62.3,59.6,56.9]
+  // LA LIGNE 6 EST LA LIGNE 10 DÉCALÉE DE QUATRE RÉPÉTITIONS (30/09/2026),
+  // comme 9, 8 et 7 le sont de une, deux et trois : elle s'en écartait de
+  // 0,2 à 1,5 point. Au-delà de la ligne 10, la prolongation est celle que les
+  // lignes 9, 8 et 7 donnent déjà (65,3 · 62,6 · 59,9), puis le même pas (57,2).
+  '6'  :[86.3,83.7,81.1,78.6,76.2,73.9,70.7,68.0,65.3,62.6,59.9,57.2]
 });
 // L'ECHELLE, DU PLUS FACILE AU PLUS DUR : c'est l'ordre d'un selecteur, et
 // c'est aussi celui de la table lue a l'envers.
@@ -84552,7 +84615,7 @@ function _htmlRecords(user){
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Records</div>
     ${lignes.map(x=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);color:var(--text-strong);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}</span>
-      <span style="font-size:var(--fs-xs);font-weight:800;color:var(--text);white-space:nowrap">${_fmtKg(x.rec.meilleureCharge.kg)}${x.rec.meilleureCharge.reps?` × ${x.rec.meilleureCharge.reps}`:''}<span style="font-size:var(--fs-2xs);color:var(--text-faint);font-weight:600"> · ${dt(x.rec.meilleureCharge.date)}</span></span>
+      <span style="font-size:var(--fs-xs);font-weight:800;color:var(--text);white-space:nowrap">${_fmtKg(x.rec.meilleureCharge.kg)}${chargeParMain({name:x.nom})?'/main':''}${x.rec.meilleureCharge.reps?` × ${x.rec.meilleureCharge.reps}`:''}<span style="font-size:var(--fs-2xs);color:var(--text-faint);font-weight:600"> · ${dt(x.rec.meilleureCharge.date)}</span></span>
     </div>`).join('')}
   </div>`;
 }
@@ -119716,13 +119779,14 @@ function updateCalcTable(){
   // l'estimation, y compris quand celle-ci est refusée.
   _renderCalcCycle();
   if(!pw||!pr){document.getElementById('calc-table-body').innerHTML='<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--sub)">Entre ta charge et tes reps précédentes</td></tr>';document.getElementById('calc-e1rm-display').style.display='none';return;}
-  // %1RM = 100 - 2.5 × RIR - 2.5 × (reps - 1)
-  const pct=100-2.5*prir-2.5*(pr-1);
-  if(pct<=0){document.getElementById('calc-table-body').innerHTML='<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--orange)">Nombre de reps ou RIR trop élevé : réduis les valeurs</td></tr>';document.getElementById('calc-e1rm-display').style.display='none';return;}
-  const e1rm=pw/(pct/100);
-  document.getElementById('calc-e1rm-val').textContent=Math.round(e1rm)+'kg';
+  // LE MODÈLE DE L'APP : e1rm() (Epley sur reps + RIR) et sa réciproque
+  // chargePourReps(). Plus de table de pourcentages propre à la calculatrice.
+  const e=e1rm(pw,pr,prir);
+  if(!(e>0)){document.getElementById('calc-table-body').innerHTML='<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--orange)">Entre une charge et au moins une répétition</td></tr>';document.getElementById('calc-e1rm-display').style.display='none';return;}
+  const _fiable=e1rmFiable(pr,prir);
+  document.getElementById('calc-e1rm-val').textContent=Math.round(e)+'kg'+(_fiable?'':' (estimation peu fiable)');
   document.getElementById('calc-e1rm-display').style.display='block';
-  const repsRange=[3,4,5,6,7,8,10,12,15,20];
+  const repsRange=[3,4,5,6,7,8,10,12,15];
   const rirRange=[0,1,2,3];
   const tbody=document.getElementById('calc-table-body');
   tbody.innerHTML=repsRange.map(r=>{
@@ -119730,11 +119794,12 @@ function updateCalcTable(){
     return `<tr style="background:${isTargetReps?'#1a0000':''}">
       <td style="padding:8px 6px;font-weight:800;text-align:center;white-space:nowrap;color:${isTargetReps?'var(--red)':'var(--sub)'}">${r} reps</td>
       ${rirRange.map(rir=>{
-        const p2=Math.max(100-2.5*rir-2.5*(r-1),1);
-        let w=e1rm*(p2/100);
+        let w=chargePourReps(e,r,rir);
         w=Math.round(w/2.5)*2.5; // arrondi à 2.5kg
         const isTarget=r===Math.round(pr)&&rir===Math.round(prir);
-        return `<td style="padding:8px 6px;text-align:center;background:${isTarget?'var(--red)':''};border-radius:${isTarget?'var(--r-2)':''};font-weight:${isTarget?'800':'600'};box-shadow:${isTarget?'var(--glow-red)':''}">${w>0?w+'kg':'-'}</td>`;
+        // Au-delà de 12 répétitions potentielles : grisé, estimation peu fiable.
+        const peuFiable=!e1rmFiable(r,rir);
+        return `<td${peuFiable?' class="calc-peu-fiable" title="Estimation peu fiable au-delà de 12 répétitions potentielles"':''} style="padding:8px 6px;text-align:center;background:${isTarget?'var(--red)':''};border-radius:${isTarget?'var(--r-2)':''};font-weight:${isTarget?'800':'600'};box-shadow:${isTarget?'var(--glow-red)':''}">${w>0?w+'kg':'-'}</td>`;
       }).join('')}
     </tr>`;
   }).join('');

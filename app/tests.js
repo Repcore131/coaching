@@ -882,7 +882,8 @@ async function testExercices(){
         // un endroit ou improviser une approximation.
         if(pctDe1RM('10',1)!==100) return _echec('@10 × 1 vaut '+pctDe1RM('10',1));
         if(pctDe1RM('8',4)!==83.7) return _echec('@8 × 4 vaut '+pctDe1RM('8',4));
-        if(pctDe1RM('6',12)!==56.9) return _echec('@6 × 12 vaut '+pctDe1RM('6',12));
+        // 57,2 depuis le 30/09/2026 : la ligne 6 est la ligne 10 décalée de quatre répétitions.
+        if(pctDe1RM('6',12)!==57.2) return _echec('@6 × 12 vaut '+pctDe1RM('6',12));
         // NEUF LIGNES, DOUZE COLONNES, et aucune case manquante.
         for(const r of RPE_ECHELLE){
           if(!RPE_PCT[r]) return _echec('ligne @'+r+' absente');
@@ -20933,6 +20934,67 @@ async function testExercices(){
     ok('T1 — calcSug n’existe plus : chargeSuivante est le seul moteur des charges proposées',typeof calcSug==='undefined');
     ok('T1 — la borne : répétitions + RIR ≤ 12',e1rmFiable(12,0)&&e1rmFiable(10,2)&&!e1rmFiable(10,3)&&!e1rmFiable(13,0)&&e1rmFiable(8,'')&&e1rmFiable(0,0));
     ok('e1rm sur charge nulle ou négative rend 0',e1rm(0,10,1)===0&&e1rm(-5,10,1)===0);
+    // ── UN SEUL MODÈLE CHARGE / RÉPÉTITIONS ──
+    ok('Calculatrice : 100 × 8 à RIR 2 donne l’e1RM de e1rm(), et la case visée revient à 100 kg',(()=>{
+      const pw=document.getElementById('calc-pw'), pr=document.getElementById('calc-pr'), pi=document.getElementById('calc-prir');
+      if(!pw||!pr||!pi) return _echec('pas de calculatrice');
+      const sv=[pw.value,pr.value,pi.value];
+      try{
+        pw.value='100'; pr.value='8'; pi.value='2';
+        updateCalcTable();
+        const v=document.getElementById('calc-e1rm-val').textContent;
+        if(v!==Math.round(e1rm(100,8,2))+'kg') return _echec('e1RM affiché : '+v);
+        const lignes=[...document.querySelectorAll('#calc-table-body tr')];
+        const l8=lignes.find(tr=>/^8 reps/.test(tr.cells[0].textContent));
+        if(!l8||l8.cells[3].textContent!=='100kg') return _echec('8 reps RIR 2 : '+(l8&&l8.cells[3].textContent));
+        if(/^20 reps/.test(lignes[lignes.length-1].cells[0].textContent)||!/^15 reps/.test(lignes[lignes.length-1].cells[0].textContent)) return _echec('les répétitions ne s’arrêtent pas à 15');
+        const l12=lignes.find(tr=>/^12 reps/.test(tr.cells[0].textContent));
+        if(!l12||l12.cells[1].classList.contains('calc-peu-fiable')||!l12.cells[2].classList.contains('calc-peu-fiable')) return _echec('le grisé au-delà de 12 répétitions potentielles');
+        pr.value='12'; pi.value='3'; updateCalcTable();
+        if(!/peu fiable/.test(document.getElementById('calc-e1rm-val').textContent)) return _echec('12 à RIR 3 : pas d’avertissement');
+        return String(updateCalcTable).indexOf('2.5*prir')<0?true:_echec('l’ancienne formule est restée');
+      } finally { pw.value=sv[0]; pr.value=sv[1]; pi.value=sv[2]; }})());
+    ok('RPE_PCT est cohérente : chaque ligne est la ligne 10 (ou 9,5) décalée de ses répétitions en réserve',(()=>{
+      for(const x of RPE_ECHELLE){
+        const v=Number(x), ref=Number.isInteger(v)?'10':'9.5', dec=Math.round((Number(ref)-v));
+        for(let n=1;n<=RPE_REPS_MAX;n++){
+          const i=n-1+dec;
+          if(i>=RPE_PCT[ref].length) continue;
+          if(Math.abs(RPE_PCT[x][n-1]-RPE_PCT[ref][i])>0.05) return _echec('@'+x+' × '+n+' : '+RPE_PCT[x][n-1]+' contre '+RPE_PCT[ref][i]);
+        }
+      }
+      // La prolongation de la ligne 6 : celle que 9, 8 et 7 donnent déjà.
+      return (RPE_PCT['6'][8]===RPE_PCT['9'][11]&&RPE_PCT['6'][9]===RPE_PCT['8'][11]&&RPE_PCT['6'][10]===RPE_PCT['7'][11])?true:_echec('prolongation');})());
+    ok('Records : 80 × 10 puis 80 × 11 est un record de répétitions ; plus lourd, un record de charge ; le type est dit',(()=>{
+      const S=(w,r)=>({date:Date.now(),data:{'SQUAT':{sets:[{done:true,weight:String(w),reps:String(r),rir:'1'}]}}});
+      const a=recordsDeSeance(S(80,11),[S(80,10)]);
+      if(a.length!==1||a[0].type!=='reps'||a[0].reps!==11||a[0].repsAvant!==10||a[0].curMax!==80) return _echec(JSON.stringify(a));
+      if(recordsDeSeance(S(80,10),[S(80,10)]).length) return _echec('mêmes répétitions : record');
+      if(recordsDeSeance(S(75,11),[S(80,12)]).length) return _echec('moins que 12 à plus lourd : record');
+      const b=recordsDeSeance(S(85,5),[S(80,10)]);
+      if(b.length!==1||b[0].type!=='charge') return _echec('charge : '+JSON.stringify(b));
+      const e=e1rmRecordsDeSeance(S(80,11),[S(80,10)]);
+      if(!e.length||e[0].type!=='e1rm') return _echec('e1RM : '+JSON.stringify(e));
+      if(!/Record de répétitions : 11 à 80 kg/.test(_htmlRecordsFin({records:a},'x'))) return _echec('affichage fin de séance');
+      return true;})());
+    ok('recordsParReps : le meilleur poids pour 1, 3, 5, 8, 10 et 12 répétitions',(()=>{
+      _viderCachePlateau();
+      const J=864e5, t=Date.now();
+      const S=(j,sets,o)=>Object.assign({date:t-j*J,data:{'SQUAT':{sets:sets.map(([w,r])=>({done:true,weight:String(w),reps:String(r),rir:'1'}))}}},o||{});
+      const u={email:'rpr@t.fr',exAlias:{},exMuscles:{},sessions:[S(20,[[100,5],[90,8]]),S(10,[[110,3],[80,12]]),S(5,[[150,1]],{deload:true})]};
+      const r=recordsParReps(u,'SQUAT');
+      if(!r) return _echec('rien');
+      if(r[1].kg!==110||r[3].kg!==110||r[5].kg!==100||r[8].kg!==90||r[10].kg!==80||r[12].kg!==80) return _echec(JSON.stringify(r));
+      return recordsParReps({email:'rpr2@t.fr',sessions:[S(1,[[30,8]])].map(s=>({date:s.date,data:{'TRACTIONS ASSISTEES':s.data.SQUAT}}))},'TRACTIONS ASSISTEES')===null?true:_echec('assisté');})());
+    ok('Haltères : la charge est « /main » dans la saisie, la suggestion et les records',(()=>{
+      if(!chargeParMain({name:'DÉVELOPPÉ COUCHÉ HALTÈRES'})||chargeParMain({name:'DÉVELOPPÉ COUCHÉ'})) return _echec('défaut');
+      if(chargeParMain({name:'CURL HALTÈRES',chargeParMain:false})||!chargeParMain({name:'SQUAT',chargeParMain:true})) return _echec('le champ du coach');
+      if(!/\/main/.test(_enteteSeries(false,false,true,true))||/\/main/.test(_enteteSeries(false,false,true,false))) return _echec('en-tête de la saisie');
+      const src=_prodSrc();
+      if(src.indexOf('placeholder="kg/main"')<0) return _echec('champ de saisie');
+      if(src.indexOf("${sug}kg${chargeParMain(ex)?")<0) return _echec('suggestion');
+      const S=(w,r)=>({date:Date.now(),data:{'CURL HALTÈRES':{sets:[{done:true,weight:String(w),reps:String(r),rir:'1'}]}}});
+      return /14 kg\/main/.test(_htmlRecordsFin({records:recordsDeSeance(S(14,10),[S(12,10)])},'x'))?true:_echec('records');})());
     // ── LE TYPE DE CHARGE : poids du corps, lesté, assisté, élastique ──
     ok('typeCharge : assisté, lesté, élastique, poids du corps, externe ; isCounterweightEx n’en est qu’un cas',(()=>{
       if(isCounterweightEx('TRACTIONS MACHINE ASSISTE')!==true) return _echec('TRACTIONS MACHINE ASSISTE');
@@ -63369,7 +63431,7 @@ async function testExercices(){
 
     // ══ 17/09/2026 — R24 : « QUELLE CHARGE POUR QUEL OBJECTIF ? » ══════════
 
-    ok('R24 — le calculateur dit ce qu’il fait, sans promettre « optimale », et ses calculs n’ont pas bougé',(()=>{
+    ok('R24 — le calculateur dit ce qu’il fait, sans promettre « optimale », et ses calculs sont ceux de e1rm()',(()=>{
       const g=id=>document.getElementById(id);
       const m=g('calc-modal');
       if(!m) return _echec('#calc-modal absent');
@@ -63402,16 +63464,16 @@ async function testExercices(){
         // UNE SECONDE OUVERTURE NE DOUBLE PAS LES ⓘ.
         openCalc('100','8','2','homme');
         if(m.querySelectorAll('.rc-i').length!==2) return _echec(m.querySelectorAll('.rc-i').length+' ⓘ après deux ouvertures');
-        // LES LIGNES, ET LES CHIFFRES D'AVANT. 100 kg × 8 à RIR 2 :
-        // 100 - 2,5×2 - 2,5×7 = 77,5 %, soit une force max de 129 kg.
-        if(g('calc-e1rm-val').textContent!=='129kg') return _echec('force max : '+g('calc-e1rm-val').textContent);
+        // LES LIGNES, ET LE MODÈLE DE L'APP (30/09/2026) : 100 kg × 8 à RIR 2,
+        // e1rm = 100 × (1 + 10/30) = 133,3 kg (l'ancienne table disait 129).
+        if(g('calc-e1rm-val').textContent!=='133kg') return _echec('force max : '+g('calc-e1rm-val').textContent);
         const lignes=[...g('calc-table-body').querySelectorAll('tr')];
         const etiquettes=lignes.map(l=>l.firstElementChild.textContent.trim());
-        if(JSON.stringify(etiquettes)!==JSON.stringify(['3 reps','4 reps','5 reps','6 reps','7 reps','8 reps','10 reps','12 reps','15 reps','20 reps']))
+        if(JSON.stringify(etiquettes)!==JSON.stringify(['3 reps','4 reps','5 reps','6 reps','7 reps','8 reps','10 reps','12 reps','15 reps']))
           return _echec('lignes : '+JSON.stringify(etiquettes));
         const huit=lignes[5].querySelectorAll('td');
-        // 8 reps : à l'échec 82,5 % → 106,5 → 107,5 kg ; RIR 2 → 100 kg.
-        if(huit[1].textContent!=='107.5kg'||huit[3].textContent!=='100kg') return _echec('8 reps : '+[...huit].map(x=>x.textContent).join('|'));
+        // 8 reps : à l'échec 133,3 / (1 + 8/30) = 105,3 → 105 kg ; RIR 2 → 100 kg (la charge de départ).
+        if(huit[1].textContent!=='105kg'||huit[3].textContent!=='100kg') return _echec('8 reps : '+[...huit].map(x=>x.textContent).join('|'));
         // Le bloc de cycle suit toujours le tableau.
         if(!(g('calc-table-body').compareDocumentPosition(g('calc-cycle-etat'))&4)) return _echec('la phrase de cycle n’est plus sous le tableau');
         return true;
