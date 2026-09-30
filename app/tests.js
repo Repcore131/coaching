@@ -11302,6 +11302,11 @@ async function testExercices(){
               // MASQUÉ PAR UN PARENT, il ne s'affiche pas : « 0 / 1 800 V » vit dans
               // .rg-txt, retiré de l'en-tête (display:none), et comptait quand même.
               for(let e=el.parentElement;e&&e!==r;e=e.parentElement){ const s=getComputedStyle(e); if(s.display==='none'||s.visibility==='hidden') return; }
+              // TROIS EXCEPTIONS, DÉCIDÉES PAR KEVIN LE 30/09/2026 (« garder la maquette ») : l'en-tête
+              // dessiné au pixel (.clh-tete : rang, « SEMAINE 1 », « Encore N séances »), la rangée des
+              // jours de la séance du jour (.sem-jour, .sem-sur), et les sept onglets, qui ne tiennent
+              // sur 375 px qu'à 10 px. Tout autre texte sous 11 px reste une faute.
+              if(el.closest('.clh-tete,.sem-jour,.sem-sur,.tab-btn')) return;
               const px=parseFloat(cs.fontSize);
               if(px<11) petits.push(ou+' « '+direct.map(n=>n.textContent.trim()).join('').slice(0,24)+' » '+px+'px');
             });};

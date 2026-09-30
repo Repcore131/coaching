@@ -44005,7 +44005,8 @@ function _htmlReprise(avecProgramme){
     +'letter-spacing:1.5px;font-size:var(--fs-md);box-shadow:var(--e-inset),var(--glow-red)">'
     +'Démarrer maintenant</button>'
     +(avecProgramme
-      ? '<div class="sub" style="font-size:var(--fs-2xs);line-height:1.5;margin-top:12px;text-align:center">'
+      // 11 px au moins : le plancher de l'accueil (--fs-2xs vaut 10 px).
+      ? '<div class="sub" style="font-size:var(--fs-xs);line-height:1.5;margin-top:12px;text-align:center">'
         +'Ton programme t’attend.</div>'
       : '')
     +'</div>';
