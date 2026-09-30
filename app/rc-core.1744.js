@@ -3755,7 +3755,7 @@ const CLOUD={
       // sur un nœud qui n'est plus celui de l'utilisateur courant.
       if(!currentUser?.email){this._retryIdx=0;return;}
       try{
-        const u=(DB.get('users')||{})[currentUser.email]||currentUser;
+        const u=this._dossierCourantAPousser(DB.get('users')||{});
         await this._doPushOne(currentUser.email,u);
         await this.viderFile();
         this._retryIdx=0; // succès : le prochain échec repart du palier court
@@ -3782,7 +3782,9 @@ const CLOUD={
       // RELU A CHAQUE TOUR, pour la meme raison que _doPush : l'envoi du
       // dossier precedent a pu en integrer un autre dans rc_users.
       for(const email of f){
-        const u=(DB.get('users')||{})[email];
+        // Le dossier courant : celui en memoire si la copie locale est en retard.
+        const u=(typeof currentUser==='object'&&currentUser&&currentUser.email===email)
+          ?this._dossierCourantAPousser(DB.get('users')||{}):(DB.get('users')||{})[email];
         // Le dossier n'existe plus localement : plus rien à renvoyer.
         if(!u){this._defiler(email);continue;}
         try{
@@ -4504,7 +4506,10 @@ const CLOUD={
           // cet envoi, qui attend cette descente.
           const descendu=await this.syncUser(email,false,true).catch(()=>false);
           if(descendu){
-            const frais=(DB.get('users')||{})[email];
+            // Le dossier courant passe par _dossierCourantAPousser : quota
+            // plein, rc_users est en retard sur la memoire.
+            const frais=(typeof currentUser==='object'&&currentUser&&currentUser.email===email)
+              ?this._dossierCourantAPousser(DB.get('users')||{}):(DB.get('users')||{})[email];
             if(frais){
               // HORODATE ICI, par exception a la regle posee dans pushOne : ce
               // second envoi ne passe pas par elle, et sans date neuve le
@@ -4637,18 +4642,24 @@ const CLOUD={
           const _hAvant=_repeintUtile(email)?syncEmpreintes(_us[email])['']:null;
           _us[email]=syncFusion(_b.h,_us[email],safe);
           _us[email]._syncMaj=Number(safe.updatedAt)||0;
-          DB.setLocal('users',_us);
+          DB.setLocal('users',_us,true);
           if(typeof currentUser==='object'&&currentUser&&currentUser.email===email){
             Object.assign(currentUser,_us[email]);
             // Ce que l'autre appareil a supprime disparait aussi — voir syncUser.
             for(const k of _clesAvant) if(!(k in _us[email])) delete currentUser[k];
-            DB.setLocal('session',currentUser);
+            DB.setLocal('session',currentUser,true);
           }
           // L'envoi a ramene du nouveau de l'autre appareil : l'ecran suit.
           if(_hAvant!==null&&_hAvant!==syncEmpreintes(_us[email])['']) _planifierRepeint(email);
         }
       }catch(e){ console.warn('[RepCore] integration apres envoi :',e); }
       this._poserBase(email,safe);
+      // LE ✓ PROMIS PAR LE MESSAGE DE QUOTA : il ne vient qu'ici, apres un PUT
+      // reussi du dossier courant.
+      if(DB._quotaAnnonce&&typeof currentUser==='object'&&currentUser&&currentUser.email===email){
+        DB._quotaAnnonce=false;
+        try{ toast('✓ Envoyé au cloud. Le téléphone est plein : ces données ne seront pas disponibles hors ligne.','var(--green)'); }catch(e){}
+      }
     }catch(e){
       console.error('[RepCore] sync push error:',e);
       this._setSyncStatus(false);
@@ -4709,8 +4720,23 @@ const CLOUD={
     // d'apporter.
     const _frais=DB.get('users')||users||{};
     try{
-      await this._doPushOne(currentUser.email, _frais[currentUser.email]||currentUser);
+      await this._doPushOne(currentUser.email, this._dossierCourantAPousser(_frais));
     }catch(e){}
+  },
+  // LE DOSSIER COURANT A POUSSER. La copie fraiche de rc_users, sauf quand
+  // elle ment : l'ecriture locale a echoue (quota), ou currentUser est plus
+  // recent qu'elle. On pousse alors le dossier EN MEMOIRE — copie profonde,
+  // et passe par _sansSante comme dans saveUser : le verrou de l'article 9 ne
+  // se contourne pas par ce chemin-ci.
+  _dossierCourantAPousser(frais){
+    const em=currentUser&&currentUser.email;
+    const f=(frais&&em)?frais[em]:null;
+    const echec=!!(DB._echecLocal&&DB._echecLocal.users);
+    const plusRecent=!!(f&&Number(currentUser.updatedAt||0)>Number(f.updatedAt||0));
+    if(echec||plusRecent){
+      try{ return JSON.parse(JSON.stringify(_sansSante(currentUser))); }catch(e){ return f||currentUser; }
+    }
+    return f||currentUser;
   },
 
   // ── Firebase Storage : téléverse un PDF, retourne l'URL de téléchargement ──
@@ -5778,7 +5804,11 @@ const CLOUD={
     // LA LIGNEE : cette copie derive desormais de cette version du serveur.
     if(merged[email]&&typeof merged[email]==='object')
       merged[email]._syncMaj=Number(cloudUser.updatedAt)||0;
-    DB.set('users',merged);
+    // La base dont derive le dossier EN MEMOIRE, lue avant que _poserBase ne
+    // l'avance : sert si l'ecriture locale echoue (voir plus bas).
+    const _bCour=(typeof currentUser==='object'&&currentUser&&currentUser.email===email)
+      ?(()=>{ try{ return this._baseDe(email,currentUser); }catch(e){ return null; } })():null;
+    const _okLocal=DB.set('users',merged);
     // La base devient la version du serveur qu'on vient d'integrer — APRES la
     // fusion, qui avait besoin de l'ancienne.
     this._poserBase(email,cloudUser);
@@ -5794,9 +5824,18 @@ const CLOUD={
     //   renvoyait au serveur. Mesure au banc. On ne retire que les cles que
     //   la fusion vient d'enlever : les champs de travail de currentUser, que
     //   le dossier stocke ne porte pas, ne sont pas touches.
+    //
+    //   ⚠ QUOTA PLEIN : merged vient d'une copie locale PERIMEE (l'ecriture
+    //   d'avant a echoue), et l'y recopier effacerait de currentUser la seance
+    //   qui n'existe qu'en memoire. On fusionne alors a trois voies — base,
+    //   memoire, serveur — et on ne retire que ce que la fusion retire.
     if(typeof currentUser==='object'&&currentUser&&currentUser.email===email&&merged[email]){
-      try{ Object.assign(currentUser,merged[email]);
-        for(const k of _clesAvant) if(!(k in merged[email])) delete currentUser[k];
+      try{
+        const cible=(_okLocal===false)
+          ?syncFusion(_bCour?_bCour.h:null,currentUser,merged[email])
+          :merged[email];
+        Object.assign(currentUser,cible);
+        for(const k of _clesAvant) if(!(k in cible)) delete currentUser[k];
         DB.setLocal('session',currentUser); }catch(e){}
     }
     // ET L'ECRAN SUIT, s'il montre ce dossier et que la descente l'a change.
@@ -6039,6 +6078,24 @@ function _aplatirTousSessionsConfig(m){
   for(const k in m) _aplatirDossier(m[k]);
   return m;
 }
+// PURE (sur `dossier`). Reinjecte dans `dossier.sessions` les seances de
+// `session` (par id) qu'il ne porte pas — sauf celles qu'une pierre tombale
+// designe : une seance supprimee ne ressuscite pas. Rend le nombre ajoute.
+function reinjecterSeancesSession(dossier,session){
+  if(!dossier||!session||!Array.isArray(session.sessions)) return 0;
+  if(!Array.isArray(dossier.sessions)) dossier.sessions=[];
+  const ids=new Set(dossier.sessions.map(x=>x&&x.id!=null?String(x.id):'').filter(Boolean));
+  const morts=(dossier.supprimes&&dossier.supprimes.sessions)||{};
+  let n=0;
+  for(const x of session.sessions){
+    if(!x||x.id==null) continue;
+    const id=String(x.id);
+    if(ids.has(id)||morts[id]) continue;
+    dossier.sessions.push(x); ids.add(id); n++;
+  }
+  if(n) dossier.sessions.sort((a,b)=>(Number(a&&a.date)||0)-(Number(b&&b.date)||0));
+  return n;
+}
 const DB={
   // N3.4 — LES DEUX CLEFS QUI PORTENT DES DOSSIERS SONT REMISES A PLAT ICI.
   // `users` est la carte de tous les dossiers, `session` est le dossier
@@ -6066,16 +6123,32 @@ const DB={
   // reparer l'horodatage d'un dossier DEJA en cours d'envoi : passer par `set`
   // y programmerait un envoi COMPLET de tous les dossiers a chaque ecriture du
   // coach.
-  setLocal(k,v){
+  //
+  // ⚠ L'ECHEC EST MEMORISE (_echecLocal), CLEF PAR CLEF, et c'est ce qui
+  //   empeche la perte (30/09/2026). Apres un quota plein, DB.get('users')
+  //   rend l'ANCIENNE copie : CLOUD._doPush, qui la relit, poussait donc le
+  //   dossier d'avant la seance — la seance ne partait jamais, pendant qu'un
+  //   toast disait « envoyees au cloud ». _doPush lit ce drapeau et pousse
+  //   alors le dossier en memoire.
+  // ⚠ ET ON NE DIT PLUS « ENVOYE » AVANT QUE CE SOIT VRAI. Le message du quota
+  //   dit ce qui est vrai a cet instant — c'est en memoire, et nulle part
+  //   ailleurs. Le « ✓ envoye » vient de _doPushOne, apres un PUT reussi.
+  //   `silencieux` : pour les reecritures d'integration, qui suivent un envoi
+  //   deja annonce.
+  _echecLocal:{},
+  _quotaAnnonce:false,
+  setLocal(k,v,silencieux){
     let localOk=true;
     try{
       localStorage.setItem('rc_'+k,JSON.stringify(v));
     }catch(e){
       if(e.name==='QuotaExceededError'||e.code===22){
         localOk=false;
-        toast('Stockage local plein : tes données sont envoyées au cloud mais ne seront pas disponibles hors ligne.','var(--orange)');
+        if(k==='users'||k==='session') this._quotaAnnonce=true;
+        if(!silencieux) toast('Stockage plein : séance gardée en mémoire, NE FERME PAS l’app avant le ✓','var(--orange)');
       } else throw e;
     }
+    this._echecLocal[k]=!localOk;
     return localOk;
   },
   del(k){localStorage.removeItem('rc_'+k)},
@@ -7273,6 +7346,17 @@ window.onload=()=>{
           currentUser=users[currentUser.email];
           for(const k in _sess)
             if(currentUser[k]===undefined&&_sess[k]!==undefined) currentUser[k]=_sess[k];
+          // LES SEANCES QUE LA SESSION A GARDEES ET QUE LA CARTE A PERDUES
+          // (quota plein au moment de l'ecriture) : reinjectees AVANT toute
+          // ecriture, puis ecrites et poussees.
+          try{
+            if(reinjecterSeancesSession(currentUser,_sess)>0){
+              currentUser.updatedAt=Date.now();
+              users[currentUser.email]=currentUser;
+              DB.set('users',users);
+              DB.set('session',currentUser);
+            }
+          }catch(e){}
         }
         // age est une VUE de birthdate : figé à l'inscription, il annoncerait
         // encore 16 ans à quelqu'un qui en a 19. On le recalcule à chaque
@@ -7327,7 +7411,9 @@ window.onload=()=>{
           (async()=>{
             try{ await CLOUD.syncUser(sess.email); }catch(e){}
             const u2=(DB.get('users')||{})[sess.email];
-            if(u2){currentUser=u2;DB.set('session',currentUser);}
+            // Quota plein : rc_users est en retard sur la memoire, que syncUser
+            // a deja fusionnee. La remplacer par u2 perdrait la seance.
+            if(u2&&!(DB._echecLocal&&DB._echecLocal.users)){currentUser=u2;DB.set('session',currentUser);}
             // Même exclusion coach qu'au démarrage synchrone : sans elle le coach
             // atteint bien s-coach-home puis en est éjecté ~1s plus tard, à la fin
             // de la sync cloud.
