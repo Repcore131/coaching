@@ -76682,6 +76682,45 @@ async function testExercices(){
             if(_sUsers) DB.set('users',_sUsers); else localStorage.removeItem('rc_users');
             CLOUD.push=_sPush;
           }})());
+        ok('Plan du coach : changer une quantité refait la ligne, l’en-tête du repas et « Ce qu’il reste à placer », sans voler le focus',(()=>{
+          // Kevin, 30/09/2026 : « si je modifie ça, le petit tableau à côté ne bouge pas du tout ».
+          const _sC=currentClientId, _sUsers=DB.get('users'), _sPush=CLOUD.push, _sPlan=_cplPlan, _sMe=currentUser;
+          const _sEcran=(document.querySelector('.screen.active')||{}).id;
+          const m={kcal:2000,p:150,c:200,l:60};
+          try{
+            CLOUD.push=()=>Promise.resolve();
+            DB.set('users',{'coachP@t':{id:'u_coachP',email:'coachP@t',role:'coach'},
+              'athP@t':{id:'u_athP',email:'athP@t',role:'athlete',coachId:'u_coachP',gender:'H',_evol_gender:'H',
+                phase:{type:'seche',debut:Date.now()-7*864e5},bilans:[],sessions:[],
+                nutrition:{macros:{on:Object.assign({},m),off:Object.assign({},m),origine:'tableur'}}}});
+            currentUser={id:'u_coachP',email:'coachP@t',role:'coach'};
+            currentClientId='u_athP';
+            ouvrirPlanCoach();
+            if(!_cplPlan.avecComplements) cplToggleComplements();
+            const w=_cplPlan.squelette.find(x=>x.portion==='whey');
+            if(!w) return _echec('pas de whey dans le modèle de sèche');
+            const txt=el=>(el&&el.textContent||'').replace(/\s+/g,' ').trim();
+            const reste=lib=>{ const b=[...document.querySelectorAll('#s-coach-plan .cpl-side .cpl-s-b')].find(x=>txt(x.querySelector('.cpl-s-l'))===lib); return txt(b&&b.querySelector('.cpl-s-r')); };
+            const champ=[...document.querySelectorAll('#s-coach-plan input[type=number]')].find(i=>(i.getAttribute('oninput')||'').indexOf("'"+w.id+"','q'")>=0);
+            if(!champ) return _echec('champ de quantité introuvable');
+            const avant={p:reste('Protéines'),l:txt(document.getElementById('cpl-m-'+w.id)),t:txt(document.querySelector('#s-coach-plan .cpl-tot[data-repas="'+w.repas+'"]'))};
+            if(!/1 scoop = P 25/.test(avant.l)) return _echec('la ligne ne dit pas ce que vaut un scoop : '+avant.l);
+            champ.focus(); champ.value='2'; champ.dispatchEvent(new Event('input',{bubbles:true}));
+            const apres={p:reste('Protéines'),l:txt(document.getElementById('cpl-m-'+w.id)),t:txt(document.querySelector('#s-coach-plan .cpl-tot[data-repas="'+w.repas+'"]'))};
+            if(apres.p===avant.p) return _echec('« Ce qu’il reste à placer » n’a pas bougé : '+apres.p);
+            if(!/^P 50 /.test(apres.l)) return _echec('la ligne n’a pas suivi : '+apres.l);
+            if(apres.t===avant.t) return _echec('l’en-tête du repas n’a pas suivi : '+apres.t);
+            if(document.activeElement!==champ) return _echec('le champ a perdu le focus');
+            // Les chiffres sont ceux du calcul, pas une approximation d'affichage.
+            const cib=planCiblesJour(_cplAthlete(),true,null), r=planRestant(cib,planCouverture(_cplPlan));
+            const att=Math.round(r.p)<0?('+'+Math.round(-r.p).toLocaleString('fr-FR')+' g de trop'):(Math.round(r.p).toLocaleString('fr-FR')+' g à placer');
+            return apres.p.indexOf(att)>=0?true:_echec('restant : '+apres.p+' pour '+att);
+          } finally {
+            currentUser=_sMe; currentClientId=_sC; _cplPlan=_sPlan;
+            if(_sUsers) DB.set('users',_sUsers); else localStorage.removeItem('rc_users');
+            CLOUD.push=_sPush;
+            try{ if(_sEcran&&_sEcran!=='s-coach-plan') go(_sEcran); }catch(e){}
+          }})());
         ok('L\'écriture du plan marque updatedAt, sinon l\'athlète l\'écraserait',(()=>{
           // Sans updatedAt sur le dossier, _mergeUser laisse la prochaine
           // sauvegarde de l'athlète effacer ce que le coach vient d'envoyer.

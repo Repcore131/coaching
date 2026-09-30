@@ -93374,6 +93374,9 @@ function cplSetChamp(lid,champ,v){
   else if(champ==='note') l.note=String(v||'');
   else if(champ==='u') l.u=String(v||'g');
   else l[champ]=_planNb(v);
+  // ⚠ LA LIGNE ELLE-MÊME SE REFAIT (30/09/2026) : ses P/G/L restaient ceux
+  //   d'avant la frappe. Un seul texte, sans champ : le focus ne bouge pas.
+  try{ const z=document.getElementById('cpl-m-'+lid); if(z) z.innerHTML=_cplMacroLigne(l); }catch(e){}
   _cplRafraichirApercu();
 }
 // Retrait par INDICE et non par identifiant : une source hors Ciqual est un
@@ -93399,6 +93402,17 @@ function cplRetirerSource(macro,index){
 // valent 0 jour par défaut — on ne peut pas deviner laquelle il choisira).
 
 // ── Rendu ─────────────────────────────────────────────────────────────────
+// Les macros d'une ligne, et pour une portion à la pièce (scoop, œuf, yaourt)
+// ce que vaut UNE pièce : « 2 scoops » affichait « P 50 », et 50 se lisait
+// comme 50 g de poudre, pas comme 50 g de protéines (Kevin, 30/09/2026).
+function _cplMacroLigne(item){
+  const txt=_cplMacroTxt(planMacrosItem(item));
+  const po=item&&item.portion&&PLAN_PORTIONS[item.portion];
+  const u=planUniteItem(item);
+  if(!po||!planParUnite(u)||(po.p+po.c+po.l)<=0) return txt;
+  const v=x=>String(Math.round(x*10)/10).replace('.',',');
+  return txt+'<span class="cpl-m-u"> · 1 '+escapeHtml(u)+' = P '+v(po.p)+' · G '+v(po.c)+' · L '+v(po.l)+'</span>';
+}
 function _cplMacroTxt(m){
   if(!m) return '<span style="color:var(--orange)">non chiffré</span>';
   return 'P '+Math.round(m.p)+' · G '+Math.round(m.c)+' · L '+Math.round(m.l)
@@ -93411,6 +93425,28 @@ function _cplInput(val,oninput,largeur,pas){
 // Seul l'aperçu est reconstruit à la frappe. Reconstruire toute la page
 // retirerait le focus du champ qu'on est en train de remplir.
 function _cplRafraichirApercu(){
+  // ⚠ LE PANNEAU « CE QU'IL RESTE À PLACER » ET LES EN-TÊTES DE REPAS SE
+  //   REFONT À LA FRAPPE (30/09/2026). Kevin : « si je modifie la quantité,
+  //   le petit tableau à côté ne bouge pas du tout ». Ils n'étaient peints que
+  //   par renderPlanCoach, donc au prochain ajout ou retrait de ligne — la
+  //   quantité changeait dans le plan, pas à l'écran. Aucun des deux ne porte
+  //   de champ : les repeindre ne vole pas le focus.
+  try{
+    const side=document.querySelector('#s-coach-plan .cpl-side');
+    if(side){
+      const h=_cplHtmlSuivi();
+      if(h){ side.outerHTML=h; _cplCalerSuivi(); }
+    }
+  }catch(e){}
+  try{
+    const tots=document.querySelectorAll('#s-coach-plan .cpl-tot[data-repas]');
+    if(tots.length){
+      const c=_cplAthlete();
+      const cib=planCiblesJour(c,true,null), couv=planCouverture(_cplPlan), rest=planRestant(cib,couv);
+      const ns={p:planNbSources(_cplPlan,'p'),c:planNbSources(_cplPlan,'c')};
+      tots.forEach(t=>{ t.innerHTML=planTotalRepasHtml(planTotalRepas(couv.parRepas[t.dataset.repas],rest,ns)); });
+    }
+  }catch(e){}
   const z=document.getElementById('cpl-apercu');
   if(z) z.innerHTML=_cplHtmlApercu();
   const a=document.getElementById('cpl-alertes');
@@ -93799,7 +93835,7 @@ function _cplHtmlLigne(item){
   return `<div class="plan-l" style="display:block">
     <div style="display:flex;align-items:flex-start;gap:8px">
       <div style="flex:1;min-width:0">${champNom}
-        <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">${_cplMacroTxt(m)}</div>
+        <div id="cpl-m-${item.id}" style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">${_cplMacroLigne(item)}</div>
       </div>
       ${_cplInput(item.q,`cplSetChamp('${item.id}','q',this.value)`,'64px')}
       <input value="${escapeHtml(planUniteItem(item))}" oninput="cplSetChamp('${item.id}','u',this.value)" aria-label="Unité"
@@ -93915,7 +93951,7 @@ function renderPlanCoach(){
         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
         style="cursor:pointer">
         <span class="plan-titre-t">${escapeHtml(planLibRepas(cle))}</span>
-        ${tot}
+        <span class="cpl-tot" data-repas="${escapeHtml(cle)}" style="display:contents">${tot}</span>
         <span style="flex-shrink:0;font-size:var(--fs-2xs);color:rgba(255,255,255,.7);margin-left:8px">${lignes.length} ligne${lignes.length>1?'s':''}</span>
         <span style="flex-shrink:0;font-size:var(--fs-xs);color:rgba(255,255,255,.8);margin-left:4px">${replie?'▶':'▼'}</span>
       </div>
