@@ -11905,7 +11905,8 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
    La bande passe de 19,8 à 26,9 cqw, seulement quand le cadre est là
    (data-assiette) ; le bloc de gauche descend de moitié pour rester centré, et
    la jauge du rang s'arrête avant la colonne des deux cadres. */
-.clh-tete[data-assiette]{height:calc(26.9cqw + var(--st))}
+/* Le bas de l'en-tete remonte sous le cadre nutrition (Kevin, 30/09/2026). */
+.clh-tete[data-assiette]{height:calc(25.4cqw + var(--st))}
 .clh-tete[data-assiette] #clh-athlete-avatar{top:calc(var(--st) + 5.15cqw)}
 .clh-tete[data-assiette] .eyebrow{top:calc(var(--st) + 5.3cqw)}
 .clh-tete[data-assiette] #clh-name{top:calc(var(--st) + 8.9cqw)}

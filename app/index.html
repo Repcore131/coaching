@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1712';
+window.RC_BUILD='1713';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-09-30';
@@ -457,7 +457,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1712.css">
+<link rel="stylesheet" href="./rc-style.1713.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -3404,7 +3404,7 @@ const COACH_PHOTO='icons/coach.jpg';
            avant la carte du coach, pour rien : les deux emplacements qui les
            separent — l'echeance d'acces et le mot au coach — sont vides la
            plupart du temps. -->
-      <div class="clh-in clh-in-1" style="margin-top:-12px;margin-bottom:10px">
+      <div class="clh-in clh-in-1" style="margin-top:-12px;margin-bottom:3px">
         <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
         <h1 id="clh-greeting" style="font-size:var(--fs-2xl);line-height:1.05;font-weight:400;letter-spacing:1px"></h1>
         <p id="clh-phrase" style="margin-top:2px;font-size:var(--fs-sm);line-height:1.4;color:var(--text-dim)"></p>
@@ -5978,5 +5978,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1712.js"></script>
+<script src="./rc-core.1713.js"></script>
 </body></html>
