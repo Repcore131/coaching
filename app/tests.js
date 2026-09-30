@@ -20940,6 +20940,71 @@ async function testExercices(){
     ok('T1 — calcSug n’existe plus : chargeSuivante est le seul moteur des charges proposées',typeof calcSug==='undefined');
     ok('T1 — la borne : répétitions + RIR ≤ 12',e1rmFiable(12,0)&&e1rmFiable(10,2)&&!e1rmFiable(10,3)&&!e1rmFiable(13,0)&&e1rmFiable(8,'')&&e1rmFiable(0,0));
     ok('e1rm sur charge nulle ou négative rend 0',e1rm(0,10,1)===0&&e1rm(-5,10,1)===0);
+    // ── LA DÉPENSE SPORTIVE EN MET NETS, ET LA SEMAINE QUI GARDE LA CIBLE ──
+    ok('MET nets : kcalHeureSport(Musculation, modérée, 55 kg) < (…, 100 kg), et (MET − 1) × poids',(()=>{
+      const a=kcalHeureSport('Musculation','moderee',55), b=kcalHeureSport('Musculation','moderee',100);
+      if(!(a<b)) return _echec(a+' ≥ '+b);
+      if(b!==400||a!==220) return _echec('(5 − 1) × poids : '+a+' / '+b);
+      // Sans poids : 75 kg. « Aucun » vaut 1 MET, donc zéro kcal nette.
+      if(kcalHeureSport('Musculation','moderee')!==300||kcalHeureSport('Musculation','moderee',0)!==300) return _echec('repli 75 kg');
+      if(kcalHeureSport('Aucun','haute',90)!==0) return _echec('Aucun');
+      // Le Compendium, aux repères cités : musculation 3,5 / 5,0 / 6,0 ; course 7 / 9,8 / 11,5.
+      const m=SPORTS_MET['Musculation'], c=SPORTS_MET['Course à pied'];
+      return (m.join('/')==='3.5/5/6'&&c.join('/')==='7/9.8/11.5')?true:_echec(m.join('/')+' ; '+c.join('/'));})());
+    ok('La dépense sportive d’un dossier suit son poids (kcalSportParJour, le bilan, le tableau)',(()=>{
+      const mk=kg=>({id:'MET'+kg,email:'met'+kg+'@t.fr',role:'athlete',gender:'H',
+        weightLog:[{date:localISODate(new Date()),kg}],
+        nutrition:{tableur:{sports:{lignes:[{sport:'Course à pied',heures:3,intensite:'moderee'}],date:Date.now()}}}});
+      const a=kcalSportParJour(mk(55)), b=kcalSportParJour(mk(100));
+      if(!(a.semaine<b.semaine)) return _echec(a.semaine+' ≥ '+b.semaine);
+      if(b.semaine!==3*kcalHeureSport('Course à pied','moderee',100)||b.poids!==100) return _echec('semaine '+b.semaine);
+      // Sans aucun poids : 75 kg, et c'est dit.
+      const z=kcalSportParJour({nutrition:{tableur:{sports:{lignes:[{sport:'Vélo',heures:2,intensite:'faible'}],date:1}}}});
+      if(z.poids!==75||!z.poidsDefaut||z.semaine!==2*kcalHeureSport('Vélo','faible',75)) return _echec('repli : '+JSON.stringify({p:z.poids,s:z.semaine}));
+      return (depenseSportsParJour([{sport:'Vélo',intensite:'faible',heures:1}],60).semaine===Math.round((4-1)*60))
+        ?true:_echec('depenseSportsParJour ne prend pas le poids');})());
+    ok('NAF : « Actif » déclaré par un métier assis → hypothèse d’alerte au coach (besoinsProposes et tableau)',(()=>{
+      let assis=null;
+      for(const m of ['Comptable','Secrétaire','Développeur','Employé de bureau']) if(niveauMetier(m)==='sedentaire'){ assis=m; break; }
+      if(!assis) return _echec('fixture : aucun métier assis reconnu');
+      const mk=naf=>({id:'NAF'+naf,email:'naf@t.fr',role:'athlete',gender:'H',_evol_gender:'H',_evol_height:'180','init-age':30,
+        bilans:[{type:'debut',date:Date.now()-864e5,'deb-weight':'80','deb-height':'180','deb-age':'30','deb-gender':'Homme',
+          'deb-job':assis,'deb-naf':naf}],weightLog:[{date:localISODate(new Date()),kg:80}],nutrition:{cycle:false}});
+      for(const naf of ['Actif','Très actif']){
+        if(!nafIncoherent(mk(naf))) return _echec(naf+' non signalé');
+        if(besoinsProposes(mk(naf)).hypotheses.indexOf(NAF_ALERTE_METIER)<0) return _echec('besoinsProposes : '+naf);
+        const t=cibleTableur(mk(naf),{});
+        if(!t.nafAlerte) return _echec('cibleTableur : '+naf);
+        if(_htmlTableauxTableur(mk(naf)).indexOf('vérifier qu’il ne compte pas le sport')<0) return _echec('le tableau ne le dit pas');
+      }
+      if(nafIncoherent(mk('Moyennement actif'))||nafIncoherent(mk('Sédentaire'))) return _echec('alerte sans contradiction');
+      return besoinsProposes(mk('Sédentaire')).hypotheses.indexOf(NAF_ALERTE_METIER)<0?true:_echec('hypothèse de trop');})());
+    const _cycU=n=>({id:'CYC'+n,email:'cyc'+n+'@t.fr',role:'athlete',gender:'H',_evol_gender:'H',_evol_height:'180','init-age':30,
+      sessions_config:Array.from({length:7},(_,i)=>({active:i<n})),
+      bilans:[{type:'debut',date:Date.now()-60*864e5,'deb-weight':'80','deb-height':'180','deb-age':'30','deb-gender':'Homme'}],
+      weightLog:[{date:localISODate(new Date()),kg:80}],nutrition:{}});
+    for(const n of [6,3]) ok(n+' créneaux : la moyenne de la semaine (nOn × ON + nOff × OFF) / 7 est à ±5 kcal de t.kcal',(()=>{
+      const u=_cycU(n);
+      const t=cibleTableur(u,{appliquerPlancher:false});
+      if(!t||!(t.kcal>0)) return _echec('fixture : '+JSON.stringify(t&&t.manque));
+      const j=_tbJournees(u,t,true,false);
+      if(!j.cycle||j.nOn!==n||j.nOff!==7-n) return _echec('cycle : '+JSON.stringify({c:j.cycle,on:j.nOn}));
+      if(!(j.on.g>j.off.g)) return _echec('ON ≤ OFF');
+      const moy=(n*j.on.kcal+(7-n)*j.off.kcal)/7;
+      if(Math.abs(moy-t.kcal)>5) return _echec('moyenne '+Math.round(moy)+' pour '+t.kcal);
+      // Le chemin automatique fait le même calcul.
+      const b=besoinsProposes(u);
+      const mb=(n*b.on.kcal+(7-n)*b.off.kcal)/7;
+      if(!b.cycle||Math.abs(mb-(b.depense+b.delta))>5) return _echec('besoinsProposes : '+Math.round(mb)+' pour '+(b.depense+b.delta));
+      return true;})());
+    ok('0 ou 7 créneaux : pas de cycle, ON = OFF',(()=>{
+      for(const n of [0,7]){
+        const u=_cycU(n), t=cibleTableur(u,{appliquerPlancher:false}), j=_tbJournees(u,t,true,false);
+        if(j.cycle||j.on.kcal!==j.off.kcal||j.on.g!==j.off.g) return _echec(n+' créneaux : '+j.on.g+' / '+j.off.g);
+        const b=besoinsProposes(u);
+        if(b.cycle||b.on.g!==b.off.g) return _echec('besoinsProposes à '+n);
+      }
+      return true;})());
     // ── CIQUAL : L'ÉNERGIE ESTIMÉE, LES ALIMENTS DE SPORTIFS, LE RECHARGEMENT ──
     ok('Énergie estimée : {k:null, p:14,3, c:20, l:18,4, f:1} à 200 g → kcal > 0 et kcalEstimee',(()=>{
       const f={id:999001,n:'Essai sans énergie',g:'',k:null,p:14.3,c:20,l:18.4,f:1};
@@ -21155,9 +21220,11 @@ async function testExercices(){
       if(!c||!(c.kcal>=1200)) return _echec('ciblesAthlete : '+(c&&c.kcal));
       if(!(c.kcal>=plancherKcal(u))) return _echec('sous plancherKcal : '+c.kcal+' < '+plancherKcal(u));
       // Les journées cyclées aussi : la basse remontée par les glucides, l'écart gardé.
-      const t=cibleTableur(u,{appliquerPlancher:true});
-      const j=_tbJournees(u,Object.assign({},t,{g:t.g}),true);
-      if(!(j.off.kcal>=plancherAthlete(u))||!(j.on.kcal>j.off.kcal)) return _echec('journées : '+j.on.kcal+' / '+j.off.kcal);
+      // 30/09/2026 : sans créneau il n'y a plus de cycle ; trois créneaux pour l'éprouver.
+      const u3=_PLa({sessions_config:[{active:true},{active:true},{active:true}]});
+      const t=cibleTableur(u3,{appliquerPlancher:true});
+      const j=_tbJournees(u3,Object.assign({},t,{g:t.g}),true);
+      if(!(j.off.kcal>=plancherAthlete(u3))||!(j.on.kcal>j.off.kcal)) return _echec('journées : '+j.on.kcal+' / '+j.off.kcal);
       // Sans plancher lisible (poids inconnu) : l'absolu, 1 200 pour une femme, 1 500 pour un homme.
       if(plancherAthlete({gender:'F'})!==1200||plancherAthlete({gender:'H'})!==1500) return _echec('absolu');
       // Côté coach (appareil du coach), rien n'est remonté.
@@ -24970,43 +25037,48 @@ async function testExercices(){
       const sauveU=currentUser;
       const sauveB=(typeof bilData!=='undefined')?bilData:null;
 
-      // ── La table du coach, reprise sans y toucher ──
-      ok('Les onze lignes du coach ont ses valeurs exactes',(()=>{
-        const t={'Marche':[200,280,370],'Course à pied':[400,550,700],'Vélo':[300,450,600],
-          'Natation':[300,500,700],'Tennis':[350,450,600],'Football':[300,500,700],
-          'Musculation':[200,350,500],'Yoga':[180,250,300],'Ski':[350,500,700],
-          'Boxe':[400,600,800],'Danse':[200,300,500]};
+      // ── La table en MET (Compendium 2011), plus en kcal absolues ──
+      // 30/09/2026 : la table du coach donnait des kcal par heure, les mêmes
+      // pour 55 et pour 100 kg. Elle est remplacée par des MET ; ces assertions
+      // figeaient ses anciennes valeurs, elles figent désormais les MET.
+      ok('Les onze premiers sports ont leurs MET du Compendium',(()=>{
+        const t={'Marche':[2.8,3.5,5.0],'Course à pied':[7.0,9.8,11.5],'Vélo':[4.0,6.8,10.0],
+          'Natation':[5.8,8.3,9.8],'Tennis':[5.0,7.3,8.0],'Football':[7.0,8.0,10.0],
+          'Musculation':[3.5,5.0,6.0],'Yoga':[2.5,3.0,4.0],'Ski':[5.3,6.8,9.0],
+          'Boxe':[5.5,7.8,12.8],'Danse':[3.0,5.0,7.3]};
         const faux=[];
         for(const k in t){
-          const v=SPORTS_KCAL_H[k];
+          const v=SPORTS_MET[k];
           if(!v) { faux.push(k+' absent'); continue; }
           if(v[0]!==t[k][0]||v[1]!==t[k][1]||v[2]!==t[k][2]) faux.push(k+' → '+v.join('/'));
         }
         return faux.length?_echec(faux.join(', ')):true;})());
+      // 1 MET est le repos : zéro kcal NETTE (le NAF compte déjà cette heure).
       ok('« Aucun » ne coûte rien, aux trois intensités',
-        [0,1,2].every(i=>SPORTS_KCAL_H['Aucun'][i]===0));
+        [0,1,2].every(i=>SPORTS_MET['Aucun'][i]===1&&kcalHeureSport('Aucun',SPORT_INTENSITES[i].cle,80)===0));
+      // (MET − 1) × 75 kg sans poids : boxe 4,5 / 6,8 / 11,8 × 75.
       ok('kcalHeureSport lit la bonne colonne',
-        kcalHeureSport('Boxe','faible')===400&&kcalHeureSport('Boxe','moderee')===600
-        &&kcalHeureSport('Boxe','haute')===800);
+        kcalHeureSport('Boxe','faible')===338&&kcalHeureSport('Boxe','moderee')===510
+        &&kcalHeureSport('Boxe','haute')===885);
       ok('Un sport inconnu ne rend rien',kcalHeureSport('Pétanque','haute')===null);
       ok('Une intensité absente retombe sur modérée, pas sur zéro',
-        kcalHeureSport('Boxe',undefined)===600&&kcalHeureSport('Boxe','n\'importe quoi')===600);
+        kcalHeureSport('Boxe',undefined)===510&&kcalHeureSport('Boxe','n\'importe quoi')===510);
       ok('Chaque sport ajouté est croissant en intensité et positif',(()=>{
         const faux=[];
-        for(const k in SPORTS_KCAL_H){
-          const v=SPORTS_KCAL_H[k];
+        for(const k in SPORTS_MET){
+          const v=SPORTS_MET[k];
           if(k==='Aucun') continue;
-          if(!(v[0]>0)||!(v[1]>=v[0])||!(v[2]>=v[1])) faux.push(k+' → '+v.join('/'));
+          if(!(v[0]>1)||!(v[1]>=v[0])||!(v[2]>=v[1])) faux.push(k+' → '+v.join('/'));
         }
         return faux.length?_echec(faux.join(', ')):true;})());
 
       // ── Dépense hebdomadaire ÷ 7, comme demandé ──
       ok('La dépense sportive est la somme des heures, divisée par sept',(()=>{
-        // Boxe haute 2 h = 1600, musculation modérée 4 h = 1400 → 3000/semaine.
+        // À 75 kg : boxe haute 2 h = 2 × 885, musculation modérée 4 h = 4 × 300 → 2970.
         const d=depenseSportsParJour([
           {sport:'Boxe',intensite:'haute',heures:2},
           {sport:'Musculation',intensite:'moderee',heures:4}]);
-        return d.semaine===3000&&d.jour===Math.round(3000/7);})());
+        return d.semaine===2970&&d.jour===Math.round(2970/7);})());
       ok('Les lignes sans heures ou sans sport sont ignorées',(()=>{
         const d=depenseSportsParJour([
           {sport:'Boxe',intensite:'haute',heures:0},
@@ -25014,13 +25086,13 @@ async function testExercices(){
           {sport:'Inconnu',intensite:'haute',heures:5},
           {sport:'Marche',intensite:'faible',heures:''},
           {sport:'Vélo',intensite:'faible',heures:1}]);
-        return d.semaine===300&&d.detail.length===1;})());
+        return d.semaine===225&&d.detail.length===1;})());   // vélo faible : (4 − 1) × 75
       ok('Une liste vide ou absente coûte zéro',
         depenseSportsParJour([]).jour===0&&depenseSportsParJour(null).jour===0
         &&depenseSportsParJour(undefined).semaine===0);
       ok('Les demi-heures sont acceptées',(()=>{
         const d=depenseSportsParJour([{sport:'Yoga',intensite:'faible',heures:1.5}]);
-        return d.semaine===270;})());
+        return d.semaine===Math.round(1.5*113);})());   // yoga faible : (2,5 − 1) × 75 = 113 kcal/h
 
       // ── Professions ──
       ok('Les quatre niveaux vont du plus bas au plus haut',
@@ -25086,6 +25158,10 @@ async function testExercices(){
         exAlias:{},exMuscles:{},sessions:[],videos:[],programs:{},
         sessions_config:[{active:true},{active:true},{active:true}],
         bilans:[_bil(60),_bil(2)],nutrition:{}},extra||{});
+      // 30/09/2026 : le sport se chiffre en MET nets sur le poids de l'athlète.
+      // La fixture pèse 80 kg (deb-weight) : musculation modérée (5 − 1) × 80 = 320.
+      const _KG_DP=80;
+      const _KH_MUSCU=kcalHeureSport('Musculation','moderee',_KG_DP);
 
       ok('Profession reconnue : le modèle décomposé prend la main',(()=>{
         const u=_ath({bilans:[_bil(60),_bil(2,{'deb-job':'Comptable'})]});
@@ -25116,8 +25192,8 @@ async function testExercices(){
         const avec=_ath({bilans:[_bil(2,{'deb-job':'Comptable',
           'deb-sports':[{sport:'Boxe',intensite:'haute',heures:2}]})]});
         const a=besoinsProposes(sansSport), c=besoinsProposes(avec);
-        // 1600 kcal/semaine → 229 par jour.
-        return c.depense-a.depense===Math.round(1600/7);})());
+        // Boxe haute 2 h à 80 kg : 2 × (12,8 − 1) × 80 = 1888 par semaine.
+        return c.depense-a.depense===Math.round(2*kcalHeureSport('Boxe','haute',80)/7);})());   // la fixture pèse 80 kg
       ok('Un métier lourd dépense plus qu\'un métier assis, à sport égal',(()=>{
         const sp=[{sport:'Musculation',intensite:'moderee',heures:4}];
         const assis=besoinsProposes(_ath({bilans:[_bil(2,{'deb-job':'Comptable','deb-sports':sp})]}));
@@ -25135,10 +25211,10 @@ async function testExercices(){
           bilans:[_bil(2,bil)]});
         const b=besoinsProposes(u);
         const sp=kcalSportParJour(u);
-        // 6 créneaux × 1 h × 350 = 2100 ; déclaré 4 h × 350 = 1400. La somme
-        // serait 3500 : c'est exactement ce qu'on refuse.
-        if(sp.semaine!==2100) return _echec('semaine '+sp.semaine);
-        return b.depense===Math.round(b.mb*nafRetenu(u).n.f)+Math.round(2100/7)
+        // 6 créneaux × 1 h × 320 = 1920 ; déclaré 4 h × 320 = 1280. La somme
+        // serait 3200 : c'est exactement ce qu'on refuse.
+        if(sp.semaine!==6*_KH_MUSCU) return _echec('semaine '+sp.semaine);
+        return b.depense===Math.round(b.mb*nafRetenu(u).n.f)+Math.round(6*_KH_MUSCU/7)
           ?true:_echec('dépense '+b.depense);})());
       ok('Plus de créneaux, plus de dépense — les créneaux comptent enfin',(()=>{
         const bil={'deb-job':'Comptable'};
@@ -25170,7 +25246,6 @@ async function testExercices(){
 
       // ── Une seule convention de dépense ───────────────────────────────
       // La fixture porte 3 créneaux actifs et aucun relevé de pas.
-      const _KH_MUSCU=kcalHeureSport('Musculation','moderee');   // 350
       ok('Critère : deux athlètes identiques ne diffèrent QUE par le NEAT',(()=>{
         // C'était le défaut de fond : l'un voyait ses sports comptés, l'autre
         // ses créneaux, et les deux dépenses n'étaient pas comparables.
@@ -25208,8 +25283,8 @@ async function testExercices(){
           bilans:[_bil(2,{'deb-sports':[{sport:'Football',intensite:'moderee',heures:6}]})]});
         const a=besoinsProposes(sansFoot), c=besoinsProposes(avecFoot);
         if(c.modele!=='defaut') return _echec('modèle '+c.modele);
-        // 500 kcal/h × 6 = 3000 par semaine, soit 429 par jour.
-        return c.depense-a.depense===Math.round(3000/7)
+        // Football modéré à 80 kg : (8 − 1) × 80 = 560 kcal/h × 6 = 3360 par semaine.
+        return c.depense-a.depense===Math.round(6*kcalHeureSport('Football','moderee',_KG_DP)/7)
           ?true:_echec('écart '+(c.depense-a.depense));})());
       ok('Critère : musculation 5 h ET 5 créneaux → comptée UNE fois',(()=>{
         const u=_ath({sessions_config:Array.from({length:5},()=>({active:true})),
@@ -25248,7 +25323,7 @@ async function testExercices(){
           const u=_ath({bilans:[_bil(2,{'deb-job':'Comptable','deb-sports':sports})]});
           const b=besoinsProposes(u);
           const ancien=Math.round(b.mb*facteurProfession('Comptable').f)
-            +depenseSportsParJour(sports).jour;
+            +depenseSportsParJour(sports,_KG_DP).jour;
           if(b.depense<ancien) rates.push(h+' h : '+b.depense+' < '+ancien);
           else if(Math.abs(b.depense-ancien)>ancien*0.03)
             rates.push(h+' h : écart de '+(b.depense-ancien));
@@ -25278,14 +25353,14 @@ async function testExercices(){
         return f('1h30')===Math.round(4*1.5*_KH_MUSCU)&&f('1h')===4*_KH_MUSCU
           ?true:_echec(f('1h30')+' / '+f('1h'));})());
       ok('Critère : un sport hors barème n\'est pas compté, mais il est NOMMÉ',(()=>{
-        // Le sélecteur du bilan est fermé sur SPORTS_KCAL_H : ce cas ne vient
+        // Le sélecteur du bilan est fermé sur SPORTS_MET : ce cas ne vient
         // que d'un dossier ancien ou importé. Il arrive quand même.
         const u=_ath({bilans:[_bil(2,{'deb-sports':[
           {sport:'Pétanque',intensite:'moderee',heures:4},
           {sport:'Vélo',intensite:'moderee',heures:2}]})]});
         const sp=kcalSportParJour(u);
         if(sp.inconnus.indexOf('Pétanque')<0) return _echec('non signalé');
-        if(sp.autres!==2*kcalHeureSport('Vélo','moderee')) return _echec('autres '+sp.autres);
+        if(sp.autres!==2*kcalHeureSport('Vélo','moderee',_KG_DP)) return _echec('autres '+sp.autres);
         return besoinsProposes(u).hypotheses.some(h=>/Pétanque.*non reconnu/.test(h))
           ?true:_echec('absent des hypothèses');})());
       ok('Aucun créneau et aucun sport : la dépense est le NEAT seul',(()=>{
@@ -25439,7 +25514,8 @@ async function testExercices(){
           const e=bilData['deb-sports'][0];
           const d=depenseSportsParJour(bilData['deb-sports']);
           bilData={};
-          return e.sport==='Boxe'&&e.intensite==='haute'&&e.heures==='2'&&d.semaine===1600;})());
+          // Sans poids : 75 kg, (12,8 − 1) × 75 = 885 kcal/h (MET nets, 30/09/2026).
+          return e.sport==='Boxe'&&e.intensite==='haute'&&e.heures==='2'&&d.semaine===2*885;})());
         ok('Retirer une ligne la retire vraiment',(()=>{
           bilData={};
           _bSportAjouter('deb-sports'); _bSportAjouter('deb-sports');
@@ -25451,14 +25527,16 @@ async function testExercices(){
         ok('La liste déroulante propose tous les sports de la table',(()=>{
           bilData={'deb-sports':[{sport:'Marche',intensite:'faible',heures:1}]};
           const h=bSports('deb-sports');
-          const manquants=Object.keys(SPORTS_KCAL_H).filter(n=>h.indexOf('>'+n+'<')<0);
+          const manquants=Object.keys(SPORTS_MET).filter(n=>h.indexOf('>'+n+'<')<0);
           bilData={};
           return manquants.length?_echec('absents : '+manquants.join(', ')):true;})());
         ok('Le total hebdomadaire est affiché dans le widget',(()=>{
-          bilData={'deb-sports':[{sport:'Boxe',intensite:'haute',heures:2}]};
+          // Le poids saisi dans le bilan chiffre le sport : 80 kg, boxe haute
+          // (12,8 − 1) × 80 = 944 kcal/h, 1888 par semaine, 270 par jour.
+          bilData={'deb-weight':'80','deb-sports':[{sport:'Boxe',intensite:'haute',heures:2}]};
           const h=bSports('deb-sports');
           bilData={};
-          return /1600 kcal par semaine/.test(h)&&/229 kcal par jour/.test(h);})());
+          return /1888 kcal par semaine/.test(h)&&/270 kcal par jour/.test(h);})());
         ok('Le widget dit que les créneaux RepCore sont comptés à part',(()=>{
           // Il disait l'inverse — « séances RepCore incluses » — et c'est cette
           // consigne qui a produit les lignes « Musculation » que le calcul
@@ -29222,9 +29300,12 @@ async function testExercices(){
           // Petit gabarit, déficit maximal : le plancher mord.
           const u=_ath({phase:{type:'seche',debut:Date.now()-30*864e5}});
           u.bilans[0]['deb-weight']='45'; u.bilans[0]['deb-height']='155';
-          const b=besoinsProposes(u,{vitesse:PHASES.seche.min});
+          // 30/09/2026 : le plancher est DEMANDÉ (appareil de l'athlète). Le test passait côté coach
+          // parce que l'ancienne table gonflait la dépense sportive de 45 kg au-dessus du plancher ;
+          // en MET nets, elle retombe dessous, et le coach n'est jamais borné (build 1725).
+          const b=besoinsProposes(u,{vitesse:PHASES.seche.min,appliquerPlancher:true});
           if(!b||b.source===null) return _echec('proposition impossible');
-          const moy=Math.round((b.on.kcal+b.off.kcal)/2);
+          const moy=Math.round(b.moyenne);
           const pl=plancherKcal(u);
           if(pl==null) return _echec('aucun plancher');
           if(moy<pl-1) return _echec('le plancher est franchi : '+moy+' < '+pl);
@@ -33950,18 +34031,19 @@ async function testExercices(){
           bilans:[{type:'debut',date:j-60*864e5,'deb-weight':'80','deb-height':'180','deb-age':'30',
             'deb-gender':'Homme','deb-sports':[{sport:'Tennis',heures:2,intensite:'moderee'}]}],
           nutrition:nut||{}});
+        // 30/09/2026 : les heures se chiffrent sur les 80 kg de la fiche (MET nets).
         // SANS LISTE : les creneaux ET le sport declare, chacun sur sa ligne.
         const a=kcalSportParJour(base());
         if(a.source!=='creneaux') return _echec('source auto : '+a.source);
         const lib=(a.lignes||[]).map(x=>x.sport+'/'+x.origine).join(',');
         if(lib!=='Musculation/creneaux,Tennis/bilan') return _echec('lignes auto : '+lib);
-        const kM=kcalHeureSport('Musculation','moderee'), kT=kcalHeureSport('Tennis','moderee');
+        const kM=kcalHeureSport('Musculation','moderee',80), kT=kcalHeureSport('Tennis','moderee',80);
         const hM=a.lignes[0].heures;
         if(Math.abs(a.semaine-Math.round(hM*kM+2*kT))>1) return _echec('le total auto n’est pas la somme des lignes');
         // AVEC LA LISTE DU COACH : elle seule compte.
         const b=kcalSportParJour(base({tableur:{sports:{lignes:[{sport:'Boxe',heures:3,intensite:'haute'}],date:j}}}));
         if(b.source!=='coach') return _echec('source coach : '+b.source);
-        if(b.semaine!==3*kcalHeureSport('Boxe','haute')) return _echec('semaine coach : '+b.semaine);
+        if(b.semaine!==3*kcalHeureSport('Boxe','haute',80)) return _echec('semaine coach : '+b.semaine);
         if(b.jour!==Math.round(b.semaine/7)) return _echec('jour coach : '+b.jour);
         // LISTE VIDEE : zero, sans retomber sur les creneaux.
         const c=kcalSportParJour(base({tableur:{sports:{date:j}}}));
@@ -33970,7 +34052,7 @@ async function testExercices(){
         const d=kcalSportParJour(base({tableur:{sports:{lignes:{0:{sport:'Marche',heures:5,intensite:'faible'},
           1:{sport:'Yoga',heures:1,intensite:'moderee'}},date:j}}}));
         if(d.lignes.map(x=>x.sport).join(',')!=='Marche,Yoga') return _echec('forme objet : '+JSON.stringify(d.lignes));
-        if(d.semaine!==Math.round(5*kcalHeureSport('Marche','faible')+kcalHeureSport('Yoga','moderee')))
+        if(d.semaine!==Math.round(5*kcalHeureSport('Marche','faible',80)+kcalHeureSport('Yoga','moderee',80)))
           return _echec('forme objet, total : '+d.semaine);
         // UN SPORT HORS BAREME : nomme, pas compte.
         const e=kcalSportParJour(base({tableur:{sports:{lignes:[{sport:'Pétanque',heures:2,intensite:'moderee'}],date:j}}}));
@@ -34005,7 +34087,8 @@ async function testExercices(){
             ||!r0.querySelector('.tbk-sp-x')) return _echec('une ligne n’a pas ses trois champs et sa croix');
           if(!z.querySelector('.tbk-sp-plus')) return _echec('« Ajouter un sport » manque');
           const dep=r=>Number(((r.querySelector('.tbk-sp-d')||{}).textContent||'').replace(/\D/g,''));
-          if(dep(rangs()[1])!==2*kcalHeureSport('Tennis','moderee'))
+          // Sur les 80 kg de la fiche (MET nets, 30/09/2026).
+          if(dep(rangs()[1])!==2*kcalHeureSport('Tennis','moderee',80))
             return _echec('le tennis ne porte pas sa propre dépense : '+dep(rangs()[1]));
           const k0=lu().nutrition.macros?lu().nutrition.macros.on.kcal:null;
           // LES HEURES : 10 h de musculation.
@@ -42003,8 +42086,10 @@ async function testExercices(){
             //   ON COMPARE DONC LA MOYENNE DES DEUX JOURNEES, qui doit retomber
             //   sur la grille : c'est une propriete du cyclage, pas un
             //   recalcul de _tbJournees par lui-meme.
-            const moy=(Number(k.nutrition.macros.on.g)
-                      +Number(k.nutrition.macros.off.g))/2;
+            // 30/09/2026 : la moyenne de la SEMAINE, nOn jours ON et nOff jours OFF.
+            const _cg=cycleGlucides(k,att.g);
+            const moy=(_cg.nOn*Number(k.nutrition.macros.on.g)
+                      +_cg.nOff*Number(k.nutrition.macros.off.g))/7;
             if(Math.abs(moy-att.g)>1)
               return _echec('ses glucides ne tournent plus autour des '+att.g
                 +' g de la grille : '+k.nutrition.macros.on.g+' / '
@@ -73887,7 +73972,10 @@ async function testExercices(){
           // que subi dans une fixture qui prétendait mesurer autre chose.
           const u=_athMM(120,74);
           const pl=plancherEffectif(u);
-          const parMM=Math.round(KCAL_PLANCHER_PAR_KG_MM*masseMaigreDuBilan(u));
+          // 30/09/2026 : la règle de la masse maigre compte aussi la dépense
+          // d'entraînement (N2.9) ; chiffrée sur les 120 kg de la fixture, elle
+          // monte, et c'est sous CETTE règle que le plafond doit passer.
+          const parMM=Math.round(KCAL_PLANCHER_PAR_KG_MM*masseMaigreDuBilan(u))+(pl.depenseExercice||0);
           if(pl.kcal>=parMM) return _echec(pl.kcal+' ne descend pas sous '+parMM);
           const dep=Math.round(mbKatch(masseMaigreDuBilan(u))*NEAT_BASE)
             +kcalSportParJour(u).jour;
@@ -74104,17 +74192,23 @@ async function testExercices(){
           if(!b||b.source===null) return _echec('aucune proposition');
           // Le cycle glucidique décale ON et OFF autour du total : leur moyenne
           // reste la dépense, aux arrondis près.
-          const moy=(b.on.kcal+b.off.kcal)/2;
+          // 30/09/2026 : la moyenne est celle de la SEMAINE (b.moyenne = (nOn × ON +
+          // nOff × OFF) / 7). Celle des deux journées ne vaut la cible qu'à 3,5 créneaux.
+          const moy=b.moyenne;
           return Math.abs(moy-b.depense)<=6
             ?true:_echec('moyenne '+moy+' contre dépense '+b.depense);})());
         ok('Critère : en maintien, le total vaut la dépense',(()=>{
           const b=besoinsProposes(_ath(62,'maintien'));
-          const moy=(b.on.kcal+b.off.kcal)/2;
+          // 30/09/2026 : la moyenne est celle de la SEMAINE (b.moyenne = (nOn × ON +
+          // nOff × OFF) / 7). Celle des deux journées ne vaut la cible qu'à 3,5 créneaux.
+          const moy=b.moyenne;
           return Math.abs(moy-b.depense)<=6
             ?true:_echec('moyenne '+moy+' contre dépense '+b.depense);})());
         ok('En recomposition aussi, le delta est nul',(()=>{
           const b=besoinsProposes(_ath(62,'recomp'));
-          const moy=(b.on.kcal+b.off.kcal)/2;
+          // 30/09/2026 : la moyenne est celle de la SEMAINE (b.moyenne = (nOn × ON +
+          // nOff × OFF) / 7). Celle des deux journées ne vaut la cible qu'à 3,5 créneaux.
+          const moy=b.moyenne;
           return Math.abs(moy-b.depense)<=6
             ?true:_echec('moyenne '+moy+' contre dépense '+b.depense);})());
 
@@ -74145,7 +74239,7 @@ async function testExercices(){
           const b=besoinsProposes(u,_vm('seche'));
           if(b.delta!==deltaKcalJour(cibleVitesseMilieu('seche'),62))
             return _echec('le plafond mord : fixture à revoir ('+b.delta+')');
-          const moy=Math.round((b.on.kcal+b.off.kcal)/2);
+          const moy=Math.round(b.moyenne);
           return moy>=1550&&moy<=1700?true:_echec('moyenne '+moy+' pour '+b.depense);})());
         ok('Sans métier reconnu, c\'est le plafond de déficit qui décide',(()=>{
           // Le pendant honnête du test ci-dessus : à 1837 de dépense, viser
@@ -74154,12 +74248,12 @@ async function testExercices(){
           // 29/09/2026 — vitesse explicite : voir le test ci-dessus.
           const b=besoinsProposes(_ath(62,'seche'),_vm('seche'));
           const plancher=Math.round(b.depense*(1-DEFICIT_MAX_PART));
-          const moy=Math.round((b.on.kcal+b.off.kcal)/2);
+          const moy=Math.round(b.moyenne);
           return moy>=plancher-2
             ?true:_echec('moyenne '+moy+' sous le plafond de déficit '+plancher);})());
         ok('Le jour OFF reste sous la moyenne, cycle glucidique oblige',(()=>{
           const b=besoinsProposes(_ath(62,'seche'));
-          const moy=(b.on.kcal+b.off.kcal)/2;
+          const moy=b.moyenne;
           return b.off.kcal<moy&&b.on.kcal>moy
             ?true:_echec('ON '+b.on.kcal+' OFF '+b.off.kcal+' moyenne '+moy);})());
         // Le cahier des charges annonçait un surplus de 350 à 450 kcal. Sa PROPRE
@@ -74170,7 +74264,7 @@ async function testExercices(){
           // 29/09/2026 — vitesse explicite : sans elle, c'est le coefficient
           // d'objectif (1,10) qui decide depuis le 07/09/2026, pas la formule.
           const b=besoinsProposes(_ath(80,'masse','H',180,29),_vm('masse'));
-          const moy=(b.on.kcal+b.off.kcal)/2;
+          const moy=b.moyenne;
           const sur=Math.round(moy-b.depense);
           const attendu=deltaKcalJour(cibleVitesseMilieu('masse'),80);
           return Math.abs(sur-attendu)<=3
@@ -74182,7 +74276,7 @@ async function testExercices(){
           for(const u of cas){
             // 29/09/2026 — par la vitesse : le coefficient ne passe pas les plafonds.
             const b=besoinsProposes(u,_vm('seche'));
-            const moy=(b.on.kcal+b.off.kcal)/2;
+            const moy=b.moyenne;
             if(moy<b.depense*(1-DEFICIT_MAX_PART)-8)
               fautifs.push(Math.round(moy)+'/'+b.depense);
           }
@@ -74206,7 +74300,7 @@ async function testExercices(){
           const brut=deltaKcalJour(cibleVitesseMilieu('masse'),120);
           const plaf=Math.round(b.depense*SURPLUS_MAX_PART);
           if(!(brut>plaf)) return _echec('fixture inutile : delta brut '+brut+' sous le plafond '+plaf);
-          const sur=Math.round((b.on.kcal+b.off.kcal)/2-b.depense);
+          const sur=Math.round(b.moyenne-b.depense);
           return Math.abs(sur-plaf)<=8
             ?true:_echec('surplus '+sur+' au lieu du plafond '+plaf);})());
         ok('Le surplus ne dépasse jamais 15 % de la dépense',(()=>{
@@ -74215,7 +74309,7 @@ async function testExercices(){
           const fautifs=[];
           for(const u of cas){
             const b=besoinsProposes(u,_vm('masse'));
-            const moy=(b.on.kcal+b.off.kcal)/2;
+            const moy=b.moyenne;
             if(moy>b.depense*(1+SURPLUS_MAX_PART)+8) fautifs.push(Math.round(moy)+'/'+b.depense);
           }
           return fautifs.length?_echec(fautifs.join(' ')):true;})());
@@ -74276,7 +74370,7 @@ async function testExercices(){
           const m=l.match(/visant (-[\d,]+) %/);
           if(!m) return _echec('ligne absente : '+l);
           const annonce=parseFloat(m[1].replace(',','.'));
-          const reel=((b.on.kcal+b.off.kcal)/2-b.depense)*7/(120*KCAL_PAR_KG_CORPS)*100;
+          const reel=(b.moyenne-b.depense)*7/(120*KCAL_PAR_KG_CORPS)*100;
           return Math.abs(annonce-reel)<0.08
             ?true:_echec('annoncé '+annonce+' contre réel '+Math.round(reel*100)/100);})());
 

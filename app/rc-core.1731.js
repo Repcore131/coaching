@@ -73643,11 +73643,19 @@ function _bSportsListe(id){
   const l=bilData[id];
   return Array.isArray(l)?l:[];
 }
+// Le poids qui chiffre les sports du bilan : celui saisi dans ce bilan,
+// sinon le poids connu de la personne, sinon 75 kg.
+function _bSportsPoids(){
+  const v=parseFloat(String((bilData&&(bilData['bil-weight']||bilData['deb-weight']))||'').replace(',','.'));
+  if(v>0) return v;
+  try{ return poidsSport(currentUser); }catch(e){ return SPORT_POIDS_DEFAUT; }
+}
 function bSports(id){
   const l=_bSportsListe(id);
-  const noms=Object.keys(SPORTS_KCAL_H);
+  const _kg=_bSportsPoids();
+  const noms=Object.keys(SPORTS_MET);
   const ligne=(e,i)=>{
-    const kh=kcalHeureSport(e.sport,e.intensite);
+    const kh=kcalHeureSport(e.sport,e.intensite,_kg);
     return `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
       <select onchange="_bSportSet('${id}',${i},'sport',this.value)"
         style="flex:2;min-width:0;padding:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
@@ -73665,7 +73673,7 @@ function bSports(id){
     </div>
     ${kh!=null&&Number(e.heures)>0?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin:-4px 0 8px 2px">${kh} kcal/h × ${String(e.heures).replace('.',',')} h = ${Math.round(kh*Number(e.heures))} kcal par semaine</div>`:''}`;
   };
-  const total=depenseSportsParJour(l);
+  const total=depenseSportsParJour(l,_kg);
   return `<div id="${id}-zone">
     ${l.map(ligne).join('')}
     <button type="button" onclick="_bSportAjouter('${id}')" class="btn btn-outline btn-sm"
@@ -73712,7 +73720,7 @@ function _bSportSet(id,i,champ,val){
   else{
     const z=document.getElementById(id+'-zone');
     if(z){
-      const t=depenseSportsParJour(l);
+      const t=depenseSportsParJour(l,_bSportsPoids());
       // Mise à jour du seul total, sans toucher aux champs de saisie.
       const tot=z.querySelector('[data-sports-total]');
       if(tot) tot.textContent=t.semaine>0?(t.semaine+' kcal par semaine, soit '+t.jour+' kcal par jour ajoutés à ta dépense.'):'';
@@ -93100,7 +93108,7 @@ function _cplHtmlApercu(){
   // la meme journee.
   const _cycA=(function(){ try{ return dieteCyclee(c); }catch(e){ return false; } })();
   const bandeauCycle=_cycA
-    ? `<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-bottom:8px">Diète cyclée : ce sont les chiffres du <b>jour d’entraînement</b>, glucides +${Math.round(CYCLE_GLUC*100)} %. Les jours de repos, ils descendent d’autant. Le total « avant cyclage » est celui de sa fiche.</div>`
+    ? `<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-bottom:8px">Diète cyclée : ce sont les chiffres du <b>jour d’entraînement</b>, glucides +${Math.round(CYCLE_GLUC*100)} %. Les jours de repos, ils descendent de ${cycleGlucides(c,100).pctOff} %, pour que la semaine garde la cible. Le total « avant cyclage » est celui de sa fiche.</div>`
     : '';
   // ⚠ LE BANDEAU DE PALIER A ETE REMPLACE le 08/09/2026. Il expliquait un
   // multiplicateur qui n'existe plus ; ce qui compte maintenant, c'est de dire
@@ -98645,79 +98653,100 @@ function loadNutrition(dateAff,dateCaff){
 // d'une même personne varie d'un jour à l'autre, et deux tables publiées ne
 // donnent jamais les mêmes chiffres. Point de départ ajustable, jamais verdict.
 
-// ── Sports : dépense en kcal PAR HEURE, par intensité ──────────────────────
-// Les onze premières lignes sont la table du coach, reprise sans y toucher.
-// Celles marquées « ajout » la complètent, calées sur la même échelle — c'est
-// mon estimation, à corriger si elle ne colle pas à son expérience.
+// ── Sports : des MET par intensité, et le POIDS de l'athlète ───────────────
+// ⚠ DES MET, PLUS DES kcal ABSOLUES (30/09/2026). L'ancienne table donnait
+//   la même dépense à une athlète de 55 kg et à un athlète de 100 kg : une
+//   heure de musculation modérée valait 350 kcal pour les deux. La dépense
+//   d'un effort est proportionnelle à la masse déplacée ; le Compendium of
+//   Physical Activities (Ainsworth et al., 2011) la tabule en MET, 1 MET
+//   valant environ 1 kcal par kilo et par heure.
 //
-// ATTENTION : ce sont des kcal ABSOLUES par heure, pas des MET. Elles ne
-// varient donc pas avec le poids de l'athlète. C'est la table du coach, et
-// l'introduire telle quelle vaut mieux que de la « corriger » dans son dos.
+// MET NETS : kcal/h = (MET − 1) × poids. Le « 1 » est le métabolisme de
+// repos de cette heure-là, que le NAF compte déjà (métabolisme × NAF couvre
+// les 24 heures). Le laisser compterait deux fois la même heure.
+//
+// Les valeurs sont celles du Compendium 2011 (codes 01xxx à 21xxx), à
+// l'intensité la plus proche ; quand le Compendium n'a qu'une ou deux
+// lignes pour un sport (golf, surf, ping-pong…), la troisième est interpolée.
+// Ce sont des repères, pas des mesures : la même heure varie d'une personne
+// et d'une séance à l'autre.
 const SPORT_INTENSITES=Object.freeze([
   Object.freeze({cle:'faible', lib:'Faible'}),
   Object.freeze({cle:'moderee',lib:'Modérée'}),
   Object.freeze({cle:'haute',  lib:'Haute'})
 ]);
-const SPORTS_KCAL_H=Object.freeze({
-  'Marche':          Object.freeze([200,280,370]),
-  'Course à pied':   Object.freeze([400,550,700]),
-  'Vélo':            Object.freeze([300,450,600]),
-  'Natation':        Object.freeze([300,500,700]),
-  'Tennis':          Object.freeze([350,450,600]),
-  'Football':        Object.freeze([300,500,700]),
-  'Musculation':     Object.freeze([200,350,500]),
-  'Yoga':            Object.freeze([180,250,300]),
-  'Ski':             Object.freeze([350,500,700]),
-  'Boxe':            Object.freeze([400,600,800]),
-  'Danse':           Object.freeze([200,300,500]),
-  // ── ajouts, calés sur l'échelle ci-dessus ──
-  'Randonnée':       Object.freeze([250,350,450]),
-  'Trail':           Object.freeze([450,600,750]),
-  'Corde à sauter':  Object.freeze([450,650,850]),
-  'Rameur':          Object.freeze([350,550,750]),
-  'Vélo elliptique': Object.freeze([300,450,600]),
-  'Spinning':        Object.freeze([400,600,750]),
-  'CrossFit':        Object.freeze([400,600,800]),
-  'HIIT':            Object.freeze([400,600,800]),
-  'Escalade':        Object.freeze([350,500,650]),
-  'Basket':          Object.freeze([350,500,650]),
-  'Handball':        Object.freeze([350,550,700]),
-  'Rugby':           Object.freeze([350,550,750]),
-  'Volley':          Object.freeze([250,350,500]),
-  'Badminton':       Object.freeze([300,450,600]),
-  'Padel':           Object.freeze([300,450,600]),
-  'Squash':          Object.freeze([450,600,800]),
-  'Arts martiaux':   Object.freeze([350,550,750]),
-  'Judo':            Object.freeze([350,550,750]),
-  'Pilates':         Object.freeze([180,250,320]),
-  'Stretching':      Object.freeze([150,200,250]),
-  'Aquagym':         Object.freeze([250,350,450]),
-  'Équitation':      Object.freeze([250,350,450]),
-  'Golf':            Object.freeze([200,280,350]),
-  'Roller':          Object.freeze([300,450,600]),
-  'Patinage':        Object.freeze([300,450,600]),
-  'Surf':            Object.freeze([250,400,550]),
-  'Kayak':           Object.freeze([300,450,600]),
-  'Ping-pong':       Object.freeze([200,300,400]),
-  'Athlétisme':      Object.freeze([400,550,700]),
-  'Gymnastique':     Object.freeze([300,450,600]),
-  'Aucun':           Object.freeze([0,0,0])
+// Sans poids connu, on compte sur 75 kg, et c'est dit (sportPoidsDefaut).
+const SPORT_POIDS_DEFAUT=75;
+const SPORTS_MET=Object.freeze({
+  'Marche':          Object.freeze([2.8,3.5,5.0]),
+  'Course à pied':   Object.freeze([7.0,9.8,11.5]),
+  'Vélo':            Object.freeze([4.0,6.8,10.0]),
+  'Natation':        Object.freeze([5.8,8.3,9.8]),
+  'Tennis':          Object.freeze([5.0,7.3,8.0]),
+  'Football':        Object.freeze([7.0,8.0,10.0]),
+  'Musculation':     Object.freeze([3.5,5.0,6.0]),
+  'Yoga':            Object.freeze([2.5,3.0,4.0]),
+  'Ski':             Object.freeze([5.3,6.8,9.0]),
+  'Boxe':            Object.freeze([5.5,7.8,12.8]),
+  'Danse':           Object.freeze([3.0,5.0,7.3]),
+  'Randonnée':       Object.freeze([5.3,6.0,7.8]),
+  'Trail':           Object.freeze([8.0,9.0,11.0]),
+  'Corde à sauter':  Object.freeze([8.8,11.8,12.3]),
+  'Rameur':          Object.freeze([4.8,7.0,8.5]),
+  'Vélo elliptique': Object.freeze([4.0,5.0,6.5]),
+  'Spinning':        Object.freeze([6.8,8.5,11.0]),
+  'CrossFit':        Object.freeze([5.0,8.0,10.0]),
+  'HIIT':            Object.freeze([5.0,8.0,10.0]),
+  'Escalade':        Object.freeze([5.8,7.3,8.0]),
+  'Basket':          Object.freeze([4.5,6.5,8.0]),
+  'Handball':        Object.freeze([6.0,8.0,12.0]),
+  'Rugby':           Object.freeze([6.3,7.3,8.3]),
+  'Volley':          Object.freeze([3.0,4.0,6.0]),
+  'Badminton':       Object.freeze([4.5,5.5,7.0]),
+  'Padel':           Object.freeze([4.5,6.0,7.0]),
+  'Squash':          Object.freeze([7.3,9.0,12.0]),
+  'Arts martiaux':   Object.freeze([5.3,7.8,10.3]),
+  'Judo':            Object.freeze([5.3,7.8,10.3]),
+  'Pilates':         Object.freeze([2.8,3.0,3.8]),
+  'Stretching':      Object.freeze([2.3,2.5,3.0]),
+  'Aquagym':         Object.freeze([3.5,5.3,6.0]),
+  'Équitation':      Object.freeze([3.8,5.8,7.3]),
+  'Golf':            Object.freeze([3.5,4.3,4.8]),
+  'Roller':          Object.freeze([7.0,9.8,12.3]),
+  'Patinage':        Object.freeze([5.5,7.0,9.0]),
+  'Surf':            Object.freeze([3.0,4.0,5.0]),
+  'Kayak':           Object.freeze([3.5,5.0,8.0]),
+  'Ping-pong':       Object.freeze([3.5,4.0,5.0]),
+  'Athlétisme':      Object.freeze([6.0,8.0,10.0]),
+  'Gymnastique':     Object.freeze([3.8,5.0,6.5]),
+  // 1 MET = le repos : zéro kcal nette.
+  'Aucun':           Object.freeze([1,1,1])
 });
-function kcalHeureSport(sport,intensite){
-  const t=SPORTS_KCAL_H[sport];
+// PURE. kcal NETTES par heure : (MET − 1) × poids, 75 kg sans poids connu.
+function kcalHeureSport(sport,intensite,poids){
+  const t=SPORTS_MET[sport];
   if(!t) return null;
   const i=SPORT_INTENSITES.findIndex(x=>x.cle===intensite);
-  return t[i<0?1:i];
+  const met=t[i<0?1:i];
+  const kg=Number(poids)>0?Number(poids):SPORT_POIDS_DEFAUT;
+  return Math.round(Math.max(0,met-1)*kg);
+}
+// Le poids qui chiffre le sport : le poids nutritionnel commun (dernière
+// pesée, sinon poids d'inscription), 75 kg à défaut.
+function poidsSport(user){
+  let kg=null;
+  try{ kg=poidsNutritionnel(user).kg; }catch(e){ kg=null; }
+  return (Number(kg)>0)?Number(kg):SPORT_POIDS_DEFAUT;
 }
 // Dépense sportive rapportée au JOUR : le coach raisonne en heures par
 // semaine, le calcul en kcal par jour. On divise donc par sept, comme demandé.
-function depenseSportsParJour(liste){
+function depenseSportsParJour(liste,poids){
   const l=Array.isArray(liste)?liste:[];
   let semaine=0; const detail=[];
   for(const e of l){
     if(!e||!e.sport) continue;
     const h=Number(e.heures);
-    const kh=kcalHeureSport(e.sport,e.intensite);
+    const kh=kcalHeureSport(e.sport,e.intensite,poids);
     if(kh==null||!(h>0)) continue;
     semaine+=kh*h;
     detail.push(e.sport.toLowerCase()+' '+String(h).replace('.',',')+' h');
@@ -99017,22 +99046,25 @@ function _sportsCoach(user){
       intensite:SPORT_INTENSITES.some(x=>x.cle===e.intensite)?e.intensite:'moderee'}));
 }
 function kcalSportParJour(user){
+  // Le poids de l'athlète chiffre chaque heure (MET nets).
+  const _kg=poidsSport(user);
+  const _kgDefaut=!(function(){ try{ return poidsNutritionnel(user).kg>0; }catch(e){ return false; } })();
   // ── LA LISTE DU COACH, SI ELLE EXISTE ──
   const _sc=_sportsCoach(user);
   if(_sc){
     const connus=[],inconnus=[];
     for(const e of _sc){
-      if(kcalHeureSport(e.sport,e.intensite)==null){ if(e.heures>0) inconnus.push(e.sport); continue; }
+      if(kcalHeureSport(e.sport,e.intensite,_kg)==null){ if(e.heures>0) inconnus.push(e.sport); continue; }
       connus.push(e);
     }
-    const tout=depenseSportsParJour(connus);
-    const dM=depenseSportsParJour(connus.filter(e=>_estMusculation(e.sport)));
-    const dA=depenseSportsParJour(connus.filter(e=>!_estMusculation(e.sport)));
+    const tout=depenseSportsParJour(connus,_kg);
+    const dM=depenseSportsParJour(connus.filter(e=>_estMusculation(e.sport)),_kg);
+    const dA=depenseSportsParJour(connus.filter(e=>!_estMusculation(e.sport)),_kg);
     const cr=((user&&user.sessions_config)||[]).filter(x=>x&&x.active).length;
     const du=_dureeSeanceMin(user);
-    return {jour:Math.round(tout.semaine/7),semaine:tout.semaine,source:'coach',doublon:false,inconnus,
+    return {jour:Math.round(tout.semaine/7),semaine:tout.semaine,source:'coach',doublon:false,inconnus,poids:_kg,poidsDefaut:_kgDefaut,
       detailMuscu:dM.detail,creneaux:cr,dureeMin:du.min,dureeSource:du.source,dureeBrut:du.brut,
-      semaineMuscu:dM.semaine,semaineCreneaux:Math.round(cr*(du.min/60)*kcalHeureSport('Musculation','moderee')),
+      semaineMuscu:dM.semaine,semaineCreneaux:Math.round(cr*(du.min/60)*kcalHeureSport('Musculation','moderee',_kg)),
       semaineDeclaree:dM.semaine,detail:dA.detail,autres:dA.semaine,
       lignes:_sc.map(e=>Object.assign({},e,{origine:'coach'}))};
   }
@@ -99047,15 +99079,15 @@ function kcalSportParJour(user){
     if(_estMusculation(e.sport)){ muscu.push({...e,sport:'Musculation'}); continue; }
     // Un sport absent du barème n'est pas compté — mais il est NOMMÉ. Le
     // passer sous silence laisserait croire qu'il a été pris en compte.
-    if(kcalHeureSport(e.sport,e.intensite)==null&&Number(e.heures)>0){
+    if(kcalHeureSport(e.sport,e.intensite,_kg)==null&&Number(e.heures)>0){
       inconnus.push(String(e.sport)); continue; }
     autres.push(e);
   }
-  const dAutres=depenseSportsParJour(autres);
-  const dMuscu=depenseSportsParJour(muscu);
+  const dAutres=depenseSportsParJour(autres,_kg);
+  const dMuscu=depenseSportsParJour(muscu,_kg);
   const creneaux=((user&&user.sessions_config)||[]).filter(x=>x&&x.active).length;
   const duree=_dureeSeanceMin(user);
-  const kh=kcalHeureSport('Musculation','moderee');
+  const kh=kcalHeureSport('Musculation','moderee',_kg);
   const semCreneaux=Math.round(creneaux*(duree.min/60)*kh);
   const doublon=muscu.length>0&&creneaux>0;
   let semMuscu,source;
@@ -99077,7 +99109,7 @@ function kcalSportParJour(user){
     lignes.push({sport:String(e.sport),heures:Number(e.heures),intensite:e.intensite||'moderee',origine:'bilan'});
   for(const e of liste) if(e&&e.sport&&inconnus.indexOf(String(e.sport))>=0&&Number(e.heures)>0)
     lignes.push({sport:String(e.sport),heures:Number(e.heures),intensite:e.intensite||'moderee',origine:'bilan'});
-  return {jour:Math.round(semaine/7),semaine,source,doublon,inconnus,
+  return {jour:Math.round(semaine/7),semaine,source,doublon,inconnus,poids:_kg,poidsDefaut:_kgDefaut,
     detailMuscu:dMuscu.detail,
     creneaux,dureeMin:duree.min,dureeSource:duree.source,dureeBrut:duree.brut,
     semaineMuscu:semMuscu,semaineCreneaux:semCreneaux,semaineDeclaree:dMuscu.semaine,
@@ -99279,7 +99311,24 @@ function sopkApplicable(user){
   return aSOPK(user)&&isFemale((user&&(user._evol_gender||user.gender))||'');
 }
 const FIBRES_PAR_1000=14;
-const CYCLE_GLUC=0.15;           // jour ON : +15 % de glucides, OFF : −15 %
+const CYCLE_GLUC=0.15;           // jour ON : +15 % de glucides ; OFF : ce qui garde la moyenne
+// ⚠ LA SEMAINE, PAS LA PAIRE DE JOURS (30/09/2026). +15 % / −15 % ne tombe
+//   juste que pour 3,5 jours d'entraînement sur 7. Avec 6 créneaux, six jours à
+//   +15 % et un seul à −15 % servaient 11 % de glucides de trop sur la semaine.
+//   Les jours ON gardent +CYCLE_GLUC ; les jours OFF retirent CYCLE_GLUC ×
+//   nOn / nOff, pour que (nOn × gOn + nOff × gOff) / 7 = g. nOn = créneaux
+//   actifs (sessions_config) ; à 0 ou à 7, il n'y a pas de cycle.
+// PURE.
+function cycleGlucides(user,g){
+  const sc=(user&&user.sessions_config)||[];
+  const l=Array.isArray(sc)?sc:(typeof sc==='object'?Object.values(sc):[]);
+  const nOn=Math.min(7,l.filter(x=>x&&x.active).length), nOff=7-nOn;
+  const G=Number(g)||0;
+  if(nOn<=0||nOff<=0) return {cycle:false,nOn,nOff,gOn:Math.round(G),gOff:Math.round(G),pctOn:0,pctOff:0};
+  const xOff=CYCLE_GLUC*nOn/nOff;
+  return {cycle:true,nOn,nOff,gOn:Math.round(G*(1+CYCLE_GLUC)),gOff:Math.round(G*(1-xOff)),
+    pctOn:Math.round(CYCLE_GLUC*100),pctOff:Math.round(xOff*100)};
+}
 
 // ── Point de départ calorique, dérivé de la vitesse visée ───────────────────
 // Comme REPERES_VOLUME, ces trois nombres sont des repères de
@@ -99564,6 +99613,18 @@ function nafDepuisReponse(txt){
   return NAF_ECHELLE.filter(x=>
     x.cle===t||nrm(x.lib)===t)[0]||null;
 }
+// PURE. LE NIVEAU DECLARE CONTREDIT LE METIER (30/09/2026). « Actif » ou
+// « Très actif » coché au bilan par un athlete dont le metier reconnu est
+// assis : le plus souvent, il a compte ses seances dans son activite de la
+// journee — et le sport, compte a part, l'est alors deux fois. On ne corrige
+// rien (sa reponse passe devant le metier) : on le dit au coach.
+const NAF_ALERTE_METIER='niveau déclaré supérieur à celui du métier : vérifier qu’il ne compte pas le sport';
+function nafIncoherent(user){
+  const u=_dossier(user);
+  const dec=nafDepuisReponse(_dernierChamp(u,'deb-naf'));
+  if(!dec||(dec.cle!=='actif'&&dec.cle!=='tres')) return false;
+  return niveauMetier(_dernierChamp(u,'deb-job'))==='sedentaire';
+}
 // PURE. Le niveau retenu et d'ou il vient : le reglage explicite du coach
 // d'abord, la profession ensuite, et le sedentaire en dernier recours.
 function nafRetenu(user,opts){
@@ -99797,7 +99858,9 @@ function cibleTableur(user,opts){
     naf:naf.n, nafSource:naf.source, metier:naf.metier||null,
     horsSport, sportJour:sport.jour, sportSemaine:sport.semaine,
     sportSource:sport.source, creneaux:sport.creneaux, dureeMin:sport.dureeMin,
-    sportLignes:sport.lignes||[],
+    sportLignes:sport.lignes||[], sportPoids:sport.poids, sportPoidsDefaut:!!sport.poidsDefaut,
+    // Le niveau déclaré dépasse celui du métier : le sport y est-il compté ?
+    nafAlerte:naf.source==='declare'&&nafIncoherent(u),
     avecSport,
     // `sousPlancher` DIT que les chiffres passent dessous — avant, il disait
     // qu'ils avaient ete remontes. Meme nom, sens inverse, et c'est celui-la
@@ -99913,6 +99976,11 @@ function besoinsProposes(user,opts){
   const _dm=sport.dureeMin;
   const _dTxt=_dm%60===0?(_dm/60)+' h':(_dm>60?Math.floor(_dm/60)+' h '+(_dm%60):_dm+' min');
   const _jMuscu=Math.round(sport.semaineMuscu/7);
+  if(_naf.source==='declare'&&nafIncoherent(user)) hypotheses.push(NAF_ALERTE_METIER);
+  // Le poids qui chiffre le sport (MET nets).
+  if(sport.semaine>0)
+    hypotheses.push('sport chiffré en MET nets sur '+String(Math.round(sport.poids*10)/10).replace('.',',')+' kg'
+      +(sport.poidsDefaut?' (poids inconnu : valeur par défaut)':''));
   if(sport.source==='coach')
     hypotheses.push('sports réglés à la main par le coach → '+sport.semaine
       +' kcal par semaine, soit '+sport.jour+' par jour');
@@ -100022,7 +100090,10 @@ function besoinsProposes(user,opts){
   { const _lr=libPoidsMacros(_pm); if(_lr) hypotheses.push(_lr); }
   if(r.depasse>0) hypotheses.push('protéines et lipides dépassent la cible de '+r.depasse+' kcal');
   if(r.glucidesBas) hypotheses.push('glucides très bas : performance en séance compromise');
-  const cycle=o.cycle!==false;
+  // Le cycle se règle sur le nombre de créneaux : sans créneau, ou avec sept,
+  // il n'y a pas de jour de repos à opposer (cycleGlucides).
+  const _cg=cycleGlucides(user,r.g);
+  const cycle=o.cycle!==false&&_cg.cycle;
   // Les journées sont calculées AVANT d'annoncer quoi que ce soit : le
   // plancher peut les relever, et c'est le total servi qui décide de la
   // vitesse réelle.
@@ -100045,7 +100116,7 @@ function besoinsProposes(user,opts){
     // supplément est le même des deux côtés. Le total servi monte d'autant,
     // mais c'est déjà ce que la ligne « kcal servies » annonce, et le
     // commentaire de deltaServi juste en dessous le dit depuis toujours.
-    const gOn=Math.round(r.g*(1+CYCLE_GLUC)), gOff=Math.round(r.g*(1-CYCLE_GLUC));
+    const gOn=_cg.gOn, gOff=_cg.gOff;
     const offRel=_relevePlancher(_bloc(r.p,r.l,gOff),user,_appl);
     const lift=offRel.g-gOff;                 // 0 quand le plancher ne mord pas
     off=offRel;
@@ -100057,7 +100128,8 @@ function besoinsProposes(user,opts){
   // serait un mensonge à l'athlète. Le défaut existait déjà ; ce lot fait
   // baisser les dépenses, donc mordre le plancher bien plus souvent, et il
   // aurait multiplié l'écart par dix.
-  const deltaServi=Math.round((on.kcal+off.kcal)/2)-depense;
+  // La moyenne de la SEMAINE : nOn jours ON, nOff jours OFF.
+  const deltaServi=(cycle?Math.round((_cg.nOn*on.kcal+_cg.nOff*off.kcal)/7):on.kcal)-depense;
   // La LIGNE dépend de l'intention (deltaRetenu), ses CHIFFRES du total servi.
   // Sans phase déclarée l'intention est nulle, et l'arrondi du bloc suffisait à
   // faire apparaître un « surplus de 1 kcal » qui ne veut rien dire.
@@ -100071,13 +100143,18 @@ function besoinsProposes(user,opts){
       +' % de poids par semaine');
   }
   hypotheses.push(cycle
-    ?'glucides +15 % les jours d\'entraînement, −15 % les jours de repos'
-    :'même total tous les jours');
+    ?'glucides +'+_cg.pctOn+' % les jours d\'entraînement ('+_cg.nOn+'), −'+_cg.pctOff
+      +' % les jours de repos ('+_cg.nOff+') : la semaine garde la cible'
+    :(o.cycle!==false&&!_cg.cycle
+      ?(_cg.nOn>=7?'sept créneaux sur sept':'aucun créneau actif')+' : pas de cycle, même total tous les jours'
+      :'même total tous les jours'));
   // delta reste le delta de CIBLE, avant plancher : c'est lui qui décide si
   // l'athlète pose un déficit d'un clic, et le garde-fou TCA s'y adosse.
   // Le remplacer par deltaServi ouvrirait ce chemin dès que le plancher
   // ramène la journée au niveau de la dépense.
-  return {poidsRef:_pm.kg,poidsRefObj:_pm,glucidesBas:r.glucidesBas,depasse:r.depasse,source,on,off,act,depense,mb,gParKg,modele,cycle,delta:deltaRetenu,
+  // La moyenne de la SEMAINE servie (nOn jours ON, nOff jours OFF), non arrondie.
+  return {moyenne:cycle?(_cg.nOn*on.kcal+_cg.nOff*off.kcal)/7:on.kcal,nOn:_cg.nOn,nOff:_cg.nOff,
+    poidsRef:_pm.kg,poidsRefObj:_pm,glucidesBas:r.glucidesBas,depasse:r.depasse,source,on,off,act,depense,mb,gParKg,modele,cycle,delta:deltaRetenu,
     poids,deltaServi,hypotheses};
 }
 // ── Réglages de la proposition, côté coach ─────────────────────────────────
@@ -101262,7 +101339,7 @@ function majSportTableur(i,champ,val){
       if(!SPORT_INTENSITES.some(x=>x.cle===val)) return false;
       e.intensite=val;
     } else if(champ==='sport'){
-      if(!SPORTS_KCAL_H[val]||val==='Aucun') return false;
+      if(!SPORTS_MET[val]||val==='Aucun') return false;
       e.sport=val;
     } else return false;
   },'Sport modifié');
@@ -101486,10 +101563,17 @@ function _tbJournees(user,t,cyclee,appliquer){
     const j=_relevePlancher(_bloc(t.p,t.l,t.g),user,ap);
     return {on:j,off:j};
   }
-  const gOn=Math.round(t.g*(1+CYCLE_GLUC)), gOff=Math.round(t.g*(1-CYCLE_GLUC));
+  // Sur la SEMAINE (cycleGlucides) : sans créneau ou avec sept, pas de cycle.
+  const cg=cycleGlucides(user,t.g);
+  if(!cg.cycle){
+    const j=_relevePlancher(_bloc(t.p,t.l,t.g),user,ap);
+    return {on:j,off:j,cycle:false,nOn:cg.nOn,nOff:cg.nOff};
+  }
+  const gOn=cg.gOn, gOff=cg.gOff;
   const offRel=_relevePlancher(_bloc(t.p,t.l,gOff),user,ap);
   const lift=offRel.g-gOff;
-  return {off:offRel,on:_relevePlancher(_bloc(t.p,t.l,gOn+lift),user,ap)};
+  return {off:offRel,on:_relevePlancher(_bloc(t.p,t.l,gOn+lift),user,ap),
+    cycle:true,nOn:cg.nOn,nOff:cg.nOff,pctOn:cg.pctOn,pctOff:cg.pctOff};
 }
 
 // ⚠ SANS CE BOUTON, LES TABLEAUX NE SONT QU'UN AFFICHAGE. Ils annoncaient
@@ -101642,7 +101726,7 @@ function _htmlTableauxTableur(c){
     +li('Niveau d’activité hors sport',
         sel('tbk-naf','naf',NAF_ECHELLE.map(x=>({v:x.cle,lib:x.lib+' (×'+String(x.f).replace('.',',')+')'})),
           t.naf.cle),
-        t.nafSource==='declare'?'déclaré par l’athlète dans son bilan'
+        t.nafSource==='declare'?('déclaré par l’athlète dans son bilan'+(t.nafAlerte?' ⚠ '+NAF_ALERTE_METIER:''))
         :t.nafSource==='metier'?('déduit de « '+t.metier+' »')
           :(t.nafSource==='reglage'?'choisi par toi'
             :(t.metier?('« '+t.metier+' » non reconnue, choisis le niveau')
@@ -101682,14 +101766,14 @@ function _htmlTableauxTableur(c){
   //   taisait les autres sports declares. Chaque sport a desormais sa ligne.
   const lignesSp=Array.isArray(t.sportLignes)?t.sportLignes:[];
   const spCoach=t.sportSource==='coach';
-  const optSport=cur=>Object.keys(SPORTS_KCAL_H).filter(k=>k!=='Aucun')
-    .concat(SPORTS_KCAL_H[cur]&&cur!=='Aucun'?[]:[cur])
+  const optSport=cur=>Object.keys(SPORTS_MET).filter(k=>k!=='Aucun')
+    .concat(SPORTS_MET[cur]&&cur!=='Aucun'?[]:[cur])
     .map(k=>'<option value="'+escapeHtml(k)+'"'+(k===cur?' selected':'')+'>'
-      +escapeHtml(k)+(SPORTS_KCAL_H[k]?'':' (hors barème)')+'</option>').join('');
+      +escapeHtml(k)+(SPORTS_MET[k]?'':' (hors barème)')+'</option>').join('');
   const optInt=cur=>SPORT_INTENSITES.map(x=>'<option value="'+x.cle+'"'+(x.cle===cur?' selected':'')+'>'
     +escapeHtml(x.lib)+'</option>').join('');
   hSport+=lignesSp.map((x,i)=>{
-    const kh=(function(){ try{ return kcalHeureSport(String(x.sport),x.intensite); }catch(e){ return null; } })();
+    const kh=(function(){ try{ return kcalHeureSport(String(x.sport),x.intensite,t.sportPoids); }catch(e){ return null; } })();
     const sem=(kh!=null)?Math.round(kh*Number(x.heures)):null;
     const aide=kh==null?'hors barème, choisis un sport'
       :(x.origine==='creneaux'?t.creneaux+' créneau'+(t.creneaux>1?'x':'')+' RepCore'
@@ -101800,8 +101884,8 @@ function _htmlTableauxTableur(c){
   let hJournees='<table class="tbk tbk-jr">'+_tbkCap('calendar','Journées',
       'Ajustement de la répartition des glucides')+'<tbody>'
     +li('Cycler les glucides',_optCyc,
-        'décale les glucides de ±'+Math.round(CYCLE_GLUC*100)
-        +' % entre jours d’entraînement et jours de repos',false,'refresh-cw')
+        '+'+Math.round(CYCLE_GLUC*100)
+        +' % de glucides les jours d’entraînement, les jours de repos compensent : la semaine garde la cible',false,'refresh-cw')
     +(function(){
       // ⚠ LA JOURNEE ECRITE, PAS LE TOTAL AVANT ARRONDI. Mesure au banc a deux
       //   appareils : le tableau annoncait 3 411 kcal et l'athlete en recevait
@@ -101815,10 +101899,12 @@ function _htmlTableauxTableur(c){
       if(!_cycT) return '';
       let j=null; try{ j=_tbJournees(c,t,true); }catch(e){ j=null; }
       if(!j) return '';
+      if(!j.cycle) return li('Journées','mêmes valeurs',
+          (j.nOn>=7?'sept créneaux sur sept':'aucun créneau actif')+' : pas de jour à opposer',false,'calendar');
       return li('Jour ON',_tbNb(j.on.kcal)+' kcal',
-          _tbNb(j.on.g)+' g de glucides, soit +'+Math.round(CYCLE_GLUC*100)+' %',true,'zap')
+          _tbNb(j.on.g)+' g de glucides, soit +'+j.pctOn+' % ('+j.nOn+' j)',true,'zap')
         +li('Jour OFF',_tbNb(j.off.kcal)+' kcal',
-          _tbNb(j.off.g)+' g de glucides, soit −'+Math.round(CYCLE_GLUC*100)+' %',true,'moon');
+          _tbNb(j.off.g)+' g de glucides, soit −'+j.pctOff+' % ('+j.nOff+' j)',true,'moon');
     })()
     +'</tbody></table>';
   // ── L'ASSEMBLAGE ────────────────────────────────────────────────────
