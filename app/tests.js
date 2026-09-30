@@ -38885,7 +38885,8 @@ async function testExercices(){
         const S=Node.DOCUMENT_POSITION_FOLLOWING;
         // Depuis le 30/09/2026, les deux cadres sont remontés sous « À traiter ».
         if(!(i.compareDocumentPosition(j)&S)) return _echec('« inactifs » ne précède pas « jamais démarré »');
-        if(!(j.compareDocumentPosition(v)&S)) return _echec('« jamais démarré » ne précède pas « en attente »');
+        // « Jamais démarré » est redescendu tout en bas, sous « en attente » (Kevin, 30/09/2026).
+        if(!(v.compareDocumentPosition(j)&S)) return _echec('« jamais démarré » n’est pas sous « en attente »');
         // Et il est rempli partout où « jamais démarré » l'est : un cadre qui
         // ne se rafraîchit qu'à l'ouverture afficherait un athlète relancé la
         // veille.
@@ -38906,11 +38907,11 @@ async function testExercices(){
           return _echec('« en attente » précède encore la liste d’athlètes');
         // ET RIEN NE LES SUIT : « en bas de la page », c'est la fin du panneau,
         // pas un rang intermédiaire entre deux boutons de navigation.
-        // « Jamais démarré » est remonté sous « À traiter » (30/09/2026) : « en attente » reste le dernier.
+        // « Jamais démarré » ferme la page, juste sous « en attente » (Kevin, 30/09/2026).
         const pere=i.parentElement;
         if(!pere) return _echec('« en attente » sans parent');
         const enf=Array.from(pere.children);
-        if(enf[enf.length-1]!==i)
+        if(enf[enf.length-1]!==j||enf[enf.length-2]!==i)
           return _echec('quelque chose les suit : '
             +enf.slice(-2).map(e=>e.id||e.tagName).join(', '));
         // LES IDENTIFIANTS N'ONT PAS BOUGÉ : _rendreJamaisDemarre et
@@ -50135,12 +50136,13 @@ async function testExercices(){
           if(String(f).indexOf('noterContact(')<0) return _echec(f.name+' ne note pas le contact');
         return true;
       } finally { ta.remove(); currentUser=sv.u; saveUser=sv.s; DB.set('users',sv.users||{}); }})());
-    ok('Les cadres « Inactifs » et « Jamais démarré » sont juste sous « À traiter », repliés à trois',(()=>{
+    ok('« Inactifs » juste sous « À traiter », « Jamais démarré » tout en bas, repliés à trois',(()=>{
       const td=document.getElementById('ch-todo'), i=document.getElementById('ch-inactifs'), j=document.getElementById('ch-jamais-demarre'), l=document.getElementById('ch-clients-list');
       if(!td||!i||!j||!l) return _echec('conteneur manquant');
       const S=Node.DOCUMENT_POSITION_FOLLOWING;
-      if(td.nextElementSibling!==i||i.nextElementSibling!==j) return _echec('pas juste sous « À traiter »');
-      if(!(j.compareDocumentPosition(l)&S)) return _echec('sous la liste');
+      if(td.nextElementSibling!==i) return _echec('« Inactifs » pas juste sous « À traiter »');
+      // « Jamais demarre » tout en bas de la page (Kevin, 30/09/2026).
+      if(j.parentElement.lastElementChild!==j||!(l.compareDocumentPosition(j)&S)) return _echec('« Jamais démarré » n’est pas tout en bas');
       const t=Date.now();
       const cinq=[1,2,3,4,5].map(n=>_ETQc({id:'in'+n,fname:'Dort'+n,sessions:[{date:t-40*_ETQ_J}]}));
       const d=document.createElement('div'); d.innerHTML=_htmlInactifs(cinq,t);
