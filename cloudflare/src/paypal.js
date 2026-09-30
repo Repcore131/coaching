@@ -244,6 +244,8 @@ export function creerPaypal(ctx) {
       ['users/' + cle + '/abonnement/resilieLe']: t, ['users/' + cle + '/updatedAt']: t,
       ['paypal_fins/' + cle]: Object.assign({}, finNotee || {}, { fin, type, le: t, role: role === 'coach' ? 'coach' : 'athlete', reserve: reserveComptee, abo: abo || null }) };
     if (role !== 'coach' && statut === 'AUTONOMIE_PREMIUM') maj['users/' + cle + '/accessExpiry'] = fin;
+    // Le coach garde son plan jusqu'à la fin payée : le registre le dit.
+    if (role === 'coach') { maj['coachs_registre/' + cle + '/actifJusqu'] = fin; maj['coachs_registre/' + cle + '/maj'] = t; }
     await db.ref().update(maj);
     if (role !== 'coach') await droitsJusqua(cle, abo, sub && OFFRES_PAYPAL[sub.plan_id], fin);
     return { fin, reserve: reserveComptee };
@@ -270,7 +272,16 @@ export function creerPaypal(ctx) {
       }
       if (role === 'coach') {
         // LE PALIER PAYÉ REVIENT : une résiliation l'avait refermé (fins()).
-        if (plan && plan.coachPlan) { maj[b + 'coachPlan'] = plan.coachPlan; maj[b + 'coachSubActive'] = true; }
+        if (plan && plan.coachPlan) {
+          maj[b + 'coachPlan'] = plan.coachPlan; maj[b + 'coachSubActive'] = true;
+          // LE REGISTRE DES COACHS (30/09/2026) : c'est lui que l'app lit, le
+          // dossier n'étant plus qu'un miroir. Actif jusqu'à la prochaine
+          // échéance PayPal, plus sept jours de grâce pour un webhook en retard.
+          const prochain = sub && sub.billing_info && Date.parse(sub.billing_info.next_billing_time || '');
+          maj['coachs_registre/' + cle + '/plan'] = plan.coachPlan;
+          maj['coachs_registre/' + cle + '/actifJusqu'] = Math.max(Number(prochain) || 0, t + MOIS_MS) + 7 * 86400000;
+          maj['coachs_registre/' + cle + '/maj'] = t;
+        }
       } else if (plan && plan.formule && statut !== 'COACHING_SUIVI') {
         maj[b + 'status'] = 'AUTONOMIE_PREMIUM';
         maj[b + 'abonnement/formule'] = plan.formule;
@@ -318,6 +329,10 @@ export function creerPaypal(ctx) {
       const t = now();
       await M.majDroits(cle, (x) => ({ palier: (x && x.palier) || 'aucun', echeance: Number(x && x.echeance) || 0, source: (x && x.source) || 'paypal',
         ultimeJusqu: Math.max(Number(x && x.ultimeJusqu) || 0, t) + PROGRAMME_MS }));
+      // LA TRACE DE L'ACHAT DANS LE DOSSIER, écrite ICI depuis le 30/09/2026 :
+      // programmesAchetes est gelé par les règles, l'app ne peut plus l'y poser.
+      await db.ref().update({ ['users/' + cle + '/programmesAchetes/' + prog]: { le: t, prixCts: Number(prixCts),
+        ordre: net(idCommande).slice(0, 64), ouvertJusqu: t + PROGRAMME_MS }, ['users/' + cle + '/updatedAt']: t });
     }
     await noterTransaction(ress.id, { cle, prog: prog || null, commande: idCommande, type: 'programme', premier,
       montant: centimes(ress.amount && ress.amount.value), devise: String((ress.amount && ress.amount.currency_code) || '') });
@@ -446,7 +461,11 @@ export function creerPaypal(ctx) {
     const [role, statut] = await Promise.all([lire(b + 'role'), lire(b + 'status')]);
     const maj = { [b + 'abonnement/statutPaypal']: 'REMBOURSE', [b + 'abonnement/finAccesPaypal']: t, [b + 'updatedAt']: t,
       ['paypal_fins/' + rec.cle]: null };
-    if (role === 'coach') { maj[b + 'coachPlan'] = 'libre'; maj[b + 'coachSubActive'] = false; }
+    if (role === 'coach') {
+      maj[b + 'coachPlan'] = 'libre'; maj[b + 'coachSubActive'] = false;
+      maj['coachs_registre/' + rec.cle + '/plan'] = 'libre'; maj['coachs_registre/' + rec.cle + '/actifJusqu'] = t;
+      maj['coachs_registre/' + rec.cle + '/maj'] = t;
+    }
     else if (statut === 'AUTONOMIE_PREMIUM') maj[b + 'accessExpiry'] = t;
     await db.ref().update(maj);
     if (role !== 'coach') await M.majDroits(rec.cle, (x) => ({ palier: (x && x.palier) || 'aucun', echeance: t, source: 'paypal', abo: rec.abo || (x && x.abo) || null }));
@@ -609,7 +628,8 @@ export function creerPaypal(ctx) {
     const role = f.role || 'coach';          // les entrées d'avant ne portaient que les coachs
     if (role === 'coach') {
       await db.ref().update({ ['users/' + cle + '/coachSubActive']: false, ['users/' + cle + '/coachPlan']: 'libre',
-        ['users/' + cle + '/updatedAt']: t });
+        ['users/' + cle + '/updatedAt']: t, ['coachs_registre/' + cle + '/plan']: 'libre',
+        ['coachs_registre/' + cle + '/actifJusqu']: t, ['coachs_registre/' + cle + '/maj']: t });
     } else if (Number(f.reserve) > 0) {
       const r = Number(f.reserve);
       await db.ref('parrainage/comptes/' + cle + '/moisEnReserve').transaction((n) => Math.max(0, (Number(n) || 0) - r));

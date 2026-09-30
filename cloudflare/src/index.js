@@ -33,13 +33,19 @@ import { servirPagePublique } from './pages.js';
 import { santeJeton, recevoirSante, compteDuJeton, rappelSanteUn } from './sante.js';
 import { creerPaiementsCoach } from './paiements-coach.js';
 import { creerGarmin, garminOuvert } from './garmin.js';
+import { creerAppelsDroits } from './droits-appels.js';
 
 // Les fonctions appelées par l'app (protocole onCall, jeton Firebase vérifié).
 // paiementCoach : relier son compte PayPal (coach), commander et capturer (athlète).
 const paiementCoach = (req, ctx) => creerPaiementsCoach(ctx).appel(req);
 // garmin : relier sa montre Garmin (OAuth), l'état, la révocation (garmin.js).
 const garmin = (req, ctx) => creerGarmin(ctx).appel(req, ctx.requete);
-const APPELS = { cloudinaryDestroy, santeJeton, paiementCoach, garmin };
+// Les droits (droits-appels.js) : consommer un code, ouvrir l'essai, devenir
+// coach, prolonger un code. L'app ne les écrit plus elle-même (règles gelées).
+const droitsAppel = (nom) => (req, ctx) => creerAppelsDroits(ctx)[nom](req);
+const APPELS = { cloudinaryDestroy, santeJeton, paiementCoach, garmin,
+  redeemCode: droitsAppel('redeemCode'), ouvrirEssai: droitsAppel('ouvrirEssai'),
+  devenirCoach: droitsAppel('devenirCoach'), prolongerCode: droitsAppel('prolongerCode') };
 
 // Toutes les requêtes sortantes passent ici : c'est le compteur du budget.
 function outils(env) {

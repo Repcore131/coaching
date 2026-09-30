@@ -1194,14 +1194,14 @@ const CAPACITES=Object.freeze({
 //   bibliotheque d'exercices est son outil de tous les jours.
 function palierEffectif(u){
   if(!u) return 'aucun';
-  if(u.role==='coach') return 'suivi';
+  if(estCoachReconnu(u)) return 'suivi';
   const p=palierDe(u);
   if(p!=='aucun') return p;
   try{ if(essaiActif(u)) return 'ultime'; }catch(e){}
   return 'aucun';
 }
 function peut(u,capacite){
-  if(u&&u.role==='coach') return true;
+  if(u&&estCoachReconnu(u)) return true;
   const l=CAPACITES[capacite];
   if(!l) return false;
   return l.indexOf(palierEffectif(u))>=0;
@@ -1459,7 +1459,18 @@ const COACH_ACTIF_SEANCES_MIN=1;
 
 // PURE. Rend 'libre' pour tout dossier qui n'a rien choisi, et pour toute
 // valeur inconnue : un palier inventé ne doit jamais valoir plus qu'aucun.
+// ⚠ LE REGISTRE DES COACHS D'ABORD (30/09/2026) : pour le compte connecte,
+//   coachs_registre/<cle> (ecrit par le Worker) decide ; coachPlan, gele par
+//   les regles, n'est plus qu'un miroir. Pour un autre dossier — ou tant que
+//   le registre n'a jamais ete lu — le dossier, comme avant.
 function coachPlanDe(coach){
+  let r={etat:'inconnu'};
+  try{ r=registreCoachDe(coach); }catch(e){}
+  if(r.etat==='serveur'){
+    const expire=r.plan!=='libre'&&r.actifJusqu>0&&Date.now()>=r.actifJusqu;
+    return (!expire&&COACH_PLANS.indexOf(r.plan)>=0)?r.plan:'libre';
+  }
+  if(r.etat==='absent'&&droitsV2Actif()) return 'libre';
   const v=(coach||{}).coachPlan;
   return COACH_PLANS.indexOf(v)>=0?v:'libre';
 }
@@ -1477,7 +1488,12 @@ function getCoachQuota(plan){
 // à une garantie serveur qui n'existe pas.
 function coachSubActif(coach){
   if(!coach) return false;
-  return coachPlanDe(coach)==='libre'?true:!!coach.coachSubActive;
+  if(coachPlanDe(coach)==='libre') return true;
+  let r={etat:'inconnu'};
+  try{ r=registreCoachDe(coach); }catch(e){}
+  // Le registre dit un plan payant en cours (coachPlanDe a deja ecarte l'expire).
+  if(r.etat==='serveur') return true;
+  return !!coach.coachSubActive;
 }
 // Compte les athlètes ACTIFS d'un coach.
 //
@@ -1682,9 +1698,12 @@ function essaiOuvrir(u,bonusJours){
   // FONCTIONS_SERVEUR. L'essai s'ouvre donc dans le dossier, et il y reste.
   // Le jour ou la fonction tourne, son echeance prendra la main a la premiere
   // lecture de droits/, sans qu'une ligne d'interface change.
+  // LE WORKER OUVRE L'ESSAI (30/09/2026) : droits/<cle>, une fois par compte.
+  // Sa duree est celle de tarifs.json, cote serveur ; le palier se relit apres.
   try{
-    if(FONCTIONS_SERVEUR&&CLOUD&&CLOUD._callFn)
-      CLOUD._callFn('ouvrirEssai',{jours:ESSAI_JOURS}).catch(()=>{});
+    if(CLOUD&&CLOUD._callFn)
+      CLOUD._callFn('ouvrirEssai',{})
+        .then(()=>rafraichirDroits(u,true)).then(()=>{ try{ _planifierRepeint(u.email); }catch(e){} }).catch(()=>{});
   }catch(e){}
   return true;
 }
@@ -1694,11 +1713,16 @@ function essaiOuvrir(u,bonusJours){
 // duree recalculee depuis `ouvertLe` — ce dernier repli sert aux dossiers
 // ouverts AVANT ce lot, qui portent `seancesAuDebut` et aucune fin.
 function essaiFin(u){
-  if(!u||!u.essai||typeof u.essai!=='object') return 0;
+  if(!u) return 0;
+  // APRES LA BASCULE : l'essai est celui que le Worker a ouvert (ouvrirEssai),
+  // et u.essai — que son titulaire ecrit — ne sert plus que si droits/ n'a
+  // jamais pu etre lu.
   try{
     const d=droitsDe(u);
     if(d.etat==='serveur'&&d.essaiFinit>0) return d.essaiFinit;
+    if(droitsV2Actif()&&d.etat!=='inconnu') return 0;
   }catch(e){}
+  if(!u.essai||typeof u.essai!=='object') return 0;
   const f=Number(u.essai.finit)||0;
   if(f>0) return f;
   const o=Number(u.essai.ouvertLe)||0;
@@ -1750,7 +1774,10 @@ function essaiFini(u){
 // Une seule fonction, six appels. Le jour ou l'essai change de regle, il n'y a
 // qu'un endroit a ouvrir, et aucun des six ne peut etre oublie.
 function doitVoirLePaywall(u){
-  if(!u||u.role==='coach') return false;
+  if(!u||estCoachReconnu(u)) return false;
+  // APRES LA BASCULE (30/09/2026) : le dossier ne dit plus rien, checkAccess
+  // lit droits/ seul.
+  if(droitsV2Actif()) return !checkAccess(u);
   // UN ABONNEMENT QUE LE SERVEUR NE CONFIRME PAS n'évite plus l'écran de
   // paiement : s'écrire AUTONOMIE_PREMIUM dans son dossier ne suffit plus
   // quand droits/ a été lu (voir _palierHerite).
@@ -3728,6 +3755,39 @@ function syncFusion(base,local,distant){
   if(ua) r.updatedAt=ua;
   return r;
 }
+// ══ LES CHAMPS DE DROITS SONT GELES PAR LES REGLES (30/09/2026) ══════════
+// database.rules.json refuse toute MODIFICATION de ces champs dans users/<cle>
+// (sauf par le createur) : ils s'ecrivent par le Worker. L'app, elle, envoie
+// le dossier ENTIER — et un seul champ modifie ferait rejeter tout le PUT,
+// definitivement et en silence, comme 'dispo' l'a fait sur coach_public.
+// Avant chaque PUT, ces champs repartent donc EXACTEMENT comme le serveur les
+// porte ; absents du serveur, ils partent absents. Un dossier neuf ne peut
+// naitre qu'en role 'athlete'. Ce que l'appareil y a ecrit localement reste
+// chez lui : ca n'ouvre plus rien, le palier se lit dans droits/.
+const CHAMPS_GELES=Object.freeze(['status','paymentStatus','accessExpiry','coachPlan','coachSubActive','programmesAchetes','role']);
+const CHAMPS_GELES_ABO=Object.freeze(['formule','statutPaypal','finAccesPaypal','dernierPaiementLe']);
+function _alignerChampsGeles(safe,d){
+  if(!safe||typeof safe!=='object') return safe;
+  const dist=(d&&typeof d==='object')?d:null;
+  for(const k of CHAMPS_GELES){
+    // La PREMIERE pose du role, a 'athlete' seulement, est admise par la
+    // regle — dossier neuf, ou ancien dossier qui n'en portait pas.
+    if(k==='role'&&safe.role==='athlete'&&(!dist||dist.role==null)) continue;
+    if(!dist){ delete safe[k]; continue; }
+    const v=dist[k];
+    if(v===undefined||v===null) delete safe[k];
+    else safe[k]=JSON.parse(JSON.stringify(v));
+  }
+  const da=(dist&&dist.abonnement&&typeof dist.abonnement==='object')?dist.abonnement:{};
+  if(safe.abonnement&&typeof safe.abonnement==='object'){
+    safe.abonnement=Object.assign({},safe.abonnement);
+    for(const k of CHAMPS_GELES_ABO){
+      if(da[k]===undefined||da[k]===null) delete safe.abonnement[k];
+      else safe.abonnement[k]=da[k];
+    }
+  }
+  return safe;
+}
 const CLOUD={
   _fbUrl:'https://repcore-sync-default-rtdb.firebaseio.com/users.json',
   _fbKey:'AIzaSyDQ_9jqpYMD6_32LRz1s7xyJOvEUPyr9K0',
@@ -4645,6 +4705,8 @@ const CLOUD={
       // se refait proprement que depuis ce que l'appareil voulait ecrire, pas
       // depuis le resultat d'une fusion precedente.
       const _safeAvantFusion=JSON.parse(JSON.stringify(safe));
+      // Le createur ecrit les champs geles (regles) : on ne les lui aligne pas.
+      const _parLeCreateur=!!(typeof currentUser==='object'&&currentUser&&currentUser.email===CREATOR_EMAIL);
       const _base=_tour.base;
       // Integre une version du serveur dans le dossier qui part : les
       // traitements d'un autre, puis la fusion a trois voies. Rejouee telle
@@ -4679,6 +4741,10 @@ const CLOUD={
           // l'autre appareil aurait conclu qu'il n'y avait rien de neuf.
           safe.updatedAt=Math.max(_avant,(Number(d.updatedAt)||0)+1);
         }
+        // LES CHAMPS DE DROITS REPARTENT TELS QUE LE SERVEUR LES PORTE : voir
+        // _alignerChampsGeles. Un seul different, et Firebase rejetterait le
+        // dossier ENTIER — seances comprises.
+        if(!_parLeCreateur) safe=_alignerChampsGeles(safe,d);
       };
       // ⚠ LA FUSION A TROIS VOIES, AVANT D'ECRIRE QUOI QUE CE SOIT. C'est le
       //   coeur du correctif du 21/09/2026 : sans elle, ce PUT ecrasait le
@@ -5265,8 +5331,28 @@ const CLOUD={
       const r=await fetch(this._fbUrl.replace('users.json','reglages_publics/droitsServeur.json')+'?auth='+token,{signal:ctrl.signal});
       if(!r.ok) return null;
       const d=await r.json();
-      return !!(d&&Number(d.le)>0);
+      // {actif, v} : `v` vaut 2 une fois remplir-droits.mjs passé (30/09/2026).
+      return {actif:!!(d&&Number(d.le)>0),v:Number(d&&d.v)||0};
     }catch(e){ return null; }
+  },
+  // ══ LE REGISTRE DES COACHS (30/09/2026) ══════════════════════════════════
+  // coachs_registre/<cle> : {plan, actifJusqu, le}, ecrit par le Worker seul.
+  // Meme contrat que pullDroits : {ok:true, registre|null} quand le serveur a
+  // repondu, {ok:false} sinon — « pas au registre » n'est pas « illisible ».
+  async pullCoachRegistre(email){
+    const key=String(email||'').toLowerCase().replace(/[.]/g,',');
+    if(!key) return {ok:false,raison:'sans adresse'};
+    const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),6000);
+    try{
+      const token=await this._getToken();
+      if(!token) return {ok:false,raison:'non authentifie'};
+      const r=await fetch(this._fbUrl.replace('users.json','coachs_registre/'+key+'.json')+'?auth='+token,{signal:ctrl.signal});
+      if(!r.ok) return {ok:false,raison:'HTTP '+r.status};
+      const txt=await r.text();
+      try{ _quotaCompter('in',txt.length); }catch(e){}
+      const d=txt?JSON.parse(txt):null;
+      return {ok:true,registre:(d&&typeof d==='object')?d:null};
+    }catch(e){ return {ok:false,raison:'reseau'}; }
   },
   // ══ ECRIRE UN DROIT, DEPUIS L’APPLICATION (24/09/2026) ══════════════════
   //
@@ -6163,6 +6249,9 @@ const CLOUD={
     let _palAvant=null;
     try{ _palAvant=palierDe(currentUser); }catch(e){}
     try{ await rafraichirDroits(currentUser); }catch(e){}
+    // LE REGISTRE DES COACHS, au meme rythme : pour un coach, c'est lui qui dit
+    // le plan ; pour tout compte, s'il est coach (30/09/2026).
+    try{ if(currentUser.role==='coach'||droitsV2Actif()) await rafraichirCoachRegistre(currentUser); }catch(e){}
     try{ if(_palAvant!==null&&palierDe(currentUser)!==_palAvant) _planifierRepeint(currentUser.email); }catch(e){}
     const users=DB.get('users')||{};
     const pulls=[];
@@ -8438,7 +8527,10 @@ function droitsDe(u){
 // PURE (elle ne lit que le dossier et le cache local).
 function palierDe(u){
   if(!u) return 'aucun';
-  if(u.role==='coach') return 'suivi';
+  // ⚠ PLUS DE RACCOURCI role==='coach' (30/09/2026) : un dossier se disait
+  //   coach et tout s'ouvrait. Un coach AU REGISTRE a le suivi ; avant la
+  //   bascule, le role du dossier (gele par les regles) en tient lieu.
+  if(estCoachReconnu(u)) return 'suivi';
   const d=droitsDe(u);
   if(d.etat==='serveur'){
     const p=(d.echeance>0&&Date.now()>=d.echeance)?'aucun':d.palier;
@@ -8449,12 +8541,21 @@ function palierDe(u){
     const p1=(Math.max(Number(d.bonusUltimeFin)||0,Number(d.ultimeJusqu)||0)>Date.now()&&PALIERS_ORDRE.indexOf(p)<PALIERS_ORDRE.indexOf('ultime'))?'ultime':p;
     // UNE FORMULE PAYÉE À UN COACH ouvre le suivi jusqu'à sa date, sans toucher au palier payé.
     const p2=(Number(d.suiviJusqu)||0)>Date.now()?'suivi':p1;
-    // LE SUIVI D'UN COACH NE PASSE PAS PAR PayPal : un ancien abonné, suivi
-    // depuis, garde son suivi même si droits/ ne porte que l'abonnement. Pas
-    // quand droits/ a été posé À LA MAIN : une fermeture du créateur tient.
+    // AVANT LA BASCULE SEULEMENT : le suivi d'un coach ne passait pas par
+    // droits/, et un ancien abonne suivi depuis gardait son suivi par le
+    // dossier. Apres, redeemCode l'ecrit dans droits/ (suiviJusqu).
+    if(droitsV2Actif()) return p2;
     const auto=(d.source==='paypal'||d.source==='parrainage');
     const h=(auto&&String(u.status)==='COACHING_SUIVI')?_palierHerite(u,'absent'):'aucun';
     return PALIERS_ORDRE.indexOf(h)>PALIERS_ORDRE.indexOf(p2)?h:p2;
+  }
+  if(droitsV2Actif()){
+    // droits/ LU ET VIDE : rien d'ouvert, quoi que dise le dossier.
+    if(d.etat==='absent') return 'aucun';
+    // JAMAIS LU (hors ligne a la premiere ouverture) : le dossier, sauf le
+    // suivi — COACHING_SUIVI n'ouvre plus rien sans droits/.
+    const h=_palierHerite(u,d.etat);
+    return h==='suivi'?'aucun':h;
   }
   return _palierHerite(u,d.etat);
 }
@@ -8512,16 +8613,102 @@ const DROITS_SERVEUR_CLE='rc_droits_serveur';
 function droitsServeurActif(){ try{ return localStorage.getItem(DROITS_SERVEUR_CLE)==='1'; }catch(e){ return false; } }
 let _droitsServeurLu=false;
 async function rafraichirDroitsServeur(){
-  if(_droitsServeurLu||droitsServeurActif()) return;
+  if(_droitsServeurLu||(droitsServeurActif()&&droitsV2Actif())) return;
   const v=await CLOUD.pullDroitsServeur().catch(()=>null);
   if(v===null) return;
   _droitsServeurLu=true;
-  if(v){ try{ localStorage.setItem(DROITS_SERVEUR_CLE,'1'); }catch(e){} }
+  if(v&&v.actif){ try{ localStorage.setItem(DROITS_SERVEUR_CLE,'1'); }catch(e){} }
+  if(v&&v.v>=2){ try{ localStorage.setItem(DROITS_V2_CLE,'1'); }catch(e){} }
+}
+// ══ LA BASCULE COMPLETE : droits/ ET coachs_registre/ SEULS (30/09/2026) ══
+// Posee (reglages_publics/droitsServeur/v = 2) par cloudflare/scripts/
+// remplir-droits.mjs, une fois droits/ rempli pour les athletes suivis et les
+// abonnes, et coachs_registre/ pour les coachs. A partir de la :
+//   · le palier d'un athlete ne se lit QUE dans droits/ ; le dossier ne sert
+//     plus de repli que si droits/ n'a JAMAIS pu etre lu, et jamais pour
+//     'suivi' — COACHING_SUIVI n'ouvre plus rien sans droits/ ;
+//   · un coach est un compte AU REGISTRE, pas un dossier role:'coach' ;
+//   · son plan est celui du registre, pas coachPlan.
+// Avant : l'ancien modele, dont les champs sont DEJA geles par les regles —
+// plus personne ne peut s'y ecrire un statut, seules les valeurs d'avant
+// restent en place le temps du rattrapage.
+const DROITS_V2_CLE='rc_droits_v2';
+function droitsV2Actif(){ try{ return localStorage.getItem(DROITS_V2_CLE)==='1'; }catch(e){ return false; } }
+// Le registre des coachs, lu et garde comme droits/ (meme forme de cache).
+const REGISTRE_CLE='rc_coachs_registre';
+function _registreTous(){
+  try{ const o=JSON.parse(localStorage.getItem(REGISTRE_CLE)||'null');
+    return (o&&typeof o==='object')?o:{}; }catch(e){ return {}; }
+}
+function _registrePoser(email,d){
+  if(!email) return;
+  try{
+    const o=_registreTous();
+    o[String(email).toLowerCase()]={d:d||null,vide:!d,lu:Date.now()};
+    localStorage.setItem(REGISTRE_CLE,JSON.stringify(o));
+  }catch(e){}
+}
+// PURE. Ce que le registre dit de ce compte : 'serveur' (inscrit), 'absent'
+// (lu, pas inscrit), 'inconnu' (jamais lu — ou un AUTRE compte que celui
+// connecte : les regles ne laissent lire que sa propre ligne).
+function registreCoachDe(u){
+  const e=String((u&&u.email)||'').toLowerCase();
+  if(!e) return {etat:'inconnu'};
+  const o=_registreTous()[e];
+  if(!o||typeof o!=='object') return {etat:'inconnu'};
+  if(o.vide||!o.d) return {etat:'absent',lu:o.lu};
+  const d=o.d;
+  return {etat:'serveur',plan:String(d.plan||'libre'),actifJusqu:Number(d.actifJusqu)||0,le:Number(d.le)||0,lu:o.lu};
+}
+// PURE. Ce compte est-il un coach ? Le registre d'abord ; tant que la bascule
+// n'est pas faite, ou que le registre n'a jamais ete lu, le role du dossier
+// (gele par les regles depuis le 30/09/2026).
+function estCoachReconnu(u){
+  if(!u) return false;
+  const r=registreCoachDe(u);
+  if(r.etat==='serveur') return true;
+  if(r.etat==='absent'&&droitsV2Actif()) return false;
+  return u.role==='coach';
+}
+async function rafraichirCoachRegistre(u,force){
+  const cible=u||currentUser;
+  const mail=String((cible&&cible.email)||'').toLowerCase();
+  if(!mail) return false;
+  const o=_registreTous()[mail];
+  if(!force&&o&&(Date.now()-Number(o.lu||0))<DROITS_FRAIS_MS) return true;
+  let r=null;
+  try{ r=await CLOUD.pullCoachRegistre(mail); }catch(e){ r=null; }
+  if(!r||!r.ok) return false;
+  _registrePoser(mail,r.registre);
+  return true;
 }
 // LA PREUVE LOCALE D'UN PAIEMENT QUI VIENT D'ABOUTIR, pour 72 heures : posée
 // par onApprove (abonnement) et par l'achat d'un programme, sur l'appareil qui
 // a payé. Elle ne voyage pas avec le dossier : la trafiquer ne vaut que pour
 // cet appareil, et trois jours.
+// ══ ATTENDRE QUE LE SERVEUR OUVRE (30/09/2026) ═══════════════════════════
+// Apres un paiement, le webhook PayPal ecrit droits/ (athlete) ou
+// coachs_registre/ (coach). On relit toutes les 5 s, pendant 2 min au plus.
+// Rend true des que c'est ouvert, false au bout du delai — l'ouverture
+// arrivera de toute facon a la relecture suivante (synchro, retour au
+// premier plan) : il n'y a rien a refaire.
+async function _attendreActivation(o,pasMs,maxMs){
+  const pas=Number(pasMs)||5000, fin=Date.now()+(Number(maxMs)||120000);
+  const coach=o&&o.coach;
+  for(;;){
+    try{
+      if(coach){
+        await rafraichirCoachRegistre(currentUser,true);
+        if(coachPlanDe(currentUser)===coach) return true;
+      } else {
+        await rafraichirDroits(currentUser,true);
+        if(palierDe(currentUser)!=='aucun') return true;
+      }
+    }catch(e){}
+    if(Date.now()+pas>fin) return false;
+    await new Promise(r=>setTimeout(r,pas));
+  }
+}
 const PAIEMENT_RECENT_CLE='rc_paiement_recent';
 const PAIEMENT_RECENT_MS=72*3600000;
 function paiementRecentNoter(u,quoi){
@@ -8992,7 +9179,9 @@ function accueilChoisir(cle,annuel){
   return true;
 }
 function checkAccess(u){
-  if(!u||u.role==='coach') return true;
+  if(!u) return true;
+  // UN COACH AU REGISTRE (30/09/2026), et non un dossier qui se dit coach.
+  if(estCoachReconnu(u)) return true;
   const s=u.status||'FREE';
   // ⚠ L'ESSAI PASSE PAR LA MEME PORTE QUE TOUT LE RESTE, et c'est voulu :
   // checkAccess est le seul endroit du fichier qui dise oui ou non a un
@@ -9010,6 +9199,14 @@ function checkAccess(u){
   if(d.etat==='serveur'){
     const p=palierDe(u);
     if(p!=='aucun') return true;
+    return essaiActif(u);
+  }
+  // ⚠ APRES LA BASCULE (reglages_publics/droitsServeur/v = 2), le dossier ne
+  //   decide plus : droits/ lu et vide ferme la porte, quel que soit le
+  //   status. Jamais lu : palierDe, qui ne rend jamais 'suivi' sur la foi du
+  //   dossier. C'est ce qui ferme la reproduction « PUT status=COACHING_SUIVI ».
+  if(droitsV2Actif()){
+    if(palierDe(u)!=='aucun') return true;
     return essaiActif(u);
   }
   // ⚠ 'absent' ET 'inconnu' SE REJOIGNENT (24/09/2026). Un noeud vide ne veut
@@ -12074,6 +12271,10 @@ async function doRegister(){
     if(selRole==='coach'&&_coachInviteCode()){
       try{ await _verifyCoachInvite(_coachInviteCode(),em); }
       catch(e){ return showErr('r-err',e.message||'Invitation refusée.'); }
+    } else if(selRole==='coach'){
+      // SANS INVITATION : une place Libre, prise et comptee par le serveur.
+      try{ await _devenirCoach(''); }
+      catch(e){ return showErr('r-err',e.message||'Création du compte coach refusée.'); }
     }
 
     users[em]=user;DB.set('users',users);
@@ -12107,8 +12308,9 @@ async function doRegister(){
       // Compté seulement maintenant : les deux sorties précédentes (compte déjà
       // présent, invitation refusée) ne sont pas des inscriptions abouties.
       // Un coach invité ne consomme pas une place Libre.
-      if(!_coachInviteCode()) incrementerCompteurLibres();
+      // LE COMPTEUR DES PLACES LIBRES est tenu par le Worker (devenirCoach).
       _clearCoachInvite();
+      try{ rafraichirCoachRegistre(currentUser,true).catch(()=>{}); }catch(e){}
       document.getElementById('coach-code-val').textContent=user.code;
       go('s-coach-code');
     } else if(!_retourApresInscription()){
@@ -12795,6 +12997,8 @@ function _appliquerPayloadCode(payload){
     // consequente de tout le parcours de l'athlete : reseau coupe, il lisait
     // « Acces active ✓ » et son coach ne le voyait jamais apparaitre.
     const _envoi=CLOUD.pushOne(currentUser.email,currentUser);
+    // LE PALIER VIENT DE droits/, que redeemCode vient d'ecrire (30/09/2026).
+    try{ rafraichirDroits(currentUser,true).then(()=>{ try{ _planifierRepeint(currentUser.email); }catch(e){} }).catch(()=>{}); }catch(e){}
     // Idem : succes confirme, le code en attente n'a plus lieu d'etre.
     _oublierCodeVerifie();
     toastSync(_u1&&_s1,_envoi,'Accès activé ✓','ton accès est');
@@ -127133,10 +127337,23 @@ async function _verifyCoachInvite(raw,email){
   if(!data.active) throw new Error('Cette invitation a été désactivée.');
   if(Date.now()>data.expiry) throw new Error('Cette invitation a expiré.');
   if(data.redeemed) throw new Error('Cette invitation a déjà servi.');
-  const r2=await fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({redeemed:true,coachEmail:email,usedBy:email,redeemedAt:Date.now()})});
-  if(!r2.ok) throw new Error('Impossible de consommer l\'invitation ('+r2.status+') : réessaie.');
+  await _devenirCoach(code);
   return {valid:true,payload:data};
+}
+// ══ DEVENIR COACH, PAR LE WORKER (30/09/2026) ═══════════════════════════════
+// Le role 'coach' est gele par les regles : devenirCoach le pose, avec la
+// ligne du registre des coachs. Avec une invitation (emise par le createur,
+// consommee en transaction) ou, sans, sur une place Libre que le serveur
+// compte lui-meme — le client ne touche plus au compteur.
+async function _devenirCoach(invitation){
+  let r;
+  try{ r=await CLOUD._callFn('devenirCoach',invitation?{invitation:String(invitation).trim().toUpperCase()}:{}); }
+  catch(e){
+    if(e&&e.statut>=400&&e.statut<500&&e.statut!==404) throw new Error(e.message);
+    throw new Error('Création du compte coach impossible pour le moment : réessaie dans un instant.');
+  }
+  try{ if(currentUser&&currentUser.email) await rafraichirCoachRegistre(currentUser,true); }catch(e){}
+  return r;
 }
 
 // Contrôle de validité SANS effet de bord, pour l'athlète qui n'a pas encore de
@@ -127236,15 +127453,24 @@ async function _verifyAccessCode(raw,athleteName){
   if(Date.now()>data.expiry) throw new Error('Ce code a expiré. Demande un nouveau code à ton coach.');
   if(data.redeemed&&data.athleteEmail&&data.athleteEmail!==currentUser.email)
     throw new Error('Ce code a déjà été utilisé par un autre compte.');
-  if(!data.redeemed&&currentUser.email){
-    // `etat` et `creeLe` partent DANS LA MEME ecriture que `redeemed` : une
-    // seconde requete pourrait echouer seule, et le coach verrait « ouvert »
-    // sur une invitation deja transformee.
-    await fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({redeemed:true,athleteEmail:currentUser.email,usedBy:athleteName||data.studentName,
-        etat:'cree',creeLe:new Date().toISOString()})});
+  // ══ C'EST LE WORKER QUI CONSOMME (30/09/2026) ══════════════════════════
+  // Le PATCH redeemed:true que l'app faisait ici est refuse par les regles :
+  // redeemCode verifie que le coach emetteur est au registre, plafonne les
+  // mois, consomme en transaction, puis ecrit droits/<athlete> et, dans le
+  // dossier, coachEmailKey, coachId et status. Rejouer pour le meme compte ne
+  // rallonge rien. Les refus (code d'un non-coach, deja pris) remontent tels
+  // quels : ils sont definitifs, et leur message dit quoi faire.
+  if(!currentUser||!currentUser.email) throw new Error('Connecte-toi pour activer ce code.');
+  let res;
+  try{ res=await CLOUD._callFn('redeemCode',{code:String(raw||'').trim().toUpperCase(),nom:athleteName||data.studentName||''}); }
+  catch(e){
+    if(e&&e.statut>=400&&e.statut<500&&e.statut!==404) throw new Error(e.message);
+    throw new Error('Activation impossible pour le moment ('+((e&&e.message)||'serveur injoignable')+'). Réessaie dans un instant : ton code n’a pas été utilisé.');
   }
-  return {valid:true,payload:data};
+  return {valid:true,payload:Object.assign({},data,{
+    // L'échéance que le SERVEUR a posée : c'est elle que l'affichage doit dire.
+    expiry:(res&&Number(res.echeance))||data.expiry,
+    coachEmailKey:(res&&res.coachEmailKey)||data.coachEmailKey,serveur:res||null})};
 }
 async function _extendAccessCode(codeId,addMonths,token){
   if(!token) throw new Error('Token du code introuvable : recopie le code depuis la liste.');
@@ -127263,10 +127489,16 @@ async function _extendAccessCode(codeId,addMonths,token){
     const ath=users[data.athleteEmail];
     // La prolongation touche le dossier de QUELQU'UN D'AUTRE : le coach voit sa
     // nouvelle date, l'athlete garde l'ancienne tant que l'envoi n'est pas parti.
-    if(ath){ath.accessExpiry=newExpiry;ath.updatedAt=Date.now();users[data.athleteEmail]=ath;DB.set('users',users);
-      direSiEnvoiEchoue(CLOUD.pushOne(data.athleteEmail,ath),'La prolongation',
-        'ton athlète ne la verra pas encore');
-      appliedImmediately=true;}
+    // L'ACCES DE L'ATHLETE SUIT PAR LE WORKER (30/09/2026) : accessExpiry est
+    // gele dans son dossier, et c'est droits/ qui decide. prolongerCode relit
+    // le code au serveur et plafonne.
+    if(ath){ath.accessExpiry=newExpiry;users[data.athleteEmail]=ath;DB.setLocal('users',users);}
+    try{
+      const _p=await CLOUD._callFn('prolongerCode',{code:token});
+      appliedImmediately=!!(_p&&_p.applique);
+    }catch(e){
+      toast('Prolongation enregistrée sur le code, pas encore sur l’accès de ton athlète : '+(e.message||'réessaie'),'var(--orange)');
+    }
   }
   return {token,payload,appliedImmediately};
 }
@@ -127941,28 +128173,17 @@ function renderPaypalButton(planId,coachId){
       toast('Vérification du paiement…');
       const _estCoach=_palierEstCoach(_subPalier);
       try{
-        // Activation directe (plan Spark, pas de vérification serveur) :
-        // le subscriptionID vient du SDK PayPal après paiement approuvé.
-        //
-        // AUTONOMIE_PREMIUM EST LE STATUT ATHLÈTE, et le poser sur un coach le
-        // ferait passer pour un abonné en autonomie auprès de tout ce qui lit
-        // `status`. Un coach n’achète pas l’accès à l’app pour lui : il achète
-        // un quota d’athlètes.
-        if(!_estCoach) currentUser.status='AUTONOMIE_PREMIUM';
-        currentUser.paymentStatus='active';
+        // ══ L'APP N'ACTIVE PLUS RIEN ELLE-MEME (30/09/2026) ═══════════════
+        // status, paymentStatus, coachPlan et abonnement/formule sont geles
+        // par les regles : c'est le webhook PayPal, au Worker, qui ouvre
+        // droits/ (athlete) ou coachs_registre/ (coach) apres avoir relu
+        // l'abonnement chez PayPal. L'app garde l'identifiant de l'abonnement
+        // (le Worker s'en sert pour savoir a qui il est), la periode choisie,
+        // puis ATTEND le serveur : voir _attendreActivation.
         currentUser.paypalSubscriptionId=data.subscriptionID;
+        // Simple affichage : « paiement reçu, activation… » (paiementRecent).
         paiementRecentNoter(currentUser,'abonnement');
-        // LE PALIER PAYÉ, ÉCRIT DANS LE DOSSIER. `coachPlan` n’était écrit
-        // qu’à l’inscription : un coach qui payait dix-neuf euros restait au
-        // palier `libre`, quota UN athlète. coachPlanDe et getCoachQuota lisent
-        // ces deux clefs-là, et rien d’autre.
-        if(_estCoach){
-          currentUser.coachPlan=_subPalier;
-          currentUser.coachSubActive=true;
-          // La date du palier EN VIGUEUR. La laisser à celle de l’inscription
-          // ne la rendrait pas seulement obsolète, mais fausse.
-          currentUser.coachPlanSince=Date.now();
-        }
+        if(_estCoach) currentUser.coachPlanSince=Date.now();
         // LE PALIER RETENU, A COTE DU STATUT. Sans lui, abonnement.palier
         // n était écrit nulle part et _renderAbonnement retombait toujours
         // sur « Mensuel » — y compris pour qui venait de payer un an.
@@ -127972,11 +128193,8 @@ function renderPaypalButton(planId,coachId){
         // remplacer les effacerait.
         currentUser.abonnement=Object.assign({},currentUser.abonnement,
           {palier:_subPalier||'mensuel',
-           // ⚠ LA FORMULE, ET PAS SEULEMENT LA PERIODE (24/09/2026). `palier`
-           //   dit « mensuel » ou « annuel » ; sans `formule`, rien dans le
-           //   dossier ne distinguait Essentielle d'Ultime, et un abonne a
-           //   24,90 € recevait Essentielle. Elle se lit sur le plan FACTURE.
-           formule:formuleDuPlan(_planIdChoisi())||subOffreChoisie(),
+           // LA FORMULE N'EST PLUS ECRITE ICI (gelee) : le Worker la pose
+           // d'apres le plan FACTURE, relu chez PayPal.
            // ⚠ LE TERME DE L'ENGAGEMENT, POSE UNE FOIS (24/09/2026). Douze mois
            //   a compter d'aujourd'hui : c'est la seule date de ce dossier qui
            //   ne vieillira jamais, parce qu'elle ne depend d'aucun evenement
@@ -128010,15 +128228,18 @@ function renderPaypalButton(planId,coachId){
         // la fermeture de l’onglet et faisait facturer le plan coach au compte
         // suivant qui ouvrirait cet écran.
         try{sessionStorage.removeItem('rc_palier_coach');}catch(e){}
-        toastEcriture(saveUser(),'Abonnement activé ! Bienvenue sur RepCore ✓','ton abonnement est');
+        saveUser();
+        toast('Paiement reçu, activation…','var(--info)');
+        const _actif=await _attendreActivation(_estCoach?{coach:_subPalier}:{});
+        toast(_actif?'Abonnement activé ! Bienvenue sur RepCore ✓'
+          :'Paiement reçu. L’activation prend plus de temps que prévu : elle apparaîtra d’elle-même, sans rien refaire.',
+          _actif?'var(--green)':'var(--orange)');
         // UN COACH NE RENTRE PAS SUR L ACCUEIL ATHLÈTE. loadClientHome y lit
         // bilans, séances et nutrition d’un dossier qui n’en porte pas, et
         // l’aurait posé devant un écran qui ne le concerne pas juste après
         // avoir payé.
-        setTimeout(()=>{
-          if(_estCoach){ go('s-coach-home'); loadCoachHome(); }
-          else loadClientHome();
-        },1500);
+        if(_estCoach){ go('s-coach-home'); loadCoachHome(); }
+        else loadClientHome();
       }catch(e){
         toast('Erreur d\'activation : '+(e.message||'Réessaie ou contacte le support.'),'var(--orange)');
       }

@@ -6,6 +6,10 @@ import { verifierJeton, repondreAppel } from '../src/appels.js';
 import { cloudinaryDestroy } from '../src/medias.js';
 import { creerBase } from '../src/base.js';
 import { fausseBase } from './fausse-base.mjs';
+import { creerMetier } from '../src/metier.js';
+import { creerAppelsDroits } from '../src/droits-appels.js';
+import { ErreurAppel } from '../src/appels.js';
+import { planifierDroitsCoachs } from '../src/migration.js';
 
 let ok = 0;
 const test = async (nom, fn) => { await fn(); ok++; console.log('ok  ', nom); };
@@ -144,6 +148,158 @@ await test('le protocole onCall : 401 sans jeton, {result} avec', async () => {
   assert.deepEqual(await avec.json(), { result: { result: 'ok', publicId: 'repcore/u_lea/v1' } });
   const inconnu = await repondreAppel(new Request('https://s.t/fn/rien', { method: 'POST', body: '{}' }), { cloudinaryDestroy }, w.ctx);
   assert.equal(inconnu.status, 404);
+});
+
+
+// ══ LES DROITS PAR LE SERVEUR (droits-appels.js) ══════════════════════════
+const JMS = 86400000, MMS = 30 * JMS, T0 = Date.UTC(2026, 8, 30, 10);
+function mondeDroits(initial) {
+  const F = fausseBase(initial);
+  const db = creerBase({ url: 'https://b.t', auth: 's', fetchImpl: F.fetchImpl });
+  const w = { F, t: T0 };
+  const M = creerMetier({ db, vapid: { publique: 'x', privee: 'y' }, fetchImpl: F.fetchImpl, maintenant: () => w.t });
+  w.A = creerAppelsDroits({ db, M, maintenant: () => w.t });
+  w.appel = (nom, email, data) => w.A[nom]({ auth: { email }, data: data || {} });
+  return w;
+}
+const CODE = (x) => Object.assign({ coachEmailKey: 'kev@t,fr', coachEmail: 'kev@t.fr', coachId: 'u_kev', coachName: 'Kev',
+  type: 'athlete', active: true, redeemed: false, months: 3, expiry: T0 + 3 * MMS, grantedBy: 'coach' }, x);
+const refusA = (statut) => (e) => e instanceof ErreurAppel && e.statut === statut;
+
+await test('redeemCode : un code de coach enregistré ouvre le suivi, pose coachEmailKey et consomme le code', async () => {
+  const w = mondeDroits({ coachs_registre: { 'kev@t,fr': { plan: 'libre', le: 1 } }, rc_codes: { 'RC-AAAA-BBBB': CODE() } });
+  const r = await w.appel('redeemCode', 'lea@t.fr', { code: 'rc-aaaa-bbbb' });
+  assert.equal(r.ok, true);
+  const d = w.F.lire('droits/lea@t,fr');
+  assert.equal(d.palier, 'suivi'); assert.equal(d.source, 'code_coach'); assert.equal(d.echeance, T0 + 3 * MMS);
+  assert.equal(w.F.lire('users/lea@t,fr/coachEmailKey'), 'kev@t,fr');
+  assert.equal(w.F.lire('users/lea@t,fr/coachId'), 'u_kev');
+  assert.equal(w.F.lire('users/lea@t,fr/status'), 'COACHING_SUIVI');
+  assert.equal(w.F.lire('users/lea@t,fr/updatedAt'), T0);
+  assert.equal(w.F.lire('rc_codes/RC-AAAA-BBBB/redeemed'), true);
+  assert.equal(w.F.lire('rc_codes/RC-AAAA-BBBB/athleteEmail'), 'lea@t.fr');
+});
+await test('redeemCode : un code FORGÉ par un compte qui n’est pas coach est refusé, rien n’est écrit', async () => {
+  const w = mondeDroits({ rc_codes: { 'RC-FAUX-CODE': CODE({ coachEmailKey: 'pirate@t,fr', coachEmail: 'pirate@t.fr', months: 99, expiry: T0 + 99 * MMS }) } });
+  await assert.rejects(() => w.appel('redeemCode', 'pirate2@t.fr', { code: 'RC-FAUX-CODE' }), refusA(403));
+  assert.equal(w.F.lire('droits/pirate2@t,fr'), null);
+  assert.equal(w.F.lire('rc_codes/RC-FAUX-CODE/redeemed'), false);
+  assert.equal(w.F.lire('users/pirate2@t,fr'), null);
+});
+await test('redeemCode : les mois sont plafonnés à 12 pour un affilié, quoi que dise le code', async () => {
+  const w = mondeDroits({ coachs_registre: { 'kev@t,fr': { plan: 'libre' } },
+    rc_codes: { 'RC-LONG-CODE': CODE({ months: 60, expiry: T0 + 60 * MMS, grantedBy: 'creator', creatorFree: true }),
+      'RC-SANS-MOIS': CODE({ months: 0, expiry: T0 + 40 * MMS }) } });
+  const r = await w.appel('redeemCode', 'lea@t.fr', { code: 'RC-LONG-CODE' });
+  assert.equal(r.echeance, T0 + 12 * MMS);
+  assert.equal(w.F.lire('droits/lea@t,fr/echeance'), T0 + 12 * MMS);
+  const r2 = await w.appel('redeemCode', 'tom@t.fr', { code: 'RC-SANS-MOIS' });
+  assert.equal(r2.echeance, T0 + 12 * MMS, 'sans months : l’expiry, plafonnée aussi');
+});
+await test('redeemCode : le créateur n’est pas plafonné', async () => {
+  const w = mondeDroits({ rc_codes: { 'RC-CREA-TEUR': CODE({ coachEmailKey: 'guellec,coachingpro@gmail,com', months: 24, expiry: T0 + 24 * MMS }) } });
+  const r = await w.appel('redeemCode', 'lea@t.fr', { code: 'RC-CREA-TEUR' });
+  assert.equal(r.echeance, T0 + 24 * MMS);
+});
+await test('redeemCode : double consommation refusée ; le même compte peut rejouer sans rien rallonger', async () => {
+  const w = mondeDroits({ coachs_registre: { 'kev@t,fr': { plan: 'libre' } }, rc_codes: { 'RC-AAAA-BBBB': CODE() } });
+  await w.appel('redeemCode', 'lea@t.fr', { code: 'RC-AAAA-BBBB' });
+  await assert.rejects(() => w.appel('redeemCode', 'tom@t.fr', { code: 'RC-AAAA-BBBB' }), refusA(409));
+  assert.equal(w.F.lire('droits/tom@t,fr'), null);
+  w.t += 20 * JMS;
+  const r = await w.appel('redeemCode', 'lea@t.fr', { code: 'RC-AAAA-BBBB' });
+  assert.equal(r.deja, true);
+  assert.equal(w.F.lire('droits/lea@t,fr/echeance'), T0 + 3 * MMS, 'rejouer ne rallonge pas');
+});
+await test('redeemCode : désactivé, expiré, invitation coach — refusés', async () => {
+  const w = mondeDroits({ coachs_registre: { 'kev@t,fr': { plan: 'libre' } },
+    rc_codes: { 'RC-OFFF-OFFF': CODE({ active: false }), 'RC-VIEU-VIEU': CODE({ expiry: T0 - 1 }), 'RC-COAC-HHHH': CODE({ type: 'coach' }) } });
+  await assert.rejects(() => w.appel('redeemCode', 'lea@t.fr', { code: 'RC-OFFF-OFFF' }), refusA(403));
+  await assert.rejects(() => w.appel('redeemCode', 'lea@t.fr', { code: 'RC-VIEU-VIEU' }), refusA(403));
+  await assert.rejects(() => w.appel('redeemCode', 'lea@t.fr', { code: 'RC-COAC-HHHH' }), refusA(400));
+  await assert.rejects(() => w.appel('redeemCode', 'lea@t.fr', { code: 'n’importe quoi' }), refusA(400));
+});
+await test('redeemCode : un abonné Ultime en cours garde son palier ; le suivi passe par-dessus (suiviJusqu)', async () => {
+  const w = mondeDroits({ coachs_registre: { 'kev@t,fr': { plan: 'libre' } }, rc_codes: { 'RC-AAAA-BBBB': CODE() },
+    droits: { 'lea@t,fr': { palier: 'ultime', echeance: 0, source: 'paypal', abo: 'I-1' } } });
+  await w.appel('redeemCode', 'lea@t.fr', { code: 'RC-AAAA-BBBB' });
+  const d = w.F.lire('droits/lea@t,fr');
+  assert.equal(d.palier, 'ultime'); assert.equal(d.abo, 'I-1'); assert.equal(d.suiviJusqu, T0 + 3 * MMS);
+});
+await test('ouvrirEssai : Ultime pendant TARIFS.essai.jours, une seule fois par compte ; pas pour un coach', async () => {
+  const w = mondeDroits({ coachs_registre: { 'kev@t,fr': { plan: 'libre' } } });
+  const r = await w.appel('ouvrirEssai', 'lea@t.fr', { jours: 400 });
+  assert.equal(r.deja, false);
+  const d = w.F.lire('droits/lea@t,fr');
+  assert.equal(d.palier, 'ultime'); assert.equal(d.source, 'essai'); assert.equal(d.essaiOuvertLe, T0);
+  assert.equal(d.echeance, T0 + 30 * JMS, 'la durée du serveur, pas celle demandée');
+  w.t += 60 * JMS;
+  const r2 = await w.appel('ouvrirEssai', 'lea@t.fr', {});
+  assert.equal(r2.deja, true);
+  assert.equal(w.F.lire('droits/lea@t,fr/echeance'), T0 + 30 * JMS);
+  await assert.rejects(() => w.appel('ouvrirEssai', 'kev@t.fr', {}), refusA(400));
+});
+await test('devenirCoach : invitation du créateur → registre + rôle ; invitation d’un autre refusée ; place Libre comptée', async () => {
+  const w = mondeDroits({ coachs_libres: { n: 199 }, rc_codes: {
+    'RC-INVI-TEUR': CODE({ type: 'coach', coachEmailKey: 'guellec,coachingpro@gmail,com' }),
+    'RC-INVI-FAUX': CODE({ type: 'coach', coachEmailKey: 'kev@t,fr' }) } });
+  await assert.rejects(() => w.appel('devenirCoach', 'zoe@t.fr', { invitation: 'RC-INVI-FAUX' }), refusA(403));
+  assert.equal(w.F.lire('coachs_registre/zoe@t,fr'), null);
+  const r = await w.appel('devenirCoach', 'zoe@t.fr', { invitation: 'RC-INVI-TEUR' });
+  assert.equal(r.plan, 'libre');
+  assert.equal(w.F.lire('coachs_registre/zoe@t,fr/plan'), 'libre');
+  assert.equal(w.F.lire('users/zoe@t,fr/role'), 'coach');
+  assert.equal(w.F.lire('rc_codes/RC-INVI-TEUR/redeemed'), true);
+  await assert.rejects(() => w.appel('devenirCoach', 'max@t.fr', { invitation: 'RC-INVI-TEUR' }), refusA(409));
+  // Sans invitation : la dernière place Libre, puis plus rien.
+  await w.appel('devenirCoach', 'max@t.fr', {});
+  assert.equal(w.F.lire('coachs_libres/n'), 200);
+  await assert.rejects(() => w.appel('devenirCoach', 'ben@t.fr', {}), refusA(409));
+  assert.equal(w.F.lire('users/ben@t,fr'), null);
+});
+await test('prolongerCode : le coach du code repousse l’accès de l’athlète, plafonné à 12 mois ; un autre coach non', async () => {
+  const w = mondeDroits({ coachs_registre: { 'kev@t,fr': { plan: 'libre' } }, rc_codes: { 'RC-AAAA-BBBB': CODE() } });
+  await w.appel('redeemCode', 'lea@t.fr', { code: 'RC-AAAA-BBBB' });
+  w.F.ecrire('rc_codes/RC-AAAA-BBBB/expiry', T0 + 30 * MMS);
+  await assert.rejects(() => w.appel('prolongerCode', 'autre@t.fr', { code: 'RC-AAAA-BBBB' }), refusA(403));
+  const r = await w.appel('prolongerCode', 'kev@t.fr', { code: 'RC-AAAA-BBBB' });
+  assert.equal(r.applique, true);
+  assert.equal(w.F.lire('droits/lea@t,fr/echeance'), T0 + 12 * MMS);
+});
+
+await test('remplir-droits : registre des coachs réels, suivi des athlètes au code consommé, rien pour un code forgé', async () => {
+  const U = (x) => Object.assign({ role: 'athlete' }, x);
+  const F = fausseBase({
+    users: { 'kev@t,fr': U({ role: 'coach', coachPlan: 'libre' }), 'seul@t,fr': U({ role: 'coach' }),
+      'pirate@t,fr': U({ role: 'coach' }),
+      'lea@t,fr': U({ status: 'COACHING_SUIVI', coachEmailKey: 'kev@t,fr', accessExpiry: T0 + 2 * MMS }),
+      'tom@t,fr': U({ status: 'COACHING_SUIVI', coachEmailKey: 'kev@t,fr' }),
+      'zoe@t,fr': U({ status: 'COACHING_SUIVI' }),
+      'max@t,fr': U({ status: 'COACHING_SUIVI', coachEmailKey: 'faux@t,fr' }),
+      'ana@t,fr': U({ status: 'COACHING_SUIVI', accessExpiry: T0 + 99 * MMS }),
+      'eve@t,fr': U({ status: 'FREE', essai: { ouvertLe: T0 - 5 * JMS, finit: T0 + 25 * JMS } }),
+      'triche@t,fr': U({ status: 'FREE', essai: { ouvertLe: T0 - 5 * JMS, finit: T0 + 900 * JMS } }),
+      'fini@t,fr': U({ status: 'FREE', essai: { ouvertLe: T0 - 90 * JMS, finit: T0 - 60 * JMS } }) },
+    rc_codes: { 'RC-LEAA-0001': CODE({ redeemed: true, athleteEmail: 'lea@t.fr' }),
+      'RC-TOMM-0001': CODE({ redeemed: true, athleteEmail: 'tom@t.fr' }),
+      'RC-MAXX-0001': CODE({ coachEmailKey: 'faux@t,fr', redeemed: true, athleteEmail: 'max@t.fr' }),
+      'RC-ANAA-0001': CODE({ coachEmailKey: 'guellec,coachingpro@gmail,com', redeemed: true, athleteEmail: 'ana@t.fr' }) } });
+  const db = creerBase({ url: 'https://b.t', auth: 's', fetchImpl: F.fetchImpl });
+  const { maj, rapport } = await planifierDroitsCoachs({ db, env: {}, fetchImpl: F.fetchImpl, maintenant: () => T0 });
+  assert.deepEqual(Object.keys(maj).filter((k) => k.startsWith('coachs_registre/')), ['coachs_registre/kev@t,fr']);
+  assert.deepEqual(rapport.coachsEcartes.sort(), ['pirate@t,fr', 'seul@t,fr']);
+  assert.equal(maj['droits/lea@t,fr'].palier, 'suivi');
+  assert.equal(maj['droits/lea@t,fr'].echeance, T0 + 2 * MMS);
+  assert.equal(maj['droits/tom@t,fr'].echeance, T0 + 12 * MMS, 'sans échéance : 12 mois pour un affilié');
+  assert.equal(maj['droits/ana@t,fr'].echeance, T0 + 99 * MMS, 'le créateur n’est pas plafonné');
+  assert.equal(maj['droits/zoe@t,fr'], undefined, 'COACHING_SUIVI sans code : rien');
+  assert.equal(maj['droits/max@t,fr'], undefined, 'code d’un coach qui n’existe pas : rien');
+  assert.deepEqual(rapport.suivisSansCode.sort(), ['max@t,fr', 'zoe@t,fr']);
+  assert.equal(maj['droits/eve@t,fr'].palier, 'ultime'); assert.equal(maj['droits/eve@t,fr'].echeance, T0 + 25 * JMS);
+  assert.equal(maj['droits/triche@t,fr'].echeance, T0 + 55 * JMS, 'une fin forgée est bornée à 60 jours');
+  assert.equal(maj['droits/fini@t,fr'].palier, 'aucun'); assert.equal(maj['droits/fini@t,fr'].essaiOuvertLe, T0 - 90 * JMS, 'l’essai passé compte : pas de second');
+  const tous = await planifierDroitsCoachs({ db, env: {}, fetchImpl: F.fetchImpl, maintenant: () => T0, tousCoachs: true });
+  assert.ok(tous.maj['coachs_registre/seul@t,fr'], '--tous-coachs');
 });
 
 console.log(ok + ' tests passés');

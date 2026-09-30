@@ -402,4 +402,43 @@ console.log('regles : aucun appel JavaScript inconnu du langage');
   console.log('evenements : '+deposes.length+' type(s) deposes par l\'app, tous admis par les regles');
 }
 
+// ── LES CHAMPS DE DROITS GELES (30/09/2026) ─────────────────────────────
+// status, role, coachPlan… se lisaient dans un dossier que son titulaire
+// ecrit : un PUT status:'COACHING_SUIVI' ouvrait tout. Ils sont geles sous
+// users/$emailKey ; retirer un seul de ces gels rouvre la faille sans bruit.
+// Et le code de l'app doit les recopier du serveur avant chaque PUT
+// (CHAMPS_GELES), sinon c'est le dossier ENTIER que Firebase rejette.
+{
+  const sansCom=regles.split('\n').map((l)=>{ let q=false,o='';
+    for(let i=0;i<l.length;i++){ const c=l[i]; if(c==='"'&&l[i-1]!=='\\') q=!q; if(!q&&c==='/'&&l[i+1]==='/') break; o+=c; }
+    return o; }).join('\n');
+  const R=JSON.parse(sansCom).rules;
+  const U=((R.users||{})['$emailKey'])||{};
+  const CREA="auth.token.email === 'guellec.coachingpro@gmail.com'";
+  const gele=(v)=>typeof v==='string'&&v.indexOf('newData.val() === data.val()')>=0&&v.indexOf(CREA)>=0;
+  const fautes=[];
+  for(const k of ['status','paymentStatus','accessExpiry','coachPlan','coachSubActive','role'])
+    if(!gele((U[k]||{})['.validate'])) fautes.push('users/$emailKey/'+k);
+  const pa=((((U.programmesAchetes||{})['$prog'])||{})['$champ'])||{};
+  if(!gele(pa['.validate'])) fautes.push('users/$emailKey/programmesAchetes/$prog/$champ');
+  for(const k of ['formule','statutPaypal','finAccesPaypal','dernierPaiementLe'])
+    if(!gele(((U.abonnement||{})[k]||{})['.validate'])) fautes.push('users/$emailKey/abonnement/'+k);
+  if(((U.role||{})['.validate']||'').indexOf("newData.val() === 'athlete'")<0) fautes.push('role : la premiere pose doit se limiter a athlete');
+  const reg=((R.coachs_registre||{})['$k'])||{};
+  if(reg['.write']!==false) fautes.push('coachs_registre : .write doit valoir false');
+  const ecr=String((((R.rc_codes||{})['$code'])||{})['.write']||'');
+  if(ecr.indexOf("!data.exists() && (root.child('coachs_registre')")<0) fautes.push('rc_codes : la creation n exige plus le registre des coachs');
+  if(/newData\.child\('redeemed'\)\.val\(\) === true/.test(ecr)) fautes.push('rc_codes : un tiers peut encore passer redeemed a true');
+  // Le code : la meme liste, recopiee avant le PUT.
+  const mG=source.match(/const CHAMPS_GELES=Object\.freeze\(\[([^\]]*)\]\)/);
+  const cote=mG?[...mG[1].matchAll(/'([^']+)'/g)].map((m)=>m[1]):[];
+  for(const k of ['status','paymentStatus','accessExpiry','coachPlan','coachSubActive','programmesAchetes','role'])
+    if(cote.indexOf(k)<0) fautes.push('CHAMPS_GELES (app) : '+k+' manque — le PUT du dossier serait rejete');
+  if(fautes.length){
+    console.error('\nGEL DES DROITS INCOMPLET :\n  '+fautes.join('\n  '));
+    process.exit(1);
+  }
+  console.log('droits geles : 11 champs de users/ figes, coachs_registre ferme, rc_codes reserve aux coachs enregistres');
+}
+
 console.log('\nRien de bloquant.');

@@ -9847,7 +9847,13 @@ async function testExercices(){
           const cas=[['generateStudentCode',generateStudentCode],
                      ['_extendAccessCode',_extendAccessCode],
                      ['deleteClientSuppEntry',deleteClientSuppEntry]];
-          const manque=cas.filter(([,f])=>nu(f).indexOf('direSiEnvoiEchoue(')<0).map(([n])=>n);
+          // _extendAccessCode NE POUSSE PLUS le dossier de l'athlete (accessExpiry
+          // est gele, 30/09/2026) : c'est prolongerCode, au Worker, et son echec
+          // se dit par un toast.
+          const parle=(n,f)=>n==='_extendAccessCode'
+            ?(nu(f).indexOf("_callFn('prolongerCode'")>=0&&nu(f).indexOf('toast(')>=0)
+            :nu(f).indexOf('direSiEnvoiEchoue(')>=0;
+          const manque=cas.filter(([n,f])=>!parle(n,f)).map(([n])=>n);
           if(manque.length) return _echec('muet(s) : '+manque.join(', '));
           // ET AUCUNE DES TROIS N'EST PASSEE A toastSync : ce serait ajouter un
           // toast de SUCCES la ou le resultat est deja visible a l'ecran.
@@ -15220,41 +15226,25 @@ async function testExercices(){
           // Aiguilles assemblées : sans ça, ce test se trouve lui-même.
           const ecritures=prod.split('coachPlan'+'=').length-1
             +(prod.split('coachPlan'+" =").length-1);
-          // DEUX écritures en production, et deux seulement :
-          //   1. la création du compte, dans doRegister ;
-          //   2. l'activation d'un palier PAYÉ, dans onApprove — après choix
-          //      explicite du palier, acceptation des CGV et paiement PayPal
-          //      abouti.
+          // UNE écriture en production, et une seule : la création du compte,
+          // dans doRegister (un miroir : les regles la ramenent a la valeur du
+          // serveur a l'envoi).
           //
-          // La seconde N'EST PAS une bascule automatique : c'est l'inverse,
-          // rien ne bouge sans que le coach ait payé. Elle est admise
-          // NOMMÉMENT — position ET condition vérifiées ci-dessous — pour
-          // qu'une TROISIÈME ne s'ajoute pas en silence. Sans elle, un coach
-          // qui paie dix-neuf euros resterait au palier libre, quota UN.
-          if(ecritures!==2) return _echec(ecritures+' écritures de coachPlan au lieu de deux');
+          // ⚠ DEPUIS LE 30/09/2026, onApprove N'ECRIT PLUS coachPlan : le plan
+          //   PAYE est pose par le webhook PayPal, au Worker, dans
+          //   coachs_registre/ — et coachPlan est gele par les regles. Une
+          //   seconde ecriture ici serait ramenee a la valeur du serveur.
+          if(ecritures!==1) return _echec(ecritures+' écritures de coachPlan au lieu d’une');
           if(String(doRegister).indexOf("user.coachPlan='libre'")<0)
-            return _echec('la première écriture n\'est pas celle de la création');
-          // La seconde est DANS onApprove, et SOUS la condition du palier coach.
-          // Aiguilles assemblées, comme ci-dessus : ce fichier ne doit pas se
-          // trouver lui-même si _prodSrc venait à l'englober.
+            return _echec('la seule écriture n\'est pas celle de la création');
           const _oaDeb=prod.indexOf('onApprove'+':async function(data){');
           if(_oaDeb<0) return _echec('onApprove introuvable en production');
           const _oaFin=prod.indexOf('onError'+':function(err)',_oaDeb);
           const _oa=prod.slice(_oaDeb,_oaFin>0?_oaFin:prod.length);
-          if((_oa.split('coachPlan'+'=').length-1)!==1)
-            return _echec('la seconde écriture n\'est pas dans onApprove');
-          // LA GARDE COLLE À L'ÉCRITURE. Un simple indexOf de la garde dans
-          // onApprove ne prouvait rien : elle y figure DEUX fois — la seconde
-          // choisit l'écran d'arrivée — et retirer celle qui protège
-          // l'écriture laissait ce test vert. On exige que les trois lignes se
-          // suivent, commentaires retirés.
-          const _oaNu=_oa.split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
-          const _motif=new RegExp('if\\(_est'+'Coach\\)\\{\\s*currentUser\\.coach'
-            +'Plan=_subPalier;\\s*currentUser\\.coachSubActive=true;');
-          if(!_motif.test(_oaNu))
-            return _echec('l\'écriture de onApprove n\'est pas conditionnée au palier payé');
-          if(_oa.indexOf('_palier'+'EstCoach(_subPalier)')<0)
-            return _echec('la condition ne vient pas de la table COACH_PALIERS');
+          if((_oa.split('coachPlan'+'=').length-1)!==0)
+            return _echec('onApprove écrit encore coachPlan');
+          if(_oa.indexOf('_attendre'+'Activation(')<0)
+            return _echec('onApprove n’attend pas l’activation par le serveur');
           // Et rien dans le comptage ni dans le bandeau n'y touche.
           for(const f of [countActiveAthletes,coachPalierRequis,_htmlBandeauPaliers,
                           paliersDe,_ecrirePaliers,loadCoachHome]){
@@ -15451,10 +15441,14 @@ async function testExercices(){
           const cible=src||String(window._verifyAccessCode||'');
           const tout=_prodSrc();
           const prod=tout.replace(/\s+/g,'');
-          if(prod.indexOf("redeemed:true,athleteEmail:currentUser.email")<0)
-            return _echec('le chemin de consommation a changé de forme');
-          if(prod.indexOf("usedBy:athleteName||data.studentName,etat:'cree',creeLe:")<0)
-            return _echec('« cree » ne part pas avec « redeemed »');
+          // ⚠ DEPUIS LE 30/09/2026, C'EST LE WORKER QUI CONSOMME (redeemCode) :
+          //   il pose redeemed, athleteEmail, etat:'cree' et creeLe dans la
+          //   MEME ecriture, en transaction (cloudflare/src/droits-appels.js).
+          //   L'app ne fait plus que l'appeler.
+          if(cible.indexOf("_callFn('redeemCode'")<0)
+            return _echec('le chemin de consommation ne passe pas par redeemCode');
+          if(prod.indexOf("redeemed:true,athleteEmail:currentUser.email")>=0)
+            return _echec('un PATCH redeemed subsiste côté app (les règles le refusent)');
           return true;})());
         ok('AUCUN service d\'envoi n\'est appelé : ni e-mail, ni SMS',(()=>{
           // Contrainte fondatrice : coût zéro. Aiguilles assemblées à
@@ -17125,7 +17119,8 @@ async function testExercices(){
           const vc=String(_verifyCoachInvite);
           for(const garde of ["data.type!=='coach'",'data.active','data.expiry','data.redeemed'])
             if(vc.indexOf(garde)<0) return _echec('garde perdue dans _verifyCoachInvite : '+garde);
-          return /redeemed:true/.test(vc)?true:_echec('le PATCH redeemed a disparu');})());
+          // LA CONSOMMATION est au Worker (devenirCoach) depuis le 30/09/2026.
+          return /_devenirCoach\(code\)/.test(vc)?true:_echec('l’invitation n’est plus consommée par devenirCoach');})());
 
         // ── LE TUNNEL D'ACQUISITION ─────────────────────────────────────
         // Rien ne couvrait doAthleteCode, ni l'ouverture directe du lien : le
@@ -36329,6 +36324,94 @@ async function testExercices(){
         return fuites.length?_echec('mot technique à l’écran : '+fuites.join(', ')):true;})());
 
       // ══ SANS PLAN BLAZE : CE QUE LE DOSSIER DOIT TENIR TOUT SEUL ══════
+      // ══ 30/09/2026 — droits/ ET coachs_registre/ SEULE SOURCE DE VÉRITÉ ═══
+      // Un PUT status:'COACHING_SUIVI' (ou role:'coach') dans son propre
+      // dossier ouvrait tout. Les règles gèlent ces champs ; après la bascule
+      // (droitsServeur/v = 2), l'app ne les lit plus du tout.
+      const _drSauve=()=>[DROITS_CLE,DROITS_V2_CLE,REGISTRE_CLE].map(k=>[k,localStorage.getItem(k)]);
+      const _drRendre=(sv)=>{ for(const [k,v] of sv){ if(v==null) localStorage.removeItem(k); else localStorage.setItem(k,v); } };
+      ok('DROITS — après la bascule, palierDe({role:"coach"}) sans registre ni droits rend « aucun »',(()=>{
+        const sv=_drSauve();
+        try{
+          localStorage.setItem(DROITS_V2_CLE,'1');
+          _droitsPoser('coachforge@t.fr',null,true); _registrePoser('coachforge@t.fr',null);
+          const u={email:'coachforge@t.fr',role:'coach'};
+          if(palierDe(u)!=='aucun') return _echec('un dossier role:coach sans registre reçoit '+palierDe(u));
+          if(peut(u,'bibliothequeExercices')) return _echec('peut() ouvre encore sur le rôle');
+          if(checkAccess(u)) return _echec('checkAccess ouvre encore sur le rôle');
+          // Un coach AU REGISTRE garde tout.
+          _registrePoser('vrai@t.fr',{plan:'pro',le:1,actifJusqu:Date.now()+864e5});
+          const v={email:'vrai@t.fr',role:'coach'};
+          if(palierDe(v)!=='suivi') return _echec('un coach au registre reçoit '+palierDe(v));
+          if(coachPlanDe(v)!=='pro') return _echec('plan du registre : '+coachPlanDe(v));
+          if(!coachSubActif(v)) return _echec('plan payé en cours réputé inactif');
+          // Le plan du DOSSIER ne compte plus pour le compte au registre.
+          if(coachPlanDe({email:'vrai@t.fr',coachPlan:'libre'})!=='pro') return _echec('coachPlan du dossier retenu');
+          _registrePoser('vrai@t.fr',{plan:'pro',le:1,actifJusqu:Date.now()-1});
+          if(coachPlanDe(v)!=='libre') return _echec('un plan échu reste payant');
+          // Registre lu et vide, après la bascule : coachPlan écrit dans le dossier ne vaut rien.
+          if(coachPlanDe({email:'coachforge@t.fr',coachPlan:'pro'})!=='libre') return _echec('coachPlan forgé retenu');
+          return true;
+        } finally { _drRendre(sv); }})());
+      ok('DROITS — palierDe({status:"COACHING_SUIVI"}) avec droits « absent » rend « aucun », et aucun écran payant ne s’ouvre',(()=>{
+        const sv=_drSauve();
+        try{
+          localStorage.setItem(DROITS_V2_CLE,'1');
+          _droitsPoser('forge@t.fr',null,true);
+          // LA REPRODUCTION : le dossier dit COACHING_SUIVI, sans échéance, avec
+          // un essai « éternel » écrit à la main — droits/ lu, vide.
+          const u={email:'forge@t.fr',role:'athlete',status:'COACHING_SUIVI',accessExpiry:0,
+            paymentStatus:'active',abonnement:{formule:'ultime'},essai:{ouvertLe:Date.now(),finit:Date.now()+9e11},
+            programmesAchetes:{p:{le:Date.now(),ouvertJusqu:Date.now()+9e11}}};
+          if(droitsDe(u).etat!=='absent') return _echec('montage : '+droitsDe(u).etat);
+          if(palierDe(u)!=='aucun') return _echec('palierDe : '+palierDe(u));
+          if(palierEffectif(u)!=='aucun') return _echec('palierEffectif : '+palierEffectif(u));
+          if(checkAccess(u)) return _echec('checkAccess ouvre');
+          if(!doitVoirLePaywall(u)) return _echec('le paywall ne s’affiche pas');
+          const ouvertes=Object.keys(CAPACITES).filter(c=>peut(u,c)&&CAPACITES[c].indexOf('aucun')<0);
+          if(ouvertes.length) return _echec('capacités payantes ouvertes : '+ouvertes.join(', '));
+          // Jamais lu (hors ligne à la première ouverture) : le dossier sert de
+          // repli, SAUF pour le suivi.
+          const inc=Object.assign({},u,{email:'jamaislu-'+Date.now()+'@t.fr',essai:null,programmesAchetes:null});
+          if(droitsDe(inc).etat!=='inconnu') return _echec('montage inconnu');
+          if(palierDe(inc)!=='aucun') return _echec('inconnu + COACHING_SUIVI : '+palierDe(inc));
+          // Et droits/ posé par le serveur ouvre, lui.
+          _droitsPoser('ok@t.fr',{palier:'suivi',echeance:0,source:'code_coach'},false);
+          const ok2={email:'ok@t.fr',role:'athlete',status:'FREE'};
+          if(palierDe(ok2)!=='suivi'||!checkAccess(ok2)) return _echec('un suivi serveur ne s’ouvre pas');
+          // L'essai du Worker compte, celui du dossier non.
+          _droitsPoser('essai@t.fr',{palier:'ultime',echeance:Date.now()+864e5,source:'essai',essaiOuvertLe:Date.now(),essaiFinit:Date.now()+864e5},false);
+          if(!essaiActif({email:'essai@t.fr'})) return _echec('l’essai du serveur ne compte pas');
+          return essaiActif(u)?_echec('l’essai écrit dans le dossier compte encore'):true;
+        } finally { _drRendre(sv); }})());
+      ok('DROITS — avant la bascule, l’ancien modèle (ses champs sont gelés par les règles)',(()=>{
+        const sv=_drSauve();
+        try{
+          localStorage.removeItem(DROITS_V2_CLE);
+          _droitsPoser('avant@t.fr',null,true);
+          const u={email:'avant@t.fr',role:'athlete',status:'COACHING_SUIVI'};
+          return palierDe(u)==='suivi'?true:_echec('l’ancien modèle a changé avant la bascule : '+palierDe(u));
+        } finally { _drRendre(sv); }})());
+      ok('DROITS — _alignerChampsGeles : le PUT porte les champs de droits DU SERVEUR, jamais ceux de l’appareil',(()=>{
+        const loc={email:'a@t.fr',role:'coach',status:'COACHING_SUIVI',paymentStatus:'active',accessExpiry:0,coachPlan:'pro',
+          coachSubActive:true,programmesAchetes:{p:{le:1}},sessions:[{id:'s'}],
+          abonnement:{palier:'mensuel',formule:'ultime',statutPaypal:'ACTIVE',engagementJusqu:5}};
+        const dist={role:'athlete',status:'FREE',abonnement:{formule:'essentielle'}};
+        const a=_alignerChampsGeles(JSON.parse(JSON.stringify(loc)),dist);
+        if(a.role!=='athlete'||a.status!=='FREE') return _echec('role/status : '+a.role+'/'+a.status);
+        for(const k of ['paymentStatus','accessExpiry','coachPlan','coachSubActive','programmesAchetes'])
+          if(k in a) return _echec(k+' part alors que le serveur ne le porte pas');
+        if(a.abonnement.formule!=='essentielle'||('statutPaypal' in a.abonnement)) return _echec('abonnement : '+JSON.stringify(a.abonnement));
+        if(a.abonnement.palier!=='mensuel'||a.abonnement.engagementJusqu!==5) return _echec('les champs libres de l’abonnement sont perdus');
+        if(!a.sessions||a.sessions.length!==1) return _echec('le reste du dossier est touché');
+        // Dossier NEUF : aucun champ de droits, le rôle seulement s'il vaut athlete.
+        const n=_alignerChampsGeles(JSON.parse(JSON.stringify(loc)),null);
+        if('role' in n||'status' in n) return _echec('dossier neuf : '+JSON.stringify(n).slice(0,120));
+        const n2=_alignerChampsGeles({role:'athlete',status:'FREE'},null);
+        if(n2.role!=='athlete'||'status' in n2) return _echec('dossier neuf athlète : '+JSON.stringify(n2));
+        // Et _doPushOne l'appelle, sauf pour le créateur.
+        const src=String(CLOUD._doPushOne);
+        return /if\(!_parLeCreateur\)\s*safe=_alignerChampsGeles\(safe,d\)/.test(src)?true:_echec('_doPushOne n’aligne pas');})());
       ok('SPARK — UN ABONNÉ À ULTIME REÇOIT ULTIME, ET PAS ESSENTIELLE',(()=>{
         // ⚠ LE DEFAUT QUE CECI FERME. Le dossier notait le statut et la
         //   PERIODE (mensuel ou annuel), jamais la FORMULE : _palierHerite
@@ -36357,10 +36440,11 @@ async function testExercices(){
           if(formuleDuPlan(PAYPAL_PLAN_ID_COACH)!=='coach') return _echec('le plan Coach n’est pas reconnu');
           if(formuleDuPlan(PAYPAL_PLAN_ID_PRO)!=='pro') return _echec('le plan Pro n’est pas reconnu');
           if(formuleDuPlan('P-INCONNU')!=='') return _echec('un plan inconnu se voit attribuer une formule');
-          // ET ELLE S’ECRIT AU MOMENT DU PAIEMENT.
+          // ET ELLE S’ECRIT AU MOMENT DU PAIEMENT — par le Worker depuis le
+          // 30/09/2026 (abonnement/formule est gele) : l'app ne l'ecrit plus.
           const src=_prodSrc();
-          if(src.indexOf('formule:formuleDuPlan(_planIdChoisi())')<0)
-            return _echec('le paiement n’écrit pas la formule dans le dossier');
+          if(src.indexOf('formule:formuleDuPlan(_planIdChoisi())')>=0)
+            return _echec('le paiement écrit encore la formule depuis l’app');
           // ⚠ LE CHAMP EST DECLARE DANS LES REGLES. `abonnement` est une liste
           //   blanche fermée : un champ non déclaré fait rejeter le PUT ENTIER
           //   du dossier, en silence.

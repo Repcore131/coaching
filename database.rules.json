@@ -96,7 +96,7 @@
           //   un champ non declare fait rejeter le PUT ENTIER du dossier, en
            //   silence. Sans cette ligne, le premier abonne a Ultime aurait
           //   cesse de se synchroniser sans que rien ne le dise.
-          "formule": { ".validate": "newData.isString() && newData.val().length < 40" },
+          "formule": { ".validate": "newData.isString() && newData.val().length < 40 && (newData.val() === data.val() || auth.token.email === 'guellec.coachingpro@gmail.com')" },
           "prochaineEcheance": { ".validate": "newData.isNumber()" },
           // ⚠ LE TERME DE L'ENGAGEMENT (24/09/2026), ET IL DOIT ETRE DECLARE ICI.
           //   `abonnement` est une liste blanche fermee par "$autre": false : un
@@ -108,10 +108,10 @@
           //   offert du parrainage), et DECLARES ICI pour la meme raison que
           //   `formule` : l app renvoie le dossier entier, et un champ inconnu
           //   ferait rejeter tout le PUT, en silence.
-          "statutPaypal": { ".validate": "newData.isString() && newData.val().length < 40" },
-          "finAccesPaypal": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "statutPaypal": { ".validate": "newData.isString() && newData.val().length < 40 && (newData.val() === data.val() || auth.token.email === 'guellec.coachingpro@gmail.com')" },
+          "finAccesPaypal": { ".validate": "newData.isNumber() && newData.val() > 0 && (newData.val() === data.val() || auth.token.email === 'guellec.coachingpro@gmail.com')" },
           "resilieLe": { ".validate": "newData.isNumber() && newData.val() > 0" },
-          "dernierPaiementLe": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "dernierPaiementLe": { ".validate": "newData.isNumber() && newData.val() > 0 && (newData.val() === data.val() || auth.token.email === 'guellec.coachingpro@gmail.com')" },
           "source": { ".validate": "newData.isString() && newData.val().length < 40" },
           "resiliationDemandee": {
             "ts": { ".validate": "newData.isNumber()" },
@@ -258,6 +258,27 @@
         "contacts": {
           "$athleteId": { ".validate": "newData.isNumber() && newData.val() > 0" }
         },
+
+        // ══ LES CHAMPS DE DROITS SONT GELES (30/09/2026) ══════════════════════
+        // Le palier, le role et le plan d un coach se lisaient ICI, dans un
+        // noeud que son titulaire ecrit a volonte : un PUT status:'COACHING_SUIVI'
+        // ouvrait tout. Ils ne changent plus que par le Worker (compte de
+        // service, qui ne passe pas par ces regles) ou par le createur.
+        // L app envoie le dossier ENTIER : une valeur IDENTIQUE passe, et
+        // _doPushOne recopie ces champs depuis le serveur avant chaque PUT
+        // (_alignerChampsGeles) pour ne jamais faire rejeter un envoi.
+        // La SUPPRESSION d un champ n est pas validee par Firebase : elle
+        // passe, et n ouvre rien — la verite est dans droits/ et coachs_registre/.
+        "status": { ".validate": "newData.val() === data.val() || auth.token.email === 'guellec.coachingpro@gmail.com'" },
+        "paymentStatus": { ".validate": "newData.val() === data.val() || auth.token.email === 'guellec.coachingpro@gmail.com'" },
+        "accessExpiry": { ".validate": "newData.val() === data.val() || auth.token.email === 'guellec.coachingpro@gmail.com'" },
+        "coachPlan": { ".validate": "newData.val() === data.val() || auth.token.email === 'guellec.coachingpro@gmail.com'" },
+        "coachSubActive": { ".validate": "newData.val() === data.val() || auth.token.email === 'guellec.coachingpro@gmail.com'" },
+        // Un objet ne se compare pas d un bloc : on gele chaque feuille.
+        "programmesAchetes": { "$prog": { "$champ": { ".validate": "newData.val() === data.val() || auth.token.email === 'guellec.coachingpro@gmail.com'" } } },
+        // Le role : la premiere pose, a 'athlete' seulement. 'coach' est pose
+        // par le Worker (devenirCoach), sur invitation ou place Libre.
+        "role": { ".validate": "newData.val() === data.val() || (!data.exists() && newData.val() === 'athlete') || auth.token.email === 'guellec.coachingpro@gmail.com'" },
 
         "coachEmailKey": {
           ".validate": "auth.token.email.replace('.', ',') === $emailKey || (data.exists() && newData.val() === data.val())"
@@ -423,6 +444,18 @@
       "avantEcheance": { ".validate": "newData.isNumber() && newData.val() >= 0" },
       "avantSource": { ".validate": "newData.isString() && newData.val().length < 30" },
       "$autre": { ".validate": false }
+    }
+  },
+
+  // LE REGISTRE DES COACHS (30/09/2026). Un compte est coach parce qu il est
+  // ICI, pas parce que son dossier dit role:'coach'. Ecrit par le Worker seul
+  // (devenirCoach, les paiements PayPal d un plan coach) : plan, actifJusqu.
+  // Lu par son titulaire (l app en tire son plan), et par les regles de
+  // rc_codes : seul un coach enregistre peut emettre un code.
+  "coachs_registre": {
+    "$k": {
+      ".read": "auth != null && auth.token.email.replace('.', ',') === $k",
+      ".write": false
     }
   },
 
@@ -997,6 +1030,11 @@
       "$code": {
         ".read": true,
 
+        // ⚠ DEPUIS LE 30/09/2026 : CREER un code exige d etre au registre des
+        //   coachs (ou le createur), et le code doit porter SA clef. Un compte
+        //   quelconque ne fabrique plus de code. Et plus personne d autre que
+        //   son coach ne passe redeemed a true : c est le Worker (redeemCode,
+        //   devenirCoach) qui consomme, apres verification.
         // Une QUATRIEME voie s ajoute ici, et une seule : l ouverture du lien
         // par quelqu un qui n a PAS encore de compte. C est tout l objet du
         // suivi d invitation — un athlete qui ouvre le lien avant de s inscrire
@@ -1018,7 +1056,7 @@
         // serveur, une telemetrie d ouverture est necessairement falsifiable ;
         // la difference avec /metrics, qui accepte l ecriture sans rien
         // connaitre, est qu il faut ici detenir le code.
-        ".write": "(auth != null && (!data.exists() || data.child('coachEmailKey').val() === auth.token.email.replace('.', ',') || (data.child('redeemed').val() !== true && newData.child('redeemed').val() === true && newData.child('coachEmailKey').val() === data.child('coachEmailKey').val()))) || (data.exists() && newData.child('etat').val() === 'ouvert' && data.child('etat').val() !== 'ouvert' && data.child('etat').val() !== 'cree' && newData.child('redeemed').val() === data.child('redeemed').val() && newData.child('active').val() === data.child('active').val() && newData.child('coachEmailKey').val() === data.child('coachEmailKey').val())",
+        ".write": "(auth != null && ((!data.exists() && (root.child('coachs_registre').child(auth.token.email.replace('.', ',')).exists() || auth.token.email === 'guellec.coachingpro@gmail.com') && newData.child('coachEmailKey').val() === auth.token.email.replace('.', ',')) || data.child('coachEmailKey').val() === auth.token.email.replace('.', ','))) || (data.exists() && newData.child('etat').val() === 'ouvert' && data.child('etat').val() !== 'ouvert' && data.child('etat').val() !== 'cree' && newData.child('redeemed').val() === data.child('redeemed').val() && newData.child('active').val() === data.child('active').val() && newData.child('coachEmailKey').val() === data.child('coachEmailKey').val())",
 
         // Trois etats, dans cet ordre, et rien d autre.
         "etat":     { ".validate": "newData.isString() && newData.val().matches(/^(envoye|ouvert|cree)$/)" },
@@ -2152,13 +2190,16 @@
       ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
       "droitsServeur": {
         "le": { ".validate": "newData.isNumber() && newData.val() > 0" },
+        // v = 2 : droits/ et coachs_registre/ remplis par remplir-droits.mjs.
+        // L app ne lit plus le dossier pour le palier qu a partir de la.
+        "v": { ".validate": "newData.isNumber() && newData.val() > 0" },
         "$autre": { ".validate": false }
       },
       "$autre": { ".validate": false }
     },
 
     "exercices": {
-      ".read": "auth != null && (\n  root.child('users').child(auth.token.email.replace('.', ',')).child('role').val() === 'coach' ||\n  (root.child('droits').child(auth.token.email.replace('.', ',')).child('palier').val() === 'ultime' &&\n   (root.child('droits').child(auth.token.email.replace('.', ',')).child('echeance').val() === 0 || root.child('droits').child(auth.token.email.replace('.', ',')).child('echeance').val() > now)) ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('ultimeJusqu').val() > now ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('bonusUltimeFin').val() > now ||\n  (!root.child('reglages_publics').child('droitsServeur').exists() &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('status').val() === 'AUTONOMIE_PREMIUM' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('paymentStatus').val() === 'active' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('abonnement').child('formule').val() === 'ultime')\n)",
+      ".read": "auth != null && (\n  root.child('coachs_registre').child(auth.token.email.replace('.', ',')).exists() ||\n  (root.child('reglages_publics').child('droitsServeur').child('v').val() !== 2 &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('role').val() === 'coach') ||\n  (root.child('droits').child(auth.token.email.replace('.', ',')).child('palier').val() === 'ultime' &&\n   (root.child('droits').child(auth.token.email.replace('.', ',')).child('echeance').val() === 0 || root.child('droits').child(auth.token.email.replace('.', ',')).child('echeance').val() > now)) ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('ultimeJusqu').val() > now ||\n  root.child('droits').child(auth.token.email.replace('.', ',')).child('bonusUltimeFin').val() > now ||\n  (!root.child('reglages_publics').child('droitsServeur').exists() &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('status').val() === 'AUTONOMIE_PREMIUM' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('paymentStatus').val() === 'active' &&\n   root.child('users').child(auth.token.email.replace('.', ',')).child('abonnement').child('formule').val() === 'ultime')\n)",
       ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'"
     }
   }
