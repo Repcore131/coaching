@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1721';
+window.RC_BUILD='1722';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-09-30';
@@ -457,7 +457,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1721.css">
+<link rel="stylesheet" href="./rc-style.1722.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -3294,6 +3294,9 @@ const COACH_PHOTO='icons/coach.jpg';
          parle de résiliation ne lui dirait rien de bon. -->
     <div id="cr-abo"></div>
 
+    <!-- L'UNITE DES CHARGES (kg ou lb) : _rendreUniteReglages. -->
+    <div id="cr-unite"></div>
+
     <!-- LE SON DE FIN DE REPOS. Éteint par défaut : une salle est bruyante et
          l'athlète a souvent ses écouteurs. Il compte surtout sur iOS, où
          Safari n'expose pas navigator.vibrate : sans lui, la fin du repos n'y
@@ -5973,5 +5976,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1721.js"></script>
+<script src="./rc-core.1722.js"></script>
 </body></html>

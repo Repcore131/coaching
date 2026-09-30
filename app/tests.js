@@ -20934,6 +20934,62 @@ async function testExercices(){
     ok('T1 — calcSug n’existe plus : chargeSuivante est le seul moteur des charges proposées',typeof calcSug==='undefined');
     ok('T1 — la borne : répétitions + RIR ≤ 12',e1rmFiable(12,0)&&e1rmFiable(10,2)&&!e1rmFiable(10,3)&&!e1rmFiable(13,0)&&e1rmFiable(8,'')&&e1rmFiable(0,0));
     ok('e1rm sur charge nulle ou négative rend 0',e1rm(0,10,1)===0&&e1rm(-5,10,1)===0);
+    // ── UNE SEULE FONCTION D'ARRONDI, ET L'UNITÉ ──
+    ok('arrondiCharge : le pas du matériel (haltères 2, machine 5, barre 2,5 ou 1,25 sous 20), dans le sens voulu',(()=>{
+      if(arrondiCharge(63.75,{ex:{name:'DEVELOPPE COUCHE HALTERE'},sens:'haut'})!==64) return _echec('haltère : '+arrondiCharge(63.75,{ex:{name:'DEVELOPPE COUCHE HALTERE'},sens:'haut'}));
+      if(arrondiCharge(57,{ex:{name:'CHEST PRESS MACHINE'},sens:'haut'})!==60) return _echec('machine : '+arrondiCharge(57,{ex:{name:'CHEST PRESS MACHINE'},sens:'haut'}));
+      if(arrondiCharge(57,{ex:{name:'CHEST PRESS MACHINE'},sens:'bas'})!==55) return _echec('machine vers le bas');
+      if(arrondiCharge(101,{ex:{name:'SQUAT BARRE'},sens:'proche'})!==100||arrondiCharge(18.2,{ex:{name:'CURL BARRE'},sens:'proche'})!==18.75) return _echec('barre');
+      if(arrondiCharge(33,{ex:{name:'PRESSE A CUISSE'},depart:30})!==35||arrondiCharge(28,{ex:{name:'PRESSE A CUISSE'},depart:30})!==25) return _echec('dans le sens du changement');
+      if(arrondiCharge(30,{ex:{name:'PRESSE A CUISSE'},depart:30})!==30) return _echec('sans changement, la charge reste');
+      if(arrondiCharge(3,{ex:{name:'CHEST PRESS MACHINE'},depart:5})!==5) return _echec('jamais sous un pas');
+      if(arrondiCharge(22.3,{ex:{name:'CURL HALTERES'},user:{pasMateriel:{HALTERES:2.5}},sens:'proche'})!==22.5) return _echec('pasMateriel');
+      if(arrondiCharge(0)!==null||arrondiCharge(-3)!==null) return _echec('charge nulle');
+      // Les enveloppes gardent leur comportement.
+      if(roundWeight(17)!==17.5||roundWeight(101)!==100||_arrondirCharge(121.4)!==122.5||arrondiAuPas(102.4999999)!==102.5) return _echec('enveloppes');
+      if(arrondiCharge125(110.0000000001,100)!==110||arrondiCharge125(20*0.95,20)!==18.75||arrondiCharge125(0.5,2)!==1.25) return _echec('arrondiCharge125');
+      // Plus aucun arrondi codé à la main hors d'arrondiCharge.
+      const src=_prodSrc().replace(String(arrondiCharge),'');
+      return /Math\.round\([a-zA-Z_.]+\/2\.5\)\*2\.5/.test(src)?_echec('un Math.round(x/2.5)*2.5 reste'):true;})());
+    ok('Unité : 100 kg ↔ 220,5 lb, dix enregistrements sans dérive ; le dossier reste en kilos',(()=>{
+      const u={unite:'lb'};
+      if(kgVersAffiche(100,u)!==220.5) return _echec('affichage : '+kgVersAffiche(100,u));
+      let kg=100;
+      for(let i=0;i<10;i++) kg=afficheVersKg(kgVersAffiche(kg,u),u,kg);
+      if(kg!==100) return _echec('après dix enregistrements : '+kg);
+      // Une vraie saisie est convertie ; une saisie en kilos ne l'est pas.
+      if(Math.abs(afficheVersKg('225',u,100)-102.0582833)>1e-6) return _echec('225 lb');
+      if(afficheVersKg('82,5',{},null)!==82.5||kgVersAffiche(82.5,{})!==82.5) return _echec('kilos');
+      // Aller-retour libre (sans valeur stockée) : l'écart reste sous la précision d'affichage.
+      let k2=100; for(let i=0;i<10;i++) k2=afficheVersKg(kgVersAffiche(k2,u),u);
+      if(Math.abs(k2-100)>0.05||kgVersAffiche(k2,u)!==220.5) return _echec('dérive libre : '+k2);
+      return (CHAMPS_NON_SANTE.indexOf('unite')>=0&&CHAMPS_NON_SANTE.indexOf('pasMateriel')>=0)?true:_echec('champs non classés');})());
+    ok('Unité lb : la suggestion affichée est un multiple de 5 lb (10 lb à la machine)',(()=>{
+      // À la barre, en kilos, le 1,25 de la progression reste (93,75 n'est pas réarrondi) ; aux haltères, 2 kg.
+      if(arrondiSuggestion(93.75,{ex:{name:'SQUAT BARRE'},user:{},depart:104})!==93.75) return _echec('barre en kilos réarrondie');
+      if(arrondiSuggestion(63.75,{ex:{name:'DEVELOPPE COUCHE HALTERE'},user:{},depart:62})!==64) return _echec('haltères');
+      const u={unite:'lb'};
+      for(const [kg,dep] of [[105,102.0582833],[61.3,60],[87.9,85],[40.2,38]]){
+        const v=chargeSuggereeAffichee(kg,{ex:{name:'SQUAT BARRE'},user:u,depart:dep});
+        if(!(v>0)||Math.abs(v/5-Math.round(v/5))>1e-9) return _echec(kg+' kg → '+v+' lb');
+      }
+      const m=chargeSuggereeAffichee(57,{ex:{name:'CHEST PRESS MACHINE'},user:u,sens:'haut'});
+      if(m%10!==0) return _echec('machine : '+m+' lb');
+      // L'écran de séance passe par arrondiCharge et affiche dans l'unité.
+      const src=String(_blocExo);
+      if(src.indexOf('arrondiSuggestion(_sugBrut,{ex,user:currentUser')<0||src.indexOf("arrondiCharge(_sugArr*_facteurCycle,{ex,user:currentUser,sens:'bas'})")<0) return _echec('suggestion ou cycle');
+      if(src.indexOf('${_aff(sug)}')<0) return _echec('affichage de la suggestion');
+      if(_prodSrc().indexOf('value="${_poidsSaisie(s.weight)}"')<0||String(_woChargeSaisie).indexOf('afficheVersKg(')<0) return _echec('saisie des séries');
+      if(String(updateCalcTable).indexOf('afficheVersKg(')<0||String(_htmlMonteeCharge).indexOf('chargeSuggereeAffichee(')<0) return _echec('calculatrice ou séries d’approche');
+      return String(ouvrirReglagesAthlete).indexOf('_rendreUniteReglages()')>=0?true:_echec('le réglage');})());
+    ok('Unité lb : les records s’affichent en livres',(()=>{
+      const sv=currentUser;
+      try{
+        currentUser=Object.assign({},sv||{},{unite:'lb'});
+        const S=(w,r)=>({date:Date.now(),data:{'SQUAT':{sets:[{done:true,weight:String(w),reps:String(r),rir:'1'}]}}});
+        const h=_htmlRecordsFin({records:recordsDeSeance(S(102.0582833,5),[S(100,5)])},'x');
+        return /225 lb/.test(h)&&!/ kg/.test(h)?true:_echec(h.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').slice(0,200));
+      } finally { currentUser=sv; }})());
     // ── LES SIGNATURES MUSCULAIRES REVUES ──
     ok('Signatures : écartés sans triceps, squats sans ischios, dips avec pectoraux, SIDE TRICEPS une pose',(()=>{
       const u={email:'sig@t.fr',exAlias:{},exMuscles:{}};
@@ -21046,7 +21102,7 @@ async function testExercices(){
       if(!/\/main/.test(_enteteSeries(false,false,true,true))||/\/main/.test(_enteteSeries(false,false,true,false))) return _echec('en-tête de la saisie');
       const src=_prodSrc();
       if(src.indexOf('placeholder="kg/main"')<0) return _echec('champ de saisie');
-      if(src.indexOf("${sug}kg${chargeParMain(ex)?")<0) return _echec('suggestion');
+      if(src.indexOf("${_aff(sug)}${chargeParMain(ex)?")<0) return _echec('suggestion');
       const S=(w,r)=>({date:Date.now(),data:{'CURL HALTÈRES':{sets:[{done:true,weight:String(w),reps:String(r),rir:'1'}]}}});
       return /14 kg\/main/.test(_htmlRecordsFin({records:recordsDeSeance(S(14,10),[S(12,10)])},'x'))?true:_echec('records');})());
     // ── LE TYPE DE CHARGE : poids du corps, lesté, assisté, élastique ──
@@ -26765,7 +26821,8 @@ async function testExercices(){
         return /Échauffement/.test(h)&&/40 · 55 · 67,5 kg × 5/.test(h);})());
       ok('Une charge légère n\'affiche qu\'un seul palier',(()=>{
         const h=_htmlMonteeCharge(15,{name:'CURL HALTERE',reps:'12'},0);
-        return /Échauffement/.test(h)&&/7,5 kg × 12/.test(h)&&h.split('·').length===1;})());
+        // 8 et non 7,5 depuis le 30/09/2026 : aux haltères, le pas est de 2 kg (arrondiCharge).
+        return /Échauffement/.test(h)&&/8 kg × 12/.test(h)&&h.split('·').length===1;})());
       ok('Une charge lourde en affiche quatre',(()=>{
         const h=_htmlMonteeCharge(140,{name:'SOULEVE DE TERRE',reps:'3'},0);
         return /55 · 83,75 · 105 · 125 kg × 3/.test(h);})());

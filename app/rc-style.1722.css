@@ -15728,3 +15728,8 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .vol-comptage{display:flex;flex-direction:column;gap:6px;font-size:var(--fs-xs);font-weight:700;color:var(--sub);margin:0 0 12px}
 .vol-comptage select{min-height:44px;font-size:var(--fs-sm)}
 .vol-comptage-d{font-weight:600;color:var(--text-faint);text-transform:none;letter-spacing:0}
+/* L'unité des charges, dans « Mes réglages » */
+.cr-unite{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:20px}
+.cr-unite label{display:block;font-weight:800;font-size:var(--fs-md);margin:0 0 8px;text-transform:none;letter-spacing:0;color:var(--text)}
+.cr-unite select{width:100%;min-height:44px}
+.cr-unite-d{font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:8px}

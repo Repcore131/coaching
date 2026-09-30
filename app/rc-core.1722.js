@@ -2788,6 +2788,7 @@ function ouvrirReglagesAthlete(){
   try{ _rendreReglagesPush(); }catch(e){}
   try{ _majConsentementCoachReglages(); }catch(e){}
   try{ rendrePrefsAide(); }catch(e){}
+  try{ _rendreUniteReglages(); }catch(e){}
   const v=document.getElementById('cr-version');
   if(v) versionSW().then(x=>{ if(x) v.textContent='RepCore · '+x; });
   return true;
@@ -6634,6 +6635,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // La cadence des bilans et les questions de fin de bilan, posées par le coach :
   // un rythme et des questions, aucune réponse (les réponses vivent dans bilans).
   'bilanCadence','questionsCoach',
+  // L'unité des charges et les pas de matériel de l'athlète (arrondiCharge).
+  'unite','pasMateriel',
   // « Compter le travail indirect » (réglage du coach, écran Volume).
   'reperesComptage',
   '_woReminderDays','_woReminderEnabled','_woReminderHour','_woReminderMin',
@@ -50469,8 +50472,15 @@ function _blocExo(idx,estSS){
   // est affichée, celle à mettre sur la barre, et la raison de l'écart est
   // écrite dessous.
   const _facteurCycle=(cycle.factor!==1.0)?cycle.factor:1;
-  const sugAjustee=_facteurCycle!==1&&_sugBrut?roundWeight(_sugBrut*_facteurCycle):null;
-  const sug=sugAjustee||_sugBrut;
+  // LE MATÉRIEL ET L'UNITÉ (arrondiCharge) : 63,75 kg d'haltères devient 64,
+  // et en livres la suggestion tombe sur un multiple de 5 lb. Dans le sens du
+  // changement depuis la dernière charge ; la charge du cycle, vers le bas.
+  const _prevW=prev?parseFloat(prev.weight):NaN;
+  const _sugArr=_sugBrut?arrondiSuggestion(_sugBrut,{ex,user:currentUser,depart:isFinite(_prevW)?_prevW:undefined}):null;
+  // Le cycle : arrondiCharge vers le bas (comme roundWeight le faisait au pas de la barre).
+  const sugAjustee=_facteurCycle!==1&&_sugArr?arrondiCharge(_sugArr*_facteurCycle,{ex,user:currentUser,sens:'bas'}):null;
+  const sug=sugAjustee||_sugArr;
+  const _aff=kg=>kgVersAffiche(kg,currentUser)+_unite();
   // QUAND LE TABLEAU PASSE EN CARTES : la regle est dans _seriesEnCartes, et
   // renderSets la lit aussi : l'en-tete et les lignes ne peuvent pas diverger.
   const isWide=pr.type==='degressive'||_seriesEnCartes(data);
@@ -50529,11 +50539,11 @@ function _blocExo(idx,estSS){
       </div>`
       :sug?`<div class="suggest-box">
         <div style="display:flex;gap:20px;align-items:flex-end;margin:2px 0 6px">
-          <div><div style="font-size:var(--fs-2xl);font-weight:900;line-height:1">${sug}kg${chargeParMain(ex)?'<span class="par-main">/main</span>':''}</div><div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance : progresser = réduire':'Charge pour la première série'}</div></div>
+          <div><div style="font-size:var(--fs-2xl);font-weight:900;line-height:1">${_aff(sug)}${chargeParMain(ex)?'<span class="par-main">/main</span>':''}</div><div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance : progresser = réduire':'Charge pour la première série'}</div></div>
         </div>
-        <div class="s-note">${isCW?'Contrepoids : un RIR élevé fait diminuer la charge. ':''}${prev?'Basée sur '+escapeHtml(creneauRef)+' ('+prev.weight+'kg'+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):', RIR non noté')+')':'Première séance'}</div>
+        <div class="s-note">${isCW?'Contrepoids : un RIR élevé fait diminuer la charge. ':''}${prev?'Basée sur '+escapeHtml(creneauRef)+' ('+_aff(prev.weight)+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):', RIR non noté')+')':'Première séance'}</div>
         ${_decote<1?`<div class="s-note" style="margin-top:6px">Ta dernière séance de ${escapeHtml(ex.name)} date du ${_libDateRef(prev._refDate)}. On repart ${Math.round((1-_decote)*100)} % en dessous, le temps de te retrouver.<div style="color:var(--text-dim);margin-top:4px">${SUG_NOTE_REPERE}</div></div>`:''}
-        ${sugAjustee?`<div class="s-note" style="color:var(--cycle-accent);margin-top:6px">Ajustée de ${Math.round((1-_facteurCycle)*100)} % pour ta phase de cycle : ${_sugBrut}kg d'habitude, ${sugAjustee}kg aujourd'hui.</div>`:''}
+        ${sugAjustee?`<div class="s-note" style="color:var(--cycle-accent);margin-top:6px">Ajustée de ${Math.round((1-_facteurCycle)*100)} % pour ta phase de cycle : ${_aff(_sugArr)} d'habitude, ${_aff(sugAjustee)} aujourd'hui.</div>`:''}
       </div>`:
       _sugReps?`<div class="suggest-box sug-reps">
         <div style="display:flex;gap:20px;align-items:flex-end;margin:2px 0 6px">
@@ -50664,7 +50674,9 @@ function _woChargeSaisie(idx,i,champ,el){
     if(principal) s.isAuto=false;
     toast('Charge négative ignorée','var(--orange)');
   } else {
-    s[champ]=brut;
+    // EN LIVRES, le dossier reçoit des kilos ; une saisie inchangée garde la valeur stockée.
+    const _kg=(uniteCharge(currentUser)==='lb'&&brut!=='')?afficheVersKg(brut,currentUser,s[champ]):null;
+    s[champ]=_kg!=null?String(_kg):brut;
     // Le champ affiche ce qui a été retenu. Sans ça, l'écran garderait « 82,5 »
     // pendant que le dossier porte « 82.5 » : deux vérités pour une saisie.
     if(el.value!==brut) el.value=brut;
@@ -51312,8 +51324,8 @@ function _enteteSeries(large,degressive,sansInfo,parMain){
       +`</div></th>`;
   }
   return sansInfo
-    ?`<th style="color:var(--text)">Reps</th><th style="color:var(--text)">Charge${parMain?'<span class="par-main"> /main</span>':''}</th><th style="color:var(--text)">RIR</th><th style="font-size:var(--fs-xs);color:var(--text)">Gêne</th><th style="color:var(--text);font-size:var(--fs-xs)">Validé</th>`
-    :`<th style="color:var(--text)">Reps</th><th style="color:var(--text)">Charge${parMain?'<span class="par-main"> /main</span>':''}</th><th style="color:var(--text)">RIR${rcInfo('rir')}</th><th style="font-size:var(--fs-xs);color:var(--text)">Gêne${rcInfo('douleur')}</th><th style="color:var(--text);font-size:var(--fs-xs)">Validé</th>`;
+    ?`<th style="color:var(--text)">Reps</th><th style="color:var(--text)">Charge${uniteCharge(currentUser)==='lb'?'<span class="par-main"> lb</span>':''}${parMain?'<span class="par-main"> /main</span>':''}</th><th style="color:var(--text)">RIR</th><th style="font-size:var(--fs-xs);color:var(--text)">Gêne</th><th style="color:var(--text);font-size:var(--fs-xs)">Validé</th>`
+    :`<th style="color:var(--text)">Reps</th><th style="color:var(--text)">Charge${uniteCharge(currentUser)==='lb'?'<span class="par-main"> lb</span>':''}${parMain?'<span class="par-main"> /main</span>':''}</th><th style="color:var(--text)">RIR${rcInfo('rir')}</th><th style="font-size:var(--fs-xs);color:var(--text)">Gêne${rcInfo('douleur')}</th><th style="color:var(--text);font-size:var(--fs-xs)">Validé</th>`;
 }
 // ══ R10 — LE PLAFOND DE TROIS ⓘ SUR L'ECRAN DE SEANCE ══════════════════
 // Un superset rend DEUX tableaux sur le meme ecran. Les ⓘ ne se posent que
@@ -51377,7 +51389,8 @@ function renderSets(ex,data,idx,opts){
     // le RPE qui est demande, pas le RIR qui est saisi.
     if(s.rpeCible) continue;
     if(w>0 && s.rir!==''&&s.rir!==undefined&&s.rir!==null){
-      const nextW=chargeSuivante(w,s.rir,_isCW,1,ex.name);
+      const _nextBrut=chargeSuivante(w,s.rir,_isCW,1,ex.name);
+      const nextW=_nextBrut!=null?arrondiSuggestion(_nextBrut,{ex,user:currentUser,depart:w}):null;
       if(!data.sets[i+1].done&&!data.sets[i+1].userEdited){
         data.sets[i+1].weight=nextW;
         data.sets[i+1].isAuto=true;
@@ -51447,13 +51460,13 @@ function renderSets(ex,data,idx,opts){
     // Wide-mode: content without <td> wrappers (for 2-sub-row card layout)
     const isWide=enCartes;
     const weightInner=isDeg
-      ?`<input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} value="${s.weight||''}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight2')} value="${s.weight2||''}" placeholder="P2" style="border-color:#78350f;margin-left:4px" onchange="${onChW2}" ${dis}>`
-      :`<div><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} style="${weightBorder}" value="${s.weight||''}"${_parMain?' placeholder="kg/main" aria-label="Charge par main (kg)"':''} onchange="${onChW}" ${dis}>${autoLabel}</div>`;
+      ?`<input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} value="${_poidsSaisie(s.weight)}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight2')} value="${_poidsSaisie(s.weight2)}" placeholder="P2" style="border-color:#78350f;margin-left:4px" onchange="${onChW2}" ${dis}>`
+      :`<div><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} style="${weightBorder}" value="${_poidsSaisie(s.weight)}"${_parMain?' placeholder="kg/main" aria-label="Charge par main (kg)"':''} onchange="${onChW}" ${dis}>${autoLabel}</div>`;
 
     // Simple-mode: <td> wrappers for classic table layout
     const weightCell=isDeg
-      ?`<td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} value="${s.weight||''}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}></td><td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight2')} value="${s.weight2||''}" placeholder="P2" style="border-color:#78350f" onchange="${onChW2}" ${dis}></td>`
-      :`<td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} style="${weightBorder}" value="${s.weight||''}"${_parMain?' placeholder="kg/main" aria-label="Charge par main (kg)"':''} onchange="${onChW}" ${dis}>${autoLabel}</td>`;
+      ?`<td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} value="${_poidsSaisie(s.weight)}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}></td><td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight2')} value="${_poidsSaisie(s.weight2)}" placeholder="P2" style="border-color:#78350f" onchange="${onChW2}" ${dis}></td>`
+      :`<td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} style="${weightBorder}" value="${_poidsSaisie(s.weight)}"${_parMain?' placeholder="kg/main" aria-label="Charge par main (kg)"':''} onchange="${onChW}" ${dis}>${autoLabel}</td>`;
 
     // Cycle cell
 
@@ -62069,8 +62082,8 @@ function _messageFinSeance(sets,setsPlanned,duration,records,delta,jour,incomple
     :(n+' séries sur '+p+', '+m+' min. ');
   if(records&&records.length){
     const b=records.slice().sort((a,x)=>x.gain-a.gain)[0];
-    const _pm=chargeParMain({name:b.nm})?' kg/main':' kg';
-    return tete+'Record : '+b.nm+(b.type==='reps'?', '+b.reps+' répétitions à '+b.curMax+_pm+'.':b.assiste?', assistance ramenée à '+b.curMax+' kg.':' à '+b.curMax+_pm+'.');
+    const _pm=_uniteTxt(b.nm), _c=String(_kgAff(b.curMax));
+    return tete+'Record : '+b.nm+(b.type==='reps'?', '+b.reps+' répétitions à '+_c+_pm+'.':b.assiste?', assistance ramenée à '+_c+' '+_unite()+'.':' à '+_c+_pm+'.');
   }
   if(Number(delta)>0) return tete+'+'+Math.round(delta)+' kg de volume sur ta séance du '+(jour||'dernière fois')+'.';
   if(p>0&&n===p) return tete+'Séance complète.';
@@ -63501,19 +63514,19 @@ function _htmlRecordsFin(ctx,date,cle){
     +rec.map((r,i)=>'<div class="rcf-rk-l">'
       +'<span class="rcf-rk-ex">'+escapeHtml(String(r.nm))+'</span>'
       +(r.type==='reps'
-        ?'<span class="rcf-rk-v"><span class="rcf-rk-a">'+nb(r.repsAvant)+' → </span>'+nb(r.reps)+' reps<span class="rcf-rk-g">'+nb(r.curMax)+(chargeParMain({name:r.nm})?' kg/main':' kg')+'</span></span>'
-        :'<span class="rcf-rk-v"><span class="rcf-rk-a">'+nb(r.histMax)+' → </span>'
-        +nb(r.curMax)+(chargeParMain({name:r.nm})?' kg/main':' kg')+'<span class="rcf-rk-g">'+(r.assiste?'−':'+')+nb(r.gain)+'</span></span>')
+        ?'<span class="rcf-rk-v"><span class="rcf-rk-a">'+nb(r.repsAvant)+' → </span>'+nb(r.reps)+' reps<span class="rcf-rk-g">'+nb(_kgAff(r.curMax))+_uniteTxt(r.nm)+'</span></span>'
+        :'<span class="rcf-rk-v"><span class="rcf-rk-a">'+nb(_kgAff(r.histMax))+' → </span>'
+        +nb(_kgAff(r.curMax))+_uniteTxt(r.nm)+'<span class="rcf-rk-g">'+(r.assiste?'−':'+')+nb(_kgAff(r.gain))+'</span></span>')
       // LA PETITE ANIMATION DU RECORD : une barre qui part de l'ancienne
       // charge (en gris) et monte jusqu'à la nouvelle (en rouge), une fois.
       +'<div class="rcf-rk-barre" aria-hidden="true" style="--avant:'
         +Math.max(5,Math.min(98,Math.round((r.type==='reps'?Number(r.repsAvant)/Number(r.reps):r.assiste?Number(r.curMax)/Number(r.histMax):Number(r.histMax)/Number(r.curMax))*100)))+'%">'
         +'<i class="rcf-rk-ancien"></i><i class="rcf-rk-nouveau"></i></div>'
       +'<div class="rcf-rk-x">'+(r.type==='reps'
-        ?'Record de répétitions : '+nb(r.reps)+' à '+nb(r.curMax)+' kg, '+nb(r.reps-r.repsAvant)+' de plus que ton meilleur à cette charge ('+nb(r.repsAvant)+').'
-        :r.assiste?'Moins d’assistance que jamais : '+nb(r.curMax)+' kg, soit '+nb(r.gain)+' kg de moins qu’avant ('+nb(r.histMax)+' kg).'
-        :'Nouvelle meilleure charge sur cet exercice : '+nb(r.curMax)
-        +' kg, soit '+nb(r.gain)+' kg de plus que ton meilleur jusqu’ici ('+nb(r.histMax)+' kg).')+'</div>'
+        ?'Record de répétitions : '+nb(r.reps)+' à '+nb(_kgAff(r.curMax))+' '+_unite()+', '+nb(r.reps-r.repsAvant)+' de plus que ton meilleur à cette charge ('+nb(r.repsAvant)+').'
+        :r.assiste?'Moins d’assistance que jamais : '+nb(_kgAff(r.curMax))+' '+_unite()+', soit '+nb(_kgAff(r.gain))+' '+_unite()+' de moins qu’avant ('+nb(_kgAff(r.histMax))+' '+_unite()+').'
+        :'Nouvelle meilleure charge sur cet exercice : '+nb(_kgAff(r.curMax))
+        +' '+_unite()+', soit '+nb(_kgAff(r.gain))+' '+_unite()+' de plus que ton meilleur jusqu’ici ('+nb(_kgAff(r.histMax))+' '+_unite()+').')+'</div>'
       +'</div>').join('')
     +'</div>';
 }
@@ -67898,7 +67911,151 @@ function updateStreak(){
   currentUser.lastSession=now;
   if(_jk&&_jk.sauve){ try{ toast('🛡 '+streakMessageJoker(_jk),'var(--green)',5000); }catch(e){} }
 }
-function roundWeight(w){return w<20?Math.ceil(w/1.25)*1.25:Math.round(w/2.5)*2.5;}
+// ══ L'ARRONDI D'UNE CHARGE, ET L'UNITÉ (30/09/2026) ═══════════════════════
+//
+// UNE SEULE FONCTION, arrondiCharge. roundWeight, arrondiCharge125,
+// _arrondirCharge et arrondiAuPas en sont des enveloppes, au comportement
+// inchangé (les appelants et les tests les connaissent).
+//
+// LE PAS DÉPEND DU MATÉRIEL (materielExercice) : une barre se charge de
+// 2,5 kg en 2,5 kg (1,25 sous 20 kg), des haltères de 2 en 2, une machine de 5
+// en 5. user.pasMateriel[matériel] le remplace, dans l'unité de l'athlète.
+//
+// L'UNITÉ : le dossier stocke TOUJOURS des kilos. En livres (user.unite =
+// 'lb'), l'arrondi se fait en livres (5 lb barre et haltères, 10 lb machine)
+// et rend les kilos qui leur correspondent ; l'affichage et la saisie
+// convertissent (1 lb = 0,45359237 kg).
+// ⚠ UNE SAISIE INCHANGÉE NE RECONVERTIT PAS : 100 kg s'affiche 220,5 lb, et
+//   réenregistrer 220,5 lb garde 100 kg, pas 100,017 (afficheVersKg).
+const LB_KG=0.45359237;
+const UNITES_CHARGE=Object.freeze(['kg','lb']);
+const PAS_MATERIEL=Object.freeze({
+  kg:Object.freeze({BARRE:2.5,SMITH:2.5,BARRE_EZ:2.5,HALTERES:2,MACHINE:5,PRESSE:5,HACK:5,POULIE:2.5,POULIE_HAUTE:2.5,POULIE_BASSE:2.5,AUCUN:1}),
+  lb:Object.freeze({BARRE:5,SMITH:5,BARRE_EZ:5,HALTERES:5,MACHINE:10,PRESSE:10,HACK:10,POULIE:5,POULIE_HAUTE:5,POULIE_BASSE:5,AUCUN:2.5})
+});
+// L'ordre dit quel matériel décide quand le nom en cite plusieurs : les
+// haltères d'un « développé couché haltère » avant le banc, la machine avant la barre.
+const _PAS_PRIORITE=['HALTERES','MACHINE','PRESSE','HACK','POULIE_HAUTE','POULIE_BASSE','POULIE','SMITH','BARRE_EZ','BARRE','AUCUN'];
+function uniteCharge(user){ return (user&&user.unite==='lb')?'lb':'kg'; }
+/** PURE. Le pas, dans l'unité de l'athlète, pour une valeur `x` exprimée dans cette unité. */
+function pasCharge(x,ex,user){
+  const u=uniteCharge(user);
+  let mats=[]; try{ mats=materielExercice(ex&&ex.name); }catch(e){ mats=[]; }
+  const perso=(user&&user.pasMateriel&&typeof user.pasMateriel==='object')?user.pasMateriel:{};
+  for(const m of _PAS_PRIORITE){
+    if(mats.indexOf(m)<0) continue;
+    const p=Number(perso[m]);
+    if(p>0&&p<=50) return p;
+    if(m==='BARRE'||m==='SMITH'||m==='BARRE_EZ') break;          // la barre : le pas fin sous 20 kg
+    return PAS_MATERIEL[u][m];
+  }
+  const pb=Number(perso.BARRE);
+  if(pb>0&&pb<=50) return pb;
+  return u==='lb'?(x<45?2.5:5):(x<20?1.25:2.5);
+}
+/**
+ * PURE. La charge arrondie à ce qu'on peut charger, en KG (null si <= 0).
+ *   o = {ex, user, sens:'haut'|'bas'|'proche', depart (kg), pas (forcé)}
+ * Sans `sens` mais avec `depart` : dans le sens du changement, comme
+ * arrondiCharge125, et jamais sous un pas.
+ */
+function arrondiCharge(kg,o){
+  const opt=o||{};
+  const v=Number(kg);
+  if(!isFinite(v)||v<=0) return null;
+  const u=uniteCharge(opt.user), f=u==='lb'?1/LB_KG:1;
+  const x=v*f;
+  const aDepart=opt.depart!=null&&isFinite(Number(opt.depart));
+  const dep=aDepart?Number(opt.depart)*f:null;
+  const pas=Number(opt.pas)>0?Number(opt.pas):pasCharge(x,opt.ex,opt.user);
+  let sens=opt.sens;
+  if(!sens&&aDepart){
+    if(Math.abs(Math.round(x*1e6)/1e6-dep)<1e-9) return Number(opt.depart);
+    sens=x>dep?'haut':'bas';
+  }
+  const q=Math.round(x/pas*1e6)/1e6;
+  const n=sens==='haut'?Math.ceil(q):(sens==='bas'?Math.floor(q):Math.round(q));
+  let r=n*pas;
+  if(aDepart||sens==='haut') r=Math.max(pas,r);
+  r=Math.round(r*1e6)/1e6;
+  return u==='lb'?Math.round(r*LB_KG*1e6)/1e6:r;
+}
+// ── L'affichage et la saisie dans l'unité de l'athlète ─────────────────
+/** PURE. Des kilos, affichés dans l'unité (0,1 lb ; 0,01 kg). */
+function kgVersAffiche(kg,user){
+  const v=Number(kg);
+  if(kg===''||kg==null||!isFinite(v)) return null;
+  return uniteCharge(user)==='lb'?Math.round(v/LB_KG*10)/10:Math.round(v*100)/100;
+}
+/** PURE. Une saisie dans l'unité, en kilos. `kgActuel` : la valeur déjà stockée,
+ *  gardée telle quelle si la saisie ne l'a pas changée (pas de dérive). */
+function afficheVersKg(val,user,kgActuel){
+  const x=parseFloat(String(val==null?'':val).replace(',','.'));
+  if(!isFinite(x)) return null;
+  if(uniteCharge(user)!=='lb') return x;
+  if(kgActuel!=null&&kgActuel!==''&&kgVersAffiche(kgActuel,user)===Math.round(x*10)/10) return Number(kgActuel);
+  return Math.round(x*LB_KG*1e6)/1e6;
+}
+// La valeur d'un champ de saisie : telle quelle en kilos, convertie en livres.
+function _poidsSaisie(v){
+  if(v===''||v==null) return '';
+  if(uniteCharge(currentUser)!=='lb') return v;
+  const a=kgVersAffiche(v,currentUser);
+  return a==null?'':a;
+}
+// PURE. Une charge PROPOSÉE (suggestion, série suivante, échauffement).
+// ⚠ À LA BARRE, EN KILOS, LE 1,25 DE chargeSuivante RESTE : la progression
+//   fine (93,75 après une coupure, 101,25 après une série facile) est voulue,
+//   et un arrondi au 2,5 l'effacerait. Le pas du matériel s'applique dès qu'il
+//   est propre à l'exercice (haltères, machine, poulie, poids du corps), que
+//   l'athlète en a posé un (pasMateriel), ou qu'il compte en livres.
+function _pasPropreA(ex,user){
+  if(uniteCharge(user)==='lb') return true;
+  if(user&&user.pasMateriel&&typeof user.pasMateriel==='object'&&Object.keys(user.pasMateriel).length) return true;
+  let mats=[]; try{ mats=materielExercice(ex&&ex.name); }catch(e){ mats=[]; }
+  for(const m of _PAS_PRIORITE){ if(mats.indexOf(m)<0) continue; return !(m==='BARRE'||m==='SMITH'||m==='BARRE_EZ'); }
+  return false;
+}
+function arrondiSuggestion(kg,o){
+  const v=Number(kg);
+  if(!isFinite(v)||v<=0) return null;
+  const opt=o||{};
+  return _pasPropreA(opt.ex,opt.user)?arrondiCharge(v,opt):v;
+}
+/** PURE. La charge suggérée telle qu'elle s'affiche : arrondie, dans l'unité. */
+function chargeSuggereeAffichee(kg,o){
+  const k=arrondiSuggestion(kg,o);
+  return k==null?null:kgVersAffiche(k,o&&o.user);
+}
+function _unite(){ return uniteCharge(currentUser); }
+function _kgAff(kg){ const a=kgVersAffiche(kg,currentUser); return a==null?0:a; }
+function _uniteTxt(nom){ return ' '+_unite()+(chargeParMain({name:nom})?'/main':''); }
+// Le réglage, dans « Mes réglages ».
+function _rendreUniteReglages(){
+  const z=document.getElementById('cr-unite');
+  if(!z||!currentUser) return false;
+  const u=uniteCharge(currentUser);
+  z.innerHTML='<div class="cr-unite"><label for="cr-unite-sel">Unité des charges</label>'
+    +'<select id="cr-unite-sel" onchange="choisirUnite(this.value)">'
+    +'<option value="kg"'+(u==='kg'?' selected':'')+'>Kilos (kg)</option>'
+    +'<option value="lb"'+(u==='lb'?' selected':'')+'>Livres (lb)</option></select>'
+    +'<div class="cr-unite-d">Tes charges restent enregistrées en kilos ; elles s’affichent et se saisissent dans l’unité choisie.</div></div>';
+  return true;
+}
+function choisirUnite(v){
+  if(!currentUser||UNITES_CHARGE.indexOf(v)<0) return false;
+  if(v==='lb') currentUser.unite='lb'; else delete currentUser.unite;
+  try{ saveUser(); }catch(e){}
+  _rendreUniteReglages();
+  toast(v==='lb'?'Charges en livres ✓':'Charges en kilos ✓','var(--green)');
+  return true;
+}
+// Enveloppe : au-dessus sous 20 kg, au plus proche au-delà (comme avant).
+function roundWeight(w){
+  const v=Number(w);
+  if(!(v>0)) return 0;
+  return arrondiCharge(v,{sens:v<20?'haut':'proche'});
+}
 // ══ LE TYPE DE CHARGE D'UN EXERCICE (30/09/2026) ═══════════════════════════
 //
 // Une traction ne se charge pas comme un développé couché. Cinq cas :
@@ -68044,15 +68201,16 @@ function multiplicateurRir(rir){
 // valent 1 kg, moins que 1,25, et la charge revenait à son point de départ.
 // C'est aussi ce que réclament les machines guidées, où l'on RETIRE du poids
 // de compensation pour progresser.
+// Enveloppe d'arrondiCharge, au pas FIXE de 1,25 (le comportement d'avant).
 function arrondiCharge125(cible,depart){
   // Une multiplication à virgule flottante peut tomber à 1e-13 au-dessus d'un
   // multiple exact : sans ce rattrapage, 110 monterait à 111,25.
   const x=Math.round((Number(cible)||0)*1e6)/1e6;
   const d=Number(depart)||0;
   if(Math.abs(x-d)<1e-9) return d;
-  const q=x>d?Math.ceil(x/1.25):Math.floor(x/1.25);
   // Jamais en dessous d'un cran : une charge ne descend pas à zéro.
-  return Math.max(1.25,q*1.25);
+  if(!(x>0)) return 1.25;
+  return arrondiCharge(x,{depart:d,pas:1.25});
 }
 
 // ── Montée en charge : les séries d'approche, affichage seul ────────────────
@@ -68112,8 +68270,8 @@ function _htmlMonteeCharge(chargeTravail,ex,idx){
   // la forme longue reprend la main plutôt que d'écrire un mensonge court.
   const memesReps=paliers.every(p=>String(p.reps)===String(paliers[0].reps));
   const txt=memesReps
-    ? paliers.map(p=>_fmtChargeMontee(p.charge)).join(' · ')+' kg × '+paliers[0].reps
-    : paliers.map(p=>_fmtChargeMontee(p.charge)+' kg × '+p.reps).join(' · ');
+    ? paliers.map(p=>_fmtChargeMontee(chargeSuggereeAffichee(p.charge,{ex,user:currentUser,sens:'proche'}))).join(' · ')+' '+_unite()+' × '+paliers[0].reps
+    : paliers.map(p=>_fmtChargeMontee(chargeSuggereeAffichee(p.charge,{ex,user:currentUser,sens:'proche'}))+' '+_unite()+' × '+p.reps).join(' · ');
   return `<div class="wo-ramp sub" style="background:var(--surface-2);border-radius:var(--r-2);padding:10px 12px;margin-bottom:12px"><button type="button" onclick="basculerMonteeCharge()" style="background:none;border:none;padding:0;margin:0;color:inherit;font:inherit;cursor:pointer">Échauffement <span class="wo-ramp-caret">${masque?'▸':'▾'}</span></button><span class="wo-ramp-det"${masque?' style="display:none"':''}> : ${txt}</span></div>`;
 }
 // Préférence GLOBALE, pas par exercice : replier la rampe une fois la replie
@@ -68911,10 +69069,8 @@ function pctDe1RM(rpe,reps){
 // MEMES PALIERS QUE chargeSuivante : 2,5 kg, et 1,25 sous 20 kg — au-dessous,
 // deux kilos et demi font plus de dix pour cent de la charge.
 function _arrondirCharge(kg){
-  const v=Number(kg);
-  if(!isFinite(v)||v<=0) return null;
-  const pas=(v<20)?1.25:2.5;
-  return Math.round(v/pas)*pas;
+  // Enveloppe d'arrondiCharge : au plus proche, pas de la barre.
+  return arrondiCharge(kg,{sens:'proche'});
 }
 // PURE. La programmation d'un exercice, normalisee — ou null.
 //
@@ -84656,7 +84812,7 @@ function _htmlRecords(user){
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Records</div>
     ${lignes.map(x=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);color:var(--text-strong);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}</span>
-      <span style="font-size:var(--fs-xs);font-weight:800;color:var(--text);white-space:nowrap">${_fmtKg(x.rec.meilleureCharge.kg)}${chargeParMain({name:x.nom})?'/main':''}${x.rec.meilleureCharge.reps?` × ${x.rec.meilleureCharge.reps}`:''}<span style="font-size:var(--fs-2xs);color:var(--text-faint);font-weight:600"> · ${dt(x.rec.meilleureCharge.date)}</span></span>
+      <span style="font-size:var(--fs-xs);font-weight:800;color:var(--text);white-space:nowrap">${String(_kgAff(x.rec.meilleureCharge.kg)).replace('.',',')}${_uniteTxt(x.nom)}${x.rec.meilleureCharge.reps?` × ${x.rec.meilleureCharge.reps}`:''}<span style="font-size:var(--fs-2xs);color:var(--text-faint);font-weight:600"> · ${dt(x.rec.meilleureCharge.date)}</span></span>
     </div>`).join('')}
   </div>`;
 }
@@ -85625,11 +85781,8 @@ const RAP_SEANCES=6, RAP_MIN_POINTS=3, RAP_PLAFOND=0.025, RAP_FRAICHEUR_J=60;
 function pasDeCharge(kg){ return (Number(kg)<20)?1.25:2.5; }
 /** PURE. Arrondi au pas de charge le plus proche. */
 function arrondiAuPas(kg){
-  const v=Number(kg);
-  if(!isFinite(v)||v<=0) return 0;
-  const p=pasDeCharge(v);
-  // Le rattrapage flottant : 102,4999999 est 102,5.
-  return Math.round(Math.round(v/p*1e6)/1e6)*p;
+  // Enveloppe d'arrondiCharge (le rattrapage flottant y est : 102,4999999 est 102,5).
+  return arrondiCharge(kg,{sens:'proche'})||0;
 }
 // Les répétitions visées : le BAS de la fourchette (« 8-10 » → 8), la plus
 // lourde des charges prévues.
@@ -119779,7 +119932,8 @@ async function analyzeProgPhotos(){
 
 // ======= CALCULATEUR RIR (logique Sheets) =======
 function openCalc(pw,pr,prir,gender){
-  document.getElementById('calc-pw').value=pw||'';
+  // La charge arrive en kilos : elle s'affiche dans l'unité de l'athlète.
+  document.getElementById('calc-pw').value=(pw!==''&&pw!=null&&uniteCharge(currentUser)==='lb')?(kgVersAffiche(pw,currentUser)||''):(pw||'');
   document.getElementById('calc-pr').value=pr||'';
   document.getElementById('calc-prir').value=prir||'';
   // La phrase est posée par updateCalcTable, appelée juste en dessous : elle
@@ -119837,7 +119991,8 @@ function _renderCalcCycle(){
   z.style.display=t?'block':'none';
 }
 function updateCalcTable(){
-  const pw=parseFloat(document.getElementById('calc-pw').value)||0;
+  // La charge est saisie dans l'unité de l'athlète : le calcul se fait en kilos.
+  const pw=afficheVersKg(document.getElementById('calc-pw').value,currentUser)||0;
   const pr=parseFloat(document.getElementById('calc-pr').value)||0;
   const prir=parseFloat(document.getElementById('calc-prir').value)||0;
   // Posée AVANT toute sortie anticipée : elle informe indépendamment de
@@ -119849,7 +120004,7 @@ function updateCalcTable(){
   const e=e1rm(pw,pr,prir);
   if(!(e>0)){document.getElementById('calc-table-body').innerHTML='<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--orange)">Entre une charge et au moins une répétition</td></tr>';document.getElementById('calc-e1rm-display').style.display='none';return;}
   const _fiable=e1rmFiable(pr,prir);
-  document.getElementById('calc-e1rm-val').textContent=Math.round(e)+'kg'+(_fiable?'':' (estimation peu fiable)');
+  document.getElementById('calc-e1rm-val').textContent=Math.round(kgVersAffiche(e,currentUser))+_unite()+(_fiable?'':' (estimation peu fiable)');
   document.getElementById('calc-e1rm-display').style.display='block';
   const repsRange=[3,4,5,6,7,8,10,12,15];
   const rirRange=[0,1,2,3];
@@ -119859,12 +120014,12 @@ function updateCalcTable(){
     return `<tr style="background:${isTargetReps?'#1a0000':''}">
       <td style="padding:8px 6px;font-weight:800;text-align:center;white-space:nowrap;color:${isTargetReps?'var(--red)':'var(--sub)'}">${r} reps</td>
       ${rirRange.map(rir=>{
-        let w=chargePourReps(e,r,rir);
-        w=Math.round(w/2.5)*2.5; // arrondi à 2.5kg
+        // Arrondie comme partout (arrondiCharge), affichée dans l'unité.
+        const w=kgVersAffiche(arrondiCharge(chargePourReps(e,r,rir),{user:currentUser,sens:'proche'}),currentUser)||0;
         const isTarget=r===Math.round(pr)&&rir===Math.round(prir);
         // Au-delà de 12 répétitions potentielles : grisé, estimation peu fiable.
         const peuFiable=!e1rmFiable(r,rir);
-        return `<td${peuFiable?' class="calc-peu-fiable" title="Estimation peu fiable au-delà de 12 répétitions potentielles"':''} style="padding:8px 6px;text-align:center;background:${isTarget?'var(--red)':''};border-radius:${isTarget?'var(--r-2)':''};font-weight:${isTarget?'800':'600'};box-shadow:${isTarget?'var(--glow-red)':''}">${w>0?w+'kg':'-'}</td>`;
+        return `<td${peuFiable?' class="calc-peu-fiable" title="Estimation peu fiable au-delà de 12 répétitions potentielles"':''} style="padding:8px 6px;text-align:center;background:${isTarget?'var(--red)':''};border-radius:${isTarget?'var(--r-2)':''};font-weight:${isTarget?'800':'600'};box-shadow:${isTarget?'var(--glow-red)':''}">${w>0?w+_unite():'-'}</td>`;
       }).join('')}
     </tr>`;
   }).join('');
