@@ -44785,6 +44785,44 @@ async function testExercices(){
     // le serveur retombait a 2 000 ; le coach, perime, effacait la seance et
     // le bilan que l'athlete venait d'envoyer. Chaque cas ci-dessous est un
     // de ces trous, rebouche.
+    // 30/09/2026 — LES JOURNAUX ET LES CRÉNEAUX, ÉLÉMENT PAR ÉLÉMENT.
+    ok('syncFusion : weightLog fusionné entrée par entrée (base [A], local [A,B], distant [A,C] → [A,B,C] trié)',(()=>{
+      const A={date:'2026-09-01',kg:80}, B={date:'2026-09-02',kg:79.5}, C={date:'2026-09-03',kg:79.2};
+      const base=syncEmpreintes({weightLog:[A]});
+      const r=syncFusion(base,{weightLog:[A,B]},{weightLog:[C,A]});
+      const d=(r.weightLog||[]).map(e=>e.date).join(',');
+      if(d!=='2026-09-01,2026-09-02,2026-09-03') return _echec('weightLog : '+d);
+      // Même patron pour les autres journaux par jour, et un retrait d'un côté
+      // (rétention) reste un retrait.
+      const b2=syncEmpreintes({sleepLog:[A,B],stepsLog:[{date:'2026-09-01',count:1}]});
+      const r2=syncFusion(b2,{sleepLog:[B],stepsLog:[{date:'2026-09-01',count:1},{date:'2026-09-02',count:2}]},
+        {sleepLog:[A,B,C],stepsLog:[{date:'2026-09-01',count:1},{date:'2026-09-03',count:3}]});
+      if(r2.sleepLog.map(e=>e.date).join(',')!=='2026-09-02,2026-09-03') return _echec('sleepLog : '+r2.sleepLog.map(e=>e.date).join(','));
+      if(r2.stepsLog.map(e=>e.count).join(',')!=='1,2,3') return _echec('stepsLog : '+r2.stepsLog.map(e=>e.count).join(','));
+      // Le journal de douleur se trie par `at`, numérique.
+      const r3=syncFusion(syncEmpreintes({journalDouleur:[]}),{journalDouleur:[{at:30,clientId:'a'},{at:5,clientId:'a'}]},{journalDouleur:[{at:12,clientId:'b'}]});
+      if(r3.journalDouleur.map(e=>e.at).join(',')!=='5,12,30') return _echec('journalDouleur : '+r3.journalDouleur.map(e=>e.at).join(','));
+      const r4=syncFusion(syncEmpreintes({}),{historiqueDrapeaux:[{leve:9}]},{historiqueDrapeaux:[{leve:3}]});
+      return r4.historiqueDrapeaux.map(e=>e.leve).join(',')==='3,9'?true:_echec('historiqueDrapeaux : '+JSON.stringify(r4.historiqueDrapeaux));})());
+    ok('syncFusion : sessions_config créneau par créneau (renommage local + exercices distants), ordre des 7 créneaux conservé',(()=>{
+      const J=['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
+      const cfg=()=>J.map((day,i)=>({day,name:'S'+i,active:i%2===0,exercises:[{name:'EX'+i,series:3,reps:'8'}]}));
+      const depart={sessions_config:cfg()};
+      const base=syncEmpreintes(depart);
+      const loc=cfg(); loc[2].name='PUSH LOURD';
+      const dis=cfg(); dis[4].exercises=[{name:'SQUAT',series:5,reps:'5'},{name:'FENTES',series:3,reps:'10'}];
+      const r=syncFusion(base,{sessions_config:loc},{sessions_config:dis});
+      const sc=r.sessions_config;
+      if(!Array.isArray(sc)||sc.length!==7) return _echec('forme : '+String(JSON.stringify(sc)).slice(0,80));
+      if(sc.map(x=>x.day).join(',')!==J.join(',')) return _echec('ordre : '+sc.map(x=>x.day).join(','));
+      if(sc[2].name!=='PUSH LOURD') return _echec('le renommage local est perdu : '+sc[2].name);
+      if(sc[4].exercises.map(e=>e.name).join(',')!=='SQUAT,FENTES') return _echec('les exercices distants sont perdus : '+JSON.stringify(sc[4].exercises));
+      if(sc[3].name!=='S3'||sc[6].exercises[0].name!=='EX6') return _echec('un créneau intact a bougé');
+      // La forme objet de Firebase ({0:…,1:…}) se fusionne pareil.
+      const disObj={sessions_config:Object.assign({},dis)};
+      const r2=syncFusion(base,{sessions_config:loc},disObj);
+      return (r2.sessions_config[2].name==='PUSH LOURD'&&r2.sessions_config[4].exercises[0].name==='SQUAT')
+        ?true:_echec('forme objet : '+JSON.stringify(r2.sessions_config).slice(0,120));})());
     ok('LA FUSION GARDE CE QUE CHACUN A ÉCRIT, ET RIEN DE PLUS',(()=>{
       // LE DOSSIER DE DEPART, tel que les deux appareils l'ont vu la derniere
       // fois — c'est leur base commune.
