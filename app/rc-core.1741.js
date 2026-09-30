@@ -92753,6 +92753,42 @@ function _planCiqual(id){
   if(!Array.isArray(_ciqualDB)) return null;
   return _ciqualDB.find(f=>f&&f.id===id)||null;
 }
+// ⚠ L'ALIMENT D'UNE LIGNE, MÊME SANS LA BASE (30/09/2026). Chez l'athlète, le
+//   plan se peint AVANT que Ciqual (873 Ko) soit chargé : ses aliments s'y
+//   lisaient « Aliment introuvable (#19644) » et ne comptaient dans aucun
+//   total — et hors ligne, sans la base en cache, ils y restaient. Le coach
+//   enregistre donc avec chaque ligne une copie de ce qu'il a vu
+//   (ciqualRef : nom, groupe, P/G/L pour 100 g). La base reste prioritaire :
+//   la copie ne sert que quand elle manque.
+function _planAlimentLigne(item,chercher){
+  if(!item||item.ciqual==null) return null;
+  const f=_planResolveur(chercher)(item.ciqual);
+  if(f) return f;
+  const r=item.ciqualRef;
+  return (r&&typeof r==='object'&&r.n)?r:null;
+}
+// Le libellé d'un aliment qu'on ne sait pas nommer : la base arrive, elle est
+// indisponible, ou l'aliment n'y est vraiment pas.
+function _planLibIntrouvable(id){
+  const charge=Array.isArray(_ciqualDB)&&_ciqualDB.length;
+  if(!charge){
+    let indispo=false; try{ indispo=ciqualIndisponible(); }catch(e){}
+    return indispo?'Aliment #'+id+' (base d’aliments indisponible hors ligne)':'Aliment en cours de chargement…';
+  }
+  return 'Aliment introuvable (#'+id+')';
+}
+// La copie posée à l'enregistrement, sur chaque ligne Ciqual que la base connaît.
+function planFigerAliments(plan){
+  let n=0;
+  for(const it of planSquelette(plan)){
+    if(!it||it.ciqual==null) continue;
+    const f=_planCiqual(it.ciqual);
+    if(!f) continue;
+    it.ciqualRef={n:String(f.n||''),g:String(f.g||''),p:_planNb(f.p),c:_planNb(f.c),l:_planNb(f.l)};
+    n++;
+  }
+  return n;
+}
 
 // ══════════════ L'ACCÈS À LA DIÈTE STRICTE ════════════════════════════════
 // La diète stricte n'est pas un mode de suivi qu'on choisit dans une liste :
@@ -92846,7 +92882,7 @@ function planMacrosItem(item,chercher){
     per={p:po.p,c:po.c,l:po.l};
     if(unite==null) unite=po.u;
   } else if(item.ciqual!=null){
-    const f=_planResolveur(chercher)(item.ciqual);
+    const f=_planAlimentLigne(item,chercher);
     if(!f) return null;
     per={p:_planNb(f.p)||0,c:_planNb(f.c)||0,l:_planNb(f.l)||0};
     if(unite==null) unite='g';
@@ -92867,9 +92903,9 @@ function planNomItem(item,chercher){
   if(item.libre) return String(item.libre);
   if(item.portion&&PLAN_PORTIONS[item.portion]) return PLAN_PORTIONS[item.portion].lib;
   if(item.ciqual!=null){
-    const f=_planResolveur(chercher)(item.ciqual);
+    const f=_planAlimentLigne(item,chercher);
     if(f) return f.n;
-    return 'Aliment introuvable (#'+item.ciqual+')';
+    return _planLibIntrouvable(item.ciqual);
   }
   return 'Ligne sans aliment';
 }
@@ -93045,7 +93081,7 @@ function planSourceRef(src,macro,chercher){
       horsCiqual:true,introuvable:false};
   }
   const f=_planResolveur(chercher)(src);
-  if(!f) return {cle:'c'+src,id:src,nom:'Aliment introuvable (#'+src+')',groupe:'',
+  if(!f) return {cle:'c'+src,id:src,nom:_planLibIntrouvable(src),groupe:'',
     per100:null,horsCiqual:false,introuvable:true};
   return {cle:'c'+src,id:src,nom:f.n,groupe:f.g||'',per100:_planNb(f[macro]),
     horsCiqual:false,introuvable:false};
@@ -93586,8 +93622,22 @@ function cplAjouterPortion(repas,cle){
   let q=1;
   if(cle==='oeuf'){ const n=oeufsSuggeres(poids,femme); if(n>0) q=n; }
   else if(cle==='amandes'){ const n=amandesSuggerees(poids,femme); if(n>0) q=n; }
-  _cplPlan.squelette.push({id:_cplId(),repas,portion:cle,q,u:po.u,comp:!!po.comp});
+  // ⚠ « comp » SEULEMENT SI LE PLAN EST AVEC COMPLÉMENTS (30/09/2026). Kevin
+  //   ajoutait des scoops de whey en collation 2 d'un plan sans compléments :
+  //   la ligne était marquée complément, donc retirée des totaux ET de la fiche
+  //   de l'athlète, tout en restant affichée ici. Un aliment que le coach pose
+  //   à la main, sur un plan sans compléments, est un aliment comme un autre.
+  //   Sur un plan avec compléments, il garde la marque : il suit l'interrupteur.
+  _cplPlan.squelette.push({id:_cplId(),repas,portion:cle,q,u:po.u,comp:!!po.comp&&!!_cplPlan.avecComplements});
   renderPlanCoach();
+}
+// Une ligne de complément que l'interrupteur masque chez l'athlète, remise dans le plan.
+function cplInclureLigne(lid){
+  const l=_cplLigne(lid);
+  if(!l) return false;
+  delete l.comp;
+  renderPlanCoach();
+  return true;
 }
 // Le marqueur « source au choix ». C'est LUI qui compte les repas à source
 // libre : poser trois marqueurs de protéines suffit à diviser par trois, sans
@@ -94089,7 +94139,13 @@ function _cplHtmlLigne(item){
         <span style="font-size:var(--fs-2xs);color:var(--text-faint)">P/G/L</span>
       </div>`
     : '';
-  return `<div class="plan-l" style="display:block">
+  // ⚠ CE QUE L'ATHLÈTE NE VOIT PAS EST DIT ICI (30/09/2026). Une ligne de
+  //   complément sur un plan sans compléments n'est ni comptée ni envoyée
+  //   (planLigneRetenue) : elle s'affichait pourtant ici comme les autres.
+  const _masquee=!!(item.comp&&!(_cplPlan&&_cplPlan.avecComplements));
+  const _noteMasquee=_masquee?`<div class="cpl-masquee">Masquée chez l’athlète : les compléments sont désactivés sur ce plan, cette ligne n’est ni comptée ni envoyée.
+      <button type="button" onclick="cplInclureLigne('${item.id}')">L’inclure quand même</button></div>`:'';
+  return `<div class="plan-l${_masquee?' cpl-l-masquee':''}" style="display:block">
     <div style="display:flex;align-items:flex-start;gap:8px">
       <div style="flex:1;min-width:0">${champNom}
         <div id="cpl-m-${item.id}" style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">${_cplMacroLigne(item)}</div>
@@ -94099,7 +94155,7 @@ function _cplHtmlLigne(item){
         style="width:62px;padding:6px 6px;background:#111;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);text-align:center;box-sizing:border-box">
       ${sup}
     </div>
-    ${macrosMain}
+    ${macrosMain}${_noteMasquee}
   </div>`;
 }
 // Le bandeau de modèle. Il porte TOUJOURS les quatre choix : quand rien n'a
@@ -94325,6 +94381,9 @@ function savePlanCoach(){
   const p=_cplCopie(_cplPlan);
   // LOT R1 : les lignes recette reprennent les valeurs de la bibliothèque.
   try{ planRecettesActualiser(p,recettesMiennes()); }catch(e){}
+  // Chaque aliment Ciqual part avec son nom et ses valeurs : l'athlète les lit
+  // même avant d'avoir la base (planFigerAliments).
+  try{ planFigerAliments(p); }catch(e){}
   p.majAt=Date.now();
   p.majPar=currentUser&&currentUser.id;
   c.nutrition.plan=p;

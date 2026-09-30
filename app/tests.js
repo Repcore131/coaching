@@ -76942,6 +76942,69 @@ async function testExercices(){
             CLOUD.push=_sPush;
             try{ if(_sEcran&&_sEcran!=='s-coach-plan') go(_sEcran); }catch(e){}
           }})());
+        ok('Plan : une whey ajoutée à la main sur un plan SANS compléments est comptée et envoyée ; une ligne masquée le dit côté coach',(()=>{
+          // Kevin, 30/09/2026 : « j'ai mis des scoops de protéines en collation 2, je ne les vois pas chez l'athlète ».
+          const _sPlan=_cplPlan, _sC=currentClientId, _sUsers=DB.get('users'), _sMe=currentUser, _sPush=CLOUD.push;
+          try{
+            CLOUD.push=()=>Promise.resolve();
+            DB.set('users',{'coachQ@t':{id:'u_coachQ',email:'coachQ@t',role:'coach'},
+              'athQ@t':{id:'u_athQ',email:'athQ@t',role:'athlete',coachId:'u_coachQ',bilans:[],sessions:[],nutrition:{}}});
+            currentUser={id:'u_coachQ',email:'coachQ@t',role:'coach'}; currentClientId='u_athQ';
+            _cplPlan=_cplCopie({avecComplements:false,squelette:[]});
+            const _r=renderPlanCoach; renderPlanCoach=()=>{};
+            try{
+              cplAjouterPortion('collation2','whey');
+              const w=_cplPlan.squelette[0];
+              if(w.comp) return _echec('whey ajoutée à la main marquée complément sur un plan sans compléments');
+              if(!planLigneRetenue(_cplPlan,w)||!(planCouverture(_cplPlan).p>0)) return _echec('whey non comptée');
+              // Plan AVEC compléments : la marque reste, et l'interrupteur la gouverne.
+              _cplPlan.avecComplements=true; cplAjouterPortion('collation2','whey');
+              const w2=_cplPlan.squelette[1];
+              if(!w2.comp) return _echec('sur un plan avec compléments, la whey doit suivre l’interrupteur');
+              // Interrupteur coupé : la ligne est masquée chez l'athlète, et l'éditeur le dit.
+              _cplPlan.avecComplements=false;
+              const h=_cplHtmlLigne(w2);
+              if(!/Masquée chez l’athlète/.test(h)||!/cplInclureLigne\(/.test(h)) return _echec('la ligne masquée ne le dit pas');
+              if(/Masquée chez l’athlète/.test(_cplHtmlLigne(w))) return _echec('une ligne visible se dit masquée');
+              cplInclureLigne(w2.id);
+              return (!w2.comp&&planLigneRetenue(_cplPlan,w2))?true:_echec('« L’inclure quand même » ne l’inclut pas');
+            } finally { renderPlanCoach=_r; }
+          } finally {
+            _cplPlan=_sPlan; currentClientId=_sC; currentUser=_sMe; CLOUD.push=_sPush;
+            if(_sUsers) DB.set('users',_sUsers); else localStorage.removeItem('rc_users');
+          }})());
+        ok('Plan : chaque ligne du coach arrive sur l’écran de l’athlète, avec sa quantité — base d’aliments chargée ou non',(()=>{
+          const _sDB=_ciqualDB;
+          try{
+            // Un aliment Ciqual réel, s'il est chargé ; sinon une entrée fabriquée.
+            const f=(Array.isArray(_ciqualDB)&&_ciqualDB.find(x=>x&&x.id===19644))||{id:19644,n:'Fromage blanc, nature, 0% MG',g:'',p:7.4,c:4,l:0.2};
+            if(!Array.isArray(_ciqualDB)||!_ciqualDB.find(x=>x&&x.id===19644)) _ciqualDB=[f];
+            const plan={v:PLAN_V,avecComplements:false,squelette:[
+              {id:'q1',repas:'petit_dej',ciqual:19644,q:150,u:'g'},
+              {id:'q2',repas:'collation2',portion:'whey',q:2,u:'scoop'},
+              {id:'q3',repas:'soir',libre:'Galette de riz',q:2,u:'galette',p:0,c:7,l:0},
+              {id:'q4',repas:'soir',note:'Sans sel'},
+              {id:'q5',repas:'collation2',portion:'whey',q:1,u:'scoop',comp:true}],
+              sources:{proteines:[],glucides:[]}};
+            planFigerAliments(plan);
+            if(!plan.squelette[0].ciqualRef||plan.squelette[0].ciqualRef.n!==f.n) return _echec('la copie de l’aliment n’est pas posée');
+            const u={id:'u_athR',email:'athR@t',role:'athlete',bilans:[],sessions:[],nutrition:{dietType:'strict',plan}};
+            const lire=()=>{ const d=document.createElement('div'); d.innerHTML=_htmlPlanAthlete(u);
+              return [...d.querySelectorAll('.plan-l')].map(l=>((l.querySelector('.plan-nom')||{}).textContent||'').trim()+' | '+((l.querySelector('.plan-q')||{}).textContent||'').replace(/\s+/g,' ').trim()); };
+            const attendu=[f.n+' | 150 g','Whey isolate | 2 scoops','Galette de riz | 2 galettes'];
+            const vu=lire();
+            for(const a of attendu) if(vu.indexOf(a)<0) return _echec('« '+a+' » absent chez l’athlète : '+JSON.stringify(vu));
+            // La ligne de complément d'un plan sans compléments n'y est pas (elle est masquée, et dite côté coach).
+            if(vu.filter(x=>/^Whey/.test(x)).length!==1) return _echec('la whey masquée apparaît : '+JSON.stringify(vu));
+            // SANS la base : même écran, grâce à la copie du coach ; et les macros comptent toujours.
+            const p0=planCouverture(plan).p;
+            _ciqualDB=null;
+            const vu2=lire();
+            if(JSON.stringify(vu2)!==JSON.stringify(vu)) return _echec('sans base : '+JSON.stringify(vu2));
+            if(Math.abs(planCouverture(plan).p-p0)>0.01) return _echec('sans base, les protéines changent');
+            // Une ligne sans copie, base absente : « en cours de chargement », plus « introuvable ».
+            return /cours de chargement|indisponible hors ligne/.test(planNomItem({ciqual:19644}))?true:_echec('libellé : '+planNomItem({ciqual:19644}));
+          } finally { _ciqualDB=_sDB; }})());
         ok('L\'écriture du plan marque updatedAt, sinon l\'athlète l\'écraserait',(()=>{
           // Sans updatedAt sur le dossier, _mergeUser laisse la prochaine
           // sauvegarde de l'athlète effacer ce que le coach vient d'envoyer.

@@ -6280,6 +6280,10 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
    aussi collante (top:0, z-index:6), et un panneau cale sous une hauteur
    devinee passerait dessous des que le bouton ENREGISTRER change de taille.
    Voir _cplCalerSuivi. Le repli de 8px sert au premier rendu, avant mesure. */
+/* Une ligne de complément que l'athlète ne voit pas (plan sans compléments). */
+.cpl-l-masquee>div:first-child{opacity:.55}
+.cpl-masquee{margin-top:6px;padding:6px 8px;border-left:2px solid var(--orange);font-size:var(--fs-2xs);line-height:1.5;color:var(--orange)}
+.cpl-masquee button{display:block;margin-top:4px;padding:4px 8px;background:none;border:1px solid var(--orange);border-radius:var(--r-2);color:var(--orange);font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;cursor:pointer}
 .cpl-side{position:sticky;top:var(--cpl-top,8px);z-index:4;align-self:start;
   background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);
   padding:12px 12px;margin-bottom:14px}
@@ -13329,6 +13333,8 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .tbk-carte .tbk-mac tr.tbk-tot .tbk-mv{color:#cc0000}
 :root[data-theme="clair"] .tbk-carte .tbk-mac.tbk-man tr:not(.tbk-swi-r)>td:nth-of-type(1)::before,:root[data-theme="clair"] .tbk-carte .tbk-mac.tbk-man tr:not(.tbk-swi-r)>td:nth-of-type(2)::before{color:var(--sub)}
 :root[data-theme="clair"] #s-coach-client .cc-sect-fixe>.cc-sect-t>span em{color:#cc0000}
+:root[data-theme="clair"] .cpl-masquee{border-left:2px solid var(--orange);color:var(--orange)}
+:root[data-theme="clair"] .cpl-masquee button{border:1px solid var(--orange);color:var(--orange)}
 :root[data-theme="clair"] .cpl-side{background:var(--dark);border:1px solid var(--border)}
 :root[data-theme="clair"] .cpl-s-t{color:var(--red-text)}
 :root[data-theme="clair"] .cpl-s-p{color:var(--text-faint)}
