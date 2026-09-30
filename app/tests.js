@@ -1126,7 +1126,7 @@ async function testExercices(){
     // arriere ne casse rien de visible — la fiche s'affiche, simplement sans
     // sa video —, et c'est exactement le genre de panne qu'on ne voit pas.
     ok('Les quatre écartés ont pris le nom du guide',(()=>{
-      const tout=EX_GUIDE_BRUT['PECTORAUX,DELT_ANT,TRICEPS'].split('~')
+      const tout=(EX_GUIDE_BRUT['PECTORAUX,DELT_ANT,TRICEPS']+'~'+EX_GUIDE_BRUT['PECTORAUX,DELT_ANT']).split('~')
         .concat(SCHEMAS_BRUT['poussee-horizontale'].split('~'));
       const restes=tout.filter(n=>/ELASTIQUE (BAS|HAUT)/.test(n));
       if(restes.length) return _echec('ancien nom encore au catalogue : '+restes.join(', '));
@@ -1141,7 +1141,7 @@ async function testExercices(){
     ok('Les quatre exercices neufs du guide sont au catalogue',(()=>{
       const neufs=['BUTTERFLY UNILATERAL','ECARTE POULIE BASSE SUR BANC',
         'ECARTE POULIE HAUTE BUSTE PENCHE','ECARTE POULIE HAUTE CONTRE BANC'];
-      const cat=EX_GUIDE_BRUT['PECTORAUX,DELT_ANT,TRICEPS'].split('~');
+      const cat=(EX_GUIDE_BRUT['PECTORAUX,DELT_ANT,TRICEPS']+'~'+EX_GUIDE_BRUT['PECTORAUX,DELT_ANT']).split('~');
       const abs=neufs.filter(n=>cat.indexOf(n)<0);
       if(abs.length) return _echec('hors catalogue : '+abs.join(', '));
       const sansSchema=neufs.filter(n=>!_SCHEMA_INDEX[exKey(n)]);
@@ -1153,7 +1153,7 @@ async function testExercices(){
     // que le catalogue connait : une video rangee sous un nom absent du
     // catalogue ne s'affiche nulle part.
     ok('Les vidéos des pectoraux portent sur des exercices du catalogue',(()=>{
-      const cat=EX_GUIDE_BRUT['PECTORAUX,DELT_ANT,TRICEPS'].split('~').map(exKey);
+      const cat=(EX_GUIDE_BRUT['PECTORAUX,DELT_ANT,TRICEPS']+'~'+EX_GUIDE_BRUT['PECTORAUX,DELT_ANT']).split('~').map(exKey);
       const ajouts=['BUTTERFLY','BUTTERFLY UNILATERAL','DEVELOPPE A LA MACHINE CONVERGENTE',
         'DEVELOPPE A LA MACHINE CONVERGENTE UNILATERAL','DEVELOPPE COUCHE BARRE AVEC CALLE',
         'DEVELOPPE COUCHE LARSEN','DEVELOPPE DECLINE BARRE SMITH MACHINE',
@@ -20934,6 +20934,60 @@ async function testExercices(){
     ok('T1 — calcSug n’existe plus : chargeSuivante est le seul moteur des charges proposées',typeof calcSug==='undefined');
     ok('T1 — la borne : répétitions + RIR ≤ 12',e1rmFiable(12,0)&&e1rmFiable(10,2)&&!e1rmFiable(10,3)&&!e1rmFiable(13,0)&&e1rmFiable(8,'')&&e1rmFiable(0,0));
     ok('e1rm sur charge nulle ou négative rend 0',e1rm(0,10,1)===0&&e1rm(-5,10,1)===0);
+    // ── LES SIGNATURES MUSCULAIRES REVUES ──
+    ok('Signatures : écartés sans triceps, squats sans ischios, dips avec pectoraux, SIDE TRICEPS une pose',(()=>{
+      const u={email:'sig@t.fr',exAlias:{},exMuscles:{}};
+      const L=n=>resoudreMusclesLecture(n,{name:n,reps:'10'},u);
+      const e=L('ECARTE POULIE HAUTE');
+      if(!e||e.s.indexOf('TRICEPS')>=0||e.p[0]!=='PECTORAUX') return _echec('écarté : '+JSON.stringify(e));
+      for(const n of ['BUTTERFLY','CHEST CROSSOVER DUAL','ECARTE HALTERE SUR BANC INCLINE']) if(L(n).s.indexOf('TRICEPS')>=0) return _echec(n);
+      if(L('DEVELOPPE COUCHE BARRE').s.indexOf('TRICEPS')<0) return _echec('le développé a perdu son triceps');
+      if(L('ELEVATION FRONTALE HALTERES').s.length) return _echec('élévation frontale : '+JSON.stringify(L('ELEVATION FRONTALE HALTERES')));
+      const sq=L('SQUAT');
+      if(!sq||sq.s.indexOf('ISCHIOS')>=0) return _echec('squat : '+JSON.stringify(sq));
+      if(L('PRESSE A CUISSE INCLINE').s.indexOf('ISCHIOS')>=0) return _echec('presse');
+      if(L('SOULEVE DE TERRE').s.indexOf('ISCHIOS')<0||L('GOOD MORNING').p[0]!=='ISCHIOS') return _echec('soulevé de terre et good morning gardent les ischios');
+      const d=L('DIPS');
+      if(!d||d.p[0]!=='TRICEPS'||d.s.indexOf('PECTORAUX')<0) return _echec('dips : '+JSON.stringify(d));
+      if(L('DIPS MACHINE').s.length) return _echec('les dips à la machine restent aux triceps seuls');
+      if(L('SIDE TRICEPS')!==VOL_CARDIO) return _echec('SIDE TRICEPS : '+JSON.stringify(L('SIDE TRICEPS')));
+      for(const n of ['JUMPING JACK','MONTE DE GENOUX','POWER RUN','QUAD STOMP']) if(L(n)!==VOL_CARDIO) return _echec(n+' n’est pas du cardio');
+      const gc=L('GAINAGE CHAISE');
+      if(!gc||gc.p[0]!=='QUADRICEPS'||gc.s.length) return _echec('gainage chaise : '+JSON.stringify(gc));
+      if(techniqueDe({name:'GAINAGE CHAISE',reps:'45s'})!=='isometrie') return _echec('le gainage chaise n’est pas isométrique');
+      // Le repli par motif dit la même chose que le guide.
+      if(L('ECARTE A LA POULIE VIS A VIS').s.indexOf('TRICEPS')>=0||L('SQUAT GOBELET').s.indexOf('ISCHIOS')>=0) return _echec('les règles de repli');
+      return SCHEMAS_BRUT['isolation-coude'].split('~').indexOf('SIDE TRICEPS')<0?true:_echec('SIDE TRICEPS encore dans « isolation-coude »');})());
+    ok('Signatures : un classement automatique d’avant est revu (cardio, pose, triceps retiré), un choix manuel jamais',(()=>{
+      const u={email:'sig2@t.fr',exAlias:{},exMuscles:{
+        'SIDE TRICEPS':{p:['QUADRICEPS'],s:['FESSIERS','ISCHIOS'],src:'auto'},
+        'JUMPING JACK':{p:['QUADRICEPS'],s:['FESSIERS','ISCHIOS'],src:'auto'},
+        'ECARTE POULIE HAUTE':{p:['PECTORAUX'],s:['DELT_ANT','TRICEPS'],src:'auto'},
+        'SQUAT':{p:['QUADRICEPS'],s:['FESSIERS','ISCHIOS'],src:'manuel'}}};
+      const L=n=>resoudreMusclesLecture(n,{name:n,reps:'10'},u);
+      if(L('SIDE TRICEPS')!==VOL_CARDIO||L('JUMPING JACK')!==VOL_CARDIO) return _echec('cardio ou pose gardé en quadriceps');
+      if(L('ECARTE POULIE HAUTE').s.indexOf('TRICEPS')>=0) return _echec('l’écarté garde son triceps');
+      return L('SQUAT').s.indexOf('ISCHIOS')>=0?true:_echec('un choix manuel a été réécrit');})());
+    ok('« Compter le travail indirect » : en séries directes, 16 séries de rowing donnent 0 biceps ; fractionné, 8',(()=>{
+      const t=Date.now();
+      const sess={date:t,data:{'ROWING BARRE LARGE':{sets:Array.from({length:16},()=>({done:true,weight:'60',reps:'10',rir:'1'}))}}};
+      const base={email:'sig3@t.fr',exAlias:{},exMuscles:{},sessions:[sess]};
+      const frac=_volumeSeance(sess,base), dir=_volumeSeance(sess,Object.assign({},base,{reperesComptage:'direct'}));
+      if(frac.muscles.DORSAUX!==16||frac.muscles.BICEPS!==8) return _echec('fractionné : '+JSON.stringify(frac.muscles));
+      if(dir.muscles.DORSAUX!==16||(dir.muscles.BICEPS||0)!==0) return _echec('direct : '+JSON.stringify(dir.muscles));
+      if(reperesComptageDe({})!=='fractionne'||reperesComptageDe({reperesComptage:'bidon'})!=='fractionne') return _echec('défaut');
+      // Le cache de la semaine ne mélange pas les deux modes.
+      _viderCacheVolume();
+      const c1=_calculSemaine(Object.assign({},base,{email:'sig4@t.fr'}),semaineISO(new Date(t)));
+      const c2=_calculSemaine(Object.assign({},base,{email:'sig4@t.fr',reperesComptage:'direct'}),semaineISO(new Date(t)));
+      if(c1.muscles.BICEPS!==8||(c2.muscles.BICEPS||0)!==0) return _echec('cache : '+c1.muscles.BICEPS+' / '+c2.muscles.BICEPS);
+      if(poidsRole('BICEPS',{name:'ROWING BARRE LARGE'},{email:'x',exMuscles:{},reperesComptage:'direct'})!==0) return _echec('serieDure (poidsRole) ne suit pas le réglage');
+      if(CHAMPS_NON_SANTE.indexOf('reperesComptage')<0) return _echec('réglage non classé');
+      return /tu comptes le travail indirect à 0,5/.test(String(renderVolume))&&String(renderVolumeCoach).indexOf('_htmlComptageCoach(')>=0?true:_echec('les textes');})());
+    ok('Gainage chaise : compté en isométrie (0,5 par série) dans le volume',(()=>{
+      const sess={date:Date.now(),data:{'GAINAGE CHAISE':{sets:[1,2,3,4].map(()=>({done:true,weight:'',reps:'45',rir:'1'}))}}};
+      const v=_volumeSeance(sess,{email:'sig5@t.fr',exAlias:{},exMuscles:{}});
+      return v.muscles.QUADRICEPS===2?true:_echec(JSON.stringify(v.muscles));})());
     // ── UN SEUL MODÈLE CHARGE / RÉPÉTITIONS ──
     ok('Calculatrice : 100 × 8 à RIR 2 donne l’e1RM de e1rm(), et la case visée revient à 100 kg',(()=>{
       const pw=document.getElementById('calc-pw'), pr=document.getElementById('calc-pr'), pi=document.getElementById('calc-prir');
@@ -42358,7 +42412,8 @@ async function testExercices(){
     // Le 412 reste ecrit en toutes lettres : perdre une ligne se voit encore.
     const _guideAttendu=()=>{
       const cardio=new Set(EX_GUIDE_CARDIO.split('~'));
-      return 412+Object.keys(EX_VARIANTES).filter(k=>!cardio.has(k)).length;};
+      // 408 depuis le 30/09/2026 : quatre exercices sont passés au cardio.
+      return 408+Object.keys(EX_VARIANTES).filter(k=>!cardio.has(k)).length;};
     ok('Les 412 exercices du guide ont un schéma',(()=>{
       const noms=_guideNoms();
       const sans=[...noms].filter(n=>!schemaDe({name:n}));
@@ -69301,9 +69356,10 @@ async function testExercices(){
         return manque.length?_echec('perdus : '+manque.join(', ')):true;})());
 
       // ── Le posing ne compte plus pour du quadriceps ──────────────────────
-      ok('Les quinze poses ne comptent pour AUCUN muscle',(()=>{
+      ok('Les seize poses ne comptent pour AUCUN muscle',(()=>{
         const poses=EX_GUIDE_POSING.split('~');
-        if(poses.length!==15) return _echec(poses.length+' poses au lieu de 15');
+        // SEIZE depuis le 30/09/2026 : SIDE TRICEPS, rangée aux jambes, est une pose.
+        if(poses.length!==16) return _echec(poses.length+' poses au lieu de 16');
         const faux=poses.filter(n=>res(n)!==VOL_CARDIO);
         return faux.length?_echec(faux.join(', ')):true;})());
       ok('Une pose n\'est pas signalée comme exercice à classer',(()=>{
@@ -69331,6 +69387,7 @@ async function testExercices(){
           ?true:_echec(JSON.stringify(r));})());
       ok('Non-régression : les squats restent du quadriceps',(()=>{
         // Quinze noms retirés de cette ligne : les vrais exercices y sont restés.
+        // 30/09/2026 : squats et presses ne comptent plus les ischios.
         // Le trap bar a quitté cette ligne pour recevoir les lombaires : ce
         // n'est pas un squat, et sa signature est éprouvée par le test des
         // sept soulevés. Le garder ici gelait son ancienne liste secondaire.
@@ -69338,7 +69395,7 @@ async function testExercices(){
           'SAFETY SQUAT BARRE','SQUAT PISTOL'];
         const faux=t.filter(n=>{const r=res(n);
           return !r||r.cardio||r.p.join()!=='QUADRICEPS'
-            ||r.s.join()!=='FESSIERS,ISCHIOS';});
+            ||r.s.join()!=='FESSIERS';});
         return faux.length?_echec(faux.join(', ')):true;})());
       ok('Une séance de posing n\'ajoute aucune série dure',(()=>{
         const sauve=currentUser;
@@ -69374,7 +69431,8 @@ async function testExercices(){
         // 29/09/2026 : DIX DEPUIS LE 07/09/2026. Les deux versions du tapis
         // sont des exercices à part (EX_VARIANTES, base TAPIS DE COURSE), et
         // restent du cardio comme leur base.
-        const att=['BATTLE ROPE','CORDE A SAUTER','ESCALIERS','LE SKIERG','RAMEUR',
+        // 30/09/2026 : jumping jack, montée de genoux, power run et quad stomp y entrent.
+        const att=['BATTLE ROPE','CORDE A SAUTER','ESCALIERS','JUMPING JACK','LE SKIERG','MONTE DE GENOUX','POWER RUN','QUAD STOMP','RAMEUR',
           'TAPIS DE COURSE','TAPIS DE COURSE COURIR','TAPIS DE COURSE MARCHE AVEC PENTE',
           'VELO D INTERIEUR','VELO ELLIPTIQUE'];
         const v=EX_GUIDE_CARDIO.split('~');
