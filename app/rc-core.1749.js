@@ -4910,6 +4910,8 @@ const CLOUD={
         }
       }catch(e){ console.warn('[RepCore] integration apres envoi :',e); }
       this._poserBase(email,safe);
+      // LA BOITE DU COACH : un nombre, apres le dossier. Voir _signalerCoach.
+      this._signalerCoach(email,safe,safeKey,token);
       // LE ✓ PROMIS PAR LE MESSAGE DE QUOTA : il ne vient qu'ici, apres un PUT
       // reussi du dossier courant.
       if(DB._quotaAnnonce&&typeof currentUser==='object'&&currentUser&&currentUser.email===email){
@@ -5368,6 +5370,31 @@ const CLOUD={
   // ont mis ; ce qui change, c'est leur DESTINATION à l'envoi. Une couche
   // de lecture, pas une migration.
   _urlSantePrivee(key){ return this._fbUrl.replace('users.json','sante_privee/'+key+'.json'); },
+  // ══ LA BOITE DU COACH (30/09/2026) ═════════════════════════════════════
+  // /boite_coach/<coachKey>/<athleteKey> = updatedAt du dossier que l'athlete
+  // vient d'ecrire. Le coach ecoute SA boite par UN flux (BOITE_COACH) au lieu
+  // d'attendre la releve de cinq minutes : une seance terminee lui arrive en
+  // quelques secondes, pour une connexion par coach et non par athlete.
+  //
+  // APRES LE PUT DU DOSSIER, et seulement de l'appareil de l'athlete : la regle
+  // verifie que users/<athleteKey>/coachEmailKey designe bien ce coach, et ce
+  // champ doit donc deja etre au serveur. Le coach qui pousse le dossier d'un
+  // athlete ne se previent pas lui-meme.
+  //
+  // NON BLOQUANT, ERREURS AVALEES : la boite n'est qu'un signal. S'il se perd,
+  // la releve de cinq minutes rattrape — le dossier, lui, est deja parti.
+  _urlBoiteCoach(coachKey,cle){ return this._fbUrl.replace('users.json','boite_coach/'+coachKey+(cle?'/'+cle:'')+'.json'); },
+  _signalerCoach(email,safe,safeKey,token){
+    try{
+      if(typeof currentUser!=='object'||!currentUser||currentUser.email!==email) return false;
+      const ck=safe&&safe.coachEmailKey, maj=Number(safe&&safe.updatedAt)||0;
+      if(!ck||!maj||!token||!safeKey) return false;
+      const o={method:'PUT',headers:{'Content-Type':'application/json'},body:String(maj)};
+      if(document.hidden) o.keepalive=true;
+      Promise.resolve().then(()=>fetch(this._urlBoiteCoach(ck,safeKey)+'?auth='+token,o)).catch(()=>{});
+      return true;
+    }catch(e){ return false; }
+  },
   // Les souscriptions Web Push : /push/<emailKey>/<id>. Hors de /users, que
   // le PUT du dossier entier effacerait (voir pushAbonner).
   _urlPush(key,id){ return this._fbUrl.replace('users.json','push/'+key+'/'+id+'.json'); },
@@ -7493,7 +7520,7 @@ function _majIndicAttente(){
     z.setAttribute('role','status'); z.setAttribute('aria-live','polite');
     document.body.appendChild(z);
   }
-  z.textContent=n+' envoi'+(n>1?'s':'')+' en attente';
+  z.textContent='↻ '+n+' envoi'+(n>1?'s':'')+' en attente';
   z.hidden=false;
   return n;
 }
@@ -9208,6 +9235,12 @@ function go(id){
   try{ if(id!=='s-motion-correction'&&typeof window.mlQuitterCorrection==='function') window.mlQuitterCorrection(); }catch(e){}
   try{ fermerContactCoach(true); }catch(e){}
   try{ fermerChoixDiete(true); }catch(e){}
+  // LA BOITE DU COACH s'ouvre a l'arrivee sur son accueil (voir BOITE_COACH) ;
+  // un autre compte a l'ecran la ferme.
+  try{
+    if(id==='s-coach-home') BOITE_COACH.ouvrir();
+    else if(BOITE_COACH._cle&&BOITE_COACH._cle!==BOITE_COACH._maCle()) BOITE_COACH.fermer();
+  }catch(e){}
   // RATTRAPAGE DU PROFIL PUBLIC, une seule fois par session. Accroche ici et
   // non au seul accueil coach : un coach qui ouvre l app ailleurs ne passait
   // jamais par loadCoachHome, et sa vitrine restait non publiee sans que rien
@@ -121550,6 +121583,132 @@ function _planifierRepeint(email){
     },400);
   }catch(e){}
 }
+// ══ LE FLUX DE LA BOITE DU COACH (30/09/2026) ═════════════════════════════
+// Voir CLOUD._signalerCoach. UN EventSource (streaming REST de Firebase) sur
+// /boite_coach/<maClé>, ouvert a l'arrivee sur s-coach-home et garde tant que
+// l'app est au premier plan. Plan Spark : 100 connexions simultanees — un flux
+// par coach connecte, jamais un par athlete.
+//
+// Ce que le flux porte : des nombres. Pour chaque athlete dont la valeur
+// differe de la version deja integree (base.maj), UN syncUser — et seulement
+// celui-la. Les autres dossiers ne sont pas relus.
+//
+// FERME QUAND L'APP PASSE EN ARRIERE-PLAN (document.hidden) : un flux ouvert
+// dans un onglet oublie compterait contre les 100 pour rien. Rouvert au retour.
+// auth_revoked : le jeton (une heure) a expire — on le rafraichit et on
+// rouvre. Toute autre coupure : reconnexion a delai croissant, plafonne.
+// LA RELEVE DE CINQ MINUTES RESTE LE FILET : si le flux tombe, rien n'est perdu.
+const BOITE_COACH={
+  _es:null,_cle:null,_voulu:false,_gen:0,_essais:0,_minuteur:null,_revoque:0,
+  _enCours:new Set(),
+  _DELAI_MIN:1000,_DELAI_MAX:300000,
+  _maCle(){
+    try{
+      if(typeof currentUser!=='object'||!currentUser||currentUser.role!=='coach'||!currentUser.email) return null;
+      return String(currentUser.email).replace(/\./g,',');
+    }catch(e){ return null; }
+  },
+  ouvert(){ return !!this._es; },
+  // Appele a l'arrivee sur l'accueil du coach, et au retour au premier plan.
+  ouvrir(){
+    const cle=this._maCle();
+    if(!cle){ this.fermer(); return false; }
+    this._voulu=true;
+    if(typeof EventSource!=='function'||document.hidden) return false;
+    // Un autre compte : l'ancien flux lisait la boite de quelqu'un d'autre.
+    if(this._cle!==cle){ this._fermerFlux(); this._essais=0; }
+    this._cle=cle;
+    if(this._es||this._minuteur) return true;
+    this._connecter(false);
+    return true;
+  },
+  // Deconnexion : plus rien a ecouter, et plus de reouverture au retour.
+  fermer(){ this._voulu=false; this._fermerFlux(); this._cle=null; this._essais=0; },
+  _fermerFlux(){
+    this._gen++;
+    clearTimeout(this._minuteur); this._minuteur=null;
+    if(this._es){ try{ this._es.close(); }catch(e){} }
+    this._es=null;
+  },
+  _replanifier(){
+    if(!this._voulu||document.hidden) return;
+    const d=Math.min(this._DELAI_MAX,this._DELAI_MIN*Math.pow(2,this._essais));
+    this._essais++;
+    clearTimeout(this._minuteur);
+    this._minuteur=setTimeout(()=>{ this._minuteur=null; this._connecter(false); },d);
+  },
+  async _connecter(rafraichir){
+    this._fermerFlux();
+    const gen=this._gen, cle=this._cle;
+    if(!this._voulu||!cle||document.hidden) return false;
+    // Jeton expire cote serveur : on force le rafraichissement.
+    if(rafraichir){ CLOUD._idToken=null; CLOUD._tokenExpiry=0; }
+    let tok=null; try{ tok=await CLOUD._getToken(); }catch(e){ tok=null; }
+    if(gen!==this._gen||!this._voulu||document.hidden||cle!==this._maCle()) return false;
+    if(!tok){ this._replanifier(); return false; }
+    let es;
+    try{ es=new EventSource(CLOUD._urlBoiteCoach(cle)+'?auth='+encodeURIComponent(tok)); }
+    catch(e){ this._replanifier(); return false; }
+    this._es=es;
+    const vif=()=>this._es===es;
+    const lire=ev=>{
+      if(!vif()) return;
+      this._essais=0;
+      let m=null; try{ m=JSON.parse(ev.data); }catch(e){ return; }
+      this._recevoir(m);
+    };
+    es.addEventListener('put',lire);
+    es.addEventListener('patch',lire);
+    es.addEventListener('auth_revoked',()=>{
+      if(!vif()) return;
+      this._fermerFlux();
+      // Deux revocations coup sur coup : le rafraichissement ne suffit pas,
+      // on laisse passer le delai croissant plutot que de marteler.
+      const t=Date.now();
+      if(t-this._revoque<10000){ this._replanifier(); }
+      else this._connecter(true);
+      this._revoque=t;
+    });
+    // `cancel` : la regle refuse la lecture. Delai croissant, jusqu'au plafond.
+    es.addEventListener('cancel',()=>{ if(!vif()) return; this._fermerFlux(); this._replanifier(); });
+    // L'EventSource se reconnecterait seul, mais avec le MEME jeton, et sans
+    // borne : on reprend la main.
+    es.onerror=()=>{ if(!vif()) return; this._fermerFlux(); this._replanifier(); };
+    return true;
+  },
+  // {path, data} de Firebase : « / » porte la boite entiere (put) ou une
+  // partie (patch) ; « /<athleteKey> » une seule entree.
+  _recevoir(m){
+    if(!m||typeof m!=='object') return [];
+    const p=String(m.path||'/');
+    let entrees={};
+    if(p==='/'){ if(m.data&&typeof m.data==='object') entrees=m.data; }
+    else { const k=p.replace(/^\/+/,'').split('/')[0]; if(k) entrees[k]=m.data; }
+    const lances=[];
+    for(const k of Object.keys(entrees)){
+      const v=Number(entrees[k]);
+      if(!(v>0)) continue;
+      const email=k.replace(/,/g,'.');
+      if(currentUser&&email===currentUser.email) continue;
+      const b=CLOUD._lireBase(email);
+      if(b&&b.maj===v) continue;
+      if(this._enCours.has(email)) continue;
+      this._enCours.add(email);
+      lances.push(email);
+      Promise.resolve().then(()=>CLOUD.syncUser(email))
+        .then(ch=>{ if(ch) _planifierRepeint(email); })
+        .catch(()=>{})
+        .finally(()=>{ this._enCours.delete(email); });
+    }
+    return lances;
+  }
+};
+document.addEventListener('visibilitychange',()=>{
+  try{
+    if(document.hidden) BOITE_COACH._fermerFlux();
+    else if(BOITE_COACH._voulu) BOITE_COACH.ouvrir();
+  }catch(e){}
+});
 async function _descenteAuRetour(){
   if(!CLOUD.ok()||!currentUser) return false;
   // Garde anti-rafale : basculer entre deux apps déclenche plusieurs
@@ -121586,6 +121745,7 @@ function toastSync(localOk,promesse,succes,perdu){
 // quelqu’un dans le stockage d’un appareil partagé. Même geste que pour le
 // brouillon de bilan dans _comptesRemiseAZero.
 function silentLogout(){DB.del('session');currentUser=null;CLOUD.signOut();oublierBanque();
+  try{ BOITE_COACH.fermer(); }catch(e){}
   try{ retirerMarque(); }catch(e){}
   try{localStorage.removeItem('rc_wo_state');}catch(e){}}
 async function logout(){

@@ -8899,12 +8899,92 @@ async function testExercices(){
             localStorage.setItem(CLOUD._QUEUE_KEY,JSON.stringify(['ath@t.fr','b@t.fr']));
             if(_majIndicAttente()!==2) return _echec('compte faux');
             const z=document.getElementById('rc-attente');
-            if(!z||z.hidden||z.textContent!=='2 envois en attente') return _echec('pastille : '+(z&&z.textContent));
+            if(!z||z.hidden||z.textContent!=='↻ 2 envois en attente') return _echec('pastille : '+(z&&z.textContent));
             currentUser={email:'c@t.fr',role:'coach'}; _majIndicAttente();
             if(!z.hidden) return _echec('la pastille s’affiche chez le coach');
             currentUser={email:'ath@t.fr',role:'athlete'}; localStorage.setItem(CLOUD._QUEUE_KEY,'[]'); _majIndicAttente();
             return z.hidden?true:_echec('la pastille reste avec une file vide');
           } finally { currentUser=svU; if(svQ==null) localStorage.removeItem(CLOUD._QUEUE_KEY); else localStorage.setItem(CLOUD._QUEUE_KEY,svQ); try{ _majIndicAttente(); }catch(e){} }})());
+        // ══ 30/09/2026 — LA BOÎTE DU COACH (/boite_coach) ════════════════════
+        ok('Boîte du coach : l’athlète signale son updatedAt après le PUT du dossier ; le coach qui pousse un athlète ne signale rien',(()=>{
+          const svF=window.fetch, svU=currentUser, appels=[];
+          try{
+            window.fetch=(u,o)=>{ appels.push({u:String(u),o}); return Promise.resolve(new Response('1')); };
+            currentUser={email:'ath@t.fr',role:'athlete'};
+            if(CLOUD._signalerCoach('ath@t.fr',{coachEmailKey:'c1@t,fr',updatedAt:3000},'ath@t,fr','J')!==true) return _echec('athlète : rien signalé');
+            currentUser={email:'c1@t.fr',role:'coach'};
+            if(CLOUD._signalerCoach('ath@t.fr',{coachEmailKey:'c1@t,fr',updatedAt:3000},'ath@t,fr','J')!==false) return _echec('le coach se signale à lui-même');
+            currentUser={email:'ath@t.fr',role:'athlete'};
+            if(CLOUD._signalerCoach('ath@t.fr',{updatedAt:3000},'ath@t,fr','J')!==false) return _echec('signalé sans coach');
+            const src=_prodSrc();
+            const i=src.indexOf('this._poserBase(email,safe);\n      // LA BOITE DU COACH'), j=src.indexOf('this._signalerCoach(email,safe,safeKey,token);');
+            if(i<0||j<i) return _echec('_signalerCoach n’est pas appelé après le PUT réussi du dossier');
+            return true;
+          } finally { window.fetch=svF; currentUser=svU; }
+        })());
+        okA('Boîte du coach : un flux EventSource ; syncUser pour l’athlète notifié SEULEMENT ; auth_revoked rafraîchit le jeton ; coupure → délai croissant',async()=>{
+          const svES=window.EventSource, svS=CLOUD.syncUser, svT=CLOUD._getToken, svU=currentUser; const svI=CLOUD._idToken, svX=CLOUD._tokenExpiry;
+          const cles=['a1@t.fr','a2@t.fr','a3@t.fr'].map(e=>CLOUD._cleBase(e));
+          const svB=cles.map(k=>localStorage.getItem(k));
+          const flux=[];
+          class FauxES{
+            constructor(url){ this.url=url; this.l={}; this.ferme=false; flux.push(this); }
+            addEventListener(t,f){ (this.l[t]=this.l[t]||[]).push(f); }
+            close(){ this.ferme=true; }
+            emettre(t,data){ for(const f of (this.l[t]||[])) f({data:JSON.stringify(data)}); }
+          }
+          const tire=[]; let jetons=0, rafraichi=0;
+          try{
+            window.EventSource=FauxES;
+            CLOUD.syncUser=async(e)=>{ tire.push(e); return false; };
+            CLOUD._getToken=async function(){ if(!this._tokenExpiry) rafraichi++; this._tokenExpiry=Date.now()+3600000; return 'jeton'+(++jetons); };
+            BOITE_COACH.fermer();
+            currentUser={email:'coach.x@t.fr',role:'coach'};
+            localStorage.setItem(cles[0],JSON.stringify({h:{},maj:100,lu:1}));
+            localStorage.setItem(cles[1],JSON.stringify({h:{},maj:200,lu:1}));
+            localStorage.removeItem(cles[2]);
+            BOITE_COACH.ouvrir();
+            await new Promise(r=>setTimeout(r,20));
+            if(flux.length!==1) return _echec(flux.length+' flux ouverts');
+            if(!/\/boite_coach\/coach,x@t,fr\.json\?auth=jeton1$/.test(flux[0].url)) return _echec('URL : '+flux[0].url);
+            // Rouvrir ne multiplie pas les connexions.
+            BOITE_COACH.ouvrir(); BOITE_COACH.ouvrir();
+            if(flux.length!==1) return _echec('ouvrir() deux fois ouvre un second flux');
+            // put initial : a1 à jour (100), a2 avancé (250), a3 inconnu.
+            flux[0].emettre('put',{path:'/',data:{'a1@t,fr':100,'a2@t,fr':250}});
+            await new Promise(r=>setTimeout(r,10));
+            if(tire.join()!=='a2@t.fr') return _echec('put : syncUser sur '+JSON.stringify(tire));
+            tire.length=0;
+            flux[0].emettre('put',{path:'/a3@t,fr',data:5});
+            flux[0].emettre('patch',{path:'/',data:{'a1@t,fr':100}});
+            await new Promise(r=>setTimeout(r,10));
+            if(tire.join()!=='a3@t.fr') return _echec('put/patch : syncUser sur '+JSON.stringify(tire));
+            // auth_revoked : jeton rafraîchi, flux rouvert.
+            const r0=rafraichi;
+            flux[0].emettre('auth_revoked',null);
+            await new Promise(r=>setTimeout(r,20));
+            if(!flux[0].ferme) return _echec('auth_revoked : l’ancien flux reste ouvert');
+            if(flux.length!==2||rafraichi!==r0+1) return _echec('auth_revoked : '+flux.length+' flux, '+(rafraichi-r0)+' rafraîchissement(s)');
+            // Coupure : fermé, reconnexion planifiée, délai qui croît.
+            flux[1].onerror();
+            if(!flux[1].ferme||!BOITE_COACH._minuteur) return _echec('coupure : pas de reconnexion planifiée');
+            const e1=BOITE_COACH._essais;
+            BOITE_COACH._replanifier();
+            if(BOITE_COACH._essais!==e1+1) return _echec('le délai ne croît pas');
+            // Masqué : le flux se ferme.
+            BOITE_COACH._fermerFlux();
+            if(BOITE_COACH.ouvert()||BOITE_COACH._minuteur) return _echec('flux ou minuteur survivant');
+            // Un athlète n'ouvre rien.
+            BOITE_COACH.fermer(); currentUser={email:'a1@t.fr',role:'athlete'};
+            const n=flux.length; BOITE_COACH.ouvrir();
+            await new Promise(r=>setTimeout(r,10));
+            return flux.length===n?true:_echec('un athlète ouvre un flux');
+          } finally {
+            BOITE_COACH.fermer();
+            window.EventSource=svES; CLOUD.syncUser=svS; CLOUD._getToken=svT; currentUser=svU; CLOUD._idToken=svI; CLOUD._tokenExpiry=svX;
+            cles.forEach((k,i)=>{ if(svB[i]==null) localStorage.removeItem(k); else localStorage.setItem(k,svB[i]); });
+          }
+        });
         okA('Sans base (a) : le distant porte une séance S absente du local → le PUT contient S',async()=>{
           const sv=_eMonter();
           try{
@@ -33928,11 +34008,17 @@ async function testExercices(){
         // ET IL NE REPEINT PAS LA FICHE PENDANT UNE SAISIE.
         if(String(actualiserClient).indexOf('_saisieEnCours()')<0)
           return _echec('la fiche peut être repeinte sous les doigts du coach');
-        // NI LISTENER FIREBASE, NI BIBLIOTHEQUE : le plan Spark l'interdit, et
-        // le sondage doit rester la mecanique de fond.
+        // NI LISTENER PAR ATHLETE, NI BIBLIOTHEQUE : le plan Spark plafonne a
+        // 100 connexions, et le sondage doit rester la mecanique de fond.
+        // UNE EXCEPTION, ET UNE SEULE (30/09/2026) : le flux de la boite du
+        // coach (BOITE_COACH), un par coach connecte et au premier plan.
         const s=_prodSrc();
-        for(const motif of ['onValue(','EventSource','new WebSocket'])
+        for(const motif of ['onValue(','new WebSocket'])
           if(s.indexOf(motif)>=0) return _echec('temps réel introduit : '+motif);
+        const _nES=s.split('new EventSource(').length-1;
+        if(_nES!==1) return _echec(_nES+' EventSource au lieu du seul flux de la boîte du coach');
+        if(String(BOITE_COACH._connecter).indexOf('new EventSource(')<0) return _echec('l’EventSource est ailleurs que dans BOITE_COACH');
+        if(s.indexOf('SYNC_PERIODE_MS=300000')<0) return _echec('la relève de 5 min, filet du flux, a disparu');
         // LA TRACE EXISTE, PAR ATHLETE, et « rien de neuf » compte comme une
         // descente reussie — c'est le cas ordinaire.
         CLOUD._descentes={};

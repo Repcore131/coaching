@@ -919,6 +919,28 @@
       }
     },
 
+    // LA BOITE DU COACH (30/09/2026) : /boite_coach/<coachKey>/<athleteKey> =
+    // updatedAt du dossier que l athlete vient d envoyer. Un NOMBRE, rien
+    // d autre — ni contenu, ni nom. Le coach ecoute sa boite par un flux au
+    // lieu de relire ses athletes toutes les cinq minutes (CLOUD._signalerCoach,
+    // BOITE_COACH).
+    //
+    // LECTURE : le coach, sa propre boite, et personne d autre.
+    // ECRITURE : l athlete, SA clef seulement, et seulement sous le coach que
+    // son dossier designe DEJA (users/<athleteKey>/coachEmailKey, lu au
+    // serveur). Rien ici n ouvre /users : on y lit un champ, on n y ecrit pas.
+    // Le coach n ecrit pas dans sa boite : une entree perimee ne coute qu une
+    // relecture du dossier, que la version integree fait d ailleurs sauter.
+    "boite_coach": {
+      "$coachKey": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
+        "$athleteKey": {
+          ".write": "auth != null && auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey",
+          ".validate": "newData.isNumber() && newData.val() > 0"
+        }
+      }
+    },
+
     "deleted_accounts": {
       ".read": false,
       ".write": false
