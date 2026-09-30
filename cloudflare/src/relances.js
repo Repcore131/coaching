@@ -7,7 +7,8 @@
 // users/<coach>/relancesAuto.regles. Le coach les règle ; elles sont COUPÉES
 // par défaut, et rien ici n'en allume une : actif vaut true ou rien.
 //
-// ⚠ CINQ SIGNAUX SEULEMENT, CEUX QUI ONT UN TEXTE (_waCorpsGroupe de l'app).
+// ⚠ SIX SIGNAUX SEULEMENT, CEUX QUI ONT UN TEXTE PAR DÉFAUT (_waCorpsGroupe de
+//   l'app pour les cinq premiers, RELANCE_CORPS_INACTIF pour l'inactivité).
 //   La douleur, le décrochage, la progression bloquée, le drapeau rouge et
 //   les tâches du coach ne sont PAS dans cette liste, et aucune configuration
 //   ne les y fait entrer : une clé inconnue est ignorée à la lecture.
@@ -22,12 +23,22 @@
 const J = 864e5;
 
 // L'ordre dit lequel part quand deux signaux sont levés le même jour.
-export const RELANCE_SIGNAUX = ['nostart', 'overdue', 'expiring', 'noprog', 'bilan'];
+// 'inactif' EN DERNIER : l'ordre des cinq premiers ne change pas.
+export const RELANCE_SIGNAUX = ['nostart', 'overdue', 'expiring', 'noprog', 'bilan', 'inactif'];
 export const RELANCE_MOYENS = ['canal', 'push'];
 export const RELANCE_DELAI_MAX = 14;
 export const RELANCE_DELAI_DEFAUT = 2;
 export const RELANCE_FENETRE_J = 7;
 export const RELANCE_JOURNAL_J = 90;
+// L'INACTIVITÉ A SES PROPRES BORNES : son délai EST le signal (N jours sans
+// séance ni bilan), et une semaine sans séance n'est pas encore un silence.
+export const RELANCE_INACTIF = { min: 7, max: 21, defaut: 10 };
+// PURE. Le délai d'un signal, borné selon le signal.
+export function delaiBorne(signal, v) {
+  const d = Math.round(Number(v));
+  if (signal === 'inactif') return Number.isFinite(d) ? Math.max(RELANCE_INACTIF.min, Math.min(RELANCE_INACTIF.max, d)) : RELANCE_INACTIF.defaut;
+  return Number.isFinite(d) ? Math.max(0, Math.min(RELANCE_DELAI_MAX, d)) : RELANCE_DELAI_DEFAUT;
+}
 
 // LE TEXTE EST CELUI DE L'APP (_waCorpsGroupe), mot pour mot. Le test
 // relances.test.mjs le relit dans rc-core et tombe s'ils divergent.
@@ -37,6 +48,8 @@ export const RELANCE_CORPS = {
   expiring: 'ton accès RepCore arrive bientôt à échéance : pense à le renouveler pour garder ton suivi 💪',
   bilan: 'j\'ai bien reçu ton bilan, je le regarde et je reviens vers toi rapidement 💪',
   noprog: 'je prépare ton programme, je te l\'envoie très vite 💪',
+  // Celui-ci a une variable : {jours}, remplacée à l'envoi (relanceComposer).
+  inactif: 'ça fait {jours} jours qu\'on ne t\'a pas vu à l\'entraînement : tout va bien ? Dis-moi si on doit adapter quelque chose.',
 };
 
 // PURE. Les règles lues, nettoyées : seules les cinq clés connues, actif
@@ -46,10 +59,9 @@ export function reglesNormalisees(brut) {
   const out = {};
   for (const s of RELANCE_SIGNAUX) {
     const r = (src[s] && typeof src[s] === 'object') ? src[s] : {};
-    const d = Math.round(Number(r.delai));
     out[s] = {
       actif: r.actif === true,
-      delai: Number.isFinite(d) ? Math.max(0, Math.min(RELANCE_DELAI_MAX, d)) : RELANCE_DELAI_DEFAUT,
+      delai: delaiBorne(s, r.delai),
       moyen: RELANCE_MOYENS.indexOf(r.moyen) >= 0 ? r.moyen : 'push',
     };
   }
@@ -109,7 +121,8 @@ export function retardBilan(dernierMs, cadence, freqAthlete, t) {
 // levé. Les prédicats sont ceux de l'app (neverStarted, needsAlert,
 // hasNewBilan, la ligne « accès », hasProgram) :
 //   d = { bilans, createdAt, status, echeance, programme (bool),
-//         cadence (bilanCadence du coach), freq (_bilanFreq de l'athlète) }
+//         cadence (bilanCadence du coach), freq (_bilanFreq de l'athlète),
+//         derniereSeance (lastSession, ms), delaiInactif (jours) }
 export function signauxRelance(d, t) {
   const x = d || {};
   const bilans = (Array.isArray(x.bilans) ? x.bilans : Object.values(x.bilans || {}))
@@ -130,6 +143,15 @@ export function signauxRelance(d, t) {
     if (!der.reponseCoach && !(der.reponseAudio && der.reponseAudio.url)) out.bilan = { depuis: dd, bilan: dd };
     const dep = bilans.filter((b) => b.type === 'depart').sort((a, b) => Number(a.date) - Number(b.date))[0];
     if (dep && x.programme === false) out.noprog = { depuis: Number(dep.date) };
+  }
+  // L'INACTIVITÉ (dernierSigneDeVie de l'app) : au moins une séance, puis ni
+  // séance ni bilan depuis delaiInactif jours. L'épisode est daté par la
+  // dernière activité + le délai : une séance le referme, la suivante en ouvre un autre.
+  const seance = Number(x.derniereSeance) || 0;
+  if (seance > 0) {
+    const derAct = bilans.reduce((m, b) => Math.max(m, Number(b.date) || 0), seance);
+    const depuis = derAct + delaiBorne('inactif', x.delaiInactif) * J;
+    if (t >= depuis) out.inactif = { depuis, jours: Math.floor((t - derAct) / J) };
   }
   const ech = Number(x.echeance) || 0;
   if (x.status === 'COACHING_SUIVI' && ech > t && ech - t < 14 * J) out.expiring = { depuis: ech - 14 * J };
@@ -175,18 +197,47 @@ export function choisirRelance(o) {
   for (const s of RELANCE_SIGNAUX) {
     const r = regles[s], x = sig[s];
     if (!r.actif || !x) continue;
-    if (t - Number(x.depuis) < r.delai * J) { raison = 'delai'; continue; }
+    // Le délai de l'inactivité est déjà dans son signal : ne pas l'attendre deux fois.
+    if (s !== 'inactif' && t - Number(x.depuis) < r.delai * J) { raison = 'delai'; continue; }
     if (reporteParCoach(reports[s], s, x.bilan, t)) { raison = 'reporte'; continue; }
     if (partis.some((e) => e.signal === s && Number(e.depuis) === Number(x.depuis))) { raison = 'deja'; continue; }
-    return { signal: s, moyen: r.moyen, depuis: Number(x.depuis) };
+    return Object.assign({ signal: s, moyen: r.moyen, depuis: Number(x.depuis) }, x.jours != null ? { jours: x.jours } : {});
   }
   return { signal: null, raison };
 }
 
-// PURE. Le texte envoyé : « Salut <prénom>, » puis le corps de l'app.
-export function texteRelance(signal, prenom) {
-  const p = String(prenom || '').trim().slice(0, 30);
-  return (p ? 'Salut ' + p + ', ' : 'Salut ! ') + (RELANCE_CORPS[signal] || '');
+// ── relanceTexte:debut
+// LA MÊME FONCTION DANS L'APP (aperçu) ET DANS LE WORKER (envoi) : le test
+// relances.test.mjs exécute celle de l'app et compare, cas par cas.
+// PURE. « Salut <prénom>, » puis le texte du coach s'il est valable (1 à
+// RELANCE_TEXTE_MAX caractères une fois nettoyé), sinon le texte par défaut.
+// {prénom} et {jours} sont remplacés ; les caractères de contrôle et les
+// chevrons disparaissent ; le résultat est tronqué s'il déborde encore.
+const RELANCE_TEXTE_MAX = 280;
+function relanceComposer(defaut, prenom, perso, vars) {
+  const net = (s) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim();
+  const p = net(prenom).slice(0, 30);
+  const brut = typeof perso === 'string' ? net(perso) : '';
+  let corps = (brut && brut.length <= RELANCE_TEXTE_MAX) ? brut : net(defaut);
+  const v = (vars && typeof vars === 'object') ? vars : {};
+  const j = Math.round(Number(v.jours));
+  corps = net(corps.replace(/\{pr[ée]nom\}/gi, p).replace(/\{jours\}/gi, Number.isFinite(j) && j > 0 ? String(j) : 'quelques'));
+  if (corps.length > RELANCE_TEXTE_MAX) corps = corps.slice(0, RELANCE_TEXTE_MAX - 1).trimEnd() + '…';
+  return (p ? 'Salut ' + p + ', ' : 'Salut ! ') + corps;
+}
+// ── relanceTexte:fin
+export { relanceComposer, RELANCE_TEXTE_MAX };
+// PURE. Les textes du coach (relancesAuto.textes), nettoyés : un par signal connu.
+export function textesNormalises(brut) {
+  const src = (brut && typeof brut === 'object') ? brut : {};
+  const out = {};
+  for (const s of RELANCE_SIGNAUX) if (typeof src[s] === 'string' && src[s].trim()) out[s] = src[s];
+  return out;
+}
+// PURE. Le texte envoyé : « Salut <prénom>, » puis le texte du coach (perso)
+// s'il est valable, sinon le texte par défaut ; vars = { jours }.
+export function texteRelance(signal, prenom, perso, vars) {
+  return relanceComposer(RELANCE_CORPS[signal] || '', prenom, perso, vars);
 }
 
 // PURE. Les entrées à effacer : plus de RELANCE_JOURNAL_J jours.

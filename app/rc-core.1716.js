@@ -26237,14 +26237,48 @@ function _proposerBilanSuivant(restants){
 //   <athlète>. Le coach la lit (écran « cette semaine », fiche de l'athlète),
 //   l'athlète lit sa branche (la carte « Un mot de ton coach »).
 
-const RELANCE_SIGNAUX=Object.freeze(['nostart','overdue','expiring','noprog','bilan']);
+// 'inactif' EN DERNIER (30/09/2026) : l'ordre des cinq premiers ne change pas.
+const RELANCE_SIGNAUX=Object.freeze(['nostart','overdue','expiring','noprog','bilan','inactif']);
 const RELANCE_MOYENS=Object.freeze({push:'Notification',canal:'Dans l’app'});
 const RELANCE_DELAIS=Object.freeze([0,1,2,3,5,7]);
 const RELANCE_DELAI_DEFAUT=2;
+// L'INACTIVITÉ : son délai EST le signal (N jours sans séance ni bilan), borné
+// de 7 à 21 jours, 10 par défaut. Mêmes bornes que le serveur (RELANCE_INACTIF).
+const RELANCE_INACTIF=Object.freeze({min:7,max:21,defaut:10});
+const RELANCE_DELAIS_INACTIF=Object.freeze([7,10,14,21]);
+// Son texte par défaut (pas de relance WhatsApp groupée pour ce signal).
+// Le serveur a le même, mot pour mot : relances.test.mjs les compare.
+const RELANCE_CORPS_INACTIF='ça fait {jours} jours qu\'on ne t\'a pas vu à l\'entraînement : tout va bien ? Dis-moi si on doit adapter quelque chose.';
+function relanceCorpsDefaut(signal){ return signal==='inactif'?RELANCE_CORPS_INACTIF:_waCorpsGroupe(signal); }
+function _relDelaiBorne(signal,v){
+  const d=Math.round(Number(v));
+  if(signal==='inactif') return Number.isFinite(d)?Math.max(RELANCE_INACTIF.min,Math.min(RELANCE_INACTIF.max,d)):RELANCE_INACTIF.defaut;
+  return Number.isFinite(d)?Math.max(0,Math.min(14,d)):RELANCE_DELAI_DEFAUT;
+}
+// ── relanceTexte:debut
+// LA MÊME FONCTION DANS L'APP (aperçu) ET DANS LE WORKER (envoi) : le test
+// relances.test.mjs exécute celle de l'app et compare, cas par cas.
+// PURE. « Salut <prénom>, » puis le texte du coach s'il est valable (1 à
+// RELANCE_TEXTE_MAX caractères une fois nettoyé), sinon le texte par défaut.
+// {prénom} et {jours} sont remplacés ; les caractères de contrôle et les
+// chevrons disparaissent ; le résultat est tronqué s'il déborde encore.
+const RELANCE_TEXTE_MAX = 280;
+function relanceComposer(defaut, prenom, perso, vars) {
+  const net = (s) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim();
+  const p = net(prenom).slice(0, 30);
+  const brut = typeof perso === 'string' ? net(perso) : '';
+  let corps = (brut && brut.length <= RELANCE_TEXTE_MAX) ? brut : net(defaut);
+  const v = (vars && typeof vars === 'object') ? vars : {};
+  const j = Math.round(Number(v.jours));
+  corps = net(corps.replace(/\{pr[ée]nom\}/gi, p).replace(/\{jours\}/gi, Number.isFinite(j) && j > 0 ? String(j) : 'quelques'));
+  if (corps.length > RELANCE_TEXTE_MAX) corps = corps.slice(0, RELANCE_TEXTE_MAX - 1).trimEnd() + '…';
+  return (p ? 'Salut ' + p + ', ' : 'Salut ! ') + corps;
+}
+// ── relanceTexte:fin
 const RELANCE_FENETRE_J=7;
 const RELANCE_ECHANGE='Ça appelle un échange, pas un message type.';
 const RELANCE_TRAVAIL='C’est ton travail, il n’y a rien à dire à l’athlète.';
-// Les dix-huit lignes, dans l'ordre de « À traiter ». auto:true pour les cinq.
+// Les dix-neuf lignes, dans l'ordre de « À traiter ». auto:true pour les six.
 const RELANCE_LIGNES=Object.freeze([
   {type:'drapeau',lib:'Drapeau rouge santé',raison:'Un drapeau rouge se traite de vive voix, jamais par un message type.'},
   {type:'douleur',lib:'Douleur répétée',raison:RELANCE_ECHANGE},
@@ -26263,7 +26297,9 @@ const RELANCE_LIGNES=Object.freeze([
   {type:'rite',lib:'Bilan de 4 semaines à lire',raison:RELANCE_TRAVAIL},
   {type:'progfin',lib:'Bloc qui se termine',raison:RELANCE_TRAVAIL},
   {type:'silence',lib:'Sans échange depuis 14 j',raison:'Un silence se rompt par un vrai mot du coach, pas par un rappel automatique.'},
-  {type:'noprog',lib:'Sans programme',auto:true,quand:'dès le bilan de départ, tant qu’aucun programme n’est posé'}
+  {type:'noprog',lib:'Sans programme',auto:true,quand:'dès le bilan de départ, tant qu’aucun programme n’est posé'},
+  // N est le délai choisi par le coach (renderRelancesCoach le remplace).
+  {type:'inactif',lib:'Plus de séance',auto:true,quand:'N jours sans séance'}
 ]);
 const RELANCE_LIB=Object.freeze(Object.fromEntries(RELANCE_LIGNES.map(l=>[l.type,l.lib])));
 
@@ -26274,9 +26310,8 @@ function relancesRegles(coach){
   const out={};
   for(const s of RELANCE_SIGNAUX){
     const r=(src[s]&&typeof src[s]==='object')?src[s]:{};
-    const d=Math.round(Number(r.delai));
     out[s]={actif:r.actif===true,
-      delai:Number.isFinite(d)?Math.max(0,Math.min(14,d)):RELANCE_DELAI_DEFAUT,
+      delai:_relDelaiBorne(s,r.delai),
       moyen:RELANCE_MOYENS[r.moyen]?r.moyen:'push'};
   }
   return out;
@@ -26298,7 +26333,7 @@ function _relEcrire(coach,maj){
   const cfg=(coach.relancesAuto&&typeof coach.relancesAuto==='object')?coach.relancesAuto:{};
   const regles=relancesRegles(coach);
   const exclus=Object.assign({},(cfg.exclus&&typeof cfg.exclus==='object')?cfg.exclus:{});
-  const n={regles,exclus,pause:cfg.pause===true};
+  const n={regles,exclus,pause:cfg.pause===true,textes:relancesTextes(coach)};
   maj(n);
   n.maj=Date.now();
   coach.relancesAuto=n;
@@ -26313,11 +26348,38 @@ function relancesRegler(signal,champ,valeur){
   _relEcrire(currentUser,n=>{
     const r=n.regles[signal];
     if(champ==='actif') r.actif=valeur===true;
-    if(champ==='delai'){ const d=Math.round(Number(valeur)); if(Number.isFinite(d)) r.delai=Math.max(0,Math.min(14,d)); }
+    if(champ==='delai'){ const d=Math.round(Number(valeur)); if(Number.isFinite(d)) r.delai=_relDelaiBorne(signal,d); }
     if(champ==='moyen'&&RELANCE_MOYENS[valeur]) r.moyen=valeur;
   });
   try{ renderRelancesCoach(); }catch(e){}
   try{ renderEntreeRelances(); }catch(e){}
+  return true;
+}
+// PURE. Les textes du coach, nettoyés comme le serveur les lit : un par signal
+// connu, non vide, RELANCE_TEXTE_MAX caractères au plus.
+function relancesTextes(coach){
+  const src=(coach&&coach.relancesAuto&&coach.relancesAuto.textes)||{};
+  const out={};
+  for(const s of RELANCE_SIGNAUX){ const v=src[s]; if(typeof v==='string'&&v.trim()&&v.trim().length<=RELANCE_TEXTE_MAX) out[s]=v.trim(); }
+  return out;
+}
+// Le texte d'une ligne : vide, on revient au texte par défaut.
+function relancesTexte(signal,valeur){
+  if(!currentUser||RELANCE_SIGNAUX.indexOf(signal)<0) return false;
+  const v=String(valeur==null?'':valeur).trim();
+  if(v.length>RELANCE_TEXTE_MAX){ toast('Ton texte dépasse '+RELANCE_TEXTE_MAX+' caractères.','var(--orange)'); return false; }
+  _relEcrire(currentUser,n=>{ if(v) n.textes[signal]=v; else delete n.textes[signal]; });
+  try{ renderRelancesCoach(); }catch(e){}
+  return true;
+}
+// L'aperçu, à la frappe : la fonction même qui composera l'envoi.
+function _relApercuTexte(signal,perso,delai){
+  return relanceComposer(relanceCorpsDefaut(signal),'Léa',perso,{jours:signal==='inactif'?delai:0});
+}
+function relApercu(signal){
+  const t=document.getElementById('rel-txt-'+signal), z=document.getElementById('rel-ap-'+signal);
+  if(!t||!z) return false;
+  z.textContent=_relApercuTexte(signal,t.value,relancesRegles(currentUser)[signal].delai);
   return true;
 }
 // « Je reprends la main » : tout s'arrête, y compris ce qui était déjà en
@@ -26736,7 +26798,7 @@ function renderRelancesCoach(){
     +sem.map(e=>_relLigneJournal(e,_relNom(e.cle))).join('');
   // LES RÈGLES : une ligne par signal, dans l'ordre de « À traiter ».
   h+='<h2 class="rel-h">Les règles</h2>'
-    +'<p class="sub rel-p">Un message par athlète sur sept jours au plus, tous signaux confondus. Le texte est celui de tes relances WhatsApp, précédé du prénom. Une ligne que tu reportes dans « Mes notifications » ne part pas.</p>';
+    +'<p class="sub rel-p">Un message par athlète sur sept jours au plus, tous signaux confondus. Le texte par défaut est celui de tes relances WhatsApp ; tu peux écrire le tien, il est toujours précédé du prénom. Une ligne que tu reportes dans « Mes notifications » ne part pas.</p>';
   // Les cinq réglables d'abord, puis les onze qui ne le seront jamais : le
   // coach règle en haut, et lit en bas pourquoi le reste n'y est pas.
   const lignes=RELANCE_LIGNES.filter(l=>l.auto).concat(RELANCE_LIGNES.filter(l=>!l.auto));
@@ -26748,15 +26810,24 @@ function renderRelancesCoach(){
       continue;
     }
     const x=r[l.type];
+    const _delais=l.type==='inactif'?RELANCE_DELAIS_INACTIF:RELANCE_DELAIS;
+    const _perso=relancesTextes(currentUser)[l.type]||'';
     h+='<div class="rel-l'+(x.actif?' rel-l-on':'')+'">'
       +'<div class="rel-l-h"><div class="rel-l-t">'+escapeHtml(l.lib)+'</div>'
       +'<label class="rel-switch"><input type="checkbox"'+(x.actif?' checked':'')+' onchange="relancesRegler(\''+l.type+'\',\'actif\',this.checked)" aria-label="'+escapeHtml(l.lib)+'"><span></span></label></div>'
-      +'<div class="rel-l-r">Le signal se lève '+escapeHtml(l.quand)+'.</div>'
+      +'<div class="rel-l-r">Le signal se lève '+escapeHtml(l.type==='inactif'?'après '+l.quand.replace('N',String(x.delai))+' ni bilan':l.quand)+'.</div>'
       +'<div class="rel-l-c"><label>Après <select onchange="relancesRegler(\''+l.type+'\',\'delai\',this.value)">'
-      +RELANCE_DELAIS.map(d=>'<option value="'+d+'"'+(d===x.delai?' selected':'')+'>'+(d?d+' jour'+(d>1?'s':''):'le jour même')+'</option>').join('')
+      +(l.type==='inactif'&&_delais.indexOf(x.delai)<0?[x.delai].concat(_delais).sort((a,b)=>a-b):_delais).map(d=>'<option value="'+d+'"'+(d===x.delai?' selected':'')+'>'+(d?d+' jour'+(d>1?'s':''):'le jour même')+'</option>').join('')
       +'</select></label><label>Par <select onchange="relancesRegler(\''+l.type+'\',\'moyen\',this.value)">'
       +Object.keys(RELANCE_MOYENS).map(m=>'<option value="'+m+'"'+(m===x.moyen?' selected':'')+'>'+escapeHtml(RELANCE_MOYENS[m])+'</option>').join('')
-      +'</select></label></div></div>';
+      +'</select></label></div>'
+      // LE TEXTE DU COACH, et son aperçu tel qu'il partira.
+      +(x.actif?'<div class="rel-txt"><label for="rel-txt-'+l.type+'">Ton texte <span>facultatif, '+RELANCE_TEXTE_MAX+' caractères au plus'
+        +(l.type==='inactif'?' ; {prénom} et {jours} sont remplacés':' ; {prénom} est remplacé')+'</span></label>'
+        +'<textarea id="rel-txt-'+l.type+'" rows="3" maxlength="'+RELANCE_TEXTE_MAX+'" placeholder="'+escapeHtml(relanceCorpsDefaut(l.type))+'" oninput="relApercu(\''+l.type+'\')" onchange="relancesTexte(\''+l.type+'\',this.value)">'+escapeHtml(_perso)+'</textarea>'
+        +'<div class="rel-ap"><span>Aperçu</span><div id="rel-ap-'+l.type+'">'+escapeHtml(_relApercuTexte(l.type,_perso,x.delai))+'</div></div>'
+        +(_perso?'<button type="button" class="rel-defaut" onclick="relancesTexte(\''+l.type+'\',\'\')">Revenir au texte par défaut</button>':'')+'</div>':'')
+      +'</div>';
   }
   z.innerHTML=h;
   return true;

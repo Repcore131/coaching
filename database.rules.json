@@ -184,6 +184,15 @@
 
         // Marqueurs de lecture du mot, dans le dossier DU COACH : un
         // horodatage par athlete, rien d autre.
+        // ── Les textes de relance du coach (relancesAuto.textes) ──
+        // Ce bloc BORNE : un texte par signal automatisable, 280 caracteres au
+        // plus (RELANCE_TEXTE_MAX). Le reste de relancesAuto n est pas touche.
+        "relancesAuto": {
+          "textes": {
+            "$signal": { ".validate": "$signal.matches(/^(nostart|overdue|expiring|noprog|bilan|inactif)$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 280" }
+          }
+        },
+
         "motsLus": {
           "$athleteId": { ".validate": "newData.isNumber() && newData.val() > 0" }
         },

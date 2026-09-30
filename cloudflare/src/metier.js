@@ -1430,7 +1430,7 @@ export function creerMetier(deps) {
   // Worker seul ; le coach le lit en entier, l'athlète sa propre branche
   // (le moyen « canal » s'y lit : c'est un message privé dans l'app, JAMAIS
   // le canal collectif du coach, que tous ses athlètes lisent).
-  const RELANCE_REPORTS = { nostart: 'nostart', overdue: 'overdue', expiring: 'expiring', noprog: 'noprog', bilan: 'bilan' };
+  const RELANCE_REPORTS = { nostart: 'nostart', overdue: 'overdue', expiring: 'expiring', noprog: 'noprog', bilan: 'bilan', inactif: 'inactif' };
   async function relancesCoachUn(coach, t) {
     const cfg = await _lire(coach, 'relancesAuto');
     if (!RL.relancesAllumees(cfg)) return 'coupe';
@@ -1441,7 +1441,7 @@ export function creerMetier(deps) {
     // garde ceux des cinq types, encore en cours, et la sous-tâche retient le sien.
     const reports = {};
     for (const k of Object.keys(a)) {
-      const m = /^(nostart|overdue|expiring|noprog|bilan)-(.+)$/.exec(k);
+      const m = /^(nostart|overdue|expiring|noprog|bilan|inactif)-(.+)$/.exec(k);
       if (!m || !a[k] || typeof a[k] !== 'object') continue;
       if (Number(a[k].until) && t >= Number(a[k].until)) continue;
       (reports[m[2]] = reports[m[2]] || {})[RELANCE_REPORTS[m[1]]] = { until: Number(a[k].until) || 0, seenUpTo: Number(a[k].seenUpTo) || 0 };
@@ -1482,10 +1482,22 @@ export function creerMetier(deps) {
       d.echeance = (droits && Number(droits.echeance) > 0) ? Number(droits.echeance) : Number(accessExpiry) || 0;
     }
     if (regles.noprog.actif) d.programme = await aUnProgramme(uid);
+    // L'inactivité : lastSession, le résumé que l'app pose à chaque séance ;
+    // à défaut, la dernière entrée de sessions (une seule, par sa clé).
+    if (regles.inactif.actif) {
+      let der = Number(await _lire(uid, 'lastSession')) || 0;
+      if (!der) {
+        const s = (await db.ref('users/' + uid + '/sessions').orderByKey().limitToLast(1).get()).val();
+        for (const x of Object.values(s || {})) der = Math.max(der, Number(x && x.date) || 0);
+      }
+      d.derniereSeance = der;
+      d.delaiInactif = regles.inactif.delai;
+    }
     const reports = (e.reports && id != null && e.reports[String(id)]) || {};
     const choix = RL.choisirRelance({ cfg, cleAthlete: uid, signaux: RL.signauxRelance(d, t), journal, reports, t });
     if (!choix.signal) return choix.raison;
-    const texte = RL.texteRelance(choix.signal, fname);
+    // Le texte du coach s'il en a écrit un (relancesAuto.textes), sinon celui par défaut.
+    const texte = RL.texteRelance(choix.signal, fname, RL.textesNormalises(cfg && cfg.textes)[choix.signal], { jours: choix.jours });
     let statut = 'parti', raison = null;
     if (choix.moyen === 'push') {
       const r = await envoyerPush(uid, { type: 'relance', url: './', tag: 'relance-' + choix.signal,

@@ -27,6 +27,7 @@ test('chaque règle choisit ses destinataires, et seulement eux', () => {
     bilan: { bilans: [{ date: T - 3 * J }] },
     expiring: { bilans: [{ date: T - 2 * J, reponseCoach: 'ok' }], status: 'COACHING_SUIVI', echeance: T + 5 * J },
     noprog: { bilans: [{ date: T - 2 * J, type: 'depart', reponseCoach: 'ok' }], programme: false },
+    inactif: { bilans: [{ date: T - 13 * J, reponseCoach: 'ok' }], derniereSeance: T - 12 * J },
   };
   for (const s of RL.RELANCE_SIGNAUX) {
     const sig = RL.signauxRelance(cas[s], T);
@@ -87,11 +88,11 @@ test('la douleur ne peut PAS être automatisée, quelle que soit la configuratio
   const signaux = Object.fromEntries(interdits.map((s) => [s, { depuis: 0 }]));
   assert.equal(RL.choisirRelance({ cfg: { regles }, signaux, t: T }).signal, null);
   assert.equal(RL.relancesAllumees({ regles }), false);
-  // Et aucun texte : il n'existe que pour les cinq.
+  // Et aucun texte : il n'existe que pour les six.
   for (const s of interdits) assert.equal(RL.RELANCE_CORPS[s], undefined);
 });
 
-test('le texte est celui de l’app (_waCorpsGroupe), précédé du prénom', () => {
+test('les textes PAR DÉFAUT sont ceux de l’app (_waCorpsGroupe, RELANCE_CORPS_INACTIF), précédés du prénom', () => {
   const ici = path.dirname(fileURLToPath(import.meta.url));
   const dossier = path.join(ici, '..', '..', 'app');
   const f = fs.readdirSync(dossier).find((n) => /^rc-core\.\d+\.js$/.test(n));
@@ -99,11 +100,15 @@ test('le texte est celui de l’app (_waCorpsGroupe), précédé du prénom', ()
   const i = src.indexOf('function _waCorpsGroupe(type){');
   assert.ok(i > 0);
   const corps = src.slice(i, src.indexOf('\n}', i));
-  for (const s of RL.RELANCE_SIGNAUX) {
+  for (const s of RL.RELANCE_SIGNAUX.filter((x) => x !== 'inactif')) {
     const m = new RegExp("if\\(type==='" + s + "'\\) return '((?:[^'\\\\]|\\\\.)*)';").exec(corps);
     assert.ok(m, s + ' dans _waCorpsGroupe');
     assert.equal(m[1].replace(/\\'/g, "'"), RL.RELANCE_CORPS[s], s);
   }
+  // L'inactivité n'a pas de relance WhatsApp groupée : son défaut vit à part.
+  const ina = /const RELANCE_CORPS_INACTIF='((?:[^'\\]|\\.)*)';/.exec(src);
+  assert.ok(ina, 'RELANCE_CORPS_INACTIF dans rc-core');
+  assert.equal(ina[1].replace(/\\'/g, "'"), RL.RELANCE_CORPS.inactif);
   // La liste de l'app (RELANCE_SIGNAUX) est celle du serveur, dans le même ordre.
   const l = /const RELANCE_SIGNAUX=Object\.freeze\(\[([^\]]*)\]\)/.exec(src);
   assert.ok(l, 'RELANCE_SIGNAUX dans rc-core');
@@ -225,4 +230,101 @@ test('réponse vocale : un bilan répondu de vive voix ne lève plus le signal �
   assert.equal(d.bilan, undefined);
   assert.ok(RL.signauxRelance({ bilans: [{ date: T - 2 * J, reponseAudio: {} }] }, T).bilan, 'un objet sans adresse ne répond pas');
   assert.equal(RL.signauxRelance({ bilans: [{ date: T - 2 * J, reponseCoach: 'ok' }] }, T).bilan, undefined);
+});
+
+// ── L'INACTIVITÉ ET LES TEXTES DU COACH (30/09/2026) ─────────────────────
+test('inactif : levé à J+10 de la dernière activité, pas avant ; jamais sans séance', () => {
+  const d = (o) => Object.assign({ bilans: [{ date: T - 30 * J, reponseCoach: 'ok' }], derniereSeance: T - 10 * J }, o || {});
+  const a = RL.signauxRelance(d(), T);
+  assert.ok(a.inactif, 'J+10 : levé');
+  assert.equal(a.inactif.depuis, T);
+  assert.equal(a.inactif.jours, 10);
+  assert.equal(RL.signauxRelance(d({ derniereSeance: T - 9 * J }), T).inactif, undefined, 'J+9 : pas encore');
+  // Un bilan récent compte comme activité (dernierSigneDeVie de l'app).
+  assert.equal(RL.signauxRelance(d({ bilans: [{ date: T - 3 * J, reponseCoach: 'ok' }] }), T).inactif, undefined);
+  // Aucune séance : c'est « jamais démarré », pas une inactivité.
+  assert.equal(RL.signauxRelance(d({ derniereSeance: 0 }), T).inactif, undefined);
+  // Le délai du coach, borné de 7 à 21 (10 par défaut).
+  assert.ok(RL.signauxRelance(d({ derniereSeance: T - 7 * J, delaiInactif: 7 }), T).inactif);
+  assert.equal(RL.signauxRelance(d({ derniereSeance: T - 20 * J, delaiInactif: 21 }), T).inactif, undefined);
+  assert.equal(RL.reglesNormalisees({ inactif: { actif: true, delai: 2 } }).inactif.delai, 7);
+  assert.equal(RL.reglesNormalisees({ inactif: { actif: true, delai: 60 } }).inactif.delai, 21);
+  assert.equal(RL.reglesNormalisees({}).inactif.delai, 10);
+  assert.equal(RL.reglesNormalisees({ overdue: { delai: 60 } }).overdue.delai, 14, 'les autres gardent leurs bornes');
+  // Le choix : il part dès qu'il est levé (le délai est dans le signal), avec ses jours.
+  const cfg = { regles: { inactif: { actif: true, delai: 10, moyen: 'push' } } };
+  assert.deepEqual(RL.choisirRelance({ cfg, signaux: a, t: T }), { signal: 'inactif', moyen: 'push', depuis: T, jours: 10 });
+  // Une fois par épisode, puis la semaine ; reporté par le coach, rien.
+  const journal = { a: { at: T, signal: 'inactif', depuis: T, statut: 'parti' } };
+  assert.equal(RL.choisirRelance({ cfg, signaux: RL.signauxRelance(d(), T + 8 * J), journal, t: T + 8 * J }).raison, 'deja');
+  assert.equal(RL.choisirRelance({ cfg, signaux: a, reports: { inactif: { until: T + J } }, t: T }).raison, 'reporte');
+  assert.equal(RL.choisirRelance({ cfg: Object.assign({ pause: true }, cfg), signaux: a, t: T }).raison, 'pause');
+});
+
+test('ordre : les cinq premiers inchangés, l’inactivité en dernier', () => {
+  assert.deepEqual(RL.RELANCE_SIGNAUX, ['nostart', 'overdue', 'expiring', 'noprog', 'bilan', 'inactif']);
+  // Bilan en retard ET inactif le même jour : le retard part.
+  const sig = RL.signauxRelance({ bilans: [{ date: T - 20 * J, reponseCoach: 'ok' }], derniereSeance: T - 15 * J }, T);
+  assert.ok(sig.overdue && sig.inactif);
+  assert.equal(RL.choisirRelance({ cfg: { regles: tout() }, signaux: sig, t: T }).signal, 'overdue');
+});
+
+test('texte du coach : variables remplacées ; vide ou trop long, le défaut ; nettoyé et tronqué', () => {
+  assert.equal(RL.texteRelance('inactif', 'Léa', 'Hé {prénom}, {jours} jours sans te voir !', { jours: 12 }), 'Salut Léa, Hé Léa, 12 jours sans te voir !');
+  assert.equal(RL.texteRelance('inactif', 'Léa', 'on se reprend {prenom} ?', {}), 'Salut Léa, on se reprend Léa ?');
+  assert.equal(RL.texteRelance('inactif', 'Léa', undefined, { jours: 11 }), 'Salut Léa, ' + RL.RELANCE_CORPS.inactif.replace('{jours}', '11'));
+  for (const vide of ['', '   ', null, 42, 'x'.repeat(281)])
+    assert.equal(RL.texteRelance('overdue', 'Léa', vide), 'Salut Léa, ' + RL.RELANCE_CORPS.overdue, JSON.stringify(vide));
+  assert.equal(RL.texteRelance('overdue', 'Léa', 'x'.repeat(280)), 'Salut Léa, ' + 'x'.repeat(280), '280 : accepté');
+  assert.equal(RL.texteRelance('overdue', 'Léa', '<b>viens</b>\n\tvite'), 'Salut Léa, b viens /b vite');
+  // Une variable qui fait déborder : tronqué, jamais plus de 280.
+  const nom = 'A'.repeat(30), long = RL.texteRelance('overdue', nom, '{prénom}'.repeat(35));
+  assert.ok(long.length === ('Salut ' + nom + ', ').length + 280 && long.endsWith('…'), long.length);
+  assert.deepEqual(RL.textesNormalises({ inactif: 'ok', douleur: 'non', overdue: '  ', bilan: 3 }), { inactif: 'ok' });
+});
+
+test('l’app et le Worker composent exactement le même texte (aperçu = envoi)', () => {
+  const ici = path.dirname(fileURLToPath(import.meta.url));
+  const dossier = path.join(ici, '..', '..', 'app');
+  const src = fs.readFileSync(path.join(dossier, fs.readdirSync(dossier).find((n) => /^rc-core\.\d+\.js$/.test(n))), 'utf8');
+  const a = src.indexOf('// ── relanceTexte:debut'), b = src.indexOf('// ── relanceTexte:fin');
+  assert.ok(a > 0 && b > a, 'les marqueurs de l’app ont disparu');
+  const app = new Function(src.slice(a, b) + '\nreturn relanceComposer;')();
+  const cas = [['Léa', 'Hé {prénom}, {jours} j', { jours: 9 }], ['', '', {}], ['  Tom  ', 'x'.repeat(281), { jours: 3 }],
+    ['Zoé', '{prénom} '.repeat(40), {}], ['Ana', '<i>a</i>\u0007b', { jours: 'x' }], ['Léa', null, { jours: 14 }]];
+  for (const [p, perso, v] of cas)
+    assert.equal(app(RL.RELANCE_CORPS.inactif, p, perso, v), RL.relanceComposer(RL.RELANCE_CORPS.inactif, p, perso, v), JSON.stringify([p, perso]));
+});
+
+test('de bout en bout : le coach écrit sa relance d’inactivité, elle part une fois, et le journal la garde', async () => {
+  const tel = appareil('https://push.test/lea');
+  const perso = '{prénom}, {jours} jours sans séance : on cale un créneau cette semaine ?';
+  const w = monde({
+    users: { [COACH]: { role: 'coach', relancesAuto: { regles: { inactif: { actif: true, delai: 10, moyen: 'push' } }, textes: { inactif: perso } } },
+      'lea@t,fr': athlete({ lastSession: T - 11 * J, sessions: [{ date: T - 11 * J }] }),
+      'tom@t,fr': athlete({ fname: 'Tom', id: 'id-tom', lastSession: T - 4 * J }),
+      'zoe@t,fr': athlete({ fname: 'Zoé', id: 'id-zoe', sessions: [{ date: T - 13 * J }] }) },
+    annuaire_coach: { [COACH]: { 'lea@t,fr': { maj: 1 }, 'tom@t,fr': { maj: 1 }, 'zoe@t,fr': { maj: 1 } } },
+    push: { 'lea@t,fr': { x: tel.abonnement } },
+  }, T);
+  for (let i = 0; i < 6; i++) { await w.minute(); w.avance(60e3); }
+  const j = w.F.lire('relances_auto/' + COACH) || {};
+  const lea = RL.journalListe(j['lea@t,fr']);
+  assert.equal(lea.length, 1);
+  assert.equal(lea[0].signal, 'inactif');
+  assert.equal(lea[0].statut, 'parti');
+  assert.equal(lea[0].texte, 'Salut Léa, Léa, 11 jours sans séance : on cale un créneau cette semaine ?');
+  assert.equal(tel.lire(w.F.recus[0].init.body).body, lea[0].texte);
+  assert.equal(j['tom@t,fr'], undefined, 'Tom s’est entraîné il y a quatre jours');
+  // Sans lastSession, la dernière entrée de sessions fait foi ; Zoé n'a pas de notification.
+  const zoe = RL.journalListe(j['zoe@t,fr']);
+  assert.equal(zoe.length, 1);
+  assert.equal(zoe[0].statut, 'non_parti');
+  // Le lendemain puis la semaine d'après : rien de plus pour Léa (un par épisode).
+  for (const pas of [J, 8 * J]) {
+    w.avance(pas);
+    for (let i = 0; i < 6; i++) { await w.minute(); w.avance(60e3); }
+  }
+  assert.equal(RL.journalListe(w.F.lire('relances_auto/' + COACH + '/lea@t,fr')).filter((e) => e.statut === 'parti').length, 1);
+  assert.equal(w.F.recus.length, 1);
 });

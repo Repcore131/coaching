@@ -50707,7 +50707,7 @@ async function testExercices(){
     // DIX-SEPT depuis la fin de programme (30/09/2026) : « Bloc qui se termine », grisée (c'est le travail du coach).
     // DIX-HUIT depuis le dernier contact (30/09/2026) : « Sans échange depuis 14 j », grisée.
     ok('C3 — dix-huit lignes, celles de « À traiter » ; cinq automatisables, et la douleur, le décrochage, la progression grisés avec leur raison',(()=>{
-      if(RELANCE_LIGNES.length!==18) return _echec(RELANCE_LIGNES.length+' lignes');
+      if(RELANCE_LIGNES.length!==19) return _echec(RELANCE_LIGNES.length+' lignes');
       const auto=RELANCE_LIGNES.filter(l=>l.auto).map(l=>l.type).sort().join();
       if(auto!==RELANCE_SIGNAUX.slice().sort().join()) return _echec('automatisables : '+auto);
       for(const t of ['douleur','douleurdiff','decrochage','entrainement']){
@@ -50715,7 +50715,8 @@ async function testExercices(){
         if(!l||l.auto||l.raison!==RELANCE_ECHANGE) return _echec(t);
       }
       // Chaque type sans texte de relance est grisé ; chaque type automatisable en a un.
-      for(const l of RELANCE_LIGNES) if(!!l.auto!==!!_waCorpsGroupe(l.type)) return _echec('texte de '+l.type);
+      // Les TEXTES PAR DÉFAUT : _waCorpsGroupe, et RELANCE_CORPS_INACTIF pour l’inactivité.
+      for(const l of RELANCE_LIGNES) if(!!l.auto!==!!relanceCorpsDefaut(l.type)) return _echec('texte de '+l.type);
       return RELANCE_LIGNES.every(l=>l.auto||String(l.raison||'').length>10)?true:_echec('une ligne grisée sans raison');})());
     ok('C3 — coupées par défaut ; la douleur ne s’allume pas, même appelée à la main',(()=>{
       const svU=currentUser, svS=saveUser;
@@ -50738,6 +50739,48 @@ async function testExercices(){
         if(relancesRegler('overdue','moyen','canal')!==true||currentUser.relancesAuto.regles.overdue.moyen!=='canal') return _echec('moyen canal');
         return relancesAllumees(currentUser)?true:_echec('allumée');
       } finally { currentUser=svU; saveUser=svS; }})());
+    ok('Relance d’inactivité : relancesRegles accepte « inactif » (7 à 21 jours, 10 par défaut), en dernier',(()=>{
+      const svU=currentUser, svS=saveUser;
+      try{
+        saveUser=()=>{};
+        if(RELANCE_SIGNAUX[RELANCE_SIGNAUX.length-1]!=='inactif'||RELANCE_SIGNAUX.slice(0,5).join()!=='nostart,overdue,expiring,noprog,bilan') return _echec('ordre : '+RELANCE_SIGNAUX.join());
+        currentUser={email:'ina.coach@t.fr',role:'coach',relancesAuto:{regles:{inactif:{actif:true,delai:3,moyen:'canal'}}}};
+        const r=relancesRegles(currentUser);
+        if(!r.inactif||!r.inactif.actif||r.inactif.delai!==7||r.inactif.moyen!=='canal') return _echec(JSON.stringify(r.inactif));
+        if(relancesRegles({relancesAuto:{regles:{}}}).inactif.delai!==10) return _echec('défaut');
+        if(relancesRegler('inactif','delai',60)!==true||currentUser.relancesAuto.regles.inactif.delai!==21) return _echec('borne haute');
+        if(relancesRegler('overdue','delai',60)!==true||currentUser.relancesAuto.regles.overdue.delai!==14) return _echec('les autres gardent 14');
+        const l=RELANCE_LIGNES.find(x=>x.type==='inactif');
+        if(!l||!l.auto||l.quand!=='N jours sans séance') return _echec('RELANCE_LIGNES');
+        return relancesAllumees(currentUser)?true:_echec('allumée');
+      } finally { currentUser=svU; saveUser=svS; }})());
+    ok('Relance d’inactivité : le texte du coach est gardé, vide il revient au défaut, trop long il est refusé ; l’écran montre l’aperçu',(()=>{
+      const svU=currentUser, svS=saveUser, svT=toast, svJ=_relJournal;
+      const z=document.getElementById('rel-corps'); const av=z?z.innerHTML:null;
+      try{
+        saveUser=()=>{}; toast=()=>{};
+        currentUser={email:'ina.coach2@t.fr',role:'coach',relancesAuto:{regles:{inactif:{actif:true,delai:10,moyen:'push'}}}};
+        if(relancesTexte('inactif','  {prénom}, {jours} jours sans toi ?  ')!==true) return _echec('refusé');
+        if(currentUser.relancesAuto.textes.inactif!=='{prénom}, {jours} jours sans toi ?') return _echec('gardé : '+JSON.stringify(currentUser.relancesAuto.textes));
+        // Régler une autre colonne ne l'efface pas (le bloc est réécrit en entier).
+        relancesRegler('inactif','moyen','canal'); relancesReprendreLaMain(false);
+        if(!currentUser.relancesAuto.textes||!currentUser.relancesAuto.textes.inactif) return _echec('perdu à la réécriture');
+        if(relancesTexte('inactif','x'.repeat(281))!==false||currentUser.relancesAuto.textes.inactif.indexOf('{jours}')<0) return _echec('281 caractères accepté');
+        if(relancesTexte('douleur','ok')!==false) return _echec('un signal interdit accepté');
+        if(_relApercuTexte('inactif',currentUser.relancesAuto.textes.inactif,10)!=='Salut Léa, Léa, 10 jours sans toi ?') return _echec('aperçu : '+_relApercuTexte('inactif',currentUser.relancesAuto.textes.inactif,10));
+        if(_relApercuTexte('inactif','',12)!=='Salut Léa, '+RELANCE_CORPS_INACTIF.replace('{jours}','12')) return _echec('défaut');
+        if(z){
+          _relJournal=[]; renderRelancesCoach();
+          const ta=z.querySelector('#rel-txt-inactif'), ap=z.querySelector('#rel-ap-inactif');
+          if(!ta||ta.value.indexOf('{jours}')<0||!ap||ap.textContent!=='Salut Léa, Léa, 10 jours sans toi ?') return _echec('écran : '+(ap&&ap.textContent));
+          if(z.querySelector('#rel-txt-overdue')) return _echec('un champ sur une ligne coupée');
+          ta.value='{jours} jours, {prénom} !'; relApercu('inactif');
+          if(ap.textContent!=='Salut Léa, 10 jours, Léa !') return _echec('aperçu à la frappe : '+ap.textContent);
+          if(!/après 10 jours sans séance ni bilan/.test(z.textContent)) return _echec('la règle ne dit pas son délai');
+        }
+        relancesTexte('inactif','');
+        return currentUser.relancesAuto.textes.inactif===undefined?true:_echec('vide : pas revenu au défaut');
+      } finally { currentUser=svU; saveUser=svS; toast=svT; _relJournal=svJ; if(z&&av!=null) z.innerHTML=av; }})());
     ok('C3 — « je reprends la main » coupe tout, et un athlète s’exclut d’un geste',(()=>{
       const svU=currentUser, svS=saveUser, svT=toast;
       try{
@@ -50765,7 +50808,7 @@ async function testExercices(){
           b:{at:t-10*864e5,signal:'bilan',moyen:'canal',statut:'parti'}},'tom@t,fr':{c:{at:t-2*864e5,signal:'nostart',moyen:'push',statut:'non_parti',raison:'aucun_abonnement'}}});
         renderRelancesCoach();
         // Dix-huit lignes depuis le dernier contact (« Sans échange depuis 14 j », grisée).
-        if(z.querySelectorAll('.rel-l').length!==18||z.querySelectorAll('.rel-l-off').length!==13) return _echec('lignes');
+        if(z.querySelectorAll('.rel-l').length!==19||z.querySelectorAll('.rel-l-off').length!==13) return _echec('lignes');
         if([...z.querySelectorAll('.rel-l-off')].some(l=>l.querySelector('input,select'))) return _echec('une ligne grisée réglable');
         if(z.querySelectorAll('.rel-l-on').length!==1) return _echec('ligne allumée');
         // Cette semaine : deux entrées sur sept jours, une partie, une pas partie (avec sa raison).
