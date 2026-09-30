@@ -6627,6 +6627,9 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'uiProgressTab',
   'questionnaireComplete','_firstBilanPending','_reprise','_repriseDeload',
   '_defaultCooldown','_defaultWarmup','_bilanFreq','_notifEnabled',
+  // La cadence des bilans et les questions de fin de bilan, posées par le coach :
+  // un rythme et des questions, aucune réponse (les réponses vivent dans bilans).
+  'bilanCadence','questionsCoach',
   '_woReminderDays','_woReminderEnabled','_woReminderHour','_woReminderMin',
   '_lastBilanNotif','_lastFbNotif','_lastRepBilanNotif','_lastWoNotif',
   '_notifDemandeeLe','_installDemandeeLe',
@@ -26246,7 +26249,7 @@ const RELANCE_LIGNES=Object.freeze([
   {type:'blocfini',lib:'Bloc de priorité terminé',raison:RELANCE_TRAVAIL},
   {type:'nostart',lib:'Inscrit, n’a jamais commencé',auto:true,quand:'trois jours après l’inscription sans bilan'},
   {type:'bilan',lib:'Nouveau bilan à lire',auto:true,quand:'le jour où le bilan arrive, tant que tu n’as pas répondu'},
-  {type:'overdue',lib:'Bilan en retard',auto:true,quand:'quatorze jours après le dernier bilan'},
+  {type:'overdue',lib:'Bilan en retard',auto:true,quand:'le lendemain de l’échéance fixée'},
   {type:'videos',lib:'Vidéo à corriger',raison:RELANCE_TRAVAIL},
   {type:'notes',lib:'Note à revoir',raison:RELANCE_TRAVAIL},
   {type:'expiring',lib:'Accès qui se termine',auto:true,quand:'quatorze jours avant la fin de l’accès'},
@@ -27551,6 +27554,7 @@ function _selMaj(){
     +'<div style="flex:1"></div>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selVersDecharge()">Décharge</button>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selVersProgramme()">Programme</button>'
+    +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selCadence()">Cadence</button>'
     +'<button type="button" onclick="selAthleteVider()" title="Tout décocher" style="background:none;border:none;color:var(--sub);font-family:inherit;font-size:var(--fs-xs);cursor:pointer;padding:4px 6px;min-height:30px">✕</button>'
     +'</div>';
 }
@@ -28756,9 +28760,168 @@ function isActive(c){
   const lastActivity=Math.max(lastSession,lastBilan,c.createdAt||0);
   return Date.now()-lastActivity<14*864e5;
 }
-function needsAlert(c){
+// ══ LA CADENCE DES BILANS, UNE SEULE DÉFINITION DU RETARD (30/09/2026) ═════
+//
+// Le coach pose sur le dossier de l'athlète bilanCadence = {freq:1|2|4
+// (semaines), jour:0..6 (0 = dimanche)}. Sans elle, c'est la fréquence que
+// l'athlète a choisie (_bilanFreq, 2 par défaut) et le samedi : exactement ce
+// que son téléphone faisait déjà.
+//
+// ⚠ echeanceBilan EST LA SEULE RÈGLE : needsAlert (« Bilans en retard »,
+//   urgencyScore, le portefeuille), la carte de l'athlète, son compte à
+//   rebours et ses rappels la lisent. Le Worker (relances.js,
+//   echeanceBilanParis) applique la même, en jours de Paris.
+// ⚠ L'ÉCHÉANCE : « dernier bilan + N semaines », arrondi au jour choisi le
+//   plus proche (±3 jours), avancé par setDate (heure d'été). EN RETARD dès
+//   le LENDEMAIN de l'échéance, chez l'athlète comme chez le coach ; le jour
+//   même, la carte de l'athlète dit « aujourd'hui ».
+// ⚠ UN CHANGEMENT DE CADENCE en cours de cycle repart du dernier bilan : il
+//   n'y a pas d'échéance mémorisée, elle se recalcule à chaque lecture.
+// ⚠ SANS AUCUN BILAN, rien ici : « Inscrit, n'a jamais commencé » garde sa
+//   règle, et needsAlert celle du questionnaire.
+const BILAN_FREQS=Object.freeze([1,2,4]);
+const BILAN_JOURS=Object.freeze(['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi']);
+const QUESTIONS_COACH_MAX=3, QUESTION_COACH_LONG=120;
+// PURE. La cadence posée par le coach, bornée ; null si absente ou invalide.
+function bilanCadenceValide(x){
+  if(!x||typeof x!=='object') return null;
+  const f=Number(x.freq), j=Number(x.jour);
+  if(BILAN_FREQS.indexOf(f)<0||!Number.isInteger(j)||j<0||j>6) return null;
+  return {freq:f,jour:j};
+}
+// PURE. La fréquence en vigueur (semaines) : celle du coach, sinon celle de l'athlète.
+function bilanFreqEffective(c){
+  const cad=bilanCadenceValide(c&&c.bilanCadence);
+  if(cad) return cad.freq;
+  const f=Number(c&&c._bilanFreq);
+  return BILAN_FREQS.indexOf(f)>=0?f:2;
+}
+// PURE. « dateMs + freq semaines », arrondi au `jour` le plus proche (±3 jours).
+function _bilanAncre(dateMs,freqWeeks,jour){
+  const d=new Date(dateMs); d.setHours(0,0,0,0);
+  d.setDate(d.getDate()+freqWeeks*7);
+  let ecart=((jour-d.getDay())%7+7)%7;
+  if(ecart>3) ecart-=7;
+  d.setDate(d.getDate()+ecart);
+  d.setHours(0,0,0,0);
+  return d;
+}
+/**
+ * PURE. {echeance (ms, minuit local), retardJours (négatif avant l'échéance,
+ * 0 le jour même), freq, jour, source:'coach'|'athlete'} ; tout à null sans bilan.
+ */
+function echeanceBilan(c,maintenant){
+  const der=dernierBilan(c);
+  const vide={echeance:null,retardJours:null,freq:bilanFreqEffective(c),jour:null,source:null};
+  if(!der||!(Number(der.date)>0)) return vide;
+  const cad=bilanCadenceValide(c&&c.bilanCadence);
+  const freq=cad?cad.freq:bilanFreqEffective(c), jour=cad?cad.jour:6;
+  const e=_bilanAncre(Number(der.date),freq,jour);
+  return {echeance:e.getTime(),retardJours:_bilRetardJours(e.getTime(),maintenant),freq,jour,source:cad?'coach':'athlete'};
+}
+// PURE. « Ton coach a fixé : bilan chaque lundi, toutes les 2 semaines. »
+function texteCadenceCoach(cad){
+  const c=bilanCadenceValide(cad);
+  if(!c) return '';
+  return 'Ton coach a fixé : bilan chaque '+BILAN_JOURS[c.jour]+(c.freq===1?'.':', toutes les '+c.freq+' semaines.');
+}
+// PURE. Les questions du coach, nettoyées : 3 au plus, 120 caractères chacune.
+function questionsCoachDe(u){
+  const l=Array.isArray(u&&u.questionsCoach)?u.questionsCoach:Object.values((u&&u.questionsCoach)||{});
+  return l.map(q=>String(q==null?'':q).replace(/\s+/g,' ').trim().slice(0,QUESTION_COACH_LONG)).filter(Boolean).slice(0,QUESTIONS_COACH_MAX);
+}
+// PURE. Le libellé d'une réponse : pour une question du coach, SA question,
+// gardée dans le bilan (<clé>-q) au moment où l'athlète y a répondu.
+function libelleQuestionBilan(q,b){
+  const x=b&&b[q.k+'-q'];
+  return (typeof x==='string'&&x.trim())?x.trim():q.lbl;
+}
+
+// ── Chez le coach : la fiche, puis la barre de sélection ─────────────────
+function _htmlCadenceCoach(c){
+  const cad=bilanCadenceValide(c&&c.bilanCadence);
+  const e=echeanceBilan(c,Date.now());
+  const opt=(v,lib,sel)=>'<option value="'+v+'"'+(sel?' selected':'')+'>'+lib+'</option>';
+  const freqs=opt('','Au choix de l’athlète',!cad)+opt(1,'Chaque semaine',cad&&cad.freq===1)+opt(2,'Toutes les 2 semaines',cad&&cad.freq===2)+opt(4,'Toutes les 4 semaines',cad&&cad.freq===4);
+  const jours=[1,2,3,4,5,6,0].map(j=>opt(j,BILAN_JOURS[j].charAt(0).toUpperCase()+BILAN_JOURS[j].slice(1),(cad?cad.jour:6)===j)).join('');
+  const d=e.echeance?new Date(e.echeance).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}):'';
+  const etat=!e.echeance?'Pas encore de bilan : la cadence partira du premier.'
+    :e.retardJours>=1?'En retard de '+e.retardJours+' jour'+(e.retardJours>1?'s':'')+' (échéance du '+d+').'
+    :e.retardJours===0?'Attendu aujourd’hui.':'Prochain bilan attendu le '+d+'.';
+  const qs=questionsCoachDe(c);
+  const champs=[0,1,2].map(i=>'<input class="bcad-q" id="bcad-q'+(i+1)+'" maxlength="'+QUESTION_COACH_LONG+'" value="'+escapeHtml(qs[i]||'')+'" placeholder="Question '+(i+1)+' (facultative)">').join('');
+  return '<div class="bcad">'
+    +'<div class="bcad-t">Cadence des bilans</div>'
+    +'<div class="bcad-l"><select id="bcad-freq" aria-label="Fréquence">'+freqs+'</select>'
+    +'<select id="bcad-jour" aria-label="Jour">'+jours+'</select></div>'
+    +'<div class="bcad-d">'+escapeHtml(etat)+(cad?'':' Sans cadence, l’athlète choisit sa fréquence, le samedi.')+'</div>'
+    +'<div class="bcad-t" style="margin-top:12px">Tes questions en fin de bilan</div>'
+    +'<div class="bcad-d">Jusqu’à trois, 120 caractères chacune. Elles s’ajoutent à son prochain bilan de suivi.</div>'
+    +champs
+    +'<button type="button" class="btn btn-outline btn-sm bcad-b" onclick="ccdCadenceEnregistrer()">Enregistrer</button>'
+    +'</div>';
+}
+// PURE (écrit dans c). La cadence et les questions lues dans le formulaire.
+function _cadenceAppliquer(c,freq,jour,questions){
+  const cad=bilanCadenceValide({freq:Number(freq),jour:Number(jour)});
+  if(cad) c.bilanCadence=cad; else delete c.bilanCadence;
+  if(questions!==undefined){
+    const q=questionsCoachDe({questionsCoach:questions});
+    if(q.length) c.questionsCoach=q; else delete c.questionsCoach;
+  }
+  c.updatedAt=Date.now();
+  return c;
+}
+function ccdCadenceEnregistrer(){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return false;
+  const v=id=>(document.getElementById(id)||{}).value;
+  const f=v('bcad-freq');
+  _cadenceAppliquer(c,f===''?null:f,v('bcad-jour'),[1,2,3].map(i=>v('bcad-q'+i)||''));
+  users[c.email]=c;
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Cadence enregistrée ✓','la cadence est');
+  try{ renderCalendrierBilansCoach(c); }catch(e){}
+  return true;
+}
+// La barre de sélection : une cadence pour plusieurs athlètes d'un coup.
+function selCadence(){
+  if(!SEL_ATHLETES.size) return false;
+  document.getElementById('modal-overlay')?.remove();
+  const opt=(v,lib)=>'<option value="'+v+'">'+lib+'</option>';
+  document.body.insertAdjacentHTML('beforeend','<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Cadence des bilans" class="bcad-feuille">'
+    +'<div class="bcad-t">Cadence des bilans · '+SEL_ATHLETES.size+' athlète'+(SEL_ATHLETES.size>1?'s':'')+'</div>'
+    +'<div class="bcad-l"><select id="bcad-m-freq" aria-label="Fréquence">'+opt('','Au choix de l’athlète')+opt(1,'Chaque semaine')+'<option value="2" selected>Toutes les 2 semaines</option>'+opt(4,'Toutes les 4 semaines')+'</select>'
+    +'<select id="bcad-m-jour" aria-label="Jour">'+[1,2,3,4,5,6,0].map(j=>'<option value="'+j+'"'+(j===6?' selected':'')+'>'+BILAN_JOURS[j].charAt(0).toUpperCase()+BILAN_JOURS[j].slice(1)+'</option>').join('')+'</select></div>'
+    +'<div class="bcad-d">L’échéance de chacun repart de son dernier bilan. Leurs questions de fin de bilan ne changent pas.</div>'
+    +'<div style="display:flex;gap:8px;margin-top:14px"><button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" onclick="closeModal()">Annuler</button>'
+    +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0" onclick="selCadenceAppliquer()">Enregistrer</button></div></div></div>');
+  return true;
+}
+function selCadenceAppliquer(){
+  const f=(document.getElementById('bcad-m-freq')||{}).value, j=(document.getElementById('bcad-m-jour')||{}).value;
+  const users=DB.get('users')||{};
+  const faits=[];
+  for(const id of SEL_ATHLETES){
+    const c=getOwnedClient(id,users);
+    if(!c||c._fromCode) continue;
+    _cadenceAppliquer(c,f===''?null:f,j);
+    users[c.email]=c; faits.push(c);
+  }
+  const ok=DB.set('users',users);
+  closeModal();
+  toastSync(ok,Promise.all(faits.map(c=>CLOUD.pushOne(c.email,c))),'Cadence appliquée à '+faits.length+' athlète'+(faits.length>1?'s':'')+' ✓','la cadence est');
+  try{ renderTodoBlock(getClients()); }catch(e){}
+  return faits.length;
+}
+
+// EN RETARD dès le lendemain de l'échéance (echeanceBilan), et plus quatorze jours fixes.
+function needsAlert(c,maintenant){
   if(!c.bilans?.length) return !!c.questionnaireComplete;
-  return Date.now()-c.bilans[c.bilans.length-1].date>14*864e5;
+  const e=echeanceBilan(c,typeof maintenant==='number'?maintenant:Date.now());
+  return e.retardJours!=null&&e.retardJours>=1;
 }
 // Le signal ne retombe plus a la simple OUVERTURE du bilan mais a l'ECRITURE
 // d'une reponse. Consequence assumee : un bilan lu sans reponse reste en
@@ -42205,11 +42368,12 @@ function loadClientHome(){
   if(_alerte){
     let _h='';
     try{
-      const _ech=getNextBilanSaturday();
-      const _n=_bilRetardJours(_ech);
+      // La même échéance que le coach (needsAlert) : echeanceBilan.
+      const _e=echeanceBilan(currentUser,Date.now());
+      const _n=_e.retardJours;
       if(_bilTexteRetard(_n)){
-        const _bs=(currentUser.bilans||[]).slice().sort((a,b)=>a.date-b.date);
-        _h=_htmlBilanRetard({retard:_n,echeance:_ech?_ech.getTime():0,dernier:_bs.length?_bs[_bs.length-1].date:0,freq:currentUser._bilanFreq||2});
+        const _der=dernierBilan(currentUser);
+        _h=_htmlBilanRetard({retard:_n,echeance:_e.echeance||0,dernier:_der?_der.date:0,freq:_e.freq});
       }
     }catch(e){ _h=''; }
     _alerte.innerHTML=_h;
@@ -71482,6 +71646,8 @@ function openBilanChoice(){
   _renderBilanChoiceUI();
 }
 function setBilanFreq(weeks){
+  // Une cadence fixée par le coach prime : les boutons sont d'ailleurs cachés.
+  if(bilanCadenceValide(currentUser&&currentUser.bilanCadence)){ _renderBilanChoiceUI(); return false; }
   currentUser._bilanFreq=weeks;
   saveUser();
   _renderBilanChoiceUI();
@@ -71494,6 +71660,19 @@ function _renderBilanChoiceUI(){
   // « Bilan toutes les semaine ». Les deux formulations peuvent maintenant ne
   // pas se ressembler, ce qui est justement ce que le français demande.
   if(fd) fd.textContent=freq===1?'Bilan chaque semaine :':'Bilan toutes les 2 semaines :';
+  // LA CADENCE DU COACH : ses mots à la place des boutons, qui disparaissent.
+  const _cad=bilanCadenceValide(currentUser.bilanCadence);
+  const _grp=(document.getElementById('bilan-freq-btn-1')||{}).parentElement||null;
+  let _note=document.getElementById('bilan-freq-coach');
+  if(_cad){
+    if(fd) fd.textContent=_cad.freq===1?'Bilan chaque semaine :':'Bilan toutes les '+_cad.freq+' semaines :';
+    if(_grp) _grp.style.display='none';
+    if(!_note&&_grp){ _note=document.createElement('div'); _note.id='bilan-freq-coach'; _note.className='bcad-note'; _grp.insertAdjacentElement('afterend',_note); }
+    if(_note){ _note.style.display=''; _note.textContent=texteCadenceCoach(_cad); }
+  } else {
+    if(_grp) _grp.style.display='flex';
+    if(_note) _note.style.display='none';
+  }
   [1,2].forEach(v=>{
     const btn=document.getElementById('bilan-freq-btn-'+v);
     if(!btn) return;
@@ -72576,6 +72755,11 @@ const BILAN_QUESTIONS={
     // « Lesquels » s'affichait seul, sans la question à laquelle il répond.
     {k:'bil-new-goals',lbl:'Nouveaux objectifs ?',emoji:'🎯'},
     {k:'bil-new-goals-detail',lbl:'Où en es-tu de tes objectifs',emoji:'🚀'},
+    // Les questions libres du coach (questionsCoach) : le texte de chacune est
+    // gardé dans le bilan sous <clé>-q, et c'est lui qui s'affiche (libelleQuestionBilan).
+    {k:'coach-q1',lbl:'Question de ton coach',emoji:'❓'},
+    {k:'coach-q2',lbl:'Question de ton coach',emoji:'❓'},
+    {k:'coach-q3',lbl:'Question de ton coach',emoji:'❓'},
   ],
   depart:[
     // Les trois contre-indications d'abord : c'est ce qui conditionne tout le
@@ -72681,7 +72865,7 @@ function _ccdBilParJour(c){
 function _ccdBilReponses(b){
   if(!b) return [];
   const qs=(b.type==='depart'?BILAN_QUESTIONS.depart:BILAN_QUESTIONS.suivi)||[];
-  return qs.map(q=>({lbl:q.lbl,emoji:q.emoji||'',txt:_texteReponseLue(q.k,b[q.k])}))
+  return qs.map(q=>({lbl:libelleQuestionBilan(q,b),emoji:q.emoji||'',txt:_texteReponseLue(q.k,b[q.k])}))
            .filter(x=>x.txt);
 }
 function _ccdBilMoisLib(cle){
@@ -72769,7 +72953,9 @@ function renderCalendrierBilansCoach(c){
   const z=document.getElementById('ccd-bil-cal');
   if(!z) return;
   let h=''; try{ h=_htmlCalendrierBilansCoach(c); }catch(e){ h=''; }
-  z.innerHTML=h;
+  // La cadence des bilans, et les questions du coach, en tête du calendrier.
+  let k=''; try{ k=(c&&!c._fromCode)?_htmlCadenceCoach(c):''; }catch(e){ k=''; }
+  z.innerHTML=k+h;
 }
 // Les deux commandes. Elles relisent le dossier plutot que de garder celui du
 // premier rendu : un bilan arrive entre-temps apparait sans rouvrir la fiche.
@@ -74779,7 +74965,8 @@ const BILAN_RUBRIQUES={
     {titre:'État général',ico:'flame',cles:['bil-motivation']},
     {titre:'Difficultés et écarts',ico:'alert-triangle',cles:['bil-diff-type','bil-diff-detail','bil-cheat-meals','bil-cheat-reasons']},
     {titre:'Récupération / sommeil / stress',ico:'moon',cles:['bil-sleep-quality','bil-stress','bil-stress-detail']},
-    {titre:'Objectifs et demandes',ico:'target',cles:['bil-prog-modifs','bil-new-goals','bil-new-goals-detail']}
+    {titre:'Objectifs et demandes',ico:'target',cles:['bil-prog-modifs','bil-new-goals','bil-new-goals-detail']},
+    {titre:'Les questions du coach',ico:'message-circle',cles:['coach-q1','coach-q2','coach-q3']}
   ],
   depart:[
     {titre:'Santé et précautions',ico:'alert-triangle',cles:['deb-health','deb-traitement','deb-traitement-detail','deb-allergies','deb-tca']},
@@ -74875,7 +75062,7 @@ function renderReponsesBilans(bilans,client){
         const val=q.k==='bil-motivation'&&j?(j.plein+' / 10'):t;
         const large=String(t).length>60;
         tuiles.push({large,html:`<div class="bn-t${j?' bn-t-j':''}${q.k==='bil-motivation'&&j?' bn-t-motiv':''}">
-            <div class="bn-l"${q.alerte?' style="color:#fca5a5"':''}>${escapeHtml(q.lbl)}</div>
+            <div class="bn-l"${q.alerte?' style="color:#fca5a5"':''}>${escapeHtml(libelleQuestionBilan(q,b))}</div>
             <div class="bn-v">${escapeHtml(val)}${q.k==='bil-motivation'&&j?_bnSegments(j):''}</div>
             ${j&&q.k!=='bil-motivation'?_bnSegments(j):''}
           </div>`});
@@ -74989,6 +75176,14 @@ const BIL_STEPS=[
   ()=>bSec('Tes objectifs',
     bLbl('Où en es-tu de tes objectifs ?')+bTA('bil-new-goals-detail','Facultatif...')
   ),
+  // Les questions libres du coach, s'il en a posé : vide sinon, comme le
+  // traitement. Le texte de chacune part avec la réponse (<clé>-q).
+  ()=>{
+    const qs=questionsCoachDe(currentUser);
+    if(!qs.length) return '';
+    qs.forEach((q,i)=>{ bilData['coach-q'+(i+1)+'-q']=q; });
+    return bSec('Les questions de ton coach',qs.map((q,i)=>bLbl(escapeHtml(q))+bTA('coach-q'+(i+1),'Ta réponse...')).join(''));
+  },
   // Step 6 : Photos de progression
   ()=>`<div style="margin-bottom:24px"><div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">Photos de progression </div>`+
     `<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-2);padding:16px;margin-bottom:14px;text-align:center">`+
@@ -75383,14 +75578,8 @@ function _bilanAnchorSat(dateMs,freqWeeks){
   // En partant de la date du bilan pour y ajouter l'intervalle voulu AVANT
   // d'arrondir au samedi, l'échéance tombe toujours à ±3 jours de l'intervalle
   // demandé, et les deux fréquences restent séparées de 7 jours pleins.
-  const d=new Date(dateMs);d.setHours(0,0,0,0);
-  d.setDate(d.getDate()+freqWeeks*7);
-  const dow=d.getDay(); // 0=dim ... 6=sam
-  // Écart au samedi le plus proche : -3..+3. dow=6 (samedi) → 0.
-  const versSamedi=dow===6?0:(dow<3?-(dow+1):6-dow);
-  d.setDate(d.getDate()+versSamedi);
-  d.setHours(0,0,0,0);
-  return d;
+  // Le samedi : le cas général (_bilanAncre, n'importe quel jour) le rend à l'identique.
+  return _bilanAncre(dateMs,freqWeeks,6);
 }
 // rattraper : reporter l'échéance au prochain multiple encore à venir.
 // Le compte à rebours ne le fait PAS, et c'est le second volet de la
@@ -75402,13 +75591,12 @@ function _bilanAnchorSat(dateMs,freqWeeks){
 // Seul le planificateur de notification garde le report : il lui faut un
 // horodatage futur, sans quoi le rappel ne pourrait jamais être programmé.
 function getNextBilanSaturday(rattraper){
-  const bilans=currentUser.bilans||[];
-  if(!bilans.length) return null;
-  const freq=currentUser._bilanFreq||2;
-  const sorted=bilans.slice().sort((a,b)=>a.date-b.date);
-  // MEME point de depart que isBilanNotifDay : _bilanAnchorSat, qui arrondit
-  // « bilan + freq semaines » au samedi le plus proche.
-  const next=_bilanAnchorSat(sorted[sorted.length-1].date,freq);
+  // LA SEULE ÉCHÉANCE : echeanceBilan (la cadence du coach, sinon la
+  // fréquence de l'athlète et le samedi). Le nom de la fonction est resté.
+  const _e=echeanceBilan(currentUser,Date.now());
+  if(!_e.echeance) return null;
+  const freq=_e.freq;
+  const next=new Date(_e.echeance);
   next.setHours(0,0,0,0);
   if(!rattraper) return next;
   const today=new Date();today.setHours(0,0,0,0);
@@ -75469,10 +75657,11 @@ function isBilanNotifDay(){
   if(!bilans.length) return false;
   const now=new Date();
   if(now.getHours()<7) return false;
-  if(now.getDay()!==6) return false;
-  const freq=currentUser._bilanFreq||2;
-  const sorted=bilans.slice().sort((a,b)=>a.date-b.date);
-  const anchor=_bilanAnchorSat(sorted[sorted.length-1].date,freq);
+  // Le jour de la cadence (samedi sans cadence du coach), la même échéance.
+  const _e=echeanceBilan(currentUser,now.getTime());
+  if(!_e.echeance||now.getDay()!==_e.jour) return false;
+  const freq=_e.freq;
+  const anchor=new Date(_e.echeance);
   anchor.setHours(0,0,0,0);
   const today=new Date();today.setHours(0,0,0,0);
   const diff=today.getTime()-anchor.getTime();
@@ -75524,8 +75713,8 @@ function checkBilanNotifToday(){
   // tout — avant, la ligne suivante jetait et la bannière restait, mais tout ce
   // qui suivait dans le cycle de démarrage sautait avec elle.
   if(_appAuPremierPlan()) return;
-  const _fq=(currentUser._bilanFreq===1)?1:2;
-  const _tBil=_fq===1?'Bilan de la semaine':'Bilan de quinzaine';
+  const _fq=bilanFreqEffective(currentUser);
+  const _tBil=_fq===1?'Bilan de la semaine':_fq===4?'Bilan du mois':'Bilan de quinzaine';
   const _bBil=(currentUser.fname||'')+', 10 min quand tu as le temps ce week-end.';
   if(_notifSupported()&&Notification.permission==='granted'){
     navigator.serviceWorker.ready.then(reg=>reg.showNotification(_tBil,{
@@ -75610,7 +75799,7 @@ async function scheduleSwNotif(){
     const c=await caches.open('repcore-sw-data');
     // La fréquence CHOISIE part avec le planning : sans elle, le Service
     // Worker avançait de quinze jours quel que soit le réglage.
-    const _fq=(currentUser&&currentUser._bilanFreq===1)?1:2;
+    const _fq=bilanFreqEffective(currentUser);
     await c.put('/bilan-schedule',new Response(JSON.stringify({
       nextDate:next?next.getTime():Date.now()+_fq*7*24*3600*1000,
       freqSemaines:_fq,

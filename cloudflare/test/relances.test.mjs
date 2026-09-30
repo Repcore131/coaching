@@ -41,7 +41,9 @@ test('chaque règle choisit ses destinataires, et seulement eux', () => {
   assert.deepEqual(RL.signauxRelance({ bilans: [], createdAt: T - 2 * J }, T), {});
   assert.deepEqual(RL.signauxRelance({ bilans: [{ date: T - 10 * J, reponseCoach: 'x' }], status: 'COACHING_SUIVI', echeance: T + 21 * J }, T), {});
   // Le délai : le bilan en retard depuis un jour ne part pas avec un délai de deux.
-  const sig = RL.signauxRelance({ bilans: [{ date: T - 15 * J, reponseCoach: 'x' }] }, T);
+  // (Dernier bilan le lundi 21/09, cadence de 2 semaines le dimanche : échéance le 04/10,
+  // en retard depuis le 05/10 à minuit, soit un jour et demi à T.)
+  const sig = RL.signauxRelance({ bilans: [{ date: T - 15 * J, reponseCoach: 'x' }], cadence: { freq: 2, jour: 0 } }, T);
   assert.deepEqual(RL.choisirRelance({ cfg: { regles: { overdue: { actif: true, delai: 2 } } }, signaux: sig, t: T }), { signal: null, raison: 'delai' });
   assert.equal(RL.choisirRelance({ cfg: { regles: { overdue: { actif: true, delai: 1 } } }, signaux: sig, t: T }).signal, 'overdue');
 });
@@ -184,4 +186,36 @@ test('« je reprends la main » coupe aussi les relances déjà en file', async 
   assert.equal(l[0].moyen, 'canal');
   // Et rien dans le canal collectif du coach.
   assert.equal(w.F.lire('canaux'), null);
+});
+
+// ── LA CADENCE DES BILANS (30/09/2026) : overdue selon la règle de l'app ──
+test('cadence : l’échéance et le retard suivent la cadence du coach, sinon la fréquence de l’athlète et le samedi', () => {
+  const lun21 = PARIS('2026-09-21T19:00:00');          // lundi 21 septembre
+  // Hebdo le lundi : échéance lundi 28, en retard le mardi 29 à minuit.
+  assert.deepEqual(RL.echeanceBilanParis(lun21, { freq: 1, jour: 1 }, 2), { jour: '2026-09-28', freq: 1, jourSem: 1, source: 'coach' });
+  assert.equal(RL.retardBilan(lun21, { freq: 1, jour: 1 }, 2, PARIS('2026-09-28T23:30:00')), null, 'le jour même : pas encore');
+  assert.equal(RL.retardBilan(lun21, { freq: 1, jour: 1 }, 2, PARIS('2026-09-29T00:10:00')).depuis, PARIS('2026-09-29T00:00:00'));
+  // Mensuel le jeudi : 21/09 + 28 j = lundi 19/10 → jeudi le plus proche = 22/10.
+  assert.equal(RL.echeanceBilanParis(lun21, { freq: 4, jour: 4 }).jour, '2026-10-22');
+  // Sans cadence : la fréquence de l'athlète, le samedi le plus proche.
+  assert.equal(RL.echeanceBilanParis(lun21, null, 1).jour, '2026-09-26');
+  assert.equal(RL.echeanceBilanParis(lun21, null, undefined).jour, '2026-10-03');
+  assert.equal(RL.echeanceBilanParis(lun21, { freq: 3, jour: 9 }, 1).source, 'athlete', 'cadence invalide : repli');
+  // Le signal overdue : dix jours après, hebdo = en retard, bimensuel = non.
+  const d10 = { bilans: [{ date: T - 10 * J, reponseCoach: 'x' }] };
+  assert.ok(RL.signauxRelance(Object.assign({ cadence: { freq: 1, jour: new Date(T - 3 * J).getUTCDay() } }, d10), T).overdue);
+  for (let j = 0; j < 7; j++) assert.equal(RL.signauxRelance(Object.assign({ cadence: { freq: 2, jour: j } }, d10), T).overdue, undefined, 'bimensuel jour ' + j);
+  // Changement d'heure (25/10) : l'échéance reste un samedi, minuit à Paris.
+  const e = RL.retardBilan(PARIS('2026-10-13T10:00:00'), null, 2, Date.parse('2026-11-02T12:00:00+01:00'));
+  // Mardi 13 + 14 j = mardi 27 → samedi le plus proche : le 24 ; le lendemain est le jour du changement d'heure.
+  assert.equal(e.echeance, '2026-10-24');
+  assert.equal(e.depuis, Date.parse('2026-10-25T00:00:00+02:00'));
+});
+
+test('le texte de l’app dit la même règle', () => {
+  const dir = path.dirname(fileURLToPath(import.meta.url));
+  const app = fs.readdirSync(path.join(dir, '../../app')).find((n) => /^rc-core\.\d+\.js$/.test(n));
+  const src = fs.readFileSync(path.join(dir, '../../app', app), 'utf8');
+  assert.ok(src.indexOf("quand:'le lendemain de l’échéance fixée'") > 0);
+  assert.ok(src.indexOf('quatorze jours après le dernier bilan') < 0);
 });

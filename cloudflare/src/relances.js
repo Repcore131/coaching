@@ -63,10 +63,53 @@ export function relancesAllumees(cfg) {
   return RELANCE_SIGNAUX.some((s) => r[s].actif);
 }
 
+// ── L'ÉCHÉANCE DU BILAN : LA RÈGLE DE L'APP (echeanceBilan), EN JOURS DE PARIS ──
+// « dernier bilan + N semaines », arrondi au jour choisi le plus proche
+// (±3 jours) ; la cadence du coach (d.cadence = {freq, jour}) prime sur la
+// fréquence de l'athlète (d.freq, 2 par défaut), et sans cadence c'est le
+// samedi. EN RETARD dès le lendemain de l'échéance.
+const _fmtJour = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' });
+const _fmtHeure = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Paris', hour: '2-digit', hour12: false });
+const _jourParis = (t) => _fmtJour.format(new Date(t));
+// Minuit à Paris d'une date « AAAA-MM-JJ », en ms (heure d'été comprise).
+function _minuitParis(jour) {
+  const [y, m, d] = jour.split('-').map(Number);
+  const t0 = Date.UTC(y, m - 1, d);
+  return t0 - (Number(_fmtHeure.format(new Date(t0))) % 24) * 3600e3;
+}
+const _decaler = (jour, n) => { const [y, m, d] = jour.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10); };
+export const BILAN_FREQS = [1, 2, 4];
+// PURE. La cadence posée par le coach, bornée ; null si absente ou invalide.
+export function cadenceValide(x) {
+  if (!x || typeof x !== 'object') return null;
+  const f = Number(x.freq), j = Number(x.jour);
+  if (BILAN_FREQS.indexOf(f) < 0 || !Number.isInteger(j) || j < 0 || j > 6) return null;
+  return { freq: f, jour: j };
+}
+/** PURE. {jour:'AAAA-MM-JJ' (l'échéance, à Paris), freq, jourSem, source}. */
+export function echeanceBilanParis(dernierMs, cadence, freqAthlete) {
+  const cad = cadenceValide(cadence);
+  const fa = Number(freqAthlete);
+  const freq = cad ? cad.freq : (BILAN_FREQS.indexOf(fa) >= 0 ? fa : 2);
+  const jourSem = cad ? cad.jour : 6;
+  const brut = _decaler(_jourParis(dernierMs), freq * 7);
+  const [y, m, d] = brut.split('-').map(Number);
+  let ecart = ((jourSem - new Date(Date.UTC(y, m - 1, d)).getUTCDay()) % 7 + 7) % 7;
+  if (ecart > 3) ecart -= 7;
+  return { jour: _decaler(brut, ecart), freq, jourSem, source: cad ? 'coach' : 'athlete' };
+}
+/** PURE. En retard à l'instant t ? {depuis (minuit à Paris du lendemain de l'échéance), echeance} ou null. */
+export function retardBilan(dernierMs, cadence, freqAthlete, t) {
+  const e = echeanceBilanParis(dernierMs, cadence, freqAthlete);
+  if (_jourParis(t) <= e.jour) return null;
+  return { depuis: _minuitParis(_decaler(e.jour, 1)), echeance: e.jour };
+}
+
 // PURE. Les signaux levés pour un athlète, avec le moment où chacun s'est
 // levé. Les prédicats sont ceux de l'app (neverStarted, needsAlert,
 // hasNewBilan, la ligne « accès », hasProgram) :
-//   d = { bilans, createdAt, status, echeance, programme (bool) }
+//   d = { bilans, createdAt, status, echeance, programme (bool),
+//         cadence (bilanCadence du coach), freq (_bilanFreq de l'athlète) }
 export function signauxRelance(d, t) {
   const x = d || {};
   const bilans = (Array.isArray(x.bilans) ? x.bilans : Object.values(x.bilans || {}))
@@ -79,7 +122,10 @@ export function signauxRelance(d, t) {
     let der = bilans[0];
     for (const b of bilans) if (Number(b.date) >= Number(der.date)) der = b;
     const dd = Number(der.date);
-    if (t - dd > 14 * J) out.overdue = { depuis: dd + 14 * J };
+    // LA RÈGLE DE L'APP (needsAlert → echeanceBilan) : la cadence du coach,
+    // sinon la fréquence de l'athlète et le samedi, en retard dès le lendemain.
+    const rt = retardBilan(dd, x.cadence, x.freq, t);
+    if (rt) out.overdue = { depuis: rt.depuis };
     if (!der.reponseCoach) out.bilan = { depuis: dd, bilan: dd };
     const dep = bilans.filter((b) => b.type === 'depart').sort((a, b) => Number(a.date) - Number(b.date))[0];
     if (dep && x.programme === false) out.noprog = { depuis: Number(dep.date) };

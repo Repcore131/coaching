@@ -55,6 +55,18 @@
         // on nomme le champ pour qu il soit BORNE et que la structure reste
         // lisible : un journal qui grossirait sans contrainte finirait par
         // porter autre chose qu une date.
+        // LA CADENCE DES BILANS, posee par le coach (le dossier lui est ouvert en
+        // ecriture) : 1, 2 ou 4 semaines, un jour de 0 (dimanche) a 6. Et jusqu a
+        // trois questions libres de fin de bilan, 120 caracteres chacune.
+        "bilanCadence": {
+          ".validate": "newData.hasChildren(['freq', 'jour'])",
+          "freq": { ".validate": "newData.isNumber() && (newData.val() === 1 || newData.val() === 2 || newData.val() === 4)" },
+          "jour": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 6 && newData.val() % 1 === 0" },
+          "$autre": { ".validate": false }
+        },
+        "questionsCoach": {
+          "$i": { ".validate": "$i.matches(/^[0-2]$/) && newData.isString() && newData.val().length >= 1 && newData.val().length <= 120" }
+        },
         "rgpd": {
           "dernierExport": { ".validate": "newData.isNumber()" },
           "$autre": { ".validate": false }

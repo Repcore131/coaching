@@ -1469,8 +1469,9 @@ export function creerMetier(deps) {
     // Rien à lire si le choix est déjà fermé (pause, exclu, semaine prise).
     const avant = RL.choisirRelance({ cfg, cleAthlete: uid, signaux: {}, journal, t });
     if (avant.raison !== 'aucun_signal') return avant.raison;
-    const [bilans, createdAt, fname, id] = await Promise.all(['bilans', 'createdAt', 'fname', 'id'].map((c) => _lire(uid, c)));
-    const d = { bilans, createdAt };
+    const [bilans, createdAt, fname, id, cadence, freq] = await Promise.all(['bilans', 'createdAt', 'fname', 'id', 'bilanCadence', '_bilanFreq'].map((c) => _lire(uid, c)));
+    // La cadence du coach et la fréquence de l'athlète : l'échéance est celle de l'app.
+    const d = { bilans, createdAt, cadence, freq };
     if (regles.expiring.actif) {
       const [status, accessExpiry, droits] = await Promise.all([_lire(uid, 'status'), _lire(uid, 'accessExpiry'), lireDroits(uid)]);
       d.status = status;

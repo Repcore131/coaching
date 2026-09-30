@@ -49190,6 +49190,83 @@ async function testExercices(){
       const c=_fjCopier(t.entries,j,'matin');
       if(c[0].qty!==60||c[1].qty!==250||c[0].id===t.entries[0].id) return _echec('copie');
       return true;})());
+    // ── LA CADENCE DES BILANS : UNE SEULE DÉFINITION DU RETARD ──
+    ok('Cadence : hebdomadaire, dernier bilan à J-10, needsAlert est vrai ; bimensuelle, faux',(()=>{
+      const J=864e5, now=Date.now();
+      const jourEch=new Date(now-3*J).getDay();              // l'échéance hebdo tombe à J-3
+      const c1={bilans:[{date:now-10*J,type:'suivi'}],bilanCadence:{freq:1,jour:jourEch}};
+      if(!needsAlert(c1)) return _echec('hebdo à J-10 : pas en retard ('+JSON.stringify(echeanceBilan(c1,now))+')');
+      if(echeanceBilan(c1,now).retardJours!==3) return _echec('retard : '+echeanceBilan(c1,now).retardJours);
+      for(let j=0;j<7;j++){
+        const c2={bilans:[{date:now-10*J,type:'suivi'}],bilanCadence:{freq:2,jour:j}};
+        if(needsAlert(c2)) return _echec('bimensuel à J-10 (jour '+j+') : en retard');
+      }
+      // Sans aucun bilan : la règle du questionnaire, inchangée.
+      if(needsAlert({bilans:[],questionnaireComplete:false})||!needsAlert({bilans:[],questionnaireComplete:true})) return _echec('sans bilan');
+      return true;})());
+    ok('Cadence : sans cadence du coach, l’échéance est exactement l’ancienne (samedi, _bilanFreq||2)',(()=>{
+      // L'ancien calcul, recopié tel qu'il était (build 1705).
+      const ancien=(dateMs,freqWeeks)=>{ const d=new Date(dateMs);d.setHours(0,0,0,0); d.setDate(d.getDate()+freqWeeks*7);
+        const dow=d.getDay(); const v=dow===6?0:(dow<3?-(dow+1):6-dow); d.setDate(d.getDate()+v); d.setHours(0,0,0,0); return d.getTime(); };
+      const base=new Date(2026,0,3,18,30).getTime();
+      for(let k=0;k<400;k+=3) for(const f of [undefined,1,2]){
+        const t=new Date(base); t.setDate(t.getDate()+k);
+        const c={bilans:[{date:t.getTime()}],_bilanFreq:f};
+        const e=echeanceBilan(c,t.getTime());
+        if(e.echeance!==ancien(t.getTime(),f||2)) return _echec('écart le '+t.toISOString().slice(0,10)+' en '+(f||2)+' sem.');
+        if(e.jour!==6||e.source!=='athlete') return _echec('repli : '+JSON.stringify(e));
+        if(_bilanAnchorSat(t.getTime(),f||2).getTime()!==e.echeance) return _echec('_bilanAnchorSat diverge');
+      }
+      // Une cadence invalide est ignorée (repli), jamais appliquée à moitié.
+      for(const x of [{freq:3,jour:1},{freq:2,jour:7},{freq:2,jour:1.5},{freq:'2',jour:'x'},null]){
+        if(bilanCadenceValide(x)) return _echec('acceptée : '+JSON.stringify(x));
+      }
+      return bilanCadenceValide({freq:'4',jour:'0'}).freq===4?true:_echec('chaînes numériques');})());
+    ok('Cadence : le retard tombe le même jour chez l’athlète et chez le coach, pour les deux fréquences',(()=>{
+      const J=864e5;
+      for(const cad of [{freq:1,jour:1},{freq:2,jour:3},null]){
+        const dernier=new Date(2026,9,5,19,0).getTime();
+        const c={bilans:[{date:dernier}],bilanCadence:cad||undefined,_bilanFreq:2};
+        let jA=null, jC=null;
+        for(let k=0;k<40&&(jA==null||jC==null);k++){
+          const t=new Date(dernier); t.setDate(t.getDate()+k); t.setHours(12,0,0,0);
+          const e=echeanceBilan(c,t.getTime());
+          const carte=_htmlBilanRetard({retard:e.retardJours,echeance:e.echeance,dernier,freq:e.freq});
+          if(jA==null&&e.retardJours>=1&&carte.indexOf('En retard')>=0) jA=k;
+          if(jC==null&&needsAlert(c,t.getTime())) jC=k;
+        }
+        if(jA==null||jA!==jC) return _echec((cad?cad.freq+' sem.':'repli')+' : athlète J+'+jA+', coach J+'+jC);
+      }
+      // Le jour même : « aujourd'hui » chez l'athlète, rien encore chez le coach.
+      const d0=new Date(2026,9,5,19,0).getTime(), c0={bilans:[{date:d0}],bilanCadence:{freq:1,jour:1}};
+      const e0=echeanceBilan(c0,d0+7*J);
+      return e0.retardJours===0&&!needsAlert(c0,d0+7*J)?true:_echec('jour de l’échéance : '+JSON.stringify(e0));})());
+    ok('Cadence : l’athlète voit ce que son coach a fixé, et ses boutons de fréquence disparaissent',(()=>{
+      if(texteCadenceCoach({freq:2,jour:1})!=='Ton coach a fixé : bilan chaque lundi, toutes les 2 semaines.') return _echec(texteCadenceCoach({freq:2,jour:1}));
+      if(texteCadenceCoach({freq:1,jour:6})!=='Ton coach a fixé : bilan chaque samedi.') return _echec('hebdo');
+      const sv=currentUser, b1=document.getElementById('bilan-freq-btn-1');
+      if(!b1) return _echec('boutons de fréquence introuvables');
+      try{
+        currentUser={email:'cad@t.fr',role:'athlete',bilans:[{date:Date.now()-2*864e5}],bilanCadence:{freq:4,jour:3}};
+        _renderBilanChoiceUI();
+        const n=document.getElementById('bilan-freq-coach');
+        if(b1.parentElement.style.display!=='none'||!n||n.textContent.indexOf('mercredi, toutes les 4 semaines')<0) return _echec('cadence du coach non affichée');
+        const avant=currentUser._bilanFreq; setBilanFreq(1);
+        if(currentUser._bilanFreq!==avant) return _echec('l’athlète a changé une fréquence fixée par son coach');
+        currentUser={email:'cad@t.fr',role:'athlete',bilans:[{date:Date.now()-2*864e5}],_bilanFreq:1};
+        _renderBilanChoiceUI();
+        return b1.parentElement.style.display!=='none'&&(!document.getElementById('bilan-freq-coach')||document.getElementById('bilan-freq-coach').style.display==='none')?true:_echec('sans cadence : boutons cachés');
+      } finally { currentUser=sv; if(window._bilanCdInterval){ clearInterval(window._bilanCdInterval); window._bilanCdInterval=null; } }})());
+    ok('Cadence : les questions du coach (3 au plus, 120 caractères), rangées dans le bilan avec leur texte',(()=>{
+      const q=questionsCoachDe({questionsCoach:['  Comment va ton genou ?  ','',null,'x'.repeat(200),'Une quatrième ?','Une cinquième']});
+      if(q.length!==3||q[0]!=='Comment va ton genou ?'||q[1].length!==120||q[2]!=='Une quatrième ?') return _echec(JSON.stringify(q));
+      if(!['coach-q1','coach-q2','coach-q3'].every(k=>BILAN_QUESTIONS.suivi.some(x=>x.k===k))) return _echec('BILAN_QUESTIONS.suivi');
+      const qq=BILAN_QUESTIONS.suivi.find(x=>x.k==='coach-q1');
+      if(libelleQuestionBilan(qq,{'coach-q1':'Mieux','coach-q1-q':'Comment va ton genou ?'})!=='Comment va ton genou ?') return _echec('libellé');
+      const c={}; _cadenceAppliquer(c,'2','1',['A ?','','']);
+      if(JSON.stringify(c.bilanCadence)!=='{"freq":2,"jour":1}'||JSON.stringify(c.questionsCoach)!=='["A ?"]') return _echec('écriture : '+JSON.stringify(c));
+      _cadenceAppliquer(c,null,'1',['','','']);
+      return (!('bilanCadence' in c)&&!('questionsCoach' in c))?true:_echec('retrait : '+JSON.stringify(c));})());
     // ── LOT M2 : LA MESSAGERIE COACH ↔ ATHLÈTE ──
     ok('Messages : le texte à envoyer, 1 à 1000 caractères, jamais des blancs seuls',(()=>{
       if(msgTexteValide('').ok||msgTexteValide('   \n  ').ok||msgTexteValide(null).ok) return _echec('vide accepté');
@@ -70449,7 +70526,8 @@ async function testExercices(){
         const _cu=currentUser,_bd=bilData;
         let html='';
         try{
-          currentUser={id:'_q',email:'q@t',gender:'Homme'}; bilData={};
+          // questionsCoach : l'étape des questions du coach n'existe que s'il en a posé.
+          currentUser={id:'_q',email:'q@t',gender:'Homme',questionsCoach:['Q1 ?','Q2 ?','Q3 ?']}; bilData={};
           html=BIL_STEPS.concat(DEB_STEPS)
             .map(f=>{try{return f();}catch(e){return '';}}).join('');
         } finally { currentUser=_cu; bilData=_bd; }

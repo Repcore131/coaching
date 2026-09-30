@@ -15609,3 +15609,13 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .rel-carte-b{display:flex;gap:8px;flex-wrap:wrap}
 .rel-carte-b .btn{flex:1;min-width:120px;margin:0}
 #ccd-msg{display:none;align-items:center;justify-content:center;gap:8px;width:100%;min-height:46px;margin-bottom:6px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer}
+/* La cadence des bilans (fiche du coach, barre de sélection, écran de l'athlète) */
+.bcad{background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:12px}
+.bcad-t{font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:8px}
+.bcad-l{display:flex;gap:8px;flex-wrap:wrap}
+.bcad-l select{flex:1 1 140px;min-height:44px;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700}
+.bcad-d{font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:8px}
+.bcad-q{display:block;width:100%;box-sizing:border-box;margin-top:8px;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm)}
+.bcad-b{width:100%;margin:12px 0 0}
+.bcad-feuille{background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:18px 20px 22px;width:100%;max-width:520px;box-sizing:border-box}
+.bcad-note{font-size:var(--fs-sm);color:var(--text);font-weight:700;line-height:1.5;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2)}
