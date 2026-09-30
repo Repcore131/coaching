@@ -15702,3 +15702,22 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .rel-ap{margin-top:8px;padding:10px 12px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);font-size:var(--fs-sm);line-height:1.5;color:var(--text)}
 .rel-ap span{display:block;font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
 .rel-defaut{background:none;border:none;padding:8px 0 0;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;text-decoration:underline;cursor:pointer;min-height:32px}
+/* Le temps du coach par athlète, sous la barre du portefeuille */
+#ch-chrono{margin:0 0 12px}
+#ch-chrono:empty{display:none}
+.chr-l{font-size:var(--fs-sm);color:var(--text);line-height:1.5}
+.chr-l b{font-weight:800;color:var(--text-strong)}
+.chr-d{margin-top:6px;border:1px solid var(--border);border-radius:var(--r-2);background:var(--surface-1)}
+.chr-d summary{cursor:pointer;padding:10px 12px;font-size:var(--fs-xs);font-weight:800;color:var(--sub);min-height:40px;display:flex;align-items:center}
+.chr-t{padding:0 12px 4px}
+.chr-e,.chr-r{display:grid;grid-template-columns:1fr 92px 84px;gap:8px;align-items:center}
+.chr-e{font-size:var(--fs-xs);color:var(--sub);font-weight:700;padding:4px 0}
+.chr-e span+span,.chr-r span+span{text-align:right}
+.chr-r{width:100%;background:none;border:none;border-top:1px solid var(--border);padding:8px 0;min-height:44px;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);text-align:left;cursor:pointer}
+.chr-r b{display:block;font-weight:800}
+.chr-r small{display:block;color:var(--sub);font-size:var(--fs-xs)}
+.chr-n{font-size:var(--fs-xs);padding:8px 12px 12px;line-height:1.5}
+/* L'invitation d'un prospect */
+.pr-inv-msg{white-space:pre-wrap;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-sm);line-height:1.5;max-height:40vh;overflow-y:auto}
+.pr-inv-sans{margin-top:12px;font-size:var(--fs-xs);line-height:1.5}
+.pr-discret{color:var(--sub)}

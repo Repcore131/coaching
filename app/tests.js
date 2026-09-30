@@ -49211,6 +49211,102 @@ async function testExercices(){
       const c=_fjCopier(t.entries,j,'matin');
       if(c[0].qty!==60||c[1].qty!==250||c[0].id===t.entries[0].id) return _echec('copie');
       return true;})());
+    // ── LE TEMPS DU COACH, PAR ATHLÈTE ET PAR SEMAINE ──
+    ok('Chrono : un segment inactif est plafonné à 3 min après la dernière interaction ; une horloge qui recule ne compte rien',(()=>{
+      const t0=Date.UTC(2026,8,30,8,0);
+      if(chronoSegmentSecondes({debut:t0,derniere:t0+60e3},t0+60*60e3)!==240) return _echec('1 min d’activité puis une heure posée : '+chronoSegmentSecondes({debut:t0,derniere:t0+60e3},t0+60*60e3));
+      if(chronoSegmentSecondes({debut:t0,derniere:t0+10*60e3},t0+11*60e3)!==660) return _echec('actif : '+chronoSegmentSecondes({debut:t0,derniere:t0+10*60e3},t0+11*60e3));
+      if(chronoSegmentSecondes({debut:t0,derniere:t0},t0-5*60e3)!==0) return _echec('horloge qui recule');
+      if(chronoSegmentSecondes(null,t0)!==0) return _echec('sans segment');
+      // Le tick applique la même règle : trois minutes sans geste, le segment se ferme.
+      const src=String(_chronoTick);
+      if(src.indexOf('CHRONO_INACTIF_MS')<0||src.indexOf('_chronoAutreOnglet(')<0) return _echec('_chronoTick ne plafonne pas ou ignore les autres onglets');
+      return true;})());
+    ok('Chrono : agrégation par semaine ISO et athlète ; au-delà de 12 semaines, purgé',(()=>{
+      const t=new Date(2026,8,30,12).getTime(), J=864e5;
+      let c=chronoAjouter({},semaineISO(new Date(t)),'a1',120);
+      c=chronoAjouter(c,semaineISO(new Date(t)),'a1',60);
+      c=chronoAjouter(c,semaineISO(new Date(t)),'a2',30);
+      const w=semaineISO(new Date(t));
+      if(c[w].a1!==180||c[w].a2!==30) return _echec(JSON.stringify(c));
+      const vieux=semaineISO(new Date(t-12*7*J)), limite=semaineISO(new Date(t-11*7*J));
+      c=chronoAjouter(chronoAjouter(c,vieux,'a1',500),limite,'a1',400);
+      const p=chronoPurger(c,t);
+      if(p[vieux]) return _echec('la 13e semaine est restée');
+      if(!p[limite]||p[limite].a1!==400) return _echec('la 12e semaine est partie');
+      if(Object.keys(p).length!==2) return _echec(Object.keys(p).join());
+      if(c[vieux].a1!==500) return _echec('chronoPurger a modifié l’original');
+      // Le relevé du dossier et ce qui attend d'être écrit s'additionnent.
+      const f=chronoFusion({[w]:{a1:10}},{[w]:{a1:5,a2:7}});
+      if(f[w].a1!==15||f[w].a2!==7) return _echec('fusion : '+JSON.stringify(f));
+      if(String(_chronoTick).indexOf('chronoFusion(currentUser.chrono')<0) return _echec('l’attente ne rejoint pas le dossier à l’écriture');
+      return true;})());
+    ok('Chrono : la médiane est juste, et le résumé ignore les athlètes qui ne sont plus là',(()=>{
+      if(chronoMediane([])!==0||chronoMediane([5])!==5||chronoMediane([9,1,5])!==5||chronoMediane([1,2,3,10])!==2.5) return _echec('médiane');
+      const t=new Date(2026,8,30,12).getTime(), w=semaineISO(new Date(t)), w1=semaineISO(new Date(t-7*864e5));
+      const chrono={[w]:{a1:600,a2:120,a3:300,parti:9000},[w1]:{a2:3000}};
+      const r=chronoResume(chrono,[{id:'a1'},{id:'a2'},{id:'a3'}],t);
+      if(r.medianeS!==300||r.dossiers!==3) return _echec(JSON.stringify(r));
+      if(r.top.map(x=>x.id).join()!=='a2,a1,a3'||r.top[0].quatre!==3120||r.top[0].semaine!==120) return _echec('top : '+JSON.stringify(r.top));
+      if(chronoMinutes(20)!=='< 1 min'||chronoMinutes(600)!=='10 min') return _echec('minutes');
+      return true;})());
+    ok('Chrono : les minutes s’affichent sous la barre du portefeuille, avec la formule',(()=>{
+      const sv={u:currentUser}, z=document.getElementById('ch-chrono'), av=z?z.innerHTML:null;
+      if(!z) return _echec('pas de #ch-chrono');
+      try{
+        const t=Date.now(), w=semaineISO(new Date(t));
+        currentUser={id:'cch',email:'cch@t.fr',role:'coach',chrono:{[w]:{x1:900,x2:300}}};
+        renderChronoCoach([{id:'x1',fname:'Léa',lname:'M',status:'FREE'},{id:'x2',fname:'Tom',status:'FREE'}]);
+        if(!/10 min<\/b> par athlète cette semaine \(médiane, 2 dossiers ouverts\)/.test(z.innerHTML)) return _echec(z.textContent.slice(0,120));
+        if(!/Les 10 dossiers qui te prennent le plus de temps/.test(z.textContent)||!/Sans formule/.test(z.textContent)) return _echec('volet');
+        if(String(renderPortefeuille).indexOf('renderChronoCoach(')<0) return _echec('renderPortefeuille ne l’appelle pas');
+        if(CHAMPS_NON_SANTE.indexOf('chrono')<0) return _echec('chrono non classé');
+        return true;
+      } finally { currentUser=sv.u; z.innerHTML=av; }})());
+    // ── LE PROSPECT DEVIENT ATHLÈTE INVITÉ ──
+    ok('Prospect : le contact normalisé, la durée de la formule',(()=>{
+      if(JSON.stringify(prospectContactNet({canal:'tel',contact:'+33612345678'}))!=='{"tel":"+33612345678"}') return _echec('tel');
+      if(JSON.stringify(prospectContactNet({canal:'email',contact:'Lea@T.fr'}))!=='{"email":"lea@t.fr"}') return _echec('email');
+      if(prospectContactNet({canal:'tel',contact:'06 12'})!==null||prospectContactNet({})!==null) return _echec('inexploitable');
+      if(prospectMoisInvitation({formule:'coaching_essentiel'},false)!==Math.min(12,OFFRES.coaching_essentiel.mois)) return _echec('formule');
+      if(prospectMoisInvitation({formule:'inconnue'},false)!==3) return _echec('défaut');
+      return true;})());
+    okA('Prospect : « Inviter » crée le code, passe le prospect en « athlete » avec codeId, et propose WhatsApp',async()=>{
+      const sv={u:currentUser,g:_genAccessCode,f:_fbJson,p:CLOUD.pushOne,b:_prBrut,users:DB.get('users'),s:DB.get('session')};
+      let patch=null;
+      try{
+        currentUser={id:'cpr',email:'cpr@t.fr',role:'coach',fname:'Kev',studentCodes:[]};
+        _genAccessCode=async(nom,mois)=>({token:'TOK123',payload:{codeId:'sc_1_abc',studentName:nom,months:mois,expiry:Date.now()+mois*30*864e5,prenom:nom,nom:'',type:'athlete'}});
+        _fbJson=async(ch,m,corps)=>{ patch={ch,m,corps}; return {ok:true,st:200,v:null}; };
+        CLOUD.pushOne=()=>Promise.resolve(true);
+        _prBrut={p1:{at:Date.now(),prenom:'Léa',contact:'+33612345678',canal:'tel',formule:'coaching_essentiel',statut:'repondu'}};
+        if(await prospectInviter('p1')!==true) return _echec('refusé');
+        const p=_prBrut.p1;
+        if(p.statut!=='athlete'||p.codeId!=='sc_1_abc') return _echec('prospect : '+JSON.stringify(p));
+        if(!patch||patch.ch!=='prospects/cpr@t,fr/p1'||patch.m!=='PATCH'||patch.corps.codeId!=='sc_1_abc') return _echec('écriture : '+JSON.stringify(patch));
+        const c=currentUser.studentCodes[0];
+        if(!c||c.token!=='TOK123'||c.studentName!=='Léa'||c.athletePhone!=='+33612345678'||c.prospectId!=='p1') return _echec('code : '+JSON.stringify(c));
+        const a=document.querySelector('#modal-overlay .pr-inv a[href^="https://wa.me/"]');
+        if(!a||!/Envoyer par WhatsApp/.test(a.textContent)) return _echec('pas de lien WhatsApp');
+        // Un second geste ne crée pas un second code.
+        await prospectInviter('p1');
+        if(currentUser.studentCodes.length!==1) return _echec('second code créé');
+        return true;
+      } finally { try{ closeModal(); }catch(e){} currentUser=sv.u; _genAccessCode=sv.g; _fbJson=sv.f; CLOUD.pushOne=sv.p; _prBrut=sv.b; DB.set('users',sv.users||{}); if(sv.s) DB.set('session',sv.s); }});
+    ok('Prospect : « Inviter » à la place de « Devenu athlète », et « Marquer athlète sans inviter » reste',(()=>{
+      const sv={u:currentUser,b:_prBrut}, z=document.getElementById('pr-corps'), av=z?z.innerHTML:null;
+      if(!z) return _echec('pas de #pr-corps');
+      try{
+        currentUser={id:'cpr2',email:'cpr2@t.fr',role:'coach',vitrineFormules:['coaching_essentiel']};
+        _prBrut={p1:{at:Date.now(),prenom:'Léa',contact:'x',canal:'autre',formule:'coaching_essentiel',statut:'nouveau'},
+          p2:{at:Date.now()-1,prenom:'Tom',contact:'+33600000000',canal:'tel',formule:'coaching_essentiel',statut:'athlete',codeId:'sc_9'}};
+        renderProspects();
+        if(/Devenu athlète<\/button>/.test(z.innerHTML)) return _echec('l’ancien bouton est resté');
+        if(!/prospectInviter\('p1'\)[^>]*>Inviter</.test(z.innerHTML)) return _echec('pas de « Inviter »');
+        if(!/Marquer athlète sans inviter/.test(z.innerHTML)) return _echec('pas de « Marquer athlète sans inviter »');
+        if(!/Invité/.test(z.innerHTML)||!/Renvoyer l’invitation/.test(z.innerHTML)) return _echec('le prospect invité');
+        return true;
+      } finally { currentUser=sv.u; _prBrut=sv.b; z.innerHTML=av; }})());
     // ── LES ÉTIQUETTES D'ATHLÈTES ET LE DERNIER CONTACT ──
     const _ETQ_J=864e5;
     const _ETQc=(o)=>Object.assign({id:'eq1',fname:'Léa',email:'eq1@t.fr',role:'athlete',coachId:'ceq',coachSince:Date.now()-90*_ETQ_J,

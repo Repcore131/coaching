@@ -6587,6 +6587,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'coachPlan','coachSubActive','coachPlanSince','coachPrograms','coachNotes',
   // Les étiquettes d'athlètes et le dernier contact : dans le dossier du coach.
   'etiquettes','etiquettesAth','contacts',
+  // Le temps passé par athlète et par semaine (chronoCoach).
+  'chrono',
   'studentCodes','msgTemplates','reponseFormules','relancesAuto','quickComments','protocolesPerso','canalEpingle',
   'canalDernier','journalGroupe','cloudinaryName','cloudinaryPreset','teamName',
   // Les programmes qu'un coach met en vente : un nom, un pitch, un prix, un
@@ -8764,6 +8766,8 @@ function _majTabbar(id){
 }
 function go(id){
   try{ lectureCacher(); }catch(e){}
+  // Le temps du coach : relu APRÈS le changement d'écran (segment fermé ou ouvert).
+  try{ setTimeout(_chronoTick,0); }catch(e){}
   // ON NE VIDE QUE SI L ON QUITTE LE MODULE. Naviguer de la nutrition vers la
   // cafeine ne rejoue rien ; revenir depuis l accueil rejoue l entree une fois.
   try{ if(!NUT_ECRANS.test(String(id||''))) _dejaAnime.clear(); }catch(e){}
@@ -17496,6 +17500,227 @@ function _pilCompteur(cle,lib,n,couleur){
 // L ORDRE EST CELUI DE L ACTION : ce qui demande un geste d abord, ce qui
 // decrit l etat ensuite, « Tous » en dernier parce qu il n est pas une
 // information mais un retour en arriere.
+// ══ LE TEMPS DU COACH, PAR ATHLÈTE ET PAR SEMAINE (30/09/2026) ═════════════
+//
+// Un segment s'ouvre quand le coach a sous les yeux le dossier d'UN athlète :
+// sa fiche (s-coach-client), son évolution (s-coach-bilan-evo) ou la
+// correction d'une de ses vidéos. Il se ferme au changement d'écran, au
+// passage en arrière-plan, ou trois minutes après la dernière interaction :
+// un téléphone posé sur la fiche ne compte pas une heure.
+//   currentUser.chrono = {'AAAA-Wss': {<id de l'athlète>: secondes}}
+//
+// ⚠ DOUZE SEMAINES AU PLUS (chronoPurger), et une écriture au plus toutes les
+//   deux minutes : saveUser réécrit le dossier entier, pas une seconde.
+// ⚠ UN SEUL SEGMENT PAR APPAREIL : l'onglet qui a la dernière interaction
+//   prend le relais (rc_chrono_onglet) ; les autres cessent de compter.
+// ⚠ UNE HORLOGE QUI RECULE ne rend jamais de temps négatif : le segment
+//   repart de l'instant présent.
+const CHRONO_INACTIF_MS=3*60e3;
+const CHRONO_SEMAINES=12;
+const CHRONO_ECRITURE_MS=2*60e3;
+const CHRONO_SEGMENT_MAX_S=4*3600;
+const CHRONO_ECRANS=Object.freeze(['s-coach-client','s-coach-bilan-evo']);
+
+// PURE. Les secondes d'un segment {debut, derniere} fermé à `fin` : au plus
+// trois minutes après la dernière interaction, jamais négatif.
+function chronoSegmentSecondes(seg,fin){
+  if(!seg) return 0;
+  const d=Number(seg.debut)||0, der=Math.max(d,Number(seg.derniere)||d);
+  const f=Math.min(Number(fin)||0,der+CHRONO_INACTIF_MS);
+  if(!d||!(f>d)) return 0;
+  return Math.min(CHRONO_SEGMENT_MAX_S,Math.round((f-d)/1000));
+}
+// PURE. Ajoute des secondes à une semaine et un athlète, sur une COPIE.
+function chronoAjouter(chrono,semaine,cle,secondes){
+  const out=chronoCopie(chrono);
+  const s=Math.round(Number(secondes)||0);
+  if(!semaine||!cle||s<=0) return out;
+  const w=out[semaine]||(out[semaine]={});
+  w[cle]=Math.min(7*86400,(Number(w[cle])||0)+s);
+  return out;
+}
+// PURE. La somme de deux relevés (le dossier, et ce qui attend d'être écrit).
+function chronoFusion(a,b){
+  let out=chronoCopie(a);
+  const x=chronoCopie(b);
+  for(const w of Object.keys(x)) for(const k of Object.keys(x[w])) out=chronoAjouter(out,w,k,x[w][k]);
+  return out;
+}
+function chronoCopie(chrono){
+  const out={};
+  const c=(chrono&&typeof chrono==='object')?chrono:{};
+  for(const w of Object.keys(c)) if(c[w]&&typeof c[w]==='object') out[w]=Object.assign({},c[w]);
+  return out;
+}
+// PURE. Les douze semaines ISO qui finissent à `maintenant`, les autres partent.
+function chronoPurger(chrono,maintenant){
+  const t=Number(maintenant)||Date.now();
+  const garde=new Set();
+  for(let i=0;i<CHRONO_SEMAINES;i++) garde.add(semaineISO(new Date(t-i*7*864e5)));
+  const out={};
+  const c=chronoCopie(chrono);
+  for(const w of Object.keys(c)) if(garde.has(w)&&Object.keys(c[w]).length) out[w]=c[w];
+  return out;
+}
+// PURE. La médiane (0 pour une liste vide).
+function chronoMediane(valeurs){
+  const l=(valeurs||[]).map(Number).filter(v=>isFinite(v)).sort((a,b)=>a-b);
+  if(!l.length) return 0;
+  const m=Math.floor(l.length/2);
+  return l.length%2?l[m]:(l[m-1]+l[m])/2;
+}
+// PURE. Ce que le portefeuille affiche : la médiane de la semaine (sur les
+// dossiers ouverts) et les dix dossiers les plus longs sur quatre semaines.
+// Les athlètes qui ne sont plus dans la liste (supprimés, partis) sont ignorés.
+function chronoResume(chrono,clients,maintenant){
+  const t=Number(maintenant)||Date.now();
+  const c=(chrono&&typeof chrono==='object')?chrono:{};
+  const ids=new Set((clients||[]).filter(x=>x&&!x._fromCode).map(x=>String(x.id)));
+  const sem=semaineISO(new Date(t));
+  const cette=c[sem]||{};
+  const semaine=Object.keys(cette).filter(k=>ids.has(k)&&Number(cette[k])>0);
+  const quatre=[0,1,2,3].map(i=>semaineISO(new Date(t-i*7*864e5)));
+  const tot={};
+  for(const w of quatre) for(const k of Object.keys(c[w]||{})) if(ids.has(k)) tot[k]=(tot[k]||0)+(Number(c[w][k])||0);
+  const top=Object.keys(tot).filter(k=>tot[k]>0).sort((a,b)=>tot[b]-tot[a]||(Number(cette[b])||0)-(Number(cette[a])||0)).slice(0,10)
+    .map(k=>({id:k,semaine:Number(cette[k])||0,quatre:tot[k]}));
+  return {semaine:sem,medianeS:chronoMediane(semaine.map(k=>Number(cette[k]))),dossiers:semaine.length,top};
+}
+function chronoMinutes(s){
+  const m=Math.round((Number(s)||0)/60);
+  return (Number(s)>0&&m<1)?'< 1 min':m+' min';
+}
+// La formule de l'athlète, comme le portefeuille la nomme.
+function _chronoFormule(c){
+  let p='aucun'; try{ p=palierDe(c); }catch(e){}
+  const f=String(((c&&c.abonnement)||{}).formule||'');
+  if(p==='suivi') return (OFFRES[f]&&OFFRES[f].type==='coaching')?OFFRES[f].lib:'Coaching suivi';
+  return {essentielle:'Essentielle',ultime:'Ultime'}[p]||'Sans formule';
+}
+
+// ── La mesure, sur cet appareil ────────────────────────────────────────
+// ⚠ CE QUI N'EST PAS ENCORE ÉCRIT VIT À PART (attente), jamais dans
+//   currentUser.chrono : la synchronisation relit le dossier du coach et
+//   l'écraserait entre deux écritures (constaté sur le banc : 7 s gardées sur
+//   25). Il est versé dans le dossier au moment d'écrire, et gardé dans
+//   localStorage pour survivre à un rechargement.
+let _chrono={seg:null,marque:0,ecrit:0,veille:false,attente:null};
+function _chronoAttente(){
+  if(_chrono.attente&&_chrono.attente.coach===currentUser.email) return _chrono.attente;
+  let v=null; try{ v=JSON.parse(localStorage.getItem('rc_chrono_attente')||'null'); }catch(e){ v=null; }
+  _chrono.attente=(v&&v.coach===currentUser.email&&v.data&&typeof v.data==='object')?v:{coach:currentUser.email,data:{}};
+  return _chrono.attente;
+}
+// Le relevé tel qu'il sera : le dossier, plus ce qui attend.
+function chronoCourant(){
+  if(!currentUser) return {};
+  return chronoFusion(currentUser.chrono,_chronoAttente().data);
+}
+const _chronoOnglet=Math.random().toString(36).slice(2,10);
+// L'athlète dont le dossier est à l'écran, ou null.
+function _chronoContexte(){
+  try{
+    if(!currentUser||currentUser.role!=='coach'||document.hidden) return null;
+    if(document.querySelector('#modal-overlay .mdl-video')&&window._vcEmail){
+      const u=(DB.get('users')||{})[window._vcEmail];
+      return u&&u.id?String(u.id):null;
+    }
+    const a=document.querySelector('.screen.active');
+    if(a&&CHRONO_ECRANS.indexOf(a.id)>=0&&currentClientId) return String(currentClientId);
+  }catch(e){}
+  return null;
+}
+function _chronoAutreOnglet(t){
+  try{
+    const v=JSON.parse(localStorage.getItem('rc_chrono_onglet')||'null');
+    return !!(v&&v.id!==_chronoOnglet&&t-Number(v.at)<60e3&&t>=Number(v.at));
+  }catch(e){ return false; }
+}
+function _chronoPrendreMain(t){ try{ localStorage.setItem('rc_chrono_onglet',JSON.stringify({id:_chronoOnglet,at:t})); }catch(e){} }
+// Verse dans currentUser.chrono ce qui a couru depuis la dernière marque.
+function _chronoVerser(t,fin){
+  const s=_chrono.seg;
+  if(!s) return;
+  // Un changement de compte entre-temps : ce temps n'est pas à ce coach.
+  if(s.coach!==currentUser.email){ _chrono.seg=null; _chrono.marque=0; return; }
+  const ref={debut:Math.max(s.debut,_chrono.marque||s.debut),derniere:s.derniere};
+  const sec=chronoSegmentSecondes(ref,fin);
+  _chrono.marque=Math.max(ref.debut,Math.min(fin,s.derniere+CHRONO_INACTIF_MS));
+  if(sec>0){
+    const a=_chronoAttente();
+    a.data=chronoAjouter(a.data,semaineISO(new Date(ref.debut)),s.cle,sec);
+    try{ localStorage.setItem('rc_chrono_attente',JSON.stringify(a)); }catch(e){}
+  }
+}
+function _chronoFermer(t){
+  if(!_chrono.seg) return;
+  _chronoVerser(t,t);
+  _chrono.seg=null; _chrono.marque=0;
+}
+function _chronoTick(){
+  try{
+    if(!currentUser||currentUser.role!=='coach') return false;
+    const t=Date.now();
+    const s=_chrono.seg;
+    // L'horloge a reculé : on repart d'ici, sans rien compter.
+    if(s&&(t<s.debut||t<(_chrono.marque||0))){ s.debut=t; s.derniere=t; _chrono.marque=t; }
+    const cle=_chronoContexte();
+    const inactif=s&&t-s.derniere>CHRONO_INACTIF_MS;
+    if(s&&(cle!==s.cle||inactif||_chronoAutreOnglet(t))){ _chronoFermer(t); if(inactif) _chrono.veille=true; }
+    else if(s) _chronoVerser(t,t);
+    if(!_chrono.seg&&cle&&!_chrono.veille&&!_chronoAutreOnglet(t)){
+      _chrono.seg={cle,coach:currentUser.email,debut:t,derniere:t}; _chrono.marque=t; _chronoPrendreMain(t);
+    }
+    if(_chrono.seg) _chronoPrendreMain(t);
+    // L'écriture, au plus toutes les deux minutes : l'attente rejoint le dossier.
+    const a=_chronoAttente();
+    if(Object.keys(a.data).length&&t-_chrono.ecrit>=CHRONO_ECRITURE_MS){
+      currentUser.chrono=chronoPurger(chronoFusion(currentUser.chrono,a.data),t);
+      a.data={}; _chrono.ecrit=t;
+      try{ localStorage.removeItem('rc_chrono_attente'); }catch(e){}
+      saveUser();
+    }
+    return true;
+  }catch(e){ return false; }
+}
+// Une interaction : le segment vit encore, l'onglet reprend la main.
+function _chronoInteraction(){
+  const t=Date.now();
+  _chrono.veille=false;
+  if(_chrono.seg){ _chrono.seg.derniere=Math.max(_chrono.seg.derniere,t); _chronoPrendreMain(t); }
+  else if(_chronoContexte()) _chronoTick();
+}
+(function(){
+  try{
+    ['pointerdown','keydown','wheel','touchstart'].forEach(e=>document.addEventListener(e,_chronoInteraction,{capture:true,passive:true}));
+    document.addEventListener('scroll',_chronoInteraction,{capture:true,passive:true});
+    document.addEventListener('visibilitychange',()=>{ _chronoTick(); });
+    setInterval(_chronoTick,10e3);
+  }catch(e){}
+})();
+
+// ── L'affichage, sous la barre d'état du portefeuille ──────────────────
+function renderChronoCoach(clients){
+  const z=document.getElementById('ch-chrono');
+  if(!z) return false;
+  if(!currentUser||currentUser.role!=='coach'){ z.innerHTML=''; return false; }
+  const l=clients||(typeof getClients==='function'?getClients():[]);
+  const r=chronoResume(chronoCourant(),l,Date.now());
+  if(!r.top.length){ z.innerHTML=''; return true; }
+  const par=new Map(l.map(c=>[String(c.id),c]));
+  const ouvert=!!(z.querySelector('details')&&z.querySelector('details').open);
+  z.innerHTML='<div class="chr-l">'+(r.dossiers
+      ?'<b>'+escapeHtml(chronoMinutes(r.medianeS))+'</b> par athlète cette semaine (médiane, '+r.dossiers+' dossier'+(r.dossiers>1?'s':'')+' ouvert'+(r.dossiers>1?'s':'')+')'
+      :'Aucun dossier ouvert cette semaine')+'</div>'
+    +'<details class="chr-d"'+(ouvert?' open':'')+'><summary>Les 10 dossiers qui te prennent le plus de temps</summary>'
+    +'<div class="chr-t"><div class="chr-e"><span>Athlète</span><span>Cette semaine</span><span>4 semaines</span></div>'
+    +r.top.map(x=>{ const c=par.get(x.id)||{};
+      return '<button type="button" class="chr-r" onclick="openClientDetail('+_attrArg(x.id)+')"><span><b>'+escapeHtml(_nomAthlete(c)||'Athlète')+'</b><small>'+escapeHtml(_chronoFormule(c))+'</small></span>'
+        +'<span>'+escapeHtml(x.semaine?chronoMinutes(x.semaine):'-')+'</span><span>'+escapeHtml(chronoMinutes(x.quatre))+'</span></button>'; }).join('')
+    +'</div><div class="sub chr-n">Le temps passé sur sa fiche, son évolution et ses vidéos. Trois minutes sans geste arrêtent le compte.</div></details>';
+  return true;
+}
+
 function renderPortefeuille(clients){
   // LA MEME REPARTITION QU'AUX ARRIVEES, et volontairement la meme fonction :
   // deux facons de compter les memes gens finiraient par ne plus dire pareil.
@@ -17526,6 +17751,8 @@ function renderPortefeuille(clients){
   el.innerHTML=cases.map(c=>_pilCompteur(c[0],c[1],c[2],c[3])).join('');
   // Les puces-filtres par étiquette : leur propre rangée, SOUS la barre (rien d'autre que les huit compteurs dedans).
   try{ renderFiltresEtiquettes(); }catch(e){}
+  // Le temps passé par athlète (chronoCoach), dans sa propre rangée elle aussi.
+  try{ renderChronoCoach(l); }catch(e){}
 }
 function _pilBande(cle,titre,corps,resume){
   return `<details class="plan-src pil-bande" style="margin:0 0 8px"${_pilOuvert[cle]?' open':''} ontoggle="pilNoterBande('${cle}',this.open)">
@@ -19867,17 +20094,108 @@ function renderProspects(){
   else if(!l.length) h+='<div class="pr-vide">Personne n’a encore laissé son contact. Partage le lien de ta page dans ta bio : chaque « Ça m’intéresse » arrive ici, et tu es prévenu.</div>';
   else h+=l.map(p=>{
     const st=p.statut||'nouveau', lien=prospectLienReponse(p,currentUser), id=E(p.id);
-    return '<div class="pr-l pr-'+st+'"><div class="pr-l-h"><b>'+E(p.prenom||'')+'</b><span>'+E(PROSPECT_STATUT_LIB[st]||st)+'</span></div>'
+    return '<div class="pr-l pr-'+st+'"><div class="pr-l-h"><b>'+E(p.prenom||'')+'</b><span>'+E(st==='athlete'&&p.codeId?'Invité':(PROSPECT_STATUT_LIB[st]||st))+'</span></div>'
       +'<div class="pr-l-d">'+E((OFFRES[p.formule]||{}).lib||'')+' · '+E(_prJour(Number(p.at)))+' · '+E(p.contact||'')+'</div>'
       +'<div class="pr-l-b">'
       +(lien?'<a class="btn btn-outline btn-sm" href="'+safeUrl(lien)+'" target="_blank" rel="noopener" onclick="rcmCoach(\'coach_message_envoye\');prospectStatut(\''+id+'\',\'repondu\',true)">Répondre</a>':'')
       +(pcRelie(currentUser)&&pcLienPayer(currentUser.vitrineSlug,p.formule)&&st!=='athlete'?'<button type="button" class="cp-lien" onclick="pcCopierLienPayer(\''+p.formule+'\',this)">Lien de paiement</button>':'')
       +(st==='nouveau'?'<button type="button" class="cp-lien" onclick="prospectStatut(\''+id+'\',\'repondu\')">J’ai répondu</button>':'')
-      +(st!=='athlete'?'<button type="button" class="cp-lien" onclick="prospectStatut(\''+id+'\',\'athlete\')">Devenu athlète</button>':'')
+      // « Inviter » : le code d'accès, prérempli, puis l'envoi (prospectInviter).
+      +(st!=='athlete'?'<button type="button" class="btn btn-red btn-sm" onclick="prospectInviter(\''+id+'\')">Inviter</button>':'')
+      +(st==='athlete'&&p.codeId?'<button type="button" class="cp-lien" onclick="prospectInviter(\''+id+'\')">Renvoyer l’invitation</button>':'')
       +(st!=='sans_suite'&&st!=='athlete'?'<button type="button" class="cp-lien" onclick="prospectStatut(\''+id+'\',\'sans_suite\')">Sans suite</button>':'')
+      +(st!=='athlete'?'<button type="button" class="cp-lien pr-discret" onclick="prospectStatut(\''+id+'\',\'athlete\')">Marquer athlète sans inviter</button>':'')
       +'</div></div>';
   }).join('');
   z.innerHTML=h;
+  return true;
+}
+// ── DU PROSPECT À L'ATHLÈTE INVITÉ, EN UN GESTE (30/09/2026) ────────────
+// « Inviter » crée le code d'accès par le flux existant (_genAccessCode, puis
+// studentCodes comme generateStudentCode), prérempli avec le prénom et le
+// contact que la page a déjà normalisés (contactNet : e-mail, ou +33…). Le
+// prospect passe à 'athlete' et garde codeId : l'invitation se retrouve.
+// Puis la feuille propose l'envoi : WhatsApp pour un numéro, un e-mail sinon,
+// et « Copier le message » toujours. RIEN NE PART SEUL : le lien s'ouvre, le
+// coach envoie.
+// ⚠ LA DURÉE est celle de la formule demandée (1 à 12 mois), 3 mois sinon.
+// ⚠ UN CONTACT INEXPLOITABLE n'empêche pas l'invitation : seul le message à
+//   copier est proposé, et la feuille le dit.
+// PURE. Le contact, tel que la page l'a normalisé : {tel} ou {email}, ou null.
+function prospectContactNet(p){
+  const c=String((p&&p.contact)||'').trim();
+  if(p&&p.canal==='tel'&&/^\+[1-9]\d{7,14}$/.test(c)) return {tel:c};
+  if(p&&p.canal==='email'&&/^[^\s@<>"',;]+@[^\s@<>"',;]+\.[a-z]{2,}$/i.test(c)) return {email:c.toLowerCase()};
+  return null;
+}
+// PURE. La durée du code : celle de la formule, bornée.
+function prospectMoisInvitation(p,estCreateur){
+  const m=Math.round(Number((OFFRES[p&&p.formule]||{}).mois)||0);
+  const d=m>=1?m:3;
+  return estCreateur?d:Math.min(CODE_MOIS_MAX_AFFILIE,d);
+}
+// PURE. L'entrée studentCodes, et la mise à jour du prospect.
+function prospectEntreeCode(p,gen,maintenant){
+  const t=Number(maintenant)||Date.now();
+  const k=prospectContactNet(p)||{};
+  return {entree:Object.assign({},gen.payload,{token:gen.token,usedBy:null,active:true,createdAt:t,prospectId:String(p.id||'')},
+      k.tel?{athletePhone:k.tel}:{},k.email?{athleteEmail:k.email}:{}),
+    maj:{statut:'athlete',finLe:t,codeId:gen.payload.codeId}};
+}
+const _prInvitEnCours=new Set();
+async function prospectInviter(id){
+  const p=(_prBrut||{})[id];
+  if(!p||!currentUser) return false;
+  // Déjà invité : on rouvre l'envoi, on ne crée pas un second code.
+  if(p.codeId){ _prFeuilleEnvoi(p); return true; }
+  if(_prInvitEnCours.has(id)) return false;
+  _prInvitEnCours.add(id);
+  try{
+    const prenom=String(p.prenom||'').trim()||'Athlète';
+    let gen;
+    try{ gen=await _genAccessCode(prenom,prospectMoisInvitation(p,currentUser.email===CREATOR_EMAIL)); }
+    catch(e){ toast(e.message||'Impossible de créer l’invitation : réessaie.','var(--red)'); return false; }
+    const {entree,maj}=prospectEntreeCode(Object.assign({id},p),gen,Date.now());
+    if(!currentUser.studentCodes) currentUser.studentCodes=[];
+    currentUser.studentCodes.push(entree);
+    currentUser.updatedAt=Date.now();
+    const users=DB.get('users')||{}; users[currentUser.email]=currentUser;
+    DB.set('users',users); DB.set('session',currentUser);
+    direSiEnvoiEchoue(CLOUD.pushOne(currentUser.email,currentUser),'Cette invitation',
+      'elle ne fonctionnera pas tant qu\'elle n\'est pas partie, attends d\'être en ligne avant de l\'envoyer');
+    // Le prospect : statut et codeId. Un refus du serveur ne perd pas le code.
+    const moi=String(currentUser.email||'').replace(/\./g,',');
+    const r=await _fbJson('prospects/'+moi+'/'+id,'PATCH',maj);
+    if(r&&r.ok) Object.assign(p,maj);
+    else toast('Invitation créée, mais le suivi du contact n’est pas à jour : réessaie une fois en ligne.','var(--orange)');
+    try{ renderProspects(); renderEntreeProspects(); }catch(e){}
+    _prFeuilleEnvoi(Object.assign({},p,maj));
+    return true;
+  } finally { _prInvitEnCours.delete(id); }
+}
+// La feuille d'envoi : le lien du bon canal, et le message à copier.
+function _prFeuilleEnvoi(p){
+  const c=((currentUser&&currentUser.studentCodes)||[]).find(x=>x&&x.codeId===p.codeId);
+  if(!c){ toast('Invitation introuvable sur cet appareil : elle est dans « Codes accès élèves ».','var(--orange)'); return false; }
+  const texte=_texteInvitationAthlete(c), k=prospectContactNet(p), E=escapeHtml;
+  const lien=k&&k.tel?waLink(k.tel,texte):(k&&k.email?'mailto:'+encodeURIComponent(k.email)+'?subject='+encodeURIComponent('Ton accès RepCore')+'&body='+encodeURIComponent(texte):'');
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend','<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" class="pr-inv" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">'
+    +'<h2 style="margin-bottom:4px">Invitation prête pour '+E(String(p.prenom||'ton athlète'))+'</h2>'
+    +'<p class="sub" style="font-size:var(--fs-sm);margin-bottom:10px">Son code est créé ('+E(String(c.months||''))+' mois). Envoie-lui le message : rien ne part d’ici sans toi.</p>'
+    +'<div class="pr-inv-msg">'+E(texte)+'</div>'
+    +(lien?'<a class="btn btn-red" href="'+safeUrl(lien)+'" target="_blank" rel="noopener" onclick="rcmCoach(\'coach_message_envoye\')" style="margin-top:12px;display:flex;align-items:center;justify-content:center;text-decoration:none">'
+        +(k.tel?'Envoyer par WhatsApp':'Envoyer par e-mail')+'</a>'
+      :'<div class="sub pr-inv-sans">Le contact laissé sur ta page n’est ni un numéro ni une adresse utilisable : copie le message et envoie-le par le moyen que tu as.</div>')
+    +'<button type="button" class="btn btn-outline" style="margin-top:10px" onclick="_prCopierInvitation('+_attrArg(p.codeId)+')">Copier le message</button>'
+    +'<button type="button" class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Fermer</button></div></div>');
+  return true;
+}
+function _prCopierInvitation(codeId){
+  const c=((currentUser&&currentUser.studentCodes)||[]).find(x=>x&&x.codeId===codeId);
+  if(!c) return false;
+  _rcCopierOuMontrer(_texteInvitationAthlete(c),'Message copié','Copie ce message et envoie-le :');
   return true;
 }
 // Le coach suit son contact : un statut et sa date, rien d'autre ne change.
@@ -27428,6 +27746,7 @@ function etiquettesOublierAthlete(u,athId){
   let fait=false;
   if(u.etiquettesAth&&u.etiquettesAth[athId]){ delete u.etiquettesAth[athId]; fait=true; }
   if(u.contacts&&u.contacts[athId]){ delete u.contacts[athId]; fait=true; }
+  if(u.chrono&&typeof u.chrono==='object') for(const w of Object.keys(u.chrono)) if(u.chrono[w]&&u.chrono[w][athId]){ delete u.chrono[w][athId]; fait=true; }
   return fait;
 }
 
@@ -109875,6 +110194,8 @@ function openVideoCorrection(email,videoId){
   <div class="mdl-large mdl-video" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto">${corps}</div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
   _vcApres();
+  // La correction d'une vidéo compte dans le temps passé sur cet athlète.
+  try{ setTimeout(_chronoTick,0); }catch(e){}
 }
 // ── UNE SEULE FEUILLE QUI RESTE ────────────────────────────────────────────
 // saveVideoCorrection appelait closeModal(), qui LAISSE LE NOEUD A L'ECRAN
@@ -120148,6 +120469,8 @@ function _feuilleOuvrir(id){
   return z;
 }
 function closeModal(){
+  // Le temps du coach, relu une fois la feuille retirée (micro-tâche : après le retrait de l'identifiant).
+  try{ Promise.resolve().then(_chronoTick); }catch(e){}
   if(typeof _audioMediaRecorder!=='undefined'&&_audioMediaRecorder&&_audioMediaRecorder.state==='recording') cancelAudioAnnotation();
   const o=document.getElementById('modal-overlay');
   if(!o) return;
