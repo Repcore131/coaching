@@ -6227,7 +6227,7 @@ function _validateAthletePkg(o){
       ||!!params.get('coach')||!!params.get('src')||!!params.get('amb')||params.get('paiements')==='1'
       ||!!params.get('duel')||params.get('duels')==='1'||!!params.get('saison')||params.get('parcours')==='1'||params.get('reprise')==='1'
       ||!!params.get('apk')||!!params.get('sante')||params.get('prospects')==='1'||!!params.get('payer')||!!params.get('paiement_coach')
-      ||!!params.get('garmin'));
+      ||!!params.get('garmin')||params.get('messages')==='1');
     // ?apk=<versionCode> — l'APK Android (LauncherActivity) l'ajoute à chaque
     // ouverture. Rangé dans rc_apk : la feuille « Connecter mes données
     // santé » sait ainsi qu'elle tourne dans l'APK (rcDansApk).
@@ -6342,6 +6342,8 @@ function _validateAthletePkg(o){
     if(/^[a-z0-9][a-z0-9-]{2,40}$/.test(String(params.get('saison')||''))) window._pendingSaisonOpen=true;
     // ?parcours=1 — le rappel du 21e jour d'essai : la carte revient.
     if(params.get('parcours')==='1') window._pendingParcoursOpen=true;
+    // ?messages=1 — la notification d'un message privé (lot M2).
+    if(params.get('messages')==='1') window._pendingMessagesOpen=true;
     // ?garmin=ok|refus|expire|erreur|ferme — le retour de la liaison Garmin (lot G1).
     if(/^[a-z]{2,8}$/.test(String(params.get('garmin')||''))) window._pendingGarmin=String(params.get('garmin'));
     // ?reprise=1 — la relance du 30e jour : l'écran « Reprise en douceur ».
@@ -7813,6 +7815,7 @@ function routeUser(){
   if(currentUser.role==='coach'){loadCoachHome();
     // ?prospects=1 : la notification d'un nouveau contact (C6). Ici, dans la branche coach.
     if(window._pendingProspectsOpen){ window._pendingProspectsOpen=false; setTimeout(()=>{ try{ ouvrirProspects(); }catch(e){} },1000); }
+    if(window._pendingMessagesOpen){ window._pendingMessagesOpen=false; setTimeout(()=>{ try{ ouvrirMessages(); }catch(e){} },1000); }
     return;}
   // Athlète : vérifier l'accès
   const s=currentUser.status||'FREE';
@@ -7865,6 +7868,8 @@ function routeUser(){
     setTimeout(()=>{ try{ ouvrirRepriseDouce(); }catch(e){} },1000);}
   if(window._pendingParcoursOpen){ window._pendingParcoursOpen=false;
     setTimeout(()=>{ try{ parcoursRelancer(); }catch(e){} },1000);}
+  if(window._pendingMessagesOpen){ window._pendingMessagesOpen=false;
+    setTimeout(()=>{ try{ msgOuvrirFil(); }catch(e){} },1000);}
   if(window._pendingGarmin){ const _g=window._pendingGarmin; window._pendingGarmin=null;
     setTimeout(()=>{ try{ garminRetour(_g); }catch(e){} },1000);}
   if(window._pendingDuelsOpen){ window._pendingDuelsOpen=false;
@@ -21527,6 +21532,8 @@ function abonnementSignaler(id,force){
 // règles exigent exactement cette valeur, type par type.
 function evenementCible(ev){
   const t=ev&&ev.type;
+  // Un message privé : l'événement vise le message (les règles vérifient qu'il existe et qui l'a écrit).
+  if(t==='message') return /^m[a-z0-9]{8,20}$/.test(String(ev.i||''))?String(ev.i):'';
   if(t==='reponse_bilan'||t==='reponse_rite') return String(ev.dest||'');
   if(t==='defi_maj') return String(ev.id||'');
   if(t==='defi_publie') return String(ev.msg||'');
@@ -26364,6 +26371,317 @@ function _relNom(cle){
 }
 
 // ── L'ENTRÉE, SOUS « MES NOTIFICATIONS » ──────────────────────────────────
+// ══ LA MESSAGERIE COACH ↔ ATHLÈTE (lot M2, 30/09/2026) ═════════════════════
+//
+// Un fil privé par couple coach/athlète, texte seulement :
+//   messages/<coachKey>/<athleteKey>/<msgId> = {de:'coach'|'athlete', texte, at, lu}
+//
+// ⚠ PAS DANS users/<email> : saveUser réécrit le dossier entier, et deux
+//   appareils qui écrivent en même temps y perdraient des messages.
+// ⚠ PAS D'ÉCOUTE PERMANENTE (plan Spark : connexions simultanées comptées).
+//   Un fil se lit à son ouverture, au retour au premier plan, et par pages de
+//   50 (orderBy $key : l'identifiant commence par l'heure en base 36, donc
+//   l'ordre des clés est celui des messages).
+// ⚠ LES RÈGLES décident : chacun n'écrit que SON rôle, l'athlète seulement
+//   tant qu'il est rattaché au coach, et seul le destinataire passe `lu` à
+//   true. Un athlète détaché ne lit plus le fil.
+// ⚠ HORS LIGNE : refusé avec un toast. Aucune file d'envoi existante ne
+//   convient à un texte qui doit arriver dans l'ordre.
+// ⚠ LA NOTIFICATION passe par deposerEvenement({type:'message'}) : le Worker
+//   relit le message en base avant de pousser (type 'coach' vers l'athlète,
+//   'message' vers le coach).
+const MSG_TEXTE_MAX=1000;
+const MSG_PAGE=50;
+const MSG_SANS_REPONSE_MS=24*3600e3;
+const MSG_CACHE_MS=10*60e3;
+// PURE. Un identifiant qui se range dans l'ordre du temps.
+function msgId(t){ return 'm'+(Number(t)||Date.now()).toString(36)+Math.random().toString(36).slice(2,8); }
+// PURE. Le texte à envoyer : 1 à 1000 caractères, pas seulement des blancs.
+function msgTexteValide(t){
+  const s=String(t==null?'':t).replace(/\r\n/g,'\n').trim();
+  if(!s) return {ok:false,texte:'',raison:'Écris un message avant d’envoyer.'};
+  if(s.length>MSG_TEXTE_MAX) return {ok:false,texte:s,raison:'Un message tient en '+MSG_TEXTE_MAX+' caractères ('+s.length+' ici).'};
+  return {ok:true,texte:s,raison:null};
+}
+// PURE. Un fil lu dans la base ({id:msg}) → une liste dans l'ordre.
+function msgListe(obj){
+  const o=(obj&&typeof obj==='object')?obj:{};
+  return Object.keys(o).filter(k=>o[k]&&typeof o[k]==='object').sort()
+    .map(k=>Object.assign({},o[k],{id:k}));
+}
+// PURE. Le résumé d'un fil : le dernier message, et ce que `role` n'a pas lu.
+function msgResume(liste,role){
+  const l=Array.isArray(liste)?liste:[];
+  const autre=role==='coach'?'athlete':'coach';
+  return {dernier:l.length?l[l.length-1]:null,nonLus:l.filter(m=>m.de===autre&&!m.lu).length,n:l.length};
+}
+// PURE. Les fils, du plus récent au plus ancien ; un fil vide passe en dernier.
+function msgFilsTries(fils){
+  return (Array.isArray(fils)?fils:[]).slice().sort((a,b)=>{
+    const x=Number(a&&a.dernier&&a.dernier.at)||0, y=Number(b&&b.dernier&&b.dernier.at)||0;
+    if(x!==y) return y-x;
+    return String(a&&a.nom||'').localeCompare(String(b&&b.nom||''),'fr');
+  });
+}
+// PURE. « Message sans réponse » : le dernier message vient de l'athlète et
+// date de 24 h ou plus. S'éteint quand le coach RÉPOND (dernier = coach),
+// pas quand il ouvre le fil.
+function msgSansReponse(fil,maintenant,seuil){
+  const d=fil&&fil.dernier;
+  if(!d||d.de!=='athlete') return false;
+  const t=typeof maintenant==='number'?maintenant:Date.now();
+  return t-(Number(d.at)||t)>=(Number(seuil)>0?Number(seuil):MSG_SANS_REPONSE_MS);
+}
+// PURE. L'heure d'un message : « 14:05 » aujourd'hui, sinon « lun. 28 sept. 14:05 ».
+function msgHeure(at,maintenant){
+  const d=new Date(Number(at)||0), n=new Date(typeof maintenant==='number'?maintenant:Date.now());
+  const h=d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  return d.toDateString()===n.toDateString()?h:d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'})+' '+h;
+}
+
+// ── L'accès à la base ────────────────────────────────────────────────────
+function _msgCles(u,athleteCle){
+  if(!u) return null;
+  if(u.role==='coach'){ const c=String(u.email||'').replace(/\./g,','); return (c&&athleteCle)?{coach:c,athlete:String(athleteCle)}:null; }
+  const coach=u.coachEmailKey, moi=_relCle(u);
+  return (coach&&moi)?{coach:String(coach),athlete:moi}:null;
+}
+function _msgEnLigne(){ return !(typeof navigator!=='undefined'&&navigator.onLine===false); }
+// Une page du fil : les 50 derniers, ou les 50 d'avant `avant` (exclu).
+async function msgChargerPage(k,avant){
+  if(!k) return {ok:false,st:0,liste:[]};
+  let tok=null; try{ tok=await CLOUD._getToken(); }catch(e){ tok=null; }
+  if(!tok) return {ok:false,st:0,liste:[]};
+  let url=CLOUD._fbUrl.replace('users.json','messages/'+k.coach+'/'+k.athlete+'.json')+'?auth='+tok+'&orderBy=%22%24key%22';
+  url+=avant?'&endAt='+encodeURIComponent(JSON.stringify(avant))+'&limitToLast='+(MSG_PAGE+1):'&limitToLast='+MSG_PAGE;
+  try{
+    const r=await fetch(url);
+    if(!r.ok) return {ok:false,st:r.status,liste:[]};
+    let l=msgListe(await r.json());
+    if(avant) l=l.filter(m=>m.id!==avant);
+    return {ok:true,st:200,liste:l,complet:l.length<MSG_PAGE};
+  }catch(e){ return {ok:false,st:0,liste:[]}; }
+}
+// Les fils du coach : un résumé par athlète (une page chacun), gardé 10 min.
+let _msgFils=null;            // {t, fils:[{cle, id, nom, dernier, nonLus}]}
+async function msgChargerFils(force){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||u.role!=='coach') return null;
+  if(!force&&_msgFils&&Date.now()-_msgFils.t<MSG_CACHE_MS) return _msgFils;
+  if(!_msgEnLigne()) return _msgFils;
+  let clients=[]; try{ clients=getClients().filter(c=>c&&c.email&&!c._fromCode); }catch(e){ clients=[]; }
+  const fils=[];
+  for(const c of clients){
+    const k=_msgCles(u,_relCle(c));
+    const p=await msgChargerPage(k);
+    if(!p.ok) continue;
+    const r=msgResume(p.liste,'coach');
+    const ini=(c.lname||'').charAt(0);
+    fils.push({cle:k.athlete,id:c.id,nom:((c.fname||'')+(ini?' '+ini+'.':'')).trim()||'Athlète',dernier:r.dernier,nonLus:r.nonLus});
+  }
+  _msgFils={t:Date.now(),fils};
+  return _msgFils;
+}
+// La ligne « Message sans réponse » du tableau de bord : lue dans le cache.
+function msgClientsSansReponse(clients,maintenant){
+  if(!_msgFils) return [];
+  const s=new Set(_msgFils.fils.filter(f=>msgSansReponse(f,maintenant)).map(f=>f.cle));
+  return (clients||[]).filter(c=>c&&s.has(_relCle(c)));
+}
+
+// ── L'envoi ──────────────────────────────────────────────────────────────
+async function msgEnvoyer(athleteCle,brut){
+  const u=currentUser;
+  const v=msgTexteValide(brut);
+  if(!v.ok){ toast(v.raison,'var(--orange)'); return {ok:false,raison:v.raison}; }
+  if(!_msgEnLigne()){ toast('Pas de réseau : ton message n’est pas parti. Réessaie une fois connecté.','var(--orange)'); return {ok:false,raison:'hors_ligne'}; }
+  // Un modèle dont une variable n'est pas résolue ne part jamais tel quel.
+  if(u.role==='coach'&&/\{[^}\s]{2,20}\}/.test(v.texte)){ toast('Une variable du modèle n’est pas complétée','var(--orange)'); return {ok:false,raison:'variable'}; }
+  const k=_msgCles(u,athleteCle);
+  if(!k){ toast('Ce fil n’est plus accessible','var(--orange)'); return {ok:false,raison:'acces'}; }
+  const de=u.role==='coach'?'coach':'athlete';
+  const id=msgId();
+  const m={de,texte:v.texte,at:Date.now(),lu:false};
+  const r=await _fbJson('messages/'+k.coach+'/'+k.athlete+'/'+id,'PUT',m);
+  if(!r||!r.ok){
+    toast(r&&(r.st===401||r.st===403)?'Ce fil n’est plus accessible (rattachement au coach terminé ?)':'Envoi impossible, réessaie','var(--orange)');
+    return {ok:false,raison:'refus'};
+  }
+  // La notification : le Worker relit ce message avant de pousser.
+  try{ deposerEvenement({type:'message',coach:k.coach,dest:de==='coach'?k.athlete:k.coach,i:id}).catch(()=>{}); }catch(e){}
+  // Le fil du coach se met à jour tout de suite : le signal « sans réponse » s'éteint.
+  if(de==='coach'&&_msgFils){ const f=_msgFils.fils.find(x=>x.cle===k.athlete); if(f) f.dernier=Object.assign({id},m); }
+  if(_msgFil&&_msgFil.cle===k.athlete) _msgFil.liste.push(Object.assign({id},m));
+  return {ok:true,id};
+}
+// Le destinataire a ouvert le fil : ce qui lui était adressé passe à lu.
+async function _msgMarquerLus(k,liste,role){
+  const autre=role==='coach'?'athlete':'coach';
+  const aLire=(liste||[]).filter(m=>m.de===autre&&!m.lu);
+  if(!aLire.length) return 0;
+  const maj={}; for(const m of aLire) maj[m.id+'/lu']=true;
+  const r=await _fbJson('messages/'+k.coach+'/'+k.athlete,'PATCH',maj);
+  if(r&&r.ok){ aLire.forEach(m=>{ m.lu=true; }); return aLire.length; }
+  return 0;
+}
+
+// ── L'écran : la liste des fils (coach), puis un fil ─────────────────────
+let _msgFil=null;             // {cle, nom, liste, complet, zone}
+function _msgZone(){ return (currentUser&&currentUser.role==='coach')?'msg-corps':'msga-corps'; }
+function ouvrirMessages(){
+  _msgFil=null;
+  goAvecRetour('s-coach-messages');
+  _rendreFils();
+  msgChargerFils(true).then(()=>{ if(!_msgFil) _rendreFils(); try{ renderEntreeMessages(); }catch(e){} }).catch(()=>{});
+}
+function _rendreFils(){
+  const z=document.getElementById('msg-corps');
+  if(!z) return;
+  if(!_msgFils){ z.innerHTML='<div class="msg-vide">Chargement des fils…</div>'; return; }
+  const l=msgFilsTries(_msgFils.fils);
+  if(!l.length){ z.innerHTML='<div class="msg-vide">Aucun athlète rattaché pour l’instant.</div>'; return; }
+  const t=Date.now();
+  z.innerHTML=l.map(f=>{
+    const d=f.dernier;
+    const ap=d?(d.de==='coach'?'Toi : ':'')+String(d.texte||'').replace(/\s+/g,' ').slice(0,80):'Aucun message';
+    return '<button type="button" class="msg-fil'+(f.nonLus?' msg-fil-nl':'')+'" onclick="msgOuvrirFil('+_attrArg(f.cle)+')">'
+      +'<span class="msg-fil-h"><span class="msg-fil-n">'+escapeHtml(f.nom)+'</span>'
+      +(d?'<span class="msg-fil-t">'+escapeHtml(msgHeure(d.at,t))+'</span>':'')+'</span>'
+      +'<span class="msg-fil-a">'+escapeHtml(ap)+'</span>'
+      +(f.nonLus?'<span class="msg-pastille" aria-label="'+f.nonLus+' non lu'+(f.nonLus>1?'s':'')+'">'+f.nonLus+'</span>':'')
+      +(msgSansReponse(f,t)?'<span class="msg-attente">sans réponse</span>':'')
+      +'</button>';
+  }).join('');
+}
+// Ouvre un fil : le coach donne la clé de l'athlète ; l'athlète n'en donne pas.
+async function msgOuvrirFil(athleteCle){
+  const u=currentUser;
+  const coach=u&&u.role==='coach';
+  if(!coach&&!u.coachEmailKey){ toast('Tu n’as pas de coach rattaché','var(--orange)'); return false; }
+  const cle=coach?String(athleteCle||''):_relCle(u);
+  let nom='Ton coach';
+  if(coach){
+    const c=(()=>{ try{ return getClients().find(x=>_relCle(x)===cle); }catch(e){ return null; } })();
+    nom=c?(c.fname||'Athlète'):'Athlète';
+    try{ tplContexte({prenom:c&&c.fname||''},'msg-texte'); }catch(e){}
+    goAvecRetour('s-coach-messages');
+  } else {
+    // Le profil public du coach, rangé par pullProfilCoach (hors du dossier).
+    try{ const cp=JSON.parse(localStorage.getItem('rc_coach_profil')||'null'); if(cp&&cp.key===u.coachEmailKey&&cp.d&&cp.d.fname) nom=cp.d.fname; }catch(e){}
+    goAvecRetour('s-messages');
+  }
+  _msgFil={cle,nom,liste:[],complet:false,charge:true};
+  _rendreFil();
+  await _msgRecharger();
+  return true;
+}
+async function _msgRecharger(){
+  const f=_msgFil; if(!f) return false;
+  const k=_msgCles(currentUser,f.cle);
+  const p=await msgChargerPage(k);
+  if(_msgFil!==f) return false;
+  f.charge=false;
+  if(!p.ok){ f.erreur=p.st===401||p.st===403?'acces':(p.st===0&&!_msgEnLigne()?'hors_ligne':'erreur'); _rendreFil(); return false; }
+  f.erreur=null; f.liste=p.liste; f.complet=p.complet;
+  _rendreFil();
+  const n=await _msgMarquerLus(k,f.liste,currentUser.role==='coach'?'coach':'athlete');
+  if(n){ try{ if(currentUser.role==='coach'){ const x=_msgFils&&_msgFils.fils.find(y=>y.cle===f.cle); if(x) x.nonLus=0; renderEntreeMessages(); } else _rendreEntreeMessagesAthlete(true); }catch(e){} }
+  return true;
+}
+async function msgPlusAnciens(){
+  const f=_msgFil; if(!f||!f.liste.length) return false;
+  const k=_msgCles(currentUser,f.cle);
+  const p=await msgChargerPage(k,f.liste[0].id);
+  if(!p.ok||_msgFil!==f) return false;
+  f.liste=p.liste.concat(f.liste); f.complet=p.complet;
+  _rendreFil(true);
+  return true;
+}
+function _rendreFil(garderPosition){
+  const z=document.getElementById(_msgZone());
+  const f=_msgFil;
+  if(!z||!f) return;
+  const moi=currentUser.role==='coach'?'coach':'athlete';
+  const t=Date.now();
+  const tete=moi==='coach'?'<button type="button" class="msg-retour" onclick="msgRetourFils()">Tous les fils</button>':'';
+  let corps;
+  if(f.charge) corps='<div class="msg-vide">Chargement…</div>';
+  else if(f.erreur==='acces') corps='<div class="msg-vide">Ce fil n’est plus accessible.'+(moi==='athlete'?' Tu n’es plus rattaché à ce coach.':' Cet athlète n’est plus rattaché à toi.')+'</div>';
+  else if(f.erreur) corps='<div class="msg-vide">'+(f.erreur==='hors_ligne'?'Pas de réseau : les messages s’afficheront une fois connecté.':'Les messages n’ont pas pu être chargés.')+'</div>';
+  else if(!f.liste.length) corps='<div class="msg-vide">Aucun message pour l’instant. '+(moi==='coach'?'Écris le premier.':'Écris à ton coach, il reçoit une notification.')+'</div>';
+  else corps=(f.complet?'':'<button type="button" class="msg-anciens" onclick="msgPlusAnciens()">Messages plus anciens</button>')
+    +f.liste.map(m=>'<div class="msg-b '+(m.de===moi?'msg-moi':'msg-lui')+'"><div class="msg-b-t">'+escapeHtml(m.texte)+'</div>'
+      +'<div class="msg-b-h">'+escapeHtml(msgHeure(m.at,t))+(m.de===moi&&m.lu?' · lu':'')+'</div></div>').join('');
+  const ferme=f.erreur==='acces';
+  z.innerHTML=tete+'<div class="msg-fil-titre">'+escapeHtml(f.nom)+'</div>'
+    +'<div class="msg-liste" id="msg-liste">'+corps+'</div>'
+    +(ferme?'':'<div class="msg-saisie">'
+      +'<textarea id="msg-texte" maxlength="'+MSG_TEXTE_MAX+'" rows="3" placeholder="Ton message" oninput="_msgCompteur()"></textarea>'
+      +'<div class="msg-saisie-b"><span id="msg-compte" class="msg-compte"></span>'
+      +(moi==='coach'?'<button type="button" class="btn btn-outline btn-sm" style="margin:0;width:auto" onclick="ouvrirModeles(\'msg-texte\')">Modèles</button>':'')
+      +'<button type="button" class="btn btn-red btn-sm" id="msg-envoyer" style="margin:0;width:auto" onclick="msgEnvoyerSaisie()">Envoyer</button></div></div>');
+  if(!garderPosition){ const l=document.getElementById('msg-liste'); if(l) l.scrollTop=l.scrollHeight; }
+}
+function _msgCompteur(){
+  const ta=document.getElementById('msg-texte'), z=document.getElementById('msg-compte');
+  if(!ta||!z) return;
+  const n=ta.value.length;
+  z.textContent=n>MSG_TEXTE_MAX-100?n+' / '+MSG_TEXTE_MAX:'';
+}
+async function msgEnvoyerSaisie(){
+  const f=_msgFil, ta=document.getElementById('msg-texte'), b=document.getElementById('msg-envoyer');
+  if(!f||!ta) return false;
+  if(b) b.disabled=true;
+  const brouillon=ta.value;
+  const r=await msgEnvoyer(f.cle,brouillon);
+  if(b) b.disabled=false;
+  if(!r.ok) return false;
+  _rendreFil();
+  try{ renderEntreeMessages(); renderTodoBlock(getClients()); }catch(e){}
+  return true;
+}
+function msgRetourFils(){ _msgFil=null; _rendreFils(); }
+// Retour au premier plan : le fil ouvert se relit, les compteurs aussi.
+try{
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden||!currentUser) return;
+    const ecran=(document.querySelector('.screen.active')||{}).id;
+    if(_msgFil&&(ecran==='s-coach-messages'||ecran==='s-messages')){ _msgRecharger().catch(()=>{}); return; }
+    if(currentUser.role==='coach'){ msgChargerFils().then(()=>{ try{ renderEntreeMessages(); if(ecran==='s-coach-home') renderTodoBlock(getClients()); }catch(e){} }).catch(()=>{}); }
+    else _rendreEntreeMessagesAthlete().catch(()=>{});
+  });
+}catch(e){}
+
+// ── Les entrées : accueil du coach, accueil de l'athlète ─────────────────
+function renderEntreeMessages(){
+  const z=document.getElementById('ch-messages');
+  if(!z||!currentUser||currentUser.role!=='coach') return false;
+  const nl=_msgFils?_msgFils.fils.reduce((a,f)=>a+(Number(f.nonLus)||0),0):0;
+  const attente=_msgFils?_msgFils.fils.filter(f=>msgSansReponse(f)).length:0;
+  z.innerHTML='<button type="button" class="rel-entree" onclick="ouvrirMessages()"><span class="rel-entree-t">Messages'
+    +(nl?' <span class="msg-pastille">'+nl+'</span>':'')+'</span>'
+    +'<span class="rel-entree-e">'+(nl?nl+' non lu'+(nl>1?'s':''):attente?attente+' sans réponse':'un fil privé par athlète')+'</span></button>';
+  if(!_msgFils) msgChargerFils().then(()=>{ try{ renderEntreeMessages(); renderTodoBlock(getClients()); }catch(e){} }).catch(()=>{});
+  return true;
+}
+let _msgAth=null;             // {t, nonLus}
+async function _rendreEntreeMessagesAthlete(force){
+  const z=document.getElementById('clh-messages');
+  const u=currentUser;
+  if(!z) return false;
+  if(!u||u.role==='coach'||!u.coachEmailKey){ z.innerHTML=''; return false; }
+  const peindre=()=>{ const n=_msgAth?_msgAth.nonLus:0;
+    z.innerHTML='<button type="button" class="rel-entree" onclick="msgOuvrirFil()"><span class="rel-entree-t">Mon coach'
+      +(n?' <span class="msg-pastille">'+n+'</span>':'')+'</span><span class="rel-entree-e">'+(n?n+' message'+(n>1?'s':'')+' non lu'+(n>1?'s':''):'Lui écrire, en privé')+'</span></button>'; };
+  peindre();
+  if(!force&&_msgAth&&Date.now()-_msgAth.t<MSG_CACHE_MS) return true;
+  if(!_msgEnLigne()) return true;
+  const p=await msgChargerPage(_msgCles(u));
+  if(p.ok){ _msgAth={t:Date.now(),nonLus:msgResume(p.liste,'athlete').nonLus}; peindre(); }
+  else if(p.st===401||p.st===403) z.innerHTML='';
+  return true;
+}
+
 function renderEntreeRelances(){
   const z=document.getElementById('ch-relances');
   if(!z||!currentUser) return false;
@@ -26479,7 +26797,9 @@ async function _rendreRelanceAthlete(u){
   if(!m){ z.innerHTML=''; return false; }
   z.innerHTML='<div class="rel-carte"><div class="rel-carte-t">Un mot de ton coach</div>'
     +'<div class="rel-carte-l">'+escapeHtml(m.texte||'')+'</div>'
-    +'<button type="button" class="btn btn-outline btn-sm" onclick="relanceVue('+Number(m.at)+')">Compris</button></div>';
+    +'<div class="rel-carte-b"><button type="button" class="btn btn-outline btn-sm" onclick="relanceVue('+Number(m.at)+')">Compris</button>'
+    // LOT M2 : répondre en privé, dans le fil.
+    +'<button type="button" class="btn btn-red btn-sm" onclick="relanceVue('+Number(m.at)+');msgOuvrirFil()">Répondre</button></div></div>';
   return true;
 }
 function relanceVue(at){
@@ -26807,6 +27127,7 @@ function renderTodoBlock(clients){
   _renderPremiersPas(clients);
   try{ renderEntreeRelances(); }catch(e){}
   try{ renderEntreeProspects(); }catch(e){}
+  try{ renderEntreeMessages(); }catch(e){}
   const el=document.getElementById('ch-todo');if(!el) return;
   const now=Date.now(),SOON=14*864e5;
   const lt=c=>(c.bilans||[]).reduce((m,b)=>Math.max(m,b.date),0);
@@ -26844,6 +27165,10 @@ function renderTodoBlock(clients){
   if(_accRet.length) rows.push({type:'accueil_retour',icon:icon('message-circle',16),color:'var(--orange)',label:'Premier point de l’accueil',list:_accRet});
   if(noStart.length) rows.push({type:'nostart',icon:icon('user-plus',16),color:'var(--red)',label:'Inscrit, n\'a jamais commencé',list:noStart});
   if(newBil.length) rows.push({type:'bilan',icon:icon('download',16),color:'var(--orange)',label:'Nouveau'+(newBil.length>1?'x bilans à lire':' bilan à lire'),list:newBil});
+  // LOT M2 : le dernier message d'un fil vient de l'athlète depuis 24 h ou plus.
+  // S'éteint quand le coach RÉPOND (lu dans le cache des fils), pas quand il ouvre.
+  const _msgs=msgClientsSansReponse(clients,now).filter(c=>!isAlertSnoozed('message',c.id));
+  if(_msgs.length) rows.push({type:'message',icon:icon('message-circle',16),color:'var(--orange)',label:'Message'+(_msgs.length>1?'s':'')+' sans réponse',list:_msgs});
   if(overdue.length) rows.push({type:'overdue',icon:icon('alert-triangle',16),color:'var(--red)',label:'Bilan'+(overdue.length>1?'s':'')+' en retard',list:overdue});
   // N6.8 — LES VIDEOS A CORRIGER REMONTENT ICI. La donnee existait,
   // videoNonCorrigee disait deja lesquelles attendent, et agregerPortefeuille
@@ -26985,6 +27310,8 @@ function renderTodoBlock(clients){
         // La file de correction des videos est deja ecrite : la ligne y entre,
         // elle n'ouvre pas une fiche que le coach devrait ensuite fouiller.
         :r.type==='videos'?`_entrerFileVideos()`
+        // LOT M2 : le fil de l'athlète, prêt à répondre.
+        :r.type==='message'?`msgOuvrirFil(${_attrArg(_relCle(r.list[0]))})`
         :r.type==='rite'?`_ouvrirRiteClient('${r.list[0].id}')`
         // LOT C1 : le bilan de départ, ouvert à l'endroit où l'on écrit le programme.
         :r.type==='accueil_prog'?`accueilOuvrirBilanDepart('${r.list[0].id}')`
@@ -31319,6 +31646,9 @@ function openClientDetail(cid,_refresh,_force){
   // Lien WhatsApp vers l'athlète. Sans numéro, le lien reste utile — WhatsApp
   // s'ouvre avec le texte et le coach choisit le contact — mais le libellé le
   // dit, pour ne pas laisser croire à un destinataire déjà résolu.
+  // LOT M2 : le fil privé, depuis la fiche.
+  const _mb=document.getElementById('ccd-msg');
+  if(_mb){ _mb.style.display=c._fromCode?'none':'flex'; _mb.innerHTML='Message à '+escapeHtml(c.fname||'cet athlète'); }
   const _wa=document.getElementById('ccd-wa');
   if(_wa){
     if(c._fromCode){_wa.style.display='none';}
@@ -41763,6 +42093,8 @@ function loadClientHome(){
   try{ _rendreCheckin(u); }catch(e){}
   try{ _rendreMobilisation(u); }catch(e){}
   try{ _rendreRelanceAthlete(u).catch(()=>{}); }catch(e){}
+  // LOT M2 : « Mon coach », le fil privé.
+  try{ _rendreEntreeMessagesAthlete().catch(()=>{}); }catch(e){}
   try{ _afficherRepriseDouce(u); }catch(e){}
   // Le résumé d'activité (rétention agrégée par le serveur), une fois par jour.
   try{ setTimeout(()=>{ activitePublier(u).catch(()=>{}); },6000); }catch(e){}
@@ -76003,8 +76335,8 @@ function etatInvitationNotif(u,supporte,permission){
 const NOTIF_GROUPES=Object.freeze([
   Object.freeze({cle:'seances',titre:'Mes séances et ma série',types:Object.freeze(['serie','badge','wrapped','retour','sante']),
     detail:'un rappel avant chacune de tes séances, le jeudi à 18 h si ta série est en danger, le dimanche quand un badge est à une ou deux séances, le 1er du mois ton mois en chiffres, après une pause (7, 14 et 30 jours sans séance), et le matin si ta nuit n’est pas arrivée (synchronisation iPhone)'}),
-  Object.freeze({cle:'coach',titre:'Mon coach',types:Object.freeze(['coach','bilan','defi','relance']),
-    detail:'quand ton coach répond à un bilan ou lance un défi, le samedi si ton dernier bilan date de deux semaines, et les rappels que ton coach a programmés (un par semaine au plus)'}),
+  Object.freeze({cle:'coach',titre:'Mon coach',types:Object.freeze(['coach','bilan','defi','relance','message']),
+    detail:'quand ton coach t’écrit, répond à un bilan ou lance un défi, le samedi si ton dernier bilan date de deux semaines, et les rappels que ton coach a programmés (un par semaine au plus)'}),
   Object.freeze({cle:'invitations',titre:'Mes invitations',types:Object.freeze(['filleul']),
     detail:'quand quelqu’un s’inscrit avec ton lien'})
 ]);

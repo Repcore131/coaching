@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1704';
+window.RC_BUILD='1705';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-09-30';
@@ -457,7 +457,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1704.css">
+<link rel="stylesheet" href="./rc-style.1705.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -1562,6 +1562,26 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
   </div>
 </div>
+<!-- LOT M2 : LA MESSAGERIE, côté coach (les fils, puis un fil). -->
+<div id="s-coach-messages" class="screen ecran-coach">
+  <div class="topbar">
+    <button class="back-btn" onclick="retourDe('s-coach-messages','s-coach-home')">←</button>
+    <span class="topbar-title">Messages</span><span></span>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad"><div id="msg-corps"></div></div>
+  </div>
+</div>
+<!-- LOT M2 : LA MESSAGERIE, côté athlète (« Mon coach »). -->
+<div id="s-messages" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="retourDe('s-messages','s-client-home')">←</button>
+    <span class="topbar-title">Mon coach</span><span></span>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad"><div id="msga-corps"></div></div>
+  </div>
+</div>
 <div id="s-coach-relances" class="screen ecran-coach">
   <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-coach-relances','s-coach-home')">←</button>
@@ -1669,6 +1689,8 @@ const COACH_PHOTO='icons/coach.jpg';
         <!-- LOT R1 : la bibliothèque de recettes, partagée aux athlètes. -->
         <button type="button" class="rel-entree" onclick="ouvrirRecettes()"><span class="rel-entree-t">Mes recettes</span><span class="rel-entree-e">partagées à tes athlètes, dans leur plan et leur journal</span></button>
         <!-- LOT C3 : l’entrée des relances automatiques (renderEntreeRelances). -->
+        <!-- LOT M2 : l’entrée des messages (renderEntreeMessages). -->
+        <div id="ch-messages"></div>
         <div id="ch-relances"></div>
         <!-- LOT C6 : les trois chiffres de la page et les contacts (renderEntreeProspects). -->
         <div id="ch-prospects"></div>
@@ -2521,6 +2543,7 @@ const COACH_PHOTO='icons/coach.jpg';
           title="Redescendre son dossier maintenant">Actualiser</button>
       </div>
       <!-- Lien WhatsApp de l'athlète : libellé et cible posés par openClientDetail -->
+      <button type="button" id="ccd-msg" onclick="msgOuvrirFil(_relCle(getOwnedClient(currentClientId)))">Message</button>
       <a id="ccd-wa" href="#" target="_blank" rel="noopener" style="display:none;align-items:center;justify-content:center;gap:8px;min-height:46px;margin-bottom:6px;background:#0a1a0a;border:1px solid #1e3a1e;border-radius:var(--r-3);color:var(--green);text-decoration:none;font-size:var(--fs-md);font-weight:800;letter-spacing:.5px"></a>
       <!-- ⚠ LA LIGNE « Derniere descente … » A ETE RETIREE le 20/09/2026, sur
            demande de Kevin, capture a l'appui. Elle redisait a froid ce que le
@@ -3465,6 +3488,8 @@ const COACH_PHOTO='icons/coach.jpg';
            coach. -->
       <div id="clh-checkin"></div>
       <!-- LOT C3 : le message privé d’une relance automatique (_rendreRelanceAthlete). -->
+      <!-- LOT M2 : « Mon coach », le fil privé (_rendreEntreeMessagesAthlete). -->
+      <div id="clh-messages"></div>
       <div id="clh-relance"></div>
       <!-- LOT T6 : les mobilisations proposées avant la séance du jour (_rendreMobilisation). -->
       <div id="clh-mobilisation"></div>
@@ -5952,5 +5977,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1704.js"></script>
+<script src="./rc-core.1705.js"></script>
 </body></html>

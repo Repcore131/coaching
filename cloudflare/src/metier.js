@@ -38,7 +38,9 @@ import * as RT from './retention.js';
 
 export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
-export const PUSH_TYPES = ['serie', 'wrapped', 'bilan', 'badge', 'coach', 'filleul', 'defi', 'acces', 'retour', 'sante', 'relance', 'prospect'];
+// 'message' : un athlète a écrit à son coach (messagerie, lot M2). Vers l'athlète,
+// un message du coach part en type 'coach'.
+export const PUSH_TYPES = ['serie', 'wrapped', 'bilan', 'badge', 'coach', 'filleul', 'defi', 'acces', 'retour', 'sante', 'relance', 'prospect', 'message'];
 const BONUS_ESSAI_JOURS = 30;  // le mois offert par l'ami : = TARIFS.essai_parrainage.moisEnPlus × 30 (l'app l'ouvre, essaiOuvrir)
 const PALIERS = ['aucun', 'essentielle', 'ultime', 'suivi'];
 
@@ -988,6 +990,30 @@ export function creerMetier(deps) {
       await envoyerPush(dest, { type: 'coach', url: './', tag: 'coach-' + (type === 'reponse_bilan' ? 'bilan' : 'rite') + '-' + i,
         title: type === 'reponse_bilan' ? 'Ton coach a répondu à ton bilan' : 'Ton coach a répondu à ton bilan de cycle',
         body: String(rep).slice(0, 120) });
+      return 'envoye';
+    }
+    // LA MESSAGERIE (lot M2) : un message privé coach ↔ athlète. Comme une
+    // réponse de bilan, le Worker relit le message en base avant de pousser :
+    // l'événement ne suffit pas, ni pour le texte ni pour l'auteur.
+    if (type === 'message') {
+      const coach = String(e.coach || ''), dest = String(e.dest || ''), i = String(e.i || '').replace(/[^A-Za-z0-9_-]/g, '');
+      if (!coach || !dest || !i) return 'incomplet';
+      const deCoach = e.par === coach;
+      if (!deCoach && dest !== coach) return 'incoherent';
+      const athlete = deCoach ? dest : String(e.par || '');
+      if ((await _lire(athlete, 'coachEmailKey')) !== coach) return 'pas_son_coach';
+      const m = await _val('messages/' + coach + '/' + athlete + '/' + i);
+      if (!m || m.de !== (deCoach ? 'coach' : 'athlete')) return 'sans_message';
+      if (m.lu === true) return 'deja_lu';
+      const extrait = String(m.texte || '').replace(/\s+/g, ' ').slice(0, 120);
+      if (deCoach) {
+        await envoyerPush(athlete, { type: 'coach', url: './?messages=1', tag: 'message-' + coach,
+          title: 'Ton coach t’a écrit', body: extrait });
+      } else {
+        const prenom = String((await _lire(athlete, 'fname')) || 'Ton athlète').slice(0, 40);
+        await envoyerPush(coach, { type: 'message', url: './?messages=1', tag: 'message-' + athlete,
+          title: prenom + ' t’a écrit', body: extrait });
+      }
       return 'envoye';
     }
     if (type === 'defi_publie') {

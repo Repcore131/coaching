@@ -383,4 +383,23 @@ console.log('regles : aucun appel JavaScript inconnu du langage');
   }
 }
 
+// ── LES TYPES D'EVENEMENTS (lot M2, 30/09/2026) ─────────────────────────
+// /evenements/$id/type se ferme sur une liste blanche. Un type depose par
+// l'app (deposerEvenement({type:'...'})) et absent de cette liste est refuse
+// par Firebase : la notification ne part jamais, et l'app n'en dit rien.
+{
+  const deposes=[...new Set([...source.matchAll(/deposerEvenement\(\{\s*type\s*:\s*'([a-z_]+)'/g)].map((m)=>m[1]))];
+  const mT=regles.match(/"type":\s*\{\s*"\.validate":\s*"newData\.isString\(\) && newData\.val\(\)\.matches\(\/\^\(([a-z_|]+)\)\$\/\)"/);
+  if(!mT){ console.error('la liste blanche des types de /evenements a disparu des regles'); process.exit(1); }
+  const admis=new Set(mT[1].split('|'));
+  if(deposes.length<5){ console.error('deposerEvenement : '+deposes.length+' type(s) lu(s), lecture cassee'); process.exit(1); }
+  const refuses=deposes.filter((t)=>!admis.has(t));
+  if(refuses.length){
+    console.error('\nDEPOSES PAR L\'APP, REFUSES PAR LES REGLES : '+refuses.join(', '));
+    console.error('Ajoute-les a /evenements/$id/type (et leur clause de « cible »).');
+    process.exit(1);
+  }
+  console.log('evenements : '+deposes.length+' type(s) deposes par l\'app, tous admis par les regles');
+}
+
 console.log('\nRien de bloquant.');

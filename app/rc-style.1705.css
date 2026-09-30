@@ -15582,3 +15582,30 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .td-annuler{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--tabbar-h,64px) + 20px + env(safe-area-inset-bottom,0px));z-index:var(--z-modal);display:flex;align-items:center;gap:14px;width:max-content;max-width:calc(100vw - 32px);box-sizing:border-box;padding:10px 12px 10px 16px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-3);box-shadow:var(--e4);font-size:var(--fs-sm)}
 .td-annuler span{flex:1;min-width:0;line-height:1.4}
 .td-annuler button{flex:none;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;padding:8px 12px;min-height:40px;cursor:pointer}
+/* LOT M2 : la messagerie coach ↔ athlète */
+.msg-vide{padding:18px 4px;font-size:var(--fs-sm);color:var(--sub);line-height:1.6}
+.msg-fil{position:relative;display:flex;flex-direction:column;gap:3px;width:100%;text-align:left;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:8px;color:var(--text);font-family:Montserrat,sans-serif;cursor:pointer}
+.msg-fil-nl{border-color:var(--red)}
+.msg-fil-h{display:flex;justify-content:space-between;gap:10px;align-items:baseline;padding-right:30px}
+.msg-fil-n{font-weight:800;font-size:var(--fs-md)}
+.msg-fil-t{font-size:var(--fs-xs);color:var(--sub);flex:none}
+.msg-fil-a{font-size:var(--fs-sm);color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:30px}
+.msg-fil .msg-pastille{position:absolute;right:12px;top:12px}
+.msg-pastille{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--red);color:#fff;font-size:var(--fs-xs);font-weight:800;vertical-align:middle}
+.msg-attente{align-self:flex-start;margin-top:2px;font-size:var(--fs-xs);font-weight:800;color:var(--orange)}
+.msg-retour{background:none;border:none;padding:6px 0;margin-bottom:6px;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.msg-fil-titre{font-weight:900;font-size:var(--fs-lg);margin-bottom:10px}
+.msg-liste{display:flex;flex-direction:column;gap:8px;max-height:calc(100dvh - 330px);min-height:160px;overflow-y:auto;padding:4px 0 10px}
+.msg-b{max-width:82%;padding:9px 12px;border-radius:14px;line-height:1.5}
+.msg-lui{align-self:flex-start;background:var(--surface-2);border:1px solid var(--border);border-bottom-left-radius:4px}
+.msg-moi{align-self:flex-end;background:color-mix(in srgb,var(--red) 22%,var(--surface-1));border:1px solid color-mix(in srgb,var(--red) 45%,transparent);border-bottom-right-radius:4px}
+.msg-b-t{font-size:var(--fs-sm);color:var(--text);white-space:pre-wrap;overflow-wrap:anywhere}
+.msg-b-h{font-size:var(--fs-xs);color:var(--sub);margin-top:3px;text-align:right}
+.msg-anciens{align-self:center;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;padding:8px 12px;min-height:40px;cursor:pointer}
+.msg-saisie{border-top:1px solid var(--border);padding-top:10px}
+.msg-saisie textarea{width:100%;box-sizing:border-box;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);resize:vertical;min-height:72px}
+.msg-saisie-b{display:flex;align-items:center;gap:8px;margin-top:8px}
+.msg-compte{flex:1;font-size:var(--fs-xs);color:var(--sub)}
+.rel-carte-b{display:flex;gap:8px;flex-wrap:wrap}
+.rel-carte-b .btn{flex:1;min-width:120px;margin:0}
+#ccd-msg{display:none;align-items:center;justify-content:center;gap:8px;width:100%;min-height:46px;margin-bottom:6px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer}

@@ -1640,6 +1640,29 @@
     "garmin_liens": { ".read": false, ".write": false },
     "garmin_uid": { ".read": false, ".write": false },
     "garmin_etats": { ".read": false, ".write": false },
+    // LOT M2 : LA MESSAGERIE COACH <-> ATHLETE. Un fil par couple : le coach le
+    // lit toujours (son historique) ; l athlete tant qu il est rattache. Chacun
+    // n ecrit que SON role, un message ne se modifie ni ne s efface, et seul le
+    // destinataire passe `lu` a true.
+    "messages": {
+      "$coachKey": {
+        "$athleteKey": {
+          ".read": "auth != null && (auth.token.email.replace('.', ',') === $coachKey || (auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey))",
+          "$msgId": {
+            ".write": "auth != null && !data.exists() && newData.exists() && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey && ((auth.token.email.replace('.', ',') === $coachKey && newData.child('de').val() === 'coach') || (auth.token.email.replace('.', ',') === $athleteKey && newData.child('de').val() === 'athlete'))",
+            ".validate": "$msgId.matches(/^m[a-z0-9]{8,20}$/) && newData.hasChildren(['de', 'texte', 'at'])",
+            "de":    { ".validate": "newData.isString() && newData.val().matches(/^(coach|athlete)$/)" },
+            "texte": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 1000" },
+            "at":    { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= now + 60000" },
+            "lu": {
+              ".write": "auth != null && data.parent().exists() && newData.val() === true && ((data.parent().child('de').val() === 'athlete' && auth.token.email.replace('.', ',') === $coachKey) || (data.parent().child('de').val() === 'coach' && auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey))",
+              ".validate": "newData.isBoolean() && (data.parent().exists() || newData.val() === false)"
+            },
+            "$autre": { ".validate": false }
+          }
+        }
+      }
+    },
     "coach_paiement": {
       "$coachKey": { ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey" }
     },
@@ -1806,7 +1829,7 @@
       "$id": {
         ".write": "auth != null && !data.exists() && newData.exists() && newData.child('par').val() === auth.token.email.replace('.', ',') && newData.parent().parent().child('evenements_attente').child(newData.child('par').val()).child(newData.child('type').val()).child(newData.child('cible').val()).child('id').val() === $id",
         ".validate": "$id.matches(/^e[a-z0-9]{8,24}$/) && newData.hasChildren(['type', 'par', 'at', 'cible'])",
-        "type":  { ".validate": "newData.isString() && newData.val().matches(/^(reponse_bilan|reponse_rite|defi_publie|defi_maj|parrainage_demande|ambassadeur_demande|abonnement|filleul_seance|duel_rejoint|duel_maj|duel_cree|seance_fin|reaction)$/)" },
+        "type":  { ".validate": "newData.isString() && newData.val().matches(/^(reponse_bilan|reponse_rite|defi_publie|defi_maj|parrainage_demande|ambassadeur_demande|abonnement|filleul_seance|duel_rejoint|duel_maj|duel_cree|seance_fin|reaction|message)$/)" },
         "par":   { ".validate": "newData.isString() && newData.val().length <= 200" },
         "at":    { ".validate": "newData.isNumber() && newData.val() > 0" },
         "dest":  { ".validate": "newData.isString() && newData.val().length <= 200" },
@@ -1816,7 +1839,7 @@
         "coach": { ".validate": "newData.isString() && newData.val().length <= 200" },
         "abo":   { ".validate": "newData.isString() && newData.val().matches(/^I-[A-Z0-9]{6,30}$/)" },
         "jour":  { ".validate": "newData.isString() && newData.val().matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)" },
-        "cible": { ".validate": "newData.isString() && (((newData.parent().child('type').val() === 'reponse_bilan' || newData.parent().child('type').val() === 'reponse_rite') && newData.val() === newData.parent().child('dest').val() && root.child('users').child(newData.val()).child('coachEmailKey').val() === auth.token.email.replace('.', ',')) || (newData.parent().child('type').val() === 'defi_maj' && newData.val() === newData.parent().child('id').val() && root.child('canaux').child(newData.parent().child('coach').val()).child('messages').child(newData.val()).child('type').val() === 'defi') || (newData.parent().child('type').val() === 'defi_publie' && newData.val() === newData.parent().child('msg').val() && root.child('canaux').child(auth.token.email.replace('.', ',')).child('messages').child(newData.val()).child('type').val() === 'defi') || ((newData.parent().child('type').val() === 'parrainage_demande' || newData.parent().child('type').val() === 'ambassadeur_demande' || newData.parent().child('type').val() === 'abonnement') && newData.val() === '-') || (newData.parent().child('type').val() === 'filleul_seance' && newData.val() === '-' && root.child('parrainage').child('liens').child(auth.token.email.replace('.', ',')).exists()) || (newData.parent().child('type').val() === 'seance_fin' && newData.val() === '-') || (newData.parent().child('type').val() === 'reaction' && newData.val().matches(/^[a-z0-9_]{3,40}$/) && root.child('amis').child(auth.token.email.replace('.', ',')).child(newData.val()).exists()) || ((newData.parent().child('type').val() === 'duel_rejoint' || newData.parent().child('type').val() === 'duel_maj') && newData.val().matches(/^d[a-z0-9]{10,24}$/) && (root.child('duels').child(newData.val()).child('createur').val() === auth.token.email.replace('.', ',') || root.child('duels').child(newData.val()).child('invite').val() === auth.token.email.replace('.', ','))) || (newData.parent().child('type').val() === 'duel_cree' && newData.val().matches(/^d[a-z0-9]{10,24}$/) && root.child('duels').child(newData.val()).child('createur').val() === auth.token.email.replace('.', ',') && root.child('duels').child(newData.val()).child('statut').val() === 'accepte'))" },
+        "cible": { ".validate": "newData.isString() && (((newData.parent().child('type').val() === 'reponse_bilan' || newData.parent().child('type').val() === 'reponse_rite') && newData.val() === newData.parent().child('dest').val() && root.child('users').child(newData.val()).child('coachEmailKey').val() === auth.token.email.replace('.', ',')) || (newData.parent().child('type').val() === 'defi_maj' && newData.val() === newData.parent().child('id').val() && root.child('canaux').child(newData.parent().child('coach').val()).child('messages').child(newData.val()).child('type').val() === 'defi') || (newData.parent().child('type').val() === 'defi_publie' && newData.val() === newData.parent().child('msg').val() && root.child('canaux').child(auth.token.email.replace('.', ',')).child('messages').child(newData.val()).child('type').val() === 'defi') || ((newData.parent().child('type').val() === 'parrainage_demande' || newData.parent().child('type').val() === 'ambassadeur_demande' || newData.parent().child('type').val() === 'abonnement') && newData.val() === '-') || (newData.parent().child('type').val() === 'filleul_seance' && newData.val() === '-' && root.child('parrainage').child('liens').child(auth.token.email.replace('.', ',')).exists()) || (newData.parent().child('type').val() === 'seance_fin' && newData.val() === '-') || (newData.parent().child('type').val() === 'message' && newData.val() === newData.parent().child('i').val() && ((newData.parent().child('coach').val() === auth.token.email.replace('.', ',') && root.child('messages').child(auth.token.email.replace('.', ',')).child(newData.parent().child('dest').val()).child(newData.val()).child('de').val() === 'coach') || (newData.parent().child('dest').val() === newData.parent().child('coach').val() && root.child('messages').child(newData.parent().child('coach').val()).child(auth.token.email.replace('.', ',')).child(newData.val()).child('de').val() === 'athlete'))) || (newData.parent().child('type').val() === 'reaction' && newData.val().matches(/^[a-z0-9_]{3,40}$/) && root.child('amis').child(auth.token.email.replace('.', ',')).child(newData.val()).exists()) || ((newData.parent().child('type').val() === 'duel_rejoint' || newData.parent().child('type').val() === 'duel_maj') && newData.val().matches(/^d[a-z0-9]{10,24}$/) && (root.child('duels').child(newData.val()).child('createur').val() === auth.token.email.replace('.', ',') || root.child('duels').child(newData.val()).child('invite').val() === auth.token.email.replace('.', ','))) || (newData.parent().child('type').val() === 'duel_cree' && newData.val().matches(/^d[a-z0-9]{10,24}$/) && root.child('duels').child(newData.val()).child('createur').val() === auth.token.email.replace('.', ',') && root.child('duels').child(newData.val()).child('statut').val() === 'accepte'))" },
         "$autre": { ".validate": false }
       }
     },

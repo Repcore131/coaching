@@ -39530,6 +39530,8 @@ async function testExercices(){
         's-coach-prospects',
         // LA VUE DU LUNDI MATIN (lot T8).
         's-coach-lundi',
+        // LA MESSAGERIE (lot M2).
+        's-coach-messages',
         // L'ECRAN « Acces », 24/09/2026 : ouvrir et fermer un acces a la
         // main, au bout du rapport payeur du 1er du mois.
         's-coach-acces',
@@ -49188,6 +49190,66 @@ async function testExercices(){
       const c=_fjCopier(t.entries,j,'matin');
       if(c[0].qty!==60||c[1].qty!==250||c[0].id===t.entries[0].id) return _echec('copie');
       return true;})());
+    // ── LOT M2 : LA MESSAGERIE COACH ↔ ATHLÈTE ──
+    ok('Messages : le texte à envoyer, 1 à 1000 caractères, jamais des blancs seuls',(()=>{
+      if(msgTexteValide('').ok||msgTexteValide('   \n  ').ok||msgTexteValide(null).ok) return _echec('vide accepté');
+      const a=msgTexteValide('  Salut Léa  ');
+      if(!a.ok||a.texte!=='Salut Léa') return _echec('rognage : '+JSON.stringify(a));
+      if(!msgTexteValide('x'.repeat(1000)).ok) return _echec('1000 refusés');
+      const b=msgTexteValide('x'.repeat(1001));
+      if(b.ok||b.raison.indexOf('1001')<0) return _echec('1001 : '+JSON.stringify(b));
+      if(msgTexteValide('a\r\nb').texte!=='a\nb') return _echec('fins de ligne');
+      return /^m[a-z0-9]{8,20}$/.test(msgId())?true:_echec('identifiant hors règles : '+msgId());})());
+    ok('Messages : les fils se trient par dernier message, les identifiants dans l’ordre du temps',(()=>{
+      const f=[{nom:'Bruno',dernier:{at:100,de:'coach'}},{nom:'Alice',dernier:null},{nom:'Chloé',dernier:{at:300,de:'athlete'}},{nom:'Aline',dernier:null}];
+      const t=msgFilsTries(f).map(x=>x.nom).join();
+      if(t!=='Chloé,Bruno,Alice,Aline') return _echec(t);
+      if(msgFilsTries(f)===f||f[0].nom!=='Bruno') return _echec('la liste d’origine a bougé');
+      const a=msgId(1790000000000), b=msgId(1790000000001), c=msgId(1800000000000);
+      if(!(a.slice(0,9)<b.slice(0,9)&&b<c)) return _echec('ordre des clés : '+[a,b,c].join());
+      const l=msgListe({mb:{de:'coach',texte:'2',at:2},ma:{de:'athlete',texte:'1',at:1},x:null});
+      if(l.map(m=>m.id).join()!=='ma,mb') return _echec('liste : '+JSON.stringify(l));
+      const r=msgResume([{de:'athlete',lu:false},{de:'coach',lu:false},{de:'athlete',lu:true},{de:'athlete'}],'coach');
+      if(r.nonLus!==2||r.n!==4||r.dernier.de!=='athlete') return _echec('résumé : '+JSON.stringify(r));
+      return msgResume([],'athlete').dernier===null?true:_echec('fil vide');})());
+    ok('Messages : « sans réponse » à 24 h du dernier message de l’athlète, éteint dès que le coach répond',(()=>{
+      const T=Date.parse('2026-10-02T12:00:00+02:00'), H=3600e3;
+      if(msgSansReponse({dernier:{de:'athlete',at:T-23*H}},T)) return _echec('23 h');
+      if(!msgSansReponse({dernier:{de:'athlete',at:T-24*H}},T)) return _echec('24 h');
+      if(msgSansReponse({dernier:{de:'coach',at:T-48*H}},T)) return _echec('le coach a répondu');
+      if(msgSansReponse({dernier:null},T)||msgSansReponse(null,T)) return _echec('fil vide');
+      return true;})());
+    ok('Messages : la ligne « Message sans réponse » apparaît puis s’éteint quand le coach répond',(()=>{
+      const z=document.getElementById('ch-todo');
+      const sv={u:currentUser,rows:window._todoRows,html:z?z.innerHTML:null,fils:_msgFils,dep:_todoDeplie};
+      try{
+        const T=Date.now();
+        currentUser={id:'cm',email:'coach.m@t.fr',role:'coach',alertStatus:{}};
+        const clients=[{id:'L1',fname:'Léa',lname:'M',email:'lea.m@t.fr',sessions:[],bilans:[]}];
+        _msgFils={t:T,fils:[{cle:'lea,m@t,fr',id:'L1',nom:'Léa M.',dernier:{de:'athlete',at:T-30*3600e3,texte:'Coucou'},nonLus:1}]};
+        renderTodoBlock(clients);
+        const r=(window._todoRows||[]).find(x=>x.type==='message');
+        if(!r||r.label!=='Message sans réponse'||r.color!=='var(--orange)') return _echec('ligne absente : '+JSON.stringify((window._todoRows||[]).map(x=>x.type)));
+        if(z&&z.innerHTML.indexOf('msgOuvrirFil(')<0) return _echec('la ligne n’ouvre pas le fil');
+        // Ouvrir ne l'éteint pas ; répondre, si.
+        _msgFils.fils[0].nonLus=0;
+        renderTodoBlock(clients);
+        if(!(window._todoRows||[]).some(x=>x.type==='message')) return _echec('éteinte à l’ouverture');
+        _msgFils.fils[0].dernier={de:'coach',at:T,texte:'Réponse'};
+        renderTodoBlock(clients);
+        return (window._todoRows||[]).some(x=>x.type==='message')?_echec('toujours allumée après la réponse'):true;
+      } finally { currentUser=sv.u; window._todoRows=sv.rows; _msgFils=sv.fils; _todoDeplie=sv.dep; if(z&&sv.html!=null) z.innerHTML=sv.html; }})());
+    ok('Messages : un texte hostile s’affiche en texte, jamais en balises',(()=>{
+      const z=document.getElementById('msg-corps');
+      if(!z) return _echec('écran s-coach-messages absent');
+      const sv={u:currentUser,f:_msgFil,h:z.innerHTML};
+      try{
+        currentUser={id:'cm',email:'coach.m@t.fr',role:'coach'};
+        _msgFil={cle:'lea,m@t,fr',nom:'<img src=x onerror=alert(1)>',liste:[{id:'ma',de:'athlete',texte:'<script>alert(1)</script><b>gras</b>',at:Date.now(),lu:false}],complet:true};
+        _rendreFil();
+        if(z.querySelector('script,img,b')) return _echec('balise interprétée');
+        return z.textContent.indexOf('<script>alert(1)</script>')>=0?true:_echec('texte perdu');
+      } finally { currentUser=sv.u; _msgFil=sv.f; z.innerHTML=sv.h; }})());
     // ── « À TRAITER » : RIEN D'IMPORTANT SOUS LE PLAFOND ──
     // Dix clients factices, les signaux bouchonnés le temps du test, et tout remis ensuite.
     const _TD=(fn)=>{
