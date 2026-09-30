@@ -26785,6 +26785,9 @@ async function testExercices(){
         catch(e){ woState=sauveW2; return _echec('exception: '+e.message); }
         const cb=document.getElementById('film-ex');
         cb.checked=true; cb.dispatchEvent(new Event('change'));
+        // 30/09/2026 : un second « Suivant » dans les 400 ms est ignoré (double toucher) ; le test
+        // précédent vient d'en faire un, on repart d'un geste neuf.
+        _woNavDernier=0;
         try{ woNav(1); }catch(e){ woState=sauveW2; return _echec('exception: '+e.message); }
         const surLe2=document.getElementById('film-ex').checked;
         try{ woNav(-1); }catch(e){ woState=sauveW2; return _echec('exception: '+e.message); }
@@ -59553,6 +59556,105 @@ async function testExercices(){
         return true;
       } finally {
         try{ _rirBandeFermer(); }catch(e){}
+        try{ annulerRepos(); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){}
+        currentUser=sU; woState=sW; window.saveUser=svSave; window.toast=svToast;
+        if(sSnap!=null) localStorage.setItem('rc_wo_state',sSnap); else localStorage.removeItem('rc_wo_state');
+        await new Promise(r=>setTimeout(r,400));
+      }});
+
+    // ── LA FIN PAR « SUIVANT » : CE QUI EST EN SUSPENS EST DIT (30/09/2026) ──
+    ok('seriesEnSuspens : notées non validées, restantes ; une charge proposée non touchée n’est pas une saisie',(()=>{
+      const S=o=>Object.assign({weight:'',reps:'8',rir:'',done:false},o||{});
+      const st={exercises:[{name:'A',series:3},{name:'B',series:2},{name:'C',series:4}],sessionData:{
+        0:{sets:[S({weight:'80',done:true}),S({weight:'80',userEdited:true}),S()]},
+        1:{sets:[S({repsDone:10}),S({weight:'60',isAuto:true})]}}};
+      const r=seriesEnSuspens(st);
+      if(JSON.stringify(r.nonValideesSaisies)!=='[{"idx":0,"i":1},{"idx":1,"i":0}]') return _echec('saisies : '+JSON.stringify(r.nonValideesSaisies));
+      // 3 + 2 + 4 (exercice pas encore ouvert : son nombre prévu) = 9, dont 1 faite.
+      if(r.restantes!==8||r.total!==9||r.fait!==1) return _echec('restantes : '+JSON.stringify(r));
+      const v=seriesEnSuspens({exercises:[],sessionData:{}});
+      if(v.nonValideesSaisies.length||v.restantes!==0) return _echec('vide');
+      return seriesEnSuspens(null).restantes===0?true:_echec('null');})());
+    okA('Dernier « Suivant » : série notée non validée → rien n’est terminé avant la réponse ; « Continuer » garde la séance ; « Valider » valide puis termine ; double toucher ignoré',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;
+      const sC3=rcConfirm3, sC=rcConfirm, sF=finishWorkout;
+      const pause=ms=>new Promise(r=>setTimeout(r,ms));
+      const cfg={active:true,name:'Push',exercises:[{name:'DEVELOPPE COUCHE',series:4,reps:'8',repos:'2 min'}]};
+      let fins=[], q3=0, q=0, repondre=null;
+      const lancer=()=>{ try{ annulerRepos(); }catch(e){} localStorage.removeItem('rc_wo_state'); launchWorkout(cfg,0); };
+      try{
+        window.saveUser=()=>true; window.toast=()=>{};
+        currentUser={id:'fin',email:'fin@t.fr',fname:'A',lname:'B',role:'athlete',exAlias:{},exMuscles:{},sessions:[],bilans:[],videos:[],
+          programs:{},contraintesSante:[],birthdate:'1990-05-01',gender:'homme',consent:{health:true,policyVersion:POLICY_VERSION},sonRepos:false,
+          sessions_config:[cfg]};
+        finishWorkout=(inc)=>{ fins.push(inc); woState.termine=true; };
+        rcConfirm3=()=>{ q3++; return new Promise(r=>{ repondre=r; }); };
+        rcConfirm=()=>{ q++; return Promise.resolve(true); };
+        lancer(); await pause(100);
+        const d=woState.sessionData[0];
+        Object.assign(d.sets[0],{weight:'80',userEdited:true,isAuto:false});
+        await pause(WO_NAV_DOUBLE_MS+50);
+        woNav(1); woNav(1);                       // double toucher
+        await pause(50);
+        if(q3!==1) return _echec('rcConfirm3 appelé '+q3+' fois (double toucher non ignoré ?)');
+        if(fins.length) return _echec('finishWorkout appelé avant la réponse');
+        // « Continuer » : la séance reste.
+        repondre(null); await pause(50);
+        if(fins.length||woState.termine) return _echec('« Continuer » a terminé la séance');
+        // « Les valider et terminer » : la série passe en done, sans repos, puis finishWorkout(false).
+        await pause(WO_NAV_DOUBLE_MS+50);
+        woNav(1); await pause(50);
+        if(q3!==2) return _echec('second dernier « Suivant » : '+q3);
+        repondre('ok'); await pause(50);
+        if(!d.sets[0].done) return _echec('la série notée n’a pas été validée');
+        if(woState.reposFin) return _echec('un repos a été lancé');
+        if(fins.length!==1||fins[0]!==false) return _echec('finishWorkout : '+JSON.stringify(fins));
+        // Sans saisie en suspens mais avec des séries restantes : rcConfirm « X/Y séries faites. », et moins de la moitié → écourtée.
+        fins=[]; lancer(); await pause(100);
+        woState.sessionData[0].sets[0].done=true;
+        await pause(WO_NAV_DOUBLE_MS+50);
+        let txt=''; rcConfirm=(t)=>{ q++; txt=t; return Promise.resolve(true); };
+        woNav(1); await pause(50);
+        if(txt!=='Terminer la séance ? 1/4 séries faites.') return _echec('message : '+txt);
+        if(fins.length!==1||fins[0]!==true) return _echec('moins de la moitié : '+JSON.stringify(fins));
+        // Tout fait : terminé sans question.
+        fins=[]; lancer(); await pause(100);
+        woState.sessionData[0].sets.forEach(x=>{ x.done=true; });
+        const qAv=q+q3;
+        await pause(WO_NAV_DOUBLE_MS+50);
+        woNav(1); await pause(50);
+        if(q+q3!==qAv) return _echec('une question alors que tout est fait');
+        return (fins.length===1&&fins[0]===false)?true:_echec('tout fait : '+JSON.stringify(fins));
+      } finally {
+        rcConfirm3=sC3; rcConfirm=sC; finishWorkout=sF;
+        try{ annulerRepos(); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){}
+        currentUser=sU; woState=sW; window.saveUser=svSave; window.toast=svToast;
+        if(sSnap!=null) localStorage.setItem('rc_wo_state',sSnap); else localStorage.removeItem('rc_wo_state');
+        await new Promise(r=>setTimeout(r,450));
+      }});
+    okA('#wo-set-count passe de 0/20 à 1/20 après toggleSet(0,0), et suit l’ajout et le retrait d’une série',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;
+      const pause=ms=>new Promise(r=>setTimeout(r,ms));
+      const exo=n=>({name:n,series:4,reps:'8',repos:'2 min'});
+      const cfg={active:true,name:'Push',exercises:['DEVELOPPE COUCHE','ROWING BARRE','SQUAT','CURL BICEPS','GAINAGE'].map(exo)};
+      try{
+        window.saveUser=()=>true; window.toast=()=>{};
+        currentUser={id:'cpt',email:'cpt@t.fr',fname:'A',lname:'B',role:'athlete',exAlias:{},exMuscles:{},sessions:[],bilans:[],videos:[],
+          programs:{},contraintesSante:[],birthdate:'1990-05-01',gender:'homme',consent:{health:true,policyVersion:POLICY_VERSION},sonRepos:false,
+          sessions_config:[cfg]};
+        localStorage.removeItem('rc_wo_state'); launchWorkout(cfg,0); await pause(100);
+        const c=()=>(document.getElementById('wo-set-count')||{}).textContent||'';
+        if(c()!=='0/20 séries') return _echec('au départ : « '+c()+' »');
+        const barre=document.getElementById('wo-progress'), pc=barre&&barre.style.getPropertyValue('--arc-pc');
+        toggleSet(0,0);
+        if(c()!=='1/20 séries') return _echec('après toggleSet(0,0) : « '+c()+' »');
+        if(barre.style.getPropertyValue('--arc-pc')!==pc) return _echec('la barre d’exercice a bougé');
+        ajouterSerie(0); if(c()!=='1/21 séries') return _echec('après ajouterSerie : « '+c()+' »');
+        retirerSerie(0); if(c()!=='1/20 séries') return _echec('après retirerSerie : « '+c()+' »');
+        return true;
+      } finally {
         try{ annulerRepos(); }catch(e){}
         try{ clearInterval(woState.timerInterval); }catch(e){}
         currentUser=sU; woState=sW; window.saveUser=svSave; window.toast=svToast;

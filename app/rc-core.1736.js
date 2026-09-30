@@ -50351,10 +50351,29 @@ function woMajProgression(gi,grs){
   _woCptPrec=gi+1;
   arcChiffre(_cpt,isNaN(_avantN)?gi+1:_avantN,gi+1,
     {duree:ARC.strike,format:v=>Math.round(v)+'/'+grs.length});
-  // LES SERIES DE TOUTE LA SEANCE, pas seulement de l'exercice courant : c'est
-  // la question qu'on se pose entre deux series — « il m'en reste combien ».
-  // PAS d'arcChiffre ici : ce compteur ne saute pas d'un exercice a l'autre,
-  // il avance d'une unite, et l'animer le rendrait moins lisible qu'immobile.
+  woMajCompteurSeries();
+}
+// LES SERIES DE TOUTE LA SEANCE, pas seulement de l'exercice courant : c'est
+// la question qu'on se pose entre deux series — « il m'en reste combien ».
+// PAS d'arcChiffre ici : ce compteur ne saute pas d'un exercice a l'autre,
+// il avance d'une unite, et l'animer le rendrait moins lisible qu'immobile.
+// ⚠ SA PROPRE FONCTION (30/09/2026) : il n'etait mis a jour que par
+//   renderWoEx, donc au changement d'exercice. Valider une serie laissait
+//   « 0/20 » a l'ecran jusqu'a « Suivant ». toggleSet, ajouterSerie et
+//   retirerSerie l'appellent, sans toucher a la barre d'exercice.
+// PURE. {fait, total} des series de la seance.
+function comptesSeriesSeance(st){
+  let fait=0,total=0;
+  const sd=(st&&st.sessionData)||{};
+  const sx=(st&&st.exercises)||[];
+  for(let k=0;k<sx.length;k++){
+    const l=(sd[k]&&sd[k].sets)||null;
+    if(l){ total+=l.length; fait+=l.filter(x=>x&&x.done).length; }
+    else { const n=parseInt(sx[k]&&sx[k].series,10); total+=isFinite(n)&&n>0?n:0; }
+  }
+  return {fait,total};
+}
+function woMajCompteurSeries(){
   try{
     // LE TOTAL SE COMPTE SUR LE PROGRAMME, PAS SUR sessionData. Ce dernier ne
     // se remplit qu'à l'OUVERTURE de chaque exercice : en parcourant ses seules
@@ -50364,14 +50383,7 @@ function woMajProgression(gi,grs){
     // dans la carte, à côté de ce qu'il compte.
     // sessionData reste PRIORITAIRE quand il existe : c'est lui qui porte les
     // séries ajoutées ou retirées à la main pendant la séance.
-    let _sFait=0,_sTot=0;
-    const _sd=(woState&&woState.sessionData)||{};
-    const _sx=(woState&&woState.exercises)||[];
-    for(let _k=0;_k<_sx.length;_k++){
-      const _st=(_sd[_k]&&_sd[_k].sets)||null;
-      if(_st){ _sTot+=_st.length; _sFait+=_st.filter(x=>x&&x.done).length; }
-      else { const _n=parseInt(_sx[_k]&&_sx[_k].series,10); _sTot+=isFinite(_n)&&_n>0?_n:0; }
-    }
+    const _c=comptesSeriesSeance(woState), _sFait=_c.fait, _sTot=_c.total;
     const _sc=document.getElementById('wo-set-count');
     if(_sc) _sc.textContent=_sTot?(_sFait+'/'+_sTot+' séries'):'';
   }catch(e){}
@@ -51101,6 +51113,7 @@ function ajouterSerie(idx){
     return toast('Vingt séries sur un exercice, c\'est déjà le maximum.','var(--orange)');
   d.sets.push(_nouvelleSerie(idx));
   renderSets(ex,d,idx);
+  try{ woMajCompteurSeries(); }catch(e){}
   woPersist();
 }
 // Ne retire QUE la derniere, et seulement si elle n'est pas validee : une
@@ -51115,7 +51128,7 @@ function retirerSerie(idx){
   if(n<=1) return;
   const der=d.sets[n-1];
   if(!der||der.done===true) return;
-  const _oter=()=>{ d.sets.pop(); renderSets(woState.exercises[idx],d,idx); woPersist(); };
+  const _oter=()=>{ d.sets.pop(); renderSets(woState.exercises[idx],d,idx); try{ woMajCompteurSeries(); }catch(e){} woPersist(); };
   // Une charge TAPEE A LA MAIN, un RIR ou une douleur : c'est de la saisie, et
   // elle disparaitrait sans un mot. La charge AUTO ne compte pas — elle est
   // proposee et non saisie, et poserait la question a chaque fois.
@@ -52184,6 +52197,7 @@ function toggleSet(i,idx){
     if(sec) demarrerRepos(sec,(woState.exercises[idx]||{}).name||'');
   }
   renderSets(woState.exercises[idx],d,idx);
+  try{ woMajCompteurSeries(); }catch(e){}
   // APRÈS renderSets, jamais avant : la ligne que l'arc doit traverser vient
   // d'être détruite et reconstruite, et l'animation doit viser la NOUVELLE.
   // Et seulement quand on coche : décocher est une correction de saisie, pas
@@ -52292,7 +52306,74 @@ function _foudreSurCharge(idx,i){
     rcFoudreRecord(champ,anc||null,d.sets[i].weight);
   }catch(e){}
 }
+// ══ LA FIN PAR « SUIVANT » (30/09/2026) ═════════════════════════════════
+// Le dernier « Suivant » terminait la séance sans un mot : des séries notées
+// mais pas validées n'étaient pas comptées (finishWorkout ne lit que done), et
+// un double toucher sur « Suivant » finissait la séance au lieu de l'avancer.
+//
+// PURE. Les séries notées mais non validées, et le nombre de séries restantes.
+// « Notée » : une charge ou des répétitions saisies. Une charge PROPOSÉE par
+// l'app (isAuto) que l'athlète n'a pas touchée n'est pas une saisie — sinon
+// la charge pré-remplie de chaque exercice ouvert poserait la question.
+function seriesEnSuspens(st){
+  const nonValideesSaisies=[];
+  const sd=(st&&st.sessionData)||{};
+  const sx=(st&&st.exercises)||[];
+  const plein=v=>v!=null&&String(v).trim()!=='';
+  for(let idx=0;idx<sx.length;idx++){
+    const l=(sd[idx]&&sd[idx].sets)||[];
+    l.forEach((x,i)=>{
+      if(!x||x.done) return;
+      const charge=plein(x.weight)&&!(x.isAuto&&!x.userEdited);
+      if(charge||plein(x.repsDone)) nonValideesSaisies.push({idx,i});
+    });
+  }
+  const c=comptesSeriesSeance(st);
+  return {nonValideesSaisies,restantes:Math.max(0,c.total-c.fait),fait:c.fait,total:c.total};
+}
+const WO_NAV_DOUBLE_MS=400;
+let _woNavDernier=0;
+let _woFinEnCours=false;
+async function _woTerminerDepuisNav(){
+  if(_woFinEnCours) return false;
+  _woFinEnCours=true;
+  try{
+    const e=seriesEnSuspens(woState);
+    const n=e.nonValideesSaisies.length;
+    const finir=incomplet=>{ localStorage.removeItem('rc_wo_state'); finishWorkout(!!incomplet); return true; };
+    if(n){
+      const choix=await rcConfirm3('Terminer la séance ?',
+        n+' série'+(n>1?'s':'')+' notée'+(n>1?'s ne sont':' n’est')+' pas validée'+(n>1?'s':'')+'.',
+        'Les valider et terminer','Terminer sans elles','Continuer');
+      if(choix===null) return false;
+      if(choix==='ok'){
+        // Validées telles quelles : ni repos, ni animation, ni record — la séance se ferme.
+        const t=Date.now();
+        for(const {idx,i} of e.nonValideesSaisies){
+          const x=woState.sessionData[idx].sets[i];
+          x.done=true; if(!x.tValid) x.tValid=t;
+        }
+        return finir(false);
+      }
+      // « Terminer sans elles » : la règle de la moitié, comme ci-dessous.
+      return finir(e.fait<e.total/2);
+    }
+    if(e.restantes>0){
+      const ok=await rcConfirm('Terminer la séance ? '+e.fait+'/'+e.total+' séries faites.');
+      if(!ok) return false;
+      // Moins de la moitié : séance écourtée (complete:false), comme « Abandonner ».
+      return finir(e.fait<e.total/2);
+    }
+    return finir(false);
+  } finally { _woFinEnCours=false; }
+}
 function woNav(dir){
+  // Un second « Suivant » dans les 400 ms est un double toucher, pas un geste.
+  if(dir>0){
+    const t=Date.now();
+    if(t-_woNavDernier<WO_NAV_DOUBLE_MS) return;
+    _woNavDernier=t;
+  }
   // On navigue d'un GROUPE à l'autre : un superset est un seul écran, sinon
   // « suivant » ramènerait sur le second exercice déjà affiché.
   _ckStopChrono();
@@ -52300,7 +52381,7 @@ function woNav(dir){
   const gi=grs.findIndex(g=>g.includes(woState.currentEx));
   const nxt=(gi<0?0:gi)+dir;
   if(nxt<0) return;
-  if(nxt>=grs.length){localStorage.removeItem('rc_wo_state');finishWorkout(false);return;}
+  if(nxt>=grs.length){ _woTerminerDepuisNav(); return; }
   woState.currentEx=grs[nxt][0];renderWoEx();woPersist();
   _arcGlissement(dir);
 }
