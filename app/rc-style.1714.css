@@ -5671,6 +5671,16 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
    du coach et ses bannières reçoivent un display en ligne à chaque rendu, y
    compris quand le profil du coach arrive du réseau après coup. */
 #s-client-home[data-demarrage] #clh-coach-banner,
+/* LES BANNIERES DU COACH EN CARROUSEL (Kevin, 30/09/2026) : une a la fois,
+   toutes dans la meme case, en fondu ; les points en dessous. */
+.promo-pile{display:grid}
+.promo-item{grid-area:1/1;align-self:center;opacity:0;visibility:hidden;transition:opacity .6s ease,visibility 0s linear .6s}
+.promo-item.on{opacity:1;visibility:visible;transition:opacity .6s ease}
+.promo-pts{display:flex;justify-content:center;gap:2px;margin-top:4px}
+.promo-pt{width:24px;height:24px;padding:0;border:0;background:none;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.promo-pt::before{content:'';width:7px;height:7px;border-radius:50%;background:#3a3a3a;transition:background .3s,width .3s}
+.promo-pt[aria-current="true"]::before{width:18px;border-radius:4px;background:var(--red)}
+@media (prefers-reduced-motion:reduce){.promo-item,.promo-item.on,.promo-pt::before{transition:none}}
 #s-client-home[data-demarrage] #clh-promo-banners,
 #s-client-home[data-demarrage] #clh-phrase,
 #s-client-home[data-demarrage] #clh-first-bilan-card,
@@ -13093,6 +13103,8 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .pd-fait .pd-case{background:var(--green);border-color:var(--green)}
 :root[data-theme="clair"] .pd-fait .pd-titre{color:var(--sub)}
 :root[data-theme="clair"] .pd-etat{color:var(--green)}
+:root[data-theme="clair"] .promo-pt::before{background:#c4c4c4}
+:root[data-theme="clair"] .promo-pt[aria-current="true"]::before{background:var(--red)}
 :root[data-theme="clair"] #clh-streak:focus-visible,:root[data-theme="clair"] .clh-m-clic:focus-visible{outline:2px solid var(--red)}
 :root[data-theme="clair"] .rir-tag{background:#7f1d1d22;color:#c50707;border:1px solid #7f1d1d44}
 :root[data-theme="clair"] .suggest-box{background:linear-gradient(135deg,#fbe5e5,#f9dede);border:1px solid #3a0a0a}

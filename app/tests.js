@@ -20409,6 +20409,29 @@ async function testExercices(){
       } finally { el.innerHTML=sv; el.style.display=sd; }
       return true;})());
 
+    // Le carrousel (Kevin, 30/09/2026) : une banniere a la fois, toutes les 9 s.
+    ok('Les bannières promo défilent une à la fois, toutes les 9 secondes',(()=>{
+      const el=document.getElementById('clh-promo-banners');
+      const sv=el.innerHTML, sd=el.style.display;
+      const G='data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+      try{
+        if(PROMO_DEFILE_MS!==9000) return _echec('le délai n’est pas de 9 s : '+PROMO_DEFILE_MS);
+        _renderPromoBanners({promoBanners:[{imageUrl:G,linkUrl:'https://a.fr'},{imageUrl:G,linkUrl:'https://b.fr'},{imageUrl:G}]});
+        const it=el.querySelectorAll('.promo-item');
+        if(it.length!==3) return _echec(it.length+' bannières au lieu de 3');
+        if(el.querySelectorAll('.promo-item.on').length!==1||!it[0].classList.contains('on')) return _echec('la première n’est pas la seule visible');
+        if(el.querySelectorAll('.promo-pt').length!==3) return _echec('il manque des points');
+        if(!_promoMinuteur) return _echec('aucun défilement lancé');
+        promoAller(1);
+        if(!it[1].classList.contains('on')||it[0].classList.contains('on')) return _echec('le point ne change pas de bannière');
+        if((it[0].querySelector('a')||{}).tabIndex!==-1) return _echec('une bannière cachée reste atteignable au clavier');
+        _promoMontrer(3);
+        if(!it[0].classList.contains('on')) return _echec('après la dernière, on ne revient pas à la première');
+        _renderPromoBanners({promoBanners:[{imageUrl:G}]});
+        if(el.querySelector('.promo-pts')||_promoMinuteur) return _echec('une seule bannière ne doit pas défiler');
+      } finally { el.innerHTML=sv; el.style.display=sd; _promoRelancer(); }
+      return true;})());
+
     ok('La vitrine transporte bien le champ qu’elle dessine',(()=>{
       // vitrineProgrammes doit figurer dans les DEUX listes de champs
       // d'ouvrirVitrineCoach — celle de l'ouverture et celle du
