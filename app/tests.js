@@ -11299,6 +11299,9 @@ async function testExercices(){
               if(!direct.length) return;
               const cs=getComputedStyle(el);
               if(cs.display==='none'||cs.visibility==='hidden') return;
+              // MASQUÉ PAR UN PARENT, il ne s'affiche pas : « 0 / 1 800 V » vit dans
+              // .rg-txt, retiré de l'en-tête (display:none), et comptait quand même.
+              for(let e=el.parentElement;e&&e!==r;e=e.parentElement){ const s=getComputedStyle(e); if(s.display==='none'||s.visibility==='hidden') return; }
               const px=parseFloat(cs.fontSize);
               if(px<11) petits.push(ou+' « '+direct.map(n=>n.textContent.trim()).join('').slice(0,24)+' » '+px+'px');
             });};
@@ -49180,6 +49183,92 @@ async function testExercices(){
       const c=_fjCopier(t.entries,j,'matin');
       if(c[0].qty!==60||c[1].qty!==250||c[0].id===t.entries[0].id) return _echec('copie');
       return true;})());
+    // ── « À TRAITER » : RIEN D'IMPORTANT SOUS LE PLAFOND ──
+    // Dix clients factices, les signaux bouchonnés le temps du test, et tout remis ensuite.
+    const _TD=(fn)=>{
+      const z=document.getElementById('ch-todo');
+      const sv={u:currentUser,rows:window._todoRows,html:z?z.innerHTML:null,dep:_todoDeplie,
+        f:{signauxEntrainement,_texteSignal,hasNewBilan,drapeauQuelconqueActif,needsAlert,neverStarted,saveUser,getClients}};
+      const clients=[];
+      for(let i=1;i<=9;i++) clients.push({id:'p'+i,fname:'Plat'+i,lname:'Eau',email:'p'+i+'@t.fr',sessions:[],bilans:[]});
+      clients.push({id:'b1',fname:'Bil',lname:'An',email:'b1@t.fr',sessions:[],bilans:[{date:Date.now()-3600e3,type:'suivi'}]});
+      signauxEntrainement=c=>(String(c.id).charAt(0)==='p'?{plateauMuscle:true,details:{}}:{details:{}});
+      _texteSignal=()=>'Aucun record depuis 4 semaines.';
+      hasNewBilan=c=>c.id==='b1';
+      drapeauQuelconqueActif=()=>null;
+      needsAlert=()=>false; neverStarted=()=>false; saveUser=()=>true; getClients=()=>clients;
+      currentUser={id:'coachTD',email:'coach.td@t.fr',role:'coach',alertStatus:{}};
+      _todoDeplie=false;
+      try{ return fn(clients,z); }
+      finally{
+        Object.assign(window,sv.f);
+        signauxEntrainement=sv.f.signauxEntrainement; _texteSignal=sv.f._texteSignal; hasNewBilan=sv.f.hasNewBilan;
+        drapeauQuelconqueActif=sv.f.drapeauQuelconqueActif; needsAlert=sv.f.needsAlert; neverStarted=sv.f.neverStarted;
+        saveUser=sv.f.saveUser; getClients=sv.f.getClients;
+        currentUser=sv.u; window._todoRows=sv.rows; _todoDeplie=sv.dep; _todoAnnulable=null; _fileSignal=null;
+        if(_todoAnnulerMinuteur){ clearTimeout(_todoAnnulerMinuteur); _todoAnnulerMinuteur=null; }
+        document.getElementById('td-annuler')?.remove(); document.getElementById('modal-overlay')?.remove();
+        if(z&&sv.html!=null) z.innerHTML=sv.html;
+      }
+    };
+    ok('À traiter : 9 athlètes en progression bloquée et 1 nouveau bilan, la ligne du bilan est affichée',(()=>_TD((clients,z)=>{
+      renderTodoBlock(clients);
+      const rows=window._todoRows||[];
+      if(!rows.some(r=>r.type==='bilan')) return _echec('pas de ligne bilan : '+rows.map(r=>r.type).join());
+      const g=rows.find(r=>r.groupe);
+      if(!g||g.type!=='entrainement'||g.list.length!==9||g.label!=='Progression bloquée') return _echec('regroupement : '+JSON.stringify(rows.map(r=>[r.type,r.list.length,!!r.groupe])));
+      if(z){
+        const h=z.innerHTML;
+        if(h.indexOf('9 athlètes')<0) return _echec('libellé « 9 athlètes » absent');
+        if(h.indexOf('_entrerFileSignal('+rows.indexOf(g)+')')<0) return _echec('la ligne groupée n’ouvre pas la file');
+        if(h.indexOf('_entrerFileBilans('+rows.findIndex(r=>r.type==='bilan')+')')<0) return _echec('index de la file des bilans');
+      }
+      return true;}))());
+    ok('À traiter : drapeau, bilan et retard ne comptent pas dans le plafond ; « + N autres » se déplie',(()=>{
+      const R=t=>({type:t,list:[{id:t}]});
+      const rows=[R('drapeau')].concat(Array.from({length:12},()=>R('entrainement')),[R('bilan'),R('overdue'),R('noprog')]);
+      const v=todoLignesVisibles(rows,8,false);
+      if(v.length!==11) return _echec(v.length+' lignes visibles, 11 attendues');
+      if(!['drapeau','bilan','overdue'].every(t=>v.some(r=>r.type===t))) return _echec('une ligne protégée coupée');
+      if(v.some(r=>r.type==='noprog')) return _echec('le plafond ne s’applique plus');
+      for(let i=1;i<v.length;i++) if(rows.indexOf(v[i])<rows.indexOf(v[i-1])) return _echec('ordre de gravité perdu');
+      if(todoLignesVisibles(rows,8,true).length!==rows.length) return _echec('déplié : tout');
+      // Le regroupement : au-delà de 3 seulement, jamais pour la santé.
+      const L=(t,lab,id,s)=>({type:t,label:lab,list:[{id}],sante:!!s,texte:'x'});
+      const g=grouperLignesEntrainement([L('douleur','Douleur répétée','d1',1),L('douleur','Douleur répétée','d2',1),L('douleur','Douleur répétée','d3',1),L('douleur','Douleur répétée','d4',1),
+        L('entrainement','Progression bloquée','a'),L('entrainement','Progression bloquée','b'),L('entrainement','Progression bloquée','c'),
+        L('calibrage','Calibrage','k1'),L('calibrage','Calibrage','k2'),L('calibrage','Calibrage','k3'),L('calibrage','Calibrage','k4')]);
+      const t=g.map(r=>r.type+':'+r.list.length+(r.groupe?'G':'')).join();
+      return t==='douleur:1,douleur:1,douleur:1,douleur:1,entrainement:1,entrainement:1,entrainement:1,calibrage:4G'?true:_echec(t);})());
+    ok('À traiter : une ligne groupée reportée puis « Annuler », alertStatus revient exactement à l’état initial',(()=>_TD((clients)=>{
+      currentUser.alertStatus={'entrainement-p1':{s:'ignoré',until:5,at:1,seenUpTo:0},'bilan-zz':{s:'vu',until:9}};
+      const avant=JSON.stringify(currentUser.alertStatus);
+      renderTodoBlock(clients);
+      const idx=(window._todoRows||[]).findIndex(r=>r.groupe);
+      dismissTodoRow(idx);
+      const cases=[...document.querySelectorAll('.td-case input')];
+      if(cases.length!==9||cases.some(c=>!c.checked)) return _echec('feuille : '+cases.length+' cases');
+      cases[8].checked=false; _todoCocher();
+      _todoReporterFeuille();
+      const st=currentUser.alertStatus;
+      if(!st['entrainement-p2']||st['entrainement-p9']) return _echec('le report ne suit pas les cases');
+      if(st['entrainement-p1'].until===5) return _echec('p1 non reporté');
+      const b=document.querySelector('#td-annuler button');
+      if(!b||b.textContent!=='Annuler') return _echec('pas de bouton Annuler');
+      b.click();
+      if(JSON.stringify(currentUser.alertStatus)!==avant) return _echec('après Annuler : '+JSON.stringify(currentUser.alertStatus));
+      if(document.getElementById('td-annuler')) return _echec('le bandeau reste');
+      return (window._todoRows||[]).some(r=>r.groupe&&r.list.length===9)?true:_echec('la ligne n’est pas revenue');}))());
+    ok('À traiter : un drapeau rouge reste non reportable',(()=>_TD((clients,z)=>{
+      drapeauQuelconqueActif=c=>c.id==='p1'?{cases:['thoracique'],zone:null}:null;
+      renderTodoBlock(clients);
+      const idx=(window._todoRows||[]).findIndex(r=>r.type==='drapeau');
+      if(idx<0) return _echec('pas de ligne drapeau');
+      if(z&&z.innerHTML.indexOf('dismissTodoRow('+idx+')')>=0) return _echec('un bouton de report sur le drapeau');
+      const avant=JSON.stringify(currentUser.alertStatus);
+      dismissTodoRow(idx);
+      if(document.getElementById('modal-overlay')||document.getElementById('td-annuler')) return _echec('une feuille ou un report s’est ouvert');
+      return JSON.stringify(currentUser.alertStatus)===avant?true:_echec('alertStatus modifié');}))());
     // ── LOT M1 : LA MARQUE DU COACH PRO ──
     const _MQ={nom:'KG Performance',couleur:'#2E7D32',logoUrl:'https://res.cloudinary.com/dntu57ml/image/upload/v1/kg/logo.png'};
     ok('Marque : couleurAccessible refuse sous 3:1 sur le fond sombre et propose la plus proche lisible',(()=>{
@@ -51513,7 +51602,12 @@ async function testExercices(){
       return true;})());
     ok('Notifications : le choix est écrit dans u.pushPrefs AVANT la demande de permission',(()=>{
       const svU=currentUser, svSave=window.saveUser, svN=Object.getOwnPropertyDescriptor(window,'Notification');
-      const z=document.createElement('div'); z.id='wd-notif-invite'; document.body.appendChild(z);
+      // LA ZONE EXISTE DÉJÀ (écran de fin de séance) : en créer une seconde doublait les
+      // identifiants, et getElementById lisait les cases de la PREMIÈRE, laissée par un test
+      // précédent. On emprunte la vraie zone, et on la rend telle quelle.
+      const _zv=document.getElementById('wd-notif-invite');
+      const z=_zv||document.body.appendChild(Object.assign(document.createElement('div'),{id:'wd-notif-invite'}));
+      const _zh=_zv?_zv.innerHTML:null;
       let vu=null, demande=0;
       try{
         currentUser={email:'lea@t.fr',role:'athlete',coachEmailKey:'k',pushPrefs:{acces:false}};
@@ -51527,7 +51621,7 @@ async function testExercices(){
         if(!vu||vu.coach!==false||vu.bilan!==false||vu.defi!==false||('serie' in vu)||('filleul' in vu)||vu.acces!==false)
           return _echec('pushPrefs au moment de la demande : '+JSON.stringify(vu));
       }finally{
-        z.remove(); currentUser=svU; window.saveUser=svSave;
+        if(_zv) _zv.innerHTML=_zh; else z.remove(); currentUser=svU; window.saveUser=svSave;
         if(svN) Object.defineProperty(window,'Notification',svN); else delete window.Notification;
       }
       return true;})());

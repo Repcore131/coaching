@@ -2063,8 +2063,9 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .rcf-dl svg{width:18px;height:18px;flex-shrink:0}
 .rcf-share{width:100%;min-height:46px;margin-top:10px;background:none;
   border:1px solid rgba(255,255,255,.13);border-radius:var(--r-2);color:var(--text-dim);
-  font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.6px;
-  text-transform:uppercase;cursor:pointer;
+  font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.3px;
+  /* R31 : le partage est second, il parle en casse phrase ; les capitales vont au seul CTA de l'écran. */
+  text-transform:none;cursor:pointer;
   transition:border-color var(--t-1),color var(--t-1),transform var(--t-1)}
 .rcf-share:active{transform:scale(.985);border-color:rgba(224,32,32,.5);color:#fff}
 .rcf-note{font-size:10px;color:var(--text-faint);line-height:1.6;margin-top:10px;text-align:center}
@@ -15566,3 +15567,18 @@ textarea.rct-champ{resize:vertical;line-height:1.5}
 .mq-apercu-fond .mq-logo{background:var(--mq-c)}
 .mq-apercu-b{margin-top:12px;background:var(--mq-c);color:#fff;text-align:center;font-weight:800;font-size:var(--fs-sm);letter-spacing:1px;text-transform:uppercase;padding:10px;border-radius:var(--r-2)}
 #mq-logo-apercu .mq-logo{background:var(--mq-c)}
+/* « À traiter » : le dépliage, la file d'une ligne groupée, le report annulable */
+.td-plus{display:block;width:100%;text-align:left;background:none;border:none;border-top:1px solid #180000;padding:10px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;color:var(--text);text-decoration:underline;text-underline-offset:3px;cursor:pointer;min-height:44px}
+.td-file{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 16px;background:var(--surface-1);border-bottom:1px solid var(--border)}
+.td-file-t{flex:1;min-width:0;font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:.5px}
+.td-file-b{margin:0;min-height:40px}
+.td-feuille{background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:18px 20px 0;width:100%;max-width:520px;max-height:80vh;overflow-y:auto;box-sizing:border-box}
+.td-feuille-pied{position:sticky;bottom:0;display:flex;gap:8px;margin:0 -20px;padding:12px 20px calc(16px + env(safe-area-inset-bottom,0px));background:var(--surface-2);border-top:1px solid var(--border)}
+.td-feuille-t{font-weight:800;font-size:var(--fs-md)}
+.td-feuille-d{font-size:var(--fs-xs);color:var(--sub);margin:4px 0 10px}
+.td-cases{display:flex;flex-direction:column}
+.td-case{display:flex;align-items:center;gap:10px;min-height:44px;margin:0;font-size:var(--fs-sm);font-weight:700;color:var(--text);text-transform:none;letter-spacing:normal;border-bottom:1px solid var(--border);cursor:pointer}
+.td-case input{width:20px;height:20px;accent-color:var(--red)}
+.td-annuler{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--tabbar-h,64px) + 20px + env(safe-area-inset-bottom,0px));z-index:var(--z-modal);display:flex;align-items:center;gap:14px;width:max-content;max-width:calc(100vw - 32px);box-sizing:border-box;padding:10px 12px 10px 16px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-3);box-shadow:var(--e4);font-size:var(--fs-sm)}
+.td-annuler span{flex:1;min-width:0;line-height:1.4}
+.td-annuler button{flex:none;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;padding:8px 12px;min-height:40px;cursor:pointer}

@@ -12682,16 +12682,17 @@ function reporterAlerte(type,c,jours){
 }
 function dismissTodoRow(idx){
   const r=window._todoRows&&window._todoRows[idx];if(!r) return;
+  // Un drapeau rouge ne se reporte jamais, même appelé directement.
+  if(r.nonReportable) return false;
+  // Une ligne groupée : une case par athlète, toutes cochées, avant de reporter.
+  if(r.list.length>1){ _todoOuvrirFeuille(r); return true; }
   // L'ECRITURE N'EST PAS RETARDEE PAR L'ANIMATION : elle est groupee avec le
   // re-rendu, qui l'etait deja. pointer-events coupes TOUT DE SUITE — le report
   // est deja decide, un second appui pendant les 180 ms ne doit rien atteindre.
   // A huit lignes a reporter le dimanche soir, le coach visait une cible qui
   // avait bouge entre deux appuis.
-  const fin=()=>{
-    r.list.forEach(c=>reporterAlerte(r.type,c));
-    saveUser();
-    renderTodoBlock(getClients());
-  };
+  // Le report passe par todoReporter : sauvegarde, redessin, et « Annuler » 6 s.
+  const fin=()=>{ todoReporter(r,r.list); };
   const n=arcDernierElement('.rc-ligne');
   if(!n||arcReduit()||!n.animate) return fin();
   n.style.pointerEvents='none';
@@ -26601,6 +26602,207 @@ function lundiOuvrir(id,cat){
   },350);
   return true;
 }
+// ══ « À TRAITER » : RIEN D'IMPORTANT NE PASSE SOUS LE PLAFOND (30/09/2026) ══
+//
+// Neuf athlètes en « Progression bloquée » et un nouveau bilan : les neuf
+// lignes d'entraînement remplissaient les huit places, la ligne du bilan
+// passait dans « + 2 autres », et « + 2 autres » ne s'ouvrait pas.
+//
+// ⚠ TROIS LIGNES NE COMPTENT JAMAIS DANS LE PLAFOND : le drapeau rouge, le
+//   nouveau bilan à lire, le bilan en retard. Le plafond ne s'applique qu'aux
+//   autres, dans leur ordre de gravité. L'ordre de `rows` ne change pas :
+//   `vues` en garde la suite, et window._todoRows reste `vues` (les index de
+//   dismissTodoRow, ouvrirAjustement et des files sont ceux de l'écran).
+// ⚠ AU-DELÀ DE TROIS ATHLÈTES pour un même signal d'entraînement, une ligne
+//   « N athlètes · Progression bloquée » les regroupe ; elle ouvre une file
+//   (« Athlète suivant »). Les douleurs restent une ligne par athlète : un
+//   signe de santé se lit avec son détail, jamais en paquet.
+// ⚠ « + N autres » se déplie (état en mémoire, jamais en localStorage).
+// ⚠ Un report groupé passe par une feuille (une case par athlète), et tout
+//   report s'annule pendant 6 s : alertStatus revient à l'identique.
+const TODO_TOUJOURS_VISIBLES=Object.freeze(['drapeau','bilan','overdue']);
+const TODO_GROUPE_SEUIL=3;
+const TODO_ANNULER_MS=6000;
+let _todoDeplie=false;
+// PURE. Les lignes d'entraînement d'un même signal, au-delà de `seuil`
+// athlètes, en une ligne ; à la place de la première, l'ordre reste celui de
+// la gravité. Les lignes de santé ne se regroupent jamais.
+function grouperLignesEntrainement(lignes,seuil){
+  const s=Number(seuil)>0?Number(seuil):TODO_GROUPE_SEUIL;
+  const l=Array.isArray(lignes)?lignes:[];
+  const cle=r=>r.type+'|'+r.label;
+  const n={};
+  for(const r of l) if(r&&!r.sante) n[cle(r)]=(n[cle(r)]||0)+1;
+  const out=[], faits={};
+  for(const r of l){
+    if(!r) continue;
+    if(r.sante||n[cle(r)]<=s){ out.push(r); continue; }
+    const k=cle(r);
+    if(faits[k]){ faits[k].list.push(r.list[0]); continue; }
+    faits[k]={type:r.type,icon:r.icon,color:r.color,label:r.label,list:[r.list[0]],groupe:true,sante:false};
+    out.push(faits[k]);
+  }
+  return out;
+}
+// PURE. Les lignes affichées : toutes celles qui ne comptent pas dans le
+// plafond, et les `max` premières des autres (toutes si `deplie`), DANS
+// L'ORDRE DE `rows`.
+function todoLignesVisibles(rows,max,deplie){
+  const m=Number(max)>0?Number(max):TODO_MAX_LIGNES;
+  let n=0;
+  return (rows||[]).filter(r=>{
+    if(TODO_TOUJOURS_VISIBLES.indexOf(r.type)>=0) return true;
+    if(deplie) return true;
+    n++;
+    return n<=m;
+  });
+}
+function todoDeplier(v){ _todoDeplie=!!v; try{ renderTodoBlock(getClients()); }catch(e){} }
+
+// ── La file d'une ligne groupée : « Athlète suivant » ───────────────────
+let _fileSignal=null;          // {type, label, ids}
+function _entrerFileSignal(idx){
+  const r=(window._todoRows||[])[idx];
+  const ids=((r&&r.list)||[]).map(c=>c&&c.id).filter(Boolean);
+  if(!ids.length){ _fileSignal=null; return false; }
+  _fileSignal={type:r.type,label:r.label,ids};
+  openClientDetail(ids[0]);
+  return true;
+}
+// Les athlètes de la file placés après `idApres`, qui portent ENCORE le signal
+// (non reporté entre-temps) : le compte reste honnête, comme pour les bilans.
+function _fileSignalSuivants(idApres){
+  const f=_fileSignal;
+  if(!f) return [];
+  const i=f.ids.indexOf(idApres);
+  if(i<0) return [];
+  return f.ids.slice(i+1).filter(id=>{
+    try{
+      const c=getOwnedClient(id);
+      return !!c&&_lignesEntrainement([c]).some(r=>r.type===f.type&&r.label===f.label);
+    }catch(e){ return false; }
+  });
+}
+function _rendreFileSignal(id){
+  let z=document.getElementById('ccd-file-signal');
+  const suivants=_fileSignalSuivants(id);
+  const dans=!!(_fileSignal&&_fileSignal.ids.indexOf(id)>=0);
+  if(!dans){ if(z) z.remove(); return false; }
+  if(!z){
+    const tb=document.querySelector('#s-coach-client .topbar');
+    if(!tb) return false;
+    z=document.createElement('div'); z.id='ccd-file-signal'; z.className='td-file';
+    tb.insertAdjacentElement('afterend',z);
+  }
+  const pos=_fileSignal.ids.indexOf(id)+1, tot=_fileSignal.ids.length;
+  z.innerHTML='<span class="td-file-t">'+escapeHtml(_fileSignal.label)+' · '+pos+'/'+tot+'</span>'
+    +(suivants.length?'<button type="button" class="btn btn-outline btn-sm td-file-b" onclick="_allerSignalSuivant()">Athlète suivant → ('+suivants.length+' restant'+(suivants.length>1?'s':'')+')</button>'
+      :'<button type="button" class="btn btn-outline btn-sm td-file-b" onclick="_quitterFileSignal()">Fin de la file</button>');
+  return true;
+}
+function _allerSignalSuivant(){
+  const s=_fileSignalSuivants(currentClientId);
+  if(!s.length){ _quitterFileSignal(); return false; }
+  openClientDetail(s[0]);
+  return true;
+}
+function _quitterFileSignal(){
+  _fileSignal=null;
+  const z=document.getElementById('ccd-file-signal'); if(z) z.remove();
+  try{ retourDe('s-coach-client','s-coach-home'); }catch(e){}
+}
+
+// ── Reporter, et pouvoir revenir en arrière ─────────────────────────────
+// Une copie EXACTE de ce que le report va toucher : les clés d'alertStatus
+// (valeur d'avant, ou absence) et la longueur du journal de douleur.
+function _todoInstantane(type,clients){
+  const st=(currentUser&&currentUser.alertStatus)||{};
+  const cles={};
+  for(const c of clients){
+    const k=type+'-'+c.id;
+    cles[k]=Object.prototype.hasOwnProperty.call(st,k)?JSON.parse(JSON.stringify(st[k])):undefined;
+  }
+  return {cles,avaitStatus:!!(currentUser&&currentUser.alertStatus),
+    journal:Array.isArray(currentUser&&currentUser.journalDouleur)?currentUser.journalDouleur.length:null};
+}
+function _todoRestaurer(inst){
+  if(!inst||!currentUser) return false;
+  if(!inst.avaitStatus){ delete currentUser.alertStatus; }
+  else{
+    if(!currentUser.alertStatus) currentUser.alertStatus={};
+    for(const k of Object.keys(inst.cles)){
+      if(inst.cles[k]===undefined) delete currentUser.alertStatus[k];
+      else currentUser.alertStatus[k]=inst.cles[k];
+    }
+  }
+  if(inst.journal===null) delete currentUser.journalDouleur;
+  else if(Array.isArray(currentUser.journalDouleur)) currentUser.journalDouleur=currentUser.journalDouleur.slice(0,inst.journal);
+  return true;
+}
+let _todoAnnulable=null, _todoAnnulerMinuteur=null;
+// Reporte `clients` pour la ligne `r`, sauvegarde, redessine, propose d'annuler.
+function todoReporter(r,clients){
+  const l=(clients||[]).filter(Boolean);
+  if(!r||r.nonReportable||!l.length) return false;
+  const inst=_todoInstantane(r.type,l);
+  l.forEach(c=>reporterAlerte(r.type,c));
+  saveUser();
+  renderTodoBlock(getClients());
+  _todoAnnulable=inst;
+  _todoProposerAnnuler(l.length>1?l.length+' athlètes reportés de 7 jours':(l[0].fname||'Athlète')+' reporté de 7 jours');
+  return true;
+}
+function todoAnnulerReport(){
+  const inst=_todoAnnulable;
+  _todoAnnulable=null;
+  if(_todoAnnulerMinuteur){ clearTimeout(_todoAnnulerMinuteur); _todoAnnulerMinuteur=null; }
+  const z=document.getElementById('td-annuler'); if(z) z.remove();
+  if(!inst) return false;
+  _todoRestaurer(inst);
+  saveUser();
+  renderTodoBlock(getClients());
+  return true;
+}
+function _todoProposerAnnuler(msg){
+  let z=document.getElementById('td-annuler');
+  if(!z){ z=document.createElement('div'); z.id='td-annuler'; z.className='td-annuler'; z.setAttribute('role','status'); document.body.appendChild(z); }
+  z.innerHTML='<span>'+escapeHtml(msg)+'</span><button type="button" onclick="todoAnnulerReport()">Annuler</button>';
+  if(_todoAnnulerMinuteur) clearTimeout(_todoAnnulerMinuteur);
+  _todoAnnulerMinuteur=setTimeout(()=>{ _todoAnnulerMinuteur=null; _todoAnnulable=null; const x=document.getElementById('td-annuler'); if(x) x.remove(); },TODO_ANNULER_MS);
+}
+// La feuille d'une ligne groupée : une case par athlète, toutes cochées.
+let _todoFeuille=null;         // {r, ids}
+function _todoOuvrirFeuille(r){
+  _todoFeuille={r,ids:r.list.map(c=>c.id)};
+  document.getElementById('modal-overlay')?.remove();
+  const cases=r.list.map(c=>{
+    const ini=(c.lname||'').charAt(0);
+    const nom=((c.fname||'')+(ini?' '+ini+'.':'')).trim()||'Athlète';
+    return '<label class="td-case"><input type="checkbox" checked value="'+escapeHtml(String(c.id))+'" onchange="_todoCocher()"> '+escapeHtml(nom)+'</label>';
+  }).join('');
+  document.body.insertAdjacentHTML('beforeend','<div id="modal-overlay" onclick="_todoFermerFeuille()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Reporter" class="td-feuille">'
+    +'<div class="td-feuille-t">'+escapeHtml(r.label)+'</div>'
+    +'<div class="td-feuille-d">Qui reporter de 7 jours ?</div>'
+    +'<div class="td-cases">'+cases+'</div>'
+    +'<div class="td-feuille-pied"><button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" onclick="_todoFermerFeuille()">Retour</button>'
+    +'<button type="button" id="td-feuille-ok" class="btn btn-red btn-sm" style="flex:1;margin:0" onclick="_todoReporterFeuille()">Reporter 7 jours</button></div>'
+    +'</div></div>');
+}
+function _todoCocher(){
+  const b=document.getElementById('td-feuille-ok');
+  if(b) b.disabled=!document.querySelectorAll('.td-case input:checked').length;
+}
+function _todoFermerFeuille(){ document.getElementById('modal-overlay')?.remove(); _todoFeuille=null; }
+function _todoReporterFeuille(){
+  const f=_todoFeuille;
+  if(!f) return false;
+  const coches=new Set([...document.querySelectorAll('.td-case input:checked')].map(i=>i.value));
+  const l=f.r.list.filter(c=>coches.has(String(c.id)));
+  _todoFermerFeuille();
+  return todoReporter(f.r,l);
+}
+
 function renderTodoBlock(clients){
   _renderPremiersPas(clients);
   try{ renderEntreeRelances(); }catch(e){}
@@ -26634,7 +26836,8 @@ function renderTodoBlock(clients){
       texte:_z+lib.join(' · ')+". Aucun exercice de remplacement n'est proposé."};
   });
   // Puis les signaux d'entrainement : la sante avant l'intendance.
-  rows.push.apply(rows,_lignesEntrainement(clients));
+  // Au-delà de trois athlètes pour un même signal : une ligne, et une file.
+  rows.push.apply(rows,grouperLignesEntrainement(_lignesEntrainement(clients)));
   // En tête des lignes administratives : relancer un inscrit qui n'a jamais démarré prime sur tout le reste.
   const _accProg=_acc.prog.filter(c=>!isAlertSnoozed('accueil_prog',c.id)), _accRet=_acc.retour.filter(c=>!isAlertSnoozed('accueil_retour',c.id));
   if(_accProg.length) rows.push({type:'accueil_prog',icon:icon('clipboard',16),color:'var(--orange)',label:'Programme à écrire',list:_accProg});
@@ -26693,8 +26896,11 @@ function renderTodoBlock(clients){
   if(!rows.length){ window._todoRows=[]; el.innerHTML=''; return; }
   // Un tableau de bord qui affiche trente alertes n'oriente plus rien. Les
   // lignes sont deja triees par gravite : on coupe la queue et on l'annonce.
-  const restant=Math.max(0,rows.length-TODO_MAX_LIGNES);
-  const vues=rows.slice(0,TODO_MAX_LIGNES);
+  // Le drapeau, le nouveau bilan et le bilan en retard ne comptent jamais
+  // dans le plafond ; les autres lignes s'y rangent, dans leur ordre.
+  const vues=todoLignesVisibles(rows,TODO_MAX_LIGNES,_todoDeplie);
+  const restant=rows.length-vues.length;
+  const _repliable=_todoDeplie&&todoLignesVisibles(rows,TODO_MAX_LIGNES,false).length<rows.length;
   window._todoRows=vues;
   const unique=new Set(rows.flatMap(r=>r.list.map(c=>c.id))).size;
   // Le disclaimer est rendu des qu'une ligne de douleur est visible, et il
@@ -26762,6 +26968,8 @@ function renderTodoBlock(clients){
       const nomA=escapeHtml(((_n0.fname||'')+(_ini?' '+_ini+'.':'')).trim()||'Athlète');
       const corps=r.texte
         ? `<div style="flex:1;min-width:0"><span style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${nomA}</span><span style="font-size:var(--fs-sm);font-weight:700;color:${coul}"> · ${r.label}</span><div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:2px">${escapeHtml(r.texte)}</div></div>`
+        : r.groupe
+        ? `<div style="flex:1;min-width:0"><span style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${r.list.length} athlètes</span><span style="font-size:var(--fs-sm);font-weight:700;color:${coul}"> · ${r.label}</span><span style="font-size:var(--fs-xs);color:var(--sub)"> · ${names}</span></div>`
         : `<div style="flex:1;min-width:0"><span style="font-size:var(--fs-sm);font-weight:700;color:var(--text)">${r.list.length>1?r.list.length+' ':''}</span><span style="font-size:var(--fs-sm);font-weight:700;color:${coul}">${r.label}</span><span style="font-size:var(--fs-xs);color:var(--sub)"> · ${names}</span></div>`;
       // L'ICÔNE EST BLANCHE ET ELLE RAYONNE, quelle que soit la bande : la
       // couleur est déjà portée par la colonne et par l'intitulé. Une icône
@@ -26772,6 +26980,8 @@ function renderTodoBlock(clients){
       // LA LIGNE DES BILANS POSE LA FILE au passage. Les autres lignes ouvrent
       // la fiche comme avant : elles ne décrivent pas une série à traiter.
       onClick:r.type==='bilan'?`_entrerFileBilans(${idx})`
+        // Une ligne groupée ouvre sa file : un athlète, puis « Athlète suivant ».
+        :r.groupe?`_entrerFileSignal(${idx})`
         // La file de correction des videos est deja ecrite : la ligne y entre,
         // elle n'ouvre pas une fiche que le coach devrait ensuite fouiller.
         :r.type==='videos'?`_entrerFileVideos()`
@@ -26786,7 +26996,8 @@ function renderTodoBlock(clients){
       :`<div style="padding:10px 12px;font-size:var(--fs-xs);color:var(--text-faint)">${b.total?'+ '+b.total+' plus bas':'Rien ici'}</div>`}
     </div>`).join('')}
     </div>
-    ${restant?`<div style="padding:8px 14px;font-size:var(--fs-xs);color:var(--sub);border-top:1px solid #180000">+ ${restant} autre${restant>1?'s':''}</div>`:''}
+    ${restant?`<button type="button" class="td-plus" onclick="todoDeplier(true)" aria-expanded="false">+ ${restant} autre${restant>1?'s':''}</button>`
+      :_repliable?`<button type="button" class="td-plus" onclick="todoDeplier(false)" aria-expanded="true">Réduire la liste</button>`:''}
     ${aDrapeau?`<div style="padding:8px 14px;border-top:1px solid #180000">${blocDisclaimerSante()}</div>`:''}
     ${aDouleur?`<div style="padding:8px 14px;border-top:1px solid #180000">${blocDisclaimerDouleur()}</div>`:''}
   </div>`;
@@ -31006,6 +31217,8 @@ function openClientDetail(cid,_refresh,_force){
   try{ renderMotCoachFiche(c); }catch(e){}
   try{ renderRelanceFiche(c); }catch(e){}
   try{ renderAccueilFiche(c); }catch(e){}
+  // La file d'une ligne groupée « À traiter » (Athlète suivant).
+  try{ _rendreFileSignal(c.id); }catch(e){}
   try{ renderPaiementsFiche(c); }catch(e){}
   try{ renderDouleurCoach(c); }catch(e){}
   try{ renderLeveeCoach(c); }catch(e){}
