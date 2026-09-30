@@ -122238,16 +122238,53 @@ function saveCoachBanners(){
 // Un seul identifiant dans toute l'application — un second, reste dans la
 // vitrine, aurait fait afficher les memes bannieres a deux endroits, et le
 // premier trouve aurait decide lequel.
+// LE CARROUSEL (Kevin, 30/09/2026) : les bannieres ne s'empilent plus, elles
+// se relaient au meme endroit, une toutes les PROMO_DEFILE_MS. Toutes sont
+// posees dans la meme case de grille : la hauteur est celle de la plus haute,
+// et rien ne saute quand l'une remplace l'autre. Une seule banniere : pas de
+// carrousel, pas de points.
+const PROMO_DEFILE_MS=9000;
+let _promoMinuteur=null, _promoIdx=0;
+function _promoMontrer(n){
+  const el=document.getElementById('clh-promo-banners');
+  if(!el) return;
+  const items=el.querySelectorAll('.promo-item'), pts=el.querySelectorAll('.promo-pt');
+  if(!items.length) return;
+  _promoIdx=((n%items.length)+items.length)%items.length;
+  items.forEach((it,k)=>{ const on=k===_promoIdx; it.classList.toggle('on',on); it.setAttribute('aria-hidden',on?'false':'true');
+    it.querySelectorAll('a').forEach(a=>{ a.tabIndex=on?0:-1; }); });
+  pts.forEach((p,k)=>p.setAttribute('aria-current',k===_promoIdx?'true':'false'));
+}
+function _promoRelancer(){
+  if(_promoMinuteur){ clearInterval(_promoMinuteur); _promoMinuteur=null; }
+  const el=document.getElementById('clh-promo-banners');
+  if(!el||el.querySelectorAll('.promo-item').length<2) return;
+  _promoMinuteur=setInterval(()=>{
+    const z=document.getElementById('clh-promo-banners');
+    if(!z||!z.isConnected||z.querySelectorAll('.promo-item').length<2){ clearInterval(_promoMinuteur); _promoMinuteur=null; return; }
+    // Onglet cache ou accueil hors de l'ecran : on ne tourne pas dans le vide.
+    if(document.hidden||!z.offsetParent) return;
+    _promoMontrer(_promoIdx+1);
+  },PROMO_DEFILE_MS);
+}
+// Un point touche : on y va, et le compte des 9 secondes repart de zero.
+function promoAller(n){ _promoMontrer(n); _promoRelancer(); }
 function _renderPromoBanners(coach){
   const el=document.getElementById('clh-promo-banners');
   if(!el) return;
   const banners=(coach?.promoBanners||[]).filter(b=>b.imageUrl);
-  if(!banners.length){el.style.display='none';return;}
+  if(!banners.length){el.style.display='none';el.innerHTML='';_promoRelancer();return;}
   el.style.display='block';
-  el.innerHTML=banners.map(b=>{
-    const img=`<img src="${escapeHtml(b.imageUrl)}" style="width:100%;height:auto;display:block;border-radius:var(--r-2);border:1px solid var(--border)" onerror="this.style.display='none'">`;
-    return `<div style="margin:0 0 8px">${b.linkUrl?`<a href="${safeUrl(b.linkUrl)}" target="_blank" rel="noopener" style="display:block">${img}</a>`:img}</div>`;
+  const items=banners.map((b,k)=>{
+    const img=`<img src="${escapeHtml(b.imageUrl)}" alt="" style="width:100%;height:auto;display:block;border-radius:var(--r-2);border:1px solid var(--border)" onerror="this.style.display='none'">`;
+    return `<div class="promo-item${k===0?' on':''}" aria-hidden="${k===0?'false':'true'}">${b.linkUrl?`<a href="${safeUrl(b.linkUrl)}" target="_blank" rel="noopener" style="display:block"${k===0?'':' tabindex="-1"'}>${img}</a>`:img}</div>`;
   }).join('');
+  const pts=banners.length>1
+    ?'<div class="promo-pts">'+banners.map((b,k)=>`<button type="button" class="promo-pt" aria-label="Bannière ${k+1}" aria-current="${k===0?'true':'false'}" onclick="promoAller(${k})"></button>`).join('')+'</div>'
+    :'';
+  el.innerHTML=`<div class="promo-pile">${items}</div>${pts}`;
+  _promoIdx=0;
+  _promoRelancer();
 }
 function uploadAthletePhoto(input){
   const f=input.files[0];if(!f) return;
