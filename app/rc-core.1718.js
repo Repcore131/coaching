@@ -52841,10 +52841,22 @@ function calEnregistrer(idx){
 // Attention : le calculateur « Calculer ma charge » (openCalc) utilise, lui, une table
 // de pourcentages, un autre modèle. C'est pourquoi aucune valeur en kg n'est
 // affichée par la détection de plateau : elle contredirait ce calculateur.
+// ET DEUX BORNES (30/09/2026) : une série à 0 répétition n'est pas une mesure
+// (0, et non plus w × (1 + RIR/30)) ; un single (reps + RIR ≤ 1) vaut sa
+// charge, sans les 3,3 % qu'Epley lui ajoute.
 function e1rm(poids,reps,rir){
-  const w=parseFloat(poids)||0, r=parseFloat(reps)||0, i=parseFloat(rir)||0;
-  if(w<=0) return 0;
-  return w*(1+(r+Math.max(0,i))/30);
+  const w=parseFloat(poids)||0, r=parseFloat(reps)||0, i=Math.max(0,parseFloat(rir)||0);
+  if(w<=0||r<=0) return 0;
+  const n=r+i;                  // les répétitions potentielles
+  if(n<=1) return w;
+  return w*(1+n/30);
+}
+// LA RÉCIPROQUE, UNE SEULE FOIS : la charge qui donne cet e1RM à `reps`
+// répétitions et `rir` de réserve. Mêmes bornes que e1rm().
+function chargePourReps(e1rmKg,reps,rir){
+  const e=Number(e1rmKg)||0, n=(Number(reps)||0)+Math.max(0,Number(rir)||0);
+  if(e<=0) return 0;
+  return n<=1?e:e/(1+n/30);
 }
 const PERF_REPS_MAX_E1RM=12;  // au-delà, l'e1RM n'est plus fiable
 // LA BORNE, UNE SEULE FOIS : répétitions + RIR ≤ 12. Elle était comparée à la
@@ -52862,8 +52874,9 @@ function e1rmFiable(reps,rir){
 // auditer les appelants pour savoir lesquels corrigeaient par accident — il
 // n'y en a aucun, par construction.
 function _perfRir(s,user){
-  // '' et absent donnent 0, donc « à l'échec ». Avec la formule du lot T1, c'est
-  // l'estimation la PLUS BASSE (une réserve inconnue ne s'ajoute pas). Écarter
+  // '' et absent donnent 0, donc « à l'échec ». Avec la formule du lot T1, un RIR
+  // vide SOUS-ESTIME l'e1RM (une réserve inconnue ne s'ajoute pas) ; l'ancienne
+  // formule le surestimait. Écarter
   // du maximum les séances où le RIR est majoritairement vide reste utile : ces
   // séances-là ne disent pas où l'athlète en était.
   const brut=(s&&s.rir==='echec')?0:(parseInt(s&&s.rir)||0);
@@ -52884,9 +52897,12 @@ function perfExercice(sess,exNom,user){
     if(!s||s.done!==true) continue;
     const w=parseFloat(s.weight);
     if(!(w>0)) continue;
+    // Un essai raté (0 répétition) n'est pas une mesure : il ne devient pas le
+    // meilleur score (même règle que recordsExercice).
+    const r=_perfReps(s);
+    if(!(r>0)) continue;
     retenues++;
     if(s.rir===''||s.rir==null) sansRir++;
-    const r=_perfReps(s);
     const m=e1rmFiable(r,_perfRir(s,user))?'e1RM':'volume-serie';
     vus[m]=true;
     const v=m==='e1RM'?e1rm(w,r,_perfRir(s,user)):w*r;
@@ -85403,8 +85419,8 @@ function recordAPorteeExo(u,nomEx,reps,maintenant){
   // conversion inverse aussi.
   const rirs=der.map(x=>x.rir).sort((a,b)=>a-b);
   const rirRef=rirs[Math.floor(rirs.length/2)]||0;
-  // La réciproque exacte de e1rm() : charge = e1RM / (1 + (reps + RIR)/30).
-  const tendance=tr.projection/(1+(r+rirRef)/30);
+  // La réciproque exacte de e1rm(), en un seul endroit : chargePourReps.
+  const tendance=chargePourReps(tr.projection,r,rirRef);
   const plafond=recKg*(1+RAP_PLAFOND);
   const charge=arrondiAuPas(Math.min(tendance,plafond));
   if(!(charge>recKg)) return null;

@@ -20899,9 +20899,9 @@ async function testExercices(){
     ok('Bascule de métrique à 12 reps : encore e1RM',_pf(60,12,'0').metrique==='e1RM');
     ok('Bascule de métrique à 13 reps : volume-serie',_pf(60,13,'0').metrique==='volume-serie');
     ok('r=13 vaut charge × reps',_pf(60,13,'0').score===780);
-    ok('r=1 reste en e1RM',_pf(100,1,'0').metrique==='e1RM');
-    ok('r=0 reste en e1RM et vaut la charge',
-       _pf(100,0,'0').metrique==='e1RM'&&Math.abs(_pf(100,0,'0').score-100)<1e-9);
+    ok('r=1 reste en e1RM, et vaut sa charge',_pf(100,1,'0').metrique==='e1RM'&&_pf(100,1,'0').score===100);
+    // Depuis le 30/09/2026 : une série à 0 répétition n'est pas une mesure (essai raté).
+    ok('r=0 : la série est ignorée, pas de score',_pf(100,0,'0')===null);
     // RIR : 'echec' vaut 0, une valeur vide aussi (l'estimation la plus basse depuis T1)
     ok('RIR « echec » compte comme 0',_pf(60,10,'echec').score===_pf(60,10,'0').score);
     ok('RIR vide compte comme 0',_pf(60,10,'').score===_pf(60,10,'0').score);
@@ -20933,6 +20933,24 @@ async function testExercices(){
     ok('T1 — calcSug n’existe plus : chargeSuivante est le seul moteur des charges proposées',typeof calcSug==='undefined');
     ok('T1 — la borne : répétitions + RIR ≤ 12',e1rmFiable(12,0)&&e1rmFiable(10,2)&&!e1rmFiable(10,3)&&!e1rmFiable(13,0)&&e1rmFiable(8,'')&&e1rmFiable(0,0));
     ok('e1rm sur charge nulle ou négative rend 0',e1rm(0,10,1)===0&&e1rm(-5,10,1)===0);
+    // ── L'e1RM SUR RÉPÉTITIONS POTENTIELLES : les bornes et la réciproque ──
+    ok('e1RM : 100×8@0 ≈ 126,67 ; 100×8@2 ≈ 133,33 ; 100×5@3 ≈ 126,67',
+       Math.abs(e1rm(100,8,0)-126.667)<0.01&&Math.abs(e1rm(100,8,2)-133.333)<0.01&&Math.abs(e1rm(100,5,3)-126.667)<0.01);
+    ok('e1RM : un single vaut sa charge, 0 répétition vaut 0',e1rm(100,1,0)===100&&e1rm(100,0,0)===0&&e1rm(100,0,3)===0&&e1rm(100,'',0)===0);
+    ok('e1RM : plus de réserve, plus d’e1RM (monotonie)',e1rm(100,8,3)>e1rm(100,8,0)&&e1rm(100,8,1)>e1rm(100,8,0));
+    ok('chargePourReps est la réciproque de e1rm',Math.abs(chargePourReps(e1rm(80,10,2),10,2)-80)<1e-9
+       &&chargePourReps(120,1,0)===120&&chargePourReps(0,5,0)===0&&Math.abs(chargePourReps(e1rm(100,5,3),8,0)-100)<1e-9);
+    ok('perfExercice ignore un essai raté (0 répétition)',(()=>{
+      const p=perfExercice({data:{'X':{sets:[{done:true,weight:'140',reps:'0',rir:'3'},{done:true,weight:'100',reps:'5',rir:'0'}]}}},'X');
+      if(!p||Math.abs(p.score-e1rm(100,5,0))>1e-9) return _echec(JSON.stringify(p));
+      return perfExercice({data:{'X':{sets:[{done:true,weight:'140',reps:'0',rir:'0'}]}}},'X')===null?true:_echec('un seul essai raté fait un score');})());
+    ok('Scénario : 100×8@0 puis trois séances à 100×8@3 sur 28 jours, pas de régression',(()=>{
+      const t0=Date.parse('2026-06-01T18:00:00Z'), J=864e5;
+      const S=(j,rir)=>({id:'e1s'+j,date:t0+j*J,slot:0,name:'P',data:{'EX':{sets:[{done:true,weight:'100',reps:'8',rir:String(rir)}]}}});
+      const ses=[S(0,0),S(9,3),S(18,3),S(28,3)];
+      _viderCachePlateau();
+      const e=etatExercice({email:'e1-scen@t.fr',exAlias:{},exMuscles:{},sessions:ses},'EX',0,'P');
+      return (e&&e.etat!=='regression')?true:_echec('état : '+(e&&e.etat));})());
 
     // ── etatExercice : les cinq sorties ──
     // Critère 1 : 3 séances sur 30 jours → insuffisant
@@ -51302,7 +51320,7 @@ async function testExercices(){
       const u2={email:'t1-rite2@t.fr',sessions:[S(0,100,5,0),S(40,105,5,0)]};
       if(_riteRecords(u2,t0+30*J,t0+50*J).length!==1) return _echec('un vrai record disparaît');
       // La réciproque du record à portée : charge = e1RM / (1 + (reps + RIR)/30).
-      return /tr\.projection\/\(1\+\(r\+rirRef\)\/30\)/.test(String(recordAPorteeExo))?true:_echec('conversion inverse');})());
+      return String(recordAPorteeExo).indexOf('chargePourReps(tr.projection,r,rirRef)')>=0?true:_echec('conversion inverse');})());
     ok('T1 — le scénario : 3 semaines à 100 × 8 à l’échec, puis 3 à 100 × 7 à RIR 2 : plus de fausse régression',(()=>{
       const t0=Date.parse('2026-06-01T18:00:00Z'), J=864e5;
       const S=(j,reps,rir)=>({id:'t1s'+j,date:t0+j*J,slot:0,name:'P',data:{'EX':{sets:[{done:true,weight:'100',reps:String(reps),rir:String(rir)}]}}});
@@ -53816,8 +53834,8 @@ async function testExercices(){
     const _CAS=(sem,exos,dur)=>{ const d=_datePlusJours(_CAL,-7*sem+1).getTime()+18*3600e3;
       const data={}; for(const [nm,kg,reps] of exos) data[nm]={sets:[{weight:String(kg),reps:String(reps),done:true}]};
       return {date:d,duration:dur==null?60:dur,data}; };
-    // Une charge dont l'e1RM (1 rép, RIR 0) vaut exactement `e`.
-    const _CAK=e=>Math.round(e*30/31*1000)/1000;
+    // Une charge dont l'e1RM (1 rép, RIR 0) vaut exactement `e` : depuis le 30/09/2026, un single vaut sa charge (plus de × 31/30).
+    const _CAK=e=>Math.round(e*1000)/1000;
     ok('Carte : la courbe douce — 1 à 99, 79 à la référence, 90 à une fois et demie, jamais 100',(()=>{
       if(carteCourbe(0)!==1||carteCourbe(-3)!==1) return _echec('zéro');
       if(carteCourbe(1)!==79||carteCourbe(1.5)!==90||carteCourbe(2)!==95) return _echec(carteCourbe(1)+' '+carteCourbe(1.5)+' '+carteCourbe(2));
