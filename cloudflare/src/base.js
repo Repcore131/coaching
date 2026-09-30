@@ -1,3 +1,9 @@
+// ⚠ TOUTE ECRITURE DANS users/<cle> POSE updatedAt (30/09/2026). L'app ne
+//   redescend un dossier que si son updatedAt distant a change (syncUser,
+//   pullUpdatedAt) : une ecriture du serveur sans lui — un statut PayPal, une
+//   attribution annulee — restait invisible sur le telephone, puis etait
+//   effacee par le PUT suivant de l'app. Dans la meme ecriture multi-chemins :
+//   { ['users/'+cle+'/champ']: v, ['users/'+cle+'/updatedAt']: t }.
 // ══ LA BASE, PAR L'API REST ═══════════════════════════════════════════════
 //
 // Le serveur léger (Cloudflare Worker) n'a pas le SDK d'administration de
