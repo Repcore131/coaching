@@ -20939,6 +20939,51 @@ async function testExercices(){
     ok('T1 — calcSug n’existe plus : chargeSuivante est le seul moteur des charges proposées',typeof calcSug==='undefined');
     ok('T1 — la borne : répétitions + RIR ≤ 12',e1rmFiable(12,0)&&e1rmFiable(10,2)&&!e1rmFiable(10,3)&&!e1rmFiable(13,0)&&e1rmFiable(8,'')&&e1rmFiable(0,0));
     ok('e1rm sur charge nulle ou négative rend 0',e1rm(0,10,1)===0&&e1rm(-5,10,1)===0);
+    // ── LA FORMULE DU MÉTABOLISME, CHOISIE PAR DOSSIER ──
+    const _MBa=(kg,cm,o)=>Object.assign({id:'mbA',email:'mba@t.fr',role:'athlete',gender:'H',_evol_gender:'H',
+      _evol_height:String(cm),'init-age':40,sessions_config:[],
+      bilans:[{type:'debut',date:Date.now()-60*864e5,'deb-weight':String(kg),'deb-height':String(cm),'deb-age':'40','deb-gender':'Homme'}],
+      weightLog:[{date:localISODate(new Date()),kg}],nutrition:{cycle:false}},o||{});
+    ok('Formules : Mifflin et Harris-Benedict donnent les valeurs de référence',
+      mbMifflin(80,180,30,'H')===1780&&mbHarrisBenedict(80,180,30,'H')===1858
+      &&mbMifflin(60,165,25,'F')===1345&&mbHarrisBenedict(120,175,40,'H')===2313);
+    ok('Formule par dossier : IMC ≥ 30 → Mifflin ; sinon la constante ; le réglage du coach prime ; un seul chemin',(()=>{
+      const gros=_MBa(120,175);
+      if(mbFormuleDe(gros)!=='mifflin') return _echec('IMC 39 : '+mbFormuleDe(gros));
+      const t=cibleTableur(gros,{appliquerPlancher:false});
+      if(t.mbSource!=='mifflin'||t.mb!==mbMifflin(120,175,40,'H')) return _echec('cibleTableur : '+t.mbSource+' '+t.mb);
+      const b=besoinsProposes(gros,{appliquerPlancher:false});
+      if(b.source!=='mifflin') return _echec('besoinsProposes : '+b.source);
+      const mince=_MBa(75,180);
+      if(mbFormuleDe(mince)!==MB_FORMULE) return _echec('IMC 23 : '+mbFormuleDe(mince));
+      const force=_MBa(120,175,{nutrition:{cycle:false,tableur:{formuleMB:'harris'}}});
+      if(mbFormuleDe(force)!=='harris'||cibleTableur(force,{appliquerPlancher:false}).mbSource!=='harris') return _echec('réglage du coach');
+      if(besoinsProposes(force,{appliquerPlancher:false}).source!=='harris') return _echec('besoinsProposes suit le réglage');
+      // Plus aucun chemin ne lit la constante sans passer par le dossier.
+      const src=_prodSrc();
+      if(/mbSource=MB_FORMULE|source=MB_FORMULE/.test(src)) return _echec('un chemin lit encore MB_FORMULE');
+      if(String(_depensePourPlafond).indexOf('mbEstime(poids,taille,age,sexe,user)')<0) return _echec('_depensePourPlafond');
+      return true;})());
+    ok('Le nom affiché est celui de la formule qui a calculé (Harris-Benedict, pas Mifflin)',(()=>{
+      const sv=currentUser;
+      try{
+        const u=_MBa(75,180,{nutrition:{cycle:false,tableur:{formuleMB:'harris'}}});
+        currentUser=u;
+        const h=_htmlDepartAthlete(u.nutrition);
+        if(!h) return _echec('la carte ne se rend pas');
+        if(h.indexOf('Harris-Benedict')<0||/Mifflin/.test(h)) return _echec(h.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').slice(0,200));
+        u.nutrition.tableur.formuleMB='mifflin';
+        const h2=_htmlDepartAthlete(u.nutrition);
+        return (h2.indexOf('Mifflin-St Jeor')>=0&&!/Harris/.test(h2))?true:_echec('en Mifflin');
+      } finally { currentUser=sv; }})());
+    ok('Tableau du coach : le sélecteur « Formule du métabolisme » et l’écart entre les deux formules',(()=>{
+      const c=_MBa(80,180,{nutrition:{cycle:false}});
+      const d=document.createElement('div'); d.innerHTML=_htmlTableauxTableur(c);
+      const s=d.querySelector('#tbk-formule');
+      if(!s) return _echec('pas de sélecteur');
+      if([...s.options].map(o=>o.value).join()!==',harris,mifflin') return _echec('options');
+      const e=_htmlEcartFormules(cibleTableur(c,{appliquerPlancher:false}));
+      return /écart de \d+ kcal/.test(e)&&/Formule du métabolisme/.test(d.textContent)?true:_echec('écart : '+e);})());
     // ── L'OBJECTIF DE L'ATHLÈTE CHANGE VRAIMENT SES CIBLES ──
     const _OBJa=(obj,o)=>Object.assign({id:'objA',email:'obja@t.fr',role:'athlete',gender:'H',_evol_gender:'H',
       _evol_height:'180','init-age':30,sessions_config:[],
@@ -33664,8 +33709,9 @@ async function testExercices(){
           return _echec('la note des estimations manque');
         // LES LIGNES PORTENT LEUR ICONE, sans changer leur texte.
         const fac=par('Facteurs');
-        if(fac.querySelectorAll('tbody tr .tbk-ri svg').length!==5)
-          return _echec('les cinq facteurs n’ont pas tous leur icône');
+        // SIX depuis le 30/09/2026 : la ligne « Formule du métabolisme ».
+        if(fac.querySelectorAll('tbody tr .tbk-ri svg').length!==6)
+          return _echec('les six facteurs n’ont pas tous leur icône');
         const poids=[...fac.querySelectorAll('tbody tr')].find(r=>/Poids/.test(r.textContent));
         if(!poids||!poids.querySelector('.tbk-v')) return _echec('le poids n’est pas dans sa case');
         if(poids.textContent.replace(/\s+/g,' ').trim()!=='Poidsdernière pesée enregistrée100,9 kg')
