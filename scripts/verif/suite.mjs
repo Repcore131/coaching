@@ -22,6 +22,12 @@ await cmd('Network.setCacheDisabled', { cacheDisabled: true });
 // a l'heure d'ete passait donc au vert sans rien avoir traverse, y compris avec
 // une division brute de millisecondes. Le fuseau est celui des utilisateurs.
 await cmd('Emulation.setTimezoneOverride', { timezoneId: 'Europe/Paris' });
+// LA FENETRE. Par defaut 800x600, comme avant ; la CI passe VW=1280 VH=2000 :
+// a 800x600, un test de la liste de gene ne trouve pas son bouton hors champ
+// et interrompt la suite (constate le 30/09/2026).
+if (process.env.VW || process.env.VH)
+  await cmd('Emulation.setDeviceMetricsOverride', { width: +(process.env.VW || 800), height: +(process.env.VH || 600),
+    deviceScaleFactor: 1, mobile: false });
 await new Promise(r => setTimeout(r, 6000));
 const ev = async x => {
   const r = await cmd('Runtime.evaluate',
@@ -82,4 +88,7 @@ const rap = await ev(`(async()=>{ try{ const r=await chargerTests();
   catch(e){ return {erreur:String(e&&e.message||e)}; } })()`);
 console.log(JSON.stringify(rap, null, 1).slice(0, 12000));
 await fetch(`http://127.0.0.1:${port}/json/close/${t.id}`);
-process.exit(0);
+// LE CODE DE SORTIE DIT LE RESULTAT (30/09/2026) : la CI le lit. Une suite
+// interrompue (erreur, ou moins de 1000 tests joues) est un echec aussi.
+const MIN = +(process.env.SUITE_MIN || 1000);
+process.exit(rap && !rap.erreur && rap.echecs === 0 && rap.total >= MIN ? 0 : 1);

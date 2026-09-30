@@ -9001,6 +9001,24 @@ async function testExercices(){
             return ids==='L,S,S0'?true:_echec('PUT : '+ids);
           } finally { _eRanger(sv); }
         });
+        okA('Sans base (a bis) : après le PUT, la copie locale INTÈGRE ce que l’union a pris au serveur (banc-sync)',async()=>{
+          const sv=_eMonter();
+          try{
+            const srv=_fauxRTDB(_eDoc(['S0','S'],1500));
+            window.fetch=srv.fetch;
+            currentUser={email:'autre@t.fr',role:'coach'};
+            localStorage.removeItem(CLOUD._cleBase('etag@t.fr')); delete CLOUD._histBases['etag@t.fr'];
+            const local=_eDoc(['L'],Date.now());
+            localStorage.setItem('rc_users',JSON.stringify({'etag@t.fr':JSON.parse(JSON.stringify(local))}));
+            await CLOUD._doPushOne('etag@t.fr',local,false,{base:null});
+            const apres=_eIds((DB.get('users')||{})['etag@t.fr']);
+            if(apres!=='L,S,S0') return _echec('copie locale après envoi : '+apres+' (la base porte S et S0, la copie non)');
+            // La descente suivante ne les retire donc plus.
+            const b=CLOUD._lireBase('etag@t.fr');
+            const f=syncFusion(b.h,(DB.get('users')||{})['etag@t.fr'],srv.val);
+            return _eIds(f)==='L,S,S0'?true:_echec('descente suivante : '+_eIds(f));
+          } finally { _eRanger(sv); }
+        });
         okA('Garde (b) : local plus pauvre mais plus récent → le rattrapage (syncUser) est appelé',async()=>{
           const sv=_eMonter(); const svSync=CLOUD.syncUser;
           try{
