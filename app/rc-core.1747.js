@@ -3820,15 +3820,43 @@ const CLOUD={
     catch{return [];}
   },
   _ecrireFile(liste){
-    // Bornée à 50 : une file non bornée finirait par saturer le stockage qu'elle
-    // est justement censée soulager. On garde les plus récentes.
-    try{localStorage.setItem(this._QUEUE_KEY,JSON.stringify(liste.slice(-50)));}catch{}
+    // BORNEE A 500 (30/09/2026 ; elle l'etait a 50) : un coach a plus de
+    // cinquante athletes perdait les plus anciennes clefs. Une file non bornee
+    // finirait par saturer le stockage qu'elle est censee soulager : on garde
+    // les plus recentes — MAIS JAMAIS SANS LA CLEF DE L'UTILISATEUR COURANT.
+    let l=liste.slice(-CLOUD_FILE_MAX);
+    try{
+      const cur=(typeof currentUser==='object'&&currentUser&&currentUser.email)||'';
+      if(cur&&liste.includes(cur)&&!l.includes(cur)){ l=l.slice(1); l.unshift(cur); }
+    }catch(e){}
+    try{localStorage.setItem(this._QUEUE_KEY,JSON.stringify(l));}catch{}
+    try{ _majIndicAttente(); }catch(e){}
   },
+  // LE JOURNAL D'ECRITURE ANTICIPEE (30/09/2026). La clef entre en file AVANT
+  // tout reseau, et n'en sort qu'apres un PUT accepte (_defiler, apres r.ok) ou
+  // un refus delibere. Une app tuee en plein envoi — onglet ferme, telephone
+  // qui coupe l'app en arriere-plan — laisse donc la clef en file, et viderFile
+  // renvoie le dossier au demarrage suivant. Avant, la clef n'entrait qu'a
+  // l'ECHEC constate : un envoi abandonne en vol ne laissait aucune trace.
   _enfiler(email){
     if(!email) return;
     const f=this._lireFile();
     if(f.includes(email)) return;
     f.push(email);this._ecrireFile(f);
+    this._syncFond();
+  },
+  // BACKGROUND SYNC : le navigateur reveille le service worker quand le reseau
+  // revient, meme app en arriere-plan ; le SW demande alors aux pages ouvertes
+  // de vider la file (lui-meme ne peut pas : jeton et fusion vivent ici).
+  // Sans l'API (Safari), rien : le demarrage et le retour au premier plan
+  // restent les filets.
+  _syncFond(){
+    try{
+      if(!('serviceWorker' in navigator)) return;
+      navigator.serviceWorker.ready
+        .then(reg=>{ if(reg&&reg.sync&&typeof reg.sync.register==='function') return reg.sync.register('rc-sync'); })
+        .catch(()=>{});
+    }catch(e){}
   },
   _defiler(email){
     const f=this._lireFile();
@@ -4265,6 +4293,8 @@ const CLOUD={
     }catch(e){}
     const key='_one_'+email;
     clearTimeout(this._pushTimers?.[key]);
+    // EN FILE AVANT TOUT RESEAU : voir _enfiler.
+    this._enfiler(email);
     const p=this._doPushOne(email,user);
     // Filet unique pour la trentaine d'appelants « fire-and-forget » : attacher
     // ici un gestionnaire marque la promesse comme traitée, donc aucun rejet non
@@ -4361,6 +4391,8 @@ const CLOUD={
     // seance que l'athlete vient d'envoyer, la reponse du coach a un bilan. La
     // fusion l'effacerait du serveur, puis de l'autre appareil.
     if(!_tour){
+      // EN FILE AVANT TOUT RESEAU (journal d'ecriture anticipee, voir _enfiler).
+      this._enfiler(email);
       const tour={base:this._baseDe(email,user)};
       return this._aTonTour(email,()=>this._doPushOne(email,user,rattrapage,tour));
     }
@@ -4835,6 +4867,9 @@ const CLOUD={
       // Branché ici et non au seul garde de jeton : le même entonnoir couvre
       // le réseau coupé et les 5xx, qui sont les causes les plus fréquentes.
       if(!e||!e._nonRejouable){this._enfiler(email);this._queueRetry();}
+      // Un refus DELIBERE ne se rejoue pas : il se reproduirait a chaque palier.
+      // La clef posee avant l'envoi sort donc de la file.
+      else this._defiler(email);
       throw e;
     }
   },
@@ -6271,6 +6306,8 @@ function reinjecterSeancesSession(dossier,session){
 // Trois 412 de suite sur le meme dossier : l'envoi repart par la file de relance.
 // Une base non servie depuis trente jours est la premiere a partir, stockage plein.
 const SYNC_BASE_INUTILE_MS=30*864e5;
+// La file d'envoi : cinq cents dossiers au plus (un coach et ses athletes).
+const CLOUD_FILE_MAX=500;
 const CLOUD_CONFLITS_MAX=3;
 const DB={
   // N3.4 — LES DEUX CLEFS QUI PORTENT DES DOSSIERS SONT REMISES A PLAT ICI.
@@ -7382,6 +7419,32 @@ let woState={exercises:[],currentEx:0,startTime:null,timerInterval:null,sessionD
 window.addEventListener('offline',()=>{
   CLOUD._setSyncStatus(false);
 });
+// ── « n envois en attente », RETABLI (30/09/2026) ─────────────────────────
+// Le commentaire ci-dessus le reconnaissait : hors ligne, plus rien ne disait a
+// l'athlete que ses donnees attendaient. Une pastille discrete, seulement
+// quand la file n'est pas vide, et seulement cote athlete (le coach a ses
+// badges). Elle se met a jour a chaque ecriture de la file.
+function _majIndicAttente(){
+  let n=0; try{ n=CLOUD.enAttenteDeSync(); }catch(e){ n=0; }
+  let z=document.getElementById('rc-attente');
+  const athlete=!!(typeof currentUser==='object'&&currentUser&&currentUser.email&&currentUser.role!=='coach');
+  if(!n||!athlete){ if(z) z.hidden=true; return 0; }
+  if(!z){
+    z=document.createElement('div');
+    z.id='rc-attente'; z.className='rc-attente';
+    z.setAttribute('role','status'); z.setAttribute('aria-live','polite');
+    document.body.appendChild(z);
+  }
+  z.textContent=n+' envoi'+(n>1?'s':'')+' en attente';
+  z.hidden=false;
+  return n;
+}
+// LE SERVICE WORKER DEMANDE DE VIDER LA FILE (Background Sync, voir _syncFond).
+try{
+  if('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message',ev=>{
+    if(ev&&ev.data&&ev.data.rc==='vider-file'&&CLOUD.enAttenteDeSync()>0) CLOUD.viderFile().catch(()=>{});
+  });
+}catch(e){}
 window.addEventListener('online',async()=>{
   // Le réseau est revenu : renvoyer maintenant, sans attendre le prochain
   // palier de _queueRetry qui peut être à dix minutes.
@@ -7391,7 +7454,7 @@ window.addEventListener('online',async()=>{
       const u=(DB.get('users')||{})[currentUser.email]||currentUser;
       await CLOUD._doPushOne(currentUser.email,u);
     }
-    await CLOUD.viderFile();
+    if(CLOUD.enAttenteDeSync()>0) await CLOUD.viderFile();
   }catch(e){
     // Réseau annoncé revenu mais serveur injoignable : _doPushOne a déjà réarmé
     // la relance. Il n'y a plus rien à afficher, mais l'état interne, lui, doit
@@ -7804,6 +7867,9 @@ window.onload=()=>{
         // d’arrière-plan qu’un jour a pu passer, et ces deux gardes sortent
         // tôt — l’un pendant 60 s, l’autre dès que le réseau manque.
         try{ _repeindreSiJourChange(); }catch(e){}
+        // LA FILE D'ENVOI D'ABORD : ce qui n'est pas parti avant la mise en
+        // arriere-plan repart des le retour (30/09/2026).
+        try{ if(CLOUD.enAttenteDeSync()>0) CLOUD.viderFile().catch(()=>{}); }catch(e){}
         // La descente, ses deux gardes ET LE REPEINT : voir _descenteAuRetour.
         _descenteAuRetour().catch(()=>{});
       });
@@ -9038,6 +9104,9 @@ function _majTabbar(id){
 }
 function go(id){
   try{ lectureCacher(); }catch(e){}
+  // La pastille « n envois en attente » suit le compte affiche (connexion,
+  // deconnexion, changement de compte).
+  try{ setTimeout(_majIndicAttente,0); }catch(e){}
   // Le temps du coach : relu APRÈS le changement d'écran (segment fermé ou ouvert).
   try{ setTimeout(_chronoTick,0); }catch(e){}
   // ON NE VIDE QUE SI L ON QUITTE LE MODULE. Naviguer de la nutrition vers la

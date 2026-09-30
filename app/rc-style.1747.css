@@ -5675,6 +5675,11 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 #s-client-home[data-demarrage] #clh-phrase,
 #s-client-home[data-demarrage] #clh-first-bilan-card,
 #s-client-home[data-demarrage] #clh-reprise{display:none!important}
+/* « n envois en attente » (30/09/2026) : discret, au-dessus de la barre d'onglets. */
+.rc-attente{position:fixed;left:12px;bottom:calc(72px + env(safe-area-inset-bottom,0px));z-index:var(--z-bar);
+  padding:4px 10px;border-radius:var(--r-2);background:var(--surface-2);border:1px solid var(--border);
+  color:var(--sub);font-size:var(--fs-2xs);font-weight:700;pointer-events:none}
+.rc-attente[hidden]{display:none}
 /* LES REMPLAÇANTS AUTORISES (30/09/2026) : pastilles cote coach, boutons cote athlete. */
 .alt-l{display:flex;flex-wrap:wrap;gap:6px}
 .alt-p{display:inline-flex;align-items:center;gap:4px;padding:4px 4px 4px 10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);font-size:var(--fs-xs);font-weight:700}
@@ -13207,6 +13212,7 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .pd-fait .pd-case{background:var(--green);border-color:var(--green)}
 :root[data-theme="clair"] .pd-fait .pd-titre{color:var(--sub)}
 :root[data-theme="clair"] .pd-etat{color:var(--green)}
+:root[data-theme="clair"] .rc-attente{background:var(--surface-2);border:1px solid var(--border);color:var(--sub)}
 :root[data-theme="clair"] .alt-p{background:var(--surface-1);border:1px solid var(--border)}
 :root[data-theme="clair"] .alt-x{color:var(--sub)}
 :root[data-theme="clair"] .rempl-alt{background:var(--surface-1);border:1px solid var(--red);color:var(--text-strong)}

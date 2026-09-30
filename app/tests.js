@@ -8540,13 +8540,15 @@ async function testExercices(){
             // sur un dossier introuvable.
             CLOUD._enfiler('');CLOUD._enfiler(null);
             if(CLOUD.enAttenteDeSync()!==1) return _echec('une clé vide est entrée');
-            // Bornée à 50 : une file non bornée saturerait le stockage
-            // qu'elle est censée soulager. On garde les PLUS RÉCENTES.
-            CLOUD._ecrireFile(Array.from({length:60},(_,i)=>'u'+i+'@t.fr'));
+            // Bornée à 500 depuis le 30/09/2026 (elle l'était à 50 : un coach à
+            // plus de cinquante athlètes perdait des clefs). Une file non bornée
+            // saturerait le stockage qu'elle est censée soulager. On garde les
+            // PLUS RÉCENTES.
+            CLOUD._ecrireFile(Array.from({length:560},(_,i)=>'u'+i+'@t.fr'));
             const f=CLOUD._lireFile();
-            if(f.length!==50) return _echec('borne : '+f.length+' entrées');
-            return (f[0]==='u10@t.fr'&&f[49]==='u59@t.fr')
-              ?true:_echec('la borne garde les mauvaises : '+f[0]+'…'+f[49]);
+            if(f.length!==500) return _echec('borne : '+f.length+' entrées');
+            return (f[0]==='u60@t.fr'&&f[499]==='u559@t.fr')
+              ?true:_echec('la borne garde les mauvaises : '+f[0]+'…'+f[499]);
           } finally { if(_sv===null) localStorage.removeItem(CLOUD._QUEUE_KEY);
                       else localStorage.setItem(CLOUD._QUEUE_KEY,_sv); }})());
         ok('Un renvoi impossible ne VIDE pas la file',(()=>{
@@ -8799,6 +8801,110 @@ async function testExercices(){
           consent:{health:true,policyVersion:POLICY_VERSION},sessions:ids.map((id,i)=>({id,date:1000+i,name:'Push',data:{}}))});
         const _eIds=d=>((d&&d.sessions)||[]).map(x=>x&&x.id).sort().join(',');
         // ══ 30/09/2026 — SANS BASE, ET LA GARDE PAR LE CONTENU ═══════════════
+        // ══ 30/09/2026 — LE JOURNAL D'ÉCRITURE ANTICIPÉE (rc_sync_queue) ══════
+        okA('File : pushOne met la clef en file AVANT toute réponse ; app tuée → viderFile renvoie le dossier au démarrage',async()=>{
+          const sv=_eMonter();
+          let _baseX=null;
+          try{
+            localStorage.removeItem(CLOUD._QUEUE_KEY);
+            // Un appareil neuf pour ce dossier : aucune base (un test plus ancien a pu en laisser une).
+            _baseX=localStorage.getItem(CLOUD._cleBase('x@t.fr')); localStorage.removeItem(CLOUD._cleBase('x@t.fr')); delete CLOUD._histBases['x@t.fr'];
+            currentUser={email:'autre@t.fr',role:'coach'};
+            let appels=0;
+            window.fetch=()=>{ appels++; return new Promise(()=>{}); };   // ne résout JAMAIS
+            const u=_eDoc(['S0','S1'],3000); u.email='x@t.fr';
+            const us=JSON.parse(localStorage.getItem('rc_users')||'{}'); us['x@t.fr']=JSON.parse(JSON.stringify(u));
+            localStorage.setItem('rc_users',JSON.stringify(us));
+            const p=CLOUD.pushOne('x@t.fr',u); p.catch(()=>{});
+            // AVANT toute résolution : la clef est déjà là.
+            if(CLOUD._lireFile().indexOf('x@t.fr')<0) return _echec('la clef n’est pas en file avant le réseau');
+            // L'APP EST TUÉE : la promesse est abandonnée, la mémoire repart de zéro.
+            delete CLOUD._filesDossier['x@t.fr'];
+            CLOUD._videEnCours=false; try{ CLOUD._annulerRetry(); }catch(e){}
+            await new Promise(r=>setTimeout(r,20));
+            if(CLOUD._lireFile().indexOf('x@t.fr')<0) return _echec('la clef a quitté la file sans succès');
+            // AU DÉMARRAGE SUIVANT : viderFile renvoie le dossier.
+            const puts=[];
+            const _cw=CLOUD.canWrite; CLOUD.canWrite=()=>true;
+            window.fetch=async(url,o)=>{
+              const m=(o&&o.method)||'GET';
+              // Tout dossier en file répond (un envoi différé d'un autre test a pu
+              // en ajouter un) ; seul celui de x@t.fr est relevé.
+              if(!/\/users\/[^/?]+\.json/.test(String(url))) return new Response('null',{status:200});
+              if(m==='GET') return new Response('null',{status:200,headers:{'ETag':'null_etag'}});
+              if(!/\/users\/x@t,fr\.json/.test(String(url))) return new Response(o.body,{status:200,headers:{'ETag':'E1'}});
+              puts.push(JSON.parse(o.body));
+              return new Response(o.body,{status:200,headers:{'ETag':'E1'}});
+            };
+            const _avantVide=JSON.stringify(CLOUD._lireFile())+' dossier:'+!!((DB.get('users')||{})['x@t.fr']);
+            let _n=null; try{ _n=await CLOUD.viderFile(); } finally { CLOUD.canWrite=_cw; }
+            if(!puts.length) return _echec('viderFile n’a rien renvoyé (renvoyés '+_n+', file avant '+_avantVide+')');
+            if(_eIds(puts[0])!=='S0,S1') return _echec('dossier renvoyé : '+_eIds(puts[0]));
+            return CLOUD._lireFile().indexOf('x@t.fr')<0?true:_echec('la clef reste en file après le succès');
+          } finally {
+            const us=JSON.parse(localStorage.getItem('rc_users')||'{}'); delete us['x@t.fr']; localStorage.setItem('rc_users',JSON.stringify(us));
+            localStorage.removeItem(CLOUD._cleBase('x@t.fr')); if(typeof _baseX==='string') localStorage.setItem(CLOUD._cleBase('x@t.fr'),_baseX); delete CLOUD._filesDossier['x@t.fr'];
+            _eRanger(sv);
+          }
+        });
+        okA('File : après un envoi réussi la clef est retirée ; un refus _nonRejouable la retire aussi',async()=>{
+          const sv=_eMonter(); const svSync=CLOUD.syncUser;
+          try{
+            localStorage.removeItem(CLOUD._QUEUE_KEY);
+            currentUser={email:'autre@t.fr',role:'coach'};
+            const d0=_eDoc(['S0']);
+            const srv=_fauxRTDB(d0);
+            window.fetch=srv.fetch;
+            localStorage.setItem('rc_users',JSON.stringify({'etag@t.fr':d0}));
+            CLOUD._poserBase('etag@t.fr',d0);
+            // 1. Succès.
+            let pendant=null;
+            srv.hook={put:async()=>{ pendant=CLOUD._lireFile().indexOf('etag@t.fr')>=0; }};
+            await CLOUD.pushOne('etag@t.fr',_eDoc(['S0','S1'],2000));
+            if(pendant!==true) return _echec('la clef n’était pas en file pendant le PUT');
+            if(CLOUD._lireFile().indexOf('etag@t.fr')>=0) return _echec('succès : la clef reste en file');
+            // 2. Refus délibéré (dossier plus pauvre, rattrapage sans effet).
+            srv.hook=null;
+            srv.val=_eDoc(['S0','S1','S2'],3000); srv.v++;
+            CLOUD._poserBase('etag@t.fr',srv.val);
+            CLOUD.syncUser=async()=>false;
+            const pauvre=_eDoc(['S0'],4000); pauvre._syncMaj=3000;
+            let err=null;
+            try{ await CLOUD.pushOne('etag@t.fr',pauvre); }catch(e){ err=e; }
+            if(!err||!err._nonRejouable) return _echec('pas de refus délibéré : '+(err&&err.message));
+            return CLOUD._lireFile().indexOf('etag@t.fr')<0?true:_echec('refus _nonRejouable : la clef reste en file');
+          } finally { CLOUD.syncUser=svSync; _eRanger(sv); }
+        });
+        ok('File : bornée à 500, dédupliquée, sans jamais évincer la clef de l’utilisateur courant',(()=>{
+          const svQ=localStorage.getItem(CLOUD._QUEUE_KEY), svU=currentUser;
+          try{
+            currentUser={email:'moi@t.fr',role:'coach'};
+            const l=['moi@t.fr'].concat(Array.from({length:600},(_,i)=>'a'+i+'@t.fr'));
+            CLOUD._ecrireFile(l);
+            const f=CLOUD._lireFile();
+            if(f.length!==500) return _echec(f.length+' clefs au lieu de 500');
+            if(f.indexOf('moi@t.fr')<0) return _echec('la clef de l’utilisateur courant a été évincée');
+            if(f.indexOf('a599@t.fr')<0) return _echec('les plus récentes ne sont pas gardées');
+            CLOUD._enfiler('a599@t.fr');
+            return CLOUD._lireFile().length===500?true:_echec('doublon ajouté');
+          } finally { currentUser=svU; if(svQ==null) localStorage.removeItem(CLOUD._QUEUE_KEY); else localStorage.setItem(CLOUD._QUEUE_KEY,svQ); try{ _majIndicAttente(); }catch(e){} }})());
+        ok('File : Background Sync (sw.js) et reprise au premier plan / en ligne câblées ; pastille « n envois en attente »',(()=>{
+          const src=_prodSrc();
+          if(!/reg\.sync\.register\('rc-sync'\)/.test(src)) return _echec('pas d’enregistrement Background Sync');
+          if(!/ev\.data\.rc==='vider-file'/.test(src)) return _echec('la page n’écoute pas le message du SW');
+          if(!/CLOUD\.enAttenteDeSync\(\)>0\) CLOUD\.viderFile\(\)/.test(src)) return _echec('pas de reprise au premier plan');
+          const svQ=localStorage.getItem(CLOUD._QUEUE_KEY), svU=currentUser;
+          try{
+            currentUser={email:'ath@t.fr',role:'athlete'};
+            localStorage.setItem(CLOUD._QUEUE_KEY,JSON.stringify(['ath@t.fr','b@t.fr']));
+            if(_majIndicAttente()!==2) return _echec('compte faux');
+            const z=document.getElementById('rc-attente');
+            if(!z||z.hidden||z.textContent!=='2 envois en attente') return _echec('pastille : '+(z&&z.textContent));
+            currentUser={email:'c@t.fr',role:'coach'}; _majIndicAttente();
+            if(!z.hidden) return _echec('la pastille s’affiche chez le coach');
+            currentUser={email:'ath@t.fr',role:'athlete'}; localStorage.setItem(CLOUD._QUEUE_KEY,'[]'); _majIndicAttente();
+            return z.hidden?true:_echec('la pastille reste avec une file vide');
+          } finally { currentUser=svU; if(svQ==null) localStorage.removeItem(CLOUD._QUEUE_KEY); else localStorage.setItem(CLOUD._QUEUE_KEY,svQ); try{ _majIndicAttente(); }catch(e){} }})());
         okA('Sans base (a) : le distant porte une séance S absente du local → le PUT contient S',async()=>{
           const sv=_eMonter();
           try{
