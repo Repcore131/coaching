@@ -6585,6 +6585,8 @@ const CHAMPS_NON_SANTE=Object.freeze([
   'echeance','alertStatus','supprimes','_export',
   'coachId','coachName','coachEmailKey','coachCode','coachPhoto','code','clients',
   'coachPlan','coachSubActive','coachPlanSince','coachPrograms','coachNotes',
+  // Les étiquettes d'athlètes et le dernier contact : dans le dossier du coach.
+  'etiquettes','etiquettesAth','contacts',
   'studentCodes','msgTemplates','reponseFormules','relancesAuto','quickComments','protocolesPerso','canalEpingle',
   'canalDernier','journalGroupe','cloudinaryName','cloudinaryPreset','teamName',
   // Les programmes qu'un coach met en vente : un nom, un pitch, un prix, un
@@ -17522,6 +17524,8 @@ function renderPortefeuille(clients){
   //   « Mes athletes (avec / sans suivi) » portent chacun leur compte, et la
   //   carte des arrivees les redit avec ses deux couleurs de barre.
   el.innerHTML=cases.map(c=>_pilCompteur(c[0],c[1],c[2],c[3])).join('');
+  // Les puces-filtres par étiquette : leur propre rangée, SOUS la barre (rien d'autre que les huit compteurs dedans).
+  try{ renderFiltresEtiquettes(); }catch(e){}
 }
 function _pilBande(cle,titre,corps,resume){
   return `<details class="plan-src pil-bande" style="margin:0 0 8px"${_pilOuvert[cle]?' open':''} ontoggle="pilNoterBande('${cle}',this.open)">
@@ -18100,7 +18104,7 @@ function _waBoutonTodo(r,idx){
     const titre=tel?'Écrire à '+(c.fname||'')+' sur WhatsApp'
       :'Ouvrir WhatsApp avec le message pré-rempli ('+(c.fname||'cet athlète')+' n\'a pas de numéro enregistré)';
     return `<a href="${safeUrl(waLink(tel,_waTexteTodo(r.type,c)))}" target="_blank" rel="noopener"
-      onclick="event.stopPropagation();rcmCoach('coach_message_envoye')" title="${escapeHtml(titre)}" aria-label="${escapeHtml(titre)}"
+      onclick="event.stopPropagation();rcmCoach('coach_message_envoye');noterContact(${_attrArg(c.id)})" title="${escapeHtml(titre)}" aria-label="${escapeHtml(titre)}"
       style="${style}${tel?'':';opacity:.55'}">${icon('message-circle',16)}</a>`;
   }
   return `<button onclick="event.stopPropagation();openWaGroupe(${idx})"
@@ -24177,6 +24181,7 @@ function openWaGroupe(rowIdx){
       <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_wagTout(true)">Tout cocher</button>
       <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_wagTout(false)">Tout décocher</button>
     </div>
+    ${_htmlCocherEtiquette('wag-liste')}
     <div id="wag-liste">${lignes}</div>
     <div style="display:flex;gap:8px;margin-top:14px">
       <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_wagCopierNumeros()">Copier les numéros</button>
@@ -24217,7 +24222,7 @@ function _wagPreparer(){
   zone.innerHTML=`<div class="sub" style="font-size:var(--fs-xs);margin-bottom:8px">Touche chaque nom pour ouvrir WhatsApp : ${sel.length} conversation${sel.length>1?'s':''} à ouvrir${sansTel?`, dont ${sansTel} sans numéro utilisable (contact à choisir)`:''}.</div>`
     +sel.map(s=>`<a href="${safeUrl(waLink(s.tel,pour(s)))}" target="_blank" rel="noopener"
       style="display:flex;align-items:center;gap:8px;min-height:44px;padding:0 12px;margin-bottom:6px;background:#0a1a0a;border:1px solid #1e3a1e;border-radius:var(--r-2);color:var(--green);text-decoration:none;font-size:var(--fs-md);font-weight:700"
-      onclick="rcmCoach('coach_message_envoye');this.style.opacity='.5';this.style.borderColor='var(--border)'">${escapeHtml(s.nom||'Athlète')}${s.tel?'':' <span style="color:var(--orange);font-weight:400;font-size:var(--fs-xs)">(contact à choisir)</span>'}</a>`).join('');
+      onclick="rcmCoach('coach_message_envoye');noterContact(${_attrArg(s.id)});this.style.opacity='.5';this.style.borderColor='var(--border)'">${escapeHtml(s.nom||'Athlète')}${s.tel?'':' <span style="color:var(--orange);font-weight:400;font-size:var(--fs-xs)">(contact à choisir)</span>'}</a>`).join('');
 }
 
 // Rendu de la liste d'athletes. La recherche et le filtre sont lus dans le
@@ -24936,6 +24941,8 @@ function renderClientList(clients){
   const q=norm((document.getElementById('ch-search')||{}).value||'');
   let vus=tous;
   if(q) vus=vus.filter(c=>norm((c.fname||'')+' '+(c.lname||'')).includes(q));
+  // Le filtre par étiquette se combine aux puces du portefeuille.
+  if(_filtreEtiquette) vus=athletesAvecEtiquette(vus,_filtreEtiquette,currentUser);
   // QUI ENTRE DANS QUEL FILTRE. Demande de Kevin, 11/09/2026 : une alerte de
   // seance ou de charge ne concerne que quelqu'un qu'on suit ; une echeance
   // d'acces concerne tout le monde, puisqu'elle porte sur le paiement.
@@ -26237,7 +26244,7 @@ const RELANCE_DELAI_DEFAUT=2;
 const RELANCE_FENETRE_J=7;
 const RELANCE_ECHANGE='Ça appelle un échange, pas un message type.';
 const RELANCE_TRAVAIL='C’est ton travail, il n’y a rien à dire à l’athlète.';
-// Les dix-sept lignes, dans l'ordre de « À traiter ». auto:true pour les cinq.
+// Les dix-huit lignes, dans l'ordre de « À traiter ». auto:true pour les cinq.
 const RELANCE_LIGNES=Object.freeze([
   {type:'drapeau',lib:'Drapeau rouge santé',raison:'Un drapeau rouge se traite de vive voix, jamais par un message type.'},
   {type:'douleur',lib:'Douleur répétée',raison:RELANCE_ECHANGE},
@@ -26255,6 +26262,7 @@ const RELANCE_LIGNES=Object.freeze([
   {type:'expiring',lib:'Accès qui se termine',auto:true,quand:'quatorze jours avant la fin de l’accès'},
   {type:'rite',lib:'Bilan de 4 semaines à lire',raison:RELANCE_TRAVAIL},
   {type:'progfin',lib:'Bloc qui se termine',raison:RELANCE_TRAVAIL},
+  {type:'silence',lib:'Sans échange depuis 14 j',raison:'Un silence se rompt par un vrai mot du coach, pas par un rappel automatique.'},
   {type:'noprog',lib:'Sans programme',auto:true,quand:'dès le bilan de départ, tant qu’aucun programme n’est posé'}
 ]);
 const RELANCE_LIB=Object.freeze(Object.fromEntries(RELANCE_LIGNES.map(l=>[l.type,l.lib])));
@@ -26511,6 +26519,8 @@ async function msgEnvoyer(athleteCle,brut){
     toast(r&&(r.st===401||r.st===403)?'Ce fil n’est plus accessible (rattachement au coach terminé ?)':'Envoi impossible, réessaie','var(--orange)');
     return {ok:false,raison:'refus'};
   }
+  // Le dernier contact du coach (étiquettes et dernier contact).
+  if(de==='coach') try{ const _c=getClients().find(x=>_relCle(x)===k.athlete); if(_c) noterContact(_c.id); }catch(e){}
   // La notification : le Worker relit ce message avant de pousser.
   try{ deposerEvenement({type:'message',coach:k.coach,dest:de==='coach'?k.athlete:k.coach,i:id}).catch(()=>{}); }catch(e){}
   // Le fil du coach se met à jour tout de suite : le signal « sans réponse » s'éteint.
@@ -27242,6 +27252,299 @@ function _cocherIds(conteneur,ids){
   return n;
 }
 
+// ══ ÉTIQUETTES D'ATHLÈTES ET DERNIER CONTACT (30/09/2026) ══════════════════
+//
+// Deux champs du dossier DU COACH, jamais de celui de l'athlète (comme
+// coachNotes et motsLus) : aucun geste d'étiquetage ne réécrit le document
+// d'un athlète, et un coach sur deux appareils retrouve les mêmes étiquettes
+// par la synchronisation de son propre dossier.
+//   etiquettes    {e0..e19: {lib (24 caractères au plus), couleur (#rrggbb)}}
+//   etiquettesAth {<id de l'athlète>: ['e0','e3']}
+//   contacts      {<id de l'athlète>: ms du dernier échange parti de l'app}
+//
+// ⚠ VINGT AU PLUS, ET LA RÈGLE DE LA BASE LE TIENT : les identifiants sont
+//   e0 à e19, le motif de database.rules.json refuse tout le reste.
+// ⚠ UNE ÉTIQUETTE SUPPRIMÉE est retirée de tous les athlètes ; un athlète
+//   supprimé perd ses entrées (etiquettesOublierAthlete). Une lecture ne
+//   montre jamais un identifiant sans étiquette : etiquettesAthlete filtre.
+// ⚠ LE DERNIER CONTACT se lit aussi dans le dossier de l'athlète (réponse au
+//   bilan, retour vidéo) : au premier jour, personne n'est déclaré silencieux
+//   parce que le champ contacts vient d'apparaître.
+const ETIQ_MAX=20, ETIQ_LIB_MAX=24;
+const ETIQ_COULEURS=Object.freeze(['#E02020','#f5c518','#22c55e','#3b82f6','#a855f7','#ec4899','#f97316','#14b8a6']);
+const SANS_CONTACT_J=14;
+let _filtreEtiquette=null;
+function _etiqId(i){ return 'e'+i; }
+// PURE. Les étiquettes du coach, dans l'ordre de leur identifiant.
+function etiquettesDe(u){
+  const t=(u&&u.etiquettes&&typeof u.etiquettes==='object')?u.etiquettes:{};
+  const out=[];
+  for(let i=0;i<ETIQ_MAX;i++){
+    const e=t[_etiqId(i)];
+    if(e&&typeof e==='object'&&String(e.lib||'').trim()) out.push({id:_etiqId(i),lib:String(e.lib).slice(0,ETIQ_LIB_MAX),couleur:/^#[0-9a-fA-F]{6}$/.test(e.couleur)?e.couleur:ETIQ_COULEURS[0]});
+  }
+  return out;
+}
+// PURE. Les identifiants posés sur un athlète, seulement ceux qui existent.
+function etiquettesAthlete(u,athId){
+  const l=(u&&u.etiquettesAth&&u.etiquettesAth[athId])||[];
+  const t=(u&&u.etiquettes)||{};
+  return (Array.isArray(l)?l:Object.values(l)).filter((x,i,a)=>t[x]&&a.indexOf(x)===i);
+}
+// PURE. Le filtrage de la liste : les athlètes qui portent cette étiquette.
+function athletesAvecEtiquette(clients,etiqId,u){
+  if(!etiqId) return (clients||[]).slice();
+  return (clients||[]).filter(c=>c&&etiquettesAthlete(u,c.id).indexOf(etiqId)>=0);
+}
+function _etiqLib(lib){ return String(lib||'').replace(/\s+/g,' ').trim().slice(0,ETIQ_LIB_MAX); }
+function etiquetteCreer(lib,couleur){
+  const u=currentUser;
+  if(!u||u.role!=='coach') return null;
+  const l=_etiqLib(lib);
+  if(!l){ toast('Donne un nom à l’étiquette.','var(--orange)'); return null; }
+  const liste=etiquettesDe(u);
+  const deja=liste.find(e=>norm(e.lib)===norm(l));
+  if(deja) return deja.id;
+  if(!u.etiquettes||typeof u.etiquettes!=='object') u.etiquettes={};
+  let id=null;
+  for(let i=0;i<ETIQ_MAX;i++) if(!u.etiquettes[_etiqId(i)]){ id=_etiqId(i); break; }
+  if(!id){ toast('Vingt étiquettes au plus : supprimes-en une d’abord.','var(--orange)'); return null; }
+  u.etiquettes[id]={lib:l,couleur:ETIQ_COULEURS.indexOf(couleur)>=0?couleur:ETIQ_COULEURS[liste.length%ETIQ_COULEURS.length]};
+  saveUser();
+  return id;
+}
+function etiquetteRenommer(id,lib){
+  const u=currentUser, l=_etiqLib(lib);
+  if(!u||!u.etiquettes||!u.etiquettes[id]||!l) return false;
+  u.etiquettes[id].lib=l;
+  saveUser();
+  return true;
+}
+// Retirée de tous les athlètes, et du filtre si c'était lui.
+function etiquetteSupprimer(id){
+  const u=currentUser;
+  if(!u||!u.etiquettes||!u.etiquettes[id]) return false;
+  delete u.etiquettes[id];
+  const a=u.etiquettesAth||{};
+  for(const k of Object.keys(a)){
+    const l=(Array.isArray(a[k])?a[k]:Object.values(a[k]||{})).filter(x=>x!==id);
+    if(l.length) a[k]=l; else delete a[k];
+  }
+  if(_filtreEtiquette===id) _filtreEtiquette=null;
+  saveUser();
+  return true;
+}
+// Pose (ou retire) une étiquette sur plusieurs athlètes : UNE sauvegarde.
+function etiquetterAthletes(ids,etiqId,poser){
+  const u=currentUser;
+  if(!u||!u.etiquettes||!u.etiquettes[etiqId]) return 0;
+  if(!u.etiquettesAth||typeof u.etiquettesAth!=='object') u.etiquettesAth={};
+  let n=0;
+  for(const id of (ids||[])){
+    if(!id) continue;
+    const l=etiquettesAthlete(u,id);
+    const a=l.indexOf(etiqId)>=0;
+    if(poser===false){ if(!a) continue; const r=l.filter(x=>x!==etiqId); if(r.length) u.etiquettesAth[id]=r; else delete u.etiquettesAth[id]; }
+    else { if(a) continue; u.etiquettesAth[id]=l.concat(etiqId).slice(0,ETIQ_MAX); }
+    n++;
+  }
+  if(n) saveUser();
+  return n;
+}
+// Un athlète supprimé : ses étiquettes et son dernier contact partent avec lui.
+function etiquettesOublierAthlete(u,athId){
+  if(!u||!athId) return false;
+  let fait=false;
+  if(u.etiquettesAth&&u.etiquettesAth[athId]){ delete u.etiquettesAth[athId]; fait=true; }
+  if(u.contacts&&u.contacts[athId]){ delete u.contacts[athId]; fait=true; }
+  return fait;
+}
+
+// ── Le dernier contact ─────────────────────────────────────────────────
+// Posé par chaque échange parti de l'app : réponse au bilan (écrite ou
+// vocale), retour vidéo, lien WhatsApp ouvert, message de la messagerie.
+function noterContact(athId,t){
+  try{
+    const u=currentUser;
+    if(!u||u.role!=='coach'||!athId) return false;
+    if(!u.contacts||typeof u.contacts!=='object') u.contacts={};
+    u.contacts[athId]=Number(t)||Date.now();
+    saveUser();
+    return true;
+  }catch(e){ return false; }
+}
+// PURE. Le dernier échange connu : le champ du coach, ou ce que le dossier de
+// l'athlète en garde (une réponse au bilan, un retour vidéo). 0 si rien.
+function dernierContact(c,contacts){
+  if(!c) return 0;
+  let t=Number(contacts&&contacts[c.id])||0;
+  for(const b of (c.bilans||[])) if(b&&(b.reponseCoach||b.reponseAudio)) t=Math.max(t,Number(b.reponseDate)||0);
+  for(const v of (c.videos||[])) if(v&&v.feedbackDate) t=Math.max(t,Number(v.feedbackDate)||0);
+  return t;
+}
+// PURE. Vrai quand rien n'a été échangé depuis `jours` jours. Un athlète
+// rattaché depuis moins longtemps n'est pas encore silencieux : la date de
+// rattachement compte comme un premier échange.
+function sansContact(c,contacts,maintenant,jours){
+  if(!c||c._fromCode) return false;
+  const j=Number(jours)>0?Number(jours):SANS_CONTACT_J;
+  const t=Number(maintenant)||Date.now();
+  const ref=Math.max(dernierContact(c,contacts),dateRattachement(c));
+  return t-ref>=j*864e5;
+}
+// PURE. La ligne « À traiter » : les athlètes actifs sans échange.
+function lignesSansContact(clients,contacts,maintenant,reporte){
+  const l=(clients||[]).filter(c=>c&&!c._fromCode&&isActive(c)&&sansContact(c,contacts,maintenant)&&!(reporte&&reporte(c)));
+  return l.length?[{type:'silence',icon:icon('message-circle',16),color:'var(--green)',label:'Sans échange depuis '+SANS_CONTACT_J+' j',list:l}]:[];
+}
+
+// ── L'interface ────────────────────────────────────────────────────────
+function _etiqPuce(e,extra){
+  return '<span class="etq-puce" style="--etq:'+e.couleur+'">'+escapeHtml(e.lib)+(extra||'')+'</span>';
+}
+// Les puces-filtres, sous la barre d'état du portefeuille. Rien sans étiquette.
+function renderFiltresEtiquettes(){
+  const z=document.getElementById('ch-etiq-filtres');
+  if(!z) return;
+  const l=etiquettesDe(currentUser);
+  if(_filtreEtiquette&&!l.some(e=>e.id===_filtreEtiquette)) _filtreEtiquette=null;
+  if(!l.length){ z.innerHTML=''; z.style.display='none'; return; }
+  z.style.display='';
+  const a=(currentUser&&currentUser.etiquettesAth)||{};
+  const compte=id=>Object.keys(a).filter(k=>etiquettesAthlete(currentUser,k).indexOf(id)>=0).length;
+  z.innerHTML=l.map(e=>'<button type="button" class="etq-filtre" style="--etq:'+e.couleur+'" aria-pressed="'+(_filtreEtiquette===e.id)+'" onclick="setFiltreEtiquette('+_attrArg(e.id)+')">'
+      +escapeHtml(e.lib)+' <b>'+compte(e.id)+'</b></button>').join('')
+    +'<button type="button" class="etq-gerer" onclick="ouvrirEtiquettes()">Gérer</button>';
+}
+function setFiltreEtiquette(id){
+  _filtreEtiquette=(_filtreEtiquette===id)?null:id;
+  renderClientList();
+  return _filtreEtiquette;
+}
+// La feuille : poser ou retirer sur `ids` (la sélection, ou un athlète),
+// créer, renommer, supprimer. Sans `ids`, c'est la gestion seule.
+let _etiqCibles=[];
+function ouvrirEtiquettes(ids){
+  _etiqCibles=Array.isArray(ids)?ids.filter(Boolean):[];
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" class="etq-feuille" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) var(--c-out);max-height:88vh;overflow-y:auto">
+    <div id="etq-corps"></div>
+    <button class="btn btn-outline" style="margin-top:12px" onclick="closeModal();renderClientList()">Fermer</button>
+  </div></div>`);
+  _etiqRepeindre();
+  return true;
+}
+function _etiqRepeindre(){
+  const z=document.getElementById('etq-corps');
+  if(!z) return;
+  const l=etiquettesDe(currentUser), ids=_etiqCibles, n=ids.length;
+  const titre=n?('Étiqueter '+(n>1?n+' athlètes':escapeHtml(_nomAthlete(getOwnedClient(ids[0])||{})||'cet athlète'))):'Mes étiquettes';
+  const lignes=l.map(e=>{
+    const ont=ids.filter(id=>etiquettesAthlete(currentUser,id).indexOf(e.id)>=0).length;
+    const act=n
+      ?(ont<n?'<button type="button" class="btn btn-red btn-sm etq-b" onclick="_etiqPoser('+_attrArg(e.id)+',true)">Ajouter</button>':'')
+        +(ont?'<button type="button" class="btn btn-outline btn-sm etq-b" onclick="_etiqPoser('+_attrArg(e.id)+',false)">Retirer</button>':'')
+      :'<button type="button" class="btn btn-outline btn-sm etq-b" onclick="_etiqRenommer('+_attrArg(e.id)+')">Renommer</button>'
+        +'<button type="button" class="btn btn-outline btn-sm etq-b" onclick="_etiqSupprimer('+_attrArg(e.id)+')">Supprimer</button>';
+    return '<div class="etq-ligne">'+_etiqPuce(e)+(n&&ont?'<span class="sub etq-ont">'+(n>1?ont+' sur '+n:'posée')+'</span>':'')+'<div style="flex:1"></div>'+act+'</div>';
+  }).join('');
+  z.innerHTML='<h2 style="margin-bottom:4px">'+titre+'</h2>'
+    +'<p class="sub" style="font-size:var(--fs-sm);margin-bottom:10px">Tes étiquettes ne sont visibles que par toi.</p>'
+    +(lignes||'<div class="sub" style="font-size:var(--fs-sm);padding:6px 0 10px">Aucune étiquette pour l’instant.</div>')
+    +(l.length<ETIQ_MAX
+      ?'<div class="etq-nouvelle"><label for="etq-lib" style="margin-top:10px">Nouvelle étiquette</label>'
+        +'<div style="display:flex;gap:8px"><input id="etq-lib" maxlength="'+ETIQ_LIB_MAX+'" placeholder="ex. Prépa compét" style="flex:1;margin:0">'
+        +'<button type="button" class="btn btn-red btn-sm" style="margin:0;min-height:44px" onclick="_etiqCreer()">Créer</button></div>'
+        +'<div class="etq-couleurs" role="radiogroup" aria-label="Couleur">'+ETIQ_COULEURS.map((c,i)=>'<button type="button" role="radio" aria-checked="'+(i===0)+'" aria-label="Couleur '+(i+1)+'" style="--etq:'+c+'" onclick="_etiqCouleur(this)"></button>').join('')+'</div></div>'
+      :'<div class="sub" style="font-size:var(--fs-xs);margin-top:10px">Vingt étiquettes : c’est le maximum.</div>');
+}
+function _etiqCouleur(b){
+  b.parentNode.querySelectorAll('button').forEach(x=>x.setAttribute('aria-checked',String(x===b)));
+}
+function _etiqCreer(){
+  const i=document.getElementById('etq-lib');
+  const b=document.querySelector('.etq-couleurs [aria-checked="true"]');
+  const id=etiquetteCreer(i&&i.value,b?getComputedStyle(b).getPropertyValue('--etq').trim():'');
+  if(!id) return false;
+  if(_etiqCibles.length) etiquetterAthletes(_etiqCibles,id,true);
+  _etiqRepeindre(); _etiqApres();
+  return id;
+}
+function _etiqPoser(id,poser){
+  etiquetterAthletes(_etiqCibles,id,poser);
+  _etiqRepeindre(); _etiqApres();
+  return true;
+}
+async function _etiqRenommer(id){
+  const e=etiquettesDe(currentUser).find(x=>x.id===id);
+  if(!e) return false;
+  const v=prompt('Nouveau nom de l’étiquette',e.lib);
+  if(v==null) return false;
+  etiquetteRenommer(id,v);
+  _etiqRepeindre(); _etiqApres();
+  return true;
+}
+async function _etiqSupprimer(id){
+  const e=etiquettesDe(currentUser).find(x=>x.id===id);
+  if(!e) return false;
+  if(!(await rcConfirm('Supprimer « '+e.lib+' » ?','Elle sera retirée de tous tes athlètes.','Supprimer','Garder'))) return false;
+  etiquetteSupprimer(id);
+  _etiqRepeindre(); _etiqApres();
+  return true;
+}
+// Ce qui montre les étiquettes se repeint : les puces, et la fiche ouverte.
+function _etiqApres(){
+  try{ renderFiltresEtiquettes(); }catch(e){}
+  try{ const c=currentClientId&&getOwnedClient(currentClientId); if(c) _rendreEtiquettesFiche(c); }catch(e){}
+}
+// Sur la fiche : les pastilles, chacune retirable, et « + Étiquette ».
+function _rendreEtiquettesFiche(c){
+  const z=document.getElementById('ccd-etiq');
+  if(!z) return;
+  if(!c||c._fromCode||!currentUser||currentUser.role!=='coach'){ z.innerHTML=''; return; }
+  const t=etiquettesDe(currentUser), l=etiquettesAthlete(currentUser,c.id);
+  z.innerHTML=t.filter(e=>l.indexOf(e.id)>=0).map(e=>_etiqPuce(e,'<button type="button" class="etq-x" aria-label="Retirer '+escapeHtml(e.lib)+'" onclick="etiquetterAthletes(['+_attrArg(c.id)+'],'+_attrArg(e.id)+',false);_etiqApres()">✕</button>')).join('')
+    +'<button type="button" class="etq-plus" onclick="ouvrirEtiquettes(['+_attrArg(c.id)+'])">+ Étiquette</button>';
+}
+// « Cocher l'étiquette… » : dans les trois écrans qui cochent des athlètes.
+function _htmlCocherEtiquette(conteneur){
+  const l=etiquettesDe(currentUser);
+  if(!l.length) return '';
+  return '<select class="etq-cocher" aria-label="Cocher les athlètes d’une étiquette" onchange="cocherEtiquette('+_attrArg(conteneur)+',this.value);this.selectedIndex=0">'
+    +'<option value="">Cocher l’étiquette…</option>'
+    +l.map(e=>'<option value="'+e.id+'">'+escapeHtml(e.lib)+'</option>').join('')+'</select>';
+}
+function cocherEtiquette(conteneur,etiqId){
+  if(!etiqId) return 0;
+  const a=(currentUser&&currentUser.etiquettesAth)||{};
+  const ids=Object.keys(a).filter(k=>etiquettesAthlete(currentUser,k).indexOf(etiqId)>=0);
+  const n=_cocherIds(conteneur,ids);
+  if(conteneur==='cdg-athletes') try{ _cdgMajBouton(); }catch(e){}
+  if(!n) toast('Aucun athlète de cette liste ne porte cette étiquette.','var(--orange)');
+  return n;
+}
+function selEtiqueter(){
+  if(!SEL_ATHLETES.size) return false;
+  return ouvrirEtiquettes(Array.from(SEL_ATHLETES));
+}
+
+// ── Les cadres repliés du haut : trois noms, puis « voir tout » ─────────
+const CADRE_REPLIE_MAX=3;
+function _crListe(l,fn,opts){
+  const vus=l.slice(0,CADRE_REPLIE_MAX), reste=l.slice(CADRE_REPLIE_MAX);
+  return renderDataList(vus,fn,opts)
+    +(reste.length?'<div class="cr-plus" hidden>'+renderDataList(reste,fn,opts)+'</div>'
+      +'<button type="button" class="cr-voir" onclick="cadreVoirTout(this)">Voir tout ('+l.length+')</button>':'');
+}
+function cadreVoirTout(b){
+  const z=b&&b.closest?b.closest('.cadre-replie'):null;
+  if(!z) return false;
+  z.querySelectorAll('.cr-plus').forEach(x=>x.removeAttribute('hidden'));
+  b.remove();
+  return true;
+}
+
 function renderTodoBlock(clients){
   _renderPremiersPas(clients);
   try{ renderEntreeRelances(); }catch(e){}
@@ -27339,6 +27642,11 @@ function renderTodoBlock(clients){
   // La fin d'un bloc (finProgramme) : une décision à prendre, bande « À traiter ».
   rows.push.apply(rows,lignesFinProgramme(clients,now,c=>isAlertSnoozed('progfin',c.id)));
   if(noProg.length) rows.push({type:'noprog',icon:icon('clipboard',16),color:'var(--sub)',label:'Sans programme',list:noProg});
+  // Les athlètes actifs sans échange depuis 14 jours (sansContact), EN DERNIER
+  // et seulement ceux qu'aucune autre ligne ne nomme : un athlète n'occupe
+  // qu'une ligne, et toute autre ligne appelle déjà un échange.
+  { const _nommes=new Set(); rows.forEach(r=>(r.list||[]).forEach(c=>c&&_nommes.add(c.id)));
+    rows.push.apply(rows,lignesSansContact(clients,currentUser&&currentUser.contacts,now,c=>_nommes.has(c.id)||isAlertSnoozed('silence',c.id))); }
   if(!rows.length){ window._todoRows=[]; el.innerHTML=''; return; }
   // Un tableau de bord qui affiche trente alertes n'oriente plus rien. Les
   // lignes sont deja triees par gravite : on coupe la queue et on l'annonce.
@@ -27672,6 +27980,7 @@ function _selMaj(){
     +'<span style="font-size:var(--fs-xs);font-weight:800;color:var(--text-strong);letter-spacing:.4px">'
     +n+' athlète'+(n>1?'s':'')+' sélectionné'+(n>1?'s':'')+'</span>'
     +'<div style="flex:1"></div>'
+    +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selEtiqueter()">Étiqueter</button>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selVersDecharge()">Décharge</button>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selVersProgramme()">Programme</button>'
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" onclick="selCadence()">Cadence</button>'
@@ -29393,7 +29702,9 @@ function _htmlJamaisDemarre(liste,maintenant){
   //   compte les gens qui n'ont JAMAIS utilise leur acces, et ceux-ci ont
   //   ouvert un compte. Un bouton « voir tout le tunnel » aurait mene a un
   //   ecran ou aucun d'eux ne figure.
-  const MAX=8;
+  // TROIS DEPUIS LE 30/09/2026 : le cadre est remonté sous « À traiter », replié
+  // à trois noms (CADRE_REPLIE_MAX), le reste à un geste.
+  const MAX=CADRE_REPLIE_MAX;
   const reste=Math.max(0,n-MAX);
   const jour=t=>{ if(!t) return '-'; const q=new Date(t), p=x=>String(x).padStart(2,'0');
     return p(q.getDate())+'/'+p(q.getMonth()+1)+'/'+q.getFullYear(); };
@@ -29438,8 +29749,7 @@ function _htmlJamaisDemarre(liste,maintenant){
     +(reste?'<button type="button" onclick="jdVoirTout(this)" style="display:block;width:100%;background:none;border:none;'
       +'border-top:1px solid var(--border);color:var(--red-text);font-family:Montserrat,sans-serif;'
       +'font-size:var(--fs-2xs);font-weight:800;letter-spacing:1px;text-transform:uppercase;'
-      +'cursor:pointer;padding:12px 14px;min-height:42px;text-align:left">+ '+reste+' autre'
-      +(reste>1?'s':'')+' · tout afficher</button>':'')
+      +'cursor:pointer;padding:12px 14px;min-height:42px;text-align:left">Voir tout ('+n+')</button>':'')
     +'<div class="sub" style="font-size:var(--fs-2xs);line-height:1.55;padding:2px 14px 12px">'
     +'« Relancer » ouvre le message pré-rédigé, en WhatsApp ou par mail. RepCore n’envoie rien à ta place.'
     +'</div></div>';
@@ -30236,7 +30546,7 @@ function _htmlInactifs(liste,maintenant){
   const n=l.length;
   const bouton=(href,lib)=>'<a href="'+_safeContactUrl(href)+'" target="_blank" rel="noopener" '
     +'class="btn btn-outline btn-sm rel-b">'+lib+'</a>';
-  return '<div style="background:var(--surface-1);border:1px solid var(--border);'
+  return '<div class="cadre-replie" style="background:var(--surface-1);border:1px solid var(--border);'
     +'border-left:3px solid var(--sub);border-radius:var(--r-card);margin-bottom:20px;'
     +'overflow:hidden;box-shadow:var(--el-1)">'
     +'<div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;'
@@ -30248,7 +30558,7 @@ function _htmlInactifs(liste,maintenant){
     +'font-family:var(--pile-titre);letter-spacing:1px">'+n+'</span>'
     +'</div>'
     +'<div style="padding:0 14px">'
-    +renderDataList(l,c=>{
+    +_crListe(l,c=>{
       const j=joursDepuisSigne(c,t);
       // XSS STOCKE : le prenom est saisi par l'athlete et atterrit dans le
       // tableau de bord de son coach. Meme precaution que renderTodoBlock.
@@ -31933,6 +32243,8 @@ function openClientDetail(cid,_refresh,_force){
   // LOT M2 : le fil privé, depuis la fiche.
   const _mb=document.getElementById('ccd-msg');
   if(_mb){ _mb.style.display=c._fromCode?'none':'flex'; _mb.innerHTML='Message à '+escapeHtml(c.fname||'cet athlète'); }
+  // Les étiquettes de l'athlète, modifiables.
+  try{ _rendreEtiquettesFiche(c); }catch(e){}
   const _wa=document.getElementById('ccd-wa');
   if(_wa){
     if(c._fromCode){_wa.style.display='none';}
@@ -31940,6 +32252,7 @@ function openClientDetail(cid,_refresh,_force){
       const _tel=_telAthlete(c);
       const _pre=c.fname||'cet athlète';
       _wa.href=safeUrlRaw(waLink(_tel,'Salut '+(c.fname||'')+' 💪'));
+      _wa.onclick=()=>{ noterContact(c.id); };
       _wa.innerHTML='Écrire à '+escapeHtml(_pre);
       // SANS NUMERO, LA BANNIERE NE S'AFFICHE PAS. Elle proposait d'ecrire a
       // quelqu'un dont on n'a pas le numero, et le lien pour l'enregistrer
@@ -32414,6 +32727,8 @@ async function supprimerAthleteDefinitivement(){
   }
   if(currentUser.clients) currentUser.clients=currentUser.clients.filter(id=>id!==currentClientId);
   if(currentUser.seenBilans) delete currentUser.seenBilans[cible.email];
+  // Ses étiquettes et son dernier contact partent avec lui.
+  try{ etiquettesOublierAthlete(currentUser,currentClientId); }catch(e){}
   ok=saveUser()&&ok;
   currentClientId=null;
   go('s-coach-home');loadCoachHome();
@@ -36547,7 +36862,7 @@ function loadAssignAthletes(){
   const athletes=Object.values(users).filter(u=>_estMonAthlete(u,currentUser));
   const container=document.getElementById('cpa-athletes');if(!container)return;
   if(!athletes.length){container.innerHTML=`<div style="text-align:center;padding:24px;color:var(--sub);font-size:var(--fs-sm)">Aucun athlète lié à ton compte.</div>`;return;}
-  container.innerHTML=athletes.map(a=>{
+  container.innerHTML=_htmlCocherEtiquette('cpa-athletes')+athletes.map(a=>{
     // Detect gender from _evol_gender first, then fall back to gender field
     const gRaw=a._evol_gender||a.gender||'';
     const detectedF=isFemale(gRaw);
@@ -74699,6 +75014,7 @@ function saveReponseBilan(email,bilanId,taId){
   // locale, qui est ce qui rend la reponse reelle.
   try{ rbOublierBrouillon(email,bilanId); }catch(e){}
   const envoi=CLOUD.pushOne(email,c);
+  noterContact(c.id);
   if(_premiere) rcmCoach('coach_bilan_repondu');
   // LA NOTIFICATION, À LA PREMIÈRE RÉPONSE SEULEMENT, et APRÈS l'envoi : le
   // serveur relit la réponse dans la base avant de prévenir l'athlète.
@@ -84382,7 +84698,7 @@ function loadDechargeAthletes(){
   const _suivis=athletes.filter(estSuivi);
   const _liste=_suivis.length?_suivis:athletes;
   const _caches=athletes.length-_liste.length;
-  el.innerHTML=(_caches?'<div style="padding:10px 10px;font-size:var(--fs-2xs);color:var(--text-faint);'
+  el.innerHTML=_htmlCocherEtiquette('cdg-athletes')+(_caches?'<div style="padding:10px 10px;font-size:var(--fs-2xs);color:var(--text-faint);'
       +'border-bottom:1px solid #242424;line-height:1.5">'+_caches+' athlète'+(_caches>1?'s':'')
       +' sans suivi ne sont pas listés ici.</div>':'')
     +_liste.map(a=>{
@@ -109550,6 +109866,7 @@ function saveVideoCorrection(){
   c.updatedAt=Date.now();users[window._vcEmail]=c;
   const ok=DB.set('users',users);
   const envoi=CLOUD.pushOne(window._vcEmail,c);
+  noterContact(c.id);
   // LA FILE EST LUE AVANT DE FERMER. closeModal() laisse le noeud a l'ecran
   // 140 ms : ferme ici, il se superposait a la feuille suivante, inseree
   // synchroniquement juste apres. On ne ferme donc que s'il n'y a pas de suite.
@@ -110516,6 +110833,7 @@ async function rvEnvoyer(){
   users2[s.email]=c2;
   const ok=DB.set('users',users2);
   const envoi=CLOUD.pushOne(s.email,c2);
+  noterContact(c2.id);
   if(_premiere) try{ rcmCoach('coach_bilan_repondu'); }catch(e){}
   // La même notification que la réponse écrite : le serveur relit le bilan.
   if(_premiere) Promise.resolve(envoi).then(r=>{ if(r!==false) deposerEvenement({type:'reponse_bilan',dest:String(s.email).replace(/\./g,','),i:String(_indice)}); }).catch(()=>{});

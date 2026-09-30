@@ -188,6 +188,27 @@
           "$athleteId": { ".validate": "newData.isNumber() && newData.val() > 0" }
         },
 
+        // ── Etiquettes d athletes et dernier contact, dans le dossier DU COACH ──
+        // Meme raison que coachNotes : ce bloc BORNE. Vingt etiquettes au plus,
+        // tenues par le motif des identifiants (e0 a e19, ETIQ_MAX cote client),
+        // un nom de 24 caracteres (ETIQ_LIB_MAX), une couleur #rrggbb.
+        "etiquettes": {
+          "$id": {
+            ".validate": "$id.matches(/^e([0-9]|1[0-9])$/) && newData.hasChildren(['lib', 'couleur'])",
+            "lib":     { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 24" },
+            "couleur": { ".validate": "newData.isString() && newData.val().matches(/^#[0-9a-fA-F]{6}$/)" },
+            "$autre": { ".validate": false }
+          }
+        },
+        "etiquettesAth": {
+          "$athleteId": {
+            "$i": { ".validate": "$i.matches(/^([0-9]|1[0-9])$/) && newData.isString() && newData.val().matches(/^e([0-9]|1[0-9])$/)" }
+          }
+        },
+        "contacts": {
+          "$athleteId": { ".validate": "newData.isNumber() && newData.val() > 0" }
+        },
+
         "coachEmailKey": {
           ".validate": "auth.token.email.replace('.', ',') === $emailKey || (data.exists() && newData.val() === data.val())"
         },

@@ -38138,7 +38138,7 @@ async function testExercices(){
             if(/^on/i.test(a.name)) return _echec(x.tagName+' porte '+a.name);
         return true;})());
 
-      ok('« Inactifs » se place entre la liste d’athlètes et « jamais démarré »',(()=>{
+      ok('« Inactifs » précède « jamais démarré », et « en attente » les suit',(()=>{
         // L'ordre du bas va du plus proche au plus lointain : un athlète
         // endormi s'est déjà entraîné, celui d'en dessous n'a jamais commencé,
         // et le dernier n'a même pas de compte.
@@ -38149,7 +38149,7 @@ async function testExercices(){
         if(!i) return _echec('aucun conteneur « inactifs »');
         if(!j||!v||!l) return _echec('un conteneur voisin manque');
         const S=Node.DOCUMENT_POSITION_FOLLOWING;
-        if(!(l.compareDocumentPosition(i)&S)) return _echec('« inactifs » précède la liste d’athlètes');
+        // Depuis le 30/09/2026, les deux cadres sont remontés sous « À traiter ».
         if(!(i.compareDocumentPosition(j)&S)) return _echec('« inactifs » ne précède pas « jamais démarré »');
         if(!(j.compareDocumentPosition(v)&S)) return _echec('« jamais démarré » ne précède pas « en attente »');
         // Et il est rempli partout où « jamais démarré » l'est : un cadre qui
@@ -38160,7 +38160,7 @@ async function testExercices(){
         const ni=s.split('_rendreInactifs').length-1;
         return ni===nj?true:_echec(ni+' appel(s) contre '+nj+' pour « jamais démarré »');})());
 
-      ok('Les listes « jamais démarré » et « en attente » sont SOUS la liste d’athlètes',(()=>{
+      ok('La liste « en attente » est SOUS la liste d’athlètes, en fin de page',(()=>{
         const l=document.getElementById('ch-clients-list');
         const j=document.getElementById('ch-jamais-demarre');
         const i=document.getElementById('ch-invitations');
@@ -38168,17 +38168,15 @@ async function testExercices(){
         if(!j) return _echec('aucun conteneur « jamais démarré »');
         if(!i) return _echec('aucun conteneur « en attente »');
         const S=Node.DOCUMENT_POSITION_FOLLOWING;
-        if(!(l.compareDocumentPosition(j)&S))
-          return _echec('« jamais démarré » précède encore la liste d’athlètes');
         if(!(l.compareDocumentPosition(i)&S))
           return _echec('« en attente » précède encore la liste d’athlètes');
         // ET RIEN NE LES SUIT : « en bas de la page », c'est la fin du panneau,
         // pas un rang intermédiaire entre deux boutons de navigation.
-        const pere=j.parentElement;
-        if(!pere||i.parentElement!==pere)
-          return _echec('les deux conteneurs ne sont plus frères');
+        // « Jamais démarré » est remonté sous « À traiter » (30/09/2026) : « en attente » reste le dernier.
+        const pere=i.parentElement;
+        if(!pere) return _echec('« en attente » sans parent');
         const enf=Array.from(pere.children);
-        if(enf[enf.length-1]!==i||enf[enf.length-2]!==j)
+        if(enf[enf.length-1]!==i)
           return _echec('quelque chose les suit : '
             +enf.slice(-2).map(e=>e.id||e.tagName).join(', '));
         // LES IDENTIFIANTS N'ONT PAS BOUGÉ : _rendreJamaisDemarre et
@@ -49213,6 +49211,105 @@ async function testExercices(){
       const c=_fjCopier(t.entries,j,'matin');
       if(c[0].qty!==60||c[1].qty!==250||c[0].id===t.entries[0].id) return _echec('copie');
       return true;})());
+    // ── LES ÉTIQUETTES D'ATHLÈTES ET LE DERNIER CONTACT ──
+    const _ETQ_J=864e5;
+    const _ETQc=(o)=>Object.assign({id:'eq1',fname:'Léa',email:'eq1@t.fr',role:'athlete',coachId:'ceq',coachSince:Date.now()-90*_ETQ_J,
+      sessions:[{date:Date.now()-2*_ETQ_J}],bilans:[]},o||{});
+    ok('Étiquettes : créer, poser en masse, filtrer ; une étiquette supprimée quitte tous les athlètes',(()=>{
+      const sv={u:currentUser,s:saveUser,f:_filtreEtiquette};
+      try{
+        saveUser=()=>true;
+        currentUser={id:'ceq',email:'ceq@t.fr',role:'coach'};
+        const a=etiquetteCreer('Prépa compét'), b=etiquetteCreer('  Reprise   blessure ','#3b82f6');
+        if(a!=='e0'||b!=='e1') return _echec('identifiants : '+a+' '+b);
+        if(currentUser.etiquettes.e1.lib!=='Reprise blessure'||currentUser.etiquettes.e1.couleur!=='#3b82f6') return _echec('nettoyage : '+JSON.stringify(currentUser.etiquettes.e1));
+        if(etiquetteCreer('prépa COMPÉT')!=='e0') return _echec('doublon créé');
+        if(etiquetteCreer('x'.repeat(40))!=='e2'||currentUser.etiquettes.e2.lib.length!==24) return _echec('24 caractères');
+        const cl=[_ETQc(),_ETQc({id:'eq2',fname:'Tom'}),_ETQc({id:'eq3',fname:'Zoé'})];
+        if(etiquetterAthletes(['eq1','eq3'],'e0',true)!==2) return _echec('pose en masse');
+        if(etiquetterAthletes(['eq1','eq3'],'e0',true)!==0) return _echec('pose en double');
+        etiquetterAthletes(['eq3'],'e1',true);
+        const f=athletesAvecEtiquette(cl,'e0',currentUser).map(c=>c.id).join();
+        if(f!=='eq1,eq3') return _echec('filtre e0 : '+f);
+        if(athletesAvecEtiquette(cl,'e1',currentUser).map(c=>c.id).join()!=='eq3') return _echec('filtre e1');
+        if(athletesAvecEtiquette(cl,null,currentUser).length!==3) return _echec('sans filtre');
+        // renderClientList applique le filtre, au même endroit que les puces.
+        if(String(renderClientList).indexOf('athletesAvecEtiquette(vus,_filtreEtiquette')<0) return _echec('renderClientList ne filtre pas');
+        _filtreEtiquette='e1';
+        etiquetteSupprimer('e1');
+        if(_filtreEtiquette!==null) return _echec('filtre resté sur une étiquette supprimée');
+        if(JSON.stringify(currentUser.etiquettesAth)!=='{"eq1":["e0"],"eq3":["e0"]}') return _echec('retrait : '+JSON.stringify(currentUser.etiquettesAth));
+        // Vingt au plus : le motif de la base (e0 à e19) le tient aussi.
+        for(let i=0;i<30;i++) etiquetteCreer('t'+i);
+        if(etiquettesDe(currentUser).length!==20||Object.keys(currentUser.etiquettes).some(k=>!/^e([0-9]|1[0-9])$/.test(k))) return _echec('plafond de 20');
+        // Un athlète supprimé : ses entrées partent.
+        currentUser.contacts={eq3:Date.now()};
+        etiquettesOublierAthlete(currentUser,'eq3');
+        if(currentUser.etiquettesAth.eq3||currentUser.contacts.eq3) return _echec('athlète supprimé : entrées restées');
+        if(String(supprimerAthleteDefinitivement).indexOf('etiquettesOublierAthlete(')<0) return _echec('la suppression ne nettoie pas');
+        return true;
+      } finally { currentUser=sv.u; saveUser=sv.s; _filtreEtiquette=sv.f; }})());
+    ok('Étiquettes : dans le dossier du coach seulement, bornées par la règle, absentes du profil public',(()=>{
+      if(CHAMPS_NON_SANTE.indexOf('etiquettes')<0||CHAMPS_NON_SANTE.indexOf('etiquettesAth')<0||CHAMPS_NON_SANTE.indexOf('contacts')<0) return _echec('non classés');
+      if(CLOUD.CHAMPS_PROFIL_COACH.some(k=>/^(etiquettes|etiquettesAth|contacts)$/.test(k))) return _echec('profil public');
+      // Aucune fonction du lot n'écrit le dossier d'un athlète.
+      for(const f of [etiquetteCreer,etiquetteSupprimer,etiquetterAthletes,noterContact])
+        if(/pushOne|DB\.set\('users'/.test(String(f))) return _echec(f.name+' écrit un dossier d’athlète');
+      return true;})());
+    ok('sansContact : J-15 vrai, J-3 faux ; la réponse au bilan et le rattachement récent comptent',(()=>{
+      const t=Date.now(), c=_ETQc();
+      if(sansContact(c,{eq1:t-15*_ETQ_J},t)!==true) return _echec('J-15');
+      if(sansContact(c,{eq1:t-3*_ETQ_J},t)!==false) return _echec('J-3');
+      if(sansContact(c,{},t)!==true) return _echec('jamais : faux');
+      if(sansContact(_ETQc({bilans:[{date:t-4*_ETQ_J,reponseCoach:'ok',reponseDate:t-4*_ETQ_J}]}),{},t)!==false) return _echec('réponse au bilan ignorée');
+      if(sansContact(_ETQc({videos:[{id:'v',feedbackDate:t-2*_ETQ_J}]}),{},t)!==false) return _echec('retour vidéo ignoré');
+      if(sansContact(_ETQc({coachSince:t-5*_ETQ_J}),{},t)!==false) return _echec('rattaché il y a 5 jours');
+      if(sansContact(c,{eq1:t-8*_ETQ_J},t,7)!==true) return _echec('jours en paramètre');
+      if(sansContact(_ETQc({_fromCode:true}),{},t)!==false) return _echec('_fromCode');
+      // La ligne « À traiter » : actifs seulement, reportable, verte.
+      const l=lignesSansContact([c,_ETQc({id:'eq2',sessions:[{date:t-40*_ETQ_J}],createdAt:t-60*_ETQ_J})],{},t);
+      if(l.length!==1||l[0].type!=='silence'||l[0].list.map(x=>x.id).join()!=='eq1'||l[0].color!=='var(--green)'||l[0].label!=='Sans échange depuis 14 j') return _echec(JSON.stringify(l.map(r=>[r.type,r.label,r.list.map(x=>x.id)])));
+      if(lignesSansContact([c],{},t,()=>true).length) return _echec('reporté : encore là');
+      const r=RELANCE_LIGNES.find(x=>x.type==='silence');
+      return (r&&!r.auto)?true:_echec('RELANCE_LIGNES');})());
+    ok('saveReponseBilan met à jour le dernier contact (et le reste de l’envoi aussi)',(()=>{
+      const sv={u:currentUser,s:saveUser,users:DB.get('users')};
+      const b={date:Date.now()-_ETQ_J,'bil-motivation':'8'};
+      const ta=document.createElement('textarea');
+      try{
+        saveUser=()=>true;
+        const users=Object.assign({},sv.users||{}); users['eq1@t.fr']=_ETQc({bilans:[b]}); DB.set('users',users);
+        currentUser={id:'ceq',email:'ceq@t.fr',role:'coach',exAlias:{},exMuscles:{},sessions:[],bilans:[]};
+        const id=_idBilan(b);
+        ta.id=_taIdBilan(id); ta.value='Bien reçu, on continue.'; document.body.appendChild(ta);
+        const avant=Date.now();
+        if(saveReponseBilan('eq1@t.fr',id)!==true) return _echec('envoi refusé');
+        if(!(currentUser.contacts&&currentUser.contacts.eq1>=avant)) return _echec('contacts : '+JSON.stringify(currentUser.contacts));
+        if(DB.get('users')['eq1@t.fr'].contacts) return _echec('écrit chez l’athlète');
+        for(const f of [rvEnvoyer,saveVideoCorrection,msgEnvoyer,_waBoutonTodo,_wagPreparer])
+          if(String(f).indexOf('noterContact(')<0) return _echec(f.name+' ne note pas le contact');
+        return true;
+      } finally { ta.remove(); currentUser=sv.u; saveUser=sv.s; DB.set('users',sv.users||{}); }})());
+    ok('Les cadres « Inactifs » et « Jamais démarré » sont juste sous « À traiter », repliés à trois',(()=>{
+      const td=document.getElementById('ch-todo'), i=document.getElementById('ch-inactifs'), j=document.getElementById('ch-jamais-demarre'), l=document.getElementById('ch-clients-list');
+      if(!td||!i||!j||!l) return _echec('conteneur manquant');
+      const S=Node.DOCUMENT_POSITION_FOLLOWING;
+      if(td.nextElementSibling!==i||i.nextElementSibling!==j) return _echec('pas juste sous « À traiter »');
+      if(!(j.compareDocumentPosition(l)&S)) return _echec('sous la liste');
+      const t=Date.now();
+      const cinq=[1,2,3,4,5].map(n=>_ETQc({id:'in'+n,fname:'Dort'+n,sessions:[{date:t-40*_ETQ_J}]}));
+      const d=document.createElement('div'); d.innerHTML=_htmlInactifs(cinq,t);
+      const vis=[...d.querySelectorAll('.cadre-replie > div > div, .cadre-replie .cr-liste > div')].length;
+      if(d.querySelectorAll('.cr-plus[hidden]').length!==1) return _echec('rien de replié');
+      const b=d.querySelector('.cr-voir');
+      if(!b||!/Voir tout \(5\)/.test(b.textContent)) return _echec('pas de « voir tout »');
+      document.body.appendChild(d);
+      try{ cadreVoirTout(b); if(d.querySelector('.cr-plus[hidden]')||d.querySelector('.cr-voir')) return _echec('ne se déplie pas'); }
+      finally{ d.remove(); }
+      const jd=document.createElement('div');
+      jd.innerHTML=_htmlJamaisDemarre(cinq.map(c=>Object.assign({},c,{sessions:[]})),t);
+      const cartes=jd.querySelectorAll('.jd-carte'), cachees=jd.querySelectorAll('.jd-carte[hidden]');
+      return (cartes.length===5&&cachees.length===2)?true:_echec('jamais démarré : '+cartes.length+' cartes, '+cachees.length+' repliées ('+vis+')');})());
     // ── LA FIN D'UN PROGRAMME, DANS « À TRAITER » ──
     // Un bloc de 4 semaines commencé le lundi 14 septembre 2026 : dernier jour le dimanche 11 octobre.
     const _PF=(o)=>Object.assign({id:'pf1',fname:'Léa',email:'pf@t.fr',programme:{debut:new Date(2026,8,14,9,0).getTime(),semaines:4,decharges:[]}},o||{});
@@ -50608,8 +50705,9 @@ async function testExercices(){
 
     // ══ LOT C3 — LES RÈGLES DE RELANCE (29/09/2026) ════════════════════════
     // DIX-SEPT depuis la fin de programme (30/09/2026) : « Bloc qui se termine », grisée (c'est le travail du coach).
-    ok('C3 — dix-sept lignes, celles de « À traiter » ; cinq automatisables, et la douleur, le décrochage, la progression grisés avec leur raison',(()=>{
-      if(RELANCE_LIGNES.length!==17) return _echec(RELANCE_LIGNES.length+' lignes');
+    // DIX-HUIT depuis le dernier contact (30/09/2026) : « Sans échange depuis 14 j », grisée.
+    ok('C3 — dix-huit lignes, celles de « À traiter » ; cinq automatisables, et la douleur, le décrochage, la progression grisés avec leur raison',(()=>{
+      if(RELANCE_LIGNES.length!==18) return _echec(RELANCE_LIGNES.length+' lignes');
       const auto=RELANCE_LIGNES.filter(l=>l.auto).map(l=>l.type).sort().join();
       if(auto!==RELANCE_SIGNAUX.slice().sort().join()) return _echec('automatisables : '+auto);
       for(const t of ['douleur','douleurdiff','decrochage','entrainement']){
@@ -50666,8 +50764,8 @@ async function testExercices(){
         _relJournal=relJournalAplati({'lea@t,fr':{a:{at:t-864e5,signal:'overdue',moyen:'push',statut:'parti',texte:'x'},
           b:{at:t-10*864e5,signal:'bilan',moyen:'canal',statut:'parti'}},'tom@t,fr':{c:{at:t-2*864e5,signal:'nostart',moyen:'push',statut:'non_parti',raison:'aucun_abonnement'}}});
         renderRelancesCoach();
-        // Dix-sept lignes depuis la fin de programme (« Bloc qui se termine », grisée).
-        if(z.querySelectorAll('.rel-l').length!==17||z.querySelectorAll('.rel-l-off').length!==12) return _echec('lignes');
+        // Dix-huit lignes depuis le dernier contact (« Sans échange depuis 14 j », grisée).
+        if(z.querySelectorAll('.rel-l').length!==18||z.querySelectorAll('.rel-l-off').length!==13) return _echec('lignes');
         if([...z.querySelectorAll('.rel-l-off')].some(l=>l.querySelector('input,select'))) return _echec('une ligne grisée réglable');
         if(z.querySelectorAll('.rel-l-on').length!==1) return _echec('ligne allumée');
         // Cette semaine : deux entrées sur sept jours, une partie, une pas partie (avec sa raison).
