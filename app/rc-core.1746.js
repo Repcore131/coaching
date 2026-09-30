@@ -3547,6 +3547,84 @@ function syncEmpreintes(doc){ return _syncCarte(_syncVersArbre(doc)); }
  * @param {Object} distant      la version du serveur
  * @returns {Object}            le dossier fusionne, pierres tombales appliquees
  */
+// La clef de pierre tombale de chaque element (voir marquerSupprime) : l'id
+// pour une seance ou une video, « date|type » pour un bilan.
+const SYNC_CLEF_TOMBE=Object.freeze({
+  sessions:s=>(s&&s.id!=null)?String(s.id):null,
+  videos:  v=>(v&&v.id!=null)?String(v.id):null,
+  bilans:  b=>b?(String(b.date)+'|'+String(b.type||'')):null
+});
+function _syncTableau(a){ return Array.isArray(a)?a:(_syncEstObjet(a)?Object.values(a):[]); }
+/** PURE. Les pierres tombales reunies de plusieurs dossiers : {type:Set}. */
+function syncTombes(...docs){
+  const out={sessions:new Set(),videos:new Set(),bilans:new Set()};
+  for(const d of docs){
+    const s=(d&&d.supprimes)||{};
+    for(const k of Object.keys(out)) if(_syncEstObjet(s[k])) for(const c of Object.keys(s[k])) out[k].add(String(c));
+  }
+  return out;
+}
+/** PURE. Une copie de `doc` sans les elements que `tombes` designe : ce que le
+ *  serveur DOIT encore porter apres un envoi legitime. */
+function syncSansTombes(doc,tombes){
+  if(!_syncEstObjet(doc)) return doc;
+  const out=Object.assign({},doc);
+  for(const k of Object.keys(SYNC_CLEF_TOMBE)){
+    if(doc[k]==null) continue;
+    out[k]=_syncTableau(doc[k]).filter(x=>{ const c=x!=null?SYNC_CLEF_TOMBE[k](x):null; return x!=null&&!(c&&tombes[k].has(c)); });
+  }
+  return out;
+}
+/**
+ * PURE. LA FUSION SANS BASE (30/09/2026). Sans base, syncFusion rend le local
+ * tel quel : la premiere synchro d'un appareil neuf, ou d'une base perdue,
+ * ecrasait donc le serveur par une copie locale qui n'avait jamais vu ses
+ * seances. Ici, rien ne se perd :
+ *   • sessions, videos, bilans (SYNC_PAR_CLEF) : UNION par clef, local
+ *     d'abord, puis les pierres tombales des DEUX cotes appliquees ;
+ *   • supprimes : union des pierres, date la plus recente ;
+ *   • tout autre champ : le distant si le local est vide ou absent, sinon le
+ *     local ; updatedAt : le plus grand.
+ */
+function syncUnionSansBase(local,distant){
+  if(!_syncEstObjet(distant)) return local;
+  if(!_syncEstObjet(local)) return distant;
+  const out={};
+  const tombes=syncTombes(local,distant);
+  for(const k of new Set([...Object.keys(distant),...Object.keys(local)])){
+    if(k in SYNC_PAR_CLEF){
+      const vus=new Set(), l=[];
+      for(const x of _syncTableau(local[k]).concat(_syncTableau(distant[k]))){
+        if(x==null) continue;
+        let c=SYNC_PAR_CLEF[k](x);
+        if(c==null) c='x:'+_syncFnv(JSON.stringify(_syncCanon(x))||'');
+        if(vus.has(c)) continue;
+        vus.add(c);
+        const t=SYNC_CLEF_TOMBE[k](x);
+        if(t&&tombes[k].has(t)) continue;
+        l.push(x);
+      }
+      l.sort((a,b)=>(Number(a&&a.date)||0)-(Number(b&&b.date)||0));
+      if(l.length||local[k]!==undefined||distant[k]!==undefined) out[k]=l;
+    } else if(k==='supprimes'){
+      const m={};
+      for(const src of [distant.supprimes,local.supprimes]){
+        if(!_syncEstObjet(src)) continue;
+        for(const t of Object.keys(src)){
+          if(!_syncEstObjet(src[t])) continue;
+          m[t]=m[t]||{};
+          for(const c of Object.keys(src[t])) m[t][c]=Math.max(Number(m[t][c])||0,Number(src[t][c])||0);
+        }
+      }
+      out.supprimes=m;
+    } else if(k==='updatedAt'){
+      out.updatedAt=Math.max(Number(local.updatedAt)||0,Number(distant.updatedAt)||0);
+    } else {
+      out[k]=(_syncCanon(local[k])===undefined)?distant[k]:local[k];
+    }
+  }
+  return out;
+}
 function syncFusion(base,local,distant){
   if(!_syncEstObjet(distant)) return local;
   if(!_syncEstObjet(local)) return distant;
@@ -3635,12 +3713,34 @@ const CLOUD={
         while(hist.length>this._HIST_BASES) hist.shift();
       }
     }catch(e){}
+    // `lu` : la date a laquelle cette base a servi. C'est ce qui permet, stockage
+    // plein, de liberer d'abord les bases des dossiers qu'on n'ouvre plus.
+    const val=JSON.stringify({h:syncEmpreintes(doc),maj:Number(doc.updatedAt)||0,lu:Date.now()});
     try{
-      localStorage.setItem(this._cleBase(email),
-        JSON.stringify({h:syncEmpreintes(doc),maj:Number(doc.updatedAt)||0}));
+      localStorage.setItem(this._cleBase(email),val);
     }catch(e){
-      try{ localStorage.removeItem(this._cleBase(email)); }catch(e2){}
+      // QUOTA : ON LIBERE D'ABORD, ON RENONCE ENSUITE (30/09/2026). Sans base,
+      // le prochain envoi de ce dossier ne pourrait plus fusionner a trois voies.
+      let ok=false;
+      try{ purgerPhotosAnciennes(); }catch(e2){}
+      try{ this._purgerBasesAnciennes(email); }catch(e2){}
+      try{ localStorage.setItem(this._cleBase(email),val); ok=true; }catch(e2){}
+      if(!ok) try{ localStorage.removeItem(this._cleBase(email)); }catch(e2){}
     }
+  },
+  // Les bases des AUTRES dossiers qui n'ont pas servi depuis BASE_INUTILE_MS :
+  // un athlete que le coach n'a pas ouvert depuis un mois. Leur perte ne coute
+  // qu'une fusion sans base (union) a la prochaine ouverture.
+  _purgerBasesAnciennes(sauf){
+    const lim=Date.now()-SYNC_BASE_INUTILE_MS;
+    let n=0;
+    for(const k of Object.keys(localStorage)){
+      if(k.indexOf('rc_sync_base:')!==0||k===this._cleBase(sauf)) continue;
+      if(typeof currentUser==='object'&&currentUser&&k===this._cleBase(currentUser.email)) continue;
+      let lu=0; try{ lu=Number((JSON.parse(localStorage.getItem(k))||{}).lu)||0; }catch(e){ lu=0; }
+      if(lu<lim){ try{ localStorage.removeItem(k); n++; }catch(e){} }
+    }
+    return n;
   },
 
   // ── Quelle base pour CE dossier ? ───────────────────────────────────────
@@ -4479,9 +4579,10 @@ const CLOUD={
           if(_dp!=null) safe.sante.prises=_dp; else delete safe.sante.prises;
         }catch(e){}
       }
-        if(d&&_base){
+        // SANS BASE : l'union conservatrice, et non plus la copie locale brute.
+        if(d){
           const _avant=Number(safe.updatedAt)||0;
-          safe=syncFusion(_base.h,safe,d);
+          safe=_base?syncFusion(_base.h,safe,d):syncUnionSansBase(safe,d);
           _retirerPrives();
           // UN HORODATAGE STRICTEMENT SUPERIEUR A CELUI DU SERVEUR. Un appareil
           // dont l'horloge retarde aurait sinon pose une date anterieure, et
@@ -4514,8 +4615,20 @@ const CLOUD={
       if(!_etag) throw new Error('Serveur illisible (pas d’ETag, '+((this._lectures||{})[email]||'?')
         +') : envoi remis à plus tard pour ne rien écraser.');
       _integrer(distant);
-      if(distant&&(distant.updatedAt||0)>(safe.updatedAt||0)){
-        const volume=o=>(((o&&o.sessions)||[]).length)+(((o&&o.bilans)||[]).length);
+      // ══ LE GARDE-FOU COMPARE LE CONTENU, PLUS LES DATES (30/09/2026) ══════
+      // Il ne se declenchait jamais : pushOne et saveUser posent updatedAt =
+      // Date.now() juste avant, et le local etait donc TOUJOURS « plus recent ».
+      // La question est desormais « le dossier qui part porte-t-il moins que le
+      // serveur ? » — seances, bilans, videos, sans compter ce qu'une pierre
+      // tombale du local retire legitimement ; et pour le programme, moins de
+      // travail que le serveur SI celui-ci a bouge depuis la base (sinon, c'est
+      // le local qui a retire, volontairement).
+      const volume=o=>(((o&&o.sessions)||[]).length)+(((o&&o.bilans)||[]).length)+(((o&&o.videos)||[]).length);
+      const travail=o=>{ try{ return _cptContenu((o&&o.sessions_config)||[]); }catch(e){ return 0; } };
+      const _vif=d=>syncSansTombes(d,syncTombes(safe));
+      const _progBouge=d=>{ try{ return !_base||syncEmpreintes(d)['sessions_config']!==_base.h['sessions_config']; }catch(e){ return true; } };
+      const _plusPauvre=d=>!!d&&((volume(safe)<volume(_vif(d)))||(_progBouge(d)&&travail(safe)<travail(d)));
+      if(_plusPauvre(distant)){
         // LE PROGRAMME ETAIT LE SEUL CHAMP DISPUTE QUE LA DEFENSE NE REGARDAIT
         // PAS — et c'est le plus dispute de tous : le coach l'edite depuis son
         // ordinateur pendant que le telephone de l'athlete pousse son propre
@@ -4533,8 +4646,7 @@ const CLOUD={
         // ET DEUX MESSAGES DISTINCTS : melanger sept creneaux a un historique
         // de seances rendrait le chiffre annonce incomprehensible, et un
         // message qu'on ne comprend pas est un message qu'on clique sans lire.
-        const travail=o=>{ try{ return _cptContenu((o&&o.sessions_config)||[]); }catch(e){ return 0; } };
-        const _tS=travail(safe), _tD=travail(distant);
+        const _tS=travail(safe), _tD=_progBouge(distant)?travail(distant):_tS;
         // ══ AVANT DE REFUSER : DESCENDRE, PUIS REPARTIR UNE FOIS ════════════
         //
         // Le dossier local est plus pauvre PARCE QU'IL N'A PAS ENCORE DESCENDU.
@@ -4553,7 +4665,7 @@ const CLOUD={
         // UNE SEULE FOIS, par le drapeau : si le second envoi se fait refuser a
         // son tour, c'est que la fusion n'a pas suffi, et boucler n'y changerait
         // rien.
-        if(!rattrapage&&((_tS<_tD)||(volume(safe)<volume(distant)))){
+        if(!rattrapage&&((_tS<_tD)||(volume(safe)<volume(_vif(distant))))){
           // DANS LE TOUR EN COURS : passer par la file attendrait la fin de
           // cet envoi, qui attend cette descente.
           const descendu=await this.syncUser(email,false,true).catch(()=>false);
@@ -4582,10 +4694,10 @@ const CLOUD={
           refus._actionnable=true;
           throw refus;
         }
-        if(volume(safe)<volume(distant)){
+        if(volume(safe)<volume(_vif(distant))){
           this._setSyncStatus(false);
           const refus=new Error('Version distante plus récente et plus complète ('
-            +volume(distant)+' entrées contre '+volume(safe)
+            +volume(_vif(distant))+' entrées contre '+volume(safe)
             +') : envoi annulé pour ne pas écraser tes données.');
           // Refus délibéré, pas une panne : le rejouer à chaque démarrage
           // échouerait à l'identique indéfiniment. Il ne va pas dans la file.
@@ -4645,6 +4757,9 @@ const CLOUD={
       if(!_ne) throw new Error('Serveur illisible après un conflit : envoi remis à plus tard.');
       _etag=_ne;
       _integrer(_nd);
+      // Meme garantie apres une refusion : jamais moins que le serveur, pierres
+      // tombales mises a part. Rejouable : la prochaine tentative redescendra.
+      if(_plusPauvre(_nd)) throw new Error('Le serveur porte plus que ce dossier après un conflit : envoi remis à plus tard.');
       }
       this._setSyncStatus(r.ok);
       if(!r.ok){
@@ -6154,6 +6269,8 @@ function reinjecterSeancesSession(dossier,session){
   return n;
 }
 // Trois 412 de suite sur le meme dossier : l'envoi repart par la file de relance.
+// Une base non servie depuis trente jours est la premiere a partir, stockage plein.
+const SYNC_BASE_INUTILE_MS=30*864e5;
 const CLOUD_CONFLITS_MAX=3;
 const DB={
   // N3.4 — LES DEUX CLEFS QUI PORTENT DES DOSSIERS SONT REMISES A PLAT ICI.
@@ -11725,6 +11842,12 @@ async function doRegister(){
       toast(cloudUser
         ?'Ce compte existe déjà : tes données ont été récupérées.'
         :'Ce compte est déjà sur cet appareil : te voilà connecté.','var(--green)');
+      // LA BASE DU DOSSIER ADOPTE (30/09/2026) : il vient du serveur, il en est
+      // donc la version de reference. Sans elle, le premier envoi de cet
+      // appareil partait sans fusion a trois voies.
+      if(cloudUser){
+        try{ dossierExistant._syncMaj=Number(cloudUser.updatedAt)||0; CLOUD._poserBase(em,cloudUser); }catch(e){}
+      }
       users[em]=dossierExistant;DB.set('users',users);
       currentUser=dossierExistant;DB.set('session',dossierExistant);
       // ── LE COMPTE ENTRE AU REGISTRE DE L'APPAREIL DÈS QU'IL EXISTE ──────

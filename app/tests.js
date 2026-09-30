@@ -8798,6 +8798,97 @@ async function testExercices(){
         const _eDoc=(ids,maj)=>({id:'etag',email:'etag@t.fr',role:'athlete',fname:'E',updatedAt:maj||1000,
           consent:{health:true,policyVersion:POLICY_VERSION},sessions:ids.map((id,i)=>({id,date:1000+i,name:'Push',data:{}}))});
         const _eIds=d=>((d&&d.sessions)||[]).map(x=>x&&x.id).sort().join(',');
+        // ══ 30/09/2026 — SANS BASE, ET LA GARDE PAR LE CONTENU ═══════════════
+        okA('Sans base (a) : le distant porte une séance S absente du local → le PUT contient S',async()=>{
+          const sv=_eMonter();
+          try{
+            const dist=_eDoc(['S0','S'],1500);
+            const srv=_fauxRTDB(dist);
+            window.fetch=srv.fetch;
+            currentUser={email:'autre@t.fr',role:'coach'};
+            localStorage.removeItem(CLOUD._cleBase('etag@t.fr'));
+            localStorage.setItem('rc_users',JSON.stringify({'etag@t.fr':_eDoc(['S0'],1000)}));
+            const local=_eDoc(['S0','L'],Date.now());   // plus récent, sans S
+            await CLOUD._doPushOne('etag@t.fr',local,false,{base:null});
+            if(srv.puts.length!==1) return _echec(srv.puts.length+' PUT');
+            const ids=_eIds(srv.puts[0]);
+            return ids==='L,S,S0'?true:_echec('PUT : '+ids);
+          } finally { _eRanger(sv); }
+        });
+        okA('Garde (b) : local plus pauvre mais plus récent → le rattrapage (syncUser) est appelé',async()=>{
+          const sv=_eMonter(); const svSync=CLOUD.syncUser;
+          try{
+            const d0=_eDoc(['S0']);
+            const dist=_eDoc(['S0','S1','S2'],1500);
+            const srv=_fauxRTDB(dist);
+            window.fetch=srv.fetch;
+            currentUser={email:'autre@t.fr',role:'coach'};
+            localStorage.setItem('rc_users',JSON.stringify({'etag@t.fr':d0}));
+            // Une base qui NE CONNAIT PAS S1 et S2, et un distant qui a bougé :
+            // la fusion garde S1/S2… sauf si le local les porte comme retirées
+            // sans pierre tombale. On force le cas : la base les connaît.
+            CLOUD._poserBase('etag@t.fr',dist);
+            const local=_eDoc(['S0'],Date.now());   // plus pauvre, horodatage plus récent
+            local._syncMaj=1500;
+            let appels=[];
+            CLOUD.syncUser=async(em,force,dansTour)=>{ appels.push([em,dansTour]); return false; };
+            let err=null;
+            try{ await CLOUD._doPushOne('etag@t.fr',local,false,{base:CLOUD._baseDe('etag@t.fr',local)}); }catch(e){ err=e; }
+            if(!appels.length) return _echec('syncUser n\'est pas appelé');
+            if(appels[0][0]!=='etag@t.fr'||appels[0][1]!==true) return _echec('appel : '+JSON.stringify(appels));
+            if(srv.puts.length) return _echec('un dossier plus pauvre est parti : '+_eIds(srv.puts[0]));
+            return (err&&err._nonRejouable)?true:_echec('pas de refus après un rattrapage sans effet');
+          } finally { CLOUD.syncUser=svSync; _eRanger(sv); }
+        });
+        okA('Connexion (c) : sur un appareil neuf, la base existe après doLogin, et la copie porte _syncMaj',async()=>{
+          const sv=_eMonter();
+          const svSi=CLOUD.signIn, svPU=CLOUD.pullUpdatedAt, svPl=CLOUD.pullUser, svRoute=window.routeUser,
+                svPay=window.doitVoirLePaywall, svCc=CLOUD._compteCree, svIns=CLOUD.inscrireClientCoach;
+          const e1=document.getElementById('l-email'), e2=document.getElementById('l-pwd');
+          const v1=e1&&e1.value, v2=e2&&e2.value;
+          try{
+            const dist=_eDoc(['S0','S1'],1700);
+            localStorage.removeItem(CLOUD._cleBase('etag@t.fr'));
+            const us=JSON.parse(localStorage.getItem('rc_users')||'{}'); delete us['etag@t.fr'];
+            localStorage.setItem('rc_users',JSON.stringify(us));
+            CLOUD.signIn=async()=>true; CLOUD._compteCree=false;
+            CLOUD.pullUpdatedAt=async()=>1700; CLOUD.pullUser=async()=>JSON.parse(JSON.stringify(dist));
+            window.routeUser=()=>{}; window.doitVoirLePaywall=()=>false;
+            if(!e1||!e2) return _echec('champs de connexion absents');
+            e1.value='etag@t.fr'; e2.value='secret1';
+            await doLogin();
+            clearTimeout(CLOUD._pushTimer);
+            const b=CLOUD._lireBase('etag@t.fr');
+            if(!b||b.maj!==1700) return _echec('base après login : '+JSON.stringify(b&&{maj:b.maj}));
+            const u=(DB.get('users')||{})['etag@t.fr'];
+            if(!u||u._syncMaj!==1700) return _echec('_syncMaj : '+(u&&u._syncMaj));
+            // doRegister, sur un compte déjà au serveur : la base est posée aussi.
+            return /CLOUD\._poserBase\(em,cloudUser\)/.test(String(doRegister))?true:_echec('doRegister ne pose pas la base du dossier adopté');
+          } finally {
+            CLOUD.signIn=svSi; CLOUD.pullUpdatedAt=svPU; CLOUD.pullUser=svPl; window.routeUser=svRoute;
+            window.doitVoirLePaywall=svPay; CLOUD._compteCree=svCc; CLOUD.inscrireClientCoach=svIns;
+            if(e1) e1.value=v1||''; if(e2) e2.value=v2||'';
+            _eRanger(sv);
+          }
+        });
+        okA('Stockage plein : _poserBase libère d’abord (photos, bases de plus de 30 jours) avant de renoncer',async()=>{
+          const sv=_eMonter(); const si=Storage.prototype.setItem;
+          const vieille=CLOUD._cleBase('vieux@t.fr'), recente=CLOUD._cleBase('recent@t.fr');
+          try{
+            si.call(localStorage,vieille,JSON.stringify({h:{},maj:1,lu:Date.now()-40*864e5}));
+            si.call(localStorage,recente,JSON.stringify({h:{},maj:1,lu:Date.now()}));
+            let n=0;
+            Storage.prototype.setItem=function(k,v){
+              if(k===CLOUD._cleBase('etag@t.fr')&&localStorage.getItem(vieille)!=null){ const e=new Error('q'); e.name='QuotaExceededError'; throw e; }
+              return si.call(this,k,v);
+            };
+            CLOUD._poserBase('etag@t.fr',_eDoc(['S0'],1800));
+            if(localStorage.getItem(vieille)!=null) return _echec('la base de plus de 30 jours n\'est pas libérée');
+            if(localStorage.getItem(recente)==null) return _echec('une base récente a été supprimée');
+            const b=CLOUD._lireBase('etag@t.fr');
+            return (b&&b.maj===1800)?true:_echec('la base n\'est pas posée après libération');
+          } finally { Storage.prototype.setItem=si; localStorage.removeItem(vieille); localStorage.removeItem(recente); _eRanger(sv); }
+        });
         okA('ETag (a) : 412 sur if-match E1 → le second PUT porte la séance S2 du serveur ET la modification locale',async()=>{
           const sv=_eMonter();
           try{
@@ -19964,29 +20055,47 @@ async function testExercices(){
           const rates=cas.filter(([o,att])=>{ try{ return f(o)!==att; }catch(e){ return true; } })
             .map(([o])=>JSON.stringify(o));
           return rates.length?_echec('volume faux pour : '+rates.join(' · ')):true;})());
-        ok('Les deux comparaisons sont STRICTES, et c\'est ce qui rend la garde vivable',(()=>{
-          // updatedAt en >= refuserait tout envoi a horodatage egal : la
-          // sauvegarde normale cesserait de partir. Le volume en <= refuserait
-          // un envoi de meme richesse, donc la plupart des mises a jour.
-          // Les deux erreurs bloqueraient le produit sans rien proteger de plus.
+        ok('La garde compare le CONTENU (plus les dates), strictement, pierres tombales mises à part',(()=>{
+          // 30/09/2026 : la garde comparait updatedAt, que pushOne et saveUser
+          // posent a Date.now() juste avant — elle ne se declenchait donc jamais.
+          // Elle compare desormais ce que le dossier PORTE. Toujours stricte : a
+          // volume egal, la sauvegarde normale doit partir.
           const src=String(CLOUD._doPushOne).replace(/\s/g,'');
-          if(src.indexOf('(distant.updatedAt||0)>(safe.updatedAt||0)')<0)
-            return _echec('la comparaison des dates a changé, ou n\'est plus stricte');
-          if(src.indexOf('volume(safe)<volume(distant)')<0)
+          if(src.indexOf('(distant.updatedAt||0)>(safe.updatedAt||0)')>=0)
+            return _echec('la garde se fonde encore sur les dates');
+          if(src.indexOf('volume(safe)<volume(_vif(d))')<0)
             return _echec('la comparaison des volumes a changé, ou n\'est plus stricte');
-          // La table de decision, rejouee sur la vraie regle.
-          const V=o=>(((o&&o.sessions)||[]).length)+(((o&&o.bilans)||[]).length);
-          const refuse=(d,sf)=>!!(d&&(d.updatedAt||0)>(sf.updatedAt||0)&&V(sf)<V(d));
-          const S=n=>Array.from({length:n},(_,i)=>i);
+          if(src.indexOf('travail(safe)<travail(d)')<0)
+            return _echec('le programme n\'est plus comparé');
+          // La table de decision, rejouee sur la vraie regle (volume, tombes).
+          const V=o=>(((o&&o.sessions)||[]).length)+(((o&&o.bilans)||[]).length)+(((o&&o.videos)||[]).length);
+          const refuse=(d,sf)=>!!d&&V(sf)<V(syncSansTombes(d,syncTombes(sf)));
+          const S=n=>Array.from({length:n},(_,i)=>({id:'s'+i,date:i}));
           const cas=[
-            ['distant plus récent ET plus riche',  {updatedAt:2,sessions:S(9),bilans:S(4)}, {updatedAt:1,sessions:[],bilans:[]},   true],
-            ['distant plus récent, volume égal',   {updatedAt:2,sessions:S(3),bilans:S(2)}, {updatedAt:1,sessions:S(3),bilans:S(2)},false],
-            ['distant plus récent mais plus pauvre',{updatedAt:2,sessions:S(1),bilans:[]},  {updatedAt:1,sessions:S(9),bilans:S(4)},false],
-            ['distant plus ancien',                {updatedAt:1,sessions:S(9),bilans:S(4)}, {updatedAt:2,sessions:[],bilans:[]},   false],
-            ['horodatages égaux',                  {updatedAt:2,sessions:S(9),bilans:S(4)}, {updatedAt:2,sessions:[],bilans:[]},   false],
-            ['aucun distant',                      null,                                    {updatedAt:1,sessions:[],bilans:[]},   false]];
+            ['distant plus riche, local plus récent', {updatedAt:1,sessions:S(9)}, {updatedAt:9,sessions:S(3)}, true],
+            ['volume égal',                           {updatedAt:2,sessions:S(3)}, {updatedAt:1,sessions:S(3)}, false],
+            ['local plus riche',                      {updatedAt:2,sessions:S(1)}, {updatedAt:1,sessions:S(9)}, false],
+            ['vidéos comptées',                       {videos:[{id:'v1'}]},       {videos:[]},                 true],
+            ['suppression légitime (pierre tombale)', {sessions:S(3)}, {sessions:S(2),supprimes:{sessions:{s2:5}}}, false],
+            ['aucun distant',                         null,                        {sessions:[]},               false]];
           const rates=cas.filter(([,d,sf,att])=>refuse(d,sf)!==att).map(([n])=>n);
           return rates.length?_echec(rates.join(' · ')):true;})());
+        ok('syncUnionSansBase : union par clef, pierres tombales des deux côtés, local non vide gardé',(()=>{
+          const loc={updatedAt:5,fname:'Loc',nutrition:{},sessions:[{id:'a',date:1},{id:'c',date:3}],
+            bilans:[{date:10,type:'hebdo',poids:80}],supprimes:{sessions:{b:9}}};
+          const dis={updatedAt:7,fname:'Dis',nutrition:{kcal:2000},coachNote:'x',
+            sessions:[{id:'a',date:1},{id:'b',date:2},{id:'d',date:4}],videos:[{id:'v1',date:5}],
+            bilans:[{date:10,type:'hebdo',poids:79},{date:20,type:'hebdo'}],supprimes:{sessions:{c:8}}};
+          const u=syncUnionSansBase(loc,dis);
+          const ids=(u.sessions||[]).map(x=>x.id).join(',');
+          if(ids!=='a,d') return _echec('séances : '+ids+' (b et c sont sous pierre tombale)');
+          if((u.videos||[]).length!==1) return _echec('la vidéo du distant est perdue');
+          if((u.bilans||[]).length!==2||u.bilans[0].poids!==80) return _echec('bilans : '+JSON.stringify(u.bilans));
+          if(u.fname!=='Loc') return _echec('un champ local non vide est remplacé');
+          if(!u.nutrition||u.nutrition.kcal!==2000) return _echec('un champ local VIDE n\'a pas pris le distant');
+          if(u.coachNote!=='x') return _echec('un champ absent du local n\'a pas pris le distant');
+          if(u.updatedAt!==7) return _echec('updatedAt '+u.updatedAt);
+          return (u.supprimes.sessions.b===9&&u.supprimes.sessions.c===8)?true:_echec('pierres tombales : '+JSON.stringify(u.supprimes));})());
 
         ok('Les premiers pas : trois actions, et seulement sans athlète',(()=>{
           const z=document.getElementById('ch-premiers-pas');
