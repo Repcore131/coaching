@@ -9428,6 +9428,24 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .rep-compact .rep-invite{order:3;flex:1 0 100%;margin-top:0}
 /* Le décompte se touche pour changer de forme, dans les deux sens. */
 .rep-scene[role="button"]{cursor:pointer;-webkit-tap-highlight-color:transparent}
+/* ── LA SÉRIE PRÉCÉDENTE, SOUS LE NUMÉRO (30/09/2026) ────────────────────
+   « 80×8 » : la même série de la dernière séance du créneau. Un toucher la
+   recopie. Sous le numéro et pas en sixième colonne : le tableau tient à
+   359 px, et une colonne de plus l'aurait fait déborder. */
+.wo-prec{display:block;margin:3px auto 0;padding:2px 3px;background:none;border:1px dashed var(--border);
+  border-radius:var(--r-1);color:var(--sub);font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;
+  line-height:1.2;white-space:nowrap;cursor:pointer;font-variant-numeric:tabular-nums;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+/* ── LE RIR EN UN TOUCHER, JUSTE APRÈS LE ✓ ──────────────────────────────
+   Une bande de quatre secondes au-dessus du minuteur. Elle ne bloque rien :
+   on l'ignore, elle s'en va. */
+#wo-rir-bande[hidden]{display:none}
+.rir-bande{display:flex;align-items:center;gap:8px;margin:0 8px 6px;padding:6px 8px;
+  background:var(--surface-1);border:1px solid var(--border);border-radius:10px}
+.rir-bande-t{flex:0 0 auto;font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--sub);line-height:1.2}
+.rir-bande-p{flex:1 1 auto;display:flex;gap:4px;min-width:0}
+.rir-pastille{flex:1 1 0;min-width:0;min-height:38px;padding:0 2px;background:var(--surface-2);border:1px solid var(--border);
+  border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer}
+.rir-pastille.on{border-color:var(--red);color:var(--red-text)}
 
 /* ANIMATION 7 — l'arc qui passe d'un onglet à l'autre. Un trait de 2 px à
    l'aplomb du liseré de l'onglet actif, qui se DÉPLACE au lieu de s'éteindre
@@ -13887,6 +13905,11 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .rep-invite[data-type="ok"] .rep-invite-t{color:var(--green)}
 :root[data-theme="clair"] .rep-invite-sep{color:var(--text-faint)}
 :root[data-theme="clair"] .rep-invite-b{color:var(--red-text)}
+:root[data-theme="clair"] .wo-prec{border:1px dashed var(--border);color:var(--sub)}
+:root[data-theme="clair"] .rir-bande{background:var(--surface-1);border:1px solid var(--border)}
+:root[data-theme="clair"] .rir-bande-t{color:var(--sub)}
+:root[data-theme="clair"] .rir-pastille{background:var(--surface-2);border:1px solid var(--border);color:var(--text)}
+:root[data-theme="clair"] .rir-pastille.on{border-color:var(--red);color:var(--red-text)}
 :root[data-theme="clair"] .arc-onglet{background:var(--arc-current);box-shadow:0 0 8px var(--arc-glow)}
 :root[data-theme="clair"] .wr-ecran{background:#fbfbfb;color:#090909}
 :root[data-theme="clair"] .wr-ecran::before{background:radial-gradient(ellipse at 50% -10%,rgba(224,32,32,.32),transparent 60%)}

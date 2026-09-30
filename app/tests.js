@@ -59481,6 +59481,85 @@ async function testExercices(){
       const barre=document.querySelector('#s-workout .wo-barre');
       return barre&&/safe-area-inset-bottom/.test(barre.getAttribute('style')||'')?true:_echec('la barre du bas ignore l’encoche');})());
 
+    // ── LA SAISIE EN MOINS DE GESTES (30/09/2026) ──
+    okA('Saisie : série 1 pré-remplie, charge recopiée sans RIR, prevSeries par index, validation rapide, RIR en un toucher',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;
+      const pause=ms=>new Promise(r=>setTimeout(r,ms));
+      const EX='DEVELOPPE COUCHE';
+      const cfg={active:true,name:'Push',exercises:[{name:EX,series:4,reps:'8',repos:'2 min'},{name:'ROWING BARRE',series:3,reps:'10',repos:'90 s'}]};
+      const prec={date:Date.now()-7*864e5,slot:0,name:'Push',data:{[EX]:{sets:[
+        {weight:'80',reps:'8',rir:'2',done:true},{weight:'82.5',reps:'8',rir:'',done:true},
+        {weight:'82.5',reps:'7',rir:'1',done:true},{weight:'75',reps:'8',rir:'',done:true}]}}};
+      const lancer=()=>{ try{ annulerRepos(); }catch(e){} localStorage.removeItem('rc_wo_state'); launchWorkout(cfg,0); };
+      try{
+        window.saveUser=()=>true; window.toast=()=>{};
+        currentUser={id:'sai',email:'sai@t.fr',fname:'A',lname:'B',role:'athlete',exAlias:{},exMuscles:{},sessions:[prec],bilans:[],videos:[],
+          programs:{},contraintesSante:[],birthdate:'1990-05-01',gender:'homme',consent:{health:true,policyVersion:POLICY_VERSION},sonRepos:false,
+          sessions_config:[cfg]};
+        // prevSeries : la même série de la dernière séance, par index.
+        const ps=prevSeries(EX,0,'Push');
+        if(ps.length!==4||ps[0].kg!==80||ps[0].reps!==8||ps[1].kg!==82.5||ps[2].reps!==7||ps[3].kg!==75) return _echec('prevSeries : '+JSON.stringify(ps));
+        if(prevSeries(EX,3,'Autre').length!==0||prevSeries('INCONNU',0,'Push').length!==0) return _echec('prevSeries hors créneau');
+        // 1. La série 1 reçoit la charge suggérée.
+        lancer(); await pause(200);
+        const d=woState.sessionData[0], sug=_blocExo(0,false).sug;
+        if(!(sug>0)) return _echec('aucune suggestion malgré l’historique');
+        if(Number(d.sets[0].weight)!==Number(sug)||d.sets[0].isAuto!==true) return _echec('série 1 : '+JSON.stringify(d.sets[0])+' pour '+sug);
+        if(d.sets[1].weight!=='') return _echec('la série 2 est pré-remplie avant toute validation');
+        // La suggestion n'ouvre pas l'encart « Ta charge monte toute seule ».
+        if(_surchargeProposee(d.sets[0])) return _echec('la suggestion passe pour une surcharge');
+        // « Préc. » : 80×8 sous le numéro de la série 1.
+        const t1=document.querySelector('#sets-body-0 tr:nth-child(1) .wo-prec');
+        if(!t1||t1.textContent.replace(/\s/g,'')!=='80×8') return _echec('Préc. série 1 : '+(t1&&t1.textContent));
+        // 2. Valider la série 1 SANS RIR recopie la charge sur la série 2.
+        toggleSet(0,0); await pause(50);
+        if(String(d.sets[1].weight)!==String(d.sets[0].weight)||!d.sets[1].isAuto) return _echec('série 2 après validation sans RIR : '+JSON.stringify(d.sets[1]));
+        // La bande du RIR est ouverte, avec les sept valeurs de RIR_CHOIX.
+        const bande=document.getElementById('wo-rir-bande');
+        if(!bande||bande.hidden||bande.querySelectorAll('.rir-pastille').length!==RIR_CHOIX.length) return _echec('bande du RIR absente');
+        if(RIR_BANDE_MS!==4000) return _echec('la bande ne dure pas 4 s');
+        // Un toucher y note le RIR, referme la bande, et la série 2 suit chargeSuivante.
+        _rirBandeChoisir(0,0,'2');
+        if(d.sets[0].rir!=='2'||!bande.hidden) return _echec('le RIR choisi n’est pas noté, ou la bande reste');
+        const w0=parseFloat(d.sets[0].weight);
+        const att=arrondiSuggestion(chargeSuivante(w0,'2',false,1,EX),{ex:woState.exercises[0],user:currentUser,depart:w0});
+        if(Number(d.sets[1].weight)!==Number(att)) return _echec('avec RIR, chargeSuivante n’est plus suivi : '+d.sets[1].weight+' pour '+att);
+        // 4. Valider une série isAuto garde la charge proposée.
+        const prop=d.sets[1].weight;
+        toggleSet(1,0); await pause(50);
+        if(!d.sets[1].done||String(d.sets[1].weight)!==String(prop)) return _echec('série isAuto validée : '+JSON.stringify(d.sets[1]));
+        // Une série VIDE se valide avec la série précédente de la dernière séance.
+        Object.assign(d.sets[3],{weight:'',isAuto:false,userEdited:false});
+        toggleSet(3,0); await pause(50);
+        if(!d.sets[3].done||parseFloat(d.sets[3].weight)!==75) return _echec('validation rapide depuis Préc. : '+JSON.stringify(d.sets[3]));
+        // Sans aucune valeur (exercice sans historique) : la série se valide vide, comme avant.
+        woNav(1); await pause(100);
+        const d2=woState.sessionData[1];
+        if(d2.sets[0].weight!=='') return _echec('pré-remplissage sans historique');
+        toggleSet(0,1); await pause(50);
+        if(!d2.sets[0].done||d2.sets[0].weight!=='') return _echec('sans valeur, la validation invente une charge');
+        // Un toucher sur « Préc. » recopie la série.
+        woNav(-1); await pause(100);
+        Object.assign(d.sets[2],{weight:'',isAuto:false,userEdited:false,done:false});
+        if(!_woPrecCopier(0,2)||parseFloat(d.sets[2].weight)!==82.5||!d.sets[2].userEdited) return _echec('copie de Préc. : '+JSON.stringify(d.sets[2]));
+        // 5. Aucun pré-remplissage sur une série userEdited.
+        lancer(); await pause(200);
+        const d3=woState.sessionData[0];
+        Object.assign(d3.sets[0],{weight:'',isAuto:false,userEdited:true});
+        _blocExo(0,false);
+        if(d3.sets[0].weight!==''||d3.sets[0].isAuto) return _echec('une série éditée a été pré-remplie : '+JSON.stringify(d3.sets[0]));
+        // Une série validée sans RIR, à charge égale au record, n'est pas un record e1RM.
+        if(estNouveauRecord(currentUser,EX,{weight:'82.5',reps:'8',rir:'',done:true})) return _echec('record e1RM sans RIR');
+        return true;
+      } finally {
+        try{ _rirBandeFermer(); }catch(e){}
+        try{ annulerRepos(); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){}
+        currentUser=sU; woState=sW; window.saveUser=svSave; window.toast=svToast;
+        if(sSnap!=null) localStorage.setItem('rc_wo_state',sSnap); else localStorage.removeItem('rc_wo_state');
+        await new Promise(r=>setTimeout(r,400));
+      }});
+
     okA('R30 — la ligne du son : premier repos seulement, 18 px au plus, « Passer » intact, « Activer » reste dans la séance',async()=>{
       const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;
       const toasts=[]; const pause=ms=>new Promise(r=>setTimeout(r,ms));

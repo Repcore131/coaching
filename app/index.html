@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1734';
+window.RC_BUILD='1735';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-09-30';
@@ -457,7 +457,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1734.css">
+<link rel="stylesheet" href="./rc-style.1735.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -4445,6 +4445,9 @@ const COACH_PHOTO='icons/coach.jpg';
        vivent désormais DANS la carte de l'exercice, sous son nom : c'est là
        qu'on les lit, à côté de ce qu'ils comptent. Voir .wo-prog. -->
   <div class="scroll-area" style="flex:1"><div class="pad" id="wo-content"></div></div>
+  <!-- LE RIR EN UN TOUCHER, juste après le ✓ : quatre secondes, non bloquant
+       (_rirBandeOuvrir). -->
+  <div id="wo-rir-bande" hidden style="flex-shrink:0"></div>
   <!-- MINUTEUR DE REPOS -->
   <div id="wo-repos" style="display:none;flex-shrink:0"></div>
   <div class="wo-barre" style="padding:12px 20px calc(12px + env(safe-area-inset-bottom, 0px));border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
@@ -5992,5 +5995,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1734.js"></script>
+<script src="./rc-core.1735.js"></script>
 </body></html>

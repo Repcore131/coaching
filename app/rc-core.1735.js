@@ -46713,6 +46713,7 @@ function pauseWorkout(){
 // NE LÈVE JAMAIS : une sortie d’écran ne doit pas pouvoir échouer.
 function _quitterEcranSeance(garder){
   try{ _swSeance('SEANCE_TERMINEE'); }catch(e){}
+  try{ _rirBandeFermer(); }catch(e){}
   try{ _woLibererEcran(); }catch(e){}
   if(garder!==false){ try{ woPersist(); }catch(e){} }
   try{ clearInterval(woState&&woState.timerInterval); }catch(e){}
@@ -50668,6 +50669,20 @@ function _blocExo(idx,estSS){
   // Le cycle : arrondiCharge vers le bas (comme roundWeight le faisait au pas de la barre).
   const sugAjustee=_facteurCycle!==1&&_sugArr?arrondiCharge(_sugArr*_facteurCycle,{ex,user:currentUser,sens:'bas'}):null;
   const sug=sugAjustee||_sugArr;
+  // ⚠ LA PREMIÈRE SÉRIE REÇOIT LA CHARGE SUGGÉRÉE (30/09/2026), comme la
+  //   consigne du coach pose sa charge : isAuto, bordure verte, « proposé ».
+  //   Elle était affichée au-dessus du tableau et la case restait vide : il
+  //   fallait la recopier à la main, à chaque exercice. Ni sur un exercice
+  //   dont le coach fixe la charge (déjà posée plus haut), ni sur une
+  //   dégressive (P1 / P2). sugPremiere : ce n'est pas une surcharge, l'encart
+  //   « Ta charge monte toute seule » ne s'y pose pas.
+  if(sug>0&&!isCardio(ex)&&pr.type!=='degressive'&&!(_cons&&_cons.kg!=null)){
+    const s0=data.sets[0];
+    if(s0&&!s0.done&&!s0.userEdited&&!s0.degressive&&!s0.rpeCible
+      &&(s0.isAuto||!String(s0.weight==null?'':s0.weight).trim())){
+      s0.weight=sug; s0.isAuto=true; s0.sugPremiere=true;
+    }
+  }
   const _aff=kg=>kgVersAffiche(kg,currentUser)+_unite();
   // QUAND LE TABLEAU PASSE EN CARTES : la regle est dans _seriesEnCartes, et
   // renderSets la lit aussi : l'en-tete et les lignes ne peuvent pas diverger.
@@ -51582,7 +51597,17 @@ function renderSets(ex,data,idx,opts){
       if(!data.sets[i+1].done&&!data.sets[i+1].userEdited){
         data.sets[i+1].weight=nextW;
         data.sets[i+1].isAuto=true;
+        delete data.sets[i+1].copieCharge;
       }
+    }
+    // ⚠ VALIDÉE SANS RIR : LA MÊME CHARGE SUR LA SUIVANTE (30/09/2026). La
+    //   série suivante restait vide tant que le RIR n'était pas noté ; celui
+    //   qui ne le note pas retapait sa charge à chaque série. Même charge, et
+    //   pas de palier : sans RIR, on ne sait pas s'il en restait sous le pied.
+    //   copieCharge : ce n'est pas une surcharge (encart et ⓘ ne s'y posent pas).
+    else if(w>0&&s.done&&!s.degressive){
+      const n=data.sets[i+1];
+      if(n&&!n.done&&!n.userEdited){ n.weight=s.weight; n.isAuto=true; n.copieCharge=true; }
     }
   }
 
@@ -51601,7 +51626,7 @@ function renderSets(ex,data,idx,opts){
   // proposer. Quand elle est validee, le ⓘ descend sur la suivante.
   // R10 — et seulement sur le premier tableau d'un superset (plafond de trois).
   const _infosIci=_woTeteDeGroupe(idx);
-  const _iPremierePropose=(isDeg||!_infosIci)?-1:data.sets.findIndex(_chargeProposee);
+  const _iPremierePropose=(isDeg||!_infosIci)?-1:data.sets.findIndex(_surchargeProposee);
   // R10 — LE ⓘ DU RPE, UNE FOIS PAR TABLEAU. Pose sur chaque ligne verrouillee,
   // il faisait quatre ⓘ pour quatre series, plus les deux de la bande : six a
   // l'ecran, le double du plafond. Il reste sur la premiere.
@@ -51615,6 +51640,16 @@ function renderSets(ex,data,idx,opts){
   const _eh=(i,champ)=>(champ!=='repsDone'&&i===_iDernierOuvert&&(champ==='weight2'||!isDeg))?'done':'next';
   const _attrs=(i,champ)=>`data-serie="${i}" data-champ="${champ}" enterkeyhint="${_eh(i,champ)}"`;
 
+  // La même série de la dernière séance du créneau (prevSeries).
+  const _prec=(!isDeg&&woState)?prevSeries(ex.name,woState.slot,woState.progName):[];
+  const _precHtml=(s,i)=>{
+    const p=_prec[i];
+    if(!p||s.done||s.rpeCible) return '';
+    const kg=String(kgVersAffiche(p.kg,currentUser)).replace('.',',');
+    const t=kg+(p.reps?'×'+p.reps:'');
+    return `<button type="button" class="wo-prec" onclick="_woPrecCopier(${idx},${i})"`
+      +` aria-label="Reprendre la série ${i+1} de la dernière séance : ${kg}${_unite()}${p.reps?' pour '+p.reps+' répétitions':''}">${t}</button>`;
+  };
   const lignes=data.sets.map((s,i)=>{
     const baseW=parseFloat(s.weight)||0;
     const dis=s.done?'disabled':'';
@@ -51798,6 +51833,7 @@ function renderSets(ex,data,idx,opts){
               <div style="text-align:center;min-width:28px;flex-shrink:0">
                 <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}${_eclairObjectif(idx,i)}${_badgeRecord(idx,i)}</div>
                 <div>${repsAffiche(18)}</div>
+                ${_precHtml(s,i)}
               </div>
               ${weightInner}
             </div>
@@ -51814,6 +51850,7 @@ function renderSets(ex,data,idx,opts){
       <td style="text-align:center;padding:${_fourch?'4px 1px':'4px 6px'}">
         <span style="display:block;font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}${_eclairObjectif(idx,i)}${_badgeRecord(idx,i)}</span>
         ${repsAffiche(20)}
+        ${_precHtml(s,i)}
       </td>
       ${weightCell}
       <td class="wo-intensite">${rirSelect}</td>
@@ -51850,6 +51887,11 @@ function renderSets(ex,data,idx,opts){
 function _chargeProposee(s){
   return !!(s&&s.isAuto&&!s.done&&!s.rpeCible&&!s.degressive);
 }
+// Une charge proposée PAR LA SURCHARGE : ni la suggestion posée sur la série 1
+// (sugPremiere), ni la copie d'une série validée sans RIR (copieCharge).
+function _surchargeProposee(s){
+  return _chargeProposee(s)&&!s.sugPremiere&&!s.copieCharge;
+}
 const SURCHARGE_ENCART_TITRE='Ta charge monte toute seule';
 const SURCHARGE_ENCART_TEXTE='RepCore augmente ta charge quand tu gardes des '
   +'répétitions en réserve. C\'est la surcharge progressive. Tu peux toujours '
@@ -51876,7 +51918,7 @@ function _htmlEncartSurcharge(idx){
   // Pas encore pris : il faut qu'une charge soit REELLEMENT proposee ici.
   if(!pris){
     const d=woState.sessionData&&woState.sessionData[idx];
-    if(!d||!Array.isArray(d.sets)||!d.sets.some(_chargeProposee)) return '';
+    if(!d||!Array.isArray(d.sets)||!d.sets.some(_surchargeProposee)) return '';
   }
   return `<div class="wo-surcharge" style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 14px;margin-top:10px">
     <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text);line-height:1.4;margin-bottom:6px">${escapeHtml(SURCHARGE_ENCART_TITRE)}</div>
@@ -52108,6 +52150,17 @@ function toggleSet(i,idx){
   if(idx==null) idx=woState.currentEx;
   const d=woState.sessionData[idx];if(!d) return;
   const avant=!!d.sets[i].done;
+  // ⚠ VALIDER SANS CHARGE, AVEC UNE VALEUR À REPRENDRE (30/09/2026). Une
+  //   charge proposée (isAuto) est déjà dans la case et reste telle quelle.
+  //   Case vide : la même série de la dernière séance, si elle existe. Sans
+  //   aucune valeur, rien ne change — la série se valide vide, comme avant.
+  if(!avant){
+    const s=d.sets[i], ex=(woState.exercises||[])[idx];
+    if(s&&ex&&!isCardio(ex)&&!s.degressive&&!(parseFloat(s.weight)>0)){
+      const p=prevSeries(ex.name,woState.slot,woState.progName)[i];
+      if(p){ _woPrecAppliquer(ex,s,p); s.isAuto=true; }
+    }
+  }
   d.sets[i].done=!avant;
   // Décocher ne lance rien et n'annule rien : c'est une correction de saisie,
   // pas un événement d'entraînement.
@@ -52136,6 +52189,8 @@ function toggleSet(i,idx){
   // Et seulement quand on coche : décocher est une correction de saisie, pas
   // un événement d'entraînement — rien ne doit le célébrer.
   if(!avant) _arcSerieValidee(idx,i);
+  // Le RIR en un toucher, pendant 4 s ; décocher la referme.
+  try{ if(!avant) _rirBandeOuvrir(idx,i); else _rirBandeFermer(); }catch(e){}
   woPersist();
 }
 // ── ANIMATION 3 : LA VALIDATION DE SÉRIE — l'élément signature ─────────────
@@ -68667,6 +68722,83 @@ function chargeSuivante(charge,rir,contrepoids,decote,exNom){
   return (cap&&res!=null&&res-w>cap)?Math.round((w+cap)*100)/100:res;
 }
 
+// ══ LA SÉRIE PRÉCÉDENTE, PAR INDEX (30/09/2026) ═════════════════════════
+// PURE. La dernière séance du même créneau qui porte cet exercice, série par
+// série : [{kg, reps, rir} | null, …]. null pour une série non validée ou
+// sans charge. Tableau vide sans historique.
+function prevSeries(name,slot,progName,user){
+  const u=user||currentUser;
+  const l=(u&&Array.isArray(u.sessions))?u.sessions:[];
+  for(let k=l.length-1;k>=0;k--){
+    const sess=l[k];
+    if(!sess||!sess.data||!_memeCreneau(sess,slot,progName)) continue;
+    const d=_dataDeSeance(sess,name);
+    if(!d||!Array.isArray(d.sets)) continue;
+    const r=d.sets.map(x=>{
+      if(!x||!x.done||!(parseFloat(x.weight)>0)) return null;
+      const rd=(x.repsDone!=null&&x.repsDone!=='')?parseInt(x.repsDone,10):parseInt(x.reps,10);
+      return {kg:parseFloat(x.weight),reps:isFinite(rd)&&rd>0?rd:null,rir:x.rir==null?'':String(x.rir)};
+    });
+    if(r.some(Boolean)) return r;
+  }
+  return [];
+}
+// Recopie la série précédente dans la série i : la charge, et les
+// répétitions faites quand la prescription est une fourchette.
+function _woPrecAppliquer(ex,s,p){
+  s.weight=String(p.kg);
+  if(p.reps&&fourchetteReps(s.reps||ex.reps)) s.repsDone=p.reps;
+}
+function _woPrecCopier(idx,i){
+  if(typeof woState==='undefined'||!woState) return false;
+  const ex=(woState.exercises||[])[idx], d=woState.sessionData&&woState.sessionData[idx], s=d&&d.sets&&d.sets[i];
+  if(!ex||!s||s.done) return false;
+  const p=prevSeries(ex.name,woState.slot,woState.progName)[i];
+  if(!p) return false;
+  _woPrecAppliquer(ex,s,p);
+  s.userEdited=true; s.isAuto=false;
+  renderSets(ex,d,idx);
+  woPersist();
+  return true;
+}
+// ══ LE RIR EN UN TOUCHER, JUSTE APRÈS LE ✓ (30/09/2026) ══════════════════
+// Le menu restait le seul chemin, et il se fermait à la validation : un RIR
+// oublié l'était pour de bon. Après le ✓, une bande de sept pastilles (les
+// valeurs de RIR_CHOIX, inchangées) reste 4 s ; un toucher note le RIR de la
+// série et referme. On l'ignore : elle s'en va seule, et rien n'attend.
+const RIR_BANDE_MS=4000;
+let _rirBandeMin=null;
+function _rirBandeFermer(){
+  if(_rirBandeMin){ clearTimeout(_rirBandeMin); _rirBandeMin=null; }
+  const z=document.getElementById('wo-rir-bande');
+  if(z){ z.hidden=true; z.innerHTML=''; delete z.dataset.serie; }
+}
+function _rirBandeOuvrir(idx,i){
+  const z=document.getElementById('wo-rir-bande');
+  const ex=woState&&(woState.exercises||[])[idx];
+  const s=woState&&woState.sessionData&&woState.sessionData[idx]&&woState.sessionData[idx].sets[i];
+  if(!z||!ex||!s||!s.done||s.rpeCible||isCardio(ex)||(s.rir!==''&&s.rir!=null)){ _rirBandeFermer(); return false; }
+  z.innerHTML=`<div class="rir-bande" role="group" aria-label="RIR de la série ${i+1}">`
+    +`<span class="rir-bande-t">RIR<br>série ${i+1}</span><div class="rir-bande-p">`
+    +RIR_CHOIX.map(c=>`<button type="button" class="rir-pastille" onclick="_rirBandeChoisir(${idx},${i},'${c[0]}')"`
+      +` aria-label="${escapeHtml(c[1]+' : '+c[2])}">${escapeHtml(c[1])}</button>`).join('')
+    +`</div></div>`;
+  z.dataset.serie=idx+':'+i;
+  z.hidden=false;
+  if(_rirBandeMin) clearTimeout(_rirBandeMin);
+  _rirBandeMin=setTimeout(_rirBandeFermer,RIR_BANDE_MS);
+  return true;
+}
+function _rirBandeChoisir(idx,i,v){
+  const d=woState&&woState.sessionData&&woState.sessionData[idx], s=d&&d.sets&&d.sets[i];
+  if(!s||!RIR_CHOIX.some(c=>c[0]===v)){ _rirBandeFermer(); return false; }
+  s.rir=v;
+  _rirBandeFermer();
+  // Le RIR noté décide maintenant de la série suivante (chargeSuivante).
+  renderSets(woState.exercises[idx],d,idx);
+  woPersist();
+  return true;
+}
 function getPrevPerf(name,slot,progName){
   if(!currentUser.sessions?.length) return null;
   for(let i=currentUser.sessions.length-1;i>=0;i--){
@@ -86962,7 +87094,12 @@ function estNouveauRecord(user,nomEx,serie){
   // Assisté : moins d'assistance, ou autant avec plus de répétitions.
   if(_t==='assiste'){ if(mc&&w>0&&r>0&&(w<mc.kg||(w===mc.kg&&r>(mc.reps||0)))) return true; }
   else if(mc&&w>mc.kg) return true;
-  if(r>0&&eff>0&&e1rmFiable(r,_perfRir(serie,user))){
+  // ⚠ SANS RIR, PAS D'e1RM (30/09/2026), comme dans recordsExercice : un RIR
+  //   vide y vaut « à l'échec », et une série RIR-less à charge ÉGALE passait
+  //   pour un record e1RM à chaque fois — les séries validées sans RIR sont
+  //   devenues le chemin court (charge recopiée, RIR en option après le ✓).
+  const _sansRir=(serie.rir===''||serie.rir==null);
+  if(!_sansRir&&r>0&&eff>0&&e1rmFiable(r,_perfRir(serie,user))){
     const v=e1rm(eff,r,_perfRir(serie,user));
     if(v>0&&(!me||v>me.valeur)) return true;
   }
