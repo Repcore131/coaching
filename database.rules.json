@@ -1963,6 +1963,10 @@
     "paypal_abonnes":    { ".read": false, ".write": false },
     "paypal_evenements": { ".read": false, ".write": false, ".indexOn": ["at"] },
     "paypal_premiers":   { ".read": false, ".write": false },
+    // La verite « premier paiement compte » de l'attribution (ecran Viralite) :
+    // serveur seul. Sa copie users/<cle>/origine/payeLe peut etre remise a
+    // null par un PUT client ; celle-ci non, et c'est elle qui garde le compte.
+    "attribution_payes": { ".read": false, ".write": false },
     "paypal_fins":       { ".read": false, ".write": false },
     // Les evenements PayPal arrives avant que leur abonnement soit relie a un
     // compte : ranges par le serveur leger, rejoues par lui des le lien fait.

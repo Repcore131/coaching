@@ -761,7 +761,7 @@ export function creerMetier(deps) {
           essaiFinit: Number(x.essaiFinit) > 0 ? Number(x.essaiFinit) - MONTH_MS : null }));
         if (c.mode === 'essai_recule') {
           const es = await _lire(parrain, 'essai');
-          if (es && Number(es.finit) > 0) await db.ref(b + 'essai/finit').set(Number(es.finit) - MONTH_MS);
+          if (es && Number(es.finit) > 0) await db.ref().update({ [b + 'essai/finit']: Number(es.finit) - MONTH_MS, [b + 'updatedAt']: t });
         }
         await db.ref('paypal_fins/' + parrain).transaction((f) => (f ? Object.assign({}, f, { fin: Number(f.fin) - MONTH_MS,
           moisRecules: Math.max(0, (Number(f.moisRecules) || 0) - 1) }) : undefined));
@@ -784,15 +784,20 @@ export function creerMetier(deps) {
 
   // L'ÉTAT « PAYANT » DE L'ATTRIBUTION : retiré du dossier, et décompté du
   // jour où il avait été compté (écran « Viralité »).
+  // ⚠ LA VERITE « DEJA PAYE » VIT DANS attribution_payes/<cle> (hors users/,
+  //   ferme aux clients) : c'est elle qu'on lit d'abord et qu'on efface.
   async function annulerAttribution(cle, t) {
-    const origine = (await _val('users/' + cle + '/origine')) || {};
-    const payeLe = Number(origine.payeLe);
+    const [origine0, surServeur] = await Promise.all([_val('users/' + cle + '/origine'), _val('attribution_payes/' + cle)]);
+    const origine = origine0 || {};
+    const payeLe = Number(surServeur) > 0 ? Number(surServeur) : Number(origine.payeLe);
     if (!(payeLe > 0)) return null;
     const lien = await _val('ambassadeurs_liens/' + cle);
     const o = Object.assign({}, origine, lien && lien.code ? { amb: lien.code } : {});
     for (const c of ATT.cheminsEvenement('payant', o, payeLe))
       await db.ref(c).transaction((n) => (Number(n) > 1 ? Number(n) - 1 : null));
-    await db.ref().update({ ['users/' + cle + '/origine/payeLe']: null, ['users/' + cle + '/origine/annuleLe']: t });
+    // updatedAt AVEC : sans lui, l'app ne redescend pas le dossier (voir base.js).
+    await db.ref().update({ ['users/' + cle + '/origine/payeLe']: null, ['users/' + cle + '/origine/annuleLe']: t,
+      ['users/' + cle + '/updatedAt']: t, ['attribution_payes/' + cle]: null });
     return { payeLe };
   }
 
@@ -942,11 +947,30 @@ export function creerMetier(deps) {
     return commissionVente(id, 'annuler');
   }
   // LE PREMIER PAIEMENT pour l'écran « Viralité » : une seule fois.
+  //
+  // ⚠ LA TRANSACTION PORTE SUR attribution_payes/<cle>, PAS SUR LE DOSSIER
+  //   (30/09/2026). users/<cle>/origine/payeLe est ecrit par le client a chaque
+  //   PUT du dossier : un appareil qui le remettait a null (copie ancienne,
+  //   fusion) rouvrait la porte, et le paiement suivant etait compte une
+  //   seconde fois. Le nœud serveur est ferme aux clients ; payeLe n'en est
+  //   plus que la copie lisible par l'app, remise en place si elle a disparu.
   async function attributionPaiement(cle) {
     const t = now();
-    const tx = await db.ref('users/' + cle + '/origine/payeLe').transaction((cur) => (cur ? undefined : t));
-    if (!tx.committed) return null;
-    const origine = (await _val('users/' + cle + '/origine')) || {};
+    const origine0 = (await _val('users/' + cle + '/origine')) || {};
+    // UN DOSSIER DEJA COMPTE AVANT CE NŒUD : on le reporte, on ne recompte pas.
+    if (Number(origine0.payeLe) > 0) {
+      await db.ref('attribution_payes/' + cle).transaction((cur) => (cur ? undefined : Number(origine0.payeLe)));
+      return null;
+    }
+    const tx = await db.ref('attribution_payes/' + cle).transaction((cur) => (cur ? undefined : t));
+    if (!tx.committed) {
+      // Deja compte : si le client a efface la copie, on la remet (et on date).
+      const v = Number(await _val('attribution_payes/' + cle));
+      if (v > 0) await db.ref().update({ ['users/' + cle + '/origine/payeLe']: v, ['users/' + cle + '/updatedAt']: t });
+      return null;
+    }
+    await db.ref().update({ ['users/' + cle + '/origine/payeLe']: t, ['users/' + cle + '/updatedAt']: t });
+    const origine = Object.assign({}, origine0, { payeLe: t });
     const lien = await _val('ambassadeurs_liens/' + cle);
     const o = Object.assign({}, origine, lien && lien.code ? { amb: lien.code } : {});
     for (const c of ATT.cheminsEvenement('payant', o, t)) await incr(c);

@@ -405,4 +405,81 @@ await test('une capture à trois segments va au coach, une capture à deux reste
   assert.equal(w.F.lire('paiements_coach/kev@t,fr/ORDPROG001'), null);
 });
 
+// ══ TOUTE ÉCRITURE DANS users/<clé> POSE updatedAt (30/09/2026) ═══════════
+// Sans lui, l'app ne redescend pas le dossier : l'écriture du serveur reste
+// invisible sur le téléphone, puis le PUT suivant de l'app l'efface.
+await test('ACTIVATED : statutPaypal ACTIVE et users/<clé>/updatedAt avancé dans la même écriture', async () => {
+  const w = monde({ users: LEA({ updatedAt: 1 }), paypal_abonnes: { 'I-ABC12345678': 'lea@t,fr' } },
+    { abonnements: { 'I-ABC12345678': abo() } });
+  await w.envoyer(evt('BILLING.SUBSCRIPTION.ACTIVATED', abo({ id: 'I-ABC12345678' })));
+  assert.equal(w.F.lire('users/lea@t,fr/abonnement/statutPaypal'), 'ACTIVE');
+  assert.equal(w.F.lire('users/lea@t,fr/updatedAt'), T0);
+});
+
+await test('attributionPaiement : compté une fois, updatedAt avancé, et une remise à null de payeLe par un client ne recompte pas', async () => {
+  const w = monde({ users: LEA({ updatedAt: 1, origine: { type: 'lien', le: T0 - 5 * J } }) });
+  const avant = JSON.stringify(w.F.arbre);
+  const o1 = await w.M.attributionPaiement('lea@t,fr');
+  assert.ok(o1, 'le premier paiement est compté');
+  assert.equal(w.F.lire('users/lea@t,fr/origine/payeLe'), T0);
+  assert.equal(w.F.lire('attribution_payes/lea@t,fr'), T0);
+  assert.equal(w.F.lire('users/lea@t,fr/updatedAt'), T0);
+  assert.notEqual(JSON.stringify(w.F.arbre), avant);
+  // UN CLIENT REMET payeLe À NULL (PUT d'une copie ancienne du dossier).
+  w.F.ecrire('users/lea@t,fr/origine/payeLe', null);
+  w.F.ecrire('users/lea@t,fr/updatedAt', 2);
+  const compteurs = (a) => JSON.stringify(Object.assign({}, a, { users: null, attribution_payes: null }));
+  const c1 = compteurs(w.F.arbre);
+  w.t += J;
+  assert.equal(await w.M.attributionPaiement('lea@t,fr'), null, 'pas de second comptage');
+  assert.equal(compteurs(w.F.arbre), c1, 'aucun compteur n’a bougé');
+  // La copie lisible par l'app est remise en place, datée.
+  assert.equal(w.F.lire('users/lea@t,fr/origine/payeLe'), T0);
+  assert.equal(w.F.lire('users/lea@t,fr/updatedAt'), T0 + J);
+});
+
+await test('attributionPaiement : un dossier déjà compté avant attribution_payes n’est pas recompté', async () => {
+  const w = monde({ users: LEA({ origine: { type: 'lien', le: 1, payeLe: T0 - 9 * J } }) });
+  const c0 = JSON.stringify(Object.assign({}, w.F.arbre, { users: null, attribution_payes: null }));
+  assert.equal(await w.M.attributionPaiement('lea@t,fr'), null);
+  assert.equal(w.F.lire('attribution_payes/lea@t,fr'), T0 - 9 * J, 'reporté dans le nœud serveur');
+  assert.equal(JSON.stringify(Object.assign({}, w.F.arbre, { users: null, attribution_payes: null })), c0);
+});
+
+await test('annulerAttribution : payeLe retiré, le nœud serveur aussi, et updatedAt avancé', async () => {
+  const w = monde({ users: LEA({ updatedAt: 1, origine: { type: 'lien', le: T0 - 5 * J } }) });
+  await w.M.attributionPaiement('lea@t,fr');
+  // Même si le client a effacé sa copie, l'annulation lit le nœud serveur.
+  w.F.ecrire('users/lea@t,fr/origine/payeLe', null);
+  const t = T0 + 2 * J;
+  const r = await w.M.annulerAttribution('lea@t,fr', t);
+  assert.deepEqual(r, { payeLe: T0 });
+  assert.equal(w.F.lire('users/lea@t,fr/origine/annuleLe'), t);
+  assert.equal(w.F.lire('users/lea@t,fr/updatedAt'), t);
+  assert.equal(w.F.lire('attribution_payes/lea@t,fr'), null);
+});
+
+// LE CRITÈRE : aucune écriture serveur dans users/ sans updatedAt. On relève,
+// dans le source, chaque écriture dont un chemin commence par users/, et on
+// exige updatedAt dans la même écriture.
+await test('aucune écriture serveur dans users/<clé> sans updatedAt (source)', async () => {
+  const fichiers = ['metier', 'paypal', 'paiements-coach', 'duels', 'pages', 'prospects', 'relances', 'retour', 'saisons', 'sante', 'xp', 'medias', 'garmin', 'google', 'lignes', 'marque', 'appels', 'retention', 'index', 'planif', 'push', 'migration'];
+  const fautes = [];
+  for (const f of fichiers) {
+    let src = '';
+    try { src = readFileSync(new URL('../src/' + f + '.js', import.meta.url), 'utf8'); } catch (e) { continue; }
+    const lignes = src.split('\n');
+    lignes.forEach((l, i) => {
+      if (/^\s*\/\//.test(l)) return;
+      // Une écriture sur users/ : update({...users/...}), ref('users/...').set/update/remove/transaction, ref(b + ...).set.
+      const ecrit = /\.(update|set|remove|transaction)\(/.test(l) && (/['"]users\//.test(l) || /\[b \+ '/.test(l) || /ref\(b \+/.test(l));
+      if (!ecrit) return;
+      // updatedAt dans la ligne ou les deux suivantes (objets sur plusieurs lignes), ou dans l'objet `maj` construit avant.
+      const fen = lignes.slice(Math.max(0, i - 8), i + 3).join('\n');
+      if (!/updatedAt/.test(fen)) fautes.push(f + '.js:' + (i + 1) + '  ' + l.trim().slice(0, 120));
+    });
+  }
+  assert.deepEqual(fautes, []);
+});
+
 console.log(ok + ' tests passés');

@@ -365,7 +365,7 @@ export function creerPaypal(ctx) {
     if (type === 'BILLING.SUBSCRIPTION.ACTIVATED') {
       const courant = await lire('users/' + cle + '/paypalSubscriptionId');
       if (!estCourant(courant, abo, sub || ress, cle)) return 'ancien_abonnement';
-      await db.ref().update({ ['users/' + cle + '/abonnement/statutPaypal']: 'ACTIVE' });
+      await db.ref().update({ ['users/' + cle + '/abonnement/statutPaypal']: 'ACTIVE', ['users/' + cle + '/updatedAt']: now() });
       // L'ACCÈS S'OUVRE DÈS L'ACTIVATION, sans attendre le paiement qui suit :
       // l'app ne donne plus l'abonnement sur la foi du dossier.
       const s2 = sub || ress;
