@@ -11912,7 +11912,9 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .clh-tete[data-assiette] .rg-emb{top:calc(var(--st) + 15.7cqw)}
 .clh-tete[data-assiette] .rg-nom{top:calc(var(--st) + 16.55cqw)}
 .clh-tete[data-assiette] .rg-jauge{top:calc(var(--st) + 19.35cqw);width:31.6cqw}
-#clh-assiette{position:absolute;left:61.6cqw;top:calc(var(--st) + 14.1cqw);width:35.65cqw;height:9.9cqw;margin:0;
+/* POUSSE A DROITE (Kevin, 30/09/2026) : son bord gauche ne s'aligne plus sur
+   celui des semaines, le bord droit reste le meme. */
+#clh-assiette{position:absolute;left:65.1cqw;top:calc(var(--st) + 14.1cqw);width:32.15cqw;height:9.9cqw;margin:0;
   cursor:pointer;-webkit-tap-highlight-color:transparent}
 #clh-assiette[hidden]{display:none}
 #clh-assiette:focus-visible{outline:2px solid var(--red);outline-offset:3px}
@@ -11920,23 +11922,23 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   /* SANS CADRE ROUGE (Kevin, 30/09/2026) : le cadre des semaines reste le
      seul allume de l'en-tete. Bordure transparente, pour garder la geometrie. */
   border:.22cqw solid transparent;background:#070303;box-shadow:none}
-#clh-assiette .sk-cadre::before{top:1.5cqw;left:10.75cqw;width:.12cqw;min-width:1px;height:6.9cqw;
-  border:0;border-radius:0;background:rgba(255,70,70,.45)}
+/* Sans le trait entre le cadran et le texte (Kevin, 30/09/2026). */
+#clh-assiette .sk-cadre::before{display:none}
 #clh-assiette .sk-cadre::after{display:none}
 #clh-assiette .sk-dial{position:absolute;left:1.5cqw;top:1.05cqw;width:7.8cqw;height:7.8cqw}
 #clh-assiette .sk-chiffres{position:static;display:block}
-#clh-assiette-val{position:absolute;left:12.65cqw;top:1.45cqw;font-family:var(--pile-titre);font-size:5.85cqw!important;
+#clh-assiette-val{position:absolute;left:9.9cqw;top:1.45cqw;font-family:var(--pile-titre);font-size:5.85cqw!important;
   line-height:1!important;letter-spacing:0;color:var(--text);font-variant-numeric:tabular-nums;
   text-shadow:0 0 10px rgba(255,255,255,.3)}
 #clh-assiette .sk-chiffres[data-nul] #clh-assiette-val{display:none}
-#clh-assiette .sk-lbl{position:absolute;left:18.95cqw;top:3.15cqw;font-family:Montserrat,sans-serif;font-weight:800;
+#clh-assiette .sk-lbl{position:absolute;left:16.2cqw;top:3.15cqw;font-family:Montserrat,sans-serif;font-weight:800;
   font-size:2.45cqw;line-height:1;letter-spacing:0;color:#fff;transform:scaleX(0.82);transform-origin:0 50%}
-#clh-assiette .sk-chiffres[data-nul] .sk-lbl{left:12.65cqw;top:2.6cqw}
-#clh-assiette .sk-date{position:absolute;left:12.4cqw;top:6.25cqw;font-family:Montserrat,sans-serif;font-weight:600;
+#clh-assiette .sk-chiffres[data-nul] .sk-lbl{left:9.9cqw;top:2.6cqw}
+#clh-assiette .sk-date{position:absolute;left:9.65cqw;top:6.25cqw;font-family:Montserrat,sans-serif;font-weight:600;
   font-size:1.87cqw;line-height:1;letter-spacing:-0.04em;color:#7d7d7d;white-space:nowrap}
-#clh-assiette .sk-reste{position:absolute;left:12.75cqw;top:6.4cqw;font-size:1.95cqw;line-height:1;
+#clh-assiette .sk-reste{position:absolute;left:10cqw;top:6.4cqw;font-size:1.95cqw;line-height:1;
   max-width:none;white-space:nowrap;letter-spacing:0}
-#clh-assiette .sk-chev{position:absolute;left:32.2cqw;top:3.3cqw;width:2.6cqw;height:3.3cqw;color:#ff2a2a;
+#clh-assiette .sk-chev{position:absolute;left:28.7cqw;top:3.3cqw;width:2.6cqw;height:3.3cqw;color:#ff2a2a;
   filter:drop-shadow(0 0 .5cqw rgba(255,42,42,.7))}
 #clh-assiette .sk-chev svg{display:block;width:100%;height:100%}
 /* La vitrine : la famille de l'assiette, cinq cases sur une ligne. */
@@ -14786,7 +14788,6 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .fj-nommer-x{color:var(--text-dim)}
 :root[data-theme="clair"] #clh-assiette:focus-visible{outline:2px solid var(--red)}
 :root[data-theme="clair"] #clh-assiette .sk-cadre{background:#faf3f3}
-:root[data-theme="clair"] #clh-assiette .sk-cadre::before{background:rgba(255,70,70,.45)}
 :root[data-theme="clair"] #clh-assiette-val{color:var(--text);text-shadow:0 0 10px rgba(255,255,255,.3)}
 :root[data-theme="clair"] #clh-assiette .sk-lbl{color:#090909}
 :root[data-theme="clair"] #clh-assiette .sk-date{color:#848484}
