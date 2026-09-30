@@ -40524,6 +40524,31 @@ const REPOS_ECLAIRS=(function(){
     + faisceau(0,0) + faisceau(1,-900) + faisceau(2,-1700)
     + '</g></svg>';
 })();
+// ── LA FORME DU MINUTEUR (30/09/2026) ─────────────────────────────────────
+// Compact sous 800 px de haut, ou quand un superset met deux exercices à
+// l'écran ; le grand cadran sinon. Un toucher sur le décompte inverse la
+// forme, pour la séance (woState._reposForme). La hauteur passe par une
+// fonction : les tests la remplacent pour simuler un écran de 667 px.
+const REPOS_COMPACT_SOUS=800;
+function _reposHauteur(){ return window.innerHeight||0; }
+function _reposEnSuperset(){
+  try{
+    if(typeof woState==='undefined'||!woState||!woState.exercises) return false;
+    const g=_groupesEx(woState.exercises).find(x=>x.indexOf(woState.currentEx)>=0);
+    return !!(g&&g.length>1);
+  }catch(e){ return false; }
+}
+function reposCompact(){
+  if(typeof woState!=='undefined'&&woState&&(woState._reposForme==='grand'||woState._reposForme==='compact'))
+    return woState._reposForme==='compact';
+  return _reposHauteur()<REPOS_COMPACT_SOUS||_reposEnSuperset();
+}
+function basculerCadranRepos(){
+  if(typeof woState==='undefined'||!woState) return;
+  woState._reposForme=reposCompact()?'grand':'compact';
+  const b=document.getElementById('rep-bandeau');
+  if(b) b.classList.toggle('rep-compact',reposCompact());
+}
 function _monterRepos(z){
   const _sonOn=!!(currentUser&&currentUser.sonRepos);
   _reposSonRendu=_sonOn;
@@ -40541,7 +40566,8 @@ function _monterRepos(z){
       aria-label="${_sonOn?'Couper le son de fin de repos':'Activer le son de fin de repos'}"
       title="${_sonOn?'Son de fin de repos activé':'Son de fin de repos coupé'}">${_icoSon(_sonOn,14)}</button>
     <div class="rep-corps">
-    <div class="rep-scene">
+    <div class="rep-scene" role="button" tabindex="0" onclick="basculerCadranRepos()"
+      aria-label="Changer la taille du minuteur">
     <div class="rep-cadran">
       ${REPOS_ECLAIRS}
       <svg class="rep-anneau" viewBox="0 0 200 200" aria-hidden="true">
@@ -40638,6 +40664,7 @@ function _peindreRepos(){
   const ronde=document.getElementById('rep-ronde');
   const point=document.getElementById('rep-point');
   const bandeau=document.getElementById('rep-bandeau');
+  if(bandeau) bandeau.classList.toggle('rep-compact',reposCompact());
   const etat=document.getElementById('rep-etat');
   // L'ENTREE. La hauteur se reserve tout de suite — on ne masque jamais le
   // contenu — et le CONTENU monte. Un drapeau, sinon l'animation rejouerait

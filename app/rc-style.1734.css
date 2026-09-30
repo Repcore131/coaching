@@ -9391,6 +9391,43 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
    l'emprise de la décharge en découlent. */
 @media (max-height:700px){.rep-carte{--rep-d:82px}}
 @media (max-height:600px){.rep-carte{--rep-d:82px}}
+/* ══ L'ÉCRAN DE SÉANCE TIENT DANS LA FENÊTRE (30/09/2026) ════════════════
+   Mesuré en 375 × 740 : pendant un repos, #s-workout faisait 892 px et
+   « Suivant » sortait de l'écran ; en superset, le minuteur commençait à
+   979 px. .screen est en min-height:100dvh, il grandit avec son contenu et
+   c'est le document qui défile, barre du bas comprise. ICI SEULEMENT, l'écran
+   prend la hauteur de la fenêtre, et seule la zone du milieu défile : la
+   topbar, le minuteur et la barre du bas ne rétrécissent jamais. Les autres
+   écrans gardent le min-height (plusieurs défilent le document, voir
+   _pxDefilerAuBord). */
+#s-workout.active{height:100vh;height:100dvh;overflow:hidden}
+#s-workout>.scroll-area{flex:1 1 auto;min-height:0}
+#s-workout>.topbar,#s-workout>#wo-repos,#s-workout>.wo-barre{flex-shrink:0}
+
+/* ── LE MINUTEUR COMPACT : une ligne, 88 px au plus ──────────────────────
+   Écran de moins de 800 px, ou superset (deux exercices à l'écran) : le
+   décompte, −15, +15, Passer et le son sur UNE ligne. Même structure que le
+   grand cadran (#rep-arc, #rep-num, #rep-lbl, #rep-son restent) : c'est la
+   feuille qui change, pas le DOM. Un toucher sur le décompte rend le grand
+   cadran (basculerCadranRepos). */
+.rep-carte.rep-compact{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px}
+.rep-compact .rep-entete{display:none}
+.rep-compact .rep-corps{order:1;flex:1 1 auto;min-width:0;margin-top:0;gap:8px}
+.rep-compact .rep-scene{flex:0 0 auto;cursor:pointer}
+.rep-compact .rep-cadran{width:auto;height:auto;min-width:74px}
+.rep-compact .rep-cadran::before,.rep-compact .rep-anneau,.rep-compact .rep-eclairs,
+.rep-compact #rep-ronde,.rep-compact .rep-centre>svg,.rep-compact #rep-etat{display:none}
+.rep-compact .rep-centre{position:static;pointer-events:none}
+.rep-compact #rep-num,.rep-compact #rep-num.rep-long{font-size:30px;line-height:1}
+.rep-compact .rep-actions{flex:1 1 auto;grid-template-columns:1fr 1fr 1.35fr;gap:6px}
+.rep-compact .rep-btn-large{grid-column:auto}
+.rep-compact .rep-btn{min-height:40px;padding:4px}
+.rep-compact .rep-btn-l{display:none}
+.rep-compact .rep-btn-large .rep-btn-v{gap:4px;letter-spacing:1px}
+.rep-compact .rep-son{order:2;position:static;flex:0 0 auto;width:32px;height:40px}
+.rep-compact .rep-invite{order:3;flex:1 0 100%;margin-top:0}
+/* Le décompte se touche pour changer de forme, dans les deux sens. */
+.rep-scene[role="button"]{cursor:pointer;-webkit-tap-highlight-color:transparent}
 
 /* ANIMATION 7 — l'arc qui passe d'un onglet à l'autre. Un trait de 2 px à
    l'aplomb du liseré de l'onglet actif, qui se DÉPLACE au lieu de s'éteindre

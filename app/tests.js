@@ -59409,6 +59409,78 @@ async function testExercices(){
         await new Promise(r=>setTimeout(r,400));
       }});
 
+    // ── L'ÉCRAN DE SÉANCE TIENT DANS LA FENÊTRE PENDANT UN REPOS (30/09/2026) ──
+    okA('Pendant un repos, « Suivant » et le minuteur restent dans la fenêtre : 5 exercices, superset, et 375 × 667 simulé',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast, sH=_reposHauteur;
+      const pause=ms=>new Promise(r=>setTimeout(r,ms));
+      const scr=document.getElementById('s-workout');
+      const exo=(n,ss)=>Object.assign({name:n,series:4,reps:'8',repos:'2 min'},ss?{ss:true}:{});
+      const seance=(exs)=>({active:true,name:'Push',exercises:exs});
+      const lancer=async(cfg)=>{ try{ annulerRepos(); }catch(e){} localStorage.removeItem('rc_wo_state');
+        currentUser.sessions_config=[cfg]; launchWorkout(cfg,0); await pause(300); };
+      const dans=(haut,bas)=>{
+        const n=document.getElementById('wo-next-btn').getBoundingClientRect();
+        const r=document.getElementById('wo-repos').getBoundingClientRect();
+        if(!(r.height>0)) return 'le minuteur n’est pas affiché';
+        if(n.bottom>bas+0.5) return '« Suivant » finit à '+Math.round(n.bottom-haut)+' px pour '+Math.round(bas-haut);
+        if(r.bottom>bas+0.5) return 'le minuteur finit à '+Math.round(r.bottom-haut)+' px pour '+Math.round(bas-haut);
+        return '';
+      };
+      try{
+        window.saveUser=()=>true; window.toast=()=>{};
+        currentUser={id:'wf',email:'wf@t.fr',fname:'A',lname:'B',role:'athlete',exAlias:{},exMuscles:{},sessions:[],bilans:[],videos:[],
+          programs:{},contraintesSante:[],birthdate:'1990-05-01',gender:'homme',consent:{health:true,policyVersion:POLICY_VERSION},sonRepos:false,
+          sessions_config:[]};
+        // 1. Cinq exercices, première série validée.
+        await lancer(seance([exo('DEVELOPPE COUCHE'),exo('ROWING BARRE'),exo('SQUAT'),exo('CURL BICEPS'),exo('GAINAGE')]));
+        toggleSet(0,0); await pause(300);
+        if(!woState.reposFin) return _echec('le repos n’a pas démarré');
+        let e=dans(0,innerHeight); if(e) return _echec('5 exercices : '+e);
+        if(Math.round(scr.getBoundingClientRect().height)!==innerHeight) return _echec('l’écran fait '+Math.round(scr.getBoundingClientRect().height)+' px pour '+innerHeight);
+        // Les id du grand cadran sont gardés dans les deux formes.
+        for(const id of ['rep-arc','rep-num','rep-lbl','rep-son']) if(!document.getElementById(id)) return _echec('#'+id+' manque');
+        // 2. Superset : exercice 2 en ss, une série de chacun.
+        await lancer(seance([exo('DEVELOPPE COUCHE'),exo('ROWING BARRE',true),exo('SQUAT'),exo('CURL BICEPS'),exo('GAINAGE')]));
+        toggleSet(0,0); toggleSet(0,1); await pause(300);
+        if(!woState.reposFin) return _echec('superset : le repos n’a pas démarré');
+        e=dans(0,innerHeight); if(e) return _echec('superset : '+e);
+        const b=document.getElementById('rep-bandeau');
+        if(!b.classList.contains('rep-compact')) return _echec('superset : minuteur non compact');
+        if(document.getElementById('wo-repos').getBoundingClientRect().height>88.5) return _echec('compact : '+Math.round(document.getElementById('wo-repos').getBoundingClientRect().height)+' px');
+        for(const id of ['rep-arc','rep-num','rep-lbl','rep-son']) if(!document.getElementById(id)) return _echec('compact : #'+id+' manque');
+        // Le toucher sur le décompte rend le grand cadran, puis le compact.
+        basculerCadranRepos(); if(b.classList.contains('rep-compact')) return _echec('la bascule ne rend pas le grand cadran');
+        basculerCadranRepos(); if(!b.classList.contains('rep-compact')) return _echec('la bascule ne revient pas au compact');
+        // 3. 375 × 667 simulé : l'écran ramené à 667 px, la hauteur lue à 667.
+        _reposHauteur=()=>667;
+        await lancer(seance([exo('DEVELOPPE COUCHE'),exo('ROWING BARRE'),exo('SQUAT'),exo('CURL BICEPS'),exo('GAINAGE')]));
+        // min-height aussi : .screen est en min-height:100dvh, soit la fenêtre du banc.
+        scr.style.height='667px'; scr.style.minHeight='667px';
+        toggleSet(0,0); await pause(300);
+        if(!document.getElementById('rep-bandeau').classList.contains('rep-compact')) return _echec('667 : minuteur non compact');
+        const t=scr.getBoundingClientRect().top;
+        e=dans(t,t+667); if(e) return _echec('667 : '+e);
+        // Sans repos non plus, la barre ne déborde pas.
+        annulerRepos(); await pause(400);
+        const n=document.getElementById('wo-next-btn').getBoundingClientRect();
+        return n.bottom<=t+667.5?true:_echec('667 sans repos : « Suivant » à '+Math.round(n.bottom-t));
+      } finally {
+        try{ scr.style.height=''; scr.style.minHeight=''; }catch(e){}
+        _reposHauteur=sH;
+        try{ annulerRepos(); }catch(e){}
+        try{ clearInterval(woState.timerInterval); }catch(e){}
+        currentUser=sU; woState=sW; window.saveUser=svSave; window.toast=svToast;
+        if(sSnap!=null) localStorage.setItem('rc_wo_state',sSnap); else localStorage.removeItem('rc_wo_state');
+        // Le retrait animé du bandeau finit en 200 ms : on l'attend.
+        await new Promise(r=>setTimeout(r,400));
+      }});
+    ok('La règle de hauteur ne vise que l’écran de séance',(()=>{
+      const css=[...document.styleSheets].map(f=>{ try{ return [...f.cssRules].map(r=>r.cssText).join('\n'); }catch(e){ return ''; } }).join('\n');
+      if(!/#s-workout\.active\s*\{[^}]*height:\s*100dvh/.test(css)) return _echec('#s-workout.active sans height:100dvh');
+      if(/(^|\n)\.screen\.active\s*\{[^}]*height:\s*100dvh/.test(css)) return _echec('la règle a gagné tous les écrans');
+      const barre=document.querySelector('#s-workout .wo-barre');
+      return barre&&/safe-area-inset-bottom/.test(barre.getAttribute('style')||'')?true:_echec('la barre du bas ignore l’encoche');})());
+
     okA('R30 — la ligne du son : premier repos seulement, 18 px au plus, « Passer » intact, « Activer » reste dans la séance',async()=>{
       const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;
       const toasts=[]; const pause=ms=>new Promise(r=>setTimeout(r,ms));
