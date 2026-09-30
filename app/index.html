@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1741';
+window.RC_BUILD='1742';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-09-30';
@@ -457,7 +457,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1741.css">
+<link rel="stylesheet" href="./rc-style.1742.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -4397,6 +4397,18 @@ const COACH_PHOTO='icons/coach.jpg';
       onclick="rcInfoFermer()">J'ai compris</button>
   </div>
 </div>
+<!-- L'HISTORIQUE D'UN EXERCICE (30/09/2026). Meme patron que rc-lexique :
+     lecture seule, fermee par le voile, « Fermer », Echap et le retour. -->
+<div id="rc-histo" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);align-items:flex-end;justify-content:center"
+  onclick="if(event.target===this)fermerHistoriqueExo()" role="dialog" aria-modal="true"
+  aria-labelledby="rc-histo-titre">
+  <div class="rci-feuille" onclick="event.stopPropagation()">
+    <div class="rci-grip" aria-hidden="true"></div>
+    <div id="rc-histo-corps"></div>
+    <button id="rc-histo-ok" class="btn btn-outline btn-sm" style="width:100%;margin-top:20px"
+      onclick="fermerHistoriqueExo()">Fermer</button>
+  </div>
+</div>
 <!-- R26 — LE CHOIX DE L APPROCHE NUTRITIONNELLE. Meme patron que les autres
      feuilles basses : voile qui ferme, retour et Echap qui ferment, go() qui la
      retire. Les deux options disent ce qu elles changent au quotidien ; la
@@ -5998,5 +6010,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1741.js"></script>
+<script src="./rc-core.1742.js"></script>
 </body></html>

@@ -6609,6 +6609,9 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // meme forme que demandesVideo, et elle doit etre classee comme elle.
   'demandesMesure',
   'motCoach','brouillonsProg','methodesForcees','programme',
+  // Les notes d'exercice (30/09/2026) : un texte libre de 140 caractères par
+  // exercice, lu par le coach — même nature que motCoach, et classé comme lui.
+  'notesExo',
   'programPdf','programPdfDate','programPdfLink','programPdfName','programPdfSize',
   'programPdfStorageUrl','programPdfVersion',
   'exAlias','exMuscles','exCatalogVersion','exCustom','exFavoris','exRecents',
@@ -8797,6 +8800,7 @@ function go(id){
   // n'importe quel ecran, il doit donc mourir avec celui qui l'a ouvert. Une
   // definition posee par-dessus l'ecran suivant n'explique plus rien.
   try{ rcInfoFermer(true); }catch(e){}
+  try{ fermerHistoriqueExo(true); }catch(e){}
   try{ fermerAchatProgramme(true); }catch(e){}
   // LES DEUX FICHES DE VENTE aussi : elles s'ouvrent depuis « Mes programmes »,
   // et une fiche laissee ouverte par-dessus l'ecran suivant y publierait un
@@ -9280,7 +9284,7 @@ function _histCalqueOuvert(){
   // _histFermerCalque sait les fermer : le retour tombait plus bas, go()
   // les fermait au passage, et l'ecran changeait avec. Meme ordre que
   // _histFermerCalque, pour qu'on lise les deux listes cote a cote.
-  for(const id of ['rc-achat','rc-progvente','rc-vente','rc-contact','rc-lexique','rc-diete','rc-confirm','rc-saisie']){
+  for(const id of ['rc-achat','rc-progvente','rc-vente','rc-contact','rc-lexique','rc-histo','rc-diete','rc-confirm','rc-saisie']){
     const z=document.getElementById(id);
     if(z&&z.style.display==='flex'&&!z.dataset.sortie) return true;
   }
@@ -9303,6 +9307,10 @@ function _histFermerCalque(){
   if(_ct&&_ct.style.display==='flex'&&!_ct.dataset.sortie){ fermerContactCoach(); return; }
   const _lx=document.getElementById('rc-lexique');
   if(_lx&&_lx.style.display==='flex'&&!_lx.dataset.sortie){ rcInfoFermer(); return; }
+  // L'historique d'un exercice, APRES le lexique : ce dernier peut s'ouvrir
+  // par-dessus n'importe quoi, et le retour defait le dernier geste.
+  const _hx=document.getElementById('rc-histo');
+  if(_hx&&_hx.style.display==='flex'&&!_hx.dataset.sortie){ fermerHistoriqueExo(); return; }
   const _dc=document.getElementById('rc-diete');
   if(_dc&&_dc.style.display==='flex'&&!_dc.dataset.sortie){ fermerChoixDiete(); return; }
   const _wp=document.getElementById('wo-pause-modal');
@@ -31044,11 +31052,12 @@ function hasProgram(c){
   );
 }
 // ======= RÉCAP SÉANCES COACH =======
-let _coachSessions=[];
+let _coachSessions=[], _coachSessionsClient=null;
 function renderCoachSessionRecap(c){
   const el=document.getElementById('ccd-sessions-recap');
   if(!el) return;
   _coachSessions=(c.sessions||[]).slice().reverse();
+  _coachSessionsClient=c;
   if(!_coachSessions.length){el.innerHTML='';return;}
   el.innerHTML=`<h3 style="margin-bottom:12px">Séances</h3>
     <div id="ccd-sr-list"></div>
@@ -31060,7 +31069,7 @@ function _renderSessionBatch(from,count){
   const list=document.getElementById('ccd-sr-list');
   const btn=document.getElementById('ccd-sr-more');
   if(!list) return;
-  list.innerHTML+=_coachSessions.slice(from,from+count).map(s=>_buildSessionCard(s)).join('');
+  list.innerHTML+=_coachSessions.slice(from,from+count).map(s=>_buildSessionCard(s,_coachSessionsClient)).join('');
   const shown=from+count;
   const more=_coachSessions.length-shown;
   if(btn){
@@ -31159,7 +31168,8 @@ function _viserExercice(nom){
   }
   return false;
 }
-function _buildSessionCard(s){
+// `client` (facultatif) : le dossier de l'athlete, pour ses notes d'exercice.
+function _buildSessionCard(s,client){
   const dt=new Date(s.date).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
   const complete=s.complete!==false;
   const rows=Object.entries(s.data||{}).map(([nm,d])=>{
@@ -31199,8 +31209,13 @@ function _buildSessionCard(s){
         title="Corriger cet exercice dans son programme"
         style="display:block;width:100%;text-align:left;background:none;border:none;padding:0;margin:0 0 2px;font-family:inherit;font-size:var(--fs-xs);font-weight:700;color:#ccc;cursor:pointer;text-decoration:underline;text-decoration-color:#333;text-underline-offset:3px">${escapeHtml(nm)}</button>
       <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6">${escapeHtml(line)}</div>
+      ${(()=>{ const n=client?noteExo(client,nm):null;
+        return n?`<div class="sc-note-exo">Sa note : ${escapeHtml(n.texte)}</div>`:''; })()}
     </div>`;
   }).filter(Boolean).join('');
+  // LE MOT DE L'ATHLETE, en tete du detail : c'est la premiere chose a lire.
+  const _mot=(typeof s.noteAthlete==='string'&&s.noteAthlete.trim())
+    ?`<div class="sc-note-ath"><span>Son mot</span>${escapeHtml(s.noteAthlete.trim().slice(0,NOTE_SEANCE_MAX))}</div>`:'';
   return `<div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:var(--r-3);margin-bottom:10px;overflow:hidden">
     <div onclick="toggleSCard(this)" style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="flex:1;min-width:0">
@@ -31211,7 +31226,7 @@ function _buildSessionCard(s){
       <span class="sc-arr" style="color:var(--text-dim);font-size:var(--fs-xs);flex-shrink:0">▶</span>
     </div>
     <div class="sc-body" style="display:none;padding:0 14px 14px">
-      ${rows||'<div style="font-size:var(--fs-xs);color:var(--text-dim);padding-top:8px">Aucune série enregistrée.</div>'}
+      ${_mot}${rows||'<div style="font-size:var(--fs-xs);color:var(--text-dim);padding-top:8px">Aucune série enregistrée.</div>'}
     </div>
   </div>`;
 }
@@ -50798,6 +50813,7 @@ function _blocExo(idx,estSS){
         <div class="wo-tete-txt">
           ${estSS?`<div class="wo-ss-rep">${rep}</div>`:''}
           <div class="ex-name wo-nom">${escapeHtml(ex.name)}</div>
+          ${_htmlNoteExo(idx,ex)}
           <div class="wo-serie">${ex.series} séries × ${escapeHtml(ex.reps)} reps</div>
           <!-- La barre et ses deux compteurs. Un superset rend plusieurs cartes
                dans le même écran : c'est une CLASSE qui les marque, et
@@ -50812,6 +50828,7 @@ function _blocExo(idx,estSS){
         </div>
         <div class="wo-cmd">
         ${_htmlBoutonRemplacer(idx,ex)}
+        ${_htmlBoutonHistorique(idx,ex)}
         <button class="hit44" id="wo-calc-btn-${idx}" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-xs);padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Calculer ma charge</button>
         </div>
         <div class="wo-ava"></div>
@@ -64401,6 +64418,8 @@ const RCF_ANCRES=Object.freeze({
   satisfaction:['déçu','très satisfait'],
   hydratation:['peu bu','bien hydraté']
 });
+// Le mot pour le coach, en fin de seance : 280 caracteres (regle RTDB comprise).
+const NOTE_SEANCE_MAX=280;
 function _htmlRessentiFin(){
   const q=o=>{
     const suite=o.forme?'renderFormeSeance();':'';
@@ -64437,6 +64456,11 @@ function _htmlRessentiFin(){
       +'<button type="button" class="rcf-fb-plus" id="ps-detail-btn" '
         +'onclick="togglePsDetail()">Plus de détails</button></div>'
     +RCF_QUESTIONS.map(q).join('')
+    // LE MOT POUR LE COACH (30/09/2026) : facultatif, 280 caracteres, range
+    // dans la seance (sess.noteAthlete) et lu dans son detail cote coach.
+    +'<label class="rcf-note-l" for="ps-note">Un mot pour ton coach ?</label>'
+    +'<textarea id="ps-note" class="rcf-note" maxlength="'+NOTE_SEANCE_MAX+'" rows="2" '
+      +'placeholder="Facultatif : une sensation, un réglage, une question…"></textarea>'
     +'</div>';
 }
 // Poser une note : la pastille, le chiffre, et l'input qui porte la valeur.
@@ -64460,6 +64484,8 @@ function rcfNoter(id,v){
 // la seance precedente passerait pour une reponse.
 function rcfReinitRessenti(){
   RCF_QUESTIONS.forEach(o=>{ try{ rcfNoter(o.id,5); }catch(e){} });
+  // Le mot de la seance precedente ne se recopie pas sur la suivante.
+  try{ const n=document.getElementById('ps-note'); if(n) n.value=''; }catch(e){}
 }
 // LE RESSENTI EST POSE AU DEMARRAGE, pas seulement en fin de seance.
 //
@@ -65916,8 +65942,12 @@ function savePostSession(versBilan){
     metrics.satisfaction=_lu('satisfaction');
     metrics.hydratation=_lu('hydratation');
   }
+  // Le mot pour le coach : borné ici ET dans les règles (PUT du dossier entier).
+  const _note=String(_lu('note')||'').trim().slice(0,NOTE_SEANCE_MAX);
   // Attacher les métriques à la dernière séance
   if(currentUser.sessions?.length){
+    const _der=currentUser.sessions[currentUser.sessions.length-1];
+    if(_note) _der.noteAthlete=_note; else delete _der.noteAthlete;
     currentUser.sessions[currentUser.sessions.length-1].metrics=metrics;
     if(metrics.steps) currentUser.sessions[currentUser.sessions.length-1].steps=parseInt(metrics.steps);
   }
@@ -76046,6 +76076,150 @@ function candidatsRemplacement(nomCourant,q){
 // Le bouton. Rien sur un cardio — il n'y a pas de mouvement à échanger — et
 // rien sous drapeau : tant qu'un drapeau est levé, l'app ne propose plus, elle
 // renvoie. C'est la même règle que pour les substituts de contrainte.
+// ══ L'HISTORIQUE D'UN EXERCICE, EN SEANCE (30/09/2026) ══════════════════
+// « Qu'est-ce que j'ai fait la derniere fois, et celle d'avant ? » — la
+// question qu'on se pose entre deux series, et a laquelle la carte ne repond
+// que pour UNE seance (getPrevPerf). La feuille montre les cinq dernieres ou
+// l'exercice a ete fait, et les deux records. LECTURE SEULE : rien ne s'y
+// modifie, rien ne s'y lance ; on regarde et on revient a sa serie.
+const HISTO_EXO_N=5;
+/** PURE. Les dernieres seances qui contiennent l'exercice (series validees),
+ *  de la plus recente a la plus ancienne. */
+function historiqueSeancesExo(user,nom,n){
+  const u=_dossier(user);
+  const lim=Number(n)>0?Number(n):HISTO_EXO_N;
+  const out=[];
+  for(const sess of ((u&&u.sessions)||[])){
+    if(!sess||!sess.date||!sess.data) continue;
+    let d=null; try{ d=_dataDeSeance(sess,nom); }catch(e){ d=null; }
+    const faites=((d&&d.sets)||[]).filter(x=>x&&x.done===true);
+    if(!faites.length) continue;
+    out.push({date:Number(sess.date)||0,series:faites});
+  }
+  out.sort((a,b)=>b.date-a.date);
+  return out.slice(0,lim);
+}
+/** PURE. Une serie en toutes lettres : « 100 kg × 8 @RIR 2 », P2 compris. */
+function _texteSerieHisto(x,user){
+  const kg=w=>{ const a=kgVersAffiche(w,user); return a==null?'?':String(a).replace('.',','); };
+  const u=' '+(uniteCharge(user)==='lb'?'lb':'kg');
+  let reps=x.repsDone!=null?x.repsDone:(x.reps||'?');
+  let t=(parseFloat(x.weight)>0?kg(x.weight)+u:'PDC')+' × '+reps;
+  if(x.degressive&&x.weight2) t+=' / '+kg(x.weight2)+u+' × '+(x.p2reps||'?');
+  if(x.rir==='echec') t+=' @échec';
+  else if(x.rir!==''&&x.rir!=null&&isFinite(Number(x.rir))) t+=' @RIR '+Number(x.rir);
+  return t;
+}
+/** PURE. Le contenu de la feuille. Tout ce qui vient du dossier est echappe. */
+function htmlHistoriqueExo(user,nom){
+  const u=_dossier(user);
+  const l=historiqueSeancesExo(u,nom);
+  let rec=null; try{ rec=recordsExercice(u,nom); }catch(e){ rec=null; }
+  const mc=rec&&rec.meilleureCharge, me=rec&&rec.meilleurE1rm;
+  const unite=uniteCharge(u)==='lb'?'lb':'kg';
+  const aff=w=>String(kgVersAffiche(w,u)).replace('.',',')+' '+unite;
+  let h='<div class="rci-t" id="rc-histo-titre">'+escapeHtml(String(nom||''))+'</div>';
+  if(mc||me){
+    h+='<div class="histo-rec">'
+      +(mc?'<div><span>'+(mc.assiste?'Assistance la plus faible':'Meilleure charge')+'</span><b>'+escapeHtml(aff(mc.kg))
+        +(mc.reps?' × '+escapeHtml(String(mc.reps)):'')+'</b></div>':'')
+      +(me?'<div><span>Meilleur e1RM</span><b>'+escapeHtml(aff(me.valeur))+'</b></div>':'')
+      +'</div>';
+  }
+  if(!l.length) return h+'<div class="rci-d">Pas encore de série validée sur cet exercice.</div>';
+  h+='<ol class="histo-l">'+l.map(e=>'<li><div class="histo-d">'
+    +escapeHtml(new Date(e.date).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short',year:'numeric'}))
+    +'</div><div class="histo-s">'+e.series.map(x=>escapeHtml(_texteSerieHisto(x,u))).join(' · ')+'</div></li>').join('')
+    +'</ol>';
+  return h;
+}
+function _htmlBoutonHistorique(idx,ex){
+  if(!ex||!ex.name||isCardio(ex)) return '';
+  return `<button type="button" class="hit44 wo-histo-btn" onclick="ouvrirHistoriqueExo(${idx})" aria-label="Historique de cet exercice"
+    style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-xs);padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;flex-shrink:0">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="13" height="13" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Historique</button>`;
+}
+// MEME PATRON QUE rc-lexique : une feuille statique, fermee par le voile,
+// par « Fermer », par Echap et par le retour Android (_histCalqueOuvert /
+// _histFermerCalque), et par go().
+function ouvrirHistoriqueExo(idx){
+  const ex=((typeof woState!=='undefined'&&woState&&woState.exercises)||[])[idx];
+  const z=document.getElementById('rc-histo-corps');
+  if(!ex||!z) return null;
+  z.innerHTML=htmlHistoriqueExo(currentUser,ex.name);
+  const f=_feuilleOuvrir('rc-histo');
+  try{ const b=document.getElementById('rc-histo-ok'); if(b) b.focus({preventScroll:true}); }catch(x){}
+  return f;
+}
+function fermerHistoriqueExo(tout_de_suite){ _feuilleFermer('rc-histo',tout_de_suite); }
+
+// ══ LA NOTE D'EXERCICE, EPINGLEE (30/09/2026) ══════════════════════════
+// « Siège au cran 4 », « prise large », « poulie à 12 » : ce que l'athlete
+// se redisait de memoire a chaque seance. Une ligne, sous le nom, rangee par
+// exercice (exKey) et non par seance : elle revient a chaque launchWorkout.
+// BORNEE a 140 caracteres, ici ET dans les regles : chaque saveUser est un PUT
+// du dossier entier. Le coach la lit dans le detail de seance.
+const NOTE_EXO_MAX=140;
+/** PURE. La note d'un exercice, ou null. */
+function noteExo(user,nom){
+  const u=_dossier(user);
+  let k=''; try{ k=exKey(nom); }catch(e){ k=''; }
+  const n=k&&u&&u.notesExo&&u.notesExo[k];
+  const t=n&&typeof n.texte==='string'?n.texte.trim():'';
+  return t?{texte:t.slice(0,NOTE_EXO_MAX),maj:Number(n.maj)||0}:null;
+}
+/** Ecrit (ou efface, sur un texte vide) la note d'un exercice. */
+function ecrireNoteExo(nom,texte){
+  const u=currentUser;
+  let k=''; try{ k=exKey(nom); }catch(e){ k=''; }
+  if(!u||!k) return false;
+  const t=String(texte==null?'':texte).replace(/\s+/g,' ').trim().slice(0,NOTE_EXO_MAX);
+  if(!u.notesExo||typeof u.notesExo!=='object') u.notesExo={};
+  if(t) u.notesExo[k]={texte:t,maj:Date.now()};
+  else delete u.notesExo[k];
+  if(!Object.keys(u.notesExo).length) delete u.notesExo;
+  try{ saveUser(); }catch(e){}
+  return true;
+}
+function _htmlNoteExo(idx,ex){
+  if(!ex||!ex.name) return '';
+  const n=noteExo(currentUser,ex.name);
+  return `<button type="button" class="wo-note-exo${n?'':' vide'}" onclick="editerNoteExo(${idx})"
+    aria-label="${n?'Ma note sur cet exercice : '+escapeHtml(n.texte)+'. Toucher pour la modifier':'Ajouter une note sur cet exercice'}">${n?escapeHtml(n.texte):'+ Ma note (réglage, prise…)'}</button>`;
+}
+function editerNoteExo(idx){
+  const ex=((typeof woState!=='undefined'&&woState&&woState.exercises)||[])[idx];
+  if(!ex) return false;
+  const n=noteExo(currentUser,ex.name);
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',
+    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+      <div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="note-exo-t" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:18px 20px 20px;width:100%;max-width:480px">
+        <div id="note-exo-t" style="font-size:var(--fs-md);font-weight:800;margin-bottom:4px">Ma note · ${escapeHtml(ex.name)}</div>
+        <div class="sub" style="font-size:var(--fs-xs);margin-bottom:10px">Elle revient à chaque séance. Ton coach la voit.</div>
+        <textarea id="note-exo-champ" maxlength="${NOTE_EXO_MAX}" rows="3" style="width:100%;resize:none" placeholder="Siège au cran 4, prise large…">${n?escapeHtml(n.texte):''}</textarea>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          ${n?'<button type="button" class="btn btn-outline" style="flex:1;margin:0" onclick="_noteExoValider('+idx+',true)">Effacer</button>':''}
+          <button type="button" class="btn btn-red" style="flex:2;margin:0" onclick="_noteExoValider(${idx})">Enregistrer</button>
+        </div>
+      </div></div>`);
+  setTimeout(()=>{ try{ const c=document.getElementById('note-exo-champ'); c.focus(); }catch(e){} },50);
+  return true;
+}
+function _noteExoValider(idx,effacer){
+  const ex=((typeof woState!=='undefined'&&woState&&woState.exercises)||[])[idx];
+  const c=document.getElementById('note-exo-champ');
+  if(!ex) return false;
+  ecrireNoteExo(ex.name,effacer?'':(c?c.value:''));
+  closeModal();
+  // La ligne sous le nom, repeinte EN PLACE : renderWoEx referait tout
+  // l'ecran, et le chronometre de repos avec.
+  document.querySelectorAll('#wo-content .wo-note-exo').forEach(b=>{
+    const m=/editerNoteExo\((\d+)\)/.exec(b.getAttribute('onclick')||'');
+    if(m&&Number(m[1])===idx){ const t=document.createElement('div'); t.innerHTML=_htmlNoteExo(idx,ex).trim(); b.replaceWith(t.firstChild); }
+  });
+  return true;
+}
 function _htmlBoutonRemplacer(idx,ex){
   if(!ex||!ex.name) return '';
   if(isCardio(ex)) return '';
@@ -122108,6 +122282,10 @@ document.addEventListener('keydown',e=>{
   const lx=document.getElementById('rc-lexique');
   if(lx&&lx.style.display==='flex'&&!lx.dataset.sortie){
     e.preventDefault(); try{ rcInfoFermer(); }catch(x){} return;
+  }
+  const hx=document.getElementById('rc-histo');
+  if(hx&&hx.style.display==='flex'&&!hx.dataset.sortie){
+    e.preventDefault(); try{ fermerHistoriqueExo(); }catch(x){} return;
   }
   // R27 — la fiche de la boutique, APRES le lexique : il peut s'ouvrir
   // par-dessus elle, et Echap defait le dernier geste.

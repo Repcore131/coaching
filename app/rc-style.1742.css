@@ -5675,6 +5675,23 @@ input.set-input.wo-reps{width:42px;letter-spacing:.3px;padding-left:2px;padding-
 #s-client-home[data-demarrage] #clh-phrase,
 #s-client-home[data-demarrage] #clh-first-bilan-card,
 #s-client-home[data-demarrage] #clh-reprise{display:none!important}
+/* L'HISTORIQUE D'UN EXERCICE, LA NOTE EPINGLEE, LE MOT DE SEANCE (30/09/2026). */
+.histo-rec{display:flex;gap:10px;margin:10px 0 4px}
+.histo-rec>div{flex:1;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:8px 10px}
+.histo-rec span{display:block;font-size:var(--fs-2xs);color:var(--sub);letter-spacing:.5px;text-transform:uppercase}
+.histo-rec b{display:block;font-size:var(--fs-md);margin-top:2px}
+.histo-l{list-style:none;margin:10px 0 0;padding:0;max-height:52vh;overflow-y:auto}
+.histo-l li{padding:8px 0;border-top:1px solid var(--border)}
+.histo-d{font-size:var(--fs-xs);font-weight:800;color:var(--text)}
+.histo-s{font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:2px}
+.wo-note-exo{display:block;max-width:100%;margin:2px 0 2px;padding:2px 0;min-height:24px;background:none;border:0;text-align:left;
+  font-family:Montserrat,sans-serif;font-size:var(--fs-xs);color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.wo-note-exo.vide{color:var(--text-faint);font-style:italic}
+.rcf-note-l{display:block;margin-top:14px;font-size:var(--fs-sm);font-weight:700;text-transform:none;letter-spacing:normal}
+.rcf-note{width:100%;margin-top:6px;resize:vertical;min-height:56px}
+.sc-note-exo{font-size:var(--fs-xs);color:var(--text-dim);font-style:italic;margin-top:2px}
+.sc-note-ath{margin:8px 0 4px;padding:8px 10px;background:var(--surface-2);border-left:2px solid var(--red);border-radius:var(--r-1);font-size:var(--fs-xs);line-height:1.6;color:var(--text)}
+.sc-note-ath span{display:block;font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px}
 /* LA VIDEO DE DEMONSTRATION, EN FEUILLE BASSE (30/09/2026). */
 .demo-voile{position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal)}
 .demo-feuille{position:fixed;left:0;right:0;bottom:0;z-index:calc(var(--z-modal) + 1);max-width:560px;margin:0 auto;
@@ -13184,6 +13201,16 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .pd-fait .pd-case{background:var(--green);border-color:var(--green)}
 :root[data-theme="clair"] .pd-fait .pd-titre{color:var(--sub)}
 :root[data-theme="clair"] .pd-etat{color:var(--green)}
+:root[data-theme="clair"] .histo-rec>div{background:var(--surface-1);border:1px solid var(--border)}
+:root[data-theme="clair"] .histo-rec span{color:var(--sub)}
+:root[data-theme="clair"] .histo-l li{border-top:1px solid var(--border)}
+:root[data-theme="clair"] .histo-d{color:var(--text)}
+:root[data-theme="clair"] .histo-s{color:var(--sub)}
+:root[data-theme="clair"] .wo-note-exo{color:var(--sub)}
+:root[data-theme="clair"] .wo-note-exo.vide{color:var(--text-faint)}
+:root[data-theme="clair"] .sc-note-exo{color:var(--text-dim)}
+:root[data-theme="clair"] .sc-note-ath{background:var(--surface-2);border-left:2px solid var(--red);color:var(--text)}
+:root[data-theme="clair"] .sc-note-ath span{color:var(--sub)}
 :root[data-theme="clair"] .demo-voile{background:var(--scrim)}
 :root[data-theme="clair"] .demo-feuille{background:var(--surface-2);box-shadow:0 -10px 30px rgba(0,0,0,0.21)}
 :root[data-theme="clair"] .demo-poignee{background:#c4c4c4}

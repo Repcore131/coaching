@@ -64578,6 +64578,109 @@ async function testExercices(){
       } finally { window.fileEnvoiLister=svLister; window.uploadVideoFile=svUp; currentUser=sU; if(z) z.innerHTML=sv||''; }
     });
 
+    // ══ 30/09/2026 — HISTORIQUE D'EXERCICE, NOTES D'EXERCICE ET DE SÉANCE ══
+    okA('Historique d’exercice : bouton à côté de « Remplacer », 5 séances antichronologiques, records, fermeture par le retour',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;
+      try{
+        window.saveUser=()=>true; window.toast=()=>{};
+        _r25Monter([{name:'ROWING BARRE',series:3,reps:'8',repos:'2 min'}]);
+        const J=864e5, t0=Date.now()-60*J;
+        const S=(j,w,rir)=>({id:'h'+j,date:t0+j*J,name:'Push',data:{'ROWING BARRE':{sets:[{weight:String(w),reps:'8',rir:String(rir),done:true},{weight:String(w),reps:'8',rir:'',done:false}]}}});
+        // DÉSORDONNÉES À DESSEIN, et sept : la feuille doit trier et couper à cinq.
+        currentUser.sessions=[S(3,62.5,2),S(1,60,3),S(7,70,1),S(5,65,2),S(2,60,2),S(6,67.5,'echec'),S(4,62.5,1),
+          {id:'x',date:t0+8*J,name:'Pull',data:{'CURL BARRE':{sets:[{weight:'30',reps:'10',done:true}]}}}];
+        _viderCachePlateau();
+        const l=historiqueSeancesExo(currentUser,'ROWING BARRE');
+        if(l.length!==5) return _echec(l.length+' séances au lieu de 5');
+        for(let k=1;k<l.length;k++) if(!(l[k-1].date>l[k].date)) return _echec('ordre non antichronologique au rang '+k);
+        if(l[0].date!==t0+7*J) return _echec('la plus récente n’est pas en tête');
+        if(l.some(e=>e.series.some(x=>!x.done))) return _echec('une série non validée est listée');
+        // LE BOUTON, À CÔTÉ DE « REMPLACER ».
+        renderWoEx();
+        const cmd=document.querySelector('#wo-content .wo-cmd');
+        const b=cmd&&cmd.querySelector('.wo-histo-btn');
+        if(!b||!b.classList.contains('hit44')||!/Historique/.test(b.textContent)) return _echec('pas de bouton Historique dans .wo-cmd');
+        const remp=[...cmd.querySelectorAll('button')].find(x=>/Remplacer/.test(x.textContent));
+        if(!remp||remp.nextElementSibling!==b) return _echec('Historique n’est pas juste à côté de « Remplacer »');
+        b.click();
+        const z=document.getElementById('rc-histo');
+        if(!z||z.style.display!=='flex') return _echec('la feuille ne s’ouvre pas');
+        const dates=[...z.querySelectorAll('.histo-l li')];
+        if(dates.length!==5) return _echec(dates.length+' lignes dans la feuille');
+        if(!/70 kg × 8 @RIR 1/.test(dates[0].textContent)) return _echec('première ligne : '+dates[0].textContent);
+        if(!/67,5 kg × 8 @échec/.test(dates[1].textContent)) return _echec('deuxième ligne : '+dates[1].textContent);
+        if(!/Meilleure charge/.test(z.textContent)||!/70 kg/.test(z.querySelector('.histo-rec').textContent)) return _echec('records : '+(z.querySelector('.histo-rec')||{}).textContent);
+        if(!/Meilleur e1RM/.test(z.textContent)) return _echec('pas de meilleur e1RM');
+        if(z.querySelector('input,textarea,select')) return _echec('la feuille n’est pas en lecture seule');
+        // LE RETOUR ANDROID LA FERME, ET RESTE SUR LA SÉANCE.
+        if(!_histCalqueOuvert()) return _echec('le retour ne voit pas la feuille');
+        _histPopstate();
+        await new Promise(r=>setTimeout(r,ARC.strike+60));
+        if(z.style.display!=='none') return _echec('le retour ne ferme pas la feuille');
+        if((document.querySelector('.screen.active')||{}).id!=='s-workout') return _echec('le retour a quitté la séance');
+        // LE VOILE AUSSI.
+        b.click(); z.dispatchEvent(new MouseEvent('click',{bubbles:true}));
+        await new Promise(r=>setTimeout(r,ARC.strike+60));
+        if(z.style.display!=='none') return _echec('le voile ne ferme pas la feuille');
+        return true;
+      } finally { try{ fermerHistoriqueExo(true); }catch(e){} _r25Ranger(sU,sW,sSnap,svSave,svToast); }
+    });
+    okA('Note d’exercice : sous le nom, 140 caractères, survit à un nouveau launchWorkout, visible et échappée côté coach',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;
+      try{
+        window.saveUser=()=>true; window.toast=()=>{};
+        _r25Monter([{name:'SQUAT',series:2,reps:'8',repos:'2 min'}]);
+        const ligne=()=>document.querySelector('#wo-content .wo-note-exo');
+        if(!ligne()) return _echec('pas de ligne de note sous le nom');
+        ligne().click();
+        const c=document.getElementById('note-exo-champ');
+        if(!c||c.tagName!=='TEXTAREA'||c.getAttribute('maxlength')!=='140') return _echec('pas de textarea bornée à 140');
+        c.value='Siège cran 4 <b>large</b> '+'x'.repeat(200);
+        _noteExoValider(0);
+        const n=currentUser.notesExo&&currentUser.notesExo[exKey('SQUAT')];
+        if(!n||n.texte.length!==140||!(n.maj>0)) return _echec('note : '+JSON.stringify(n));
+        if(!/Siège cran 4 <b>large<\/b>/.test(ligne().textContent)||ligne().querySelector('b')) return _echec('la ligne n’affiche pas la note échappée');
+        // UN NOUVEAU launchWorkout : la note revient.
+        const cfg=currentUser.sessions_config[0];
+        try{ clearInterval(woState.timerInterval); }catch(e){}
+        localStorage.removeItem('rc_wo_state'); woState=null;
+        launchWorkout(cfg,0);
+        if(!ligne()||ligne().textContent.indexOf('Siège cran 4')!==0) return _echec('la note ne survit pas au launchWorkout : '+(ligne()||{}).textContent);
+        // CÔTÉ COACH, DANS LE DÉTAIL DE SÉANCE, ÉCHAPPÉE.
+        currentUser.notesExo[exKey('SQUAT')].texte='<script>alert(1)</script>';
+        const h=_buildSessionCard({date:Date.now(),name:'Push',data:{SQUAT:{sets:[{weight:'100',reps:'8',done:true}]}}},currentUser);
+        if(h.indexOf('<script>')>=0) return _echec('la note d’exercice n’est pas échappée');
+        if(h.indexOf('&lt;script&gt;alert(1)&lt;/script&gt;')<0) return _echec('la note d’exercice n’est pas affichée au coach');
+        // Effacer la note.
+        ligne().click(); _noteExoValider(0,true);
+        if(currentUser.notesExo&&currentUser.notesExo[exKey('SQUAT')]) return _echec('la note ne s’efface pas');
+        return true;
+      } finally { try{ closeModal(); }catch(e){} _r25Ranger(sU,sW,sSnap,svSave,svToast); }
+    });
+    ok('Note de séance : savePostSession écrit noteAthlete tronquée à 280, le coach la voit échappée',(()=>{
+      const sU=currentUser, svSave=window.saveUser, svToast=window.toastEcriture, svGo=window.go, svHome=window.loadClientHome, svSteps=window._recordSteps;
+      try{
+        rcfPoserRessenti();
+        const z=document.getElementById('ps-note');
+        if(!z||z.tagName!=='TEXTAREA'||z.getAttribute('maxlength')!=='280') return _echec('pas de zone « Un mot pour ton coach ? » bornée à 280');
+        if(!/Un mot pour ton coach \?/.test(document.getElementById('wd-ressenti').textContent)) return _echec('libellé absent');
+        window.saveUser=()=>true; window.toastEcriture=()=>{}; window.go=()=>{}; window.loadClientHome=()=>{}; window._recordSteps=()=>{};
+        currentUser={email:'ps@t.fr',role:'athlete',sessions:[{id:'s1',date:Date.now(),data:{}}]};
+        z.value='  <script>x</script> '+'é'.repeat(400);
+        savePostSession(false);
+        const na=currentUser.sessions[0].noteAthlete;
+        if(typeof na!=='string'||na.length!==280) return _echec('noteAthlete : '+(na==null?na:na.length+' caractères'));
+        if(na.indexOf('<script>x</script>')!==0) return _echec('le début de la note est perdu');
+        const h=_buildSessionCard(currentUser.sessions[0]);
+        if(h.indexOf('<script>')>=0) return _echec('le rendu coach n’échappe pas « <script> »');
+        if(h.indexOf('&lt;script&gt;x&lt;/script&gt;')<0) return _echec('la note n’est pas dans le détail coach');
+        // VIDE : aucun champ.
+        z.value='   '; savePostSession(false);
+        if('noteAthlete' in currentUser.sessions[0]) return _echec('une note vide laisse un champ');
+        rcfReinitRessenti();
+        return z.value===''||_echec('la note ne se vide pas pour la séance suivante');
+      } finally { window.saveUser=svSave; window.toastEcriture=svToast; window.go=svGo; window.loadClientHome=svHome; window._recordSteps=svSteps; currentUser=sU; }})());
+
     // ══ 17/09/2026 — R24 : « QUELLE CHARGE POUR QUEL OBJECTIF ? » ══════════
 
     ok('R24 — le calculateur dit ce qu’il fait, sans promettre « optimale », et ses calculs sont ceux de e1rm()',(()=>{

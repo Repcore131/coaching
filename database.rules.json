@@ -190,6 +190,29 @@
           "$autre": { ".validate": false }
         },
 
+        // ── Les notes d exercice de l athlete (30/09/2026) ─────────────────
+        // Meme raison que motCoach : ce bloc BORNE. Une note par exercice,
+        // rangee sous sa cle exKey (lettres, chiffres, espaces), 140 caracteres
+        // au plus (NOTE_EXO_MAX cote client). Lecture : le .read du dossier,
+        // proprietaire et coach.
+        "notesExo": {
+          "$exKey": {
+            ".validate": "$exKey.matches(/^[A-Z0-9 ]{1,120}$/)",
+            "texte": { ".validate": "newData.isString() && newData.val().length <= 140" },
+            "maj":   { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "$autre": { ".validate": false }
+          }
+        },
+
+        // ── Le mot de fin de seance (sessions/$i/noteAthlete, 30/09/2026) ──
+        // Seul ce champ est borne ici (NOTE_SEANCE_MAX = 280) ; le reste d une
+        // seance n est pas touche — aucun "$autre" : false.
+        "sessions": {
+          "$i": {
+            "noteAthlete": { ".validate": "newData.isString() && newData.val().length <= 280" }
+          }
+        },
+
         // Marqueurs de lecture du mot, dans le dossier DU COACH : un
         // horodatage par athlete, rien d autre.
         // ── Les textes de relance du coach (relancesAuto.textes) ──
