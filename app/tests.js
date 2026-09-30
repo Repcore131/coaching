@@ -8668,18 +8668,126 @@ async function testExercices(){
             // 2. Le retour DIT que le local a echoue : les appelants s'en
             //    servent pour nuancer leur message.
             if(r!==false) return _echec('retour '+r+' au lieu de false');
-            // 3. L'utilisateur est prevenu, et le message dit les DEUX choses :
-            //    c'est envoye, mais indisponible hors ligne.
+            // 3. L'utilisateur est prevenu. ⚠ DEPUIS LE 30/09/2026 LE MESSAGE
+            //    NE DIT PLUS « ENVOYEES AU CLOUD » : a cet instant rien n'est
+            //    parti. Il dit ce qui est vrai — en memoire seulement — et ce
+            //    qu'il faut faire. Le « ✓ envoye » vient apres le PUT reussi.
             if(!vus.length) return _echec('aucun avertissement');
-            if(!/hors ligne/.test(vus[0])) return _echec('message : '+vus[0]);
+            if(!/Stockage plein/.test(vus[0])||!/NE FERME PAS/.test(vus[0])) return _echec('message : '+vus[0]);
+            if(/envoy/.test(vus[0])) return _echec('le message annonce un envoi qui n’a pas eu lieu : '+vus[0]);
+            // 4 bis. L'echec est MEMORISE, et un succes l'efface.
+            if(DB._echecLocal.users!==true) return _echec('_echecLocal.users non posé');
             // 4. Le code 22 est l'autre forme du meme defaut, selon le
             //    navigateur : les deux doivent etre reconnues.
             pushs=0;
             Storage.prototype.setItem=function(){ const e=new Error('quota'); e.code=22; throw e; };
             if(DB.set('users',donnees)!==false||pushs!==1)
               return _echec('le code 22 n\'est pas reconnu comme un quota');
+            Storage.prototype.setItem=_si;
+            const _av=localStorage.getItem('rc_quota_sonde');
+            DB.setLocal('quota_sonde',1);
+            if(DB._echecLocal.quota_sonde!==false) return _echec('un succès ne remet pas _echecLocal à false');
+            localStorage.removeItem('rc_quota_sonde'); if(_av!=null) localStorage.setItem('rc_quota_sonde',_av);
             return true;
-          } finally { Storage.prototype.setItem=_si; window.toast=_t; CLOUD.push=_p; }})());
+          } finally { Storage.prototype.setItem=_si; window.toast=_t; CLOUD.push=_p;
+                     DB._echecLocal.users=false; DB._quotaAnnonce=false; }})());
+        // ══ 30/09/2026 — QUOTA PLEIN : LA SÉANCE PART QUAND MÊME ══════════
+        // La perte : rc_users refuse l'écriture, _doPush relisait rc_users —
+        // donc la copie d'AVANT la séance —, et la séance ne partait jamais,
+        // sous un toast « envoyées au cloud ».
+        const _qMonter=()=>{
+          const sv={si:Storage.prototype.setItem,t:window.toast,cu:currentUser,cw:CLOUD.canWrite,gt:CLOUD._getToken,
+            f:window.fetch,u:localStorage.getItem('rc_users'),se:localStorage.getItem('rc_session'),
+            b:localStorage.getItem(CLOUD._cleBase('quota@t.fr')),pu:CLOUD.pullUser,pa:CLOUD.pullUpdatedAt};
+          const ancien={id:'quota',email:'quota@t.fr',role:'athlete',fname:'Q',updatedAt:1000,
+            consent:{health:true,policyVersion:POLICY_VERSION},
+            sessions:[{id:'s_ancienne',date:Date.now()-5*864e5,name:'Push',data:{}}]};
+          const us=JSON.parse(sv.u||'{}'); us['quota@t.fr']=JSON.parse(JSON.stringify(ancien));
+          localStorage.setItem('rc_users',JSON.stringify(us));
+          currentUser=JSON.parse(JSON.stringify(ancien));
+          return sv;
+        };
+        const _qRanger=(sv)=>{
+          Storage.prototype.setItem=sv.si; window.toast=sv.t; currentUser=sv.cu; CLOUD.canWrite=sv.cw;
+          CLOUD._getToken=sv.gt; window.fetch=sv.f; CLOUD.pullUser=sv.pu; CLOUD.pullUpdatedAt=sv.pa;
+          clearTimeout(CLOUD._pushTimer);
+          if(sv.u==null) localStorage.removeItem('rc_users'); else localStorage.setItem('rc_users',sv.u);
+          if(sv.se==null) localStorage.removeItem('rc_session'); else localStorage.setItem('rc_session',sv.se);
+          if(sv.b==null) localStorage.removeItem(CLOUD._cleBase('quota@t.fr')); else localStorage.setItem(CLOUD._cleBase('quota@t.fr'),sv.b);
+          DB._echecLocal.users=false; DB._echecLocal.session=false; DB._quotaAnnonce=false;
+          try{ CLOUD._defiler('quota@t.fr'); CLOUD._annulerRetry(); }catch(e){}
+        };
+        okA('Quota plein sur rc_users : saveUser après une séance, le PUT porte la séance, et le ✓ ne vient qu’après',async()=>{
+          const sv=_qMonter();
+          try{
+            const vus=[], puts=[];
+            window.toast=m=>vus.push(String(m));
+            CLOUD.canWrite=()=>true; CLOUD._getToken=async()=>'jeton-test';
+            CLOUD.pullUser=async()=>null;
+            window.fetch=async(url,o)=>{
+              if(o&&o.method==='PUT'&&/\/users\/quota@t,fr\.json/.test(String(url))) puts.push(JSON.parse(o.body));
+              return new Response(o&&o.body?o.body:'null',{status:200,headers:{'Content-Type':'application/json'}});
+            };
+            const si=Storage.prototype.setItem;
+            Storage.prototype.setItem=function(k,v){
+              if(k==='rc_users'){ const e=new Error('quota'); e.name='QuotaExceededError'; throw e; }
+              return si.call(this,k,v);
+            };
+            currentUser.sessions.push({id:'s_nouvelle',date:Date.now(),name:'Push',data:{SQUAT:{sets:[{weight:'100',reps:'5',done:true}]}}});
+            const ok=saveUser();
+            if(ok!==false) return _echec('saveUser ne dit pas l’échec local');
+            if(DB._echecLocal.users!==true) return _echec('échec local non mémorisé');
+            // rc_users porte toujours l'ancienne copie : c'est le piège.
+            if(((DB.get('users')||{})['quota@t.fr'].sessions||[]).some(x=>x.id==='s_nouvelle')) return _echec('montage : rc_users a été écrit');
+            if(vus.some(m=>/envoy/.test(m))) return _echec('« envoyé » annoncé avant le PUT : '+vus.join(' | '));
+            // L'ENVOI DIFFERE, sans attendre ses deux secondes.
+            clearTimeout(CLOUD._pushTimer);
+            await CLOUD._doPush(DB.get('users'));
+            if(!puts.length) return _echec('aucun PUT du dossier');
+            const corps=puts[puts.length-1];
+            const ids=(corps.sessions||[]).map(x=>x&&x.id);
+            if(ids.indexOf('s_nouvelle')<0) return _echec('le PUT ne porte pas la séance : '+JSON.stringify(ids));
+            if(ids.indexOf('s_ancienne')<0) return _echec('le PUT perd l’ancienne séance');
+            if(!vus.some(m=>/✓ Envoyé au cloud/.test(m))) return _echec('pas de ✓ après le PUT réussi : '+vus.join(' | '));
+            // Et la séance est toujours en mémoire.
+            return currentUser.sessions.some(x=>x.id==='s_nouvelle')?true:_echec('la séance a quitté currentUser');
+          } finally { _qRanger(sv); }
+        });
+        okA('Quota plein : syncUser ne retire pas de currentUser la séance qui n’existe qu’en mémoire',async()=>{
+          const sv=_qMonter();
+          try{
+            window.toast=()=>{};
+            CLOUD.canWrite=()=>false;
+            const si=Storage.prototype.setItem;
+            Storage.prototype.setItem=function(k,v){
+              if(k==='rc_users'){ const e=new Error('quota'); e.name='QuotaExceededError'; throw e; }
+              return si.call(this,k,v);
+            };
+            // La base : la dernière version du serveur intégrée par cet appareil.
+            CLOUD._poserBase('quota@t.fr',JSON.parse(JSON.stringify((DB.get('users')||{})['quota@t.fr'])));
+            // La séance du jour : en mémoire seulement (saveUser a buté sur le quota).
+            currentUser.sessions.push({id:'s_nouvelle',date:Date.now(),name:'Push',data:{}});
+            currentUser.updatedAt=2000;
+            // Le serveur : l'ancien dossier, plus un champ posé par le coach.
+            const distant=JSON.parse(JSON.stringify(Object.assign({},(DB.get('users')||{})['quota@t.fr'],{updatedAt:3000,motCoach:{texte:'Bravo',maj:3000}})));
+            CLOUD.pullUpdatedAt=async()=>3000;
+            CLOUD.pullUser=async()=>JSON.parse(JSON.stringify(distant));
+            await CLOUD.syncUser('quota@t.fr',true);
+            clearTimeout(CLOUD._pushTimer);
+            const ids=(currentUser.sessions||[]).map(x=>x&&x.id);
+            if(ids.indexOf('s_nouvelle')<0) return _echec('syncUser a retiré la séance : '+JSON.stringify(ids));
+            if(ids.indexOf('s_ancienne')<0) return _echec('l’ancienne séance a disparu');
+            return (currentUser.motCoach&&currentUser.motCoach.texte==='Bravo')?true:_echec('le champ du serveur n’est pas arrivé');
+          } finally { _qRanger(sv); }
+        });
+        ok('Au démarrage, les séances de rc_session absentes de rc_users sont réinjectées (sauf les supprimées)',(()=>{
+          const carte={sessions:[{id:'a',date:1}],supprimes:{sessions:{c:5}}};
+          const sess={sessions:[{id:'a',date:1},{id:'b',date:3},{id:'c',date:2},{date:4}]};
+          const n=reinjecterSeancesSession(carte,sess);
+          if(n!==1) return _echec(n+' séance(s) réinjectée(s) au lieu de 1');
+          if(carte.sessions.map(x=>x.id).join(',')!=='a,b') return _echec('ordre ou contenu : '+carte.sessions.map(x=>x.id).join(','));
+          const src=_prodSrc();
+          return /reinjecterSeancesSession\(currentUser,_sess\)/.test(src)?true:_echec('le démarrage n’appelle pas la réinjection');})());
         ok('Une erreur qui N\'EST PAS un quota remonte, elle n\'est pas avalée',(()=>{
           // Le catch ne doit pas devenir un fourre-tout : une ecriture refusee
           // pour une autre raison — mode prive, stockage desactive — doit se
