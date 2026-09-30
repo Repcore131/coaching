@@ -15346,9 +15346,13 @@ html[data-theme="clair"]{background:#f8f8f8}
    de faire une ligne de plus. Seulement quand la carte est la (pendant le
    demarrage, elle est masquee : la ligne reprend sa forme ordinaire). */
 #s-client-home:not([data-demarrage]) #clh-coach-banner[style*="block"]+#clh-messages .rel-entree{
-  width:calc(100% - 36px);min-height:36px;margin:-17px auto 16px;padding:6px 14px;
-  border-top:0;border-color:rgba(224,32,32,.45);border-radius:0 0 12px 12px}
-#s-client-home:not([data-demarrage]) #clh-coach-banner[style*="block"]+#clh-messages .rel-entree-t{font-size:var(--fs-xs)}
+  width:100%;min-height:30px;margin:-16px 0 16px;padding:4px 14px;
+  background:#1b1b1b;border:1px solid var(--border);border-top:1px solid #262626;border-radius:0 0 12px 12px}
+#s-client-home:not([data-demarrage]) #clh-coach-banner[style*="block"]+#clh-messages .rel-entree-t{font-size:var(--fs-xs);color:#c8c8c8}
+/* Même largeur que la carte du coach : ses coins du bas deviennent droits,
+   l'onglet grisé en fait le prolongement. */
+#s-client-home:not([data-demarrage]) #clh-coach-banner[style*="block"]:has(+#clh-messages .rel-entree)>div{
+  border-bottom-left-radius:0!important;border-bottom-right-radius:0!important}
 .rel-frein{display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:18px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3)}
 .rel-frein-on{border-color:var(--orange)}
 .rel-frein-l{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:var(--fs-sm);line-height:1.5}
