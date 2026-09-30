@@ -64681,6 +64681,89 @@ async function testExercices(){
         return z.value===''||_echec('la note ne se vide pas pour la séance suivante');
       } finally { window.saveUser=svSave; window.toastEcriture=svToast; window.go=svGo; window.loadClientHome=svHome; window._recordSteps=svSteps; currentUser=sU; }})());
 
+    // ══ 30/09/2026 — LES REMPLAÇANTS AUTORISÉS PAR LE COACH ═══════════════
+    ok('alternatives survit à _assainirExercices, _normaliserSessionsConfig, dupliquerSeance et à la propagation de modèle',(()=>{
+      const alt=['DÉVELOPPÉ COUCHÉ HALTÈRES','POMPES'];
+      const sc={exercises:[{name:'DÉVELOPPÉ COUCHÉ BARRE',series:3,reps:'8',alternatives:alt.slice()},
+        {name:'CURL BARRE',series:3,reps:'10',alternatives:{0:'CURL HALTÈRES',1:'CURL BARRE',2:'curl haltères',3:'A',4:'B',5:'C'}}]};
+      _assainirExercices(sc);
+      if(JSON.stringify(sc.exercises[0].alternatives)!==JSON.stringify(alt)) return _echec('assaini : '+JSON.stringify(sc.exercises[0].alternatives));
+      // Objet Firebase remis en tableau, sans lui-même ni doublon, trois au plus.
+      if(JSON.stringify(sc.exercises[1].alternatives)!==JSON.stringify(['CURL HALTÈRES','A','B'])) return _echec('remis en forme : '+JSON.stringify(sc.exercises[1].alternatives));
+      const vide={exercises:[{name:'X',alternatives:[]}]}; _assainirExercices(vide);
+      if('alternatives' in vide.exercises[0]) return _echec('une liste vide reste posée');
+      const d={sessions_config:[{day:'Lundi',name:'Push',active:true,exercises:[{name:'SQUAT',reps:'8',alternatives:['PRESSE À CUISSES']}]}]};
+      const cfg=_normaliserSessionsConfig(d);
+      if(!cfg[0].exercises[0].alternatives||cfg[0].exercises[0].alternatives[0]!=='PRESSE À CUISSES') return _echec('_normaliserSessionsConfig perd le champ');
+      const r=dupliquerSeance(cfg,0,2);
+      if(!r||r.ok===false) return _echec('duplication refusée : '+JSON.stringify(r));
+      const a2=cfg[2].exercises[0].alternatives;
+      if(!Array.isArray(a2)||a2[0]!=='PRESSE À CUISSES') return _echec('dupliquerSeance perd le champ');
+      a2.push('HACK SQUAT');
+      if(cfg[0].exercises[0].alternatives.length!==1) return _echec('la copie partage le tableau de la source');
+      const dst={}; _copierSeance(cfg[0],dst);
+      if(!dst.exercises[0].alternatives||dst.exercises[0].alternatives[0]!=='PRESSE À CUISSES') return _echec('_copierSeance perd le champ');
+      // LA PROPAGATION DE MODÈLE : un changement de remplaçants est une opération.
+      const av=[{day:'Lundi',name:'Push',active:true,exercises:[{name:'SQUAT',reps:'8'}]}];
+      const ap=[{day:'Lundi',name:'Push',active:true,exercises:[{name:'SQUAT',reps:'8',alternatives:['HACK SQUAT']}]}];
+      const ops=diffModele(av,ap);
+      if(ops.length!==1||!ops[0].champs.some(c=>c.champ==='alternatives')) return _echec('diffModele : '+JSON.stringify(ops));
+      const out=appliquerPropagation(av,ops,ops.map(o=>o.id),ap);
+      return (out[0].exercises[0].alternatives||[])[0]==='HACK SQUAT'?true:_echec('appliquerPropagation perd le champ');})());
+    ok('Coach : « Remplaçants autorisés » n’accepte que la banque, « Suggérer » préremplit depuis substitutsSalle',(()=>{
+      const svPe=progEx, svR=window.renderProgEx, svT=window.toast, svS=window.substitutsSalle, svD=_progExDirty;
+      const toasts=[];
+      try{
+        window.renderProgEx=()=>{}; window.toast=m=>toasts.push(m);
+        progEx=[{name:'DÉVELOPPÉ COUCHÉ BARRE',series:3,reps:'8'}];
+        const banque=_nomsRemplacement();
+        const autre=banque.find(n=>exKey(n)!==exKey('DÉVELOPPÉ COUCHÉ BARRE'));
+        const h=_htmlAlternativesEx(progEx[0],0);
+        if(!/Remplaçants autorisés/.test(h)||!/Suggérer/.test(h)) return _echec('section absente');
+        _altAjouter(0,{value:'Mouvement inventé'});
+        if(progEx[0].alternatives) return _echec('un nom hors banque est accepté');
+        _altAjouter(0,{value:autre.toLowerCase()});
+        if(JSON.stringify(progEx[0].alternatives)!==JSON.stringify([autre])) return _echec('ajout : '+JSON.stringify(progEx[0].alternatives));
+        let appel=null;
+        window.substitutsSalle=(u,nom,salle)=>{ appel={u,nom,salle}; return {liste:banque.slice(10,15).map(n=>({nom:n})),raison:null}; };
+        _altSuggerer(0);
+        if(!appel||appel.nom!=='DÉVELOPPÉ COUCHÉ BARRE') return _echec('substitutsSalle non appelé sur le bon exercice');
+        const a=progEx[0].alternatives;
+        if(a.length!==3||a[0]!==autre||a[1]!==banque[10]) return _echec('suggestion : '+JSON.stringify(a));
+        _altRetirer(0,0);
+        return progEx[0].alternatives.length===2?true:_echec('retrait : '+JSON.stringify(progEx[0].alternatives));
+      } finally { progEx=svPe; window.renderProgEx=svR; window.toast=svT; window.substitutsSalle=svS; _progExDirty=svD; }})());
+    okA('Athlète : ouvrirRemplacement propose les remplaçants du coach, candidatsRemplacement rend toujours [], la charge d’un mouvement déjà fait est préremplie',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;
+      try{
+        window.saveUser=()=>true; window.toast=()=>{};
+        _r25Monter([{name:'DÉVELOPPÉ COUCHÉ BARRE',series:3,reps:'8',repos:'2 min',alternatives:['DÉVELOPPÉ COUCHÉ HALTÈRES','POMPES']}]);
+        currentUser.sessions=[{id:'a1',date:Date.now()-7*864e5,name:'Push',data:{'DÉVELOPPÉ COUCHÉ HALTÈRES':{sets:[{weight:'32.5',reps:'8',rir:'2',done:true}]}}}];
+        if(candidatsRemplacement('DÉVELOPPÉ COUCHÉ BARRE','').length!==0) return _echec('candidatsRemplacement rend des noms à un athlète');
+        if(candidatsRemplacement('DÉVELOPPÉ COUCHÉ BARRE','curl').length!==0) return _echec('la recherche rend des noms à un athlète');
+        ouvrirRemplacement(0);
+        const bs=[...document.querySelectorAll('#modal-overlay .rempl-alt')];
+        if(bs.length!==2) return _echec(bs.length+' bouton(s) de remplaçant');
+        if(bs.some(b=>!b.classList.contains('hit44'))) return _echec('un bouton n’est pas hit44');
+        if(!document.getElementById('rempl-manuel')) return _echec('le champ libre a disparu');
+        if(!/Autre…/.test(document.getElementById('modal-overlay').textContent)) return _echec('le champ libre n’est pas présenté comme « Autre… »');
+        if(document.querySelector('#modal-overlay #rempl-liste')) return _echec('la liste de la banque s’affiche à un athlète');
+        const avant=(currentUser.ecartsSeance||[]).length;
+        bs[0].click();
+        if(woState.exercises[0].name!=='DÉVELOPPÉ COUCHÉ HALTÈRES') return _echec('substitut : '+woState.exercises[0].name);
+        if(!/Pourquoi ce changement/.test((document.getElementById('modal-overlay')||{}).textContent||'')) return _echec('le motif n’est pas demandé');
+        if((currentUser.ecartsSeance||[]).length!==avant+1) return _echec('l’écart n’est pas journalisé');
+        const w=woState.sessionData[0].sets.map(s=>s.weight);
+        if(w.some(x=>x!=='32.5')) return _echec('charge préremplie : '+JSON.stringify(w));
+        // Sans remplaçants prévus, l'écran reste celui d'avant.
+        closeModal();
+        _r25Monter([{name:'SQUAT',series:2,reps:'8',repos:'2 min'}]);
+        ouvrirRemplacement(0);
+        if(document.querySelector('#modal-overlay .rempl-alt')) return _echec('des boutons sans remplaçants prévus');
+        return true;
+      } finally { try{ closeModal(); }catch(e){} _r25Ranger(sU,sW,sSnap,svSave,svToast); }
+    });
+
     // ══ 17/09/2026 — R24 : « QUELLE CHARGE POUR QUEL OBJECTIF ? » ══════════
 
     ok('R24 — le calculateur dit ce qu’il fait, sans promettre « optimale », et ses calculs sont ceux de e1rm()',(()=>{
