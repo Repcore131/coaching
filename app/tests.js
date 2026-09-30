@@ -49190,6 +49190,61 @@ async function testExercices(){
       const c=_fjCopier(t.entries,j,'matin');
       if(c[0].qty!==60||c[1].qty!==250||c[0].id===t.entries[0].id) return _echec('copie');
       return true;})());
+    // ── LA FIN D'UN PROGRAMME, DANS « À TRAITER » ──
+    // Un bloc de 4 semaines commencé le lundi 14 septembre 2026 : dernier jour le dimanche 11 octobre.
+    const _PF=(o)=>Object.assign({id:'pf1',fname:'Léa',email:'pf@t.fr',programme:{debut:new Date(2026,8,14,9,0).getTime(),semaines:4,decharges:[]}},o||{});
+    const _PFj=(a,m,j)=>new Date(a,m-1,j,12,0).getTime();
+    ok('Fin de programme : dans 5 jours, un signal ; dans 10, rien ; dépassé de 30, rien ; nouveau début, rien',(()=>{
+      const a=finProgramme(_PF(),_PFj(2026,10,6));
+      if(!a||a.joursRestants!==5||a.fini||new Date(a.finPrevue).getDate()!==11) return _echec('5 jours : '+JSON.stringify(a));
+      if(finProgramme(_PF(),_PFj(2026,10,1))!==null) return _echec('10 jours : signal');
+      if(finProgramme(_PF(),_PFj(2026,11,10))!==null) return _echec('dépassé de 30 jours : signal');
+      const b=finProgramme(_PF(),_PFj(2026,11,1));
+      if(!b||!b.fini||b.joursRestants!==-21) return _echec('dépassé de 21 jours : '+JSON.stringify(b));
+      if(!finProgramme(_PF(),_PFj(2026,10,4))||finProgramme(_PF(),_PFj(2026,10,3))) return _echec('la borne des 7 jours');
+      // Un nouveau programme assigné : un nouveau début, le signal tombe.
+      if(finProgramme(_PF({programme:{debut:new Date(2026,9,5).getTime(),semaines:8}}),_PFj(2026,10,6))!==null) return _echec('nouveau début : signal');
+      // Programme absent ou hors bornes, athlète _fromCode : rien.
+      for(const c of [_PF({programme:null}),_PF({programme:{semaines:4}}),_PF({programme:{debut:1790000000000,semaines:999}}),_PF({_fromCode:true})])
+        if(finProgramme(c,_PFj(2026,10,6))!==null) return _echec('rien attendu : '+JSON.stringify(c.programme));
+      return true;})());
+    ok('Fin de programme : la ligne « À traiter », verte, groupée, reportable, hors d’urgencyScore',(()=>{
+      const l=lignesFinProgramme([_PF(),_PF({id:'pf2',fname:'Tom'}),_PF({id:'pf3',programme:{debut:new Date(2026,7,31).getTime(),semaines:4}})],_PFj(2026,10,6));
+      const t=l.map(r=>r.type+':'+r.label+':'+r.list.map(c=>c.id).join('+')+':'+r.color).join(' | ');
+      if(t!=='progfin:Bloc qui se termine:pf1+pf2:var(--green) | progfin:Bloc terminé:pf3:var(--green)') return _echec(t);
+      if(lignesFinProgramme([_PF()],_PFj(2026,10,6),()=>true).length) return _echec('reporté : encore là');
+      const l1=RELANCE_LIGNES.find(x=>x.type==='progfin');
+      if(!l1||l1.auto||l1.raison!==RELANCE_TRAVAIL) return _echec('RELANCE_LIGNES');
+      // urgencyScore ne le connaît pas : un bloc qui finit ne remonte personne.
+      const pres=urgencyScore(_PF({programme:{debut:_lundiDe(new Date()).getTime()-3*604800000,semaines:4}}));
+      const loin=urgencyScore(_PF({programme:{debut:_lundiDe(new Date()).getTime(),semaines:8}}));
+      return pres===loin?true:_echec('urgencyScore : '+pres+' contre '+loin);})());
+    ok('Fin de programme : renderTodoBlock montre la ligne, et son clic ouvre la file',(()=>{
+      const z=document.getElementById('ch-todo');
+      const sv={u:currentUser,rows:window._todoRows,html:z?z.innerHTML:null};
+      try{
+        currentUser={id:'cpf',email:'coach.pf@t.fr',role:'coach',alertStatus:{}};
+        const lundi=_lundiDe(new Date()).getTime();
+        const c=_PF({programme:{debut:lundi-3*604800000,semaines:4},sessions:[],bilans:[{date:Date.now(),reponseCoach:'ok'}]});
+        renderTodoBlock([c]);
+        const i=(window._todoRows||[]).findIndex(r=>r.type==='progfin');
+        if(i<0) return _echec('pas de ligne : '+(window._todoRows||[]).map(r=>r.type).join());
+        if(z&&z.innerHTML.indexOf('_entrerFileProgfin('+i+')')<0) return _echec('le clic n’ouvre pas la file');
+        if(z&&z.innerHTML.indexOf('dismissTodoRow('+i+')')<0) return _echec('non reportable');
+        return true;
+      } finally { currentUser=sv.u; window._todoRows=sv.rows; if(z&&sv.html!=null) z.innerHTML=sv.html; }})());
+    ok('Fin de programme : l’assignation arrive l’athlète coché (et la sélection du tableau de bord aussi)',(()=>{
+      const d=document.createElement('div'); d.id='pf-test-cases';
+      d.innerHTML='<input type="checkbox" value="a1"><input type="checkbox" value="a2"><input type="checkbox" value="a3">';
+      document.body.appendChild(d);
+      try{
+        if(_cocherIds('pf-test-cases',['a2'])!==1) return _echec('compte');
+        const c=[...d.querySelectorAll('input')].map(x=>x.checked).join();
+        if(c!=='false,true,false') return _echec('cases : '+c);
+        const src=_prodSrc();
+        if(src.indexOf("_cocherIds('cpa-athletes',_ids)")<0) return _echec('openAssignProgram ne coche rien');
+        return /class="[^"]*bb-ouvrir/.test(htmlBlocProgramme(_PF()))?true:_echec('le bouton « Bilan du bloc » n’est pas repérable');
+      } finally { d.remove(); }})());
     // ── LA RÉPONSE VOCALE AU BILAN ──
     // Un faux micro : getUserMedia et MediaRecorder bouchonnés le temps d'un test.
     const _RV=async(fn,o)=>{
@@ -50529,8 +50584,9 @@ async function testExercices(){
       return true;})());
 
     // ══ LOT C3 — LES RÈGLES DE RELANCE (29/09/2026) ════════════════════════
-    ok('C3 — seize lignes, celles de « À traiter » ; cinq automatisables, et la douleur, le décrochage, la progression grisés avec leur raison',(()=>{
-      if(RELANCE_LIGNES.length!==16) return _echec(RELANCE_LIGNES.length+' lignes');
+    // DIX-SEPT depuis la fin de programme (30/09/2026) : « Bloc qui se termine », grisée (c'est le travail du coach).
+    ok('C3 — dix-sept lignes, celles de « À traiter » ; cinq automatisables, et la douleur, le décrochage, la progression grisés avec leur raison',(()=>{
+      if(RELANCE_LIGNES.length!==17) return _echec(RELANCE_LIGNES.length+' lignes');
       const auto=RELANCE_LIGNES.filter(l=>l.auto).map(l=>l.type).sort().join();
       if(auto!==RELANCE_SIGNAUX.slice().sort().join()) return _echec('automatisables : '+auto);
       for(const t of ['douleur','douleurdiff','decrochage','entrainement']){
@@ -50587,7 +50643,8 @@ async function testExercices(){
         _relJournal=relJournalAplati({'lea@t,fr':{a:{at:t-864e5,signal:'overdue',moyen:'push',statut:'parti',texte:'x'},
           b:{at:t-10*864e5,signal:'bilan',moyen:'canal',statut:'parti'}},'tom@t,fr':{c:{at:t-2*864e5,signal:'nostart',moyen:'push',statut:'non_parti',raison:'aucun_abonnement'}}});
         renderRelancesCoach();
-        if(z.querySelectorAll('.rel-l').length!==16||z.querySelectorAll('.rel-l-off').length!==11) return _echec('lignes');
+        // Dix-sept lignes depuis la fin de programme (« Bloc qui se termine », grisée).
+        if(z.querySelectorAll('.rel-l').length!==17||z.querySelectorAll('.rel-l-off').length!==12) return _echec('lignes');
         if([...z.querySelectorAll('.rel-l-off')].some(l=>l.querySelector('input,select'))) return _echec('une ligne grisée réglable');
         if(z.querySelectorAll('.rel-l-on').length!==1) return _echec('ligne allumée');
         // Cette semaine : deux entrées sur sept jours, une partie, une pas partie (avec sa raison).

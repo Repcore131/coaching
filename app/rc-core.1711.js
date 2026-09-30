@@ -26237,7 +26237,7 @@ const RELANCE_DELAI_DEFAUT=2;
 const RELANCE_FENETRE_J=7;
 const RELANCE_ECHANGE='Ça appelle un échange, pas un message type.';
 const RELANCE_TRAVAIL='C’est ton travail, il n’y a rien à dire à l’athlète.';
-// Les seize lignes, dans l'ordre de « À traiter ». auto:true pour les cinq.
+// Les dix-sept lignes, dans l'ordre de « À traiter ». auto:true pour les cinq.
 const RELANCE_LIGNES=Object.freeze([
   {type:'drapeau',lib:'Drapeau rouge santé',raison:'Un drapeau rouge se traite de vive voix, jamais par un message type.'},
   {type:'douleur',lib:'Douleur répétée',raison:RELANCE_ECHANGE},
@@ -26254,6 +26254,7 @@ const RELANCE_LIGNES=Object.freeze([
   {type:'notes',lib:'Note à revoir',raison:RELANCE_TRAVAIL},
   {type:'expiring',lib:'Accès qui se termine',auto:true,quand:'quatorze jours avant la fin de l’accès'},
   {type:'rite',lib:'Bilan de 4 semaines à lire',raison:RELANCE_TRAVAIL},
+  {type:'progfin',lib:'Bloc qui se termine',raison:RELANCE_TRAVAIL},
   {type:'noprog',lib:'Sans programme',auto:true,quand:'dès le bilan de départ, tant qu’aucun programme n’est posé'}
 ]);
 const RELANCE_LIB=Object.freeze(Object.fromEntries(RELANCE_LIGNES.map(l=>[l.type,l.lib])));
@@ -27126,6 +27127,121 @@ function _todoReporterFeuille(){
   return todoReporter(f.r,l);
 }
 
+// ══ LA FIN D'UN PROGRAMME, DANS « À TRAITER » (30/09/2026) ═════════════════
+//
+// Un bloc (programmeDe : début, semaines) qui s'achève sans que rien ne le
+// dise laisse l'athlète sans consigne le lundi suivant. La ligne « Bloc qui se
+// termine » se lève sept jours avant le dernier jour du bloc (le dimanche de
+// sa dernière semaine), devient « Bloc terminé » le lendemain, et tombe
+// vingt et un jours après : au-delà, le coach a choisi de laisser tourner.
+//
+// ⚠ HORS D'urgencyScore, comme 'rite' et 'blocfini' : une décision à prendre,
+//   pas une alerte. Bande « À traiter » (vert), groupée, reportable 7 jours.
+// ⚠ UN NOUVEAU PROGRAMME pose un nouveau début : le calcul repart, le signal
+//   tombe de lui-même. Rien n'est mémorisé.
+// ⚠ LE CHEMIN : la ligne ouvre l'écran Programme de l'athlète sur « Bilan du
+//   bloc » ; la feuille du bilan propose « Assigner le bloc suivant » (un
+//   programme de la bibliothèque, un geste), qui ouvre l'assignation avec
+//   l'athlète déjà coché. Trois gestes de la ligne à l'assignation.
+const PROGFIN_AVANT_J=7, PROGFIN_APRES_J=21;
+// PURE. null, ou {joursRestants (négatif une fois le bloc passé), fini, finPrevue (ms, minuit du dernier jour)}.
+function finProgramme(c,maintenant){
+  if(!c||c._fromCode) return null;
+  let p=null; try{ p=programmeDe(c); }catch(e){ p=null; }
+  if(!p) return null;
+  const fin=new Date(p.debut); fin.setHours(0,0,0,0);
+  fin.setDate(fin.getDate()+p.semaines*7-1);      // le dimanche de la dernière semaine (setDate : heure d'été)
+  const j=new Date(typeof maintenant==='number'?maintenant:Date.now()); j.setHours(0,0,0,0);
+  const restants=Math.round((fin.getTime()-j.getTime())/864e5);
+  if(!isFinite(restants)||restants>PROGFIN_AVANT_J||restants<-PROGFIN_APRES_J) return null;
+  return {joursRestants:restants,fini:restants<0,finPrevue:fin.getTime()};
+}
+// PURE. Les lignes « À traiter » : une pour les blocs qui se terminent, une
+// pour les blocs terminés (deux libellés, un seul type).
+function lignesFinProgramme(clients,maintenant,reporte){
+  const bientot=[], finis=[];
+  for(const c of (clients||[])){
+    const f=finProgramme(c,maintenant);
+    if(!f||(reporte&&reporte(c))) continue;
+    (f.fini?finis:bientot).push(c);
+  }
+  const ligne=(l,lib)=>({type:'progfin',icon:icon('flag',16),color:'var(--green)',label:lib,list:l});
+  const out=[];
+  if(bientot.length) out.push(ligne(bientot,'Bloc qui se termine'));
+  if(finis.length) out.push(ligne(finis,'Bloc terminé'));
+  return out;
+}
+// ── La file : un athlète après l'autre ──────────────────────────────────
+let _fileProgfin=[];
+function _entrerFileProgfin(idx){
+  const r=(window._todoRows||[])[idx];
+  _fileProgfin=((r&&r.list)||[]).map(c=>c&&c.id).filter(Boolean);
+  if(!_fileProgfin.length) return false;
+  return _ouvrirProgfin(_fileProgfin[0]);
+}
+// L'écran Programme de l'athlète, le bouton « Bilan du bloc » mis en avant.
+function _ouvrirProgfin(id){
+  currentClientId=id;
+  if(!ouvrirSeancesSansBrouillon()) return false;
+  setTimeout(()=>{
+    const b=document.querySelector('#csm-bloc .bb-ouvrir');
+    if(!b) return;
+    try{ b.scrollIntoView({block:'center'}); }catch(e){}
+    b.classList.add('pf-attention');
+    try{ b.focus({preventScroll:true}); }catch(e){}
+  },60);
+  return true;
+}
+function _fileProgfinSuivants(idApres){
+  const i=_fileProgfin.indexOf(idApres);
+  if(i<0) return [];
+  return _fileProgfin.slice(i+1).filter(id=>{ try{ return !!finProgramme(getOwnedClient(id)); }catch(e){ return false; } });
+}
+// La fin de la feuille « Bilan du bloc » : le bloc suivant, et l'athlète suivant.
+function _htmlSuiteBilanBloc(c){
+  const progs=((currentUser&&currentUser.coachPrograms)||[]).map((p,i)=>({p,i})).filter(x=>x.p);
+  const enCours=c&&c.assignedProgramId;
+  const suivants=_fileProgfinSuivants(c&&c.id);
+  const boutons=progs.slice(-6).reverse().map(x=>'<button type="button" class="bb-prog" onclick="progfinAssigner('+x.i+')">'
+    +escapeHtml(x.p.name||'Programme')+(enCours&&x.p.id===enCours?' <small>(en cours)</small>':'')+'</button>').join('');
+  return '<div class="bb-suite"><div class="bb-suite-t">Assigner le bloc suivant</div>'
+    +(progs.length?'<div class="bb-progs">'+boutons+'</div>'
+      +(progs.length>6?'<button type="button" class="bb-lien" onclick="progfinTousProgrammes()">Tous mes programmes</button>':'')
+      :'<div class="bb-s">Ta bibliothèque de programmes est vide.</div>')
+    +(suivants.length?'<button type="button" class="btn btn-outline btn-sm bb-suivant" onclick="progfinSuivant()">Athlète suivant → ('+suivants.length+' restant'+(suivants.length>1?'s':'')+')</button>':'')
+    +'</div>';
+}
+function progfinAssigner(idx){
+  const c=getOwnedClient(currentClientId);
+  if(!c) return false;
+  closeModal();
+  openAssignProgram(idx,[c.id]);
+  return true;
+}
+function progfinTousProgrammes(){
+  const c=getOwnedClient(currentClientId);
+  if(!c) return false;
+  SEL_ATHLETES.clear(); SEL_ATHLETES.add(c.id);
+  closeModal();
+  return selVersProgramme();
+}
+function progfinSuivant(){
+  const s=_fileProgfinSuivants(currentClientId);
+  closeModal();
+  return s.length?_ouvrirProgfin(s[0]):false;
+}
+// Coche, dans un écran de destination, les athlètes voulus (value = id).
+function _cocherIds(conteneur,ids){
+  const veut=new Set((ids||[]).map(String));
+  let n=0;
+  try{
+    document.querySelectorAll('#'+conteneur+' input[type=checkbox]').forEach(cb=>{
+      if(veut.has(String(cb.value))){ cb.checked=true; n++; }
+    });
+  }catch(e){}
+  return n;
+}
+
 function renderTodoBlock(clients){
   _renderPremiersPas(clients);
   try{ renderEntreeRelances(); }catch(e){}
@@ -27220,6 +27336,8 @@ function renderTodoBlock(clients){
   });
   if(_rites.length) rows.push({type:'rite',icon:icon('calendar',16),color:'var(--sub)',
     label:'Bilan de 4 semaines à lire',list:_rites});
+  // La fin d'un bloc (finProgramme) : une décision à prendre, bande « À traiter ».
+  rows.push.apply(rows,lignesFinProgramme(clients,now,c=>isAlertSnoozed('progfin',c.id)));
   if(noProg.length) rows.push({type:'noprog',icon:icon('clipboard',16),color:'var(--sub)',label:'Sans programme',list:noProg});
   if(!rows.length){ window._todoRows=[]; el.innerHTML=''; return; }
   // Un tableau de bord qui affiche trente alertes n'oriente plus rien. Les
@@ -27316,6 +27434,8 @@ function renderTodoBlock(clients){
         // LOT M2 : le fil de l'athlète, prêt à répondre.
         :r.type==='message'?`msgOuvrirFil(${_attrArg(_relCle(r.list[0]))})`
         :r.type==='rite'?`_ouvrirRiteClient('${r.list[0].id}')`
+        // La fin d'un bloc : sa file, un athlète après l'autre, sur « Bilan du bloc ».
+        :r.type==='progfin'?`_entrerFileProgfin(${idx})`
         // LOT C1 : le bilan de départ, ouvert à l'endroit où l'on écrit le programme.
         :r.type==='accueil_prog'?`accueilOuvrirBilanDepart('${r.list[0].id}')`
         :`openClientDetail('${r.list[0].id}')`,
@@ -36027,6 +36147,8 @@ function ouvrirBilanBloc(){
     '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
     +'<div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Bilan du bloc" class="bb-feuille">'
     +'<h2 class="bb-t">Bilan du bloc</h2>'+htmlBilanBloc(b)
+    // Et la suite : le bloc suivant à assigner, l'athlète suivant de la file.
+    +_htmlSuiteBilanBloc(c)
     +'<div class="bb-btns">'+(b?'<button type="button" class="btn btn-red btn-sm" onclick="bilanBlocExporter()">Exporter</button>':'')
     +'<button type="button" class="btn btn-outline btn-sm" onclick="closeModal()">Fermer</button></div></div></div>');
   return true;
@@ -36076,7 +36198,9 @@ function htmlBlocProgramme(c){
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" '
     +'onclick="reglerBlocProgramme()">Définir un bloc</button></div>';
   const dep=new Date(p.debut);
-  const fin=new Date(p.debut+(p.semaines-1)*604800000);
+  // Le DERNIER JOUR du bloc (le dimanche de sa dernière semaine), celui de finProgramme,
+  // et non le lundi de la dernière semaine : « au 28 sept. » pour un bloc qui court jusqu'au 4 octobre.
+  const fin=new Date(p.debut); fin.setDate(fin.getDate()+p.semaines*7-1);
   const fmt=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
   const i=(()=>{ try{ return indexSemaineBloc(c,Date.now()); }catch(e){ return null; } })();
   const dech=p.decharges.length
@@ -36096,7 +36220,7 @@ function htmlBlocProgramme(c){
     +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" '
     +'onclick="retirerBlocProgramme()">Retirer</button>'
     // LOT T7 : le bilan, en cours de bloc comme à sa fin (lu jusqu'à aujourd'hui).
-    +'<button class="btn btn-outline btn-sm" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" '
+    +'<button class="btn btn-outline btn-sm bb-ouvrir" style="margin:0;letter-spacing:1px;font-size:var(--fs-2xs)" '
     +'onclick="ouvrirBilanBloc()">Bilan du bloc</button>'
     +'</div></div>';
 }
@@ -36398,13 +36522,17 @@ function openProgTemplateSessionExercises(idx){
 }
 
 // ─── Assignation ───
-function openAssignProgram(idx){
+// `precoches` : les athlètes à cocher d'office (la fin d'un bloc) ; sinon la
+// sélection du tableau de bord (SEL_ATHLETES), qui ne l'était jamais jusqu'ici.
+function openAssignProgram(idx,precoches){
   _assigningProgIdx=idx;
   const p=currentUser.coachPrograms[idx];
   const title=document.getElementById('cpa-title');
   if(title) title.textContent='Assigner : '+escapeHtml(p.name||'Programme');
   go('s-coach-prog-assign');
   loadAssignAthletes();
+  const _ids=Array.isArray(precoches)?precoches:Array.from(SEL_ATHLETES);
+  if(_ids.length) _cocherIds('cpa-athletes',_ids);
 }
 
 /** Le modele en cours d'assignation, ou un objet vide. */
