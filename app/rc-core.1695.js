@@ -64066,15 +64066,19 @@ function htmlFicheAlim(user,chercher){
   const marque=d.marque
     ? `<img class="fa-logo-img" src="${E(d.marque)}" alt="">`
     : `<div class="fa-logo-txt">REP<span>CORE</span></div>`;
+  // LE LOGO DU COACH PREND LA PLACE DU RAIL GAUCHE, A COTE DU TITRE (retour
+  // de Kevin le 30/09/2026) : en tete de page, il poussait tout le bandeau
+  // vers le bas et restait petit. Sans logo, rien ne change.
   const tete=(titre1,titre2,sous)=>`<header class="fa-tete">
-      <div class="fa-tete-g">${marque}<div class="fa-logo-sous">MORE THAN PROGRESS</div></div>
+      <div class="fa-tete-g">${d.marque?'':`${marque}<div class="fa-logo-sous">MORE THAN PROGRESS</div>`}</div>
       <div class="fa-tete-d">
         ${d.coachNom?`<div class="fa-tete-coach"><span class="fa-tiret"></span>${E(d.coachNom.toUpperCase())}</div>`:''}
         <div class="fa-tete-sous">NUTRITION | PERFORMANCE | RÉSULTATS</div>
       </div>
     </header>
     <div class="fa-bandeau">
-      <div class="fa-rail fa-rail-g">NUTRITION<br>PERFORMANCE<br>SANTÉ<br>DISCIPLINE</div>
+      ${d.marque?`<div class="fa-rail-logo">${marque}<div class="fa-logo-sous">MORE THAN PROGRESS</div></div>`
+        :`<div class="fa-rail fa-rail-g">NUTRITION<br>PERFORMANCE<br>SANTÉ<br>DISCIPLINE</div>`}
       <div class="fa-titre-bloc">
         <h1 class="fa-h1">${E(titre1)} <em>${E(titre2)}</em></h1>
         ${sous?`<div class="fa-h1-sous">${sous}</div>`:''}
@@ -64082,7 +64086,7 @@ function htmlFicheAlim(user,chercher){
       <div class="fa-rail fa-rail-d">DISCIPLINE<br>AUJOURD'HUI<br><b>RÉSULTATS</b><br>DEMAIN.</div>
     </div>`;
   const pied=`<footer class="fa-pied">
-      <div class="fa-pied-g">${d.coachNom?`<b>${E(d.coachNom.toUpperCase())}</b>`:''}<span>COACHING | NUTRITION | SUIVI</span></div>
+      <div class="fa-pied-g">${d.marque?`<img class="fa-pied-logo" src="${E(d.marque)}" alt="">`:''}<div>${d.coachNom?`<b>${E(d.coachNom.toUpperCase())}</b>`:''}<span>COACHING | NUTRITION | SUIVI</span></div></div>
       <div class="fa-pied-c">DES FONDATIONS SOLIDES<br>POUR DE MEILLEURS RÉSULTATS.</div>
       <div class="fa-pied-d">REP<span>CORE</span><em>MORE THAN PROGRESS</em></div>
     </footer>`;
