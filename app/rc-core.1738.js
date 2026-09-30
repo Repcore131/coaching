@@ -50850,12 +50850,45 @@ function _progTempoSaisie(i,el){
   if(el&&el.value!==val) el.value=val;
   return val;
 }
+// ══ LA CHARGE TAPEE, LUE UNE FOIS POUR TOUTES (30/09/2026) ═════════════
+// En Chromium fr-FR, un <input type="number"> lit « 82,5 » comme 825 : la
+// virgule y est un separateur de milliers. Les champs de charge sont donc des
+// champs TEXTE (inputmode="decimal" garde le pave numerique), et c'est cette
+// fonction qui dit ce qu'ils contiennent.
+//
+// PURE. « 82,5 », « 82.5 » et « 82 » sont acceptes ; tout le reste (lettres,
+// signe, deux separateurs, vide) rend null. Arrondi au quart de kilo — le
+// plus petit disque qui existe en salle —, borne a 0..max (500 par defaut).
+const CHARGE_SAISIE_MAX=500;
+function lireCharge(brut,max){
+  const t=String(brut==null?'':brut).trim();
+  if(!/^\d+(?:[.,]\d*)?$/.test(t)) return null;
+  const x=parseFloat(t.replace(',','.'));
+  if(!isFinite(x)) return null;
+  const v=Math.round(x*4)/4;
+  const m=(typeof max==='number'&&max>0)?max:CHARGE_SAISIE_MAX;
+  return (v<0||v>m)?null:v;
+}
+// La charge qui merite une question : plus de 1,5 fois la meilleure charge
+// deja faite sur l'exercice, et plus de 20 kg. Sans historique, aucune
+// question — il n'y a rien a comparer. En assistance, la « meilleure » charge
+// est la plus FAIBLE : la regle ne s'y applique pas.
+const CHARGE_SUSPECTE_FACTEUR=1.5, CHARGE_SUSPECTE_MIN_KG=20;
+function chargeSuspecte(kg,user,nomEx){
+  const v=Number(kg);
+  if(!(v>CHARGE_SUSPECTE_MIN_KG)) return null;
+  let r=null; try{ r=recordsExercice(user,nomEx); }catch(e){ r=null; }
+  const mc=r&&r.meilleureCharge;
+  if(!mc||mc.assiste||!(mc.kg>0)) return null;
+  return v>CHARGE_SUSPECTE_FACTEUR*mc.kg?mc.kg:null;
+}
 // LA SAISIE D'UNE CHARGE, EN UN SEUL ENDROIT. Elle vivait dans un attribut
 // onchange recopié à quatre exemplaires par le gabarit : un refus posé là ne
 // serait vérifiable nulle part, et les copies finiraient par diverger.
 //
-// UNE CHARGE NÉGATIVE EST REFUSÉE, PAS CORRIGÉE : on ne devine pas qu'un
-// « -80 » voulait dire 80. Le champ se vide et l'athlète retape.
+// CE QUI NE SE LIT PAS EST REFUSE, PAS CORRIGE : on ne devine pas qu'un
+// « -80 » voulait dire 80, ni qu'un « 8a » voulait dire 8. Le champ reprend
+// la valeur d'avant et un toast le dit.
 //
 // Ce que le négatif coûtait : sur `weight`, tonnageSerie rend 0 et la série
 // disparaît du tonnage sans un mot ; sur `weight2`, il n'y a AUCUN garde et
@@ -50863,8 +50896,12 @@ function _progTempoSaisie(i,el){
 //
 // ET LE REFUS NE MARQUE PAS `userEdited` : ce drapeau coupe la charge
 // proposée pour cette série jusqu'à la fin de la séance. Une faute de frappe
-// ne doit pas priver quelqu'un de sa suggestion — au contraire, vider le
-// champ laisse renderSets la reproposer au tour suivant.
+// ne doit pas priver quelqu'un de sa suggestion.
+//
+// UNE CHARGE AUX ANTIPODES DE L'HISTORIQUE EST CONFIRMEE avant d'etre ecrite
+// (chargeSuspecte) : « 825 » pour « 82,5 » fausse d'un coup le record, le
+// tonnage et la charge proposee de la seance suivante. La fonction rend alors
+// la promesse de la question ; sinon, elle ecrit tout de suite.
 function _woChargeSaisie(idx,i,champ,el){
   const d=woState&&woState.sessionData&&woState.sessionData[idx];
   const s=d&&d.sets&&d.sets[i];
@@ -50872,37 +50909,50 @@ function _woChargeSaisie(idx,i,champ,el){
   // Seule `weight` porte la charge proposée : `weight2` n'est jamais
   // auto-remplie, donc ni `userEdited` ni `isAuto` ne la concernent.
   const principal=champ!=='weight2';
-  // LA VIRGULE DÉCIMALE, NORMALISÉE UNE FOIS POUR TOUTES. Rangée telle
-  // quelle, « 82,5 » devenait 82 : tout ce qui relit la charge passe par
-  // parseFloat, qui s'arrête à la virgule. Ni erreur, ni champ rouge — cinq
-  // cents grammes de moins par série dans le tonnage, et une charge suggérée
-  // calculée sur une valeur fausse.
-  //
-  // AVANT le contrôle du négatif, et non après : parseFloat("-0,5") rend -0,
-  // et `-0 < 0` est FAUX. Une charge négative écrite à la virgule passait donc
-  // au travers du refus.
-  const brut=String(el.value).replace(',','.');
-  // parseFloat("") vaut NaN, et NaN<0 est faux : vider un champ reste une
-  // saisie volontaire et passe par la branche normale, comme avant.
-  if(parseFloat(brut)<0){
-    el.value=''; s[champ]='';
-    if(principal) s.isAuto=false;
-    toast('Charge négative ignorée','var(--orange)');
-  } else {
-    // EN LIVRES, le dossier reçoit des kilos ; une saisie inchangée garde la valeur stockée.
-    const _kg=(uniteCharge(currentUser)==='lb'&&brut!=='')?afficheVersKg(brut,currentUser,s[champ]):null;
-    s[champ]=_kg!=null?String(_kg):brut;
-    // Le champ affiche ce qui a été retenu. Sans ça, l'écran garderait « 82,5 »
-    // pendant que le dossier porte « 82.5 » : deux vérités pour une saisie.
-    if(el.value!==brut) el.value=brut;
+  const lb=uniteCharge(currentUser)==='lb';
+  const avant=String(_poidsSaisie(s[champ]));
+  const tape=String(el.value).trim();
+  const ecrire=(val)=>{
+    s[champ]=val;
     if(principal){ s.userEdited=true; s.isAuto=false; }
+    // R25 — PAS renderSets : il reconstruit tout le tbody, et le champ ou le
+    // doigt vient d'arriver — la serie suivante — serait detruit avec son
+    // clavier. On ne remplace que les lignes dont le rendu change, et celle
+    // qui porte le focus est modifiee EN PLACE.
+    _woMajLignes(woState.exercises[idx],d,idx);
+  };
+  // VIDER UN CHAMP reste une saisie volontaire, comme avant.
+  if(tape===''){ el.value=''; ecrire(''); return; }
+  const v=lireCharge(tape,lb?Math.round(CHARGE_SAISIE_MAX/LB_KG):CHARGE_SAISIE_MAX);
+  if(v==null){
+    el.value=avant;
+    const _max=lb?Math.round(CHARGE_SAISIE_MAX/LB_KG):CHARGE_SAISIE_MAX;
+    toast(/^\s*-/.test(tape)?'Charge négative ignorée'
+      :/^\d+(?:[.,]\d*)?$/.test(tape)?'Charge hors limites : '+_max+' '+(lb?'lb':'kg')+' au plus'
+      :'Charge illisible : tape un nombre, par exemple 82,5','var(--orange)');
+    _woMajLignes(woState.exercises[idx],d,idx);
+    return;
   }
-  // R25 — PAS renderSets : il reconstruit tout le tbody, et le champ ou le
-  // doigt vient d'arriver — la serie suivante — serait detruit avec son
-  // clavier. Meme raisonnement que pour la carte douleur, qui ne repasse pas
-  // par renderWoEx. On ne remplace que les lignes dont le rendu change, et
-  // celle qui porte le focus est modifiee EN PLACE.
-  _woMajLignes(woState.exercises[idx],d,idx);
+  // EN LIVRES, le dossier reçoit des kilos ; une saisie inchangée garde la
+  // valeur stockée (pas de dérive d'arrondi).
+  const inchangee=tape.replace(',','.')===avant;
+  const kg=lb?(inchangee?Number(s[champ]):afficheVersKg(String(v),currentUser,s[champ])):v;
+  const val=inchangee&&!lb?String(s[champ]):String(kg);
+  // Le champ affiche ce qui a été retenu : deux vérités pour une saisie, jamais.
+  el.value=lb?String(v):val;
+  const nomEx=woState.exercises[idx]&&woState.exercises[idx].name;
+  const record=inchangee?null:chargeSuspecte(kg,currentUser,nomEx);
+  if(record==null){ ecrire(val); return; }
+  const u=lb?'lb':'kg', aff=x=>String(lb?kgVersAffiche(x,currentUser):x).replace('.',',');
+  return rcConfirm(aff(kg)+' '+u+' ?',
+    'Ta meilleure charge sur cet exercice est '+aff(record)+' '+u+'. Confirme, ou corrige si une virgule a sauté.',
+    'Oui, c’est ça','Corriger').then(ok=>{
+      if(ok){ ecrire(val); return true; }
+      el.value=avant;
+      _woMajLignes(woState.exercises[idx],d,idx);
+      try{ el.focus(); el.select(); }catch(e){}
+      return false;
+    });
 }
 // ══ R29 — LES REPETITIONS FAITES, DANS UNE FOURCHETTE ═══════════════════
 // Un entier de 1 a 999, ou rien : vide rend la prescription (repsDone retire),
@@ -50966,8 +51016,11 @@ function _woBrancherEnchainement(tb,idx){
       const d=woState&&woState.sessionData&&woState.sessionData[idx];
       const s=d&&d.sets&&d.sets[i];
       if(s){
-        const brut=String(el.value).replace(',','.');
-        if(brut!==String(s[champ]==null?'':s[champ])){
+        // Compare ce que le champ AFFICHE (en livres, la valeur convertie) :
+        // « 82,5 » face a un dossier en « 82.5 » n'est pas une nouvelle saisie.
+        const brut=String(el.value).trim().replace(',','.');
+        const deja=champ==='repsDone'?String(s[champ]==null?'':s[champ]):String(_poidsSaisie(s[champ]));
+        if(brut!==deja){
           // R29 — les repetitions d'une fourchette ont leur propre ecriture.
           if(champ==='repsDone') _woRepsSaisie(idx,i,el);
           else _woChargeSaisie(idx,i,champ,el);
@@ -51696,13 +51749,13 @@ function renderSets(ex,data,idx,opts){
     // Wide-mode: content without <td> wrappers (for 2-sub-row card layout)
     const isWide=enCartes;
     const weightInner=isDeg
-      ?`<input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} value="${_poidsSaisie(s.weight)}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight2')} value="${_poidsSaisie(s.weight2)}" placeholder="P2" style="border-color:#78350f;margin-left:4px" onchange="${onChW2}" ${dis}>`
-      :`<div><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} style="${weightBorder}" value="${_poidsSaisie(s.weight)}"${_parMain?' placeholder="kg/main" aria-label="Charge par main (kg)"':''} onchange="${onChW}" ${dis}>${autoLabel}</div>`;
+      ?`<input class="set-input" type="text" inputmode="decimal" autocomplete="off" pattern="[0-9]*[.,]?[0-9]*" ${_attrs(i,'weight')} value="${_poidsSaisie(s.weight)}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}><input class="set-input" type="text" inputmode="decimal" autocomplete="off" pattern="[0-9]*[.,]?[0-9]*" ${_attrs(i,'weight2')} value="${_poidsSaisie(s.weight2)}" placeholder="P2" style="border-color:#78350f;margin-left:4px" onchange="${onChW2}" ${dis}>`
+      :`<div><input class="set-input" type="text" inputmode="decimal" autocomplete="off" pattern="[0-9]*[.,]?[0-9]*" ${_attrs(i,'weight')} style="${weightBorder}" value="${_poidsSaisie(s.weight)}"${_parMain?' placeholder="kg/main" aria-label="Charge par main (kg)"':''} onchange="${onChW}" ${dis}>${autoLabel}</div>`;
 
     // Simple-mode: <td> wrappers for classic table layout
     const weightCell=isDeg
-      ?`<td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} value="${_poidsSaisie(s.weight)}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}></td><td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight2')} value="${_poidsSaisie(s.weight2)}" placeholder="P2" style="border-color:#78350f" onchange="${onChW2}" ${dis}></td>`
-      :`<td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" ${_attrs(i,'weight')} style="${weightBorder}" value="${_poidsSaisie(s.weight)}"${_parMain?' placeholder="kg/main" aria-label="Charge par main (kg)"':''} onchange="${onChW}" ${dis}>${autoLabel}</td>`;
+      ?`<td><input class="set-input" type="text" inputmode="decimal" autocomplete="off" pattern="[0-9]*[.,]?[0-9]*" ${_attrs(i,'weight')} value="${_poidsSaisie(s.weight)}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}></td><td><input class="set-input" type="text" inputmode="decimal" autocomplete="off" pattern="[0-9]*[.,]?[0-9]*" ${_attrs(i,'weight2')} value="${_poidsSaisie(s.weight2)}" placeholder="P2" style="border-color:#78350f" onchange="${onChW2}" ${dis}></td>`
+      :`<td><input class="set-input" type="text" inputmode="decimal" autocomplete="off" pattern="[0-9]*[.,]?[0-9]*" ${_attrs(i,'weight')} style="${weightBorder}" value="${_poidsSaisie(s.weight)}"${_parMain?' placeholder="kg/main" aria-label="Charge par main (kg)"':''} onchange="${onChW}" ${dis}>${autoLabel}</td>`;
 
     // Cycle cell
 
