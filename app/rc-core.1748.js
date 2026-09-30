@@ -3443,8 +3443,42 @@ const SYNC_SEP='';
 const SYNC_PAR_CLEF=Object.freeze({
   sessions:s=>(s&&s.id!=null)?('s:'+s.id):null,
   videos:  v=>(v&&v.id!=null)?('v:'+v.id):null,
-  bilans:  b=>b?('b:'+String(b.date)+'|'+String(b.type||'')):null
+  bilans:  b=>b?('b:'+String(b.date)+'|'+String(b.type||'')):null,
+  // LES JOURNAUX, ELEMENT PAR ELEMENT (30/09/2026). Ils etaient des feuilles :
+  // deux appareils qui pesaient chacun un jour different se disputaient le
+  // tableau entier, et le dernier a ecrire effacait la pesee de l'autre.
+  // Une entree par jour ('YYYY-MM-DD') : _recordWeight, _recordSteps, le
+  // sommeil, l'energie et _sanJournalPoser remplacent l'entree du jour.
+  weightLog:   e=>e&&e.date?('w:'+e.date):null,
+  sleepLog:    e=>e&&e.date?('z:'+e.date):null,
+  stepsLog:    e=>e&&e.date?('p:'+e.date):null,
+  energieLog:  e=>e&&e.date?('e:'+e.date):null,
+  fcReposLog:  e=>e&&e.date?('f:'+e.date):null,
+  vfcLog:      e=>e&&e.date?('h:'+e.date):null,
+  // Le journal de douleur du coach : horodate a la milliseconde, par athlete.
+  journalDouleur:e=>e&&e.at!=null?('j:'+e.at+'|'+String(e.clientId||'')):null,
+  historiqueDrapeaux:e=>e&&e.leve?('d:'+e.leve):null
 });
+// LES TABLEAUX « PAR INDEX » : une position, pas une identite. Les sept
+// creneaux de sessions_config n'ont jamais d'id — le creneau 2 est le mardi.
+// Fusionnes creneau par creneau (clef 'c:'+i), ils redeviennent un tableau
+// ORDONNE PAR INDEX, jamais trie par date.
+const SYNC_PAR_INDEX=Object.freeze(['sessions_config']);
+// Le champ qui ordonne chaque journal a la reconstruction (defaut : date).
+const SYNC_TRI=Object.freeze({journalDouleur:'at',historiqueDrapeaux:'leve'});
+// PURE. Compare deux valeurs d'ordre : numerique si les deux sont des nombres
+// (seances : Date.now()), sinon en chaine ('YYYY-MM-DD' se trie tel quel).
+function _syncOrdre(va,vb){
+  const na=typeof va==='number'&&isFinite(va), nb=typeof vb==='number'&&isFinite(vb);
+  if(na&&nb) return va-vb;
+  if(na!==nb) return na?-1:1;
+  const sa=va==null?'':String(va), sb=vb==null?'':String(vb);
+  return sa<sb?-1:(sa>sb?1:0);
+}
+function _syncTrier(k,l){
+  const f=SYNC_TRI[k]||'date';
+  return l.sort((a,b)=>_syncOrdre(a&&a[f],b&&b[f]));
+}
 // L'horodatage n'est pas une donnee : il est recalcule a chaque envoi.
 const SYNC_HORS_FUSION=Object.freeze(['updatedAt','_syncMaj']);
 const SYNC_VIDE='0';
@@ -3493,6 +3527,15 @@ function _syncVersArbre(doc){
     }
     t[k]=m;
   }
+  for(const k of SYNC_PAR_INDEX){
+    let a=t[k];
+    if(a==null) continue;
+    const m={};
+    if(Array.isArray(a)) a.forEach((x,i)=>{ if(x!=null) m['c:'+i]=x; });
+    else if(_syncEstObjet(a)) for(const i of Object.keys(a)){ if(/^\d+$/.test(i)&&a[i]!=null) m['c:'+i]=a[i]; }
+    else continue;
+    t[k]=m;
+  }
   return t;
 }
 // PURE. L'inverse : les objets indexes redeviennent des tableaux, dans
@@ -3503,8 +3546,22 @@ function _syncDepuisArbre(t){
   for(const k of Object.keys(SYNC_PAR_CLEF)){
     const m=d[k];
     if(!_syncEstObjet(m)) continue;
-    d[k]=Object.values(m).filter(x=>x!=null)
-      .sort((a,b)=>(Number(a&&a.date)||0)-(Number(b&&b.date)||0));
+    // ⚠ PAR CHAMP ET SANS Number() : un 'YYYY-MM-DD' donnait NaN, donc 0, et
+    //   les journaux gardaient un ordre de hasard.
+    d[k]=_syncTrier(k,Object.values(m).filter(x=>x!=null));
+  }
+  for(const k of SYNC_PAR_INDEX){
+    const m=d[k];
+    if(!_syncEstObjet(m)) continue;
+    // PAR INDEX : le creneau i revient a la place i. Un creneau absent des deux
+    // cotes laisse un trou (null), que _aplatirSessionsConfig sait combler.
+    const out=[];
+    for(const c of Object.keys(m)){
+      const i=/^c:(\d+)$/.exec(c);
+      if(i&&m[c]!=null) out[Number(i[1])]=m[c];
+    }
+    for(let i=0;i<out.length;i++) if(out[i]===undefined) out[i]=null;
+    d[k]=out;
   }
   return d;
 }
@@ -3600,11 +3657,12 @@ function syncUnionSansBase(local,distant){
         if(c==null) c='x:'+_syncFnv(JSON.stringify(_syncCanon(x))||'');
         if(vus.has(c)) continue;
         vus.add(c);
-        const t=SYNC_CLEF_TOMBE[k](x);
-        if(t&&tombes[k].has(t)) continue;
+        // Seuls sessions, videos et bilans ont des pierres tombales.
+        const ft=SYNC_CLEF_TOMBE[k], t=ft?ft(x):null;
+        if(t&&tombes[k]&&tombes[k].has(t)) continue;
         l.push(x);
       }
-      l.sort((a,b)=>(Number(a&&a.date)||0)-(Number(b&&b.date)||0));
+      _syncTrier(k,l);
       if(l.length||local[k]!==undefined||distant[k]!==undefined) out[k]=l;
     } else if(k==='supprimes'){
       const m={};
