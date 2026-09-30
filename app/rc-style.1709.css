@@ -3369,10 +3369,6 @@ body.with-tabbar #rc-ban-install{padding-bottom:10px}
 .nut-eclairs{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;
   mix-blend-mode:screen;opacity:.92}
 .nut-hud>*:not(.nut-eclairs){position:relative;z-index:1}
-/* LE CADRE ROUGE DE L'ACCUEIL (Kevin, 30/09/2026) : sur l'accueil, la carte
-   Nutrition porte le meme lisere franc que les cadres de l'en-tete. */
-#clh-nut-card.nut-hud{border:1.5px solid #ff2a2a!important;
-  box-shadow:0 8px 13px rgba(0,0,0,.72),0 0 12px rgba(255,40,40,.45),0 0 26px rgba(224,32,32,.2),inset 0 1px 0 rgba(255,190,190,.10)!important}
 /* LE CREPITEMENT. steps(1,end) et non une interpolation : un eclair ne fond
    pas, il est la ou il n'est pas. Les trois faisceaux partagent la meme duree
    -- le seul cran infini legal -- et se decalent d'un tiers, si bien qu'il y
@@ -11921,8 +11917,9 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 #clh-assiette[hidden]{display:none}
 #clh-assiette:focus-visible{outline:2px solid var(--red);outline-offset:3px}
 #clh-assiette .sk-cadre{position:absolute;inset:0;display:block;padding:0;border-radius:1.8cqw;
-  border:.22cqw solid #ff2a2a;background:#070303;
-  box-shadow:0 0 1.2cqw rgba(255,40,40,.75),0 0 3cqw rgba(224,32,32,.35),inset 0 0 1cqw rgba(224,32,32,.15)}
+  /* SANS CADRE ROUGE (Kevin, 30/09/2026) : le cadre des semaines reste le
+     seul allume de l'en-tete. Bordure transparente, pour garder la geometrie. */
+  border:.22cqw solid transparent;background:#070303;box-shadow:none}
 #clh-assiette .sk-cadre::before{top:1.5cqw;left:10.75cqw;width:.12cqw;min-width:1px;height:6.9cqw;
   border:0;border-radius:0;background:rgba(255,70,70,.45)}
 #clh-assiette .sk-cadre::after{display:none}
@@ -12705,7 +12702,6 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .metric-box[data-vide]{box-shadow:0 4px 10px rgba(0,0,0,0.158)}
 :root[data-theme="clair"] .card-nut{background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);box-shadow:var(--elev-2)}
 :root[data-theme="clair"] .nut-hud{border:1px solid rgba(224,32,32,.55)!important;background:radial-gradient(120% 80% at 78% 0%,#f9e0e0 0%,#fbefef 46%,#faf3f3 100%)!important;box-shadow:0 8px 13px rgba(0,0,0,0.252),0 0 26px rgba(224,32,32,.16),inset 0 1px 0 rgba(255,190,190,.10)!important}
-:root[data-theme="clair"] #clh-nut-card.nut-hud{border:1.5px solid #ff2a2a!important;box-shadow:0 8px 13px rgba(0,0,0,0.252),0 0 12px rgba(255,40,40,.45),0 0 26px rgba(224,32,32,.2),inset 0 1px 0 rgba(255,190,190,.10)!important}
 :root[data-theme="clair"] .nut-boul{color:#cc0000;background:linear-gradient(180deg,#f8dede,#faf0f0);border:1px solid rgba(255,42,42,.75);box-shadow:0 0 12px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,190,190,.28)}
 :root[data-theme="clair"] .nut-boul svg{filter:drop-shadow(0 0 5px rgba(255,42,42,.9))}
 :root[data-theme="clair"] .nut-sep{background:linear-gradient(180deg,transparent,rgba(255,42,42,.55),transparent)}
@@ -14789,7 +14785,7 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .fj-nommer input{background:var(--surface-2);color:var(--text);border:1px solid var(--border)}
 :root[data-theme="clair"] .fj-nommer-x{color:var(--text-dim)}
 :root[data-theme="clair"] #clh-assiette:focus-visible{outline:2px solid var(--red)}
-:root[data-theme="clair"] #clh-assiette .sk-cadre{border:.22cqw solid #ff2a2a;background:#faf3f3;box-shadow:0 0 1.2cqw rgba(255,40,40,.75),0 0 3cqw rgba(224,32,32,.35),inset 0 0 1cqw rgba(224,32,32,.15)}
+:root[data-theme="clair"] #clh-assiette .sk-cadre{background:#faf3f3}
 :root[data-theme="clair"] #clh-assiette .sk-cadre::before{background:rgba(255,70,70,.45)}
 :root[data-theme="clair"] #clh-assiette-val{color:var(--text);text-shadow:0 0 10px rgba(255,255,255,.3)}
 :root[data-theme="clair"] #clh-assiette .sk-lbl{color:#090909}
