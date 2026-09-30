@@ -42588,6 +42588,18 @@ async function testExercices(){
       ok('Superset : le premier exercice ne lance rien',_reposApresSerie(0,0)===null);
       ok('Superset : le second lance le minuteur',_reposApresSerie(1,0)===120);
       ok('Superset : la dernière série du couple ne lance rien',_reposApresSerie(1,2)===null);
+      // 30/09/2026 : la dernière série d'un exercice lance le repos quand un autre
+      // groupe suit ; seule la dernière série de la SÉANCE n'en lance pas.
+      mk([{name:'DC',repos:'2 min',series:3},{name:'ROWING',repos:'90 s',series:3}]);
+      ok('Dernière série d’un exercice NON final → le repos de l’exercice',_reposApresSerie(0,2)===120);
+      ok('Dernière série de la séance → rien',_reposApresSerie(1,2)===null);
+      ok('Série intermédiaire du dernier exercice → son repos',_reposApresSerie(1,0)===90);
+      mk([{name:'DC',repos:'2 min',series:3},{name:'ROWING',repos:'2 min',series:3,ss:true},{name:'CURL',repos:'1 min',series:3}]);
+      ok('Superset suivi d’un exercice : la fin du couple lance le repos du couple',_reposApresSerie(1,2)===120);
+      ok('Superset suivi d’un exercice : le premier du couple ne lance toujours rien',_reposApresSerie(0,2)===null);
+      ok('Superset suivi d’un exercice : la dernière série de la séance ne lance rien',_reposApresSerie(2,2)===null);
+      mk([{name:'DC',repos:'2 min',series:3},{name:'TAPIS',reps:'20 min',repos:'2 min',series:1}]);
+      ok('Avant un cardio final, la dernière série de l’exercice lance le repos',_reposApresSerie(0,2)===120);
       woState=sauveWo;
     })();
 
@@ -59281,6 +59293,121 @@ async function testExercices(){
       // Sans tiret.
       if(/—/.test(JSON.stringify([a,reposInviteSon({})]))) return _echec('un tiret dans la ligne');
       return true;})());
+
+    // ── LA FIN DU REPOS, ÉCRAN ÉTEINT OU APP EN ARRIÈRE-PLAN (30/09/2026) ──
+    okA('Wake Lock : launchWorkout demande l’écran UNE fois, finishWorkout le relâche ; réglage coupé ou API absente, rien ne casse',async()=>{
+      const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;
+      const propre=Object.prototype.hasOwnProperty.call(navigator,'wakeLock');
+      const dProp=propre?Object.getOwnPropertyDescriptor(navigator,'wakeLock'):null;
+      const pause=ms=>new Promise(r=>setTimeout(r,ms));
+      let req=0, rel=0;
+      const faux={request:(t)=>{ req++; const v={released:false,type:t,
+        release(){ if(!this.released){ this.released=true; rel++; } return Promise.resolve(); },
+        addEventListener(){}}; return Promise.resolve(v); }};
+      const lancer=()=>{ localStorage.removeItem('rc_wo_state'); launchWorkout(currentUser.sessions_config[0],0); };
+      try{
+        window.saveUser=()=>true; window.toast=()=>{};
+        _woLibererEcran();
+        Object.defineProperty(navigator,'wakeLock',{configurable:true,get:()=>faux});
+        currentUser={id:'wl',email:'wl@t.fr',fname:'A',lname:'B',role:'athlete',exAlias:{},exMuscles:{},sessions:[],bilans:[],videos:[],
+          programs:{},contraintesSante:[],birthdate:'1990-05-01',gender:'homme',consent:{health:true,policyVersion:POLICY_VERSION},
+          sessions_config:[{active:true,name:'Push',exercises:[{name:'ROWING BARRE',series:3,reps:'8',repos:'90 s'}]}]};
+        lancer();
+        await pause(0);
+        if(req!==1) return _echec('request appelé '+req+' fois au lancement');
+        // Un retour au premier plan pendant que le verrou tient n'en redemande pas.
+        await _woVerrouEcran(); if(req!==1) return _echec('verrou redemandé alors qu’il tient');
+        woState.sessionData={0:{sets:[{weight:'40',reps:'8',rir:'1',done:true}]}};
+        finishWorkout(false);
+        await pause(0);
+        if(rel!==1) return _echec('finishWorkout n’a pas relâché le verrou ('+rel+')');
+        // Le réglage coupé : aucune demande.
+        currentUser.ecranAllume=false; req=0;
+        lancer(); await pause(0);
+        try{ clearInterval(woState.timerInterval); }catch(e){}
+        if(req!==0) return _echec('écran demandé alors que le réglage est coupé');
+        _woLibererEcran(); currentUser.ecranAllume=true;
+        // Une API qui refuse : aucune exception.
+        Object.defineProperty(navigator,'wakeLock',{configurable:true,get:()=>({request:()=>Promise.reject(new Error('refus'))})});
+        try{ lancer(); await pause(0); }catch(e){ return _echec('refus : '+e.message); }
+        try{ clearInterval(woState.timerInterval); }catch(e){}
+        _woLibererEcran();
+        // Sans l'API : aucune exception.
+        Object.defineProperty(navigator,'wakeLock',{configurable:true,get:()=>undefined});
+        try{ lancer(); await pause(0); }catch(e){ return _echec('sans wakeLock : '+e.message); }
+        try{ clearInterval(woState.timerInterval); }catch(e){}
+        return ecranAllumeActif({})&&!ecranAllumeActif({ecranAllume:false})?true:_echec('réglage : vrai par défaut');
+      } finally {
+        try{ _woLibererEcran(); }catch(e){}
+        try{ delete navigator.wakeLock; }catch(e){}
+        if(dProp) try{ Object.defineProperty(navigator,'wakeLock',dProp); }catch(e){}
+        currentUser=sU; woState=sW; window.saveUser=svSave; window.toast=svToast;
+        if(sSnap!=null) localStorage.setItem('rc_wo_state',sSnap); else localStorage.removeItem('rc_wo_state');
+      }});
+    okA('visibilitychange : aucune notification sans repos (reposFin null) ; une seule, silencieuse, « rc-repos », quand il court',async()=>{
+      const sW=woState, sN=window.Notification, sR=_swReg;
+      const shows=[]; let fermees=0;
+      const hPropre=Object.prototype.hasOwnProperty.call(document,'hidden');
+      try{
+        window.Notification={permission:'granted'};
+        _swReg=()=>Promise.resolve({showNotification:(t,o)=>{ shows.push([t,o]); return Promise.resolve(); },
+          getNotifications:()=>Promise.resolve([{close(){ fermees++; }}])});
+        Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});
+        woState={exercises:[{name:'DC'}],currentEx:0,sessionData:{},reposFin:null};
+        await _woVisibilite();
+        if(shows.length) return _echec('notification sans repos en cours');
+        woState.reposFin=Date.now()-1000; await _woVisibilite();
+        if(shows.length) return _echec('notification pour un repos déjà fini');
+        woState.reposFin=Date.now()+60000; woState.reposLib='DC';
+        window.Notification={permission:'default'}; await _woVisibilite();
+        if(shows.length) return _echec('notification sans permission');
+        window.Notification={permission:'granted'}; await _woVisibilite();
+        if(shows.length!==1) return _echec(shows.length+' notifications');
+        const [t,o]=shows[0];
+        if(t!=='Repos en cours'||o.tag!=='rc-repos'||o.silent!==true||o.renotify!==false||!o.data||o.data.url!=='./index.html#seance')
+          return _echec(JSON.stringify(shows[0]));
+        if(!/^Fin à \d\d:\d\d:\d\d · DC$/.test(o.body)) return _echec('corps : '+o.body);
+        // Au retour : la notification est fermée.
+        Object.defineProperty(document,'hidden',{configurable:true,get:()=>false});
+        woState.reposFin=null;
+        await _woVisibilite();
+        return fermees===1?true:_echec('notification non fermée au retour');
+      } finally {
+        // Le retrait animé du bandeau finit en 200 ms : on l'attend, sinon il
+        // viderait le bandeau du test suivant.
+        await new Promise(r=>setTimeout(r,400));
+        try{ delete document.hidden; }catch(e){}
+        if(hPropre) {}
+        window.Notification=sN; _swReg=sR; woState=sW;
+      }});
+    okA('Retour après l’échéance : vibration (et bip si son actif) tout de suite, une seule fois',async()=>{
+      const sW=woState, sH=arcHaptique, sB=_bipRepos, sU=currentUser, sR=_swReg;
+      let vib=0, bip=0;
+      try{
+        arcHaptique=(n)=>{ if(n==='avertir') vib++; }; _bipRepos=()=>{ bip++; };
+        _swReg=()=>Promise.resolve(null);
+        currentUser=Object.assign({},sU||{},{sonRepos:true});
+        Object.defineProperty(document,'hidden',{configurable:true,get:()=>false});
+        // Deux minutes après l'échéance : bien au-delà du dépassement affiché.
+        woState={exercises:[{name:'DC'}],currentEx:0,sessionData:{},reposFin:Date.now()-120000,reposTotal:90,reposVibre:false};
+        await _woVisibilite();
+        if(vib!==1||bip!==1) return _echec('signal : '+vib+' vibration(s), '+bip+' bip(s)');
+        woState.reposFin=Date.now()-1000; await _woVisibilite();
+        if(vib!==1) return _echec('le signal repart');
+        // Son coupé : la vibration seule.
+        currentUser.sonRepos=false;
+        woState={exercises:[],sessionData:{},reposFin:Date.now()-5000,reposVibre:false};
+        await _woVisibilite();
+        return (vib===2&&bip===1)?true:_echec('son coupé : '+vib+' / '+bip);
+      } finally {
+        try{ delete document.hidden; }catch(e){}
+        arcHaptique=sH; _bipRepos=sB; currentUser=sU; _swReg=sR; woState=sW;
+        try{ annulerRepos(); }catch(e){}
+        woState=sW;
+        // Le retrait animé du bandeau (lancé par annulerRepos) finit en 200 ms :
+        // on l'attend APRÈS lui, sinon il viderait le bandeau du test suivant.
+        await new Promise(r=>setTimeout(r,400));
+      }});
 
     okA('R30 — la ligne du son : premier repos seulement, 18 px au plus, « Passer » intact, « Activer » reste dans la séance',async()=>{
       const sU=currentUser, sW=woState, sSnap=localStorage.getItem('rc_wo_state'), svSave=window.saveUser, svToast=window.toast;

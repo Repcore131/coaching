@@ -6626,7 +6626,7 @@ const CHAMPS_NON_SANTE=Object.freeze([
   // l'hebergeur, rien d'autre. Aucun contenu, aucune mesure, aucun nom : de
   // la comptabilite de menage, classee avec les videos qu'elle designe.
   'videos','correctionsOrphelines','cloudinaryAPurger','programmePerso','revisions',
-  'athletePhoto','objective','badges','habitudes','sonRepos',
+  'athletePhoto','objective','badges','habitudes','sonRepos','ecranAllume',
   // R20 — le dernier onglet d'Évolution ouvert : un NOM d'onglet ('perf',
   // 'mensus'…), une preference d'affichage. Aucune mesure n'y transite.
   'uiProgressTab',
@@ -40920,10 +40920,126 @@ function _majSonReglages(){
   if(c) c.checked=!!(currentUser&&currentUser.sonRepos);
   const e=document.getElementById('cr-son-etat');
   if(e) e.textContent=(currentUser&&currentUser.sonRepos)?'Activé':'Éteint';
+  // L'écran allumé pendant la séance, juste en dessous.
+  const ec=document.getElementById('cr-ecran-case');
+  if(ec) ec.checked=ecranAllumeActif(currentUser);
+  const ee=document.getElementById('cr-ecran-etat');
+  if(ee) ee.textContent=ecranAllumeActif(currentUser)?'Activé':'Éteint';
+}
+
+// ══════════════ LA FIN DU REPOS, ÉCRAN ÉTEINT OU APP EN ARRIÈRE-PLAN ══════
+// (30/09/2026) Téléphone posé sur le banc, l'écran s'éteignait au bout de
+// 30 s : le navigateur gelait les minuteurs, et la vibration de fin de repos
+// ne partait qu'au rallumage. Trois gestes, sans serveur (le cron du Worker
+// tourne à la minute, bien trop grossier pour un repos de 90 s) :
+//   1. l'écran reste allumé pendant la séance (Wake Lock), si le réglage le veut ;
+//   2. passée en arrière-plan, la page pose une notification « Repos en cours »
+//      qui dit l'heure de fin ; elle se ferme au retour ;
+//   3. revenue APRÈS l'échéance, la page vibre (et bipe) tout de suite, une fois.
+// Tout est dans des try/catch : l'API peut manquer (iOS ancien, Firefox) ou
+// être refusée (économie d'énergie), et rien de cela ne doit casser la séance.
+
+// Le réglage : vrai par défaut, faux seulement quand l'athlète l'a coupé.
+function ecranAllumeActif(u){ return !(u&&u.ecranAllume===false); }
+let _woVerrou=null;            // la sentinelle rendue par le navigateur
+let _woVerrouVoulu=false;      // une séance est à l'écran : le verrou est souhaité
+let _woVerrouDemande=null;     // une demande en vol (deux appels, une requête)
+function _woVerrouEcran(){
+  _woVerrouVoulu=true;
+  try{
+    if(!ecranAllumeActif(currentUser)) return Promise.resolve(false);
+    const wl=(typeof navigator!=='undefined')&&navigator.wakeLock;
+    if(!wl||typeof wl.request!=='function') return Promise.resolve(false);
+    if(_woVerrou&&!_woVerrou.released) return Promise.resolve(true);
+    if(_woVerrouDemande) return _woVerrouDemande;
+    _woVerrouDemande=Promise.resolve(wl.request('screen')).then(v=>{
+      _woVerrouDemande=null;
+      if(!v) return false;
+      // Le verrou a été rendu pendant la demande : on le relâche aussitôt.
+      if(!_woVerrouVoulu||!ecranAllumeActif(currentUser)){ try{ v.release(); }catch(e){} return false; }
+      _woVerrou=v;
+      try{ v.addEventListener('release',()=>{ if(_woVerrou===v) _woVerrou=null; }); }catch(e){}
+      return true;
+    }).catch(()=>{ _woVerrouDemande=null; return false; });
+    return _woVerrouDemande;
+  }catch(e){ _woVerrouDemande=null; return Promise.resolve(false); }
+}
+function _woLibererEcran(){
+  _woVerrouVoulu=false;
+  const v=_woVerrou; _woVerrou=null;
+  try{ if(v&&!v.released) v.release(); }catch(e){}
+}
+function basculerEcranAllume(){
+  if(!currentUser) return;
+  currentUser.ecranAllume=!ecranAllumeActif(currentUser);
+  saveUser();
+  if(ecranAllumeActif(currentUser)){ if(_woVerrouVoulu) _woVerrouEcran(); }
+  else { const v=_woVerrou; _woVerrou=null; try{ if(v&&!v.released) v.release(); }catch(e){} }
+  try{ _majSonReglages(); }catch(e){}
+  toast(ecranAllumeActif(currentUser)?'L’écran restera allumé pendant la séance':'L’écran pourra s’éteindre pendant la séance');
+}
+
+// ── La notification de repos ────────────────────────────────────────────
+const REPOS_NOTIF_TAG='rc-repos';
+// L'enregistrement du service worker, sans jamais attendre (ready peut ne
+// jamais se résoudre sans SW). Isolé pour que les tests le remplacent.
+function _swReg(){
+  try{
+    if(typeof navigator==='undefined'||!navigator.serviceWorker||!navigator.serviceWorker.getRegistration) return Promise.resolve(null);
+    return navigator.serviceWorker.getRegistration().catch(()=>null);
+  }catch(e){ return Promise.resolve(null); }
+}
+function _hms(ms){
+  const d=new Date(ms);
+  return [d.getHours(),d.getMinutes(),d.getSeconds()].map(x=>String(x).padStart(2,'0')).join(':');
+}
+async function _reposNotifier(){
+  try{
+    if(typeof woState==='undefined'||!woState||!woState.reposFin||!(woState.reposFin>Date.now())) return false;
+    const N=window.Notification;
+    if(!N||N.permission!=='granted') return false;
+    const reg=await _swReg();
+    if(!reg||typeof reg.showNotification!=='function') return false;
+    const ex=woState.reposLib||((woState.exercises||[])[woState.currentEx]||{}).name||'';
+    await reg.showNotification('Repos en cours',{body:'Fin à '+_hms(woState.reposFin)+(ex?' · '+ex:''),
+      tag:REPOS_NOTIF_TAG,renotify:false,silent:true,data:{url:'./index.html#seance'}});
+    return true;
+  }catch(e){ return false; }
+}
+async function _reposFermerNotif(){
+  try{
+    const reg=await _swReg();
+    if(!reg||typeof reg.getNotifications!=='function') return 0;
+    const l=await reg.getNotifications({tag:REPOS_NOTIF_TAG});
+    (l||[]).forEach(n=>{ try{ n.close(); }catch(e){} });
+    return (l||[]).length;
+  }catch(e){ return 0; }
+}
+// Revenue après l'échéance : le signal part TOUT DE SUITE, une seule fois
+// (reposVibre). Avant _peindreRepos, qui efface un repos trop dépassé sans
+// rien signaler.
+function _reposRattraper(){
+  try{
+    if(typeof woState==='undefined'||!woState||!woState.reposFin||woState.reposVibre) return false;
+    if(woState.reposFin>Date.now()) return false;
+    woState.reposVibre=true;
+    try{ arcHaptique('avertir'); }catch(e){}
+    try{ if(currentUser&&currentUser.sonRepos) _bipRepos(); }catch(e){}
+    return true;
+  }catch(e){ return false; }
 }
 // Le retour d'arrière-plan est le moment où un compteur décrémenté aurait
 // menti : on repeint depuis l'échéance, qui est la seule source de vérité.
-document.addEventListener('visibilitychange',()=>{ if(!document.hidden) _peindreRepos(); });
+async function _woVisibilite(){
+  if(document.hidden){ return _reposNotifier(); }
+  try{ _reposRattraper(); }catch(e){}
+  try{ _peindreRepos(); }catch(e){}
+  // Le navigateur relâche le verrou en arrière-plan : on le reprend.
+  if(_woVerrouVoulu){ try{ _woVerrouEcran(); }catch(e){} }
+  try{ await _reposFermerNotif(); }catch(e){}
+  return false;
+}
+document.addEventListener('visibilitychange',()=>{ _woVisibilite(); });
 
 // ══════════════ LE TEMPO ═══════════════════════════════════════════════
 //
@@ -41180,19 +41296,27 @@ function _reposReelDepuis(d,i,maintenant){
   if(dt<REPOS_REEL_MIN) return null;
   return Math.min(dt,REPOS_REEL_MAX);
 }
-// Le minuteur ne part pas sur : le cardio, la dernière série d'un exercice
-// (le repos suivant est un changement d'exercice), un exercice qui n'est pas
-// le dernier de son groupe (sur un superset, le repos est à la fin du couple),
-// et un repos qu'on ne sait pas lire.
+// Le minuteur ne part pas sur : le cardio, la dernière série de la SÉANCE
+// (la dernière série du dernier groupe), un exercice qui n'est pas le dernier
+// de son groupe (sur un superset, le repos est à la fin du couple), et un
+// repos qu'on ne sait pas lire.
+// ⚠ LA DERNIÈRE SÉRIE D'UN EXERCICE LANCE LE REPOS (30/09/2026) quand un
+//   autre groupe suit : le passage à l'exercice suivant est un repos comme un
+//   autre, et c'est souvent le plus long. Durée : le repos de l'exercice (du
+//   groupe, sur un superset).
 function _reposApresSerie(idx,i){
   if(typeof woState==='undefined'||!woState) return null;
   const ex=(woState.exercises||[])[idx];
   if(!ex||isCardio(ex)) return null;
   const d=woState.sessionData[idx];
-  if(!d||!d.sets||i>=d.sets.length-1) return null;
+  if(!d||!d.sets||i>d.sets.length-1) return null;
   const grs=_groupesEx(woState.exercises);
   const g=grs.find(x=>x.indexOf(idx)>=0);
   if(g&&g[g.length-1]!==idx) return null;
+  if(i>=d.sets.length-1){
+    const gi=g?grs.indexOf(g):-1;
+    if(gi<0||gi>=grs.length-1) return null;   // la dernière série de la séance
+  }
   const src=(g&&g.length>1)?((woState.exercises[g[g.length-1]]||{}).repos||(woState.exercises[g[0]]||{}).repos):ex.repos;
   return parseRepos(src);
 }
@@ -46505,6 +46629,7 @@ function demarrerSeance(sessConfig,slotIdx){
 function woResumeAndGo(){
   const snap=_woLoadSnap();
   if(!snap){document.getElementById('clh-resume-workout').style.display='none';return;}
+  try{ _woVerrouEcran(); }catch(e){}
   // Vidé AVANT l'affectation : ce qui restait dans le Set appartient à une
   // autre séance, et son indexation par « exercice : série » le ferait
   // ressortir sur des séries qui ne sont pas des records.
@@ -46561,6 +46686,7 @@ function pauseWorkout(){
 // NE LÈVE JAMAIS : une sortie d’écran ne doit pas pouvoir échouer.
 function _quitterEcranSeance(garder){
   try{ _swSeance('SEANCE_TERMINEE'); }catch(e){}
+  try{ _woLibererEcran(); }catch(e){}
   if(garder!==false){ try{ woPersist(); }catch(e){} }
   try{ clearInterval(woState&&woState.timerInterval); }catch(e){}
 }
@@ -46574,6 +46700,7 @@ async function cancelWorkout(){
   _feuilleFermer('wo-pause-modal');
   if(!await rcConfirm('Annuler la séance ? Aucune donnée ne sera enregistrée.',null,'Annuler la séance')) return;
   localStorage.removeItem('rc_wo_state');
+  try{ _woLibererEcran(); }catch(e){}
   // `false` : la séance vient d’être effacée, la réécrire la ferait revenir.
   _quitterEcranSeance(false);
   woState={};
@@ -46802,6 +46929,7 @@ async function finishWorkoutEarly(){
 // remonte a personne.
 function quitterSeanceSansEnregistrer(){
   try{ _swSeance('SEANCE_TERMINEE'); }catch(e){}
+  try{ _woLibererEcran(); }catch(e){}
   try{ localStorage.removeItem('rc_wo_state'); }catch(e){}
   if(woState){
     woState.termine=true;
@@ -47143,6 +47271,8 @@ function launchWorkout(sessConfig,slotIdx){
   if(!sessConfig?.exercises?.length){toast('Aucun exercice dans cette séance.','var(--red)');return;}
   // APRÈS le garde : une séance avortée ne doit pas bloquer une mise à jour.
   _swSeance('SEANCE_EN_COURS');
+  // L'écran reste allumé pendant la séance (réglage ecranAllume).
+  try{ _woVerrouEcran(); }catch(e){}
   // « Première » déduit de l'historique réel, jamais d'un drapeau local : un
   // drapeau se perdrait au changement d'appareil et recompterait la même
   // première séance. Après le garde ci-dessus, pour ne pas compter un
@@ -49850,6 +49980,7 @@ function _renderProgExercisesInto(el){
 function startWorkout(){
   const prog=getProgram();
   if(!prog.exercises?.length){toast('Aucun programme défini.','var(--red)');return;}
+  try{ _woVerrouEcran(); }catch(e){}
   // Même raison qu'en tête de launchWorkout : woState est remplacé juste après,
   // et avec lui la seule référence à l'intervalle en cours.
   if(woState?.timerInterval) clearInterval(woState.timerInterval);
@@ -52148,6 +52279,7 @@ function finishWorkout(incomplete=false){
   // bloc par un objet neuf, qui ne porte pas le champ. Le cas légitime — une
   // seconde séance dans la même session — n’est donc pas touché.
   if(woState&&woState.termine) return;
+  try{ _woLibererEcran(); }catch(e){}
   // En PREMIER : si le reste échoue, le SW ne doit pas rester bloqué en
   // attente sur une séance qui, elle, est bel et bien finie.
   _swSeance('SEANCE_TERMINEE');

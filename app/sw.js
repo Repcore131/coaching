@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1732';
+const CACHE = 'repcore-v1733';
 // v1167 - inscription sans impasse, courbes lifestyle, pastilles chiffrees,
 // calendrier des bilans. Sans numero neuf, un appareil deja equipe garde
 // l'index.html du cache precedent et ne verrait rien de tout cela.
@@ -167,7 +167,7 @@ CORPS.push('./img/complements.webp');
 // ni code ni style — c'est-a-dire rien du tout.
 // Leur nom est tenu a jour par scripts/versionner_actifs.py, qui les renomme a
 // chaque build et reecrit cette ligne comme celle d'index.html.
-const ASSETS = ['./index.html', './rc-core.1732.js', './rc-style.1732.css',
+const ASSETS = ['./index.html', './rc-core.1733.js', './rc-style.1733.css',
   './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './vendor/rc-video.js',
   // LES DEUX COPIES FIGEES MP4. En cache des l installation : une seance se
@@ -833,6 +833,8 @@ self.addEventListener('notificationclick', e => {
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(ws => {
       const w = ws.find(c => c.url.startsWith(self.registration.scope));
       if (!w) return clients.openWindow(url);
+      // Le repos en cours : la séance est dans CETTE page ; la naviguer la rechargerait.
+      if (e.notification.tag === 'rc-repos') return w.focus();
       const cible = new URL(url, self.registration.scope).href;
       if (w.navigate && cible !== w.url && url !== './') {
         return w.focus().then(c => (c || w).navigate(cible)).catch(() => w.focus());

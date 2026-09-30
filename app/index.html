@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1732';
+window.RC_BUILD='1733';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-09-30';
@@ -457,7 +457,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1732.css">
+<link rel="stylesheet" href="./rc-style.1733.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -3314,6 +3314,22 @@ const COACH_PHOTO='icons/coach.jpg';
       </label>
     </div>
 
+    <!-- L'ÉCRAN ALLUMÉ PENDANT LA SÉANCE (Wake Lock). Activé par défaut : un
+         écran qui s'éteint pendant le repos gèle le minuteur, et la vibration
+         de fin n'arrive qu'au rallumage. État posé par _majSonReglages. -->
+    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:20px">
+      <label for="cr-ecran-case" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0">
+        <input type="checkbox" id="cr-ecran-case" onchange="basculerEcranAllume()" checked
+          style="width:18px;height:18px;accent-color:#E02020;flex-shrink:0;margin-top:2px;cursor:pointer">
+        <span style="flex:1;min-width:0">
+          <span style="display:block;font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Écran allumé pendant la séance</span>
+          <span style="display:block;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Le téléphone ne se met pas en veille pendant
+            l'entraînement : le minuteur de repos continue de tourner et vibre à la fin.</span>
+          <span id="cr-ecran-etat" style="display:block;font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;font-weight:800;margin-top:6px">Activé</span>
+        </span>
+      </label>
+    </div>
+
     <!-- L'ACCORD DE PARTAGE AVEC LE COACH (victoires, recap d'equipe,
          avant/apres) : _majConsentementCoachReglages. -->
     <div id="cr-partage-coach"></div>
@@ -5976,5 +5992,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1732.js"></script>
+<script src="./rc-core.1733.js"></script>
 </body></html>
