@@ -223,6 +223,20 @@
     // reste permis au coach a tout moment (detachement).
     "coachs": {
       "$coachKey": {
+        // LOT M1 : la marque du coach Pro. ECRITE par lui seul, et seulement Pro
+        // (la supprimer reste toujours permis). LUE par lui, et par ses athletes
+        // TANT QU IL EST PRO : sous Pro, la lecture est refusee et l app de
+        // l athlete revient au theme RepCore. Contraste et logo : verifies dans l app.
+        "marque": {
+          ".read": "auth != null && (auth.token.email.replace('.', ',') === $coachKey || (root.child('users').child(auth.token.email.replace('.', ',')).child('coachEmailKey').val() === $coachKey && (root.child('users').child($coachKey).child('coachPlan').val() === 'pro' || $coachKey === 'guellec,coachingpro@gmail,com')))",
+          ".write": "auth != null && auth.token.email.replace('.', ',') === $coachKey && (!newData.exists() || (root.child('users').child($coachKey).child('coachPlan').val() === 'pro' || $coachKey === 'guellec,coachingpro@gmail,com'))",
+          ".validate": "newData.hasChildren(['nom', 'couleur'])",
+          "nom": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 40" },
+          "couleur": { ".validate": "newData.isString() && newData.val().matches(/^#[0-9A-F]{6}$/)" },
+          "logoUrl": { ".validate": "newData.isString() && newData.val().length <= 500 && newData.val().beginsWith('https://res.cloudinary.com/')" },
+          "maj": { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "$autre": { ".validate": false }
+        },
         "clients": {
           ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
           "$athleteKey": {

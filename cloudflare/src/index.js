@@ -203,7 +203,8 @@ export default {
       // LES PAGES PUBLIQUES, AVEC LEUR APERÇU (/@<pseudo>, /coach/<slug>) :
       // firebase.json y redirige ; voir pages.js. Mises en cache 6 h.
       if ((req.method === 'GET' || req.method === 'HEAD') && (url.pathname.startsWith('/@') || url.pathname.startsWith('/coach/'))) {
-        const r = await servirPagePublique(req, { env, ctx });
+        // La vitrine d'un coach lit sa marque (lot M1) avec le compte de service.
+        const r = await servirPagePublique(req, { env, ctx, db: url.pathname.startsWith('/coach/') ? outils(env).db : null });
         if (r) return r;
       }
       if (url.pathname === '/sante') {

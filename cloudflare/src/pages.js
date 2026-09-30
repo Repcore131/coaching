@@ -27,6 +27,8 @@
 // statique (p/?u=, c/?s=), qui marche sans aperçu. Jamais une erreur 500
 // devant quelqu'un qui a cliqué un lien.
 
+import { marqueValide, initialesMarque } from './marque.js';
+
 export const ORIGINE = 'https://repcore-sync.web.app';
 export const IMAGE_DEFAUT = ORIGINE + '/og-image.png';
 export const CACHE_S = 6 * 3600;
@@ -134,6 +136,30 @@ export function injecterOg(html, o, type) {
   return s;
 }
 
+// ── LA MARQUE D'UN COACH PRO (lot M1) ────────────────────────────────────
+// Sa couleur (déjà rendue lisible par marqueValide) remplace le rouge de la
+// page, et son logo (ou ses initiales, si l'image ne vient pas) coiffe la
+// vitrine. Rien n'est lu si le coach n'est plus Pro : la page retombe sur
+// RepCore. Mis en cache comme le reste (6 h).
+export function injecterMarque(html, m) {
+  const s = String(html || '');
+  if (!m || !m.couleur || s.indexOf('</head>') < 0) return s;
+  const n = parseInt(m.couleur.slice(1), 16);
+  const rgba = 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',';
+  const style = '<style id="rc-marque">:root{--rouge:' + m.couleur + '}'
+    + '.equipe{color:' + m.couleur + '}.photo{border-color:' + m.couleur + ';box-shadow:0 0 0 4px ' + rgba + '.25),0 12px 30px rgba(0,0,0,.5)}'
+    + '.cta{box-shadow:0 10px 30px ' + rgba + '.35)}'
+    + '.rc-mq{display:flex;align-items:center;justify-content:center;gap:10px;padding:18px 18px 0;font-weight:800;letter-spacing:.5px}'
+    + '.rc-mq-l{position:relative;width:40px;height:40px;border-radius:10px;overflow:hidden;background:' + m.couleur + ';color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px}'
+    + '.rc-mq-l img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#0b0b0c}</style>';
+  const logo = '<span class="rc-mq-l" aria-hidden="true">' + esc(initialesMarque(m.nom))
+    + (m.logoUrl ? '<img src="' + esc(m.logoUrl) + '" alt="" onerror="this.remove()">' : '') + '</span>';
+  const bande = '<div class="rc-mq">' + logo + '<span>' + esc(m.nom) + '</span></div>';
+  let r = s.replace('</head>', style + '\n</head>');
+  r = r.replace(/<body([^>]*)>/i, (x) => x + '\n' + bande);
+  return r;
+}
+
 // ── Le service ────────────────────────────────────────────────────────────
 const _memoire = new Map();          // clé → {t, corps} (aperçus et gabarits)
 const MEMOIRE_MAX = 500;
@@ -209,7 +235,19 @@ export async function servirPagePublique(req, o) {
     return new Response(null, { status: 302, headers: { Location: statique(c) + url.search.replace(/^\?/, '&'), 'Cache-Control': 'no-store' } });
   }
   const og = c.type === 'coach' ? ogCoach(c.cle, fiche) : ogAthlete(c.cle, fiche);
-  const corps = injecterOg(html, og, c.type);
+  // LOT M1 : la marque d'un coach Pro, lue avec le compte de service (x.db) :
+  // coachs/<coach>/marque n'est pas publique, ni le palier du coach.
+  let marque = null;
+  if (c.type === 'coach' && x.db) {
+    try {
+      const k = (await x.db.ref('slugs/' + c.cle).get()).val();
+      if (k && typeof k === 'string') {
+        const [m, plan] = await Promise.all([x.db.ref('coachs/' + k + '/marque').get(), x.db.ref('users/' + k + '/coachPlan').get()]);
+        marque = marqueValide(m.val(), plan.val() || null, k);
+      }
+    } catch (e) { marque = null; }   // une marque illisible n'empêche pas la page
+  }
+  const corps = injecterMarque(injecterOg(html, og, c.type), marque);
   _poserMemoire(cle, corps, t);
   try {
     if (cache && x.ctx && typeof x.ctx.waitUntil === 'function')

@@ -2411,6 +2411,364 @@ function htmlPrefsAide(role,choix,maj,build,appareil){
     +'<p class="prf-maj">'+escapeHtml(texteMiseAJour(maj,build))+'</p>'
     +'</section>';
 }
+// ══ LOT M1 : LA MARQUE DU COACH PRO (30/09/2026) ═══════════════════════════
+//
+// Un coach de palier Pro (ou le créateur) habille l'app de SES athlètes : sa
+// couleur remplace l'accent rouge, son logo et son nom coiffent l'accueil et
+// le canal ; « Propulsé par RepCore » reste en petit dans les réglages.
+//
+//   coachs/<coach>/marque = {nom (≤ 40), couleur '#RRGGBB', logoUrl?, maj}
+//
+// ⚠ LE PALIER EST VÉRIFIÉ PAR LA BASE, pas par l'app : les règles refusent
+//   l'écriture à un coach qui n'est pas Pro, et la LECTURE à ses athlètes dès
+//   qu'il ne l'est plus. L'athlète reçoit alors un refus : la marque est
+//   retirée, le cache vidé, l'app redevient RepCore. Même chose si le lien
+//   au coach est rompu (plus de coachEmailKey) : rien n'est demandé.
+// ⚠ LA COULEUR EST REJUGÉE CHEZ L'ATHLÈTE (couleurAccessible) : une couleur
+//   illisible sur le fond sombre (contraste < 3:1) est remplacée par la plus
+//   proche qui passe, même si elle a été écrite par un autre chemin.
+// ⚠ SEULS LES TOKENS D'ACCENT CHANGENT (--red, --red2, --red-glow,
+//   --red-text, --red-bg, --glow-red, et --red-light qui dérive de --red).
+//   Les rouges écrits en dur dans la feuille de style restent rouges.
+// ⚠ HORS LIGNE : la dernière marque reçue (DB 'coach_marque') s'applique au
+//   lancement ; la réponse du réseau la confirme, la remplace ou la retire.
+
+// ── couleur:debut (le Worker en a la même copie : cloudflare/src/marque.js ;
+//    pages.test.mjs vérifie que les deux répondent pareil)
+// PURE. #RGB ou #RRGGBB (casse libre) → '#RRGGBB' en capitales, ou null.
+function hexMarque(v){
+  const s=String(v==null?'':v).trim();
+  let m=/^#?([0-9a-fA-F]{6})$/.exec(s);
+  if(m) return '#'+m[1].toUpperCase();
+  m=/^#?([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])$/.exec(s);
+  return m?('#'+m[1]+m[1]+m[2]+m[2]+m[3]+m[3]).toUpperCase():null;
+}
+function _mqRgb(h){ const n=parseInt(h.slice(1),16); return [(n>>16)&255,(n>>8)&255,n&255]; }
+function _mqHex(r,g,b){ return '#'+[r,g,b].map(x=>Math.max(0,Math.min(255,Math.round(x))).toString(16).padStart(2,'0')).join('').toUpperCase(); }
+// La luminance relative de WCAG 2.x.
+function luminanceRelative(hex){
+  const h=hexMarque(hex); if(!h) return null;
+  const c=_mqRgb(h).map(v=>{ v/=255; return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4); });
+  return 0.2126*c[0]+0.7152*c[1]+0.0722*c[2];
+}
+// PURE. Le rapport de contraste WCAG entre deux couleurs (1 à 21).
+function contrasteCouleurs(a,b){
+  const x=luminanceRelative(a), y=luminanceRelative(b);
+  if(x==null||y==null) return null;
+  return (Math.max(x,y)+0.05)/(Math.min(x,y)+0.05);
+}
+function _mqHsl(h){
+  const [r,g,b]=_mqRgb(h).map(v=>v/255);
+  const mx=Math.max(r,g,b), mn=Math.min(r,g,b), l=(mx+mn)/2;
+  if(mx===mn) return [0,0,l];
+  const d=mx-mn, s=l>0.5?d/(2-mx-mn):d/(mx+mn);
+  let t=mx===r?(g-b)/d+(g<b?6:0):mx===g?(b-r)/d+2:(r-g)/d+4;
+  return [t/6,s,l];
+}
+function _mqDeHsl(hh,s,l){
+  if(s===0) return _mqHex(l*255,l*255,l*255);
+  const q=l<0.5?l*(1+s):l+s-l*s, p=2*l-q;
+  const f=t=>{ if(t<0) t+=1; if(t>1) t-=1; return t<1/6?p+(q-p)*6*t:t<1/2?q:t<2/3?p+(q-p)*(2/3-t)*6:p; };
+  return _mqHex(f(hh+1/3)*255,f(hh)*255,f(hh-1/3)*255);
+}
+/**
+ * PURE. Une couleur est-elle lisible sur le fond (sombre par défaut, #080808,
+ * le --bg de l'app) avec un contraste d'au moins `min` (3:1 par défaut) ?
+ * Rend {ok, couleur, ratio, proposee}. Refusée, `proposee` est la plus
+ * proche qui passe : MÊME teinte, même saturation, la luminosité la plus
+ * proche de l'originale qui atteint le seuil (éclaircie sur un fond sombre,
+ * assombrie sur un fond clair).
+ */
+function couleurAccessible(hex,fond,min){
+  const c=hexMarque(hex), f=hexMarque(fond||'#080808')||'#080808', seuil=Number(min)||3;
+  if(!c) return {ok:false,couleur:null,ratio:null,proposee:null,raison:'format'};
+  const ratio=contrasteCouleurs(c,f);
+  if(ratio>=seuil) return {ok:true,couleur:c,ratio,proposee:null};
+  const [h,s,l]=_mqHsl(c);
+  const sombre=luminanceRelative(f)<0.5;
+  // Recherche par dichotomie du premier cran qui passe, entre la couleur et le blanc (ou le noir).
+  let bas=sombre?l:0, haut=sombre?1:l;
+  for(let i=0;i<30;i++){
+    const m=(bas+haut)/2;
+    const ok=contrasteCouleurs(_mqDeHsl(h,s,m),f)>=seuil;
+    if(sombre){ if(ok) haut=m; else bas=m; } else { if(ok) bas=m; else haut=m; }
+  }
+  let p=_mqDeHsl(h,s,sombre?haut:bas);
+  // L'arrondi à l'octet peut retomber d'un cheveu sous le seuil : un cran de plus.
+  for(let k=0;k<20&&contrasteCouleurs(p,f)<seuil;k++){ const x=_mqHsl(p); p=_mqDeHsl(x[0],x[1],Math.max(0,Math.min(1,x[2]+(sombre?0.004:-0.004)))); }
+  return {ok:false,couleur:c,ratio,proposee:p};
+}
+// ── couleur:fin
+
+const MARQUE_NOM_MAX=40, MARQUE_LOGO_KO=200, MARQUE_LOGO_PX=256;
+const MARQUE_FOND='#080808', MARQUE_FOND_CLAIR='#f4f4f4';
+const MARQUE_LOGO_RE=/^https:\/\/res\.cloudinary\.com\/[^\s"'<>]{1,460}$/;
+const MARQUE_CREATEUR='guellec,coachingpro@gmail,com';
+// PURE. La marque à appliquer, ou null (nom 1 à 40, couleur rendue lisible,
+// logo hébergé chez Cloudinary ou absent).
+function marqueValide(m){
+  if(!m||typeof m!=='object') return null;
+  const nom=String(m.nom||'').replace(/\s+/g,' ').trim();
+  if(!nom||nom.length>MARQUE_NOM_MAX) return null;
+  const c=couleurAccessible(m.couleur);
+  if(!c.couleur) return null;
+  return {nom,couleur:c.ok?c.couleur:c.proposee,logoUrl:MARQUE_LOGO_RE.test(String(m.logoUrl||''))?String(m.logoUrl):null};
+}
+// PURE. « Kévin Guellec Coaching » → « KG » ; rien de lisible → « RC ».
+function initialesMarque(nom){
+  const mots=String(nom||'').replace(/[^\p{L}\p{N}\s]/gu,' ').trim().split(/\s+/).filter(Boolean);
+  return mots.slice(0,2).map(w=>w[0]).join('').toUpperCase()||'RC';
+}
+// PURE. Mélange deux couleurs (t = part de b).
+function _mqMelange(a,b,t){
+  const x=_mqRgb(hexMarque(a)), y=_mqRgb(hexMarque(b));
+  return _mqHex(x[0]+(y[0]-x[0])*t,x[1]+(y[1]-x[1])*t,x[2]+(y[2]-x[2])*t);
+}
+// PURE. Les tokens d'accent, pour le thème sombre et le thème clair.
+function marqueTokens(couleur){
+  const c=hexMarque(couleur);
+  if(!c) return null;
+  const [r,g,b]=_mqRgb(c);
+  const texteSombre=couleurAccessible(c,MARQUE_FOND,4.5), texteClair=couleurAccessible(c,MARQUE_FOND_CLAIR,4.5);
+  // Le texte POSÉ SUR l'accent : blanc, ou presque noir si la couleur est claire (un jaune).
+  const sur=contrasteCouleurs('#FFFFFF',c)>=contrasteCouleurs('#0B0B0B',c)?'#FFFFFF':'#0B0B0B';
+  return {commun:{'--red':c,'--red2':_mqMelange(c,'#000000',0.18),'--red-glow':_mqMelange(c,'#FFFFFF',0.2),
+      '--glow-red':'0 0 18px rgba('+r+','+g+','+b+',.35)','--mq-sur':sur,
+      '--mq-sombre':_mqMelange(c,'#000000',0.45),'--mq-nuit':_mqMelange(c,'#000000',0.78)},
+    sombre:{'--red-text':texteSombre.ok?c:texteSombre.proposee,'--red-bg':_mqMelange(c,'#000000',0.94)},
+    clair:{'--red-text':texteClair.ok?c:texteClair.proposee,'--red-bg':_mqMelange(c,'#FFFFFF',0.9)}};
+}
+// PURE. La feuille qui surcharge ces tokens. Placée APRÈS rc-style : à
+// spécificité égale, elle gagne ; le thème clair a son propre bloc.
+function marqueCss(couleur){
+  const t=marqueTokens(couleur);
+  if(!t) return '';
+  const decl=o=>Object.keys(o).map(k=>k+':'+o[k]).join(';');
+  // LES COMPOSANTS LES PLUS VUS, dont le rouge est écrit en dur : le bouton
+  // principal, la carte « Séance du jour » (assombrie : son texte est blanc),
+  // « Défie un pote », le contour de l'avatar.
+  const M=':root[data-marque="coach"] ';
+  return ':root,:root[data-theme="clair"]{'+decl(t.commun)+'}'
+    +':root{'+decl(t.sombre)+'}'
+    +':root[data-theme="clair"]{'+decl(t.clair)+'}'
+    +M+'.btn-red,'+M+'.btn-red:hover{background:linear-gradient(160deg,var(--red),var(--red2));border-color:color-mix(in srgb,var(--red) 60%,transparent);color:var(--mq-sur)}'
+    +M+'.du-defier{background:linear-gradient(var(--red-glow),var(--red),var(--red2));color:var(--mq-sur)}'
+    +M+'.banner-hero{background:linear-gradient(145deg,var(--mq-sombre) 0%,var(--mq-nuit) 100%)}'
+    +M+'#clh-athlete-avatar{border-color:var(--red)}';
+}
+// PURE. Le logo, ou les initiales quand il manque ou ne se charge pas (l'image
+// posée PAR-DESSUS les initiales s'efface d'elle-même en cas d'erreur).
+function htmlMarqueLogo(m,classe){
+  if(!m) return '';
+  return '<span class="mq-logo'+(classe?' '+classe:'')+'" aria-hidden="true"><span class="mq-init">'+escapeHtml(initialesMarque(m.nom))+'</span>'
+    +(m.logoUrl?'<img src="'+escapeHtml(m.logoUrl)+'" alt="" onerror="this.remove()">':'')+'</span>';
+}
+// PURE. La bande de l'accueil et du canal.
+function htmlMarqueBande(m){
+  if(!m) return '';
+  return '<div class="mq-bande">'+htmlMarqueLogo(m)+'<span class="mq-nom">'+escapeHtml(m.nom)+'</span></div>';
+}
+
+// ── L'application chez l'athlète ─────────────────────────────────────────
+let _marqueActive=null;
+function marqueActive(){ return _marqueActive; }
+function _rendreMarqueEntetes(){
+  for(const id of ['clh-marque','canal-marque']){
+    const z=document.getElementById(id);
+    if(!z) continue;
+    z.innerHTML=htmlMarqueBande(_marqueActive);
+    z.hidden=!_marqueActive;
+  }
+}
+// Pose (ou retire, avec null) la marque : variables, attribut, en-têtes.
+function appliquerMarque(m){
+  const v=marqueValide(m);
+  const avant=document.getElementById('rc-marque');
+  if(avant) avant.remove();
+  if(!v){
+    _marqueActive=null;
+    document.documentElement.removeAttribute('data-marque');
+    _rendreMarqueEntetes();
+    return false;
+  }
+  const st=document.createElement('style');
+  st.id='rc-marque';
+  st.textContent=marqueCss(v.couleur);
+  document.head.appendChild(st);
+  document.documentElement.setAttribute('data-marque','coach');
+  _marqueActive=v;
+  _rendreMarqueEntetes();
+  return true;
+}
+function retirerMarque(){ return appliquerMarque(null); }
+function _marqueCache(){ try{ return DB.get('coach_marque')||null; }catch(e){ return null; } }
+function _marqueCacher(k,m){ try{ DB.set('coach_marque',{key:k,m:m||null,t:Date.now()}); }catch(e){} }
+// Au lancement de l'athlète : le cache d'abord (hors ligne compris), puis la base.
+async function chargerMarqueCoach(){
+  const u=(typeof currentUser!=='undefined')?currentUser:null;
+  if(!u||u.role==='coach'){ retirerMarque(); return null; }
+  const k=cleCoachDe(u);
+  // Athlète autonome, ou lien au coach rompu : RepCore, et le cache se vide.
+  if(!k){ if(_marqueCache()) _marqueCacher(null,null); retirerMarque(); return null; }
+  const c=_marqueCache();
+  if(c&&c.key===k&&c.m) appliquerMarque(c.m); else retirerMarque();
+  if(typeof navigator!=='undefined'&&navigator.onLine===false) return _marqueActive;
+  let r=null;
+  try{ r=await _fbJson('coachs/'+k+'/marque'); }catch(e){ r=null; }
+  if(r&&r.ok){ _marqueCacher(k,r.v||null); appliquerMarque(r.v||null); }
+  // Refus des règles : le coach n'est plus Pro, ou n'est plus le sien.
+  else if(r&&(r.st===401||r.st===403)){ _marqueCacher(k,null); retirerMarque(); }
+  // Réseau absent (st 0) : la marque du cache reste.
+  return _marqueActive;
+}
+
+// ── Le réglage, chez le coach ────────────────────────────────────────────
+// PURE. Le coach peut-il poser une marque ? (La base le vérifie aussi.)
+function coachMarqueOuvert(u){
+  return !!u&&(String(u.email||'').replace(/\./g,',')===MARQUE_CREATEUR||(u.role==='coach'&&'pro'===u.coachPlan));
+}
+let _mqEd=null;
+async function renderMarqueCoach(){
+  const z=document.getElementById('coach-marque');
+  if(!z||!currentUser||currentUser.role!=='coach') return false;
+  const E=escapeHtml;
+  const tete='<div class="mq-carte-t">Ta marque dans l’app de tes athlètes</div>';
+  if(!coachMarqueOuvert(currentUser)){
+    z.innerHTML='<div class="mq-carte">'+tete+'<div class="mq-carte-d">Avec le palier Pro, ta couleur et ton logo habillent l’app de tes athlètes, ta vitrine aussi.</div></div>';
+    return true;
+  }
+  if(!_mqEd){
+    _mqEd={nom:String(currentUser.teamName||((currentUser.fname||'')+' '+(currentUser.lname||'')).trim()||'').slice(0,MARQUE_NOM_MAX),
+      couleur:'#E02020',logoUrl:'',envoi:false,lu:false};
+    const cle=String(currentUser.email||'').replace(/\./g,',');
+    _fbJson('coachs/'+cle+'/marque').then(r=>{
+      if(!_mqEd) return;
+      _mqEd.lu=true;
+      if(r&&r.ok&&r.v){ _mqEd.nom=String(r.v.nom||_mqEd.nom); _mqEd.couleur=hexMarque(r.v.couleur)||_mqEd.couleur; _mqEd.logoUrl=String(r.v.logoUrl||''); _mqEd.existe=true; }
+      renderMarqueCoach();
+    }).catch(()=>{});
+  }
+  const e=_mqEd;
+  const aLogoProfil=/^data:image\//.test(String(currentUser.logo||''));
+  z.innerHTML='<div class="mq-carte">'+tete
+    +'<div class="mq-carte-d">Ta couleur remplace le rouge, ton logo et ton nom coiffent leur accueil et le canal. Ils la voient au prochain lancement.</div>'
+    +'<label class="mq-lab" for="mq-nom">Nom affiché</label>'
+    +'<input id="mq-nom" class="mq-champ" maxlength="40" value="'+E(e.nom)+'" oninput="mqChamp(\'nom\',this.value)">'
+    +'<label class="mq-lab" for="mq-hex">Couleur</label>'
+    +'<div class="mq-coul"><input type="color" id="mq-couleur" value="'+E((hexMarque(e.couleur)||'#E02020').toLowerCase())+'" oninput="mqChamp(\'couleur\',this.value)" aria-label="Choisir la couleur">'
+    +'<input id="mq-hex" class="mq-champ" maxlength="7" value="'+E(e.couleur)+'" oninput="mqChamp(\'couleur\',this.value)"></div>'
+    +'<div id="mq-verdict" class="mq-verdict"></div>'
+    +'<label class="mq-lab">Logo (carré, 200 Ko au plus)</label>'
+    +'<div class="mq-logo-l"><div id="mq-logo-apercu"></div><div style="flex:1;min-width:0">'
+      +'<label class="btn btn-outline btn-sm mq-b">'+(e.envoi?'Envoi…':'Choisir une image')+'<input type="file" accept="image/*" style="display:none" onchange="mqLogoFichier(this)"></label>'
+      +(aLogoProfil?'<button type="button" class="mq-lien" onclick="mqLogoProfil()">Reprendre le logo de mon profil</button>':'')
+      +(e.logoUrl?'<button type="button" class="mq-lien" onclick="mqChamp(\'logoUrl\',\'\');renderMarqueCoach()">Sans logo (initiales)</button>':'')
+    +'</div></div>'
+    +'<div class="mq-lab">Aperçu</div><div id="mq-apercu" class="mq-apercu"></div>'
+    +'<div style="display:flex;gap:8px;margin-top:12px">'
+      +(e.existe?'<button type="button" class="btn btn-outline btn-sm" style="flex:1;margin:0" onclick="mqRetirer()">Retirer ma marque</button>':'')
+      +'<button type="button" class="btn btn-red btn-sm" style="flex:1;margin:0" onclick="mqEnregistrer()">Enregistrer ma marque</button></div>'
+    +'</div>';
+  _mqApercu();
+  return true;
+}
+// La saisie ne redessine que l'aperçu : réécrire les champs ferait perdre le clavier.
+function mqChamp(k,v){
+  if(!_mqEd) return;
+  _mqEd[k]=String(v==null?'':v);
+  if(k==='couleur'){
+    const h=hexMarque(v);
+    const a=document.getElementById('mq-couleur'), b=document.getElementById('mq-hex');
+    if(h&&a&&document.activeElement!==a) a.value=h.toLowerCase();
+    if(h&&b&&document.activeElement!==b) b.value=h;
+  }
+  _mqApercu();
+}
+function mqUtiliser(hex){ mqChamp('couleur',hex); const b=document.getElementById('mq-hex'); if(b) b.value=hex; const a=document.getElementById('mq-couleur'); if(a) a.value=hex.toLowerCase(); }
+function _mqApercu(){
+  const e=_mqEd; if(!e) return;
+  const c=couleurAccessible(e.couleur);
+  const v=document.getElementById('mq-verdict');
+  if(v) v.innerHTML=!c.couleur?'<span class="mq-ko">Écris une couleur au format #RRGGBB.</span>'
+    :c.ok?'<span class="mq-ok">Lisible sur le fond de l’app (contraste '+String(Math.round(c.ratio*10)/10).replace('.',',')+':1).</span>'
+    :'<span class="mq-ko">Trop sombre sur le fond de l’app (contraste '+String(Math.round(c.ratio*10)/10).replace('.',',')+':1, il en faut 3).</span> '
+      +'<button type="button" class="mq-lien" onclick="mqUtiliser('+_attrArg(c.proposee)+')">Utiliser '+escapeHtml(c.proposee)+', la plus proche lisible</button>';
+  const l=document.getElementById('mq-logo-apercu');
+  const m={nom:e.nom||'?',couleur:c.ok?c.couleur:(c.proposee||'#E02020'),logoUrl:e.logoUrl||null};
+  if(l){ l.innerHTML=htmlMarqueLogo(m,'mq-logo-grand'); l.style.setProperty('--mq-c',m.couleur); }
+  const a=document.getElementById('mq-apercu');
+  if(a) a.innerHTML='<div class="mq-apercu-fond" style="--mq-c:'+escapeHtml(m.couleur)+'">'+htmlMarqueBande(m)
+    +'<div class="mq-apercu-b">Commencer ma séance</div></div>';
+}
+// Un logo CARRÉ, 256 px, fond transparent, 200 Ko au plus (PNG, sinon WebP).
+function _mqLogoCarre(src){
+  return new Promise((ok,ko)=>{
+    const im=new Image();
+    im.onload=async()=>{
+      try{
+        for(const px of [MARQUE_LOGO_PX,192,128]){
+          const cv=document.createElement('canvas'); cv.width=cv.height=px;
+          const cx=cv.getContext('2d');
+          const k=Math.min(px/im.naturalWidth,px/im.naturalHeight);
+          const w=im.naturalWidth*k, h=im.naturalHeight*k;
+          cx.drawImage(im,(px-w)/2,(px-h)/2,w,h);
+          for(const [type,q] of [['image/png',1],['image/webp',0.92],['image/webp',0.8],['image/webp',0.65]]){
+            const b=await new Promise(r=>cv.toBlob(r,type,q));
+            if(b&&b.size<=MARQUE_LOGO_KO*1024) return ok(b);
+          }
+        }
+        ko(new Error('Logo trop lourd, même réduit'));
+      }catch(e){ ko(e); }
+    };
+    im.onerror=()=>ko(new Error('Image illisible'));
+    im.src=src;
+  });
+}
+async function _mqEnvoyerLogo(src){
+  if(!_mqEd) return false;
+  _mqEd.envoi=true; renderMarqueCoach();
+  try{
+    const b=await _mqLogoCarre(src);
+    const d=await phpUploadImage(b,'logo-'+Date.now(),'marque');
+    if(!d||!MARQUE_LOGO_RE.test(String(d.secure_url||''))) throw new Error('Envoi refusé');
+    _mqEd.logoUrl=String(d.secure_url);
+    toast('Logo prêt : pense à enregistrer ta marque','var(--green)');
+  }catch(e){ toast((e&&e.message)||'Envoi impossible','var(--orange)'); }
+  finally{ if(_mqEd){ _mqEd.envoi=false; renderMarqueCoach(); } }
+  return true;
+}
+function mqLogoFichier(input){
+  const f=input&&input.files&&input.files[0];
+  if(!f) return;
+  if(f.size>20*1024*1024){ toast('Image trop lourde (20 Mo au plus)','var(--orange)'); return; }
+  const url=URL.createObjectURL(f);
+  _mqEnvoyerLogo(url).finally(()=>URL.revokeObjectURL(url));
+}
+function mqLogoProfil(){ if(/^data:image\//.test(String(currentUser.logo||''))) _mqEnvoyerLogo(currentUser.logo); }
+async function mqEnregistrer(){
+  const e=_mqEd; if(!e) return false;
+  const nom=String(e.nom||'').replace(/\s+/g,' ').trim();
+  if(!nom||nom.length>MARQUE_NOM_MAX){ toast('Donne un nom de 1 à 40 caractères','var(--orange)'); return false; }
+  const c=couleurAccessible(e.couleur);
+  if(!c.couleur){ toast('Couleur au format #RRGGBB','var(--orange)'); return false; }
+  if(!c.ok){ toast('Couleur trop sombre : utilise '+c.proposee+' ou une plus claire','var(--orange)'); return false; }
+  const corps={nom,couleur:c.couleur,maj:Date.now()};
+  if(MARQUE_LOGO_RE.test(String(e.logoUrl||''))) corps.logoUrl=e.logoUrl;
+  const cle=String(currentUser.email||'').replace(/\./g,',');
+  const r=await _fbJson('coachs/'+cle+'/marque','PUT',corps);
+  if(r&&r.ok){ e.existe=true; toast('Ta marque est enregistrée : tes athlètes la verront au prochain lancement','var(--green)'); renderMarqueCoach(); return true; }
+  toast(r&&(r.st===401||r.st===403)?'Réservé au palier Pro':'Enregistrement impossible, réessaie','var(--orange)');
+  return false;
+}
+async function mqRetirer(){
+  if(!await rcConfirm('Retirer ta marque ?','Tes athlètes retrouvent l’app RepCore au prochain lancement.','Retirer')) return false;
+  const cle=String(currentUser.email||'').replace(/\./g,',');
+  const r=await _fbJson('coachs/'+cle+'/marque','DELETE');
+  if(r&&r.ok){ _mqEd=null; toast('Marque retirée','var(--green)'); renderMarqueCoach(); return true; }
+  toast('Retrait impossible, réessaie','var(--orange)');
+  return false;
+}
+
 function rendrePrefsAide(){
   const role=(currentUser&&currentUser.role==='coach')?'coach':'client';
   const z=document.getElementById(role==='coach'?'ct-prefs':'cr-prefs');
@@ -2418,6 +2776,8 @@ function rendrePrefsAide(){
   let ua='';
   try{ ua=navigator.userAgent||''; }catch(e){}
   z.innerHTML=htmlPrefsAide(role,themeChoisi(),window.RC_MAJ||'',window.RC_BUILD||'',ua);
+  // LOT M1 : l'app porte la marque du coach ; RepCore le dit, en petit.
+  if(role==='client'&&_marqueActive) z.insertAdjacentHTML('beforeend','<p class="mq-propulse">'+escapeHtml(_marqueActive.nom)+' · propulsé par RepCore</p>');
   return true;
 }
 function ouvrirReglagesAthlete(){
@@ -7447,6 +7807,9 @@ function routeUser(){
   // s'interposer. Meme delai, pour laisser l'ecran d'arrivee se peindre.
   setTimeout(_proposerReconsentement,600);
   if(window._pendingAthletePkg) setTimeout(_proposerImportAthlete,700);
+  // LOT M1 : un coach n'est jamais habillé ; un athlète prend la marque de son coach Pro.
+  if(currentUser.role==='coach'){ try{ retirerMarque(); }catch(e){} }
+  else { try{ chargerMarqueCoach().catch(()=>{}); }catch(e){} }
   if(currentUser.role==='coach'){loadCoachHome();
     // ?prospects=1 : la notification d'un nouveau contact (C6). Ici, dans la branche coach.
     if(window._pendingProspectsOpen){ window._pendingProspectsOpen=false; setTimeout(()=>{ try{ ouvrirProspects(); }catch(e){} },1000); }
@@ -117090,6 +117453,7 @@ function toastSync(localOk,promesse,succes,perdu){
 // quelqu’un dans le stockage d’un appareil partagé. Même geste que pour le
 // brouillon de bilan dans _comptesRemiseAZero.
 function silentLogout(){DB.del('session');currentUser=null;CLOUD.signOut();oublierBanque();
+  try{ retirerMarque(); }catch(e){}
   try{localStorage.removeItem('rc_wo_state');}catch(e){}}
 async function logout(){
   if(!await rcConfirm('Se déconnecter ?',null,'Se déconnecter')) return;
@@ -121432,6 +121796,8 @@ function loadMonetisationTab(){
   Object.keys(_IMG_VITRINE).forEach(id=>_apercuVitrine(id,u[_IMG_VITRINE[id][0]]||''));
   try{ _rendreLienVitrineCoach(); }catch(e){}
   try{ _rendreReglagesProspects(); }catch(e){}
+  // LOT M1 : la marque, réservée au palier Pro.
+  try{ _mqEd=null; renderMarqueCoach(); }catch(e){}
   const _dz=document.getElementById('coach-diplomes-liste');
   if(_dz){ _dz.innerHTML=''; (u.diplomes||[]).forEach(d=>ajouterDiplomeRow(d&&d.titre,d&&d.image)); }
   _chargerDispoCoach(u);

@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1701';
+window.RC_BUILD='1702';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-09-30';
@@ -457,7 +457,7 @@ if('serviceWorker' in navigator){
 <link rel="preload" href="./fonts/montserrat-var-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="./fonts/bebasneue-400-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preconnect" href="https://repcore-sync-default-rtdb.firebaseio.com" crossorigin>
-<link rel="stylesheet" href="./rc-style.1701.css">
+<link rel="stylesheet" href="./rc-style.1702.css">
 <script>
 // UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
 // n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
@@ -2024,6 +2024,8 @@ const COACH_PHOTO='icons/coach.jpg';
   <button type="button" onclick="_viderImageVitrine('coach-logo')" aria-label="Retirer l'image" style="flex:none;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);cursor:pointer">✕</button>
 </div>
 </div>
+<!-- LOT M1 : la marque dans l’app des athlètes (palier Pro), rendue par renderMarqueCoach. -->
+<div id="coach-marque"></div>
 <!-- CARTE PRO ET DIPLOMES. Facultatifs, et retirables : vider le champ
      retire le document du profil public a la sauvegarde suivante.
      Ce sont des documents personnels publies a tes athletes rattaches —
@@ -3327,6 +3329,8 @@ const COACH_PHOTO='icons/coach.jpg';
        « MON PROFIL » et le rendaient intouchable. Les .topbar l'ont depuis
        toujours ; celui-ci, ecrit en style en ligne, ne l'avait jamais eue.
        Signale par Kevin le 07/09/2026, capture a l'appui. -->
+  <!-- LOT M1 : la marque du coach Pro (logo ou initiales, nom), posée par appliquerMarque. -->
+  <div id="clh-marque" class="mq-zone" hidden></div>
   <div class="clh-tete">
     <div class="clh-profil" style="display:flex;align-items:center;gap:10px;cursor:pointer;flex:1;min-width:0" onclick="openAthleteProfile()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div id="clh-athlete-avatar" style="width:48px;height:48px;border-radius:var(--r-full);background:var(--surface-2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:24px;height:24px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
@@ -5491,6 +5495,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <span class="topbar-title">Canal</span>
     <span></span>
   </div>
+  <div id="canal-marque" class="mq-zone" hidden></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad"><div id="canal-fil"></div></div>
   </div>
@@ -5947,5 +5952,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1701.js"></script>
+<script src="./rc-core.1702.js"></script>
 </body></html>

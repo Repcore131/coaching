@@ -188,3 +188,60 @@ test('l’aperçu prend le rang recalculé par le serveur (/volts_publics)', asy
   assert.equal(og(h, 'og:title'), 'Julie · rang IMPULSION sur RepCore');
   assert.equal(og(h, 'og:image'), ORIGINE + '/app/img/rangs/rang_2-og.jpg');
 });
+
+// ── LOT M1 : la marque d'un coach Pro sur sa vitrine ──────────────────────
+import { couleurAccessible, contrasteCouleurs, marqueValide, initialesMarque } from '../src/marque.js';
+import { readdirSync } from 'node:fs';
+const faussePlace = (arbre) => ({ ref: (p) => ({ get: async () => ({ val: () => p.split('/').reduce((n, k) => (n == null ? null : n[k] ?? null), arbre) }) }) });
+const KG = 'kevin,g@t,fr';
+const arbreMarque = (plan, marque) => ({ slugs: { 'kevin-guellec': KG }, users: { [KG]: { coachPlan: plan } }, coachs: { [KG]: { marque } } });
+const MQ = { nom: 'KG Performance', couleur: '#2E7D32', logoUrl: 'https://res.cloudinary.com/dntu57ml/image/upload/v1/repcore/kg/marque/logo.png', maj: 1 };
+
+test('marque : un coach Pro colore sa vitrine et y pose son logo', async () => {
+  _viderMemoire();
+  const { f } = reseau({ vitrines: { 'kevin-guellec': { nom: 'Kévin Guellec' } } });
+  const h = await (await servirPagePublique(req('/coach/kevin-guellec'), { env: { FIREBASE_DB_URL: BASE }, fetchImpl: f, cache: null, db: faussePlace(arbreMarque('pro', MQ)) })).text();
+  assert.match(h, /<style id="rc-marque">:root\{--rouge:#2E7D32\}/);
+  assert.ok(h.indexOf('<style id="rc-marque">') < h.indexOf('</head>'));
+  assert.match(h, /<div class="rc-mq"><span class="rc-mq-l" aria-hidden="true">KP<img src="https:\/\/res\.cloudinary\.com\/[^"]+logo\.png" alt="" onerror="this\.remove\(\)"><\/span><span>KG Performance<\/span><\/div>/);
+  assert.equal(og(h, 'og:title'), 'Kévin Guellec : coaching sur RepCore', 'l’aperçu ne change pas');
+});
+
+test('marque : sous Pro, lien rompu ou marque absente, la vitrine reste RepCore', async () => {
+  const cas = [arbreMarque('coach', MQ), arbreMarque('pro', null), { slugs: {}, users: {}, coachs: {} }];
+  for (const a of cas) {
+    _viderMemoire();
+    const { f } = reseau({ vitrines: { 'kevin-guellec': { nom: 'Kévin Guellec' } } });
+    const h = await (await servirPagePublique(req('/coach/kevin-guellec'), { env: { FIREBASE_DB_URL: BASE }, fetchImpl: f, cache: null, db: faussePlace(a) })).text();
+    assert.doesNotMatch(h, /rc-marque|rc-mq/);
+  }
+  // Une base en panne ne casse pas la page.
+  _viderMemoire();
+  const { f } = reseau({ vitrines: { 'kevin-guellec': { nom: 'Kévin Guellec' } } });
+  const r = await servirPagePublique(req('/coach/kevin-guellec'), { env: { FIREBASE_DB_URL: BASE }, fetchImpl: f, cache: null,
+    db: { ref: () => ({ get: async () => { throw new Error('panne'); } }) } });
+  assert.equal(r.status, 200);
+});
+
+test('marque : couleur trop sombre remplacée par la plus proche lisible ; logo hors Cloudinary refusé ; initiales', () => {
+  const m = marqueValide(Object.assign({}, MQ, { couleur: '#000080', logoUrl: 'https://ailleurs.test/x.png' }), 'pro', KG);
+  assert.equal(m.couleur, '#3737FF');
+  assert.ok(contrasteCouleurs(m.couleur, '#080808') >= 3);
+  assert.equal(m.logoUrl, null);
+  assert.equal(marqueValide(MQ, 'coach', 'guellec,coachingpro@gmail,com').nom, 'KG Performance', 'le créateur passe toujours');
+  assert.equal(marqueValide(Object.assign({}, MQ, { nom: 'x'.repeat(41) }), 'pro', KG), null);
+  assert.equal(marqueValide(Object.assign({}, MQ, { couleur: 'rouge' }), 'pro', KG), null);
+  assert.equal(initialesMarque('Kévin Guellec Coaching'), 'KG');
+  assert.equal(initialesMarque('  '), 'RC');
+});
+
+test('marque : l’app et le Worker jugent une couleur exactement pareil', () => {
+  const app = readdirSync(new URL('app/', racine)).find((n) => /^rc-core\.\d+\.js$/.test(n));
+  const src = readFileSync(new URL('app/' + app, racine), 'utf8');
+  const a = src.indexOf('// ── couleur:debut'), b = src.indexOf('// ── couleur:fin');
+  assert.ok(a > 0 && b > a, 'les marqueurs de l’app ont disparu');
+  const ca = new Function(src.slice(a, b) + '\nreturn couleurAccessible;')();
+  for (const c of ['#E02020', '#000080', '#123', '#FFFFFF', '#1A1A1A', '#2E7D32', 'zz', '#7a1fa2', '#004d40'])
+    for (const [fond, min] of [['#080808', 3], ['#f4f4f4', 4.5]])
+      assert.deepEqual(ca(c, fond, min), couleurAccessible(c, fond, min), c + ' sur ' + fond);
+});

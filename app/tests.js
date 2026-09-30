@@ -49180,6 +49180,101 @@ async function testExercices(){
       const c=_fjCopier(t.entries,j,'matin');
       if(c[0].qty!==60||c[1].qty!==250||c[0].id===t.entries[0].id) return _echec('copie');
       return true;})());
+    // ── LOT M1 : LA MARQUE DU COACH PRO ──
+    const _MQ={nom:'KG Performance',couleur:'#2E7D32',logoUrl:'https://res.cloudinary.com/dntu57ml/image/upload/v1/kg/logo.png'};
+    ok('Marque : couleurAccessible refuse sous 3:1 sur le fond sombre et propose la plus proche lisible',(()=>{
+      const a=couleurAccessible('#E02020');
+      if(!a.ok||a.couleur!=='#E02020'||!(a.ratio>=3)) return _echec('le rouge RepCore : '+JSON.stringify(a));
+      const b=couleurAccessible('#000080');
+      if(b.ok||b.proposee!=='#3737FF') return _echec('bleu marine : '+JSON.stringify(b));
+      if(!(contrasteCouleurs(b.proposee,'#080808')>=3)) return _echec('la proposée ne passe pas');
+      // La PLUS PROCHE : un cran plus sombre, même teinte, et elle ne passe plus.
+      const h=_mqHsl(b.proposee), avant=_mqDeHsl(h[0],h[1],h[2]-0.01);
+      if(contrasteCouleurs(avant,'#080808')>=3) return _echec('une couleur plus proche passait : '+avant);
+      if(Math.abs(_mqHsl(b.proposee)[0]-_mqHsl('#000080')[0])>0.01) return _echec('la teinte a changé');
+      if(couleurAccessible('#123').proposee!=='#2F5F8E') return _echec('#RGB');
+      if(couleurAccessible('rouge').ok||couleurAccessible('rouge').raison!=='format') return _echec('format');
+      const c=couleurAccessible('#FFFFFF','#f4f4f4',4.5);
+      if(c.ok||!(contrasteCouleurs(c.proposee,'#f4f4f4')>=4.5)) return _echec('fond clair : '+JSON.stringify(c));
+      return Math.round(contrasteCouleurs('#FFFFFF','#000000'))===21?true:_echec('WCAG');})());
+    ok('Marque : appliquée, elle surcharge les tokens d’accent et coiffe l’accueil ; retirée, RepCore revient',(()=>{
+      const r0=getComputedStyle(document.documentElement).getPropertyValue('--red').trim();
+      try{
+        if(!appliquerMarque(_MQ)) return _echec('refusée');
+        const st=getComputedStyle(document.documentElement);
+        if(st.getPropertyValue('--red').trim().toUpperCase()!=='#2E7D32') return _echec('--red : '+st.getPropertyValue('--red'));
+        if(!st.getPropertyValue('--red-text').trim()||!st.getPropertyValue('--red2').trim()) return _echec('tokens dérivés');
+        if(document.documentElement.getAttribute('data-marque')!=='coach') return _echec('attribut');
+        const z=document.getElementById('clh-marque');
+        if(z&&(z.hidden||z.textContent.indexOf('KG Performance')<0)) return _echec('en-tête de l’accueil');
+        const k=document.getElementById('canal-marque');
+        if(k&&k.textContent.indexOf('KG Performance')<0) return _echec('en-tête du canal');
+        // Une couleur illisible écrite par un autre chemin est corrigée chez l'athlète.
+        appliquerMarque(Object.assign({},_MQ,{couleur:'#000080'}));
+        if(getComputedStyle(document.documentElement).getPropertyValue('--red').trim().toUpperCase()!=='#3737FF') return _echec('couleur non corrigée');
+        if(document.querySelectorAll('#rc-marque').length!==1) return _echec('deux feuilles de marque');
+        if(appliquerMarque({nom:'',couleur:'#2E7D32'})) return _echec('marque sans nom appliquée');
+        retirerMarque();
+        if(document.getElementById('rc-marque')) return _echec('la feuille reste');
+        if(getComputedStyle(document.documentElement).getPropertyValue('--red').trim()!==r0) return _echec('--red non rendu');
+        if(z&&!z.hidden) return _echec('l’en-tête reste');
+        return marqueActive()===null?true:_echec('état');
+      } finally { retirerMarque(); }})());
+    ok('Marque : sans logo, les initiales ; logo présent, posé par-dessus les initiales et retiré s’il ne charge pas',(()=>{
+      const a=htmlMarqueLogo({nom:'KG Performance',couleur:'#2E7D32',logoUrl:null});
+      if(a.indexOf('>KP<')<0||a.indexOf('<img')>=0) return _echec('sans logo : '+a);
+      const b=htmlMarqueLogo(marqueValide(_MQ));
+      if(b.indexOf('>KP<')<0||b.indexOf('onerror="this.remove()"')<0) return _echec('avec logo : '+b);
+      if(marqueValide(Object.assign({},_MQ,{logoUrl:'https://ailleurs.test/x.png'})).logoUrl!==null) return _echec('logo hors Cloudinary gardé');
+      if(initialesMarque('  ')!=='RC'||initialesMarque('Élan Coaching')!=='ÉC') return _echec('initiales');
+      return true;})());
+    okA('Marque : une image qui ne charge pas laisse les initiales visibles',async()=>{
+      const z=document.createElement('div');
+      z.innerHTML=htmlMarqueLogo({nom:'KG Performance',couleur:'#2E7D32',logoUrl:'data:image/png;base64,cassé'});
+      document.body.appendChild(z);
+      try{
+        for(let i=0;i<40&&z.querySelector('img');i++) await new Promise(r=>setTimeout(r,25));
+        if(z.querySelector('img')) return _echec('l’image cassée est restée');
+        return z.textContent.trim()==='KP'?true:_echec('initiales : '+z.textContent);
+      } finally { z.remove(); }});
+    okA('Marque : hors ligne le cache s’applique ; refus des règles ou athlète autonome, retour à RepCore',async()=>{
+      const svU=currentUser, svF=_fbJson, svC=localStorage.getItem('rc_coach_marque'), svOn=Object.getOwnPropertyDescriptor(navigator,'onLine');
+      let appels=0;
+      try{
+        currentUser={email:'mq@t.fr',role:'athlete',coachEmailKey:'kg@t,fr'};
+        localStorage.setItem('rc_coach_marque',JSON.stringify({key:'kg@t,fr',m:_MQ,t:1}));
+        Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>false});
+        _fbJson=async()=>{ appels++; return {ok:false,st:0,v:null}; };
+        await chargerMarqueCoach();
+        if(!marqueActive()||appels) return _echec('hors ligne : cache non appliqué ou réseau appelé');
+        if(svOn) Object.defineProperty(navigator,'onLine',svOn); else delete navigator.onLine;
+        // Le coach n'est plus Pro : la base refuse la lecture.
+        _fbJson=async()=>({ok:false,st:401,v:null});
+        await chargerMarqueCoach();
+        if(marqueActive()) return _echec('refus : la marque reste');
+        if(JSON.parse(localStorage.getItem('rc_coach_marque')).m!==null) return _echec('refus : le cache reste');
+        // Une nouvelle marque arrive.
+        _fbJson=async()=>({ok:true,st:200,v:_MQ});
+        await chargerMarqueCoach();
+        if(!marqueActive()) return _echec('marque reçue non appliquée');
+        // Une panne réseau garde la marque.
+        _fbJson=async()=>({ok:false,st:0,v:null});
+        await chargerMarqueCoach();
+        if(!marqueActive()) return _echec('panne : marque perdue');
+        // Lien rompu (athlète autonome) : rien n'est demandé, la marque tombe.
+        appels=0; _fbJson=async()=>{ appels++; return {ok:true,st:200,v:_MQ}; };
+        currentUser={email:'mq@t.fr',role:'athlete'};
+        await chargerMarqueCoach();
+        if(marqueActive()||appels) return _echec('autonome : marque ou appel');
+        // Un coach n'est jamais habillé.
+        currentUser={email:'kg@t.fr',role:'coach',coachPlan:'pro'};
+        await chargerMarqueCoach();
+        return marqueActive()===null&&coachMarqueOuvert(currentUser)&&!coachMarqueOuvert({email:'x@t.fr',role:'coach',coachPlan:'coach'})?true:_echec('coach');
+      } finally {
+        currentUser=svU; _fbJson=svF; retirerMarque();
+        if(svC==null) localStorage.removeItem('rc_coach_marque'); else localStorage.setItem('rc_coach_marque',svC);
+        if(svOn) Object.defineProperty(navigator,'onLine',svOn); else delete navigator.onLine;
+      }});
     // ── LOT G1 : GARMIN ──
     ok('Garmin : la fiche remplace les instructions par « Connecter Garmin » quand la connexion est ouverte',(()=>{
       if(htmlGarminFiche(null)!==''||htmlGarminFiche({dispo:false,lie:false})!=='') return _echec('fermé : les instructions doivent rester');
