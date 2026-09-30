@@ -89251,7 +89251,8 @@ function ciblesEnVigueur(u,jourISO){
 function ciblesAthlete(u){
   const per=_athPerso(u);
   const opts={};
-  if(per.objectif) opts.coef=objCoefDefaut(per.objectif);
+  // L'objectif choisi est la PHASE du calcul (coefficient ET g/kg), sauf phase du coach.
+  if(per.objectif){ opts.coef=objCoefDefaut(per.objectif); opts.objectif=per.objectif; }
   // ⚠ protGkg / lipGkg ET NON protGparKg / lipGparKg. Les deux noms coexistent
   // dans ce fichier : besoinsProposes lit `protGparKg`, cibleTableur lit
   // `protGkg`. Ces deux lignes passaient les noms de la PREMIERE a la SECONDE,
@@ -89278,8 +89279,10 @@ function ciblesAthlete(u){
   // lit a zero glucide, pas en chiffre rouge invente.
   const g=Math.max(0,Math.round((kcal-p*4-l*9)/4));
   return {kcal,p,l,g,protGkg:t.protGkg,lipGkg:t.lipGkg,
-          coef:per.objectif?objCoefDefaut(per.objectif):t.coef,
-          objectif:per.objectif||t.phase,delta:deltaKcalPartage(u),manque:[]};
+          // LE COEFFICIENT ET L'OBJECTIF REELLEMENT APPLIQUES (ceux du calcul) :
+          // une phase posee par le coach l'emporte sur le choix de l'athlete.
+          coef:t.coef,objectif:t.phase,objectifChoisi:per.objectif,
+          delta:deltaKcalPartage(u),manque:[]};
 }
 // Ecrit les cibles LA OU TOUT LE MONDE LES LIT : nutrition.macros.on/off.
 // Les deux journees recoivent la meme valeur — le cyclage ON/OFF est une
@@ -89333,7 +89336,7 @@ async function athObjectif(k){
     try{ gro=grossesseSuspend(currentUser); }catch(e){}
     if(tca){ toast(ATH_REFUS_DEFICIT_TCA,'var(--orange)'); return; }
     if(gro){ toast(GROSSESSE_REFUS_SECHE,'var(--orange)'); return; }
-    let t=null; try{ t=cibleTableur(currentUser,{coef:objCoefDefaut('seche'),appliquerPlancher:true}); }catch(e){ t=null; }
+    let t=null; try{ t=cibleTableur(currentUser,{coef:objCoefDefaut('seche'),objectif:'seche',appliquerPlancher:true}); }catch(e){ t=null; }
     const deficit=(t&&!(t.manque&&t.manque.length))?Math.round((t.avecSport||0)-(t.kcal||0)):0;
     if(deficit>0&&!await rcConfirm('La sèche pose un déficit d’environ '+deficit
       +' kcal par jour, sous ta dépense estimée de '+Math.round(t.avecSport)+' kcal.'
@@ -89348,7 +89351,9 @@ async function athObjectif(k){
   // aurait choisi « seche » et le tableau du coach serait reste sur le
   // maintien — deux ecrans, deux verites, sur la meme personne.
   const tb=currentUser.nutrition.tableur||{};
-  tb.coef=objCoefDefaut(k); tb.objectifAthlete=k;
+  // (tb.objectifAthlete n'avait aucun lecteur : il n'est plus écrit. La phase
+  // de l'athlète se lit dans nutrition.perso.objectif, voir cibleTableur.)
+  tb.coef=objCoefDefaut(k);
   currentUser.nutrition.tableur=tb;
   _athEcrireCibles(); loadNutrition();
 }
@@ -99538,8 +99543,22 @@ function cibleTableur(user,opts){
   const avecSport=horsSport+sport.jour;
 
   // ── Ligne 4 : le coefficient d'objectif ─────────────────────────────
-  const phase=(typeof phaseCourante==='function')
-    ? ((phaseCourante(u)||{}).type||'maintien') : 'maintien';
+  // ⚠ L'OBJECTIF DE L'ATHLETE DEVIENT LA PHASE QUAND LE COACH N'EN A POSE
+  //   AUCUNE (30/09/2026). Sans ces lignes, un athlete sans user.phase restait
+  //   en 'maintien' : coefPourPhase(0,85, 'maintien') rendait 1,00 et
+  //   protSuggeree 1,8 g/kg — « Sèche » ne changeait ni les kcal ni le g/kg.
+  //   L'objectif vient de opts.objectif, sinon de nutrition.perso.objectif
+  //   quand les cibles sont celles de l'athlete (origine 'athlete'). Une phase
+  //   posee par le coach gagne toujours : le choix de l'athlete est ignore.
+  const _phCoach=(typeof phaseCourante==='function')?phaseCourante(u):null;
+  const _objAth=(function(){
+    if(_phCoach) return null;
+    const ok=k=>ATH_OBJECTIFS.some(x=>x.k===k)?k:null;
+    if(o.objectif) return ok(o.objectif);
+    const nu=(u&&u.nutrition)||{};
+    return ((nu.macros||{}).origine==='athlete')?ok((nu.perso||{}).objectif):null;
+  })();
+  const phase=_phCoach?(_phCoach.type||'maintien'):(_objAth||'maintien');
   // ⚠ LE COEFFICIENT EST RAMENE A LA PHASE EN COURS. Sans cette ligne, celui
   //   d'une phase precedente pilotait encore le total pendant que le menu — qui
   //   ne le trouve pas dans son bareme — affichait sa premiere option. Voir

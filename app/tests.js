@@ -20939,6 +20939,35 @@ async function testExercices(){
     ok('T1 — calcSug n’existe plus : chargeSuivante est le seul moteur des charges proposées',typeof calcSug==='undefined');
     ok('T1 — la borne : répétitions + RIR ≤ 12',e1rmFiable(12,0)&&e1rmFiable(10,2)&&!e1rmFiable(10,3)&&!e1rmFiable(13,0)&&e1rmFiable(8,'')&&e1rmFiable(0,0));
     ok('e1rm sur charge nulle ou négative rend 0',e1rm(0,10,1)===0&&e1rm(-5,10,1)===0);
+    // ── L'OBJECTIF DE L'ATHLÈTE CHANGE VRAIMENT SES CIBLES ──
+    const _OBJa=(obj,o)=>Object.assign({id:'objA',email:'obja@t.fr',role:'athlete',gender:'H',_evol_gender:'H',
+      _evol_height:'180','init-age':30,sessions_config:[],
+      bilans:[{type:'debut',date:Date.now()-60*864e5,'deb-weight':'80','deb-height':'180','deb-age':'30','deb-gender':'Homme'}],
+      weightLog:[{date:localISODate(new Date()),kg:80}],
+      nutrition:{cycle:false,perso:{objectif:obj},macros:{origine:'athlete'}}},o||{});
+    ok('Objectif de l’athlète sans phase coach : sèche ×0,85 et 2,4 g/kg ; masse ×1,10 ; maintien ×1,00',(()=>{
+      for(const [obj,coef,prot] of [['seche',0.85,2.4],['masse',1.10,2.2],['maintien',1.00,1.8]]){
+        const u=_OBJa(obj);
+        const t=cibleTableur(u,{appliquerPlancher:false});
+        const c=ciblesAthlete(u);
+        if(!c||c.manque&&c.manque.length) return _echec(obj+' : '+JSON.stringify(c));
+        const attendu=Math.round(t.avecSport*coef);
+        if(Math.abs(c.kcal-attendu)>2) return _echec(obj+' : '+c.kcal+' kcal pour '+attendu+' (dépense '+t.avecSport+')');
+        if(c.protGkg!==prot) return _echec(obj+' : '+c.protGkg+' g/kg');
+        // Le coefficient renvoyé est celui du calcul.
+        if(c.coef!==coef||c.objectif!==obj) return _echec(obj+' : coef '+c.coef+', objectif '+c.objectif);
+      }
+      return _prodSrc().indexOf('tb.objectifAthlete=')<0?true:_echec('objectifAthlete encore écrit');})());
+    ok('Une phase posée par le coach gagne sur l’objectif de l’athlète (masse contre sèche)',(()=>{
+      const u=_OBJa('seche',{phase:{type:'masse',debut:Date.now()-14*864e5}});
+      const t=cibleTableur(u,{appliquerPlancher:false});
+      const c=ciblesAthlete(u);
+      if(!c||c.objectif!=='masse'||c.coef!==1.10) return _echec('objectif '+(c&&c.objectif)+', coef '+(c&&c.coef));
+      if(Math.abs(c.kcal-Math.round(t.avecSport*1.10))>2) return _echec('kcal '+c.kcal);
+      if(c.protGkg!==2.2) return _echec('g/kg '+c.protGkg);
+      // Et sans origine « athlete », l'objectif enregistré ne s'impose pas au calcul du coach.
+      const v=_OBJa('seche',{nutrition:{cycle:false,perso:{objectif:'seche'},macros:{origine:'tableur'}}});
+      return cibleTableur(v,{appliquerPlancher:false}).phase==='maintien'?true:_echec('origine coach : '+cibleTableur(v,{}).phase);})());
     // ── LE PLANCHER CALORIQUE, APPLIQUÉ CÔTÉ ATHLÈTE ──
     const _PLa=(o)=>Object.assign({id:'plA',email:'pla@t.fr',role:'athlete',gender:'F',_evol_gender:'F',
       _evol_height:'155','init-age':25,sessions_config:[],
