@@ -48433,7 +48433,9 @@ function _dessinerCarteRecord(record,fond,format,anim){
   const vrai=_recKg(r.curMax), anc=(Number(r.histMax)>0)?_recKg(r.histMax):'';
   const nouv=(anim&&anim.valeur!=null)?String(anim.valeur):vrai;
   const pct=_recPct(r);
-  const gainTxt=(Number(r.gain)>0?('+'+_recKg(r.gain)+' KG'):'')+(pct?('  ·  +'+pct+' %'):'');
+  // Un record d'assistance est une assistance RETIRÉE : pas de « + », pas de %.
+  const gainTxt=r.assiste?(Number(r.gain)>0?('−'+_recKg(r.gain)+' KG D’ASSISTANCE'):'')
+    :(Number(r.gain)>0?('+'+_recKg(r.gain)+' KG'):'')+(pct?('  ·  +'+pct+' %'):'');
 
   // ── LA MISE EN PAGE, CENTRÉE COMME CELLE DU BILAN ────────────────────
   // Le creux est transparent : centrer donne une image qu'on pose au milieu
@@ -48592,7 +48594,7 @@ function _dessinerCarteRecords(d,fond,format){
     // Le gain à gauche, sous le nom.
     const pct=_recPct(r);
     g.textAlign='left'; g.fillStyle='rgba(255,255,255,.9)'; g.font='800 32px '+MONT;
-    o.ecrireEspace('+'+_recKg(r.gain)+' KG'+(pct?(' · +'+pct+' %'):''),M,yy+150,2);
+    o.ecrireEspace(r.assiste?('−'+_recKg(r.gain)+' KG D’ASSISTANCE'):('+'+_recKg(r.gain)+' KG'+(pct?(' · +'+pct+' %'):'')),M,yy+150,2);
   });
   _recSignature(g,o,String((d&&d.signature)||''),H-(post?64:150),LARG);
   o.ombre(false);
@@ -50413,6 +50415,10 @@ function _blocExo(idx,estSS){
   const _abandon=!!prev&&_decote===null;
   const _rawSug=(prev&&!_abandon)?chargeSuivante(prev.weight,prev.rir,isCW,_decote,ex.name):null;
   const _sugBrut=_rawSug!=null&&_rawSug>0?_rawSug:null;
+  // AU POIDS DU CORPS SANS LEST (typeCharge) : on progresse en répétitions.
+  // +1 quand la dernière série laissait plus de réserve que le RIR visé.
+  const _prevPdc=(!prev&&typeCharge(_exPourCharge(ex.name,currentUser))==='poids_corps')?_prevSeriePoidsCorps(ex.name,woState.slot,woState.progName):null;
+  const _sugReps=_prevPdc?repsSuivantes(_perfReps(_prevPdc),_prevPdc.rir,_rirPrescrit(ex)):null;
   // isFemale ne garde plus l'ajustement ni le bandeau : currentCycle ne vaut
   // autre chose que 'ignore' QUE si l'athlète a répondu au modal de phase, et
   // ce modal ne s'ouvre QUE sur cycleSuivi === 'actif'. Le test de genre était
@@ -50492,6 +50498,12 @@ function _blocExo(idx,estSS){
         <div class="s-note">${isCW?'Contrepoids : un RIR élevé fait diminuer la charge. ':''}${prev?'Basée sur '+escapeHtml(creneauRef)+' ('+prev.weight+'kg'+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):', RIR non noté')+')':'Première séance'}</div>
         ${_decote<1?`<div class="s-note" style="margin-top:6px">Ta dernière séance de ${escapeHtml(ex.name)} date du ${_libDateRef(prev._refDate)}. On repart ${Math.round((1-_decote)*100)} % en dessous, le temps de te retrouver.<div style="color:var(--text-dim);margin-top:4px">${SUG_NOTE_REPERE}</div></div>`:''}
         ${sugAjustee?`<div class="s-note" style="color:var(--cycle-accent);margin-top:6px">Ajustée de ${Math.round((1-_facteurCycle)*100)} % pour ta phase de cycle : ${_sugBrut}kg d'habitude, ${sugAjustee}kg aujourd'hui.</div>`:''}
+      </div>`:
+      _sugReps?`<div class="suggest-box sug-reps">
+        <div style="display:flex;gap:20px;align-items:flex-end;margin:2px 0 6px">
+          <div><div style="font-size:var(--fs-2xl);font-weight:900;line-height:1">${_sugReps.reps} reps</div><div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">Au poids du corps : progresser = une répétition de plus</div></div>
+        </div>
+        <div class="s-note">Basée sur ${escapeHtml(creneauRef)} (${_perfReps(_prevPdc)} reps${_sugReps.rir!=null?' à RIR '+_sugReps.rir:', RIR non noté'})${_sugReps.monte?' : il te restait de la réserve, vise une de plus.':' : garde le même nombre, et vise le RIR prévu.'}</div>
       </div>`:
       // Pas d'historique SUR CE CRÉNEAU. On le dit, au lieu de laisser un vide
       // inexpliqué — et surtout au lieu de proposer la charge d'un autre jour,
@@ -52893,9 +52905,11 @@ function perfExercice(sess,exNom,user){
   const d=_dataDeSeance(sess,exNom);
   if(!d||!Array.isArray(d.sets)) return null;
   let score=0, metrique=null, vus={}, retenues=0, sansRir=0;
+  // LA CHARGE EFFECTIVE (typeCharge) : le poids du corps, le lest, l'assistance.
+  const _ex=_exPourCharge(exNom,user);
   for(const s of d.sets){
     if(!s||s.done!==true) continue;
-    const w=parseFloat(s.weight);
+    const w=chargeEffective(s,_ex,user);
     if(!(w>0)) continue;
     // Un essai raté (0 répétition) n'est pas une mesure : il ne devient pas le
     // meilleur score (même règle que recordsExercice).
@@ -62017,7 +62031,7 @@ function _messageFinSeance(sets,setsPlanned,duration,records,delta,jour,incomple
     :(n+' séries sur '+p+', '+m+' min. ');
   if(records&&records.length){
     const b=records.slice().sort((a,x)=>x.gain-a.gain)[0];
-    return tete+'Record : '+b.nm+' à '+b.curMax+' kg.';
+    return tete+'Record : '+b.nm+(b.assiste?', assistance ramenée à '+b.curMax+' kg.':' à '+b.curMax+' kg.');
   }
   if(Number(delta)>0) return tete+'+'+Math.round(delta)+' kg de volume sur ta séance du '+(jour||'dernière fois')+'.';
   if(p>0&&n===p) return tete+'Séance complète.';
@@ -62730,7 +62744,7 @@ function achievementEngine(ctx){
     if(rec.length>=2) pose('MULTIPLE_RECORDS',{valeur:rec.length});
     // Un palier est un multiple de 10 kg franchi pour la premiere fois : 97 ->
     // 102 en est un, 101 -> 104 n'en est pas.
-    const palier=rec.find(r=>Math.floor(r.curMax/10)>Math.floor((r.histMax||0)/10));
+    const palier=rec.find(r=>!r.assiste&&Math.floor(r.curMax/10)>Math.floor((r.histMax||0)/10));
     if(palier) pose('NEW_LOAD',{exercice:palier.nm,valeur:Math.floor(palier.curMax/10)*10});
   }
   // PERSONAL BEST : la meilleure e1RM historique battue, SUR UN EXERCICE DONT
@@ -63100,6 +63114,16 @@ function recordsDeSeance(sc,anterieures){
   const data=(sc&&sc.data&&typeof sc.data==='object')?sc.data:{};
   for(const nm of Object.keys(data)){
     const sets=((data[nm]||{}).sets)||[];
+    // ASSISTÉ : le record est une assistance PLUS FAIBLE. Une assistance plus
+    // lourde n'est jamais fêtée.
+    if(typeCharge({name:nm})==='assiste'){
+      const minA=l=>{ let m=0; for(const st of (l||[])){ if(!st||st.done!==true||!(_perfReps(st)>0)) continue; const w=parseFloat(st.weight)||0; if(w>0&&(!m||w<m)) m=w; } return m; };
+      const cur=minA(sets); if(!cur) continue;
+      let hist=0;
+      for(const p of (anterieures||[])){ let d=null; try{ d=_dataDeSeance(p,nm); }catch(e){ d=null; } const v=minA(d&&d.sets); if(v&&(!hist||v<hist)) hist=v; }
+      if(hist>0&&cur<hist) out.push({nm,curMax:cur,histMax:hist,gain:hist-cur,assiste:true});
+      continue;
+    }
     let cur=0;
     for(const st of sets){
       if(!st||st.done!==true) continue;
@@ -63129,11 +63153,11 @@ function recordsDeSeance(sc,anterieures){
 // charge (recordsDeSeance ne le voit pas), mais c'est la meilleure
 // performance jamais faite sur l'exercice.
 function e1rmRecordsDeSeance(sc,anterieures,user){
-  const best=sets=>{
+  const best=(sets,ex)=>{
     let v=0;
     for(const st of (sets||[])){
       if(!st||st.done!==true) continue;
-      const w=parseFloat(st.weight)||0, r=_perfReps(st);
+      const w=chargeEffective(st,ex,user)||0, r=_perfReps(st);
       if(!(w>0)||!(r>0)||!e1rmFiable(r,_perfRir(st,user))) continue;
       let x=0; try{ x=e1rm(w,r,_perfRir(st,user)); }catch(e){ x=0; }
       if(x>v) v=x;
@@ -63143,12 +63167,13 @@ function e1rmRecordsDeSeance(sc,anterieures,user){
   const out=[];
   const data=(sc&&sc.data&&typeof sc.data==='object')?sc.data:{};
   for(const nm of Object.keys(data)){
-    const cur=best((data[nm]||{}).sets);
+    const _ex=_exPourCharge(nm,user);
+    const cur=best((data[nm]||{}).sets,_ex);
     if(!(cur>0)) continue;
     let hist=0;
     for(const p of (anterieures||[])){
       let d=null; try{ d=_dataDeSeance(p,nm); }catch(e){ d=null; }
-      const v=best(d&&d.sets); if(v>hist) hist=v;
+      const v=best(d&&d.sets,_ex); if(v>hist) hist=v;
     }
     if(hist>0&&cur>hist) out.push({nm,avant:Math.round(hist*10)/10,apres:Math.round(cur*10)/10});
   }
@@ -67786,12 +67811,113 @@ function updateStreak(){
   if(_jk&&_jk.sauve){ try{ toast('🛡 '+streakMessageJoker(_jk),'var(--green)',5000); }catch(e){} }
 }
 function roundWeight(w){return w<20?Math.ceil(w/1.25)*1.25:Math.round(w/2.5)*2.5;}
-// Détecte les exercices à contrepoids (DIPS/TRACTIONS assistés ou guidés)
-// Sur ces machines: progression = MOINS de charge (moins d'assistance)
+// ══ LE TYPE DE CHARGE D'UN EXERCICE (30/09/2026) ═══════════════════════════
+//
+// Une traction ne se charge pas comme un développé couché. Cinq cas :
+//   externe      la charge saisie est ce qui est soulevé (le cas d'avant) ;
+//   poids_corps  le corps est la charge (tractions, dips, pompes…) ; un poids
+//                saisi y est un lest ;
+//   leste        le nom le dit (« lesté ») : poids du corps + lest ;
+//   assiste      machine à contrepoids : la charge saisie est l'ASSISTANCE,
+//                progresser veut dire en retirer ;
+//   elastique    au poids du corps, aidé d'un élastique qu'on ne mesure pas.
+// Le coach peut le poser (ex.typeCharge) ; sinon il se lit dans le nom.
+//
+// ⚠ SANS POIDS DE CORPS CONNU, pas de charge effective (null) : aucun e1RM
+//   n'est calculé, mais les séries comptent dans le VOLUME (serieEligible).
+// ⚠ LE POIDS DE CORPS EST L'ACTUEL (poidsCorpsActuel), appliqué à tout
+//   l'historique : c'est la seule valeur mesurée qu'on ait à chaque séance.
+const TYPES_CHARGE=Object.freeze(['externe','poids_corps','leste','assiste','elastique']);
+function _nomCharge(nom){
+  return String(nom||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+}
+// Les mouvements au poids du corps (EX_GUIDE_BRUT, et le groupe 'AUCUN' de
+// EX_MATERIEL_MOTS). Une machine, une poulie ou une barre guidée les chargent :
+// « DIPS MACHINE » est une charge externe.
+const _RE_POIDS_CORPS=/\btractions?\b|\bpull ?ups?\b|\bchin ?ups?\b|\bdips?\b|\bpompes?\b|\bpush ?ups?\b|\bnordic\b|\bpistol\b|\bmuscle ?ups?\b|\bpike\b|\bhandstand\b|\breleves? de (genoux|jambes)\b|\bgainage\b|\bplanche\b|\bplank\b|\bburpees?\b|\bsuperman\b|\bmontee de genoux\b|\bjumping jack\b|\bfire hydrant\b|\bchaise\b|\bau sol\b/;
+function _estPoidsCorpsNom(n){
+  if(/\bmachine\b|\bpoulie\b|\bcable\b|\bsmith\b/.test(n)) return false;
+  return _RE_POIDS_CORPS.test(n);
+}
+/** PURE. 'externe' | 'poids_corps' | 'leste' | 'assiste' | 'elastique'. */
+function typeCharge(ex){
+  if(ex&&TYPES_CHARGE.indexOf(ex.typeCharge)>=0) return ex.typeCharge;
+  const n=_nomCharge(ex&&ex.name);
+  if(!n) return 'externe';
+  if(/\b(assiste|guide)e?s?\b/.test(n)&&/\b(traction|dips?|pull)/.test(n)) return 'assiste';
+  const pdc=_estPoidsCorpsNom(n);
+  if(/elastique|\bband/.test(n)&&pdc) return 'elastique';
+  if(/\blest/.test(n)) return 'leste';
+  return pdc?'poids_corps':'externe';
+}
+/** PURE. La part du poids de corps soulevée, ou null quand on ne la connaît pas. */
+function coefPoidsCorps(nom){
+  const n=_nomCharge(nom);
+  if(/\bpompes?\b|\bpush ?ups?\b/.test(n)) return /\binclinee?s?\b/.test(n)?0.5:0.65;
+  if(/\btractions?\b|\bpull ?ups?\b|\bchin ?ups?\b|\bdips?\b|\bmuscle ?ups?\b/.test(n)) return 1;
+  return null;
+}
+/**
+ * PURE (le dossier est lu). La charge réellement déplacée par une série, en
+ * kg, ou null quand on ne peut pas la dire (pas de poids de corps, ou un
+ * mouvement dont on ne connaît pas la part de corps soulevée).
+ */
+function chargeEffective(set,ex,user){
+  const t=typeCharge(ex);
+  const w=Math.max(0,parseFloat(set&&set.weight)||0);
+  if(t==='externe') return w>0?w:null;
+  let pc=null; try{ pc=poidsCorpsActuel(user); }catch(e){ pc=null; }
+  if(!(pc>0)) return null;
+  const k=coefPoidsCorps(ex&&ex.name);
+  if(t==='poids_corps') return k==null?null:pc*k+w;
+  if(t==='leste') return pc*(k==null?1:k)+w;
+  if(t==='assiste') return Math.max(0,pc-w);
+  if(t==='elastique') return pc*(k==null?1:k);
+  return null;
+}
+// L'exercice tel que le coach l'a posé (son typeCharge), retrouvé par son
+// nom dans le programme ; le nom seul sinon.
+function _exPourCharge(nom,user){
+  const ex={name:nom};
+  try{
+    const k=exKey(nom);
+    for(const c of ((user&&user.sessions_config)||[])){
+      const l=c&&c.exercises; if(!l) continue;
+      for(const e of (Array.isArray(l)?l:Object.values(l)))
+        if(e&&e.typeCharge&&TYPES_CHARGE.indexOf(e.typeCharge)>=0&&exKey(e.name)===k){ ex.typeCharge=e.typeCharge; return ex; }
+    }
+  }catch(e){}
+  return ex;
+}
+// Détecte les exercices à contrepoids (DIPS/TRACTIONS assistés ou guidés).
+// Sur ces machines : progression = MOINS de charge (moins d'assistance).
 function isCounterweightEx(name){
   if(!name) return false;
-  const n=name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
-  return /(dips?|traction[s]?)\s+(assiste[es]?|guide[es]?)/i.test(n);
+  return typeCharge({name})==='assiste';
+}
+// ── Au poids du corps, on progresse en répétitions ─────────────────────
+// PURE. Les répétitions à viser : +1 si la dernière série laissait plus de
+// réserve que la cible, les mêmes sinon. null sans répétitions connues.
+function repsSuivantes(reps,rir,cible){
+  const r=Math.round(parseFloat(reps));
+  if(!(r>0)) return null;
+  const i=(rir==='echec')?0:parseInt(rir,10);
+  const c=parseInt(cible,10);
+  const vise=isFinite(c)?c:2;
+  return {reps:(isFinite(i)&&i>vise)?r+1:r,monte:isFinite(i)&&i>vise,rir:isFinite(i)?i:null};
+}
+// La dernière série faite de cet exercice sur ce créneau, au poids du corps
+// (sans lest) : ses répétitions et son RIR.
+function _prevSeriePoidsCorps(name,slot,progName){
+  const l=(currentUser&&currentUser.sessions)||[];
+  for(let i=l.length-1;i>=0;i--){
+    const sess=l[i]; if(!sess||!sess.data) continue;
+    if(!_memeCreneau(sess,slot,progName)) continue;
+    const d=_dataDeSeance(sess,name); if(!d||!Array.isArray(d.sets)) continue;
+    const done=d.sets.filter(s=>s&&s.done&&!(parseFloat(s.weight)>0)&&_perfReps(s)>0);
+    if(done.length) return Object.assign({},done[done.length-1],{_refDate:_dateRefSeance(sess)});
+  }
+  return null;
 }
 // calcSug a été SUPPRIMÉE (lot T1) : aucun appelant, et une seconde façon de
 // proposer une charge, qui divergeait de chargeSuivante.
@@ -68181,10 +68307,14 @@ function poidsRole(m,ex,user){
 // (phase 1 + phase 2) compte 1 et non 2 : dans sess.data, un objet de sets EST
 // une série, et le weight2/p2reps d'une dégressive vit dans ce même objet.
 // La convention est donc tenue par la structure, sans code dédié.
+// AU POIDS DU CORPS (typeCharge), une série faite compte sans charge saisie :
+// des tractions à vide sont des tractions.
 function serieEligible(s,ex){
   if(!s||s.done!==true) return false;
-  if(!(parseFloat(s.weight)>0)) return false;
-  return !isCardio(ex);
+  if(isCardio(ex)) return false;
+  if(parseFloat(s.weight)>0) return true;
+  const t=typeCharge(ex);
+  return t==='poids_corps'||t==='assiste'||t==='elastique';
 }
 function serieDure(s,m,ex,user){
   if(!serieEligible(s,ex)) return 0;
@@ -68754,6 +68884,11 @@ function maxE1rmObserve(user,nomEx,maintenant){
   const u=_dossier(user);
   const l=(u&&Array.isArray(u.sessions))?u.sessions:[];
   if(!l.length||!nomEx) return null;
+  // Ce maximum sert à PRESCRIRE une charge en kg (consigneProgEx) : il n'a de
+  // sens que pour une charge externe. Au poids du corps, lesté ou assisté, la
+  // charge effective n'est pas ce qu'on met sur la barre.
+  const _ex=_exPourCharge(nomEx,u);
+  if(typeCharge(_ex)!=='externe') return null;
   const t=(maintenant instanceof Date)?maintenant.getTime()
     :Number(maintenant==null?Date.now():maintenant);
   const limite=(isFinite(t)?t:Date.now())-PROG_EX_OBS_JOURS*86400000;
@@ -68769,7 +68904,7 @@ function maxE1rmObserve(user,nomEx,maintenant){
     if(!dd||!Array.isArray(dd.sets)) continue;
     for(const se of dd.sets){
       if(!se||se.done!==true) continue;
-      const w=parseFloat(se.weight); if(!(w>0)) continue;
+      const w=chargeEffective(se,_ex,user); if(!(w>0)) continue;
       const r=_perfReps(se);
       // Au-dela de douze repetitions l'e1RM n'est plus fiable : la meme borne
       // que partout ailleurs dans ce fichier, et pour la meme raison.
@@ -69102,6 +69237,8 @@ function _volumeSeance(sess,user){
     // d'un import le faisait lever.
     const r0=d.sets[0].reps;
     const ex={name:nom,reps:(r0==null?r0:String(r0)),methode:d.methode,technique:d.technique};
+    // Le type de charge posé par le coach, s'il y en a un (sinon le nom décide).
+    try{ const _tc=_exPourCharge(nom,user).typeCharge; if(_tc) ex.typeCharge=_tc; }catch(e){}
     const cardio=isCardio(ex);
     const cls=cardio?VOL_CARDIO:resoudreMusclesLecture(nom,ex,user);
     let elig=0,sansRir=0;
@@ -82490,14 +82627,16 @@ function carteMouvementDe(nom){
   return m?m.cle:null;
 }
 // Les séries faites d'une séance : [{nom, kg, reps, rir}].
-function _carteSeries(s){
+function _carteSeries(s,u){
   const out=[];
   const exos=(s&&s.data&&typeof s.data==='object'&&Object.keys(s.data).length)
     ?Object.keys(s.data).map(nm=>({nom:nm,sets:((s.data[nm]||{}).sets)||[]}))
     :((s&&s.exercises)||[]).filter(e=>e&&(e.name||e.nm)).map(e=>({nom:e.name||e.nm,sets:e.sets||[]}));
   for(const e of exos) for(const st of (e.sets||[])){
     if(!st||st.done===false) continue;
-    out.push({nom:e.nom,kg:parseFloat(st.weight)||0,reps:parseFloat(st.reps)||0,rir:parseFloat(st.rir)||0});
+    // eff : la charge effective (typeCharge), quand le dossier est donné.
+    let eff=null; try{ eff=u?chargeEffective(st,_exPourCharge(e.nom,u),u):(parseFloat(st.weight)||null); }catch(er){ eff=null; }
+    out.push({nom:e.nom,kg:parseFloat(st.weight)||0,eff,reps:parseFloat(st.reps)||0,rir:parseFloat(st.rir)||0});
   }
   return out;
 }
@@ -82521,14 +82660,14 @@ function noteAthlete(u,maintenant){
   const meilleur={}, moitie={};
   let series=0, minutes=0;
   for(const s of ses){
-    const l=_carteSeries(s);
+    const l=_carteSeries(s,u);
     series+=l.length;
     const d=Number(s.duration);
     minutes+=(d>0&&d<600)?d:l.length*3;
     const h=s.date<milieu?0:1;
     for(const x of l){
-      if(!(x.kg>0)||!(x.reps>=1)||!e1rmFiable(x.reps,x.rir)) continue;
-      const e=e1rm(x.kg,x.reps,x.rir);
+      if(!(x.eff>0)||!(x.reps>=1)||!e1rmFiable(x.reps,x.rir)) continue;
+      const e=e1rm(x.eff,x.reps,x.rir);
       let k=x.nom; try{ k=resoudreAlias(exKey(x.nom)); }catch(er){}
       if(!meilleur[k]||e>meilleur[k].e) meilleur[k]={e,nom:x.nom};
       (moitie[k]=moitie[k]||[0,0]);
@@ -85298,24 +85437,35 @@ function recordsExercice(user,nomEx){
   const cle=(user.email||'?')+'|'+exKey(nomEx)+'|records';
   if(_cachePlateau[cle]) return _cachePlateau[cle];
   let mc=null, me=null;
-  for(const pt of _serieRecords(user,nomEx)){
+  const _ex=_exPourCharge(nomEx,user), _t=typeCharge(_ex);
+  // ASSISTÉ : le record est l'assistance la plus FAIBLE, et à assistance égale
+  // le plus de répétitions (c'est tout ce qu'on sait sans poids de corps).
+  // Toutes les séances sont lues : sans poids de corps, perfExercice n'y voit rien.
+  const _pts=_t==='assiste'
+    ?((user.sessions)||[]).filter(x=>x&&x.date&&!x.deload).map(x=>{ const nom=_nomDansSeance(x,nomEx,user); return nom?{date:x.date,nom,sess:x,sansRirDominant:false}:null; }).filter(Boolean)
+    :_serieRecords(user,nomEx);
+  for(const pt of _pts){
     if(pt.aberrant) continue;              // saisie probablement fautive
     const d=pt.sess.data[pt.nom];
     if(!d||!Array.isArray(d.sets)) continue;
     for(const s of d.sets){
       if(!s||s.done!==true) continue;
-      const w=parseFloat(s.weight);
-      if(!(w>0)) continue;
+      const w=parseFloat(s.weight)||0;
       const r=_perfReps(s);
+      if(_t==='assiste'){
+        if(w>0&&r>0&&(!mc||w<mc.kg||(w===mc.kg&&r>(mc.reps||0)))) mc={kg:w,reps:r,date:pt.date,assiste:true};
+      }
       // Meilleure charge : la plus lourde, et à charge égale la plus longue.
-      if(!mc||w>mc.kg||(w===mc.kg&&(r||0)>(mc.reps||0)))
+      else if(w>0&&(!mc||w>mc.kg||(w===mc.kg&&(r||0)>(mc.reps||0))))
         mc={kg:w,reps:(r>0?r:null),date:pt.date};
       // e1RM : la séance doit avoir ses RIR, et la série rester dans les bornes
       // où le modèle vaut quelque chose. Au-delà de PERF_REPS_MAX_E1RM,
       // perfExercice bascule déjà sur le tonnage-série — même règle ici.
       if(pt.sansRirDominant) continue;
       if(!(r>0)||!e1rmFiable(r,_perfRir(s,user))) continue;
-      const v=e1rm(w,r,_perfRir(s,user));
+      const _eff=chargeEffective(s,_ex,user);
+      if(!(_eff>0)) continue;
+      const v=e1rm(_eff,r,_perfRir(s,user));
       if(v>0&&(!me||v>me.valeur)) me={valeur:Math.round(v*10)/10,date:pt.date};
     }
   }
@@ -85388,6 +85538,8 @@ function recordAPorteeExo(u,nomEx,reps,maintenant){
   const t=(typeof maintenant==='number')?maintenant:Date.now();
   const r=Math.round(Number(reps));
   if(!u||!nomEx||!(r>=1&&r<=PERF_REPS_MAX_E1RM)) return null;
+  // Une CHARGE à viser n'a de sens que sur une charge externe (typeCharge).
+  if(typeCharge(_exPourCharge(nomEx,u))!=='externe') return null;
   const ses=((u.sessions)||[]).filter(s=>s&&Number(s.date)>0&&Number(s.date)<=t);
   // LE RECORD DE CHARGE : la même règle que recordsDeSeance, toutes séances.
   let recKg=0;
@@ -86208,15 +86360,19 @@ function _rebatirRecordsVus(){
 }
 function estNouveauRecord(user,nomEx,serie){
   if(!user||!nomEx||!serie||serie.done!==true) return false;
-  const w=parseFloat(serie.weight);
-  if(!(w>0)) return false;
+  const _ex=_exPourCharge(nomEx,user), _t=typeCharge(_ex);
+  const w=parseFloat(serie.weight)||0;
+  const eff=chargeEffective(serie,_ex,user);
+  if(!(w>0)&&!(eff>0)) return false;
   const r=_perfReps(serie);
   const rec=recordsExercice(user,nomEx);
   if(!rec) return true;                    // premier record de cet exercice
   const mc=rec.meilleureCharge, me=rec.meilleurE1rm;
-  if(mc&&w>mc.kg) return true;
-  if(r>0&&e1rmFiable(r,_perfRir(serie,user))){
-    const v=e1rm(w,r,_perfRir(serie,user));
+  // Assisté : moins d'assistance, ou autant avec plus de répétitions.
+  if(_t==='assiste'){ if(mc&&w>0&&r>0&&(w<mc.kg||(w===mc.kg&&r>(mc.reps||0)))) return true; }
+  else if(mc&&w>mc.kg) return true;
+  if(r>0&&eff>0&&e1rmFiable(r,_perfRir(serie,user))){
+    const v=e1rm(eff,r,_perfRir(serie,user));
     if(v>0&&(!me||v>me.valeur)) return true;
   }
   return !mc&&!me;

@@ -20933,6 +20933,74 @@ async function testExercices(){
     ok('T1 — calcSug n’existe plus : chargeSuivante est le seul moteur des charges proposées',typeof calcSug==='undefined');
     ok('T1 — la borne : répétitions + RIR ≤ 12',e1rmFiable(12,0)&&e1rmFiable(10,2)&&!e1rmFiable(10,3)&&!e1rmFiable(13,0)&&e1rmFiable(8,'')&&e1rmFiable(0,0));
     ok('e1rm sur charge nulle ou négative rend 0',e1rm(0,10,1)===0&&e1rm(-5,10,1)===0);
+    // ── LE TYPE DE CHARGE : poids du corps, lesté, assisté, élastique ──
+    ok('typeCharge : assisté, lesté, élastique, poids du corps, externe ; isCounterweightEx n’en est qu’un cas',(()=>{
+      if(isCounterweightEx('TRACTIONS MACHINE ASSISTE')!==true) return _echec('TRACTIONS MACHINE ASSISTE');
+      if(isCounterweightEx('DIPS MACHINE GUIDEE')!==true) return _echec('DIPS MACHINE GUIDEE');
+      if(isCounterweightEx('DIPS MACHINE')!==false) return _echec('DIPS MACHINE');
+      if(isCounterweightEx('Tractions assistées')!==true||isCounterweightEx('SQUAT BARRE GUIDEE')!==false) return _echec('accents, barre guidée');
+      const cas={'TRACTIONS':'poids_corps','DIPS':'poids_corps','POMPES':'poids_corps','NORDIC CURL':'poids_corps','PISTOL SQUAT':'poids_corps',
+        'MUSCLE UP':'poids_corps','PIKE PUSH UP':'poids_corps','RELEVE DE GENOUX':'poids_corps','DIPS LESTES':'leste','TRACTIONS LESTÉES':'leste',
+        'TRACTIONS ÉLASTIQUE':'elastique','DIPS MACHINE':'externe','DÉVELOPPÉ COUCHÉ':'externe','TRACTION POULIE HAUTE':'externe','':'externe'};
+      for(const n of Object.keys(cas)) if(typeCharge({name:n})!==cas[n]) return _echec(n+' : '+typeCharge({name:n}));
+      if(typeCharge({name:'DÉVELOPPÉ COUCHÉ',typeCharge:'leste'})!=='leste'||typeCharge({name:'TRACTIONS',typeCharge:'bidon'})!=='poids_corps') return _echec('le champ du coach');
+      return true;})());
+    ok('chargeEffective : PDC × coefficient, + lest, − assistance ; sans poids de corps, null',(()=>{
+      const u={weightLog:[{date:'2026-09-20',kg:80}]};
+      const c=(n,w)=>chargeEffective({weight:w},{name:n},u);
+      if(c('TRACTIONS','')!==80||c('DIPS','')!==80||c('POMPES','')!==52||c('POMPES INCLINÉES','')!==40) return _echec('coefficients');
+      if(c('DIPS LESTES','20')!==100||c('TRACTIONS','10')!==90) return _echec('lest');
+      if(c('TRACTIONS ASSISTEES','30')!==50||c('TRACTIONS ASSISTEES','95')!==0) return _echec('assistance');
+      if(c('TRACTIONS ÉLASTIQUE','15')!==80) return _echec('élastique');
+      if(c('SQUAT','100')!==100||c('SQUAT','')!==null) return _echec('externe');
+      if(c('NORDIC CURL','')!==null) return _echec('coefficient inconnu : pas de charge inventée');
+      if(chargeEffective({weight:''},{name:'TRACTIONS'},{})!==null) return _echec('sans poids de corps');
+      return true;})());
+    ok('Volume : 4 séries de TRACTIONS sans charge saisie comptent 4 séries de DORSAUX, même sans poids de corps',(()=>{
+      const sess={date:Date.now(),data:{'TRACTIONS':{sets:[1,2,3,4].map(()=>({done:true,weight:'',reps:'8',rir:'1'}))}}};
+      const v=_volumeSeance(sess,{email:'tc-vol@t.fr',exAlias:{},exMuscles:{}});
+      if(v.eligibles!==4) return _echec('éligibles : '+v.eligibles);
+      if(v.muscles.DORSAUX!==4) return _echec('DORSAUX : '+JSON.stringify(v.muscles));
+      if(serieEligible({done:true,weight:''},{name:'DÉVELOPPÉ COUCHÉ',reps:'8'})) return _echec('une charge externe vide compte');
+      return serieEligible({done:true,weight:'0'},{name:'DIPS MACHINE GUIDEE',reps:'8'})?true:_echec('assisté sans charge');})());
+    ok('Assisté : 40 → 20 kg d’assistance sur 28 jours est une progression, pas une régression (avec ou sans poids de corps)',(()=>{
+      const t0=Date.parse('2026-06-01T18:00:00Z'), J=864e5;
+      const S=(j,w)=>({id:'tca'+j,date:t0+j*J,slot:0,name:'P',data:{'TRACTIONS ASSISTEES':{sets:[{done:true,weight:String(w),reps:'8',rir:'1'}]}}});
+      const ses=[S(0,40),S(7,35),S(14,30),S(21,25),S(28,20)];
+      for(const avec of [true,false]){
+        _viderCachePlateau();
+        const u={email:'tca'+avec+'@t.fr',exAlias:{},exMuscles:{},sessions:ses,weightLog:avec?[{date:'2026-06-01',kg:80}]:[]};
+        const e=etatExercice(u,'TRACTIONS ASSISTEES',0,'P');
+        if(!e||e.etat==='regression') return _echec((avec?'avec':'sans')+' PDC : '+(e&&e.etat));
+        if(avec&&!(perfExercice(ses[4],'TRACTIONS ASSISTEES',u).score>perfExercice(ses[0],'TRACTIONS ASSISTEES',u).score)) return _echec('le score ne monte pas');
+      }
+      return true;})());
+    ok('Assisté : recordsDeSeance ne fête pas une assistance plus lourde, et fête une plus légère',(()=>{
+      const S=w=>({date:Date.now(),data:{'TRACTIONS ASSISTEES':{sets:[{done:true,weight:String(w),reps:'8',rir:'1'}]}}});
+      if(recordsDeSeance(S(50),[S(40)]).length) return _echec('assistance plus lourde fêtée');
+      const r=recordsDeSeance(S(30),[S(40)]);
+      if(r.length!==1||!r[0].assiste||r[0].curMax!==30||r[0].gain!==10) return _echec(JSON.stringify(r));
+      // Pendant la séance : même règle.
+      const u={email:'tca-rec@t.fr',exAlias:{},exMuscles:{},sessions:[Object.assign(S(40),{date:Date.now()-7*864e5})]};
+      _viderCachePlateau();
+      if(estNouveauRecord(u,'TRACTIONS ASSISTEES',{done:true,weight:'50',reps:'8',rir:'1'})) return _echec('série plus assistée = record');
+      if(!estNouveauRecord(u,'TRACTIONS ASSISTEES',{done:true,weight:'40',reps:'10',rir:'1'})) return _echec('mêmes 40 kg, plus de reps : pas de record');
+      return true;})());
+    ok('Lesté : PDC 80 kg, dips lestés +20 × 5 → e1RM calculé sur 100 kg',(()=>{
+      _viderCachePlateau();
+      const u={email:'tc-lest@t.fr',exAlias:{},exMuscles:{},weightLog:[{date:'2026-09-20',kg:80}],
+        sessions:[{date:Date.now()-864e5,data:{'DIPS LESTES':{sets:[{done:true,weight:'20',reps:'5',rir:'0'}]}}}]};
+      const r=recordsExercice(u,'DIPS LESTES');
+      if(!r||!r.meilleurE1rm||r.meilleurE1rm.valeur!==Math.round(e1rm(100,5,0)*10)/10) return _echec(JSON.stringify(r));
+      if(r.meilleureCharge.kg!==20) return _echec('le record de charge reste le lest saisi');
+      return maxE1rmObserve(u,'DIPS LESTES')===null?true:_echec('un maximum en kg prescrit sur un exercice lesté');})());
+    ok('Au poids du corps : la suggestion est en répétitions (+1 si la réserve dépasse la cible)',(()=>{
+      const a=repsSuivantes(8,3,'2'), b=repsSuivantes('8','1','2'), c=repsSuivantes(8,'echec',''), d=repsSuivantes(0,3,2);
+      if(!a||a.reps!==9||!a.monte) return _echec('RIR 3 > 2 : '+JSON.stringify(a));
+      if(!b||b.reps!==8||b.monte) return _echec('RIR 1 : '+JSON.stringify(b));
+      if(!c||c.reps!==8) return _echec('échec');
+      if(d!==null) return _echec('sans répétitions');
+      return /_sugReps\?/.test(_prodSrc())?true:_echec('l’écran de séance ne l’affiche pas');})());
     // ── L'e1RM SUR RÉPÉTITIONS POTENTIELLES : les bornes et la réciproque ──
     ok('e1RM : 100×8@0 ≈ 126,67 ; 100×8@2 ≈ 133,33 ; 100×5@3 ≈ 126,67',
        Math.abs(e1rm(100,8,0)-126.667)<0.01&&Math.abs(e1rm(100,8,2)-133.333)<0.01&&Math.abs(e1rm(100,5,3)-126.667)<0.01);
