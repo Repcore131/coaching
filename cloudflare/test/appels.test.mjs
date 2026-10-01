@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { verifierJeton, repondreAppel } from '../src/appels.js';
-import { cloudinaryDestroy } from '../src/medias.js';
+import { cloudinaryDestroy, cloudinarySigner, signatureCloudinary, LIMITE_SIGNATURES_HEURE } from '../src/medias.js';
 import { creerBase } from '../src/base.js';
 import { fausseBase } from './fausse-base.mjs';
 import { creerMetier } from '../src/metier.js';
@@ -150,6 +150,56 @@ await test('le protocole onCall : 401 sans jeton, {result} avec', async () => {
   assert.equal(inconnu.status, 404);
 });
 
+
+// ══ L'ENVOI SIGNÉ (cloudinarySigner, 01/10/2026) ═══════════════════════════
+const TS = Date.UTC(2026, 9, 1, 8, 0, 0);
+const signer = (w, email, data, t) => cloudinarySigner({ auth: { email }, data }, Object.assign({}, w.ctx, { maintenant: () => t || TS }));
+await test('signature : celle de Cloudinary pour des paramètres connus (triés, secret nettoyé, SHA-1)', async () => {
+  const w = monde(USERS, INDEX);
+  const r = await signer(w, 'lea@t.fr', { dossier: 'repcore/u_lea/bilan', type: 'image' });
+  const attendu = crypto.createHash('sha1').update('allowed_formats=jpg,png,webp&folder=repcore/u_lea/bilan&timestamp='
+    + Math.floor(TS / 1000) + '&upload_preset=repcore_videos' + 'SECRET').digest('hex');
+  assert.equal(r.signature, attendu);
+  assert.equal(r.api_key, 'KEY'); assert.equal(r.cloud_name, 'dntu57ml'); assert.equal(r.resource_type, 'image');
+  assert.equal(r.folder, 'repcore/u_lea/bilan'); assert.equal(r.timestamp, Math.floor(TS / 1000));
+  assert.equal(await signatureCloudinary({ b: 2, a: 1, vide: '' }, 'S'), crypto.createHash('sha1').update('a=1&b=2S').digest('hex'));
+  // public_id et vidéo : signés aussi.
+  const v = await signer(w, 'lea@t.fr', { dossier: 'repcore/u_lea', type: 'video', publicId: 'bilan_1_2' });
+  assert.equal(v.public_id, 'bilan_1_2'); assert.equal(v.allowed_formats, 'mp4,mov,webm'); assert.equal(v.resource_type, 'video');
+});
+await test('refus sans jeton : le protocole onCall répond 401 avant toute signature', async () => {
+  const w = monde(USERS, INDEX);
+  const req = new Request('https://s.t/fn/cloudinarySigner', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: { dossier: 'repcore/u_lea', type: 'video' } }) });
+  const r = await repondreAppel(req, { cloudinarySigner }, w.ctx);
+  assert.equal(r.status, 401);
+  assert.equal(w.F.lire('cloudinary_signatures'), null);
+});
+await test('refus d’un dossier d’un autre compte ; le vrai coach signe pour son athlète, un autre coach non', async () => {
+  const w = monde(USERS, INDEX);
+  await assert.rejects(() => signer(w, 'lea@t.fr', { dossier: 'repcore/u_autre', type: 'video' }), refus(403));
+  await assert.rejects(() => signer(w, 'lea@t.fr', { dossier: 'repcore/audio/kev@t,fr', type: 'audio' }), refus(403));
+  await assert.rejects(() => signer(w, 'autre@t.fr', { dossier: 'repcore/u_lea', type: 'image' }), refus(403));
+  assert.ok((await signer(w, 'kev@t.fr', { dossier: 'repcore/u_lea/bilan', type: 'image' })).signature);
+  assert.ok((await signer(w, 'kev@t.fr', { dossier: 'repcore/audio/lea@t,fr', type: 'audio', publicId: 'bilan_x_1' })).signature);
+  assert.ok((await signer(w, 'lea@t.fr', { dossier: 'repcore/lea@t.fr', type: 'video' })).signature, 'ancien dossier à l’adresse');
+  for (const d of ['autre/u_lea', 'repcore/u_lea/../u_autre', 'repcore/u_lea/Bilan2', 'repcore', ''])
+    await assert.rejects(() => signer(w, 'lea@t.fr', { dossier: d, type: 'image' }), refus(400), d);
+  await assert.rejects(() => signer(w, 'lea@t.fr', { dossier: 'repcore/u_lea', type: 'raw' }), refus(400));
+  await assert.rejects(() => signer(w, 'lea@t.fr', { dossier: 'repcore/u_lea', type: 'video', publicId: '../x' }), refus(400));
+});
+await test('limite : 30 signatures par heure et par compte, la 31e refusée ; l’heure suivante repart', async () => {
+  const w = monde(USERS, INDEX);
+  for (let i = 0; i < LIMITE_SIGNATURES_HEURE; i++) await signer(w, 'lea@t.fr', { dossier: 'repcore/u_lea', type: 'video' });
+  await assert.rejects(() => signer(w, 'lea@t.fr', { dossier: 'repcore/u_lea', type: 'video' }), refus(429));
+  assert.ok((await signer(w, 'kev@t.fr', { dossier: 'repcore/u_lea', type: 'video' })).signature, 'un autre compte a sa propre limite');
+  assert.ok((await signer(w, 'lea@t.fr', { dossier: 'repcore/u_lea', type: 'video' }, TS + 3600e3)).signature);
+});
+await test('sans secret configuré : 503, l’envoi reste en file', async () => {
+  const w = monde(USERS, INDEX);
+  await assert.rejects(() => cloudinarySigner({ auth: { email: 'lea@t.fr' }, data: { dossier: 'repcore/u_lea', type: 'video' } },
+    Object.assign({}, w.ctx, { env: {} })), refus(503));
+});
 
 // ══ LES DROITS PAR LE SERVEUR (droits-appels.js) ══════════════════════════
 const JMS = 86400000, MMS = 30 * JMS, T0 = Date.UTC(2026, 8, 30, 10);

@@ -248,6 +248,35 @@ Le **nom du compte Cloudinary** vient du worker, jamais de l'app : secret facult
 - réponses : 400 (identifiant invalide) et 403 (pas le tien) sont définitives, l'app sort le média de
   sa file ; 409 (propriétaire pas encore indexé) et 503 le laissent en file.
 
+### Les envois signés (`cloudinarySigner`, 01/10/2026)
+
+L'app ne poste plus rien à Cloudinary sans une **signature du Worker** : `/fn/cloudinarySigner`
+vérifie le jeton Firebase, impose le dossier (`repcore/<id du compte>[/<rubrique>]`, celui d'un
+athlète dont l'appelant est le coach — même contrôle que la suppression —, ou
+`repcore/audio/<clé de l'athlète>`), signe les formats (`allowed_formats`) et limite à **30 signatures
+par heure et par compte**. Le secret est le même `CLOUDINARY_API_SECRET` que pour la suppression.
+Preset signé : `repcore_videos` par défaut, ou le secret facultatif `CLOUDINARY_UPLOAD_PRESET`.
+
+**À faire par Kevin dans la console Cloudinary, une fois le Worker déployé** (sinon un envoi sans
+signature reste possible, puisque le preset public existe encore) :
+
+1. https://console.cloudinary.com → **Settings** → **Upload** → **Upload presets** → `repcore_videos`.
+2. **Signing mode** : passer de *Unsigned* à **Signed**. Enregistrer. À partir de là, un envoi sans
+   signature valide est refusé par Cloudinary (`401 Upload preset must be whitelisted for unsigned
+   uploads`).
+3. Dans le même preset, **Upload control** :
+   - **Allowed formats** : `mp4, mov, webm, jpg, png, webp` (plus `ogg, m4a` si les commentaires
+     audio doivent continuer de passer : ils partent comme des vidéos) ;
+   - **Max file size** : la console n'a qu'un plafond par preset. Mettre **100 Mo** sur
+     `repcore_videos` ; pour tenir **10 Mo** sur les images, créer un second preset signé
+     `repcore_images` (formats `jpg, png, webp`, 10 Mo) et le poser en secret
+     `CLOUDINARY_UPLOAD_PRESET_IMAGE` — le Worker l'utilisera pour les images dès qu'il est posé.
+4. Vérifier : un envoi depuis l'app passe ; `curl -F file=@x.jpg -F upload_preset=repcore_videos
+   https://api.cloudinary.com/v1_1/dntu57ml/image/upload` répond une erreur.
+
+Les comptes Cloudinary « personnels » d'un coach (`cloudinaryName`/`cloudinaryPreset` dans son
+dossier) ne servent plus aux envois : seul le compte du service sait être signé par le Worker.
+
 ## Paiement direct au coach (`paiements-coach.js`) : FERMÉ tant que la sandbox ne l'a pas prouvé
 
 Un coach relié (palier Coach ou Pro) encaisse ses formules sur **son** compte PayPal : la commande

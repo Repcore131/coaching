@@ -27,7 +27,7 @@ import { lireCompteService, jetonCompteService } from './google.js';
 import { creerMetier } from './metier.js';
 import { minute } from './planif.js';
 import { repondreAppel } from './appels.js';
-import { cloudinaryDestroy, compteCloudinary } from './medias.js';
+import { cloudinaryDestroy, cloudinarySigner, compteCloudinary } from './medias.js';
 import { creerPaypal, recevoirWebhook, jetonPaypal } from './paypal.js';
 import { servirPagePublique } from './pages.js';
 import { santeJeton, recevoirSante, compteDuJeton, rappelSanteUn } from './sante.js';
@@ -43,7 +43,7 @@ const garmin = (req, ctx) => creerGarmin(ctx).appel(req, ctx.requete);
 // Les droits (droits-appels.js) : consommer un code, ouvrir l'essai, devenir
 // coach, prolonger un code. L'app ne les écrit plus elle-même (règles gelées).
 const droitsAppel = (nom) => (req, ctx) => creerAppelsDroits(ctx)[nom](req);
-const APPELS = { cloudinaryDestroy, santeJeton, paiementCoach, garmin,
+const APPELS = { cloudinaryDestroy, cloudinarySigner, santeJeton, paiementCoach, garmin,
   redeemCode: droitsAppel('redeemCode'), ouvrirEssai: droitsAppel('ouvrirEssai'),
   devenirCoach: droitsAppel('devenirCoach'), prolongerCode: droitsAppel('prolongerCode'),
   emailVerifie: droitsAppel('emailVerifie') };

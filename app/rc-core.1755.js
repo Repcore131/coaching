@@ -68486,24 +68486,39 @@ function phpPartagees(u){
     }
   return out;
 }
+// ══ TOUT ENVOI CLOUDINARY EST SIGNÉ PAR LE SERVEUR (01/10/2026) ══════════════
+// Les envois partaient avec un preset PUBLIC : quiconque lisait ce fichier
+// pouvait déposer n'importe quoi, n'importe où, sur le compte de RepCore. Le
+// Worker (cloudinarySigner) vérifie le jeton, IMPOSE le dossier (le sien, ou
+// celui d'un athlète dont on est le coach), signe les formats, et limite à
+// trente signatures par heure. L'app recopie ce qu'il rend, tel quel, dans
+// l'envoi : elle ne connaît ni le secret ni le preset.
+// Rend {url, champs}. Lève si la signature est refusée ou injoignable : les
+// appelants gardent alors le média en file (fileEnvoiPoser), comme une coupure.
+async function _cloudinarySigner(dossier,type,publicId){
+  const data={dossier:String(dossier||''),type:String(type||'')};
+  if(publicId) data.publicId=String(publicId);
+  let r;
+  try{ r=await CLOUD._callFn('cloudinarySigner',data); }
+  catch(e){ throw new Error('Envoi non autorisé pour le moment ('+((e&&e.message)||'serveur injoignable')+')'); }
+  if(!r||!r.signature||!r.cloud_name||!r.resource_type) throw new Error('Signature d’envoi invalide');
+  const champs={};
+  for(const k of Object.keys(r)) if(k!=='cloud_name'&&k!=='resource_type'&&r[k]!=null) champs[k]=String(r[k]);
+  return {url:'https://api.cloudinary.com/v1_1/'+encodeURIComponent(r.cloud_name)+'/'+r.resource_type+'/upload',champs,cloudName:String(r.cloud_name)};
+}
+function _champsDansFormData(fd,champs){ for(const k of Object.keys(champs||{})) fd.append(k,champs[k]); return fd; }
 // L'endpoint IMAGE, et non /video/upload que l'existant utilise pour tout.
 // AUCUNE transformation n'est demandée : elles consomment des crédits, et la
 // compression est déjà faite côté client.
 async function phpUploadImage(blob,nom,dossier){
-  const users=DB.get('users')||{};
-  const coach=currentUser&&currentUser.coachId
-    ?Object.values(users).find(x=>x.id===currentUser.coachId):null;
-  const cloudName=(coach&&coach.cloudinaryName)||currentUser.cloudinaryName||'dntu57ml';
-  const preset=(coach&&coach.cloudinaryPreset)||currentUser.cloudinaryPreset||'repcore_videos';
-  const fd=new FormData();
-  fd.append('file',blob,(nom||'photo').replace(/\//g,'_')+'.jpg');
-  fd.append('upload_preset',preset);
   // LE DOSSIER EST UN ARGUMENT DEPUIS LE BUILD 1421 : les photos de bilan
   // passent par la meme porte, sous 'bilan/'. Un seul chemin d'envoi, un seul
   // endroit ou corriger le jour ou l'hebergeur change.
-  fd.append('folder','repcore/'+(currentUser.id||currentUser.email)+'/'+(dossier||'progression'));
-  const res=await fetch('https://api.cloudinary.com/v1_1/'+cloudName+'/image/upload',
-    {method:'POST',body:fd});
+  const sig=await _cloudinarySigner('repcore/'+(currentUser.id||currentUser.email)+'/'+(dossier||'progression'),'image');
+  const fd=new FormData();
+  fd.append('file',blob,(nom||'photo').replace(/\//g,'_')+'.jpg');
+  _champsDansFormData(fd,sig.champs);
+  const res=await fetch(sig.url,{method:'POST',body:fd});
   if(!res.ok) throw new Error('Erreur serveur '+res.status);
   const data=await res.json();
   if(data.error) throw new Error(data.error.message);
@@ -110635,7 +110650,7 @@ function _envoiReessayable(e){
  *
  * @param {string} url
  * @param {File|Blob} file
- * @param {Object<string,string>} champs  upload_preset, folder…
+ * @param {Object<string,string>} champs  les champs SIGNÉS rendus par _cloudinarySigner
  * @param {{onProgres?:(charge:number,total:number)=>void, signal?:any,
  *          tailleMorceau?:number, onMorceau?:(i:number,n:number)=>void}} [opt]
  * @returns {Promise<string>}
@@ -110980,11 +110995,10 @@ async function uploadVideoFile(input,options){
   const targetEmail=currentUser.email; // capturé avant tout await
 
   // Cherche la config Cloudinary du coach (ou de l'utilisateur lui-même si solo)
-  const users=DB.get('users')||{};
-  const coach=currentUser.coachId?Object.values(users).find(u=>u.id===currentUser.coachId):null;
-  const cloudName=coach?.cloudinaryName||currentUser.cloudinaryName||'dntu57ml';
-  const uploadPreset=coach?.cloudinaryPreset||currentUser.cloudinaryPreset||'repcore_videos';
+  // Le compte Cloudinary et les champs d'envoi viennent de la SIGNATURE,
+  // demandee juste avant l'envoi (voir _cloudinarySigner).
   const folder='repcore/'+(currentUser.id||currentUser.email);
+  let cloudName='dntu57ml';
 
   // Le panneau flottant est le SEUL affichage commun aux deux ecrans d'envoi :
   // `vid-upload-progress` n'existe pas au milieu d'une seance.
@@ -111143,20 +111157,22 @@ async function uploadVideoFile(input,options){
         if(progEl) progEl.textContent='Traitement de la vidéo…';
       }
     };
-    const cible='https://api.cloudinary.com/v1_1/'+cloudName+'/video/upload';
+    // SIGNE, APRES la mise en file : un refus laisse la video dans la file.
+    const sig=await _cloudinarySigner(folder,'video');
+    cloudName=sig.cloudName||cloudName;
+    const cible=sig.url;
     let brut;
     if(_envoiDecoupeRequis(aEnvoyer.size)){
       // AU-DELÀ DU PLAFOND PAR REQUÊTE : en morceaux. En dessous on garde
       // l'envoi simple — le découpage coûte des allers-retours qui ne se
       // justifient pas sur quinze mégaoctets.
-      brut=await _envoiXhrDecoupe(cible,aEnvoyer,{upload_preset:uploadPreset,folder:folder},
+      brut=await _envoiXhrDecoupe(cible,aEnvoyer,sig.champs,
         {onProgres:surProgres,signal:ctrl?ctrl.signal:null,
          onMorceau:(i,n)=>{ pan.note('Morceau '+(i+1)+' sur '+n+' · une coupure ne fait reperdre que celui-ci.'); }});
     } else {
       const fd=new FormData();
       fd.append('file',aEnvoyer);
-      fd.append('upload_preset',uploadPreset);
-      fd.append('folder',folder);
+      _champsDansFormData(fd,sig.champs);
       brut=await _envoiXhr(cible,fd,surProgres,{signal:ctrl?ctrl.signal:null});
     }
     let data;
@@ -114035,12 +114051,11 @@ async function _audioBilanUpload(blob,athleteCle,bilanId){
   const nom='bilan_'+String(bilanId).replace(/[^A-Za-z0-9_-]/g,'')+'_'+ts;
   const file=new File([blob],nom+extensionAudio(blob.type),{type:blob.type||'audio/webm'});
   if(!/^audio\//.test(file.type)||file.size>AUDIO_MAX_OCTETS) throw new Error('Enregistrement invalide ou trop lourd (maximum '+_mo(AUDIO_MAX_OCTETS)+').');
+  const sig=await _cloudinarySigner('repcore/audio/'+String(athleteCle).replace(/[^A-Za-z0-9_@,.-]/g,'_'),'audio',nom);
   const fd=new FormData();
   fd.append('file',file);
-  fd.append('upload_preset',currentUser.cloudinaryPreset||'repcore_videos');
-  fd.append('folder','repcore/audio/'+String(athleteCle).replace(/[^A-Za-z0-9_@,.-]/g,'_'));
-  fd.append('public_id',nom);
-  const res=await fetch('https://api.cloudinary.com/v1_1/'+(currentUser.cloudinaryName||'dntu57ml')+'/video/upload',{method:'POST',body:fd});
+  _champsDansFormData(fd,sig.champs);
+  const res=await fetch(sig.url,{method:'POST',body:fd});
   if(!res.ok) throw new Error('Erreur serveur '+res.status);
   const d=await res.json();
   if(d.error) throw new Error(d.error.message);
@@ -126421,14 +126436,13 @@ function _renderCoachPhonePreview(raw){
   el.innerHTML='→ Lien : <a href="https://wa.me/'+digits+'" target="_blank" rel="noopener" style="color:var(--green);text-decoration:none">wa.me/'+digits+'</a>';
 }
 async function _cloudinaryUpload(file){
-  const cloudName=currentUser.cloudinaryName||'dntu57ml';
-  const uploadPreset=currentUser.cloudinaryPreset||'repcore_videos';
   const folder='repcore/'+(currentUser.id||currentUser.email);
+  const type=/^audio\//.test(String(file&&file.type||''))?'audio':'video';
+  const sig=await _cloudinarySigner(folder,type);
   const fd=new FormData();
   fd.append('file',file);
-  fd.append('upload_preset',uploadPreset);
-  fd.append('folder',folder);
-  const res=await fetch('https://api.cloudinary.com/v1_1/'+cloudName+'/video/upload',{method:'POST',body:fd});
+  _champsDansFormData(fd,sig.champs);
+  const res=await fetch(sig.url,{method:'POST',body:fd});
   if(!res.ok) throw new Error('Erreur serveur '+res.status);
   const data=await res.json();
   if(data.error) throw new Error(data.error.message);

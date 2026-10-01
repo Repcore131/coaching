@@ -17744,8 +17744,9 @@ async function testExercices(){
             const fin=src.indexOf('// ══════════════ LA VIDEO RATTACHEE',i);
             const bloc=src.slice(i,fin>i?fin:i+12000);
             if(bloc.length<4000) return _echec('la fonction ne fait que '+bloc.length+' octets');
-            // LE FICHIER PART SUR CLOUDINARY, et il n'est jamais lu en base64.
-            if(bloc.indexOf('api.cloudinary.com')<0)
+            // LE FICHIER PART SUR CLOUDINARY (envoi SIGNÉ depuis le 01/10/2026 :
+            // l'adresse vient de _cloudinarySigner), et il n'est jamais lu en base64.
+            if(bloc.indexOf('_cloudinarySigner(')<0||String(_cloudinarySigner).indexOf('api.cloudinary.com')<0)
               return _echec('la vidéo ne part plus sur Cloudinary');
             for(const interdit of ['readAsDataURL','toDataURL','createObjectURL'])
               if(bloc.indexOf(interdit)>=0)
@@ -24243,6 +24244,47 @@ async function testExercices(){
             return _echec('une fonction du lecteur sort sur le réseau');
         return true;})());
 
+      // ══ 01/10/2026 — TOUT ENVOI CLOUDINARY EST SIGNÉ PAR LE SERVEUR ══════
+      okA('CLOUDINARY — l’envoi demande d’abord la signature, puis poste ses champs ; refusée, rien ne part et la photo reste à envoyer',async()=>{
+        const svF=window.fetch, svC=CLOUD._callFn, svU=currentUser;
+        const ordre=[];
+        try{
+          currentUser={id:'u_sig',email:'sig@t.fr',role:'athlete'};
+          CLOUD._callFn=async(n,d)=>{ ordre.push('signer:'+d.dossier+':'+d.type);
+            return {signature:'abc',api_key:'K',timestamp:123,folder:d.dossier,upload_preset:'P',allowed_formats:'jpg,png,webp',cloud_name:'dntu57ml',resource_type:'image'}; };
+          let corps=null;
+          window.fetch=async(u,o)=>{ ordre.push('envoi:'+String(u)); corps=o&&o.body;
+            return new Response(JSON.stringify({secure_url:'https://res.cloudinary.com/x.jpg',public_id:'x'}),{status:200}); };
+          const d=await phpUploadImage(new Blob(['x'],{type:'image/jpeg'}),'n','bilan');
+          if(ordre.join('|')!=='signer:repcore/u_sig/bilan:image|envoi:https://api.cloudinary.com/v1_1/dntu57ml/image/upload')
+            return _echec('ordre : '+ordre.join(' | '));
+          if(!(corps instanceof FormData)||corps.get('signature')!=='abc'||corps.get('api_key')!=='K'||corps.get('folder')!=='repcore/u_sig/bilan')
+            return _echec('les champs signés ne partent pas');
+          if(corps.get('cloud_name')||corps.get('resource_type')) return _echec('des champs internes partent');
+          if(!d||d.secure_url!=='https://res.cloudinary.com/x.jpg') return _echec('réponse perdue');
+          // Signature refusée : aucun envoi, et l'appelant garde la photo en file.
+          ordre.length=0;
+          CLOUD._callFn=async()=>{ ordre.push('signer'); const e=new Error('Trop d’envois'); e.statut=429; throw e; };
+          let err=null; try{ await phpUploadImage(new Blob(['x']),'n','bilan'); }catch(e){ err=e; }
+          if(!err||ordre.join()!=='signer') return _echec('sans signature, un envoi est parti : '+ordre.join());
+          // La vidéo entre en FILE avant d'être signée : un refus l'y laisse.
+          const v=String(uploadVideoFile);
+          const iFile=v.indexOf('fileEnvoiPoser('), iSig=v.indexOf('_cloudinarySigner(');
+          if(iFile<0||iSig<0||iFile>iSig) return _echec('la vidéo n’est pas mise en file avant la signature');
+          return true;
+        } finally { window.fetch=svF; CLOUD._callFn=svC; currentUser=svU; }
+      });
+      ok('CLOUDINARY — plus aucun upload_preset non signé dans le front : tout envoi passe par _cloudinarySigner',(()=>{
+        const src=_prodSrc();
+        const aig='upload'+'_preset';
+        const lignes=src.split('\n').filter(l=>l.indexOf(aig)>=0&&!/^\s*(\/\/|\*)/.test(l.trim()));
+        if(lignes.length) return _echec('upload_preset encore écrit : '+lignes[0].trim().slice(0,120));
+        if(src.indexOf("'repcore"+"_videos'")>=0) return _echec('le nom du preset est encore dans le front');
+        const envois=(src.match(/api\.cloudinary\.com\/v1_1\/'\+[^;]*\/(image|video)\/upload/g)||[]);
+        if(envois.length) return _echec('URL d’envoi construite hors signature : '+envois[0]);
+        for(const f of [phpUploadImage,uploadVideoFile,_audioBilanUpload,_cloudinaryUpload])
+          if(String(f).indexOf('_cloudinarySigner(')<0) return _echec((f.name||'?')+' ne signe pas');
+        return true;})());
       // ══ 01/10/2026 — PARRAINAGE : L'ADRESSE VÉRIFIÉE ═══════════════════════
       okA('PARRAINAGE — rappel « vérifie ton adresse » tant que le jeton dit email_verified:false ; vérifiée, le Worker est prévenu une fois',async()=>{
         const svI=CLOUD._idToken, svU=currentUser, svC=CLOUD._callFn, svS=localStorage.getItem(VERIF_SIGNALEE_CLE);
@@ -62439,6 +62481,16 @@ async function testExercices(){
 
     // Un XMLHttpRequest de paille : il note ce qu'on lui envoie et répond ce
     // qu'on lui dit de répondre. Aucun octet ne part sur le réseau.
+    // LA SIGNATURE D'ENVOI, FACTICE (01/10/2026) : les tests d'envoi simulent
+    // le transfert ; depuis l'envoi signé, ils simulent aussi le Worker. Rendue
+    // à la fin, quoi qu'il arrive.
+    window._avecSignatureFactice=(fn)=>async()=>{
+      const sv=CLOUD._callFn;
+      CLOUD._callFn=async(n,d)=>n==='cloudinarySigner'
+        ?{signature:'s',api_key:'k',timestamp:1,folder:d.dossier,cloud_name:'dntu57ml',resource_type:d.type==='image'?'image':'video'}
+        :sv.call(CLOUD,n,d);
+      try{ return await fn(); } finally{ CLOUD._callFn=sv; }
+    };
     const _vFauxXhr=(plan)=>{
       const vus=[];
       function Faux(){ this.upload={}; this._e={}; this.status=0; this.responseText=''; }
@@ -62578,7 +62630,7 @@ async function testExercices(){
         return r.blob===null?true:_echec('un blob sort sans encodeur');
       } finally { if(sE) window.VideoEncoder=sE; if(sD) window.VideoDecoder=sD; }});
 
-    okA('Envoi — l’entrée écrite ne porte AUCUN octet de vidéo',async()=>{
+    okA('Envoi — l’entrée écrite ne porte AUCUN octet de vidéo',_avecSignatureFactice(async()=>{
       const sX=window.XMLHttpRequest, sU=currentUser, svU=JSON.stringify(DB.get('users')||{});
       const sRCV=window.RepCoreVideo, sT=window.toast;
       try{
@@ -62622,7 +62674,7 @@ async function testExercices(){
       } finally {
         window.XMLHttpRequest=sX; currentUser=sU; DB.set('users',JSON.parse(svU));
         window.RepCoreVideo=sRCV; window.toast=sT;
-      }});
+      }}));
 
     okA('Envoi — annulé : aucune entrée, et aucune URL objet qui fuit',async()=>{
       const sX=window.XMLHttpRequest, sU=currentUser, svU=JSON.stringify(DB.get('users')||{});
@@ -62781,7 +62833,7 @@ async function testExercices(){
         try{ const z=document.getElementById('rc-reprise'); if(z) z.remove(); }catch(x){}
       }});
 
-    okA('Envoi — une reprise ne recompresse pas, et la file se vide à la confirmation',async()=>{
+    okA('Envoi — une reprise ne recompresse pas, et la file se vide à la confirmation',_avecSignatureFactice(async()=>{
       if(typeof indexedDB==='undefined') return true;
       const sX=window.XMLHttpRequest, sU=currentUser, svU=JSON.stringify(DB.get('users')||{});
       const sRCV=window.RepCoreVideo, sT=window.toast, sD=window._videoDureeS;
@@ -62815,7 +62867,7 @@ async function testExercices(){
       } finally {
         window.XMLHttpRequest=sX; currentUser=sU; DB.set('users',JSON.parse(svU));
         window.RepCoreVideo=sRCV; window.toast=sT; window._videoDureeS=sD;
-      }});
+      }}));
 
 
     // ══ 17/09/2026 — R29 : MOTION LAB, LOTS 2 ET 3 — LA TRAJECTOIRE ════════
@@ -65364,7 +65416,7 @@ async function testExercices(){
         _r25Ranger(sU,sW,sSnap,svSave,svToast);
       }
     });
-    okA('uploadVideoFile avec resterIci ne change pas l’écran actif (et sans, il ouvre les vidéos)',async()=>{
+    okA('uploadVideoFile avec resterIci ne change pas l’écran actif (et sans, il ouvre les vidéos)',_avecSignatureFactice(async()=>{
       const sU=currentUser, svSave=window.saveUser, svToast=window.toast, svXhr=window._envoiXhr, svDur=window._videoDureeS;
       const svQ=window.quotaDegrade, svPoser=window.fileEnvoiPoser, svRet=window.fileEnvoiRetirer, svGo=window.go;
       const svRCV=window.RepCoreVideo, svCan=CLOUD.canWrite, svPan=window._envoiPanneau;
@@ -65397,7 +65449,7 @@ async function testExercices(){
         currentUser=sU;
         try{ if(ecran0) go(ecran0); }catch(e){}
       }
-    });
+    }));
     ok('La vidéo de démonstration s’ouvre dans l’app : plus de target="_blank", youtube-nocookie, hors ligne dit',(()=>{
       const ex={name:'SQUAT',videoUrl:'https://youtu.be/dQw4w9WgXcQ'};
       const h=_htmlVideoTechniqueExo(ex);
