@@ -41087,6 +41087,65 @@ async function testExercices(){
         return /\(_photo\|\|_nv\)\?'var\(--green\)':'var\(--orange\)'/.test(s)
           ?true:_echec('un exercice sans média reçoit quand même un ✓ vert');})());
 
+      okA('Séances du coach : bloc en rouge et bouton blanc, versions qui se cochent, se restaurent et se copient, deux boutons rouge et blanc',async()=>{
+        // Kevin, 01/10/2026.
+        const sv={c:_coachEditClient,u:currentUser,s:window.saveUser,sa:rcSaisie,rc:rcConfirm,sel:_histSel,cid:currentClientId};
+        const box=document.getElementById('csm-history'), list=document.getElementById('csm-history-list');
+        if(!box||!list) return _echec('#csm-history absent');
+        const avH=list.innerHTML, avD=box.style.display;
+        const ex=n=>({name:n,series:4,reps:'8',repos:'2 min'});
+        const cfg=noms=>Array.from({length:7},(_,i)=>noms[i]?{day:i,active:true,name:noms[i],exercises:[ex('SQUAT'),ex('ROWING BARRE')]}:{day:i,active:false,name:'',exercises:[]});
+        try{
+          window.saveUser=()=>true;
+          currentUser={id:'CH',email:'ch@t.fr',role:'coach',coachPrograms:[]};
+          _coachEditClient={id:'AH',email:'ah@t.fr',fname:'Léa',role:'athlete',sessions_config:cfg(['Actuelle']),
+            sessions_config_history:[{ts:Date.now()-864e5,sessions_config:cfg(['Push','Pull'])},{ts:Date.now()-9*864e5,sessions_config:cfg(['Full body'])},
+              {ts:Date.now()-20*864e5,sessions_config:cfg([])}]};
+          _histSel=new Set(); renderSessionsHistory();
+          // Le résumé d'une version dit ce qu'elle contient.
+          const r=resumeVersionSeances(_coachEditClient.sessions_config_history[0]);
+          if(r.actifs!==2||r.exos!==4||r.noms.join('|')!=='Push|Pull') return _echec('résumé : '+JSON.stringify(r));
+          const lignes=()=>[...list.querySelectorAll('.csm-hist-v')];
+          const btn=t=>[...list.querySelectorAll('.csm-hist-btns .btn')].find(b=>b.textContent.indexOf(t)>=0);
+          if(lignes().length!==3) return _echec(lignes().length+' lignes pour 3 versions');
+          if(lignes()[0].textContent.indexOf('Push · Pull')<0) return _echec('la ligne ne nomme pas ses séances');
+          if(!btn('Restaurer').disabled||!btn('Copier').disabled) return _echec('actions ouvertes sans sélection');
+          // Cocher une version : les deux gestes s'ouvrent.
+          lignes()[0].querySelector('input').click();
+          if(!_histSel.has(0)||!lignes()[0].classList.contains('on')) return _echec('la coche ne sélectionne pas');
+          if(btn('Restaurer').disabled||btn('Copier').disabled) return _echec('actions fermées avec une sélection');
+          if(!btn('Restaurer').classList.contains('btn-red')||!btn('Copier').classList.contains('btn-blanc')) return _echec('couleurs des deux actions');
+          // Deux cochées : on ne restaure pas deux programmes, on peut en copier deux.
+          histBasculer(1);
+          if(!btn('Restaurer').disabled||btn('Copier').disabled) return _echec('à deux versions : restaurer doit se fermer, copier rester ouvert');
+          let demandes=0; rcSaisie=async(t,d)=>{ demandes++; return d; };
+          if(!await histCopier()) return _echec('la copie de deux versions échoue');
+          if(demandes) return _echec('un nom demandé pour une copie multiple');
+          if(currentUser.coachPrograms.length!==2) return _echec(currentUser.coachPrograms.length+' modèles pour 2 versions');
+          const p0=currentUser.coachPrograms[0];
+          if(p0.id===currentUser.coachPrograms[1].id) return _echec('deux modèles, un seul identifiant');
+          if(p0.origine!=='athlete'||p0.depuis!=='Léa'||p0.sessions_H.filter(x=>x.active).length!==2||p0.sessions_H===p0.sessions_F) return _echec('modèle : '+JSON.stringify({o:p0.origine,d:p0.depuis}));
+          // La copie ne touche ni au programme en cours ni à l'historique.
+          if(_coachEditClient.sessions_config[0].name!=='Actuelle'||_coachEditClient.sessions_config_history.length!==3) return _echec('la copie a modifié le dossier');
+          if(_histSel.size) return _echec('la sélection reste après la copie');
+          // Une seule cochée : le nom est demandé, et une version vide n'est pas copiée.
+          histBasculer(2);
+          if(await histCopier()!==false||currentUser.coachPrograms.length!==2) return _echec('une version sans exercice a été copiée');
+          // Restaurer : la version cochée remplace le programme affiché (après confirmation).
+          rcConfirm=async()=>true;
+          _histSel=new Set([1]);
+          await histRestaurer();
+          if(_coachEditClient.sessions_config[0].name!=='Full body') return _echec('la restauration n’a pas chargé la version cochée');
+          // Le bloc : cadre rouge, bouton blanc ; et les deux boutons du bas.
+          const hb=htmlBlocProgramme({id:'x',email:'x@t.fr'});
+          if(hb.indexOf('csm-bloc-c')<0||!/btn btn-blanc btn-sm[^>]*>Définir un bloc/.test(hb.replace(/\s+/g,' '))) return _echec('bloc : cadre ou bouton');
+          const b1=document.querySelector('#s-coach-sessions button[onclick="openApplyTemplate()"]'), b2=document.querySelector('#s-coach-sessions button[onclick="saveCoachSessionsAsTemplate()"]');
+          return (b1&&b1.classList.contains('btn-red')&&b2&&b2.classList.contains('btn-blanc'))?true:_echec('« Partir d’un modèle » rouge, « Enregistrer… » blanc');
+        } finally {
+          _coachEditClient=sv.c; currentUser=sv.u; window.saveUser=sv.s; rcSaisie=sv.sa; rcConfirm=sv.rc; _histSel=sv.sel; currentClientId=sv.cid;
+          list.innerHTML=avH; box.style.display=avD;
+        }});
+
       ok('Banque d’exercices : les muscles en grille de vignettes (image + nom), plus de rangée à faire glisser',(()=>{
         // Kevin, 01/10/2026 : « un carré, un muscle, cinq par ligne, la petite image comme pour le volume ».
         const z=document.getElementById('bq-filtres');
