@@ -234,3 +234,47 @@ test('revanche : jamais commencée, elle s’annule après 30 jours comme les au
   for (let i = 0; i < 6; i++) { const b = await w.minute(); if (b.travaux.duels === 'fini') break; w.avance(60e3); }
   assert.equal(w.F.lire('duels/' + ID + '/statut'), 'annule');
 });
+
+// ══ LA PRIORITÉ DES PUSH (01/10/2026) : le duel passe en second push du jour ══
+test('(c) un duel clôturé alors qu’un push est déjà parti : le résultat part quand même (2e du jour, priorité 90)', async () => {
+  const t = PARIS('2026-10-20T18:40:00');
+  const d = duel({ invite: TOM, inviteNom: 'Tom', statut: 'en_cours', debut: t - 15 * J, fin: t - 3600e3,
+    progres: { [LEA]: { valeur: 4, maj: t }, [TOM]: { valeur: 2, maj: t } } });
+  // Un défi est parti à 9 h chez l'un comme chez l'autre : le plafond d'un par
+  // jour aurait jeté le résultat.
+  const matin = { jour: '2026-10-20', n: 1, at: PARIS('2026-10-20T09:00:00'), type: 'defi', prio: 70 };
+  const w = monde({ push: pushs, duels: { [ID]: d }, duels_actifs: { [ID]: { fin: d.fin } },
+    push_log: { [LEA]: matin, [TOM]: matin } }, t);
+  for (let i = 0; i < 6; i++) { const b = await w.minute(); if (b.travaux.duels === 'fini') break; w.avance(60e3); }
+  assert.equal(w.F.lire('duels/' + ID + '/statut'), 'termine');
+  assert.deepEqual(titres(w).sort(), ['Léa remporte le duel', 'Tu as gagné ton duel ⚡']);
+  for (const k of [LEA, TOM]) {
+    const l = w.F.lire('push_log/' + k);
+    assert.equal(l.n, 2); assert.equal(l.prio, 90); assert.equal(l.type, 'defi', 'le type ne change pas');
+  }
+});
+
+test('(d) le J-2 refusé en heures calmes : duels/<id>/rappel reste absent, et il repart le lendemain', async () => {
+  const t = PARIS('2026-10-07T18:40:00'), debut = t - 11.5 * J;   // fin dans deux jours et demi
+  const d = duel({ invite: TOM, inviteNom: 'Tom', statut: 'en_cours', debut, fin: debut + 14 * J,
+    progres: { [LEA]: { valeur: 3, maj: t }, [TOM]: { valeur: 2, maj: t } } });
+  // Les deux vivent à Tokyo : 18 h 40 à Paris, 1 h 40 chez eux.
+  const w = monde({ push: pushs, users: { [LEA]: { tz: 'Asia/Tokyo' }, [TOM]: { tz: 'Asia/Tokyo' } },
+    duels: { [ID]: d }, duels_actifs: { [ID]: { fin: d.fin } } }, t);
+  for (let i = 0; i < 6; i++) { const b = await w.minute(); if (b.travaux.duels === 'fini') break; w.avance(60e3); }
+  assert.equal(w.F.recus.length, 0, 'rien en pleine nuit');
+  assert.equal(w.F.lire('duels/' + ID + '/rappel'), null, 'le rappel n’est pas consommé');
+  assert.equal(w.F.lire('duels/' + ID + '/rappelPour'), null);
+  // Tokyo déménage à Paris : le travail du lendemain le fait partir, une fois.
+  w.F.ecrire('users/' + LEA + '/tz', 'Europe/Paris'); w.F.ecrire('users/' + TOM + '/tz', 'Europe/Paris');
+  w.avance(J);
+  assert.equal(await w.M.duelQuotidienUn(ID, w.t), 'rappel');
+  assert.equal(w.F.lire('duels/' + ID + '/rappel'), true);
+  await w.minute();                                // les sous-tâches (hors réveil, le budget est à zéro)
+  assert.deepEqual(titres(w).sort(), ['Plus que 2 jours contre Léa', 'Plus que 2 jours contre Tom']);
+  // Dans les 12 dernières heures, un refus n'est plus retenté : le rappel est posé.
+  const w2 = monde({ push: pushs, users: { [LEA]: { tz: 'Asia/Tokyo' }, [TOM]: { tz: 'Asia/Tokyo' } },
+    duels: { [ID]: Object.assign({}, d, { fin: t + 10 * 3600e3 }) }, duels_actifs: { [ID]: { fin: t + 10 * 3600e3 } } }, t);
+  assert.equal(await w2.M.duelQuotidienUn(ID, t), 'rappel_a_reprendre');
+  assert.equal(w2.F.lire('duels/' + ID + '/rappel'), true);
+});

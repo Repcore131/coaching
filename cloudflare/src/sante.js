@@ -316,12 +316,16 @@ export function rappelSante({ meta, rappel, t }) {
 }
 
 /** Un compte (clé de sante_sync) : lit, décide, pousse, retient. */
-export async function rappelSanteUn(cle, t, { db, envoyerPush }) {
+// `serieReservee(cle, t)` (metier.js) : le jeudi de 8 h à 18 h, un athlète dont
+// la série n'est pas validée garde sa place pour « Ta série est en danger » ;
+// le rappel de santé est alors SAUTÉ (rien n'est retenu : il pourra partir demain).
+export async function rappelSanteUn(cle, t, { db, envoyerPush, serieReservee }) {
   const node = (await db.ref('sante_sync/' + cle + '/meta').get()).val();
   if (!node || node.plateforme !== 'ios') return 'pas_ios';
   const rappel = (await db.ref('sante_sync/' + cle + '/rappel').get()).val();
   const d = rappelSante({ meta: node, rappel, t });
   if (!d.ok) return d.raison;
+  if (serieReservee && await serieReservee(cle, t)) return 'reserve_serie';
   const r = await envoyerPush(cle, MESSAGE_RAPPEL, { attendre: false });
   if (!r || !r.envoye) return (r && r.raison) || 'echec';
   await db.ref('sante_sync/' + cle + '/rappel').set({ jour: paris(t).jour, n: d.n, recu: d.recu });

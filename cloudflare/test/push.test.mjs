@@ -6,8 +6,9 @@ import nodeCrypto from 'node:crypto';
 import assert from 'node:assert/strict';
 import { chiffrer, jetonVapid, b64uVersOctets, octetsVersB64u, envoyerA } from '../src/push.js';
 import { creerBase } from '../src/base.js';
-import { creerMetier, fusionAttente, messageDuMatin, PRIO_PUSH } from '../src/metier.js';
-import { minute, ESSAIS_MAX, consommerLot } from '../src/planif.js';
+import { creerMetier, fusionAttente, messageDuMatin, PRIO_PUSH, PUSH_PRIORITE, pushAutorise, prioDe, reserveSerieJeudi } from '../src/metier.js';
+import { MESSAGE_RAPPEL } from '../src/sante.js';
+import { minute, ESSAIS_MAX, consommerLot, travaux } from '../src/planif.js';
 import { fausseBase, appareil } from './fausse-base.mjs';
 
 const b64u = (b) => Buffer.from(b).toString('base64url');
@@ -198,6 +199,85 @@ await test('consommateur : ack si envoyé, retry sur 503 (push_log intact), ack 
   await consommerLot(batch, { M, compteur: () => n, budget: 900 });
   assert.equal(m.r, 'ack', 'abonnement supprimé : rien à rejouer');
   assert.equal(F.lire('push/' + LEA), null, 'le 410 a bien retiré l’abonnement');
+});
+
+// ══ LA PRIORITÉ DES PUSH : deux par jour, le second pour la série ou un duel ══
+const ZOE = 'zoe@t,fr', telZ = appareil('https://push.test/zoe');
+const recusDe = (w, tel) => w.F.recus.filter((r) => r.endpoint === tel.abonnement.endpoint).map((r) => tel.lire(r.init.body));
+const zoe = () => ({ fname: 'Zoé', streak: 3, streakWeek: '2026-09-21', lastSession: PARIS('2026-09-28T19:00:00') });
+
+await test('(a) le défi des 48 h à 9 h, puis la série à 18 h : les deux partent', async () => {
+  const w = monde({ users: { [ZOE]: zoe() }, push: { [ZOE]: { a: telZ.abonnement } } }, PARIS('2026-10-01T09:00:00'));
+  const r1 = await w.M.envoyerPush(ZOE, { type: 'defi', tag: 'defi-48h-d1', title: 'Plus que 48 h', body: 'Ton défi se termine.' });
+  assert.equal(r1.envoye, 1);
+  assert.deepEqual(w.F.lire('push_log/' + ZOE), { jour: '2026-10-01', n: 1, at: w.t, type: 'defi', prio: 70 });
+  w.avance(9 * 3600e3);                                      // jeudi 18 h
+  assert.equal(await w.M.planifies.serie(ZOE, w.t), 'envoye');
+  assert.deepEqual(recusDe(w, telZ).map((m) => m.title), ['Plus que 48 h', 'Ta série de 3 semaines est en danger']);
+  const l = w.F.lire('push_log/' + ZOE);
+  assert.equal(l.n, 2); assert.equal(l.type, 'serie'); assert.equal(l.prio, PUSH_PRIORITE.serie);
+  // La réservation du jeudi : de 8 h à 18 h, une série non validée garde sa place.
+  assert.equal(reserveSerieJeudi(PARIS('2026-10-01T11:00:00'), 3, '2026-09-21'), true);
+  assert.equal(reserveSerieJeudi(PARIS('2026-10-01T11:00:00'), 3, '2026-09-28'), false, 'semaine validée');
+  assert.equal(reserveSerieJeudi(PARIS('2026-10-01T18:00:00'), 3, '2026-09-21'), false, '18 h : la série parle');
+  assert.equal(reserveSerieJeudi(PARIS('2026-10-02T11:00:00'), 3, '2026-09-21'), false, 'vendredi');
+});
+
+await test('(b) le rappel de santé, puis les réactions : les réactions sont refusées et attendent demain', async () => {
+  const w = monde({ users: { [ZOE]: {} }, push: { [ZOE]: { a: telZ.abonnement } },
+    reactions_push: { [ZOE]: { pk: 'zoe', jour: '2026-09-29', le: 1 } },
+    reactions: { zoe: { '2026-09-29': { tom__fit: '💪' } } }, profils_publics: { tom__fit: { prenom: 'Tom' } } }, PARIS('2026-09-29T10:00:00'));
+  assert.equal((await w.M.envoyerPush(ZOE, MESSAGE_RAPPEL, { attendre: false })).envoye, 1);
+  w.avance(9 * 3600e3);                                      // 19 h
+  assert.equal(await w.M.reactionsPushUn(ZOE, w.t), 'plafond', 'priorité 45 : pas de second push');
+  assert.deepEqual(w.F.lire('reactions_push/' + ZOE), { pk: 'zoe', jour: '2026-09-29', le: 1 }, 'gardé pour le lendemain');
+  w.avance(24 * 3600e3);                                     // le lendemain, 19 h
+  assert.equal(await w.M.reactionsPushUn(ZOE, w.t), 'envoye');
+  assert.equal(w.F.lire('reactions_push/' + ZOE), null, 'effacé après l’envoi');
+  assert.deepEqual(recusDe(w, telZ).map((m) => m.title), [MESSAGE_RAPPEL.title, 'Tom a réagi à ta séance']);
+});
+
+await test('(e) un troisième push du jour, même de priorité 90, est refusé ; l’urgent passe toujours', async () => {
+  const w = monde({ users: { [ZOE]: {} }, push: { [ZOE]: { a: telZ.abonnement } } }, PARIS('2026-09-29T12:00:00'));
+  assert.equal((await w.M.envoyerPush(ZOE, { type: 'defi', title: '1' })).envoye, 1);
+  assert.equal((await w.M.envoyerPush(ZOE, { type: 'defi', prio: 'duel_fin', title: '2' })).envoye, 1);
+  assert.equal((await w.M.envoyerPush(ZOE, { type: 'defi', prio: 'duel_fin', title: '3' })).raison, 'plafond');
+  assert.equal(w.F.lire('push_log/' + ZOE).n, 2);
+  assert.equal((await w.M.envoyerPush(ZOE, { type: 'coach', title: 'Litige' }, { urgent: true })).envoye, 1, 'urgent : hors plafond');
+  // Le pur : un second push de priorité ≥ 80 ne passe jamais en heures calmes.
+  const log = { jour: '2026-09-29', n: 1, at: 1, type: 'defi', prio: 70 };
+  assert.equal(pushAutorise('serie', null, log, PARIS('2026-09-29T22:00:00'), null, 85).raison, 'calme');
+  assert.equal(pushAutorise('defi', null, log, PARIS('2026-09-29T15:00:00'), null, 79).raison, 'plafond');
+  assert.equal(pushAutorise('defi', null, log, PARIS('2026-09-29T15:00:00'), null, 80).ok, true);
+  // L'ancien journal ({jour, at, type}, sans n) compte pour un.
+  assert.equal(pushAutorise('serie', null, { jour: '2026-09-29', at: 1, type: 'defi' }, PARIS('2026-09-29T18:00:00'), null, 85).ok, true);
+  // Une sous-tâche différée garde sa priorité : elle voyage dans le message.
+  assert.equal(prioDe({ type: 'defi', prio: 'duel_fin' }), 90);
+  assert.equal(prioDe({ type: 'serie', prio: 'parcours' }), 60, 'le parcours n’hérite pas des 85 de la série');
+});
+
+await test('le dernier appel du samedi 10 h (serie_sam) et la réservation du jeudi pour l’accès', async () => {
+  const sam = PARIS('2026-10-03T10:05:00');
+  const w = monde({ users: { [ZOE]: zoe() }, push: { [ZOE]: { a: telZ.abonnement } } }, sam);
+  assert.equal(await w.M.planifies.serieSamedi(ZOE, w.t), 'envoye');
+  const m = recusDe(w, telZ)[0];
+  assert.equal(m.title, 'Dernier week-end pour ta série de 3 semaines');
+  assert.equal(m.body, 'Une séance d’ici dimanche soir et elle continue.');
+  assert.equal(m.tag, 'serie-2026-09-28-sam');
+  // Une séance depuis jeudi 18 h : rien.
+  const w2 = monde({ users: { [ZOE]: Object.assign(zoe(), { lastSession: PARIS('2026-10-01T19:30:00') }) }, push: { [ZOE]: { a: telZ.abonnement } } }, sam);
+  assert.equal(await w2.M.planifies.serieSamedi(ZOE, w2.t), 'ouvert');
+  assert.ok(travaux(w.M).some((x) => x.nom === 'serie_sam' && x.un === w.M.planifies.serieSamedi), 'planif.js : serie_sam');
+  // Jeudi 11 h : l'accès qui expire attend demain ; la place reste à la série.
+  const jeu = PARIS('2026-10-01T11:00:00');
+  const u = Object.assign(zoe(), { status: 'AUTONOMIE_PREMIUM', accessExpiry: jeu + 2.5 * 864e5 });
+  const w3 = monde({ users: { [ZOE]: u }, push: { [ZOE]: { a: telZ.abonnement } } }, jeu);
+  assert.equal(await w3.M.planifies.acces(ZOE, w3.t), 'reserve_serie');
+  assert.equal(w3.F.recus.length, 0);
+  assert.equal(w3.F.lire('worker/relances_acces/' + ZOE), null, 'rien de retenu : il repart demain');
+  w3.avance(864e5);
+  await w3.M.planifies.acces(ZOE, w3.t);
+  assert.equal(w3.F.recus.length, 1, 'vendredi : il part');
 });
 
 console.log(ok + ' tests passés');

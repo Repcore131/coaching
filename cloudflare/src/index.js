@@ -83,7 +83,7 @@ function outils(env) {
   M.paypal = creerPaypal({ db, M, env, fetchImpl: fetchCompte });
   // Le rappel du matin (iPhone) : les comptes synchronisés, un par un.
   M.santeComptes = () => db.ref('sante_sync').shallow();
-  M.santeRappelUn = (cle, t) => rappelSanteUn(cle, t, { db, envoyerPush: M.envoyerPush });
+  M.santeRappelUn = (cle, t) => rappelSanteUn(cle, t, { db, envoyerPush: M.envoyerPush, serieReservee: M.serieReservee });
   return { db, M, env, fetchCompte, compteur: () => n, budget: lim.budget };
 }
 

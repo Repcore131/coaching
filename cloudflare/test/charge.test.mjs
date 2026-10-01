@@ -136,7 +136,14 @@ const epreuves = [];
   const servis = servisDe(w.F).size;
   assert.equal(servis, N, '(a) ' + servis + '/' + N + ' servis, série ' + JSON.stringify(w.F.lire('worker/jobs/serie')));
   assert.ok(fin && heureParis(fin) < '21:00', '(a) fini à ' + (fin ? heureParis(fin) : 'jamais'));
-  assert.equal(w.F.recus.length, N, '(a) jamais deux fois');
+  // AU PLUS DEUX PUSH PAR ATHLÈTE, et le second est toujours de priorité ≥ 80
+  // (la série) : le défi du canal parti avant elle ne lui prend plus sa place.
+  const parAppareil = {};
+  for (const r of w.F.recus) parAppareil[r.endpoint] = (parAppareil[r.endpoint] || 0) + 1;
+  assert.ok(Object.values(parAppareil).every((x) => x <= 2), '(a) jamais trois fois');
+  const logs = Object.values(w.F.lire('push_log') || {});
+  assert.ok(logs.filter((l) => l.n === 2).every((l) => l.prio >= 80 && l.type === 'serie'), '(a) le second push est la série');
+  assert.equal(w.F.recus.length, N + logs.filter((l) => l.n === 2).length, '(a) un push par place prise');
   epreuves.push('(a) tous les travaux, jeudi 18 h, ' + N + ' abonnés : ' + servis + '/' + N + ' servis, fini à ' + heureParis(fin)
     + ', ' + minutes + ' réveils, au plus ' + max + ' requêtes par réveil, ' + w.total() + ' en tout');
   console.log('ok   ' + epreuves[epreuves.length - 1]);

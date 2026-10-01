@@ -140,7 +140,9 @@ test('pas de doublon avec la série en danger, dans les deux sens', async () => 
   const { push, recus } = abonnes(users);
   const w = monde({ users, push, push_log: { [k]: { jour: '2026-10-01', at: samedi - 2 * J, type: 'serie' } } }, samedi);
   await w.jusqua('retour');
-  assert.equal(recus(w, k).length, 0, 'la relance de série a déjà parlé');
+  // Samedi 10 h, seul le DERNIER APPEL de la série parle (serie_sam) ; le J+7
+  // se tait, la série a déjà parlé.
+  assert.deepEqual(recus(w, k).map((m) => m.title), ['Dernier week-end pour ta série de 4 semaines'], 'la relance de série a déjà parlé');
   assert.equal(await w.M.retourUn(k, w.t), 'serie');
   // 2. Le J+7 est parti le mardi : la série du jeudi se tait.
   const JEUDI = PARIS('2026-10-01T18:01:00');

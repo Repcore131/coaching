@@ -96,6 +96,9 @@ export function travaux(M) {
     // Série en danger : jeudi DÈS 17 H (18 h jusqu'au 01/10/2026) — trois
     // heures de fenêtre et non plus deux : voir README, « Charge ».
     { nom: 'serie', quand: (p) => p.joursem === 4 && apres(p, 17, 0) && avantFenetre(p), cles: () => M.abonnes(), un: M.planifies.serie, cout: 15, push: true, fenetre: true, profils: true, parAthlete: true },
+    // LE DERNIER APPEL DU SAMEDI, 10 h (01/10/2026) : la série encore en danger,
+    // pour qui ne s'est pas entraîné depuis jeudi 18 h.
+    { nom: 'serie_sam', quand: (p) => p.joursem === 6 && apres(p, 10, 0) && avantFenetre(p), cles: () => M.abonnes(), un: M.planifies.serieSamedi, cout: 15, push: true, fenetre: true, profils: true, parAthlete: true },
     { nom: 'bilan', quand: (p) => p.joursem === 6 && apres(p, 10, 0) && avantFenetre(p), cles: () => M.abonnes(), un: M.planifies.bilan, cout: 12, push: true, fenetre: true, parAthlete: true },
     { nom: 'wrapped', quand: (p) => p.date === 1 && apres(p, 10, 0) && avantFenetre(p), cles: () => M.abonnes(), un: M.planifies.wrapped, cout: 10, push: true, fenetre: true, profils: true, parAthlete: true },
     { nom: 'badge', quand: (p) => p.joursem === 0 && apres(p, 17, 0) && avantFenetre(p), cles: () => M.abonnes(), un: M.planifies.badge, cout: 10, push: true, fenetre: true, parAthlete: true },
@@ -110,8 +113,8 @@ export function travaux(M) {
       fin: (acc) => M.retentionFin(acc), cout: 3 },
     // La relance des inactifs : J+7, J+14, J+30 après la dernière séance.
     // Les relances automatiques des coachs (lot C3) : une lecture par coach,
-    // puis une sous-tâche par athlète dans la file. Avant 11 h : le plafond
-    // d'une notification par jour n'est pas encore pris par l'accès ou le retour.
+    // puis une sous-tâche par athlète dans la file. Avant 11 h : le premier
+    // push du jour n'est pas encore pris par l'accès ou le retour.
     { nom: 'relances', quand: (p) => apres(p, 10, 30) && p.heure < 21, cles: () => (M.relancesCoachUn ? db_coachs(M) : []),
       un: (coach, t) => M.relancesCoachUn(coach, t), cout: 6 },
     { nom: 'retour', quand: (p) => apres(p, 11, 0) && avantFenetre(p), cles: () => M.abonnes(), un: (uid, t, acc, profil, log) => (M.retourUn ? M.retourUn(uid, t, profil, log) : null), cout: 12, push: true, fenetre: true, profils: true, parAthlete: true },
@@ -376,7 +379,7 @@ export async function minute({ db, M, compteur, maintenant, source, budget }) {
 // Un lot de messages (max_batch_size = 20). Chaque message :
 //   · {quoi:'push', uid, message, …} : un push différé (envoyerPush) ;
 //   · {quoi:'planifie', nom, uid} : le travail `nom` pour cet athlète, à
-//     l'heure du traitement (le plafond d'un push par jour et les heures
+//     l'heure du traitement (le plafond des push du jour et les heures
 //     calmes de l'athlète s'appliquent comme dans le réveil).
 // RÉUSSI : msg.ack(). UNE ERREUR (dont « push_transitoire » : 429 ou 5xx sur
 // tous ses appareils, voir envoyerPush) : msg.retry() — Cloudflare le

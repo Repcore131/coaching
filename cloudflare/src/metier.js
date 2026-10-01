@@ -48,7 +48,7 @@ const PALIERS = ['aucun', 'essentielle', 'ultime', 'suivi'];
 
 // ── LE TEMPS : À PARIS POUR LES TRAVAUX, CHEZ L'ATHLÈTE POUR LES ENVOIS ──
 // Les travaux planifiés se déclenchent à l'heure de Paris (planif.js). Mais
-// les heures calmes, et le jour du plafond d'un push par jour, sont ceux de
+// les heures calmes, et le jour du plafond des push (deux par jour), sont ceux de
 // l'ATHLÈTE : son fuseau (users/<clé>/tz, posé par l'app au démarrage) ; à
 // défaut, ou mal formé, Europe/Paris.
 // UN FORMATEUR PAR FUSEAU, GARDÉ : en construire un à chaque appel coûtait
@@ -84,7 +84,7 @@ export function paris(t) { return heureLocale(t, TZ_DEFAUT); }
 // PURE. Le push du 21e jour d'essai, parcours « Mise sous tension » pas fini.
 export function messageParcoursJ21(n, jour) {
   const k = Math.max(1, Math.min(7, Math.round(Number(n)) || 1));
-  return { type: 'serie', url: './?parcours=1', tag: 'parcours-j21-' + String(jour || ''),
+  return { type: 'serie', prio: 'parcours', url: './?parcours=1', tag: 'parcours-j21-' + String(jour || ''),
     title: 'Encore ' + k + ' étape' + (k > 1 ? 's' : '') + ' ⚡',
     body: 'Ta Mise sous tension est presque bouclée : ' + (k > 1 ? 'les ' + k + ' dernières étapes débloquent' : 'la dernière étape débloque') + ' le badge SOUS TENSION.' };
 }
@@ -109,14 +109,63 @@ export function lundiParis(t) {
   d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
   return d.toISOString().slice(0, 10);
 }
+// ── LA PRIORITÉ D'UN PUSH (01/10/2026) ────────────────────────────────────
+// Le plafond d'UN push par jour laissait la place au premier arrivé : la
+// série en danger du jeudi 18 h, le J-2 et le résultat d'un duel (18 h 30),
+// les réactions (19 h) étaient jetés dès qu'un rappel de santé ou un défi
+// était parti le matin. Chaque message a désormais une priorité (plus grand
+// = plus important) : `message.prio` (une clé de cette table) quand il le
+// précise, sinon son TYPE. Le type, lui, ne change pas : c'est lui que
+// règlent les préférences de l'athlète (pushPrefs).
+export const PUSH_PRIORITE = Object.freeze({
+  duel_fin: 90, serie: 85, duel_j2: 80,
+  defi: 70,                       // les 48 h d'un défi, une saison, un duel qui commence
+  retour: 60, parcours: 60, accueil: 60,
+  wrapped: 55, badge: 50, filleul: 50, coach: 50, message: 50,
+  reactions: 45, bilan: 40, acces: 40, prospect: 40, relance: 30, sante: 20 });
+// Au-delà d'un push dans la journée, seul un message de cette priorité passe.
+export const PRIO_SECOND = 80;
+export const PUSH_PAR_JOUR = 2;
+export function prioDe(message) {
+  const m = message || {};
+  if (typeof m.prio === 'number' && isFinite(m.prio)) return m.prio;
+  return PUSH_PRIORITE[String(m.prio || '')] || PUSH_PRIORITE[String(m.type || '')] || 0;
+}
+// Combien de push ce journal compte AUJOURD'HUI (l'ancien format {jour, at,
+// type}, sans `n`, en compte un).
+export function pushDuJour(log, jour) {
+  if (!log || log.jour !== jour) return 0;
+  return Math.max(1, Number(log.n) || 1);
+}
+// Le plafond : au plus PUSH_PAR_JOUR par jour, et le second seulement pour
+// une priorité ≥ PRIO_SECOND (série, duel). Rend la raison du refus, ou null.
+export function plafondAtteint(log, jour, prio) {
+  const n = pushDuJour(log, jour);
+  if (n >= PUSH_PAR_JOUR) return 'plafond';
+  if (n >= 1 && !(Number(prio) >= PRIO_SECOND)) return 'plafond';
+  return null;
+}
 // `tz` : le fuseau de l'athlète. Le plafond compte SON jour (push_log.jour
 // est écrit dans ce fuseau) : un changement d'heure ne le décale pas.
-export function pushAutorise(type, prefs, log, t, tz) {
+// `prio` : celle du message (prioDe) ; à défaut, celle de son type. Les
+// heures calmes valent pour tous, le second push de priorité ≥ 80 compris.
+export function pushAutorise(type, prefs, log, t, tz, prio) {
   if (PUSH_TYPES.indexOf(type) < 0) return { ok: false, raison: 'type' };
   if (prefs && prefs[type] === false) return { ok: false, raison: 'coupe' };
   if (heuresCalmes(t, tz)) return { ok: false, raison: 'calme' };
-  if (log && log.jour === heureLocale(t, tz).jour) return { ok: false, raison: 'plafond' };
+  const p = prio === undefined ? (PUSH_PRIORITE[type] || 0) : prio;
+  const plein = plafondAtteint(log, heureLocale(t, tz).jour, p);
+  if (plein) return { ok: false, raison: plein };
   return { ok: true, raison: null };
+}
+// LA RÉSERVATION DU JEUDI : de 8 h à 18 h (Paris), les rappels qui peuvent
+// attendre (accès, santé) se taisent chez un athlète dont la série court et
+// n'est pas encore validée cette semaine : la place du second push est
+// gardée pour « Ta série est en danger » à 18 h. PURE.
+export function reserveSerieJeudi(t, streak, streakWeek) {
+  const p = paris(t);
+  if (p.joursem !== 4 || p.heure < 8 || p.heure >= 18) return false;
+  return Number(streak) > 0 && streakWeek !== lundiParis(t);
 }
 
 // ── LA NUIT, UN SEUL MESSAGE ATTEND : LE PLUS IMPORTANT ─────────────────────
@@ -381,7 +430,7 @@ export function creerMetier(deps) {
 
   // ══ WEB PUSH ═══════════════════════════════════════════════════════════
   // `o.urgent` : un message pour l'ADMINISTRATEUR (un litige PayPal). Ni
-  // heures calmes, ni plafond d'un par jour, ni préférences : chaque litige
+  // heures calmes, ni plafond du jour, ni préférences : chaque litige
   // doit arriver, à l'heure où il arrive. Réservé au code du serveur.
   // `o.tz` : le fuseau de l'athlète déjà lu (profil) ; sinon relu ici.
   // `o.attendre === false` : un message qui n'a de sens que maintenant ; en
@@ -403,7 +452,8 @@ export function creerMetier(deps) {
     const prefs = surf ? await _objet(uid, surf, 'pushPrefs') : null;
     const tz0 = tzDonne ? o.tz : (surf ? surf.tz : null);
     const tz = fuseauValide(tz0);
-    const ok = urgent ? { ok: true, raison: null } : pushAutorise(type, prefs, log, t, tz);
+    const prio = prioDe(message);
+    const ok = urgent ? { ok: true, raison: null } : pushAutorise(type, prefs, log, t, tz, prio);
     if (!ok.ok) {
       if (ok.raison === 'calme' && (!o || o.attendre !== false)) {
         await db.ref('push_attente/' + uid).transaction((cur) => fusionAttente(cur, message, t, tz));
@@ -415,8 +465,15 @@ export function creerMetier(deps) {
     const ids = Object.keys(subs);
     if (!ids.length) return { envoye: 0, raison: 'aucun_abonnement' };
     const jour = heureLocale(t, tz).jour;
+    // LA PLACE SE PREND EN TRANSACTION : deux envois simultanés ne prennent
+    // pas la même. `avant` garde le journal d'avant, rendu si rien ne part.
+    let avant = null;
     if (!urgent) {
-      const tx = await db.ref('push_log/' + uid).transaction((cur) => (cur && cur.jour === jour) ? undefined : { jour, at: t, type });
+      const tx = await db.ref('push_log/' + uid).transaction((cur) => {
+        if (plafondAtteint(cur, jour, prio)) return undefined;
+        avant = cur && cur.jour === jour ? cur : null;
+        return { jour, n: pushDuJour(cur, jour) + 1, at: t, type, prio };
+      });
       if (!tx.committed) return { envoye: 0, raison: 'plafond' };
     }
     const charge = JSON.stringify({ title: message.title, body: message.body || '',
@@ -435,13 +492,22 @@ export function creerMetier(deps) {
         else if (r.statut === 429 || r.statut >= 500) passagers++;
       } catch (e) { passagers++; /* un appareil injoignable n'arrête pas les autres */ }
     }));
-    if (!envoye && !urgent) await db.ref('push_log/' + uid).remove();
+    // RIEN N'EST PARTI : la place est rendue — le journal redevient celui
+    // d'avant (le premier push du jour reste compté), ou disparaît.
+    if (!envoye && !urgent) {
+      await db.ref('push_log/' + uid).transaction((cur) => (cur && cur.jour === jour && Number(cur.at) === t) ? (avant || null) : undefined);
+    }
     if (!envoye && tentes > 0 && passagers === tentes) {
       if (_enFile || (o && o.leverTransitoire)) throw new Error('push_transitoire');
       return { envoye: 0, raison: 'transitoire' };
     }
     return { envoye, raison: envoye ? null : 'echec' };
   }
+  // UN PUSH « TERMINÉ » : parti, ou refusé pour de bon (préférence coupée,
+  // aucun appareil, type inconnu, appareils hors service). Le plafond, les
+  // heures calmes et la panne passagère laissent l'état en place : le travail
+  // suivant réessaie.
+  const pushTermine = (r) => !!r && (r.envoye > 0 || ['coupe', 'aucun_abonnement', 'type', 'echec'].indexOf(r.raison) >= 0);
   // planif.js le pose pendant qu'il traite un événement ou une sous-tâche.
   let _enFile = false;
   const enFile = (v) => { _enFile = !!v; };
@@ -504,55 +570,88 @@ export function creerMetier(deps) {
   async function profilsPage(debut, n) {
     return (await db.ref('worker/profils').orderByKey().startAt(String(debut)).limitToFirst(n).get()).val() || {};
   }
-  // Le journal des push (push_log/<uid> : {jour, at, type}), par pages aussi :
-  // un athlète déjà notifié aujourd'hui (une notification par jour) est écarté
-  // sans une seule requête, dans chaque travail.
+  // Le journal des push (push_log/<uid> : {jour, n, at, type, prio}), par pages
+  // aussi : un athlète dont le plafond du jour est pris POUR CETTE PRIORITÉ est
+  // écarté sans une seule requête, dans chaque travail.
   async function logsPage(debut, n) {
     return (await db.ref('push_log').orderByKey().startAt(String(debut)).limitToFirst(n).get()).val() || {};
   }
   // `log` : undefined (pas lu par pages), null (rien aujourd'hui) ou le journal.
   // Le jour du plafond est celui de l'athlète (son fuseau, porté par le profil).
-  const dejaNotifie = (log, t, tz) => !!log && log.jour === heureLocale(t, tz).jour;
+  const dejaNotifie = (log, t, tz, cle) => !!plafondAtteint(log, heureLocale(t, tz).jour, PUSH_PRIORITE[cle] || 0);
   // `pr` : le profil lu (porte tz) — envoyerPush n'a alors pas à relire le fuseau.
   const optLog = (log, o, pr) => Object.assign({}, o || {}, log === undefined ? {} : { log: log || null },
     pr ? { tz: pr.tz || null } : {});
+
+  // La réservation du jeudi (reserveSerieJeudi) pour un athlète : le profil
+  // s'il est là, sinon deux champs — et seulement le jeudi de 8 h à 18 h.
+  async function serieReservee(uid, t, pr) {
+    if (!reserveSerieJeudi(t, 1, null)) return false;
+    const [streak, semaine] = pr ? [pr.streak, pr.streakWeek] : await Promise.all([_lire(uid, 'streak'), _lire(uid, 'streakWeek')]);
+    return reserveSerieJeudi(t, streak, semaine);
+  }
+  // ── LA SÉRIE EN DANGER : jeudi 17 h (« jeu ») et le dernier appel du samedi
+  // 10 h (« sam »). LA SÉRIE EST RECALCULÉE À LA DATE DU JOUR (serieDuJour, la
+  // règle de l'app) : rien si elle est cassée, gelée, ou si la dernière séance
+  // date de plus de 14 jours. Deux temps : trois champs d'abord, qui écartent
+  // la plupart des dossiers ; le reste ensuite.
+  async function serieEnDanger(uid, t, profil, log, quand) {
+    if (dejaNotifie(log, t, profil && profil.tz, 'serie')) return 'plafond';
+    const lundi = lundiParis(t);
+    const pr = await profilUtile(uid, profil, t);
+    const [streak, semaine, der] = pr ? [pr.streak, pr.streakWeek, pr.lastSession]
+      : await Promise.all(['streak', 'streakWeek', 'lastSession'].map((c) => _lire(uid, c)));
+    if (!(Number(streak) > 0) || semaine === lundi) return 'rien';
+    if (!(Number(der) > 0) || t - Number(der) > SERIE_MAX_JOURS * JOUR_MS) return 'ancienne';
+    // LE SAMEDI : seulement si l'athlète ne s'est pas entraîné depuis le
+    // premier appel (jeudi 18 h). Une séance validerait la semaine de toute
+    // façon ; celle-ci compte aussi une séance enregistrée en retard.
+    if (quand === 'sam' && Number(der) >= jeudi18h(lundi)) return 'ouvert';
+    // La surface du dossier : prénom et jokers d'un coup ; la suspension et
+    // le planning, objets, relus seulement s'ils existent. LA SUSPENSION EST
+    // TOUJOURS RELUE ICI, jamais prise au profil : elle change sans séance.
+    const s = await _surface(uid);
+    const [susp, config] = await Promise.all([_objet(uid, s, 'suspension'), _objet(uid, s, 'sessions_config')]);
+    const fname = s.fname, jokers = s.streakJokers, jokerLe = s.streakJokerLe;
+    const etat = serieDuJour({ streak, streakWeek: semaine, lastSession: der, suspension: susp, streakJokers: jokers,
+      streakJokerLe: jokerLe, sessions_config: config }, t);
+    if (etat.etat !== 'vivante' && etat.etat !== 'sauvee') return etat.etat;
+    // Pas de doublon : une relance « retour » vient de partir.
+    if (RE.retourRecent(RE.etatPeriode(await _val('retour_etat/' + uid), der), t)) return 'retour';
+    const n = etat.valeur;
+    const semaines = n + ' semaine' + (n > 1 ? 's' : '');
+    const m = quand === 'sam'
+      ? { title: 'Dernier week-end pour ta série de ' + semaines, body: 'Une séance d’ici dimanche soir et elle continue.' }
+      : { title: 'Ta série de ' + semaines + ' est en danger',
+        body: (fname ? fname + ', il' : 'Il') + ' te reste jusqu’à dimanche pour valider ta semaine.'
+          + (Number(jokers) > 0 ? ' Ton joker la sauverait, mais garde-le pour un vrai coup dur.' : '') };
+    const r = await envoyerPush(uid, Object.assign({ type: 'serie', prio: 'serie', url: './?wo=1', tag: 'serie-' + lundi + '-' + quand }, m), optLog(log, {}, pr));
+    return r && r.envoye ? 'envoye' : ((r && r.raison) || 'echec');
+  }
+  // Jeudi 18 h, heure de Paris, de la semaine qui commence le lundi `lundi`.
+  function jeudi18h(lundi) {
+    const [a, mo, j] = String(lundi).split('-').map(Number);
+    let x = Date.UTC(a, mo - 1, j + 3, 16, 0);       // 18 h en heure d'été
+    if (paris(x).heure !== 18) x += 3600e3;          // 18 h en heure d'hiver
+    return x;
+  }
 
   // ── LES RAPPELS PLANIFIÉS — UNE PERSONNE À LA FOIS ─────────────────────
   // Chacun rend la même chose : il traite UNE clé. Le découpage en lots et le
   // curseur sont dans planif.js.
   const planifies = {
-    // Série en danger : jeudi, de 17 h à 21 h. LA SÉRIE EST RECALCULÉE À LA DATE DU JOUR
-    // (serieDuJour, la règle de l'app) : rien si elle est cassée, gelée, ou
-    // si la dernière séance date de plus de 14 jours. Deux temps : trois
-    // champs d'abord, qui écartent la plupart des dossiers ; le reste ensuite.
+    // Série en danger : jeudi, de 17 h à 21 h (serieEnDanger, ci-dessus).
     async serie(uid, t, acc, profil, log) {
-      if (dejaNotifie(log, t, profil && profil.tz)) return 'plafond';
-      const lundi = lundiParis(t);
-      const pr = await profilUtile(uid, profil, t);
-      const [streak, semaine, der] = pr ? [pr.streak, pr.streakWeek, pr.lastSession]
-        : await Promise.all(['streak', 'streakWeek', 'lastSession'].map((c) => _lire(uid, c)));
-      if (!(Number(streak) > 0) || semaine === lundi) return 'rien';
-      if (!(Number(der) > 0) || t - Number(der) > SERIE_MAX_JOURS * JOUR_MS) return 'ancienne';
-      // La surface du dossier : prénom et jokers d'un coup ; la suspension et
-      // le planning, objets, relus seulement s'ils existent. LA SUSPENSION EST
-      // TOUJOURS RELUE ICI, jamais prise au profil : elle change sans séance.
-      const s = await _surface(uid);
-      const [susp, config] = await Promise.all([_objet(uid, s, 'suspension'), _objet(uid, s, 'sessions_config')]);
-      const fname = s.fname, jokers = s.streakJokers, jokerLe = s.streakJokerLe;
-      const etat = serieDuJour({ streak, streakWeek: semaine, lastSession: der, suspension: susp, streakJokers: jokers,
-        streakJokerLe: jokerLe, sessions_config: config }, t);
-      if (etat.etat !== 'vivante' && etat.etat !== 'sauvee') return etat.etat;
-      // Pas de doublon : une relance « retour » vient de partir.
-      if (RE.retourRecent(RE.etatPeriode(await _val('retour_etat/' + uid), der), t)) return 'retour';
-      const n = etat.valeur;
-      await envoyerPush(uid, { type: 'serie', url: './?wo=1', tag: 'serie-' + lundi + '-jeu',
-        title: 'Ta série de ' + n + ' semaine' + (n > 1 ? 's' : '') + ' est en danger',
-        body: (fname ? fname + ', il' : 'Il') + ' te reste jusqu’à dimanche pour valider ta semaine.'
-          + (Number(jokers) > 0 ? ' Ton joker la sauverait, mais garde-le pour un vrai coup dur.' : '') }, optLog(log, {}, pr));
+      return serieEnDanger(uid, t, profil, log, 'jeu');
+    },
+    // LE DERNIER APPEL DU SAMEDI, 10 h (01/10/2026) : la même série, si rien
+    // n'a bougé depuis jeudi 18 h (pas de séance depuis le premier appel).
+    async serieSamedi(uid, t, acc, profil, log) {
+      return serieEnDanger(uid, t, profil, log, 'sam');
     },
     // Wrapped prêt : le 1er du mois, 10 h — pour qui s'est entraîné le mois écoulé.
     async wrapped(uid, t, acc, profil, log) {
-      if (dejaNotifie(log, t, profil && profil.tz)) return 'plafond';
+      if (dejaNotifie(log, t, profil && profil.tz, 'wrapped')) return 'plafond';
       const p = paris(t);
       const moisPrec = p.mois === 1 ? 12 : p.mois - 1, anPrec = p.mois === 1 ? p.annee - 1 : p.annee;
       const debut = Date.UTC(anPrec, moisPrec - 1, 1) - 2 * 3600e3;
@@ -583,11 +682,14 @@ export function creerMetier(deps) {
     // UNE fois par échéance. C'était le bandeau de l'accueil, qu'on ne voit
     // qu'en ouvrant l'app : la notification le dit à qui ne l'ouvre plus.
     async acces(uid, t, acc, profil, log) {
-      if (dejaNotifie(log, t, profil && profil.tz)) return 'plafond';
+      if (dejaNotifie(log, t, profil && profil.tz, 'acces')) return 'plafond';
       // Le profil ÉCARTE (pas d'échéance dans les trois jours) ; retenu, le
       // dossier est relu avant d'envoyer quoi que ce soit.
       const pr = await profilUtile(uid, profil, t);
       if (pr) { const e0 = Number(pr.accessExpiry) || 0; if (!(e0 > t) || e0 - t > 3 * 864e5) return 'profil'; }
+      // LE JEUDI, LA SÉRIE D'ABORD : le rappel d'accès attend demain (il reste
+      // au moins deux jours), relances_acces n'est pas posé.
+      if (await serieReservee(uid, t, pr)) return 'reserve_serie';
       const [statut, ech, fin, fname, deja] = await Promise.all([_lire(uid, 'status'), _lire(uid, 'accessExpiry'),
         _lire(uid, 'abonnement/finAccesPaypal'), _lire(uid, 'fname'), _val('worker/relances_acces/' + uid)]);
       const e = Number(ech) || 0;
@@ -1457,14 +1559,32 @@ export function creerMetier(deps) {
       await db.ref().update({ ['duels/' + id + '/statut']: 'annule', ['duels/' + id + '/maj']: t, ['duels_actifs/' + id]: null });
       return 'annule';
     }
+    // LE J-2 : duels/<id>/rappel n'est posé qu'une fois CHACUN servi — envoi
+    // réussi, ou refus définitif (préférence, aucun appareil). Refusé pour le
+    // plafond ou les heures calmes, il est retenté demain, tant qu'il reste
+    // plus de 12 h ; rappelPour/<uid> retient qui l'a déjà eu.
     if (suite === 'rappel') {
-      await db.ref('duels/' + id + '/rappel').set(true);
-      await pousserA([d.createur, d.invite].map((uid) => ({ uid, message: DU.pushRappel(d, uid) })), { attendre: false });
-      return 'rappel';
+      const deja = d.rappelPour || {};
+      const maj = {};
+      let reste = false;
+      for (const uid of [d.createur, d.invite].filter(Boolean)) {
+        if (deja[uid]) continue;
+        // Plus de budget dans ce réveil : la sous-tâche part à la minute suivante.
+        if (file || !peutPousser()) { await differer([tachePush(uid, DU.pushRappel(d, uid), { attendre: false })]); maj['duels/' + id + '/rappelPour/' + uid] = true; continue; }
+        const r = await envoyerPush(uid, DU.pushRappel(d, uid), { attendre: false });
+        if (pushTermine(r)) maj['duels/' + id + '/rappelPour/' + uid] = true;
+        else reste = true;
+      }
+      if (!reste || Number(d.fin) - t <= RAPPEL_REESSAI_MS) maj['duels/' + id + '/rappel'] = true;
+      if (Object.keys(maj).length) await db.ref().update(maj);
+      return reste ? 'rappel_a_reprendre' : 'rappel';
     }
     return 'rien';
   }
   const duelsActifs = () => db.ref('duels_actifs').shallow();
+  // Un J-2 refusé (plafond, heures calmes) se retente demain s'il reste plus
+  // que cela avant la fin du duel.
+  const RAPPEL_REESSAI_MS = 12 * 3600e3;
 
   // ══ LES RÉACTIONS ENTRE AMIS (lot D) ═════════════════════════════════════
   // /reactions/<pseudo>/<jour>/<pseudo de l'envoyeur> = un des cinq emojis,
@@ -1485,18 +1605,22 @@ export function creerMetier(deps) {
     return 'note';
   }
   const reactionsAttente = () => db.ref('reactions_push').shallow();
+  // reactions_push/<uid> N'EST EFFACÉ QU'APRÈS : un envoi réussi, ou un refus
+  // définitif (préférence coupée, aucun appareil). Refusé pour le plafond ou
+  // les heures calmes, il reste, et le travail du lendemain réessaie.
   async function reactionsPushUn(uid, t) {
     const a = await _val('reactions_push/' + uid);
-    await db.ref('reactions_push/' + uid).remove();
-    if (!a || !a.pk || !a.jour) return 'rien';
+    const oublier = () => db.ref('reactions_push/' + uid).remove();
+    if (!a || !a.pk || !a.jour) { await oublier(); return 'rien'; }
     const r = (await _val('reactions/' + a.pk + '/' + a.jour)) || {};
     const qui = Object.keys(r).filter((k) => REACTIONS.indexOf(r[k]) >= 0);
-    if (!qui.length) return 'rien';
+    if (!qui.length) { await oublier(); return 'rien'; }
     const p1 = (await _val('profils_publics/' + qui[0] + '/prenom')) || 'Un ami';
     const nom = String(p1).trim().slice(0, 24) || 'Un ami';
     const n = qui.length - 1;
     const title = n ? nom + ' et ' + n + ' autre' + (n > 1 ? 's' : '') + ' ont réagi à ta séance' : nom + ' a réagi à ta séance';
-    const res = await envoyerPush(uid, { type: 'defi', url: './?duels=1', tag: 'reactions-' + a.jour, title, body: qui.map((k) => r[k]).join(' ') });
+    const res = await envoyerPush(uid, { type: 'defi', prio: 'reactions', url: './?duels=1', tag: 'reactions-' + a.jour, title, body: qui.map((k) => r[k]).join(' ') });
+    if (pushTermine(res)) await oublier();
     return res && res.envoye ? 'envoye' : ((res && res.raison) || 'echec');
   }
 
@@ -1626,7 +1750,7 @@ export function creerMetier(deps) {
   // le reste seulement pour qui est au bon jour. retour_etat/<uid> retient
   // les paliers envoyés de la période ; le Worker seul le lit et l'écrit.
   async function retourUn(uid, t, profil, log) {
-    if (dejaNotifie(log, t, profil && profil.tz)) return 'plafond';
+    if (dejaNotifie(log, t, profil && profil.tz, 'retour')) return 'plafond';
     const pr = await profilUtile(uid, profil, t);
     const der = Number(pr ? pr.lastSession : await _lire(uid, 'lastSession')) || 0;
     const palier = RE.palierDuJour(der, t);
@@ -1832,15 +1956,15 @@ export function creerMetier(deps) {
   // l'athlète (bilan à J2, séance à J6) ou par son coach à la publication
   // (programme non lu). Le Worker lit la liste du JOUR (une lecture), relit la
   // seule chose qui dit si l'étape est faite, et pousse au plafond commun
-  // (une poussée par jour et par compte). UNE FOIS PAR ÉTAPE : la trace
+  // (deux poussées par jour au plus, la seconde pour la série ou un duel). UNE FOIS PAR ÉTAPE : la trace
   // accueil_trace/<compte>/<étape> = la date de l'envoi, que la fiche du coach
   // lit aussi. Plafond du jour déjà pris : l'étape repart au lendemain, une fois.
   const ACCUEIL_MSG = {
-    bilan: { type: 'bilan', url: './?bilan=1', title: 'Ton bilan de départ t’attend',
+    bilan: { type: 'bilan', prio: 'accueil', url: './?bilan=1', title: 'Ton bilan de départ t’attend',
       body: 'Cinq minutes, et ton coach a de quoi écrire ton programme.' },
-    programme: { type: 'serie', url: './', title: 'Ton programme est prêt',
+    programme: { type: 'serie', prio: 'accueil', url: './', title: 'Ton programme est prêt',
       body: 'Ton coach l’a écrit pour toi : jette un œil avant ta première séance.' },
-    seance: { type: 'serie', url: './?wo=1', title: 'Ta première séance t’attend',
+    seance: { type: 'serie', prio: 'accueil', url: './?wo=1', title: 'Ta première séance t’attend',
       body: 'Ton programme est là : une séance, et ton accueil est presque bouclé.' },
   };
   async function accueilFaite(k, etape) {
@@ -1918,7 +2042,7 @@ export function creerMetier(deps) {
     return 'tache_inconnue';
   }
 
-  return { envoyerPush, enFile, alerteKo, abonnes, planifies, profilsPage, logsPage, rafraichirProfil, apresHeuresCalmes, statsBadgesUn, statsBadgesFin,
+  return { envoyerPush, enFile, alerteKo, abonnes, planifies, serieReservee, profilsPage, logsPage, rafraichirProfil, apresHeuresCalmes, statsBadgesUn, statsBadgesFin,
     defisQuotidienCoach, coachsAvecCanal, coachsAvecAthletes, recalculerDefi, parrainageDemande, parrainagePaiement, parrainageSeuil,
     ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits, majDroits, palierDroits, dejaPaye,
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,

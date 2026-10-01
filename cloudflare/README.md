@@ -18,8 +18,22 @@ Ce que le plan Spark de Firebase ne fait pas, sans rien payer ni donner de carte
 
 ## Règles d'envoi
 
-- **Une notification par jour et par personne au plus.** Le jour est celui de l'athlète, dans son
-  fuseau : un changement d'heure ne le décale pas.
+- **Deux notifications par jour et par personne au plus, la seconde seulement si elle compte.**
+  Chaque message a une priorité (`PUSH_PRIORITE`, `src/metier.js`) : duel_fin 90, serie 85,
+  duel_j2 80, defi 70, retour, parcours et accueil 60, wrapped 55, badge, filleul, coach et message
+  50, reactions 45, bilan, acces et prospect 40, relance 30, sante 20. Le message la précise dans
+  `prio`, sinon c'est celle de son type ; le type, lui, reste celui des préférences (`pushPrefs`).
+  - `push_log/<clé>` = `{jour, n, at, type, prio}` : le premier push du jour passe toujours ; le
+    second seulement si sa priorité est **≥ 80** (la série, un duel) ; jamais de troisième.
+  - Le jour est celui de l'athlète, dans son fuseau : un changement d'heure ne le décale pas.
+  - Un message refusé pour le plafond ou les heures calmes ne perd pas son travail : le J-2 d'un
+    duel (`duels/<id>/rappel`) et les réactions (`reactions_push/<clé>`) ne sont consommés
+    qu'après un envoi réussi ou un refus définitif (préférence coupée, aucun appareil).
+  - **Le jeudi, de 8 h à 18 h**, l'accès et le rappel de santé se taisent chez un athlète dont la
+    série n'est pas validée cette semaine : l'accès repart le lendemain, la santé est sautée.
+  - **Le samedi 10 h**, `serie_sam` : « Dernier week-end pour ta série de N semaines », pour qui ne
+    s'est pas entraîné depuis jeudi 18 h.
+  - Le push urgent de l'administrateur (litige PayPal) reste hors plafond.
 - **Rien entre 21 h et 8 h, heure de l'athlète.**
   - Le fuseau, c'est `users/<clé>/tz` : le nom IANA du fuseau de l'appareil (`America/Montreal`),
     écrit par l'app à chaque démarrage s'il a changé.
