@@ -20,6 +20,22 @@ orphelins à valider à la main.
 
 Avant de publier le nouveau `index.html`, ces fonctions doivent être déployées.
 
+## Déploiement manuel (décidé le 01/10/2026)
+
+**Les fonctions ne sont déployées par AUCUN automatisme** : ni `.github/workflows/firebase.yml`,
+ni `deploie.sh`. C'est voulu, et décidé une fois pour toutes :
+
+- le projet est en plan **Spark**, où elles ne tournent pas ;
+- leur travail est fait par le **serveur léger** (Cloudflare Worker, `cloudflare/`) : paiements
+  PayPal (`/paypal`), `droits/`, codes de coach, essais, push. Il se déploie par
+  `.github/workflows/cloudflare.yml` ;
+- **les deux ensemble traiteraient chaque événement deux fois** (un paiement crédité deux fois,
+  un push envoyé deux fois) — voir `firebase.json`, « //pages » : « jamais avec ».
+
+Le jour où le projet passe en Blaze ET où l'on retire le Worker, le déploiement se fait **à la main**,
+une fois, depuis un poste autorisé (section « 3. Déployer les fonctions » ci-dessous). Jamais les deux
+serveurs en même temps.
+
 ## Prérequis
 
 - **Plan Firebase Blaze (pay-as-you-go) obligatoire.** Les Cloud Functions ne fonctionnent pas

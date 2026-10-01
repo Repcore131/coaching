@@ -1,0 +1,202 @@
+# ══════════════════════════════════════════════════════════════════════════
+#  LE SERVEUR LÉGER (Cloudflare Worker) : TESTÉ À CHAQUE PR, DÉPLOYÉ DEPUIS main
+# ══════════════════════════════════════════════════════════════════════════
+#
+#  POURQUOI. Le Worker partait à la main (`npx wrangler deploy` sur le poste
+#  de Kevin) : rien ne garantissait que ce qui tourne soit ce qui est dans
+#  main. Désormais :
+#    · test        à chaque PR et chaque push : `npm test` et la compilation
+#                  du Worker (`wrangler deploy --dry-run`, sans secret) ;
+#    · deploy      sur main seulement : `wrangler deploy`, la version porte le
+#                  commit (--tag), puis la SONDE /sante (5 essais). Si elle
+#                  échoue : `wrangler rollback`, et le travail est ROUGE ;
+#    · concordance chaque matin : la version EN LIGNE doit porter le dernier
+#                  commit de main qui touche le Worker. Un déploiement fait à
+#                  la main depuis une autre branche, un déploiement raté :
+#                  ROUGE.
+#
+#  ── LES SECRETS ── Settings > Secrets and variables > Actions :
+#    CLOUDFLARE_API_TOKEN   Cloudflare > My Profile > API Tokens > Create Token
+#                           > modèle « Edit Cloudflare Workers » (cloudflare/README.md, « Déployer »)
+#    CLOUDFLARE_ACCOUNT_ID  Cloudflare > Workers & Pages > colonne de droite « Account ID »
+#  Absents : un avertissement, et rien n'est déployé (comme apk.yml).
+#
+#  ⚠ LES SECRETS DU WORKER (FIREBASE_SERVICE_ACCOUNT, VAPID_PRIVATE_KEY,
+#    PAYPAL_*…) restent posés chez Cloudflare : un déploiement ne les touche
+#    pas, et ils ne passent jamais par GitHub.
+# ══════════════════════════════════════════════════════════════════════════
+name: Serveur léger (Cloudflare)
+
+on:
+  push:
+    branches: [main]
+    # Tout ce que le Worker embarque : son dossier, les calculs partagés avec
+    # functions/, le tableau des tarifs (importé), et ce que ses tests lisent.
+    paths:
+      - 'cloudflare/**'
+      - 'functions/*-calcul.js'
+      - 'tarifs.json'
+      - 'scripts/veille_serveur.mjs'
+      - '.github/workflows/cloudflare.yml'
+  pull_request:
+    paths:
+      - 'cloudflare/**'
+      - 'functions/*-calcul.js'
+      - 'tarifs.json'
+      - 'scripts/veille_serveur.mjs'
+      - '.github/workflows/cloudflare.yml'
+  schedule:
+    # La concordance, chaque matin à 05:23 UTC.
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  URL_SANTE: https://repcore-serveur.repcore.workers.dev/sante
+  # Les chemins dont dépend le Worker : la concordance cherche le dernier commit qui les touche.
+  CHEMINS_WORKER: cloudflare functions/ambassadeurs-calcul.js functions/attribution-calcul.js functions/defis-calcul.js functions/parrainage-calcul.js tarifs.json
+
+jobs:
+  test:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Les tests du Worker
+        working-directory: cloudflare
+        run: npm test
+      # La compilation, comme au déploiement, mais sans rien envoyer (ni secret).
+      - name: Le Worker se compile
+        working-directory: cloudflare
+        run: npx -y wrangler@4 deploy --dry-run --outdir "$RUNNER_TEMP/worker"
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: cloudflare-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # ⚠ PAR COMPARAISON, jamais la table des secrets (voir rapport-payeur.yml).
+      - name: Les secrets sont-ils posés
+        id: cle
+        env:
+          VU_JETON: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+          VU_COMPTE: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+        run: |
+          if [ "$VU_JETON" = "true" ] && [ "$VU_COMPTE" = "true" ]; then
+            echo "ok=oui" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=non" >> "$GITHUB_OUTPUT"
+            echo "::warning::CLOUDFLARE_API_TOKEN ou CLOUDFLARE_ACCOUNT_ID absent des secrets : le Worker n'est PAS déployé (cloudflare/README.md, « Déployer »)."
+          fi
+
+      - name: Le commit
+        id: commit
+        run: echo "court=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - name: Déployer
+        if: steps.cle.outputs.ok == 'oui'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: cloudflare
+          wranglerVersion: '4'
+          command: deploy --tag ${{ steps.commit.outputs.court }} --message "main ${{ steps.commit.outputs.court }}"
+
+      # LA SONDE. /sante est mis en cache 30 s et le pouls n'est écrit qu'à la
+      # minute suivante : 5 essais espacés de 30 s couvrent deux minutes.
+      # ok (pouls de moins de 5 min, base joignable), vapid (push possible),
+      # base (adresse de la base posée). /sante ne dit plus « secret » depuis
+      # le lot 7 : c'est /sante?cles=1, réservé à l'administrateur.
+      - name: La sonde /sante
+        id: sonde
+        if: steps.cle.outputs.ok == 'oui'
+        run: |
+          for i in 1 2 3 4 5; do
+            if curl -fsS --max-time 15 "$URL_SANTE" | tee /tmp/sante.json | jq -e '.ok and .vapid and .base' >/dev/null; then
+              echo "Sonde verte à l'essai $i : $(cat /tmp/sante.json)"
+              exit 0
+            fi
+            echo "Essai $i : $(cat /tmp/sante.json 2>/dev/null)"
+            [ "$i" -lt 5 ] && sleep 30
+          done
+          echo "::error::/sante ne passe pas après 5 essais : retour à la version précédente."
+          exit 1
+
+      - name: Revenir à la version précédente
+        if: failure() && steps.sonde.outcome == 'failure'
+        working-directory: cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          COURT: ${{ steps.commit.outputs.court }}
+        run: |
+          npx -y wrangler@4 rollback --yes --message "Sonde /sante en échec après le déploiement de $COURT"
+          echo "::error::Le Worker est revenu à la version précédente : main ($COURT) N'EST PAS en ligne."
+          exit 1
+
+  # LA CONCORDANCE : ce qui tourne est-il ce qui est dans main ?
+  concordance:
+    needs: [deploy]
+    # Le matin (schedule : test et deploy sont sautés, d'où always()), et après
+    # un déploiement lancé à la main. Pas après un deploy rouge : il l'a déjà dit.
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && needs.deploy.result != 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Les secrets sont-ils posés
+        id: cle
+        env:
+          VU_JETON: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+          VU_COMPTE: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+        run: |
+          if [ "$VU_JETON" = "true" ] && [ "$VU_COMPTE" = "true" ]; then echo "ok=oui" >> "$GITHUB_OUTPUT"
+          else echo "ok=non" >> "$GITHUB_OUTPUT"; echo "::warning::Secrets Cloudflare absents : concordance non vérifiée."; fi
+      - name: La version en ligne porte-t-elle le dernier commit du Worker ?
+        if: steps.cle.outputs.ok == 'oui'
+        working-directory: cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          ATTENDU=$(git -C .. log -1 --format=%H -- $CHEMINS_WORKER | cut -c1-12)
+          npx -y wrangler@4 deployments status --json > "$RUNNER_TEMP/statut.json"
+          # La version active (100 %) ; son tag est posé par le job deploy.
+          VERSION=$(jq -r '[.versions[] | select(.percentage == 100)][0].version_id // .versions[0].version_id' "$RUNNER_TEMP/statut.json")
+          npx -y wrangler@4 versions view "$VERSION" --json > "$RUNNER_TEMP/version.json"
+          EN_LIGNE=$(jq -r '.annotations["workers/tag"] // ""' "$RUNNER_TEMP/version.json")
+          echo "Dernier commit du Worker dans main : $ATTENDU ; version en ligne : $VERSION, tag « $EN_LIGNE »"
+          {
+            echo "## Concordance du Worker"
+            echo "| | |"; echo "|---|---|"
+            echo "| dernier commit du Worker dans main | \`$ATTENDU\` |"
+            echo "| tag de la version en ligne | \`${EN_LIGNE:-aucun}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$EN_LIGNE" != "$ATTENDU" ]; then
+            echo "::error::Le Worker en ligne ne correspond pas à main : déployé à la main, ou dernier déploiement raté. Relancer ce workflow (Run workflow sur main)."
+            exit 1
+          fi

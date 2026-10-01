@@ -1,3 +1,19 @@
+# GitHub Pages : repcore131.github.io/coaching/
+#
+# ⚠ JUSQU'AU 01/10/2026, CE TRAVAIL PUBLIAIT LE DÉPÔT ENTIER (path: .) :
+#   scripts, règles de la base, code du Worker, docs/ (les plans), android/…
+#   tout était lisible à repcore131.github.io/coaching/<chemin>.
+#
+# CE QUI EST PUBLIÉ, désormais : le site public assemblé par
+# scripts/assembler_site.sh — LA MÊME LISTE que Firebase Hosting — plus vault/
+# (l'appli d'épargne, servie seulement ici : vault/README.md).
+#
+# POURQUOI PAS vault/ SEUL : le sitemap, robots.txt, les balises canonical et
+# les images d'aperçu (og:image) de la page de vente, du blog et de l'app
+# désignent encore repcore131.github.io/coaching/. Les retirer d'ici casserait
+# les aperçus partagés et les liens déjà donnés. Passer tout sur
+# repcore-sync.web.app est un choix à faire à part (et ce travail ne
+# publierait plus alors que vault/).
 name: Deployer les Pages
 on:
   push:
@@ -19,8 +35,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      - name: Assembler ce qui est public (et rien d'autre)
+        run: |
+          bash scripts/assembler_site.sh _pages --avec-vault
+          # GARDE-FOU : rien de privé ne doit y entrer.
+          for x in scripts cloudflare functions docs android database.rules.json firebase.json deploie.sh .github; do
+            if [ -e "_pages/$x" ]; then echo "::error::$x ne doit pas être publié"; exit 1; fi
+          done
+          test -f _pages/index.html && test -f _pages/vault/README.md && test -f _pages/app/index.html
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _pages
       - id: deploiement
         uses: actions/deploy-pages@v4

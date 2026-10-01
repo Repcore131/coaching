@@ -47,10 +47,8 @@ refusés jusqu'à minuit (UTC).
    ```
    type C:\Users\kevin\RepCore-secrets\vapid-privee.txt | npx wrangler@4 secret put VAPID_PRIVATE_KEY
    ```
-5. **Déployer** :
-   ```
-   npx wrangler@4 deploy
-   ```
+5. **Déployer** : la première fois à la main (`npx wrangler@4 deploy`), ensuite **par GitHub**
+   seulement — voir « Déployer » ci-dessous.
 6. Vérifier : `https://repcore-serveur.<sous-domaine>.workers.dev/sante` doit répondre
    `{"ok":true,"base":true,"vapid":true,"derniereMinuteIlYA_s":…,"file":0,"ko":0}` — `ok` n'est vrai
    qu'une fois la première minute passée (voir « La veille »). Le détail (mode d'accès à la base, secrets posés) est
@@ -58,6 +56,37 @@ refusés jusqu'à minuit (UTC).
 
 L'adresse du serveur est ensuite posée dans l'app (`SERVEUR_LEGER_URL`, `app/rc-core.*.js`) et dans
 les pages publiques (`index.html`, `i/`, `p/`, `c/`), puis livrée : c'est ce qui allume le tout.
+
+## Déployer
+
+**Le Worker part de `main`, par `.github/workflows/cloudflare.yml`, et de nulle part ailleurs.**
+
+| quand | ce qui tourne |
+|---|---|
+| une PR qui touche `cloudflare/`, `functions/*-calcul.js` ou `tarifs.json` | `npm test` et la compilation (`wrangler deploy --dry-run`) ; **rien n'est déployé** |
+| un push sur `main` qui touche ces fichiers, ou *Run workflow* sur `main` | les tests, puis `wrangler deploy --tag <commit>`, puis la **sonde** `/sante` (5 essais, 30 s d'écart : `ok`, `vapid` et `base` vrais). Sonde en échec : `wrangler rollback` vers la version précédente, et le travail est **rouge** |
+| chaque matin (05:23 UTC) | la **concordance** : la version en ligne doit porter le tag du dernier commit de `main` qui touche le Worker. Un déploiement fait à la main depuis une autre branche, ou un déploiement raté : **rouge** |
+
+Un `npx wrangler deploy` depuis ton poste reste possible en urgence. La concordance du lendemain sera
+alors rouge, tant que *Run workflow* sur `main` n'aura pas remis la version de `main`.
+
+### Les deux secrets GitHub (une fois)
+
+1. **Le jeton Cloudflare** : Cloudflare → *My Profile* (en haut à droite) → *API Tokens* →
+   *Create Token* → modèle **« Edit Cloudflare Workers »** → *Use template*.
+   - *Account Resources* : ton compte seulement.
+   - *Zone Resources* : *All zones* convient (le Worker est sur `workers.dev`).
+   - *Continue to summary* → *Create Token*, puis **copier le jeton** : il n'est montré qu'une fois.
+2. **L'identifiant du compte** : Cloudflare → *Workers & Pages* → colonne de droite, **Account ID**.
+3. Dépôt GitHub → *Settings* → *Secrets and variables* → *Actions* → *New repository secret* :
+   - `CLOUDFLARE_API_TOKEN` : le jeton ;
+   - `CLOUDFLARE_ACCOUNT_ID` : l'identifiant.
+
+Sans eux, le travail affiche un avertissement et ne déploie rien.
+
+**Les secrets du Worker lui-même** (`FIREBASE_SERVICE_ACCOUNT`, `VAPID_PRIVATE_KEY`, `PAYPAL_*`…) restent
+posés chez Cloudflare par `wrangler secret put`. Un déploiement ne les touche pas, et ils ne passent
+jamais par GitHub.
 
 ## Comment ça marche
 

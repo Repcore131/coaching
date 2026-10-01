@@ -42,26 +42,10 @@ jobs:
         with:
           node-version: '22'
 
+      # LA LISTE DE CE QUI EST PUBLIC vit dans scripts/assembler_site.sh,
+      # partagée avec deploie.sh et pages.yml (deux copies divergeaient).
       - name: Assembler _site
-        run: |
-          set -e
-          rm -rf _site && mkdir -p _site
-          # maj/ : la page de deblocage, DEHORS de /app/ et donc hors de
-          # portee du service worker de l'app. Elle doit etre deployee,
-          # sinon elle n'existe que sur le disque.
-          # p/, c/, a/ : les pages publiques /@pseudo, /coach/slug et la page
-          # secrete d'un ambassadeur ; firebase.json y reecrit /@* et /coach/*.
-          cp -a app blog i maj p c a _site/
-          cp -a index.html legal.html privacy.html terms.html 404.html aide-apk.html _site/
-          cp -a logo.png og-image.png robots.txt sitemap.xml _site/
-          # LOT C6 : le tableau des offres, que la vitrine d'un coach lit pour ses formules.
-          cp -a tarifs.json _site/
-          # well-known/ (sans point dans le depot) -> _site/.well-known/.
-          # Absent, Firebase sert un assetlinks.json VIDE (« [] ») et la TWA
-          # Android s'ouvre avec la barre d'adresse (constate le 28/09/2026).
-          mkdir -p _site/.well-known && cp -a well-known/. _site/.well-known/
-          if [ -f .nojekyll ]; then cp -a .nojekyll _site/; fi
-          echo "Fichiers assembles : $(find _site -type f | wc -l)"
+        run: bash scripts/assembler_site.sh _site
 
       # GARDE-FOU. Un deploiement remplace TOUT le site : si l'assemblage a
       # rate, on prefere ne rien envoyer plutot que de vider sync.web.app.
@@ -203,14 +187,13 @@ jobs:
           else
             echo "::warning::REGLES NON DEPLOYEES. droits/ reste inaccessible et l application retombe sur l ancien modele : bash deploie.sh depuis un poste autorise."
           fi
-          # LES FONCTIONS demandent le plan Blaze. Tant que le projet est en
-          # Spark, ce deploiement echoue : on le tente, on le DIT, et on ne fait
-          # pas tomber la livraison du site pour autant.
-          if firebase deploy --only functions --project repcore-sync --non-interactive; then
-            echo "Fonctions deployees."
-          else
-            echo "::warning::Fonctions NON deployees (plan Blaze requis). droits/ reste vide et l application retombe sur l ancien modele."
-          fi
+          # LES FONCTIONS NE PARTENT PAS D'ICI (01/10/2026), et c'est décidé une
+          # fois pour toutes : le serveur léger (Cloudflare Worker) fait leur
+          # travail sur le plan Spark — paiements PayPal, droits/, push — et
+          # les deux ensemble traiteraient chaque paiement deux fois
+          # (firebase.json, « //pages » : « jamais avec »). Leur déploiement est
+          # MANUEL : functions/README.md, « Déploiement manuel ». Le Worker, lui,
+          # part par .github/workflows/cloudflare.yml.
           rm -f "$RUNNER_TEMP/cle.json"
 
   # LA SUITE NAVIGATEUR (app/tests.js, ~6 000 assertions) dans le Chrome du
