@@ -39,7 +39,7 @@ import * as RT from './retention.js';
 export const CREATOR_EMAIL = 'guellec.coachingpro@gmail.com';
 export const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 // La clé du créateur, destinataire des alertes (plafond de parrainage).
-const CLE_CREATEUR_PUSH = CREATOR_EMAIL.replace(/\./g, ',');
+export const CLE_CREATEUR_PUSH = CREATOR_EMAIL.replace(/\./g, ',');
 // 'message' : un athlète a écrit à son coach (messagerie, lot M2). Vers l'athlète,
 // un message du coach part en type 'coach'.
 export const PUSH_TYPES = ['serie', 'wrapped', 'bilan', 'badge', 'coach', 'filleul', 'defi', 'acces', 'retour', 'sante', 'relance', 'prospect', 'message'];

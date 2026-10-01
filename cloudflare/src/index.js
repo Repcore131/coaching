@@ -18,8 +18,14 @@
 //   GARMIN_CLIENT_ID, GARMIN_CLIENT_SECRET, GARMIN_PUSH_SECRET, GARMIN_CLE
 //                        la Health API de Garmin (garmin.js). Un seul absent : fermé.
 //                        Absent : /sante?cles=1 est fermé.
-// LIMITES (wrangler.toml, [[ratelimits]]) : LIMITE_ARRIVEES, par adresse IP,
-// pour /arrivee et /amb-clic. Absente (tests, ancien déploiement) : rien n'est limité.
+// LIMITES (wrangler.toml, [[ratelimits]]), par adresse IP. AUCUNE ROUTE
+// PUBLIQUE SANS LIMITE (01/10/2026) :
+//   LIMITE_ROUTES    toute requête (sauf la pré-vérification OPTIONS), 120/min ;
+//   LIMITE_ARRIVEES  /arrivee, /amb-clic, /prospect, /vitrine-vue, 30/min ;
+//   LIMITE_REVEIL    /reveil, 6/min (POST seulement).
+// Absente (tests, ancien déploiement) ou en panne : la requête passe.
+// Chaque 429 servi est compté (pouls.js) ; au-delà de 500 par heure, le
+// créateur est prévenu.
 // VARIABLES (wrangler.toml) : FIREBASE_DB_URL, VAPID_PUBLIC_KEY.
 
 import { creerBase } from './base.js';
@@ -34,6 +40,7 @@ import { santeJeton, recevoirSante, compteDuJeton, rappelSanteUn } from './sante
 import { creerPaiementsCoach } from './paiements-coach.js';
 import { creerGarmin, garminOuvert } from './garmin.js';
 import { creerAppelsDroits } from './droits-appels.js';
+import { noter429, viderPouls, surveillerQuota } from './pouls.js';
 
 // Les fonctions appelées par l'app (protocole onCall, jeton Firebase vérifié).
 // paiementCoach : relier son compte PayPal (coach), commander et capturer (athlète).
@@ -94,142 +101,173 @@ const reponse = (corps, statut, type) => {
   return new Response(vide ? null : corps, { status: st, headers: entetes });
 };
 
+// Le limiteur d'une route, par adresse IP. Vrai : la requête passe. Une
+// panne du limiteur laisse passer : un clic compté de trop vaut mieux qu'une
+// page publique qui renvoie 500.
+async function passe(limiteur, req) {
+  try {
+    if (limiteur && typeof limiteur.limit === 'function') {
+      const r = await limiteur.limit({ key: ipDe(req) });
+      if (r && r.success === false) return false;
+    }
+  } catch (e) { /* laisse passer */ }
+  return true;
+}
+
 export default {
   async fetch(req, env, ctx) {
-    // TOUT EST DANS LE try, pré-vérification comprise : aucune exception ne
-    // doit sortir d'ici sans en-têtes CORS.
-    try {
-      if (req.method === 'OPTIONS') return reponse(null, 204);
-      const url = new URL(req.url);
-      // LES FONCTIONS DE L'APP : /fn/<nom>, comme les Cloud Functions.
-      if (url.pathname.startsWith('/fn/') && req.method === 'POST') {
-        const o = outils(env);
-        return await repondreAppel(req, APPELS, { db: o.db, M: o.M, env, projet: 'repcore-sync', fetchImpl: o.fetchCompte, requete: req });
-      }
-      // LA SANTÉ SYNCHRONISÉE (Health Connect, Raccourci iPhone) : voir sante.js.
-      // Le corps n'est jamais journalisé.
-      if (url.pathname === '/sante/qui' && req.method === 'POST') {
-        const o = outils(env);
-        const r = await compteDuJeton(req, { db: o.db });
-        return reponse(JSON.stringify(r.corps), r.statut);
-      }
-      if ((url.pathname === '/sante/i' || url.pathname.startsWith('/sante/i/')) && req.method === 'POST') {
-        const o = outils(env);
-        const r = await recevoirSante(req, { db: o.db });
-        return reponse(JSON.stringify(r.corps), r.statut);
-      }
-      // GARMIN (garmin.js) : la liaison OAuth, puis ce que Garmin pousse.
-      // Fermé (404 ou retour « ferme ») tant que les secrets GARMIN_* manquent.
-      if (url.pathname === '/garmin/lier' && req.method === 'GET') {
-        const o = outils(env);
-        return await creerGarmin({ db: o.db, env, fetchImpl: o.fetchCompte }).lier(req);
-      }
-      if (url.pathname === '/garmin/retour' && req.method === 'GET') {
-        const o = outils(env);
-        return await creerGarmin({ db: o.db, env, fetchImpl: o.fetchCompte }).retour(req);
-      }
-      if (url.pathname.startsWith('/garmin/push') && req.method === 'POST') {
-        const o = outils(env);
-        const r = await creerGarmin({ db: o.db, env, fetchImpl: o.fetchCompte }).recevoir(req);
-        return reponse(JSON.stringify(r.corps), r.statut);
-      }
-      // PAYPAL : chaque événement d'abonnement ou de paiement, signature vérifiée chez PayPal.
-      if (url.pathname === '/paypal' && req.method === 'POST') {
-        const o = outils(env);
-        return await recevoirWebhook(req, { db: o.db, M: o.M, env });
-      }
-      // L'app vient de déposer un événement : on le traite tout de suite,
-      // sans attendre le réveil de la minute. Aucune donnée n'est lue ici.
-      // SANS EFFET si la file a été parcourue il y a moins de 30 s, ou si une
-      // autre exécution la tient (verrou : planif.js).
-      if (url.pathname === '/reveil') {
-        const o = outils(env);
-        ctx.waitUntil(minute(Object.assign({ source: 'reveil' }, o)).catch(() => {}));
-        return reponse('', 202);
-      }
-      // L'arrivée par un lien (/i, la page d'accueil, les pages publiques).
-      // Limitée par adresse IP (LIMITE_ARRIVEES) : un script qui boucle ne
-      // gonfle ni les clics d'un ambassadeur, ni les compteurs « Viralité ».
-      if (url.pathname === '/arrivee' || url.pathname === '/amb-clic') {
-        // Une panne du limiteur laisse passer : un clic compté de trop vaut
-        // mieux qu'une page publique qui renvoie 500.
-        let limite = null;
-        try { if (env.LIMITE_ARRIVEES && typeof env.LIMITE_ARRIVEES.limit === 'function') limite = await env.LIMITE_ARRIVEES.limit({ key: ipDe(req) }); } catch (e) { limite = null; }
-        if (limite && limite.success === false) return reponse('', 429, 'text/plain');
-        const q = Object.fromEntries(url.searchParams);
-        if (url.pathname === '/amb-clic' && q.c) q.amb = q.c;
-        const o = outils(env);
-        ctx.waitUntil(o.M.arrivee(q).catch(() => {}));
-        return reponse('', 204);
-      }
-      // LE PROSPECT (lot C6) : le « Ça m'intéresse » de la vitrine d'un coach.
-      // Sans compte, donc limité par adresse IP comme /arrivee, et borné par
-      // coach et par jour dans prospects.js. Aucun paiement ici.
-      if ((url.pathname === '/prospect' && req.method === 'POST') || url.pathname === '/vitrine-vue') {
-        let limite = null;
-        try { if (env.LIMITE_ARRIVEES && typeof env.LIMITE_ARRIVEES.limit === 'function') limite = await env.LIMITE_ARRIVEES.limit({ key: ipDe(req) }); } catch (e) { limite = null; }
-        if (limite && limite.success === false) return reponse(JSON.stringify({ ok: false, raison: 'trop' }), 429);
-        const o = outils(env);
-        if (url.pathname === '/vitrine-vue') {
-          ctx.waitUntil(o.M.vitrineVue(url.searchParams.get('s'), Date.now()).catch(() => {}));
-          return reponse(null, 204);
-        }
-        let corps = null;
-        try { corps = await req.json(); } catch (e) { corps = null; }
-        if (!corps || typeof corps !== 'object') return reponse(JSON.stringify({ ok: false, raison: 'corps' }), 400);
-        const r = await o.M.prospectRecevoir(corps, Date.now());
-        return reponse(JSON.stringify(r), r.ok ? 200 : 400);
-      }
-      // LES CLÉS SONT-ELLES JUSTES, et pas seulement posées ? Un jeton PayPal
-      // demandé, un ping Cloudinary authentifié. Rien d'autre ne sort que oui/non
-      // et le code HTTP, jamais une clé.
-      // RÉSERVÉ À L'ADMINISTRATEUR : chaque appel demande un jeton PayPal et
-      // interroge Cloudinary — ouvert à tous, c'était une porte pour épuiser
-      // les quotas. Authorization: Bearer <ADMIN_SECRET>.
-      if (url.pathname === '/sante' && url.searchParams.get('cles') === '1') {
-        const donne = String(req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
-        if (!egalSecret(donne, String(env.ADMIN_SECRET || '').trim())) return reponse(JSON.stringify({ erreur: 'réservé' }), 401);
-        const r = {};
-        try {
-          const jeton = await jetonPaypal(env); r.paypal = 'ok';
-          // Le Webhook ID posé est-il celui qui pointe ici ?
-          const l = await (await fetch('https://api-m.paypal.com/v1/notifications/webhooks', { headers: { Authorization: 'Bearer ' + jeton } })).json();
-          const w = ((l && l.webhooks) || []).find((x) => x.id === String(env.PAYPAL_WEBHOOK_ID || '').trim());
-          r.webhook = !w ? 'Webhook ID inconnu de PayPal' : (/repcore-serveur\.repcore\.workers\.dev\/paypal$/.test(w.url) ? 'ok' : 'pointe ailleurs');
-        } catch (e) { r.paypal = r.paypal || String(e.message || e).slice(0, 60); }
-        try {
-          const k = String(env.CLOUDINARY_API_KEY || '').trim(), sec = String(env.CLOUDINARY_API_SECRET || '').trim();
-          if (!k || !sec) r.cloudinary = 'non configuré';
-          else {
-            const c = await fetch('https://api.cloudinary.com/v1_1/' + compteCloudinary(env) + '/ping', { headers: { Authorization: 'Basic ' + btoa(k + ':' + sec) } });
-            r.cloudinary = c.ok ? 'ok' : 'HTTP ' + c.status;
-          }
-        } catch (e) { r.cloudinary = 'injoignable'; }
-        return reponse(JSON.stringify(r));
-      }
-      // LES PAGES PUBLIQUES, AVEC LEUR APERÇU (/@<pseudo>, /coach/<slug>) :
-      // firebase.json y redirige ; voir pages.js. Mises en cache 6 h.
-      if ((req.method === 'GET' || req.method === 'HEAD') && (url.pathname.startsWith('/@') || url.pathname.startsWith('/coach/'))) {
-        // La vitrine d'un coach lit sa marque (lot M1) avec le compte de service.
-        const r = await servirPagePublique(req, { env, ctx, db: url.pathname.startsWith('/coach/') ? outils(env).db : null });
-        if (r) return r;
-      }
-      if (url.pathname === '/sante') {
-        // `acces` : « compte_service » est l'état voulu ; « secret_historique »
-        // dit que l'ancien code secret sert encore et qu'il reste à le retirer.
-        const cs = !!lireCompteService(env.FIREBASE_SERVICE_ACCOUNT);
-        return reponse(JSON.stringify({ ok: true, base: !!env.FIREBASE_DB_URL, secret: cs || !!env.FIREBASE_DB_SECRET,
-          acces: cs ? 'compte_service' : (env.FIREBASE_DB_SECRET ? 'secret_historique' : 'aucun'),
-          vapid: !!(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY),
-          paypal: !!(env.PAYPAL_CLIENT_ID && env.PAYPAL_CLIENT_SECRET && env.PAYPAL_WEBHOOK_ID),
-          cloudinary: !!(env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET), garmin: garminOuvert(env) }));
-      }
-      return reponse(JSON.stringify({ repcore: 'serveur léger' }), 404);
-    } catch (e) {
-      return reponse(JSON.stringify({ erreur: 'interne' }), 500);
+    const r = await servir(req, env, ctx);
+    // LE POULS : chaque 429 servi est compté, et versé au plus une fois par
+    // minute dans le seau de l'heure (pouls.js).
+    if (r.status === 429) {
+      try {
+        const t = Date.now();
+        if (noter429(t)) ctx.waitUntil(viderPouls(outils(env).db, t).catch(() => {}));
+      } catch (e) { /* le compte n'empêche jamais de répondre */ }
     }
+    return r;
   },
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(minute(outils(env)));
+    const o = outils(env);
+    ctx.waitUntil(minute(o));
+    // L'alerte de quota : lit le seau de l'heure, prévient le créateur au-delà
+    // de 500 refus (pouls.js). Une instance du Worker de plus, c'est un compte
+    // en mémoire de plus : on vide aussi le sien.
+    const t = Date.now();
+    ctx.waitUntil(viderPouls(o.db, t).then(() => surveillerQuota({ db: o.db, M: o.M, t })).catch(() => {}));
   },
 };
+
+async function servir(req, env, ctx) {
+  // TOUT EST DANS LE try, pré-vérification comprise : aucune exception ne
+  // doit sortir d'ici sans en-têtes CORS.
+  try {
+    if (req.method === 'OPTIONS') return reponse(null, 204);
+    const url = new URL(req.url);
+    // LA LIMITE GÉNÉRALE : aucune route publique sans limite.
+    if (!(await passe(env.LIMITE_ROUTES, req))) return reponse('', 429, 'text/plain');
+    // LES FONCTIONS DE L'APP : /fn/<nom>, comme les Cloud Functions.
+    if (url.pathname.startsWith('/fn/') && req.method === 'POST') {
+      const o = outils(env);
+      return await repondreAppel(req, APPELS, { db: o.db, M: o.M, env, projet: 'repcore-sync', fetchImpl: o.fetchCompte, requete: req });
+    }
+    // LA SANTÉ SYNCHRONISÉE (Health Connect, Raccourci iPhone) : voir sante.js.
+    // Le corps n'est jamais journalisé.
+    if (url.pathname === '/sante/qui' && req.method === 'POST') {
+      const o = outils(env);
+      const r = await compteDuJeton(req, { db: o.db });
+      return reponse(JSON.stringify(r.corps), r.statut);
+    }
+    if ((url.pathname === '/sante/i' || url.pathname.startsWith('/sante/i/')) && req.method === 'POST') {
+      const o = outils(env);
+      const r = await recevoirSante(req, { db: o.db });
+      return reponse(JSON.stringify(r.corps), r.statut);
+    }
+    // GARMIN (garmin.js) : la liaison OAuth, puis ce que Garmin pousse.
+    // Fermé (404 ou retour « ferme ») tant que les secrets GARMIN_* manquent.
+    if (url.pathname === '/garmin/lier' && req.method === 'GET') {
+      const o = outils(env);
+      return await creerGarmin({ db: o.db, env, fetchImpl: o.fetchCompte }).lier(req);
+    }
+    if (url.pathname === '/garmin/retour' && req.method === 'GET') {
+      const o = outils(env);
+      return await creerGarmin({ db: o.db, env, fetchImpl: o.fetchCompte }).retour(req);
+    }
+    if (url.pathname.startsWith('/garmin/push') && req.method === 'POST') {
+      const o = outils(env);
+      const r = await creerGarmin({ db: o.db, env, fetchImpl: o.fetchCompte }).recevoir(req);
+      return reponse(JSON.stringify(r.corps), r.statut);
+    }
+    // PAYPAL : chaque événement d'abonnement ou de paiement, signature vérifiée chez PayPal.
+    if (url.pathname === '/paypal' && req.method === 'POST') {
+      const o = outils(env);
+      return await recevoirWebhook(req, { db: o.db, M: o.M, env });
+    }
+    // L'app vient de déposer un événement : on le traite tout de suite,
+    // sans attendre le réveil de la minute. Aucune donnée n'est lue ici.
+    // SANS EFFET si la file a été parcourue il y a moins de 30 s, ou si une
+    // autre exécution la tient (verrou : planif.js).
+    // POST SEULEMENT, et LIMITE_REVEIL : 6 par minute et par adresse IP.
+    if (url.pathname === '/reveil') {
+      if (req.method !== 'POST') return reponse('', 405, 'text/plain');
+      if (!(await passe(env.LIMITE_REVEIL, req))) return reponse('', 429, 'text/plain');
+      const o = outils(env);
+      ctx.waitUntil(minute(Object.assign({ source: 'reveil' }, o)).catch(() => {}));
+      return reponse('', 202);
+    }
+    // L'arrivée par un lien (/i, la page d'accueil, les pages publiques).
+    // Limitée par adresse IP (LIMITE_ARRIVEES) : un script qui boucle ne
+    // gonfle ni les clics d'un ambassadeur, ni les compteurs « Viralité ».
+    if (url.pathname === '/arrivee' || url.pathname === '/amb-clic') {
+      if (!(await passe(env.LIMITE_ARRIVEES, req))) return reponse('', 429, 'text/plain');
+      const q = Object.fromEntries(url.searchParams);
+      if (url.pathname === '/amb-clic' && q.c) q.amb = q.c;
+      const o = outils(env);
+      ctx.waitUntil(o.M.arrivee(q).catch(() => {}));
+      return reponse('', 204);
+    }
+    // LE PROSPECT (lot C6) : le « Ça m'intéresse » de la vitrine d'un coach.
+    // Sans compte, donc limité par adresse IP comme /arrivee, et borné par
+    // coach et par jour dans prospects.js. Aucun paiement ici.
+    if ((url.pathname === '/prospect' && req.method === 'POST') || url.pathname === '/vitrine-vue') {
+      if (!(await passe(env.LIMITE_ARRIVEES, req))) return reponse(JSON.stringify({ ok: false, raison: 'trop' }), 429);
+      const o = outils(env);
+      if (url.pathname === '/vitrine-vue') {
+        ctx.waitUntil(o.M.vitrineVue(url.searchParams.get('s'), Date.now()).catch(() => {}));
+        return reponse(null, 204);
+      }
+      let corps = null;
+      try { corps = await req.json(); } catch (e) { corps = null; }
+      if (!corps || typeof corps !== 'object') return reponse(JSON.stringify({ ok: false, raison: 'corps' }), 400);
+      const r = await o.M.prospectRecevoir(corps, Date.now());
+      return reponse(JSON.stringify(r), r.ok ? 200 : 400);
+    }
+    // LES CLÉS SONT-ELLES JUSTES, et pas seulement posées ? Un jeton PayPal
+    // demandé, un ping Cloudinary authentifié. Rien d'autre ne sort que oui/non
+    // et le code HTTP, jamais une clé.
+    // RÉSERVÉ À L'ADMINISTRATEUR : chaque appel demande un jeton PayPal et
+    // interroge Cloudinary — ouvert à tous, c'était une porte pour épuiser
+    // les quotas. Authorization: Bearer <ADMIN_SECRET>.
+    if (url.pathname === '/sante' && url.searchParams.get('cles') === '1') {
+      const donne = String(req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
+      if (!egalSecret(donne, String(env.ADMIN_SECRET || '').trim())) return reponse(JSON.stringify({ erreur: 'réservé' }), 401);
+      const r = {};
+      try {
+        const jeton = await jetonPaypal(env); r.paypal = 'ok';
+        // Le Webhook ID posé est-il celui qui pointe ici ?
+        const l = await (await fetch('https://api-m.paypal.com/v1/notifications/webhooks', { headers: { Authorization: 'Bearer ' + jeton } })).json();
+        const w = ((l && l.webhooks) || []).find((x) => x.id === String(env.PAYPAL_WEBHOOK_ID || '').trim());
+        r.webhook = !w ? 'Webhook ID inconnu de PayPal' : (/repcore-serveur\.repcore\.workers\.dev\/paypal$/.test(w.url) ? 'ok' : 'pointe ailleurs');
+      } catch (e) { r.paypal = r.paypal || String(e.message || e).slice(0, 60); }
+      try {
+        const k = String(env.CLOUDINARY_API_KEY || '').trim(), sec = String(env.CLOUDINARY_API_SECRET || '').trim();
+        if (!k || !sec) r.cloudinary = 'non configuré';
+        else {
+          const c = await fetch('https://api.cloudinary.com/v1_1/' + compteCloudinary(env) + '/ping', { headers: { Authorization: 'Basic ' + btoa(k + ':' + sec) } });
+          r.cloudinary = c.ok ? 'ok' : 'HTTP ' + c.status;
+        }
+      } catch (e) { r.cloudinary = 'injoignable'; }
+      return reponse(JSON.stringify(r));
+    }
+    // LES PAGES PUBLIQUES, AVEC LEUR APERÇU (/@<pseudo>, /coach/<slug>) :
+    // firebase.json y redirige ; voir pages.js. Mises en cache 6 h.
+    if ((req.method === 'GET' || req.method === 'HEAD') && (url.pathname.startsWith('/@') || url.pathname.startsWith('/coach/'))) {
+      // La vitrine d'un coach lit sa marque (lot M1) avec le compte de service.
+      const r = await servirPagePublique(req, { env, ctx, db: url.pathname.startsWith('/coach/') ? outils(env).db : null });
+      if (r) return r;
+    }
+    if (url.pathname === '/sante') {
+      // `acces` : « compte_service » est l'état voulu ; « secret_historique »
+      // dit que l'ancien code secret sert encore et qu'il reste à le retirer.
+      const cs = !!lireCompteService(env.FIREBASE_SERVICE_ACCOUNT);
+      return reponse(JSON.stringify({ ok: true, base: !!env.FIREBASE_DB_URL, secret: cs || !!env.FIREBASE_DB_SECRET,
+        acces: cs ? 'compte_service' : (env.FIREBASE_DB_SECRET ? 'secret_historique' : 'aucun'),
+        vapid: !!(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY),
+        paypal: !!(env.PAYPAL_CLIENT_ID && env.PAYPAL_CLIENT_SECRET && env.PAYPAL_WEBHOOK_ID),
+        cloudinary: !!(env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET), garmin: garminOuvert(env) }));
+    }
+    return reponse(JSON.stringify({ repcore: 'serveur léger' }), 404);
+  } catch (e) {
+    return reponse(JSON.stringify({ erreur: 'interne' }), 500);
+  }
+}

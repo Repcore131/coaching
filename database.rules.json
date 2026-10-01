@@ -149,7 +149,9 @@
         // scripts/mesure_urls_videos.py dit, sur un export, ce qui ne passerait pas.
         "videos": {
           "$i": {
-            "url": { ".validate": "newData.isString() && newData.val().length < 600 && (newData.val().beginsWith('https://res.cloudinary.com/') || newData.val().beginsWith('https://firebasestorage.googleapis.com/') || newData.val().beginsWith('https://youtu.be/') || newData.val().beginsWith('https://www.youtube.com/'))" }
+            "url": { ".validate": "newData.isString() && newData.val().length < 600 && (newData.val().beginsWith('https://res.cloudinary.com/') || newData.val().beginsWith('https://firebasestorage.googleapis.com/') || newData.val().beginsWith('https://youtu.be/') || newData.val().beginsWith('https://www.youtube.com/'))" },
+            // Le retour ecrit du coach sur la video : 4 000 caracteres au plus.
+            "feedback": { ".validate": "newData.isString() && newData.val().length <= 4000" }
           }
         },
 
@@ -220,7 +222,48 @@
         // seance n est pas touche — aucun "$autre" : false.
         "sessions": {
           "$i": {
-            "noteAthlete": { ".validate": "newData.isString() && newData.val().length <= 280" }
+            "noteAthlete": { ".validate": "newData.isString() && newData.val().length <= 280" },
+            // Les consignes du coach sur la seance : 4 000 caracteres au plus.
+            "notes": { ".validate": "newData.isString() && newData.val().length <= 4000" }
+          }
+        },
+
+        // ── LES TEXTES LIBRES LES PLUS GROS, BORNES A 4 000 CARACTERES (01/10/2026) ──
+        // Sans borne, un dossier pouvait porter un texte de plusieurs megaoctets,
+        // renvoye EN ENTIER a chaque synchronisation. L app les rogne avant chaque
+        // PUT (_textesBornes, TEXTE_LIBRE_MAX = 4000) : un texte trop long ne fait
+        // donc jamais rejeter le dossier, il arrive coupe. La liste de ce qui est
+        // borne, et de ce qui ne peut pas l etre, est dans scripts/verif/regles.mjs.
+        "bio":              { ".validate": "newData.isString() && newData.val().length <= 4000" },
+        "catchphrase":      { ".validate": "newData.isString() && newData.val().length <= 4000" },
+        "vision":           { ".validate": "newData.isString() && newData.val().length <= 4000" },
+        "traitementDetail": { ".validate": "newData.isString() && newData.val().length <= 4000" },
+        // Les reponses texte d un bilan. Les photos encore en base64 (clef
+        // « -photo- ») en sont exclues : voir l en-tete de ce dossier.
+        "bilans": {
+          "$i": {
+            "$champ": { ".validate": "!newData.isString() || $champ.matches(/-photo-/) || newData.val().length <= 4000" }
+          }
+        },
+        // Les modeles de message du coach : schema FERME.
+        "msgTemplates": {
+          "$i": {
+            "id":        { ".validate": "newData.isString() && newData.val().length <= 60" },
+            "cat":       { ".validate": "newData.isString() && newData.val().length <= 40" },
+            "titre":     { ".validate": "newData.isString() && newData.val().length <= 120" },
+            "corps":     { ".validate": "newData.isString() && newData.val().length <= 4000" },
+            "createdAt": { ".validate": "newData.isNumber()" },
+            "$autre": { ".validate": false }
+          }
+        },
+        // Les anciens commentaires rapides (avant les modeles) : schema FERME.
+        "quickComments": {
+          "$i": {
+            "id":    { ".validate": "newData.isString() && newData.val().length <= 60" },
+            "label": { ".validate": "newData.isString() && newData.val().length <= 120" },
+            "text":  { ".validate": "newData.isString() && newData.val().length <= 4000" },
+            "pos":   { ".validate": "newData.isNumber()" },
+            "$autre": { ".validate": false }
           }
         },
 
@@ -1162,7 +1205,13 @@
       ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
       "$jour": {
         ".read": "auth != null",
-        ".validate": "$jour.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+        // UNE DATE PLAUSIBLE, et pas seulement un motif a chiffres : annee 2020
+        // a 2099, mois 01 a 12, jour 01 a 31. « Aujourd hui a un jour pres »
+        // N EST PAS EXPRIMABLE ICI : le langage des regles n a aucune fonction
+        // de date, et `now` (un nombre) ne se compare pas a une clef texte. Le
+        // Worker efface donc chaque nuit les jours poses dans le futur
+        // (pouls.js, purgerJoursFuturs) ; voir scripts/verif/regles.mjs.
+        ".validate": "$jour.matches(/^20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/)",
 
         // PURGE GLISSANTE A QUATRE CENTS JOURS : la seule ecriture permise ici,
         // et elle est reservee au createur. Ce noeud n avait JAMAIS ete purge —
@@ -1199,7 +1248,13 @@
           //   Ils sont incrementes par rcq(), par paquets de quarante-cinq
           //   secondes, et lus par la carte « Capacite » du createur.
           ".write": true,
-          ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && (!data.exists() || newData.val() > data.val()) && $evenement.matches(/^(landing_view|welcome_view|role_selected_coach|role_selected_athlete|code_entered|code_valid|code_invalid|register_started|register_completed|subscribe_viewed|paypal_clicked|subscription_activated|first_workout_started|first_workout_completed|first_bilan_completed|iab_instagram|iab_facebook|iab_tiktok|iab_linkedin|iab_snapchat|iab_twitter|iab_autre|install_ecran_vu|install_invite_montree|install_accepte|install_refuse|install_guide_ios|install_fait|lancement_autonome|nav_samsung|notif_granted|pwa_installed|retour_j1|jamais_demarre_7j|vitrine_vue|programme_vu|programme_clic_achat|story_partagee|oct_in_ko|oct_out_ko|cld_envois|cld_ko|nut_jour_g1_3|nut_jour_g4_6|nut_jour_g7_10|nut_jour_g11|coach_message_envoye|coach_programme_assigne|coach_fiche_ouverte|coach_bilan_repondu|coach_canal_publie|coach_relance_auto)$/)"
+          // ⚠ BORNE PAR ECRITURE (01/10/2026). Une etape de tunnel n avance que
+          //   de UN : exactement la valeur precedente plus un, ou 1 si le compteur
+          //   n existe pas encore. Un .sv increment est vu ici APRES resolution.
+          //   Les quatre compteurs de capacite arrivent par paquets (rcqVider) :
+          //   ils avancent d au plus RCQ_PAS_MAX = 1 000 000 par ecriture.
+          //   AVANT : un seul PUT anonyme pouvait poser 9 999 999 d un coup.
+          ".validate": "newData.isNumber() && newData.val() < 10000000 && (($evenement.matches(/^(landing_view|welcome_view|role_selected_coach|role_selected_athlete|code_entered|code_valid|code_invalid|register_started|register_completed|subscribe_viewed|paypal_clicked|subscription_activated|first_workout_started|first_workout_completed|first_bilan_completed|iab_instagram|iab_facebook|iab_tiktok|iab_linkedin|iab_snapchat|iab_twitter|iab_autre|install_ecran_vu|install_invite_montree|install_accepte|install_refuse|install_guide_ios|install_fait|lancement_autonome|nav_samsung|notif_granted|pwa_installed|retour_j1|jamais_demarre_7j|vitrine_vue|programme_vu|programme_clic_achat|story_partagee|nut_jour_g1_3|nut_jour_g4_6|nut_jour_g7_10|nut_jour_g11|coach_message_envoye|coach_programme_assigne|coach_fiche_ouverte|coach_bilan_repondu|coach_canal_publie|coach_relance_auto)$/) && ((!data.exists() && newData.val() === 1) || (data.exists() && newData.val() === data.val() + 1))) || ($evenement.matches(/^(oct_in_ko|oct_out_ko|cld_envois|cld_ko)$/) && ((!data.exists() && newData.val() > 0 && newData.val() <= 1000000) || (data.exists() && newData.val() > data.val() && newData.val() - data.val() <= 1000000))))"
         }
       }
     },
@@ -2125,10 +2180,15 @@
       ".read": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'",
       "jours": {
         "$jour": {
-          ".validate": "$jour.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+          // Une date plausible (comme /metrics). « Aujourd hui a un jour pres »
+          // n est pas exprimable dans les regles : le Worker efface chaque nuit
+          // les jours poses dans le futur (pouls.js).
+          ".validate": "$jour.matches(/^20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/)",
           "src": {
             "$s": {
-              ".validate": "$s.matches(/^[a-z0-9_-]{1,20}$/)",
+              // LISTE BLANCHE (01/10/2026), la meme que SRC_CONNUS (Worker) et
+              // ATTR_SRC_CONNUS (app) : un src inconnu y arrive en 'autre'.
+              ".validate": "$s.matches(/^(amb|amis|autre|avant|badge|bilan|bio|carte|champion|charge|commissions|cycle|defi|diete|direct|dossier|duel|email|envois|facebook|fond|instagram|invitation|journal|kit|logo|mes|muscles|parrainage|pesees|photos|pub|qr|rang|record|records|saison|seance|seances|serie|site|story|team|tiktok|victoire|visuel|whatsapp|wrapped|youtube)$/)",
               "$m": {
                 ".write": true,
                 ".validate": "$m.matches(/^(partage|telechargement|copie|clic|inscription|payant)$/) && newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && ((!data.exists() && newData.val() === 1) || newData.val() === data.val() + 1)"
@@ -2137,7 +2197,10 @@
           },
           "amb": {
             "$c": {
-              ".validate": "$c.matches(/^[A-Z0-9]{3,16}$/)",
+              // UN AMBASSADEUR QUI EXISTE : sans cela, chaque code bien forme
+              // ouvrait un noeud de plus. Le Worker (compte de service) ne passe
+              // pas par ces regles et verifie la fiche lui-meme.
+              ".validate": "$c.matches(/^[A-Z0-9]{3,16}$/) && root.child('ambassadeurs').child($c).exists()",
               "$m": {
                 ".write": true,
                 ".validate": "$m.matches(/^(clic|inscription|payant)$/) && newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && ((!data.exists() && newData.val() === 1) || newData.val() === data.val() + 1)"
@@ -2149,7 +2212,7 @@
       },
       "semaines": {
         "$lundi": {
-          ".validate": "$lundi.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+          ".validate": "$lundi.matches(/^20[2-9][0-9]-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/)",
           "actifs": { ".write": true, ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && ((!data.exists() && newData.val() === 1) || newData.val() === data.val() + 1)" },
           "$autre": { ".validate": false }
         }

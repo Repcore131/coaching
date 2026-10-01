@@ -6729,7 +6729,10 @@ async function testExercices(){
           // le couper, et ne le lit jamais. Mise à jour SCIEMMENT le
           // 15/09/2026, comme la ligne au-dessus le demande. Toute occurrence
           // supplémentaire reste une lecture à justifier.
-          return n<=2?true:_echec(n+' occurrences en production au lieu de 2');})());
+          // 01/10/2026 : +1, la liste TEXTES_LIBRES_RACINE de _textesBornes, qui
+          // rogne le texte à 4 000 caractères avant l'envoi (règle de longueur) —
+          // une borne, pas une lecture : aucune décision n'en dépend.
+          return n<=3?true:_echec(n+' occurrences en production au lieu de 3');})());
         ok('deb-health garde ses DEUX lecteurs, et pas un de plus',(()=>{
           // La spec en annonçait un seul — _aAntecedentLombaire. Il y en a deux :
           // MICRO_CHAMPS_VEGE balaie aussi deb-health pour l'entrée végétale de
@@ -38411,6 +38414,51 @@ async function testExercices(){
               return _echec('le tampon se rejoue encore après cinq refus');
             return rcqEtat().refuses>0?true:_echec('les refus ne sont pas comptés');});
 
+          // ══ LOT 6 (01/10/2026) : AUCUNE ECRITURE ANONYME NON BORNEE ══════
+          okA('1756 — UN COMPTEUR DE CAPACITÉ AVANCE D’UN MILLION AU PLUS PAR ÉCRITURE ; LE RESTE ATTEND',async()=>{
+            const vus=[], f0=window.fetch;
+            try{
+              window.fetch=async(u,o)=>{ vus.push({u:String(u),body:String((o&&o.body)||'')}); return {ok:true,status:200,json:async()=>({})}; };
+              await rcqVider(); vus.length=0;
+              rcq('cld_ko',2500000);
+              const r=await rcqVider();
+              if(r&&r.local) return true;
+              const p=vus.find(x=>/cld_ko\.json$/.test(x.u));
+              if(!p) return _echec('rien n’est parti');
+              if(p.body.indexOf('"increment":1000000')<0) return _echec('pas borné : '+p.body);
+              if(rcqEtat().enAttente<1) return _echec('le reste est perdu');
+              await rcqVider(); await rcqVider();
+              return rcqEtat().enAttente===0?true:_echec('le reste n’est jamais parti');
+            }finally{ window.fetch=f0; }});
+
+          ok('1756 — UN src INCONNU DEVIENT « autre », UN src CONNU RESTE LUI-MÊME',(()=>{
+            if(attribSrc('Seance')!=='seance') return _echec('seance : '+attribSrc('Seance'));
+            if(attribSrc('zzz-inconnu')!=='autre') return _echec('inconnu : '+attribSrc('zzz-inconnu'));
+            if(attribSrc('<>')!=='') return _echec('vide : '+attribSrc('<>'));
+            if(ATTR_SRC_CONNUS.indexOf('autre')<0||ATTR_SRC_CONNUS.indexOf('direct')<0) return _echec('autre/direct absents');
+            const l=lienAttribue('https://x.test/',{src:'nimporte'});
+            return /src=autre$/.test(l)?true:_echec(l);})());
+
+          ok('1756 — LES TEXTES LIBRES PARTENT ROGNÉS À 4 000, ET LES MODÈLES À LEUR SCHÉMA',(()=>{
+            const long='x'.repeat(10000), photo='data:image/jpeg;base64,'+'A'.repeat(9000);
+            const d={bio:long,vision:'court',sessions:[{notes:long,noteAthlete:'ok'}],videos:[{url:'https://youtu.be/abcdefghijk',feedback:long}],
+              bilans:[{'deb-ressenti':long,'deb-photo-face':photo,'deb-weight':72,reprises:['a']}],
+              msgTemplates:[{id:'t1',cat:'technique',titre:'T'.repeat(300),corps:long,createdAt:'5',intrus:1}],
+              quickComments:[{id:'q',label:'L',text:long,pos:2,vieux:true}]};
+            _textesBornes(d);
+            if(d.bio.length!==4000||d.vision!=='court') return _echec('bio/vision');
+            if(d.sessions[0].notes.length!==4000||d.sessions[0].noteAthlete!=='ok') return _echec('séance');
+            if(d.videos[0].feedback.length!==4000) return _echec('vidéo');
+            if(d.bilans[0]['deb-ressenti'].length!==4000) return _echec('bilan texte');
+            if(d.bilans[0]['deb-photo-face']!==photo) return _echec('une photo base64 ne se rogne pas : elle serait détruite');
+            if(d.bilans[0]['deb-weight']!==72) return _echec('un nombre a bougé');
+            const t=d.msgTemplates[0];
+            if(t.corps.length!==4000||t.titre.length!==120||t.createdAt!==5||'intrus' in t) return _echec('modèle : '+JSON.stringify(Object.keys(t)));
+            const c=d.quickComments[0];
+            if(c.text.length!==4000||'vieux' in c) return _echec('commentaire');
+            // Et _doPushOne l'appelle avant chaque PUT.
+            return /_textesBornes\(safe\)/.test(_prodSrc())?true:_echec('_textesBornes n’est pas appelé avant l’envoi');})());
+
           ok('1422 — LA SOMME DU MOIS NE COMPTE QUE LE MOIS, ET DIT SES BORNES',(()=>{
             const releve={'2026-09-01':{oct_in_ko:100,oct_out_ko:200,cld_envois:1,cld_ko:5000},
                           '2026-09-15':{oct_out_ko:300,landing_view:42},
@@ -56295,10 +56343,11 @@ async function testExercices(){
     ok('Attribution : UNE fonction pose src, ref et amb — l’ambassadeur exclut le parrain, un code faux est ignoré',(()=>{
       const r=[lienAttribue('https://x.fr/@lea',{src:'Record',ref:'JULIE7K2'}),
         lienAttribue('https://x.fr/?a=1',{src:'story',amb:'leafit',ref:'JULIE7K2'}),
+        // 'a b!' devient 'ab', inconnu de ATTR_SRC_CONNUS : 'autre' (01/10/2026).
         lienAttribue('https://x.fr/',{src:'a b!',ref:'x',amb:'?'}),
         lienAttribue('',{src:'x'})];
       return (r[0]==='https://x.fr/@lea?ref=JULIE7K2&src=record'&&r[1]==='https://x.fr/?a=1&amb=LEAFIT&src=story'
-        &&r[2]==='https://x.fr/?src=ab'&&r[3]==='')?true:_echec(r.join(' | '));})());
+        &&r[2]==='https://x.fr/?src=autre'&&r[3]==='')?true:_echec(r.join(' | '));})());
     ok('Attribution : les liens de l’app passent tous par lienAttribue',(()=>{
       const s=_prodSrc();
       if(!/function lienPerso\([\s\S]{0,1500}?lienAttribue\(page,\{src,ref:/.test(s)) return _echec('lienPerso');

@@ -55,11 +55,11 @@ const litige = (id, o) => Object.assign({ dispute_id: 'PP-D-1', reason: 'MERCHAN
   dispute_amount: { value: '9.50', currency_code: 'EUR' }, disputed_transactions: [{ seller_transaction_id: id }] }, o);
 
 // Léa : abonnée Essentielle, filleule de Kev (parrain), rattachée aussi à
-// l'ambassadrice LEAFIT, arrivée par un lien « partage ».
+// l'ambassadrice LEAFIT, arrivée par un lien « story ».
 function base(parrain) {
   const kev = Object.assign({ role: 'athlete' }, parrain || { status: 'AUTONOMIE_PREMIUM', paymentStatus: 'active' });
   return {
-    users: { 'lea@t,fr': { role: 'athlete', status: 'AUTONOMIE_PREMIUM', paymentStatus: 'active', paypalSubscriptionId: ABO, fname: 'Léa', origine: { src: 'partage' },
+    users: { 'lea@t,fr': { role: 'athlete', status: 'AUTONOMIE_PREMIUM', paymentStatus: 'active', paypalSubscriptionId: ABO, fname: 'Léa', origine: { src: 'story' },
       sessions: [12, 8, 4, 1].map((k) => ({ date: T0 - k * 864e5, data: { Squat: { sets: [{ done: true }] } } })) },
       'kev@t,fr': kev },
     paypal_abonnes: { [ABO]: 'lea@t,fr' },
@@ -78,7 +78,7 @@ await test('remboursement total d’un premier paiement : tout est repris, et le
   const w = monde(base());
   await premierPaiement(w);
   assert.equal(w.F.lire('parrainage/comptes/kev@t,fr/moisEnReserve'), 1, 'le parrain abonné a gagné un mois en réserve');
-  assert.equal(w.F.lire('attribution/jours/' + JOUR + '/src/partage/payant'), 1);
+  assert.equal(w.F.lire('attribution/jours/' + JOUR + '/src/story/payant'), 1);
   assert.equal(w.com().commission, 1.9);
   w.t = T0 + 3 * J;
   assert.equal((await w.envoyer('PAYMENT.SALE.REFUNDED', rembourse('SALE0000001'))).texte, 'remboursement');
@@ -91,7 +91,7 @@ await test('remboursement total d’un premier paiement : tout est repris, et le
   assert.equal(w.com().statut, 'annulee');
   // L'attribution : plus « payant ».
   assert.equal(w.F.lire('users/lea@t,fr/origine/payeLe'), null);
-  assert.equal(w.F.lire('attribution/jours/' + JOUR + '/src/partage/payant'), null);
+  assert.equal(w.F.lire('attribution/jours/' + JOUR + '/src/story/payant'), null);
   assert.equal(w.F.lire('attribution/jours/' + JOUR + '/amb/LEAFIT/payant'), null);
   // Le remboursé : accès fermé à la date du remboursement.
   assert.equal(w.F.lire('users/lea@t,fr/accessExpiry'), T0 + 3 * J);

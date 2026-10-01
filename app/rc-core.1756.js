@@ -750,7 +750,11 @@ function rcm(nom){
 //   zéro pendant que les compteurs sont rejetés serait pire qu'un écran vide.
 const RCQ_NOMS=Object.freeze(['oct_in_ko','oct_out_ko','cld_envois','cld_ko']);
 const RCQ_FLUSH_MS=45000;
-const RCQ_CIEL=9000000;          // sous le plafond de dix millions de la règle
+const RCQ_CIEL=9000000;
+// UN PAS AU PLUS PAR ECRITURE (01/10/2026) : la regle de /metrics refuse
+// qu'un compteur de capacite avance de plus d'un million en un PUT. Le reste
+// attend dans le tampon le paquet suivant.
+const RCQ_PAS_MAX=1000000;          // sous le plafond de dix millions de la règle
 let _rcqTampon=Object.create(null);
 let _rcqReste=Object.create(null);   // les octets pas encore convertis en Ko
 let _rcqMinuteur=null;
@@ -803,15 +807,16 @@ async function rcqVider(){
   const jour=rcqJour();
   let ok=0,ko=0;
   for(const nom of noms){
-    const v=Math.min(RCQ_CIEL,Math.round(t[nom]));
+    const v=Math.min(RCQ_CIEL,RCQ_PAS_MAX,Math.round(t[nom]));
     if(!(v>0)) continue;
+    if(Math.round(t[nom])>v) _rcqTampon[nom]=(_rcqTampon[nom]||0)+(t[nom]-v);
     try{
       const r=await fetch(RCM_BASE+'/'+jour+'/'+nom+'.json',{
         method:'PUT',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({'.sv':{'increment':v}}),keepalive:true});
       if(r.ok) ok++;
-      else { ko++; _rcqTampon[nom]=(_rcqTampon[nom]||0)+t[nom]; }
-    }catch(e){ ko++; _rcqTampon[nom]=(_rcqTampon[nom]||0)+t[nom]; }
+      else { ko++; _rcqTampon[nom]=(_rcqTampon[nom]||0)+v; }
+    }catch(e){ ko++; _rcqTampon[nom]=(_rcqTampon[nom]||0)+v; }
   }
   _rcqEnvoyes+=ok; _rcqRefuses+=ko;
   if(ok) _rcqDernier=Date.now();
@@ -3861,6 +3866,43 @@ function _videosConformes(doc){
   }
   return doc;
 }
+// ══ LES TEXTES LIBRES, BORNES COMME LA REGLE LES BORNE (01/10/2026) ══════
+// database.rules.json refuse, dans users/<cle>, tout texte libre de plus de
+// TEXTE_LIBRE_MAX caracteres (bio, vision, consignes de seance, reponses de
+// bilan, retour sur une video, modeles de message) et tout champ inconnu dans
+// msgTemplates[] et quickComments[]. Un seul depassement, et c'est le PUT
+// ENTIER qui serait rejete. Avant chaque envoi, ces textes sont donc rognes
+// et ces deux listes ramenees a leur schema. PURE sur ses arguments :
+// modifie `doc` en place et le rend.
+const TEXTE_LIBRE_MAX=4000;
+const TEXTES_LIBRES_RACINE=Object.freeze(['bio','catchphrase','vision','traitementDetail']);
+const SCHEMA_MODELE=Object.freeze({id:60,cat:40,titre:120,corps:TEXTE_LIBRE_MAX,createdAt:0});
+const SCHEMA_COMMENTAIRE=Object.freeze({id:60,label:120,text:TEXTE_LIBRE_MAX,pos:0});
+function _textesBornes(doc){
+  if(!doc||typeof doc!=='object') return doc;
+  const rogner=(v,max)=>{ const x=String(v); return x.length>max?x.slice(0,max):x; };
+  const liste=o=>(!o||typeof o!=='object')?[]:(Array.isArray(o)?o:Object.values(o));
+  for(const k of TEXTES_LIBRES_RACINE) if(doc[k]!=null) doc[k]=rogner(doc[k],TEXTE_LIBRE_MAX);
+  for(const s of liste(doc.sessions)) if(s&&typeof s==='object'&&s.notes!=null) s.notes=rogner(s.notes,TEXTE_LIBRE_MAX);
+  for(const v of liste(doc.videos)) if(v&&typeof v==='object'&&v.feedback!=null) v.feedback=rogner(v.feedback,TEXTE_LIBRE_MAX);
+  for(const b of liste(doc.bilans)){
+    if(!b||typeof b!=='object') continue;
+    for(const c of Object.keys(b))
+      if(typeof b[c]==='string'&&!/-photo-/.test(c)&&b[c].length>TEXTE_LIBRE_MAX) b[c]=b[c].slice(0,TEXTE_LIBRE_MAX);
+  }
+  const fermer=(o,schema)=>{
+    if(!o||typeof o!=='object') return;
+    for(const c of Object.keys(o)){
+      if(!(c in schema)){ delete o[c]; continue; }
+      if(o[c]==null) continue;
+      if(schema[c]===0){ const n=Number(o[c]); if(isFinite(n)) o[c]=n; else delete o[c]; }
+      else o[c]=rogner(o[c],schema[c]);
+    }
+  };
+  for(const t of liste(doc.msgTemplates)) fermer(t,SCHEMA_MODELE);
+  for(const c of liste(doc.quickComments)) fermer(c,SCHEMA_COMMENTAIRE);
+  return doc;
+}
 const CLOUD={
   _fbUrl:'https://repcore-sync-default-rtdb.firebaseio.com/users.json',
   _fbKey:'AIzaSyDQ_9jqpYMD6_32LRz1s7xyJOvEUPyr9K0',
@@ -4843,6 +4885,8 @@ const CLOUD={
         if(!_parLeCreateur) safe=_alignerChampsGeles(safe,d);
         // LES LIENS DE VIDEO, conformes a la regle : voir _videosConformes.
         _videosConformes(safe);
+        // LES TEXTES LIBRES, a la longueur que la regle admet : _textesBornes.
+        _textesBornes(safe);
       };
       // ⚠ LA FUSION A TROIS VOIES, AVANT D'ECRIRE QUOI QUE CE SOIT. C'est le
       //   coeur du correctif du 21/09/2026 : sans elle, ce PUT ecrasait le
@@ -21311,11 +21355,22 @@ function _rendreLienVitrineCoach(){
 // aucun identifiant ; le code d'un parrain n'est jamais compté (il désigne
 // une personne). Voir privacy.html, « Mesure d'audience ».
 const ATTR_SRC_RE=/^[a-z0-9_-]{1,20}$/;
+// LA LISTE BLANCHE DES src (01/10/2026). La regle de /attribution n'accepte
+// qu'eux : un src bien forme mais inconnu devient 'autre' — jamais une cle
+// refusee, jamais un noeud de plus. La meme liste vit dans le Worker
+// (functions/attribution-calcul.js, SRC_CONNUS) et dans database.rules.json ;
+// scripts/verif/regles.mjs verifie que les trois disent la meme chose.
+const ATTR_SRC_CONNUS=Object.freeze(['amb','amis','autre','avant','badge','bilan','bio','carte',
+  'champion','charge','commissions','cycle','defi','diete','direct','dossier','duel','email',
+  'envois','facebook','fond','instagram','invitation','journal','kit','logo','mes','muscles',
+  'parrainage','pesees','photos','pub','qr','rang','record','records','saison','seance',
+  'seances','serie','site','story','team','tiktok','victoire','visuel','whatsapp','wrapped','youtube']);
 const ATTR_ORIGINE_CLE='rc_origine';
 const ATTR_BASE='https://repcore-sync-default-rtdb.firebaseio.com/attribution';
 function attribSrc(s){
   const x=String(s||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,20);
-  return ATTR_SRC_RE.test(x)?x:'';
+  if(!ATTR_SRC_RE.test(x)) return '';
+  return ATTR_SRC_CONNUS.indexOf(x)>=0?x:'autre';
 }
 // PURE. LE LIEN ATTRIBUÉ — la SEULE fonction qui pose src, ref et amb. Un
 // ambassadeur exclut un parrain (un seul avantage) ; un code mal formé est

@@ -9,12 +9,26 @@ compatibility_date = "2026-09-01"
 [triggers]
 crons = ["* * * * *"]
 
-# /arrivee et /amb-clic : 30 appels par minute et par adresse IP, au-delà 429.
+# LES LIMITES, par adresse IP, au-delà 429 : AUCUNE ROUTE PUBLIQUE SANS LIMITE.
 # L'API de limitation des Workers (gratuite) ; voir README, « Limites ».
+# La période ne peut valoir que 10 ou 60 secondes.
+# /arrivee, /amb-clic, /prospect, /vitrine-vue : 30 appels par minute.
 [[ratelimits]]
 name = "LIMITE_ARRIVEES"
 namespace_id = "1001"
 simple = { limit = 30, period = 60 }
+
+# /reveil (POST seulement) : 6 appels par minute.
+[[ratelimits]]
+name = "LIMITE_REVEIL"
+namespace_id = "1002"
+simple = { limit = 6, period = 60 }
+
+# Toutes les routes (sauf OPTIONS) : 120 appels par minute.
+[[ratelimits]]
+name = "LIMITE_ROUTES"
+namespace_id = "1003"
+simple = { limit = 120, period = 60 }
 
 [vars]
 FIREBASE_DB_URL = "https://repcore-sync-default-rtdb.firebaseio.com"

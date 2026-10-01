@@ -132,12 +132,24 @@ if(mQ&&qs.length<4){ console.error('RCQ_NOMS : '+qs.length+' nom(s) lu(s), lectu
 if(!mQ) console.log('RCQ_NOMS introuvable : les compteurs de capacite ne sont pas verifies');
 for(const q of qs) evts.push(q);
 
-const mRegex=regles.match(/\$evenement\.matches\(\/\^\(([^)]*)\)\$\/\)/);
-if(!mRegex){ console.error('la liste blanche de /metrics a disparu des regles'); process.exit(1); }
-const acceptes=new Set(mRegex[1].split('|').filter(Boolean));
+// ⚠ DEUX LISTES DANS LA REGLE DEPUIS LE 01/10/2026 : une etape de tunnel
+// n'avance que de UN par ecriture, un compteur de capacite d'au plus un
+// million. La premiere `$evenement.matches` est le tunnel, la seconde la
+// capacite ; chaque famille doit etre dans SA liste, sinon la borne serait
+// la mauvaise (un paquet de capacite refuse, ou un +5 accepte au tunnel).
+const mRegexes=[...regles.matchAll(/\$evenement\.matches\(\/\^\(([^)]*)\)\$\/\)/g)].map(m=>m[1].split('|').filter(Boolean));
+if(mRegexes.length!==2){ console.error('/metrics : deux listes blanches attendues (tunnel, capacite), '+mRegexes.length+' trouvee(s)'); process.exit(1); }
+const [tunnelRegle,capaRegle]=mRegexes;
+const acceptes=new Set([...tunnelRegle,...capaRegle]);
+const tunnelCode=evts.filter(n=>!qs.includes(n));
+const malRanges=[...tunnelCode.filter(n=>capaRegle.includes(n)),...qs.filter(n=>tunnelRegle.includes(n))];
+if(malRanges.length){ console.error('\n/metrics : nom(s) dans la mauvaise liste (mauvaise borne) : '+malRanges.join(', ')); process.exit(1); }
+if(qs.length&&(qs.length!==capaRegle.length||qs.some(n=>!capaRegle.includes(n)))){
+  console.error('\n/metrics : la liste de capacite de la regle ('+capaRegle.join(',')+') differe de RCQ_NOMS ('+qs.join(',')+')'); process.exit(1);
+}
 
 console.log('\ncompteurs ecrits par le code : '+evts.length
-  +'   noms acceptes par les regles : '+acceptes.size);
+  +'   noms acceptes par les regles : '+acceptes.size+' ('+tunnelRegle.length+' a +1, '+capaRegle.length+' par paquets)');
 const refuses=evts.filter(n=>!acceptes.has(n));
 if(refuses.length){
   console.error('\nCOMPTE PAR L\'APP, REFUSE PAR LE SERVEUR : '+refuses.join(', '));
@@ -150,6 +162,78 @@ if(refuses.length){
 // laisse croire qu'une mesure existe.
 const inutiles=[...acceptes].filter(n=>!evts.includes(n));
 if(inutiles.length) console.log('nom(s) accepte(s) que le code n\'ecrit plus : '+inutiles.join(', '));
+
+// ══ L'ATTRIBUTION : TROIS LISTES DE src, UNE SEULE VERITE ══════════════════
+// La regle de /attribution/jours/$jour/src/$s n'accepte qu'une liste fermee.
+// L'app (ATTR_SRC_CONNUS) et le Worker (SRC_CONNUS, functions/attribution-calcul.js)
+// ramenent tout src inconnu a 'autre'. Un nom que l'app ecrit et que la regle
+// refuse serait perdu sans un mot ; un nom que la regle accepte et que l'app
+// ne connait pas n'arriverait jamais. Les trois doivent etre identiques.
+{
+  const mApp=source.match(/const ATTR_SRC_CONNUS=Object\.freeze\(\[([\s\S]*?)\]\)/);
+  const attribCalc=readFileSync('functions/attribution-calcul.js','utf8');
+  const mW=attribCalc.match(/const SRC_CONNUS = Object\.freeze\(\[([\s\S]*?)\]\)/);
+  const mR=regles.match(/"\$s":\s*\{[\s\S]*?\$s\.matches\(\/\^\(([^)]*)\)\$\/\)/);
+  if(!mApp||!mW||!mR){ console.error('attribution : liste de src introuvable (app '+!!mApp+', Worker '+!!mW+', regles '+!!mR+')'); process.exit(1); }
+  const app=[...mApp[1].matchAll(/'([^']+)'/g)].map(m=>m[1]).sort();
+  const w=[...mW[1].matchAll(/"([^"]+)"/g)].map(m=>m[1]).sort();
+  const r=mR[1].split('|').sort();
+  if(app.join()!==w.join()||app.join()!==r.join()){
+    console.error('\nATTRIBUTION : les listes de src divergent');
+    console.error('  app    : '+app.join(','));
+    console.error('  Worker : '+w.join(','));
+    console.error('  regles : '+r.join(','));
+    process.exit(1);
+  }
+  if(!app.includes('autre')||!app.includes('direct')){ console.error('attribution : autre et direct doivent etre dans la liste'); process.exit(1); }
+  console.log('attribution : '+app.length+' src, identiques dans l\'app, le Worker et les regles');
+}
+
+// ══ CE QUI EST BORNE, ET CE QUI NE PEUT PAS L'ETRE (01/10/2026) ════════════
+//
+// ECRITURES ANONYMES (sans compte) — toutes bornees par ecriture :
+//   /metrics/$jour/$evenement     tunnel : +1 exactement (ou 1) ; capacite
+//                                 (RCQ_NOMS) : +1 000 000 au plus ; < 10 000 000.
+//   /attribution/jours/$jour/src/$s/$m   +1 ; $s en liste blanche ; $m ferme.
+//   /attribution/jours/$jour/amb/$c/$m   +1 ; $c doit exister sous /ambassadeurs.
+//   /attribution/semaines/$lundi/actifs  +1.
+//   $jour, $lundi : une date plausible (2020-2099, mois 01-12, jour 01-31).
+//   PROFONDEUR FIXE : chaque niveau est nomme ou motif ; "$autre": false au jour.
+//
+// CE QUE LES REGLES NE SAVENT PAS EXPRIMER, et ce qui le remplace :
+//   · « aujourd'hui a un jour pres » pour une clef de date : aucune fonction
+//     de date, et `now` (un nombre) ne se compare pas a une clef texte. Le
+//     Worker efface chaque nuit les jours poses dans le futur (pouls.js).
+//   · un plafond de debit (N ecritures par minute) : pas d'etat entre deux
+//     ecritures. Une ecriture anonyme reste donc REPETABLE ; elle n'avance que
+//     d'un pas borne, et le compteur plafonne a dix millions.
+//   · une taille TOTALE de users/$emailKey : `.validate` ne mesure pas un
+//     noeud. On borne les champs, un par un.
+//
+// users/$emailKey — ce qui est borne (le reste est libre, ecrit par son seul
+// titulaire ou son coach, jamais anonyme) :
+//   texte <= 4 000 : bio, catchphrase, vision, traitementDetail,
+//                    sessions/$i/notes, videos/$i/feedback, bilans/$i/<texte>
+//                    (hors clefs « -photo- », base64 en migration),
+//                    msgTemplates/$i/corps, quickComments/$i/text ;
+//   schema FERME ("$autre": false) : msgTemplates/$i, quickComments/$i,
+//                    notesExo/$exKey, motCoach, bilanCadence, rgpd, abonnement,
+//                    coachNotes/$a/$i, badges/$b, etiquettes/$id ;
+//   plus courts : coachNotes texte 600, motCoach 600, noteAthlete 280,
+//                    notesExo 140, questionsCoach 120, relancesAuto 280.
+// L'app rogne avant chaque PUT (_textesBornes) : un depassement ne fait
+// jamais rejeter le dossier.
+{
+  const borne=(chemin,motif)=>{ if(!motif.test(regles)){ console.error('BORNE DISPARUE : '+chemin); process.exit(1); } };
+  borne('users bio <= 4000',/"bio":\s*\{ "\.validate": "newData\.isString\(\) && newData\.val\(\)\.length <= 4000"/);
+  borne('users bilans <= 4000',/"bilans":\s*\{\s*"\$i":\s*\{\s*"\$champ":\s*\{ "\.validate": "!newData\.isString\(\) \|\| \$champ\.matches\(\/-photo-\/\) \|\| newData\.val\(\)\.length <= 4000"/);
+  borne('users msgTemplates ferme',/"msgTemplates":[\s\S]{0,800}?"corps":[^\n]*4000[\s\S]{0,200}?"\$autre": \{ "\.validate": false \}/);
+  borne('users quickComments ferme',/"quickComments":[\s\S]{0,600}?"text":[^\n]*4000[\s\S]{0,200}?"\$autre": \{ "\.validate": false \}/);
+  borne('metrics +1',/newData\.val\(\) === data\.val\(\) \+ 1\)\)\) \|\| \(\$evenement\.matches/);
+  borne('metrics pas de capacite',/newData\.val\(\) - data\.val\(\) <= 1000000/);
+  borne('attribution amb existe',/root\.child\('ambassadeurs'\)\.child\(\$c\)\.exists\(\)/);
+  console.log('bornes des ecritures : presentes (users, metrics, attribution)');
+}
 
 // ══ LES BADGES : LA MEME LISTE, AUX DEUX BOUTS ═════════════════════════════
 //

@@ -138,7 +138,15 @@ vérification à la main : `docs/apercu-liens.md`.
   Invoke-RestMethod https://repcore-serveur.repcore.workers.dev/sante?cles=1 -Headers @{Authorization="Bearer $s"}
   ```
   Sans le secret (ou sans en-tête), la réponse est 401. `/sante` tout court reste public.
-- **`/arrivee` et `/amb-clic`** : 30 appels par minute et par adresse IP, au-delà `429`. C'est la
+- **Aucune route publique sans limite** (01/10/2026). Trois limiteurs par adresse IP, déclarés dans
+  `wrangler.toml` et posés par `npx wrangler deploy` (rien à régler à la main) :
+  `LIMITE_ROUTES` (toute requête sauf `OPTIONS`, 120 par minute), `LIMITE_ARRIVEES` (ci-dessous) et
+  `LIMITE_REVEIL` (`/reveil`, **POST seulement** — sinon `405` —, 6 par minute). Au-delà : `429`.
+- **L'alerte de quota** (`src/pouls.js`) : chaque `429` servi est compté dans
+  `worker/pouls_429/<AAAAMMJJHH>` (heure UTC). Au-delà de **500 par heure**, un push urgent part vers
+  le créateur, une fois par heure. Chaque nuit (03:30 UTC), les jours posés dans le futur sous
+  `/metrics` et `/attribution` sont effacés — la règle ne sait pas borner une date.
+- **`/arrivee`, `/amb-clic`, `/prospect`, `/vitrine-vue`** : 30 appels par minute et par adresse IP, au-delà `429`. C'est la
   **limitation de débit des Workers** (`[[ratelimits]]` dans `wrangler.toml`, binding
   `LIMITE_ARRIVEES`), gratuite, sans rien à régler dans le tableau de bord. Les **règles de limitation
   du pare-feu** (WAF, *Security → WAF → Rate limiting rules*, une règle gratuite) ne s'appliquent
