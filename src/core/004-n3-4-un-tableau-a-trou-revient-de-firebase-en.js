@@ -1200,7 +1200,7 @@ function _proposerReconsentement(){
       ?'Le texte que tu avais accepté a été modifié. Relis-le et confirme ton accord pour continuer.'
       :'Ton compte a été créé avant que ces deux accords soient recueillis séparément. Confirme-les pour continuer.'}</p>
     <div style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-2)">
-      <input type="checkbox" id="rc-cgu" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
+      <input type="checkbox" id="rc-cgu" style="margin-top:2px;flex-shrink:0;accent-color:var(--red);width:16px;height:16px;cursor:pointer">
       <label for="rc-cgu" style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6;cursor:pointer">J'ai lu et j'accepte la <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--red-text);text-decoration:underline;font-weight:600">politique de confidentialité</a> et les <a href="../legal.html" target="_blank" rel="noopener" style="color:var(--red-text);text-decoration:underline;font-weight:600">mentions légales</a>.</label>
     </div>
     <!-- PAS DE CASE SANTE ICI. Cette modale bloque l'application : y

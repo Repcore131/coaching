@@ -112,7 +112,7 @@ function _wrPlanifierNotif(){
 // ══════════════════ LA CARTE MUSCULAIRE ════════════════════════════════════
 //
 // La silhouette, face et dos côte à côte, où chaque groupe musculaire prend
-// une couleur entre #2a2a2a (au repos) et #E02020 (à sa cible) — et, à la
+// une couleur entre #2a2a2a (au repos) et ROUGE_MARQUE (à sa cible) — et, à la
 // cible, une lueur électrique et de fines veines lumineuses.
 //
 // ⚠ LES ZONES VIENNENT DES CARTES z-*.png, PAS DE TRACÉS SVG. La demande
@@ -200,7 +200,7 @@ function volumeParMuscle(seances,o){
   }
   return {groupes,series,muscles,total,semaines:sem};
 }
-// PURE. La couleur d'un score : #2a2a2a → #E02020.
+// PURE. La couleur d'un score : #2a2a2a → ROUGE_MARQUE.
 function muscCouleur(s){
   const t=Math.max(0,Math.min(1,Number(s)||0));
   const c=MUSC_FROID.map((a,i)=>Math.round(a+(MUSC_CHAUD[i]-a)*t));
@@ -507,7 +507,7 @@ function _dessinerCarteMuscles(d,fond,res,signature,format){
     const vs=o.ajuste(c.v,'700',post?92:110,BEBAS,cw-20,50);
     const yc=post?1062:1590;
     g.font='700 '+vs+'px '+BEBAS; o.ecrire(c.v,x,yc);
-    g.fillStyle=f==='rouge'?'rgba(255,255,255,.9)':'#E02020';
+    g.fillStyle=f==='rouge'?'rgba(255,255,255,.9)':ROUGE_MARQUE;
     const ls=o.ajusteEspace(c.l.toUpperCase(),'800',24,MONT,3,cw-16,14);
     g.font='800 '+ls+'px '+MONT; o.ecrireEspace(c.l.toUpperCase(),x,yc+42,3,true);
   });
@@ -872,7 +872,7 @@ function _dessinerAvantApres(o){
     g.fillStyle=v; g.fillRect(x,py+ph-240,pw,240);
     g.restore();
     g.save();
-    if(fort){ g.shadowColor=rouge?'rgba(255,255,255,.6)':'#E02020'; g.shadowBlur=40; g.strokeStyle=rouge?'#fff':'#E02020'; g.lineWidth=5; }
+    if(fort){ g.shadowColor=rouge?'rgba(255,255,255,.6)':ROUGE_MARQUE; g.shadowBlur=40; g.strokeStyle=rouge?'#fff':ROUGE_MARQUE; g.lineWidth=5; }
     else { g.strokeStyle='rgba(255,255,255,.25)'; g.lineWidth=2; }
     arrondi(x,py,pw,ph,R); g.stroke(); g.restore();
     vo.ombre(true); g.fillStyle='#fff'; g.textAlign='left';
@@ -893,9 +893,9 @@ function _dessinerAvantApres(o){
     pts=nv; d*=0.55;
   }
   const trace=(w,c,sh)=>{ g.save(); g.lineJoin='round'; g.lineCap='round'; g.strokeStyle=c; g.lineWidth=w;
-    if(sh){ g.shadowColor=rouge?'rgba(255,255,255,.7)':'#E02020'; g.shadowBlur=sh; }
+    if(sh){ g.shadowColor=rouge?'rgba(255,255,255,.7)':ROUGE_MARQUE; g.shadowBlur=sh; }
     g.beginPath(); g.moveTo(pts[0].x,pts[0].y); for(const p of pts) g.lineTo(p.x,p.y); g.stroke(); g.restore(); };
-  trace(10,rouge?'rgba(255,255,255,.45)':'rgba(224,32,32,.45)',30); trace(4,rouge?'#fff':'#E02020',0); trace(1.4,'#fff',0);
+  trace(10,rouge?'rgba(255,255,255,.45)':'rgba(224,32,32,.45)',30); trace(4,rouge?'#fff':ROUGE_MARQUE,0); trace(1.4,'#fff',0);
   // ── Les chiffres, en colonnes, comme le bilan de séance
   const chiffres=aaChiffres(o).slice(0,3), n=chiffres.length, cw=(W-2*M)/n;
   const ys=py+ph+L.ys;
@@ -903,7 +903,7 @@ function _dessinerAvantApres(o){
     const x=M+i*cw+cw/2;
     vo.ombre(true); g.fillStyle='#fff'; g.textAlign='center';
     vo.ajuste(c.v,'400',L.v,BEBAS,cw-20,40); vo.ecrire(c.v,x,ys);
-    g.fillStyle=(i===0&&!rouge)?'#E02020':'rgba(255,255,255,.78)';
+    g.fillStyle=(i===0&&!rouge)?ROUGE_MARQUE:'rgba(255,255,255,.78)';
     vo.ajusteEspace(c.lib,'800',L.etq,MONT,4,cw-24,12);
     vo.ecrireEspace(c.lib,x,ys+(post?36:50),4,true);
     vo.ombre(false);
@@ -915,7 +915,7 @@ function _dessinerAvantApres(o){
   const marque=o.marque||null, equipe=String(o.equipe||'').trim();
   const yb=ys+L.yb;
   if(marque||equipe){
-    vo.ombre(true); g.fillStyle=rouge?'#fff':'#E02020'; g.textAlign='center';
+    vo.ombre(true); g.fillStyle=rouge?'#fff':ROUGE_MARQUE; g.textAlign='center';
     g.font='800 '+(post?16:20)+'px '+MONT; vo.ecrireEspace('COACHÉ PAR',cx,yb,6,true);
     const hl=L.logo, yl=yb+(post?14:20);
     let lw=0, lh=0;
@@ -1178,7 +1178,7 @@ function _dessinerCarteCycle(d,fond,resMuscles,format){
   const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   const rouge=f==='rouge';
-  const accent=rouge?'#ffffff':'#E02020';
+  const accent=rouge?'#ffffff':ROUGE_MARQUE;
   g.textAlign='center'; g.textBaseline='alphabetic';
   // CYCLE N TERMINÉ
   o.ombre(true); g.fillStyle='#fff';
@@ -1387,7 +1387,7 @@ function _dessinerCarteSerie(d,fond,format){
   const HB=60+cs*0.82+90+70+hCal+(d.jokers?70:0);
   let y=Math.max(post?60:150,Math.round((H-(post?140:200)-HB)/2));
   o.ombre(true);
-  g.fillStyle=rouge?'#fff':'#E02020'; g.font='800 34px '+MONT;
+  g.fillStyle=rouge?'#fff':ROUGE_MARQUE; g.font='800 34px '+MONT;
   o.ecrireEspace('SÉRIE EN COURS',cx,y+34,10,true);
   // LE GRAND CHIFFRE.
   g.fillStyle='#fff';
@@ -1407,7 +1407,7 @@ function _dessinerCarteSerie(d,fond,format){
     const x=x0+c*(cote+gap), yy=y+r*(cote+gap);
     g.save();
     const dernier=i===nc-1;
-    g.fillStyle=rouge?(dernier?'#fff':'rgba(255,255,255,.82)'):(dernier?'#ff3b3b':'#E02020');
+    g.fillStyle=rouge?(dernier?'#fff':'rgba(255,255,255,.82)'):(dernier?'#ff3b3b':ROUGE_MARQUE);
     g.shadowColor=rouge?'rgba(255,255,255,.5)':'rgba(224,32,32,.85)'; g.shadowBlur=dernier?26:10;
     g.fillRect(x,yy,cote,cote);
     g.restore();

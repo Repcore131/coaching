@@ -776,7 +776,7 @@ const BIL_STEPS=[
       {v:'1',f:'happy',c:'#a3e635'},
       {v:'2',f:'neutral',c:'#eab308'},
       {v:'3',f:'sad',c:'#f97316'},
-      {v:'4 ou plus',f:'angry',c:'#E02020'},
+      {v:'4 ou plus',f:'angry',c:ROUGE_MARQUE},
     ])}</div>`+
     bLbl('Explique-moi les raisons (repas de famille, sorties professionnelles...) :')+bTA('bil-cheat-reasons','Repas de famille, sorties professionnelles...')
   ),
@@ -897,14 +897,14 @@ const DEB_STEPS=[
     `<div>${bEmojiScale('deb-intensity-1',[
       {v:'Faible intensité',l:'Faible',svg:BICON.flame1,c:'#22c55e'},
       {v:'Intensité Modérée',l:'Modérée',svg:BICON.flame2,c:'#f97316'},
-      {v:'Haute intensité',l:'Haute',svg:BICON.flame3,c:'#E02020'},
+      {v:'Haute intensité',l:'Haute',svg:BICON.flame3,c:ROUGE_MARQUE},
     ])}</div>`+
     `<div id="deb-intensity-2-bloc"${_bSportsDeclares('deb-sports')<2?' style="display:none"':''}>`+
     bLbl('Et celle de ton second sport ?')+
     `<div>${bEmojiScale('deb-intensity-2',[
       {v:'Faible intensité',l:'Faible',svg:BICON.flame1,c:'#22c55e'},
       {v:'Intensité Modérée',l:'Modérée',svg:BICON.flame2,c:'#f97316'},
-      {v:'Haute intensité',l:'Haute',svg:BICON.flame3,c:'#E02020'},
+      {v:'Haute intensité',l:'Haute',svg:BICON.flame3,c:ROUGE_MARQUE},
     ])}</div></div>`+
     bLbl('As-tu des antécédents sportifs ?')+bT('deb-history','Ex : football 5 ans, boxe 2 ans...')+
     bLbl('Quand préfères-tu t\'entraîner ? ⏰')+
@@ -1412,7 +1412,7 @@ function showBilanNotifBanner(){
   const b=document.createElement('div');
   b.id='bilan-notif-banner';
   b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:var(--z-bar);animation:slideDown var(--t-3) var(--c-out)';
-  b.innerHTML=`<div style="background:linear-gradient(135deg,#1a0000,#280000);border-bottom:2px solid var(--red);padding:14px 20px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openBilanChoice();document.getElementById('bilan-notif-banner')?.remove()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+  b.innerHTML=`<div style="background:linear-gradient(135deg,#1a0000,var(--red-bg-2));border-bottom:2px solid var(--red);padding:14px 20px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openBilanChoice();document.getElementById('bilan-notif-banner')?.remove()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div style="flex:1;min-width:0">
       <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red-text);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Bilan bimensuel · Ce samedi</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Remplis ton bilan coaching pour suivre ton évolution !</div>
@@ -1750,7 +1750,7 @@ function _htmlHabTaux(u){
 function _htmlHabSemaine(u,h){
   const sem=habSemaine(u,h.cle);
   const n=sem.filter(x=>x===true).length;
-  return `<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05)">
+  return `<div style="margin-top:12px;padding-top:10px;border-top:1px solid color-mix(in srgb,var(--text) 5%,transparent)">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px">
       <span style="font-size:var(--fs-2xs);color:var(--sub);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(h.libelle||h.cle)}</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint);flex-shrink:0">${n}/7</span>
@@ -1948,7 +1948,7 @@ function renderWoReminderCard(){
   const days=(u._woReminderDays||[]).map(i=>DS[i]).join(' · ');
   const hh=String(u._woReminderHour??18).padStart(2,'0');
   const mm=String(u._woReminderMin??0).padStart(2,'0');
-  el.innerHTML=`<div style="background:#08100a;border:1px solid #1a3020;border-radius:var(--r-3);padding:12px 16px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
+  el.innerHTML=`<div style="background:var(--surface-0);border:1px solid #1a3020;border-radius:var(--r-3);padding:12px 16px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:18px;height:18px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
     <div style="flex:1;min-width:0">
       <div style="font-size:var(--fs-xs);font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.8px">Rappel séance activé</div>
@@ -2222,7 +2222,7 @@ function _htmlInvitationNotif(etat,phrase,choix){
       +'margin:0;padding:8px 0;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:700;'
       +'font-size:var(--fs-sm);color:var(--text)">'
       +'<input type="checkbox" id="inv-notif-g-'+g.cle+'" data-groupe="'+g.cle+'"'+(ch[g.cle]?' checked':'')
-      +' onchange="invNotifMaj()" style="width:20px;height:20px;accent-color:#E02020;flex-shrink:0;margin:0;cursor:pointer">'
+      +' onchange="invNotifMaj()" style="width:20px;height:20px;accent-color:var(--red);flex-shrink:0;margin:0;cursor:pointer">'
       +escapeHtml(g.titre)+'</label>').join('');
   const aucune=!NOTIF_GROUPES.some(g=>ch[g.cle]);
   return cadre('Et la prochaine ?',

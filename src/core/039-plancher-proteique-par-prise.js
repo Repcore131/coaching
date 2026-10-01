@@ -120,7 +120,7 @@ function _htmlRepartitionPrises(user,macrosJour){
   const detail=egales
     ?r.nRepas+' × '+r.parts[0]+' g'
     :r.parts.join(' g + ')+' g';
-  return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">
+  return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid color-mix(in srgb,var(--text) 6%,transparent)">
     <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">${escapeHtml(detail)} = ${escapeHtml(String(r.total))} g au total.</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:6px">${escapeHtml(phrasePlancherPrise(r))}</div>
     ${r.tension?`<div style="font-size:var(--fs-2xs);color:var(--text-dim);line-height:1.55;margin-top:6px">${escapeHtml(PRISE_PHRASE_TENSION)}${r.nSuggere?' Essaie '+r.nSuggere+' repas.':''}</div>`:''}
@@ -792,7 +792,7 @@ function _htmlPpQuestions(user){
   const s=ppEtat(u).symptomes;
   return `<div class="card" style="margin-bottom:14px">
     <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:10px">Comment ça se passe ?</label>
-    ${PP_SYMPTOMES.map(x=>`<div style="padding:8px 0;border-top:1px solid rgba(255,255,255,.06)">
+    ${PP_SYMPTOMES.map(x=>`<div style="padding:8px 0;border-top:1px solid color-mix(in srgb,var(--text) 6%,transparent)">
       <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-bottom:6px">${escapeHtml(x.q)}</div>
       <div style="display:flex;gap:6px">
         ${[['0','Non'],['1','Oui']].map(([v,l])=>
@@ -2140,7 +2140,7 @@ function _renderCycleNutSettings(nut){
     <div style="display:flex;align-items:center;justify-content:space-between">
       <div>
         <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:4px">Adaptation cycle menstruel</div>
-        <div style="font-size:var(--fs-xs);color:#888">Ajuste tes macros selon ta phase</div>
+        <div style="font-size:var(--fs-xs);color:var(--sub)">Ajuste tes macros selon ta phase</div>
       </div>
       <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer">
         <input type="checkbox" id="cycle-enabled" ${on?'checked':''} onchange="saveCycleNutSettings()" style="opacity:0;width:0;height:0;position:absolute">

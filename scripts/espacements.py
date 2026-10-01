@@ -15,6 +15,11 @@ Usage : python3 scripts/espacements.py [--verifier]
   --verifier : ne modifie rien, sort en erreur s'il reste une valeur hors echelle.
 Traite app/rc-style.<build>.css (hors theme clair genere), app/rc-core.<build>.js
 et app/index.html. Relancer scripts/theme_clair.py ensuite.
+
+DEPUIS LE 01/10/2026, rc-core vit dans src/core/ (src/core/LISEZMOI.md) : ce
+sont les morceaux qui sont corriges, puis rc-core est reassemble
+(scripts/assembler_core.mjs). Corriger rc-core lui-meme le ferait refuser par
+l'assemblage, et la correction serait perdue au prochain build.
 """
 import glob, os, re, sys
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -45,17 +50,24 @@ def main():
     verifier = '--verifier' in sys.argv
     total = 0
     css = glob.glob(os.path.join(RACINE, 'app', 'rc-style.*.css'))[0]
-    js = glob.glob(os.path.join(RACINE, 'app', 'rc-core.*.js'))[0]
-    for f in (css, js, os.path.join(RACINE, 'app', 'index.html')):
+    morceaux = sorted(glob.glob(os.path.join(RACINE, 'src', 'core', '[0-9][0-9][0-9]-*.js')))
+    js = morceaux or [glob.glob(os.path.join(RACINE, 'app', 'rc-core.*.js'))[0]]
+    modifie_core = False
+    for f in [css] + js + [os.path.join(RACINE, 'app', 'index.html')]:
         s = open(f, encoding='utf-8', newline='').read()
         i = s.find('/* ═══ THEME CLAIR')
         base, gen = (s[:i], s[i:]) if (f == css and i >= 0) else (s, '')
         c = [0]
         n = traite(base, c)
         total += c[0]
-        print(os.path.basename(f), c[0])
+        if c[0] or f == css or not morceaux:
+            print(os.path.basename(f), c[0])
         if not verifier and c[0]:
             open(f, 'w', encoding='utf-8', newline='').write(n + gen)
+            modifie_core = modifie_core or f in morceaux
+    if modifie_core:
+        import subprocess
+        subprocess.run(['node', os.path.join(RACINE, 'scripts', 'assembler_core.mjs')], check=True)
     if verifier and total:
         sys.exit('%d espacements hors echelle' % total)
 

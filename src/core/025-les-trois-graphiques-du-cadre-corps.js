@@ -310,7 +310,7 @@ function _htmlCorpsGraphes(u,o){
   let _neutre=false;
   try{ _neutre=aTCA(u); }catch(e){ _neutre=false; }
   if(!_neutre&&o.poids!==false) h+=_htmlCorpsGraphe('Poids','kg',
-    [{lib:'Poids',couleur:'#E02020',points:_f(corpsPointsPoids(u))}],
+    [{lib:'Poids',couleur:ROUGE_MARQUE,points:_f(corpsPointsPoids(u))}],
     {h:44,dates:true,
      pied:'Relevé au bilan. La pesée quotidienne a son propre protocole '
       +'et n’est pas mélangée ici.'});
@@ -1721,8 +1721,8 @@ function _htmlCcdMensurations(c){
       values:vals.map((v,i)=>lu(v,i,vals))
         .concat([(function(){ try{ return _cellEcartMensuration(bl,m.k); }catch(e){ return null; } })()]),
       valueStyleFn:(v,ci,vide)=>(ci>=bl.length)
-        ?(vide?'background:#080808;color:var(--sub);':'background:var(--dark);color:var(--sub);')
-        :(vide?'background:#080808;color:var(--sub);'
+        ?(vide?'background:var(--bg);color:var(--sub);':'background:var(--dark);color:var(--sub);')
+        :(vide?'background:var(--bg);color:var(--sub);'
           :('background:var(--dark);color:'
             +((bl[ci]&&(function(){ try{ return bmReportee(bl[ci],m.k); }catch(e){ return false; } })())
               ?'var(--text-faint)':'var(--text)')+';'))};

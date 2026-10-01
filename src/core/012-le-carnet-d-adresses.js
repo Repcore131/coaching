@@ -497,7 +497,7 @@ function riteBilanDeLaSemaine(u,now){
 // ne porte alors que la date si l'athlète n'a rien répondu.
 function _riteLigne(lib,val,note){
   return `<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;
-    padding:8px 0;border-top:1px solid rgba(255,255,255,.06)">
+    padding:8px 0;border-top:1px solid color-mix(in srgb,var(--text) 6%,transparent)">
     <span style="font-size:var(--fs-xs);color:var(--sub)">${escapeHtml(lib)}</span>
     <span style="font-size:var(--fs-md);font-weight:800;color:var(--text);text-align:right">${val}${note?`<span style="font-size:var(--fs-2xs);color:var(--text-faint);font-weight:400"> ${escapeHtml(note)}</span>`:''}</span>
   </div>`;
@@ -553,7 +553,7 @@ function ouvrirRite(cycle){
       <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:10px">Tes jours et ton heure d'entraînement pour les 4 prochaines semaines. Nommer cette période ne crée aucun programme : c'est une étiquette.</div>
       <div id="rite-jours" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
         ${['L','Ma','Me','J','V','S','D'].map((j,i)=>`<button type="button" data-j="${i}" onclick="riteJour(${i},this)"
-          style="flex:1;min-width:40px;min-height:44px;border-radius:var(--r-2);cursor:pointer;background:#111;border:1px solid var(--border);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800">${j}</button>`).join('')}
+          style="flex:1;min-width:40px;min-height:44px;border-radius:var(--r-2);cursor:pointer;background:var(--surface-1);border:1px solid var(--border);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800">${j}</button>`).join('')}
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:var(--fs-xs);color:var(--sub)">Heure</span>
@@ -1151,12 +1151,12 @@ function renderFileReprise(){
       background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:12px">
       <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.5">Relancés cette semaine</span>
       <span style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--red-text);
-        --halo-c:rgba(224,32,32,.6);text-shadow:var(--halo-1)">${sem}</span>
+        --halo-c:color-mix(in srgb,var(--red) 60%,transparent);text-shadow:var(--halo-1)">${sem}</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
       <span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase">Mettre en veille</span>
       <select onchange="frSetDuree(this.value)" aria-label="Durée de mise en veille"
-        style="min-height:38px;padding:6px 10px;border-radius:var(--r-2);background:#101010;border:1px solid var(--border);
+        style="min-height:38px;padding:6px 10px;border-radius:var(--r-2);background:var(--surface-1);border:1px solid var(--border);
           color:var(--text-strong);font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
         ${FR_DUREES.map(j=>`<option value="${j}"${j===_frDuree?' selected':''}>${j} jours</option>`).join('')}
       </select>
@@ -1172,7 +1172,7 @@ function renderFileReprise(){
       font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.3px;
       background:${fort?'rgba(224,32,32,.14)':'#111'};border:1px solid ${fort?'var(--red)':'var(--border)'};
       color:${fort?'var(--text)':'var(--sub)'}">${escapeHtml(lib)}</button>`;
-  el.innerHTML=tete+_htmlCalendrierAcces()+f.lignes.map(r=>`<div style="background:linear-gradient(180deg,#151515,#0e0e0e);
+  el.innerHTML=tete+_htmlCalendrierAcces()+f.lignes.map(r=>`<div style="background:linear-gradient(180deg,var(--surface-2),var(--surface-0));
       border:1px solid var(--border);border-left:1px solid var(--border);border-radius:var(--r-3);
       padding:12px 12px;margin-bottom:10px;box-shadow:var(--e2)">
       <div style="display:flex;align-items:baseline;gap:8px">

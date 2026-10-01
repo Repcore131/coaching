@@ -276,9 +276,25 @@ def preparer_variantes(css):
                 change = True
 
 
+# LE ROUGE DE LA MARQUE, EN TEXTE (01/10/2026). scripts/couleurs.py a remplace
+# les #E02020 ecrits en dur par var(--red). Litteral, le generateur
+# l'assombrissait en texte ; en jeton, il restait #E02020 (4,4:1 sur #f4f4f4).
+# On le remplace, dans les copies claires, par --red-texte-clair : la valeur
+# EXACTE que le generateur donnait au litteral (meme teinte, assombri jusqu'a
+# 4,5:1), posee sur le :root clair. --red-text, lui, tire vers l'orange (#c21100) :
+# « série. » de l'accueil aurait change de teinte.
+CIBLE_TEXTE = {'--red': '--red-texte-clair'}
+
+
 def vers_variante(valeur):
-    """var(--green) -> var(--green-text), pour les jetons qui ont une variante."""
-    return re.sub(r'var\((--[\w-]+)', lambda m: 'var(' + m.group(1) + '-text' if m.group(1) in VARIANTES else m.group(0), valeur)
+    """var(--green) -> var(--green-text), pour les jetons qui ont une variante ;
+    var(--red) -> var(--red-text)."""
+    def un(m):
+        n = m.group(1)
+        if n in CIBLE_TEXTE:
+            return 'var(' + CIBLE_TEXTE[n]
+        return 'var(' + n + '-text' if n in VARIANTES else m.group(0)
+    return re.sub(r'var\((--[\w-]+)(?=[),])', un, valeur)
 
 
 def variante_de(p, v):
@@ -444,8 +460,24 @@ def prefixer(sel):
 FOND_VIF = re.compile(r'var\(--(?:red|green|danger|success|orange|amber|warning|gold|info|accent|pub-|cycle|arc-)(?![\w-]*-(?:bg|border)\b)|#(e02020|b81515|ff3345|22c55e|f97316|f59e0b|f5c518|ff3b30)', re.I)
 
 
+RE_MELANGE = re.compile(r'color-mix\(in srgb,\s*var\((--[\w-]+)\)\s+([\d.]+)%,\s*transparent\)')
+
+
+def sans_melange(valeur):
+    """color-mix(in srgb,var(--red) 14%,transparent) -> rgba(224,32,32,0.14), lu
+    avec la valeur SOMBRE du jeton (01/10/2026, scripts/couleurs.py). Un voile
+    a 14 % n'est pas un fond franc, meme ecrit avec var(--red)."""
+    def un(m):
+        c = lire(JETONS_SOMBRES.get(m.group(1), '') or '#000')
+        if not c:
+            return m.group(0)
+        return 'rgba(%d,%d,%d,%s)' % (c[0], c[1], c[2], '%g' % (float(m.group(2)) / 100))
+    return RE_MELANGE.sub(un, valeur)
+
+
 def vif(valeur):
     """Un fond de couleur franche (le rouge, le vert…) : le texte blanc y reste blanc."""
+    valeur = sans_melange(valeur)
     if FOND_VIF.search(valeur):
         return True
     for m in RE_COUL.finditer(valeur):
@@ -500,6 +532,8 @@ def regle_claire(sel, corps):
         var = variante_de(p, v)
         if var:
             lignes.append(var)
+        if p == '--red' and sel.strip() == ':root' and RE_COUL.fullmatch(v.strip()):
+            lignes.append('--red-texte-clair:' + lisible(clair(v.strip(), 'texte')))
     FONDS_REGLE = None
     return prefixer(sel) + '{' + ';'.join(lignes) + '}'
 
@@ -678,14 +712,15 @@ def styles_en_ligne(textes):
     jetons = set()
     for t in textes:
         for m in RE_LIGNE_VAR.finditer(t):
-            if m.group(1) in VARIANTES:
+            if m.group(1) in VARIANTES or m.group(1) in CIBLE_TEXTE:
                 jetons.add(m.group(1))
     for j in sorted(jetons):
         cles = ['color:var(%s)' % j, 'color: var(%s)' % j]
         sels = []
         for c in cles:
             sels += ['[style^="%s"]' % c, '[style*=";%s"]' % c, '[style*="; %s"]' % c, '[style*=" %s"]' % c]
-        out.append(','.join(PREFIXE + ' ' + s + pas_vif for s in sels) + '{color:var(%s-text)!important}' % j)
+        cible = CIBLE_TEXTE.get(j, j + '-text')
+        out.append(','.join(PREFIXE + ' ' + s + pas_vif for s in sels) + '{color:var(%s)!important}' % cible)
     return '\n'.join(out)
 
 

@@ -1424,7 +1424,7 @@ const SUPP_FAMILLES=Object.freeze({
   proteine:   {lib:'Protéine',    c:'#ef4444'},
   acide:      {lib:'Acide aminé', c:'#f59e0b'},
   creatine:   {lib:'Créatine',    c:'#fb923c'},
-  booster:    {lib:'Booster',     c:'#E02020'},
+  booster:    {lib:'Booster',     c:ROUGE_MARQUE},
   vitamine:   {lib:'Vitamine',    c:'#facc15'},
   mineral:    {lib:'Minéral',     c:'#f59e0b'},
   gras:       {lib:'Acides gras', c:'#f59e0b'},

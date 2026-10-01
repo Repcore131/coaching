@@ -28,13 +28,13 @@
 //   haptique   false pour ne pas vibrer
 //   eclairs    2 ou 3 (tiré au hasard sinon)
 //   conteneur  l'élément qui tremble (défaut : l'écran actif)
-//   couleur    la teinte du halo et du trait (défaut #E02020)
+//   couleur    la teinte du halo et du trait (défaut ROUGE_MARQUE)
 // Rend une Promise résolue à la fin (jamais rejetée), avec le point d'impact —
 // l'appelant peut enchaîner, mais n'a JAMAIS à attendre pour laisser la main.
 //
 // NE LÈVE JAMAIS : comme toute l'animation, la foudre cède en silence.
 const FOUDRE_MAX=1100;
-const FOUDRE_ROUGE='#E02020';
+const FOUDRE_ROUGE=ROUGE_MARQUE;
 function rcFoudre(cible,o){
   o=o||{};
   try{
@@ -1871,14 +1871,14 @@ function rescueLogin(em,pw){
     <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-4);padding:28px 24px;max-width:340px;width:100%;text-align:center">
       <div style="font-size:var(--fs-2xl);margin-bottom:12px">✅</div>
       <div style="font-size:var(--fs-md);font-weight:800;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px">Mot de passe reconnu</div>
-      <p style="font-size:var(--fs-sm);color:#888;line-height:1.6;margin-bottom:20px">Le site a changé d'adresse et tes données locales n'ont pas encore été retrouvées dans le cloud. Indique ton rôle pour continuer provisoirement : si tu te reconnectes depuis ton appareil ou navigateur habituel, ton profil complet sera restauré.</p>
+      <p style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6;margin-bottom:20px">Le site a changé d'adresse et tes données locales n'ont pas encore été retrouvées dans le cloud. Indique ton rôle pour continuer provisoirement : si tu te reconnectes depuis ton appareil ou navigateur habituel, ton profil complet sera restauré.</p>
       <div style="display:flex;gap:10px;margin-bottom:16px">
         <button onclick="doRescue('${em}','${encodeURIComponent(pw)}','coach')"
           style="flex:1;background:#1a0000;border:1.5px solid var(--red);color:var(--text);padding:14px 8px;border-radius:var(--r-3);cursor:pointer;font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-sm);letter-spacing:1px">
           Coach
         </button>
         <button onclick="doRescue('${em}','${encodeURIComponent(pw)}','athlete')"
-          style="flex:1;background:#0a1a0a;border:1.5px solid #22c55e;color:var(--text);padding:14px 8px;border-radius:var(--r-3);cursor:pointer;font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-sm);letter-spacing:1px">
+          style="flex:1;background:#0a1a0a;border:1.5px solid var(--green);color:var(--text);padding:14px 8px;border-radius:var(--r-3);cursor:pointer;font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-sm);letter-spacing:1px">
           Athlète
         </button>
       </div>

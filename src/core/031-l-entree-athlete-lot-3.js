@@ -94,7 +94,7 @@ function _rendreGrilleCharge(){
         +'font-size:var(--fs-xs);font-weight:800;color:var(--text);background:'+fond+';opacity:'+alpha.toFixed(2)
         // Previsionnel : pointille. Une case vide ne dit rien, une case
         // pointillee dit « c est ce qui est prevu, rien n a encore ete fait ».
-        +(m.prevision?';outline:1px dashed rgba(255,255,255,.55);outline-offset:-2px':'')
+        +(m.prevision?';outline:1px dashed color-mix(in srgb,var(--text) 55%,transparent);outline-offset:-2px':'')
         +(m.courante?';box-shadow:0 0 0 2px var(--red)':'');
       const titre=escapeHtml(((MUSCLES[mu]||{}).lib||mu)+' : S'+(i+1)+' : '
         +(c?c.series:0)+' séries'+(c&&c.repere?(' ('+c.repere+')'):'')

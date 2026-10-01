@@ -1273,14 +1273,14 @@ function _htmlFlammeFin(){
       +'<stop offset="0" stop-color="#2b0000"/><stop offset=".45" stop-color="#6b0505"/>'
       +'<stop offset="1" stop-color="#a00d0d"/></linearGradient>'
     +'<linearGradient id="rcffVif" x1="0" y1="1" x2="0" y2="0">'
-      +'<stop offset="0" stop-color="#7a0000"/><stop offset=".5" stop-color="#e02020"/>'
+      +('<stop offset="0" stop-color="#7a0000"/><stop offset=".5" stop-color="'+ROUGE_MARQUE_MIN+'"/>')
       +'<stop offset="1" stop-color="#ff4a2a"/></linearGradient>'
     +'<linearGradient id="rcffCoeur" x1="0" y1="1" x2="0" y2="0">'
-      +'<stop offset="0" stop-color="#e02020"/><stop offset=".55" stop-color="#ff6a3c"/>'
+      +('<stop offset="0" stop-color="'+ROUGE_MARQUE_MIN+'"/><stop offset=".55" stop-color="#ff6a3c"/>')
       +'<stop offset="1" stop-color="#ffb08a"/></linearGradient>'
     +'<radialGradient id="rcffHalo" cx=".5" cy=".62" r=".55">'
-      +'<stop offset="0" stop-color="#e02020" stop-opacity=".42"/>'
-      +'<stop offset="1" stop-color="#e02020" stop-opacity="0"/></radialGradient>'
+      +('<stop offset="0" stop-color="'+ROUGE_MARQUE_MIN+'" stop-opacity=".42"/>')
+      +('<stop offset="1" stop-color="'+ROUGE_MARQUE_MIN+'" stop-opacity="0"/></radialGradient>')
   +'</defs>'
   // 1. Le halo. Peint le premier, donc derriere tout le reste.
   +'<ellipse cx="60" cy="86" rx="52" ry="50" fill="url(#rcffHalo)"/>'
@@ -2356,7 +2356,7 @@ function buildSessionComparison(vol,data){
         </g>
         <text x="100" y="157" text-anchor="middle" font-family="'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif" font-size="34" letter-spacing="4" fill="url(#wdSilver)" stroke="#43474e" stroke-width=".7" paint-order="stroke">RECORD</text>
       </svg></div>
-      <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:2px;color:#e8ebef;margin-top:12px;line-height:1;text-shadow:var(--halo-1)">NOUVEAU RECORD</div>
+      <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:2px;color:var(--text);margin-top:12px;line-height:1;text-shadow:var(--halo-1)">NOUVEAU RECORD</div>
       <div style="font-size:var(--fs-md);font-weight:800;color:var(--text);margin-top:6px">${best.curMax}kg : ${escapeHtml(best.nm)}</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">était ${best.histMax}kg${records.length>1?' · +'+(records.length-1)+' autre'+(records.length>2?'s':'')+' record'+(records.length>2?'s':'')+' battu'+(records.length>2?'s':''):''}</div>
     </div>`;
@@ -2369,10 +2369,10 @@ function buildSessionComparison(vol,data){
     const delta=Math.round(vol)-prevSame.volume;
     _bscDelta=delta;
     _bscJour=new Date(prevSame.date).toLocaleDateString('fr-FR',{weekday:'long'});
-    if(delta!==0) html+=`<div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:var(--r-2);padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px"><span style="flex-shrink:0;color:${delta>0?'var(--green)':'#666'}">${delta>0?icon('flame',18):'▾'}</span><span style="font-size:var(--fs-sm);font-weight:700;color:${delta>0?'var(--green)':'#888'}">${delta>0?'+':''}${delta}kg de volume vs dernière séance</span></div>`;
+    if(delta!==0) html+=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px"><span style="flex-shrink:0;color:${delta>0?'var(--green)':'#666'}">${delta>0?icon('flame',18):'▾'}</span><span style="font-size:var(--fs-sm);font-weight:700;color:${delta>0?'var(--green)':'#888'}">${delta>0?'+':''}${delta}kg de volume vs dernière séance</span></div>`;
   }
   if(firstSession&&!html)
-    html=`<div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:var(--r-2);padding:10px 14px;margin-bottom:14px;font-size:var(--fs-sm);font-weight:700;color:var(--sub)">Première séance enregistrée : tes prochains records apparaîtront ici</div>`;
+    html=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 14px;margin-bottom:14px;font-size:var(--fs-sm);font-weight:700;color:var(--sub)">Première séance enregistrée : tes prochains records apparaîtront ici</div>`;
   return {html,records,delta:_bscDelta,jour:_bscJour};
 }
 // versBilan : enchaîner sur le questionnaire de départ au lieu de rentrer à

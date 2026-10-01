@@ -840,7 +840,7 @@ function htmlPrefsAide(role,choix,maj,build,appareil){
 // ⚠ LA COULEUR EST REJUGÉE CHEZ L'ATHLÈTE (couleurAccessible) : une couleur
 //   illisible sur le fond sombre (contraste < 3:1) est remplacée par la plus
 //   proche qui passe, même si elle a été écrite par un autre chemin.
-// ⚠ SEULS LES TOKENS D'ACCENT CHANGENT (--red, --red2, --red-glow,
+// ⚠ SEULS LES TOKENS D'ACCENT CHANGENT (--red, --red-deep, --red-glow,
 //   --red-text, --red-bg, --glow-red, et --red-light qui dérive de --red).
 //   Les rouges écrits en dur dans la feuille de style restent rouges.
 // ⚠ HORS LIGNE : la dernière marque reçue (DB 'coach_marque') s'applique au
@@ -945,7 +945,7 @@ function marqueTokens(couleur){
   const texteSombre=couleurAccessible(c,MARQUE_FOND,4.5), texteClair=couleurAccessible(c,MARQUE_FOND_CLAIR,4.5);
   // Le texte POSÉ SUR l'accent : blanc, ou presque noir si la couleur est claire (un jaune).
   const sur=contrasteCouleurs('#FFFFFF',c)>=contrasteCouleurs('#0B0B0B',c)?'#FFFFFF':'#0B0B0B';
-  return {commun:{'--red':c,'--red2':_mqMelange(c,'#000000',0.18),'--red-glow':_mqMelange(c,'#FFFFFF',0.2),
+  return {commun:{'--red':c,'--red-deep':_mqMelange(c,'#000000',0.18),'--red-glow':_mqMelange(c,'#FFFFFF',0.2),
       '--glow-red':'0 0 18px rgba('+r+','+g+','+b+',.35)','--mq-sur':sur,
       '--mq-sombre':_mqMelange(c,'#000000',0.45),'--mq-nuit':_mqMelange(c,'#000000',0.78)},
     sombre:{'--red-text':texteSombre.ok?c:texteSombre.proposee,'--red-bg':_mqMelange(c,'#000000',0.94)},
@@ -964,8 +964,8 @@ function marqueCss(couleur){
   return ':root,:root[data-theme="clair"]{'+decl(t.commun)+'}'
     +':root{'+decl(t.sombre)+'}'
     +':root[data-theme="clair"]{'+decl(t.clair)+'}'
-    +M+'.btn-red,'+M+'.btn-red:hover{background:linear-gradient(160deg,var(--red),var(--red2));border-color:color-mix(in srgb,var(--red) 60%,transparent);color:var(--mq-sur)}'
-    +M+'.du-defier{background:linear-gradient(var(--red-glow),var(--red),var(--red2));color:var(--mq-sur)}'
+    +M+'.btn-red,'+M+'.btn-red:hover{background:linear-gradient(160deg,var(--red),var(--red-deep));border-color:color-mix(in srgb,var(--red) 60%,transparent);color:var(--mq-sur)}'
+    +M+'.du-defier{background:linear-gradient(var(--red-glow),var(--red),var(--red-deep));color:var(--mq-sur)}'
     +M+'.banner-hero{background:linear-gradient(145deg,var(--mq-sombre) 0%,var(--mq-nuit) 100%)}'
     +M+'#clh-athlete-avatar{border-color:var(--red)}';
 }
@@ -1056,7 +1056,7 @@ async function renderMarqueCoach(){
   }
   if(!_mqEd){
     _mqEd={nom:String(currentUser.teamName||((currentUser.fname||'')+' '+(currentUser.lname||'')).trim()||'').slice(0,MARQUE_NOM_MAX),
-      couleur:'#E02020',logoUrl:'',envoi:false,lu:false};
+      couleur:ROUGE_MARQUE,logoUrl:'',envoi:false,lu:false};
     const cle=String(currentUser.email||'').replace(/\./g,',');
     _fbJson('coachs/'+cle+'/marque').then(r=>{
       if(!_mqEd) return;
@@ -1072,7 +1072,7 @@ async function renderMarqueCoach(){
     +'<label class="mq-lab" for="mq-nom">Nom affiché</label>'
     +'<input id="mq-nom" class="mq-champ" maxlength="40" value="'+E(e.nom)+'" oninput="mqChamp(\'nom\',this.value)">'
     +'<label class="mq-lab" for="mq-hex">Couleur</label>'
-    +'<div class="mq-coul"><input type="color" id="mq-couleur" value="'+E((hexMarque(e.couleur)||'#E02020').toLowerCase())+'" oninput="mqChamp(\'couleur\',this.value)" aria-label="Choisir la couleur">'
+    +'<div class="mq-coul"><input type="color" id="mq-couleur" value="'+E((hexMarque(e.couleur)||ROUGE_MARQUE).toLowerCase())+'" oninput="mqChamp(\'couleur\',this.value)" aria-label="Choisir la couleur">'
     +'<input id="mq-hex" class="mq-champ" maxlength="7" value="'+E(e.couleur)+'" oninput="mqChamp(\'couleur\',this.value)"></div>'
     +'<div id="mq-verdict" class="mq-verdict"></div>'
     +'<label class="mq-lab">Logo (carré, 200 Ko au plus)</label>'
@@ -1111,7 +1111,7 @@ function _mqApercu(){
     :'<span class="mq-ko">Trop sombre sur le fond de l’app (contraste '+String(Math.round(c.ratio*10)/10).replace('.',',')+':1, il en faut 3).</span> '
       +'<button type="button" class="mq-lien" onclick="mqUtiliser('+_attrArg(c.proposee)+')">Utiliser '+escapeHtml(c.proposee)+', la plus proche lisible</button>';
   const l=document.getElementById('mq-logo-apercu');
-  const m={nom:e.nom||'?',couleur:c.ok?c.couleur:(c.proposee||'#E02020'),logoUrl:e.logoUrl||null};
+  const m={nom:e.nom||'?',couleur:c.ok?c.couleur:(c.proposee||ROUGE_MARQUE),logoUrl:e.logoUrl||null};
   if(l){ l.innerHTML=htmlMarqueLogo(m,'mq-logo-grand'); l.style.setProperty('--mq-c',m.couleur); }
   const a=document.getElementById('mq-apercu');
   if(a) a.innerHTML='<div class="mq-apercu-fond" style="--mq-c:'+escapeHtml(m.couleur)+'">'+htmlMarqueBande(m)

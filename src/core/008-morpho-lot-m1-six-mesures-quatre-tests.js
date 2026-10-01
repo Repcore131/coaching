@@ -1527,7 +1527,7 @@ function _htmlMorphoExercice(ex){
   if(r.variantes.length)
     h+=bloc('Variantes du même schéma',escapeHtml(r.variantes.join(', '))
       +' : à envisager à côté, jamais à la place.');
-  return '<div style="background:#0c0c0c;border:1px solid var(--border);border-left:1px solid var(--border);'
+  return '<div style="background:var(--surface-0);border:1px solid var(--border);border-left:1px solid var(--border);'
     +'border-radius:var(--r-2);padding:10px 12px;margin:0 0 12px;font-size:var(--fs-xs);line-height:1.6">'
     +'<div style="color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase;'
     +'margin-bottom:6px;font-size:var(--fs-2xs)">Proportions : pour toi, pas pour lui</div>'+h+'</div>';
@@ -1593,7 +1593,7 @@ function _htmlMorphoLecture(user,cal){
         +'font-weight:800">Accent :</span> <span style="color:var(--text-dim)">'+E(p.accent)+'</span></div>'
         // LE PIÈGE EST AFFICHÉ. C'est la partie la plus utile de la fiche, et
         // celle qu'on serait tenté de garder pour soi.
-        +'<div style="font-size:var(--fs-sm);line-height:1.6;margin-top:6px;background:#0c0c0c;'
+        +'<div style="font-size:var(--fs-sm);line-height:1.6;margin-top:6px;background:var(--surface-0);'
         +'border-radius:var(--r-2);padding:8px 10px"><span style="color:var(--red);font-weight:800">'
         +'Le piège :</span> <span style="color:var(--text-dim)">'+E(p.piege)+'</span></div>'
         +'</div>';
@@ -2292,7 +2292,7 @@ function _ampRendre(){
   const num=(cle,champ,val,ph)=>'<input type="number" inputmode="decimal" step="any" value="'
     +escapeHtml(String(val==null?'':val))+'" placeholder="'+escapeHtml(ph||'-')+'" '
     +'oninput="ampSaisie(\''+cle+'\',\''+champ+'\',this.value)" '
-    +'style="width:88px;min-height:44px;background:#0c0c0c;border:1px solid var(--border);'
+    +'style="width:88px;min-height:44px;background:var(--surface-0);border:1px solid var(--border);'
     +'border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-weight:800;'
     +'font-size:var(--fs-md);text-align:center;padding:6px">';
   const bouton=(cle,champ,val,cour,lib)=>'<button type="button" onclick="ampSaisie(\''+cle+'\',\''+champ

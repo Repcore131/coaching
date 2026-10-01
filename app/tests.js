@@ -51953,7 +51953,7 @@ async function testExercices(){
         if(!appliquerMarque(_MQ)) return _echec('refusée');
         const st=getComputedStyle(document.documentElement);
         if(st.getPropertyValue('--red').trim().toUpperCase()!=='#2E7D32') return _echec('--red : '+st.getPropertyValue('--red'));
-        if(!st.getPropertyValue('--red-text').trim()||!st.getPropertyValue('--red2').trim()) return _echec('tokens dérivés');
+        if(!st.getPropertyValue('--red-text').trim()||!st.getPropertyValue('--red-deep').trim()) return _echec('tokens dérivés');
         if(document.documentElement.getAttribute('data-marque')!=='coach') return _echec('attribut');
         const z=document.getElementById('clh-marque');
         if(z&&(z.hidden||z.textContent.indexOf('KG Performance')<0)) return _echec('en-tête de l’accueil');
@@ -56755,6 +56755,26 @@ async function testExercices(){
       const h=String(window._RC_PAGE_PROD||'');
       return (h&&!/style="[^"]*rgba\(0,0,0,\.88\) 100%\)/.test(h)&&(h.match(/class="vignette-entree"/g)||[]).length===2)
         ?true:_echec('les deux voiles d’index.html ne sont pas passés en classe');})());
+    // ══ LE ROUGE DE LA MARQUE, PAR SES JETONS (01/10/2026) ═══════════════
+    // scripts/couleurs.py a ramené les couleurs écrites en dur sur la palette de
+    // :root. Le rouge #E02020 ne s'écrit plus qu'en deux endroits : sa
+    // définition dans :root (la feuille), et la constante ROUGE_MARQUE de
+    // rc-core (canvas, SVG exportés, <input type="color"> : ce qui ne lit pas
+    // les variables CSS). Partout ailleurs : var(--red), ou ROUGE_MARQUE.
+    ok('Le rouge #E02020 n’est écrit en dur ni dans la feuille (hors :root) ni dans rc-core (hors ROUGE_MARQUE)',(()=>{
+      const lire=u=>{ try{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; }catch(e){ return ''; } };
+      const lien=document.querySelector('link[rel="stylesheet"][href*="rc-style."]');
+      const scr=document.querySelector('script[src*="rc-core."]');
+      const css=lien?lire(lien.getAttribute('href')):'', js=scr?lire(scr.getAttribute('src')):'';
+      if(!css||!js) return _echec('feuille ou rc-core illisible');
+      // Les blocs :root (et leurs déclinaisons :root[…]) : les définitions des jetons.
+      const horsRoot=css.replace(/:root[^{};]*\{[^}]*\}/g,'');
+      const nCss=(horsRoot.match(/#[eE]02020\b/g)||[]).length;
+      const lignes=js.split('\n').filter(l=>/#[eE]02020\b/.test(l));
+      const horsDecl=lignes.filter(l=>!/^const ROUGE_MARQUE=/.test(l));
+      if(nCss) return _echec(nCss+' #E02020 dans la feuille hors :root');
+      if(horsDecl.length) return _echec(horsDecl.length+' ligne(s) de rc-core : '+horsDecl[0].trim().slice(0,90));
+      return (lignes.length===1&&typeof ROUGE_MARQUE==='string'&&ROUGE_MARQUE.toUpperCase()==='#E02020')?true:_echec('ROUGE_MARQUE absent ou déclaré '+lignes.length+' fois');})());
     ok('Aide : apparence, FAQ dépliable, contact du créateur, date de mise à jour',(()=>{
       const d=document.createElement('div'); d.innerHTML=htmlPrefsAide('client','clair','2026-09-26','1598','UA');
       const seg=[...d.querySelectorAll('.prf-theme button')];

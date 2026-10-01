@@ -234,7 +234,7 @@ function _rendreEcheanceAcces(){
   // Les deux derniers jours passent au rouge : le même bandeau orange pendant
   // une semaine finit par faire partie du décor.
   const urgent=j<=2;
-  const c=urgent?'#E02020':'#f97316';
+  const c=urgent?ROUGE_MARQUE:'#f97316';
   // « dans 1 jour » serait ambigu — la veille au soir comme le matin même.
   // « moins de 24 heures » est vrai dans les deux cas.
   const quand=j===1?'dans moins de 24 heures':'dans '+j+' jours';
@@ -244,7 +244,7 @@ function _rendreEcheanceAcces(){
   const href=_coachContactHref(u.coachId,
     'Bonjour'+(nom?' '+nom:'')+", mon accès RepCore se termine le "+d+'. Peux-tu le prolonger ?');
   z.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:var(--r-3);padding:14px 14px;margin-bottom:16px;
-      background:linear-gradient(168deg,#1b1b1b,#111 55%,#0b0b0b);
+      background:linear-gradient(168deg,var(--surface-3),var(--surface-1) 55%,var(--surface-0));
       border:1px solid var(--border);border-left:3px solid ${c};
       box-shadow:var(--e3)}33">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:${c};--halo-c:${c};text-shadow:var(--halo-1)66">
@@ -686,10 +686,10 @@ function renderPortefeuille(clients){
   catch(e){ el.innerHTML=''; return; }
   const p=r.portefeuille;
   const cases=[
-    ['pf-traiter',    'À traiter',            r.aTraiter,        '#E02020'],
+    ['pf-traiter',    'À traiter',            r.aTraiter,        ROUGE_MARQUE],
     ['pf-decrochage', 'Séances écourtées',    r.decrochage,      '#f5c518'],
     ['pf-acces',      'Accès qui expirent',   r.accesExpirent,   '#22c55e'],
-    ['traiter',       'Alertes',              p.alertes,         '#E02020'],
+    ['traiter',       'Alertes',              p.alertes,         ROUGE_MARQUE],
     ['pf-jamais',     'Jamais démarrés',      p.jamaisDemarres,  '#f5c518'],
     ['attente',       'En attente',           p.enAttente,       '#8a8a8a'],
     ['pf-actifs',     'Actifs 14 j',          p.actifs,          '#22c55e'],
@@ -752,7 +752,7 @@ function renderPilotage(clients){
   // TROIS VOLETS POUR UN SEUL GESTE. Le coach les ouvrait l'un apres l'autre
   // pour se faire une idee, et devait retenir ce qu'il avait lu dans le
   // precedent. Un seul volet, trois sections separees d'un filet.
-  const corpsSep='<div style="height:1px;background:#1e1e1e;margin:10px 0"></div>';
+  const corpsSep='<div style="height:1px;background:var(--surface-3);margin:10px 0"></div>';
   const _tt=t=>`<div style="font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--sub);font-weight:800;margin-bottom:4px">${t}</div>`;
   const corpsA2=_tt('Depuis ta dernière visite')+corpsA;
   const corpsC2=_tt('Charge de travail')+corpsC;
@@ -1786,7 +1786,7 @@ function renderEpingleAccueil(){
   if(!manque||accueilMasque('photo')){ el.innerHTML=''; el.style.display='none'; return; }
   el.style.display='block';
   el.innerHTML='<div data-acc style="position:relative;background:var(--surface-1);border:1px solid var(--border);'
-    +'border-radius:var(--r-3);padding:14px 38px 14px 14px;margin-bottom:16px">'+_accX('photo')
+    +'border-radius:var(--r-3);padding:14px 40px 14px 14px;margin-bottom:16px">'+_accX('photo')
     +'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5;margin-bottom:10px">'
     +'Ajoute ta photo de profil : c\'est ce qui permet à ton coach de te reconnaître '
     +'d\'un coup d\'œil sur son tableau de bord.</div>'
@@ -1909,7 +1909,7 @@ function _dessinerVictoireCoach(d,fond,format){
   let y=Math.max(90,Math.round((H-HTOT)/2));
   g.textAlign='center'; g.textBaseline='alphabetic';
   o.ombre(true);
-  g.fillStyle=rouge?'#fff':'#E02020';
+  g.fillStyle=rouge?'#fff':ROUGE_MARQUE;
   const ss=o.ajusteEspace('VICTOIRE DE LA SEMAINE','800',40,MONT,10,LARG,24);
   g.font='800 '+ss+'px '+MONT; o.ecrireEspace('VICTOIRE DE LA SEMAINE',cx,y+ss,10,true);
   y+=64;
@@ -1985,7 +1985,7 @@ function _dessinerRecapTeam(d,fond,format){
   let y=Math.max(70,Math.round((H-HTOT)/2));
   g.textAlign='center'; g.textBaseline='alphabetic';
   o.ombre(true);
-  g.fillStyle=rouge?'#fff':'#E02020';
+  g.fillStyle=rouge?'#fff':ROUGE_MARQUE;
   const ss=o.ajusteEspace(d.titre,'800',40,MONT,10,LARG,24);
   g.font='800 '+ss+'px '+MONT; o.ecrireEspace(d.titre,cx,y+ss,10,true);
   y+=64;
@@ -2048,7 +2048,7 @@ const KIT_HASHTAGS='#RepCore #coaching #musculation';
 const KIT_VU_CLE='rc_kit_vu';
 const KIT_REGLES=Object.freeze([
   'Le logo ne se déforme pas, ne se recolore pas et garde de l’air autour de lui.',
-  'Le rouge RepCore (#E02020) sert aux accents, jamais aux longs textes.',
+  ('Le rouge RepCore ('+ROUGE_MARQUE+') sert aux accents, jamais aux longs textes.'),
   'Pas de montage d’un emblème de rang sur un compte qui ne l’a pas gagné.'
 ]);
 const KIT_FONDS=Object.freeze([{cle:'carbone',lib:'Carbone'},{cle:'rouge',lib:'Rouge'},{cle:'noir',lib:'Noir'}]);
@@ -2472,7 +2472,7 @@ function _majConsentementCoachReglages(){
   if(!u||u.role!=='athlete'||!(u.coachId||u.coachEmailKey)){ z.innerHTML=''; return; }
   z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:20px">'
     +'<label for="cr-partage-case" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0;text-transform:none;letter-spacing:normal;font-weight:400;color:var(--text)">'
-    +'<input type="checkbox" id="cr-partage-case"'+(vcConsentement(u)?' checked':'')+' onchange="aaConsentementCoach(this.checked);_majConsentementCoachReglages()" style="width:18px;height:18px;accent-color:#E02020;flex-shrink:0;margin-top:2px;cursor:pointer">'
+    +'<input type="checkbox" id="cr-partage-case"'+(vcConsentement(u)?' checked':'')+' onchange="aaConsentementCoach(this.checked);_majConsentementCoachReglages()" style="width:18px;height:18px;accent-color:var(--red);flex-shrink:0;margin-top:2px;cursor:pointer">'
     +'<span style="flex:1;min-width:0"><span style="display:block;font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Mon coach peut partager mes progrès</span>'
     +'<span style="display:block;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Tes victoires, ton prénom dans le récap de l’équipe, ton avant/après. Sans cet accord, ce qu’il partage reste anonyme.</span></span></label></div>';
 }

@@ -370,7 +370,7 @@ function _cplMacroTxt(m){
 }
 function _cplInput(val,oninput,largeur,pas){
   return `<input type="number" step="${pas||'any'}" value="${val==null?'':val}" oninput="${oninput}"
-    style="width:${largeur||'62px'};padding:6px 8px;background:#111;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;text-align:center;box-sizing:border-box">`;
+    style="width:${largeur||'62px'};padding:6px 8px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;text-align:center;box-sizing:border-box">`;
 }
 // Seul l'aperçu est reconstruit à la frappe. Reconstruire toute la page
 // retirerait le focus du champ qu'on est en train de remplir.
@@ -533,7 +533,7 @@ function _cplHtmlSuivi(){
     // les trois macros energetiques : les lignes du squelette ne portent ni sel
     // ni fibres. Afficher une jauge vide ferait croire a zero pose ; on affiche
     // la CIBLE seule, qui est ce que le coach vient y chercher.
-    +'<div class="cpl-s-b cpl-s-nu" style="--sb:#9aa0a6">'
+    +'<div class="cpl-s-b cpl-s-nu" style="--sb:#a0a0a0">'
       +'<div class="cpl-s-h"><span class="cpl-s-l">Sel</span>'
       +'<span class="cpl-s-v">'+(sel?String(Math.round(sel.targetSaltG*10)/10).replace('.',','):'-')+' g</span></div>'
       +'<div class="cpl-s-r">cible du jour, non comptée dans le squelette</div></div>'
@@ -765,13 +765,13 @@ function _cplHtmlLigne(item){
   if(item.note!=null){
     return `<div class="plan-l">
       <input value="${escapeHtml(item.note)}" placeholder="Note de préparation (ex : sous forme de PANCAKES)" oninput="cplSetChamp('${item.id}','note',this.value)"
-        style="flex:1;min-width:0;padding:6px 8px;background:#111;border:1px dashed var(--border);border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-style:italic;box-sizing:border-box">
+        style="flex:1;min-width:0;padding:6px 8px;background:var(--surface-1);border:1px dashed var(--border);border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-style:italic;box-sizing:border-box">
       ${sup}</div>`;
   }
   const m=planMacrosItem(item);
   const champNom=item.libre!=null
     ? `<input value="${escapeHtml(item.libre)}" placeholder="Nom de la ligne" oninput="cplSetChamp('${item.id}','libre',this.value)"
-        style="width:100%;padding:6px 8px;background:#111;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;box-sizing:border-box">`
+        style="width:100%;padding:6px 8px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;box-sizing:border-box">`
     : `<div style="font-size:var(--fs-sm);font-weight:700;line-height:1.35">${escapeHtml(nom)}${item.recette?' <span class="rct-b">recette</span>':''}</div>`;
   const macrosMain=item.libre!=null
     ? `<div style="display:flex;gap:6px;align-items:center;margin-top:6px">
@@ -795,7 +795,7 @@ function _cplHtmlLigne(item){
       </div>
       ${_cplInput(item.q,`cplSetChamp('${item.id}','q',this.value)`,'64px')}
       <input value="${escapeHtml(planUniteItem(item))}" oninput="cplSetChamp('${item.id}','u',this.value)" aria-label="Unité"
-        style="width:62px;padding:6px 6px;background:#111;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);text-align:center;box-sizing:border-box">
+        style="width:62px;padding:6px 6px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);text-align:center;box-sizing:border-box">
       ${sup}
     </div>
     ${macrosMain}${_noteMasquee}
@@ -1229,8 +1229,8 @@ function _htmlPlanAthlete(user,intercale){
   // halo. Les trois autres restent neutres — si tout est mis en avant, plus
   // rien ne l est.
   const tuile=(lib,val,unite,couleur,vedette)=>`<div style="position:relative;overflow:hidden;flex:1;min-width:0;border-radius:var(--r-3);padding:10px 4px;text-align:center;${vedette
-      ?'background:linear-gradient(160deg,rgba(224,32,32,.20),rgba(224,32,32,.06) 60%,rgba(224,32,32,.02));border:1px solid rgba(224,32,32,.45);box-shadow:var(--e2),var(--glow-red)'
-      :'background:rgba(255,255,255,.028);border:1px solid rgba(255,255,255,.05)'}">
+      ?'background:linear-gradient(160deg,color-mix(in srgb,var(--red) 20%,transparent),color-mix(in srgb,var(--red) 6%,transparent) 60%,color-mix(in srgb,var(--red) 2%,transparent));border:1px solid color-mix(in srgb,var(--red) 45%,transparent);box-shadow:var(--e2),var(--glow-red)'
+      :'background:color-mix(in srgb,var(--text) 2.8%,transparent);border:1px solid color-mix(in srgb,var(--text) 5%,transparent)'}">
     ${vedette?`<div aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;background:none"></div>`:''}
     <div style="position:relative;font-family:var(--pile-titre);font-size:${vedette?30:26}px;line-height:1;color:${couleur};text-shadow:0 0 ${vedette?16:10}px ${couleur}${vedette?'99':'66'}">${val==null?'-':Math.round(val)}<span style="font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);color:var(--sub);font-weight:400">${unite}</span></div>
     <div style="position:relative;font-size:var(--fs-2xs);color:${vedette?'#ffb3b3':'var(--sub)'};letter-spacing:1.4px;font-weight:800;margin-top:6px">${lib}</div>
@@ -1337,7 +1337,7 @@ function _htmlPlanAthlete(user,intercale){
   // de portion sont une RÉFÉRENCE qu'on consulte, pas une consigne du jour.
   // Dépliée, elle s'intercalait entre le programme et la liste de courses.
   const blocFruits=`<div class="plan-card">
-    <div class="plan-titre" style="background:linear-gradient(90deg,rgba(34,197,94,.55),rgba(22,140,66,.3) 62%,rgba(10,80,36,.1));border-left-color:#2ee06a">
+    <div class="plan-titre" style="background:linear-gradient(90deg,color-mix(in srgb,var(--green) 55%,transparent),rgba(22,140,66,.3) 62%,rgba(10,80,36,.1));border-left-color:#2ee06a">
       <span class="plan-titre-t">1 portion de fruits</span></div>
     <div class="plan-corps">
       ${cartoucheFruit('Table des équivalences')}
@@ -1348,18 +1348,18 @@ function _htmlPlanAthlete(user,intercale){
   // Rouge translucide, halo néon, filet diagonal, et un bandeau d'en-tête —
   // c'est un panneau routier, pas un paragraphe.
   const blocCheat=`<div style="position:relative;overflow:hidden;border-radius:var(--r-3);margin-bottom:14px;
-    background:linear-gradient(180deg,rgba(224,32,32,.13),rgba(224,32,32,.05));
+    background:linear-gradient(180deg,color-mix(in srgb,var(--red) 13%,transparent),color-mix(in srgb,var(--red) 5%,transparent));
     border:1px solid rgba(255,90,90,.42);
-    box-shadow:0 0 20px rgba(224,32,32,.30),inset 0 1px 0 rgba(255,255,255,.07)">
+    box-shadow:0 0 20px color-mix(in srgb,var(--red) 30%,transparent),inset 0 1px 0 rgba(255,255,255,.07)">
     <div style="position:absolute;inset:0;pointer-events:none;
       background:none"></div>
     <div style="position:relative;display:flex;align-items:center;gap:8px;padding:10px 14px;
-      background:linear-gradient(90deg,rgba(224,32,32,.55),rgba(140,0,0,.22) 70%,transparent);
+      background:linear-gradient(90deg,color-mix(in srgb,var(--red) 55%,transparent),color-mix(in srgb,var(--red-deep) 22%,transparent) 70%,transparent);
       border-bottom:1px solid rgba(255,90,90,.30)">
       <span style="font-size:var(--fs-lg);line-height:1;filter:drop-shadow(0 0 6px rgba(255,90,90,.95))">⚠</span>
       <span style="font-family:var(--pile-titre);font-size:var(--fs-lg);
         letter-spacing:3px;color:var(--text);text-transform:uppercase;
-        --halo-c:rgba(255,90,90,.95);text-shadow:var(--halo-1),0 0 20px rgba(224,32,32,.55)">Attention</span>
+        --halo-c:rgba(255,90,90,.95);text-shadow:var(--halo-1),0 0 20px color-mix(in srgb,var(--red) 55%,transparent)">Attention</span>
     </div>
     <div style="position:relative;padding:12px 14px 12px">
       <!-- LE FILET NE SEPARE QUE LES PUCES ENTRE ELLES. Pose sur TOUTES, il
@@ -1368,7 +1368,7 @@ function _htmlPlanAthlete(user,intercale){
            onze pixels l'un de l'autre, dont le second ne separait rien. La
            premiere puce n'en porte donc plus ; les suivantes le gardent,
            c'est la leur fonction. -->
-      ${PLAN_NOTE_CHEATMEAL.map((t,i)=>`<div style="display:flex;gap:8px;align-items:flex-start;font-size:var(--fs-xs);color:#f0dede;line-height:1.65;padding:4px 0;${i?'border-top:1px solid rgba(255,90,90,.14)':''}">
+      ${PLAN_NOTE_CHEATMEAL.map((t,i)=>`<div style="display:flex;gap:8px;align-items:flex-start;font-size:var(--fs-xs);color:var(--text-strong);line-height:1.65;padding:4px 0;${i?'border-top:1px solid rgba(255,90,90,.14)':''}">
         <span style="color:var(--red-text);flex-shrink:0;font-weight:900">•</span>
         <span>${escapeHtml(t)}</span></div>`).join('')}
     </div>
@@ -1387,7 +1387,7 @@ function _htmlPlanAthlete(user,intercale){
   // Rythme de LISTE : 3px de marge au lieu de 7, separateur plus discret.
   // La cible tactile ne descend pas pour autant — le select garde 34px, et
   // la regle WCAG est tenue par sa largeur, pas par l interligne.
-  const ligneCourse=(lib,qte,cle,stock,nUsages)=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-top:1px solid #1c1c1c">
+  const ligneCourse=(lib,qte,cle,stock,nUsages)=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-top:1px solid var(--border)">
       <select onchange="lcStock('${cle}',this)" aria-label="État : ${escapeHtml(lib)}"
         style="flex-shrink:0;width:88px;min-height:34px;padding:4px 6px;border-radius:var(--r-2);cursor:pointer;
           background:${stock?'rgba(34,197,94,.10)':'#101010'};
@@ -1414,7 +1414,7 @@ function _htmlPlanAthlete(user,intercale){
     const q=choisi?Math.round(Number(choisi.split('|')[1])*LC_REPAS):null;
     return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--border)">
       <select onchange="lcChoisir('${cle}',this.value)" aria-label="Source de ${macro==='p'?'protéines':'glucides'} au choix"
-        style="flex:1;min-width:0;min-height:38px;padding:8px 10px;background:#101010;border:1px solid var(--border);border-radius:var(--r-2);color:${choisi?'var(--text)':'var(--text-dim)'};font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
+        style="flex:1;min-width:0;min-height:38px;padding:8px 10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:${choisi?'var(--text)':'var(--text-dim)'};font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
         <option value="">${macro==='p'?'Protéines':'Glucides'} au choix…</option>
         ${opts}
       </select>
@@ -1457,7 +1457,7 @@ const courses=(lc&&lc.lignes.length)?`<details class="hist-repli lc-repli" style
     :'';
 
   return `<div style="margin-bottom:24px">
-    <div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:2px;font-weight:800;--halo-c:rgba(224,32,32,.45);text-shadow:var(--halo-2);margin-bottom:4px;display:flex;align-items:center;gap:6px">${icon('target',12)} Programme nutritionnel</div>
+    <div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:2px;font-weight:800;--halo-c:color-mix(in srgb,var(--red) 45%,transparent);text-shadow:var(--halo-2);margin-bottom:4px;display:flex;align-items:center;gap:6px">${icon('target',12)} Programme nutritionnel</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-bottom:12px">${escapeHtml(PLAN_NOTE_INDICATIF)}</div>
     <div class="oa-carte">
       <div class="oa-tete">
@@ -1979,7 +1979,7 @@ function _htmlPortions(f){
   if(!l.length) return '';
   return `<div style="display:flex;gap:8px;margin-top:10px">
     ${l.map(p=>`<button onclick="setFjaQty(${p.g})"
-      style="flex:1;padding:8px;background:#111;border:1px solid #222;border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer">${p.lib} · ${p.g} g</button>`).join('')}
+      style="flex:1;padding:8px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer">${p.lib} · ${p.g} g</button>`).join('')}
   </div>
   <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:6px;line-height:1.5">${escapeHtml(FJ_PORTIONS_NOTE)}</div>`;
 }

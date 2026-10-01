@@ -625,8 +625,8 @@ function _renderNutriContent(type,dateAff){
   // s afficher, et le cercle retombait toujours sur son haltere.
   const _flxPhoto=photoCoachDe(currentUser);
   const _flxCircle=_flxPhoto
-    ?`<img src="${escapeHtml(_flxPhoto)}" style="width:54px;height:54px;border-radius:var(--r-full);object-fit:cover;flex-shrink:0;border:2px solid rgba(255,255,255,.35);box-shadow:0 0 0 4px rgba(0,0,0,.18)">`
-    :`<div style="width:54px;height:54px;border-radius:var(--r-full);background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text)">${icon('dumbbell',22)}</div>`;
+    ?`<img src="${escapeHtml(_flxPhoto)}" style="width:54px;height:54px;border-radius:var(--r-full);object-fit:cover;flex-shrink:0;border:2px solid color-mix(in srgb,var(--text) 35%,transparent);box-shadow:0 0 0 4px rgba(0,0,0,.18)">`
+    :`<div style="width:54px;height:54px;border-radius:var(--r-full);background:rgba(0,0,0,.28);border:2px solid color-mix(in srgb,var(--text) 22%,transparent);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text)">${icon('dumbbell',22)}</div>`;
   if(type==='flexible'){
     // L'ENCART QUI EXPLIQUE LA DIETE VIENT EN PREMIER, LA CARTE DES CIBLES
     // JUSTE APRES. On dit d'abord ou l'on est, on regle ensuite : l'ordre
@@ -866,8 +866,8 @@ function _renderStrictDiet(){
   // Meme lecture que l en-tete de la diete flexible, et pour la meme raison.
   const coachPhoto=photoCoachDe(currentUser);
   const coachCircle=coachPhoto
-    ?`<img src="${escapeHtml(coachPhoto)}" style="width:54px;height:54px;border-radius:var(--r-full);object-fit:cover;flex-shrink:0;border:2px solid rgba(255,255,255,.35);box-shadow:0 0 0 4px rgba(0,0,0,.18)">`
-    :`<div style="width:54px;height:54px;border-radius:var(--r-full);background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text)">${icon('dumbbell',22)}</div>`;
+    ?`<img src="${escapeHtml(coachPhoto)}" style="width:54px;height:54px;border-radius:var(--r-full);object-fit:cover;flex-shrink:0;border:2px solid color-mix(in srgb,var(--text) 35%,transparent);box-shadow:0 0 0 4px rgba(0,0,0,.18)">`
+    :`<div style="width:54px;height:54px;border-radius:var(--r-full);background:rgba(0,0,0,.28);border:2px solid color-mix(in srgb,var(--text) 22%,transparent);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text)">${icon('dumbbell',22)}</div>`;
   // LE SUIVI DU JOUR, EN UNE CARTE (maquette de Kevin, 24/09/2026), juste
   // sous le cadre qui explique la diete : voir _htmlSuiviAlimentaire.
   const suiviDuJour=_htmlSuiviAlimentaire(currentUser,_sjour);

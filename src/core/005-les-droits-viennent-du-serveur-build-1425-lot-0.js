@@ -800,7 +800,7 @@ function loadAccessGate(){
   const ic=document.getElementById('ag-icon');
   if(!u){return;}
   if(ic) ic.innerHTML=icon('lock',56);
-  const L='<div style="font-size:var(--fs-sm);color:#888;line-height:1.8">';
+  const L='<div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.8">';
   // ══ FERMÉ À LA MAIN (24/09/2026) ═══════════════════════════════════════
   // ⚠ CETTE BRANCHE PASSE AVANT TOUTES LES AUTRES, et c'est voulu. Un accès
   //   fermé depuis l'écran « Accès » l'est pour une raison précise, et les

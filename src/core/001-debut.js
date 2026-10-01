@@ -1,3 +1,13 @@
+// ══ LE ROUGE DE LA MARQUE, POUR CE QUI NE LIT PAS LA FEUILLE (01/10/2026) ══
+// La feuille dit le rouge par var(--red) (scripts/couleurs.py). Mais un canvas
+// (fillStyle), un SVG exporte en image, un <input type="color">, une valeur par
+// defaut enregistree dans une donnee ne lisent pas les variables CSS : il leur
+// faut la couleur ecrite. Elle l'est ICI, une seule fois, et nulle part
+// ailleurs dans rc-core (app/tests.js le verifie). Ce n'est pas var(--red) lu a
+// l'execution : la marque d'un coach surcharge --red, et les visuels partages
+// restent aux couleurs de RepCore. _MIN : la meme, en minuscules, la ou le code
+// la compare a une valeur deja mise en minuscules.
+const ROUGE_MARQUE='#E02020', ROUGE_MARQUE_MIN='#e02020';
 
 
 // ── Version de la politique de confidentialite ────────────────────────

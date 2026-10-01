@@ -495,7 +495,7 @@ function loadClientHome(){
       _z.innerHTML=_l
         ? '<div onclick="ouvrirEcheanceEcran()" role="button" tabindex="0" '
           +'onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}" '
-          +'style="background:rgba(224,32,32,.07);border:1px solid var(--red);border-radius:var(--r-3);'
+          +'style="background:color-mix(in srgb,var(--red) 7%,transparent);border:1px solid var(--red);border-radius:var(--r-3);'
           +'padding:12px 14px;cursor:pointer;font-size:var(--fs-sm);color:var(--text);font-weight:700">'
           +escapeHtml(_l)+'</div>'
         : '';
@@ -801,7 +801,7 @@ function loadClientHome(){
     if(!name){
       if(accueilMasque('code')){ el.innerHTML=''; el.style.display='none'; return; }
       el.style.display='block';
-      el.innerHTML=`<div data-acc onclick="go('s-client-code')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="position:relative;display:flex;align-items:center;gap:12px;padding:14px 40px 14px 16px;border-radius:var(--r-md);background:#0c0c0c;border:1px dashed var(--border);cursor:pointer">${_accX('code')}
+      el.innerHTML=`<div data-acc onclick="go('s-client-code')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="position:relative;display:flex;align-items:center;gap:12px;padding:14px 40px 14px 16px;border-radius:var(--r-md);background:var(--surface-0);border:1px dashed var(--border);cursor:pointer">${_accX('code')}
         <div style="flex-shrink:0;width:38px;height:38px;border-radius:var(--r-full);background:var(--surface-3);display:flex;align-items:center;justify-content:center;color:var(--sub)">${icon('user',18)}</div>
         <div style="flex:1;min-width:0">
           <div style="font-weight:800;font-size:var(--fs-md)">Tu as un code coach&nbsp;?</div>
@@ -812,7 +812,7 @@ function loadClientHome(){
       return;
     }
     el.style.display='block';
-    el.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:var(--r-md);background:#0c0c0c;border-top:1px solid var(--border);border-left:1px solid var(--border);border-right:1px solid #1e1e1e;border-bottom:1px solid rgba(180,0,0,0.18)">
+    el.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:var(--r-md);background:var(--surface-0);border-top:1px solid var(--border);border-left:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid rgba(180,0,0,0.18)">
       
       <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 0% 50%,rgba(210,0,0,0.2) 0%,transparent 65%);pointer-events:none"></div>
       <!-- La photo n'est plus centrée sur la hauteur : elle est calée EN HAUT,
@@ -830,13 +830,13 @@ function loadClientHome(){
         <div style="flex-shrink:0;display:flex;flex-direction:column;width:72px;gap:12px">
         ${photo
           ?`<div style="width:72px;height:72px;border-radius:var(--r-full);overflow:hidden;border:2px solid rgba(210,0,0,0.55);box-shadow:0 0 0 5px rgba(200,0,0,0.07),0 8px 28px rgba(0,0,0,0.7)"><img src="${escapeHtml(photo)}" style="width:100%;height:100%;object-fit:cover;display:block"></div>`
-          :`<div style="width:72px;height:72px;border-radius:var(--r-full);background:linear-gradient(135deg,var(--surface-3),#080808);border:2px solid rgba(210,0,0,0.55);box-shadow:0 0 0 5px rgba(200,0,0,0.07),0 8px 28px rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center">${icon('dumbbell',28)}</div>`}
+          :`<div style="width:72px;height:72px;border-radius:var(--r-full);background:linear-gradient(135deg,var(--surface-3),var(--bg));border:2px solid rgba(210,0,0,0.55);box-shadow:0 0 0 5px rgba(200,0,0,0.07),0 8px 28px rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center">${icon('dumbbell',28)}</div>`}
           <div style="margin-top:auto;margin-left:-20px;width:92px;text-align:center;background:var(--red);color:var(--text);font-size:var(--fs-2xs);font-weight:900;letter-spacing:2.5px;padding:6px 0;border-radius:0 var(--r-2) var(--r-2) 0;box-shadow:var(--e2),var(--glow-red)">COACH</div>
         </div>
         <div style="flex:1;min-width:0">
           ${team?`<div class="cc-team">${escapeHtml(team)}</div>`:''}
           <div class="txt-stat" style="letter-spacing:2px;line-height:0.95;color:var(--text);margin-bottom:${phrase?'8':'0'}px">${escapeHtml(name.trim())}</div>
-          ${phrase?`<div style="font-size:var(--fs-xs);color:#888;font-style:italic;line-height:1.6">"${escapeHtml(phrase)}"</div>`:''}
+          ${phrase?`<div style="font-size:var(--fs-xs);color:var(--sub);font-style:italic;line-height:1.6">"${escapeHtml(phrase)}"</div>`:''}
         </div>
       </div>
     </div>`;

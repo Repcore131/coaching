@@ -1952,8 +1952,8 @@ function _rapCourbePoids(points){
     <text x="2" y="${P+4}" class="rap-lgd" fill="currentColor" fill-opacity=".55">${mx.toFixed(1)}</text>
     <text x="2" y="${H-P+3}" class="rap-lgd" fill="currentColor" fill-opacity=".55">${mn.toFixed(1)}</text>
     ${dm?`<path d="${dm}" fill="none" stroke="currentColor" stroke-opacity=".35" stroke-width="2.5"/>`:''}
-    <path d="${d}" fill="none" stroke="#e02020" stroke-width="2.4" vector-effect="non-scaling-stroke"/>
-    ${pts.map((p,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(p.kg).toFixed(1)}" r="2" fill="#e02020"/>`).join('')}
+    <path d="${d}" fill="none" stroke="${ROUGE_MARQUE_MIN}" stroke-width="2.4" vector-effect="non-scaling-stroke"/>
+    ${pts.map((p,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(p.kg).toFixed(1)}" r="2" fill="${ROUGE_MARQUE_MIN}"/>`).join('')}
   </svg>`;
 }
 // Barre de volume : la position des trois repères est MONTRÉE, le verdict n'est
@@ -1968,7 +1968,7 @@ function _rapBarreVolume(m){
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img"
     aria-label="Volume ${escapeHtml(m.muscle)} : ${m.series} séries, MEV ${m.mev}, MAV ${m.mav}, MRV ${m.mrv}${m.source==='perso'?', repères ajustés sur ses retours':(m.source==='coach'?', repères fixés par le coach':'')}" style="display:block">
     <rect class="rap-piste" x="0" y="9" width="${W}" height="8" fill="currentColor" fill-opacity=".08" rx="4"/>
-    <rect x="0" y="9" width="${px(m.series).toFixed(1)}" height="8" fill="#e02020" rx="4"/>
+    <rect x="0" y="9" width="${px(m.series).toFixed(1)}" height="8" fill="${ROUGE_MARQUE_MIN}" rx="4"/>
     ${rep(m.mev,'MEV')}${rep(m.mav,'MAV')}${rep(m.mrv,'MRV')}
   </svg>`;
 }

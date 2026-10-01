@@ -1188,7 +1188,7 @@ function loadAssignAthletes(){
     // qui sera reellement assigne plutot que ce qu'on aurait choisi par defaut.
     const defG=progGenreServi(_progAssigne(),detectedF?'F':'H');
     return `
-    <div style="display:flex;align-items:center;gap:12px;border-bottom:1px solid #242424;padding:12px 10px;border-left:3px solid ${ETAT_FILET[etatAthlete(a)]||'#666666'};border-radius:0 8px 8px 0;background:linear-gradient(168deg,#141414,#0d0d0d);margin-bottom:6px">
+    <div style="display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);padding:12px 10px;border-left:3px solid ${ETAT_FILET[etatAthlete(a)]||'#666666'};border-radius:0 8px 8px 0;background:linear-gradient(168deg,var(--surface-1),var(--surface-0));margin-bottom:6px">
       <div class="avatar" style="width:32px;height:32px;font-size:12px;flex-shrink:0">${escapeHtml(ini(a.fname,a.lname))}</div>
       <input type="checkbox" id="cpa-cb-${a.id}" value="${a.id}" data-gender="${defG}"${cpaCocheDefaut(a)?'':' data-encours="1"'} style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <label for="cpa-cb-${a.id}" style="flex:1;cursor:pointer">

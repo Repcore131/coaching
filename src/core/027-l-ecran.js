@@ -2088,11 +2088,11 @@ function _htmlAnat(c){
       +f.chiffres.map(r=>'<tr><th>'+escapeHtml(r.lib)+(r.def?'<small class="an-def">'+escapeHtml(r.def)+'</small>':'')+'</th><td'+(((r.val||'').length>16||/→/.test(r.val||''))?' class="an-td-txt"':'')+'>'+escapeHtml(r.val||'-')+'</td><td>'+escapeHtml(r.ref||'')+'</td><td>'+escapeHtml(r.ecart||'')+'</td></tr>').join('')+'</tbody></table>':'';
     // LA COURBE DU V (A13), avec la carte des courbes de l'onglet Données.
     const courbe=f.courbeV?_anatSafe(()=>_htmlCorpsGraphe('Rapport deltoïdes / taille (V)','',
-      [{lib:'V',couleur:'#E02020',points:f.courbeV.map(x=>({x:x.bilan,v:x.V})),bande:ANAT_V_REF.BRUIT}],
+      [{lib:'V',couleur:ROUGE_MARQUE,points:f.courbeV.map(x=>({x:x.bilan,v:x.V})),bande:ANAT_V_REF.BRUIT}],
       {h:72,dates:true,valeur:_anatN(f.courbeV[f.courbeV.length-1].V,2),
        pied:'Un point par bilan à photo de face · la bande grise est le bruit de placement : ± '+_anatN(ANAT_V_REF.BRUIT,2)}))||'':'';
     const cP=(f.suivi&&f.suivi.serie.length>1)?_anatSafe(()=>_htmlCorpsGraphe(f.suivi.lib,f.suivi.unite.trim(),
-      [{lib:f.suivi.lib,couleur:'#E02020',points:f.suivi.serie.map(x=>({x:x.bilan,v:x.v})),bande:f.suivi.marge}],
+      [{lib:f.suivi.lib,couleur:ROUGE_MARQUE,points:f.suivi.serie.map(x=>({x:x.bilan,v:x.v})),bande:f.suivi.marge}],
       {h:60,dates:true,valeur:_anatSN(f.suivi.serie[f.suivi.serie.length-1].v,1)+f.suivi.unite,
        pied:'Un point par bilan à photos de face et de dos · la bande grise est la marge : ± '+_anatN(f.suivi.marge,1)+f.suivi.unite}))||'':'';
     const detail='<div class="an-f-long" id="an-long-'+f.cle+'">'+tab+(courbe?'<div class="an-f-courbe">'+courbe+'</div>':'')+(cP?'<div class="an-f-courbe">'+cP+'</div>':'')

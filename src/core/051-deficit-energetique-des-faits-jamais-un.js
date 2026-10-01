@@ -442,13 +442,13 @@ function htmlLeafq(){
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px 16px;margin-bottom:16px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">${escapeHtml(REDS_TITRE)}</div>
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.75;margin-bottom:12px">${escapeHtml(LEAFQ_INTRO)}</div>
-    ${LEAFQ_ITEMS.map(it=>`<div style="padding:8px 0;border-top:1px solid rgba(255,255,255,.06)">
+    ${LEAFQ_ITEMS.map(it=>`<div style="padding:8px 0;border-top:1px solid color-mix(in srgb,var(--text) 6%,transparent)">
       <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-bottom:6px">${escapeHtml(it.q)}</div>
       <div style="display:flex;gap:6px">
         ${[['0','Non'],['1','Un peu'],['2','Oui']].map(([v,l])=>
           `<button type="button" onclick="leafqRepondre('${it.k}',${v},this)"
             style="flex:1;min-height:36px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;
-              background:#111;border:1px solid var(--border);color:var(--sub)">${l}</button>`).join('')}
+              background:var(--surface-1);border:1px solid var(--border);color:var(--sub)">${l}</button>`).join('')}
       </div>
     </div>`).join('')}
     <button class="btn btn-red" style="width:100%;margin-top:14px" onclick="leafqValider()">Envoyer mes réponses</button>
@@ -532,7 +532,7 @@ function htmlRedsCoach(c){
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">${escapeHtml(REDS_TITRE)}</span>
       <span style="font-size:var(--fs-xs);font-weight:800;color:${e.level==='red'?'var(--red)':(e.level==='orange'?'var(--orange)':'var(--sub)')}">${escapeHtml(lib)}</span>
     </div>
-    ${sig.length?sig.map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,.05)">
+    ${sig.length?sig.map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid color-mix(in srgb,var(--text) 5%,transparent)">
       <span style="font-size:var(--fs-xs);color:var(--text-strong);min-width:0">${escapeHtml(REDS_LIB_SIGNAUX[x.code]||x.code)}</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint);white-space:nowrap;flex-shrink:0">${escapeHtml(dat(new Date(x.date).getTime?new Date(x.date).getTime():Date.now()))}</span>
     </div>`).join('')
@@ -861,7 +861,7 @@ function _courbePesee(serie,opts){
       <stop offset="0" style="stop-color:#ff2a2a;stop-opacity:.30"/>
       <stop offset="1" style="stop-color:#ff2a2a;stop-opacity:.12"/>
     </linearGradient><linearGradient id="${gidS}" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" style="stop-color:#e01818;stop-opacity:.42"/>
+      <stop offset="0" style="stop-color:var(--red);stop-opacity:.42"/>
       <stop offset=".55" style="stop-color:#b01010;stop-opacity:.16"/>
       <stop offset="1" style="stop-color:#b01010;stop-opacity:0"/>
     </linearGradient></defs>`;
@@ -1742,7 +1742,7 @@ function _htmlCadreImportCapture(quoi,opts){
   // reecrit en « Lecture en cours… » puis le restaure par textContent.
   if(opts&&opts.alternative){
     return `
-    <div class="san-import" style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.07)">
+    <div class="san-import" style="margin-top:12px;padding-top:12px;border-top:1px solid color-mix(in srgb,var(--text) 7%,transparent)">
       <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-bottom:10px;text-align:center">ou importe une capture d'écran de ton application de santé</div>
       <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="importerCaptureStats(this)">
       <button type="button" class="btn btn-outline btn-sm" onclick="this.previousElementSibling.click()"
@@ -2379,7 +2379,7 @@ function regulariteCoucher(u,nuits){
 // « tenu » — c'est la regle de couleur de tout l'ecran.
 function _teinteRegularite(min){
   const m=Number(min)||0;
-  return m<30?'#22c55e':(m<=60?'#f59e0b':'#e02020');
+  return m<30?'#22c55e':(m<=60?'#f59e0b':ROUGE_MARQUE_MIN);
 }
 // ⚠ LA DETTE A SES PROPRES SEUILS, et elle a d'abord emprunte ceux de la
 // regularite : toute dette au-dela d'une heure passait au rouge. Une heure de
@@ -2391,7 +2391,7 @@ function _teinteRegularite(min){
 function _teinteDette(min,objectif){
   const m=Number(min)||0;
   const o=Number(objectif)||SAN_OBJ_SOMMEIL;
-  return m<=0?'#22c55e':(m<o?'#f59e0b':'#e02020');
+  return m<=0?'#22c55e':(m<o?'#f59e0b':ROUGE_MARQUE_MIN);
 }
 // ══ DETTE DE SOMMEIL DE LA SEMAINE ══════════════════════════════════════
 //

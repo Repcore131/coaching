@@ -1627,7 +1627,7 @@ function dessinerDieteRespectee(c){
   const d=_drsDonnees(c);
   if(!d||typeof document==='undefined') return null;
   const K=2, L=DRS_IMG_L, P=30;
-  const ROUGE=_tok('--red','#E02020'), TXT='#efefef', SUB='#8a8a8a';
+  const ROUGE=_tok('--red',ROUGE_MARQUE), TXT='#efefef', SUB='#8a8a8a';
   const COUL={oui:'#34c759',non:'#ff3b47',neutre:'rgba(255,255,255,.36)',vide:'rgba(255,255,255,.1)'};
   const T="'Bebas Neue','Arial Narrow',Impact,sans-serif", M='Montserrat,sans-serif';
   // LES DEUX COLONNES : 380 a gauche, le reste a droite.
@@ -2212,7 +2212,7 @@ function _htmlSuppInteractions(list){
   const l=_suppInteractions(list);
   if(!l.length) return '';
   return `<div style="background:color-mix(in srgb,var(--amber) 7%,transparent);border:1px solid color-mix(in srgb,var(--amber) 25%,transparent);border-radius:var(--r-3);padding:10px 12px;margin-bottom:12px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:#f59e0b;text-transform:uppercase;margin-bottom:6px">Au même moment</div>
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--amber);text-transform:uppercase;margin-bottom:6px">Au même moment</div>
     ${l.map(m=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;margin-bottom:4px">· ${escapeHtml(m)}</div>`).join('')}
   </div>`;
 }
@@ -2293,7 +2293,7 @@ const SUPP_TIMING_META={
   'apres-midi':         {color:'#d97706',svg:'<circle cx="12" cy="13" r="4"/><line x1="12" y1="4" x2="12" y2="6.5"/><line x1="18.5" y1="7.5" x2="16.7" y2="9.3"/><line x1="20" y1="14" x2="17.5" y2="14"/><line x1="3" y1="20" x2="21" y2="20"/>'},
   'soir':               {color:'#a78bfa',svg:'<circle cx="12" cy="14" r="4"/><line x1="12" y1="5" x2="12" y2="7.5"/><line x1="5.5" y1="8.5" x2="7.3" y2="10.3"/><line x1="4" y1="15" x2="6.5" y2="15"/><line x1="3" y1="20" x2="21" y2="20"/><polyline points="9 17.5 12 20.5 15 17.5"/>'},
   'coucher':            {color:'#60a5fa',svg:'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'},
-  'avant-entrainement': {color:'#E02020',svg:'<path d="M6.5 6.5h11M6.5 17.5h11M4 9v6M20 9v6M8 7v10M16 7v10"/>'},
+  'avant-entrainement': {color:ROUGE_MARQUE,svg:'<path d="M6.5 6.5h11M6.5 17.5h11M4 9v6M20 9v6M8 7v10M16 7v10"/>'},
   'intra':              {color:'#22c55e',svg:'<path d="M12 2.7 C12 2.7 5.5 10 5.5 14.2 a6.5 6.5 0 0 0 13 0 C18.5 10 12 2.7 12 2.7 Z"/>'},
   'apres-entrainement': {color:'#c2410c',svg:'<path d="M6.5 6.5h11M6.5 17.5h11M4 9v6M20 9v6"/><polyline points="8.5 12 11 14.5 15.5 9.5"/>'},
   'toutes-4h':          {color:'#94a3b8',svg:'<circle cx="12" cy="12" r="9"/><polyline points="12 6.5 12 12 15.8 14"/>'}

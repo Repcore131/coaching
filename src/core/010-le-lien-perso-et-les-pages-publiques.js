@@ -1131,8 +1131,8 @@ function svgRetention(cohortes){
     +'<text x="'+(g-4)+'" y="'+(y(v)+3)+'" text-anchor="end" font-size="8" fill="currentColor" fill-opacity=".6">'+v+'</text>').join('');
   const lab=l.map((c,i)=>(i%Math.ceil(l.length/6)===0)?'<text x="'+x(i).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle" font-size="8" fill="currentColor" fill-opacity=".6">'+c.sem.slice(5).replace('-','/')+'</text>':'').join('');
   return '<svg class="vir-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Rétention J1, J7 et J30 par semaine d’inscription">'
-    +grille+lab+serie('j1','#ff6b6b',true)+serie('j7','#ffb020',false)+serie('j30','#E02020',false)+'</svg>'
-    +'<div class="vir-leg"><span style="--c:#ff6b6b">J1</span><span style="--c:#ffb020">J7</span><span style="--c:#E02020">J30</span></div>';
+    +grille+lab+serie('j1','#ff6b6b',true)+serie('j7','#ffb020',false)+serie('j30',ROUGE_MARQUE,false)+'</svg>'
+    +'<div class="vir-leg"><span style="--c:#ff6b6b">J1</span><span style="--c:#ffb020">J7</span><span style="--c:var(--red)">J30</span></div>';
 }
 /** PURE. L'entonnoir total, en barres SVG. */
 function svgEntonnoir(total){
@@ -1142,7 +1142,7 @@ function svgEntonnoir(total){
   return '<svg class="vir-svg" viewBox="0 0 '+W+' '+(et.length*h+4)+'" role="img" aria-label="Entonnoir, toutes sources">'
     +et.map((e,i)=>{ const v=Number(total&&total[e[0]])||0, w=Math.round((W-120)*v/max);
       return '<text x="0" y="'+(i*h+15)+'" font-size="10" fill="currentColor">'+e[1]+'</text>'
-        +'<rect x="84" y="'+(i*h+4)+'" width="'+Math.max(1,w)+'" height="14" rx="3" fill="#E02020" fill-opacity="'+(1-i*0.12)+'"/>'
+        +'<rect x="84" y="'+(i*h+4)+'" width="'+Math.max(1,w)+('" height="14" rx="3" fill="'+ROUGE_MARQUE+'" fill-opacity="')+(1-i*0.12)+'"/>'
         +'<text x="'+(88+w)+'" y="'+(i*h+15)+'" font-size="10" fill="currentColor">'+v+'</text>'; }).join('')+'</svg>';
 }
 /** PURE. Les sections rétention de l'écran Viralité. */
@@ -2063,7 +2063,7 @@ function _dessinerCarteInvitation(d,fond,format){
   g.fillStyle='#fff'; g.font='800 34px '+MONT;
   o.ecrireEspace('INVITATION',cx,y+34,10,true);
   o.ombre(false);
-  g.fillStyle=rouge?'rgba(255,255,255,.85)':'#E02020';
+  g.fillStyle=rouge?'rgba(255,255,255,.85)':ROUGE_MARQUE;
   g.fillRect(cx-44,y+54,88,5);
   y+=H_TAG;
   o.ombre(true);
@@ -2095,7 +2095,7 @@ function _dessinerCarteInvitation(d,fond,format){
     const hc=post?170:200, lc=Math.min(LARG,760), yc=y+(post?20:30);
     o.ombre(false);
     g.save();
-    g.strokeStyle=rouge?'rgba(255,255,255,.9)':'#E02020'; g.lineWidth=5;
+    g.strokeStyle=rouge?'rgba(255,255,255,.9)':ROUGE_MARQUE; g.lineWidth=5;
     g.fillStyle=f==='transparent'?'rgba(0,0,0,.35)':'rgba(0,0,0,.28)';
     const r=24, x0=cx-lc/2;
     g.beginPath();

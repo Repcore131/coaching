@@ -33,9 +33,9 @@ function _htmlCalendrierAcces(){
     +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;'
     +'color:var(--sub);margin-bottom:6px">'+escapeHtml(libMois(k))+' · '+mois[k].length+'</div>'
     +mois[k].map(x=>'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;'
-      +'border-top:1px solid rgba(255,255,255,.05);font-size:var(--fs-xs)">'
+      +'border-top:1px solid color-mix(in srgb,var(--text) 5%,transparent);font-size:var(--fs-xs)">'
       +'<span style="width:8px;height:8px;border-radius:var(--r-full);flex-shrink:0;background:'
-      +(estSuivi(x.c)?'#E02020':'#f5a524')+'"></span>'
+      +(estSuivi(x.c)?ROUGE_MARQUE:'#f5a524')+'"></span>'
       +'<span style="flex:1;min-width:0;color:var(--text-strong);overflow:hidden;text-overflow:ellipsis;'
       +'white-space:nowrap">'+escapeHtml(((x.c.fname||'')+' '+(x.c.lname||'')).trim()||'-')+'</span>'
       +'<span style="color:var(--sub);flex-shrink:0">'+jour(x.t)+'</span></div>').join('')
@@ -81,7 +81,7 @@ function _htmlCroissanceCoach(athletes){
          l'autre. Les nombres rejoignent donc les pastilles qu'ils décrivent. -->
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;flex-wrap:wrap">
       <span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--red-text)">
-        <span style="width:9px;height:9px;border-radius:var(--r-1);background:linear-gradient(180deg,#ff4a4a,#6d0000);box-shadow:0 0 7px rgba(224,32,32,.8)"></span>${avecSuivi} avec suivi</span>
+        <span style="width:9px;height:9px;border-radius:var(--r-1);background:linear-gradient(180deg,#ff4a4a,#6d0000);box-shadow:0 0 7px color-mix(in srgb,var(--red) 80%,transparent)"></span>${avecSuivi} avec suivi</span>
       <span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--text)">
         <span style="width:9px;height:9px;border-radius:var(--r-1);background:linear-gradient(180deg,#ffffff,#8f8f8f);box-shadow:0 0 7px rgba(255,255,255,.6)"></span>${sansSuivi} sans suivi</span>
       <span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--text)">
@@ -1231,7 +1231,7 @@ function tunnelStatut(n){
 }
 /** Les libelles et les couleurs des quatre statuts, en un seul endroit. */
 const TUNNEL_LIB=Object.freeze({
-  chaud:{lib:'Chaud',c:'#E02020'},
+  chaud:{lib:'Chaud',c:ROUGE_MARQUE},
   tiede:{lib:'Tiède',c:'#f5a524'},
   froid:{lib:'Froid',c:'#4DA3FF'},
   fin:{lib:'Fin du tunnel',c:'#8a8a8a'}});
@@ -2036,7 +2036,7 @@ function renderCoachSessionRecap(c){
   el.innerHTML=`<h3 style="margin-bottom:12px">Séances</h3>
     <div id="ccd-sr-list"></div>
     <button id="ccd-sr-more" onclick="showMoreCoachSessions()"
-      style="display:none;width:100%;padding:10px;background:none;border:1px solid #222;border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-sm);cursor:pointer;margin-bottom:4px;min-height:44px">Voir plus de séances</button>`;
+      style="display:none;width:100%;padding:10px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-sm);cursor:pointer;margin-bottom:4px;min-height:44px">Voir plus de séances</button>`;
   _renderSessionBatch(0,5);
 }
 function _renderSessionBatch(from,count){
@@ -2190,7 +2190,7 @@ function _buildSessionCard(s,client){
   // LE MOT DE L'ATHLETE, en tete du detail : c'est la premiere chose a lire.
   const _mot=(typeof s.noteAthlete==='string'&&s.noteAthlete.trim())
     ?`<div class="sc-note-ath"><span>Son mot</span>${escapeHtml(s.noteAthlete.trim().slice(0,NOTE_SEANCE_MAX))}</div>`:'';
-  return `<div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:var(--r-3);margin-bottom:10px;overflow:hidden">
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);margin-bottom:10px;overflow:hidden">
     <div onclick="toggleSCard(this)" style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="flex:1;min-width:0">
         <div style="font-size:var(--fs-md);font-weight:700;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(s.name||'Séance')}</div>

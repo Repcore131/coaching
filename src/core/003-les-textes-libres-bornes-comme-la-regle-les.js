@@ -2627,10 +2627,10 @@ const CLOUD={
     const url=APP_BASE_URL;
     const modal=document.createElement('div');
     modal.style.cssText='position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:center;justify-content:center';
-    modal.innerHTML=`<div style="background:#111;border:1px solid #222;border-radius:var(--r-4);padding:28px;text-align:center;max-width:300px;width:90%">
+    modal.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:28px;text-align:center;max-width:300px;width:90%">
       <div style="font-size:var(--fs-md);font-weight:800;text-transform:uppercase;letter-spacing:2px;margin-bottom:16px">Scanner sur un autre appareil</div>
       <div id="qr-zone" style="width:220px;height:220px;border-radius:var(--r-3);background:#fff;padding:8px;margin:0 auto;display:flex;align-items:center;justify-content:center"></div>
-      <p style="font-size:var(--fs-xs);color:#888;margin-top:12px;line-height:1.6">Ouvre l'app RepCore sur ton téléphone, scanne ce QR → sync configurée automatiquement</p>
+      <p style="font-size:var(--fs-xs);color:var(--sub);margin-top:12px;line-height:1.6">Ouvre l'app RepCore sur ton téléphone, scanne ce QR → sync configurée automatiquement</p>
       <button onclick="this.closest('div').parentElement.remove()" style="margin-top:16px;background:var(--red);border:none;color:var(--text);padding:10px 24px;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer">Fermer</button>
     </div>`;
     document.body.appendChild(modal);

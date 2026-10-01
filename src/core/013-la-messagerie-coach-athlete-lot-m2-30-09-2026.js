@@ -895,7 +895,7 @@ function _cocherIds(conteneur,ids){
 //   bilan, retour vidéo) : au premier jour, personne n'est déclaré silencieux
 //   parce que le champ contacts vient d'apparaître.
 const ETIQ_MAX=20, ETIQ_LIB_MAX=24;
-const ETIQ_COULEURS=Object.freeze(['#E02020','#f5c518','#22c55e','#3b82f6','#a855f7','#ec4899','#f97316','#14b8a6']);
+const ETIQ_COULEURS=Object.freeze([ROUGE_MARQUE,'#f5c518','#22c55e','#3b82f6','#a855f7','#ec4899','#f97316','#14b8a6']);
 const SANS_CONTACT_J=14;
 let _filtreEtiquette=null;
 function _etiqId(i){ return 'e'+i; }
@@ -1318,13 +1318,13 @@ function renderTodoBlock(clients){
     total:rows.filter(r=>_bande(r)===i).length,
     // On garde l'index d'origine avec la ligne : la colonne n'est qu'une vue.
     lignes:vues.map((r,idx)=>({r,idx})).filter(x=>_bande(x.r)===i)}));
-  el.innerHTML=`<div style="background:#0c0000;border:1px solid #2a0000;border-left:1px solid var(--border);border-radius:var(--r-card);margin-bottom:20px;overflow:hidden;box-shadow:var(--elev-3)">
-    <div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;background:#0f0000;border-bottom:1px solid #1e0000">
+  el.innerHTML=`<div style="background:var(--red-bg);border:1px solid var(--red-bg-2);border-left:1px solid var(--border);border-radius:var(--r-card);margin-bottom:20px;overflow:hidden;box-shadow:var(--elev-3)">
+    <div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;background:var(--red-bg);border-bottom:1px solid #1e0000">
       <span style="font-size:13px;font-weight:800;color:var(--red-text);text-transform:uppercase;letter-spacing:2.4px">Mes notifications</span>
       <span style="background:var(--red);color:var(--text);font-size:14px;font-weight:400;padding:1px 10px;border-radius:var(--r-3);font-family:var(--pile-titre);letter-spacing:1px">${unique}</span>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:10px;padding:10px">
-    ${_cols.map(b=>`<div style="min-width:0;background:#0a0000;border:1px solid #1e0000;border-radius:0;overflow:hidden">
+    ${_cols.map(b=>`<div style="min-width:0;background:var(--red-bg);border:1px solid #1e0000;border-radius:0;overflow:hidden">
       <div style="padding:8px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:${b.couleur}">
         <!-- LE TEXTE EST PRESQUE NOIR SUR LE BANDEAU PLEIN, et non blanc : sur
              l'orange et sur le vert, du blanc tombe sous trois pour un de
@@ -1551,7 +1551,7 @@ function etatAthlete(c){
     :isActive(c)?'actif':'dormant';
 }
 // La couleur du filet, par etat. Meme table pour les trois ecrans.
-const ETAT_FILET=Object.freeze({alerte:'#E02020',bilan:'#f97316',attente:'#f97316',
+const ETAT_FILET=Object.freeze({alerte:ROUGE_MARQUE,bilan:'#f97316',attente:'#f97316',
   actif:'#22c55e',lecture:'#8a8a8a',dormant:'#666666'});
 // ══════ N4.13 — COCHER DES ATHLETES SANS QUITTER LA LISTE ═════════════════
 // Les cases a cocher existaient, mais sur deux ecrans separes et mono-usage :

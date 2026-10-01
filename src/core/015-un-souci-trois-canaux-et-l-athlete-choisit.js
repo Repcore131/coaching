@@ -1418,7 +1418,7 @@ function openClientDetail(cid,_refresh,_force){
   try{ renderRiteCoach(c); }catch(e){}
   const be=document.getElementById('ccd-bilans');
   if(c._fromCode){
-    be.innerHTML=`<div style="background:#111;border:1px solid var(--surface-2);border-radius:var(--r-3);padding:16px;text-align:center">
+    be.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--surface-2);border-radius:var(--r-3);padding:16px;text-align:center">
       <div style="margin-bottom:10px">${icon('smartphone',32)}</div>
       <div style="font-weight:700;margin-bottom:6px">${escapeHtml(c.fname||'')} n'a pas encore créé son compte</div>
       <div class="sub" style="font-size:var(--fs-sm);line-height:1.6">Envoie-lui le code d'accès pour qu'elle s'inscrive.<br>Ses données apparaîtront ici automatiquement dès qu'elle aura complété son premier bilan.</div>
@@ -1452,7 +1452,7 @@ function openClientDetail(cid,_refresh,_force){
       return `<div class="card" style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700">${new Date(b.date).toLocaleDateString('fr-FR')}</span><span class="badge ${b.date>_oldSeen?'badge-orange':'badge-green'}">${b.date>_oldSeen?'Nouveau ✦':'Complété'}</span></div>
       <div style="display:flex;gap:16px;flex-wrap:wrap">${_fragmentSiValeur('<span class="sub">Poids: <strong style="color:var(--text)">',bwN,'kg</strong></span>')}${_fragmentSiValeur('<span class="sub">MG: <strong style="color:var(--text)">',bfPct,'%</strong></span>')}${_fragmentSiValeur('<span class="sub">Taille: <strong style="color:var(--text)">',bWaistN,'cm</strong></span>')}</div>
-      ${_extrait.length?`<div style="margin-top:10px;border-top:1px solid #1a1a1a;padding-top:8px">
+      ${_extrait.length?`<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
         ${_extrait.map(x=>`<div style="font-size:var(--fs-xs);line-height:1.5;margin-bottom:4px"><span style="color:var(--sub);font-weight:700">${x.lbl} :</span> <span style="color:#ccc">${escapeHtml(x.txt.length>90?x.txt.slice(0,90)+'…':x.txt)}</span></div>`).join('')}
         <button class="btn btn-outline btn-sm" style="margin-top:6px" onclick="viewClientBilans();evoTab('reponses')">Voir toutes les réponses</button>
       </div>`:''}
@@ -1967,7 +1967,7 @@ function drawLineChart(canvas,datasets,labels){
     // dit « c'est celle-ci qu'on suit » ; l'appliquer a toutes le dirait de
     // personne. Base = pad.t+ch, le socle de la grille.
     const _ok=pts.filter(p=>p.ok);
-    if(ds.color==='#E02020'&&_ok.length>1){
+    if(ds.color===ROUGE_MARQUE&&_ok.length>1){
       const _hauts=Math.min.apply(null,_ok.map(q=>q.y));
       const _g=ctx.createLinearGradient(0,_hauts,0,pad.t+ch);
       _g.addColorStop(0,ds.color+'5c');_g.addColorStop(.5,ds.color+'26');_g.addColorStop(1,ds.color+'0a');
@@ -2105,7 +2105,7 @@ function renderBilanEvolution(c){
 
   // Measurements list
   const MEAS=[
-    {key:'bicep-r',label:'Tour de biceps D',color:'#E02020'},
+    {key:'bicep-r',label:'Tour de biceps D',color:ROUGE_MARQUE},
     {key:'bicep-l',label:'Tour de biceps G',color:'#f97316'},
     {key:'chest',label:'Tour de poitrine',color:'#eab308'},
     {key:'waist',label:'Tour de taille',color:'#3b82f6'},
@@ -2121,7 +2121,7 @@ function renderBilanEvolution(c){
 
   // Groups for mini charts
   const GROUPS=[
-    {label:'Biceps',keys:['bicep-r','bicep-l'],colors:['#E02020','#f97316']},
+    {label:'Biceps',keys:['bicep-r','bicep-l'],colors:[ROUGE_MARQUE,'#f97316']},
     {label:'Tour de poitrine',keys:['chest'],colors:['#eab308']},
     {label:'Tour de taille',keys:['waist'],colors:['#3b82f6']},
     {label:'Tour de hanche',keys:['hips'],colors:['#38bdf8']},
@@ -2150,8 +2150,8 @@ function renderBilanEvolution(c){
       // stagnation, et il doit distinguer d'un coup d'oeil une mesure reprise
       // d'un relevé du jour.
       valueStyleFn:(v,ci,empty)=>ci>=maxB
-        ? (empty?'background:#080808;color:var(--sub);':'background:var(--dark);color:var(--sub);')
-        : (empty?'background:#080808;color:var(--sub);'
+        ? (empty?'background:var(--bg);color:var(--sub);':'background:var(--dark);color:var(--sub);')
+        : (empty?'background:var(--bg);color:var(--sub);'
           :('background:var(--dark);color:'
             +(bilans[ci]&&bmReportee(bilans[ci],m.key)?'var(--text-faint)':'var(--text)')+';'))
     }));
@@ -2208,15 +2208,15 @@ function renderBilanEvolution(c){
       return{bf,mg,mm,w};
     });
     // Formula note
-    const formulaNote=`<div style="background:#111;border:1px solid #222;border-radius:var(--r-2);padding:12px;margin-bottom:14px;font-size:var(--fs-xs);line-height:1.8">
+    const formulaNote=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:12px;margin-bottom:14px;font-size:var(--fs-xs);line-height:1.8">
       <div style="font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:2px;color:var(--red-text);margin-bottom:6px">Formule US Navy ${female?'(Femme)':'(Homme)'} : Calcul automatique</div>
       ${female
-        ?`<div style="color:#aaa;font-family:monospace;font-size:var(--fs-xs)">%MG = 495 / [1,29579 − 0,35004 × log(<b style="color:var(--text)">taille</b> + <b style="color:#69f0ae">hanches</b> − <b style="color:#ffd600">cou</b>) + 0,22100 × log(<b style="color:var(--accent-blue)">hauteur</b>)] − 450</div>
+        ?`<div style="color:var(--text-mid);font-family:monospace;font-size:var(--fs-xs)">%MG = 495 / [1,29579 − 0,35004 × log(<b style="color:var(--text)">taille</b> + <b style="color:#69f0ae">hanches</b> − <b style="color:#ffd600">cou</b>) + 0,22100 × log(<b style="color:var(--accent-blue)">hauteur</b>)] − 450</div>
          <div style="color:var(--text-dim);font-size:var(--fs-xs);margin-top:4px">taille = tour de taille · hanches = tour de hanches · cou = tour de cou · hauteur = taille en cm</div>`
-        :`<div style="color:#aaa;font-family:monospace;font-size:var(--fs-xs)">%MG = 495 / [1,0324 − 0,19077 × log(<b style="color:var(--text)">taille</b> − <b style="color:#ffd600">cou</b>) + 0,15456 × log(<b style="color:var(--accent-blue)">hauteur</b>)] − 450</div>
+        :`<div style="color:var(--text-mid);font-family:monospace;font-size:var(--fs-xs)">%MG = 495 / [1,0324 − 0,19077 × log(<b style="color:var(--text)">taille</b> − <b style="color:#ffd600">cou</b>) + 0,15456 × log(<b style="color:var(--accent-blue)">hauteur</b>)] − 450</div>
          <div style="color:var(--text-dim);font-size:var(--fs-xs);margin-top:4px">taille = tour de taille · cou = tour de cou · hauteur = taille en cm</div>`
       }
-      <div style="margin-top:8px;color:#888;font-size:var(--fs-xs);border-top:1px solid #222;padding-top:8px"> Précision estimée ±3% par rapport à la réalité. La formule est une estimation : pour un résultat précis, privilégier une pesée hydrostatique ou DEXA.</div>
+      <div style="margin-top:8px;color:var(--sub);font-size:var(--fs-xs);border-top:1px solid var(--border);padding-top:8px"> Précision estimée ±3% par rapport à la réalité. La formule est une estimation : pour un résultat précis, privilégier une pesée hydrostatique ou DEXA.</div>
     </div>`;
     // Pie charts for each bilan (first 3 with data)
     const pieBilans=bfVals.map((b,i)=>b.mg!==null?{idx:i,mg:b.mg,mm:b.mm}:null).filter(Boolean).slice(0,4);
@@ -2225,11 +2225,11 @@ function renderBilanEvolution(c){
         <div style="font-size:var(--fs-xs);font-weight:800;margin-bottom:6px">Bilan ${p.idx+1}</div>
         <canvas id="evo-pie-${p.idx}" width="100" height="100"></canvas>
         <div style="font-size:var(--fs-xs);color:var(--red-text);margin-top:4px">MG: ${p.mg}kg</div>
-        <div style="font-size:var(--fs-xs);color:#aaa;margin-top:1px">MM: ${p.mm}kg</div>
+        <div style="font-size:var(--fs-xs);color:var(--text-mid);margin-top:1px">MM: ${p.mm}kg</div>
       </div>`).join('')+`</div>`:'';
     return `
       <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:12px;margin-bottom:12px">
-        <div style="font-size:var(--fs-xs);color:#aaa;text-align:center;margin-bottom:6px;text-transform:uppercase;letter-spacing:2px;font-weight:700">% de graisse corporelle</div>
+        <div style="font-size:var(--fs-xs);color:var(--text-mid);text-align:center;margin-bottom:6px;text-transform:uppercase;letter-spacing:2px;font-weight:700">% de graisse corporelle</div>
         <canvas id="evo-fat-chart" style="width:100%;display:block"></canvas>
       </div>
       ${formulaNote}${pies}
@@ -2295,22 +2295,22 @@ function renderBilanEvolution(c){
         const safeCap=(c.fname||'').replace(/'/g,'').replace(/"/g,'')+'  B'+(i+1);
         return img
           ?`<div data-cap="${safeCap}" onclick="openPhotoFull(this.querySelector('img').src,this.dataset.cap)"
-              style="flex-shrink:0;cursor:pointer;position:relative;border-radius:var(--r-3);overflow:hidden;background:#111;border:1px solid var(--border);width:110px" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+              style="flex-shrink:0;cursor:pointer;position:relative;border-radius:var(--r-3);overflow:hidden;background:var(--surface-1);border:1px solid var(--border);width:110px" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
               <div style="position:absolute;top:6px;left:6px;background:#000b;color:var(--text);font-size:var(--fs-xs);font-weight:800;padding:2px 8px;border-radius:var(--r-2);letter-spacing:1px;z-index:1">B${i+1}</div>
-              <img src="${srcImageSure(img||'')}"${_p.cle?` data-bil-cle="${escapeHtml(_p.cle)}"`:''} style="width:110px;height:160px;object-fit:cover;display:block;background:#111">
-              <div style="padding:6px 6px;font-size:var(--fs-xs);color:#888;font-weight:700;text-align:center">${date}</div>
+              <img src="${srcImageSure(img||'')}"${_p.cle?` data-bil-cle="${escapeHtml(_p.cle)}"`:''} style="width:110px;height:160px;object-fit:cover;display:block;background:var(--surface-1)">
+              <div style="padding:6px 6px;font-size:var(--fs-xs);color:var(--sub);font-weight:700;text-align:center">${date}</div>
               <div style="padding:0 6px 6px;font-size:var(--fs-2xs);color:${_p.locale?'var(--orange)':'var(--text-faint)'};text-align:center;line-height:1.3">${_p.locale?'Haute déf., cet appareil':'Version transmise'}</div>
             </div>`
           :`<label style="flex-shrink:0;width:110px;border-radius:var(--r-3);background:var(--surface-2);border:1px dashed var(--red);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:180px;cursor:pointer">
               <input type="file" accept="image/*" style="display:none" onchange="addBilanPhoto(${b.date},'${b.type}','${v.k}',this)">
               <div style="font-size:var(--fs-2xl);opacity:.5">📷</div>
-              <div style="font-size:var(--fs-xs);color:#aaa;font-weight:700">B${i+1}</div>
-              <div style="font-size:var(--fs-xs);color:#888">${date}</div>
+              <div style="font-size:var(--fs-xs);color:var(--text-mid);font-weight:700">B${i+1}</div>
+              <div style="font-size:var(--fs-xs);color:var(--sub)">${date}</div>
               <div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:1px;margin-top:2px">+ Ajouter</div>
             </label>`;
       }).join('');
       return `<div style="margin-bottom:20px">
-        <div style="font-size:var(--fs-xs);font-weight:800;color:#888;text-transform:uppercase;letter-spacing:2px;margin-bottom:10px;display:flex;align-items:center;gap:6px">
+        <div style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:2px;margin-bottom:10px;display:flex;align-items:center;gap:6px">
           <span>${v.icon}</span><span>${v.label}</span>
         </div>
         <div style="position:relative"><div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:4px" data-scroll-fade>${cards}</div></div>
@@ -2319,9 +2319,9 @@ function renderBilanEvolution(c){
 
     return `<div style="margin-top:4px;margin-bottom:28px">
       <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);text-align:center;text-transform:uppercase;letter-spacing:3px;margin-bottom:20px;display:flex;align-items:center;justify-content:center;gap:8px">
-        <div style="height:1px;background:rgba(224,32,32,.2);flex:1"></div>
+        <div style="height:1px;background:color-mix(in srgb,var(--red) 20%,transparent);flex:1"></div>
         FRESQUE ÉVOLUTION
-        <div style="height:1px;background:rgba(224,32,32,.2);flex:1"></div>
+        <div style="height:1px;background:color-mix(in srgb,var(--red) 20%,transparent);flex:1"></div>
       </div>
       ${(()=>{ try{ return htmlBoutonAvantApres(c,'coach'); }catch(e){ return ''; } })()}
       ${viewSections}

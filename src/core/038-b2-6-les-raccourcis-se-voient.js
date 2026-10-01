@@ -237,7 +237,7 @@ function loadDechargeAthletes(){
   const _liste=_suivis.length?_suivis:athletes;
   const _caches=athletes.length-_liste.length;
   el.innerHTML=_htmlCocherEtiquette('cdg-athletes')+(_caches?'<div style="padding:10px 10px;font-size:var(--fs-2xs);color:var(--text-faint);'
-      +'border-bottom:1px solid #242424;line-height:1.5">'+_caches+' athlète'+(_caches>1?'s':'')
+      +'border-bottom:1px solid var(--border);line-height:1.5">'+_caches+' athlète'+(_caches>1?'s':'')
       +' sans suivi ne sont pas listés ici.</div>':'')
     +_liste.map(a=>{
     const n=((a.sessions_config)||[]).filter(s=>s&&s.active).length;
@@ -245,7 +245,7 @@ function loadDechargeAthletes(){
     // le récapitulatif qui dira pourquoi. Le masquer ferait croire au coach
     // qu'il n'existe pas.
     const empeche=(!a.email?'dossier non synchronisé':(!n?'aucun créneau actif':''));
-    return `<div style="display:flex;align-items:center;gap:12px;border-bottom:1px solid #242424;padding:12px 10px;border-left:3px solid ${ETAT_FILET[etatAthlete(a)]||'#666666'};border-radius:0 8px 8px 0;background:linear-gradient(168deg,#141414,#0d0d0d);margin-bottom:6px">
+    return `<div style="display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);padding:12px 10px;border-left:3px solid ${ETAT_FILET[etatAthlete(a)]||'#666666'};border-radius:0 8px 8px 0;background:linear-gradient(168deg,var(--surface-1),var(--surface-0));margin-bottom:6px">
       <div class="avatar" style="width:32px;height:32px;font-size:12px;flex-shrink:0">${escapeHtml(ini(a.fname,a.lname))}</div>
       <input type="checkbox" id="cdg-cb-${escapeHtml(a.id)}" value="${escapeHtml(a.id)}" onchange="_cdgMajBouton()" style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <label for="cdg-cb-${escapeHtml(a.id)}" style="flex:1;cursor:pointer;min-width:0">
@@ -1382,7 +1382,7 @@ function _marquerRecordSiBesoin(idx,i){
 }
 function _badgeRecord(idx,i){
   return _recordsVus.has(idx+':'+i)
-    ? `<span title="Nouveau record" style="display:inline-block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;color:var(--red-text);background:#280303;border:1px solid rgba(224,32,32,.6);border-radius:var(--r-1);padding:0 4px;margin-left:4px;white-space:nowrap;--halo-c:rgba(224,32,32,.5);text-shadow:var(--halo-1)">RECORD</span>`
+    ? `<span title="Nouveau record" style="display:inline-block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;color:var(--red-text);background:var(--red-bg-2);border:1px solid color-mix(in srgb,var(--red) 60%,transparent);border-radius:var(--r-1);padding:0 4px;margin-left:4px;white-space:nowrap;--halo-c:color-mix(in srgb,var(--red) 50%,transparent);text-shadow:var(--halo-1)">RECORD</span>`
     : '';
 }
 
@@ -1792,7 +1792,7 @@ function showProgressTab(tab,btn,sansMemo){
     const _isoMG=b=>{ try{ return localISODate(new Date(b.date)); }catch(e){ return ''; } };
     const _ptsMG=bl.map((b,i)=>({d:_isoMG(b),v:bfPcts[i]})).filter(p=>p.v!==null&&p.d);
     const _couleurMG=e=>(ecartMasseGrasse(e)==='stable')?'var(--sub)':(e<0?'var(--green)':'var(--red)');
-    const _traceMG=_ptsMG.length>1?_courbeMesures([{label:'Masse grasse estimée',color:'#E02020',pts:_ptsMG}],
+    const _traceMG=_ptsMG.length>1?_courbeMesures([{label:'Masse grasse estimée',color:ROUGE_MARQUE,pts:_ptsMG}],
       {unite:'%',couleur:_couleurMG}):'';
     const _ecartMG=ecartLib===null?''
       :`<span class="pc-ecart" style="color:${col}">${ecartLib==='stable'?'stable'
@@ -1816,14 +1816,14 @@ function showProgressTab(tab,btn,sansMemo){
     const pieSec=(idx,title)=>{
       const mg=mgKgs[idx]??0,mm=mmKgs[idx]??0;
       if(!mg&&!mm) return '';
-      const mgC=idx===0?'#E02020':'#3b82f6';
+      const mgC=idx===0?ROUGE_MARQUE:'#3b82f6';
       const kg=v=>String(v)+'<small> kg</small>';
       return `<div class="mgc-col">
         <div class="mgc-tete"><div class="mgc-titre">${title}</div><div class="mgc-date">${_dateBil(bl[idx])}</div></div>
         <canvas id="pie-${idx}" class="mgc-pie"></canvas>
         <div class="mgc-leg">
           <div class="mgc-item"><div class="mgc-nom"><span class="mgc-pt" style="background:${mgC};box-shadow:0 0 8px ${mgC}"></span>MG</div><div class="mgc-val">${kg(mg)}</div></div>
-          <div class="mgc-item"><div class="mgc-nom"><span class="mgc-pt" style="background:#22c55e;box-shadow:0 0 8px #22c55e"></span>MM</div><div class="mgc-val">${kg(mm)}</div></div>
+          <div class="mgc-item"><div class="mgc-nom"><span class="mgc-pt" style="background:var(--green);box-shadow:0 0 8px var(--green)"></span>MM</div><div class="mgc-val">${kg(mm)}</div></div>
         </div>
       </div>`;
     };
@@ -1872,7 +1872,7 @@ function showProgressTab(tab,btn,sansMemo){
       ${renderDataTable(
         ['',...bilLabels],
         [
-          {label:'% Masse grasse',labelColor:'#E02020',labelBg:'var(--dark)',
+          {label:'% Masse grasse',labelColor:ROUGE_MARQUE,labelBg:'var(--dark)',
             values:bfPcts.map(v=>v!==null?v+'%':null)},
           {label:'Masse grasse (kg)',labelColor:'#f97316',labelBg:'var(--surface-1)',
             values:mgKgs.map(v=>v!==null?v:null)},
@@ -1900,7 +1900,7 @@ function showProgressTab(tab,btn,sansMemo){
     try{ if(typeof arcTracerCourbes==='function') arcTracerCourbes(c); }catch(e){}
     setTimeout(()=>{
       const mg0=mgKgs[0]??0,mm0=mmKgs[0]??0;
-      if(mg0&&mm0) drawPie('pie-0',[{val:mg0,color:'#E02020'},{val:mm0,color:'#22c55e'}],{label:'Masse grasse',max:170});
+      if(mg0&&mm0) drawPie('pie-0',[{val:mg0,color:ROUGE_MARQUE},{val:mm0,color:'#22c55e'}],{label:'Masse grasse',max:170});
       if(bl.length>1){
         const mgL=mgKgs[bl.length-1]??0,mmL=mmKgs[bl.length-1]??0;
         if(mgL&&mmL) drawPie('pie-'+(bl.length-1),[{val:mgL,color:'#3b82f6'},{val:mmL,color:'#22c55e'}],{label:'Masse grasse',max:170});
@@ -1980,7 +1980,7 @@ function showProgressTab(tab,btn,sansMemo){
     // écrite dans chaque cellule : elle est réajustée après le rendu, une fois
     // la place réellement disponible mesurée, et une seule écriture suffit.
     // MON AVANT/APRÈS : dès deux bilans à photo du même angle, en tête.
-    let html=htmlBoutonAvantApres(currentUser)+`<div data-fresque class="fq-carte" style="--fq:${cellW}px;background:linear-gradient(160deg,#141414 0%,#0b0b0b 55%,#080808 100%);border:1px solid #202020;border-radius:var(--r-4);position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 14px 34px rgba(0,0,0,.55);animation:fadeInUp var(--t-3) var(--c-out)">
+    let html=htmlBoutonAvantApres(currentUser)+`<div data-fresque class="fq-carte" style="--fq:${cellW}px;background:linear-gradient(160deg,var(--surface-1) 0%,var(--surface-0) 55%,var(--bg) 100%);border:1px solid var(--border);border-radius:var(--r-4);position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 14px 34px rgba(0,0,0,.55);animation:fadeInUp var(--t-3) var(--c-out)">
       
       <div style="position:absolute;left:-16px;top:34px;width:66px;height:150px;background:none;opacity:.4;pointer-events:none;z-index:0"></div>
       <div style="position:absolute;right:-16px;bottom:44px;width:66px;height:150px;background:none;opacity:.4;pointer-events:none;z-index:0"></div>
@@ -1988,24 +1988,24 @@ function showProgressTab(tab,btn,sansMemo){
         <!-- Titre facon affiche -->
         <div style="text-align:center;margin-bottom:6px">
           <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px">
-            <div style="flex:1;max-width:52px;height:1px;background:linear-gradient(90deg,transparent,rgba(224,32,32,.85))"></div>
-            <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:4px;color:var(--red-text);text-transform:uppercase;white-space:nowrap;--halo-c:rgba(224,32,32,.65);text-shadow:var(--halo-1)">RepCore</div>
-            <div style="flex:1;max-width:52px;height:1px;background:linear-gradient(90deg,rgba(224,32,32,.85),transparent)"></div>
+            <div style="flex:1;max-width:52px;height:1px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--red) 85%,transparent))"></div>
+            <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:4px;color:var(--red-text);text-transform:uppercase;white-space:nowrap;--halo-c:color-mix(in srgb,var(--red) 65%,transparent);text-shadow:var(--halo-1)">RepCore</div>
+            <div style="flex:1;max-width:52px;height:1px;background:linear-gradient(90deg,color-mix(in srgb,var(--red) 85%,transparent),transparent)"></div>
           </div>
-          <div class="fq-titre" style="font-family:var(--pile-titre);line-height:.96;letter-spacing:2px;color:var(--text);text-shadow:var(--halo-3),0 0 44px rgba(224,32,32,.35)">MA TRANSFORMATION</div>
-          <div style="width:46px;height:2.5px;background:linear-gradient(90deg,#ff3b30,#8d0000);border-radius:var(--r-1);margin:10px auto 0;box-shadow:0 0 12px rgba(224,32,32,.85)"></div>
+          <div class="fq-titre" style="font-family:var(--pile-titre);line-height:.96;letter-spacing:2px;color:var(--text);text-shadow:var(--halo-3),0 0 44px color-mix(in srgb,var(--red) 35%,transparent)">MA TRANSFORMATION</div>
+          <div style="width:46px;height:2.5px;background:linear-gradient(90deg,#ff3b30,var(--red-deep));border-radius:var(--r-1);margin:10px auto 0;box-shadow:0 0 12px color-mix(in srgb,var(--red) 85%,transparent)"></div>
           <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2.8px;color:var(--text-faint);text-transform:uppercase;margin-top:8px">${period?period+' de travail':'Suivi photo'} &nbsp;·&nbsp; ${bl.length} bilan${bl.length>1?'s':''}</div>
         </div>
         ${dW!=null?`<div style="display:flex;justify-content:center;gap:10px;margin:12px 0 14px">
-          <div style="flex:1;max-width:112px;background:linear-gradient(180deg,#131313,#0b0b0b);border:1px solid var(--border);border-radius:var(--r-3);padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)">
-            <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:#8a8a8a">${wFirst}<span style="font-size:var(--fs-xs)">kg</span></div>
+          <div style="flex:1;max-width:112px;background:linear-gradient(180deg,var(--surface-1),var(--surface-0));border:1px solid var(--border);border-radius:var(--r-3);padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)">
+            <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:var(--sub)">${wFirst}<span style="font-size:var(--fs-xs)">kg</span></div>
             <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:var(--text-dim);margin-top:4px;font-weight:800">DÉPART</div>
           </div>
-          <div style="flex:1;max-width:112px;background:linear-gradient(160deg,#c10000,#6d0000);border:1px solid rgba(255,90,90,.42);border-radius:var(--r-3);padding:8px 6px;text-align:center;box-shadow:0 0 20px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18)">
+          <div style="flex:1;max-width:112px;background:linear-gradient(160deg,#c10000,#6d0000);border:1px solid rgba(255,90,90,.42);border-radius:var(--r-3);padding:8px 6px;text-align:center;box-shadow:0 0 20px color-mix(in srgb,var(--red) 40%,transparent),inset 0 1px 0 rgba(255,255,255,.18)">
             <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:var(--text);text-shadow:var(--halo-2)">${wLast}<span style="font-size:var(--fs-xs)">kg</span></div>
             <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:rgba(255,255,255,.8);margin-top:4px;font-weight:800">AUJOURD'HUI</div>
           </div>
-          <div style="flex:1;max-width:112px;background:linear-gradient(180deg,#131313,#0b0b0b);border:1px solid ${dCol}44;border-radius:var(--r-3);padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 0 16px ${dCol}22">
+          <div style="flex:1;max-width:112px;background:linear-gradient(180deg,var(--surface-1),var(--surface-0));border:1px solid ${dCol}44;border-radius:var(--r-3);padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 0 16px ${dCol}22">
             <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:${dCol};--halo-c:${dCol};text-shadow:var(--halo-2)bb">${dW>0?'+':''}${dW}<span style="font-size:var(--fs-xs)">kg</span></div>
             <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:${dCol}aa;margin-top:4px;font-weight:800">ÉVOLUTION</div>
           </div>
@@ -2035,8 +2035,8 @@ function showProgressTab(tab,btn,sansMemo){
                 const isLast=i===bl.length-1;
                 return `<td style="padding:4px;vertical-align:top">
                   ${src
-                    ?`<div style="width:var(--fq);aspect-ratio:.65;border-radius:var(--r-2);overflow:hidden;background:#111;cursor:pointer;border:1.5px solid ${isLast?'rgba(224,32,32,.75)':'#242424'};box-shadow:${isLast?'0 0 16px rgba(224,32,32,.45)':'0 5px 14px rgba(0,0,0,.5)'};position:relative" onclick="openPhotoFull(this.querySelector('img').src,'Bilan ${i+1} : ${lbl}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><img src="${srcImageSure(src)}" style="width:100%;height:100%;object-fit:cover"><div style="position:absolute;inset:0;background:linear-gradient(180deg,transparent 62%,rgba(0,0,0,.55));pointer-events:none"></div></div>`
-                    :`<div style="width:var(--fq);aspect-ratio:.65;border-radius:var(--r-2);background:linear-gradient(180deg,#101010,#0a0a0a);border:1px dashed #1e1e1e;display:flex;align-items:center;justify-content:center;color:#1e1e1e">${icon('image',20)}</div>`}
+                    ?`<div style="width:var(--fq);aspect-ratio:.65;border-radius:var(--r-2);overflow:hidden;background:var(--surface-1);cursor:pointer;border:1.5px solid ${isLast?'rgba(224,32,32,.75)':'#242424'};box-shadow:${isLast?'0 0 16px rgba(224,32,32,.45)':'0 5px 14px rgba(0,0,0,.5)'};position:relative" onclick="openPhotoFull(this.querySelector('img').src,'Bilan ${i+1} : ${lbl}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><img src="${srcImageSure(src)}" style="width:100%;height:100%;object-fit:cover"><div style="position:absolute;inset:0;background:linear-gradient(180deg,transparent 62%,rgba(0,0,0,.55));pointer-events:none"></div></div>`
+                    :`<div style="width:var(--fq);aspect-ratio:.65;border-radius:var(--r-2);background:linear-gradient(180deg,var(--surface-1),var(--bg));border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;color:#1e1e1e">${icon('image',20)}</div>`}
                 </td>`;
               }).join('')}
             </tr>`).join('')}
@@ -2044,7 +2044,7 @@ function showProgressTab(tab,btn,sansMemo){
           </table>
         </div>
         <!-- Pied facon signature -->
-        <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.06)">
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid color-mix(in srgb,var(--text) 6%,transparent)">
           <img src="./icons/logo.png" alt="" style="width:20px;height:20px;border-radius:var(--r-1);object-fit:cover;opacity:.9">
           <span style="font-family:var(--pile-titre);font-size:var(--fs-md);letter-spacing:3px;color:var(--text-faint)">REPCORE</span>
           <span style="font-size:var(--fs-xs);color:var(--text-dim);letter-spacing:1.5px;font-weight:700">· GUELLEC COACHING PRO</span>
@@ -2417,7 +2417,7 @@ function _htmlDossierSante(user,pourCoach){
   if(dossierSanteVide(d))
     return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.75">${escapeHtml(DOSSIER_VIDE)}</div>`;
   const titre=t=>`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin:14px 0 8px">${escapeHtml(t)}</div>`;
-  const ligne=(g,dr)=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid rgba(255,255,255,.06)">
+  const ligne=(g,dr)=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid color-mix(in srgb,var(--text) 6%,transparent)">
       <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;min-width:0">${g}</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint);white-space:nowrap;flex-shrink:0">${escapeHtml(dr)}</span>
     </div>`;

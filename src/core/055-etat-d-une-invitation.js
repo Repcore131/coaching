@@ -469,7 +469,7 @@ function loadStudentCodes(){
     return '<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:var(--r-3);padding:14px;margin-bottom:10px">'
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
       +'<div style="font-weight:700">'+escapeHtml(c.studentName||'')+'</div>'+st+'</div>'
-      +'<div style="font-size:var(--fs-xs);color:#888;margin-bottom:4px">Expire: '+exp.toLocaleDateString('fr-FR')+' ('+c.months+' mois)</div>'
+      +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px">Expire: '+exp.toLocaleDateString('fr-FR')+' ('+c.months+' mois)</div>'
       +used
       +'<div style="display:flex;gap:8px;margin-top:10px">'
       +'<button onclick="toggleStudentCode('+i+')" style="flex:1;background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">'+(c.active?'Désactiver':'Activer')+'</button>'
@@ -1135,7 +1135,7 @@ function _ligneMuscles(ex,i){
       +(r.src==='auto'?`<span style="color:var(--text-dim);font-size:var(--fs-xs);margin-left:6px">proposé, à corriger</span>`:'')
     : `<span style="color:var(--orange);font-size:var(--fs-xs);font-weight:700">Non classé, appuie pour choisir</span>`;
   return `<div onclick="ouvrirSelecteurMuscles(${i})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
-    style="margin-bottom:10px;padding:8px 10px;background:#0c0c0c;border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">
+    style="margin-bottom:10px;padding:8px 10px;background:var(--surface-0);border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Muscles</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${corps}</div>
   </div>`;

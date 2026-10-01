@@ -973,8 +973,8 @@ function _renderFjDaySummary(date){
   const nextStr=localISODate(new Date(_yy,_mm-1,_dd+1));
   const dateLbl=_libelleJourNut(date);
   const nextBtn=isToday
-    ?`<button disabled style="flex-shrink:0;background:none;border:1px solid #222;color:var(--text-dim);border-radius:var(--r-2);padding:6px 12px;font-size:var(--fs-md);line-height:1;cursor:not-allowed">→</button>`
-    :`<button onclick="_renderFjDaySummary('${nextStr}')" style="flex-shrink:0;background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-md);line-height:1">→</button>`;
+    ?`<button disabled style="flex-shrink:0;background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:var(--r-2);padding:6px 12px;font-size:var(--fs-md);line-height:1;cursor:not-allowed">→</button>`
+    :`<button onclick="_renderFjDaySummary('${nextStr}')" style="flex-shrink:0;background:none;border:1px solid var(--border);color:var(--text-mid);border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-md);line-height:1">→</button>`;
   const nut=currentUser.nutrition||{};
   const entries=(nut.log?.[date]?.entries)||[];
   const isOn=nutIsOnDay(date);
@@ -1014,7 +1014,7 @@ function _renderFjDaySummary(date){
   if(_nav) _nav.innerHTML=`
     <div style="margin-bottom:20px;${_animEntree('fj-nav')}">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <button onclick="_renderFjDaySummary('${prevStr}')" style="flex-shrink:0;background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-md);line-height:1">←</button>
+        <button onclick="_renderFjDaySummary('${prevStr}')" style="flex-shrink:0;background:none;border:1px solid var(--border);color:var(--text-mid);border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-md);line-height:1">←</button>
         <div style="flex:1;min-width:0;text-align:center">
           <div class="nut-titre" style="transform:none">${dateLbl}</div>
           <div style="margin-top:6px">${dayBadge}</div>

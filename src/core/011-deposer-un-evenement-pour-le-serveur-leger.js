@@ -433,12 +433,12 @@ const DUEL_MESURES=Object.freeze([
 // un hexagone rouge, deux haches croisées — manches rouges, têtes claires.
 const DUEL_ECUSSON='<svg viewBox="0 0 120 120" aria-hidden="true"><defs>'
   +'<linearGradient id="duT" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#d9d9d9"/><stop offset="1" stop-color="#9a9a9a"/></linearGradient></defs>'
-  +'<polygon points="60,6 107,33 107,87 60,114 13,87 13,33" fill="rgba(120,8,8,.25)" stroke="#e02020" stroke-width="2.5"/>'
+  +('<polygon points="60,6 107,33 107,87 60,114 13,87 13,33" fill="rgba(120,8,8,.25)" stroke="'+ROUGE_MARQUE_MIN+'" stroke-width="2.5"/>')
   +'<polygon points="60,16 98,38 98,82 60,104 22,82 22,38" fill="none" stroke="rgba(224,32,32,.35)" stroke-width="1"/>'
   +'<g transform="translate(60 62) rotate(40)"><rect x="-3" y="-34" width="6" height="68" rx="3" fill="#c81212"/>'
-  +'<path d="M-2 -40h5c11 2 18 9 19 19-8-1-13-3-19-3h-5z" fill="url(#duT)" stroke="#e02020" stroke-width="1.5"/></g>'
+  +('<path d="M-2 -40h5c11 2 18 9 19 19-8-1-13-3-19-3h-5z" fill="url(#duT)" stroke="'+ROUGE_MARQUE_MIN+'" stroke-width="1.5"/></g>')
   +'<g transform="translate(60 62) rotate(-40) scale(-1 1)"><rect x="-3" y="-34" width="6" height="68" rx="3" fill="#c81212"/>'
-  +'<path d="M-2 -40h5c11 2 18 9 19 19-8-1-13-3-19-3h-5z" fill="url(#duT)" stroke="#e02020" stroke-width="1.5"/></g></svg>';
+  +('<path d="M-2 -40h5c11 2 18 9 19 19-8-1-13-3-19-3h-5z" fill="url(#duT)" stroke="'+ROUGE_MARQUE_MIN+'" stroke-width="1.5"/></g></svg>');
 const DUEL_INVITE_CLE='rc_duel_invite';
 /** PURE. « 14 jours de régularité » — la même phrase que le Worker. */
 function texteDuel(mesure,duree){
@@ -1402,7 +1402,7 @@ function _dessinerCarteDuel(d,fond,format){
   const o=_visuelOutils(g);
   const x=d||{};
   const rouge=f==='rouge';
-  const acc=rouge?'#fff':'#E02020';
+  const acc=rouge?'#fff':ROUGE_MARQUE;
   g.textAlign='center'; g.textBaseline='alphabetic';
   // En story, le bloc est centré dans la hauteur (il fait ~1 000 px).
   let y=post?150:(x.type==='resultat'?500:560);
@@ -1614,7 +1614,7 @@ function saisonActive(maintenant,liste){
 /** PURE. L'année d'une édition. */
 function saisonAnnee(s){ return String(new Date(Number(s&&s.debut)||0).getFullYear()); }
 /** PURE. La couleur d'accent, sûre. */
-function saisonCouleur(s){ return /^#[0-9a-fA-F]{6}$/.test(String(s&&s.couleurAccent||''))?s.couleurAccent:'#E02020'; }
+function saisonCouleur(s){ return /^#[0-9a-fA-F]{6}$/.test(String(s&&s.couleurAccent||''))?s.couleurAccent:ROUGE_MARQUE; }
 /** PURE. « J-12 », « 5 h », « 12 min » : le temps qui reste. */
 function saisonReste(s,maintenant){
   const ms=Number(s&&s.fin)-((typeof maintenant==='number')?maintenant:Date.now());
@@ -1712,7 +1712,7 @@ function saisonsFusionnerResultats(u,r){
   for(const id of Object.keys(r)){
     const x=r[id]; if(!x||m[id]||!SAISON_ID_RE.test(id)) continue;
     m[id]={nom:String(x.nom||'').slice(0,60),annee:String(x.annee||'').slice(0,4),badgeCle:String(x.badgeCle||'').slice(0,40),
-      couleur:/^#[0-9a-fA-F]{6}$/.test(String(x.couleur||''))?x.couleur:'#E02020',termineLe:Number(x.termineLe)||0,fin:Number(x.fin)||0};
+      couleur:/^#[0-9a-fA-F]{6}$/.test(String(x.couleur||''))?x.couleur:ROUGE_MARQUE,termineLe:Number(x.termineLe)||0,fin:Number(x.fin)||0};
     n++;
   }
   if(n) u.saisonsReleves=m;
@@ -1720,7 +1720,7 @@ function saisonsFusionnerResultats(u,r){
 }
 // PURE. Le médaillon d'une édition : un hexagone de sa couleur, l'année dedans.
 function svgMedailleEdition(couleur,annee,obtenu){
-  const c=/^#[0-9a-fA-F]{6}$/.test(String(couleur||''))?couleur:'#E02020';
+  const c=/^#[0-9a-fA-F]{6}$/.test(String(couleur||''))?couleur:ROUGE_MARQUE;
   return '<svg class="ed-med" viewBox="0 0 100 100" aria-hidden="true">'
     +'<polygon points="50,4 91,27 91,73 50,96 9,73 9,27" fill="'+(obtenu?'#111':'#1a1a1d')+'" stroke="'+(obtenu?c:'#3a3a40')+'" stroke-width="6"/>'
     +'<polygon points="50,18 79,34 79,66 50,82 21,66 21,34" fill="none" stroke="'+(obtenu?c:'#2a2a2e')+'" stroke-width="2" opacity=".7"/>'
@@ -1767,7 +1767,7 @@ function _dessinerCarteSaison(d,fond,format){
   const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   const x=d||{};
-  const acc=f==='rouge'?'#fff':(x.couleur||'#E02020');
+  const acc=f==='rouge'?'#fff':(x.couleur||ROUGE_MARQUE);
   g.textAlign='center'; g.textBaseline='alphabetic';
   // En story, le bloc (~1 000 px) est centré dans la hauteur.
   let y=post?140:520;
@@ -1837,7 +1837,7 @@ function saisonFiche(f){
   if(!SAISON_ID_RE.test(id)) return {erreur:'Identifiant invalide.'};
   const badgeCle=(slug(f.badgeCle)||slug(nom)).slice(0,40);
   if(!/^[a-z0-9-]{2,40}$/.test(badgeCle)) return {erreur:'Clé de badge invalide.'};
-  const couleurAccent=/^#[0-9a-fA-F]{6}$/.test(String(f.couleurAccent||''))?f.couleurAccent:'#E02020';
+  const couleurAccent=/^#[0-9a-fA-F]{6}$/.test(String(f.couleurAccent||''))?f.couleurAccent:ROUGE_MARQUE;
   return {id,fiche:{nom,debut,fin,mesure,objectifPerso:op,objectifCollectif:oc,badgeCle,couleurAccent,
     texteAccueil:String(f.texteAccueil||'').trim().slice(0,200)}};
 }
@@ -1852,7 +1852,7 @@ function htmlSaisonAdmin(){
     +L('sa-op','Objectif perso','<input id="sa-op" type="number" min="1" inputmode="decimal" placeholder="10">')
     +L('sa-oc','Objectif collectif','<input id="sa-oc" type="number" min="0" inputmode="decimal" placeholder="1000">')
     +L('sa-badge','Clé du badge','<input id="sa-badge" type="text" maxlength="40" placeholder="hiver">')
-    +L('sa-couleur','Couleur','<input id="sa-couleur" type="color" value="#E02020">')
+    +L('sa-couleur','Couleur',('<input id="sa-couleur" type="color" value="'+ROUGE_MARQUE+'">'))
     +L('sa-texte','Texte d’accueil','<input id="sa-texte" type="text" maxlength="200">')
     +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:10px 0 0;min-height:44px" onclick="enregistrerSaison(this)">Créer l’édition</button></div>';
 }
@@ -1961,7 +1961,7 @@ function _dessinerCarteDefi(d,fond,format){
   const h=g.createRadialGradient(cx,Y(690),40,cx,Y(690),540*K);
   h.addColorStop(0,rouge?'rgba(255,255,255,.3)':'rgba(224,32,32,.45)'); h.addColorStop(1,'rgba(0,0,0,0)');
   g.fillStyle=h; g.fillRect(0,Y(200),W,Math.round(1100*K));
-  g.fillStyle=rouge?'rgba(255,255,255,.92)':'#E02020';
+  g.fillStyle=rouge?'rgba(255,255,255,.92)':ROUGE_MARQUE;
   g.shadowColor=rouge?'rgba(255,255,255,.6)':'rgba(224,32,32,.9)'; g.shadowBlur=60;
   g.beginPath();
   [[610,300],[410,720],[540,720],[455,1080],[715,580],[575,580],[680,300]].forEach((p,i)=>i?g.lineTo(X(p[0]),Y(p[1])):g.moveTo(X(p[0]),Y(p[1])));
@@ -1970,7 +1970,7 @@ function _dessinerCarteDefi(d,fond,format){
   o.ombre(true);
   g.fillStyle='#fff';
   if(d.champion){
-    g.fillStyle=rouge?'#fff':'#E02020'; g.font='800 40px '+MONT;
+    g.fillStyle=rouge?'#fff':ROUGE_MARQUE; g.font='800 40px '+MONT;
     o.ecrireEspace('DÉFI '+String(d.mois||''),cx,post?90:300,9,true);
     g.fillStyle='#fff';
     const cs=o.ajuste('CHAMPION','700',post?230:300,BEBAS,LARG,120);

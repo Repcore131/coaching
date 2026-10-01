@@ -215,7 +215,7 @@ function _carteCadrePret(cle){
 }
 // Les couleurs du cadre dessiné.
 const CARTE_TEINTES=Object.freeze({
-  standard:{a:'#6b6b72',b:'#2a2a2e',accent:'#E02020',halo:'rgba(224,32,32,.18)'},
+  standard:{a:'#6b6b72',b:'#2a2a2e',accent:ROUGE_MARQUE,halo:'rgba(224,32,32,.18)'},
   elite:{a:'#ff3b3b',b:'#7a0a0a',accent:'#ff3b3b',halo:'rgba(255,59,59,.38)'},
   legendaire:{a:'#ffd36a',b:'#b3261e',accent:'#ffcf5a',halo:'rgba(255,190,70,.42)'}
 });
@@ -545,7 +545,7 @@ function _dessinerCarteRang(d,fond,img,format,anim){
   g.globalAlpha=aTexte;
   const sur='NOUVEAU RANG · '+String(d.nom||'');
   const ss=o.ajusteEspace(sur,'800',46,MONT,9,LARG,26);
-  g.fillStyle=rouge?'#fff':'#E02020'; g.font='800 '+ss+'px '+MONT;
+  g.fillStyle=rouge?'#fff':ROUGE_MARQUE; g.font='800 '+ss+'px '+MONT;
   o.ecrireEspace(sur,cx,post?110:300,9,true);
   o.ombre(false);
   // L'EMBLÈME GÉANT, avec un halo derrière.
@@ -934,7 +934,7 @@ function getBM(b,k){const v=parseFloat(b['bil-'+k]||b['deb-'+k]||b[k]);return is
 // qu'une ligne dise quoi que ce soit. Ils restent dans le TABLEAU — la donnee
 // n'est pas perdue, elle n'a simplement pas besoin de son propre graphique.
 const MENS_GROUPES=Object.freeze([
-  {label:'Biceps (D / G)',items:[{k:'bicep-r',l:'Droit',color:'#E02020'},{k:'bicep-l',l:'Gauche',color:'#f97316'}]},
+  {label:'Biceps (D / G)',items:[{k:'bicep-r',l:'Droit',color:ROUGE_MARQUE},{k:'bicep-l',l:'Gauche',color:'#f97316'}]},
   {label:'Cuisses (D / G)',items:[{k:'thigh-r',l:'Droit',color:'#06b6d4'},{k:'thigh-l',l:'Gauche',color:'#14b8a6'}]},
   {label:'Mollets (D / G)',items:[{k:'calf-r',l:'Droit',color:'#f472b6'},{k:'calf-l',l:'Gauche',color:'#a78bfa'}]},
   {label:'Tour de Poitrine',items:[{k:'chest',l:'',color:'#eab308'}]},
@@ -1552,7 +1552,7 @@ function drawPie(id,slices,opts){
 }
 
 const MEAS=[
-  {k:'bicep-r',l:'Tour de Biceps D',color:'#E02020'},
+  {k:'bicep-r',l:'Tour de Biceps D',color:ROUGE_MARQUE},
   {k:'bicep-l',l:'Tour de Biceps G',color:'#f97316'},
   {k:'chest',l:'Tour de Poitrine',color:'#eab308'},
   {k:'waist',l:'Tour de Taille',color:'#3b82f6'},

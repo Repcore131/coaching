@@ -148,7 +148,7 @@ function _dbCarteAmplitudes(u,W){
     if(x.pts.length<2) return '<div class="db-am"><b>'+escapeHtml(lib)+'</b>'+_dbVide('Un seul relevé, le '+new Date(x.pts[0].x).toLocaleDateString('fr-FR')+' : il en faut deux pour tracer une courbe.')+'</div>';
     const fmt=x.d.cle==='posterieur'?(v=>({1:'bas du dos',2:'milieu du dos',3:'haut du dos'})[Math.round(v)]||''):(v=>_dbNb(v,0)+(unites[x.d.cle]||''));
     return '<div class="db-am"><b>'+escapeHtml(lib)+'</b>'
-      +_dbCourbe({id:'db-am-'+x.d.cle,titre:lib,W,H:110,series:[{lib,couleur:'#e02020',points:x.pts,aire:false,fmt}],fmtG:fmt})+'</div>';
+      +_dbCourbe({id:'db-am-'+x.d.cle,titre:lib,W,H:110,series:[{lib,couleur:ROUGE_MARQUE_MIN,points:x.pts,aire:false,fmt}],fmtG:fmt})+'</div>';
   }).join('');
   return _dbCarte('db-c-am','Amplitudes',info,'',corps);
 }
@@ -1293,18 +1293,18 @@ function _renderCaffeineEmbedded(){
   const minStr=localISODate(new Date(Date.now()-CAFF_RETENTION_JOURS*24*3600*1000));
   const auFond=prevStr<minStr;
   const navPrev=auFond
-    ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:var(--r-2);padding:6px 12px;font-size:var(--fs-lg);cursor:not-allowed">←</button>`
-    :`<button onclick="_caffeineEmbedDate='${prevStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">←</button>`;
+    ?`<button disabled style="background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:var(--r-2);padding:6px 12px;font-size:var(--fs-lg);cursor:not-allowed">←</button>`
+    :`<button onclick="_caffeineEmbedDate='${prevStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid var(--border);color:var(--text-mid);border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">←</button>`;
   const navNext=isToday
-    ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:var(--r-2);padding:6px 12px;font-size:var(--fs-lg);cursor:not-allowed">→</button>`
-    :`<button onclick="_caffeineEmbedDate='${nextStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">→</button>`;
+    ?`<button disabled style="background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:var(--r-2);padding:6px 12px;font-size:var(--fs-lg);cursor:not-allowed">→</button>`
+    :`<button onclick="_caffeineEmbedDate='${nextStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid var(--border);color:var(--text-mid);border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">→</button>`;
   const entries=getCaffeineDay(date);
   const totalMg=entries.reduce((s,e)=>s+(e.mg||0),0);
   const {weight:wKg,estimated:_wEst}=getUserWeight();
   const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser),grossesseSuspend(currentUser));
   el.innerHTML=`
     <div style="margin-bottom:12px">
-      <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--red-text);--halo-c:rgba(224,32,32,.45);text-shadow:var(--halo-1);display:flex;align-items:center;gap:6px">${icon('coffee',11)} Caféine</h3>
+      <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--red-text);--halo-c:color-mix(in srgb,var(--red) 45%,transparent);text-shadow:var(--halo-1);display:flex;align-items:center;gap:6px">${icon('coffee',11)} Caféine</h3>
     </div>
     ${_bandeauJour('caff-embed-date-input',date,'_caffEmbedAllerJour',{avecFleches:true,prev:auFond?null:prevStr,next:isToday?null:nextStr,retention:CAFF_RETENTION_JOURS,libelle:dateLbl})}
     ${_renderCaffeineBlock(entries,totalMg,thr,'embedded',date,_wEst,isToday,dateLbl,wKg)}
@@ -1811,7 +1811,7 @@ function _renderVideosListe(){
       :'')
     +'<div id="vid-card-list"></div>'
     +(()=>{ try{ return htmlCorrectionsOrphelines(currentUser); }catch(e){ return ''; } })()
-    +'<button id="vid-more-btn" onclick="loadMoreVideos()" style="display:none;width:100%;margin-top:10px;padding:10px;background:none;border:1px solid #222;border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-sm);cursor:pointer;font-family:Montserrat,sans-serif;font-weight:700;letter-spacing:.5px;min-height:44px">Voir plus de vidéos</button>';
+    +'<button id="vid-more-btn" onclick="loadMoreVideos()" style="display:none;width:100%;margin-top:10px;padding:10px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-sm);cursor:pointer;font-family:Montserrat,sans-serif;font-weight:700;letter-spacing:.5px;min-height:44px">Voir plus de vidéos</button>';
   _renderVideoBatch(0,20);
 }
 function _renderVideoBatch(from,count){

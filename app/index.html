@@ -42,7 +42,7 @@ try{
 // raison : le service worker servait l'ancienne page, et rien a l'ecran ne le
 // disait. Il se pose ici, dans le premier script du document, pour etre vrai
 // meme si tout le reste echoue.
-window.RC_BUILD='1766';
+window.RC_BUILD='1769';
 // La date de cette livraison, posee par scripts/versionner_actifs.py : les
 // reglages l'affichent (« Mis à jour le … »).
 window.RC_MAJ='2026-10-01';
@@ -281,8 +281,8 @@ if('serviceWorker' in navigator){
       b.setAttribute('role','status');
       b.style.cssText='position:fixed;left:12px;right:12px;bottom:12px;z-index:99999;'
         +'display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;'
-        +'background:#141414;border:1px solid #E02020;box-shadow:0 10px 30px rgba(0,0,0,.6);'
-        +'font-family:Montserrat,sans-serif;color:#f2f2f2;font-size:13px;line-height:1.45;'
+        +'background:var(--surface-1);border:1px solid var(--red);box-shadow:0 10px 30px rgba(0,0,0,.6);'
+        +'font-family:Montserrat,sans-serif;color:var(--text);font-size:13px;line-height:1.45;'
         +'max-width:520px;margin:0 auto';
       const t=document.createElement('span');
       t.style.cssText='flex:1;min-width:0';
@@ -290,7 +290,7 @@ if('serviceWorker' in navigator){
       const a=document.createElement('button');
       a.type='button';
       a.style.cssText='flex:0 0 auto;border:none;border-radius:8px;cursor:pointer;'
-        +'background:#D21A1A;color:#fff;font-family:Montserrat,sans-serif;'
+        +'background:var(--red);color:#fff;font-family:Montserrat,sans-serif;'
         +'font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;'
         +'padding:10px 14px;min-height:40px';
       a.textContent='Mettre à jour';
@@ -490,11 +490,11 @@ if('serviceWorker' in navigator){
    rc-style, qui en portent, reprennent la main des qu'elles arrivent.
    LE THEME CLAIR (data-theme="clair", pose par le premier script) : --bg
    n'est defini que dans rc-style, d'ou les replis. */
-body{margin:0 auto;max-width:480px;background:var(--bg,#080808)}
+body{margin:0 auto;max-width:480px;background:var(--bg,var(--bg))}
 :root[data-theme="clair"] body{background:var(--bg,#f4f4f4)}
 .screen{display:none;min-height:100vh;min-height:100dvh;flex-direction:column}
 .screen.active{display:flex}
-.carbon-bg{background-color:#050505}
+.carbon-bg{background-color:var(--bg)}
 :root[data-theme="clair"] .carbon-bg{background-color:#f6f6f6}
 @keyframes rcStrike{
   0%       {opacity:0;transform:scale(.4) translateY(30px)}
@@ -567,7 +567,7 @@ const COACH_PHOTO='icons/coach.jpg';
      coach ouvrait un athlete. Elle est masquee par defaut et allumee par
      la requete @media(min-width:1025px), ecran coach actif par ecran coach
      actif — jamais sur un ecran athlete, jamais sur le seul role. -->
-<div id="ch-sidebar" style="display:none;flex-direction:column;background:#040404;border-right:1px solid #1a0000">
+<div id="ch-sidebar" style="display:none;flex-direction:column;background:var(--bg);border-right:1px solid #1a0000">
   <div style="padding:20px 16px;border-bottom:1px solid #1a0000">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
       <img src="./icons/logo.webp" style="display:block;width:52px;height:52px;flex-shrink:0">
@@ -690,7 +690,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- Le halo sur son propre calque, sous le logo : rendu equivalent aux trois
          drop-shadow d'avant, aucun flou recalcule par image. -->
     <div style="position:relative;display:flex;justify-content:center;align-items:center">
-      <div id="splash-halo" style="position:absolute;width:340px;height:340px;border-radius:50%;pointer-events:none;background:radial-gradient(circle,rgba(224,32,32,.55),transparent 70%)"></div>
+      <div id="splash-halo" style="position:absolute;width:340px;height:340px;border-radius:50%;pointer-events:none;background:radial-gradient(circle,color-mix(in srgb,var(--red) 55%,transparent),transparent 70%)"></div>
       <div id="splash-logo-anim" style="position:relative">
         <img src="./icons/logo.webp" style="display:block;width:240px;height:240px">
       </div>
@@ -712,13 +712,13 @@ const COACH_PHOTO='icons/coach.jpg';
      peint avec le CSS critique du <style> d'en tete pendant qu'elle arrive.
      rc-core, plus bas, attend toujours qu'elle soit chargee pour s'executer,
      comme avant. scripts/versionner_actifs.py la renomme ici a chaque build. -->
-<link rel="stylesheet" href="./rc-style.1766.css">
+<link rel="stylesheet" href="./rc-style.1769.css">
 <!-- LE THEME CLAIR, A PART ET APRES rc-style (l'ordre de cascade compte) :
      ~700 Ko de regles :root[data-theme="clair"] qu'un appareil en sombre ne
      doit pas appliquer. media="not all" par defaut ; le script suivant le passe
      a "all" si le premier script a pose data-theme="clair" (et themeAppliquer,
      dans rc-core, a chaud). Sorti par scripts/extraire_theme_clair.py. -->
-<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1766.css" media="not all">
+<link rel="stylesheet" id="rc-theme-clair" href="./rc-theme.1769.css" media="not all">
 <script>window.rcThemeFeuille&&window.rcThemeFeuille();</script>
 
 <!-- WELCOME -->
@@ -740,7 +740,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-install" class="screen carbon-bg" style="flex-direction:column;height:100vh;height:100dvh;position:relative;overflow:hidden">
 
   <!-- Rougeur subtile haut-centre — reprise de s-welcome -->
-  <div style="position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:500px;height:400px;background:radial-gradient(ellipse at 50% 0%,rgba(224,32,32,.18) 0%,transparent 65%);pointer-events:none;z-index:0"></div>
+  <div style="position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:500px;height:400px;background:radial-gradient(ellipse at 50% 0%,color-mix(in srgb,var(--red) 18%,transparent) 0%,transparent 65%);pointer-events:none;z-index:0"></div>
   <!-- Diagonales de texture -->
   <div style="position:absolute;inset:0;background-image:none;pointer-events:none;z-index:0"></div>
   <!-- Vignette de bords -->
@@ -753,7 +753,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
 
     <div style="margin-top:28px;margin-top:min(28px,3.4dvh);text-align:center;animation:wFadeUp var(--t-4) var(--c-out) 0.18s both;opacity:0">
-      <div style="font-size:var(--fs-2xl);font-weight:900;line-height:1.1;letter-spacing:-1.2px;color:var(--text);text-shadow:0 2px 20px rgba(0,0,0,.95),0 0 50px rgba(0,0,0,.8)">Installe<br><span style="color:#E02020;--halo-c:rgba(224,32,32,.5);text-shadow:var(--halo-3),0 2px 14px rgba(0,0,0,.9)">RepCore.</span></div>
+      <div style="font-size:var(--fs-2xl);font-weight:900;line-height:1.1;letter-spacing:-1.2px;color:var(--text);text-shadow:0 2px 20px rgba(0,0,0,.95),0 0 50px rgba(0,0,0,.8)">Installe<br><span style="color:var(--red);--halo-c:color-mix(in srgb,var(--red) 50%,transparent);text-shadow:var(--halo-3),0 2px 14px rgba(0,0,0,.9)">RepCore.</span></div>
       <div id="rc-inst-sous" style="margin-top:14px;font-size:var(--fs-sm);color:rgba(255,255,255,.5);line-height:1.6;max-width:340px"></div>
     </div>
 
@@ -767,7 +767,7 @@ const COACH_PHOTO='icons/coach.jpg';
            integre, qui ne SAIT PAS installer, et Samsung Internet, qui sait
            mais dont le paquet est refuse par Android. Le decideur repose ce
            message a chaque decision — voir rcInstallDecider. -->
-      <div id="rc-inst-msg" style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.3);border-radius:var(--r-3);padding:16px 16px;font-size:var(--fs-sm);color:#f0d6d6;line-height:1.65">
+      <div id="rc-inst-msg" style="background:color-mix(in srgb,var(--red) 7%,transparent);border:1px solid color-mix(in srgb,var(--red) 30%,transparent);border-radius:var(--r-3);padding:16px 16px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.65">
         Tu es dans le navigateur intégré de <b id="rc-inst-app" style="color:var(--text)">cette application</b>.<br>
         <b style="color:var(--text)">Il ne sait pas installer RepCore.</b>
       </div>
@@ -820,7 +820,7 @@ const COACH_PHOTO='icons/coach.jpg';
          trois points et les trois trais ne portent pas le même mot d'un
          téléphone à l'autre. -->
     <div id="rc-inst-menu" class="rc-inst-bloc" style="display:none;margin-top:24px;width:100%;max-width:380px">
-      <div style="display:flex;align-items:center;gap:14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.13);border-radius:var(--r-3);padding:14px 16px">
+      <div style="display:flex;align-items:center;gap:14px;background:color-mix(in srgb,var(--text) 4%,transparent);border:1px solid color-mix(in srgb,var(--text) 13%,transparent);border-radius:var(--r-3);padding:14px 16px">
         <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#E02020" stroke-width="2.2" stroke-linecap="square" aria-hidden="true" style="flex-shrink:0">
           <circle cx="12" cy="5" r="1.4" fill="#E02020" stroke="none"></circle>
           <circle cx="12" cy="12" r="1.4" fill="#E02020" stroke="none"></circle>
@@ -837,14 +837,14 @@ const COACH_PHOTO='icons/coach.jpg';
 
     <!-- C et D partagent ce bouton : seuls son texte et son geste changent. -->
     <button class="hv-rouge" id="rc-inst-principal" onclick="rcInstallAgir()"
-      style="display:none;width:100%;padding:20px;background:#D21A1A;color:#fff;border:none;font-family:var(--pile-titre);font-size:var(--fs-md);font-weight:400;letter-spacing:4px;cursor:pointer;text-transform:uppercase;transition:background var(--t-1);box-shadow:var(--e-inset),var(--glow-red)"
+      style="display:none;width:100%;padding:20px;background:var(--red);color:#fff;border:none;font-family:var(--pile-titre);font-size:var(--fs-md);font-weight:400;letter-spacing:4px;cursor:pointer;text-transform:uppercase;transition:background var(--t-1);box-shadow:var(--e-inset),var(--glow-red)"
      >INSTALLER REPCORE</button>
 
     <!-- SUR ORDINATEUR, l'installation locale reste possible quand le
          navigateur l'offre — mais en second rang : le message principal reste
          « prends ton téléphone ». -->
     <button class="hv-teinte" id="rc-inst-ici" onclick="rcInstallLocal()"
-      style="display:none;width:100%;margin-top:12px;padding:14px;background:transparent;color:#E02020;border:1px solid rgba(224,32,32,.35);font-family:var(--pile-titre);font-size:var(--fs-sm);font-weight:400;letter-spacing:3px;cursor:pointer;text-transform:uppercase;transition:background var(--t-1)"
+      style="display:none;width:100%;margin-top:12px;padding:14px;background:transparent;color:var(--red);border:1px solid color-mix(in srgb,var(--red) 35%,transparent);font-family:var(--pile-titre);font-size:var(--fs-sm);font-weight:400;letter-spacing:3px;cursor:pointer;text-transform:uppercase;transition:background var(--t-1)"
      >Installer sur cet ordinateur</button>
 
     <!-- ── CHROME, EN SECOND RANG ET SUR LA SEULE BRANCHE S ─────────────
@@ -901,7 +901,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-welcome" class="screen carbon-bg wel" style="flex-direction:column;position:relative;overflow-x:hidden">
 
   <!-- Rougeur subtile haut-centre -->
-  <div style="position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:min(500px,100%);height:400px;background:radial-gradient(ellipse at 50% 0%,rgba(224,32,32,.13),transparent 62%);pointer-events:none;z-index:0"></div>
+  <div style="position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:min(500px,100%);height:400px;background:radial-gradient(ellipse at 50% 0%,color-mix(in srgb,var(--red) 13%,transparent),transparent 62%);pointer-events:none;z-index:0"></div>
 
   <!-- Diagonales de texture -->
   <div style="position:absolute;inset:0;background-image:none;pointer-events:none;z-index:0"></div>
@@ -992,7 +992,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-coach-entry" class="screen carbon-bg" style="position:relative">
 
   <!-- Topbar — bandeau uni, ombre portée vers le bas pour séparation visuelle -->
-  <div class="topbar" style="border-bottom:1px solid rgba(255,255,255,.22);box-shadow:var(--e2);position:relative;z-index:2;background:#090909">
+  <div class="topbar" style="border-bottom:1px solid color-mix(in srgb,var(--text) 22%,transparent);box-shadow:var(--e2);position:relative;z-index:2;background:var(--bg)">
     <!-- R21 — retour force : tunnel d'entree, on revient a l'accueil du tunnel et non a un ecran de session. -->
     <button class="back-btn" onclick="go('s-welcome')">←</button>
     <div style="height:32px;display:flex;align-items:center;gap:6px">
@@ -1030,7 +1030,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- CRÉER MON COMPTE -->
     <div class="hv-bord" onclick="goRegisterCoach()" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-4);padding:20px;cursor:pointer;transition:border-color var(--t-2)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="display:flex;align-items:center;gap:14px">
-        <div style="width:44px;height:44px;border-radius:var(--r-3);background:#0d0d0d;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div>
+        <div style="width:44px;height:44px;border-radius:var(--r-3);background:var(--surface-0);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div>
         <div>
           <div style="font-weight:800;font-size:var(--fs-lg);letter-spacing:.5px">CRÉER MON COMPTE</div>
           <!-- CE COMMENTAIRE DISAIT L'INVERSE, et il se déclarait faisant foi :
@@ -1071,7 +1071,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
 
     <!-- Info box rouge -->
-    <div style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.24);border-radius:var(--r-3);padding:14px 16px;margin-top:4px">
+    <div style="background:color-mix(in srgb,var(--red) 7%,transparent);border:1px solid color-mix(in srgb,var(--red) 24%,transparent);border-radius:var(--r-3);padding:14px 16px;margin-top:4px">
       <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:var(--red-text);font-weight:700;margin-bottom:6px">ESPACE COACH : TARIFS</div>
       <!-- Cet écran est lu AVANT l'inscription, donc par de futurs coachs affiliés.
            L'encart disait ce que le COACH paie, jamais ce que ses athlètes
@@ -1088,7 +1088,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-athlete-entry" class="screen carbon-bg" style="position:relative">
 
   <!-- Topbar — bandeau uni avec séparation visuelle identique coach -->
-  <div class="topbar" style="border-bottom:1px solid rgba(255,255,255,.22);box-shadow:var(--e2);position:relative;z-index:2;background:#090909">
+  <div class="topbar" style="border-bottom:1px solid color-mix(in srgb,var(--text) 22%,transparent);box-shadow:var(--e2);position:relative;z-index:2;background:var(--bg)">
     <!-- R21 — retour force : tunnel d'entree, on revient a l'accueil du tunnel et non a un ecran de session. -->
     <button class="back-btn" onclick="go('s-welcome')">←</button>
     <div style="height:32px;display:flex;align-items:center;gap:6px">
@@ -1145,7 +1145,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- Carte B : déjà inscrit -->
     <div class="hv-bord" onclick="go('s-login')" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-4);padding:20px;cursor:pointer;transition:border-color var(--t-2)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="display:flex;align-items:center;gap:14px">
-        <div style="width:44px;height:44px;border-radius:var(--r-3);background:#0d0d0d;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+        <div style="width:44px;height:44px;border-radius:var(--r-3);background:var(--surface-0);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
         <div>
           <div style="font-weight:800;font-size:var(--fs-lg);letter-spacing:.5px">J'AI DÉJÀ UN COMPTE</div>
           <div class="sub" style="font-size:var(--fs-xs);margin-top:4px">Me connecter et reprendre ma progression</div>
@@ -1160,7 +1160,7 @@ const COACH_PHOTO='icons/coach.jpg';
          aucune donnée personnelle n'est demandée. -->
     <div class="hv-bord" onclick="goAvecRetour('s-subscribe');loadSubscribePage()" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-4);padding:20px;cursor:pointer;transition:border-color var(--t-2)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="display:flex;align-items:center;gap:14px">
-        <div style="width:44px;height:44px;border-radius:var(--r-3);background:#0d0d0d;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div>
+        <div style="width:44px;height:44px;border-radius:var(--r-3);background:var(--surface-0);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div>
         <div>
           <div style="font-weight:800;font-size:var(--fs-lg);letter-spacing:.5px">JE N'AI PAS DE CODE</div>
           <!-- ⚠ L'ESSAI EST ANNONCE ICI, ET LE PRIX RESTE. Annoncer l'un sans
@@ -1176,7 +1176,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
 
     <!-- Info box athlète -->
-    <div style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.24);border-radius:var(--r-3);padding:14px 16px;margin-top:4px">
+    <div style="background:color-mix(in srgb,var(--red) 7%,transparent);border:1px solid color-mix(in srgb,var(--red) 24%,transparent);border-radius:var(--r-3);padding:14px 16px;margin-top:4px">
       <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:var(--red-text);font-weight:700;margin-bottom:6px">ESPACE ATHLÈTE</div>
       <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.82);line-height:1.6">Avec un code fourni par ton coach, l'accès est compris dans son suivi. Sans code, <span data-promesse-athlete></span> L'accès en autonomie coûte ensuite <span data-prix-autonomie></span>, sur douze mois d'engagement.</div>
     </div>
@@ -1206,7 +1206,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <div><label for="l-pwd">Mot de passe</label><input type="password" id="l-pwd" placeholder="••••••••"></div>
     <div id="l-err" style="color:var(--red-light);font-size:var(--fs-md);display:none"></div>
     <button class="btn btn-red" style="margin-top:8px;letter-spacing:2px" onclick="doLogin()">Se connecter</button>
-    <p class="sub" style="text-align:center;margin-top:12px"><span style="cursor:pointer;font-size:var(--fs-md);color:#f97316;font-weight:700;text-decoration:underline;text-decoration-color:#f97316" onclick="forgotPassword()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">Mot de passe oublié ?</span></p>
+    <p class="sub" style="text-align:center;margin-top:12px"><span style="cursor:pointer;font-size:var(--fs-md);color:var(--orange);font-weight:700;text-decoration:underline;text-decoration-color:var(--orange)" onclick="forgotPassword()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">Mot de passe oublié ?</span></p>
     <p class="sub" style="text-align:center;margin-top:8px">Pas de compte ? <span class="red" style="cursor:pointer;font-weight:700;color:var(--red-light)" onclick="goRegisterAthlete()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">Créer un compte</span></p>
     <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:16px">
       <p class="sub" style="text-align:center;font-size:var(--fs-xs);margin-bottom:10px;color:var(--text-dim)">Tu as changé de navigateur ou d'appareil ?</p>
@@ -1219,7 +1219,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
     <div id="new-pwd-recovery" style="display:none;margin-top:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-4);padding:16px">
       <div style="font-size:var(--fs-sm);font-weight:800;letter-spacing:1px;margin-bottom:10px">PREMIÈRE CONNEXION SUR CET APPAREIL</div>
-      <p style="font-size:var(--fs-xs);color:#888;line-height:1.6;margin-bottom:12px">À utiliser seulement si tu n'as <b style="color:#bbb">jamais réussi</b> à te connecter, nulle part. Tes données sont rapatriées depuis le cloud, et le mot de passe saisi ici devient celui de ton compte.<br><br>Si ton compte est déjà connu, ce bouton n'y changera rien : passe par « Mot de passe oublié ? » ci-dessus.</p>
+      <p style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">À utiliser seulement si tu n'as <b style="color:#bbb">jamais réussi</b> à te connecter, nulle part. Tes données sont rapatriées depuis le cloud, et le mot de passe saisi ici devient celui de ton compte.<br><br>Si ton compte est déjà connu, ce bouton n'y changera rien : passe par « Mot de passe oublié ? » ci-dessus.</p>
       <div style="margin-bottom:8px"><label style="font-size:var(--fs-xs)">Email</label><input id="rec-email" type="email" placeholder="ton@email.com"></div>
       <div style="margin-bottom:8px"><label style="font-size:var(--fs-xs)">Mot de passe à définir</label><input id="rec-pwd" type="password" placeholder="Min. 6 caractères"></div>
       <div id="rec-err" style="color:var(--red-light);font-size:var(--fs-sm);display:none;margin-bottom:8px"></div>
@@ -1301,7 +1301,7 @@ const COACH_PHOTO='icons/coach.jpg';
       aujourd'hui. Tes données déjà enregistrées ne sont pas touchées.
     </div>
     <div style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2)">
-      <input type="checkbox" id="cs-health" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
+      <input type="checkbox" id="cs-health" style="margin-top:2px;flex-shrink:0;accent-color:var(--red);width:16px;height:16px;cursor:pointer">
       <label for="cs-health" style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6;cursor:pointer">Je consens explicitement au traitement de mes <strong style="color:#ccc">données de santé</strong>, notamment poids, mensurations, photos corporelles, cycle menstruel, sommeil, stress, caféine, compléments, pas quotidiens et âge pour mon suivi sportif. La liste complète figure au §2 de la <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--red-light)">politique de confidentialité</a>.</label>
     </div>
     <div id="cs-err" style="color:var(--red-light);font-size:var(--fs-sm);display:none"></div>
@@ -1436,7 +1436,7 @@ const COACH_PHOTO='icons/coach.jpg';
          12 px d'écart — et chacun porte déjà son propre fond et sa bordure,
          le conteneur en ajoutait un troisième par-dessus. -->
     <div style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2)">
-      <input type="checkbox" id="r-cgu" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
+      <input type="checkbox" id="r-cgu" style="margin-top:2px;flex-shrink:0;accent-color:var(--red);width:16px;height:16px;cursor:pointer">
       <label for="r-cgu" style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6;cursor:pointer">J'ai lu et j'accepte la <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--red-text);text-decoration:underline;font-weight:600">politique de confidentialité</a> et les <a href="../legal.html" target="_blank" rel="noopener" style="color:var(--red-text);text-decoration:underline;font-weight:600">mentions légales</a>.</label>
     </div>
     <!-- ⚠ LE CONSENTEMENT SANTE A QUITTE CE FORMULAIRE, et c'est le cur du
@@ -1526,7 +1526,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <p class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:20px">Envoie ce lien à ton athlète par WhatsApp ou SMS.<br>Il le colle dans le champ code → lié instantanément.</p>
 
     <!-- Info code court -->
-    <div style="background:#111;border:1px solid var(--surface-2);border-radius:var(--r-3);padding:12px;text-align:left;margin-bottom:20px">
+    <div style="background:var(--surface-1);border:1px solid var(--surface-2);border-radius:var(--r-3);padding:12px;text-align:left;margin-bottom:20px">
       <div style="font-size:var(--fs-xs);color:var(--text-dim);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px">Code court (même appareil uniquement)</div>
       <p style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin:0">Le code GCP ci-dessus ne fonctionne que si le coach et l'athlète utilisent le même téléphone/ordi. Pour un autre appareil, utilise le lien d'invitation.</p>
     </div>
@@ -1552,13 +1552,13 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
     <div style="margin-bottom:16px">
       <input id="cc-code" type="text" placeholder="Colle ton code RC-XXXX-XXXX ou le lien reçu de ton coach"
-        style="width:100%;padding:14px;background:#111;border:1px solid var(--border);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);box-sizing:border-box;letter-spacing:1px"
+        style="width:100%;padding:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);box-sizing:border-box;letter-spacing:1px"
         oninput="var v=this.value;if(!v.startsWith('http')&&!v.startsWith('RCACCESS')&&!v.startsWith('RCLINK'))this.value=v.toUpperCase()">
       <!-- Invitation reconnue. Rempli par _annoncerInvitation quand le lien du
            coach est ouvert depuis une session deja active : le code est
            pré-rempli au-dessus, il ne reste qu'à valider. -->
       <div id="cc-invit" style="display:none;margin-top:10px;font-size:var(--fs-xs);line-height:1.6;
-        border-radius:var(--r-3);padding:10px 12px;background:linear-gradient(168deg,#131313,#0b0b0b);
+        border-radius:var(--r-3);padding:10px 12px;background:linear-gradient(168deg,var(--surface-1),var(--surface-0));
         border:1px solid var(--border);border-left:1px solid var(--border);color:var(--text-strong)"></div>
       <div id="cc-err" class="err" style="display:none;margin-top:8px"></div>
     </div>
@@ -1711,7 +1711,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- Mobile header -->
     <!-- 12px et non 14 : c'est le padding propre à cet en-tête. Le retrait
          d'encoche s'ajoute à l'existant, il ne le redéfinit pas. -->
-    <div id="ch-mobile-header" style="background:#090909;border-bottom:1px solid var(--red);padding:12px 20px;padding-top:calc(12px + env(safe-area-inset-top,0px));display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+    <div id="ch-mobile-header" style="background:var(--bg);border-bottom:1px solid var(--red);padding:12px 20px;padding-top:calc(12px + env(safe-area-inset-top,0px));display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
       <div style="display:flex;align-items:center;gap:10px">
         <img src="./icons/logo.webp" style="display:block;width:52px;height:52px;flex-shrink:0">
         <div>
@@ -1721,14 +1721,14 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
       </div>
       <div style="display:flex;gap:8px">
-        <button onclick="ouvrirComptes()" style="background:none;border:1px solid rgba(255,255,255,.1);color:var(--sub);padding:8px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer" title="Changer de compte">⇄</button>
+        <button onclick="ouvrirComptes()" style="background:none;border:1px solid color-mix(in srgb,var(--text) 10%,transparent);color:var(--sub);padding:8px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer" title="Changer de compte">⇄</button>
         <button class="hv-code" onclick="showCoachCode()" style="background:var(--red-bg);border:1px solid var(--red);color:var(--red-light);padding:8px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:2px;text-transform:uppercase;transition:background var(--t-1)">CODE</button>
-        <button class="hv-texte" onclick="logout()" style="background:none;border:1px solid rgba(255,255,255,.1);color:var(--sub);padding:8px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;transition:color var(--t-1)">&#8592;</button>
+        <button class="hv-texte" onclick="logout()" style="background:none;border:1px solid color-mix(in srgb,var(--text) 10%,transparent);color:var(--sub);padding:8px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;transition:color var(--t-1)">&#8592;</button>
       </div>
     </div>
 
     <!-- Mobile tabs (hidden on desktop) -->
-    <div id="coach-tabs-bar" style="display:flex;border-bottom:1px solid #1a0000;flex-shrink:0;background:#080808">
+    <div id="coach-tabs-bar" style="display:flex;border-bottom:1px solid #1a0000;flex-shrink:0;background:var(--bg)">
       <button id="ct-tab-dashboard" onclick="coachTab('dashboard')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid var(--red);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;cursor:pointer">ATHLÈTES</button>
       <button id="ct-tab-codes" onclick="coachTab('codes')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;cursor:pointer">CODES</button>
       <button id="ct-tab-monetisation" onclick="coachTab('monetisation')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;cursor:pointer">PAIEMENTS</button>
@@ -1900,7 +1900,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <!-- Alerte anti-falaise et propositions de palier. Jamais bloquante,
              jamais une bascule : elle DIT, le coach decide. -->
         <div id="ch-alerte-palier"></div>
-        <button onclick="openCoachPrograms()" class="content-card ch-nav-large" style="width:100%;margin-bottom:16px;padding:14px 16px;background:linear-gradient(135deg,#0d0d0d,#1a0000);border:1px solid #2a0000;border-left:1px solid var(--border);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px;text-align:left">
+        <button onclick="openCoachPrograms()" class="content-card ch-nav-large" style="width:100%;margin-bottom:16px;padding:14px 16px;background:linear-gradient(135deg,var(--surface-0),#1a0000);border:1px solid var(--red-bg-2);border-left:1px solid var(--border);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px;text-align:left">
           <span>MES PROGRAMMES (H/F)</span>
           <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
         </button>
@@ -1978,13 +1978,13 @@ const COACH_PHOTO='icons/coach.jpg';
             <div style="background:#0a1420;border:1px solid #1c4266;border-radius:var(--r-3);padding:16px">
               <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;margin-bottom:8px">INVITATION GÉNÉRÉE</div>
               <div id="ci-code-val" style="font-family:monospace;font-size:var(--fs-lg);color:#7fb3e8;letter-spacing:2px;margin-bottom:10px;background:#050b14;padding:10px;border-radius:var(--r-2);text-align:center"></div>
-              <div style="font-size:var(--fs-sm);color:#aaa;margin-bottom:14px" id="ci-expiry-info"></div>
+              <div style="font-size:var(--fs-sm);color:var(--text-mid);margin-bottom:14px" id="ci-expiry-info"></div>
               <button class="btn btn-outline" onclick="_copierInviteCoach()" style="font-size:var(--fs-sm);letter-spacing:1px">Copier l'invitation</button>
             </div>
           </div>
         </div>
 
-        <div id="sc-generate-card" style="background:var(--dark);border:1px solid #2a0000;border-radius:var(--r-4);padding:20px;margin-bottom:24px">
+        <div id="sc-generate-card" style="background:var(--dark);border:1px solid var(--red-bg-2);border-radius:var(--r-4);padding:20px;margin-bottom:24px">
           <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);letter-spacing:2px;margin-bottom:14px">NOUVEAU CODE D'ACCÈS</div>
           <div style="margin-bottom:12px"><label for="sc-name">Nom de l'élève</label><input id="sc-name" placeholder="Ex: Marie Martin"></div>
           <div style="margin-bottom:14px">
@@ -2001,7 +2001,7 @@ const COACH_PHOTO='icons/coach.jpg';
             <div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:var(--r-3);padding:16px">
               <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;margin-bottom:8px">CODE ACCÈS GÉNÉRÉ</div>
               <div id="sc-code-val" style="font-family:monospace;font-size:var(--fs-xs);color:var(--green);word-break:break-all;line-height:1.6;margin-bottom:10px;background:#050f05;padding:10px;border-radius:var(--r-2)"></div>
-              <div style="font-size:var(--fs-sm);color:#aaa;margin-bottom:14px" id="sc-expiry-info"></div>
+              <div style="font-size:var(--fs-sm);color:var(--text-mid);margin-bottom:14px" id="sc-expiry-info"></div>
               <button class="btn btn-outline" onclick="copyStudentCode()" style="font-size:var(--fs-sm);letter-spacing:1px">Copier et envoyer par WhatsApp</button>
             </div>
           </div>
@@ -2009,7 +2009,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <!-- Notice pour coachs non-créateur — géré dans loadStudentCodes() -->
         <div id="sc-noncreatormsg" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-4);padding:20px;margin-bottom:24px">
           <div style="font-size:var(--fs-xs);font-weight:800;color:var(--info);letter-spacing:2px;margin-bottom:10px">ACCÈS ÉLÈVES</div>
-          <p style="font-size:var(--fs-sm);color:#aaa;line-height:1.7;margin:0">Chaque code que tu génères ouvre l'accès à ton athlète pour la durée choisie, jusqu'à 12 mois. Passé ce délai, tu lui en donnes un nouveau.</p>
+          <p style="font-size:var(--fs-sm);color:var(--text-mid);line-height:1.7;margin:0">Chaque code que tu génères ouvre l'accès à ton athlète pour la durée choisie, jusqu'à 12 mois. Passé ce délai, tu lui en donnes un nouveau.</p>
         </div>
         <div>
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
@@ -2191,7 +2191,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div id="coach-contact-wa" style="display:none">
             <div style="display:flex;gap:8px;margin-bottom:8px">
               <input id="coach-phone-input" type="tel" placeholder="+33 6 12 34 56 78" style="flex:1;font-size:var(--fs-md);padding:12px 14px">
-              <button onclick="saveCoachPhone()" style="background:#22c55e;border:none;color:#000;border-radius:var(--r-1);padding:12px 20px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;white-space:nowrap">Enregistrer</button>
+              <button onclick="saveCoachPhone()" style="background:var(--green);border:none;color:#000;border-radius:var(--r-1);padding:12px 20px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;white-space:nowrap">Enregistrer</button>
             </div>
             <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:8px">
               <input type="checkbox" id="coach-contact-consent" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px" onchange="basculerConsentContact(this.checked)">
@@ -2370,7 +2370,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
 
         <!-- Zone dangereuse : self-service -->
-        <div style="background:#0f0000;border:1px solid #2a0000;border-radius:var(--r-4);padding:20px;margin-top:24px;margin-bottom:8px">
+        <div style="background:var(--red-bg);border:1px solid var(--red-bg-2);border-radius:var(--r-4);padding:20px;margin-top:24px;margin-bottom:8px">
           <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:14px">Zone dangereuse</div>
 
           <div style="margin-bottom:16px">
@@ -2389,7 +2389,7 @@ const COACH_PHOTO='icons/coach.jpg';
                exportMyData RESTE dans le code : l ecran de l athlete,
                s-athlete-profile, s en sert encore. Arbitrage de Kevin,
                26/08/2026. -->
-          <div style="border-top:1px solid #2a0000;padding-top:16px">
+          <div style="border-top:1px solid var(--red-bg-2);padding-top:16px">
             <div style="font-weight:700;font-size:var(--fs-md);margin-bottom:4px">Supprimer mon compte</div>
             <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px;line-height:1.5">Action irréversible. Conformément au RGPD (Art. 17), toutes tes données personnelles seront effacées. Les données financières sont conservées 5 ans (obligation légale).</div>
             <button onclick="requestAccountDeletion()" style="width:100%;background:none;border:1px solid #600000;border-radius:var(--r-2);padding:10px;color:#cc0000;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1px">Supprimer mon compte définitivement</button>
@@ -2419,7 +2419,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- Pied légal du tableau de bord coach. Il est ICI et non dans
          #ch-sidebar : celle-ci est en display:none sous 900 px, donc sur
          mobile — la plateforme réelle — le coach ne verrait jamais le lien. -->
-    <div style="flex-shrink:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));border-top:1px solid #141414;background:#080808;text-align:center;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.9">
+    <div style="flex-shrink:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));border-top:1px solid #141414;background:var(--bg);text-align:center;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.9">
       <a href="../legal.html" target="_blank" rel="noopener" style="color:var(--text-faint);text-decoration:underline">Mentions légales</a>
       &nbsp;·&nbsp;
       <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--text-faint);text-decoration:underline">Confidentialité</a>
@@ -2466,7 +2466,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <span class="ccd-tu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M20.5 14.6A8.5 8.5 0 1 1 9.4 3.5a6.6 6.6 0 0 0 11.1 11.1Z"/></svg></span>
       <span class="ccd-tu-lib">Lifestyle</span>
     </button>
-    <button class="ccd-tuile" data-vue="donnees" onclick="ccdVue('donnees')" style="--tu:#22c55e">
+    <button class="ccd-tuile" data-vue="donnees" onclick="ccdVue('donnees')" style="--tu:var(--green)">
       <span class="ccd-tu-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M4 3v17h17"/><path d="M8 17v-5M12.5 17V8M17 17v-7"/></svg></span>
       <span class="ccd-tu-lib">Données</span>
     </button>
@@ -2966,7 +2966,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </section>
       </section>
       <div style="margin-top:40px;padding-top:20px;border-top:1px solid var(--surface-2)">
-        <button onclick="confirmDeleteClient()" style="width:100%;padding:12px;background:transparent;border:1px solid #3a1500;color:#f97316;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer">Retirer cet élève du suivi</button>
+        <button onclick="confirmDeleteClient()" style="width:100%;padding:12px;background:transparent;border:1px solid #3a1500;color:var(--orange);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:var(--r-3);cursor:pointer">Retirer cet élève du suivi</button>
         <!-- LA SUPPRESSION EST SOUS LE RETRAIT, ET PLUS DISCRETE QUE LUI.
              L'ordre porte la recommandation : « retirer » est le geste normal,
              « effacer » celui qu'on ne fait qu'une fois. La phrase sous le
@@ -3066,7 +3066,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <input id="cpt-name" placeholder="Nom du programme" style="flex:1;background:transparent;border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;outline:none;min-width:0;margin:0 8px" onchange="saveCoachProgTemplateName()">
     <button onclick="saveCoachProgTemplate()" style="background:var(--red);border:none;color:var(--text);padding:8px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:var(--r-1)">Enregistrer</button>
   </div>
-  <div style="display:flex;border-bottom:1px solid #1a0000;flex-shrink:0;background:#080808">
+  <div style="display:flex;border-bottom:1px solid #1a0000;flex-shrink:0;background:var(--bg)">
     <button id="cpt-tab-h" onclick="loadProgTemplateSlots('H')" style="flex:1;padding:12px 4px;background:none;border:none;border-bottom:2px solid var(--red);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;cursor:pointer">Homme</button>
     <button id="cpt-tab-f" onclick="loadProgTemplateSlots('F')" style="flex:1;padding:12px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;cursor:pointer">Femme</button>
   </div>
@@ -3106,7 +3106,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar">
     <button class="back-btn" onclick="retourDe('s-coach-decharge','s-coach-home')">←</button>
     <span class="topbar-title">Décharge groupée</span>
-    <button id="cdg-appliquer" onclick="confirmDechargeGroupee()" disabled style="background:#222;color:var(--text-dim);border:none;padding:8px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:not-allowed;letter-spacing:1px;border-radius:var(--r-1)">Enregistrer</button>
+    <button id="cdg-appliquer" onclick="confirmDechargeGroupee()" disabled style="background:var(--surface-3);color:var(--text-dim);border:none;padding:8px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:not-allowed;letter-spacing:1px;border-radius:var(--r-1)">Enregistrer</button>
     <!-- Le retrait groupe : meme selection, meme recapitulatif nomme, meme
          rapport d echecs. Un booleen distingue les deux gestes, il n y a pas
          deux mecanismes de decharge a tenir d accord. -->
@@ -3231,7 +3231,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <!-- La couleur de la phase se pose UNE FOIS, sur --c, et redescend sur
              la pastille et le halo de l'icône : deux orange écrits à la main
              finiraient par diverger. -->
-        <div class="pr-phase" style="--c:#f97316">
+        <div class="pr-phase" style="--c:var(--orange)">
           <div class="pr-sect">
             <span class="pr-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:15px;height:15px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg></span>
             <label class="pr-lbl" for="prog-warmup">Échauffement</label>
@@ -3326,7 +3326,7 @@ const COACH_PHOTO='icons/coach.jpg';
              corrige aucun chiffre. -->
       </div>
     </div>
-    <div id="calc-e1rm-display" style="background:linear-gradient(135deg,#1a0000,#2a0000);border:1px solid #7f1d1d;border-radius:var(--r-3);padding:14px;margin-bottom:16px;display:none">
+    <div id="calc-e1rm-display" style="background:linear-gradient(135deg,#1a0000,var(--red-bg-2));border:1px solid #7f1d1d;border-radius:var(--r-3);padding:14px;margin-bottom:16px;display:none">
       <!-- R24 — « Force max estimée » et non « 1RM estimé » : le mot du lexique.
            Le ⓘ est pose par openCalc dans [data-lex], comme sur la fiche coach :
            un gabarit statique ne peut pas appeler rcInfo. -->
@@ -3386,7 +3386,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:20px">
       <label for="cr-son-case" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0">
         <input type="checkbox" id="cr-son-case" onchange="basculerSonRepos()"
-          style="width:18px;height:18px;accent-color:#E02020;flex-shrink:0;margin-top:2px;cursor:pointer">
+          style="width:18px;height:18px;accent-color:var(--red);flex-shrink:0;margin-top:2px;cursor:pointer">
         <span style="flex:1;min-width:0">
           <span style="display:block;font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Son de fin de repos</span>
           <span style="display:block;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Un bip court quand le minuteur arrive à zéro,
@@ -3402,7 +3402,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:20px">
       <label for="cr-ecran-case" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0">
         <input type="checkbox" id="cr-ecran-case" onchange="basculerEcranAllume()" checked
-          style="width:18px;height:18px;accent-color:#E02020;flex-shrink:0;margin-top:2px;cursor:pointer">
+          style="width:18px;height:18px;accent-color:var(--red);flex-shrink:0;margin-top:2px;cursor:pointer">
         <span style="flex:1;min-width:0">
           <span style="display:block;font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Écran allumé pendant la séance</span>
           <span style="display:block;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Le téléphone ne se met pas en veille pendant
@@ -3500,7 +3500,7 @@ const COACH_PHOTO='icons/coach.jpg';
            avant la carte du coach, pour rien : les deux emplacements qui les
            separent — l'echeance d'acces et le mot au coach — sont vides la
            plupart du temps. -->
-      <div class="clh-in clh-in-1" style="margin-top:-12px;margin-bottom:3px">
+      <div class="clh-in clh-in-1" style="margin-top:-12px;margin-bottom:4px">
         <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
         <h1 id="clh-greeting" style="font-size:var(--fs-2xl);line-height:1.05;font-weight:400;letter-spacing:1px"></h1>
         <p id="clh-phrase" style="margin-top:2px;font-size:var(--fs-sm);line-height:1.4;color:var(--text-dim)"></p>
@@ -3656,7 +3656,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 
       <!-- DÉMARRER SÉANCE — hero card -->
-      <div id="clh-hero" class="clh-in clh-in-3" style="background:linear-gradient(160deg,#1a0303,#120000 55%,#0b0000);border:1px solid #3a0000;border-left:1px solid var(--border);border-radius:14px;padding:10px 20px 20px;margin-bottom:16px;position:relative;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 30px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.05)">
+      <div id="clh-hero" class="clh-in clh-in-3" style="background:linear-gradient(160deg,#1a0303,var(--red-bg) 55%,var(--red-bg));border:1px solid #3a0000;border-left:1px solid var(--border);border-radius:14px;padding:10px 20px 20px;margin-bottom:16px;position:relative;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 30px color-mix(in srgb,var(--red) 22%,transparent),inset 0 1px 0 rgba(255,255,255,.05)">
         <div style="position:absolute;right:0;top:0;width:3px;height:100%;background:var(--red)"></div>
         <div class="eyebrow eyebrow-act" style="margin-bottom:8px">Entraînement</div>
         <!-- ⚠ LA COUPURE EST ECRITE, elle n'est pas subie. Le libelle faisait
@@ -3721,7 +3721,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
 
       <!-- REPRISE BILAN EN COURS -->
-      <div id="clh-resume-bilan" style="display:none;background:linear-gradient(135deg,#0a1420,#04080f);border:1px solid #1c4266;border-radius:var(--r-md);padding:14px 16px;margin-bottom:16px;cursor:pointer" onclick="bilResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div id="clh-resume-bilan" style="display:none;background:linear-gradient(135deg,#0a1420,var(--bg));border:1px solid #1c4266;border-radius:var(--r-md);padding:14px 16px;margin-bottom:16px;cursor:pointer" onclick="bilResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <!-- accent bleu propre à cette carte : var(--info) est ambre et servirait
              déjà la carte « 1er bilan en attente » juste en dessous, les deux
              deviendraient indistinguables -->
@@ -4389,7 +4389,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- CONFIRMATION MAISON. Meme forme que la feuille de pause juste en
      dessous, pour que la question ne surgisse pas d un autre monde. -->
 <div id="rc-confirm" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal-2);align-items:flex-end;justify-content:center">
-  <div style="background:linear-gradient(180deg,#151515,#0e0e0e);border-top:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom,0px));width:100%;max-width:480px;box-shadow:0 -12px 40px rgba(0,0,0,.7)">
+  <div style="background:linear-gradient(180deg,var(--surface-2),var(--surface-0));border-top:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom,0px));width:100%;max-width:480px;box-shadow:0 -12px 40px rgba(0,0,0,.7)">
     <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:3px;color:var(--red-text);margin-bottom:10px">REPCORE</div>
     <div id="rc-confirm-titre" style="white-space:pre-line;font-size:var(--fs-lg);font-weight:800;color:var(--text);margin-bottom:6px"></div>
     <div id="rc-confirm-texte" style="white-space:pre-line;font-size:var(--fs-sm);color:var(--sub);line-height:1.65;margin-bottom:20px"></div>
@@ -4411,7 +4411,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 <!-- SAISIE. Remplace prompt(), que Chrome éteint avec les autres boîtes. -->
 <div id="rc-saisie" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal-2);align-items:flex-end;justify-content:center">
-  <div style="background:linear-gradient(180deg,#151515,#0e0e0e);border-top:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom,0px));width:100%;max-width:480px">
+  <div style="background:linear-gradient(180deg,var(--surface-2),var(--surface-0));border-top:1px solid var(--border);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom,0px));width:100%;max-width:480px">
     <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:3px;color:var(--red-text);margin-bottom:10px">REPCORE</div>
     <div id="rc-saisie-titre" style="font-size:var(--fs-lg);font-weight:800;color:var(--text);margin-bottom:6px;white-space:pre-line"></div>
     <div id="rc-saisie-texte" style="font-size:var(--fs-sm);color:var(--sub);line-height:1.65;margin-bottom:14px;white-space:pre-line"></div>
@@ -4448,7 +4448,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="font-size:var(--fs-sm);color:var(--text-faint);margin-bottom:20px">Que veux-tu faire ?</div>
     <div style="display:flex;flex-direction:column;gap:10px">
       <button onclick="_feuilleFermer('wo-pause-modal')" style="padding:14px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">Continuer la séance</button>
-      <button onclick="confirmPauseWorkout()" style="padding:14px;background:#111;border:1px solid var(--border);border-radius:var(--r-3);color:#aaa;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">Mettre en pause</button>
+      <button onclick="confirmPauseWorkout()" style="padding:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);color:var(--text-mid);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">Mettre en pause</button>
       <button onclick="cancelWorkout()" style="padding:14px;background:#1a0000;border:1px solid var(--red);border-radius:var(--r-3);color:#fca5a5;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">✕ Annuler la séance</button>
     </div>
   </div>
@@ -4546,12 +4546,12 @@ const COACH_PHOTO='icons/coach.jpg';
   <div id="wo-repos" style="display:none;flex-shrink:0"></div>
   <div class="wo-barre" style="padding:12px 20px calc(12px + env(safe-area-inset-bottom, 0px));border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
     <button class="btn btn-outline" id="wo-prev-btn" onclick="woNav(-1)" style="flex:none;width:44px">←</button>
-    <button onclick="confirmPauseWorkout()" title="Retour à l'accueil (séance sauvegardée)" style="flex:none;width:44px;align-self:stretch;background:#111;border:1px solid var(--border);border-radius:var(--r-1);color:var(--sub);cursor:pointer;display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="17" height="17"><path d="M3 10.5 L12 3 L21 10.5"/><path d="M5.5 9 V20 a1,1 0 0 0 1,1 H9.5 V14.5 h5 V21 H17.5 a1,1 0 0 0 1,-1 V9"/></svg></button>
+    <button onclick="confirmPauseWorkout()" title="Retour à l'accueil (séance sauvegardée)" style="flex:none;width:44px;align-self:stretch;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-1);color:var(--sub);cursor:pointer;display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="17" height="17"><path d="M3 10.5 L12 3 L21 10.5"/><path d="M5.5 9 V20 a1,1 0 0 0 1,1 H9.5 V14.5 h5 V21 H17.5 a1,1 0 0 0 1,-1 V9"/></svg></button>
     <button class="btn btn-red" id="wo-next-btn" onclick="woNav(1)" style="flex:1;white-space:nowrap;font-size:var(--fs-sm);letter-spacing:1px;padding-left:8px;padding-right:8px;min-width:0;overflow:hidden;text-overflow:ellipsis"><span class="wo-lbl-long">Exercice suivant</span><span class="wo-lbl-court">Suivant</span> →</button>
     <!-- ICONE SEULE. Le libelle « Terminer » se confondait avec « Terminer la
          seance » du bouton principal, juste a cote : deux mots identiques pour
          deux gestes differents. L'infobulle et l'aria-label portent le sens. -->
-    <button onclick="finishWorkoutEarly()" aria-label="Terminer la séance maintenant" title="Terminer la séance" style="flex:none;width:44px;align-self:stretch;background:#0d0d0d;border:1px solid var(--border);color:var(--sub);font-family:Montserrat,sans-serif;cursor:pointer;border-radius:var(--r-1);display:inline-flex;align-items:center;justify-content:center;padding:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="18" height="18"><circle cx="12" cy="12" r="9"/><polyline points="9 12 11 14 15 10"/></svg></button>
+    <button onclick="finishWorkoutEarly()" aria-label="Terminer la séance maintenant" title="Terminer la séance" style="flex:none;width:44px;align-self:stretch;background:var(--surface-0);border:1px solid var(--border);color:var(--sub);font-family:Montserrat,sans-serif;cursor:pointer;border-radius:var(--r-1);display:inline-flex;align-items:center;justify-content:center;padding:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="18" height="18"><circle cx="12" cy="12" r="9"/><polyline points="9 12 11 14 15 10"/></svg></button>
   </div>
 </div>
 
@@ -4728,7 +4728,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
     <!-- Bilan de départ (1ère visite) -->
     <div id="bilan-choice-first" style="display:none;margin-bottom:12px">
-      <div onclick="openBilan('depart')" style="background:linear-gradient(135deg,#1a0000,#2a0000);border:1px solid var(--red);border-radius:var(--r-4);padding:20px;cursor:pointer" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div onclick="openBilan('depart')" style="background:linear-gradient(135deg,#1a0000,var(--red-bg-2));border:1px solid var(--red);border-radius:var(--r-4);padding:20px;cursor:pointer" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div style="font-weight:900;font-size:var(--fs-lg);margin-bottom:6px;letter-spacing:.5px;text-transform:uppercase">Bilan de départ</div>
         <div class="sub" style="font-size:var(--fs-sm);line-height:1.5">Premier bilan complet : point de départ, objectifs, historique, mensurations initiales.</div>
       </div>
@@ -4739,7 +4739,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="font-weight:900;font-size:var(--fs-lg);margin-bottom:6px;letter-spacing:.5px;text-transform:uppercase;color:var(--red-text)">BILAN COACHING</div>
       <div style="font-size:var(--fs-md);font-weight:700;margin-bottom:4px;color:var(--text-strong)"><span id="bilan-freq-display">Bilan toutes les 2 semaines :</span></div>
       <div class="sub" style="font-size:var(--fs-sm);line-height:1.5">Poids, mensurations, ressenti, photos.</div>
-      <div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:10px;line-height:1.65;border-top:1px solid #1e1e1e;padding-top:10px">
+      <div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:10px;line-height:1.65;border-top:1px solid var(--border);padding-top:10px">
         Cela me permet de voir ton évolution, de structurer ta pratique et d'ajuster tes programmes au besoin.
       </div>
     </div>
@@ -4770,7 +4770,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <button class="back-btn" id="bil-back-btn" onclick="bilBack()">←</button>
     <span class="topbar-title" id="bil-title">Bilan</span>
     <span id="bil-step-label" style="font-size:13px;font-weight:800;color:#fff;letter-spacing:.5px">1/4</span>
-    <div style="position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,.06)"><div id="bil-progress" style="height:100%;background:var(--red);transition:width var(--t-3) var(--c-out);width:25%"></div></div>
+    <div style="position:absolute;bottom:0;left:0;right:0;height:3px;background:color-mix(in srgb,var(--text) 6%,transparent)"><div id="bil-progress" style="height:100%;background:var(--red);transition:width var(--t-3) var(--c-out);width:25%"></div></div>
   </div>
   <div class="scroll-area" style="flex:1" id="bil-content"></div>
   <div style="padding:14px 20px;border-top:1px solid #181818;background:var(--bg);flex-shrink:0">
@@ -4815,13 +4815,13 @@ const COACH_PHOTO='icons/coach.jpg';
            L enveloppe garde son position:relative, sans consequence. -->
       <div style="position:relative;margin-bottom:20px">
       <div style="position:relative;padding-bottom:2px" id="prog-tabs" class="prog-onglets">
-        <button class="btn btn-red btn-sm" onclick="showProgressTab('poids',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 13px;font-size:10.5px;letter-spacing:1px">Poids</button>
-        <button class="btn btn-outline btn-sm" onclick="showProgressTab('mensus',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 13px;font-size:10.5px;letter-spacing:1px">Mensurations</button>
-        <button class="btn btn-outline btn-sm" onclick="showProgressTab('masseGrasse',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 13px;font-size:10.5px;letter-spacing:1px">Masse Grasse</button>
-        <button class="btn btn-outline btn-sm" onclick="showProgressTab('perf',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 13px;font-size:10.5px;letter-spacing:1px">Perfs</button>
-        <button class="btn btn-outline btn-sm" onclick="showProgressTab('volume',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 13px;font-size:10.5px;letter-spacing:1px">Volume</button>
-        <button class="btn btn-outline btn-sm" onclick="showProgressTab('photos',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 13px;font-size:10.5px;letter-spacing:1px">Photos</button>
-        <button class="btn btn-outline btn-sm" onclick="showProgressTab('notes',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 13px;font-size:10.5px;letter-spacing:1px;display:inline-flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> Notes</button>
+        <button class="btn btn-red btn-sm" onclick="showProgressTab('poids',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 14px;font-size:10.5px;letter-spacing:1px">Poids</button>
+        <button class="btn btn-outline btn-sm" onclick="showProgressTab('mensus',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 14px;font-size:10.5px;letter-spacing:1px">Mensurations</button>
+        <button class="btn btn-outline btn-sm" onclick="showProgressTab('masseGrasse',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 14px;font-size:10.5px;letter-spacing:1px">Masse Grasse</button>
+        <button class="btn btn-outline btn-sm" onclick="showProgressTab('perf',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 14px;font-size:10.5px;letter-spacing:1px">Perfs</button>
+        <button class="btn btn-outline btn-sm" onclick="showProgressTab('volume',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 14px;font-size:10.5px;letter-spacing:1px">Volume</button>
+        <button class="btn btn-outline btn-sm" onclick="showProgressTab('photos',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 14px;font-size:10.5px;letter-spacing:1px">Photos</button>
+        <button class="btn btn-outline btn-sm" onclick="showProgressTab('notes',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 14px;font-size:10.5px;letter-spacing:1px;display:inline-flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> Notes</button>
       </div>
       </div>
       <div id="progress-content"></div>
@@ -5017,10 +5017,10 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
         <div id="fja-unites-slot"></div>
         <div style="display:flex;gap:8px;margin-top:10px">
-          <button onclick="setFjaQty(50)"  style="flex:1;padding:8px;background:#111;border:1px solid #222;border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer">50g</button>
-          <button onclick="setFjaQty(100)" style="flex:1;padding:8px;background:#111;border:1px solid #222;border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer">100g</button>
-          <button onclick="setFjaQty(150)" style="flex:1;padding:8px;background:#111;border:1px solid #222;border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer">150g</button>
-          <button onclick="setFjaQty(200)" style="flex:1;padding:8px;background:#111;border:1px solid #222;border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer">200g</button>
+          <button onclick="setFjaQty(50)"  style="flex:1;padding:8px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer">50g</button>
+          <button onclick="setFjaQty(100)" style="flex:1;padding:8px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer">100g</button>
+          <button onclick="setFjaQty(150)" style="flex:1;padding:8px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer">150g</button>
+          <button onclick="setFjaQty(200)" style="flex:1;padding:8px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer">200g</button>
         </div>
         <div id="fja-portions"></div>
       </div>
@@ -5178,7 +5178,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
       <div id="caff-products-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
       <div id="caff-confirm-panel" style="display:none"></div>
-      <div id="caff-preworkout-info" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:12px;margin-top:16px;font-size:var(--fs-sm);color:#aab;line-height:1.7">
+      <div id="caff-preworkout-info" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:12px;margin-top:16px;font-size:var(--fs-sm);color:var(--text-mid);line-height:1.7">
         <strong style="color:var(--info);display:inline-flex;align-items:center;gap:8px"><span class="caff-tab-ico" data-caff="clock"></span>Timing recommandé</strong><br>
         Prends ton pré-workout <strong>30 à 20 min avant</strong> ta séance : il agit pendant l’effort.
       </div>
@@ -5247,9 +5247,9 @@ const COACH_PHOTO='icons/coach.jpg';
            copier le lien). L'ordre est inverse, et le lien est replie. -->
       <div id="vid-envoi" style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:20px 16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45)">
         
-        <div style="position:absolute;left:50%;top:-34px;transform:translateX(-50%);width:120px;height:90px;border-radius:var(--r-full);background:radial-gradient(circle,rgba(224,32,32,.15),transparent 68%);pointer-events:none"></div>
+        <div style="position:absolute;left:50%;top:-34px;transform:translateX(-50%);width:120px;height:90px;border-radius:var(--r-full);background:radial-gradient(circle,color-mix(in srgb,var(--red) 15%,transparent),transparent 68%);pointer-events:none"></div>
         <div style="position:relative;text-align:center">
-          <div style="margin-bottom:10px;color:#ff3b30;filter:drop-shadow(0 0 9px rgba(224,32,32,.75))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:30px;height:30px;display:inline-block;vertical-align:middle" aria-hidden="true"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></div>
+          <div style="margin-bottom:10px;color:#ff3b30;filter:drop-shadow(0 0 9px color-mix(in srgb,var(--red) 75%,transparent))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:30px;height:30px;display:inline-block;vertical-align:middle" aria-hidden="true"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></div>
           <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:2.5px;color:var(--text);text-transform:uppercase;margin-bottom:12px;text-shadow:var(--halo-2)">Envoyer une vidéo</div>
           <!-- Le nom était jusqu'ici DÉDUIT de l'URL (« Vidéo YouTube ») ou du
                nom de fichier. Deux vidéos de deux exercices différents
@@ -5259,18 +5259,18 @@ const COACH_PHOTO='icons/coach.jpg';
                R17 — il vit dans le bloc fichier, et sert aussi au lien replie
                plus bas : addVideoLink et uploadVideoFile le lisent tous deux. -->
           <input id="vid-name-input" type="text" placeholder="Quel exercice ? (facultatif)" autocomplete="off"
-            style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:var(--r-2);border:1px solid var(--border);background:linear-gradient(180deg,#0b0b0b,#0f0f0f);color:var(--text);font-size:var(--fs-md);font-family:inherit;margin-bottom:10px;box-shadow:var(--e-inset)">
+            style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:var(--r-2);border:1px solid var(--border);background:linear-gradient(180deg,var(--surface-0),var(--surface-1));color:var(--text);font-size:var(--fs-md);font-family:inherit;margin-bottom:10px;box-shadow:var(--e-inset)">
           <!-- UN <label for> ET NON UN BOUTON QUI APPELLERAIT .click() : c'est la
                forme qui ouvre le selecteur de fichiers partout, iOS compris.
                role, tabindex et Entree/Espace le rendent atteignable au
                clavier, ce qu'un <label> n'est pas de lui-meme. -->
           <label id="vid-file-btn" for="vid-file-input" role="button" tabindex="0"
             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('vid-file-input').click()}"
-            style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;box-sizing:border-box;margin:0;padding:14px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">
+            style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;box-sizing:border-box;margin:0;padding:14px;background:linear-gradient(160deg,#e21414,var(--red-deep));border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px color-mix(in srgb,var(--red) 45%,transparent),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:17px;height:17px;display:inline-block;vertical-align:middle;flex-shrink:0" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Choisir une vidéo
           </label>
           <input id="vid-file-input" type="file" accept="video/*" style="display:none" onchange="uploadVideoFile(this)">
-          <div id="vid-upload-progress" style="display:none;margin-top:10px;font-size:var(--fs-md);font-weight:800;color:var(--green);text-align:center;--halo-c:rgba(34,197,94,.6);text-shadow:var(--halo-1)"></div>
+          <div id="vid-upload-progress" style="display:none;margin-top:10px;font-size:var(--fs-md);font-weight:800;color:var(--green);text-align:center;--halo-c:color-mix(in srgb,var(--green) 60%,transparent);text-shadow:var(--halo-1)"></div>
           <div id="vid-upload-error" style="display:none;margin-top:10px;font-size:var(--fs-sm);color:var(--red-text)"></div>
           <div class="sub" style="font-size:var(--fs-xs);margin-top:12px;line-height:1.6">Envoi direct et sécurisé : ta vidéo est visible par ton coach immédiatement · <strong style="color:var(--red-text)">il la corrige directement dans l'app</strong></div>
         </div>
@@ -5288,11 +5288,11 @@ const COACH_PHOTO='icons/coach.jpg';
         </summary>
         <div style="padding:2px 16px 16px;text-align:center">
           <input id="vid-url-input" type="url" placeholder="Colle le lien YouTube ou Google Drive…" autocomplete="off"
-            style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:var(--r-2);border:1px solid var(--border);background:linear-gradient(180deg,#0b0b0b,#0f0f0f);color:var(--text);font-size:var(--fs-md);font-family:inherit;margin-bottom:10px;box-shadow:var(--e-inset)"
+            style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:var(--r-2);border:1px solid var(--border);background:linear-gradient(180deg,var(--surface-0),var(--surface-1));color:var(--text);font-size:var(--fs-md);font-family:inherit;margin-bottom:10px;box-shadow:var(--e-inset)"
             onkeydown="if(event.key==='Enter')addVideoLink()"
             oninput="document.getElementById('vid-drive-hint').style.display=this.value.includes('drive.google.com')?'block':'none'">
           <div id="vid-drive-hint" style="display:none;background:var(--warning-bg);border:1px solid #7c2d1244;border-radius:var(--r-2);padding:10px 12px;font-size:var(--fs-xs);color:var(--warning);line-height:1.5;margin-bottom:10px;text-align:left">Vérifie que le lien est accessible à tous ceux qui l'ont (pas seulement toi) avant de l'envoyer · dans Drive : <strong>Partager → Toute personne avec le lien</strong>.</div>
-          <button onclick="addVideoLink()" style="width:100%;padding:14px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Envoyer à mon coach</button>
+          <button onclick="addVideoLink()" style="width:100%;padding:14px;background:linear-gradient(160deg,#e21414,var(--red-deep));border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;;cursor:pointer;box-shadow:0 0 20px color-mix(in srgb,var(--red) 45%,transparent),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Envoyer à mon coach</button>
           <div class="sub" style="font-size:var(--fs-xs);margin-top:12px;line-height:1.6">Partage sur <b style="color:var(--text-strong)">YouTube</b> (non répertoriée) ou <b style="color:var(--text-strong)">Google Drive</b>, puis colle le lien ici. L'exercice indiqué plus haut part avec le lien.</div>
         </div>
       </details>
@@ -5710,7 +5710,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <!-- LES EN-TETES DE LA MAQUETTE (Kevin, 24/09/2026) : un trait, le
              titre en deux couleurs, une ligne espacee dessous, et le menu de
              periode a droite — sanRendre le pose dans #ls-per-pas. -->
-        <div class="ls-trait" style="background:var(--red);box-shadow:0 0 12px rgba(224,32,32,.9)"></div>
+        <div class="ls-trait" style="background:var(--red);box-shadow:0 0 12px color-mix(in srgb,var(--red) 90%,transparent)"></div>
         <div class="ls-titres"><span class="ls-titre">MES <span style="color:#ff2d2d">PAS</span></span><span class="ls-sous">Suivi quotidien</span></div>
         <div class="ls-per" id="ls-per-pas"></div>
       </div>
@@ -5754,7 +5754,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- max-width : le message d'apres-installation fait quinze mots, et sans
      borne le toast s'etendait au-dela de l'ecran sur un telephone etroit —
      min-width etait la seule contrainte de largeur. Il enveloppe desormais. -->
-<div id="toast" role="status" aria-live="polite" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(28px);background:#222;color:var(--text);padding:12px 20px;border-radius:var(--r-3);font-size:var(--fs-md);font-weight:600;z-index:var(--z-toast);transition:opacity var(--t-2) var(--c-out),transform var(--t-2) var(--c-out);opacity:0;min-width:200px;max-width:min(92vw,420px);line-height:1.4;text-align:center;pointer-events:none"></div>
+<div id="toast" role="status" aria-live="polite" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(28px);background:var(--surface-3);color:var(--text);padding:12px 20px;border-radius:var(--r-3);font-size:var(--fs-md);font-weight:600;z-index:var(--z-toast);transition:opacity var(--t-2) var(--c-out),transform var(--t-2) var(--c-out);opacity:0;min-width:200px;max-width:min(92vw,420px);line-height:1.4;text-align:center;pointer-events:none"></div>
 
 <!-- LA CÉLÉBRATION DES BADGES est un écran plein, créé à la demande par
      _celebrerBadges (#bdg-ecran) : rien à poser ici. -->
@@ -5802,7 +5802,7 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
   <div class="scroll-area" style="flex:1"><div id="vitrine-coach-corps"></div></div>
 </div>
-<div id="s-access-gate" class="screen" style="background:#060606;justify-content:center;padding:32px 24px;position:relative;overflow:hidden">
+<div id="s-access-gate" class="screen" style="background:var(--bg);justify-content:center;padding:32px 24px;position:relative;overflow:hidden">
   <div style="position:absolute;inset:0;background-image:none;pointer-events:none"></div>
   <div class="anim-in" style="text-align:center;z-index:1;width:100%">
     <!-- Rempli par loadAccessGate (seul chemin qui mène ici) : le bloc restait
@@ -5810,7 +5810,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <div id="ag-icon" style="color:var(--red-text);margin-bottom:16px;line-height:0"></div>
     <h1 style="margin-bottom:8px" id="ag-title">Accès expiré</h1>
     <p class="sub" style="line-height:1.6;margin-bottom:32px" id="ag-sub">Ton accès à RepCore n'est plus actif.</p>
-    <div style="background:var(--dark);border:1px solid #2a0000;border-radius:var(--r-4);padding:20px;margin-bottom:24px;text-align:left">
+    <div style="background:var(--dark);border:1px solid var(--red-bg-2);border-radius:var(--r-4);padding:20px;margin-bottom:24px;text-align:left">
       <div id="ag-status-block"></div>
     </div>
     <!-- ⚠ LE BOUTON « Renouveler mon accès » DISPARAIT SUR UNE SORTIE DE
@@ -5989,7 +5989,7 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<div id="s-subscribe" class="screen" style="background:#060606;overflow:hidden">
+<div id="s-subscribe" class="screen" style="background:var(--bg);overflow:hidden">
   <div class="topbar" style="border-bottom:1px solid #1a0000">
     <button class="back-btn" onclick="retourDe('s-subscribe')">←</button>
     <span class="topbar-title">Accès RepCore</span>
@@ -5998,7 +5998,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area pad">
 
     <!-- Option 1: Code coach -->
-    <div id="sub-code-option" style="border:1px solid #2a0000;border-radius:var(--r-4);padding:20px;margin-bottom:16px;background:#0a0000">
+    <div id="sub-code-option" style="border:1px solid var(--red-bg-2);border-radius:var(--r-4);padding:20px;margin-bottom:16px;background:var(--red-bg)">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
         <div style="width:48px;height:48px;border-radius:var(--r-full);background:var(--surface-2);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--sub)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:32px;height:32px;display:inline-block;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -6013,7 +6013,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
 
     <!-- Option 2: Autonomie -->
-    <div style="border:2px solid var(--red);border-radius:var(--r-4);padding:20px;margin-bottom:16px;background:#0a0000;position:relative;overflow:hidden">
+    <div style="border:2px solid var(--red);border-radius:var(--r-4);padding:20px;margin-bottom:16px;background:var(--red-bg);position:relative;overflow:hidden">
       <!-- Badge « POPULAIRE » retiré : rien ne le mesurait. L'app ne compte
            nulle part la répartition des souscriptions entre les deux formules,
            et l'offre n'a jamais eu qu'un seul palier — il n'y avait donc même
@@ -6038,15 +6038,15 @@ const COACH_PHOTO='icons/coach.jpg';
            est en attente : cycle menstruel, base alimentaire et « sans réseau en salle »
            ne décrivent pas ce qu’un coach achète, et le lui vendre serait faux. -->
       <div id="sub-args-athlete" style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;color:var(--green)">
-        <div style="display:flex;align-items:center;gap:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="font-size:var(--fs-sm);color:#aaa">Charges adaptées à ta phase de cycle</span></div>
-        <div style="display:flex;align-items:center;gap:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="font-size:var(--fs-sm);color:#aaa">Tu choisis ce que ton coach voit</span></div>
-        <div style="display:flex;align-items:center;gap:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="font-size:var(--fs-sm);color:#aaa">3 484 aliments ANSES-Ciqual 2025, hors ligne</span></div>
-        <div style="display:flex;align-items:center;gap:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="font-size:var(--fs-sm);color:#aaa">Séances complètes en salle sans réseau</span></div>
+        <div style="display:flex;align-items:center;gap:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="font-size:var(--fs-sm);color:var(--text-mid)">Charges adaptées à ta phase de cycle</span></div>
+        <div style="display:flex;align-items:center;gap:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="font-size:var(--fs-sm);color:var(--text-mid)">Tu choisis ce que ton coach voit</span></div>
+        <div style="display:flex;align-items:center;gap:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="font-size:var(--fs-sm);color:var(--text-mid)">3 484 aliments ANSES-Ciqual 2025, hors ligne</span></div>
+        <div style="display:flex;align-items:center;gap:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="font-size:var(--fs-sm);color:var(--text-mid)">Séances complètes en salle sans réseau</span></div>
         <div style="display:flex;align-items:center;gap:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><!-- ⚠ CETTE LIGNE PROMETTAIT « Sans engagement, tu arrêtes quand tu veux »
      (24/09/2026). L'abonnement s'engage désormais sur douze mois, réglés en
      une fois ou mois par mois : la promesse inverse, maintenue au-dessus du
      bouton de paiement, aurait été un argument de vente faux. -->
-<span style="font-size:var(--fs-sm);color:#aaa">Engagement 12 mois, en une fois ou mensuel</span></div>
+<span style="font-size:var(--fs-sm);color:var(--text-mid)">Engagement 12 mois, en une fois ou mensuel</span></div>
       </div>
       <div style="width:36px;height:2px;background:var(--red);margin-bottom:16px"></div>
       <!-- Sélecteur de palier — rempli par _renderSubPaliers(). Rendu en JS et
@@ -6092,5 +6092,5 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<script src="./rc-core.1766.js"></script>
+<script src="./rc-core.1769.js"></script>
 </body></html>

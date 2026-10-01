@@ -112,7 +112,7 @@ function _dessinerStorySeance(d){
     g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r);
     g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); };
   const grad=g.createLinearGradient(CX,CY,CX+CW,CY+CH);
-  grad.addColorStop(0,'#e02020'); grad.addColorStop(0.55,'#c01818'); grad.addColorStop(1,'#8e1010');
+  grad.addColorStop(0,ROUGE_MARQUE_MIN); grad.addColorStop(0.55,'#c01818'); grad.addColorStop(1,'#8e1010');
   // AUCUNE OMBRE PORTEE : le canevas s arrete au bord de la carte, une ombre
   // y serait coupee net. Elle n aurait de sens qu avec une marge, donc avec
   // un fond — precisement ce qu on retire.
@@ -543,7 +543,7 @@ function _visuelPeindreFond(g,W,H,fond){
   if(fond==='rouge'){
     // Le dégradé et la trame de _dessinerStorySeance, sur tout le format.
     const grad=g.createLinearGradient(0,0,W,H);
-    grad.addColorStop(0,'#e02020'); grad.addColorStop(0.55,'#c01818'); grad.addColorStop(1,'#8e1010');
+    grad.addColorStop(0,ROUGE_MARQUE_MIN); grad.addColorStop(0.55,'#c01818'); grad.addColorStop(1,'#8e1010');
     g.fillStyle=grad; g.fillRect(0,0,W,H);
     g.save();
     g.strokeStyle='rgba(255,255,255,.05)'; g.lineWidth=2;
@@ -1060,7 +1060,7 @@ function _recEclairFiligrane(g,x1,y1,x2,y2,graine,fond){
   const coul=fond==='rouge'?'rgba(255,255,255,':'rgba(224,32,32,';
   g.save();
   g.lineJoin='round'; g.lineCap='round';
-  g.shadowColor=fond==='rouge'?'rgba(255,255,255,.5)':'#E02020'; g.shadowBlur=22;
+  g.shadowColor=fond==='rouge'?'rgba(255,255,255,.5)':ROUGE_MARQUE; g.shadowBlur=22;
   g.strokeStyle=coul+'.42)'; g.lineWidth=7;
   g.beginPath(); g.moveTo(pts[0].x,pts[0].y); for(const p of pts) g.lineTo(p.x,p.y); g.stroke();
   g.shadowBlur=0;
@@ -1128,7 +1128,7 @@ function _dessinerCarteRecord(record,fond,format,anim){
   o.ecrireEspace(surTitreRecord(r),cx,y+34,10,true);
   // Le trait rouge sous l'étiquette : la seule touche de couleur hors éclair.
   o.ombre(false);
-  g.fillStyle=f==='rouge'?'rgba(255,255,255,.85)':'#E02020';
+  g.fillStyle=f==='rouge'?'rgba(255,255,255,.85)':ROUGE_MARQUE;
   g.fillRect(cx-44,y+54,88,5);
   y+=H_TAG;
 
@@ -1147,7 +1147,7 @@ function _dessinerCarteRecord(record,fond,format,anim){
     o.ecrire(t,cx,y+52);
     const w=g.measureText(t).width;
     o.ombre(false);
-    g.strokeStyle=f==='rouge'?'rgba(255,255,255,.9)':'#E02020'; g.lineWidth=5;
+    g.strokeStyle=f==='rouge'?'rgba(255,255,255,.9)':ROUGE_MARQUE; g.lineWidth=5;
     g.beginPath(); g.moveTo(cx-w/2-10,y+30); g.lineTo(cx+w/2+10,y+30); g.stroke();
     o.ombre(true);
     y+=H_ANC;
@@ -1263,7 +1263,7 @@ function _dessinerCarteRecords(d,fond,format){
       o.ecrire(a,dx,yy+150);
       const w=g.measureText(a).width;
       o.ombre(false);
-      g.strokeStyle=f==='rouge'?'rgba(255,255,255,.9)':'#E02020'; g.lineWidth=4;
+      g.strokeStyle=f==='rouge'?'rgba(255,255,255,.9)':ROUGE_MARQUE; g.lineWidth=4;
       g.beginPath(); g.moveTo(dx-w-6,yy+134); g.lineTo(dx+6,yy+134); g.stroke();
       o.ombre(true);
     }
@@ -2367,7 +2367,7 @@ function _renderWeeklyInto(el,sc){
           <div style="font-family:var(--pile-titre);font-size:var(--fs-2xl);font-weight:400;color:var(--text);letter-spacing:1px;line-height:1">${heading}</div>
           ${nbEx?`<div style="font-size:var(--fs-xs);color:rgba(255,255,255,.6);margin-top:4px">${nbEx} exercice${nbEx>1?'s':''}${mainRest?' · '+mainRest+' repos':''}</div>`:'<div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);margin-top:4px">Récupération active</div>'}
         </div>
-        ${nbEx?`<div style="border-top:1px solid rgba(255,255,255,.15);padding-top:10px;display:flex;flex-direction:column;gap:6px">
+        ${nbEx?`<div style="border-top:1px solid color-mix(in srgb,var(--text) 15%,transparent);padding-top:10px;display:flex;flex-direction:column;gap:6px">
           ${selS.exercises.map((ex,i)=>`
             <div style="display:flex;align-items:center;gap:8px">
               <div style="width:18px;height:18px;background:rgba(0,0,0,.3);border-radius:var(--r-1);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:900;color:rgba(255,255,255,.65);flex-shrink:0">${i+1}</div>
@@ -2375,10 +2375,10 @@ function _renderWeeklyInto(el,sc){
               <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);flex-shrink:0">${ex.series}×${ex.reps}${_rirPrescrit(ex)?' @RIR'+escapeHtml(_rirPrescrit(ex)):''}</div>
             </div>`).join('')}
         </div>`:''}
-        ${nbEx?`<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.15);display:flex;justify-content:flex-end;gap:8px">
+        ${nbEx?`<div style="margin-top:12px;padding-top:10px;border-top:1px solid color-mix(in srgb,var(--text) 15%,transparent);display:flex;justify-content:flex-end;gap:8px">
           <button id="story-btn" type="button" onclick="event.stopPropagation();telechargerSeanceDuJour()" aria-label="Télécharger la séance du jour en image"
             style="display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:6px 12px;border-radius:var(--r-2);cursor:pointer;
-              background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.22);color:var(--text);
+              background:rgba(0,0,0,.28);border:1px solid color-mix(in srgb,var(--text) 22%,transparent);color:var(--text);
               font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.4px">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">
               <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
@@ -2391,7 +2391,7 @@ function _renderWeeklyInto(el,sc){
           ${(typeof navigator!=='undefined'&&navigator.share)?`
           <button id="story-partage-btn" type="button" onclick="event.stopPropagation();partagerSeanceDuJour()" aria-label="Partager la séance du jour"
             style="display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:6px 12px;border-radius:var(--r-2);cursor:pointer;
-              background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.34);color:var(--text);
+              background:color-mix(in srgb,var(--text) 16%,transparent);border:1px solid color-mix(in srgb,var(--text) 34%,transparent);color:var(--text);
               font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.4px">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">
               <path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>

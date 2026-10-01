@@ -784,7 +784,7 @@ function _blocExo(idx,estSS){
         <div class="wo-ava"></div>
       </div>
 
-      ${cycleLabel&&!estSS?`<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-xs);color:#888;letter-spacing:.5px">${cycleLabel.text}</div>`:''}
+      ${cycleLabel&&!estSS?`<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-xs);color:var(--sub);letter-spacing:.5px">${cycleLabel.text}</div>`:''}
 
       <!-- La consigne a ete recalculee sur ce qui a ete souleve. On le DIT :
            une charge qui change toute seule sans un mot se lit comme un bug,

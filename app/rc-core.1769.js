@@ -1,3 +1,13 @@
+// ══ LE ROUGE DE LA MARQUE, POUR CE QUI NE LIT PAS LA FEUILLE (01/10/2026) ══
+// La feuille dit le rouge par var(--red) (scripts/couleurs.py). Mais un canvas
+// (fillStyle), un SVG exporte en image, un <input type="color">, une valeur par
+// defaut enregistree dans une donnee ne lisent pas les variables CSS : il leur
+// faut la couleur ecrite. Elle l'est ICI, une seule fois, et nulle part
+// ailleurs dans rc-core (app/tests.js le verifie). Ce n'est pas var(--red) lu a
+// l'execution : la marque d'un coach surcharge --red, et les visuels partages
+// restent aux couleurs de RepCore. _MIN : la meme, en minuscules, la ou le code
+// la compare a une valeur deja mise en minuscules.
+const ROUGE_MARQUE='#E02020', ROUGE_MARQUE_MIN='#e02020';
 
 
 // ── Version de la politique de confidentialite ────────────────────────
@@ -2499,7 +2509,7 @@ function htmlPrefsAide(role,choix,maj,build,appareil){
 // ⚠ LA COULEUR EST REJUGÉE CHEZ L'ATHLÈTE (couleurAccessible) : une couleur
 //   illisible sur le fond sombre (contraste < 3:1) est remplacée par la plus
 //   proche qui passe, même si elle a été écrite par un autre chemin.
-// ⚠ SEULS LES TOKENS D'ACCENT CHANGENT (--red, --red2, --red-glow,
+// ⚠ SEULS LES TOKENS D'ACCENT CHANGENT (--red, --red-deep, --red-glow,
 //   --red-text, --red-bg, --glow-red, et --red-light qui dérive de --red).
 //   Les rouges écrits en dur dans la feuille de style restent rouges.
 // ⚠ HORS LIGNE : la dernière marque reçue (DB 'coach_marque') s'applique au
@@ -2604,7 +2614,7 @@ function marqueTokens(couleur){
   const texteSombre=couleurAccessible(c,MARQUE_FOND,4.5), texteClair=couleurAccessible(c,MARQUE_FOND_CLAIR,4.5);
   // Le texte POSÉ SUR l'accent : blanc, ou presque noir si la couleur est claire (un jaune).
   const sur=contrasteCouleurs('#FFFFFF',c)>=contrasteCouleurs('#0B0B0B',c)?'#FFFFFF':'#0B0B0B';
-  return {commun:{'--red':c,'--red2':_mqMelange(c,'#000000',0.18),'--red-glow':_mqMelange(c,'#FFFFFF',0.2),
+  return {commun:{'--red':c,'--red-deep':_mqMelange(c,'#000000',0.18),'--red-glow':_mqMelange(c,'#FFFFFF',0.2),
       '--glow-red':'0 0 18px rgba('+r+','+g+','+b+',.35)','--mq-sur':sur,
       '--mq-sombre':_mqMelange(c,'#000000',0.45),'--mq-nuit':_mqMelange(c,'#000000',0.78)},
     sombre:{'--red-text':texteSombre.ok?c:texteSombre.proposee,'--red-bg':_mqMelange(c,'#000000',0.94)},
@@ -2623,8 +2633,8 @@ function marqueCss(couleur){
   return ':root,:root[data-theme="clair"]{'+decl(t.commun)+'}'
     +':root{'+decl(t.sombre)+'}'
     +':root[data-theme="clair"]{'+decl(t.clair)+'}'
-    +M+'.btn-red,'+M+'.btn-red:hover{background:linear-gradient(160deg,var(--red),var(--red2));border-color:color-mix(in srgb,var(--red) 60%,transparent);color:var(--mq-sur)}'
-    +M+'.du-defier{background:linear-gradient(var(--red-glow),var(--red),var(--red2));color:var(--mq-sur)}'
+    +M+'.btn-red,'+M+'.btn-red:hover{background:linear-gradient(160deg,var(--red),var(--red-deep));border-color:color-mix(in srgb,var(--red) 60%,transparent);color:var(--mq-sur)}'
+    +M+'.du-defier{background:linear-gradient(var(--red-glow),var(--red),var(--red-deep));color:var(--mq-sur)}'
     +M+'.banner-hero{background:linear-gradient(145deg,var(--mq-sombre) 0%,var(--mq-nuit) 100%)}'
     +M+'#clh-athlete-avatar{border-color:var(--red)}';
 }
@@ -2715,7 +2725,7 @@ async function renderMarqueCoach(){
   }
   if(!_mqEd){
     _mqEd={nom:String(currentUser.teamName||((currentUser.fname||'')+' '+(currentUser.lname||'')).trim()||'').slice(0,MARQUE_NOM_MAX),
-      couleur:'#E02020',logoUrl:'',envoi:false,lu:false};
+      couleur:ROUGE_MARQUE,logoUrl:'',envoi:false,lu:false};
     const cle=String(currentUser.email||'').replace(/\./g,',');
     _fbJson('coachs/'+cle+'/marque').then(r=>{
       if(!_mqEd) return;
@@ -2731,7 +2741,7 @@ async function renderMarqueCoach(){
     +'<label class="mq-lab" for="mq-nom">Nom affiché</label>'
     +'<input id="mq-nom" class="mq-champ" maxlength="40" value="'+E(e.nom)+'" oninput="mqChamp(\'nom\',this.value)">'
     +'<label class="mq-lab" for="mq-hex">Couleur</label>'
-    +'<div class="mq-coul"><input type="color" id="mq-couleur" value="'+E((hexMarque(e.couleur)||'#E02020').toLowerCase())+'" oninput="mqChamp(\'couleur\',this.value)" aria-label="Choisir la couleur">'
+    +'<div class="mq-coul"><input type="color" id="mq-couleur" value="'+E((hexMarque(e.couleur)||ROUGE_MARQUE).toLowerCase())+'" oninput="mqChamp(\'couleur\',this.value)" aria-label="Choisir la couleur">'
     +'<input id="mq-hex" class="mq-champ" maxlength="7" value="'+E(e.couleur)+'" oninput="mqChamp(\'couleur\',this.value)"></div>'
     +'<div id="mq-verdict" class="mq-verdict"></div>'
     +'<label class="mq-lab">Logo (carré, 200 Ko au plus)</label>'
@@ -2770,7 +2780,7 @@ function _mqApercu(){
     :'<span class="mq-ko">Trop sombre sur le fond de l’app (contraste '+String(Math.round(c.ratio*10)/10).replace('.',',')+':1, il en faut 3).</span> '
       +'<button type="button" class="mq-lien" onclick="mqUtiliser('+_attrArg(c.proposee)+')">Utiliser '+escapeHtml(c.proposee)+', la plus proche lisible</button>';
   const l=document.getElementById('mq-logo-apercu');
-  const m={nom:e.nom||'?',couleur:c.ok?c.couleur:(c.proposee||'#E02020'),logoUrl:e.logoUrl||null};
+  const m={nom:e.nom||'?',couleur:c.ok?c.couleur:(c.proposee||ROUGE_MARQUE),logoUrl:e.logoUrl||null};
   if(l){ l.innerHTML=htmlMarqueLogo(m,'mq-logo-grand'); l.style.setProperty('--mq-c',m.couleur); }
   const a=document.getElementById('mq-apercu');
   if(a) a.innerHTML='<div class="mq-apercu-fond" style="--mq-c:'+escapeHtml(m.couleur)+'">'+htmlMarqueBande(m)
@@ -6493,10 +6503,10 @@ const CLOUD={
     const url=APP_BASE_URL;
     const modal=document.createElement('div');
     modal.style.cssText='position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:center;justify-content:center';
-    modal.innerHTML=`<div style="background:#111;border:1px solid #222;border-radius:var(--r-4);padding:28px;text-align:center;max-width:300px;width:90%">
+    modal.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:28px;text-align:center;max-width:300px;width:90%">
       <div style="font-size:var(--fs-md);font-weight:800;text-transform:uppercase;letter-spacing:2px;margin-bottom:16px">Scanner sur un autre appareil</div>
       <div id="qr-zone" style="width:220px;height:220px;border-radius:var(--r-3);background:#fff;padding:8px;margin:0 auto;display:flex;align-items:center;justify-content:center"></div>
-      <p style="font-size:var(--fs-xs);color:#888;margin-top:12px;line-height:1.6">Ouvre l'app RepCore sur ton téléphone, scanne ce QR → sync configurée automatiquement</p>
+      <p style="font-size:var(--fs-xs);color:var(--sub);margin-top:12px;line-height:1.6">Ouvre l'app RepCore sur ton téléphone, scanne ce QR → sync configurée automatiquement</p>
       <button onclick="this.closest('div').parentElement.remove()" style="margin-top:16px;background:var(--red);border:none;color:var(--text);padding:10px 24px;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer">Fermer</button>
     </div>`;
     document.body.appendChild(modal);
@@ -7714,7 +7724,7 @@ function _proposerReconsentement(){
       ?'Le texte que tu avais accepté a été modifié. Relis-le et confirme ton accord pour continuer.'
       :'Ton compte a été créé avant que ces deux accords soient recueillis séparément. Confirme-les pour continuer.'}</p>
     <div style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-2)">
-      <input type="checkbox" id="rc-cgu" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
+      <input type="checkbox" id="rc-cgu" style="margin-top:2px;flex-shrink:0;accent-color:var(--red);width:16px;height:16px;cursor:pointer">
       <label for="rc-cgu" style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6;cursor:pointer">J'ai lu et j'accepte la <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--red-text);text-decoration:underline;font-weight:600">politique de confidentialité</a> et les <a href="../legal.html" target="_blank" rel="noopener" style="color:var(--red-text);text-decoration:underline;font-weight:600">mentions légales</a>.</label>
     </div>
     <!-- PAS DE CASE SANTE ICI. Cette modale bloque l'application : y
@@ -9567,7 +9577,7 @@ function loadAccessGate(){
   const ic=document.getElementById('ag-icon');
   if(!u){return;}
   if(ic) ic.innerHTML=icon('lock',56);
-  const L='<div style="font-size:var(--fs-sm);color:#888;line-height:1.8">';
+  const L='<div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.8">';
   // ══ FERMÉ À LA MAIN (24/09/2026) ═══════════════════════════════════════
   // ⚠ CETTE BRANCHE PASSE AVANT TOUTES LES AUTRES, et c'est voulu. Un accès
   //   fermé depuis l'écran « Accès » l'est pour une raison précise, et les
@@ -10950,13 +10960,13 @@ function arcChiffre(el,de,vers,o){
 //   haptique   false pour ne pas vibrer
 //   eclairs    2 ou 3 (tiré au hasard sinon)
 //   conteneur  l'élément qui tremble (défaut : l'écran actif)
-//   couleur    la teinte du halo et du trait (défaut #E02020)
+//   couleur    la teinte du halo et du trait (défaut ROUGE_MARQUE)
 // Rend une Promise résolue à la fin (jamais rejetée), avec le point d'impact —
 // l'appelant peut enchaîner, mais n'a JAMAIS à attendre pour laisser la main.
 //
 // NE LÈVE JAMAIS : comme toute l'animation, la foudre cède en silence.
 const FOUDRE_MAX=1100;
-const FOUDRE_ROUGE='#E02020';
+const FOUDRE_ROUGE=ROUGE_MARQUE;
 function rcFoudre(cible,o){
   o=o||{};
   try{
@@ -12793,14 +12803,14 @@ function rescueLogin(em,pw){
     <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-4);padding:28px 24px;max-width:340px;width:100%;text-align:center">
       <div style="font-size:var(--fs-2xl);margin-bottom:12px">✅</div>
       <div style="font-size:var(--fs-md);font-weight:800;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px">Mot de passe reconnu</div>
-      <p style="font-size:var(--fs-sm);color:#888;line-height:1.6;margin-bottom:20px">Le site a changé d'adresse et tes données locales n'ont pas encore été retrouvées dans le cloud. Indique ton rôle pour continuer provisoirement : si tu te reconnectes depuis ton appareil ou navigateur habituel, ton profil complet sera restauré.</p>
+      <p style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6;margin-bottom:20px">Le site a changé d'adresse et tes données locales n'ont pas encore été retrouvées dans le cloud. Indique ton rôle pour continuer provisoirement : si tu te reconnectes depuis ton appareil ou navigateur habituel, ton profil complet sera restauré.</p>
       <div style="display:flex;gap:10px;margin-bottom:16px">
         <button onclick="doRescue('${em}','${encodeURIComponent(pw)}','coach')"
           style="flex:1;background:#1a0000;border:1.5px solid var(--red);color:var(--text);padding:14px 8px;border-radius:var(--r-3);cursor:pointer;font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-sm);letter-spacing:1px">
           Coach
         </button>
         <button onclick="doRescue('${em}','${encodeURIComponent(pw)}','athlete')"
-          style="flex:1;background:#0a1a0a;border:1.5px solid #22c55e;color:var(--text);padding:14px 8px;border-radius:var(--r-3);cursor:pointer;font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-sm);letter-spacing:1px">
+          style="flex:1;background:#0a1a0a;border:1.5px solid var(--green);color:var(--text);padding:14px 8px;border-radius:var(--r-3);cursor:pointer;font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-sm);letter-spacing:1px">
           Athlète
         </button>
       </div>
@@ -17028,7 +17038,7 @@ function _htmlMorphoExercice(ex){
   if(r.variantes.length)
     h+=bloc('Variantes du même schéma',escapeHtml(r.variantes.join(', '))
       +' : à envisager à côté, jamais à la place.');
-  return '<div style="background:#0c0c0c;border:1px solid var(--border);border-left:1px solid var(--border);'
+  return '<div style="background:var(--surface-0);border:1px solid var(--border);border-left:1px solid var(--border);'
     +'border-radius:var(--r-2);padding:10px 12px;margin:0 0 12px;font-size:var(--fs-xs);line-height:1.6">'
     +'<div style="color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase;'
     +'margin-bottom:6px;font-size:var(--fs-2xs)">Proportions : pour toi, pas pour lui</div>'+h+'</div>';
@@ -17094,7 +17104,7 @@ function _htmlMorphoLecture(user,cal){
         +'font-weight:800">Accent :</span> <span style="color:var(--text-dim)">'+E(p.accent)+'</span></div>'
         // LE PIÈGE EST AFFICHÉ. C'est la partie la plus utile de la fiche, et
         // celle qu'on serait tenté de garder pour soi.
-        +'<div style="font-size:var(--fs-sm);line-height:1.6;margin-top:6px;background:#0c0c0c;'
+        +'<div style="font-size:var(--fs-sm);line-height:1.6;margin-top:6px;background:var(--surface-0);'
         +'border-radius:var(--r-2);padding:8px 10px"><span style="color:var(--red);font-weight:800">'
         +'Le piège :</span> <span style="color:var(--text-dim)">'+E(p.piege)+'</span></div>'
         +'</div>';
@@ -17793,7 +17803,7 @@ function _ampRendre(){
   const num=(cle,champ,val,ph)=>'<input type="number" inputmode="decimal" step="any" value="'
     +escapeHtml(String(val==null?'':val))+'" placeholder="'+escapeHtml(ph||'-')+'" '
     +'oninput="ampSaisie(\''+cle+'\',\''+champ+'\',this.value)" '
-    +'style="width:88px;min-height:44px;background:#0c0c0c;border:1px solid var(--border);'
+    +'style="width:88px;min-height:44px;background:var(--surface-0);border:1px solid var(--border);'
     +'border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-weight:800;'
     +'font-size:var(--fs-md);text-align:center;padding:6px">';
   const bouton=(cle,champ,val,cour,lib)=>'<button type="button" onclick="ampSaisie(\''+cle+'\',\''+champ
@@ -18300,7 +18310,7 @@ function _rendreEcheanceAcces(){
   // Les deux derniers jours passent au rouge : le même bandeau orange pendant
   // une semaine finit par faire partie du décor.
   const urgent=j<=2;
-  const c=urgent?'#E02020':'#f97316';
+  const c=urgent?ROUGE_MARQUE:'#f97316';
   // « dans 1 jour » serait ambigu — la veille au soir comme le matin même.
   // « moins de 24 heures » est vrai dans les deux cas.
   const quand=j===1?'dans moins de 24 heures':'dans '+j+' jours';
@@ -18310,7 +18320,7 @@ function _rendreEcheanceAcces(){
   const href=_coachContactHref(u.coachId,
     'Bonjour'+(nom?' '+nom:'')+", mon accès RepCore se termine le "+d+'. Peux-tu le prolonger ?');
   z.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:var(--r-3);padding:14px 14px;margin-bottom:16px;
-      background:linear-gradient(168deg,#1b1b1b,#111 55%,#0b0b0b);
+      background:linear-gradient(168deg,var(--surface-3),var(--surface-1) 55%,var(--surface-0));
       border:1px solid var(--border);border-left:3px solid ${c};
       box-shadow:var(--e3)}33">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:${c};--halo-c:${c};text-shadow:var(--halo-1)66">
@@ -18752,10 +18762,10 @@ function renderPortefeuille(clients){
   catch(e){ el.innerHTML=''; return; }
   const p=r.portefeuille;
   const cases=[
-    ['pf-traiter',    'À traiter',            r.aTraiter,        '#E02020'],
+    ['pf-traiter',    'À traiter',            r.aTraiter,        ROUGE_MARQUE],
     ['pf-decrochage', 'Séances écourtées',    r.decrochage,      '#f5c518'],
     ['pf-acces',      'Accès qui expirent',   r.accesExpirent,   '#22c55e'],
-    ['traiter',       'Alertes',              p.alertes,         '#E02020'],
+    ['traiter',       'Alertes',              p.alertes,         ROUGE_MARQUE],
     ['pf-jamais',     'Jamais démarrés',      p.jamaisDemarres,  '#f5c518'],
     ['attente',       'En attente',           p.enAttente,       '#8a8a8a'],
     ['pf-actifs',     'Actifs 14 j',          p.actifs,          '#22c55e'],
@@ -18818,7 +18828,7 @@ function renderPilotage(clients){
   // TROIS VOLETS POUR UN SEUL GESTE. Le coach les ouvrait l'un apres l'autre
   // pour se faire une idee, et devait retenir ce qu'il avait lu dans le
   // precedent. Un seul volet, trois sections separees d'un filet.
-  const corpsSep='<div style="height:1px;background:#1e1e1e;margin:10px 0"></div>';
+  const corpsSep='<div style="height:1px;background:var(--surface-3);margin:10px 0"></div>';
   const _tt=t=>`<div style="font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--sub);font-weight:800;margin-bottom:4px">${t}</div>`;
   const corpsA2=_tt('Depuis ta dernière visite')+corpsA;
   const corpsC2=_tt('Charge de travail')+corpsC;
@@ -19852,7 +19862,7 @@ function renderEpingleAccueil(){
   if(!manque||accueilMasque('photo')){ el.innerHTML=''; el.style.display='none'; return; }
   el.style.display='block';
   el.innerHTML='<div data-acc style="position:relative;background:var(--surface-1);border:1px solid var(--border);'
-    +'border-radius:var(--r-3);padding:14px 38px 14px 14px;margin-bottom:16px">'+_accX('photo')
+    +'border-radius:var(--r-3);padding:14px 40px 14px 14px;margin-bottom:16px">'+_accX('photo')
     +'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5;margin-bottom:10px">'
     +'Ajoute ta photo de profil : c\'est ce qui permet à ton coach de te reconnaître '
     +'d\'un coup d\'œil sur son tableau de bord.</div>'
@@ -19975,7 +19985,7 @@ function _dessinerVictoireCoach(d,fond,format){
   let y=Math.max(90,Math.round((H-HTOT)/2));
   g.textAlign='center'; g.textBaseline='alphabetic';
   o.ombre(true);
-  g.fillStyle=rouge?'#fff':'#E02020';
+  g.fillStyle=rouge?'#fff':ROUGE_MARQUE;
   const ss=o.ajusteEspace('VICTOIRE DE LA SEMAINE','800',40,MONT,10,LARG,24);
   g.font='800 '+ss+'px '+MONT; o.ecrireEspace('VICTOIRE DE LA SEMAINE',cx,y+ss,10,true);
   y+=64;
@@ -20051,7 +20061,7 @@ function _dessinerRecapTeam(d,fond,format){
   let y=Math.max(70,Math.round((H-HTOT)/2));
   g.textAlign='center'; g.textBaseline='alphabetic';
   o.ombre(true);
-  g.fillStyle=rouge?'#fff':'#E02020';
+  g.fillStyle=rouge?'#fff':ROUGE_MARQUE;
   const ss=o.ajusteEspace(d.titre,'800',40,MONT,10,LARG,24);
   g.font='800 '+ss+'px '+MONT; o.ecrireEspace(d.titre,cx,y+ss,10,true);
   y+=64;
@@ -20114,7 +20124,7 @@ const KIT_HASHTAGS='#RepCore #coaching #musculation';
 const KIT_VU_CLE='rc_kit_vu';
 const KIT_REGLES=Object.freeze([
   'Le logo ne se déforme pas, ne se recolore pas et garde de l’air autour de lui.',
-  'Le rouge RepCore (#E02020) sert aux accents, jamais aux longs textes.',
+  ('Le rouge RepCore ('+ROUGE_MARQUE+') sert aux accents, jamais aux longs textes.'),
   'Pas de montage d’un emblème de rang sur un compte qui ne l’a pas gagné.'
 ]);
 const KIT_FONDS=Object.freeze([{cle:'carbone',lib:'Carbone'},{cle:'rouge',lib:'Rouge'},{cle:'noir',lib:'Noir'}]);
@@ -20538,7 +20548,7 @@ function _majConsentementCoachReglages(){
   if(!u||u.role!=='athlete'||!(u.coachId||u.coachEmailKey)){ z.innerHTML=''; return; }
   z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:20px">'
     +'<label for="cr-partage-case" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0;text-transform:none;letter-spacing:normal;font-weight:400;color:var(--text)">'
-    +'<input type="checkbox" id="cr-partage-case"'+(vcConsentement(u)?' checked':'')+' onchange="aaConsentementCoach(this.checked);_majConsentementCoachReglages()" style="width:18px;height:18px;accent-color:#E02020;flex-shrink:0;margin-top:2px;cursor:pointer">'
+    +'<input type="checkbox" id="cr-partage-case"'+(vcConsentement(u)?' checked':'')+' onchange="aaConsentementCoach(this.checked);_majConsentementCoachReglages()" style="width:18px;height:18px;accent-color:var(--red);flex-shrink:0;margin-top:2px;cursor:pointer">'
     +'<span style="flex:1;min-width:0"><span style="display:block;font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Mon coach peut partager mes progrès</span>'
     +'<span style="display:block;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">Tes victoires, ton prénom dans le récap de l’équipe, ton avant/après. Sans cet accord, ce qu’il partage reste anonyme.</span></span></label></div>';
 }
@@ -21675,8 +21685,8 @@ function svgRetention(cohortes){
     +'<text x="'+(g-4)+'" y="'+(y(v)+3)+'" text-anchor="end" font-size="8" fill="currentColor" fill-opacity=".6">'+v+'</text>').join('');
   const lab=l.map((c,i)=>(i%Math.ceil(l.length/6)===0)?'<text x="'+x(i).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle" font-size="8" fill="currentColor" fill-opacity=".6">'+c.sem.slice(5).replace('-','/')+'</text>':'').join('');
   return '<svg class="vir-svg" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Rétention J1, J7 et J30 par semaine d’inscription">'
-    +grille+lab+serie('j1','#ff6b6b',true)+serie('j7','#ffb020',false)+serie('j30','#E02020',false)+'</svg>'
-    +'<div class="vir-leg"><span style="--c:#ff6b6b">J1</span><span style="--c:#ffb020">J7</span><span style="--c:#E02020">J30</span></div>';
+    +grille+lab+serie('j1','#ff6b6b',true)+serie('j7','#ffb020',false)+serie('j30',ROUGE_MARQUE,false)+'</svg>'
+    +'<div class="vir-leg"><span style="--c:#ff6b6b">J1</span><span style="--c:#ffb020">J7</span><span style="--c:var(--red)">J30</span></div>';
 }
 /** PURE. L'entonnoir total, en barres SVG. */
 function svgEntonnoir(total){
@@ -21686,7 +21696,7 @@ function svgEntonnoir(total){
   return '<svg class="vir-svg" viewBox="0 0 '+W+' '+(et.length*h+4)+'" role="img" aria-label="Entonnoir, toutes sources">'
     +et.map((e,i)=>{ const v=Number(total&&total[e[0]])||0, w=Math.round((W-120)*v/max);
       return '<text x="0" y="'+(i*h+15)+'" font-size="10" fill="currentColor">'+e[1]+'</text>'
-        +'<rect x="84" y="'+(i*h+4)+'" width="'+Math.max(1,w)+'" height="14" rx="3" fill="#E02020" fill-opacity="'+(1-i*0.12)+'"/>'
+        +'<rect x="84" y="'+(i*h+4)+'" width="'+Math.max(1,w)+('" height="14" rx="3" fill="'+ROUGE_MARQUE+'" fill-opacity="')+(1-i*0.12)+'"/>'
         +'<text x="'+(88+w)+'" y="'+(i*h+15)+'" font-size="10" fill="currentColor">'+v+'</text>'; }).join('')+'</svg>';
 }
 /** PURE. Les sections rétention de l'écran Viralité. */
@@ -22607,7 +22617,7 @@ function _dessinerCarteInvitation(d,fond,format){
   g.fillStyle='#fff'; g.font='800 34px '+MONT;
   o.ecrireEspace('INVITATION',cx,y+34,10,true);
   o.ombre(false);
-  g.fillStyle=rouge?'rgba(255,255,255,.85)':'#E02020';
+  g.fillStyle=rouge?'rgba(255,255,255,.85)':ROUGE_MARQUE;
   g.fillRect(cx-44,y+54,88,5);
   y+=H_TAG;
   o.ombre(true);
@@ -22639,7 +22649,7 @@ function _dessinerCarteInvitation(d,fond,format){
     const hc=post?170:200, lc=Math.min(LARG,760), yc=y+(post?20:30);
     o.ombre(false);
     g.save();
-    g.strokeStyle=rouge?'rgba(255,255,255,.9)':'#E02020'; g.lineWidth=5;
+    g.strokeStyle=rouge?'rgba(255,255,255,.9)':ROUGE_MARQUE; g.lineWidth=5;
     g.fillStyle=f==='transparent'?'rgba(0,0,0,.35)':'rgba(0,0,0,.28)';
     const r=24, x0=cx-lc/2;
     g.beginPath();
@@ -23308,12 +23318,12 @@ const DUEL_MESURES=Object.freeze([
 // un hexagone rouge, deux haches croisées — manches rouges, têtes claires.
 const DUEL_ECUSSON='<svg viewBox="0 0 120 120" aria-hidden="true"><defs>'
   +'<linearGradient id="duT" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#d9d9d9"/><stop offset="1" stop-color="#9a9a9a"/></linearGradient></defs>'
-  +'<polygon points="60,6 107,33 107,87 60,114 13,87 13,33" fill="rgba(120,8,8,.25)" stroke="#e02020" stroke-width="2.5"/>'
+  +('<polygon points="60,6 107,33 107,87 60,114 13,87 13,33" fill="rgba(120,8,8,.25)" stroke="'+ROUGE_MARQUE_MIN+'" stroke-width="2.5"/>')
   +'<polygon points="60,16 98,38 98,82 60,104 22,82 22,38" fill="none" stroke="rgba(224,32,32,.35)" stroke-width="1"/>'
   +'<g transform="translate(60 62) rotate(40)"><rect x="-3" y="-34" width="6" height="68" rx="3" fill="#c81212"/>'
-  +'<path d="M-2 -40h5c11 2 18 9 19 19-8-1-13-3-19-3h-5z" fill="url(#duT)" stroke="#e02020" stroke-width="1.5"/></g>'
+  +('<path d="M-2 -40h5c11 2 18 9 19 19-8-1-13-3-19-3h-5z" fill="url(#duT)" stroke="'+ROUGE_MARQUE_MIN+'" stroke-width="1.5"/></g>')
   +'<g transform="translate(60 62) rotate(-40) scale(-1 1)"><rect x="-3" y="-34" width="6" height="68" rx="3" fill="#c81212"/>'
-  +'<path d="M-2 -40h5c11 2 18 9 19 19-8-1-13-3-19-3h-5z" fill="url(#duT)" stroke="#e02020" stroke-width="1.5"/></g></svg>';
+  +('<path d="M-2 -40h5c11 2 18 9 19 19-8-1-13-3-19-3h-5z" fill="url(#duT)" stroke="'+ROUGE_MARQUE_MIN+'" stroke-width="1.5"/></g></svg>');
 const DUEL_INVITE_CLE='rc_duel_invite';
 /** PURE. « 14 jours de régularité » — la même phrase que le Worker. */
 function texteDuel(mesure,duree){
@@ -24277,7 +24287,7 @@ function _dessinerCarteDuel(d,fond,format){
   const o=_visuelOutils(g);
   const x=d||{};
   const rouge=f==='rouge';
-  const acc=rouge?'#fff':'#E02020';
+  const acc=rouge?'#fff':ROUGE_MARQUE;
   g.textAlign='center'; g.textBaseline='alphabetic';
   // En story, le bloc est centré dans la hauteur (il fait ~1 000 px).
   let y=post?150:(x.type==='resultat'?500:560);
@@ -24489,7 +24499,7 @@ function saisonActive(maintenant,liste){
 /** PURE. L'année d'une édition. */
 function saisonAnnee(s){ return String(new Date(Number(s&&s.debut)||0).getFullYear()); }
 /** PURE. La couleur d'accent, sûre. */
-function saisonCouleur(s){ return /^#[0-9a-fA-F]{6}$/.test(String(s&&s.couleurAccent||''))?s.couleurAccent:'#E02020'; }
+function saisonCouleur(s){ return /^#[0-9a-fA-F]{6}$/.test(String(s&&s.couleurAccent||''))?s.couleurAccent:ROUGE_MARQUE; }
 /** PURE. « J-12 », « 5 h », « 12 min » : le temps qui reste. */
 function saisonReste(s,maintenant){
   const ms=Number(s&&s.fin)-((typeof maintenant==='number')?maintenant:Date.now());
@@ -24587,7 +24597,7 @@ function saisonsFusionnerResultats(u,r){
   for(const id of Object.keys(r)){
     const x=r[id]; if(!x||m[id]||!SAISON_ID_RE.test(id)) continue;
     m[id]={nom:String(x.nom||'').slice(0,60),annee:String(x.annee||'').slice(0,4),badgeCle:String(x.badgeCle||'').slice(0,40),
-      couleur:/^#[0-9a-fA-F]{6}$/.test(String(x.couleur||''))?x.couleur:'#E02020',termineLe:Number(x.termineLe)||0,fin:Number(x.fin)||0};
+      couleur:/^#[0-9a-fA-F]{6}$/.test(String(x.couleur||''))?x.couleur:ROUGE_MARQUE,termineLe:Number(x.termineLe)||0,fin:Number(x.fin)||0};
     n++;
   }
   if(n) u.saisonsReleves=m;
@@ -24595,7 +24605,7 @@ function saisonsFusionnerResultats(u,r){
 }
 // PURE. Le médaillon d'une édition : un hexagone de sa couleur, l'année dedans.
 function svgMedailleEdition(couleur,annee,obtenu){
-  const c=/^#[0-9a-fA-F]{6}$/.test(String(couleur||''))?couleur:'#E02020';
+  const c=/^#[0-9a-fA-F]{6}$/.test(String(couleur||''))?couleur:ROUGE_MARQUE;
   return '<svg class="ed-med" viewBox="0 0 100 100" aria-hidden="true">'
     +'<polygon points="50,4 91,27 91,73 50,96 9,73 9,27" fill="'+(obtenu?'#111':'#1a1a1d')+'" stroke="'+(obtenu?c:'#3a3a40')+'" stroke-width="6"/>'
     +'<polygon points="50,18 79,34 79,66 50,82 21,66 21,34" fill="none" stroke="'+(obtenu?c:'#2a2a2e')+'" stroke-width="2" opacity=".7"/>'
@@ -24642,7 +24652,7 @@ function _dessinerCarteSaison(d,fond,format){
   const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   const x=d||{};
-  const acc=f==='rouge'?'#fff':(x.couleur||'#E02020');
+  const acc=f==='rouge'?'#fff':(x.couleur||ROUGE_MARQUE);
   g.textAlign='center'; g.textBaseline='alphabetic';
   // En story, le bloc (~1 000 px) est centré dans la hauteur.
   let y=post?140:520;
@@ -24712,7 +24722,7 @@ function saisonFiche(f){
   if(!SAISON_ID_RE.test(id)) return {erreur:'Identifiant invalide.'};
   const badgeCle=(slug(f.badgeCle)||slug(nom)).slice(0,40);
   if(!/^[a-z0-9-]{2,40}$/.test(badgeCle)) return {erreur:'Clé de badge invalide.'};
-  const couleurAccent=/^#[0-9a-fA-F]{6}$/.test(String(f.couleurAccent||''))?f.couleurAccent:'#E02020';
+  const couleurAccent=/^#[0-9a-fA-F]{6}$/.test(String(f.couleurAccent||''))?f.couleurAccent:ROUGE_MARQUE;
   return {id,fiche:{nom,debut,fin,mesure,objectifPerso:op,objectifCollectif:oc,badgeCle,couleurAccent,
     texteAccueil:String(f.texteAccueil||'').trim().slice(0,200)}};
 }
@@ -24727,7 +24737,7 @@ function htmlSaisonAdmin(){
     +L('sa-op','Objectif perso','<input id="sa-op" type="number" min="1" inputmode="decimal" placeholder="10">')
     +L('sa-oc','Objectif collectif','<input id="sa-oc" type="number" min="0" inputmode="decimal" placeholder="1000">')
     +L('sa-badge','Clé du badge','<input id="sa-badge" type="text" maxlength="40" placeholder="hiver">')
-    +L('sa-couleur','Couleur','<input id="sa-couleur" type="color" value="#E02020">')
+    +L('sa-couleur','Couleur',('<input id="sa-couleur" type="color" value="'+ROUGE_MARQUE+'">'))
     +L('sa-texte','Texte d’accueil','<input id="sa-texte" type="text" maxlength="200">')
     +'<button type="button" class="btn btn-outline btn-sm btn-casse" style="width:100%;margin:10px 0 0;min-height:44px" onclick="enregistrerSaison(this)">Créer l’édition</button></div>';
 }
@@ -24836,7 +24846,7 @@ function _dessinerCarteDefi(d,fond,format){
   const h=g.createRadialGradient(cx,Y(690),40,cx,Y(690),540*K);
   h.addColorStop(0,rouge?'rgba(255,255,255,.3)':'rgba(224,32,32,.45)'); h.addColorStop(1,'rgba(0,0,0,0)');
   g.fillStyle=h; g.fillRect(0,Y(200),W,Math.round(1100*K));
-  g.fillStyle=rouge?'rgba(255,255,255,.92)':'#E02020';
+  g.fillStyle=rouge?'rgba(255,255,255,.92)':ROUGE_MARQUE;
   g.shadowColor=rouge?'rgba(255,255,255,.6)':'rgba(224,32,32,.9)'; g.shadowBlur=60;
   g.beginPath();
   [[610,300],[410,720],[540,720],[455,1080],[715,580],[575,580],[680,300]].forEach((p,i)=>i?g.lineTo(X(p[0]),Y(p[1])):g.moveTo(X(p[0]),Y(p[1])));
@@ -24845,7 +24855,7 @@ function _dessinerCarteDefi(d,fond,format){
   o.ombre(true);
   g.fillStyle='#fff';
   if(d.champion){
-    g.fillStyle=rouge?'#fff':'#E02020'; g.font='800 40px '+MONT;
+    g.fillStyle=rouge?'#fff':ROUGE_MARQUE; g.font='800 40px '+MONT;
     o.ecrireEspace('DÉFI '+String(d.mois||''),cx,post?90:300,9,true);
     g.fillStyle='#fff';
     const cs=o.ajuste('CHAMPION','700',post?230:300,BEBAS,LARG,120);
@@ -25924,7 +25934,7 @@ function riteBilanDeLaSemaine(u,now){
 // ne porte alors que la date si l'athlète n'a rien répondu.
 function _riteLigne(lib,val,note){
   return `<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;
-    padding:8px 0;border-top:1px solid rgba(255,255,255,.06)">
+    padding:8px 0;border-top:1px solid color-mix(in srgb,var(--text) 6%,transparent)">
     <span style="font-size:var(--fs-xs);color:var(--sub)">${escapeHtml(lib)}</span>
     <span style="font-size:var(--fs-md);font-weight:800;color:var(--text);text-align:right">${val}${note?`<span style="font-size:var(--fs-2xs);color:var(--text-faint);font-weight:400"> ${escapeHtml(note)}</span>`:''}</span>
   </div>`;
@@ -25980,7 +25990,7 @@ function ouvrirRite(cycle){
       <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:10px">Tes jours et ton heure d'entraînement pour les 4 prochaines semaines. Nommer cette période ne crée aucun programme : c'est une étiquette.</div>
       <div id="rite-jours" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
         ${['L','Ma','Me','J','V','S','D'].map((j,i)=>`<button type="button" data-j="${i}" onclick="riteJour(${i},this)"
-          style="flex:1;min-width:40px;min-height:44px;border-radius:var(--r-2);cursor:pointer;background:#111;border:1px solid var(--border);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800">${j}</button>`).join('')}
+          style="flex:1;min-width:40px;min-height:44px;border-radius:var(--r-2);cursor:pointer;background:var(--surface-1);border:1px solid var(--border);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800">${j}</button>`).join('')}
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:var(--fs-xs);color:var(--sub)">Heure</span>
@@ -26578,12 +26588,12 @@ function renderFileReprise(){
       background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:12px 14px;margin-bottom:12px">
       <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.5">Relancés cette semaine</span>
       <span style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--red-text);
-        --halo-c:rgba(224,32,32,.6);text-shadow:var(--halo-1)">${sem}</span>
+        --halo-c:color-mix(in srgb,var(--red) 60%,transparent);text-shadow:var(--halo-1)">${sem}</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
       <span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase">Mettre en veille</span>
       <select onchange="frSetDuree(this.value)" aria-label="Durée de mise en veille"
-        style="min-height:38px;padding:6px 10px;border-radius:var(--r-2);background:#101010;border:1px solid var(--border);
+        style="min-height:38px;padding:6px 10px;border-radius:var(--r-2);background:var(--surface-1);border:1px solid var(--border);
           color:var(--text-strong);font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
         ${FR_DUREES.map(j=>`<option value="${j}"${j===_frDuree?' selected':''}>${j} jours</option>`).join('')}
       </select>
@@ -26599,7 +26609,7 @@ function renderFileReprise(){
       font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.3px;
       background:${fort?'rgba(224,32,32,.14)':'#111'};border:1px solid ${fort?'var(--red)':'var(--border)'};
       color:${fort?'var(--text)':'var(--sub)'}">${escapeHtml(lib)}</button>`;
-  el.innerHTML=tete+_htmlCalendrierAcces()+f.lignes.map(r=>`<div style="background:linear-gradient(180deg,#151515,#0e0e0e);
+  el.innerHTML=tete+_htmlCalendrierAcces()+f.lignes.map(r=>`<div style="background:linear-gradient(180deg,var(--surface-2),var(--surface-0));
       border:1px solid var(--border);border-left:1px solid var(--border);border-radius:var(--r-3);
       padding:12px 12px;margin-bottom:10px;box-shadow:var(--e2)">
       <div style="display:flex;align-items:baseline;gap:8px">
@@ -28693,7 +28703,7 @@ function _cocherIds(conteneur,ids){
 //   bilan, retour vidéo) : au premier jour, personne n'est déclaré silencieux
 //   parce que le champ contacts vient d'apparaître.
 const ETIQ_MAX=20, ETIQ_LIB_MAX=24;
-const ETIQ_COULEURS=Object.freeze(['#E02020','#f5c518','#22c55e','#3b82f6','#a855f7','#ec4899','#f97316','#14b8a6']);
+const ETIQ_COULEURS=Object.freeze([ROUGE_MARQUE,'#f5c518','#22c55e','#3b82f6','#a855f7','#ec4899','#f97316','#14b8a6']);
 const SANS_CONTACT_J=14;
 let _filtreEtiquette=null;
 function _etiqId(i){ return 'e'+i; }
@@ -29116,13 +29126,13 @@ function renderTodoBlock(clients){
     total:rows.filter(r=>_bande(r)===i).length,
     // On garde l'index d'origine avec la ligne : la colonne n'est qu'une vue.
     lignes:vues.map((r,idx)=>({r,idx})).filter(x=>_bande(x.r)===i)}));
-  el.innerHTML=`<div style="background:#0c0000;border:1px solid #2a0000;border-left:1px solid var(--border);border-radius:var(--r-card);margin-bottom:20px;overflow:hidden;box-shadow:var(--elev-3)">
-    <div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;background:#0f0000;border-bottom:1px solid #1e0000">
+  el.innerHTML=`<div style="background:var(--red-bg);border:1px solid var(--red-bg-2);border-left:1px solid var(--border);border-radius:var(--r-card);margin-bottom:20px;overflow:hidden;box-shadow:var(--elev-3)">
+    <div style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;background:var(--red-bg);border-bottom:1px solid #1e0000">
       <span style="font-size:13px;font-weight:800;color:var(--red-text);text-transform:uppercase;letter-spacing:2.4px">Mes notifications</span>
       <span style="background:var(--red);color:var(--text);font-size:14px;font-weight:400;padding:1px 10px;border-radius:var(--r-3);font-family:var(--pile-titre);letter-spacing:1px">${unique}</span>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:10px;padding:10px">
-    ${_cols.map(b=>`<div style="min-width:0;background:#0a0000;border:1px solid #1e0000;border-radius:0;overflow:hidden">
+    ${_cols.map(b=>`<div style="min-width:0;background:var(--red-bg);border:1px solid #1e0000;border-radius:0;overflow:hidden">
       <div style="padding:8px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:${b.couleur}">
         <!-- LE TEXTE EST PRESQUE NOIR SUR LE BANDEAU PLEIN, et non blanc : sur
              l'orange et sur le vert, du blanc tombe sous trois pour un de
@@ -29349,7 +29359,7 @@ function etatAthlete(c){
     :isActive(c)?'actif':'dormant';
 }
 // La couleur du filet, par etat. Meme table pour les trois ecrans.
-const ETAT_FILET=Object.freeze({alerte:'#E02020',bilan:'#f97316',attente:'#f97316',
+const ETAT_FILET=Object.freeze({alerte:ROUGE_MARQUE,bilan:'#f97316',attente:'#f97316',
   actif:'#22c55e',lecture:'#8a8a8a',dormant:'#666666'});
 // ══════ N4.13 — COCHER DES ATHLETES SANS QUITTER LA LISTE ═════════════════
 // Les cases a cocher existaient, mais sur deux ecrans separes et mono-usage :
@@ -30063,9 +30073,9 @@ function _htmlCalendrierAcces(){
     +'<div style="font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;'
     +'color:var(--sub);margin-bottom:6px">'+escapeHtml(libMois(k))+' · '+mois[k].length+'</div>'
     +mois[k].map(x=>'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;'
-      +'border-top:1px solid rgba(255,255,255,.05);font-size:var(--fs-xs)">'
+      +'border-top:1px solid color-mix(in srgb,var(--text) 5%,transparent);font-size:var(--fs-xs)">'
       +'<span style="width:8px;height:8px;border-radius:var(--r-full);flex-shrink:0;background:'
-      +(estSuivi(x.c)?'#E02020':'#f5a524')+'"></span>'
+      +(estSuivi(x.c)?ROUGE_MARQUE:'#f5a524')+'"></span>'
       +'<span style="flex:1;min-width:0;color:var(--text-strong);overflow:hidden;text-overflow:ellipsis;'
       +'white-space:nowrap">'+escapeHtml(((x.c.fname||'')+' '+(x.c.lname||'')).trim()||'-')+'</span>'
       +'<span style="color:var(--sub);flex-shrink:0">'+jour(x.t)+'</span></div>').join('')
@@ -30111,7 +30121,7 @@ function _htmlCroissanceCoach(athletes){
          l'autre. Les nombres rejoignent donc les pastilles qu'ils décrivent. -->
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px;flex-wrap:wrap">
       <span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--red-text)">
-        <span style="width:9px;height:9px;border-radius:var(--r-1);background:linear-gradient(180deg,#ff4a4a,#6d0000);box-shadow:0 0 7px rgba(224,32,32,.8)"></span>${avecSuivi} avec suivi</span>
+        <span style="width:9px;height:9px;border-radius:var(--r-1);background:linear-gradient(180deg,#ff4a4a,#6d0000);box-shadow:0 0 7px color-mix(in srgb,var(--red) 80%,transparent)"></span>${avecSuivi} avec suivi</span>
       <span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--text)">
         <span style="width:9px;height:9px;border-radius:var(--r-1);background:linear-gradient(180deg,#ffffff,#8f8f8f);box-shadow:0 0 7px rgba(255,255,255,.6)"></span>${sansSuivi} sans suivi</span>
       <span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--text)">
@@ -31261,7 +31271,7 @@ function tunnelStatut(n){
 }
 /** Les libelles et les couleurs des quatre statuts, en un seul endroit. */
 const TUNNEL_LIB=Object.freeze({
-  chaud:{lib:'Chaud',c:'#E02020'},
+  chaud:{lib:'Chaud',c:ROUGE_MARQUE},
   tiede:{lib:'Tiède',c:'#f5a524'},
   froid:{lib:'Froid',c:'#4DA3FF'},
   fin:{lib:'Fin du tunnel',c:'#8a8a8a'}});
@@ -32066,7 +32076,7 @@ function renderCoachSessionRecap(c){
   el.innerHTML=`<h3 style="margin-bottom:12px">Séances</h3>
     <div id="ccd-sr-list"></div>
     <button id="ccd-sr-more" onclick="showMoreCoachSessions()"
-      style="display:none;width:100%;padding:10px;background:none;border:1px solid #222;border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-sm);cursor:pointer;margin-bottom:4px;min-height:44px">Voir plus de séances</button>`;
+      style="display:none;width:100%;padding:10px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-sm);cursor:pointer;margin-bottom:4px;min-height:44px">Voir plus de séances</button>`;
   _renderSessionBatch(0,5);
 }
 function _renderSessionBatch(from,count){
@@ -32220,7 +32230,7 @@ function _buildSessionCard(s,client){
   // LE MOT DE L'ATHLETE, en tete du detail : c'est la premiere chose a lire.
   const _mot=(typeof s.noteAthlete==='string'&&s.noteAthlete.trim())
     ?`<div class="sc-note-ath"><span>Son mot</span>${escapeHtml(s.noteAthlete.trim().slice(0,NOTE_SEANCE_MAX))}</div>`:'';
-  return `<div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:var(--r-3);margin-bottom:10px;overflow:hidden">
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);margin-bottom:10px;overflow:hidden">
     <div onclick="toggleSCard(this)" style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="flex:1;min-width:0">
         <div style="font-size:var(--fs-md);font-weight:700;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(s.name||'Séance')}</div>
@@ -33753,7 +33763,7 @@ function openClientDetail(cid,_refresh,_force){
   try{ renderRiteCoach(c); }catch(e){}
   const be=document.getElementById('ccd-bilans');
   if(c._fromCode){
-    be.innerHTML=`<div style="background:#111;border:1px solid var(--surface-2);border-radius:var(--r-3);padding:16px;text-align:center">
+    be.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--surface-2);border-radius:var(--r-3);padding:16px;text-align:center">
       <div style="margin-bottom:10px">${icon('smartphone',32)}</div>
       <div style="font-weight:700;margin-bottom:6px">${escapeHtml(c.fname||'')} n'a pas encore créé son compte</div>
       <div class="sub" style="font-size:var(--fs-sm);line-height:1.6">Envoie-lui le code d'accès pour qu'elle s'inscrive.<br>Ses données apparaîtront ici automatiquement dès qu'elle aura complété son premier bilan.</div>
@@ -33787,7 +33797,7 @@ function openClientDetail(cid,_refresh,_force){
       return `<div class="card" style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700">${new Date(b.date).toLocaleDateString('fr-FR')}</span><span class="badge ${b.date>_oldSeen?'badge-orange':'badge-green'}">${b.date>_oldSeen?'Nouveau ✦':'Complété'}</span></div>
       <div style="display:flex;gap:16px;flex-wrap:wrap">${_fragmentSiValeur('<span class="sub">Poids: <strong style="color:var(--text)">',bwN,'kg</strong></span>')}${_fragmentSiValeur('<span class="sub">MG: <strong style="color:var(--text)">',bfPct,'%</strong></span>')}${_fragmentSiValeur('<span class="sub">Taille: <strong style="color:var(--text)">',bWaistN,'cm</strong></span>')}</div>
-      ${_extrait.length?`<div style="margin-top:10px;border-top:1px solid #1a1a1a;padding-top:8px">
+      ${_extrait.length?`<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
         ${_extrait.map(x=>`<div style="font-size:var(--fs-xs);line-height:1.5;margin-bottom:4px"><span style="color:var(--sub);font-weight:700">${x.lbl} :</span> <span style="color:#ccc">${escapeHtml(x.txt.length>90?x.txt.slice(0,90)+'…':x.txt)}</span></div>`).join('')}
         <button class="btn btn-outline btn-sm" style="margin-top:6px" onclick="viewClientBilans();evoTab('reponses')">Voir toutes les réponses</button>
       </div>`:''}
@@ -34302,7 +34312,7 @@ function drawLineChart(canvas,datasets,labels){
     // dit « c'est celle-ci qu'on suit » ; l'appliquer a toutes le dirait de
     // personne. Base = pad.t+ch, le socle de la grille.
     const _ok=pts.filter(p=>p.ok);
-    if(ds.color==='#E02020'&&_ok.length>1){
+    if(ds.color===ROUGE_MARQUE&&_ok.length>1){
       const _hauts=Math.min.apply(null,_ok.map(q=>q.y));
       const _g=ctx.createLinearGradient(0,_hauts,0,pad.t+ch);
       _g.addColorStop(0,ds.color+'5c');_g.addColorStop(.5,ds.color+'26');_g.addColorStop(1,ds.color+'0a');
@@ -34440,7 +34450,7 @@ function renderBilanEvolution(c){
 
   // Measurements list
   const MEAS=[
-    {key:'bicep-r',label:'Tour de biceps D',color:'#E02020'},
+    {key:'bicep-r',label:'Tour de biceps D',color:ROUGE_MARQUE},
     {key:'bicep-l',label:'Tour de biceps G',color:'#f97316'},
     {key:'chest',label:'Tour de poitrine',color:'#eab308'},
     {key:'waist',label:'Tour de taille',color:'#3b82f6'},
@@ -34456,7 +34466,7 @@ function renderBilanEvolution(c){
 
   // Groups for mini charts
   const GROUPS=[
-    {label:'Biceps',keys:['bicep-r','bicep-l'],colors:['#E02020','#f97316']},
+    {label:'Biceps',keys:['bicep-r','bicep-l'],colors:[ROUGE_MARQUE,'#f97316']},
     {label:'Tour de poitrine',keys:['chest'],colors:['#eab308']},
     {label:'Tour de taille',keys:['waist'],colors:['#3b82f6']},
     {label:'Tour de hanche',keys:['hips'],colors:['#38bdf8']},
@@ -34485,8 +34495,8 @@ function renderBilanEvolution(c){
       // stagnation, et il doit distinguer d'un coup d'oeil une mesure reprise
       // d'un relevé du jour.
       valueStyleFn:(v,ci,empty)=>ci>=maxB
-        ? (empty?'background:#080808;color:var(--sub);':'background:var(--dark);color:var(--sub);')
-        : (empty?'background:#080808;color:var(--sub);'
+        ? (empty?'background:var(--bg);color:var(--sub);':'background:var(--dark);color:var(--sub);')
+        : (empty?'background:var(--bg);color:var(--sub);'
           :('background:var(--dark);color:'
             +(bilans[ci]&&bmReportee(bilans[ci],m.key)?'var(--text-faint)':'var(--text)')+';'))
     }));
@@ -34543,15 +34553,15 @@ function renderBilanEvolution(c){
       return{bf,mg,mm,w};
     });
     // Formula note
-    const formulaNote=`<div style="background:#111;border:1px solid #222;border-radius:var(--r-2);padding:12px;margin-bottom:14px;font-size:var(--fs-xs);line-height:1.8">
+    const formulaNote=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:12px;margin-bottom:14px;font-size:var(--fs-xs);line-height:1.8">
       <div style="font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:2px;color:var(--red-text);margin-bottom:6px">Formule US Navy ${female?'(Femme)':'(Homme)'} : Calcul automatique</div>
       ${female
-        ?`<div style="color:#aaa;font-family:monospace;font-size:var(--fs-xs)">%MG = 495 / [1,29579 − 0,35004 × log(<b style="color:var(--text)">taille</b> + <b style="color:#69f0ae">hanches</b> − <b style="color:#ffd600">cou</b>) + 0,22100 × log(<b style="color:var(--accent-blue)">hauteur</b>)] − 450</div>
+        ?`<div style="color:var(--text-mid);font-family:monospace;font-size:var(--fs-xs)">%MG = 495 / [1,29579 − 0,35004 × log(<b style="color:var(--text)">taille</b> + <b style="color:#69f0ae">hanches</b> − <b style="color:#ffd600">cou</b>) + 0,22100 × log(<b style="color:var(--accent-blue)">hauteur</b>)] − 450</div>
          <div style="color:var(--text-dim);font-size:var(--fs-xs);margin-top:4px">taille = tour de taille · hanches = tour de hanches · cou = tour de cou · hauteur = taille en cm</div>`
-        :`<div style="color:#aaa;font-family:monospace;font-size:var(--fs-xs)">%MG = 495 / [1,0324 − 0,19077 × log(<b style="color:var(--text)">taille</b> − <b style="color:#ffd600">cou</b>) + 0,15456 × log(<b style="color:var(--accent-blue)">hauteur</b>)] − 450</div>
+        :`<div style="color:var(--text-mid);font-family:monospace;font-size:var(--fs-xs)">%MG = 495 / [1,0324 − 0,19077 × log(<b style="color:var(--text)">taille</b> − <b style="color:#ffd600">cou</b>) + 0,15456 × log(<b style="color:var(--accent-blue)">hauteur</b>)] − 450</div>
          <div style="color:var(--text-dim);font-size:var(--fs-xs);margin-top:4px">taille = tour de taille · cou = tour de cou · hauteur = taille en cm</div>`
       }
-      <div style="margin-top:8px;color:#888;font-size:var(--fs-xs);border-top:1px solid #222;padding-top:8px"> Précision estimée ±3% par rapport à la réalité. La formule est une estimation : pour un résultat précis, privilégier une pesée hydrostatique ou DEXA.</div>
+      <div style="margin-top:8px;color:var(--sub);font-size:var(--fs-xs);border-top:1px solid var(--border);padding-top:8px"> Précision estimée ±3% par rapport à la réalité. La formule est une estimation : pour un résultat précis, privilégier une pesée hydrostatique ou DEXA.</div>
     </div>`;
     // Pie charts for each bilan (first 3 with data)
     const pieBilans=bfVals.map((b,i)=>b.mg!==null?{idx:i,mg:b.mg,mm:b.mm}:null).filter(Boolean).slice(0,4);
@@ -34560,11 +34570,11 @@ function renderBilanEvolution(c){
         <div style="font-size:var(--fs-xs);font-weight:800;margin-bottom:6px">Bilan ${p.idx+1}</div>
         <canvas id="evo-pie-${p.idx}" width="100" height="100"></canvas>
         <div style="font-size:var(--fs-xs);color:var(--red-text);margin-top:4px">MG: ${p.mg}kg</div>
-        <div style="font-size:var(--fs-xs);color:#aaa;margin-top:1px">MM: ${p.mm}kg</div>
+        <div style="font-size:var(--fs-xs);color:var(--text-mid);margin-top:1px">MM: ${p.mm}kg</div>
       </div>`).join('')+`</div>`:'';
     return `
       <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:12px;margin-bottom:12px">
-        <div style="font-size:var(--fs-xs);color:#aaa;text-align:center;margin-bottom:6px;text-transform:uppercase;letter-spacing:2px;font-weight:700">% de graisse corporelle</div>
+        <div style="font-size:var(--fs-xs);color:var(--text-mid);text-align:center;margin-bottom:6px;text-transform:uppercase;letter-spacing:2px;font-weight:700">% de graisse corporelle</div>
         <canvas id="evo-fat-chart" style="width:100%;display:block"></canvas>
       </div>
       ${formulaNote}${pies}
@@ -34630,22 +34640,22 @@ function renderBilanEvolution(c){
         const safeCap=(c.fname||'').replace(/'/g,'').replace(/"/g,'')+'  B'+(i+1);
         return img
           ?`<div data-cap="${safeCap}" onclick="openPhotoFull(this.querySelector('img').src,this.dataset.cap)"
-              style="flex-shrink:0;cursor:pointer;position:relative;border-radius:var(--r-3);overflow:hidden;background:#111;border:1px solid var(--border);width:110px" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+              style="flex-shrink:0;cursor:pointer;position:relative;border-radius:var(--r-3);overflow:hidden;background:var(--surface-1);border:1px solid var(--border);width:110px" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
               <div style="position:absolute;top:6px;left:6px;background:#000b;color:var(--text);font-size:var(--fs-xs);font-weight:800;padding:2px 8px;border-radius:var(--r-2);letter-spacing:1px;z-index:1">B${i+1}</div>
-              <img src="${srcImageSure(img||'')}"${_p.cle?` data-bil-cle="${escapeHtml(_p.cle)}"`:''} style="width:110px;height:160px;object-fit:cover;display:block;background:#111">
-              <div style="padding:6px 6px;font-size:var(--fs-xs);color:#888;font-weight:700;text-align:center">${date}</div>
+              <img src="${srcImageSure(img||'')}"${_p.cle?` data-bil-cle="${escapeHtml(_p.cle)}"`:''} style="width:110px;height:160px;object-fit:cover;display:block;background:var(--surface-1)">
+              <div style="padding:6px 6px;font-size:var(--fs-xs);color:var(--sub);font-weight:700;text-align:center">${date}</div>
               <div style="padding:0 6px 6px;font-size:var(--fs-2xs);color:${_p.locale?'var(--orange)':'var(--text-faint)'};text-align:center;line-height:1.3">${_p.locale?'Haute déf., cet appareil':'Version transmise'}</div>
             </div>`
           :`<label style="flex-shrink:0;width:110px;border-radius:var(--r-3);background:var(--surface-2);border:1px dashed var(--red);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:180px;cursor:pointer">
               <input type="file" accept="image/*" style="display:none" onchange="addBilanPhoto(${b.date},'${b.type}','${v.k}',this)">
               <div style="font-size:var(--fs-2xl);opacity:.5">📷</div>
-              <div style="font-size:var(--fs-xs);color:#aaa;font-weight:700">B${i+1}</div>
-              <div style="font-size:var(--fs-xs);color:#888">${date}</div>
+              <div style="font-size:var(--fs-xs);color:var(--text-mid);font-weight:700">B${i+1}</div>
+              <div style="font-size:var(--fs-xs);color:var(--sub)">${date}</div>
               <div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:1px;margin-top:2px">+ Ajouter</div>
             </label>`;
       }).join('');
       return `<div style="margin-bottom:20px">
-        <div style="font-size:var(--fs-xs);font-weight:800;color:#888;text-transform:uppercase;letter-spacing:2px;margin-bottom:10px;display:flex;align-items:center;gap:6px">
+        <div style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:2px;margin-bottom:10px;display:flex;align-items:center;gap:6px">
           <span>${v.icon}</span><span>${v.label}</span>
         </div>
         <div style="position:relative"><div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:4px" data-scroll-fade>${cards}</div></div>
@@ -34654,9 +34664,9 @@ function renderBilanEvolution(c){
 
     return `<div style="margin-top:4px;margin-bottom:28px">
       <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);text-align:center;text-transform:uppercase;letter-spacing:3px;margin-bottom:20px;display:flex;align-items:center;justify-content:center;gap:8px">
-        <div style="height:1px;background:rgba(224,32,32,.2);flex:1"></div>
+        <div style="height:1px;background:color-mix(in srgb,var(--red) 20%,transparent);flex:1"></div>
         FRESQUE ÉVOLUTION
-        <div style="height:1px;background:rgba(224,32,32,.2);flex:1"></div>
+        <div style="height:1px;background:color-mix(in srgb,var(--red) 20%,transparent);flex:1"></div>
       </div>
       ${(()=>{ try{ return htmlBoutonAvantApres(c,'coach'); }catch(e){ return ''; } })()}
       ${viewSections}
@@ -38402,7 +38412,7 @@ function loadAssignAthletes(){
     // qui sera reellement assigne plutot que ce qu'on aurait choisi par defaut.
     const defG=progGenreServi(_progAssigne(),detectedF?'F':'H');
     return `
-    <div style="display:flex;align-items:center;gap:12px;border-bottom:1px solid #242424;padding:12px 10px;border-left:3px solid ${ETAT_FILET[etatAthlete(a)]||'#666666'};border-radius:0 8px 8px 0;background:linear-gradient(168deg,#141414,#0d0d0d);margin-bottom:6px">
+    <div style="display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);padding:12px 10px;border-left:3px solid ${ETAT_FILET[etatAthlete(a)]||'#666666'};border-radius:0 8px 8px 0;background:linear-gradient(168deg,var(--surface-1),var(--surface-0));margin-bottom:6px">
       <div class="avatar" style="width:32px;height:32px;font-size:12px;flex-shrink:0">${escapeHtml(ini(a.fname,a.lname))}</div>
       <input type="checkbox" id="cpa-cb-${a.id}" value="${a.id}" data-gender="${defG}"${cpaCocheDefaut(a)?'':' data-encours="1"'} style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <label for="cpa-cb-${a.id}" style="flex:1;cursor:pointer">
@@ -43259,8 +43269,8 @@ function renderProgEx(){
           </details>
         </span>`:''}
         <span class="px-cmd px-cmd-ed">
-          <button onclick="_dupliquerExUI(${i})" aria-label="Dupliquer cet exercice" title="Dupliquer" style="background:#fff2;border:none;color:var(--text);font-size:var(--fs-xs);font-weight:800;cursor:pointer;border-radius:var(--r-3);height:24px;padding:0 10px;display:flex;align-items:center;justify-content:center;font-family:inherit">Copie</button>
-          <button onclick="_supprimerEx(${i})" aria-label="Supprimer cet exercice" style="background:#fff2;border:none;color:var(--text);font-size:var(--fs-md);cursor:pointer;border-radius:var(--r-full);width:24px;height:24px;display:flex;align-items:center;justify-content:center">${icon('trash',13)}</button>
+          <button onclick="_dupliquerExUI(${i})" aria-label="Dupliquer cet exercice" title="Dupliquer" style="background:color-mix(in srgb,var(--text) 13.3%,transparent);border:none;color:var(--text);font-size:var(--fs-xs);font-weight:800;cursor:pointer;border-radius:var(--r-3);height:24px;padding:0 10px;display:flex;align-items:center;justify-content:center;font-family:inherit">Copie</button>
+          <button onclick="_supprimerEx(${i})" aria-label="Supprimer cet exercice" style="background:color-mix(in srgb,var(--text) 13.3%,transparent);border:none;color:var(--text);font-size:var(--fs-md);cursor:pointer;border-radius:var(--r-full);width:24px;height:24px;display:flex;align-items:center;justify-content:center">${icon('trash',13)}</button>
         </span>
       </div>
       <div class="px-mus" id="px-mus-${i}">${_pxHtmlMuscles(ex)}</div>
@@ -44568,7 +44578,7 @@ function loadClientHome(){
       _z.innerHTML=_l
         ? '<div onclick="ouvrirEcheanceEcran()" role="button" tabindex="0" '
           +'onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}" '
-          +'style="background:rgba(224,32,32,.07);border:1px solid var(--red);border-radius:var(--r-3);'
+          +'style="background:color-mix(in srgb,var(--red) 7%,transparent);border:1px solid var(--red);border-radius:var(--r-3);'
           +'padding:12px 14px;cursor:pointer;font-size:var(--fs-sm);color:var(--text);font-weight:700">'
           +escapeHtml(_l)+'</div>'
         : '';
@@ -44874,7 +44884,7 @@ function loadClientHome(){
     if(!name){
       if(accueilMasque('code')){ el.innerHTML=''; el.style.display='none'; return; }
       el.style.display='block';
-      el.innerHTML=`<div data-acc onclick="go('s-client-code')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="position:relative;display:flex;align-items:center;gap:12px;padding:14px 40px 14px 16px;border-radius:var(--r-md);background:#0c0c0c;border:1px dashed var(--border);cursor:pointer">${_accX('code')}
+      el.innerHTML=`<div data-acc onclick="go('s-client-code')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="position:relative;display:flex;align-items:center;gap:12px;padding:14px 40px 14px 16px;border-radius:var(--r-md);background:var(--surface-0);border:1px dashed var(--border);cursor:pointer">${_accX('code')}
         <div style="flex-shrink:0;width:38px;height:38px;border-radius:var(--r-full);background:var(--surface-3);display:flex;align-items:center;justify-content:center;color:var(--sub)">${icon('user',18)}</div>
         <div style="flex:1;min-width:0">
           <div style="font-weight:800;font-size:var(--fs-md)">Tu as un code coach&nbsp;?</div>
@@ -44885,7 +44895,7 @@ function loadClientHome(){
       return;
     }
     el.style.display='block';
-    el.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:var(--r-md);background:#0c0c0c;border-top:1px solid var(--border);border-left:1px solid var(--border);border-right:1px solid #1e1e1e;border-bottom:1px solid rgba(180,0,0,0.18)">
+    el.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:var(--r-md);background:var(--surface-0);border-top:1px solid var(--border);border-left:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid rgba(180,0,0,0.18)">
       
       <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 0% 50%,rgba(210,0,0,0.2) 0%,transparent 65%);pointer-events:none"></div>
       <!-- La photo n'est plus centrée sur la hauteur : elle est calée EN HAUT,
@@ -44903,13 +44913,13 @@ function loadClientHome(){
         <div style="flex-shrink:0;display:flex;flex-direction:column;width:72px;gap:12px">
         ${photo
           ?`<div style="width:72px;height:72px;border-radius:var(--r-full);overflow:hidden;border:2px solid rgba(210,0,0,0.55);box-shadow:0 0 0 5px rgba(200,0,0,0.07),0 8px 28px rgba(0,0,0,0.7)"><img src="${escapeHtml(photo)}" style="width:100%;height:100%;object-fit:cover;display:block"></div>`
-          :`<div style="width:72px;height:72px;border-radius:var(--r-full);background:linear-gradient(135deg,var(--surface-3),#080808);border:2px solid rgba(210,0,0,0.55);box-shadow:0 0 0 5px rgba(200,0,0,0.07),0 8px 28px rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center">${icon('dumbbell',28)}</div>`}
+          :`<div style="width:72px;height:72px;border-radius:var(--r-full);background:linear-gradient(135deg,var(--surface-3),var(--bg));border:2px solid rgba(210,0,0,0.55);box-shadow:0 0 0 5px rgba(200,0,0,0.07),0 8px 28px rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center">${icon('dumbbell',28)}</div>`}
           <div style="margin-top:auto;margin-left:-20px;width:92px;text-align:center;background:var(--red);color:var(--text);font-size:var(--fs-2xs);font-weight:900;letter-spacing:2.5px;padding:6px 0;border-radius:0 var(--r-2) var(--r-2) 0;box-shadow:var(--e2),var(--glow-red)">COACH</div>
         </div>
         <div style="flex:1;min-width:0">
           ${team?`<div class="cc-team">${escapeHtml(team)}</div>`:''}
           <div class="txt-stat" style="letter-spacing:2px;line-height:0.95;color:var(--text);margin-bottom:${phrase?'8':'0'}px">${escapeHtml(name.trim())}</div>
-          ${phrase?`<div style="font-size:var(--fs-xs);color:#888;font-style:italic;line-height:1.6">"${escapeHtml(phrase)}"</div>`:''}
+          ${phrase?`<div style="font-size:var(--fs-xs);color:var(--sub);font-style:italic;line-height:1.6">"${escapeHtml(phrase)}"</div>`:''}
         </div>
       </div>
     </div>`;
@@ -46870,7 +46880,7 @@ function _doitProposerReprise(u,maintenant){
 // que le coach ait publie ou non, la proposition est la meme, et l'athlete n'a
 // pas a apprendre ici l'etat du travail de son coach.
 function _htmlReprise(avecProgramme){
-  return '<div class="clh-in clh-in-2" style="background:linear-gradient(160deg,#1a0303,#120000 55%,#0b0000);'
+  return '<div class="clh-in clh-in-2" style="background:linear-gradient(160deg,#1a0303,var(--red-bg) 55%,var(--red-bg));'
     +'border:1px solid #3a0000;border-left:1px solid var(--border);border-radius:14px;'
     +'padding:24px 20px;margin-bottom:16px;box-shadow:0 14px 34px rgba(0,0,0,.6),'
     +'0 0 30px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.05)">'
@@ -48384,7 +48394,7 @@ function ouvrirIllustration(ref){
     +'padding:20px;touch-action:none';
   ov.innerHTML='<button type="button" aria-label="Fermer" data-fermer="1"'
     +' style="position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:14px;'
-    +'width:44px;height:44px;border-radius:var(--r-full);background:#ffffff1f;border:none;color:var(--text);'
+    +'width:44px;height:44px;border-radius:var(--r-full);background:color-mix(in srgb,var(--text) 12.2%,transparent);border:none;color:var(--text);'
     +'font-size:var(--fs-xl);line-height:1;cursor:pointer">×</button>'
     +'<img src="'+escapeHtml(img)+'" alt="'+escapeHtml(String(nom||''))+'"'
     +' style="max-width:96vw;max-height:76vh;object-fit:contain;border-radius:var(--r-3);background:#fff">'
@@ -48495,7 +48505,7 @@ function _apLigne(ex,i){
   // Lignes zébrées et valeur en gras : déplié, ce panneau se lit debout entre
   // deux séries, pas assis au calme.
   const l=(t,v)=>v?`<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;
-      font-size:var(--fs-sm);padding:6px 2px;border-top:1px solid rgba(255,255,255,.05)">`
+      font-size:var(--fs-sm);padding:6px 2px;border-top:1px solid color-mix(in srgb,var(--text) 5%,transparent)">`
     +`<span style="color:var(--sub);letter-spacing:.4px">${escapeHtml(t)}</span>`
     +`<span style="color:var(--text);font-weight:800;text-align:right">${escapeHtml(String(v))}</span></div>`:'';
   // `ex.note` a disparu d'ici : TROIS lectures, et aucun champ ne l'écrivait.
@@ -48526,17 +48536,17 @@ function _apLigne(ex,i){
          aria-label="Agrandir l'illustration de ${escapeHtml(_nomEx)}"
          style="position:relative;flex-shrink:0;width:76px;height:76px;padding:0;
          border-radius:var(--r-3);background:transparent;cursor:zoom-in;
-         border:1px solid rgba(255,255,255,.10);overflow:hidden;line-height:0">
+         border:1px solid color-mix(in srgb,var(--text) 10%,transparent);overflow:hidden;line-height:0">
         <img src="${escapeHtml(img)}" alt="" loading="lazy" width="76" height="76"
           style="width:100%;height:100%;object-fit:contain;display:block">
         <span aria-hidden="true" style="position:absolute;right:3px;bottom:3px;
           width:17px;height:17px;border-radius:var(--r-1);background:rgba(0,0,0,.62);
-          color:#e8e8e8;font-size:11px;line-height:17px;text-align:center">⤢</span></button>`
+          color:var(--text);font-size:11px;line-height:17px;text-align:center">⤢</span></button>`
     : `<div style="flex-shrink:0;width:76px;height:76px;border-radius:var(--r-3);
-         background:linear-gradient(145deg,#181818,#0d0d0d);border:1px solid var(--border);
+         background:linear-gradient(145deg,var(--surface-2),var(--surface-0));border:1px solid var(--border);
          display:flex;align-items:center;justify-content:center;color:var(--border);
          box-shadow:inset 0 1px 0 rgba(255,255,255,.04)">${icon('dumbbell',26)}</div>`;
-  return `<details style="position:relative;background:linear-gradient(180deg,#161616,#0f0f0f);
+  return `<details style="position:relative;background:linear-gradient(180deg,var(--surface-2),var(--surface-1));
     border:1px solid var(--border);border-left:1px solid var(--border);border-radius:var(--r-3);
     margin-bottom:10px;overflow:hidden;
     box-shadow:var(--e2)">
@@ -48545,19 +48555,19 @@ function _apLigne(ex,i){
     <summary style="position:relative;display:flex;align-items:center;gap:12px;padding:12px 12px;
       cursor:pointer;list-style:none;min-height:56px">
       <span style="flex-shrink:0;width:22px;font-family:var(--pile-titre);
-        font-size:var(--fs-xl);line-height:1;color:var(--red-text);--halo-c:rgba(224,32,32,.75);text-shadow:var(--halo-1);
+        font-size:var(--fs-xl);line-height:1;color:var(--red-text);--halo-c:color-mix(in srgb,var(--red) 75%,transparent);text-shadow:var(--halo-1);
         text-align:center">${i+1}</span>
       ${vign}
       <div style="flex:1;min-width:0">
         <div style="font-weight:900;font-size:var(--fs-md);line-height:1.25;letter-spacing:.2px;
           text-transform:uppercase;color:var(--text)">${escapeHtml(ex.name||'Exercice '+(i+1))}</div>
         ${sr?`<div style="display:inline-block;margin-top:6px;padding:4px 10px;border-radius:var(--r-2);
-          background:rgba(224,32,32,.12);border:1px solid rgba(224,32,32,.32);
+          background:color-mix(in srgb,var(--red) 12%,transparent);border:1px solid color-mix(in srgb,var(--red) 32%,transparent);
           font-size:var(--fs-sm);font-weight:800;color:var(--red-text);letter-spacing:.5px">${escapeHtml(sr)}</div>`:''}
       </div>
       <span style="color:var(--sub);font-size:var(--fs-lg);flex-shrink:0;width:22px;text-align:center">▾</span>
     </summary>
-    <div style="position:relative;padding:2px 14px 14px 14px;border-top:1px solid rgba(255,255,255,.07);
+    <div style="position:relative;padding:2px 14px 14px 14px;border-top:1px solid color-mix(in srgb,var(--text) 7%,transparent);
       background:rgba(0,0,0,.28)">
       ${l('Séries',ex.series)}
       ${l('Répétitions',ex.reps)}
@@ -48996,7 +49006,7 @@ function _dessinerStorySeance(d){
     g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r);
     g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); };
   const grad=g.createLinearGradient(CX,CY,CX+CW,CY+CH);
-  grad.addColorStop(0,'#e02020'); grad.addColorStop(0.55,'#c01818'); grad.addColorStop(1,'#8e1010');
+  grad.addColorStop(0,ROUGE_MARQUE_MIN); grad.addColorStop(0.55,'#c01818'); grad.addColorStop(1,'#8e1010');
   // AUCUNE OMBRE PORTEE : le canevas s arrete au bord de la carte, une ombre
   // y serait coupee net. Elle n aurait de sens qu avec une marge, donc avec
   // un fond — precisement ce qu on retire.
@@ -49427,7 +49437,7 @@ function _visuelPeindreFond(g,W,H,fond){
   if(fond==='rouge'){
     // Le dégradé et la trame de _dessinerStorySeance, sur tout le format.
     const grad=g.createLinearGradient(0,0,W,H);
-    grad.addColorStop(0,'#e02020'); grad.addColorStop(0.55,'#c01818'); grad.addColorStop(1,'#8e1010');
+    grad.addColorStop(0,ROUGE_MARQUE_MIN); grad.addColorStop(0.55,'#c01818'); grad.addColorStop(1,'#8e1010');
     g.fillStyle=grad; g.fillRect(0,0,W,H);
     g.save();
     g.strokeStyle='rgba(255,255,255,.05)'; g.lineWidth=2;
@@ -49944,7 +49954,7 @@ function _recEclairFiligrane(g,x1,y1,x2,y2,graine,fond){
   const coul=fond==='rouge'?'rgba(255,255,255,':'rgba(224,32,32,';
   g.save();
   g.lineJoin='round'; g.lineCap='round';
-  g.shadowColor=fond==='rouge'?'rgba(255,255,255,.5)':'#E02020'; g.shadowBlur=22;
+  g.shadowColor=fond==='rouge'?'rgba(255,255,255,.5)':ROUGE_MARQUE; g.shadowBlur=22;
   g.strokeStyle=coul+'.42)'; g.lineWidth=7;
   g.beginPath(); g.moveTo(pts[0].x,pts[0].y); for(const p of pts) g.lineTo(p.x,p.y); g.stroke();
   g.shadowBlur=0;
@@ -50012,7 +50022,7 @@ function _dessinerCarteRecord(record,fond,format,anim){
   o.ecrireEspace(surTitreRecord(r),cx,y+34,10,true);
   // Le trait rouge sous l'étiquette : la seule touche de couleur hors éclair.
   o.ombre(false);
-  g.fillStyle=f==='rouge'?'rgba(255,255,255,.85)':'#E02020';
+  g.fillStyle=f==='rouge'?'rgba(255,255,255,.85)':ROUGE_MARQUE;
   g.fillRect(cx-44,y+54,88,5);
   y+=H_TAG;
 
@@ -50031,7 +50041,7 @@ function _dessinerCarteRecord(record,fond,format,anim){
     o.ecrire(t,cx,y+52);
     const w=g.measureText(t).width;
     o.ombre(false);
-    g.strokeStyle=f==='rouge'?'rgba(255,255,255,.9)':'#E02020'; g.lineWidth=5;
+    g.strokeStyle=f==='rouge'?'rgba(255,255,255,.9)':ROUGE_MARQUE; g.lineWidth=5;
     g.beginPath(); g.moveTo(cx-w/2-10,y+30); g.lineTo(cx+w/2+10,y+30); g.stroke();
     o.ombre(true);
     y+=H_ANC;
@@ -50147,7 +50157,7 @@ function _dessinerCarteRecords(d,fond,format){
       o.ecrire(a,dx,yy+150);
       const w=g.measureText(a).width;
       o.ombre(false);
-      g.strokeStyle=f==='rouge'?'rgba(255,255,255,.9)':'#E02020'; g.lineWidth=4;
+      g.strokeStyle=f==='rouge'?'rgba(255,255,255,.9)':ROUGE_MARQUE; g.lineWidth=4;
       g.beginPath(); g.moveTo(dx-w-6,yy+134); g.lineTo(dx+6,yy+134); g.stroke();
       o.ombre(true);
     }
@@ -51251,7 +51261,7 @@ function _renderWeeklyInto(el,sc){
           <div style="font-family:var(--pile-titre);font-size:var(--fs-2xl);font-weight:400;color:var(--text);letter-spacing:1px;line-height:1">${heading}</div>
           ${nbEx?`<div style="font-size:var(--fs-xs);color:rgba(255,255,255,.6);margin-top:4px">${nbEx} exercice${nbEx>1?'s':''}${mainRest?' · '+mainRest+' repos':''}</div>`:'<div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);margin-top:4px">Récupération active</div>'}
         </div>
-        ${nbEx?`<div style="border-top:1px solid rgba(255,255,255,.15);padding-top:10px;display:flex;flex-direction:column;gap:6px">
+        ${nbEx?`<div style="border-top:1px solid color-mix(in srgb,var(--text) 15%,transparent);padding-top:10px;display:flex;flex-direction:column;gap:6px">
           ${selS.exercises.map((ex,i)=>`
             <div style="display:flex;align-items:center;gap:8px">
               <div style="width:18px;height:18px;background:rgba(0,0,0,.3);border-radius:var(--r-1);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:900;color:rgba(255,255,255,.65);flex-shrink:0">${i+1}</div>
@@ -51259,10 +51269,10 @@ function _renderWeeklyInto(el,sc){
               <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);flex-shrink:0">${ex.series}×${ex.reps}${_rirPrescrit(ex)?' @RIR'+escapeHtml(_rirPrescrit(ex)):''}</div>
             </div>`).join('')}
         </div>`:''}
-        ${nbEx?`<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.15);display:flex;justify-content:flex-end;gap:8px">
+        ${nbEx?`<div style="margin-top:12px;padding-top:10px;border-top:1px solid color-mix(in srgb,var(--text) 15%,transparent);display:flex;justify-content:flex-end;gap:8px">
           <button id="story-btn" type="button" onclick="event.stopPropagation();telechargerSeanceDuJour()" aria-label="Télécharger la séance du jour en image"
             style="display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:6px 12px;border-radius:var(--r-2);cursor:pointer;
-              background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.22);color:var(--text);
+              background:rgba(0,0,0,.28);border:1px solid color-mix(in srgb,var(--text) 22%,transparent);color:var(--text);
               font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.4px">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">
               <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
@@ -51275,7 +51285,7 @@ function _renderWeeklyInto(el,sc){
           ${(typeof navigator!=='undefined'&&navigator.share)?`
           <button id="story-partage-btn" type="button" onclick="event.stopPropagation();partagerSeanceDuJour()" aria-label="Partager la séance du jour"
             style="display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:6px 12px;border-radius:var(--r-2);cursor:pointer;
-              background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.34);color:var(--text);
+              background:color-mix(in srgb,var(--text) 16%,transparent);border:1px solid color-mix(in srgb,var(--text) 34%,transparent);color:var(--text);
               font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.4px">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true">
               <path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
@@ -52152,7 +52162,7 @@ function _blocExo(idx,estSS){
         <div class="wo-ava"></div>
       </div>
 
-      ${cycleLabel&&!estSS?`<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-xs);color:#888;letter-spacing:.5px">${cycleLabel.text}</div>`:''}
+      ${cycleLabel&&!estSS?`<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-xs);color:var(--sub);letter-spacing:.5px">${cycleLabel.text}</div>`:''}
 
       <!-- La consigne a ete recalculee sur ce qui a ete souleve. On le DIT :
            une charge qui change toute seule sans un mot se lit comme un bug,
@@ -56306,7 +56316,7 @@ function _htmlCorpsGraphes(u,o){
   let _neutre=false;
   try{ _neutre=aTCA(u); }catch(e){ _neutre=false; }
   if(!_neutre&&o.poids!==false) h+=_htmlCorpsGraphe('Poids','kg',
-    [{lib:'Poids',couleur:'#E02020',points:_f(corpsPointsPoids(u))}],
+    [{lib:'Poids',couleur:ROUGE_MARQUE,points:_f(corpsPointsPoids(u))}],
     {h:44,dates:true,
      pied:'Relevé au bilan. La pesée quotidienne a son propre protocole '
       +'et n’est pas mélangée ici.'});
@@ -57717,8 +57727,8 @@ function _htmlCcdMensurations(c){
       values:vals.map((v,i)=>lu(v,i,vals))
         .concat([(function(){ try{ return _cellEcartMensuration(bl,m.k); }catch(e){ return null; } })()]),
       valueStyleFn:(v,ci,vide)=>(ci>=bl.length)
-        ?(vide?'background:#080808;color:var(--sub);':'background:var(--dark);color:var(--sub);')
-        :(vide?'background:#080808;color:var(--sub);'
+        ?(vide?'background:var(--bg);color:var(--sub);':'background:var(--dark);color:var(--sub);')
+        :(vide?'background:var(--bg);color:var(--sub);'
           :('background:var(--dark);color:'
             +((bl[ci]&&(function(){ try{ return bmReportee(bl[ci],m.k); }catch(e){ return false; } })())
               ?'var(--text-faint)':'var(--text)')+';'))};
@@ -63232,11 +63242,11 @@ function _htmlAnat(c){
       +f.chiffres.map(r=>'<tr><th>'+escapeHtml(r.lib)+(r.def?'<small class="an-def">'+escapeHtml(r.def)+'</small>':'')+'</th><td'+(((r.val||'').length>16||/→/.test(r.val||''))?' class="an-td-txt"':'')+'>'+escapeHtml(r.val||'-')+'</td><td>'+escapeHtml(r.ref||'')+'</td><td>'+escapeHtml(r.ecart||'')+'</td></tr>').join('')+'</tbody></table>':'';
     // LA COURBE DU V (A13), avec la carte des courbes de l'onglet Données.
     const courbe=f.courbeV?_anatSafe(()=>_htmlCorpsGraphe('Rapport deltoïdes / taille (V)','',
-      [{lib:'V',couleur:'#E02020',points:f.courbeV.map(x=>({x:x.bilan,v:x.V})),bande:ANAT_V_REF.BRUIT}],
+      [{lib:'V',couleur:ROUGE_MARQUE,points:f.courbeV.map(x=>({x:x.bilan,v:x.V})),bande:ANAT_V_REF.BRUIT}],
       {h:72,dates:true,valeur:_anatN(f.courbeV[f.courbeV.length-1].V,2),
        pied:'Un point par bilan à photo de face · la bande grise est le bruit de placement : ± '+_anatN(ANAT_V_REF.BRUIT,2)}))||'':'';
     const cP=(f.suivi&&f.suivi.serie.length>1)?_anatSafe(()=>_htmlCorpsGraphe(f.suivi.lib,f.suivi.unite.trim(),
-      [{lib:f.suivi.lib,couleur:'#E02020',points:f.suivi.serie.map(x=>({x:x.bilan,v:x.v})),bande:f.suivi.marge}],
+      [{lib:f.suivi.lib,couleur:ROUGE_MARQUE,points:f.suivi.serie.map(x=>({x:x.bilan,v:x.v})),bande:f.suivi.marge}],
       {h:60,dates:true,valeur:_anatSN(f.suivi.serie[f.suivi.serie.length-1].v,1)+f.suivi.unite,
        pied:'Un point par bilan à photos de face et de dos · la bande grise est la marge : ± '+_anatN(f.suivi.marge,1)+f.suivi.unite}))||'':'';
     const detail='<div class="an-f-long" id="an-long-'+f.cle+'">'+tab+(courbe?'<div class="an-f-courbe">'+courbe+'</div>':'')+(cP?'<div class="an-f-courbe">'+cP+'</div>':'')
@@ -64807,14 +64817,14 @@ function _htmlFlammeFin(){
       +'<stop offset="0" stop-color="#2b0000"/><stop offset=".45" stop-color="#6b0505"/>'
       +'<stop offset="1" stop-color="#a00d0d"/></linearGradient>'
     +'<linearGradient id="rcffVif" x1="0" y1="1" x2="0" y2="0">'
-      +'<stop offset="0" stop-color="#7a0000"/><stop offset=".5" stop-color="#e02020"/>'
+      +('<stop offset="0" stop-color="#7a0000"/><stop offset=".5" stop-color="'+ROUGE_MARQUE_MIN+'"/>')
       +'<stop offset="1" stop-color="#ff4a2a"/></linearGradient>'
     +'<linearGradient id="rcffCoeur" x1="0" y1="1" x2="0" y2="0">'
-      +'<stop offset="0" stop-color="#e02020"/><stop offset=".55" stop-color="#ff6a3c"/>'
+      +('<stop offset="0" stop-color="'+ROUGE_MARQUE_MIN+'"/><stop offset=".55" stop-color="#ff6a3c"/>')
       +'<stop offset="1" stop-color="#ffb08a"/></linearGradient>'
     +'<radialGradient id="rcffHalo" cx=".5" cy=".62" r=".55">'
-      +'<stop offset="0" stop-color="#e02020" stop-opacity=".42"/>'
-      +'<stop offset="1" stop-color="#e02020" stop-opacity="0"/></radialGradient>'
+      +('<stop offset="0" stop-color="'+ROUGE_MARQUE_MIN+'" stop-opacity=".42"/>')
+      +('<stop offset="1" stop-color="'+ROUGE_MARQUE_MIN+'" stop-opacity="0"/></radialGradient>')
   +'</defs>'
   // 1. Le halo. Peint le premier, donc derriere tout le reste.
   +'<ellipse cx="60" cy="86" rx="52" ry="50" fill="url(#rcffHalo)"/>'
@@ -65890,7 +65900,7 @@ function buildSessionComparison(vol,data){
         </g>
         <text x="100" y="157" text-anchor="middle" font-family="'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif" font-size="34" letter-spacing="4" fill="url(#wdSilver)" stroke="#43474e" stroke-width=".7" paint-order="stroke">RECORD</text>
       </svg></div>
-      <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:2px;color:#e8ebef;margin-top:12px;line-height:1;text-shadow:var(--halo-1)">NOUVEAU RECORD</div>
+      <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:2px;color:var(--text);margin-top:12px;line-height:1;text-shadow:var(--halo-1)">NOUVEAU RECORD</div>
       <div style="font-size:var(--fs-md);font-weight:800;color:var(--text);margin-top:6px">${best.curMax}kg : ${escapeHtml(best.nm)}</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">était ${best.histMax}kg${records.length>1?' · +'+(records.length-1)+' autre'+(records.length>2?'s':'')+' record'+(records.length>2?'s':'')+' battu'+(records.length>2?'s':''):''}</div>
     </div>`;
@@ -65903,10 +65913,10 @@ function buildSessionComparison(vol,data){
     const delta=Math.round(vol)-prevSame.volume;
     _bscDelta=delta;
     _bscJour=new Date(prevSame.date).toLocaleDateString('fr-FR',{weekday:'long'});
-    if(delta!==0) html+=`<div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:var(--r-2);padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px"><span style="flex-shrink:0;color:${delta>0?'var(--green)':'#666'}">${delta>0?icon('flame',18):'▾'}</span><span style="font-size:var(--fs-sm);font-weight:700;color:${delta>0?'var(--green)':'#888'}">${delta>0?'+':''}${delta}kg de volume vs dernière séance</span></div>`;
+    if(delta!==0) html+=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px"><span style="flex-shrink:0;color:${delta>0?'var(--green)':'#666'}">${delta>0?icon('flame',18):'▾'}</span><span style="font-size:var(--fs-sm);font-weight:700;color:${delta>0?'var(--green)':'#888'}">${delta>0?'+':''}${delta}kg de volume vs dernière séance</span></div>`;
   }
   if(firstSession&&!html)
-    html=`<div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:var(--r-2);padding:10px 14px;margin-bottom:14px;font-size:var(--fs-sm);font-weight:700;color:var(--sub)">Première séance enregistrée : tes prochains records apparaîtront ici</div>`;
+    html=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);padding:10px 14px;margin-bottom:14px;font-size:var(--fs-sm);font-weight:700;color:var(--sub)">Première séance enregistrée : tes prochains records apparaîtront ici</div>`;
   return {html,records,delta:_bscDelta,jour:_bscJour};
 }
 // versBilan : enchaîner sur le questionnaire de départ au lieu de rentrer à
@@ -67866,8 +67876,8 @@ function _rapCourbePoids(points){
     <text x="2" y="${P+4}" class="rap-lgd" fill="currentColor" fill-opacity=".55">${mx.toFixed(1)}</text>
     <text x="2" y="${H-P+3}" class="rap-lgd" fill="currentColor" fill-opacity=".55">${mn.toFixed(1)}</text>
     ${dm?`<path d="${dm}" fill="none" stroke="currentColor" stroke-opacity=".35" stroke-width="2.5"/>`:''}
-    <path d="${d}" fill="none" stroke="#e02020" stroke-width="2.4" vector-effect="non-scaling-stroke"/>
-    ${pts.map((p,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(p.kg).toFixed(1)}" r="2" fill="#e02020"/>`).join('')}
+    <path d="${d}" fill="none" stroke="${ROUGE_MARQUE_MIN}" stroke-width="2.4" vector-effect="non-scaling-stroke"/>
+    ${pts.map((p,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(p.kg).toFixed(1)}" r="2" fill="${ROUGE_MARQUE_MIN}"/>`).join('')}
   </svg>`;
 }
 // Barre de volume : la position des trois repères est MONTRÉE, le verdict n'est
@@ -67882,7 +67892,7 @@ function _rapBarreVolume(m){
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img"
     aria-label="Volume ${escapeHtml(m.muscle)} : ${m.series} séries, MEV ${m.mev}, MAV ${m.mav}, MRV ${m.mrv}${m.source==='perso'?', repères ajustés sur ses retours':(m.source==='coach'?', repères fixés par le coach':'')}" style="display:block">
     <rect class="rap-piste" x="0" y="9" width="${W}" height="8" fill="currentColor" fill-opacity=".08" rx="4"/>
-    <rect x="0" y="9" width="${px(m.series).toFixed(1)}" height="8" fill="#e02020" rx="4"/>
+    <rect x="0" y="9" width="${px(m.series).toFixed(1)}" height="8" fill="${ROUGE_MARQUE_MIN}" rx="4"/>
     ${rep(m.mev,'MEV')}${rep(m.mav,'MAV')}${rep(m.mrv,'MRV')}
   </svg>`;
 }
@@ -70736,7 +70746,7 @@ function _rendreGrilleCharge(){
         +'font-size:var(--fs-xs);font-weight:800;color:var(--text);background:'+fond+';opacity:'+alpha.toFixed(2)
         // Previsionnel : pointille. Une case vide ne dit rien, une case
         // pointillee dit « c est ce qui est prevu, rien n a encore ete fait ».
-        +(m.prevision?';outline:1px dashed rgba(255,255,255,.55);outline-offset:-2px':'')
+        +(m.prevision?';outline:1px dashed color-mix(in srgb,var(--text) 55%,transparent);outline-offset:-2px':'')
         +(m.courante?';box-shadow:0 0 0 2px var(--red)':'');
       const titre=escapeHtml(((MUSCLES[mu]||{}).lib||mu)+' : S'+(i+1)+' : '
         +(c?c.series:0)+' séries'+(c&&c.repere?(' ('+c.repere+')'):'')
@@ -74862,7 +74872,7 @@ function _bilEstReprise(id){ return !!(_bilReprises&&_bilReprises.has(id)); }
 // quelque chose à vérifier.
 function _htmlNoteReprises(){
   if(!_bilReprises||!_bilReprises.size) return '';
-  return `<div style="display:flex;gap:8px;align-items:flex-start;background:#12100a;border:1px dashed rgba(224,32,32,.45);border-radius:var(--r-2);padding:10px 12px;margin-bottom:10px">
+  return `<div style="display:flex;gap:8px;align-items:flex-start;background:var(--surface-1);border:1px dashed color-mix(in srgb,var(--red) 45%,transparent);border-radius:var(--r-2);padding:10px 12px;margin-bottom:10px">
     <span style="flex:none;font-size:var(--fs-sm);line-height:1.3">↺</span>
     <span style="font-size:var(--fs-xs);color:var(--sub);line-height:1.55">Les cases en pointillé portent les valeurs de ton dernier bilan : corrige ce qui a changé.</span>
   </div>`;
@@ -74982,7 +74992,7 @@ function _updateBilanCountdown(){
   cd.style.display='block';
   const next=getNextBilanSaturday();
   if(!next){
-    cd.innerHTML=`<div style="text-align:center;padding:14px 12px;font-size:var(--fs-sm);color:var(--sub);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:var(--r-3)">Après ton 1er bilan, ton prochain rendez-vous apparaîtra ici.</div>`;
+    cd.innerHTML=`<div style="text-align:center;padding:14px 12px;font-size:var(--fs-sm);color:var(--sub);background:color-mix(in srgb,var(--text) 3%,transparent);border:1px solid color-mix(in srgb,var(--text) 7%,transparent);border-radius:var(--r-3)">Après ton 1er bilan, ton prochain rendez-vous apparaîtra ici.</div>`;
     return;
   }
   const diffMs=next.getTime()-Date.now();
@@ -74993,7 +75003,7 @@ function _updateBilanCountdown(){
     let n=null; try{ n=_bilRetardJours(next); }catch(e){ n=null; }
     const quand=(n==null||n<=0)?'est prévu aujourd’hui'
       :(n===1?'était attendu hier':'est attendu depuis '+n+' jours');
-    cd.innerHTML=`<div style="background:linear-gradient(135deg,#c10000,#7a0000);border-radius:var(--r-3);padding:20px 16px;text-align:center;box-shadow:0 0 32px rgba(224,32,32,.35)"><div style="font-size:var(--fs-lg);font-weight:900;color:var(--text);letter-spacing:.5px;text-transform:uppercase">C'est le moment !</div><div style="font-size:var(--fs-sm);color:rgba(255,255,255,.75);margin-top:6px">Ton bilan ${quand} : complète-le maintenant.</div></div>`;
+    cd.innerHTML=`<div style="background:linear-gradient(135deg,#c10000,#7a0000);border-radius:var(--r-3);padding:20px 16px;text-align:center;box-shadow:0 0 32px color-mix(in srgb,var(--red) 35%,transparent)"><div style="font-size:var(--fs-lg);font-weight:900;color:var(--text);letter-spacing:.5px;text-transform:uppercase">C'est le moment !</div><div style="font-size:var(--fs-sm);color:rgba(255,255,255,.75);margin-top:6px">Ton bilan ${quand} : complète-le maintenant.</div></div>`;
     return;
   }
   const totalMins=Math.floor(diffMs/60000);
@@ -75004,11 +75014,11 @@ function _updateBilanCountdown(){
   const blocks=days>0
     ?[{v:pad(days),l:'JOURS',red:true},{v:pad(hours),l:'HEURES',red:false},{v:pad(mins),l:'MIN',red:false}]
     :[{v:pad(hours),l:'HEURES',red:true},{v:pad(mins),l:'MIN',red:false}];
-  cd.innerHTML=`<div style="background:linear-gradient(160deg,#1a0000 0%,#0d0d0d 60%);border:1px solid rgba(224,32,32,.22);border-radius:var(--r-3);padding:16px 14px 14px;position:relative;overflow:hidden;box-shadow:0 0 28px rgba(224,32,32,.07),0 6px 20px rgba(0,0,0,.55)">
-    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,rgba(224,32,32,.95),rgba(224,32,32,.15),transparent)"></div>
+  cd.innerHTML=`<div style="background:linear-gradient(160deg,#1a0000 0%,var(--surface-0) 60%);border:1px solid color-mix(in srgb,var(--red) 22%,transparent);border-radius:var(--r-3);padding:16px 14px 14px;position:relative;overflow:hidden;box-shadow:0 0 28px color-mix(in srgb,var(--red) 7%,transparent),0 6px 20px rgba(0,0,0,.55)">
+    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,color-mix(in srgb,var(--red) 95%,transparent),color-mix(in srgb,var(--red) 15%,transparent),transparent)"></div>
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:var(--red-text);margin-bottom:4px">Prochain bilan</div>
     <div style="font-size:var(--fs-md);font-weight:700;color:var(--text);margin-bottom:14px">${dateLabel}</div>
-    <div style="display:flex;gap:6px">${blocks.map(b=>`<div style="flex:1;background:${b.red?'rgba(224,32,32,.13)':'rgba(255,255,255,.03)'};border:1px solid ${b.red?'rgba(224,32,32,.28)':'rgba(255,255,255,.07)'};border-radius:var(--r-2);padding:12px 6px;text-align:center"><div style="font-size:var(--fs-3xl);font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${b.red?'var(--red)':'var(--text)'}${b.red?';--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)':''}">${b.v}</div><div style="font-size:var(--fs-xs);font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:rgba(255,255,255,.32);margin-top:6px">${b.l}</div></div>`).join('')}</div>
+    <div style="display:flex;gap:6px">${blocks.map(b=>`<div style="flex:1;background:${b.red?'rgba(224,32,32,.13)':'rgba(255,255,255,.03)'};border:1px solid ${b.red?'rgba(224,32,32,.28)':'rgba(255,255,255,.07)'};border-radius:var(--r-2);padding:12px 6px;text-align:center"><div style="font-size:var(--fs-3xl);font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${b.red?'var(--red)':'var(--text)'}${b.red?';--halo-c:color-mix(in srgb,var(--red) 55%,transparent);text-shadow:var(--halo-2)':''}">${b.v}</div><div style="font-size:var(--fs-xs);font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:rgba(255,255,255,.32);margin-top:6px">${b.l}</div></div>`).join('')}</div>
   </div>`;
 }
 // forcerReprise : appelé depuis la carte de reprise de l'accueil, où l'athlète
@@ -75257,7 +75267,7 @@ function renderBilStep(){
   // ecrits par la meme phrase, mais seul le premier est peint en blanc.
   // Aucune des deux valeurs ne vient de l exterieur : bilStep est un entier
   // interne, total sort de _etapesUtiles — rien a echapper ici.
-  document.getElementById('bil-step-label').innerHTML=(bilStep+1)+'<span style="color:#8a8a8a;font-weight:700">/'+total+'</span>';
+  document.getElementById('bil-step-label').innerHTML=(bilStep+1)+'<span style="color:var(--sub);font-weight:700">/'+total+'</span>';
   document.getElementById('bil-progress').style.width=((bilStep+1)/total*100)+'%';
   document.getElementById('bil-next-btn').textContent=bilStep===total-1?'Valider ':'Suivant →';
   document.getElementById('bil-back-btn').style.visibility='visible';
@@ -75295,7 +75305,7 @@ function pickBilChoice(groupId,val,multi){
 // regarde, et un athlète distrait y inscrirait le poids d'il y a quinze jours.
 // Aucune mensuration ne passe par bQ : seul le poids est concerné.
 function bQ(id){const _r=_bilEstReprise(id);
-  return`<input type="number" id="${id}" placeholder="-" value="${bilData[id]||''}" step="any" oninput="bMesureSaisie('${id}',this.value)" style="width:68px;text-align:right;padding:6px 8px;font-size:var(--fs-lg);font-weight:800;margin:0;background:#080808;border:1px ${_r?'dashed rgba(224,32,32,.5)':'solid #222'};border-radius:var(--r-1)">`;}
+  return`<input type="number" id="${id}" placeholder="-" value="${bilData[id]||''}" step="any" oninput="bMesureSaisie('${id}',this.value)" style="width:68px;text-align:right;padding:6px 8px;font-size:var(--fs-lg);font-weight:800;margin:0;background:var(--bg);border:1px ${_r?'dashed rgba(224,32,32,.5)':'solid #222'};border-radius:var(--r-1)">`;}
 function bT(id,ph){return`<input type="text" id="${id}" placeholder="${ph||''}" value="${escapeHtml(bilData[id]||'')}" oninput="bilData['${id}']=this.value">`;}
 // ⚠ UNE DATE DE NAISSANCE, PAS UN AGE. « 26 » saisi une fois reste 26 pour
 // toujours : deux ans plus tard le metabolisme de base se calcule sur un age
@@ -75311,7 +75321,7 @@ function bDate(id){
     +`<input type="date" id="${id}" value="${v}" max="${_dateMaxNaissance()}"`
     +` oninput="bilData['${id}']=this.value;bMajAge('${id}')"`
     +` style="padding:6px 8px;font-size:var(--fs-sm);font-weight:700;margin:0;`
-    +`background:#080808;border:1px solid #222;border-radius:var(--r-1);color:var(--text)">`
+    +`background:var(--bg);border:1px solid var(--border);border-radius:var(--r-1);color:var(--text)">`
     +`<span id="${id}-age" style="font-size:var(--fs-xs);color:var(--sub);white-space:nowrap">`
     +(a!=null&&a>=0&&a<=120?(a+' ans'):'')+`</span></span>`;
 }
@@ -75391,7 +75401,7 @@ function bGenderCards(gid){
     `<div class="gsl-lbl">${o.v.toUpperCase()}</div></div>`).join('')+`</div>`;
 }
 // Curseur néon 1-10 — stocke "X/10" (affiché tel quel côté coach)
-const BSL_COLORS=['#E02020','#ef4116','#f97316','#fb9d1e','#eab308','#c9d411','#a3e635','#67dd2f','#3ad348','#22c55e'];
+const BSL_COLORS=[ROUGE_MARQUE,'#ef4116','#f97316','#fb9d1e','#eab308','#c9d411','#a3e635','#67dd2f','#3ad348','#22c55e'];
 const BSL_LABELS=['À plat','Très faible','En baisse','Fragile','Moyenne','Correcte','Bonne','Très bonne','Excellente','EN FEU !'];
 // Poses de reference pour les photos de progression (extraites du visuel "LES PHOTOS")
 const BPOSE={
@@ -75524,7 +75534,7 @@ function bPhotoCards(prefix){
   return _aaBtn+`<div style="display:flex;gap:8px">`+P.map(p=>{
     const key=prefix+'-photo-'+p.k;
     const done=!!bilData[key];
-    return `<div style="flex:1;min-width:0;background:var(--surface-1);border:1px solid #222;border-radius:var(--r-3);padding:14px 6px 12px;text-align:center">
+    return `<div style="flex:1;min-width:0;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 6px 12px;text-align:center">
       <img src="${p.img}" alt="${p.l}" style="height:118px;max-width:100%;object-fit:contain;filter:drop-shadow(0 0 7px rgba(255,255,255,.4));margin-bottom:8px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#ccc;margin-bottom:10px">${p.l}</div>
       <label style="display:inline-block;background:${done?'#001a00':'#1a0000'};border:1px solid ${done?'#22c55e':'var(--red)'};color:${done?'#22c55e':'var(--red)'};padding:6px 12px;border-radius:var(--r-1);font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:.5px">${done?' Ajoutée':'AJOUTER'} <input type="file" accept="image/*" style="display:none" onchange="loadBilPhoto(this,'${key}')"></label>
@@ -75824,7 +75834,7 @@ function bBodySchema(prefix){
         </pattern>
         <filter id="bodyGlow" x="-30%" y="-30%" width="160%" height="160%">
           <feDropShadow dx="0" dy="0" stdDeviation="2.5" flood-color="#ff2222" flood-opacity="0.55"/>
-          <feDropShadow dx="0" dy="0" stdDeviation="9" flood-color="#E02020" flood-opacity="0.3"/>
+          <feDropShadow dx="0" dy="0" stdDeviation="9" flood-color="${ROUGE_MARQUE}" flood-opacity="0.3"/>
         </filter>
       </defs>
       <g filter="url(#bodyGlow)">
@@ -75892,10 +75902,10 @@ function bLongueurs(){
 function bBodyFocus(id,on){
   const ln=document.getElementById('ln-'+id),dot=document.getElementById('dot-'+id),bx=document.getElementById('bx-'+id),dsh=document.getElementById('dsh-'+id);
   const filled=!!bilData[id];
-  if(ln){ln.setAttribute('stroke',on?'#E02020':(filled?'rgba(224,32,32,.75)':'#6a6a6a'));ln.setAttribute('stroke-width',on?'2':'1.4');}
+  if(ln){ln.setAttribute('stroke',on?ROUGE_MARQUE:(filled?'rgba(224,32,32,.75)':'#6a6a6a'));ln.setAttribute('stroke-width',on?'2':'1.4');}
   if(dsh){dsh.setAttribute('stroke',on?'#ff2222':(filled?'rgba(224,32,32,.8)':'rgba(224,32,32,.5)'));dsh.setAttribute('stroke-width',on?'1.8':'1.2');}
-  if(dot){dot.setAttribute('stroke',on?'#E02020':(filled?'rgba(224,32,32,.9)':'#8a8a8a'));dot.setAttribute('fill',on||filled?'#E02020':'#0a0a0a');}
-  if(bx){bx.style.borderColor=on?'#E02020':(filled?'rgba(224,32,32,.4)':'var(--border)');bx.style.boxShadow=on?'0 0 18px rgba(224,32,32,.45)':'none';}
+  if(dot){dot.setAttribute('stroke',on?ROUGE_MARQUE:(filled?'rgba(224,32,32,.9)':'#8a8a8a'));dot.setAttribute('fill',on||filled?ROUGE_MARQUE:'#0a0a0a');}
+  if(bx){bx.style.borderColor=on?ROUGE_MARQUE:(filled?'rgba(224,32,32,.4)':'var(--border)');bx.style.boxShadow=on?'0 0 18px rgba(224,32,32,.45)':'none';}
 }
 function bLbl(txt){return`<div style="font-size:var(--fs-xs);font-weight:700;color:var(--text-strong);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;margin-top:14px">${txt}</div>`;}
 /** Le moteur de pose, sur l'appareil, puis le contrôle. null si le moteur n'est pas disponible. */
@@ -76912,7 +76922,7 @@ function blocDrapeauRouge(u){
   const d=drapeauRougeActif(u);
   if(!d) return '';
   const lib=d.cases.map(c=>(DRAPEAUX_ROUGES.find(x=>x.cle===c)||{lib:c}).lib);
-  return `<div style="background:#1a0505;border:1px solid var(--red);border-radius:var(--r-3);padding:12px;margin-bottom:12px">
+  return `<div style="background:var(--red-bg);border:1px solid var(--red);border-radius:var(--r-3);padding:12px;margin-bottom:12px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:6px">Signes à faire examiner · ${escapeHtml(libZone(d.zone))}</div>
     ${lib.map(t=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">· ${escapeHtml(t)}</div>`).join('')}
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:8px">Aucun exercice de remplacement n'est proposé tant que ce signalement est actif.</div>
@@ -77548,7 +77558,7 @@ function editerNoteExo(idx){
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
     `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-      <div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="note-exo-t" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:18px 20px 20px;width:100%;max-width:480px">
+      <div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="note-exo-t" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:20px 20px 20px;width:100%;max-width:480px">
         <div id="note-exo-t" style="font-size:var(--fs-md);font-weight:800;margin-bottom:4px">Ma note · ${escapeHtml(ex.name)}</div>
         <div class="sub" style="font-size:var(--fs-xs);margin-bottom:10px">Elle revient à chaque séance. Ton coach la voit.</div>
         <textarea id="note-exo-champ" maxlength="${NOTE_EXO_MAX}" rows="3" style="width:100%;resize:none" placeholder="Siège au cran 4, prise large…">${n?escapeHtml(n.texte):''}</textarea>
@@ -78589,7 +78599,7 @@ const BIL_STEPS=[
       {v:'1',f:'happy',c:'#a3e635'},
       {v:'2',f:'neutral',c:'#eab308'},
       {v:'3',f:'sad',c:'#f97316'},
-      {v:'4 ou plus',f:'angry',c:'#E02020'},
+      {v:'4 ou plus',f:'angry',c:ROUGE_MARQUE},
     ])}</div>`+
     bLbl('Explique-moi les raisons (repas de famille, sorties professionnelles...) :')+bTA('bil-cheat-reasons','Repas de famille, sorties professionnelles...')
   ),
@@ -78710,14 +78720,14 @@ const DEB_STEPS=[
     `<div>${bEmojiScale('deb-intensity-1',[
       {v:'Faible intensité',l:'Faible',svg:BICON.flame1,c:'#22c55e'},
       {v:'Intensité Modérée',l:'Modérée',svg:BICON.flame2,c:'#f97316'},
-      {v:'Haute intensité',l:'Haute',svg:BICON.flame3,c:'#E02020'},
+      {v:'Haute intensité',l:'Haute',svg:BICON.flame3,c:ROUGE_MARQUE},
     ])}</div>`+
     `<div id="deb-intensity-2-bloc"${_bSportsDeclares('deb-sports')<2?' style="display:none"':''}>`+
     bLbl('Et celle de ton second sport ?')+
     `<div>${bEmojiScale('deb-intensity-2',[
       {v:'Faible intensité',l:'Faible',svg:BICON.flame1,c:'#22c55e'},
       {v:'Intensité Modérée',l:'Modérée',svg:BICON.flame2,c:'#f97316'},
-      {v:'Haute intensité',l:'Haute',svg:BICON.flame3,c:'#E02020'},
+      {v:'Haute intensité',l:'Haute',svg:BICON.flame3,c:ROUGE_MARQUE},
     ])}</div></div>`+
     bLbl('As-tu des antécédents sportifs ?')+bT('deb-history','Ex : football 5 ans, boxe 2 ans...')+
     bLbl('Quand préfères-tu t\'entraîner ? ⏰')+
@@ -79225,7 +79235,7 @@ function showBilanNotifBanner(){
   const b=document.createElement('div');
   b.id='bilan-notif-banner';
   b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:var(--z-bar);animation:slideDown var(--t-3) var(--c-out)';
-  b.innerHTML=`<div style="background:linear-gradient(135deg,#1a0000,#280000);border-bottom:2px solid var(--red);padding:14px 20px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openBilanChoice();document.getElementById('bilan-notif-banner')?.remove()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+  b.innerHTML=`<div style="background:linear-gradient(135deg,#1a0000,var(--red-bg-2));border-bottom:2px solid var(--red);padding:14px 20px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openBilanChoice();document.getElementById('bilan-notif-banner')?.remove()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div style="flex:1;min-width:0">
       <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red-text);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">Bilan bimensuel · Ce samedi</div>
       <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Remplis ton bilan coaching pour suivre ton évolution !</div>
@@ -79563,7 +79573,7 @@ function _htmlHabTaux(u){
 function _htmlHabSemaine(u,h){
   const sem=habSemaine(u,h.cle);
   const n=sem.filter(x=>x===true).length;
-  return `<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05)">
+  return `<div style="margin-top:12px;padding-top:10px;border-top:1px solid color-mix(in srgb,var(--text) 5%,transparent)">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px">
       <span style="font-size:var(--fs-2xs);color:var(--sub);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(h.libelle||h.cle)}</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint);flex-shrink:0">${n}/7</span>
@@ -79761,7 +79771,7 @@ function renderWoReminderCard(){
   const days=(u._woReminderDays||[]).map(i=>DS[i]).join(' · ');
   const hh=String(u._woReminderHour??18).padStart(2,'0');
   const mm=String(u._woReminderMin??0).padStart(2,'0');
-  el.innerHTML=`<div style="background:#08100a;border:1px solid #1a3020;border-radius:var(--r-3);padding:12px 16px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
+  el.innerHTML=`<div style="background:var(--surface-0);border:1px solid #1a3020;border-radius:var(--r-3);padding:12px 16px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" style="width:18px;height:18px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
     <div style="flex:1;min-width:0">
       <div style="font-size:var(--fs-xs);font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.8px">Rappel séance activé</div>
@@ -80035,7 +80045,7 @@ function _htmlInvitationNotif(etat,phrase,choix){
       +'margin:0;padding:8px 0;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:700;'
       +'font-size:var(--fs-sm);color:var(--text)">'
       +'<input type="checkbox" id="inv-notif-g-'+g.cle+'" data-groupe="'+g.cle+'"'+(ch[g.cle]?' checked':'')
-      +' onchange="invNotifMaj()" style="width:20px;height:20px;accent-color:#E02020;flex-shrink:0;margin:0;cursor:pointer">'
+      +' onchange="invNotifMaj()" style="width:20px;height:20px;accent-color:var(--red);flex-shrink:0;margin:0;cursor:pointer">'
       +escapeHtml(g.titre)+'</label>').join('');
   const aucune=!NOTIF_GROUPES.some(g=>ch[g.cle]);
   return cadre('Et la prochaine ?',
@@ -80315,7 +80325,7 @@ function htmlReglagesPush(u,etat){
     return '<label for="cr-push-'+t.cle+'" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0;padding:10px 0;border-top:1px solid var(--border);text-transform:none;letter-spacing:normal;font-weight:400;color:var(--text)">'
       +'<input type="checkbox" id="cr-push-'+t.cle+'" data-push="'+t.cle+'"'+(on?' checked':'')
       +' onchange="basculerPushType(\''+t.cle+'\',this.checked)"'
-      +' style="width:18px;height:18px;accent-color:#E02020;flex-shrink:0;margin-top:2px;cursor:pointer">'
+      +' style="width:18px;height:18px;accent-color:var(--red);flex-shrink:0;margin-top:2px;cursor:pointer">'
       +'<span style="flex:1;min-width:0"><span style="display:block;font-weight:700;font-size:var(--fs-sm)">'+escapeHtml(t.titre)+'</span>'
       +'<span style="display:block;font-size:var(--fs-xs);color:var(--sub);line-height:1.5">'+escapeHtml(t.txt)+'</span></span></label>';
   }).join('');
@@ -81836,8 +81846,8 @@ function _bdgArcs(z,duree){
       const trace=(w,st,al)=>{ g.globalAlpha=a*al; g.strokeStyle=st; g.lineWidth=w;
         g.beginPath(); g.moveTo(pts[0][0],pts[0][1]); for(const p of pts) g.lineTo(p[0],p[1]); g.stroke(); };
       g.save(); g.lineJoin='round'; g.lineCap='round';
-      g.shadowColor='#E02020'; g.shadowBlur=24; trace(7,'#E02020',.5);
-      g.shadowBlur=0; trace(3,'#E02020',1); trace(1.2,'#fff',1);
+      g.shadowColor=ROUGE_MARQUE; g.shadowBlur=24; trace(7,ROUGE_MARQUE,.5);
+      g.shadowBlur=0; trace(3,ROUGE_MARQUE,1); trace(1.2,'#fff',1);
       g.restore();
     }
     _bdgArcsRaf=requestAnimationFrame(image);
@@ -82036,7 +82046,7 @@ function _dessinerCarteBadge(b,at,img,fond,signature,rarete,format){
   g.font='800 '+ss+'px '+MONT;
   o.ecrireEspace(sur,cx,y,10,true);
   o.ombre(false);
-  g.fillStyle=f==='rouge'?'rgba(255,255,255,.85)':'#E02020';
+  g.fillStyle=f==='rouge'?'rgba(255,255,255,.85)':ROUGE_MARQUE;
   g.fillRect(cx-44,y+20,88,5);
   y+=60;
   // LE MÉDAILLON GÉANT, 780 px, sans ombre de texte : il porte sa lueur.
@@ -82364,7 +82374,7 @@ function _dessinerWrapped(w,per,i,signature,format,anim){
   _recEclairFiligrane(g,cx+260,post?60:120,cx-200,H*(post?0.66:0.62),_recGraine(per.cle+'|'+i),'transparent');
   g.textAlign='center'; g.textBaseline='alphabetic';
   o.ombre(true);
-  g.fillStyle='#E02020'; g.font='800 36px '+MONT;
+  g.fillStyle=ROUGE_MARQUE; g.font='800 36px '+MONT;
   const ss=o.ajusteEspace(s.sur,'800',36,MONT,8,LARG,22);
   g.font='800 '+ss+'px '+MONT;
   // En post, chaque bloc remonte : mêmes éléments, sur 1 350 px.
@@ -82405,7 +82415,7 @@ function _dessinerWrapped(w,per,i,signature,format,anim){
       g.fillStyle='#fff';
       const vs=o.ajuste(v,'700',P(150,124),BEBAS,LARG/2-24,60);
       g.font='700 '+vs+'px '+BEBAS; o.ecrire(v,x,y);
-      g.fillStyle='#E02020'; g.font='800 32px '+MONT; o.ecrireEspace(lib.toUpperCase(),x,y+56,4,true);
+      g.fillStyle=ROUGE_MARQUE; g.font='800 32px '+MONT; o.ecrireEspace(lib.toUpperCase(),x,y+56,4,true);
     });
     if(s.equivalent){
       const t='= '+s.equivalent.texte.toUpperCase()+' '+s.equivalent.emoji;
@@ -82419,7 +82429,7 @@ function _dessinerWrapped(w,per,i,signature,format,anim){
     o.ecrireEspace(per.titre,cx,P(1620,1110),6,true);
   }
   o.ombre(false);
-  g.fillStyle='#E02020'; g.fillRect(cx-60,H-(post?120:210),120,5);
+  g.fillStyle=ROUGE_MARQUE; g.fillRect(cx-60,H-(post?120:210),120,5);
   _recSignature(g,o,String(signature||''),H-(post?50:120),LARG);
   o.ombre(false);
   return cv;
@@ -82673,7 +82683,7 @@ function _wrPlanifierNotif(){
 // ══════════════════ LA CARTE MUSCULAIRE ════════════════════════════════════
 //
 // La silhouette, face et dos côte à côte, où chaque groupe musculaire prend
-// une couleur entre #2a2a2a (au repos) et #E02020 (à sa cible) — et, à la
+// une couleur entre #2a2a2a (au repos) et ROUGE_MARQUE (à sa cible) — et, à la
 // cible, une lueur électrique et de fines veines lumineuses.
 //
 // ⚠ LES ZONES VIENNENT DES CARTES z-*.png, PAS DE TRACÉS SVG. La demande
@@ -82761,7 +82771,7 @@ function volumeParMuscle(seances,o){
   }
   return {groupes,series,muscles,total,semaines:sem};
 }
-// PURE. La couleur d'un score : #2a2a2a → #E02020.
+// PURE. La couleur d'un score : #2a2a2a → ROUGE_MARQUE.
 function muscCouleur(s){
   const t=Math.max(0,Math.min(1,Number(s)||0));
   const c=MUSC_FROID.map((a,i)=>Math.round(a+(MUSC_CHAUD[i]-a)*t));
@@ -83068,7 +83078,7 @@ function _dessinerCarteMuscles(d,fond,res,signature,format){
     const vs=o.ajuste(c.v,'700',post?92:110,BEBAS,cw-20,50);
     const yc=post?1062:1590;
     g.font='700 '+vs+'px '+BEBAS; o.ecrire(c.v,x,yc);
-    g.fillStyle=f==='rouge'?'rgba(255,255,255,.9)':'#E02020';
+    g.fillStyle=f==='rouge'?'rgba(255,255,255,.9)':ROUGE_MARQUE;
     const ls=o.ajusteEspace(c.l.toUpperCase(),'800',24,MONT,3,cw-16,14);
     g.font='800 '+ls+'px '+MONT; o.ecrireEspace(c.l.toUpperCase(),x,yc+42,3,true);
   });
@@ -83433,7 +83443,7 @@ function _dessinerAvantApres(o){
     g.fillStyle=v; g.fillRect(x,py+ph-240,pw,240);
     g.restore();
     g.save();
-    if(fort){ g.shadowColor=rouge?'rgba(255,255,255,.6)':'#E02020'; g.shadowBlur=40; g.strokeStyle=rouge?'#fff':'#E02020'; g.lineWidth=5; }
+    if(fort){ g.shadowColor=rouge?'rgba(255,255,255,.6)':ROUGE_MARQUE; g.shadowBlur=40; g.strokeStyle=rouge?'#fff':ROUGE_MARQUE; g.lineWidth=5; }
     else { g.strokeStyle='rgba(255,255,255,.25)'; g.lineWidth=2; }
     arrondi(x,py,pw,ph,R); g.stroke(); g.restore();
     vo.ombre(true); g.fillStyle='#fff'; g.textAlign='left';
@@ -83454,9 +83464,9 @@ function _dessinerAvantApres(o){
     pts=nv; d*=0.55;
   }
   const trace=(w,c,sh)=>{ g.save(); g.lineJoin='round'; g.lineCap='round'; g.strokeStyle=c; g.lineWidth=w;
-    if(sh){ g.shadowColor=rouge?'rgba(255,255,255,.7)':'#E02020'; g.shadowBlur=sh; }
+    if(sh){ g.shadowColor=rouge?'rgba(255,255,255,.7)':ROUGE_MARQUE; g.shadowBlur=sh; }
     g.beginPath(); g.moveTo(pts[0].x,pts[0].y); for(const p of pts) g.lineTo(p.x,p.y); g.stroke(); g.restore(); };
-  trace(10,rouge?'rgba(255,255,255,.45)':'rgba(224,32,32,.45)',30); trace(4,rouge?'#fff':'#E02020',0); trace(1.4,'#fff',0);
+  trace(10,rouge?'rgba(255,255,255,.45)':'rgba(224,32,32,.45)',30); trace(4,rouge?'#fff':ROUGE_MARQUE,0); trace(1.4,'#fff',0);
   // ── Les chiffres, en colonnes, comme le bilan de séance
   const chiffres=aaChiffres(o).slice(0,3), n=chiffres.length, cw=(W-2*M)/n;
   const ys=py+ph+L.ys;
@@ -83464,7 +83474,7 @@ function _dessinerAvantApres(o){
     const x=M+i*cw+cw/2;
     vo.ombre(true); g.fillStyle='#fff'; g.textAlign='center';
     vo.ajuste(c.v,'400',L.v,BEBAS,cw-20,40); vo.ecrire(c.v,x,ys);
-    g.fillStyle=(i===0&&!rouge)?'#E02020':'rgba(255,255,255,.78)';
+    g.fillStyle=(i===0&&!rouge)?ROUGE_MARQUE:'rgba(255,255,255,.78)';
     vo.ajusteEspace(c.lib,'800',L.etq,MONT,4,cw-24,12);
     vo.ecrireEspace(c.lib,x,ys+(post?36:50),4,true);
     vo.ombre(false);
@@ -83476,7 +83486,7 @@ function _dessinerAvantApres(o){
   const marque=o.marque||null, equipe=String(o.equipe||'').trim();
   const yb=ys+L.yb;
   if(marque||equipe){
-    vo.ombre(true); g.fillStyle=rouge?'#fff':'#E02020'; g.textAlign='center';
+    vo.ombre(true); g.fillStyle=rouge?'#fff':ROUGE_MARQUE; g.textAlign='center';
     g.font='800 '+(post?16:20)+'px '+MONT; vo.ecrireEspace('COACHÉ PAR',cx,yb,6,true);
     const hl=L.logo, yl=yb+(post?14:20);
     let lw=0, lh=0;
@@ -83739,7 +83749,7 @@ function _dessinerCarteCycle(d,fond,resMuscles,format){
   const M=72, LARG=W-M*2, cx=W/2;
   const o=_visuelOutils(g);
   const rouge=f==='rouge';
-  const accent=rouge?'#ffffff':'#E02020';
+  const accent=rouge?'#ffffff':ROUGE_MARQUE;
   g.textAlign='center'; g.textBaseline='alphabetic';
   // CYCLE N TERMINÉ
   o.ombre(true); g.fillStyle='#fff';
@@ -83948,7 +83958,7 @@ function _dessinerCarteSerie(d,fond,format){
   const HB=60+cs*0.82+90+70+hCal+(d.jokers?70:0);
   let y=Math.max(post?60:150,Math.round((H-(post?140:200)-HB)/2));
   o.ombre(true);
-  g.fillStyle=rouge?'#fff':'#E02020'; g.font='800 34px '+MONT;
+  g.fillStyle=rouge?'#fff':ROUGE_MARQUE; g.font='800 34px '+MONT;
   o.ecrireEspace('SÉRIE EN COURS',cx,y+34,10,true);
   // LE GRAND CHIFFRE.
   g.fillStyle='#fff';
@@ -83968,7 +83978,7 @@ function _dessinerCarteSerie(d,fond,format){
     const x=x0+c*(cote+gap), yy=y+r*(cote+gap);
     g.save();
     const dernier=i===nc-1;
-    g.fillStyle=rouge?(dernier?'#fff':'rgba(255,255,255,.82)'):(dernier?'#ff3b3b':'#E02020');
+    g.fillStyle=rouge?(dernier?'#fff':'rgba(255,255,255,.82)'):(dernier?'#ff3b3b':ROUGE_MARQUE);
     g.shadowColor=rouge?'rgba(255,255,255,.5)':'rgba(224,32,32,.85)'; g.shadowBlur=dernier?26:10;
     g.fillRect(x,yy,cote,cote);
     g.restore();
@@ -85198,7 +85208,7 @@ function _carteCadrePret(cle){
 }
 // Les couleurs du cadre dessiné.
 const CARTE_TEINTES=Object.freeze({
-  standard:{a:'#6b6b72',b:'#2a2a2e',accent:'#E02020',halo:'rgba(224,32,32,.18)'},
+  standard:{a:'#6b6b72',b:'#2a2a2e',accent:ROUGE_MARQUE,halo:'rgba(224,32,32,.18)'},
   elite:{a:'#ff3b3b',b:'#7a0a0a',accent:'#ff3b3b',halo:'rgba(255,59,59,.38)'},
   legendaire:{a:'#ffd36a',b:'#b3261e',accent:'#ffcf5a',halo:'rgba(255,190,70,.42)'}
 });
@@ -85528,7 +85538,7 @@ function _dessinerCarteRang(d,fond,img,format,anim){
   g.globalAlpha=aTexte;
   const sur='NOUVEAU RANG · '+String(d.nom||'');
   const ss=o.ajusteEspace(sur,'800',46,MONT,9,LARG,26);
-  g.fillStyle=rouge?'#fff':'#E02020'; g.font='800 '+ss+'px '+MONT;
+  g.fillStyle=rouge?'#fff':ROUGE_MARQUE; g.font='800 '+ss+'px '+MONT;
   o.ecrireEspace(sur,cx,post?110:300,9,true);
   o.ombre(false);
   // L'EMBLÈME GÉANT, avec un halo derrière.
@@ -85917,7 +85927,7 @@ function getBM(b,k){const v=parseFloat(b['bil-'+k]||b['deb-'+k]||b[k]);return is
 // qu'une ligne dise quoi que ce soit. Ils restent dans le TABLEAU — la donnee
 // n'est pas perdue, elle n'a simplement pas besoin de son propre graphique.
 const MENS_GROUPES=Object.freeze([
-  {label:'Biceps (D / G)',items:[{k:'bicep-r',l:'Droit',color:'#E02020'},{k:'bicep-l',l:'Gauche',color:'#f97316'}]},
+  {label:'Biceps (D / G)',items:[{k:'bicep-r',l:'Droit',color:ROUGE_MARQUE},{k:'bicep-l',l:'Gauche',color:'#f97316'}]},
   {label:'Cuisses (D / G)',items:[{k:'thigh-r',l:'Droit',color:'#06b6d4'},{k:'thigh-l',l:'Gauche',color:'#14b8a6'}]},
   {label:'Mollets (D / G)',items:[{k:'calf-r',l:'Droit',color:'#f472b6'},{k:'calf-l',l:'Gauche',color:'#a78bfa'}]},
   {label:'Tour de Poitrine',items:[{k:'chest',l:'',color:'#eab308'}]},
@@ -86535,7 +86545,7 @@ function drawPie(id,slices,opts){
 }
 
 const MEAS=[
-  {k:'bicep-r',l:'Tour de Biceps D',color:'#E02020'},
+  {k:'bicep-r',l:'Tour de Biceps D',color:ROUGE_MARQUE},
   {k:'bicep-l',l:'Tour de Biceps G',color:'#f97316'},
   {k:'chest',l:'Tour de Poitrine',color:'#eab308'},
   {k:'waist',l:'Tour de Taille',color:'#3b82f6'},
@@ -87717,7 +87727,7 @@ function loadDechargeAthletes(){
   const _liste=_suivis.length?_suivis:athletes;
   const _caches=athletes.length-_liste.length;
   el.innerHTML=_htmlCocherEtiquette('cdg-athletes')+(_caches?'<div style="padding:10px 10px;font-size:var(--fs-2xs);color:var(--text-faint);'
-      +'border-bottom:1px solid #242424;line-height:1.5">'+_caches+' athlète'+(_caches>1?'s':'')
+      +'border-bottom:1px solid var(--border);line-height:1.5">'+_caches+' athlète'+(_caches>1?'s':'')
       +' sans suivi ne sont pas listés ici.</div>':'')
     +_liste.map(a=>{
     const n=((a.sessions_config)||[]).filter(s=>s&&s.active).length;
@@ -87725,7 +87735,7 @@ function loadDechargeAthletes(){
     // le récapitulatif qui dira pourquoi. Le masquer ferait croire au coach
     // qu'il n'existe pas.
     const empeche=(!a.email?'dossier non synchronisé':(!n?'aucun créneau actif':''));
-    return `<div style="display:flex;align-items:center;gap:12px;border-bottom:1px solid #242424;padding:12px 10px;border-left:3px solid ${ETAT_FILET[etatAthlete(a)]||'#666666'};border-radius:0 8px 8px 0;background:linear-gradient(168deg,#141414,#0d0d0d);margin-bottom:6px">
+    return `<div style="display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);padding:12px 10px;border-left:3px solid ${ETAT_FILET[etatAthlete(a)]||'#666666'};border-radius:0 8px 8px 0;background:linear-gradient(168deg,var(--surface-1),var(--surface-0));margin-bottom:6px">
       <div class="avatar" style="width:32px;height:32px;font-size:12px;flex-shrink:0">${escapeHtml(ini(a.fname,a.lname))}</div>
       <input type="checkbox" id="cdg-cb-${escapeHtml(a.id)}" value="${escapeHtml(a.id)}" onchange="_cdgMajBouton()" style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <label for="cdg-cb-${escapeHtml(a.id)}" style="flex:1;cursor:pointer;min-width:0">
@@ -88862,7 +88872,7 @@ function _marquerRecordSiBesoin(idx,i){
 }
 function _badgeRecord(idx,i){
   return _recordsVus.has(idx+':'+i)
-    ? `<span title="Nouveau record" style="display:inline-block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;color:var(--red-text);background:#280303;border:1px solid rgba(224,32,32,.6);border-radius:var(--r-1);padding:0 4px;margin-left:4px;white-space:nowrap;--halo-c:rgba(224,32,32,.5);text-shadow:var(--halo-1)">RECORD</span>`
+    ? `<span title="Nouveau record" style="display:inline-block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;color:var(--red-text);background:var(--red-bg-2);border:1px solid color-mix(in srgb,var(--red) 60%,transparent);border-radius:var(--r-1);padding:0 4px;margin-left:4px;white-space:nowrap;--halo-c:color-mix(in srgb,var(--red) 50%,transparent);text-shadow:var(--halo-1)">RECORD</span>`
     : '';
 }
 
@@ -89272,7 +89282,7 @@ function showProgressTab(tab,btn,sansMemo){
     const _isoMG=b=>{ try{ return localISODate(new Date(b.date)); }catch(e){ return ''; } };
     const _ptsMG=bl.map((b,i)=>({d:_isoMG(b),v:bfPcts[i]})).filter(p=>p.v!==null&&p.d);
     const _couleurMG=e=>(ecartMasseGrasse(e)==='stable')?'var(--sub)':(e<0?'var(--green)':'var(--red)');
-    const _traceMG=_ptsMG.length>1?_courbeMesures([{label:'Masse grasse estimée',color:'#E02020',pts:_ptsMG}],
+    const _traceMG=_ptsMG.length>1?_courbeMesures([{label:'Masse grasse estimée',color:ROUGE_MARQUE,pts:_ptsMG}],
       {unite:'%',couleur:_couleurMG}):'';
     const _ecartMG=ecartLib===null?''
       :`<span class="pc-ecart" style="color:${col}">${ecartLib==='stable'?'stable'
@@ -89296,14 +89306,14 @@ function showProgressTab(tab,btn,sansMemo){
     const pieSec=(idx,title)=>{
       const mg=mgKgs[idx]??0,mm=mmKgs[idx]??0;
       if(!mg&&!mm) return '';
-      const mgC=idx===0?'#E02020':'#3b82f6';
+      const mgC=idx===0?ROUGE_MARQUE:'#3b82f6';
       const kg=v=>String(v)+'<small> kg</small>';
       return `<div class="mgc-col">
         <div class="mgc-tete"><div class="mgc-titre">${title}</div><div class="mgc-date">${_dateBil(bl[idx])}</div></div>
         <canvas id="pie-${idx}" class="mgc-pie"></canvas>
         <div class="mgc-leg">
           <div class="mgc-item"><div class="mgc-nom"><span class="mgc-pt" style="background:${mgC};box-shadow:0 0 8px ${mgC}"></span>MG</div><div class="mgc-val">${kg(mg)}</div></div>
-          <div class="mgc-item"><div class="mgc-nom"><span class="mgc-pt" style="background:#22c55e;box-shadow:0 0 8px #22c55e"></span>MM</div><div class="mgc-val">${kg(mm)}</div></div>
+          <div class="mgc-item"><div class="mgc-nom"><span class="mgc-pt" style="background:var(--green);box-shadow:0 0 8px var(--green)"></span>MM</div><div class="mgc-val">${kg(mm)}</div></div>
         </div>
       </div>`;
     };
@@ -89352,7 +89362,7 @@ function showProgressTab(tab,btn,sansMemo){
       ${renderDataTable(
         ['',...bilLabels],
         [
-          {label:'% Masse grasse',labelColor:'#E02020',labelBg:'var(--dark)',
+          {label:'% Masse grasse',labelColor:ROUGE_MARQUE,labelBg:'var(--dark)',
             values:bfPcts.map(v=>v!==null?v+'%':null)},
           {label:'Masse grasse (kg)',labelColor:'#f97316',labelBg:'var(--surface-1)',
             values:mgKgs.map(v=>v!==null?v:null)},
@@ -89380,7 +89390,7 @@ function showProgressTab(tab,btn,sansMemo){
     try{ if(typeof arcTracerCourbes==='function') arcTracerCourbes(c); }catch(e){}
     setTimeout(()=>{
       const mg0=mgKgs[0]??0,mm0=mmKgs[0]??0;
-      if(mg0&&mm0) drawPie('pie-0',[{val:mg0,color:'#E02020'},{val:mm0,color:'#22c55e'}],{label:'Masse grasse',max:170});
+      if(mg0&&mm0) drawPie('pie-0',[{val:mg0,color:ROUGE_MARQUE},{val:mm0,color:'#22c55e'}],{label:'Masse grasse',max:170});
       if(bl.length>1){
         const mgL=mgKgs[bl.length-1]??0,mmL=mmKgs[bl.length-1]??0;
         if(mgL&&mmL) drawPie('pie-'+(bl.length-1),[{val:mgL,color:'#3b82f6'},{val:mmL,color:'#22c55e'}],{label:'Masse grasse',max:170});
@@ -89460,7 +89470,7 @@ function showProgressTab(tab,btn,sansMemo){
     // écrite dans chaque cellule : elle est réajustée après le rendu, une fois
     // la place réellement disponible mesurée, et une seule écriture suffit.
     // MON AVANT/APRÈS : dès deux bilans à photo du même angle, en tête.
-    let html=htmlBoutonAvantApres(currentUser)+`<div data-fresque class="fq-carte" style="--fq:${cellW}px;background:linear-gradient(160deg,#141414 0%,#0b0b0b 55%,#080808 100%);border:1px solid #202020;border-radius:var(--r-4);position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 14px 34px rgba(0,0,0,.55);animation:fadeInUp var(--t-3) var(--c-out)">
+    let html=htmlBoutonAvantApres(currentUser)+`<div data-fresque class="fq-carte" style="--fq:${cellW}px;background:linear-gradient(160deg,var(--surface-1) 0%,var(--surface-0) 55%,var(--bg) 100%);border:1px solid var(--border);border-radius:var(--r-4);position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 14px 34px rgba(0,0,0,.55);animation:fadeInUp var(--t-3) var(--c-out)">
       
       <div style="position:absolute;left:-16px;top:34px;width:66px;height:150px;background:none;opacity:.4;pointer-events:none;z-index:0"></div>
       <div style="position:absolute;right:-16px;bottom:44px;width:66px;height:150px;background:none;opacity:.4;pointer-events:none;z-index:0"></div>
@@ -89468,24 +89478,24 @@ function showProgressTab(tab,btn,sansMemo){
         <!-- Titre facon affiche -->
         <div style="text-align:center;margin-bottom:6px">
           <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px">
-            <div style="flex:1;max-width:52px;height:1px;background:linear-gradient(90deg,transparent,rgba(224,32,32,.85))"></div>
-            <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:4px;color:var(--red-text);text-transform:uppercase;white-space:nowrap;--halo-c:rgba(224,32,32,.65);text-shadow:var(--halo-1)">RepCore</div>
-            <div style="flex:1;max-width:52px;height:1px;background:linear-gradient(90deg,rgba(224,32,32,.85),transparent)"></div>
+            <div style="flex:1;max-width:52px;height:1px;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--red) 85%,transparent))"></div>
+            <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:4px;color:var(--red-text);text-transform:uppercase;white-space:nowrap;--halo-c:color-mix(in srgb,var(--red) 65%,transparent);text-shadow:var(--halo-1)">RepCore</div>
+            <div style="flex:1;max-width:52px;height:1px;background:linear-gradient(90deg,color-mix(in srgb,var(--red) 85%,transparent),transparent)"></div>
           </div>
-          <div class="fq-titre" style="font-family:var(--pile-titre);line-height:.96;letter-spacing:2px;color:var(--text);text-shadow:var(--halo-3),0 0 44px rgba(224,32,32,.35)">MA TRANSFORMATION</div>
-          <div style="width:46px;height:2.5px;background:linear-gradient(90deg,#ff3b30,#8d0000);border-radius:var(--r-1);margin:10px auto 0;box-shadow:0 0 12px rgba(224,32,32,.85)"></div>
+          <div class="fq-titre" style="font-family:var(--pile-titre);line-height:.96;letter-spacing:2px;color:var(--text);text-shadow:var(--halo-3),0 0 44px color-mix(in srgb,var(--red) 35%,transparent)">MA TRANSFORMATION</div>
+          <div style="width:46px;height:2.5px;background:linear-gradient(90deg,#ff3b30,var(--red-deep));border-radius:var(--r-1);margin:10px auto 0;box-shadow:0 0 12px color-mix(in srgb,var(--red) 85%,transparent)"></div>
           <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2.8px;color:var(--text-faint);text-transform:uppercase;margin-top:8px">${period?period+' de travail':'Suivi photo'} &nbsp;·&nbsp; ${bl.length} bilan${bl.length>1?'s':''}</div>
         </div>
         ${dW!=null?`<div style="display:flex;justify-content:center;gap:10px;margin:12px 0 14px">
-          <div style="flex:1;max-width:112px;background:linear-gradient(180deg,#131313,#0b0b0b);border:1px solid var(--border);border-radius:var(--r-3);padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)">
-            <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:#8a8a8a">${wFirst}<span style="font-size:var(--fs-xs)">kg</span></div>
+          <div style="flex:1;max-width:112px;background:linear-gradient(180deg,var(--surface-1),var(--surface-0));border:1px solid var(--border);border-radius:var(--r-3);padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)">
+            <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:var(--sub)">${wFirst}<span style="font-size:var(--fs-xs)">kg</span></div>
             <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:var(--text-dim);margin-top:4px;font-weight:800">DÉPART</div>
           </div>
-          <div style="flex:1;max-width:112px;background:linear-gradient(160deg,#c10000,#6d0000);border:1px solid rgba(255,90,90,.42);border-radius:var(--r-3);padding:8px 6px;text-align:center;box-shadow:0 0 20px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18)">
+          <div style="flex:1;max-width:112px;background:linear-gradient(160deg,#c10000,#6d0000);border:1px solid rgba(255,90,90,.42);border-radius:var(--r-3);padding:8px 6px;text-align:center;box-shadow:0 0 20px color-mix(in srgb,var(--red) 40%,transparent),inset 0 1px 0 rgba(255,255,255,.18)">
             <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:var(--text);text-shadow:var(--halo-2)">${wLast}<span style="font-size:var(--fs-xs)">kg</span></div>
             <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:rgba(255,255,255,.8);margin-top:4px;font-weight:800">AUJOURD'HUI</div>
           </div>
-          <div style="flex:1;max-width:112px;background:linear-gradient(180deg,#131313,#0b0b0b);border:1px solid ${dCol}44;border-radius:var(--r-3);padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 0 16px ${dCol}22">
+          <div style="flex:1;max-width:112px;background:linear-gradient(180deg,var(--surface-1),var(--surface-0));border:1px solid ${dCol}44;border-radius:var(--r-3);padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 0 16px ${dCol}22">
             <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:${dCol};--halo-c:${dCol};text-shadow:var(--halo-2)bb">${dW>0?'+':''}${dW}<span style="font-size:var(--fs-xs)">kg</span></div>
             <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:${dCol}aa;margin-top:4px;font-weight:800">ÉVOLUTION</div>
           </div>
@@ -89515,8 +89525,8 @@ function showProgressTab(tab,btn,sansMemo){
                 const isLast=i===bl.length-1;
                 return `<td style="padding:4px;vertical-align:top">
                   ${src
-                    ?`<div style="width:var(--fq);aspect-ratio:.65;border-radius:var(--r-2);overflow:hidden;background:#111;cursor:pointer;border:1.5px solid ${isLast?'rgba(224,32,32,.75)':'#242424'};box-shadow:${isLast?'0 0 16px rgba(224,32,32,.45)':'0 5px 14px rgba(0,0,0,.5)'};position:relative" onclick="openPhotoFull(this.querySelector('img').src,'Bilan ${i+1} : ${lbl}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><img src="${srcImageSure(src)}" style="width:100%;height:100%;object-fit:cover"><div style="position:absolute;inset:0;background:linear-gradient(180deg,transparent 62%,rgba(0,0,0,.55));pointer-events:none"></div></div>`
-                    :`<div style="width:var(--fq);aspect-ratio:.65;border-radius:var(--r-2);background:linear-gradient(180deg,#101010,#0a0a0a);border:1px dashed #1e1e1e;display:flex;align-items:center;justify-content:center;color:#1e1e1e">${icon('image',20)}</div>`}
+                    ?`<div style="width:var(--fq);aspect-ratio:.65;border-radius:var(--r-2);overflow:hidden;background:var(--surface-1);cursor:pointer;border:1.5px solid ${isLast?'rgba(224,32,32,.75)':'#242424'};box-shadow:${isLast?'0 0 16px rgba(224,32,32,.45)':'0 5px 14px rgba(0,0,0,.5)'};position:relative" onclick="openPhotoFull(this.querySelector('img').src,'Bilan ${i+1} : ${lbl}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><img src="${srcImageSure(src)}" style="width:100%;height:100%;object-fit:cover"><div style="position:absolute;inset:0;background:linear-gradient(180deg,transparent 62%,rgba(0,0,0,.55));pointer-events:none"></div></div>`
+                    :`<div style="width:var(--fq);aspect-ratio:.65;border-radius:var(--r-2);background:linear-gradient(180deg,var(--surface-1),var(--bg));border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;color:#1e1e1e">${icon('image',20)}</div>`}
                 </td>`;
               }).join('')}
             </tr>`).join('')}
@@ -89524,7 +89534,7 @@ function showProgressTab(tab,btn,sansMemo){
           </table>
         </div>
         <!-- Pied facon signature -->
-        <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.06)">
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid color-mix(in srgb,var(--text) 6%,transparent)">
           <img src="./icons/logo.png" alt="" style="width:20px;height:20px;border-radius:var(--r-1);object-fit:cover;opacity:.9">
           <span style="font-family:var(--pile-titre);font-size:var(--fs-md);letter-spacing:3px;color:var(--text-faint)">REPCORE</span>
           <span style="font-size:var(--fs-xs);color:var(--text-dim);letter-spacing:1.5px;font-weight:700">· GUELLEC COACHING PRO</span>
@@ -89897,7 +89907,7 @@ function _htmlDossierSante(user,pourCoach){
   if(dossierSanteVide(d))
     return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:14px 16px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.75">${escapeHtml(DOSSIER_VIDE)}</div>`;
   const titre=t=>`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin:14px 0 8px">${escapeHtml(t)}</div>`;
-  const ligne=(g,dr)=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid rgba(255,255,255,.06)">
+  const ligne=(g,dr)=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid color-mix(in srgb,var(--text) 6%,transparent)">
       <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;min-width:0">${g}</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint);white-space:nowrap;flex-shrink:0">${escapeHtml(dr)}</span>
     </div>`;
@@ -90117,7 +90127,7 @@ function _htmlRepartitionPrises(user,macrosJour){
   const detail=egales
     ?r.nRepas+' × '+r.parts[0]+' g'
     :r.parts.join(' g + ')+' g';
-  return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">
+  return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid color-mix(in srgb,var(--text) 6%,transparent)">
     <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">${escapeHtml(detail)} = ${escapeHtml(String(r.total))} g au total.</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:6px">${escapeHtml(phrasePlancherPrise(r))}</div>
     ${r.tension?`<div style="font-size:var(--fs-2xs);color:var(--text-dim);line-height:1.55;margin-top:6px">${escapeHtml(PRISE_PHRASE_TENSION)}${r.nSuggere?' Essaie '+r.nSuggere+' repas.':''}</div>`:''}
@@ -90789,7 +90799,7 @@ function _htmlPpQuestions(user){
   const s=ppEtat(u).symptomes;
   return `<div class="card" style="margin-bottom:14px">
     <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:10px">Comment ça se passe ?</label>
-    ${PP_SYMPTOMES.map(x=>`<div style="padding:8px 0;border-top:1px solid rgba(255,255,255,.06)">
+    ${PP_SYMPTOMES.map(x=>`<div style="padding:8px 0;border-top:1px solid color-mix(in srgb,var(--text) 6%,transparent)">
       <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-bottom:6px">${escapeHtml(x.q)}</div>
       <div style="display:flex;gap:6px">
         ${[['0','Non'],['1','Oui']].map(([v,l])=>
@@ -92137,7 +92147,7 @@ function _renderCycleNutSettings(nut){
     <div style="display:flex;align-items:center;justify-content:space-between">
       <div>
         <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:4px">Adaptation cycle menstruel</div>
-        <div style="font-size:var(--fs-xs);color:#888">Ajuste tes macros selon ta phase</div>
+        <div style="font-size:var(--fs-xs);color:var(--sub)">Ajuste tes macros selon ta phase</div>
       </div>
       <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer">
         <input type="checkbox" id="cycle-enabled" ${on?'checked':''} onchange="saveCycleNutSettings()" style="opacity:0;width:0;height:0;position:absolute">
@@ -93005,8 +93015,8 @@ function _renderNutriContent(type,dateAff){
   // s afficher, et le cercle retombait toujours sur son haltere.
   const _flxPhoto=photoCoachDe(currentUser);
   const _flxCircle=_flxPhoto
-    ?`<img src="${escapeHtml(_flxPhoto)}" style="width:54px;height:54px;border-radius:var(--r-full);object-fit:cover;flex-shrink:0;border:2px solid rgba(255,255,255,.35);box-shadow:0 0 0 4px rgba(0,0,0,.18)">`
-    :`<div style="width:54px;height:54px;border-radius:var(--r-full);background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text)">${icon('dumbbell',22)}</div>`;
+    ?`<img src="${escapeHtml(_flxPhoto)}" style="width:54px;height:54px;border-radius:var(--r-full);object-fit:cover;flex-shrink:0;border:2px solid color-mix(in srgb,var(--text) 35%,transparent);box-shadow:0 0 0 4px rgba(0,0,0,.18)">`
+    :`<div style="width:54px;height:54px;border-radius:var(--r-full);background:rgba(0,0,0,.28);border:2px solid color-mix(in srgb,var(--text) 22%,transparent);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text)">${icon('dumbbell',22)}</div>`;
   if(type==='flexible'){
     // L'ENCART QUI EXPLIQUE LA DIETE VIENT EN PREMIER, LA CARTE DES CIBLES
     // JUSTE APRES. On dit d'abord ou l'on est, on regle ensuite : l'ordre
@@ -93246,8 +93256,8 @@ function _renderStrictDiet(){
   // Meme lecture que l en-tete de la diete flexible, et pour la meme raison.
   const coachPhoto=photoCoachDe(currentUser);
   const coachCircle=coachPhoto
-    ?`<img src="${escapeHtml(coachPhoto)}" style="width:54px;height:54px;border-radius:var(--r-full);object-fit:cover;flex-shrink:0;border:2px solid rgba(255,255,255,.35);box-shadow:0 0 0 4px rgba(0,0,0,.18)">`
-    :`<div style="width:54px;height:54px;border-radius:var(--r-full);background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text)">${icon('dumbbell',22)}</div>`;
+    ?`<img src="${escapeHtml(coachPhoto)}" style="width:54px;height:54px;border-radius:var(--r-full);object-fit:cover;flex-shrink:0;border:2px solid color-mix(in srgb,var(--text) 35%,transparent);box-shadow:0 0 0 4px rgba(0,0,0,.18)">`
+    :`<div style="width:54px;height:54px;border-radius:var(--r-full);background:rgba(0,0,0,.28);border:2px solid color-mix(in srgb,var(--text) 22%,transparent);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text)">${icon('dumbbell',22)}</div>`;
   // LE SUIVI DU JOUR, EN UNE CARTE (maquette de Kevin, 24/09/2026), juste
   // sous le cadre qui explique la diete : voir _htmlSuiviAlimentaire.
   const suiviDuJour=_htmlSuiviAlimentaire(currentUser,_sjour);
@@ -95106,7 +95116,7 @@ function _cplMacroTxt(m){
 }
 function _cplInput(val,oninput,largeur,pas){
   return `<input type="number" step="${pas||'any'}" value="${val==null?'':val}" oninput="${oninput}"
-    style="width:${largeur||'62px'};padding:6px 8px;background:#111;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;text-align:center;box-sizing:border-box">`;
+    style="width:${largeur||'62px'};padding:6px 8px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;text-align:center;box-sizing:border-box">`;
 }
 // Seul l'aperçu est reconstruit à la frappe. Reconstruire toute la page
 // retirerait le focus du champ qu'on est en train de remplir.
@@ -95269,7 +95279,7 @@ function _cplHtmlSuivi(){
     // les trois macros energetiques : les lignes du squelette ne portent ni sel
     // ni fibres. Afficher une jauge vide ferait croire a zero pose ; on affiche
     // la CIBLE seule, qui est ce que le coach vient y chercher.
-    +'<div class="cpl-s-b cpl-s-nu" style="--sb:#9aa0a6">'
+    +'<div class="cpl-s-b cpl-s-nu" style="--sb:#a0a0a0">'
       +'<div class="cpl-s-h"><span class="cpl-s-l">Sel</span>'
       +'<span class="cpl-s-v">'+(sel?String(Math.round(sel.targetSaltG*10)/10).replace('.',','):'-')+' g</span></div>'
       +'<div class="cpl-s-r">cible du jour, non comptée dans le squelette</div></div>'
@@ -95501,13 +95511,13 @@ function _cplHtmlLigne(item){
   if(item.note!=null){
     return `<div class="plan-l">
       <input value="${escapeHtml(item.note)}" placeholder="Note de préparation (ex : sous forme de PANCAKES)" oninput="cplSetChamp('${item.id}','note',this.value)"
-        style="flex:1;min-width:0;padding:6px 8px;background:#111;border:1px dashed var(--border);border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-style:italic;box-sizing:border-box">
+        style="flex:1;min-width:0;padding:6px 8px;background:var(--surface-1);border:1px dashed var(--border);border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-style:italic;box-sizing:border-box">
       ${sup}</div>`;
   }
   const m=planMacrosItem(item);
   const champNom=item.libre!=null
     ? `<input value="${escapeHtml(item.libre)}" placeholder="Nom de la ligne" oninput="cplSetChamp('${item.id}','libre',this.value)"
-        style="width:100%;padding:6px 8px;background:#111;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;box-sizing:border-box">`
+        style="width:100%;padding:6px 8px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;box-sizing:border-box">`
     : `<div style="font-size:var(--fs-sm);font-weight:700;line-height:1.35">${escapeHtml(nom)}${item.recette?' <span class="rct-b">recette</span>':''}</div>`;
   const macrosMain=item.libre!=null
     ? `<div style="display:flex;gap:6px;align-items:center;margin-top:6px">
@@ -95531,7 +95541,7 @@ function _cplHtmlLigne(item){
       </div>
       ${_cplInput(item.q,`cplSetChamp('${item.id}','q',this.value)`,'64px')}
       <input value="${escapeHtml(planUniteItem(item))}" oninput="cplSetChamp('${item.id}','u',this.value)" aria-label="Unité"
-        style="width:62px;padding:6px 6px;background:#111;border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);text-align:center;box-sizing:border-box">
+        style="width:62px;padding:6px 6px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);text-align:center;box-sizing:border-box">
       ${sup}
     </div>
     ${macrosMain}${_noteMasquee}
@@ -95965,8 +95975,8 @@ function _htmlPlanAthlete(user,intercale){
   // halo. Les trois autres restent neutres — si tout est mis en avant, plus
   // rien ne l est.
   const tuile=(lib,val,unite,couleur,vedette)=>`<div style="position:relative;overflow:hidden;flex:1;min-width:0;border-radius:var(--r-3);padding:10px 4px;text-align:center;${vedette
-      ?'background:linear-gradient(160deg,rgba(224,32,32,.20),rgba(224,32,32,.06) 60%,rgba(224,32,32,.02));border:1px solid rgba(224,32,32,.45);box-shadow:var(--e2),var(--glow-red)'
-      :'background:rgba(255,255,255,.028);border:1px solid rgba(255,255,255,.05)'}">
+      ?'background:linear-gradient(160deg,color-mix(in srgb,var(--red) 20%,transparent),color-mix(in srgb,var(--red) 6%,transparent) 60%,color-mix(in srgb,var(--red) 2%,transparent));border:1px solid color-mix(in srgb,var(--red) 45%,transparent);box-shadow:var(--e2),var(--glow-red)'
+      :'background:color-mix(in srgb,var(--text) 2.8%,transparent);border:1px solid color-mix(in srgb,var(--text) 5%,transparent)'}">
     ${vedette?`<div aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;background:none"></div>`:''}
     <div style="position:relative;font-family:var(--pile-titre);font-size:${vedette?30:26}px;line-height:1;color:${couleur};text-shadow:0 0 ${vedette?16:10}px ${couleur}${vedette?'99':'66'}">${val==null?'-':Math.round(val)}<span style="font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);color:var(--sub);font-weight:400">${unite}</span></div>
     <div style="position:relative;font-size:var(--fs-2xs);color:${vedette?'#ffb3b3':'var(--sub)'};letter-spacing:1.4px;font-weight:800;margin-top:6px">${lib}</div>
@@ -96073,7 +96083,7 @@ function _htmlPlanAthlete(user,intercale){
   // de portion sont une RÉFÉRENCE qu'on consulte, pas une consigne du jour.
   // Dépliée, elle s'intercalait entre le programme et la liste de courses.
   const blocFruits=`<div class="plan-card">
-    <div class="plan-titre" style="background:linear-gradient(90deg,rgba(34,197,94,.55),rgba(22,140,66,.3) 62%,rgba(10,80,36,.1));border-left-color:#2ee06a">
+    <div class="plan-titre" style="background:linear-gradient(90deg,color-mix(in srgb,var(--green) 55%,transparent),rgba(22,140,66,.3) 62%,rgba(10,80,36,.1));border-left-color:#2ee06a">
       <span class="plan-titre-t">1 portion de fruits</span></div>
     <div class="plan-corps">
       ${cartoucheFruit('Table des équivalences')}
@@ -96084,18 +96094,18 @@ function _htmlPlanAthlete(user,intercale){
   // Rouge translucide, halo néon, filet diagonal, et un bandeau d'en-tête —
   // c'est un panneau routier, pas un paragraphe.
   const blocCheat=`<div style="position:relative;overflow:hidden;border-radius:var(--r-3);margin-bottom:14px;
-    background:linear-gradient(180deg,rgba(224,32,32,.13),rgba(224,32,32,.05));
+    background:linear-gradient(180deg,color-mix(in srgb,var(--red) 13%,transparent),color-mix(in srgb,var(--red) 5%,transparent));
     border:1px solid rgba(255,90,90,.42);
-    box-shadow:0 0 20px rgba(224,32,32,.30),inset 0 1px 0 rgba(255,255,255,.07)">
+    box-shadow:0 0 20px color-mix(in srgb,var(--red) 30%,transparent),inset 0 1px 0 rgba(255,255,255,.07)">
     <div style="position:absolute;inset:0;pointer-events:none;
       background:none"></div>
     <div style="position:relative;display:flex;align-items:center;gap:8px;padding:10px 14px;
-      background:linear-gradient(90deg,rgba(224,32,32,.55),rgba(140,0,0,.22) 70%,transparent);
+      background:linear-gradient(90deg,color-mix(in srgb,var(--red) 55%,transparent),color-mix(in srgb,var(--red-deep) 22%,transparent) 70%,transparent);
       border-bottom:1px solid rgba(255,90,90,.30)">
       <span style="font-size:var(--fs-lg);line-height:1;filter:drop-shadow(0 0 6px rgba(255,90,90,.95))">⚠</span>
       <span style="font-family:var(--pile-titre);font-size:var(--fs-lg);
         letter-spacing:3px;color:var(--text);text-transform:uppercase;
-        --halo-c:rgba(255,90,90,.95);text-shadow:var(--halo-1),0 0 20px rgba(224,32,32,.55)">Attention</span>
+        --halo-c:rgba(255,90,90,.95);text-shadow:var(--halo-1),0 0 20px color-mix(in srgb,var(--red) 55%,transparent)">Attention</span>
     </div>
     <div style="position:relative;padding:12px 14px 12px">
       <!-- LE FILET NE SEPARE QUE LES PUCES ENTRE ELLES. Pose sur TOUTES, il
@@ -96104,7 +96114,7 @@ function _htmlPlanAthlete(user,intercale){
            onze pixels l'un de l'autre, dont le second ne separait rien. La
            premiere puce n'en porte donc plus ; les suivantes le gardent,
            c'est la leur fonction. -->
-      ${PLAN_NOTE_CHEATMEAL.map((t,i)=>`<div style="display:flex;gap:8px;align-items:flex-start;font-size:var(--fs-xs);color:#f0dede;line-height:1.65;padding:4px 0;${i?'border-top:1px solid rgba(255,90,90,.14)':''}">
+      ${PLAN_NOTE_CHEATMEAL.map((t,i)=>`<div style="display:flex;gap:8px;align-items:flex-start;font-size:var(--fs-xs);color:var(--text-strong);line-height:1.65;padding:4px 0;${i?'border-top:1px solid rgba(255,90,90,.14)':''}">
         <span style="color:var(--red-text);flex-shrink:0;font-weight:900">•</span>
         <span>${escapeHtml(t)}</span></div>`).join('')}
     </div>
@@ -96123,7 +96133,7 @@ function _htmlPlanAthlete(user,intercale){
   // Rythme de LISTE : 3px de marge au lieu de 7, separateur plus discret.
   // La cible tactile ne descend pas pour autant — le select garde 34px, et
   // la regle WCAG est tenue par sa largeur, pas par l interligne.
-  const ligneCourse=(lib,qte,cle,stock,nUsages)=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-top:1px solid #1c1c1c">
+  const ligneCourse=(lib,qte,cle,stock,nUsages)=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-top:1px solid var(--border)">
       <select onchange="lcStock('${cle}',this)" aria-label="État : ${escapeHtml(lib)}"
         style="flex-shrink:0;width:88px;min-height:34px;padding:4px 6px;border-radius:var(--r-2);cursor:pointer;
           background:${stock?'rgba(34,197,94,.10)':'#101010'};
@@ -96150,7 +96160,7 @@ function _htmlPlanAthlete(user,intercale){
     const q=choisi?Math.round(Number(choisi.split('|')[1])*LC_REPAS):null;
     return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--border)">
       <select onchange="lcChoisir('${cle}',this.value)" aria-label="Source de ${macro==='p'?'protéines':'glucides'} au choix"
-        style="flex:1;min-width:0;min-height:38px;padding:8px 10px;background:#101010;border:1px solid var(--border);border-radius:var(--r-2);color:${choisi?'var(--text)':'var(--text-dim)'};font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
+        style="flex:1;min-width:0;min-height:38px;padding:8px 10px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:${choisi?'var(--text)':'var(--text-dim)'};font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
         <option value="">${macro==='p'?'Protéines':'Glucides'} au choix…</option>
         ${opts}
       </select>
@@ -96193,7 +96203,7 @@ const courses=(lc&&lc.lignes.length)?`<details class="hist-repli lc-repli" style
     :'';
 
   return `<div style="margin-bottom:24px">
-    <div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:2px;font-weight:800;--halo-c:rgba(224,32,32,.45);text-shadow:var(--halo-2);margin-bottom:4px;display:flex;align-items:center;gap:6px">${icon('target',12)} Programme nutritionnel</div>
+    <div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:2px;font-weight:800;--halo-c:color-mix(in srgb,var(--red) 45%,transparent);text-shadow:var(--halo-2);margin-bottom:4px;display:flex;align-items:center;gap:6px">${icon('target',12)} Programme nutritionnel</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-bottom:12px">${escapeHtml(PLAN_NOTE_INDICATIF)}</div>
     <div class="oa-carte">
       <div class="oa-tete">
@@ -96715,7 +96725,7 @@ function _htmlPortions(f){
   if(!l.length) return '';
   return `<div style="display:flex;gap:8px;margin-top:10px">
     ${l.map(p=>`<button onclick="setFjaQty(${p.g})"
-      style="flex:1;padding:8px;background:#111;border:1px solid #222;border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer">${p.lib} · ${p.g} g</button>`).join('')}
+      style="flex:1;padding:8px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer">${p.lib} · ${p.g} g</button>`).join('')}
   </div>
   <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:6px;line-height:1.5">${escapeHtml(FJ_PORTIONS_NOTE)}</div>`;
 }
@@ -97990,7 +98000,7 @@ function _htmlEquivalents(e){
   };
   return cadre(`
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:10px">${escapeHtml(descriptif?'À '+libDom+' égales, dans le même groupe.':'Même quantité de '+libDom+', dans le même groupe. À toi de voir.')}</div>
-    ${l.map(x=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid rgba(255,255,255,.06)">
+    ${l.map(x=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid color-mix(in srgb,var(--text) 6%,transparent)">
       <div style="flex:1;min-width:0">
         <div style="font-size:var(--fs-sm);font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.alim.n)}</div>
         <div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:2px">${x.qtyEq} g${x.plafonne?' <span style="color:var(--orange)">· plafonné</span>':''} &nbsp;·&nbsp; <span style="color:var(--text-dim)">${escapeHtml(ecart(x))}</span></div>
@@ -98263,7 +98273,7 @@ function _renderFjRecent(){
   const favIds=_fjFavs();
   const favs=favIds.map(id=>_ciqualDB.find(f=>f.id===id)).filter(Boolean);
   const titre=t=>'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;padding:14px 16px 6px">'+t+'</div>';
-  const sep='<div style="height:1px;background:#111;margin:6px 0"></div>';
+  const sep='<div style="height:1px;background:var(--surface-1);margin:6px 0"></div>';
   const blocFav=favs.length
     ?titre('Favoris')+favs.map(f=>_fjResultHtml(f,true)).join('')+sep
     :'';
@@ -98969,7 +98979,7 @@ function ouvrirScan(){
 function _htmlScanViseur(){
   return `<div id="scan-viseur" style="position:relative;border-radius:var(--r-3);overflow:hidden;background:#000;aspect-ratio:4/3">
       <video id="scan-video" playsinline muted autoplay style="width:100%;height:100%;object-fit:cover;display:block"></video>
-      <div style="position:absolute;left:12%;right:12%;top:38%;height:24%;border:2px solid rgba(255,255,255,.85);border-radius:var(--r-2);box-shadow:0 0 0 9999px rgba(0,0,0,.35)"></div>
+      <div style="position:absolute;left:12%;right:12%;top:38%;height:24%;border:2px solid color-mix(in srgb,var(--text) 85%,transparent);border-radius:var(--r-2);box-shadow:0 0 0 9999px rgba(0,0,0,.35)"></div>
     </div>
     <div id="scan-etat" style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:10px;min-height:34px">Démarrage de la caméra…</div>
     <div id="scan-torche-slot"></div>
@@ -100560,8 +100570,8 @@ function _renderFjDaySummary(date){
   const nextStr=localISODate(new Date(_yy,_mm-1,_dd+1));
   const dateLbl=_libelleJourNut(date);
   const nextBtn=isToday
-    ?`<button disabled style="flex-shrink:0;background:none;border:1px solid #222;color:var(--text-dim);border-radius:var(--r-2);padding:6px 12px;font-size:var(--fs-md);line-height:1;cursor:not-allowed">→</button>`
-    :`<button onclick="_renderFjDaySummary('${nextStr}')" style="flex-shrink:0;background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-md);line-height:1">→</button>`;
+    ?`<button disabled style="flex-shrink:0;background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:var(--r-2);padding:6px 12px;font-size:var(--fs-md);line-height:1;cursor:not-allowed">→</button>`
+    :`<button onclick="_renderFjDaySummary('${nextStr}')" style="flex-shrink:0;background:none;border:1px solid var(--border);color:var(--text-mid);border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-md);line-height:1">→</button>`;
   const nut=currentUser.nutrition||{};
   const entries=(nut.log?.[date]?.entries)||[];
   const isOn=nutIsOnDay(date);
@@ -100601,7 +100611,7 @@ function _renderFjDaySummary(date){
   if(_nav) _nav.innerHTML=`
     <div style="margin-bottom:20px;${_animEntree('fj-nav')}">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-        <button onclick="_renderFjDaySummary('${prevStr}')" style="flex-shrink:0;background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-md);line-height:1">←</button>
+        <button onclick="_renderFjDaySummary('${prevStr}')" style="flex-shrink:0;background:none;border:1px solid var(--border);color:var(--text-mid);border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-md);line-height:1">←</button>
         <div style="flex:1;min-width:0;text-align:center">
           <div class="nut-titre" style="transform:none">${dateLbl}</div>
           <div style="margin-top:6px">${dayBadge}</div>
@@ -105520,7 +105530,7 @@ function dessinerDieteRespectee(c){
   const d=_drsDonnees(c);
   if(!d||typeof document==='undefined') return null;
   const K=2, L=DRS_IMG_L, P=30;
-  const ROUGE=_tok('--red','#E02020'), TXT='#efefef', SUB='#8a8a8a';
+  const ROUGE=_tok('--red',ROUGE_MARQUE), TXT='#efefef', SUB='#8a8a8a';
   const COUL={oui:'#34c759',non:'#ff3b47',neutre:'rgba(255,255,255,.36)',vide:'rgba(255,255,255,.1)'};
   const T="'Bebas Neue','Arial Narrow',Impact,sans-serif", M='Montserrat,sans-serif';
   // LES DEUX COLONNES : 380 a gauche, le reste a droite.
@@ -106105,7 +106115,7 @@ function _htmlSuppInteractions(list){
   const l=_suppInteractions(list);
   if(!l.length) return '';
   return `<div style="background:color-mix(in srgb,var(--amber) 7%,transparent);border:1px solid color-mix(in srgb,var(--amber) 25%,transparent);border-radius:var(--r-3);padding:10px 12px;margin-bottom:12px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:#f59e0b;text-transform:uppercase;margin-bottom:6px">Au même moment</div>
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--amber);text-transform:uppercase;margin-bottom:6px">Au même moment</div>
     ${l.map(m=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;margin-bottom:4px">· ${escapeHtml(m)}</div>`).join('')}
   </div>`;
 }
@@ -106186,7 +106196,7 @@ const SUPP_TIMING_META={
   'apres-midi':         {color:'#d97706',svg:'<circle cx="12" cy="13" r="4"/><line x1="12" y1="4" x2="12" y2="6.5"/><line x1="18.5" y1="7.5" x2="16.7" y2="9.3"/><line x1="20" y1="14" x2="17.5" y2="14"/><line x1="3" y1="20" x2="21" y2="20"/>'},
   'soir':               {color:'#a78bfa',svg:'<circle cx="12" cy="14" r="4"/><line x1="12" y1="5" x2="12" y2="7.5"/><line x1="5.5" y1="8.5" x2="7.3" y2="10.3"/><line x1="4" y1="15" x2="6.5" y2="15"/><line x1="3" y1="20" x2="21" y2="20"/><polyline points="9 17.5 12 20.5 15 17.5"/>'},
   'coucher':            {color:'#60a5fa',svg:'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'},
-  'avant-entrainement': {color:'#E02020',svg:'<path d="M6.5 6.5h11M6.5 17.5h11M4 9v6M20 9v6M8 7v10M16 7v10"/>'},
+  'avant-entrainement': {color:ROUGE_MARQUE,svg:'<path d="M6.5 6.5h11M6.5 17.5h11M4 9v6M20 9v6M8 7v10M16 7v10"/>'},
   'intra':              {color:'#22c55e',svg:'<path d="M12 2.7 C12 2.7 5.5 10 5.5 14.2 a6.5 6.5 0 0 0 13 0 C18.5 10 12 2.7 12 2.7 Z"/>'},
   'apres-entrainement': {color:'#c2410c',svg:'<path d="M6.5 6.5h11M6.5 17.5h11M4 9v6M20 9v6"/><polyline points="8.5 12 11 14.5 15.5 9.5"/>'},
   'toutes-4h':          {color:'#94a3b8',svg:'<circle cx="12" cy="12" r="9"/><polyline points="12 6.5 12 12 15.8 14"/>'}
@@ -107617,7 +107627,7 @@ const SUPP_FAMILLES=Object.freeze({
   proteine:   {lib:'Protéine',    c:'#ef4444'},
   acide:      {lib:'Acide aminé', c:'#f59e0b'},
   creatine:   {lib:'Créatine',    c:'#fb923c'},
-  booster:    {lib:'Booster',     c:'#E02020'},
+  booster:    {lib:'Booster',     c:ROUGE_MARQUE},
   vitamine:   {lib:'Vitamine',    c:'#facc15'},
   mineral:    {lib:'Minéral',     c:'#f59e0b'},
   gras:       {lib:'Acides gras', c:'#f59e0b'},
@@ -108513,7 +108523,7 @@ function _dbCarteAmplitudes(u,W){
     if(x.pts.length<2) return '<div class="db-am"><b>'+escapeHtml(lib)+'</b>'+_dbVide('Un seul relevé, le '+new Date(x.pts[0].x).toLocaleDateString('fr-FR')+' : il en faut deux pour tracer une courbe.')+'</div>';
     const fmt=x.d.cle==='posterieur'?(v=>({1:'bas du dos',2:'milieu du dos',3:'haut du dos'})[Math.round(v)]||''):(v=>_dbNb(v,0)+(unites[x.d.cle]||''));
     return '<div class="db-am"><b>'+escapeHtml(lib)+'</b>'
-      +_dbCourbe({id:'db-am-'+x.d.cle,titre:lib,W,H:110,series:[{lib,couleur:'#e02020',points:x.pts,aire:false,fmt}],fmtG:fmt})+'</div>';
+      +_dbCourbe({id:'db-am-'+x.d.cle,titre:lib,W,H:110,series:[{lib,couleur:ROUGE_MARQUE_MIN,points:x.pts,aire:false,fmt}],fmtG:fmt})+'</div>';
   }).join('');
   return _dbCarte('db-c-am','Amplitudes',info,'',corps);
 }
@@ -109658,18 +109668,18 @@ function _renderCaffeineEmbedded(){
   const minStr=localISODate(new Date(Date.now()-CAFF_RETENTION_JOURS*24*3600*1000));
   const auFond=prevStr<minStr;
   const navPrev=auFond
-    ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:var(--r-2);padding:6px 12px;font-size:var(--fs-lg);cursor:not-allowed">←</button>`
-    :`<button onclick="_caffeineEmbedDate='${prevStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">←</button>`;
+    ?`<button disabled style="background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:var(--r-2);padding:6px 12px;font-size:var(--fs-lg);cursor:not-allowed">←</button>`
+    :`<button onclick="_caffeineEmbedDate='${prevStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid var(--border);color:var(--text-mid);border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">←</button>`;
   const navNext=isToday
-    ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:var(--r-2);padding:6px 12px;font-size:var(--fs-lg);cursor:not-allowed">→</button>`
-    :`<button onclick="_caffeineEmbedDate='${nextStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">→</button>`;
+    ?`<button disabled style="background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:var(--r-2);padding:6px 12px;font-size:var(--fs-lg);cursor:not-allowed">→</button>`
+    :`<button onclick="_caffeineEmbedDate='${nextStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid var(--border);color:var(--text-mid);border-radius:var(--r-2);padding:6px 12px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">→</button>`;
   const entries=getCaffeineDay(date);
   const totalMg=entries.reduce((s,e)=>s+(e.mg||0),0);
   const {weight:wKg,estimated:_wEst}=getUserWeight();
   const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser),grossesseSuspend(currentUser));
   el.innerHTML=`
     <div style="margin-bottom:12px">
-      <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--red-text);--halo-c:rgba(224,32,32,.45);text-shadow:var(--halo-1);display:flex;align-items:center;gap:6px">${icon('coffee',11)} Caféine</h3>
+      <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--red-text);--halo-c:color-mix(in srgb,var(--red) 45%,transparent);text-shadow:var(--halo-1);display:flex;align-items:center;gap:6px">${icon('coffee',11)} Caféine</h3>
     </div>
     ${_bandeauJour('caff-embed-date-input',date,'_caffEmbedAllerJour',{avecFleches:true,prev:auFond?null:prevStr,next:isToday?null:nextStr,retention:CAFF_RETENTION_JOURS,libelle:dateLbl})}
     ${_renderCaffeineBlock(entries,totalMg,thr,'embedded',date,_wEst,isToday,dateLbl,wKg)}
@@ -110176,7 +110186,7 @@ function _renderVideosListe(){
       :'')
     +'<div id="vid-card-list"></div>'
     +(()=>{ try{ return htmlCorrectionsOrphelines(currentUser); }catch(e){ return ''; } })()
-    +'<button id="vid-more-btn" onclick="loadMoreVideos()" style="display:none;width:100%;margin-top:10px;padding:10px;background:none;border:1px solid #222;border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-sm);cursor:pointer;font-family:Montserrat,sans-serif;font-weight:700;letter-spacing:.5px;min-height:44px">Voir plus de vidéos</button>';
+    +'<button id="vid-more-btn" onclick="loadMoreVideos()" style="display:none;width:100%;margin-top:10px;padding:10px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-sm);cursor:pointer;font-family:Montserrat,sans-serif;font-weight:700;letter-spacing:.5px;min-height:44px">Voir plus de vidéos</button>';
   _renderVideoBatch(0,20);
 }
 function _renderVideoBatch(from,count){
@@ -112583,7 +112593,7 @@ function _tplFiltrer(){
       const v=templateVariables(t.corps);
       return `<button type="button" onclick="tplInserer('${escapeHtml(t.id)}')"
         style="width:100%;text-align:left;min-height:44px;padding:10px 12px;margin-bottom:6px;border-radius:var(--r-2);cursor:pointer;
-          background:#111;border:1px solid var(--border);color:var(--text-strong);font-family:Montserrat,sans-serif">
+          background:var(--surface-1);border:1px solid var(--border);color:var(--text-strong);font-family:Montserrat,sans-serif">
         <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${escapeHtml(t.titre)}</div>
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:4px">${escapeHtml(t.corps)}</div>
         ${v.length?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">Variables : ${v.map(x=>escapeHtml(x)).join(', ')}</div>`:''}
@@ -114750,16 +114760,16 @@ function _bandeauJour(inputId,jour,handler,opts){
   // LES FLECHES, quand l ecran en demande. Style repris tel quel de la version
   // cafeine : fond transparent, bordure #333, et la variante desactivee en #222.
   const _fl=(cible,txt,actif)=>actif
-    ?`<button onclick="${handler}('${cible}')" style="flex:none;background:none;border:1px solid #333;color:#aaa;border-radius:var(--r-sm);padding:6px 14px;font-size:15px;cursor:pointer;font-family:Montserrat,sans-serif">${txt}</button>`
-    :`<button disabled style="flex:none;background:none;border:1px solid #222;color:var(--text-dim);border-radius:var(--r-sm);padding:6px 14px;font-size:15px;cursor:not-allowed">${txt}</button>`;
+    ?`<button onclick="${handler}('${cible}')" style="flex:none;background:none;border:1px solid var(--border-strong);color:var(--text-mid);border-radius:var(--r-sm);padding:6px 14px;font-size:15px;cursor:pointer;font-family:Montserrat,sans-serif">${txt}</button>`
+    :`<button disabled style="flex:none;background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:var(--r-sm);padding:6px 14px;font-size:15px;cursor:not-allowed">${txt}</button>`;
   const _gauche=avecFleches?_fl(prev,'←',!!prev&&prev>=min):'';
   const _droite=avecFleches?_fl(next,'→',!!next&&next<=auj):'';
   return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
     ${_gauche}
     <div style="flex:1;min-width:0;font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:${estAuj?'#8a8a8a':'var(--red)'};text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${lbl}</div>
     ${_droite}
-    ${estAuj?'':`<button onclick="${handler}('')" title="Revenir à aujourd'hui" style="flex:none;background:#141414;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:6px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;cursor:pointer">AUJ.</button>`}
-    <input type="date" id="${inputId}" value="${jour}" min="${min}" max="${auj}" onchange="${handler}(this.value)" aria-label="Choisir le jour" style="flex:0 0 auto;width:138px;box-sizing:border-box;background:#101010;border:1px solid var(--border);color:#ccc;border-radius:var(--r-2);padding:6px 8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);color-scheme:dark">
+    ${estAuj?'':`<button onclick="${handler}('')" title="Revenir à aujourd'hui" style="flex:none;background:var(--surface-1);border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:6px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;cursor:pointer">AUJ.</button>`}
+    <input type="date" id="${inputId}" value="${jour}" min="${min}" max="${auj}" onchange="${handler}(this.value)" aria-label="Choisir le jour" style="flex:0 0 auto;width:138px;box-sizing:border-box;background:var(--surface-1);border:1px solid var(--border);color:#ccc;border-radius:var(--r-2);padding:6px 8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);color-scheme:dark">
   </div>`;
 }
 
@@ -114850,16 +114860,16 @@ function loadSteps(containerId='steps-content',opts){
     if(!(goal>0)) return 'var(--border)';
     if(n>=goal) return '#22c55e';
     if(n>=goal*0.6) return '#f97316';
-    return '#E02020';
+    return ROUGE_MARQUE;
   };
   const fmt=n=>n?n.toLocaleString('fr-FR'):'-';
-  const avgColor=weekAvg>=goals.on?'#22c55e':weekAvg>=goals.on*0.6?'#f97316':weekAvg>0?'#E02020':'#777777';
+  const avgColor=weekAvg>=goals.on?'#22c55e':weekAvg>=goals.on*0.6?'#f97316':weekAvg>0?ROUGE_MARQUE:'#777777';
 
   let bars='';
   weekData.forEach(d=>{
     const pct=d.count?Math.max(5,Math.round(d.count/maxVal*100)):4;
     const col=stepColor(d.count||0,d.type,d.date);
-    const typeAccent=d.type==='on'?'#E02020':d.type==='off'?'#60a5fa':'transparent';
+    const typeAccent=d.type==='on'?ROUGE_MARQUE:d.type==='off'?'#60a5fa':'transparent';
     bars+=_htmlBarreSemaine(pct,col,d.isToday,typeAccent);
   });
 
@@ -114889,7 +114899,7 @@ function loadSteps(containerId='steps-content',opts){
       const goalLine=goal?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">${e.count.toLocaleString('fr-FR')} / ${goal.toLocaleString('fr-FR')} pas${e.count>=goal?' <span style="color:var(--green)">✓</span>':''}</div><div style="height:3px;background:var(--surface-2);border-radius:var(--r-1);margin-top:6px;overflow:hidden"><div style="height:100%;width:${pctBar}%;background:${col};border-radius:var(--r-1)"></div></div>`:'';
       return `<div style="padding:10px 0;border-bottom:1px solid #111">
         <div style="display:flex;align-items:center;justify-content:space-between">
-          <div style="display:flex;align-items:center;gap:8px">${typeBadge}<div style="font-size:var(--fs-sm);font-weight:600;color:#aaa;text-transform:capitalize">${lbl}</div></div>
+          <div style="display:flex;align-items:center;gap:8px">${typeBadge}<div style="font-size:var(--fs-sm);font-weight:600;color:var(--text-mid);text-transform:capitalize">${lbl}</div></div>
           <div style="font-size:var(--fs-md);font-weight:800;color:${col}">${fmt(e.count)}</div>
         </div>
         ${goalLine}
@@ -114898,7 +114908,7 @@ function loadSteps(containerId='steps-content',opts){
     histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)">
       
       <!-- R34, l'historique n'est plus replie : ses jours se lisent d'emblee. -->
-      <div class="hist-bloc" style="position:relative"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Historique</div><span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:700">${Math.min(log.length,21)} jour${Math.min(log.length,21)>1?'s':''}</span></div>
+      <div class="hist-bloc" style="position:relative"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:var(--sub);text-transform:uppercase">Historique</div><span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:700">${Math.min(log.length,21)} jour${Math.min(log.length,21)>1?'s':''}</span></div>
       ${rows}</div>
     </div>`;
   }
@@ -114944,7 +114954,7 @@ function loadSteps(containerId='steps-content',opts){
         </div>
         <input type="number" id="steps-today-input" placeholder="0" min="0" max="99999"
           value="${todayEntry&&todayEntry.count!=null?todayEntry.count:''}"
-          style="width:100%;box-sizing:border-box;font-size:var(--fs-3xl);text-align:center;padding:14px 10px;background:linear-gradient(180deg,#070707,#0d0d0d);border:1px solid #242424;border-radius:var(--r-3);color:var(--text);font-family:var(--pile-titre);letter-spacing:2px;margin-bottom:12px;box-shadow:var(--e-inset);text-shadow:var(--halo-2)">
+          style="width:100%;box-sizing:border-box;font-size:var(--fs-3xl);text-align:center;padding:14px 10px;background:linear-gradient(180deg,var(--bg),var(--surface-0));border:1px solid var(--border);border-radius:var(--r-3);color:var(--text);font-family:var(--pile-titre);letter-spacing:2px;margin-bottom:12px;box-shadow:var(--e-inset);text-shadow:var(--halo-2)">
         <!-- R28, « Enregistrer », comme partout ailleurs dans l app. -->
         <button class="btn btn-red" onclick="saveSteps()">Enregistrer</button>
         <!-- LA CAPTURE SE PLACE SOUS LA SAISIE, PAS EN BAS DE PAGE : l athlete
@@ -114963,10 +114973,10 @@ function loadSteps(containerId='steps-content',opts){
       
       <div style="position:relative">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <span style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Cette semaine</span>
-          <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--text-dim)"><span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:var(--red);vertical-align:middle;box-shadow:0 0 6px rgba(224,32,32,.9)"></span> Entraînement &nbsp;<span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:#60a5fa;vertical-align:middle;box-shadow:0 0 6px rgba(96,165,250,.8)"></span> Repos</span>
+          <span style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:var(--sub);text-transform:uppercase">Cette semaine</span>
+          <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--text-dim)"><span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:var(--red);vertical-align:middle;box-shadow:0 0 6px color-mix(in srgb,var(--red) 90%,transparent)"></span> Entraînement &nbsp;<span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:#60a5fa;vertical-align:middle;box-shadow:0 0 6px rgba(96,165,250,.8)"></span> Repos</span>
         </div>
-        <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:8px;border-bottom:1px solid rgba(255,255,255,.05)">${bars}</div>
+        <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:8px;border-bottom:1px solid color-mix(in srgb,var(--text) 5%,transparent)">${bars}</div>
         <div style="display:flex;gap:4px">${labels}</div>
         <div style="display:flex;gap:4px">${counts}</div>
       </div>
@@ -114974,16 +114984,16 @@ function loadSteps(containerId='steps-content',opts){
 
     <div style="background:linear-gradient(145deg,#c10000 0%,#7d0000 55%,#4a0000 100%);border-radius:var(--r-4);padding:20px;margin-bottom:14px;text-align:center;position:relative;overflow:hidden;box-shadow:var(--e3);${_animEntree('steps-moy')}">
       
-      <div style="position:absolute;right:-22px;top:-22px;width:100px;height:100px;border-radius:var(--r-full);background:rgba(255,255,255,.055);pointer-events:none"></div>
+      <div style="position:absolute;right:-22px;top:-22px;width:100px;height:100px;border-radius:var(--r-full);background:color-mix(in srgb,var(--text) 5.5%,transparent);pointer-events:none"></div>
       <div style="position:relative">
         <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:8px">Moyenne hebdomadaire</div>
         <div style="font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:.95;color:var(--text);letter-spacing:1px;text-shadow:var(--halo-3),0 0 34px rgba(255,255,255,.4)">${fmt(weekAvg)}</div>
         <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.62);margin-top:6px">pas / jour &nbsp;·&nbsp; ${withData.length} / 7 jours renseignés</div>
         <div style="margin-top:14px;display:flex;justify-content:center;gap:14px">
           <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">OBJECTIF ENTRAÎNEMENT</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--text);margin-top:2px">${goals.on.toLocaleString('fr-FR')}</div></div>
-          <div style="width:1px;background:rgba(255,255,255,.18)"></div>
+          <div style="width:1px;background:color-mix(in srgb,var(--text) 18%,transparent)"></div>
           <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">OBJECTIF REPOS</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:rgba(255,255,255,.8);margin-top:2px">${goals.off.toLocaleString('fr-FR')}</div></div>
-          <div style="width:1px;background:rgba(255,255,255,.18)"></div>
+          <div style="width:1px;background:color-mix(in srgb,var(--text) 18%,transparent)"></div>
           <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--text);margin-top:2px">${fmt(withData.reduce((s,d)=>s+d.count,0))}</div></div>
         </div>
       </div>
@@ -114996,7 +115006,7 @@ function loadSteps(containerId='steps-content',opts){
     <div class="card-nut" style="margin:14px 0">
       
       <div class="steps-reglages" style="position:relative">
-        <div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Régler mes objectifs</div>
+        <div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:var(--sub);text-transform:uppercase">Régler mes objectifs</div>
         <!-- ALIGNES PAR LE BAS. « JOUR ON ENTRAÎNEMENT » se replie sur deux
              lignes la ou « JOUR OFF REPOS » tient sur une : les deux champs
              se retrouvaient decales. Les colonnes s etirent a la meme hauteur
@@ -115009,14 +115019,14 @@ function loadSteps(containerId='steps-content',opts){
                  libelle le dit, et il ne se confond plus avec le marquage du
                  jour, plus haut, qui employait les memes mots. -->
             <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">Objectif les jours d'entraînement</div>
-            <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:12px 6px;background:linear-gradient(180deg,#0a0000,#0f0303);border:1px solid #3a0d0d;border-radius:var(--r-2);color:var(--red-text);font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),var(--glow-red);--halo-c:rgba(224,32,32,.6);text-shadow:var(--halo-1)">
+            <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:12px 6px;background:linear-gradient(180deg,var(--red-bg),var(--red-bg));border:1px solid #3a0d0d;border-radius:var(--r-2);color:var(--red-text);font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),var(--glow-red);--halo-c:color-mix(in srgb,var(--red) 60%,transparent);text-shadow:var(--halo-1)">
           </div>
           <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end">
             <div style="font-size:var(--fs-xs);font-weight:800;color:#7aa7d9;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">Objectif les jours de repos</div>
-            <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:12px 6px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:var(--r-2);color:#7aa7d9;font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),0 0 12px rgba(96,165,250,.1);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
+            <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:12px 6px;background:linear-gradient(180deg,var(--bg),var(--bg));border:1px solid #12304d;border-radius:var(--r-2);color:#7aa7d9;font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),0 0 12px rgba(96,165,250,.1);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
           </div>
         </div>
-        <button onclick="saveStepsGoals()" style="width:100%;padding:12px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;cursor:pointer;box-shadow:0 0 18px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Enregistrer les objectifs</button>
+        <button onclick="saveStepsGoals()" style="width:100%;padding:12px;background:linear-gradient(160deg,#e21414,var(--red-deep));border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;cursor:pointer;box-shadow:0 0 18px color-mix(in srgb,var(--red) 40%,transparent),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Enregistrer les objectifs</button>
       </div>
     </div>
   `;
@@ -116739,7 +116749,7 @@ function _htmlViolationsCoach(c){
   if(!viol.length) return '';
   const pl=plancherEffectif(c);
   const dur=pl.tca;
-  return `<div style="background:#1a0505;border:1px solid var(--red);border-radius:var(--r-3);padding:12px;margin:10px 0">
+  return `<div style="background:var(--red-bg);border:1px solid var(--red);border-radius:var(--r-3);padding:12px;margin:10px 0">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:8px">Sous le plancher</div>
     ${viol.map(v=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">· ${escapeHtml(v.message)}</div>`).join('')}
     ${dur
@@ -116771,7 +116781,7 @@ function _htmlPlancherAthlete(user){
   // « En dessous, on ne descend pas » aurait ete faux : le coach peut
   // enregistrer une prescription sous le plancher, et c'est precisement ce
   // cas que ce bloc annonce.
-  return `<div style="background:#1a0505;border:1px solid var(--red);border-radius:var(--r-4);padding:14px;margin-bottom:20px">
+  return `<div style="background:var(--red-bg);border:1px solid var(--red);border-radius:var(--r-4);padding:14px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:1px">À savoir</div>
     <div class="rc-micro" style="margin-bottom:8px">Tes objectifs sont sous le minimum calculé pour toi.</div>
     ${TEXTE_PLANCHER_ATHLETE.map(t=>`<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-bottom:8px">${escapeHtml(t)}</div>`).join('')}
@@ -116987,7 +116997,7 @@ function _htmlCourbesRecup(user,maintenant){
   // La couleur de l'écart : une FC qui baisse, une VFC qui monte, c'est dans le bon sens.
   const cFc=e=>Math.abs(e)<2?'var(--sub)':(e<0?'var(--green)':'var(--orange)');
   const cVf=e=>Math.abs(e)<3?'var(--sub)':(e>0?'var(--green)':'var(--orange)');
-  const h=carte('FC de repos · 28 jours',fc.length>1?_courbeMesures([{label:'FC de repos',color:'#E02020',pts:fc}],{unite:'bpm',couleur:cFc}):'')
+  const h=carte('FC de repos · 28 jours',fc.length>1?_courbeMesures([{label:'FC de repos',color:ROUGE_MARQUE,pts:fc}],{unite:'bpm',couleur:cFc}):'')
     +carte('Variabilité cardiaque ('+(meth==='sdnn'?'SDNN':'RMSSD')+') · 28 jours',vf.length>1?_courbeMesures([{label:'VFC',color:'#60a5fa',pts:vf}],{unite:'ms',couleur:cVf}):'');
   return h?'<div class="recup-courbes">'+h+'</div>':'';
 }
@@ -117141,10 +117151,10 @@ function _htmlObjectifsCoach(c){
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <label style="flex:1;min-width:110px;font-size:var(--fs-2xs);color:var(--text-dim)">Jours ON
         <input type="number" id="ccd-pas-on" min="0" max="99999" inputmode="numeric" value="${v(g.on)}"
-          style="width:100%;box-sizing:border-box;margin-top:4px;background:#101010;border:1px solid var(--border);color:var(--text);border-radius:var(--r-2);padding:8px;min-height:44px;font-family:inherit"></label>
+          style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--surface-1);border:1px solid var(--border);color:var(--text);border-radius:var(--r-2);padding:8px;min-height:44px;font-family:inherit"></label>
       <label style="flex:1;min-width:110px;font-size:var(--fs-2xs);color:var(--text-dim)">Jours OFF
         <input type="number" id="ccd-pas-off" min="0" max="99999" inputmode="numeric" value="${v(g.off)}"
-          style="width:100%;box-sizing:border-box;margin-top:4px;background:#101010;border:1px solid var(--border);color:var(--text);border-radius:var(--r-2);padding:8px;min-height:44px;font-family:inherit"></label>
+          style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--surface-1);border:1px solid var(--border);color:var(--text);border-radius:var(--r-2);padding:8px;min-height:44px;font-family:inherit"></label>
     </div>
     <button class="btn btn-outline btn-sm" onclick="coachPoserObjectifsPas()" style="width:100%;margin:10px 0 0;min-height:44px">Enregistrer les objectifs</button>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">L'athlète peut les changer depuis son écran : c'est alors sa valeur qui s'applique.</div>
@@ -118396,13 +118406,13 @@ function htmlLeafq(){
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:16px 16px;margin-bottom:16px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">${escapeHtml(REDS_TITRE)}</div>
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.75;margin-bottom:12px">${escapeHtml(LEAFQ_INTRO)}</div>
-    ${LEAFQ_ITEMS.map(it=>`<div style="padding:8px 0;border-top:1px solid rgba(255,255,255,.06)">
+    ${LEAFQ_ITEMS.map(it=>`<div style="padding:8px 0;border-top:1px solid color-mix(in srgb,var(--text) 6%,transparent)">
       <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-bottom:6px">${escapeHtml(it.q)}</div>
       <div style="display:flex;gap:6px">
         ${[['0','Non'],['1','Un peu'],['2','Oui']].map(([v,l])=>
           `<button type="button" onclick="leafqRepondre('${it.k}',${v},this)"
             style="flex:1;min-height:36px;border-radius:var(--r-2);cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;
-              background:#111;border:1px solid var(--border);color:var(--sub)">${l}</button>`).join('')}
+              background:var(--surface-1);border:1px solid var(--border);color:var(--sub)">${l}</button>`).join('')}
       </div>
     </div>`).join('')}
     <button class="btn btn-red" style="width:100%;margin-top:14px" onclick="leafqValider()">Envoyer mes réponses</button>
@@ -118486,7 +118496,7 @@ function htmlRedsCoach(c){
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">${escapeHtml(REDS_TITRE)}</span>
       <span style="font-size:var(--fs-xs);font-weight:800;color:${e.level==='red'?'var(--red)':(e.level==='orange'?'var(--orange)':'var(--sub)')}">${escapeHtml(lib)}</span>
     </div>
-    ${sig.length?sig.map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,.05)">
+    ${sig.length?sig.map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid color-mix(in srgb,var(--text) 5%,transparent)">
       <span style="font-size:var(--fs-xs);color:var(--text-strong);min-width:0">${escapeHtml(REDS_LIB_SIGNAUX[x.code]||x.code)}</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint);white-space:nowrap;flex-shrink:0">${escapeHtml(dat(new Date(x.date).getTime?new Date(x.date).getTime():Date.now()))}</span>
     </div>`).join('')
@@ -118815,7 +118825,7 @@ function _courbePesee(serie,opts){
       <stop offset="0" style="stop-color:#ff2a2a;stop-opacity:.30"/>
       <stop offset="1" style="stop-color:#ff2a2a;stop-opacity:.12"/>
     </linearGradient><linearGradient id="${gidS}" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" style="stop-color:#e01818;stop-opacity:.42"/>
+      <stop offset="0" style="stop-color:var(--red);stop-opacity:.42"/>
       <stop offset=".55" style="stop-color:#b01010;stop-opacity:.16"/>
       <stop offset="1" style="stop-color:#b01010;stop-opacity:0"/>
     </linearGradient></defs>`;
@@ -119696,7 +119706,7 @@ function _htmlCadreImportCapture(quoi,opts){
   // reecrit en « Lecture en cours… » puis le restaure par textContent.
   if(opts&&opts.alternative){
     return `
-    <div class="san-import" style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.07)">
+    <div class="san-import" style="margin-top:12px;padding-top:12px;border-top:1px solid color-mix(in srgb,var(--text) 7%,transparent)">
       <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-bottom:10px;text-align:center">ou importe une capture d'écran de ton application de santé</div>
       <input type="file" accept="image/*,.heic,.heif,.hif" style="display:none" onchange="importerCaptureStats(this)">
       <button type="button" class="btn btn-outline btn-sm" onclick="this.previousElementSibling.click()"
@@ -120333,7 +120343,7 @@ function regulariteCoucher(u,nuits){
 // « tenu » — c'est la regle de couleur de tout l'ecran.
 function _teinteRegularite(min){
   const m=Number(min)||0;
-  return m<30?'#22c55e':(m<=60?'#f59e0b':'#e02020');
+  return m<30?'#22c55e':(m<=60?'#f59e0b':ROUGE_MARQUE_MIN);
 }
 // ⚠ LA DETTE A SES PROPRES SEUILS, et elle a d'abord emprunte ceux de la
 // regularite : toute dette au-dela d'une heure passait au rouge. Une heure de
@@ -120345,7 +120355,7 @@ function _teinteRegularite(min){
 function _teinteDette(min,objectif){
   const m=Number(min)||0;
   const o=Number(objectif)||SAN_OBJ_SOMMEIL;
-  return m<=0?'#22c55e':(m<o?'#f59e0b':'#e02020');
+  return m<=0?'#22c55e':(m<o?'#f59e0b':ROUGE_MARQUE_MIN);
 }
 // ══ DETTE DE SOMMEIL DE LA SEMAINE ══════════════════════════════════════
 //
@@ -120721,10 +120731,10 @@ function _htmlCarteSante(u,quoi){
   const bloc=nuit?r.sommeil:r.pas;
   const fmt=nuit?sanHM:sanNb;
   const serie=r.jours.map(j=>({iso:j.iso,d:j.d,v:nuit?sanSommeilMin(u,j.iso):sanPas(u,j.iso)}));
-  // Les couleurs du domaine, posees une fois sur la carte : #e02020 pour les
+  // Les couleurs du domaine, posees une fois sur la carte : ROUGE_MARQUE_MIN pour les
   // pas, #60a5fa pour le sommeil. Tout le reste en derive.
   return '<section class="san-carte sv-carte" data-quoi="'+(nuit?'sommeil':'pas')+'"'
-    +' style="--sv-c:'+(nuit?'#60a5fa':'#e02020')+'">'
+    +' style="--sv-c:'+(nuit?'#60a5fa':ROUGE_MARQUE_MIN)+'">'
     +'<div class="sv-bloc sv-g">'+_svEnTete(quoi,r,bloc,fmt)+_sanGraphe(quoi,serie,bloc.objectif,fmt)+(nuit?_htmlPhasesNuit(u,r.jours):'')+'</div>'
     +'<div class="sv-duo">'+_svMoyenne(quoi,bloc,fmt)+_svProgression(quoi,r,bloc)+'</div>'
     +(nuit?_svDette(u):'')
@@ -121685,7 +121695,7 @@ function sleepColor(h){
   if(!h) return 'var(--border)';
   if(h>=7&&h<=9) return '#22c55e';
   if((h>=6&&h<7)||(h>9&&h<=10)) return '#f97316';
-  return '#E02020';
+  return ROUGE_MARQUE;
 }
 function updateSleepPreview(){
   const bed=document.getElementById('sleep-bed-input')?.value;
@@ -121745,9 +121755,9 @@ function loadSleep(containerId='sleep-content',user,opts){
       const lbl=new Date(e.date).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
       const col=sleepColor(e.duration);
       const badge=e.duration>=7&&e.duration<=9?'Idéal':'';
-      return `<div style="font-size:var(--fs-sm);font-weight:600;color:#aaa;text-transform:capitalize">${lbl}</div><div style="display:flex;align-items:center;gap:10px">${(e.bed&&e.wake)?`<div style="font-size:var(--fs-xs);color:var(--sub)">${e.bed} → ${e.wake}</div>`:''}${badge?`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--green)">${badge}</span>`:''}<div style="font-size:var(--fs-md);font-weight:800;color:${col}">${e.duration}h</div></div>`;
+      return `<div style="font-size:var(--fs-sm);font-weight:600;color:var(--text-mid);text-transform:capitalize">${lbl}</div><div style="display:flex;align-items:center;gap:10px">${(e.bed&&e.wake)?`<div style="font-size:var(--fs-xs);color:var(--sub)">${e.bed} → ${e.wake}</div>`:''}${badge?`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--green)">${badge}</span>`:''}<div style="font-size:var(--fs-md);font-weight:800;color:${col}">${e.duration}h</div></div>`;
     },{pad:'9px 0',justify:'space-between',gap:0,border:'#111'});
-    histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)"><div class="hist-bloc" style="position:relative"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Historique</div><span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:700">${sortedLog.length} nuit${sortedLog.length>1?'s':''}</span></div>${rows}</div></div>`;
+    histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)"><div class="hist-bloc" style="position:relative"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:var(--sub);text-transform:uppercase">Historique</div><span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:700">${sortedLog.length} nuit${sortedLog.length>1?'s':''}</span></div>${rows}</div></div>`;
   }
 
   document.getElementById(containerId).innerHTML=`
@@ -121765,11 +121775,11 @@ function loadSleep(containerId='sleep-content',user,opts){
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
           <div>
             <div style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-xs);font-weight:800;color:#60a5fa;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(96,165,250,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="12" height="12"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>Coucher</div>
-            <input type="time" id="sleep-bed-input" value="${todayEntry?.bed||''}" oninput="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:12px 4px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:var(--r-2);color:#9cc4ee;width:100%;box-sizing:border-box;box-shadow:var(--e-inset);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
+            <input type="time" id="sleep-bed-input" value="${todayEntry?.bed||''}" oninput="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:12px 4px;background:linear-gradient(180deg,var(--bg),var(--bg));border:1px solid #12304d;border-radius:var(--r-2);color:#9cc4ee;width:100%;box-sizing:border-box;box-shadow:var(--e-inset);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
           </div>
           <div>
             <div style="display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-xs);font-weight:800;color:#f5c518;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(245,197,24,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="square" stroke-linejoin="miter" width="12" height="12"><circle cx="12" cy="12" r="4.5"/><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="4.2" y1="4.2" x2="6" y2="6"/><line x1="18" y1="18" x2="19.8" y2="19.8"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.2" y1="19.8" x2="6" y2="18"/><line x1="18" y1="6" x2="19.8" y2="4.2"/></svg></span>Lever</div>
-            <input type="time" id="sleep-wake-input" value="${todayEntry?.wake||''}" oninput="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:12px 4px;background:linear-gradient(180deg,#0d0900,#120e03);border:1px solid #4d3d12;border-radius:var(--r-2);color:#f0d98a;width:100%;box-sizing:border-box;box-shadow:var(--e-inset);--halo-c:rgba(245,197,24,.45);text-shadow:var(--halo-1)">
+            <input type="time" id="sleep-wake-input" value="${todayEntry?.wake||''}" oninput="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:12px 4px;background:linear-gradient(180deg,var(--bg),var(--surface-0));border:1px solid #4d3d12;border-radius:var(--r-2);color:#f0d98a;width:100%;box-sizing:border-box;box-shadow:var(--e-inset);--halo-c:rgba(245,197,24,.45);text-shadow:var(--halo-1)">
           </div>
         </div>
         <div id="sleep-preview" style="text-align:center;font-size:var(--fs-sm);color:var(--text-faint);margin-bottom:12px;min-height:26px">${todayEntry?.duration!=null?`<span style="font-family:var(--pile-titre);font-size:var(--fs-2xl);color:${sleepColor(todayEntry.duration)};--halo-c:${sleepColor(todayEntry.duration)};text-shadow:var(--halo-2)aa">${todayEntry.duration}h</span> de sommeil`:''}</div>
@@ -121784,17 +121794,17 @@ function loadSleep(containerId='sleep-content',user,opts){
       
       <div style="position:relative">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <span style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Cette semaine</span>
-          <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--text-dim)"><span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:#22c55e;vertical-align:middle;box-shadow:0 0 6px rgba(34,197,94,.9)"></span> 7-9H</span>
+          <span style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:var(--sub);text-transform:uppercase">Cette semaine</span>
+          <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--text-dim)"><span style="display:inline-block;width:6px;height:6px;border-radius:var(--r-full);background:var(--green);vertical-align:middle;box-shadow:0 0 6px color-mix(in srgb,var(--green) 90%,transparent)"></span> 7-9H</span>
         </div>
-        <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:8px;border-bottom:1px solid rgba(255,255,255,.05)">${bars}</div>
+        <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:8px;border-bottom:1px solid color-mix(in srgb,var(--text) 5%,transparent)">${bars}</div>
         <div style="display:flex;gap:4px">${labels}</div>
         <div style="display:flex;gap:4px">${counts}</div>
       </div>
     </div>
     <div style="background:#0b1d33;border-radius:var(--r-4);padding:20px;margin-bottom:14px;text-align:center;position:relative;overflow:hidden;box-shadow:var(--e3);${_animEntree('sleep-moy')}">
       
-      <div style="position:absolute;right:-20px;top:-20px;width:96px;height:96px;border-radius:var(--r-full);background:rgba(255,255,255,.05);pointer-events:none"></div>
+      <div style="position:absolute;right:-20px;top:-20px;width:96px;height:96px;border-radius:var(--r-full);background:color-mix(in srgb,var(--text) 5%,transparent);pointer-events:none"></div>
       <div style="position:absolute;left:14px;top:12px;color:rgba(255,255,255,.16)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" stroke-linejoin="miter" width="22" height="22"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
       <div style="position:relative">
         <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:8px">Moyenne hebdomadaire</div>
@@ -121802,7 +121812,7 @@ function loadSleep(containerId='sleep-content',user,opts){
         <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);margin-top:6px">heures / nuit &nbsp;·&nbsp; ${withData.length} / 7 nuits renseignées</div>
         <div style="margin-top:14px;display:flex;justify-content:center;gap:16px">
           <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">OPTIMAL</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--green);margin-top:2px">7 – 9 h</div></div>
-          <div style="width:1px;background:rgba(255,255,255,.15)"></div>
+          <div style="width:1px;background:color-mix(in srgb,var(--text) 15%,transparent)"></div>
           <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:${weekTotal!=null?avgColor:'rgba(255,255,255,.5)'};margin-top:2px">${weekTotal!=null?weekTotal+'h':'-'}</div></div>
         </div>
       </div>
@@ -122020,7 +122030,7 @@ function barChart(id,labels,data){
   const bw=(w-p*2)/data.length*.7,gap=(w-p*2)/data.length;
   data.forEach((v,i)=>{
     const x=p+i*gap+(gap-bw)/2,bh=(v/mx)*(h-p*2),y=h-p-bh;
-    const g=ctx.createLinearGradient(0,y,0,h-p);g.addColorStop(0,'#E02020');g.addColorStop(1,'#7f1d1d');
+    const g=ctx.createLinearGradient(0,y,0,h-p);g.addColorStop(0,ROUGE_MARQUE);g.addColorStop(1,'#7f1d1d');
     ctx.fillStyle=g;ctx.beginPath();if(ctx.roundRect)ctx.roundRect(x,y,bw,bh,4);else ctx.rect(x,y,bw,bh);ctx.fill();
     ctx.fillStyle='#555';ctx.font='9px sans-serif';ctx.textAlign='center';ctx.fillText(labels[i],x+bw/2,h-4);
   });
@@ -122042,7 +122052,7 @@ function openPhotoFull(src,title){
   const m=document.createElement('div');
   m.style.cssText='position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer';
   m.onclick=()=>m.remove();
-  m.innerHTML=`<div style="font-size:var(--fs-xs);color:#888;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:12px">${escapeHtml(title)}</div>
+  m.innerHTML=`<div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:12px">${escapeHtml(title)}</div>
     <img src="${escapeHtml(src)}" style="max-width:94vw;max-height:80vh;object-fit:contain;border-radius:var(--r-2)">
     <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:12px">Touche pour fermer</div>`;
   document.body.appendChild(m);
@@ -123439,7 +123449,7 @@ function showOcrReviewModal(exercises,idx,videoLinks=[]){
     // « prise serrée » de « large », et la fiche papier ne le dit pas.
     const _autres=_propose&&_vg.length>1
       ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">`
-        +_vg.map(v=>`<button onclick="_ocrChoisirVideo(${i},'${v.id}')" style="background:#0e0e0e;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:4px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:700;cursor:pointer">${escapeHtml(v.lbl||'version par défaut')}</button>`).join('')
+        +_vg.map(v=>`<button onclick="_ocrChoisirVideo(${i},'${v.id}')" style="background:var(--surface-0);border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:4px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:700;cursor:pointer">${escapeHtml(v.lbl||'version par défaut')}</button>`).join('')
         +`</div>` : '';
     const _mention=_propose
       ? `<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-bottom:4px">Proposé depuis ton guide</div>` : '';
@@ -123685,7 +123695,7 @@ async function triggerAthletePdfParse(){
 function showPdfSeancesModal(seances,targetEmail){
   _pendingPdfSeances=seances;_pendingPdfTarget=targetEmail;
   const rows=seances.map((s,si)=>`
-    <div style="background:#111;border:1px solid var(--border);border-radius:var(--r-2);margin-bottom:10px;overflow:hidden">
+    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);margin-bottom:10px;overflow:hidden">
       <div style="padding:12px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div>
           <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px">${escapeHtml(s.name)}</div>
@@ -125417,7 +125427,7 @@ function coachTab(tab){
     }
     var b=document.getElementById('ct-tab-'+id);
     if(b){
-      b.style.borderBottom=(id===tab)?'2px solid #E02020':'2px solid transparent';
+      b.style.borderBottom=(id===tab)?('2px solid '+ROUGE_MARQUE):'2px solid transparent';
       b.style.color=(id===tab)?'var(--text)':'var(--text-faint)';
     }
     // LE PANNEAU LATERAL DU BUREAU. Il n'etait pas touche : ses boutons
@@ -128324,7 +128334,7 @@ function loadStudentCodes(){
     return '<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:var(--r-3);padding:14px;margin-bottom:10px">'
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
       +'<div style="font-weight:700">'+escapeHtml(c.studentName||'')+'</div>'+st+'</div>'
-      +'<div style="font-size:var(--fs-xs);color:#888;margin-bottom:4px">Expire: '+exp.toLocaleDateString('fr-FR')+' ('+c.months+' mois)</div>'
+      +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px">Expire: '+exp.toLocaleDateString('fr-FR')+' ('+c.months+' mois)</div>'
       +used
       +'<div style="display:flex;gap:8px;margin-top:10px">'
       +'<button onclick="toggleStudentCode('+i+')" style="flex:1;background:none;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;font-weight:700">'+(c.active?'Désactiver':'Activer')+'</button>'
@@ -128990,7 +129000,7 @@ function _ligneMuscles(ex,i){
       +(r.src==='auto'?`<span style="color:var(--text-dim);font-size:var(--fs-xs);margin-left:6px">proposé, à corriger</span>`:'')
     : `<span style="color:var(--orange);font-size:var(--fs-xs);font-weight:700">Non classé, appuie pour choisir</span>`;
   return `<div onclick="ouvrirSelecteurMuscles(${i})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
-    style="margin-bottom:10px;padding:8px 10px;background:#0c0c0c;border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">
+    style="margin-bottom:10px;padding:8px 10px;background:var(--surface-0);border:1px solid var(--border);border-radius:var(--r-2);cursor:pointer">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Muscles</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${corps}</div>
   </div>`;

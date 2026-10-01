@@ -1879,7 +1879,7 @@ function _bilEstReprise(id){ return !!(_bilReprises&&_bilReprises.has(id)); }
 // quelque chose à vérifier.
 function _htmlNoteReprises(){
   if(!_bilReprises||!_bilReprises.size) return '';
-  return `<div style="display:flex;gap:8px;align-items:flex-start;background:#12100a;border:1px dashed rgba(224,32,32,.45);border-radius:var(--r-2);padding:10px 12px;margin-bottom:10px">
+  return `<div style="display:flex;gap:8px;align-items:flex-start;background:var(--surface-1);border:1px dashed color-mix(in srgb,var(--red) 45%,transparent);border-radius:var(--r-2);padding:10px 12px;margin-bottom:10px">
     <span style="flex:none;font-size:var(--fs-sm);line-height:1.3">↺</span>
     <span style="font-size:var(--fs-xs);color:var(--sub);line-height:1.55">Les cases en pointillé portent les valeurs de ton dernier bilan : corrige ce qui a changé.</span>
   </div>`;
@@ -1999,7 +1999,7 @@ function _updateBilanCountdown(){
   cd.style.display='block';
   const next=getNextBilanSaturday();
   if(!next){
-    cd.innerHTML=`<div style="text-align:center;padding:14px 12px;font-size:var(--fs-sm);color:var(--sub);background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:var(--r-3)">Après ton 1er bilan, ton prochain rendez-vous apparaîtra ici.</div>`;
+    cd.innerHTML=`<div style="text-align:center;padding:14px 12px;font-size:var(--fs-sm);color:var(--sub);background:color-mix(in srgb,var(--text) 3%,transparent);border:1px solid color-mix(in srgb,var(--text) 7%,transparent);border-radius:var(--r-3)">Après ton 1er bilan, ton prochain rendez-vous apparaîtra ici.</div>`;
     return;
   }
   const diffMs=next.getTime()-Date.now();
@@ -2010,7 +2010,7 @@ function _updateBilanCountdown(){
     let n=null; try{ n=_bilRetardJours(next); }catch(e){ n=null; }
     const quand=(n==null||n<=0)?'est prévu aujourd’hui'
       :(n===1?'était attendu hier':'est attendu depuis '+n+' jours');
-    cd.innerHTML=`<div style="background:linear-gradient(135deg,#c10000,#7a0000);border-radius:var(--r-3);padding:20px 16px;text-align:center;box-shadow:0 0 32px rgba(224,32,32,.35)"><div style="font-size:var(--fs-lg);font-weight:900;color:var(--text);letter-spacing:.5px;text-transform:uppercase">C'est le moment !</div><div style="font-size:var(--fs-sm);color:rgba(255,255,255,.75);margin-top:6px">Ton bilan ${quand} : complète-le maintenant.</div></div>`;
+    cd.innerHTML=`<div style="background:linear-gradient(135deg,#c10000,#7a0000);border-radius:var(--r-3);padding:20px 16px;text-align:center;box-shadow:0 0 32px color-mix(in srgb,var(--red) 35%,transparent)"><div style="font-size:var(--fs-lg);font-weight:900;color:var(--text);letter-spacing:.5px;text-transform:uppercase">C'est le moment !</div><div style="font-size:var(--fs-sm);color:rgba(255,255,255,.75);margin-top:6px">Ton bilan ${quand} : complète-le maintenant.</div></div>`;
     return;
   }
   const totalMins=Math.floor(diffMs/60000);
@@ -2021,11 +2021,11 @@ function _updateBilanCountdown(){
   const blocks=days>0
     ?[{v:pad(days),l:'JOURS',red:true},{v:pad(hours),l:'HEURES',red:false},{v:pad(mins),l:'MIN',red:false}]
     :[{v:pad(hours),l:'HEURES',red:true},{v:pad(mins),l:'MIN',red:false}];
-  cd.innerHTML=`<div style="background:linear-gradient(160deg,#1a0000 0%,#0d0d0d 60%);border:1px solid rgba(224,32,32,.22);border-radius:var(--r-3);padding:16px 14px 14px;position:relative;overflow:hidden;box-shadow:0 0 28px rgba(224,32,32,.07),0 6px 20px rgba(0,0,0,.55)">
-    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,rgba(224,32,32,.95),rgba(224,32,32,.15),transparent)"></div>
+  cd.innerHTML=`<div style="background:linear-gradient(160deg,#1a0000 0%,var(--surface-0) 60%);border:1px solid color-mix(in srgb,var(--red) 22%,transparent);border-radius:var(--r-3);padding:16px 14px 14px;position:relative;overflow:hidden;box-shadow:0 0 28px color-mix(in srgb,var(--red) 7%,transparent),0 6px 20px rgba(0,0,0,.55)">
+    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,color-mix(in srgb,var(--red) 95%,transparent),color-mix(in srgb,var(--red) 15%,transparent),transparent)"></div>
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:var(--red-text);margin-bottom:4px">Prochain bilan</div>
     <div style="font-size:var(--fs-md);font-weight:700;color:var(--text);margin-bottom:14px">${dateLabel}</div>
-    <div style="display:flex;gap:6px">${blocks.map(b=>`<div style="flex:1;background:${b.red?'rgba(224,32,32,.13)':'rgba(255,255,255,.03)'};border:1px solid ${b.red?'rgba(224,32,32,.28)':'rgba(255,255,255,.07)'};border-radius:var(--r-2);padding:12px 6px;text-align:center"><div style="font-size:var(--fs-3xl);font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${b.red?'var(--red)':'var(--text)'}${b.red?';--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)':''}">${b.v}</div><div style="font-size:var(--fs-xs);font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:rgba(255,255,255,.32);margin-top:6px">${b.l}</div></div>`).join('')}</div>
+    <div style="display:flex;gap:6px">${blocks.map(b=>`<div style="flex:1;background:${b.red?'rgba(224,32,32,.13)':'rgba(255,255,255,.03)'};border:1px solid ${b.red?'rgba(224,32,32,.28)':'rgba(255,255,255,.07)'};border-radius:var(--r-2);padding:12px 6px;text-align:center"><div style="font-size:var(--fs-3xl);font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${b.red?'var(--red)':'var(--text)'}${b.red?';--halo-c:color-mix(in srgb,var(--red) 55%,transparent);text-shadow:var(--halo-2)':''}">${b.v}</div><div style="font-size:var(--fs-xs);font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:rgba(255,255,255,.32);margin-top:6px">${b.l}</div></div>`).join('')}</div>
   </div>`;
 }
 // forcerReprise : appelé depuis la carte de reprise de l'accueil, où l'athlète
@@ -2274,7 +2274,7 @@ function renderBilStep(){
   // ecrits par la meme phrase, mais seul le premier est peint en blanc.
   // Aucune des deux valeurs ne vient de l exterieur : bilStep est un entier
   // interne, total sort de _etapesUtiles — rien a echapper ici.
-  document.getElementById('bil-step-label').innerHTML=(bilStep+1)+'<span style="color:#8a8a8a;font-weight:700">/'+total+'</span>';
+  document.getElementById('bil-step-label').innerHTML=(bilStep+1)+'<span style="color:var(--sub);font-weight:700">/'+total+'</span>';
   document.getElementById('bil-progress').style.width=((bilStep+1)/total*100)+'%';
   document.getElementById('bil-next-btn').textContent=bilStep===total-1?'Valider ':'Suivant →';
   document.getElementById('bil-back-btn').style.visibility='visible';
@@ -2312,7 +2312,7 @@ function pickBilChoice(groupId,val,multi){
 // regarde, et un athlète distrait y inscrirait le poids d'il y a quinze jours.
 // Aucune mensuration ne passe par bQ : seul le poids est concerné.
 function bQ(id){const _r=_bilEstReprise(id);
-  return`<input type="number" id="${id}" placeholder="-" value="${bilData[id]||''}" step="any" oninput="bMesureSaisie('${id}',this.value)" style="width:68px;text-align:right;padding:6px 8px;font-size:var(--fs-lg);font-weight:800;margin:0;background:#080808;border:1px ${_r?'dashed rgba(224,32,32,.5)':'solid #222'};border-radius:var(--r-1)">`;}
+  return`<input type="number" id="${id}" placeholder="-" value="${bilData[id]||''}" step="any" oninput="bMesureSaisie('${id}',this.value)" style="width:68px;text-align:right;padding:6px 8px;font-size:var(--fs-lg);font-weight:800;margin:0;background:var(--bg);border:1px ${_r?'dashed rgba(224,32,32,.5)':'solid #222'};border-radius:var(--r-1)">`;}
 function bT(id,ph){return`<input type="text" id="${id}" placeholder="${ph||''}" value="${escapeHtml(bilData[id]||'')}" oninput="bilData['${id}']=this.value">`;}
 // ⚠ UNE DATE DE NAISSANCE, PAS UN AGE. « 26 » saisi une fois reste 26 pour
 // toujours : deux ans plus tard le metabolisme de base se calcule sur un age
@@ -2328,7 +2328,7 @@ function bDate(id){
     +`<input type="date" id="${id}" value="${v}" max="${_dateMaxNaissance()}"`
     +` oninput="bilData['${id}']=this.value;bMajAge('${id}')"`
     +` style="padding:6px 8px;font-size:var(--fs-sm);font-weight:700;margin:0;`
-    +`background:#080808;border:1px solid #222;border-radius:var(--r-1);color:var(--text)">`
+    +`background:var(--bg);border:1px solid var(--border);border-radius:var(--r-1);color:var(--text)">`
     +`<span id="${id}-age" style="font-size:var(--fs-xs);color:var(--sub);white-space:nowrap">`
     +(a!=null&&a>=0&&a<=120?(a+' ans'):'')+`</span></span>`;
 }
@@ -2408,7 +2408,7 @@ function bGenderCards(gid){
     `<div class="gsl-lbl">${o.v.toUpperCase()}</div></div>`).join('')+`</div>`;
 }
 // Curseur néon 1-10 — stocke "X/10" (affiché tel quel côté coach)
-const BSL_COLORS=['#E02020','#ef4116','#f97316','#fb9d1e','#eab308','#c9d411','#a3e635','#67dd2f','#3ad348','#22c55e'];
+const BSL_COLORS=[ROUGE_MARQUE,'#ef4116','#f97316','#fb9d1e','#eab308','#c9d411','#a3e635','#67dd2f','#3ad348','#22c55e'];
 const BSL_LABELS=['À plat','Très faible','En baisse','Fragile','Moyenne','Correcte','Bonne','Très bonne','Excellente','EN FEU !'];
 // Poses de reference pour les photos de progression (extraites du visuel "LES PHOTOS")
 const BPOSE={

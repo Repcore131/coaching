@@ -358,7 +358,7 @@ function _doitProposerReprise(u,maintenant){
 // que le coach ait publie ou non, la proposition est la meme, et l'athlete n'a
 // pas a apprendre ici l'etat du travail de son coach.
 function _htmlReprise(avecProgramme){
-  return '<div class="clh-in clh-in-2" style="background:linear-gradient(160deg,#1a0303,#120000 55%,#0b0000);'
+  return '<div class="clh-in clh-in-2" style="background:linear-gradient(160deg,#1a0303,var(--red-bg) 55%,var(--red-bg));'
     +'border:1px solid #3a0000;border-left:1px solid var(--border);border-radius:14px;'
     +'padding:24px 20px;margin-bottom:16px;box-shadow:0 14px 34px rgba(0,0,0,.6),'
     +'0 0 30px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.05)">'
@@ -1872,7 +1872,7 @@ function ouvrirIllustration(ref){
     +'padding:20px;touch-action:none';
   ov.innerHTML='<button type="button" aria-label="Fermer" data-fermer="1"'
     +' style="position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:14px;'
-    +'width:44px;height:44px;border-radius:var(--r-full);background:#ffffff1f;border:none;color:var(--text);'
+    +'width:44px;height:44px;border-radius:var(--r-full);background:color-mix(in srgb,var(--text) 12.2%,transparent);border:none;color:var(--text);'
     +'font-size:var(--fs-xl);line-height:1;cursor:pointer">×</button>'
     +'<img src="'+escapeHtml(img)+'" alt="'+escapeHtml(String(nom||''))+'"'
     +' style="max-width:96vw;max-height:76vh;object-fit:contain;border-radius:var(--r-3);background:#fff">'
@@ -1983,7 +1983,7 @@ function _apLigne(ex,i){
   // Lignes zébrées et valeur en gras : déplié, ce panneau se lit debout entre
   // deux séries, pas assis au calme.
   const l=(t,v)=>v?`<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;
-      font-size:var(--fs-sm);padding:6px 2px;border-top:1px solid rgba(255,255,255,.05)">`
+      font-size:var(--fs-sm);padding:6px 2px;border-top:1px solid color-mix(in srgb,var(--text) 5%,transparent)">`
     +`<span style="color:var(--sub);letter-spacing:.4px">${escapeHtml(t)}</span>`
     +`<span style="color:var(--text);font-weight:800;text-align:right">${escapeHtml(String(v))}</span></div>`:'';
   // `ex.note` a disparu d'ici : TROIS lectures, et aucun champ ne l'écrivait.
@@ -2014,17 +2014,17 @@ function _apLigne(ex,i){
          aria-label="Agrandir l'illustration de ${escapeHtml(_nomEx)}"
          style="position:relative;flex-shrink:0;width:76px;height:76px;padding:0;
          border-radius:var(--r-3);background:transparent;cursor:zoom-in;
-         border:1px solid rgba(255,255,255,.10);overflow:hidden;line-height:0">
+         border:1px solid color-mix(in srgb,var(--text) 10%,transparent);overflow:hidden;line-height:0">
         <img src="${escapeHtml(img)}" alt="" loading="lazy" width="76" height="76"
           style="width:100%;height:100%;object-fit:contain;display:block">
         <span aria-hidden="true" style="position:absolute;right:3px;bottom:3px;
           width:17px;height:17px;border-radius:var(--r-1);background:rgba(0,0,0,.62);
-          color:#e8e8e8;font-size:11px;line-height:17px;text-align:center">⤢</span></button>`
+          color:var(--text);font-size:11px;line-height:17px;text-align:center">⤢</span></button>`
     : `<div style="flex-shrink:0;width:76px;height:76px;border-radius:var(--r-3);
-         background:linear-gradient(145deg,#181818,#0d0d0d);border:1px solid var(--border);
+         background:linear-gradient(145deg,var(--surface-2),var(--surface-0));border:1px solid var(--border);
          display:flex;align-items:center;justify-content:center;color:var(--border);
          box-shadow:inset 0 1px 0 rgba(255,255,255,.04)">${icon('dumbbell',26)}</div>`;
-  return `<details style="position:relative;background:linear-gradient(180deg,#161616,#0f0f0f);
+  return `<details style="position:relative;background:linear-gradient(180deg,var(--surface-2),var(--surface-1));
     border:1px solid var(--border);border-left:1px solid var(--border);border-radius:var(--r-3);
     margin-bottom:10px;overflow:hidden;
     box-shadow:var(--e2)">
@@ -2033,19 +2033,19 @@ function _apLigne(ex,i){
     <summary style="position:relative;display:flex;align-items:center;gap:12px;padding:12px 12px;
       cursor:pointer;list-style:none;min-height:56px">
       <span style="flex-shrink:0;width:22px;font-family:var(--pile-titre);
-        font-size:var(--fs-xl);line-height:1;color:var(--red-text);--halo-c:rgba(224,32,32,.75);text-shadow:var(--halo-1);
+        font-size:var(--fs-xl);line-height:1;color:var(--red-text);--halo-c:color-mix(in srgb,var(--red) 75%,transparent);text-shadow:var(--halo-1);
         text-align:center">${i+1}</span>
       ${vign}
       <div style="flex:1;min-width:0">
         <div style="font-weight:900;font-size:var(--fs-md);line-height:1.25;letter-spacing:.2px;
           text-transform:uppercase;color:var(--text)">${escapeHtml(ex.name||'Exercice '+(i+1))}</div>
         ${sr?`<div style="display:inline-block;margin-top:6px;padding:4px 10px;border-radius:var(--r-2);
-          background:rgba(224,32,32,.12);border:1px solid rgba(224,32,32,.32);
+          background:color-mix(in srgb,var(--red) 12%,transparent);border:1px solid color-mix(in srgb,var(--red) 32%,transparent);
           font-size:var(--fs-sm);font-weight:800;color:var(--red-text);letter-spacing:.5px">${escapeHtml(sr)}</div>`:''}
       </div>
       <span style="color:var(--sub);font-size:var(--fs-lg);flex-shrink:0;width:22px;text-align:center">▾</span>
     </summary>
-    <div style="position:relative;padding:2px 14px 14px 14px;border-top:1px solid rgba(255,255,255,.07);
+    <div style="position:relative;padding:2px 14px 14px 14px;border-top:1px solid color-mix(in srgb,var(--text) 7%,transparent);
       background:rgba(0,0,0,.28)">
       ${l('Séries',ex.series)}
       ${l('Répétitions',ex.reps)}

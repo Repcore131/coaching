@@ -499,7 +499,7 @@ function showOcrReviewModal(exercises,idx,videoLinks=[]){
     // « prise serrée » de « large », et la fiche papier ne le dit pas.
     const _autres=_propose&&_vg.length>1
       ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">`
-        +_vg.map(v=>`<button onclick="_ocrChoisirVideo(${i},'${v.id}')" style="background:#0e0e0e;border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:4px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:700;cursor:pointer">${escapeHtml(v.lbl||'version par défaut')}</button>`).join('')
+        +_vg.map(v=>`<button onclick="_ocrChoisirVideo(${i},'${v.id}')" style="background:var(--surface-0);border:1px solid var(--border);color:var(--sub);border-radius:var(--r-2);padding:4px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:700;cursor:pointer">${escapeHtml(v.lbl||'version par défaut')}</button>`).join('')
         +`</div>` : '';
     const _mention=_propose
       ? `<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-bottom:4px">Proposé depuis ton guide</div>` : '';
@@ -745,7 +745,7 @@ async function triggerAthletePdfParse(){
 function showPdfSeancesModal(seances,targetEmail){
   _pendingPdfSeances=seances;_pendingPdfTarget=targetEmail;
   const rows=seances.map((s,si)=>`
-    <div style="background:#111;border:1px solid var(--border);border-radius:var(--r-2);margin-bottom:10px;overflow:hidden">
+    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-2);margin-bottom:10px;overflow:hidden">
       <div style="padding:12px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div>
           <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px">${escapeHtml(s.name)}</div>
@@ -2477,7 +2477,7 @@ function coachTab(tab){
     }
     var b=document.getElementById('ct-tab-'+id);
     if(b){
-      b.style.borderBottom=(id===tab)?'2px solid #E02020':'2px solid transparent';
+      b.style.borderBottom=(id===tab)?('2px solid '+ROUGE_MARQUE):'2px solid transparent';
       b.style.color=(id===tab)?'var(--text)':'var(--text-faint)';
     }
     // LE PANNEAU LATERAL DU BUREAU. Il n'etait pas touche : ses boutons

@@ -1814,7 +1814,7 @@ function _tplFiltrer(){
       const v=templateVariables(t.corps);
       return `<button type="button" onclick="tplInserer('${escapeHtml(t.id)}')"
         style="width:100%;text-align:left;min-height:44px;padding:10px 12px;margin-bottom:6px;border-radius:var(--r-2);cursor:pointer;
-          background:#111;border:1px solid var(--border);color:var(--text-strong);font-family:Montserrat,sans-serif">
+          background:var(--surface-1);border:1px solid var(--border);color:var(--text-strong);font-family:Montserrat,sans-serif">
         <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${escapeHtml(t.titre)}</div>
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:4px">${escapeHtml(t.corps)}</div>
         ${v.length?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">Variables : ${v.map(x=>escapeHtml(x)).join(', ')}</div>`:''}

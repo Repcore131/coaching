@@ -204,7 +204,7 @@ function htmlReglagesPush(u,etat){
     return '<label for="cr-push-'+t.cle+'" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0;padding:10px 0;border-top:1px solid var(--border);text-transform:none;letter-spacing:normal;font-weight:400;color:var(--text)">'
       +'<input type="checkbox" id="cr-push-'+t.cle+'" data-push="'+t.cle+'"'+(on?' checked':'')
       +' onchange="basculerPushType(\''+t.cle+'\',this.checked)"'
-      +' style="width:18px;height:18px;accent-color:#E02020;flex-shrink:0;margin-top:2px;cursor:pointer">'
+      +' style="width:18px;height:18px;accent-color:var(--red);flex-shrink:0;margin-top:2px;cursor:pointer">'
       +'<span style="flex:1;min-width:0"><span style="display:block;font-weight:700;font-size:var(--fs-sm)">'+escapeHtml(t.titre)+'</span>'
       +'<span style="display:block;font-size:var(--fs-xs);color:var(--sub);line-height:1.5">'+escapeHtml(t.txt)+'</span></span></label>';
   }).join('');
@@ -1725,8 +1725,8 @@ function _bdgArcs(z,duree){
       const trace=(w,st,al)=>{ g.globalAlpha=a*al; g.strokeStyle=st; g.lineWidth=w;
         g.beginPath(); g.moveTo(pts[0][0],pts[0][1]); for(const p of pts) g.lineTo(p[0],p[1]); g.stroke(); };
       g.save(); g.lineJoin='round'; g.lineCap='round';
-      g.shadowColor='#E02020'; g.shadowBlur=24; trace(7,'#E02020',.5);
-      g.shadowBlur=0; trace(3,'#E02020',1); trace(1.2,'#fff',1);
+      g.shadowColor=ROUGE_MARQUE; g.shadowBlur=24; trace(7,ROUGE_MARQUE,.5);
+      g.shadowBlur=0; trace(3,ROUGE_MARQUE,1); trace(1.2,'#fff',1);
       g.restore();
     }
     _bdgArcsRaf=requestAnimationFrame(image);
@@ -1925,7 +1925,7 @@ function _dessinerCarteBadge(b,at,img,fond,signature,rarete,format){
   g.font='800 '+ss+'px '+MONT;
   o.ecrireEspace(sur,cx,y,10,true);
   o.ombre(false);
-  g.fillStyle=f==='rouge'?'rgba(255,255,255,.85)':'#E02020';
+  g.fillStyle=f==='rouge'?'rgba(255,255,255,.85)':ROUGE_MARQUE;
   g.fillRect(cx-44,y+20,88,5);
   y+=60;
   // LE MÉDAILLON GÉANT, 780 px, sans ombre de texte : il porte sa lueur.
@@ -2253,7 +2253,7 @@ function _dessinerWrapped(w,per,i,signature,format,anim){
   _recEclairFiligrane(g,cx+260,post?60:120,cx-200,H*(post?0.66:0.62),_recGraine(per.cle+'|'+i),'transparent');
   g.textAlign='center'; g.textBaseline='alphabetic';
   o.ombre(true);
-  g.fillStyle='#E02020'; g.font='800 36px '+MONT;
+  g.fillStyle=ROUGE_MARQUE; g.font='800 36px '+MONT;
   const ss=o.ajusteEspace(s.sur,'800',36,MONT,8,LARG,22);
   g.font='800 '+ss+'px '+MONT;
   // En post, chaque bloc remonte : mêmes éléments, sur 1 350 px.
@@ -2294,7 +2294,7 @@ function _dessinerWrapped(w,per,i,signature,format,anim){
       g.fillStyle='#fff';
       const vs=o.ajuste(v,'700',P(150,124),BEBAS,LARG/2-24,60);
       g.font='700 '+vs+'px '+BEBAS; o.ecrire(v,x,y);
-      g.fillStyle='#E02020'; g.font='800 32px '+MONT; o.ecrireEspace(lib.toUpperCase(),x,y+56,4,true);
+      g.fillStyle=ROUGE_MARQUE; g.font='800 32px '+MONT; o.ecrireEspace(lib.toUpperCase(),x,y+56,4,true);
     });
     if(s.equivalent){
       const t='= '+s.equivalent.texte.toUpperCase()+' '+s.equivalent.emoji;
@@ -2308,7 +2308,7 @@ function _dessinerWrapped(w,per,i,signature,format,anim){
     o.ecrireEspace(per.titre,cx,P(1620,1110),6,true);
   }
   o.ombre(false);
-  g.fillStyle='#E02020'; g.fillRect(cx-60,H-(post?120:210),120,5);
+  g.fillStyle=ROUGE_MARQUE; g.fillRect(cx-60,H-(post?120:210),120,5);
   _recSignature(g,o,String(signature||''),H-(post?50:120),LARG);
   o.ombre(false);
   return cv;

@@ -1103,7 +1103,7 @@ function _htmlViolationsCoach(c){
   if(!viol.length) return '';
   const pl=plancherEffectif(c);
   const dur=pl.tca;
-  return `<div style="background:#1a0505;border:1px solid var(--red);border-radius:var(--r-3);padding:12px;margin:10px 0">
+  return `<div style="background:var(--red-bg);border:1px solid var(--red);border-radius:var(--r-3);padding:12px;margin:10px 0">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:8px">Sous le plancher</div>
     ${viol.map(v=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">· ${escapeHtml(v.message)}</div>`).join('')}
     ${dur
@@ -1135,7 +1135,7 @@ function _htmlPlancherAthlete(user){
   // « En dessous, on ne descend pas » aurait ete faux : le coach peut
   // enregistrer une prescription sous le plancher, et c'est precisement ce
   // cas que ce bloc annonce.
-  return `<div style="background:#1a0505;border:1px solid var(--red);border-radius:var(--r-4);padding:14px;margin-bottom:20px">
+  return `<div style="background:var(--red-bg);border:1px solid var(--red);border-radius:var(--r-4);padding:14px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:1px">À savoir</div>
     <div class="rc-micro" style="margin-bottom:8px">Tes objectifs sont sous le minimum calculé pour toi.</div>
     ${TEXTE_PLANCHER_ATHLETE.map(t=>`<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-bottom:8px">${escapeHtml(t)}</div>`).join('')}
@@ -1351,7 +1351,7 @@ function _htmlCourbesRecup(user,maintenant){
   // La couleur de l'écart : une FC qui baisse, une VFC qui monte, c'est dans le bon sens.
   const cFc=e=>Math.abs(e)<2?'var(--sub)':(e<0?'var(--green)':'var(--orange)');
   const cVf=e=>Math.abs(e)<3?'var(--sub)':(e>0?'var(--green)':'var(--orange)');
-  const h=carte('FC de repos · 28 jours',fc.length>1?_courbeMesures([{label:'FC de repos',color:'#E02020',pts:fc}],{unite:'bpm',couleur:cFc}):'')
+  const h=carte('FC de repos · 28 jours',fc.length>1?_courbeMesures([{label:'FC de repos',color:ROUGE_MARQUE,pts:fc}],{unite:'bpm',couleur:cFc}):'')
     +carte('Variabilité cardiaque ('+(meth==='sdnn'?'SDNN':'RMSSD')+') · 28 jours',vf.length>1?_courbeMesures([{label:'VFC',color:'#60a5fa',pts:vf}],{unite:'ms',couleur:cVf}):'');
   return h?'<div class="recup-courbes">'+h+'</div>':'';
 }
@@ -1505,10 +1505,10 @@ function _htmlObjectifsCoach(c){
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <label style="flex:1;min-width:110px;font-size:var(--fs-2xs);color:var(--text-dim)">Jours ON
         <input type="number" id="ccd-pas-on" min="0" max="99999" inputmode="numeric" value="${v(g.on)}"
-          style="width:100%;box-sizing:border-box;margin-top:4px;background:#101010;border:1px solid var(--border);color:var(--text);border-radius:var(--r-2);padding:8px;min-height:44px;font-family:inherit"></label>
+          style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--surface-1);border:1px solid var(--border);color:var(--text);border-radius:var(--r-2);padding:8px;min-height:44px;font-family:inherit"></label>
       <label style="flex:1;min-width:110px;font-size:var(--fs-2xs);color:var(--text-dim)">Jours OFF
         <input type="number" id="ccd-pas-off" min="0" max="99999" inputmode="numeric" value="${v(g.off)}"
-          style="width:100%;box-sizing:border-box;margin-top:4px;background:#101010;border:1px solid var(--border);color:var(--text);border-radius:var(--r-2);padding:8px;min-height:44px;font-family:inherit"></label>
+          style="width:100%;box-sizing:border-box;margin-top:4px;background:var(--surface-1);border:1px solid var(--border);color:var(--text);border-radius:var(--r-2);padding:8px;min-height:44px;font-family:inherit"></label>
     </div>
     <button class="btn btn-outline btn-sm" onclick="coachPoserObjectifsPas()" style="width:100%;margin:10px 0 0;min-height:44px">Enregistrer les objectifs</button>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:6px">L'athlète peut les changer depuis son écran : c'est alors sa valeur qui s'applique.</div>

@@ -647,7 +647,7 @@ function _htmlEquivalents(e){
   };
   return cadre(`
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:10px">${escapeHtml(descriptif?'À '+libDom+' égales, dans le même groupe.':'Même quantité de '+libDom+', dans le même groupe. À toi de voir.')}</div>
-    ${l.map(x=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid rgba(255,255,255,.06)">
+    ${l.map(x=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid color-mix(in srgb,var(--text) 6%,transparent)">
       <div style="flex:1;min-width:0">
         <div style="font-size:var(--fs-sm);font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.alim.n)}</div>
         <div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:2px">${x.qtyEq} g${x.plafonne?' <span style="color:var(--orange)">· plafonné</span>':''} &nbsp;·&nbsp; <span style="color:var(--text-dim)">${escapeHtml(ecart(x))}</span></div>
@@ -920,7 +920,7 @@ function _renderFjRecent(){
   const favIds=_fjFavs();
   const favs=favIds.map(id=>_ciqualDB.find(f=>f.id===id)).filter(Boolean);
   const titre=t=>'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;padding:14px 16px 6px">'+t+'</div>';
-  const sep='<div style="height:1px;background:#111;margin:6px 0"></div>';
+  const sep='<div style="height:1px;background:var(--surface-1);margin:6px 0"></div>';
   const blocFav=favs.length
     ?titre('Favoris')+favs.map(f=>_fjResultHtml(f,true)).join('')+sep
     :'';
@@ -1626,7 +1626,7 @@ function ouvrirScan(){
 function _htmlScanViseur(){
   return `<div id="scan-viseur" style="position:relative;border-radius:var(--r-3);overflow:hidden;background:#000;aspect-ratio:4/3">
       <video id="scan-video" playsinline muted autoplay style="width:100%;height:100%;object-fit:cover;display:block"></video>
-      <div style="position:absolute;left:12%;right:12%;top:38%;height:24%;border:2px solid rgba(255,255,255,.85);border-radius:var(--r-2);box-shadow:0 0 0 9999px rgba(0,0,0,.35)"></div>
+      <div style="position:absolute;left:12%;right:12%;top:38%;height:24%;border:2px solid color-mix(in srgb,var(--text) 85%,transparent);border-radius:var(--r-2);box-shadow:0 0 0 9999px rgba(0,0,0,.35)"></div>
     </div>
     <div id="scan-etat" style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:10px;min-height:34px">Démarrage de la caméra…</div>
     <div id="scan-torche-slot"></div>

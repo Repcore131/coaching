@@ -64,6 +64,16 @@ jobs:
       - name: Verifier le contraste du theme clair
         run: python3 scripts/theme_clair.py --verifier
 
+      # LES COULEURS PAR LEURS JETONS (01/10/2026) : le nombre de couleurs encore
+      # ecrites en dur ne doit pas depasser scripts/couleurs-plafond.txt, qui ne
+      # fait que baisser (python3 scripts/couleurs.py --baisser-plafond).
+      - name: Verifier les couleurs (palette de :root, plafond de litteraux)
+        run: python3 scripts/couleurs.py --verifier
+
+      # LES ESPACEMENTS SUR L'ECHELLE (margin, padding, gap) : aucun hors echelle.
+      - name: Verifier les espacements
+        run: python3 scripts/espacements.py --verifier
+
       - name: Servir la racine du depot
         run: |
           python3 -m http.server 8799 --bind 127.0.0.1 >/dev/null 2>&1 &
