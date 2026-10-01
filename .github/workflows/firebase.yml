@@ -47,6 +47,14 @@ jobs:
       - name: Assembler _site
         run: bash scripts/assembler_site.sh _site
 
+      # LA COPIE PUBLIEE EST MINIFIEE, LE DEPOT JAMAIS (01/10/2026) : tests.js
+      # et assertNoCycleRuleAltersSeries lisent le SOURCE des fonctions
+      # (String(fn)). esbuild sans --minify-identifiers (les noms globaux sont
+      # appeles depuis des onclick="..."). Avant/apres en brut, gzip, brotli ;
+      # le script echoue si un fichier minifie ne se parse plus.
+      - name: Minifier _site
+        run: node scripts/minifier_site.mjs _site
+
       # GARDE-FOU. Un deploiement remplace TOUT le site : si l'assemblage a
       # rate, on prefere ne rien envoyer plutot que de vider sync.web.app.
       - name: Verifier avant d'envoyer
@@ -75,6 +83,8 @@ jobs:
           grep -q 'rel="canonical"' _site/index.html
           # Le service worker de l'app, lui, doit bien etre la.
           test -f _site/app/sw.js
+          # La suite de tests ne part pas (5,5 Mo publics, utiles en local seulement).
+          test ! -f _site/app/tests.js
           n=$(find _site -type f | wc -l)
           if [ "$n" -lt 400 ]; then
             echo "Seulement $n fichiers : assemblage suspect, on n'envoie rien."
@@ -88,7 +98,11 @@ jobs:
       # le JavaScript qui suit de tourner. L'app s'affiche, et plus rien ne
       # repond. Depuis que le code est servi a part, ce controle le lit aussi.
       - name: Verifier que le code se parse
-        run: node scripts/verif/syntaxe.mjs
+        run: |
+          set -e
+          node scripts/verif/syntaxe.mjs
+          # Et la version MINIFIEE, celle qui part.
+          node scripts/verif/syntaxe.mjs _site/app/index.html
 
       # LES ACTIFS VERSIONNES. Depuis le build 1417, index.html ne porte plus le
       # code : il le DEMANDE, sous un nom qui contient le numero de build, et
