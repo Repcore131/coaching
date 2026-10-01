@@ -5480,20 +5480,30 @@ span.cc-corps-lp{cursor:default;text-decoration:none}
    ligne sur un téléphone ; sur un écran large, autant qu'il en tient à 104 px,
    pour que dix-huit vignettes ne deviennent pas dix-huit affiches. */
 .bq-mus-grille{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-bottom:10px}
-@media (min-width:700px){ .bq-mus-grille{grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px} }
+/* NEUF PAR LIGNE, ET DES RECTANGLES (Kevin, 01/10/2026) : dix-huit muscles sur
+   deux rangs. L'image prend toute la largeur de la vignette et perd en hauteur :
+   elle est recadrée (cover), jamais écrasée. */
+@media (min-width:1200px){
+  .bq-mus-grille{grid-template-columns:repeat(9,minmax(0,1fr));gap:8px}
+  .bq-mus{padding:4px 4px 6px}
+  .bq-mus-grille .bq-mus img,.bq-mus-grille .bq-mus i{max-width:none;aspect-ratio:auto;height:50px}
+  /* Le muscle coloré est en bas de ces quatre planches : cadrées au centre, la bande n'en montrait plus rien. */
+  .bq-mus[data-muscle="LOMBAIRES"] img,.bq-mus[data-muscle="ISCHIOS"] img,
+  .bq-mus[data-muscle="ABDUCTEURS"] img,.bq-mus[data-muscle="ADDUCTEURS"] img{object-position:50% 92%}
+}
 .bq-mus{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:4px;min-width:0;
   padding:5px 3px 6px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:var(--r-3);
   color:var(--text);font-family:Montserrat,sans-serif;cursor:pointer;
   transition:border-color var(--t-1),background var(--t-1),transform var(--arc-strike) var(--arc-c-discharge)}
 .bq-mus:active{transform:scale(var(--arc-scale-charge))}
-.bq-mus img,.bq-mus i{display:block;width:100%;max-width:72px;aspect-ratio:1/1;object-fit:cover;border-radius:8px;background:#0c0c0c}
+.bq-mus img,.bq-mus i{display:block;width:100%;max-width:72px;aspect-ratio:5/4;object-fit:cover;border-radius:8px;background:#0c0c0c}
 .bq-mus span{display:block;width:100%;font-size:11px;font-weight:800;line-height:1.15;text-align:center;
   color:var(--text-strong)}
 /* CINQ PAR LIGNE SUR UN TÉLÉPHONE : 59 px pour le nom. « Abdominaux » et
    « Quadriceps » n'y tiennent pas à 11 px et se coupaient au milieu du mot
    (« Quadrice / ps »). Le corps cède d'un point et le crénage se resserre :
    un nom se coupe à l'espace ou au trait d'union, jamais ailleurs. */
-@media (max-width:699px){
+@media (max-width:1199px){
   .bq-mus{padding:5px 1px 6px}
   .bq-mus span{font-size:10px;letter-spacing:-.35px}
 }
