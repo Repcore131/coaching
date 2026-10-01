@@ -31972,12 +31972,42 @@ async function testExercices(){
           }
           return true;})());
 
-        ok('Le coach garde les 30 methodes, et le choix « Aucune »',(()=>{
+        ok('Le coach garde toutes les methodes et le choix « Aucune » ; chaque ligne dit « Nom : ce qu’elle fait »',(()=>{
+          // 01/10/2026 : le <select> est devenu une liste dessinee (Kevin : le nom, deux
+          // points, et l'explication en plus petit et plus fin, sur UNE ligne). Ce test
+          // comptait les <option> ; il compte les lignes, et verifie ce qu'elles disent.
           const h=rendu('coach',VIDE);
-          if(!/<select/.test(h)) return _echec('le selecteur a disparu du cote coach');
-          const n=(h.match(/<option/g)||[]).length;
+          const d=document.createElement('div'); d.innerHTML=h;
+          const l=[...d.querySelectorAll('.tq .tq-l .tq-o')];
           const att=Object.keys(TECHNIQUES).length+1;
-          return n===att?true:_echec(n+' options pour '+att+' attendues');})());
+          if(l.length!==att) return _echec(l.length+' lignes pour '+att+' attendues');
+          if(l[0].textContent!=='Aucune : série normale'||l[0].dataset.v!=='') return _echec('« Aucune » : '+l[0].textContent);
+          // Chaque methode a son resume : court, sans tiret long, et la ligne s'ecrit « Nom : resume ».
+          for(const k of Object.keys(TECHNIQUES)){
+            const c=techniqueCourt(k);
+            if(!c) return _echec('aucun résumé pour '+k);
+            if(c.length>52) return _echec(k+' : résumé de '+c.length+' caractères');
+            if(/\u2014/.test(c)) return _echec(k+' : tiret long');
+            const o=l.find(x=>x.dataset.v===k);
+            if(!o||o.textContent!==TECHNIQUES[k].nom+' : '+c) return _echec('ligne de '+k+' : '+(o&&o.textContent));
+            if((o.getAttribute('onclick')||'').indexOf("_progExTechnique(0,'"+k+"')")<0) return _echec(k+' n’est pas câblée');
+          }
+          // UNE LIGNE, et l'explication plus petite et plus fine que le nom.
+          document.body.appendChild(d); d.style.cssText='position:fixed;left:0;top:0;width:900px;z-index:-1'; d.querySelector('.tq').open=true;
+          try{
+            const haut=l.map(x=>x.getBoundingClientRect().height);
+            if(Math.max.apply(null,haut)>36) return _echec('une ligne passe sur deux rangs : '+Math.max.apply(null,haut)+' px');
+            const coupes=l.filter(x=>{ const sp=x.querySelector('span'); return sp&&sp.scrollWidth>sp.clientWidth+1; }).map(x=>x.dataset.v);
+            if(coupes.length) return _echec('à 900 px, résumé coupé : '+coupes.join(', '));
+            const nb=getComputedStyle(l[1].querySelector('b')), ns=getComputedStyle(l[1].querySelector('span'));
+            if(!(parseFloat(ns.fontSize)<parseFloat(nb.fontSize))||!(parseInt(ns.fontWeight,10)<parseInt(nb.fontWeight,10)))
+              return _echec('l’explication n’est pas plus petite et plus fine : '+ns.fontSize+'/'+ns.fontWeight+' contre '+nb.fontSize+'/'+nb.fontWeight);
+          } finally { d.remove(); }
+          // La methode posee s'affiche de la meme facon dans l'en-tete de la liste.
+          const hp=rendu('coach',POSEE);
+          const dp=document.createElement('div'); dp.innerHTML=hp;
+          return dp.querySelector('.tq-s').textContent.indexOf(TECHNIQUES.dropset_type_1.nom+' : '+techniqueCourt('dropset_type_1'))===0
+            &&dp.querySelector('.tq-o[aria-selected="true"]').dataset.v==='dropset_type_1'?true:_echec('la méthode posée n’est pas montrée');})());
 
         ok('L\'ATHLETE LIT TOUJOURS CE QUE SON COACH A PRESCRIT',(()=>{
           // Retirer le selecteur ne doit pas lui cacher son propre programme :
@@ -40715,11 +40745,12 @@ async function testExercices(){
             const carte=document.querySelector('#prog-exercises [data-px-idx="0"]');
             const lab=[...carte.querySelectorAll('label')].find(l=>/^Technique/.test(l.textContent.trim()));
             if(!lab) return null;
-            return lab.parentElement.querySelector('select');
+            // 01/10/2026 : le menu n'est plus un <select> mais une liste dessinée (.tq).
+            return lab.parentElement.querySelector('.tq');
           };
           const mc=menuPour('coach');
           if(!mc) return _echec('le coach n’a aucun menu de technique');
-          if(mc.options.length<10) return _echec('le catalogue est vide : '+mc.options.length+' options');
+          if(mc.querySelectorAll('.tq-o').length<10) return _echec('le catalogue est vide : '+mc.querySelectorAll('.tq-o').length+' lignes');
           if(menuPour('athlete')) return _echec('l’athlète a le catalogue');
           // IL EST AVEC LA PRESCRIPTION D'EFFORT, pas apres le materiel : c'est
           // ce qui le rendait introuvable.

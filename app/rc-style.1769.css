@@ -5529,6 +5529,30 @@ span.cc-corps-lp{cursor:default;text-decoration:none}
 .csm-hist-sel{font-size:var(--fs-xs);color:var(--sub);line-height:1.4;min-width:0}
 .csm-hist-btns{display:flex;gap:8px;flex-wrap:wrap}
 .csm-hist-btns .btn[disabled]{opacity:.4;cursor:not-allowed;box-shadow:none}
+/* ══ LA LISTE DES TECHNIQUES D'INTENSIFICATION (01/10/2026) ═══════════════
+   « Nom : ce qu'elle fait », sur une ligne. Le nom est petit, l'explication
+   plus petite encore et plus fine : c'est le nom qu'on cherche, l'explication
+   qu'on lit pour être sûr. */
+.tq{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);overflow:hidden}
+.tq[open]{border-color:rgba(224,32,32,.5)}
+.tq[data-inactif]{opacity:.45;pointer-events:none}
+.tq-s{display:flex;align-items:baseline;gap:0;min-height:44px;box-sizing:border-box;padding:13px 12px 11px;cursor:pointer;list-style:none;
+  white-space:nowrap;overflow:hidden;font-family:Montserrat,sans-serif}
+.tq-s::-webkit-details-marker{display:none}
+.tq-s i{margin-left:auto;padding-left:10px;font-style:normal;color:var(--sub);flex:0 0 auto;transition:transform var(--t-2)}
+.tq[open] .tq-s i{transform:rotate(180deg)}
+.tq-s:focus-visible{outline:2px solid var(--red-text);outline-offset:-2px}
+.tq-l{max-height:min(46vh,340px);overflow-y:auto;-webkit-overflow-scrolling:touch;border-top:1px solid var(--border)}
+.tq-o{display:flex;align-items:baseline;width:100%;min-height:34px;box-sizing:border-box;padding:8px 12px;margin:0;
+  background:none;border:none;border-top:1px solid rgba(255,255,255,.045);border-radius:0;cursor:pointer;text-align:left;
+  white-space:nowrap;overflow:hidden;font-family:Montserrat,sans-serif;letter-spacing:0;text-transform:none}
+.tq-o:first-child{border-top:none}
+.tq-o:hover,.tq-o:focus-visible{background:rgba(255,255,255,.05);outline:none}
+.tq-o[aria-selected="true"]{background:rgba(224,32,32,.12)}
+.tq-s b,.tq-o b{flex:0 0 auto;font-size:11px;font-weight:700;color:var(--text-strong);letter-spacing:.1px}
+.tq-o[aria-selected="true"] b{color:var(--red-text)}
+.tq-s span,.tq-o span{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:pre;
+  font-size:10px;font-weight:300;color:var(--sub);letter-spacing:.1px}
 /* ══ LA GRILLE DES MUSCLES DE LA BANQUE D'EXERCICES (01/10/2026) ═══════════
    Un carré par muscle : l'illustration du volume, le nom dessous. Cinq par
    ligne sur un téléphone ; sur un écran large, autant qu'il en tient à 104 px,
@@ -13382,6 +13406,17 @@ html[data-theme="clair"]{background:#f8f8f8}
 :root[data-theme="clair"] .csm-hist-noms{color:var(--text-faint)}
 :root[data-theme="clair"] .csm-hist-actions{border-top:1px solid rgba(9,9,9,0.08)}
 :root[data-theme="clair"] .csm-hist-sel{color:var(--sub)}
+:root[data-theme="clair"] .tq{background:var(--surface-2);border:1px solid var(--border)}
+:root[data-theme="clair"] .tq[open]{border-color:rgba(224,32,32,.5)}
+:root[data-theme="clair"] .tq-s i{color:var(--sub)}
+:root[data-theme="clair"] .tq-s:focus-visible{outline:2px solid var(--red-text)}
+:root[data-theme="clair"] .tq-l{border-top:1px solid var(--border)}
+:root[data-theme="clair"] .tq-o{border-top:1px solid rgba(9,9,9,0.045)}
+:root[data-theme="clair"] .tq-o:hover,:root[data-theme="clair"] .tq-o:focus-visible{background:rgba(9,9,9,0.05)}
+:root[data-theme="clair"] .tq-o[aria-selected="true"]{background:rgba(224,32,32,.12)}
+:root[data-theme="clair"] .tq-s b,:root[data-theme="clair"] .tq-o b{color:var(--text-strong)}
+:root[data-theme="clair"] .tq-o[aria-selected="true"] b{color:var(--red-text)}
+:root[data-theme="clair"] .tq-s span,:root[data-theme="clair"] .tq-o span{color:var(--sub)}
 :root[data-theme="clair"] .bq-mus{background:var(--surface-2);border:1.5px solid var(--border);color:var(--text)}
 :root[data-theme="clair"] .bq-mus img,:root[data-theme="clair"] .bq-mus i{background:#f0f0f0}
 :root[data-theme="clair"] .bq-mus span{color:var(--text-strong)}
