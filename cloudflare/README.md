@@ -286,13 +286,18 @@ de 21 h, série dès 17 h). Un réveil par minute :
 | 1 000 | défi publié (12 h) | 250 | 16:09 | 1 000 | 35 | 8 501 | 4 | 8.8 / 33.4 ms |
 | 1 000 | série (jeudi 17 h) | 241 | 21:01 | **480** | 34 | 6 749 | 2 | 6.6 / 15.4 ms |
 
-Et trois épreuves, dans `npm test` :
+**Au-delà de ~500 athlètes, ou deux jeudis de suite avec `sautes` > 0 : passer au plan payant.**
+Quand, combien, et comment : `docs/capacite.md`. Le mode file (`FILE_PUSH = "queue"`, Cloudflare
+Queues) est prêt dans le code et testé à 10 000 abonnés (épreuve (d) ci-dessous).
+
+Et quatre épreuves, dans `npm test` :
 
 | épreuve | résultat |
 |---|---|
 | (a) **tous** les travaux actifs, jeudi 1er octobre 18 h, 300 abonnés, rien de pré-marqué | **300/300 servis à 20:13**, au plus 35 requêtes par réveil |
 | (b) la série lancée à 20 h 40 pour 300 : la fenêtre se ferme | 40 servis, 260 dans `sautes` et dans `evenements_ko`, aucun compté sans push |
 | (c) base vide, 1 440 minutes (minute + alerte de quota) | **7 615 sous-requêtes par jour** (23 098 avant), au plus 9 par réveil |
+| (d) **mode file** (plan payant, fausse file en mémoire), 10 000 abonnés, série du jeudi | **10 000/10 000 servis**, enfilés en 1 réveil, 505 lots de 20, 1 % de 503 rejoués, personne deux fois |
 
 Ce qu'il faut en retenir :
 

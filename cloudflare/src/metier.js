@@ -224,11 +224,26 @@ export function idFile(t, marque) {
     + Array.from(a, (b) => (b % 36).toString(36)).join('');
 }
 
+// LES PLAFONDS, RÉGLABLES PAR VARIABLES (wrangler.toml, [vars]) : BUDGET,
+// MAX_CHIFFREMENTS, COUT_PUSH. Absents ou illisibles : les valeurs du plan
+// gratuit ci-dessus. Plan payant (docs/capacite.md) : BUDGET=900,
+// MAX_CHIFFREMENTS=200.
+export function limitesDe(env) {
+  const n = (v, d) => { const x = Math.round(Number(v)); return Number.isFinite(x) && x > 0 ? x : d; };
+  const e = env || {};
+  return { budget: n(e.BUDGET, 38), maxChiffrements: n(e.MAX_CHIFFREMENTS, MAX_CHIFFREMENTS), coutPush: n(e.COUT_PUSH, COUT_PUSH) };
+}
+
 /**
- * @param {{db:any, vapid:{publique:string, privee:string}, fetchImpl?:Function, maintenant?:()=>number}} deps
+ * @param {{db:any, vapid:{publique:string, privee:string}, fetchImpl?:Function, maintenant?:()=>number,
+ *   limites?:{maxChiffrements?:number, coutPush?:number}, file?:{sendBatch:Function}}} deps
+ * `file` : la file Cloudflare Queues des push (env.PUSHS, si FILE_PUSH='queue') ;
+ * absente, tout passe par /evenements comme sur le plan gratuit.
  */
 export function creerMetier(deps) {
   const { db } = deps;
+  const LIM = Object.assign({ maxChiffrements: MAX_CHIFFREMENTS, coutPush: COUT_PUSH }, deps.limites || {});
+  const file = deps.file && typeof deps.file.sendBatch === 'function' ? deps.file : null;
   const now = deps.maintenant || (() => Date.now());
   const _val = async (c) => (await db.ref(c).get()).val();
   const _lire = (uid, champ) => _val('users/' + uid + '/' + champ);
@@ -245,14 +260,22 @@ export function creerMetier(deps) {
   let _chiffres = 0;
   function fixerBudget(fn) { _reste = typeof fn === 'function' ? fn : () => Infinity; _chiffres = 0; _abonnes = null; }
   const reste = () => _reste();
-  const peutPousser = () => _reste() >= COUT_PUSH + MARGE && _chiffres < MAX_CHIFFREMENTS;
+  const peutPousser = () => _reste() >= LIM.coutPush + MARGE && _chiffres < LIM.maxChiffrements;
   const chiffrements = () => _chiffres;
   // `maj` : d'autres écritures à faire DANS LA MÊME requête (le passage de
   // relais est atomique : rien n'est retiré sans que sa suite soit écrite).
+  // AVEC LA FILE (plan payant, FILE_PUSH='queue') : les PUSH partent dans
+  // Cloudflare Queues (enfiler) ; le reste — PayPal, relances, xp —, dont
+  // l'ordre compte, reste dans /evenements.
   async function differer(taches, maj0) {
     const t = now();
     const maj = Object.assign({}, maj0 || {});
-    for (const x of taches) maj['evenements/' + idFile(t, 't')] = Object.assign({ type: 'tache', par: 'worker', at: t }, x);
+    let reste = taches;
+    if (file) {
+      await enfiler(taches.filter((x) => x && x.quoi === 'push'));
+      reste = taches.filter((x) => !(x && x.quoi === 'push'));
+    }
+    for (const x of reste) maj['evenements/' + idFile(t, 't')] = Object.assign({ type: 'tache', par: 'worker', at: t }, x);
     if (Object.keys(maj).length) await db.ref().update(maj);
     return taches.length;
   }
@@ -267,6 +290,11 @@ export function creerMetier(deps) {
   const pousser1 = (uid, message, o) => pousserA([{ uid, message }], o);
   async function pousserA(liste, o) {
     let envoyes = 0;
+    // AVEC LA FILE : tout part dans la file, le consommateur envoie.
+    if (file) {
+      await differer(liste.map((x) => tachePush(x.uid, x.message, o)));
+      return { envoyes: 0, differes: liste.length };
+    }
     for (let i = 0; i < liste.length; i++) {
       if (!peutPousser()) {
         await differer(liste.slice(i).map((x) => tachePush(x.uid, x.message, o)));
@@ -276,6 +304,23 @@ export function creerMetier(deps) {
       if (r.envoye) envoyes++;
     }
     return { envoyes, differes: 0 };
+  }
+
+  // LA FILE : par paquets de 100 (le plafond de sendBatch), un message par
+  // tâche. Rend le nombre d'envois (chacun compte dans le budget de l'appelant).
+  async function enfiler(corps) {
+    if (!file || !corps.length) return 0;
+    let n = 0;
+    for (let i = 0; i < corps.length; i += 100) { await file.sendBatch(corps.slice(i, i + 100).map((body) => ({ body }))); n++; }
+    return n;
+  }
+  const enModeFile = () => !!file;
+  // LES ABONNÉS PAR PAGES (mode file) : `n` clés de /push après `apres`, en
+  // une requête. Les clés seules sont gardées.
+  async function abonnesPage(apres, n) {
+    const ref = apres ? db.ref('push').orderByKey().startAt(String(apres)).limitToFirst(n + 1) : db.ref('push').orderByKey().limitToFirst(n);
+    const v = (await ref.get()).val() || {};
+    return Object.keys(v).sort().filter((k) => !apres || k > String(apres)).slice(0, n);
   }
 
   // ── LES DROITS (palier, échéance) — écrits par le serveur seul ──────────
@@ -1878,6 +1923,6 @@ export function creerMetier(deps) {
     ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits, majDroits, palierDroits, dejaPaye,
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,
     retirerMoisOffert, annulerAttribution, commissionVente,
-    fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, pousser1, tache,
+    fixerBudget, reste, peutPousser, chiffrements, differer, pousserA, pousser1, tache, enfiler, enModeFile, abonnesPage,
     duelEvenement, duelCloturer, duelQuotidienUn, duelsActifs, reactionEvenement, reactionsAttente, reactionsPushUn, saisonsHeure, parcoursJ21, accueilRelances, retourUn, relancesCoachUn, canalProgrammesHeure, prospectRecevoir, vitrineVue, prospectsRelanceHeure, relanceAthlete, xpRecalculer, retentionUn, retentionFin, activiteComptes };
 }

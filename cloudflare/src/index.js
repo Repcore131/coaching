@@ -30,8 +30,8 @@
 
 import { creerBase } from './base.js';
 import { lireCompteService, jetonCompteService } from './google.js';
-import { creerMetier } from './metier.js';
-import { minute } from './planif.js';
+import { creerMetier, limitesDe } from './metier.js';
+import { minute, consommerLot } from './planif.js';
 import { repondreAppel } from './appels.js';
 import { cloudinaryDestroy, cloudinarySigner, compteCloudinary } from './medias.js';
 import { creerPaypal, recevoirWebhook, jetonPaypal } from './paypal.js';
@@ -71,14 +71,20 @@ function outils(env) {
   const db = creerBase({ url: net(env.FIREBASE_DB_URL), fetchImpl: fetchCompte,
     jeton: compte ? () => jetonCompteService(compte, { fetchImpl: fetchCompte }) : null,
     auth: compte ? null : net(env.FIREBASE_DB_SECRET) });
-  const M = creerMetier({ db, vapid: { publique: net(env.VAPID_PUBLIC_KEY), privee: net(env.VAPID_PRIVATE_KEY) }, fetchImpl: fetchCompte });
+  // LES PLAFONDS (BUDGET, MAX_CHIFFREMENTS, COUT_PUSH) : des variables, les
+  // valeurs du plan gratuit par défaut (docs/capacite.md). LA FILE : seulement
+  // si FILE_PUSH vaut 'queue' ET que la liaison PUSHS existe (plan payant).
+  const lim = limitesDe(env);
+  const file = env.FILE_PUSH === 'queue' && env.PUSHS ? env.PUSHS : null;
+  const M = creerMetier({ db, vapid: { publique: net(env.VAPID_PUBLIC_KEY), privee: net(env.VAPID_PRIVATE_KEY) }, fetchImpl: fetchCompte,
+    limites: { maxChiffrements: lim.maxChiffrements, coutPush: lim.coutPush }, file });
   // Les clés de tous les dossiers, pour la rareté des badges (lecture en shallow).
   M.coachsEtUsers = () => db.ref('users').shallow();
   M.paypal = creerPaypal({ db, M, env, fetchImpl: fetchCompte });
   // Le rappel du matin (iPhone) : les comptes synchronisés, un par un.
   M.santeComptes = () => db.ref('sante_sync').shallow();
   M.santeRappelUn = (cle, t) => rappelSanteUn(cle, t, { db, envoyerPush: M.envoyerPush });
-  return { db, M, env, fetchCompte, compteur: () => n };
+  return { db, M, env, fetchCompte, compteur: () => n, budget: lim.budget };
 }
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -211,6 +217,15 @@ export default {
     // en mémoire de plus : on vide aussi le sien.
     const t = Date.now();
     ctx.waitUntil(viderPouls(o.db, t).then(() => surveillerQuota({ db: o.db, M: o.M, t })).catch(() => {}));
+  },
+  // LE CONSOMMATEUR DE LA FILE repcore-push (mode file seulement :
+  // wrangler.toml, [[queues.consumers]]). Chaque message est acquitté, ou
+  // rejoué sur erreur (429/5xx des services de push compris) ; après
+  // max_retries, Cloudflare le range dans repcore-push-ko.
+  async queue(batch, env) {
+    const o = outils(env);
+    const b = await consommerLot(batch, o);
+    console.log(JSON.stringify(Object.assign({ file: batch.queue }, b)));
   },
 };
 

@@ -37,6 +37,16 @@
 
 import { paris, idFile } from './metier.js';
 
+// ══ LE MODE FILE (plan payant, FILE_PUSH='queue' : docs/capacite.md) ══════
+// Les travaux PAR ATHLÈTE (`parAthlete` : acces, serie, bilan, wrapped,
+// badge, retour) ne traitent plus les athlètes dans le réveil : ils lisent
+// les abonnés par pages de PAGE_FILE (une requête) et ENFILENT un message par
+// athlète ({quoi:'planifie', nom, uid}) dans Cloudflare Queues. Le
+// consommateur (consommerLot, appelé par queue() dans index.js) fait le
+// travail de l'athlète, comme le réveil l'aurait fait. Sans file (plan
+// gratuit), rien ne change.
+export const PAGE_FILE = 500;
+
 export const BUDGET = 38;          // requêtes par réveil (plafond Cloudflare : 50)
 export const VERROU_MS = 55e3;     // le bail : moins que la minute entre deux réveils
 export const REVEIL_MIN_MS = 30e3; // /reveil ne relance pas une file traitée il y a moins
@@ -77,7 +87,7 @@ export function travaux(M) {
     // Les coachs qui ont résilié : leur palier se referme à la fin payée.
     { nom: 'fins_coachs', quand: (p) => apres(p, 6, 0), une: () => (M.paypal ? M.paypal.finsCoachs() : null) },
     // « Ton accès se termine dans N jours », une fois par échéance.
-    { nom: 'acces', quand: (p) => apres(p, 11, 0) && p.heure < 21, cles: () => M.abonnes(), un: M.planifies.acces, cout: 12, push: true, profils: true },
+    { nom: 'acces', quand: (p) => apres(p, 11, 0) && p.heure < 21, cles: () => M.abonnes(), un: M.planifies.acces, cout: 12, push: true, profils: true, parAthlete: true },
     // Les messages mis de côté pour la nuit : CHAQUE HEURE (01/10/2026), car
     // le matin est celui de l'athlète, dans son fuseau (8 h à Montréal, c'est
     // 14 h à Paris). Chacun part quand SES heures calmes sont finies.
@@ -85,10 +95,10 @@ export function travaux(M) {
     { nom: 'defis', quand: (p) => apres(p, 9, 0), cles: () => M.coachsAvecCanal(), un: (c, t) => M.defisQuotidienCoach(c, t), cout: 8 },
     // Série en danger : jeudi DÈS 17 H (18 h jusqu'au 01/10/2026) — trois
     // heures de fenêtre et non plus deux : voir README, « Charge ».
-    { nom: 'serie', quand: (p) => p.joursem === 4 && apres(p, 17, 0) && avantFenetre(p), cles: () => M.abonnes(), un: M.planifies.serie, cout: 15, push: true, fenetre: true, profils: true },
-    { nom: 'bilan', quand: (p) => p.joursem === 6 && apres(p, 10, 0) && avantFenetre(p), cles: () => M.abonnes(), un: M.planifies.bilan, cout: 12, push: true, fenetre: true },
-    { nom: 'wrapped', quand: (p) => p.date === 1 && apres(p, 10, 0) && avantFenetre(p), cles: () => M.abonnes(), un: M.planifies.wrapped, cout: 10, push: true, fenetre: true, profils: true },
-    { nom: 'badge', quand: (p) => p.joursem === 0 && apres(p, 17, 0) && avantFenetre(p), cles: () => M.abonnes(), un: M.planifies.badge, cout: 10, push: true, fenetre: true },
+    { nom: 'serie', quand: (p) => p.joursem === 4 && apres(p, 17, 0) && avantFenetre(p), cles: () => M.abonnes(), un: M.planifies.serie, cout: 15, push: true, fenetre: true, profils: true, parAthlete: true },
+    { nom: 'bilan', quand: (p) => p.joursem === 6 && apres(p, 10, 0) && avantFenetre(p), cles: () => M.abonnes(), un: M.planifies.bilan, cout: 12, push: true, fenetre: true, parAthlete: true },
+    { nom: 'wrapped', quand: (p) => p.date === 1 && apres(p, 10, 0) && avantFenetre(p), cles: () => M.abonnes(), un: M.planifies.wrapped, cout: 10, push: true, fenetre: true, profils: true, parAthlete: true },
+    { nom: 'badge', quand: (p) => p.joursem === 0 && apres(p, 17, 0) && avantFenetre(p), cles: () => M.abonnes(), un: M.planifies.badge, cout: 10, push: true, fenetre: true, parAthlete: true },
     // Les duels suivis (/duels_actifs) : le push de J-2, la clôture, l'oubli.
     { nom: 'duels', quand: (p) => apres(p, 18, 30) && avantFenetre(p), cles: () => (M.duelsActifs ? M.duelsActifs() : []), un: (id, t) => M.duelQuotidienUn(id, t), cout: 10, push: true, fenetre: true },
     // Les réactions des amis du jour : une poussée groupée par personne, 19 h.
@@ -104,7 +114,7 @@ export function travaux(M) {
     // d'une notification par jour n'est pas encore pris par l'accès ou le retour.
     { nom: 'relances', quand: (p) => apres(p, 10, 30) && p.heure < 21, cles: () => (M.relancesCoachUn ? db_coachs(M) : []),
       un: (coach, t) => M.relancesCoachUn(coach, t), cout: 6 },
-    { nom: 'retour', quand: (p) => apres(p, 11, 0) && avantFenetre(p), cles: () => M.abonnes(), un: (uid, t, acc, profil, log) => (M.retourUn ? M.retourUn(uid, t, profil, log) : null), cout: 12, push: true, fenetre: true, profils: true },
+    { nom: 'retour', quand: (p) => apres(p, 11, 0) && avantFenetre(p), cles: () => M.abonnes(), un: (uid, t, acc, profil, log) => (M.retourUn ? M.retourUn(uid, t, profil, log) : null), cout: 12, push: true, fenetre: true, profils: true, parAthlete: true },
     // La santé synchronisée : « Ta nuit n'est pas encore arrivée » (iPhone), vers 10 h.
     { nom: 'sante_rappel', quand: (p) => apres(p, 10, 0) && p.heure < 21, cles: () => (M.santeComptes ? M.santeComptes() : []),
       un: (k, t) => (M.santeRappelUn ? M.santeRappelUn(k, t) : null), cout: 8, push: true },
@@ -176,7 +186,7 @@ async function echec(db, id, e, err, t, M, reste) {
 
 // UN TRAVAIL, pour ce réveil. `etat0` : ce que /worker/jobs portait (lu en
 // une fois par minute()). Rien n'est écrit ici : l'état modifié va dans `maj`.
-async function unTravail(w, etat0, { db, M, t, p, reste, bilan, maj }) {
+async function unTravail(w, etat0, { db, M, t, p, reste, bilan, maj, enfiles }) {
   const chemin = 'worker/jobs/' + w.nom;
   if (!w.quand(p)) {
     // LA FENÊTRE S'EST FERMÉE SUR UNE LISTE INACHEVÉE : ni « fini », ni
@@ -211,6 +221,19 @@ async function unTravail(w, etat0, { db, M, t, p, reste, bilan, maj }) {
         etat.fini = true;
         maj['evenements_ko/' + idFile(t, 'j')] = { type: 'travail', nom: w.nom, essais: etat.essais, erreur: bilan.erreur, le: t };
       }
+    }
+  } else if (w.parAthlete && M.enModeFile && M.enModeFile()) {
+    // LE MODE FILE : des pages de PAGE_FILE abonnés, un message par athlète.
+    // Une page coûte une lecture et un envoi par paquet de 100.
+    const coutPage = 1 + Math.ceil(PAGE_FILE / 100);
+    while (!etat.fini && reste() >= coutPage + 2) {
+      const page = await M.abonnesPage(etat.dernier || '', PAGE_FILE);
+      await M.enfiler(page.map((uid) => ({ quoi: 'planifie', nom: w.nom, uid })));
+      enfiles.n += Math.ceil(page.length / 100);
+      if (page.length) etat.dernier = page[page.length - 1];
+      etat.curseur = (Number(etat.curseur) || 0) + page.length;
+      etat.total = etat.curseur;
+      if (page.length < PAGE_FILE) etat.fini = true;
     }
   } else {
     const cles = (await w.cles()).sort();
@@ -261,11 +284,15 @@ async function unTravail(w, etat0, { db, M, t, p, reste, bilan, maj }) {
  * réveil (base ET services de push). `source` : 'reveil' quand c'est l'app
  * qui l'a demandé (/reveil), sinon la minute de Cloudflare.
  */
-export async function minute({ db, M, compteur, maintenant, source }) {
+export async function minute({ db, M, compteur, maintenant, source, budget }) {
   const horloge = maintenant || Date.now;
   const t = horloge();
   const p = paris(t);
-  const reste = () => BUDGET - compteur();
+  // `budget` : BUDGET, ou la variable du même nom (plan payant : 900).
+  // Les envois à la file (sendBatch) comptent aussi.
+  const B = Number(budget) > 0 ? Number(budget) : BUDGET;
+  const enfiles = { n: 0 };
+  const reste = () => B - compteur() - enfiles.n;
   if (M.fixerBudget) M.fixerBudget(reste);
   const bilan = { evenements: 0, echecs: 0, travaux: {} };
 
@@ -319,7 +346,7 @@ export async function minute({ db, M, compteur, maintenant, source }) {
     //    modifié part dans `maj`, écrit en une fois dans le `finally`.
     if (reste() >= 6) {
       const jobs = (await db.ref('worker/jobs').get()).val() || {};
-      for (const w of travaux(M)) await unTravail(w, jobs[w.nom], { db, M, t, p, reste, bilan, maj });
+      for (const w of travaux(M)) await unTravail(w, jobs[w.nom], { db, M, t, p, reste, bilan, maj, enfiles });
     }
   } finally {
     // LE POULS : ce que ce réveil a fait, écrit DANS LA MÊME écriture que le
@@ -342,5 +369,41 @@ export async function minute({ db, M, compteur, maintenant, source }) {
   }
   bilan.requetes = compteur();
   if (M.chiffrements) bilan.chiffrements = M.chiffrements();
+  return bilan;
+}
+
+// ══ LE CONSOMMATEUR DE LA FILE (mode file : index.js, queue()) ═══════════
+// Un lot de messages (max_batch_size = 20). Chaque message :
+//   · {quoi:'push', uid, message, …} : un push différé (envoyerPush) ;
+//   · {quoi:'planifie', nom, uid} : le travail `nom` pour cet athlète, à
+//     l'heure du traitement (le plafond d'un push par jour et les heures
+//     calmes de l'athlète s'appliquent comme dans le réveil).
+// RÉUSSI : msg.ack(). UNE ERREUR (dont « push_transitoire » : 429 ou 5xx sur
+// tous ses appareils, voir envoyerPush) : msg.retry() — Cloudflare le
+// rejoue, et au cinquième échec (max_retries) il part dans repcore-push-ko.
+// `budget` : comme pour minute() ; un message qui ne tient plus est rejoué.
+export async function consommerLot(batch, { M, compteur, maintenant, budget }) {
+  const horloge = maintenant || Date.now;
+  const B = Number(budget) > 0 ? Number(budget) : BUDGET;
+  if (M.fixerBudget) M.fixerBudget(() => B - compteur());
+  const parNom = Object.fromEntries(travaux(M).filter((w) => w.parAthlete).map((w) => [w.nom, w]));
+  const bilan = { ok: 0, rejoues: 0, erreur: null };
+  for (const msg of (batch && batch.messages) || []) {
+    const e = msg.body || {};
+    if (B - compteur() < 12) { msg.retry(); bilan.rejoues++; continue; }
+    if (M.enFile) M.enFile(true);
+    try {
+      if (e.quoi === 'planifie') {
+        const w = parNom[String(e.nom || '')];
+        if (w && e.uid) await w.un(String(e.uid), horloge(), {});
+      } else if (e.quoi === 'push') {
+        await M.tache(Object.assign({ type: 'tache' }, e));
+      }
+      msg.ack(); bilan.ok++;
+    } catch (err) {
+      msg.retry(); bilan.rejoues++; bilan.erreur = texteErreur(err);
+    } finally { if (M.enFile) M.enFile(false); }
+  }
+  bilan.requetes = compteur();
   return bilan;
 }
