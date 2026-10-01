@@ -33,10 +33,20 @@ export const XP_PLAFOND_JOUR = 400;
 export const SEANCE_MIN_MIN = 15, SEANCE_MIN_SERIES = 6, VOLTS_PAR_SERIE = 10;
 export const RANGS = [
   { n: 1, nom: 'ÉTINCELLE', seuil: 0 }, { n: 2, nom: 'IMPULSION', seuil: 1800 }, { n: 3, nom: 'VOLTAGE', seuil: 3800 },
-  { n: 4, nom: 'MACHINE', seuil: 7500 }, { n: 5, nom: 'ÉLITE', seuil: 14000 }, { n: 6, nom: 'SURTENSION', seuil: 20000 },
-  { n: 7, nom: 'MONSTRE', seuil: 29000 }, { n: 8, nom: 'FOUDRE', seuil: 37000 }, { n: 9, nom: 'TITAN', seuil: 53000 },
-  { n: 10, nom: 'LÉGENDE', seuil: 85000 },
+  { n: 4, nom: 'MACHINE', seuil: 7500 }, { n: 5, nom: 'ÉLITE', seuil: 13500 }, { n: 6, nom: 'SURTENSION', seuil: 21000 },
+  { n: 7, nom: 'MONSTRE', seuil: 30500 }, { n: 8, nom: 'FOUDRE', seuil: 42000 }, { n: 9, nom: 'TITAN', seuil: 55500 },
+  { n: 10, nom: 'LÉGENDE', seuil: 84000 },
 ];
+// Le prestige de l'app (PRESTIGE_TRANCHE) : une étoile par 20 000 V au-delà de LÉGENDE.
+export const PRESTIGE_TRANCHE = 20000;
+// LA PART HORS ENTRAÎNEMENT (XP_HORS_PART de l'app) : journal, cible, nuit,
+// check-in et semaine d'assiette, au plus 40 % des volts d'entraînement de la
+// fenêtre de 7 jours, ou 150 V si c'est plus. Le serveur n'a pas le détail
+// par jour : il borne le TOTAL par semaines entières, 40 % de l'entraînement
+// plus 150 V par semaine du compte — une borne que le calcul de l'app ne
+// dépasse jamais (chaque fenêtre de 7 jours tient sous la sienne).
+export const HORS_PART = 0.4, HORS_PLANCHER = 150;
+export const HORS = ['nutrition', 'cible', 'sommeil', 'checkin', 'semaineAssiette'];
 const EX_RENOMMAGES = {
   'ABDUCTEURS A LA MACHINE': 'ABDUCTEUR A LA MACHINE',
   'CURL LARRY SCOTT MACHINE GUIDEE OU PUPITRE': 'CURL LARRY SCOTT MACHINE GUIDEE',
@@ -345,6 +355,15 @@ export function totalServeur(etat, client, dossier, t) {
     mission: borne('mission', jours * XP.mission),
     archive: borne('archive', jours * XP.sommeil),
   });
+  // La part hors entraînement, rabotée dans l'ordre de l'app (XP_HORS_RABOT).
+  const entr = (Number(cat.seance) || 0) + (Number(cat.complete) || 0) + (Number(cat.record) || 0) + (Number(cat.semaine) || 0);
+  const permis = Math.floor(HORS_PART * entr + HORS_PLANCHER * Math.ceil(jours / 7));
+  let trop = HORS.reduce((a, k) => a + (Number(cat[k]) || 0), 0) - permis;
+  for (const k of ['semaineAssiette', 'cible', 'nutrition', 'checkin', 'sommeil']) {
+    if (trop <= 0) break;
+    const r = Math.min(Number(cat[k]) || 0, trop);
+    cat[k] -= r; trop -= r;
+  }
   const total = Object.keys(cat).reduce((a, k) => a + (Number(cat[k]) || 0), 0);
   return { total, cat, nonVerifies: b.nonVerifies };
 }

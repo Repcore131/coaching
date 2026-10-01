@@ -51755,7 +51755,11 @@ async function testExercices(){
       const u={email:'n2b@t.fr',role:'athlete',createdAt:debut.getTime(),
         nutrition:{dietType:'flexible',macros:{on:{kcal:2000,p:160,l:70,g:250},off:{kcal:2000,p:160,l:70,g:250}},log}};
       const r=xpCalcul(u,t);
-      if(r.cat.cible!==6*XP_ACTIONS.cible) return _echec('journées tenues : '+r.cat.cible/XP_ACTIONS.cible+' au lieu de 6');
+      // Six journées TENUES (les faits) ; leurs volts, sans aucune séance, passent
+      // sous la part hors entraînement (150 V par 7 jours : XP_HORS_PLANCHER).
+      const tenues=Object.keys(log).filter(j=>cibleTenueJour(u,j).tenue).length;
+      if(tenues!==6) return _echec('journées tenues : '+tenues+' au lieu de 6');
+      if(r.cat.cible>6*XP_ACTIONS.cible||!(r.ecrete>0)) return _echec('borne hors entraînement : '+JSON.stringify(r.cat)+' écrêté '+r.ecrete);
       // Les badges que l'app calcule, tels que le dossier les porte : le serveur
       // les borne par eux (valeurBadges), jamais par le journal.
       const bdg={}; const f=_badgesFaits(u,t);
@@ -52780,11 +52784,16 @@ async function testExercices(){
       // Semaine du lundi 14/09 : cinq jours tenus. Semaine du 21/09 : quatre.
       const log=_N4L(['2026-09-14','2026-09-15','2026-09-16','2026-09-18','2026-09-20',
         '2026-09-21','2026-09-22','2026-09-24','2026-09-26'],['2026-09-17','2026-09-23']);
-      const r=xpCalcul(M(log),_N4M);
+      // Deux séances par jour sur ces deux semaines : la part hors entraînement
+      // (40 % de l'entraînement, XP_HORS_PART) ne rabote rien, on lit le barème.
+      const _ses=[];
+      for(let d=0;d<14;d++) for(const h of [8,18]) _ses.push({date:new Date(2026,8,14+d,h).getTime(),duration:60,
+        data:{Squat:{sets:Array.from({length:6},()=>({weight:'100',reps:'8',done:true}))}}});
+      const r=xpCalcul(M(log,{sessions:_ses}),_N4M);
       if(r.cat.semaineAssiette!==75) return _echec('semaines : '+r.cat.semaineAssiette);
       if(r.cat.cible!==9*XP_ACTIONS.cible) return _echec('la cible relue dans les faits : '+r.cat.cible);
       // Sous aTCA : ni série, ni badge, ni semaine. La cible du lot N2 ne bouge pas.
-      const t=M(log,{tcaRisque:true});
+      const t=M(log,{tcaRisque:true,sessions:_ses});
       const rt=xpCalcul(t,_N4M);
       if(rt.cat.semaineAssiette!==0||rt.cat.cible!==r.cat.cible) return _echec('aTCA : '+JSON.stringify(rt.cat));
       if(badgesMeritesDates(t,_N4M).some(x=>/^assiette_/.test(x.id))) return _echec('un badge de l’assiette sous aTCA');
@@ -54085,14 +54094,15 @@ async function testExercices(){
       if(g.total!==g.lignes.reduce((a,x)=>a+x.v,0)) return _echec('somme '+g.total+' '+l);
       if(!/Séance terminée:100/.test(l)||!/Séance complète:30/.test(l)||!/Semaine validée:150/.test(l)) return _echec(l);
       return g.apres-g.avant===g.total?true:_echec('avant/après');})());
-    ok('Volts : la courbe tient le calendrier d’un athlète à 3 séances par semaine',(()=>{
-      // LE MÊME ATHLÈTE QUE LA CALIBRATION (voir RANGS) : 5 exercices par
-      // séance, 85 % de séances complètes, un bilan toutes les deux semaines,
-      // un record par exercice à 45 % au début, qui fond vers 6 %.
+    // LES TROIS ATHLÈTES DE LA CALIBRATION (voir RANGS et XP_HORS_PART).
+    const _VCAL=(()=>{
+      // 1. LE RÉGULIER : 5 exercices par séance, 3 séances par semaine, 85 %
+      // de séances complètes, un bilan toutes les deux semaines, un record par
+      // exercice à 45 % au début, qui fond vers 6 %.
       let x=7; const rnd=()=>{ x=(x*1103515245+12345)%2147483648; return x/2147483648; };
       const EX=['Squat','Développé couché','Soulevé de terre','Rowing barre','Développé militaire','Tractions','Fentes','Dips','Curl barre','Presse'];
-      const best={}, ses=[], bil=[];
-      for(let w=0;w<140;w++){
+      const best={}, ses=[], bil=[], W=145;
+      for(let w=0;w<W;w++){
         for(const dj of [0,2,4]){
           const data={}, p=Math.max(0.06,0.45*Math.exp(-w/18));
           for(const e of (dj===2?EX.slice(5):EX.slice(0,5))){
@@ -54105,16 +54115,81 @@ async function testExercices(){
         }
         if(w%2===1) bil.push({date:_VT0+(w*7+5)*_VJ,type:'suivi'});
       }
-      const rangA=w=>{ const t=_VT0+w*7*_VJ-1;
-        return rangDe(xpCalcul(_VU({sessions:ses.filter(s=>s.date<=t),bilans:bil.filter(b=>b.date<=t)}),t).total).rang.n; };
-      // [rang, semaines visées] : ~2 sem., ~1 mois, ~2 mois, ~4, ~6, ~9 mois, ~1 an, ~18 mois, ~30 mois.
-      const cible=[[2,2],[3,4.3],[4,8.7],[5,17],[6,26],[7,39],[8,52],[9,78],[10,130]];
+      // 2. et 3. LE QUOTIDIEN : le journal chaque jour (la cible tenue 5 jours
+      // sur 7, à côté les deux autres), le check-in et la nuit chaque jour.
+      const macros={on:{kcal:2200,p:150},off:{kcal:2200,p:150}}, log={}, checkin={}, nuits=[];
+      for(let d=0;d<W*7;d++){
+        const t=_VT0+d*_VJ, j=localISODate(new Date(t)), tenu=(d%7)<5;
+        log[j]={entries:tenu?[{kcal:1100,p:75},{kcal:1100,p:75},{kcal:0,p:0}]:[{kcal:700,p:40},{kcal:700,p:40},{kcal:400,p:10}]};
+        checkin[j]={sommeil:4,energie:4,courbatures:2,at:t-10*3600e3};
+        nuits.push({date:j,duration:450});
+      }
+      const dossier=(k,w)=>{ const t=_VT0+w*7*_VJ-1, jm=localISODate(new Date(t));
+        const o={sessions:k===3?[]:ses.filter(s=>s.date<=t),bilans:k===3?[]:bil.filter(b=>b.date<=t)};
+        if(k>=2){ o.nutrition={macros,log:Object.fromEntries(Object.entries(log).filter(([j])=>j<=jm))};
+          o.checkin=Object.fromEntries(Object.entries(checkin).filter(([j])=>j<=jm)); o.sleepLog=nuits.filter(e=>e.date<=jm); }
+        return {u:_VU(o),t}; };
+      const calc=(k,w)=>{ const d=dossier(k,w); return xpCalcul(d.u,d.t); };
+      return {calc,rang:(k,w)=>rangDe(calc(k,w).total).rang.n};
+    })();
+    ok('Volts : la courbe tient le calendrier d’un athlète à 3 séances par semaine',(()=>{
+      // [rang, semaines visées] : ~2 sem., ~1 mois, ~2 mois, ~4, ~6-7, ~10 mois, ~14, ~19, ~26 mois.
+      const cible=[[2,2],[3,4.3],[4,8.7],[5,17],[6,28],[7,43],[8,61],[9,82],[10,113]];
       const f=[];
       for(const [n,w] of cible){
-        if(rangA(Math.ceil(w*1.25))<n) f.push(RANGS[n-1].nom+' pas atteint à '+Math.ceil(w*1.25)+' sem.');
-        if(rangA(Math.floor(w*0.75))>=n) f.push(RANGS[n-1].nom+' déjà atteint à '+Math.floor(w*0.75)+' sem.');
+        if(_VCAL.rang(1,Math.ceil(w*1.25))<n) f.push(RANGS[n-1].nom+' pas atteint à '+Math.ceil(w*1.25)+' sem.');
+        if(_VCAL.rang(1,Math.floor(w*0.75))>=n) f.push(RANGS[n-1].nom+' déjà atteint à '+Math.floor(w*0.75)+' sem.');
       }
+      // Les écarts entre deux rangs croissent : la fin est plus longue, pas plus abrupte.
+      for(let i=2;i<RANGS.length;i++) if(RANGS[i].seuil-RANGS[i-1].seuil<=RANGS[i-1].seuil-(RANGS[i-2]||{seuil:0}).seuil) f.push('écart non croissant avant '+RANGS[i].nom);
       return f.length?_echec(f.join(' ; ')):true;})());
+    ok('Volts : « tout remplir » (journal, cible 5 j/7, check-in, nuit) ne fait pas LÉGENDE avant 20 mois',(()=>{
+      const w20=Math.floor(20*30.44/7);                                  // 86 semaines
+      const c=_VCAL.calc(2,w20);
+      if(rangDe(c.total).rang.n>=10) return _echec('LÉGENDE à 20 mois : '+c.total+' V');
+      // La borne mord : la part hors entraînement est écrêtée, jamais au-delà de 40 % (ou 150 V par semaine).
+      if(!(c.ecrete>0)) return _echec('rien d’écrêté');
+      const hors=XP_HORS.reduce((a,k)=>a+c.cat[k],0), entr=XP_ENTRAINEMENT.reduce((a,k)=>a+c.cat[k],0);
+      if(hors>Math.max(XP_HORS_PART*entr,XP_HORS_PLANCHER*Math.ceil(w20*7/XP_HORS_FENETRE))+XP_HORS_PLANCHER) return _echec('hors '+hors+' / entraînement '+entr);
+      // Il avance quand même plus vite que le régulier (ce qu'il fait compte).
+      return c.total>_VCAL.calc(1,w20).total?true:_echec('aucun gain à tout remplir');})());
+    ok('Volts : « nutrition seule », aucune séance : jamais au-delà de VOLTAGE en six mois',(()=>{
+      const w6=Math.ceil(6*30.44/7);                                     // 27 semaines
+      const c=_VCAL.calc(3,w6);
+      if(rangDe(c.total).rang.n>3) return _echec(RANGS[rangDe(c.total).rang.n-1].nom+' : '+c.total+' V');
+      // Le plancher de 150 V par fenêtre de 7 jours : ~150 V par semaine hors badges.
+      const hors=XP_HORS.reduce((a,k)=>a+c.cat[k],0);
+      return hors<=XP_HORS_PLANCHER*(w6+1)?true:_echec('hors entraînement '+hors);})());
+    ok('Volts : la part hors entraînement se borne sur 7 jours glissants, l’excédent est écrêté',(()=>{
+      // Une semaine de journal sans séance : 150 V au plus sur la fenêtre.
+      const log={}, ck={};
+      for(let d=0;d<7;d++){ const j=localISODate(new Date(_VT0+d*_VJ)); log[j]={entries:[{kcal:1},{kcal:1},{kcal:1}]}; ck[j]={sommeil:3,energie:3,courbatures:3,at:_VT0+d*_VJ-5*3600e3}; }
+      const c=xpCalcul(_VU({nutrition:{log},checkin:ck}),_VT0+8*_VJ);
+      const hors=XP_HORS.reduce((a,k)=>a+c.cat[k],0);
+      if(hors!==150||c.ecrete!==7*25-150) return _echec('hors '+hors+', écrêté '+c.ecrete);
+      // Avec des séances, 40 % de l'entraînement de la fenêtre : 3 séances (390 V) + semaine (150) → 216 V.
+      const s=xpCalcul(_VU({nutrition:{log},checkin:ck,sessions:[_VS(0),_VS(2),_VS(4)]}),_VT0+8*_VJ);
+      const hs=XP_HORS.reduce((a,k)=>a+s.cat[k],0);
+      return hs===7*25?true:_echec('sous la borne, rien n’est écrêté : '+hs);})());
+    ok('Volts : un rang fêté ne redescend pas ; LÉGENDE ★N au-delà, fêtée petit',(()=>{
+      const d=document.createElement('div');
+      // Fêté MONSTRE (7), total repassé sous son seuil : MONSTRE reste affiché.
+      d.innerHTML=htmlRangAccueil(29000,7);
+      if(!/MONSTRE/.test(d.querySelector('.rg-nom').textContent)) return _echec('rang fêté : '+d.textContent);
+      if(!/vers FOUDRE/.test(d.textContent)) return _echec('vers '+d.textContent);
+      if(rangAffiche(29000,7).rang.n!==7||rangAffiche(31000,6).rang.n!==7) return _echec('rangAffiche');
+      // Le prestige : une étoile par tranche de 20 000 V au-delà de LÉGENDE.
+      const L=RANGS[9].seuil;
+      if(prestigeDe(L-1)!==0||prestigeDe(L+19999)!==0||prestigeDe(L+20000)!==1||prestigeDe(L+65000)!==3) return _echec('prestige');
+      if(nomRangComplet(L+45000)!=='LÉGENDE ★2') return _echec(nomRangComplet(L+45000));
+      if(niveauCode(L+45000)<=niveauCode(L+25000)||_rangDuCode(niveauCode(L+45000))!==10) return _echec('code');
+      d.innerHTML=htmlRangAccueil(L+25000);
+      if(!/LÉGENDE ★1/.test(d.textContent)||!/vers LÉGENDE ★2/.test(d.textContent)) return _echec('accueil '+d.textContent);
+      // Le passage d'une étoile : un toast, pas d'écran plein.
+      const sv=toast, vus=[]; toast=m=>vus.push(String(m));
+      try{ if(!_celebrerSousNiveau(L+40000)||!/LÉGENDE ★2 · nouvelle étoile/.test(vus.join())) return _echec('fête '+vus.join()); }
+      finally{ toast=sv; }
+      return true;})());
     ok('Volts : l’accueil dit « total / seuil V vers RANG », avec l’emblème',(()=>{
       const d=document.createElement('div');
       d.innerHTML=htmlRangAccueil(1240);
@@ -54124,8 +54199,9 @@ async function testExercices(){
       if(!/ÉTINCELLE/.test(t)) return _echec('nom du rang');
       const img=d.querySelector('img.rg-emb');
       if(!img||!/img\/rangs\/rang_1\.webp$/.test(img.getAttribute('src'))) return _echec('emblème');
+      // Au-delà de LÉGENDE : l'étoile suivante (prestige), plus de « rang maximal ».
       d.innerHTML=htmlRangAccueil(RANGS[9].seuil+5);
-      return /rang maximal/.test(d.textContent)?true:_echec('rang maximal');})());
+      return /vers LÉGENDE ★1/.test(d.textContent)?true:_echec('prestige : '+d.textContent);})());
     ok('Volts : la fin de séance affiche « +N ⚡ » et une ligne par gain',(()=>{
       const d=document.createElement('div');
       d.innerHTML=htmlVoltsFin({total:180,lignes:[{lib:'Séance terminée',v:100},{lib:'Record battu',v:50},{lib:'Séance complète',v:30}],ecrete:false},2000);
@@ -57253,7 +57329,7 @@ async function testExercices(){
     // reste d'emojis que là où l'app ne dessine pas : partages, visuels,
     // réactions envoyées. MÊME LISTE que LISTE_BLANCHE de scripts/emojis.py.
     ok('Les emojis des chaînes de rc-core (hors commentaires) sont tous dans la liste blanche',(()=>{
-      const BLANCHE='⚡💪🔥🛡👇🐈🧍🎹🚗🦏🐘🦖🚌🐋🗽🗼👍❤👏😮☺♫✦♀♂';
+      const BLANCHE='⚡💪🔥🛡👇🐈🧍🎹🚗🦏🐘🦖🚌🐋🗽🗼👍❤👏😮☺♫✦♀♂★';
       const lire=u=>{ try{ const x=new XMLHttpRequest(); x.open('GET',u,false); x.send(); return x.status===200?x.responseText:''; }catch(e){ return ''; } };
       const scr=document.querySelector('script[src*="rc-core."]');
       const js=scr?lire(scr.getAttribute('src')):'';

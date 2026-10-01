@@ -55,8 +55,21 @@ test('les textes portent les vraies données : rang et série, tonnage et équiv
   const a = RE.messageRetour(7, { fname: 'Léa', xpRang: 3, streak: 5 });
   assert.equal(a.type, 'retour');
   assert.equal(a.title, 'Léa, ta semaine t’attend');
-  assert.equal(a.body, 'Une séance suffit à garder ton rang VOLTAGE et ta série de 5 semaines.');
+  assert.equal(a.body, 'Une séance suffit pour avancer vers MACHINE et garder ta série de 5 semaines.');
   assert.equal(RE.messageRetour(7, {}).body, 'Une séance suffit pour repartir.');
+  // Le total du serveur : ce qu'il reste avant le rang suivant (jamais « garder ton rang »).
+  const r = RE.messageRetour(7, { xpRang: 3, total: 6260 });
+  assert.equal(r.body, 'Une séance suffit pour avancer vers MACHINE. Plus que 1\u00a0240 V avant MACHINE.');
+  assert.ok(!/garder ton rang/.test(r.body));
+  // Le total a dépassé le rang fêté : on vise celui d'après.
+  assert.equal(RE.prochainPalier(8000, 3).vers, 'ÉLITE');
+  assert.equal(RE.prochainPalier(8000, 3).reste, 5500);
+  // Un rang fêté au-dessus du total (seuils revus) : on vise le suivant du rang fêté.
+  assert.deepEqual(RE.prochainPalier(29000, 7), { vers: 'FOUDRE', reste: 13000 });
+  // LÉGENDE : l'étoile suivante.
+  assert.deepEqual(RE.prochainPalier(84000 + 25000, 10), { vers: 'LÉGENDE ★2', reste: 15000 });
+  assert.equal(RE.prochainPalier(null, 0), null);
+  assert.deepEqual(RE.RANGS_NOMS, ['ÉTINCELLE', 'IMPULSION', 'VOLTAGE', 'MACHINE', 'ÉLITE', 'SURTENSION', 'MONSTRE', 'FOUDRE', 'TITAN', 'LÉGENDE']);
   const b = RE.messageRetour(14, { tonnageTotal: 84000 });
   assert.equal(b.title, 'Tu as soulevé 84 t avec nous');
   assert.match(b.body, /^Soit 7 bus\. /);
@@ -94,11 +107,11 @@ test('11 h : J+7, J+14, J+30 reçoivent chacun leur message ; les autres rien ; 
     'susp@t,fr': { lastSession: der(7), suspension: { actif: true } },
   };
   const { push, recus } = abonnes(users);
-  const w = monde({ users, push }, MARDI);
+  const w = monde({ users, push, xp_serveur: { 'j7@t,fr': { total: 12260 } } }, MARDI);
   assert.ok(travaux(w.M).some((x) => x.nom === 'retour'));
   await w.jusqua('retour');
   assert.equal(recus(w, 'j7@t,fr').length, 1);
-  assert.equal(recus(w, 'j7@t,fr')[0].body, 'Une séance suffit à garder ton rang MACHINE et ta série de 3 semaines.');
+  assert.equal(recus(w, 'j7@t,fr')[0].body, 'Une séance suffit pour avancer vers ÉLITE et garder ta série de 3 semaines. Plus que 1\u00a0240 V avant ÉLITE.');
   assert.equal(recus(w, 'j14@t,fr')[0].title, 'Tu as soulevé 84 t avec nous');
   assert.equal(recus(w, 'j30@t,fr')[0].url, './?reprise=1');
   for (const k of ['j8@t,fr', 'actif@t,fr', 'jamais@t,fr']) assert.equal(recus(w, k).length, 0, k);

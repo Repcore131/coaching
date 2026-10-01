@@ -1691,13 +1691,23 @@ function _rendreSerieAssiette(u){
 // validée, badge — n'y sont pas soumis : ils ne se répètent pas.
 const XP_PLAFOND_JOUR=400;
 // LES RANGS ET LEURS SEUILS, en volts cumulés. C'est LA table à retoucher.
-// Calibrée sur un athlète à 3 séances par semaine de 5 exercices (complètes à
-// 85 %, un bilan toutes les deux semaines, un record par exercice avec une
-// chance de 45 % au début qui fond vers 6 %, badges compris, SANS journal ni
-// sommeil — ceux-là accélèrent : +20 V par jour au plus) : IMPULSION ~2 semaines,
-// VOLTAGE ~1 mois, MACHINE ~2 mois, ÉLITE ~4 mois, SURTENSION ~6 mois,
-// MONSTRE ~9 mois, FOUDRE ~1 an, TITAN ~1 an et demi, LÉGENDE ~2 ans et demi.
-// Le test « Volts : la courbe tient le calendrier » rejoue cet athlète.
+// Calibrée (01/10/2026) sur TROIS athlètes, que le test « Volts : la courbe
+// tient le calendrier » rejoue :
+//  1. L'ATHLÈTE RÉGULIER : 3 séances par semaine de 5 exercices (complètes à
+//     85 %, un bilan toutes les deux semaines, un record par exercice avec une
+//     chance de 45 % au début qui fond vers 6 %, badges compris), SANS journal
+//     ni sommeil : IMPULSION ~2 semaines, VOLTAGE ~1 mois, MACHINE ~2 mois,
+//     ÉLITE ~4 mois, SURTENSION ~6-7 mois, MONSTRE ~10 mois, FOUDRE ~14 mois,
+//     TITAN ~19 mois, LÉGENDE ~26-29 mois (±25 % à chaque rang) ;
+//  2. « TOUT REMPLIR » : le même, plus le journal chaque jour (la cible tenue
+//     5 jours sur 7), le check-in et la nuit chaque jour. Hors entraînement,
+//     cela rapporte ~485 V par semaine (journal 105, cible 200, check-in 70,
+//     nuit 35, semaine d'assiette 75) : AU PLUS 40 % des volts d'entraînement
+//     de la semaine, ou 150 V (XP_HORS_PART). LÉGENDE pas avant 20 mois ;
+//  3. « NUTRITION SEULE », aucune séance : le plancher de 150 V par semaine,
+//     jamais au-delà de VOLTAGE en six mois.
+// Ce qui n'est PAS borné par semaine : les jalons rares (badges, bilans, le
+// parcours), et le plafond du jour (XP_PLAFOND_JOUR) reste au-dessus de tout.
 // ══ LE PARCOURS DE DÉMARRAGE « MISE SOUS TENSION » (28/09/2026) ══════════
 //
 // Les premiers paliers de badges demandent dix séances ou cinq records : un
@@ -2070,18 +2080,41 @@ function parcoursInvitation(){
   return true;
 }
 
+// LISSÉS LE 01/10/2026 : des écarts qui croissent d'un rang à l'autre
+// (1 800, 2 000, 3 700, 6 000, 7 500, 9 500, 11 500, 13 500, 28 500) — ils
+// sautaient de 6 000 à 16 000 puis 32 000. MÊMES SEUILS AU SERVEUR
+// (cloudflare/src/xp.js, RANGS ; un test compare les deux).
+// ⚠ UN RANG FÊTÉ NE REDESCEND JAMAIS (u.xpRang) : un total repassé sous son
+//   seuil (barème revu, part hors entraînement bornée) affiche le rang fêté
+//   (rangAffiche).
 const RANGS=Object.freeze([
   {n:1, nom:'ÉTINCELLE', seuil:0},
   {n:2, nom:'IMPULSION', seuil:1800},
   {n:3, nom:'VOLTAGE',   seuil:3800},
   {n:4, nom:'MACHINE',   seuil:7500},
-  {n:5, nom:'ÉLITE',     seuil:14000},
-  {n:6, nom:'SURTENSION',seuil:20000},
-  {n:7, nom:'MONSTRE',   seuil:29000},
-  {n:8, nom:'FOUDRE',    seuil:37000},
-  {n:9, nom:'TITAN',     seuil:53000},
-  {n:10,nom:'LÉGENDE',   seuil:85000}
+  {n:5, nom:'ÉLITE',     seuil:13500},
+  {n:6, nom:'SURTENSION',seuil:21000},
+  {n:7, nom:'MONSTRE',   seuil:30500},
+  {n:8, nom:'FOUDRE',    seuil:42000},
+  {n:9, nom:'TITAN',     seuil:55500},
+  {n:10,nom:'LÉGENDE',   seuil:84000}
 ]);
+// ══ LE PRESTIGE (01/10/2026) : chaque tranche de 20 000 V au-delà de
+// LÉGENDE, une étoile — « LÉGENDE ★2 ». Aucune image nouvelle : l'emblème de
+// LÉGENDE, l'étoile écrite. Fêtée petit, comme un sous-niveau.
+const PRESTIGE_TRANCHE=20000;
+/** PURE. Le nombre d'étoiles d'un total (0 avant LÉGENDE). */
+function prestigeDe(xp){
+  const v=Math.max(0,Number(xp)||0), l=RANGS[RANGS.length-1].seuil;
+  return v>=l?Math.floor((v-l)/PRESTIGE_TRANCHE):0;
+}
+/** PURE. Le rang AFFICHÉ : celui du total, jamais sous le rang déjà fêté. */
+function rangAffiche(xp,rangFete){
+  const r=rangDe(xp), n=Math.max(0,Math.min(RANGS.length,Math.round(Number(rangFete)||0)));
+  if(n<=r.rang.n) return r;
+  const rang=RANGS[n-1], suivant=RANGS[n]||null;
+  return {rang,suivant,part:0,reste:suivant?Math.max(0,suivant.seuil-r.xp):0,xp:r.xp,fete:true};
+}
 function rangEmbleme(n,grand){
   const k=Math.max(1,Math.min(RANGS.length,Number(n)||1));
   return './img/rangs/rang_'+k+(grand?'-512':'')+'.webp';
@@ -2118,14 +2151,17 @@ function sousNiveauDe(xp){
 }
 /** PURE. « MONSTRE II », ou le nom du rang seul. */
 function nomRangComplet(xp){
-  const r=rangDe(xp), s=sousNiveauDe(xp);
-  return r.rang.nom+(s?' '+s.lib:'');
+  const r=rangDe(xp), s=sousNiveauDe(xp), p=prestigeDe(xp);
+  return r.rang.nom+(s?' '+s.lib:'')+(p?' ★'+p:'');
 }
-/** PURE. Le code d'un niveau, pour comparer : rang × 10 + sous-niveau. */
+/** PURE. Le code d'un niveau, pour comparer : rang × 10 + sous-niveau ; en
+ *  LÉGENDE, 100 + les étoiles. */
 function niveauCode(xp){
   const r=rangDe(xp), s=sousNiveauDe(xp);
-  return r.rang.n*10+(s?s.n:0);
+  return r.rang.n*10+(s?s.n:0)+prestigeDe(xp);
 }
+/** PURE. Le rang d'un code de niveau (LÉGENDE au-delà de 100). */
+function _rangDuCode(c){ return Math.min(RANGS.length,Math.floor((Number(c)||0)/10)); }
 /** PURE. 1, 2 ou 3 chevrons rouges, en SVG. */
 function htmlChevrons(n,classe){
   const k=Math.max(0,Math.min(3,Math.round(Number(n)||0)));
@@ -2139,9 +2175,9 @@ function htmlChevrons(n,classe){
 // Le passage : toast, petite foudre sur l'en-tête, trophée du jour si la fin
 // de séance est à l'écran.
 function _celebrerSousNiveau(xp){
-  const nom=nomRangComplet(xp), s=sousNiveauDe(xp);
+  const nom=nomRangComplet(xp), p=prestigeDe(xp), s=sousNiveauDe(xp)||(p?{n:p}:null);
   if(!s) return false;
-  try{ toast(ICO.eclair+' '+nom+' · nouveau sous-niveau'); }catch(e){}
+  try{ toast(ICO.eclair+' '+nom+(p?' · nouvelle étoile':' · nouveau sous-niveau')); }catch(e){}
   try{ const el=document.getElementById('clh-rang'); rcFoudre(el&&el.offsetParent?el:null,{eclairs:1,son:false}); }catch(e){}
   try{
     const ancre=document.getElementById('wd-volts');
@@ -2223,6 +2259,50 @@ function _xpComplete(s){
   return !(Number(s.setsPlanned)>0&&Number(s.sets)<Number(s.setsPlanned));
 }
 function _xpJour(t){ try{ return localISODate(new Date(t)); }catch(e){ return ''; } }
+// ══ LA PART HORS ENTRAÎNEMENT (01/10/2026) ══════════════════════════════
+// Journal, cible, nuit, check-in et semaine d'assiette ne peuvent pas
+// rapporter, sur 7 jours glissants, plus de 40 % des volts d'entraînement de
+// la même fenêtre (séance, complète, records, semaine validée) — ou 150 V,
+// si c'est plus : le PLANCHER d'un athlète blessé ou suspendu, qui tient son
+// journal sans pouvoir s'entraîner. L'excédent est écrêté (`ecrete`).
+// ⚠ POURQUOI 40 % ET UN PLANCHER, ET NON « 60 % + 150 V » (la demande) : un
+//   athlète à 3 séances par semaine gagne ~560 V d'entraînement par
+//   semaine ; 60 % + 150 lui laissaient ~490 V hors entraînement, plus que ce
+//   que « tout remplir » rapporte (~485 V) — la borne ne mordait jamais, et
+//   l'athlète « tout remplir » touchait LÉGENDE en 14 mois. À 40 % avec un
+//   plancher de 150 V, il y met plus de 20 mois, l'athlète régulier ~29,
+//   et un compte sans séance plafonne à ~150 V par semaine (VOLTAGE en six
+//   mois). Le test « la courbe tient le calendrier » rejoue les trois.
+// MÊME BORNE AU SERVEUR (cloudflare/src/xp.js, totalServeur), sur des
+// semaines entières : il n'a pas le détail par jour.
+const XP_HORS_PART=0.4, XP_HORS_PLANCHER=150, XP_HORS_FENETRE=7;
+const XP_HORS=Object.freeze(['nutrition','cible','sommeil','checkin','semaineAssiette']);
+const XP_ENTRAINEMENT=Object.freeze(['seance','complete','record','semaine']);
+// L'ordre du rabot quand la borne mord : la semaine d'assiette d'abord, la
+// nuit en dernier.
+const XP_HORS_RABOT=Object.freeze(['semaineAssiette','cible','nutrition','checkin','sommeil']);
+function _xpJourPlus(j,n){ const [a,m,d]=String(j).split('-').map(Number); return localISODate(new Date(a,m-1,d+n)); }
+/** PURE (écrit dans parJour). Borne la part hors entraînement ; rend l'écrêté. */
+function _xpBornerHors(parJour){
+  const jl=Object.keys(parJour).sort();
+  const somme=(o,l)=>l.reduce((a,c)=>a+(Number(o&&o[c])||0),0);
+  const pris={};
+  let ecrete=0;
+  for(let i=0;i<jl.length;i++){
+    const j=jl[i], d0=_xpJourPlus(j,-(XP_HORS_FENETRE-1));
+    let train=0, avant=0;
+    for(let k=i;k>=0&&jl[k]>=d0;k--){ train+=somme(parJour[jl[k]],XP_ENTRAINEMENT); if(k<i) avant+=pris[jl[k]]||0; }
+    const permis=Math.max(0,Math.floor(Math.max(XP_HORS_PART*train,XP_HORS_PLANCHER)-avant));
+    const o=parJour[j], hors=somme(o,XP_HORS);
+    if(hors>permis){
+      let trop=hors-permis;
+      for(const c of XP_HORS_RABOT){ const v=Number(o[c])||0, r=Math.min(v,trop); if(r){ o[c]=v-r; trop-=r; } if(!trop) break; }
+      ecrete+=hors-permis;
+    }
+    pris[j]=Math.min(hors,permis);
+  }
+  return ecrete;
+}
 // PURE. LE CALCUL. Rend {total, cat:{seance, complete, record, bilan,
 // nutrition, sommeil, semaine, badge, archive}, ecrete} — `ecrete`, ce que le
 // plafond a retenu. Les catégories du jour passent dans l'ordre ci-dessous
@@ -2275,17 +2355,22 @@ function xpCalcul(u,maintenant){
   // place.
   const ordre=['seance','complete','record','bilan','nutrition','sommeil','checkin','cible','mission'];
   let ecrete=0;
+  const parJour={};                       // jour → {catégorie: volts retenus}
+  const ajoute=(j,c,v)=>{ if(!j||!(v>0)) return; const o=parJour[j]||(parJour[j]={}); o[c]=(o[c]||0)+v; };
   for(const j of Object.keys(jours)){
     let reste=XP_PLAFOND_JOUR;
     const l=jours[j].sort((a,b)=>ordre.indexOf(a[0])-ordre.indexOf(b[0]));
     for(const [c,v] of l){
       const pris=Math.min(v,reste);
-      cat[c]+=pris; reste-=pris; ecrete+=v-pris;
+      ajoute(j,c,pris); reste-=pris; ecrete+=v-pris;
     }
   }
-  // Les jalons, hors plafond.
-  cat.semaine=f.semaines.filter(d=>d<=t).length*XP_ACTIONS.semaine;
-  cat.semaineAssiette=((f.assiette&&f.assiette.semaines)||[]).filter(d=>d<=t).length*XP_ACTIONS.semaineAssiette;
+  // Les jalons, hors plafond du jour, rangés à leur date.
+  for(const d of f.semaines) if(d<=t) ajoute(_xpJour(d),'semaine',XP_ACTIONS.semaine);
+  for(const d of ((f.assiette&&f.assiette.semaines)||[])) if(d<=t) ajoute(_xpJour(d),'semaineAssiette',XP_ACTIONS.semaineAssiette);
+  // LA PART HORS ENTRAÎNEMENT, sur 7 jours glissants (voir XP_HORS_PART).
+  ecrete+=_xpBornerHors(parJour);
+  for(const j of Object.keys(parJour)) for(const c of Object.keys(parJour[j])) cat[c]+=parJour[j][c];
   for(const b of BADGES_ACQUIS){
     if(_bdgInactif(b)) continue;
     let at=0; try{ at=Number(b.test(f))||0; }catch(e){ at=0; }
@@ -2374,7 +2459,7 @@ function majXp(){
   if(!vuN){ u.xpNiveau=code; change=true; }
   else if(code>vuN&&!bloque){
     u.xpNiveau=code; change=true;
-    if(!fete&&Math.floor(code/10)===Math.floor(vuN/10)) sous=code;
+    if(!fete&&_rangDuCode(code)===_rangDuCode(vuN)) sous=code;
   }
   if(change) try{ saveUser(); }catch(e){}
   if(fete) try{ _celebrerRang(fete); }catch(e){}
@@ -2383,12 +2468,18 @@ function majXp(){
 }
 // ── L'ACCUEIL : l'emblème et le nom du rang sous le prénom, et la jauge ──
 // PURE.
-function htmlRangAccueil(xp){
-  const r=rangDe(xp);
+function htmlRangAccueil(xp,rangFete){
+  // Le rang FÊTÉ ne redescend pas : sous son seuil, il reste affiché, jauge
+  // à zéro vers le rang suivant.
+  const r=rangAffiche(xp,rangFete);
   // À partir de VOLTAGE, la jauge va au sous-niveau suivant : « MONSTRE II ·
-  // 30 240 / 31 667 V vers MONSTRE III ».
-  const s=sousNiveauDe(xp);
-  const part=s?s.part:r.part, cible=s?s.a:(r.suivant?r.suivant.seuil:0), vers=s?s.vers:(r.suivant?r.suivant.nom:'');
+  // 30 240 / 31 667 V vers MONSTRE III ». En LÉGENDE, vers l'étoile suivante.
+  const s=r.fete?null:sousNiveauDe(xp), p=r.fete?0:prestigeDe(xp);
+  const l=RANGS[RANGS.length-1].seuil;
+  const etoile=r.rang.n===RANGS.length&&!r.fete?{de:l+p*PRESTIGE_TRANCHE,a:l+(p+1)*PRESTIGE_TRANCHE}:null;
+  const part=s?s.part:etoile?Math.max(0,Math.min(1,(r.xp-etoile.de)/PRESTIGE_TRANCHE)):r.part;
+  const cible=s?s.a:etoile?etoile.a:(r.suivant?r.suivant.seuil:0);
+  const vers=s?s.vers:etoile?'LÉGENDE ★'+(p+1):(r.suivant?r.suivant.nom:'');
   const txt=cible
     ?xpFormat(r.xp)+' / '+xpFormat(cible)+' V vers '+vers
     :xpFormat(r.xp)+' V · rang maximal';
@@ -2397,8 +2488,8 @@ function htmlRangAccueil(xp){
     // le logo, je ne comprends pas ce qu'elles font »). Le sous-niveau reste
     // ecrit en toutes lettres dans le nom du rang.
     +'</span>'
-    +'<span class="rg-nom">'+escapeHtml(r.rang.nom+(s?' '+s.lib:''))+'</span></div>'
-    +'<div class="rg-jauge" role="progressbar" aria-label="Volts vers le '+(s?'sous-niveau':'rang')+' suivant" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'
+    +'<span class="rg-nom">'+escapeHtml(r.rang.nom+(s?' '+s.lib:'')+(p?' ★'+p:''))+'</span></div>'
+    +'<div class="rg-jauge" role="progressbar" aria-label="Volts vers '+(s?'le sous-niveau suivant':etoile?'l’étoile suivante':'le rang suivant')+'" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'
       +Math.round(part*100)+'"><span style="width:'+Math.round(part*100)+'%"></span></div>'
     // LA MAQUETTE DE L'EN-TETE (27/09/2026) : les chiffres en blanc, « vers »
     // plus petit et gris, le rang suivant en blanc.
@@ -2412,7 +2503,7 @@ function _rendreRang(u){
   if(!u||u.role==='coach'){ z.innerHTML=''; z.hidden=true; return false; }
   let m=null; try{ m=majXp(); }catch(e){ m=null; }
   z.hidden=false;
-  z.innerHTML=htmlRangAccueil(m?m.total:xpDe(u));
+  z.innerHTML=htmlRangAccueil(m?m.total:xpDe(u),u.xpRang);
   // LA LIGNE DES FILLEULS, sous l'en-tête (la bande a une hauteur fixe) :
   // rien avant le premier filleul.
   try{

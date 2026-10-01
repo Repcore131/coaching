@@ -17,13 +17,37 @@
 // si une relance de série est partie dans les RETOUR_ECART_J derniers jours,
 // et la série se tait si une relance « retour » vient de partir.
 
+import { RANGS, PRESTIGE_TRANCHE } from './xp.js';
+
 export const RETOUR_PALIERS = [7, 14, 30];
 export const RETOUR_MAX = 3;
 export const RETOUR_ECART_J = 4;
 const J = 864e5;
 
-// Les rangs de l'app (RANGS, rc-core), dans l'ordre : xpRang est un numéro 1..10.
-export const RANGS_NOMS = ['ÉTINCELLE', 'IMPULSION', 'VOLTAGE', 'MACHINE', 'ÉLITE', 'SURTENSION', 'MONSTRE', 'FOUDRE', 'TITAN', 'LÉGENDE'];
+// Les rangs de l'app (RANGS, rc-core, et xp.js), dans l'ordre : xpRang est un numéro 1..10.
+export const RANGS_NOMS = RANGS.map((r) => r.nom);
+// « 1 240 » : les milliers séparés par une espace insécable, comme l'app.
+export const voltsTexte = (v) => String(Math.max(0, Math.round(Number(v) || 0))).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0');
+/**
+ * PURE. Vers quoi avance-t-on ? `total` : xp_serveur/<k>.total (ou null),
+ * `xpRang` : le rang déjà fêté (il ne redescend pas). Rend {vers, reste} :
+ * le rang suivant (ou, en LÉGENDE, l'étoile suivante) et les volts qui
+ * manquent (null sans total), ou null sans rang connu.
+ */
+export function prochainPalier(total, xpRang) {
+  const v = Number(total);
+  const aTotal = total != null && isFinite(v) && v >= 0;
+  let n = Math.round(Number(xpRang) || 0);
+  if (aTotal) for (const r of RANGS) if (v >= r.seuil && r.n > n) n = r.n;
+  if (!(n >= 1)) return null;
+  if (n >= RANGS.length) {
+    const l = RANGS[RANGS.length - 1].seuil, p = aTotal ? Math.max(0, Math.floor((v - l) / PRESTIGE_TRANCHE)) : 0;
+    const a = l + (p + 1) * PRESTIGE_TRANCHE;
+    return { vers: 'LÉGENDE ★' + (p + 1), reste: aTotal ? Math.max(0, a - v) : null };
+  }
+  const s = RANGS[n];
+  return { vers: s.nom, reste: aTotal ? Math.max(0, s.seuil - v) : null };
+}
 // La table de l'app (EQUIV_TONNAGE, rc-core) : mêmes seuils, mêmes libellés.
 const EQUIV = [
   { kg: 4, un: 'chat', plu: 'chats' }, { kg: 75, un: 'humain', plu: 'humains' },
@@ -87,11 +111,15 @@ export function messageRetour(palier, d, t) {
   const pr = String(x.fname || '').trim().slice(0, 30);
   const base = { type: 'retour', tag: 'retour-' + palier };
   if (palier === 7) {
-    const rang = RANGS_NOMS[Math.round(Number(x.xpRang)) - 1] || '';
+    // POUR AVANCER, pas « pour garder » : un rang fêté ne se perd jamais
+    // (01/10/2026). Le total du serveur (xp_serveur/<k>.total) dit ce qu'il reste.
+    const pp = prochainPalier(x.total, x.xpRang);
     const s = Math.max(0, Math.round(Number(x.streak) || 0));
-    return Object.assign(base, { url: './?wo=1', title: (pr ? pr + ', ta' : 'Ta') + ' semaine t’attend',
-      body: 'Une séance suffit' + (rang ? ' à garder ton rang ' + rang : ' pour repartir')
-        + (s > 0 ? ' et ta série de ' + s + ' semaine' + (s > 1 ? 's' : '') : '') + '.' });
+    const serie = s > 0 ? ' et garder ta série de ' + s + ' semaine' + (s > 1 ? 's' : '') : '';
+    const body = pp
+      ? 'Une séance suffit pour avancer vers ' + pp.vers + serie + '.' + (pp.reste != null && pp.reste > 0 ? ' Plus que ' + voltsTexte(pp.reste) + ' V avant ' + pp.vers + '.' : '')
+      : 'Une séance suffit pour repartir' + serie + '.';
+    return Object.assign(base, { url: './?wo=1', title: (pr ? pr + ', ta' : 'Ta') + ' semaine t’attend', body });
   }
   if (palier === 14) {
     const kg = Number(x.tonnageTotal) || 0;

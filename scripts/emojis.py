@@ -57,6 +57,8 @@ LISTE_BLANCHE = {
     '☺': 'apercu Instagram', '♫': 'apercu Instagram', '✦': 'apercu Instagram',
     # Les signes du sexe : de la typographie colorée, pas des pictogrammes.
     '♀': 'signe', '♂': 'signe',
+    # L'étoile du prestige (« LÉGENDE ★2 ») : de la typographie, comme les signes.
+    '★': 'etoile de prestige',
 }
 
 

@@ -2056,6 +2056,7 @@ export function creerMetier(deps) {
   // Trois champs d'abord (la dernière séance écarte presque tout le monde),
   // le reste seulement pour qui est au bon jour. retour_etat/<uid> retient
   // les paliers envoyés de la période ; le Worker seul le lit et l'écrit.
+  const _LIRE_RETOUR = ['fname', 'xpRang', 'streak', 'tonnageTotal'];
   async function retourUn(uid, t, profil, log) {
     if (dejaNotifie(log, t, profil && profil.tz, 'retour')) return 'plafond';
     const pr = await profilUtile(uid, profil, t);
@@ -2066,9 +2067,10 @@ export function creerMetier(deps) {
     const etat = RE.etatPeriode(etat0, der);
     const ok = RE.retourAutorise({ palier, etat, suspension: susp, logPush, t });
     if (!ok.ok) return ok.raison;
-    const [fname, xpRang, streak, tonnageTotal] = await Promise.all(['fname', 'xpRang', 'streak', 'tonnageTotal'].map((c) => _lire(uid, c)));
+    // Le total du SERVEUR (xp_serveur/<k>.total) : « plus que 1 240 V avant MACHINE ».
+    const [fname, xpRang, streak, tonnageTotal, total] = await Promise.all([..._LIRE_RETOUR.map((c) => _lire(uid, c)), _val('xp_serveur/' + uid + '/total')]);
     // Heures calmes chez l'athlète : déposé pour son matin, et compté comme parti.
-    const r = await envoyerPush(uid, RE.messageRetour(palier, { fname, xpRang, streak, tonnageTotal }, t), optLog(log, {}, pr));
+    const r = await envoyerPush(uid, RE.messageRetour(palier, { fname, xpRang, streak, tonnageTotal, total }, t), optLog(log, {}, pr));
     if (!r.envoye && !r.differe) return r.raison || 'echec';
     etat.paliers[palier] = t;
     await db.ref('retour_etat/' + uid).set(etat);

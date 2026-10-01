@@ -418,3 +418,30 @@ test('mission du jour : cat.mission bornée à jours × 50, le joker accepté se
   assert.equal(X.jokersAdmis({ streak: 40, streakJokers: 9 }), 2);
   assert.equal(X.jokersAdmis({ streak: 0, streakJokers: 0 }), 0);
 });
+
+// ══ LA PART HORS ENTRAÎNEMENT BORNÉE, LES RANGS LISSÉS (01/10/2026) ═════════
+test('la part hors entraînement : 40 % de l’entraînement + 150 V par semaine du compte, comme l’app ; rangs et prestige en miroir', async () => {
+  const t0 = PARIS('2026-10-10T12:00:00');
+  // Trois semaines, aucune séance : 3 × 150 V au plus, rabotés dans l'ordre de l'app.
+  const r = X.totalServeur(X.etatVide(), { nutrition: 300, cible: 600, sommeil: 100, checkin: 200, semaineAssiette: 150 }, { debut: t0 - 20 * J }, t0);
+  const hors = X.HORS.reduce((a, k) => a + r.cat[k], 0);
+  assert.equal(hors, 450);
+  assert.equal(r.cat.semaineAssiette, 0, 'la semaine d’assiette part la première');
+  assert.equal(r.cat.sommeil, 100, 'la nuit, la dernière');
+  // Avec de l'entraînement recalculé par le serveur : 40 % de plus.
+  const e = X.avancer(null, Array.from({ length: 9 }, (_, i) => S(t0 - (18 - 2 * i) * J)), null, t0);
+  const entr = e.s.seance + e.s.complete + e.s.record;
+  const r2 = X.totalServeur(e, { nutrition: 300, cible: 600, sommeil: 100, checkin: 200 }, { debut: t0 - 20 * J }, t0);
+  assert.equal(X.HORS.reduce((a, k) => a + r2.cat[k], 0), Math.min(1200, Math.floor(0.4 * entr + 450)));
+  // Sous la borne : rien ne bouge.
+  assert.equal(X.totalServeur(X.etatVide(), { nutrition: 45, checkin: 30 }, { debut: t0 - 6 * J }, t0).cat.nutrition, 45);
+  // Les constantes de l'app.
+  const fs = await import('node:fs');
+  const dir = new URL('../../app/', import.meta.url);
+  const src = fs.readFileSync(new URL(fs.readdirSync(dir).find((x) => /^rc-core\.\d+\.js$/.test(x)), dir), 'utf8');
+  assert.match(src, new RegExp('const XP_HORS_PART=' + X.HORS_PART + ', XP_HORS_PLANCHER=' + X.HORS_PLANCHER + ', XP_HORS_FENETRE=7;'));
+  assert.match(src, new RegExp('const PRESTIGE_TRANCHE=' + X.PRESTIGE_TRANCHE + ';'));
+  assert.match(src, new RegExp("const XP_HORS=Object\\.freeze\\(\\[" + X.HORS.map((k) => "'" + k + "'").join(',') + '\\]\\);'));
+  // Des écarts croissants entre les rangs.
+  for (let i = 2; i < X.RANGS.length; i++) assert.ok(X.RANGS[i].seuil - X.RANGS[i - 1].seuil > X.RANGS[i - 1].seuil - X.RANGS[i - 2].seuil, X.RANGS[i].nom);
+});
