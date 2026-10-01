@@ -7,9 +7,14 @@ permissions:
   contents: read
   pages: write
   id-token: write
+# LE GROUPE A CHANGE DE NOM LE 01/10/2026. Un deploiement du 30/09 (run 36763599481) est
+# reste « en attente » sans jamais demarrer : avec cancel-in-progress a false, tous les
+# suivants faisaient la queue derriere lui puis etaient annules, et les Pages sont restees
+# au build 1743 pendant onze builds. Nouveau groupe : plus rien n'attend derriere ce run.
+# cancel-in-progress a true : le dernier push gagne, un deploiement bloque ne bloque plus.
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: pages-deploiement
+  cancel-in-progress: true
 jobs:
   deployer:
     environment:
