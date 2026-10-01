@@ -7,7 +7,8 @@ import crypto from 'node:crypto';
 import { creerBase } from '../src/base.js';
 import { creerMetier, MAX_CHIFFREMENTS } from '../src/metier.js';
 import { creerPaypal } from '../src/paypal.js';
-import { minute, BUDGET, ESSAIS_MAX, VERROU_MS } from '../src/planif.js';
+import { minute, BUDGET, ESSAIS_MAX, VERROU_MS, travaux } from '../src/planif.js';
+import { paris } from '../src/metier.js';
 import worker from '../src/index.js';
 import { fausseBase, appareil } from './fausse-base.mjs';
 
@@ -272,6 +273,20 @@ await test('/arrivee et /amb-clic : limités par adresse IP (429), les autres IP
   assert.equal((await appel('5.6.7.8', '/arrivee?src=story')).status, 204);
   const panne = Object.assign({}, ENV, { LIMITE_ARRIVEES: { async limit() { throw new Error('limiteur absent'); } } });
   assert.equal((await worker.fetch(new Request('https://s.t/arrivee?src=story'), panne, CTX)).status, 204, 'une panne du limiteur laisse passer');
+});
+
+await test('la série en danger : jeudi de 17 h à 21 h ; les travaux qui envoient sans attendre s’arrêtent à 21 h', async () => {
+  const T = travaux({ planifies: {}, abonnes: () => [] });
+  const w = (n) => T.find((x) => x.nom === n);
+  const q = (n, iso) => w(n).quand(paris(PARIS(iso)));
+  assert.equal(q('serie', '2026-10-01T16:59:00'), false);
+  assert.equal(q('serie', '2026-10-01T17:00:00'), true);
+  assert.equal(q('serie', '2026-10-01T20:59:00'), true);
+  assert.equal(q('serie', '2026-10-01T21:00:00'), false);
+  assert.equal(q('serie', '2026-10-02T17:30:00'), false, 'le jeudi seulement');
+  for (const n of ['serie', 'retour', 'bilan', 'wrapped', 'badge', 'duels']) assert.equal(w(n).fenetre, true, n);
+  assert.equal(q('retour', '2026-10-01T21:00:00'), false);
+  assert.equal(q('duels', '2026-10-01T21:10:00'), false);
 });
 
 console.log(ok + ' tests passés — budget par réveil : ' + BUDGET + ' requêtes, ' + MAX_CHIFFREMENTS + ' chiffrements');

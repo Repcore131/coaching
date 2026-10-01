@@ -79632,7 +79632,7 @@ function etatInvitationNotif(u,supporte,permission){
 // dans aucune case : il reste, et la carte le dit.
 const NOTIF_GROUPES=Object.freeze([
   Object.freeze({cle:'seances',titre:'Mes séances et ma série',types:Object.freeze(['serie','badge','wrapped','retour','sante']),
-    detail:'un rappel avant chacune de tes séances, le jeudi à 18 h si ta série est en danger, le dimanche quand un badge est à une ou deux séances, le 1er du mois ton mois en chiffres, après une pause (7, 14 et 30 jours sans séance), et le matin si ta nuit n’est pas arrivée (synchronisation iPhone)'}),
+    detail:'un rappel avant chacune de tes séances, le jeudi en fin de journée (entre 17 h et 21 h) si ta série est en danger, le dimanche quand un badge est à une ou deux séances, le 1er du mois ton mois en chiffres, après une pause (7, 14 et 30 jours sans séance), et le matin si ta nuit n’est pas arrivée (synchronisation iPhone)'}),
   Object.freeze({cle:'coach',titre:'Mon coach',types:Object.freeze(['coach','bilan','defi','relance','message']),
     detail:'quand ton coach t’écrit, répond à un bilan ou lance un défi, le samedi si ton dernier bilan date de deux semaines, et les rappels que ton coach a programmés (un par semaine au plus)'}),
   Object.freeze({cle:'invitations',titre:'Mes invitations',types:Object.freeze(['filleul']),
@@ -79791,7 +79791,7 @@ const VAPID_PUBLIQUE='BLOS0J9PpSZcViPM4ySSKDd0Ss-rnuo8yhmdqpvyhAE6s_HQvSM7QK5nIs
 // PUSH_TYPES (functions/index.js) : c'est u.pushPrefs[cle]===false qui coupe.
 const PUSH_TYPES=Object.freeze([
   {cle:'coach',titre:'Réponse de ton coach',txt:'Quand ton coach répond à un bilan ou à un rite.'},
-  {cle:'serie',titre:'Série en danger',txt:'Le jeudi à 18 h, si ta semaine n’est pas encore validée.'},
+  {cle:'serie',titre:'Série en danger',txt:'Le jeudi en fin de journée (entre 17 h et 21 h), si ta semaine n’est pas encore validée.'},
   {cle:'bilan',titre:'Rappel de bilan',txt:'Le samedi, quand ton dernier bilan date de deux semaines.'},
   {cle:'badge',titre:'Badge à portée',txt:'Le dimanche, quand un badge n’est plus qu’à une ou deux séances.'},
   {cle:'wrapped',titre:'Ton mois en chiffres',txt:'Le 1er du mois, quand ton Wrapped est prêt.'},

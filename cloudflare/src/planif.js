@@ -11,6 +11,22 @@
 //   2. les travaux du jour dont l'heure est passée (heure de Paris), repris
 //      là où le réveil précédent s'est arrêté : /worker/jobs/<nom> garde le
 //      jour, le curseur et, pour la rareté des badges, les comptes en cours.
+//      TOUT /worker/jobs EST LU EN UN GET, et seuls les travaux dont l'état a
+//      changé sont réécrits, en UN update multi-chemins à la fin — le même
+//      qui rend le verrou. Un travail déjà fini ne coûte plus rien.
+//
+// LA FENÊTRE DE 21 H (01/10/2026). Les travaux qui envoient sans attendre
+// (`fenetre: true` : serie, retour, bilan, wrapped, badge, duels) s'arrêtent
+// à 21 h : après, envoyerPush les écarterait (heures calmes) et l'athlète
+// serait compté « traité » sans avoir rien reçu. Une liste inachevée n'est
+// PAS déclarée finie : son état reçoit `sautes` (les clés restantes) et une
+// ligne { type: 'travail_incomplet' } entre dans /evenements_ko.
+//
+// LES PROFILS (worker/profils/<uid>, `profils: true`). Les rappels lisaient
+// trois à cinq champs par athlète, y compris pour tous ceux qu'on ne relance
+// pas. Les profils se lisent PAR PAGES de PAGE_PROFILS (une requête), sont
+// filtrés en mémoire, et l'athlète écarté ne coûte plus rien (metier.js,
+// « LES PROFILS DE RELANCE »).
 //
 // UN TRAVAIL MANQUÉ SE RATTRAPE : la condition est « l'heure est passée
 // aujourd'hui et ce n'est pas fini », pas « il est exactement 18 h 00 ».
@@ -26,12 +42,21 @@ export const VERROU_MS = 55e3;     // le bail : moins que la minute entre deux r
 export const REVEIL_MIN_MS = 30e3; // /reveil ne relance pas une file traitée il y a moins
 export const ESSAIS_MAX = 5;
 const LOT = 25;                    // événements lus d'un coup (une requête)
+export const PAGE_PROFILS = 200;   // profils lus d'un coup (une requête)
+export const FIN_FENETRE = 21;     // heure de Paris où s'arrêtent les travaux `fenetre`
+const avantFenetre = (p) => p.heure < FIN_FENETRE;
+// Le bail se rend dans l'update final s'il reste à coup sûr à nous (bien
+// avant son échéance) ; sinon par transaction, comme avant.
+const RENDU_DIRECT_MS = 40e3;
 const apres = (p, h, m) => p.heure * 60 + p.minute >= h * 60 + m;
 // Les coachs qui ont des athlètes : les clés de l'annuaire (une lecture).
 const db_coachs = (M) => (M.coachsAvecAthletes ? M.coachsAvecAthletes() : []);
 // Une relance lit une vingtaine de champs au pire : elle attend le réveil
 // suivant plutôt que de dépasser le plafond de Cloudflare.
 const COUT_RELANCE = 24;
+// La fin de séance recalcule les volts ET rafraîchit le profil de relance
+// (sept champs, une écriture) : elle attend d'avoir de quoi faire les deux.
+const COUT_SEANCE = 22;
 
 export function travaux(M) {
   return [
@@ -42,17 +67,19 @@ export function travaux(M) {
     // Les coachs qui ont résilié : leur palier se referme à la fin payée.
     { nom: 'fins_coachs', quand: (p) => apres(p, 6, 0), une: () => (M.paypal ? M.paypal.finsCoachs() : null) },
     // « Ton accès se termine dans N jours », une fois par échéance.
-    { nom: 'acces', quand: (p) => apres(p, 11, 0) && p.heure < 21, cles: () => M.abonnes(), un: M.planifies.acces, cout: 12, push: true },
+    { nom: 'acces', quand: (p) => apres(p, 11, 0) && p.heure < 21, cles: () => M.abonnes(), un: M.planifies.acces, cout: 12, push: true, profils: true },
     // Pas en heures calmes : ce serait relire les messages mis de côté pour la
     // nuit et les jeter au lieu de les envoyer le lendemain à 8 h 05.
     { nom: 'attente', quand: (p) => apres(p, 8, 5) && p.heure < 21, une: M.apresHeuresCalmes },
     { nom: 'defis', quand: (p) => apres(p, 9, 0), cles: () => M.coachsAvecCanal(), un: (c, t) => M.defisQuotidienCoach(c, t), cout: 8 },
-    { nom: 'serie', quand: (p) => p.joursem === 4 && apres(p, 18, 0), cles: () => M.abonnes(), un: M.planifies.serie, cout: 15, push: true },
-    { nom: 'bilan', quand: (p) => p.joursem === 6 && apres(p, 10, 0), cles: () => M.abonnes(), un: M.planifies.bilan, cout: 12, push: true },
-    { nom: 'wrapped', quand: (p) => p.date === 1 && apres(p, 10, 0), cles: () => M.abonnes(), un: M.planifies.wrapped, cout: 10, push: true },
-    { nom: 'badge', quand: (p) => p.joursem === 0 && apres(p, 17, 0), cles: () => M.abonnes(), un: M.planifies.badge, cout: 10, push: true },
+    // Série en danger : jeudi DÈS 17 H (18 h jusqu'au 01/10/2026) — trois
+    // heures de fenêtre et non plus deux : voir README, « Charge ».
+    { nom: 'serie', quand: (p) => p.joursem === 4 && apres(p, 17, 0) && avantFenetre(p), cles: () => M.abonnes(), un: M.planifies.serie, cout: 15, push: true, fenetre: true, profils: true },
+    { nom: 'bilan', quand: (p) => p.joursem === 6 && apres(p, 10, 0) && avantFenetre(p), cles: () => M.abonnes(), un: M.planifies.bilan, cout: 12, push: true, fenetre: true },
+    { nom: 'wrapped', quand: (p) => p.date === 1 && apres(p, 10, 0) && avantFenetre(p), cles: () => M.abonnes(), un: M.planifies.wrapped, cout: 10, push: true, fenetre: true, profils: true },
+    { nom: 'badge', quand: (p) => p.joursem === 0 && apres(p, 17, 0) && avantFenetre(p), cles: () => M.abonnes(), un: M.planifies.badge, cout: 10, push: true, fenetre: true },
     // Les duels suivis (/duels_actifs) : le push de J-2, la clôture, l'oubli.
-    { nom: 'duels', quand: (p) => apres(p, 18, 30), cles: () => (M.duelsActifs ? M.duelsActifs() : []), un: (id, t) => M.duelQuotidienUn(id, t), cout: 10, push: true },
+    { nom: 'duels', quand: (p) => apres(p, 18, 30) && avantFenetre(p), cles: () => (M.duelsActifs ? M.duelsActifs() : []), un: (id, t) => M.duelQuotidienUn(id, t), cout: 10, push: true, fenetre: true },
     // Les réactions des amis du jour : une poussée groupée par personne, 19 h.
     { nom: 'reactions', quand: (p) => apres(p, 19, 0) && p.heure < 21, cles: () => (M.reactionsAttente ? M.reactionsAttente() : []),
       un: (uid, t) => M.reactionsPushUn(uid, t), cout: 8, push: true },
@@ -66,7 +93,7 @@ export function travaux(M) {
     // d'une notification par jour n'est pas encore pris par l'accès ou le retour.
     { nom: 'relances', quand: (p) => apres(p, 10, 30) && p.heure < 21, cles: () => (M.relancesCoachUn ? db_coachs(M) : []),
       un: (coach, t) => M.relancesCoachUn(coach, t), cout: 6 },
-    { nom: 'retour', quand: (p) => apres(p, 11, 0), cles: () => M.abonnes(), un: (uid, t) => (M.retourUn ? M.retourUn(uid, t) : null), cout: 12, push: true },
+    { nom: 'retour', quand: (p) => apres(p, 11, 0) && avantFenetre(p), cles: () => M.abonnes(), un: (uid, t, acc, profil, log) => (M.retourUn ? M.retourUn(uid, t, profil, log) : null), cout: 12, push: true, fenetre: true, profils: true },
     // La santé synchronisée : « Ta nuit n'est pas encore arrivée » (iPhone), vers 10 h.
     { nom: 'sante_rappel', quand: (p) => apres(p, 10, 0) && p.heure < 21, cles: () => (M.santeComptes ? M.santeComptes() : []),
       un: (k, t) => (M.santeRappelUn ? M.santeRappelUn(k, t) : null), cout: 8, push: true },
@@ -126,6 +153,88 @@ async function echec(db, id, e, err, t) {
   return essais;
 }
 
+// UN TRAVAIL, pour ce réveil. `etat0` : ce que /worker/jobs portait (lu en
+// une fois par minute()). Rien n'est écrit ici : l'état modifié va dans `maj`.
+async function unTravail(w, etat0, { db, M, t, p, reste, bilan, maj }) {
+  const chemin = 'worker/jobs/' + w.nom;
+  if (!w.quand(p)) {
+    // LA FENÊTRE S'EST FERMÉE SUR UNE LISTE INACHEVÉE : ni « fini », ni
+    // silence. `sautes` le dit, une fois, et evenements_ko le montre.
+    if (w.fenetre && !avantFenetre(p) && etat0 && etat0.jour === p.jour && !etat0.fini && etat0.sautes == null && etat0.total != null) {
+      const sautes = Math.max(0, (Number(etat0.total) || 0) - (Number(etat0.curseur) || 0));
+      maj[chemin] = Object.assign({}, etat0, { sautes });
+      maj['evenements_ko/' + idFile(t, 'j')] = { type: 'travail_incomplet', nom: w.nom, sautes, le: t };
+      bilan.travaux[w.nom] = 'sautes:' + sautes;
+    }
+    return;
+  }
+  if (reste() < 6) return;
+  // Un travail HORAIRE (heure: true) repart à chaque heure de Paris.
+  const periode = w.heure ? p.jour + 'h' + p.heure : p.jour;
+  let etat = etat0 && etat0.jour === periode ? JSON.parse(JSON.stringify(etat0)) : { jour: periode, curseur: 0, fini: false, acc: {} };
+  if (etat.fini) return;
+  const avant = JSON.stringify(etat0 || null);
+  // Firebase ne garde pas un objet vide : relu, il revient null.
+  if (!etat.acc || typeof etat.acc !== 'object') etat.acc = {};
+  if (w.une) {
+    // `false` : coupé par le budget, à reprendre au réveil suivant.
+    // Une erreur cinq fois de suite le range dans evenements_ko.
+    try {
+      const r = await w.une(t);
+      etat.fini = r !== false;
+      etat.essais = null;
+    } catch (err) {
+      bilan.erreur = texteErreur(err);
+      etat.essais = (Number(etat.essais) || 0) + 1;
+      if (etat.essais >= ESSAIS_MAX) {
+        etat.fini = true;
+        maj['evenements_ko/' + idFile(t, 'j')] = { type: 'travail', nom: w.nom, essais: etat.essais, erreur: bilan.erreur, le: t };
+      }
+    }
+  } else {
+    const cles = (await w.cles()).sort();
+    etat.total = cles.length;
+    // LA REPRISE SE FAIT APRÈS LA DERNIÈRE CLÉ TRAITÉE, pas à un index :
+    // une liste qui rétrécit entre deux réveils (un duel clos sort de
+    // /duels_actifs) décalerait l'index et sauterait des clés.
+    let i = etat.dernier != null ? cles.findIndex((k) => String(k) > String(etat.dernier)) : (Number(etat.curseur) || 0);
+    if (i < 0) i = cles.length;
+    const assez = () => reste() >= (w.cout || 10) + 2 && (!w.push || !M.peutPousser || M.peutPousser());
+    // LES PROFILS ET LE JOURNAL DES PUSH, PAR PAGES : une requête chacun pour
+    // PAGE_PROFILS clés à partir de la clé courante. `null` : rien pour cette
+    // clé (pas de profil : le métier le construit ; pas de push aujourd'hui).
+    const pager = (lire) => {
+      let page = null;
+      return async (k) => {
+        const dedans = page && (page.n < PAGE_PROFILS || String(k) <= page.fin);
+        if (!dedans) {
+          const v = (await lire(String(k), PAGE_PROFILS)) || {};
+          const ks = Object.keys(v).sort();
+          page = { v, n: ks.length, fin: ks.length ? ks[ks.length - 1] : '' };
+        }
+        return page.v[k] || null;
+      };
+    };
+    const pagine = w.profils && M.profilsPage && M.logsPage;
+    const profilDe = pagine ? pager(M.profilsPage) : null, logDe = pagine ? pager(M.logsPage) : null;
+    while (i < cles.length && assez()) {
+      try {
+        if (pagine) await w.un(cles[i], t, etat.acc, await profilDe(cles[i]), await logDe(cles[i]));
+        else await w.un(cles[i], t, etat.acc);
+      } catch (err) { bilan.erreur = texteErreur(err); }
+      etat.dernier = String(cles[i]);
+      i++;
+    }
+    etat.curseur = i;
+    if (i >= cles.length) {
+      if (w.fin) await w.fin(etat.acc || {});
+      etat.fini = true;
+    }
+  }
+  bilan.travaux[w.nom] = etat.fini ? 'fini' : etat.curseur;
+  if (JSON.stringify(etat) !== avant) maj[chemin] = etat;
+}
+
 /**
  * Un réveil. `compteur()` rend le nombre de requêtes déjà émises dans ce
  * réveil (base ET services de push). `source` : 'reveil' quand c'est l'app
@@ -153,6 +262,7 @@ export async function minute({ db, M, compteur, maintenant, source }) {
   bilan.verrou = 'pris';
 
   let fileLe = null;
+  const maj = {};
   try {
     // 1. LES ÉVÉNEMENTS, un lot lu en une requête, traités dans l'ordre.
     const lot = (await db.ref('evenements').orderByKey().limitToFirst(LOT).get()).val() || {};
@@ -160,7 +270,7 @@ export async function minute({ db, M, compteur, maintenant, source }) {
     let fini = true;
     for (const id of ids) {
       const e = lot[id];
-      const cout = (e && e.type === 'tache' && e.quoi === 'relance') ? COUT_RELANCE : 12;
+      const cout = (e && e.type === 'tache' && e.quoi === 'relance') ? COUT_RELANCE : (e && e.type === 'seance_fin') ? COUT_SEANCE : 12;
       if (reste() < cout) { fini = false; break; }
       let ok = true;
       try { await traiter(db, M, e); } catch (err) {
@@ -175,60 +285,25 @@ export async function minute({ db, M, compteur, maintenant, source }) {
     // La file est « traitée » si ce réveil l'a parcourue jusqu'au bout.
     if (fini) fileLe = horloge();
 
-    // 2. LES TRAVAUX DU JOUR.
-    for (const w of travaux(M)) {
-      if (!w.quand(p) || reste() < 6) continue;
-      const ref = db.ref('worker/jobs/' + w.nom);
-      let etat = (await ref.get()).val();
-      // Un travail HORAIRE (heure: true) repart à chaque heure de Paris.
-      const periode = w.heure ? p.jour + 'h' + p.heure : p.jour;
-      if (!etat || etat.jour !== periode) etat = { jour: periode, curseur: 0, fini: false, acc: {} };
-      if (etat.fini) continue;
-      // Firebase ne garde pas un objet vide : relu, il revient null.
-      if (!etat.acc || typeof etat.acc !== 'object') etat.acc = {};
-      if (w.une) {
-        // `false` : coupé par le budget, à reprendre au réveil suivant.
-        // Une erreur cinq fois de suite le range dans evenements_ko.
-        try {
-          const r = await w.une(t);
-          etat.fini = r !== false;
-          etat.essais = null;
-        } catch (err) {
-          bilan.erreur = texteErreur(err);
-          etat.essais = (Number(etat.essais) || 0) + 1;
-          if (etat.essais >= ESSAIS_MAX) {
-            etat.fini = true;
-            await db.ref('evenements_ko/' + idFile(t, 'j')).set({ type: 'travail', nom: w.nom, essais: etat.essais, erreur: bilan.erreur, le: t });
-          }
-        }
-      } else {
-        const cles = (await w.cles()).sort();
-        // LA REPRISE SE FAIT APRÈS LA DERNIÈRE CLÉ TRAITÉE, pas à un index :
-        // une liste qui rétrécit entre deux réveils (un duel clos sort de
-        // /duels_actifs) décalerait l'index et sauterait des clés.
-        let i = etat.dernier != null ? cles.findIndex((k) => String(k) > String(etat.dernier)) : (Number(etat.curseur) || 0);
-        if (i < 0) i = cles.length;
-        const assez = () => reste() >= (w.cout || 10) + 2 && (!w.push || !M.peutPousser || M.peutPousser());
-        while (i < cles.length && assez()) {
-          try { await w.un(cles[i], t, etat.acc); } catch (err) { bilan.erreur = texteErreur(err); }
-          etat.dernier = String(cles[i]);
-          i++;
-        }
-        etat.curseur = i;
-        if (i >= cles.length) {
-          if (w.fin) await w.fin(etat.acc || {});
-          etat.fini = true;
-        }
-      }
-      bilan.travaux[w.nom] = etat.fini ? 'fini' : etat.curseur;
-      await ref.set(etat);
+    // 2. LES TRAVAUX DU JOUR. Tout /worker/jobs en UN GET ; chaque état
+    //    modifié part dans `maj`, écrit en une fois dans le `finally`.
+    if (reste() >= 6) {
+      const jobs = (await db.ref('worker/jobs').get()).val() || {};
+      for (const w of travaux(M)) await unTravail(w, jobs[w.nom], { db, M, t, p, reste, bilan, maj });
     }
   } finally {
     // LE BAIL EST RENDU, et l'heure de la file notée — s'il est encore à nous.
-    try {
-      await db.ref('worker/verrou').transaction((v) => (v && v.id === moi
-        ? Object.assign({}, v, { jusqua: 0, id: null }, fileLe ? { fileLe } : {}) : undefined));
-    } catch (e) { /* le bail expire seul dans 55 s */ }
+    // D'ordinaire DANS LE MÊME update que les travaux : à moins de 40 s du
+    // début, le bail de 55 s ne peut pas avoir été repris par un autre.
+    const direct = horloge() - t < RENDU_DIRECT_MS;
+    if (direct) Object.assign(maj, { 'worker/verrou/jusqua': 0, 'worker/verrou/id': null }, fileLe ? { 'worker/verrou/fileLe': fileLe } : {});
+    try { if (Object.keys(maj).length) await db.ref().update(maj); } catch (e) { bilan.erreur = texteErreur(e); }
+    if (!direct) {
+      try {
+        await db.ref('worker/verrou').transaction((v) => (v && v.id === moi
+          ? Object.assign({}, v, { jusqua: 0, id: null }, fileLe ? { fileLe } : {}) : undefined));
+      } catch (e) { /* le bail expire seul dans 55 s */ }
+    }
   }
   bilan.requetes = compteur();
   if (M.chiffrements) bilan.chiffrements = M.chiffrements();

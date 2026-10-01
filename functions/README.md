@@ -179,7 +179,7 @@ entier par `PUT`, qui effacerait un enfant écrit à part.
 
 | Fonction | Quand | Type |
 |---|---|---|
-| `pushSerieEnDanger` | jeudi 18 h (Paris) | `serie` — série > 0, semaine pas validée, hors suspension |
+| `pushSerieEnDanger` | jeudi 18 h (Paris) — le Worker, lui : 17 h–21 h | `serie` — série > 0, semaine pas validée, hors suspension |
 | `pushWrappedPret` | le 1er du mois, 10 h | `wrapped` — seulement si l'athlète s'est entraîné le mois écoulé |
 | `pushRappelBilan` | samedi 10 h | `bilan` — dernier bilan vieux de 13 jours ou plus |
 | `pushBadgeProche` | dimanche 17 h | `badge` — ASSIDU à 1 ou 2 séances |

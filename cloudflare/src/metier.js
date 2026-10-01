@@ -147,6 +147,9 @@ export function serieDuJour(u, t) {
 // Cinq chiffrements par exécution tiennent sous les 10 ms avec la marge du
 // reste (lecture, JSON) ; au-delà, la suite part en sous-tâches.
 export const COUT_PUSH = 8;
+// Le profil de relance (worker/profils/<uid>) : ses champs, et sa durée de vie.
+export const PROFIL_CHAMPS = ['streak', 'streakWeek', 'lastSession', 'fname', 'accessExpiry', 'status', 'suspension'];
+export const PROFIL_VALIDITE_MS = 7 * 864e5;
 export const MAX_CHIFFREMENTS = 5;
 const MARGE = 2;
 
@@ -178,7 +181,7 @@ export function creerMetier(deps) {
   // Hors d'un réveil (webhook PayPal), rien n'est fixé : pas de limite ici.
   let _reste = () => Infinity;
   let _chiffres = 0;
-  function fixerBudget(fn) { _reste = typeof fn === 'function' ? fn : () => Infinity; _chiffres = 0; }
+  function fixerBudget(fn) { _reste = typeof fn === 'function' ? fn : () => Infinity; _chiffres = 0; _abonnes = null; }
   const reste = () => _reste();
   const peutPousser = () => _reste() >= COUT_PUSH + MARGE && _chiffres < MAX_CHIFFREMENTS;
   const chiffrements = () => _chiffres;
@@ -270,7 +273,10 @@ export function creerMetier(deps) {
     const t = now();
     const type = String((message && message.type) || '');
     const urgent = !!(o && o.urgent);
-    const [prefs, log] = urgent ? [null, null] : await Promise.all([_lire(uid, 'pushPrefs'), _val('push_log/' + uid)]);
+    // `o.log` : le journal du jour déjà lu (par pages, planif.js) — on ne le
+    // relit pas ; la transaction ci-dessous le revérifie de toute façon.
+    const logDonne = !!o && o.log !== undefined;
+    const [prefs, log] = urgent ? [null, null] : await Promise.all([_lire(uid, 'pushPrefs'), logDonne ? o.log : _val('push_log/' + uid)]);
     const ok = urgent ? { ok: true, raison: null } : pushAutorise(type, prefs, log, t);
     if (!ok.ok) {
       if (ok.raison === 'calme' && (!o || o.attendre !== false))
@@ -302,22 +308,85 @@ export function creerMetier(deps) {
     if (!envoye && !urgent) await db.ref('push_log/' + uid).remove();
     return { envoye, raison: envoye ? null : 'echec' };
   }
-  const abonnes = () => db.ref('push').shallow();
+  // LES ABONNÉS, UNE LECTURE PAR RÉVEIL : serie, acces, retour, bilan… la
+  // demandaient chacun, à chaque minute. fixerBudget (début de réveil) l'oublie.
+  let _abonnes = null;
+  const abonnes = () => (_abonnes = _abonnes || db.ref('push').shallow().catch((e) => { _abonnes = null; throw e; }));
+  // La surface d'un dossier (base.js, surface) : ses champs simples en UNE
+  // requête ; un champ objet y vaut `true` et se relit à part s'il sert.
+  const _surface = (uid) => db.ref('users/' + uid).surface();
+  const _objet = async (uid, s, champ) => (s[champ] === true ? _lire(uid, champ) : (s[champ] === undefined ? null : s[champ]));
+
+  // ══ LES PROFILS DE RELANCE (worker/profils/<uid>, 01/10/2026) ══════════
+  // Les rappels planifiés lisaient trois à cinq champs PAR ATHLÈTE, y compris
+  // pour tous ceux qu'on ne relance pas (série cassée, déjà entraîné, pas
+  // d'échéance proche). Le profil réunit ces champs en un nœud que le Worker
+  // seul écrit ; planif.js les lit PAR PAGES (une requête pour 200) et les
+  // passe un à un : l'athlète écarté en mémoire ne coûte plus rien.
+  //
+  // QUI L'ÉCRIT : la fin de séance (seance_fin, après les volts), et le
+  // rappel lui-même quand le profil manque ou date de plus de PROFIL_VALIDITE_MS.
+  // CE QU'IL DÉCIDE : seulement d'ÉCARTER. Un athlète retenu est relu dans
+  // son dossier avant tout envoi, comme avant. Les champs de séance (série,
+  // semaine, dernière séance) ne changent qu'avec une séance, qui rafraîchit
+  // le profil ; l'échéance d'accès peut bouger sans séance (code, PayPal,
+  // créateur) : elle est relue au plus tard au bout de sept jours.
+  // DEUX REQUÊTES d'ordinaire : la surface du dossier (tous les champs
+  // simples d'un coup), et l'écriture. Une troisième si une suspension existe.
+  async function rafraichirProfil(uid, t) {
+    const s = await _surface(uid);
+    const p = { maj: t };
+    for (const c of PROFIL_CHAMPS) if (c !== 'suspension' && s[c] !== undefined && s[c] !== null && s[c] !== true) p[c] = s[c];
+    const susp = await _objet(uid, s, 'suspension');
+    if (susp) p.suspension = susp;
+    if (p.suspension && typeof p.suspension === 'object') p.suspension = { actif: !!p.suspension.actif, fin: Number(p.suspension.fin) || 0 };
+    else delete p.suspension;
+    if (p.fname != null) p.fname = String(p.fname).slice(0, 40);
+    await db.ref('worker/profils/' + uid).set(p);
+    return p;
+  }
+  // `profil` : undefined (appel hors des pages : lecture directe, comme
+  // avant), null (aucun profil) ou le nœud lu.
+  async function profilUtile(uid, profil, t) {
+    if (profil === undefined) return null;
+    if (profil && Number(profil.maj) > t - PROFIL_VALIDITE_MS) return profil;
+    return rafraichirProfil(uid, t);
+  }
+  async function profilsPage(debut, n) {
+    return (await db.ref('worker/profils').orderByKey().startAt(String(debut)).limitToFirst(n).get()).val() || {};
+  }
+  // Le journal des push (push_log/<uid> : {jour, at, type}), par pages aussi :
+  // un athlète déjà notifié aujourd'hui (une notification par jour) est écarté
+  // sans une seule requête, dans chaque travail.
+  async function logsPage(debut, n) {
+    return (await db.ref('push_log').orderByKey().startAt(String(debut)).limitToFirst(n).get()).val() || {};
+  }
+  // `log` : undefined (pas lu par pages), null (rien aujourd'hui) ou le journal.
+  const dejaNotifie = (log, t) => !!log && log.jour === paris(t).jour;
+  const optLog = (log, o) => Object.assign({}, o || {}, log === undefined ? {} : { log: log || null });
 
   // ── LES RAPPELS PLANIFIÉS — UNE PERSONNE À LA FOIS ─────────────────────
   // Chacun rend la même chose : il traite UNE clé. Le découpage en lots et le
   // curseur sont dans planif.js.
   const planifies = {
-    // Série en danger : jeudi 18 h. LA SÉRIE EST RECALCULÉE À LA DATE DU JOUR
+    // Série en danger : jeudi, de 17 h à 21 h. LA SÉRIE EST RECALCULÉE À LA DATE DU JOUR
     // (serieDuJour, la règle de l'app) : rien si elle est cassée, gelée, ou
     // si la dernière séance date de plus de 14 jours. Deux temps : trois
     // champs d'abord, qui écartent la plupart des dossiers ; le reste ensuite.
-    async serie(uid, t) {
+    async serie(uid, t, acc, profil, log) {
+      if (dejaNotifie(log, t)) return 'plafond';
       const lundi = lundiParis(t);
-      const [streak, semaine, der] = await Promise.all(['streak', 'streakWeek', 'lastSession'].map((c) => _lire(uid, c)));
+      const pr = await profilUtile(uid, profil, t);
+      const [streak, semaine, der] = pr ? [pr.streak, pr.streakWeek, pr.lastSession]
+        : await Promise.all(['streak', 'streakWeek', 'lastSession'].map((c) => _lire(uid, c)));
       if (!(Number(streak) > 0) || semaine === lundi) return 'rien';
       if (!(Number(der) > 0) || t - Number(der) > SERIE_MAX_JOURS * JOUR_MS) return 'ancienne';
-      const [susp, fname, jokers, jokerLe, config] = await Promise.all(['suspension', 'fname', 'streakJokers', 'streakJokerLe', 'sessions_config'].map((c) => _lire(uid, c)));
+      // La surface du dossier : prénom et jokers d'un coup ; la suspension et
+      // le planning, objets, relus seulement s'ils existent. LA SUSPENSION EST
+      // TOUJOURS RELUE ICI, jamais prise au profil : elle change sans séance.
+      const s = await _surface(uid);
+      const [susp, config] = await Promise.all([_objet(uid, s, 'suspension'), _objet(uid, s, 'sessions_config')]);
+      const fname = s.fname, jokers = s.streakJokers, jokerLe = s.streakJokerLe;
       const etat = serieDuJour({ streak, streakWeek: semaine, lastSession: der, suspension: susp, streakJokers: jokers,
         streakJokerLe: jokerLe, sessions_config: config }, t);
       if (etat.etat !== 'vivante' && etat.etat !== 'sauvee') return etat.etat;
@@ -327,19 +396,21 @@ export function creerMetier(deps) {
       await envoyerPush(uid, { type: 'serie', url: './?wo=1', tag: 'serie-' + lundi + '-jeu',
         title: 'Ta série de ' + n + ' semaine' + (n > 1 ? 's' : '') + ' est en danger',
         body: (fname ? fname + ', il' : 'Il') + ' te reste jusqu’à dimanche pour valider ta semaine.'
-          + (Number(jokers) > 0 ? ' Ton joker la sauverait, mais garde-le pour un vrai coup dur.' : '') }, { attendre: false });
+          + (Number(jokers) > 0 ? ' Ton joker la sauverait, mais garde-le pour un vrai coup dur.' : '') }, optLog(log, { attendre: false }));
     },
     // Wrapped prêt : le 1er du mois, 10 h — pour qui s'est entraîné le mois écoulé.
-    async wrapped(uid, t) {
+    async wrapped(uid, t, acc, profil, log) {
+      if (dejaNotifie(log, t)) return 'plafond';
       const p = paris(t);
       const moisPrec = p.mois === 1 ? 12 : p.mois - 1, anPrec = p.mois === 1 ? p.annee - 1 : p.annee;
       const debut = Date.UTC(anPrec, moisPrec - 1, 1) - 2 * 3600e3;
       const cle = 'm-' + anPrec + '-' + String(moisPrec).padStart(2, '0');
       const nom = new Date(Date.UTC(anPrec, moisPrec - 1, 15)).toLocaleDateString('fr-FR', { month: 'long', timeZone: 'Europe/Paris' });
-      const der = Number(await _lire(uid, 'lastSession')) || 0;
+      const pr = await profilUtile(uid, profil, t);
+      const der = Number(pr ? pr.lastSession : await _lire(uid, 'lastSession')) || 0;
       if (der < debut) return;
       await envoyerPush(uid, { type: 'wrapped', url: './?wrapped=' + cle, tag: 'wrapped-' + cle,
-        title: 'Ton mois de ' + nom + ' est prêt', body: 'Tes chiffres, tes records et ton profil t’attendent.' });
+        title: 'Ton mois de ' + nom + ' est prêt', body: 'Tes chiffres, tes records et ton profil t’attendent.' }, optLog(log));
     },
     // Rappel de bilan : samedi 10 h, dernier bilan vieux de 13 jours ou plus.
     // SEULEMENT POUR QUI A UN COACH ET A DÉJÀ FAIT UN BILAN : le bilan est
@@ -359,7 +430,12 @@ export function creerMetier(deps) {
     // FIN D'ACCÈS : chaque jour, 11 h — trois jours ou moins avant l'échéance,
     // UNE fois par échéance. C'était le bandeau de l'accueil, qu'on ne voit
     // qu'en ouvrant l'app : la notification le dit à qui ne l'ouvre plus.
-    async acces(uid, t) {
+    async acces(uid, t, acc, profil, log) {
+      if (dejaNotifie(log, t)) return 'plafond';
+      // Le profil ÉCARTE (pas d'échéance dans les trois jours) ; retenu, le
+      // dossier est relu avant d'envoyer quoi que ce soit.
+      const pr = await profilUtile(uid, profil, t);
+      if (pr) { const e0 = Number(pr.accessExpiry) || 0; if (!(e0 > t) || e0 - t > 3 * 864e5) return 'profil'; }
       const [statut, ech, fin, fname, deja] = await Promise.all([_lire(uid, 'status'), _lire(uid, 'accessExpiry'),
         _lire(uid, 'abonnement/finAccesPaypal'), _lire(uid, 'fname'), _val('worker/relances_acces/' + uid)]);
       const e = Number(ech) || 0;
@@ -373,7 +449,7 @@ export function creerMetier(deps) {
       else if (statut === 'AUTONOMIE_PREMIUM')
         m = { title: 'Ton abonnement prend fin ' + quand, body: fin ? 'Tu as résilié : ton accès reste ouvert jusqu’au ' + date + '.' : 'Ton accès prend fin le ' + date + '.' };
       if (!m) return;
-      const r = await envoyerPush(uid, Object.assign({ type: 'acces', url: './', tag: 'acces-' + e }, m), { attendre: false });
+      const r = await envoyerPush(uid, Object.assign({ type: 'acces', url: './', tag: 'acces-' + e }, m), optLog(log, { attendre: false }));
       if (r.envoye) await db.ref('worker/relances_acces/' + uid).set(e);
     },
     // Badge proche : dimanche 17 h — ASSIDU à deux séances ou moins.
@@ -407,7 +483,10 @@ export function creerMetier(deps) {
 
   // ── LA RARETÉ DES BADGES (la nuit), dossier par dossier ────────────────
   async function statsBadgesUn(uid, acc) {
-    const [role, badges] = await Promise.all([_lire(uid, 'role'), _lire(uid, 'badges')]);
+    // La surface : le rôle d'un coup ; les badges relus seulement s'il y en a.
+    const s = await _surface(uid);
+    const role = s.role;
+    const badges = role === 'coach' ? null : await _objet(uid, s, 'badges');
     if (role === 'coach') return;
     acc.total = (acc.total || 0) + 1;
     acc.n = acc.n || {};
@@ -1124,7 +1203,14 @@ export function creerMetier(deps) {
     if (type === 'duel_rejoint' || type === 'duel_maj' || type === 'duel_cree') return duelEvenement(e, t);
     if (type === 'reaction') return reactionEvenement(e, t);
     // UNE SÉANCE TERMINÉE : les volts recalculés par le serveur.
-    if (type === 'seance_fin') return xpRecalculer(String(e.par || ''), t, true);
+    // Les volts, puis le profil de relance (worker/profils) : la séance est
+    // ce qui change la série, la semaine et la dernière séance.
+    if (type === 'seance_fin') {
+      const k = String(e.par || '');
+      const r = await xpRecalculer(k, t, true);
+      if (r !== 'cle') await rafraichirProfil(k, t);
+      return r;
+    }
     return 'type_inconnu';
   }
 
@@ -1381,16 +1467,18 @@ export function creerMetier(deps) {
   // Trois champs d'abord (la dernière séance écarte presque tout le monde),
   // le reste seulement pour qui est au bon jour. retour_etat/<uid> retient
   // les paliers envoyés de la période ; le Worker seul le lit et l'écrit.
-  async function retourUn(uid, t) {
-    const der = Number(await _lire(uid, 'lastSession')) || 0;
+  async function retourUn(uid, t, profil, log) {
+    if (dejaNotifie(log, t)) return 'plafond';
+    const pr = await profilUtile(uid, profil, t);
+    const der = Number(pr ? pr.lastSession : await _lire(uid, 'lastSession')) || 0;
     const palier = RE.palierDuJour(der, t);
     if (!palier) return 'rien';
-    const [susp, etat0, logPush] = await Promise.all([_lire(uid, 'suspension'), _val('retour_etat/' + uid), _val('push_log/' + uid)]);
+    const [susp, etat0, logPush] = await Promise.all([_lire(uid, 'suspension'), _val('retour_etat/' + uid), log !== undefined ? (log || null) : _val('push_log/' + uid)]);
     const etat = RE.etatPeriode(etat0, der);
     const ok = RE.retourAutorise({ palier, etat, suspension: susp, logPush, t });
     if (!ok.ok) return ok.raison;
     const [fname, xpRang, streak, tonnageTotal] = await Promise.all(['fname', 'xpRang', 'streak', 'tonnageTotal'].map((c) => _lire(uid, c)));
-    const r = await envoyerPush(uid, RE.messageRetour(palier, { fname, xpRang, streak, tonnageTotal }, t), { attendre: false });
+    const r = await envoyerPush(uid, RE.messageRetour(palier, { fname, xpRang, streak, tonnageTotal }, t), optLog(log, { attendre: false }));
     if (!r.envoye) return r.raison || 'echec';
     etat.paliers[palier] = t;
     await db.ref('retour_etat/' + uid).set(etat);
@@ -1659,7 +1747,7 @@ export function creerMetier(deps) {
     return 'tache_inconnue';
   }
 
-  return { envoyerPush, abonnes, planifies, apresHeuresCalmes, statsBadgesUn, statsBadgesFin,
+  return { envoyerPush, abonnes, planifies, profilsPage, logsPage, rafraichirProfil, apresHeuresCalmes, statsBadgesUn, statsBadgesFin,
     defisQuotidienCoach, coachsAvecCanal, coachsAvecAthletes, recalculerDefi, parrainageDemande, parrainagePaiement, parrainageSeuil,
     ambassadeurDemande, ambassadeursQuotidien, arrivee, evenement, lireDroits, majDroits, palierDroits,
     crediterMoisOffert, ambassadeurPaiement, ambassadeurRemboursement, attributionPaiement,

@@ -13,7 +13,7 @@
 // d'inactivité (la période = la date de la dernière séance : une séance la
 // referme, la suivante repart de zéro). Rien pendant une suspension.
 //
-// PAS DE DOUBLON AVEC LA SÉRIE EN DANGER (jeudi 18 h) : un palier ne part pas
+// PAS DE DOUBLON AVEC LA SÉRIE EN DANGER (jeudi, 17 h–21 h) : un palier ne part pas
 // si une relance de série est partie dans les RETOUR_ECART_J derniers jours,
 // et la série se tait si une relance « retour » vient de partir.
 

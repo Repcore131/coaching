@@ -23,8 +23,8 @@
 // script aurait écrit pour un jour qui n'existe pas encore.
 //
 // LE BUDGET. Le réveil de la minute (planif.js) garde 38 requêtes sur les 50
-// du plan gratuit ; ce qui suit en prend 3 d'ordinaire (vidage, lecture du
-// seau), 4 de plus l'heure d'une alerte, et au plus 2 lectures + 3 effacements
+// du plan gratuit ; ce qui suit en prend 3 au plus (vidage, et lecture du
+// seau une minute sur cinq), 4 de plus l'heure d'une alerte, et au plus 2 lectures + 3 effacements
 // au ménage — MENAGE_MAX borne les effacements d'un passage.
 import { CLE_CREATEUR_PUSH } from './metier.js';
 
@@ -32,6 +32,7 @@ export const SEUIL_429_HEURE = 500;
 const VIDAGE_MS = 60 * 1000;
 const JOUR_MS = 24 * 60 * 60 * 1000;
 const MENAGE_MAX = 3;
+export const LECTURE_MIN = 5;   // le seau de l'heure se lit toutes les 5 minutes
 
 let enAttente = 0;
 let dernierVidage = 0;
@@ -69,7 +70,11 @@ export async function viderPouls(db, t) {
 export async function surveillerQuota({ db, M, t }) {
   const h = heureUTC(t);
   const bilan = { heure: h, n429: 0, alerte: false };
-  bilan.n429 = Number(await db.ref('worker/pouls_429/' + h).get().then((s) => s.val()).catch(() => 0)) || 0;
+  const d = new Date(t);
+  // LE SEAU SE LIT TOUTES LES CINQ MINUTES, pas chaque minute : 288 lectures
+  // par jour au lieu de 1 440, pour une alerte qui arrive au plus 5 min après.
+  if (d.getUTCMinutes() % LECTURE_MIN === 0)
+    bilan.n429 = Number(await db.ref('worker/pouls_429/' + h).get().then((s) => s.val()).catch(() => 0)) || 0;
   if (bilan.n429 > SEUIL_429_HEURE) {
     const pose = await db.ref('worker/pouls_alerte/' + h).transaction((v) => (v ? undefined : t));
     if (pose.committed) {
@@ -80,7 +85,6 @@ export async function surveillerQuota({ db, M, t }) {
         { urgent: true }).catch(() => null);
     }
   }
-  const d = new Date(t);
   if (d.getUTCMinutes() === 30) bilan.menage = await menage(db, t, d.getUTCHours() === 3).catch(() => null);
   return bilan;
 }

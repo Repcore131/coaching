@@ -48,13 +48,15 @@ await test(SEUIL_429_HEURE + ' refus dans l’heure : pas d’alerte ; ' + (SEUI
   assert.equal(b.alerte, false);
   assert.equal(w.pushs.length, 0);
   w.F.ecrire('worker/pouls_429/' + heureUTC(T), SEUIL_429_HEURE + 1);
-  b = await surveillerQuota({ db: w.db, M: w.M, t: T + 60_000 });
+  b = await surveillerQuota({ db: w.db, M: w.M, t: T + 5 * 60_000 });
   assert.equal(b.alerte, true);
   assert.equal(w.pushs.length, 1);
   assert.equal(w.pushs[0].uid, CLE_CREATEUR_PUSH);
   assert.equal(w.pushs[0].o.urgent, true);
   assert.match(w.pushs[0].msg.body, /501 requêtes refusées/);
-  await surveillerQuota({ db: w.db, M: w.M, t: T + 120_000 });
+  await surveillerQuota({ db: w.db, M: w.M, t: T + 10 * 60_000 });
+  // Hors des minutes multiples de 5, le seau n'est pas lu.
+  assert.equal((await surveillerQuota({ db: w.db, M: w.M, t: T + 11 * 60_000 })).n429, 0);
   assert.equal(w.pushs.length, 1, 'une alerte par heure');
   // L'heure suivante repart de zéro.
   w.F.ecrire('worker/pouls_429/' + heureUTC(T + 3600e3), 900);

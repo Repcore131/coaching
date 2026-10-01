@@ -39,7 +39,8 @@ export function fausseBase(initial) {
     const h = (init && init.headers) || {};
     if (m === 'GET') {
       let v = lire(p);
-      if (u.searchParams.get('shallow') === 'true' && v && typeof v === 'object') { const o = {}; for (const k of Object.keys(v)) o[k] = true; v = o; }
+      // Comme Firebase : un enfant simple garde sa valeur, un objet devient true.
+      if (u.searchParams.get('shallow') === 'true' && v && typeof v === 'object') { const o = {}; for (const k of Object.keys(v)) o[k] = (v[k] && typeof v[k] === 'object') ? true : v[k]; v = o; }
       // orderBy "$key" + startAt : comme Firebase, les clés entières d'abord, en ordre numérique.
       if (u.searchParams.get('orderBy') === '"$key"' && u.searchParams.has('startAt') && v && typeof v === 'object') {
         const de = JSON.parse(u.searchParams.get('startAt'));

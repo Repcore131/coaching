@@ -7,7 +7,7 @@ Ce que le plan Spark de Firebase ne fait pas, sans rien payer ni donner de carte
 | Notification « Ton coach a répondu à ton bilan » (et au bilan de cycle) | dans la minute qui suit la réponse |
 | Notification « Nouveau défi » aux athlètes du coach | dans la minute |
 | Défis : équipe, classement, paliers, podium, « Plus que 48 h » | à chaque progression, et chaque matin à 9 h |
-| Série en danger | jeudi 18 h |
+| Série en danger | jeudi 17 h (jusqu’à 21 h) |
 | Rappel de bilan | samedi 10 h |
 | Ton mois en chiffres (Wrapped) | le 1er du mois, 10 h |
 | Badge à portée | dimanche 17 h |
@@ -183,30 +183,53 @@ l'est pas, cliquer le lien de vérification reçu par e-mail, puis se déconnect
 mémoire (`CHARGE=10,100,1000` pour choisir N ; `npm test` fait 10 et 100). À chaque réveil : au
 plus 50 requêtes, au plus 5 chiffrements, et chacun reçoit son message une fois.
 
-Mesuré le 27/09/2026 (Node 22). Un réveil par minute :
+Mesuré le 01/10/2026 (Node 22), après le lot « charge » (jobs en un GET, profils par pages, fenêtre
+de 21 h, série dès 17 h). Un réveil par minute :
 
 | abonnés | chemin | réveils (minutes) | fini à | servis | requêtes max / réveil | requêtes en tout | chiffrements max / réveil | calcul médian / max |
 |---|---|---|---|---|---|---|---|---|
-| 10 | défi publié (12 h) | 3 | 12:02 | 10 | 35 | 95 | 4 | 12.5 / 16.5 ms |
-| 10 | série (jeudi 18 h) | 5 | 18:04 | 10 | 38 | 186 | 2 | 5.4 / 9.3 ms |
-| 100 | défi publié (12 h) | 25 | 12:24 | 100 | 35 | 875 | 4 | 9.2 / 14.8 ms |
-| 100 | série (jeudi 18 h) | 50 | 18:49 | 100 | 38 | 1 851 | 2 | 4.3 / 8.7 ms |
-| 1 000 | défi publié (12 h) | 250 | 16:09 | 1 000 | 35 | 8 750 | 4 | 8.7 / 39.9 ms |
-| 1 000 | série (jeudi 18 h) | 360 | 00:00 | **360** | 38 | 13 321 | 2 | 3.9 / 17.2 ms |
+| 10 | défi publié (12 h) | 3 | 12:02 | 10 | 35 | 96 | 4 | 10.5 / 18.4 ms |
+| 10 | série (jeudi 17 h) | 5 | 17:04 | 10 | 34 | 147 | 2 | 5.4 / 8.0 ms |
+| 100 | défi publié (12 h) | 25 | 12:24 | 100 | 35 | 851 | 4 | 8.3 / 13.3 ms |
+| 100 | série (jeudi 17 h) | 50 | 17:49 | 100 | 34 | 1 409 | 2 | 4.8 / 9.7 ms |
+| 1 000 | défi publié (12 h) | 250 | 16:09 | 1 000 | 35 | 8 501 | 4 | 8.8 / 33.4 ms |
+| 1 000 | série (jeudi 17 h) | 241 | 21:01 | **480** | 34 | 6 749 | 2 | 6.6 / 15.4 ms |
+
+Et trois épreuves, dans `npm test` :
+
+| épreuve | résultat |
+|---|---|
+| (a) **tous** les travaux actifs, jeudi 1er octobre 18 h, 300 abonnés, rien de pré-marqué | **300/300 servis à 20:13**, au plus 35 requêtes par réveil |
+| (b) la série lancée à 20 h 40 pour 300 : la fenêtre se ferme | 40 servis, 260 dans `sautes` et dans `evenements_ko`, aucun compté sans push |
+| (c) base vide, 1 440 minutes (minute + alerte de quota) | **7 615 sous-requêtes par jour** (23 098 avant), au plus 9 par réveil |
 
 Ce qu'il faut en retenir :
 
-- **Le chiffrement d'un push coûte ~1,2 ms** : 5 par réveil au plus (`MAX_CHIFFREMENTS`), soit ~6 ms,
-  sous les 10 ms. Au-delà, la suite part au réveil suivant. En pratique ce plafond ne mord pas :
-  **ce sont les 50 requêtes qui bornent** (un push en coûte 7 à 8 : préférences, journal du jour,
-  abonnements, transaction, envoi), soit 4 push par minute par la file, 2 par un rappel planifié
-  (qui relit en plus 3 à 5 champs du dossier).
+- **LES NOUVEAUX PLAFONDS.** Série du jeudi : **~480 athlètes** servis entre 17 h et 21 h (180 avant :
+  18 h–21 h, et trois à cinq lectures par athlète, même pour ceux qu'on ne relance pas). Un défi
+  publié : toujours 4 par minute par la file, ~1 000 en 4 h. Au-delà de 480 athlètes à relancer le
+  même jeudi, la liste s'arrête à 21 h : `worker/jobs/serie/sautes` dit combien, et une ligne
+  `travail_incomplet` apparaît dans l'écran des échecs (`evenements_ko`).
+- **Ce qui a changé** :
+  - `worker/jobs` se lit en **un GET** par réveil, et ne s'écrit qu'en **un update** final, celui qui
+    rend aussi le verrou. Un travail fini ne coûte plus rien ; une minute à vide en coûte 5.
+  - Les rappels (`serie`, `acces`, `retour`, `wrapped`) lisent `worker/profils` et `push_log` **par
+    pages de 200** (une requête chacune) : un athlète écarté (série cassée, déjà notifié aujourd'hui,
+    pas d'échéance) ne coûte plus aucune requête. Le profil est rafraîchi à chaque fin de séance
+    (`seance_fin`) et, s'il manque ou date de plus de 7 jours, par le rappel lui-même — en deux
+    requêtes : la « surface » du dossier (`?shallow=true` : tous ses champs simples d'un coup) et
+    l'écriture. Il ne sert qu'à **écarter** : un athlète retenu est relu avant tout envoi.
+  - `serie`, `retour`, `bilan`, `wrapped`, `badge` et `duels` s'arrêtent à **21 h** : après, le push
+    serait écarté (heures calmes) et l'athlète compté traité sans rien recevoir.
+  - L'alerte de quota lit son seau toutes les 5 minutes, et non chaque minute.
+- **Le chiffrement d'un push coûte ~1,2 à 2 ms** : 5 par réveil au plus (`MAX_CHIFFREMENTS`), sous
+  les 10 ms. **Ce sont toujours les 50 requêtes qui bornent** : un push en coûte 5 (préférences,
+  abonnements, transaction du journal, envoi), un rappel planifié retenu ~7 de plus au pire ; d'où 2
+  rappels par minute (le travail garde 15 + 2 requêtes de marge par athlète).
 - Le « calcul » est celui de Node, hors base simulée mais avec ses réponses fabriquées : une
   estimation haute. Les pics (premier réveil, JIT) ne se reproduisent pas dans un Worker chaud.
-- **À 1 000 abonnés, la série du jeudi ne passe pas** : 2 par minute de 18 h à 21 h, puis les heures
-  calmes ; à minuit, 640 n'ont rien reçu. Un défi publié arrive à tous, en 4 h. Les leviers, si on
-  y arrive : lire en une requête ce que les rappels planifiés lisent en cinq, commencer la série
-  plus tôt, ou passer au plan payant de Cloudflare (bien plus de requêtes par exécution).
+- **Le levier suivant**, si 480 ne suffit plus : passer au plan payant de Cloudflare (1 000
+  sous-requêtes par exécution), ou étaler la série sur le mercredi soir.
 
 - **PayPal** (`POST /paypal`) : chaque événement est vérifié chez PayPal (signature).
   - **Une seule fois** : `paypal_evenements/<id>` passe à `en_cours` avant le traitement, à `fait`
